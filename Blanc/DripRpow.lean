@@ -32,17 +32,17 @@ def freshNat (chi k : Nat) : Nat :=
 def compositionResidue (chi k : Nat) : Nat :=
   chi * factorNat k % scale.toNat
 
-@[simp] theorem scaleNat_exact : scale.toNat = 1000000000000000000000000000 := by
+theorem scaleNat_exact : scale.toNat = 1000000000000000000000000000 := by
   decide +kernel
 
-@[simp] theorem rateNat_exact :
+theorem rateNat_exact :
     rate.toNat = 1000000001547125957863212448 := by
   decide +kernel
 
-@[simp] theorem halfNat_exact : half.toNat = 500000000000000000000000000 := by
+theorem halfNat_exact : half.toNat = 500000000000000000000000000 := by
   decide +kernel
 
-@[simp] theorem maxElapsedNat_exact : maxElapsed.toNat = 4294967295 := by
+theorem maxElapsedNat_exact : maxElapsed.toNat = 4294967295 := by
   decide +kernel
 
 theorem scaleNat_ne_zero : scale.toNat ≠ 0 := by

@@ -1529,7 +1529,7 @@ private def Func.CompileShape.compsize : Func.CompileShape → Nat
   | .branch p q => p.compsize + q.compsize + 5
   | .call _ => 4
 
-@[simp] private theorem Func.compsize_compileShape (p : Func) :
+private theorem Func.compsize_compileShape (p : Func) :
     p.compileShape.compsize = compsize p := by
   induction p with
   | last => rfl
@@ -1586,7 +1586,7 @@ private def Func.compileDecision (l : List (Nat × Func)) (n : Nat) :
 def Func.compiles (l : List (Nat × Func)) (n : Nat) (p : Func) : Bool :=
   (Func.compileDecision l n p).1
 
-@[simp] private theorem Func.compileDecision_snd
+private theorem Func.compileDecision_snd
     (l : List (Nat × Func)) (n : Nat) (p : Func) :
     (Func.compileDecision l n p).2 = compsize p := by
   induction p generalizing n with

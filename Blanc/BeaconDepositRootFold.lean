@@ -95,52 +95,52 @@ structure RootLoopCarrier (origin base : Devm) (memory : Mem)
   output : base.output = origin.output
   error : base.error = origin.error
 
-@[simp] theorem rootReadGas_eq_rootSloadCost
+theorem rootReadGas_eq_rootSloadCost
     (sevm : Sevm) (base : Devm) (key : B256) :
     rootReadGas sevm.currentTarget base.accessedStorageKeys key =
       sloadCost sevm base key := rfl
 
-@[simp] theorem rootAfterSload_accessedStorageKeys
+theorem rootAfterSload_accessedStorageKeys
     (sevm : Sevm) (base : Devm) (key : B256) :
     (afterSload sevm base key).accessedStorageKeys =
       rootReadKeys sevm.currentTarget base.accessedStorageKeys key := by
   unfold afterSload rootReadKeys sloadAccessedStorageKeys
   split <;> rfl
 
-@[simp] theorem rootAfterSload_getStor
+theorem rootAfterSload_getStor
     (sevm : Sevm) (base : Devm) (key : B256) (address : Adr) :
     Devm.getStor (afterSload sevm base key) address =
       Devm.getStor base address := by
   unfold afterSload
   split <;> rfl
 
-@[simp] theorem rootAfterSload_getCode
+theorem rootAfterSload_getCode
     (sevm : Sevm) (base : Devm) (key : B256) (address : Adr) :
     (afterSload sevm base key).getCode address =
       base.getCode address := by
   unfold afterSload
   split <;> rfl
 
-@[simp] theorem rootAfterSload_accessedAddresses
+theorem rootAfterSload_accessedAddresses
     (sevm : Sevm) (base : Devm) (key : B256) :
     (afterSload sevm base key).accessedAddresses =
       base.accessedAddresses := by
   unfold afterSload
   split <;> rfl
 
-@[simp] theorem rootAfterSload_logs
+theorem rootAfterSload_logs
     (sevm : Sevm) (base : Devm) (key : B256) :
     (afterSload sevm base key).logs = base.logs := by
   unfold afterSload
   split <;> rfl
 
-@[simp] theorem rootAfterSload_output
+theorem rootAfterSload_output
     (sevm : Sevm) (base : Devm) (key : B256) :
     (afterSload sevm base key).output = base.output := by
   unfold afterSload
   split <;> rfl
 
-@[simp] theorem rootAfterSload_error
+theorem rootAfterSload_error
     (sevm : Sevm) (base : Devm) (key : B256) :
     (afterSload sevm base key).error = base.error := by
   unfold afterSload

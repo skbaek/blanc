@@ -55,7 +55,7 @@ instance decidableSlotsDisjoint (w w' : B256) :
 theorem SlotsDisjoint.symm {w w' : B256} (h : SlotsDisjoint w w') :
     SlotsDisjoint w' w := Or.symm h
 
-@[simp] theorem scratch_setScratch_self (image : Bytes) (w v : B256) :
+theorem scratch_setScratch_self (image : Bytes) (w v : B256) :
     scratch (setScratch image w v) w = v :=
   Bytes.readWord_writeAt_self image (w * 32).toNat v
 

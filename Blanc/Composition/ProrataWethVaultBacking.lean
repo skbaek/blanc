@@ -426,7 +426,7 @@ def vaultSnapshot (vault : Adr) (state : Devm) :
 def snapshotAt (sevm : Sevm) (state : Devm) : Blanc.Prorata.AccountingSnapshot :=
   vaultSnapshot sevm.currentTarget state
 
-@[simp] theorem snapshotAt_eq (sevm : Sevm) (state : Devm) :
+theorem snapshotAt_eq (sevm : Sevm) (state : Devm) :
     snapshotAt sevm state = vaultSnapshot sevm.currentTarget state := rfl
 
 /-- **A successful inbound flow is a `deposit` accounting step.**

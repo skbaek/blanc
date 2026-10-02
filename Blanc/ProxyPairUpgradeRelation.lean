@@ -16,13 +16,13 @@ open Jaune
 def storageWord (state : State) (owner : Adr) (slot : B256) : B256 :=
   (state.get owner).stor.get slot
 
-@[simp] theorem storageWord_setStorVal_self
+theorem storageWord_setStorVal_self
     (state : State) (owner : Adr) (slot value : B256) :
     storageWord (state.setStorVal owner slot value) owner slot = value := by
   unfold storageWord State.setStorVal
   rw [State.get_set_self, Stor.get_set_self]
 
-@[simp] theorem storageWord_setStorVal_ne
+theorem storageWord_setStorVal_ne
     (state : State) (owner : Adr) (written read value : B256)
     (hne : written ≠ read) :
     storageWord (state.setStorVal owner written value) owner read =

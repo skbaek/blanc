@@ -62,7 +62,7 @@ def creationMessage : Msg :=
     disablePrecompiles := false }
 
 /-- The fixture message carries the exact complete creation input. -/
-@[simp] theorem creationMessage_code :
+theorem creationMessage_code :
     creationMessage.code.toList =
       ossifiableFullCreateInput implementation requestedAdmin setupData := by
   change creationCode.toList = _

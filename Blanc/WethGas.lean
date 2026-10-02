@@ -499,7 +499,7 @@ cost is `balanceOfGasWarm` or `balanceOfGas` according to the pre-state's
 accessed-key set. **This is the arc's combined cold/warm statement of the cost
 itself**; `weth_balanceOf_gas_exact_wethGas` is the combined statement of the
 run. -/
-@[simp] theorem wethGas_boSel {sevm : Sevm} {pre : Devm} :
+theorem wethGas_boSel {sevm : Sevm} {pre : Devm} :
     wethGas boSel sevm pre =
       some (if (⟨sevm.currentTarget, Sevm.dataWord sevm 4⟩ : Adr × B256)
               ∈ pre.accessedStorageKeys then balanceOfGasWarm else balanceOfGas) := by
@@ -513,7 +513,7 @@ run. -/
     rfl
 
 /-- `wethGas` at `decimals()`, for every state: it reads no storage. -/
-@[simp] theorem wethGas_dcSel {sevm : Sevm} {pre : Devm} :
+theorem wethGas_dcSel {sevm : Sevm} {pre : Devm} :
     wethGas dcSel sevm pre = some decimalsGas := by
   simp only [wethGas, wethGasWith, if_neg dcSel_ne_boSel]
   rfl

@@ -25,20 +25,20 @@ def supportsInterfaceWord (word : B256) : Bool :=
 def supportsInterfaceArg (sevm : Sevm) : Bool :=
   supportsInterfaceWord (Sevm.argWord sevm 0 >>> 224)
 
-@[simp] theorem supportsInterfaceWord_eq_true_iff (word : B256) :
+theorem supportsInterfaceWord_eq_true_iff (word : B256) :
     supportsInterfaceWord word = true ↔
       word = erc165InterfaceId ∨ word = depositInterfaceId := by
   simp only [supportsInterfaceWord, Bool.decide_or, Bool.or_eq_true, decide_eq_true_eq]
 
-@[simp] theorem supportsInterfaceWord_erc165 :
+theorem supportsInterfaceWord_erc165 :
     supportsInterfaceWord erc165InterfaceId = true := by
   simp only [supportsInterfaceWord_eq_true_iff, true_or]
 
-@[simp] theorem supportsInterfaceWord_deposit :
+theorem supportsInterfaceWord_deposit :
     supportsInterfaceWord depositInterfaceId = true := by
   simp only [supportsInterfaceWord_eq_true_iff, or_true]
 
-@[simp] theorem supportsInterfaceWord_ffffffff :
+theorem supportsInterfaceWord_ffffffff :
     supportsInterfaceWord (0xffffffff : B256) = false := by
   decide +kernel
 

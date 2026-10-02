@@ -309,48 +309,48 @@ theorem FlowAction.localSegmentsBookedLoss_eq (action : FlowAction) :
   cases atom <;> cases credit <;>
     simp_all only [CreditShape, localSegmentsBookedLoss, LocalSegmentKind.bookedLoss, bookedCreditLoss, localSegmentLabels, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero, creditLossTotal, reduceCtorEq]
 
-@[simp] theorem localSegmentsHolderIn_append
+theorem localSegmentsHolderIn_append
     (left right : List (LocalSegmentKind × FlowAction)) (u : Adr) :
     localSegmentsHolderIn (left ++ right) u =
       localSegmentsHolderIn left u + localSegmentsHolderIn right u := by
   simp only [localSegmentsHolderIn, List.map_append, List.sum_append]
 
-@[simp] theorem localSegmentsHolderOut_append
+theorem localSegmentsHolderOut_append
     (left right : List (LocalSegmentKind × FlowAction)) (u : Adr) :
     localSegmentsHolderOut (left ++ right) u =
       localSegmentsHolderOut left u + localSegmentsHolderOut right u := by
   simp only [localSegmentsHolderOut, List.map_append, List.sum_append]
 
-@[simp] theorem localSegmentsHolderLoss_append
+theorem localSegmentsHolderLoss_append
     (left right : List (LocalSegmentKind × FlowAction)) (u : Adr) :
     localSegmentsHolderLoss (left ++ right) u =
       localSegmentsHolderLoss left u + localSegmentsHolderLoss right u := by
   simp only [localSegmentsHolderLoss, List.map_append, List.sum_append]
 
-@[simp] theorem localSegmentsBookedIn_append
+theorem localSegmentsBookedIn_append
     (left right : List (LocalSegmentKind × FlowAction)) :
     localSegmentsBookedIn (left ++ right) =
       localSegmentsBookedIn left + localSegmentsBookedIn right := by
   simp only [localSegmentsBookedIn, List.map_append, List.sum_append]
 
-@[simp] theorem localSegmentsBookedOut_append
+theorem localSegmentsBookedOut_append
     (left right : List (LocalSegmentKind × FlowAction)) :
     localSegmentsBookedOut (left ++ right) =
       localSegmentsBookedOut left + localSegmentsBookedOut right := by
   simp only [localSegmentsBookedOut, List.map_append, List.sum_append]
 
-@[simp] theorem localSegmentsBookedLoss_append
+theorem localSegmentsBookedLoss_append
     (left right : List (LocalSegmentKind × FlowAction)) :
     localSegmentsBookedLoss (left ++ right) =
       localSegmentsBookedLoss left + localSegmentsBookedLoss right := by
   simp only [localSegmentsBookedLoss, List.map_append, List.sum_append]
 
-@[simp] theorem holderFlowOfActions_singleton
+theorem holderFlowOfActions_singleton
     (action : FlowAction) (u : Adr) :
     holderFlowOfActions [action] u = action.atom.holderFlow u := by
   simp only [holderFlowOfActions, List.foldl_cons, HolderFlow.zero_add, List.foldl_nil]
 
-@[simp] theorem supplyFlowOfActions_singleton (action : FlowAction) :
+theorem supplyFlowOfActions_singleton (action : FlowAction) :
     supplyFlowOfActions [action] = action.atom.supplyFlow := by
   simp only [supplyFlowOfActions, SupplyFlow.add, SupplyFlow.zero, List.foldl_cons, zero_add,
     List.foldl_nil]
@@ -400,12 +400,12 @@ theorem localSegmentsHolderOut_labels_eq
       simp only [holderFlowOfActions_singleton, HolderFlow.add]
       omega
 
-@[simp] theorem SupplyFlow.zero_add (flow : SupplyFlow) :
+theorem SupplyFlow.zero_add (flow : SupplyFlow) :
     SupplyFlow.zero.add flow = flow := by
   cases flow
   simp only [add, zero, _root_.zero_add]
 
-@[simp] theorem SupplyFlow.add_zero (flow : SupplyFlow) :
+theorem SupplyFlow.add_zero (flow : SupplyFlow) :
     flow.add SupplyFlow.zero = flow := by
   cases flow
   simp only [add, zero, _root_.add_zero]
@@ -438,14 +438,14 @@ theorem supplyFlowOfActions_append (left right : List FlowAction) :
   rw [List.foldl_append]
   exact supplyFlowOfActions_from_eq_add right _
 
-@[simp] theorem holderCreditLossOfActions_append
+theorem holderCreditLossOfActions_append
     (left right : List FlowAction) (u : Adr) :
     holderCreditLossOfActions (left ++ right) u =
       holderCreditLossOfActions left u +
         holderCreditLossOfActions right u := by
   simp only [holderCreditLossOfActions, List.map_append, List.sum_append]
 
-@[simp] theorem creditLossOfActions_append
+theorem creditLossOfActions_append
     (left right : List FlowAction) :
     creditLossOfActions (left ++ right) =
       creditLossOfActions left + creditLossOfActions right := by

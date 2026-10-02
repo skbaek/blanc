@@ -79,13 +79,13 @@ def ChildToWrapperSettledAt (owner : Adr) :
         MessageTransientEqualAt owner childTransient wrapperTransient
   | _, _ => False
 
-@[simp] theorem ChildToWrapperSettledAt.ok_iff
+theorem ChildToWrapperSettledAt.ok_iff
     (owner : Adr) (child wrapper : Devm) :
     ChildToWrapperSettledAt owner (.ok child) (.ok wrapper) ↔
       ChildToWrapperOkAt owner child wrapper :=
   Iff.rfl
 
-@[simp] theorem ChildToWrapperSettledAt.error_iff
+theorem ChildToWrapperSettledAt.error_iff
     (owner : Adr)
     (childError wrapperError : EvmError)
     (childState wrapperState : State)

@@ -52,12 +52,12 @@ def constructorStorageEffectTriplesFrom
           zeroHash Bytes.sha256 (height + 1)) ::
         constructorStorageEffectTriplesFrom owner (height + 1) remaining
 
-@[simp] theorem constructorStorageEffectTriplesFrom_zero
+theorem constructorStorageEffectTriplesFrom_zero
     (owner : Adr) (height : Nat) :
     constructorStorageEffectTriplesFrom owner height 0 = [] :=
   rfl
 
-@[simp] theorem constructorStorageEffectTriplesFrom_succ
+theorem constructorStorageEffectTriplesFrom_succ
     (owner : Adr) (height remaining : Nat) :
     constructorStorageEffectTriplesFrom owner height (remaining + 1) =
       (owner, zeroHashSlot (height + 1),

@@ -50,18 +50,18 @@ def avoidsAll (stage : MemoryStage) (windows : List (Nat × Nat)) : Bool :=
 def before (stage : MemoryStage) (start : Nat) : Bool :=
   stage.all fun write => decide (write.1 + write.2.length ≤ start)
 
-@[simp] theorem applyImage_nil (image : Bytes) :
+theorem applyImage_nil (image : Bytes) :
     applyImage [] image = image := rfl
 
-@[simp] theorem applyImage_cons
+theorem applyImage_cons
     (write : Nat × Bytes) (stage : MemoryStage) (image : Bytes) :
     applyImage (write :: stage) image =
       applyImage stage (Bytes.writeAt image write.1 write.2) := rfl
 
-@[simp] theorem applyMemory_nil (memory : Mem) :
+theorem applyMemory_nil (memory : Mem) :
     applyMemory [] memory = memory := rfl
 
-@[simp] theorem applyMemory_cons
+theorem applyMemory_cons
     (write : Nat × Bytes) (stage : MemoryStage) (memory : Mem) :
     applyMemory (write :: stage) memory =
       applyMemory stage (memory.write write.1 write.2) := rfl
@@ -199,7 +199,7 @@ theorem applyMemory_size_of_covered
 def words (writes : List (Nat × B256)) : MemoryStage :=
   writes.map fun write => (write.1, write.2.toBytes)
 
-@[simp] theorem footprint_words (writes : List (Nat × B256)) :
+theorem footprint_words (writes : List (Nat × B256)) :
     (words writes).footprint = writes.map fun write => (write.1, 32) := by
   simp only [footprint, words, List.map_map, Function.comp_def, B256.length_toBytes]
 

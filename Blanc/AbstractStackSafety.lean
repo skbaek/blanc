@@ -24,9 +24,9 @@ def Matches : Pattern → Stack → Prop
   | word :: words, value :: values => WordMatches word value ∧ Matches words values
   | _, _ => False
 
-@[simp] theorem matches_nil : Matches [] [] := True.intro
+theorem matches_nil : Matches [] [] := True.intro
 
-@[simp] theorem matches_cons {word : Option B256} {words : Pattern}
+theorem matches_cons {word : Option B256} {words : Pattern}
     {value : B256} {values : Stack} :
     Matches (word :: words) (value :: values) ↔
       WordMatches word value ∧ Matches words values := Iff.rfl

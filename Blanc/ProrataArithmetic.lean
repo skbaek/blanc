@@ -12,22 +12,22 @@ namespace Prorata
 
 
 
-@[simp] theorem offset_toNat : offset.toNat = 1000 := by
+theorem offset_toNat : offset.toNat = 1000 := by
   rfl
 
-@[simp] theorem maxValue_toNat :
+theorem maxValue_toNat :
     maxValue.toNat = 2 ^ 96 - 1 := by
   unfold maxValue
   rw [B256.toNat_toB256_of_lt]
   norm_num only
 
-@[simp] theorem maxSupply_toNat :
+theorem maxSupply_toNat :
     maxSupply.toNat = 2 ^ 126 - 1 := by
   unfold maxSupply
   rw [B256.toNat_toB256_of_lt]
   norm_num only
 
-@[simp] theorem maxBalance_toNat :
+theorem maxBalance_toNat :
     maxBalance.toNat = 2 ^ 126 - 1 := by
   unfold maxBalance
   rw [B256.toNat_toB256_of_lt]

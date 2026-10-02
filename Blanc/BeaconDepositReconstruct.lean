@@ -225,35 +225,35 @@ theorem reconstructPushStore_runCompiledTo
       rfl) ?_
   simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using htail
 
-@[simp] theorem reconstructPushStoreCost_zero_one :
+theorem reconstructPushStoreCost_zero_one :
     reconstructPushStoreCost 0 1 = 8 := by
   decide +kernel
 
-@[simp] theorem reconstructLoadStoreCost_node_zero :
+theorem reconstructLoadStoreCost_node_zero :
     reconstructLoadStoreCost nodeWord 0 = 11 := by
   decide +kernel
 
-@[simp] theorem reconstructLoadStoreCost_intermediate_zero :
+theorem reconstructLoadStoreCost_intermediate_zero :
     reconstructLoadStoreCost intermediateWord 0 = 11 := by
   decide +kernel
 
-@[simp] theorem reconstructLoadStoreCost_intermediate_one :
+theorem reconstructLoadStoreCost_intermediate_one :
     reconstructLoadStoreCost intermediateWord 1 = 12 := by
   decide +kernel
 
-@[simp] theorem reconstructLoadStoreCost_second_one :
+theorem reconstructLoadStoreCost_second_one :
     reconstructLoadStoreCost secondIntermediateWord 1 = 12 := by
   decide +kernel
 
-@[simp] theorem reconstructLoadStoreCost_fifteen_zero :
+theorem reconstructLoadStoreCost_fifteen_zero :
     reconstructLoadStoreCost 15 0 = 11 := by
   decide +kernel
 
-@[simp] theorem reconstructLoadStoreCost_nine_one :
+theorem reconstructLoadStoreCost_nine_one :
     reconstructLoadStoreCost 9 1 = 12 := by
   decide +kernel
 
-@[simp] theorem reconstructLoadStoreCost_eleven_zero :
+theorem reconstructLoadStoreCost_eleven_zero :
     reconstructLoadStoreCost 11 0 = 11 := by
   decide +kernel
 

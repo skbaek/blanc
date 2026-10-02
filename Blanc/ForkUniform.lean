@@ -70,18 +70,18 @@ open Jaune
 
 section withFork
 variable (s : Sevm) (g : Fork)
-@[simp] theorem Sevm.withFork_caller : (s.withFork g).caller = s.caller := rfl
-@[simp] theorem Sevm.withFork_target : (s.withFork g).target = s.target := rfl
-@[simp] theorem Sevm.withFork_currentTarget : (s.withFork g).currentTarget = s.currentTarget := rfl
-@[simp] theorem Sevm.withFork_gas : (s.withFork g).gas = s.gas := rfl
-@[simp] theorem Sevm.withFork_value : (s.withFork g).value = s.value := rfl
-@[simp] theorem Sevm.withFork_data : (s.withFork g).data = s.data := rfl
-@[simp] theorem Sevm.withFork_codeAddress : (s.withFork g).codeAddress = s.codeAddress := rfl
-@[simp] theorem Sevm.withFork_code : (s.withFork g).code = s.code := rfl
-@[simp] theorem Sevm.withFork_depth : (s.withFork g).depth = s.depth := rfl
-@[simp] theorem Sevm.withFork_isStatic : (s.withFork g).isStatic = s.isStatic := rfl
-@[simp] theorem Sevm.withFork_tenvStat : (s.withFork g).tenvStat = s.tenvStat := rfl
-@[simp] theorem Sevm.withFork_fork : (s.withFork g).benvStat.fork = g := rfl
+theorem Sevm.withFork_caller : (s.withFork g).caller = s.caller := rfl
+theorem Sevm.withFork_target : (s.withFork g).target = s.target := rfl
+theorem Sevm.withFork_currentTarget : (s.withFork g).currentTarget = s.currentTarget := rfl
+theorem Sevm.withFork_gas : (s.withFork g).gas = s.gas := rfl
+theorem Sevm.withFork_value : (s.withFork g).value = s.value := rfl
+theorem Sevm.withFork_data : (s.withFork g).data = s.data := rfl
+theorem Sevm.withFork_codeAddress : (s.withFork g).codeAddress = s.codeAddress := rfl
+theorem Sevm.withFork_code : (s.withFork g).code = s.code := rfl
+theorem Sevm.withFork_depth : (s.withFork g).depth = s.depth := rfl
+theorem Sevm.withFork_isStatic : (s.withFork g).isStatic = s.isStatic := rfl
+theorem Sevm.withFork_tenvStat : (s.withFork g).tenvStat = s.tenvStat := rfl
+theorem Sevm.withFork_fork : (s.withFork g).benvStat.fork = g := rfl
 theorem Sevm.withFork_self : s.withFork s.benvStat.fork = s := rfl
 end withFork
 
@@ -145,7 +145,7 @@ theorem XStep.withFork_ofExcept (g : Fork) (m : Except (EvmError × Devm) XStep)
     (XStep.ofExcept m).withFork g = XStep.ofExcept (m.map (XStep.withFork g)) := by
   cases m <;> rfl
 
-@[simp] theorem XStep.withFork_done (g : Fork) (ex : Execution) :
+theorem XStep.withFork_done (g : Fork) (ex : Execution) :
     (XStep.done ex).withFork g = .done ex := rfl
 
 theorem genericCall_step_withFork (s : Sevm) (g : Fork) (d : Devm) (gas : Nat) (value : B256)
@@ -334,16 +334,16 @@ theorem settle_withFork {f : Frame} {g : Fork} (ho : CoveredFork f.outer.benv.st
 
 section msgWithFork
 variable (m : Msg) (g : Fork)
-@[simp] theorem Msg.withFork_codeAddress : (m.withFork g).codeAddress = m.codeAddress := rfl
-@[simp] theorem Msg.withFork_disablePrecompiles :
+theorem Msg.withFork_codeAddress : (m.withFork g).codeAddress = m.codeAddress := rfl
+theorem Msg.withFork_disablePrecompiles :
     (m.withFork g).disablePrecompiles = m.disablePrecompiles := rfl
-@[simp] theorem Msg.withFork_shouldTransferValue :
+theorem Msg.withFork_shouldTransferValue :
     (m.withFork g).shouldTransferValue = m.shouldTransferValue := rfl
-@[simp] theorem Msg.withFork_caller : (m.withFork g).caller = m.caller := rfl
-@[simp] theorem Msg.withFork_value : (m.withFork g).value = m.value := rfl
-@[simp] theorem Msg.withFork_currentTarget : (m.withFork g).currentTarget = m.currentTarget := rfl
-@[simp] theorem Msg.withFork_benv_state : (m.withFork g).benv.state = m.benv.state := rfl
-@[simp] theorem Msg.withFork_rules : (m.withFork g).benv.stat.rules = Fork.ruleSet g := rfl
+theorem Msg.withFork_caller : (m.withFork g).caller = m.caller := rfl
+theorem Msg.withFork_value : (m.withFork g).value = m.value := rfl
+theorem Msg.withFork_currentTarget : (m.withFork g).currentTarget = m.currentTarget := rfl
+theorem Msg.withFork_benv_state : (m.withFork g).benv.state = m.benv.state := rfl
+theorem Msg.withFork_rules : (m.withFork g).benv.stat.rules = Fork.ruleSet g := rfl
 end msgWithFork
 
 theorem initEvm_withFork {m : Msg} {g : Fork} (hf : CoveredFork m.benv.stat.fork)

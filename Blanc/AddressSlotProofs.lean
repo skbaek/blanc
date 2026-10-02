@@ -50,7 +50,7 @@ theorem addressSlotReadWord_eq_toAdr_toB256 (raw : B256) :
     · exact lowMask middle
   · exact b128AndMax low
 
-@[simp] theorem addressSlotReadWord_toB256 (address : Adr) :
+theorem addressSlotReadWord_toB256 (address : Adr) :
     addressSlotReadWord address.toB256 = address.toB256 := by
   rw [addressSlotReadWord_eq_toAdr_toB256, toAdr_toB256]
 

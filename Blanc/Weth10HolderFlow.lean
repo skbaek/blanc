@@ -44,12 +44,12 @@ def HolderFlow.add {u : Adr} (x y : HolderFlow u) : HolderFlow u :=
     x.flashCredit + y.flashCredit,
     x.flashRepayment + y.flashRepayment⟩
 
-@[simp] theorem HolderFlow.zero_add {u : Adr} (x : HolderFlow u) :
+theorem HolderFlow.zero_add {u : Adr} (x : HolderFlow u) :
     (HolderFlow.zero u).add x = x := by
   cases x
   simp only [add, zero, _root_.zero_add]
 
-@[simp] theorem HolderFlow.add_zero {u : Adr} (x : HolderFlow u) :
+theorem HolderFlow.add_zero {u : Adr} (x : HolderFlow u) :
     x.add (HolderFlow.zero u) = x := by
   cases x
   simp only [add, zero, _root_.add_zero]

@@ -27,7 +27,7 @@ def ledgerDebit (f : Adr → B256) (k : Adr) (v : B256) : Adr → B256 :=
 def ledgerCredit (f : Adr → B256) (k : Adr) (v : B256) : Adr → B256 :=
   Function.update f k (f k + v)
 
-@[simp] theorem ledgerDebit_self (f : Adr → B256) (k : Adr) (v : B256) :
+theorem ledgerDebit_self (f : Adr → B256) (k : Adr) (v : B256) :
     ledgerDebit f k v k = f k - v := by
   simp only [ledgerDebit, Function.update_self]
 
@@ -35,7 +35,7 @@ theorem ledgerDebit_ne {f : Adr → B256} {k a : Adr} (v : B256) (h : a ≠ k) :
     ledgerDebit f k v a = f a := by
   simp only [ledgerDebit, Function.update_of_ne h]
 
-@[simp] theorem ledgerCredit_self (f : Adr → B256) (k : Adr) (v : B256) :
+theorem ledgerCredit_self (f : Adr → B256) (k : Adr) (v : B256) :
     ledgerCredit f k v k = f k + v := by
   simp only [ledgerCredit, Function.update_self]
 

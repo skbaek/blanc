@@ -178,10 +178,10 @@ theorem v1Prog_compile : Prog.compile v1Prog = some v1Bytes :=
 theorem v2Prog_compile : Prog.compile v2Prog = some v2Bytes :=
   Prog.compile_eq_some_getD_of_compiles _ v2Prog_compiles
 
-@[simp] theorem v1Code_toList : v1Code.toList = v1Bytes := by
+theorem v1Code_toList : v1Code.toList = v1Bytes := by
   simp only [v1Code, ByteArray.toList_eq_toList_data]
 
-@[simp] theorem v2Code_toList : v2Code.toList = v2Bytes := by
+theorem v2Code_toList : v2Code.toList = v2Bytes := by
   simp only [v2Code, ByteArray.toList_eq_toList_data]
 
 theorem v1Bytes_length : v1Bytes.length = 74 := by decide +kernel

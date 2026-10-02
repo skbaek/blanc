@@ -52,10 +52,10 @@ def claimSum (f : RedemptionClaim → Nat) : List RedemptionClaim → Nat
   | [] => 0
   | c :: cs => f c + claimSum f cs
 
-@[simp] theorem claimSum_nil (f : RedemptionClaim → Nat) :
+theorem claimSum_nil (f : RedemptionClaim → Nat) :
     claimSum f [] = 0 := rfl
 
-@[simp] theorem claimSum_cons (f : RedemptionClaim → Nat)
+theorem claimSum_cons (f : RedemptionClaim → Nat)
     (c : RedemptionClaim) (cs : List RedemptionClaim) :
     claimSum f (c :: cs) = f c + claimSum f cs := rfl
 
@@ -89,23 +89,23 @@ def ownerClaimTotal (cs : List RedemptionClaim) (u : Adr) : Nat :=
 def recipientClaimTotal (cs : List RedemptionClaim) (r : Adr) : Nat :=
   claimSum (fun c => if c.recipient = r then c.amount else 0) cs
 
-@[simp] theorem claimTotal_nil : claimTotal [] = 0 := rfl
+theorem claimTotal_nil : claimTotal [] = 0 := rfl
 
-@[simp] theorem claimTotal_cons (c : RedemptionClaim)
+theorem claimTotal_cons (c : RedemptionClaim)
     (cs : List RedemptionClaim) :
     claimTotal (c :: cs) = c.amount + claimTotal cs := rfl
 
-@[simp] theorem ownerClaimTotal_nil (u : Adr) : ownerClaimTotal [] u = 0 := rfl
+theorem ownerClaimTotal_nil (u : Adr) : ownerClaimTotal [] u = 0 := rfl
 
-@[simp] theorem ownerClaimTotal_cons (c : RedemptionClaim)
+theorem ownerClaimTotal_cons (c : RedemptionClaim)
     (cs : List RedemptionClaim) (u : Adr) :
     ownerClaimTotal (c :: cs) u =
       (if c.owner = u then c.amount else 0) + ownerClaimTotal cs u := rfl
 
-@[simp] theorem recipientClaimTotal_nil (r : Adr) :
+theorem recipientClaimTotal_nil (r : Adr) :
     recipientClaimTotal [] r = 0 := rfl
 
-@[simp] theorem recipientClaimTotal_cons (c : RedemptionClaim)
+theorem recipientClaimTotal_cons (c : RedemptionClaim)
     (cs : List RedemptionClaim) (r : Adr) :
     recipientClaimTotal (c :: cs) r =
       (if c.recipient = r then c.amount else 0) +

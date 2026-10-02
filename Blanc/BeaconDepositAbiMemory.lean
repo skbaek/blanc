@@ -32,14 +32,14 @@ def depositOffsetWord (data : Bytes) (head : Nat) : B256 :=
 def depositLengthWord (data : Bytes) (head : Nat) : B256 :=
   Nat.toB256 (dynamicLength data head)
 
-@[simp] theorem depositOffsetWord_eq_calldataWord
+theorem depositOffsetWord_eq_calldataWord
     (data : Bytes) (head : Nat) :
     depositOffsetWord data head =
       calldataWord data (4 + 32 * head) := by
   unfold depositOffsetWord dynamicOffset
   exact Jaune.toB256_toNat _
 
-@[simp] theorem depositLengthWord_eq_calldataWord
+theorem depositLengthWord_eq_calldataWord
     (data : Bytes) (head : Nat) :
     depositLengthWord data head =
       calldataWord data (4 + dynamicOffset data head) := by

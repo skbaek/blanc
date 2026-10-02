@@ -52,13 +52,13 @@ theorem CountedFrame.permanentOutflow_eq (record : CountedFrame) (u : Adr) :
       | some action => action.atom.outflow u
       | none => 0 := rfl
 
-@[simp] theorem FlowAtom.outflow_ordinaryMint (raw : B256) (recipient : Adr)
+theorem FlowAtom.outflow_ordinaryMint (raw : B256) (recipient : Adr)
     (amount : Nat) (u : Adr) :
     (FlowAtom.ordinaryMint raw recipient amount).outflow u = 0 := by
   by_cases hrec : recipient = u <;>
     simp only [outflow, holderFlow, hrec, ↓reduceIte, HolderFlow.zero, add_zero]
 
-@[simp] theorem FlowAtom.outflow_flashPair (raw : B256) (receiver : Adr)
+theorem FlowAtom.outflow_flashPair (raw : B256) (receiver : Adr)
     (amount : Nat) (u : Adr) :
     (FlowAtom.flashPair raw receiver amount).outflow u = 0 := by
   by_cases hrec : receiver = u <;>
@@ -101,9 +101,9 @@ def actionOutflow (u : Adr) : List FlowAction → Nat
           (action.atom.holderFlow u).externalTransferredOut) +
         actionOutflow u rest
 
-@[simp] theorem ledgerOutflow_nil (u : Adr) : ledgerOutflow u [] = 0 := rfl
+theorem ledgerOutflow_nil (u : Adr) : ledgerOutflow u [] = 0 := rfl
 
-@[simp] theorem actionOutflow_nil (u : Adr) : actionOutflow u [] = 0 := rfl
+theorem actionOutflow_nil (u : Adr) : actionOutflow u [] = 0 := rfl
 
 theorem ledgerOutflow_append (u : Adr) (left right : List CountedFrame) :
     ledgerOutflow u (left ++ right) =

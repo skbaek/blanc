@@ -193,7 +193,7 @@ theorem Prog.entrySstoreFree_sound
   Prog.entrySstoreFree_iff.mp accepted
 
 /-- The component-only finite scan accepts the empty component vacuously. -/
-@[simp] theorem Prog.componentSstoreFree_nil (program : Prog) :
+theorem Prog.componentSstoreFree_nil (program : Prog) :
     program.componentSstoreFree [] = true := rfl
 
 /-- An empty component certifies exactly a locally SSTORE-free, call-free

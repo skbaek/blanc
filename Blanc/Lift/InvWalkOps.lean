@@ -24,13 +24,13 @@ namespace Blanc.Lift
 
 open Jaune
 
-@[simp] theorem St.returnData {b : Devm} {S : List B256} {M : Mem} {G : Nat} :
+theorem St.returnData {b : Devm} {S : List B256} {M : Mem} {G : Nat} :
     (St b S M G).returnData = b.returnData := rfl
 
-@[simp] theorem St.memRead_fst {b : Devm} {S : List B256} {M : Mem} {G i sz : Nat} :
+theorem St.memRead_fst {b : Devm} {S : List B256} {M : Mem} {G i sz : Nat} :
     ((St b S M G).memRead i sz).1 = (M.read i sz).1 := rfl
 
-@[simp] theorem St.memRead_snd {b : Devm} {S : List B256} {M : Mem} {G i sz : Nat} :
+theorem St.memRead_snd {b : Devm} {S : List B256} {M : Mem} {G i sz : Nat} :
     ((St b S M G).memRead i sz).2 = St b S (M.read i sz).2 G := rfl
 
 section Steps

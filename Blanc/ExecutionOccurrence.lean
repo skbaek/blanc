@@ -425,7 +425,7 @@ def Exec.retainedStorageEffectTriples
 
 /-- A committed continuing step contributes its recognized storage effect,
 followed by the retained effects of its tail. -/
-@[simp] theorem Exec.retainedStorageEffectTriples_cont
+theorem Exec.retainedStorageEffectTriples_cont
     {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
     {step : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' post}
     {out : Execution} (tail : Exec pc' sevm post out)
@@ -446,7 +446,7 @@ followed by the retained effects of its tail. -/
 
 /-- A synchronously resolved childless frame contributes no child-frame
 storage effects; retained effects resume at the same-frame tail. -/
-@[simp] theorem Exec.retainedStorageEffectTriples_doneOk
+theorem Exec.retainedStorageEffectTriples_doneOk
     {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
     {frame : Jaune.Frame} {resume : Resume}
     {settled : Except (EvmError × State × AdrSet × Tra) Devm}
@@ -469,7 +469,7 @@ storage effects; retained effects resume at the same-frame tail. -/
   simp only [hnone, retainedStorageEffectTriples, retainedStorageWrites]
 
 /-- A committed halt has no retained SSTORE driver node. -/
-@[simp] theorem Exec.retainedStorageEffectTriples_halt
+theorem Exec.retainedStorageEffectTriples_halt
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     {step : Evm.step ⟨pc, sevm, pre⟩ = .halt out}
     (committed : Execution.commits out = true) :
@@ -492,7 +492,7 @@ def Exec.StorageWrite.matches
     (write : Exec.StorageWrite) (owner : Adr) (key : B256) : Bool :=
   write.owner == owner && write.key == key
 
-@[simp] theorem Exec.StorageWrite.matches_eq_true
+theorem Exec.StorageWrite.matches_eq_true
     {write : Exec.StorageWrite} {owner : Adr} {key : B256} :
     write.matches owner key = true ↔
       write.owner = owner ∧ write.key = key := by
@@ -3313,7 +3313,7 @@ def Exec.Frame.SourceCursor.toRaw
   ⟨cursor.pc, cursor.pre, cursor.current, cursor.parentPrefix,
     cursor.codeSlice, cursor.codeBoundary, cursor.sourceIncluded⟩
 
-@[simp] theorem Exec.Frame.SourceCursor.toRaw_node
+theorem Exec.Frame.SourceCursor.toRaw_node
     {frame : Exec.Frame} {program : Prog}
     {path : Prog.SourcePath} {source : Func}
     (cursor : Exec.Frame.SourceCursor frame program path source) :
@@ -3350,7 +3350,7 @@ def Prog.SourceSite.matchesSstore
     | .reg .sstore => true
     | _ => false
 
-@[simp] theorem Prog.SourceSite.matchesSstore_eq_true
+theorem Prog.SourceSite.matchesSstore_eq_true
     {site : Prog.SourceSite} {path : Prog.SourcePath} {pc : Nat} :
     site.matchesSstore path pc = true ↔
       site.path = path ∧ site.pc = pc ∧

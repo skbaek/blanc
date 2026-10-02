@@ -2443,12 +2443,8 @@ theorem getDepositRootEndpoint_nonpayable_zero_storageEffectRun
       (nonpayableEndpoint getDepositRootEndpoint) out effects := by
   unfold nonpayableEndpoint nonpayableEndpointZeroGas
   storage_effect_run (1)
-  · simp only [Devm.stack_setMach]
-    omega
   · rw [hvalue]
     storage_effect_run (1)
-    · simp only [Devm.stack_setMach, List.length_cons]
-      omega
     case h_arm =>
       simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas,
           show G + 15 - 15 = G by omega] using hbody
@@ -2467,8 +2463,6 @@ theorem getDepositRootEndpoint_nonpayable_nonzero_storageEffectRun
         (base.setMach ⟨base.stack, base.memory, G, base.stateGas⟩).withOutput [])) [] := by
   unfold nonpayableEndpoint nonpayableEndpointRevertGas
   storage_effect_run (1)
-  · simp only [Devm.stack_setMach]
-    omega
   · apply Func.StorageEffectRun.succ hvalue
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)
       (by

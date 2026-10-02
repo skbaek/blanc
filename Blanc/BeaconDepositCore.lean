@@ -34,12 +34,12 @@ def accOfStor (stor : Stor) : Acc :=
       if height < 32 then stor.get (branchSlot height) else 0
     count := (stor.get depositCountSlot).toNat }
 
-@[simp] theorem accOfStor_branch_of_lt (stor : Stor) (height : Nat)
+theorem accOfStor_branch_of_lt (stor : Stor) (height : Nat)
     (h : height < 32) :
     (accOfStor stor).branch height = stor.get (branchSlot height) := by
   simp only [accOfStor, h, ↓reduceIte]
 
-@[simp] theorem accOfStor_count (stor : Stor) :
+theorem accOfStor_count (stor : Stor) :
     (accOfStor stor).count = (stor.get depositCountSlot).toNat := rfl
 
 /-- The constructor-owned zero-hash region is canonical through depth 31. -/

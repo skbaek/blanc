@@ -694,7 +694,7 @@ def stateSnapshot (vault : Adr) (state : State) : Snapshot :=
   ⟨((state.getStor vault).get Blanc.ProrataWethVault.supplySlot).toNat,
     (Stor.rest (state.getStor wethAccount) vault).toNat⟩
 
-@[simp] theorem vaultSnapshot_state (vault : Adr) (state : Devm) :
+theorem vaultSnapshot_state (vault : Adr) (state : Devm) :
     vaultSnapshot vault state = stateSnapshot vault state.state := rfl
 
 /-- The vault-side storage equation of an actual inbound effect is one exact

@@ -196,10 +196,10 @@ macro_rules
                 (Func.of_inv Devm.storageView Devm.storageView (by func_inv) run)
                 sevm.currentTarget) key))
 
-@[simp] theorem ContractSpec.ofStorageOnly_prog {p : Prog} {P : Stor → Prop} :
+theorem ContractSpec.ofStorageOnly_prog {p : Prog} {P : Stor → Prop} :
     (ContractSpec.ofStorageOnly p P).prog = p := rfl
 
-@[simp] theorem ContractSpec.ofStorageOnly_inv {p : Prog} {P : Stor → Prop}
+theorem ContractSpec.ofStorageOnly_inv {p : Prog} {P : Stor → Prop}
     {s : Stor} {v b : B256} :
     (ContractSpec.ofStorageOnly p P).Inv s v b = P s := rfl
 

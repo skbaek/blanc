@@ -87,7 +87,7 @@ inductive TriggerLabel
 The equations are `@[simp]` so that the `*Slot` abbreviations below, which are
 now defined through `localSlotOf`, still reduce to their numeric literal in the
 downstream `simp [runtime, aux, baseAux, fooSlot]` table-lookup idiom. -/
-@[simp] def localSlotOf : TriggerLabel → Nat
+def localSlotOf : TriggerLabel → Nat
   | .malformedAbi => 1
   | .zeroMsgValue => 2
   | .zeroValidatorsData => 3

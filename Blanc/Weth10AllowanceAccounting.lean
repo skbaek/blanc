@@ -58,7 +58,7 @@ def applyAllowanceLedger (pre : Stor) (ledger : List CountedFrame)
   | some value => value
   | none => pre.get key
 
-@[simp] theorem applyAllowanceLedger_nil (pre : Stor) (key : B256) :
+theorem applyAllowanceLedger_nil (pre : Stor) (key : B256) :
     applyAllowanceLedger pre [] key = pre.get key := rfl
 
 /-- Chronological composition: replaying `left ++ right` is replaying

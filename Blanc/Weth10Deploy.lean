@@ -31,12 +31,12 @@ def freshDeployParams
     (chainId : B256) (contractAddress : Adr) : DeployParams :=
   ⟨chainId, deploymentDomainSeparator chainId contractAddress⟩
 
-@[simp] theorem freshDeployParams_deploymentChainId
+theorem freshDeployParams_deploymentChainId
     (chainId : B256) (contractAddress : Adr) :
     (freshDeployParams chainId contractAddress).deploymentChainId = chainId :=
   rfl
 
-@[simp] theorem freshDeployParams_cachedDomainSeparator
+theorem freshDeployParams_cachedDomainSeparator
     (chainId : B256) (contractAddress : Adr) :
     (freshDeployParams chainId contractAddress).cachedDomainSeparator =
       deploymentDomainSeparator chainId contractAddress :=

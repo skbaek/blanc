@@ -122,7 +122,7 @@ inductive Label : Type
 The equations are `@[simp]` so that the `*Slot` abbreviations below, which are
 now defined through `slotOf`, still reduce to their numeric literal in the
 downstream `simp [runtime, aux, fooSlot]` table-lookup idiom. -/
-@[simp] def slotOf : Label → Nat
+def slotOf : Label → Nat
   | .root => 0
   | .fallback => 1
   | .pausableZeroError => 2
@@ -1089,15 +1089,15 @@ now anchored on the certificate, so `simp [runtime, ...]` rewrites a goal to
 `(symbolicLinkCert dp).resolved`; without this `@[simp]` lemma simp cannot
 delta-unfold `symbolicLinkCert` and the 50-odd `simp [runtime, aux, fooSlot]`
 table-lookup sites stall. -/
-@[simp] theorem symbolicLinkCert_resolved (dp : DeployParams) :
+theorem symbolicLinkCert_resolved (dp : DeployParams) :
     (symbolicLinkCert dp).resolved = legacyRuntime dp :=
   rfl
 
-@[simp] theorem legacyRuntime_main (dp : DeployParams) :
+theorem legacyRuntime_main (dp : DeployParams) :
     (legacyRuntime dp).main = runtimeMain dp :=
   rfl
 
-@[simp] theorem legacyRuntime_aux (dp : DeployParams) :
+theorem legacyRuntime_aux (dp : DeployParams) :
     (legacyRuntime dp).aux = aux :=
   rfl
 

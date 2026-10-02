@@ -1027,7 +1027,7 @@ def ossifiableConstructorDecodedImage
   Bytes.writeAt (ossifiableConstructorLengthImage image code argsOffset) 0x100
     (code.sliceD (pointer + 32).toNat length.toNat 0)
 
-@[simp] theorem ossifiableConstructorDecodedImage_implementationWord
+theorem ossifiableConstructorDecodedImage_implementationWord
     (image code : Bytes) (argsOffset : Nat) :
     Bytes.toB256
       ((ossifiableConstructorDecodedImage image code argsOffset).sliceD
@@ -1040,7 +1040,7 @@ def ossifiableConstructorDecodedImage
     Bytes.sliceD_writeAt_before _ _ 0 32 96 (by omega)]
   exact ossifiableConstructorHeadImage_implementationWord _ _ _
 
-@[simp] theorem ossifiableConstructorDecodedImage_adminWord
+theorem ossifiableConstructorDecodedImage_adminWord
     (image code : Bytes) (argsOffset : Nat) :
     Bytes.toB256
       ((ossifiableConstructorDecodedImage image code argsOffset).sliceD
@@ -1053,7 +1053,7 @@ def ossifiableConstructorDecodedImage
     Bytes.sliceD_writeAt_before _ _ 32 32 96 (by omega)]
   exact ossifiableConstructorHeadImage_adminWord _ _ _
 
-@[simp] theorem ossifiableConstructorDecodedImage_lengthWord
+theorem ossifiableConstructorDecodedImage_lengthWord
     (image code : Bytes) (argsOffset : Nat) :
     Bytes.toB256
       ((ossifiableConstructorDecodedImage image code argsOffset).sliceD
@@ -1065,7 +1065,7 @@ def ossifiableConstructorDecodedImage
   rw [Bytes.sliceD_writeAt_before _ _ 128 32 0x100 (by omega)]
   exact ossifiableConstructorLengthImage_lengthWord _ _ _
 
-@[simp] theorem ossifiableConstructorDecodedImage_setupData
+theorem ossifiableConstructorDecodedImage_setupData
     (image code : Bytes) (argsOffset : Nat) :
     let offset := ossifiableConstructorCodeWord code (argsOffset + 64)
     let pointer := ossifiableConstructorDataPointer argsOffset offset

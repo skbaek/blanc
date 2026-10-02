@@ -75,7 +75,7 @@ namespace CreationArtifact
 
 /-- Byte indices at which two artifacts differ.  Unequal lengths are handled
 fail-closed by also returning every unmatched tail index. -/
-@[simp] def differingByteOffsets : Nat → Bytes → Bytes → List Nat
+def differingByteOffsets : Nat → Bytes → Bytes → List Nat
   | _, [], [] => []
   | i, [], _ :: ys => i :: differingByteOffsets (i + 1) [] ys
   | i, _ :: xs, [] => i :: differingByteOffsets (i + 1) xs []

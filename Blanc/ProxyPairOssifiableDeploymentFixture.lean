@@ -67,12 +67,12 @@ def message : Msg :=
     accessedStorageKeys := .emptyWithCapacity
     disablePrecompiles := false }
 
-@[simp] theorem message_code :
+theorem message_code :
     message.code.toList = ossifiableEmptyDataCreateInput implementation admin := by
   change createCode.toList = _
   exact byteArrayMk_toList _
 
-@[simp] theorem implementation_code :
+theorem implementation_code :
     state.getCode implementation = implementationCode := by
   unfold state State.getCode
   rw [State.get_set_ne _

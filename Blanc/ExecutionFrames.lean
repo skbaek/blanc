@@ -108,7 +108,7 @@ theorem Exec.mem_rawFrameRoots_self
 
 /-- A failed parent resume still retains the entered child and all of its raw
 descendant frame roots. -/
-@[simp] theorem Exec.rawFrameRoots_runErr
+theorem Exec.rawFrameRoots_runErr
     {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
     {frame : Jaune.Frame} {resume : Resume} {childEvm : Evm}
     {raw : Execution} {error : EvmError × Devm}
@@ -124,7 +124,7 @@ descendant frame roots. -/
 
 /-- On a successful parent resume, the child's complete raw-frame segment
 precedes every child frame entered later by the resumed parent. -/
-@[simp] theorem Exec.rawFrameRoots_runOk
+theorem Exec.rawFrameRoots_runOk
     {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
     {frame : Jaune.Frame} {resume : Resume} {childEvm : Evm}
     {raw out : Execution}

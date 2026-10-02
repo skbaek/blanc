@@ -435,7 +435,7 @@ theorem Ninst.runCompiled_sstore_selected
     exact Ninst.runCompiled_sstore_cold hfork.rules_stateGas_none hstack hwarm hsentry hstatic
       rfl rfl hgas
 
-@[simp] theorem sstoreCost_setMach
+theorem sstoreCost_setMach
     {sevm : Sevm} {base : Devm} {mach : Mach} {key value : B256} :
     sstoreCost sevm (base.setMach mach) key value =
       sstoreCost sevm base key value := rfl

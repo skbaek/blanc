@@ -372,7 +372,7 @@ structure OssifiableConstructorAdminEffect
         proxy postSetupRaw requestedAdmin]
 
 /-- The event reads the post-setup word and cleans it before encoding. -/
-@[simp] theorem ossifiableConstructorAdminChangedLog_data
+theorem ossifiableConstructorAdminChangedLog_data
     (proxy : Adr) (postSetupRaw : B256) (requestedAdmin : Adr) :
     (ossifiableConstructorAdminChangedLog
       proxy postSetupRaw requestedAdmin).data =
@@ -380,7 +380,7 @@ structure OssifiableConstructorAdminEffect
         requestedAdmin.toB256.toBytes := by
   rfl
 
-@[simp] theorem ossifiableConstructorAdminChangedLog_topics
+theorem ossifiableConstructorAdminChangedLog_topics
     (proxy : Adr) (postSetupRaw : B256) (requestedAdmin : Adr) :
     (ossifiableConstructorAdminChangedLog
       proxy postSetupRaw requestedAdmin).topics =

@@ -80,9 +80,9 @@ def run (l : Ledger) : List Call → Option Ledger
   | [] => some l
   | c :: cs => (l.step c).bind fun l' => l'.run cs
 
-@[simp] theorem run_nil (l : Ledger) : l.run [] = some l := rfl
+theorem run_nil (l : Ledger) : l.run [] = some l := rfl
 
-@[simp] theorem run_cons (l : Ledger) (c : Call) (cs : List Call) :
+theorem run_cons (l : Ledger) (c : Call) (cs : List Call) :
     l.run (c :: cs) = (l.step c).bind fun l' => l'.run cs := rfl
 
 theorem run_append (l : Ledger) (xs ys : List Call) :
@@ -98,9 +98,9 @@ theorem run_append (l : Ledger) (xs ys : List Call) :
 /-- The total booked balance, as a natural number. -/
 def total (l : Ledger) : Nat := sum l.bal
 
-@[simp] theorem setBal_bal (l : Ledger) (a : Adr) (w : B256) : (l.setBal a w).bal = Function.update l.bal a w := rfl
-@[simp] theorem setBal_allow (l : Ledger) (a : Adr) (w : B256) : (l.setBal a w).allow = l.allow := rfl
-@[simp] theorem setAllow_bal (l : Ledger) (o p : Adr) (w : B256) : (l.setAllow o p w).bal = l.bal := rfl
+theorem setBal_bal (l : Ledger) (a : Adr) (w : B256) : (l.setBal a w).bal = Function.update l.bal a w := rfl
+theorem setBal_allow (l : Ledger) (a : Adr) (w : B256) : (l.setBal a w).allow = l.allow := rfl
+theorem setAllow_bal (l : Ledger) (o p : Adr) (w : B256) : (l.setAllow o p w).bal = l.bal := rfl
 
 theorem increase_setBal (l : Ledger) (a : Adr) (v : B256) :
     Increase a v l.bal (l.setBal a (l.bal a + v)).bal := by

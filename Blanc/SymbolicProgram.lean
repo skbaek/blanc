@@ -281,7 +281,6 @@ def Func.liftCallFree (Label : Type) (f : Func) (h : (f.toSymbolic? Label).isSom
     SymbolicFunc Label :=
   (f.toSymbolic? Label).get h
 
-@[simp]
 theorem Func.erase_liftCallFree (f : Func) (h : (f.toSymbolic? Label).isSome = true) (map : Label → Nat) :
     (f.liftCallFree Label h).erase map = f := by
   have h_eq : f.toSymbolic? Label = some (f.liftCallFree Label h) := Option.get_mem h
@@ -319,7 +318,7 @@ def Func.mapTargets (t : Nat → Nat) : Func → Func
   | .branch f g => .branch (f.mapTargets t) (g.mapTargets t)
   | .call n => .call (t n)
 
-@[simp] theorem Func.mapTargets_id (f : Func) : f.mapTargets id = f := by
+theorem Func.mapTargets_id (f : Func) : f.mapTargets id = f := by
   induction f with
   | last o => rfl
   | next i f ih => simp only [Func.mapTargets, ih]
@@ -381,7 +380,6 @@ def SymbolicFunc.prepend (l : Line) (f : SymbolicFunc Label) : SymbolicFunc Labe
   | [] => f
   | x :: xs => .next x (SymbolicFunc.prepend xs f)
 
-@[simp]
 theorem SymbolicFunc.erase_prepend (l : Line) (f : SymbolicFunc Label) (map : Label → Nat) :
     (SymbolicFunc.prepend l f).erase map = l +++ (f.erase map) := by
   induction l with
@@ -648,7 +646,7 @@ def symbolicLinearDispatchWith (fallback : Label) :
 
 /-- Erasing a symbolic linear dispatcher yields the positional dispatcher over
 the erased bodies, with the fallback label at its assigned coordinate. -/
-@[simp] theorem erase_symbolicLinearDispatchWith (map : Label → Nat) (fallback : Label)
+theorem erase_symbolicLinearDispatchWith (map : Label → Nat) (fallback : Label)
     (entries : List (B256 × SymbolicFunc Label)) :
     (symbolicLinearDispatchWith fallback entries).erase map =
       linearDispatchWith (map fallback)

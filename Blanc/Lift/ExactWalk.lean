@@ -25,15 +25,15 @@ open Jaune
 def St (b : Devm) (S : List B256) (M : Mem) (G : Nat) : Devm :=
   b.setMach ⟨S, M, G, b.stateGas⟩
 
-@[simp] theorem St.stack {b : Devm} {S : List B256} {M : Mem} {G : Nat} :
+theorem St.stack {b : Devm} {S : List B256} {M : Mem} {G : Nat} :
     (St b S M G).stack = S := rfl
-@[simp] theorem St.memory {b : Devm} {S : List B256} {M : Mem} {G : Nat} :
+theorem St.memory {b : Devm} {S : List B256} {M : Mem} {G : Nat} :
     (St b S M G).memory = M := rfl
-@[simp] theorem St.gasLeft {b : Devm} {S : List B256} {M : Mem} {G : Nat} :
+theorem St.gasLeft {b : Devm} {S : List B256} {M : Mem} {G : Nat} :
     (St b S M G).gasLeft = G := rfl
-@[simp] theorem St.getStorVal {b : Devm} {S : List B256} {M : Mem} {G : Nat} {a : Adr}
+theorem St.getStorVal {b : Devm} {S : List B256} {M : Mem} {G : Nat} {a : Adr}
     {k : B256} : (St b S M G).getStorVal a k = b.getStorVal a k := rfl
-@[simp] theorem St.accessedStorageKeys {b : Devm} {S : List B256} {M : Mem} {G : Nat} :
+theorem St.accessedStorageKeys {b : Devm} {S : List B256} {M : Mem} {G : Nat} :
     (St b S M G).accessedStorageKeys = b.accessedStorageKeys := rfl
 
 /-- The expansion charge of a window over an image of known size. -/

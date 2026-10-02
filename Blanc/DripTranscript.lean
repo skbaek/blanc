@@ -16,7 +16,7 @@ def callKinds {scale : Nat} {fresh : Nat → Nat → Nat}
     (steps : List (Step scale fresh)) : List Kind :=
   (steps.map Step.kind).filter Kind.isCall
 
-@[simp] theorem callKinds_nil {scale : Nat} {fresh : Nat → Nat → Nat} :
+theorem callKinds_nil {scale : Nat} {fresh : Nat → Nat → Nat} :
     callKinds ([] : List (Step scale fresh)) = [] := rfl
 theorem callKinds_append {scale : Nat} {fresh : Nat → Nat → Nat}
     (left right : List (Step scale fresh)) :

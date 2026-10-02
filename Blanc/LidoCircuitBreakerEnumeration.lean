@@ -446,9 +446,6 @@ theorem enumPrefixDevm_memRead_full (base : Devm) (entries : List Entry)
       enumPrefixMemory entries entries by rfl, hread]
   rfl
 
-attribute [simp] enumPrefixMemory_read_length_fst
-  enumPrefixMemory_read_length_snd
-
 /-- Ordered storage reads of `getPausables`: length first, then one target slot per entry. -/
 def enumerationEntryKeysFrom : Nat → List Entry → List B256
   | _, [] => []
@@ -649,10 +646,10 @@ theorem enumLoopGasWarmFrom_ge (i : Nat) (entries : List Entry) :
 def getPausablesGasWarm (entries : List Entry) : Nat :=
   131 + calculateMemoryGasCost 64 + enumLoopGasWarmFrom 0 entries
 
-@[simp] theorem enumLoopGasWarmFrom_nil (i : Nat) :
+theorem enumLoopGasWarmFrom_nil (i : Nat) :
     enumLoopGasWarmFrom i [] = 49 := rfl
 
-@[simp] theorem enumLoopGasWarmFrom_cons (i : Nat) (entry : Entry)
+theorem enumLoopGasWarmFrom_cons (i : Nat) (entry : Entry)
     (rest : List Entry) :
     enumLoopGasWarmFrom i (entry :: rest) =
       179 +

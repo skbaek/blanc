@@ -146,16 +146,16 @@ def project (stor : Stor) : LogicalState where
   pie := fun holder => stor.get (pieSlot holder)
   totalUnits := stor.get totalUnitsSlot
 
-@[simp] theorem project_chi (stor : Stor) :
+theorem project_chi (stor : Stor) :
     (project stor).chi = stor.get chiSlot := rfl
 
-@[simp] theorem project_rho (stor : Stor) :
+theorem project_rho (stor : Stor) :
     (project stor).rho = stor.get rhoSlot := rfl
 
-@[simp] theorem project_pie (stor : Stor) (holder : Adr) :
+theorem project_pie (stor : Stor) (holder : Adr) :
     (project stor).pie holder = stor.get (pieSlot holder) := rfl
 
-@[simp] theorem project_totalUnits (stor : Stor) :
+theorem project_totalUnits (stor : Stor) :
     (project stor).totalUnits = stor.get totalUnitsSlot := rfl
 
 end Drip

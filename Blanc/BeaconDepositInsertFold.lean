@@ -112,12 +112,12 @@ theorem insertionStoreCost_eq_sstoreCost
     rw [carrier.stor, horiginStor]
   simp only [insertionStoreCost, sstoreCost, carrier.keys, hcurrent]
 
-@[simp] theorem insertionReadGas_eq_sloadCost
+theorem insertionReadGas_eq_sloadCost
     (sevm : Sevm) (base : Devm) (key : B256) :
     insertionReadGas sevm.currentTarget base.accessedStorageKeys key =
       sloadCost sevm base key := rfl
 
-@[simp] theorem afterSload_accessedStorageKeys_insertion
+theorem afterSload_accessedStorageKeys_insertion
     (sevm : Sevm) (base : Devm) (key : B256) :
     (afterSload sevm base key).accessedStorageKeys =
       insertionReadKeys sevm.currentTarget base.accessedStorageKeys key := by

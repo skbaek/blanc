@@ -81,19 +81,19 @@ def last {vault : Adr} (path : RealizedPath vault) : Snapshot :=
   path.snapshot ⟨path.steps.length, Nat.lt_succ_self _⟩
 -- PA:364–370.
 
-@[simp] theorem nil_steps {vault : Adr} (q : Snapshot) : (nil vault q).steps = [] := rfl
-@[simp] theorem nil_first {vault : Adr} (q : Snapshot) : (nil vault q).first = q := rfl
-@[simp] theorem nil_last {vault : Adr} (q : Snapshot) : (nil vault q).last = q := rfl
+theorem nil_steps {vault : Adr} (q : Snapshot) : (nil vault q).steps = [] := rfl
+theorem nil_first {vault : Adr} (q : Snapshot) : (nil vault q).first = q := rfl
+theorem nil_last {vault : Adr} (q : Snapshot) : (nil vault q).last = q := rfl
 
-@[simp] theorem cons_steps {vault : Adr} (step : FourQuoteStep vault) (tail : RealizedPath vault)
+theorem cons_steps {vault : Adr} (step : FourQuoteStep vault) (tail : RealizedPath vault)
     (connect : stateSnapshot vault step.after = tail.first) :
     (cons step tail connect).steps = step :: tail.steps := rfl
 
-@[simp] theorem cons_first {vault : Adr} (step : FourQuoteStep vault) (tail : RealizedPath vault)
+theorem cons_first {vault : Adr} (step : FourQuoteStep vault) (tail : RealizedPath vault)
     (connect : stateSnapshot vault step.after = tail.first) :
     (cons step tail connect).first = stateSnapshot vault step.before := rfl
 
-@[simp] theorem cons_last {vault : Adr} (step : FourQuoteStep vault) (tail : RealizedPath vault)
+theorem cons_last {vault : Adr} (step : FourQuoteStep vault) (tail : RealizedPath vault)
     (connect : stateSnapshot vault step.after = tail.first) :
     (cons step tail connect).last = tail.last := by
   rfl
@@ -213,7 +213,7 @@ def FourQuotePath.toRealizedPath {vault : Adr} (path : FourQuotePath vault) :
   pre_eq := fun i => congrArg (stateSnapshot vault) (path.pre_eq i)
   post_eq := fun i => congrArg (stateSnapshot vault) (path.post_eq i)
 
-@[simp] theorem FourQuotePath.toRealizedPath_snapshotAt {vault : Adr}
+theorem FourQuotePath.toRealizedPath_snapshotAt {vault : Adr}
     (path : FourQuotePath vault) (i : Nat) :
     path.toRealizedPath.snapshotAt i = path.snapshotAt i := rfl
 -- new; A:2220–2225 (`worldAt`, `snapshotAt`) unfold to the same term.

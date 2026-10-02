@@ -61,59 +61,59 @@ def directCounterfactual (m : Msg) : Msg :=
     codeAddress := some implAdr
     code := (m.benv.state.get implAdr).code }
 
-@[simp] theorem directCounterfactual_benv (m : Msg) :
+theorem directCounterfactual_benv (m : Msg) :
     (directCounterfactual m).benv = m.benv := rfl
 
-@[simp] theorem directCounterfactual_tenv (m : Msg) :
+theorem directCounterfactual_tenv (m : Msg) :
     (directCounterfactual m).tenv = m.tenv := rfl
 
-@[simp] theorem directCounterfactual_caller (m : Msg) :
+theorem directCounterfactual_caller (m : Msg) :
     (directCounterfactual m).caller = m.caller := rfl
 
-@[simp] theorem directCounterfactual_target (m : Msg) :
+theorem directCounterfactual_target (m : Msg) :
     (directCounterfactual m).target = m.target := rfl
 
-@[simp] theorem directCounterfactual_currentTarget (m : Msg) :
+theorem directCounterfactual_currentTarget (m : Msg) :
     (directCounterfactual m).currentTarget = m.currentTarget := rfl
 
-@[simp] theorem directCounterfactual_gas (m : Msg) :
+theorem directCounterfactual_gas (m : Msg) :
     (directCounterfactual m).gas = m.gas := rfl
 
-@[simp] theorem directCounterfactual_value (m : Msg) :
+theorem directCounterfactual_value (m : Msg) :
     (directCounterfactual m).value = m.value := rfl
 
-@[simp] theorem directCounterfactual_data (m : Msg) :
+theorem directCounterfactual_data (m : Msg) :
     (directCounterfactual m).data = m.data := rfl
 
-@[simp] theorem directCounterfactual_depth (m : Msg) :
+theorem directCounterfactual_depth (m : Msg) :
     (directCounterfactual m).depth = m.depth := rfl
 
-@[simp] theorem directCounterfactual_shouldTransferValue (m : Msg) :
+theorem directCounterfactual_shouldTransferValue (m : Msg) :
     (directCounterfactual m).shouldTransferValue =
       m.shouldTransferValue := rfl
 
-@[simp] theorem directCounterfactual_isStatic (m : Msg) :
+theorem directCounterfactual_isStatic (m : Msg) :
     (directCounterfactual m).isStatic = m.isStatic := rfl
 
-@[simp] theorem directCounterfactual_accessedAddresses (m : Msg) :
+theorem directCounterfactual_accessedAddresses (m : Msg) :
     (directCounterfactual m).accessedAddresses =
       m.accessedAddresses := rfl
 
-@[simp] theorem directCounterfactual_accessedStorageKeys (m : Msg) :
+theorem directCounterfactual_accessedStorageKeys (m : Msg) :
     (directCounterfactual m).accessedStorageKeys =
       m.accessedStorageKeys := rfl
 
-@[simp] theorem directCounterfactual_disablePrecompiles (m : Msg) :
+theorem directCounterfactual_disablePrecompiles (m : Msg) :
     (directCounterfactual m).disablePrecompiles =
       m.disablePrecompiles := rfl
 
-@[simp] theorem directCounterfactual_benvAfterTransfer (m : Msg) :
+theorem directCounterfactual_benvAfterTransfer (m : Msg) :
     (directCounterfactual m).benvAfterTransfer = m.benvAfterTransfer := rfl
 
-@[simp] theorem directCounterfactual_codeAddress (m : Msg) :
+theorem directCounterfactual_codeAddress (m : Msg) :
     (directCounterfactual m).codeAddress = some implAdr := rfl
 
-@[simp] theorem directCounterfactual_code (m : Msg) :
+theorem directCounterfactual_code (m : Msg) :
     (directCounterfactual m).code =
       (m.benv.state.get implAdr).code := rfl
 
@@ -384,11 +384,11 @@ private def proxyD1 (m : Msg) (atCallGas : Nat) : Devm :=
 private def proxyParent (m : Msg) (atCallGas callCost : Nat) : Devm :=
   callSpawnParent (proxyD1 m atCallGas) callCost 0 32 0 0
 
-@[simp] private theorem proxyParent_stack
+private theorem proxyParent_stack
     (m : Msg) (atCallGas callCost : Nat) :
     (proxyParent m atCallGas callCost).stack = [] := rfl
 
-@[simp] private theorem proxyParent_gasLeft
+private theorem proxyParent_gasLeft
     (m : Msg) (atCallGas callCost : Nat) :
     (proxyParent m atCallGas callCost).gasLeft = atCallGas - callCost := rfl
 
@@ -426,24 +426,24 @@ private theorem proxyChild_data
   rw [hnil] at hlen
   simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
 
-@[simp] private theorem proxyChild_currentTarget
+private theorem proxyChild_currentTarget
     (m : Msg) (atCallGas callCost childGas : Nat) :
     (proxyChild m atCallGas callCost childGas).currentTarget =
       m.currentTarget := rfl
 
-@[simp] private theorem proxyChild_codeAddress
+private theorem proxyChild_codeAddress
     (m : Msg) (atCallGas callCost childGas : Nat) :
     (proxyChild m atCallGas callCost childGas).codeAddress = some implAdr := rfl
 
-@[simp] private theorem proxyChild_gas
+private theorem proxyChild_gas
     (m : Msg) (atCallGas callCost childGas : Nat) :
     (proxyChild m atCallGas callCost childGas).gas = childGas := rfl
 
-@[simp] private theorem proxyChild_code
+private theorem proxyChild_code
     (m : Msg) (atCallGas callCost childGas : Nat) :
     (proxyChild m atCallGas callCost childGas).code = implGuardedCode := rfl
 
-@[simp] private theorem proxyChild_isStatic
+private theorem proxyChild_isStatic
     (m : Msg) (atCallGas callCost childGas : Nat) :
     (proxyChild m atCallGas callCost childGas).isStatic = m.isStatic := rfl
 
@@ -603,10 +603,10 @@ private theorem implGuarded_exec_static_nonzero
   · simpa only [Devm.transientStorage, initDevm] using htra
   · exact hlogs.trans (initDevm_logs_of_covered hfork)
 
-@[simp] private theorem proxyCallPre_state (m : Msg) (atCallGas : Nat) :
+private theorem proxyCallPre_state (m : Msg) (atCallGas : Nat) :
     (proxyCallPre m atCallGas).state = m.benv.state := rfl
 
-@[simp] private theorem proxyCallPre_transientStorage
+private theorem proxyCallPre_transientStorage
     (m : Msg) (atCallGas : Nat) :
     (proxyCallPre m atCallGas).transientStorage =
       m.tenv.transientStorage := rfl
@@ -616,27 +616,27 @@ private theorem proxyCallPre_logs (m : Msg) (atCallGas : Nat)
     (proxyCallPre m atCallGas).logs = [] :=
   initDevm_logs_of_covered hfork
 
-@[simp] private theorem proxyCallBase_accessedAddresses
+private theorem proxyCallBase_accessedAddresses
     (m : Msg) (atCallGas : Nat) :
     (proxyCallBase m atCallGas).accessedAddresses =
       m.accessedAddresses := rfl
 
-@[simp] private theorem proxyChild_benv_state
+private theorem proxyChild_benv_state
     (m : Msg) (atCallGas callCost childGas : Nat) :
     (proxyChild m atCallGas callCost childGas).benv.state =
       m.benv.state := rfl
 
-@[simp] private theorem proxyChild_origState
+private theorem proxyChild_origState
     (m : Msg) (atCallGas callCost childGas : Nat) :
     (proxyChild m atCallGas callCost childGas).benv.stat.origState =
       m.benv.stat.origState := rfl
 
-@[simp] private theorem proxyChild_transientStorage
+private theorem proxyChild_transientStorage
     (m : Msg) (atCallGas callCost childGas : Nat) :
     (proxyChild m atCallGas callCost childGas).tenv.transientStorage =
       m.tenv.transientStorage := rfl
 
-@[simp] private theorem proxyChild_accessedStorageKeys
+private theorem proxyChild_accessedStorageKeys
     (m : Msg) (atCallGas callCost childGas : Nat) :
     (proxyChild m atCallGas callCost childGas).accessedStorageKeys =
       m.accessedStorageKeys.insert
@@ -762,7 +762,7 @@ private theorem proxyChild_exec_static_nonzero
   · simpa only [child, proxyChild_benv_state] using hstate
   · simpa only [child, proxyChild_transientStorage] using htra
 
-@[simp] private theorem proxyCallPre_stack (m : Msg) (atCallGas : Nat) :
+private theorem proxyCallPre_stack (m : Msg) (atCallGas : Nat) :
     (proxyCallPre m atCallGas).stack =
       [Nat.toB256 atCallGas, implAdr.toB256, 0, 32, 0, 0] := rfl
 
@@ -778,7 +778,7 @@ private theorem proxyCallBase_extCost
       proxyCopiedMemory_size m hlen]
   decide
 
-@[simp] private theorem proxyD1_state (m : Msg) (atCallGas : Nat) :
+private theorem proxyD1_state (m : Msg) (atCallGas : Nat) :
     (proxyD1 m atCallGas).state = m.benv.state := rfl
 
 private theorem proxyCall_accessDelegation
@@ -808,7 +808,7 @@ private theorem proxyCall_accessCost
   unfold accessCost
   simp only [hcold, ↓reduceIte, add_zero]
 
-@[simp] private theorem proxyD1_gasLeft (m : Msg) (atCallGas : Nat) :
+private theorem proxyD1_gasLeft (m : Msg) (atCallGas : Nat) :
     (proxyD1 m atCallGas).gasLeft = atCallGas := rfl
 
 private theorem proxy_delegatecall_crossing

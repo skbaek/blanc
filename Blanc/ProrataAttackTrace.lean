@@ -32,10 +32,10 @@ theorem backed_of_priceLe_genesis {o : Nat} {s : AccountingSnapshot}
     Nat.mul_comm s.balance o] at h1
   omega
 
-@[simp] theorem AttackAttribution.coalitionAmount_zero (a : AttackAttribution) :
+theorem AttackAttribution.coalitionAmount_zero (a : AttackAttribution) :
     a.coalitionAmount 0 = 0 := by cases a <;> rfl
 
-@[simp] theorem AttackAttribution.outsideAmount_zero (a : AttackAttribution) :
+theorem AttackAttribution.outsideAmount_zero (a : AttackAttribution) :
     a.outsideAmount 0 = 0 := by cases a <;> rfl
 
 /-! ## Price monotonicity along a realized replay -/

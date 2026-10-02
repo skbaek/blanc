@@ -129,55 +129,55 @@ def DelegatecallSpawnDescriptor.resume
     (d : DelegatecallSpawnDescriptor sevm callPre) : Resume :=
   .call d.parent d.outputOffsetWord.toNat d.outputSizeWord.toNat
 
-@[simp] theorem DelegatecallSpawnDescriptor.child_currentTarget
+theorem DelegatecallSpawnDescriptor.child_currentTarget
     {sevm : Sevm} {callPre : Devm}
     (d : DelegatecallSpawnDescriptor sevm callPre) :
     d.child.currentTarget = sevm.currentTarget :=
   rfl
 
-@[simp] theorem DelegatecallSpawnDescriptor.child_codeAddress
+theorem DelegatecallSpawnDescriptor.child_codeAddress
     {sevm : Sevm} {callPre : Devm}
     (d : DelegatecallSpawnDescriptor sevm callPre) :
     d.child.codeAddress = some d.resolvedCodeAddress :=
   rfl
 
-@[simp] theorem DelegatecallSpawnDescriptor.child_caller
+theorem DelegatecallSpawnDescriptor.child_caller
     {sevm : Sevm} {callPre : Devm}
     (d : DelegatecallSpawnDescriptor sevm callPre) :
     d.child.caller = sevm.caller :=
   rfl
 
-@[simp] theorem DelegatecallSpawnDescriptor.child_value
+theorem DelegatecallSpawnDescriptor.child_value
     {sevm : Sevm} {callPre : Devm}
     (d : DelegatecallSpawnDescriptor sevm callPre) :
     d.child.value = sevm.value :=
   rfl
 
-@[simp] theorem DelegatecallSpawnDescriptor.child_gas
+theorem DelegatecallSpawnDescriptor.child_gas
     {sevm : Sevm} {callPre : Devm}
     (d : DelegatecallSpawnDescriptor sevm callPre) :
     d.child.gas = d.childGas :=
   rfl
 
-@[simp] theorem DelegatecallSpawnDescriptor.child_depth
+theorem DelegatecallSpawnDescriptor.child_depth
     {sevm : Sevm} {callPre : Devm}
     (d : DelegatecallSpawnDescriptor sevm callPre) :
     d.child.depth = sevm.depth - 1 :=
   rfl
 
-@[simp] theorem DelegatecallSpawnDescriptor.child_transfer
+theorem DelegatecallSpawnDescriptor.child_transfer
     {sevm : Sevm} {callPre : Devm}
     (d : DelegatecallSpawnDescriptor sevm callPre) :
     d.child.shouldTransferValue = false :=
   rfl
 
-@[simp] theorem DelegatecallSpawnDescriptor.child_code
+theorem DelegatecallSpawnDescriptor.child_code
     {sevm : Sevm} {callPre : Devm}
     (d : DelegatecallSpawnDescriptor sevm callPre) :
     d.child.code = d.code :=
   rfl
 
-@[simp] theorem DelegatecallSpawnDescriptor.child_data
+theorem DelegatecallSpawnDescriptor.child_data
     {sevm : Sevm} {callPre : Devm}
     (d : DelegatecallSpawnDescriptor sevm callPre) :
     d.child.data =
@@ -456,21 +456,21 @@ def directTargetMessage
     code := code
     shouldTransferValue := true }
 
-@[simp] theorem directTargetMessage_currentTarget
+theorem directTargetMessage_currentTarget
     (outer : Msg) (implementation resolvedCodeAddress : Adr)
     (code : ByteArray) :
     (directTargetMessage outer implementation resolvedCodeAddress
       code).currentTarget = implementation :=
   rfl
 
-@[simp] theorem directTargetMessage_codeAddress
+theorem directTargetMessage_codeAddress
     (outer : Msg) (implementation resolvedCodeAddress : Adr)
     (code : ByteArray) :
     (directTargetMessage outer implementation resolvedCodeAddress
       code).codeAddress = some resolvedCodeAddress :=
   rfl
 
-@[simp] theorem directTargetMessage_transfer
+theorem directTargetMessage_transfer
     (outer : Msg) (implementation resolvedCodeAddress : Adr)
     (code : ByteArray) :
     (directTargetMessage outer implementation resolvedCodeAddress

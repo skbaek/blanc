@@ -76,45 +76,45 @@ def forwardingFailedPost
         (forwardingFailedResume d child) child.output, gas, (forwardingFailedResume d child).stateGas⟩).withOutput
     child.output
 
-@[simp] theorem forwardingCleanPost_error
+theorem forwardingCleanPost_error
     {sevm : Sevm} {callPre : Devm}
     (d : DelegatecallSpawnDescriptor sevm callPre)
     (child : Devm) (gas : Nat) :
     (forwardingCleanPost d child gas).error = d.parent.error := rfl
 
-@[simp] theorem forwardingCleanPost_output
+theorem forwardingCleanPost_output
     {sevm : Sevm} {callPre : Devm}
     (d : DelegatecallSpawnDescriptor sevm callPre)
     (child : Devm) (gas : Nat) :
     (forwardingCleanPost d child gas).output = child.output := rfl
 
-@[simp] theorem forwardingCleanPost_logs
+theorem forwardingCleanPost_logs
     {sevm : Sevm} {callPre : Devm}
     (d : DelegatecallSpawnDescriptor sevm callPre)
     (child : Devm) (gas : Nat) :
     (forwardingCleanPost d child gas).logs =
       d.parent.logs ++ child.logs := rfl
 
-@[simp] theorem forwardingCleanPost_state
+theorem forwardingCleanPost_state
     {sevm : Sevm} {callPre : Devm}
     (d : DelegatecallSpawnDescriptor sevm callPre)
     (child : Devm) (gas : Nat) :
     (forwardingCleanPost d child gas).state = child.state := rfl
 
-@[simp] theorem forwardingCleanPost_transientStorage
+theorem forwardingCleanPost_transientStorage
     {sevm : Sevm} {callPre : Devm}
     (d : DelegatecallSpawnDescriptor sevm callPre)
     (child : Devm) (gas : Nat) :
     (forwardingCleanPost d child gas).transientStorage =
       child.transientStorage := rfl
 
-@[simp] theorem forwardingFailedPost_output
+theorem forwardingFailedPost_output
     {sevm : Sevm} {callPre : Devm}
     (d : DelegatecallSpawnDescriptor sevm callPre)
     (child : Devm) (gas : Nat) :
     (forwardingFailedPost d child gas).output = child.output := rfl
 
-@[simp] theorem forwardingFailedPost_logs
+theorem forwardingFailedPost_logs
     {sevm : Sevm} {callPre : Devm}
     (d : DelegatecallSpawnDescriptor sevm callPre)
     (child : Devm) (gas : Nat) :
@@ -153,22 +153,22 @@ private theorem forwardingCopiedMemory_shape
       · omega
       · simpa only [List.length_cons, zero_add] using Nat.le_ceil32 (byte :: bytes).length
 
-@[simp] theorem forwardingCleanResume_returnData
+theorem forwardingCleanResume_returnData
     {sevm : Sevm} {callPre : Devm}
     (d : DelegatecallSpawnDescriptor sevm callPre) (child : Devm) :
     (forwardingCleanResume d child).returnData = child.output := rfl
 
-@[simp] theorem forwardingCleanResume_stack
+theorem forwardingCleanResume_stack
     {sevm : Sevm} {callPre : Devm}
     (d : DelegatecallSpawnDescriptor sevm callPre) (child : Devm) :
     (forwardingCleanResume d child).stack = 1 :: d.parent.stack := rfl
 
-@[simp] theorem forwardingFailedResume_returnData
+theorem forwardingFailedResume_returnData
     {sevm : Sevm} {callPre : Devm}
     (d : DelegatecallSpawnDescriptor sevm callPre) (child : Devm) :
     (forwardingFailedResume d child).returnData = child.output := rfl
 
-@[simp] theorem forwardingFailedResume_stack
+theorem forwardingFailedResume_stack
     {sevm : Sevm} {callPre : Devm}
     (d : DelegatecallSpawnDescriptor sevm callPre) (child : Devm) :
     (forwardingFailedResume d child).stack = 0 :: d.parent.stack := rfl

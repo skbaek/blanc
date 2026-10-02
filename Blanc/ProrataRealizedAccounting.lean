@@ -66,7 +66,7 @@ def messageEntry (ca : Adr) (msg : Msg) (state : State) :
   else ofState ca state
 
 /-- The realized boundary projects onto the frozen accounting snapshot. -/
-@[simp] theorem snapshot_ofState (ca : Adr) (state : State) :
+theorem snapshot_ofState (ca : Adr) (state : State) :
     (ofState ca state).snapshot = AccountingSnapshot.ofWorldState ca state := rfl
 
 theorem ofState_snapshot (ca : Adr) (state : State) :
@@ -133,13 +133,13 @@ def execEntry (ca : Adr) (sevm : Sevm) (state : State) :
   if sevm.currentTarget = ca then beforeCredit ca sevm.value state
   else ofState ca state
 
-@[simp] theorem execEntry_of_target
+theorem execEntry_of_target
     {ca : Adr} {sevm : Sevm} {state : State}
     (target : sevm.currentTarget = ca) :
     execEntry ca sevm state = beforeCredit ca sevm.value state := by
   simp only [execEntry, target, ↓reduceIte]
 
-@[simp] theorem execEntry_of_target_ne
+theorem execEntry_of_target_ne
     {ca : Adr} {sevm : Sevm} {state : State}
     (target : sevm.currentTarget ≠ ca) :
     execEntry ca sevm state = ofState ca state := by

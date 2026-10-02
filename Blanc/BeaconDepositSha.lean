@@ -545,23 +545,23 @@ theorem sha64_success_of_run
 
 /-! ## Contract-site cost specializations -/
 
-@[simp] theorem sha64SuccessCost_zero_node :
+theorem sha64SuccessCost_zero_node :
     sha64SuccessCost 0 nodeWord = 237 := by
   decide +kernel
 
-@[simp] theorem sha64SuccessCost_zero_intermediate :
+theorem sha64SuccessCost_zero_intermediate :
     sha64SuccessCost 0 intermediateWord = 237 := by
   decide +kernel
 
-@[simp] theorem sha64SuccessCost_zero_secondIntermediate :
+theorem sha64SuccessCost_zero_secondIntermediate :
     sha64SuccessCost 0 secondIntermediateWord = 237 := by
   decide +kernel
 
-@[simp] theorem sha64SuccessCost_six_node :
+theorem sha64SuccessCost_six_node :
     sha64SuccessCost 6 nodeWord = 238 := by
   decide +kernel
 
-@[simp] theorem sha64SuccessCost_thirteen_intermediate :
+theorem sha64SuccessCost_thirteen_intermediate :
     sha64SuccessCost 13 intermediateWord = 238 := by
   decide +kernel
 

@@ -118,14 +118,14 @@ def heartbeatSloadCost (sevm : Sevm) (base : Devm) (key : B256) : Nat :=
   else
     gasColdSload
 
-@[simp] theorem heartbeatSloadBase_getStorVal
+theorem heartbeatSloadBase_getStorVal
     (sevm : Sevm) (base : Devm) (key : B256) (a : Adr) (k : B256) :
     (heartbeatSloadBase sevm base key).getStorVal a k =
       base.getStorVal a k := by
   unfold heartbeatSloadBase
   split_ifs <;> rfl
 
-@[simp] theorem heartbeatSloadBase_logs
+theorem heartbeatSloadBase_logs
     (sevm : Sevm) (base : Devm) (key : B256) :
     (heartbeatSloadBase sevm base key).logs = base.logs := by
   unfold heartbeatSloadBase

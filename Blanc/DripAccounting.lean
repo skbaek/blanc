@@ -343,37 +343,37 @@ def allPaidSum (steps : List (Step scale fresh)) : Nat :=
 def giftSum (steps : List (Step scale fresh)) : Nat :=
   (steps.map Step.gift).sum
 
-@[simp] theorem accrualSum_nil :
+theorem accrualSum_nil :
     accrualSum ([] : List (Step scale fresh)) = 0 := rfl
-@[simp] theorem accrualSum_cons (step : Step scale fresh) (rest) :
+theorem accrualSum_cons (step : Step scale fresh) (rest) :
     accrualSum (step :: rest) = step.accrual + accrualSum rest := rfl
-@[simp] theorem joinedSum_nil :
+theorem joinedSum_nil :
     joinedSum ([] : List (Step scale fresh)) = 0 := rfl
-@[simp] theorem joinedSum_cons (step : Step scale fresh) (rest) :
+theorem joinedSum_cons (step : Step scale fresh) (rest) :
     joinedSum (step :: rest) = step.joined + joinedSum rest := rfl
-@[simp] theorem joinResidueSum_nil :
+theorem joinResidueSum_nil :
     joinResidueSum ([] : List (Step scale fresh)) = 0 := rfl
-@[simp] theorem joinResidueSum_cons (step : Step scale fresh) (rest) :
+theorem joinResidueSum_cons (step : Step scale fresh) (rest) :
     joinResidueSum (step :: rest) = step.joinResidue + joinResidueSum rest := rfl
-@[simp] theorem paidSum_nil :
+theorem paidSum_nil :
     paidSum ([] : List (Step scale fresh)) = 0 := rfl
-@[simp] theorem paidSum_cons (step : Step scale fresh) (rest) :
+theorem paidSum_cons (step : Step scale fresh) (rest) :
     paidSum (step :: rest) = step.paid + paidSum rest := rfl
-@[simp] theorem exitResidueSum_nil :
+theorem exitResidueSum_nil :
     exitResidueSum ([] : List (Step scale fresh)) = 0 := rfl
-@[simp] theorem exitResidueSum_cons (step : Step scale fresh) (rest) :
+theorem exitResidueSum_cons (step : Step scale fresh) (rest) :
     exitResidueSum (step :: rest) = step.exitResidue + exitResidueSum rest := rfl
-@[simp] theorem allJoinedSum_nil :
+theorem allJoinedSum_nil :
     allJoinedSum ([] : List (Step scale fresh)) = 0 := rfl
-@[simp] theorem allJoinedSum_cons (step : Step scale fresh) (rest) :
+theorem allJoinedSum_cons (step : Step scale fresh) (rest) :
     allJoinedSum (step :: rest) = step.allJoined + allJoinedSum rest := rfl
-@[simp] theorem allPaidSum_nil :
+theorem allPaidSum_nil :
     allPaidSum ([] : List (Step scale fresh)) = 0 := rfl
-@[simp] theorem allPaidSum_cons (step : Step scale fresh) (rest) :
+theorem allPaidSum_cons (step : Step scale fresh) (rest) :
     allPaidSum (step :: rest) = step.allPaid + allPaidSum rest := rfl
-@[simp] theorem giftSum_nil :
+theorem giftSum_nil :
     giftSum ([] : List (Step scale fresh)) = 0 := rfl
-@[simp] theorem giftSum_cons (step : Step scale fresh) (rest) :
+theorem giftSum_cons (step : Step scale fresh) (rest) :
     giftSum (step :: rest) = step.gift + giftSum rest := rfl
 
 /-- **R2, the headline coalition identity.**  Over an arbitrary finite

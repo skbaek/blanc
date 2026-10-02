@@ -79,27 +79,27 @@ def adminChangedLog (proxy previousAdmin newAdmin : Adr) : Log :=
 def proxyOssifiedLog (proxy : Adr) : Log :=
   ⟨proxy, [proxyOssifiedEventTopic], []⟩
 
-@[simp] theorem upgradedLog_topics (proxy implementation : Adr) :
+theorem upgradedLog_topics (proxy implementation : Adr) :
     (upgradedLog proxy implementation).topics =
       [upgradedEventTopic, implementation.toB256] := rfl
 
-@[simp] theorem upgradedLog_data (proxy implementation : Adr) :
+theorem upgradedLog_data (proxy implementation : Adr) :
     (upgradedLog proxy implementation).data = [] := rfl
 
-@[simp] theorem adminChangedLog_topics
+theorem adminChangedLog_topics
     (proxy previousAdmin newAdmin : Adr) :
     (adminChangedLog proxy previousAdmin newAdmin).topics =
       [adminChangedEventTopic] := rfl
 
-@[simp] theorem adminChangedLog_data
+theorem adminChangedLog_data
     (proxy previousAdmin newAdmin : Adr) :
     (adminChangedLog proxy previousAdmin newAdmin).data =
       previousAdmin.toB256.toBytes ++ newAdmin.toB256.toBytes := rfl
 
-@[simp] theorem proxyOssifiedLog_topics (proxy : Adr) :
+theorem proxyOssifiedLog_topics (proxy : Adr) :
     (proxyOssifiedLog proxy).topics = [proxyOssifiedEventTopic] := rfl
 
-@[simp] theorem proxyOssifiedLog_data (proxy : Adr) :
+theorem proxyOssifiedLog_data (proxy : Adr) :
     (proxyOssifiedLog proxy).data = [] := rfl
 
 /-! ## Custom errors and inherited `Error(string)` payloads -/

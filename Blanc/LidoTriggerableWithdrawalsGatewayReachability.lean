@@ -432,37 +432,37 @@ private theorem pauseStored_getCode
     (pauseStored sevm base duration).getCode a = base.getCode a := by
   rw [pauseStored, afterSstore_getCode, pauseResumeWarm_getCode]
 
-@[simp] theorem pauseFinitePost_gasLeft
+theorem pauseFinitePost_gasLeft
     (sevm : Sevm) (base : Devm) (duration : B256) (G : Nat) :
     (pauseFinitePost sevm base duration G).gasLeft = G := rfl
 
-@[simp] theorem pauseFinitePost_error
+theorem pauseFinitePost_error
     (sevm : Sevm) (base : Devm) (duration : B256) (G : Nat) :
     (pauseFinitePost sevm base duration G).error = base.error := by
   rw [pauseFinitePost, setMach_error_local, pauseLogged,
     addLog_error_local, pauseStored_error]
 
-@[simp] theorem pauseFinitePost_output
+theorem pauseFinitePost_output
     (sevm : Sevm) (base : Devm) (duration : B256) (G : Nat) :
     (pauseFinitePost sevm base duration G).output = base.output := by
   rw [pauseFinitePost, setMach_output_local, pauseLogged,
     addLog_output_local, pauseStored_output]
 
-@[simp] theorem pauseFinitePost_logs
+theorem pauseFinitePost_logs
     (sevm : Sevm) (base : Devm) (duration : B256) (G : Nat) :
     (pauseFinitePost sevm base duration G).logs =
       base.logs ++ [pauseEvent sevm duration] := by
   rw [pauseFinitePost, setMach_logs_local, pauseLogged, addLog_logs_local,
     pauseStored_logs]
 
-@[simp] theorem pauseFinitePost_accountsToDelete
+theorem pauseFinitePost_accountsToDelete
     (sevm : Sevm) (base : Devm) (duration : B256) (G : Nat) :
     (pauseFinitePost sevm base duration G).accountsToDelete =
       base.accountsToDelete := by
   rw [pauseFinitePost, setMach_accountsToDelete_local, pauseLogged,
     addLog_accountsToDelete_local, pauseStored_accountsToDelete]
 
-@[simp] theorem pauseFinitePost_refundCounter
+theorem pauseFinitePost_refundCounter
     (sevm : Sevm) (base : Devm) (duration : B256) (G : Nat) :
     (pauseFinitePost sevm base duration G).refundCounter =
       sstoreNewRefundCounter sevm.benvStat.rules.gas (duration + sevm.benvStat.time)
@@ -472,14 +472,14 @@ private theorem pauseStored_getCode
   rw [pauseFinitePost, setMach_refundCounter_local, pauseLogged,
     addLog_refundCounter_local, pauseStored_refundCounter]
 
-@[simp] theorem pauseFinitePost_transientStorage
+theorem pauseFinitePost_transientStorage
     (sevm : Sevm) (base : Devm) (duration : B256) (G : Nat) :
     (pauseFinitePost sevm base duration G).transientStorage =
       base.transientStorage := by
   rw [pauseFinitePost, setMach_transientStorage_local, pauseLogged,
     addLog_transientStorage_local, pauseStored_transientStorage]
 
-@[simp] theorem pauseFinitePost_accessedAddresses
+theorem pauseFinitePost_accessedAddresses
     (sevm : Sevm) (base : Devm) (duration : B256) (G : Nat) :
     (pauseFinitePost sevm base duration G).accessedAddresses =
       base.accessedAddresses := by
@@ -518,30 +518,30 @@ theorem pauseFinitePost_accessedStorageKeys
   unfold sloadAccessedStorageKeys
   rw [if_pos hwarm]
 
-@[simp] theorem pauseSentinelPost_gasLeft
+theorem pauseSentinelPost_gasLeft
     (sevm : Sevm) (base : Devm) (G : Nat) :
     (pauseSentinelPost sevm base G).gasLeft = G := rfl
 
-@[simp] theorem pauseSentinelPost_error
+theorem pauseSentinelPost_error
     (sevm : Sevm) (base : Devm) (G : Nat) :
     (pauseSentinelPost sevm base G).error = base.error := by
   rw [pauseSentinelPost, setMach_error_local, addLog_error_local,
     afterSstore_error, pauseResumeWarm_error]
 
-@[simp] theorem pauseSentinelPost_output
+theorem pauseSentinelPost_output
     (sevm : Sevm) (base : Devm) (G : Nat) :
     (pauseSentinelPost sevm base G).output = base.output := by
   rw [pauseSentinelPost, setMach_output_local, addLog_output_local,
     afterSstore_output, pauseResumeWarm_output]
 
-@[simp] theorem pauseSentinelPost_logs
+theorem pauseSentinelPost_logs
     (sevm : Sevm) (base : Devm) (G : Nat) :
     (pauseSentinelPost sevm base G).logs =
       base.logs ++ [pauseEvent sevm pauseInfinitely] := by
   rw [pauseSentinelPost, setMach_logs_local, addLog_logs_local,
     afterSstore_logs, pauseResumeWarm_logs]
 
-@[simp] theorem pauseSentinelPost_accountsToDelete
+theorem pauseSentinelPost_accountsToDelete
     (sevm : Sevm) (base : Devm) (G : Nat) :
     (pauseSentinelPost sevm base G).accountsToDelete =
       base.accountsToDelete := by
@@ -549,7 +549,7 @@ theorem pauseFinitePost_accessedStorageKeys
     addLog_accountsToDelete_local, afterSstore_accountsToDelete,
     pauseResumeWarm_accountsToDelete]
 
-@[simp] theorem pauseSentinelPost_refundCounter
+theorem pauseSentinelPost_refundCounter
     (sevm : Sevm) (base : Devm) (G : Nat) :
     (pauseSentinelPost sevm base G).refundCounter =
       sstoreNewRefundCounter sevm.benvStat.rules.gas pauseInfinitely
@@ -560,7 +560,7 @@ theorem pauseFinitePost_accessedStorageKeys
     addLog_refundCounter_local, afterSstore_refundCounter,
     pauseResumeWarm_getStorVal, pauseResumeWarm_refundCounter]
 
-@[simp] theorem pauseSentinelPost_transientStorage
+theorem pauseSentinelPost_transientStorage
     (sevm : Sevm) (base : Devm) (G : Nat) :
     (pauseSentinelPost sevm base G).transientStorage =
       base.transientStorage := by
@@ -568,7 +568,7 @@ theorem pauseFinitePost_accessedStorageKeys
     addLog_transientStorage_local, afterSstore_transientStorage_local,
     pauseResumeWarm_transientStorage]
 
-@[simp] theorem pauseSentinelPost_accessedAddresses
+theorem pauseSentinelPost_accessedAddresses
     (sevm : Sevm) (base : Devm) (G : Nat) :
     (pauseSentinelPost sevm base G).accessedAddresses =
       base.accessedAddresses := by

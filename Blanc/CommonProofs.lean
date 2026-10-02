@@ -646,8 +646,8 @@ lemma Devm.push_getCode_eq {v devm devm'} (h : Devm.push v devm = .ok devm') (a 
 lemma Devm.popToAdr_getCode_eq {devm devm' adr} (h : Devm.popToAdr devm = .ok ⟨adr, devm'⟩) (a : Adr) : devm'.getCode a = devm.getCode a := by
   exact (liftMach_worldEq_of_ok (core := Mach.popToAdr) h).getCode a |>.symm
 
-@[simp] lemma Except.bind_error {α β ε} (e : ε) (f : α → Except ε β) : (Except.error e >>= f) = Except.error e := rfl
-@[simp] lemma Except.bind_ok {α β ε} (x : α) (f : α → Except ε β) : (Except.ok x >>= f) = f x := rfl
+lemma Except.bind_error {α β ε} (e : ε) (f : α → Except ε β) : (Except.error e >>= f) = Except.error e := rfl
+lemma Except.bind_ok {α β ε} (x : α) (f : α → Except ε β) : (Except.ok x >>= f) = f x := rfl
 
 lemma chargeGas_getBal_eq {cost devm devm'} (h : chargeGas cost devm = .ok devm') (a : Adr) : devm'.getBal a = devm.getBal a := by
   exact (chargeGas_worldEq_of_ok h).getBal a |>.symm
@@ -6196,7 +6196,7 @@ lemma of_run_sstore {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sstore s') :
     exact hp
 
 /-- `Devm.memWrite` changes memory to the requested write. -/
-@[simp] lemma Devm.memWrite_memory (devm : Devm) (i : Nat) (val : Bytes) :
+lemma Devm.memWrite_memory (devm : Devm) (i : Nat) (val : Bytes) :
     (devm.memWrite i val).memory = devm.memory.write i val := rfl
 
 /-- `Devm.memWrite` leaves the operand stack unchanged. -/
@@ -12182,7 +12182,7 @@ lemma of_check_address {e : Sevm} {s s' : Devm} {x xs} :
 
 /-- Replacing the machine component before an accessed-storage-key update is
 irrelevant once the caller supplies the final machine component. -/
-@[simp] theorem Devm.addAccessedStorageKey_setMach_setMach
+theorem Devm.addAccessedStorageKey_setMach_setMach
     {base : Devm} {target : Adr} {key : B256} {mach mach' : Mach} :
     (addAccessedStorageKey (base.setMach mach) target key).setMach mach' =
       (addAccessedStorageKey base target key).setMach mach' := rfl
@@ -12194,7 +12194,7 @@ lemma setStorVal_getStor_self {devm : Devm} {adr : Adr} {key val : B256} :
   simp only [Devm.state, State.get_set_self]
 
 /-- Persistent storage read-after-write at the same address and key. -/
-@[simp] theorem Devm.getStorVal_setStorVal_self
+theorem Devm.getStorVal_setStorVal_self
     (devm : Devm) (adr : Adr) (key val : B256) :
     (devm.setStorVal adr key val).getStorVal adr key = val := by
   show (Devm.getStor (devm.setStorVal adr key val) adr).get key = val

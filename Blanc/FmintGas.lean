@@ -376,7 +376,7 @@ theorem dcSel_ne_tsSel : dcSel ≠ tsSel := by decide
 WETH's `balanceOf`, the key is fixed — `supplySlot` — so this branches on
 something no calldata can influence, which is the cleanest demonstration that
 the pre-state argument is doing work the selector argument cannot. -/
-@[simp] theorem fmintGas_tsSel {sevm : Sevm} {pre : Devm} :
+theorem fmintGas_tsSel {sevm : Sevm} {pre : Devm} :
     fmintGas tsSel sevm pre =
       some (if (⟨sevm.currentTarget, supplySlot⟩ : Adr × B256)
               ∈ pre.accessedStorageKeys then totalSupplyGasWarm
@@ -391,7 +391,7 @@ the pre-state argument is doing work the selector argument cannot. -/
     rfl
 
 /-- `fmintGas` at `decimals()`, for every state: it reads no storage. -/
-@[simp] theorem fmintGas_dcSel {sevm : Sevm} {pre : Devm} :
+theorem fmintGas_dcSel {sevm : Sevm} {pre : Devm} :
     fmintGas dcSel sevm pre = some decimalsGas := by
   simp only [fmintGas, fmintGasWith, if_neg dcSel_ne_tsSel]
   rfl

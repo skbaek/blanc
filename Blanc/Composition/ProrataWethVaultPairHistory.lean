@@ -73,7 +73,7 @@ theorem transfer_src_row_of_zero {b d : Adr → B256} {kd ki : Adr}
 def PairBoundary.snapshot (vault : Adr) (b : PairBoundary) : FourQuote.Snapshot :=
   ⟨(b.vault.get Blanc.ProrataWethVault.supplySlot).toNat, (Stor.rest b.weth vault).toNat⟩
 
-@[simp] theorem PairBoundary.snapshot_ofState (vault : Adr) (w : State) :
+theorem PairBoundary.snapshot_ofState (vault : Adr) (w : State) :
     (PairBoundary.ofState vault w).snapshot vault = FourQuote.stateSnapshot vault w := rfl
 -- `stateSnapshot` A:684 reads exactly these two coordinates.
 
