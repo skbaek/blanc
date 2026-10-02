@@ -200,7 +200,10 @@ registry has identified the likely vocabulary.
 - `sstoreNewRefundCounter_ge_of_original_eq_current` proves an SSTORE whose
   original and current slot values agree cannot decrease an arbitrary refund
   counter; `afterSstore_refundCounter_ge_of_original_eq_current` carries this
-  to the selected warm/cold SSTORE state for checked-message settlement.
+  to the selected warm/cold SSTORE state for checked-message settlement; more
+  generally `RefundSafe orig cur` (original equals current, original zero, or
+  current nonzero) rules out the clearing-reversal branch:
+  `sstoreNewRefundCounter_ge_of_safe` / `afterSstore_refundCounter_ge_of_safe` in
   [`Blanc/StorageRefund.lean`](../Blanc/StorageRefund.lean).
 - For TWG trigger packets, local-call rebasing commutes with constant-store
   prefixes by `Trigger.rebaseLocalCalls_prependStoresRev` in

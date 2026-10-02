@@ -93,40 +93,8 @@ theorem userSubmissionGas_le_iters (sevm : Sevm) (b : Devm) (iters : Nat) :
   simp only [gasColdSload, gasStorageSet] at reads s1 s2 s3 s4 s5 v1 v2 v3 v4 v5
   omega
 
-/-- The queue slots a submission writes are pairwise distinct and avoid the metadata
-slots, in the word arithmetic, under the submission bounds. -/
-private theorem submissionKey_distinct (sevm : Sevm) (b : Devm)
-    (σ : Blanc.WithdrawalRequest.State)
-    (rep : Blanc.WithdrawalRequest.RepresentsStorage (b.getStor sevm.currentTarget).get σ)
-    (bounds : SubmissionBounds σ) :
-    submissionKey sevm b ≠ 1 ∧ 1 + submissionKey sevm b ≠ 1 ∧
-    1 + (1 + submissionKey sevm b) ≠ 1 ∧
-    1 + submissionKey sevm b ≠ submissionKey sevm b ∧
-    1 + (1 + submissionKey sevm b) ≠ submissionKey sevm b ∧
-    1 + (1 + submissionKey sevm b) ≠ 1 + submissionKey sevm b := by
-  have tail := submissionTail_eq sevm b σ rep
-  have key := submissionKey_queueSlot sevm b σ.tail tail
-  have offsets := submissionKey_offsets sevm b σ.tail tail
-  have inWord : ∀ off, off ≤ 2 → Blanc.WithdrawalRequest.queueBase σ.tail + off < 2 ^ 256 :=
-    fun off hoff => Nat.lt_of_le_of_lt (Nat.add_le_add_left hoff _) bounds.tail_slot_lt
-  have metaNe : ∀ off, off ≤ 2 →
-      Blanc.WithdrawalRequest.queueSlot σ.tail off ≠ (1 : B256) := fun off hoff =>
-    submission_queueSlot_ne_metadata σ.tail off 1 (inWord off hoff) (by decide)
-  have slots : ∀ a c, a ≤ 2 → c ≤ 2 → a ≠ c →
-      Blanc.WithdrawalRequest.queueSlot σ.tail a ≠ Blanc.WithdrawalRequest.queueSlot σ.tail c := by
-    intro a c ha hc hac eq
-    have values := congrArg B256.toNat eq
-    rw [submission_queueSlot_toNat σ.tail a (inWord a ha),
-      submission_queueSlot_toNat σ.tail c (inWord c hc)] at values
-    exact hac (Nat.add_left_cancel values)
-  rw [offsets.2, offsets.1, key]
-  exact ⟨metaNe 0 (by decide), metaNe 1 (by decide), metaNe 2 (by decide),
-    slots 1 0 (by decide) (by decide) (by decide), slots 2 0 (by decide) (by decide) (by decide),
-    slots 2 1 (by decide) (by decide) (by decide)⟩
-
 /-- A committed submission never lowers the refund counter when every slot it writes
-still holds its transaction-original value: each of its five stores hits a slot the
-earlier stores left alone. -/
+still holds its transaction-original value. -/
 theorem submissionPost_refund_ge (sevm : Sevm) (b : Devm) (M : Mem) (G : Nat)
     (σ : Blanc.WithdrawalRequest.State)
     (rep : Blanc.WithdrawalRequest.RepresentsStorage (b.getStor sevm.currentTarget).get σ)
@@ -134,84 +102,14 @@ theorem submissionPost_refund_ge (sevm : Sevm) (b : Devm) (M : Mem) (G : Nat)
     (original : ∀ key, getOrigStorVal sevm sevm.currentTarget key =
       b.getStorVal sevm.currentTarget key) :
     b.refundCounter ≤ (submissionPost sevm b M G).refundCounter := by
-  obtain ⟨k1, k1', k1'', kk, kk2, kk3⟩ := submissionKey_distinct sevm b σ rep bounds
-  -- the value of an untouched slot after a store at another key
-  have keep : ∀ (d : Devm) (w x v : B256), w ≠ v →
-      (afterSstore sevm d w x).getStorVal sevm.currentTarget v =
-        d.getStorVal sevm.currentTarget v := by
-    intro d w x v hne
-    rw [getStorVal_eq_getStor, afterSstore_getStor_self, Stor.get_set_ne _ hne,
-      ← getStorVal_eq_getStor]
-  have hLog : ∀ (d : Devm) (l : Log), (d.addLog l).refundCounter = d.refundCounter :=
-    fun _ _ => rfl
-  have hSt : ∀ d : Devm, (St d [] (submissionMemory sevm M) G).refundCounter = d.refundCounter :=
-    fun _ => rfl
-  -- stage 1: the count store at slot 1
-  have o1 : getOrigStorVal sevm sevm.currentTarget 1 =
-      (submissionCountRead sevm b).getStorVal sevm.currentTarget 1 := by
-    rw [submissionCountRead, getStorVal_afterSload]; exact original 1
-  have r1 : (submissionCountRead sevm b).refundCounter ≤
-      (submissionCountStore sevm b).refundCounter :=
-    afterSstore_refundCounter_ge_of_original_eq_current sevm (submissionCountRead sevm b)
-      1 (1 + submissionCount sevm b) o1
-  -- stage 2: the caller word at `key`
-  have o2 : getOrigStorVal sevm sevm.currentTarget (submissionKey sevm b) =
-      (submissionTailRead sevm b).getStorVal sevm.currentTarget (submissionKey sevm b) := by
-    rw [submissionTailRead, getStorVal_afterSload, submissionCountStore, keep _ _ _ _ k1.symm,
-      submissionCountRead, getStorVal_afterSload]
-    exact original _
-  have r2 : (submissionTailRead sevm b).refundCounter ≤
-      (submissionCallerStore sevm b).refundCounter :=
-    afterSstore_refundCounter_ge_of_original_eq_current sevm (submissionTailRead sevm b)
-      (submissionKey sevm b) sevm.caller.toB256 o2
-  -- stage 3: the first payload word at `key + 1`
-  have o3 : getOrigStorVal sevm sevm.currentTarget (1 + submissionKey sevm b) =
-      (submissionCallerStore sevm b).getStorVal sevm.currentTarget (1 + submissionKey sevm b) := by
-    rw [submissionCallerStore, keep _ _ _ _ kk.symm, submissionTailRead, getStorVal_afterSload,
-      submissionCountStore, keep _ _ _ _ k1'.symm, submissionCountRead, getStorVal_afterSload]
-    exact original _
-  have r3 : (submissionCallerStore sevm b).refundCounter ≤
-      (submissionWord1Store sevm b).refundCounter :=
-    afterSstore_refundCounter_ge_of_original_eq_current sevm (submissionCallerStore sevm b)
-      (1 + submissionKey sevm b) (Sevm.dataWord sevm 0) o3
-  -- stage 4: the second payload word at `key + 2`
-  have o4 : getOrigStorVal sevm sevm.currentTarget (1 + (1 + submissionKey sevm b)) =
-      (submissionWord1Store sevm b).getStorVal sevm.currentTarget
-        (1 + (1 + submissionKey sevm b)) := by
-    rw [submissionWord1Store, keep _ _ _ _ kk3.symm, submissionCallerStore, keep _ _ _ _ kk2.symm,
-      submissionTailRead, getStorVal_afterSload, submissionCountStore, keep _ _ _ _ k1''.symm,
-      submissionCountRead, getStorVal_afterSload]
-    exact original _
-  have r4 : (submissionWord1Store sevm b).refundCounter ≤
-      (submissionWordsStore sevm b).refundCounter :=
-    afterSstore_refundCounter_ge_of_original_eq_current sevm (submissionWord1Store sevm b)
-      (1 + (1 + submissionKey sevm b)) (Sevm.dataWord sevm 32) o4
-  -- stage 5: the tail store at slot 3, whose current value is the represented tail
-  have o5 : getOrigStorVal sevm sevm.currentTarget 3 =
-      (submissionLogged sevm b M).getStorVal sevm.currentTarget 3 := by
-    rw [FloodWalk.submissionLogged_tail sevm b M σ rep bounds, original 3, getStorVal_eq_getStor]
+  refine FloodWalk.submissionPost_refund_ge_of_safe sevm b M G σ rep bounds ?_ ?_
+    (fun key _ => Or.inl (original key))
+  · left
+    rw [original 1, getStorVal_eq_getStor]
+    exact rep.count
+  · left
+    rw [original 3, getStorVal_eq_getStor]
     exact rep.tail
-  have r5 : (submissionLogged sevm b M).refundCounter ≤
-      (submissionBase sevm b M).refundCounter :=
-    afterSstore_refundCounter_ge_of_original_eq_current sevm (submissionLogged sevm b M)
-      3 (1 + submissionTail sevm b) o5
-  -- assemble: reads, the log, and `St` keep the counter
-  have e1 : b.refundCounter = (submissionCountRead sevm b).refundCounter := by
-    rw [submissionCountRead, afterSload_refundCounter]
-  have e3 : (submissionCountStore sevm b).refundCounter =
-      (submissionTailRead sevm b).refundCounter := by
-    rw [submissionTailRead, afterSload_refundCounter]
-  have e5 : (submissionWordsStore sevm b).refundCounter =
-      (submissionLogged sevm b M).refundCounter := by
-    rw [submissionLogged, hLog]
-  have e6 : (submissionPost sevm b M G).refundCounter = (submissionBase sevm b M).refundCounter := by
-    rw [submissionPost, hSt]
-  rw [e6, e1]
-  refine r1.trans ?_
-  rw [e3]
-  refine r2.trans (r3.trans (r4.trans ?_))
-  rw [e5]
-  exact r5
 
 /-- The submission record a `payload` submission from `caller` queues. -/
 def entryWith (caller : Adr) : Blanc.WithdrawalRequest.Entry :=

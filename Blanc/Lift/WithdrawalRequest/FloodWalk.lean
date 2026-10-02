@@ -170,6 +170,131 @@ theorem submissionLogged_tail (sevm : Sevm) (b : Devm) (M : Mem) (σ : Blanc.Wit
     Stor.get_set_ne _ (by decide : (1 : B256) ≠ 3)]
   exact rep.tail
 
+/-- The queue slots a submission writes are pairwise distinct and avoid the metadata
+slots, in the word arithmetic, under the submission bounds. -/
+theorem submissionKey_distinct (sevm : Sevm) (b : Devm)
+    (σ : Blanc.WithdrawalRequest.State)
+    (rep : Blanc.WithdrawalRequest.RepresentsStorage (b.getStor sevm.currentTarget).get σ)
+    (bounds : SubmissionBounds σ) :
+    submissionKey sevm b ≠ 1 ∧ 1 + submissionKey sevm b ≠ 1 ∧
+    1 + (1 + submissionKey sevm b) ≠ 1 ∧
+    1 + submissionKey sevm b ≠ submissionKey sevm b ∧
+    1 + (1 + submissionKey sevm b) ≠ submissionKey sevm b ∧
+    1 + (1 + submissionKey sevm b) ≠ 1 + submissionKey sevm b := by
+  have tail := submissionTail_eq sevm b σ rep
+  have key := submissionKey_queueSlot sevm b σ.tail tail
+  have offsets := submissionKey_offsets sevm b σ.tail tail
+  have inWord : ∀ off, off ≤ 2 → Blanc.WithdrawalRequest.queueBase σ.tail + off < 2 ^ 256 :=
+    fun off hoff => Nat.lt_of_le_of_lt (Nat.add_le_add_left hoff _) bounds.tail_slot_lt
+  have metaNe : ∀ off, off ≤ 2 →
+      Blanc.WithdrawalRequest.queueSlot σ.tail off ≠ (1 : B256) := fun off hoff =>
+    submission_queueSlot_ne_metadata σ.tail off 1 (inWord off hoff) (by decide)
+  have slots : ∀ a c, a ≤ 2 → c ≤ 2 → a ≠ c →
+      Blanc.WithdrawalRequest.queueSlot σ.tail a ≠ Blanc.WithdrawalRequest.queueSlot σ.tail c := by
+    intro a c ha hc hac eq
+    have values := congrArg B256.toNat eq
+    rw [submission_queueSlot_toNat σ.tail a (inWord a ha),
+      submission_queueSlot_toNat σ.tail c (inWord c hc)] at values
+    exact hac (Nat.add_left_cancel values)
+  rw [offsets.2, offsets.1, key]
+  exact ⟨metaNe 0 (by decide), metaNe 1 (by decide), metaNe 2 (by decide),
+    slots 1 0 (by decide) (by decide) (by decide), slots 2 0 (by decide) (by decide) (by decide),
+    slots 2 1 (by decide) (by decide) (by decide)⟩
+
+/-- A committed submission never lowers the refund counter when none of its five stores
+can take the clearing-reversal branch: each store's transaction-original value equals the
+value it finds (`RefundSafe`), is zero, or the value it finds is nonzero.  The metadata
+stores find the represented count and tail; the queue stores find the incoming values. -/
+theorem submissionPost_refund_ge_of_safe (sevm : Sevm) (b : Devm) (M : Mem) (G : Nat)
+    (σ : Blanc.WithdrawalRequest.State)
+    (rep : Blanc.WithdrawalRequest.RepresentsStorage (b.getStor sevm.currentTarget).get σ)
+    (bounds : SubmissionBounds σ)
+    (safe1 : RefundSafe (getOrigStorVal sevm sevm.currentTarget 1) σ.count.toB256)
+    (safe3 : RefundSafe (getOrigStorVal sevm sevm.currentTarget 3) σ.tail.toB256)
+    (safeQ : ∀ key, key = submissionKey sevm b ∨ key = 1 + submissionKey sevm b ∨
+      key = 1 + (1 + submissionKey sevm b) →
+      RefundSafe (getOrigStorVal sevm sevm.currentTarget key) (b.getStorVal sevm.currentTarget key)) :
+    b.refundCounter ≤ (submissionPost sevm b M G).refundCounter := by
+  obtain ⟨k1, k1', k1'', kk, kk2, kk3⟩ := submissionKey_distinct sevm b σ rep bounds
+  -- the value of an untouched slot after a store at another key
+  have keep : ∀ (d : Devm) (w x v : B256), w ≠ v →
+      (afterSstore sevm d w x).getStorVal sevm.currentTarget v =
+        d.getStorVal sevm.currentTarget v := by
+    intro d w x v hne
+    rw [getStorVal_eq_getStor, afterSstore_getStor_self, Stor.get_set_ne _ hne,
+      ← getStorVal_eq_getStor]
+  have hLog : ∀ (d : Devm) (l : Log), (d.addLog l).refundCounter = d.refundCounter :=
+    fun _ _ => rfl
+  have hSt : ∀ d : Devm, (St d [] (submissionMemory sevm M) G).refundCounter = d.refundCounter :=
+    fun _ => rfl
+  -- stage 1: the count store at slot 1
+  have o1 : RefundSafe (getOrigStorVal sevm sevm.currentTarget 1)
+      ((submissionCountRead sevm b).getStorVal sevm.currentTarget 1) := by
+    rw [submissionCountRead, getStorVal_afterSload, getStorVal_eq_getStor, rep.count]
+    exact safe1
+  have r1 : (submissionCountRead sevm b).refundCounter ≤
+      (submissionCountStore sevm b).refundCounter :=
+    afterSstore_refundCounter_ge_of_safe sevm (submissionCountRead sevm b)
+      1 (1 + submissionCount sevm b) o1
+  -- stage 2: the caller word at `key`
+  have o2 : RefundSafe (getOrigStorVal sevm sevm.currentTarget (submissionKey sevm b))
+      ((submissionTailRead sevm b).getStorVal sevm.currentTarget (submissionKey sevm b)) := by
+    rw [submissionTailRead, getStorVal_afterSload, submissionCountStore, keep _ _ _ _ k1.symm,
+      submissionCountRead, getStorVal_afterSload]
+    exact safeQ _ (Or.inl rfl)
+  have r2 : (submissionTailRead sevm b).refundCounter ≤
+      (submissionCallerStore sevm b).refundCounter :=
+    afterSstore_refundCounter_ge_of_safe sevm (submissionTailRead sevm b)
+      (submissionKey sevm b) sevm.caller.toB256 o2
+  -- stage 3: the first payload word at `key + 1`
+  have o3 : RefundSafe (getOrigStorVal sevm sevm.currentTarget (1 + submissionKey sevm b))
+      ((submissionCallerStore sevm b).getStorVal sevm.currentTarget (1 + submissionKey sevm b)) := by
+    rw [submissionCallerStore, keep _ _ _ _ kk.symm, submissionTailRead, getStorVal_afterSload,
+      submissionCountStore, keep _ _ _ _ k1'.symm, submissionCountRead, getStorVal_afterSload]
+    exact safeQ _ (Or.inr (Or.inl rfl))
+  have r3 : (submissionCallerStore sevm b).refundCounter ≤
+      (submissionWord1Store sevm b).refundCounter :=
+    afterSstore_refundCounter_ge_of_safe sevm (submissionCallerStore sevm b)
+      (1 + submissionKey sevm b) (Sevm.dataWord sevm 0) o3
+  -- stage 4: the second payload word at `key + 2`
+  have o4 : RefundSafe (getOrigStorVal sevm sevm.currentTarget (1 + (1 + submissionKey sevm b)))
+      ((submissionWord1Store sevm b).getStorVal sevm.currentTarget
+        (1 + (1 + submissionKey sevm b))) := by
+    rw [submissionWord1Store, keep _ _ _ _ kk3.symm, submissionCallerStore, keep _ _ _ _ kk2.symm,
+      submissionTailRead, getStorVal_afterSload, submissionCountStore, keep _ _ _ _ k1''.symm,
+      submissionCountRead, getStorVal_afterSload]
+    exact safeQ _ (Or.inr (Or.inr rfl))
+  have r4 : (submissionWord1Store sevm b).refundCounter ≤
+      (submissionWordsStore sevm b).refundCounter :=
+    afterSstore_refundCounter_ge_of_safe sevm (submissionWord1Store sevm b)
+      (1 + (1 + submissionKey sevm b)) (Sevm.dataWord sevm 32) o4
+  -- stage 5: the tail store at slot 3, whose current value is the represented tail
+  have o5 : RefundSafe (getOrigStorVal sevm sevm.currentTarget 3)
+      ((submissionLogged sevm b M).getStorVal sevm.currentTarget 3) := by
+    rw [submissionLogged_tail sevm b M σ rep bounds]
+    exact safe3
+  have r5 : (submissionLogged sevm b M).refundCounter ≤
+      (submissionBase sevm b M).refundCounter :=
+    afterSstore_refundCounter_ge_of_safe sevm (submissionLogged sevm b M)
+      3 (1 + submissionTail sevm b) o5
+  -- assemble: reads, the log, and `St` keep the counter
+  have e1 : b.refundCounter = (submissionCountRead sevm b).refundCounter := by
+    rw [submissionCountRead, afterSload_refundCounter]
+  have e3 : (submissionCountStore sevm b).refundCounter =
+      (submissionTailRead sevm b).refundCounter := by
+    rw [submissionTailRead, afterSload_refundCounter]
+  have e5 : (submissionWordsStore sevm b).refundCounter =
+      (submissionLogged sevm b M).refundCounter := by
+    rw [submissionLogged, hLog]
+  have e6 : (submissionPost sevm b M G).refundCounter = (submissionBase sevm b M).refundCounter := by
+    rw [submissionPost, hSt]
+  rw [e6, e1]
+  refine r1.trans ?_
+  rw [e3]
+  refine r2.trans (r3.trans (r4.trans ?_))
+  rw [e5]
+  exact r5
+
 /-- The closed charge of one fresh submission at one fee-loop iteration, bounded with every
 read and the three queue stores taken cold and fresh; the two metadata stores keep their
 value charges, which fall to the warm charge once the slot is dirty. -/
@@ -304,6 +429,12 @@ theorem flood_call {sevm : Sevm} {base : Devm} {S : List B256} {Gc : Nat} {cw : 
     (hrep : Blanc.WithdrawalRequest.RepresentsStorage
       (base.getStor withdrawalRequestPredeployAddress).get σ)
     (hexcess : σ.excess = 0) (hbounds : SubmissionBounds σ)
+    (hsafe1 : RefundSafe (getOrigStorVal sevm withdrawalRequestPredeployAddress 1)
+      σ.count.toB256)
+    (hsafe3 : RefundSafe (getOrigStorVal sevm withdrawalRequestPredeployAddress 3)
+      σ.tail.toB256)
+    (hqueue : ∀ o, o ≤ 2 → getOrigStorVal sevm withdrawalRequestPredeployAddress
+      (Blanc.WithdrawalRequest.queueSlot σ.tail o) = 0)
     (hbal : 1 ≤ (base.getBal sevm.currentTarget).toNat)
     (hroom : S.length < 1024) (hGlt : Gc < 2 ^ 256) (hG : 247892 ≤ Gc) :
     ∃ post G',
@@ -319,7 +450,8 @@ theorem flood_call {sevm : Sevm} {base : Devm} {S : List B256} {Gc : Nat} {cw : 
       (post.getBal sevm.currentTarget).toNat + 1 = (base.getBal sevm.currentTarget).toNat ∧
       post.error = base.error ∧
       post.logs = base.logs ++ [⟨withdrawalRequestPredeployAddress, [],
-        Blanc.WithdrawalRequest.submissionLog entry⟩] := by
+        Blanc.WithdrawalRequest.submissionLog entry⟩] ∧
+      base.refundCounter ≤ post.refundCounter := by
   have hplen := Blanc.WithdrawalRequest.submissionPayload_length entry
   have hMsize := payloadMem_size hplen
   generalize hMp : payloadMem (Blanc.WithdrawalRequest.submissionPayload entry) = Mp at hMsize ⊢
@@ -512,8 +644,34 @@ theorem flood_call {sevm : Sevm} {base : Devm} {S : List B256} {Gc : Nat} {cw : 
     rw [mtarget]
   have cacct := fun a => submissionPost_code_bal (initSevm msg)
     (afterSload (initSevm msg) (initDevm msg) 0) Mem.empty (fwd + gCallStipend - U) a
+  have crefund : 0 ≤ (submissionPost (initSevm msg) (afterSload (initSevm msg) (initDevm msg) 0)
+      Mem.empty (fwd + gCallStipend - U)).refundCounter := by
+    have rep0 : Blanc.WithdrawalRequest.RepresentsStorage
+        ((afterSload (initSevm msg) (initDevm msg) 0).getStor (initSevm msg).currentTarget).get σ := by
+      rw [afterSload_getStor]; exact rep'
+    have tail0 := submissionTail_eq (initSevm msg) (afterSload (initSevm msg) (initDevm msg) 0) σ rep0
+    have key0 := submissionKey_queueSlot (initSevm msg) (afterSload (initSevm msg) (initDevm msg) 0)
+      σ.tail tail0
+    have offs := submissionKey_offsets (initSevm msg) (afterSload (initSevm msg) (initDevm msg) 0)
+      σ.tail tail0
+    have morigT : ∀ key, getOrigStorVal (initSevm msg) (initSevm msg).currentTarget key =
+        getOrigStorVal sevm withdrawalRequestPredeployAddress key := morig
+    have h := submissionPost_refund_ge_of_safe (initSevm msg)
+      (afterSload (initSevm msg) (initDevm msg) 0) Mem.empty (fwd + gCallStipend - U) σ rep0 hbounds
+      (by rw [morigT]; exact hsafe1) (by rw [morigT]; exact hsafe3) (by
+        intro key hkey
+        right; left
+        rw [morigT]
+        rcases hkey with rfl | rfl | rfl
+        · rw [key0]; exact hqueue 0 (by decide)
+        · rw [offs.1]; exact hqueue 1 (by decide)
+        · rw [offs.2]; exact hqueue 2 (by decide))
+    have h0 : (afterSload (initSevm msg) (initDevm msg) 0).refundCounter = 0 := by
+      rw [afterSload_refundCounter]; rfl
+    rw [h0] at h
+    exact h
   generalize hcp : submissionPost (initSevm msg) (afterSload (initSevm msg) (initDevm msg) 0)
-    Mem.empty (fwd + gCallStipend - U) = cpost at run cout crep clogs cacct cfacts
+    Mem.empty (fwd + gCallStipend - U) = cpost at run cout crep clogs cacct cfacts crefund
   -- the world the child started from
   have hinit : ∀ a, (initDevm msg).getAcct a = (stmid.addBal cw.toAdr 1).get a := by
     intro a
@@ -561,12 +719,12 @@ theorem flood_call {sevm : Sevm} {base : Devm} {S : List B256} {Gc : Nat} {cw : 
       (fwd + (accessCost cw.toAdr base.accessedAddresses + 0 + gasCallValue) + 0)
       (0 : B256).toNat (56 : B256).toNat (0 : B256).toNat (0 : B256).toNat) cpost
     (0 : B256).toNat (0 : B256).toNat = post at run pfacts
-  obtain ⟨pstack, pmem', pgas, pstate, -, plogs, -, perr, -⟩ := pfacts
+  obtain ⟨pstack, pmem', pgas, pstate, -, plogs, prefund, perr, -⟩ := pfacts
   rw [pmem] at pmem'
   have pstack' : post.stack = 1 :: S := pstack
   have hSt := St.self pstack' pmem'
   have hd1gas : (addAccessedAddress (St base S Mp Gc) cw.toAdr).gasLeft = Gc := rfl
-  refine ⟨post, post.gasLeft, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨post, post.gasLeft, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [← hSt]; exact run
   · have hf : fwd ≤ Gc - (accessCost cw.toAdr base.accessedAddresses + 0 + gasCallValue) := by
       rw [← hfwd]; unfold except64th; omega
@@ -593,5 +751,12 @@ theorem flood_call {sevm : Sevm} {base : Devm} {S : List B256} {Gc : Nat} {cw : 
     rfl
   · rw [plogs, clogs]
     rfl
+  · rw [prefund]
+    have hp : (callSpawnParent (addAccessedAddress (St base S Mp Gc) cw.toAdr)
+        (fwd + (accessCost cw.toAdr base.accessedAddresses + 0 + gasCallValue) + 0)
+        (0 : B256).toNat (56 : B256).toNat (0 : B256).toNat (0 : B256).toNat).refundCounter =
+        base.refundCounter := rfl
+    rw [hp]
+    omega
 
 end Blanc.Lift.WithdrawalRequest.FloodWalk
