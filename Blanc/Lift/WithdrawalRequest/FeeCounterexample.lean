@@ -47,6 +47,17 @@ theorem AppliedBodyTrace.decodedTxs_eq {benv : Benv} {tx : Tx} {wds : List Withd
     trace.decodedTxs = [tx] := by
   exact Except.ok.inj (trace.decodeRun.symm.trans (decode_single tx))
 
+theorem AppliedBodyTrace.decodedTxs_eq_of_txs_eq
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {tx : Tx} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs wds state bout)
+    (htxs : txs = [Sum.inr tx]) :
+    trace.decodedTxs = [tx] := by
+  have hdecode : txs.mapM decodeTx = .ok [tx] := by
+    rw [htxs]
+    exact decode_single tx
+  exact Except.ok.inj (trace.decodeRun.symm.trans hdecode)
+
 theorem noSenderAt_single {benv finalBenv : Benv} {bout finalBout : BlockOutput}
     {tx : Tx} (trace : ApplyTransactionsTrace [(0, tx)] benv bout finalBenv finalBout)
     (hrecover : recoverSender benv.stat.chainId tx = .ok senderE) :
@@ -64,19 +75,28 @@ theorem noSenderAt_single {benv finalBenv : Benv} {bout finalBout : BlockOutput}
         Except.ok.inj (hrecover.symm.trans hrecover'')
       exact (by decide : senderE ≠ systemAddress) (hsender'.trans hsender)
 
-theorem noAuthorityAt_single {benv : Benv} {tx : Tx} {wds : List Withdrawal}
-    {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv [Sum.inr tx] wds state bout)
-    (hauths : tx.auths = []) :
+theorem noAuthorityAt_decoded {benv : Benv} {txs : List (Bytes ⊕ Tx)} {tx : Tx}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs wds state bout)
+    (hdecoded : trace.decodedTxs = [tx]) (hauths : tx.auths = []) :
     ∀ p ∈ trace.decodedTxs.putIndex, ∀ auth ∈ p.2.auths, ∀ authority,
       recoverAuthority auth = .ok authority → authority ≠ systemAddress := by
-  rw [AppliedBodyTrace.decodedTxs_eq trace, putIndex_single]
+  rw [hdecoded, putIndex_single]
   intro p hp
   rw [List.mem_singleton] at hp
   subst p
   rw [hauths]
   intro auth hauth
   exact False.elim (List.not_mem_nil hauth)
+
+theorem noAuthorityAt_single {benv : Benv} {tx : Tx} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv [Sum.inr tx] wds state bout)
+    (hauths : tx.auths = []) :
+    ∀ p ∈ trace.decodedTxs.putIndex, ∀ auth ∈ p.2.auths, ∀ authority,
+      recoverAuthority auth = .ok authority → authority ≠ systemAddress := by
+  apply noAuthorityAt_decoded trace (AppliedBodyTrace.decodedTxs_eq trace)
+  exact hauths
 
 /-- The settled state of a transaction whose frame scheduled no deletion and whose
 sender and coinbase are credited, as `processTransaction` returns it. -/
