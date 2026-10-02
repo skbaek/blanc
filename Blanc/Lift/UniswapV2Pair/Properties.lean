@@ -2422,4 +2422,404 @@ theorem runTyped_swap_product {st : State} {ctx : Context} {amount0Out amount1Ou
   rw [fields.1]
   exact Nat.mul_le_mul_right (st.totalSupply.toNat ^ 2) fields.2
 
+
+/-- Supply and reserves, excluding the lock released after a successful skim. -/
+def State.liquidityCore (st : State) : B256 × (Fin (2 ^ 112) × Fin (2 ^ 112)) :=
+  (st.totalSupply, (st.reserve0, st.reserve1))
+
+/-- The final actual skim transfer settles nested turns before releasing only the lock. -/
+theorem drive_skimTransfer1_liquidity {fuel : Nat} {frame : Frame} {request : Request}
+    {locals : SkimLocals} {transcript : Transcript} {returndata : Bytes}
+    (locked : frame.current.state.unlocked = 0)
+    (successful : (drive fuel (.suspended frame request (.skimTransfer1 locals))
+      transcript).status = .success returndata) :
+    (drive fuel (.suspended frame request (.skimTransfer1 locals))
+      transcript).frame.current.state.liquidityCore = frame.current.state.liquidityCore := by
+  cases fuel with
+  | zero => cases successful
+  | succ fuel =>
+    obtain ⟨result, turns, tail, shape, complete, resumedSuccess, frameEq⟩ :=
+      drive_suspended_success successful
+    have core := Frame.settleExternal_locked_core locked fuel request result turns
+    let resumed := (frame.settleExternal fuel request result turns).beginResume request
+    have liquidity : resumed.current.state.liquidityCore = frame.current.state.liquidityCore :=
+      congrArg (fun core => (core.1, core.2.1)) core
+    cases decoded : decodeExternal request result with
+    | error failure =>
+      exact False.elim (resumeSegment_error_not_success decoded fuel tail returndata resumedSuccess)
+    | ok decodedResult =>
+      cases decodedResult with
+      | address address =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | word balance =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | unit =>
+        simp only [resumeSegment, decoded] at resumedSuccess frameEq
+        have finished := congrArg (fun current : Checkpoint => current.state.liquidityCore)
+          (drive_terminal_current fuel (resumed.finishLocked []) tail True.intro)
+        rw [frameEq]
+        exact finished.trans liquidity
+
+
+/-- Skim's second balance guard feeds the real final transfer without changing stored liquidity. -/
+theorem drive_skimBalance1_liquidity {fuel : Nat} {frame : Frame} {request : Request}
+    {locals : SkimLocals} {transcript : Transcript} {returndata : Bytes}
+    (locked : frame.current.state.unlocked = 0)
+    (successful : (drive fuel (.suspended frame request (.skimBalance1 locals))
+      transcript).status = .success returndata) :
+    (drive fuel (.suspended frame request (.skimBalance1 locals))
+      transcript).frame.current.state.liquidityCore = frame.current.state.liquidityCore := by
+  cases fuel with
+  | zero => cases successful
+  | succ fuel =>
+    obtain ⟨result, turns, tail, shape, complete, resumedSuccess, frameEq⟩ :=
+      drive_suspended_success successful
+    have core := Frame.settleExternal_locked_core locked fuel request result turns
+    let resumed := (frame.settleExternal fuel request result turns).beginResume request
+    have resumeLocked : resumed.current.state.unlocked = 0 :=
+      (congrArg (fun core => core.2.2.2.2.2) core).trans locked
+    have liquidity : resumed.current.state.liquidityCore = frame.current.state.liquidityCore :=
+      congrArg (fun core => (core.1, core.2.1)) core
+    cases decoded : decodeExternal request result with
+    | error failure =>
+      exact False.elim (resumeSegment_error_not_success decoded fuel tail returndata resumedSuccess)
+    | ok decodedResult =>
+      cases decodedResult with
+      | address address =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | unit =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | word balance1 =>
+        simp only [resumeSegment, decoded] at resumedSuccess frameEq
+        by_cases covered : resumed.current.state.reserve1.val ≤ balance1.toNat
+        · dsimp only [resumed] at covered
+          simp only [ite_eq_left covered, Frame.suspend] at resumedSuccess frameEq
+          have preserved := drive_skimTransfer1_liquidity resumeLocked resumedSuccess
+          rw [frameEq]
+          exact preserved.trans liquidity
+        · dsimp only [resumed] at covered
+          simp only [ite_eq_right covered, Frame.fail] at resumedSuccess
+          exact False.elim (drive_failed_not_success fuel _
+            (.sourceGuard "ds-math-sub-underflow") tail returndata resumedSuccess)
+
+
+/-- Skim's first actual transfer resumes the remaining observation/transfer chain. -/
+theorem drive_skimTransfer0_liquidity {fuel : Nat} {frame : Frame} {request : Request}
+    {locals : SkimLocals} {transcript : Transcript} {returndata : Bytes}
+    (locked : frame.current.state.unlocked = 0)
+    (successful : (drive fuel (.suspended frame request (.skimTransfer0 locals))
+      transcript).status = .success returndata) :
+    (drive fuel (.suspended frame request (.skimTransfer0 locals))
+      transcript).frame.current.state.liquidityCore = frame.current.state.liquidityCore := by
+  cases fuel with
+  | zero => cases successful
+  | succ fuel =>
+    obtain ⟨result, turns, tail, shape, complete, resumedSuccess, frameEq⟩ :=
+      drive_suspended_success successful
+    have core := Frame.settleExternal_locked_core locked fuel request result turns
+    let resumed := (frame.settleExternal fuel request result turns).beginResume request
+    have resumeLocked : resumed.current.state.unlocked = 0 :=
+      (congrArg (fun core => core.2.2.2.2.2) core).trans locked
+    have liquidity : resumed.current.state.liquidityCore = frame.current.state.liquidityCore :=
+      congrArg (fun core => (core.1, core.2.1)) core
+    cases decoded : decodeExternal request result with
+    | error failure =>
+      exact False.elim (resumeSegment_error_not_success decoded fuel tail returndata resumedSuccess)
+    | ok decodedResult =>
+      cases decodedResult with
+      | address address =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | word balance =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | unit =>
+        simp only [resumeSegment, decoded, Frame.suspend] at resumedSuccess frameEq
+        have preserved := drive_skimBalance1_liquidity resumeLocked resumedSuccess
+        rw [frameEq]
+        exact preserved.trans liquidity
+
+
+/-- Skim's first balance guard feeds the real first transfer without changing stored liquidity. -/
+theorem drive_skimBalance0_liquidity {fuel : Nat} {frame : Frame} {request : Request}
+    {locals : SkimLocals} {transcript : Transcript} {returndata : Bytes}
+    (locked : frame.current.state.unlocked = 0)
+    (successful : (drive fuel (.suspended frame request (.skimBalance0 locals))
+      transcript).status = .success returndata) :
+    (drive fuel (.suspended frame request (.skimBalance0 locals))
+      transcript).frame.current.state.liquidityCore = frame.current.state.liquidityCore := by
+  cases fuel with
+  | zero => cases successful
+  | succ fuel =>
+    obtain ⟨result, turns, tail, shape, complete, resumedSuccess, frameEq⟩ :=
+      drive_suspended_success successful
+    have core := Frame.settleExternal_locked_core locked fuel request result turns
+    let resumed := (frame.settleExternal fuel request result turns).beginResume request
+    have resumeLocked : resumed.current.state.unlocked = 0 :=
+      (congrArg (fun core => core.2.2.2.2.2) core).trans locked
+    have liquidity : resumed.current.state.liquidityCore = frame.current.state.liquidityCore :=
+      congrArg (fun core => (core.1, core.2.1)) core
+    cases decoded : decodeExternal request result with
+    | error failure =>
+      exact False.elim (resumeSegment_error_not_success decoded fuel tail returndata resumedSuccess)
+    | ok decodedResult =>
+      cases decodedResult with
+      | address address =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | unit =>
+        simp only [resumeSegment, decoded, Frame.fail] at resumedSuccess
+        exact False.elim
+          (drive_failed_not_success fuel _ .incompleteTranscript tail returndata resumedSuccess)
+      | word balance0 =>
+        simp only [resumeSegment, decoded] at resumedSuccess frameEq
+        by_cases covered : resumed.current.state.reserve0.val ≤ balance0.toNat
+        · dsimp only [resumed] at covered
+          simp only [ite_eq_left covered, Frame.suspend] at resumedSuccess frameEq
+          have preserved := drive_skimTransfer0_liquidity resumeLocked resumedSuccess
+          rw [frameEq]
+          exact preserved.trans liquidity
+        · dsimp only [resumed] at covered
+          simp only [ite_eq_right covered, Frame.fail] at resumedSuccess
+          exact False.elim (drive_failed_not_success fuel _
+            (.sourceGuard "ds-math-sub-underflow") tail returndata resumedSuccess)
+
+
+/-- Actual successful skim preserves stored supply/reserves through its guarded four-call chain. -/
+theorem drive_startTyped_skim_liquidity {fuel : Nat} {current : Checkpoint} {ctx : Context}
+    {recipient : Adr} {transcript : Transcript} {returndata : Bytes}
+    (successful : (drive fuel (startTyped current ctx (.skim recipient)) transcript).status =
+      .success returndata) :
+    (drive fuel (startTyped current ctx (.skim recipient))
+      transcript).frame.current.state.liquidityCore = current.state.liquidityCore := by
+  by_cases paid : ctx.value ≠ 0
+  · simp only [startTyped, startImmediate, ite_eq_left paid, Frame.fail] at successful
+    exact False.elim (drive_failed_not_success fuel _ .emptyRevert transcript returndata successful)
+  · by_cases unlocked : current.state.unlocked = 1
+    · by_cases staticContext : ctx.isStatic = true
+      · simp only [startTyped, startImmediate, ite_eq_right paid, getterResult, Frame.lock,
+          Frame.enter, ite_eq_left unlocked, staticContext, ite_true, Frame.fail] at successful
+        exact False.elim (drive_failed_not_success fuel _ .staticWrite transcript returndata successful)
+      · let lockedFrame : Frame :=
+          { Frame.enter current ctx (.skim recipient) with
+            current := { current with state := { current.state with unlocked := 0 } } }
+        let locals : SkimLocals :=
+          { recipient := recipient, token0 := current.state.token0, token1 := current.state.token1 }
+        have enteredUnlocked : (Frame.enter current ctx (.skim recipient)).current.state.unlocked = 1 :=
+          unlocked
+        have enteredStatic : ¬(Frame.enter current ctx (.skim recipient)).context.isStatic = true :=
+          staticContext
+        have opened : (Frame.enter current ctx (.skim recipient)).lock = .ok lockedFrame := by
+          rw [Frame.lock, ite_eq_left enteredUnlocked, ite_eq_right enteredStatic]
+          rfl
+        have stage : startTyped current ctx (.skim recipient) =
+            lockedFrame.suspend .skimBalance0 locals.token0 (.balanceOf ctx.pair)
+              (.skimBalance0 locals) := by
+          simp only [startTyped, startImmediate, ite_eq_right paid, getterResult, opened]
+          rfl
+        have suspendedSuccess :
+            (drive fuel (.suspended lockedFrame
+              (requestFor .skimBalance0 locals.token0 (.balanceOf ctx.pair))
+              (.skimBalance0 locals)) transcript).status = .success returndata := by
+          simpa only [stage, Frame.suspend] using successful
+        have preserved := drive_skimBalance0_liquidity (frame := lockedFrame) rfl suspendedSuccess
+        rw [stage, Frame.suspend]
+        exact preserved
+    · have enteredLocked : ¬(Frame.enter current ctx (.skim recipient)).current.state.unlocked = 1 :=
+        unlocked
+      have closed : (Frame.enter current ctx (.skim recipient)).lock =
+          .error (.sourceGuard "UniswapV2: LOCKED") := by
+        rw [Frame.lock, ite_eq_right enteredLocked]
+      simp only [startTyped, startImmediate, ite_eq_right paid, getterResult, closed, Frame.fail] at successful
+      exact False.elim (drive_failed_not_success fuel _
+        (.sourceGuard "UniswapV2: LOCKED") transcript returndata successful)
+
+
+/-- Any actual immediate source segment feeds the driver with the original economic core. -/
+theorem drive_startTyped_immediate_core {fuel : Nat} {current : Checkpoint} {ctx : Context}
+    {entry : Entry} {segment : SegmentResult} {transcript : Transcript}
+    (immediate : startImmediate current ctx entry = some segment) :
+    (drive fuel (startTyped current ctx entry) transcript).frame.current.state.economicCore =
+      current.state.economicCore := by
+  have laws := startImmediate_core entry immediate
+  rw [startTyped, immediate]
+  exact (congrArg (fun current : Checkpoint => current.state.economicCore)
+    (drive_terminal_current fuel segment transcript laws.1)).trans laws.2
+
+/-- The public driver consumes a real immediate segment without changing supply/reserves. -/
+theorem runTyped_immediate_liquidity {st : State} {ctx : Context} {entry : Entry}
+    {transcript : Transcript}
+    (immediate : ∃ segment, startImmediate { state := st, logs := [], updates := [] } ctx entry =
+      some segment) :
+    (runTyped st ctx entry transcript).frame.current.state.liquidityCore = st.liquidityCore := by
+  rcases immediate with ⟨segment, found⟩
+  exact congrArg (fun core => (core.1, core.2.1))
+    (drive_startTyped_immediate_core (current := { state := st, logs := [], updates := [] })
+      (ctx := ctx) (entry := entry) (segment := segment) (fuel := transcript.work + 2)
+      (transcript := transcript) found)
+
+/-- Permit's actual nonce prefix and static recovery retain the original economic core. -/
+theorem drive_startTyped_permit_core {fuel : Nat} {current : Checkpoint} {ctx : Context}
+    {owner spender : Adr} {value deadline : B256} {v : UInt8} {r s : B256} {transcript : Transcript} :
+    (drive fuel (startTyped current ctx (.permit owner spender value deadline v r s))
+      transcript).frame.current.state.economicCore = current.state.economicCore := by
+  cases immediate : startImmediate current ctx (.permit owner spender value deadline v r s) with
+  | some segment => exact drive_startTyped_immediate_core immediate
+  | none =>
+    simp only [startTyped, immediate]
+    by_cases timely : ctx.timestamp ≤ deadline
+    · rw [ite_eq_left timely]
+      by_cases staticContext : ctx.isStatic = true
+      · rw [ite_eq_left staticContext]
+        exact congrArg (fun current : Checkpoint => current.state.economicCore)
+          (drive_terminal_current fuel
+            ((Frame.enter current ctx (.permit owner spender value deadline v r s)).fail .staticWrite)
+            transcript True.intro)
+      · rw [ite_eq_right staticContext]
+        let nonce := current.state.nonces owner
+        let post : State := { current.state with nonces := Function.update current.state.nonces owner (nonce + 1) }
+        let prior := (Frame.enter current ctx (.permit owner spender value deadline v r s)).withEvents post []
+        let request := requestFor .permitRecovery 1
+          (.recover (permitDigest current.state owner spender value nonce deadline) v r s)
+        have staticExternal : externalStatic prior request = true := by
+          rw [externalStatic]
+          cases prior.context.isStatic <;> rfl
+        have checkpointCore : prior.checkpoint.state.economicCore = prior.current.state.economicCore := rfl
+        exact drive_permit_core fuel prior request owner spender value transcript staticExternal checkpointCore
+    · rw [ite_eq_right timely]
+      exact congrArg (fun current : Checkpoint => current.state.economicCore)
+        (drive_terminal_current fuel
+          ((Frame.enter current ctx (.permit owner spender value deadline v r s)).fail
+            (.sourceGuard "UniswapV2: EXPIRED")) transcript True.intro)
+
+
+/-- Independent answer conditions for the two entries that can consume an unbacked observation. -/
+def EntryNoShrink (st : State) (ctx : Context) (entry : Entry) (transcript : Transcript) : Prop :=
+  match entry with
+  | .burn recipient => BurnEntryNoShrink st ctx.pair recipient transcript
+  | .sync => SyncEntryNoShrink st transcript
+  | _ => True
+
+/-- Exact fee minted at the actual third own observation of mint and burn. -/
+def entryFeeAmount (st : State) (entry : Entry) (transcript : Transcript) : Nat :=
+  match entry with
+  | .mint _ | .burn _ =>
+    feeAmount st transcript.ownTail.ownTail.firstWord.toAdr st.reserve0.val st.reserve1.val
+  | _ => 0
+
+/-- Fee-off constrains the fee-recipient answer only for entries that query it. -/
+def EntryFeeOff (entry : Entry) (transcript : Transcript) : Prop :=
+  match entry with
+  | .mint _ | .burn _ => transcript.ownTail.ownTail.firstWord.toAdr = 0
+  | _ => True
+
+/-- The all-entry product consumer uses actual supply/reserve preservation for other entries. -/
+theorem runTyped_product_of_liquidityCore {st : State} {ctx : Context} {entry : Entry}
+    {transcript : Transcript}
+    (zeroFee : entryFeeAmount st entry transcript = 0)
+    (preserved : (runTyped st ctx entry transcript).frame.current.state.liquidityCore =
+      st.liquidityCore) :
+    st.reserve0.val * st.reserve1.val *
+        (runTyped st ctx entry transcript).frame.current.state.totalSupply.toNat ^ 2 ≤
+      (runTyped st ctx entry transcript).frame.current.state.reserve0.val *
+        (runTyped st ctx entry transcript).frame.current.state.reserve1.val *
+        (st.totalSupply.toNat + entryFeeAmount st entry transcript) ^ 2 := by
+  have supply := congrArg (fun core => core.1) preserved
+  have reserve0 := congrArg (fun core => core.2.1.val) preserved
+  have reserve1 := congrArg (fun core => core.2.2.val) preserved
+  dsimp only [State.liquidityCore] at supply reserve0 reserve1
+  rw [zeroFee, Nat.add_zero, supply, reserve0, reserve1]
+
+/-- Every successful typed entry satisfies the exact-fee supply-scaled product bound. -/
+theorem runTyped_product {st : State} {ctx : Context} {entry : Entry}
+    {transcript : Transcript} {returndata : Bytes}
+    (positiveSupply : 0 < st.totalSupply.toNat)
+    (noShrink : EntryNoShrink st ctx entry transcript)
+    (successful : (runTyped st ctx entry transcript).status = .success returndata) :
+    st.reserve0.val * st.reserve1.val *
+        (runTyped st ctx entry transcript).frame.current.state.totalSupply.toNat ^ 2 ≤
+      (runTyped st ctx entry transcript).frame.current.state.reserve0.val *
+        (runTyped st ctx entry transcript).frame.current.state.reserve1.val *
+        (st.totalSupply.toNat + entryFeeAmount st entry transcript) ^ 2 := by
+  cases entry
+  case mint recipient =>
+    exact runTyped_mint_product positiveSupply successful
+  case burn recipient =>
+    exact runTyped_burn_product noShrink successful
+  case sync =>
+    simpa only [entryFeeAmount, Nat.add_zero] using runTyped_sync_product noShrink successful
+  case swap amount0Out amount1Out recipient data =>
+    simpa only [entryFeeAmount, Nat.add_zero] using runTyped_swap_product successful
+  case skim recipient =>
+    apply runTyped_product_of_liquidityCore rfl
+    exact drive_startTyped_skim_liquidity
+      (current := { state := st, logs := [], updates := [] }) (ctx := ctx)
+      (recipient := recipient) (fuel := transcript.work + 2) (transcript := transcript)
+      (returndata := returndata) successful
+  case permit owner spender value deadline v r s =>
+    apply runTyped_product_of_liquidityCore rfl
+    exact congrArg (fun core => (core.1, core.2.1))
+      (drive_startTyped_permit_core (current := { state := st, logs := [], updates := [] })
+        (ctx := ctx) (owner := owner) (spender := spender) (value := value)
+        (deadline := deadline) (v := v) (r := r) (s := s)
+        (fuel := transcript.work + 2) (transcript := transcript))
+  case «initialize» token0 token1 =>
+    apply runTyped_product_of_liquidityCore rfl
+    apply runTyped_immediate_liquidity
+    by_cases paid : ctx.value ≠ 0
+    · rw [startImmediate, ite_eq_left paid]
+      exact ⟨_, rfl⟩
+    · simp only [startImmediate, ite_eq_right paid, getterResult]
+      by_cases authorized : ctx.sender = st.factory
+      · rw [ite_eq_left authorized]
+        cases ctx.isStatic <;> exact ⟨_, rfl⟩
+      · rw [ite_eq_right authorized]
+        exact ⟨_, rfl⟩
+  all_goals
+    apply runTyped_product_of_liquidityCore rfl
+    apply runTyped_immediate_liquidity
+    by_cases paid : ctx.value ≠ 0
+    · rw [startImmediate, ite_eq_left paid]
+      exact ⟨_, rfl⟩
+    · simp only [startImmediate, ite_eq_right paid, getterResult]
+      exact ⟨_, rfl⟩
+
+/-- The independent fee-off answer makes the exact entry charge zero. -/
+theorem entryFeeAmount_eq_zero {st : State} {entry : Entry} {transcript : Transcript}
+    (feeOff : EntryFeeOff entry transcript) : entryFeeAmount st entry transcript = 0 := by
+  cases entry
+  case mint recipient =>
+    change transcript.ownTail.ownTail.firstWord.toAdr = 0 at feeOff
+    rw [entryFeeAmount, feeAmount, ite_eq_left (Or.inl feeOff)]
+  case burn recipient =>
+    change transcript.ownTail.ownTail.firstWord.toAdr = 0 at feeOff
+    rw [entryFeeAmount, feeAmount, ite_eq_left (Or.inl feeOff)]
+  all_goals rfl
+
+/-- Every successful fee-off typed entry satisfies the original product bound. -/
+theorem runTyped_feeOff_product {st : State} {ctx : Context} {entry : Entry}
+    {transcript : Transcript} {returndata : Bytes}
+    (positiveSupply : 0 < st.totalSupply.toNat)
+    (feeOff : EntryFeeOff entry transcript)
+    (noShrink : EntryNoShrink st ctx entry transcript)
+    (successful : (runTyped st ctx entry transcript).status = .success returndata) :
+    st.reserve0.val * st.reserve1.val *
+        (runTyped st ctx entry transcript).frame.current.state.totalSupply.toNat ^ 2 ≤
+      (runTyped st ctx entry transcript).frame.current.state.reserve0.val *
+        (runTyped st ctx entry transcript).frame.current.state.reserve1.val *
+        st.totalSupply.toNat ^ 2 := by
+  have zeroFee : entryFeeAmount st entry transcript = 0 := entryFeeAmount_eq_zero feeOff
+  simpa only [zeroFee, Nat.add_zero] using runTyped_product positiveSupply noShrink successful
+
 end Blanc.Lift.UniswapV2Pair
