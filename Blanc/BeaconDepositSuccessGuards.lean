@@ -44,7 +44,7 @@ theorem depositRootGuard_runCompiledTo
   case h_cost =>
     simp only [show (nodeWord * 32 : B256).toNat = 640 by decide +kernel]
     rw [Devm.extCost_zero_of_le hmod hcovered]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case h_val =>
     change Sevm.argWord sevm 3 =? (memory.read 640 32).1.toB256 = 1
     rw [hroot, hread]
@@ -82,7 +82,7 @@ theorem depositCapGuard_runCompiledTo
   case h_cost =>
     rw [show (oldCountWord * 32 : B256).toNat = 576 by decide +kernel]
     rw [Devm.extCost_zero_of_le hmod hcovered]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case h_val =>
     rw [show (oldCountWord * 32 : B256).toNat = 576 by decide +kernel,
       hread]

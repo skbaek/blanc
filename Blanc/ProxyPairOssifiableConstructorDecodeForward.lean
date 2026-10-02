@@ -344,7 +344,7 @@ private theorem decodeForwardImplementationStage_runCompiled
   · simp only [Devm.stack_setMach]
     decide
   · simp only [Devm.gasLeft_setMach]
-    norm_num [gVerylow, gHigh]
+    norm_num only [gVerylow, gHigh]
   · simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using hrest
 
 private theorem decodeForwardAdminStage_runCompiled
@@ -398,7 +398,7 @@ private theorem decodeForwardAdminStage_runCompiled
   · simp only [Devm.stack_setMach]
     decide
   · simp only [Devm.gasLeft_setMach]
-    norm_num [gVerylow, gHigh]
+    norm_num only [gVerylow, gHigh]
   · simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using hrest
 
 private theorem decodeForwardOffsetBoundStage_runCompiled
@@ -1231,7 +1231,7 @@ theorem ossifiableConstructorProgram_emptySetup_runCompiled
     decodeForwardProgramMainStage_runCompiled hvalue hdecode
   refine ⟨post, ?_, hstorage, hlogs, houtput, hgasPost, herrorPost⟩
   apply Prog.runCompiled_intro (G := G + 319)
-  · norm_num [gJumpdest]
+  · norm_num only [gJumpdest, Devm.gasLeft_setMach]
   · rfl
   · change Func.RunCompiled
       (ossifiableConstructorFunctions 1249 2188) sevm

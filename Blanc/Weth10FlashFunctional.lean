@@ -132,7 +132,7 @@ lemma flashCallbackWindow (sel cal slf amt : B256) (payload : Bytes) :
         (32 - 28 + (32 + (32 + (32 + (32 + (32 +
           (32 + payload.length))))))) =
         ceil32 payload.length - payload.length from by omega]
-    norm_num
+    norm_num only
     rfl
   · simp only [List.length_append, List.length_drop, hlen]
     omega
@@ -302,7 +302,7 @@ lemma FlashCallbackBoundary.exists_log_segment
     (h : FlashCallbackBoundary sevm self receiver amount data pre mid) :
     ∃ callbackLogs : List Log, mid.logs = pre.logs ++ callbackLogs := by
   unfold FlashCallbackBoundary at h
-  aesop
+  aesop (config := {enableSimp := false})
 
 /-- Bubbling returndata always terminates by `REVERT`, hence cannot be the
 selected arm of a successful flash-loan suffix. -/

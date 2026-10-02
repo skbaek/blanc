@@ -221,7 +221,7 @@ theorem ric_mcpy_iter {s d l n : Nat} (hl : 32 ≤ l) (hl' : l < 2 ^ 256) (hs : 
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_lt s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_push s1
   have hlt : B256.ltCheck (Nat.toB256 l) (Bytes.toB256 [0x20]) = 0 := by
-    rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, lt_toB256 hl' (by norm_num)]
+    rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, lt_toB256 hl' (by norm_num only)]
     simp only [show ¬l < 32 by omega, ↓reduceIte]
   rw [hlt] at run
   rcases ric_branch run with ⟨-, G6, run⟩ | ⟨hw, -⟩
@@ -262,7 +262,7 @@ theorem ric_mcpy_exit {s d l : Nat} (hl : l < 32)
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_lt s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_push s1
   have hlt : B256.ltCheck (Nat.toB256 l) (Bytes.toB256 [0x20]) = 1 := by
-    rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, lt_toB256 (by omega) (by norm_num)]
+    rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, lt_toB256 (by omega) (by norm_num only)]
     simp only [hl, ↓reduceIte]
   rw [hlt] at run
   rcases ric_branch run with ⟨hw, -⟩ | ⟨-, G6, run⟩
@@ -403,7 +403,7 @@ theorem ric_shaCall {img : Bytes} {n d : Nat} {x1 x3 x4 : B256} {c0 c1 v0 v1 : U
   obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G35, rfl⟩ := ri_iszero s2
   obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G36, rfl⟩ := ri_push s2
   have hlt : B256.ltCheck (Nat.toB256 32) (Bytes.toB256 [0x20]) = 0 := by
-    rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, lt_toB256 (by norm_num) (by norm_num)]
+    rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, lt_toB256 (by norm_num only) (by norm_num only)]
     simp only [lt_self_iff_false, ↓reduceIte]
   rw [hlt, show B256.eqCheck (0 : B256) 0 = 1 by decide] at run
   rcases ric_branch run with ⟨hw, -⟩ | ⟨-, G37, run⟩

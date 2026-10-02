@@ -23,10 +23,10 @@ theorem byte_roundtrip (u : UInt8) :
 theorem shl192_eq (a b c d : UInt64) :
     B256.shiftLeft (((a, b) : B128), ((c, d) : B128)) 192 = (((d, 0) : B128), (0 : B128)) := by
   simp only [B256.shiftLeft]
-  norm_num
+  norm_num only
   change (B128.shiftLeft ((c, d) : B128) 64, (0 : B128)) = _
   simp only [B128.shiftLeft]
-  norm_num
+  norm_num only [↓reduceIte, Nat.toUInt64_eq, UInt64.reduceOfNat, UInt64.shiftLeft_zero]
   rfl
 
 theorem shl192_eq' (v : B256) : v <<< 192 = (((v.2.2, 0) : B128), (0 : B128)) := by

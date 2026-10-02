@@ -562,7 +562,7 @@ theorem canonicalDepositCalldata_decodable
   have hsignatureBound : signature.length < 2 ^ 32 := by
     omega
   have hfirstOffsetBound : firstDepositTailOffset < 2 ^ 32 := by
-    norm_num [firstDepositTailOffset]
+    norm_num only [firstDepositTailOffset]
   have hsecondOffsetBound :
       secondDepositTailOffset pubkey < 2 ^ 32 := by
     simp only [secondDepositTailOffset, firstDepositTailOffset,
@@ -615,7 +615,7 @@ theorem canonicalDepositCalldata_decodable
     unfold dynamicLength
     rw [hoffsetZero,
       show 4 + firstDepositTailOffset = 132 by
-        norm_num [firstDepositTailOffset],
+        norm_num only [firstDepositTailOffset],
       abiDepositCall_lengthWord_zero]
     exact B256.toNat_toB256_of_lt hpubkeyWordBound
   have hlengthOne : dynamicLength

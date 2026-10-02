@@ -174,7 +174,7 @@ private theorem
   · rw [Devm.extCost_zero_of_le halign (by
       simp only [show (0 : B256).toNat = 0 by rfl]
       omega)]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   simp only [show (0 : B256).toNat = 0 by rfl]
   rw [Mem.Reads.read hreads, himplementation, hmemory0]
   func_run (4) [0]
@@ -224,7 +224,7 @@ private theorem
     rw [sstoreValueCost,
       if_pos ⟨rfl, fun h => himplementationWordNonzero h.symm⟩,
       if_pos rfl]
-    norm_num [gasStorageSet]
+    norm_num only [gasStorageSet]
   simp only [hnew, Devm.getStorVal_setMach,
     initialize_addAccessedStorageKey_getStorVal,
     initialize_addAccessedAddress_getStorVal, himplementationRaw,
@@ -235,7 +235,7 @@ private theorem
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   · simp only [show ((0 : B256) * 32).toNat = 0 by decide]
     erw [Devm.extCost_zero_of_le halign hzeroWindow]
-    norm_num [gLog, gLogdata, gLogtopic]
+    norm_num only [gLog, gLogdata, gLogtopic, Fin.succ_one_eq_two, Fin.val_two]
   simp only [show ((0 : B256) * 32).toNat = 0 by decide]
   rw [hreadZero, hrefund]
   simp only [initialize_refundCounter_setMach,
@@ -297,12 +297,13 @@ theorem
     · simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
       decide
     · simp only [Devm.gasLeft_setMach]
-      norm_num [gVerylow, gHigh, gJumpdest]
+      norm_num only [gVerylow, gHigh, gJumpdest]
+      omega
     · apply Func.runCompiled_call' (G := G) hsetup
       · simp only [Devm.stack_setMach, List.length_nil]
         decide
       · simp only [Devm.gasLeft_setMach]
-        norm_num [gVerylow, gMid, gJumpdest]
+        norm_num only [gVerylow, gMid, gJumpdest]
       · simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
           Devm.stack_setMach] using hrest
   have hpfx :=
@@ -496,7 +497,7 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
       rw [sstoreValueCost,
         if_pos ⟨rfl, fun h => himplementationWordNonzero h.symm⟩,
         if_pos rfl]
-      norm_num [gasStorageSet]
+      norm_num only [gasStorageSet]
     simp only [hnew, Devm.getStorVal_setMach,
       initialize_addAccessedStorageKey_getStorVal,
       initialize_addAccessedAddress_getStorVal, himplementationRaw,
@@ -508,7 +509,7 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     · simp only [show ((0 : B256) * 32).toNat = 0 by decide]
       erw [Devm.extCost_zero_of_le halign hzeroWindow]
-      norm_num [gLog, gLogdata, gLogtopic]
+      norm_num only [gLog, gLogdata, gLogtopic, Fin.succ_one_eq_two, Fin.val_two]
     simp only [show ((0 : B256) * 32).toNat = 0 by decide]
     rw [hreadZero]
     change Func.RunCompiled (ossifiableConstructorFunctions 1249 2188) sevm _

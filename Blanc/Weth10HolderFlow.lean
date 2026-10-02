@@ -240,7 +240,7 @@ def FlowAtom.holderFlow (atom : FlowAtom) (u : Adr) : HolderFlow u :=
 theorem FlowAtom.holderFlow_flash_eq (atom : FlowAtom) (u : Adr) :
     (atom.holderFlow u).flashCredit =
       (atom.holderFlow u).flashRepayment := by
-  cases atom <;> simp only [FlowAtom.holderFlow] <;> aesop
+  cases atom <;> simp only [FlowAtom.holderFlow] <;> aesop (config := {enableSimp := false})
 
 /-- The public numeric fold used by `AccountedHistory.weth10Flow`. -/
 def holderFlowOfActions (actions : List FlowAction) (u : Adr) : HolderFlow u :=

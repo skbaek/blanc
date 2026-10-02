@@ -333,7 +333,7 @@ private theorem stageMask_complete
     · simp only [Devm.getStorVal_setMach, hrawLog, horiginal, hnew]
       rw [hrawZero, sstoreValueCost,
         if_pos ⟨rfl, fun h => hrequestedNonzero h.symm⟩, if_pos rfl]
-      norm_num [gasStorageSet]
+      norm_num only [gasStorageSet]
     exact stageCopy_runCompiled
       (fs := fs) (sevm := sevm) (memory := memory2)
       (runtimeBytes := runtimeBytes) (G := G - 21455)
@@ -509,7 +509,7 @@ private theorem stageMask_dirtyCovered_complete
       rw [sstoreValueCost, if_neg (by
         intro hclean
         exact hrawNonzero hclean.1.symm)]
-      norm_num [gasWarmAccess]
+      norm_num only [gasWarmAccess]
     exact stageCopy_runCompiled
       (fs := fs) (sevm := sevm) (memory := memory2)
       (runtimeBytes := runtimeBytes) (G := G - 1549)

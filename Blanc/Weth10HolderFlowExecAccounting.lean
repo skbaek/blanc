@@ -32,8 +32,103 @@ private theorem exec_result_unique
 private theorem exec_unique
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (left right : Exec pc sevm pre out) : left = right := by
-  induction left <;> cases right <;> simp_all only [reduceCtorEq, Exec.cont.injEq, Exec.doneErr.injEq, Exec.doneOk.injEq, Exec.runErr.injEq, ExceptT.stM_eq, Exec.runOk.injEq] <;>
-    aesop (add safe forward exec_result_unique)
+  induction left with
+  | halt h =>
+      cases right with
+      | halt => rfl
+      | cont h' => cases h.symm.trans h'
+      | doneErr h' => cases h.symm.trans h'
+      | doneOk h' => cases h.symm.trans h'
+      | runErr h' => cases h.symm.trans h'
+      | runOk h' => cases h.symm.trans h'
+  | cont h k ih =>
+      cases right with
+      | halt h' => cases h.symm.trans h'
+      | cont h' k' =>
+          cases h.symm.trans h'
+          rw [ih k']
+      | doneErr h' => cases h.symm.trans h'
+      | doneOk h' => cases h.symm.trans h'
+      | runErr h' => cases h.symm.trans h'
+      | runOk h' => cases h.symm.trans h'
+  | doneErr h he hr =>
+      cases right with
+      | halt h' => cases h.symm.trans h'
+      | cont h' => cases h.symm.trans h'
+      | doneErr h' he' =>
+          cases h.symm.trans h'
+          cases he.symm.trans he'
+          rfl
+      | doneOk h' he' hr' =>
+          cases h.symm.trans h'
+          cases he.symm.trans he'
+          cases hr.symm.trans hr'
+      | runErr h' he' =>
+          cases h.symm.trans h'
+          cases he.symm.trans he'
+      | runOk h' he' =>
+          cases h.symm.trans h'
+          cases he.symm.trans he'
+  | doneOk h he hr k ih =>
+      cases right with
+      | halt h' => cases h.symm.trans h'
+      | cont h' => cases h.symm.trans h'
+      | doneErr h' he' hr' =>
+          cases h.symm.trans h'
+          cases he.symm.trans he'
+          cases hr.symm.trans hr'
+      | doneOk h' he' hr' k' =>
+          cases h.symm.trans h'
+          cases he.symm.trans he'
+          cases hr.symm.trans hr'
+          rw [ih k']
+      | runErr h' he' =>
+          cases h.symm.trans h'
+          cases he.symm.trans he'
+      | runOk h' he' =>
+          cases h.symm.trans h'
+          cases he.symm.trans he'
+  | runErr h he child hr ih =>
+      cases right with
+      | halt h' => cases h.symm.trans h'
+      | cont h' => cases h.symm.trans h'
+      | doneErr h' he' =>
+          cases h.symm.trans h'
+          cases he.symm.trans he'
+      | doneOk h' he' =>
+          cases h.symm.trans h'
+          cases he.symm.trans he'
+      | runErr h' he' child' hr' =>
+          cases h.symm.trans h'
+          cases he.symm.trans he'
+          cases exec_result_unique child child'
+          rw [ih child']
+      | runOk h' he' child' hr' =>
+          cases h.symm.trans h'
+          cases he.symm.trans he'
+          cases exec_result_unique child child'
+          cases hr.symm.trans hr'
+  | runOk h he child hr k ihChild ih =>
+      cases right with
+      | halt h' => cases h.symm.trans h'
+      | cont h' => cases h.symm.trans h'
+      | doneErr h' he' =>
+          cases h.symm.trans h'
+          cases he.symm.trans he'
+      | doneOk h' he' =>
+          cases h.symm.trans h'
+          cases he.symm.trans he'
+      | runErr h' he' child' hr' =>
+          cases h.symm.trans h'
+          cases he.symm.trans he'
+          cases exec_result_unique child child'
+          cases hr.symm.trans hr'
+      | runOk h' he' child' hr' k' =>
+          cases h.symm.trans h'
+          cases he.symm.trans he'
+          cases exec_result_unique child child'
+          cases hr.symm.trans hr'
+          rw [ihChild child', ih k']
 
 /-- Proof-indexed retained traversals are independent of which concrete
 `Exec` witness was recovered from a `RunCompiled` callback slot. -/
@@ -162,7 +257,7 @@ theorem FlowAction.localSegmentsHolderIn_eq
     codeAddress, depth⟩
   cases atom <;>
     simp only [localSegmentsHolderIn, LocalSegmentKind.holderIn, FlowAtom.holderFlow, HolderFlow.zero, localSegmentLabels, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero, Nat.left_eq_add, Nat.right_eq_add, Nat.add_eq_zero_iff] <;>
-    aesop
+    (split_ifs <;> dsimp only <;> omega)
 
 theorem FlowAction.localSegmentsHolderOut_eq
     (action : FlowAction) (u : Adr) :
@@ -175,7 +270,7 @@ theorem FlowAction.localSegmentsHolderOut_eq
     codeAddress, depth⟩
   cases atom <;>
     simp only [localSegmentsHolderOut, LocalSegmentKind.holderOut, FlowAtom.holderFlow, HolderFlow.zero, localSegmentLabels, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero, zero_add, Nat.right_eq_add, Nat.add_eq_zero_iff] <;>
-    aesop
+    (split_ifs <;> dsimp only <;> omega)
 
 theorem FlowAction.localSegmentsHolderLoss_eq
     (action : FlowAction) (u : Adr) (shape : action.CreditShape) :
@@ -3368,8 +3463,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_permitTypehash
   apply Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_childlessNoFlow (frame := frame) context
   refine ⟨permitTypehash, hnonempty, ?_, ?_, ?_, ?_, ?_⟩
   · rw [hselector]
-    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
-    aesop
+    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
   · simpa only [permitTypehash] using
       returnWord_childlessTerminal PERMIT_TYPEHASH
   · exact permitTypehashSelector_noPrimaryFlow.selectsNoPrimaryFlow
@@ -3389,8 +3483,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_decimals
   apply Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_childlessNoFlow (frame := frame) context
   refine ⟨decimals, hnonempty, ?_, ?_, ?_, ?_, ?_⟩
   · rw [hselector]
-    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
-    aesop
+    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
   · exact ⟨returnWordLine 0x12, .return_, rfl, by
       simp only [returnWordLine, pushB256, mstoreAt, List.cons_append, List.nil_append, pushList,
         List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
@@ -3413,8 +3506,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_callbackSuccess
   apply Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_childlessNoFlow (frame := frame) context
   refine ⟨callbackSuccess, hnonempty, ?_, ?_, ?_, ?_, ?_⟩
   · rw [hselector]
-    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
-    aesop
+    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
   · simpa only [callbackSuccess] using
       returnWord_childlessTerminal CALLBACK_SUCCESS
   · exact callbackSuccessSelector_noPrimaryFlow.selectsNoPrimaryFlow
@@ -3508,8 +3600,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_totalSupply
   refine ⟨totalSupply, hnonempty, ?_, totalSupply_childlessTerminal,
     ?_, ?_, ?_⟩
   · rw [hselector]
-    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
-    aesop
+    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
   · exact totalSupplySelector_noPrimaryFlow.selectsNoPrimaryFlow
       (hselector.trans totalSupplySelector_word_eq)
   · rw [hselector, totalSupplySelector_word_eq]
@@ -3529,8 +3620,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_balanceOf
   refine ⟨balanceOfEndpoint, hnonempty, ?_, balanceOf_childlessTerminal,
     ?_, ?_, ?_⟩
   · rw [hselector]
-    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
-    aesop
+    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
   · exact balanceOfSelector_noPrimaryFlow.selectsNoPrimaryFlow
       (hselector.trans balanceOfSelector_word_eq)
   · rw [hselector, balanceOfSelector_word_eq]
@@ -3548,8 +3638,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_nonces
   apply Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_childlessNoFlow (frame := frame) context
   refine ⟨nonces, hnonempty, ?_, nonces_childlessTerminal, ?_, ?_, ?_⟩
   · rw [hselector]
-    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
-    aesop
+    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
   · exact noncesSelector_noPrimaryFlow.selectsNoPrimaryFlow
       (hselector.trans noncesSelector_word_eq_local)
   · rw [hselector, noncesSelector_word_eq_local]
@@ -3568,8 +3657,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_flashMinted
   refine ⟨flashMinted, hnonempty, ?_, flashMinted_childlessTerminal,
     ?_, ?_, ?_⟩
   · rw [hselector]
-    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
-    aesop
+    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
   · exact flashMintedSelector_noPrimaryFlow.selectsNoPrimaryFlow
       (hselector.trans flashMintedSelector_word_eq)
   · rw [hselector, flashMintedSelector_word_eq]
@@ -3587,8 +3675,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_symbol
   apply Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_childlessNoFlow (frame := frame) context
   refine ⟨symbol, hnonempty, ?_, symbol_childlessTerminal, ?_, ?_, ?_⟩
   · rw [hselector]
-    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
-    aesop
+    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
   · exact symbolSelector_noPrimaryFlow.selectsNoPrimaryFlow
       (hselector.trans symbolSelector_word_eq)
   · rw [hselector, symbolSelector_word_eq]
@@ -3608,8 +3695,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_deploymentChainId
   refine ⟨deploymentChainId dp, hnonempty, ?_,
     deploymentChainId_childlessTerminal dp, ?_, ?_, ?_⟩
   · rw [hselector]
-    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
-    aesop
+    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
   · exact deploymentChainIdSelector_noPrimaryFlow.selectsNoPrimaryFlow
       (hselector.trans deploymentChainIdSelector_word_eq)
   · rw [hselector, deploymentChainIdSelector_word_eq]
@@ -3629,8 +3715,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_allowance
   refine ⟨allowance, hnonempty, ?_, allowance_childlessTerminal,
     ?_, ?_, ?_⟩
   · rw [hselector]
-    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
-    aesop
+    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
   · exact allowanceSelector_noPrimaryFlow.selectsNoPrimaryFlow
       (hselector.trans allowanceSelector_word_eq_local)
   · rw [hselector, allowanceSelector_word_eq_local]
@@ -3667,8 +3752,7 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_domainSeparator
   have hmem : (Sevm.selector frame.sevm,
       nonpayable (domainSeparator dp)) ∈ weth10Funcs dp := by
     rw [hselector]
-    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
-    aesop
+    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
   rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursor (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor, _hstack, hwrapperActions⟩
   rcases wrapperCursor.enterNonpayable with
@@ -3696,8 +3780,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_domainSeparator
   have hmember : (Sevm.selector frame.sevm,
       nonpayable (domainSeparator dp)) ∈ weth10Funcs dp := by
     rw [hselector]
-    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
-    aesop
+    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
   apply Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_noFlowNil (frame := frame) context
     hnonempty hmember
   · exact domainSeparatorSelector_noPrimaryFlow.selectsNoPrimaryFlow
@@ -3734,8 +3817,7 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_maxFlashLoan
   have hmem : (Sevm.selector frame.sevm,
       nonpayable maxFlashLoan) ∈ weth10Funcs dp := by
     rw [hselector]
-    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
-    aesop
+    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
   rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursor (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor, _hstack, hwrapperActions⟩
   rcases wrapperCursor.enterNonpayable with
@@ -3764,8 +3846,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_maxFlashLoan
   have hmember : (Sevm.selector frame.sevm,
       nonpayable maxFlashLoan) ∈ weth10Funcs dp := by
     rw [hselector]
-    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
-    aesop
+    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
   apply Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_noFlowNil (frame := frame) context
     hnonempty hmember
   · exact maxFlashLoanSelector_noPrimaryFlow.selectsNoPrimaryFlow
@@ -3800,8 +3881,7 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_flashFee
   have hmem : (Sevm.selector frame.sevm,
       nonpayable flashFee) ∈ weth10Funcs dp := by
     rw [hselector]
-    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
-    aesop
+    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
   rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursor (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor, _hstack, hwrapperActions⟩
   rcases wrapperCursor.enterNonpayable with
@@ -3842,8 +3922,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_flashFee
   have hmember : (Sevm.selector frame.sevm,
       nonpayable flashFee) ∈ weth10Funcs dp := by
     rw [hselector]
-    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false]
-    aesop
+    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
   apply Blanc.Weth10.Exec.Frame.hasProofIndexedStorageAccounting_of_noFlowNil (frame := frame) context
     hnonempty hmember
   · exact flashFeeSelector_noPrimaryFlow.selectsNoPrimaryFlow

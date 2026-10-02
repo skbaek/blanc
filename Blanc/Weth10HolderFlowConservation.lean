@@ -226,7 +226,7 @@ theorem creditLoss_max_one_eq_modulus :
   unfold B256.Nof
   rw [show (B256.max : B256).toNat = 2 ^ 256 - 1 from rfl]
   rw [show (1 : B256).toNat = 1 from rfl]
-  norm_num
+  norm_num only
 
 theorem CreditOccurrence.nof_of_loss_lt_modulus
     (credit : CreditOccurrence) (h : credit.loss < 2 ^ 256) :

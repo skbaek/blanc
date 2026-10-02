@@ -398,7 +398,7 @@ private lemma tokenCallbackWindow
     rw [show 132 + ceil32 payload.length -
         (32 - 28 + (32 + (32 + (32 + (32 + payload.length))))) =
         ceil32 payload.length - payload.length from by omega]
-    norm_num
+    norm_num only
     rfl
   · simp only [List.length_append, List.length_drop, hlen]
     omega

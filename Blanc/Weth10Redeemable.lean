@@ -1089,7 +1089,7 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
     have hs := hv.1
     change (b.getCode recipient).size = eoaDelegatedCodeLength at hs
     rw [h_code] at hs
-    norm_num [eoaDelegatedCodeLength] at hs
+    norm_num only [eoaDelegatedCodeLength] at hs
   have hcodeeq : code = d0.state.getCode recipient := by
     have hc := accessDelegation_code_of_not hnotdel
     rw [hdel] at hc
@@ -1128,7 +1128,7 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
       (a := (d.setMach ⟨[], d.memory, d.gasLeft, d.stateGas⟩).accessedAddresses)
     have hsum : acc ≤ gasColdAccountAccess + gasColdAccountAccess := by
       exact Nat.add_le_add ha hdgc
-    norm_num [gasColdAccountAccess] at hsum
+    norm_num only [gasColdAccountAccess] at hsum
     exact hsum
   by_cases hv : value = 0
   · subst value
@@ -1181,10 +1181,10 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
         (if ¬ (d1.getAcct recipient).Empty then 0 else gNewAccount) = create := rfl
     have hcreate_le : create ≤ 25000 := by
       dsimp only [create]
-      split <;> norm_num [gNewAccount]
+      split <;> norm_num only [gNewAccount]
     have hafford : acc + create + gasCallValue + 0 ≤ d1.gasLeft := by
       rw [hd1g']
-      norm_num [gasCallValue]
+      norm_num only [gasCallValue]
       omega
     rcases hsplit : calculateMsgCallGas value.toNat (Nat.toB256 G).toNat
         d1.gasLeft 0 (acc + create + gasCallValue) with ⟨mcc, mcs⟩
@@ -1213,7 +1213,8 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
       change mcs = min (Nat.toB256 G).toNat (except64th avail) +
         (if value.toNat = 0 then 0 else gCallStipend) at hmcs
       rw [hmcs, if_neg hvnat]
-      norm_num [gCallStipend]
+      norm_num only [gCallStipend]
+      omega
     have hdel' : accessDelegation
         (addAccessedAddress
           (d.setMach ⟨[], d.memory, d.gasLeft, d.stateGas⟩) recipient.toB256.toAdr)
@@ -2137,8 +2138,8 @@ theorem Stable.withdrawTo_messageFrame_of_le
     (initSevm msg) recipient q hdata
   have hdataNonempty : (initSevm msg).data.length.toB256 ≠ 0 := by
     rw [hdata]
-    norm_num [withdrawToCalldata, abiSelectorBytes_length,
-      B256.length_toBytes]
+    norm_num only [withdrawToCalldata, abiSelectorBytes_length,
+      B256.length_toBytes, List.length_append]
     decide
   have hamount : Sevm.argWord (initSevm msg) 1 ≤
       child.dyna.getStorVal (initSevm msg).currentTarget
@@ -2292,8 +2293,8 @@ theorem Stable.withdraw_messageFrame_of_le
   have harg := withdrawCalldata_argWord (initSevm msg) q hdata
   have hdataNonempty : (initSevm msg).data.length.toB256 ≠ 0 := by
     rw [hdata]
-    norm_num [withdrawCalldata, abiSelectorBytes_length,
-      B256.length_toBytes]
+    norm_num only [withdrawCalldata, abiSelectorBytes_length,
+      B256.length_toBytes, List.length_append]
     decide
   have hamount : Sevm.argWord (initSevm msg) 0 ≤
       child.dyna.getStorVal (initSevm msg).currentTarget

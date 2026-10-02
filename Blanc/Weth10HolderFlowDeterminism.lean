@@ -84,9 +84,45 @@ theorem MessageCallTrace.index_eq_of_same_input
 theorem MessageCallTrace.eq_of_same
     {msg : Msg} {state : State} {out : MsgCallOutput}
     (left right : MessageCallTrace msg state out) : left = right := by
-  cases left <;> cases right <;> simp_all only [reduceCtorEq, ExecutionTrace.MessageCallTrace.createRun.injEq, ExecutionTrace.MessageCallTrace.callRun.injEq] <;>
-    aesop (add safe forward ProcessMessageTrace.eq_of_same)
-      (add safe forward ProcessCreateMessageTrace.eq_of_same)
+  cases left with
+  | createCollision ltarget lcollision _ =>
+      cases right with
+      | createCollision => rfl
+      | createRun _ rcollision =>
+          rw [lcollision] at rcollision
+          cases rcollision
+      | callRun rtarget =>
+          rw [ltarget] at rtarget
+          cases rtarget
+  | createRun ltarget lcollision levm lcore ltrace _ =>
+      cases right with
+      | createCollision _ rcollision =>
+          rw [lcollision] at rcollision
+          cases rcollision
+      | createRun _ _ revm rcore rtrace =>
+          have hevm : levm = revm := Except.ok.inj (lcore.symm.trans rcore)
+          subst hevm
+          rw [ProcessCreateMessageTrace.eq_of_same ltrace rtrace]
+      | callRun rtarget =>
+          rw [ltarget] at rtarget
+          cases rtarget
+  | callRun ltarget ldelegated lrefund ldelegation lexec lexecEq levm lcore ltrace _ =>
+      cases right with
+      | createCollision rtarget =>
+          rw [ltarget] at rtarget
+          cases rtarget
+      | createRun rtarget =>
+          rw [ltarget] at rtarget
+          cases rtarget
+      | callRun _ rdelegated rrefund rdelegation rexec rexecEq revm rcore rtrace =>
+          have hdelegation : (ldelegated, lrefund) = (rdelegated, rrefund) :=
+            Except.ok.inj (ldelegation.symm.trans rdelegation)
+          cases hdelegation
+          subst lexecEq
+          subst rexecEq
+          have hevm : levm = revm := Except.ok.inj (lcore.symm.trans rcore)
+          subst hevm
+          rw [ProcessMessageTrace.eq_of_same ltrace rtrace]
 
 theorem MessageCallTrace.index_eq_and_heq_of_same_input
     {msg : Msg} {leftState rightState : State}
@@ -234,10 +270,19 @@ theorem RequestsTrace.eq_of_same
     {benv : Benv} {bout : BlockOutput}
     {state : State} {bout' : BlockOutput}
     (left right : RequestsTrace benv bout state bout') : left = right := by
-  cases left
-  cases right
-  simp_all only [ExecutionTrace.RequestsTrace.mk.injEq]
-  aesop (add safe forward SystemMessageTrace.index_eq_and_heq_of_same_input)
+  rcases left with ⟨ldeposits, lparsed, _, lwState, lwOut, _, lwTrace, lcState, lcOut, _,
+    lcTrace, _⟩
+  rcases right with ⟨rdeposits, rparsed, _, rwState, rwOut, _, rwTrace, rcState, rcOut, _,
+    rcTrace, _⟩
+  have hdeposits : ldeposits = rdeposits := Except.ok.inj (lparsed.symm.trans rparsed)
+  subst hdeposits
+  obtain ⟨rfl, rfl, hwithdrawal⟩ :=
+    SystemMessageTrace.index_eq_and_heq_of_same_input lwTrace rwTrace
+  cases hwithdrawal
+  obtain ⟨rfl, rfl, hconsolidation⟩ :=
+    SystemMessageTrace.index_eq_and_heq_of_same_input lcTrace rcTrace
+  cases hconsolidation
+  rfl
 
 theorem RequestsTrace.index_eq_and_heq_of_same_input
     {benv : Benv} {bout : BlockOutput}
@@ -305,10 +350,26 @@ theorem AccountedBlock.eq_of_block_eq
     {pre post : BlockChain}
     (left right : AccountedBlock cfg dp ca pre post)
     (hblock : left.block = right.block) : left = right := by
-  cases left
-  cases right
-  simp_all only [mk.injEq, true_and]
-  aesop (add safe forward AppliedBodyTrace.eq_of_same)
+  rcases left with ⟨lblock, _, lfork, lforkAt, lrules, _, lrulesAt, _, _, lbodyState,
+    lblockOutput, lbodyRun, lbodyTrace, lactions, lactionsEq, lobservations, lobservationsEq, _⟩
+  rcases right with ⟨rblock, _, rfork, rforkAt, rrules, _, rrulesAt, _, _, rbodyState,
+    rblockOutput, rbodyRun, rbodyTrace, ractions, ractionsEq, robservations, robservationsEq, _⟩
+  change lblock = rblock at hblock
+  subst hblock
+  have hfork : lfork = rfork := Except.ok.inj (lforkAt.symm.trans rforkAt)
+  subst hfork
+  have hrules : lrules = rrules := Except.ok.inj (lrulesAt.symm.trans rrulesAt)
+  subst hrules
+  have hbody : (lbodyState, lblockOutput) = (rbodyState, rblockOutput) :=
+    Except.ok.inj (lbodyRun.symm.trans rbodyRun)
+  cases hbody
+  have htrace := AppliedBodyTrace.eq_of_same lbodyTrace rbodyTrace
+  subst htrace
+  subst lactionsEq
+  subst ractionsEq
+  subst lobservationsEq
+  subst robservationsEq
+  rfl
 
 theorem AccountedBlock.observations_eq_of_block_eq
     {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}

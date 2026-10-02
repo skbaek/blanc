@@ -253,7 +253,7 @@ theorem attack_carrier_inhabited :
     .snoc ⟨_, _, _, prov,
       .nonVictimDeposit
         (Blanc.Prorata.ProrataAttackState.genesis offsetN)
-        .coalition 1 1000 (by norm_num [offsetN, Blanc.Prorata.ProrataAttackState.genesis,
+        .coalition 1 1000 (by norm_num only [offsetN, Blanc.Prorata.ProrataAttackState.genesis,
           Blanc.Prorata.mintN, Blanc.Prorata.payN])⟩ .genesis
   -- and donates a million, which moves the price and not the supply.
   have p2 : Blanc.Prorata.ProrataAttackPath offsetN _ :=
@@ -262,16 +262,16 @@ theorem attack_carrier_inhabited :
   -- The victim deposits a million into the moved price.
   have p3 : Blanc.Prorata.ProrataAttackPath offsetN _ :=
     .snoc ⟨_, _, _, prov,
-      .victimDeposit _ 1000000 1999 rfl (by norm_num [offsetN, Blanc.Prorata.ProrataAttackState.genesis,
+      .victimDeposit _ 1000000 1999 rfl (by norm_num only [offsetN, Blanc.Prorata.ProrataAttackState.genesis,
           Blanc.Prorata.mintN, Blanc.Prorata.payN])
-        (by norm_num [offsetN, Blanc.Prorata.ProrataAttackState.genesis,
+        (by norm_num only [offsetN, Blanc.Prorata.ProrataAttackState.genesis,
           Blanc.Prorata.mintN, Blanc.Prorata.payN])⟩ p2
   -- The coalition exits.
   have p4 : Blanc.Prorata.ProrataAttackPath offsetN _ :=
     .snoc ⟨_, _, _, prov,
-      .nonVictimWithdraw _ .coalition 1000 500125 (by norm_num [offsetN, Blanc.Prorata.ProrataAttackState.genesis,
+      .nonVictimWithdraw _ .coalition 1000 500125 (by norm_num only [offsetN, Blanc.Prorata.ProrataAttackState.genesis,
           Blanc.Prorata.mintN, Blanc.Prorata.payN])
-        (by norm_num [offsetN, Blanc.Prorata.ProrataAttackState.genesis,
+        (by norm_num only [offsetN, Blanc.Prorata.ProrataAttackState.genesis,
           Blanc.Prorata.mintN, Blanc.Prorata.payN])⟩ p3
   refine ⟨_, p4, ?_, ?_, ?_⟩ <;>
     simp only [offsetN, Prorata.ProrataAttackState.genesis, Prorata.AttackAttribution.coalitionAmount, zero_add, Nat.reduceAdd, Prorata.AttackAttribution.outsideAmount, add_zero]

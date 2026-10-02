@@ -372,7 +372,8 @@ private theorem proxy_success_child_frame_roots
       List.flatMap_cons, zero_lt_one, getElem?_pos, List.getElem_cons_zero, Func.sourceSites,
       List.nil_append, List.cons_append, List.flatMap_nil, List.append_nil, List.mem_cons,
       List.not_mem_nil, or_false] at member
-    aesop (add simp [Ninst.pushB256])
+    repeat' (rcases member with rfl | member)
+    all_goals (intro h; cases h)
   have childless : Exec.rawFrameDescendants child = [] := by
     apply Exec.rawFrameDescendants_eq_nil_of_no_sameFrame_xinstAt child
     intro node sameFrame x instructionAt
@@ -949,7 +950,8 @@ private theorem proxy_revert_child_frame_roots
       List.flatMap_cons, zero_lt_one, getElem?_pos, List.getElem_cons_zero, Func.sourceSites,
       List.nil_append, List.cons_append, List.flatMap_nil, List.append_nil, List.mem_cons,
       List.not_mem_nil, or_false] at member
-    aesop (add simp [Ninst.pushB256])
+    repeat' (rcases member with rfl | member)
+    all_goals (intro h; cases h)
   have childless : Exec.rawFrameDescendants child = [] := by
     apply Exec.rawFrameDescendants_eq_nil_of_no_sameFrame_xinstAt child
     intro node sameFrame x instructionAt
