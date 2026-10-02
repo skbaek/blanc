@@ -241,6 +241,7 @@ CONTRACTS = {
                            "Lift.FloodLooper.Jumps",
                            "Lift.WithdrawalRequest.FloodWalk", "Lift.WithdrawalRequest.FloodRun",
                            "Lift.WithdrawalRequest.FloodTx",
+                           "Lift.WithdrawalRequest.FeeCounterexample",
                            "Lift.WithdrawalRequest.Creation.Address",
                            "Lift.WithdrawalRequest.Creation.Cert",
                            "Lift.WithdrawalRequest.Creation.Check",
