@@ -14,7 +14,7 @@ namespace Blanc.Lift.WithdrawalRequest
 
 open Jaune ExecutionAccountingReplay ExecutionTrace Blanc.WithdrawalRequest
 
-private theorem WordReplayGuard.system_kind {storage : Stor} {event : WordReplayEvent}
+theorem WordReplayGuard.system_kind {storage : Stor} {event : WordReplayEvent}
     (guard : WordReplayGuard storage event)
     (caller : event.frame.sevm.caller = systemAddress) : event.kind = .system := by
   cases kind : event.kind with

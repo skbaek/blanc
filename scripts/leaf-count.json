@@ -1,7 +1,7 @@
 {
  "generator": "python3 scripts/leaf_audit.py generate",
- "leaves": 1418,
+ "leaves": 1414,
  "private": 145,
- "public": 1273,
+ "public": 1269,
  "schema": 1
 }

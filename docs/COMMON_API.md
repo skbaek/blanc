@@ -2416,6 +2416,10 @@ rather than restating them:
   segments and `.fold_eq` gives the exact final storage. The contract supplies
   the update, guard and event observation; the carrier imposes no queue model.
   [`Blanc/ExecutionAccountingStorageFold.lean`](../Blanc/ExecutionAccountingStorageFold.lean).
+  For the inverse decomposition at an exact list boundary, import
+  [`Blanc/ExecutionAccountingStoragePrefix.lean`](../Blanc/ExecutionAccountingStoragePrefix.lean).
+  `GuardedStorageReplay.split` retains both guarded segments at the computed
+  prefix storage; `.head_guard` exposes the first event's incoming guard.
   The registered recipe triggers do not recognize this custom relation or
   carrier-construction need, so discovery remains in this branch.
 
