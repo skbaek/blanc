@@ -3192,7 +3192,8 @@ contract-neutral.
   inverted (`ri_return`), the memory facts `Mem.reads_data`/`Mem.read_write_word_of_wf`, and
   the world projections after a store, log or return (`getStor_afterStore`,
   `getStor_afterStore_ne`, `getStorVal_afterStore`, `logs_afterStore`, `getStor_addLog`,
-  `logs_addLog`, `getStor_St_return`, `logs_St_return`, `output_St_return`) are in
+  `logs_addLog`, `getAcct_addLog`, `output_addLog`, `getStor_St_return`,
+  `logs_St_return`, `output_St_return`) are in
   [`Blanc/Lift/WalkSteps.lean`](../Blanc/Lift/WalkSteps.lean), which also holds
   exact forward `TIMESTAMP` (`rx_timestamp`, actual block-header time and two gas),
   `SLT`, `TIMESTAMP`, `LOG2`, `TLOAD` and `TSTORE` inverted (`ri_slt`, `ri_timestamp`,

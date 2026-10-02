@@ -232,6 +232,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.Consumption",
         "Lift.UniswapV2Pair.Layout",
         "Lift.UniswapV2Pair.UpdateArithmetic",
+        "Lift.UniswapV2Pair.UpdateSource",
         "Lift.UniswapV2Pair.UpdateWalk",
         "Lift.UniswapV2Pair.UpdateTailWalk",
         "Lift.UniswapV2Pair.GetterStorageReservesCore",

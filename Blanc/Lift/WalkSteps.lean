@@ -296,6 +296,14 @@ theorem logs_St_return (b : Devm) (S : List B256) (M : Mem) (G i n : Nat) (out :
 theorem output_St_return (b : Devm) (S : List B256) (M : Mem) (G i n : Nat) (out : Bytes) :
     (((St b S M G).memRead i n).2.withOutput out).output = out := rfl
 
+/-- A log leaves every account unchanged. -/
+theorem getAcct_addLog (d : Devm) (L : Log) (a : Adr) :
+    (d.addLog L).getAcct a = d.getAcct a := rfl
+
+/-- A log leaves the enclosing output field unchanged. -/
+theorem output_addLog (d : Devm) (L : Log) :
+    (d.addLog L).output = d.output := rfl
+
 theorem logs_addLog (d : Devm) (L : Log) : (d.addLog L).logs = d.logs ++ [L] := rfl
 
 theorem logs_afterStore {sevm : Sevm} {b : Devm} {k v : B256} :
