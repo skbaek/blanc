@@ -13,7 +13,7 @@ theorem executeSha256_of_length_64 {evm : Evm}
     executeSha256 evm =
       .ok 84 (Bytes.sha256 evm.sta.data).toBytes := by
   simp only [executeSha256, hlen]
-  norm_num [ceilDiv, PrecompResult.chargeGas, hgas]
+  norm_num only [ceilDiv, PrecompResult.chargeGas, hgas, ite_true]
 
 /-- Address two selects the fixed-width SHA-256 result above. -/
 theorem executePrecomp_two_of_length_64 {evm : Evm}

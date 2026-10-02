@@ -6897,7 +6897,7 @@ private lemma UInt64.high_concat32 (x y : UInt32) :
   have hx : x.toNat <<< 32 < 2 ^ 64 := by
     rw [Nat.shiftLeft_eq]
     have := UInt32.toNat_lt x
-    norm_num at this ⊢
+    norm_num only at this ⊢
     omega
   unfold Nat.lo
   rw [Nat.mod_eq_of_lt hx, Nat.shiftRight_or_distrib,
@@ -6916,7 +6916,7 @@ private lemma UInt64.low_concat32 (x y : UInt32) :
   have hx : x.toNat <<< 32 < 2 ^ 64 := by
     rw [Nat.shiftLeft_eq]
     have := UInt32.toNat_lt x
-    norm_num at this ⊢
+    norm_num only at this ⊢
     omega
   unfold Nat.lo
   rw [Nat.mod_eq_of_lt hx, Nat.or_mod_two_pow]
@@ -6935,7 +6935,7 @@ private lemma UInt32.high_concat16 (x y : UInt16) :
   have hx : x.toNat <<< 16 < 2 ^ 32 := by
     rw [Nat.shiftLeft_eq]
     have := UInt16.toNat_lt x
-    norm_num at this ⊢
+    norm_num only at this ⊢
     omega
   unfold Nat.lo
   rw [Nat.mod_eq_of_lt hx, Nat.shiftRight_or_distrib,
@@ -6954,7 +6954,7 @@ private lemma UInt32.low_concat16 (x y : UInt16) :
   have hx : x.toNat <<< 16 < 2 ^ 32 := by
     rw [Nat.shiftLeft_eq]
     have := UInt16.toNat_lt x
-    norm_num at this ⊢
+    norm_num only at this ⊢
     omega
   unfold Nat.lo
   rw [Nat.mod_eq_of_lt hx, Nat.or_mod_two_pow]
@@ -6973,7 +6973,7 @@ private lemma UInt16.high_concat8 (x y : UInt8) :
   have hx : x.toNat <<< 8 < 2 ^ 16 := by
     rw [Nat.shiftLeft_eq]
     have := UInt8.toNat_lt x
-    norm_num at this ⊢
+    norm_num only at this ⊢
     omega
   unfold Nat.lo
   rw [Nat.mod_eq_of_lt hx, Nat.shiftRight_or_distrib,
@@ -6992,7 +6992,7 @@ private lemma UInt16.low_concat8 (x y : UInt8) :
   have hx : x.toNat <<< 8 < 2 ^ 16 := by
     rw [Nat.shiftLeft_eq]
     have := UInt8.toNat_lt x
-    norm_num at this ⊢
+    norm_num only at this ⊢
     omega
   unfold Nat.lo
   rw [Nat.mod_eq_of_lt hx, Nat.or_mod_two_pow]
@@ -7140,13 +7140,15 @@ lemma shiftRight_224_eq_toB256_take_four (x : B256) :
   simp only [B256.shiftRight]
   change (⟨0, B128.shiftRight ⟨_, _⟩ 96⟩ : B256) = _
   simp only [B128.shiftRight]
-  norm_num
+  dsimp only [B128]
+  norm_num only
+  simp only [ite_true, ite_false]
   congr 3
   have hlt : (x3 >>> 32).toNat < 4294967296 := by
     rw [UInt64.toNat_shiftRight]
     change x3.toNat >>> 32 < 4294967296
     rw [Nat.shiftRight_eq_div_pow]
-    norm_num
+    norm_num only
     have hx := UInt64.toNat_lt x3
     omega
   rw [← UInt64.toNat_inj]
@@ -12098,7 +12100,7 @@ lemma UInt64.toUInt32_toUInt64_eq_of_highMask_and_eq_zero {x : UInt64}
         BitVec.reduceNeg, Bool.true_and]
       change (BitVec.allOnes 64)[i - 32] = true
       rw [BitVec.getElem_eq_testBit_toNat _ _ (by omega), BitVec.toNat_allOnes]
-      rw [Nat.testBit_two_pow_sub_succ (x := 0) (by norm_num)]
+      rw [Nat.testBit_two_pow_sub_succ (x := 0) (by norm_num only)]
       have hi64 : i - 32 < 64 := by omega
       simp only [hi64, decide_true, zero_testBit, Bool.not_false, Bool.and_self]
     rw [hmask] at hb_i

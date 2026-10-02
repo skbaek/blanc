@@ -1754,7 +1754,7 @@ theorem Func.isSome_compile (l : List (Nat × Func)) (n : Nat) (p : Func) :
             Table.getElem?_locations, Option.map_none]
       | some np =>
           rcases np with ⟨loc, p⟩
-          by_cases hg : loc < 2 ^ 16 <;> norm_num at hg
+          by_cases hg : loc < 2 ^ 16 <;> norm_num only at hg
           · simp only [compile, h, guard, reducePow, Option.pure_def, Option.failure_eq_none,
             toUInt8_eq, cons_append, nil_append, Option.bind_eq_bind, Option.bind_some, hg,
             ↓reduceIte, Option.isSome_some, compiles, compileDecision, Table.getElem?_locations,
@@ -1784,7 +1784,7 @@ theorem Func.isSome_compile (l : List (Nat × Func)) (n : Nat) (p : Func) :
           simp only [Option.isSome_some] at hs
           have hsp : (Func.compileDecision l (n + 4) p).1 = true := by
             simpa only [Func.compiles] using hs.symm
-          by_cases hg : n + compsize p + 4 < 2 ^ 16 <;> norm_num at hg
+          by_cases hg : n + compsize p + 4 < 2 ^ 16 <;> norm_num only at hg
           · generalize hq :
               Func.compile l (n + compsize p + 4 + 1) q = cq
             cases cq with

@@ -227,7 +227,7 @@ theorem productHighWord_mul_add_productLowWord_toNat (x y : B256) :
   let scratch := p % maxWordN
   have hmodulus : 2 ≤ wordModulusN := by
     unfold wordModulusN
-    norm_num
+    norm_num only
   have hmaxWord : maxWordN = wordModulusN - 1 := rfl
   have hq : q < maxWordN := by
     exact product_quotient_lt_pred hmodulus (B256.toNat_lt x)
@@ -682,7 +682,7 @@ private theorem Nat.lowestSetBit_eq_one_of_odd
     by_contra notPositive
     have widthZero : width = 0 := by omega
     subst width
-    norm_num at bound
+    norm_num only at bound
     omega
   unfold Nat.lowestSetBit
   apply Nat.eq_of_testBit_eq
@@ -736,7 +736,7 @@ theorem Nat.lowestSetBit_spec
       (n / twos) % 2 = 1 := by
   induction width generalizing n with
   | zero =>
-      norm_num at bound
+      norm_num only at bound
       omega
   | succ width ih =>
       rcases Nat.mod_two_eq_zero_or_one n with even | odd
@@ -1019,7 +1019,7 @@ theorem toUInt64_shiftRight_one (n : Nat) (hn : n < 2 ^ 64) :
   have hright : (n / 2).toUInt64.toNat = n / 2 := by
     rw [toNat_toUInt64, Nat.lo_eq_of_lt (by omega : n / 2 < 2 ^ 64)]
   rw [hright, show ((1 : Nat).toUInt64).toNat = 1 by rfl]
-  norm_num [Nat.shiftRight_eq_div_pow]
+  norm_num only [Nat.shiftRight_eq_div_pow]
 
 theorem toB128_shiftRight_one (n : Nat) (hn : n < 2 ^ 64) :
     Nat.toB128 n >>> 1 = Nat.toB128 (n / 2) := by
@@ -1069,7 +1069,7 @@ theorem toB256_shiftRight_one (n : Nat) (hn : n < 2 ^ 64) :
   · have hzeroShift : (0 : B128) <<< 127 = 0 := by
       change B128.shiftLeft ((0 : UInt64), (0 : UInt64)) 127 =
         ((0 : UInt64), (0 : UInt64))
-      norm_num [B128.shiftLeft]
+      norm_num only [B128.shiftLeft]
       rfl
     rw [show 128 - 1 = 127 by omega, hzeroShift, B128.zero_or]
     exact toB128_shiftRight_one n hn
@@ -1450,22 +1450,22 @@ theorem inverseNewtonIter_six_modEq
       [ZMOD (wordModulusN : Int)] := by
   have h1 := inverseNewtonStepWord_modEq_square
     (denominator := denominator) (inverse := seed) (modulus := 16)
-    (by norm_num [wordModulusN]) seedCorrect
+    (by norm_num only [wordModulusN]) seedCorrect
   have h2 := inverseNewtonStepWord_modEq_square
     (denominator := denominator)
     (inverse := inverseNewtonStepWord denominator seed)
-    (modulus := 256) (by norm_num [wordModulusN]) h1
+    (modulus := 256) (by norm_num only [wordModulusN]) h1
   have h3 := inverseNewtonStepWord_modEq_square
     (denominator := denominator)
     (inverse := inverseNewtonStepWord denominator
       (inverseNewtonStepWord denominator seed))
-    (modulus := 65536) (by norm_num [wordModulusN]) h2
+    (modulus := 65536) (by norm_num only [wordModulusN]) h2
   have h4 := inverseNewtonStepWord_modEq_square
     (denominator := denominator)
     (inverse := inverseNewtonStepWord denominator
       (inverseNewtonStepWord denominator
         (inverseNewtonStepWord denominator seed)))
-    (modulus := 4294967296) (by norm_num [wordModulusN]) h3
+    (modulus := 4294967296) (by norm_num only [wordModulusN]) h3
   have h5 := inverseNewtonStepWord_modEq_square
     (denominator := denominator)
     (inverse := inverseNewtonStepWord denominator
@@ -1473,7 +1473,7 @@ theorem inverseNewtonIter_six_modEq
         (inverseNewtonStepWord denominator
           (inverseNewtonStepWord denominator seed))))
     (modulus := 18446744073709551616)
-    (by norm_num [wordModulusN]) h4
+    (by norm_num only [wordModulusN]) h4
   have h6 := inverseNewtonStepWord_modEq_square
     (denominator := denominator)
     (inverse := inverseNewtonStepWord denominator
@@ -1482,7 +1482,7 @@ theorem inverseNewtonIter_six_modEq
           (inverseNewtonStepWord denominator
             (inverseNewtonStepWord denominator seed)))))
     (modulus := 340282366920938463463374607431768211456)
-    (by norm_num [wordModulusN]) h5
+    (by norm_num only [wordModulusN]) h5
   simpa only [wordModulusN, Nat.reducePow, Nat.cast_ofNat, inverseNewtonIter, Int.reduceMul] using
     h6
 
@@ -1494,8 +1494,8 @@ private theorem inverseSeedNat_mod_sixteen
     rw [Nat.mod_mod_of_dvd n (by omega : 2 ∣ 16)]
     exact odd
   rw [Nat.mul_mod n ((3 * n) ^^^ 2) 16]
-  rw [show 16 = 2 ^ 4 by norm_num, Nat.xor_mod_two_pow]
-  rw [← show 16 = 2 ^ 4 by norm_num]
+  rw [show 16 = 2 ^ 4 by norm_num only, Nat.xor_mod_two_pow]
+  rw [← show 16 = 2 ^ 4 by norm_num only]
   rw [Nat.mul_mod 3 n 16]
   change
     (n % 16 * (((3 * (n % 16)) % 16) ^^^ 2)) % 16 = 1
@@ -1517,7 +1517,7 @@ private theorem inverseSeedWord_mod_sixteen (denominator : B256) :
       (((3 * denominator.toNat) ^^^ 2) % (2 ^ 4))
   simp only [Nat.xor_mod_two_pow]
   rw [Nat.mod_mod_of_dvd]
-  norm_num
+  norm_num only
 
 /-- For every odd word, `(3 * denominator) xor 2` is an inverse modulo
 `16`. -/

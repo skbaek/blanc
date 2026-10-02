@@ -16,7 +16,12 @@ theorem Exec.result_unique {pc : Nat} {sevm : Sevm} {devm : Devm}
 theorem Exec.unique {pc : Nat} {sevm : Sevm} {devm : Devm} {ex : Execution}
     (a b : Exec pc sevm devm ex) : a = b := by
   induction a <;> cases b <;> simp_all only [reduceCtorEq, Exec.cont.injEq, Exec.doneErr.injEq, Exec.doneOk.injEq, Exec.runErr.injEq, ExceptT.stM_eq, Exec.runOk.injEq] <;>
-    aesop (add safe forward Exec.result_unique)
+    aesop (config := { enableSimp := false })
+      (add safe forward Exec.result_unique)
+      (add norm tactic (by
+        simp_all only [Step.cont.injEq, Step.spawn.injEq, FrameEntry.done.injEq,
+          FrameEntry.run.injEq, reduceCtorEq, Except.ok.injEq, heq_eq_eq,
+          eq_self, true_and, and_true]))
 
 instance {pc : Nat} {sevm : Sevm} {devm : Devm} {ex : Execution} :
     Subsingleton (Exec pc sevm devm ex) where

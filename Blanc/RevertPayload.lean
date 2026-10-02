@@ -464,12 +464,12 @@ lemma Func.runCompiledTo_revertSelector {fs : List Func} {sevm : Sevm}
   have hn4 : Nat.toB256 4 ≠ 0 := by
     intro hz
     have hh := congrArg B256.toNat hz
-    rw [B256.toNat_toB256_of_lt (by norm_num), B256.toNat_zero] at hh
+    rw [B256.toNat_toB256_of_lt (by norm_num only), B256.toNat_zero] at hh
     omega
   have hn28 : Nat.toB256 28 ≠ 0 := by
     intro hz
     have hh := congrArg B256.toNat hz
-    rw [B256.toNat_toB256_of_lt (by norm_num), B256.toNat_zero] at hh
+    rw [B256.toNat_toB256_of_lt (by norm_num only), B256.toNat_zero] at hh
     omega
   have hc4 : pushCost (Nat.toB256 4).toBytes.sig = gVerylow :=
     pushCost_of_ne_zero hn4
@@ -514,9 +514,9 @@ lemma Func.runCompiledTo_revertSelector {fs : List Func} {sevm : Sevm}
           (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
       simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
       have h4nat : (Nat.toB256 4).toNat = 4 :=
-        B256.toNat_toB256_of_lt (by norm_num)
+        B256.toNat_toB256_of_lt (by norm_num only)
       have h28nat : (Nat.toB256 28).toNat = 28 :=
-        B256.toNat_toB256_of_lt (by norm_num)
+        B256.toNat_toB256_of_lt (by norm_num only)
       have ha : M'.size % 32 = 0 := by
         dsimp only [M']
         exact Mem.aligned_write_word halign
