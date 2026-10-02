@@ -6,6 +6,8 @@ import Blanc.Lift.WalkSteps
 import Blanc.Lift.Vyper
 import Blanc.ExecutionTraceSystemCode
 import Blanc.ExecutionNoninterference
+import Blanc.SystemCallForward
+import Blanc.StorageRefund
 
 namespace Blanc.Lift.BeaconRoots
 
@@ -30,7 +32,7 @@ theorem body_run {fs : List SFunc} {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
         (afterSstore sevm b (sevm.benvStat.time % (0x1fff : B256)) sevm.benvStat.time)
         ((0x1fff : B256) + sevm.benvStat.time % (0x1fff : B256))
         (Sevm.dataWord sevm 0)) :
-    ∃ post : Devm, SFunc.RunExact fs sevm
+    SFunc.RunExact fs sevm
       (St b [] M (G + 31 +
         sstoreCost sevm b (sevm.benvStat.time % (0x1fff : B256))
           sevm.benvStat.time +
@@ -38,13 +40,11 @@ theorem body_run {fs : List SFunc} {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
           (afterSstore sevm b (sevm.benvStat.time % (0x1fff : B256))
             sevm.benvStat.time)
           ((0x1fff : B256) + sevm.benvStat.time % (0x1fff : B256))
-          (Sevm.dataWord sevm 0))) t_004d_c0 (.halted post) := by
-  let key := sevm.benvStat.time % (0x1fff : B256)
-  let key₂ := (0x1fff : B256) + key
-  let b₁ := afterSstore sevm b key sevm.benvStat.time
-  let post := St (afterSstore sevm b₁ key₂ (Sevm.dataWord sevm 0)) [] M (G + 1)
-  refine ⟨post, ?_⟩
-  dsimp only [key, key₂, b₁, post]
+          (Sevm.dataWord sevm 0))) t_004d_c0
+      (.halted (St (afterSstore sevm
+        (afterSstore sevm b (sevm.benvStat.time % (0x1fff : B256)) sevm.benvStat.time)
+        ((0x1fff : B256) + sevm.benvStat.time % (0x1fff : B256)) (Sevm.dataWord sevm 0))
+        [] M (G + 1))) := by
   rw [show G + 31 +
       sstoreCost sevm b (sevm.benvStat.time % (0x1fff : B256)) sevm.benvStat.time +
       sstoreCost sevm
@@ -277,7 +277,7 @@ theorem root_run {fs : List SFunc} {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
         (afterSstore sevm b (sevm.benvStat.time % (0x1fff : B256)) sevm.benvStat.time)
         ((0x1fff : B256) + sevm.benvStat.time % (0x1fff : B256))
         (Sevm.dataWord sevm 0)) :
-    ∃ post : Devm, SFunc.RunExact fs sevm
+    SFunc.RunExact fs sevm
       (St b [] M (G + 21 + 31 +
         sstoreCost sevm b (sevm.benvStat.time % (0x1fff : B256))
           sevm.benvStat.time +
@@ -285,10 +285,13 @@ theorem root_run {fs : List SFunc} {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
           (afterSstore sevm b (sevm.benvStat.time % (0x1fff : B256))
             sevm.benvStat.time)
             ((0x1fff : B256) + sevm.benvStat.time % (0x1fff : B256))
-            (Sevm.dataWord sevm 0))) t_0000_c0 (.halted post) := by
-  obtain ⟨post, hbody⟩ := body_run (fs := fs) (sevm := sevm) (b := b) (M := M)
+            (Sevm.dataWord sevm 0))) t_0000_c0
+      (.halted (St (afterSstore sevm
+        (afterSstore sevm b (sevm.benvStat.time % (0x1fff : B256)) sevm.benvStat.time)
+        ((0x1fff : B256) + sevm.benvStat.time % (0x1fff : B256)) (Sevm.dataWord sevm 0))
+        [] M (G + 1))) := by
+  have hbody := body_run (fs := fs) (sevm := sevm) (b := b) (M := M)
     (G := G) hfork hstatic hsentry1 hsentry2
-  refine ⟨post, ?_⟩
   dsimp only [t_0000_c0]
   rw [show G + 21 + 31 +
       sstoreCost sevm b (sevm.benvStat.time % (0x1fff : B256)) sevm.benvStat.time +
@@ -361,13 +364,36 @@ theorem root_run {fs : List SFunc} {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
   exact rx_branch_succ (by decide) hbody
 
 def systemMsg (benv : Benv) : Msg :=
-  processSystemTransactionMsg benv.beginTransaction
-    (processSystemTransactionTenv benv.beginTransaction)
-    beaconRootsAddress benv.stat.parentBeaconBlockRoot.toBytes beaconRootsCode
+  systemCallMsg benv beaconRootsAddress beaconRootsCode
+    benv.stat.parentBeaconBlockRoot.toBytes
 
 def systemSevm (benv : Benv) : Sevm := initSevm (systemMsg benv)
 
 def systemBase (benv : Benv) : Devm := initDevm (systemMsg benv)
+
+/-- The timestamp slot the SYSTEM call writes: `timestamp mod 8191`. -/
+def systemKey (benv : Benv) : B256 := (systemSevm benv).benvStat.time % (0x1fff : B256)
+
+/-- The root slot the SYSTEM call writes, `8191` slots above the timestamp slot. -/
+def systemRootKey (benv : Benv) : B256 := (0x1fff : B256) + systemKey benv
+
+/-- The parent beacon root the SYSTEM call stores. -/
+def systemValue (benv : Benv) : B256 := Sevm.dataWord (systemSevm benv) 0
+
+/-- The frame after the timestamp store. -/
+def systemMid (benv : Benv) : Devm :=
+  afterSstore (systemSevm benv) (systemBase benv) (systemKey benv)
+    (systemSevm benv).benvStat.time
+
+def systemCost (benv : Benv) : Nat :=
+  sstoreCost (systemSevm benv) (systemBase benv) (systemKey benv)
+      (systemSevm benv).benvStat.time +
+    sstoreCost (systemSevm benv) (systemMid benv) (systemRootKey benv) (systemValue benv)
+
+/-- The exact halted frame of the SYSTEM call. -/
+def systemPost (benv : Benv) : Devm :=
+  St (afterSstore (systemSevm benv) (systemMid benv) (systemRootKey benv) (systemValue benv))
+    [] .empty (systemTransactionGas - (52 + systemCost benv) + 1)
 
 theorem system_seed (benv : Benv) :
     (systemSevm benv).caller = systemAddress ∧
@@ -385,43 +411,31 @@ theorem system_seed (benv : Benv) :
     (systemSevm benv).codeAddress = some beaconRootsAddress := by
   exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
-theorem system_exec_exists {benv : Benv} (fork : CoveredFork benv.stat.fork) :
-    ∃ post : Devm, exec (initEvm (systemMsg benv)) = .ok post := by
+theorem system_exec {benv : Benv} (fork : CoveredFork benv.stat.fork) :
+    exec (initEvm (systemMsg benv)) = .ok (systemPost benv) := by
   let sevm := systemSevm benv
   let base := systemBase benv
-  let key := sevm.benvStat.time % (0x1fff : B256)
-  let key₂ := (0x1fff : B256) + key
-  let b₁ := afterSstore sevm base key sevm.benvStat.time
-  let c₁ := sstoreCost sevm base key sevm.benvStat.time
-  let c₂ := sstoreCost sevm b₁ key₂ (Sevm.dataWord sevm 0)
-  let G := systemTransactionGas - (52 + c₁ + c₂)
+  let c₁ := sstoreCost sevm base (systemKey benv) sevm.benvStat.time
+  let c₂ := sstoreCost sevm (systemMid benv) (systemRootKey benv) (systemValue benv)
+  let G := systemTransactionGas - (52 + systemCost benv)
+  have hcostEq : systemCost benv = c₁ + c₂ := rfl
   have hgas : systemTransactionGas = 30000000 := by rfl
   have hcost1 : c₁ ≤ 22100 := by
     dsimp only [c₁]
-    have h := sstoreCost_le sevm base key sevm.benvStat.time
+    have h := sstoreCost_le sevm base (systemKey benv) sevm.benvStat.time
     simp only [gasColdSload, gasStorageSet] at h
     exact h
   have hcost2 : c₂ ≤ 22100 := by
     dsimp only [c₂]
-    have h := sstoreCost_le sevm b₁ key₂ (Sevm.dataWord sevm 0)
+    have h := sstoreCost_le sevm (systemMid benv) (systemRootKey benv) (systemValue benv)
     simp only [gasColdSload, gasStorageSet] at h
     exact h
-  have hcost : c₁ + c₂ ≤ systemTransactionGas - 52 := by
-    have h1 := hcost1
-    have h2 := hcost2
-    rw [hgas]
-    omega
-  have hsum : c₁ + c₂ ≤ 44200 := by omega
-  have hG : G + 52 + c₁ + c₂ = systemTransactionGas := by
-    rw [hgas]
-    dsimp only [G]
-    omega
   have hGbound : gCallStipend < G := by
     dsimp only [G]
-    rw [hgas]
+    rw [hgas, hcostEq]
     norm_num only [gCallStipend]
     omega
-  obtain ⟨post, hrun⟩ := root_run (fs := prog) (sevm := sevm) (b := base)
+  have hrun := root_run (fs := prog) (sevm := sevm) (b := base)
     (M := .empty) (G := G) fork (system_seed benv).2.2.1
     (system_seed benv).1 (by omega) (by omega)
   have hG' : G + 21 + 31 +
@@ -430,24 +444,84 @@ theorem system_exec_exists {benv : Benv} (fork : CoveredFork benv.stat.fork) :
         sevm.benvStat.time)
         ((0x1fff : B256) + sevm.benvStat.time % (0x1fff : B256))
         (Sevm.dataWord sevm 0) = systemTransactionGas := by
-    dsimp only [sevm, base, key, key₂, b₁, c₁, c₂] at hG ⊢
+    change G + 21 + 31 + c₁ + c₂ = systemTransactionGas
+    dsimp only [G]
+    rw [hgas, hcostEq]
     omega
   have hrun' : SFunc.RunExact prog sevm
-      (St base [] .empty systemTransactionGas) t_0000_c0 (.halted post) := by
+      (St base [] .empty systemTransactionGas) t_0000_c0 (.halted (systemPost benv)) := by
     rw [hG'] at hrun
     exact hrun
   have hexec : Nonempty (Exec 0 sevm
-      (St base [] .empty systemTransactionGas) (.ok post)) := by
+      (St base [] .empty systemTransactionGas) (.ok (systemPost benv))) := by
     apply lift_exact cert_check jumps_ok (system_seed benv).2.2.2.1 fork
     exact ⟨t_0000_c0, prog_root, hrun'⟩
-  refine ⟨post, ?_⟩
-  change exec (initEvm (systemMsg benv)) = .ok post
   change Nonempty (Exec 0 sevm
-    (St base [] .empty systemTransactionGas) (.ok post)) at hexec
+    (St base [] .empty systemTransactionGas) (.ok (systemPost benv))) at hexec
   have entry : St base [] .empty systemTransactionGas = base := by
     rfl
   rw [entry] at hexec
   exact (exec_iff_exec_eq _ _ _ _).mp hexec
+
+theorem member : (beaconRootsAddress, beaconRootsCode) ∈ systemContracts := by
+  simp only [systemContracts, List.mem_cons, List.not_mem_nil, or_false]
+  exact Or.inl trivial
+
+/-- The two ring-buffer slots are distinct. -/
+theorem systemKey_ne (benv : Benv) : systemKey benv ≠ systemRootKey benv := by
+  intro same
+  have hlt : (systemKey benv).toNat < 8191 := by
+    rw [systemKey, B256.toNat_mod (by decide)]
+    exact Nat.mod_lt _ (by decide)
+  have hnat := congrArg B256.toNat same
+  rw [systemRootKey, B256.toNat_add] at hnat
+  have hconst : (0x1fff : B256).toNat = 8191 := by decide
+  rw [hconst, Nat.lo_eq_of_lt (by omega)] at hnat
+  omega
+
+/-- The SYSTEM frame halts cleanly, with a non-negative refund counter, having
+written exactly its two ring-buffer slots. -/
+theorem systemPost_facts (benv : Benv) :
+    (systemPost benv).error = none ∧
+    0 ≤ (systemPost benv).refundCounter ∧
+    (systemPost benv).state =
+      (benv.state.setStorVal beaconRootsAddress (systemKey benv)
+        (systemSevm benv).benvStat.time).setStorVal beaconRootsAddress
+        (systemRootKey benv) (systemValue benv) := by
+  refine ⟨?_, ?_, ?_⟩
+  · change (afterSstore (systemSevm benv) (systemMid benv) _ _).error = none
+    rw [afterSstore_error, systemMid, afterSstore_error]
+    rfl
+  · change 0 ≤ (afterSstore (systemSevm benv) (systemMid benv) _ _).refundCounter
+    have first : (0 : Int) ≤ (systemMid benv).refundCounter :=
+      afterSstore_refundCounter_ge_of_original_eq_current _ _ _ _ rfl
+    refine first.trans (afterSstore_refundCounter_ge_of_original_eq_current _ _ _ _ ?_)
+    rw [getStorVal_eq_getStor, systemMid, afterSstore_getStor_self,
+      Stor.get_set_ne _ (systemKey_ne benv), ← getStorVal_eq_getStor]
+    rfl
+  · change (afterSstore (systemSevm benv) (systemMid benv) _ _).state = _
+    rw [afterSstore_state, systemMid, afterSstore_state]
+    rfl
+
+/-- **The EIP-4788 unchecked system call** on the real installed code: it succeeds and
+its state is the input state with its two ring-buffer slots written, so every other
+account is untouched. -/
+theorem processUncheckedSystemTransaction_beaconRoots {benv : Benv}
+    (fork : CoveredFork benv.stat.fork)
+    (installed : benv.state.getCode beaconRootsAddress = beaconRootsCode) :
+    processUncheckedSystemTransaction benv beaconRootsAddress
+        benv.stat.parentBeaconBlockRoot.toBytes =
+      .ok ((systemPost benv).state, systemCallOutput (systemPost benv)) ∧
+    (systemPost benv).state =
+      (benv.state.setStorVal beaconRootsAddress (systemKey benv)
+        (systemSevm benv).benvStat.time).setStorVal beaconRootsAddress
+        (systemRootKey benv) (systemValue benv) ∧
+    ∀ a, beaconRootsAddress ≠ a → (systemPost benv).state.get a = benv.state.get a := by
+  have facts := systemPost_facts benv
+  refine ⟨processUncheckedSystemTransaction_of_exec member fork installed (system_exec fork)
+    facts.1 facts.2.1, facts.2.2, fun a different => ?_⟩
+  rw [facts.2.2, State.get_setStorVal_ne _ _ _ different,
+    State.get_setStorVal_ne _ _ _ different]
 
 theorem beaconRoots_trace_target_of_installed
     {benv : Benv} {state : State} {out : MsgCallOutput}
@@ -456,8 +530,7 @@ theorem beaconRoots_trace_target_of_installed
     (installed : SystemCodeInstalled benv.state) :
     ∀ root ∈ trace.rawFrames, root.sevm.currentTarget = beaconRootsAddress := by
   exact trace.rawFrames_target_of_installed (c := beaconRootsCode)
-    (by simp only [systemContracts, List.mem_cons, List.not_mem_nil, or_false]
-        exact Or.inl trivial) installed
+    member installed
 
 theorem beaconRoots_no_foreign_write {benv : Benv} {pre : Devm} {out : Execution}
     {sevm : Sevm} (run : Exec 0 sevm pre out)
@@ -465,9 +538,7 @@ theorem beaconRoots_no_foreign_write {benv : Benv} {pre : Devm} {out : Execution
     (different : beaconRootsAddress ≠ owner) :
     Exec.NoRetainedWriteTo run owner key := by
   subst sevm
-  obtain ⟨hreach, _, _⟩ := systemContracts_facts (beaconRootsAddress, beaconRootsCode)
-    (by simp only [systemContracts, List.mem_cons, List.not_mem_nil, or_false]
-        exact Or.inl trivial)
+  obtain ⟨hreach, _, _⟩ := systemContracts_facts _ member
   apply Exec.noRetainedWriteTo_of_frame_owners_ne run
   intro root member
   have hroot := Exec.rawFrameRoots_of_reach run

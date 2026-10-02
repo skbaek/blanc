@@ -2775,6 +2775,20 @@ the body-level sibling of T3:
 For the same system-message, transaction-list, withdrawal, request, and body
 layers in exact state order, use the chronology APIs named in E8.
 
+For the converse (a system call *succeeds*, and I have its raw frame) use
+[`Blanc/SystemCallForward.lean`](../Blanc/SystemCallForward.lean):
+`processSystemTransaction_of_exec`, `processUncheckedSystemTransaction_of_exec` and
+`processCheckedSystemTransaction_of_exec` return the call's exact `(post.state,
+systemCallOutput post)` for any member of `systemContracts` on a covered fork, from
+`exec (initEvm (systemCallMsg benv target code data)) = .ok post` with no frame error and a
+non-negative refund counter (and, for the block-level forms, the canonical code installed).
+`systemContracts_not_precompile`, `systemContracts_nondelegated` and
+`systemContracts_nonempty` are the envelope facts; `afterSstore_state` and
+`State.get_setStorVal_ne` read a store's world-state effect. Worked uses: the EIP-4788 and
+EIP-2935 walks `Blanc/Lift/BeaconRoots/SystemWalk.lean` and
+`Blanc/Lift/HistoryStorage/SystemWalk.lean` (`processUncheckedSystemTransaction_beaconRoots`,
+`processUncheckedSystemTransaction_historyStorage`).
+
 ### T6. The wrapper is a configured block or a whole chain history
 
 Use
