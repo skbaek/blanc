@@ -175,7 +175,7 @@ SHARED += ["Lift.PackedShaSize", "Lift.Deploy", "Lift.CreationOps"]
 SHARED += ["Lift.ExactWalkSolc", "Lift.ExactWalkCall"]
 # Forward construction of one configured block from proof-produced body evidence
 # (eip7002-withdrawal-predeploy-v1): contract-neutral.
-SHARED += ["BlockForward"]
+SHARED += ["BlockForward", "Lift.ExactWalkCallChild"]
 # Pure-model ledger updates (vyper-3crv-bytecode-v1): contract-neutral.
 SHARED += ["LedgerUpdate"]
 # Walk steps for arbitrary static calls, CALLER/KECCAK256/LOG3/SSTORE, hashed slots and the

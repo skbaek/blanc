@@ -347,6 +347,16 @@ Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
   four-instruction selector prefix before the residual function.
 - `Func.ExecSat` / `Prog.ExecSat` package predicates over outcomes.
 - The `Ninst.runCompiled_*call*` family constructs concrete call crossings.
+- When the walk already holds the callee's own exact run, use
+  [`Blanc/Lift/ExactWalkCallChild.lean`](../Blanc/Lift/ExactWalkCallChild.lean):
+  `Ninst.runCompiled_call_nonzero_child` resumes a nonzero-value `CALL` into a
+  non-precompile callee from `exec (initEvm (callChildMsg …)) = .ok cpost` with
+  `cpost.error = none`, the child message being the parent-built message over
+  the debited world; the parent lands in `callChildPost` (child world and
+  warm sets adopted, gas returned, flag `1` pushed, output copied), and
+  `callChildPost_facts` projects every field when the child returned nothing.
+  A lifted callee supplies `exec … = .ok _` through `exec_iff_exec_eq` from its
+  `Exec` derivation; a code-free callee is `Ninst.runCompiled_call_nonzero_codeFree`.
 - `accessDelegation_worldMeta` carries transient storage and the storage-access
   warm set through the exact delegation-resolution equation.
 - `state_subBal_stor` preserves every account's storage across a successful
