@@ -1,4 +1,5 @@
 import Blanc.Lift.WithdrawalRequest.FloodTx
+import Blanc.Lift.WithdrawalRequest.FloodTxRecover
 import Blanc.Lift.WithdrawalRequest.ProtocolOccurrences
 import Blanc.Lift.WithdrawalRequest.BalanceHistory
 import Blanc.BlockForward
@@ -93,7 +94,6 @@ theorem blockC_body {benv : Benv} {iters : Nat} {out : B256}
     (hchain : benv.stat.chainId = 1)
     (hbase : benv.stat.baseFeePerGas ≤ 8)
     (hroom : 2 ^ 20 ≤ benv.stat.blockGasLimit)
-    (hrecover : recoverSender benv.stat.chainId txC = .ok senderE)
     (hnonce : (stHistory.get senderE).nonce = 1)
     (hnocode : (stHistory.get senderE).code.isEmpty = true)
     (hfunds : 2 ^ 20 * 8 + 2 ^ 245 ≤ (stHistory.get senderE).bal.toNat)
@@ -135,6 +135,9 @@ theorem blockC_body {benv : Benv} {iters : Nat} {out : B256}
   set benvTx : Benv := (benv.withState stBeacon).withState stHistory with hbenvTx
   have hstat : benvTx.stat = benv.stat := rfl
   have hstate : benvTx.state = stHistory := rfl
+  have hrecover : recoverSender benv.stat.chainId txC = .ok senderE := by
+    rw [hchain]
+    exact txC_recoveredSender
   obtain ⟨post, bout', hQ, hproc, -, -, hkeys, hreceipt⟩ := txC_processTransaction
     (benv := benv.withState stHistory) (bout := BlockOutput.init) (index := 0)
     hfork hchain hbase (by show 2 ^ 20 ≤ benv.stat.blockGasLimit - 0; exact hroom) hrecover
@@ -163,8 +166,7 @@ theorem blockC_body {benv : Benv} {iters : Nat} {out : B256}
 /-! ## Block B -/
 
 /-- **Block B's body.**  As for block C, with `txB_processTransaction`; the flood
-frame's deletion set is not yet exposed by `flood_exec`, so the settled state keeps
-the deletion fold. -/
+frame schedules no deletions (`TxBPost.no_deletions`), settling to `settledState`. -/
 theorem blockB_body {benv : Benv} {σ0 : Blanc.WithdrawalRequest.State}
     {stBeacon stHistory : State} {outBeacon outHistory : MsgCallOutput} {lastHash : B256}
     (hfork : CoveredFork benv.stat.fork)
@@ -177,7 +179,6 @@ theorem blockB_body {benv : Benv} {σ0 : Blanc.WithdrawalRequest.State}
     (hchain : benv.stat.chainId = 1)
     (hbase : benv.stat.baseFeePerGas ≤ 8)
     (hroom : 2 ^ 28 ≤ benv.stat.blockGasLimit)
-    (hrecover : recoverSender benv.stat.chainId txB = .ok senderE)
     (hnonce : (stHistory.get senderE).nonce = 0)
     (hnocode : (stHistory.get senderE).code.isEmpty = true)
     (hfunds : 2 ^ 28 * 8 + 2895 ≤ (stHistory.get senderE).bal.toNat)
@@ -198,24 +199,30 @@ theorem blockB_body {benv : Benv} {σ0 : Blanc.WithdrawalRequest.State}
     (hC : ∀ benvTxs : Benv, ∃ stC outC,
       processCheckedSystemTransaction benvTxs consolidationRequestPredeployAddress [] =
         .ok (stC, outC)) :
-    ∃ (post : Devm) (boutTxs : BlockOutput) (stTx stW stC : State) (outW outC : MsgCallOutput),
+    ∃ (post : Devm) (boutTxs : BlockOutput) (stW stC : State) (outW outC : MsgCallOutput),
       TxBPost (benv.withState stHistory) σ0 post ∧
-      stTx = post.accountsToDelete.toList.foldl destroyAccount
-        ((post.state.addBal senderE
-            ((txB.gas - txGasUsed txB.gas 23380 post.gasLeft post.refundCounter.toNat) *
-              (min 1 (8 - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)).toB256).addBal
-          benv.stat.coinbase
-            (txGasUsed txB.gas 23380 post.gasLeft post.refundCounter.toNat *
-              (min 1 (8 - benv.stat.baseFeePerGas))).toB256) ∧
       applyBody benv [Sum.inr txB] [] =
         .ok (stC, requestsOutput boutTxs outW.returnData outC.returnData) ∧
       processCheckedSystemTransaction
-        (((benv.withState stBeacon).withState stHistory).withState stTx)
+        (((benv.withState stBeacon).withState stHistory).withState
+          (settledState post senderE benv.stat.coinbase
+            ((txB.gas - txGasUsed txB.gas 23380 post.gasLeft post.refundCounter.toNat) *
+              (min 1 (8 - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)).toB256
+            (txGasUsed txB.gas 23380 post.gasLeft post.refundCounter.toNat *
+              (min 1 (8 - benv.stat.baseFeePerGas))).toB256))
         withdrawalRequestPredeployAddress [] = .ok (stW, outW) ∧
       processCheckedSystemTransaction
-        ((((benv.withState stBeacon).withState stHistory).withState stTx).withState stW)
+        ((((benv.withState stBeacon).withState stHistory).withState
+          (settledState post senderE benv.stat.coinbase
+            ((txB.gas - txGasUsed txB.gas 23380 post.gasLeft post.refundCounter.toNat) *
+              (min 1 (8 - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)).toB256
+            (txGasUsed txB.gas 23380 post.gasLeft post.refundCounter.toNat *
+              (min 1 (8 - benv.stat.baseFeePerGas))).toB256)).withState stW)
         consolidationRequestPredeployAddress [] = .ok (stC, outC) := by
   set benvTx : Benv := (benv.withState stBeacon).withState stHistory with hbenvTx
+  have hrecover : recoverSender benv.stat.chainId txB = .ok senderE := by
+    rw [hchain]
+    exact txB_recoveredSender
   obtain ⟨post, bout', hQ, hproc, -, -, hkeys, hreceipt⟩ := txB_processTransaction
     (benv := benv.withState stHistory) (bout := BlockOutput.init) (index := 0)
     hfork hnocap hchain hbase (by show 2 ^ 28 ≤ benv.stat.blockGasLimit - 0; exact hroom)
@@ -225,11 +232,19 @@ theorem blockB_body {benv : Benv} {σ0 : Blanc.WithdrawalRequest.State}
       rw [hQ.2.2.1]
       intro log hlog
       rw [(List.mem_replicate.mp hlog).2])
+  have hproc' : processTransaction benvTx BlockOutput.init txB 0 = .ok
+      (settledState post senderE benv.stat.coinbase
+        ((txB.gas - txGasUsed txB.gas 23380 post.gasLeft post.refundCounter.toNat) *
+          (min 1 (8 - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)).toB256
+        (txGasUsed txB.gas 23380 post.gasLeft post.refundCounter.toNat *
+          (min 1 (8 - benv.stat.baseFeePerGas))).toB256, bout') := by
+    rw [TxBPost.no_deletions hQ] at hproc
+    exact hproc
   obtain ⟨stW, outW, hWrun⟩ := hW (benvTx.withState _)
   obtain ⟨stC, outC, hCrun⟩ := hC ((benvTx.withState _).withState stW)
-  refine ⟨post, bout', _, stW, stC, outW, outC, hQ, rfl, ?_, hWrun, hCrun⟩
+  refine ⟨post, bout', stW, stC, outW, outC, hQ, ?_, hWrun, hCrun⟩
   exact applyBody_forward hfork hbeacon hlast hhistory (decode_single txB)
-    (by rw [putIndex_single]; exact applyTransactions_single hproc) hdeposit hWrun hCrun
+    (by rw [putIndex_single]; exact applyTransactions_single hproc') hdeposit hWrun hCrun
 
 /-! ## From a body to a configured block trace -/
 
