@@ -18,7 +18,8 @@ Population: every theorem and definition-like declaration declared in a `Blanc.*
 environment (in production that is every module reachable from `Blanc` plus
 `Blanc.ProofRecipeTactic` and `Blanc.ProofRecipesGenerated`, the only certified modules outside
 `Blanc.lean`'s closure) and, for fixtures, every such declaration in the elaborated file itself.
-This includes `def`, `abbrev`, `opaque`, instances, and structure/inductive/class types. Constructors,
+This includes `def`, `abbrev`, `opaque`, instances, and structure/inductive/class types, but not
+the parser descriptors that `syntax`/`macro` declarations generate. Constructors,
 projections and recursors are attributed to their parent type, as are compiler auxiliaries. This
 driver's own definitions live in `LeafCensusDriver` and are never population, users or dependencies.
 
@@ -126,7 +127,12 @@ def fingerprint (ci : ConstantInfo) : String :=
 def populationKind (ci : ConstantInfo) : Option String :=
   match ci with
   | .thmInfo _ => some "theorem"
-  | .defnInfo _ | .opaqueInfo _ | .inductInfo _ => some "definition"
+  | .defnInfo d =>
+    -- A `syntax`/`macro` declaration's parser descriptor is used through its node kind by the
+    -- elaborator, never by a term, so it is attributed to the syntax machinery, not population.
+    if d.type.isConstOf ``Lean.ParserDescr || d.type.isConstOf ``Lean.TrailingParserDescr then none
+    else some "definition"
+  | .opaqueInfo _ | .inductInfo _ => some "definition"
   | _ => none
 
 end LeafCensusDriver

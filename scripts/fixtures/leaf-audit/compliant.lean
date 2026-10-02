@@ -21,6 +21,8 @@ a one-line change to this text and must move exactly the leaf set the control na
 * `definition_leaf` is an unused definition and is reported in the separate definition-leaf list;
   `used_definition` is used by `uses_definition` and is not a definition leaf. `Qt` is used by
   `qtWitness`, so the unused-definition control is not an accidental structure artifact.
+  `uses_definition` and `uses_qt` are themselves used by nothing, so they are theorem leaves. The
+  parser descriptors the fixture's tactic macros generate are not population.
 * The compiler-generated theorems of `Pt` and `Qt` (`Qt.mk.injEq`, `Qt.mk.inj`,
   `Qt.mk.sizeOf_spec`, ...) are auxiliaries attributed to their structure, not population, so
   they are not leaves (`Qt.mk.inj` is used by nothing and would be one if it counted).
