@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Bounded pure-Python syntax inventory and verification control for explicit simps in Blanc.
 
-Scans Blanc Lean sources (every Blanc/**/*.lean and Blanc.lean) for:
+Scans Blanc Lean sources (Blanc.lean, every Blanc/**/*.lean, and every other Git-tracked
+*.lean outside .lake except the named EXEMPT_FIXTURES) for:
 (a) Simp registrations:
     - Declaration attributes: @[simp], @[scoped simp], @[local simp], @[simp high],
       @[simp ↓], @[simp ←], @[← simp], @[↓ simp], grouped attributes like @[simp, inline], etc.
@@ -52,6 +53,7 @@ import argparse
 import bisect
 import json
 import re
+import subprocess
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -414,10 +416,39 @@ def scan_source(code_raw: str, path: str) -> List[Finding]:
 # Repository discovery
 # ---------------------------------------------------------------------------
 
-def discover_lean_files(root: Path, targets: Optional[Sequence[str]] = None) -> List[Path]:
-    """Find all candidate Lean files: Blanc.lean and Blanc/**/*.lean.
+# Deliberate fixtures and controls outside Blanc/ that must keep implicit
+# simplification or simp registrations as their subject matter. Every entry must
+# name a tracked file; a stale or Blanc/ entry refuses the population.
+EXEMPT_FIXTURES: Dict[str, str] = {
+    "scripts/fixtures/leaf-audit/compliant.lean":
+        "leaf-audit self-test fixture: its @[simp] lemmas and `by simp` proofs are the"
+        " attribute-exemption and _simp_1 auxiliary cases check-leaf-audit.sh --self-test asserts",
+    "scripts/SimpaUsingSyntaxControl.lean":
+        "parser control for the simpa-using migration tooling: its `(tactic| simpa ...)`"
+        " quotation is a syntax pattern it matches, not a proof call",
+}
 
-    Fails closed if targets or repository sources cannot be found.
+
+def tracked_lean_files(root: Path) -> List[str]:
+    """Every Git-tracked `*.lean` path outside `.lake`, fail-closed without Git."""
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "-z", "--", "*.lean"],
+            check=True, capture_output=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise ExplicitSimpError(f"cannot list tracked Lean sources under {root}: {exc}")
+    paths = [raw.decode("utf-8") for raw in completed.stdout.split(b"\0") if raw]
+    return sorted(p for p in paths if ".lake" not in p.split("/"))
+
+
+def discover_lean_files(root: Path, targets: Optional[Sequence[str]] = None) -> List[Path]:
+    """Find the production population.
+
+    Blanc.lean and Blanc/**/*.lean (walked, so an untracked new module is still
+    scanned) plus every other Git-tracked `*.lean` outside `.lake` (Main.lean,
+    lakefile.lean, scripts/**), except the named EXEMPT_FIXTURES.
+    Fails closed if targets, Git, an exemption or repository sources cannot be found.
     """
     try:
         if targets:
@@ -434,7 +465,18 @@ def discover_lean_files(root: Path, targets: Optional[Sequence[str]] = None) -> 
         modules = walk_module_files(root, site="explicit-simp-population")
         if not modules:
             raise ExplicitSimpError(f"empty Blanc module population under {root}")
-        return sorted([root_file, *modules])
+        tracked = tracked_lean_files(root)
+        for exempt in EXEMPT_FIXTURES:
+            if exempt == "Blanc.lean" or exempt.startswith("Blanc/"):
+                raise ExplicitSimpError(f"production module cannot be exempt: {exempt}")
+            if exempt not in tracked:
+                raise ExplicitSimpError(f"stale explicit-simp exemption (not a tracked Lean file): {exempt}")
+        extra = [
+            resolve_bound_file(root, rel, allow_missing=False, site="explicit-simp-tracked")
+            for rel in tracked
+            if rel not in EXEMPT_FIXTURES and rel != "Blanc.lean" and not rel.startswith("Blanc/")
+        ]
+        return sorted(set([root_file, *modules, *extra]))
     except ModulePathPolicyError as error:
         raise ExplicitSimpError(str(error)) from error
 
@@ -540,7 +582,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument(
         "targets",
         nargs="*",
-        help="Optional specific Lean source files to check (defaults to Blanc.lean and Blanc/**/*.lean).",
+        help="Optional specific Lean source files to check (defaults to Blanc.lean, Blanc/**/*.lean and every other tracked *.lean outside .lake except EXEMPT_FIXTURES).",
     )
     parser.add_argument(
         "--root",

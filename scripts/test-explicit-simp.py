@@ -51,6 +51,7 @@ Covers:
 from __future__ import annotations
 
 import hashlib
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -426,6 +427,16 @@ def test_exact_population_and_paths() -> None:
         source = root / "Blanc/Clean.lean"
         baseline = b"example : True := by simp only [True.intro]\n"
         source.write_bytes(baseline)
+        refuses_untracked = False
+        try:
+            discover_lean_files(root)
+        except ExplicitSimpError:
+            refuses_untracked = True
+        assert refuses_untracked, "population without Git must fail closed"
+        for exempt in explicit_simp.EXEMPT_FIXTURES:
+            (root / exempt).parent.mkdir(parents=True, exist_ok=True)
+            (root / exempt).write_text("example : True := by simp\n", encoding="utf-8")
+        git_init(root, *explicit_simp.EXEMPT_FIXTURES)
         assert discover_lean_files(root) == sorted([root_file, source])
         assert discover_lean_files(root, ["Blanc/Clean.lean"]) == [source]
 
@@ -456,6 +467,66 @@ def test_exact_population_and_paths() -> None:
     print("Exact population/path controls OK; green bytes restored by identity.\n")
 
 
+def git_init(root: Path, *paths: str) -> None:
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    if paths:
+        subprocess.run(["git", "-C", str(root), "add", "--", *paths], check=True)
+
+
+def test_tracked_population_and_exemptions() -> None:
+    """Tracked Lean outside Blanc/ is scanned; named fixtures are exempt; stale exemptions refuse."""
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory).resolve()
+        (root / "Blanc").mkdir()
+        (root / "scripts" / "fixtures" / "leaf-audit").mkdir(parents=True)
+        (root / ".lake" / "packages" / "dep").mkdir(parents=True)
+        (root / "Blanc.lean").write_text("import Blanc.Clean\n", encoding="utf-8")
+        (root / "Blanc" / "Clean.lean").write_text(CLEAN_REFERENCE_LEAN, encoding="utf-8")
+        script = root / "scripts" / "Regression.lean"
+        clean_script = "example : True := by simp only [True.intro]\n"
+        script.write_text(clean_script, encoding="utf-8")
+        main_file = root / "Main.lean"
+        main_file.write_text("def main : IO Unit := pure ()\n", encoding="utf-8")
+        for exempt in explicit_simp.EXEMPT_FIXTURES:
+            path = root / exempt
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("@[simp] theorem f : True := trivial\nexample : True := by simp\n", encoding="utf-8")
+        (root / ".lake" / "packages" / "dep" / "Dep.lean").write_text("example : True := by simp\n", encoding="utf-8")
+        git_init(root, "Blanc.lean", "Blanc/Clean.lean", "scripts/Regression.lean", "Main.lean",
+                 *explicit_simp.EXEMPT_FIXTURES)
+        found = discover_lean_files(root)
+        rels = sorted(str(p.relative_to(root)) for p in found)
+        assert rels == ["Blanc.lean", "Blanc/Clean.lean", "Main.lean", "scripts/Regression.lean"], rels
+        assert explicit_simp.main(["check", "--root", str(root)]) == 0
+        # Control: an implicit call in a tracked script bites through the default population.
+        script.write_text("example : True := by simp\n", encoding="utf-8")
+        assert explicit_simp.main(["check", "--root", str(root)]) == 1
+        script.write_text(clean_script, encoding="utf-8")
+        assert explicit_simp.main(["check", "--root", str(root)]) == 0
+        # Control: a registration in Main.lean bites.
+        original_main = main_file.read_bytes()
+        main_file.write_text("@[simp] theorem g : True := trivial\n", encoding="utf-8")
+        assert explicit_simp.main(["check", "--root", str(root)]) == 1
+        main_file.write_bytes(original_main)
+        assert explicit_simp.main(["check", "--root", str(root)]) == 0
+        # Control: a stale exemption (file no longer tracked) refuses the population.
+        first = next(iter(explicit_simp.EXEMPT_FIXTURES))
+        subprocess.run(["git", "-C", str(root), "rm", "-q", "--cached", "--", first], check=True)
+        assert explicit_simp.main(["check", "--root", str(root)]) == 2
+        subprocess.run(["git", "-C", str(root), "add", "--", first], check=True)
+        assert explicit_simp.main(["check", "--root", str(root)]) == 0
+        # Control: an exemption naming a production module refuses.
+        saved = dict(explicit_simp.EXEMPT_FIXTURES)
+        try:
+            explicit_simp.EXEMPT_FIXTURES["Blanc/Clean.lean"] = "not allowed"
+            assert explicit_simp.main(["check", "--root", str(root)]) == 2
+        finally:
+            explicit_simp.EXEMPT_FIXTURES.clear()
+            explicit_simp.EXEMPT_FIXTURES.update(saved)
+        assert explicit_simp.main(["check", "--root", str(root)]) == 0
+    print("Tracked population/exemption controls OK; clean bytes restored.\n")
+
+
 def main() -> int:
     print("=================================================================")
     print("Running explicit simp syntax controls and self-tests")
@@ -464,6 +535,7 @@ def main() -> int:
     test_bite_and_restore_by_byte_identity()
     test_cli_and_errors()
     test_exact_population_and_paths()
+    test_tracked_population_and_exemptions()
     print("ALL TESTS PASSED SUCCESSFULLY.")
     return 0
 
