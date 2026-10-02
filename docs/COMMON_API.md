@@ -2179,7 +2179,12 @@ consumer needs canonical interpreter ingress as one conjunct:
   `tx.gas ≤ blockGasLimit < 2 ^ 63` (`checkTransaction`, `checkGasLimit` via
   `ConfiguredBlockTrace.header_gasLimit_lt`); child frames carry a memory slice
   sized by a popped word (`Evm.step_spawn_child_data`), and system messages
-  fixed data. `Exec.rawFrameRoots_data_bound` is the execution-level form. Worked
+  fixed data. Before child entry, including synchronous precompile entry,
+  `ExecutionTrace.Xinst.step_spawn_inner_data_length_lt` derives
+  `frame.inner.data.length < 2 ^ 256` directly from an actual `Xinst.step` spawn
+  and `stateGas = none`; it needs no entered-child witness or bounded-output
+  premise. The entered-child theorem consumes this same opcode proof.
+  `Exec.rawFrameRoots_data_bound` is the execution-level form. Worked
   consumers: `Lift.BeaconDeposit.configuredHistory_solInv_env` (and
   `_count_env`/`_root_env`) and `Lift.Curve3Crv.c3crv_history_committed_derived`.
 - Every retained carrier from `ProcessMessageTrace` through
