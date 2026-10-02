@@ -2197,6 +2197,21 @@ precompile facts, constrain an execution's result, or filter by settlement.
 A consumer must derive every independent admission from its actual trace and
 use the retained/committed APIs when rollback matters.
 
+#### I need an ordinary execution output bound
+
+Use [`Blanc/Lift/ReturnDataBound.lean`](../Blanc/Lift/ReturnDataBound.lean).
+`Lift.ReturnDataBound.exec_output` proves, on both success and error outcomes,
+that `Exec` leaves the enclosing output equal to its initial value or produces
+an output of length less than `2 ^ 256`, assuming `stateGas = none`.
+`OutputProvenance` states that disjunction explicitly: arbitrary seeded
+execution does not imply a bounded output. Regular instructions and jumps
+preserve output; RETURN/REVERT use a popped word for their full output size;
+normal CREATE/CALL resumption preserves the enclosing output across either
+child outcome. The theorem composes those facts over the actual interpreter.
+A call-level consumer must separately derive its real entry seed, precompile
+output bounds and settlement/returndata installation; this theorem does not
+assume or provide those remaining facts.
+
 ### T2b. I need a contract's own ledger replay across retained settlement
 
 A contract that reads one account and reports an *ordered* replay of the moves
