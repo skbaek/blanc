@@ -1,4 +1,5 @@
 import Blanc.Lift.ExactWalk
+import Blanc.Lift.ExactWalkCut
 import Blanc.ForwardCall
 
 /-!
@@ -132,5 +133,43 @@ theorem callChildPost_facts (p cpost : Devm) (oi os : Nat) (hout : cpost.output 
   unfold callChildPost
   rw [hout, List.take_nil, Devm.memWrite_nil]
   exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+
+/-- With the whole remaining gas asked for (the `GAS; CALL` idiom), a value-bearing `CALL`
+forwards all but one 64th of what is left after its fixed charge, plus the stipend. -/
+theorem calculateMsgCallGas_all {value gas gl extra : Nat} (hv : value ≠ 0) (hg : gl ≤ gas)
+    (he : extra ≤ gl) :
+    calculateMsgCallGas value gas gl 0 extra =
+      ⟨except64th (gl - extra) + extra, except64th (gl - extra) + gCallStipend⟩ := by
+  have hmin : min gas (except64th (gl - 0 - extra)) = except64th (gl - extra) := by
+    have hle : except64th (gl - extra) ≤ gas := by
+      unfold except64th
+      omega
+    rw [Nat.sub_zero]
+    exact Nat.min_eq_right hle
+  unfold calculateMsgCallGas
+  simp only [hv, ite_false, show ¬ gl < extra + 0 by omega, hmin]
+
+/-! ## Cut-run steps for loops around a call -/
+
+section CutSteps
+
+variable {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b : Devm} {f : SFunc} {r : Seg}
+  {S : List B256} {M : Mem} {G : Nat}
+
+/-- `PUSH0` inside a cut run. -/
+theorem rxc_push0 {le : ([] : Bytes).length ≤ 32} (hroom : S.length < 1024)
+    (k : SFunc.RunExactCut fs sevm C (St b (0 :: S) M G) f r) :
+    SFunc.RunExactCut fs sevm C (St b S M (G + 2)) (.next (.push [] le) f) r :=
+  .next (Ninst.runCompiled_pushBytes (devm := St b S M (G + 2)) (c := gBase) (G := G)
+    rfl rfl hroom) k
+
+/-- `CALLDATALOAD` inside a cut run. -/
+theorem rxc_calldataload {x : B256} (hroom : S.length < 1024)
+    (k : SFunc.RunExactCut fs sevm C (St b (Sevm.dataWord sevm x :: S) M G) f r) :
+    SFunc.RunExactCut fs sevm C (St b (x :: S) M (G + 3)) (.next (.reg .calldataload) f) r :=
+  .next (Ninst.runCompiled_calldataload (devm := St b (x :: S) M (G + 3)) (G := G) rfl rfl rfl
+    hroom) k
+
+end CutSteps
 
 end Blanc.Lift

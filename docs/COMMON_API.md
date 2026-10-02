@@ -194,6 +194,9 @@ registry has identified the likely vocabulary.
   cost from the cold surcharge, and `sloadColdCount_le` /
   `sloadScheduleCost_le` bound that schedule in
   [`Blanc/StorageAccessGas.lean`](../Blanc/StorageAccessGas.lean).
+  The same module bounds an SSTORE: `sstoreCost_le_value` (cold access plus the
+  value charge), `sstoreValueCost_le` (at most a fresh set) and
+  `sstoreValueCost_of_ne` (a dirty slot costs the warm charge).
 - `sstoreNewRefundCounter_ge_of_original_eq_current` proves an SSTORE whose
   original and current slot values agree cannot decrease an arbitrary refund
   counter; `afterSstore_refundCounter_ge_of_original_eq_current` carries this
@@ -357,6 +360,12 @@ Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
   `callChildPost_facts` projects every field when the child returned nothing.
   A lifted callee supplies `exec … = .ok _` through `exec_iff_exec_eq` from its
   `Exec` derivation; a code-free callee is `Ninst.runCompiled_call_nonzero_codeFree`.
+  For a loop that calls once per iteration (`GAS; CALL` forwarding everything),
+  `calculateMsgCallGas_all` closes `calculateMsgCallGas` to all but one 64th of
+  the gas left after the fixed charge (plus the stipend), and the cut-run steps
+  `rxc_push0` / `rxc_calldataload` complete the `rxc_*` kit for
+  `SFunc.RunExactCut.iterate` bodies; the EIP-7002 flood looper
+  (`Blanc/Lift/WithdrawalRequest/FloodRun.lean`) is the worked example.
 - `accessDelegation_worldMeta` carries transient storage and the storage-access
   warm set through the exact delegation-resolution equation.
 - `state_subBal_stor` preserves every account's storage across a successful
