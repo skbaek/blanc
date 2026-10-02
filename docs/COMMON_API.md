@@ -917,6 +917,8 @@ rules and body traces without hard-coding a fork.
 To identify the literal block in a retained configured transition, use
 `ExecutionTrace.ConfiguredBlockTrace.block_eq_of_transition` in
 [`Blanc/ExecutionHistoryExact.lean`](../Blanc/ExecutionHistoryExact.lean).
+For an append-shaped post-chain equality, `BlockForward.ConfiguredBlockTrace.block_eq`
+directly identifies the retained block.
 Supply a successful transition with the same configuration and endpoints;
 the post-world last-block field identifies the retained block without
 reconstructing its body trace. This remains COMMON_API-only: the projected
