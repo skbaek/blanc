@@ -639,6 +639,7 @@ import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Run
 import Blanc.Lift.WithdrawalRequest.BlockRequests
 import Blanc.Lift.WithdrawalRequest.Creation.Deploy
 import Blanc.Lift.WithdrawalRequest.NatLiveness
+import Blanc.Lift.WithdrawalRequest.ModelBounds
 import Blanc.Lift.WithdrawalRequest.ResetWindowCount
 import Blanc.Lift.WithdrawalRequest.WordBudget
 
