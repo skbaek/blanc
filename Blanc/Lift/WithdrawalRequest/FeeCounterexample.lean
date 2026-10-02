@@ -98,6 +98,23 @@ theorem noAuthorityAt_single {benv : Benv} {tx : Tx} {wds : List Withdrawal}
   apply noAuthorityAt_decoded trace (AppliedBodyTrace.decodedTxs_eq trace)
   exact hauths
 
+/-- A root frame supplied by `TransactionTrace.root_frame_of_call_value` is a
+balance observation when its target is the withdrawal predeploy and it is
+dynamic. -/
+theorem member_of_root_frame
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput} {frame : Exec.Frame}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (hmem : frame ∈ trace.settledFrames)
+    (htarget : frame.sevm.currentTarget = withdrawalRequestPredeployAddress)
+    (hstatic : frame.sevm.isStatic = false) :
+    frame ∈ trace.settledFrames.flatMap balanceFrameObservation := by
+  apply List.mem_flatMap.mpr
+  refine ⟨frame, hmem, ?_⟩
+  unfold balanceFrameObservation
+  rw [htarget, hstatic]
+  exact List.mem_singleton_self _
+
 /-- The settled state of a transaction whose frame scheduled no deletion and whose
 sender and coinbase are credited, as `processTransaction` returns it. -/
 def settledState (post : Devm) (E coinbase : Adr) (refund tip : B256) : State :=
