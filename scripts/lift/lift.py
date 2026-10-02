@@ -2320,16 +2320,23 @@ def check_source() -> Any:
                     "show ((none : Option Bool) == some true) = false from by decide",
                     "show ((none : Option Bool) == some false) = false from by decide",
                 ] if len(node.children) == 2 else [])
+                # The default-simp-set facts these steps used, captured with `simp?` from
+                # every split node of the registered row: the step is an explicit
+                # `simp only`, so removing a global simp registration cannot change it.
+                normal_forms = ["Nat.reduceAdd", "zero_add", "Fin.isValue",
+                                "Fin.coe_ofNat_eq_mod", "Nat.one_mod", "Nat.toUInt8_eq",
+                                "UInt8.ofNat_one", "UInt8.reduceAdd",
+                                "Bool.and_eq_true", "beq_iff_eq"]
                 simp_names = ([node.sfunc, "checkNodeT", "AVal.jumps?", "Ninst.size",
                                "Ninst.pcFree", "Ninst.toBytes", "Rinst.toUInt8", "Xinst.toUInt8",
                                "pushToB8L", "bytesAtT", "LTrie.get?",
-                               "List.length_cons", "List.length_nil"] +
+                               "List.length_cons", "List.length_nil"] + normal_forms +
                               branch_only + node.hints + child_names)
                 block.extend([
                     f"theorem {thm} :",
                     f"    checkNodeT code {depth} codeTries.bytes (Cert.entries cert) {rets} "
                     f"0x{node.pc:x} {stack_lean(node.st)} {node.sfunc} = true := by",
-                    "  simp [" + ", ".join(simp_names) + "] <;> decide",
+                    "  simp only [" + ", ".join(simp_names) + "] <;> decide",
                     "",
                 ])
                 return thm

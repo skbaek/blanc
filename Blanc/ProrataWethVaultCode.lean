@@ -1786,7 +1786,7 @@ private theorem previewWithdraw_dispatch_size :
     exact hpush
   have heqBytes : (Ninst.toBytes Ninst.eq).length = 1 := rfl
   rw [previewWithdraw_leaf_source, Func.CompileShape.byteSize_compileShape]
-  simp [dispatchWith, compsize, hendpoint, hpushBytes, heqBytes]
+  simp only [dispatchWith, compsize, hendpoint, Nat.reduceAdd, heqBytes, hpushBytes]
 
 private theorem totalSupply_dispatch_size :
     (dispatchWith ProrataWethVault.revertSlot
@@ -1803,7 +1803,7 @@ private theorem totalSupply_dispatch_size :
     exact hpush
   have heqBytes : (Ninst.toBytes Ninst.eq).length = 1 := rfl
   rw [totalSupply_leaf_source, Func.CompileShape.byteSize_compileShape]
-  simp [dispatchWith, compsize, hendpoint, hpushBytes, heqBytes]
+  simp only [dispatchWith, compsize, hendpoint, Nat.reduceAdd, heqBytes, hpushBytes]
 
 private theorem totalSupplyFork_dispatch_node :
     dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 21 totalSupplyFork) =
@@ -1849,7 +1849,7 @@ private theorem transferFrom_dispatch_size :
     exact hpush
   have heqBytes : (Ninst.toBytes Ninst.eq).length = 1 := rfl
   rw [transferFrom_leaf_source, Func.CompileShape.byteSize_compileShape]
-  simp [dispatchWith, compsize, hendpoint, hpushBytes, heqBytes]
+  simp only [dispatchWith, compsize, hendpoint, Nat.reduceAdd, heqBytes, hpushBytes]
 
 private theorem rootLeftLeftRight_dispatch_node :
     dispatchWith ProrataWethVault.revertSlot (DispatchTree.build 22 rootLeftLeftRight) =
@@ -1911,7 +1911,7 @@ private theorem totalAssets_dispatch_size :
     (dispatchWith ProrataWethVault.revertSlot
       (DispatchTree.build 20 (firstTwo.take 1))).compileShape.byteSize = 90 := by
   rw [totalAssets_leaf_source]
-  simpa [dispatchWith] using
+  simpa only [dispatchWith, Nat.reduceAdd] using
     dispatchLeaf_size (selector "totalAssets" []) ProrataWethVault.revertSlot 75
       (ProrataWethVault.routed 0 ProrataWethVault.totalAssets) (by decide +kernel)
       totalAssets_endpoint_size
@@ -1920,7 +1920,7 @@ private theorem name_dispatch_size :
     (dispatchWith ProrataWethVault.revertSlot
       (DispatchTree.build 20 (firstTwo.drop 1))).compileShape.byteSize = 75 := by
   rw [name_leaf_source]
-  simpa [dispatchWith] using
+  simpa only [dispatchWith, Nat.reduceAdd] using
     dispatchLeaf_size (selector "name" []) ProrataWethVault.revertSlot 60
       (ProrataWethVault.routed 0 ProrataWethVault.name) (by decide +kernel) name_endpoint_size
 
@@ -1928,7 +1928,7 @@ private theorem convertToAssets_dispatch_size :
     (dispatchWith ProrataWethVault.revertSlot
       (DispatchTree.build 20 (secondTwo.take 1))).compileShape.byteSize = 1162 := by
   rw [convertToAssets_leaf_source]
-  simpa [dispatchWith] using
+  simpa only [dispatchWith, Nat.reduceAdd] using
     dispatchLeaf_size (selector "convertToAssets" [.uint256]) ProrataWethVault.revertSlot 1147
       (ProrataWethVault.routed 1 ProrataWethVault.convertToAssets) (by decide +kernel)
       convertToAssets_endpoint_size
@@ -1937,7 +1937,7 @@ private theorem approve_dispatch_size :
     (dispatchWith ProrataWethVault.revertSlot
       (DispatchTree.build 20 (secondTwo.drop 1))).compileShape.byteSize = 192 := by
   rw [approve_leaf_source]
-  simpa [dispatchWith] using
+  simpa only [dispatchWith, Nat.reduceAdd] using
     dispatchLeaf_size (selector "approve" [.address, .uint256]) ProrataWethVault.revertSlot 177
       (ProrataWethVault.routed 2 ProrataWethVault.approve) (by decide +kernel)
       approve_endpoint_size
@@ -2057,7 +2057,7 @@ private theorem decimals_dispatch_size :
     (dispatchWith ProrataWethVault.revertSlot
       (DispatchTree.build 20 (rightSixLeftPair.take 1))).compileShape.byteSize = 45 := by
   rw [decimals_leaf_source]
-  simpa [dispatchWith] using
+  simpa only [dispatchWith, Nat.reduceAdd] using
     dispatchLeaf_size (selector "decimals" []) ProrataWethVault.revertSlot 30
       (ProrataWethVault.routed 0 ProrataWethVault.decimals) (by decide +kernel)
       decimals_endpoint_size
@@ -2066,7 +2066,7 @@ private theorem asset_dispatch_size :
     (dispatchWith ProrataWethVault.revertSlot
       (DispatchTree.build 20 (rightSixLeftPair.drop 1))).compileShape.byteSize = 46 := by
   rw [asset_leaf_source]
-  simpa [dispatchWith] using
+  simpa only [dispatchWith, Nat.reduceAdd] using
     dispatchLeaf_size (selector "asset" []) ProrataWethVault.revertSlot 31
       (ProrataWethVault.routed 0 ProrataWethVault.asset) (by decide +kernel) asset_endpoint_size
 
@@ -2074,7 +2074,7 @@ private theorem maxDeposit_dispatch_size :
     (dispatchWith ProrataWethVault.revertSlot
       (DispatchTree.build 21 (rightSixLeft.drop 2))).compileShape.byteSize = 1427 := by
   rw [maxDeposit_leaf_source]
-  simpa [dispatchWith] using
+  simpa only [dispatchWith, Nat.reduceAdd] using
     dispatchLeaf_size (selector "maxDeposit" [.address]) ProrataWethVault.revertSlot 1412
       (ProrataWethVault.routed 1 ProrataWethVault.maxDeposit) (by decide +kernel)
       maxDeposit_endpoint_size
@@ -2083,7 +2083,7 @@ private theorem previewRedeem_dispatch_size :
     (dispatchWith ProrataWethVault.revertSlot
       (DispatchTree.build 20 (rightSixRightPair.take 1))).compileShape.byteSize = 1162 := by
   rw [previewRedeem_leaf_source]
-  simpa [dispatchWith] using
+  simpa only [dispatchWith, Nat.reduceAdd] using
     dispatchLeaf_size (selector "previewRedeem" [.uint256]) ProrataWethVault.revertSlot 1147
       (ProrataWethVault.routed 1 ProrataWethVault.previewRedeem) (by decide +kernel)
       previewRedeem_endpoint_size
@@ -2092,7 +2092,7 @@ private theorem deposit_dispatch_size :
     (dispatchWith ProrataWethVault.revertSlot
       (DispatchTree.build 20 (rightSixRightPair.drop 1))).compileShape.byteSize = 866 := by
   rw [deposit_leaf_source]
-  simpa [dispatchWith] using
+  simpa only [dispatchWith, Nat.reduceAdd] using
     dispatchLeaf_size (selector "deposit" [.uint256, .address]) ProrataWethVault.revertSlot 851
       (ProrataWethVault.routed 2 ProrataWethVault.deposit) (by decide +kernel)
       deposit_endpoint_size
@@ -2101,7 +2101,7 @@ private theorem balanceOf_dispatch_size :
     (dispatchWith ProrataWethVault.revertSlot
       (DispatchTree.build 21 (rightSixRight.drop 2))).compileShape.byteSize = 64 := by
   rw [balanceOf_leaf_source]
-  simpa [dispatchWith] using
+  simpa only [dispatchWith, Nat.reduceAdd] using
     dispatchLeaf_size (selector "balanceOf" [.address]) ProrataWethVault.revertSlot 49
       (ProrataWethVault.routed 1 ProrataWethVault.balanceOf) (by decide +kernel)
       balanceOf_endpoint_size
@@ -2313,7 +2313,7 @@ private theorem mint_dispatch_size :
     (dispatchWith ProrataWethVault.revertSlot
       (DispatchTree.build 20 (rootRightLeftAPair.take 1))).compileShape.byteSize = 1306 := by
   rw [mint_leaf_source]
-  simpa [dispatchWith] using
+  simpa only [dispatchWith, Nat.reduceAdd] using
     dispatchLeaf_size (selector "mint" [.uint256, .address]) ProrataWethVault.revertSlot 1291
       (ProrataWethVault.routed 2 ProrataWethVault.mint) (by decide +kernel) mint_endpoint_size
 
@@ -2321,7 +2321,7 @@ private theorem symbol_dispatch_size :
     (dispatchWith ProrataWethVault.revertSlot
       (DispatchTree.build 20 (rootRightLeftAPair.drop 1))).compileShape.byteSize = 63 := by
   rw [symbol_leaf_source]
-  simpa [dispatchWith] using
+  simpa only [dispatchWith, Nat.reduceAdd] using
     dispatchLeaf_size (selector "symbol" []) ProrataWethVault.revertSlot 48
       (ProrataWethVault.routed 0 ProrataWethVault.symbol) (by decide +kernel) symbol_endpoint_size
 
@@ -2329,7 +2329,7 @@ private theorem transfer_dispatch_size :
     (dispatchWith ProrataWethVault.revertSlot
       (DispatchTree.build 21 (rootRightLeftA.drop 2))).compileShape.byteSize = 97 := by
   rw [transfer_leaf_source]
-  simpa [dispatchWith] using
+  simpa only [dispatchWith, Nat.reduceAdd] using
     dispatchLeaf_size (selector "transfer" [.address, .uint256]) ProrataWethVault.revertSlot 82
       (ProrataWethVault.routed 2 ProrataWethVault.transfer) (by decide +kernel) transfer_endpoint_size
 
@@ -2337,7 +2337,7 @@ private theorem previewMint_dispatch_size :
     (dispatchWith ProrataWethVault.revertSlot
       (DispatchTree.build 20 (rootRightLeftBPair.take 1))).compileShape.byteSize = 1290 := by
   rw [previewMint_leaf_source]
-  simpa [dispatchWith] using
+  simpa only [dispatchWith, Nat.reduceAdd] using
     dispatchLeaf_size (selector "previewMint" [.uint256]) ProrataWethVault.revertSlot 1275
       (ProrataWethVault.routed 1 ProrataWethVault.previewMint) (by decide +kernel)
       previewMint_endpoint_size
@@ -2346,7 +2346,7 @@ private theorem withdraw_dispatch_size :
     (dispatchWith ProrataWethVault.revertSlot
       (DispatchTree.build 20 (rootRightLeftBPair.drop 1))).compileShape.byteSize = 969 := by
   rw [withdraw_leaf_source]
-  simpa [dispatchWith] using
+  simpa only [dispatchWith, Nat.reduceAdd] using
     dispatchLeaf_size (selector "withdraw" [.uint256, .address, .address])
       ProrataWethVault.revertSlot 954 (ProrataWethVault.routed 3 ProrataWethVault.withdraw)
       (by decide +kernel) withdraw_endpoint_size
@@ -2355,7 +2355,7 @@ private theorem redeem_dispatch_size :
     (dispatchWith ProrataWethVault.revertSlot
       (DispatchTree.build 21 (rootRightLeftB.drop 2))).compileShape.byteSize = 1185 := by
   rw [redeem_leaf_source]
-  simpa [dispatchWith] using
+  simpa only [dispatchWith, Nat.reduceAdd] using
     dispatchLeaf_size (selector "redeem" [.uint256, .address, .address])
       ProrataWethVault.revertSlot 1170 (ProrataWethVault.routed 3 ProrataWethVault.redeem)
       (by decide +kernel) redeem_endpoint_size
@@ -2364,7 +2364,7 @@ private theorem maxMint_dispatch_size :
     (dispatchWith ProrataWethVault.revertSlot
       (DispatchTree.build 20 (rootRightRightAPair.take 1))).compileShape.byteSize = 981 := by
   rw [maxMint_leaf_source]
-  simpa [dispatchWith] using
+  simpa only [dispatchWith, Nat.reduceAdd] using
     dispatchLeaf_size (selector "maxMint" [.address]) ProrataWethVault.revertSlot 966
       (ProrataWethVault.routed 1 ProrataWethVault.maxMint) (by decide +kernel) maxMint_endpoint_size
 
@@ -2372,7 +2372,7 @@ private theorem convertToShares_dispatch_size :
     (dispatchWith ProrataWethVault.revertSlot
       (DispatchTree.build 20 (rootRightRightAPair.drop 1))).compileShape.byteSize = 850 := by
   rw [convertToShares_leaf_source]
-  simpa [dispatchWith] using
+  simpa only [dispatchWith, Nat.reduceAdd] using
     dispatchLeaf_size (selector "convertToShares" [.uint256]) ProrataWethVault.revertSlot 835
       (ProrataWethVault.routed 1 ProrataWethVault.convertToShares) (by decide +kernel)
       convertToShares_endpoint_size
@@ -2381,7 +2381,7 @@ private theorem maxWithdraw_dispatch_size :
     (dispatchWith ProrataWethVault.revertSlot
       (DispatchTree.build 21 (rootRightRightA.drop 2))).compileShape.byteSize = 1261 := by
   rw [maxWithdraw_leaf_source]
-  simpa [dispatchWith] using
+  simpa only [dispatchWith, Nat.reduceAdd] using
     dispatchLeaf_size (selector "maxWithdraw" [.address]) ProrataWethVault.revertSlot 1246
       (ProrataWethVault.routed 1 ProrataWethVault.maxWithdraw) (by decide +kernel)
       maxWithdraw_endpoint_size
@@ -2390,7 +2390,7 @@ private theorem maxRedeem_dispatch_size :
     (dispatchWith ProrataWethVault.revertSlot
       (DispatchTree.build 20 (rootRightRightBPair.take 1))).compileShape.byteSize = 64 := by
   rw [maxRedeem_leaf_source]
-  simpa [dispatchWith] using
+  simpa only [dispatchWith, Nat.reduceAdd] using
     dispatchLeaf_size (selector "maxRedeem" [.address]) ProrataWethVault.revertSlot 49
       (ProrataWethVault.routed 1 ProrataWethVault.maxRedeem) (by decide +kernel) maxRedeem_endpoint_size
 
@@ -2398,7 +2398,7 @@ private theorem allowance_dispatch_size :
     (dispatchWith ProrataWethVault.revertSlot
       (DispatchTree.build 20 (rootRightRightBPair.drop 1))).compileShape.byteSize = 113 := by
   rw [allowance_leaf_source]
-  simpa [dispatchWith] using
+  simpa only [dispatchWith, Nat.reduceAdd] using
     dispatchLeaf_size (selector "allowance" [.address, .address]) ProrataWethVault.revertSlot 98
       (ProrataWethVault.routed 2 ProrataWethVault.allowance) (by decide +kernel) allowance_endpoint_size
 
@@ -2406,7 +2406,7 @@ private theorem previewDeposit_dispatch_size :
     (dispatchWith ProrataWethVault.revertSlot
       (DispatchTree.build 21 (rootRightRightB.drop 2))).compileShape.byteSize = 850 := by
   rw [previewDeposit_leaf_source]
-  simpa [dispatchWith] using
+  simpa only [dispatchWith, Nat.reduceAdd] using
     dispatchLeaf_size (selector "previewDeposit" [.uint256]) ProrataWethVault.revertSlot 835
       (ProrataWethVault.routed 1 ProrataWethVault.previewDeposit) (by decide +kernel)
       previewDeposit_endpoint_size
@@ -2590,7 +2590,7 @@ private theorem vault_main_size :
     rw [← Func.CompileShape.byteSize_compileShape]
     exact vaultTree_dispatch_size
   rw [vault_source_main, Func.CompileShape.byteSize_compileShape]
-  simp [Func.mainWith, fsig, cdl, shiftRight, prepend, compsize, htree]
+  simp only [Func.mainWith, fsig, cdl, shiftRight, List.cons_append, List.nil_append, prepend, compsize, htree]
   decide +kernel
 
 private theorem vault_table_revert :
@@ -2598,7 +2598,8 @@ private theorem vault_table_revert :
   have hmain : compsize ProrataWethVault.vault.main = 15662 := by
     rw [← Func.CompileShape.byteSize_compileShape]
     exact vault_main_size
-  simp [vaultTable, ProrataWethVault.revertSlot, table, hmain]
+  simp only [vaultTable, table, hmain, zero_add, Nat.reduceAdd, ProrataWethVault.revertSlot,
+    List.getElem?_cons_succ]
   rfl
 
 
@@ -2623,7 +2624,8 @@ private theorem vault_table_returnWord :
   have hmain : compsize ProrataWethVault.vault.main = 15662 := by
     rw [← Func.CompileShape.byteSize_compileShape]
     exact vault_main_size
-  simp [vaultTable, ProrataWethVault.returnWordSlot, table, hmain]
+  simp only [vaultTable, table, hmain, zero_add, Nat.reduceAdd, ProrataWethVault.returnWordSlot,
+    List.getElem?_cons_succ]
   rfl
 
 
@@ -2640,7 +2642,9 @@ private def maxDepositFrozen : Bytes :=
 private theorem returnWord_slot_compile_at (n : Nat) :
     Func.compile vaultTable n (Func.call ProrataWethVault.returnWordSlot) =
       some [0x61, 0x3d, 0x33, 0x56] := by
-  simp [Func.compile, vault_table_returnWord]
+  simp only [Func.compile, vault_table_returnWord, Nat.reducePow, Nat.toUInt8_eq, List.cons_append,
+    List.nil_append, Option.pure_def, Option.bind_eq_bind, Option.bind_some, Nat.reduceLT, guard_true,
+    Nat.reduceShiftRight, UInt8.reduceOfNat, Option.some.injEq, List.cons.injEq, and_true, true_and]
   rfl
 
 private theorem finishQuotient_capCeilPred_12067_compile :
@@ -3538,7 +3542,9 @@ private theorem maxDeposit_endpoint_compile :
 private theorem revert_slot_compile_at (n : Nat) :
     Func.compile vaultTable n (Func.call ProrataWethVault.revertSlot) =
       some [0x61, 0x3d, 0x2f, 0x56] := by
-  simp [Func.compile, vault_table_revert]
+  simp only [Func.compile, vault_table_revert, Nat.reducePow, Nat.toUInt8_eq, List.cons_append, List.nil_append,
+    Option.pure_def, Option.bind_eq_bind, Option.bind_some, Nat.reduceLT, guard_true, Nat.reduceShiftRight,
+    UInt8.reduceOfNat, Option.some.injEq, List.cons.injEq, and_true, true_and]
   rfl
 
 private theorem maxDepositSelector_value :
@@ -4269,7 +4275,8 @@ private theorem vault_table_depositAfterQuote :
   have hmain : compsize ProrataWethVault.vault.main = 15662 := by
     rw [← Func.CompileShape.byteSize_compileShape]
     exact vault_main_size
-  simp [vaultTable, ProrataWethVault.depositAfterQuoteSlot, table, hmain]
+  simp only [vaultTable, table, hmain, zero_add, Nat.reduceAdd, ProrataWethVault.depositAfterQuoteSlot,
+    List.getElem?_cons_succ]
   rfl
 
 
@@ -5554,8 +5561,9 @@ private theorem vault_table_mintAfterQuote :
   have hmain : compsize ProrataWethVault.vault.main = 15662 := by
     rw [← Func.CompileShape.byteSize_compileShape]
     exact vault_main_size
-  simp [vaultTable, ProrataWethVault.mintAfterQuoteSlot, table, hmain, vault_aux_source,
-    aux_depositAfterQuote_size]
+  simp only [vaultTable, table, hmain, zero_add, Nat.reduceAdd, vault_aux_source, aux_depositAfterQuote_size,
+    ProrataWethVault.mintAfterQuoteSlot, List.length_cons, List.length_nil, Nat.reduceLT, getElem?_pos,
+    List.getElem_cons_succ, List.getElem_cons_zero, Option.some.injEq, Prod.mk.injEq, Nat.reduceEqDiff, and_true]
   rfl
 
 private theorem vault_table_withdrawAfterQuote :
@@ -5563,8 +5571,10 @@ private theorem vault_table_withdrawAfterQuote :
   have hmain : compsize ProrataWethVault.vault.main = 15662 := by
     rw [← Func.CompileShape.byteSize_compileShape]
     exact vault_main_size
-  simp [vaultTable, ProrataWethVault.withdrawAfterQuoteSlot, table, hmain, vault_aux_source,
-    aux_depositAfterQuote_size, aux_mintAfterQuote_size]
+  simp only [vaultTable, table, hmain, zero_add, Nat.reduceAdd, vault_aux_source, aux_depositAfterQuote_size,
+    aux_mintAfterQuote_size, ProrataWethVault.withdrawAfterQuoteSlot, List.length_cons, List.length_nil, Nat.reduceLT,
+    getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero, Option.some.injEq, Prod.mk.injEq, Nat.reduceEqDiff,
+    and_true]
   rfl
 
 private theorem vault_table_redeemAfterQuote :
@@ -5572,8 +5582,10 @@ private theorem vault_table_redeemAfterQuote :
   have hmain : compsize ProrataWethVault.vault.main = 15662 := by
     rw [← Func.CompileShape.byteSize_compileShape]
     exact vault_main_size
-  simp [vaultTable, ProrataWethVault.redeemAfterQuoteSlot, table, hmain, vault_aux_source,
-    aux_depositAfterQuote_size, aux_mintAfterQuote_size, aux_withdrawAfterQuote_size]
+  simp only [vaultTable, table, hmain, zero_add, Nat.reduceAdd, vault_aux_source, aux_depositAfterQuote_size,
+    aux_mintAfterQuote_size, aux_withdrawAfterQuote_size, ProrataWethVault.redeemAfterQuoteSlot, List.length_cons,
+    List.length_nil, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero, Option.some.injEq,
+    Prod.mk.injEq, Nat.reduceEqDiff, and_true]
   rfl
 
 private theorem vault_table_transferStaged :
@@ -5581,8 +5593,10 @@ private theorem vault_table_transferStaged :
   have hmain : compsize ProrataWethVault.vault.main = 15662 := by
     rw [← Func.CompileShape.byteSize_compileShape]
     exact vault_main_size
-  simp [vaultTable, ProrataWethVault.transferFromAfterAllowanceSlot, table, hmain, vault_aux_source,
-    aux_depositAfterQuote_size, aux_mintAfterQuote_size, aux_withdrawAfterQuote_size, aux_redeemAfterQuote_size]
+  simp only [vaultTable, table, hmain, zero_add, Nat.reduceAdd, vault_aux_source, aux_depositAfterQuote_size,
+    aux_mintAfterQuote_size, aux_withdrawAfterQuote_size, aux_redeemAfterQuote_size,
+    ProrataWethVault.transferFromAfterAllowanceSlot, List.length_cons, List.length_nil, Nat.reduceLT, getElem?_pos,
+    List.getElem_cons_succ, List.getElem_cons_zero, Option.some.injEq, Prod.mk.injEq, Nat.reduceEqDiff, and_true]
   rfl
 
 private theorem vault_table_withdrawBurn :
@@ -5590,8 +5604,10 @@ private theorem vault_table_withdrawBurn :
   have hmain : compsize ProrataWethVault.vault.main = 15662 := by
     rw [← Func.CompileShape.byteSize_compileShape]
     exact vault_main_size
-  simp [vaultTable, ProrataWethVault.withdrawBurnSlot, table, hmain, vault_aux_source,
-    aux_depositAfterQuote_size, aux_mintAfterQuote_size, aux_withdrawAfterQuote_size, aux_redeemAfterQuote_size, aux_transferStaged_size]
+  simp only [vaultTable, table, hmain, zero_add, Nat.reduceAdd, vault_aux_source, aux_depositAfterQuote_size,
+    aux_mintAfterQuote_size, aux_withdrawAfterQuote_size, aux_redeemAfterQuote_size, aux_transferStaged_size,
+    ProrataWethVault.withdrawBurnSlot, List.length_cons, List.length_nil, Nat.reduceLT, getElem?_pos,
+    List.getElem_cons_succ, List.getElem_cons_zero, Option.some.injEq, Prod.mk.injEq, Nat.reduceEqDiff, and_true]
   rfl
 
 private theorem vault_table_redeemBurn :
@@ -5599,8 +5615,11 @@ private theorem vault_table_redeemBurn :
   have hmain : compsize ProrataWethVault.vault.main = 15662 := by
     rw [← Func.CompileShape.byteSize_compileShape]
     exact vault_main_size
-  simp [vaultTable, ProrataWethVault.redeemBurnSlot, table, hmain, vault_aux_source,
-    aux_depositAfterQuote_size, aux_mintAfterQuote_size, aux_withdrawAfterQuote_size, aux_redeemAfterQuote_size, aux_transferStaged_size, aux_withdrawBurn_size]
+  simp only [vaultTable, table, hmain, zero_add, Nat.reduceAdd, vault_aux_source, aux_depositAfterQuote_size,
+    aux_mintAfterQuote_size, aux_withdrawAfterQuote_size, aux_redeemAfterQuote_size, aux_transferStaged_size,
+    aux_withdrawBurn_size, ProrataWethVault.redeemBurnSlot, List.length_cons, List.length_nil, Nat.reduceLT,
+    getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero, Option.some.injEq, Prod.mk.injEq, Nat.reduceEqDiff,
+    and_true]
   rfl
 
 private theorem vault_table_maxMintAfterAssetCap :
@@ -5608,8 +5627,11 @@ private theorem vault_table_maxMintAfterAssetCap :
   have hmain : compsize ProrataWethVault.vault.main = 15662 := by
     rw [← Func.CompileShape.byteSize_compileShape]
     exact vault_main_size
-  simp [vaultTable, ProrataWethVault.maxMintAfterAssetCapSlot, table, hmain, vault_aux_source,
-    aux_depositAfterQuote_size, aux_mintAfterQuote_size, aux_withdrawAfterQuote_size, aux_redeemAfterQuote_size, aux_transferStaged_size, aux_withdrawBurn_size, aux_redeemBurn_size]
+  simp only [vaultTable, table, hmain, zero_add, Nat.reduceAdd, vault_aux_source, aux_depositAfterQuote_size,
+    aux_mintAfterQuote_size, aux_withdrawAfterQuote_size, aux_redeemAfterQuote_size, aux_transferStaged_size,
+    aux_withdrawBurn_size, aux_redeemBurn_size, ProrataWethVault.maxMintAfterAssetCapSlot, List.length_cons,
+    List.length_nil, Nat.lt_add_one, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero, Option.some.injEq,
+    Prod.mk.injEq, Nat.reduceEqDiff, and_true]
   rfl
 
 private theorem convertWideCore_14621_compile :
@@ -6199,7 +6221,9 @@ private theorem vault_approvalEvent_value :
 private theorem transferStaged_slot_compile_at (n : Nat) :
     Func.compile vaultTable n (Func.call ProrataWethVault.transferFromAfterAllowanceSlot) =
       some [0x61, 0x41, 0x80, 0x56] := by
-  simp [Func.compile, vault_table_transferStaged]
+  simp only [Func.compile, vault_table_transferStaged, Nat.reducePow, Nat.toUInt8_eq, List.cons_append,
+    List.nil_append, Option.pure_def, Option.bind_eq_bind, Option.bind_some, Nat.reduceLT, guard_true,
+    Nat.reduceShiftRight, UInt8.reduceOfNat, Option.some.injEq, List.cons.injEq, and_true, true_and]
   rfl
 
 open ProrataWethVault Jaune.Ninst Ninst in
