@@ -433,6 +433,14 @@ spawn/resume equations at the consumer:
   operands, value, stipend) and STATICCALL (6 operands, forced static) already
   have separate statements — select by the operand count actually on the stack,
   never by analogy, and keep DELEGATECALL on its envelope above.
+- `of_step_staticcall_val_with_depth_frame_cause`: when the proof already
+  holds the actual pc, recursive slot, `Xlot.Filled` and successful
+  `Ninst.StepRun`, preserve that supplied slot directly. Its success arm also
+  gives the exact `Ninst.step` spawn of the resolved `Frame.ofCall`, parent
+  `Resume.call` and successor pc. The existing run-level cause theorem is a
+  compatibility projection of this single inversion. The supplied-slot form
+  retains occurrence provenance; it does not establish child order or root
+  commitment.
 - Consumption pattern: Blanc's compiled callers branch on the pushed flag, so a
   caller holding the success guard dismisses the failed arm with the trailing
   `iszero`+guard; the entered arm's `StepRun` aligns to the occurrence slot by
@@ -905,6 +913,11 @@ the consumer must still identify the concrete source CALL. A clean
 child alone does not retain an uncommitted parent, and an immediate/no-code
 slot does not establish an entered child. The later source-route producer
 must supply that same-frame provenance; endpoint states cannot replace it.
+`Exec.Deriv.ExecFreeUntil.descendantFramePaths_eq` preserves the exact ordered
+path list across a proved frame-entry-free span at any supplied parent path and
+child counter. Both ends use the same counter; childless completed messages
+outside that span still count. Obtain the span from actual execution evidence.
+This equality supplies no root commitment or chosen child occurrence by itself.
 Existing discovery and suggestion facilities were checked. The existential
 membership goal alone does not identify the available occurrence, root-prefix,
 spawn and process witnesses; current matchers do not inspect this joint local
@@ -3166,7 +3179,12 @@ contract-neutral.
   cursor and `Line.Run` to the same actual endpoint.
   `cursor_nexts_line_cont_forward` additionally preserves the identical full
   continuation stack, including each pending tag, frame and return metadata.
-  The older linear theorem projects this stronger result. `cursor_nexts_forward`
+  `cursor_nexts_line_cont_free_forward` additionally derives `ExecFreeUntil`
+  when every instruction in that literal list is non-exec. It owns the single
+  list induction; the older forms project it. `CursorOK.ninstAt_of_next`
+  exposes the actual decoded instruction from the checked next node and is
+  shared by the single-step and exec-free cuts.
+  `cursor_nexts_forward`
   is its cursor-only compatibility projection. These are certificate/SFunc
   cuts, not the compiled Func prefix API. They require raw success and a
   covered fork; they do not establish child context, settlement or ordered
@@ -3337,6 +3355,12 @@ contract-neutral.
   contract's storage (to `s`) and no log, built with `StorStep.refl`/`.sload`/`.sstore`/
   `.trans`/`.congr`/`.of_getStor` and read with `StorStep.getStorVal`
   (`getStorVal_eq_getStor` unfolds a word read).
+  `ri_log2_post` retains the precise added log (current target, both topics,
+  actual read bytes) and the read-expanded memory, leaving only residual gas
+  existential. `ri_log2` is its compatibility projection. Prove memory fit
+  before simplifying that returned memory to the input memory. This inverse
+  needs an existing instruction run and does not manufacture gas affordability;
+  its existential endpoint alone is not a reliable recipe trigger.
 - Concrete runs checked by kernel evaluation of Jaune's own `Evm.step`:
   `ConcreteRun.stepN` (at most `n` continuing steps), `stepN_add`, `stepN_sta`, and the
   bridges into the canonical derivation `ConcreteRun.exec_of_stepN`,

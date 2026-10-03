@@ -7,6 +7,18 @@ namespace Blanc.Lift
 
 open Jaune
 
+/-- A checked next-node cursor supplies the actual decoded instruction. -/
+theorem CursorOK.ninstAt_of_next {code : ByteArray} {c : Cert}
+    {F : Exec.Deriv} {κ : Cursor} (ok : CursorOK code c F κ)
+    {n : Ninst} {f : SFunc} (tree : κ.f = .next n f) :
+    Ninst.At F.sevm.code F.pc n := by
+  have check := ok.check
+  rw [tree] at check
+  simp only [checkNode, Bool.and_eq_true] at check
+  obtain ⟨⟨bytes, _⟩, _⟩ := check
+  rw [ok.code_eq, ok.pc_eq]
+  exact Ninst.at_of_slice (bytesAt_slice (ninst_bytes_ne_nil n) bytes)
+
 /-- A checked `.next` in a successful raw suffix crosses its actual same-frame
 edge. The primitive witness and successor cursor come from that edge, including
 the actual recursive slot when the instruction enters interpreted code. -/
@@ -23,13 +35,7 @@ theorem cursor_next_forward {code : ByteArray} {c : Cert}
       ConfStep (Ninst.RunWith (Cursor.DescOf F)) c.prog F.sevm
         (κ.conf F.devm) (κ'.conf N.devm) ∧
       CursorOK code c N κ' := by
-  have check := ok.check
-  rw [tree] at check
-  simp only [checkNode, Bool.and_eq_true] at check
-  obtain ⟨⟨bytes, _⟩, _⟩ := check
-  have atInst : Ninst.At F.sevm.code F.pc n := by
-    rw [ok.code_eq, ok.pc_eq]
-    exact Ninst.at_of_slice (bytesAt_slice (ninst_bytes_ne_nil n) bytes)
+  have atInst := ok.ninstAt_of_next tree
   have crossed : ∃ N : Exec.Deriv, Exec.Deriv.ParentStep N F := by
     rcases F with ⟨pc, sevm, pre, out, run⟩
     dsimp only at success
@@ -69,7 +75,7 @@ theorem cursor_jinst_forward {code : ByteArray} {c : Cert}
 
 /-- A literal linear certificate prefix is crossed by composing the actual
 next cuts. The final cursor and raw location are derived, never assumed. -/
-theorem cursor_nexts_line_cont_forward {code : ByteArray} {c : Cert}
+theorem cursor_nexts_line_cont_free_forward {code : ByteArray} {c : Cert}
     (checked : Cert.check code c = true) {F : Exec.Deriv} {κ : Cursor}
     (ok : CursorOK code c F κ) (ns : List Ninst) (tail : SFunc)
     (tree : κ.f = ns.foldr SFunc.next tail)
@@ -80,11 +86,13 @@ theorem cursor_nexts_line_cont_forward {code : ByteArray} {c : Cert}
       N.pc = F.pc + (ns.map Ninst.size).sum ∧
       N.sevm = F.sevm ∧ N.exn = F.exn ∧
       CursorOK code c N κ' ∧ κ'.f = tail ∧
-      Line.Run F.sevm F.devm ns N.devm ∧ κ'.K = κ.K := by
+      Line.Run F.sevm F.devm ns N.devm ∧ κ'.K = κ.K ∧
+      ((∀ n ∈ ns, ∀ x : Xinst, n ≠ .exec x) →
+        Exec.Deriv.ExecFreeUntil F N) := by
   induction ns generalizing F κ with
   | nil =>
     exact ⟨F, κ, .refl F,
-      (by simp only [List.map_nil, List.sum_nil, Nat.add_zero]), rfl, rfl, ok, tree, .nil, rfl⟩
+      (by simp only [List.map_nil, List.sum_nil, Nat.add_zero]), rfl, rfl, ok, tree, .nil, rfl, fun _ => .refl F⟩
   | cons n ns ih =>
     change κ.f = .next n (ns.foldr SFunc.next tail) at tree
     obtain ⟨next, cursor, edge, stepPc, primitive, synthetic, stateful, placed⟩ :=
@@ -99,14 +107,42 @@ theorem cursor_nexts_line_cont_forward {code : ByteArray} {c : Cert}
       subst f
       cases synthetic
       exact ⟨rfl, rfl⟩
-    obtain ⟨N, κ', path, pc, sameSevm, sameOutcome, finalOk, finalTree, line, finalK⟩ :=
+    obtain ⟨N, κ', path, pc, sameSevm, sameOutcome, finalOk, finalTree, line, finalK, finalFree⟩ :=
       ih placed nextShape.1 (nextOutcome.trans success) nextFork
     refine ⟨N, κ', .step edge path, ?_, sameSevm.trans nextSevm,
-      sameOutcome.trans nextOutcome, finalOk, finalTree, ?_, finalK.trans nextShape.2⟩
+      sameOutcome.trans nextOutcome, finalOk, finalTree, ?_, finalK.trans nextShape.2, ?_⟩
     · rw [stepPc] at pc
       simpa only [List.map_cons, List.sum_cons, Nat.add_assoc] using pc
     · rw [nextSevm] at line
       exact .cons primitive.toRun line
+    · intro free
+      have decoded := ok.ninstAt_of_next tree
+      have headFree : ∀ x : Xinst, ¬ Ninst.At F.sevm.code F.pc (.exec x) := by
+        intro x atExec
+        have equal : n = .exec x :=
+          Inst.next.inj (Option.some.inj (decoded.symm.trans atExec))
+        exact free n (List.mem_cons_self) x equal
+      have tailFree : ∀ n ∈ ns, ∀ x : Xinst, n ≠ .exec x :=
+        fun n member x => free n (List.mem_cons_of_mem _ member) x
+      exact (Blanc.Exec.Deriv.ExecFreeUntil.ofStep edge headFree).trans
+        (finalFree tailFree)
+
+/-- Compatibility projection retaining the existing full-continuation statement. -/
+theorem cursor_nexts_line_cont_forward {code : ByteArray} {c : Cert}
+    (checked : Cert.check code c = true) {F : Exec.Deriv} {κ : Cursor}
+    (ok : CursorOK code c F κ) (ns : List Ninst) (tail : SFunc)
+    (tree : κ.f = ns.foldr SFunc.next tail)
+    {post : Devm} (success : F.exn = .ok post)
+    (fork : CoveredFork F.sevm.benvStat.fork) :
+    ∃ (N : Exec.Deriv) (κ' : Cursor),
+      Exec.Deriv.ParentPrefix F N ∧
+      N.pc = F.pc + (ns.map Ninst.size).sum ∧
+      N.sevm = F.sevm ∧ N.exn = F.exn ∧
+      CursorOK code c N κ' ∧ κ'.f = tail ∧
+      Line.Run F.sevm F.devm ns N.devm ∧ κ'.K = κ.K := by
+  obtain ⟨N, κ', path, pc, sameSevm, sameOutcome, placed, finalTree, line, sameK, free⟩ :=
+    cursor_nexts_line_cont_free_forward checked ok ns tail tree success fork
+  exact ⟨N, κ', path, pc, sameSevm, sameOutcome, placed, finalTree, line, sameK⟩
 
 /-- Compatibility projection of the actual linear cut, retaining its existing public statement. -/
 theorem cursor_nexts_line_forward {code : ByteArray} {c : Cert}
