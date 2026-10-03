@@ -3172,6 +3172,13 @@ contract-neutral.
   covered fork; they do not establish child context, settlement or ordered
   history. The joint node/tree premises are discovered here because the
   existential result alone is not a reliable recipe trigger.
+- To expose the six actual STATICCALL operands, use
+  `cursor_staticcall_operands` in
+  [`Blanc/Lift/CursorCuts.lean`](../Blanc/Lift/CursorCuts.lean). `CursorOK` and
+  the exact next-staticcall tree force a six-word concrete stack prefix.
+  No successful outcome, child context or settlement premise is needed.
+  The existing forward-cut consumers can retain these operands at the same
+  actual occurrence; the projection alone supplies no occurrence order.
 - Every same-frame node with its machine state (all outcomes): the stateful
   prefix lift `reach_of_parentPrefix` (from `cursor_stepS`, which adds one
   `ConfStep` to each `cursor_step`) places the node at a `Reach (StepIn R)` from
