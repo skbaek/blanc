@@ -250,6 +250,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.FeeMintWalk",
         "Lift.UniswapV2Pair.FeeMintSource",
         "Lift.UniswapV2Pair.MintAfterFeeWalk",
+        "Lift.UniswapV2Pair.MintSource",
         "Lift.UniswapV2Pair.TransferFromCore",
         "Lift.UniswapV2Pair.TransferFromEntries",
         "Lift.UniswapV2Pair.TransferFromSource",
