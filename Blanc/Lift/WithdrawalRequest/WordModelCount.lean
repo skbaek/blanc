@@ -179,34 +179,4 @@ theorem history_word_model_prefix_count_lt {cfg : ChainConfig} {checkpoint futur
       (beforeEvents.foldl wordModelUpdate initial).count < 2 * 2 ^ 64 :=
   (historyEvents_count_lt trace code events observed replay.system_kinds).2
 
-/-- For the exact actual event list, only Nat payment remains needed by the
-conditional model bridge; every submission's count cap is derived here. -/
-theorem history_word_model_admission_of_nat_paid
-    {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (code : checkpoint.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode)
-    {events : List WordReplayEvent}
-    (replay : WordStorageReplay (checkpoint.state.getStor withdrawalRequestPredeployAddress) events
-      (future.state.getStor withdrawalRequestPredeployAddress))
-    (observed : events.map WordReplayEvent.frame = trace.settledFrames.flatMap balanceFrameObservation)
-    (paid : ∀ before event after, events = before ++ event :: after →
-      match event.kind with
-      | .submission _ _ _ => fee (before.foldl wordModelUpdate initial) ≤ event.frame.sevm.value.toNat
-      | _ => True) :
-    WordModelAdmission (2 * 2 ^ 64) initial events := by
-  intro before event after equality
-  have payment := paid before event after equality
-  cases kind : event.kind with
-  | system => trivial
-  | getter iterations output => trivial
-  | submission entry iterations output =>
-    have count := history_word_model_prefix_count_lt trace code replay observed (before ++ [event])
-      (by
-        refine ⟨after, ?_⟩
-        rw [List.append_assoc, List.singleton_append]
-        exact equality.symm)
-    simp only [List.foldl_append, List.foldl_cons, List.foldl_nil, wordModelUpdate, kind] at count
-    simp only [kind] at payment ⊢
-    exact ⟨payment, Nat.le_of_lt count⟩
-
 end Blanc.Lift.WithdrawalRequest
