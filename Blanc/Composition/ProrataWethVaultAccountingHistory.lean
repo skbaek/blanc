@@ -81,11 +81,6 @@ def last {vault : Adr} (path : RealizedPath vault) : Snapshot :=
   path.snapshot ⟨path.steps.length, Nat.lt_succ_self _⟩
 -- PA:364–370.
 
-theorem cons_last {vault : Adr} (step : FourQuoteStep vault) (tail : RealizedPath vault)
-    (connect : stateSnapshot vault step.after = tail.first) :
-    (cons step tail connect).last = tail.last := by
-  rfl
--- PA:372–385.
 
 /-- Total snapshot lookup; the telescope only uses in-range indices. -/
 def snapshotAt {vault : Adr} (path : RealizedPath vault) (i : Nat) : Snapshot :=

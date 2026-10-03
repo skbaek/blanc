@@ -3801,52 +3801,6 @@ theorem flashFloorPost_of_value_call
 
 /-! ### Reentrant callback closure -/
 
-/-- An accepted `CALL` result (`iszero` followed by the successful zero-flag
-branch) carries both the flash floor and the contract's compiled code to the
-post-guard state. -/
-theorem flashFloorCode_of_call_success_guard
-    (dp : DeployParams) (floor : B256) (ca : Adr)
-    {sevm : Sevm} {sc s6 si sb : Devm}
-    {g c v ii is oi os : B256} {xs : Stack}
-    (h_target : sevm.currentTarget = ca)
-    (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((flashFloorSpec dp floor).PreWf ca)
-      ((flashFloorSpec dp floor).Post ca))
-    (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ sc.stack)
-    (h_code : some (sc.getCode ca).toList = Prog.compile (weth10 dp))
-    (h_floor : Stor.FlashFloor floor (Devm.getStor sc ca))
-    (hcall : Ninst.Run sevm sc call s6)
-    (hiszero : Ninst.Run sevm s6 iszero si)
-    (hpop : Devm.PopBurn [0] si sb)
-    (hfork : CoveredFork sevm.benvStat.fork) :
-    Stor.FlashFloor floor (Devm.getStor sb ca) ∧
-      some (sb.getCode ca).toList = Prog.compile (weth10 dp) := by
-  have h_post_call := flashFloorPost_of_value_call dp floor ca
-    h_target ih hp h_code h_floor hcall hfork
-  have h_stor_s6_si : Devm.getStor s6 = Devm.getStor si :=
-    Line.of_inv Devm.getStor (by line_inv)
-      (Line.Run.cons hiszero Line.Run.nil)
-  have h_stor_si_sb : Devm.getStor si = Devm.getStor sb :=
-    PopBurn.Inv.inv hpop
-  have h_floor_sb : Stor.FlashFloor floor (Devm.getStor sb ca) := by
-    rw [← congrFun h_stor_si_sb ca, ← congrFun h_stor_s6_si ca]
-    exact h_post_call.inv
-  have h_code_nonempty : (sc.getCode ca).toList ≠ [] := by
-    intro he
-    apply Prog.compile_ne_nil (p := weth10 dp)
-    rw [← h_code, he]
-  have h_code_s6_sc : s6.getCode ca = sc.getCode ca :=
-    code_eq_of_ninst_run h_code_nonempty hcall
-  have h_code_s6_si : s6.getCode ca = si.getCode ca :=
-    congrFun (Line.of_inv Devm.getCode (by line_inv)
-      (Line.Run.cons hiszero Line.Run.nil)) ca
-  have h_code_si_sb : si.getCode ca = sb.getCode ca :=
-    getCode_eq_of_state_eq hpop.state ca
-  have h_code_sb_sc : sb.getCode ca = sc.getCode ca :=
-    (h_code_s6_si.trans h_code_si_sb).symm.trans h_code_s6_sc
-  refine ⟨h_floor_sb, ?_⟩
-  rw [h_code_sb_sc]
-  exact h_code
 
 /-- The nonzero-recipient transfer prefix preserves the exact flash counter
 and exposes its continuation state. -/
@@ -5882,29 +5836,15 @@ theorem of_run_flashLoanFromCall
     subst f
     exact absurd hbubble not_run_bubbleRevert
 
-/-! ### Relational flash-floor dispatch
 
-A fixed-floor `FuncSoundNoMem` induction hypothesis cannot be instantiated at
-the
-larger counter created immediately before a flash callback.  The relation
-below quantifies the floor outside `Pre`/`Post`; a successful subexecution can
-therefore be reused at the counter actually present at that subexecution's
-entry. -/
 
-/-- Every admissible flash floor at `pre` remains admissible at `post`. -/
-def FlashFloorsRel (dp : DeployParams) (ca : Adr)
-    (_sevm : Sevm) (pre post : Devm) : Prop :=
-  ∀ floor,
-    (flashFloorSpec dp floor).Pre ca _sevm pre →
-    (flashFloorSpec dp floor).Post ca _sevm post
 
 
 /-! ### Exact flash-counter stability
 
-The floor relation above is deliberately one-sided.  Flash settlement also
-needs the stronger fact that a successful reentrant WETH10 dispatch restores
-the exact counter present at its entry.  This relation is kept separate from
-the frozen backing spec and from the floor relation. -/
+Flash settlement needs the fact that a successful reentrant WETH10 dispatch
+restores the exact counter present at its entry.  The exact-counter relation
+is kept separate from the frozen backing spec. -/
 
 /-- Equality to one caller-chosen flash-counter value. -/
 def Stor.FlashAt (flash : B256) (s : Stor) : Prop :=

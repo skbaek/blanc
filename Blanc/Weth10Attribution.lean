@@ -599,11 +599,7 @@ private def fixtureFrame (caller : Adr) (allowance : Option AllowanceEvent)
     (action : Option FlowAction) : CountedFrame :=
   { caller, depth := 1, sel? := none, allowance, action }
 
-/-! ### Approve-rooted decrement chain
 
-Holder `u` approves spender `sp`, who spends 40 then 60 of a 100 allowance.
-Both spends' governing chain roots back at the single `approve`, and the sum
-of hardened contributions matches the sum of permanent outflow exactly. -/
 
 
 

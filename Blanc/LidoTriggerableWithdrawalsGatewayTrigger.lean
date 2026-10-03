@@ -855,18 +855,9 @@ theorem rebaseLocalCalls_prependStoresRev (delta : Nat)
       rw [ih]
       rfl
 
-def packet (dp : DeployParams) : Prog :=
-  ⟨triggerFullWithdrawals dp, localAux dp⟩
 
 
 
-def triggerLabels : List TriggerLabel :=
-  [ .malformedAbi, .zeroMsgValue, .zeroValidatorsData, .resumedExpected,
-    .exitLimitExceeded, .insufficientFee, .feeRefundFailed, .arithmeticPanic,
-    .divisionPanic, .assertionPanic, .roleFailureBoundary, .validateArrayLoop,
-    .afterValidation, .consumeQuota, .afterQuota, .encodeArraysLoop,
-    .afterEncoding, .bubbleRevert, .afterVaultCall, .refundCall,
-    .balanceCheck, .afterNestedValidation ]
 
 
 

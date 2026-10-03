@@ -20,14 +20,6 @@ open Jaune.Ninst Ninst
 
 namespace Weth10
 
-private theorem exec_result_unique
-    {pc : Nat} {sevm : Sevm} {pre : Devm}
-    {leftOut rightOut : Execution}
-    (left : Exec pc sevm pre leftOut)
-    (right : Exec pc sevm pre rightOut) : leftOut = rightOut := by
-  have hleft := (exec_iff_exec_eq pc sevm pre leftOut).mp ⟨left⟩
-  have hright := (exec_iff_exec_eq pc sevm pre rightOut).mp ⟨right⟩
-  exact hleft.symm.trans hright
 
 
 
@@ -1002,17 +994,6 @@ theorem ProcessCreateMessage.ok_getStorCode_eq_inner_of_clean
         rw [show inner.error = none from herror]
         rfl
 
-/-- The recursive premise needed to account for a concrete child message. -/
-def StorageSegmentTraceBelow
-    (dp : DeployParams) (ca : Adr) (depth : Nat) : Prop :=
-  ∀ {pc : Nat} {sevm : Sevm} {pre raw : Devm}
-    (run : Exec pc sevm pre (.ok raw))
-    (_ : sevm.depth < depth)
-    (_ : Prog.At (weth10 dp) ca pc sevm pre)
-    (committed : Execution.commits (.ok raw) = true),
-    Exec.Frame.IsRoot (Exec.Frame.ofRun run committed) →
-    Nonempty (StorageSegmentEffect ca pre raw
-      (Exec.flowActions dp ca run))
 
 
 

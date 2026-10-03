@@ -365,20 +365,6 @@ structure OssifiableConstructorAdminEffect
       [ossifiableConstructorAdminChangedLog
         proxy postSetupRaw requestedAdmin]
 
-/-- The event reads the post-setup word and cleans it before encoding. -/
-theorem ossifiableConstructorAdminChangedLog_data
-    (proxy : Adr) (postSetupRaw : B256) (requestedAdmin : Adr) :
-    (ossifiableConstructorAdminChangedLog
-      proxy postSetupRaw requestedAdmin).data =
-      (ossifiableConstructorAddressRead postSetupRaw).toBytes ++
-        requestedAdmin.toB256.toBytes := by
-  rfl
 
-theorem ossifiableConstructorAdminChangedLog_topics
-    (proxy : Adr) (postSetupRaw : B256) (requestedAdmin : Adr) :
-    (ossifiableConstructorAdminChangedLog
-      proxy postSetupRaw requestedAdmin).topics =
-      [adminChangedEventTopic] := by
-  rfl
 
 end Blanc.ProxyPair

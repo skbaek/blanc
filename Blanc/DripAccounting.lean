@@ -516,10 +516,6 @@ abbrev RealizedStep : Type := Step scale.toNat freshNat
 abbrev RealizedChain : Snapshot → List RealizedStep → Snapshot → Prop :=
   Chain scale.toNat freshNat
 
-/-- The pure accounting step for one elapsed DRIP interval. -/
-def dripPost (s : Snapshot) (elapsed : Nat) : Snapshot :=
-  ⟨freshNat s.chi elapsed, s.rho + elapsed,
-    s.coalitionUnits, s.totalUnits, s.balance⟩
 
 
 /-! ## G5 — pure segmentation -/

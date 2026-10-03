@@ -75,7 +75,6 @@ inductive DebitBranch
   | direct
   | delegated (allowance : AllowanceBranch)
   | flash (allowance : AllowanceBranch)
-deriving DecidableEq
 
 /-- Per-debit data retained by the committed ledger.  `rawSource` is the word
 used by the runtime branch/key path; `source` is its normalized balance key. -/

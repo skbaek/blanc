@@ -37,9 +37,6 @@ private theorem addAccessedStorageKey_output_local
     (base : Devm) (a : Adr) (k : B256) :
     (addAccessedStorageKey base a k).output = base.output := rfl
 
-private theorem addAccessedStorageKey_returnData_local
-    (base : Devm) (a : Adr) (k : B256) :
-    (addAccessedStorageKey base a k).returnData = base.returnData := rfl
 
 private theorem addAccessedStorageKey_logs_local
     (base : Devm) (a : Adr) (k : B256) :
@@ -69,9 +66,6 @@ private theorem addAccessedStorageKey_state_local
     (base : Devm) (a : Adr) (k : B256) :
     (addAccessedStorageKey base a k).state = base.state := rfl
 
-private theorem addAccessedStorageKey_getCode_local
-    (base : Devm) (a : Adr) (k : B256) (x : Adr) :
-    (addAccessedStorageKey base a k).getCode x = base.getCode x := rfl
 
 
 private theorem afterSstore_transientStorage_local
@@ -1111,62 +1105,6 @@ private theorem pauseFiniteWrite_exact_runCompiledTo
 
 /-! ## The finite-duration body -/
 
-/-- Execute the checked finite-duration arm.  Its arithmetic/source prefix and
-zero branch cost `32` gas; the exact write-and-log suffix above costs `21031`.
-The strict timestamp inequality is precisely the successful no-overflow arm. -/
-private theorem pauseForFinite_runCompiledTo
-    {fs : List Func} {sevm : Sevm} {base : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    {duration : B256} {G : Nat}
-    (harg : Sevm.dataWord sevm 4 = duration)
-    (hresume : base.getStorVal sevm.currentTarget resumeSinceSlot = 0)
-    (horiginal : getOrigStorVal sevm sevm.currentTarget resumeSinceSlot = 0)
-    (hwarm : (sevm.currentTarget, resumeSinceSlot) ∈
-      base.accessedStorageKeys)
-    (hstatic : sevm.isStatic = false)
-    (htime : sevm.benvStat.time < duration + sevm.benvStat.time) :
-    ∃ post, Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], pauseAuthScratch sevm.caller.toB256, G + 21060, base.stateGas⟩)
-      pauseForFinite (.ok post) := by
-  have hvalueNonzero : duration + sevm.benvStat.time ≠ 0 := by
-    intro hzero
-    rw [hzero] at htime
-    have hn := B256.toNat_lt_toNat htime
-    rw [B256.toNat_zero] at hn
-    exact Nat.not_lt_zero _ hn
-  -- Stage the scratch image opaquely for the whole walk: the concrete
-  -- tower breaks the walk's defeq past `maxRecDepth` (as at 977), while
-  -- a named equation breaks the hinted scans (as at 811-815).  Reverting
-  -- the continuation first abstracts its type too, so no bridge is needed.
-  have writeRun := pauseFiniteWrite_runCompiledTo (hfork := hfork)
-    (fs := fs) (sevm := sevm) (base := base)
-    (duration := duration) (value := duration + sevm.benvStat.time)
-    (G := G) harg hresume horiginal hwarm hstatic hvalueNonzero
-  obtain ⟨post, writeRun⟩ := writeRun
-  revert writeRun
-  generalize (pauseAuthScratch sevm.caller.toB256) = staged3
-  intro writeRun
-  refine ⟨post, ?_⟩
-  unfold pauseForFinite arg cdl
-  func_run (3)
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  func_run (1)
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  -- Name the sum by rewriting: only the stack occurrence is normalized.
-  nth_rewrite 1 [show 32 * (0 : B256) + 4 = 4 by decide]
-  rw [harg]
-  func_run (1)
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  func_run (2) [0]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  case h_val =>
-    simp only [B256.gtCheck, gt_iff_lt, not_lt_of_ge (le_of_lt htime), ↓reduceIte]
-  func_run (1)
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  have hgas : G + 21060 - 32 = G + 21028 := by omega
-  rw [hgas]
-  unfold arg cdl at writeRun
-  exact writeRun
 
 
 /-! ## The pause-state guard -/
@@ -1602,71 +1540,6 @@ theorem pauseForFinite_exec
 
 /-! ## Independent infinite-sentinel arm -/
 
-private theorem pauseSentinelEventTail_runCompiledTo
-    {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}
-    (hstatic : sevm.isStatic = false) :
-    ∃ post, Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], pauseAuthScratch sevm.caller.toB256, G + 1022, base.stateGas⟩)
-      ((emitOneWord (signatureHash "Paused" [.uint256]) pauseInfinitely) +++
-        Func.stop) (.ok post) := by
-  -- Abstract the scratch image (as in `pauseFiniteLogTail_runCompiledTo`).
-  generalize hstagedS : (pauseAuthScratch sevm.caller.toB256) = staged9
-  have hlen : pauseInfinitely.toBytes.length = 32 :=
-    B256.length_toBytes pauseInfinitely
-  have hne : pauseInfinitely.toBytes ≠ [] := by
-    intro h
-    rw [h] at hlen
-    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
-  have hscratchread : (((staged9.write
-      ((0 : B256) * 32).toNat pauseInfinitely.toBytes).read 0 32).1) =
-      pauseInfinitely.toBytes := by
-    rw [← hlen]
-    exact Mem.read_write_zero _ hne
-  have hscratchsize : ((staged9.write
-      ((0 : B256) * 32).toNat pauseInfinitely.toBytes).size) = 64 := by
-    have hscratch64 : staged9.size = 64 := by
-      rw [← hstagedS]
-      unfold pauseAuthScratch
-      rw [Mem.size_write_word_at, Mem.size_write_word_at,
-        Mem.size_write_word_at, Mem.size_write_word_at]
-      decide
-    have h0 : ((0 : B256) * 32).toNat = 0 := by decide
-    rw [Mem.size_write_word_at, hscratch64, h0]
-    decide
-  obtain ⟨post, eventRun⟩ := pauseEvent_runCompiledTo
-    (fs := fs) (sevm := sevm) (base := base)
-    (memory := (staged9.write
-      ((0 : B256) * 32).toNat pauseInfinitely.toBytes))
-    (duration := pauseInfinitely) (G := G) hstatic hscratchsize
-    hscratchread
-  refine ⟨post, ?_⟩
-  unfold emitOneWord
-  apply Func.RunCompiledTo.next
-  · exact Ninst.runCompiled_pushB256
-      (c := gVerylow) (G := G + 1019)
-      (pushCost_of_ne_zero (by decide +kernel))
-      (by simp only [Devm.gasLeft_setMach, gVerylow])
-      (by simp only [Devm.stack_setMach, List.length_nil]; omega)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
-  apply Func.runCompiledTo_mstoreAt
-      (memory := staged9) (stack := []) (value := pauseInfinitely)
-      (word := 0) (G := G + 1014) (pushGas := gBase)
-      (extGas := 0) (body :=
-        ([Ninst.pushB256 (signatureHash "Paused" [.uint256])] ++
-          logWith 0 0 1) +++ Func.stop)
-  · exact pushCost_zero
-  · simp only [List.length_nil, Nat.ofNat_pos]
-  · intro S G'
-    have hscratch64 : staged9.size = 64 := by
-      rw [← hstagedS]
-      unfold pauseAuthScratch
-      rw [Mem.size_write_word_at, Mem.size_write_word_at,
-        Mem.size_write_word_at, Mem.size_write_word_at]
-      decide
-    have h0 : ((0 : B256) * 32).toNat = 0 := by decide
-    exact Devm.extCost_zero_of_le (by omega) (by omega)
-  · simpa only [show ((0 : B256) * 32).toNat = 0 by decide,
-      gBase, gVerylow] using eventRun
 
 private theorem pauseSentinelEventTail_exact_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}

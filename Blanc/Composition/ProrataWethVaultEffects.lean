@@ -549,13 +549,6 @@ def WethAllowanceEvent.classify? (frame : Exec.Frame) : Option WethAllowanceEven
     else none
   else none
 
-/-- The allowance-event projection of committed frames.  `filterMap` retains
-the order supplied by `Exec.committedFrames`, which is an invocation order
-only; use retained nodes and parent-prefix boundaries for storage replay. -/
-def retainedWethAllowanceEvents
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out) : List WethAllowanceEvent :=
-  (Exec.committedFrames run).filterMap WethAllowanceEvent.classify?
 
 /-- A classified WETH allowance invocation together with its stable retained
 path.  `located` is intentionally retained as data rather than recovered by

@@ -71,18 +71,6 @@ inductive LockedError where
   | ethTransfer
   | etherTransfer
 
-def LockedError.reason : LockedError → String
-  | .flashToken => "WETH: flash mint only WETH10"
-  | .individualLimit => "WETH: individual loan limit exceeded"
-  | .totalLimit => "WETH: total loan limit exceeded"
-  | .flashFailed => "WETH: flash loan failed"
-  | .allowance => "WETH: request exceeds allowance"
-  | .burnBalance => "WETH: burn amount exceeds balance"
-  | .expiredPermit => "WETH: Expired permit"
-  | .invalidPermit => "WETH: invalid permit"
-  | .transferBalance => "WETH: transfer amount exceeds balance"
-  | .ethTransfer => "WETH: ETH transfer failed"
-  | .etherTransfer => "WETH: Ether transfer failed"
 
 
 
@@ -124,13 +112,6 @@ locked flash-failure guard. -/
 def flashCallbackHeadBase (base : Devm) (stack : List B256) : Devm :=
   base.setMach ⟨stack, flashCallbackHeadMemory base, 0, base.stateGas⟩
 
-/-- Exact cost of accepting a successful child-call flag, detecting returndata
-shorter than one word and empty-reverting. -/
-def shortReturnCost : Nat :=
-  gVerylow + (gVerylow + gHigh) +
-    (gVerylow + gBase + gVerylow) +
-    (gVerylow + gHigh + gJumpdest) +
-    (gBase + gBase)
 
 
 
