@@ -1,6 +1,8 @@
 import Blanc.Lift.UniswapV2Pair.UpdateSource
 import Blanc.Lift.InvWalkProvenance
 import Blanc.Lift.StaticCall
+import Blanc.Lift.StaticCallGuard
+import Blanc.Lift.ByteWindowMemory
 
 /-! The concrete balanceOf request and answer windows of the two sync calls. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -84,15 +86,11 @@ theorem balanceReplyMemory_ptr {M : Mem} {pair : Adr} (out : Bytes)
     change (⟨request.data, 192⟩ : Mem) = request
     rw [← mem.size]
   rw [extendedEq]
-  have shortWrite : (out.take 32).length ≤ 32 := by
-    rw [List.length_take]
-    exact Nat.min_le_left _ _
-  refine ⟨(Mem.size_write_of_le (by rw [mem.size]; omega)).trans mem.size,
-    mem.n32, mem.wf.write _ _, ?_⟩
-  have keep := MemMatches.write 128 (out.take 32) mem.map
-  simpa only [memKill, List.filter_cons, List.filter_nil,
-    show decide (64 + 32 ≤ 128) = true from by decide,
-    Bool.true_or, ite_true] using keep
+  apply mem.write_bytes_of_le 128 (out.take 32)
+  · rw [List.length_take]
+    have := Nat.min_le_left 32 out.length
+    omega
+  · exact Or.inr (by decide)
 
 inductive SyncBalanceSite where
   | first | second
@@ -115,36 +113,9 @@ theorem balanceReturn_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
       (St b (b.returnData.length.toB256 :: 128 :: R) M G) site.decodeTree o) :
     SFunc.RunExact cert.prog sevm (St b (a :: x :: y :: z :: R) M (G + 42))
       site.returnTree o := by
-  have enough : B256.ltCheck b.returnData.length.toB256 32 = 0 := by
-    rw [B256.ltCheck, ite_eq_right]
-    rw [B256.lt_iff_toNat_lt_toNat]
-    rw [B256.toNat_toB256_of_lt short]
-    change ¬ b.returnData.length < 32
-    omega
   cases site
-  all_goals simp only [SyncBalanceSite.returnTree, SyncBalanceSite.decodeTree] at body ⊢
-  all_goals simp only [t_1ef1_c31, t_1f8e_c31]
-  all_goals apply rx_dest
-  all_goals apply rx_pop
-  all_goals apply rx_pop
-  all_goals apply rx_pop
-  all_goals apply rx_pop
-  all_goals refine rx_push (w := 64) rfl (by omega) ?_
-  all_goals
-    refine rx_mload (i := 64) (v := 128) (c := 3)
-      (by rw [St.extCost_eq mem.size]; decide) mem.word
-      (mem.read_self (by decide : 64 + 32 ≤ 192)) (by omega) ?_
-  all_goals refine rx_returndatasize (by simp only [List.length_cons]; omega) ?_
-  all_goals refine rx_push (w := 32) rfl (by simp only [List.length_cons]; omega) ?_
-  all_goals refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
-  all_goals refine rx_lt enough (by simp only [List.length_cons]; omega) ?_
-  all_goals refine rx_iszero (v := 1) (by decide) (by simp only [List.length_cons]; omega) ?_
-  case first =>
-    apply rx_push (w := 0x1f07) rfl (by simp only [List.length_cons]; omega)
-    exact rx_branch_succ (by decide : (1 : B256) ≠ 0) body
-  case second =>
-    apply rx_push (w := 0x1fa4) rfl (by simp only [List.length_cons]; omega)
-    exact rx_branch_succ (by decide : (1 : B256) ≠ 0) body
+  · exact returnWidthGuard_exact [0x1f, 0x07] (by decide) (by decide) rfl mem room short long body
+  · exact returnWidthGuard_exact [0x1f, 0xa4] (by decide) (by decide) rfl mem room short long body
 
 def SyncBalanceSite.callTree : SyncBalanceSite → SFunc
   | .first => t_1edd_c31
@@ -178,41 +149,9 @@ theorem balanceCall_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
         (St d (0 :: a :: x :: y :: R)
           ((M.extends [(128, 36), (128, 32)]).write 128 (out.take 32)) tailGas)
         site.returnTree seg := by
-  have shape : site.callTree = .dest (.next (.reg .pop) (.next (.reg .gas)
-      (.next (.exec .staticcall) (.next (.reg .iszero) (.next (.reg (.dup 0))
-        (.next (.reg .iszero) (.next (.push site.returnDestination
-          (by cases site <;> decide)) (.branch site.failureTree site.returnTree)))))))) := by
-    cases site <;> rfl
-  rw [shape] at run
-  obtain ⟨_, h⟩ := ric_destP run
-  obtain ⟨_, hs, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h
-  obtain ⟨gw, callGas, rfl⟩ := ri_gas (StepIn.toRun hs)
-  obtain ⟨d, hcall, h⟩ := ric_nextP h
-  obtain ⟨flag, out, post, bound, answered⟩ := ri_staticcall_bounded fork (StepIn.toRun hcall)
-  rw [post.eq_St] at h
-  obtain ⟨_, hs, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  rcases ric_branchP h with ⟨-, _, failed⟩ | ⟨accepted, tailGas, h⟩
-  · have noFail : site.failureTree.noOk = true := by cases site <;> decide
-    exact False.elim (failed.false_of_noOk noFail)
-  · have zeroFlag : B256.eqCheck flag 0 = 0 := eq_zero_of_iszero_ne_zero accepted
-    rcases post.flag with zero | one
-    · rw [zero, show B256.eqCheck (0 : B256) 0 = 1 from by decide] at zeroFlag
-      exact False.elim ((by decide : (1 : B256) ≠ 0) zeroFlag)
-    · subst flag
-      refine ⟨gw, callGas, d, out, tailGas, hcall, post, bound, answered rfl, ?_⟩
-      simpa only [show B256.eqCheck (1 : B256) 0 = 0 from by decide,
-        show (128 : B256).toNat = 128 from rfl,
-        show (36 : B256).toNat = 36 from rfl,
-        show (32 : B256).toNat = 32 from rfl] using h
+  cases site
+  · exact staticCallGuard_invP [0x1e, 0xf1] (by decide) rfl StepIn.toRun fork (by decide) run
+  · exact staticCallGuard_invP [0x1f, 0x8e] (by decide) rfl StepIn.toRun fork (by decide) run
 
 def SyncBalanceSite.shortTree : SyncBalanceSite → SFunc
   | .first => t_1f03_c31
@@ -233,38 +172,9 @@ theorem balanceReturn_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     32 ≤ b.returnData.length ∧ ∃ G',
       SFunc.RunCutP (StepIn D) cert.prog sevm C
         (St b (b.returnData.length.toB256 :: 128 :: R) M G') site.decodeTree seg := by
-  have shape : site.returnTree = .dest (.next (.reg .pop) (.next (.reg .pop)
-      (.next (.reg .pop) (.next (.reg .pop) (.next (.push [0x40] (by decide))
-        (.next (.reg .mload) (.next (.reg .returndatasize)
-          (.next (.push [0x20] (by decide)) (.next (.reg (.dup 1)) (.next (.reg .lt)
-            (.next (.reg .iszero) (.next (.push site.decodeDestination
-              (by cases site <;> decide)) (.branch site.shortTree site.decodeTree))))))))))))) := by
-    cases site <;> rfl
-  rw [shape] at run
-  obtain ⟨_, h⟩ := ric_destP run
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨d, hs, h⟩ := ric_nextP h
-  obtain ⟨_, eq⟩ := ri_mload (StepIn.toRun hs)
-  have word : Bytes.toB256 (M.read 64 32).1 = 128 := mem.word
-  rw [show (Bytes.toB256 [0x40]).toNat = 64 from rfl, word,
-    mem.read_self (by decide : 64 + 32 ≤ 192)] at eq
-  subst d
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_returndatasize (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_lt (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  rcases ric_branchP h with ⟨-, _, failed⟩ | ⟨accepted, G', h⟩
-  · have noShort : site.shortTree.noOk = true := by cases site <;> decide
-    exact False.elim (failed.false_of_noOk noShort)
-  · have width := toNat_ge_of_ltCheck_eq_zero (eq_zero_of_iszero_ne_zero accepted)
-    rw [B256.toNat_toB256_of_lt short] at width
-    exact ⟨width, G', h⟩
+  cases site
+  · exact returnWidthGuard_invP [0x1f, 0x07] (by decide) rfl StepIn.toRun mem short (by decide) run
+  · exact returnWidthGuard_invP [0x1f, 0xa4] (by decide) rfl StepIn.toRun mem short (by decide) run
 
 /-- A successful actual balance call consumes the overlapping request, derives
 both return-length guards, and reaches the decoder with full returndata retained. -/
@@ -317,33 +227,14 @@ theorem balanceCall_exact {sevm : Sevm} {b d : Devm} {R : List B256}
     SFunc.RunExact cert.prog sevm
       (St b (z :: token :: 128 :: 36 :: 128 :: 32 :: a :: x :: y :: R) M (callGas + 5))
       site.callTree o := by
-  have shape : site.callTree = .dest (.next (.reg .pop) (.next (.reg .gas)
-      (.next (.exec .staticcall) (.next (.reg .iszero) (.next (.reg (.dup 0))
-        (.next (.reg .iszero) (.next (.push site.returnDestination
-          (by cases site <;> decide)) (.branch site.failureTree site.returnTree)))))))) := by
-    cases site <;> rfl
-  rw [shape]
-  apply rx_dest
-  apply rx_pop
-  apply rx_gas (by simp only [List.length_cons]; omega)
-  apply rx_staticcall fork call
-  intro flag out post answered
-  have flagEq : flag = 1 := (List.cons.inj (post.stack.symm.trans success)).1
-  subst flag
-  simp only [show (128 : B256).toNat = 128 from rfl,
-    show (36 : B256).toNat = 36 from rfl,
-    show (32 : B256).toNat = 32 from rfl, returnedGas]
-  apply rx_iszero (v := 0) (by decide) (by simp only [List.length_cons]; omega)
-  apply rx_dup1 (by simp only [List.length_cons]; omega)
-  apply rx_iszero (v := 1) (by decide) (by simp only [List.length_cons]; omega)
-  cases site <;>
-    simp only [SyncBalanceSite.returnDestination, SyncBalanceSite.failureTree,
-      SyncBalanceSite.returnTree] at body ⊢
-  all_goals
-    apply rx_push rfl (by simp only [List.length_cons]; omega)
-    apply rx_branch_succ (by decide : (1 : B256) ≠ 0)
-    rw [post.returnData] at body
-    exact body
+  have stackRoom : (a :: x :: y :: R).length ≤ 1018 := by
+    simp only [List.length_cons]
+    omega
+  cases site
+  · exact staticCallGuard_exact [0x1e, 0xf1] (by decide) (by decide) rfl
+      fork stackRoom call success returnedGas body
+  · exact staticCallGuard_exact [0x1f, 0x8e] (by decide) (by decide) rfl
+      fork stackRoom call success returnedGas body
 
 /-- The full actual call and return guard consume exactly64 local gas after the
 callee, with arbitrary successful output bytes of at least the decoder width. -/
