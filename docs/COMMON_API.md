@@ -1721,6 +1721,12 @@ the finite trace. These statements establish no finite-word no-overflow,
 bytecode refinement, gas cost or history property. This is a theorem-directed
 numeric interface; it has no execution-goal recipe.
 
+[`Blanc/FakeExponentialEval.lean`](../Blanc/FakeExponentialEval.lean) provides
+`Blanc.FakeExponentialEval.runFuel` and `fakeExpFuel`, an explicit Option-valued
+Nat evaluator. `run_iff_runFuel` relates a finite Nat trace to sufficient fuel,
+and `fakeExpFuel_eq_fakeExp` identifies a completed evaluation with Jaune's
+total `fakeExp`.
+
 For a symbolic lower bound from a finite growing prefix, use
 [`Blanc/FakeExponentialGrowth.lean`](../Blanc/FakeExponentialGrowth.lean).
 `Blanc.FakeExponential.accumulator_mul_pow_le` bounds the canonical series
@@ -1742,6 +1748,14 @@ countdown to zero and unsigned division by zero, for arbitrary word numerator
 and denominator. These theorems establish no equality with the Nat recurrence,
 bytecode refinement, gas bound or history property. This interface has no
 execution-goal recipe.
+
+[`Blanc/WordFakeExponentialEval.lean`](../Blanc/WordFakeExponentialEval.lean)
+spells out the word recurrence as a Nat evaluator: `nextNat` and `addNat`
+apply `% 2^256` at each word operation. `runFuel_of_run` transports an
+existing word trace through Jaune's `B256.toNat` bridges, while
+`run_of_runFuel` reifies a completed Nat evaluation as a word trace; closed
+computations using this evaluator never evaluate B256 limb arithmetic in the
+kernel.
 
 For a shorter word-run bound under a sufficiently large eventual divisor, use
 [`Blanc/WordFakeExponentialBound.lean`](../Blanc/WordFakeExponentialBound.lean).
@@ -2794,6 +2808,20 @@ the body-level sibling of T3:
 
 For the same system-message, transaction-list, withdrawal, request, and body
 layers in exact state order, use the chronology APIs named in E8.
+
+For the converse (a system call *succeeds*, and I have its raw frame) use
+[`Blanc/SystemCallForward.lean`](../Blanc/SystemCallForward.lean):
+`processSystemTransaction_of_exec`, `processUncheckedSystemTransaction_of_exec` and
+`processCheckedSystemTransaction_of_exec` return the call's exact `(post.state,
+systemCallOutput post)` for any member of `systemContracts` on a covered fork, from
+`exec (initEvm (systemCallMsg benv target code data)) = .ok post` with no frame error and a
+non-negative refund counter (and, for the block-level forms, the canonical code installed).
+`systemContracts_not_precompile`, `systemContracts_nondelegated` and
+`systemContracts_nonempty` are the envelope facts; `afterSstore_state` and
+`State.get_setStorVal_ne` read a store's world-state effect. Worked uses: the EIP-4788 and
+EIP-2935 walks `Blanc/Lift/BeaconRoots/SystemWalk.lean` and
+`Blanc/Lift/HistoryStorage/SystemWalk.lean` (`processUncheckedSystemTransaction_beaconRoots`,
+`processUncheckedSystemTransaction_historyStorage`).
 
 ### T6. The wrapper is a configured block or a whole chain history
 

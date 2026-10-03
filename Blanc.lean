@@ -12,6 +12,8 @@ import Blanc.StorageOnlySpec
 import Blanc.SlotFootprint
 import Blanc.StaticStores
 import Blanc.WordArithmetic
+import Blanc.FakeExponentialEval
+import Blanc.WordFakeExponentialEval
 import Blanc.MemoryImage
 import Blanc.BytesWrite
 import Blanc.MemoryLayout
@@ -77,6 +79,7 @@ import Blanc.CycleWriteFree
 import Blanc.ReachableExecFree
 import Blanc.ReachableExecFreeControl
 import Blanc.TransactionForward
+import Blanc.SystemCallForward
 import Blanc.TransientSettlement
 import Blanc.TransientInvariance
 import Blanc.LidoCircuitBreakerCore
@@ -440,6 +443,8 @@ import Blanc.Lift.Weth9.CommittedHistory
 import Blanc.Lift.Weth9.Live
 import Blanc.Lift.ExactWalkSolc
 import Blanc.Lift.ExactWalkCall
+import Blanc.Lift.BeaconRoots.SystemWalk
+import Blanc.Lift.HistoryStorage.SystemWalk
 import Blanc.Lift.Weth9.LiveApprove
 import Blanc.Lift.Weth9.LiveDeposit
 import Blanc.Lift.Weth9.LiveTransfer
@@ -641,6 +646,7 @@ import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5Full
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Run
 
 import Blanc.Lift.WithdrawalRequest.BlockRequests
+import Blanc.Lift.WithdrawalRequest.NumericFacts
 import Blanc.Lift.WithdrawalRequest.ResetOccurrence
 import Blanc.Lift.WithdrawalRequest.Creation.Deploy
 import Blanc.Lift.WithdrawalRequest.NatLiveness

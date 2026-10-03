@@ -58,6 +58,7 @@ def liftRegularTransfer : Rinst → Pattern → Option Pattern
   | .signextend, words => binaryTransfer words
   | .sgt, words => binaryTransfer words
   | .origin, words => some (none :: words)
+  | .number, words => some (none :: words)
   | .chainid, words => some (none :: words)
   | .codesize, words => some (none :: words)
   | .selfbalance, words => some (none :: words)
@@ -246,7 +247,7 @@ private theorem regularTransfer_map {r : Rinst} {words output : Pattern}
       exact binaryTransfer_map φ hφ checked
   case iszero | calldataload | mload | sload =>
       exact unaryTransfer_map φ hφ checked
-  case caller | callvalue | calldatasize | timestamp | gas =>
+  case caller | callvalue | calldatasize | timestamp | number | gas =>
       cases checked
       simp [hφ]
   case pop => exact dropOneTransfer_map φ hφ checked
@@ -279,7 +280,7 @@ private theorem regularTransfer_append {r : Rinst} {words output below : Pattern
       exact binaryTransfer_append checked
   case iszero | calldataload | mload | sload =>
       exact unaryTransfer_append checked
-  case caller | callvalue | calldatasize | timestamp | gas =>
+  case caller | callvalue | calldatasize | timestamp | number | gas =>
       cases checked
       rfl
   case pop => exact dropOneTransfer_append checked
@@ -310,7 +311,7 @@ private theorem liftRegularTransfer_map {r : Rinst} {words output : Pattern}
   cases r <;> simp only [liftRegularTransfer] at checked ⊢
   case exp | slt | keccak256 | sdiv | signextend | sgt => exact binaryTransfer_map φ hφ checked
   case not | balance | extcodesize | tload => exact unaryTransfer_map φ hφ checked
-  case address | origin | chainid | selfbalance | codesize => cases checked; simp [hφ]
+  case address | origin | chainid | selfbalance | codesize | number => cases checked; simp [hφ]
   case log n =>
       rw [← dropTransfer_map φ hφ (n.val + 2) words]
       simpa using congrArg (Option.map (List.map φ)) checked
@@ -329,7 +330,7 @@ private theorem liftRegularTransfer_append {r : Rinst}
   cases r <;> simp only [liftRegularTransfer] at checked ⊢
   case exp | slt | keccak256 | sdiv | signextend | sgt => exact binaryTransfer_append checked
   case not | balance | extcodesize | tload => exact unaryTransfer_append checked
-  case address | origin | chainid | selfbalance | codesize => cases checked; rfl
+  case address | origin | chainid | selfbalance | codesize | number => cases checked; rfl
   case log n => exact dropTransfer_append (n.val + 2) checked
   case mod | or | xor | byte | shl => exact binaryTransfer_append checked
   case calldatacopy | codecopy | returndatacopy => exact dropTransfer_append 3 checked
@@ -1150,7 +1151,7 @@ theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
       | address =>
           cases checked
           exact matches_diff matched (diff_of_push (of_run_address run).stack)
-      | origin | chainid | codesize =>
+      | origin | chainid | codesize | number =>
           cases checked
           rcases of_run_reg run with ⟨pc, hr⟩
           simp only [Rinst.run, Rinst.runCore] at hr
