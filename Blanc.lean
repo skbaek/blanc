@@ -662,7 +662,7 @@ import Blanc.Lift.FloodLooper.Jumps
 import Blanc.Lift.WithdrawalRequest.FloodWalk
 import Blanc.Lift.WithdrawalRequest.FloodRun
 import Blanc.Lift.WithdrawalRequest.FloodTx
-import Blanc.Lift.WithdrawalRequest.FeeCounterexample
+import Blanc.Composition.WithdrawalRequestFeeCounterexample
 import Blanc.Lift.WithdrawalRequest.FloodTxRecover
 import Blanc.Lift.WithdrawalRequest.WordModelCount
 import Blanc.Lift.WithdrawalRequest.UserOccurrence
