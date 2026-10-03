@@ -18,7 +18,6 @@ namespace Blanc.Lift.LidoCircuitBreakerDeployed
 open Jaune
 open Blanc.Lift
 
-private instance : Inhabited SFunc := ⟨.undefined⟩
 
 /-- The state-silent entries used by the frame proof. -/
 def silentEntries : List Nat :=

@@ -340,7 +340,6 @@ theorem entry13_reach {R : Exec.Deriv} {sevm : Sevm} {b : Devm} {M : Mem} {G : N
     (fun burn hΨ => by rw [getStor_eq_of_state_eq burn.state.symm]; exact hΨ)
     run hT (by decide) (by simp only [List.not_mem_nil, IsEmpty.forall_iff, implies_true]) hinvF
 
-private instance : Inhabited SFunc := ⟨.undefined⟩
 
 /-- **`RegInv` at the external instructions reached through the `pause` wrapper
 (entry 49)**: decoder 7 is crossed as a big-step callee (`entry7_ret`), the body

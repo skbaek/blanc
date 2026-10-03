@@ -137,7 +137,6 @@ theorem entry22_stor {sevm : Sevm} {d : Devm} {o : Outcome} {v p : B256} {xs : S
 
 /-! ## Shared steps -/
 
-private instance : Inhabited SFunc := ⟨.undefined⟩
 
 /-- A run of a state-silent entry keeps the persistent state. -/
 theorem silent_entry_state {sevm : Sevm} {d : Devm} {o : Outcome} {k : Nat} {g : SFunc}

@@ -101,6 +101,13 @@
       "source": "optional explicit repository-relative Lean source targets"
     },
     {
+      "id": "explicit-simp-tracked",
+      "script": "scripts/explicit_simp.py",
+      "call": "resolve_bound_file",
+      "class": "generator output binding",
+      "source": "Git-tracked Lean files outside the Blanc library, excluding named deliberate fixtures"
+    },
+    {
       "id": "usage-evidence-candidate-input",
       "script": "scripts/usage_evidence.py",
       "call": "resolve_bound_file",

@@ -370,10 +370,6 @@ inductive TransactionTargetNoneDisposition
       TransactionTargetNoneDisposition ready targetNone
         (.createRun targetNone collision evm coreRun core result)
 
-/-- A configured transaction call to the deployed DRIP address keeps both the
-actual execution message's storage target and its compiled runtime.  The
-facts are transported through the trace's concrete delegation and code
-resolution equations, rather than being attached to a classifier witness. -/
 /-- The fully sourced direct CALL branch of a configured transaction.  This
 packages the exact delegation, resolved runtime, retained `ProcessMessage`
 core, and wrapper result under the already-derived transaction envelope; no

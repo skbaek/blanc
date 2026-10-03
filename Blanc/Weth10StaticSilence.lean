@@ -114,17 +114,6 @@ theorem applyAllowanceLedger_writeFree
   unfold applyAllowanceLedger
   rw [lastAllowanceWriteAt_eq_none_of_writeFree hfree.reverse key]
 
-/-- A write-free suffix is transparent to the ledger replay: the bridging
-form the selector arms consume. -/
-theorem applyAllowanceLedger_append_writeFree
-    (pre : Stor) (left : List CountedFrame) {right : List CountedFrame}
-    (key : B256) (hfree : WriteFreeLedger right) :
-    applyAllowanceLedger pre (left ++ right) key =
-      applyAllowanceLedger pre left key := by
-  unfold applyAllowanceLedger
-  rw [List.reverse_append, lastAllowanceWriteAt_append,
-    lastAllowanceWriteAt_eq_none_of_writeFree hfree.reverse key]
-
 /-- A write-free *prefix* is transparent to the ledger replay: the mirror
 bridging form consumed by the arms whose own record follows a write-free
 descendant stream. -/

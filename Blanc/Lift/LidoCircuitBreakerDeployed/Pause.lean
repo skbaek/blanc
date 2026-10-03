@@ -695,7 +695,6 @@ theorem entry13_regInv {A : List Entry → Sevm → Prop}
 
 /-! ## The `pause` selector wrapper (entry 49) -/
 
-private instance : Inhabited SFunc := ⟨.undefined⟩
 
 /-- **`pause(address)` (wrapper 49) establishes the frame postcondition** inside
 a root derivation: the `pause` field of `LidoWriterSpecsM lidoA`. -/
