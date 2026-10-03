@@ -164,6 +164,200 @@ def TxCPost (benv : Benv) (σ : Blanc.WithdrawalRequest.State) (iters : Nat) (po
     benv.state.bal withdrawalRequestPredeployAddress + (2 ^ 245 : Nat).toB256 ∧
   1026776 - (118058 + 87 * iters) ≤ post.gasLeft ∧ post.gasLeft ≤ 1026776
 
+/-- **Block C's frame.**  The message `txC` prepares, entered after the up-front debit and the
+value transfer, executes without error and leaves `TxCPost`.  Split out of
+`txC_processTransaction` so a witness can name the frame itself. -/
+theorem txC_exec
+    {benv : Benv} {index iters : Nat} {out : B256}
+    {σ : Blanc.WithdrawalRequest.State}
+    (hfork : CoveredFork benv.stat.fork)
+    (hcode : benv.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode)
+    (hrep : Blanc.WithdrawalRequest.RepresentsStorage
+      (benv.state.getStor withdrawalRequestPredeployAddress).get σ)
+    (hbounds : SubmissionBounds σ)
+    (hexcess : σ.excess + 1 < 2 ^ 256)
+    (hrun : WordFakeExponential.Run σ.excess.toB256 17 1 17 0 iters out)
+    (hpaid : (out / (17 : B256)).toNat ≤ 2 ^ 245)
+    (hiters : iters ≤ 10000) :
+    ∀ (debit : State) (msg : Msg) (after : Benv),
+      (benv.state.incrNonce senderE).subBal senderE
+        (txC.gas * (min 1 (8 - benv.stat.baseFeePerGas) +
+          benv.stat.baseFeePerGas)).toB256 = some debit →
+      prepareMessage { benv.beginTransaction with state := debit }
+        (transactionTenv benv.beginTransaction txC index senderE
+          (min 1 (8 - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas) 21800 []) txC =
+          .ok msg →
+      msg.benvAfterTransfer = .ok after →
+      ∃ post, exec (initEvm (msg.withBenv after)) = .ok post ∧ post.error = none ∧
+        0 ≤ post.refundCounter ∧ TxCPost benv σ iters post := by
+  have hEP : senderE ≠ withdrawalRequestPredeployAddress := by decide
+  have hEsys : senderE ≠ systemAddress := by decide
+  have h245 : (2 ^ 245 : Nat) < 2 ^ 256 := by decide
+  have hmax : B256.max.toNat = 2 ^ 256 - 1 := by decide +kernel
+  intro debit msg after hdebit hprep hentry
+  set v : B256 := (txC.gas * (min 1 (8 - benv.stat.baseFeePerGas) +
+    benv.stat.baseFeePerGas)).toB256 with hv
+  rw [prepareMessage_call rfl] at hprep
+  have hm := Except.ok.inj hprep
+  obtain ⟨-, hdeb⟩ := State.of_subBal hdebit
+  have hd_ne : ∀ a, senderE ≠ a → debit.get a = benv.state.get a := fun a h => by
+    rw [hdeb]; exact debit_get_ne h
+  have hd_E : debit.get senderE = { benv.state.get senderE with
+      nonce := (benv.state.get senderE).nonce + 1, bal := benv.state.bal senderE - v } := by
+    rw [hdeb, debit_get_self, State.incrNonce_bal]
+  have hm_caller : msg.caller = senderE := by rw [← hm]; rfl
+  have hm_ct : msg.currentTarget = withdrawalRequestPredeployAddress := by rw [← hm]; rfl
+  have hm_value : msg.value = (2 ^ 245 : Nat).toB256 := by rw [← hm]; rfl
+  have hm_data : msg.data = payload := by rw [← hm]; rfl
+  have hm_static : msg.isStatic = false := by rw [← hm]; rfl
+  have hm_code : msg.code = debit.getCode withdrawalRequestPredeployAddress := by
+    rw [← hm]; rfl
+  have hm_gas : msg.gas = 1026776 := by rw [← hm]; rfl
+  have hm_state : msg.benv.state = debit := by rw [← hm]; rfl
+  have hm_stat : msg.benv.stat = benv.beginTransaction.stat := by rw [← hm]; rfl
+  have hm_stv : msg.shouldTransferValue = true := by rw [← hm]; rfl
+  obtain ⟨mid, hmid, hafter⟩ := of_benvAfterTransfer hm_stv hentry
+  obtain ⟨-, hmid'⟩ := State.of_subBal hmid
+  have hstat : after.stat = benv.beginTransaction.stat := by
+    rw [benvAfterTransfer_stat hentry, hm_stat]
+  have hstor : ∀ a, after.state.getStor a = benv.state.getStor a := fun a => by
+    rw [benvAfterTransfer_ok_getStor hentry a, hm_state]
+    show (debit.get a).stor = (benv.state.get a).stor
+    by_cases h : senderE = a
+    · subst h; rw [hd_E]
+    · rw [hd_ne a h]
+  have hcodeAll : ∀ a, after.state.getCode a = benv.state.getCode a := fun a => by
+    rw [benvAfterTransfer_ok_getCode hentry a, hm_state]
+    show (debit.get a).code = (benv.state.get a).code
+    by_cases h : senderE = a
+    · subst h; rw [hd_E]
+    · rw [hd_ne a h]
+  have hafter_E : after.state.get senderE = { benv.state.get senderE with
+      nonce := (benv.state.get senderE).nonce + 1,
+      bal := benv.state.bal senderE - v - (2 ^ 245 : Nat).toB256 } := by
+    rw [hafter]
+    show (mid.addBal msg.currentTarget msg.value).get senderE = _
+    rw [hm_ct, addBal_get_ne _ hEP.symm, hmid', hm_state, hm_caller, hm_value,
+      State.setBal_get_self]
+    simp only [State.bal, hd_E]
+    rfl
+  have hafter_P : after.state.get withdrawalRequestPredeployAddress =
+      (benv.state.get withdrawalRequestPredeployAddress).withBal
+        (benv.state.bal withdrawalRequestPredeployAddress + (2 ^ 245 : Nat).toB256) := by
+    rw [hafter]
+    show (mid.addBal msg.currentTarget msg.value).get withdrawalRequestPredeployAddress = _
+    rw [hm_ct, hm_value, addBal_get_self, hmid', hm_state, hm_caller]
+    simp only [State.bal, State.setBal_get_ne hEP, hd_ne _ hEP]
+  -- the frame
+  set m := msg.withBenv after with hmdef
+  have hm'_ct : (initSevm m).currentTarget = withdrawalRequestPredeployAddress := hm_ct
+  have hm'_caller : (initSevm m).caller = senderE := hm_caller
+  have hm'_data : (initSevm m).data = payload := hm_data
+  have hm'_len : (initSevm m).data.length = 56 := by rw [hm'_data]; exact payload_length
+  have hfork' : CoveredFork m.benv.stat.fork := by
+    show CoveredFork after.stat.fork; rw [hstat]; exact hfork
+  have hstor0 : (initDevm m).getStorVal (initSevm m).currentTarget 0 = σ.excess.toB256 := by
+    show ((after.state.get msg.currentTarget).stor).get 0 = _
+    rw [hm_ct]
+    change (after.state.getStor _).get 0 = _
+    rw [hstor]; exact hrep.excess
+  have hgasm : userSubmissionGas (initSevm m) (initDevm m) Mem.empty iters + gCallStipend
+      < m.gas := by
+    have := userSubmissionGas_le_iters (initSevm m) (initDevm m) iters
+    show _ < msg.gas
+    rw [hm_gas]; unfold gCallStipend; omega
+  have hex := submission_child_exec (msg := m) (iters := iters) (out := out) hfork'
+    (by show msg.code = _; rw [hm_code, State.getCode, hd_ne _ hEP]; exact hcode)
+    (by show msg.caller ≠ _; rw [hm_caller]; exact hEsys)
+    hm'_len hm_static
+    (by
+      show (initDevm m).getStorVal (initSevm m).currentTarget 0 ≠ B256.max
+      rw [hstor0]
+      intro h
+      have := congrArg B256.toNat h
+      rw [B256.toNat_toB256_of_lt (by omega), hmax] at this
+      omega)
+    (by
+      show WordFakeExponential.Run ((initDevm m).getStorVal (initSevm m).currentTarget 0)
+        17 1 17 0 iters out
+      rw [hstor0]; exact hrun)
+    (by show _ ≤ msg.value.toNat; rw [hm_value, B256.toNat_toB256_of_lt h245]; exact hpaid)
+    hgasm
+  set b0 := afterSload (initSevm m) (initDevm m) 0 with hb0
+  set G := submissionLeftover m iters m.gas with hG
+  have hrep0 : Blanc.WithdrawalRequest.RepresentsStorage
+      (b0.getStor (initSevm m).currentTarget).get σ := by
+    rw [hb0, afterSload_getStor, hm'_ct]
+    show Blanc.WithdrawalRequest.RepresentsStorage (after.state.getStor _).get σ
+    rw [hstor]; exact hrep
+  have horig : ∀ key, getOrigStorVal (initSevm m) (initSevm m).currentTarget key =
+      b0.getStorVal (initSevm m).currentTarget key := by
+    intro key
+    rw [hb0, getStorVal_afterSload, hm'_ct]
+    show ((after.stat.origState.get _).stor).get key = ((after.state.get _).stor).get key
+    rw [hstat]
+    change (benv.state.getStor _).get key = (after.state.getStor _).get key
+    rw [hstor]
+  have hlayout := submissionPost_layout (initSevm m) b0 Mem.empty G σ hm'_len hrep0 hbounds
+    Mem.wf_empty
+  rw [decodeSubmission_payload_eq _ hm'_len hm'_caller hm'_data] at hlayout
+  obtain ⟨hrepP, hlogsP, -, hotherP⟩ := hlayout
+  have hfacts := submissionPost_facts (initSevm m) b0 Mem.empty G
+  have herr : (submissionPost (initSevm m) b0 Mem.empty G).error = none := by
+    rw [show (submissionPost (initSevm m) b0 Mem.empty G).error =
+        (submissionBase (initSevm m) b0 Mem.empty).error from
+      congrArg Meta.error hfacts.2.1, (submissionBase_inherited _ _ _).2, hb0, afterSload_error]
+    rfl
+  have hrefund : 0 ≤ (submissionPost (initSevm m) b0 Mem.empty G).refundCounter := by
+    have h := submissionPost_refund_ge (initSevm m) b0 Mem.empty G σ hrep0 hbounds horig
+    have h0 : b0.refundCounter = 0 := by rw [hb0, afterSload_refundCounter]; rfl
+    rw [h0] at h; exact h
+  have hlog0 : (initDevm m).logs = [] := by
+    change (match m.benv.stat.rules.stateGas with
+      | none => []
+      | some _ => _) = []
+    rw [CoveredFork.rules_stateGas_none hfork']
+  have hacct := fun a => submissionPost_code_bal (initSevm m) b0 Mem.empty G a
+  refine ⟨_, hex, herr, hrefund, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · rw [hm'_ct] at hrepP; exact hrepP
+  · rw [hlogsP, hb0, afterSload_logs, hlog0, hm'_ct, List.nil_append]
+  · intro a ha
+    show Devm.getStor _ a = _
+    rw [hotherP a (by rw [hm'_ct]; exact ha), hb0, afterSload_getStor]
+    exact hstor a
+  · intro a
+    show ((submissionPost (initSevm m) b0 Mem.empty G).getAcct a).code = _
+    rw [(hacct a).1, hb0, afterSload_getAcct]
+    exact hcodeAll a
+  · have hdel : ∀ d : Devm,
+        (St d [] (submissionMemory (initSevm m) Mem.empty) G).accountsToDelete =
+          d.accountsToDelete := fun _ => rfl
+    have hLogDel : ∀ (d : Devm) (l : Log), (d.addLog l).accountsToDelete = d.accountsToDelete :=
+      fun _ _ => rfl
+    rw [submissionPost, hdel, submissionBase, afterSstore_accountsToDelete, submissionLogged,
+      hLogDel, submissionWordsStore, afterSstore_accountsToDelete, submissionWord1Store,
+      afterSstore_accountsToDelete, submissionCallerStore, afterSstore_accountsToDelete,
+      submissionTailRead, afterSload_accountsToDelete, submissionCountStore,
+      afterSstore_accountsToDelete, submissionCountRead, afterSload_accountsToDelete, hb0,
+      afterSload_accountsToDelete]
+    rfl
+  · show ((submissionPost (initSevm m) b0 Mem.empty G).getAcct senderE).bal = _
+    rw [(hacct senderE).2, hb0, afterSload_getAcct]
+    show (after.state.get senderE).bal = _
+    rw [hafter_E]
+    exact rfl
+  · show ((submissionPost (initSevm m) b0 Mem.empty G).getAcct
+      withdrawalRequestPredeployAddress).bal = _
+    rw [(hacct withdrawalRequestPredeployAddress).2, hb0, afterSload_getAcct]
+    show (after.state.get withdrawalRequestPredeployAddress).bal = _
+    rw [hafter_P]
+    rfl
+  · rw [hfacts.2.2.2.2.1, hG, submissionLeftover]
+    have hb := userSubmissionGas_le_iters (initSevm m) (initDevm m) iters
+    have hmg : m.gas = 1026776 := hm_gas
+    rw [hmg]
+    constructor <;> omega
+
 /-- **Block C's transaction, forwarded.**  Its sender recovery is the one named premise
 `hrecover`; everything else is the configured state: the predeploy installed and
 representing `σ` with its excess below the word ceiling, the word fee loop at that excess
@@ -206,8 +400,6 @@ theorem txC_processTransaction
       bout'.receiptsTrie[BLT.toBytes (.bytes index.toBytes)]? =
         some (makeReceipt txC none bout'.cumulativeGasUsed post.logs) := by
   have hsg : benv.stat.rules.stateGas = none := CoveredFork.rules_stateGas_none hfork
-  have hEP : senderE ≠ withdrawalRequestPredeployAddress := by decide
-  have hEsys : senderE ≠ systemAddress := by decide
   have hcost : calculateIntrinsicCost benv.stat.rules txC senderE = (21800, 23000) :=
     txC_intrinsic hsg (CoveredFork.rules_txBase hfork) (CoveredFork.rules_floorTokenCost hfork) _
   have hprec : benv.stat.rules.isPrecomp withdrawalRequestPredeployAddress = false :=
@@ -215,182 +407,8 @@ theorem txC_processTransaction
   have hnodeleg :
       getDelegatedCodeAddress (benv.state.getCode withdrawalRequestPredeployAddress) = none := by
     rw [hcode]; exact withdrawalRequestCode_nondelegated
-  have h245 : (2 ^ 245 : Nat) < 2 ^ 256 := by decide
-  have hmax : B256.max.toNat = 2 ^ 256 - 1 := by decide +kernel
-  have hexec : ∀ (debit : State) (msg : Msg) (after : Benv),
-      (benv.state.incrNonce senderE).subBal senderE
-        (txC.gas * (min 1 (8 - benv.stat.baseFeePerGas) +
-          benv.stat.baseFeePerGas)).toB256 = some debit →
-      prepareMessage { benv.beginTransaction with state := debit }
-        (transactionTenv benv.beginTransaction txC index senderE
-          (min 1 (8 - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas) 21800 []) txC =
-          .ok msg →
-      msg.benvAfterTransfer = .ok after →
-      ∃ post, exec (initEvm (msg.withBenv after)) = .ok post ∧ post.error = none ∧
-        0 ≤ post.refundCounter ∧ TxCPost benv σ iters post := by
-    intro debit msg after hdebit hprep hentry
-    set v : B256 := (txC.gas * (min 1 (8 - benv.stat.baseFeePerGas) +
-      benv.stat.baseFeePerGas)).toB256 with hv
-    rw [prepareMessage_call rfl] at hprep
-    have hm := Except.ok.inj hprep
-    obtain ⟨-, hdeb⟩ := State.of_subBal hdebit
-    have hd_ne : ∀ a, senderE ≠ a → debit.get a = benv.state.get a := fun a h => by
-      rw [hdeb]; exact debit_get_ne h
-    have hd_E : debit.get senderE = { benv.state.get senderE with
-        nonce := (benv.state.get senderE).nonce + 1, bal := benv.state.bal senderE - v } := by
-      rw [hdeb, debit_get_self, State.incrNonce_bal]
-    have hm_caller : msg.caller = senderE := by rw [← hm]; rfl
-    have hm_ct : msg.currentTarget = withdrawalRequestPredeployAddress := by rw [← hm]; rfl
-    have hm_value : msg.value = (2 ^ 245 : Nat).toB256 := by rw [← hm]; rfl
-    have hm_data : msg.data = payload := by rw [← hm]; rfl
-    have hm_static : msg.isStatic = false := by rw [← hm]; rfl
-    have hm_code : msg.code = debit.getCode withdrawalRequestPredeployAddress := by
-      rw [← hm]; rfl
-    have hm_gas : msg.gas = 1026776 := by rw [← hm]; rfl
-    have hm_state : msg.benv.state = debit := by rw [← hm]; rfl
-    have hm_stat : msg.benv.stat = benv.beginTransaction.stat := by rw [← hm]; rfl
-    have hm_stv : msg.shouldTransferValue = true := by rw [← hm]; rfl
-    obtain ⟨mid, hmid, hafter⟩ := of_benvAfterTransfer hm_stv hentry
-    obtain ⟨-, hmid'⟩ := State.of_subBal hmid
-    have hstat : after.stat = benv.beginTransaction.stat := by
-      rw [benvAfterTransfer_stat hentry, hm_stat]
-    have hstor : ∀ a, after.state.getStor a = benv.state.getStor a := fun a => by
-      rw [benvAfterTransfer_ok_getStor hentry a, hm_state]
-      show (debit.get a).stor = (benv.state.get a).stor
-      by_cases h : senderE = a
-      · subst h; rw [hd_E]
-      · rw [hd_ne a h]
-    have hcodeAll : ∀ a, after.state.getCode a = benv.state.getCode a := fun a => by
-      rw [benvAfterTransfer_ok_getCode hentry a, hm_state]
-      show (debit.get a).code = (benv.state.get a).code
-      by_cases h : senderE = a
-      · subst h; rw [hd_E]
-      · rw [hd_ne a h]
-    have hafter_E : after.state.get senderE = { benv.state.get senderE with
-        nonce := (benv.state.get senderE).nonce + 1,
-        bal := benv.state.bal senderE - v - (2 ^ 245 : Nat).toB256 } := by
-      rw [hafter]
-      show (mid.addBal msg.currentTarget msg.value).get senderE = _
-      rw [hm_ct, addBal_get_ne _ hEP.symm, hmid', hm_state, hm_caller, hm_value,
-        State.setBal_get_self]
-      simp only [State.bal, hd_E]
-      rfl
-    have hafter_P : after.state.get withdrawalRequestPredeployAddress =
-        (benv.state.get withdrawalRequestPredeployAddress).withBal
-          (benv.state.bal withdrawalRequestPredeployAddress + (2 ^ 245 : Nat).toB256) := by
-      rw [hafter]
-      show (mid.addBal msg.currentTarget msg.value).get withdrawalRequestPredeployAddress = _
-      rw [hm_ct, hm_value, addBal_get_self, hmid', hm_state, hm_caller]
-      simp only [State.bal, State.setBal_get_ne hEP, hd_ne _ hEP]
-    -- the frame
-    set m := msg.withBenv after with hmdef
-    have hm'_ct : (initSevm m).currentTarget = withdrawalRequestPredeployAddress := hm_ct
-    have hm'_caller : (initSevm m).caller = senderE := hm_caller
-    have hm'_data : (initSevm m).data = payload := hm_data
-    have hm'_len : (initSevm m).data.length = 56 := by rw [hm'_data]; exact payload_length
-    have hfork' : CoveredFork m.benv.stat.fork := by
-      show CoveredFork after.stat.fork; rw [hstat]; exact hfork
-    have hstor0 : (initDevm m).getStorVal (initSevm m).currentTarget 0 = σ.excess.toB256 := by
-      show ((after.state.get msg.currentTarget).stor).get 0 = _
-      rw [hm_ct]
-      change (after.state.getStor _).get 0 = _
-      rw [hstor]; exact hrep.excess
-    have hgasm : userSubmissionGas (initSevm m) (initDevm m) Mem.empty iters + gCallStipend
-        < m.gas := by
-      have := userSubmissionGas_le_iters (initSevm m) (initDevm m) iters
-      show _ < msg.gas
-      rw [hm_gas]; unfold gCallStipend; omega
-    have hex := submission_child_exec (msg := m) (iters := iters) (out := out) hfork'
-      (by show msg.code = _; rw [hm_code, State.getCode, hd_ne _ hEP]; exact hcode)
-      (by show msg.caller ≠ _; rw [hm_caller]; exact hEsys)
-      hm'_len hm_static
-      (by
-        show (initDevm m).getStorVal (initSevm m).currentTarget 0 ≠ B256.max
-        rw [hstor0]
-        intro h
-        have := congrArg B256.toNat h
-        rw [B256.toNat_toB256_of_lt (by omega), hmax] at this
-        omega)
-      (by
-        show WordFakeExponential.Run ((initDevm m).getStorVal (initSevm m).currentTarget 0)
-          17 1 17 0 iters out
-        rw [hstor0]; exact hrun)
-      (by show _ ≤ msg.value.toNat; rw [hm_value, B256.toNat_toB256_of_lt h245]; exact hpaid)
-      hgasm
-    set b0 := afterSload (initSevm m) (initDevm m) 0 with hb0
-    set G := submissionLeftover m iters m.gas with hG
-    have hrep0 : Blanc.WithdrawalRequest.RepresentsStorage
-        (b0.getStor (initSevm m).currentTarget).get σ := by
-      rw [hb0, afterSload_getStor, hm'_ct]
-      show Blanc.WithdrawalRequest.RepresentsStorage (after.state.getStor _).get σ
-      rw [hstor]; exact hrep
-    have horig : ∀ key, getOrigStorVal (initSevm m) (initSevm m).currentTarget key =
-        b0.getStorVal (initSevm m).currentTarget key := by
-      intro key
-      rw [hb0, getStorVal_afterSload, hm'_ct]
-      show ((after.stat.origState.get _).stor).get key = ((after.state.get _).stor).get key
-      rw [hstat]
-      change (benv.state.getStor _).get key = (after.state.getStor _).get key
-      rw [hstor]
-    have hlayout := submissionPost_layout (initSevm m) b0 Mem.empty G σ hm'_len hrep0 hbounds
-      Mem.wf_empty
-    rw [decodeSubmission_payload_eq _ hm'_len hm'_caller hm'_data] at hlayout
-    obtain ⟨hrepP, hlogsP, -, hotherP⟩ := hlayout
-    have hfacts := submissionPost_facts (initSevm m) b0 Mem.empty G
-    have herr : (submissionPost (initSevm m) b0 Mem.empty G).error = none := by
-      rw [show (submissionPost (initSevm m) b0 Mem.empty G).error =
-          (submissionBase (initSevm m) b0 Mem.empty).error from
-        congrArg Meta.error hfacts.2.1, (submissionBase_inherited _ _ _).2, hb0, afterSload_error]
-      rfl
-    have hrefund : 0 ≤ (submissionPost (initSevm m) b0 Mem.empty G).refundCounter := by
-      have h := submissionPost_refund_ge (initSevm m) b0 Mem.empty G σ hrep0 hbounds horig
-      have h0 : b0.refundCounter = 0 := by rw [hb0, afterSload_refundCounter]; rfl
-      rw [h0] at h; exact h
-    have hlog0 : (initDevm m).logs = [] := by
-      change (match m.benv.stat.rules.stateGas with
-        | none => []
-        | some _ => _) = []
-      rw [CoveredFork.rules_stateGas_none hfork']
-    have hacct := fun a => submissionPost_code_bal (initSevm m) b0 Mem.empty G a
-    refine ⟨_, hex, herr, hrefund, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-    · rw [hm'_ct] at hrepP; exact hrepP
-    · rw [hlogsP, hb0, afterSload_logs, hlog0, hm'_ct, List.nil_append]
-    · intro a ha
-      show Devm.getStor _ a = _
-      rw [hotherP a (by rw [hm'_ct]; exact ha), hb0, afterSload_getStor]
-      exact hstor a
-    · intro a
-      show ((submissionPost (initSevm m) b0 Mem.empty G).getAcct a).code = _
-      rw [(hacct a).1, hb0, afterSload_getAcct]
-      exact hcodeAll a
-    · have hdel : ∀ d : Devm,
-          (St d [] (submissionMemory (initSevm m) Mem.empty) G).accountsToDelete =
-            d.accountsToDelete := fun _ => rfl
-      have hLogDel : ∀ (d : Devm) (l : Log), (d.addLog l).accountsToDelete = d.accountsToDelete :=
-        fun _ _ => rfl
-      rw [submissionPost, hdel, submissionBase, afterSstore_accountsToDelete, submissionLogged,
-        hLogDel, submissionWordsStore, afterSstore_accountsToDelete, submissionWord1Store,
-        afterSstore_accountsToDelete, submissionCallerStore, afterSstore_accountsToDelete,
-        submissionTailRead, afterSload_accountsToDelete, submissionCountStore,
-        afterSstore_accountsToDelete, submissionCountRead, afterSload_accountsToDelete, hb0,
-        afterSload_accountsToDelete]
-      rfl
-    · show ((submissionPost (initSevm m) b0 Mem.empty G).getAcct senderE).bal = _
-      rw [(hacct senderE).2, hb0, afterSload_getAcct]
-      show (after.state.get senderE).bal = _
-      rw [hafter_E]
-      exact rfl
-    · show ((submissionPost (initSevm m) b0 Mem.empty G).getAcct
-        withdrawalRequestPredeployAddress).bal = _
-      rw [(hacct withdrawalRequestPredeployAddress).2, hb0, afterSload_getAcct]
-      show (after.state.get withdrawalRequestPredeployAddress).bal = _
-      rw [hafter_P]
-      rfl
-    · rw [hfacts.2.2.2.2.1, hG, submissionLeftover]
-      have hb := userSubmissionGas_le_iters (initSevm m) (initDevm m) iters
-      have hmg : m.gas = 1026776 := hm_gas
-      rw [hmg]
-      constructor <;> omega
+  have hexec := txC_exec (benv := benv) (index := index) hfork hcode hrep hbounds hexcess
+    hrun hpaid hiters
   obtain ⟨_, post, bout', hQ, hproc, hcum, hblk, hkeys, hreceipt⟩ :=
     processTransaction_call_value_of_exec_receipts
     (E := senderE) (t := withdrawalRequestPredeployAddress)

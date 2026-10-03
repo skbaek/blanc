@@ -200,6 +200,8 @@ SHARED += ["ExecutionWarmth", "ExecutionTraceWarmth", "ExecutionCodeAt", "Execut
 # Reachable program counters, the canonical consensus system-contract code and system frames that
 # run it (beacon-env-v2): contract-neutral (the four system contracts are protocol, not a Blanc contract).
 SHARED += ["ExecutionReachable", "SystemContracts", "ExecutionTraceCodeKeep", "ExecutionTraceSystemCode"]
+# Call-only executions enter no CREATE frame (eip7002-withdrawal-predeploy-v1).
+SHARED += ["ExecutionTraceCallOnly"]
 # Generic per-frame calldata-length bound of a configured history (calldata-bound-v1): contract-neutral.
 SHARED += ["ExecutionTraceCalldata", "ForkUniform", "Lift.NodeWalkFork", "Lift.WitnessFork", "TransactionFork"]
 
@@ -564,6 +566,7 @@ COMPOSITION = [
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControlRun",
     "Composition.ProrataWethVaultBoundary",
     "Composition.WithdrawalRequestFeeCounterexample",
+    "Composition.WithdrawalRequestFeeRefutation",
     "Composition.ProrataWethVaultEffects",
     "Composition.ProrataWethVaultStaging",
     "Composition.ProrataWethVaultViews",
