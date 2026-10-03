@@ -2369,6 +2369,20 @@ consumer needs canonical interpreter ingress as one conjunct:
   shows that with the canonical code installed at the checkpoint every system
   message enters no frame but its own. `Lift.BeaconDeposit.configuredHistory_solInv_sys`
   (and `_count_`/`_root_`) is the worked consumer.
+- To discharge the creation-avoidance premise
+  `∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none → root.sevm.currentTarget ≠ a`
+  for a concrete witness whose code makes calls (so `SpawnFreeReach` fails): show the world is
+  call-only, `CodesCallOnly` (every installed code reaches only `CALL` at positions no `PUSH`
+  immediate covers, `CallOnlyReach`, and none is a delegation designator), and that the
+  block's transactions are calls without authorizations. `Exec.callOnly_roots` gives every raw
+  frame a code address for one derivation, and `ConfiguredBlockTrace.callOnly` lifts it through
+  the message, transaction, system-call, request and body traces, returning the post-chain
+  world call-only again ([`Blanc/ExecutionTraceCallOnly.lean`](../Blanc/ExecutionTraceCallOnly.lean)).
+  Decide `CallOnlyReach` for concrete bytes with `callOnlyReach_of_check`
+  (`callOnlyCheck`, the linear walk), and get it from `SpawnFreeReach` with
+  `callOnlyReach_of_spawnFreeReach`. `Xinst.step_call_spawn` is the per-`CALL` fact: the child
+  has a code address and runs the callee's own code when it holds no designator.
+  `Lift.WithdrawalRequest.FeeCounterexample.blockOk_of` is the worked consumer.
 - To discharge the per-frame premise `sevm.data.length < 2 ^ 256` for every raw
   frame of a configured history with no premise at all:
   `ConfiguredHistoryTrace.calldata_bound` and
