@@ -4,6 +4,8 @@ import Blanc.Lift.WithdrawalRequest.ProtocolOccurrences
 import Blanc.Lift.WithdrawalRequest.BalanceHistory
 import Blanc.BlockForward
 import Blanc.ExecutionTraceRootFrame
+import Blanc.Lift.BeaconRoots.SystemWalk
+import Blanc.Lift.HistoryStorage.SystemWalk
 
 /-!
 # The mathematical-fee refutation: block assembly
@@ -25,6 +27,8 @@ one per transaction.
 namespace Blanc.Lift.WithdrawalRequest.FeeCounterexample
 
 open Jaune Blanc.Lift Blanc.ExecutionTrace Blanc.BlockForward FloodTx
+
+
 
 /-- The transaction fold over a single indexed transaction is that transaction's
 settlement, its state installed. -/
@@ -152,30 +156,105 @@ theorem parseDepositRequests_of_predeploy_logs {bout : BlockOutput} {tx : Tx} {c
   rw [hlogs log hlog]
   decide
 
+/-- The state after the EIP-4788 beacon-roots system call. -/
+def stBeacon (benv : Benv) : State :=
+  (BeaconRoots.systemPost benv).state
+
+/-- The state after the EIP-2935 history-storage system call. -/
+def stHistory (benv : Benv) : State :=
+  (HistoryStorage.systemPost (benv.withState (stBeacon benv))).state
+
+/-- The call output of the EIP-4788 beacon-roots system call. -/
+def outBeacon (benv : Benv) : MsgCallOutput :=
+  systemCallOutput (BeaconRoots.systemPost benv)
+
+/-- The call output of the EIP-2935 history-storage system call. -/
+def outHistory (benv : Benv) : MsgCallOutput :=
+  systemCallOutput (HistoryStorage.systemPost (benv.withState (stBeacon benv)))
+
+theorem systemCodeInstalled_beaconRoots {w : State} (h : SystemCodeInstalled w) :
+    w.getCode beaconRootsAddress = beaconRootsCode :=
+  h (beaconRootsAddress, beaconRootsCode)
+    (by simp only [systemContracts, List.mem_cons, true_or])
+
+theorem systemCodeInstalled_historyStorage {w : State} (h : SystemCodeInstalled w) :
+    w.getCode historyStorageAddress = historyStorageCode :=
+  h (historyStorageAddress, historyStorageCode)
+    (by simp only [systemContracts, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])
+
+theorem stBeacon_step {benv : Benv} (hfork : CoveredFork benv.stat.fork)
+    (hcode : benv.state.getCode beaconRootsAddress = beaconRootsCode) :
+    processUncheckedSystemTransaction benv beaconRootsAddress
+        benv.stat.parentBeaconBlockRoot.toBytes =
+      .ok (stBeacon benv, outBeacon benv) ∧
+    ∀ a, beaconRootsAddress ≠ a → (stBeacon benv).get a = benv.state.get a := by
+  have h := BeaconRoots.processUncheckedSystemTransaction_beaconRoots hfork hcode
+  exact ⟨h.1, h.2.2⟩
+
+theorem stHistory_step {benv : Benv} {lastHash : B256}
+    (hfork : CoveredFork benv.stat.fork)
+    (hbeaconCode : benv.state.getCode beaconRootsAddress = beaconRootsCode)
+    (hhistoryCode : benv.state.getCode historyStorageAddress = historyStorageCode)
+    (hlast : benv.stat.blockHashes.getLast? = some lastHash) :
+    processUncheckedSystemTransaction (benv.withState (stBeacon benv)) historyStorageAddress
+        lastHash.toBytes = .ok (stHistory benv, outHistory benv) ∧
+    ∀ a, historyStorageAddress ≠ a → (stHistory benv).get a = (stBeacon benv).get a := by
+  have hB := stBeacon_step hfork hbeaconCode
+  have hneBH : beaconRootsAddress ≠ historyStorageAddress := by decide
+  have hgetH : (stBeacon benv).get historyStorageAddress = benv.state.get historyStorageAddress :=
+    hB.2 historyStorageAddress hneBH
+  have hcodeH : (stBeacon benv).getCode historyStorageAddress = historyStorageCode := by
+    change ((stBeacon benv).get historyStorageAddress).code = historyStorageCode
+    rw [hgetH]
+    exact hhistoryCode
+  have hlast' : (benv.withState (stBeacon benv)).stat.blockHashes.getLast? = some lastHash := hlast
+  have h := HistoryStorage.processUncheckedSystemTransaction_historyStorage
+    (benv := benv.withState (stBeacon benv)) hfork hcodeH hlast'
+  exact ⟨h.1, h.2.2⟩
+
+theorem stHistory_get {benv : Benv} {lastHash : B256} {a : Adr}
+    (hfork : CoveredFork benv.stat.fork)
+    (hbeaconCode : benv.state.getCode beaconRootsAddress = beaconRootsCode)
+    (hhistoryCode : benv.state.getCode historyStorageAddress = historyStorageCode)
+    (hlast : benv.stat.blockHashes.getLast? = some lastHash)
+    (hneB : beaconRootsAddress ≠ a) (hneH : historyStorageAddress ≠ a) :
+    (stHistory benv).get a = benv.state.get a := by
+  have hB := stBeacon_step hfork hbeaconCode
+  have hH := stHistory_step hfork hbeaconCode hhistoryCode hlast
+  rw [hH.2 a hneH, hB.2 a hneB]
+
+theorem stHistory_get_of_installed {benv : Benv} {lastHash : B256} {a : Adr}
+    (hfork : CoveredFork benv.stat.fork)
+    (installed : SystemCodeInstalled benv.state)
+    (hlast : benv.stat.blockHashes.getLast? = some lastHash)
+    (hneB : beaconRootsAddress ≠ a) (hneH : historyStorageAddress ≠ a) :
+    (stHistory benv).get a = benv.state.get a :=
+  stHistory_get hfork
+    (systemCodeInstalled_beaconRoots installed)
+    (systemCodeInstalled_historyStorage installed)
+    hlast hneB hneH
+
 /-! ## Block C -/
 
-/-- **Block C's body.**  The two unchecked system calls and the two checked request
-calls are hypotheses (their walks live in the system-path modules); the transaction
+/-- **Block C's body.** The two unchecked system calls are discharged via
+`BeaconRoots.processUncheckedSystemTransaction_beaconRoots` and
+`HistoryStorage.processUncheckedSystemTransaction_historyStorage`; the transaction
 is `txC_processTransaction`. -/
 theorem blockC_body {benv : Benv} {iters : Nat} {out : B256}
-    {σ : Blanc.WithdrawalRequest.State}
-    {stBeacon stHistory : State} {outBeacon outHistory : MsgCallOutput} {lastHash : B256}
+    {σ : Blanc.WithdrawalRequest.State} {lastHash : B256}
     (hfork : CoveredFork benv.stat.fork)
-    (hbeacon : processUncheckedSystemTransaction benv beaconRootsAddress
-      benv.stat.parentBeaconBlockRoot.toBytes = .ok (stBeacon, outBeacon))
+    (installed : SystemCodeInstalled benv.state)
     (hlast : benv.stat.blockHashes.getLast? = some lastHash)
-    (hhistory : processUncheckedSystemTransaction (benv.withState stBeacon)
-      historyStorageAddress lastHash.toBytes = .ok (stHistory, outHistory))
-    -- the transaction's premises, on the state the system calls leave
+    -- the transaction's premises, on the block's pre-state
     (hchain : benv.stat.chainId = 1)
     (hbase : benv.stat.baseFeePerGas ≤ 8)
     (hroom : 2 ^ 20 ≤ benv.stat.blockGasLimit)
-    (hnonce : (stHistory.get senderE).nonce = 1)
-    (hnocode : (stHistory.get senderE).code.isEmpty = true)
-    (hfunds : 2 ^ 20 * 8 + 2 ^ 245 ≤ (stHistory.get senderE).bal.toNat)
-    (hcode : stHistory.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode)
+    (hnonce : (benv.state.get senderE).nonce = 1)
+    (hnocode : (benv.state.get senderE).code.isEmpty = true)
+    (hfunds : 2 ^ 20 * 8 + 2 ^ 245 ≤ (benv.state.get senderE).bal.toNat)
+    (hcode : benv.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode)
     (hrep : Blanc.WithdrawalRequest.RepresentsStorage
-      (stHistory.getStor withdrawalRequestPredeployAddress).get σ)
+      (benv.state.getStor withdrawalRequestPredeployAddress).get σ)
     (hbounds : SubmissionBounds σ)
     (hexcess : σ.excess + 1 < 2 ^ 256)
     (hrun : WordFakeExponential.Run σ.excess.toB256 17 1 17 0 iters out)
@@ -189,11 +268,11 @@ theorem blockC_body {benv : Benv} {iters : Nat} {out : B256}
       processCheckedSystemTransaction benvTxs consolidationRequestPredeployAddress [] =
         .ok (stC, outC)) :
     ∃ (post : Devm) (boutTxs : BlockOutput) (stW stC : State) (outW outC : MsgCallOutput),
-      TxCPost (benv.withState stHistory) σ iters post ∧
+      TxCPost (benv.withState (stHistory benv)) σ iters post ∧
       applyBody benv [Sum.inr txC] [] =
         .ok (stC, requestsOutput boutTxs outW.returnData outC.returnData) ∧
       processCheckedSystemTransaction
-        (((benv.withState stBeacon).withState stHistory).withState
+        (((benv.withState (stBeacon benv)).withState (stHistory benv)).withState
           (settledState post senderE benv.stat.coinbase
             ((txC.gas - txGasUsed txC.gas 23000 post.gasLeft post.refundCounter.toNat) *
               (min 1 (8 - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)).toB256
@@ -201,23 +280,46 @@ theorem blockC_body {benv : Benv} {iters : Nat} {out : B256}
               (min 1 (8 - benv.stat.baseFeePerGas))).toB256))
         withdrawalRequestPredeployAddress [] = .ok (stW, outW) ∧
       processCheckedSystemTransaction
-        ((((benv.withState stBeacon).withState stHistory).withState
+        ((((benv.withState (stBeacon benv)).withState (stHistory benv)).withState
           (settledState post senderE benv.stat.coinbase
             ((txC.gas - txGasUsed txC.gas 23000 post.gasLeft post.refundCounter.toNat) *
               (min 1 (8 - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)).toB256
             (txGasUsed txC.gas 23000 post.gasLeft post.refundCounter.toNat *
               (min 1 (8 - benv.stat.baseFeePerGas))).toB256)).withState stW)
         consolidationRequestPredeployAddress [] = .ok (stC, outC) := by
-  set benvTx : Benv := (benv.withState stBeacon).withState stHistory with hbenvTx
-  have hstat : benvTx.stat = benv.stat := rfl
-  have hstate : benvTx.state = stHistory := rfl
+  have hbeaconCode := systemCodeInstalled_beaconRoots installed
+  have hhistoryCode := systemCodeInstalled_historyStorage installed
+  obtain ⟨hbeacon, -⟩ := stBeacon_step hfork hbeaconCode
+  obtain ⟨hhistory, -⟩ := stHistory_step hfork hbeaconCode hhistoryCode hlast
+  have hsender : (stHistory benv).get senderE = benv.state.get senderE :=
+    stHistory_get_of_installed hfork installed hlast (by decide) (by decide)
+  have hpredeploy : (stHistory benv).get withdrawalRequestPredeployAddress =
+      benv.state.get withdrawalRequestPredeployAddress :=
+    stHistory_get_of_installed hfork installed hlast (by decide) (by decide)
+  have hnonce' : ((stHistory benv).get senderE).nonce = 1 := by
+    rw [hsender]; exact hnonce
+  have hnocode' : ((stHistory benv).get senderE).code.isEmpty = true := by
+    rw [hsender]; exact hnocode
+  have hfunds' : 2 ^ 20 * 8 + 2 ^ 245 ≤ ((stHistory benv).get senderE).bal.toNat := by
+    rw [hsender]; exact hfunds
+  have hcode' : (stHistory benv).getCode withdrawalRequestPredeployAddress =
+      Blanc.withdrawalRequestCode := by
+    change ((stHistory benv).get _).code = _
+    rw [hpredeploy]
+    exact hcode
+  have hrep' : Blanc.WithdrawalRequest.RepresentsStorage
+      ((stHistory benv).getStor withdrawalRequestPredeployAddress).get σ := by
+    change Blanc.WithdrawalRequest.RepresentsStorage ((stHistory benv).get _).stor.get σ
+    rw [hpredeploy]
+    exact hrep
+  set benvTx : Benv := (benv.withState (stBeacon benv)).withState (stHistory benv) with hbenvTx
   have hrecover : recoverSender benv.stat.chainId txC = .ok senderE := by
     rw [hchain]
     exact txC_recoveredSender
   obtain ⟨post, bout', hQ, hproc, -, -, hkeys, hreceipt⟩ := txC_processTransaction
-    (benv := benv.withState stHistory) (bout := BlockOutput.init) (index := 0)
+    (benv := benv.withState (stHistory benv)) (bout := BlockOutput.init) (index := 0)
     hfork hchain hbase (by show 2 ^ 20 ≤ benv.stat.blockGasLimit - 0; exact hroom) hrecover
-    hnonce hnocode hfunds hcode hrep hbounds hexcess hrun hpaid hiters
+    hnonce' hnocode' hfunds' hcode' hrep' hbounds hexcess hrun hpaid hiters
   have hdeposit : parseDepositRequests bout' = .ok [] :=
     parseDepositRequests_of_predeploy_logs hkeys hreceipt (by
       rw [hQ.2.1]
@@ -241,33 +343,31 @@ theorem blockC_body {benv : Benv} {iters : Nat} {out : B256}
 
 /-! ## Block B -/
 
-/-- **Block B's body.**  As for block C, with `txB_processTransaction`; the flood
+/-- **Block B's body.** The two unchecked system calls are discharged via
+`BeaconRoots.processUncheckedSystemTransaction_beaconRoots` and
+`HistoryStorage.processUncheckedSystemTransaction_historyStorage`; the flood
 frame schedules no deletions (`TxBPost.no_deletions`), settling to `settledState`. -/
-theorem blockB_body {benv : Benv} {σ0 : Blanc.WithdrawalRequest.State}
-    {stBeacon stHistory : State} {outBeacon outHistory : MsgCallOutput} {lastHash : B256}
+theorem blockB_body {benv : Benv} {σ0 : Blanc.WithdrawalRequest.State} {lastHash : B256}
     (hfork : CoveredFork benv.stat.fork)
-    (hbeacon : processUncheckedSystemTransaction benv beaconRootsAddress
-      benv.stat.parentBeaconBlockRoot.toBytes = .ok (stBeacon, outBeacon))
+    (installed : SystemCodeInstalled benv.state)
     (hlast : benv.stat.blockHashes.getLast? = some lastHash)
-    (hhistory : processUncheckedSystemTransaction (benv.withState stBeacon)
-      historyStorageAddress lastHash.toBytes = .ok (stHistory, outHistory))
     (hnocap : benv.stat.rules.tx.maxGas = none)
     (hchain : benv.stat.chainId = 1)
     (hbase : benv.stat.baseFeePerGas ≤ 8)
     (hroom : 2 ^ 28 ≤ benv.stat.blockGasLimit)
-    (hnonce : (stHistory.get senderE).nonce = 0)
-    (hnocode : (stHistory.get senderE).code.isEmpty = true)
-    (hfunds : 2 ^ 28 * 8 + 2895 ≤ (stHistory.get senderE).bal.toNat)
-    (hLcode : stHistory.getCode looperAddress = Blanc.Lift.FloodLooper.code)
-    (hLbal : (stHistory.bal looperAddress).toNat + 2895 < 2 ^ 256)
-    (hcode : stHistory.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode)
+    (hnonce : (benv.state.get senderE).nonce = 0)
+    (hnocode : (benv.state.get senderE).code.isEmpty = true)
+    (hfunds : 2 ^ 28 * 8 + 2895 ≤ (benv.state.get senderE).bal.toNat)
+    (hLcode : benv.state.getCode looperAddress = Blanc.Lift.FloodLooper.code)
+    (hLbal : (benv.state.bal looperAddress).toNat + 2895 < 2 ^ 256)
+    (hcode : benv.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode)
     (hrep : Blanc.WithdrawalRequest.RepresentsStorage
-      (stHistory.getStor withdrawalRequestPredeployAddress).get σ0)
+      (benv.state.getStor withdrawalRequestPredeployAddress).get σ0)
     (hexcess : σ0.excess = 0)
     (hcountLt : σ0.count + 2895 < 2 ^ 256)
     (htailLt : Blanc.WithdrawalRequest.queueBase (σ0.tail + 2895) + 2 < 2 ^ 256)
     (hqueue : ∀ n o, σ0.tail ≤ n → n < σ0.tail + 2895 → o ≤ 2 →
-      (stHistory.getStor withdrawalRequestPredeployAddress).get
+      (benv.state.getStor withdrawalRequestPredeployAddress).get
         (Blanc.WithdrawalRequest.queueSlot n o) = 0)
     (hW : ∀ benvTxs : Benv, ∃ stW outW,
       processCheckedSystemTransaction benvTxs withdrawalRequestPredeployAddress [] =
@@ -276,11 +376,11 @@ theorem blockB_body {benv : Benv} {σ0 : Blanc.WithdrawalRequest.State}
       processCheckedSystemTransaction benvTxs consolidationRequestPredeployAddress [] =
         .ok (stC, outC)) :
     ∃ (post : Devm) (boutTxs : BlockOutput) (stW stC : State) (outW outC : MsgCallOutput),
-      TxBPost (benv.withState stHistory) σ0 post ∧
+      TxBPost (benv.withState (stHistory benv)) σ0 post ∧
       applyBody benv [Sum.inr txB] [] =
         .ok (stC, requestsOutput boutTxs outW.returnData outC.returnData) ∧
       processCheckedSystemTransaction
-        (((benv.withState stBeacon).withState stHistory).withState
+        (((benv.withState (stBeacon benv)).withState (stHistory benv)).withState
           (settledState post senderE benv.stat.coinbase
             ((txB.gas - txGasUsed txB.gas 23380 post.gasLeft post.refundCounter.toNat) *
               (min 1 (8 - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)).toB256
@@ -288,21 +388,63 @@ theorem blockB_body {benv : Benv} {σ0 : Blanc.WithdrawalRequest.State}
               (min 1 (8 - benv.stat.baseFeePerGas))).toB256))
         withdrawalRequestPredeployAddress [] = .ok (stW, outW) ∧
       processCheckedSystemTransaction
-        ((((benv.withState stBeacon).withState stHistory).withState
+        ((((benv.withState (stBeacon benv)).withState (stHistory benv)).withState
           (settledState post senderE benv.stat.coinbase
             ((txB.gas - txGasUsed txB.gas 23380 post.gasLeft post.refundCounter.toNat) *
               (min 1 (8 - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)).toB256
             (txGasUsed txB.gas 23380 post.gasLeft post.refundCounter.toNat *
               (min 1 (8 - benv.stat.baseFeePerGas))).toB256)).withState stW)
         consolidationRequestPredeployAddress [] = .ok (stC, outC) := by
-  set benvTx : Benv := (benv.withState stBeacon).withState stHistory with hbenvTx
+  have hbeaconCode := systemCodeInstalled_beaconRoots installed
+  have hhistoryCode := systemCodeInstalled_historyStorage installed
+  obtain ⟨hbeacon, -⟩ := stBeacon_step hfork hbeaconCode
+  obtain ⟨hhistory, -⟩ := stHistory_step hfork hbeaconCode hhistoryCode hlast
+  have hsender : (stHistory benv).get senderE = benv.state.get senderE :=
+    stHistory_get_of_installed hfork installed hlast (by decide) (by decide)
+  have hlooper : (stHistory benv).get looperAddress = benv.state.get looperAddress :=
+    stHistory_get_of_installed hfork installed hlast (by decide) (by decide)
+  have hpredeploy : (stHistory benv).get withdrawalRequestPredeployAddress =
+      benv.state.get withdrawalRequestPredeployAddress :=
+    stHistory_get_of_installed hfork installed hlast (by decide) (by decide)
+  have hnonce' : ((stHistory benv).get senderE).nonce = 0 := by
+    rw [hsender]; exact hnonce
+  have hnocode' : ((stHistory benv).get senderE).code.isEmpty = true := by
+    rw [hsender]; exact hnocode
+  have hfunds' : 2 ^ 28 * 8 + 2895 ≤ ((stHistory benv).get senderE).bal.toNat := by
+    rw [hsender]; exact hfunds
+  have hLcode' : (stHistory benv).getCode looperAddress = Blanc.Lift.FloodLooper.code := by
+    change ((stHistory benv).get _).code = _
+    rw [hlooper]
+    exact hLcode
+  have hLbal' : ((stHistory benv).bal looperAddress).toNat + 2895 < 2 ^ 256 := by
+    change ((stHistory benv).get _).bal.toNat + 2895 < 2 ^ 256
+    rw [hlooper]
+    exact hLbal
+  have hcode' : (stHistory benv).getCode withdrawalRequestPredeployAddress =
+      Blanc.withdrawalRequestCode := by
+    change ((stHistory benv).get _).code = _
+    rw [hpredeploy]
+    exact hcode
+  have hrep' : Blanc.WithdrawalRequest.RepresentsStorage
+      ((stHistory benv).getStor withdrawalRequestPredeployAddress).get σ0 := by
+    change Blanc.WithdrawalRequest.RepresentsStorage ((stHistory benv).get _).stor.get σ0
+    rw [hpredeploy]
+    exact hrep
+  have hqueue' : ∀ n o, σ0.tail ≤ n → n < σ0.tail + 2895 → o ≤ 2 →
+      ((stHistory benv).getStor withdrawalRequestPredeployAddress).get
+        (Blanc.WithdrawalRequest.queueSlot n o) = 0 := by
+    intro n o hn htail ho
+    change ((stHistory benv).get _).stor.get _ = 0
+    rw [hpredeploy]
+    exact hqueue n o hn htail ho
+  set benvTx : Benv := (benv.withState (stBeacon benv)).withState (stHistory benv) with hbenvTx
   have hrecover : recoverSender benv.stat.chainId txB = .ok senderE := by
     rw [hchain]
     exact txB_recoveredSender
   obtain ⟨post, bout', hQ, hproc, -, -, hkeys, hreceipt⟩ := txB_processTransaction
-    (benv := benv.withState stHistory) (bout := BlockOutput.init) (index := 0)
+    (benv := benv.withState (stHistory benv)) (bout := BlockOutput.init) (index := 0)
     hfork hnocap hchain hbase (by show 2 ^ 28 ≤ benv.stat.blockGasLimit - 0; exact hroom)
-    hrecover hnonce hnocode hfunds hLcode hLbal hcode hrep hexcess hcountLt htailLt hqueue
+    hrecover hnonce' hnocode' hfunds' hLcode' hLbal' hcode' hrep' hexcess hcountLt htailLt hqueue'
   have hdeposit : parseDepositRequests bout' = .ok [] :=
     parseDepositRequests_of_predeploy_logs hkeys hreceipt (by
       rw [hQ.2.2.1]
