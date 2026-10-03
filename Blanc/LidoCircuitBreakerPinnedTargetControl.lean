@@ -1763,6 +1763,42 @@ structure RetainedWriteFixture where
   settle : (Frame.ofCall retainedWriteMsg).settle (.ok rootPost) = .ok settled
   settledClean : settled.error = none
 
+def retainedWriteFixture? : Option RetainedWriteFixture :=
+  match enter : (Frame.ofCall retainedWriteMsg).enter with
+  | .run rootEvm =>
+      match rawExec : exec rootEvm with
+      | .ok rootPost =>
+          if rootClean : rootPost.error = none then
+            if rootTarget : rootEvm.sta.currentTarget =
+                retainedWriteTarget then
+              if rootChanged :
+                  (Devm.getStor rootEvm.dyna
+                      retainedWriteCircuitBreaker).get retainedWriteKey ≠
+                    (Devm.getStor rootPost
+                      retainedWriteCircuitBreaker).get retainedWriteKey then
+                match settle : (Frame.ofCall retainedWriteMsg).settle
+                    (.ok rootPost) with
+                | .ok settled =>
+                    if settledClean : settled.error = none then
+                      some {
+                        rootEvm := rootEvm
+                        rootPost := rootPost
+                        settled := settled
+                        enter := enter
+                        rawExec := rawExec
+                        rootClean := rootClean
+                        rootTarget := rootTarget
+                        rootChanged := rootChanged
+                        settle := settle
+                        settledClean := settledClean }
+                    else none
+                | .error _ => none
+              else none
+            else none
+          else none
+      | .error _ => none
+  | .done _ => none
+
 private noncomputable def RetainedWriteFixture.run
     (w : RetainedWriteFixture) :
     Exec w.rootEvm.pc w.rootEvm.sta w.rootEvm.dyna (.ok w.rootPost) :=

@@ -906,7 +906,8 @@ written where the environment records no trace: in the lemma list of a `simp`, `
 `syntax`, `elab` or `notation` command, in an `attribute [..]` command, or as a double-backtick name
 literal (``` ``foo`` ```, a rule table naming its lemmas: the elaborator resolves it, the term does not
 contain it), of any
-`Blanc/**/*.lean` file (comments and string contents stripped; a `-name` erases and is not a use;
+`Blanc/**/*.lean` file (comments and literal string contents stripped, executable terms inside
+standard string interpolations retained; a `-name` erases and is not a use;
 a token is resolved like an identifier, innermost enclosing namespace first and then the active
 `open`s, and counts only if it names a Blanc declaration). An `rfl`-proved lemma named only in a
 `simp only [..]` leaves no term in the proof, so the census alone would call it a leaf; the source
@@ -920,7 +921,9 @@ exemption loses the simp leaves. The published `leaf-count.json` count remains t
 Definition leaves are printed informationally by `check` and reviewed separately. The source scan
 also reports exact identifier mentions in tracked `scripts/` text and `Main.lean` as
 `external_consumers` on rows. Mentions in Lean proof files count as uses; mentions in shell/Python
-gate scripts are report-only. Whether a leaf is worth keeping is a human judgement made by a
+gate scripts are report-only. Method-style references with a named declaration receiver, such as
+`selectors.map`, credit that receiver after checking for an exact complete declaration name.
+Whether a leaf is worth keeping is a human judgement made by a
 periodic sweep; nothing here decides it.
 
 **The count.** `scripts/check.sh` prints `LEAF-COUNT N` and requires `N`, with its public and

@@ -108,48 +108,99 @@ class LeafAuditError(Exception):
 # Source text: comment and string stripping
 # --------------------------------------------------------------------------------------------
 
-_LEXEME = re.compile(r"/-|--[^\n]*|\"(?:[^\"\\]|\\.)*\"|(?<![\w'])'(?:\\.[^']*|[^'\\])'", re.S)
-_BLOCK = re.compile(r"/-|-/")
+_CHAR = re.compile(r"(?<![\w'])'(?:\\.[^']*|[^'\\])'", re.S)
+_RAW_STRING = re.compile(r'(?<![\w\'])r(\#*)"')
+_INTERPOLATED_PREFIX = re.compile(
+    r"(?<![\w'.])(?:[smf]!|dbg_trace|throwError|println!|"
+    r"(?:Macro\.)?trace\[[^\]\n]+\])\s*$")
 
 
 def strip_comments_and_strings(text: str, label: str = "source") -> str:
-    """Blank `--` and nested `/- -/` comments and the contents of string and char literals.
+    """Mask literal text, retaining executable terms in interpolated strings.
 
-    Offsets, newlines and every other character are preserved, so a position in the result is the
-    position in the source. String delimiters survive, their contents do not: a lemma name written
-    in a docstring, a comment or a message string is not a use. Inside a block comment only the
-    nesting delimiters mean anything (`--` is not special there, as in Lean).
+    Offsets/newlines and quote delimiters survive. Ordinary strings, raw strings,
+    chars, and nested comments cannot credit a declaration use. The standard
+    s!/m!/f! formatters and direct diagnostic forms retain their {...} terms,
+    including nested strings, comments, records and further interpolations.
+    Lean escapes a literal interpolation opener as \\{ (not doubled braces).
     """
 
-    out: List[str] = []
-    pos = 0
-    last = 0
+    out = list(text)
     n = len(text)
-    while pos < n:
-        m = _LEXEME.search(text, pos)
-        if m is None:
-            break
-        tok = m.group(0)
-        out.append(text[last:m.start()])
-        if tok == "/-":
-            depth = 1
-            end = m.end()
-            while depth:
-                b = _BLOCK.search(text, end)
-                if b is None:
-                    raise LeafAuditError(f"{label}: unterminated block comment")
-                depth += 1 if b.group(0) == "/-" else -1
-                end = b.end()
-            out.append(re.sub(r"[^\n]", " ", text[m.start():end]))
-            pos = last = end
-        elif tok.startswith("--"):
-            out.append(" " * len(tok))
-            pos = last = m.end()
-        else:
-            quote = tok[0]
-            out.append(quote + re.sub(r"[^\n]", " ", tok[1:-1]) + quote)
-            pos = last = m.end()
-    out.append(text[last:])
+
+    def blank(start: int, end: int) -> None:
+        for i in range(start, end):
+            if text[i] != "\n":
+                out[i] = " "
+
+    def block(start: int) -> int:
+        depth, pos = 1, start + 2
+        while pos < n:
+            if text.startswith("/-", pos):
+                depth += 1
+                pos += 2
+            elif text.startswith("-/", pos):
+                depth -= 1
+                pos += 2
+                if not depth:
+                    blank(start, pos)
+                    return pos
+            else:
+                pos += 1
+        raise LeafAuditError(f"{label}: unterminated block comment")
+
+    def string(start: int, interpolated: bool) -> int:
+        pos = start + 1
+        while pos < n:
+            if text[pos] == '"':
+                return pos + 1
+            if text[pos] == "\\":
+                blank(pos, min(pos + 2, n))
+                pos += 2
+            elif interpolated and text[pos] == "{":
+                pos = code(pos + 1, interpolation=True)
+            else:
+                blank(pos, pos + 1)
+                pos += 1
+        raise LeafAuditError(f"{label}: unterminated string literal")
+
+    def code(start: int, interpolation: bool = False) -> int:
+        pos, braces = start, 0
+        while pos < n:
+            if text.startswith("/-", pos):
+                pos = block(pos)
+            elif text.startswith("--", pos):
+                end = text.find("\n", pos)
+                end = n if end < 0 else end
+                blank(pos, end)
+                pos = end
+            elif raw := _RAW_STRING.match(text, pos):
+                end = text.find('"' + raw.group(1), raw.end())
+                if end < 0:
+                    raise LeafAuditError(f"{label}: unterminated raw string literal")
+                blank(raw.end(), end)
+                pos = end + 1 + len(raw.group(1))
+            elif text[pos] == '"':
+                prefix = "".join(out[:pos])
+                pos = string(pos, bool(_INTERPOLATED_PREFIX.search(prefix)))
+            elif char := _CHAR.match(text, pos):
+                blank(pos + 1, char.end() - 1)
+                pos = char.end()
+            elif interpolation and text[pos] == "{":
+                braces += 1
+                pos += 1
+            elif interpolation and text[pos] == "}":
+                if not braces:
+                    return pos + 1
+                braces -= 1
+                pos += 1
+            else:
+                pos += 1
+        if interpolation:
+            raise LeafAuditError(f"{label}: unterminated string interpolation")
+        return pos
+
+    code(0)
     return "".join(out)
 
 
@@ -432,6 +483,12 @@ def scan_external_sources(sources: Dict[str, str], population: Set[str]
             found: Optional[str] = None
             # Outside Lean a closing quote is not an identifier character (`'Name'`, `"Name"`).
             tokens = [token] if is_lean else list(dict.fromkeys([token, token.rstrip("'")]))
+            if is_lean:
+                # Prefer a complete declaration name. If none resolves, field notation
+                # such as `runtimeSelectors.map` still uses its declaration receiver.
+                # Match whole dotted components, never arbitrary string prefixes.
+                parts = token.split(".")
+                tokens += [".".join(parts[:i]) for i in range(len(parts) - 1, 0, -1)]
             for candidate in (c for t in tokens for c in _candidates(t, ns, opens)):
                 if candidate in population:
                     found = candidate
@@ -986,6 +1043,10 @@ def scan_controls() -> List[str]:
         ("comment", "-- simp [foo]\ntheorem t : True := by trivial\n", set()),
         ("block comment", "/- rw [foo] -/\ntheorem t : True := by trivial\n", set()),
         ("string", 'theorem t : String := "simp [foo]"\n', set()),
+        ("interpolated term tactic", 'def t := s!"literal simp [foo] {by simp only [A.B.bar]}"',
+         {"A.B.bar"}),
+        ("interpolated nested string", 'def t := s!"{String.intercalate "simp [foo]" xs}"', set()),
+        ("raw string", 'def t := r##"simp [foo] /- "more" -/"##', set()),
         ("not a tactic list", "theorem t : True := by exact foo\n", set()),
         ("projection of a lemma", "theorem t : True := by rw [foo.symm]\n", {"foo"}),
         ("macro body names a theorem", "namespace A\nmacro \"m\" : tactic => `(tactic| exact mac)\n"
@@ -1003,6 +1064,55 @@ def scan_controls() -> List[str]:
         got = set(scan_uses({"M": text}, population))
         if got != expected:
             failures.append(f"source scan {label}: expected {sorted(expected)}, got {sorted(got)}")
+    # Actual regression: evaluator terms inside s! were erased along with literal text.
+    # Both positive uses and same-spelled literal non-uses matter to leaf classification.
+    interpolation_cases = [
+        ("ordinary literal", '"{A.foo}"', set()),
+        ("ordinary message argument", 'logError "{A.foo}"', set()),
+        ("qualified message argument", 'Lean.throwError "{A.foo}"', set()),
+        ("raw literal", 'r##"{A.foo} " /- --"##', set()),
+        ("raw zero hashes", 'r"{A.foo}"', set()),
+        ("s formatter", 's!"A.foo {A.B.bar}"', {"A.B.bar"}),
+        ("m formatter", 'm!"{A.foo}"', {"A.foo"}),
+        ("f formatter", 'f!"{A.foo}"', {"A.foo"}),
+        ("comment before quote", 's! /- {A.foo} -/ "{A.B.bar}"', {"A.B.bar"}),
+        ("nested record", 's!"{({field := A.foo, other := {field := A.B.bar}})}"',
+         {"A.foo", "A.B.bar"}),
+        ("nested string", 's!"{String.intercalate "A.foo" [A.B.bar]}"', {"A.B.bar"}),
+        ("nested formatter", 's!"{s!"A.foo {A.B.bar}"}"', {"A.B.bar"}),
+        ("nested comments", 's!"{/- } /- A.foo -/ -/ A.B.bar}"', {"A.B.bar"}),
+        ("line comment", 's!"{-- } A.foo\n A.B.bar}"', {"A.B.bar"}),
+        ("character brace", "s!\"{('{', A.foo, '}')}\"", {"A.foo"}),
+        ("escaped opener", r's!"\{A.foo} {A.B.bar}"', {"A.B.bar"}),
+        ("escaped quote", r's!"\" A.foo {A.B.bar}"', {"A.B.bar"}),
+        ("println formatter", 'println! "{A.foo}"', {"A.foo"}),
+        ("throwError formatter", 'throwError "{A.foo}"', {"A.foo"}),
+        ("trace formatter", 'trace[Blanc.test] "{A.foo}"', {"A.foo"}),
+        ("namespace in interpolation", 'namespace A\ndef t := s!"{foo}"\nend A', {"A.foo"}),
+        ("method receiver", 'namespace A\ndef t := B.bar.map f\nend A', {"A.B.bar"}),
+        ("chained projections", 'def t := A.B.bar.toList.length', {"A.B.bar"}),
+        ("exact name before receiver", 'def t := A.B.bar', {"A.B.bar"}),
+        ("no partial component", 'def t := A.B.barSuffix.map f', set()),
+    ]
+    for label, text, expected in interpolation_cases:
+        masked = strip_comments_and_strings(text, label)
+        if len(masked) != len(text) or [i for i, c in enumerate(masked) if c == "\n"] != [
+                i for i, c in enumerate(text) if c == "\n"]:
+            failures.append(f"interpolation {label}: changed offsets or newlines")
+        external, used = scan_external_sources({"scripts/Eval.lean": text}, population)
+        if used != expected or set(external) != expected:
+            failures.append(f"interpolation {label}: expected {sorted(expected)}, got {sorted(used)}")
+    for malformed in ['s!"{A.foo', 's!"literal', '/- unclosed', 'r##"unclosed"#']:
+        try:
+            strip_comments_and_strings(malformed, "malformed fixture")
+        except LeafAuditError:
+            pass
+        else:
+            failures.append(f"malformed literal did not fail closed: {malformed!r}")
+    exact_external, exact_uses = scan_external_sources(
+        {"scripts/Eval.lean": "def t := A.foo.map"}, {"A.foo", "A.foo.map"})
+    if exact_uses != {"A.foo.map"} or set(exact_external) != {"A.foo.map"}:
+        failures.append("field notation: complete declaration name must win over receiver")
     # a private leaf is credited only inside its own module (`analyze` checks the module)
     return failures
 
@@ -1257,12 +1367,16 @@ def self_test(root: Path) -> int:
 
     # External consumers: a Lean proof file removes a leaf, while a shell/Python mention is
     # retained on the row as report-only evidence.
+    # Elaborate the interpolation regression too: this is executable evaluator syntax,
+    # even though these tracked scripts are not imported into the library census.
+    interpolation_source = '#eval IO.println s!"literal LeafFixture.simp_only_fact {LeafFixture.definition_leaf.succ}"\n'
+    census_of(base + "\n" + interpolation_source)
     checks += 1
     external, lean_external = scan_external_sources(
         {"scripts/check-fixture.sh": "echo LeafFixture.definition_leaf\n",
          "scripts/check-fixture.py": "print('LeafFixture.definition_leaf')  # a /- in Python text\n",
-         "scripts/ProofFixture.lean": "theorem t : LeafFixture.definition_leaf = 41 := rfl\n"},
-        {ns + "definition_leaf"})
+         "scripts/ProofFixture.lean": interpolation_source},
+        {ns + "definition_leaf", ns + "simp_only_fact"})
     external_result = analyze(base_census, {"_current": base}, external, lean_external)
     ext_rows = [r for r in external_result["definition_leaves"]
                 if r["name"] == ns + "definition_leaf"]

@@ -66,9 +66,17 @@ def runtimePatchControlsValid : Bool :=
     runtimePatchIdentityValid ⟨0xabcdefabcdefabcdefabcdefabcdefabcdefabcd⟩
 
 
+def lidoTwgSelectors : List B256 :=
+  (funcs zeroDeployParams).map Prod.fst
+
 def eip170RuntimeLimit : Nat := 24576
 
 def lidoTwgCodeSize (dp : DeployParams) : Nat := (lidoTwgCode dp).length
+
+def runtimeTemplateCodeSize : Nat := runtimeTemplateCode.length
+
+def lidoTwgCodeHeadroom (dp : DeployParams) : Nat :=
+  eip170RuntimeLimit - lidoTwgCodeSize dp
 
 
 end LidoTriggerableWithdrawalsGateway

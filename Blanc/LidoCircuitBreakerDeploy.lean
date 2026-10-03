@@ -18,6 +18,8 @@ open Jaune.Ninst Ninst
 
 namespace LidoCircuitBreaker
 
+def eip3860InitcodeLimit : Nat := 49152
+
 def constructorArgumentBytes : Nat := 7 * 32
 
 private def constructorRuntimeBase : Nat := constructorArgumentBytes

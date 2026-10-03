@@ -17,6 +17,9 @@ open Jaune
 def code : Bytes :=
   (Prog.compile runtime).getD []
 
+def selectors : List B256 :=
+  funcs.map Prod.fst
+
 def eip170RuntimeLimit : Nat :=
   pragueCodeLimits.maxCodeSize
 

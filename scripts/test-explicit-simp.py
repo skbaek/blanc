@@ -114,6 +114,10 @@ REGISTRATION_TESTS = [
 ]
 
 IMPLICIT_TACTIC_TESTS = [
+    TestCase("interpolated_term", 'def x := s!"{show Nat from by simp}"', True, "implicit-simp", "implicit-tactic"),
+    TestCase("interpolated_literal", 'def x := s!"simp [foo] {1}"', False),
+    TestCase("interpolated_nested_literal", 'def x := s!"{String.intercalate "simp" xs}"', False),
+    TestCase("raw_literal", 'def x := r##"simp [foo]"##', False),
     TestCase("tactic_simp_bare", "example : True := by simp", True, "implicit-simp", "implicit-tactic"),
     TestCase("tactic_simp_semicolon", "example : True := by simp; done", True, "implicit-simp", "implicit-tactic"),
     TestCase("tactic_simp_list", "example : True := by simp [foo, bar]", True, "implicit-simp", "implicit-tactic"),
