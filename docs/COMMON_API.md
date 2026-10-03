@@ -3113,6 +3113,14 @@ contract-neutral.
   are linear per instruction and a 1,474-node entry of the 6,358-byte beacon
   deposit contract passed 16 GiB, while the trie decides it in 6 s / 3.4 GiB
   (`Blanc/Lift/BeaconDeposit/Check.lean` is the template).
+- For a plain singleton certificate whose only entry starts at pc0 with an
+  empty frame, use `Cert.check_singleton` in
+  [`Blanc/Lift/CheckAssembly.lean`](../Blanc/Lift/CheckAssembly.lean). It assembles
+  the unchanged `checkNode` proof for that entry into `Cert.check`; the entry
+  check remains an explicit premise. The registered producer uses it for the
+  Pair creation and Vminus Attacker2 certificates. Singleton shape is hidden
+  behind named certificate definitions, so discovery stays here without a
+  broad execution-relation tactic trigger.
 - To relate the unsigned ABI word-length guards to a natural calldata bound,
   use `word_calldata_guards_iff` in
   [`Blanc/Lift/CalldataGuards.lean`](../Blanc/Lift/CalldataGuards.lean).

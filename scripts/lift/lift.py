@@ -2370,17 +2370,25 @@ def check_source() -> Any:
             "",
         ])
     n = len(cert_entries_lines)
-    assembly = [
-        "theorem cert_check : Cert.check code cert = true := by",
-        "  unfold Cert.check",
-        "  rw [Bool.and_eq_true]",
-        "  refine ⟨by decide +kernel, ?_⟩",
-        "  rw [List.all_eq_true]",
-        "  intro p hp",
-        "  simp only [cert, List.mem_cons, List.not_mem_nil, or_false] at hp",
-        "  rcases hp with " + " | ".join(["rfl"] * n),
-    ]
-    assembly.extend(f"  · exact entry_{i}" for i in range(n))
+    # For one entry, the parsed pc/frame above describe the certificate root.
+    if n == 1 and int(pc, 16) == 0 and frame == "[]":
+        lines.insert(2, "import Blanc.Lift.CheckAssembly")
+        assembly = [
+            "theorem cert_check : Cert.check code cert = true :=",
+            "  Cert.check_singleton entry_0",
+        ]
+    else:
+        assembly = [
+            "theorem cert_check : Cert.check code cert = true := by",
+            "  unfold Cert.check",
+            "  rw [Bool.and_eq_true]",
+            "  refine ⟨by decide +kernel, ?_⟩",
+            "  rw [List.all_eq_true]",
+            "  intro p hp",
+            "  simp only [cert, List.mem_cons, List.not_mem_nil, or_false] at hp",
+            "  rcases hp with " + " | ".join(["rfl"] * n),
+        ]
+        assembly.extend(f"  · exact entry_{i}" for i in range(n))
     files = split_check(lines, blocks, assembly)
     return files if args.check_parts >= 2 else files["Check"]
 
