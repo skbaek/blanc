@@ -1941,4 +1941,80 @@ theorem mintBalanceRequests_exact {sevm : Sevm} {b d0 d1 : Devm}
     (by simp only [List.length_cons]; omega) call0 success0 (by omega) long0 decoded0
   exact mintFirstRequest_exact fork mem room code0 observed0
 
+/-- Checked amounts, the real factory call, all fee arms and both pricing arms construct
+one complete callee-local continuation from primitive guards and charges. -/
+theorem mintFeePricing_exact {sevm : Sevm} {b d : Devm} {R : List B256} {M : Mem}
+    {feeResidual finalGas callGas sourceCost supplyCost loadCost creditCost : Nat}
+    {b1 b0 r1 r0 toWord ρ : B256}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112)
+    (balanceBound0 : b0.toNat < 2 ^ 112) (balanceBound1 : b1.toNat < 2 ^ 112)
+    (cover0 : r0 ≤ b0) (cover1 : r1 ≤ b1) (room : R.length ≤ 990)
+    (code : ((feeFactoryLoadWorld sevm b).getCode (feeFactoryWord sevm b).toAdr).size.toB256 ≠ 0)
+    (call : Ninst.RunCompiled sevm
+      (St (feeFactoryCallWorld sevm b)
+        (callGas.toB256 :: feeFactoryWord sevm b :: 128 :: 4 :: 128 :: 32 ::
+          132 :: 0x017e7e58 :: feeFactoryWord sevm b :: 0 :: 0 :: r1 :: r0 :: 0x1233 ::
+          mintFeeLocals (b1-r1) (b0-r0) b1 b0 r1 r0 toWord ρ R)
+        (feeRequestMemory M) callGas) (.exec .staticcall) d)
+    (success : d.stack = 1 :: 132 :: 0x017e7e58 :: feeFactoryWord sevm b ::
+      0 :: 0 :: r1 :: r0 :: 0x1233 :: mintFeeLocals (b1-r1) (b0-r0) b1 b0 r1 r0 toWord ρ R)
+    (width : 32 ≤ d.returnData.length)
+    (returnedGas : d.gasLeft = feeResidual +
+      feeBranchCharge sevm (feeKLastWorld sevm d) (feeKLastWord sevm d)
+        (Bytes.toB256 (d.returnData.take 32)) r0 r1 sourceCost supplyCost loadCost creditCost +
+      sloadCost sevm d 11 + 120)
+    (forward : FeeBranchForward sevm (feeKLastWorld sevm d) (feeKLastWord sevm d)
+      (Bytes.toB256 (d.returnData.take 32)) r0 r1 feeResidual sourceCost supplyCost loadCost creditCost)
+    (pricing : MintAfterFeeEnv sevm
+      (feeBranchPost sevm (feeKLastWorld sevm d)
+        (mintFeeLocals (b1-r1) (b0-r0) b1 b0 r1 r0 toWord ρ R)
+        (feeReplyMemory M d.returnData) (feeKLastWord sevm d)
+        (Bytes.toB256 (d.returnData.take 32)) r0 r1 feeResidual)
+      (feeOnWord (Bytes.toB256 (d.returnData.take 32))) toWord (b0-r0) (b1-r1) b0 b1 r0 r1 finalGas)
+    (residualCharge : feeResidual = pricing.armGas + sloadCost sevm
+      (feeBranchPost sevm (feeKLastWorld sevm d)
+        (mintFeeLocals (b1-r1) (b0-r0) b1 b0 r1 r0 toWord ρ R)
+        (feeReplyMemory M d.returnData) (feeKLastWord sevm d)
+        (Bytes.toB256 (d.returnData.take 32)) r0 r1 feeResidual) 0 + 28) :
+    SFunc.RunExact cert.prog sevm
+      (St b (b1 :: 0 :: b0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R) M
+        (callGas + sloadCost sevm b 5 +
+          temporalAccountAccessCost (feeFactoryLoadWorld sevm b) (feeFactoryWord sevm b).toAdr + 360))
+      MintBalanceSite.second.afterDecodeTree
+      (.returned (pricing.post
+        (feeBranchPost sevm (feeKLastWorld sevm d)
+          (mintFeeLocals (b1-r1) (b0-r0) b1 b0 r1 r0 toWord ρ R)
+          (feeReplyMemory M d.returnData) (feeKLastWord sevm d)
+          (Bytes.toB256 (d.returnData.take 32)) r0 r1 feeResidual).memory R ρ)) := by
+  let feePost := feeBranchPost sevm (feeKLastWorld sevm d)
+    (mintFeeLocals (b1-r1) (b0-r0) b1 b0 r1 r0 toWord ρ R)
+    (feeReplyMemory M d.returnData) (feeKLastWord sevm d)
+    (Bytes.toB256 (d.returnData.take 32)) r0 r1 feeResidual
+  have machine := mintFeePost_machine (sevm := sevm) (b := feeKLastWorld sevm d)
+    (R := mintFeeLocals (b1-r1) (b0-r0) b1 b0 r1 r0 toWord ρ R)
+    (K := feeKLastWord sevm d) (w := Bytes.toB256 (d.returnData.take 32))
+    (r0 := r0) (r1 := r1) (G := feeResidual)
+    (feeReplyMemory_ptr d.returnData (feeRequestMemory_ptr mem))
+  have priced := mintAfterFee_exact (R := R) (oldLiquidity := 0) (ρ := ρ) fork machine.2 bound0 bound1
+    balanceBound0 balanceBound1 (by omega) pricing
+  have self : feePost = St feePost
+      (feeOnWord (Bytes.toB256 (d.returnData.take 32)) :: 0 :: (b1-r1) :: (b0-r0) ::
+        b1 :: b0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R) feePost.memory feeResidual := by
+    have gas : feePost.gasLeft = feeResidual :=
+      (feeBranchPost_facts (st := { State.empty 0 0 with kLast := feeKLastWord sevm d })).2.1
+    have eq := St.self (d := feePost) (by simpa only [feePost,mintFeeLocals] using machine.1) rfl
+    rw [gas] at eq
+    exact eq
+  have suffix : SFunc.RunExact cert.prog sevm feePost t_1233_c41
+      (.returned (pricing.post feePost.memory R ρ)) := by
+    rw [self]
+    simpa only [feePost,← residualCharge,St,Devm.memory_setMach] using priced
+  have callee := fee68_exact fork mem bound0 bound1 (by simp only [mintFeeLocals,List.length_cons]; omega)
+    code call success width returnedGas forward
+  have composed := mintAmountsFee_exact bound0 bound1 cover0 cover1 (by omega) callee
+    (SFunc.runExact_iff_runExactCut_nil.mp suffix)
+  have raw := SFunc.runExact_iff_runExactCut_nil.mpr composed
+  convert raw using 1
+
 end Blanc.Lift.UniswapV2Pair
