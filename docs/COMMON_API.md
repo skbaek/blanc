@@ -182,6 +182,15 @@ registry has identified the likely vocabulary.
   code, addresses, logs, account-deletion set, output, and error; the
   target-storage, refund-counter, and key-set equations expose the selected
   write, refund update, and warm/cold access update.  The lower
+  whole-machine transport uses `afterSload_setMach`, `afterSstore_setMach`
+  and `addLog_setMach` from
+  [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean). They commute each
+  selected world update with `Devm.setMach`, preserving warm keys, refunds and
+  logs while a caller changes stack, memory and gas. Apply them over a symbolic
+  base before substituting a concrete machine image. The existing recipe
+  `devm-common-update-law` matches exposed `memWrite`, `addAccessedStorageKey`
+  or `setStorVal`, not these whole carrier equalities; discovery stays here
+  instead of broadening that trigger or unfolding a concrete state tower. The lower
   one-write primitive is `setStorVal_getStor_ne` in
   [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean).
 - For TWG trigger packets, local-call rebasing commutes with constant-store
@@ -918,6 +927,14 @@ path list across a proved frame-entry-free span at any supplied parent path and
 child counter. Both ends use the same counter; childless completed messages
 outside that span still count. Obtain the span from actual execution evidence.
 This equality supplies no root commitment or chosen child occurrence by itself.
+`Exec.Deriv.ParentStep.descendantFramePaths_spawn_suffix` crosses one actual
+spawning parent edge: its exact settlement-filtered child prefix is followed by
+that same parent continuation at counter `index + 1`. A childless completed
+message contributes an empty prefix and still advances the counter. Combine
+this with proved entry-free spans to retain the original ordered suffix; a
+membership witness or selected index is not a substitute. This theorem does
+not supply root commitment, an entering witness or an exhaustive source replay.
+Its joint edge/spawn premises retain the same registry-only discovery boundary.
 Existing discovery and suggestion facilities were checked. The existential
 membership goal alone does not identify the available occurrence, root-prefix,
 spawn and process witnesses; current matchers do not inspect this joint local

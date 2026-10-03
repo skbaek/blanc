@@ -341,6 +341,19 @@ theorem afterSload_stateGas {sevm : Sevm} {base : Devm} {key : B256} :
   unfold afterSload
   split <;> rfl
 
+/-- Selected `SLOAD` commutes with replacement of the machine registers. -/
+theorem afterSload_setMach {sevm : Sevm} {base : Devm} {mach : Mach} {key : B256} :
+    afterSload sevm (base.setMach mach) key = (afterSload sevm base key).setMach mach := by
+  unfold afterSload
+  by_cases warm : (sevm.currentTarget, key) ∈ base.accessedStorageKeys
+  · simp only [Devm.setMach_accessedStorageKeys, warm, ite_true]
+  · simp only [Devm.setMach_accessedStorageKeys, warm, ite_false]
+    rfl
+
+/-- Adding a log commutes with replacement of the machine registers. -/
+theorem addLog_setMach {base : Devm} {mach : Mach} {log : Jaune.Log} :
+    (base.setMach mach).addLog log = (base.addLog log).setMach mach := rfl
+
 private lemma addAccessedStorageKey_setMach_setMach_selected
     {base : Devm} {target : Adr} {key : B256} {mach mach' : Mach} :
     (addAccessedStorageKey (base.setMach mach) target key).setMach mach' =
@@ -440,28 +453,22 @@ theorem Ninst.runCompiled_sstore_selected
     sstoreCost sevm (base.setMach mach) key value =
       sstoreCost sevm base key value := rfl
 
-private lemma accessedStorageKeys_setMach_selected
-    {base : Devm} {mach : Mach} :
-    (base.setMach mach).accessedStorageKeys =
-      base.accessedStorageKeys := rfl
+/-- Selected `SSTORE` commutes with replacement of the machine registers. -/
+theorem afterSstore_setMach {sevm : Sevm} {base : Devm} {mach : Mach} {key value : B256} :
+    afterSstore sevm (base.setMach mach) key value = (afterSstore sevm base key value).setMach mach := by
+  unfold afterSstore
+  by_cases warm : (sevm.currentTarget, key) ∈ base.accessedStorageKeys
+  · simp only [Devm.setMach_accessedStorageKeys, Devm.getStorVal_setMach, Devm.setMach_refundCounter, warm, ite_true]
+    rfl
+  · simp only [Devm.setMach_accessedStorageKeys, Devm.getStorVal_setMach, Devm.setMach_refundCounter, warm, ite_false]
+    rfl
 
 private lemma afterSstore_setMach_setMach_selected
     {sevm : Sevm} {base : Devm} {mach mach' : Mach}
     {key value : B256} :
     (afterSstore sevm (base.setMach mach) key value).setMach mach' =
       (afterSstore sevm base key value).setMach mach' := by
-  unfold afterSstore
-  by_cases hwarm :
-      (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
-        base.accessedStorageKeys
-  · simp only [accessedStorageKeys_setMach_selected,
-      Devm.getStorVal_setMach, Devm.setMach_refundCounter,
-      hwarm, if_pos]
-    rfl
-  · simp only [accessedStorageKeys_setMach_selected,
-      Devm.getStorVal_setMach, Devm.setMach_refundCounter,
-      hwarm]
-    rfl
+  rw [afterSstore_setMach, Devm.setMach_setMach]
 
 /-- The selected warm/cold `SSTORE` rule specialized to a caller-owned
 machine image.  The selected cost and successor remain phrased over the
