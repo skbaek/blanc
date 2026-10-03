@@ -92,7 +92,6 @@ theorem migration_sound (proxyProg : Prog) (proxy : Adr) :
 inductive SharedCall where
   | value
   | setValue (word : B256)
-deriving DecidableEq
 
 def sharedCalldata : SharedCall → Bytes
   | .value => valueCalldata

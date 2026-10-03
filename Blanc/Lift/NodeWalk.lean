@@ -290,11 +290,6 @@ def pstepH (pol : HashPol) {code : ByteArray} {d : Nat} (T : CodeTries code d) (
   | some (.last .selfdestruct) => .stuck
   | some (.last l) => .halt (l.run sevm c.devm)
 
-/-- One instruction, `KECCAK256` refused (`pstepH .refuse`). -/
-def pstep {code : ByteArray} {d : Nat} (T : CodeTries code d) (sevm : Sevm) (c : PCfg) :
-    PRes :=
-  pstepH .refuse T sevm c
-
 /-- At most `n` steps under the hash policy `pol`, each first checking `ok` at its pc. -/
 def pwalkH (pol : HashPol) {code : ByteArray} {d : Nat} (T : CodeTries code d) (sevm : Sevm)
     (ok : Nat → Bool) : Nat → PCfg → PRes

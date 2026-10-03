@@ -85,11 +85,6 @@ inductive RecipientAccountCase (w : Jaune.State) (recipient : Adr) : Prop
   | empty (h : (w.get recipient).Empty)
   | existing (h : ¬ (w.get recipient).Empty)
 
-/-- Child gas added by EVM value-call semantics.  This is not an additional
-caller-paid charge: the nonzero branch is covered by `gasCallValue`. -/
-def redemptionChildSupplement (q : Nat) : Nat :=
-  if q = 0 then 0 else gCallStipend
-
 /-- Gas charged by the balanced selector walk before entering either body. -/
 def redemptionSelectorDispatchGas : Nat := 182
 
@@ -115,22 +110,12 @@ def redemptionStorageWriteWorstGas : Nat :=
 
 def redemptionSuccessTailGas : Nat := 16
 
-def redemptionStorageReadCharge
-    (accessed : KeySet) (ca owner : Adr) : Nat :=
-  if (ca, owner.toB256) ∈ accessed then gasWarmAccess else gasColdSload
-
 def redemptionRecipientCreationCharge
     (w : State) (recipient : Adr) (q : Nat) : Nat :=
   if ¬ (w.get recipient).Empty ∨ q = 0 then 0 else gNewAccount
 
 def redemptionValueCallCharge (q : Nat) : Nat :=
   if q = 0 then 0 else gasCallValue
-
-def redemptionCallCharge
-    (accessed : AdrSet) (w : State) (recipient : Adr) (q : Nat) : Nat :=
-  accessCost recipient accessed +
-    redemptionRecipientCreationCharge w recipient q +
-    redemptionValueCallCharge q
 
 /-- Closed worst-case caller-paid `CALL` charge.  The child stipend is absent:
 on the nonzero branch it is dominated by `gasCallValue`. -/
@@ -150,12 +135,6 @@ schedule.  It is the maximum of the exact forward-proof budget and the
 explicit worst-case component schedule. -/
 def redemptionRuntimeCeiling (q : Nat) : Nat :=
   max redemptionExecutionGasFloor (redemptionModeledRuntime q)
-
-/-- The EIP-2200 charge of a store, including the possible cold surcharge. -/
-def redemptionSstoreCharge
-    (cold : Bool) (original current new : B256) : Nat :=
-  (if cold then gasColdSload else 0) +
-    sstoreValueCost original current new
 
 theorem redemptionModeledRuntime_zero :
     redemptionModeledRuntime 0 = 36998 := by

@@ -593,8 +593,4 @@ theorem call_setPauserSlot_routeTo_assignment_revert (dp : DeployParams)
     fun _kernelStart _burn tail =>
       setPauserKernel_routeTo_assignment_revert dp tail emptyOutput
 
-/-! Compatibility name retained after hoisting `MemWordAt`. -/
-abbrev MemWordAt.acrossOldCountPrefix :=
-  @Blanc.MemWordAt.acrossOldCountPrefix
-
 end Blanc.LidoCircuitBreaker

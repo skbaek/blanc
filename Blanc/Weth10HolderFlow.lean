@@ -31,7 +31,6 @@ structure HolderFlow (u : Adr) where
   selfTransfer : Nat
   flashCredit : Nat
   flashRepayment : Nat
-deriving DecidableEq
 
 def HolderFlow.zero (u : Adr) : HolderFlow u :=
   ⟨0, 0, 0, 0, 0, 0⟩
@@ -318,7 +317,6 @@ structure FlowObservation where
   currentTarget : Adr
   codeAddress : Option Adr
   depth : Nat
-deriving DecidableEq
 
 def FlowAction.observation (action : FlowAction) : FlowObservation :=
   { atom := action.atom
@@ -331,22 +329,6 @@ def holderFlowOfObservations (observations : List FlowObservation)
     (u : Adr) : HolderFlow u :=
   observations.foldl (fun total observation =>
     total.add (observation.atom.holderFlow u)) (HolderFlow.zero u)
-
-private theorem holderFlowOfObservations_from_eq_add
-    (observations : List FlowObservation) (u : Adr)
-    (initial : HolderFlow u) :
-    observations.foldl (fun total observation =>
-      total.add (observation.atom.holderFlow u)) initial =
-    initial.add (holderFlowOfObservations observations u) := by
-  unfold holderFlowOfObservations
-  induction observations generalizing initial with
-  | nil => simp only [List.foldl_nil, HolderFlow.add_zero]
-  | cons observation observations ih =>
-      simp only [List.foldl_cons]
-      rw [ih]
-      rw [ih (initial := (HolderFlow.zero u).add
-        (observation.atom.holderFlow u))]
-      rw [HolderFlow.zero_add, HolderFlow.add_assoc]
 
 theorem holderFlowOfObservations_map_observation
     (actions : List FlowAction) (u : Adr) :
@@ -555,10 +537,6 @@ def Exec.Frame.flowAction? (dp : DeployParams) (ca : Adr)
         depth := frame.sevm.depth }
   else none
 
-def Exec.Frame.flowObservation? (dp : DeployParams) (ca : Adr)
-    (frame : Exec.Frame) : Option FlowObservation :=
-  (Exec.Frame.flowAction? dp ca frame).map FlowAction.observation
-
 def Exec.flowActions (dp : DeployParams) (ca : Adr)
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) : List FlowAction :=
@@ -596,13 +574,6 @@ theorem Exec.retainedChildActions_eq_nil_of_create_codeDepositRollback
     | some error => simp only [hoption, Option.isNone_some, Bool.false_eq_true] at hcommit
   simp only [if_neg hnot]
 
-/-- Executable observations for one root derivation, in enclosing-frame then
-depth-first child order.  Classification proofs later show that this includes
-every and only committed balance-writing WETH10 invocation. -/
-def Exec.flowObservations (dp : DeployParams) (ca : Adr)
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out) : List FlowObservation :=
-  (Exec.flowActions dp ca run).map FlowAction.observation
 /-! ## Contract-neutral retained-trace compatibility
 
 The carriers and replay proofs are owned by `Blanc.ExecutionTrace`.  These
@@ -830,15 +801,6 @@ def AccountedBlock.ofConfiguredBlockTrace
   observations_eq := rfl
   postEq := trace.postEq
 }
-
-theorem AccountedBlock.toConfiguredBlockTrace_ofConfiguredBlockTrace
-    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
-    {pre post : BlockChain}
-    (trace : ExecutionTrace.ConfiguredBlockTrace cfg pre post) :
-    (AccountedBlock.ofConfiguredBlockTrace
-      (dp := dp) (ca := ca) trace).toConfiguredBlockTrace = trace := by
-  cases trace
-  rfl
 
 /-- A proof-carrying configured replay from a checkpoint to an endpoint. -/
 inductive AccountedHistory

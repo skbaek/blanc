@@ -58,11 +58,6 @@ def NoVaultVisitKeyCollision
     ∀ q ∈ visits.filterMap AllowanceVisit.writtenPair?, p ≠ q →
       wethAllowanceKey p.1 p.2 ≠ wethAllowanceKey q.1 q.2
 
-instance (visits : List AllowanceVisit) (vault : Adr) :
-    Decidable (NoVaultVisitKeyCollision visits vault) := by
-  unfold NoVaultVisitKeyCollision
-  infer_instance
-
 /-- Antitonicity from the real-chain visit universe to the recorded ledger. -/
 theorem noVaultAllowanceKeyCollision_of_visits
     {history : List WethAllowanceInvocation}

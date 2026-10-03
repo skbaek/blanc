@@ -16,9 +16,6 @@ open Jaune Jaune.List Jaune.B256
 
 -- Boolean lemmas --
 
-instance : @Zero Bool := ⟨false⟩
-instance : @One Bool := ⟨true⟩
-
 def Split {α} [HAppend α α α] : α → α → α → Prop
   | a, ab, b => ab = a ++ b
 

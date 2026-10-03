@@ -34,14 +34,6 @@ theorem supportsInterfaceWord_erc165 :
     supportsInterfaceWord erc165InterfaceId = true := by
   simp only [supportsInterfaceWord_eq_true_iff, true_or]
 
-theorem supportsInterfaceWord_deposit :
-    supportsInterfaceWord depositInterfaceId = true := by
-  simp only [supportsInterfaceWord_eq_true_iff, or_true]
-
-theorem supportsInterfaceWord_ffffffff :
-    supportsInterfaceWord (0xffffffff : B256) = false := by
-  decide +kernel
-
 private def supportsInterfaceResultWord (sevm : Sevm) : B256 :=
   B256.or
     (B256.eqCheck depositInterfaceId (Sevm.argWord sevm 0 >>> 224))

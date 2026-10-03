@@ -31,7 +31,6 @@ inductive OssifiableConstructorDecodeResult where
   | accepted (implementation requestedAdmin : B256) (setupData : Bytes)
   | emptyRevert
   | allocationPanic
-  deriving DecidableEq
 
 def ossifiableConstructorAbiMaxUint64 : B256 := 0xffffffffffffffff
 
@@ -263,11 +262,6 @@ theorem ossifiableConstructorDecodeSpec_accepted
 inductive OssifiableImplementationValidation where
   | noCode
   | accepted
-  deriving DecidableEq, Repr
-
-def ossifiableImplementationValidation
-    (code : ByteArray) : OssifiableImplementationValidation :=
-  if code.size.toB256 = 0 then .noCode else .accepted
 
 /-- The exact raw word produced by Solidity address assignment. -/
 def ossifiableConstructorAddressWrite

@@ -1761,34 +1761,6 @@ theorem finishQuotient_up_image_trace
               (roundState.trans
                 (Devm.QuietFrame.mk' callBurn.state callBurn.logs))))
 
-/-- Ceiling-mode finishing selects the staged quotient when the staged
-remainder is zero. Otherwise it rejects the all-ones quotient through the
-compiled revert arm and passes the word successor to the continuation. -/
-theorem finishQuotient_up_trace
-    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
-    {fs : List Func} {sevm : Sevm} {pre final : Devm}
-    {image : Bytes} {quotient remainder : B256} {continuation : Nat}
-    {body : Func} {tail : Stack}
-    (memoryWf : Mem.Wf pre.memory)
-    (memoryReads : Mem.Reads pre.memory image)
-    (quotientAt : Bytes.toB256
-      (image.sliceD (quotientWord * 32).toNat 32 0) = quotient)
-    (remainderAt : Bytes.toB256
-      (image.sliceD (remainderWord * 32).toNat 32 0) = remainder)
-    (stack : tail <<+ pre.stack)
-    (lookup : fs[continuation]? = some body)
-    (run : R fs sevm pre
-      (finishQuotient .up continuation) final) :
-    (remainder ≠ 0 → quotient ≠ B256.max) ∧
-      ∃ bodyPre,
-        (if remainder = 0 then quotient else quotient + 1) :: tail <<+
-          bodyPre.stack ∧
-        R fs sevm bodyPre body final := by
-  obtain ⟨roundingSafe, bodyPre, roundedPrefix, -, -, bodyRun⟩ :=
-    finishQuotient_up_image_trace memoryWf memoryReads quotientAt remainderAt
-      stack lookup run
-  exact ⟨roundingSafe, bodyPre, roundedPrefix, bodyRun⟩
-
 /-- Capped floor finishing has the same successful continuation effect as
 ordinary floor finishing; only the earlier wide-overflow branch differs. -/
 theorem finishQuotient_capDown_trace
@@ -3114,30 +3086,6 @@ theorem divideSimple_down_image_trace
       lookup finishRun
   exact ⟨bodyPre, quotientPrefix, bodyImage,
     finishState.trans bodyState, bodyRun⟩
-
-/-- Unframed floor-mode single-word division. -/
-theorem divideSimple_down_trace
-    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
-    {fs : List Func} {sevm : Sevm} {pre final : Devm}
-    {image : Bytes} {denominator low : B256} {continuation : Nat}
-    {body : Func} {tail : Stack}
-    (memoryWf : Mem.Wf pre.memory)
-    (memoryReads : Mem.Reads pre.memory image)
-    (denominatorAt : Bytes.toB256
-      (image.sliceD (denominatorWord * 32).toNat 32 0) = denominator)
-    (lowAt : Bytes.toB256
-      (image.sliceD (lowWord * 32).toNat 32 0) = low)
-    (stack : tail <<+ pre.stack)
-    (lookup : fs[continuation]? = some body)
-    (run : R fs sevm pre
-      (divideSimple .down continuation) final) :
-    ∃ bodyPre,
-      (low / denominator) :: tail <<+ bodyPre.stack ∧
-      R fs sevm bodyPre body final := by
-  obtain ⟨bodyPre, quotientPrefix, -, -, bodyRun⟩ :=
-    divideSimple_down_image_trace memoryWf memoryReads denominatorAt lowAt
-      stack lookup run
-  exact ⟨bodyPre, quotientPrefix, bodyRun⟩
 
 /-- A successful ceiling-mode single-word division passes its exact word
 quotient, incremented precisely when the staged remainder is nonzero. -/

@@ -282,11 +282,6 @@ theorem ProcessCreateMessageTrace.hasExecOrigin_of_mem_flowActions
   RetainedXlot.hasExecOrigin_of_mem_flowActions trace.retained
     (ProcessCreateMessageTrace.allFramesRoot trace) h
 
-private theorem frame_enter_run_memory_empty
-    {frame : Frame} {child : Evm}
-    (h : frame.enter = .run child) : child.dyna.memory = Mem.empty :=
-  frame_enter_run_memory h
-
 theorem MessageCallTrace.hasExecOrigin_of_mem_flowActions
     {dp : DeployParams} {ca : Adr} {msg : Msg} {state : State}
     {out : MsgCallOutput} (trace : MessageCallTrace msg state out)
@@ -374,15 +369,6 @@ theorem AppliedBodyTrace.hasExecOrigin_of_mem_flowActions
       trace.transactions htransactions
   · exact RequestsTrace.hasExecOrigin_of_mem_flowActions
       trace.requests hrequests
-
-theorem AccountedBlock.hasExecOrigin_of_mem_actions
-    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
-    {pre post : BlockChain}
-    (accounted : AccountedBlock cfg dp ca pre post)
-    {action : FlowAction} (h : action ∈ accounted.actions) :
-    action.HasExecOrigin dp ca := by
-  rw [accounted.actions_eq] at h
-  exact AppliedBodyTrace.hasExecOrigin_of_mem_flowActions accounted.bodyTrace h
 
 end Weth10
 

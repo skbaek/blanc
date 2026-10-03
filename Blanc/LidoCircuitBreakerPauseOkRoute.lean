@@ -3099,9 +3099,4 @@ theorem runtimeMain_routeTo_pauseRetainedExpiry
     (fun _s4 _r4 write => ?_)
   exact routeTo_head write pauseRetainedExpiryPath
 
-/-! Compatibility names retained after hoisting `MemWordAt`. -/
-abbrev MemWordAt.acrossLoadTag := @Blanc.MemWordAt.acrossLoadTag
-abbrev MemWordAt.acrossRemoveTargetPrefix :=
-  @Blanc.MemWordAt.acrossRemoveTargetPrefix
-
 end Blanc.LidoCircuitBreaker

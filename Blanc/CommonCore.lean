@@ -19,8 +19,6 @@ def Func.toString : Func → String
   | .branch p q => "{" ++ q.toString ++ "} <?> {" ++ p.toString ++ "}"
   | .call _ => "[TAIL]"
 
-instance : Repr Func := ⟨λ p _ => Func.toString p⟩
-
 def Ninst.pushB256 (w : B256) : Ninst :=
   Jaune.Ninst.push w.toBytes.sig <|
     le_of_le_of_eq (List.length_dropWhile_le _ _) (B256.length_toBytes _)
@@ -448,9 +446,6 @@ def returnTrue : Func :=
 before the endpoint body, and reverts with empty data. -/
 def nonpayable (body : Func) : Func :=
   callvalue ::: iszero ::: (body <?> Func.revert)
-
-abbrev Prog.Pred : Type :=
-  Nat → Sevm → Devm → Prog → Execution → Prop
 
 def sumBelow (f : Adr → B256) : Nat → Nat
   | 0 => 0
@@ -1547,7 +1542,6 @@ private theorem Func.compsize_eq_of_compileShape {p q : Func}
 structure Prog.CompileShape where
   main : Func.CompileShape
   aux : List Func.CompileShape
-deriving DecidableEq
 
 /-- Erase byte contents and terminal opcodes from a program, retaining exactly
 the structure that can affect compiler success. -/

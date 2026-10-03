@@ -533,22 +533,6 @@ def dripSteps (s : Snapshot) : List Nat → List RealizedStep
   | elapsed :: rest => dripStep s elapsed ::
       dripSteps (dripPost s elapsed) rest
 
-private theorem dripSteps_chain_chi (s : Snapshot) (ks : List Nat)
-    {t : Snapshot} (chain : RealizedChain s (dripSteps s ks) t) :
-    t.chi = segmentIndex scale.toNat half.toNat rate.toNat s.chi ks := by
-  induction ks generalizing s t with
-  | nil =>
-      cases chain
-      rfl
-  | cons elapsed rest ih =>
-      change RealizedChain s (dripStep s elapsed ::
-        dripSteps (dripPost s elapsed) rest) t at chain
-      cases chain with
-      | cons entry tail =>
-          have htail := ih (dripStep s elapsed).post tail
-          simpa only [segmentIndex, segmentIndexFrom, scaleNat_exact, halfNat_exact, rateNat_exact,
-            mulr, add_zero, dripStep, dripPost, freshNat, factorNat] using htail
-
 /-! ## G5 — pure segmentation -/
 
 theorem realized_freshNat_mono : ∀ chi k, chi ≤ freshNat chi k :=

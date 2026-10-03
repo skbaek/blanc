@@ -142,18 +142,6 @@ def deployMsg : Msg where
   accessedStorageKeys := .emptyWithCapacity
   disablePrecompiles := false
 
-/-- **The recorded WETH9 deployment, closed.**  WETH9's address is the deployer's nonce-446
-CREATE address, and executing the recorded creation input from the deployer as a Prague CREATE
-message succeeds, installs exactly the certified deployed runtime there, and leaves exactly the
-constructor's `name`/`symbol`/`decimals` storage. -/
-theorem weth9_deploy :
-    weth9Address = computeContractAddress deployer 446 ∧
-    ∃ post, processCreateMessage deployMsg = .ok post ∧
-      (post.getCode weth9Address).toList = Blanc.Lift.Weth9.code.toList ∧
-      Devm.getStor post weth9Address = deployedStor :=
-  ⟨weth9Address_eq, weth9_create deployMsg rfl rfl rfl (by decide) (by decide)
-    CoveredFork.prague rfl (by decide)⟩
-
 /-- **The recorded WETH9 deployment under every covered fork.**  The same conclusion as
 `weth9_deploy` for `deployMsg.withFork f`, by instantiating `weth9_create` at the
 fork-replaced message; the code-size premise discharges by cases on `hf`. -/

@@ -1490,65 +1490,6 @@ private theorem dispatch24_21_3ByteAt_eq_zero_0_113
           apply deploymentLeafByteAt_eq_zero_0_26
           omega
 
-private theorem dispatch24_21_3ByteAt_chainWord
-    (locations : List Nat) (n : Nat) (dp : DeployParams)
-    (j : Nat) (hj : j < 32) :
-    Func.byteAtByShape locations n
-        (dispatch24_21_3 (⟨0, 0⟩ : DeployParams)).compileShape
-        (dispatch24_21_3 dp) (113 + j) 0 =
-      dp.deploymentChainId.toBytes.getD j 0 := by
-  rw [dispatch24_21_3_eq_factored dp,
-    dispatch24_21_3_eq_factored (⟨0, 0⟩ : DeployParams)]
-  unfold dispatch24Factored
-  have hdepositPush :
-      (Ninst.pushB256 (0xd0e30db0 : B256)).size = 5 := by
-    decide +kernel
-  have hdeploymentPush :
-      (Ninst.pushB256 (0xcd0d0096 : B256)).size = 5 := by
-    decide +kernel
-  have hdepositLeaf :
-      (dispatchLeaf 0xd0e30db0 deposit).compileShape.byteSize = 64 :=
-        depositDispatchLeaf_size
-  rw [dispatchNodeByteAt_to_offPath
-      (locations := locations) (n := n) (selector := 0xd0e30db0)
-      (off0 := dispatchNode 0xcd0d0096
-        (dispatchLeaf 0xcae9ca51 (nonpayable approveAndCall))
-        (dispatchLeaf 0xcd0d0096
-          (nonpayable
-            (deploymentChainId (⟨0, 0⟩ : DeployParams)))))
-      (on0 := dispatchLeaf 0xd0e30db0 deposit)
-      (off := dispatchNode 0xcd0d0096
-        (dispatchLeaf 0xcae9ca51 (nonpayable approveAndCall))
-        (dispatchLeaf 0xcd0d0096
-          (nonpayable (deploymentChainId dp))))
-      (on := dispatchLeaf 0xd0e30db0 deposit)
-      (i := 113 + j) (d := 0) hdepositPush (by
-        rw [hdepositLeaf]
-        omega)]
-  simp only [hdepositLeaf, Nat.reduceAdd]
-  have hdeploymentLeaf :
-      (dispatchLeaf 0xcd0d0096
-        (nonpayable
-          (deploymentChainId
-            (⟨0, 0⟩ : DeployParams)))).compileShape.byteSize = 64 :=
-        deploymentChainIdDispatchLeaf_size
-  rw [dispatchNodeByteAt_to_onPath
-      (locations := locations) (n := n + 76)
-      (selector := 0xcd0d0096)
-      (off0 := dispatchLeaf 0xcae9ca51 (nonpayable approveAndCall))
-      (on0 := dispatchLeaf 0xcd0d0096
-        (nonpayable
-          (deploymentChainId (⟨0, 0⟩ : DeployParams))))
-      (off := dispatchLeaf 0xcae9ca51 (nonpayable approveAndCall))
-      (on := dispatchLeaf 0xcd0d0096
-        (nonpayable (deploymentChainId dp)))
-      (i := 113 + j - 76) (d := 0) hdeploymentPush (by omega)
-      (by rw [hdeploymentLeaf]; omega)]
-  have hi : 113 + j - 76 - 11 = 26 + j := by omega
-  rw [hi]
-  exact deploymentLeafByteAt_chainWord
-    locations (n + 76 + 11) dp j hj
-
 private theorem flashFeeDispatchByteAt_to_dispatch24_21_3
     (locations : List Nat) (n : Nat) (dp : DeployParams)
     (i : Nat) (d : UInt8) (hlo : 566 ≤ i)

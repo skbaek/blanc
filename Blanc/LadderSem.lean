@@ -119,22 +119,6 @@ def SoundNoMem (c : ContractSpecSem) (ca : Adr) : Prop :=
     c.Pre ca sevm pre →
     c.Post ca sevm post
 
-def SoundWith (c : ContractSpecSem) (ca : Adr) (mw : Mem → Prop) : Prop :=
-  ∀ {sevm pre post},
-    CoveredFork sevm.benvStat.fork →
-    c.sem.Run sevm pre post →
-    sevm.currentTarget = ca →
-    ( ∀ pc' sevm' pre' post',
-        Exec pc' sevm' pre' (.ok post') →
-        sevm'.depth < sevm.depth →
-        CodeSem.At c.sem ca pc' sevm' pre' →
-        CoveredFork sevm'.benvStat.fork →
-        c.PreWf ca sevm' pre' →
-        c.Post ca sevm' post' ) →
-    mw pre.memory →
-    c.Pre ca sevm pre →
-    c.Post ca sevm post
-
 def Preserves (c : ContractSpecSem) (ca : Adr) : Prop :=
   ∀ sevm pre post,
     CoveredFork sevm.benvStat.fork →

@@ -700,14 +700,6 @@ theorem drip_message_error_transient {msg : Msg} {xl : Xlot} {out : Devm}
     out.transientStorage = msg.tenv.transientStorage :=
   (ProcessMessage.rollback_of_error h herr).2
 
-theorem drip_message_error_getStor {msg : Msg} {xl : Xlot} {out : Devm}
-    (h : ProcessMessage msg xl (.ok out)) (herr : out.error.isSome)
-    (_hcode : msg.code.toList = code) (a : Adr) :
-    Devm.getStor out a = (msg.benv.state.get a).stor := by
-  have hst := (ProcessMessage.rollback_of_error h herr).1
-  unfold Devm.getStor Devm.getAcct
-  rw [hst]
-
 theorem drip_message_error_getBal {msg : Msg} {xl : Xlot} {out : Devm}
     (h : ProcessMessage msg xl (.ok out)) (herr : out.error.isSome)
     (_hcode : msg.code.toList = code) (a : Adr) :

@@ -714,16 +714,6 @@ inductive PairInFlight (vault : Adr) (sevm : Sevm) (entry : Devm) :
   | reverting {cur : Devm} (rollback : cur.state = entry.state) :
       PairInFlight vault sevm entry .reverting cur
 
-/-- The four stages that settle an operation.  `reverting` is deliberately
-excluded below: it is the one stage that reads the whole world rather than the
-two ledgers, and a prefix that leaves storage alone need not leave the world
-alone — the quote snapshot's `STATICCALL` warms an address.  `reverting` is
-produced at its own crossing and consumed by the settlement rollback, never
-transported. -/
-def PairStage.settles : PairStage → Prop
-  | .reverting => False
-  | _ => True
-
 /-! ### Exiting a stage -/
 
 /-- **The inbound stage exits to a backed post.**

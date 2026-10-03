@@ -167,13 +167,9 @@ the committed literal above. -/
 theorem code_compile : Prog.compile runtime = some code := by
   decide +kernel
 
-def compiledSelectors : List B256 := funcs.map Prod.fst
-
 def codeSize : Nat := code.length
 
 def eip170RuntimeLimit : Nat := pragueCodeLimits.maxCodeSize
-
-def codeHeadroom : Nat := eip170RuntimeLimit - codeSize
 
 theorem codeSize_exact : codeSize = 1762 := by
   decide +kernel

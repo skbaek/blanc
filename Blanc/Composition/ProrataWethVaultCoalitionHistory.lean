@@ -571,24 +571,6 @@ theorem victimAdmits_cons {vault victim : Adr} {o : Nat} {phase : Blanc.Prorata.
         exact .inl ⟨rfl, h, fun _ hp => by cases hp⟩
       · simp only [victimAdmits, victimMoves, hm, List.filter_cons_of_pos, reduceCtorEq] at h
 
-/-- **Parity with PRORATA's schedule.**  The pair schedule has PRORATA's move-list shape (T:141). -/
-theorem VictimOpenAdmits.moves {vault victim : Adr} {locked : Nat} :
-    ∀ {steps : List (PairStepRecord vault)}, VictimOpenAdmits victim locked steps →
-      victimMoves victim steps = [] ∨
-        ∃ exit paid, exit.flow = .outbound victim victim locked paid true false ∧
-          victimMoves victim steps = [exit]
-  | [], _ => .inl rfl
-  | r :: rest, h => by
-      cases hm : victimMove victim r
-      · simp only [VictimOpenAdmits, hm, Bool.false_eq_true, ↓reduceIte] at h
-        simpa only [victimMoves, List.filter_cons, hm, Bool.false_eq_true, ↓reduceIte] using
-          VictimOpenAdmits.moves h.2
-      · simp only [VictimOpenAdmits, hm, ↓reduceIte] at h
-        obtain ⟨⟨paid, hflow⟩, hnone⟩ := h
-        refine .inr ⟨r, paid, hflow, ?_⟩
-        simp only [victimMoves] at hnone
-        simp only [victimMoves, List.filter_cons, hm, ↓reduceIte, hnone]
-
 /-! ### 5.6 Two model facts the adapter needs -/
 
 /-- The genesis price anchor holds along every pair path. -/

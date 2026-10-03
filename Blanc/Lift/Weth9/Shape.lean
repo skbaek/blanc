@@ -23,10 +23,6 @@ def Weth9.silentSet : List Nat := [2, 4, 5, 6, 7, 10, 12, 13, 14, 15, 16, 17]
 
 def Weth9.wrapperSet : List Nat := [18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28]
 
-def Weth9.wrapperSpecs : List (Nat × Nat) :=
-  [(18, 2), (19, 1), (20, 3), (21, 4), (22, 6), (23, 7),
-   (24, 8), (25, 9), (26, 10), (27, 11), (28, 12)]
-
 theorem Weth9.silentSet_closed :
     SilentSet Weth9.prog Weth9.silentSet = true := by
   decide +kernel

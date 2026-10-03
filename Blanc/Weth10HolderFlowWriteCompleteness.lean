@@ -31,35 +31,6 @@ theorem Exec.Deriv.ParentStepActions.unique
     nextLeft = nextRight ∧ leftActions = rightActions := by
   cases left <;> cases right <;> simp_all only [and_self, ExceptT.stM_eq]
 
-/-- Same-frame prefixes from one concrete `Exec` proof form a linear chain.
-This is the generic ordering fact needed to compare an arbitrary occurrence
-with a compiled source cursor. -/
-theorem Exec.Deriv.ParentPrefixActions.linear
-    {dp : DeployParams} {ca : Adr}
-    {root leftTail rightTail : Exec.Deriv}
-    {leftActions rightActions : List FlowAction}
-    (left : Exec.Deriv.ParentPrefixActions dp ca
-      root leftTail leftActions)
-    (right : Exec.Deriv.ParentPrefixActions dp ca
-      root rightTail rightActions) :
-    (∃ suffix, Exec.Deriv.ParentPrefixActions dp ca
-      leftTail rightTail suffix) ∨
-    (∃ suffix, Exec.Deriv.ParentPrefixActions dp ca
-      rightTail leftTail suffix) := by
-  induction left generalizing rightTail rightActions with
-  | refl =>
-      exact Or.inl ⟨rightActions, right⟩
-  | @step root next leftTail headActions leftActions head rest ih =>
-      cases right with
-      | refl =>
-          exact Or.inr ⟨headActions ++ leftActions, .step head rest⟩
-      | @step _ rightNext rightTail rightHeadActions rightActions
-          rightHead rightRest =>
-          have unique := head.unique rightHead
-          cases unique.1
-          cases unique.2
-          exact ih rightRest
-
 /-- An actual proof-indexed `SSTORE` whose raw key is an address-shaped WETH
 balance key.  The machine states, recursive slot, raw key, stored value, and
 normalized holder are all indices, so later classification cannot replace
@@ -1187,74 +1158,6 @@ private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_nonpayable_
     ⟨bodyCursor, insideBody⟩
   exact bodyCursor.no_balanceSstoreOccurrence_of_free
     hcode free insideBody
-
-/-- Exhaustive structural view of the exact 27-entry WETH10 dispatcher.
-Keeping the selected selector and body as indices lets later occurrence proofs
-case-split without losing their dependent body cursor. -/
-inductive Weth10BodyCase (dp : DeployParams) : B256 → Func → Prop
-  | nameCase : Weth10BodyCase dp
-      (selector "name" []) (nonpayable name)
-  | approveCase : Weth10BodyCase dp
-      (selector "approve" [.address, .uint256]) (nonpayable approve)
-  | totalSupplyCase : Weth10BodyCase dp
-      (selector "totalSupply" []) (nonpayable totalSupply)
-  | withdrawToCase : Weth10BodyCase dp
-      (selector "withdrawTo" [.address, .uint256]) (nonpayable withdrawTo)
-  | transferFromCase : Weth10BodyCase dp
-      (selector "transferFrom" [.address, .address, .uint256])
-      (nonpayable transferFrom)
-  | withdrawCase : Weth10BodyCase dp
-      (selector "withdraw" [.uint256]) (nonpayable withdraw)
-  | permitTypehashCase : Weth10BodyCase dp
-      (selector "PERMIT_TYPEHASH" []) (nonpayable permitTypehash)
-  | decimalsCase : Weth10BodyCase dp
-      (selector "decimals" []) (nonpayable decimals)
-  | domainSeparatorCase : Weth10BodyCase dp
-      (selector "DOMAIN_SEPARATOR" []) (nonpayable (domainSeparator dp))
-  | transferAndCallCase : Weth10BodyCase dp
-      (selector "transferAndCall" [.address, .uint256, .dynBytes])
-      (nonpayable transferAndCall)
-  | flashLoanCase : Weth10BodyCase dp
-      (selector "flashLoan" [.address, .address, .uint256, .dynBytes])
-      (nonpayable flashLoan)
-  | depositToAndCallCase : Weth10BodyCase dp
-      (selector "depositToAndCall" [.address, .dynBytes]) depositToAndCall
-  | maxFlashLoanCase : Weth10BodyCase dp
-      (selector "maxFlashLoan" [.address]) (nonpayable maxFlashLoan)
-  | balanceOfCase : Weth10BodyCase dp
-      (selector "balanceOf" [.address]) (nonpayable balanceOfEndpoint)
-  | noncesCase : Weth10BodyCase dp
-      (selector "nonces" [.address]) (nonpayable nonces)
-  | callbackSuccessCase : Weth10BodyCase dp
-      (selector "CALLBACK_SUCCESS" []) (nonpayable callbackSuccess)
-  | flashMintedCase : Weth10BodyCase dp
-      (selector "flashMinted" []) (nonpayable flashMinted)
-  | withdrawFromCase : Weth10BodyCase dp
-      (selector "withdrawFrom" [.address, .address, .uint256])
-      (nonpayable withdrawFrom)
-  | symbolCase : Weth10BodyCase dp
-      (selector "symbol" []) (nonpayable symbol)
-  | transferCase : Weth10BodyCase dp
-      (selector "transfer" [.address, .uint256]) (nonpayable transfer)
-  | depositToCase : Weth10BodyCase dp
-      (selector "depositTo" [.address]) depositTo
-  | approveAndCallCase : Weth10BodyCase dp
-      (selector "approveAndCall" [.address, .uint256, .dynBytes])
-      (nonpayable approveAndCall)
-  | deploymentChainIdCase : Weth10BodyCase dp
-      (selector "deploymentChainId" [])
-      (nonpayable (deploymentChainId dp))
-  | depositCase : Weth10BodyCase dp
-      (selector "deposit" []) deposit
-  | permitCase : Weth10BodyCase dp
-      (selector "permit"
-        [.address, .address, .uint256, .uint256, .uint 8, .bytes 32,
-          .bytes 32])
-      (nonpayable (permit dp))
-  | flashFeeCase : Weth10BodyCase dp
-      (selector "flashFee" [.address, .uint256]) (nonpayable flashFee)
-  | allowanceCase : Weth10BodyCase dp
-      (selector "allowance" [.address, .address]) (nonpayable allowance)
 
 /-- The exact local role of one balance-region stored word.  Transfer and
 flash actions have separate debit and credit constructors; for a self
@@ -5020,85 +4923,6 @@ private theorem Exec.Frame.compiledReceiveCursor
     ⟨receiveCursor, receiveStack, receiveActions⟩
   exact ⟨receiveCursor, receiveStack,
     receiveActions.trans (entryActions.trans mainActions)⟩
-
-/-- The receive branch's unique source `SSTORE` is an actual balance-region
-occurrence at the caller key, with the exact word computed by its immediate
-load/add prefix. -/
-theorem Exec.Frame.exists_balanceSstoreOccurrence_of_receive
-    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
-    (empty : frame.sevm.data.length.toB256 = 0) :
-    ∃ (storePre storePost : Devm) (slot : Xlot),
-      Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame storePre storePost slot
-        frame.sevm.caller.toB256
-        (Stor.rest (Devm.getStor storePre ca) frame.sevm.caller +
-          Nat.toB256 frame.sevm.value.toNat)
-        frame.sevm.caller := by
-  rcases Blanc.Weth10.Exec.Frame.compiledReceiveCursor (frame := frame) context empty with
-    ⟨receiveCursor, _receiveStack, _receiveActions⟩
-  rw [receiveEther_eq_sstoreSplit] at receiveCursor
-  rcases receiveCursor.peelChildlessLine
-      (by simp only [mintCallerBeforeSstore, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
-    ⟨storeCursor, prefixRun, _prefixActions⟩
-  rcases Line.of_run_cons prefixRun with
-    ⟨afterCaller, callerStep, restCaller⟩
-  rcases Line.of_run_cons restCaller with
-    ⟨afterLoad, loadStep, restLoad⟩
-  rcases Line.of_run_cons restLoad with
-    ⟨afterValue, valueStep, restValue⟩
-  rcases Line.of_run_cons restValue with
-    ⟨afterAdd, addStep, restAdd⟩
-  rcases Line.of_run_cons restAdd with
-    ⟨afterCallerAgain, callerAgainStep, emptyLine⟩
-  cases emptyLine
-  have callerPrefix : [frame.sevm.caller.toB256] <<+
-      afterCaller.stack :=
-    prefix_of_push (of_run_caller callerStep) nil_pref
-  rcases prefix_of_sload loadStep callerPrefix with
-    ⟨callerBalance, balancePrefix, callerBalanceEq⟩
-  have valuePrefix : [frame.sevm.value, callerBalance] <<+
-      afterValue.stack :=
-    prefix_of_push (of_run_callvalue valueStep) balancePrefix
-  have sumPrefix : [frame.sevm.value + callerBalance] <<+
-      afterAdd.stack :=
-    prefix_of_add addStep valuePrefix
-  have storePrefix :
-      [frame.sevm.caller.toB256, frame.sevm.value + callerBalance] <<+
-        storeCursor.pre.stack :=
-    prefix_of_push (of_run_caller callerAgainStep) sumPrefix
-  have storLoad : Devm.getStor afterCaller = Devm.getStor afterLoad :=
-    Ninst.Hinv.inv (f := Devm.getStor) loadStep
-  have storValue : Devm.getStor afterLoad = Devm.getStor afterValue :=
-    Ninst.Hinv.inv (f := Devm.getStor) valueStep
-  have storAdd : Devm.getStor afterValue = Devm.getStor afterAdd :=
-    Ninst.Hinv.inv (f := Devm.getStor) addStep
-  have storCaller : Devm.getStor afterAdd = Devm.getStor storeCursor.pre :=
-    Ninst.Hinv.inv (f := Devm.getStor) callerAgainStep
-  have callerBalanceAtStore :
-      callerBalance =
-        (Devm.getStor storeCursor.pre frame.sevm.currentTarget).get
-          frame.sevm.caller.toB256 := by
-    rw [callerBalanceEq]
-    change
-      (Devm.getStor afterCaller frame.sevm.currentTarget).get
-          frame.sevm.caller.toB256 = _
-    rw [storLoad, storValue, storAdd, storCaller]
-  have target : frame.sevm.currentTarget = ca := context.invocation.2.1
-  have storedWord :
-      frame.sevm.value + callerBalance =
-        Stor.rest (Devm.getStor storeCursor.pre ca) frame.sevm.caller +
-          Nat.toB256 frame.sevm.value.toNat := by
-    rw [Jaune.toB256_toNat, callerBalanceAtStore, target]
-    simp only [Stor.rest, Function.comp_apply]
-    exact B256.add_comm
-  rcases storeCursor.selectNextChildless
-      (by simp only [NinstIsChildless]) with
-    ⟨tailCursor, slot, _storeRun, occurrence, _storeActions⟩
-  refine ⟨storeCursor.pre, tailCursor.pre, slot, occurrence,
-    balanceKey_valid frame.sevm.caller, rfl, [], ?_⟩
-  rw [← storedWord]
-  exact storePrefix
 
 private theorem name_sstoreFree (fs : List Func) :
     Func.sstoreFreeWithin 64 fs name = true := by

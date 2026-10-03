@@ -1254,46 +1254,6 @@ theorem getDepositCount_route_runCompiled
         simpa only [runtime, Devm.setMach_setMach, Devm.stateGas_setMach, count_stateGas_addAccessedStorageKey, Devm.memory_setMach]
           using hmain)
 
-theorem getDepositCount_route_runCompiledTo
-    {sevm : Sevm} {base : Devm} {out : Execution} {K : Nat}
-    (hnonempty : sevm.data.length.toB256 ≠ 0)
-    (hselector : Sevm.selector sevm = getDepositCountSelector)
-    (hbody : Func.RunCompiledTo (runtime.main :: runtime.aux) sevm
-      (base.setMach ⟨[], Mem.empty, K, base.stateGas⟩)
-      (nonpayableEndpoint getDepositCountEndpoint) out) :
-    Prog.RunCompiledTo sevm
-      (base.setMach ⟨[], Mem.empty, K + getDepositCountRouteGas, base.stateGas⟩)
-      runtime out := by
-  have hleaf :=
-    getDepositCountLeafRoute_runCompiledTo (G := K) hbody
-  have hinner :=
-    getDepositCountInnerDispatch_runCompiledTo (G := K) hleaf
-  have hmiddle :=
-    getDepositCountMiddleDispatch_runCompiledTo (G := K) hinner
-  have hroot :=
-    getDepositCountRootDispatch_runCompiledTo (G := K) hmiddle
-  have hmain :=
-    getDepositCountMainRoute_runCompiledTo (G := K) hselector hroot
-  refine Prog.runCompiledTo_intro
-    (mid := base.setMach ⟨[], Mem.empty, K + 114, base.stateGas⟩)
-    (G := K + 114) ?_ rfl ?_
-  · simp only [Devm.gasLeft_setMach, getDepositCountRouteGas,
-      gJumpdest]
-  · unfold runtime
-    func_run (1) []
-    exact Func.runCompiledTo_branch_succ
-      (w := sevm.data.length.toB256) (s := []) (G := K + 98)
-      hnonempty rfl
-      (by
-        simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
-        omega)
-      (by
-        simp only [Devm.gasLeft_setMach, gVerylow, gHigh, gJumpdest]
-        omega)
-      (by
-        simpa only [runtime, Devm.setMach_setMach, Devm.stateGas_setMach, count_stateGas_addAccessedStorageKey, Devm.memory_setMach]
-          using hmain)
-
 private theorem getDepositCount_route_runCompiledTo_with_path
     {sevm : Sevm} {base : Devm} {out : Execution} {K : Nat}
     (hnonempty : sevm.data.length.toB256 ≠ 0)

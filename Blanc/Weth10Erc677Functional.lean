@@ -1358,29 +1358,6 @@ def RawTokenCallbackIndexedStepBoundary (dp : DeployParams) (e : Sevm)
     Func.Run ((weth10 dp).main :: weth10Aux) e
       callPost (.call boolReturnSlot) post
 
-/-- Forgetting only the parent `StepRun` recovers the established raw
-callback API. -/
-theorem RawTokenCallbackStepBoundary.toRaw
-    {dp : DeployParams} {e : Sevm} {self target : Adr}
-    {rawTarget sel value tailLen inputSize : B256} {tail input : Bytes}
-    {pre post : Devm}
-    (h : RawTokenCallbackStepBoundary dp e self target rawTarget sel value
-      tailLen inputSize tail input pre post) :
-    RawTokenCallbackBoundary dp e self target rawTarget sel value tailLen
-      inputSize tail input pre post := by
-  rcases h with
-    ⟨htarget, hsize, callPre, callPost, parent, child, xl, delegated,
-      code, gasWord, avail, pc, _hstep, hdepth, hstack, hinput,
-      hreads, hstor, hbal, hcode, hlogs, houtput, hparentState,
-      hparentMemory, hparentLogs, hparentOutput, hdelegation, hfilled,
-      hmessage, hclean, hresume, hcallPostState, hreturnData, hmemory,
-      hcallPostStack, hbool⟩
-  exact ⟨htarget, hsize, callPre, callPost, parent, child, xl,
-    delegated, code, gasWord, avail, hdepth, hstack, hinput, hreads,
-    hstor, hbal, hcode, hlogs, houtput, hparentState, hparentMemory,
-    hparentLogs, hparentOutput, hdelegation, hfilled, hmessage, hclean,
-    hresume, hcallPostState, hreturnData, hmemory, hcallPostStack, hbool⟩
-
 /-- The exact ABI-size word passed to the ERC-677 callback `CALL`. -/
 def tokenCallbackSizeWord (data : Bytes) : B256 :=
   0x84 + ((~~~ (31 : B256)) &&& (31 + Nat.toB256 data.length))

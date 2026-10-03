@@ -229,13 +229,6 @@ private lemma proxy_stateGas_addAccessedStorageKey
     {base : Devm} {target : Adr} {key : B256} :
     (addAccessedStorageKey base target key).stateGas = base.stateGas := rfl
 
-private lemma proxy_empty_extCost (S : List B256) (G : Nat) :
-    ((initDevm proxyMsgSuccess).setMach
-      ⟨S, (initDevm proxyMsgSuccess).memory, G, (initDevm proxyMsgSuccess).stateGas⟩).extCost [⟨0, 32⟩] = gMemory := by
-  rw [show (initDevm proxyMsgSuccess).memory = Mem.empty by rfl]
-  simpa only [initDevm, proxyMsgSuccess, Bool.false_eq_true, ↓reduceIte] using
-    (Devm.extCost_empty_word (devm := initDevm proxyMsgSuccess) (S := S) (G := G))
-
 private def proxyCallPreSuccess : Devm :=
   let mem := (initDevm proxyMsgSuccess).memory.write (B256.toNat 0)
     ((initSevm proxyMsgSuccess).data.sliceD (B256.toNat 0)

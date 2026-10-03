@@ -70,13 +70,9 @@ def constructorInitPrefix : Bytes :=
 def creationCode : Bytes :=
   constructorInitPrefix ++ code
 
-def constructorCreationCode : Bytes := creationCode
-
 def creationCodeSize : Nat := creationCode.length
 
 def eip3860InitcodeLimit : Nat := pragueCodeLimits.maxInitCodeSize
-
-def creationCodeHeadroom : Nat := eip3860InitcodeLimit - creationCodeSize
 
 theorem constructorProgram_eq :
     constructorProgram =
@@ -105,10 +101,6 @@ theorem constructorRuntimeOffset_exact : constructorRuntimeOffset = 239 := by
 theorem creationCode_eq_prefix_append_runtime :
     creationCode = constructorInitPrefix ++ code := by
   rfl
-
-theorem creationCode_drop_prefix :
-    creationCode.drop constructorInitPrefix.length = code := by
-  simp only [creationCode, List.drop_left']
 
 /-- The constructor's CODECOPY window is exactly the appended runtime. -/
 theorem creationCode_slice_runtime :
@@ -2346,12 +2338,6 @@ theorem canonicalDeploymentStep_establishes_root
     exact htx.pie
   · rw [← hstate]
     exact htx.bal
-
-theorem DeploymentRoot.reflReach
-    (hroot : DeploymentRoot cfg base deployed ca) :
-    BlockChain.ReachUsing cfg deployed deployed := by
-  exact .refl deployed hroot.configValid hroot.deployed_validContext
-    hroot.deployed_chainId
 
 end Drip
 end Blanc

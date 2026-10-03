@@ -2270,7 +2270,6 @@ structure RelSpec where
   branchSucc : Name
   /-- An internal tail call into the flat table. -/
   call : Name
-  deriving Inhabited
 
 /-- `Blanc/Compiled.lean`'s `Func.RunCompiled`, with this module's wrappers. -/
 def okSpec : RelSpec where

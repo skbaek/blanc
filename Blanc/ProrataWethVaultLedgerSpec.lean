@@ -266,41 +266,6 @@ theorem readOnly_preserves_conserved :
   exact h.of_get_eq fun key =>
     (congrFun (congrFun view sevm.currentTarget) key).symm
 
-/-- Strip the dispatch wrapper.  `routed` is `nonpayable` over
-`requireStaticArgs`, so a successful entry pays two guards and reaches the body
-with the storage untouched.  Shared by every writer obligation below. -/
-theorem of_routed {fs : List Func} {sevm : Sevm} {s r : Devm}
-    {words : Nat} {body : Func}
-    (run : Func.Run fs sevm s (routed words body) r) :
-    ∃ mid, Devm.getStor s sevm.currentTarget = Devm.getStor mid sevm.currentTarget ∧
-      s.memory = mid.memory ∧
-      Func.Run fs sevm mid body r := by
-  unfold routed endpoint nonpayable requireStaticArgs at run
-  rcases of_run_next run with ⟨a1, hcv, run⟩
-  rcases of_run_next run with ⟨a2, hiz, run⟩
-  rcases of_run_branch run with ⟨a3, hpb, hrun⟩ | ⟨w, a3, a4, hne, hpb, hb, hrun⟩
-  · exact absurd hrun not_run_revert
-  · rcases of_run_next hrun with ⟨a5, hpush, hrun⟩
-    rcases of_run_next hrun with ⟨a6, hcds, hrun⟩
-    rcases of_run_next hrun with ⟨a7, hlt, hrun⟩
-    rcases of_run_branch_revert hrun with ⟨a8, hpop, hrun⟩
-    refine ⟨a8, ?_, ?_, hrun⟩
-    swap
-    · exact (Ninst.Hinv.inv (f := Devm.memory) hcv).trans
-        ((Ninst.Hinv.inv (f := Devm.memory) hiz).trans
-          (hpb.memory.trans (hb.memory.trans
-            ((Ninst.Hinv.inv (f := Devm.memory) hpush).trans
-              ((Ninst.Hinv.inv (f := Devm.memory) hcds).trans
-                ((Ninst.Hinv.inv (f := Devm.memory) hlt).trans hpop.memory))))))
-    rw [congr_fun (Ninst.Hinv.inv (f := Devm.getStor) hcv) sevm.currentTarget,
-      congr_fun (Ninst.Hinv.inv (f := Devm.getStor) hiz) sevm.currentTarget,
-      (Devm.PopBurn.getStor hpb sevm.currentTarget).symm,
-      (Devm.Burn.getStor hb sevm.currentTarget).symm,
-      congr_fun (Ninst.Hinv.inv (f := Devm.getStor) hpush) sevm.currentTarget,
-      congr_fun (Ninst.Hinv.inv (f := Devm.getStor) hcds) sevm.currentTarget,
-      congr_fun (Ninst.Hinv.inv (f := Devm.getStor) hlt) sevm.currentTarget,
-      (Devm.PopBurn.getStor hpop sevm.currentTarget).symm]
-
 /-! ## The three share writers
 
 Each is its body theorem from `Blanc/ProrataWethVaultShares.lean`, instantiated
@@ -322,54 +287,6 @@ Every ERC-4626 flow writes storage on every path it can complete, so a
 successful run is itself evidence that the frame was not static.  That turns
 one third of the resource bundle those flows carry into a derived fact rather
 than an assumed one. -/
-
-/-- **Scope.** `transferStaged`, `withdrawBurn` and `redeemBurn` are proved
-below. `depositAfterQuote` and `mintAfterQuote` are not: the structural walk
-exhausts the elaborator's recursion depth before reaching their write, even
-with `StoresOrHalts.prepend` collapsing whole staging lines in one step. The
-ceiling is not raised — the proof-debt gate tracks `maxRecDepth` scopes — so
-those two are open.
-
-The obstruction has been narrowed. It is not the flows' outer structure and it
-is not the literal staging lines: restating the shared tail over *variable*
-lines, so that `StoresOrHalts.prepend` can collapse each in one step, still
-exhausts the ceiling. It is `callWethTransferFrom`: a lemma about that
-definition alone, with its asset line a variable and its body a hypothesis,
-exhausts the ceiling on its own.
-
-**Resolved.** The obvious tactic — `repeat' first | apply StoresOrHalts.next
-| apply StoresOrHalts.prepend | ...` — exceeded the default `maxRecDepth` on
-the two inbound continuations. `set_option diagnostics true` on the smallest
-failing case reported `List.rec` unfolded 1902 times, `List.casesOn` 1869,
-`List.concat` 820 and `List.get` 704: list reduction during elaboration,
-though the finished term is about twenty constructors deep.
-
-Five candidate causes were tried and refuted — the flows' outer structure and
-literal staging lines, `StoresOrHalts.store` as the expensive alternative, the
-concrete function context, the position of `exact h`, and dropping `prepend`
-altogether. The sixth was right, and it was `prepend` after all, but for the
-opposite reason to the one tested: not that the lemma is expensive, but that
-its conclusion `l +++ f` makes unification *search* for a split of a concrete
-chain, and every candidate split re-reduces the `Line` machinery. Dropping it
-does not help, because then the walk cannot cross a `+++` at all.
-
-Naming each `Line` — `apply StoresOrHalts.prepend (mstoreAt 0)` rather than
-letting `repeat'` guess — turns that search into a check. The ceiling
-disappears, and `maxRecDepth` and `maxHeartbeats` are untouched: the
-proof-debt gate tracks those scopes, and widening one would have spent the
-budget instead of fixing the cost.
-
-The lesson generalises to any `StoresOrHalts` walk over a staged program: name
-the chunks. It is recorded here rather than in `Blanc/StaticStores.lean`
-because one contract has needed it so far; a second consumer should hoist it
-into that module's `stores_structure` tactic.
-
-Slots a flow may tail-jump into on its way to a write. -/
-def FlowStoreSlot (k : Nat) : Prop :=
-  k = depositAfterQuoteSlot ∨ k = mintAfterQuoteSlot ∨
-    k = withdrawAfterQuoteSlot ∨ k = redeemAfterQuoteSlot ∨
-    k = withdrawBurnSlot ∨ k = redeemBurnSlot ∨
-    k = transferFromAfterAllowanceSlot
 
 /-- Discharge a permitted tail jump. -/
 syntax "flow_slot" : tactic
@@ -476,16 +393,6 @@ theorem inboundAfterQuote_storesOrHalts {fs : List Func}
       · exact StoresOrHalts.never not_run_revert
     · exact StoresOrHalts.never not_run_revert
   · exact StoresOrHalts.never not_run_revert
-
-/-- `deposit`'s post-quote continuation writes or halts. -/
-theorem depositAfterQuote_storesOrHalts {fs : List Func} :
-    StoresOrHalts fs depositAfterQuote :=
-  inboundAfterQuote_storesOrHalts _ _ _
-
-/-- `mint`'s post-quote continuation writes or halts. -/
-theorem mintAfterQuote_storesOrHalts {fs : List Func} :
-    StoresOrHalts fs mintAfterQuote :=
-  inboundAfterQuote_storesOrHalts _ _ _
 
 end ProrataWethVault
 

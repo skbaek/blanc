@@ -38,31 +38,6 @@ structure ReconstructSourceMemoryCarrier
   oldCount_read : image.sliceD 576 32 0 = oldCount.toBytes
   amount_read : image.sliceD 672 32 0 = amount.toBytes
 
-/-- The event-stage carrier exposes the five raw reconstruction windows
-without replaying the concrete memory-write construction.  Their semantic
-identification with the deposit fields is kept as a separate bridge. -/
-def DepositEventMemoryCarrier.toReconstructSource
-    {memory : Mem} {event : DepositEvent} {amount oldCount : B256}
-    (h : DepositEventMemoryCarrier memory event amount oldCount) :
-    ReconstructSourceMemoryCarrier memory
-      (h.image.sliceD 192 64 0)
-      (h.image.sliceD 416 64 0)
-      (h.image.sliceD 480 32 0)
-      (h.image.sliceD 288 32 0)
-      (h.image.sliceD 352 32 0)
-      oldCount amount 704 :=
-  { image := h.image
-    wf := h.wf
-    reads := h.reads
-    size_eq := h.size_eq
-    pubkeyInput_read := rfl
-    withdrawal_read := rfl
-    amountPadded_read := rfl
-    signatureFirst_read := rfl
-    signatureTail_read := rfl
-    oldCount_read := h.oldCount_read
-    amount_read := h.amount_read }
-
 /-- A fixed-width canonical event image supplies the semantic reconstruction
 inputs, including the two signature halves. -/
 def DepositEventMemoryCarrier.toFixedReconstructSource
@@ -607,22 +582,6 @@ theorem ReconstructRegistersMemoryCarrier.readSecond
     Bytes.toB256 (memory.read 736 32).1 = second := by
   rw [Mem.Reads.read h.intermediate.node.source.reads, h.second_read,
     B256.toB256_toBytes]
-
-/-- Logical SHA expansion preserves all three digest registers. -/
-def ReconstructRegistersMemoryCarrier.extendForHash
-    {memory : Mem}
-    {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
-    {oldCount amount node intermediate second : B256} {size : Nat}
-    (h : ReconstructRegistersMemoryCarrier memory pubkeyInput signatureFirst
-      signatureTail withdrawal amountPadded oldCount amount node intermediate
-      second size)
-    (inputWord outputWord : B256) :
-    ReconstructRegistersMemoryCarrier
-      (memory.extends (reconstructionShaWindows inputWord outputWord))
-      pubkeyInput signatureFirst signatureTail withdrawal amountPadded
-      oldCount amount node intermediate second
-      (memExtsSize size (reconstructionShaWindows inputWord outputWord)) := by
-  exact ⟨h.intermediate.extendForHash inputWord outputWord, h.second_read⟩
 
 /-- The steady-state three-register carrier after staging words 0–1. -/
 structure ReconstructPairMemoryCarrier

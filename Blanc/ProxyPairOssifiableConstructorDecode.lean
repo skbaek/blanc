@@ -63,21 +63,6 @@ private def constructorDecodeAfterHeadCopy
   constructorDecodeLoadWord 0 +++ checkNonAddress +++
     ((.call 1) <?> constructorDecodeAfterImplementation argsOffset body)
 
-private theorem constructorDecodeAfterHeadCopy_shape
-    (argsOffset : Nat) (body : Func) :
-    constructorDecodeAfterHeadCopy argsOffset body =
-      constructorDecodeLoadWord 0 +++ checkNonAddress +++
-        ((.call 1) <?>
-          constructorDecodeAfterImplementation argsOffset body) := by
-  rfl
-
-private theorem constructorDecodeAfterImplementation_shape
-    (argsOffset : Nat) (body : Func) :
-    constructorDecodeAfterImplementation argsOffset body =
-      constructorDecodeLoadWord 1 +++ checkNonAddress +++
-        ((.call 1) <?> constructorDecodeAfterAdmin argsOffset body) := by
-  rfl
-
 private def constructorDecodeAfterHead
     (argsOffset : Nat) (body : Func) : Func :=
   pushB256 96 ::: ossifiablePushCreationCoordinate argsOffset :::
@@ -1188,60 +1173,6 @@ theorem OssifiableConstructorPayloadCompleteBoundary.copyPayload
         (pushDest.logs.trans logs6)))))
 
 /-! ## Accepted-route composition -/
-
-theorem ossifiableConstructorDecode_pointerBoundary_of_guards
-    {fs : List Func} {sevm : Sevm} {entry : Devm} {body : Func}
-    {argsOffset : Nat} {tail : Stack} {image : Bytes} {out : Execution}
-    (hp : tail <<+ entry.stack)
-    (hwf : Mem.Wf entry.memory)
-    (hreads : Mem.Reads entry.memory image)
-    (hcoordinate : argsOffset + 96 < 2 ^ 256)
-    (hcodeSize : sevm.code.size < 2 ^ 256)
-    (hheadComplete : argsOffset + 96 ≤ sevm.code.size)
-    (himplementationClean : addressMask &&&
-      ossifiableConstructorCodeWord sevm.code.toList argsOffset = 0)
-    (hadminClean : addressMask &&&
-      ossifiableConstructorCodeWord sevm.code.toList (argsOffset + 32) = 0)
-    (hoffsetBound : ¬ ossifiableConstructorAbiMaxUint64 <
-      ossifiableConstructorCodeWord sevm.code.toList (argsOffset + 64))
-    (run : Func.RunCompiledTo fs sevm entry
-      (ossifiableConstructorDecode argsOffset body) out) :
-    OssifiableConstructorPointerBoundary fs sevm entry body argsOffset tail
-      image out := by
-  have head := ossifiableConstructorDecode_headBoundary hp hwf hreads
-    hcoordinate hcodeSize hheadComplete run
-  have implementation := head.implementationClean himplementationClean
-  have address := implementation.adminClean hadminClean
-  exact (address.offsetBound hoffsetBound).storePointer
-
-theorem OssifiableConstructorPointerBoundary.accepted
-    {fs : List Func} {sevm : Sevm} {entry : Devm} {body : Func}
-    {argsOffset : Nat} {tail : Stack} {image : Bytes} {out : Execution}
-    (pointer : OssifiableConstructorPointerBoundary fs sevm entry body
-      argsOffset tail image out)
-    (hcodeSize : sevm.code.size < 2 ^ 256)
-    (hlengthComplete :
-      (ossifiableConstructorDataPointer argsOffset
-        (ossifiableConstructorCodeWord sevm.code.toList (argsOffset + 64)) +
-          32).toNat ≤ sevm.code.size)
-    (hlengthBound : ¬ ossifiableConstructorAbiMaxUint64 <
-      ossifiableConstructorCodeWord sevm.code.toList
-        (ossifiableConstructorDataPointer argsOffset
-          (ossifiableConstructorCodeWord sevm.code.toList
-            (argsOffset + 64))).toNat)
-    (hpayloadComplete :
-      (ossifiableConstructorDataEnd argsOffset
-        (ossifiableConstructorCodeWord sevm.code.toList (argsOffset + 64))
-        (ossifiableConstructorCodeWord sevm.code.toList
-          (ossifiableConstructorDataPointer argsOffset
-            (ossifiableConstructorCodeWord sevm.code.toList
-              (argsOffset + 64))).toNat)).toNat ≤ sevm.code.size) :
-    OssifiableConstructorDecodeBoundary fs sevm entry body argsOffset tail
-      image out := by
-  have complete := pointer.lengthComplete hcodeSize hlengthComplete
-  have length := complete.copyLength
-  have bounded := length.lengthBound hlengthBound
-  exact (bounded.payloadComplete hcodeSize hpayloadComplete).copyPayload
 
 /-! ## Total result-indexed routes -/
 

@@ -2064,7 +2064,7 @@ deriving DecidableEq, Repr
 structure Prog.SourcePath where
   functionIndex : Nat
   steps : List Prog.SourceStep
-deriving DecidableEq, Repr
+deriving DecidableEq
 
 /-- An executable compiler-produced source instruction site. -/
 structure Prog.SourceSite where

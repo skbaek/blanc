@@ -991,22 +991,6 @@ private theorem fixtureV2ValueChild_data :
   simpa only [fixtureV2ValueChildMessage, sharedValueMessage, Lean.Elab.WF.paramLet,
     v2ValueSpawn] using route.childData
 
-private theorem fixtureV1ValueChild_initialMemory :
-    (initDevm fixtureV1ValueChildMessage).memory = Mem.empty := by
-  rfl
-
-private theorem fixtureV2ValueChild_initialMemory :
-    (initDevm fixtureV2ValueChildMessage).memory = Mem.empty := by
-  rfl
-
-private theorem fixtureV1ValueChild_initialStack :
-    (initDevm fixtureV1ValueChildMessage).stack = [] := by
-  rfl
-
-private theorem fixtureV2ValueChild_initialStack :
-    (initDevm fixtureV2ValueChildMessage).stack = [] := by
-  rfl
-
 private theorem fixtureV1ValueChild_currentTarget :
     (initSevm fixtureV1ValueChildMessage).currentTarget = upgradeProxy := by
   rfl

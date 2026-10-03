@@ -26,11 +26,6 @@ structure InsertionLoopState where
 def InsertionLoopState.live (s : InsertionLoopState) : Prop :=
   ((1 : B256) &&& s.size) ≠ 0
 
-instance instDecidableInsertionLoopStateLive
-    (s : InsertionLoopState) : Decidable s.live := by
-  unfold InsertionLoopState.live
-  infer_instance
-
 /-- The branch key read by a dead step or written by the live step. -/
 def InsertionLoopState.key (s : InsertionLoopState) : B256 :=
   branchBase + s.height
@@ -639,92 +634,5 @@ theorem insertionLoop_deadThenLive_exists_storageEffectRun
   rcases hfinal with ⟨finalBase, finalMemory, ⟨finalCarrier⟩, rfl⟩
   exact ⟨finalBase, finalMemory, ⟨finalCarrier⟩,
     by simpa only [terminalGas, final] using run⟩
-
-/-- Compose a dead prefix with its terminal live store.  The final carrier is
-exposed so downstream proofs can classify the one branch write exactly. -/
-theorem insertionLoop_deadThenLive_exists_runCompiledTo
-    {fs : List Func} {sevm : Sevm} {origin base : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    {memory : Mem} {oldCount : B256} {s : InsertionLoopState}
-    {stor : Stor} {n G : Nat}
-    (carrier : InsertionLoopCarrier origin base memory oldCount s)
-    (horiginStor : Devm.getStor origin sevm.currentTarget = stor)
-    (hdead : InsertionLoopDead sevm.currentTarget stor n s)
-    (hfinalLive :
-      (insertionLoopIter sevm.currentTarget stor n s).live)
-    (hnodeleg : getDelegatedCodeAddress (origin.getCode 2) = none)
-    (hwarm : (2 : Adr) ∈ origin.accessedAddresses)
-    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hdepth : sevm.depth ≠ 0)
-    (hstatic : sevm.isStatic = false)
-    (hsentry : gCallStipend < G + 2 +
-      insertionStoreCost sevm stor
-        (insertionLoopIter sevm.currentTarget stor n s))
-    (hbound :
-      (G + 46 + insertionStoreCost sevm stor
-          (insertionLoopIter sevm.currentTarget stor n s)) +
-        insertionDeadGas sevm.currentTarget stor n s < 2 ^ 256)
-    (hinsertionContinuation :
-      fs[insertionContinuationSlot]? = some insertionContinuation)
-    (hinsertionLoop : fs[insertionLoopSlot]? = some insertionLoop) :
-    ∃ finalBase finalMemory,
-      Nonempty (InsertionLoopCarrier origin finalBase finalMemory oldCount
-        (insertionLoopIter sevm.currentTarget stor n s)) ∧
-      Func.RunCompiledTo fs sevm
-        (base.setMach
-          ⟨[s.height], memory,
-            (G + 46 + insertionStoreCost sevm stor
-                (insertionLoopIter sevm.currentTarget stor n s)) +
-              insertionDeadGas sevm.currentTarget stor n s, base.stateGas⟩)
-        insertionLoop
-        (.ok ((afterSstore sevm finalBase
-          (insertionLoopIter sevm.currentTarget stor n s).key
-          (insertionLoopIter sevm.currentTarget stor n s).node).setMach
-            ⟨[], finalMemory, G, finalBase.stateGas⟩)) := by
-  let final := insertionLoopIter sevm.currentTarget stor n s
-  let terminalGas := G + 46 + insertionStoreCost sevm stor final
-  obtain ⟨ex, hfinal, hrun⟩ :=
-    insertionLoop_dead_iterations_exists_runCompiledTo (hfork := hfork)
-      (P := fun ex => ∃ finalBase finalMemory,
-        Nonempty (InsertionLoopCarrier origin finalBase finalMemory
-          oldCount final) ∧
-        ex = .ok ((afterSstore sevm finalBase final.key final.node).setMach
-          ⟨[], finalMemory, G, finalBase.stateGas⟩))
-      (K := terminalGas) carrier horiginStor hdead
-      hnodeleg hwarm hpre hdepth
-      (by simpa only [terminalGas, final] using hbound)
-      hinsertionContinuation hinsertionLoop
-      (by
-        intro finalBase finalMemory finalCarrier
-        have hcost :=
-          insertionStoreCost_eq_sstoreCost finalCarrier horiginStor
-        have hkey : final.key = branchBase + final.height := rfl
-        have hbit : ((1 : B256) &&& final.size) ≠ 0 := by
-          change final.live at hfinalLive
-          exact hfinalLive
-        have hsentryFinal : gCallStipend < G + 2 +
-            insertionStoreCost sevm stor final := by
-          simpa only [final] using hsentry
-        rw [hcost, hkey] at hsentryFinal
-        have hsentry' : gCallStipend < G + 2 +
-            sstoreCost sevm finalBase
-              (branchBase + final.height) final.node := by
-          exact hsentryFinal
-        have hlive := insertionLoopLive_runCompiledTo (hfork := hfork)
-          (fs := fs) (sevm := sevm) (base := finalBase)
-          (K := G) finalCarrier.mem hbit hsentry' hstatic
-        have hcost' :
-            sstoreCost sevm finalBase
-                (branchBase + final.height) final.node =
-              insertionStoreCost sevm stor final := by
-          rw [← hkey, ← hcost]
-        rw [hcost'] at hlive
-        refine ⟨.ok ((afterSstore sevm finalBase final.key final.node).setMach
-            ⟨[], finalMemory, G, finalBase.stateGas⟩),
-          ⟨finalBase, finalMemory, ⟨finalCarrier⟩, rfl⟩, ?_⟩
-        simpa only [terminalGas, final, hkey] using hlive)
-  rcases hfinal with ⟨finalBase, finalMemory, ⟨finalCarrier⟩, rfl⟩
-  exact ⟨finalBase, finalMemory, ⟨finalCarrier⟩,
-    by simpa only [terminalGas, final] using hrun⟩
 
 end Blanc.BeaconDeposit

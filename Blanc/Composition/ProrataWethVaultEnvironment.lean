@@ -66,7 +66,6 @@ inductive WethFrameClass
   | withdraw (caller : Adr) (wad : B256)
   | transfer (caller : Adr) (dst wad : B256)
   | transferFrom (caller : Adr) (src dst wad : B256)
-  deriving DecidableEq
 
 /-- What one class asserts about the frame's own machine.  This is written
 independently of `classify?` on purpose: the classifier is a decision

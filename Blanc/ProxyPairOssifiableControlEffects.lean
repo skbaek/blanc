@@ -139,26 +139,6 @@ theorem noCodeImplementation_call_exact
   · decide +kernel
   · exact run
 
-theorem emptyDelegatecallError_call_exact
-    {sevm : Sevm} {pre : Devm} {image : Bytes} {out : Execution}
-    (hwf : Mem.Wf pre.memory) (hreads : Mem.Reads pre.memory image)
-    (run : Func.RunCompiledTo
-      (runtimeBaseline.main :: runtimeBaseline.aux)
-      sevm pre (.call emptyDelegatecallErrorSlot) out) :
-    ControlErrorOutcome pre emptyDelegatecallErrorData out := by
-  apply controlErrorCall_exact
-      (slot := emptyDelegatecallErrorSlot)
-      (blob := emptyDelegatecallErrorData)
-      (image := image) (out := out)
-  · simp only [runtimeBaseline, runtimeBaselineAux, emptyDelegatecallError,
-    emptyDelegatecallErrorSlot, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
-    Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
-  · exact hwf
-  · exact hreads
-  · decide +kernel
-  · decide +kernel
-  · exact run
-
 /-! ## `upgradeToAndCall` decoder boundary -/
 
 /- The source decoder is one nested guard chain.  These suffix names keep each

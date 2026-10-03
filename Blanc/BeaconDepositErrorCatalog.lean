@@ -24,7 +24,6 @@ inductive ReachableReason
   | valueTooHigh
   | depositDataRootMismatch
   | merkleTreeFull
-deriving DecidableEq
 
 /-- The source-model reason represented by one compiled auxiliary. -/
 def ReachableReason.reason : ReachableReason → Reason

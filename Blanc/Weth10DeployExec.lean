@@ -627,9 +627,6 @@ theorem weth10InitMemory_read_runtime {sevm : Sevm}
   rw [hsep2, Bytes.sliceD_zero_length h5]
   rfl
 
-private theorem memRead_fst_eq (d : Devm) (index size : Nat) :
-    (d.memRead index size).1 = (d.memory.read index size).1 := rfl
-
 private def weth10InitReturnPre
     (base : Devm) (M : Mem) (g : Nat) : Devm :=
   base.setMach

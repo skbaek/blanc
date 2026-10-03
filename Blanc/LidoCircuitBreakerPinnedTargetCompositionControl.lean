@@ -197,44 +197,6 @@ private theorem temporalSloadBase_accessedAddresses (sevm : Sevm) (base : Devm)
       base.accessedAddresses :=
   (temporalSloadBase_carriers sevm base key).2.2.1
 
-/-! ## Slot-pair inequalities lifted to accessed-key pairs -/
-
-private theorem addAccessedStorageKey_getStorVal (devm : Devm) (a : Adr)
-    (k : B256) (a' : Adr) (key : B256) :
-    (addAccessedStorageKey devm a k).getStorVal a' key =
-      devm.getStorVal a' key := rfl
-
-private theorem addAccessedStorageKey_accessedStorageKeys' (devm : Devm)
-    (a : Adr) (k : B256) :
-    (addAccessedStorageKey devm a k).accessedStorageKeys =
-      devm.accessedStorageKeys.insert (a, k) := rfl
-
-private theorem addAccessedStorageKey_accessedAddresses (devm : Devm) (a : Adr)
-    (k : B256) : (addAccessedStorageKey devm a k).accessedAddresses =
-      devm.accessedAddresses := rfl
-
-private theorem addAccessedStorageKey_error (devm : Devm) (a : Adr) (k : B256) :
-    (addAccessedStorageKey devm a k).error = devm.error := rfl
-
-private theorem addAccessedStorageKey_output (devm : Devm) (a : Adr)
-    (k : B256) : (addAccessedStorageKey devm a k).output = devm.output := rfl
-
-private theorem addAccessedStorageKey_logs (devm : Devm) (a : Adr) (k : B256) :
-    (addAccessedStorageKey devm a k).logs = devm.logs := rfl
-
-private theorem lengthWritePost_error (sevm : Sevm) (base : Devm) (ol : B256) :
-    (lengthWritePost sevm base ol).error = base.error := rfl
-
-private theorem lengthWritePost_output (sevm : Sevm) (base : Devm) (ol : B256) :
-    (lengthWritePost sevm base ol).output = base.output := rfl
-
-private theorem lengthWritePost_logs (sevm : Sevm) (base : Devm) (ol : B256) :
-    (lengthWritePost sevm base ol).logs = base.logs := rfl
-
-private theorem lengthWritePost_accessedAddresses (sevm : Sevm) (base : Devm)
-    (ol : B256) : (lengthWritePost sevm base ol).accessedAddresses =
-      base.accessedAddresses := rfl
-
 private theorem keyPairNe {a₁ a₂ : Adr} {k₁ k₂ : B256} (h : k₂ ≠ k₁) :
     (a₁, k₁) ≠ (a₂, k₂) := fun hp => h (congrArg Prod.snd hp).symm
 
@@ -492,38 +454,10 @@ private theorem stubRunKeys_removeBase3 :
 
 /-! ## One-layer projection helpers -/
 
-private theorem temporalSstorePost_error (sevm : Sevm) (base : Devm)
-    (key value : B256) :
-    (temporalSstorePost sevm base key value).error = base.error := rfl
-
-private theorem temporalSstorePost_output (sevm : Sevm) (base : Devm)
-    (key value : B256) :
-    (temporalSstorePost sevm base key value).output = base.output := rfl
-
-private theorem temporalSstorePost_transientStorage (sevm : Sevm)
-    (base : Devm) (key value : B256) :
-    (temporalSstorePost sevm base key value).transientStorage =
-      base.transientStorage := rfl
-
 private theorem temporalSstorePost_accessedAddresses (sevm : Sevm)
     (base : Devm) (key value : B256) :
     (temporalSstorePost sevm base key value).accessedAddresses =
       base.accessedAddresses := rfl
-
-private theorem addLog_getCode (devm : Devm) (l : Log) (x : Adr) :
-    (devm.addLog l).getCode x = devm.getCode x := rfl
-
-private theorem addLog_logs (devm : Devm) (l : Log) :
-    (devm.addLog l).logs = devm.logs ++ [l] := rfl
-
-private theorem addLog_error (devm : Devm) (l : Log) :
-    (devm.addLog l).error = devm.error := rfl
-
-private theorem addLog_output (devm : Devm) (l : Log) :
-    (devm.addLog l).output = devm.output := rfl
-
-private theorem addLog_transientStorage (devm : Devm) (l : Log) :
-    (devm.addLog l).transientStorage = devm.transientStorage := rfl
 
 private theorem addLog_accessedStorageKeys (devm : Devm) (l : Log) :
     (devm.addLog l).accessedStorageKeys = devm.accessedStorageKeys := rfl
@@ -535,35 +469,9 @@ private theorem addLog_getStorVal (devm : Devm) (l : Log) (a : Adr)
     (key : B256) : (devm.addLog l).getStorVal a key = devm.getStorVal a key :=
   rfl
 
-private theorem setTransVal_getStorVal (devm : Devm) (a : Adr) (k v : B256)
-    (a' : Adr) (key : B256) :
-    (devm.setTransVal a k v).getStorVal a' key = devm.getStorVal a' key := rfl
-
-private theorem setTransVal_logs (devm : Devm) (a : Adr) (k v : B256) :
-    (devm.setTransVal a k v).logs = devm.logs := rfl
-
-private theorem setTransVal_error (devm : Devm) (a : Adr) (k v : B256) :
-    (devm.setTransVal a k v).error = devm.error := rfl
-
-private theorem setTransVal_output (devm : Devm) (a : Adr) (k v : B256) :
-    (devm.setTransVal a k v).output = devm.output := rfl
-
 private theorem setMach_getStorVal (devm : Devm) (m : Mach) (a : Adr)
     (key : B256) : (devm.setMach m).getStorVal a key = devm.getStorVal a key :=
   rfl
-
-private theorem setMach_getTransVal (devm : Devm) (m : Mach) (a : Adr)
-    (key : B256) :
-    (devm.setMach m).getTransVal a key = devm.getTransVal a key := rfl
-
-private theorem setMach_logs (devm : Devm) (m : Mach) :
-    (devm.setMach m).logs = devm.logs := rfl
-
-private theorem setMach_error (devm : Devm) (m : Mach) :
-    (devm.setMach m).error = devm.error := rfl
-
-private theorem setMach_output (devm : Devm) (m : Mach) :
-    (devm.setMach m).output = devm.output := rfl
 
 /-! ## The cold and warm charges, resolved at the row-19 world -/
 
@@ -851,19 +759,6 @@ private theorem stubRunStor_removeBase3_count :
   rw [temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
     temporalSloadBase_getStorVal]
   exact stubRunStor_countPost_count
-
-private theorem stubRunStor_removeBase3_assign :
-    (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
-      (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)).getStorVal configWorldOwner (assignmentSlot pauseWorldCallee.toB256) = 0 := by
-  rw [temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
-    temporalSloadBase_getStorVal]
-  exact stubRunStor_countPost_assign
 
 /-! The five removal-walk writes, peeled from the outside of `B6`:
 `indexClearPost` writes the index clear over the length restore, and
@@ -1369,10 +1264,6 @@ private theorem temporalSloadBase_getCode (sevm : Sevm) (base : Devm)
     (temporalSloadBase sevm base key).getCode a = base.getCode a :=
   (temporalSloadBase_carriers sevm base key).2.2.2 a
 
-
-private theorem addAccessedStorageKey_getCode (devm : Devm) (a : Adr)
-    (k : B256) (x : Adr) :
-    (addAccessedStorageKey devm a k).getCode x = devm.getCode x := rfl
 
 private theorem stubRunAddrs_B7 :
     ((indexClearPost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm

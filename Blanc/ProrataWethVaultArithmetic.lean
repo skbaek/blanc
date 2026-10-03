@@ -168,14 +168,6 @@ private theorem maxWord_mul_div_wordModulus
     rw [Nat.sub_mul, Nat.one_mul]
     exact Nat.sub_lt (Nat.mul_pos wordModulusN_pos hd) hd
 
-theorem maxWord_mul_denominator_div_assetFactor_maxWord
-    {supply : Nat} (stable : supply ≤ maxSupplyN) :
-    maxWordN * denominatorN supply / assetFactorN maxWordN =
-      denominatorN supply - 1 := by
-  rw [assetFactorN_maxWord]
-  exact maxWord_mul_div_wordModulus (denominatorN_pos supply)
-    (denominatorN_le_maxWord stable)
-
 /-! ## Exact rounding directions -/
 
 theorem convertToSharesN_floor_le (amount assets supply : Nat) :

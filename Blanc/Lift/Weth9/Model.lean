@@ -99,7 +99,6 @@ theorem run_append (l : Ledger) (xs ys : List Call) :
 def total (l : Ledger) : Nat := sum l.bal
 
 theorem setBal_bal (l : Ledger) (a : Adr) (w : B256) : (l.setBal a w).bal = Function.update l.bal a w := rfl
-theorem setBal_allow (l : Ledger) (a : Adr) (w : B256) : (l.setBal a w).allow = l.allow := rfl
 theorem setAllow_bal (l : Ledger) (o p : Adr) (w : B256) : (l.setAllow o p w).bal = l.bal := rfl
 
 theorem increase_setBal (l : Ledger) (a : Adr) (v : B256) :

@@ -604,34 +604,6 @@ theorem WethAllowanceEvent.classification_sound
       · simp only [reduceCtorEq] at classified
   · simp only [reduceCtorEq] at classified
 
-/-- Every committed exact approve or transferFrom frame is retained by the
-classifier.  Together with `classification_sound`, this is frame-level coverage;
-it still says nothing about the frame's intervening child chronology. -/
-theorem WethAllowanceEvent.classification_complete
-    {frame : Exec.Frame} {approval : Bool}
-    (classified : (⟨frame, approval⟩ : WethAllowanceEvent).Classified) :
-    WethAllowanceEvent.classify? frame = some ⟨frame, approval⟩ := by
-  change (Blanc.Exec.Frame.exactInvocation Blanc.weth wethAccount wethAccount frame) ∧
-    Sevm.selector frame.sevm =
-      if approval then selector "approve" [.address, .uint256]
-      else selector "transferFrom" [.address, .address, .uint256] at classified
-  rcases classified with ⟨identity, selected⟩
-  cases approval with
-  | false =>
-      have distinct : selector "transferFrom" [.address, .address, .uint256] ≠
-          selector "approve" [.address, .uint256] := by decide +kernel
-      simp only [Bool.false_eq_true, ↓reduceIte] at selected
-      have notApprove : Sevm.selector frame.sevm ≠
-          selector "approve" [.address, .uint256] := by
-        intro equal
-        exact distinct (selected.symm.trans equal)
-      unfold WethAllowanceEvent.classify?
-      rw [if_pos identity, if_neg notApprove, if_pos selected]
-  | true =>
-      simp only [↓reduceIte] at selected
-      unfold WethAllowanceEvent.classify?
-      rw [if_pos identity, if_pos selected]
-
 /-- Classifying a path-retained frame preserves that exact path and produces
 the existing frame-level WETH allowance classification. -/
 theorem WethAllowanceLocatedEvent.classification_sound
@@ -742,21 +714,6 @@ def RetainedWethAllowanceEventInvocations
           call.approval = event.approval ∧ call.sevm = event.frame.sevm ∧
             call.pre = event.frame.pre ∧ call.post = event.frame.post
 
-/-- A retained slot whose actual frame entries are fresh supplies the
-memory condition needed by every projected allowance event. -/
-theorem retainedXlot_wethAllowanceEvents_toInvocations
-    {slot : Xlot} (retained : _root_.Blanc.ExecutionTrace.RetainedXlot slot)
-    (fresh : _root_.Blanc.ExecutionTrace.RetainedXlot.FrameAdmitted retained
-      wethAccount Exec.FreshEntry) :
-    RetainedWethAllowanceEventInvocations retained := by
-  cases retained with
-  | none => trivial
-  | some run =>
-      intro event member
-      have fresh : Exec.FrameAdmitted wethAccount Exec.FreshEntry run := by
-        simpa only [_root_.Blanc.ExecutionTrace.RetainedXlot.FrameAdmitted] using fresh
-      exact retainedWethAllowanceEvent_toInvocation run fresh member
-
 /-- Raw words, without address normalization. A self `transferFrom` bypasses
 allowance hashing; all other successful allowance invocations visit one pair.
 Both finite-decrement and maximum-allowance visits retain their pair. -/
@@ -794,11 +751,6 @@ def NoVaultAllowanceKeyCollision (history : List WethAllowanceInvocation)
   ∀ p ∈ touchedWethAllowancePairs history, p.1 = vault.toB256 →
     ∀ q ∈ writtenWethAllowancePairs history, p ≠ q →
       wethAllowanceKey p.1 p.2 ≠ wethAllowanceKey q.1 q.2
-
-instance (history : List WethAllowanceInvocation) (vault : Adr) :
-    Decidable (NoVaultAllowanceKeyCollision history vault) := by
-  unfold NoVaultAllowanceKeyCollision
-  infer_instance
 
 /-- A foreign approval in the recorded exact executions cannot forge any
 vault-owned allowance pair touched by that record, under D9. The raw write is

@@ -249,8 +249,4 @@ abbrev CreationCoordinatesCertificate := CreationArtifact.CreationCoordinatesCer
 /-- Public alias for the creation coordinates checker. -/
 abbrev checkCreationCoordinates := CreationArtifact.checkCreationCoordinates
 
-/-- Public alias for the certificate-to-checker direction. -/
-abbrev checkCreationCoordinates_isSome_of_cert :=
-  @CreationArtifact.checkCreationCoordinates_isSome_of_cert
-
 end Blanc

@@ -115,7 +115,7 @@ inductive Label : Type
   | pauseAfterSet
   | enumLoop
   | arithmeticPanic
-  deriving DecidableEq, Repr
+  deriving DecidableEq
 
 /-- Positional auxiliary slot index corresponding to each label.
 
@@ -1115,9 +1115,6 @@ theorem runtime_eq_mk (dp : DeployParams) :
 theorem runtime_compiles (dp : DeployParams) :
     Prog.compiles (runtime dp) = true :=
   (symbolicLinkCert dp).compiles
-
-def runtimeCode (dp : DeployParams) : Bytes :=
-  (Prog.compile (runtime dp)).getD []
 
 def sourceSstoreSiteCount : Func → Nat :=
   Func.sourceSiteCount fun

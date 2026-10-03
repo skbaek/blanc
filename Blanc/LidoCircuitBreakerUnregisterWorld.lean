@@ -398,34 +398,6 @@ theorem unregWorld_stor_count_other {p : B256}
       (by norm_num only [countRegion]) unregWorld_payload_pauser hp
       (by norm_num only [expiryRegion, countRegion])
 
-/-- Every canonical pauser other than `9` has a zero heartbeat expiry. -/
-theorem unregWorld_stor_expiry_other {p : B256}
-    (hcanonical : canonicalAddress p) (hne : p ≠ unregWorldPauser) :
-    unregWorldStor.get (expirySlot p) = 0 := by
-  have hp : p.toNat < 2 ^ 252 := unregWorld_payload_of_canonical hcanonical
-  refine unregWorld_stor_zero ?_ ?_ ?_ ?_ ?_ ?_ ?_
-  · exact slot_ne_of_region_ne (by norm_num only [configRegion])
-      (by norm_num only [expiryRegion]) unregWorld_payload_one hp
-      (by norm_num only [configRegion, expiryRegion])
-  · exact slot_ne_of_region_ne (by norm_num only [arrayRegion])
-      (by norm_num only [expiryRegion]) unregWorld_payload_zero hp
-      (by norm_num only [arrayRegion, expiryRegion])
-  · exact slot_ne_of_region_ne (by norm_num only [arrayRegion])
-      (by norm_num only [expiryRegion]) unregWorld_payload_one hp
-      (by norm_num only [arrayRegion, expiryRegion])
-  · exact slot_ne_of_region_ne (by norm_num only [assignmentRegion])
-      (by norm_num only [expiryRegion]) unregWorld_payload_target hp
-      (by norm_num only [assignmentRegion, expiryRegion])
-  · exact slot_ne_of_region_ne (by norm_num only [indexRegion])
-      (by norm_num only [expiryRegion]) unregWorld_payload_target hp
-      (by norm_num only [indexRegion, expiryRegion])
-  · exact slot_ne_of_region_ne (by norm_num only [countRegion])
-      (by norm_num only [expiryRegion]) unregWorld_payload_pauser hp
-      (by norm_num only [countRegion, expiryRegion])
-  · intro heq
-    exact hne (slot_injective_payload (by norm_num only [expiryRegion])
-      unregWorld_payload_pauser hp heq).symm
-
 /-! ## The Registry witness
 
 The deployed storage is the image of the one-entry list `[(7, 9)]` under the
@@ -689,13 +661,6 @@ theorem unregWorld_assignment :
     Devm.getStorVal unregWorldPre unregWorldOwner
       (assignmentSlot unregWorldTarget) = unregWorldPauser := by
   rw [unregWorld_getStorVal, unregWorld_stor_assignment]
-
-/-- The admin address is a canonical address distinct from the retiring
-pauser, so its own heartbeat cell is untouched and zero. -/
-theorem unregWorld_adminCanonical :
-    canonicalAddress unregWorldAdmin.toB256 := by
-  unfold canonicalAddress unregWorldAdmin
-  decide
 
 theorem unregWorld_preWitness :
     RegistryWitness

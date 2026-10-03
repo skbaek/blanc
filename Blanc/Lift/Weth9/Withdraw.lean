@@ -402,36 +402,6 @@ theorem Weth9.withdraw_post_gen {P : Sevm → Devm → Ninst → Devm → Prop}
     · rw [hstor10, hbal10]; exact hinv
   exact ContractSpecSem.Post.of_state_eq hpost hstate
 
-/-- **WETH9 `withdraw(wad)` (entry 8) establishes the frame postcondition.**
-
-Stated over any `ContractSpecSem` whose invariant admits the debit
-(`hstep`: from `Inv s v b` and `wad ≤ balanceOf[caller]`, the ether covers `wad`
-and the invariant holds at the debited storage and balance).  `ih` is the
-deeper-frame hypothesis of `ContractSpecSem.Sound`, verbatim; `hpre` is the
-frame precondition at the entry's pre-state. -/
-theorem Weth9.withdraw_post {ca : Adr}
-    {sevm : Sevm}
-    (hstep : ∀ {s : Stor} {v b : B256} {wad : B256},
-      c.Inv s v b → wad ≤ s.get (balSlot sevm.caller) →
-      wad ≤ b ∧ c.Inv (s.set (balSlot sevm.caller) (s.get (balSlot sevm.caller) - wad)) 0
-        (b - wad))
-    {devm : Devm} {o : Outcome} {g : SFunc}
-    (hfork : CoveredFork sevm.benvStat.fork) (hca : sevm.currentTarget = ca)
-    (ih : ∀ pc' sevm' pre' post',
-        Exec pc' sevm' pre' (.ok post') →
-        sevm'.depth < sevm.depth →
-        CodeSem.At c.sem ca pc' sevm' pre' →
-        CoveredFork sevm'.benvStat.fork →
-        c.PreWf ca sevm' pre' →
-        c.Post ca sevm' post')
-    (hg : prog[8]? = some g) (run : SFunc.Run prog sevm devm g o)
-    (hpre : c.Pre ca sevm devm) :
-    c.Post ca sevm (Outcome.devm o) :=
-  Weth9.withdraw_post_gen (P := Ninst.Run) id hstep hfork hca
-    (fun hc hp hcode hside hle hinv =>
-      ContractSpecSem.post_of_call_self hfork hca ih hp hcode hside hle hinv hc)
-    hg run hpre
-
 /-- **WETH9 `withdraw(wad)` within a root derivation, under the admitted
 deeper-frame hypothesis.**  The run is a `StepIn R` run, so the `CALL`'s child
 derivation lies among `R`'s raw frame roots; given `R`'s frame admission, the

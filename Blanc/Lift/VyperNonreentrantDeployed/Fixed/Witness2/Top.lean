@@ -97,11 +97,6 @@ theorem eRe_static : eRe.pc = 0 ∧ eRe.sta.currentTarget = proxyAddress ∧ eRe
   exact ⟨(Prod.mk.inj h).1, (Prod.mk.inj (Prod.mk.inj h).2).1, (Prod.mk.inj (Prod.mk.inj (Prod.mk.inj h).2).2).1,
     (Prod.mk.inj (Prod.mk.inj (Prod.mk.inj h).2).2).2⟩
 
-theorem eTop_withFork_prague : eTop.sta.withFork .prague = eTop.sta := by
-  have h := Sevm.withFork_self eTop.sta
-  rw [eTop_static.2.2.2] at h
-  exact h
-
 /-- **The run, on every derivation, under any covered fork.**  Whatever derivation `R` of the
 forwarder frame's machine is taken, with its fork changed to any covered fork, it succeeds with
 `dTop`, and it has the nodes the V+ antecedent names.  The kernel facts of the Prague walks are

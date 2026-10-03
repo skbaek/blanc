@@ -412,7 +412,6 @@ inductive PairAttackKind where
   | victimDeposit (amount minted : Nat)
   | victimExit (shares paid : Nat)
   | silent
-deriving DecidableEq
 
 /-- Exact state change of one classified pair step. -/
 inductive PairAttackEffect (o : Nat) :
@@ -964,29 +963,5 @@ def PairAttackKind.ofProrata : ProrataAttackKind → PairAttackKind
   | .victimDeposit amount minted => .victimDeposit amount minted
   | .victimExit shares paid => .victimExit shares paid
   | .silent => .silent
-
-/-- Where the roles coincide the overlay is PRORATA's effect verbatim and the
-priced totals do not move. -/
-theorem PairAttackEffect.ofProrata {o : Nat} {pre post : ProrataAttackState o}
-    {kind : ProrataAttackKind} (effect : ProrataAttackEffect o pre kind post)
-    (sharesIn sharesOut : Nat) :
-    PairAttackEffect o ⟨pre, sharesIn, sharesOut⟩ (.ofProrata kind)
-      ⟨post, sharesIn, sharesOut⟩ := by
-  cases effect with
-  | nonVictimDeposit attribution amount minted hminted =>
-      exact .nonVictimDeposit ⟨pre, sharesIn, sharesOut⟩ attribution amount minted
-        (Nat.le_of_eq hminted)
-  | nonVictimWithdraw attribution shares paid hshares hpaid =>
-      exact .nonVictimWithdraw ⟨pre, sharesIn, sharesOut⟩ attribution shares paid
-        hshares (Nat.le_of_eq hpaid)
-  | externalCredit attribution amount hpositive =>
-      exact .externalCredit ⟨pre, sharesIn, sharesOut⟩ attribution amount
-  | victimDeposit amount minted hphase hminted hbacked =>
-      exact .victimDeposit ⟨pre, sharesIn, sharesOut⟩
-        ⟨pre.accounting, amount, minted, hminted, hbacked⟩ hphase rfl
-  | victimExit deposit paid hphase hfull hpaid =>
-      exact .victimExit ⟨pre, sharesIn, sharesOut⟩ deposit
-        ⟨pre.accounting, paid, hpaid⟩ hphase rfl
-  | silent => exact .silent _
 
 end Blanc.Composition.ProrataWethVault

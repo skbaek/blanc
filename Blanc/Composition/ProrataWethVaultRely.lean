@@ -286,63 +286,6 @@ theorem VaultFrameConfiguration.of_codePreserve
   rw [preserve vault (vaultCode_toList_ne_nil configuration.installed)]
   exact configuration.installed
 
-/-- **Same-frame transport.**  The configuration at a frame root holds at
-every node of that frame's actual same-frame chronology, including every
-continuation resumed after a child. -/
-theorem VaultFrameConfiguration.parentPrefix {vault : Adr}
-    {root node : Exec.Deriv}
-    (sameFrame : Exec.Deriv.ParentPrefix root node)
-    (configuration : VaultFrameConfiguration vault root.sevm root.devm) :
-    VaultFrameConfiguration vault node.sevm node.devm := by
-  induction sameFrame with
-  | refl => exact configuration
-  | step head _ ih =>
-      apply ih
-      rw [(Blanc.Exec.Deriv.ParentStep.sevm_eq head)]
-      exact configuration.of_codePreserve (Blanc.Exec.Deriv.ParentStep.codePreserve head)
-
-/-- **Child-entry transport.**  A spawned interpreter child inherits the
-world's code and the block statics from the spawning instruction's pre-state.
-Its own frame runs the vault code whenever its target is the vault, provided
-the spawn is not a `CALLCODE`/`DELEGATECALL` from the vault's own frame —
-excluded either because the parent frame is foreign or because the child does
-not target the vault, which is what the vault's staged children satisfy (they
-target the asset, `wethAccount ≠ vault`). -/
-theorem VaultFrameConfiguration.childEntry {vault : Adr}
-    {pc nextPc : Nat} {sevm : Sevm} {pre : Devm}
-    {frame : Jaune.Frame} {resume : Resume} {childEvm : Evm}
-    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume nextPc)
-    (entered : frame.enter = .run childEvm)
-    (configuration : VaultFrameConfiguration vault sevm pre)
-    (foreign : sevm.currentTarget ≠ vault ∨
-      childEvm.sta.currentTarget ≠ vault) :
-    VaultFrameConfiguration vault childEvm.sta childEvm.dyna := by
-  obtain ⟨x, _execAt, spawn, _⟩ := Evm.step_spawn_inv step
-  have childCode : Devm.CodePreserve pre childEvm.dyna := by
-    intro a _
-    rw [Frame.enter_run_getCode entered a]
-    exact Xinst.step_spawn_getCode spawn a
-  have childStat : childEvm.sta.benvStat = sevm.benvStat := by
-    rw [Frame.enter_run_benvStat entered]
-    exact Xinst.step_spawn_benvStat spawn
-  refine ⟨configuration.config.of_codePreserve childStat childCode, ?_, ?_⟩
-  · rw [childCode vault (vaultCode_toList_ne_nil configuration.installed)]
-    exact configuration.installed
-  · intro childTarget
-    have targetEq := Frame.enter_run_currentTarget entered
-    rw [Frame.enter_run_code entered]
-    rw [childTarget] at targetEq
-    rcases Xinst.step_spawn_source spawn with empty | same | source
-    · rw [← targetEq] at empty
-      exact absurd empty (not_empty_of_compile configuration.installed)
-    · rw [← targetEq] at same
-      rcases foreign with parentNe | childNe
-      · exact absurd same.symm parentNe
-      · exact absurd childTarget childNe
-    · rw [← targetEq] at source
-      rw [source (not_delegation_of_compile configuration.installed)]
-      exact configuration.installed
-
 /-! ## Allowance-debit authorization
 
 The 09-08 transferFrom seam classifies each retained invocation's allowance

@@ -20,33 +20,6 @@ theorem abiAddressArray_length (entries : List Entry) :
         List.flatMap_cons] at ih ⊢
       omega
 
-theorem abiAddressArray_offset_word (entries : List Entry) :
-    (abiAddressArray entries).sliceD 0 32 0 = (Nat.toB256 32).toBytes := by
-  unfold abiAddressArray List.sliceD
-  rw [List.drop_zero, List.takeD_eq_take 0 (by simp only [List.append_assoc, List.length_append,
-    B256.length_toBytes, List.length_flatMap, List.map_map, le_add_iff_nonneg_right, zero_le])]
-  change List.take 32 ((Nat.toB256 32).toBytes ++
-    ((Nat.toB256 entries.length).toBytes ++
-      (entries.map Prod.fst).flatMap B256.toBytes)) = _
-  simpa only [B256.length_toBytes] using
-    (List.take_length_append (xs := (Nat.toB256 32).toBytes)
-      (ys := (Nat.toB256 entries.length).toBytes ++
-        (entries.map Prod.fst).flatMap B256.toBytes))
-
-theorem abiAddressArray_length_word (entries : List Entry) :
-    (abiAddressArray entries).sliceD 32 32 0 =
-      (Nat.toB256 entries.length).toBytes := by
-  unfold abiAddressArray List.sliceD
-  change List.takeD 32 (List.drop 32 ((Nat.toB256 32).toBytes ++
-    ((Nat.toB256 entries.length).toBytes ++
-      (entries.map Prod.fst).flatMap B256.toBytes))) 0 = _
-  rw [List.drop_length_append' (B256.length_toBytes _).symm,
-    List.takeD_eq_take 0 (by simp only [List.length_append, B256.length_toBytes,
-      List.length_flatMap, List.map_map, le_add_iff_nonneg_right, zero_le])]
-  simpa only [B256.length_toBytes] using
-    (List.take_length_append (xs := (Nat.toB256 entries.length).toBytes)
-      (ys := (entries.map Prod.fst).flatMap B256.toBytes))
-
 private theorem abiAddressWords_target_word (entries : List Entry)
     {i : Nat} (hi : i < entries.length) :
     ((entries.map Prod.fst).flatMap B256.toBytes).sliceD (32 * i) 32 0 =
@@ -72,28 +45,6 @@ private theorem abiAddressWords_target_word (entries : List Entry)
           rw [show 32 * (i + 1) = 32 + 32 * i by omega,
             ← B256.length_toBytes entry.1, List.drop_length_add_append]
           exact ih hi'
-
-theorem abiAddressArray_target_word (entries : List Entry)
-    {i : Nat} (hi : i < entries.length) :
-    (abiAddressArray entries).sliceD (64 + 32 * i) 32 0 =
-      (entries[i].1).toBytes := by
-  unfold abiAddressArray List.sliceD
-  change List.takeD 32 (List.drop (64 + 32 * i)
-    ((Nat.toB256 32).toBytes ++ ((Nat.toB256 entries.length).toBytes ++
-      (entries.map Prod.fst).flatMap B256.toBytes))) 0 = _
-  have hoff : (Nat.toB256 32).toBytes.length = 32 := B256.length_toBytes _
-  have hlen : (Nat.toB256 entries.length).toBytes.length = 32 :=
-    B256.length_toBytes _
-  rw [show 64 + 32 * i = (Nat.toB256 32).toBytes.length +
-      ((Nat.toB256 entries.length).toBytes.length + 32 * i) by omega,
-    List.drop_length_add_append, List.drop_length_add_append]
-  exact abiAddressWords_target_word entries hi
-
-theorem RegistryWitness.entry_target_canonical
-    {storage : LogicalStorage} {entries : List Entry}
-    (h : RegistryWitness storage entries) {i : Nat} (hi : i < entries.length) :
-    canonicalAddress entries[i].1 :=
-  (h.targetsValid entries[i] (by simp only [List.getElem_mem])).2
 
 theorem RegistryWitness.enumeration_offsets_lt_2pow256
     {storage : LogicalStorage} {entries : List Entry}
@@ -527,15 +478,6 @@ theorem arrayEntrySlot_mem_enumerationStorageKeys (entries : List Entry)
   exact Or.inr (by simpa only [zero_add] using
     arrayEntrySlot_mem_enumerationEntryKeysFrom entries 0 i hi)
 
-private theorem prewarmStorage_mach (sevm : Sevm) (keys : List B256) (base : Devm) :
-    (keys.foldl (fun devm key =>
-      addAccessedStorageKey devm sevm.currentTarget key) base).mach = base.mach := by
-  induction keys generalizing base with
-  | nil => rfl
-  | cons key rest ih =>
-      rw [List.foldl_cons, ih]
-      rfl
-
 private theorem prewarmStorage_logs (sevm : Sevm) (keys : List B256) (base : Devm) :
     (keys.foldl (fun devm key =>
       addAccessedStorageKey devm sevm.currentTarget key) base).logs = base.logs := by
@@ -646,9 +588,6 @@ theorem enumLoopGasWarmFrom_ge (i : Nat) (entries : List Entry) :
 def getPausablesGasWarm (entries : List Entry) : Nat :=
   131 + calculateMemoryGasCost 64 + enumLoopGasWarmFrom 0 entries
 
-theorem enumLoopGasWarmFrom_nil (i : Nat) :
-    enumLoopGasWarmFrom i [] = 49 := rfl
-
 theorem enumLoopGasWarmFrom_cons (i : Nat) (entry : Entry)
     (rest : List Entry) :
     enumLoopGasWarmFrom i (entry :: rest) =
@@ -671,13 +610,6 @@ def preparedEnumerationState (sevm : Sevm) (base : Devm)
     (entries : List Entry) : Devm :=
   (prepareEnumerationStorage sevm base entries).setMach
     ⟨[], Mem.empty, getPausablesGasWarm entries, (prepareEnumerationStorage sevm base entries).stateGas⟩
-
-theorem preparedEnumerationState_worldEq (sevm : Sevm) (base : Devm)
-    (entries : List Entry) :
-    Devm.WorldEq base (preparedEnumerationState sevm base entries) := by
-  rcases prepareEnumerationStorage_worldEq sevm base entries with
-    ⟨hstate, htransient⟩
-  exact ⟨hstate, htransient⟩
 
 theorem enumLoop_pre_memory_independent_of_cursor (base : Devm)
     (entries done : List Entry) (cursor cursor' G : Nat) :

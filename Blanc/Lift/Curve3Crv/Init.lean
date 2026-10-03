@@ -63,27 +63,8 @@ No other slot is written. -/
 def curveShapedName : Bytes := "Curve.fi DAI/USDC/USDT".toUTF8.toList
 def curveShapedSymbol : Bytes := "3Crv".toUTF8.toList
 
-/-- Decimals 18, minter `1`, supply and all mappings zero. -/
-def curveShapedState : Curve3Crv.State where
-  name := curveShapedName
-  symbol := curveShapedSymbol
-  decimals := 18
-  balanceOf := fun _ => 0
-  allowances := fun _ _ => 0
-  totalSupply := 0
-  minter := 1
-
 /-- The left-aligned data word of a string of at most 32 bytes. -/
 def curveStrWord (bs : Bytes) : B256 := Bytes.toB256 (bs ++ List.replicate (32 - bs.length) 0)
-
-/-- The storage the constructor and name/symbol setters leave: decimals, minter, and the two
-strings' length and data words; no other slot is written. -/
-def curveShapedStor : Stor :=
-  ((((Stor.empty.set vyDecimalsSlot 18).set vyMinterSlot (1 : Adr).toB256).set vyNameBase
-      (Nat.toB256 curveShapedName.length)).set (vyNameBase + Nat.toB256 1)
-      (curveStrWord curveShapedName)).set vySymbolBase
-      (Nat.toB256 curveShapedSymbol.length) |>.set (vySymbolBase + Nat.toB256 1)
-      (curveStrWord curveShapedSymbol)
 
 theorem get_ne_zero_mem_set {s : Stor} {l : List B256} (h : ∀ x, s.get x ≠ 0 → x ∈ l)
     (k v : B256) : ∀ x, (s.set k v).get x ≠ 0 → x ∈ k :: l := by

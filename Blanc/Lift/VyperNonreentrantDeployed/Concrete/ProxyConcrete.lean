@@ -17,13 +17,4 @@ def proxyWorld : State :=
 
 def proxyGas : Nat := 10000000
 
-def proxyEntryW : Evm :=
-  ⟨0, proxySevm removeCalldata, implDevm proxyGas proxyWorld⟩
-
-/-- The machine at the proxy's `DELEGATECALL`. -/
-def proxyAtCall : Devm :=
-  (implDevm proxyGas proxyWorld).setMach
-    ⟨[(proxyGas - 54).toB256, implementationAddress.toB256, 0, (132 : Nat).toB256,
-      0, 0, 0], Mem.empty.write 0 removeCalldata, proxyGas - 54, .zero⟩
-
 end Blanc.Lift.VyperNonreentrantDeployed.Concrete

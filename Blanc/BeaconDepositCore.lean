@@ -68,12 +68,6 @@ def beaconSelectors : List B256 :=
 def erc165InterfaceId : B256 := 0x01ffc9a7
 def depositInterfaceId : B256 := 0x85640907
 
-def erc165InterfaceIdBytes : Bytes :=
-  [0x01, 0xff, 0xc9, 0xa7]
-
-def depositInterfaceIdBytes : Bytes :=
-  [0x85, 0x64, 0x09, 0x07]
-
 def depositEventTopic : B256 :=
   signatureHash "DepositEvent"
     [.dynBytes, .dynBytes, .dynBytes, .dynBytes, .dynBytes]
@@ -168,11 +162,6 @@ def CanonicalDepositCalldata
 def abiSupportsInterfaceCall (interfaceId : Bytes) : Bytes :=
   abiSelectorBytes supportsInterfaceSelector ++ interfaceId ++
     List.replicate (32 - interfaceId.length) 0
-
-def CanonicalSupportsInterfaceCalldata
-    (data interfaceId : Bytes) : Prop :=
-  interfaceId.length = 4 ∧
-    data = abiSupportsInterfaceCall interfaceId
 
 /-! ## Return and event encodings -/
 

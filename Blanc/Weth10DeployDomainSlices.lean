@@ -979,9 +979,6 @@ theorem fullDispatchByteAt_cachedWord_3027_3059
 
 /-! ## Equality before and after the parameterized DOMAIN leaf -/
 
-private def dispatchHeaderPrefix (selector : B256) : Line :=
-  [Ninst.dup 0, Ninst.pushB256 selector, Ninst.gt]
-
 private theorem dispatch25_0_7_eq_zero (dp : DeployParams) :
     dispatch25_0_7 dp =
       dispatch25_0_7 (⟨0, 0⟩ : DeployParams) := by

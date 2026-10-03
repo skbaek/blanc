@@ -55,10 +55,6 @@ the all-ones sentinel. -/
 def sentinelPauseWorldStor : Stor :=
   pauseLastWorldStor.set pauseDurationSlot pauseInfiniteSentinel
 
-theorem sentinelPauseLastStor_interval :
-    sentinelPauseWorldStor.get heartbeatIntervalSlot = pauseWorldInterval := by
-  decide +kernel
-
 theorem sentinelPauseLastStor_duration :
     sentinelPauseWorldStor.get pauseDurationSlot = pauseInfiniteSentinel := by
   decide +kernel

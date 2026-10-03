@@ -2179,22 +2179,6 @@ theorem fmintSpec_funcSound_all (fa : Adr) :
   · exact fmintSpec_funcSound Fmint.flashFee flashFee_preserves_conserved
   · exact fmintSpec_funcSound allowance allowance_preserves_conserved
 
-/-- fmint's frame-level obligation, the one input
-`ContractSpec.preserves_noMem` cannot supply.  The proof is
-`wethSpec_soundNoMem`'s, with twelve dispatch targets where WETH has ten and a
-*reverting* fallback where WETH has `deposit`, so the fallback obligation is
-vacuous rather than a walk.
-
-Both shape side conditions are `rfl`: `k`, the function list and the aux context
-are read off `fmintSpec.prog` by unification.  The fallback lookup at index 1
-reduces — unlike `burnSlot`'s at index 2, which needs `get_burnSlot`'s explicit
-`List.getElem?` route. -/
-theorem fmintSpec_soundNoMem (fa : Adr) : fmintSpec.SoundNoMem fa :=
-  ContractSpec.soundNoMem_of_dispatch (k := Fmint.fallbackSlot)
-    (funcs := Fmint.fmintFuncs) (aux := Fmint.fmintAux) (fallback := Func.revert)
-    rfl (List.cons_ne_nil _ _) rfl (fmintSpec_funcSound_all fa)
-    fmintSpec_funcSound_revert
-
 /-- fmint's own result, as the instantiation of the quantified open-contract
 statement (`ContractSpec.preservesNoMem_of_dispatch`, `Blanc/Ladder.lean`): the
 same twelve obligations and the same vacuous fallback, consumed by the named
@@ -2334,27 +2318,5 @@ core-shaped in the first place — it consumes `Pre`'s code equation and the
 program-indexed `Exec.InvDepth` through `conserved_of_call`.  Under an
 extension, `flashLoan` (and any new call-bearing target) is mechanical
 re-discharge territory, per the plan's honest fallback. -/
-
-/-- Each non-reentrant fmint target's core holds in **every** context: the
-target is call-free, so its derivation never performs a lookup. -/
-theorem fmint_core_stable (fs : List Func) :
-    ∀ p ∈ Fmint.fmintFuncs, p.2 ≠ Fmint.flashLoan →
-      Func.Core fs Stor.Conserved p.2 := by
-  intro p h_mem h_ne
-  -- `List.mem_cons`, never `decide` (see `fmintSpec_funcSound_all`).
-  simp only [Fmint.fmintFuncs, List.mem_cons, List.not_mem_nil, or_false] at h_mem
-  rcases h_mem with h | h | h | h | h | h | h | h | h | h | h | h <;> (cases h)
-  · exact Func.Core.of_callFree rfl name_preserves_conserved
-  · exact Func.Core.of_callFree rfl approve_preserves_conserved
-  · exact Func.Core.of_callFree rfl totalSupply_preserves_conserved
-  · exact Func.Core.of_callFree rfl transferFrom_preserves_conserved
-  · exact Func.Core.of_callFree rfl decimals_preserves_conserved
-  · exact absurd rfl h_ne
-  · exact Func.Core.of_callFree rfl maxFlashLoan_preserves_conserved
-  · exact Func.Core.of_callFree rfl balanceOf_preserves_conserved
-  · exact Func.Core.of_callFree rfl symbol_preserves_conserved
-  · exact Func.Core.of_callFree rfl transfer_preserves_conserved
-  · exact Func.Core.of_callFree rfl flashFee_preserves_conserved
-  · exact Func.Core.of_callFree rfl allowance_preserves_conserved
 
 end Blanc

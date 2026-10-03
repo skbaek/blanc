@@ -5560,26 +5560,6 @@ private inductive Func.RunCompiledTo.DirectPausePath
       Func.RunCompiledTo.DirectPausePath ca target
         (phase := .beforeWrite) (.next instructionRun tail)
 
-/-- Prepend an ordinary (unmarked) storage write to a constructed direct-pause
-path.  The write remains a childless `.next`, so it preserves its phase. -/
-private theorem directPausePath_prepend_sstore
-    {ca : Adr} {target : B256} {phase : DirectPausePhase}
-    {fs : List Func} {sevm : Sevm} {pre post : Devm}
-    {body : Func} {out : Execution}
-    (instructionRun : Ninst.RunCompiled sevm pre (.reg .sstore) post)
-    (tail : Func.RunCompiledTo fs sevm post body out)
-    (tailPath : Func.RunCompiledTo.DirectPausePath ca target
-      (phase := phase) tail) :
-    ∃ run : Func.RunCompiledTo fs sevm pre (.reg .sstore ::: body) out,
-      Func.RunCompiledTo.DirectPausePath ca target (phase := phase) run := by
-  let run : Func.RunCompiledTo fs sevm pre (.reg .sstore ::: body) out :=
-    .next instructionRun tail
-  have path : Func.RunCompiledTo.DirectPausePath ca target
-      (phase := phase) run :=
-    .next (instructionRun := instructionRun) (tail := tail) (by simp only [ne_eq, reduceCtorEq,
-      not_false_eq_true, implies_true]) tailPath
-  exact ⟨run, path⟩
-
 /-- Prepend any childless instruction without changing a direct-pause phase. -/
 private theorem directPausePath_prepend_childless
     {ca : Adr} {target : B256} {phase : DirectPausePhase}
@@ -6301,22 +6281,6 @@ def Exec.RawBefore {root : Exec.Deriv}
     (left right : Exec.Deriv) : Prop :=
   ∃ before middle after,
     Exec.rawNodes root.exc = before ++ left :: middle ++ right :: after
-
-/-- Rebase an exact instruction occurrence along a proved raw-node inclusion. -/
-private def Exec.NinstOccurrence.rebase
-    {inner outer : Exec.Deriv}
-    (occurrence : Exec.NinstOccurrence inner)
-    (reached : occurrence.node ∈ Exec.rawNodes outer.exc) :
-    Exec.NinstOccurrence outer :=
-  { occurrence with reached := reached }
-
-/-- Rebase an exact successful write along a proved raw-node inclusion. -/
-private def Exec.SuccessfulSstoreOccurrence.rebase
-    {inner outer : Exec.Deriv}
-    (write : Exec.SuccessfulSstoreOccurrence inner)
-    (reached : write.occurrence.node ∈ Exec.rawNodes outer.exc) :
-    Exec.SuccessfulSstoreOccurrence outer :=
-  { write with occurrence := { write.occurrence with reached := reached } }
 
 /-- Every node selected by the direct-pause certificate excludes both external
 call opcodes. -/

@@ -129,32 +129,6 @@ theorem transfer_steps_sum_add_creditLoss
   have h_inc := sum_increase_add_creditLoss inc
   omega
 
-/-- A `Transfer` exposes an intermediate balance map whose recipient credit
-accounts for the transfer's exact sum loss. -/
-theorem transfer_exists_sum_add_creditLoss
-    {b d : Adr → B256} {kd ki : Adr} {v : B256}
-    (tr : Transfer b kd v ki d) :
-    ∃ c : Adr → B256,
-      Decrease kd v b c ∧
-      Increase ki v c d ∧
-      sum b = sum d + creditLoss (c ki) v := by
-  rcases tr with ⟨h_le, c, dec, inc⟩
-  exact ⟨c, dec, inc, transfer_steps_sum_add_creditLoss h_le dec inc⟩
-
-/-- Under the usual global no-overflow bound, a checked transfer's recipient
-credit cannot discard a modulus. -/
-theorem transfer_steps_creditLoss_eq_zero_of_sumNof
-    {b c d : Adr → B256} {kd ki : Adr} {v : B256}
-    (h_sumNof : SumNof b)
-    (h_le : v ≤ b kd)
-    (dec : Decrease kd v b c)
-    (inc : Increase ki v c d) :
-    creditLoss (c ki) v = 0 := by
-  have h_exact := transfer_steps_sum_add_creditLoss h_le dec inc
-  have h_preserved :=
-    transfer_preserves_sum h_sumNof ⟨h_le, c, dec, inc⟩
-  omega
-
 end Weth10
 
 end Blanc

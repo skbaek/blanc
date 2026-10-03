@@ -218,15 +218,6 @@ theorem drip_factorNat_zero : factorNat 0 = scale.toNat :=
 theorem drip_rate_ne_zero : rate ≠ 0 := by
   decide +kernel
 
-/-- The frozen base never takes the word loop's zero arm: low-bit
-initialization followed by the halved loop, exactly the runtime's order. -/
-theorem drip_word_rpow_unfold_nonzero {k : Nat} (hk : k ≠ 0) :
-    B256.rpow scale half rate k =
-      B256.rpowLoop scale half (if k % 2 = 1 then rate else scale) rate
-        (k / 2) := by
-  unfold B256.rpow
-  rw [if_neg drip_rate_ne_zero, if_neg hk]
-
 end Drip
 
 end Blanc

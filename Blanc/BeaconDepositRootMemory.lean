@@ -209,11 +209,6 @@ def rootInitialMemory (count : B256) : Mem :=
   ((Mem.empty.write 576 count.toBytes).write 608 count.toBytes).write
     640 (0 : B256).toBytes
 
-def rootInitialImage (count : B256) : Bytes :=
-  ((Bytes.writeAt [] 576 count.toBytes)
-      |> fun image => Bytes.writeAt image 608 count.toBytes)
-    |> fun image => Bytes.writeAt image 640 (0 : B256).toBytes
-
 /-- The endpoint's three stores establish the exact 672-byte root register
 carrier. -/
 def rootInitialMemory_carrier (count : B256) :

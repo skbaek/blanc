@@ -93,7 +93,6 @@ inductive ResolveError (Label : Type) : Type
   | rootReuse (label : Label) (auxPosition : Nat)
   | duplicateAux (label : Label) (firstPosition secondPosition : Nat)
   | missingLabel (owner : Label) (path : List BranchArm) (target : Label)
-  deriving DecidableEq, Repr
 
 /-- Check that the auxiliary table does not reuse the root label. -/
 def checkRootReuse [DecidableEq Label] (root : Label) (aux : List (Label × SymbolicFunc Label)) :
@@ -794,7 +793,7 @@ inductive TestLabel : Type
   | pong
   | dead
   | missing
-  deriving DecidableEq, Repr
+  deriving DecidableEq
 
 -- Positive control: nested branches with valid calls
 def nestedBranchProg : SymbolicProg TestLabel where

@@ -253,14 +253,6 @@ private theorem deposit_guard_prefix
       ((Line.of_inv Devm.logs (by line_inv) hlineInv).trans hpop.logs)
   · simpa only [depositTail] using hsuccess
 
-private theorem deposit_pre_guards
-    {fs : List Func} {sevm : Sevm} {pre post : Devm}
-    (run : Func.Run fs sevm pre deposit post) :
-    sevm.value ≤ maxValue ∧
-      Devm.getBal pre sevm.currentTarget - sevm.value ≤ maxBalance := by
-  rcases deposit_guard_prefix run with ⟨-, ha, hb, -⟩
-  exact ⟨ha, hb⟩
-
 /-- Exact successful `deposit` body effect. -/
 theorem deposit_effect
     {fs : List Func} {sevm : Sevm} {pre post : Devm}

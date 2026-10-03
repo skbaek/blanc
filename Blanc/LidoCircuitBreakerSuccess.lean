@@ -2135,11 +2135,4 @@ theorem PauseSuccessInputs.of_noninterference
   · exact hcountEq
   · exact hintervalEq
 
-/-! Compatibility names retained for the established public Lido boundary
-theorems after hoisting `MemWordAt`. -/
-abbrev MemWordAt.acrossPauseCallStagingBoundary :=
-  @Blanc.MemWordAt.acrossPauseCallStagingBoundary
-abbrev MemWordAt.acrossPauseStatStagingBoundary :=
-  @Blanc.MemWordAt.acrossPauseStatStagingBoundary
-
 end Blanc.LidoCircuitBreaker

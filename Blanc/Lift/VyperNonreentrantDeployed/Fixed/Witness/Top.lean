@@ -49,11 +49,6 @@ theorem e0_getCode : e0.dyna.getCode poolAddress = code := by
   rw [← c0_pool_code, ← h]
   rfl
 
-theorem e0_withFork_prague : e0.sta.withFork .prague = e0.sta := by
-  have h := Sevm.withFork_self e0.sta
-  rw [e0_fork] at h
-  exact h
-
 theorem e0_covered : CoveredFork e0.sta.benvStat.fork := by rw [e0_fork]; exact CoveredFork.prague
 
 theorem e0_excess : e0.sta.benvStat.excessBlobGas = 0 := by

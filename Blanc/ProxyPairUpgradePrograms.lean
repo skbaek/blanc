@@ -22,8 +22,6 @@ def setValueSelector : B256 := 0x55241077
 def initializeV2Selector : B256 := 0x5cd8a76b
 def migrationMarkerSelector : B256 := 0x8d8a346e
 
-def sharedSelectors : List B256 := [valueSelector, setValueSelector]
-
 def upgradeWitnessSelectors : List B256 :=
   [valueSelector, setValueSelector, initializeV2Selector,
     migrationMarkerSelector]

@@ -118,7 +118,7 @@ structure LSt : Type where
   passed : Bool
   setNow : Bool
   noMut : Bool
-deriving DecidableEq, Repr
+deriving DecidableEq
 
 /-- The state a frame starts in (entry `0`'s required annotation). -/
 def LSt.init : LSt := ⟨[], [], false, false, true⟩

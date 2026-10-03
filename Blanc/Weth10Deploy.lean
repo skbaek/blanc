@@ -31,17 +31,6 @@ def freshDeployParams
     (chainId : B256) (contractAddress : Adr) : DeployParams :=
   ⟨chainId, deploymentDomainSeparator chainId contractAddress⟩
 
-theorem freshDeployParams_deploymentChainId
-    (chainId : B256) (contractAddress : Adr) :
-    (freshDeployParams chainId contractAddress).deploymentChainId = chainId :=
-  rfl
-
-theorem freshDeployParams_cachedDomainSeparator
-    (chainId : B256) (contractAddress : Adr) :
-    (freshDeployParams chainId contractAddress).cachedDomainSeparator =
-      deploymentDomainSeparator chainId contractAddress :=
-  rfl
-
 /-! ## Initcode emitter
 
 The constructor first rejects nonzero endowment, copies the all-zero member of
@@ -413,41 +402,11 @@ private lemma Bytes.take_eq_take_of_getD_eq
   rw [List.takeD_eq_take d hxs, List.takeD_eq_take d hys] at hs
   exact hs
 
-private theorem dispatchForkByteAt_eq_prefix
-    (locations : List Nat) (n k : Nat)
-    (left0 right0 left right : DispatchTree)
-    (hselector : leftmostFsig right = leftmostFsig right0)
-    (hpush : (Ninst.pushB256 (leftmostFsig right0)).size = 5)
-    (i : Nat) (hi : i < 11) :
-    Func.byteAtByShape locations n
-        (dispatchWith k (.fork left0 right0)).compileShape
-        (dispatchWith k (.fork left right)) i 0 =
-      Func.byteAtByShape locations n
-        (dispatchWith k (.fork left0 right0)).compileShape
-        (dispatchWith k (.fork left0 right0)) i 0 := by
-  have hdup : (Ninst.dup 0).size = 1 := by decide +kernel
-  have hgt : Ninst.gt.size = 1 := by decide +kernel
-  interval_cases i <;>
-    simp only [dispatchWith, Fin.isValue, Func.compileShape, hdup, hpush, hgt, hselector, Func.byteAtByShape, zero_lt_one, ↓reduceIte, List.takeD_succ, List.takeD_zero, List.getD_eq_getElem?_getD, List.length_cons, List.length_nil, zero_add, getElem?_pos, List.getElem_cons_zero, Option.getD_some, lt_self_iff_false, tsub_self, Nat.ofNat_pos, List.head?_tail, List.getElem?_tail, Nat.reduceAdd, Nat.not_ofNat_lt_one, Nat.add_one_sub_one, Nat.one_lt_ofNat, List.getElem_cons_succ, Nat.reduceLT, Nat.lt_add_one, Nat.reduceSub, Nat.toUInt8_eq, UInt8.ofNat_add, UInt8.ofNat_one, UInt8.reduceOfNat]
-
 private def weth10TreeLeft (dp : DeployParams) : DispatchTree :=
   DispatchTree.build 26 ((weth10Funcs dp).take 14)
 
 private def weth10TreeRight (dp : DeployParams) : DispatchTree :=
   DispatchTree.build 26 ((weth10Funcs dp).drop 14)
-
-private theorem weth10Tree_eq_fork (dp : DeployParams) :
-    weth10Tree dp = .fork (weth10TreeLeft dp) (weth10TreeRight dp) := by
-  simp only [weth10Tree, DispatchTree.ofSorted, weth10Funcs, List.length_cons, List.length_nil,
-    zero_add, Nat.reduceAdd, DispatchTree.build, Nat.reduceDiv, List.take_succ_cons, List.take_zero,
-    List.drop_succ_cons, List.drop_zero, weth10TreeLeft, weth10TreeRight]
-
-private theorem weth10TreeRight_leftmost_eq (dp : DeployParams) :
-    leftmostFsig (weth10TreeRight dp) =
-      leftmostFsig (weth10TreeRight (⟨0, 0⟩ : DeployParams)) := by
-  simp only [weth10TreeRight, weth10Funcs, List.drop_succ_cons, List.drop_zero, DispatchTree.build,
-    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceDiv, List.take_succ_cons,
-    List.take_zero, leftmostFsig]
 
 private theorem allowanceSel_eq :
     selector "allowance" [.address, .address] = (0xdd62ed3e : B256) := by
@@ -533,14 +492,6 @@ private theorem deploymentPairDispatch_size :
   unfold deploymentPairDispatch
   rw [dispatchNode_size _ _ _ (by decide +kernel),
     deploymentChainIdLeaf_size, approveAndCallLeaf_size]
-
-
-private theorem deploymentDispatch_size :
-    (deploymentDispatch
-      (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 391 := by
-  unfold deploymentDispatch
-  rw [dispatchNode_size _ _ _ (by decide +kernel),
-    depositLeaf_size, deploymentPairDispatch_size]
 
 private lemma byteAt_main_to_dispatch
     (locations : List Nat) (n : Nat) (p q : Func) (i : Nat) (d : UInt8)

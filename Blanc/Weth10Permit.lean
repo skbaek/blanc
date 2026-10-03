@@ -2674,10 +2674,6 @@ private lemma output_eq_of_timestamp {e : Sevm} {s s' : Devm}
   simp only [Rinst.run, Rinst.runCore] at run
   exact (Devm.pushBurn_of_pushItem run).output
 
-lemma permitDeadlineFlag_expired {timestamp deadline : B256}
-    (h : timestamp > deadline) : (timestamp >? deadline) = 1 := by
-  simp only [B256.gtCheck, gt_iff_lt, h, ↓reduceIte]
-
 /-- A successful selected-body execution must enter the live deadline arm.
 The returned machine is exactly the start of the nonce prefix; the guard and
 branch pop preserve storage and memory. -/

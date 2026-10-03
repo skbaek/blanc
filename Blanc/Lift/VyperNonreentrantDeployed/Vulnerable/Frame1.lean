@@ -83,11 +83,6 @@ def poolWrites1 : List ((Adr × B256) × B256) :=
 /-- The world, built by folding `poolWrites1` from the storage-free base world. -/
 def world0 : State := stateFoldStor world0_base poolWrites1
 
-/-- The pool account `P`: the 45-byte proxy, 1000 wei, the pool storage. -/
-def poolAcct : Acct :=
-  { nonce := 1, bal := (1000 : Nat).toB256, code := proxyCode,
-    stor := poolStorage.foldl (fun s kv => Std.TreeMap.insert s kv.1.toB256 kv.2.toB256) .empty }
-
 def gas1 : Nat := 29528638
 
 def sevm1 : Sevm :=
@@ -128,11 +123,5 @@ theorem c0_agree : Agree c0 := by
   · show AcctAgree world0 acs0
     exact acctAgree_stateFoldStor poolWrites1 acctAgree_world0_base
 
-
-/-- The observed projection a chunk decision pins: gas, stack and memory bytes. -/
-def summ : Res → Option (Nat × List Nat × List Nat)
-  | .cont c => some (c.devm.gasLeft, c.devm.stack.map B256.toNat,
-      c.devm.memory.data.toList.map UInt8.toNat)
-  | _ => none
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1

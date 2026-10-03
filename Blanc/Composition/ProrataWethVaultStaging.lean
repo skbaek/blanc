@@ -340,16 +340,6 @@ theorem callWethTransfer_sourceShape
 
 /-! ## Complete WETH selector surface staged by the vault -/
 
-/-- The three source helpers above stage exactly the boundary allowlist.  In
-particular, the vault has no source helper that stages WETH `approve` or
-`withdraw`. -/
-theorem stagedWethSelectors_complete :
-    [ Blanc.ProrataWethVault.wethBalanceOfSelector,
-      Blanc.ProrataWethVault.wethTransferFromSelector,
-      Blanc.ProrataWethVault.wethTransferSelector ] =
-      allowedWethSelectors := by
-  rfl
-
 /-! ## Proof-carrying source memory -/
 
 abbrev MemoryImage (devm : Devm) (image : Bytes) : Prop :=

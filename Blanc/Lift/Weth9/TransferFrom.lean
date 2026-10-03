@@ -169,12 +169,6 @@ def Weth9.XferEff (sevm : Sevm) (d : Devm) (o : Outcome) (wad dst src : B256) : 
           xferStor ((Devm.getStor d sevm.currentTarget).set
             (allowKey src.toAdr.toB256 sevm.caller.toB256) w) src.toAdr dst.toAdr wad))
 
-theorem Weth9.XferEff.of_same {sevm : Sevm} {d d' : Devm} {o : Outcome} {wad dst src : B256}
-    (h : Same d d') (e : XferEff sevm d' o wad dst src) : XferEff sevm d o wad dst src := by
-  unfold XferEff at *
-  rw [h.1, h.2]
-  exact e
-
 /-- `allowance[src][caller]`: the word the transfer reads to decide whether to debit it. -/
 def Weth9.allowWord (sevm : Sevm) (d : Devm) (src : B256) : B256 :=
   (Devm.getStor d sevm.currentTarget).get (allowKey src.toAdr.toB256 sevm.caller.toB256)
@@ -804,24 +798,6 @@ private theorem solvent_of_xfer {sevm : Sevm} {d : Devm} {o : Outcome} {wad dst 
     bookedSum_transfer hle1 (by omega)
   rw [hs1, ht, hb, B256.toNat_zero]
   omega
-
-/-- **WETH9 `transferFrom` (entry 9) preserves solvency**, for any frame whose
-stack starts with the three arguments.  The allowance-slot premise is needed
-only when the masked `src` differs from the caller, and is the local
-collision premise of `Premise.lean` in its `allowKey owner spender` form. -/
-theorem Weth9.transferFrom_solvent_of_prefix {sevm : Sevm} {d : Devm} {o : Outcome}
-    {g : SFunc} {wad dst src : B256} {rest : Stack}
-    (hg : prog[9]? = some g) (hp : wad :: dst :: src :: rest <<+ d.stack)
-    (hoff : (src &&& ~~~ addressMask) ≠ sevm.caller.toB256 →
-      ∀ a, balSlot a ≠ allowKey (src &&& ~~~ addressMask) sevm.caller.toB256)
-    (h : Solvent (Devm.getStor d sevm.currentTarget) sevm.value
-      (d.getBal sevm.currentTarget))
-    (run : SFunc.Run prog sevm d g o) :
-    Solvent (Devm.getStor (Outcome.devm o) sevm.currentTarget) 0
-      ((Outcome.devm o).getBal sevm.currentTarget) := by
-  rw [and_mask_word] at hoff
-  obtain ⟨e, hle⟩ := Weth9.transferFrom_ok_of_prefix hg hp run
-  exact solvent_of_xfer hoff e hle h
 
 /-- Entry 9 as a callee: a `callNext 9` from a frame whose stack starts with
 `wad, dst, src`, continued by a state-silent tree, preserves solvency. -/

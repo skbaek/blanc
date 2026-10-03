@@ -659,17 +659,6 @@ theorem PairProvenanceOk.of_child {vault : Adr} {blockIndex : Nat}
     PairProvenanceOk blockIndex transactionIndex framePath r :=
   ⟨ok.block, ok.tx, (List.prefix_append framePath [child]).trans ok.path⟩
 
-namespace PairReplayBetween
-
-variable {vault : Adr} {blockIndex : Nat} {transactionIndex : Option Nat}
-  {framePath : List Nat}
-
-theorem nil_of_eq {pre post : PairBoundary} (eq : post = pre) :
-    PairReplayBetween vault blockIndex transactionIndex framePath pre post :=
-  ⟨[], PairReplay.nil_of_eq eq, by simp only [List.not_mem_nil, IsEmpty.forall_iff, implies_true]⟩
-
-end PairReplayBetween
-
 /-- The pair boundary presented to the contract-neutral settlement seams, at a record
 admissibility `ok`.  Its boundary reads two accounts' storage and no balance, so it is a
 `SettlementCarrier` and not an account-local `ReplayCarrier`: the whole-world silence law is what
@@ -690,12 +679,6 @@ def pairCarrierWith (vault : Adr) (ok : PairStepRecord vault → Prop) :
     intro _ _ _ _ transfer _
     have storage := benvAfterTransfer_getStor_eq transfer
     exact PairBoundary.ofState_eq (congrFun storage vault) (congrFun storage wethAccount)
-
-/-- The pair boundary presented to the contract-neutral settlement seams, at admissible
-provenance. -/
-def pairCarrier (vault : Adr) (blockIndex : Nat) (transactionIndex : Option Nat)
-    (framePath : List Nat) : ExecutionAccountingReplay.SettlementCarrier wethAccount :=
-  pairCarrierWith vault (PairProvenanceOk blockIndex transactionIndex framePath)
 
 /-! ## Transport of the frame invariant across a foreign frame's steps
 

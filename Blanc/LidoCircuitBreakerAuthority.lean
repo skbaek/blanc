@@ -153,48 +153,6 @@ private inductive Exec.Deriv.SourceCursor.Toward.CallCut
         initial target targetInstruction bodyCursor) :
       Exec.Deriv.SourceCursor.Toward.CallCut initial functionIndex
 
-/-- The terminal source cursor of a target-directed route, together with an
-exact call cut whenever its function differs from the current one. -/
-private theorem Exec.Deriv.SourceCursor.Toward.atTargetData
-    {root target : Exec.Deriv} {program : Prog}
-    {initialPath path : Prog.SourcePath} {initialSource source : Func}
-    {targetInstruction : Ninst}
-    {initial : Exec.Deriv.SourceCursor root program
-      initialPath initialSource}
-    {cursor : Exec.Deriv.SourceCursor root program path source}
-    (route : Exec.Deriv.SourceCursor.Toward
-      initial target targetInstruction cursor) :
-    ∃ finalPath finalTail,
-      ∃ finalCursor : Exec.Deriv.SourceCursor root program finalPath
-          (.next targetInstruction finalTail),
-        finalCursor.node = target ∧
-        ({ path := finalPath, pc := finalCursor.pc,
-            instruction := targetInstruction } : Prog.SourceSite) ∈
-          program.sourceSites ∧
-        (path.functionIndex = finalPath.functionIndex ∨
-          Exec.Deriv.SourceCursor.Toward.CallCut
-            (target := target) (targetInstruction := targetInstruction)
-            initial finalPath.functionIndex) := by
-  induction route with
-  | atTarget cursor chronology site siteEq sourceMember targetEq instructionEq =>
-      cases instructionEq
-      exact ⟨_, _, cursor, targetEq,
-        by simpa only [siteEq] using sourceMember, Or.inl rfl⟩
-  | next cursor chronology tailCursor edge rest ih => exact ih
-  | branchLeft cursor chronology arm compilerPrefix rest ih => exact ih
-  | branchRight cursor chronology arm compilerPrefix rest ih => exact ih
-  | call cursor chronology lookup bodyCursor compilerPrefix rest ih =>
-      rcases ih with
-        ⟨finalPath, finalTail, finalCursor, targetEq, sourceMember,
-          sameFunction | deeperCut⟩
-      · refine ⟨finalPath, finalTail, finalCursor, targetEq, sourceMember,
-          Or.inr ?_⟩
-        rw [← sameFunction]
-        exact .intro _ cursor _ lookup bodyCursor
-          (.call cursor chronology lookup bodyCursor compilerPrefix rest) rest
-      · exact ⟨finalPath, finalTail, finalCursor, targetEq, sourceMember,
-          Or.inr deeperCut⟩
-
 /-- Frozen source function index per row.  Public because the attainment
 consumers need it to refute a role at a row whose write sits in a different
 compiled function; see `RuntimeWriteAuthority`'s `writeSite` conjuncts. -/
@@ -565,73 +523,6 @@ private theorem Exec.Deriv.SourceCursor.Toward.branchArmStorage
         (chronology.initialToCursor.trans branchToArm) localRoute,
       storage⟩
 
-private theorem linearDispatchWith_bodyCut
-    {dp : DeployParams} {root target : Exec.Deriv}
-    {initialPath : Prog.SourcePath} {initialSource : Func}
-    {initial : Exec.Deriv.SourceCursor root (runtime dp)
-      initialPath initialSource}
-    (compiled : some root.sevm.code.toList = (runtime dp).compile)
-    (targetAt : Ninst.At target.sevm.code target.pc (.reg .sstore))
-    (entries : List (B256 × Func)) {path : Prog.SourcePath}
-    (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
-      (linearDispatchWith fallbackSlot entries))
-    (route : Exec.Deriv.SourceCursor.Toward
-      initial target (.reg .sstore) cursor) :
-    ∃ word body,
-      (word, body) ∈ entries ∧
-        ∃ bodyPath,
-          ∃ bodyCursor : Exec.Deriv.SourceCursor root (runtime dp)
-              bodyPath body,
-            Exec.Deriv.SourceCursor.Toward
-              initial target (.reg .sstore) bodyCursor := by
-  induction entries generalizing path with
-  | nil =>
-      exact (cursor.noSstore_of_entrySstoreFree compiled
-        [fallbackSlot] rfl
-        (Exec.Deriv.SourceCursor.Toward.chronology route).cursorToTarget
-        targetAt).elim
-  | cons head tail ih =>
-      rcases head with ⟨word, body⟩
-      cases tail with
-      | nil =>
-          unfold linearDispatchWith at cursor
-          rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne route
-              (by intro h; cases h) with
-            ⟨pushChronology, eqCursor, pushEdge, eqRoute⟩
-          rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne eqRoute
-              (by intro h; cases h) with
-            ⟨eqChronology, branchCursor, eqEdge, branchRoute⟩
-          cases branchRoute with
-          | branchLeft branchCursor chronology arm compilerPrefix rest =>
-              exact (arm.noSstore_of_entrySstoreFree compiled
-                [fallbackSlot] rfl
-                (Exec.Deriv.SourceCursor.Toward.chronology rest).cursorToTarget
-                targetAt).elim
-          | branchRight branchCursor chronology arm compilerPrefix rest =>
-              exact ⟨word, body, by simp only [List.mem_cons, List.not_mem_nil, or_false], _, arm, rest⟩
-      | cons next rest =>
-          unfold linearDispatchWith at cursor
-          rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne route
-              (by intro h; cases h) with
-            ⟨dupChronology, pushCursor, dupEdge, pushRoute⟩
-          rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne pushRoute
-              (by intro h; cases h) with
-            ⟨pushChronology, eqCursor, pushEdge, eqRoute⟩
-          rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne eqRoute
-              (by intro h; cases h) with
-            ⟨eqChronology, branchCursor, eqEdge, branchRoute⟩
-          cases branchRoute with
-          | branchLeft branchCursor chronology arm compilerPrefix tailRoute =>
-              rcases ih arm tailRoute with
-                ⟨selectedWord, selectedBody, member, cut⟩
-              exact ⟨selectedWord, selectedBody, by simp only [List.mem_cons, Prod.mk.injEq,
-                member, or_true], cut⟩
-          | branchRight branchCursor chronology arm compilerPrefix bodyRoute =>
-              rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne
-                  bodyRoute (by intro h; cases h) with
-                ⟨popChronology, bodyCursor, popEdge, restRoute⟩
-              exact ⟨word, body, by simp only [List.mem_cons, true_or], _, bodyCursor, restRoute⟩
-
 private theorem linearDispatchWith_bodyCutStorage
     {dp : DeployParams} {root target : Exec.Deriv}
     {initialPath : Prog.SourcePath} {initialSource : Func}
@@ -734,42 +625,6 @@ private theorem linearDispatchWith_bodyCutStorage
                 (Line.Run.cons popRun Line.Run.nil)
             exact ⟨word, body, by simp only [List.mem_cons, true_or], _, bodyCursor, bodyRoute,
               prefixStorage.trans (branchStorage.trans popStorage)⟩
-
-private theorem splitDispatch_bodyCut
-    {dp : DeployParams} {root target : Exec.Deriv}
-    {initialPath path : Prog.SourcePath} {initialSource : Func}
-    {initial : Exec.Deriv.SourceCursor root (runtime dp)
-      initialPath initialSource}
-    {pivot : B256} {left right : Func}
-    (cursor : Exec.Deriv.SourceCursor root (runtime dp) path
-      (splitDispatch pivot left right))
-    (route : Exec.Deriv.SourceCursor.Toward
-      initial target (.reg .sstore) cursor) :
-    (∃ leftPath,
-      ∃ leftCursor : Exec.Deriv.SourceCursor root (runtime dp)
-          leftPath left,
-        Exec.Deriv.SourceCursor.Toward
-          initial target (.reg .sstore) leftCursor) ∨
-    (∃ rightPath,
-      ∃ rightCursor : Exec.Deriv.SourceCursor root (runtime dp)
-          rightPath right,
-        Exec.Deriv.SourceCursor.Toward
-          initial target (.reg .sstore) rightCursor) := by
-  unfold splitDispatch at cursor
-  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne route
-      (by intro h; cases h) with
-    ⟨dupChronology, pushCursor, dupEdge, pushRoute⟩
-  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne pushRoute
-      (by intro h; cases h) with
-    ⟨pushChronology, gtCursor, pushEdge, gtRoute⟩
-  rcases Exec.Deriv.SourceCursor.Toward.next_of_instruction_ne gtRoute
-      (by intro h; cases h) with
-    ⟨gtChronology, branchCursor, gtEdge, branchRoute⟩
-  cases branchRoute with
-  | branchLeft branchCursor chronology arm compilerPrefix rest =>
-      exact Or.inr ⟨_, arm, rest⟩
-  | branchRight branchCursor chronology arm compilerPrefix rest =>
-      exact Or.inl ⟨_, arm, rest⟩
 
 private theorem splitDispatch_bodyCutStorage
     {dp : DeployParams} {root target : Exec.Deriv}

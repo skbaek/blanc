@@ -209,9 +209,6 @@ def creationBaseline : Prog :=
 def creationBaselineBytes : Bytes :=
   (Prog.compile creationBaseline).getD []
 
-def creationBaselineCode : ByteArray :=
-  ByteArray.mk creationBaselineBytes.toArray
-
 theorem creationBaseline_compiles : creationBaseline.compiles = true := by
   decide +kernel
 
@@ -269,15 +266,6 @@ theorem ossifiablePushCreationCoordinate_shape (value : Nat) :
     ossifiablePushCreationCoordinate value =
       Ninst.push (Nat.toB256 value).toBytes (by rw [B256.length_toBytes]) := by
   rfl
-
-theorem ossifiableConstructorAfterSetupSlot_eq :
-    constructorAfterSetupSlot = 5 := rfl
-
-theorem ossifiableConstructorDelegateSetupSlot_eq :
-    constructorDelegateSetupSlot = 6 := rfl
-
-theorem ossifiableConstructorZeroAdminErrorSlot_eq :
-    constructorZeroAdminErrorSlot = 4 := rfl
 
 theorem ossifiableConstructorFunctions_emptyRevert
     (runtimeOffset runtimeLength : Nat) :

@@ -67,10 +67,6 @@ def output {o : Nat} : VictimPhase o → Nat
   | .before | .open _ => 0
   | .exited _ exit => exit.payout
 
-def hasDeposit {o : Nat} : VictimPhase o → Prop
-  | .before => False
-  | .open _ | .exited _ _ => True
-
 end VictimPhase
 
 /-- The total actor overlay at one committed PRORATA boundary.  All
@@ -177,7 +173,6 @@ inductive ProrataAttackKind where
   | victimDeposit (amount minted : Nat)
   | victimExit (shares paid : Nat)
   | silent
-deriving DecidableEq
 
 namespace ProrataAttackKind
 

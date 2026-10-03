@@ -54,30 +54,6 @@ theorem drip_compiled_freshStart {e : Sevm} {entry s r : Devm} {image : Bytes}
         (.call freshRouteSlot) r := by
   exact of_run_freshStart auxLookup_runtime frame hp run
 
-/-- The word guard, derived from a successful compiled run at the frozen
-constants: loop guards, composition no-overflow, and the post cap. -/
-theorem drip_compiled_guards_of_run {e : Sevm} {entry s r : Devm}
-    {image : Bytes} {tail : Stack}
-    (frame : Frame image entry s) (hp : tail <<+ s.stack)
-    (run : Func.Run (runtime.main :: runtime.aux) e s
-      (.call freshStartSlot) r) :
-    B256.RPowGuards scale half rate
-        (e.benvStat.time -
-          Devm.getStorVal entry e.currentTarget rhoSlot).toNat ∧
-      B256.Nofm (Devm.getStorVal entry e.currentTarget chiSlot)
-        (B256.rpow scale half rate
-          (e.benvStat.time -
-            Devm.getStorVal entry e.currentTarget rhoSlot).toNat) ∧
-      ¬ maxChi <
-        (B256.rpow scale half rate
-              (e.benvStat.time -
-                Devm.getStorVal entry e.currentTarget rhoSlot).toNat *
-            Devm.getStorVal entry e.currentTarget chiSlot) / scale := by
-  obtain ⟨t, image', hchiLo, hchiHi, hclock, helapsed, hguards, hnofm, hcap,
-    hacc, hnow, hmach, hframe, hstack, hrun⟩ :=
-    drip_compiled_freshStart frame hp run
-  exact ⟨hguards, hnofm, hcap⟩
-
 /-! ## G5: compiled freshness and same-block agreement -/
 
 /-- A successful compiled `join` uses the fresh index for its conversion and

@@ -61,8 +61,6 @@ theorem CheckedHeartbeatExtension.add_eq
   rw [← Jaune.toB256_toNat (timestamp + interval),
     Jaune.B256.toNat_add_eq_of_nof _ _ hnof]
 
-def checkedHeartbeatExpiryGasWarm : Nat := 132
-
 def heartbeatBodySuccessGasWarmUpdate : Nat := 4693
 
 /-- The strict-live heartbeat boundary rules out the zero-current branch of

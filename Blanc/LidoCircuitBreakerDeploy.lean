@@ -19,7 +19,6 @@ open Jaune.Ninst Ninst
 namespace LidoCircuitBreaker
 
 def constructorArgumentBytes : Nat := 7 * 32
-def eip3860InitcodeLimit : Nat := 49152
 
 private def constructorRuntimeBase : Nat := constructorArgumentBytes
 
@@ -261,10 +260,6 @@ private theorem constructorInstructionEffectCounts_reg (regular : Rinst) :
       | .tstore => (0, 1, 0)
       | _ => (0, 0, 0) := by
   cases regular <;> rfl
-
-private theorem constructorInstructionEffectCounts_exec (execution : Xinst) :
-    constructorInstructionEffectCounts (.exec execution) = (0, 0, 1) := by
-  rfl
 
 private theorem constructorInstructionEffectCounts_push
     (bytes : Bytes) (bound : bytes.length ≤ 32) :

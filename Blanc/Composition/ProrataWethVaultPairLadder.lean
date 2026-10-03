@@ -37,12 +37,6 @@ def PairInBlock {vault : Adr} (blockIndex : Nat) (r : PairStepRecord vault) : Pr
   r.provenance.blockIndex = blockIndex
 
 
-theorem PairReplayBetween.toWith {vault : Adr} {blockIndex : Nat}
-    {transactionIndex : Option Nat} {framePath : List Nat} {pre post : PairBoundary}
-    (replay : PairReplayBetween vault blockIndex transactionIndex framePath pre post) :
-    PairReplayWith vault (PairProvenanceOk blockIndex transactionIndex framePath) pre post :=
-  replay
-
 /-- A faithful replay re-graded: weaken the admissibility half and enlarge the frame universe. -/
 theorem PairReplayWith.faithfulLift {vault : Adr} {p q : PairStepRecord vault → Prop}
     {F G : List Exec.Deriv} {pre post : PairBoundary}

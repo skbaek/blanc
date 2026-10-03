@@ -524,16 +524,6 @@ private def redeemFromBody (ownerArg amountArg : B256) (sendPrefix : Line)
       Ninst.call ::: Ninst.iszero :::
       ((.call errSlot) <?> success)))
 
-private theorem withdrawFromCore_eq_redeemFromBody :
-    withdrawFromCore =
-      redeemFromBody 0 2 (redeemSendToArgPrefix 1) etherTransferErrorSlot
-        (Func.last .stop) := rfl
-
-private theorem transferFromZero_eq_redeemFromBody :
-    transferFromZero =
-      redeemFromBody 0 2 redeemSendToCallerPrefix ethTransferErrorSlot
-        (redeemReturnTrueLine +++ Func.last .return_) := rfl
-
 /-- The shared delegated redemption walk: the guarded debit writes a single
 address-shaped balance key at the normalized owner argument, the external
 value `CALL` is identified with a retained child message whose

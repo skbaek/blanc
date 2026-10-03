@@ -57,7 +57,6 @@ inductive Error
   | approveNonzero
   | decimalsBound
   | supplyMulOverflow
-  deriving DecidableEq
 
 /-- The two events of the source. -/
 inductive Event

@@ -339,67 +339,6 @@ theorem OssifiableConstructorSetupSelectionRoute.empty_afterSetup_success
     · rw [postLogs, bodyLogs, bodyAdmin]
   · exact (lengthNonzero lengthZero).elim
 
-/-- Compose the empty setup selection with the already-proved implementation
-commit.  The result states the exact two writes and the source log chronology
-without assuming an initially empty admin slot. -/
-theorem OssifiableConstructorPreparedRoute.empty_afterSetup_success
-    {runtimeOffset runtimeLength : Nat}
-    {sevm : Sevm} {pre post : Devm} {tail : Stack}
-    {image runtimeBytes : Bytes} {implementation length : B256}
-    {requestedAdmin : Adr}
-    (route : OssifiableConstructorPreparedRoute
-      (ossifiableConstructorFunctions runtimeOffset runtimeLength)
-      sevm pre (.ok post) tail image implementation length)
-    (lengthZero : length = 0)
-    (hrequested :
-      Bytes.toB256 (image.sliceD 32 32 0) = requestedAdmin.toB256)
-    (hruntime :
-      sevm.code.sliceD runtimeOffset runtimeLength
-        (Linst.toUInt8 .stop) = runtimeBytes)
-    (hruntimeLength : runtimeBytes.length = runtimeLength)
-    (hruntimeNonempty : runtimeBytes ≠ [])
-    (hoffsetBound : runtimeOffset < 2 ^ 256)
-    (hlengthBound : runtimeLength < 2 ^ 256) :
-    requestedAdmin ≠ 0 ∧
-      Devm.getStor post sevm.currentTarget =
-        ((Devm.getStor pre sevm.currentTarget).set implementationSlotLit
-          (addressSlotUpdateRaw pre sevm.currentTarget
-            implementationSlotLit implementation)).set adminSlotLit
-          (addressSlotWriteWord
-            (((Devm.getStor pre sevm.currentTarget).set implementationSlotLit
-              (addressSlotUpdateRaw pre sevm.currentTarget
-                implementationSlotLit implementation)).get adminSlotLit)
-            requestedAdmin.toB256) ∧
-      post.logs =
-        pre.logs ++ [rawUpgradedLog sevm.currentTarget implementation] ++
-          [ossifiableConstructorAdminChangedLog sevm.currentTarget
-            (((Devm.getStor pre sevm.currentTarget).set
-              implementationSlotLit
-              (addressSlotUpdateRaw pre sevm.currentTarget
-                implementationSlotLit implementation)).get adminSlotLit)
-            requestedAdmin] ∧
-      post.output = runtimeBytes := by
-  rcases route with
-    noCode |
-    ⟨next, _, nextStorage, nextLogs, selection⟩
-  · rcases noCode with
-      ⟨_, _, _, _, _, _, _, _, noCodeOutcome⟩
-    rcases noCodeOutcome with
-      ⟨_, impossible, _, _, _⟩ | ⟨_, impossible, _, _, _, _⟩ <;>
-        cases impossible
-  · rcases selection.empty_afterSetup_success lengthZero hrequested hruntime
-        hruntimeLength hruntimeNonempty hoffsetBound hlengthBound with
-      ⟨adminNonzero, postStorage, postLogs, postOutput⟩
-    have nextAdmin :
-        next.getStorVal sevm.currentTarget adminSlotLit =
-          (((Devm.getStor pre sevm.currentTarget).set implementationSlotLit
-            (addressSlotUpdateRaw pre sevm.currentTarget
-              implementationSlotLit implementation)).get adminSlotLit) := by
-      exact congrArg (fun stor => stor.get adminSlotLit) nextStorage
-    refine ⟨adminNonzero, ?_, ?_, postOutput⟩
-    · rw [postStorage, nextStorage, nextAdmin]
-    · rw [postLogs, nextLogs, nextAdmin, List.append_assoc]
-
 /-! ## Accepted decoder into the prepared constructor route -/
 
 /-- Proof-carrying successful decoder/implementation preparation.  This

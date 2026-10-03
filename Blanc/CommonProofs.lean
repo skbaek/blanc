@@ -10226,12 +10226,6 @@ def Devm.BalNoninc (pre post : Devm) : Prop :=
 def State.BalGrowth (allowance : Nat) (pre post : Jaune.State) : Prop :=
   State.balSum post ≤ State.balSum pre + allowance
 
-def State.SumNof (st : Jaune.State) : Prop :=
-  State.balSum st < 2 ^ 256
-
-def Devm.SumNof (d : Devm) : Prop :=
-  Devm.balSum d < 2 ^ 256
-
 lemma balNoninc_refl_trans :
     (ReflexiveRel State.BalNoninc ∧ TransitiveRel State.BalNoninc) ∧
     (ReflexiveRel Devm.BalNoninc ∧ TransitiveRel Devm.BalNoninc) := by

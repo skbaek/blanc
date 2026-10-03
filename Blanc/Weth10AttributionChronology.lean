@@ -144,19 +144,6 @@ theorem Exec.Deriv.ParentPrefixCounted.snoc
   simpa only [List.append_nil] using
     Exec.Deriv.ParentPrefixCounted.step hedge (Exec.Deriv.ParentPrefixCounted.refl next)
 
-/-- The same-frame continuation edge out of a fixed proof-indexed derivation
-is unique, including its counted-frame label. -/
-theorem Exec.Deriv.ParentStepCounted.unique
-    {dp : DeployParams} {ca : Adr}
-    {root nextLeft nextRight : Exec.Deriv}
-    {leftCounted rightCounted : List CountedFrame}
-    (left : Exec.Deriv.ParentStepCounted dp ca
-      nextLeft root leftCounted)
-    (right : Exec.Deriv.ParentStepCounted dp ca
-      nextRight root rightCounted) :
-    nextLeft = nextRight ∧ leftCounted = rightCounted := by
-  cases left <;> cases right <;> simp_all only [and_self, ExceptT.stM_eq]
-
 /-! ## Relabelling bridges from the action-labelled chronology -/
 
 /-- Every action-labelled same-frame continuation edge admits a counted

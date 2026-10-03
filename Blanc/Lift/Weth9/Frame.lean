@@ -44,8 +44,6 @@ open Jaune
 open Blanc
 open Blanc.Lift
 
-private instance : Inhabited SFunc := ⟨.undefined⟩
-
 /-- The view wrappers and their silent callees form a state-silent set. -/
 theorem viewWrappers_silent :
     SilentSet prog (silentSet ++ [18, 21, 22, 23, 26, 28]) = true := by

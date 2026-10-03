@@ -95,7 +95,6 @@ inductive DepositAbiFailure
   | tail0 (stage : DynamicTailFailureStage)
   | tail1 (stage : DynamicTailFailureStage)
   | tail2 (stage : DynamicTailFailureStage)
-deriving DecidableEq
 
 /-- Exact endpoint gas consumed by one malformed-input row. -/
 def DepositAbiFailure.endpointGas : DepositAbiFailure → Nat

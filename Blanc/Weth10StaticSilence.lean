@@ -489,17 +489,6 @@ theorem Exec.attributionStream_writeFree_of_static
 
 /-! ## The payoff -/
 
-/-- Appending a write-free segment leaves an allowance-region transport
-unchanged. -/
-theorem AllowanceRegionEffect.append_writeFree
-    {ca : Adr} {pre post : Devm} {left right : List CountedFrame}
-    (h : AllowanceRegionEffect ca pre post left)
-    (hfree : WriteFreeLedger right) :
-    AllowanceRegionEffect ca pre post (left ++ right) := by
-  refine ⟨fun key hregion => ?_, h.codeEq⟩
-  rw [applyAllowanceLedger_append_writeFree _ left key hfree]
-  exact h.storage key hregion
-
 /-- Prepending a write-free segment leaves an allowance-region transport
 unchanged. -/
 theorem AllowanceRegionEffect.writeFree_append

@@ -229,34 +229,6 @@ def setPauserAssignmentPath : Prog.SourcePath :=
   ⟨setPauserSlot,
     List.replicate 3 .rest ++ [.branchLeft] ++ List.replicate 14 .rest⟩
 
-/-- Inside `setPauserKernel`, a walk whose zero-check falls through reaches the
-assignment `SSTORE` at `setPauserAssignmentPath`.  The nonzero-target branch
-word is the leg's only execution premise. -/
-theorem setPauserKernel_routeTo_assignment
-    {fs : List Func} {sevm : Sevm} {devm : Devm} {out : Execution}
-    (h : Func.RunCompiledTo fs sevm devm setPauserKernel out)
-    (nonzeroTarget : ∀ devm' : Devm,
-      Line.Run sevm devm setPauserKernelZeroCheck devm' →
-      ∀ (w : B256) (rest : Stack), devm'.stack = w :: rest → w = 0) :
-    Func.RunCompiledTo.RouteTo ⟨setPauserSlot, []⟩ h
-      setPauserAssignmentPath (.reg .sstore) := by
-  refine routeTo_line setPauserKernelZeroCheck h
-    (fun zeroCheck lineRun tail => ?_)
-  refine routeTo_branchLeft tail (nonzeroTarget zeroCheck lineRun)
-    (fun _armStart arm => ?_)
-  refine routeTo_line setPauserKernelAssignmentPrefix arm
-    (fun _writeState _writeRun write => ?_)
-  have pathEq :
-      ((([] ++ List.replicate setPauserKernelZeroCheck.length
-              Prog.SourceStep.rest) ++ [Prog.SourceStep.branchLeft]) ++
-          List.replicate setPauserKernelAssignmentPrefix.length
-            Prog.SourceStep.rest) =
-        setPauserAssignmentPath.steps := by
-    simp only [setPauserKernelZeroCheck, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
-      List.reduceReplicate, List.nil_append, List.cons_append, setPauserKernelAssignmentPrefix,
-      Fin.isValue, setPauserAssignmentPath]
-  exact pathEq ▸ routeTo_head write setPauserAssignmentPath
-
 /-- The dispatcher's entry guard, spelled literally. -/
 def runtimeMainEntryPrefix : Line :=
   [Ninst.callvalue, Ninst.pushB256 4, Ninst.calldatasize, Ninst.lt, Ninst.or]
@@ -2181,10 +2153,6 @@ because attainment does not need them: an `Attainable` witness consumes `.ok`
 and the route, and says nothing about what the write left behind. -/
 
 /-! ### The world -/
-
-/-- World state for the configuration call: empty storage, so the
-configuration cell reads zero and the store is priced as a set. -/
-def configWorldState : State := breakerState Stor.empty
 
 /-- The one warm accessed key at message entry: the configuration slot the
 body both reads and writes.  Warm at entry is a choice, not a fact about the
@@ -4324,33 +4292,5 @@ theorem attainable_registerLastOldNewExpiry_adminExpiry :
   rw [replWorld_codeAddress, replWorld_currentTarget]
 
 end Replacement
-
-/-! Compatibility names retained after hoisting the generic memory-image
-carrier.  The implementations live in the carrier namespace so generalized
-field notation continues to find them. -/
-abbrev MemWordAt.acrossMemoryZeroCheck :=
-  @Blanc.MemWordAt.acrossMemoryZeroCheck
-abbrev MemWordAt.acrossZeroCheck := @Blanc.MemWordAt.acrossZeroCheck
-abbrev MemWordAt.acrossAppendPrefix := @Blanc.MemWordAt.acrossAppendPrefix
-abbrev MemWordAt.acrossArrayEntryPrefix :=
-  @Blanc.MemWordAt.acrossArrayEntryPrefix
-abbrev MemWordAt.acrossReverseIndexPrefix :=
-  @Blanc.MemWordAt.acrossReverseIndexPrefix
-abbrev MemWordAt.acrossArrayLengthPrefix :=
-  @Blanc.MemWordAt.acrossArrayLengthPrefix
-abbrev MemWordAt.acrossNewCountKey := @Blanc.MemWordAt.acrossNewCountKey
-abbrev MemWordAt.acrossNewCountPrefix := @Blanc.MemWordAt.acrossNewCountPrefix
-abbrev MemWordAt.acrossFinishPrefix := @Blanc.MemWordAt.acrossFinishPrefix
-abbrev MemWordAt.acrossPreviousCountKey :=
-  @Blanc.MemWordAt.acrossPreviousCountKey
-abbrev MemWordAt.acrossDecrementPrefix :=
-  @Blanc.MemWordAt.acrossDecrementPrefix
-abbrev MemWordAt.acrossNewCountLine := @Blanc.MemWordAt.acrossNewCountLine
-abbrev MemWordAt.acrossPreviousCountCheck :=
-  @Blanc.MemWordAt.acrossPreviousCountCheck
-abbrev MemWordAt.acrossOldLastClearPrefix :=
-  @Blanc.MemWordAt.acrossOldLastClearPrefix
-abbrev MemWordAt.acrossOldLastRecordPrefix :=
-  @Blanc.MemWordAt.acrossOldLastRecordPrefix
 
 end Blanc.LidoCircuitBreaker

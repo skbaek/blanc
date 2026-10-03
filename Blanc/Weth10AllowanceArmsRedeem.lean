@@ -417,17 +417,6 @@ def redeemBody (amountArg : B256) (sendPrefix : Line)
       Ninst.call ::: Ninst.iszero :::
       ((.call ethTransferErrorSlot) <?> success)))
 
-private theorem withdraw_eq_redeemBody :
-    withdraw = redeemBody 0 redeemSendToCallerPrefix (Func.last .stop) := rfl
-
-private theorem withdrawTo_eq_redeemBody :
-    withdrawTo = redeemBody 1 (redeemSendToArgPrefix 0) (Func.last .stop) :=
-  rfl
-
-private theorem transferZeroThen_eq_redeemBody (success : Func) :
-    transferZeroThen success =
-      redeemBody 1 redeemSendToCallerPrefix success := rfl
-
 /-- The caller-send operand walk shared by the redemption selectors. -/
 theorem redeemSendToCallerPrefix_effect
     {e : Sevm} {pre callPre : Devm} {value : B256} {tail : Stack}

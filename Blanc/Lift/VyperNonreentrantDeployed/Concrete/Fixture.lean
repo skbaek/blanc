@@ -51,10 +51,6 @@ def implSevm (data : Bytes) : Sevm := implSevmWith implementationCode data
 def implDevm (gas : Nat) (world : State) : Devm :=
   ((default : Devm).withGasLeft gas).withState world
 
-/-- The implementation frame entry for `remove_liquidity`. -/
-def removeEntry : Evm :=
-  ⟨0, implSevm removeCalldata, implDevm 10000000 poolState⟩
-
 /-- The proxy frame entry with the same calldata. -/
 def proxySevm (data : Bytes) : Sevm :=
   { (default : Sevm) with
@@ -67,26 +63,11 @@ def proxySevm (data : Bytes) : Sevm :=
     code := proxyCode
     depth := 1023 }
 
-def proxyEntry : Evm :=
-  ⟨0, proxySevm removeCalldata, implDevm 10000000 poolState⟩
-
-/-- The observed projection a chunk certificate pins: pc, stack, execution gas
-and memory bytes. -/
-def proj (e : Evm) : Nat × List Nat × Nat × List Nat :=
-  (e.pc, e.dyna.stack.map B256.toNat, e.dyna.gasLeft,
-    e.dyna.memory.data.toList.map UInt8.toNat)
-
-/-- `add_liquidity([1000, 1000], 0)` = `0x0b4c7e4d`: 100 bytes. -/
-def addCalldata : Bytes := [0x0b, 0x4c, 0x7e, 0x4d] ++ word 1000 ++ word 1000 ++ word 0
-
 /-- A literal mid-frame state: given pc, stack words, gas and memory bytes,
 over the implementation code with `add_liquidity` calldata. -/
 def midStateWith (code : ByteArray) (data : Bytes) (pc : Nat) (stack : List Nat) (gas : Nat) (mem : List Nat) : Evm :=
   ⟨pc, implSevmWith code data,
     (((implDevm gas poolState).withStack (stack.map Nat.toB256)).withMemory
       ⟨(mem.map Nat.toUInt8).toArray, mem.length⟩)⟩
-
-def midState (data : Bytes) (pc : Nat) (stack : List Nat) (gas : Nat) (mem : List Nat) : Evm :=
-  midStateWith implementationCode data pc stack gas mem
 
 end Blanc.Lift.VyperNonreentrantDeployed.Concrete

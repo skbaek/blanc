@@ -869,8 +869,6 @@ theorem entry21_foreign {Φ : Stor → Prop}
 
 /-! ## The `registerPauser` selector wrapper (entry 59) -/
 
-private instance : Inhabited SFunc := ⟨.undefined⟩
-
 /-- **The `registerPauser(address,address)` wrapper (entry 59)**, for any storage
 predicate `Φ` stable under off-Registry writes that every successful entry-32
 run of `setPauser(t, np)` (from the frame's storage and well-formed memory)

@@ -67,37 +67,17 @@ theorem directCounterfactual_benv (m : Msg) :
 theorem directCounterfactual_tenv (m : Msg) :
     (directCounterfactual m).tenv = m.tenv := rfl
 
-theorem directCounterfactual_caller (m : Msg) :
-    (directCounterfactual m).caller = m.caller := rfl
-
-theorem directCounterfactual_target (m : Msg) :
-    (directCounterfactual m).target = m.target := rfl
-
 theorem directCounterfactual_currentTarget (m : Msg) :
     (directCounterfactual m).currentTarget = m.currentTarget := rfl
 
 theorem directCounterfactual_gas (m : Msg) :
     (directCounterfactual m).gas = m.gas := rfl
 
-theorem directCounterfactual_value (m : Msg) :
-    (directCounterfactual m).value = m.value := rfl
-
 theorem directCounterfactual_data (m : Msg) :
     (directCounterfactual m).data = m.data := rfl
 
-theorem directCounterfactual_depth (m : Msg) :
-    (directCounterfactual m).depth = m.depth := rfl
-
-theorem directCounterfactual_shouldTransferValue (m : Msg) :
-    (directCounterfactual m).shouldTransferValue =
-      m.shouldTransferValue := rfl
-
 theorem directCounterfactual_isStatic (m : Msg) :
     (directCounterfactual m).isStatic = m.isStatic := rfl
-
-theorem directCounterfactual_accessedAddresses (m : Msg) :
-    (directCounterfactual m).accessedAddresses =
-      m.accessedAddresses := rfl
 
 theorem directCounterfactual_accessedStorageKeys (m : Msg) :
     (directCounterfactual m).accessedStorageKeys =
@@ -109,13 +89,6 @@ theorem directCounterfactual_disablePrecompiles (m : Msg) :
 
 theorem directCounterfactual_benvAfterTransfer (m : Msg) :
     (directCounterfactual m).benvAfterTransfer = m.benvAfterTransfer := rfl
-
-theorem directCounterfactual_codeAddress (m : Msg) :
-    (directCounterfactual m).codeAddress = some implAdr := rfl
-
-theorem directCounterfactual_code (m : Msg) :
-    (directCounterfactual m).code =
-      (m.benv.state.get implAdr).code := rfl
 
 /-! ## Arithmetic and runtime premises -/
 
@@ -431,17 +404,9 @@ private theorem proxyChild_currentTarget
     (proxyChild m atCallGas callCost childGas).currentTarget =
       m.currentTarget := rfl
 
-private theorem proxyChild_codeAddress
-    (m : Msg) (atCallGas callCost childGas : Nat) :
-    (proxyChild m atCallGas callCost childGas).codeAddress = some implAdr := rfl
-
 private theorem proxyChild_gas
     (m : Msg) (atCallGas callCost childGas : Nat) :
     (proxyChild m atCallGas callCost childGas).gas = childGas := rfl
-
-private theorem proxyChild_code
-    (m : Msg) (atCallGas callCost childGas : Nat) :
-    (proxyChild m atCallGas callCost childGas).code = implGuardedCode := rfl
 
 private theorem proxyChild_isStatic
     (m : Msg) (atCallGas callCost childGas : Nat) :
@@ -603,14 +568,6 @@ private theorem implGuarded_exec_static_nonzero
   · simpa only [Devm.transientStorage, initDevm] using htra
   · exact hlogs.trans (initDevm_logs_of_covered hfork)
 
-private theorem proxyCallPre_state (m : Msg) (atCallGas : Nat) :
-    (proxyCallPre m atCallGas).state = m.benv.state := rfl
-
-private theorem proxyCallPre_transientStorage
-    (m : Msg) (atCallGas : Nat) :
-    (proxyCallPre m atCallGas).transientStorage =
-      m.tenv.transientStorage := rfl
-
 private theorem proxyCallPre_logs (m : Msg) (atCallGas : Nat)
     (hfork : CoveredFork m.benv.stat.fork) :
     (proxyCallPre m atCallGas).logs = [] :=
@@ -635,12 +592,6 @@ private theorem proxyChild_transientStorage
     (m : Msg) (atCallGas callCost childGas : Nat) :
     (proxyChild m atCallGas callCost childGas).tenv.transientStorage =
       m.tenv.transientStorage := rfl
-
-private theorem proxyChild_accessedStorageKeys
-    (m : Msg) (atCallGas callCost childGas : Nat) :
-    (proxyChild m atCallGas callCost childGas).accessedStorageKeys =
-      m.accessedStorageKeys.insert
-        (m.currentTarget, implementationSlotLit) := rfl
 
 private theorem proxyChild_exec_nonzero
     (m : Msg) (atCallGas callCost childGas : Nat)
@@ -1790,14 +1741,6 @@ theorem processMessage_static_halt_to_revert :
   · simpa only [m] using hpmessage
   · simp only [reason, settledHalt_error]
   · simp only [settledRevert_error]
-
-/-- A downstream account-level property states explicitly that it respects
-the one-way proxy observable before it may be transported. -/
-def PreservedByProxying (target : Adr)
-    (P : Msg → TargetMessageResult → Prop) : Prop :=
-  ∀ m direct proxied,
-    SettledObservableAt target direct proxied →
-      P m direct → P m proxied
 
 /-! ## Biting controls for the directional relation -/
 

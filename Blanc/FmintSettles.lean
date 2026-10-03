@@ -421,21 +421,6 @@ requires the success form's callback premises to be stated over named
 definitions rather than an existential, and these are the names; the arguments
 they still take are the ones a caller has to bind anyway. -/
 
-/-- The parent state fmint's callback `CALL` suspends on. -/
-def flashLoanSpawnParent (d1 : Devm) (charge dataLen : Nat) : Devm :=
-  callSpawnParent d1 charge callbackArgsOffset.toNat
-    (flashLoanArgsSize dataLen).toNat 0 0
-
-/-- The message fmint's callback `CALL` builds: `onFlashLoan(...)` read out of
-the parent's own memory, sent to `receiver` with no value.  `receiver` owns the
-storage and `cadr` is the account whose code runs; they differ exactly when the
-borrower carries a delegation designator, so `cadr` joins `code` and `dp` among
-the operands the world supplies rather than `flashLoan`'s construction. -/
-def flashLoanSpawnMsg (sevm : Sevm) (p : Devm) (mcs : Nat) (receiver : B256)
-    (cadr : Adr) (dataLen : Nat) (code : ByteArray) (dp : Bool) : Msg :=
-  callSpawnMsg sevm p mcs receiver.toAdr cadr callbackArgsOffset.toNat
-    (flashLoanArgsSize dataLen).toNat code dp
-
 /-! ## The trunk, all the way to the `CALL`
 
 The walk continues `flashLoan_runCompiledTo_mint` through the `Transfer` log and

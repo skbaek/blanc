@@ -66,9 +66,6 @@ private def AllowanceAgree (sevm : Sevm) (u v : Devm) : Prop :=
     (Devm.getStor v sevm.currentTarget).get key =
       (Devm.getStor u sevm.currentTarget).get key
 
-private theorem AllowanceAgree.refl' {sevm : Sevm} {u : Devm} :
-    AllowanceAgree sevm u u := fun _ _ => rfl
-
 private theorem AllowanceAgree.trans {sevm : Sevm} {u v w : Devm}
     (h₁ : AllowanceAgree sevm u v) (h₂ : AllowanceAgree sevm v w) :
     AllowanceAgree sevm u w :=

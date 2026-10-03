@@ -139,7 +139,6 @@ inductive LocalSegmentKind
   | redemption
   | flashCredit
   | flashRepayment
-deriving DecidableEq
 
 /-- One exact contiguous balance segment belonging to a classified action. -/
 inductive LocalActionSegment :

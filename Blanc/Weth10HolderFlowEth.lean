@@ -74,13 +74,6 @@ def FlowAction.bodyEthActions (action : FlowAction) : List FlowAction :=
   | .ordinaryMint .. => []
   | _ => [action]
 
-theorem FlowAction.entryEthActions_append_bodyEthActions
-    (action : FlowAction) :
-    action.entryEthActions ++ action.bodyEthActions = [action] := by
-  rcases action with
-    ⟨atom, credit, debit, actualCaller, currentTarget, codeAddress, depth⟩
-  cases atom <;> rfl
-
 def flowActionEntryEthActions : Option FlowAction → List FlowAction
   | none => []
   | some action => action.entryEthActions
@@ -1700,17 +1693,6 @@ theorem AccountedHistory.ethBound
         (AccountedHistory.ethBound cfg dp ca hmessage prior hstable)
         (AccountedBlock.ethBound accounted hmessage
           (prior.future_stable hstable))
-
-/-- Full history accounting with all settlement/wrapper premises discharged;
-only the concrete committed raw-`Exec` theorem remains to be supplied. -/
-theorem AccountedHistory.ethBound_of_committedExecSound
-    (cfg : ChainConfig) (dp : DeployParams) (ca : Adr)
-    (hsound : CommittedExecEthSound dp ca) :
-    {checkpoint : BlockChain} → {future : BlockChain} →
-    (history : AccountedHistory cfg dp ca checkpoint future) →
-    Stable dp ca checkpoint.state →
-    EthBound ca checkpoint.state future.state history.flowActions :=
-  AccountedHistory.ethBound cfg dp ca hsound.messageEthSound
 
 end Weth10
 

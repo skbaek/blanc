@@ -692,19 +692,6 @@ def StorageSegmentDelta.append
     · exact left.creditShape action hleft
     · exact right.creditShape action hright
 
-def StorageSegmentDelta.silentSurround
-    {ca : Adr} {pre childPre childPost post : Devm}
-    {children : List FlowAction}
-    (entrySilent : Stor.Weth10Silent
-      (Devm.getStor pre ca) (Devm.getStor childPre ca))
-    (child : StorageSegmentDelta ca childPre childPost children)
-    (exitSilent : Stor.Weth10Silent
-      (Devm.getStor childPost ca) (Devm.getStor post ca)) :
-    StorageSegmentDelta ca pre post children := by
-  simpa only [List.nil_append, List.append_nil] using
-    (StorageSegmentDelta.of_weth10Silent entrySilent).append
-      (child.append (StorageSegmentDelta.of_weth10Silent exitSilent))
-
 /-- A contiguous ordinary local segment is the complete delta for its one
 action.  The label equality excludes using this constructor for only half of
 a flash action. -/
@@ -1603,94 +1590,6 @@ theorem ProcessCreateMessage.storageSegmentEffect_of_bodyEffect
         (hparent.trans hpostState.symm)
     exact ⟨StorageSegmentEffect.of_getStorCode_eq hstorage hcodeEq⟩
 
-/-- A CALL-family instruction with a concrete child slot consists of a
-storage-silent instruction prefix, the exact retained child message, and a
-storage-silent resumption. -/
-theorem GenericCall.storageSegmentDelta_some
-    {dp : DeployParams} {ca : Adr} {depth : Nat}
-    {sevm : Sevm} {pre inter : Devm}
-    {gas : Nat} {value : B256} {caller target codeAddress : Adr}
-    {stv isStatic : Bool} {ii is oi os : Nat} {code : ByteArray}
-    {disablePrecompiles : Bool}
-    {pc' : Nat} {childSevm : Sevm} {childPre : Devm}
-    {childOut : Execution}
-    (hrun : GenericCall sevm pre gas value caller target codeAddress stv
-      isStatic ii is oi os code disablePrecompiles
-      (.some ⟨⟨pc', childSevm, childPre⟩, childOut⟩) (.ok inter))
-    (childRun : Exec pc' childSevm childPre childOut)
-    (hdepth : childSevm.depth < depth)
-    (hcode : some (pre.getCode ca).toList =
-      Prog.compile (weth10 dp))
-    (htargetCode : target = ca →
-      some code.toList = Prog.compile (weth10 dp))
-    (hbelow : StorageSegmentTraceBelow dp ca depth) :
-    Nonempty (StorageSegmentEffect ca pre inter
-      (if Blanc.Frame.settlementCommits
-          (Frame.ofCall
-            (callMsg sevm (pre.withReturnData []) gas value caller target
-              codeAddress stv isStatic ((pre.memory.read ii is).1)
-              code disablePrecompiles)) childOut = true
-       then Exec.flowActions dp ca childRun else [])) := by
-  unfold GenericCall genericCall.step at hrun
-  simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at hrun
-  repeat' split at hrun
-  all_goals simp only [XStep.ofExcept, XStep.Run] at hrun
-  · cases hrun.1
-  · cases hrun.1
-  · obtain ⟨result, hprocess, hresume⟩ := hrun
-    rcases result with error | child
-    · cases Resume.call_run_error hresume.symm
-    have hinterState : inter.state = child.state :=
-      Resume.call_state hresume.symm
-    let callPre := pre.withReturnData []
-    let msg := callMsg sevm callPre gas value caller target codeAddress stv
-      isStatic ((callPre.memory.read ii is).1) code disablePrecompiles
-    let trace : ProcessMessageTrace msg (.ok child) :=
-      ⟨.some ⟨⟨pc', childSevm, childPre⟩, childOut⟩,
-        .some childRun, by
-          simpa only [ProcessMessage, msg, callPre, Mem.read] using hprocess⟩
-    have hmsgDepth : msg.depth < depth := by
-      rw [← ProcessMessage.depth_eq trace.run]
-      exact hdepth
-    have hmsgTargetCode : msg.currentTarget = ca →
-        some msg.code.toList = Prog.compile (weth10 dp) := by
-      intro htarget
-      apply htargetCode
-      simpa only [msg, callMsg] using htarget
-    have hcallPreCode : some (callPre.getCode ca).toList =
-        Prog.compile (weth10 dp) := by
-      change some (pre.getCode ca).toList = Prog.compile (weth10 dp)
-      exact hcode
-    rcases ProcessMessage.storageSegmentEffect_of_settlement childRun
-        trace.run (parent := callPre) rfl hmsgDepth hcallPreCode
-        hmsgTargetCode hbelow with ⟨effect⟩
-    have hprefixStorage : Devm.getStor pre ca = Devm.getStor callPre ca := by
-      rfl
-    have hprefixCode : pre.getCode ca = callPre.getCode ca := by
-      rfl
-    have hpostStorage : Devm.getStor child ca = Devm.getStor inter ca :=
-      (getStor_eq_of_state_eq hinterState ca).symm
-    have hpostCode : child.getCode ca = inter.getCode ca :=
-      congrArg (fun state : State => state.getCode ca) hinterState.symm
-    have hmemory : callPre.memory = pre.memory := by
-      rfl
-    dsimp only [msg] at effect
-    rw [hmemory] at effect
-    dsimp only [callPre] at effect
-    exact ⟨by
-      convert
-        (StorageSegmentEffect.of_getStorCode_eq
-            hprefixStorage hprefixCode).append
-          (effect.append
-            (StorageSegmentEffect.of_getStorCode_eq
-              hpostStorage hpostCode)) using 1
-      by_cases hretain : Jaune.Frame.settlementCommits
-          (Frame.ofCall
-            (callMsg sevm (pre.withReturnData []) gas value caller target
-              codeAddress stv isStatic ((pre.memory.read ii is).1) code
-              disablePrecompiles)) childOut = true <;>
-        simp only [hretain, ↓reduceIte, List.append_nil, List.nil_append, Bool.false_eq_true]⟩
-
 /-- Proof-indexed CALL transport: the recursive premise is the effect of this
 exact filled child slot, rather than a depth-wide hypothesis. -/
 theorem GenericCall.storageSegmentEffect_some_of_bodyEffect
@@ -1817,106 +1716,6 @@ theorem GenericCall.storageSegmentEffect_none
               (effect.append
                 (StorageSegmentEffect.of_getStorCode_eq
                   hsuffixStorage hsuffixCode))⟩
-
-/-- A CREATE-family instruction with a concrete constructor slot retains the
-child actions only when full create settlement (including code deposit)
-commits.  Fresh-address separation from the installed contract follows from
-the actual collision check that admitted the concrete child slot. -/
-theorem GenericCreate.storageSegmentEffect_some
-    {dp : DeployParams} {ca : Adr} {depth : Nat}
-    {sevm : Sevm} {pre post : Devm}
-    {endowment : B256} {newAddress : Adr} {mi ms : Nat}
-    {cevm : Evm} {raw : Execution}
-    (hrun : GenericCreate sevm pre endowment newAddress mi ms
-      (.some ⟨cevm, raw⟩) (.ok post))
-    (childRun : Exec cevm.pc cevm.sta cevm.dyna raw)
-    (hdepth : cevm.sta.depth < depth)
-    (hcode : some (pre.getCode ca).toList =
-      Prog.compile (weth10 dp))
-    (hbelow : StorageSegmentTraceBelow dp ca depth) :
-    Nonempty (StorageSegmentEffect ca pre post
-      (if Blanc.Frame.settlementCommits
-          (Frame.ofCreate
-            (createMsg sevm
-              (addAccessedAddress
-                (((pre.withGasLeft
-                    (pre.gasLeft - except64th pre.gasLeft)).withReturnData
-                  []).incrNonce sevm.currentTarget) newAddress)
-              (except64th pre.gasLeft) endowment newAddress
-              ((pre.memory.read mi ms).1))) raw = true
-       then Exec.flowActions dp ca childRun else [])) := by
-  have hnewNe : newAddress ≠ ca :=
-    GenericCreate.newAddress_ne_of_installed hrun hcode
-  unfold GenericCreate genericCreate.step at hrun
-  simp only [Bind.bind, Except.bind, Except.assert, assertDynamic,
-    Pure.pure, Except.pure] at hrun
-  repeat' split at hrun
-  all_goals simp only [XStep.ofExcept, XStep.Run] at hrun
-  all_goals try
-    (have hxl : (some ⟨cevm, raw⟩ : Xlot) = none := hrun.1
-     cases hxl)
-  obtain ⟨result, hframe, hresume⟩ := hrun
-  cases result with
-  | error error =>
-      simp only [ExceptT.stM_eq, Resume.run, liftToExecution, Except.bind_error,
-        reduceCtorEq] at hresume
-  | ok settled =>
-      let createPre :=
-        addAccessedAddress
-          (((pre.withGasLeft
-              (pre.gasLeft - except64th pre.gasLeft)).withReturnData
-            []).incrNonce sevm.currentTarget) newAddress
-      let msg := createMsg sevm createPre (except64th pre.gasLeft)
-        endowment newAddress ((pre.memory.read mi ms).1)
-      let trace : ProcessCreateMessageTrace msg (.ok settled) :=
-        ⟨.some ⟨cevm, raw⟩, .some childRun, by
-          simpa only [ProcessCreateMessage, msg, createPre, Mem.read] using
-            hframe⟩
-      have hmsgDepth : msg.depth < depth := by
-        rw [← ProcessCreateMessage.depth_eq trace.run]
-        exact hdepth
-      have hcreatePreStorage :
-          Devm.getStor pre ca = Devm.getStor createPre ca := by
-        have hstate : createPre.state =
-            pre.state.incrNonce sevm.currentTarget := by
-          rfl
-        change pre.state.getStor ca = createPre.state.getStor ca
-        rw [hstate]
-        exact State.incrNonce_get_stor.symm
-      have hcreatePreCode : pre.getCode ca = createPre.getCode ca := by
-        have hstate : createPre.state =
-            pre.state.incrNonce sevm.currentTarget := by
-          rfl
-        change pre.state.getCode ca = createPre.state.getCode ca
-        rw [hstate]
-        exact State.incrNonce_get_code.symm
-      have hcreatePreInstalled : some (createPre.getCode ca).toList =
-          Prog.compile (weth10 dp) := by
-        rw [← hcreatePreCode]
-        exact hcode
-      rcases trace.storageSegmentDelta (parent := createPre) rfl hmsgDepth
-          hcreatePreInstalled hnewNe hbelow with ⟨effect⟩
-      have hresumeState : post.state = settled.state :=
-        Resume.create_state hresume.symm
-      have hpostStorage : Devm.getStor settled ca = Devm.getStor post ca :=
-        congrArg (fun state : State => state.getStor ca) hresumeState.symm
-      have hpostCode : settled.getCode ca = post.getCode ca :=
-        congrArg (fun state : State => state.getCode ca) hresumeState.symm
-      have combined :=
-        (StorageSegmentEffect.of_getStorCode_eq
-            hcreatePreStorage hcreatePreCode).append
-          (effect.append
-            (StorageSegmentEffect.of_getStorCode_eq
-              hpostStorage hpostCode))
-      have hsettle :
-          (Frame.ofCreate msg).settle raw = .ok settled :=
-        (RunFrame.some_inv trace.run).2.symm
-      cases hopt : settled.error <;>
-        refine ⟨?_⟩ <;>
-        simpa only [msg, createPre, trace, Frame.settlementCommits, hsettle, hopt, Option.isNone_none, ↓reduceIte,
-          Option.isSome_none, Bool.false_eq_true, RetainedXlot.flowActions, List.append_nil,
-          List.nil_append, Option.isNone_some, Option.isSome_some]
-          using combined
 
 /-- Proof-indexed CREATE transport through full code-deposit settlement. -/
 theorem GenericCreate.storageSegmentEffect_some_of_bodyEffect
@@ -2172,32 +1971,6 @@ abbrev Exec.StorageSegmentTrace
     (run : Exec pc sevm pre (.ok post)) : Type :=
   StorageSegmentEffect ca pre post
     (Blanc.Weth10.Exec.flowActions dp ca run)
-
-/-- `RunCompiled` reconstruction may choose a different inhabitant of the same
-`Exec` index, but the exact segment-trace target transports across that choice.
--/
-def Exec.StorageSegmentTrace.congr_runs
-    {dp : DeployParams} {ca : Adr}
-    {pc : Nat} {sevm : Sevm} {pre post : Devm}
-    {left right : Exec pc sevm pre (.ok post)}
-    (trace : Blanc.Weth10.Exec.StorageSegmentTrace dp ca left) :
-    Blanc.Weth10.Exec.StorageSegmentTrace dp ca right := by
-  change StorageSegmentEffect ca pre post (Exec.flowActions dp ca left) at trace
-  change StorageSegmentEffect ca pre post (Exec.flowActions dp ca right)
-  rw [← Exec.flowActions_eq_of_runs (dp := dp) (ca := ca) left right]
-  exact trace
-
-/-- Constructing the exact execution segment trace is sufficient for the full
-per-holder and aggregate storage theorem, with no endpoint equation supplied
-as a premise. -/
-theorem Exec.StorageSegmentTrace.storageFlowAccounting
-    {dp : DeployParams} {ca : Adr}
-    {pc : Nat} {sevm : Sevm} {pre post : Devm}
-    {run : Exec pc sevm pre (.ok post)}
-    (trace : Blanc.Weth10.Exec.StorageSegmentTrace dp ca run) :
-    StorageFlowAccounting ca pre post
-      (Blanc.Weth10.Exec.flowActions dp ca run) :=
-  trace.delta.storageFlowAccounting
 
 /-- A committed foreign frame contributes no root WETH10 action; its complete
 ledger is exactly its settlement-pruned proper-descendant traversal. -/
@@ -3933,19 +3706,6 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_flashFee
     decide +kernel
   · exact Blanc.Weth10.Exec.Frame.descendantFlowActions_eq_nil_of_flashFee (frame := frame)
       context hselector hnonempty
-
-/-- Selector chronology provider expected from the concrete compiled WETH10
-body.  It consumes only the authentic frame and the recursive deeper-frame
-soundness generated by `lift_core`; its result is the operational package
-above, never an assumed endpoint equation. -/
-def CompiledStorageAccountingProvider
-    (dp : DeployParams) (ca : Adr) : Prop :=
-  ∀ (frame : Exec.Frame),
-    Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame →
-    ForallDeeperAt frame.sevm.depth ca (weth10 dp)
-      (fun pc sevm pre out _ =>
-        Exec.CoreStorageSound dp ca pc sevm pre out) →
-    Blanc.Weth10.Exec.Frame.HasProofIndexedStorageAccounting dp ca frame
 
 /-- Exact proof-indexed accounting for the childless receive mint. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_receive
@@ -5977,54 +5737,6 @@ theorem Exec.coreStorageSound_of_compiledBodyStorageHandler
       hat hstep next hforeign ihNext
   · intro pc sevm devm l execution hat hstep hforeign
     exact Exec.CoreStorageSound.last hat hstep hforeign
-
-/-- The exact installed-execution theorem still required from the compiled
-callback semantics.  This predicate does not assume an endpoint equation: it
-asks for the operational segment trace itself for every actual committed
-successful `Exec` proof at a location carrying the installed WETH10 program.
-The commit premise is necessary because a raw `.ok` machine with a set error
-flag is rolled back only by the enclosing message settlement. -/
-def InstalledStorageSegmentTraceSound
-    (dp : DeployParams) (ca : Adr) : Prop :=
-  ∀ {pc : Nat} {sevm : Sevm} {pre post : Devm}
-    (run : Exec pc sevm pre (.ok post))
-    (committed : Execution.commits (.ok post) = true),
-    Prog.At (weth10 dp) ca pc sevm pre →
-      Exec.Frame.IsRoot (Exec.Frame.ofRun run committed) →
-      sevm.codeAddress = some ca →
-      CoveredFork sevm.benvStat.fork →
-      Nonempty (Blanc.Weth10.Exec.StorageSegmentTrace dp ca run)
-
-/-- Equality of the public holder map is the empty-action accounting unit;
-allowance and auxiliary-slot writes may still occur outside `Stor.rest`. -/
-theorem StorageFlowAccounting.of_rest_eq
-    {ca : Adr} {pre post : Devm}
-    (h : Stor.rest (Devm.getStor pre ca) =
-      Stor.rest (Devm.getStor post ca)) :
-    StorageFlowAccounting ca pre post [] := by
-  constructor <;>
-    simp only [h, holderFlowOfActions, HolderFlow.zero, List.foldl_nil, add_zero, holderCreditLossOfActions, List.map_nil, List.sum_nil, implies_true, balSum, supplyFlowOfActions, SupplyFlow.zero, creditLossOfActions]
-
-/-- Sequential accounting composes by appending the exact action labels. -/
-theorem StorageFlowAccounting.append
-    {ca : Adr} {pre middle post : Devm}
-    {left right : List FlowAction}
-    (hleft : StorageFlowAccounting ca pre middle left)
-    (hright : StorageFlowAccounting ca middle post right) :
-    StorageFlowAccounting ca pre post (left ++ right) := by
-  constructor
-  · intro u
-    have hl := hleft.holderEquation u
-    have hr := hright.holderEquation u
-    rw [holderFlowOfActions_append,
-      holderCreditLossOfActions_append]
-    simp only [HolderFlow.add]
-    omega
-  · have hl := hleft.supplyEquation
-    have hr := hright.supplyEquation
-    rw [supplyFlowOfActions_append, creditLossOfActions_append]
-    simp only [SupplyFlow.add]
-    omega
 
 end Weth10
 

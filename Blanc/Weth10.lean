@@ -526,11 +526,6 @@ def permit (dp : DeployParams) : Func :=
       .call permitRecoverSlot) <?>
     (swap 0 ::: calculateDomainSeparator +++ .call permitRecoverSlot))
 
-/-- Dispatcher misses reach this slot.  Only truly empty calldata is receive;
-an unknown nonempty selector is an empty-data revert. -/
-def receiveOrRevert : Func :=
-  calldatasize ::: iszero ::: (receiveEther <?> Func.revert)
-
 /-! ## Complete runtime program -/
 
 /-- The 27 deployed selectors in strict ascending order.  Payability is local

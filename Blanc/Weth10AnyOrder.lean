@@ -59,13 +59,6 @@ theorem claimSum_cons (f : RedemptionClaim → Nat)
     (c : RedemptionClaim) (cs : List RedemptionClaim) :
     claimSum f (c :: cs) = f c + claimSum f cs := rfl
 
-theorem claimSum_append (f : RedemptionClaim → Nat)
-    (cs ds : List RedemptionClaim) :
-    claimSum f (cs ++ ds) = claimSum f cs + claimSum f ds := by
-  induction cs with
-  | nil => simp only [List.nil_append, claimSum_nil, zero_add]
-  | cons c cs ih => simp only [List.cons_append, claimSum_cons, ih, Nat.add_assoc]
-
 /-- Reordering a claim list cannot change any of its aggregates. -/
 theorem claimSum_perm {cs ds : List RedemptionClaim} (h : cs.Perm ds)
     (f : RedemptionClaim → Nat) : claimSum f cs = claimSum f ds := by
@@ -602,10 +595,6 @@ theorem redeemEveryoneList_anyOrder
   exact redeemClaims_anyOrder hca hsel hstable hadm hperm
 
 /-! ## The deployment-rooted instance -/
-
-/-- A holder redeeming to itself: the recipient is the equally qualified
-owner. -/
-def selfClaim (u : Adr) (a : Nat) : RedemptionClaim := ⟨u, a, u⟩
 
 /-- A configured rule lookup on a covered schedule selects a covered fork's own
 rule set. -/

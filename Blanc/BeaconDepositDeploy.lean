@@ -131,17 +131,10 @@ def constructorInitPrefix : Bytes :=
 def creationCode : Bytes :=
   constructorInitPrefix ++ code
 
-def constructorCreationCode : Bytes :=
-  creationCode
-
 def eip3860InitcodeLimit : Nat :=
   pragueCodeLimits.maxInitCodeSize
 
 /-! ## Compiler and layout witnesses -/
-
-private theorem provisionalConstructorProgram_compiles :
-    Prog.compiles provisionalConstructorProgram = true := by
-  decide +kernel
 
 theorem constructorProgram_compiles :
     Prog.compiles constructorProgram = true := by
@@ -188,10 +181,6 @@ theorem creationCode_eip3860 :
     creationCode.length <= eip3860InitcodeLimit := by
   rw [creationCode_length_exact, eip3860InitcodeLimit_exact]
   decide
-
-theorem creationCode_drop_prefix :
-    creationCode.drop constructorInitPrefix.length = code := by
-  simp only [creationCode, List.drop_left']
 
 /-- The constructor's CODECOPY window is exactly the appended runtime. -/
 theorem creationCode_slice_runtime :
@@ -251,9 +240,6 @@ theorem mem_constructorSstoreSourceSites_iff
   cases regular <;>
     simp only [Bool.false_eq_true, reduceCtorEq, implies_true]
 
-def runtimeAndConstructorStaticcallSourceSites : List Prog.SourceSite :=
-  runtimeStaticcallSourceSites ++ constructorStaticcallSourceSites
-
 private theorem constructorSourceSiteFacts :
     constructorSstoreSourceSites.length = 1 ∧
     Prog.SourceSite.pcs constructorSstoreSourceSites = [137] ∧
@@ -298,9 +284,5 @@ theorem constructorSstoreSourceSite_coordinate
     List.mem_map_of_mem member
   rw [constructorSstoreSourceSites_coordinates] at coordinateMember
   simpa only [List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false] using coordinateMember
-
-theorem constructorStaticcallSourceSites_length :
-    constructorStaticcallSourceSites.length = 1 :=
-  constructorSourceSiteFacts.2.2.1
 
 end Blanc.BeaconDeposit

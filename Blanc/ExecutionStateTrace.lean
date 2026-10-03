@@ -80,7 +80,6 @@ inductive Exec.StateBoundaryKind where
   | childRollback
   /-- The current frame executed its terminal instruction. -/
   | terminal
-  deriving DecidableEq
 
 /-- Provenance of one exact retained execution-state boundary.  The committing
 driver suffix retains the concrete execution proof at the boundary. -/

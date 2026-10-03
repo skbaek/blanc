@@ -199,11 +199,6 @@ private theorem weth10CreateMessageGas_sub_certificate
     simpa only [Nat.reduceAdd] using h
   · simpa only [Nat.reduceAdd] using (Nat.sub_sub g 1471 1262600)
 
-/-- Closed core charged by an internal `CREATE`, excluding the caller's
-memory-extension term and the instructions used to place initcode in memory. -/
-def weth10CreateOpcodeCoreGasAccounting : Nat :=
-  gasCreate + weth10Eip3860InitCodeGas + weth10CreateMessageGasAccounting
-
 /-- Exact closed accounting expression for a zero-access-list top-level
 creation transaction followed by the successful direct creation-message path. -/
 def weth10TopLevelDeploymentGasAccounting : Nat :=

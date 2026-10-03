@@ -17,16 +17,10 @@ open Jaune
 def code : Bytes :=
   (Prog.compile runtime).getD []
 
-def selectors : List B256 :=
-  funcs.map Prod.fst
-
 def eip170RuntimeLimit : Nat :=
   pragueCodeLimits.maxCodeSize
 
 def codeSize : Nat := code.length
-
-def codeHeadroom : Nat :=
-  eip170RuntimeLimit - codeSize
 
 theorem runtime_compiles : Prog.compiles runtime = true := by
   decide +kernel
@@ -77,15 +71,6 @@ def runtimeSstoreSourceSites : List Prog.SourceSite :=
 def runtimeStaticcallSourceSites : List Prog.SourceSite :=
   sourceSitesMatching isStaticcall
 
-def runtimeLog1SourceSites : List Prog.SourceSite :=
-  sourceSitesMatching isLog1
-
-def runtimeExternalExecutionSourceSites : List Prog.SourceSite :=
-  sourceSitesMatching isExternalExecution
-
-def runtimeMstore8SourceSites : List Prog.SourceSite :=
-  sourceSitesMatching isMstore8
-
 /-- Membership in the runtime SSTORE inventory is exactly membership in the
 compiler source map at a source-level SSTORE instruction. -/
 theorem mem_runtimeSstoreSourceSites_iff
@@ -121,21 +106,5 @@ theorem runtimeSstoreSourceSite_pc
     List.mem_map_of_mem member
   rw [runtimeSstoreSourceSites_pcs] at pcMember
   simpa only [List.mem_cons, List.not_mem_nil, or_false] using pcMember
-
-theorem runtimeSstoreSourceSite_coordinate
-    {site : Prog.SourceSite}
-    (member : site ∈ runtimeSstoreSourceSites) :
-    (site.path.functionIndex = 0 ∧ site.pc = 1070) ∨
-      (site.path.functionIndex = 13 ∧ site.pc = 2869) := by
-  have coordinateMember :
-      (site.path.functionIndex, site.pc) ∈
-        Prog.SourceSite.coordinates runtimeSstoreSourceSites :=
-    List.mem_map_of_mem member
-  rw [runtimeSstoreSourceSites_coordinates] at coordinateMember
-  simpa only [List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false] using coordinateMember
-
-theorem runtimeStaticcallSourceSites_length :
-    runtimeStaticcallSourceSites.length = 11 := by
-  decide +kernel
 
 end Blanc.BeaconDeposit

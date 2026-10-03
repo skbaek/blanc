@@ -119,11 +119,6 @@ private theorem rootSilentSlot_closed {sevm : Sevm}
           some rootContinuation from rfl).symm.trans lookup)
     exact silentIn_rootContinuation.toSilentAt
 
-private def NativeShaPreserves
-    (fs : List Func) (sevm : Sevm) (f : Func) : Prop :=
-  ∀ {s r : Devm}, NativeShaEntry sevm s → Func.Run fs sevm s f r →
-    NativeShaEntry sevm r ∧ Devm.getStor r = Devm.getStor s
-
 private def HistoryTargetSound
     (baseline : List B256) (ca : Adr) (f : Func) : Prop :=
   ∀ {sevm : Sevm} {s r : Devm},

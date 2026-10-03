@@ -309,16 +309,6 @@ theorem assignmentCount_le_length (entries : List Entry) (pauser : B256) :
       simp only [assignmentCount, List.length_cons]
       split <;> omega
 
-theorem oneBasedIndexAt_le_length (entries : List Entry) (target : B256) :
-    oneBasedIndexAt entries target ≤ entries.length := by
-  induction entries with
-  | nil => simp only [oneBasedIndexAt, List.length_nil, Std.le_refl]
-  | cons entry rest ih =>
-      simp only [oneBasedIndexAt, List.length_cons]
-      split
-      · omega
-      · split <;> omega
-
 theorem findEntry_index_lt {entries target index pauser}
     (h : findEntry entries target = some (index, pauser)) :
     index < entries.length := by

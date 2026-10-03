@@ -136,26 +136,6 @@ theorem decimals_gas_exact {sevm : Sevm} {pre : Devm}
     decimals_runCompiled h_sel h_stack h_mem h_gas
   exact ⟨post, Prog.exec_of_runCompiled h_run h_code, h_gas_eq, h_out⟩
 
-/-- **`fmint`'s `decimals()` call costs exactly `decimalsGas`, from an
-arbitrary `Prog.RunCompiled` witness.** By determinism; see
-`Blanc.weth_balanceOf_gas_of_runCompiled`. -/
-theorem decimals_gas_of_runCompiled {sevm : Sevm} {pre post : Devm}
-    (h_code : some sevm.code.toList = Prog.compile fmint)
-    (h_sel : Sevm.selector sevm = dcSel)
-    (h_stack : pre.stack = [])
-    (h_mem : pre.memory = Mem.empty)
-    (h_gas : decimalsGas ≤ pre.gasLeft)
-    (h_run : Prog.RunCompiled sevm pre fmint post) :
-    pre.gasLeft = post.gasLeft + decimalsGas := by
-  obtain ⟨post', h_exec', h_gas_eq, _⟩ :=
-    decimals_gas_exact h_code h_sel h_stack h_mem h_gas
-  have h_exec : exec ⟨0, sevm, pre⟩ = .ok post :=
-    Prog.exec_of_runCompiled h_run h_code
-  rw [h_exec] at h_exec'
-  injection h_exec' with h_eq
-  subst h_eq
-  omega
-
 set_option maxRecDepth 674 in
 /-- **`fmint`'s `totalSupply()` call costs exactly `totalSupplyGas`.**
 
@@ -389,12 +369,6 @@ theorem fmintGas_tsSel {sevm : Sevm} {pre : Devm} :
   · rw [if_neg h]
     simp only [fmintGas, fmintGasWith, if_neg h]
     rfl
-
-/-- `fmintGas` at `decimals()`, for every state: it reads no storage. -/
-theorem fmintGas_dcSel {sevm : Sevm} {pre : Devm} :
-    fmintGas dcSel sevm pre = some decimalsGas := by
-  simp only [fmintGas, fmintGasWith, if_neg dcSel_ne_tsSel]
-  rfl
 
 /-- **`totalSupply()` costs exactly what `fmintGas` says it does — with no
 assumption about `supplySlot`.**

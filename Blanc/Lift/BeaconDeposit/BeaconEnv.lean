@@ -90,68 +90,6 @@ theorem beaconEntry_of_env {cfg : ChainConfig} {checkpoint future : BlockChain}
       exact getDelegatedCodeAddress_empty
     · exact trace.txRawFrames_warm (fun f hf => two_mem_precompiles hf) root htx
 
-/-- **Committed-history soundness with the environment premises derived.**  The conclusion of
-`configuredHistory_solInv`, with `beaconEntry` replaced by the calldata bound and the trace-level
-premises above. -/
-theorem configuredHistory_solInv_env {ca : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {initialHistory : List B256}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (calldata : trace.FrameAdmitted ca (fun sevm _ => sevm.data.length < 2 ^ 256))
-    (systemSpawnFree : ∀ root ∈ trace.systemRawFrames, SpawnFree root.sevm.code)
-    (notSystem : ca ∉ systemTargets)
-    (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
-    (noAuthority : trace.NoAuthorityAt 2)
-    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
-      root.sevm.currentTarget ≠ 2)
-    (installed : checkpoint.state.getCode ca = code)
-    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
-    SolInv (future.state.getStor ca) (initialHistory ++ committedNodes ca trace) :=
-  configuredHistory_solInv trace
-    (beaconEntry_of_env trace calldata (system_of_spawnFree trace systemSpawnFree notSystem)
-      checkpointEmpty noAuthority noFrame)
-    installed invariant
-
-/-- The final deployed count word is the length of the same exact history. -/
-theorem configuredHistory_count_env {ca : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {initialHistory : List B256}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (calldata : trace.FrameAdmitted ca (fun sevm _ => sevm.data.length < 2 ^ 256))
-    (systemSpawnFree : ∀ root ∈ trace.systemRawFrames, SpawnFree root.sevm.code)
-    (notSystem : ca ∉ systemTargets)
-    (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
-    (noAuthority : trace.NoAuthorityAt 2)
-    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
-      root.sevm.currentTarget ≠ 2)
-    (installed : checkpoint.state.getCode ca = code)
-    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
-    (future.state.getStor ca).get solCountSlot =
-      Nat.toB256 (initialHistory ++ committedNodes ca trace).length ∧
-      (initialHistory ++ committedNodes ca trace).length < 2 ^ 32 :=
-  configuredHistory_count trace
-    (beaconEntry_of_env trace calldata (system_of_spawnFree trace systemSpawnFree notSystem)
-      checkpointEmpty noAuthority noFrame)
-    installed invariant
-
-/-- The final mixed root belongs to the same exact extracted node sequence. -/
-theorem configuredHistory_root_env {ca : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {initialHistory : List B256}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (calldata : trace.FrameAdmitted ca (fun sevm _ => sevm.data.length < 2 ^ 256))
-    (systemSpawnFree : ∀ root ∈ trace.systemRawFrames, SpawnFree root.sevm.code)
-    (notSystem : ca ∉ systemTargets)
-    (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
-    (noAuthority : trace.NoAuthorityAt 2)
-    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
-      root.sevm.currentTarget ≠ 2)
-    (installed : checkpoint.state.getCode ca = code)
-    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
-    BeaconDeposit.Acc.root Bytes.sha256 (solAcc (future.state.getStor ca)) =
-      BeaconDeposit.mixedRootOf Bytes.sha256 (initialHistory ++ committedNodes ca trace) :=
-  configuredHistory_root trace
-    (beaconEntry_of_env trace calldata (system_of_spawnFree trace systemSpawnFree notSystem)
-      checkpointEmpty noAuthority noFrame)
-    installed invariant
-
 /-! ### The calldata bound is derived too
 
 `ConfiguredHistoryTrace.frameAdmitted_calldata` (`Blanc/ExecutionTraceCalldata.lean`) discharges

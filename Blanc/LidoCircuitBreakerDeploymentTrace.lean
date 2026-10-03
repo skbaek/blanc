@@ -303,15 +303,6 @@ def officialConstructorCopiedMemory : Mem :=
   officialConstructorDecodedMemory.write constructorRuntimeBaseForProof
     runtimeTemplateCode
 
-def applyConstructorMemoryPatch
-    (memory : Mem) (patch : ImmutablePatch) : Mem :=
-  memory.write (constructorRuntimeBaseForProof + patch.offset) patch.value.toBytes
-
-def applyConstructorImagePatch
-    (image : Bytes) (patch : ImmutablePatch) : Bytes :=
-  Bytes.writeAt image (constructorRuntimeBaseForProof + patch.offset)
-    patch.value.toBytes
-
 def officialConstructorDecodedImage : Bytes :=
   Bytes.writeAt [] 0 (abiEncodeConstructorArgs officialConstructorArgs)
 
@@ -1132,10 +1123,6 @@ private theorem ConstructorPatchInvariant.read_argument_bytes
     unfold List.sliceD
     rw [List.takeD_length]
   rw [← h.argument_reads i, Bytes.toBytes_toB256_of_length hlen]
-
-/-- Exact gas consumed by the successful source-level constructor function,
-excluding the compiler table's leading `JUMPDEST`. -/
-def officialConstructorFuncGas : Nat := 50328
 
 /-- Exact gas consumed by the compiled successful constructor from pc zero,
 including the compiler table's leading `JUMPDEST`. -/

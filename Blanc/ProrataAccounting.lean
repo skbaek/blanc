@@ -14,7 +14,6 @@ open scoped BigOperators
 structure AccountingSnapshot where
   supply : Nat
   balance : Nat
-deriving DecidableEq
 
 /-- The four SF-frozen accounting classes. -/
 inductive ProrataAccountingKind where
@@ -32,7 +31,6 @@ structure ProrataAccountingProvenance where
   transactionIndex : Option Nat
   framePath : List Nat
   actor : Option Jaune.Adr
-deriving DecidableEq
 
 /-- The exact state equation and pricing fact for one accounting step. -/
 inductive ProrataAccountingEffect (o : Nat) :
@@ -345,17 +343,6 @@ def first {o : Nat} (path : ProrataAccountingPath o) : AccountingSnapshot :=
 /-- The terminal snapshot of a connected accounting path. -/
 def last {o : Nat} (path : ProrataAccountingPath o) : AccountingSnapshot :=
   path.snapshot ⟨path.steps.length, Nat.lt_succ_self _⟩
-
-theorem nil_first {o : Nat} (snapshot : AccountingSnapshot) :
-    (nil o snapshot).first = snapshot := rfl
-
-theorem nil_last {o : Nat} (snapshot : AccountingSnapshot) :
-    (nil o snapshot).last = snapshot := rfl
-
-theorem cons_first {o : Nat} (step : ProrataAccountingStep o)
-    (tail : ProrataAccountingPath o)
-    (connect : step.post = tail.first) :
-    (cons step tail connect).first = step.pre := rfl
 
 theorem cons_last {o : Nat} (step : ProrataAccountingStep o)
     (tail : ProrataAccountingPath o)

@@ -164,7 +164,6 @@ structure SupplyFlow where
   redeemed : Nat
   flashCredit : Nat
   flashRepayment : Nat
-deriving DecidableEq
 
 def SupplyFlow.zero : SupplyFlow := ⟨0, 0, 0, 0⟩
 

@@ -100,14 +100,6 @@ facts of the actual entered frame, not assumptions about an arbitrary Devm. -/
 def HistoryEntry (sevm : Sevm) (pre : Devm) : Prop :=
   NativeShaEntry sevm pre ∧ Exec.FreshEntry sevm pre
 
-/-- Every actually entered frame executing at the Beacon storage owner has a
-native SHA-256 boundary.  This is trace-local: unrelated frames need no such
-fact, and no result or poststorage premise appears. -/
-def Exec.NativeShaAdmitted
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (ca : Adr) (run : Exec pc sevm pre out) : Prop :=
-  Exec.FrameAdmitted ca NativeShaEntry run
-
 /-- Native SHA admission combined with the fresh machine state supplied by
 the concrete frame-entry trace. -/
 def Exec.HistoryAdmitted

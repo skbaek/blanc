@@ -22,7 +22,7 @@ inductive InvocationRole
   | heartbeatExpiry
   | pauseRegistry
   | pauseExpiry
-deriving DecidableEq, Repr
+deriving DecidableEq
 
 /-- One constructor per reviewed runtime SSTORE, in compiler/source order. -/
 inductive RuntimePersistentWrite
@@ -46,7 +46,6 @@ inductive RuntimePersistentWrite
   | registerFreshExpiry
   | pauseRetainedTargetExpiry
   | pauseLastTargetExpiry
-deriving DecidableEq, Repr
 
 def RuntimePersistentWrite.all : List RuntimePersistentWrite :=
   [ .setPauseDurationConfig,

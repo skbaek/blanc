@@ -841,7 +841,4 @@ length 32, so no hypothesis about `H` is needed anywhere. -/
 
 theorem le64_length (n : Nat) : (le64 n).length = 8 := rfl
 
-theorem zeros_length (n : Nat) : (zeros n).length = n :=
-  List.length_replicate
-
 end Blanc.BeaconDeposit
