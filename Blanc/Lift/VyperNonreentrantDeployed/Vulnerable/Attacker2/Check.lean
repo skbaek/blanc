@@ -1,3 +1,4 @@
+import Blanc.Lift.CheckAssembly
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Attacker2.Cert
 import Blanc.Lift.CheckFast
 
@@ -19,13 +20,6 @@ theorem entry_0 :
   decide +kernel
 
 theorem cert_check : Cert.check code cert = true := by
-  unfold Cert.check
-  rw [Bool.and_eq_true]
-  refine ⟨by decide +kernel, ?_⟩
-  rw [List.all_eq_true]
-  intro p hp
-  simp only [cert, List.mem_cons, List.not_mem_nil, or_false] at hp
-  rcases hp with rfl
-  · exact entry_0
+  exact Cert.check_singleton (by decide +kernel) entry_0
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Attacker2

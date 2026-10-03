@@ -30,6 +30,22 @@ theorem rx_caller (hroom : S.length < 1024)
   .next (Ninst.runCompiled_pushItem (devm := St b S M (G + 2)) (G := G) (cost := gBase)
     (by rintro ⟨⟩) rfl rfl hroom) k
 
+theorem rx_number (hroom : S.length < 1024)
+    (k : SFunc.RunExact fs sevm
+      (St b (sevm.benvStat.number.toB256 :: S) M G) f o) :
+    SFunc.RunExact fs sevm (St b S M (G + 2)) (.next (.reg .number) f) o :=
+  .next (Ninst.runCompiled_pushItem (devm := St b S M (G + 2)) (r := .number)
+    (x := sevm.benvStat.number.toB256) (G := G) (cost := gBase)
+    (by rintro ⟨⟩) rfl rfl hroom) k
+
+theorem rx_timestamp (hroom : S.length < 1024)
+    (k : SFunc.RunExact fs sevm
+      (St b (sevm.benvStat.time :: S) M G) f o) :
+    SFunc.RunExact fs sevm (St b S M (G + 2)) (.next (.reg .timestamp) f) o :=
+  .next (Ninst.runCompiled_pushItem (devm := St b S M (G + 2)) (r := .timestamp)
+    (x := sevm.benvStat.time) (G := G) (cost := gBase)
+    (by rintro ⟨⟩) rfl rfl hroom) k
+
 /-- `CALLER`, inverted. -/
 theorem ri_caller {d : Devm}
     (h : Ninst.Run sevm (St b S M G) (.reg .caller) d) :

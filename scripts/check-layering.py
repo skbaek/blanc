@@ -121,16 +121,16 @@ import tomllib
 SHARED = ["Basic", "Semantics", "CommonCore", "MachineDataFacts", "CreationArtifact", "RlpConcrete",
           "ProofRecipesGenerated", "ProofRecipeTactic", "Tactics", "CommonProofs", "Ladder", "Upgrade",
           "BalanceAlgebra", "LedgerConservation", "StorageOnlySpec", "SlotFootprint", "OffsetPricing", "ProrataAccounting",
-          "ProrataAttackModel", "ProrataAttackPath", "WordArithmetic", "MemoryImage", "BytesWrite", "MemoryLayout",
+          "ProrataAttackModel", "ProrataAttackPath", "FakeExponential", "FakeExponentialGrowth", "FakeExponentialEval", "WordFakeExponential", "WordFakeExponentialBound", "WordFakeExponentialEval", "FakeExponentialWordCorrespondence", "FakeExponentialWordDomain", "WordArithmetic", "WordByteCodecs", "WordByteRoundtrip", "MemoryImage", "BytesWrite", "MemoryLayout", "MemoryStageGas",
           "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward",
-          "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256",
+          "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "StorageAccessGas", "StorageRefund", "ForwardSha256",
           "StaticPrecompileMessage", "StaticStorage", "ForwardNoRawSstore", "ForwardStorageEffects",
           "ForwardDispatchMiss", "ForwardLog", "CompiledStackSafety", "AbstractStackSafety",
           "AbstractStackTransfer", "AbstractStackCertificate", "GasErasure", "RunPrefix", "ReachDispatchPrefix", "PrefixTransport",
           "RevertPayload", "CompiledWalkInversion", "RevertCause", "CompiledFixedInvariance", "NonpayableInversion",
           "LinearDispatch", "LinearDispatchCorrectness", "ExecDeterminism", "ExecIdentification", "ExecutionSettlement", "ExecutionPath",
-          "ExecutionPathLocator", "ExecutionStateTrace", "ExecutionTrace", "ExecutionMessageStateTrace",
-          "ExecutionTransactionStateTrace", "ExecutionBodyStateTrace", "ExecutionHistory", "ExecutionHistoryExact",
+          "ExecutionPathLocator", "ExecutionStateTrace", "ExecutionTrace", "RequestsOutput", "ExecutionMessageStateTrace",
+          "ExecutionTransactionStateTrace", "ExecutionTransactionGas", "ExecutionBodyGas", "ExecutionBodyStateTrace", "ExecutionHistory", "ExecutionHistoryExact",
           "ExecutionHistoryStateTrace", "ExecutionOccurrence", "ExecutionNoninterference", "CycleWriteFree",
           "ReachableExecFree", "ReachableExecFreeControl", "TransientSettlement", "SourceAttainment",
           "TransientInvariance", "PinnedPauseTarget"]
@@ -141,17 +141,18 @@ SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "TaggedStorage",
            "DelegatecallEnvelope",
            "StaticStores",
-           "ExecutionFrames", "ExecutionFrameEntry", "ExecutionFrameTime", "ExecutionAdmission", "ContractAdmission",
+           "ExecutionFrames", "ExecutionCommittedGas", "ExecutionMessageGas", "ExecutionFrameEntry", "ExecutionCallerExclusion", "ExecutionTraceCallerExclusion", "ExecutionFrameTime", "ExecutionAdmission", "ContractAdmission",
            "ExecutionMessageAdmission", "ExecutionTransactionAdmission",
-           "ExecutionBodyAdmission", "ExecutionHistoryAdmission",
-           "ExecutionTraceFresh",
+           "ExecutionBodyAdmission", "ExecutionBodyPrefixAdmission", "ExecutionHistoryAdmission",
+           "ExecutionTraceFresh", "ExecutionImmutableCode",
            "ExecutionMessageEffects", "ExecutionTransactionEffects",
            "ExecutionBodyEffects", "ExecutionHistoryEffects",
-           "ExecutionAccountingReplay",
+           "ExecutionAccountingReplay", "ExecutionAccountingSignedBalance", "ExecutionAccountingStorageFold",
+           "ExecutionAccountingStoragePrefix",
            "ExecutionAccountingLadder", "CallSpawnExact", "StaticCallStorage",
            "ChargeGas", "CallOutOfGas", "SourceSiteCount", "CompiledShape",
            "SymbolicProgram",
-           "ExecutionTraceFrames", "ExecutionTraceAdmission", "ExecutionTraceSettledFrames", "ExecutionTraceEntry",
+           "ExecutionTraceFrames", "ExecutionTraceAdmission", "ExecutionTraceSettledFrames", "ExecutionTraceSettledOrigin", "ExecutionTraceRootFrame", "ExecutionRequestSegments", "ExecutionTraceEntry",
            "ExecutionAccountingObserved", "ExecutionAccountingAdmission", "ExecutionAccountingCore", "ExecutionEntryAccounting", "ExecutionModelAccounting", "ExecutionDirectCode", "FuncMainPrefix",
            "ChunkedDecide"]
 # The ladder over arbitrary code images and the generic bytecode lift
@@ -162,7 +163,7 @@ SHARED += ["LadderBase", "LadderSem", "ContractAdmissionSem", "ExecutionAdmissio
            "Lift.Hoare", "Lift.BookedSpec", "Lift.BookedSupportSpec"]
 # Loops, kernel-economical checking, walk kits and solc idioms (beacon-deposit-bytecode-v1):
 # contract-neutral, no contract name in any of them.
-SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.ExactWalkOps",
+SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.CheckAssembly", "Lift.ExactWalkOps",
            "Lift.ExactWalkCut", "Lift.ExactWalkCutOps", "Lift.CopyLoop", "Lift.PackedSha",
            "Lift.PackedShaCovered", "Lift.Quiet", "Lift.InvWalk", "Lift.InvWalkOps",
            "Lift.InvWalkWorld", "Lift.InvWalkSha"]
@@ -172,6 +173,9 @@ SHARED += ["Lift.PackedShaSize", "Lift.Deploy", "Lift.CreationOps"]
 # Solc-0.4 scratch-memory walk kit and the value-bearing CALL to a code-free recipient
 # (weth9-liveness-v1): contract-neutral.
 SHARED += ["Lift.ExactWalkSolc", "Lift.ExactWalkCall"]
+# Forward construction of one configured block from proof-produced body evidence
+# (eip7002-withdrawal-predeploy-v1): contract-neutral.
+SHARED += ["BlockForward", "Lift.ExactWalkCallChild"]
 # Pure-model ledger updates (vyper-3crv-bytecode-v1): contract-neutral.
 SHARED += ["LedgerUpdate"]
 # Walk steps for arbitrary static calls, CALLER/KECCAK256/LOG3/SSTORE, hashed slots and the
@@ -188,6 +192,9 @@ SHARED += ["Lift.MemMap", "Lift.CheckMem", "Lift.CodeTriesData", "Lift.WitnessAr
 # Chunk boundaries and stage composition of a witness run, the literal-free scaffolding the
 # V- witness's heavy frames instantiate (vminus-tx-v1): contract-neutral.
 SHARED += ["Lift.WitnessBoundary", "TransactionForward"]
+# The system-call envelope over a successful raw frame of canonical system code
+# (eip7002-system-paths): contract-neutral.
+SHARED += ["SystemCallForward"]
 # Generic warmth / code-at-address / system-frame execution facts (beacon-env-v1): contract-neutral.
 SHARED += ["ExecutionWarmth", "ExecutionTraceWarmth", "ExecutionCodeAt", "ExecutionTraceCodeAt", "ExecutionTraceSystem"]
 # Reachable program counters, the canonical consensus system-contract code and system frames that
@@ -197,6 +204,70 @@ SHARED += ["ExecutionReachable", "SystemContracts", "ExecutionTraceCodeKeep", "E
 SHARED += ["ExecutionTraceCalldata", "ForkUniform", "Lift.NodeWalkFork", "Lift.WitnessFork", "TransactionFork"]
 
 CONTRACTS = {
+    "withdrawal-request": ["Lift.WithdrawalRequest.Cert", "Lift.WithdrawalRequest.Check",
+                           "Lift.WithdrawalRequest.Jumps", "Lift.WithdrawalRequest.Model",
+                           "Lift.WithdrawalRequest.Layout", "Lift.WithdrawalRequest.Prog",
+                           "Lift.WithdrawalRequest.Dispatch", "Lift.WithdrawalRequest.SystemSetup",
+                           "Lift.WithdrawalRequest.UserSetup", "Lift.WithdrawalRequest.FeeLoop",
+                           "Lift.WithdrawalRequest.SystemMemory", "Lift.WithdrawalRequest.SystemAmount",
+                           "Lift.WithdrawalRequest.SystemBody", "Lift.WithdrawalRequest.UserFeeDispatch",
+                           "Lift.WithdrawalRequest.FeeGetter", "Lift.WithdrawalRequest.SystemLoop",
+                           "Lift.WithdrawalRequest.SystemImage", "Lift.WithdrawalRequest.SystemOutput",
+                           "Lift.WithdrawalRequest.SubmissionState", "Lift.WithdrawalRequest.SubmissionBody",
+                           "Lift.WithdrawalRequest.SystemBookkeepingState",
+                           "Lift.WithdrawalRequest.SystemBookkeeping",
+                           "Lift.WithdrawalRequest.SystemStorage", "Lift.WithdrawalRequest.SubmissionLayout",
+                           "Lift.WithdrawalRequest.SystemMemoryGas", "Lift.WithdrawalRequest.SystemGas",
+                           "Lift.WithdrawalRequest.FrameEffects",
+                           "Lift.WithdrawalRequest.BalanceHistory", "Lift.WithdrawalRequest.BlockRequests",
+                           "Lift.WithdrawalRequest.WordReplay", "Lift.WithdrawalRequest.NatFee",
+                           "Lift.WithdrawalRequest.WordBudget",
+                           "Lift.WithdrawalRequest.NatFeeBound",
+                           "Lift.WithdrawalRequest.NumericFacts",
+                           "Lift.WithdrawalRequest.ModelBounds",
+                           "Lift.WithdrawalRequest.ModelFeeDomainLimit",
+                           "Lift.WithdrawalRequest.WordModelReplay",
+                           "Lift.WithdrawalRequest.WordModelCount",
+                           "Lift.WithdrawalRequest.UserOccurrence",
+                           "Lift.WithdrawalRequest.ProtocolOccurrences",
+                           "Lift.WithdrawalRequest.ModelBlockRequests",
+                           "Lift.WithdrawalRequest.WordHistory",
+                           "Lift.WithdrawalRequest.WordFifo",
+                           "Lift.WithdrawalRequest.ResetOccurrence",
+                           "Lift.WithdrawalRequest.ExactFeeDomain",
+                           "Lift.WithdrawalRequest.NatLiveness",
+                           "Lift.WithdrawalRequest.SubmissionCount",
+                           "Lift.WithdrawalRequest.ResetWindowCount",
+                           "Lift.WithdrawalRequest.CodeFacts",
+                           "Lift.WithdrawalRequest.Semantics",
+                           "Lift.WithdrawalRequest.SystemHistory",
+                           "Lift.WithdrawalRequest.SystemProtocol",
+                           "Lift.WithdrawalRequest.UserGas",
+                           "Lift.FloodLooper.Cert", "Lift.FloodLooper.Check",
+                           "Lift.FloodLooper.Jumps",
+                           "Lift.WithdrawalRequest.FloodWalk", "Lift.WithdrawalRequest.FloodRun",
+                           "Lift.WithdrawalRequest.FloodTx",
+                           "Lift.WithdrawalRequest.FloodTxRecover",
+                           "Lift.WithdrawalRequest.Creation.Address",
+                           "Lift.WithdrawalRequest.Creation.Cert",
+                           "Lift.WithdrawalRequest.Creation.Check",
+                           "Lift.WithdrawalRequest.Creation.Deploy",
+                           "Lift.WithdrawalRequest.Creation.Init",
+                           "Lift.WithdrawalRequest.Creation.Input",
+                           "Lift.WithdrawalRequest.Creation.State",
+                           "Lift.WithdrawalRequest.Creation.Walk"],
+    "beacon-roots": ["Lift.BeaconRoots.Cert", "Lift.BeaconRoots.Check",
+                      "Lift.BeaconRoots.Jumps", "Lift.BeaconRoots.Prog",
+                      "Lift.BeaconRoots.SystemWalk"],
+    "history-storage": ["Lift.HistoryStorage.Cert", "Lift.HistoryStorage.Check",
+                         "Lift.HistoryStorage.Jumps", "Lift.HistoryStorage.Prog",
+                         "Lift.HistoryStorage.SystemWalk"],
+    "consolidation-request": ["Lift.ConsolidationRequest.Cert", "Lift.ConsolidationRequest.Check",
+                               "Lift.ConsolidationRequest.CheckTries",
+                               "Lift.ConsolidationRequest.CheckPart0",
+                               "Lift.ConsolidationRequest.CheckPart1",
+                               "Lift.ConsolidationRequest.Jumps", "Lift.ConsolidationRequest.Prog",
+                               "Lift.ConsolidationRequest.SystemWalk"],
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness",
                        # the deployed runtime, lifted (decision beacon-lift-layering-family-20260926)
                        "Lift.BeaconDeposit.Body", "Lift.BeaconDeposit.BodyCount", "Lift.BeaconDeposit.BodyEvent", "Lift.BeaconDeposit.BodyEventHead", "Lift.BeaconDeposit.BodyEventKit", "Lift.BeaconDeposit.BodyEventLoop", "Lift.BeaconDeposit.BodyEventSig", "Lift.BeaconDeposit.BodyGuards", "Lift.BeaconDeposit.BodyInsertDead", "Lift.BeaconDeposit.BodyInsertLive", "Lift.BeaconDeposit.BodyNode", "Lift.BeaconDeposit.BodyPubkeyRoot", "Lift.BeaconDeposit.BodyShaKit", "Lift.BeaconDeposit.BodySignatureRoot", "Lift.BeaconDeposit.BodySpec", "Lift.BeaconDeposit.Cert", "Lift.BeaconDeposit.Check", "Lift.BeaconDeposit.Creation.Cert", "Lift.BeaconDeposit.Creation.Check", "Lift.BeaconDeposit.Creation.Deploy", "Lift.BeaconDeposit.Creation.Walk", "Lift.BeaconDeposit.CountView", "Lift.BeaconDeposit.DepositArgs", "Lift.BeaconDeposit.DepositDecode", "Lift.BeaconDeposit.DepositExec", "Lift.BeaconDeposit.Erc165", "Lift.BeaconDeposit.Jumps", "Lift.BeaconDeposit.Ladder", "Lift.BeaconDeposit.Layout", "Lift.BeaconDeposit.Init", "Lift.BeaconDeposit.Lift", "Lift.BeaconDeposit.LittleEndian", "Lift.BeaconDeposit.Prog", "Lift.BeaconDeposit.Refines", "Lift.BeaconDeposit.CommittedReplay", "Lift.BeaconDeposit.CommittedExec", "Lift.BeaconDeposit.CommittedHistory", "Lift.BeaconDeposit.BeaconEnv", "Lift.BeaconDeposit.Liveness", "Lift.BeaconDeposit.RootLoop", "Lift.BeaconDeposit.RootView", "Lift.BeaconDeposit.Safe", "Lift.BeaconDeposit.SafeCount", "Lift.BeaconDeposit.SafeDecoder", "Lift.BeaconDeposit.SafeDispatch", "Lift.BeaconDeposit.SafeEvent", "Lift.BeaconDeposit.SafeGuards", "Lift.BeaconDeposit.SafeInsertDead", "Lift.BeaconDeposit.SafeInsertLive", "Lift.BeaconDeposit.SafeLittleEndian", "Lift.BeaconDeposit.SafeNode", "Lift.BeaconDeposit.SafePubkeyRoot", "Lift.BeaconDeposit.SafeSignatureRoot", "Lift.BeaconDeposit.SafeViews", "Lift.BeaconDeposit.Views",
@@ -488,6 +559,7 @@ COMPOSITION = [
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControl",
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControlRun",
     "Composition.ProrataWethVaultBoundary",
+    "Composition.WithdrawalRequestFeeCounterexample",
     "Composition.ProrataWethVaultEffects",
     "Composition.ProrataWethVaultStaging",
     "Composition.ProrataWethVaultViews",

@@ -124,6 +124,7 @@ def regularTransfer : Rinst → Pattern → Option Pattern
   | .calldataload, words => unaryTransfer words
   | .calldatasize, words => some (none :: words)
   | .timestamp, words => some (none :: words)
+  | .number, words => some (none :: words)
   | .pop, words => dropOneTransfer words
   | .mload, words => unaryTransfer words
   | .mstore, words => dropTwoTransfer words
@@ -410,7 +411,7 @@ theorem regularTransfer_safe {evm : Evm} {instruction : Rinst}
   case iszero =>
     simp only [Rinst.run, Rinst.runCore]
     exact applyUnary_transfer_safe _ _ matched bound checked
-  case caller | callvalue | calldatasize | timestamp =>
+  case caller | callvalue | calldatasize | timestamp | number =>
     cases checked
     exact pushUnknown_safe _ _ matched room
   case gas =>

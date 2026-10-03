@@ -12,6 +12,8 @@ import Blanc.StorageOnlySpec
 import Blanc.SlotFootprint
 import Blanc.StaticStores
 import Blanc.WordArithmetic
+import Blanc.FakeExponentialEval
+import Blanc.WordFakeExponentialEval
 import Blanc.MemoryImage
 import Blanc.BytesWrite
 import Blanc.MemoryLayout
@@ -41,6 +43,7 @@ import Blanc.ExecutionHistoryAdmission
 import Blanc.ExecutionTraceFresh
 import Blanc.ExecutionOccurrence
 import Blanc.ExecutionAccountingReplay
+import Blanc.ExecutionAccountingStoragePrefix
 import Blanc.ExecutionAccountingLadder
 import Blanc.ExecutionAccountingAdmission
 import Blanc.ExecutionAccountingCore
@@ -61,7 +64,11 @@ import Blanc.SystemContracts
 import Blanc.ExecutionTraceCodeKeep
 import Blanc.ExecutionTraceSystemCode
 import Blanc.ExecutionTraceCalldata
+import Blanc.ExecutionTraceCallerExclusion
 import Blanc.ExecutionTraceSettledFrames
+import Blanc.ExecutionTraceSettledOrigin
+import Blanc.ExecutionTraceRootFrame
+import Blanc.ExecutionImmutableCode
 import Blanc.ExecutionTraceEntry
 import Blanc.ExecutionAccountingObserved
 import Blanc.DeploymentOccurrence
@@ -72,6 +79,7 @@ import Blanc.CycleWriteFree
 import Blanc.ReachableExecFree
 import Blanc.ReachableExecFreeControl
 import Blanc.TransactionForward
+import Blanc.SystemCallForward
 import Blanc.TransientSettlement
 import Blanc.TransientInvariance
 import Blanc.LidoCircuitBreakerCore
@@ -435,6 +443,9 @@ import Blanc.Lift.Weth9.CommittedHistory
 import Blanc.Lift.Weth9.Live
 import Blanc.Lift.ExactWalkSolc
 import Blanc.Lift.ExactWalkCall
+import Blanc.Lift.BeaconRoots.SystemWalk
+import Blanc.Lift.HistoryStorage.SystemWalk
+import Blanc.Lift.ConsolidationRequest.Prog
 import Blanc.Lift.Weth9.LiveApprove
 import Blanc.Lift.Weth9.LiveDeposit
 import Blanc.Lift.Weth9.LiveTransfer
@@ -634,6 +645,33 @@ import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5ChunkB
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5Chunks
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5Full
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Run
+
+import Blanc.Lift.WithdrawalRequest.BlockRequests
+import Blanc.Lift.WithdrawalRequest.NumericFacts
+import Blanc.Lift.WithdrawalRequest.ResetOccurrence
+import Blanc.Lift.WithdrawalRequest.Creation.Deploy
+import Blanc.Lift.WithdrawalRequest.NatLiveness
+import Blanc.Lift.WithdrawalRequest.ModelBounds
+import Blanc.Lift.WithdrawalRequest.ModelFeeDomainLimit
+import Blanc.Lift.WithdrawalRequest.WordModelReplay
+import Blanc.BlockForward
+import Blanc.Lift.ExactWalkCallChild
+import Blanc.Lift.FloodLooper.Cert
+import Blanc.Lift.FloodLooper.Check
+import Blanc.Lift.FloodLooper.Jumps
+import Blanc.Lift.WithdrawalRequest.FloodWalk
+import Blanc.Lift.WithdrawalRequest.FloodRun
+import Blanc.Lift.WithdrawalRequest.FloodTx
+import Blanc.Composition.WithdrawalRequestFeeCounterexample
+import Blanc.Lift.WithdrawalRequest.FloodTxRecover
+import Blanc.Lift.WithdrawalRequest.WordModelCount
+import Blanc.Lift.WithdrawalRequest.UserOccurrence
+import Blanc.Lift.WithdrawalRequest.ProtocolOccurrences
+import Blanc.Lift.WithdrawalRequest.ModelBlockRequests
+import Blanc.Lift.WithdrawalRequest.ResetWindowCount
+import Blanc.Lift.WithdrawalRequest.WordBudget
+import Blanc.Lift.WithdrawalRequest.WordHistory
+import Blanc.Lift.WithdrawalRequest.WordFifo
 
 -- The COMPOSITION stratum is strictly downstream of every contract family, so
 -- it is aggregated last. Roots aggregate composition; nothing imports back.
