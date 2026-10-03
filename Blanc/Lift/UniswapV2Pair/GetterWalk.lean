@@ -43,30 +43,38 @@ theorem totalSupply_callee_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨g, hg⟩ := ric_ret h
   exact ⟨g, Seg.done.inj hg⟩
 
-theorem getterWord_tail_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
-    {R : List B256} {M : Mem} {G : Nat} {v : B256}
-    (mem : PtrMem 128 96 M) (room : R.length ≤ 1019) :
-    SFunc.RunExact fs sevm (St b (v :: R) M (G + 49)) t_039b_c98
+/-- The literal word return charges only its actual memory expansion. -/
+theorem getterWord_tail_ptr_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {G n : Nat} {v : B256}
+    (mem : PtrMem 128 n M) (room : R.length ≤ 1019) :
+    SFunc.RunExact fs sevm (St b (v :: R) M (G + 43 + (calculateMemoryGasCost (memExtSize n 128 32) - calculateMemoryGasCost n))) t_039b_c98
       (.halted (getterWordPost b R M v G)) := by
-  have outmem := getterWordMemory_ptr mem v
+  let expansion := calculateMemoryGasCost (memExtSize n 128 32) - calculateMemoryGasCost n
+  have outmem := mem.write 128 v (Or.inr (by decide : 96 ≤ 128))
+  have fit : 128 + 32 ≤ memExtSize n 128 32 := by
+    change 32 * 5 ≤ 32 * max (ceilDiv n 32) 5
+    exact Nat.mul_le_mul_left _ (Nat.le_max_right _ _)
+  change SFunc.RunExact fs sevm (St b (v :: R) M (G + 43 + expansion)) t_039b_c98 _
+  rw [show G + 43 + expansion = (G + expansion) + 43 from by omega]
   unfold t_039b_c98
   refine rx_dest ?_
   refine rx_push (w := 64) rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
-  refine rx_mload (c := 3) ?_ mem.word (mem.read_self (by decide))
+  refine rx_mload (c := 3) ?_ mem.word (mem.read_self (i := 64) (sz := 32) mem.ge)
     (by simp only [List.length_cons]; omega) ?_
   · rw [St.extCost_eq mem.size]
-    decide
+    rw [memExtSize_of_le mem.n32 mem.ge, Nat.sub_self]; rfl
   refine rx_swap2 ?_
   refine rx_dup3 (by simp only [List.length_cons]; omega) ?_
-  refine rx_mstore (c := 9) ?_ rfl ?_
+  rw [show (G + expansion) + 27 = (G + 24) + (3 + expansion) from by omega]
+  refine rx_mstore (c := 3 + expansion) ?_ rfl ?_
   · rw [St.extCost_eq mem.size]
-    decide
-  refine rx_mload (c := 3) ?_ outmem.word (outmem.read_self (by decide))
+    rfl
+  refine rx_mload (c := 3) ?_ outmem.word (outmem.read_self (i := 64) (sz := 32) outmem.ge)
     (by simp only [List.length_cons]; omega) ?_
   · simp only [show (128 : B256).toNat = 128 from rfl]
     rw [St.extCost_eq outmem.size]
-    decide
+    rw [memExtSize_of_le outmem.n32 outmem.ge, Nat.sub_self]; rfl
   refine rx_swap1 ?_
   refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
   refine rx_swap1 ?_
@@ -75,18 +83,27 @@ theorem getterWord_tail_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   refine rx_add' (v := 32) (by decide) (by simp only [List.length_cons]; omega) ?_
   refine rx_swap1 ?_
   exact rx_return_any rfl (by
-    simp only [show (128 : B256).toNat = 128 from rfl]
+    simp only [show (128 : B256).toNat = 128 from rfl, show (32 : B256).toNat = 32 from rfl]
     rw [St.extCost_eq outmem.size]
-    decide)
+    rw [memExtSize_of_le outmem.n32 fit, Nat.sub_self])
 
+theorem getterWord_tail_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {G : Nat} {v : B256}
+    (mem : PtrMem 128 96 M) (room : R.length ≤ 1019) :
+    SFunc.RunExact fs sevm (St b (v :: R) M (G + 49)) t_039b_c98
+      (.halted (getterWordPost b R M v G)) := by
+  have charge : (43 : Nat) +
+      (calculateMemoryGasCost (memExtSize 96 128 32) - calculateMemoryGasCost 96) = 49 := by decide
+  simpa only [Nat.add_assoc, charge] using getterWord_tail_ptr_exact mem room
 
-theorem getterWord_tail_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
-    {R : List B256} {M : Mem} {G : Nat} {v : B256} {o : Outcome}
-    (mem : PtrMem 128 96 M)
+/-- The return word is independent of the incoming allocated high-water mark. -/
+theorem getterWord_tail_ptr_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {G n : Nat} {v : B256} {o : Outcome}
+    (mem : PtrMem 128 n M)
     (run : SFunc.Run fs sevm (St b (v :: R) M G) t_039b_c98 o) :
     ∃ d, o = .halted d ∧ d.output = v.toBytes ∧
       (∀ a, Devm.getStor d a = Devm.getStor b a) ∧ d.logs = b.logs := by
-  have outmem := getterWordMemory_ptr mem v
+  have outmem := mem.write 128 v (Or.inr (by decide : 96 ≤ 128))
   have h := run.cut
   unfold t_039b_c98 at h
   obtain ⟨_, h⟩ := ric_dest h
@@ -98,7 +115,7 @@ theorem getterWord_tail_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨_, hd⟩ := ri_mload hd
   simp only [show Bytes.toB256 [0x40] = (64 : B256) from rfl,
     show (64 : B256).toNat = 64 from rfl,
-    mem.read_self (by decide : 64 + 32 ≤ 96), show Bytes.toB256 (M.read 64 32).1 = (128 : B256) from mem.word] at hd
+    mem.read_self (i := 64) (sz := 32) mem.ge, show Bytes.toB256 (M.read 64 32).1 = (128 : B256) from mem.word] at hd
   subst d
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_swap rfl hd
@@ -111,7 +128,7 @@ theorem getterWord_tail_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mload hd
   simp only [show (64 : B256).toNat = 64 from rfl,
-    outmem.read_self (by decide : 64 + 32 ≤ 160), show Bytes.toB256 ((M.write 128 v.toBytes).read 64 32).1 = (128 : B256) from outmem.word] at hd
+    outmem.read_self (i := 64) (sz := 32) outmem.ge, show Bytes.toB256 ((M.write 128 v.toBytes).read 64 32).1 = (128 : B256) from outmem.word] at hd
   subst d
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_swap rfl hd
@@ -138,6 +155,14 @@ theorem getterWord_tail_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
     refine ⟨_, rfl, ?_, hstor, hlogs⟩
     rw [hout]
     exact Mem.read_write_word_of_wf mem.wf 128 v
+
+theorem getterWord_tail_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {G : Nat} {v : B256} {o : Outcome}
+    (mem : PtrMem 128 96 M)
+    (run : SFunc.Run fs sevm (St b (v :: R) M G) t_039b_c98 o) :
+    ∃ d, o = .halted d ∧ d.output = v.toBytes ∧
+      (∀ a, Devm.getStor d a = Devm.getStor b a) ∧ d.logs = b.logs := by
+  exact getterWord_tail_ptr_inv mem run
 
 theorem totalSupply_entry_exact {sevm : Sevm} {b : Devm}
     {M : Mem} {G c : Nat} {sel : B256}
