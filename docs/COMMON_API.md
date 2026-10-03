@@ -3339,6 +3339,12 @@ contract-neutral.
   [`Blanc/Lift/InvWalkProvenance.lean`](../Blanc/Lift/InvWalkProvenance.lean)
   retain that relation in the exposed instruction and the continuation. Use these
   projections when a walk must preserve execution-derivation provenance.
+  For a complete linear prefix, `SFunc.RunCutP.split_nexts` exposes its actual
+  intermediate state and `Line.Run`, using an explicit projection to `Ninst.Run`.
+  The residual cut keeps the original instruction relation, program, cut set and
+  final segment. Use it when an existing instruction inverse consumes a line
+  while the remaining cut must retain provenance. Split a line itself with the
+  existing `Blanc.of_run_append`; no second cut relation is needed.
 - An `EXTCODESIZE` step with the actual warm/cold account access is in
   [`Blanc/Lift/CodeSizeWalk.lean`](../Blanc/Lift/CodeSizeWalk.lean).
   `temporalAccountAccessBase` and `temporalAccountAccessCost` name the selected
