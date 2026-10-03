@@ -1,5 +1,6 @@
 import Blanc.Composition.WithdrawalRequestFeeCounterexample
 import Blanc.ExecutionTraceCallOnly
+import Blanc.ExecutionTraceRootFrame
 import Blanc.Lift.WithdrawalRequest.NumericFacts
 import Blanc.Lift.WithdrawalRequest.SystemProtocol
 import Blanc.Lift.ConsolidationRequest.SystemWalk
@@ -229,9 +230,6 @@ def bodyOut (benv : Benv) (s : State) (bout : BlockOutput) : BlockOutput :=
   requestsOutput bout
     (Blanc.Lift.WithdrawalRequest.systemProtocolOutput ((benvH benv).withState s)).returnData
     (systemCallOutput (Blanc.Lift.ConsolidationRequest.systemPost (benvC benv s))).returnData
-
-theorem bodyOut_blockGasUsed (benv : Benv) (s : State) (bout : BlockOutput) :
-    (bodyOut benv s bout).blockGasUsed = bout.blockGasUsed := rfl
 
 theorem benvC_state_getStor7251 (benv : Benv) (s : State) :
     (benvC benv s).state.getStor consolidationRequestPredeployAddress =
@@ -882,10 +880,6 @@ def mkChain (pre : BlockChain) (block : Block) (st : State) : BlockChain :=
 def benvAt (pre : BlockChain) (parent : Block) : Benv :=
   initBenv .prague pre (commitHeader (Fork.ruleSet .prague) parent witnessTemplate pre.state
     BlockOutput.init)
-
-theorem initBenv_mkBlock (pre : BlockChain) (parent : Block) (txs : List (Bytes ⊕ Tx))
-    (st : State) (bout : BlockOutput) :
-    initBenv .prague pre (mkBlock parent txs st bout).header = benvAt pre parent := rfl
 
 theorem prague_covered : CoveredFork .prague := by decide
 
