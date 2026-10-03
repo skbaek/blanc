@@ -1579,51 +1579,6 @@ theorem mintPc0_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {G : Nat} {o : Out
   obtain ⟨_,entry⟩ := mintSelector_inv selector (SFunc.runP_iff_runCutP_nil.mp selected)
   exact ⟨value,size,mintAbi_inv entry⟩
 
-/-- ActualPC0 supplies the complete finite callee observations from its own entry memory. -/
-theorem mintPc0_source_inv {K : WriterKey → Prop} {st : State}
-    {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
-    (frame : Frame) (time : frame.context.timestamp = sevm.benvStat.time)
-    (pair : frame.context.pair = sevm.currentTarget) (sender : frame.context.sender = sevm.caller)
-    (selector : Blanc.Sevm.selector sevm = 0x6a627842)
-    (run : SFunc.RunP (StepIn D) cert.prog sevm (St b [] Mem.empty G) t_0000_c0 o) :
-    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
-      (32 : B256) ≤ sevm.data.length.toB256 - 4 ∧ ∃ calleeGas calleePost,
-        SFunc.RunP (StepIn D) cert.prog sevm
-          (St b [(Sevm.dataWord sevm 4).toAdr.toB256,0x039b,0x6a627842] getterInitMemory calleeGas)
-          t_1011_c41 (.returned calleePost) ∧
-        MintSourcePrefixResult K st D sevm b [0x6a627842] getterInitMemory
-          (Sevm.dataWord sevm 4).toAdr.toB256 0x039b frame (.returned calleePost) ∧
-        SFunc.RunCutP (StepIn D) cert.prog sevm [] calleePost t_039b_c86 (.done o) := by
-  obtain ⟨value,size,guard,gas,post,callee,tail⟩ := mintPc0_inv selector run
-  have source := mintSourcePrefix_inv fork getterInitMemory_ptr rep frame time pair sender
-    (SFunc.runP_iff_runCutP_nil.mp callee)
-  exact ⟨value,size,guard,gas,post,callee,source,tail⟩
-
-/-- Concrete rawPC0 execution supplies the same derivation used by every mint observation. -/
-theorem mintBytecode_source_inv {K : WriterKey → Prop} {st : State}
-    {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
-    (frame : Frame) (time : frame.context.timestamp = sevm.benvStat.time)
-    (pair : frame.context.pair = sevm.currentTarget) (sender : frame.context.sender = sevm.caller)
-    (selector : Blanc.Sevm.selector sevm = 0x6a627842)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    let D : Exec.Deriv := ⟨0,sevm,St b [] Mem.empty G,.ok post,run⟩
-    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
-      (32 : B256) ≤ sevm.data.length.toB256 - 4 ∧ ∃ calleeGas calleePost,
-        SFunc.RunP (StepIn D) cert.prog sevm
-          (St b [(Sevm.dataWord sevm 4).toAdr.toB256,0x039b,0x6a627842] getterInitMemory calleeGas)
-          t_1011_c41 (.returned calleePost) ∧
-        MintSourcePrefixResult K st D sevm b [0x6a627842] getterInitMemory
-          (Sevm.dataWord sevm 4).toAdr.toB256 0x039b frame (.returned calleePost) ∧
-        SFunc.RunCutP (StepIn D) cert.prog sevm [] calleePost t_039b_c86 (.done (.halted post)) := by
-  obtain ⟨f,entry,derived⟩ := lift_sound_in cert_check codeEq fork run
-  rw [show cert.prog[0]? = some t_0000_c0 from rfl] at entry
-  cases entry
-  exact mintPc0_source_inv fork rep frame time pair sender selector derived
-
 /-- The literal mint PC0 guard and selector path costs165gas before0469. -/
 theorem mintDispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
     (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
@@ -2862,5 +2817,46 @@ theorem mintPc0_public_source_inv {K : WriterKey → Prop} {current : Checkpoint
     gw0,callGas0,d0,out0,decodedGas0,gw1,callGas1,d1,out1,decodedGas1,feeGas,feePost,
     code0,call0,post0,long0,width0,answered0,decoded0,code1,call1,post1,long1,width1,answered1,
     stor0,stor1,logs1,output1,decoded1,cover0,cover1,feeRun,suffix,bound0,bound1,typedFinished,handlers,cache0,cache1,token0Target,token1Target,target⟩
+
+
+/-- Successful execution of the original bytes derives the complete canonical finite mint result. -/
+theorem mintBytecode_public_source_inv {K : WriterKey → Prop} {current : Checkpoint}
+    {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (invocation : List Nat) (selector : Blanc.Sevm.selector sevm = 0x6a627842)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    let D : Exec.Deriv := ⟨0,sevm,St b [] Mem.empty G,.ok post,run⟩
+    MintPublicSourceResult K current D sevm b invocation (.halted post) ∧
+      ∃ liquidity : B256, post.output = liquidity.toBytes := by
+  obtain ⟨f,entry,derived⟩ := lift_sound_in cert_check codeEq fork run
+  rw [show cert.prog[0]? = some t_0000_c0 from rfl] at entry
+  cases entry
+  have source := mintPc0_public_source_inv fork rep invocation selector derived
+  obtain ⟨calleeGas,calleePost,publicPost,liquidity,callee,stack,mem,halted,output,stor,logs⟩ :=
+    mintPc0_return_inv fork selector derived
+  have eq := Outcome.halted.inj halted
+  exact ⟨source,liquidity,eq.symm ▸ output⟩
+
+/-- Primitive callee ENV constructs the original PC0 execution and its complete finite source result. -/
+theorem mintBytecode_public_source_exact {K : WriterKey → Prop} {current : Checkpoint}
+    {sevm : Sevm} {b : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (invocation : List Nat) (value : sevm.value = 0)
+    (size : (4 : B256) ≤ sevm.data.length.toB256)
+    (guard : (32 : B256) ≤ sevm.data.length.toB256 - 4)
+    (selector : Blanc.Sevm.selector sevm = 0x6a627842)
+    (env : MintPrefixForwardEnv sevm b [0x6a627842] getterInitMemory
+      (Sevm.dataWord sevm 4).toAdr.toB256 0x039b (G + 43)) :
+    ∃ liquidity : B256, ∃ run : Exec 0 sevm (St b [] Mem.empty (env.gas + 228))
+      (.ok (getterWordPost env.fee.post [0x6a627842] env.fee.post.memory liquidity G)),
+      let post := getterWordPost env.fee.post [0x6a627842] env.fee.post.memory liquidity G
+      let D : Exec.Deriv := ⟨0,sevm,St b [] Mem.empty (env.gas + 228),.ok post,run⟩
+      post.output = liquidity.toBytes ∧
+        MintPublicSourceResult K current D sevm b invocation (.halted post) := by
+  obtain ⟨liquidity,⟨run⟩,output⟩ := mintBytecode_exact codeEq fork value size guard selector env
+  have source := mintBytecode_public_source_inv codeEq fork rep invocation selector run
+  exact ⟨liquidity,run,output,source.1⟩
 
 end Blanc.Lift.UniswapV2Pair
