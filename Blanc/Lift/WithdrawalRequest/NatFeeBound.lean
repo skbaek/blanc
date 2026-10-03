@@ -33,6 +33,18 @@ theorem NatFeeDomain.excess_lt {excess : B256} {iterations : Nat}
     Nat.lt_of_le_of_lt (Nat.div_le_self _ _) sumLt
   omega
 
+/-- Nat payment by a word-sized value forces excess below the same ceiling,
+independently of any no-wrap or representation hypothesis. -/
+theorem nat_paid_excess_lt (model : Blanc.WithdrawalRequest.State) (value : B256)
+    (paid : Blanc.WithdrawalRequest.fee model ≤ value.toNat) :
+    model.excess < natFeeExcessCeiling := by
+  by_contra notSmall
+  have large : natFeeExcessCeiling ≤ model.excess := by omega
+  have feeLower := fee_ge_word_limit model.excess large
+  change 2 ^ 256 ≤ Blanc.WithdrawalRequest.fee model at feeLower
+  have valueLt := B256.toNat_lt value
+  omega
+
 /-- Above the ceiling every word-sized quotient is strictly below the Nat
 model fee. This is a symbolic separation, not a reachable execution claim. -/
 theorem word_fee_lt_nat_of_large_excess (model : Blanc.WithdrawalRequest.State)
