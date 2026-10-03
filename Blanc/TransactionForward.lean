@@ -836,6 +836,23 @@ theorem applyTransactions_two {benv : Benv} {bout bout1 bout2 : BlockOutput} {tx
   simp only [applyTransactions, h1, h2, bind, Except.bind]
   rfl
 
+theorem receiptKey_zero : BLT.toBytes (.bytes (0 : Nat).toBytes) = [0x80] := by
+  have h0 : Nat.toBytes 0 = [] := by decide +kernel
+  rw [h0]
+  simp only [BLT.toBytes, List.length_nil, Nat.ofNat_pos, ↓reduceIte, Nat.toUInt8_eq,
+    UInt8.reduceOfNat, add_zero]
+
+theorem receiptKey_one : BLT.toBytes (.bytes (1 : Nat).toBytes) = [0x01] := by
+  have h1 : Nat.toBytes 1 = [1] := by simp only [Nat.toBytes, Nat.toBytes.aux,
+    Nat.succ_eq_add_one, zero_add, Nat.one_mod, Nat.toUInt8_eq, UInt8.ofNat_one, Nat.reduceDiv]
+  rw [h1]
+  simp only [BLT.toBytes, UInt8.reduceLT, ↓reduceIte]
+
+theorem receiptKey_ne :
+    BLT.toBytes (.bytes (1 : Nat).toBytes) ≠ BLT.toBytes (.bytes (0 : Nat).toBytes) := by
+  rw [receiptKey_zero, receiptKey_one]
+  decide
+
 /-- A successful transaction inserts exactly its own receipt: every other key of the receipts
 trie keeps its entry. -/
 theorem processTransaction_receiptsTrie {benv : Benv} {bout : BlockOutput} {tx : Tx}

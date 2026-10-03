@@ -2737,7 +2737,8 @@ The shared parts are `checkTransactionGasFee_two`, `checkTransactionChainId_two`
 `benvAfterTransfer_get_of_value_zero`, `processMessage_call_of_exec`, `debit_get_ne`/`debit_get_self`,
 `addBal_get_self`/`addBal_get_ne`, `sender_net_toNat`, `txGasUsed_le` (bounds `txGasUsed ≤ gas` from `floor ≤ gas`),
 `applyTransactions_two` (folds two sequential successful transactions into `applyTransactions`),
-`processTransaction_receiptsTrie` (identifies the inserted receipt key), and `processTransaction_of_stages_gasUsed` (the
+`processTransaction_receiptsTrie` (identifies the inserted receipt key), `receiptKey_zero`/`receiptKey_one`/`receiptKey_ne`
+(evaluate and distinguish the receipt keys at index 0 and 1), and `processTransaction_of_stages_gasUsed` (the
 stage lemma with the block output's gas counters).  Worked use: the deployed WETH9's
 `Blanc/Lift/Weth9/LiveTx.lean` (`weth9_tx_withdraw`, `weth9_history_tx_withdraw`), which feeds it the frame of
 `weth9_withdraw_live_post`.
@@ -3026,8 +3027,6 @@ current recipe matchers have no forward-transition shape to bind.
   across a successful message-entry transfer.
   The same module owns the shared receipt key, intrinsic/calldata gas
   projections and type-2 effective gas price;
-  `receiptKey_zero`, `receiptKey_one` and `receiptKey_ne` evaluate and
-  distinguish receipt keys at index 0 and 1;
   `deploymentTxPreludeBout` delegates to the lower
   `ExecutionTrace.transactionPreludeBout`.  Redemption and deployment owners
   should retain compatibility names only as thin aliases to these primitives.
