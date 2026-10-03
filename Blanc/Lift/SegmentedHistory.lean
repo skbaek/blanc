@@ -70,6 +70,84 @@ def Exec.retainedTargetTurns (ca : Adr)
     Exec.retainedTargetTurnsFrom ca [] 0 run h
   else []
 
+
+/-- Rebase only original paths; the execution driver and all state boundaries stay exact. -/
+def Exec.RetainedTargetTurn.rebase (pathPrefix : List Nat) :
+    Exec.RetainedTargetTurn → Exec.RetainedTargetTurn
+  | .inl boundary => .inl (boundary.mapOrigin fun origin =>
+      { origin with framePath := pathPrefix ++ origin.framePath })
+  | .inr located => .inr { located with path := pathPrefix ++ located.path }
+
+/-- The existing retained traversal at an original entering path. -/
+def Exec.retainedTargetTurnsAt (ca : Adr) (pathPrefix : List Nat)
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) : List Exec.RetainedTargetTurn :=
+  if h : Execution.commits out = true then
+    Exec.retainedTargetTurnsFrom ca pathPrefix 0 run h
+  else []
+
+private theorem Exec.retainedTargetTurnsFrom_prefix
+    (ca : Adr) (pathPrefix framePath : List Nat) (nextChild : Nat)
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true) :
+    Exec.retainedTargetTurnsFrom ca (pathPrefix ++ framePath) nextChild run committed =
+      (Exec.retainedTargetTurnsFrom ca framePath nextChild run committed).map
+        (Exec.RetainedTargetTurn.rebase pathPrefix) := by
+  by_cases target : sevm.currentTarget = ca
+  · conv_lhs => rw [Exec.retainedTargetTurnsFrom, ite_eq_left target]
+    conv_rhs => arg 2; rw [Exec.retainedTargetTurnsFrom, ite_eq_left target]
+    rfl
+  · conv_lhs => rw [Exec.retainedTargetTurnsFrom, ite_eq_right target]
+    conv_rhs => arg 2; rw [Exec.retainedTargetTurnsFrom, ite_eq_right target]
+    cases run with
+    | halt step => rfl
+    | cont step next =>
+      simp only [List.map_cons]
+      congr 1
+      exact Exec.retainedTargetTurnsFrom_prefix ca pathPrefix framePath nextChild next committed
+    | doneErr step entered resumed =>
+      simp only [Execution.commits, Bool.false_eq_true] at committed
+    | doneOk step entered resumed next =>
+      simp only [List.map_cons]
+      congr 1
+      exact Exec.retainedTargetTurnsFrom_prefix ca pathPrefix framePath (nextChild + 1) next committed
+    | runErr step entered child resumed =>
+      simp only [Execution.commits, Bool.false_eq_true] at committed
+    | runOk step entered child resumed next =>
+      dsimp only
+      split
+      next settles =>
+        simp only [List.map_cons, List.map_append]
+        have childPrefix := Exec.retainedTargetTurnsFrom_prefix ca pathPrefix
+          (framePath ++ [nextChild]) 0 child
+          (Frame.raw_commits_of_settlementCommits settles)
+        have nextPrefix := Exec.retainedTargetTurnsFrom_prefix ca pathPrefix
+          framePath (nextChild + 1) next committed
+        simp only [List.append_assoc, Exec.RetainedTargetTurn.rebase,
+          Exec.stateBoundary, StateTransition.mapOrigin]
+        rw [childPrefix, nextPrefix]
+      next rollsBack =>
+        simp only [List.map_cons]
+        have nextPrefix := Exec.retainedTargetTurnsFrom_prefix ca pathPrefix
+          framePath (nextChild + 1) next committed
+        exact congrArg (List.cons _) nextPrefix
+termination_by sizeOf run
+
+/-- Ordered pathPrefix transport preserves every retained occurrence, including
+duplicates and complete settlement pruning, and does not renumber child slots. -/
+theorem Exec.retainedTargetTurnsAt_eq_map_prefix
+    (ca : Adr) (pathPrefix : List Nat)
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) :
+    Exec.retainedTargetTurnsAt ca pathPrefix run =
+      (Exec.retainedTargetTurns ca run).map (Exec.RetainedTargetTurn.rebase pathPrefix) := by
+  unfold Exec.retainedTargetTurnsAt Exec.retainedTargetTurns
+  split
+  next committed =>
+    simpa only [List.append_nil] using
+      Exec.retainedTargetTurnsFrom_prefix ca pathPrefix [] 0 run committed
+  next notCommitted => rfl
+
 private theorem Exec.retainedTargetTurnsFrom_target_expand
     (ca : Adr) (framePath : List Nat)
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
