@@ -2787,7 +2787,9 @@ non-negative refund counter (and, for the block-level forms, the canonical code 
 `State.get_setStorVal_ne` read a store's world-state effect. Worked uses: the EIP-4788 and
 EIP-2935 walks `Blanc/Lift/BeaconRoots/SystemWalk.lean` and
 `Blanc/Lift/HistoryStorage/SystemWalk.lean` (`processUncheckedSystemTransaction_beaconRoots`,
-`processUncheckedSystemTransaction_historyStorage`).
+`processUncheckedSystemTransaction_historyStorage`), and the EIP-7251 empty-queue walk
+`Blanc/Lift/ConsolidationRequest/SystemWalk.lean`
+(`processCheckedSystemTransaction_consolidationRequest_empty`, via the checked form).
 
 ### T6. The wrapper is a configured block or a whole chain history
 
@@ -3243,6 +3245,13 @@ contract-neutral.
   existing startup Boolean and sole `checkNode` result; the theorem preserves
   the ordinary `Cert.check` proposition. The registered producer uses it for
   singleton checks, including the final owner of split check files.
+- Assemble a seven-entry non-memory certificate with `Cert.check_seven` and its
+  jump counterpart `Cert.jumpsOk_seven` in the same module: supply the seven
+  per-entry `checkNode`/`jumpsOkNode` results plus the startup Boolean (check
+  only). The registered producer emits a call to `check_seven` in its opt-in
+  `seven` assembly mode (`check.assembly`), so sibling seven-entry
+  certificates share the assembly instead of repeating the generic
+  conjunction; hand-written `Jumps` modules call `jumpsOk_seven` directly.
 - Execution to lifted run (safety): `lift_sound`, and `lift_sound_in`, which
   keeps each step's derivation (`StepIn`) for arguments about re-entrant child
   frames, in [`Blanc/Lift/Sound.lean`](../Blanc/Lift/Sound.lean).

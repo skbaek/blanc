@@ -352,6 +352,8 @@ def run_registry(args: argparse.Namespace) -> int:
                     argv += ["--check-parts", str(check["parts"])]
                 if check.get("literal_tries") is True:
                     argv.append("--check-literal-tries")
+                if check.get("assembly") == "seven":
+                    argv += ["--check-assembly", "seven"]
             lock = row.get("lock")
             if lock:
                 argv += ["--lock-spec", json.dumps(lock["spec"]), "--lock-spec-module", lock["spec_module"],
@@ -431,6 +433,8 @@ parser.add_argument("--check-parts", type=int, default=0,
                     help="split the generated Check into CheckTries, CheckPart0..N-1 and the assembling Check (N >= 2; registry check.parts)")
 parser.add_argument("--check-literal-tries", action="store_true",
                     help="emit the code tries as data checked once against LTrie.ofList (registry check.literal_tries)")
+parser.add_argument("--check-assembly", choices=("seven",), default=None,
+                    help="emit cert_check as a call to the shared seven-entry assembler Cert.check_seven (Blanc.Lift.CheckAssembly) instead of the generic conjunction (registry check.assembly); opt-in per certificate so other certificates regenerate byte-identically")
 parser.add_argument("--no-join-entries", action="store_true",
                     help="do not promote multi-predecessor JUMPDESTs to join entries (solc-w3 exploration)")
 parser.add_argument("--wrapper-order", choices=("taken-first", "fall-first"), default="taken-first",
@@ -2404,7 +2408,19 @@ def check_source() -> Any:
             "",
         ])
     n = len(cert_entries_lines)
-    if n == 1:
+    if args.check_assembly == "seven":
+        # Share the seven-entry checker/list assembly; the node decisions stay
+        # local. Opt-in per certificate (registry check.assembly), so every
+        # other certificate regenerates byte-identically.
+        if n != 7:
+            raise RuntimeError(
+                f"--check-assembly seven needs 7 certificate entries, found {n}")
+        assembly = [
+            "theorem cert_check : Cert.check code cert = true :=",
+            "  Cert.check_seven entry_0 entry_1 entry_2 entry_3 entry_4 entry_5 entry_6",
+            "    (by decide +kernel)",
+        ]
+    elif n == 1:
         # Share the checker/list assembly; the actual node decision stays local.
         assembly = [
             "theorem cert_check : Cert.check code cert = true := by",
@@ -2423,7 +2439,7 @@ def check_source() -> Any:
         ]
         assembly.extend(f"  · exact entry_{i}" for i in range(n))
     files = split_check(lines, blocks, assembly)
-    if n == 1:
+    if n == 1 or args.check_assembly == "seven":
         # Add only to the assembly owner, including a split Check if requested.
         files["Check"] = "import Blanc.Lift.CheckAssembly\n" + files["Check"]
     return files if args.check_parts >= 2 else files["Check"]
