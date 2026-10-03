@@ -86,6 +86,99 @@ def Exec.retainedTargetTurnsAt (ca : Adr) (pathPrefix : List Nat)
     Exec.retainedTargetTurnsFrom ca pathPrefix 0 run h
   else []
 
+
+/-- The target-frame projection of the existing retained traversal at its
+actual original parent path and child counter. No traversal is duplicated. -/
+def Exec.retainedTargetFramesFromAt (ca : Adr) (path : List Nat) (counter : Nat)
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true) :
+    List Exec.LocatedFrame :=
+  (Exec.retainedTargetTurnsFrom ca path counter run committed).filterMap Sum.getRight?
+
+/-- The original entering-path wrapper starts this projection at counter zero. -/
+theorem Exec.retainedTargetTurnsAt_filterMap_eq (ca : Adr) (path : List Nat)
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true) :
+    (Exec.retainedTargetTurnsAt ca path run).filterMap Sum.getRight? =
+      Exec.retainedTargetFramesFromAt ca path 0 run committed := by
+  rw [Exec.retainedTargetTurnsAt, dite_eq_left committed]
+  rfl
+
+/-- Target selection retains this actual frame once and stops outer traversal. -/
+theorem Exec.retainedTargetFramesFromAt_target (ca : Adr) (path : List Nat) (counter : Nat)
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true)
+    (target : sevm.currentTarget = ca) :
+    Exec.retainedTargetFramesFromAt ca path counter run committed =
+      [⟨path, Exec.Frame.ofRun run committed⟩] := by
+  unfold Exec.retainedTargetFramesFromAt
+  rw [Exec.retainedTargetTurnsFrom, ite_eq_left target]
+  rfl
+
+/-- A foreign terminal boundary is not a selected target frame. -/
+theorem Exec.retainedTargetFramesFromAt_halt (ca : Adr) (path : List Nat) (counter : Nat)
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .halt out)
+    (committed : Execution.commits out = true) (foreign : sevm.currentTarget ≠ ca) :
+    Exec.retainedTargetFramesFromAt ca path counter (.halt step) committed = [] := by
+  unfold Exec.retainedTargetFramesFromAt
+  rw [Exec.retainedTargetTurnsFrom, ite_eq_right foreign]
+  rfl
+
+/-- A foreign ordinary instruction preserves the original child counter. -/
+theorem Exec.retainedTargetFramesFromAt_cont (ca : Adr) (path : List Nat) (counter : Nat)
+    {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm} {out : Execution}
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' inter)
+    (next : Exec pc' sevm inter out)
+    (committed : Execution.commits out = true) (foreign : sevm.currentTarget ≠ ca) :
+    Exec.retainedTargetFramesFromAt ca path counter (.cont step next) committed =
+      Exec.retainedTargetFramesFromAt ca path counter next committed := by
+  unfold Exec.retainedTargetFramesFromAt
+  conv_lhs => rw [Exec.retainedTargetTurnsFrom, ite_eq_right foreign]
+  rfl
+
+/-- A foreign childless message still advances the original parent counter. -/
+theorem Exec.retainedTargetFramesFromAt_doneOk (ca : Adr) (path : List Nat) (counter : Nat)
+    {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm}
+    {frame : Jaune.Frame} {resume : Resume}
+    {result : Except (EvmError × State × AdrSet × Tra) Devm} {out : Execution}
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
+    (entered : frame.enter = .done result)
+    (resumed : resume.run result = .ok inter) (next : Exec pc' sevm inter out)
+    (committed : Execution.commits out = true) (foreign : sevm.currentTarget ≠ ca) :
+    Exec.retainedTargetFramesFromAt ca path counter (.doneOk step entered resumed next) committed =
+      Exec.retainedTargetFramesFromAt ca path (counter + 1) next committed := by
+  unfold Exec.retainedTargetFramesFromAt
+  conv_lhs => rw [Exec.retainedTargetTurnsFrom, ite_eq_right foreign]
+  rfl
+
+/-- Only a settled child contributes its complete selected subtree; the
+parent suffix advances its original counter even when that child rolls back. -/
+theorem Exec.retainedTargetFramesFromAt_runOk (ca : Adr) (path : List Nat) (counter : Nat)
+    {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm}
+    {frame : Jaune.Frame} {resume : Resume} {childEvm : Evm}
+    {raw out : Execution}
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
+    (entered : frame.enter = .run childEvm)
+    (child : Exec childEvm.pc childEvm.sta childEvm.dyna raw)
+    (resumed : resume.run (frame.settle raw) = .ok inter)
+    (next : Exec pc' sevm inter out)
+    (committed : Execution.commits out = true) (foreign : sevm.currentTarget ≠ ca) :
+    Exec.retainedTargetFramesFromAt ca path counter
+        (.runOk step entered child resumed next) committed =
+      (if settles : Frame.settlementCommits frame raw = true then
+        Exec.retainedTargetFramesFromAt ca (path ++ [counter]) 0 child
+          (Frame.raw_commits_of_settlementCommits settles)
+       else []) ++
+        Exec.retainedTargetFramesFromAt ca path (counter + 1) next committed := by
+  unfold Exec.retainedTargetFramesFromAt
+  conv_lhs => rw [Exec.retainedTargetTurnsFrom, ite_eq_right foreign]
+  by_cases settles : Frame.settlementCommits frame raw = true
+  · simp only [dite_eq_left settles, List.filterMap_cons, List.filterMap_append,
+      Sum.getRight?_inl]
+  · simp only [dite_eq_right settles, List.filterMap_cons, Sum.getRight?_inl,
+      List.nil_append]
+
 private theorem Exec.retainedTargetTurnsFrom_prefix
     (ca : Adr) (pathPrefix framePath : List Nat) (nextChild : Nat)
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
