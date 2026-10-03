@@ -3530,6 +3530,73 @@ theorem sync_root_second_static_step {sevm : Sevm} {b post : Devm} {G : Nat}
 
 /-- The second actual flag test reaches its successful arm and authenticates
 its nonzero return, retaining the original counter1 suffix and supplied slot. -/
+theorem sync_second_static_answered_from_step {root : Exec.Deriv}
+    {sevm : Sevm} {post : Devm}
+    (second : Exec.NinstOccurrence root) (returned : Exec.Deriv) (afterCall : Cursor)
+    {g t ii is oi os : B256} {S : List B256}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (primitive : Ninst.RunWith (Cursor.DescOf second.node) sevm second.node.devm
+      Ninst.staticcall returned.devm)
+    (returnedPc : returned.pc = 0x1f7e) (returnedSevm : returned.sevm = sevm)
+    (returnedOutcome : returned.exn = .ok post)
+    (returnedTree : afterCall.f = syncSecondAfterCall)
+    (returnedOk : CursorOK code cert returned afterCall)
+    (stack : second.node.devm.stack = g :: t :: ii :: is :: oi :: os :: S) :
+    ∃ (node : Exec.Deriv) (cursor : Cursor) (out : Bytes),
+      Exec.Deriv.ExecFreeUntil returned node ∧ node.pc = 0x1f8e ∧
+      node.sevm = sevm ∧ node.exn = .ok post ∧ cursor.f = SyncBalanceSite.second.returnTree ∧
+      cursor.K = afterCall.K ∧ CursorOK code cert node cursor ∧
+      StaticCallPost second.node.devm returned.devm S second.node.devm.memory
+        ii is oi os 1 out ∧ out.length < 2^256 ∧
+      StaticAnswered sevm second.node.devm t.toAdr
+        (second.node.devm.memory.read ii.toNat is.toNat).1 out ∧
+      node.devm.getStor = second.node.devm.getStor ∧
+      node.devm.memory =
+        (second.node.devm.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write
+          oi.toNat (out.take os.toNat) ∧
+      node.devm.returnData = out ∧ node.devm.stack = 0 :: S := by
+  have location : returned.pc + 6 = syncBalanceFlagPc .second := by rw [returnedPc]; rfl
+  obtain ⟨guard, node, cursor, guardPath, guardPc, line, jumped, returnedFree,
+    nodePc, nodeSevm, nodeOutcome, tree, sameK, placed⟩ :=
+    sync_balance_flag_cursor .second returnedOk returnedTree location returnedOutcome
+      (by rw [returnedSevm]; exact fork)
+  have call : Ninst.Run sevm
+      (St second.node.devm (g :: t :: ii :: is :: oi :: os :: S)
+        second.node.devm.memory second.node.devm.gasLeft)
+      (.exec .staticcall) returned.devm := by
+    rw [← St.self stack rfl]
+    exact primitive.toRun
+  obtain ⟨flag, out, hpost, bound, answered⟩ := ri_staticcall_bounded fork call
+  have actualLine : Line.Run sevm
+      (St returned.devm (flag :: S) returned.devm.memory returned.devm.gasLeft)
+      [.reg .iszero, .reg (.dup 0), .reg .iszero,
+        .push SyncBalanceSite.second.returnDestination (by decide)] guard.devm := by
+    rw [← St.self hpost.stack rfl]
+    simpa only [returnedSevm] using line
+  have actualJump : Jinst.Run ⟨syncBalanceFlagPc .second, sevm, guard.devm⟩ .jumpi
+      (.ok ⟨(Bytes.toB256 SyncBalanceSite.second.returnDestination).toNat, node.devm⟩) := by
+    simpa only [guardPc, nodePc, returnedSevm] using jumped
+  obtain ⟨nonzero, tailGas, nodeState⟩ := sync_balance_return_flag_state .second actualLine actualJump
+  have one : flag = 1 := hpost.flag.resolve_left nonzero
+  rw [one] at hpost nodeState
+  simp only [show B256.eqCheck (1 : B256) 0 = 0 from by decide] at nodeState
+  have actualPc : node.pc = 0x1f8e := nodePc.trans (by decide +kernel)
+  have nodeStor : node.devm.getStor = second.node.devm.getStor := by
+    rw [nodeState]
+    exact funext hpost.stor
+  have nodeMemory : node.devm.memory =
+      (second.node.devm.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write
+        oi.toNat (out.take os.toNat) := by
+    rw [nodeState]
+    exact hpost.memory
+  have nodeData : node.devm.returnData = out := by
+    rw [nodeState]
+    exact hpost.returnData
+  have nodeStack : node.devm.stack = 0 :: S := by rw [nodeState]; rfl
+  exact ⟨node, cursor, out, returnedFree, actualPc, nodeSevm.trans returnedSevm,
+    nodeOutcome.trans returnedOutcome, tree, sameK, placed, hpost, bound, answered one,
+    nodeStor, nodeMemory, nodeData, nodeStack⟩
+
 theorem sync_root_second_static_answered {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
@@ -3565,42 +3632,216 @@ theorem sync_root_second_static_answered {sevm : Sevm} {b post : Devm} {G : Nat}
     callEdge, returnedPc, returnedSevm, returnedOutcome, result, primitive,
     returnedTree, continuation, returnedOk, ordered, g, t, ii, is, oi, os, S, stack⟩ :=
     sync_root_second_static_step codeEq fork selector run
-  have location : returned.pc + 6 = syncBalanceFlagPc .second := by rw [returnedPc]; rfl
-  obtain ⟨guard, node, cursor, guardPath, guardPc, line, jumped, returnedFree,
-    nodePc, nodeSevm, nodeOutcome, tree, sameK, placed⟩ :=
-    sync_balance_flag_cursor .second returnedOk returnedTree location returnedOutcome
-      (by rw [returnedSevm]; exact fork)
-  have call : Ninst.Run sevm
-      (St second.node.devm (g :: t :: ii :: is :: oi :: os :: S)
-        second.node.devm.memory second.node.devm.gasLeft)
-      (.exec .staticcall) returned.devm := by
-    rw [← St.self stack rfl]
-    exact primitive.toRun
-  obtain ⟨flag, out, hpost, bound, answered⟩ := ri_staticcall_bounded fork call
-  have actualLine : Line.Run sevm
-      (St returned.devm (flag :: S) returned.devm.memory returned.devm.gasLeft)
-      [.reg .iszero, .reg (.dup 0), .reg .iszero,
-        .push SyncBalanceSite.second.returnDestination (by decide)] guard.devm := by
-    rw [← St.self hpost.stack rfl]
-    simpa only [returnedSevm] using line
-  have actualJump : Jinst.Run ⟨syncBalanceFlagPc .second, sevm, guard.devm⟩ .jumpi
-      (.ok ⟨(Bytes.toB256 SyncBalanceSite.second.returnDestination).toNat, node.devm⟩) := by
-    simpa only [guardPc, nodePc, returnedSevm] using jumped
-  have nonzero := sync_balance_return_flag_nonzero .second actualLine actualJump
-  have one : flag = 1 := hpost.flag.resolve_left nonzero
-  rw [one] at hpost
+  obtain ⟨node, cursor, out, returnedFree, actualPc, nodeSevm, nodeOutcome,
+    tree, sameK, placed, hpost, bound, answered, nodeStor, nodeMemory, nodeData, nodeStack⟩ :=
+    sync_second_static_answered_from_step second returned afterCall fork primitive returnedPc
+      returnedSevm returnedOutcome returnedTree returnedOk stack
   have retained : ∃ k K, cursor.K = k :: K ∧ k.f = t_0257_c78 := by
     rw [sameK]; exact continuation
-  have actualPc : node.pc = 0x1f8e := nodePc.trans (by decide +kernel)
   exact ⟨first, second, firstReturned, returned, node, cursor, g, t, ii, is, oi, os, S, out,
     rootFree, firstPc, firstEdge, firstReturnedPc, firstResult, firstSpawn, secondFree,
     pc, sameSevm, instruction, callEdge, returnedPc, result, primitive, returnedFree,
-    actualPc, nodeSevm.trans returnedSevm, nodeOutcome.trans returnedOutcome,
-    tree, retained, placed, ordered, stack, hpost, bound, answered one⟩
+    actualPc, nodeSevm, nodeOutcome, tree, retained, placed, ordered, stack, hpost, bound, answered⟩
 
 /-- The genuine second supplied slot yields its actual immediate or
 interpreted context. Conditional root commitment retains that same child at
 original path[1], using the derived ordered first-spawn suffix equation. -/
+theorem sync_second_static_settlement_from_occurrence
+    {sevm : Sevm} {b post : Devm} {G : Nat}
+    {run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)}
+    (second : Exec.NinstOccurrence ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)
+    (returned : Exec.Deriv)
+    {g t ii is oi os : B256} {S : List B256} {out : Bytes}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (sameSevm : second.node.sevm = sevm)
+    (instruction : second.instruction = Ninst.staticcall)
+    (result : second.stepResult = .ok returned.devm)
+    (stack : second.node.devm.stack = g :: t :: ii :: is :: oi :: os :: S)
+    (hpost : StaticCallPost second.node.devm returned.devm S second.node.devm.memory
+      ii is oi os 1 out)
+    (secondPath : Exec.Deriv.ParentPrefix
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ second.node)
+    (ordered : ∃ firstChildFrames : List Exec.LocatedFrame,
+      Exec.descendantFramePaths [] 0 run =
+        firstChildFrames ++ Exec.descendantFramePaths [] 1 second.node.exc) :
+    ∃ (parent child : Devm) (dp : Bool) (na : Adr)
+        (childCode : ByteArray) (avail : Nat),
+        0 < sevm.depth ∧
+        second.node.devm.stack = g :: t :: ii :: is :: oi :: os :: parent.stack ∧
+        parent.state = second.node.devm.state ∧
+        parent.memory = second.node.devm.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] ∧
+        parent.logs = second.node.devm.logs ∧ parent.output = second.node.devm.output ∧
+        ((getDelegatedCodeAddress (second.node.devm.getCode t.toAdr) = none ∧
+            na = t.toAdr ∧ childCode = second.node.devm.getCode t.toAdr ∧ dp = false) ∨
+          (∃ d, getDelegatedCodeAddress (second.node.devm.getCode t.toAdr) = some d ∧
+            na = d ∧ childCode = second.node.devm.getCode d ∧ dp = true)) ∧
+        Xlot.Filled second.slot ∧
+        ProcessMessage
+          (callMsg sevm parent (min g.toNat (except64th avail)) 0 sevm.currentTarget
+            t.toAdr na true true (second.node.devm.memory.read ii.toNat is.toNat).1 childCode dp)
+          second.slot (.ok child) ∧ child.error.isSome = false ∧
+        (Resume.call parent oi.toNat os.toNat).run (.ok child) = .ok returned.devm ∧
+        returned.devm.state = child.state ∧ returned.devm.returnData = child.output ∧
+        returned.devm.memory = parent.memory.write oi.toNat (child.output.take os.toNat) ∧
+        returned.devm.stack = (1 : B256) :: parent.stack ∧
+        Ninst.step ⟨second.node.pc, sevm, second.node.devm⟩ Ninst.staticcall =
+          .spawn (Frame.ofCall
+            (callMsg sevm parent (min g.toNat (except64th avail)) 0 sevm.currentTarget
+              t.toAdr na true true (second.node.devm.memory.read ii.toNat is.toNat).1
+              childCode dp))
+            (Resume.call parent oi.toNat os.toNat) (second.node.pc + 1) ∧
+        let msg := callMsg sevm parent (min g.toNat (except64th avail)) 0 sevm.currentTarget
+          t.toAdr na true true (second.node.devm.memory.read ii.toNat is.toNat).1 childCode dp
+        Evm.step ⟨second.node.pc, second.node.sevm, second.node.devm⟩ =
+          .spawn (Frame.ofCall msg) (Resume.call parent oi.toNat os.toNat)
+            (second.node.pc + 1) ∧
+        ((second.slot = .none ∧ (Frame.ofCall msg).enter = .done (.ok child)) ∨
+          ∃ (childEvm : Evm) (raw : Execution),
+            second.slot = .some ⟨childEvm, raw⟩ ∧
+            (Frame.ofCall msg).enter = .run childEvm ∧
+            Nonempty (Exec childEvm.pc childEvm.sta childEvm.dyna raw) ∧
+            .ok child = (Frame.ofCall msg).settle raw ∧
+            Execution.commits raw = true ∧
+            ∃ benv, msg.benvAfterTransfer = .ok benv ∧
+              childEvm = initEvm (msg.withBenv benv) ∧
+              childEvm.pc = 0 ∧ childEvm.sta.code = childCode ∧
+              childEvm.sta.codeAddress = na ∧ childEvm.sta.currentTarget = t.toAdr ∧
+              childEvm.sta.caller = sevm.currentTarget ∧ childEvm.sta.value = 0 ∧
+              childEvm.sta.data = (second.node.devm.memory.read ii.toNat is.toNat).1 ∧
+              childEvm.sta.isStatic = true ∧ childEvm.sta.benvStat = sevm.benvStat ∧
+              ∃ (childRun : Exec childEvm.pc childEvm.sta childEvm.dyna raw)
+                (next : Exec (second.node.pc + 1) second.node.sevm
+                  returned.devm second.node.exn),
+                ∃ (actualSpawn : Evm.step
+                    ⟨second.node.pc, second.node.sevm, second.node.devm⟩ =
+                    .spawn (Frame.ofCall msg) (Resume.call parent oi.toNat os.toNat)
+                      (second.node.pc + 1))
+                  (actualEntry : (Frame.ofCall msg).enter = .run childEvm)
+                  (actualResume : (Resume.call parent oi.toNat os.toNat).run
+                    ((Frame.ofCall msg).settle raw) = .ok returned.devm),
+                  second.node.exc = .runOk actualSpawn actualEntry childRun actualResume next ∧
+                  ∀ committed : Execution.commits (.ok post) = true,
+                    ∃ located : Exec.LocatedFrame,
+                      located ∈ Exec.committedFramePaths run ∧
+                      ∃ entering : Exec.LocatedFrame.EnteringOccurrence run located,
+                        entering.parent = ⟨[], Exec.Frame.ofRun run committed⟩ ∧
+                        HEq entering.occurrence second ∧
+                        located.path = [entering.childIndex] ∧ entering.childIndex = 1 ∧
+                        second.slot = .some
+                          ⟨⟨located.frame.pc, located.frame.sevm, located.frame.pre⟩,
+                            located.frame.out⟩) := by
+  have hp : (g :: t :: ii :: is :: oi :: os :: S) <<+ second.node.devm.stack := by
+    rw [stack]
+    simpa only [List.append_nil] using pref_append (g :: t :: ii :: is :: oi :: os :: S) []
+  have actualStep : Ninst.StepRun second.node.pc sevm second.node.devm
+      Ninst.staticcall second.slot (.ok returned.devm) := by
+    simpa only [sameSevm, instruction, result] using second.stepRun
+  rcases of_step_staticcall_val_with_depth_frame_cause hp second.filled actualStep fork
+    with failed | success
+  · have zero := failed.1
+    rw [hpost.stack] at zero
+    have impossible : (0 : B256) = 1 := pref_head_unique zero (pref_append [1] S)
+    exact False.elim ((by decide : (0 : B256) ≠ 1) impossible)
+  · obtain ⟨parent, child, dp, na, childCode, avail, depth, childStack, parentState,
+      parentMemory, parentLogs, parentOutput, authentication, filled, process, clean,
+      resumed, returnedState, returnedData, returnedMemory, returnedStack, spawned⟩ := success
+    let msg := callMsg sevm parent (min g.toNat (except64th avail)) 0 sevm.currentTarget
+      t.toAdr na true true (second.node.devm.memory.read ii.toNat is.toNat).1 childCode dp
+    have decoded : Ninst.At sevm.code second.node.pc Ninst.staticcall := by
+      simpa only [sameSevm, instruction] using second.decoded
+    have driverSpawn : Evm.step
+        ⟨second.node.pc, second.node.sevm, second.node.devm⟩ =
+        .spawn (Frame.ofCall msg) (Resume.call parent oi.toNat os.toNat)
+          (second.node.pc + 1) := by
+      rw [sameSevm, Evm.step_next decoded]
+      exact spawned
+    refine ⟨parent, child, dp, na, childCode, avail, depth, childStack, parentState,
+      parentMemory, parentLogs, parentOutput, authentication, filled, process, clean,
+      resumed, returnedState, returnedData, returnedMemory, returnedStack, spawned,
+      driverSpawn, ?_⟩
+    cases slotEq : second.slot with
+    | none =>
+      apply Or.inl
+      refine ⟨rfl, ?_⟩
+      have processNone : ProcessMessage msg .none (.ok child) := by
+        simpa only [slotEq] using process
+      cases entered : (Frame.ofCall msg).enter with
+      | done settled =>
+        simp only [ProcessMessage, RunFrame, entered] at processNone
+        exact congrArg FrameEntry.done processNone.2.symm
+      | run childEvm =>
+        simp only [ProcessMessage, RunFrame, entered] at processNone
+        obtain ⟨raw, impossible, _⟩ := processNone
+        cases impossible
+    | some pair =>
+      rcases pair with ⟨childEvm, raw⟩
+      have processSome : ProcessMessage msg (.some ⟨childEvm, raw⟩) (.ok child) := by
+        simpa only [slotEq] using process
+      have actualFilled := filled
+      rw [slotEq] at actualFilled
+      obtain ⟨childRun⟩ := actualFilled
+      obtain ⟨entered, settled⟩ := RunFrame.some_inv processSome
+      have childSettles := ProcessMessage.settlementCommits_of_some_ok_clean processSome clean
+      have committed := Frame.raw_commits_of_settlementCommits childSettles
+      obtain ⟨benv, transferred, initial⟩ := Frame.enter_run_inv entered
+      have childContext : childEvm.pc = 0 ∧ childEvm.sta.code = childCode ∧
+          childEvm.sta.codeAddress = na ∧ childEvm.sta.currentTarget = t.toAdr ∧
+          childEvm.sta.caller = sevm.currentTarget ∧ childEvm.sta.value = 0 ∧
+          childEvm.sta.data = (second.node.devm.memory.read ii.toNat is.toNat).1 ∧
+          childEvm.sta.isStatic = true := by
+        rw [initial]
+        exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+      have statics : childEvm.sta.benvStat = sevm.benvStat :=
+        Frame.enter_run_benvStat entered
+      have resumedRaw : (Resume.call parent oi.toNat os.toNat).run
+          ((Frame.ofCall msg).settle raw) = .ok returned.devm := by
+        rw [← settled]
+        exact resumed
+      obtain ⟨next, exactRun⟩ := Exec.exists_next_of_run_spawn second.node.exc
+        driverSpawn entered childRun resumedRaw
+      refine Or.inr ⟨childEvm, raw, rfl, entered, ⟨childRun⟩, settled, committed,
+        benv, transferred, initial, childContext.1, childContext.2.1,
+        childContext.2.2.1, childContext.2.2.2.1, childContext.2.2.2.2.1,
+        childContext.2.2.2.2.2.1, childContext.2.2.2.2.2.2.1,
+        childContext.2.2.2.2.2.2.2, statics,
+        childRun, next, driverSpawn, entered, resumedRaw, exactRun, ?_⟩
+      intro rootCommitted
+      let located : Exec.LocatedFrame := ⟨[1], Exec.Frame.ofRun childRun committed⟩
+      have localMember : located ∈ Exec.descendantFramePaths [] 1 second.node.exc := by
+        rw [exactRun, Exec.descendantFramePaths, dite_eq_left childSettles]
+        exact List.mem_append_left _ List.mem_cons_self
+      have rootMember : located ∈ Exec.descendantFramePaths [] 0 run := by
+        obtain ⟨firstChildFrames, orderedEquation⟩ := ordered
+        rw [orderedEquation]
+        exact List.mem_append_right firstChildFrames localMember
+      have member : located ∈ Exec.committedFramePaths run := by
+        rw [Exec.committedFramePaths, dite_eq_left rootCommitted]
+        exact List.mem_cons_of_mem _ rootMember
+      have parentMember : ⟨[], Exec.Frame.ofRun run rootCommitted⟩ ∈
+          Exec.committedFramePaths run := by
+        rw [Exec.committedFramePaths, dite_eq_left rootCommitted]
+        exact List.mem_cons_self
+      have retained : second.Retained := by
+        apply (Exec.mem_retainedNodes_iff_committedFrame_parentPrefix
+          run second.node).mpr
+        refine ⟨Exec.Frame.ofRun run rootCommitted, ?_, secondPath⟩
+        rw [Exec.committedFrames, dite_eq_left rootCommitted]
+        exact List.mem_cons_self
+      let entering : Exec.LocatedFrame.EnteringOccurrence run located :=
+        { parent := ⟨[], Exec.Frame.ofRun run rootCommitted⟩
+          parentMember := parentMember
+          childIndex := 1
+          path_eq := rfl
+          occurrence := second
+          sameFrame := secondPath
+          retained := retained
+          slot_eq := slotEq
+          spawns := ⟨Frame.ofCall msg, Resume.call parent oi.toNat os.toNat,
+            second.node.pc + 1, returned.devm, driverSpawn, entered,
+            resumedRaw, next, exactRun⟩ }
+      exact ⟨located, member, entering, rfl, HEq.rfl, rfl, rfl, rfl⟩
+
+
 theorem sync_root_second_static_settlement {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
@@ -3702,120 +3943,13 @@ theorem sync_root_second_static_settlement {sevm : Sevm} {b post : Devm} {G : Na
   have secondPath : Exec.Deriv.ParentPrefix
       ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ second.node :=
     rootFree.1.snoc firstEdge |>.trans secondFree.1
-  have hp : (g :: t :: ii :: is :: oi :: os :: S) <<+ second.node.devm.stack := by
-    rw [stack]
-    simpa only [List.append_nil] using pref_append (g :: t :: ii :: is :: oi :: os :: S) []
-  have actualStep : Ninst.StepRun second.node.pc sevm second.node.devm
-      Ninst.staticcall second.slot (.ok returned.devm) := by
-    simpa only [sameSevm, instruction, result] using second.stepRun
-  rcases of_step_staticcall_val_with_depth_frame_cause hp second.filled actualStep fork
-    with failed | success
-  · have zero := failed.1
-    rw [hpost.stack] at zero
-    have impossible : (0 : B256) = 1 := pref_head_unique zero (pref_append [1] S)
-    exact False.elim ((by decide : (0 : B256) ≠ 1) impossible)
-  · obtain ⟨parent, child, dp, na, childCode, avail, depth, childStack, parentState,
-      parentMemory, parentLogs, parentOutput, authentication, filled, process, clean,
-      resumed, returnedState, returnedData, returnedMemory, returnedStack, spawned⟩ := success
-    let msg := callMsg sevm parent (min g.toNat (except64th avail)) 0 sevm.currentTarget
-      t.toAdr na true true (second.node.devm.memory.read ii.toNat is.toNat).1 childCode dp
-    have decoded : Ninst.At sevm.code second.node.pc Ninst.staticcall := by
-      simpa only [sameSevm, instruction] using second.decoded
-    have driverSpawn : Evm.step
-        ⟨second.node.pc, second.node.sevm, second.node.devm⟩ =
-        .spawn (Frame.ofCall msg) (Resume.call parent oi.toNat os.toNat)
-          (second.node.pc + 1) := by
-      rw [sameSevm, Evm.step_next decoded]
-      exact spawned
-    refine ⟨first, second, firstReturned, returned, node, cursor, g, t, ii, is, oi, os, S, out,
-      rootFree, firstPc, firstEdge, firstReturnedPc, firstResult, firstSpawn, secondFree,
-      pc, sameSevm, instruction, edge, result, primitive, returnedFree, returnedPc,
-      nodePc, nodeSevm, outcome, tree, continuation, placed, ordered, stack, hpost, bound,
-      parent, child, dp, na, childCode, avail, depth, childStack, parentState,
-      parentMemory, parentLogs, parentOutput, authentication, filled, process, clean,
-      resumed, returnedState, returnedData, returnedMemory, returnedStack, spawned,
-      driverSpawn, ?_⟩
-    cases slotEq : second.slot with
-    | none =>
-      apply Or.inl
-      refine ⟨rfl, ?_⟩
-      have processNone : ProcessMessage msg .none (.ok child) := by
-        simpa only [slotEq] using process
-      cases entered : (Frame.ofCall msg).enter with
-      | done settled =>
-        simp only [ProcessMessage, RunFrame, entered] at processNone
-        exact congrArg FrameEntry.done processNone.2.symm
-      | run childEvm =>
-        simp only [ProcessMessage, RunFrame, entered] at processNone
-        obtain ⟨raw, impossible, _⟩ := processNone
-        cases impossible
-    | some pair =>
-      rcases pair with ⟨childEvm, raw⟩
-      have processSome : ProcessMessage msg (.some ⟨childEvm, raw⟩) (.ok child) := by
-        simpa only [slotEq] using process
-      have actualFilled := filled
-      rw [slotEq] at actualFilled
-      obtain ⟨childRun⟩ := actualFilled
-      obtain ⟨entered, settled⟩ := RunFrame.some_inv processSome
-      have childSettles := ProcessMessage.settlementCommits_of_some_ok_clean processSome clean
-      have committed := Frame.raw_commits_of_settlementCommits childSettles
-      obtain ⟨benv, transferred, initial⟩ := Frame.enter_run_inv entered
-      have childContext : childEvm.pc = 0 ∧ childEvm.sta.code = childCode ∧
-          childEvm.sta.codeAddress = na ∧ childEvm.sta.currentTarget = t.toAdr ∧
-          childEvm.sta.caller = sevm.currentTarget ∧ childEvm.sta.value = 0 ∧
-          childEvm.sta.data = (second.node.devm.memory.read ii.toNat is.toNat).1 ∧
-          childEvm.sta.isStatic = true := by
-        rw [initial]
-        exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
-      have statics : childEvm.sta.benvStat = sevm.benvStat :=
-        Frame.enter_run_benvStat entered
-      have resumedRaw : (Resume.call parent oi.toNat os.toNat).run
-          ((Frame.ofCall msg).settle raw) = .ok returned.devm := by
-        rw [← settled]
-        exact resumed
-      obtain ⟨next, exactRun⟩ := Exec.exists_next_of_run_spawn second.node.exc
-        driverSpawn entered childRun resumedRaw
-      refine Or.inr ⟨childEvm, raw, rfl, entered, ⟨childRun⟩, settled, committed,
-        benv, transferred, initial, childContext.1, childContext.2.1,
-        childContext.2.2.1, childContext.2.2.2.1, childContext.2.2.2.2.1,
-        childContext.2.2.2.2.2.1, childContext.2.2.2.2.2.2.1,
-        childContext.2.2.2.2.2.2.2, statics,
-        childRun, next, driverSpawn, entered, resumedRaw, exactRun, ?_⟩
-      intro rootCommitted
-      let located : Exec.LocatedFrame := ⟨[1], Exec.Frame.ofRun childRun committed⟩
-      have localMember : located ∈ Exec.descendantFramePaths [] 1 second.node.exc := by
-        rw [exactRun, Exec.descendantFramePaths, dite_eq_left childSettles]
-        exact List.mem_append_left _ List.mem_cons_self
-      have rootMember : located ∈ Exec.descendantFramePaths [] 0 run := by
-        obtain ⟨firstChildFrames, orderedEquation⟩ := ordered
-        rw [orderedEquation]
-        exact List.mem_append_right firstChildFrames localMember
-      have member : located ∈ Exec.committedFramePaths run := by
-        rw [Exec.committedFramePaths, dite_eq_left rootCommitted]
-        exact List.mem_cons_of_mem _ rootMember
-      have parentMember : ⟨[], Exec.Frame.ofRun run rootCommitted⟩ ∈
-          Exec.committedFramePaths run := by
-        rw [Exec.committedFramePaths, dite_eq_left rootCommitted]
-        exact List.mem_cons_self
-      have retained : second.Retained := by
-        apply (Exec.mem_retainedNodes_iff_committedFrame_parentPrefix
-          run second.node).mpr
-        refine ⟨Exec.Frame.ofRun run rootCommitted, ?_, secondPath⟩
-        rw [Exec.committedFrames, dite_eq_left rootCommitted]
-        exact List.mem_cons_self
-      let entering : Exec.LocatedFrame.EnteringOccurrence run located :=
-        { parent := ⟨[], Exec.Frame.ofRun run rootCommitted⟩
-          parentMember := parentMember
-          childIndex := 1
-          path_eq := rfl
-          occurrence := second
-          sameFrame := secondPath
-          retained := retained
-          slot_eq := slotEq
-          spawns := ⟨Frame.ofCall msg, Resume.call parent oi.toNat os.toNat,
-            second.node.pc + 1, returned.devm, driverSpawn, entered,
-            resumedRaw, next, exactRun⟩ }
-      exact ⟨located, member, entering, rfl, HEq.rfl, rfl, rfl, rfl⟩
+  have settlement := sync_second_static_settlement_from_occurrence second returned fork
+    sameSevm instruction result stack hpost secondPath ordered
+  exact ⟨first, second, firstReturned, returned, node, cursor, g, t, ii, is, oi, os, S, out,
+    rootFree, firstPc, firstEdge, firstReturnedPc, firstResult, firstSpawn, secondFree,
+    pc, sameSevm, instruction, edge, result, primitive, returnedFree, returnedPc,
+    nodePc, nodeSevm, outcome, tree, continuation, placed, ordered, stack, hpost, bound,
+    settlement⟩
 
 
 /-- The SAME supplied STATICCALL slot supplies its actual ordered static turn
@@ -3965,6 +4099,84 @@ theorem sync_root_first_static_finite_occurrence {K : WriterKey → Prop} {st : 
 
 
 /-- The existing filtered-slot fold at the supplied actual first occurrence. -/
+theorem sync_static_slot_filtered_turns_inv {K : WriterKey → Prop}
+    {frame : Frame} {request : Request} {path : List Nat} {root : Exec.Deriv}
+    (occurrence : Exec.NinstOccurrence root) (returned : Exec.Deriv)
+    (instruction : occurrence.instruction = Ninst.staticcall)
+    (result : occurrence.stepResult = .ok returned.devm)
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    (installed : some (occurrence.node.devm.getCode frame.context.pair).toList = sem.image)
+    (rep : WriterRep K (occurrence.node.devm.getStor frame.context.pair) frame.current.state)
+    (time : frame.context.timestamp = occurrence.node.sevm.benvStat.time)
+    (fork : CoveredFork occurrence.node.sevm.benvStat.fork) :
+      ((occurrence.slot = .none ∧
+          ExactTurns frame request 0 .done
+            { complete := true, frame := frame, childReturns := [] }) ∨
+        ∃ (childEvm : Evm) (raw : Execution) (callee : Jaune.Frame)
+          (resume : Resume) (pc' : Nat)
+          (childRun : Exec childEvm.pc childEvm.sta childEvm.dyna raw)
+          (next : Exec pc' occurrence.node.sevm returned.devm occurrence.node.exn)
+          (spawn : Evm.step ⟨occurrence.node.pc, occurrence.node.sevm, occurrence.node.devm⟩ =
+            .spawn callee resume pc')
+          (enter : callee.enter = .run childEvm)
+          (resumed : resume.run (callee.settle raw) = .ok returned.devm),
+          occurrence.slot = .some ⟨childEvm, raw⟩ ∧
+          occurrence.node.exc = .runOk spawn enter childRun resumed next ∧
+          ((∀ located ∈
+            (if Jaune.Frame.settlementCommits callee raw = true then
+              (Exec.retainedTargetTurnsAt frame.context.pair path childRun).filterMap Sum.getRight?
+            else []),
+            WriterFreshKeys K (staticViewDecodedKeys located.frame.sevm)) →
+            ∃ views : List StaticViewTurn,
+              views.map Prod.fst =
+                (if Jaune.Frame.settlementCommits callee raw = true then
+              (Exec.retainedTargetTurnsAt frame.context.pair path childRun).filterMap Sum.getRight?
+            else []) ∧
+              (∀ picked ∈ views, picked.Authentic frame) ∧
+              ExactTurns frame request 0 (staticViewTranscript views .done)
+                { complete := true, frame := frame,
+                  childReturns := staticViewChildReturns frame request 0 views })) := by
+  have actual : Step.Run
+      (Evm.step ⟨occurrence.node.pc, occurrence.node.sevm, occurrence.node.devm⟩)
+      occurrence.slot (.ok returned.devm) := by
+    rw [Evm.step_next occurrence.decoded]
+    change Ninst.StepRun occurrence.node.pc occurrence.node.sevm occurrence.node.devm
+      occurrence.instruction occurrence.slot (.ok returned.devm)
+    rw [← result]
+    exact occurrence.stepRun
+  cases slotEq : occurrence.slot with
+  | none =>
+    exact Or.inl ⟨rfl, ExactTurns.done _ _ _⟩
+  | some pairSlot =>
+    rcases pairSlot with ⟨childEvm, raw⟩
+    have actualSome : Step.Run
+        (Evm.step ⟨occurrence.node.pc, occurrence.node.sevm, occurrence.node.devm⟩)
+        (.some ⟨childEvm, raw⟩) (.ok returned.devm) := by
+      simpa only [slotEq] using actual
+    obtain ⟨callee, resume, pc', spawn, enter, resumed⟩ := Step.Run.some_inv actualSome
+    have filled := occurrence.filled
+    rw [slotEq] at filled
+    obtain ⟨childRun⟩ := filled
+    obtain ⟨next, exactRun⟩ := Exec.exists_next_of_run_spawn occurrence.node.exc
+      spawn enter childRun resumed.symm
+    refine Or.inr ⟨childEvm, raw, callee, resume, pc', childRun, next,
+      spawn, enter, resumed.symm, rfl, exactRun, ?_⟩
+    intro fresh
+    by_cases committed : Jaune.Frame.settlementCommits callee raw = true
+    · have selectedFresh : ∀ located ∈
+          (Exec.retainedTargetTurnsAt frame.context.pair path childRun).filterMap Sum.getRight?,
+          WriterFreshKeys K (staticViewDecodedKeys located.frame.sevm) := by
+        simpa only [ite_eq_left committed] using fresh
+      obtain ⟨views, mapped, authentic, exactTurns⟩ :=
+        (sync_static_slot_turns_inv occurrence instruction slotEq spawn enter childRun
+          sem image installed rep selectedFresh time fork).2
+      exact ⟨views, by simpa only [ite_eq_left committed] using mapped, authentic, exactTurns⟩
+    · refine ⟨[], ?_, ?_, ?_⟩
+      · simp only [List.map_nil, ite_eq_right committed]
+      · intro picked member
+        cases member
+      · exact ExactTurns.done _ _ _
+
 theorem sync_root_first_static_slot_request_turns_from_occurrence {K : WriterKey → Prop}
     {current : Checkpoint} {ctx : Context} {sevm : Sevm} {b post : Devm} {G : Nat}
     (sem : CodeSem) (image : sem.image = some code.toList)
@@ -4020,53 +4232,16 @@ theorem sync_root_first_static_slot_request_turns_from_occurrence {K : WriterKey
   have nodeInstalled : some (occurrence.node.devm.getCode ctx.pair).toList = sem.image := by
     rw [preserved]
     exact installed
-  have actual : Step.Run
-      (Evm.step ⟨occurrence.node.pc, occurrence.node.sevm, occurrence.node.devm⟩)
-      occurrence.slot (.ok returned.devm) := by
-    rw [Evm.step_next occurrence.decoded]
-    change Ninst.StepRun occurrence.node.pc occurrence.node.sevm occurrence.node.devm
-      occurrence.instruction occurrence.slot (.ok returned.devm)
-    rw [← result]
-    exact occurrence.stepRun
-  refine ⟨nodeInstalled, free.descendantFramePaths_eq [] 0, ?_⟩
-  cases slotEq : occurrence.slot with
-  | none =>
-    exact Or.inl ⟨rfl, ExactTurns.done _ _ _⟩
-  | some pairSlot =>
-    rcases pairSlot with ⟨childEvm, raw⟩
-    have actualSome : Step.Run
-        (Evm.step ⟨occurrence.node.pc, occurrence.node.sevm, occurrence.node.devm⟩)
-        (.some ⟨childEvm, raw⟩) (.ok returned.devm) := by
-      simpa only [slotEq] using actual
-    obtain ⟨callee, resume, pc', spawn, enter, resumed⟩ := Step.Run.some_inv actualSome
-    have filled := occurrence.filled
-    rw [slotEq] at filled
-    obtain ⟨childRun⟩ := filled
-    obtain ⟨next, exactRun⟩ := Exec.exists_next_of_run_spawn occurrence.node.exc
-      spawn enter childRun resumed.symm
-    refine Or.inr ⟨childEvm, raw, callee, resume, pc', childRun, next,
-      spawn, enter, resumed.symm, rfl, exactRun, ?_⟩
-    intro fresh
-    have callTime : (syncSourceLockedFrame current ctx).context.timestamp =
-        occurrence.node.sevm.benvStat.time := by
-      change ctx.timestamp = occurrence.node.sevm.benvStat.time
-      rw [sameSevm]
-      exact time
-    by_cases committed : Jaune.Frame.settlementCommits callee raw = true
-    · have selectedFresh : ∀ located ∈
-          (Exec.retainedTargetTurnsAt ctx.pair [0] childRun).filterMap Sum.getRight?,
-          WriterFreshKeys K (staticViewDecodedKeys located.frame.sevm) := by
-        simpa only [ite_eq_left committed] using fresh
-      obtain ⟨views, mapped, authentic, exactTurns⟩ :=
-        (sync_static_slot_turns_inv occurrence instruction slotEq spawn enter childRun
-          sem image nodeInstalled nodeRep selectedFresh callTime
-          (by rw [sameSevm]; exact fork)).2
-      exact ⟨views, by simpa only [syncSourceLockedFrame, Frame.enter, ite_eq_left committed] using mapped, authentic, exactTurns⟩
-    · refine ⟨[], ?_, ?_, ?_⟩
-      · simp only [List.map_nil, ite_eq_right committed]
-      · intro picked member
-        cases member
-      · exact ExactTurns.done _ _ _
+  have callTime : (syncSourceLockedFrame current ctx).context.timestamp =
+      occurrence.node.sevm.benvStat.time := by
+    change ctx.timestamp = occurrence.node.sevm.benvStat.time
+    rw [sameSevm]
+    exact time
+  exact ⟨nodeInstalled, free.descendantFramePaths_eq [] 0,
+    sync_static_slot_filtered_turns_inv (frame := syncSourceLockedFrame current ctx)
+      (request := requestFor .syncBalance0 current.state.token0 (.balanceOf ctx.pair))
+      (path := [0]) occurrence returned instruction result sem image nodeInstalled nodeRep
+      callTime (by rw [sameSevm]; exact fork)⟩
 
 /-- The first root-produced occurrence consumes its SAME supplied slot. The
 source frame is the actual lock frame, and installed code and finite storage
@@ -4388,6 +4563,168 @@ theorem sync_root_first_static_finite_request_reply_turns {K : WriterKey → Pro
       codeEq fork selector run
   exact ⟨occurrence, returned, node, cursor, parent, child, dp, na, childCode, avail, g, S, out, facts⟩
 
+theorem sync_balance_reply_decoded_from_cursor (site : SyncBalanceSite)
+    {F : Exec.Deriv} {κ : Cursor} {post : Devm} {S : List B256} {out : Bytes}
+    (ok : CursorOK code cert F κ) (tree : κ.f = site.returnTree)
+    (pc : F.pc = (Bytes.toB256 site.returnDestination).toNat)
+    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork)
+    (stack : F.devm.stack = 0 :: S) (data : F.devm.returnData = out)
+    (bound : out.length < 2^256) (ptr : PtrMem 128 192 F.devm.memory)
+    (readWord : 32 ≤ out.length →
+      Bytes.toB256 (F.devm.memory.read 128 32).1 = Bytes.toB256 (out.take 32)) :
+    ∃ (decoded : Exec.Deriv) (decodedCursor : Cursor),
+      Exec.Deriv.ExecFreeUntil F decoded ∧ decoded.sevm = F.sevm ∧ decoded.exn = F.exn ∧
+      decoded.pc = (Bytes.toB256 site.decodeDestination).toNat + 3 ∧
+      decodedCursor.f = site.afterDecodeTree ∧ decodedCursor.K = κ.K ∧
+      CursorOK code cert decoded decodedCursor ∧ 32 ≤ out.length ∧
+      decoded.devm.getStor = F.devm.getStor ∧ decoded.devm.memory = F.devm.memory ∧
+      decoded.devm.returnData = out ∧
+      ∃ (a x y : B256) (R : List B256) (gas : Nat),
+        S = a :: x :: y :: R ∧
+        decoded.devm = St F.devm (Bytes.toB256 (out.take 32) :: R) F.devm.memory gas := by
+  have destinationLength : site.decodeDestination.length ≤ 32 := by cases site <;> decide
+  obtain ⟨decoder, decoderCursor, ⟨suffix, decoderSevm, decoderOutcome, decoderPc, decoderTree,
+    decoderK, decoderOk⟩, entry, guard, destEdge, entryPc, destRun, widthLine, guardPc,
+    guardEdge, guardRun⟩ :=
+    sync_balance_return_cursor_trace site ok tree success fork
+  have nodeSelf : F.devm = St F.devm (0 :: S) F.devm.memory F.devm.gasLeft :=
+    St.self stack rfl
+  have entryBurn := (of_jumpdest_run destRun).2
+  rw [nodeSelf] at entryBurn
+  have entryState := St.of_burn entryBurn
+  rw [entryState] at widthLine
+  change Line.Run F.sevm (St F.devm (0 :: S) F.devm.memory entry.devm.gasLeft)
+    ([.reg .pop, .reg .pop, .reg .pop, .reg .pop] ++
+      (returnWidthCompareLine ++ [.push site.decodeDestination destinationLength])) guard.devm at widthLine
+  obtain ⟨afterPop, pops, comparison⟩ := of_run_append
+    (e := F.sevm) (s := St F.devm (0 :: S) F.devm.memory entry.devm.gasLeft)
+    (b := returnWidthCompareLine ++ [.push site.decodeDestination destinationLength])
+    (s'' := guard.devm) [.reg .pop, .reg .pop, .reg .pop, .reg .pop] widthLine
+  obtain ⟨first, step, pops⟩ := Line.of_run_cons pops
+  obtain ⟨_, firstState⟩ := ri_pop step
+  rw [firstState] at pops
+  obtain ⟨second, step, pops⟩ := Line.of_run_cons pops
+  obtain ⟨a, popped⟩ := of_run_pop step
+  have poppedA : S = a :: second.stack := by
+    simpa only [Stack.Pop, Split, St.stack, List.cons_append, List.nil_append] using popped.stack
+  have secondState := St.of_stackRel popped
+  rw [secondState] at pops
+  obtain ⟨third, step, pops⟩ := Line.of_run_cons pops
+  obtain ⟨x, popped⟩ := of_run_pop step
+  have poppedX : second.stack = x :: third.stack := by
+    simpa only [Stack.Pop, Split, St.stack, List.cons_append, List.nil_append] using popped.stack
+  have thirdState := St.of_stackRel popped
+  rw [thirdState] at pops
+  obtain ⟨fourth, step, pops⟩ := Line.of_run_cons pops
+  obtain ⟨y, popped⟩ := of_run_pop step
+  have poppedY : third.stack = y :: fourth.stack := by
+    simpa only [Stack.Pop, Split, St.stack, List.cons_append, List.nil_append] using popped.stack
+  have fourthState := St.of_stackRel popped
+  cases pops
+  rw [fourthState] at comparison
+  obtain ⟨compared, comparedLine, pushLine⟩ := of_run_append returnWidthCompareLine comparison
+  obtain ⟨comparisonGas, comparisonState⟩ := returnWidthCompareLine_inv ptr comparedLine
+  obtain ⟨_, pushed, empty⟩ := Line.of_run_cons pushLine
+  cases empty
+  rw [comparisonState] at pushed
+  obtain ⟨pushGas, guardState⟩ := ri_push pushed
+  have guardActualPc : guard.pc = F.pc + 17 := by
+    rw [guardPc, entryPc]
+    cases site <;>
+      simp only [syncReturnWidthLine, SyncBalanceSite.decodeDestination,
+        List.cons_append, List.nil_append, List.map_cons, List.map_nil,
+        List.sum_cons, List.sum_nil, Ninst.size, List.length_cons, List.length_nil]
+    all_goals rfl
+  have decoderActualPc := decoderPc
+  rw [guardState] at guardRun
+  have widthState : 32 ≤ out.length ∧ ∃ gas,
+      decoder.devm = St F.devm (out.length.toB256 :: 128 :: afterPop.stack)
+        F.devm.memory gas := by
+    rcases of_jumpi_run guardRun with ⟨t, fallPc, popped⟩ |
+      ⟨t, condition, takenPc, popped, legal, nonzero⟩
+    · rw [guardActualPc, pc, decoderActualPc] at fallPc
+      cases site with
+      | first => change (0x1f07 : Nat) = 0x1ef1 + 17 + 1 at fallPc; omega
+      | second => change (0x1fa4 : Nat) = 0x1f8e + 17 + 1 at fallPc; omega
+    · obtain ⟨target, sameCondition, state⟩ := St.of_pop2 popped
+      rw [← sameCondition] at nonzero
+      have width := toNat_ge_of_ltCheck_eq_zero (eq_zero_of_iszero_ne_zero nonzero)
+      have nodeBound : F.devm.returnData.length < 2^256 := by
+        rw [data]
+        exact bound
+      rw [B256.toNat_toB256_of_lt nodeBound, data] at width
+      rw [data] at state
+      exact ⟨width, _, state⟩
+  obtain ⟨long, decodeGas, decoderState⟩ := widthState
+  have decoderDestAt : Jinst.At decoder.sevm.code decoder.pc .jumpdest := by
+    have check := decoderOk.check
+    rw [decoderTree] at check
+    have opcode : byteAt code decoderCursor.pc = some (Jinst.toUInt8 .jumpdest) := by
+      cases site <;>
+        change (byteAt code decoderCursor.pc == some (Jinst.toUInt8 .jumpdest) && _) = true at check
+      all_goals
+        rw [Bool.and_eq_true] at check
+        simpa only [beq_iff_eq] using check.1
+    rw [decoderOk.code_eq, decoderOk.pc_eq]
+    exact byteAt_jinst_at opcode
+  obtain ⟨decodeEntry, decodeEntryCursor, decodeDestEdge, decodeDestRun,
+    decodeSynthetic, decodeStateful, decodeEntryOk⟩ :=
+    cursor_jinst_forward cert_check decoderOk decoderDestAt
+      (decoderOutcome.trans success) (by rw [decoderSevm]; exact fork)
+  have decodeEntrySevm : decodeEntry.sevm = decoder.sevm := Cursor.parentStep_sevm decodeDestEdge
+  have decodeEntryOutcome : decodeEntry.exn = decoder.exn := by cases decodeDestEdge <;> rfl
+  have decodeShape : decodeEntryCursor.f =
+      [.reg .pop, .reg .mload].foldr SFunc.next site.afterDecodeTree ∧
+      decodeEntryCursor.K = decoderCursor.K := by
+    rcases decoderCursor with ⟨f, pc, a, m, K⟩
+    dsimp only at decoderTree
+    subst f
+    cases site <;>
+      dsimp only [SyncBalanceSite.decodeTree, t_1f07_c31, t_1fa4_c31] at decodeSynthetic <;>
+      cases decodeSynthetic <;> exact ⟨rfl, rfl⟩
+  obtain ⟨decoded, decodedCursor, decodePath, decodedPc, decodedSevm, decodedOutcome,
+    decodedOk, decodedTree, decodeLine, decodedK, decodeFree⟩ :=
+    cursor_nexts_line_cont_free_forward cert_check decodeEntryOk [.reg .pop, .reg .mload]
+      site.afterDecodeTree decodeShape.1
+      (decodeEntryOutcome.trans (decoderOutcome.trans success))
+      (by rw [decodeEntrySevm, decoderSevm]; exact fork)
+  have decodeBurn := (of_jumpdest_run decodeDestRun).2
+  have decodeEntryPc := (of_jumpdest_run decodeDestRun).1
+  rw [decoderState] at decodeBurn
+  have decodeEntryState := St.of_burn decodeBurn
+  rw [decodeEntryState] at decodeLine
+  obtain ⟨popped, popRun, rest⟩ := Line.of_run_cons decodeLine
+  obtain ⟨_, popState⟩ := ri_pop popRun
+  rw [popState] at rest
+  obtain ⟨loaded, loadRun, empty⟩ := Line.of_run_cons rest
+  cases empty
+  obtain ⟨loadGas, loadState⟩ := ri_mload loadRun
+  have actualReadWord := readWord long
+  rw [show (128 : B256).toNat = 128 from rfl, actualReadWord,
+    ptr.read_self (by decide)] at loadState
+  have decodedActualPc : decoded.pc = (Bytes.toB256 site.decodeDestination).toNat + 3 := by
+    rw [decodedPc, decodeEntryPc, decoderActualPc]
+    rfl
+  have decodedFree : Exec.Deriv.ExecFreeUntil F decoded :=
+    suffix.trans ((Blanc.Exec.Deriv.ExecFreeUntil.ofStep decodeDestEdge
+      (Blanc.Jinst.At.not_exec decoderDestAt)).trans (decodeFree (by
+        intro n member x equal
+        simp only [List.mem_cons, List.mem_nil_iff, or_false] at member
+        rcases member with rfl | rfl <;> cases equal)))
+  have tailEq : S = a :: x :: y :: afterPop.stack := by
+    rw [poppedA, poppedX, poppedY, fourthState]
+  have decodedImage : decoded.devm =
+      St F.devm (Bytes.toB256 (out.take 32) :: afterPop.stack) F.devm.memory loadGas :=
+    loadState
+  have decodedStor : decoded.devm.getStor = F.devm.getStor := by rw [decodedImage]; rfl
+  have decodedMemory : decoded.devm.memory = F.devm.memory := by rw [decodedImage]; rfl
+  have decodedData : decoded.devm.returnData = out := by rw [decodedImage]; exact data
+  exact ⟨decoded, decodedCursor, decodedFree,
+    decodedSevm.trans (decodeEntrySevm.trans decoderSevm),
+    decodedOutcome.trans (decodeEntryOutcome.trans decoderOutcome), decodedActualPc, decodedTree,
+    decodedK.trans (decodeShape.2.trans decoderK), decodedOk, long, decodedStor,
+    decodedMemory, decodedData, a, x, y, afterPop.stack, loadGas, tailEq, decodedImage⟩
+
 theorem sync_root_first_static_finite_request_reply_turns_decoded {K : WriterKey → Prop}
     {current : Checkpoint} {ctx : Context} {sevm : Sevm} {b post : Devm} {G : Nat}
     (pair : ctx.pair = sevm.currentTarget)
@@ -4489,142 +4826,33 @@ theorem sync_root_first_static_finite_request_reply_turns_decoded {K : WriterKey
     nodePath, nodePc, nodeSevm, outcome, tree, continuation, placed, nodeRep, memory,
     stack, calldata, hpost, bound, returnedData, childOutput, clean, filled, process,
     resumed, authentication, driverSpawn⟩ := primitiveFacts
-  obtain ⟨decoder, decoderCursor, ⟨suffix, decoderSevm, decoderOutcome, decoderPc, decoderTree,
-    decoderK, decoderOk⟩, entry, guard, destEdge, entryPc, destRun, widthLine, guardPc,
-    guardEdge, guardRun⟩ :=
-    sync_balance_return_cursor_trace .first placed tree outcome (by rw [nodeSevm]; exact fork)
-  have nodeSelf : node.devm = St node.devm (0 :: S) node.devm.memory node.devm.gasLeft :=
-    St.self nodeStack rfl
-  have entryBurn := (of_jumpdest_run destRun).2
-  rw [nodeSelf] at entryBurn
-  have entryState := St.of_burn entryBurn
-  rw [entryState] at widthLine
-  change Line.Run node.sevm (St node.devm (0 :: S) node.devm.memory entry.devm.gasLeft)
-    ([.reg .pop, .reg .pop, .reg .pop, .reg .pop] ++
-      (returnWidthCompareLine ++ [.push [0x1f, 0x07] (by decide)])) guard.devm at widthLine
-  obtain ⟨afterPop, pops, comparison⟩ := of_run_append
-    [.reg .pop, .reg .pop, .reg .pop, .reg .pop] widthLine
-  obtain ⟨first, step, pops⟩ := Line.of_run_cons pops
-  obtain ⟨_, firstState⟩ := ri_pop step
-  rw [firstState] at pops
-  obtain ⟨second, step, pops⟩ := Line.of_run_cons pops
-  obtain ⟨_, popped⟩ := of_run_pop step
-  have secondState := St.of_stackRel popped
-  rw [secondState] at pops
-  obtain ⟨third, step, pops⟩ := Line.of_run_cons pops
-  obtain ⟨_, popped⟩ := of_run_pop step
-  have thirdState := St.of_stackRel popped
-  rw [thirdState] at pops
-  obtain ⟨fourth, step, pops⟩ := Line.of_run_cons pops
-  obtain ⟨_, popped⟩ := of_run_pop step
-  have fourthState := St.of_stackRel popped
-  cases pops
-  rw [fourthState] at comparison
-  obtain ⟨compared, comparedLine, pushLine⟩ := of_run_append returnWidthCompareLine comparison
   have ptr : PtrMem 128 192 node.devm.memory := by
     rw [nodeMemory]
     exact balanceReplyMemory_ptr out (balanceRequestMemory_ptr getterInitMemory_ptr ctx.pair)
-  obtain ⟨comparisonGas, comparisonState⟩ := returnWidthCompareLine_inv ptr comparedLine
-  obtain ⟨_, pushed, empty⟩ := Line.of_run_cons pushLine
-  cases empty
-  rw [comparisonState] at pushed
-  obtain ⟨pushGas, guardState⟩ := ri_push pushed
-  have guardActualPc : guard.pc = 0x1f02 := by
-    rw [guardPc, entryPc, nodePc]
-    simp only [syncReturnWidthLine, SyncBalanceSite.decodeDestination,
-      List.cons_append, List.nil_append, List.map_cons, List.map_nil,
-      List.sum_cons, List.sum_nil, Ninst.size, List.length_cons, List.length_nil]
-    rfl
-  have decoderActualPc : decoder.pc = 0x1f07 := decoderPc.trans (by decide +kernel)
-  rw [guardState] at guardRun
-  have widthState : 32 ≤ out.length ∧ ∃ gas,
-      decoder.devm = St node.devm (out.length.toB256 :: 128 :: afterPop.stack)
-        node.devm.memory gas := by
-    rcases of_jumpi_run guardRun with ⟨t, fallPc, popped⟩ |
-      ⟨t, condition, takenPc, popped, legal, nonzero⟩
-    · rw [guardActualPc, decoderActualPc] at fallPc
-      omega
-    · obtain ⟨target, sameCondition, state⟩ := St.of_pop2 popped
-      rw [← sameCondition] at nonzero
-      have width := toNat_ge_of_ltCheck_eq_zero (eq_zero_of_iszero_ne_zero nonzero)
-      have nodeBound : node.devm.returnData.length < 2^256 := by
-        rw [nodeData]
-        exact bound
-      rw [B256.toNat_toB256_of_lt nodeBound, nodeData] at width
-      rw [nodeData] at state
-      exact ⟨width, _, state⟩
-  obtain ⟨long, decodeGas, decoderState⟩ := widthState
-  have decoderDestAt : Jinst.At decoder.sevm.code decoder.pc .jumpdest := by
-    have check := decoderOk.check
-    rw [decoderTree] at check
-    change (byteAt code decoderCursor.pc == some (Jinst.toUInt8 .jumpdest) && _) = true at check
-    rw [Bool.and_eq_true] at check
-    rw [decoderOk.code_eq, decoderOk.pc_eq]
-    exact byteAt_jinst_at (by simpa only [beq_iff_eq] using check.1)
-  obtain ⟨decodeEntry, decodeEntryCursor, decodeDestEdge, decodeDestRun,
-    decodeSynthetic, decodeStateful, decodeEntryOk⟩ :=
-    cursor_jinst_forward cert_check decoderOk decoderDestAt
-      (decoderOutcome.trans outcome) (by rw [decoderSevm, nodeSevm]; exact fork)
-  have decodeEntrySevm : decodeEntry.sevm = decoder.sevm := Cursor.parentStep_sevm decodeDestEdge
-  have decodeEntryOutcome : decodeEntry.exn = decoder.exn := by cases decodeDestEdge <;> rfl
-  have decodeShape : decodeEntryCursor.f =
-      [.reg .pop, .reg .mload].foldr SFunc.next SyncBalanceSite.first.afterDecodeTree ∧
-      decodeEntryCursor.K = decoderCursor.K := by
-    rcases decoderCursor with ⟨f, pc, a, m, K⟩
-    dsimp only at decoderTree
-    subst f
-    dsimp only [SyncBalanceSite.decodeTree, t_1f07_c31] at decodeSynthetic
-    cases decodeSynthetic
-    exact ⟨rfl, rfl⟩
-  obtain ⟨decoded, decodedCursor, decodePath, decodedPc, decodedSevm, decodedOutcome,
-    decodedOk, decodedTree, decodeLine, decodedK, decodeFree⟩ :=
-    cursor_nexts_line_cont_free_forward cert_check decodeEntryOk [.reg .pop, .reg .mload]
-      SyncBalanceSite.first.afterDecodeTree decodeShape.1
-      (decodeEntryOutcome.trans (decoderOutcome.trans outcome))
-      (by rw [decodeEntrySevm, decoderSevm, nodeSevm]; exact fork)
-  have decodeBurn := (of_jumpdest_run decodeDestRun).2
-  have decodeEntryPc := (of_jumpdest_run decodeDestRun).1
-  rw [decoderState] at decodeBurn
-  have decodeEntryState := St.of_burn decodeBurn
-  rw [decodeEntryState] at decodeLine
-  obtain ⟨popped, popRun, rest⟩ := Line.of_run_cons decodeLine
-  obtain ⟨_, popState⟩ := ri_pop popRun
-  rw [popState] at rest
-  obtain ⟨loaded, loadRun, empty⟩ := Line.of_run_cons rest
-  cases empty
-  obtain ⟨loadGas, loadState⟩ := ri_mload loadRun
-  have readWord : Bytes.toB256 (node.devm.memory.read 128 32).1 = Bytes.toB256 (out.take 32) := by
+  have actualReadWord : 32 ≤ out.length →
+      Bytes.toB256 (node.devm.memory.read 128 32).1 = Bytes.toB256 (out.take 32) := by
+    intro long
     rw [nodeMemory]
     exact balanceReplyMemory_word getterInitMemory_ptr.wf ctx.pair out long
-  rw [show (128 : B256).toNat = 128 from rfl, readWord, ptr.read_self (by decide)] at loadState
-  have decodedActualPc : decoded.pc = 0x1f0a := by
-    rw [decodedPc, decodeEntryPc, decoderActualPc]
-    rfl
-  have decodedFree : Exec.Deriv.ExecFreeUntil node decoded :=
-    suffix.trans ((Blanc.Exec.Deriv.ExecFreeUntil.ofStep decodeDestEdge
-      (Blanc.Jinst.At.not_exec decoderDestAt)).trans (decodeFree (by
-        intro n member x equal
-        simp only [List.mem_cons, List.mem_nil_iff, or_false] at member
-        rcases member with rfl | rfl <;> cases equal)))
-  have decodedStor : decoded.devm.getStor = occurrence.node.devm.getStor := by
-    rw [loadState]
-    exact nodeStor
-  have decodedMemory : decoded.devm.memory = balanceReplyMemory getterInitMemory ctx.pair out := by
-    rw [loadState]
-    exact nodeMemory
-  have decodedData : decoded.devm.returnData = out := by
-    rw [loadState]
-    exact nodeData
+  obtain ⟨decoded, decodedCursor, decodedFree, decodedSevm, decodedOutcome, decodedPc,
+    decodedTree, decodedK, decodedOk, long, preservedStor, preservedMemory, decodedData,
+    a, x, y, R, gas, tailEq, decodedImage⟩ :=
+    sync_balance_reply_decoded_from_cursor .first placed tree
+      (by rw [nodePc]; rfl) outcome (by rw [nodeSevm]; exact fork)
+      nodeStack nodeData bound ptr actualReadWord
+  have decodedStor : decoded.devm.getStor = occurrence.node.devm.getStor :=
+    preservedStor.trans nodeStor
+  have decodedMemory : decoded.devm.memory = balanceReplyMemory getterInitMemory ctx.pair out :=
+    preservedMemory.trans nodeMemory
   have decodedRep : WriterRep K (decoded.devm.getStor ctx.pair) {current.state with unlocked := 0} := by
     rw [decodedStor]
     exact nodeRep
   refine ⟨occurrence, returned, node, cursor, parent, child, dp, na, childCode, avail, g, S, out,
     kept, decoded, decodedCursor, decodedFree, nodePath.trans decodedFree.1,
-    decodedActualPc, decodedSevm.trans (decodeEntrySevm.trans (decoderSevm.trans nodeSevm)),
-    decodedOutcome.trans (decodeEntryOutcome.trans (decoderOutcome.trans outcome)), decodedTree,
-    decodedK.trans (decodeShape.2.trans decoderK), decodedOk, long, decodedRep,
-    decodedStor, decodedMemory, decodedData, afterPop.stack, ?_⟩
-  rw [loadState]
+    decodedPc.trans (by rfl), decodedSevm.trans nodeSevm,
+    decodedOutcome.trans outcome, decodedTree, decodedK, decodedOk, long, decodedRep,
+    decodedStor, decodedMemory, decodedData, R, ?_⟩
+  rw [decodedImage]
   rfl
 
 theorem sync_root_second_static_finite_request {K : WriterKey → Prop}
@@ -4880,5 +5108,439 @@ theorem sync_root_second_static_finite_request {K : WriterKey → Prop}
     secondCalldata, second.filled, secondEdge, secondReturnedPc, secondReturnedSevm,
     secondReturnedOutcome, secondResult, secondPrimitive, secondReturnedTree, finalK,
     secondReturnedOk, ordered⟩
+
+theorem sync_root_second_static_finite_request_reply_turns_decoded {K : WriterKey → Prop}
+    {current : Checkpoint} {ctx : Context} {sevm : Sevm} {b post : Devm} {G : Nat}
+    (pair : ctx.pair = sevm.currentTarget)
+    (rep : WriterRep K (b.getStor ctx.pair) current.state)
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    (installed : some (b.getCode ctx.pair).toList = sem.image)
+    (time : ctx.timestamp = sevm.benvStat.time)
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+    let frame := syncSourceLockedFrame current ctx
+    let request := requestFor .syncBalance0 current.state.token0 (.balanceOf ctx.pair)
+    ∃ (occurrence : Exec.NinstOccurrence root) (returned node : Exec.Deriv)
+      (cursor : Cursor) (parent child : Devm) (dp : Bool) (na : Adr)
+      (childCode : ByteArray) (avail : Nat) (g : B256) (S : List B256) (out : Bytes),
+      (((Exec.Deriv.ExecFreeUntil root occurrence.node ∧ occurrence.node.pc = 0x1ee0 ∧
+      occurrence.node.sevm = sevm ∧ occurrence.instruction = Ninst.staticcall ∧
+      Exec.Deriv.ParentStep returned occurrence.node ∧
+      occurrence.stepResult = .ok returned.devm ∧
+      Ninst.RunWith (Cursor.DescOf occurrence.node) sevm occurrence.node.devm
+        Ninst.staticcall returned.devm ∧
+      Exec.Deriv.ExecFreeUntil returned node ∧ returned.pc = occurrence.node.pc + 1 ∧
+      Exec.Deriv.ParentPrefix root node ∧ node.pc = 0x1ef1 ∧ node.sevm = sevm ∧
+      node.exn = .ok post ∧ cursor.f = t_1ef1_c31 ∧
+      (∃ k K, cursor.K = k :: K ∧ k.f = t_0257_c78) ∧ CursorOK code cert node cursor ∧
+      WriterRep K (occurrence.node.devm.getStor ctx.pair) {current.state with unlocked := 0} ∧
+      occurrence.node.devm.memory = balanceRequestMemory getterInitMemory ctx.pair ∧
+      occurrence.node.devm.stack = g :: current.state.token0.toB256 :: 128 :: 36 :: 128 :: 32 :: S ∧
+      (occurrence.node.devm.memory.read 128 36).1 = request.calldata ∧
+      StaticCallPost occurrence.node.devm returned.devm S occurrence.node.devm.memory
+        128 36 128 32 1 out ∧ out.length < 2^256 ∧
+      returned.devm.returnData = out ∧ child.output = out ∧ child.error.isSome = false ∧
+      Xlot.Filled occurrence.slot ∧
+      ProcessMessage
+        (callMsg sevm parent (min g.toNat (except64th avail)) 0 ctx.pair
+          current.state.token0 na true true request.calldata childCode dp)
+        occurrence.slot (.ok child) ∧
+      (Resume.call parent 128 32).run (.ok child) = .ok returned.devm ∧
+      ((getDelegatedCodeAddress (occurrence.node.devm.getCode current.state.token0) = none ∧
+          na = current.state.token0 ∧ childCode = occurrence.node.devm.getCode current.state.token0 ∧ dp = false) ∨
+        (∃ d, getDelegatedCodeAddress (occurrence.node.devm.getCode current.state.token0) = some d ∧
+          na = d ∧ childCode = occurrence.node.devm.getCode d ∧ dp = true)) ∧
+      Evm.step ⟨occurrence.node.pc, occurrence.node.sevm, occurrence.node.devm⟩ =
+        .spawn (Frame.ofCall
+          (callMsg sevm parent (min g.toNat (except64th avail)) 0 ctx.pair
+            current.state.token0 na true true request.calldata childCode dp))
+          (Resume.call parent 128 32) (occurrence.node.pc + 1)) ∧
+      some (occurrence.node.devm.getCode ctx.pair).toList = sem.image ∧
+      Exec.descendantFramePaths [] 0 run = Exec.descendantFramePaths [] 0 occurrence.node.exc ∧
+      ((occurrence.slot = .none ∧
+          ExactTurns frame request 0 .done
+            { complete := true, frame := frame, childReturns := [] }) ∨
+        ∃ (childEvm : Evm) (raw : Execution) (callee : Jaune.Frame)
+          (resume : Resume) (pc' : Nat)
+          (childRun : Exec childEvm.pc childEvm.sta childEvm.dyna raw)
+          (next : Exec pc' occurrence.node.sevm returned.devm occurrence.node.exn)
+          (spawn : Evm.step ⟨occurrence.node.pc, occurrence.node.sevm, occurrence.node.devm⟩ =
+            .spawn callee resume pc')
+          (enter : callee.enter = .run childEvm)
+          (resumed : resume.run (callee.settle raw) = .ok returned.devm),
+          occurrence.slot = .some ⟨childEvm, raw⟩ ∧
+          occurrence.node.exc = .runOk spawn enter childRun resumed next ∧
+          ((∀ located ∈
+            (if Jaune.Frame.settlementCommits callee raw = true then
+              (Exec.retainedTargetTurnsAt ctx.pair [0] childRun).filterMap Sum.getRight?
+            else []),
+            WriterFreshKeys K (staticViewDecodedKeys located.frame.sevm)) →
+            ∃ views : List StaticViewTurn,
+              views.map Prod.fst =
+                (if Jaune.Frame.settlementCommits callee raw = true then
+              (Exec.retainedTargetTurnsAt ctx.pair [0] childRun).filterMap Sum.getRight?
+            else []) ∧
+              (∀ picked ∈ views, picked.Authentic frame) ∧
+              ExactTurns frame request 0 (staticViewTranscript views .done)
+                { complete := true, frame := frame,
+                  childReturns := staticViewChildReturns frame request 0 views }))) ∧
+      node.devm.getStor = occurrence.node.devm.getStor ∧
+      node.devm.memory = balanceReplyMemory getterInitMemory ctx.pair out ∧
+      node.devm.returnData = out ∧ node.devm.stack = 0 :: S) ∧
+      ∃ (decoded : Exec.Deriv) (decodedCursor : Cursor),
+        Exec.Deriv.ExecFreeUntil node decoded ∧
+        Exec.Deriv.ParentPrefix root decoded ∧
+        decoded.pc = 0x1f0a ∧ decoded.sevm = sevm ∧ decoded.exn = .ok post ∧
+        decodedCursor.f = SyncBalanceSite.first.afterDecodeTree ∧
+        decodedCursor.K = cursor.K ∧ CursorOK code cert decoded decodedCursor ∧
+        32 ≤ out.length ∧
+        WriterRep K (decoded.devm.getStor ctx.pair) {current.state with unlocked := 0} ∧
+        decoded.devm.getStor = occurrence.node.devm.getStor ∧
+        decoded.devm.memory = balanceReplyMemory getterInitMemory ctx.pair out ∧
+        decoded.devm.returnData = out ∧
+        ∃ R : List B256, decoded.devm.stack = Bytes.toB256 (out.take 32) :: R ∧
+          let secondRequest := requestFor .syncBalance1 current.state.token1 (.balanceOf ctx.pair)
+          ∃ (second : Exec.NinstOccurrence root) (secondReturned : Exec.Deriv)
+            (secondCursor : Cursor) (g1 : B256),
+            Exec.Deriv.ExecFreeUntil decoded second.node ∧
+            Exec.Deriv.ExecFreeUntil returned second.node ∧
+            Exec.Deriv.ParentPrefix root second.node ∧
+            second.node.pc = 0x1f7d ∧ second.node.sevm = sevm ∧
+            second.node.exn = .ok post ∧ second.instruction = Ninst.staticcall ∧
+            WriterRep K (second.node.devm.getStor ctx.pair) {current.state with unlocked := 0} ∧
+            second.node.devm.getStor = occurrence.node.devm.getStor ∧
+            second.node.devm.memory = balanceRequestMemory
+              (balanceReplyMemory getterInitMemory ctx.pair out) ctx.pair ∧
+            second.node.devm.returnData = out ∧
+            second.node.devm.stack = g1 :: current.state.token1.toB256 ::
+              128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
+              current.state.token1.toB256 :: Bytes.toB256 (out.take 32) :: R ∧
+            (second.node.devm.memory.read 128 36).1 = secondRequest.calldata ∧
+            Xlot.Filled second.slot ∧
+            Exec.Deriv.ParentStep secondReturned second.node ∧
+            secondReturned.pc = 0x1f7e ∧ secondReturned.sevm = sevm ∧
+            secondReturned.exn = .ok post ∧ second.stepResult = .ok secondReturned.devm ∧
+            Ninst.RunWith (Cursor.DescOf second.node) sevm second.node.devm
+              Ninst.staticcall secondReturned.devm ∧
+            secondCursor.f = syncSecondAfterCall ∧ secondCursor.K = cursor.K ∧
+            CursorOK code cert secondReturned secondCursor ∧
+            (∃ firstChildFrames : List Exec.LocatedFrame,
+              Exec.descendantFramePaths [] 0 run =
+                firstChildFrames ++ Exec.descendantFramePaths [] 1 second.node.exc) ∧
+            ∃ (secondNode : Exec.Deriv) (secondAt : Cursor)
+              (parent1 child1 : Devm) (dp1 : Bool) (na1 : Adr)
+              (childCode1 : ByteArray) (avail1 : Nat) (out1 : Bytes),
+              let secondTail := [164, 0x70a08231, current.state.token1.toB256,
+                Bytes.toB256 (out.take 32)] ++ R
+              let secondFrame := syncSourceSecondFrame current ctx
+              let msg1 := callMsg sevm parent1 (min g1.toNat (except64th avail1)) 0 ctx.pair
+                current.state.token1 na1 true true secondRequest.calldata childCode1 dp1
+              Exec.Deriv.ExecFreeUntil secondReturned secondNode ∧
+              Exec.Deriv.ParentPrefix root secondNode ∧ secondNode.pc = 0x1f8e ∧
+              secondNode.sevm = sevm ∧ secondNode.exn = .ok post ∧
+              secondAt.f = SyncBalanceSite.second.returnTree ∧ secondAt.K = cursor.K ∧
+              CursorOK code cert secondNode secondAt ∧
+              StaticCallPost second.node.devm secondReturned.devm secondTail second.node.devm.memory
+                128 36 128 32 1 out1 ∧ out1.length < 2^256 ∧
+              StaticAnswered sevm second.node.devm current.state.token1 secondRequest.calldata out1 ∧
+              secondReturned.devm.returnData = out1 ∧ child1.output = out1 ∧ child1.error.isSome = false ∧
+              0 < sevm.depth ∧
+              second.node.devm.stack = g1 :: current.state.token1.toB256 ::
+                128 :: 36 :: 128 :: 32 :: parent1.stack ∧ parent1.stack = secondTail ∧
+              parent1.state = second.node.devm.state ∧
+              parent1.memory = second.node.devm.memory.extends [(128, 36), (128, 32)] ∧
+              parent1.logs = second.node.devm.logs ∧ parent1.output = second.node.devm.output ∧
+              ((getDelegatedCodeAddress (second.node.devm.getCode current.state.token1) = none ∧
+                  na1 = current.state.token1 ∧ childCode1 = second.node.devm.getCode current.state.token1 ∧ dp1 = false) ∨
+                (∃ d, getDelegatedCodeAddress (second.node.devm.getCode current.state.token1) = some d ∧
+                  na1 = d ∧ childCode1 = second.node.devm.getCode d ∧ dp1 = true)) ∧
+              ProcessMessage msg1 second.slot (.ok child1) ∧
+              (Resume.call parent1 128 32).run (.ok child1) = .ok secondReturned.devm ∧
+              secondReturned.devm.state = child1.state ∧
+              secondReturned.devm.memory = parent1.memory.write 128 (child1.output.take 32) ∧
+              secondReturned.devm.stack = 1 :: parent1.stack ∧
+              Evm.step ⟨second.node.pc, second.node.sevm, second.node.devm⟩ =
+                .spawn (Frame.ofCall msg1) (Resume.call parent1 128 32) (second.node.pc + 1) ∧
+              secondNode.devm.getStor = second.node.devm.getStor ∧
+              secondNode.devm.memory = balanceReplyMemory
+                (balanceReplyMemory getterInitMemory ctx.pair out) ctx.pair out1 ∧
+              secondNode.devm.returnData = out1 ∧ secondNode.devm.stack = 0 :: secondTail ∧
+              some (second.node.devm.getCode ctx.pair).toList = sem.image ∧
+              ((second.slot = .none ∧ (Frame.ofCall msg1).enter = .done (.ok child1) ∧
+                  ExactTurns secondFrame secondRequest 0 .done
+                    { complete := true, frame := secondFrame, childReturns := [] }) ∨
+                ∃ (childEvm1 : Evm) (raw1 : Execution)
+                  (childRun1 : Exec childEvm1.pc childEvm1.sta childEvm1.dyna raw1)
+                  (next1 : Exec (second.node.pc + 1) second.node.sevm secondReturned.devm second.node.exn)
+                  (spawn1 : Evm.step ⟨second.node.pc, second.node.sevm, second.node.devm⟩ =
+                    .spawn (Frame.ofCall msg1) (Resume.call parent1 128 32) (second.node.pc + 1))
+                  (enter1 : (Frame.ofCall msg1).enter = .run childEvm1)
+                  (resumed1 : (Resume.call parent1 128 32).run ((Frame.ofCall msg1).settle raw1) =
+                    .ok secondReturned.devm),
+                  second.slot = .some ⟨childEvm1, raw1⟩ ∧
+                  second.node.exc = .runOk spawn1 enter1 childRun1 resumed1 next1 ∧
+                  .ok child1 = (Frame.ofCall msg1).settle raw1 ∧ Execution.commits raw1 = true ∧
+                  childEvm1.pc = 0 ∧ childEvm1.sta.code = childCode1 ∧
+                  childEvm1.sta.codeAddress = na1 ∧ childEvm1.sta.currentTarget = current.state.token1 ∧
+                  childEvm1.sta.caller = ctx.pair ∧ childEvm1.sta.value = 0 ∧
+                  childEvm1.sta.data = secondRequest.calldata ∧ childEvm1.sta.isStatic = true ∧
+                  childEvm1.sta.benvStat = sevm.benvStat ∧
+                  ((∀ located ∈
+                    (if Jaune.Frame.settlementCommits (Frame.ofCall msg1) raw1 = true then
+                      (Exec.retainedTargetTurnsAt ctx.pair [1] childRun1).filterMap Sum.getRight?
+                    else []), WriterFreshKeys K (staticViewDecodedKeys located.frame.sevm)) →
+                    ∃ views1 : List StaticViewTurn,
+                      views1.map Prod.fst =
+                        (if Jaune.Frame.settlementCommits (Frame.ofCall msg1) raw1 = true then
+                          (Exec.retainedTargetTurnsAt ctx.pair [1] childRun1).filterMap Sum.getRight?
+                        else []) ∧
+                      (∀ picked ∈ views1, picked.Authentic secondFrame) ∧
+                      ExactTurns secondFrame secondRequest 0 (staticViewTranscript views1 .done)
+                        { complete := true, frame := secondFrame,
+                          childReturns := staticViewChildReturns secondFrame secondRequest 0 views1 })) ∧
+              ∃ (decoded1 : Exec.Deriv) (decodedAt1 : Cursor),
+                Exec.Deriv.ExecFreeUntil secondNode decoded1 ∧
+                Exec.Deriv.ParentPrefix root decoded1 ∧
+                decoded1.pc = 0x1fa7 ∧ decoded1.sevm = sevm ∧ decoded1.exn = .ok post ∧
+                decodedAt1.f = SyncBalanceSite.second.afterDecodeTree ∧ decodedAt1.K = cursor.K ∧
+                CursorOK code cert decoded1 decodedAt1 ∧ 32 ≤ out1.length ∧
+                WriterRep K (decoded1.devm.getStor ctx.pair) {current.state with unlocked := 0} ∧
+                decoded1.devm.getStor = occurrence.node.devm.getStor ∧
+                decoded1.devm.memory = balanceReplyMemory
+                  (balanceReplyMemory getterInitMemory ctx.pair out) ctx.pair out1 ∧
+                decoded1.devm.returnData = out1 ∧
+                decoded1.devm.stack = Bytes.toB256 (out1.take 32) :: Bytes.toB256 (out.take 32) :: R := by
+  obtain ⟨occurrence, returned, node, cursor, parent, child, dp, na, childCode, avail, g, S, out,
+    original, decoded, decodedCursor, decodedFree, decodedPath, decodedPc, decodedSevm,
+    decodedOutcome, decodedTree, decodedK, decodedOk, long, decodedRep, decodedStor,
+    decodedMemory, decodedData, R, decodedStack, second, secondReturned, secondCursor, g1,
+    secondFree, returnedSecondFree, secondPath, secondPc, secondSevm, secondOutcome,
+    secondInstruction, secondRep, secondStor, secondMemory, secondData, secondStack,
+    secondCalldata, secondFilled, secondEdge, secondReturnedPc, secondReturnedSevm,
+    secondReturnedOutcome, secondResult, secondPrimitive, secondTree, secondK, secondOk, ordered⟩ :=
+    sync_root_second_static_finite_request pair rep sem image installed time codeEq fork selector run
+  let secondRequest := requestFor .syncBalance1 current.state.token1 (.balanceOf ctx.pair)
+  let secondFrame := syncSourceSecondFrame current ctx
+  let secondTail := [164, 0x70a08231, current.state.token1.toB256,
+    Bytes.toB256 (out.take 32)] ++ R
+  have actualStack : second.node.devm.stack = g1 :: current.state.token1.toB256 ::
+      128 :: 36 :: 128 :: 32 :: secondTail := secondStack
+  obtain ⟨secondNode, secondAt, out1, returnedNodeFree, secondNodePc, secondNodeSevm,
+    secondNodeOutcome, secondNodeTree, secondNodeK, secondNodeOk, hpost1, bound1,
+    answered1, nodeStor1, nodeMemory1, nodeData1, nodeStack1⟩ :=
+    sync_second_static_answered_from_step second secondReturned secondCursor fork secondPrimitive
+      secondReturnedPc secondReturnedSevm secondReturnedOutcome secondTree secondOk actualStack
+  obtain ⟨parent1, child1, dp1, na1, childCode1, avail1, depth1, childStack1,
+    parentState1, parentMemory1, parentLogs1, parentOutput1, authentication1,
+    filled1, process1, clean1, resumed1, returnedState1, returnedData1,
+    returnedMemory1, returnedStack1, primitiveSpawn1, driverSpawn1, entry1⟩ :=
+    sync_second_static_settlement_from_occurrence second secondReturned fork secondSevm
+      secondInstruction secondResult actualStack hpost1 secondPath ordered
+  let msg1 := callMsg sevm parent1 (min g1.toNat (except64th avail1)) 0 ctx.pair
+    current.state.token1 na1 true true secondRequest.calldata childCode1 dp1
+  have actualMsg1 :
+      callMsg sevm parent1 (min g1.toNat (except64th avail1)) 0 sevm.currentTarget
+        current.state.token1.toB256.toAdr na1 true true
+        (second.node.devm.memory.read (128 : B256).toNat (36 : B256).toNat).1 childCode1 dp1 = msg1 := by
+    change callMsg sevm parent1 (min g1.toNat (except64th avail1)) 0 sevm.currentTarget
+      current.state.token1.toB256.toAdr na1 true true
+      (second.node.devm.memory.read 128 36).1 childCode1 dp1 = msg1
+    rw [← pair, toAdr_toB256, secondCalldata]
+  have actualProcess1 : ProcessMessage msg1 second.slot (.ok child1) := by
+    rw [actualMsg1] at process1
+    exact process1
+  have actualSpawn1 : Evm.step ⟨second.node.pc, second.node.sevm, second.node.devm⟩ =
+      .spawn (Frame.ofCall msg1) (Resume.call parent1 128 32) (second.node.pc + 1) := by
+    rw [actualMsg1] at driverSpawn1
+    exact driverSpawn1
+  have actualAnswered1 : StaticAnswered sevm second.node.devm current.state.token1
+      secondRequest.calldata out1 := by
+    change StaticAnswered sevm second.node.devm current.state.token1.toB256.toAdr
+      (second.node.devm.memory.read 128 36).1 out1 at answered1
+    rw [toAdr_toB256, secondCalldata] at answered1
+    exact answered1
+  have parentTail1 : parent1.stack = secondTail := by
+    have same := childStack1.symm.trans actualStack
+    simpa only [List.cons.injEq, true_and] using same
+  have childOutput1 : child1.output = out1 := returnedData1.symm.trans hpost1.returnData
+  have replyMemory1 : secondNode.devm.memory = balanceReplyMemory
+      (balanceReplyMemory getterInitMemory ctx.pair out) ctx.pair out1 := by
+    rw [nodeMemory1, secondMemory]
+    rfl
+  have rootNonempty : (b.getCode ctx.pair).toList ≠ [] := by
+    intro empty
+    exact sem.ne_nil (installed.symm.trans (congrArg some empty)) rfl
+  have sameCode : second.node.devm.getCode ctx.pair = b.getCode ctx.pair :=
+    (Blanc.Exec.Deriv.ParentPrefix.balSum_le_getCode secondPath).2 ctx.pair rootNonempty
+  have secondInstalled : some (second.node.devm.getCode ctx.pair).toList = sem.image := by
+    rw [sameCode]
+    exact installed
+  have callTime : secondFrame.context.timestamp = second.node.sevm.benvStat.time := by
+    change ctx.timestamp = second.node.sevm.benvStat.time
+    rw [secondSevm]
+    exact time
+  have filtered := sync_static_slot_filtered_turns_inv (frame := secondFrame)
+    (request := secondRequest) (path := [1]) second secondReturned secondInstruction secondResult
+    sem image secondInstalled secondRep callTime (by rw [secondSevm]; exact fork)
+  have joined : ((second.slot = .none ∧ (Frame.ofCall msg1).enter = .done (.ok child1) ∧
+      ExactTurns secondFrame secondRequest 0 .done
+        { complete := true, frame := secondFrame, childReturns := [] }) ∨
+    ∃ (childEvm1 : Evm) (raw1 : Execution)
+      (childRun1 : Exec childEvm1.pc childEvm1.sta childEvm1.dyna raw1)
+      (next1 : Exec (second.node.pc + 1) second.node.sevm secondReturned.devm second.node.exn)
+      (spawn1 : Evm.step ⟨second.node.pc, second.node.sevm, second.node.devm⟩ =
+        .spawn (Frame.ofCall msg1) (Resume.call parent1 128 32) (second.node.pc + 1))
+      (enter1 : (Frame.ofCall msg1).enter = .run childEvm1)
+      (resumed1 : (Resume.call parent1 128 32).run ((Frame.ofCall msg1).settle raw1) =
+        .ok secondReturned.devm),
+      second.slot = .some ⟨childEvm1, raw1⟩ ∧
+      second.node.exc = .runOk spawn1 enter1 childRun1 resumed1 next1 ∧
+      .ok child1 = (Frame.ofCall msg1).settle raw1 ∧ Execution.commits raw1 = true ∧
+      childEvm1.pc = 0 ∧ childEvm1.sta.code = childCode1 ∧
+      childEvm1.sta.codeAddress = na1 ∧ childEvm1.sta.currentTarget = current.state.token1 ∧
+      childEvm1.sta.caller = ctx.pair ∧ childEvm1.sta.value = 0 ∧
+      childEvm1.sta.data = secondRequest.calldata ∧ childEvm1.sta.isStatic = true ∧
+      childEvm1.sta.benvStat = sevm.benvStat ∧
+      ((∀ located ∈
+        (if Jaune.Frame.settlementCommits (Frame.ofCall msg1) raw1 = true then
+          (Exec.retainedTargetTurnsAt ctx.pair [1] childRun1).filterMap Sum.getRight?
+        else []), WriterFreshKeys K (staticViewDecodedKeys located.frame.sevm)) →
+        ∃ views1 : List StaticViewTurn,
+          views1.map Prod.fst =
+            (if Jaune.Frame.settlementCommits (Frame.ofCall msg1) raw1 = true then
+              (Exec.retainedTargetTurnsAt ctx.pair [1] childRun1).filterMap Sum.getRight?
+            else []) ∧
+          (∀ picked ∈ views1, picked.Authentic secondFrame) ∧
+          ExactTurns secondFrame secondRequest 0 (staticViewTranscript views1 .done)
+            { complete := true, frame := secondFrame,
+              childReturns := staticViewChildReturns secondFrame secondRequest 0 views1 })) := by
+    rcases entry1 with ⟨none, done⟩ | ⟨childEvm1, raw1, slot1, enter1, childNonempty1,
+      settled1, committed1, benv1, transferred1, initial1, childPc1, childCodeEq1,
+      childCodeAddress1, childTarget1, childCaller1, childValue1, childData1, childStatic1,
+      childBenv1, childRun1, next1, spawn1, entryProof1, resumed1, exactRun1, located1⟩
+    · have actualDone : (Frame.ofCall msg1).enter = .done (.ok child1) := by
+        simpa only [actualMsg1] using done
+      rcases filtered with ⟨none2, turns⟩ | ⟨childEvm2, raw2, callee2, resume2, pc2,
+        childRun2, next2, spawn2, enter2, resumed2, slot2, exactRun2, turns2⟩
+      · exact Or.inl ⟨none, actualDone, turns⟩
+      · rw [none] at slot2
+        cases slot2
+    · have actualEntry1 : (Frame.ofCall msg1).enter = .run childEvm1 := by
+        simpa only [actualMsg1] using entryProof1
+      have offset128 : (128 : B256).toNat = 128 := rfl
+      have size32 : (32 : B256).toNat = 32 := rfl
+      have size36 : (36 : B256).toNat = 36 := rfl
+      have normalizedMsg1 :
+          callMsg sevm parent1 (min g1.toNat (except64th avail1)) 0 sevm.currentTarget
+            current.state.token1.toB256.toAdr na1 true true
+            (second.node.devm.memory.read 128 36).1 childCode1 dp1 = msg1 := actualMsg1
+      have actualResumed1 : (Resume.call parent1 128 32).run ((Frame.ofCall msg1).settle raw1) =
+          .ok secondReturned.devm := by
+        rw [actualMsg1] at resumed1
+        simpa only [offset128, size32] using resumed1
+      have actualRun1 : second.node.exc =
+          .runOk actualSpawn1 actualEntry1 childRun1 actualResumed1 next1 := by
+        simpa only [offset128, size32, size36, normalizedMsg1] using exactRun1
+      have actualSettled1 : .ok child1 = (Frame.ofCall msg1).settle raw1 := by
+        simpa only [actualMsg1] using settled1
+      rcases filtered with ⟨none2, turns⟩ | ⟨childEvm2, raw2, callee2, resume2, pc2,
+        childRun2, next2, spawn2, enter2, resumed2, slot2, exactRun2, turns2⟩
+      · rw [slot1] at none2
+        cases none2
+      · have slotAgreement := slot2.symm.trans slot1
+        injection slotAgreement with pairAgreement
+        injection pairAgreement with childAgreement rawAgreement
+        subst childEvm2
+        subst raw2
+        have spawnAgreement := spawn2.symm.trans actualSpawn1
+        injection spawnAgreement with calleeAgreement resumeAgreement pcAgreement
+        subst callee2
+        subst resume2
+        subst pc2
+        have historyAgreement := exactRun2.symm.trans actualRun1
+        injection historyAgreement with pcEq sevmEq devmEq frameEq resumeEq endPcEq
+          childEq rawEq returnedEq outcomeEq sameChildRun sameNext
+        subst childRun2
+        refine Or.inr ⟨childEvm1, raw1, childRun1, next1, actualSpawn1, actualEntry1,
+          actualResumed1, slot1, actualRun1, actualSettled1, committed1, childPc1,
+          childCodeEq1, childCodeAddress1, ?_, ?_, childValue1, ?_, childStatic1,
+          childBenv1, ?_⟩
+        · simpa only [toAdr_toB256] using childTarget1
+        · simpa only [← pair] using childCaller1
+        · change childEvm1.sta.data = (second.node.devm.memory.read 128 36).1 at childData1
+          rw [secondCalldata] at childData1
+          exact childData1
+        · change ((∀ located ∈
+            (if Jaune.Frame.settlementCommits (Frame.ofCall msg1) raw1 = true then
+              (Exec.retainedTargetTurnsAt ctx.pair [1] childRun1).filterMap Sum.getRight?
+            else []), WriterFreshKeys K (staticViewDecodedKeys located.frame.sevm)) →
+            ∃ views1 : List StaticViewTurn,
+              views1.map Prod.fst =
+                (if Jaune.Frame.settlementCommits (Frame.ofCall msg1) raw1 = true then
+                  (Exec.retainedTargetTurnsAt ctx.pair [1] childRun1).filterMap Sum.getRight?
+                else []) ∧
+              (∀ picked ∈ views1, picked.Authentic secondFrame) ∧
+              ExactTurns secondFrame secondRequest 0 (staticViewTranscript views1 .done)
+                { complete := true, frame := secondFrame,
+                  childReturns := staticViewChildReturns secondFrame secondRequest 0 views1 }) at turns2
+          exact turns2
+  have basePtr : PtrMem 128 192 (balanceReplyMemory getterInitMemory ctx.pair out) :=
+    balanceReplyMemory_ptr out (balanceRequestMemory_ptr getterInitMemory_ptr ctx.pair)
+  have replyPtr1 : PtrMem 128 192 secondNode.devm.memory := by
+    rw [replyMemory1]
+    exact balanceReplyMemory_ptr out1 (balanceRequestMemory_ptr basePtr ctx.pair)
+  have readWord1 : 32 ≤ out1.length →
+      Bytes.toB256 (secondNode.devm.memory.read 128 32).1 = Bytes.toB256 (out1.take 32) := by
+    intro long1
+    rw [replyMemory1]
+    exact balanceReplyMemory_word basePtr.wf ctx.pair out1 long1
+  obtain ⟨decoded1, decodedAt1, decodedFree1, decodedSevm1, decodedOutcome1, decodedPc1,
+    decodedTree1, decodedK1, decodedOk1, long1, decodedStor1, decodedMemory1, decodedData1,
+    a1, x1, y1, tail1, gas1, metadata1, decodedImage1⟩ :=
+    sync_balance_reply_decoded_from_cursor .second secondNodeOk secondNodeTree
+      (by rw [secondNodePc]; rfl) secondNodeOutcome (by rw [secondNodeSevm]; exact fork)
+      nodeStack1 nodeData1 bound1 replyPtr1 readWord1
+  have actualTail1 : tail1 = Bytes.toB256 (out.take 32) :: R := by
+    change (164 : B256) :: 0x70a08231 :: current.state.token1.toB256 ::
+      Bytes.toB256 (out.take 32) :: R = a1 :: x1 :: y1 :: tail1 at metadata1
+    exact (List.cons.inj (List.cons.inj (List.cons.inj metadata1).2).2).2.symm
+  have finiteDecoded1 : WriterRep K (decoded1.devm.getStor ctx.pair)
+      {current.state with unlocked := 0} := by
+    rw [decodedStor1, nodeStor1]
+    exact secondRep
+  have wholeDecodedStor1 : decoded1.devm.getStor = occurrence.node.devm.getStor :=
+    decodedStor1.trans (nodeStor1.trans secondStor)
+  have wholeDecodedMemory1 : decoded1.devm.memory = balanceReplyMemory
+      (balanceReplyMemory getterInitMemory ctx.pair out) ctx.pair out1 :=
+    decodedMemory1.trans replyMemory1
+  have wholeDecodedStack1 : decoded1.devm.stack = Bytes.toB256 (out1.take 32) ::
+      Bytes.toB256 (out.take 32) :: R := by
+    rw [decodedImage1, actualTail1]
+    rfl
+  have secondNodePath : Exec.Deriv.ParentPrefix
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ secondNode :=
+    (secondPath.snoc secondEdge).trans returnedNodeFree.1
+  refine ⟨occurrence, returned, node, cursor, parent, child, dp, na, childCode, avail, g, S, out,
+    original, decoded, decodedCursor, decodedFree, decodedPath, decodedPc, decodedSevm,
+    decodedOutcome, decodedTree, decodedK, decodedOk, long, decodedRep, decodedStor,
+    decodedMemory, decodedData, R, decodedStack, second, secondReturned, secondCursor, g1,
+    secondFree, returnedSecondFree, secondPath, secondPc, secondSevm, secondOutcome,
+    secondInstruction, secondRep, secondStor, secondMemory, secondData, secondStack,
+    secondCalldata, secondFilled, secondEdge, secondReturnedPc, secondReturnedSevm,
+    secondReturnedOutcome, secondResult, secondPrimitive, secondTree, secondK, secondOk, ordered,
+    secondNode, secondAt, parent1, child1, dp1, na1, childCode1, avail1, out1,
+    returnedNodeFree, secondNodePath, secondNodePc, secondNodeSevm, secondNodeOutcome,
+    secondNodeTree, secondNodeK.trans secondK, secondNodeOk, hpost1, bound1, actualAnswered1,
+    hpost1.returnData, childOutput1, clean1, depth1, childStack1, parentTail1,
+    parentState1, parentMemory1, parentLogs1, parentOutput1, ?_, actualProcess1,
+    resumed1, returnedState1, returnedMemory1, returnedStack1, actualSpawn1, nodeStor1,
+    replyMemory1, nodeData1, nodeStack1, secondInstalled, joined, decoded1, decodedAt1,
+    decodedFree1, secondNodePath.trans decodedFree1.1, decodedPc1.trans (by rfl),
+    decodedSevm1.trans secondNodeSevm, decodedOutcome1.trans secondNodeOutcome,
+    decodedTree1, decodedK1.trans (secondNodeK.trans secondK), decodedOk1, long1,
+    finiteDecoded1, wholeDecodedStor1, wholeDecodedMemory1, decodedData1, wholeDecodedStack1⟩
+  simpa only [toAdr_toB256] using authentication1
 
 end Blanc.Lift.UniswapV2Pair
