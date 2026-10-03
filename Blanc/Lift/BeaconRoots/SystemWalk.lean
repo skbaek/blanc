@@ -523,27 +523,4 @@ theorem processUncheckedSystemTransaction_beaconRoots {benv : Benv}
   rw [facts.2.2, State.get_setStorVal_ne _ _ _ different,
     State.get_setStorVal_ne _ _ _ different]
 
-theorem beaconRoots_trace_target_of_installed
-    {benv : Benv} {state : State} {out : MsgCallOutput}
-    (trace : SystemMessageTrace benv beaconRootsAddress
-      benv.stat.parentBeaconBlockRoot.toBytes state out)
-    (installed : SystemCodeInstalled benv.state) :
-    ∀ root ∈ trace.rawFrames, root.sevm.currentTarget = beaconRootsAddress := by
-  exact trace.rawFrames_target_of_installed (c := beaconRootsCode)
-    member installed
-
-theorem beaconRoots_no_foreign_write {benv : Benv} {pre : Devm} {out : Execution}
-    {sevm : Sevm} (run : Exec 0 sevm pre out)
-    (hsevm : sevm = systemSevm benv) (owner : Adr) (key : B256)
-    (different : beaconRootsAddress ≠ owner) :
-    Exec.NoRetainedWriteTo run owner key := by
-  subst sevm
-  obtain ⟨hreach, _, _⟩ := systemContracts_facts _ member
-  apply Exec.noRetainedWriteTo_of_frame_owners_ne run
-  intro root member
-  have hroot := Exec.rawFrameRoots_of_reach run
-    (noPushBefore_zero _ _) hreach root member
-  rw [hroot]
-  exact different
-
 end Blanc.Lift.BeaconRoots

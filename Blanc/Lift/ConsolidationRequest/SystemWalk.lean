@@ -35,26 +35,6 @@ private theorem system_push :
       0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe] =
       systemAddress.toB256 := rfl
 
-/-- Slot 2 holds the queue head. -/
-def queueHead (sevm : Sevm) (b : Devm) : B256 :=
-  b.getStorVal sevm.currentTarget 2
-
-/-- Slot 3 holds the queue tail. -/
-def queueTail (sevm : Sevm) (b : Devm) : B256 :=
-  b.getStorVal sevm.currentTarget 3
-
-/-- Pending consolidations: tail minus head. -/
-def queueDiff (sevm : Sevm) (b : Devm) : B256 :=
-  queueTail sevm b - queueHead sevm b
-
-/-- Slot 0 holds the excess consolidation balance. -/
-def oldExcess (sevm : Sevm) (b : Devm) : B256 :=
-  b.getStorVal sevm.currentTarget 0
-
-/-- Slot 1 holds the pending count. -/
-def pendingCount (sevm : Sevm) (b : Devm) : B256 :=
-  b.getStorVal sevm.currentTarget 1
-
 /-- Exact meta-state after reading tail first, then head. -/
 def setupBase (sevm : Sevm) (b : Devm) : Devm :=
   afterSload sevm (afterSload sevm b 3) 2

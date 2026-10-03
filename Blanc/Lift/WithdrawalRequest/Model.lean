@@ -40,9 +40,6 @@ def Coherent (state : State) : Prop := state.head + state.queue.length = state.t
 
 def fee (state : State) : Nat := fakeExp 1 state.excess feeUpdateFraction
 
-def fee? (state : State) : Option Nat :=
-  if state.excess = excessInhibitor then none else some (fee state)
-
 /-- The successful add-request state change; admission is carried by History. -/
 def submit (state : State) (entry : Entry) : State :=
   { state with

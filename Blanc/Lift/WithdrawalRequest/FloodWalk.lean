@@ -28,9 +28,6 @@ namespace Blanc.Lift.WithdrawalRequest.FloodWalk
 
 open Jaune Blanc.Lift
 
-/-- The looper's runtime bytes. -/
-def code : ByteArray := Blanc.Lift.FloodLooper.code
-
 /-- The looper's lifted program. -/
 def prog : List SFunc := Blanc.Lift.FloodLooper.cert.prog
 
@@ -41,10 +38,6 @@ theorem prog_head : prog[1]? = some Blanc.Lift.FloodLooper.t_0007_c1 := rfl
 /-- The looper's calldata: the 32-byte count word followed by the 56-byte
 submission payload. -/
 def calldata (k : B256) (payload : Bytes) : Bytes := k.toBytes ++ payload
-
-theorem calldata_length {k : B256} {payload : Bytes} (hp : payload.length = 56) :
-    (calldata k payload).length = 88 := by
-  simp only [calldata, List.length_append, B256.length_toBytes, hp]
 
 /-- The leftover gas a committed submission leaves the caller, for an incoming
 child gas grant `g`. -/

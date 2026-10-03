@@ -12,19 +12,10 @@ namespace Blanc.Lift.WithdrawalRequest
 open Blanc
 open Jaune
 
-def wordFeeFuel (fuel excess : Nat) : Option Nat :=
-  (WordFakeExponentialEval.runFuel fuel excess 17 1 17 0).map
-    (fun result => result.2 / 17)
-
 theorem word_run_2893 :
     WordFakeExponentialEval.runFuel 1000 2893 17 1 17 0 =
       some (457,
         545485220060489857066268109499810576327418688227975047986437738206577926843) := by
-  decide +kernel
-
-theorem word_fee_2893 :
-    wordFeeFuel 1000 2893 =
-      some 32087365885911168062721653499988857431024628719292649881555161070975172167 := by
   decide +kernel
 
 theorem word_run_2893_existing :
@@ -80,9 +71,5 @@ theorem fee_2893 {state : WithdrawalRequest.State}
     apply Option.some.inj
     exact fuelEq.symm.trans nat_fee_2893
   exact modelEq
-
-theorem fee_zero {state : WithdrawalRequest.State}
-    (excess : state.excess = 0) : WithdrawalRequest.fee state = 1 := by
-  exact WithdrawalRequest.fee_at_zero_excess state excess
 
 end Blanc.Lift.WithdrawalRequest

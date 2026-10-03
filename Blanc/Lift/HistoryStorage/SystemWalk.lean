@@ -266,27 +266,4 @@ theorem processUncheckedSystemTransaction_historyStorage {benv : Benv} {lastHash
       facts.1 facts.2.1
   · rw [facts.2.2, State.get_setStorVal_ne _ _ _ different]
 
-theorem historyStorage_trace_target_of_installed
-    {benv : Benv} {state : State} {out : MsgCallOutput}
-    (trace : SystemMessageTrace benv historyStorageAddress
-      (benv.stat.blockHashes.getLast?.getD 0).toBytes state out)
-    (installed : SystemCodeInstalled benv.state) :
-    ∀ root ∈ trace.rawFrames, root.sevm.currentTarget = historyStorageAddress := by
-  exact trace.rawFrames_target_of_installed (c := historyStorageCode)
-    member installed
-
-theorem historyStorage_no_foreign_write {benv : Benv} {pre : Devm} {out : Execution}
-    {sevm : Sevm} (run : Exec 0 sevm pre out)
-    (hsevm : sevm = systemSevm benv) (owner : Adr) (key : B256)
-    (different : historyStorageAddress ≠ owner) :
-    Exec.NoRetainedWriteTo run owner key := by
-  subst sevm
-  obtain ⟨hreach, _, _⟩ := systemContracts_facts _ member
-  apply Exec.noRetainedWriteTo_of_frame_owners_ne run
-  intro root member
-  have hroot := Exec.rawFrameRoots_of_reach run
-    (noPushBefore_zero _ _) hreach root member
-  rw [hroot]
-  exact different
-
 end Blanc.Lift.HistoryStorage

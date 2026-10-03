@@ -653,7 +653,6 @@ import Blanc.Lift.WithdrawalRequest.ResetOccurrence
 import Blanc.Lift.WithdrawalRequest.Creation.Deploy
 import Blanc.Lift.WithdrawalRequest.NatLiveness
 import Blanc.Lift.WithdrawalRequest.ModelBounds
-import Blanc.Lift.WithdrawalRequest.ModelFeeDomainLimit
 import Blanc.Lift.WithdrawalRequest.WordModelReplay
 import Blanc.BlockForward
 import Blanc.Lift.ExactWalkCallChild
