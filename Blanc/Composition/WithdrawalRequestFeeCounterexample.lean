@@ -1176,6 +1176,59 @@ theorem blockB_body {benv : Benv} {σ0 : Blanc.WithdrawalRequest.State} {lastHas
   exact applyBody_forward hfork hbeacon hlast hhistory (decode_single txB)
     (by rw [putIndex_single]; exact applyTransactions_single hproc') hdeposit hWrun hCrun
 
+theorem systemCodeInstalled_withdrawal {w : State} (h : SystemCodeInstalled w) :
+    w.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode :=
+  h (withdrawalRequestPredeployAddress, Blanc.withdrawalRequestCode)
+    (by simp only [systemContracts, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])
+
+/-! ## Block A -/
+
+/-- **Block A's body.** No transactions: the transaction fold is the identity,
+no deposits parse, and the 7002 code at the post-unchecked state chains back to
+`installed` through `stHistory`. -/
+theorem blockA_body {benv : Benv} {lastHash : B256}
+    (hfork : CoveredFork benv.stat.fork)
+    (installed : SystemCodeInstalled benv.state)
+    (hlast : benv.stat.blockHashes.getLast? = some lastHash)
+    (hCcode : ∀ benvTxs : Benv,
+      benvTxs.state.getCode consolidationRequestPredeployAddress = Blanc.consolidationRequestCode)
+    (hCempty : ∀ benvTxs : Benv, EmptyQueueAt benvTxs) :
+    ∃ (stW stC : State) (outW outC : MsgCallOutput),
+      applyBody benv [] [] =
+        .ok (stC, requestsOutput BlockOutput.init outW.returnData outC.returnData) ∧
+      processCheckedSystemTransaction
+        ((benv.withState (stBeacon benv)).withState (stHistory benv))
+        withdrawalRequestPredeployAddress [] = .ok (stW, outW) ∧
+      processCheckedSystemTransaction
+        (((benv.withState (stBeacon benv)).withState (stHistory benv)).withState stW)
+        consolidationRequestPredeployAddress [] = .ok (stC, outC) := by
+  have hbeaconCode := systemCodeInstalled_beaconRoots installed
+  have hhistoryCode := systemCodeInstalled_historyStorage installed
+  obtain ⟨hbeacon, -⟩ := stBeacon_step hfork hbeaconCode
+  obtain ⟨hhistory, -⟩ := stHistory_step hfork hbeaconCode hhistoryCode hlast
+  have hWcodeAt : (((benv.withState (stBeacon benv)).withState
+      (stHistory benv)).state).getCode
+      withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode := by
+    have h2 : (stHistory benv).getCode withdrawalRequestPredeployAddress =
+        benv.state.getCode withdrawalRequestPredeployAddress :=
+      stHistory_getCode_of_ne hfork hbeaconCode hhistoryCode hlast _
+        (by decide) (by decide)
+    exact h2.trans (systemCodeInstalled_withdrawal installed)
+  have htxs : applyTransactions [].putIndex
+      (((benv.withState (stBeacon benv)).withState (stHistory benv)))
+      BlockOutput.init =
+      .ok ((((benv.withState (stBeacon benv)).withState (stHistory benv))),
+        BlockOutput.init) := rfl
+  have hdeposit : parseDepositRequests BlockOutput.init = .ok [] :=
+    parseDepositRequests_of_no_receipts rfl
+  obtain ⟨stW, outW, hWrun⟩ := checkedW_of_installed
+    ((benv.withState (stBeacon benv)).withState (stHistory benv)) hfork hWcodeAt
+  obtain ⟨stC, outC, hCrun⟩ := checkedC_of_emptyQueue
+    (((benv.withState (stBeacon benv)).withState (stHistory benv)).withState stW)
+    hfork (hCcode _) (hCempty _)
+  refine ⟨stW, stC, outW, outC, ?_, hWrun, hCrun⟩
+  exact applyBody_forward hfork hbeacon hlast hhistory rfl htxs hdeposit hWrun hCrun
+
 /-! ## From a body to a configured block trace -/
 
 /-- A block without ommers or withdrawals whose header validates and commits to its
