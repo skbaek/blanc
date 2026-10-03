@@ -93,8 +93,7 @@ theorem temporalAccountAccessBase_mem (base : Devm) (a x : Adr) :
 
 theorem temporalAccountAccessBase_state (base : Devm) (a : Adr) :
     (temporalAccountAccessBase base a).state = base.state := by
-  unfold temporalAccountAccessBase Blanc.Lift.temporalAccountAccessBase
-  split <;> rfl
+  exact Blanc.Lift.temporalAccountAccessBase_state base a
 
 theorem temporalAccountAccessBase_getCode (base : Devm) (a x : Adr) :
     (temporalAccountAccessBase base a).getCode x = base.getCode x := by
@@ -108,13 +107,11 @@ theorem temporalAccountAccessBase_error (base : Devm) (a : Adr) :
 
 theorem temporalAccountAccessBase_output (base : Devm) (a : Adr) :
     (temporalAccountAccessBase base a).output = base.output := by
-  unfold temporalAccountAccessBase Blanc.Lift.temporalAccountAccessBase
-  split <;> rfl
+  exact Blanc.Lift.temporalAccountAccessBase_output base a
 
 theorem temporalAccountAccessBase_logs (base : Devm) (a : Adr) :
     (temporalAccountAccessBase base a).logs = base.logs := by
-  unfold temporalAccountAccessBase Blanc.Lift.temporalAccountAccessBase
-  split <;> rfl
+  exact Blanc.Lift.temporalAccountAccessBase_logs base a
 
 theorem temporalAccountAccessBase_refundCounter (base : Devm) (a : Adr) :
     (temporalAccountAccessBase base a).refundCounter = base.refundCounter := by
