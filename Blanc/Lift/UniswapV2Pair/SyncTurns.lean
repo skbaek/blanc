@@ -12,7 +12,7 @@ open Jaune
 
 /-- The initial seven raw instructions place the same actual execution at
 its first guard branch. Every cut starts from the root-derived cursor. -/
-theorem sync_root_guard_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
+theorem sync_root_guard_cursor_storage {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
@@ -21,7 +21,8 @@ theorem sync_root_guard_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
       node.sevm = sevm ∧ node.exn = .ok post ∧
       cursor.f = .branch t_000c_c0 t_0010_c0 ∧
       (∃ a, cursor.a = .const (Bytes.toB256 [0x00, 0x10]) :: a) ∧
-      CursorOK code cert node cursor ∧ Exec.Deriv.ExecFreeUntil root node := by
+      CursorOK code cert node cursor ∧ Exec.Deriv.ExecFreeUntil root node ∧
+      node.devm.getStor = b.getStor := by
   let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
   have ok : CursorOK code cert root (Cursor.start cert) :=
     cursor_start cert_check rfl codeEq
@@ -35,6 +36,11 @@ theorem sync_root_guard_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
     rw [beforeSevm]; exact fork
   obtain ⟨node, cursor, edge, stepPc, primitive, synthetic, stateful, placed⟩ :=
     cursor_next_forward cert_check beforeOk beforeTree beforeOutcome beforeFork
+  have storeLine : root.devm.getStor = before.devm.getStor :=
+    Line.of_inv Devm.getStor (by dsimp only [ns]; line_inv) line
+  have storePush : before.devm.getStor = node.devm.getStor :=
+    Ninst.Hinv.inv (f := Devm.getStor) primitive.toRun
+  have storage : node.devm.getStor = b.getStor := storePush.symm.trans storeLine.symm
   have prefixFree : Exec.Deriv.ExecFreeUntil root before := by
     apply linearFree
     intro n member x equal
@@ -56,7 +62,7 @@ theorem sync_root_guard_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
     omega
   refine ⟨node, cursor, path.snoc edge, pc,
     (Cursor.parentStep_sevm edge).trans beforeSevm,
-    sameOutcome.trans beforeOutcome, ?_, ?_, placed, actualFree⟩
+    sameOutcome.trans beforeOutcome, ?_, ?_, placed, actualFree, storage⟩
   · rcases atPush with ⟨f, pc, a, m, K⟩
     dsimp only at beforeTree
     subst f
@@ -73,8 +79,62 @@ theorem sync_root_guard_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
       subst abstract
       exact ⟨a, rfl⟩
 
+theorem sync_root_guard_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+    ∃ (node : Exec.Deriv) (cursor : Cursor),
+      Exec.Deriv.ParentPrefix root node ∧ node.pc = 0x000b ∧
+      node.sevm = sevm ∧ node.exn = .ok post ∧
+      cursor.f = .branch t_000c_c0 t_0010_c0 ∧
+      (∃ a, cursor.a = .const (Bytes.toB256 [0x00, 0x10]) :: a) ∧
+      CursorOK code cert node cursor ∧ Exec.Deriv.ExecFreeUntil root node := by
+  obtain ⟨node, cursor, path, pc, sameSevm, outcome, tree, stack, ok, free, _⟩ :=
+    sync_root_guard_cursor_storage codeEq fork run
+  exact ⟨node, cursor, path, pc, sameSevm, outcome, tree, stack, ok, free⟩
+
 /-- The root-derived guard cursor crosses its actual decoded JUMPI. The
 successor shape is produced by the checked cursor, without choosing a branch. -/
+theorem sync_root_guard_jump_storage {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+    ∃ (node : Exec.Deriv) (cursor : Cursor),
+      Exec.Deriv.ParentPrefix root node ∧ node.sevm = sevm ∧
+      node.exn = .ok post ∧ CursorOK code cert node cursor ∧
+      ((cursor.f = t_000c_c0 ∧ node.pc = 12) ∨
+        (cursor.f = t_0010_c0 ∧ node.pc = 16)) ∧
+      Exec.Deriv.ExecFreeUntil root node ∧
+      node.devm.getStor = b.getStor := by
+  let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+  obtain ⟨guard, before, path, pc, sameSevm, success, tree, stack, ok, rootFree, guardStorage⟩ :=
+    sync_root_guard_cursor_storage codeEq fork run
+  have guardFork : CoveredFork guard.sevm.benvStat.fork := by
+    rw [sameSevm]; exact fork
+  obtain ⟨a, top⟩ := stack
+  obtain ⟨node, cursor, edge, jumped, synthetic, stateful, placed, branch⟩ :=
+    cursor_branch_forward cert_check ok tree top success guardFork
+  have frame := Blanc.Jinst.run_instructionFrame
+    ⟨guard.pc, guard.sevm, guard.devm⟩ .jumpi
+  rw [jumped] at frame
+  have storage : node.devm.getStor = b.getStor :=
+    (funext (Blanc.Devm.InstructionFrame.getStor frame)).symm.trans guardStorage
+  have instruction : Jinst.At guard.sevm.code guard.pc .jumpi := by
+    rw [sameSevm, codeEq, pc]
+    exact byteAt_jinst_at (by decide +kernel)
+  have actualFree : Exec.Deriv.ExecFreeUntil root node :=
+    rootFree.trans (Blanc.Exec.Deriv.ExecFreeUntil.ofStep edge (Blanc.Jinst.At.not_exec instruction))
+  have unchanged : node.exn = guard.exn := by cases edge <;> rfl
+  refine ⟨node, cursor, path.snoc edge,
+    (Cursor.parentStep_sevm edge).trans sameSevm, unchanged.trans success, placed, ?_, actualFree, storage⟩
+  rcases branch with ⟨nextTree, nextPc⟩ | ⟨nextTree, nextPc⟩
+  · refine Or.inl ⟨nextTree, ?_⟩
+    rw [pc] at nextPc
+    exact nextPc
+  · refine Or.inr ⟨nextTree, ?_⟩
+    have literal : (Bytes.toB256 [0x00, 0x10]).toNat = 16 := by decide +kernel
+    exact nextPc.trans literal
+
 theorem sync_root_guard_jump {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
@@ -85,29 +145,9 @@ theorem sync_root_guard_jump {sevm : Sevm} {b post : Devm} {G : Nat}
       ((cursor.f = t_000c_c0 ∧ node.pc = 12) ∨
         (cursor.f = t_0010_c0 ∧ node.pc = 16)) ∧
       Exec.Deriv.ExecFreeUntil root node := by
-  let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-  obtain ⟨guard, before, path, pc, sameSevm, success, tree, stack, ok, rootFree⟩ :=
-    sync_root_guard_cursor codeEq fork run
-  have guardFork : CoveredFork guard.sevm.benvStat.fork := by
-    rw [sameSevm]; exact fork
-  obtain ⟨a, top⟩ := stack
-  obtain ⟨node, cursor, edge, jumped, synthetic, stateful, placed, branch⟩ :=
-    cursor_branch_forward cert_check ok tree top success guardFork
-  have instruction : Jinst.At guard.sevm.code guard.pc .jumpi := by
-    rw [sameSevm, codeEq, pc]
-    exact byteAt_jinst_at (by decide +kernel)
-  have actualFree : Exec.Deriv.ExecFreeUntil root node :=
-    rootFree.trans (Blanc.Exec.Deriv.ExecFreeUntil.ofStep edge (Blanc.Jinst.At.not_exec instruction))
-  have unchanged : node.exn = guard.exn := by cases edge <;> rfl
-  refine ⟨node, cursor, path.snoc edge,
-    (Cursor.parentStep_sevm edge).trans sameSevm, unchanged.trans success, placed, ?_, actualFree⟩
-  rcases branch with ⟨nextTree, nextPc⟩ | ⟨nextTree, nextPc⟩
-  · refine Or.inl ⟨nextTree, ?_⟩
-    rw [pc] at nextPc
-    exact nextPc
-  · refine Or.inr ⟨nextTree, ?_⟩
-    have literal : (Bytes.toB256 [0x00, 0x10]).toNat = 16 := by decide +kernel
-    exact nextPc.trans literal
+  obtain ⟨node, cursor, path, sameSevm, success, ok, branch, free, _⟩ :=
+    sync_root_guard_jump_storage codeEq fork run
+  exact ⟨node, cursor, path, sameSevm, success, ok, branch, free⟩
 
 /-- The Pair's concrete zero-length REVERT tail has no successful raw run. -/
 theorem sync_revert_guard_no_ok {node : Exec.Deriv} {cursor : Cursor} {post : Devm}
@@ -145,6 +185,24 @@ theorem sync_revert_guard_no_ok {node : Exec.Deriv} {cursor : Cursor} {post : De
       | ok paid => rw [charged] at closed; cases closed
 
 /-- A successful root run cannot take the first guard's actual REVERT tail. -/
+theorem sync_root_guard_open_storage {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+    ∃ (node : Exec.Deriv) (cursor : Cursor),
+      Exec.Deriv.ParentPrefix root node ∧ node.pc = 16 ∧
+      node.sevm = sevm ∧ node.exn = .ok post ∧
+      cursor.f = t_0010_c0 ∧ CursorOK code cert node cursor ∧
+      Exec.Deriv.ExecFreeUntil root node ∧
+      node.devm.getStor = b.getStor := by
+  obtain ⟨node, cursor, path, sameSevm, success, ok, branch, actualFree, storage⟩ :=
+    sync_root_guard_jump_storage codeEq fork run
+  rcases branch with ⟨tree, pc⟩ | ⟨tree, pc⟩
+  · have nodeFork : CoveredFork node.sevm.benvStat.fork := by
+      rw [sameSevm]; exact fork
+    exact (sync_revert_guard_no_ok ok tree success nodeFork).elim
+  · exact ⟨node, cursor, path, pc, sameSevm, success, tree, ok, actualFree, storage⟩
+
 theorem sync_root_guard_open {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
@@ -154,17 +212,13 @@ theorem sync_root_guard_open {sevm : Sevm} {b post : Devm} {G : Nat}
       node.sevm = sevm ∧ node.exn = .ok post ∧
       cursor.f = t_0010_c0 ∧ CursorOK code cert node cursor ∧
       Exec.Deriv.ExecFreeUntil root node := by
-  obtain ⟨node, cursor, path, sameSevm, success, ok, branch, actualFree⟩ :=
-    sync_root_guard_jump codeEq fork run
-  rcases branch with ⟨tree, pc⟩ | ⟨tree, pc⟩
-  · have nodeFork : CoveredFork node.sevm.benvStat.fork := by
-      rw [sameSevm]; exact fork
-    exact (sync_revert_guard_no_ok ok tree success nodeFork).elim
-  · exact ⟨node, cursor, path, pc, sameSevm, success, tree, ok, actualFree⟩
+  obtain ⟨node, cursor, path, pc, sameSevm, success, tree, ok, free, _⟩ :=
+    sync_root_guard_open_storage codeEq fork run
+  exact ⟨node, cursor, path, pc, sameSevm, success, tree, ok, free⟩
 
 /-- The successful root reaches the calldata-size guard through its actual
 DEST and linear prelude, preserving the literal branch target. -/
-theorem sync_root_size_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
+theorem sync_root_size_cursor_storage {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
@@ -173,9 +227,10 @@ theorem sync_root_size_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
       node.sevm = sevm ∧ node.exn = .ok post ∧
       cursor.f = .branch t_001a_c0 t_01b9_c0 ∧
       (∃ a, cursor.a = .const (Bytes.toB256 [0x01, 0xb9]) :: a) ∧
-      CursorOK code cert node cursor ∧ Exec.Deriv.ExecFreeUntil root node := by
-  obtain ⟨dest, atDest, rootPath, destPc, destSevm, destOutcome, destTree, destOk, rootFree⟩ :=
-    sync_root_guard_open codeEq fork run
+      CursorOK code cert node cursor ∧ Exec.Deriv.ExecFreeUntil root node ∧
+      node.devm.getStor = b.getStor := by
+  obtain ⟨dest, atDest, rootPath, destPc, destSevm, destOutcome, destTree, destOk, rootFree, destStorage⟩ :=
+    sync_root_guard_open_storage codeEq fork run
   have instruction : Jinst.At dest.sevm.code dest.pc .jumpdest := by
     rw [destSevm, codeEq, destPc]
     exact byteAt_jinst_at (by decide +kernel)
@@ -183,6 +238,11 @@ theorem sync_root_size_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
     rw [destSevm]; exact fork
   obtain ⟨afterDest, afterCursor, destEdge, jumped, destSynthetic, destStateful, afterOk⟩ :=
     cursor_jinst_forward cert_check destOk instruction destOutcome destFork
+  have destFrame := Blanc.Jinst.run_instructionFrame
+    ⟨dest.pc, dest.sevm, dest.devm⟩ .jumpdest
+  rw [jumped] at destFrame
+  have afterStorage : afterDest.devm.getStor = b.getStor :=
+    (funext (Blanc.Devm.InstructionFrame.getStor destFrame)).symm.trans destStorage
   have afterPc : afterDest.pc = 17 := by
     obtain ⟨pc, burn⟩ := of_jumpdest_run jumped
     rw [destPc] at pc
@@ -212,6 +272,12 @@ theorem sync_root_size_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
   obtain ⟨node, cursor, edge, stepPc, primitive, synthetic, stateful, placed⟩ :=
     cursor_next_forward cert_check beforeOk beforeTree
       (beforeOutcome.trans afterOutcome) beforeFork
+  have storeLine : afterDest.devm.getStor = before.devm.getStor :=
+    Line.of_inv Devm.getStor (by dsimp only [ns]; line_inv) line
+  have storePush : before.devm.getStor = node.devm.getStor :=
+    Ninst.Hinv.inv (f := Devm.getStor) primitive.toRun
+  have storage : node.devm.getStor = b.getStor :=
+    storePush.symm.trans (storeLine.symm.trans afterStorage)
   have linear : Exec.Deriv.ExecFreeUntil afterDest before := by
     apply linearFree
     intro n member x equal
@@ -236,7 +302,7 @@ theorem sync_root_size_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
     omega
   refine ⟨node, cursor, (rootPath.snoc destEdge).trans (path.snoc edge), pc,
     (Cursor.parentStep_sevm edge).trans (beforeSevm.trans afterSevm),
-    sameOutcome.trans (beforeOutcome.trans afterOutcome), ?_, ?_, placed, actualFree⟩
+    sameOutcome.trans (beforeOutcome.trans afterOutcome), ?_, ?_, placed, actualFree, storage⟩
   · rcases atPush with ⟨f, pc, a, m, K⟩
     dsimp only at beforeTree
     subst f
@@ -252,6 +318,20 @@ theorem sync_root_size_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
       simp only [absNinst, Option.some.injEq] at abstract
       subst abstract
       exact ⟨a, rfl⟩
+
+theorem sync_root_size_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+    ∃ (node : Exec.Deriv) (cursor : Cursor),
+      Exec.Deriv.ParentPrefix root node ∧ node.pc = 25 ∧
+      node.sevm = sevm ∧ node.exn = .ok post ∧
+      cursor.f = .branch t_001a_c0 t_01b9_c0 ∧
+      (∃ a, cursor.a = .const (Bytes.toB256 [0x01, 0xb9]) :: a) ∧
+      CursorOK code cert node cursor ∧ Exec.Deriv.ExecFreeUntil root node := by
+  obtain ⟨node, cursor, path, pc, sameSevm, success, tree, stack, ok, free, _⟩ :=
+    sync_root_size_cursor_storage codeEq fork run
+  exact ⟨node, cursor, path, pc, sameSevm, success, tree, stack, ok, free⟩
 
 /-- The Pair's fallback DEST enters the same concrete REVERT tail. -/
 theorem sync_fallback_no_ok {node : Exec.Deriv} {cursor : Cursor} {post : Devm}
@@ -284,21 +364,27 @@ theorem sync_fallback_no_ok {node : Exec.Deriv} {cursor : Cursor} {post : Devm}
 
 /-- Raw success excludes the size guard's actual fallback, placing the root
 at the selector prelude without assuming which branch was taken. -/
-theorem sync_root_size_open {sevm : Sevm} {b post : Devm} {G : Nat}
+theorem sync_root_size_open_storage {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
     ∃ (node : Exec.Deriv) (cursor : Cursor),
       Exec.Deriv.ParentPrefix root node ∧ node.pc = 26 ∧
       node.sevm = sevm ∧ node.exn = .ok post ∧
-      cursor.f = t_001a_c0 ∧ CursorOK code cert node cursor ∧ Exec.Deriv.ExecFreeUntil root node := by
-  obtain ⟨guard, before, path, pc, sameSevm, success, tree, stack, ok, rootFree⟩ :=
-    sync_root_size_cursor codeEq fork run
+      cursor.f = t_001a_c0 ∧ CursorOK code cert node cursor ∧ Exec.Deriv.ExecFreeUntil root node ∧
+      node.devm.getStor = b.getStor := by
+  obtain ⟨guard, before, path, pc, sameSevm, success, tree, stack, ok, rootFree, guardStorage⟩ :=
+    sync_root_size_cursor_storage codeEq fork run
   have guardFork : CoveredFork guard.sevm.benvStat.fork := by
     rw [sameSevm]; exact fork
   obtain ⟨a, top⟩ := stack
   obtain ⟨node, cursor, edge, jumped, synthetic, stateful, placed, branch⟩ :=
     cursor_branch_forward cert_check ok tree top success guardFork
+  have frame := Blanc.Jinst.run_instructionFrame
+    ⟨guard.pc, guard.sevm, guard.devm⟩ .jumpi
+  rw [jumped] at frame
+  have storage : node.devm.getStor = b.getStor :=
+    (funext (Blanc.Devm.InstructionFrame.getStor frame)).symm.trans guardStorage
   have instruction : Jinst.At guard.sevm.code guard.pc .jumpi := by
     rw [sameSevm, codeEq, pc]
     exact byteAt_jinst_at (by decide +kernel)
@@ -313,10 +399,22 @@ theorem sync_root_size_open {sevm : Sevm} {b post : Devm} {G : Nat}
     (Cursor.parentStep_sevm edge).trans sameSevm
   rcases branch with ⟨nextTree, nextPc⟩ | ⟨nextTree, nextPc⟩
   · rw [pc] at nextPc
-    exact ⟨node, cursor, path.snoc edge, nextPc, nodeSevm, sameOutcome, nextTree, placed, actualFree⟩
+    exact ⟨node, cursor, path.snoc edge, nextPc, nodeSevm, sameOutcome, nextTree, placed, actualFree, storage⟩
   · have nodeFork : CoveredFork node.sevm.benvStat.fork := by
       rw [nodeSevm]; exact fork
     exact (sync_fallback_no_ok placed nextTree sameOutcome nodeFork).elim
+
+theorem sync_root_size_open {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+    ∃ (node : Exec.Deriv) (cursor : Cursor),
+      Exec.Deriv.ParentPrefix root node ∧ node.pc = 26 ∧
+      node.sevm = sevm ∧ node.exn = .ok post ∧
+      cursor.f = t_001a_c0 ∧ CursorOK code cert node cursor ∧ Exec.Deriv.ExecFreeUntil root node := by
+  obtain ⟨node, cursor, path, pc, sameSevm, success, tree, ok, free, _⟩ :=
+    sync_root_size_open_storage codeEq fork run
+  exact ⟨node, cursor, path, pc, sameSevm, success, tree, ok, free⟩
 
 /-- The literal selector prelude appearing at pc26 in the Pair certificate. -/
 def syncSelectorLead : List Ninst :=
@@ -357,7 +455,7 @@ theorem syncSelectorLead_inv {sevm : Sevm} {b d : Devm} {S : List B256}
 
 /-- The sync selector's first comparison follows the actual raw fallthrough;
 the condition is computed from calldata, not chosen as an input premise. -/
-theorem sync_root_selector_first {sevm : Sevm} {b post : Devm} {G : Nat}
+theorem sync_root_selector_first_storage {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
@@ -365,9 +463,10 @@ theorem sync_root_selector_first {sevm : Sevm} {b post : Devm} {G : Nat}
     ∃ (node : Exec.Deriv) (cursor : Cursor),
       Exec.Deriv.ParentPrefix root node ∧ node.pc = 43 ∧
       node.sevm = sevm ∧ node.exn = .ok post ∧ cursor.f = t_002b_c0 ∧
-      (∃ S, node.devm.stack = 0xfff6cae9 :: S) ∧ CursorOK code cert node cursor ∧ Exec.Deriv.ExecFreeUntil root node := by
-  obtain ⟨entry, atEntry, rootPath, entryPc, entrySevm, entryOutcome, entryTree, entryOk, rootFree⟩ :=
-    sync_root_size_open codeEq fork run
+      (∃ S, node.devm.stack = 0xfff6cae9 :: S) ∧ CursorOK code cert node cursor ∧ Exec.Deriv.ExecFreeUntil root node ∧
+      node.devm.getStor = b.getStor := by
+  obtain ⟨entry, atEntry, rootPath, entryPc, entrySevm, entryOutcome, entryTree, entryOk, rootFree, entryStorage⟩ :=
+    sync_root_size_open_storage codeEq fork run
   let tail : SFunc := .next (.push [0x00, 0xf9] (by decide)) (.branch t_002b_c0 t_00f9_c0)
   have lead : atEntry.f = syncSelectorLead.foldr SFunc.next tail := by
     simpa only [syncSelectorLead, List.foldr_cons, List.foldr_nil, tail, t_001a_c0] using entryTree
@@ -419,6 +518,16 @@ theorem sync_root_selector_first {sevm : Sevm} {b post : Devm} {G : Nat}
   obtain ⟨a, top⟩ := top
   obtain ⟨node, cursor, edge, jumped, synthetic, stateful, placed, branch⟩ :=
     cursor_branch_forward cert_check guardOk guardTree top guardOutcome guardFork
+  have storeLine : entry.devm.getStor = before.devm.getStor :=
+    Line.of_inv Devm.getStor (by dsimp only [syncSelectorLead]; line_inv) line
+  have storePush : before.devm.getStor = guard.devm.getStor :=
+    Ninst.Hinv.inv (f := Devm.getStor) primitive.toRun
+  have frame := Blanc.Jinst.run_instructionFrame
+    ⟨guard.pc, guard.sevm, guard.devm⟩ .jumpi
+  rw [jumped] at frame
+  have storage : node.devm.getStor = b.getStor :=
+    (funext (Blanc.Devm.InstructionFrame.getStor frame)).symm.trans
+      (storePush.symm.trans (storeLine.symm.trans entryStorage))
   have linear : Exec.Deriv.ExecFreeUntil entry before := by
     apply linearFree
     intro n member x equal
@@ -461,7 +570,20 @@ theorem sync_root_selector_first {sevm : Sevm} {b post : Devm} {G : Nat}
     have unchanged : node.exn = guard.exn := by cases edge <;> rfl
     exact unchanged.trans guardOutcome
   exact ⟨node, cursor, rootPath.trans (path.snoc pushEdge |>.snoc edge), fall.1,
-    (Cursor.parentStep_sevm edge).trans guardSevm, sameOutcome, finalTree, fall.2, placed, actualFree⟩
+    (Cursor.parentStep_sevm edge).trans guardSevm, sameOutcome, finalTree, fall.2, placed, actualFree, storage⟩
+
+theorem sync_root_selector_first {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+    ∃ (node : Exec.Deriv) (cursor : Cursor),
+      Exec.Deriv.ParentPrefix root node ∧ node.pc = 43 ∧
+      node.sevm = sevm ∧ node.exn = .ok post ∧ cursor.f = t_002b_c0 ∧
+      (∃ S, node.devm.stack = 0xfff6cae9 :: S) ∧ CursorOK code cert node cursor ∧ Exec.Deriv.ExecFreeUntil root node := by
+  obtain ⟨node, cursor, path, pc, sameSevm, success, tree, stack, ok, free, _⟩ :=
+    sync_root_selector_first_storage codeEq fork selector run
+  exact ⟨node, cursor, path, pc, sameSevm, success, tree, stack, ok, free⟩
 
 /-- Only the six literal comparison rows remaining on the sync selector route. -/
 inductive SyncComparison
@@ -566,7 +688,7 @@ theorem SyncComparison.line_inv {sevm : Sevm} {b d : Devm} {S : List B256}
 
 /-- One of the six actual Pair comparison rows retains its real prefix and
 selector stack while the concrete sync operands determine the successor. -/
-theorem SyncComparison.cursor_forward (q : SyncComparison)
+theorem SyncComparison.cursor_forward_storage (q : SyncComparison)
     {F : Exec.Deriv} {κ : Cursor} {post : Devm} {S : List B256}
     (ok : CursorOK code cert F κ) (tree : κ.f = q.body) (pc : F.pc = q.pc)
     (stack : F.devm.stack = 0xfff6cae9 :: S) (success : F.exn = .ok post)
@@ -574,7 +696,8 @@ theorem SyncComparison.cursor_forward (q : SyncComparison)
     ∃ (N : Exec.Deriv) (κ' : Cursor), Exec.Deriv.ParentPrefix F N ∧
       N.pc = q.nextPc ∧ N.sevm = F.sevm ∧ N.exn = F.exn ∧
       κ'.f = q.after ∧ (∃ S', N.devm.stack = 0xfff6cae9 :: S') ∧
-      CursorOK code cert N κ' ∧ Exec.Deriv.ExecFreeUntil F N := by
+      CursorOK code cert N κ' ∧ Exec.Deriv.ExecFreeUntil F N ∧
+      N.devm.getStor = F.devm.getStor := by
   have lead : κ.f = q.line.foldr SFunc.next q.tail := tree.trans q.body_eq
   obtain ⟨guard, atGuard, path, guardPc, guardSevm, guardOutcome, guardOk, guardTree, line, sameK, linearFree⟩ :=
     cursor_nexts_line_cont_free_forward cert_check ok q.line q.tail lead success fork
@@ -590,6 +713,14 @@ theorem SyncComparison.cursor_forward (q : SyncComparison)
     rw [guardSevm]; exact fork
   obtain ⟨node, cursor, edge, jumped, synthetic, stateful, placed⟩ :=
     cursor_jinst_forward cert_check guardOk instruction (guardOutcome.trans success) guardFork
+  have storeLine : F.devm.getStor = guard.devm.getStor :=
+    Line.of_inv Devm.getStor (by
+      cases q <;> dsimp only [SyncComparison.line, SyncComparison.op] <;> line_inv) line
+  have frame := Blanc.Jinst.run_instructionFrame
+    ⟨guard.pc, guard.sevm, guard.devm⟩ .jumpi
+  rw [jumped] at frame
+  have storage : node.devm.getStor = F.devm.getStor :=
+    (funext (Blanc.Devm.InstructionFrame.getStor frame)).symm.trans storeLine.symm
   have linear : Exec.Deriv.ExecFreeUntil F guard := by
     apply linearFree
     intro n member x equal
@@ -655,10 +786,71 @@ theorem SyncComparison.cursor_forward (q : SyncComparison)
     exact unchanged.trans guardOutcome
   exact ⟨node, cursor, path.snoc edge, finalPc,
     (Cursor.parentStep_sevm edge).trans guardSevm, sameOutcome,
-    finalShape.1, finalShape.2, placed, actualFree⟩
+    finalShape.1, finalShape.2, placed, actualFree, storage⟩
+
+theorem SyncComparison.cursor_forward (q : SyncComparison)
+    {F : Exec.Deriv} {κ : Cursor} {post : Devm} {S : List B256}
+    (ok : CursorOK code cert F κ) (tree : κ.f = q.body) (pc : F.pc = q.pc)
+    (stack : F.devm.stack = 0xfff6cae9 :: S) (success : F.exn = .ok post)
+    (fork : CoveredFork F.sevm.benvStat.fork) :
+    ∃ (N : Exec.Deriv) (κ' : Cursor), Exec.Deriv.ParentPrefix F N ∧
+      N.pc = q.nextPc ∧ N.sevm = F.sevm ∧ N.exn = F.exn ∧
+      κ'.f = q.after ∧ (∃ S', N.devm.stack = 0xfff6cae9 :: S') ∧
+      CursorOK code cert N κ' ∧ Exec.Deriv.ExecFreeUntil F N := by
+  obtain ⟨node, cursor, path, pc, sameSevm, outcome, shape, stack, placed, free, _⟩ :=
+    q.cursor_forward_storage ok tree pc stack success fork
+  exact ⟨node, cursor, path, pc, sameSevm, outcome, shape, stack, placed, free⟩
 
 /-- The six checked comparison rows are consumed on the root-derived sync
 route, yielding the actual public wrapper cursor and its retained selector. -/
+theorem sync_root_selector_cursor_storage {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+    ∃ (node : Exec.Deriv) (cursor : Cursor),
+      Exec.Deriv.ParentPrefix root node ∧ node.pc = 0x067b ∧
+      node.sevm = sevm ∧ node.exn = .ok post ∧ cursor.f = t_067b_c78 ∧
+      (∃ S, node.devm.stack = 0xfff6cae9 :: S) ∧ CursorOK code cert node cursor ∧ Exec.Deriv.ExecFreeUntil root node ∧
+      node.devm.getStor = b.getStor := by
+  obtain ⟨n0, k0, p0, pc0, sevm0, outcome0, tree0, ⟨s0, stack0⟩, ok0, free0, store0⟩ :=
+    sync_root_selector_first_storage codeEq fork selector run
+  obtain ⟨n1, k1, p1, pc1, same1, equal1, tree1, ⟨s1, stack1⟩, ok1, free1, store1⟩ :=
+    SyncComparison.cursor_forward_storage .gt0 ok0 tree0 pc0 stack0 outcome0
+      (by rw [sevm0]; exact fork)
+  have sevm1 : n1.sevm = sevm := same1.trans sevm0
+  have outcome1 : n1.exn = .ok post := equal1.trans outcome0
+  obtain ⟨n2, k2, p2, pc2, same2, equal2, tree2, ⟨s2, stack2⟩, ok2, free2, store2⟩ :=
+    SyncComparison.cursor_forward_storage .gt1 ok1 tree1 pc1 stack1 outcome1
+      (by rw [sevm1]; exact fork)
+  have sevm2 : n2.sevm = sevm := same2.trans sevm1
+  have outcome2 : n2.exn = .ok post := equal2.trans outcome1
+  obtain ⟨n3, k3, p3, pc3, same3, equal3, tree3, ⟨s3, stack3⟩, ok3, free3, store3⟩ :=
+    SyncComparison.cursor_forward_storage .eq0 ok2 tree2 pc2 stack2 outcome2
+      (by rw [sevm2]; exact fork)
+  have sevm3 : n3.sevm = sevm := same3.trans sevm2
+  have outcome3 : n3.exn = .ok post := equal3.trans outcome2
+  obtain ⟨n4, k4, p4, pc4, same4, equal4, tree4, ⟨s4, stack4⟩, ok4, free4, store4⟩ :=
+    SyncComparison.cursor_forward_storage .eq1 ok3 tree3 pc3 stack3 outcome3
+      (by rw [sevm3]; exact fork)
+  have sevm4 : n4.sevm = sevm := same4.trans sevm3
+  have outcome4 : n4.exn = .ok post := equal4.trans outcome3
+  obtain ⟨n5, k5, p5, pc5, same5, equal5, tree5, ⟨s5, stack5⟩, ok5, free5, store5⟩ :=
+    SyncComparison.cursor_forward_storage .eq2 ok4 tree4 pc4 stack4 outcome4
+      (by rw [sevm4]; exact fork)
+  have sevm5 : n5.sevm = sevm := same5.trans sevm4
+  have outcome5 : n5.exn = .ok post := equal5.trans outcome4
+  obtain ⟨n6, k6, p6, pc6, same6, equal6, tree6, ⟨s6, stack6⟩, ok6, free6, store6⟩ :=
+    SyncComparison.cursor_forward_storage .eq3 ok5 tree5 pc5 stack5 outcome5
+      (by rw [sevm5]; exact fork)
+  have sevm6 : n6.sevm = sevm := same6.trans sevm5
+  have outcome6 : n6.exn = .ok post := equal6.trans outcome5
+  have storage : n6.devm.getStor = b.getStor :=
+    store6.trans (store5.trans (store4.trans (store3.trans (store2.trans (store1.trans store0)))))
+  exact ⟨n6, k6, p0.trans (p1.trans (p2.trans (p3.trans (p4.trans (p5.trans p6))))),
+    pc6, sevm6, outcome6, tree6, ⟨s6, stack6⟩, ok6,
+    free0.trans (free1.trans (free2.trans (free3.trans (free4.trans (free5.trans free6))))), storage⟩
+
 theorem sync_root_selector_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
@@ -668,45 +860,13 @@ theorem sync_root_selector_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
       Exec.Deriv.ParentPrefix root node ∧ node.pc = 0x067b ∧
       node.sevm = sevm ∧ node.exn = .ok post ∧ cursor.f = t_067b_c78 ∧
       (∃ S, node.devm.stack = 0xfff6cae9 :: S) ∧ CursorOK code cert node cursor ∧ Exec.Deriv.ExecFreeUntil root node := by
-  obtain ⟨n0, k0, p0, pc0, sevm0, outcome0, tree0, ⟨s0, stack0⟩, ok0, free0⟩ :=
-    sync_root_selector_first codeEq fork selector run
-  obtain ⟨n1, k1, p1, pc1, same1, equal1, tree1, ⟨s1, stack1⟩, ok1, free1⟩ :=
-    SyncComparison.cursor_forward .gt0 ok0 tree0 pc0 stack0 outcome0
-      (by rw [sevm0]; exact fork)
-  have sevm1 : n1.sevm = sevm := same1.trans sevm0
-  have outcome1 : n1.exn = .ok post := equal1.trans outcome0
-  obtain ⟨n2, k2, p2, pc2, same2, equal2, tree2, ⟨s2, stack2⟩, ok2, free2⟩ :=
-    SyncComparison.cursor_forward .gt1 ok1 tree1 pc1 stack1 outcome1
-      (by rw [sevm1]; exact fork)
-  have sevm2 : n2.sevm = sevm := same2.trans sevm1
-  have outcome2 : n2.exn = .ok post := equal2.trans outcome1
-  obtain ⟨n3, k3, p3, pc3, same3, equal3, tree3, ⟨s3, stack3⟩, ok3, free3⟩ :=
-    SyncComparison.cursor_forward .eq0 ok2 tree2 pc2 stack2 outcome2
-      (by rw [sevm2]; exact fork)
-  have sevm3 : n3.sevm = sevm := same3.trans sevm2
-  have outcome3 : n3.exn = .ok post := equal3.trans outcome2
-  obtain ⟨n4, k4, p4, pc4, same4, equal4, tree4, ⟨s4, stack4⟩, ok4, free4⟩ :=
-    SyncComparison.cursor_forward .eq1 ok3 tree3 pc3 stack3 outcome3
-      (by rw [sevm3]; exact fork)
-  have sevm4 : n4.sevm = sevm := same4.trans sevm3
-  have outcome4 : n4.exn = .ok post := equal4.trans outcome3
-  obtain ⟨n5, k5, p5, pc5, same5, equal5, tree5, ⟨s5, stack5⟩, ok5, free5⟩ :=
-    SyncComparison.cursor_forward .eq2 ok4 tree4 pc4 stack4 outcome4
-      (by rw [sevm4]; exact fork)
-  have sevm5 : n5.sevm = sevm := same5.trans sevm4
-  have outcome5 : n5.exn = .ok post := equal5.trans outcome4
-  obtain ⟨n6, k6, p6, pc6, same6, equal6, tree6, ⟨s6, stack6⟩, ok6, free6⟩ :=
-    SyncComparison.cursor_forward .eq3 ok5 tree5 pc5 stack5 outcome5
-      (by rw [sevm5]; exact fork)
-  have sevm6 : n6.sevm = sevm := same6.trans sevm5
-  have outcome6 : n6.exn = .ok post := equal6.trans outcome5
-  exact ⟨n6, k6, p0.trans (p1.trans (p2.trans (p3.trans (p4.trans (p5.trans p6))))),
-    pc6, sevm6, outcome6, tree6, ⟨s6, stack6⟩, ok6,
-    free0.trans (free1.trans (free2.trans (free3.trans (free4.trans (free5.trans free6)))))⟩
+  obtain ⟨node, cursor, path, pc, sameSevm, success, tree, stack, ok, free, _⟩ :=
+    sync_root_selector_cursor_storage codeEq fork selector run
+  exact ⟨node, cursor, path, pc, sameSevm, success, tree, stack, ok, free⟩
 
 /-- The actual public sync wrapper enters its certified internal callee,
 retaining the real return stack and its pending wrapper continuation. -/
-theorem sync_root_callee_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
+theorem sync_root_callee_cursor_storage {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
@@ -715,9 +875,10 @@ theorem sync_root_callee_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
       Exec.Deriv.ParentPrefix root node ∧ node.pc = 0x1df5 ∧
       node.sevm = sevm ∧ node.exn = .ok post ∧ cursor.f = t_1df5_c31 ∧
       (∃ S, node.devm.stack = 0x0257 :: 0xfff6cae9 :: S) ∧
-      (∃ k K, cursor.K = k :: K ∧ k.f = t_0257_c78) ∧ CursorOK code cert node cursor ∧ Exec.Deriv.ExecFreeUntil root node := by
+      (∃ k K, cursor.K = k :: K ∧ k.f = t_0257_c78) ∧ CursorOK code cert node cursor ∧ Exec.Deriv.ExecFreeUntil root node ∧
+      node.devm.getStor = b.getStor := by
   obtain ⟨dest, atDest, rootPath, destPc, destSevm, destOutcome,
-    destTree, ⟨S, destStack⟩, destOk, rootFree⟩ := sync_root_selector_cursor codeEq fork selector run
+    destTree, ⟨S, destStack⟩, destOk, rootFree, destStorage⟩ := sync_root_selector_cursor_storage codeEq fork selector run
   have instruction : Jinst.At dest.sevm.code dest.pc .jumpdest := by
     rw [destSevm, codeEq, destPc]
     exact byteAt_jinst_at (by decide +kernel)
@@ -758,6 +919,16 @@ theorem sync_root_callee_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
   obtain ⟨node, cursor, callEdge, jumped, callSynthetic, callStateful, placed⟩ :=
     cursor_jinst_forward cert_check beforeOk jumpAt (beforeOutcome.trans entryOutcome)
       (by rw [beforeSevm, entrySevm]; exact fork)
+  have entryStorage : entry.devm.getStor = b.getStor :=
+    (funext (Blanc.Devm.Burn.getStor burn)).trans destStorage
+  have storeLine : entry.devm.getStor = before.devm.getStor :=
+    Line.of_inv Devm.getStor (by dsimp only [ns]; line_inv) line
+  have frame := Blanc.Jinst.run_instructionFrame
+    ⟨before.pc, before.sevm, before.devm⟩ .jump
+  rw [jumped] at frame
+  have storage : node.devm.getStor = b.getStor :=
+    (funext (Blanc.Devm.InstructionFrame.getStor frame)).symm.trans
+      (storeLine.symm.trans entryStorage)
   have linear : Exec.Deriv.ExecFreeUntil entry before := by
     apply linearFree
     intro n member x equal
@@ -791,7 +962,21 @@ theorem sync_root_callee_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
     exact same.trans (beforeOutcome.trans entryOutcome)
   exact ⟨node, cursor, rootPath.snoc destEdge |>.trans (path.snoc callEdge), calleePc,
     (Cursor.parentStep_sevm callEdge).trans (beforeSevm.trans entrySevm),
-    sameOutcome, callShape.1, ⟨S, calleeStack⟩, callShape.2, placed, actualFree⟩
+    sameOutcome, callShape.1, ⟨S, calleeStack⟩, callShape.2, placed, actualFree, storage⟩
+
+theorem sync_root_callee_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+    ∃ (node : Exec.Deriv) (cursor : Cursor),
+      Exec.Deriv.ParentPrefix root node ∧ node.pc = 0x1df5 ∧
+      node.sevm = sevm ∧ node.exn = .ok post ∧ cursor.f = t_1df5_c31 ∧
+      (∃ S, node.devm.stack = 0x0257 :: 0xfff6cae9 :: S) ∧
+      (∃ k K, cursor.K = k :: K ∧ k.f = t_0257_c78) ∧ CursorOK code cert node cursor ∧ Exec.Deriv.ExecFreeUntil root node := by
+  obtain ⟨node, cursor, path, pc, sameSevm, success, tree, stack, continuation, ok, free, _⟩ :=
+    sync_root_callee_cursor_storage codeEq fork selector run
+  exact ⟨node, cursor, path, pc, sameSevm, success, tree, stack, continuation, ok, free⟩
 
 /-- The concrete LOCKED failure line reaches its certified REVERT terminal. -/
 theorem sync_locked_failure_no_ok {node : Exec.Deriv} {cursor : Cursor} {post : Devm}
@@ -844,7 +1029,7 @@ theorem sync_locked_failure_no_ok {node : Exec.Deriv} {cursor : Cursor} {post : 
 
 /-- Raw success excludes the actual LOCKED arm and places the root execution
 at the unlocked callee body before its lock write and first token read. -/
-theorem sync_root_unlocked_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
+theorem sync_root_unlocked_cursor_storage {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
@@ -853,9 +1038,10 @@ theorem sync_root_unlocked_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
       Exec.Deriv.ParentPrefix root node ∧ node.pc = 0x1e66 ∧
       node.sevm = sevm ∧ node.exn = .ok post ∧ cursor.f = t_1e66_c31 ∧
       (∃ S, node.devm.stack = 0x0257 :: 0xfff6cae9 :: S) ∧
-      (∃ k K, cursor.K = k :: K ∧ k.f = t_0257_c78) ∧ CursorOK code cert node cursor ∧ Exec.Deriv.ExecFreeUntil root node := by
+      (∃ k K, cursor.K = k :: K ∧ k.f = t_0257_c78) ∧ CursorOK code cert node cursor ∧ Exec.Deriv.ExecFreeUntil root node ∧
+      node.devm.getStor = b.getStor := by
   obtain ⟨dest, atDest, rootPath, destPc, destSevm, destOutcome,
-    destTree, ⟨S, destStack⟩, continuation, destOk, rootFree⟩ := sync_root_callee_cursor codeEq fork selector run
+    destTree, ⟨S, destStack⟩, continuation, destOk, rootFree, destStorage⟩ := sync_root_callee_cursor_storage codeEq fork selector run
   have instruction : Jinst.At dest.sevm.code dest.pc .jumpdest := by
     rw [destSevm, codeEq, destPc]
     exact byteAt_jinst_at (by decide +kernel)
@@ -906,6 +1092,16 @@ theorem sync_root_unlocked_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
   obtain ⟨node, cursor, edge, jumped, synthetic, stateful, placed⟩ :=
     cursor_jinst_forward cert_check guardOk jumpAt (guardOutcome.trans entryOutcome)
       (by rw [guardSevm, entrySevm]; exact fork)
+  have entryStorage : entry.devm.getStor = b.getStor :=
+    (funext (Blanc.Devm.Burn.getStor burn)).trans destStorage
+  have storeLine : entry.devm.getStor = guard.devm.getStor :=
+    Line.of_inv Devm.getStor (by dsimp only [ns]; line_inv) line
+  have frame := Blanc.Jinst.run_instructionFrame
+    ⟨guard.pc, guard.sevm, guard.devm⟩ .jumpi
+  rw [jumped] at frame
+  have storage : node.devm.getStor = b.getStor :=
+    (funext (Blanc.Devm.InstructionFrame.getStor frame)).symm.trans
+      (storeLine.symm.trans entryStorage)
   have linear : Exec.Deriv.ExecFreeUntil entry guard := by
     apply linearFree
     intro n member x equal
@@ -964,7 +1160,21 @@ theorem sync_root_unlocked_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
       rw [← target] at nextPc
       exact nextPc.trans (by decide +kernel)
   exact ⟨node, cursor, rootPath.snoc destEdge |>.trans (path.snoc edge), finalPc,
-    nodeSevm, nodeOutcome, shape.1, ⟨S, shape.2.2⟩, nodeContinuation, placed, actualFree⟩
+    nodeSevm, nodeOutcome, shape.1, ⟨S, shape.2.2⟩, nodeContinuation, placed, actualFree, storage⟩
+
+theorem sync_root_unlocked_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+    ∃ (node : Exec.Deriv) (cursor : Cursor),
+      Exec.Deriv.ParentPrefix root node ∧ node.pc = 0x1e66 ∧
+      node.sevm = sevm ∧ node.exn = .ok post ∧ cursor.f = t_1e66_c31 ∧
+      (∃ S, node.devm.stack = 0x0257 :: 0xfff6cae9 :: S) ∧
+      (∃ k K, cursor.K = k :: K ∧ k.f = t_0257_c78) ∧ CursorOK code cert node cursor ∧ Exec.Deriv.ExecFreeUntil root node := by
+  obtain ⟨node, cursor, path, pc, sameSevm, success, tree, stack, continuation, ok, free, _⟩ :=
+    sync_root_unlocked_cursor_storage codeEq fork selector run
+  exact ⟨node, cursor, path, pc, sameSevm, success, tree, stack, continuation, ok, free⟩
 
 /-- The exact Pair nexts through the first request and code-size flag;
 only the final literal branch target is left for its own real push cut. -/
@@ -1014,9 +1224,43 @@ def syncFirstBeforeBranch : List Ninst := [.push [0x00] (by decide),
   .reg (.dup 0),
   .reg .iszero]
 
+/-- The actual first request line contains the one lock store; its remaining
+literal instructions preserve the entire storage observation. -/
+theorem sync_first_lock_line_storage {sevm : Sevm} {b final : Devm}
+    {S : List B256} {M : Mem} {G : Nat}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (run : Line.Run sevm (St b S M G) syncFirstBeforeBranch final) :
+    final.getStor sevm.currentTarget = (b.getStor sevm.currentTarget).set 12 0 := by
+  dsimp only [syncFirstBeforeBranch] at run
+  obtain ⟨first, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨second, step, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨stored, step, run⟩ := Line.of_run_cons run
+  rw [show Bytes.toB256 [0x0c] = (12 : B256) from by decide +kernel,
+    show Bytes.toB256 [0x00] = (0 : B256) from by decide +kernel] at step
+  obtain ⟨gas, rfl⟩ := ri_sstore fork step
+  have tailInv : Line.Inv Devm.getStor (syncFirstBeforeBranch.drop 3) := by
+    dsimp only [syncFirstBeforeBranch, List.drop]
+    line_inv
+  have same := Line.of_inv Devm.getStor tailInv run
+  rw [← same]
+  exact afterSstore_getStor_self sevm b 12 0
+
+
+/-- The finite source lock image is derived from the actual first request line. -/
+theorem sync_first_lock_line_rep {K : WriterKey → Prop} {st : State}
+    {sevm : Sevm} {b final : Devm} {S : List B256} {M : Mem} {G : Nat}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (run : Line.Run sevm (St b S M G) syncFirstBeforeBranch final) :
+    WriterRep K (final.getStor sevm.currentTarget) { st with unlocked := 0 } := by
+  rw [sync_first_lock_line_storage fork run]
+  exact WriterRep.mint_lock_store rep
+
 /-- The first actual token code guard cannot select its REVERT arm under
 raw success. Its retained continuation comes from the root wrapper. -/
-theorem sync_root_first_guard_open {sevm : Sevm} {b post : Devm} {G : Nat}
+theorem sync_root_first_guard_open_storage {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
@@ -1024,9 +1268,10 @@ theorem sync_root_first_guard_open {sevm : Sevm} {b post : Devm} {G : Nat}
     ∃ (node : Exec.Deriv) (cursor : Cursor),
       Exec.Deriv.ParentPrefix root node ∧ node.pc = 0x1edd ∧
       node.sevm = sevm ∧ node.exn = .ok post ∧ cursor.f = t_1edd_c31 ∧
-      (∃ k K, cursor.K = k :: K ∧ k.f = t_0257_c78) ∧ CursorOK code cert node cursor ∧ Exec.Deriv.ExecFreeUntil root node := by
+      (∃ k K, cursor.K = k :: K ∧ k.f = t_0257_c78) ∧ CursorOK code cert node cursor ∧ Exec.Deriv.ExecFreeUntil root node ∧
+      node.devm.getStor sevm.currentTarget = (b.getStor sevm.currentTarget).set 12 0 := by
   obtain ⟨dest, atDest, rootPath, destPc, destSevm, destOutcome,
-    destTree, stack, continuation, destOk, rootFree⟩ := sync_root_unlocked_cursor codeEq fork selector run
+    destTree, stack, continuation, destOk, rootFree, destStorage⟩ := sync_root_unlocked_cursor_storage codeEq fork selector run
   have instruction : Jinst.At dest.sevm.code dest.pc .jumpdest := by
     rw [destSevm, codeEq, destPc]
     exact byteAt_jinst_at (by decide +kernel)
@@ -1077,6 +1322,24 @@ theorem sync_root_first_guard_open {sevm : Sevm} {b post : Devm} {G : Nat}
   obtain ⟨node, cursor, edge, jumped, synthetic, stateful, placed, branch⟩ :=
     cursor_branch_forward cert_check guardOk pushShape.1 top guardOutcome
       (by rw [guardSevm]; exact fork)
+  have entryStorage : entry.devm.getStor = b.getStor :=
+    (funext (Blanc.Devm.Burn.getStor burn)).trans destStorage
+  have actualLine : Line.Run sevm
+      (St entry.devm entry.devm.stack entry.devm.memory entry.devm.gasLeft)
+      syncFirstBeforeBranch before.devm := by
+    rw [← entrySevm, ← St.self rfl rfl]
+    exact line
+  have beforeStorage := sync_first_lock_line_storage fork actualLine
+  rw [entryStorage] at beforeStorage
+  have storePush : before.devm.getStor = guard.devm.getStor :=
+    Ninst.Hinv.inv (f := Devm.getStor) primitive.toRun
+  have frame := Blanc.Jinst.run_instructionFrame
+    ⟨guard.pc, guard.sevm, guard.devm⟩ .jumpi
+  rw [jumped] at frame
+  have storage : node.devm.getStor sevm.currentTarget =
+      (b.getStor sevm.currentTarget).set 12 0 := by
+    rw [← (funext (Blanc.Devm.InstructionFrame.getStor frame)), ← storePush]
+    exact beforeStorage
   have linear : Exec.Deriv.ExecFreeUntil entry before := by
     apply linearFree
     intro n member x equal
@@ -1118,7 +1381,20 @@ theorem sync_root_first_guard_open {sevm : Sevm} {b post : Devm} {G : Nat}
     rw [nodeK, pushShape.2.2, beforeK, entryShape.2]
     exact continuation
   exact ⟨node, cursor, rootPath.snoc destEdge |>.trans (path.snoc pushEdge |>.snoc edge),
-    chosen.2, nodeSevm, nodeOutcome, chosen.1, nodeContinuation, placed, actualFree⟩
+    chosen.2, nodeSevm, nodeOutcome, chosen.1, nodeContinuation, placed, actualFree, storage⟩
+
+theorem sync_root_first_guard_open {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+    ∃ (node : Exec.Deriv) (cursor : Cursor),
+      Exec.Deriv.ParentPrefix root node ∧ node.pc = 0x1edd ∧
+      node.sevm = sevm ∧ node.exn = .ok post ∧ cursor.f = t_1edd_c31 ∧
+      (∃ k K, cursor.K = k :: K ∧ k.f = t_0257_c78) ∧ CursorOK code cert node cursor ∧ Exec.Deriv.ExecFreeUntil root node := by
+  obtain ⟨node, cursor, path, pc, sameSevm, success, tree, continuation, ok, free, _⟩ :=
+    sync_root_first_guard_open_storage codeEq fork selector run
+  exact ⟨node, cursor, path, pc, sameSevm, success, tree, continuation, ok, free⟩
 
 /-- The actual certified continuation immediately after sync's first STATICCALL. -/
 def syncFirstAfterCall : SFunc := .next (.reg .iszero) (.next (.reg (.dup 0))
@@ -1126,7 +1402,7 @@ def syncFirstAfterCall : SFunc := .next (.reg .iszero) (.next (.reg (.dup 0))
 
 /-- Raw success reaches the actual first STATICCALL cursor in the root frame,
 with its complete pending wrapper continuation retained. -/
-theorem sync_root_first_static_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
+theorem sync_root_first_static_cursor_storage {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
@@ -1135,9 +1411,10 @@ theorem sync_root_first_static_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
       Exec.Deriv.ParentPrefix root node ∧ node.pc = 0x1ee0 ∧
       node.sevm = sevm ∧ node.exn = .ok post ∧
       cursor.f = .next (.exec .staticcall) syncFirstAfterCall ∧
-      (∃ k K, cursor.K = k :: K ∧ k.f = t_0257_c78) ∧ CursorOK code cert node cursor ∧ Exec.Deriv.ExecFreeUntil root node := by
+      (∃ k K, cursor.K = k :: K ∧ k.f = t_0257_c78) ∧ CursorOK code cert node cursor ∧ Exec.Deriv.ExecFreeUntil root node ∧
+      node.devm.getStor sevm.currentTarget = (b.getStor sevm.currentTarget).set 12 0 := by
   obtain ⟨dest, atDest, rootPath, destPc, destSevm, destOutcome,
-    destTree, continuation, destOk, rootFree⟩ := sync_root_first_guard_open codeEq fork selector run
+    destTree, continuation, destOk, rootFree, destStorage⟩ := sync_root_first_guard_open_storage codeEq fork selector run
   have instruction : Jinst.At dest.sevm.code dest.pc .jumpdest := by
     rw [destSevm, codeEq, destPc]
     exact byteAt_jinst_at (by decide +kernel)
@@ -1161,6 +1438,12 @@ theorem sync_root_first_static_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
   obtain ⟨node, cursor, path, nodePc, nodeSevm, nodeOutcome, placed, tree, line, sameK, linearFree⟩ :=
     cursor_nexts_line_cont_free_forward cert_check entryOk ns (.next (.exec .staticcall) syncFirstAfterCall)
       entryShape.1 entryOutcome (by rw [entrySevm]; exact fork)
+  have storeLine : entry.devm.getStor = node.devm.getStor :=
+    Line.of_inv Devm.getStor (by dsimp only [ns]; line_inv) line
+  have storage : node.devm.getStor sevm.currentTarget =
+      (b.getStor sevm.currentTarget).set 12 0 :=
+    (congrFun storeLine.symm sevm.currentTarget).trans
+      ((Blanc.Devm.Burn.getStor burn sevm.currentTarget).trans destStorage)
   have linear : Exec.Deriv.ExecFreeUntil entry node := by
     apply linearFree
     intro n member x equal
@@ -1179,11 +1462,25 @@ theorem sync_root_first_static_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
     rw [sameK, entryShape.2]
     exact continuation
   exact ⟨node, cursor, rootPath.snoc destEdge |>.trans path, finalPc,
-    nodeSevm.trans entrySevm, nodeOutcome.trans entryOutcome, tree, nodeContinuation, placed, actualFree⟩
+    nodeSevm.trans entrySevm, nodeOutcome.trans entryOutcome, tree, nodeContinuation, placed, actualFree, storage⟩
+
+theorem sync_root_first_static_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+    ∃ (node : Exec.Deriv) (cursor : Cursor),
+      Exec.Deriv.ParentPrefix root node ∧ node.pc = 0x1ee0 ∧
+      node.sevm = sevm ∧ node.exn = .ok post ∧
+      cursor.f = .next (.exec .staticcall) syncFirstAfterCall ∧
+      (∃ k K, cursor.K = k :: K ∧ k.f = t_0257_c78) ∧ CursorOK code cert node cursor ∧ Exec.Deriv.ExecFreeUntil root node := by
+  obtain ⟨node, cursor, path, pc, sameSevm, success, tree, continuation, ok, free, _⟩ :=
+    sync_root_first_static_cursor_storage codeEq fork selector run
+  exact ⟨node, cursor, path, pc, sameSevm, success, tree, continuation, ok, free⟩
 
 /-- The first actual STATICCALL is an authenticated raw occurrence in the
 root's own chronology, with the same supplied wrapper continuation. -/
-theorem sync_root_first_static_occurrence {sevm : Sevm} {b post : Devm} {G : Nat}
+theorem sync_root_first_static_occurrence_storage {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
@@ -1196,9 +1493,10 @@ theorem sync_root_first_static_occurrence {sevm : Sevm} {b post : Devm} {G : Nat
       (∃ k K, cursor.K = k :: K ∧ k.f = t_0257_c78) ∧
       CursorOK code cert occurrence.node cursor ∧
       (∃ (g t ii is oi os : B256) (S : List B256),
-        occurrence.node.devm.stack = g :: t :: ii :: is :: oi :: os :: S) := by
-  obtain ⟨node, cursor, path, pc, sameSevm, outcome, tree, continuation, placed, rootFree⟩ :=
-    sync_root_first_static_cursor codeEq fork selector run
+        occurrence.node.devm.stack = g :: t :: ii :: is :: oi :: os :: S) ∧
+      occurrence.node.devm.getStor sevm.currentTarget = (b.getStor sevm.currentTarget).set 12 0 := by
+  obtain ⟨node, cursor, path, pc, sameSevm, outcome, tree, continuation, placed, rootFree, storage⟩ :=
+    sync_root_first_static_cursor_storage codeEq fork selector run
   have operands := cursor_staticcall_operands placed tree
   have check := placed.check
   rw [tree] at check
@@ -1214,8 +1512,28 @@ theorem sync_root_first_static_occurrence {sevm : Sevm} {b post : Devm} {G : Nat
   obtain ⟨occurrence, sameNode, instruction⟩ :=
     Blanc.Exec.exists_ninstOccurrence_of_mem_rawNodes
       (root := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩) reached atInst
-  refine ⟨occurrence, cursor, ?_, ?_, ?_, ?_, instruction, tree, continuation, ?_, ?_⟩
+  refine ⟨occurrence, cursor, ?_, ?_, ?_, ?_, instruction, tree, continuation, ?_, ?_, ?_⟩
   all_goals rw [sameNode]; assumption
+
+theorem sync_root_first_static_occurrence {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+    ∃ (occurrence : Exec.NinstOccurrence root) (cursor : Cursor),
+      Exec.Deriv.ExecFreeUntil root occurrence.node ∧ occurrence.node.pc = 0x1ee0 ∧
+      occurrence.node.sevm = sevm ∧ occurrence.node.exn = .ok post ∧
+      occurrence.instruction = .exec .staticcall ∧
+      cursor.f = .next (.exec .staticcall) syncFirstAfterCall ∧
+      (∃ k K, cursor.K = k :: K ∧ k.f = t_0257_c78) ∧
+      CursorOK code cert occurrence.node cursor ∧
+      (∃ (g t ii is oi os : B256) (S : List B256),
+        occurrence.node.devm.stack = g :: t :: ii :: is :: oi :: os :: S) := by
+  obtain ⟨occurrence, cursor, free, pc, sameSevm, success, instruction, tree,
+    continuation, ok, operands, _⟩ :=
+    sync_root_first_static_occurrence_storage codeEq fork selector run
+  exact ⟨occurrence, cursor, free, pc, sameSevm, success, instruction, tree,
+    continuation, ok, operands⟩
 
 /-- Crossing the authenticated first occurrence fixes its actual primitive
 result and recursive slot to the real parent continuation. -/
@@ -2638,38 +2956,32 @@ theorem sync_static_slot_turns_inv {K : WriterKey → Prop} {frame : Frame}
 
 
 
-/-- The actual first request line contains the one lock store; its remaining
-literal instructions preserve the entire storage observation. -/
-theorem sync_first_lock_line_storage {sevm : Sevm} {b final : Devm}
-    {S : List B256} {M : Mem} {G : Nat}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (run : Line.Run sevm (St b S M G) syncFirstBeforeBranch final) :
-    final.getStor sevm.currentTarget = (b.getStor sevm.currentTarget).set 12 0 := by
-  dsimp only [syncFirstBeforeBranch] at run
-  obtain ⟨first, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨second, step, run⟩ := Line.of_run_cons run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨stored, step, run⟩ := Line.of_run_cons run
-  rw [show Bytes.toB256 [0x0c] = (12 : B256) from by decide +kernel,
-    show Bytes.toB256 [0x00] = (0 : B256) from by decide +kernel] at step
-  obtain ⟨gas, rfl⟩ := ri_sstore fork step
-  have tailInv : Line.Inv Devm.getStor (syncFirstBeforeBranch.drop 3) := by
-    dsimp only [syncFirstBeforeBranch, List.drop]
-    line_inv
-  have same := Line.of_inv Devm.getStor tailInv run
-  rw [← same]
-  exact afterSstore_getStor_self sevm b 12 0
 
-
-/-- The finite source lock image is derived from the actual first request line. -/
-theorem sync_first_lock_line_rep {K : WriterKey → Prop} {st : State}
-    {sevm : Sevm} {b final : Devm} {S : List B256} {M : Mem} {G : Nat}
-    (fork : CoveredFork sevm.benvStat.fork)
+/-- The environmental finite root image reaches the SAME actual first call
+occurrence after the real lock store, without a node-representation premise. -/
+theorem sync_root_first_static_finite_occurrence {K : WriterKey → Prop} {st : State}
+    {sevm : Sevm} {b post : Devm} {G : Nat}
     (rep : WriterRep K (b.getStor sevm.currentTarget) st)
-    (run : Line.Run sevm (St b S M G) syncFirstBeforeBranch final) :
-    WriterRep K (final.getStor sevm.currentTarget) { st with unlocked := 0 } := by
-  rw [sync_first_lock_line_storage fork run]
-  exact WriterRep.mint_lock_store rep
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+    ∃ (occurrence : Exec.NinstOccurrence root) (cursor : Cursor),
+      Exec.Deriv.ExecFreeUntil root occurrence.node ∧ occurrence.node.pc = 0x1ee0 ∧
+      occurrence.node.sevm = sevm ∧ occurrence.node.exn = .ok post ∧
+      occurrence.instruction = .exec .staticcall ∧
+      cursor.f = .next (.exec .staticcall) syncFirstAfterCall ∧
+      (∃ k K, cursor.K = k :: K ∧ k.f = t_0257_c78) ∧
+      CursorOK code cert occurrence.node cursor ∧
+      (∃ (g t ii is oi os : B256) (S : List B256),
+        occurrence.node.devm.stack = g :: t :: ii :: is :: oi :: os :: S) ∧
+      WriterRep K (occurrence.node.devm.getStor sevm.currentTarget) { st with unlocked := 0 } := by
+  obtain ⟨occurrence, cursor, free, pc, sameSevm, success, instruction, tree,
+    continuation, ok, operands, storage⟩ :=
+    sync_root_first_static_occurrence_storage codeEq fork selector run
+  refine ⟨occurrence, cursor, free, pc, sameSevm, success, instruction, tree,
+    continuation, ok, operands, ?_⟩
+  rw [storage]
+  exact rep.mint_lock_store
 
 end Blanc.Lift.UniswapV2Pair
