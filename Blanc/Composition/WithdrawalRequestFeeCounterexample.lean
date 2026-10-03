@@ -867,9 +867,10 @@ theorem checkpoint_7002_queue_zero (n o : Nat)
 
 /-! ## The genesis chain -/
 
-/-- Block gas limit for the whole witness: covers block B's `2 ^ 28` and sits
-inside the Prague adjustment window around itself. -/
-def witnessGasLimit : Nat := 2 ^ 28
+/-- Block gas limit for the whole witness: twice block B's `2 ^ 28`, so no block
+uses more than its target and the base fee stays `1` throughout; it sits inside the
+Prague adjustment window around itself. -/
+def witnessGasLimit : Nat := 2 ^ 29
 
 /-- Hand-built genesis header (number 0, hence not via `commitHeader`): commits
 to the checkpoint state root, empty tries, no requests. -/
