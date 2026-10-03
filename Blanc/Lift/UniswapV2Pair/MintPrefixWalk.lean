@@ -2611,6 +2611,74 @@ theorem mintActualFeeFinished_public_inv {K : WriterKey → Prop} {st : State}
   have result := mint_fee_public_handler observed prior state mem sourceResult tail
   simpa only [dEq,outEq] using result
 
+
+/-- Balance replies create one source payload from the genuine entry reserve cache. -/
+def mintBalanceObserved (st : State) (recipient : Adr) (balance0 balance1 : B256) : MintObserved :=
+  { recipient := recipient, reserves := st.cachedReserves,
+    balance0 := balance0, balance1 := balance1,
+    amount0 := balance0 - st.reserve0.val.toB256, amount1 := balance1 - st.reserve1.val.toB256 }
+
+/-- Raw cached words and the source handler have precisely the same bounded reserve payload. -/
+theorem mint_balance_observed_eq {st : State} {recipient : Adr} {b0 b1 r0 r1 : B256}
+    (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112)
+    (word0 : r0 = st.reserve0.val.toB256) (word1 : r1 = st.reserve1.val.toB256)
+    (nat0 : r0.toNat = st.reserve0.val) (nat1 : r1.toNat = st.reserve1.val) :
+    feeMintObserved recipient.toB256 (b1 - r1) (b0 - r0) b1 b0 r1 r0 bound0 bound1 =
+      mintBalanceObserved st recipient b0 b1 := by
+  have cache0 : (⟨r0.toNat,bound0⟩ : Fin (2 ^ 112)) = st.reserve0 := Fin.ext nat0
+  have cache1 : (⟨r1.toNat,bound1⟩ : Fin (2 ^ 112)) = st.reserve1 := Fin.ext nat1
+  dsimp only [feeMintObserved,mintBalanceObserved,State.cachedReserves]
+  rw [toAdr_toB256,cache0,cache1,word0,word1]
+
+/-- The final callback uses the very payload and target emitted by the typed balance handler. -/
+def MintPublicTypedFeeFinished (K : WriterKey → Prop) (st : State)
+    (D : Exec.Deriv) (sevm : Sevm) (b feePost : Devm) (R : List B256)
+    (M : Mem) (amount1 amount0 b1 b0 r1 r0 toWord ρ : B256)
+    (_bound0 : r0.toNat < 2 ^ 112) (_bound1 : r1.toNat < 2 ^ 112)
+    (prior : Frame) (observedPayload : MintObserved) (target : Adr) (o : Outcome) : Prop :=
+    ∃ (gw : B256) (callGas : Nat) (d : Devm) (out : Bytes),
+      StepIn D sevm
+        (St (feeFactoryCallWorld sevm b)
+          (gw :: feeFactoryWord sevm b :: 128 :: 4 :: 128 :: 32 ::
+            132 :: 0x017e7e58 :: feeFactoryWord sevm b :: 0 :: 0 :: r1 :: r0 :: 0x1233 :: (mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord ρ R))
+          (feeRequestMemory M) callGas) (.exec .staticcall) d ∧
+      StaticCallPost (feeFactoryCallWorld sevm b) d
+        (132 :: 0x017e7e58 :: feeFactoryWord sevm b :: 0 :: 0 :: r1 :: r0 :: 0x1233 :: (mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord ρ R))
+        (feeRequestMemory M) 128 4 128 32 1 out ∧
+      32 ≤ out.length ∧ out.length < 2 ^ 256 ∧
+      StaticAnswered sevm (feeFactoryCallWorld sevm b) (feeFactoryWord sevm b).toAdr
+        (ExternalOperation.encode .feeTo) out ∧
+      (FeeMintFresh K st sevm (feeKLastWorld sevm d) (Bytes.toB256 (out.take 32)) r0 r1 →
+        ∃ observed : FeeMintSourceObservation K st D sevm b (mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord ρ R) M r1 r0 0x1233 (.returned feePost),
+          observed.d = d ∧ observed.out = out ∧
+          (MintAfterFeeFresh
+            (feeBranchSourceKeys K st sevm (feeKLastWorld sevm d) (Bytes.toB256 (out.take 32)) r0 r1)
+            (feeBranchSourceFee st sevm (feeKLastWorld sevm d) (Bytes.toB256 (out.take 32)) r0 r1).state toWord →
+            MintPublicFrameResult
+              (feeBranchSourceKeys K st sevm (feeKLastWorld sevm d) (Bytes.toB256 (out.take 32)) r0 r1)
+              (prior.beginResume (requestFor .mintFeeTo target .feeTo))
+              observedPayload
+              (feeBranchSourceFee st sevm (feeKLastWorld sevm d) (Bytes.toB256 (out.take 32)) r0 r1)
+              sevm feePost amount1 amount0 b1 b0 toWord o ∧
+            ∃ liquidity : Nat, ∃ finished : Frame,
+              resumeSegment prior (requestFor .mintFeeTo target .feeTo)
+                (.mintFee observedPayload)
+                (feeObservedResult out) = .finished finished (encodeWords [liquidity.toB256])))
+
+/-- Only actual cache/target equality transports the earned raw callback to the typed handler. -/
+theorem mintPublicActualFeeFinished_typed {K : WriterKey → Prop} {st : State}
+    {D : Exec.Deriv} {sevm : Sevm} {b feePost : Devm} {R : List B256} {M : Mem}
+    {amount1 amount0 b1 b0 r1 r0 toWord ρ : B256} {prior : Frame} {o : Outcome}
+    {bound0 : r0.toNat < 2 ^ 112} {bound1 : r1.toNat < 2 ^ 112}
+    {observedPayload : MintObserved} {target : Adr}
+    (payload : feeMintObserved toWord amount1 amount0 b1 b0 r1 r0 bound0 bound1 = observedPayload)
+    (targetEq : (feeFactoryWord sevm b).toAdr = target)
+    (source : MintPublicActualFeeFinished K st D sevm b feePost R M
+      amount1 amount0 b1 b0 r1 r0 toWord ρ bound0 bound1 prior o) :
+    MintPublicTypedFeeFinished K st D sevm b feePost R M
+      amount1 amount0 b1 b0 r1 r0 toWord ρ bound0 bound1 prior observedPayload target o := by
+  simpa only [MintPublicActualFeeFinished,MintPublicTypedFeeFinished,payload,targetEq] using source
+
 def MintBalanceHandlerResult (current : Checkpoint) (ctx : Context) (recipient : Adr)
     (out0 out1 : Bytes) : Prop :=
   let locked := mintSourceLockedFrame current ctx recipient
@@ -2705,12 +2773,17 @@ def MintPublicSourceResult (K : WriterKey → Prop) (current : Checkpoint) (D : 
         t_26ec_c68 (.returned feePost) ∧
       SFunc.RunCutP (StepIn D) cert.prog sevm [] feePost t_1233_c41 (.done (.returned calleePost)) ∧
       ∃ bound0 : r0.toNat < 2 ^ 112, ∃ bound1 : r1.toNat < 2 ^ 112,
-        MintPublicActualFeeFinished K { st with unlocked := 0 } D sevm d1 feePost R
+        MintPublicTypedFeeFinished K { st with unlocked := 0 } D sevm d1 feePost R
           (balanceReplyMemory M0 sevm.currentTarget out1)
           (Bytes.toB256 (out1.take 32) - r1) (balance0 - r0)
           (Bytes.toB256 (out1.take 32)) balance0 r1 r0 toWord ρ bound0 bound1
-          (mintSourceFeeFrame current ctx (Sevm.dataWord sevm 4).toAdr) o ∧
-        MintBalanceHandlerResult current ctx (Sevm.dataWord sevm 4).toAdr out0 out1
+          (mintSourceFeeFrame current ctx (Sevm.dataWord sevm 4).toAdr)
+          (mintBalanceObserved st (Sevm.dataWord sevm 4).toAdr balance0 (Bytes.toB256 (out1.take 32)))
+          st.factory o ∧
+        MintBalanceHandlerResult current ctx (Sevm.dataWord sevm 4).toAdr out0 out1 ∧
+        r0 = st.reserve0.val.toB256 ∧ r1 = st.reserve1.val.toB256 ∧
+        token0.toAdr = st.token0 ∧ token1.toAdr = st.token1 ∧
+        (feeFactoryWord sevm d1).toAdr = st.factory
 
 /-- Every canonical cache, context and handler binding is derived from actualPC0 and finite entry storage. -/
 theorem mintPc0_public_source_inv {K : WriterKey → Prop} {current : Checkpoint}
@@ -2746,7 +2819,7 @@ theorem mintPc0_public_source_inv {K : WriterKey → Prop} {current : Checkpoint
   have publicFinished := mintActualFeeFinished_public_inv
     (st := { current.state with unlocked := 0 }) prior rfl mem finished rawTail
   have lockedRep := rep.mint_locked_world (sevm := sevm) (b := b)
-  rcases lockedRep.fixed with ⟨_,_,_,_,_,cache0,cache1,_,_,_,_,_⟩
+  rcases lockedRep.fixed with ⟨_,_,_,token0Fixed,token1Fixed,cache0,cache1,_,_,_,_,_⟩
   change reserve0Read ((mintLockedWorld sevm b).getStorVal sevm.currentTarget 8) =
     current.state.reserve0.val.toB256 at cache0
   change reserve1Read ((mintLockedWorld sevm b).getStorVal sevm.currentTarget 8) =
@@ -2768,11 +2841,26 @@ theorem mintPc0_public_source_inv {K : WriterKey → Prop} {current : Checkpoint
   have covers1 : current.state.reserve1.val ≤ (Bytes.toB256 (out1.take 32)).toNat := by
     rw [← natCache1]
     exact B256.toNat_le_toNat cover1
+  have token0Target : ((afterSload sevm (mintLockedWorld sevm b) 8).getStorVal
+      sevm.currentTarget 6).toAdr.toB256.toAdr = current.state.token0 := by
+    rw [toAdr_toB256]
+    change (((afterSload sevm (mintLockedWorld sevm b) 8).getStor sevm.currentTarget).get 6).toAdr = _
+    rw [afterSload_getStor]
+    exact token0Fixed
+  have token1Target : (d0.getStorVal sevm.currentTarget 7).toAdr.toB256.toAdr = current.state.token1 := by
+    rw [toAdr_toB256]
+    change ((d0.getStor sevm.currentTarget).get 7).toAdr = _
+    rw [stor0]
+    exact token1Fixed
+  have payload := mint_balance_observed_eq (st := current.state) (recipient := recipient)
+    (b0 := Bytes.toB256 (out0.take 32)) (b1 := Bytes.toB256 (out1.take 32))
+    bound0 bound1 cache0 cache1 natCache0 natCache1
+  have typedFinished := mintPublicActualFeeFinished_typed payload target publicFinished
   have handlers : MintBalanceHandlerResult current ctx recipient out0 out1 :=
     mint_source_balance_handlers value nonstatic sourceUnlocked long0 long1 covers0 covers1
   exact ⟨value,size,guard,calleeGas,calleePost,callee,mem,unlocked,nonstatic,
     gw0,callGas0,d0,out0,decodedGas0,gw1,callGas1,d1,out1,decodedGas1,feeGas,feePost,
     code0,call0,post0,long0,width0,answered0,decoded0,code1,call1,post1,long1,width1,answered1,
-    stor0,stor1,logs1,output1,decoded1,cover0,cover1,feeRun,suffix,bound0,bound1,publicFinished,handlers⟩
+    stor0,stor1,logs1,output1,decoded1,cover0,cover1,feeRun,suffix,bound0,bound1,typedFinished,handlers,cache0,cache1,token0Target,token1Target,target⟩
 
 end Blanc.Lift.UniswapV2Pair
