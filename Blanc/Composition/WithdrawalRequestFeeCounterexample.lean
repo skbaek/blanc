@@ -865,6 +865,55 @@ theorem checkpoint_7002_queue_zero (n o : Nat)
   rw [h0] at hzN
   omega
 
+/-! ## The genesis chain -/
+
+/-- Block gas limit for the whole witness: covers block B's `2 ^ 28` and sits
+inside the Prague adjustment window around itself. -/
+def witnessGasLimit : Nat := 2 ^ 28
+
+/-- Hand-built genesis header (number 0, hence not via `commitHeader`): commits
+to the checkpoint state root, empty tries, no requests. -/
+def genesisHeader : Header :=
+  { parentHash := 0
+    ommersHash := emptyOmmerHash
+    coinbase := senderE
+    stateRoot := checkpointState.root
+    txsRoot := getTransactionsRoot BlockOutput.init
+    receiptRoot := getReceiptRoot BlockOutput.init
+    bloom := List.replicate 256 0
+    difficulty := 0
+    number := 0
+    gasLimit := witnessGasLimit
+    gasUsed := 0
+    timestamp := 0
+    extraData := []
+    prevRandao := 0
+    nonce := 0
+    baseFeePerGas := 1
+    withdrawalsRoot := getWithdrawalsRoot BlockOutput.init
+    blobGasUsed := 0
+    excessBlobGas := 0
+    parentBeaconBlockRoot := 0
+    requestsHash := none
+    blockAccessListHash := none
+    slotNumber := none }
+
+def genesisBlock : Block :=
+  { header := genesisHeader, txs := [], wds := [], ommers := [] }
+
+def checkpointChain : BlockChain :=
+  { blocks := [genesisBlock], state := checkpointState, chainId := 1 }
+
+theorem checkpoint_validContext : checkpointChain.ValidContext := by
+  refine ⟨by decide +kernel, checkpoint_canonical, ?_, ?_⟩
+  · decide +kernel
+  · intro tip htip
+    have ht : tip = genesisBlock := by
+      simpa only [checkpointChain, List.getLast?_singleton, Option.mem_def,
+        Option.some.injEq] using htip.symm
+    subst tip
+    rfl
+
 /-! ## Block C -/
 
 /-- **Block C's body.** The two unchecked system calls are discharged via
