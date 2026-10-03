@@ -3555,14 +3555,11 @@ theorem backedSpec_transferAndCall_funcSound
       rfl ih h_pre_next.code h_pre_next.side h_inv_next
       (by line_inv) (by line_inv) (by line_inv) hcallback hfork
 
-/-! ## Flash-counter floor closure
+/-! ## Flash-counter assertions
 
-The backing invariant intentionally forgets the exact flash counter at a
-successful callback boundary.  Flash settlement needs one more fact: the
-outer loan remains included in that counter while arbitrary borrower code is
-running.  The auxiliary spec below carries only that lower bound.  It does not
-change `backedSpec`; it closes independently over the same exact dispatcher
-and is consumed by the final backing proof for `flashLoan`. -/
+The backing proof uses a lower bound on the outstanding flash counter at
+settlement and exact-counter stability across successful reentrant dispatches.
+These assertions remain separate from the backing invariant. -/
 
 /-- The runtime flash cap together with a lower bound on WETH10's outstanding
 flash-minted counter.  The cap is essential: it rules out modular wrap in a
@@ -3571,44 +3568,6 @@ def Stor.FlashFloor (floor : B256) (s : Stor) : Prop :=
   (s.get flashMintedSlot).toNat ≤ maxFlashMinted ∧
     floor ≤ s.get flashMintedSlot
 
-/-- The storage-only auxiliary contract spec used to retain an outer flash
-loan's amount through arbitrary reentrant WETH10 executions. -/
-def flashFloorSpec (dp : DeployParams) (floor : B256) : ContractSpec where
-  prog := weth10 dp
-  Inv := fun s _ _ => Stor.FlashFloor floor s
-  Side := fun _ => True
-  inv_forget := id
-  inv_mono := fun h _ => h
-  inv_recv := fun h _ => h
-  side_le := fun _ _ => trivial
-  side_transfer := fun _ _ => trivial
-  side_addBal := fun _ _ => trivial
-  inv_transfer := by
-    intro st st' caller callee ca wad v h_sub h_ne _ h_inv
-    show Stor.FlashFloor floor _
-    have h_stor : (st'.addBal callee wad).getStor ca = st.getStor ca := by
-      rcases State.of_subBal h_sub with ⟨-, h_st'⟩
-      show ((st'.setBal callee _).get ca).stor = (st.get ca).stor
-      rw [State.setBal_get_stor, h_st', State.setBal_get_stor]
-    rw [h_stor]
-    exact h_inv
-  inv_recv_transfer := by
-    intro st st' caller ca wad h_sub h_ne _ h_inv
-    show Stor.FlashFloor floor _
-    have h_stor : (st'.addBal ca wad).getStor ca = st.getStor ca := by
-      rcases State.of_subBal h_sub with ⟨-, h_st'⟩
-      show ((st'.setBal ca _).get ca).stor = (st.get ca).stor
-      rw [State.setBal_get_stor, h_st', State.setBal_get_stor]
-    rw [h_stor]
-    exact h_inv
-  inv_addBal := by
-    intro w ca a val v _ _ h_inv
-    show Stor.FlashFloor floor _
-    have h_stor : (w.addBal a val).getStor ca = w.getStor ca := by
-      show ((w.setBal a _).get ca).stor = (w.get ca).stor
-      rw [State.setBal_get_stor]
-    rw [h_stor]
-    exact h_inv
 
 /-- Exact flash-slot preservation for a body in WETH10's runtime context. -/
 def FlashStable (dp : DeployParams) (f : Func) : Prop :=
@@ -3642,160 +3601,6 @@ theorem FlashStable.nonpayable (dp : DeployParams) {body : Func}
   exact (hbody hrun).trans (congrArg (fun st => st.get flashMintedSlot)
     h_stor).symm
 
-/-- An arbitrary value `CALL` preserves a flash-counter floor.  Value transfer
-never changes storage; if the child reenters WETH10, the auxiliary spec's
-deeper-frame hypothesis supplies exactly the retained floor. -/
-theorem flashFloorPost_of_value_call
-    (dp : DeployParams) (floor : B256) (ca : Adr)
-    {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
-    {xs : Stack}
-    (h_target : sevm.currentTarget = ca)
-    (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((flashFloorSpec dp floor).PreWf ca)
-      ((flashFloorSpec dp floor).Post ca))
-    (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
-    (h_code : some (s.getCode ca).toList = Prog.compile (weth10 dp))
-    (h_floor : Stor.FlashFloor floor (Devm.getStor s ca))
-    (h_run : Ninst.Run sevm s call sf)
-    (hfork : CoveredFork sevm.benvStat.fork) :
-    (flashFloorSpec dp floor).Post ca sevm sf := by
-  rcases of_run_call_val_with_depth hp h_run hfork with
-    ⟨_, h_world⟩ |
-      ⟨parent, child, xl, delegated, na, code, avail, h_depth,
-        h_stack, h_parent_state, h_parent_memory, h_delegation,
-        h_fill, h_pm, h_child_clean, h_resume, h_sf_state,
-        h_returnData, h_memory, h_sf_stack⟩
-  · refine ⟨trivial, ?_⟩
-    change Stor.FlashFloor floor (Devm.getStor sf ca)
-    rw [← h_world.getStor ca]
-    exact h_floor
-  · let childMsg :=
-      callMsg sevm parent
-        (min g.toNat (except64th avail) +
-          (if v.toNat = 0 then 0 else gCallStipend))
-        v sevm.currentTarget c.toAdr na true false
-        ((s.memory.read ii.toNat is.toNat).1) code delegated
-    change ProcessMessage childMsg xl (.ok child) at h_pm
-    have hc_state : childMsg.benv.state = s.state := by
-      change parent.state = s.state
-      exact h_parent_state
-    have hc_stv : childMsg.shouldTransferValue = true := rfl
-    have hc_caller : childMsg.caller = ca := by
-      change sevm.currentTarget = ca
-      exact h_target
-    have hc_value : childMsg.value = v := rfl
-    have hc_target : childMsg.currentTarget = c.toAdr := rfl
-    have hc_codeAddress : childMsg.codeAddress = some na := rfl
-    obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp h_pm
-    unfold FrameBody at hbody
-    rcases h_bt : childMsg.benvAfterTransfer with e | benv <;>
-      rw [h_bt] at hbody
-    · rw [hbody.2, processMessage.settle_error] at hset
-      cases hset
-    have h_exec : ExecuteCode (childMsg.withBenv benv) xl r0 := hbody
-    rcases of_benvAfterTransfer hc_stv h_bt with
-      ⟨st_mid, h_sub, h_benv⟩
-    rw [hc_state, hc_caller, hc_value] at h_sub
-    have h_benv_state :
-        benv.state = st_mid.addBal c.toAdr v := by
-      rw [h_benv, hc_target, hc_value]
-      rfl
-    rcases of_state_transfer_fields (callee := c.toAdr) h_sub with
-      ⟨h_t_stor, h_t_code, h_le, h_t_self, h_t_ne⟩
-    have h_pre : (flashFloorSpec dp floor).Pre ca
-        (initSevm (childMsg.withBenv benv))
-        (initDevm (childMsg.withBenv benv)) := by
-      refine ⟨?_, trivial, ?_, ?_⟩
-      · show some (benv.state.getCode ca).toList =
-          Prog.compile (weth10 dp)
-        rw [h_benv_state]
-        change some ((st_mid.addBal c.toAdr v).get ca).code.toList =
-          Prog.compile (weth10 dp)
-        rw [h_t_code ca]
-        exact h_code
-      · intro _
-        change Stor.FlashFloor floor (benv.state.getStor ca)
-        rw [h_benv_state]
-        change Stor.FlashFloor floor
-          ((st_mid.addBal c.toAdr v).get ca).stor
-        rw [h_t_stor ca]
-        exact h_floor
-      · intro _
-        change Stor.FlashFloor floor (benv.state.getStor ca)
-        rw [h_benv_state]
-        change Stor.FlashFloor floor
-          ((st_mid.addBal c.toAdr v).get ca).stor
-        rw [h_t_stor ca]
-        exact h_floor
-    obtain ⟨evm2, h_r0, h_settle⟩ := processMessage.settle_ok_cases hset.symm
-    subst h_r0
-    rcases h_settle with ⟨h_err2, h_eq⟩ | ⟨h_err2, h_eq_child⟩
-    · have : child.error.isSome = true := by
-        rw [← h_eq]
-        exact h_err2
-      simp only [h_child_clean, Bool.false_eq_true] at this
-    rw [h_eq_child] at h_exec h_err2
-    have h_child_post : (flashFloorSpec dp floor).Post ca
-        (initSevm (childMsg.withBenv benv)) child := by
-      have hc_codeAddress' :
-          (childMsg.withBenv benv).codeAddress = some na :=
-        hc_codeAddress
-      rcases of_executeCode_someCode hc_codeAddress' h_exec with
-        ⟨h_precompile, h_xl_none, h_handle⟩ |
-        ⟨h_precompile, exn, h_xl_some, h_handle⟩
-      · have h_child_state :
-            child.state = (initDevm (childMsg.withBenv benv)).state :=
-          state_of_executePrecomp_ok h_handle h_err2
-        exact (flashFloorSpec dp floor).post_of_pre
-          (h_pre.state_eq h_child_state)
-      · have h_exn : exn = .ok child :=
-          exec_ok_of_handleError h_handle h_err2
-        rw [h_xl_some, h_exn] at h_fill
-        obtain ⟨h_exec_child⟩ := h_fill
-        have h_at : Prog.At (weth10 dp) ca 0
-            (initSevm (childMsg.withBenv benv))
-            (initDevm (childMsg.withBenv benv)) := by
-          refine ⟨h_pre.code, ?_⟩
-          intro h_child_target
-          refine ⟨?_, rfl⟩
-          have h_to_ca : c.toAdr = ca :=
-            hc_target.symm.trans h_child_target
-          change some code.toList = Prog.compile (weth10 dp)
-          rcases h_delegation with
-            ⟨h_none, _, h_code_self, h_not_delegated⟩ |
-            ⟨d, h_some, _, h_code_delegated, h_delegated⟩
-          · rw [h_code_self, h_to_ca]
-            exact h_code
-          · exfalso
-            have h_not : ¬ isValidDelegation (s.getCode ca) :=
-              not_delegation_of_compile h_code
-            apply h_not
-            unfold getDelegatedCodeAddress at h_some
-            split at h_some
-            · rename_i h_valid
-              rw [h_to_ca] at h_valid
-              exact h_valid
-            · cases h_some
-        have h_depth_lt :
-            (initSevm (childMsg.withBenv benv)).depth < sevm.depth := by
-          change sevm.depth - 1 < sevm.depth
-          omega
-        have h_child_fork :
-            CoveredFork (initSevm (childMsg.withBenv benv)).benvStat.fork := by
-          rw [initSevm_benvStat, Msg.withBenv_benvStat,
-            benvAfterTransfer_stat h_bt, callMsg_stat]
-          exact hfork
-        exact ih 0
-          (initSevm (childMsg.withBenv benv))
-          (initDevm (childMsg.withBenv benv))
-          (.ok child) h_exec_child h_depth_lt h_at h_child_fork
-          ⟨h_pre, fun _ => Mem.wf_empty⟩
-    refine ⟨trivial, ?_⟩
-    change Stor.FlashFloor floor (Devm.getStor sf ca)
-    have h_stor : Devm.getStor sf ca = Devm.getStor child ca :=
-      getStor_eq_of_state_eq h_sf_state ca
-    rw [h_stor]
-    exact h_child_post.inv
 
 /-! ### Flash-stable non-reentrant leaves -/
 

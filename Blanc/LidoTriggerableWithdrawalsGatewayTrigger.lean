@@ -824,11 +824,6 @@ def localAuxWithRoleFailure (dp : DeployParams) (roleFailure : Func) : List Func
     balanceCheck,
     afterNestedValidation ]
 
-/-- A closed standalone packet uses an empty revert at the AccessControl
-policy boundary.  Runtime integration should normally use
-`localAuxWithRoleFailure` to install the family-wide role failure body. -/
-def localAux (dp : DeployParams) : List Func :=
-  localAuxWithRoleFailure dp Func.revert
 
 /-- Shift every local table call by `delta`.  If the first appended trigger aux
 body will occupy global table slot `base`, use `delta = base - 1`: local slot

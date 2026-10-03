@@ -636,7 +636,7 @@ theorem pauseOnlyRole_runCompiledTo
   -- Abstract the staged image across the outer walk: `func_run` recurses over
   -- the concrete write tower past the default `maxRecDepth` (term-size
   -- breaker per PROOF_RECIPES runcompiled-construction, as in
-  -- `pauseEvent_runCompiledTo`).  Size facts go through `hsize`; the key
+  -- `pauseEvent_exact_runCompiledTo`).  Size facts go through `hsize`; the key
   -- namings concretize via `hstaged` only where they must match.
   generalize hstaged : ((((Mem.empty.write ((0 : B256) * 32).toNat
       pauseRole.toBytes).write ((1 : B256) * 32).toNat
@@ -707,75 +707,6 @@ theorem pauseOnlyRole_runCompiledTo
 
 /-! ## The pause event tail -/
 
-/-- Emit the gateway's exact `Paused(uint256)` log from an abstract two-word
-memory image.  Naming the memory is the term-size boundary: it avoids reducing
-the concrete 64-byte scratch write in every later state. -/
-private theorem pauseEvent_runCompiledTo
-    {fs : List Func} {sevm : Sevm} {base : Devm} {memory : Mem}
-    {duration : B256} {G : Nat}
-    (hstatic : sevm.isStatic = false)
-    (hsize : memory.size = 64)
-    (hread : (memory.read 0 32).1 = duration.toBytes) :
-    ∃ post, Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G + 1014, base.stateGas⟩)
-      (([Ninst.pushB256 (signatureHash "Paused" [.uint256])] ++
-        logWith 0 0 1) +++ Func.stop) (.ok post) := by
-  obtain ⟨logged, _, _, _, _, _, _, _, _, _, hlift⟩ :=
-    Func.runCompiledTo_log_step_exists (fs := fs) (sevm := sevm)
-      (devm := base.setMach
-        ⟨[(0 : B256), (32 : B256),
-          signatureHash "Paused" [.uint256]], memory, G + 1006, base.stateGas⟩)
-      (n := (0 : Fin 4).succ)
-      (i := (0 : B256)) (sz := (32 : B256))
-      (topics := [signatureHash "Paused" [.uint256]]) (s := [])
-      (c := 1006) (G := G) (M := memory) (M' := memory)
-      (payload := duration.toBytes) (rest := Func.stop)
-      rfl rfl hstatic rfl
-      (by
-        rw [show (0 : B256).toNat = 0 by decide,
-          show (32 : B256).toNat = 32 by decide,
-          Devm.extCost_of_size (N := memory) (i := 0) (sz := 32) (n := 64)
-            (e := 0) hsize (by decide)]
-        decide)
-      (by
-        simpa only [show (0 : B256).toNat = 0 by decide,
-          show (32 : B256).toNat = 32 by decide] using hread)
-      (by
-        apply Mem.read_snd_eq_self
-        apply memExtSize_of_le
-        · rw [hsize]
-        · rw [hsize]
-          decide)
-      (by simp only [Devm.gasLeft_setMach])
-  refine ⟨logged.setMach ⟨[], memory, G, logged.stateGas⟩, ?_⟩
-  unfold logWith
-  apply Func.RunCompiledTo.next
-  · exact Ninst.runCompiled_pushB256
-      (c := gVerylow) (G := G + 1011)
-      (pushCost_of_ne_zero (by decide +kernel))
-      (by simp only [Devm.gasLeft_setMach, gVerylow])
-      (by simp only [Devm.stack_setMach, List.length_nil]; omega)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
-  apply Func.RunCompiledTo.next
-  · exact Ninst.runCompiled_pushB256
-      (c := gVerylow) (G := G + 1008)
-      (pushCost_of_ne_zero (by decide))
-      (by simp only [Devm.gasLeft_setMach, gVerylow])
-      (by
-        simp only [Devm.stack_setMach, List.length_cons,
-          List.length_nil]
-        omega)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
-  apply Func.RunCompiledTo.next
-  · exact Ninst.runCompiled_pushB256
-      (c := gBase) (G := G + 1006) pushCost_zero
-      (by simp only [Devm.gasLeft_setMach, gBase])
-      (by
-        simp only [Devm.stack_setMach, List.length_cons,
-          List.length_nil]
-        omega)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
-  exact hlift (Func.RunCompiledTo.last rfl)
 
 /-- Exact-state variant of the event tail.  The abstract-memory boundary is
 retained, but the post state is named so a parent `CALL` crossing can consume
@@ -843,74 +774,6 @@ private theorem pauseEvent_exact_runCompiledTo
       (by simp only [Devm.gasLeft_setMach])
   exact Func.RunCompiledTo.last rfl
 
-/-- Store the non-indexed event word and emit `Paused(uint256)`.  The calldata
-load and covered one-word store add `11` gas to the abstract event tail. -/
-private theorem pauseFiniteLogTail_runCompiledTo
-    {fs : List Func} {sevm : Sevm} {base : Devm}
-    {duration : B256} {G : Nat}
-    (harg : Sevm.dataWord sevm 4 = duration)
-    (hstatic : sevm.isStatic = false) :
-    ∃ post, Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], pauseAuthScratch sevm.caller.toB256, G + 1025, base.stateGas⟩)
-      ((arg 0 ++ mstoreAt 0 ++
-        [Ninst.pushB256 (signatureHash "Paused" [.uint256])] ++
-        logWith 0 0 1) +++ Func.stop) (.ok post) := by
-  -- Abstract the scratch image: `func_run`'s tactic scans exceed the
-  -- default `maxRecDepth` over the concrete write tower.
-  generalize hstaged2 : (pauseAuthScratch sevm.caller.toB256) = staged2
-  have hlen : duration.toBytes.length = 32 := B256.length_toBytes duration
-  have hne : duration.toBytes ≠ [] := by
-    intro h
-    rw [h] at hlen
-    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
-  have hscratchread : (((staged2.write
-      ((0 : B256) * 32).toNat duration.toBytes).read 0 32).1) =
-      duration.toBytes := by
-    rw [← hlen]
-    exact Mem.read_write_zero _ hne
-  have hscratchsize : ((staged2.write
-      ((0 : B256) * 32).toNat duration.toBytes).size) = 64 := by
-    have hscratch64 : staged2.size = 64 := by
-      rw [← hstaged2]
-      unfold pauseAuthScratch
-      rw [Mem.size_write_word_at, Mem.size_write_word_at,
-        Mem.size_write_word_at, Mem.size_write_word_at]
-      decide
-    have h0 : ((0 : B256) * 32).toNat = 0 := by decide
-    rw [Mem.size_write_word_at, hscratch64, h0]
-    decide
-  obtain ⟨post, eventRun⟩ := pauseEvent_runCompiledTo
-    (fs := fs) (sevm := sevm) (base := base)
-    (memory := (staged2.write
-      ((0 : B256) * 32).toNat duration.toBytes))
-    (duration := duration) (G := G) hstatic hscratchsize
-    hscratchread
-  -- Clear the concrete-tower facts before walking: they break the same
-  -- scans.  The abstract continuation run stays.
-  clear hlen hne hscratchread hscratchsize
-  refine ⟨post, ?_⟩
-  unfold arg cdl
-  func_run (2)
-  rw [show 32 * (0 : B256) + 4 = 4 by decide, harg]
-  apply Func.runCompiledTo_mstoreAt
-      (memory := staged2) (stack := []) (value := duration)
-      (word := 0) (G := G + 1014) (pushGas := gBase)
-      (extGas := 0) (body :=
-        ([Ninst.pushB256 (signatureHash "Paused" [.uint256])] ++
-          logWith 0 0 1) +++ Func.stop)
-  · exact pushCost_zero
-  · simp only [List.length_nil, Nat.ofNat_pos]
-  · intro S G'
-    have hscratch64 : staged2.size = 64 := by
-      rw [← hstaged2]
-      unfold pauseAuthScratch
-      rw [Mem.size_write_word_at, Mem.size_write_word_at,
-        Mem.size_write_word_at, Mem.size_write_word_at]
-      decide
-    have h0 : ((0 : B256) * 32).toNat = 0 := by decide
-    exact Devm.extCost_zero_of_le (by omega) (by omega)
-  · simpa only [show ((0 : B256) * 32).toNat = 0 by decide,
-      gBase, gVerylow] using eventRun
 
 private theorem pauseFiniteLogTail_exact_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
@@ -1010,51 +873,6 @@ private theorem pauseFiniteSstore_runCompiled
       (value := value) (stack := []) (memory := memory) (G := G)
       hfork (by norm_num only [hcost, gCallStipend]; omega) hstatic)
 
-/-- Install the finite resume timestamp, then execute the calldata/event tail.
-The guard's preceding `SLOAD` has already warmed `resumeSinceSlot`, so the
-zero-to-nonzero `SSTORE` charge is exactly `20000`. -/
-private theorem pauseFiniteWrite_runCompiledTo
-    {fs : List Func} {sevm : Sevm} {base : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    {duration value : B256} {G : Nat}
-    (harg : Sevm.dataWord sevm 4 = duration)
-    (hresume : base.getStorVal sevm.currentTarget resumeSinceSlot = 0)
-    (horiginal : getOrigStorVal sevm sevm.currentTarget resumeSinceSlot = 0)
-    (hwarm : (sevm.currentTarget, resumeSinceSlot) ∈
-      base.accessedStorageKeys)
-    (hstatic : sevm.isStatic = false)
-    (hvalueNonzero : value ≠ 0) :
-    ∃ post, Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[value], pauseAuthScratch sevm.caller.toB256,
-        G + 21028, base.stateGas⟩)
-      (([Ninst.pushB256 resumeSinceSlot, Ninst.sstore] ++
-        arg 0 ++ mstoreAt 0 ++
-        [Ninst.pushB256 (signatureHash "Paused" [.uint256])] ++
-        logWith 0 0 1) +++ Func.stop) (.ok post) := by
-  generalize hstaged3 : (pauseAuthScratch sevm.caller.toB256) = staged3
-  obtain ⟨post, tailRun⟩ := pauseFiniteLogTail_runCompiledTo
-    (fs := fs) (sevm := sevm)
-    (base := afterSstore sevm base resumeSinceSlot value)
-    (duration := duration) (G := G) harg hstatic
-  refine ⟨post, ?_⟩
-  apply Func.RunCompiledTo.next
-  · exact Ninst.runCompiled_pushB256
-      (c := gVerylow) (G := G + 21025)
-      (pushCost_of_ne_zero (by decide +kernel))
-      (by simp only [Devm.gasLeft_setMach, gVerylow])
-      (by simp only [Devm.stack_setMach, List.length_cons,
-        List.length_nil]; omega)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
-  rw [show G + 21025 = G + 1025 + 20000 from by omega]
-  apply Func.RunCompiledTo.next
-  · exact pauseFiniteSstore_runCompiled (hfork := hfork)
-      (memory := staged3)
-      (G := G + 1025) hresume horiginal hwarm hstatic hvalueNonzero
-  rw [← hstaged3]
-  have hsg : (afterSstore sevm base resumeSinceSlot value).stateGas =
-      base.stateGas := afterSstore_stateGas
-  rw [hsg] at tailRun
-  exact tailRun
 
 private theorem pauseFiniteWrite_exact_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
@@ -1551,7 +1369,7 @@ private theorem pauseSentinelEventTail_exact_runCompiledTo
       (.ok ((base.addLog (pauseEvent sevm pauseInfinitely)).setMach
         ⟨[], (pauseAuthScratch sevm.caller.toB256).write
           ((0 : B256) * 32).toNat pauseInfinitely.toBytes, G, (base.addLog (pauseEvent sevm pauseInfinitely)).stateGas⟩)) := by
-  -- Abstract the scratch image (as in `pauseFiniteLogTail_runCompiledTo`).
+  -- Abstract the scratch image (as in `pauseFiniteLogTail_exact_runCompiledTo`).
   generalize hstagedS : (pauseAuthScratch sevm.caller.toB256) = staged9
   have hlen : pauseInfinitely.toBytes.length = 32 :=
     B256.length_toBytes pauseInfinitely

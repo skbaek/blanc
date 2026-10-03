@@ -67,7 +67,6 @@ inductive AllowanceBranch
   | selfBypass
   | finite (key before after : B256)
   | maximum (key : B256)
-deriving DecidableEq
 
 /-- Mechanical debit provenance: direct caller, delegated allowance arm, or
 flash settlement's post-callback allowance arm. -/
