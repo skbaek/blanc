@@ -288,6 +288,114 @@ theorem checkedC_of_emptyQueue (benvTxs : Benv) (fork : CoveredFork benvTxs.stat
       fork installed hs3 hs2 hs0b hs1b horig0 horig1 horig2 horig3
   exact ⟨_, _, h⟩
 
+/-! ## Preservation through settlement and the 7251 system call -/
+
+/-- Settlement credits preserve every account's code, via shared
+`State.addBal_getCode`. -/
+theorem settledState_getCode (post : Devm) (E coinbase a : Adr) (refund tip : B256) :
+    (settledState post E coinbase refund tip).getCode a = post.state.getCode a := by
+  unfold settledState
+  rw [State.addBal_getCode, State.addBal_getCode]
+
+/-- Settlement credits preserve every account's storage map: `addBal` is a `setBal`,
+whose storage projection is shared `State.setBal_get_stor`. -/
+theorem settledState_getStor (post : Devm) (E coinbase a : Adr) (refund tip : B256) :
+    (settledState post E coinbase refund tip).getStor a = post.state.getStor a := by
+  simp only [settledState, State.getStor, State.addBal, State.setBal_get_stor]
+
+/-- `setStorVal` preserves every account's code, via shared
+`Blanc.State.setStorVal_balCodeEq` (same shape as the two existing private
+copies; hoist candidate at the closure pass). -/
+theorem setStorVal_getCode_local (w : State) (owner a : Adr) (key value : B256) :
+    (w.setStorVal owner key value).getCode a = w.getCode a := by
+  unfold State.getCode
+  have h := congrFun (Blanc.State.setStorVal_balCodeEq w owner key value) a
+  exact (congrArg Prod.snd h).symm
+
+/-- Block C's settled state keeps every installed code: its frame already does
+(`TxCPost`'s code leg). -/
+theorem TxCPost_settled_codes {benv : Benv} {σ : Blanc.WithdrawalRequest.State}
+    {iters : Nat} {post : Devm} (hQ : TxCPost benv σ iters post)
+    (E coinbase a : Adr) (refund tip : B256) :
+    (settledState post E coinbase refund tip).getCode a = benv.state.getCode a := by
+  rw [settledState_getCode]
+  exact hQ.2.2.2.1 a
+
+/-- Block C's settled state keeps the 7251 storage map: its frame keeps every
+non-predeploy map (`TxCPost`'s storage leg). -/
+theorem TxCPost_settled_stor7251 {benv : Benv} {σ : Blanc.WithdrawalRequest.State}
+    {iters : Nat} {post : Devm} (hQ : TxCPost benv σ iters post)
+    (hne : consolidationRequestPredeployAddress ≠ withdrawalRequestPredeployAddress)
+    (E coinbase : Adr) (refund tip : B256) :
+    (settledState post E coinbase refund tip).getStor
+      consolidationRequestPredeployAddress =
+      benv.state.getStor consolidationRequestPredeployAddress := by
+  rw [settledState_getStor]
+  exact hQ.2.2.1 consolidationRequestPredeployAddress hne
+
+/-- Block B's settled state keeps the 7002 code: its frame says so directly. -/
+theorem TxBPost_settled_7002code {benv : Benv} {σ0 : Blanc.WithdrawalRequest.State}
+    {post : Devm} (hQ : TxBPost benv σ0 post)
+    (E coinbase : Adr) (refund tip : B256) :
+    (settledState post E coinbase refund tip).getCode
+      withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode := by
+  rw [settledState_getCode]
+  exact hQ.1
+
+/-- Block B's settled state keeps any other account's code: its frame keeps the
+whole account (`TxBPost`'s others leg). -/
+theorem TxBPost_settled_otherCode {benv : Benv} {σ0 : Blanc.WithdrawalRequest.State}
+    {post : Devm} (hQ : TxBPost benv σ0 post)
+    (a : Adr) (hE : a ≠ senderE) (hL : a ≠ looperAddress)
+    (hP : a ≠ withdrawalRequestPredeployAddress)
+    (E coinbase : Adr) (refund tip : B256) :
+    (settledState post E coinbase refund tip).getCode a = benv.state.getCode a := by
+  have hget := hQ.2.2.2.2.2.2 a hE hL hP
+  rw [settledState_getCode]
+  exact congrArg (·.code) hget
+
+/-- Block B's settled state keeps the 7251 storage map, by the same others leg. -/
+theorem TxBPost_settled_stor7251 {benv : Benv} {σ0 : Blanc.WithdrawalRequest.State}
+    {post : Devm} (hQ : TxBPost benv σ0 post)
+    (hE : consolidationRequestPredeployAddress ≠ senderE)
+    (hL : consolidationRequestPredeployAddress ≠ looperAddress)
+    (hP : consolidationRequestPredeployAddress ≠ withdrawalRequestPredeployAddress)
+    (E coinbase : Adr) (refund tip : B256) :
+    (settledState post E coinbase refund tip).getStor
+      consolidationRequestPredeployAddress =
+      benv.state.getStor consolidationRequestPredeployAddress := by
+  have hget := hQ.2.2.2.2.2.2 consolidationRequestPredeployAddress hE hL hP
+  rw [settledState_getStor]
+  exact congrArg (·.stor) hget
+
+/-- The 7251 empty-queue system call preserves every account's code: its post
+state writes only slots 0-3 of its own target (`systemPost_facts`). -/
+theorem systemC_post_getCode (benvTxs : Benv) (hempty : EmptyQueueAt benvTxs) (a : Adr) :
+    (Blanc.Lift.ConsolidationRequest.systemPost benvTxs).state.getCode a =
+      benvTxs.state.getCode a := by
+  obtain ⟨hs3, hs2, hs0b, hs1b, horig0, horig1, horig2, horig3⟩ := hempty
+  have hfacts := Blanc.Lift.ConsolidationRequest.systemPost_facts benvTxs
+    hs3 hs2 hs0b hs1b horig0 horig1 horig2 horig3
+  rw [hfacts.2.2.2]
+  rw [setStorVal_getCode_local, setStorVal_getCode_local,
+    setStorVal_getCode_local, setStorVal_getCode_local]
+
+/-- The 7251 empty-queue system call preserves every other account's storage map,
+via shared `Blanc.State.get_setStorVal_ne`. -/
+theorem systemC_post_getStor_other (benvTxs : Benv) (hempty : EmptyQueueAt benvTxs)
+    (a : Adr) (hne : a ≠ consolidationRequestPredeployAddress) :
+    (Blanc.Lift.ConsolidationRequest.systemPost benvTxs).state.getStor a =
+      benvTxs.state.getStor a := by
+  obtain ⟨hs3, hs2, hs0b, hs1b, horig0, horig1, horig2, horig3⟩ := hempty
+  have hfacts := Blanc.Lift.ConsolidationRequest.systemPost_facts benvTxs
+    hs3 hs2 hs0b hs1b horig0 horig1 horig2 horig3
+  have htarg := (Blanc.Lift.ConsolidationRequest.system_seed benvTxs).2.1
+  have h : (Blanc.Lift.ConsolidationRequest.systemSevm benvTxs).currentTarget ≠ a := by
+    rw [htarg]
+    exact Ne.symm hne
+  rw [hfacts.2.2.2]
+  simp only [State.getStor, Blanc.State.get_setStorVal_ne _ _ _ h]
+
 /-! ## Block C -/
 
 /-- **Block C's body.** The two unchecked system calls are discharged via
