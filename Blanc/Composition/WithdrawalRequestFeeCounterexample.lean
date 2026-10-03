@@ -288,6 +288,40 @@ theorem checkedC_of_emptyQueue (benvTxs : Benv) (fork : CoveredFork benvTxs.stat
       fork installed hs3 hs2 hs0b hs1b horig0 horig1 horig2 horig3
   exact ⟨_, _, h⟩
 
+/-- The current-read half of `EmptyQueueAt` follows from four storage-map reads:
+the system base runs on the post-state, and `SLOAD`s read through. The
+transaction-original half stays an explicit premise (orig threading is open). -/
+theorem EmptyQueueAt_of_maps (benvTxs : Benv)
+    (h0 : (benvTxs.state.getStor consolidationRequestPredeployAddress).get 0 = 0)
+    (h1 : (benvTxs.state.getStor consolidationRequestPredeployAddress).get 1 = 0)
+    (h2 : (benvTxs.state.getStor consolidationRequestPredeployAddress).get 2 = 0)
+    (h3 : (benvTxs.state.getStor consolidationRequestPredeployAddress).get 3 = 0)
+    (horig0 : getOrigStorVal (Blanc.Lift.ConsolidationRequest.systemSevm benvTxs)
+      (Blanc.Lift.ConsolidationRequest.systemSevm benvTxs).currentTarget 0 = 0)
+    (horig1 : getOrigStorVal (Blanc.Lift.ConsolidationRequest.systemSevm benvTxs)
+      (Blanc.Lift.ConsolidationRequest.systemSevm benvTxs).currentTarget 1 = 0)
+    (horig2 : getOrigStorVal (Blanc.Lift.ConsolidationRequest.systemSevm benvTxs)
+      (Blanc.Lift.ConsolidationRequest.systemSevm benvTxs).currentTarget 2 = 0)
+    (horig3 : getOrigStorVal (Blanc.Lift.ConsolidationRequest.systemSevm benvTxs)
+      (Blanc.Lift.ConsolidationRequest.systemSevm benvTxs).currentTarget 3 = 0) :
+    EmptyQueueAt benvTxs := by
+  obtain ⟨_, htarg, _, _, _, _, _, _, _, _, _, hstate, _⟩ :=
+    Blanc.Lift.ConsolidationRequest.system_seed benvTxs
+  have hread : ∀ k : B256,
+      (Blanc.Lift.ConsolidationRequest.systemBase benvTxs).getStorVal
+        (Blanc.Lift.ConsolidationRequest.systemSevm benvTxs).currentTarget k =
+        (benvTxs.state.getStor consolidationRequestPredeployAddress).get k := by
+    intro k
+    simp only [Devm.getStorVal, Devm.getAcct, State.getStor, htarg, hstate]
+  refine ⟨?_, ?_, ?_, ?_, horig0, horig1, horig2, horig3⟩
+  · exact (hread 3).trans h3
+  · rw [getStorVal_afterSload]
+    exact (hread 2).trans h2
+  · simp only [Blanc.Lift.ConsolidationRequest.setupBase, getStorVal_afterSload]
+    exact (hread 0).trans h0
+  · simp only [Blanc.Lift.ConsolidationRequest.setupBase, getStorVal_afterSload]
+    exact (hread 1).trans h1
+
 /-! ## Preservation through settlement and the 7251 system call -/
 
 /-- Settlement credits preserve every account's code, via shared
