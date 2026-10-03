@@ -1,5 +1,6 @@
 import Blanc.Lift.Exact
 import Blanc.Lift.SystemDrainer.Check
+import Blanc.Lift.CheckAssembly
 
 /-!
 # System-drainer valid jump destinations
@@ -15,12 +16,7 @@ theorem jumps_0 :
     jumpsOkNode code (Cert.entries cert) t_0000_c0 [] = true := by
   decide +kernel
 
-theorem jumps_ok : Cert.jumpsOk code cert = true := by
-  unfold Cert.jumpsOk
-  rw [List.all_eq_true]
-  intro p hp
-  simp only [cert, List.mem_cons, List.not_mem_nil, or_false] at hp
-  rcases hp with rfl
-  exact jumps_0
+theorem jumps_ok : Cert.jumpsOk code cert = true :=
+  Cert.jumpsOk_singleton jumps_0
 
 end Blanc.Lift.SystemDrainer

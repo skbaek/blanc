@@ -17,6 +17,15 @@ theorem Cert.check_singleton {code : ByteArray} {entry : Entry} {node : SFunc}
   rw [hstart, hnode]
   rfl
 
+/-- Assemble a single-entry jump certificate from its sole node check, the
+`jumpsOk` counterpart of `check_singleton` for hand-written `Jumps` modules. -/
+theorem Cert.jumpsOk_singleton {code : ByteArray} {entry : Entry} {node : SFunc}
+    (hnode : jumpsOkNode code [entry] node entry.frame = true) :
+    Cert.jumpsOk code [(entry, node)] = true := by
+  change (jumpsOkNode code [entry] node entry.frame && true) = true
+  rw [hnode]
+  rfl
+
 /-- Assemble a seven-entry non-memory certificate from its startup condition
 and seven node checks. The entries stay implicit: each node check unifies them
 against the certificate's own entry list, exactly as in `check_singleton`.

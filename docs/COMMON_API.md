@@ -3333,6 +3333,8 @@ contract-neutral.
   existing startup Boolean and sole `checkNode` result; the theorem preserves
   the ordinary `Cert.check` proposition. The registered producer uses it for
   singleton checks, including the final owner of split check files.
+  Its jump counterpart `Cert.jumpsOk_singleton` takes the sole `jumpsOkNode`
+  result; hand-written single-entry `Jumps` modules call it directly.
 - Assemble a seven-entry non-memory certificate with `Cert.check_seven` and its
   jump counterpart `Cert.jumpsOk_seven` in the same module: supply the seven
   per-entry `checkNode`/`jumpsOkNode` results plus the startup Boolean (check
