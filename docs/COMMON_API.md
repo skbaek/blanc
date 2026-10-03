@@ -3378,6 +3378,13 @@ contract-neutral.
   consume the genuine compiled call, actual returned stack/gas and continuation.
   Request/output windows and `PtrMem` are parameterized; replies need not have
   exactly32 bytes, and the returned world is not replaced by its pre-call world.
+  For an actual `Line.Run` through the comparison, use
+  `returnWidthCompareLine_inv` with `returnWidthCompareLine` and `PtrMem`.
+  It retains the actual post-state and comparison stack, including the full
+  returndata length converted to a word. Combine the bounded producer result
+  with the actual taken branch to derive the minimum width; the line alone
+  does not establish it. `returnWidthGuard_invP` reuses this single inversion
+  while retaining the residual cut's original instruction predicate.
   The required literal tree and failure facts are not selected reliably by a
   general `RunCutP` or `RunExact` goal head, so these entries remain registry-only.
   `CALLER` (`rx_caller`, `ri_caller`), `KECCAK256` inverted (`ri_keccak`), `LOG3`
