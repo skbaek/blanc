@@ -6,6 +6,8 @@ import Blanc.BlockForward
 import Blanc.ExecutionTraceRootFrame
 import Blanc.Lift.BeaconRoots.SystemWalk
 import Blanc.Lift.HistoryStorage.SystemWalk
+import Blanc.Lift.WithdrawalRequest.SystemProtocol
+import Blanc.Lift.ConsolidationRequest.SystemWalk
 
 /-!
 # The mathematical-fee refutation: block assembly
@@ -234,6 +236,58 @@ theorem stHistory_get_of_installed {benv : Benv} {lastHash : B256} {a : Adr}
     (systemCodeInstalled_historyStorage installed)
     hlast hneB hneH
 
+/-- Empty-queue storage facts at a post-transaction state, in the exact shapes of
+`Blanc.Lift.ConsolidationRequest.processCheckedSystemTransaction_consolidationRequest_empty`:
+slots 3 and 2 read zero, slots 0 and 1 read zero after the pointer reset, and the
+transaction-original values of slots 0-3 are zero. -/
+def EmptyQueueAt (benvTxs : Benv) : Prop :=
+  (Blanc.Lift.ConsolidationRequest.systemBase benvTxs).getStorVal
+      (Blanc.Lift.ConsolidationRequest.systemSevm benvTxs).currentTarget 3 = 0 ∧
+  (Blanc.afterSload (Blanc.Lift.ConsolidationRequest.systemSevm benvTxs)
+      (Blanc.Lift.ConsolidationRequest.systemBase benvTxs) 3).getStorVal
+      (Blanc.Lift.ConsolidationRequest.systemSevm benvTxs).currentTarget 2 = 0 ∧
+  (Blanc.Lift.ConsolidationRequest.setupBase
+      (Blanc.Lift.ConsolidationRequest.systemSevm benvTxs)
+      (Blanc.Lift.ConsolidationRequest.systemBase benvTxs)).getStorVal
+      (Blanc.Lift.ConsolidationRequest.systemSevm benvTxs).currentTarget 0 = 0 ∧
+  (Blanc.Lift.ConsolidationRequest.setupBase
+      (Blanc.Lift.ConsolidationRequest.systemSevm benvTxs)
+      (Blanc.Lift.ConsolidationRequest.systemBase benvTxs)).getStorVal
+      (Blanc.Lift.ConsolidationRequest.systemSevm benvTxs).currentTarget 1 = 0 ∧
+  getOrigStorVal (Blanc.Lift.ConsolidationRequest.systemSevm benvTxs)
+      (Blanc.Lift.ConsolidationRequest.systemSevm benvTxs).currentTarget 0 = 0 ∧
+  getOrigStorVal (Blanc.Lift.ConsolidationRequest.systemSevm benvTxs)
+      (Blanc.Lift.ConsolidationRequest.systemSevm benvTxs).currentTarget 1 = 0 ∧
+  getOrigStorVal (Blanc.Lift.ConsolidationRequest.systemSevm benvTxs)
+      (Blanc.Lift.ConsolidationRequest.systemSevm benvTxs).currentTarget 2 = 0 ∧
+  getOrigStorVal (Blanc.Lift.ConsolidationRequest.systemSevm benvTxs)
+      (Blanc.Lift.ConsolidationRequest.systemSevm benvTxs).currentTarget 3 = 0
+
+/-- The 7002 checked system call from installed canonical code, via
+`Blanc.Lift.WithdrawalRequest.checked_system_totality`. -/
+theorem checkedW_of_installed (benvTxs : Benv) (fork : CoveredFork benvTxs.stat.fork)
+    (installed : benvTxs.state.getCode withdrawalRequestPredeployAddress =
+      Blanc.withdrawalRequestCode) :
+    ∃ stW outW, processCheckedSystemTransaction benvTxs withdrawalRequestPredeployAddress [] =
+      .ok (stW, outW) := by
+  obtain ⟨h, -, -, -, -, -⟩ :=
+    Blanc.Lift.WithdrawalRequest.checked_system_totality fork installed
+  exact ⟨_, _, h⟩
+
+/-- The 7251 checked system call from installed code and the empty-queue facts, via
+`Blanc.Lift.ConsolidationRequest.processCheckedSystemTransaction_consolidationRequest_empty`. -/
+theorem checkedC_of_emptyQueue (benvTxs : Benv) (fork : CoveredFork benvTxs.stat.fork)
+    (installed : benvTxs.state.getCode consolidationRequestPredeployAddress =
+      Blanc.consolidationRequestCode)
+    (hempty : EmptyQueueAt benvTxs) :
+    ∃ stC outC, processCheckedSystemTransaction benvTxs consolidationRequestPredeployAddress [] =
+      .ok (stC, outC) := by
+  obtain ⟨hs3, hs2, hs0b, hs1b, horig0, horig1, horig2, horig3⟩ := hempty
+  obtain ⟨h, -, -, -⟩ :=
+    Blanc.Lift.ConsolidationRequest.processCheckedSystemTransaction_consolidationRequest_empty
+      fork installed hs3 hs2 hs0b hs1b horig0 horig1 horig2 horig3
+  exact ⟨_, _, h⟩
+
 /-! ## Block C -/
 
 /-- **Block C's body.** The two unchecked system calls are discharged via
@@ -260,13 +314,13 @@ theorem blockC_body {benv : Benv} {iters : Nat} {out : B256}
     (hrun : WordFakeExponential.Run σ.excess.toB256 17 1 17 0 iters out)
     (hpaid : (out / (17 : B256)).toNat ≤ 2 ^ 245)
     (hiters : iters ≤ 10000)
-    -- the request calls, on whatever the transaction leaves
-    (hW : ∀ benvTxs : Benv, ∃ stW outW,
-      processCheckedSystemTransaction benvTxs withdrawalRequestPredeployAddress [] =
-        .ok (stW, outW))
-    (hC : ∀ benvTxs : Benv, ∃ stC outC,
-      processCheckedSystemTransaction benvTxs consolidationRequestPredeployAddress [] =
-        .ok (stC, outC)) :
+    -- the request calls, on whatever the transaction leaves: installed canonical code
+    -- plus the 7251 empty-queue facts (carried as state facts, not opaque existentials)
+    (hWcode : ∀ benvTxs : Benv,
+      benvTxs.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode)
+    (hCcode : ∀ benvTxs : Benv,
+      benvTxs.state.getCode consolidationRequestPredeployAddress = Blanc.consolidationRequestCode)
+    (hCempty : ∀ benvTxs : Benv, EmptyQueueAt benvTxs) :
     ∃ (post : Devm) (boutTxs : BlockOutput) (stW stC : State) (outW outC : MsgCallOutput),
       TxCPost (benv.withState (stHistory benv)) σ iters post ∧
       applyBody benv [Sum.inr txC] [] =
@@ -335,8 +389,15 @@ theorem blockC_body {benv : Benv} {iters : Nat} {out : B256}
     have hdel := hQ.2.2.2.2.1
     rw [settled_of_no_deletions post senderE _ _ _ hdel] at hproc
     exact hproc
-  obtain ⟨stW, outW, hWrun⟩ := hW (benvTx.withState _)
-  obtain ⟨stC, outC, hCrun⟩ := hC ((benvTx.withState _).withState stW)
+  set settledTx : State := settledState post senderE benv.stat.coinbase
+      ((txC.gas - txGasUsed txC.gas 23000 post.gasLeft post.refundCounter.toNat) *
+        (min 1 (8 - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)).toB256
+      (txGasUsed txC.gas 23000 post.gasLeft post.refundCounter.toNat *
+        (min 1 (8 - benv.stat.baseFeePerGas))).toB256 with hsettledTx
+  obtain ⟨stW, outW, hWrun⟩ := checkedW_of_installed (benvTx.withState settledTx)
+    hfork (hWcode _)
+  obtain ⟨stC, outC, hCrun⟩ := checkedC_of_emptyQueue
+    ((benvTx.withState settledTx).withState stW) hfork (hCcode _) (hCempty _)
   refine ⟨post, bout', stW, stC, outW, outC, hQ, ?_, hWrun, hCrun⟩
   exact applyBody_forward hfork hbeacon hlast hhistory (decode_single txC)
     (by rw [putIndex_single]; exact applyTransactions_single hproc') hdeposit hWrun hCrun
@@ -369,12 +430,11 @@ theorem blockB_body {benv : Benv} {σ0 : Blanc.WithdrawalRequest.State} {lastHas
     (hqueue : ∀ n o, σ0.tail ≤ n → n < σ0.tail + 2895 → o ≤ 2 →
       (benv.state.getStor withdrawalRequestPredeployAddress).get
         (Blanc.WithdrawalRequest.queueSlot n o) = 0)
-    (hW : ∀ benvTxs : Benv, ∃ stW outW,
-      processCheckedSystemTransaction benvTxs withdrawalRequestPredeployAddress [] =
-        .ok (stW, outW))
-    (hC : ∀ benvTxs : Benv, ∃ stC outC,
-      processCheckedSystemTransaction benvTxs consolidationRequestPredeployAddress [] =
-        .ok (stC, outC)) :
+    (hWcode : ∀ benvTxs : Benv,
+      benvTxs.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode)
+    (hCcode : ∀ benvTxs : Benv,
+      benvTxs.state.getCode consolidationRequestPredeployAddress = Blanc.consolidationRequestCode)
+    (hCempty : ∀ benvTxs : Benv, EmptyQueueAt benvTxs) :
     ∃ (post : Devm) (boutTxs : BlockOutput) (stW stC : State) (outW outC : MsgCallOutput),
       TxBPost (benv.withState (stHistory benv)) σ0 post ∧
       applyBody benv [Sum.inr txB] [] =
@@ -458,8 +518,15 @@ theorem blockB_body {benv : Benv} {σ0 : Blanc.WithdrawalRequest.State} {lastHas
           (min 1 (8 - benv.stat.baseFeePerGas))).toB256, bout') := by
     rw [TxBPost.no_deletions hQ] at hproc
     exact hproc
-  obtain ⟨stW, outW, hWrun⟩ := hW (benvTx.withState _)
-  obtain ⟨stC, outC, hCrun⟩ := hC ((benvTx.withState _).withState stW)
+  set settledTx : State := settledState post senderE benv.stat.coinbase
+      ((txB.gas - txGasUsed txB.gas 23380 post.gasLeft post.refundCounter.toNat) *
+        (min 1 (8 - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)).toB256
+      (txGasUsed txB.gas 23380 post.gasLeft post.refundCounter.toNat *
+        (min 1 (8 - benv.stat.baseFeePerGas))).toB256 with hsettledTx
+  obtain ⟨stW, outW, hWrun⟩ := checkedW_of_installed (benvTx.withState settledTx)
+    hfork (hWcode _)
+  obtain ⟨stC, outC, hCrun⟩ := checkedC_of_emptyQueue
+    ((benvTx.withState settledTx).withState stW) hfork (hCcode _) (hCempty _)
   refine ⟨post, bout', stW, stC, outW, outC, hQ, ?_, hWrun, hCrun⟩
   exact applyBody_forward hfork hbeacon hlast hhistory (decode_single txB)
     (by rw [putIndex_single]; exact applyTransactions_single hproc') hdeposit hWrun hCrun
