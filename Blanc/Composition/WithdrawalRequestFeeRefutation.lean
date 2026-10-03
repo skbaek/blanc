@@ -535,14 +535,27 @@ structure PreB (w : State) : Prop where
     (w.getStor withdrawalRequestPredeployAddress).get
       (Blanc.WithdrawalRequest.queueSlot n o) = 0
 
-/-- **Block A**: no transactions; the fork-activation system call resets the inhibitor. -/
+/-- **Block A**: no transactions; the fork-activation system call resets the inhibitor.  The
+opening world needs only the checkpoint's two request-predeploy storage maps; every account but
+the four system contracts' survives the block. -/
 theorem blockA_run {benv : Benv} {lastHash : B256}
     (hfork : CoveredFork benv.stat.fork) (installed : SystemCodeInstalled benv.state)
     (hlast : benv.stat.blockHashes.getLast? = some lastHash)
-    (hstate : benv.state = checkpointState) :
+    (h7002 : benv.state.getStor withdrawalRequestPredeployAddress =
+      checkpointState.getStor withdrawalRequestPredeployAddress)
+    (h7251 : benv.state.getStor consolidationRequestPredeployAddress =
+      checkpointState.getStor consolidationRequestPredeployAddress) :
     applyBody benv [] [] =
       .ok (bodyPost benv (stHistory benv), bodyOut benv (stHistory benv) BlockOutput.init) ∧
-    PreB (bodyPost benv (stHistory benv)) := by
+    Slots7251Zero (bodyPost benv (stHistory benv)) ∧
+    Blanc.WithdrawalRequest.RepresentsStorage
+      ((bodyPost benv (stHistory benv)).getStor withdrawalRequestPredeployAddress).get σA ∧
+    (∀ n o, n < 2895 → o ≤ 2 →
+      ((bodyPost benv (stHistory benv)).getStor withdrawalRequestPredeployAddress).get
+        (Blanc.WithdrawalRequest.queueSlot n o) = 0) ∧
+    ∀ a, a ≠ withdrawalRequestPredeployAddress → a ≠ consolidationRequestPredeployAddress →
+      beaconRootsAddress ≠ a → historyStorageAddress ≠ a →
+      (bodyPost benv (stHistory benv)).get a = benv.state.get a := by
   have hWcode : (stHistory benv).getCode withdrawalRequestPredeployAddress =
       Blanc.withdrawalRequestCode :=
     (stHistory_getCode_inst hfork installed hlast _ (by decide) (by decide)).trans
@@ -551,34 +564,31 @@ theorem blockA_run {benv : Benv} {lastHash : B256}
       Blanc.consolidationRequestCode :=
     (stHistory_getCode_inst hfork installed hlast _ (by decide) (by decide)).trans
       (systemCodeInstalled_consolidation installed)
-  have hstor : ∀ a, beaconRootsAddress ≠ a → historyStorageAddress ≠ a →
-      (stHistory benv).getStor a = checkpointState.getStor a := by
-    intro a hB hH
-    rw [stHistory_getStor_inst hfork installed hlast a hB hH, hstate]
+  have hstorW : (stHistory benv).getStor withdrawalRequestPredeployAddress =
+      checkpointState.getStor withdrawalRequestPredeployAddress := by
+    rw [stHistory_getStor_inst hfork installed hlast _ (by decide) (by decide), h7002]
   have hz : Slots7251Zero (stHistory benv) := by
     unfold Slots7251Zero
-    rw [hstor _ (by decide) (by decide)]
+    rw [stHistory_getStor_inst hfork installed hlast _ (by decide) (by decide), h7251]
     exact ⟨checkpoint_7251_slots 0, checkpoint_7251_slots 1, checkpoint_7251_slots 2,
       checkpoint_7251_slots 3⟩
-  have hget : ∀ a, a ≠ withdrawalRequestPredeployAddress →
+  have hkeep : ∀ a, a ≠ withdrawalRequestPredeployAddress →
       a ≠ consolidationRequestPredeployAddress → beaconRootsAddress ≠ a →
       historyStorageAddress ≠ a →
-      (bodyPost benv (stHistory benv)).get a = checkpointState.get a := by
+      (bodyPost benv (stHistory benv)).get a = benv.state.get a := by
     intro a hW hC hB hH
     rw [bodyPost_get_other hfork hCcode hz a hW hC,
-      stHistory_get_of_installed hfork installed hlast hB hH, hstate]
+      stHistory_get_of_installed hfork installed hlast hB hH]
   have htxs : applyTransactions ([] : List Tx).putIndex (benvH benv) BlockOutput.init =
       .ok ((benvH benv).withState (stHistory benv), BlockOutput.init) := by
     rw [benvH_withState_stHistory]
     rfl
   refine ⟨body_of_txs hfork installed hlast rfl htxs (parseDepositRequests_of_no_receipts rfl)
-    hWcode hCcode hz, ⟨bodyPost_zero hfork hCcode hz, ?_, ?_, ?_, ?_⟩⟩
-  · exact hget _ (by decide) (by decide) (by decide) (by decide)
-  · exact hget _ (by decide) (by decide) (by decide) (by decide)
+    hWcode hCcode hz, bodyPost_zero hfork hCcode hz, ?_, ?_, hkeep⟩
   · have hrep0 : Blanc.WithdrawalRequest.RepresentsStorage
         ((stHistory benv).getStor withdrawalRequestPredeployAddress).get
         Blanc.WithdrawalRequest.initial := by
-      rw [hstor _ (by decide) (by decide)]
+      rw [hstorW]
       exact checkpoint_7002_rep
     exact bodyPost_represents hfork hCcode hz hrep0 (by decide)
   · intro n o hn ho
@@ -590,7 +600,7 @@ theorem blockA_run {benv : Benv} {lastHash : B256}
       (queueSlot_ne_meta hn ho 1 (by decide)) (queueSlot_ne_meta hn ho 2 (by decide))
       (queueSlot_ne_meta hn ho 3 (by decide))]
     change ((stHistory benv).getStor _).get _ = 0
-    rw [hstor _ (by decide) (by decide)]
+    rw [hstorW]
     exact checkpoint_7002_queue_zero n o (by unfold Blanc.WithdrawalRequest.queueBase; omega)
 
 /-! ## Block B -/
@@ -1120,8 +1130,12 @@ theorem checkpoint_ready : ChainReady checkpointChain genesisBlock :=
 theorem stageA : ∃ (post : BlockChain) (trace : ConfiguredBlockTrace witnessConfig checkpointChain post)
     (parent : Block), BlockOk trace ∧ PreB post.state ∧ ChainReady post parent := by
   obtain ⟨lhA, hlA⟩ := blockHashes_getLast_of_ne checkpoint_ready.nonempty
-  obtain ⟨hbody, hpre⟩ := blockA_run (benv := benvAt checkpointChain genesisBlock)
-    prague_covered checkpoint_installed hlA rfl
+  obtain ⟨hbody, hz, hrep, hqueue, hkeep⟩ := blockA_run
+    (benv := benvAt checkpointChain genesisBlock) prague_covered checkpoint_installed hlA rfl rfl
+  have hpre : PreB (bodyPost (benvAt checkpointChain genesisBlock)
+      (stHistory (benvAt checkpointChain genesisBlock))) :=
+    ⟨hz, hkeep _ (by decide) (by decide) (by decide) (by decide),
+      hkeep _ (by decide) (by decide) (by decide) (by decide), hrep, hqueue⟩
   obtain ⟨trace⟩ := witnessBlockTrace checkpoint_ready.last checkpoint_sum_bound rfl rfl rfl
     checkpoint_ready.gasUsed hbody (by decide)
   have blockEq := Blanc.BlockForward.ConfiguredBlockTrace.block_eq trace rfl

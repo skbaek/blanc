@@ -665,6 +665,7 @@ import Blanc.Lift.WithdrawalRequest.FloodRun
 import Blanc.Lift.WithdrawalRequest.FloodTx
 import Blanc.Composition.WithdrawalRequestFeeCounterexample
 import Blanc.Composition.WithdrawalRequestFeeRefutation
+import Blanc.Composition.WithdrawalRequestDrainControl
 import Blanc.Lift.WithdrawalRequest.FloodTxRecover
 import Blanc.Lift.WithdrawalRequest.WordModelCount
 import Blanc.Lift.WithdrawalRequest.UserOccurrence

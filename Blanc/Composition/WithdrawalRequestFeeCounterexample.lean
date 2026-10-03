@@ -6,6 +6,7 @@ import Blanc.BlockForward
 import Blanc.Lift.BeaconRoots.SystemWalk
 import Blanc.Lift.HistoryStorage.SystemWalk
 import Blanc.Lift.WithdrawalRequest.SystemProtocol
+import Blanc.Lift.WithdrawalRequest.SystemFrameEffects
 
 /-!
 # The mathematical-fee refutation: block assembly
@@ -257,77 +258,6 @@ theorem TxBPost_settled_stor7251 {benv : Benv} {σ0 : Blanc.WithdrawalRequest.St
 
 /-! ## Preservation through the 7002 system call -/
 
-/-- `St` preserves every account's code: it only replaces the machine. -/
-theorem St_getCode_local (b : Devm) (S : List B256) (M : Mem) (G : Nat) (address : Adr) :
-    (Blanc.Lift.St b S M G).getCode address = b.getCode address := by
-  simp only [Blanc.Lift.St, Devm.getCode_state, Devm.setMach_state]
-
-/-- `returnPost` preserves every account's code: it only replaces machine,
-memory window and output. -/
-theorem returnPost_getCode_local (d : Devm) (i sz : B256) (S : List B256) (address : Adr) :
-    (Blanc.Lift.returnPost d i sz S).getCode address = d.getCode address := by
-  have hstate : (Blanc.Lift.returnPost d i sz S).state = d.state := by
-    simp only [Blanc.Lift.returnPost, Devm.withOutput_state, Devm.memRead_state,
-      Devm.setMach_state]
-  simp only [Devm.getCode_state, hstate]
-
-/-- One queue-loop body preserves every account's code: three `SLOAD`s. -/
-theorem systemBodyBase_getCode_local (sevm : Sevm) (base : Devm) (head index : B256)
-    (address : Adr) :
-    (Blanc.Lift.WithdrawalRequest.systemBodyBase sevm base head index).getCode address =
-      base.getCode address := by
-  simp only [Blanc.Lift.WithdrawalRequest.systemBodyBase,
-    Blanc.Lift.WithdrawalRequest.systemBodyBase2,
-    Blanc.Lift.WithdrawalRequest.systemBodyBase1, Blanc.afterSload_getCode]
-
-/-- The queue loop preserves every account's code, mirroring `systemLoopFold_storage`. -/
-theorem systemLoopFold_getCode_local (sevm : Sevm) (head : B256) (index remaining : Nat)
-    (base : Devm) (memory : Mem) (address : Adr) :
-    (Blanc.Lift.WithdrawalRequest.systemLoopFold sevm head index remaining base
-      memory).base.getCode address = base.getCode address := by
-  induction remaining generalizing index base memory with
-  | zero => rfl
-  | succ remaining ih =>
-    simp only [Blanc.Lift.WithdrawalRequest.systemLoopFold]
-    rw [ih, systemBodyBase_getCode_local]
-
-/-- Queue setup preserves every account's code: two `SLOAD`s. -/
-theorem systemSetupBase_getCode_local (sevm : Sevm) (base : Devm) (address : Adr) :
-    (Blanc.Lift.WithdrawalRequest.systemSetupBase sevm base).getCode address =
-      base.getCode address := by
-  simp only [Blanc.Lift.WithdrawalRequest.systemSetupBase, Blanc.afterSload_getCode]
-
-/-- The whole queue segment preserves every account's code, mirroring
-`systemQueuePost_storage`. -/
-theorem systemQueuePost_getCode_local (sevm : Sevm) (base : Devm) (memory : Mem)
-    (address : Adr) :
-    (Blanc.Lift.WithdrawalRequest.systemQueuePost sevm base memory).base.getCode address =
-      base.getCode address := by
-  rw [Blanc.Lift.WithdrawalRequest.systemQueuePost, systemLoopFold_getCode_local,
-    systemSetupBase_getCode_local]
-
-/-- The whole 7002 system frame preserves every account's code: every layer is
-an `SLOAD`, an `SSTORE`, `RETURN` or a machine update. Mirrors
-`systemFramePost_other_storage`, with no side condition since stores never touch
-code. -/
-theorem systemFramePost_getCode_local (sevm : Sevm) (base : Devm) (memory : Mem)
-    (gas : Nat) (address : Adr) :
-    (Blanc.Lift.WithdrawalRequest.systemFramePost sevm base memory gas).getCode address =
-      base.getCode address := by
-  rw [Blanc.Lift.WithdrawalRequest.systemFramePost,
-    Blanc.Lift.WithdrawalRequest.systemBookkeepingPost,
-    returnPost_getCode_local, St_getCode_local]
-  simp only [Blanc.Lift.WithdrawalRequest.systemBookkeepingBase,
-    Blanc.Lift.WithdrawalRequest.systemExcessStore,
-    Blanc.Lift.WithdrawalRequest.systemCountRead,
-    Blanc.Lift.WithdrawalRequest.systemExcessRead,
-    Blanc.afterSstore_getCode, Blanc.afterSload_getCode]
-  unfold Blanc.Lift.WithdrawalRequest.systemFramePointers
-    Blanc.Lift.WithdrawalRequest.systemPointerBase
-  split
-  · simp only [Blanc.afterSstore_getCode, systemQueuePost_getCode_local]
-  · simp only [Blanc.afterSstore_getCode, systemQueuePost_getCode_local]
-
 /-- The 7002 checked system call preserves every account's code. -/
 theorem systemW_post_getCode (benvTxs : Benv) (address : Adr) :
     (Blanc.Lift.WithdrawalRequest.systemProtocolPost benvTxs).state.getCode address =
@@ -335,7 +265,7 @@ theorem systemW_post_getCode (benvTxs : Benv) (address : Adr) :
   obtain ⟨_, _, _, _, _, _, _, _, _, _, _, hstate, _, _, _, _, _⟩ :=
     Blanc.Lift.WithdrawalRequest.systemProtocol_seed benvTxs
   unfold Blanc.Lift.WithdrawalRequest.systemProtocolPost
-  rw [← Devm.getCode_state, systemFramePost_getCode_local, Devm.getCode_state, hstate]
+  rw [← Devm.getCode_state, Blanc.Lift.WithdrawalRequest.systemFramePost_getCode, Devm.getCode_state, hstate]
 
 /-- The 7002 checked system call preserves every other account's storage map, via
 shared `systemFramePost_other_storage`. -/

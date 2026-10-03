@@ -144,9 +144,39 @@ theorem txC_intrinsic {rules : ForkRules} (hsg : rules.stateGas = none)
   rw [calldataTokens_payload]
   rfl
 
+/-- `SSTORE` keeps every account's nonce. -/
+private theorem afterSstore_nonce {sevm : Sevm} {b : Devm} {key value : B256} (a : Adr) :
+    ((afterSstore sevm b key value).getAcct a).nonce = (b.getAcct a).nonce := by
+  obtain ⟨st, h⟩ := afterSstore_getAcct (sevm := sevm) (b := b) (key := key) (value := value) a
+  rw [h]
+
+/-- A submission keeps every account's nonce, mirroring `submissionPost_code_bal`. -/
+theorem submissionPost_nonce (sevm : Sevm) (b : Devm) (M : Mem) (G : Nat) (a : Adr) :
+    ((submissionPost sevm b M G).getAcct a).nonce = (b.getAcct a).nonce := by
+  have hSt : ∀ d : Devm, (St d [] (submissionMemory sevm M) G).getAcct a = d.getAcct a :=
+    fun _ => rfl
+  have hLog : ∀ (d : Devm) (l : Log), (d.addLog l).getAcct a = d.getAcct a := fun _ _ => rfl
+  rw [submissionPost, hSt]
+  unfold submissionBase
+  rw [afterSstore_nonce]
+  unfold submissionLogged
+  rw [hLog]
+  unfold submissionWordsStore
+  rw [afterSstore_nonce]
+  unfold submissionWord1Store
+  rw [afterSstore_nonce]
+  unfold submissionCallerStore
+  rw [afterSstore_nonce]
+  unfold submissionTailRead
+  rw [afterSload_getAcct]
+  unfold submissionCountStore
+  rw [afterSstore_nonce]
+  unfold submissionCountRead
+  rw [afterSload_getAcct]
+
 /-- What block C's transaction leaves of the frame it ran: the queued record, its one
-log, every other storage map and all code untouched, the value moved, no account
-scheduled for deletion, and the gas it kept. -/
+log, every other storage map and all code untouched, the value moved, the sender's nonce
+bumped, no account scheduled for deletion, and the gas it kept. -/
 def TxCPost (benv : Benv) (σ : Blanc.WithdrawalRequest.State) (iters : Nat) (post : Devm) :
     Prop :=
   Blanc.WithdrawalRequest.RepresentsStorage
@@ -160,6 +190,7 @@ def TxCPost (benv : Benv) (σ : Blanc.WithdrawalRequest.State) (iters : Nat) (po
   (post.state.get senderE).bal = benv.state.bal senderE -
     (2 ^ 20 * (min 1 (8 - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)).toB256 -
     (2 ^ 245 : Nat).toB256 ∧
+  (post.state.get senderE).nonce = (benv.state.get senderE).nonce + 1 ∧
   (post.state.get withdrawalRequestPredeployAddress).bal =
     benv.state.bal withdrawalRequestPredeployAddress + (2 ^ 245 : Nat).toB256 ∧
   1026776 - (118058 + 87 * iters) ≤ post.gasLeft ∧ post.gasLeft ≤ 1026776
@@ -318,7 +349,7 @@ theorem txC_exec
       | some _ => _) = []
     rw [CoveredFork.rules_stateGas_none hfork']
   have hacct := fun a => submissionPost_code_bal (initSevm m) b0 Mem.empty G a
-  refine ⟨_, hex, herr, hrefund, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨_, hex, herr, hrefund, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [hm'_ct] at hrepP; exact hrepP
   · rw [hlogsP, hb0, afterSload_logs, hlog0, hm'_ct, List.nil_append]
   · intro a ha
@@ -346,6 +377,10 @@ theorem txC_exec
     show (after.state.get senderE).bal = _
     rw [hafter_E]
     exact rfl
+  · show ((submissionPost (initSevm m) b0 Mem.empty G).getAcct senderE).nonce = _
+    rw [submissionPost_nonce, hb0, afterSload_getAcct]
+    show (after.state.get senderE).nonce = _
+    rw [hafter_E]
   · show ((submissionPost (initSevm m) b0 Mem.empty G).getAcct
       withdrawalRequestPredeployAddress).bal = _
     rw [(hacct withdrawalRequestPredeployAddress).2, hb0, afterSload_getAcct]

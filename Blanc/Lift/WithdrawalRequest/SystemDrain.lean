@@ -3,6 +3,7 @@ import Blanc.Lift.ExactWalkCallChild
 import Blanc.Lift.CreationOps
 import Blanc.Lift.ExactWalkCutOps
 import Blanc.Lift.WithdrawalRequest.SystemProtocol
+import Blanc.Lift.WithdrawalRequest.SystemFrameEffects
 import Blanc.StorageOnlySpec
 
 /-!
@@ -42,13 +43,20 @@ theorem drain_call {sevm : Sevm} {base : Devm} {Gc : Nat} {cw : B256}
     (hrep : Blanc.WithdrawalRequest.RepresentsStorage
       (base.getStor withdrawalRequestPredeployAddress).get σ)
     (hsum : Blanc.WithdrawalRequest.effectiveExcess σ + σ.count < 2 ^ 256)
+    (horig : ∀ key, getOrigStorVal sevm withdrawalRequestPredeployAddress key =
+      (base.getStor withdrawalRequestPredeployAddress).get key)
     (hGlt : Gc < 2 ^ 256) (hG : 427202 ≤ Gc) :
     ∃ post G',
       Ninst.RunCompiled sevm (St base [Nat.toB256 Gc, cw, 0, 0, 0, 0, 0] Mem.empty Gc)
         (.exec .call) (St post [1] Mem.empty G') ∧
       Blanc.WithdrawalRequest.RepresentsStorage
         (post.getStor withdrawalRequestPredeployAddress).get (Blanc.WithdrawalRequest.system σ) ∧
-      post.error = base.error := by
+      post.error = base.error ∧
+      (∀ a, post.getCode a = base.getCode a) ∧
+      (∀ a, a ≠ withdrawalRequestPredeployAddress → post.getStor a = base.getStor a) ∧
+      post.logs = base.logs ∧
+      post.accountsToDelete.isEmpty = base.accountsToDelete.isEmpty ∧
+      base.refundCounter ≤ post.refundCounter := by
   have hd1code : (addAccessedAddress (St base [] Mem.empty Gc) cw.toAdr).state.getCode cw.toAdr =
       Blanc.withdrawalRequestCode := by
     rw [hcw]
@@ -191,7 +199,41 @@ theorem drain_call {sevm : Sevm} {base : Devm} {Gc : Nat} {cw : B256}
   rw [pmem] at pmem'
   have pstack' : post.stack = [1] := pstack
   have hSt := St.self pstack' pmem'
-  refine ⟨post, post.gasLeft, ?_, ?_, ?_⟩
+  have hchild : (callChildPost (callSpawnParent
+      (addAccessedAddress (St base [] Mem.empty Gc) cw.toAdr)
+      (fwd + (accessCost cw.toAdr base.accessedAddresses + 0) + 0)
+      (0 : B256).toNat (0 : B256).toNat (0 : B256).toNat (0 : B256).toNat)
+    (systemFramePost (initSevm msg) (initDevm msg) Mem.empty (fwd - cg)) (0 : B256).toNat
+    (0 : B256).toNat) = post := hpost
+  rw [drain_consts.1] at hchild
+  unfold callChildPost at hchild
+  rw [List.take_zero, Devm.memWrite_nil] at hchild
+  have mstorAll : ∀ a, (initDevm msg).getStor a = base.getStor a := by
+    intro a
+    rw [← hmsg]
+    exact getStor_subBal_addBal hsub
+  have mcodeAll : ∀ a, (initDevm msg).getCode a = base.getCode a := by
+    intro a
+    rw [← hmsg]
+    change (stmid.addBal cw.toAdr 0).getCode a = _
+    rw [State.addBal_getCode, ← hstmid, State.setBal_getCode]
+    rfl
+  have mlogs : (initDevm msg).logs = [] := by
+    change (match (initSevm msg).benvStat.rules.stateGas with
+      | none => []
+      | some _ => _) = []
+    rw [CoveredFork.rules_stateGas_none mfork]
+  have morig : ∀ key, getOrigStorVal (initSevm msg) (initSevm msg).currentTarget key =
+      (initDevm msg).getStorVal (initSevm msg).currentTarget key := by
+    intro key
+    rw [mtarget]
+    change _ = ((initDevm msg).getStor withdrawalRequestPredeployAddress).get key
+    rw [mstor, ← horig key, ← hmsg]
+    rfl
+  have hrefund := systemFramePost_refund_ge (initSevm msg) (initDevm msg) Mem.empty (fwd - cg)
+    morig
+  have hld := systemFramePost_logs_deletions (initSevm msg) (initDevm msg) Mem.empty (fwd - cg)
+  refine ⟨post, post.gasLeft, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [← hSt]
     exact run
   · change Blanc.WithdrawalRequest.RepresentsStorage (post.state.get _).stor.get _
@@ -200,6 +242,25 @@ theorem drain_call {sevm : Sevm} {base : Devm} {Gc : Nat} {cw : B256}
     exact hrep'
   · rw [perr, callSpawnParent_error]
     rfl
+  · intro a
+    rw [Devm.getCode_state, pstate, ← Devm.getCode_state, systemFramePost_getCode, mcodeAll]
+  · intro a ha
+    change (post.state.get a).stor = _
+    rw [pstate]
+    change Devm.getStor _ a = _
+    rw [systemFramePost_other_storage _ _ _ _ a (by rw [mtarget]; exact Ne.symm ha), mstorAll]
+  · rw [← hchild]
+    change base.logs ++ _ = base.logs
+    rw [hld.1, mlogs, List.append_nil]
+  · rw [← hchild]
+    change (base.accountsToDelete.union _).isEmpty = _
+    rw [hld.2]
+    exact adrSet_union_isEmpty _ _ (Std.HashSet.isEmpty_emptyWithCapacity)
+  · rw [← hchild]
+    change base.refundCounter ≤ base.refundCounter + _
+    have h0 : (initDevm msg).refundCounter = 0 := rfl
+    rw [h0] at hrefund
+    omega
 
 /-- **A user-transaction frame at SYSTEM_ADDRESS drains the queue.**  A message running the
 drainer code at SYSTEM_ADDRESS (dynamic, not outermost), into a world where the predeploy is
@@ -216,16 +277,22 @@ theorem drain_exec {msg : Msg} {σ : Blanc.WithdrawalRequest.State}
     (hrep : Blanc.WithdrawalRequest.RepresentsStorage
       (msg.benv.state.getStor withdrawalRequestPredeployAddress).get σ)
     (hsum : Blanc.WithdrawalRequest.effectiveExcess σ + σ.count < 2 ^ 256)
+    (horig : ∀ key, (msg.benv.stat.origState.getStor withdrawalRequestPredeployAddress).get key =
+      (msg.benv.state.getStor withdrawalRequestPredeployAddress).get key)
     (hgas : 427217 ≤ msg.gas) (hlt : msg.gas < 2 ^ 256) :
     ∃ post, exec (initEvm msg) = .ok post ∧ post.error = none ∧
       Blanc.WithdrawalRequest.RepresentsStorage
         (post.getStor withdrawalRequestPredeployAddress).get
-        (Blanc.WithdrawalRequest.system σ) := by
+        (Blanc.WithdrawalRequest.system σ) ∧
+      (∀ a, post.getCode a = msg.benv.state.getCode a) ∧
+      (∀ a, a ≠ withdrawalRequestPredeployAddress → post.getStor a = msg.benv.state.getStor a) ∧
+      post.logs = [] ∧ post.accountsToDelete.isEmpty = true ∧ 0 ≤ post.refundCounter := by
   obtain ⟨G0, hG0⟩ : ∃ G0, G0 + 15 = (initDevm msg).gasLeft :=
     ⟨msg.gas - 15, by rw [initDevm_gasLeft]; omega⟩
   have hpre := pre_eq_St (pre := initDevm msg) rfl rfl hG0
-  obtain ⟨post, G', run, rep, err⟩ := drain_call (sevm := initSevm msg) (base := initDevm msg)
-    (Gc := G0) (σ := σ) hfork hstatic hdepth hsys drainer_callee hinstalled hrep hsum
+  obtain ⟨post, G', run, rep, err, pcode, pstor, plogs, pdel, prefund⟩ :=
+    drain_call (sevm := initSevm msg) (base := initDevm msg)
+    (Gc := G0) (σ := σ) hfork hstatic hdepth hsys drainer_callee hinstalled hrep hsum horig
     (by rw [initDevm_gasLeft] at hG0; omega) (by rw [initDevm_gasLeft] at hG0; omega)
   have hrun : SFunc.RunExact Blanc.Lift.SystemDrainer.cert.prog (initSevm msg)
       (St (initDevm msg) [] Mem.empty (G0 + 15)) Blanc.Lift.SystemDrainer.t_0000_c0
@@ -243,9 +310,22 @@ theorem drain_exec {msg : Msg} {σ : Blanc.WithdrawalRequest.State}
   obtain ⟨exn⟩ := lift_exact Blanc.Lift.SystemDrainer.cert_check Blanc.Lift.SystemDrainer.jumps_ok
     hcode hfork ⟨Blanc.Lift.SystemDrainer.t_0000_c0, rfl, hrun⟩
   refine ⟨St post [1] Mem.empty G', (exec_iff_exec_eq 0 (initSevm msg) (initDevm msg) _).mp ⟨exn⟩,
-    ?_, rep⟩
-  change post.error = none
-  rw [err]
-  rfl
+    ?_, rep, pcode, pstor, ?_, ?_, ?_⟩
+  · change post.error = none
+    rw [err]
+    rfl
+  · change post.logs = []
+    rw [plogs]
+    have hsg : (initSevm msg).benvStat.rules.stateGas = none :=
+      CoveredFork.rules_stateGas_none hfork
+    change (match (initSevm msg).benvStat.rules.stateGas with
+      | none => []
+      | some _ => _) = []
+    rw [hsg]
+  · change post.accountsToDelete.isEmpty = true
+    rw [pdel]
+    exact Std.HashSet.isEmpty_emptyWithCapacity
+  · change 0 ≤ post.refundCounter
+    exact prefund
 
 end Blanc.Lift.WithdrawalRequest.SystemDrain
