@@ -573,6 +573,298 @@ theorem stHistory_getStor_of_ne {benv : Benv} {lastHash : B256}
   have h := stHistory_get hfork hbeaconCode hhistoryCode hlast hneB hneH
   exact congrArg (·.stor) h
 
+/-! ## The concrete checkpoint -/
+
+/-- Witness chain config: Prague-only, chain id 1. -/
+def witnessConfig : ChainConfig := ChainConfig.pragueOnly 1
+
+theorem witnessConfig_valid : witnessConfig.Valid := ChainConfig.pragueOnly_valid 1
+
+theorem witnessConfig_chainId : witnessConfig.chainId = 1 := rfl
+
+theorem witnessConfig_forkAt (t : Nat) : witnessConfig.forkAt t = .ok .prague :=
+  Blanc.ChainConfig.pragueOnly_forkAt 1 t
+
+/-- Funded sender balance: covers block C's `2 ^ 20 * 8 + 2 ^ 245` with room. -/
+def senderEFunds : Nat := 2 ^ 245 + 2 ^ 31
+
+theorem senderEFunds_lt : senderEFunds < 2 ^ 256 := by
+  unfold senderEFunds
+  omega
+
+/-- The 7002 storage at the inhibitor/empty queue: only slot 0 set. -/
+def checkpoint7002Stor : Stor := Stor.ofList [(0, Blanc.WithdrawalRequest.excessInhibitor.toB256)]
+
+/-- The concrete checkpoint state: four system codes, the 7002 predeploy at the
+inhibitor/empty queue, the 7251 empty queue, the looper code, funded senderE,
+and no entry (hence no code) at `systemAddress`. -/
+def checkpointState : State := State.ofList
+  [(beaconRootsAddress, { Acct.nil with code := Blanc.beaconRootsCode }),
+   (historyStorageAddress, { Acct.nil with code := Blanc.historyStorageCode }),
+   (withdrawalRequestPredeployAddress,
+     { Acct.nil with code := Blanc.withdrawalRequestCode, stor := checkpoint7002Stor }),
+   (consolidationRequestPredeployAddress,
+     { Acct.nil with code := Blanc.consolidationRequestCode }),
+   (looperAddress, { Acct.nil with code := Blanc.Lift.FloodLooper.code }),
+   (senderE, { Acct.nil with nonce := 0, bal := senderEFunds.toB256 })]
+
+/-- Lookup tactic note: closed lookups go through `simp (disch := decide +kernel)`
+over the `ofList` fold with the get/set lemmas (discharger sees only address
+disequalities, never storage images or bytecode); open-address facts peel by hand. -/
+
+theorem checkpoint_get_beaconRoots :
+    checkpointState.get beaconRootsAddress =
+      { Acct.nil with code := Blanc.beaconRootsCode } := by
+  simp (disch := decide +kernel) only [checkpointState, State.ofList,
+    List.foldl_cons, List.foldl_nil, State.get_set_ne, State.get_set_self]
+
+theorem checkpoint_get_historyStorage :
+    checkpointState.get historyStorageAddress =
+      { Acct.nil with code := Blanc.historyStorageCode } := by
+  simp (disch := decide +kernel) only [checkpointState, State.ofList,
+    List.foldl_cons, List.foldl_nil, State.get_set_ne, State.get_set_self]
+
+theorem checkpoint_get_7002 :
+    checkpointState.get withdrawalRequestPredeployAddress =
+      { Acct.nil with code := Blanc.withdrawalRequestCode, stor := checkpoint7002Stor } := by
+  simp (disch := decide +kernel) only [checkpointState, State.ofList,
+    List.foldl_cons, List.foldl_nil, State.get_set_ne, State.get_set_self]
+
+theorem checkpoint_get_7251 :
+    checkpointState.get consolidationRequestPredeployAddress =
+      { Acct.nil with code := Blanc.consolidationRequestCode } := by
+  simp (disch := decide +kernel) only [checkpointState, State.ofList,
+    List.foldl_cons, List.foldl_nil, State.get_set_ne, State.get_set_self]
+
+theorem checkpoint_get_looper :
+    checkpointState.get looperAddress =
+      { Acct.nil with code := Blanc.Lift.FloodLooper.code } := by
+  simp (disch := decide +kernel) only [checkpointState, State.ofList,
+    List.foldl_cons, List.foldl_nil, State.get_set_ne, State.get_set_self]
+
+theorem checkpoint_get_senderE :
+    checkpointState.get senderE =
+      { Acct.nil with nonce := 0, bal := senderEFunds.toB256 } := by
+  simp (disch := decide +kernel) only [checkpointState, State.ofList,
+    List.foldl_cons, List.foldl_nil, State.get_set_self]
+
+theorem checkpoint_get_systemAddress :
+    checkpointState.get systemAddress = Acct.nil := by
+  simp (disch := decide +kernel) only [checkpointState, State.ofList,
+    List.foldl_cons, List.foldl_nil, State.get_set_ne]
+  rfl
+
+theorem checkpoint_systemEmpty :
+    checkpointState.getCode systemAddress = ByteArray.empty := by
+  rw [show checkpointState.getCode systemAddress =
+    (checkpointState.get systemAddress).code from rfl]
+  rw [checkpoint_get_systemAddress]
+  rfl
+
+theorem checkpoint_senderE_nonce : (checkpointState.get senderE).nonce = 0 := by
+  rw [checkpoint_get_senderE]
+
+theorem checkpoint_senderE_noCode :
+    (checkpointState.get senderE).code.isEmpty = true := by
+  rw [checkpoint_get_senderE]
+  rfl
+
+theorem checkpoint_senderE_funds :
+    2 ^ 20 * 8 + 2 ^ 245 ≤ (checkpointState.get senderE).bal.toNat := by
+  have hbal : (checkpointState.get senderE).bal = senderEFunds.toB256 := by
+    rw [checkpoint_get_senderE]
+  have h0 : (0 : B256).toNat = 0 := B256.toNat_toB256_of_lt (by decide)
+  rw [hbal, B256.toNat_toB256_of_lt senderEFunds_lt]
+  unfold senderEFunds
+  omega
+
+theorem checkpoint_senderE_fundsB :
+    2 ^ 28 * 8 + 2895 ≤ (checkpointState.get senderE).bal.toNat := by
+  have hbal : (checkpointState.get senderE).bal = senderEFunds.toB256 := by
+    rw [checkpoint_get_senderE]
+  rw [hbal, B256.toNat_toB256_of_lt senderEFunds_lt]
+  unfold senderEFunds
+  omega
+
+/-- Every non-sender account holds zero balance. -/
+theorem checkpoint_bal_other (b : Adr) (hne : b ≠ senderE) :
+    checkpointState.bal b = 0 := by
+  change (checkpointState.get b).bal = 0
+  unfold checkpointState State.ofList
+  simp only [List.foldl_cons, List.foldl_nil]
+  by_cases hE : senderE = b
+  · exact absurd hE.symm hne
+  · rw [State.get_set_ne _ hE]
+    by_cases hL : looperAddress = b
+    · rw [hL, State.get_set_self]
+      rfl
+    · rw [State.get_set_ne _ hL]
+      by_cases hC : consolidationRequestPredeployAddress = b
+      · rw [hC, State.get_set_self]
+        rfl
+      · rw [State.get_set_ne _ hC]
+        by_cases hW : withdrawalRequestPredeployAddress = b
+        · rw [hW, State.get_set_self]
+          rfl
+        · rw [State.get_set_ne _ hW]
+          by_cases hH : historyStorageAddress = b
+          · rw [hH, State.get_set_self]
+            rfl
+          · rw [State.get_set_ne _ hH]
+            by_cases hB : beaconRootsAddress = b
+            · rw [hB, State.get_set_self]
+              rfl
+            · rw [State.get_set_ne _ hB]
+              rfl
+
+theorem checkpoint_sum : sum checkpointState.bal = senderEFunds := by
+  have h0 : (0 : B256).toNat = 0 := B256.toNat_toB256_of_lt (by decide)
+  have hbal : (checkpointState.bal senderE).toNat = senderEFunds := by
+    have hb : checkpointState.bal senderE = senderEFunds.toB256 := by
+      change (checkpointState.get senderE).bal = _
+      rw [checkpoint_get_senderE]
+    rw [hb, B256.toNat_toB256_of_lt senderEFunds_lt]
+  have row : (checkpointState.bal senderE).toNat =
+      ((fun _ => (0 : B256)) senderE).toNat + senderEFunds := by
+    simp only [hbal, h0, Nat.zero_add]
+  have rest : ∀ b : Adr, b ≠ senderE →
+      checkpointState.bal b = (fun _ => (0 : B256)) b :=
+    fun b hb => checkpoint_bal_other b hb
+  have total := Blanc.sum_eq_add_of_row_add (f := fun _ => (0 : B256)) row rest
+  have zero : sum (fun _ => (0 : B256)) = 0 := Blanc.sumBelow_zero _
+  exact total.trans ((congrArg (fun n => n + senderEFunds) zero).trans (Nat.zero_add _))
+
+theorem checkpoint_sum_bound : sum checkpointState.bal < 2 ^ 256 := by
+  rw [checkpoint_sum]
+  exact senderEFunds_lt
+
+theorem checkpoint_canonical : checkpointState.Canonical := by
+  apply State.canonical_ofList
+  intro e he
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at he
+  rcases he with rfl | rfl | rfl | rfl | rfl | rfl
+  · exact Stor.canonical_empty
+  · exact Stor.canonical_empty
+  · exact Stor.canonical_ofList _
+  · exact Stor.canonical_empty
+  · exact Stor.canonical_empty
+  · exact Stor.canonical_empty
+
+theorem systemCodeInstalled_consolidation {w : State} (h : SystemCodeInstalled w) :
+    w.getCode consolidationRequestPredeployAddress = Blanc.consolidationRequestCode :=
+  h (consolidationRequestPredeployAddress, Blanc.consolidationRequestCode)
+    (by simp only [systemContracts, List.mem_cons, List.not_mem_nil, or_false, or_true])
+
+theorem checkpoint_installed : SystemCodeInstalled checkpointState := by
+  intro p hp
+  simp only [systemContracts, List.mem_cons, List.not_mem_nil, or_false] at hp
+  rcases hp with rfl | rfl | rfl | rfl
+  · rw [show checkpointState.getCode beaconRootsAddress =
+      (checkpointState.get beaconRootsAddress).code from rfl]
+    rw [checkpoint_get_beaconRoots]
+  · rw [show checkpointState.getCode historyStorageAddress =
+      (checkpointState.get historyStorageAddress).code from rfl]
+    rw [checkpoint_get_historyStorage]
+  · rw [show checkpointState.getCode withdrawalRequestPredeployAddress =
+      (checkpointState.get withdrawalRequestPredeployAddress).code from rfl]
+    rw [checkpoint_get_7002]
+  · rw [show checkpointState.getCode consolidationRequestPredeployAddress =
+      (checkpointState.get consolidationRequestPredeployAddress).code from rfl]
+    rw [checkpoint_get_7251]
+
+/-- The 7002 storage map at the checkpoint. -/
+theorem checkpoint_7002_stor :
+    checkpointState.getStor withdrawalRequestPredeployAddress = checkpoint7002Stor := by
+  have h := checkpoint_get_7002
+  exact congrArg (·.stor) h
+
+/-- Singleton storage lookup, symbolically. -/
+theorem checkpoint7002_get_self :
+    (checkpoint7002Stor).get 0 = Blanc.WithdrawalRequest.excessInhibitor.toB256 := by
+  have h : checkpoint7002Stor =
+      (Stor.empty).set 0 Blanc.WithdrawalRequest.excessInhibitor.toB256 := rfl
+  rw [h, Stor.get_set_self]
+
+/-- Empty storage reads zero, symbolically. -/
+theorem Stor_empty_get (k : B256) : (Stor.empty).get k = 0 := by
+  rw [Stor.get_eq_getD_find?, Stor.find?_empty]
+  rfl
+
+/-- A non-slot-0 read of the checkpoint 7002 map is zero. -/
+theorem checkpoint7002_get_ne (k : B256) (hne : k ≠ 0) :
+    (checkpoint7002Stor).get k = 0 := by
+  have h : checkpoint7002Stor =
+      (Stor.empty).set 0 Blanc.WithdrawalRequest.excessInhibitor.toB256 := rfl
+  rw [h, Stor.get_set_ne _ (Ne.symm hne)]
+  exact Stor_empty_get k
+
+/-- The checkpoint 7002 storage represents the initial model. -/
+theorem checkpoint_7002_rep : Blanc.WithdrawalRequest.RepresentsStorage
+    (checkpointState.getStor withdrawalRequestPredeployAddress).get
+    Blanc.WithdrawalRequest.initial := by
+  refine ⟨Blanc.WithdrawalRequest.initial_coherent, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · refine ⟨?_, ?_, ?_, ?_, ?_⟩
+    · show (2 ^ 256 - 1) < 2 ^ 256
+      omega
+    · show (0 : Nat) < 2 ^ 256
+      omega
+    · show (0 : Nat) < 2 ^ 256
+      omega
+    · show (0 : Nat) < 2 ^ 256
+      omega
+    · intro i hi
+      have hz : Blanc.WithdrawalRequest.initial.queue.length = 0 := rfl
+      rw [hz] at hi
+      exact absurd hi (Nat.not_lt_zero i)
+  · rw [checkpoint_7002_stor]
+    exact checkpoint7002_get_self
+  · rw [checkpoint_7002_stor]
+    have h := checkpoint7002_get_ne 1 (by decide)
+    exact h
+  · rw [checkpoint_7002_stor]
+    have h := checkpoint7002_get_ne 2 (by decide)
+    exact h
+  · rw [checkpoint_7002_stor]
+    have h := checkpoint7002_get_ne 3 (by decide)
+    exact h
+  · intro i hi
+    have hz : Blanc.WithdrawalRequest.initial.queue.length = 0 := rfl
+    rw [hz] at hi
+    exact absurd hi (Nat.not_lt_zero i)
+
+/-- The 7251 storage map is empty at the checkpoint, so every slot reads zero. -/
+theorem checkpoint_7251_slots (k : B256) :
+    (checkpointState.getStor consolidationRequestPredeployAddress).get k = 0 := by
+  have hget : checkpointState.getStor consolidationRequestPredeployAddress = Stor.empty := by
+    have h := checkpoint_get_7251
+    exact congrArg (·.stor) h
+  rw [hget]
+  exact Stor_empty_get k
+
+/-- Bounded queue-region reads are zero at the checkpoint: every queue slot key
+is nonzero, missing from the singleton 7002 map. -/
+theorem checkpoint_7002_queue_zero (n o : Nat)
+    (hbound : Blanc.WithdrawalRequest.queueBase n + o < 2 ^ 256) :
+    (checkpointState.getStor withdrawalRequestPredeployAddress).get
+      (Blanc.WithdrawalRequest.queueSlot n o) = 0 := by
+  rw [checkpoint_7002_stor]
+  apply checkpoint7002_get_ne
+  intro hz
+  have hlt : (Blanc.WithdrawalRequest.queueBase n + o).toB256.toNat =
+      Blanc.WithdrawalRequest.queueBase n + o :=
+    B256.toNat_toB256_of_lt hbound
+  have hge : 4 ≤ Blanc.WithdrawalRequest.queueBase n + o := by
+    unfold Blanc.WithdrawalRequest.queueBase
+    omega
+  have hslot : Blanc.WithdrawalRequest.queueSlot n o =
+      (Blanc.WithdrawalRequest.queueBase n + o).toB256 := rfl
+  rw [hslot] at hz
+  have hzN := congrArg B256.toNat hz
+  rw [hlt] at hzN
+  have h0 : (0 : B256).toNat = 0 := B256.toNat_toB256_of_lt (by decide)
+  rw [h0] at hzN
+  omega
+
 /-! ## Block C -/
 
 /-- **Block C's body.** The two unchecked system calls are discharged via
