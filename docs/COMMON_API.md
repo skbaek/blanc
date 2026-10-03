@@ -3310,6 +3310,8 @@ contract-neutral.
   `ri_sstore_nonstatic`: a completed `SSTORE` proves the frame non-static) in
   [`Blanc/Lift/InvWalk.lean`](../Blanc/Lift/InvWalk.lean) and
   [`Blanc/Lift/InvWalkOps.lean`](../Blanc/Lift/InvWalkOps.lean), which also holds the
+  `ri_returndatacopy` inverse, which derives the actual returndata range bound
+  and complete `St` successor with its physical memory write, and the
   solc word-copy loop inverted (`ric_copy_step`, `ric_copy_exit`, the converses of
   `copy_step`/`copy_exit`) and the facts a failed comparison guard leaves
   (`toNat_le_of_gtCheck_eq_zero`, `toNat_ge_of_ltCheck_eq_zero`,
