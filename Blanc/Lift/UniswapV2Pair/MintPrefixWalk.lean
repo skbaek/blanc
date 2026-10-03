@@ -2,6 +2,8 @@ import Blanc.Lift.UniswapV2Pair.MintSource
 import Blanc.Lift.UniswapV2Pair.GetterStorageReservesCore
 import Blanc.Lift.UniswapV2Pair.BalanceCallWalk
 import Blanc.Lift.UniswapV2Pair.WriterLockStorage
+import Blanc.Lift.InvWalkDispatch
+import Blanc.Lift.UniswapV2Pair.SyncWalk
 
 /-! Literal public mint entry, retaining the original instruction derivation. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -1280,15 +1282,10 @@ theorem mintActualFeeFinished_inv {K : WriterKey → Prop} {st : State}
     frame time pair sender suffix
   simpa only [dEq, outEq] using finished
 
-/-- Complete actual1011 inverse to the finite mint suffix, with only actual touched-recipient obligations. -/
-theorem mintSourcePrefix_inv {K : WriterKey → Prop} {st : State} {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {R : List B256} {M : Mem} {G : Nat} {toWord ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
-    (frame : Frame) (time : frame.context.timestamp = sevm.benvStat.time)
-    (pair : frame.context.pair = sevm.currentTarget) (sender : frame.context.sender = sevm.caller)
-    (run : SFunc.RunCutP (StepIn D) cert.prog sevm []
-      (St b (toWord :: ρ :: R) M G) t_1011_c41 (.done o)) :
+/-- Finite observations and conditional touched-recipient source result of the actual1011 run. -/
+def MintSourcePrefixResult (K : WriterKey → Prop) (st : State) (D : Exec.Deriv)
+    (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem) (toWord ρ : B256)
+    (frame : Frame) (o : Outcome) : Prop :=
     b.getStorVal sevm.currentTarget 12 = 1 ∧ sevm.isStatic = false ∧
     ∃ (gw0 : B256) (callGas0 : Nat) (d0 : Devm) (out0 : Bytes) (decodedGas0 : Nat)
       (gw1 : B256) (callGas1 : Nat) (d1 : Devm) (out1 : Bytes) (decodedGas1 : Nat)
@@ -1348,7 +1345,18 @@ theorem mintSourcePrefix_inv {K : WriterKey → Prop} {st : State} {D : Exec.Der
         MintActualFeeFinished K { st with unlocked := 0 } D sevm d1 feePost R
           (balanceReplyMemory M0 sevm.currentTarget out1)
           (Bytes.toB256 (out1.take 32) - r1) (balance0 - r0)
-          (Bytes.toB256 (out1.take 32)) balance0 r1 r0 toWord ρ bound0 bound1 frame o := by
+          (Bytes.toB256 (out1.take 32)) balance0 r1 r0 toWord ρ bound0 bound1 frame o
+
+/-- Complete actual1011 inverse to the finite mint suffix, with only actual touched-recipient obligations. -/
+theorem mintSourcePrefix_inv {K : WriterKey → Prop} {st : State} {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {G : Nat} {toWord ρ : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (frame : Frame) (time : frame.context.timestamp = sevm.benvStat.time)
+    (pair : frame.context.pair = sevm.currentTarget) (sender : frame.context.sender = sevm.caller)
+    (run : SFunc.RunCutP (StepIn D) cert.prog sevm []
+      (St b (toWord :: ρ :: R) M G) t_1011_c41 (.done o)) :
+    MintSourcePrefixResult K st D sevm b R M toWord ρ frame o := by
   obtain ⟨unlocked, nonstatic, gw0, callGas0, d0, out0, decodedGas0,
     gw1, callGas1, d1, out1, decodedGas1, feeGas, feePost, code0, call0, post0, long0, width0,
     answered0, decoded0, code1, call1, post1, long1, width1, answered1,
@@ -1391,5 +1399,546 @@ theorem mintUintReturn_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
       calculateMemoryGasCost 192) = 43 := by decide
   simpa only [Nat.add_assoc, charge, t_039b_c86, t_039b_c98] using
     getterWord_tail_ptr_exact mem room
+
+/-- Literal mint calldata decoder preserves the actual same-D callee and return continuation. -/
+theorem mintAbiCall_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {M : Mem} {G : Nat} {sel avail : B256} {o : Outcome}
+    (run : SFunc.RunCutP (StepIn D) cert.prog sevm []
+      (St b [avail, 4, 0x039b, sel] M G) t_047f_c86 (.done o)) :
+    ∃ calleeGas calleePost,
+      SFunc.RunP (StepIn D) cert.prog sevm
+        (St b [(Sevm.dataWord sevm 4).toAdr.toB256, 0x039b, sel] M calleeGas)
+        t_1011_c41 (.returned calleePost) ∧
+      SFunc.RunCutP (StepIn D) cert.prog sevm [] calleePost t_039b_c86 (.done o) := by
+  unfold t_047f_c86 at run
+  obtain ⟨_, run⟩ := ric_destP run
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_calldataload (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run
+  obtain ⟨_, rfl⟩ := ri_val (w := (Sevm.dataWord sevm 4).toAdr.toB256)
+    (ff20_and_word _) (ri_and (StepIn.toRun hs))
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  cases run with
+  | callHalt d lookup pop callee =>
+      change some t_1011_c41 = _ at lookup
+      cases lookup
+      exact False.elim (callee.not_halted_entry
+        (S := [9,11,12,18,19,20,21,22,23,24,25,26,27,41,56,58,59,60,62,65,66,68,69,70,72,74])
+        (by decide) (by decide : 41 ∈ [9,11,12,18,19,20,21,22,23,24,25,26,27,41,56,58,59,60,62,65,66,68,69,70,72,74])
+        (by rfl : cert.prog[41]? = some t_1011_c41) rfl)
+  | callRet d lookup pop callee body =>
+      change some t_1011_c41 = _ at lookup
+      cases lookup
+      exact ⟨_, _, (St.of_pop1 pop).2 ▸ callee, body⟩
+
+/-- Successful mint ABI entry derives its wrapped32-byte argument guard. -/
+theorem mintAbiGuard_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {M : Mem} {G : Nat} {sel : B256} {o : Outcome}
+    (run : SFunc.RunCutP (StepIn D) cert.prog sevm []
+      (St b [sel] M G) t_0469_c86 (.done o)) :
+    (32 : B256) ≤ sevm.data.length.toB256 - 4 ∧
+      ∃ gas, SFunc.RunCutP (StepIn D) cert.prog sevm []
+        (St b [sevm.data.length.toB256 - 4, 4, 0x039b, sel] M gas)
+        t_047f_c86 (.done o) := by
+  unfold t_0469_c86 at run
+  obtain ⟨_, run⟩ := ric_destP run
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_calldatasize (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_sub (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_lt (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  rcases ric_branchP run with ⟨_, _, failed⟩ | ⟨accepted, gas, run⟩
+  · exact False.elim (failed.false_of_noOk (by decide : t_047b_c86.noOk = true))
+  · simp only [show Bytes.toB256 [4] = (4 : B256) from rfl,
+      show Bytes.toB256 [32] = (32 : B256) from rfl] at accepted
+    have guard : (32 : B256) ≤ sevm.data.length.toB256 - 4 := by
+      by_contra ne
+      have flag : B256.ltCheck (sevm.data.length.toB256 - 4) 32 = 1 := by
+        simp only [B256.ltCheck, lt_of_not_ge ne, ite_true]
+      rw [flag] at accepted
+      exact accepted (by decide)
+    exact ⟨guard, gas, run⟩
+
+/-- Actual mint selector dispatch retains the supplied derivation into0469. -/
+theorem mintSelector_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {M : Mem} {G : Nat} {o : Outcome}
+    (selector : Blanc.Sevm.selector sevm = 0x6a627842)
+    (run : SFunc.RunCutP (StepIn D) cert.prog sevm []
+      (St b [] M G) t_001a_c0 (.done o)) :
+    ∃ gas, SFunc.RunCutP (StepIn D) cert.prog sevm []
+      (St b [0x6a627842] M gas) t_0469_c86 (.done o) := by
+  unfold t_001a_c0 at run
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_calldataload (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  obtain ⟨d, hs, run⟩ := ric_nextP run
+  obtain ⟨_, eq⟩ := ri_shr (StepIn.toRun hs)
+  simp only [show Bytes.toB256 [0] = (0 : B256) from rfl,
+    show Bytes.toB256 [0xe0] = (224 : B256) from rfl,
+    show (224 : B256).toNat = 224 from rfl,
+    show Sevm.dataWord sevm 0 >>> 224 = (0x6a627842 : B256) from selector] at eq
+  subst d
+  obtain ⟨_, run⟩ := ric_cmp_gtP (fun h => StepIn.toRun h) run
+  simp only [show B256.gtCheck (Bytes.toB256 [0x6a,0x62,0x78,0x42]) (0x6a627842 : B256) = 0 from by decide,
+    ite_true] at run
+  unfold t_002b_c0 at run
+  obtain ⟨_, run⟩ := ric_cmp_gtP (fun h => StepIn.toRun h) run
+  simp only [show B256.gtCheck (Bytes.toB256 [0xba,0x9a,0x7a,0x56]) (0x6a627842 : B256) = 1 from by decide,
+    show ¬ ((1 : B256) = 0) from by decide, ite_false] at run
+  unfold t_0097_c0 at run
+  obtain ⟨_, run⟩ := ric_destP run
+  obtain ⟨_, run⟩ := ric_cmp_gtP (fun h => StepIn.toRun h) run
+  simp only [show B256.gtCheck (Bytes.toB256 [0x7e,0xce,0xbe,0x00]) (0x6a627842 : B256) = 1 from by decide,
+    show ¬ ((1 : B256) = 0) from by decide, ite_false] at run
+  unfold t_00d3_c0 at run
+  obtain ⟨_, run⟩ := ric_destP run
+  obtain ⟨gas, run⟩ := ric_cmp_eqP (fun h => StepIn.toRun h)
+    (g := t_0469_c86) (by intro bad; cases bad) rfl run
+  simp only [show B256.eqCheck (Bytes.toB256 [0x6a,0x62,0x78,0x42]) (0x6a627842 : B256) = 1 from by decide,
+    show ¬ ((1 : B256) = 0) from by decide, ite_false] at run
+  exact ⟨gas, run⟩
+
+/-- The literal decoder contributes23gas around the actual mint callee and its ABI return. -/
+theorem mintAbiCall_exact {sevm : Sevm} {b post : Devm} {M : Mem}
+    {G : Nat} {sel avail : B256} {o : Outcome}
+    (callee : SFunc.RunExact cert.prog sevm
+      (St b [(Sevm.dataWord sevm 4).toAdr.toB256, 0x039b, sel] M G) t_1011_c41 (.returned post))
+    (tail : SFunc.RunExact cert.prog sevm post t_039b_c86 o) :
+    SFunc.RunExact cert.prog sevm (St b [avail,4,0x039b,sel] M (G + 23)) t_047f_c86 o := by
+  unfold t_047f_c86
+  apply rx_dest
+  apply rx_pop
+  apply rx_calldataload (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_push (w := ~~~ addressMask) (by decide) (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_and (v := (Sevm.dataWord sevm 4).toAdr.toB256) (ff20_and_word _) (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_push (w := 0x1011) rfl (by simp only [List.length_cons, List.length_nil]; decide)
+  exact rx_callRet rfl callee tail
+
+/-- Actual0469 argument guard costs40gas before its literal calldata decoder. -/
+theorem mintAbiGuard_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {sel : B256} {o : Outcome}
+    (guard : (32 : B256) ≤ sevm.data.length.toB256 - 4)
+    (body : SFunc.RunExact cert.prog sevm
+      (St b [sevm.data.length.toB256 - 4,4,0x039b,sel] M G) t_047f_c86 o) :
+    SFunc.RunExact cert.prog sevm (St b [sel] M (G + 40)) t_0469_c86 o := by
+  unfold t_0469_c86
+  apply rx_dest
+  apply rx_push (w := 0x039b) rfl (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_push (w := 4) rfl (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_calldatasize (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_sub' (v := sevm.data.length.toB256 - 4) rfl (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_push (w := 32) rfl (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_dup2 (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_lt (v := 0) (ltCheck_zero_of_le guard) (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_iszero (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil]; decide)
+  apply rx_push (w := 0x047f) rfl (by simp only [List.length_cons, List.length_nil]; decide)
+  exact rx_branch_succ (by decide : (1 : B256) ≠ 0) body
+
+/-- The complete public mint ABI wrapper exposes its real callee and original return. -/
+theorem mintAbi_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {M : Mem} {G : Nat} {sel : B256} {o : Outcome}
+    (run : SFunc.RunCutP (StepIn D) cert.prog sevm []
+      (St b [sel] M G) t_0469_c86 (.done o)) :
+    (32 : B256) ≤ sevm.data.length.toB256 - 4 ∧ ∃ calleeGas calleePost,
+      SFunc.RunP (StepIn D) cert.prog sevm
+        (St b [(Sevm.dataWord sevm 4).toAdr.toB256,0x039b,sel] M calleeGas)
+        t_1011_c41 (.returned calleePost) ∧
+      SFunc.RunCutP (StepIn D) cert.prog sevm [] calleePost t_039b_c86 (.done o) := by
+  obtain ⟨guard,_,decoded⟩ := mintAbiGuard_inv run
+  exact ⟨guard,mintAbiCall_inv decoded⟩
+
+/-- Construct the complete literal ABI wrapper with63gas over its actual callee budget. -/
+theorem mintAbi_exact {sevm : Sevm} {b post : Devm} {M : Mem}
+    {G : Nat} {sel : B256} {o : Outcome}
+    (guard : (32 : B256) ≤ sevm.data.length.toB256 - 4)
+    (callee : SFunc.RunExact cert.prog sevm
+      (St b [(Sevm.dataWord sevm 4).toAdr.toB256,0x039b,sel] M G) t_1011_c41 (.returned post))
+    (tail : SFunc.RunExact cert.prog sevm post t_039b_c86 o) :
+    SFunc.RunExact cert.prog sevm (St b [sel] M (G + 63)) t_0469_c86 o := by
+  have body := mintAbiCall_exact (avail := sevm.data.length.toB256 - 4) callee tail
+  have entry := mintAbiGuard_exact guard body
+  simpa only [Nat.add_assoc,show (23 + 40 : Nat) = 63 from rfl] using entry
+
+/-- ActualPC0 derives scratch memory, nonpayability, size and its same-D mint callee. -/
+theorem mintPc0_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
+    (selector : Blanc.Sevm.selector sevm = 0x6a627842)
+    (run : SFunc.RunP (StepIn D) cert.prog sevm (St b [] Mem.empty G) t_0000_c0 o) :
+    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
+      (32 : B256) ≤ sevm.data.length.toB256 - 4 ∧ ∃ calleeGas calleePost,
+        SFunc.RunP (StepIn D) cert.prog sevm
+          (St b [(Sevm.dataWord sevm 4).toAdr.toB256,0x039b,0x6a627842] getterInitMemory calleeGas)
+          t_1011_c41 (.returned calleePost) ∧
+        SFunc.RunCutP (StepIn D) cert.prog sevm [] calleePost t_039b_c86 (.done o) := by
+  obtain ⟨value,size,_,selected⟩ := syncGuards_inv run
+  obtain ⟨_,entry⟩ := mintSelector_inv selector (SFunc.runP_iff_runCutP_nil.mp selected)
+  exact ⟨value,size,mintAbi_inv entry⟩
+
+/-- ActualPC0 supplies the complete finite callee observations from its own entry memory. -/
+theorem mintPc0_source_inv {K : WriterKey → Prop} {st : State}
+    {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (frame : Frame) (time : frame.context.timestamp = sevm.benvStat.time)
+    (pair : frame.context.pair = sevm.currentTarget) (sender : frame.context.sender = sevm.caller)
+    (selector : Blanc.Sevm.selector sevm = 0x6a627842)
+    (run : SFunc.RunP (StepIn D) cert.prog sevm (St b [] Mem.empty G) t_0000_c0 o) :
+    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
+      (32 : B256) ≤ sevm.data.length.toB256 - 4 ∧ ∃ calleeGas calleePost,
+        SFunc.RunP (StepIn D) cert.prog sevm
+          (St b [(Sevm.dataWord sevm 4).toAdr.toB256,0x039b,0x6a627842] getterInitMemory calleeGas)
+          t_1011_c41 (.returned calleePost) ∧
+        MintSourcePrefixResult K st D sevm b [0x6a627842] getterInitMemory
+          (Sevm.dataWord sevm 4).toAdr.toB256 0x039b frame (.returned calleePost) ∧
+        SFunc.RunCutP (StepIn D) cert.prog sevm [] calleePost t_039b_c86 (.done o) := by
+  obtain ⟨value,size,guard,gas,post,callee,tail⟩ := mintPc0_inv selector run
+  have source := mintSourcePrefix_inv fork getterInitMemory_ptr rep frame time pair sender
+    (SFunc.runP_iff_runCutP_nil.mp callee)
+  exact ⟨value,size,guard,gas,post,callee,source,tail⟩
+
+/-- Concrete rawPC0 execution supplies the same derivation used by every mint observation. -/
+theorem mintBytecode_source_inv {K : WriterKey → Prop} {st : State}
+    {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (frame : Frame) (time : frame.context.timestamp = sevm.benvStat.time)
+    (pair : frame.context.pair = sevm.currentTarget) (sender : frame.context.sender = sevm.caller)
+    (selector : Blanc.Sevm.selector sevm = 0x6a627842)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    let D : Exec.Deriv := ⟨0,sevm,St b [] Mem.empty G,.ok post,run⟩
+    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
+      (32 : B256) ≤ sevm.data.length.toB256 - 4 ∧ ∃ calleeGas calleePost,
+        SFunc.RunP (StepIn D) cert.prog sevm
+          (St b [(Sevm.dataWord sevm 4).toAdr.toB256,0x039b,0x6a627842] getterInitMemory calleeGas)
+          t_1011_c41 (.returned calleePost) ∧
+        MintSourcePrefixResult K st D sevm b [0x6a627842] getterInitMemory
+          (Sevm.dataWord sevm 4).toAdr.toB256 0x039b frame (.returned calleePost) ∧
+        SFunc.RunCutP (StepIn D) cert.prog sevm [] calleePost t_039b_c86 (.done (.halted post)) := by
+  obtain ⟨f,entry,derived⟩ := lift_sound_in cert_check codeEq fork run
+  rw [show cert.prog[0]? = some t_0000_c0 from rfl] at entry
+  cases entry
+  exact mintPc0_source_inv fork rep frame time pair sender selector derived
+
+/-- The literal mint PC0 guard and selector path costs165gas before0469. -/
+theorem mintDispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
+    (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
+    (selector : Blanc.Sevm.selector sevm = 0x6a627842)
+    (body : SFunc.RunExact cert.prog sevm
+      (St b [0x6a627842] getterInitMemory G) t_0469_c86 o) :
+    SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + 165)) t_0000_c0 o := by
+  rw [show G + 165 = (G + 102) + 63 by omega]
+  refine getterString_guards_exact value size ?_
+  unfold t_001a_c0
+  apply rx_push (w := 0) rfl (by decide)
+  apply rx_calldataload (by decide)
+  apply rx_push (w := 224) rfl (by simp only [List.length_cons,List.length_nil]; decide)
+  apply rx_shr (v := 0x6a627842) selector (by decide)
+  apply rx_dup1 (by simp only [List.length_cons,List.length_nil]; decide)
+  apply rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons,List.length_nil]; decide)
+  apply rx_gt (v := 0) (by decide) (by simp only [List.length_cons,List.length_nil]; decide)
+  apply rx_push (w := 0x00f9) rfl (by simp only [List.length_cons,List.length_nil]; decide)
+  apply rx_branch_zero
+  unfold t_002b_c0
+  apply rx_dup1 (by simp only [List.length_cons,List.length_nil]; decide)
+  apply rx_push (w := 0xba9a7a56) rfl (by simp only [List.length_cons,List.length_nil]; decide)
+  apply rx_gt (v := 1) (by decide) (by simp only [List.length_cons,List.length_nil]; decide)
+  apply rx_push (w := 0x0097) rfl (by simp only [List.length_cons,List.length_nil]; decide)
+  apply rx_branch_succ (by decide : (1 : B256) ≠ 0)
+  unfold t_0097_c0
+  apply rx_dest
+  apply rx_dup1 (by simp only [List.length_cons,List.length_nil]; decide)
+  apply rx_push (w := 0x7ecebe00) rfl (by simp only [List.length_cons,List.length_nil]; decide)
+  apply rx_gt (v := 1) (by decide) (by simp only [List.length_cons,List.length_nil]; decide)
+  apply rx_push (w := 0x00d3) rfl (by simp only [List.length_cons,List.length_nil]; decide)
+  apply rx_branch_succ (by decide : (1 : B256) ≠ 0)
+  unfold t_00d3_c0
+  apply rx_dest
+  exact cmp_hit (tgt := t_0469_c86) rfl rfl body
+
+/-- Construct token0's actual request, selected load and code warming from the reserve cache. -/
+theorem mintFirstRequest_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {timestamp r1 r0 toWord ρ : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M) (room : R.length ≤ 990)
+    (code : ((afterSload sevm b 6).getCode (b.getStorVal sevm.currentTarget 6).toAdr).size.toB256 ≠ 0)
+    (body : SFunc.RunExact cert.prog sevm
+      (St (temporalAccountAccessBase (afterSload sevm b 6) (b.getStorVal sevm.currentTarget 6).toAdr)
+        (0 :: (b.getStorVal sevm.currentTarget 6).toAdr.toB256 :: 128 :: 36 :: 128 :: 32 ::
+          164 :: 0x70a08231 :: (b.getStorVal sevm.currentTarget 6).toAdr.toB256 ::
+          0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
+        (balanceRequestMemory M sevm.currentTarget) G) t_110e_c41 o) :
+    SFunc.RunExact cert.prog sevm
+      (St b (timestamp :: r1 :: r0 :: 0 :: 0 :: 0 :: toWord :: ρ :: R) M
+        (G + sloadCost sevm b 6 +
+          temporalAccountAccessCost (afterSload sevm b 6) (b.getStorVal sevm.currentTarget 6).toAdr + 166))
+      t_1094_c41 o := by
+  let access := temporalAccountAccessCost (afterSload sevm b 6) (b.getStorVal sevm.currentTarget 6).toAdr
+  have mem1 : PtrMem 128 160 (M.write 128 balanceOfSelectorWord.toBytes) :=
+    mem.write 128 balanceOfSelectorWord (Or.inr (by decide))
+  have mem2 : PtrMem 128 192 (balanceRequestMemory M sevm.currentTarget) :=
+    balanceRequestMemory_ptr mem sevm.currentTarget
+  rw [show G + sloadCost sevm b 6 + access + 166 =
+    (G + access + 160) + sloadCost sevm b 6 + 6 by omega]
+  unfold t_1094_c41
+  apply rx_dest
+  apply rx_pop
+  apply rx_push (w := 6) rfl (by simp only [List.length_cons]; omega)
+  apply rx_sload_selC fork rfl (by simp only [List.length_cons]; omega)
+  apply rx_push (w := 64) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  apply rx_mload (i := 64) (v := 128) (c := 3)
+    (by rw [St.extCost_eq mem.size]; decide) mem.word (mem.read_self (by decide))
+    (by simp only [List.length_cons]; omega)
+  apply rx_push (w := balanceOfSelectorWord) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  apply rx_mstore (i := 128) (v := balanceOfSelectorWord) (c := 9)
+    (by rw [St.extCost_eq mem.size]; decide) rfl
+  refine .next (Ninst.runCompiled_pushItem (G := G + access + 134) (cost := gBase)
+    (by rintro ⟨⟩) rfl rfl (by simp only [St.stack,List.length_cons]; omega)) ?_
+  change SFunc.RunExact cert.prog sevm
+    (St (afterSload sevm b 6)
+      (sevm.currentTarget.toB256 :: 128 :: 64 :: b.getStorVal sevm.currentTarget 6 ::
+        r1 :: r0 :: 0 :: 0 :: 0 :: toWord :: ρ :: R)
+      (M.write 128 balanceOfSelectorWord.toBytes) (G + access + 134)) _ o
+  apply rx_push (w := 4) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  apply rx_add' (v := 132) (by decide) (by simp only [List.length_cons]; omega)
+  apply rx_mstore (i := 132) (v := sevm.currentTarget.toB256) (c := 6)
+    (by rw [St.extCost_eq mem1.size]; decide) rfl
+  apply rx_swap1
+  apply rx_mload (i := 64) (v := 128) (c := 3)
+    (by rw [St.extCost_eq mem2.size]; decide) mem2.word (mem2.read_self (by decide))
+    (by simp only [List.length_cons]; omega)
+  apply rx_swap4
+  apply rx_swap rfl
+  change SFunc.RunExact cert.prog sevm
+    (St (afterSload sevm b 6)
+      (0 :: 128 :: b.getStorVal sevm.currentTarget 6 :: r1 :: 128 :: 0 :: r0 ::
+        0 :: toWord :: ρ :: R) (balanceRequestMemory M sevm.currentTarget)
+      (G + access + 107)) _ o
+  apply rx_pop
+  apply rx_swap2
+  apply rx_swap4
+  apply rx_pop
+  apply rx_push (w := 0) rfl (by simp only [List.length_cons]; omega)
+  apply rx_swap3
+  apply rx_push (w := ~~~ addressMask) ff20_eq (by simp only [List.length_cons]; omega)
+  apply rx_swap1
+  apply rx_swap2
+  apply rx_and (v := (b.getStorVal sevm.currentTarget 6).toAdr.toB256)
+    (by rw [B256.and_comm]; exact ff20_and_word _) (by simp only [List.length_cons]; omega)
+  apply rx_swap2
+  apply rx_push (w := 0x70a08231) rfl (by simp only [List.length_cons]; omega)
+  apply rx_swap2
+  apply rx_push (w := 36) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  apply rx_add' (v := 164) (by decide) (by simp only [List.length_cons]; omega)
+  apply rx_swap3
+  apply rx_push (w := 32) rfl (by simp only [List.length_cons]; omega)
+  apply rx_swap3
+  apply rx_swap2
+  apply rx_swap1
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  apply rx_swap1
+  apply rx_sub' (v := 0) (by decide) (by simp only [List.length_cons]; omega)
+  apply rx_add' (v := 36) (by decide) (by simp only [List.length_cons]; omega)
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  rw [show G + access + 22 = (G + 22) + access by omega]
+  dsimp only [access]
+  conv in temporalAccountAccessCost _ _ =>
+    rw [← toAdr_toB256 (b.getStorVal sevm.currentTarget 6).toAdr]
+  apply rx_extcodesize fork (by simp only [List.length_cons]; omega)
+  apply rx_iszero (v := 0)
+    (by simp only [toAdr_toB256,B256.eqCheck,code,ite_false])
+    (by simp only [List.length_cons]; omega)
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  apply rx_iszero (v := 1) (by decide) (by simp only [List.length_cons]; omega)
+  apply rx_push (w := 0x110e) rfl (by simp only [List.length_cons]; omega)
+  apply rx_branch_succ (by decide : (1 : B256) ≠ 0)
+  simpa only [toAdr_toB256] using body
+
+/-- Decode the physical reply word, retaining the complete returndata in the world. -/
+theorem mintBalanceDecode_exact {sevm : Sevm} {b : Devm} {R : List B256}
+    {M : Mem} {G : Nat} {lengthWord : B256} {out : Bytes} {o : Outcome}
+    (site : MintBalanceSite) (mem : PtrMem 128 192 (balanceRequestMemory M sevm.currentTarget))
+    (wf : Mem.Wf M) (long : 32 ≤ out.length) (room : R.length ≤ 1022)
+    (body : SFunc.RunExact cert.prog sevm
+      (St b (Bytes.toB256 (out.take 32) :: R)
+        (balanceReplyMemory M sevm.currentTarget out) G) site.afterDecodeTree o) :
+    SFunc.RunExact cert.prog sevm
+      (St b (lengthWord :: 128 :: R) (balanceReplyMemory M sevm.currentTarget out) (G + 6))
+      site.decodeTree o := by
+  have shape : site.decodeTree = .dest (.next (.reg .pop)
+      (.next (.reg .mload) site.afterDecodeTree)) := by cases site <;> rfl
+  rw [shape]
+  apply rx_dest
+  apply rx_pop
+  apply rx_mload (i := 128) (v := Bytes.toB256 (out.take 32)) (c := 3)
+    (by rw [St.extCost_eq (balanceReplyMemory_ptr out mem).size]; decide)
+    (balanceReplyMemory_word wf sevm.currentTarget out long)
+    ((balanceReplyMemory_ptr out mem).read_self (by decide)) (by omega)
+  exact body
+
+/-- Construct token1's actual request, selected load and code warming from the reserve cache. -/
+theorem mintSecondRequest_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {balance0 r1 r0 toWord ρ : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M) (room : R.length ≤ 990)
+    (code : ((afterSload sevm b 7).getCode (b.getStorVal sevm.currentTarget 7).toAdr).size.toB256 ≠ 0)
+    (body : SFunc.RunExact cert.prog sevm
+      (St (temporalAccountAccessBase (afterSload sevm b 7) (b.getStorVal sevm.currentTarget 7).toAdr)
+        (0 :: (b.getStorVal sevm.currentTarget 7).toAdr.toB256 :: 128 :: 36 :: 128 :: 32 ::
+          164 :: 0x70a08231 :: (b.getStorVal sevm.currentTarget 7).toAdr.toB256 ::
+          0 :: balance0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
+        (balanceRequestMemory M sevm.currentTarget) G) t_11b1_c41 o) :
+    SFunc.RunExact cert.prog sevm
+      (St b (balance0 :: 0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R) M
+        (G + sloadCost sevm b 7 +
+          temporalAccountAccessCost (afterSload sevm b 7) (b.getStorVal sevm.currentTarget 7).toAdr + 149))
+      MintBalanceSite.first.afterDecodeTree o := by
+  let access := temporalAccountAccessCost (afterSload sevm b 7) (b.getStorVal sevm.currentTarget 7).toAdr
+  have mem1 : PtrMem 128 192 (M.write 128 balanceOfSelectorWord.toBytes) :=
+    mem.write 128 balanceOfSelectorWord (Or.inr (by decide))
+  have mem2 : PtrMem 128 192 (balanceRequestMemory M sevm.currentTarget) :=
+    balanceRequestMemory_ptr mem sevm.currentTarget
+  rw [show G + sloadCost sevm b 7 + access + 149 =
+    (G + access + 146) + sloadCost sevm b 7 + 3 by omega]
+  change SFunc.RunExact _ _ _ (.next (.push [7] _) _) _
+  apply rx_push (w := 7) rfl (by simp only [List.length_cons]; omega)
+  apply rx_sload_selC fork rfl (by simp only [List.length_cons]; omega)
+  apply rx_push (w := 64) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  apply rx_mload (i := 64) (v := 128) (c := 3)
+    (by rw [St.extCost_eq mem.size]; decide) mem.word (mem.read_self (by decide))
+    (by simp only [List.length_cons]; omega)
+  apply rx_push (w := balanceOfSelectorWord) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  apply rx_mstore (i := 128) (v := balanceOfSelectorWord) (c := 3)
+    (by rw [St.extCost_eq mem.size]; decide) rfl
+  refine .next (Ninst.runCompiled_pushItem (G := G + access + 126) (cost := gBase)
+    (by rintro ⟨⟩) rfl rfl (by simp only [St.stack,List.length_cons]; omega)) ?_
+  change SFunc.RunExact cert.prog sevm
+    (St (afterSload sevm b 7)
+      (sevm.currentTarget.toB256 :: 128 :: 64 :: b.getStorVal sevm.currentTarget 7 ::
+        balance0 :: 0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
+      (M.write 128 balanceOfSelectorWord.toBytes) (G + access + 126)) _ o
+  apply rx_push (w := 4) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  apply rx_add' (v := 132) (by decide) (by simp only [List.length_cons]; omega)
+  apply rx_mstore (i := 132) (v := sevm.currentTarget.toB256) (c := 3)
+    (by rw [St.extCost_eq mem1.size]; decide) rfl
+  apply rx_swap1
+  apply rx_mload (i := 64) (v := 128) (c := 3)
+    (by rw [St.extCost_eq mem2.size]; decide) mem2.word (mem2.read_self (by decide))
+    (by simp only [List.length_cons]; omega)
+  apply rx_swap3
+  apply rx_swap4
+  apply rx_pop
+  apply rx_push (w := 0) rfl (by simp only [List.length_cons]; omega)
+  apply rx_swap3
+  apply rx_push (w := ~~~ addressMask) ff20_eq (by simp only [List.length_cons]; omega)
+  apply rx_swap1
+  apply rx_swap3
+  apply rx_and (v := (b.getStorVal sevm.currentTarget 7).toAdr.toB256)
+    (by rw [B256.and_comm]; exact ff20_and_word _) (by simp only [List.length_cons]; omega)
+  apply rx_swap2
+  apply rx_push (w := 0x70a08231) rfl (by simp only [List.length_cons]; omega)
+  apply rx_swap2
+  apply rx_push (w := 36) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  apply rx_add' (v := 164) (by decide) (by simp only [List.length_cons]; omega)
+  apply rx_swap3
+  apply rx_push (w := 32) rfl (by simp only [List.length_cons]; omega)
+  apply rx_swap3
+  apply rx_swap1
+  apply rx_swap2
+  apply rx_swap1
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  apply rx_swap1
+  apply rx_sub' (v := 0) (by decide) (by simp only [List.length_cons]; omega)
+  apply rx_add' (v := 36) (by decide) (by simp only [List.length_cons]; omega)
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  rw [show G + access + 22 = (G + 22) + access by omega]
+  dsimp only [access]
+  conv in temporalAccountAccessCost _ _ =>
+    rw [← toAdr_toB256 (b.getStorVal sevm.currentTarget 7).toAdr]
+  apply rx_extcodesize fork (by simp only [List.length_cons]; omega)
+  apply rx_iszero (v := 0)
+    (by simp only [toAdr_toB256,B256.eqCheck,code,ite_false])
+    (by simp only [List.length_cons]; omega)
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  apply rx_iszero (v := 1) (by decide) (by simp only [List.length_cons]; omega)
+  apply rx_push (w := 0x11b1) rfl (by simp only [List.length_cons]; omega)
+  apply rx_branch_succ (by decide : (1 : B256) ≠ 0)
+  simpa only [toAdr_toB256] using body
+
+/-- Both actual token requests and full-reply guards compose before the amount checks.
+Only the compiled calls, successful return metadata and downstream instruction continuation
+are supplied here; the complete caller constructs that continuation from fee/pricing data. -/
+theorem mintBalanceRequests_exact {sevm : Sevm} {b d0 d1 : Devm}
+    {R : List B256} {M : Mem} {callGas0 callGas1 G : Nat}
+    {timestamp r1 r0 toWord ρ : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (room : R.length ≤ 990)
+    (code0 : ((afterSload sevm b 6).getCode (b.getStorVal sevm.currentTarget 6).toAdr).size.toB256 ≠ 0)
+    (call0 : Ninst.RunCompiled sevm
+      (St (temporalAccountAccessBase (afterSload sevm b 6) (b.getStorVal sevm.currentTarget 6).toAdr)
+        (callGas0.toB256 :: (b.getStorVal sevm.currentTarget 6).toAdr.toB256 ::
+          128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
+          (b.getStorVal sevm.currentTarget 6).toAdr.toB256 :: 0 :: r1 :: r0 ::
+          0 :: toWord :: ρ :: R) (balanceRequestMemory M sevm.currentTarget) callGas0)
+      (.exec .staticcall) d0)
+    (success0 : d0.stack = 1 :: 164 :: 0x70a08231 ::
+      (b.getStorVal sevm.currentTarget 6).toAdr.toB256 :: 0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
+    (long0 : 32 ≤ d0.returnData.length)
+    (code1 : ((afterSload sevm d0 7).getCode (d0.getStorVal sevm.currentTarget 7).toAdr).size.toB256 ≠ 0)
+    (call1 : Ninst.RunCompiled sevm
+      (St (temporalAccountAccessBase (afterSload sevm d0 7) (d0.getStorVal sevm.currentTarget 7).toAdr)
+        (callGas1.toB256 :: (d0.getStorVal sevm.currentTarget 7).toAdr.toB256 ::
+          128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
+          (d0.getStorVal sevm.currentTarget 7).toAdr.toB256 :: 0 ::
+          Bytes.toB256 (d0.returnData.take 32) :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
+        (balanceRequestMemory (balanceReplyMemory M sevm.currentTarget d0.returnData)
+          sevm.currentTarget) callGas1) (.exec .staticcall) d1)
+    (success1 : d1.stack = 1 :: 164 :: 0x70a08231 ::
+      (d0.getStorVal sevm.currentTarget 7).toAdr.toB256 :: 0 ::
+      Bytes.toB256 (d0.returnData.take 32) :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
+    (long1 : 32 ≤ d1.returnData.length)
+    (gas0 : d0.gasLeft = callGas1 + 5 + sloadCost sevm d0 7 +
+      temporalAccountAccessCost (afterSload sevm d0 7) (d0.getStorVal sevm.currentTarget 7).toAdr + 219)
+    (gas1 : d1.gasLeft = G + 70)
+    (body : SFunc.RunExact cert.prog sevm
+      (St d1 (Bytes.toB256 (d1.returnData.take 32) :: 0 ::
+        Bytes.toB256 (d0.returnData.take 32) :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
+        (balanceReplyMemory (balanceReplyMemory M sevm.currentTarget d0.returnData)
+          sevm.currentTarget d1.returnData) G) MintBalanceSite.second.afterDecodeTree o) :
+    SFunc.RunExact cert.prog sevm
+      (St b (timestamp :: r1 :: r0 :: 0 :: 0 :: 0 :: toWord :: ρ :: R) M
+        (callGas0 + 5 + sloadCost sevm b 6 +
+          temporalAccountAccessCost (afterSload sevm b 6) (b.getStorVal sevm.currentTarget 6).toAdr + 166))
+      t_1094_c41 o := by
+  have request0 := balanceRequestMemory_ptr mem sevm.currentTarget
+  have reply0 := balanceReplyMemory_ptr d0.returnData request0
+  have request1 := balanceRequestMemory_ptr reply0 sevm.currentTarget
+  have decoded1 := mintBalanceDecode_exact (lengthWord := d1.returnData.length.toB256) MintBalanceSite.second request1
+    reply0.wf long1 (by simp only [List.length_cons]; omega) body
+  have observed1 := mintBalanceObservation_exact (z := 0) MintBalanceSite.second fork request1
+    (by simp only [List.length_cons]; omega) call1 success1
+    (show d1.gasLeft = (G + 6) + 64 by omega) long1 decoded1
+  have requested1 := mintSecondRequest_exact fork reply0 room code1 observed1
+  have decoded0 := mintBalanceDecode_exact (lengthWord := d0.returnData.length.toB256) MintBalanceSite.first request0 mem.wf long0
+    (by simp only [List.length_cons]; omega) requested1
+  have observed0 := mintBalanceObservation_exact (z := 0) MintBalanceSite.first fork request0
+    (by simp only [List.length_cons]; omega) call0 success0 (by omega) long0 decoded0
+  exact mintFirstRequest_exact fork mem room code0 observed0
 
 end Blanc.Lift.UniswapV2Pair
