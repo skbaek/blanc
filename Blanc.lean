@@ -445,6 +445,7 @@ import Blanc.Lift.ExactWalkSolc
 import Blanc.Lift.ExactWalkCall
 import Blanc.Lift.BeaconRoots.SystemWalk
 import Blanc.Lift.HistoryStorage.SystemWalk
+import Blanc.Lift.ConsolidationRequest.Prog
 import Blanc.Lift.Weth9.LiveApprove
 import Blanc.Lift.Weth9.LiveDeposit
 import Blanc.Lift.Weth9.LiveTransfer
