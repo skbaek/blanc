@@ -565,10 +565,9 @@ theorem blockC_body {benv : Benv} {iters : Nat} {out : B256}
     (hrun : WordFakeExponential.Run σ.excess.toB256 17 1 17 0 iters out)
     (hpaid : (out / (17 : B256)).toNat ≤ 2 ^ 245)
     (hiters : iters ≤ 10000)
-    -- the request calls, on whatever the transaction leaves: installed canonical code
-    -- plus the 7251 empty-queue facts (carried as state facts, not opaque existentials)
-    (hWcode : ∀ benvTxs : Benv,
-      benvTxs.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode)
+    -- the 7251 request call, on whatever the transaction leaves: installed
+    -- canonical code plus the empty-queue facts (carried as state facts, not
+    -- opaque existentials). The 7002 code is derived in the proof.
     (hCcode : ∀ benvTxs : Benv,
       benvTxs.state.getCode consolidationRequestPredeployAddress = Blanc.consolidationRequestCode)
     (hCempty : ∀ benvTxs : Benv, EmptyQueueAt benvTxs) :
@@ -645,8 +644,23 @@ theorem blockC_body {benv : Benv} {iters : Nat} {out : B256}
         (min 1 (8 - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)).toB256
       (txGasUsed txC.gas 23000 post.gasLeft post.refundCounter.toNat *
         (min 1 (8 - benv.stat.baseFeePerGas))).toB256 with hsettledTx
+  have hWcodeAt : (benvTx.withState settledTx).state.getCode
+      withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode := by
+    have h1 := hQ.2.2.2.1 withdrawalRequestPredeployAddress
+    have h2 : (stHistory benv).getCode withdrawalRequestPredeployAddress =
+        benv.state.getCode withdrawalRequestPredeployAddress :=
+      stHistory_getCode_of_ne hfork hbeaconCode hhistoryCode hlast _
+        (by decide) (by decide)
+    have h3 : ((benv.withState (stHistory benv)).state).getCode
+        withdrawalRequestPredeployAddress =
+        (stHistory benv).getCode withdrawalRequestPredeployAddress := rfl
+    have h4 : ((benvTx.withState settledTx).state).getCode
+        withdrawalRequestPredeployAddress =
+        settledTx.getCode withdrawalRequestPredeployAddress := rfl
+    rw [h4, hsettledTx, settledState_getCode, h1, h3]
+    exact h2.trans hcode
   obtain ⟨stW, outW, hWrun⟩ := checkedW_of_installed (benvTx.withState settledTx)
-    hfork (hWcode _)
+    hfork hWcodeAt
   obtain ⟨stC, outC, hCrun⟩ := checkedC_of_emptyQueue
     ((benvTx.withState settledTx).withState stW) hfork (hCcode _) (hCempty _)
   refine ⟨post, bout', stW, stC, outW, outC, hQ, ?_, hWrun, hCrun⟩
@@ -681,8 +695,6 @@ theorem blockB_body {benv : Benv} {σ0 : Blanc.WithdrawalRequest.State} {lastHas
     (hqueue : ∀ n o, σ0.tail ≤ n → n < σ0.tail + 2895 → o ≤ 2 →
       (benv.state.getStor withdrawalRequestPredeployAddress).get
         (Blanc.WithdrawalRequest.queueSlot n o) = 0)
-    (hWcode : ∀ benvTxs : Benv,
-      benvTxs.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode)
     (hCcode : ∀ benvTxs : Benv,
       benvTxs.state.getCode consolidationRequestPredeployAddress = Blanc.consolidationRequestCode)
     (hCempty : ∀ benvTxs : Benv, EmptyQueueAt benvTxs) :
@@ -774,8 +786,15 @@ theorem blockB_body {benv : Benv} {σ0 : Blanc.WithdrawalRequest.State} {lastHas
         (min 1 (8 - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)).toB256
       (txGasUsed txB.gas 23380 post.gasLeft post.refundCounter.toNat *
         (min 1 (8 - benv.stat.baseFeePerGas))).toB256 with hsettledTx
+  have hWcodeAt : (benvTx.withState settledTx).state.getCode
+      withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode := by
+    have h4 : ((benvTx.withState settledTx).state).getCode
+        withdrawalRequestPredeployAddress =
+        settledTx.getCode withdrawalRequestPredeployAddress := rfl
+    rw [h4, hsettledTx, settledState_getCode]
+    exact hQ.1
   obtain ⟨stW, outW, hWrun⟩ := checkedW_of_installed (benvTx.withState settledTx)
-    hfork (hWcode _)
+    hfork hWcodeAt
   obtain ⟨stC, outC, hCrun⟩ := checkedC_of_emptyQueue
     ((benvTx.withState settledTx).withState stW) hfork (hCcode _) (hCempty _)
   refine ⟨post, bout', stW, stC, outW, outC, hQ, ?_, hWrun, hCrun⟩
