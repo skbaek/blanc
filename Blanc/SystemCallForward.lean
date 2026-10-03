@@ -130,4 +130,15 @@ theorem State.get_setStorVal_ne (w : State) {owner a : Adr} (key value : B256)
   unfold State.setStorVal
   exact State.get_set_ne w different _
 
+theorem afterSstore_getAcct_ne (sevm : Sevm) (base : Devm) (key value : B256) {a : Adr}
+    (hne : sevm.currentTarget ≠ a) :
+    (afterSstore sevm base key value).getAcct a = base.getAcct a := by
+  unfold Devm.getAcct
+  rw [afterSstore_state, State.get_setStorVal_ne _ _ _ hne]
+
+theorem State.getStor_setStorVal_self (w : State) (t : Adr) (k v : B256) :
+    (w.setStorVal t k v).getStor t = (w.getStor t).set k v := by
+  unfold State.setStorVal State.getStor
+  rw [State.get_set_self]
+
 end Blanc

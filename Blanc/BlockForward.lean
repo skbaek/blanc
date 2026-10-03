@@ -476,4 +476,17 @@ theorem ConfiguredBlockTrace.sum_post_le {cfg : ChainConfig} {pre post : BlockCh
   rw [trace.postState]
   exact this
 
+/-- A chain with a block has a last retained block hash. -/
+theorem blockHashes_getLast_of_ne {chain : BlockChain} (h : chain.blocks ≠ []) :
+    ∃ lastHash, (getLast256BlockHashes chain).getLast? = some lastHash := by
+  unfold getLast256BlockHashes
+  split
+  · rename_i hnil
+    exfalso
+    rw [List.take_eq_nil_iff] at hnil
+    rcases hnil with h0 | hrev
+    · exact absurd h0 (by decide)
+    · exact h (List.reverse_eq_nil_iff.mp hrev)
+  · exact ⟨_, by rw [List.getLast?_reverse, List.head?_cons]⟩
+
 end Blanc.BlockForward

@@ -762,6 +762,19 @@ theorem exists_appliedBodyTrace
     transactionsTrace, requestState, requestBout, requestsTrace,
     hfinal'.1, hfinal'.2⟩⟩
 
+theorem AppliedBodyTrace.decodedTxs_nil {benv : Benv} {txs : List (Bytes ⊕ Tx)}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs wds state bout) (htxs : txs = []) :
+    trace.decodedTxs = [] := by
+  have hdecode : txs.mapM decodeTx = .ok [] := by rw [htxs]; rfl
+  exact Except.ok.inj (trace.decodeRun.symm.trans hdecode)
+
+theorem AppliedBodyTrace.decodedTxs_of_mapM {benv : Benv} {txs : List (Bytes ⊕ Tx)}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs wds state bout) {l : List Tx}
+    (h : txs.mapM decodeTx = .ok l) : trace.decodedTxs = l :=
+  Except.ok.inj (trace.decodeRun.symm.trans h)
+
 end ExecutionTrace
 
 end Blanc

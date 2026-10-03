@@ -158,6 +158,14 @@ def ApplyTransactionsTrace.NoSenderAt (a : Adr) :
   | .nil _ _ => True
   | .cons head tail => head.sender ≠ a ∧ tail.NoSenderAt a
 
+theorem ApplyTransactionsTrace.noSender_nil {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+    {bout finalBout : BlockOutput}
+    (t : ApplyTransactionsTrace txs benv bout finalBenv finalBout) (h : txs = []) (a : Adr) :
+    t.NoSenderAt a := by
+  subst h
+  cases t
+  trivial
+
 private theorem ApplyTransactionsTrace.caller_excluded
     {txs : List (Nat × Tx)} {benv finalBenv : Benv} {bout finalBout : BlockOutput} {a : Adr}
     (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)

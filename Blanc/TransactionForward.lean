@@ -822,4 +822,39 @@ theorem deploymentFinalState_two {benv : Benv} {tx : Tx} {sender : Adr} {chainId
   unfold deploymentFinalState
   rw [deploymentEffectiveGasPrice_two htype, Nat.add_sub_cancel]
 
+theorem txGasUsed_le {gas floor left refund : Nat} (h : floor ≤ gas) :
+    txGasUsed gas floor left refund ≤ gas := by
+  unfold txGasUsed
+  exact Nat.max_le.mpr ⟨by omega, h⟩
+
+/-- The fold over two indexed transactions: each settles in the state the previous left. -/
+theorem applyTransactions_two {benv : Benv} {bout bout1 bout2 : BlockOutput} {tx1 tx2 : Tx}
+    {s1 s2 : State} (h1 : processTransaction benv bout tx1 0 = .ok (s1, bout1))
+    (h2 : processTransaction (benv.withState s1) bout1 tx2 1 = .ok (s2, bout2)) :
+    applyTransactions [tx1, tx2].putIndex benv bout = .ok (benv.withState s2, bout2) := by
+  change applyTransactions [(0, tx1), (1, tx2)] benv bout = _
+  simp only [applyTransactions, h1, h2, bind, Except.bind]
+  rfl
+
+/-- A successful transaction inserts exactly its own receipt: every other key of the receipts
+trie keeps its entry. -/
+theorem processTransaction_receiptsTrie {benv : Benv} {bout : BlockOutput} {tx : Tx}
+    {index : Nat} {p : State × BlockOutput} (hp : processTransaction benv bout tx index = .ok p) :
+    ∃ r, p.2.receiptsTrie = bout.receiptsTrie.insert (BLT.toBytes (.bytes index.toBytes)) r := by
+  unfold processTransaction at hp
+  obtain ⟨b1, hb1, hp⟩ := Except.bind_eq_ok hp
+  obtain ⟨_, _, hp⟩ := Except.bind_eq_ok hp
+  obtain ⟨_, _, hp⟩ := Except.bind_eq_ok hp
+  obtain ⟨_, _, hp⟩ := Except.bind_eq_ok hp
+  obtain ⟨_, _, hp⟩ := Except.bind_eq_ok hp
+  obtain ⟨_, _, hp⟩ := Except.bind_eq_ok hp
+  obtain ⟨_, _, hp⟩ := Except.bind_eq_ok hp
+  obtain ⟨_, _, hp⟩ := Except.bind_eq_ok hp
+  obtain ⟨b2, hb2, hp⟩ := Except.bind_eq_ok hp
+  obtain ⟨b3, hb3, hp⟩ := Except.bind_eq_ok hp
+  simp only [Except.ok.injEq] at hb1 hb2 hb3
+  cases hp
+  subst hb1 hb2 hb3
+  exact ⟨_, rfl⟩
+
 end Blanc

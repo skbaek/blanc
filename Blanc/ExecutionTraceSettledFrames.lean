@@ -67,4 +67,36 @@ def ConfiguredHistoryTrace.settledFrames :
   | .refl _ _ _ => []
   | .step prior block => prior.settledFrames ++ block.settledFrames
 
+theorem ApplyTransactionsTrace.settledFrames_nil {txs : List (Nat × Tx)}
+    {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    (t : ApplyTransactionsTrace txs benv bout finalBenv finalBout) (h : txs = []) :
+    t.settledFrames = [] := by
+  subst h
+  cases t
+  rfl
+
+/-- The head transaction of a nonempty fold, with its frames among the fold's. -/
+theorem ApplyTransactionsTrace.head_of_cons {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+    {bout finalBout : BlockOutput}
+    (t : ApplyTransactionsTrace txs benv bout finalBenv finalBout) {index : Nat} {tx : Tx}
+    {rest : List (Nat × Tx)} (h : txs = (index, tx) :: rest) :
+    ∃ (st : State) (bo : BlockOutput) (head : TransactionTrace benv bout tx index st bo),
+      ∀ f ∈ head.settledFrames, f ∈ t.settledFrames := by
+  subst h
+  cases t with
+  | cons head tail =>
+      exact ⟨_, _, head, fun f hf => List.mem_append_left _ hf⟩
+
+/-- The single transaction of a one-transaction fold, with its frames among the fold's. -/
+theorem ApplyTransactionsTrace.single_head {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+    {bout finalBout : BlockOutput}
+    (t : ApplyTransactionsTrace txs benv bout finalBenv finalBout) {tx : Tx}
+    (h : txs = [(0, tx)]) :
+    ∃ (st : State) (bo : BlockOutput) (head : TransactionTrace benv bout tx 0 st bo),
+      ∀ f ∈ head.settledFrames, f ∈ t.settledFrames := by
+  subst h
+  cases t with
+  | cons head tail =>
+      exact ⟨_, _, head, fun f hf => List.mem_append_left _ hf⟩
+
 end Blanc.ExecutionTrace

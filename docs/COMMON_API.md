@@ -892,7 +892,8 @@ and constructor families cover every modelled wrapper layer:
   `RequestsTrace`, and `AppliedBodyTrace`, together with their `exists_*Trace`
   theorems, retain transaction lists, system messages, requests, and the full
   block body. `RequestsTrace.state_eq_consolidationState` identifies the final
-  request state.
+  request state, and `AppliedBodyTrace.decodedTxs_nil` / `AppliedBodyTrace.decodedTxs_of_mapM`
+  decode `trace.decodedTxs` from empty or mapped `txs.mapM decodeTx` runs.
 
 For the exact request bytes appended by a retained request pass, import
 [`Blanc/RequestsOutput.lean`](../Blanc/RequestsOutput.lean).
@@ -2259,6 +2260,10 @@ consumer needs canonical interpreter ingress as one conjunct:
   and use its `settledFrames` projections instead of `rawFrames`; it mirrors
   the same trace-carrier route and concatenation order while applying the
   message and CREATE settlement tests at their roots.
+  `ApplyTransactionsTrace.settledFrames_nil` shows an empty transaction fold
+  settles no frames, while `ApplyTransactionsTrace.head_of_cons` and
+  `ApplyTransactionsTrace.single_head` place the head transaction's settled
+  frames among the fold's.
 - To apply a property of raw transaction roots to a settlement-committed
   transaction frame, import
   [`Blanc/ExecutionTraceSettledOrigin.lean`](../Blanc/ExecutionTraceSettledOrigin.lean).
@@ -2347,7 +2352,8 @@ consumer needs canonical interpreter ingress as one conjunct:
   `ConfiguredHistoryTrace.txRawFrames_caller_excluded` in
   [`Blanc/ExecutionTraceCallerExclusion.lean`](../Blanc/ExecutionTraceCallerExclusion.lean)
   derives that exclusion from initially empty code, retained `NoSenderAt`,
-  `NoAuthorityAt`, and trace-local CREATE avoidance. Calls to the empty-code
+  `NoAuthorityAt`, and trace-local CREATE avoidance (`ApplyTransactionsTrace.noSender_nil`
+  supplies `NoSenderAt a` vacuously for an empty transaction list). Calls to the empty-code
   address remain allowed; system frames are outside the conclusion.
   `SpawnFree` and
   `ConfiguredHistoryTrace.systemRawFrames_target_of_spawnFree`
@@ -2729,7 +2735,9 @@ The shared parts are `checkTransactionGasFee_two`, `checkTransactionChainId_two`
 `CoveredFork.rules_txBase`, `rules_floorTokenCost`, `rules_storageClearRefund`,
 `CoveredFork.checkTransactionGasCap_ok`), `prepareMessage_call`/`callMessage`,
 `benvAfterTransfer_get_of_value_zero`, `processMessage_call_of_exec`, `debit_get_ne`/`debit_get_self`,
-`addBal_get_self`/`addBal_get_ne`, `sender_net_toNat`, and `processTransaction_of_stages_gasUsed` (the
+`addBal_get_self`/`addBal_get_ne`, `sender_net_toNat`, `txGasUsed_le` (bounds `txGasUsed ≤ gas` from `floor ≤ gas`),
+`applyTransactions_two` (folds two sequential successful transactions into `applyTransactions`),
+`processTransaction_receiptsTrie` (identifies the inserted receipt key), and `processTransaction_of_stages_gasUsed` (the
 stage lemma with the block output's gas counters).  Worked use: the deployed WETH9's
 `Blanc/Lift/Weth9/LiveTx.lean` (`weth9_tx_withdraw`, `weth9_history_tx_withdraw`), which feeds it the frame of
 `weth9_withdraw_live_post`.
@@ -2837,8 +2845,9 @@ systemCallOutput post)` for any member of `systemContracts` on a covered fork, f
 `exec (initEvm (systemCallMsg benv target code data)) = .ok post` with no frame error and a
 non-negative refund counter (and, for the block-level forms, the canonical code installed).
 `systemContracts_not_precompile`, `systemContracts_nondelegated` and
-`systemContracts_nonempty` are the envelope facts; `afterSstore_state` and
-`State.get_setStorVal_ne` read a store's world-state effect. Worked uses: the EIP-4788 and
+`systemContracts_nonempty` are the envelope facts; `afterSstore_state`,
+`afterSstore_getAcct_ne`, `State.get_setStorVal_ne` and `State.getStor_setStorVal_self`
+read a store's world-state effect and account/storage preservation. Worked uses: the EIP-4788 and
 EIP-2935 walks `Blanc/Lift/BeaconRoots/SystemWalk.lean` and
 `Blanc/Lift/HistoryStorage/SystemWalk.lean` (`processUncheckedSystemTransaction_beaconRoots`,
 `processUncheckedSystemTransaction_historyStorage`), and the EIP-7251 empty-queue walk
@@ -2958,6 +2967,8 @@ Nothing in it names a contract; the only fork premise is `CoveredFork`.
   `ConfiguredBlockTrace` carrier of T6 from `sum pre.state.bal < 2 ^ 256`, and
   `BlockForward.ConfiguredBlockTrace.sum_post_le` carries that bound to the
   next block when the withdrawal list is empty.
+- `BlockForward.blockHashes_getLast_of_ne` supplies the last retained block hash
+  (`getLast? = some lastHash`) for any chain with nonempty blocks.
 
 This remains COMMON_API-only: the goal shape is a fixed Jaune equation and the
 current recipe matchers have no forward-transition shape to bind.
@@ -3015,6 +3026,8 @@ current recipe matchers have no forward-transition shape to bind.
   across a successful message-entry transfer.
   The same module owns the shared receipt key, intrinsic/calldata gas
   projections and type-2 effective gas price;
+  `receiptKey_zero`, `receiptKey_one` and `receiptKey_ne` evaluate and
+  distinguish receipt keys at index 0 and 1;
   `deploymentTxPreludeBout` delegates to the lower
   `ExecutionTrace.transactionPreludeBout`.  Redemption and deployment owners
   should retain compatibility names only as thin aliases to these primitives.

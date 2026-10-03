@@ -21,12 +21,6 @@ open Jaune Blanc.Lift Blanc.ExecutionTrace Blanc.BlockForward FloodTx FloodWalk
 
 /-! ## Accounts other than the predeploy through the 7002 system frame -/
 
-theorem afterSstore_getAcct_ne_local (sevm : Sevm) (base : Devm) (key value : B256) {a : Adr}
-    (hne : sevm.currentTarget ≠ a) :
-    (afterSstore sevm base key value).getAcct a = base.getAcct a := by
-  unfold Devm.getAcct
-  rw [Blanc.afterSstore_state, Blanc.State.get_setStorVal_ne _ _ _ hne]
-
 theorem systemBodyBase_getAcct_local (sevm : Sevm) (base : Devm) (head index : B256)
     (a : Adr) :
     (Blanc.Lift.WithdrawalRequest.systemBodyBase sevm base head index).getAcct a =
@@ -71,12 +65,12 @@ theorem systemFramePost_getAcct_other (sevm : Sevm) (base : Devm) (memory : Mem)
     Blanc.Lift.WithdrawalRequest.systemExcessStore,
     Blanc.Lift.WithdrawalRequest.systemCountRead,
     Blanc.Lift.WithdrawalRequest.systemExcessRead,
-    afterSstore_getAcct_ne_local _ _ _ _ hne, afterSload_getAcct]
+    afterSstore_getAcct_ne _ _ _ _ hne, afterSload_getAcct]
   unfold Blanc.Lift.WithdrawalRequest.systemFramePointers
     Blanc.Lift.WithdrawalRequest.systemPointerBase
   split
-  · simp only [afterSstore_getAcct_ne_local _ _ _ _ hne, systemQueuePost_getAcct_local]
-  · simp only [afterSstore_getAcct_ne_local _ _ _ _ hne, systemQueuePost_getAcct_local]
+  · simp only [afterSstore_getAcct_ne _ _ _ _ hne, systemQueuePost_getAcct_local]
+  · simp only [afterSstore_getAcct_ne _ _ _ _ hne, systemQueuePost_getAcct_local]
 
 /-- The 7002 checked system call keeps every account but the predeploy. -/
 theorem systemW_post_get_other (benv : Benv) (a : Adr)
@@ -90,11 +84,6 @@ theorem systemW_post_get_other (benv : Benv) (a : Adr)
   exact h
 
 /-! ## The 7251 system call on an empty queue -/
-
-theorem State.getStor_setStorVal_self_local (w : State) (t : Adr) (k v : B256) :
-    (w.setStorVal t k v).getStor t = (w.getStor t).set k v := by
-  unfold State.setStorVal State.getStor
-  rw [State.get_set_self]
 
 /-- Slots 0-3 of the 7251 predeploy read zero. -/
 def Slots7251Zero (w : State) : Prop :=
@@ -182,32 +171,12 @@ theorem systemC_post_zero (b : Benv) (hfork : CoveredFork b.stat.fork)
     Slots7251Zero (Blanc.Lift.ConsolidationRequest.systemPost b).state := by
   rw [(checkedC_of_zero b hfork hcode hz).2]
   unfold Slots7251Zero
-  simp only [State.getStor_setStorVal_self_local, Stor.get_set_self,
+  simp only [State.getStor_setStorVal_self, Stor.get_set_self,
     Stor.get_set_ne _ (by decide : (1 : B256) ≠ 0),
     Stor.get_set_ne _ (by decide : (1 : B256) ≠ 2), Stor.get_set_ne _ (by decide : (0 : B256) ≠ 2),
     Stor.get_set_ne _ (by decide : (3 : B256) ≠ 2), Stor.get_set_ne _ (by decide : (1 : B256) ≠ 3),
     Stor.get_set_ne _ (by decide : (0 : B256) ≠ 3)]
   exact ⟨trivial, trivial, trivial, trivial⟩
-
-/-! ## Block-level helpers -/
-
-/-- A chain with a block has a last retained block hash. -/
-theorem blockHashes_getLast_of_ne {chain : BlockChain} (h : chain.blocks ≠ []) :
-    ∃ lastHash, (getLast256BlockHashes chain).getLast? = some lastHash := by
-  unfold getLast256BlockHashes
-  split
-  · rename_i hnil
-    exfalso
-    rw [List.take_eq_nil_iff] at hnil
-    rcases hnil with h0 | hrev
-    · exact absurd h0 (by decide)
-    · exact h (List.reverse_eq_nil_iff.mp hrev)
-  · exact ⟨_, by rw [List.getLast?_reverse, List.head?_cons]⟩
-
-theorem txGasUsed_le {gas floor left refund : Nat} (h : floor ≤ gas) :
-    txGasUsed gas floor left refund ≤ gas := by
-  unfold txGasUsed
-  exact Nat.max_le.mpr ⟨by omega, h⟩
 
 /-! ## One body: system calls around a settled transaction state -/
 
@@ -349,18 +318,6 @@ theorem stW_getStor_high (b : Benv) (k : B256) (h0 : k ≠ 0) (h1 : k ≠ 1) (h2
     rfl
 
 /-! ## Block C's submission frame -/
-
-/-- The single transaction of a one-transaction fold, with its frames among the fold's. -/
-theorem ApplyTransactionsTrace.single_head {txs : List (Nat × Tx)} {benv finalBenv : Benv}
-    {bout finalBout : BlockOutput}
-    (t : ApplyTransactionsTrace txs benv bout finalBenv finalBout) {tx : Tx}
-    (h : txs = [(0, tx)]) :
-    ∃ (st : State) (bo : BlockOutput) (head : TransactionTrace benv bout tx 0 st bo),
-      ∀ f ∈ head.settledFrames, f ∈ t.settledFrames := by
-  subst h
-  cases t with
-  | cons head tail =>
-      exact ⟨_, _, head, fun f hf => List.mem_append_left _ hf⟩
 
 /-- **Block C's committed submission frame.**  A retained trace of `txC` on a state that
 satisfies the transaction's premises holds a settled root frame at the predeploy that is a
@@ -1018,14 +975,6 @@ theorem AppliedBodyTrace.history_eq {benv : Benv} {txs : List (Bytes ⊕ Tx)}
   have hHeq := Except.ok.inj (hrun.symm.trans hH)
   exact ⟨hbeacon, (Prod.mk.inj hHeq).1⟩
 
-theorem ApplyTransactionsTrace.noSender_nil {txs : List (Nat × Tx)} {benv finalBenv : Benv}
-    {bout finalBout : BlockOutput}
-    (t : ApplyTransactionsTrace txs benv bout finalBenv finalBout) (h : txs = []) (a : Adr) :
-    t.NoSenderAt a := by
-  subst h
-  cases t
-  trivial
-
 theorem ApplyTransactionsTrace.noSender_single {txs : List (Nat × Tx)} {benv finalBenv : Benv}
     {bout finalBout : BlockOutput}
     (t : ApplyTransactionsTrace txs benv bout finalBenv finalBout) {tx : Tx}
@@ -1033,13 +982,6 @@ theorem ApplyTransactionsTrace.noSender_single {txs : List (Nat × Tx)} {benv fi
     t.NoSenderAt systemAddress := by
   subst h
   exact noSenderAt_single t hrecover
-
-theorem AppliedBodyTrace.decodedTxs_nil {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) (htxs : txs = []) :
-    trace.decodedTxs = [] := by
-  have hdecode : txs.mapM decodeTx = .ok [] := by rw [htxs]; rfl
-  exact Except.ok.inj (trace.decodeRun.symm.trans hdecode)
 
 /-- The one transaction of a witness block is a call without authorizations. -/
 theorem calls_of_single {benv : Benv} {txs : List (Bytes ⊕ Tx)}

@@ -151,14 +151,6 @@ structure PreD (w : State) : Prop where
   rep : Blanc.WithdrawalRequest.RepresentsStorage
     (w.getStor withdrawalRequestPredeployAddress).get σA
 
-theorem ApplyTransactionsTrace.settledFrames_nil {txs : List (Nat × Tx)}
-    {benv finalBenv : Benv} {bout finalBout : BlockOutput}
-    (t : ApplyTransactionsTrace txs benv bout finalBenv finalBout) (h : txs = []) :
-    t.settledFrames = [] := by
-  subst h
-  cases t
-  rfl
-
 /-- **Stage A**: the activation block on the drain checkpoint; it settles no submission. -/
 theorem drain_stageA : ∃ (post : BlockChain)
     (trace : ConfiguredBlockTrace witnessConfig drainChain post) (parent : Block),
@@ -192,65 +184,6 @@ theorem drain_stageA : ∃ (post : BlockChain)
 
 /-! ## Transaction-fold helpers -/
 
-theorem receiptKey_zero : BLT.toBytes (.bytes (0 : Nat).toBytes) = [0x80] := by
-  have h0 : Nat.toBytes 0 = [] := by decide +kernel
-  rw [h0]
-  simp only [BLT.toBytes, List.length_nil, Nat.ofNat_pos, ↓reduceIte, Nat.toUInt8_eq,
-    UInt8.reduceOfNat, add_zero]
-
-theorem receiptKey_one : BLT.toBytes (.bytes (1 : Nat).toBytes) = [0x01] := by
-  have h1 : Nat.toBytes 1 = [1] := by simp only [Nat.toBytes, Nat.toBytes.aux,
-    Nat.succ_eq_add_one, zero_add, Nat.one_mod, Nat.toUInt8_eq, UInt8.ofNat_one, Nat.reduceDiv]
-  rw [h1]
-  simp only [BLT.toBytes, UInt8.reduceLT, ↓reduceIte]
-
-theorem receiptKey_ne :
-    BLT.toBytes (.bytes (1 : Nat).toBytes) ≠ BLT.toBytes (.bytes (0 : Nat).toBytes) := by
-  rw [receiptKey_zero, receiptKey_one]
-  decide
-
-/-- The fold over two indexed transactions: each settles in the state the previous left. -/
-theorem applyTransactions_two {benv : Benv} {bout bout1 bout2 : BlockOutput} {tx1 tx2 : Tx}
-    {s1 s2 : State} (h1 : processTransaction benv bout tx1 0 = .ok (s1, bout1))
-    (h2 : processTransaction (benv.withState s1) bout1 tx2 1 = .ok (s2, bout2)) :
-    applyTransactions [tx1, tx2].putIndex benv bout = .ok (benv.withState s2, bout2) := by
-  change applyTransactions [(0, tx1), (1, tx2)] benv bout = _
-  simp only [applyTransactions, h1, h2, bind, Except.bind]
-  rfl
-
-/-- A successful transaction inserts exactly its own receipt: every other key of the receipts
-trie keeps its entry. -/
-theorem processTransaction_receiptsTrie {benv : Benv} {bout : BlockOutput} {tx : Tx}
-    {index : Nat} {p : State × BlockOutput} (hp : processTransaction benv bout tx index = .ok p) :
-    ∃ r, p.2.receiptsTrie = bout.receiptsTrie.insert (BLT.toBytes (.bytes index.toBytes)) r := by
-  unfold processTransaction at hp
-  obtain ⟨b1, hb1, hp⟩ := Except.bind_eq_ok hp
-  obtain ⟨_, _, hp⟩ := Except.bind_eq_ok hp
-  obtain ⟨_, _, hp⟩ := Except.bind_eq_ok hp
-  obtain ⟨_, _, hp⟩ := Except.bind_eq_ok hp
-  obtain ⟨_, _, hp⟩ := Except.bind_eq_ok hp
-  obtain ⟨_, _, hp⟩ := Except.bind_eq_ok hp
-  obtain ⟨_, _, hp⟩ := Except.bind_eq_ok hp
-  obtain ⟨_, _, hp⟩ := Except.bind_eq_ok hp
-  obtain ⟨b2, hb2, hp⟩ := Except.bind_eq_ok hp
-  obtain ⟨b3, hb3, hp⟩ := Except.bind_eq_ok hp
-  simp only [Except.ok.injEq] at hb1 hb2 hb3
-  cases hp
-  subst hb1 hb2 hb3
-  exact ⟨_, rfl⟩
-
-/-- The head transaction of a nonempty fold, with its frames among the fold's. -/
-theorem ApplyTransactionsTrace.head_of_cons {txs : List (Nat × Tx)} {benv finalBenv : Benv}
-    {bout finalBout : BlockOutput}
-    (t : ApplyTransactionsTrace txs benv bout finalBenv finalBout) {index : Nat} {tx : Tx}
-    {rest : List (Nat × Tx)} (h : txs = (index, tx) :: rest) :
-    ∃ (st : State) (bo : BlockOutput) (head : TransactionTrace benv bout tx index st bo),
-      ∀ f ∈ head.settledFrames, f ∈ t.settledFrames := by
-  subst h
-  cases t with
-  | cons head tail =>
-      exact ⟨_, _, head, fun f hf => List.mem_append_left _ hf⟩
-
 /-- A fold whose every transaction recovers to `senderE` has no sender at SYSTEM_ADDRESS. -/
 theorem ApplyTransactionsTrace.noSenderAt_of_recover {txs : List (Nat × Tx)}
     {benv finalBenv : Benv} {bout finalBout : BlockOutput}
@@ -266,12 +199,6 @@ theorem ApplyTransactionsTrace.noSenderAt_of_recover {txs : List (Nat × Tx)}
     have hsender' : senderE = head.sender :=
       Except.ok.inj ((h _ List.mem_cons_self).symm.trans hrecover')
     exact (by decide : senderE ≠ systemAddress) (hsender'.trans hsender)
-
-theorem AppliedBodyTrace.decodedTxs_of_mapM {benv : Benv} {txs : List (Bytes ⊕ Tx)}
-    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout) {l : List Tx}
-    (h : txs.mapM decodeTx = .ok l) : trace.decodedTxs = l :=
-  Except.ok.inj (trace.decodeRun.symm.trans h)
 
 theorem calls_of_two {benv : Benv} {txs : List (Bytes ⊕ Tx)}
     {wds : List Withdrawal} {state : State} {bout : BlockOutput}
