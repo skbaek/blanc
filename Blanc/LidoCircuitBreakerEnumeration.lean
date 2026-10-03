@@ -20,32 +20,6 @@ theorem abiAddressArray_length (entries : List Entry) :
         List.flatMap_cons] at ih ⊢
       omega
 
-private theorem abiAddressWords_target_word (entries : List Entry)
-    {i : Nat} (hi : i < entries.length) :
-    ((entries.map Prod.fst).flatMap B256.toBytes).sliceD (32 * i) 32 0 =
-      (entries[i].1).toBytes := by
-  induction entries generalizing i with
-  | nil => simp only [List.length_nil, not_lt_zero] at hi
-  | cons entry rest ih =>
-      cases i with
-      | zero =>
-          unfold List.sliceD
-          simp only [List.map_cons, List.flatMap_cons, Nat.mul_zero,
-            List.drop_zero, List.getElem_cons_zero]
-          rw [List.takeD_eq_take 0 (by simp only [List.length_append, B256.length_toBytes,
-            List.length_flatMap, List.map_map, le_add_iff_nonneg_right, zero_le])]
-          simpa only [B256.length_toBytes] using
-            (List.take_length_append (xs := entry.1.toBytes)
-              (ys := (rest.map Prod.fst).flatMap B256.toBytes))
-      | succ i =>
-          have hi' : i < rest.length := by simpa only [List.length_cons, add_lt_add_iff_right] using
-            hi
-          unfold List.sliceD
-          simp only [List.map_cons, List.flatMap_cons, List.getElem_cons_succ]
-          rw [show 32 * (i + 1) = 32 + 32 * i by omega,
-            ← B256.length_toBytes entry.1, List.drop_length_add_append]
-          exact ih hi'
-
 theorem RegistryWitness.enumeration_offsets_lt_2pow256
     {storage : LogicalStorage} {entries : List Entry}
     (h : RegistryWitness storage entries) {i : Nat} (hi : i < entries.length) :
@@ -605,11 +579,6 @@ structure EnumerationResources (sevm : Sevm) (pre : Devm)
   warm : ∀ key ∈ enumerationStorageKeys entries,
     (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈ pre.accessedStorageKeys
   gas_sufficient : getPausablesGasWarm entries ≤ pre.gasLeft
-
-def preparedEnumerationState (sevm : Sevm) (base : Devm)
-    (entries : List Entry) : Devm :=
-  (prepareEnumerationStorage sevm base entries).setMach
-    ⟨[], Mem.empty, getPausablesGasWarm entries, (prepareEnumerationStorage sevm base entries).stateGas⟩
 
 theorem enumLoop_pre_memory_independent_of_cursor (base : Devm)
     (entries done : List Entry) (cursor cursor' G : Nat) :

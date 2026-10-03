@@ -94,7 +94,6 @@ structure AllowanceEvent where
   caller : Adr
   depth : Nat
   visit : AllowanceVisit
-deriving DecidableEq
 
 /-- The projected key this event's pair hashes to. -/
 def AllowanceEvent.key (event : AllowanceEvent) : B256 :=
@@ -593,38 +592,11 @@ Holder `u` approves spender `sp`, who spends 40 then 60 of a 100 allowance.
 Both spends' governing chain roots back at the single `approve`, and the sum
 of hardened contributions matches the sum of permanent outflow exactly. -/
 
-private def approveFrame1 (u : Adr) (ow sp : B256) : CountedFrame :=
-  fixtureFrame u
-    (some
-      { owner := ow
-        spender := sp
-        caller := u
-        depth := 1
-        visit := .approveStore 100 })
-    none
-
 private def spend40Debit (u : Adr) (ow sp : B256) : DebitProvenance :=
   { actualCaller := sp.toAdr
     rawSource := u.toB256
     source := u
     branch := .delegated (.finite (projectedAllowanceKey ow sp) 100 60) }
-
-private def spendFrame40 (u w : Adr) (ow sp : B256) : CountedFrame :=
-  fixtureFrame sp.toAdr
-    (some
-      { owner := ow
-        spender := sp
-        caller := sp.toAdr
-        depth := 1
-        visit := .spendFinite 100 60 })
-    (some
-      { atom := .transfer u.toB256 w.toB256 u w 40
-        credit := none
-        debit := some (spend40Debit u ow sp)
-        actualCaller := sp.toAdr
-        currentTarget := 0
-        codeAddress := some 0
-        depth := 1 })
 
 private def spend60Debit (u : Adr) (ow sp : B256) : DebitProvenance :=
   { actualCaller := sp.toAdr
@@ -632,47 +604,6 @@ private def spend60Debit (u : Adr) (ow sp : B256) : DebitProvenance :=
     source := u
     branch := .delegated (.finite (projectedAllowanceKey ow sp) 60 0) }
 
-private def spendFrame60 (u w : Adr) (ow sp : B256) : CountedFrame :=
-  fixtureFrame sp.toAdr
-    (some
-      { owner := ow
-        spender := sp
-        caller := sp.toAdr
-        depth := 1
-        visit := .spendFinite 60 0 })
-    (some
-      { atom := .transfer u.toB256 w.toB256 u w 60
-        credit := none
-        debit := some (spend60Debit u ow sp)
-        actualCaller := sp.toAdr
-        currentTarget := 0
-        codeAddress := some 0
-        depth := 1 })
-
-/-! ### Permit-rooted third-party spend
-
-A relayer submits a `permit` whose owner word normalizes to `u`; a later
-spend at the same key by a third party still roots at that `permit`, and
-carries a hardened witness for `u` even though `u` acted nowhere in the
-ledger. -/
-
-private def permitSpendDebit (u : Adr) (ow sp : B256) : DebitProvenance :=
-  { actualCaller := sp.toAdr
-    rawSource := u.toB256
-    source := u
-    branch := .delegated (.finite (projectedAllowanceKey ow sp) 50 20) }
-
-/-! ### Checkpoint root
-
-A spend at a key with no preceding counted write in the ledger roots at the
-checkpoint, and still carries a hardened witness: the checkpoint-preexisting
-allowance is exactly as attributable as a committed `approve`. -/
-
-private def checkpointSpendDebit (u : Adr) (ow sp : B256) : DebitProvenance :=
-  { actualCaller := sp.toAdr
-    rawSource := u.toB256
-    source := u
-    branch := .delegated (.finite (projectedAllowanceKey ow sp) 80 50) }
 
 /-! ### Max-allowance transparency
 
@@ -690,11 +621,6 @@ private def maxApproveFrame (u : Adr) (ow sp : B256) : CountedFrame :=
         visit := .approveStore B256.max })
     none
 
-private def maxSpendDebit (u : Adr) (ow sp : B256) : DebitProvenance :=
-  { actualCaller := sp.toAdr
-    rawSource := u.toB256
-    source := u
-    branch := .delegated (.maximum (projectedAllowanceKey ow sp)) }
 
 /-! ### Read-only and infinite-allowance flash visits
 
@@ -991,23 +917,6 @@ theorem nonDormantApproveFrameByU_authorizes (u : Adr) (owU spU : B256) :
   simp only [CountedFrame.authorizes, nonDormantApproveFrameByU, fixtureFrame, decide_true,
     Bool.or_true]
 
-/-! ### Self-bypass and direct debits
-
-A direct-caller redemption and a raw-word self-bypass transfer both carry a
-hardened witness unconditionally, and each one's hardened contribution
-equals its own permanent outflow. -/
-
-private def directRedeemDebit (u : Adr) : DebitProvenance :=
-  { actualCaller := u
-    rawSource := u.toB256
-    source := u
-    branch := .direct }
-
-private def selfBypassDebit (u : Adr) : DebitProvenance :=
-  { actualCaller := u
-    rawSource := u.toB256
-    source := u
-    branch := .delegated .selfBypass }
 
 /-! ## Fixtures lifted to the history-altitude premise shapes
 

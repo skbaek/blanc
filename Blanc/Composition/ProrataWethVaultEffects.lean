@@ -688,32 +688,6 @@ theorem WethAllowanceEvent.toInvocation
       exact Prog.runCompiled_of_exec sevm pre Blanc.weth post weth_pcFree run
         identity.2.2.2
 
-/-- An event extracted from a fresh retained execution yields the existing
-allowance-invocation record with no caller-supplied memory condition. -/
-theorem retainedWethAllowanceEvent_toInvocation
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out)
-    (fresh : Exec.FrameAdmitted wethAccount Exec.FreshEntry run)
-    {event : WethAllowanceEvent}
-    (member : event ∈ retainedWethAllowanceEvents run) :
-    ∃ call : WethAllowanceInvocation,
-      call.approval = event.approval ∧ call.sevm = event.frame.sevm ∧
-        call.pre = event.frame.pre ∧ call.post = event.frame.post := by
-  rcases List.mem_filterMap.mp member with ⟨frame, _, classified⟩
-  exact event.toInvocation (WethAllowanceEvent.classification_sound classified).2
-    (retainedWethAllowanceEvent_memoryWf run fresh member)
-
-/-- The event-to-invocation projection attached to a retained raw slot. -/
-def RetainedWethAllowanceEventInvocations
-    {slot : Xlot} (retained : _root_.Blanc.ExecutionTrace.RetainedXlot slot) : Prop :=
-  match retained with
-  | .none => True
-  | .some run => ∀ event : WethAllowanceEvent,
-      event ∈ retainedWethAllowanceEvents run →
-        ∃ call : WethAllowanceInvocation,
-          call.approval = event.approval ∧ call.sevm = event.frame.sevm ∧
-            call.pre = event.frame.pre ∧ call.post = event.frame.post
-
 /-- Raw words, without address normalization. A self `transferFrom` bypasses
 allowance hashing; all other successful allowance invocations visit one pair.
 Both finite-decrement and maximum-allowance visits retain their pair. -/

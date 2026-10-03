@@ -11,10 +11,5 @@ namespace Blanc.Lift.VyperNonreentrantDeployed.Concrete
 
 open Jaune Blanc.ConcreteRun
 
-/-- Pool storage plus the implementation account's code. -/
-def proxyWorld : State :=
-  poolState.set implementationAddress { Acct.nil with code := implementationCode }
-
-def proxyGas : Nat := 10000000
 
 end Blanc.Lift.VyperNonreentrantDeployed.Concrete

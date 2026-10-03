@@ -130,15 +130,6 @@ private theorem exec_unique
           cases hr.symm.trans hr'
           rw [ihChild child', ih k']
 
-/-- Proof-indexed retained traversals are independent of which concrete
-`Exec` witness was recovered from a `RunCompiled` callback slot. -/
-theorem Exec.flowActions_eq_of_runs
-    {dp : DeployParams} {ca : Adr}
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (left right : Exec pc sevm pre out) :
-    Blanc.Weth10.Exec.flowActions dp ca left =
-      Blanc.Weth10.Exec.flowActions dp ca right := by
-  rw [exec_unique left right]
 
 /-- The action labels contributed by committed proper descendants, excluding
 the enclosing root frame. -/
@@ -1246,53 +1237,6 @@ theorem ProcessMessageTrace.storageSegmentDelta
         simp only [Blanc.Weth10.RetainedXlot.flowActions, hactions]
         exact ⟨StorageSegmentEffect.of_getStorCode_eq hstorage hcodeEq⟩
 
-/-- A filled CALL message is retained exactly when its complete frame
-settlement is clean.  A noncommitting settlement restores the saved message
-world and therefore contributes neither storage segments nor child labels. -/
-theorem ProcessMessage.storageSegmentEffect_of_settlement
-    {dp : DeployParams} {ca : Adr} {depth : Nat}
-    {msg : Msg} {post parent : Devm}
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out)
-    (hprocess : ProcessMessage msg
-      (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
-    (hparent : parent.state = msg.benv.state)
-    (hdepth : msg.depth < depth)
-    (hcode : some (parent.getCode ca).toList =
-      Prog.compile (weth10 dp))
-    (htargetCode : msg.currentTarget = ca →
-      some msg.code.toList = Prog.compile (weth10 dp))
-    (hbelow : StorageSegmentTraceBelow dp ca depth) :
-    Nonempty (StorageSegmentEffect ca parent post
-      (if Blanc.Frame.settlementCommits
-          (Frame.ofCall msg) out = true
-       then Exec.flowActions dp ca run else [])) := by
-  by_cases hsettle : Jaune.Frame.settlementCommits
-      (Frame.ofCall msg) out = true
-  · rw [if_pos hsettle]
-    let trace : ProcessMessageTrace msg (.ok post) :=
-      ⟨.some ⟨⟨pc, sevm, pre⟩, out⟩, .some run, hprocess⟩
-    simpa only [trace, RetainedXlot.flowActions] using
-      trace.storageSegmentDelta hparent hdepth hcode htargetCode hbelow
-  · rw [if_neg hsettle]
-    have hset := (RunFrame.some_inv hprocess).2
-    have herr : post.error.isSome = true := by
-      have hnone : post.error.isNone ≠ true := by
-        intro hnone
-        apply hsettle
-        unfold Jaune.Frame.settlementCommits
-        rw [← hset]
-        exact hnone
-      cases he : post.error <;> simp_all only [ExceptT.stM_eq, Bool.not_eq_true, Option.isNone_none, ne_eq, not_true_eq_false, Option.isNone_some, Bool.false_eq_true, not_false_eq_true, Option.isSome_some]
-    have hpostState : post.state = msg.benv.state :=
-      (ProcessMessage.rollback_of_error hprocess herr).1
-    have hstorage : Devm.getStor parent ca = Devm.getStor post ca :=
-      congrArg (fun state : State => state.getStor ca)
-        (hparent.trans hpostState.symm)
-    have hcodeEq : parent.getCode ca = post.getCode ca :=
-      congrArg (fun state : State => state.getCode ca)
-        (hparent.trans hpostState.symm)
-    exact ⟨StorageSegmentEffect.of_getStorCode_eq hstorage hcodeEq⟩
 
 /-- Proof-indexed form of `storageSegmentEffect_of_settlement`.  It consumes
 the accounting theorem for this concrete child derivation, which is the form
@@ -1400,91 +1344,6 @@ theorem ProcessMessage.storageSegmentEffect_none
           (congrArg (fun state : State => state.getCode ca) hpost).symm
   exact ⟨StorageSegmentEffect.of_getStorCode_eq hstorage hcode⟩
 
-/-- CREATE settlement contributes its retained constructor actions exactly
-when the final code-deposit result is clean.  Both constructor failure and
-code-deposit failure are handled by the actual rollback path. -/
-theorem ProcessCreateMessageTrace.storageSegmentDelta
-    {dp : DeployParams} {ca : Adr} {depth : Nat}
-    {msg : Msg} {post parent : Devm}
-    (trace : ProcessCreateMessageTrace msg (.ok post))
-    (hparent : parent.state = msg.benv.state)
-    (hdepth : msg.depth < depth)
-    (hcode : some (parent.getCode ca).toList =
-      Prog.compile (weth10 dp))
-    (htargetNe : msg.currentTarget ≠ ca)
-    (hbelow : StorageSegmentTraceBelow dp ca depth) :
-    Nonempty (StorageSegmentEffect ca parent post
-      (if post.error.isSome then []
-       else Blanc.Weth10.RetainedXlot.flowActions dp ca
-         trace.retained)) := by
-  cases herror : post.error.isSome with
-  | true =>
-      simp only [↓reduceIte]
-      have hpostState : post.state = msg.benv.state :=
-        ProcessCreateMessage.rollback_of_error trace.run herror
-      have hstorage : Devm.getStor parent ca = Devm.getStor post ca :=
-        congrArg (fun state : State => state.getStor ca)
-          (hparent.trans hpostState.symm)
-      have hcodeEq : parent.getCode ca = post.getCode ca :=
-        congrArg (fun state : State => state.getCode ca)
-          (hparent.trans hpostState.symm)
-      exact ⟨StorageSegmentEffect.of_getStorCode_eq hstorage hcodeEq⟩
-  | false =>
-      simp only [Bool.false_eq]
-      rcases ProcessCreateMessage.ok_getStorCode_eq_inner_of_clean
-        trace.run herror htargetNe with
-          ⟨inner, hinner, hpostStorage, hpostCode⟩
-      let innerTrace : ProcessMessageTrace
-          (processCreateMessage.msg msg) (.ok inner) :=
-        ⟨trace.slot, trace.retained, hinner⟩
-      let prepared : Devm :=
-        parent.withState (processCreateMessage.msg msg).benv.state
-      have hprefixStorage :
-          Devm.getStor parent ca = Devm.getStor prepared ca := by
-        change parent.state.getStor ca =
-          (processCreateMessage.msg msg).benv.state.getStor ca
-        rw [hparent,
-          processCreateMessage_msg_getStor_eq htargetNe]
-      have hprefixCode : parent.getCode ca = prepared.getCode ca := by
-        change parent.state.getCode ca =
-          (processCreateMessage.msg msg).benv.state.getCode ca
-        rw [hparent, processCreateMessage.msg_getCode]
-      have hpreparedCode : some (prepared.getCode ca).toList =
-          Prog.compile (weth10 dp) := by
-        calc
-          some (prepared.getCode ca).toList =
-              some ((processCreateMessage.msg msg).benv.state.getCode ca).toList :=
-            rfl
-          _ = some (msg.benv.state.getCode ca).toList := by
-            rw [processCreateMessage.msg_getCode]
-          _ = some (parent.state.getCode ca).toList := by
-            rw [hparent]
-          _ = _ := hcode
-      have hinnerDepth : (processCreateMessage.msg msg).depth < depth := by
-        simpa only [processCreateMessage.msg, Msg.withBenv] using hdepth
-      have hinnerTargetCode :
-          (processCreateMessage.msg msg).currentTarget = ca →
-            some (processCreateMessage.msg msg).code.toList =
-              Prog.compile (weth10 dp) := by
-        intro htarget
-        apply False.elim
-        apply htargetNe
-        simpa only [processCreateMessage.msg, Msg.withBenv] using htarget
-      rcases innerTrace.storageSegmentDelta (parent := prepared) rfl
-          hinnerDepth hpreparedCode hinnerTargetCode hbelow with ⟨effect⟩
-      have hsuffixStorage : Devm.getStor inner ca = Devm.getStor post ca :=
-        hpostStorage.symm
-      have hsuffixCode : inner.getCode ca = post.getCode ca :=
-        hpostCode.symm
-      exact ⟨by
-        simpa only [innerTrace, herror, Bool.false_eq,
-          Bool.true_eq_false, if_false,
-          List.nil_append, List.append_nil] using
-          (StorageSegmentEffect.of_getStorCode_eq
-              hprefixStorage hprefixCode).append
-            (effect.append
-              (StorageSegmentEffect.of_getStorCode_eq
-                hsuffixStorage hsuffixCode))⟩
 
 /-- Proof-indexed CREATE counterpart of
 `ProcessMessage.storageSegmentEffect_of_bodyEffect`.  The successful arm
@@ -1962,15 +1821,6 @@ theorem Xinst.storageSegmentEffect_none
         (StorageSegmentEffect.of_getStorCode_eq
           (hprefix.getStor ca) (hprefix.getCode ca)).append effect⟩
 
-/-- The exact remaining semantic target for one successful execution: a
-chronological chain of operational segments whose multiset of owned labels is
-exactly the canonical expansion of the rollback-pruned action traversal. -/
-abbrev Exec.StorageSegmentTrace
-    (dp : DeployParams) (ca : Adr)
-    {pc : Nat} {sevm : Sevm} {pre post : Devm}
-    (run : Exec pc sevm pre (.ok post)) : Type :=
-  StorageSegmentEffect ca pre post
-    (Blanc.Weth10.Exec.flowActions dp ca run)
 
 /-- A committed foreign frame contributes no root WETH10 action; its complete
 ledger is exactly its settlement-pruned proper-descendant traversal. -/

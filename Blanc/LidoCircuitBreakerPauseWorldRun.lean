@@ -392,11 +392,6 @@ private theorem temporalSstorePost_output (sevm : Sevm) (base : Devm)
     (key value : B256) :
     (temporalSstorePost sevm base key value).output = base.output := rfl
 
-private theorem temporalSstorePost_transientStorage (sevm : Sevm)
-    (base : Devm) (key value : B256) :
-    (temporalSstorePost sevm base key value).transientStorage =
-      base.transientStorage := rfl
-
 private theorem temporalSstorePost_accessedAddresses (sevm : Sevm)
     (base : Devm) (key value : B256) :
     (temporalSstorePost sevm base key value).accessedAddresses =
@@ -413,9 +408,6 @@ private theorem addLog_error (devm : Devm) (l : Log) :
 
 private theorem addLog_output (devm : Devm) (l : Log) :
     (devm.addLog l).output = devm.output := rfl
-
-private theorem addLog_transientStorage (devm : Devm) (l : Log) :
-    (devm.addLog l).transientStorage = devm.transientStorage := rfl
 
 private theorem addLog_accessedStorageKeys (devm : Devm) (l : Log) :
     (devm.addLog l).accessedStorageKeys = devm.accessedStorageKeys := rfl
@@ -443,10 +435,6 @@ private theorem setTransVal_output (devm : Devm) (a : Adr) (k v : B256) :
 private theorem setMach_getStorVal (devm : Devm) (m : Mach) (a : Adr)
     (key : B256) : (devm.setMach m).getStorVal a key = devm.getStorVal a key :=
   rfl
-
-private theorem setMach_getTransVal (devm : Devm) (m : Mach) (a : Adr)
-    (key : B256) :
-    (devm.setMach m).getTransVal a key = devm.getTransVal a key := rfl
 
 private theorem setMach_logs (devm : Devm) (m : Mach) :
     (devm.setMach m).logs = devm.logs := rfl

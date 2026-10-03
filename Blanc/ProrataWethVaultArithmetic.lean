@@ -153,21 +153,6 @@ theorem supply_add_le_maxSupplyN_of_le_shareRoomN
   rw [← supply_add_shareRoomN stable]
   exact Nat.add_le_add_left room supply
 
-private theorem maxWord_mul_div_wordModulus
-    {d : Nat} (hd : 0 < d) (hle : d ≤ maxWordN) :
-    maxWordN * d / wordModulusN = d - 1 := by
-  apply Nat.div_eq_of_lt_le
-  · rw [Nat.sub_mul, Nat.one_mul]
-    unfold maxWordN
-    rw [Nat.sub_mul, Nat.one_mul, Nat.mul_comm d wordModulusN]
-    apply Nat.sub_le_sub_left
-    exact hle.trans (Nat.le_of_lt maxWordN_lt_wordModulusN)
-  · have hdOne : d - 1 + 1 = d := Nat.sub_add_cancel (by omega)
-    rw [hdOne, Nat.mul_comm d wordModulusN]
-    unfold maxWordN
-    rw [Nat.sub_mul, Nat.one_mul]
-    exact Nat.sub_lt (Nat.mul_pos wordModulusN_pos hd) hd
-
 /-! ## Exact rounding directions -/
 
 theorem convertToSharesN_floor_le (amount assets supply : Nat) :

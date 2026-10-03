@@ -187,13 +187,6 @@ structure PairProvenanceOk {vault : Adr} (blockIndex : Nat) (transactionIndex : 
   tx : r.provenance.transactionIndex = transactionIndex
   path : framePath <+: r.provenance.framePath
 
-/-- The conclusion of the pair core: a connected replay between two boundaries whose records all
-carry admissible provenance. -/
-def PairReplayBetween (vault : Adr) (blockIndex : Nat) (transactionIndex : Option Nat)
-    (framePath : List Nat) (pre post : PairBoundary) : Prop :=
-  ∃ steps, PairReplay vault pre steps post ∧
-    ∀ r ∈ steps, PairProvenanceOk blockIndex transactionIndex framePath r
-
 /-- Proof-indexed committed pair replay for one interpreter suffix.  Every record carries
 admissible provenance, and every allowance invocation it owns is the visit of a raw frame root of
 the suffix's own derivation.  The frame's fork is covered (`CoveredFork`); every spawned child

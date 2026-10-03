@@ -140,12 +140,6 @@ structure LogicalState where
   pie : Adr → B256
   totalUnits : B256
 
-def project (stor : Stor) : LogicalState where
-  chi := stor.get chiSlot
-  rho := stor.get rhoSlot
-  pie := fun holder => stor.get (pieSlot holder)
-  totalUnits := stor.get totalUnitsSlot
-
 end Drip
 
 end Blanc

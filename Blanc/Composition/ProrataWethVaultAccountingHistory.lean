@@ -193,14 +193,6 @@ theorem dust_telescope_separate {vault : Adr} (path : RealizedPath vault) :
 
 end RealizedPath
 
-/-- Every world-connected G7 path is snapshot-connected, with the same boundary snapshots. -/
-def FourQuotePath.toRealizedPath {vault : Adr} (path : FourQuotePath vault) :
-    RealizedPath vault where
-  steps := path.steps
-  snapshot := fun i => stateSnapshot vault (path.world i)
-  pre_eq := fun i => congrArg (stateSnapshot vault) (path.pre_eq i)
-  post_eq := fun i => congrArg (stateSnapshot vault) (path.post_eq i)
-
 -- new; A:2220–2225 (`worldAt`, `snapshotAt`) unfold to the same term.
 
 end FourQuote

@@ -159,7 +159,7 @@ inductive CompositeLabel
   | root
   | base (slot : Nat)
   | trigger (lbl : TriggerLabel)
-  deriving DecidableEq, Repr
+  deriving DecidableEq
 
 /-- Unified coordinate mapping for the composite table. -/
 def compositeSlotOf (baseCount : Nat) : CompositeLabel → Nat
@@ -220,8 +220,6 @@ def afterVaultCallSlot : Nat := localSlotOf .afterVaultCall
 def refundCallSlot : Nat := localSlotOf .refundCall
 def balanceCheckSlot : Nat := localSlotOf .balanceCheck
 def afterNestedValidationSlot : Nat := localSlotOf .afterNestedValidation
-
-def localAuxSlotCount : Nat := 22
 
 /-! ## Fixed scratch-memory words
 
@@ -868,18 +866,8 @@ theorem rebaseLocalCalls_prependStoresRev (delta : Nat)
       rw [ih]
       rfl
 
-def rebasedTrigger (delta : Nat) (dp : DeployParams) : Func :=
-  rebaseLocalCalls delta (triggerFullWithdrawals dp)
-
-def rebasedLocalAuxWithRoleFailure
-    (delta : Nat) (dp : DeployParams) (roleFailure : Func) : List Func :=
-  (localAuxWithRoleFailure dp roleFailure).map (rebaseLocalCalls delta)
-
 def packet (dp : DeployParams) : Prog :=
   ⟨triggerFullWithdrawals dp, localAux dp⟩
-
-def packetCode (dp : DeployParams) : Bytes :=
-  (Prog.compile (packet dp)).getD []
 
 theorem packet_compileShape_eq_zero (dp : DeployParams) :
     (packet dp).compileShape = (packet ⟨0⟩).compileShape := by
@@ -888,11 +876,6 @@ theorem packet_compileShape_eq_zero (dp : DeployParams) :
 private theorem packetCompilesZero :
     Prog.compiles (packet ⟨0⟩) = true := by
   decide +kernel
-
-theorem packet_compiles (dp : DeployParams) :
-    Prog.compiles (packet dp) = true := by
-  rw [Prog.compiles_eq_of_compileShape (packet_compileShape_eq_zero dp)]
-  exact packetCompilesZero
 
 def triggerLabels : List TriggerLabel :=
   [ .malformedAbi, .zeroMsgValue, .zeroValidatorsData, .resumedExpected,
@@ -916,42 +899,11 @@ def base17AuxSkeleton : List (CompositeLabel × SymbolicFunc CompositeLabel) :=
 def triggerAuxSkeleton : List (TriggerLabel × SymbolicFunc CompositeLabel) :=
   triggerLabels.map fun lbl => (lbl, .last .stop)
 
-/-- Composite 39-entry auxiliary program testing exact label resolution. -/
-def composite17TriggerProg (main : SymbolicFunc CompositeLabel) :
-    SymbolicProg CompositeLabel :=
-  ⟨.root, main, standardCompositeAux base17AuxSkeleton triggerAuxSkeleton⟩
-
 /-- Convert a Trigger `Func` with local slot calls into a `SymbolicFunc
 CompositeLabel` by naming each call target.  The structural recursion is the
 shared owner `Blanc.Func.mapCalls`; only the naming function is local. -/
 def toCompositeSymbolic (f : Func) : SymbolicFunc CompositeLabel :=
   f.mapCalls compositeLabelOfLocalSlot
-
-/-- Erasure of a named Trigger body is the rebased numeric body, for every body
-whose call targets all lie inside the local table.  `rebaseLocalCalls baseCount`
-shifts *every* target including `0`, while `toCompositeSymbolic` sends an
-undecodable target to `.base`, so the membership restriction is the content. -/
-theorem erase_toCompositeSymbolic (baseCount : Nat) (f : Func)
-    (hf : ∀ n ∈ f.callTargets, (labelOfLocalSlot? n).isSome) :
-    (toCompositeSymbolic f).erase (compositeSlotOf baseCount) =
-      rebaseLocalCalls baseCount f := by
-  rw [rebaseLocalCalls_eq_mapTargets]
-  exact Func.erase_mapCalls_eq_mapTargets compositeLabelOfLocalSlot
-    (compositeSlotOf baseCount) (baseCount + ·) f
-    (fun n hn => compositeSlotOf_compositeLabelOfLocalSlot baseCount (hf n hn))
-
-/-- Table form of `erase_toCompositeSymbolic`: one hypothesis for a whole
-auxiliary table. -/
-theorem erase_map_toCompositeSymbolic (baseCount : Nat) (bodies : List Func)
-    (h : ∀ n ∈ bodies.flatMap Func.callTargets, (labelOfLocalSlot? n).isSome) :
-    bodies.map (fun f => (toCompositeSymbolic f).erase (compositeSlotOf baseCount)) =
-      bodies.map (rebaseLocalCalls baseCount) := by
-  rw [show rebaseLocalCalls baseCount = Func.mapTargets (baseCount + ·) from
-    funext (rebaseLocalCalls_eq_mapTargets baseCount)]
-  exact Func.erase_map_mapCalls compositeLabelOfLocalSlot (compositeSlotOf baseCount)
-    (baseCount + ·) bodies
-    (fun f hf n hn => compositeSlotOf_compositeLabelOfLocalSlot baseCount
-      (h n (List.mem_flatMap.mpr ⟨f, hf, hn⟩)))
 
 /-! Deployment parameters reach the Trigger packet only through PUSH immediates.
 `Func.callTargets` discards every instruction payload, so the call-target
@@ -961,32 +913,6 @@ membership side conditions below close by `decide +kernel` on a closed term. -/
 theorem callTargets_triggerFullWithdrawals (dp : DeployParams) :
     (triggerFullWithdrawals dp).callTargets = (triggerFullWithdrawals ⟨0⟩).callTargets :=
   rfl
-
-/-- Symbolic representation of Trigger auxiliary functions with qualified labels. -/
-def symbolicLocalAuxWithRoleFailure (dp : DeployParams) (roleFailure : Func) :
-    List (CompositeLabel × SymbolicFunc CompositeLabel) :=
-  [ (.trigger .malformedAbi, toCompositeSymbolic Func.revert),
-    (.trigger .zeroMsgValue, toCompositeSymbolic zeroMsgValueRevert),
-    (.trigger .zeroValidatorsData, toCompositeSymbolic zeroValidatorsDataRevert),
-    (.trigger .resumedExpected, toCompositeSymbolic resumedExpectedRevert),
-    (.trigger .exitLimitExceeded, toCompositeSymbolic exitLimitExceededRevert),
-    (.trigger .insufficientFee, toCompositeSymbolic insufficientFeeRevert),
-    (.trigger .feeRefundFailed, toCompositeSymbolic feeRefundFailedRevert),
-    (.trigger .arithmeticPanic, toCompositeSymbolic arithmeticPanicRevert),
-    (.trigger .divisionPanic, toCompositeSymbolic divisionPanicRevert),
-    (.trigger .assertionPanic, toCompositeSymbolic assertionPanicRevert),
-    (.trigger .roleFailureBoundary, toCompositeSymbolic roleFailure),
-    (.trigger .validateArrayLoop, toCompositeSymbolic validateArrayLoop),
-    (.trigger .afterValidation, toCompositeSymbolic afterValidation),
-    (.trigger .consumeQuota, toCompositeSymbolic (consumeExitRequestLimit (.call afterQuotaSlot))),
-    (.trigger .afterQuota, toCompositeSymbolic (afterQuota dp)),
-    (.trigger .encodeArraysLoop, toCompositeSymbolic encodeArraysLoop),
-    (.trigger .afterEncoding, toCompositeSymbolic afterEncoding),
-    (.trigger .bubbleRevert, toCompositeSymbolic bubbleRevert),
-    (.trigger .afterVaultCall, toCompositeSymbolic (afterVaultCall dp)),
-    (.trigger .refundCall, toCompositeSymbolic refundCall),
-    (.trigger .balanceCheck, toCompositeSymbolic balanceCheck),
-    (.trigger .afterNestedValidation, toCompositeSymbolic afterNestedValidation) ]
 
 end Trigger
 end LidoTriggerableWithdrawalsGateway

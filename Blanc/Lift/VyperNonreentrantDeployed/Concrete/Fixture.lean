@@ -18,10 +18,6 @@ def word (n : Nat) : Bytes :=
 def attacker : Adr := 0xa11ce00000000000000000000000000000000a11
 def receiver : Adr := 0xa11ce00000000000000000000000000000000a11
 
-/-- `remove_liquidity(uint256,uint256[2],address)` = `0x3eb1719f`,
-with `(200, [0, 0], receiver)`: 132 bytes. -/
-def removeCalldata : Bytes :=
-  [0x3e, 0xb1, 0x71, 0x9f] ++ word 200 ++ word 0 ++ word 0 ++ word receiver.toNat
 
 /-- Arbitrary concrete pool storage at the proxy (the storage owner). -/
 def poolStorage : List (Nat × Nat) :=
@@ -46,28 +42,8 @@ def implSevmWith (code : ByteArray) (data : Bytes) : Sevm :=
     code := code
     depth := 1022 }
 
-def implSevm (data : Bytes) : Sevm := implSevmWith implementationCode data
-
 def implDevm (gas : Nat) (world : State) : Devm :=
   ((default : Devm).withGasLeft gas).withState world
 
-/-- The proxy frame entry with the same calldata. -/
-def proxySevm (data : Bytes) : Sevm :=
-  { (default : Sevm) with
-    caller := attacker
-    currentTarget := proxyAddress
-    target := some proxyAddress
-    gas := 10000000
-    data := data
-    codeAddress := some proxyAddress
-    code := proxyCode
-    depth := 1023 }
-
-/-- A literal mid-frame state: given pc, stack words, gas and memory bytes,
-over the implementation code with `add_liquidity` calldata. -/
-def midStateWith (code : ByteArray) (data : Bytes) (pc : Nat) (stack : List Nat) (gas : Nat) (mem : List Nat) : Evm :=
-  ⟨pc, implSevmWith code data,
-    (((implDevm gas poolState).withStack (stack.map Nat.toB256)).withMemory
-      ⟨(mem.map Nat.toUInt8).toArray, mem.length⟩)⟩
 
 end Blanc.Lift.VyperNonreentrantDeployed.Concrete

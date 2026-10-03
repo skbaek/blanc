@@ -2058,7 +2058,7 @@ inductive Prog.SourceStep where
   | rest
   | branchLeft
   | branchRight
-deriving DecidableEq, Repr
+deriving DecidableEq
 
 /-- Stable structural identity of a source instruction. -/
 structure Prog.SourcePath where
@@ -2187,12 +2187,6 @@ def Exec.Deriv.exactInvocation
     root.sevm.currentTarget = storageTarget ∧
     root.sevm.codeAddress = some codeAddress ∧
     some root.sevm.code.toList = program.compile
-
-instance (program : Prog) (storageTarget codeAddress : Adr)
-    (root : Exec.Deriv) :
-    Decidable ((Blanc.Exec.Deriv.exactInvocation program storageTarget codeAddress root)) := by
-  unfold Exec.Deriv.exactInvocation
-  infer_instance
 
 /-- Exact contract-neutral identity of one retained compiled invocation.
 `currentTarget` is the storage owner, `codeAddress` names the executing code

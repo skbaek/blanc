@@ -721,13 +721,6 @@ theorem Weth9.transferFrom_okX_of_prefix {sevm : Sevm} {d : Devm} {o : Outcome}
   subst g
   exact xfer_068c hp run
 
-/-- **Entry 9 (`transferFrom`) as a callee**, for any frame whose stack starts with the three
-arguments. -/
-theorem Weth9.transferFrom_ok_of_prefix {sevm : Sevm} {d : Devm} {o : Outcome}
-    {g : SFunc} {wad dst src : B256} {rest : Stack}
-    (hg : prog[9]? = some g) (hp : wad :: dst :: src :: rest <<+ d.stack)
-    (run : SFunc.Run prog sevm d g o) : Weth9.XferOk sevm d o wad dst src :=
-  (Weth9.transferFrom_okX_of_prefix hg hp run).toOk
 
 /-- Entry 9 as a callee, exactly: a `callNext 9` from a frame whose stack starts with the three
 arguments below a return address, continued by a state-silent tree. -/

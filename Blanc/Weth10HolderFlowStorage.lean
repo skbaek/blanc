@@ -351,24 +351,6 @@ theorem RequestsTrace.hasExecOrigin_of_mem_flowActions
   · exact SystemMessageTrace.hasExecOrigin_of_mem_flowActions
       trace.consolidation hconsolidation
 
-theorem AppliedBodyTrace.hasExecOrigin_of_mem_flowActions
-    {dp : DeployParams} {ca : Adr} {benv : Benv}
-    {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
-    {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
-    {action : FlowAction}
-    (h : action ∈ Blanc.Weth10.AppliedBodyTrace.flowActions dp ca trace) :
-    action.HasExecOrigin dp ca := by
-  simp only [AppliedBodyTrace.flowActions, List.mem_append] at h
-  rcases h with ((hbeacon | hhistory) | htransactions) | hrequests
-  · exact SystemMessageTrace.hasExecOrigin_of_mem_flowActions
-      trace.beacon hbeacon
-  · exact SystemMessageTrace.hasExecOrigin_of_mem_flowActions
-      trace.history hhistory
-  · exact ApplyTransactionsTrace.hasExecOrigin_of_mem_flowActions
-      trace.transactions htransactions
-  · exact RequestsTrace.hasExecOrigin_of_mem_flowActions
-      trace.requests hrequests
 
 end Weth10
 

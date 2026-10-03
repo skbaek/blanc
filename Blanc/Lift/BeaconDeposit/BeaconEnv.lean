@@ -45,15 +45,6 @@ namespace Blanc.Lift.BeaconDeposit
 
 open Jaune Blanc Blanc.ExecutionTrace
 
-/-- **The system exclusion is derived** from the static fact that the code a system frame runs
-spawns nothing and from the deposit contract not being a system address. -/
-theorem system_of_spawnFree {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future) {ca : Adr}
-    (systemSpawnFree : ∀ root ∈ trace.systemRawFrames, SpawnFree root.sevm.code)
-    (notSystem : ca ∉ systemTargets) :
-    ∀ root ∈ trace.systemRawFrames, root.sevm.currentTarget ≠ ca := by
-  intro root member h
-  exact notSystem (h ▸ trace.systemRawFrames_target_of_spawnFree systemSpawnFree root member)
 
 /-- The SHA-256 precompile is a precompile of every covered fork. -/
 theorem two_mem_precompiles {f : Fork} (hf : CoveredFork f) :

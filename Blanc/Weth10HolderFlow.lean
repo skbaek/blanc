@@ -183,7 +183,6 @@ structure FlowAction where
   currentTarget : Adr
   codeAddress : Option Adr
   depth : Nat
-deriving DecidableEq
 
 def FlowAtom.creditOccurrence (pre : Devm) (ca : Adr) :
     FlowAtom → Option CreditOccurrence

@@ -3032,34 +3032,6 @@ theorem post_of_call_self_with {Q : ∀ pc sevm devm exn, Exec pc sevm devm exn 
             child ex_sub hq h_depth_lt hat hchildFork ⟨hchildPre, fun _ => Mem.wf_empty⟩
       exact Post.of_state_eq hchildPost h_sf_state
 
-/-- **A successful `CALL` in the contract's own frame preserves the frame
-postcondition**, given the invariant at the debited balance and the
-deeper-frame hypothesis of `ContractSpecSem.Sound`.  The generic core of
-`Blanc/Solvent.lean`'s `of_send_to_caller`; `post_of_call_self_with` is the
-same fact for a deeper-frame hypothesis restricted to the child derivations a
-predicate `Q` admits. -/
-theorem post_of_call_self {ca : Adr} {sevm : Sevm} {s sf : Devm}
-    {gas dst value : B256} {xs : Stack}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (hca : sevm.currentTarget = ca)
-    (ih : ∀ pc' sevm' pre' post',
-        Exec pc' sevm' pre' (.ok post') →
-        sevm'.depth < sevm.depth →
-        CodeSem.At c.sem ca pc' sevm' pre' →
-        CoveredFork sevm'.benvStat.fork →
-        c.PreWf ca sevm' pre' →
-        c.Post ca sevm' post')
-    (hp : gas :: dst :: value :: xs <<+ s.stack)
-    (hcode : some (s.getCode ca).toList = c.sem.image)
-    (hside : c.Side s.getBal)
-    (hle : value ≤ s.getBal ca)
-    (hinv : c.Inv (Devm.getStor s ca) 0 (s.getBal ca - value))
-    (run : Ninst.Run sevm s (.exec .call) sf) :
-    c.Post ca sevm sf :=
-  post_of_call_self_with (Q := fun _ _ _ _ _ => True) hfork hca
-    (fun pc' sevm' pre' post' child _ => ih pc' sevm' pre' post' child)
-    hp hcode hside hle hinv run.toRunWith
-
 end ContractSpecSem
 
 end Blanc

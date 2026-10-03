@@ -1508,7 +1508,6 @@ inductive Func.CompileShape : Type
   | next (size : Nat) (acc : Bool) (rest : Func.CompileShape)
   | branch (left right : Func.CompileShape)
   | call (index : Nat)
-deriving DecidableEq
 
 /-- The part of a function that can affect compiler success: instruction
 widths, fork structure, and table-call indices. -/

@@ -110,13 +110,6 @@ def redemptionStorageWriteWorstGas : Nat :=
 
 def redemptionSuccessTailGas : Nat := 16
 
-def redemptionRecipientCreationCharge
-    (w : State) (recipient : Adr) (q : Nat) : Nat :=
-  if ¬ (w.get recipient).Empty ∨ q = 0 then 0 else gNewAccount
-
-def redemptionValueCallCharge (q : Nat) : Nat :=
-  if q = 0 then 0 else gasCallValue
-
 /-- Closed worst-case caller-paid `CALL` charge.  The child stipend is absent:
 on the nonzero branch it is dominated by `gasCallValue`. -/
 def redemptionCallWorstGas (q : Nat) : Nat :=

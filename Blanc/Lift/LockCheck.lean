@@ -87,7 +87,7 @@ inductive Fact : Type
   | lockv (s : Nat)
   /-- `r = 0` implies the lock slot was not `locked` at some earlier node. -/
   | lockeq (r : Nat)
-deriving DecidableEq, Repr
+deriving DecidableEq
 
 def Fact.syms : Fact → List Nat
   | .bnd s _ _ => [s]

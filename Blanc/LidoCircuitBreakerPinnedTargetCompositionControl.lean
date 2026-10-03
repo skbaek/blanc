@@ -713,17 +713,6 @@ private theorem stubRunStor_countPost_other {key : B256}
     temporalSloadBase_getStorVal]
   exact stubRunStor_assignPost_other ha
 
-private theorem stubRunStor_countPost_assign :
-    (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
-      (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0).getStorVal configWorldOwner (assignmentSlot pauseWorldCallee.toB256) = 0 := by
-  rw [temporalSstorePost_other _ _ _ _ _ _
-    (keyPairNe pauseWorld_assignCallee_ne_count.symm),
-    temporalSloadBase_getStorVal]
-  exact stubRunStor_assignPost_self
-
 private theorem stubRunStor_countPost_count :
     (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre

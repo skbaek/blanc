@@ -1213,7 +1213,4 @@ theorem enumeration_writing_mutant_rejected :
 
 end LidoCircuitBreaker
 
-/-- Public alias for the CircuitBreaker symbolic label type. -/
-abbrev CircuitBreaker.Label := LidoCircuitBreaker.Label
-
 end Blanc

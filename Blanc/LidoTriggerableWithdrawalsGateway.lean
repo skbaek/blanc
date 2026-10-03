@@ -61,33 +61,6 @@ def setLimitWriteSlot : Nat := 15
 def consumeAfterCurrentSlot : Nat := 16
 def exitRequestsLimitExceededSlot : Nat := 17
 
-def roleKeyFromMemory (region : Nat) : Line :=
-  mloadWord 0 ++ mloadWord 1 ++
-  [pushB256 addressMask, and, xor,
-   pushB256 low252Mask, and, pushB256 (regionWord region), or]
-
-def roleKeyFromMemoryAt (roleWord accountWord : Nat) (region : Nat) : Line :=
-  mloadWord (Nat.toB256 roleWord) ++ mloadWord (Nat.toB256 accountWord) ++
-  [pushB256 addressMask, and, xor,
-   pushB256 low252Mask, and, pushB256 (regionWord region), or]
-
-def roleKeyFromArgs (region : Nat) : Line :=
-  arg 0 ++ arg 1 ++
-  [pushB256 addressMask, and, xor,
-   pushB256 low252Mask, and, pushB256 (regionWord region), or]
-
-def roleKeyForCaller (role region : B256) : Line :=
-  [pushB256 role, caller, pushB256 addressMask, and, xor,
-   pushB256 low252Mask, and, pushB256 region, or]
-
-def enumKeyFromMemory (region : Nat) : Line :=
-  mloadWord 2 ++
-  [pushB256 low252Mask, and, pushB256 (regionWord region), or]
-
-def enumKeyFromMemoryAt (word : Nat) (region : Nat) : Line :=
-  mloadWord (Nat.toB256 word) ++
-  [pushB256 low252Mask, and, pushB256 (regionWord region), or]
-
 def onlyRole (role : B256) (body : Func) : Func :=
   viewRoleMembershipSlotFrom [pushB256 role] [caller] +++
     (sload ::: iszero ::: ((.call missingRoleSlot) <?> body))
@@ -213,12 +186,6 @@ def consumeAfterCurrent : Func :=
   (mloadWord 8 ++ mloadWord 14 ++ [gt]) +++
     ((.call exitRequestsLimitExceededSlot) <?>
       consumeAfterCurrentSuccess)
-
-def consumeExitLimit : Func :=
-  ( loadPackedLimitWorkingWords ++
-    [timestamp] ++ mstoreAt 12 ++ [pushB256 2] ++ mstoreAt 11) +++
-    ((mloadWord 13 ++ [iszero]) +++
-      (Func.stop <?> .call limitCurrentComputeSlot))
 
 def getExitRequestLimitFullInfo : Func :=
   ( loadPackedLimitWorkingWords ++
@@ -731,32 +698,6 @@ def symbolicAux (dp : DeployParams) :
     List (Trigger.CompositeLabel × SymbolicFunc Trigger.CompositeLabel) :=
   symbolicBaseAux ++ symbolicTriggerAux dp
 
-def symbolicFuncs (dp : DeployParams) : List (B256 × SymbolicFunc Trigger.CompositeLabel) :=
-  [ (selPauseFor, toBaseSymbolic (nonpayable pauseFor)),
-    (selIsPaused, toBaseSymbolic (nonpayable isPaused)),
-    (selTriggerFullWithdrawals, toIntegratedSymbolic (Trigger.triggerFullWithdrawals dp)),
-    (selPauseRole, toBaseSymbolic (nonpayable (constantWord pauseRole))),
-    (selResumeRole, toBaseSymbolic (nonpayable (constantWord resumeRole))),
-    (selAddFullWithdrawalRequestRole, toBaseSymbolic (nonpayable (constantWord addFullWithdrawalRequestRole))),
-    (selTwExitLimitManagerRole, toBaseSymbolic (nonpayable (constantWord twExitLimitManagerRole))),
-    (selTwrLimitPosition, toBaseSymbolic (nonpayable (constantWord twrLimitPosition))),
-    (selVersion, toBaseSymbolic (nonpayable (constantWord version))),
-    (selResume, toBaseSymbolic (nonpayable resume)),
-    (selPauseUntil, toBaseSymbolic (nonpayable pauseUntil)),
-    (selSetExitRequestLimit, toBaseSymbolic (nonpayable setExitRequestLimit)),
-    (selGetExitRequestLimitFullInfo, toBaseSymbolic (nonpayable getExitRequestLimitFullInfo)),
-    (selPauseInfinitely, toBaseSymbolic (nonpayable (constantWord pauseInfinitely))),
-    (selGetResumeSinceTimestamp, toBaseSymbolic (nonpayable getResumeSinceTimestamp)),
-    (selDefaultAdminRole, toBaseSymbolic (nonpayable (constantWord defaultAdminRole))),
-    (selSupportsInterface, toBaseSymbolic (nonpayable supportsInterface)),
-    (selHasRole, toBaseSymbolic (nonpayable hasRole)),
-    (selGetRoleAdmin, toBaseSymbolic (nonpayable getRoleAdmin)),
-    (selGrantRole, toBaseSymbolic (nonpayable grantRole)),
-    (selRevokeRole, toBaseSymbolic (nonpayable revokeRole)),
-    (selRenounceRole, toBaseSymbolic (nonpayable renounceRole)),
-    (selGetRoleMember, toBaseSymbolic (nonpayable getRoleMember)),
-    (selGetRoleMemberCount, toBaseSymbolic (nonpayable getRoleMemberCount)) ]
-
 local infixr:65 " ++++ " => SymbolicFunc.prepend
 
 /-- Symbolic mirror of `sharedNonpayableFuncs`: the trigger-first dispatcher
@@ -986,23 +927,6 @@ def sourceSstoreSiteCount : Func → Nat :=
   Func.sourceSiteCount fun
     | .reg .sstore => true
     | _ => false
-
-def sourceSstoreCount (dp : DeployParams) : Nat :=
-  (funcs dp).foldl (fun n p => n + sourceSstoreSiteCount p.2) 0
-
-def sourceInventory (dp : DeployParams) : SourceInventory :=
-  { persistentWrites :=
-      [({label := "pause", offset := 0}, .pause),
-       ({label := "limit", offset := 1}, .limit),
-       ({label := "roles", offset := 2}, .roleMembership),
-       ({label := "enumeration", offset := 3}, .enumeration)]
-    externalCalls :=
-      [({label := "locatorVault", offset := 0}, .locatorVault),
-       ({label := "vaultFee", offset := 1}, .vaultFee),
-       ({label := "withdrawalRequests", offset := 2}, .withdrawalRequests),
-       ({label := "locatorRouter", offset := 3}, .locatorRouter),
-       ({label := "stakingNotification", offset := 4}, .stakingNotification),
-       ({label := "refund", offset := 5}, .refund)] }
 
 end LidoTriggerableWithdrawalsGateway
 end Blanc

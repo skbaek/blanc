@@ -1532,43 +1532,6 @@ private theorem Exec.Frame.compiledMainCursorSilent
         hsub, hboundary⟩, rfl,
         Devm.DispatchSilent.of_burnBy hcompiledBurn⟩
 
-/-- A matching compiled dispatch leaf advances to its stored body while
-removing the selector word from the stack. -/
-private theorem Exec.Frame.CompiledCursor.reachDispatchLeaf
-    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    {fs : List Func} {table : List (Nat × Func)} {final : Devm}
-    {sig w : B256} {f body : Func} {k : Nat} {stack : Stack}
-    (hmem : (sig, f) ∈ [(w, body)])
-    (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
-      (dispatchWith k (.leaf w body)) final)
-    (hstack : sig :: stack <<+ cursor.pre.stack) :
-    ∃ bodyCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table f final,
-      stack <<+ bodyCursor.pre.stack ∧
-      bodyCursor.actions = cursor.actions := by
-  have heq : (sig, f) = (w, body) := List.mem_singleton.mp hmem
-  injection heq with hsig hfun
-  subst w
-  subst body
-  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
-    ([Ninst.pushB256 sig, Ninst.eq] +++ (f <?> .call k)) final at cursor
-  rcases cursor.peelChildlessLine
-      (by simp only [Ninst.pushB256, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-        forall_eq_or_imp, forall_eq, and_self]) with
-    ⟨branchCursor, hline, hbranchActions⟩
-  have hflag : (sig =? sig) :: stack <<+ branchCursor.pre.stack := by
-    rcases Line.of_run_cons hline with ⟨afterPush, hpush, hrest⟩
-    rcases Line.of_run_cons hrest with ⟨afterEq, heq, hnil⟩
-    cases hnil
-    have hpushed : sig :: sig :: stack <<+ afterPush.stack := by
-      simpa only [List.cons_append, List.nil_append] using
-        prefix_of_push (of_run_pushB256 hpush) hstack
-    exact prefix_of_eq heq hpushed
-  rw [show (sig =? sig) = 1 from by simp only [B256.eqCheck, ↓reduceIte]] at hflag
-  rcases branchCursor.selectBranchSucc
-      (left := .call k) (right := f) (flag := (1 : B256))
-      (stack := stack) (by decide) hflag with
-    ⟨bodyCursor, hbodyStack, hbodyActions⟩
-  exact ⟨bodyCursor, hbodyStack, hbodyActions.trans hbranchActions⟩
 
 /-- A matching dispatch leaf with its exact entry-observation silence. -/
 private theorem Exec.Frame.CompiledCursor.reachDispatchLeafSilent

@@ -22,7 +22,6 @@ structure DeployParams where
   maxPauseDuration : B256
   minHeartbeatInterval : B256
   maxHeartbeatInterval : B256
-deriving DecidableEq
 
 structure ConstructorArgs extends DeployParams where
   initialPauseDuration : B256
@@ -155,20 +154,6 @@ inductive CustomError
   | minHeartbeatIntervalZero | minHeartbeatIntervalExceedsMax
   | heartbeatIntervalBelowMin | heartbeatIntervalAboveMax
   | heartbeatExpired | pauseFailed | reentrantCall
-
-def CustomError.name : CustomError → String
-  | .pausableZero => "PausableZero" | .senderNotAdmin => "SenderNotAdmin"
-  | .senderNotPauser => "SenderNotPauser" | .adminZero => "AdminZero"
-  | .minPauseDurationZero => "MinPauseDurationZero"
-  | .minPauseDurationExceedsMax => "MinPauseDurationExceedsMax"
-  | .pauseDurationBelowMin => "PauseDurationBelowMin"
-  | .pauseDurationAboveMax => "PauseDurationAboveMax"
-  | .minHeartbeatIntervalZero => "MinHeartbeatIntervalZero"
-  | .minHeartbeatIntervalExceedsMax => "MinHeartbeatIntervalExceedsMax"
-  | .heartbeatIntervalBelowMin => "HeartbeatIntervalBelowMin"
-  | .heartbeatIntervalAboveMax => "HeartbeatIntervalAboveMax"
-  | .heartbeatExpired => "HeartbeatExpired" | .pauseFailed => "PauseFailed"
-  | .reentrantCall => "ReentrantCall"
 
 structure EventMetadata where
   name : String

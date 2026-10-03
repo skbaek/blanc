@@ -270,25 +270,6 @@ theorem TransactionMessageOccurrence.msgInv_of_body
   exact occurrence.msgInv historySum historyInv (by
     simpa only [Benv.withState] using hfork)
 
-/-- A transaction occurrence in an arbitrary actual configured block receives
-the DRIP message invariant from the deployment root and the exact retained
-block entry.  No caller, target, or classifier premise is introduced here. -/
-theorem TransactionMessageOccurrence.msgInv_of_configuredBlock
-    {cfg : ChainConfig} {base deployed pre post : BlockChain} {ca : Adr}
-    (root : DeploymentRoot cfg base deployed ca)
-    (reach : BlockChain.ReachUsing cfg deployed pre)
-    (block : ExecutionTrace.ConfiguredBlockTrace cfg pre post)
-    {msg : Msg} {messageState : State} {out : MsgCallOutput}
-    {message : ExecutionTrace.MessageCallTrace msg messageState out}
-    (occurrence : TransactionMessageOccurrence block.bodyTrace.transactions message)
-    (hcov : ∀ timestamp fork,
-      cfg.forkAt timestamp = .ok fork → CoveredFork fork) :
-    dripSpec.MsgInv ca msg := by
-  have entryInv : dripSpec.BenvInv ca
-      (initBenv block.fork pre block.block.header) :=
-    block.openingBenvInv (root.reachable_stateInv reach hcov)
-  exact occurrence.msgInv_of_body block.openingBound entryInv block.covered
-
 /-- The exhaustive classification of an actual prepared transaction message.
 The two present-target cases are deliberately separated by `currentTarget`:
 EIP-7702 delegation preserves that storage target, while a CREATE keeps no
@@ -299,18 +280,6 @@ inductive TransactionTargetClass (ca : Adr) (msg : Msg) : Type where
       (currentTarget : msg.currentTarget = ca)
   | other (target : msg.target.isNone = false)
       (currentTarget : msg.currentTarget ≠ ca)
-
-/-- Every actual prepared transaction message has exactly one target case.
-This is a classifier over the recorded message fields, not an assumption about
-which callers or target values a configured trace may contain. -/
-def TransactionTargetClass.classify (ca : Adr) (msg : Msg) :
-    TransactionTargetClass ca msg := by
-  cases target : msg.target.isNone with
-  | false =>
-      by_cases currentTarget : msg.currentTarget = ca
-      · exact .targetCa target currentTarget
-      · exact .other target currentTarget
-  | true => exact .targetNone target
 
 /-- The concrete successful transaction that supplied one selected message,
 including its ordered debit/message/refund/coinbase/deletion chronology.  The
@@ -345,26 +314,6 @@ inductive TransactionMessageOccurrence.SelectedTransaction :
       (selected : TransactionMessageOccurrence.SelectedTransaction occurrence) :
       TransactionMessageOccurrence.SelectedTransaction
         (TransactionMessageOccurrence.tail head tail occurrence)
-
-/-- Selecting a message from the transaction list also selects the one actual
-transaction chronology that produced it.  Prefix recursion retains the
-selected head instead of inventing a message-only chronology. -/
-theorem TransactionMessageOccurrence.exists_selectedTransaction
-    {txs : List (Nat × Tx)} {benv finalBenv : Benv}
-    {bout finalBout : BlockOutput}
-    {trace : ExecutionTrace.ApplyTransactionsTrace txs benv bout finalBenv finalBout}
-    {msg : Msg} {state : State} {out : MsgCallOutput}
-    {message : ExecutionTrace.MessageCallTrace msg state out}
-    (occurrence : TransactionMessageOccurrence trace message)
-    (hfork : CoveredFork benv.stat.fork) :
-    Nonempty (TransactionMessageOccurrence.SelectedTransaction occurrence) := by
-  induction occurrence with
-  | head head tail =>
-      rcases head.exists_stateChronology hfork with ⟨chronology⟩
-      exact ⟨.head head tail chronology⟩
-  | tail head tail occurrence ih =>
-      rcases ih (by simpa only [Benv.withState] using hfork) with ⟨selected⟩
-      exact ⟨.tail head tail occurrence selected⟩
 
 /-- A selected transaction message in an arbitrary configured block, coupled
 to the invariant derived from that block's deployment root and to its actual
@@ -421,79 +370,10 @@ inductive TransactionTargetNoneDisposition
       TransactionTargetNoneDisposition ready targetNone
         (.createRun targetNone collision evm coreRun core result)
 
-/-- Classify an actual target-none transaction wrapper without treating a
-CREATE as a CALL.  The foreign conclusion is available only in the non-
-collision arm; a CREATE aimed at an installed `ca` instead remains the exact
-collision no-op. -/
-def TransactionTargetNoneDisposition.classify
-    {ca : Adr} {msg : Msg} {state : State} {out : MsgCallOutput}
-    (ready : dripSpec.MsgInv ca msg)
-    (message : ExecutionTrace.MessageCallTrace msg state out)
-    (targetNone : msg.target.isNone = true)
-    (hfork : CoveredFork msg.benv.stat.fork) :
-    TransactionTargetNoneDisposition ready targetNone message := by
-  cases message with
-  | createCollision target collision result =>
-      exact .collision collision result
-        (ExecutionTrace.processMessageCall_createCollision_state_eq target collision result
-          hfork)
-  | createRun target collision evm coreRun core result =>
-      exact .foreignCreate collision evm coreRun core result
-        (ContractSpec.StateInv.ne_of_messageCreateCollision_false ready.state collision)
-  | callRun target delegated refund delegation execMsg execMsg_eq evm coreRun core result =>
-      have impossible : false = true := target.symm.trans targetNone
-      cases impossible
-
 /-- A configured transaction call to the deployed DRIP address keeps both the
 actual execution message's storage target and its compiled runtime.  The
 facts are transported through the trace's concrete delegation and code
 resolution equations, rather than being attached to a classifier witness. -/
-theorem transactionCallRun_runtime_of_target
-    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
-    {state : State} {bout' : BlockOutput} {ca : Adr}
-    (trace : ExecutionTrace.TransactionTrace benv bout tx index state bout')
-    (ready : dripSpec.MsgInv ca trace.msg)
-    (target : trace.msg.target.isNone = false)
-    (currentTarget : trace.msg.currentTarget = ca) :
-    ∃ (delegated : Msg) (refund : Nat)
-      (delegation : ExecutionTrace.messageCallDelegation trace.msg =
-        .ok ⟨delegated, refund⟩)
-      (execMsg : Msg)
-      (execMsg_eq : execMsg =
-        ExecutionTrace.messageCallExecutionMessage delegated)
-      (evm : Devm) (coreRun : processMessage execMsg = .ok evm)
-      (core : ExecutionTrace.ProcessMessageTrace execMsg (.ok evm))
-      (result : processMessageCall trace.msg =
-        .ok ⟨trace.messageState, trace.messageOut⟩),
-      trace.message = .callRun target delegated refund delegation execMsg
-        execMsg_eq evm coreRun core result ∧
-      execMsg.currentTarget = ca ∧
-      some execMsg.code.toList = Prog.compile runtime := by
-  obtain ⟨delegated, refund, delegation, execMsg, execMsg_eq, evm, coreRun,
-    core, result, message⟩ :=
-    Blanc.ExecutionTrace.TransactionTrace.exists_callRun_of_target trace target
-  refine ⟨delegated, refund, delegation, execMsg, execMsg_eq, evm, coreRun,
-    core, result, message, ?_, ?_⟩
-  · rw [execMsg_eq,
-      Blanc.ExecutionTrace.messageCallExecutionMessage_currentTarget_eq,
-      Blanc.ExecutionTrace.messageCallDelegation_currentTarget_eq delegation]
-    exact currentTarget
-  · have delegatedReady :=
-      Blanc.ContractSpec.MsgInv.of_messageCallDelegation ready delegation
-    have execReady :=
-      Blanc.ContractSpec.MsgInv.messageCallExecutionMessage delegatedReady
-    rw [← execMsg_eq] at execReady
-    change some execMsg.code.toList = Prog.compile runtime
-    apply execReady.code
-    · rw [execMsg_eq,
-        Blanc.ExecutionTrace.messageCallExecutionMessage_target_eq,
-        Blanc.ExecutionTrace.messageCallDelegation_target_eq delegation]
-      exact target
-    · rw [execMsg_eq,
-        Blanc.ExecutionTrace.messageCallExecutionMessage_currentTarget_eq,
-        Blanc.ExecutionTrace.messageCallDelegation_currentTarget_eq delegation]
-      exact currentTarget
-
 /-- The fully sourced direct CALL branch of a configured transaction.  This
 packages the exact delegation, resolved runtime, retained `ProcessMessage`
 core, and wrapper result under the already-derived transaction envelope; no
@@ -870,20 +750,6 @@ inductive BodyMessageOccurrence :
       (body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout) :
       BodyMessageOccurrence body body.requests.consolidation.message
 
-def BodyMessageOccurrence.tag
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
-    {state : State} {bout : BlockOutput}
-    {body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout}
-    {msg : Msg} {messageState : State} {out : MsgCallOutput}
-    {message : ExecutionTrace.MessageCallTrace msg messageState out}
-    (occurrence : BodyMessageOccurrence body message) : BodyMessageTag := by
-  cases occurrence with
-  | beacon => exact .beacon
-  | history => exact .history
-  | transaction => exact .transaction
-  | withdrawalRequest => exact .withdrawalRequest
-  | consolidationRequest => exact .consolidationRequest
-
 /-- A successful raw interpreter execution retained by an actual call-message
 trace.  The full call wrapper remains attached, including its EIP-7702
 preparation and deterministic result equation; this is not an arbitrary
@@ -909,19 +775,6 @@ structure MessageCallExecutionOccurrence
   isCall : trace = .callRun target delegated refund delegation execMsg execMsg_eq
     evm coreRun ⟨.some ⟨⟨0, sevm, entryState⟩, .ok postState⟩,
       .some run, rawProcess⟩ result
-
-/-- Recover the exact raw interpreter invocation whose retained slot is the
-selected execution.  This is the bridge used to obtain entry caller and
-calldata facts from the staged runtime rather than taking them as assumptions
-of an accounting segment. -/
-theorem MessageCallExecutionOccurrence.raw_process
-    {msg : Msg} {state : State} {out : MsgCallOutput}
-    {trace : ExecutionTrace.MessageCallTrace msg state out}
-    (occurrence : MessageCallExecutionOccurrence trace) :
-    ProcessMessage occurrence.execMsg
-      (.some ⟨⟨0, occurrence.sevm, occurrence.entryState⟩,
-        .ok occurrence.postState⟩) (.ok occurrence.evm) :=
-  occurrence.rawProcess
 
 /-- An interpreter root selected from one exact body message.  It is the root
 envelope carrier: the source tag, call wrapper, and raw execution remain

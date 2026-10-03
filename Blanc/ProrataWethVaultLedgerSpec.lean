@@ -370,29 +370,6 @@ theorem finishInbound_storesOrHalts {fs : List Func}
     · exact StoresOrHalts.never not_run_revert
   · exact StoresOrHalts.never not_run_revert
 
-/-- The staged-entry wrapper shared by both inbound flows. -/
-theorem inboundAfterQuote_storesOrHalts {fs : List Func}
-    (shares assets returned : Line) :
-    StoresOrHalts fs
-      (mstoreAt quoteWord +++
-        nonzeroCaller (nonzeroStagedAddress receiverWord
-          (finishInbound shares assets returned))) := by
-  apply StoresOrHalts.prepend (mstoreAt quoteWord)
-  unfold nonzeroCaller
-  apply StoresOrHalts.next
-  apply StoresOrHalts.next
-  apply StoresOrHalts.branch
-  · unfold nonzeroStagedAddress
-    apply StoresOrHalts.prepend (loadWord receiverWord)
-    apply StoresOrHalts.next
-    apply StoresOrHalts.prepend checkNonAddress
-    apply StoresOrHalts.branch
-    · apply StoresOrHalts.next
-      apply StoresOrHalts.branch
-      · exact finishInbound_storesOrHalts shares assets returned
-      · exact StoresOrHalts.never not_run_revert
-    · exact StoresOrHalts.never not_run_revert
-  · exact StoresOrHalts.never not_run_revert
 
 end ProrataWethVault
 

@@ -346,12 +346,6 @@ schedule.** Message-call altitude; these two selectors only; exact under
 def fmintGas : B256 → Sevm → Devm → Option Nat :=
   fmintGasWith gJumpdest gBase gVerylow gHigh gMemory gasColdSload gasWarmAccess
 
-set_option maxRecDepth 589 in
-/-- The two priced entrypoints are distinct, which is what makes
-`fmintGasWith`'s second branch reachable. Proved once: deciding it forces both
-`String.keccak` calls behind the selectors. -/
-theorem dcSel_ne_tsSel : dcSel ≠ tsSel := by decide
-
 /-- `fmintGas` at `totalSupply()`, with the state dependence exposed. Unlike
 WETH's `balanceOf`, the key is fixed — `supplySlot` — so this branches on
 something no calldata can influence, which is the cleanest demonstration that

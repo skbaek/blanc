@@ -24,7 +24,6 @@ inductive DynamicTailFailureStage
   | lengthWord
   | length
   | paddedEnd
-deriving DecidableEq
 
 /-- Exact source-order premises selecting one dynamic-tail failure stage. -/
 def DynamicTailFailsAt

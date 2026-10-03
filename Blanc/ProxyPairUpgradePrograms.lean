@@ -76,8 +76,6 @@ def v2ValueSlot : B256 := 8
 def migrationMarkerSlot : B256 := 9
 def migrationMarkerValue : B256 := 1
 
-def scalarSlots : List B256 :=
-  [v1ValueSlot, v2ValueSlot, migrationMarkerSlot]
 
 theorem scalarSlots_erc1967_separated :
     v1ValueSlot ≠ implementationSlot ∧

@@ -11,7 +11,6 @@ or to the diagnostic open context. -/
 inductive AttackAttribution where
   | coalition
   | outside
-deriving DecidableEq
 
 namespace AttackAttribution
 

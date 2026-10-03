@@ -527,12 +527,6 @@ def dripStep (s : Snapshot) (elapsed : Nat) : RealizedStep :=
     post := dripPost s elapsed
     effect := .drip s.chi s.rho s.coalitionUnits s.totalUnits s.balance elapsed }
 
-/-- The state-threaded list of pure DRIP steps for a segment schedule. -/
-def dripSteps (s : Snapshot) : List Nat → List RealizedStep
-  | [] => []
-  | elapsed :: rest => dripStep s elapsed ::
-      dripSteps (dripPost s elapsed) rest
-
 /-! ## G5 — pure segmentation -/
 
 theorem realized_freshNat_mono : ∀ chi k, chi ≤ freshNat chi k :=

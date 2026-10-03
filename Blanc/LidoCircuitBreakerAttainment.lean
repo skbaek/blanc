@@ -3505,25 +3505,6 @@ theorem _root_.Blanc.MemWordAt.acrossOldLastClearPrefix {e : Sevm} {a b : Devm}
   rcases of_run_append (loadWord previousPauserWord) run with ⟨_s2, r2, run⟩
   exact ((window.acrossNinst q1).acrossLoadWord r2).acrossLine (by line_inv) run
 
-/-- The old-last record fragment.  Its one write is `mstoreAt 0`, the scratch
-word every expiry record is built in, which misses all four windows. -/
-theorem _root_.Blanc.MemWordAt.acrossOldLastRecordPrefix {e : Sevm} {a b : Devm}
-    {offset : Nat} {w : B256}
-    (miss : offset + 32 ≤ ((0 : B256) * 32).toNat ∨
-      ((0 : B256) * 32).toNat + 32 ≤ offset)
-    (run : Line.Run e a registerOldLastRecordPrefix b)
-    (window : MemWordAt a offset w) : MemWordAt b offset w := by
-  unfold registerOldLastRecordPrefix at run
-  rcases of_run_append [Ninst.sstore, Ninst.pushB256 0] run with ⟨_s1, r1, run⟩
-  rcases of_run_append (mstoreAt 0) run with ⟨_s2, r2, run⟩
-  rcases of_run_append (loadWord previousPauserWord) run with ⟨_s3, r3, run⟩
-  rcases of_run_append [Ninst.pushB256 heartbeatUpdatedEvent] run
-    with ⟨_s4, r4, run⟩
-  rcases of_run_append (logWith 1 0 1) run with ⟨_s5, r5, run⟩
-  exact (((((window.acrossLine (by line_inv) r1).acrossMstoreAt miss
-    r2).acrossLoadWord r3).acrossLine (by line_inv) r4).acrossLogWith
-    r5).acrossMemoryZeroCheck run
-
 /-! ### The staged words at a replacement world -/
 
 /-- What the staging line stages: the call's two arguments at `targetWord` and

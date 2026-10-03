@@ -4879,51 +4879,6 @@ theorem Exec.Frame.BalanceSstoreOccurrence.classify_of_receive
         rw [atomEq]
         exact role
 
-/-- Reach the exact generated receive body while preserving its original
-proof-indexed frame execution. -/
-private theorem Exec.Frame.compiledReceiveCursor
-    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
-    (empty : frame.sevm.data.length.toB256 = 0) :
-    ∃ receiveCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
-        ((weth10 dp).main :: weth10Aux)
-        (table 0 ((weth10 dp).main :: weth10Aux))
-        receiveEther frame.post,
-      [] <<+ receiveCursor.pre.stack ∧ receiveCursor.actions = [] := by
-  rcases Blanc.Weth10.Exec.Frame.compiledMainCursor (frame := frame) context with
-    ⟨mainCursor, mainActions⟩
-  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
-    ((weth10 dp).main :: weth10Aux)
-    (table 0 ((weth10 dp).main :: weth10Aux))
-    ([Ninst.calldatasize, Ninst.iszero] +++
-      (receiveEther <?>
-        (fsig +++ dispatchWith fallbackSlot (weth10Tree dp))))
-    frame.post at mainCursor
-  rcases mainCursor.peelChildlessLine
-      (by simp only [List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp,
-        forall_eq, and_self]) with
-    ⟨entryBranchCursor, entryLine, entryActions⟩
-  have flagPrefix :
-      [frame.sevm.data.length.toB256 =? 0] <<+
-        entryBranchCursor.pre.stack := by
-    rcases Line.of_run_cons entryLine with
-      ⟨afterSize, sizeStep, restSize⟩
-    rcases Line.of_run_cons restSize with
-      ⟨afterZero, zeroStep, emptyLine⟩
-    cases emptyLine
-    have sizePrefix : [frame.sevm.data.length.toB256] <<+
-        afterSize.stack :=
-      prefix_of_push (of_run_calldatasize sizeStep) nil_pref
-    exact prefix_of_iszero zeroStep sizePrefix
-  rw [empty] at flagPrefix
-  have one : ((0 : B256) =? 0) = 1 := by simp only [B256.eqCheck, ↓reduceIte]
-  rw [one] at flagPrefix
-  rcases entryBranchCursor.selectBranchSucc (flag := (1 : B256))
-      (by decide) flagPrefix with
-    ⟨receiveCursor, receiveStack, receiveActions⟩
-  exact ⟨receiveCursor, receiveStack,
-    receiveActions.trans (entryActions.trans mainActions)⟩
-
 private theorem name_sstoreFree (fs : List Func) :
     Func.sstoreFreeWithin 64 fs name = true := by
   rfl

@@ -156,7 +156,6 @@ theorem regions_disjoint {x y : KeyRegion} (hne : x ≠ y) :
   apply regionTag_injective
   rw [← hx, ← hy]
 
-theorem balanceKey_valid (a : Adr) : ValidAdr (balanceKey a) := ⟨a, rfl⟩
 
 theorem nonceKey_not_valid (a : Adr) : ¬ ValidAdr (nonceKey a) := by
   rintro ⟨b, hb⟩
@@ -230,12 +229,6 @@ Balances, nonces, flashMinted, and ETH are total.  Allowances are observed only
 on a finite trace-local set with an explicit local collision exclusion; no
 global property of keccak is assumed. -/
 
-def balanceOf (s : Stor) (a : Adr) : B256 := s.get (balanceKey a)
-def nonceOf (s : Stor) (a : Adr) : B256 := s.get (nonceKey a)
-def allowanceOf (s : Stor) (owner spender : Adr) : B256 :=
-  s.get (allowanceKey owner spender)
-def flashMintedOf (s : Stor) : B256 := s.get flashMintedSlot
-def ethOf (ethBalance : Adr → B256) (self : Adr) : B256 := ethBalance self
 
 structure LogicalState where
   balances : Adr → B256
@@ -245,9 +238,6 @@ structure LogicalState where
 
 abbrev AllowancePair := Adr × Adr
 
-def AllowanceNoncolliding (observed : Finset AllowancePair) : Prop :=
-  ∀ p ∈ observed, ∀ q ∈ observed,
-    allowanceKey p.1 p.2 = allowanceKey q.1 q.2 → p = q
 
 /-- Explicitly maps the deployed reference's `address(this)` to the Blanc
 instance's `address(this)` while leaving ordinary non-self addresses fixed. -/

@@ -65,18 +65,11 @@ def runtimePatchControlsValid : Bool :=
     runtimePatchIdentityValid ⟨0x111122223333444455556666777788889999aaaa⟩ &&
     runtimePatchIdentityValid ⟨0xabcdefabcdefabcdefabcdefabcdefabcdefabcd⟩
 
-/-- Selector inventory generated from the executable dispatcher owner. -/
-def lidoTwgSelectors : List B256 :=
-  (funcs zeroDeployParams).map Prod.fst
 
 def eip170RuntimeLimit : Nat := 24576
 
 def lidoTwgCodeSize (dp : DeployParams) : Nat := (lidoTwgCode dp).length
 
-def runtimeTemplateCodeSize : Nat := runtimeTemplateCode.length
-
-def lidoTwgCodeHeadroom (dp : DeployParams) : Nat :=
-  eip170RuntimeLimit - lidoTwgCodeSize dp
 
 end LidoTriggerableWithdrawalsGateway
 end Blanc

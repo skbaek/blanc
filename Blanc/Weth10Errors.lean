@@ -97,10 +97,6 @@ def LockedError.slot : LockedError → Nat
   | .ethTransfer => ethTransferErrorSlot
   | .etherTransfer => etherTransferErrorSlot
 
-theorem lockedError_lookup (dp : DeployParams) (e : LockedError) :
-    ((weth10 dp).main :: weth10Aux)[e.slot]? =
-      some (Func.revertWith e.reason) := by
-  cases e <;> rfl
 
 /-! ## Exact empty and bubbled callback errors -/
 
@@ -110,7 +106,6 @@ empty-reverts before any child `CALL`. -/
 def codelessCallbackCost : Nat :=
   gVerylow + (gVerylow + gHigh + gJumpdest) + (gBase + gBase)
 
-theorem codelessCallbackCost_eq : codelessCallbackCost = 21 := by decide
 
 /-- Exact continuation cost when a preceding child call returned failure.
 It includes `ISZERO`, the taken branch, the internal bubble tail-call and the
@@ -121,42 +116,6 @@ def bubbleContinuationCost (devm : Devm) : Nat :=
     (gVerylow + gMid + gJumpdest) +
     revertReturnDataCost devm
 
-/-- A failed callback bubbles the child's returndata byte-for-byte.  This is
-the common post-`CALL` continuation; `afterSuccess` is unreachable on this
-path and is therefore left abstract. -/
-theorem callbackBubble_runCompiledTo {dp : DeployParams} {sevm : Sevm}
-    {base : Devm} {G : Nat} {stack : List B256} {img : Bytes}
-    {afterSuccess : Func}
-    (hwf : Mem.Wf base.memory) (hr : Mem.Reads base.memory img)
-    (halign : base.memory.size % 32 = 0)
-    (h_len : base.returnData.length < 2 ^ 256)
-    (h_room : stack.length < 1021) :
-    Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
-      (base.setMach
-        ⟨0 :: stack, base.memory, G + bubbleContinuationCost base,
-          base.stateGas⟩)
-      (iszero ::: (.call bubbleRevertSlot) <?> afterSuccess)
-      (.error (.revert,
-        (base.setMach
-          ⟨stack, base.memory.write 0 base.returnData, G, base.stateGas⟩).withOutput
-            base.returnData)) := by
-  rw [show G + bubbleContinuationCost base =
-      (G + revertReturnDataCost base) + 29 by
-    simp only [bubbleContinuationCost, gVerylow, gHigh, gJumpdest, gMid]
-    omega]
-  func_run (3) [1]
-  all_goals try {
-    simp only [Devm.stack_setMach, List.length_cons] at *
-    omega }
-  all_goals try omega
-  exact Func.runCompiledTo_revertReturnData
-    (devm := base.setMach
-      ⟨stack, base.memory, G + revertReturnDataCost base, base.stateGas⟩)
-    (G := G) hwf hr halign h_len (by
-      simp only [Devm.gasLeft_setMach, revertReturnDataCost,
-        Devm.returnData_setMach, Devm.extCost, Devm.memory_setMach]) (by
-      simp only [Devm.stack_setMach]
-      omega)
 
 /-- The exact post-`CALL` decoder embedded in `flashLoan`. -/
 def flashCallbackReturn : Func :=
@@ -200,38 +159,6 @@ def shortReturnCost : Nat :=
 
 theorem shortReturnCost_eq : shortReturnCost = 42 := by decide
 
-/-- A successful callback whose returndata is shorter than 32 bytes reverts
-with empty data.  The full-word decoder is abstract because this path cannot
-reach it. -/
-theorem callbackShort_runCompiledTo {dp : DeployParams} {sevm : Sevm}
-    {base : Devm} {G : Nat} {stack : List B256} {fullWord : Func}
-    (h_short : base.returnData.length < 32)
-    (h_room : stack.length < 1020) :
-    Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
-      (base.setMach ⟨1 :: stack, base.memory, G + shortReturnCost,
-        base.stateGas⟩)
-      (iszero :::
-        (.call bubbleRevertSlot) <?>
-        (returnDataShorterThan 32 +++ Func.revert <?> fullWord))
-      (.error (.revert,
-        (base.setMach ⟨stack, base.memory, G, base.stateGas⟩).withOutput [])) := by
-  rw [shortReturnCost_eq]
-  func_run (6) [0, 1]
-  all_goals try {
-    simp only [Devm.stack_setMach, Devm.returnData_setMach,
-      List.length_cons] at *
-    omega }
-  all_goals try omega
-  · simp only [B256.ltCheck, Devm.returnData_setMach]
-    exact if_pos (by
-      rw [B256.lt_iff_toNat_lt_toNat,
-        B256.toNat_toB256_of_lt (by omega)]
-      exact h_short)
-  · exact Func.runCompiledTo_revert_func
-      (devm := base.setMach ⟨stack, base.memory, G + 4, base.stateGas⟩) (G := G) (by
-        simp only [Devm.gasLeft_setMach, gBase]) (by
-        simp only [Devm.stack_setMach]
-        omega)
 
 /-- The successful-call/full-word prefix costs exactly 37 gas before entering
 the word decoder.  `fullWord` is abstract so the short-return and magic-word
@@ -663,30 +590,6 @@ theorem flashCallback_errorPrecedence :
             (pop ::: pop ::: .call flashSettleSlot)))) := by
   rfl
 
-/-! ## Message-frame rollback transport -/
-
-/-- A gas-exact WETH10 compiled walk ending in `REVERT` settles the enclosing
-message frame with that exact output and restores persistent and transient
-state.  This is deliberately message-call altitude: it says nothing about
-transaction validity, intrinsic gas or transaction-level rollback. -/
-theorem rollback_revert_of_weth10_runCompiledTo
-    {dp : DeployParams} {msg : Msg} {benv : Benv} {xl : Xlot}
-    {out d : Devm} {bs : Bytes}
-    (h_pm : ProcessMessage msg xl (.ok out))
-    (h_fill : Xlot.Filled xl)
-    (h_bt : msg.benvAfterTransfer = .ok benv)
-    (h_prec : ∀ adr, msg.codeAddress = some adr →
-      ¬ (!msg.disablePrecompiles &&
-        decide (benv.stat.rules.isPrecomp adr)) = true)
-    (h_code : some (initSevm (msg.withBenv benv)).code.toList =
-      (weth10 dp).compile)
-    (h_run : Prog.RunCompiledTo (initSevm (msg.withBenv benv))
-      (initDevm (msg.withBenv benv)) (weth10 dp)
-      (.error (.revert, d.withOutput bs))) :
-    out.error = some .revert ∧ out.output = bs ∧
-      out.state = msg.benv.state ∧
-      out.transientStorage = msg.tenv.transientStorage := by
-  exact rollback_revert_of_runCompiledTo h_pm h_fill h_bt h_prec h_code h_run
 
 end Weth10
 end Blanc

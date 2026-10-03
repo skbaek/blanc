@@ -277,46 +277,6 @@ theorem exit_callNode_spine_of_exec {sevm : Sevm} {pre post : Devm}
       hfilled, hmessage, hclean, hresume, hpostState, hpostReturnData,
       hpostMemory, hpostStack⟩
 
-/-- **Exit payout identity.** A successful `exit` of the installed runtime has
-an actual same-frame `CALL` node whose storage, code, payout stack words and
-memory well-formedness are the settled ones. The `gas` word is existential and
-is the actual node's own. -/
-theorem exit_callNode_identity_of_exec {sevm : Sevm} {pre post : Devm}
-    (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code.toList = code)
-    (hsel : Sevm.selector sevm = exitSelector)
-    (hnonempty : sevm.data.length.toB256 ≠ 0)
-    (hcanon : pre.memory = Mem.empty)
-    (hfork : CoveredFork sevm.benvStat.fork) :
-    let units := Sevm.dataWord sevm (32 * 0 + 4)
-    let freshChi := (B256.rpow scale half rate
-      (sevm.benvStat.time - Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat *
-      Devm.getStorVal pre sevm.currentTarget chiSlot) / scale
-    let payout := (freshChi * units) / scale
-    ∃ (node : Exec.NinstOccurrence ⟨0, sevm, pre, .ok post, exc⟩)
-      (gasWord : B256),
-      node.instruction = call ∧
-      node.node.pc = exitCallSitePc ∧
-      Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, exc⟩ node.node ∧
-      Devm.getStor node.node.devm sevm.currentTarget =
-        ((((Devm.getStor pre sevm.currentTarget).set chiSlot freshChi).set
-            rhoSlot sevm.benvStat.time).set sevm.caller.toB256
-            (Devm.getStorVal pre sevm.currentTarget sevm.caller.toB256 - units)).set
-          totalUnitsSlot
-            (Devm.getStorVal pre sevm.currentTarget totalUnitsSlot - units) ∧
-      Devm.getCode node.node.devm = Devm.getCode pre ∧
-      (gasWord :: sevm.caller.toB256 :: payout :: 0 :: 0 :: 0 :: 0 :: payout ::
-        [] <<+ node.node.devm.stack) ∧
-      Mem.Wf node.node.devm.memory ∧
-      ∃ callPost guardPost returnPre, node.stepResult = .ok callPost ∧
-        AcceptedPayout sevm payout node.node.devm callPost guardPost
-          returnPre := by
-  rcases exit_callNode_spine_of_exec exc hcode hsel hnonempty hcanon hfork with
-    ⟨node, gasWord, isCall, sitePc, sameFrame, storEq, codeEq, stackPref,
-      memWf, -, -, callPost, guardPost, returnPre, stepEq, accepted, -⟩
-  exact ⟨node, gasWord, isCall, sitePc, sameFrame, storEq, codeEq, stackPref,
-    memWf, callPost, guardPost, returnPre, stepEq, accepted⟩
-
 /-- Public twin of the private clean-settlement lemma below: a clean call-frame
 settlement does not read the message. -/
 theorem ofCall_settle_of_clean {raw : Execution} {child : Devm}

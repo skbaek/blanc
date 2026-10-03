@@ -132,27 +132,6 @@ inductive RuntimeWriteAuthority
         site.pc = write.pc ∧ site.path.functionIndex = pauseAfterSetSlot) :
       RuntimeWriteAuthority dp frameRoot write .pauseExpiry
 
-/-- An exact internal-call cut retained on the target-directed source route. -/
-private inductive Exec.Deriv.SourceCursor.Toward.CallCut
-    {root target : Exec.Deriv} {program : Prog}
-    {initialPath : Prog.SourcePath} {initialSource : Func}
-    {targetInstruction : Ninst}
-    (initial : Exec.Deriv.SourceCursor root program
-      initialPath initialSource)
-    (functionIndex : Nat) : Prop
-  | intro (path : Prog.SourcePath)
-      (cursor : Exec.Deriv.SourceCursor root program path
-        (.call functionIndex))
-      (body : Func)
-      (lookup : (program.main :: program.aux)[functionIndex]? = some body)
-      (bodyCursor : Exec.Deriv.SourceCursor root program
-        ⟨functionIndex, []⟩ body)
-      (routeToCall : Exec.Deriv.SourceCursor.Toward
-        initial target targetInstruction cursor)
-      (routeFromBody : Exec.Deriv.SourceCursor.Toward
-        initial target targetInstruction bodyCursor) :
-      Exec.Deriv.SourceCursor.Toward.CallCut initial functionIndex
-
 /-- Frozen source function index per row.  Public because the attainment
 consumers need it to refute a role at a row whose write sits in a different
 compiled function; see `RuntimeWriteAuthority`'s `writeSite` conjuncts. -/

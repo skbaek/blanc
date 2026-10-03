@@ -30,31 +30,6 @@ namespace LidoTriggerableWithdrawalsGateway
 
 /-! ## Exact role-gate census -/
 
-def roleGatedEntries (dp : DeployParams) :
-    List (B256 × B256 × Func) :=
-  [ (selPauseFor, pauseRole, pauseFor),
-    (selPauseUntil, pauseRole, pauseUntil),
-    (selResume, resumeRole, resume),
-    (selSetExitRequestLimit, twExitLimitManagerRole, setExitRequestLimit),
-    (selTriggerFullWithdrawals, addFullWithdrawalRequestRole,
-      triggerFullWithdrawals dp),
-    (selGrantRole, defaultAdminRole, grantRole),
-    (selRevokeRole, defaultAdminRole, revokeRole) ]
-
-/-- The same census at the actual `funcs` dispatcher boundary.  In particular,
-the payable trigger is not wrapped in `nonpayable`; every other protected entry
-is. -/
-def roleGatedDispatchEntries (dp : DeployParams) :
-    List (B256 × B256 × Func) :=
-  [ (selPauseFor, pauseRole, nonpayable pauseFor),
-    (selPauseUntil, pauseRole, nonpayable pauseUntil),
-    (selResume, resumeRole, nonpayable resume),
-    (selSetExitRequestLimit, twExitLimitManagerRole,
-      nonpayable setExitRequestLimit),
-    (selTriggerFullWithdrawals, addFullWithdrawalRequestRole,
-      triggerFullWithdrawals dp),
-    (selGrantRole, defaultAdminRole, nonpayable grantRole),
-    (selRevokeRole, defaultAdminRole, nonpayable revokeRole) ]
 
 /-! ## Exact authorization calldata
 

@@ -402,11 +402,6 @@ private lemma Bytes.take_eq_take_of_getD_eq
   rw [List.takeD_eq_take d hxs, List.takeD_eq_take d hys] at hs
   exact hs
 
-private def weth10TreeLeft (dp : DeployParams) : DispatchTree :=
-  DispatchTree.build 26 ((weth10Funcs dp).take 14)
-
-private def weth10TreeRight (dp : DeployParams) : DispatchTree :=
-  DispatchTree.build 26 ((weth10Funcs dp).drop 14)
 
 private theorem allowanceSel_eq :
     selector "allowance" [.address, .address] = (0xdd62ed3e : B256) := by
@@ -486,12 +481,6 @@ private theorem dispatch23_26_1_size :
       110 := by
   decide +kernel
 
-private theorem deploymentPairDispatch_size :
-    (deploymentPairDispatch
-      (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 315 := by
-  unfold deploymentPairDispatch
-  rw [dispatchNode_size _ _ _ (by decide +kernel),
-    deploymentChainIdLeaf_size, approveAndCallLeaf_size]
 
 private lemma byteAt_main_to_dispatch
     (locations : List Nat) (n : Nat) (p q : Func) (i : Nat) (d : UInt8)

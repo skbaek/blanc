@@ -661,38 +661,4 @@ theorem insertionLive_runCompiledTo
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.memory_setMach]
   exact Func.RunCompiledTo.last rfl
 
-/-- Dispatch to the first live branch, store the accumulated node, and stop.
-The fixed work costs 46 gas in addition to the selected `SSTORE` charge. -/
-theorem insertionLoopLive_runCompiledTo
-    {fs : List Func} {sevm : Sevm} {base : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    {memory : Mem} {oldCount shiftedSize node height : B256}
-    {K : Nat}
-    (hmem : InsertionMemoryCarrier memory oldCount shiftedSize node)
-    (hbit : ((1 : B256) &&& shiftedSize) ≠ 0)
-    (hsentry : gCallStipend <
-      K + 2 + sstoreCost sevm base (branchBase + height) node)
-    (hstatic : sevm.isStatic = false) :
-    Func.RunCompiledTo fs sevm
-      (base.setMach
-        ⟨[height], memory,
-          K + 46 + sstoreCost sevm base (branchBase + height) node, base.stateGas⟩)
-      insertionLoop
-      (.ok ((afterSstore sevm base (branchBase + height) node).setMach
-        ⟨[], memory, K, base.stateGas⟩)) := by
-  let C := sstoreCost sevm base (branchBase + height) node
-  have harm : Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[height], memory, K + 20 + C, base.stateGas⟩)
-      insertionLive
-      (.ok ((afterSstore sevm base (branchBase + height) node).setMach
-        ⟨[], memory, K, base.stateGas⟩)) :=
-    insertionLive_runCompiledTo (hfork := hfork) hmem hsentry hstatic
-  have hdispatch :=
-    insertionLoopLive_dispatch_runCompiledTo
-      (K := K + 20 + C) hmem hbit
-      (by simp only [List.length_nil]; omega) harm
-  have hgas : K + 20 + C + 26 = K + 46 + C := by omega
-  rw [hgas] at hdispatch
-  simpa only [C] using hdispatch
-
 end Blanc.BeaconDeposit

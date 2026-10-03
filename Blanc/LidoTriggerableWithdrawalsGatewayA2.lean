@@ -17,11 +17,6 @@ open Jaune
 
 namespace LidoTriggerableWithdrawalsGateway
 
-/-! ## Source projections used by the pause/query rows -/
-
-def isPausedSourceProjection (resumeSince timestamp : B256) : B256 :=
-  timestamp <? resumeSince
-
 /-! ## Exact auxiliary reverter consumers
 
 `runtime` stores the base auxiliary table after the main entry.  The index

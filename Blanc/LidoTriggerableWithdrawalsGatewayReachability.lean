@@ -18,9 +18,6 @@ open Jaune
 
 namespace LidoTriggerableWithdrawalsGateway
 
-private theorem accessedStorageKeys_setMach
-    {base : Devm} {mach : Mach} :
-    (base.setMach mach).accessedStorageKeys = base.accessedStorageKeys := rfl
 
 private theorem addAccessedStorageKey_setMach
     {base : Devm} {mach : Mach} {a : Adr} {k : B256} :
@@ -284,9 +281,6 @@ private theorem setMach_error_local (base : Devm) (mach : Mach) :
 private theorem setMach_output_local (base : Devm) (mach : Mach) :
     (base.setMach mach).output = base.output := rfl
 
-private theorem setMach_returnData_local (base : Devm) (mach : Mach) :
-    (base.setMach mach).returnData = base.returnData := rfl
-
 private theorem setMach_logs_local (base : Devm) (mach : Mach) :
     (base.setMach mach).logs = base.logs := rfl
 
@@ -308,9 +302,6 @@ private theorem setMach_accessedStorageKeys_local (base : Devm) (mach : Mach) :
 private theorem setMach_state_local (base : Devm) (mach : Mach) :
     (base.setMach mach).state = base.state := rfl
 
-private theorem setMach_getCode_local (base : Devm) (mach : Mach) (a : Adr) :
-    (base.setMach mach).getCode a = base.getCode a := rfl
-
 private theorem setMach_getStorVal_local
     (base : Devm) (mach : Mach) (a : Adr) (key : B256) :
     (base.setMach mach).getStorVal a key = base.getStorVal a key := rfl
@@ -320,9 +311,6 @@ private theorem addLog_error_local (base : Devm) (event : Log) :
 
 private theorem addLog_output_local (base : Devm) (event : Log) :
     (base.addLog event).output = base.output := rfl
-
-private theorem addLog_returnData_local (base : Devm) (event : Log) :
-    (base.addLog event).returnData = base.returnData := rfl
 
 private theorem addLog_logs_local (base : Devm) (event : Log) :
     (base.addLog event).logs = base.logs ++ [event] := rfl
@@ -344,10 +332,6 @@ private theorem addLog_accessedStorageKeys_local (base : Devm) (event : Log) :
 
 private theorem addLog_state_local (base : Devm) (event : Log) :
     (base.addLog event).state = base.state := rfl
-
-private theorem addLog_getCode_local
-    (base : Devm) (event : Log) (a : Adr) :
-    (base.addLog event).getCode a = base.getCode a := rfl
 
 private theorem addLog_getStorVal_local
     (base : Devm) (event : Log) (a : Adr) (key : B256) :
@@ -378,11 +362,6 @@ private theorem pauseStored_output
     (sevm : Sevm) (base : Devm) (duration : B256) :
     (pauseStored sevm base duration).output = base.output := by
   rw [pauseStored, afterSstore_output, pauseResumeWarm_output]
-
-private theorem pauseStored_returnData
-    (sevm : Sevm) (base : Devm) (duration : B256) :
-    (pauseStored sevm base duration).returnData = base.returnData := by
-  rw [pauseStored, afterSstore_returnData_local, pauseResumeWarm_returnData]
 
 private theorem pauseStored_logs
     (sevm : Sevm) (base : Devm) (duration : B256) :
@@ -426,11 +405,6 @@ private theorem pauseStored_state
       base.state.setStorVal sevm.currentTarget resumeSinceSlot
         (duration + sevm.benvStat.time) := by
   rw [pauseStored, afterSstore_state_local, pauseResumeWarm_state]
-
-private theorem pauseStored_getCode
-    (sevm : Sevm) (base : Devm) (duration : B256) (a : Adr) :
-    (pauseStored sevm base duration).getCode a = base.getCode a := by
-  rw [pauseStored, afterSstore_getCode, pauseResumeWarm_getCode]
 
 theorem pauseFinitePost_gasLeft
     (sevm : Sevm) (base : Devm) (duration : B256) (G : Nat) :
@@ -1255,63 +1229,6 @@ private theorem pauseForUnpausedFinite_runCompiledTo
 
 /-! ## The pause-state guard -/
 
-/-- From a cold zero resume slot, execute the exact unpaused guard and enter
-the finite-duration body.  The cold `SLOAD`, five surrounding instructions,
-and selected nonzero branch cost `2125` gas. -/
-private theorem pauseForGuardFinite_runCompiledTo
-    {fs : List Func} {sevm : Sevm} {base : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    {duration : B256} {G : Nat}
-    (harg : Sevm.dataWord sevm 4 = duration)
-    (hresume : base.getStorVal sevm.currentTarget resumeSinceSlot = 0)
-    (horiginal : getOrigStorVal sevm sevm.currentTarget resumeSinceSlot = 0)
-    (hcold : (sevm.currentTarget, resumeSinceSlot) ∉
-      base.accessedStorageKeys)
-    (hstatic : sevm.isStatic = false)
-    (hduration : duration ≠ 0)
-    (hfinite : duration ≠ pauseInfinitely)
-    (htime : sevm.benvStat.time < duration + sevm.benvStat.time) :
-    ∃ post, Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], pauseAuthScratch sevm.caller.toB256, G + 23232, base.stateGas⟩)
-      (([Ninst.pushB256 resumeSinceSlot, Ninst.sload, Ninst.timestamp,
-          Ninst.lt, Ninst.iszero]) +++
-        (pauseForUnpaused <?> .call resumedExpectedSlot)) (.ok post) := by
-  let warm := addAccessedStorageKey base sevm.currentTarget resumeSinceSlot
-  have hresumeWarm : warm.getStorVal sevm.currentTarget resumeSinceSlot = 0 := by
-    simpa only [warm, getStorVal_addAccessedStorageKey] using hresume
-  have hwarm : (sevm.currentTarget, resumeSinceSlot) ∈
-      warm.accessedStorageKeys := by
-    unfold warm
-    change (sevm.currentTarget, resumeSinceSlot) ∈
-      base.accessedStorageKeys.insert (sevm.currentTarget, resumeSinceSlot)
-    exact Std.HashSet.mem_insert_self
-  obtain ⟨post, unpausedRun⟩ := pauseForUnpausedFinite_runCompiledTo (hfork := hfork)
-    (fs := fs) (sevm := sevm) (base := warm)
-    (duration := duration) (G := G) harg hresumeWarm horiginal hwarm hstatic
-    hduration hfinite htime
-  have hnotlt : ¬ sevm.benvStat.time < (0 : B256) := by
-    intro h
-    have hn := B256.toNat_lt_toNat h
-    rw [B256.toNat_zero] at hn
-    exact Nat.not_lt_zero _ hn
-  -- Stage opaquely (as in `pauseForFinite_runCompiledTo` above).
-  revert unpausedRun
-  generalize (pauseAuthScratch sevm.caller.toB256) = staged5
-  intro unpausedRun
-  refine ⟨post, ?_⟩
-  func_run (5) [0, 1]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  case h_val =>
-    rw [Devm.getStorVal_setMach, hresume]
-    simp only [B256.ltCheck, hnotlt, ↓reduceIte]
-  func_run (1)
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  change Func.RunCompiledTo fs sevm
-    (warm.setMach ⟨[], staged5, G + 23232 - 2125, warm.stateGas⟩)
-    pauseForUnpaused (.ok post)
-  have hgas : G + 23232 - 2125 = G + 21107 := by omega
-  rw [hgas]
-  exact unpausedRun
 
 /-! ## Authorization and ABI-length guard -/
 
@@ -1971,47 +1888,6 @@ private theorem pauseForSentinel_exact_runCompiledTo
   rw [hsg] at eventRun
   exact eventRun
 
-/-- Select the sentinel arm after the successful nonzero test.  Its positive
-sentinel branch is one gas dearer than the finite zero branch, so the two
-guards cost `48` gas. -/
-private theorem pauseForUnpausedSentinel_runCompiledTo
-    {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (harg : Sevm.dataWord sevm 4 = pauseInfinitely)
-    (hresume : base.getStorVal sevm.currentTarget resumeSinceSlot = 0)
-    (horiginal : getOrigStorVal sevm sevm.currentTarget resumeSinceSlot = 0)
-    (hwarm : (sevm.currentTarget, resumeSinceSlot) ∈
-      base.accessedStorageKeys)
-    (hstatic : sevm.isStatic = false) :
-    ∃ post, Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], pauseAuthScratch sevm.caller.toB256, G + 21076, base.stateGas⟩)
-      pauseForUnpaused (.ok post) := by
-  obtain ⟨post, sentinelRun⟩ := pauseForSentinel_runCompiledTo (hfork := hfork)
-    (fs := fs) (sevm := sevm) (base := base) (G := G)
-    hresume horiginal hwarm hstatic
-  -- Stage opaquely (as in `pauseForFinite_runCompiledTo` above).
-  revert sentinelRun
-  generalize (pauseAuthScratch sevm.caller.toB256) = staged10
-  intro sentinelRun
-  refine ⟨post, ?_⟩
-  unfold pauseForUnpaused arg cdl
-  func_run (3) [0]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  case h_val =>
-    rw [show 32 * (0 : B256) + 4 = 4 by decide, harg]
-    decide +kernel
-  func_run (1)
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  func_run (4) [1]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  case h_val =>
-    rw [show 32 * (0 : B256) + 4 = 4 by decide, harg]
-    simp only [B256.eqCheck, ↓reduceIte]
-  func_run (1)
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  have hgas : G + 21076 - 48 = G + 21028 := by omega
-  rw [hgas]
-  exact sentinelRun
 
 private theorem pauseForUnpausedSentinel_exact_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}

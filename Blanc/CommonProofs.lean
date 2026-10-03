@@ -560,18 +560,6 @@ lemma ExecuteCode.depth_eq
     evm_.sta.depth = msg.depth := by
   rw [(ExecuteCode.some_inv run).1]; rfl
 
-lemma ProcessMessage.depth_eq
-    {msg : Msg} {evm_ exn_ ex}
-    (run : ProcessMessage msg (.some ⟨evm_, exn_⟩) ex) :
-    evm_.sta.depth = msg.depth :=
-  RunFrame.depth_eq run
-
-lemma ProcessCreateMessage.depth_eq
-    {msg : Msg} {evm_ exn_ ex}
-    (run : ProcessCreateMessage msg (.some ⟨evm_, exn_⟩) ex) :
-    evm_.sta.depth = msg.depth :=
-  RunFrame.depth_eq run
-
 lemma GenericCall.depth_lt
     {sevm devm msgCallGas value caller currentTarget target
       shouldTransferValue isStatic inputIndex inputSize

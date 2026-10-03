@@ -159,10 +159,6 @@ def CanonicalDepositCalldata
   (abiDepositCall pubkey withdrawalCredentials signature
     depositDataRoot).length < 2 ^ 32
 
-def abiSupportsInterfaceCall (interfaceId : Bytes) : Bytes :=
-  abiSelectorBytes supportsInterfaceSelector ++ interfaceId ++
-    List.replicate (32 - interfaceId.length) 0
-
 /-! ## Return and event encodings -/
 
 def abiDynamicBytesReturn (data : Bytes) : Bytes :=

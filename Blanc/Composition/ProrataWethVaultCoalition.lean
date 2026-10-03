@@ -952,16 +952,4 @@ end PairAttackPath
 
 /-! ## PRORATA is the same-role fragment -/
 
-/-- A PRORATA classification read as a pair classification with every role on
-its own side. -/
-def PairAttackKind.ofProrata : ProrataAttackKind → PairAttackKind
-  | .nonVictimDeposit attribution amount minted =>
-      .nonVictimDeposit attribution amount minted true
-  | .nonVictimWithdraw attribution shares paid =>
-      .nonVictimWithdraw attribution shares paid true
-  | .externalCredit attribution amount => .externalCredit attribution amount
-  | .victimDeposit amount minted => .victimDeposit amount minted
-  | .victimExit shares paid => .victimExit shares paid
-  | .silent => .silent
-
 end Blanc.Composition.ProrataWethVault

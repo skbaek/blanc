@@ -86,7 +86,6 @@ structure SymbolicProg (Label : Type) : Type where
 inductive BranchArm : Type
   | left
   | right
-  deriving DecidableEq, Repr
 
 /-- Errors reported during symbolic resolution. -/
 inductive ResolveError (Label : Type) : Type

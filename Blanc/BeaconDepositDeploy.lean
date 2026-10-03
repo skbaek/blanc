@@ -263,17 +263,6 @@ theorem constructorSstoreSourceSites_coordinates :
     Prog.SourceSite.coordinates constructorSstoreSourceSites = [(4, 137)] := by
   decide +kernel
 
-/-- Every constructor source-level SSTORE is the unique recursive zero-hash
-write site at compiled prefix PC 137. -/
-theorem constructorSstoreSourceSite_pc
-    {site : Prog.SourceSite}
-    (member : site ∈ constructorSstoreSourceSites) :
-    site.pc = 137 := by
-  have pcMember : site.pc ∈ Prog.SourceSite.pcs constructorSstoreSourceSites :=
-    List.mem_map_of_mem member
-  rw [constructorSstoreSourceSites_pcs] at pcMember
-  simpa only [List.mem_cons, List.not_mem_nil, or_false] using pcMember
-
 theorem constructorSstoreSourceSite_coordinate
     {site : Prog.SourceSite}
     (member : site ∈ constructorSstoreSourceSites) :

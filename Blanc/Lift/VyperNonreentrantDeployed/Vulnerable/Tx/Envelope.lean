@@ -22,32 +22,6 @@ open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Witness
 open Blanc.Lift.VyperNonreentrantDeployed Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
 open Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxTop
 
-/-! ### The admission checks, evaluated on the concrete transaction and block -/
-
-theorem benvPre_stateGas : benvPre.stat.rules.stateGas = none :=
-  CoveredFork.prague.rules_stateGas_none
-
-/-- The type-2 transaction's chain id is the block's. -/
-theorem tx0_chain : checkTransactionChainId benvPre.beginTransaction tx0 = .ok () := by
-  kernel_rfl
-
-/-- Fee rules with base fee 0: `maxPriorityFee = maxFee = 0` is legal, and the effective gas
-price and the maximum fee are 0. -/
-theorem tx0_fee : checkTransactionGasFee benvPre.beginTransaction tx0 = .ok (0, 0) := by
-  kernel_rfl
-
-theorem tx0_blob : checkTransactionBlobData benvPre.beginTransaction tx0 0 = .ok (0, []) := by
-  kernel_rfl
-
-theorem tx0_receiver : checkTransactionReceiver tx0 = .ok () := by kernel_rfl
-
-theorem tx0_auth : checkTransactionAuthorizationList tx0 = .ok () := by kernel_rfl
-
-/-- The sender account: nonce 0 is the transaction's nonce, its balance 0 covers the maximum fee
-0 plus the value 0, and it has no code (EIP-3607): `E` is an EOA. -/
-theorem tx0_sender :
-    checkTransactionSenderAccount (benvPre.beginTransaction.state.get eAddress) tx0 0 = .ok () := by
-  kernel_rfl
 
 /-! ### The debit, the prepared message and the call wrapper -/
 

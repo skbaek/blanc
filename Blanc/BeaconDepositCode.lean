@@ -49,27 +49,12 @@ private def isStaticcall : Ninst → Bool
   | .exec .staticcall => true
   | _ => false
 
-private def isLog1 : Ninst → Bool
-  | .reg (.log 1) => true
-  | _ => false
-
-private def isExternalExecution : Ninst → Bool
-  | .exec _ => true
-  | _ => false
-
-private def isMstore8 : Ninst → Bool
-  | .reg .mstore8 => true
-  | _ => false
-
 private def sourceSitesMatching
     (predicate : Ninst → Bool) : List Prog.SourceSite :=
   runtime.sourceSites.filter fun site => predicate site.instruction
 
 def runtimeSstoreSourceSites : List Prog.SourceSite :=
   sourceSitesMatching isSstore
-
-def runtimeStaticcallSourceSites : List Prog.SourceSite :=
-  sourceSitesMatching isStaticcall
 
 /-- Membership in the runtime SSTORE inventory is exactly membership in the
 compiler source map at a source-level SSTORE instruction. -/
@@ -86,14 +71,6 @@ theorem mem_runtimeSstoreSourceSites_iff
 
 theorem runtimeSstoreSourceSites_pcs :
     Prog.SourceSite.pcs runtimeSstoreSourceSites = [1070, 2869] := by
-  decide +kernel
-
-/-- Coupled function-table/PC identities for the two runtime write sites.
-Keeping the coordinates paired prevents a consumer from mixing the main-body
-count site with the insertion-loop branch site. -/
-theorem runtimeSstoreSourceSites_coordinates :
-    Prog.SourceSite.coordinates runtimeSstoreSourceSites =
-      [(0, 1070), (13, 2869)] := by
   decide +kernel
 
 /-- The complete runtime source-level SSTORE population is the count write in

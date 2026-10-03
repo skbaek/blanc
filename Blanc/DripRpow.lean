@@ -214,10 +214,6 @@ arithmetic, not by a special case. -/
 theorem drip_factorNat_zero : factorNat 0 = scale.toNat :=
   Jaune.rpow_exponent_zero _ _ _
 
-/-- The frozen base word is nonzero. -/
-theorem drip_rate_ne_zero : rate ≠ 0 := by
-  decide +kernel
-
 end Drip
 
 end Blanc

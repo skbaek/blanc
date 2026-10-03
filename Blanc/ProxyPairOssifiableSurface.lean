@@ -67,10 +67,6 @@ def proxyOssifiedEventTopic : B256 :=
 def upgradedLog (proxy implementation : Adr) : Log :=
   ⟨proxy, [upgradedEventTopic, implementation.toB256], []⟩
 
-/-- `AdminChanged(address,address)`: neither argument is indexed. -/
-def adminChangedLog (proxy previousAdmin newAdmin : Adr) : Log :=
-  ⟨proxy, [adminChangedEventTopic],
-    previousAdmin.toB256.toBytes ++ newAdmin.toB256.toBytes⟩
 
 /-- `ProxyOssified()`: no indexed arguments and no data. -/
 def proxyOssifiedLog (proxy : Adr) : Log :=

@@ -25,13 +25,8 @@ structure ConstructorArgs where
   maxExitRequestsLimit : B256
   exitsPerFrame : B256
   frameDurationInSec : B256
-deriving DecidableEq
-
-def ConstructorArgs.toDeployParams (args : ConstructorArgs) : DeployParams :=
-  ⟨args.locator⟩
 
 def constructorArgumentBytes : Nat := 5 * 32
-def eip3860InitcodeLimit : Nat := 49152
 
 private def constructorRuntimeBase : Nat := constructorArgumentBytes
 
@@ -206,19 +201,6 @@ theorem full_create_input_length (args : ConstructorArgs) :
     (lidoTwgFullCreateInput args).length =
       lidoTwgCreationTemplate.length + constructorArgumentBytes := by
   simp only [lidoTwgFullCreateInput, List.length_append, abiEncodeConstructorArgs_length]
-
-/-- Constructor writes are classified one-for-one.  Internal `Func.call`
-table edges are not external EVM calls. -/
-def constructorPersistentWriteInventory :
-    List (SourceSite × PersistentWriteClass) :=
-  [ (⟨"constructor.admin.membership", 0⟩, .roleMembership),
-    (⟨"constructor.admin.member", 1⟩, .enumeration),
-    (⟨"constructor.admin.memberIndex", 2⟩, .roleIndex),
-    (⟨"constructor.admin.memberCount", 3⟩, .enumeration),
-    (⟨"constructor.limit.packed", 4⟩, .limit) ]
-
-def constructorExternalCallInventory :
-    List (SourceSite × ExternalCallClass) := []
 
 end LidoTriggerableWithdrawalsGateway
 end Blanc

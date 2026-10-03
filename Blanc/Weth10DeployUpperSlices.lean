@@ -1077,10 +1077,6 @@ private theorem depositDispatchLeaf_size :
     (dispatchLeaf 0xd0e30db0 deposit).compileShape.byteSize = 64 := by
   decide +kernel
 
-private theorem deploymentChainIdDispatchLeaf_size :
-    (dispatchLeaf 0xcd0d0096 (nonpayable (deploymentChainId
-      (⟨0, 0⟩ : DeployParams)))).compileShape.byteSize = 64 := by
-  decide +kernel
 
 private theorem dispatchLeafByteAt_eq_before_body
     (locations : List Nat) (n : Nat) (selector : B256)
@@ -1284,32 +1280,6 @@ private theorem deploymentLeafByteAt_eq_zero_0_26
       exact deploymentChainIdByteAt_eq_zero_opcode
         locations (n + 15 + 10) dp
 
-private theorem deploymentLeafByteAt_chainWord
-    (locations : List Nat) (n : Nat) (dp : DeployParams)
-    (j : Nat) (hj : j < 32) :
-    Func.byteAtByShape locations n
-        (dispatchLeaf 0xcd0d0096
-          (nonpayable
-            (deploymentChainId
-              (⟨0, 0⟩ : DeployParams)))).compileShape
-        (dispatchLeaf 0xcd0d0096
-          (nonpayable (deploymentChainId dp))) (26 + j) 0 =
-      dp.deploymentChainId.toBytes.getD j 0 := by
-  have hpush : (Ninst.pushB256 (0xcd0d0096 : B256)).size = 5 := by
-    decide +kernel
-  rw [dispatchLeafByteAt_to_body locations n 0xcd0d0096
-      (nonpayable
-        (deploymentChainId (⟨0, 0⟩ : DeployParams)))
-      (nonpayable (deploymentChainId dp)) (26 + j) 0 hpush (by omega)]
-  have hiLeaf : 26 + j - 15 = 11 + j := by omega
-  rw [hiLeaf]
-  rw [nonpayableByteAt_to_body locations (n + 15)
-      (deploymentChainId (⟨0, 0⟩ : DeployParams))
-      (deploymentChainId dp) (11 + j) 0 (by omega)]
-  have hiBody : 11 + j - 10 = j + 1 := by omega
-  rw [hiBody]
-  exact deploymentChainIdByteAt_chainWord
-    locations (n + 15 + 10) dp j hj
 
 private theorem dispatch24_21_3ByteAt_eq_zero_0_113
     (locations : List Nat) (n : Nat) (dp : DeployParams)

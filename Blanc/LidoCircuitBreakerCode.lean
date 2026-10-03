@@ -92,9 +92,6 @@ def immutableWordOffsetsValid (field : ImmutableParameter) : Bool :=
   CreationArtifact.immutableWordOffsetsValid runtimeTemplateCode
     (lidoCircuitBreakerCode (immutableMarkerParams field))
 
-def immutableOffsetMetadataValid : Bool :=
-  immutableParameters.all immutableWordOffsetsValid
-
 structure ImmutablePatch where
   field : ImmutableParameter
   offset : Nat
@@ -116,16 +113,8 @@ patch plan consumed by the constructor. -/
 def patchRuntimeTemplate (dp : DeployParams) : Bytes :=
   (runtimeImmutablePatches dp).foldl applyImmutablePatch runtimeTemplateCode
 
-/-- Executable patch-identity check for an arbitrary evaluator-selected
-parameter world. -/
-def runtimePatchIdentityValid (dp : DeployParams) : Bool :=
-  patchRuntimeTemplate dp = lidoCircuitBreakerCode dp
-
 /-- Artifact size metadata used by EIP-170 checks in deployment evaluators. -/
 def eip170RuntimeLimit : Nat := 24576
-
-def lidoCircuitBreakerCodeSize (dp : DeployParams) : Nat :=
-  (lidoCircuitBreakerCode dp).length
 
 end LidoCircuitBreaker
 end Blanc

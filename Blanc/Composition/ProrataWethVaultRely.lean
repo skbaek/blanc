@@ -274,18 +274,6 @@ private theorem vaultCode_toList_ne_nil {vault : Adr} {pre : Devm}
   rw [empty] at installed
   exact Prog.compile_ne_nil installed.symm
 
-/-- The configuration survives any same-frame step that preserves nonempty
-code. -/
-theorem VaultFrameConfiguration.of_codePreserve
-    {vault : Adr} {sevm : Sevm} {pre inter : Devm}
-    (configuration : VaultFrameConfiguration vault sevm pre)
-    (preserve : Devm.CodePreserve pre inter) :
-    VaultFrameConfiguration vault sevm inter := by
-  refine ⟨configuration.config.of_codePreserve rfl preserve, ?_,
-    configuration.code⟩
-  rw [preserve vault (vaultCode_toList_ne_nil configuration.installed)]
-  exact configuration.installed
-
 /-! ## Allowance-debit authorization
 
 The 09-08 transferFrom seam classifies each retained invocation's allowance
