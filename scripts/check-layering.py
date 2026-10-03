@@ -245,6 +245,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.ApproveSource",
         "Lift.UniswapV2Pair.TransferCore",
         "Lift.UniswapV2Pair.LPMintCore",
+        "Lift.UniswapV2Pair.LPBurnCore",
         "Lift.UniswapV2Pair.LPMintSource",
         "Lift.UniswapV2Pair.FeeMintArithmetic",
         "Lift.UniswapV2Pair.FeeMintCall",
