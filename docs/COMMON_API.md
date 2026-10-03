@@ -1035,6 +1035,18 @@ entering path. `Exec.RetainedTargetTurn.rebase` changes only original paths, and
 unprefixed traversal. It preserves child counters, duplicates, state boundaries
 and complete failed-settlement pruning; it supplies no new entering occurrence
 or contract-specific source queue.
+For a structural fold over only the selected frames, use
+`Exec.retainedTargetFramesFromAt`: it projects the existing traversal with
+`filterMap Sum.getRight?` at the original parent path and child counter.
+`Exec.retainedTargetTurnsAt_filterMap_eq` connects the entering-path wrapper
+to that projection at counter zero. The `_target`, `_halt`, `_cont`, `_doneOk`
+and `_runOk` equations preserve target selection and the original counters:
+childless calls advance the parent counter; interpreted children use
+`path ++ [counter]` and start at zero. A child contributes only when
+`Frame.settlementCommits` holds, so a failed settlement removes its whole
+subtree before the parent continuation is appended. These equations support
+a local producer over the retained frames; they do not establish its request,
+reply or contract-model correspondence.
 The existing `goal-head:StateReplay` recipe selects chronology continuity;
 the joint chunk/Link/observation premises are discovered through this registry.
 
@@ -3327,6 +3339,12 @@ contract-neutral.
   [`Blanc/Lift/InvWalkProvenance.lean`](../Blanc/Lift/InvWalkProvenance.lean)
   retain that relation in the exposed instruction and the continuation. Use these
   projections when a walk must preserve execution-derivation provenance.
+  For a complete linear prefix, `SFunc.RunCutP.split_nexts` exposes its actual
+  intermediate state and `Line.Run`, using an explicit projection to `Ninst.Run`.
+  The residual cut keeps the original instruction relation, program, cut set and
+  final segment. Use it when an existing instruction inverse consumes a line
+  while the remaining cut must retain provenance. Split a line itself with the
+  existing `Blanc.of_run_append`; no second cut relation is needed.
 - An `EXTCODESIZE` step with the actual warm/cold account access is in
   [`Blanc/Lift/CodeSizeWalk.lean`](../Blanc/Lift/CodeSizeWalk.lean).
   `temporalAccountAccessBase` and `temporalAccountAccessCost` name the selected
@@ -3334,8 +3352,13 @@ contract-neutral.
   compiled step from the code-size word, stack-room and covered-fork facts.
   `ri_extcodesize` inverts the actual instruction into that world, exact word,
   unchanged memory and residual gas. `rx_extcodesize` consumes an exact
-  continuation at the selected warm/cold charge. The existing Lido temporal
-  access names are compatibility declarations over this common owner.
+  continuation at the selected warm/cold charge.
+  `temporalAccountAccessBase_state`, `temporalAccountAccessBase_output` and
+  `temporalAccountAccessBase_logs` project the unchanged state, output and logs
+  through account warming. Use these facts to compose an observed call without
+  unfolding the nested world update; the Pair mint prefix consumes all three.
+  The existing Lido temporal access names are compatibility declarations over
+  this common owner.
 - A `STATICCALL` to an arbitrary callee, whose code is unknown: its abstract outcome
   (`StaticCallPost`: flag, returned bytes as output window and return data, every storage
   map and the log list kept) and, for a set flag, the successful static child message
