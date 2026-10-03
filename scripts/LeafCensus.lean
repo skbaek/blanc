@@ -207,6 +207,23 @@ run_cmd do
     if extNames.contains t then ks := ks.push "ext"
     if instState.instanceNames.contains t then ks := ks.push "instance"
     return ks
+  -- External scripts resolve raw constants (including projections and auxiliaries).
+  -- Export this driver's ownership relation rather than reproducing it in another collector.
+  let externalConstants := allConstants.map fun (n, ci) =>
+    Json.mkObj [("name", toJson (showName n)),
+      ("module", toJson (showName (moduleOf env n))),
+      ("fp", toJson (fingerprint ci)),
+      ("owner", toJson ((owner env n).map showName)),
+      ("owner_external", toJson ((owner env n).any fun o => !inScope env o)),
+      ("dependencies", toJson (if (owner env n).isNone then
+        (constantsOf ci).filterMap fun u => if inScope env u then some (showName u) else none
+        else #[]))]
+  let populationDeclarations := pop.map fun (n, ci, kind) =>
+    Json.mkObj [("raw_name", toJson (showName n)),
+      ("name", toJson (showName ((privateToUserName? n).getD n))),
+      ("module", toJson (showName (moduleOf env n))),
+      ("private", toJson (isPrivateName n)), ("kind", toJson kind),
+      ("fp", toJson (fingerprint ci))]
   -- Classification.
   let mut leaves : Array Json := #[]
   let mut definitionLeaves : Array Json := #[]
@@ -232,6 +249,8 @@ run_cmd do
       ("parentless_auxiliaries", toJson orphanOwners.size),
       ("simp_sets_registered", toJson (simpSets.map (showName ·.1))),
       ("population_names", toJson popNames),
+      ("external_constants", toJson externalConstants),
+      ("population_declarations", toJson populationDeclarations),
       ("leaves", Json.arr leaves),
       ("definition_leaves", Json.arr definitionLeaves)]).compress ++ "\n")
   logInfo m!"LEAF-CENSUS population {pop.size}; theorem leaves {leaves.size}; definition leaves {definitionLeaves.size}"

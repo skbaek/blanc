@@ -46,6 +46,7 @@ inductive RuntimePersistentWrite
   | registerFreshExpiry
   | pauseRetainedTargetExpiry
   | pauseLastTargetExpiry
+deriving DecidableEq
 
 def RuntimePersistentWrite.all : List RuntimePersistentWrite :=
   [ .setPauseDurationConfig,

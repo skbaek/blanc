@@ -2753,12 +2753,16 @@
      "scripts/leaf_audit.py",
      "scripts/gate_semaphore.py",
      "scripts/leaf-count.json",
-     "Blanc.lean"
+     "Blanc.lean",
+     "scripts/external_uses.py",
+     "scripts/prorata-weth-vault-code-proof.lean.in",
+     "Main.lean"
     ],
     "lean_entries": [
      "scripts/AxiomCheck.lean",
      "scripts/ProofRecipeSuggestions.lean",
-     "scripts/LeafCensus.lean"
+     "scripts/LeafCensus.lean",
+     "scripts/ExternalUseCensus.lean"
     ],
     "lean_modules": [
      "AxiomAudit"
@@ -2777,11 +2781,15 @@
       "mode": "membership",
       "pattern": "leaf-review.json",
       "root": "scripts"
+     },
+     {
+      "pattern": "**/*.lean",
+      "root": "scripts"
      }
     ]
    },
    "kind": "cacheable",
-   "note": "One union axiom walk over the whole library (scripts/AxiomCheck.lean imports every Blanc module and runs Jaune's #union_axioms_of_modules) plus its explicit stricter claims, then the leaf search (scripts/leaf_audit.py elaborating scripts/LeafCensus.lean), whose count must equal the generated scripts/leaf-count.json. There is no pin table: the population is what AxiomCheck.lean imports, so the Blanc/**/*.lean sources (audited for reachability, and read by the leaf search for the uses the environment cannot show) and the LeafCensus.lean import closure are inputs. ProofRecipeSuggestions.lean is separately elaborated before the axiom audit so its positive and negative matcher controls cannot remain unexecuted. scripts/leaf-review.json (the review ledger a sweep generates) is read only for the informational LEAF-REVIEW line and never decides the verdict, so it is declared by membership: seeding or removing it re-runs the row, editing it does not.",
+   "note": "One union axiom walk over the whole library (scripts/AxiomCheck.lean imports every Blanc module and runs Jaune's #union_axioms_of_modules) plus its explicit stricter claims, then the leaf search (scripts/leaf_audit.py elaborating scripts/LeafCensus.lean), whose count must equal the generated scripts/leaf-count.json. There is no pin table: the population is what AxiomCheck.lean imports, so the Blanc/**/*.lean sources (audited for reachability, and read by the leaf search for the uses the environment cannot show) and the LeafCensus.lean import closure are inputs. ProofRecipeSuggestions.lean is separately elaborated before the axiom audit so its positive and negative matcher controls cannot remain unexecuted. scripts/leaf-review.json (the review ledger a sweep generates) is read only for the informational LEAF-REVIEW line and never decides the verdict, so it is declared by membership: seeding or removing it re-runs the row, editing it does not. External Lean script consumers are now elaborated through ExternalUseCensus.lean using current Lake setup and temporary command-time IO directories. Resolved constants, implicit instances and field notation are joined to the census ownership graph by module, raw name and type fingerprint. All tracked external Lean source bytes and the generator template they read are inputs; non-Lean external mentions remain informational.",
    "order": 57,
    "verdict": {
     "expect_exit": 0,
@@ -2801,7 +2809,9 @@
      "scripts/check-leaf-audit.sh",
      "scripts/leaf_audit.py",
      "scripts/LeafCensus.lean",
-     "scripts/gate_semaphore.py"
+     "scripts/gate_semaphore.py",
+     "scripts/external_uses.py",
+     "scripts/test-external-uses.py"
     ],
     "populations": [
      {
@@ -2815,7 +2825,7 @@
     ]
    },
    "kind": "cacheable",
-   "note": "Bite controls of the leaf search on small fixture environments elaborated by the byte-identical driver body: each one-line change to the compliant fixture moves exactly the leaf set it names (an unused or private theorem; an unused non-rfl simp lemma, @[ext] lemma or instance, which are leaves, against an unused rfl simp lemma, which is attribute-exempt; rfl-proved-and-named-in-a-simp/dsimp/simpa-call, macro-named or open-namespace-resolved theorem), the statement fingerprint ignores proofs and binder names, the review ledger and the count artifact are compared, an empty, wrongly-versioned or incomplete census and an unclassified attribute are refused, and 23 pure-Python table controls of the source scan hold. Inputs are the harness, the driver and the fixture only: the production tree is not read.",
+   "note": "Bite controls of the leaf search on small fixture environments elaborated by the byte-identical driver body: each one-line change to the compliant fixture moves exactly the leaf set it names (an unused or private theorem; an unused non-rfl simp lemma, @[ext] lemma or instance, which are leaves, and an unused rfl simp lemma, also a leaf; rfl-proved-and-named-in-a-simp/dsimp/simpa-call, macro-named or open-namespace-resolved theorem), the statement fingerprint ignores proofs and binder names, the review ledger and the count artifact are compared, an empty, wrongly-versioned or incomplete census and an unclassified attribute are refused, and 23 pure-Python table controls of the source scan hold. Inputs are the harness, the driver and the fixture only: the production tree is not read. The wrapper also runs native-reference join falsifiers for private module identities, auxiliary/orphan ownership, stale or missing references, truncated graphs and captured source/setup identity.",
    "verdict": {
     "expect_exit": 0,
     "summary_patterns": [

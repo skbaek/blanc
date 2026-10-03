@@ -397,6 +397,13 @@ def NoAllowanceKeyCollision
     p ≠ q →
       projectedAllowanceKey p.1 p.2 ≠ projectedAllowanceKey q.1 q.2
 
+instance {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain}
+    (history : AccountedHistory cfg dp ca checkpoint future) :
+    Decidable (NoAllowanceKeyCollision history) := by
+  unfold NoAllowanceKeyCollision
+  infer_instance
+
 /-! ## Attribution roots and the hardened outflow fold -/
 
 /-- The root category of the committed slot-write chain governing a debit:
@@ -553,6 +560,13 @@ def NoAuthorizingActBy
     (u : Adr)
     (history : AccountedHistory cfg dp ca checkpoint future) : Prop :=
   ∀ frame ∈ history.attributionLedger, frame.authorizes u = false
+
+instance {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
+    {checkpoint future : BlockChain} (u : Adr)
+    (history : AccountedHistory cfg dp ca checkpoint future) :
+    Decidable (NoAuthorizingActBy u history) := by
+  unfold NoAuthorizingActBy
+  infer_instance
 
 /-! ## Basic bounds -/
 

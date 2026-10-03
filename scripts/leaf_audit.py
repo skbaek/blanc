@@ -29,8 +29,8 @@ What counts as use is documented in ``scripts/GATES.md`` ("Leaf audit") and in t
 in the lemma list of a rewriting tactic call (``simp``, ``simp only``, ``dsimp``, ``simpa``, ``rw``, ...),
 a double-backtick name literal, or anywhere in a tactic macro of any ``Blanc/**/*.lean`` file.
 Attributes alone never count, including an ``rfl`` simp registration. The same exact-identifier
-scan records mentions in tracked ``scripts/`` text and ``Main.lean``; Lean files count as compiled
-proof uses, while non-Lean script mentions are report-only external consumers.
+scan records mentions in tracked ``scripts/`` text and ``Main.lean``. External Lean uses are
+resolved by ``ExternalUseCensus.lean`` and joined to this census's ownership graph; non-Lean script mentions are report-only external consumers.
 
 Command line (from the repository root)::
 
@@ -521,10 +521,14 @@ def tracked_external_sources(root: Path) -> Dict[str, str]:
         except OSError as exc:
             raise LeafAuditError(f"could not read tracked external source {relative}: {exc}")
         if b"\0" in data:
+            if relative.endswith(".lean"):
+                raise LeafAuditError(f"tracked Lean source contains NUL: {relative}")
             continue
         try:
             result[relative] = data.decode("utf-8")
-        except UnicodeDecodeError:
+        except UnicodeDecodeError as exc:
+            if relative.endswith(".lean"):
+                raise LeafAuditError(f"tracked Lean source is not UTF-8: {relative}") from exc
             continue
     return result
 
@@ -729,7 +733,8 @@ def leaf_key(row: dict) -> str:
 
 def analyze(census: dict, sources: Dict[str, str],
             external: Optional[Dict[str, List[str]]] = None,
-            external_lean_uses: Optional[Set[str]] = None) -> dict:
+            external_lean_uses: Optional[Set[str]] = None,
+            native_external: Optional[Dict[tuple, List[str]]] = None) -> dict:
     """The final leaf sets, with source uses and external consumer paths attached."""
 
     validate_census(census)
@@ -737,6 +742,7 @@ def analyze(census: dict, sources: Dict[str, str],
     uses = scan_uses(sources, population)
     external = external or {}
     external_lean_uses = external_lean_uses or set()
+    native_external = native_external or {}
     kept: List[dict] = []
     definition_kept: List[dict] = []
     removed: List[Tuple[dict, Tuple[str, int, str]]] = []
@@ -744,7 +750,10 @@ def analyze(census: dict, sources: Dict[str, str],
         row = dict(original)
         row["external_consumers"] = sorted(external.get(row["name"], []))
         evidence = uses.get(row["name"])
-        if row["name"] in external_lean_uses:
+        if (row["module"], row["name"], row["fp"]) in native_external:
+            paths = native_external[(row["module"], row["name"], row["fp"])]
+            removed.append((row, (paths[0], 0, "native resolved external consumer")))
+        elif not row["private"] and row["name"] in external_lean_uses:
             removed.append((row, ("scripts", 0, "compiled Lean external consumer")))
         elif evidence is not None and (not row["private"] or evidence[0] == row["module"]):
             removed.append((row, evidence))
@@ -753,7 +762,10 @@ def analyze(census: dict, sources: Dict[str, str],
     for original in census["definition_leaves"]:
         row = dict(original)
         row["external_consumers"] = sorted(external.get(row["name"], []))
-        if row["name"] in external_lean_uses:
+        if (row["module"], row["name"], row["fp"]) in native_external:
+            paths = native_external[(row["module"], row["name"], row["fp"])]
+            removed.append((row, (paths[0], 0, "native resolved external consumer")))
+        elif not row["private"] and row["name"] in external_lean_uses:
             removed.append((row, ("scripts", 0, "compiled Lean external consumer")))
         elif evidence := uses.get(row["name"]):
             if not row["private"] or evidence[0] == row["module"]:
@@ -907,14 +919,30 @@ def toolchain_of(root: Path) -> str:
 # --------------------------------------------------------------------------------------------
 
 def production_result(root: Path) -> Tuple[dict, dict]:
+    import external_uses
+
     sources = blanc_sources(root)
     problems = scan_attributes(sources)
     if problems:
         raise LeafAuditError("; ".join(problems))
-    census = run_census(root)
-    external, lean_external = scan_external_sources(
-        tracked_external_sources(root), set(census.get("population_names", [])))
-    result = analyze(census, sources, external, lean_external)
+    with gate_semaphore.admitted("the leaf census", memory_gib=8):
+        census = run_census(root)
+    external_sources = tracked_external_sources(root)
+    external, _ = scan_external_sources(external_sources, set(census.get("population_names", [])))
+    # Keep the narrow source contexts that can disappear from elaborated terms.
+    # General identifier occurrences in Lean scripts are report-only; native resolution
+    # decides actual constants, methods and implicit instances.
+    traceless = scan_uses({p: s for p, s in external_sources.items() if p.endswith(".lean")},
+                          set(census.get("population_names", [])))
+    try:
+        documents = external_uses.collect(root, external_sources)
+        native = external_uses.resolve_references(census, documents)
+    except external_uses.ExternalUseError as exc:
+        raise LeafAuditError(str(exc)) from exc
+    if tracked_external_sources(root) != external_sources or blanc_sources(root) != sources:
+        raise LeafAuditError("source population changed during native external collection")
+    result = analyze(census, sources, external, set(traceless), native)
+    result["external_script_population"] = sorted(documents)
     return census, result
 
 

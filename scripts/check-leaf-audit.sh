@@ -18,4 +18,6 @@ if [ "$#" -ne 1 ] || [ "$1" != "--self-test" ]; then
   exit 2
 fi
 
-cd "$ROOT" && exec python3 scripts/leaf_audit.py self-test
+cd "$ROOT" || exit 1
+python3 scripts/test-external-uses.py || exit $?
+exec python3 scripts/leaf_audit.py self-test
