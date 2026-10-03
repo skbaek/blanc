@@ -231,6 +231,8 @@ CONTRACTS = {
                            "Lift.WithdrawalRequest.UserOccurrence",
                            "Lift.WithdrawalRequest.ProtocolOccurrences",
                            "Lift.WithdrawalRequest.ModelBlockRequests",
+                           "Lift.WithdrawalRequest.WordHistory",
+                           "Lift.WithdrawalRequest.WordFifo",
                            "Lift.WithdrawalRequest.ResetOccurrence",
                            "Lift.WithdrawalRequest.ExactFeeDomain",
                            "Lift.WithdrawalRequest.NatLiveness",

@@ -670,6 +670,8 @@ import Blanc.Lift.WithdrawalRequest.ProtocolOccurrences
 import Blanc.Lift.WithdrawalRequest.ModelBlockRequests
 import Blanc.Lift.WithdrawalRequest.ResetWindowCount
 import Blanc.Lift.WithdrawalRequest.WordBudget
+import Blanc.Lift.WithdrawalRequest.WordHistory
+import Blanc.Lift.WithdrawalRequest.WordFifo
 
 -- The COMPOSITION stratum is strictly downstream of every contract family, so
 -- it is aggregated last. Roots aggregate composition; nothing imports back.

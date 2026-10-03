@@ -19,7 +19,7 @@ private theorem WordModelAdmission.prefix {bound : Nat}
   exact admitted before event (after ++ right) (by
     rw [equality, List.append_assoc, List.cons_append])
 
-private theorem wordModelOutputs_append (left right : List WordReplayEvent)
+theorem wordModelOutputs_append (left right : List WordReplayEvent)
     (state : Blanc.WithdrawalRequest.State) :
     wordModelOutputs state (left ++ right) = wordModelOutputs state left ++
       wordModelOutputs (left.foldl wordModelUpdate state) right := by
@@ -28,7 +28,7 @@ private theorem wordModelOutputs_append (left right : List WordReplayEvent)
   | cons event left ih =>
     simp only [List.cons_append, wordModelOutputs, ih, List.foldl_cons, List.append_assoc]
 
-private theorem wordModelOutputs_eq_nil (events : List WordReplayEvent)
+theorem wordModelOutputs_eq_nil (events : List WordReplayEvent)
     (state : Blanc.WithdrawalRequest.State)
     (nonSystem : ∀ event ∈ events, event.kind ≠ .system) :
     wordModelOutputs state events = [] := by
@@ -45,7 +45,7 @@ private theorem wordModelOutputs_eq_nil (events : List WordReplayEvent)
     | getter iterations output =>
       simp only [wordModelOutputs, kind, tail, List.nil_append]
 
-private theorem WordStorageReplay.non_system_kinds
+theorem WordStorageReplay.non_system_kinds
     {pre post : Stor} {events : List WordReplayEvent}
     (replay : WordStorageReplay pre events post)
     (nonSystem : ∀ event ∈ events, event.frame.sevm.caller ≠ systemAddress) :
@@ -57,6 +57,113 @@ private theorem WordStorageReplay.non_system_kinds
   have caller : event.frame.sevm.caller = systemAddress := by
     simpa only [wordEventInput, kind] using guard.input
   exact nonSystem event member caller
+
+/-- Model-free partition of one configured block's exact word events into
+the earlier history, the block's user transactions and its canonical
+withdrawal reset, with the request-boundary storage between them. -/
+theorem block_word_event_partition
+    {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    (history : ConfiguredHistoryTrace cfg checkpoint pre)
+    (block : ConfiguredBlockTrace cfg pre post)
+    (installed : SystemCodeInstalled checkpoint.state)
+    (senders : (ConfiguredHistoryTrace.step history block).NoSenderAt systemAddress)
+    (authorities : (ConfiguredHistoryTrace.step history block).NoAuthorityAt systemAddress)
+    (avoid : ∀ root ∈ (ConfiguredHistoryTrace.step history block).rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
+    (systemEmpty : checkpoint.state.getCode systemAddress = ByteArray.empty)
+    {events : List WordReplayEvent}
+    (replay : WordStorageReplay (checkpoint.state.getStor withdrawalRequestPredeployAddress) events
+      (post.state.getStor withdrawalRequestPredeployAddress))
+    (observed : events.map WordReplayEvent.frame =
+      (ConfiguredHistoryTrace.step history block).settledFrames.flatMap balanceFrameObservation) :
+    ∃ past transactionEvents : List WordReplayEvent, ∃ reset : WordReplayEvent,
+      events = (past ++ transactionEvents) ++ [reset] ∧
+      past.map WordReplayEvent.frame = history.settledFrames.flatMap balanceFrameObservation ∧
+      transactionEvents.map WordReplayEvent.frame =
+        block.bodyTrace.transactions.settledFrames.flatMap balanceFrameObservation ∧
+      reset.kind = .system ∧
+      reset.frame.pre.state = block.bodyTrace.requestBenv.state ∧
+      WordStorageReplay (checkpoint.state.getStor withdrawalRequestPredeployAddress)
+        (past ++ transactionEvents)
+        (block.bodyTrace.requestBenv.state.getStor withdrawalRequestPredeployAddress) ∧
+      WordStorageReplay (block.bodyTrace.requestBenv.state.getStor withdrawalRequestPredeployAddress)
+        [reset] (post.state.getStor withdrawalRequestPredeployAddress) ∧
+      ∀ state : Blanc.WithdrawalRequest.State,
+        wordModelOutputs state (past ++ transactionEvents) = wordModelOutputs state past ∧
+        wordModelOutputs state events = wordModelOutputs state past ++
+          emitted ((past ++ transactionEvents).foldl wordModelUpdate state) ∧
+        events.foldl wordModelUpdate state =
+          Blanc.WithdrawalRequest.system ((past ++ transactionEvents).foldl wordModelUpdate state) := by
+  obtain ⟨resetFrame, partition, _, resetCaller, _, resetPre, _, _, userCallers⟩ :=
+    block_protocol_observation_partition history block installed senders authorities avoid systemEmpty
+  have mapped : events.map WordReplayEvent.frame =
+      history.settledFrames.flatMap balanceFrameObservation ++
+        (block.bodyTrace.transactions.settledFrames.flatMap balanceFrameObservation ++ [resetFrame]) := by
+    rw [observed]
+    simp only [ConfiguredHistoryTrace.settledFrames, List.flatMap_append, partition]
+  obtain ⟨past, blockEvents, eventsEq, pastMap, blockMap⟩ := List.map_eq_append_iff.mp mapped
+  obtain ⟨transactionEvents, remaining, blockEq, transactionMap, remainingMap⟩ :=
+    List.map_eq_append_iff.mp blockMap
+  obtain ⟨reset, rest, remainingEq, resetEq, restMap⟩ := List.map_eq_cons_iff.mp remainingMap
+  have restEq : rest = [] := List.map_eq_nil_iff.mp restMap
+  have equality : events = (past ++ transactionEvents) ++ [reset] := by
+    rw [eventsEq, blockEq, remainingEq, restEq, List.append_assoc]
+  have splitReplay : WordStorageReplay (checkpoint.state.getStor withdrawalRequestPredeployAddress)
+      ((past ++ transactionEvents) ++ [reset]) (post.state.getStor withdrawalRequestPredeployAddress) :=
+    equality ▸ replay
+  have segments := splitReplay.split (left := past ++ transactionEvents) (right := [reset])
+  have resetGuard := segments.2.head_guard
+  have resetKind : reset.kind = .system := resetGuard.system_kind (by rw [resetEq]; exact resetCaller)
+  have prefixBoundary : (past ++ transactionEvents).foldl wordEventUpdate
+      (checkpoint.state.getStor withdrawalRequestPredeployAddress) =
+      block.bodyTrace.requestBenv.state.getStor withdrawalRequestPredeployAddress := by
+    rw [resetGuard.pre, resetEq]
+    change resetFrame.pre.state.getStor withdrawalRequestPredeployAddress = _
+    rw [resetPre]
+  have transactionReplay := (segments.1.split (left := past) (right := transactionEvents)).2
+  have transactionKinds := WordStorageReplay.non_system_kinds transactionReplay (by
+    intro event member
+    apply userCallers event.frame
+    rw [← transactionMap]
+    exact List.mem_map.mpr ⟨event, member, rfl⟩)
+  refine ⟨past, transactionEvents, reset, equality, pastMap, transactionMap, resetKind,
+    resetEq ▸ resetPre, prefixBoundary ▸ segments.1, prefixBoundary ▸ segments.2, ?_⟩
+  intro state
+  have prefixOutputs : wordModelOutputs state (past ++ transactionEvents) =
+      wordModelOutputs state past := by
+    rw [wordModelOutputs_append, wordModelOutputs_eq_nil transactionEvents _ transactionKinds,
+      List.append_nil]
+  refine ⟨prefixOutputs, ?_, ?_⟩
+  · rw [equality, wordModelOutputs_append, prefixOutputs]
+    simp only [wordModelOutputs, resetKind, List.append_nil]
+  · rw [equality, List.foldl_append]
+    simp only [List.foldl_cons, List.foldl_nil, wordModelUpdate, resetKind]
+
+/-- The block's request bytes follow from a model represented at its request boundary. -/
+theorem block_requests_of_request_rep {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    (history : ConfiguredHistoryTrace cfg checkpoint pre)
+    (block : ConfiguredBlockTrace cfg pre post)
+    (code : checkpoint.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode)
+    (model : Blanc.WithdrawalRequest.State)
+    (requestRep : RepresentsStorage (block.bodyTrace.requestBenv.state.getStor
+      withdrawalRequestPredeployAddress).get model) :
+    block.bodyTrace.requests.withdrawalOut.returnData = systemOutput model ∧
+    block.blockOutput.requests = block.bodyTrace.transactionBout.requests ++
+      optionalRequestEntry 0 block.bodyTrace.requests.depositRequests ++
+      optionalRequestEntry 1 (systemOutput model) ++
+      optionalRequestEntry 2 block.bodyTrace.requests.consolidationOut.returnData ∧
+    (optionalRequestEntry 1 block.bodyTrace.requests.withdrawalOut.returnData = [] ↔
+      emitted model = []) := by
+  have baseRep : RepresentsStorage
+      ((systemProtocolBase block.bodyTrace.requestBenv).getStorVal
+        withdrawalRequestPredeployAddress) model := by
+    obtain ⟨_, _, _, _, _, _, _, _, _, _, _, baseState, _⟩ :=
+      systemProtocol_seed block.bodyTrace.requestBenv
+    change RepresentsStorage ((systemProtocolBase block.bodyTrace.requestBenv).state.getStor
+      withdrawalRequestPredeployAddress).get model
+    rw [baseState]
+    exact requestRep
+  exact block_requests_fifo history block code model baseRep
 
 /-- Derive this actual block's model request boundary and bytes from INIT and
 the exact ordered replay. Nat payment is deliberately still conditional. -/
@@ -113,78 +220,23 @@ theorem block_model_requests_of_nat_paid
     apply installed (withdrawalRequestPredeployAddress, Blanc.withdrawalRequestCode)
     simp only [systemContracts, List.mem_cons, List.not_mem_nil, or_false]
     exact Or.inr (Or.inr (Or.inl trivial))
-  obtain ⟨resetFrame, partition, _, resetCaller, _, resetPre, _, _, userCallers⟩ :=
-    block_protocol_observation_partition history block installed senders authorities avoid systemEmpty
-  have mapped : events.map WordReplayEvent.frame =
-      history.settledFrames.flatMap balanceFrameObservation ++
-        (block.bodyTrace.transactions.settledFrames.flatMap balanceFrameObservation ++ [resetFrame]) := by
-    rw [observed]
-    simp only [ConfiguredHistoryTrace.settledFrames, List.flatMap_append, partition]
-  obtain ⟨past, blockEvents, eventsEq, pastMap, blockMap⟩ := List.map_eq_append_iff.mp mapped
-  obtain ⟨transactionEvents, remaining, blockEq, transactionMap, remainingMap⟩ :=
-    List.map_eq_append_iff.mp blockMap
-  obtain ⟨reset, rest, remainingEq, resetEq, restMap⟩ := List.map_eq_cons_iff.mp remainingMap
-  have restEq : rest = [] := List.map_eq_nil_iff.mp restMap
-  have equality : events = (past ++ transactionEvents) ++ [reset] := by
-    rw [eventsEq, blockEq, remainingEq, restEq, List.append_assoc]
+  obtain ⟨past, transactionEvents, reset, equality, pastMap, transactionMap, resetKind, resetPre,
+      prefixReplay, _, outputs⟩ :=
+    block_word_event_partition history block installed senders authorities avoid systemEmpty
+      replay observed
+  obtain ⟨prefixOutputs, fullOutputs, finalModel⟩ := outputs initial
   let prefixEvents := past ++ transactionEvents
-  let prefixStorage := prefixEvents.foldl wordEventUpdate
-    (checkpoint.state.getStor withdrawalRequestPredeployAddress)
   let model := prefixEvents.foldl wordModelUpdate initial
-  have splitReplay : WordStorageReplay (checkpoint.state.getStor withdrawalRequestPredeployAddress)
-      (prefixEvents ++ [reset]) (post.state.getStor withdrawalRequestPredeployAddress) :=
-    equality ▸ replay
-  have segments := splitReplay.split (left := prefixEvents) (right := [reset])
-  have resetGuard : WordReplayGuard prefixStorage reset := segments.2.head_guard
-  have resetKind : reset.kind = .system := resetGuard.system_kind (by rw [resetEq]; exact resetCaller)
-  have prefixBoundary : prefixStorage =
-      block.bodyTrace.requestBenv.state.getStor withdrawalRequestPredeployAddress := by
-    rw [resetGuard.pre, resetEq]
-    change resetFrame.pre.state.getStor withdrawalRequestPredeployAddress = _
-    rw [resetPre]
   have admitted := history_word_model_admission_of_nat_paid
     (.step history block) code replay observed natPaid
   have prefixAdmission : WordModelAdmission (2 * 2 ^ 64) initial prefixEvents :=
     (show WordModelAdmission (2 * 2 ^ 64) initial (prefixEvents ++ [reset]) from
       equality ▸ admitted).prefix
-  obtain ⟨prefixHistory, _, prefixRep⟩ := WordStorageReplay.model segments.1 (Nat.le_refl (2 * 2 ^ 64))
-    History.start ModelResources.start init prefixAdmission
+  obtain ⟨prefixHistory, _, requestRep⟩ := WordStorageReplay.model prefixReplay
+    (Nat.le_refl (2 * 2 ^ 64)) History.start ModelResources.start init prefixAdmission
   obtain ⟨fullHistory, _, finalRep⟩ := replay.model (Nat.le_refl (2 * 2 ^ 64))
     History.start ModelResources.start init admitted
-  have transactionReplay := (segments.1.split (left := past) (right := transactionEvents)).2
-  have transactionKinds := WordStorageReplay.non_system_kinds transactionReplay (by
-    intro event member
-    apply userCallers event.frame
-    rw [← transactionMap]
-    exact List.mem_map.mpr ⟨event, member, rfl⟩)
-  have prefixOutputs : wordModelOutputs initial prefixEvents = wordModelOutputs initial past := by
-    change wordModelOutputs initial (past ++ transactionEvents) = _
-    rw [wordModelOutputs_append, wordModelOutputs_eq_nil transactionEvents _ transactionKinds,
-      List.append_nil]
-  have fullOutputs : wordModelOutputs initial events = wordModelOutputs initial past ++ emitted model := by
-    rw [equality, wordModelOutputs_append]
-    simp only [wordModelOutputs, resetKind, List.append_nil]
-    change wordModelOutputs initial prefixEvents ++ emitted model = _
-    rw [prefixOutputs]
-  have finalModel : events.foldl wordModelUpdate initial = Blanc.WithdrawalRequest.system model := by
-    rw [equality, List.foldl_append]
-    simp only [List.foldl_cons, List.foldl_nil, wordModelUpdate, resetKind]
-    rfl
-  have requestRep : RepresentsStorage (block.bodyTrace.requestBenv.state.getStor
-      withdrawalRequestPredeployAddress).get model := by
-    change RepresentsStorage prefixStorage.get model at prefixRep
-    rw [prefixBoundary] at prefixRep
-    exact prefixRep
-  have baseRep : RepresentsStorage
-      ((systemProtocolBase block.bodyTrace.requestBenv).getStorVal
-        withdrawalRequestPredeployAddress) model := by
-    obtain ⟨_, _, _, _, _, _, _, _, _, _, _, baseState, _⟩ :=
-      systemProtocol_seed block.bodyTrace.requestBenv
-    change RepresentsStorage ((systemProtocolBase block.bodyTrace.requestBenv).state.getStor
-      withdrawalRequestPredeployAddress).get model
-    rw [baseState]
-    exact requestRep
-  have payload := block_requests_fifo history block code model baseRep
+  have payload := block_requests_of_request_rep history block code model requestRep
   have beforeHistory : History initial model (wordModelSubmissions prefixEvents)
       (wordModelOutputs initial past) := by
     simpa only [List.nil_append, prefixOutputs] using prefixHistory
@@ -196,7 +248,7 @@ theorem block_model_requests_of_nat_paid
         (events.foldl wordModelUpdate initial).queue := by
     simpa only [initial, List.nil_append] using afterHistory.conservation
   exact ⟨past, transactionEvents, reset, equality, pastMap, transactionMap, resetKind,
-    resetEq ▸ resetPre, beforeHistory, requestRep, payload.1, payload.2.1, payload.2.2,
+    resetPre, beforeHistory, requestRep, payload.1, payload.2.1, payload.2.2,
     fullOutputs, finalModel, afterHistory, conservation, finalRep⟩
 
 private theorem WordStorageReplay.model_zero_user_span
@@ -512,16 +564,7 @@ theorem first_enabled_block_model_requests
       withdrawalRequestPredeployAddress).get model := by
     rw [← prefixBoundary]
     exact prefixRep
-  have baseRep : RepresentsStorage
-      ((systemProtocolBase block.bodyTrace.requestBenv).getStorVal
-        withdrawalRequestPredeployAddress) model := by
-    obtain ⟨_, _, _, _, _, _, _, _, _, _, _, baseState, _⟩ :=
-      systemProtocol_seed block.bodyTrace.requestBenv
-    change RepresentsStorage ((systemProtocolBase block.bodyTrace.requestBenv).state.getStor
-      withdrawalRequestPredeployAddress).get model
-    rw [baseState]
-    exact requestRep
-  have payload := block_requests_fifo history block code model baseRep
+  have payload := block_requests_of_request_rep history block code model requestRep
   have resetAdmission : WordModelAdmission (2 * 2 ^ 64) model [reset] := by
     intro before event after eq
     have member : event ∈ [reset] := by
