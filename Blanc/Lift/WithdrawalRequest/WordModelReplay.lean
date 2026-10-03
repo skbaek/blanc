@@ -1,5 +1,5 @@
 import Blanc.Lift.WithdrawalRequest.WordReplay
-import Blanc.Lift.WithdrawalRequest.ModelBounds
+import Blanc.Lift.WithdrawalRequest.SubmissionLayout
 import Blanc.Lift.WithdrawalRequest.SystemStorage
 
 /-!
