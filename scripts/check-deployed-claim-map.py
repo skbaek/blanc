@@ -72,6 +72,7 @@ H3 = [
     "5.4 Lido CircuitBreaker",
     "5.5 Vyper V+",
     "5.6 Vyper V−",
+    "5.7 EIP-7002 withdrawal requests",
 ]
 
 # The headline results the map exists to carry.  A row deleted from the document fails here.
