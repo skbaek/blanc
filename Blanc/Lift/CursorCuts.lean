@@ -69,7 +69,7 @@ theorem cursor_jinst_forward {code : ByteArray} {c : Cert}
 
 /-- A literal linear certificate prefix is crossed by composing the actual
 next cuts. The final cursor and raw location are derived, never assumed. -/
-theorem cursor_nexts_forward {code : ByteArray} {c : Cert}
+theorem cursor_nexts_line_forward {code : ByteArray} {c : Cert}
     (checked : Cert.check code c = true) {F : Exec.Deriv} {κ : Cursor}
     (ok : CursorOK code c F κ) (ns : List Ninst) (tail : SFunc)
     (tree : κ.f = ns.foldr SFunc.next tail)
@@ -79,11 +79,12 @@ theorem cursor_nexts_forward {code : ByteArray} {c : Cert}
       Exec.Deriv.ParentPrefix F N ∧
       N.pc = F.pc + (ns.map Ninst.size).sum ∧
       N.sevm = F.sevm ∧ N.exn = F.exn ∧
-      CursorOK code c N κ' ∧ κ'.f = tail := by
+      CursorOK code c N κ' ∧ κ'.f = tail ∧
+      Line.Run F.sevm F.devm ns N.devm := by
   induction ns generalizing F κ with
   | nil =>
     exact ⟨F, κ, .refl F,
-      (by simp only [List.map_nil, List.sum_nil, Nat.add_zero]), rfl, rfl, ok, tree⟩
+      (by simp only [List.map_nil, List.sum_nil, Nat.add_zero]), rfl, rfl, ok, tree, .nil⟩
   | cons n ns ih =>
     change κ.f = .next n (ns.foldr SFunc.next tail) at tree
     obtain ⟨next, cursor, edge, stepPc, primitive, synthetic, stateful, placed⟩ :=
@@ -98,12 +99,31 @@ theorem cursor_nexts_forward {code : ByteArray} {c : Cert}
       subst f
       cases synthetic
       rfl
-    obtain ⟨N, κ', path, pc, sameSevm, sameOutcome, finalOk, finalTree⟩ :=
+    obtain ⟨N, κ', path, pc, sameSevm, sameOutcome, finalOk, finalTree, line⟩ :=
       ih placed nextTree (nextOutcome.trans success) nextFork
     refine ⟨N, κ', .step edge path, ?_, sameSevm.trans nextSevm,
-      sameOutcome.trans nextOutcome, finalOk, finalTree⟩
-    rw [stepPc] at pc
-    simpa only [List.map_cons, List.sum_cons, Nat.add_assoc] using pc
+      sameOutcome.trans nextOutcome, finalOk, finalTree, ?_⟩
+    · rw [stepPc] at pc
+      simpa only [List.map_cons, List.sum_cons, Nat.add_assoc] using pc
+    · rw [nextSevm] at line
+      exact .cons primitive.toRun line
+
+/-- A literal linear certificate prefix is crossed by composing the actual
+next cuts. The final cursor and raw location are derived, never assumed. -/
+theorem cursor_nexts_forward {code : ByteArray} {c : Cert}
+    (checked : Cert.check code c = true) {F : Exec.Deriv} {κ : Cursor}
+    (ok : CursorOK code c F κ) (ns : List Ninst) (tail : SFunc)
+    (tree : κ.f = ns.foldr SFunc.next tail)
+    {post : Devm} (success : F.exn = .ok post)
+    (fork : CoveredFork F.sevm.benvStat.fork) :
+    ∃ (N : Exec.Deriv) (κ' : Cursor),
+      Exec.Deriv.ParentPrefix F N ∧
+      N.pc = F.pc + (ns.map Ninst.size).sum ∧
+      N.sevm = F.sevm ∧ N.exn = F.exn ∧
+      CursorOK code c N κ' ∧ κ'.f = tail := by
+  obtain ⟨N, κ', path, pc, sameSevm, sameOutcome, placed, finalTree, line⟩ :=
+    cursor_nexts_line_forward checked ok ns tail tree success fork
+  exact ⟨N, κ', path, pc, sameSevm, sameOutcome, placed, finalTree⟩
 
 /-- A checked branch supplies its decoded JUMPI and its actual successor;
 only the real step chooses which side survives. -/
