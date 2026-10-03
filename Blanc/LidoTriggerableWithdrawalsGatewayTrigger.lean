@@ -367,13 +367,10 @@ def zeroMsgValueRevert : Func :=
 def zeroValidatorsDataRevert : Func :=
   Func.revertData (zeroArgumentData "validatorsData")
 
-def resumedExpectedRevert : Func :=
-  selectorRevert resumedExpectedSelector
 
 def feeRefundFailedRevert : Func :=
   selectorRevert feeRefundFailedSelector
 
-def arithmeticPanicRevert : Func := Func.revertData (panicData 0x11)
 def divisionPanicRevert : Func := Func.revertData (panicData 0x12)
 def assertionPanicRevert : Func := Func.revertData (panicData 0x01)
 
@@ -795,34 +792,10 @@ def afterValidation : Func :=
              ((.call zeroValidatorsDataSlot) <?> .call consumeQuotaSlot)))))))
 
 /-- The runtime-integration body.  Its local calls use the slot table above;
-the final runtime must rebase them together with `localAux`. -/
+the final runtime rebases these calls through its integrated Trigger table. -/
 def triggerFullWithdrawals (dp : DeployParams) : Func :=
   validateCalldata
 
-def localAuxWithRoleFailure (dp : DeployParams) (roleFailure : Func) : List Func :=
-  [ Func.revert,
-    zeroMsgValueRevert,
-    zeroValidatorsDataRevert,
-    resumedExpectedRevert,
-    exitLimitExceededRevert,
-    insufficientFeeRevert,
-    feeRefundFailedRevert,
-    arithmeticPanicRevert,
-    divisionPanicRevert,
-    assertionPanicRevert,
-    -- AccessControl's dynamic source string is the one deliberate policy hook.
-    roleFailure,
-    validateArrayLoop,
-    afterValidation,
-    consumeExitRequestLimit (.call afterQuotaSlot),
-    afterQuota dp,
-    encodeArraysLoop,
-    afterEncoding,
-    bubbleRevert,
-    afterVaultCall dp,
-    refundCall,
-    balanceCheck,
-    afterNestedValidation ]
 
 
 /-- Shift every local table call by `delta`.  If the first appended trigger aux
