@@ -999,6 +999,12 @@ supplies the actual entering occurrence for each selected non-root frame.
 expanded queue and supplies the proven provenance to local chunk producers,
 deriving the concrete committed log endpoint without a target-frame model
 endpoint premise. Nested activity inside a selected frame remains in its expansion.
+`Exec.retainedTargetTurnsAt` starts that same retained traversal at an original
+entering path. `Exec.RetainedTargetTurn.rebase` changes only original paths, and
+`retainedTargetTurnsAt_eq_map_prefix` identifies it with the ordered map of the
+unprefixed traversal. It preserves child counters, duplicates, state boundaries
+and complete failed-settlement pruning; it supplies no new entering occurrence
+or contract-specific source queue.
 The existing `goal-head:StateReplay` recipe selects chronology continuity;
 the joint chunk/Link/observation premises are discovered through this registry.
 
@@ -3140,6 +3146,24 @@ contract-neutral.
   `cursor_of_parentPrefix`, with `CursorOK.exec_call_or_staticcall` (a reached
   node spawns only by `CALL`/`STATICCALL`), in
   [`Blanc/Lift/Cursor.lean`](../Blanc/Lift/Cursor.lean).
+- To advance a checked certificate cursor through an actual successful raw
+  suffix, use [`Blanc/Lift/CursorCuts.lean`](../Blanc/Lift/CursorCuts.lean).
+  `cursor_next_forward` derives the actual `ParentStep`, instruction witness
+  with `Cursor.DescOf`, `SStep`, `ConfStep` and successor `CursorOK`.
+  `cursor_jinst_forward` reuses the decoded jump edge; `cursor_branch_forward`
+  derives the faithful branch disjunction from the checked tree and literal
+  abstract target, without choosing the branch as a premise.
+  `cursor_nexts_line_forward` composes a literal instruction list into a real
+  `ParentPrefix`, pc sum, preserved static environment/outcome, checked tail
+  cursor and `Line.Run` to the same actual endpoint.
+  `cursor_nexts_line_cont_forward` additionally preserves the identical full
+  continuation stack, including each pending tag, frame and return metadata.
+  The older linear theorem projects this stronger result. `cursor_nexts_forward`
+  is its cursor-only compatibility projection. These are certificate/SFunc
+  cuts, not the compiled Func prefix API. They require raw success and a
+  covered fork; they do not establish child context, settlement or ordered
+  history. The joint node/tree premises are discovered here because the
+  existential result alone is not a reliable recipe trigger.
 - Every same-frame node with its machine state (all outcomes): the stateful
   prefix lift `reach_of_parentPrefix` (from `cursor_stepS`, which adds one
   `ConfStep` to each `cursor_step`) places the node at a `Reach (StepIn R)` from
@@ -3273,6 +3297,16 @@ contract-neutral.
   `ri_staticcall_bounded` additionally derives `out.length < 2^256` from the
   actual static-call producer, for the same outcome and full return data. This
   bound is independent of the caller's output window and needs no callee premise.
+  For literal call-success and return-width guards around that primitive, use
+  [`Blanc/Lift/StaticCallGuard.lean`](../Blanc/Lift/StaticCallGuard.lean):
+  `staticCallGuard_invP` keeps the original instruction predicate and witness,
+  full reply, bounded producer and original continuation; `returnWidthGuard_invP`
+  derives the ABI minimum width from the actual guard. Their `_exact` forms
+  consume the genuine compiled call, actual returned stack/gas and continuation.
+  Request/output windows and `PtrMem` are parameterized; replies need not have
+  exactly32 bytes, and the returned world is not replaced by its pre-call world.
+  The required literal tree and failure facts are not selected reliably by a
+  general `RunCutP` or `RunExact` goal head, so these entries remain registry-only.
   `CALLER` (`rx_caller`, `ri_caller`), `KECCAK256` inverted (`ri_keccak`), `LOG3`
   (`rx_log3`, `ri_log3`), `SSTORE` forward at its selected cost (`rx_sstore`), `RETURN`
   inverted (`ri_return`), the memory facts `Mem.reads_data`/`Mem.read_write_word_of_wf`, and
@@ -3381,6 +3415,13 @@ contract-neutral.
   replacement and reads within the allocation. The Pair's `GetterMemory` and
   `GetterWalk` consume it for the actual one-word return at offset128; use this
   carrier when the fixed pointer96 of `FpMem` does not describe the bytecode.
+  For arbitrary byte writes, `PtrMem.write_bytes_of_le` in
+  [`Blanc/Lift/ByteWindowMemory.lean`](../Blanc/Lift/ByteWindowMemory.lean)
+  preserves that same pointer/allocation carrier when the whole write fits
+  inside the allocation and is disjoint from the pointer word at offsets64..95.
+  It consumes the actual byte list and does not restrict it to a word-sized
+  reply. The bare `PtrMem` head cannot distinguish this byte-write obligation
+  from initialization, word writes or pointer changes; this is registry-only.
 - Gas-exact writer walks for solc-0.4-style runtimes: the scratch-memory invariant `FpMem n M` (word-aligned,
   free pointer `0x60`, kept for an arbitrary `M`; `FpMem.init`, `FpMem.write`, `FpMem.write_out`,
   `FpMem.readback`, `scratchW`), its steps (`rx_mstoreF`, `rx_mstoreOut`, `rx_mloadFp`, `rx_keccakF`,
