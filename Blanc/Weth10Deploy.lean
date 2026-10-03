@@ -472,9 +472,6 @@ private theorem deploymentChainIdLeaf_size :
       (⟨0, 0⟩ : DeployParams)).compileShape.byteSize = 64 := by
   decide +kernel
 
-private theorem approveAndCallLeaf_size :
-    approveAndCallLeaf.compileShape.byteSize = 239 := by
-  decide +kernel
 
 private theorem dispatch23_26_1_size :
     (dispatch23_26_1 (⟨0, 0⟩ : DeployParams)).compileShape.byteSize =

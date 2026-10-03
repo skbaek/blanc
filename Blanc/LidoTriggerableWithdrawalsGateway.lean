@@ -923,10 +923,6 @@ theorem runtimeCode_length (dp : DeployParams) : (runtimeCode dp).length = 8094 
   ((Prog.length_compile (runtime_compile dp)).trans
     (runtimeStructuralLength_eq_zero dp)).trans runtimeStructuralLengthZero
 
-def sourceSstoreSiteCount : Func → Nat :=
-  Func.sourceSiteCount fun
-    | .reg .sstore => true
-    | _ => false
 
 end LidoTriggerableWithdrawalsGateway
 end Blanc

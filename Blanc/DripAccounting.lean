@@ -521,11 +521,6 @@ def dripPost (s : Snapshot) (elapsed : Nat) : Snapshot :=
   ⟨freshNat s.chi elapsed, s.rho + elapsed,
     s.coalitionUnits, s.totalUnits, s.balance⟩
 
-def dripStep (s : Snapshot) (elapsed : Nat) : RealizedStep :=
-  { pre := s
-    kind := .drip elapsed
-    post := dripPost s elapsed
-    effect := .drip s.chi s.rho s.coalitionUnits s.totalUnits s.balance elapsed }
 
 /-! ## G5 — pure segmentation -/
 

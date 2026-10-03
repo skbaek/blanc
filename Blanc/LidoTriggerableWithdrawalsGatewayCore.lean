@@ -36,7 +36,6 @@ structure ExitLimitData where
   prevTimestamp : B256
   frameDurationInSec : B256
   exitsPerFrame : B256
-deriving DecidableEq
 
 structure LogicalState where
   resumeSince : B256
@@ -48,17 +47,12 @@ structure LogicalState where
 abbrev low252Mask : B256 := TaggedStorage.low252Mask
 def addressMask : B256 := Nat.toB256 (2 ^ 160 - 1)
 
-abbrev regionWord (region : Nat) : B256 := TaggedStorage.regionWord region
 
 abbrev taggedSlot (region : Nat) (payload : B256) : B256 :=
   TaggedStorage.encode region payload
 
 def configRegion : Nat := 1
-def roleLookupRoleRegion : Nat := 2
-def roleLookupAccountRegion : Nat := 3
-def roleLookupIndexRegion : Nat := 4
 def enumRoleRegion : Nat := 5
-def enumAccountRegion : Nat := 6
 
 def resumeSinceSlot : B256 := taggedSlot configRegion 0
 def maxExitRequestsLimitSlot : B256 := taggedSlot configRegion 1
@@ -269,8 +263,6 @@ def selGetRoleMemberCount : B256 := 0xca15c873
 def entry (name signature : String) (args : List ArgType) (payable : Bool) : SelectorEntry :=
   { name, signature, selector := selector name args, payable }
 
-def entryLiteral (name signature : String) (sel : B256) (payable : Bool) : SelectorEntry :=
-  { name, signature, selector := sel, payable }
 
 /-! ## Source inventory vocabulary -/
 

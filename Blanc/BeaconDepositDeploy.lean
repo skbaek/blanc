@@ -255,9 +255,6 @@ private theorem constructorSourceSiteFacts :
     Prog.SourceSite.pcs constructorExternalExecutionSourceSites = [98] := by
   decide +kernel
 
-theorem constructorSstoreSourceSites_pcs :
-    Prog.SourceSite.pcs constructorSstoreSourceSites = [137] :=
-  constructorSourceSiteFacts.2.1
 
 theorem constructorSstoreSourceSites_coordinates :
     Prog.SourceSite.coordinates constructorSstoreSourceSites = [(4, 137)] := by

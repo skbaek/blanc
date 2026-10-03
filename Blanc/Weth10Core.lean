@@ -236,7 +236,6 @@ structure LogicalState where
   flashMinted : B256
   eth : B256
 
-abbrev AllowancePair := Adr × Adr
 
 
 /-- Explicitly maps the deployed reference's `address(this)` to the Blanc

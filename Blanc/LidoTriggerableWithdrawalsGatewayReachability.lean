@@ -73,11 +73,6 @@ private theorem addAccessedStorageKey_getCode_local
     (base : Devm) (a : Adr) (k : B256) (x : Adr) :
     (addAccessedStorageKey base a k).getCode x = base.getCode x := rfl
 
-private theorem afterSstore_returnData_local
-    (sevm : Sevm) (base : Devm) (key value : B256) :
-    (afterSstore sevm base key value).returnData = base.returnData := by
-  unfold afterSstore
-  split <;> rfl
 
 private theorem afterSstore_transientStorage_local
     (sevm : Sevm) (base : Devm) (key value : B256) :
@@ -116,10 +111,6 @@ private theorem pauseResumeWarm_output (sevm : Sevm) (base : Devm) :
   simp only [pauseResumeWarm, pauseRoleWarm,
     addAccessedStorageKey_output_local]
 
-private theorem pauseResumeWarm_returnData (sevm : Sevm) (base : Devm) :
-    (pauseResumeWarm sevm base).returnData = base.returnData := by
-  simp only [pauseResumeWarm, pauseRoleWarm,
-    addAccessedStorageKey_returnData_local]
 
 private theorem pauseResumeWarm_logs (sevm : Sevm) (base : Devm) :
     (pauseResumeWarm sevm base).logs = base.logs := by
@@ -155,11 +146,6 @@ private theorem pauseResumeWarm_state (sevm : Sevm) (base : Devm) :
   simp only [pauseResumeWarm, pauseRoleWarm,
     addAccessedStorageKey_state_local]
 
-private theorem pauseResumeWarm_getCode
-    (sevm : Sevm) (base : Devm) (a : Adr) :
-    (pauseResumeWarm sevm base).getCode a = base.getCode a := by
-  simp only [pauseResumeWarm, pauseRoleWarm,
-    addAccessedStorageKey_getCode_local]
 
 private theorem pauseResumeWarm_getStorVal
     (sevm : Sevm) (base : Devm) (a : Adr) (key : B256) :
@@ -1182,50 +1168,6 @@ private theorem pauseForFinite_runCompiledTo
   unfold arg cdl at writeRun
   exact writeRun
 
-/-- Lift the finite body through the successful nonzero and non-sentinel
-duration guards.  The two tests and their selected branches cost `47` gas. -/
-private theorem pauseForUnpausedFinite_runCompiledTo
-    {fs : List Func} {sevm : Sevm} {base : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    {duration : B256} {G : Nat}
-    (harg : Sevm.dataWord sevm 4 = duration)
-    (hresume : base.getStorVal sevm.currentTarget resumeSinceSlot = 0)
-    (horiginal : getOrigStorVal sevm sevm.currentTarget resumeSinceSlot = 0)
-    (hwarm : (sevm.currentTarget, resumeSinceSlot) ∈
-      base.accessedStorageKeys)
-    (hstatic : sevm.isStatic = false)
-    (hduration : duration ≠ 0)
-    (hfinite : duration ≠ pauseInfinitely)
-    (htime : sevm.benvStat.time < duration + sevm.benvStat.time) :
-    ∃ post, Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], pauseAuthScratch sevm.caller.toB256, G + 21107, base.stateGas⟩)
-      pauseForUnpaused (.ok post) := by
-  obtain ⟨post, finiteRun⟩ := pauseForFinite_runCompiledTo (hfork := hfork)
-    (fs := fs) (sevm := sevm) (base := base)
-    (duration := duration) (G := G) harg hresume horiginal hwarm hstatic htime
-  -- Stage opaquely (as in `pauseForFinite_runCompiledTo` above).
-  revert finiteRun
-  generalize (pauseAuthScratch sevm.caller.toB256) = staged4
-  intro finiteRun
-  refine ⟨post, ?_⟩
-  unfold pauseForUnpaused arg cdl
-  func_run (3) [0]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  case h_val =>
-    rw [show 32 * (0 : B256) + 4 = 4 by decide, harg]
-    simp only [B256.eqCheck, hduration, ↓reduceIte]
-  func_run (1)
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  func_run (4) [0]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  case h_val =>
-    rw [show 32 * (0 : B256) + 4 = 4 by decide, harg]
-    simp only [B256.eqCheck, Ne.symm hfinite, ↓reduceIte]
-  func_run (1)
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  have hgas : G + 21107 - 47 = G + 21060 := by omega
-  rw [hgas]
-  exact finiteRun
 
 /-! ## The pause-state guard -/
 
@@ -1794,51 +1736,6 @@ private theorem pauseSentinelEventTail_exact_runCompiledTo
   · simpa only [show ((0 : B256) * 32).toNat = 0 by decide,
       gBase, gVerylow, pauseEvent] using eventRun
 
-/-- The sentinel store and its fixed event consume exactly `21028` gas. -/
-private theorem pauseForSentinel_runCompiledTo
-    {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (hresume : base.getStorVal sevm.currentTarget resumeSinceSlot = 0)
-    (horiginal : getOrigStorVal sevm sevm.currentTarget resumeSinceSlot = 0)
-    (hwarm : (sevm.currentTarget, resumeSinceSlot) ∈
-      base.accessedStorageKeys)
-    (hstatic : sevm.isStatic = false) :
-    ∃ post, Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], pauseAuthScratch sevm.caller.toB256, G + 21028, base.stateGas⟩)
-      pauseForSentinel (.ok post) := by
-  obtain ⟨post, eventRun⟩ := pauseSentinelEventTail_runCompiledTo
-    (fs := fs) (sevm := sevm)
-    (base := afterSstore sevm base resumeSinceSlot pauseInfinitely)
-    (G := G) hstatic
-  refine ⟨post, ?_⟩
-  unfold pauseForSentinel emitOneWord
-  apply Func.RunCompiledTo.next
-  · exact Ninst.runCompiled_pushB256
-      (c := gVerylow) (G := G + 21025)
-      (pushCost_of_ne_zero (by decide +kernel))
-      (by simp only [Devm.gasLeft_setMach, gVerylow])
-      (by simp only [Devm.stack_setMach, List.length_nil]; omega)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
-  apply Func.RunCompiledTo.next
-  · exact Ninst.runCompiled_pushB256
-      (c := gVerylow) (G := G + 21022)
-      (pushCost_of_ne_zero (by decide +kernel))
-      (by simp only [Devm.gasLeft_setMach, gVerylow])
-      (by simp only [Devm.stack_setMach, List.length_cons,
-        List.length_nil]; omega)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
-  rw [show G + 21022 = G + 1022 + 20000 from by omega]
-  apply Func.RunCompiledTo.next
-  · exact pauseFiniteSstore_runCompiled (hfork := hfork)
-      (G := G + 1022) hresume horiginal hwarm hstatic
-      (by decide +kernel)
-  -- Collapse the push-lemma projection chain: over the folded scratch
-  -- image the defeq would otherwise unfold past `maxRecDepth`.
-  simp only [Devm.stack_setMach, Devm.memory_setMach]
-  have hsg : (afterSstore sevm base resumeSinceSlot pauseInfinitely).stateGas =
-      base.stateGas := afterSstore_stateGas
-  rw [hsg] at eventRun
-  exact eventRun
 
 private theorem pauseForSentinel_exact_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}

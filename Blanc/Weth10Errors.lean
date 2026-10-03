@@ -84,37 +84,12 @@ def LockedError.reason : LockedError → String
   | .ethTransfer => "WETH: ETH transfer failed"
   | .etherTransfer => "WETH: Ether transfer failed"
 
-def LockedError.slot : LockedError → Nat
-  | .flashToken => flashTokenErrorSlot
-  | .individualLimit => individualLimitErrorSlot
-  | .totalLimit => totalLimitErrorSlot
-  | .flashFailed => flashFailedErrorSlot
-  | .allowance => allowanceErrorSlot
-  | .burnBalance => burnBalanceErrorSlot
-  | .expiredPermit => expiredPermitErrorSlot
-  | .invalidPermit => invalidPermitErrorSlot
-  | .transferBalance => transferBalanceErrorSlot
-  | .ethTransfer => ethTransferErrorSlot
-  | .etherTransfer => etherTransferErrorSlot
 
 
 /-! ## Exact empty and bubbled callback errors -/
 
-/-- The post-`EXTCODESIZE` continuation shared by typed Boolean callbacks and
-the flash callback: a zero code size becomes a nonzero branch flag and
-empty-reverts before any child `CALL`. -/
-def codelessCallbackCost : Nat :=
-  gVerylow + (gVerylow + gHigh + gJumpdest) + (gBase + gBase)
 
 
-/-- Exact continuation cost when a preceding child call returned failure.
-It includes `ISZERO`, the taken branch, the internal bubble tail-call and the
-complete `RETURNDATACOPY; REVERT` program. -/
-def bubbleContinuationCost (devm : Devm) : Nat :=
-  gVerylow +
-    (gVerylow + gHigh + gJumpdest) +
-    (gVerylow + gMid + gJumpdest) +
-    revertReturnDataCost devm
 
 
 /-- The exact post-`CALL` decoder embedded in `flashLoan`. -/
@@ -157,7 +132,6 @@ def shortReturnCost : Nat :=
     (gVerylow + gHigh + gJumpdest) +
     (gBase + gBase)
 
-theorem shortReturnCost_eq : shortReturnCost = 42 := by decide
 
 
 /-- The successful-call/full-word prefix costs exactly 37 gas before entering

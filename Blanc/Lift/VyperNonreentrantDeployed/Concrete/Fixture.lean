@@ -11,12 +11,8 @@ namespace Blanc.Lift.VyperNonreentrantDeployed.Concrete
 
 open Jaune Blanc.ConcreteRun
 
-/-- A big-endian 32-byte ABI word. -/
-def word (n : Nat) : Bytes :=
-  (List.range 32).reverse.map fun i => ((n >>> (8 * i)) % 256).toUInt8
 
 def attacker : Adr := 0xa11ce00000000000000000000000000000000a11
-def receiver : Adr := 0xa11ce00000000000000000000000000000000a11
 
 
 /-- Arbitrary concrete pool storage at the proxy (the storage owner). -/
@@ -27,23 +23,8 @@ def poolStorage : List (Nat × Nat) :=
    (9, 0), (10, 0), (11, 1000000000000000000), (12, 1000000000000000000),
    (0x1d, 1800), (0x1a, 1800)]
 
-def poolState : State :=
-  poolStorage.foldl (fun w kv => w.setStorVal proxyAddress kv.1.toB256 kv.2.toB256)
-    (.empty : State)
 
-def implSevmWith (code : ByteArray) (data : Bytes) : Sevm :=
-  { (default : Sevm) with
-    caller := attacker
-    currentTarget := proxyAddress
-    target := some proxyAddress
-    gas := 10000000
-    data := data
-    codeAddress := some implementationAddress
-    code := code
-    depth := 1022 }
 
-def implDevm (gas : Nat) (world : State) : Devm :=
-  ((default : Devm).withGasLeft gas).withState world
 
 
 end Blanc.Lift.VyperNonreentrantDeployed.Concrete

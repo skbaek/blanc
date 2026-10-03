@@ -84,7 +84,6 @@ structure DebitProvenance where
   rawSource : B256
   source : Adr
   branch : DebitBranch
-deriving DecidableEq
 
 /-- Data-level tag for the caller allowance arm selected by the runtime.  The
 full state/log effect remains in `CallerAllowanceOutcome`; this tag makes the
@@ -150,7 +149,6 @@ inductive FlowAtom
   | redemption (rawSource : B256) (source : Adr)
       (ethRecipient : Adr) (amount : Nat)
   | flashPair (rawReceiver : B256) (receiver : Adr) (amount : Nat)
-deriving DecidableEq
 
 /-- The exact modular addition site underlying one credited balance write.
 `before` is the recipient word immediately before that addition (after the
@@ -160,7 +158,6 @@ structure CreditOccurrence where
   recipient : Adr
   before : B256
   amountWord : B256
-deriving DecidableEq
 
 def CreditOccurrence.loss (credit : CreditOccurrence) : Nat :=
   creditLoss credit.before credit.amountWord

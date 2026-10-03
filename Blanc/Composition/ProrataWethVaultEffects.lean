@@ -643,50 +643,7 @@ raw entered roots.  The common `ExecutionFrames` membership bridge carries a
 committed invocation root back to that all-outcome traversal; it deliberately
 does not claim same-frame prefix or resumed-parent storage chronology. -/
 
-/-- Every extracted event has well-formed entry memory when its concrete
-execution is admitted as freshly entered.  This derives the side condition
-from retained-frame provenance rather than leaving it as an allowance-history
-premise. -/
-theorem retainedWethAllowanceEvent_memoryWf
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out)
-    (fresh : Exec.FrameAdmitted wethAccount Exec.FreshEntry run)
-    {event : WethAllowanceEvent}
-    (member : event ∈ retainedWethAllowanceEvents run) :
-    Mem.Wf event.frame.pre.memory := by
-  rcases List.mem_filterMap.mp member with ⟨frame, frameMember, classified⟩
-  have source := WethAllowanceEvent.classification_sound classified
-  have committed : event.frame ∈ Exec.committedFrames run := by
-    simpa only [source.1] using frameMember
-  have raw : (Blanc.Exec.Frame.rootDeriv event.frame) ∈ Exec.rawFrameRoots run :=
-    Exec.mem_rawFrameRoots_of_mem_committedFrames run event.frame committed
-  have entry : Exec.FreshEntry event.frame.sevm event.frame.pre :=
-    fresh (Blanc.Exec.Frame.rootDeriv event.frame) raw source.2.1.2.1
-  rw [entry.2]
-  exact Mem.wf_empty
 
-/-- A classified committed frame packages the existing exact WETH invocation
-record once its actual entry supplies well-formed memory.  The only endpoint
-used is the frame's own committed post, so a callback remains represented by
-its separately retained child event. -/
-theorem WethAllowanceEvent.toInvocation
-    (event : WethAllowanceEvent) (classified : event.Classified)
-    (memoryWf : Mem.Wf event.frame.pre.memory) :
-    ∃ call : WethAllowanceInvocation,
-      call.approval = event.approval ∧ call.sevm = event.frame.sevm ∧
-        call.pre = event.frame.pre ∧ call.post = event.frame.post := by
-  rcases event with ⟨frame, approval⟩
-  rcases frame with ⟨pc, sevm, pre, out, run, committed⟩
-  rcases classified with ⟨identity, selected⟩
-  cases out with
-  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
-  | ok post =>
-      have hpc : pc = 0 := identity.1
-      subst pc
-      refine ⟨⟨sevm, pre, post, approval, identity.2.1, memoryWf, ?_, selected⟩,
-        rfl, rfl, rfl, rfl⟩
-      exact Prog.runCompiled_of_exec sevm pre Blanc.weth post weth_pcFree run
-        identity.2.2.2
 
 /-- Raw words, without address normalization. A self `transferFrom` bypasses
 allowance hashing; all other successful allowance invocations visit one pair.

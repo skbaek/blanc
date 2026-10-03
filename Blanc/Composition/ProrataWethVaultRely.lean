@@ -265,14 +265,6 @@ structure VaultFrameConfiguration (vault : Adr) (sevm : Sevm) (pre : Devm) :
   code : sevm.currentTarget = vault →
     some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault
 
-/-- The installed vault runtime is nonempty. -/
-private theorem vaultCode_toList_ne_nil {vault : Adr} {pre : Devm}
-    (installed : some (pre.getCode vault).toList =
-      Prog.compile Blanc.ProrataWethVault.vault) :
-    (pre.getCode vault).toList ≠ [] := by
-  intro empty
-  rw [empty] at installed
-  exact Prog.compile_ne_nil installed.symm
 
 /-! ## Allowance-debit authorization
 

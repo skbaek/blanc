@@ -48,9 +48,6 @@ private def isSstore : Ninst → Bool
   | .reg .sstore => true
   | _ => false
 
-private def isStaticcall : Ninst → Bool
-  | .exec .staticcall => true
-  | _ => false
 
 private def sourceSitesMatching
     (predicate : Ninst → Bool) : List Prog.SourceSite :=

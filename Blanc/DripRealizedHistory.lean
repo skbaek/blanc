@@ -235,40 +235,6 @@ theorem TransactionMessageOccurrence.msgInv
           sumNof
       exact ih nextSum headInv (by simpa only [Benv.withState] using hfork)
 
-/-- A transaction message selected from a concrete body inherits DRIP's
-invariant from the body entry.  The two system-message traces are traversed in
-their retained order, and the transaction-list bound is derived from the
-body's actual consensus withdrawal bound. -/
-theorem TransactionMessageOccurrence.msgInv_of_body
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
-    {state : State} {bout : BlockOutput}
-    {body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout}
-    {msg : Msg} {messageState : State} {out : MsgCallOutput}
-    {message : ExecutionTrace.MessageCallTrace msg messageState out}
-    (occurrence : TransactionMessageOccurrence body.transactions message)
-    (bound : sum benv.state.bal + wdsum wds < 2 ^ 256)
-    (inv : dripSpec.BenvInv ca benv)
-    (hfork : CoveredFork benv.stat.fork) :
-    dripSpec.MsgInv ca msg := by
-  have beacon := body.beacon.stateInv_and_sum_le (dripSpec_preserves ca) inv hfork
-  have beaconInv : dripSpec.BenvInv ca (benv.withState body.beaconState) :=
-    body.beacon.benvInv (dripSpec_preserves ca) inv hfork
-  have hforkHistory : CoveredFork (benv.withState body.beaconState).stat.fork := by
-    simpa only [Benv.withState] using hfork
-  have history := body.history.stateInv_and_sum_le
-    (dripSpec_preserves ca) beaconInv hforkHistory
-  have historyInv : dripSpec.BenvInv ca
-      ((benv.withState body.beaconState).withState body.historyState) :=
-    body.history.benvInv (dripSpec_preserves ca) beaconInv hforkHistory
-  have startSum : sum benv.state.bal < 2 ^ 256 := by
-    omega
-  have historyLe : sum body.historyState.bal ≤ sum benv.state.bal := by
-    exact le_trans (by simpa only [Benv.withState] using history.2) beacon.2
-  have historySum : sum ((benv.withState body.beaconState).withState
-      body.historyState).state.bal < 2 ^ 256 := by
-    simpa only [Benv.withState, Nat.reducePow] using Nat.lt_of_le_of_lt historyLe startSum
-  exact occurrence.msgInv historySum historyInv (by
-    simpa only [Benv.withState] using hfork)
 
 /-- The exhaustive classification of an actual prepared transaction message.
 The two present-target cases are deliberately separated by `currentTarget`:

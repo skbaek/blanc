@@ -651,10 +651,3 @@ import Blanc.Lift.Curve3Crv.Init
 import Blanc.Lift.Curve3Crv.Creation.Deploy
 import Blanc.Lift.Curve3Crv.Exec
 import Blanc.Lift.Curve3Crv.Liveness
-
-namespace Blanc
-
-def main : List String → IO Unit
-  | _ => IO.print "Hello World!"
-
-end Blanc

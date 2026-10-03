@@ -522,12 +522,6 @@ private theorem gatewayRunStor_assignPost_other {key : B256}
   rw [temporalSloadBase_getStorVal]
   exact gatewayRunStor_kernelBase key
 
-private theorem gatewayRunStor_assignPost_self :
-    (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0).getStorVal configWorldOwner (assignmentSlot pauseWorldCallee.toB256) = 0 := by
-  unfold assignmentPost
-  exact temporalSstorePost_self _ _ _ _
 
 private theorem gatewayRunStor_countPost_other {key : B256}
     (ha : assignmentSlot pauseWorldCallee.toB256 ≠ key)

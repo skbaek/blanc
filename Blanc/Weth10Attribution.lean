@@ -83,7 +83,6 @@ inductive AllowanceVisit
   | flashMax
   /-- `flashLoan` post-callback finite settlement decrement. -/
   | flashFinite (before after : B256)
-deriving DecidableEq
 
 /-- One hashed-pair event: the exact raw owner/spender words the runtime
 placed in memory words 0 and 1 before hashing, the visiting frame's actual
@@ -606,17 +605,7 @@ Holder `u` approves spender `sp`, who spends 40 then 60 of a 100 allowance.
 Both spends' governing chain roots back at the single `approve`, and the sum
 of hardened contributions matches the sum of permanent outflow exactly. -/
 
-private def spend40Debit (u : Adr) (ow sp : B256) : DebitProvenance :=
-  { actualCaller := sp.toAdr
-    rawSource := u.toB256
-    source := u
-    branch := .delegated (.finite (projectedAllowanceKey ow sp) 100 60) }
 
-private def spend60Debit (u : Adr) (ow sp : B256) : DebitProvenance :=
-  { actualCaller := sp.toAdr
-    rawSource := u.toB256
-    source := u
-    branch := .delegated (.finite (projectedAllowanceKey ow sp) 60 0) }
 
 
 /-! ### Max-allowance transparency

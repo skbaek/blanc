@@ -1217,16 +1217,6 @@ private theorem deploymentChainIdByteAt_eq_zero_opcode
   unfold deploymentChainId returnDeployWord
   exact pushFullWord_opcode_eq _ _ _ _ _
 
-private theorem deploymentChainIdByteAt_chainWord
-    (locations : List Nat) (n : Nat) (dp : DeployParams)
-    (j : Nat) (hj : j < 32) :
-    Func.byteAtByShape locations n
-        (deploymentChainId (⟨0, 0⟩ : DeployParams)).compileShape
-        (deploymentChainId dp) (j + 1) 0 =
-      dp.deploymentChainId.toBytes.getD j 0 := by
-  unfold deploymentChainId returnDeployWord
-  exact byteAt_pushFullWord_data
-    locations n _ _ dp.deploymentChainId j hj
 
 private theorem deploymentLeafByteAt_eq_zero_0_26
     (locations : List Nat) (n : Nat) (dp : DeployParams)

@@ -80,7 +80,7 @@ inductive TriggerLabel
   | refundCall
   | balanceCheck
   | afterNestedValidation
-  deriving DecidableEq, Repr
+  deriving DecidableEq
 
 /-- Positional slot index for each Trigger auxiliary label (1..22).
 
@@ -840,17 +840,6 @@ def rebaseLocalCalls (delta : Nat) : Func → Func
   | .next op rest => .next op (rebaseLocalCalls delta rest)
   | .call slot => .call (delta + slot)
 
-/-- The local-to-global rebase is the shared target renumbering owner
-(`Blanc.Func.mapTargets`) at `(delta + ·)`.  Kept as a bridge rather than a
-redefinition so that every existing `simp [rebaseLocalCalls]` site downstream
-keeps its normal form. -/
-theorem rebaseLocalCalls_eq_mapTargets (delta : Nat) (f : Func) :
-    rebaseLocalCalls delta f = f.mapTargets (delta + ·) := by
-  induction f with
-  | branch left right ihl ihr => simp only [rebaseLocalCalls, Func.mapTargets, ihl, ihr]
-  | last op => rfl
-  | next op rest ih => simp only [rebaseLocalCalls, Func.mapTargets, ih]
-  | call slot => rfl
 
 /-- Local-call rebasing commutes with the constant-store prefix used by
 `Func.revertData`.  The prefix contains no local calls, so only its tail can
@@ -869,13 +858,7 @@ theorem rebaseLocalCalls_prependStoresRev (delta : Nat)
 def packet (dp : DeployParams) : Prog :=
   ⟨triggerFullWithdrawals dp, localAux dp⟩
 
-theorem packet_compileShape_eq_zero (dp : DeployParams) :
-    (packet dp).compileShape = (packet ⟨0⟩).compileShape := by
-  rfl
 
-private theorem packetCompilesZero :
-    Prog.compiles (packet ⟨0⟩) = true := by
-  decide +kernel
 
 def triggerLabels : List TriggerLabel :=
   [ .malformedAbi, .zeroMsgValue, .zeroValidatorsData, .resumedExpected,
@@ -885,25 +868,9 @@ def triggerLabels : List TriggerLabel :=
     .afterEncoding, .bubbleRevert, .afterVaultCall, .refundCall,
     .balanceCheck, .afterNestedValidation ]
 
-/-- Standard 17-base + 22-trigger auxiliary table layout. -/
-def standardCompositeAux (baseAux : List (CompositeLabel × SymbolicFunc CompositeLabel))
-    (triggerAux : List (TriggerLabel × SymbolicFunc CompositeLabel)) :
-    List (CompositeLabel × SymbolicFunc CompositeLabel) :=
-  baseAux ++ triggerAux.map (fun (lbl, body) => (.trigger lbl, body))
 
-/-- Concrete 17-base prefix skeleton for composite resolution verification. -/
-def base17AuxSkeleton : List (CompositeLabel × SymbolicFunc CompositeLabel) :=
-  (List.range 17).map fun i => (.base (i + 1), .last .stop)
 
-/-- Concrete Trigger auxiliary skeleton with exact 22 labels in order. -/
-def triggerAuxSkeleton : List (TriggerLabel × SymbolicFunc CompositeLabel) :=
-  triggerLabels.map fun lbl => (lbl, .last .stop)
 
-/-- Convert a Trigger `Func` with local slot calls into a `SymbolicFunc
-CompositeLabel` by naming each call target.  The structural recursion is the
-shared owner `Blanc.Func.mapCalls`; only the naming function is local. -/
-def toCompositeSymbolic (f : Func) : SymbolicFunc CompositeLabel :=
-  f.mapCalls compositeLabelOfLocalSlot
 
 /-! Deployment parameters reach the Trigger packet only through PUSH immediates.
 `Func.callTargets` discards every instruction payload, so the call-target
