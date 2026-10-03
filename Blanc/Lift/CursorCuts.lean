@@ -187,4 +187,43 @@ theorem cursor_branch_forward {code : ByteArray} {c : Cert}
       exact actualPc
     · exact Or.inr ⟨rfl, actualPc⟩
 
+/-- A checked STATICCALL cursor supplies its six actual stack operands,
+independently of the instruction's eventual child or parent outcome. -/
+theorem cursor_staticcall_operands {code : ByteArray} {c : Cert}
+    {F : Exec.Deriv} {κ : Cursor} {f : SFunc}
+    (ok : CursorOK code c F κ) (tree : κ.f = .next (.exec .staticcall) f) :
+    ∃ (g t ii is oi os : B256) (S : List B256),
+      F.devm.stack = g :: t :: ii :: is :: oi :: os :: S := by
+  have check := ok.check
+  rw [tree] at check
+  simp only [checkNode, Bool.and_eq_true] at check
+  obtain ⟨_, transfer⟩ := check
+  cases effect : absNinst (.exec .staticcall) κ.a with
+  | none => rw [effect] at transfer; cases transfer
+  | some a' =>
+    obtain ⟨bounded, output, frame, transferred, read, folded⟩ :=
+      absNinst_nonpush_spec (by intro bs fits same; cases same) effect
+    have enough : 6 ≤ κ.a.length := by
+      by_contra short
+      have small : κ.a.length = 0 ∨ κ.a.length = 1 ∨ κ.a.length = 2 ∨
+          κ.a.length = 3 ∨ κ.a.length = 4 ∨ κ.a.length = 5 := by omega
+      rcases small with h | h | h | h | h | h
+      all_goals rw [h] at transferred; cases transferred
+    obtain ⟨S, rest, stack, matched, pending⟩ := ok.stack
+    have sameLength : κ.a.length = S.length := by
+      simpa only [List.length_map] using (frameMatches_matches matched).length.symm
+    have actualLength : 6 ≤ F.devm.stack.length := by
+      rw [stack, List.length_append]
+      omega
+    refine ⟨F.devm.stack[0]'(by omega), F.devm.stack[1]'(by omega),
+      F.devm.stack[2]'(by omega), F.devm.stack[3]'(by omega),
+      F.devm.stack[4]'(by omega), F.devm.stack[5]'(by omega), F.devm.stack.drop 6, ?_⟩
+    rw [List.cons_getElem_drop_succ (h := show 5 < F.devm.stack.length from by omega),
+      List.cons_getElem_drop_succ (h := show 4 < F.devm.stack.length from by omega),
+      List.cons_getElem_drop_succ (h := show 3 < F.devm.stack.length from by omega),
+      List.cons_getElem_drop_succ (h := show 2 < F.devm.stack.length from by omega),
+      List.cons_getElem_drop_succ (h := show 1 < F.devm.stack.length from by omega),
+      List.cons_getElem_drop_succ (h := show 0 < F.devm.stack.length from by omega),
+      List.drop_zero]
+
 end Blanc.Lift
