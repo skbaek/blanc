@@ -3334,8 +3334,13 @@ contract-neutral.
   compiled step from the code-size word, stack-room and covered-fork facts.
   `ri_extcodesize` inverts the actual instruction into that world, exact word,
   unchanged memory and residual gas. `rx_extcodesize` consumes an exact
-  continuation at the selected warm/cold charge. The existing Lido temporal
-  access names are compatibility declarations over this common owner.
+  continuation at the selected warm/cold charge.
+  `temporalAccountAccessBase_state`, `temporalAccountAccessBase_output` and
+  `temporalAccountAccessBase_logs` project the unchanged state, output and logs
+  through account warming. Use these facts to compose an observed call without
+  unfolding the nested world update; the Pair mint prefix consumes all three.
+  The existing Lido temporal access names are compatibility declarations over
+  this common owner.
 - A `STATICCALL` to an arbitrary callee, whose code is unknown: its abstract outcome
   (`StaticCallPost`: flag, returned bytes as output window and return data, every storage
   map and the log list kept) and, for a set flag, the successful static child message

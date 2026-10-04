@@ -22,6 +22,26 @@ theorem ric_nextP {n : Ninst} {devm : Devm}
   cases run with
   | next h k => exact ⟨_, h, k⟩
 
+/-- Extract the actual linear prefix while retaining the supplied relation
+in the SAME cut continuation. -/
+theorem SFunc.RunCutP.split_nexts
+    {P : Sevm → Devm → Ninst → Devm → Prop}
+    {fs : List SFunc} {sevm : Sevm} {C : List Nat}
+    {pre : Devm} {tail : SFunc} {seg : Seg}
+    (erase : ∀ {before : Devm} {n : Ninst} {after : Devm},
+      P sevm before n after → Ninst.Run sevm before n after)
+    (ns : List Ninst)
+    (run : SFunc.RunCutP P fs sevm C pre (ns.foldr SFunc.next tail) seg) :
+    ∃ post, Line.Run sevm pre ns post ∧
+      SFunc.RunCutP P fs sevm C post tail seg := by
+  induction ns generalizing pre with
+  | nil => exact ⟨pre, .nil, run⟩
+  | cons n ns ih =>
+    change SFunc.RunCutP P fs sevm C pre (.next n (ns.foldr SFunc.next tail)) seg at run
+    obtain ⟨middle, first, rest⟩ := ric_nextP run
+    obtain ⟨post, line, cut⟩ := ih rest
+    exact ⟨post, .cons (erase first) line, cut⟩
+
 theorem ric_destP (run : SFunc.RunCutP P fs sevm C (St b S M G) (.dest f) r) :
     ∃ G', SFunc.RunCutP P fs sevm C (St b S M G') f r := by
   cases run with
