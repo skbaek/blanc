@@ -646,4 +646,113 @@ theorem Xinst.spawn_child_logs {sevm : Sevm} {pre : Devm} {x : Xinst}
   rw [benvAfterTransfer_stat transfer, Xinst.step_spawn_benvStat spawn]
   exact fork.rules_stateGas_none
 
+/-- A CALL or STATICCALL step whose pushed success flag is nonzero committed its entered
+child. -/
+theorem Xinst.call_run_flag_commits {sevm : Sevm} {pre post : Devm} {x : Xinst}
+    {child : Evm} {raw : Execution}
+    (fork : CoveredFork sevm.benvStat.fork) (callFamily : x = .call ∨ x = .staticcall)
+    (run : Xinst.Run sevm pre x (.some ⟨child, raw⟩) (.ok post))
+    (flag : ∃ f rest, post.stack = f :: rest ∧ f ≠ 0) : Execution.commits raw = true := by
+  unfold Xinst.Run at run
+  rcases Lift.Xinst.step_shapeLogs sevm pre x fork with ⟨ex, shape, _⟩ |
+    ⟨creates, d, e, na, mi, ms, _, shape⟩ |
+    ⟨d, g, v, c, t, ca, stv, isSt, ii, isz, oi, osz, code, dp, _, shape⟩ <;>
+    rw [shape] at run
+  · cases run.1
+  · exfalso
+    rcases callFamily with rfl | rfl <;> rcases creates with h | h <;> cases h
+  · unfold genericCall.step at run
+    split at run
+    · rcases pushed : ((d.withReturnData []).withGasLeft ((d.withReturnData []).gasLeft + g)).push 0
+        with failure | pushedDevm <;>
+        simp only [pushed, XStep.ofExcept, bind, Except.bind, XStep.Run] at run
+      · cases run.2
+      · cases run.1
+    · obtain ⟨settled, frameRun, resumed⟩ := run
+      rcases settled with failure | settledChild
+      · exact (Resume.call_run_error resumed.symm).elim
+      have stack := Resume.call_stack_flag resumed.symm
+      obtain ⟨f, rest, flagStack, nonzero⟩ := flag
+      have clean : settledChild.error.isSome = false := by
+        cases error : settledChild.error.isSome with
+        | false => rfl
+        | true =>
+          rw [error, ite_eq_left rfl, flagStack] at stack
+          exact (nonzero (List.cons.inj stack).1).elim
+      exact Frame.raw_commits_of_settlementCommits
+        (ProcessMessage.settlementCommits_of_some_ok_clean frameRun clean)
+
+/-- Code-free entry routes the message's code address to an enabled precompile. -/
+theorem executeCode.enter_inr {m : Msg} {raw : Execution}
+    (entry : executeCode.enter m = .inr raw) :
+    ∃ adr, m.codeAddress = some adr ∧ m.disablePrecompiles = false ∧
+      m.benv.stat.rules.isPrecomp adr := by
+  unfold executeCode.enter at entry
+  cases hca : m.codeAddress with
+  | none =>
+    simp only [hca, reduceCtorEq] at entry
+  | some adr =>
+    simp only [hca] at entry
+    by_cases routed : (!m.disablePrecompiles && decide (m.benv.stat.rules.isPrecomp adr)) = true
+    · rw [ite_eq_left routed] at entry
+      obtain ⟨enabled, precomp⟩ := Bool.and_eq_true_iff.mp routed
+      refine ⟨adr, rfl, ?_, of_decide_eq_true precomp⟩
+      simpa only [Bool.not_eq_true'] using enabled
+    · rw [ite_eq_right routed] at entry
+      cases entry
+
+/-- A successful CALL step with a nonzero flag that enters no code frame ran the precompile
+at its target: the target is a precompile of the fork and carries no delegation. -/
+theorem Xinst.call_none_precompile {sevm : Sevm} {s sf : Devm}
+    {g c v ii is oi os : B256} {xs : List B256}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (operands : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
+    (run : Xinst.Run sevm s .call .none (.ok sf))
+    (flag : ∃ f rest, sf.stack = f :: rest ∧ f ≠ 0) :
+    sevm.benvStat.rules.isPrecomp c.toAdr := by
+  have stepRun : ∀ pc, Ninst.StepRun pc sevm s Ninst.call .none (.ok sf) := by
+    intro pc
+    rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep]
+    exact run
+  rcases of_run_call_val_with_depth_frame operands ⟨.none, trivial, 0, stepRun 0⟩ fork with
+    ⟨failed, _⟩ | ⟨parent, child, xl, dp, na, code, avail, pc, step, _, _, _, _, _, _, routing,
+      filled, process, _, _, _, _, _, _⟩
+  · obtain ⟨f, rest, flagStack, nonzero⟩ := flag
+    rw [flagStack] at failed
+    exact (nonzero (pref_head_unique failed (pref_append [f] rest)).symm).elim
+  · obtain ⟨slotEq, _⟩ := Step.Run.unique_of_filled (show Xlot.Filled .none from trivial) filled (stepRun pc) step
+    subst slotEq
+    unfold ProcessMessage RunFrame at process
+    cases entered : (Frame.ofCall (callMsg sevm parent
+        (min g.toNat (except64th avail) + (if v.toNat = 0 then 0 else gCallStipend))
+        v sevm.currentTarget c.toAdr na true false ((s.memory.read ii.toNat is.toNat).1)
+        code dp)).enter with
+    | run evm =>
+      rw [entered] at process
+      obtain ⟨_, slot, _⟩ := process
+      cases slot
+    | done result =>
+      rw [entered] at process
+      obtain ⟨_, resultEq⟩ := process
+      unfold Jaune.Frame.enter at entered
+      split at entered
+      · rename_i failure _
+        cases entered
+        simp only [Frame.settleMsg, Frame.ofCall, processMessage.settle, bind, Except.bind,
+          Bool.false_eq_true, ite_false, reduceCtorEq] at resultEq
+      · rename_i benv transfer
+        split at entered
+        · cases entered
+        · rename_i raw entry
+          obtain ⟨adr, codeAddress, enabled, precomp⟩ := executeCode.enter_inr entry
+          have stat : benv.stat = sevm.benvStat := benvAfterTransfer_stat transfer
+          simp only [Msg.withBenv, Frame.ofCall, callMsg] at codeAddress enabled precomp
+          rw [stat] at precomp
+          rcases routing with ⟨_, nameEq, _, _⟩ | ⟨_, _, _, _, dpEq⟩
+          · subst nameEq
+            cases codeAddress
+            exact precomp
+          · subst dpEq
+            cases enabled
+
 end Blanc

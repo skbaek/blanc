@@ -422,7 +422,10 @@ theorem mutable_call_turns {pair : Adr} {Rep : State → Stor → Prop} {Good : 
       Rep c.state (d.getStor pair) ∧ c.logs = frame.current.logs ++ added ∧
       (∃ L : List Log, d.logs = pre.logs ++ L ∧
         added.map (PendingLog.rawWith owned) = L.map some) ∧
-      ((turns = [] ∧ c = frame.current ∧ added = []) ∨
+      ((turns = [] ∧ c = frame.current ∧ added = [] ∧
+          (Xinst.Run sevm pre x .none (.ok d) ∨ ∃ (child : Evm) (raw : Execution),
+            Xinst.Run sevm pre x (.some ⟨child, raw⟩) (.ok d) ∧
+              ¬ Execution.commits raw = true)) ∨
         ∃ (child : Evm) (raw : Execution) (childRun : Exec child.pc child.sta child.dyna raw)
           (committed : Execution.commits raw = true) (L : List Log),
           (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots D.exc) ∧
@@ -436,6 +439,8 @@ theorem mutable_call_turns {pair : Adr} {Rep : State → Stor → Prop} {Good : 
     exact sem.ne_nil imageEmpty rfl
   have unchanged : ∀ (s : Stor), (∀ k, s.get k = (pre.getStor pair).get k) →
       d.logs = pre.logs →
+      (Xinst.Run sevm pre x .none (.ok d) ∨ ∃ (child : Evm) (raw : Execution),
+        Xinst.Run sevm pre x (.some ⟨child, raw⟩) (.ok d) ∧ ¬ Execution.commits raw = true) →
       ∃ (turns : List MutableTurn) (c : Checkpoint) (added : List PendingLog)
         (rets : List ChildReturn),
         ExactTurns frame request 0 (mutableTranscript turns .done)
@@ -445,17 +450,20 @@ theorem mutable_call_turns {pair : Adr} {Rep : State → Stor → Prop} {Good : 
         Rep c.state s ∧ c.logs = frame.current.logs ++ added ∧
         (∃ L : List Log, d.logs = pre.logs ++ L ∧
           added.map (PendingLog.rawWith owned) = L.map some) ∧
-        ((turns = [] ∧ c = frame.current ∧ added = []) ∨
+        ((turns = [] ∧ c = frame.current ∧ added = [] ∧
+            (Xinst.Run sevm pre x .none (.ok d) ∨ ∃ (child : Evm) (raw : Execution),
+              Xinst.Run sevm pre x (.some ⟨child, raw⟩) (.ok d) ∧
+                ¬ Execution.commits raw = true)) ∨
           ∃ (child : Evm) (raw : Execution) (childRun : Exec child.pc child.sta child.dyna raw)
             (committed : Execution.commits raw = true) (L : List Log),
             (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots D.exc) ∧
             turns.map MutableTurn.event = Exec.targetLogEventsFrom pair [] 0 childRun committed ∧
             (Execution.committedPost raw committed).logs = child.dyna.logs ++ L ∧
             added.map (PendingLog.rawWith owned) = L.map some) := by
-    intro s same unlogged
+    intro s same unlogged reason
     refine ⟨[], frame.current, [], [], ExactTurns.done frame request 0, ?_,
       repCongr _ _ _ same rep, (List.append_nil _).symm,
-      ⟨[], by rw [unlogged, List.append_nil], rfl⟩, Or.inl ⟨rfl, rfl, rfl⟩⟩
+      ⟨[], by rw [unlogged, List.append_nil], rfl⟩, Or.inl ⟨rfl, rfl, rfl, reason⟩⟩
     intro located entry nested member
     simp only [List.not_mem_nil] at member
   obtain ⟨xl, inRoots, pc, stepRun⟩ := call
@@ -466,7 +474,7 @@ theorem mutable_call_turns {pair : Adr} {Rep : State → Stor → Prop} {Good : 
   | none =>
     have storage := Xinst.none_getStor_eq xrun
     exact unchanged (d.getStor pair) (fun k => by rw [storage])
-      ((Xinst.call_run_logs fork callFamily xrun).1 rfl)
+      ((Xinst.call_run_logs fork callFamily xrun).1 rfl) (Or.inl xrun)
   | some slot =>
     obtain ⟨child, raw⟩ := slot
     obtain ⟨childRun, childRoots⟩ := inRoots
@@ -525,5 +533,6 @@ theorem mutable_call_turns {pair : Adr} {Rep : State → Stor → Prop} {Good : 
             exact settles (Jaune.Frame.settlementCommits_ofCall_of_raw_commits committed)
           exact unchanged (d.getStor pair) (rolledStorage settles)
             (((Xinst.call_run_logs fork callFamily xrun).2 child raw rfl).2 notCommitted)
+            (Or.inr ⟨child, raw, xrun, notCommitted⟩)
 
 end Blanc.Lift.UniswapV2Pair

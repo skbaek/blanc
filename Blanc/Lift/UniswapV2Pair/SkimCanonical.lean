@@ -49,6 +49,7 @@ theorem skim_static_call_turns {U K : WriterKey → Prop} (inj : WriterInj U)
     (rep : WriterRep K (pre.getStor frame.context.pair) frame.current.state)
     (time : frame.context.timestamp = sevm.benvStat.time)
     (fork : CoveredFork sevm.benvStat.fork)
+    (flag : ∃ f rest, d.stack = f :: rest ∧ f ≠ 0)
     (good : ∀ F ∈ Exec.rawFrameRoots D.exc, F.sevm.currentTarget = frame.context.pair →
       ∀ k ∈ staticViewDecodedKeys F.sevm, U k) :
     ∃ views : List StaticViewTurn,
@@ -58,6 +59,7 @@ theorem skim_static_call_turns {U K : WriterKey → Prop} (inj : WriterInj U)
       (∀ picked ∈ views, picked.Authentic frame) ∧
       (views = [] ∨ ∃ (child : Evm) (raw : Execution)
         (childRun : Exec child.pc child.sta child.dyna raw),
+        Execution.commits raw = true ∧
         (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots D.exc) ∧
         views.map Prod.fst =
           (Exec.retainedTargetTurnsAt frame.context.pair [] childRun).filterMap
@@ -69,6 +71,7 @@ theorem skim_static_call_turns {U K : WriterKey → Prop} (inj : WriterInj U)
       (∀ picked ∈ views, picked.Authentic frame) ∧
       (views = [] ∨ ∃ (child : Evm) (raw : Execution)
         (childRun : Exec child.pc child.sta child.dyna raw),
+        Execution.commits raw = true ∧
         (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots D.exc) ∧
         views.map Prod.fst =
           (Exec.retainedTargetTurnsAt frame.context.pair [] childRun).filterMap
@@ -85,6 +88,7 @@ theorem skim_static_call_turns {U K : WriterKey → Prop} (inj : WriterInj U)
   | some slot =>
     obtain ⟨child, raw⟩ := slot
     obtain ⟨childRun, childRoots⟩ := inRoots
+    have rawCommitted := Xinst.call_run_flag_commits fork (Or.inr rfl) xrun flag
     unfold Xinst.Run XStep.Run at xrun
     cases spawned : Xinst.step sevm pre .staticcall with
     | done result =>
@@ -137,13 +141,18 @@ theorem skim_static_call_turns {U K : WriterKey → Prop} (inj : WriterInj U)
           staticView_raw_retained_turns_inv (request := request) (turn := 0) (path := [])
             sem image childRun childInstalled childRep fresh (fun _ => ⟨entry.1, entry.2.1⟩)
             short (by rw [stat]; exact time) childStatic childFork
-        exact ⟨views, consumed, authentic, Or.inr ⟨child, raw, childRun, childRoots, mapped⟩⟩
+        exact ⟨views, consumed, authentic,
+          Or.inr ⟨child, raw, childRun, rawCommitted, childRoots, mapped⟩⟩
 
 private theorem skim_St_getStor (x : Devm) (S : List B256) (M : Mem) (g : Nat) (a : Adr) :
     Devm.getStor (St x S M g) a = Devm.getStor x a := rfl
 
 private theorem skim_St_getCode (x : Devm) (S : List B256) (M : Mem) (g : Nat) (a : Adr) :
     (St x S M g).getCode a = x.getCode a := rfl
+
+private theorem skim_operands (x : Devm) (S : List B256) (M : Mem) (g : Nat) :
+    S <<+ (St x S M g).stack := by
+  simpa only [List.append_nil, St.stack] using pref_append S ([] : List B256)
 
 private theorem skim_tAAB_getStor (base : Devm) (a x : Adr) :
     Devm.getStor (temporalAccountAccessBase base a) x = Devm.getStor base x := by
@@ -239,23 +248,29 @@ theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
           LockedAuth located.frame.sevm located.frame.post entry nested) ∧
         (views0 = [] ∨ ∃ (child : Evm) (raw : Execution)
           (childRun : Exec child.pc child.sta child.dyna raw),
+          Execution.commits raw = true ∧
           (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots root.exc) ∧
           views0.map Prod.fst =
             (Exec.retainedTargetTurnsAt sevm.currentTarget [] childRun).filterMap
               Sum.getRight?) ∧
         (views1 = [] ∨ ∃ (child : Evm) (raw : Execution)
           (childRun : Exec child.pc child.sta child.dyna raw),
+          Execution.commits raw = true ∧
           (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots root.exc) ∧
           views1.map Prod.fst =
             (Exec.retainedTargetTurnsAt sevm.currentTarget [] childRun).filterMap
               Sum.getRight?) ∧
-        (turns1 = [] ∨ ∃ (child : Evm) (raw : Execution)
+        ((turns1 = [] ∧ sevm.benvStat.rules.isPrecomp
+            (skimToken0 sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr) ∨
+          ∃ (child : Evm) (raw : Execution)
           (childRun : Exec child.pc child.sta child.dyna raw)
           (committed : Execution.commits raw = true),
           (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots root.exc) ∧
           turns1.map MutableTurn.event =
             Exec.targetLogEventsFrom sevm.currentTarget [] 0 childRun committed) ∧
-        (turns3 = [] ∨ ∃ (child : Evm) (raw : Execution)
+        ((turns3 = [] ∧ sevm.benvStat.rules.isPrecomp
+            (skimToken1 sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr) ∨
+          ∃ (child : Evm) (raw : Execution)
           (childRun : Exec child.pc child.sta child.dyna raw)
           (committed : Execution.commits raw = true),
           (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots root.exc) ∧
@@ -274,10 +289,10 @@ theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
   have supply := lockedPairSupply hashTInj hashTApart sevm.currentTarget
   have repCongr : ∀ st (s s' : Stor), (∀ k, s'.get k = s.get k) →
       LockedRep U st s → LockedRep U st s' := fun _ _ _ same rep => LockedRep.congr same rep
-  obtain ⟨value, _, _, unlockedRaw, first⟩ := skim_raw_inv codeEq fork selector run
+  obtain ⟨value, _, _, unlockedRaw, first⟩ := skim_raw_flag_inv codeEq fork selector run
   unfold SkimFirstFacts at first
   dsimp only at first
-  obtain ⟨nonstatic, _, _, _, d0, out0, call0, post0, long0, _, _, cover0, _, _, _, d, _, _,
+  obtain ⟨nonstatic, _, _, _, d0, out0, call0, post0, long0, _, _, cover0, _, _, _, d, _, helper,
     call1, _, _, output1, _, accept1, second⟩ := first
   have nonempty : b.getCode sevm.currentTarget ≠ .empty := by
     intro empty
@@ -290,10 +305,10 @@ theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
   refine ⟨value, nonstatic, out0, d, ⟨_, _, _, _, _, _, d0, call0, post0.returnData, call1⟩, ?_⟩
   intro low high
   have secondFacts := second low high
-  unfold SkimSecondFacts at secondFacts
+  unfold SkimSecondFlagFacts at secondFacts
   dsimp only at secondFacts
-  obtain ⟨_, _, _, d1, out1, call2, post2, long1, _, _, cover1, _, _, _, d2, call3, _, output3,
-    _, accept3, _, _, postEq⟩ := secondFacts
+  obtain ⟨_, _, _, d1, out1, call2, post2, long1, _, _, cover1, _, _, _, d2, call3, flag3, _,
+    output3, _, accept3, _, _, postEq⟩ := secondFacts
   -- source frames and requests
   let frame0 := skimSourceLockedFrame current ctx recipient
   let request0 := skimRequest0 current ctx
@@ -315,7 +330,7 @@ theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
     skim_static_call_turns (frame := frame0) (request := request0) hashTInj hashTApart sub sem
       image call0 (by rw [pair0, skim_St_getCode, code0]; exact installed)
       (by rw [pair0, skim_St_getStor, skim_tAAB_getStor, cachedStor]; exact lockRep0)
-      rfl fork staticGood
+      rfl fork ⟨1, _, post0.stack, by decide⟩ staticGood
   -- transfer 0
   have codeD0 : d0.getCode sevm.currentTarget = b.getCode sevm.currentTarget := by
     rw [Blanc.Lift.StepIn.codePreserve call0 sevm.currentTarget
@@ -324,11 +339,21 @@ theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
     unfold externalStatic
     rw [show frame1.context.isStatic = sevm.isStatic from rfl, nonstatic]
     rfl
+  have ptr0 := PtrWord.of_ptrMem (balanceReplyMemory_ptr out0
+    (balanceRequestMemory_ptr getterInitMemory_ptr sevm.currentTarget))
+  obtain ⟨_, _, _, d', call1', _, flag1, _, _, _, _, _, helperEq⟩ :=
+    skimTransfer_flag_inv Blanc.Lift.StepIn.toRun fork ptr0.1 ptr0.2 (by decide) (by decide)
+      helper
+  have storEq : ∀ a, Devm.getStor d' a = Devm.getStor d a := fun a =>
+    (congrArg (fun z => Devm.getStor z a) helperEq).symm
+  have logsEq : d'.logs = d.logs := (congrArg Devm.logs helperEq).symm
   obtain ⟨turns1, c1, added1, rets1, turns1Exact, auth1, rep1, logs1, ⟨L1, raw1, images1⟩,
       derived1⟩ :=
-    mutable_call_turns (frame := frame1) (request := request1) supply repCongr sem image call1
+    mutable_call_turns (frame := frame1) (request := request1) supply repCongr sem image call1'
       (Or.inl rfl) rfl mutable1 (by rw [skim_St_getCode, codeD0]; exact installed)
       ⟨K, sub, by rw [skim_St_getStor, world0]; exact lockRep0, rfl⟩ rfl fork lockedGood
+  rw [storEq] at rep1
+  rw [logsEq] at raw1
   obtain ⟨K1, sub1, wrep1, locked1⟩ := rep1
   have reserve1 := skim_transfer0_reserve1 turns1Exact
   have transport : reserve1Read (d.getStorVal sevm.currentTarget 8) =
@@ -351,7 +376,7 @@ theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
       (by rw [pair2, skim_St_getCode, skim_tAAB_getCode, afterSload_getCode, codeD]
           exact installed)
       (by rw [pair2, skim_St_getStor, skim_tAAB_getStor, afterSload_getStor]; exact wrep1)
-      rfl fork staticGood
+      rfl fork ⟨1, _, post2.stack, by decide⟩ staticGood
   -- transfer 1
   let amount1 := Bytes.toB256 (out1.take 32) - Nat.toB256 current.state.reserve1.val
   let frame3 := frame2.beginResume request2
@@ -413,11 +438,17 @@ theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
     · exact auth3 located entry nested right
   · exact derived0
   · exact derived2
-  · rcases derived1 with ⟨empty, _, _⟩ | ⟨child, raw, childRun, committed, _, roots, events, _⟩
-    · exact Or.inl empty
+  · rcases derived1 with ⟨empty, _, _, reason⟩ |
+        ⟨child, raw, childRun, committed, _, roots, events, _⟩
+    · rcases reason with none | ⟨child, raw, childRun, rolled⟩
+      · exact Or.inl ⟨empty, Xinst.call_none_precompile fork (skim_operands _ _ _ _) none flag1⟩
+      · exact (rolled (Xinst.call_run_flag_commits fork (Or.inl rfl) childRun flag1)).elim
     · exact Or.inr ⟨child, raw, childRun, committed, roots, events⟩
-  · rcases derived3 with ⟨empty, _, _⟩ | ⟨child, raw, childRun, committed, _, roots, events, _⟩
-    · exact Or.inl empty
+  · rcases derived3 with ⟨empty, _, _, reason⟩ |
+        ⟨child, raw, childRun, committed, _, roots, events, _⟩
+    · rcases reason with none | ⟨child, raw, childRun, rolled⟩
+      · exact Or.inl ⟨empty, Xinst.call_none_precompile fork (skim_operands _ _ _ _) none flag3⟩
+      · exact (rolled (Xinst.call_run_flag_commits fork (Or.inl rfl) childRun flag3)).elim
     · exact Or.inr ⟨child, raw, childRun, committed, roots, events⟩
   · rw [postEq]
     change (afterSstore sevm d2 12 1).output = []
