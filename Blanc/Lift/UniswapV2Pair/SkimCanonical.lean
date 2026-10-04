@@ -199,10 +199,10 @@ def SkimSecondSteps (D : Exec.Deriv) (sevm : Sevm) (d : Devm) (t1 : B256) (out1 
       (t1 &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr) S0 M0 g0) (.exec .staticcall) d1 ∧
     d1.returnData = out1 ∧ Blanc.Lift.StepIn D sevm (St d1 S1 M1 g1) (.exec .call) d2
 
-/-- Canonical skim frame: every successful raw skim run consumes the typed source skim
-over turn queues derived from its actual children, under trace-local HASH-T. The second
-half is stated for a fitting transfer0 reply pointer (`skimFirstPointer_fit`). -/
-theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpoint}
+/-- The canonical skim frame with the Pair's own-code foreign-storage silence: the lock
+store and cache reads before the first query touch no other account, the reserve1 read before
+the second query touches none, and after transfer1 returns only the Pair's lock slot is written. -/
+theorem skim_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Checkpoint}
     {sevm : Sevm} {b post : Devm} {G : Nat}
     (invocation : List Nat)
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
@@ -221,12 +221,19 @@ theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
     let recipient := skimRecipient sevm
     sevm.value = 0 ∧ sevm.isStatic = false ∧
     ∃ (out0 : Bytes) (d : Devm), SkimFirstSteps root sevm b out0 d ∧
+      (∀ a, a ≠ sevm.currentTarget →
+        Devm.getStor (temporalAccountAccessBase (skimCachedWorld sevm b)
+          (skimToken0 sevm b).toAdr) a = Devm.getStor b a) ∧
+      (∀ a, Devm.getStor (temporalAccountAccessBase (afterSload sevm d 8)
+        (skimToken1 sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr) a =
+          Devm.getStor d a) ∧
       (96 ≤ (skimFirstPointer d.returnData).toNat →
         (skimFirstPointer d.returnData).toNat + 1024 < 2 ^ 256 →
       ∃ (out1 : Bytes) (d2 : Devm) (views0 views1 : List StaticViewTurn)
         (turns1 turns3 : List MutableTurn) (final : Frame) (rets : List ChildReturn)
         (K' : WriterKey → Prop) (added : List PendingLog),
         SkimSecondSteps root sevm d (skimToken1 sevm b) out1 d2 ∧
+        (∀ a, a ≠ sevm.currentTarget → post.getStor a = d2.getStor a) ∧
         ExactConsumes (startTyped current ctx (.skim recipient))
           (.next (skimBalanceReply out0) (staticViewTranscript views0 .done)
             (.next (skimTransferReply d.returnData true) (mutableTranscript turns1 .done)
@@ -302,7 +309,15 @@ theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
   have nonemptyList : (b.getCode sevm.currentTarget).toList ≠ [] := by
     intro empty
     exact sem.ne_nil (installed.symm.trans (congrArg some empty)) rfl
-  refine ⟨value, nonstatic, out0, d, ⟨_, _, _, _, _, _, d0, call0, post0.returnData, call1⟩, ?_⟩
+  refine ⟨value, nonstatic, out0, d, ⟨_, _, _, _, _, _, d0, call0, post0.returnData, call1⟩,
+    ?_, ?_, ?_⟩
+  · intro a foreign
+    rw [skim_tAAB_getStor]
+    unfold skimCachedWorld syncLockedWorld
+    rw [afterSload_getStor, afterSload_getStor, afterSload_getStor,
+      afterSstore_getStor_ne _ _ _ _ _ (Ne.symm foreign), afterSload_getStor]
+  · intro a
+    rw [skim_tAAB_getStor, afterSload_getStor]
   intro low high
   have secondFacts := second low high
   unfold SkimSecondFlagFacts at secondFacts
@@ -408,7 +423,10 @@ theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
   have consumed := consume _ _ _ _ _ _ _ _ turns0Exact (fun absent => by cases absent)
     turns1Exact turns2Exact (fun absent => by cases absent) turns3Exact
   refine ⟨out1, d2, views0, views1, turns1, turns3, _, _, K3, added1 ++ added3,
-    ⟨_, _, _, _, _, _, d1, call2, post2.returnData, call3⟩, consumed, rfl, rfl,
+    ⟨_, _, _, _, _, _, d1, call2, post2.returnData, call3⟩,
+    fun a foreign => by
+      rw [postEq, skim_St_getStor, afterSstore_getStor_ne _ _ _ _ _ (Ne.symm foreign)],
+    consumed, rfl, rfl,
     fun k tracked => sub3 k tracked, ?_, rfl, ?_, ?_, ⟨L1 ++ L3, ?_, ?_⟩, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [postEq, skim_St_getStor, afterSstore_getStor_self]
     exact wrep3.mint_unlock_store
@@ -455,5 +473,92 @@ theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
     rw [afterSstore_output, output3, post2.output rfl]
     rw [temporalAccountAccessBase_output, afterSload_output, output1, post0.output rfl,
       temporalAccountAccessBase_output, skim_cached_output, freshOutput]
+
+/-- Canonical skim frame: every successful raw skim run consumes the typed source skim
+over turn queues derived from its actual children, under trace-local HASH-T. The second
+half is stated for a fitting transfer0 reply pointer (`skimFirstPointer_fit`). -/
+theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpoint}
+    {sevm : Sevm} {b post : Devm} {G : Nat}
+    (invocation : List Nat)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
+    (freshOutput : b.output = [])
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0xbc25cf77)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
+    (hashTInj : WriterInj (WriterExtend K
+      (skimTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)))
+    (hashTApart : WriterApart (WriterExtend K
+      (skimTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩))) :
+    let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+    let ctx := writerContext sevm invocation
+    let recipient := skimRecipient sevm
+    sevm.value = 0 ∧ sevm.isStatic = false ∧
+    ∃ (out0 : Bytes) (d : Devm), SkimFirstSteps root sevm b out0 d ∧
+      (96 ≤ (skimFirstPointer d.returnData).toNat →
+        (skimFirstPointer d.returnData).toNat + 1024 < 2 ^ 256 →
+      ∃ (out1 : Bytes) (d2 : Devm) (views0 views1 : List StaticViewTurn)
+        (turns1 turns3 : List MutableTurn) (final : Frame) (rets : List ChildReturn)
+        (K' : WriterKey → Prop) (added : List PendingLog),
+        SkimSecondSteps root sevm d (skimToken1 sevm b) out1 d2 ∧
+        ExactConsumes (startTyped current ctx (.skim recipient))
+          (.next (skimBalanceReply out0) (staticViewTranscript views0 .done)
+            (.next (skimTransferReply d.returnData true) (mutableTranscript turns1 .done)
+              (.next (skimBalanceReply out1) (staticViewTranscript views1 .done)
+                (.next (skimTransferReply d2.returnData true) (mutableTranscript turns3 .done)
+                  .done))))
+          { status := .success [], frame := final, remaining := .done, childReturns := rets } ∧
+        final.checkpoint = current ∧ final.context = ctx ∧
+        (∀ k, K' k → WriterExtend K (skimTraceKeys root) k) ∧
+        WriterRep K' (post.getStor sevm.currentTarget) final.current.state ∧
+        final.current.state.unlocked = 1 ∧
+        final.current.state.liquidityCore = current.state.liquidityCore ∧
+        final.current.logs = current.logs ++ added ∧
+        (∃ L : List Log, post.logs = b.logs ++ L ∧
+          added.map (PendingLog.rawWith (lockedOwnedRaw sevm.currentTarget)) = L.map some) ∧
+        (∀ picked ∈ views0 ++ views1, Blanc.Sevm.selector picked.1.frame.sevm = picked.2.selector ∧
+          picked.1.frame.sevm.currentTarget = sevm.currentTarget) ∧
+        (∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns1 ++ turns3 →
+          LockedAuth located.frame.sevm located.frame.post entry nested) ∧
+        (views0 = [] ∨ ∃ (child : Evm) (raw : Execution)
+          (childRun : Exec child.pc child.sta child.dyna raw),
+          Execution.commits raw = true ∧
+          (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots root.exc) ∧
+          views0.map Prod.fst =
+            (Exec.retainedTargetTurnsAt sevm.currentTarget [] childRun).filterMap
+              Sum.getRight?) ∧
+        (views1 = [] ∨ ∃ (child : Evm) (raw : Execution)
+          (childRun : Exec child.pc child.sta child.dyna raw),
+          Execution.commits raw = true ∧
+          (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots root.exc) ∧
+          views1.map Prod.fst =
+            (Exec.retainedTargetTurnsAt sevm.currentTarget [] childRun).filterMap
+              Sum.getRight?) ∧
+        ((turns1 = [] ∧ sevm.benvStat.rules.isPrecomp
+            (skimToken0 sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr) ∨
+          ∃ (child : Evm) (raw : Execution)
+          (childRun : Exec child.pc child.sta child.dyna raw)
+          (committed : Execution.commits raw = true),
+          (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots root.exc) ∧
+          turns1.map MutableTurn.event =
+            Exec.targetLogEventsFrom sevm.currentTarget [] 0 childRun committed) ∧
+        ((turns3 = [] ∧ sevm.benvStat.rules.isPrecomp
+            (skimToken1 sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr) ∨
+          ∃ (child : Evm) (raw : Execution)
+          (childRun : Exec child.pc child.sta child.dyna raw)
+          (committed : Execution.commits raw = true),
+          (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots root.exc) ∧
+          turns3.map MutableTurn.event =
+            Exec.targetLogEventsFrom sevm.currentTarget [] 0 childRun committed) ∧
+        post.output = []) := by
+  intro root ctx recipient
+  obtain ⟨value, nonstatic, out0, d, first, _, _, rest⟩ :=
+    skim_bytecode_exact_consumes_own invocation rep sem image installed freshOutput codeEq fork
+      selector run hashTInj hashTApart
+  refine ⟨value, nonstatic, out0, d, first, fun low high => ?_⟩
+  obtain ⟨out1, d2, views0, views1, turns1, turns3, final, rets, K', added, second, _, result⟩ :=
+    rest low high
+  exact ⟨out1, d2, views0, views1, turns1, turns3, final, rets, K', added, second, result⟩
 
 end Blanc.Lift.UniswapV2Pair
