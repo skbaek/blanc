@@ -54,6 +54,31 @@ import Blanc.Composition.ProrataWethVaultLedgerFaithful
 import Blanc.Composition.ProrataWethVaultCoalitionInhabitant
 import Blanc.Composition.ProrataWethVaultNonrevert
 import Blanc.Composition.ProrataWethVaultCapacities
+import Blanc.Lift.Weth9.FootHistory
+import Blanc.Lift.Weth9.CommittedHistory
+import Blanc.Lift.Weth9.LiveTx
+import Blanc.Lift.Weth9.Creation.Deploy
+import Blanc.Lift.Weth9.Creation.DeployInit
+import Blanc.Lift.BeaconDeposit.BeaconEnv
+import Blanc.Lift.BeaconDeposit.Creation.Deploy
+import Blanc.Lift.Curve3Crv.CommittedHistory
+import Blanc.Lift.Curve3Crv.Safe
+import Blanc.Lift.Curve3Crv.Creation.Deploy
+import Blanc.Lift.LidoCircuitBreakerDeployed.History
+import Blanc.Lift.LidoCircuitBreakerDeployed.L2History
+import Blanc.Lift.LidoCircuitBreakerDeployed.Creation.Deploy
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exclusion
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness.Top
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness2.Top
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.ForkTop
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Envelope
+import Blanc.Lift.WithdrawalRequest.WordFifo
+import Blanc.Composition.WithdrawalRequestDrainControl
+import Blanc.Lift.WithdrawalRequest.SystemHistory
+import Blanc.Lift.WithdrawalRequest.ExactFeeDomain
+import Blanc.Composition.WithdrawalRequestFeeRefutation
+import Blanc.Lift.WithdrawalRequest.NatLiveness
+import Blanc.Lift.WithdrawalRequest.Creation.Deploy
 
 /-!
 Lean-checked statement pins for the WETH10 flagship declarations and the Lido
@@ -6474,3 +6499,1002 @@ example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
 end Drip
 
 end Blanc
+
+/-!
+Deployed-bytecode claim map headlines: one exact statement pin per required headline of
+`scripts/check-deployed-claim-map.py`, each written in the namespace and with the `open`s of the
+module that states it, so every name resolves as it does there.  A change to any headline statement
+breaks this file; a proof-only change does not.
+-/
+
+namespace Blanc.Lift.Weth9
+open Jaune
+open Blanc
+open Blanc.Lift
+open Blanc.ExecutionTrace
+
+-- WETH9: weth9_history_footprint
+example {ca : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {K₀ : Key → Prop}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode ca).toList = weth9Sem.image)
+    (sumNof : SumNof checkpoint.state.bal)
+    (initial : FootInv K₀ (checkpoint.state.getStor ca) (checkpoint.state.bal ca))
+    (fresh : KeysFresh K₀ (historyTouchedKeys ca trace)) :
+    some (future.state.getCode ca).toList = weth9Sem.image ∧
+      ∃ K : Key → Prop, (∀ k, K k → K₀ k ∨ k ∈ historyTouchedKeys ca trace) ∧
+        FootInv K (future.state.getStor ca) (future.state.bal ca) :=
+  weth9_history_footprint trace installed sumNof initial fresh
+
+end Blanc.Lift.Weth9
+
+namespace Blanc.Lift.Weth9
+open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+-- WETH9: weth9_history_committed
+example {ca : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {K₀ : Key → Prop}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode ca).toList = weth9Sem.image)
+    (sumNof : SumNof checkpoint.state.bal)
+    (initial : FootInv K₀ (checkpoint.state.getStor ca) (checkpoint.state.bal ca))
+    (fresh : KeysFresh K₀ (historyTouchedKeys ca trace)) :
+    some (future.state.getCode ca).toList = weth9Sem.image ∧ SumNof future.state.bal ∧
+      FootInv (historyKeyUniverse ca trace K₀) (future.state.getStor ca) (future.state.bal ca) ∧
+      (ledger K₀ (checkpoint.state.getStor ca)).run
+          (replayCalls (committedInvocations ca trace)) =
+        some (ledger (historyKeyUniverse ca trace K₀) (future.state.getStor ca)) ∧
+      ∃ s : State,
+        (State.mk (ledger K₀ (checkpoint.state.getStor ca)) (checkpoint.state.bal ca).toNat).run
+            (replayCalls (committedInvocations ca trace)) = some s ∧
+          s.ledger = ledger (historyKeyUniverse ca trace K₀) (future.state.getStor ca) ∧
+          s.Backed :=
+  weth9_history_committed trace installed sumNof initial fresh
+
+end Blanc.Lift.Weth9
+
+namespace Blanc.Lift.Weth9
+open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace
+
+-- WETH9: weth9_tx_withdraw
+example
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat} {E ca : Adr} {wad : B256}
+    {chainId : UInt64} {maxPriorityFee maxFee : Nat} {U : Key → Prop}
+    (hfork : CoveredFork benv.stat.fork)
+    (htype : tx.type = .two chainId maxPriorityFee maxFee (some ca) [])
+    (hvalue : tx.value = 0) (hdata : tx.data = withdrawCalldata wad)
+    (hchain : chainId = benv.stat.chainId)
+    (hprio : maxPriorityFee ≤ maxFee) (hbase : benv.stat.baseFeePerGas ≤ maxFee)
+    (hgas : withdrawIntrinsicGas wad + withdrawFrameGas wad + 811 ≤ tx.gas)
+    (hcap : tx.gas ≤ 16777216)
+    (hroom : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed)
+    (hrecover : recoverSender benv.stat.chainId tx = .ok E)
+    (hnonce : (benv.state.get E).nonce = tx.nonce) (hnonceMax : tx.nonce ≠ UInt64.max)
+    (hnocode : (benv.state.getCode E).size = 0)
+    (hfunds : tx.gas * maxFee ≤ (benv.state.get E).bal.toNat)
+    (hprecE : benv.stat.rules.isPrecomp E = false) (hprecCa : benv.stat.rules.isPrecomp ca = false)
+    (hcode : benv.state.getCode ca = code)
+    (hinv : FootInv U (benv.state.getStor ca) (benv.state.bal ca)) (hholder : U (.bal E))
+    (hbal : wad ≤ (benv.state.getStor ca).get (balSlot E))
+    (hcbE : benv.stat.coinbase ≠ E) (hcbCa : benv.stat.coinbase ≠ ca) :
+    ∃ (st : Jaune.State) (bout' : BlockOutput), processTransaction benv bout tx index = .ok (st, bout') ∧
+      bout'.cumulativeGasUsed = bout.cumulativeGasUsed +
+        withdrawGasUsed ((benv.state.getStor ca).get (balSlot E)) wad ∧
+      bout'.blockGasUsed = bout.blockGasUsed +
+        withdrawGasUsed ((benv.state.getStor ca).get (balSlot E)) wad ∧
+      st.getStor ca = (benv.state.getStor ca).set (balSlot E)
+        ((benv.state.getStor ca).get (balSlot E) - wad) ∧
+      (∀ a, a ≠ ca → st.getStor a = benv.state.getStor a) ∧
+      (st.get E).nonce = tx.nonce + 1 ∧
+      (st.get E).bal = benv.state.bal E -
+          (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+            benv.stat.baseFeePerGas)).toB256 + wad +
+        ((tx.gas - withdrawGasUsed ((benv.state.getStor ca).get (balSlot E)) wad) *
+          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+            benv.stat.baseFeePerGas)).toB256 ∧
+      (st.get ca).bal = benv.state.bal ca - wad ∧
+      ((benv.state.bal E).toNat + wad.toNat < 2 ^ 256 →
+        (st.get E).bal.toNat + withdrawGasUsed ((benv.state.getStor ca).get (balSlot E)) wad *
+          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas) =
+          (benv.state.bal E).toNat + wad.toNat) :=
+  weth9_tx_withdraw hfork htype hvalue hdata hchain hprio hbase hgas hcap hroom hrecover hnonce hnonceMax hnocode hfunds hprecE hprecCa hcode hinv hholder hbal hcbE hcbCa
+
+end Blanc.Lift.Weth9
+
+namespace Blanc.Lift.Weth9.Creation
+open Jaune Blanc.Lift Blanc.ForkUniform
+
+-- WETH9: weth9_deploy_covered
+example (f : Fork) (hf : CoveredFork f) :
+    weth9Address = computeContractAddress deployer 446 ∧
+    ∃ post, processCreateMessage (deployMsg.withFork f) = .ok post ∧
+      (post.getCode weth9Address).toList = Blanc.Lift.Weth9.code.toList ∧
+      Devm.getStor post weth9Address = deployedStor :=
+  weth9_deploy_covered f hf
+
+end Blanc.Lift.Weth9.Creation
+
+namespace Blanc.Lift.Weth9.Creation
+open Jaune
+
+-- WETH9: weth9_deploy_init_covered
+example (f : Fork) (hf : CoveredFork f) :
+    weth9Address = computeContractAddress deployer 446 ∧
+    ∃ post, processCreateMessage (deployMsg.withFork f) = .ok post ∧
+      (post.getCode weth9Address).toList = Blanc.Lift.Weth9.code.toList ∧
+      ∀ b : B256, FootInv (fun _ => False) (Devm.getStor post weth9Address) b :=
+  weth9_deploy_init_covered f hf
+
+end Blanc.Lift.Weth9.Creation
+
+namespace Blanc.Lift.BeaconDeposit
+open Jaune Blanc Blanc.ExecutionTrace
+
+-- Beacon deposit: configuredHistory_solInv_sys
+example {ca : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {initialHistory : List B256}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (systemInstalled : SystemCodeInstalled checkpoint.state)
+    (systemNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
+    (systemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
+    (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
+    (noAuthority : trace.NoAuthorityAt 2)
+    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ 2)
+    (installed : checkpoint.state.getCode ca = code)
+    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
+    SolInv (future.state.getStor ca) (initialHistory ++ committedNodes ca trace) :=
+  configuredHistory_solInv_sys trace systemInstalled systemNoAuthority systemNoFrame checkpointEmpty noAuthority noFrame installed invariant
+
+end Blanc.Lift.BeaconDeposit
+
+namespace Blanc.Lift.BeaconDeposit
+open Jaune Blanc Blanc.ExecutionTrace
+
+-- Beacon deposit: configuredHistory_root_sys
+example {ca : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {initialHistory : List B256}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (systemInstalled : SystemCodeInstalled checkpoint.state)
+    (systemNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
+    (systemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
+    (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
+    (noAuthority : trace.NoAuthorityAt 2)
+    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ 2)
+    (installed : checkpoint.state.getCode ca = code)
+    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
+    BeaconDeposit.Acc.root Bytes.sha256 (solAcc (future.state.getStor ca)) =
+      BeaconDeposit.mixedRootOf Bytes.sha256 (initialHistory ++ committedNodes ca trace) :=
+  configuredHistory_root_sys trace systemInstalled systemNoAuthority systemNoFrame checkpointEmpty noAuthority noFrame installed invariant
+
+end Blanc.Lift.BeaconDeposit
+
+namespace Blanc.Lift.BeaconDeposit.Creation
+open Jaune Blanc.BeaconDeposit Blanc.Lift.BeaconDeposit Blanc.ForkUniform
+
+-- Beacon deposit: beacon_deploy_covered
+example (f : Fork) (hf : CoveredFork f) :
+    depositAddress = computeContractAddress deployer 0 ∧
+    ∃ post, processCreateMessage (deployMsg.withFork f) = .ok post ∧
+      (post.getCode depositAddress).toList = Blanc.Lift.BeaconDeposit.code.toList ∧
+      SolInv (Devm.getStor post depositAddress) [] :=
+  beacon_deploy_covered f hf
+
+end Blanc.Lift.BeaconDeposit.Creation
+
+namespace Blanc.Lift.Curve3Crv
+open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+-- Curve 3Crv: c3crv_history_committed_derived
+example {ca : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {initial : Blanc.Curve3Crv.State}
+    {initialKeys : Key → Prop}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode ca).toList = c3crvSem.image)
+    (invariant : VyInv (checkpoint.state.getStor ca) initial initialKeys)
+    (fresh : FreshKeys initialKeys (historyTouchedKeys ca trace)) :
+    some (future.state.getCode ca).toList = c3crvSem.image ∧
+      ∃ s, InvRun initial (committedInvocations ca trace) s ∧
+        runInvocations initial (committedInvocations ca trace) = some s ∧
+        VyInv (future.state.getStor ca) s
+          (Key.extend initialKeys (invocationKeys (committedInvocations ca trace))) ∧
+        Blanc.Curve3Crv.Conserved s :=
+  c3crv_history_committed_derived trace installed invariant fresh
+
+end Blanc.Lift.Curve3Crv
+
+namespace Blanc.Lift.Curve3Crv
+open Jaune
+open Blanc.Curve3Crv (Call)
+
+-- Curve 3Crv: c3crv_frame_refines
+example {sevm : Sevm} {pre post : Devm} {s : Curve3Crv.State}
+    {K : Key → Prop}
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcd : sevm.data.length < 2 ^ 256) (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty)
+    (houtput : pre.output = [])
+    (hinv : VyInv (Devm.getStor pre sevm.currentTarget) s K)
+    (hfresh : FreshKeys K (callKeys sevm.caller (decodeCall sevm)))
+    (exc : Exec 0 sevm pre (.ok post)) :
+    (IsWriter (decodeCall sevm) →
+      ∃ ow : Option B256, (∀ w, ow = some w → OwnerAnswer sevm pre s.minter w) ∧
+        ∃ o, Curve3Crv.step (c3ctx sevm ow) (decodeCall sevm) s = .ok o ∧
+          VyInv (Devm.getStor post sevm.currentTarget) o.1
+            (Key.extend K (callKeys sevm.caller (decodeCall sevm))) ∧
+          (∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor pre a) ∧
+          post.logs = pre.logs ++ o.2.1.map (eventLog sevm.currentTarget) ∧
+          RetOut post.output o.2.2) ∧
+    (¬ IsWriter (decodeCall sevm) →
+      (∀ a, Devm.getStor post a = Devm.getStor pre a) ∧ post.logs = pre.logs ∧
+        ∃ o, Curve3Crv.step (c3ctx sevm none) (decodeCall sevm) s = .ok o ∧
+          RetOut post.output o.2.2) :=
+  c3crv_frame_refines hcode hfork hcd hstack hmem houtput hinv hfresh exc
+
+end Blanc.Lift.Curve3Crv
+
+namespace Blanc.Lift.Curve3Crv.Creation
+open Jaune Blanc.Lift Blanc.Lift.Curve3Crv Blanc.ForkUniform
+
+-- Curve 3Crv: curve_deploy_covered
+example (f : Fork) (hf : CoveredFork f) :
+    tokenAddress = computeContractAddress deployer 42 ∧
+    ∃ post, processCreateMessage (deployMsg.withFork f) = .ok post ∧
+      (post.getCode tokenAddress).toList = Blanc.Lift.Curve3Crv.code.toList ∧
+      Devm.getStor post tokenAddress = deployedStor deployer.toB256 ∧
+      VyInv (Devm.getStor post tokenAddress) (curveDeployedState deployer) (fun _ => False) :=
+  curve_deploy_covered f hf
+
+end Blanc.Lift.Curve3Crv.Creation
+
+namespace Blanc.Lift.LidoCircuitBreakerDeployed
+open Jaune
+open Blanc
+open Blanc.Lift
+open Blanc.LidoCircuitBreaker
+open Blanc.ExecutionTrace
+open scoped BigOperators
+
+-- Lido CircuitBreaker: lido_history_l1_l3
+example
+    {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (admitted : trace.FrameAdmitted ca (lidoEntry lidoA))
+    (hcode : some (checkpoint.state.getCode ca).toList = lidoSpec.sem.image)
+    (hzero : RegistryZeroRaw (checkpoint.state.getStor ca)) :
+    ∃ entries,
+      (∀ {t : B256}, canonicalAddress t →
+        (addressSlotReadWord ((future.state.getStor ca).get (mapSlot t 3)) ≠ 0 ↔
+          t ∈ entries.map Prod.fst) ∧
+        ((future.state.getStor ca).get (mapSlot t 4) ≠ 0 ↔
+          t ∈ entries.map Prod.fst) ∧
+        ∀ index pauser, findEntry entries t = some (index, pauser) →
+          addressSlotReadWord ((future.state.getStor ca).get (mapSlot t 3)) = pauser ∧
+          (future.state.getStor ca).get (mapSlot t 4) = Nat.toB256 (index + 1) ∧
+          addressSlotReadWord ((future.state.getStor ca).get (registryArraySlot index)) = t) ∧
+      (∀ p, canonicalAddress p →
+        (future.state.getStor ca).get (mapSlot p 6) = Nat.toB256 (assignmentCount entries p)) ∧
+      (future.state.getStor ca).get (mapSlot 0 6) = 0 ∧
+      (∑ p ∈ (entries.map Prod.snd).toFinset,
+        ((future.state.getStor ca).get (mapSlot p 6)).toNat) = entries.length ∧
+      (future.state.getStor ca).get 5 = Nat.toB256 entries.length :=
+  lido_history_l1_l3 trace admitted hcode hzero
+
+end Blanc.Lift.LidoCircuitBreakerDeployed
+
+namespace Blanc.Lift.LidoCircuitBreakerDeployed
+open Jaune
+open Blanc
+open Blanc.Lift
+open Blanc.LidoCircuitBreaker
+open Blanc.ExecutionTrace
+
+-- Lido CircuitBreaker: lido_history_l2_committed
+example
+    {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (admitted : trace.FrameAdmitted ca (lidoEntry lidoA))
+    (inv : lidoSpec.StateInv ca checkpoint.state)
+    (frame : Exec.Frame) (member : frame ∈ trace.settledFrames)
+    (target : frame.sevm.currentTarget = ca) (nonstatic : frame.sevm.isStatic = false)
+    (hsig : Sevm.dataWord frame.sevm 0 >>> 224 = selector "registerPauser" [.address, .address])
+    (hnp0 : Sevm.dataWord frame.sevm 36 = 0) :
+    ∃ entries, RegistryWitness (solRegistryStorage (Devm.getStor frame.pre ca)) entries ∧
+      L2Post entries (Sevm.dataWord frame.sevm 4) (Devm.getStor frame.post ca) :=
+  lido_history_l2_committed trace admitted inv frame member target nonstatic hsig hnp0
+
+end Blanc.Lift.LidoCircuitBreakerDeployed
+
+namespace Blanc.Lift.LidoCircuitBreakerDeployed.Creation
+open Jaune Blanc Blanc.Lift Blanc.LidoCircuitBreaker Blanc.ForkUniform
+
+-- Lido CircuitBreaker: lido_deploy_covered
+example (f : Fork) (hf : CoveredFork f) :
+    breakerAddress = computeContractAddress deployer 0 ∧
+    ∃ post, processCreateMessage (deployMsg.withFork f) = .ok post ∧
+      (post.getCode breakerAddress).toList = Blanc.Lift.LidoCircuitBreakerDeployed.code.toList ∧
+      Devm.getStor post breakerAddress = deployedStor :=
+  lido_deploy_covered f hf
+
+end Blanc.Lift.LidoCircuitBreakerDeployed.Creation
+
+namespace Blanc.Lift.LidoCircuitBreakerDeployed.Creation
+open Jaune Blanc Blanc.Lift Blanc.LidoCircuitBreaker Blanc.ForkUniform
+
+-- Lido CircuitBreaker: lido_deploy_init_covered
+example (f : Fork) (hf : CoveredFork f)
+    (hfa0 : ForeignApart 0 0) (hfa1 : ForeignApart 0 1) :
+    ∃ post, processCreateMessage (deployMsg.withFork f) = .ok post ∧
+      (post.getCode breakerAddress).toList = Blanc.Lift.LidoCircuitBreakerDeployed.code.toList ∧
+      RegistryZeroRaw (Devm.getStor post breakerAddress) ∧
+      lidoSpec.StateInv breakerAddress post.state :=
+  lido_deploy_init_covered f hf hfa0 hfa1
+
+end Blanc.Lift.LidoCircuitBreakerDeployed.Creation
+
+namespace Blanc.Lift.VyperNonreentrantDeployed.Fixed
+open Jaune Blanc.LockExclusion
+open Jaune.Exec.Deriv (ParentPrefix)
+
+-- Vyper V+: vplus_exclusion
+example {sevm : Sevm} {pre : Devm} {out : Execution}
+    (R : Exec 0 sevm pre out) (hfork : CoveredFork sevm.benvStat.fork) {P : Adr}
+    (hP : pre.getCode P = forwarderCode curvePlainImpl847e ∨ pre.getCode P = code)
+    (hI : pre.getCode curvePlainImpl847e = code)
+    (hroot : sevm.currentTarget = P → sevm.code = pre.getCode P)
+    (hash : lockL.HashAvoidIn P R)
+    {F h c : Exec.Deriv} (hF : F ∈ Exec.rawFrameRoots R)
+    (active : ActiveRel P F h) (spawn : Spawns h c)
+    {G : Exec.Deriv} (hG : G ∈ Exec.rawFrameRoots c.exc) :
+    ¬ lockL.Enters P G :=
+  vplus_exclusion R hfork hP hI hroot hash hF active spawn hG
+
+end Blanc.Lift.VyperNonreentrantDeployed.Fixed
+
+namespace Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness
+open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.NodeWalk Blanc.LockExclusion Blanc.ForkUniform
+open Jaune.Exec.Deriv (ParentPrefix ParentStep)
+
+-- Vyper V+: vplus_witness_covered
+example (g : Fork) (hg : CoveredFork g) :
+    (msg0.withFork g).benv.stat.fork = g ∧ (f0.withFork g).enter = .run (e0.withFork g) ∧
+    (e0.withFork g).pc = 0 ∧
+    (∀ out, Exec 0 (e0.withFork g).sta (e0.withFork g).dyna out → out = .error (.revert, dF)) ∧
+    ∃ (out : Execution) (R : Exec 0 (e0.withFork g).sta (e0.withFork g).dyna out)
+      (h c G : Exec.Deriv),
+      -- the antecedent of `vplus_exclusion`, for `F` the root of `R`
+      (⟨0, (e0.withFork g).sta, (e0.withFork g).dyna, out, R⟩ : Exec.Deriv) ∈
+        Exec.rawFrameRoots R ∧
+      ActiveRel curvePlainImpl847e ⟨0, (e0.withFork g).sta, (e0.withFork g).dyna, out, R⟩ h ∧
+      Spawns h c ∧
+      -- the premises of `vplus_exclusion_impl`, for this `R`
+      CoveredFork (e0.withFork g).sta.benvStat.fork ∧
+      (e0.withFork g).dyna.getCode curvePlainImpl847e = code ∧
+      ((e0.withFork g).sta.currentTarget = curvePlainImpl847e →
+        (e0.withFork g).sta.code = (e0.withFork g).dyna.getCode curvePlainImpl847e) ∧
+      lockL.HashAvoidIn curvePlainImpl847e R ∧
+      -- the spawn: `remove_liquidity`'s `STATICCALL` of the coin `R`
+      h.pc = 0x337a ∧ Ninst.At h.sevm.code h.pc (.exec .staticcall) ∧
+      c.sevm.currentTarget = readerAddress ∧ c.sevm.code = Reader.code ∧
+      -- the reentry into `get_virtual_price()`, refused
+      G ∈ Exec.rawFrameRoots c.exc ∧ CPFrame curvePlainImpl847e code G ∧
+      G.sevm.data = [0xbb, 0x7b, 0x8b, 0x80] ∧ G.exn = .error (.revert, dG) ∧
+      (∀ x, ParentPrefix G x → x.pc ∉ lockBodies) ∧
+      ¬ lockL.Enters curvePlainImpl847e G :=
+  vplus_witness_covered g hg
+
+end Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness
+
+namespace Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness2
+open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.NodeWalk Blanc.LockExclusion Blanc.ForkUniform
+open Jaune.Exec.Deriv (ParentPrefix ParentStep)
+
+-- Vyper V+: vplus_witness2_covered
+example (g : Fork) (hg : CoveredFork g) :
+    (msgTop.withFork g).benv.stat.fork = g ∧
+    (frameTop.withFork g).enter = .run (eTop.withFork g) ∧ (eTop.withFork g).pc = 0 ∧
+    (∀ out, Exec 0 (eTop.withFork g).sta (eTop.withFork g).dyna out → out = .ok dTop) ∧
+    ∃ (out : Execution) (R : Exec 0 (eTop.withFork g).sta (eTop.withFork g).dyna out)
+      (F h c q G : Exec.Deriv),
+      -- the premises of `vplus_exclusion_stethPool`, for this `R`
+      CoveredFork (eTop.withFork g).sta.benvStat.fork ∧
+      (eTop.withFork g).dyna.getCode curveStethPool847e = forwarderCode curvePlainImpl847e ∧
+      (eTop.withFork g).dyna.getCode curvePlainImpl847e = code ∧
+      ((eTop.withFork g).sta.currentTarget = curveStethPool847e →
+        (eTop.withFork g).sta.code = (eTop.withFork g).dyna.getCode curveStethPool847e) ∧
+      lockL.HashAvoidIn curveStethPool847e R ∧
+      -- its antecedent: the pool body, active, spawns the receiver with the ETH payment
+      F ∈ Exec.rawFrameRoots R ∧ ActiveRel curveStethPool847e F h ∧ Spawns h c ∧
+      h.pc = 7427 ∧ Ninst.At h.sevm.code h.pc (.exec .call) ∧
+      c.sevm.currentTarget = receiverAddress ∧ c.sevm.code = Receiver.code ∧
+      c.sevm.value.toNat = 100 ∧
+      -- the reentry through the forwarder, refused at the lock check
+      q ∈ Exec.rawFrameRoots c.exc ∧ q.sevm.currentTarget = curveStethPool847e ∧
+      q.sevm.code = forwarderCode curvePlainImpl847e ∧ G ∈ Exec.rawFrameRoots q.exc ∧
+      G ∈ Exec.rawFrameRoots c.exc ∧ CPFrame curveStethPool847e code G ∧
+      G.sevm.data = reentryCall ∧ G.exn = .error (.revert, dRe) ∧
+      (∀ x, ParentPrefix G x → x.pc ∉ lockBodies) ∧
+      (∃ y y', ParentPrefix G y ∧ y.pc = 0x53 ∧ ParentPrefix y y' ∧ y'.pc = 0x477e) ∧
+      ¬ lockL.Enters curveStethPool847e G ∧
+      -- the transaction commits
+      out = .ok dTop ∧
+      ((eTop.withFork g).dyna.getBal curveStethPool847e).toNat = 1000 ∧
+      (dTop.getBal curveStethPool847e).toNat = 900 ∧
+      ((eTop.withFork g).dyna.getBal receiverAddress).toNat = 0 ∧
+      (dTop.getBal receiverAddress).toNat = 100 ∧
+      lockAt curveStethPool847e 0 (eTop.withFork g).dyna = (3 : Nat).toB256 ∧
+      lockAt curveStethPool847e 0 dTop = (3 : Nat).toB256 :=
+  vplus_witness2_covered g hg
+
+end Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness2
+
+namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top
+open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.Witness.Boundary Blanc.ConcreteRun
+open Blanc.Lift.VyperNonreentrantDeployed Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
+open Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Subtree
+variable {g : Fork}
+
+-- Vyper V−: vminus_witness_covered
+example (g : Fork) (hg : CoveredFork g) :
+    ∃ post0 post1 : Devm,
+      -- the top-level message call, under `g`
+      (msg0.withFork g).benv.stat.fork = g ∧ CoveredFork (msg0.withFork g).benv.stat.fork ∧
+      (f0.withFork g).enter = .run (e0.withFork g) ∧
+      Nonempty (Exec (e0.withFork g).pc (e0.withFork g).sta (e0.withFork g).dyna (.ok post0)) ∧
+      processMessage (msg0.withFork g) = .ok post0 ∧ post0.error = none ∧
+      post0.output = word 100 ++ word 100 ∧
+      -- (a) frame 1: `P` running the implementation's `remove_liquidity`, spawned by the proxy
+      stepN 11 (e0.withFork g) = some (e0_31.withFork g) ∧
+      SpawnedBy (e0_31.withFork g).sta (e0_31.withFork g).dyna .delegatecall
+        ⟨0, sevm1.withFork g, pre1⟩ ∧
+      (sevm1.withFork g).currentTarget = proxyAddress ∧ (sevm1.withFork g).code = code ∧
+      (sevm1.withFork g).data = removeCalldata ∧
+      Nonempty (Exec 0 (sevm1.withFork g) pre1 (.ok post1)) ∧ post1.error = none ∧
+      -- frame 1 takes slot 2 and calls `A` holding it
+      storOf pre1.state proxyAddress (2 : Nat).toB256 = 0 ∧
+      wrun fs1 (sevm1.withFork g) 339 c0 = .cont cfg339 ∧ Agree cfg339 ∧
+      storOf cfg339.devm.state proxyAddress (2 : Nat).toB256 = (1 : Nat).toB256 ∧
+      SpawnedBy (sevm1.withFork g) cfg339.devm .call (e2.withFork g) ∧
+      (e2.withFork g).sta.currentTarget = attackerAddress ∧
+      (e2.withFork g).sta.code = attackerCode ∧
+      -- `A` calls `P`; the proxy delegates to the implementation: frame 4
+      wrun fs2 (e2.withFork g).sta 24 cc2 = .cont aCall ∧
+      SpawnedBy (e2.withFork g).sta aCall.devm .call (e3.withFork g) ∧
+      (e3.withFork g).sta.currentTarget = proxyAddress ∧
+      (e3.withFork g).sta.code = proxyCode ∧
+      stepN 11 (e3.withFork g) = some (e31.withFork g) ∧
+      SpawnedBy (e31.withFork g).sta (e31.withFork g).dyna .delegatecall (e4.withFork g) ∧
+      (e4.withFork g).sta.currentTarget = proxyAddress ∧ (e4.withFork g).sta.code = code ∧
+      (e4.withFork g).sta.data = addCalldata ∧
+      -- frame 4 is entered while slot 2 = 1, its own lock (slot 0) free
+      storOf e4.dyna.state proxyAddress (2 : Nat).toB256 = (1 : Nat).toB256 ∧
+      storOf e4.dyna.state proxyAddress (0 : Nat).toB256 = 0 ∧
+      Nonempty (Exec (e4.withFork g).pc (e4.withFork g).sta (e4.withFork g).dyna (.ok post4)) ∧
+      -- frame 4 reaches `add_liquidity`'s body with slot 0 taken and slot 2 still held
+      (∃ cB : Cfg, wrun fs1 (e4.withFork g).sta 2625 c4 = .cont cB ∧ Agree cB ∧
+        cB.f = t_0370_c63 ∧
+        storOf cB.devm.state proxyAddress (0 : Nat).toB256 = (1 : Nat).toB256 ∧
+        storOf cB.devm.state proxyAddress (2 : Nat).toB256 = (1 : Nat).toB256) ∧
+      (storOf post4.state proxyAddress balanceOfASlot.toB256).toNat = 2106 ∧
+      storOf post4.state proxyAddress (0 : Nat).toB256 = 0 ∧
+      -- (b) the two guards in the deployed bytes: slot 2 and slot 0
+      (code.getInst 6900 = some (.next (.push [0x02] (by decide))) ∧
+        code.getInst 6902 = some (.next (.reg .sload)) ∧
+        code.getInst 6911 = some (.next (.reg .sstore))) ∧
+      (code.getInst 88 = some (.next (.push [0x00] (by decide))) ∧
+        code.getInst 90 = some (.next (.reg .sload)) ∧
+        code.getInst 99 = some (.next (.reg .sstore))) ∧
+      (storOf post1.state proxyAddress (2 : Nat).toB256).toNat = 0 ∧
+      -- (c) the harm
+      (storOf post0.state proxyAddress (26 : Nat).toB256).toNat = 1800 ∧
+      (storOf post0.state proxyAddress balanceOfASlot.toB256).toNat = 1906 ∧
+      (storOf post0.state proxyAddress (26 : Nat).toB256).toNat <
+        (storOf post0.state proxyAddress balanceOfASlot.toB256).toNat :=
+  vminus_witness_covered g hg
+
+end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top
+
+namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC
+open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Witness Blanc.ForkUniform
+open Blanc.Lift.VyperNonreentrantDeployed Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
+open Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxTop
+variable {g : Fork}
+
+-- Vyper V−: vminus_txC_process
+example (g : Fork) (hg : CoveredFork g) (bout : BlockOutput)
+    (hroom : bout.blockGasUsed + txC.gas ≤ 60000000) :
+    txC.gas < 2 ^ 24 ∧
+    ∃ (st : State) (bout' : BlockOutput),
+      processTransaction (benvPre.withFork g) bout txC 0 = .ok (st, bout') ∧
+      (storOf st proxyAddress (26 : Nat).toB256).toNat = 1800 ∧
+      (storOf st proxyAddress balanceOfA2Slot.toB256).toNat = 1906 ∧
+      (storOf st proxyAddress (26 : Nat).toB256).toNat <
+        (storOf st proxyAddress balanceOfA2Slot.toB256).toNat :=
+  vminus_txC_process g hg bout hroom
+
+end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC
+
+namespace Blanc.Lift.WithdrawalRequest
+open Jaune ExecutionTrace ExecutionAccountingReplay Blanc.WithdrawalRequest
+
+-- EIP-7002: block_word_fifo
+example
+    {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    (history : ConfiguredHistoryTrace cfg checkpoint pre)
+    (block : ConfiguredBlockTrace cfg pre post)
+    (installed : SystemCodeInstalled checkpoint.state)
+    (senders : (ConfiguredHistoryTrace.step history block).NoSenderAt systemAddress)
+    (authorities : (ConfiguredHistoryTrace.step history block).NoAuthorityAt systemAddress)
+    (avoid : ∀ root ∈ (ConfiguredHistoryTrace.step history block).rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
+    (systemEmpty : checkpoint.state.getCode systemAddress = ByteArray.empty)
+    (init : RepresentsStorage (checkpoint.state.getStor withdrawalRequestPredeployAddress).get initial)
+    (occurrences : ((ConfiguredHistoryTrace.step history block).settledFrames.flatMap
+      submissionFramePayments).length ≤ wordOccurrenceCap) :
+    BlockWordFifo history block :=
+  block_word_fifo history block installed senders authorities avoid systemEmpty init occurrences
+
+end Blanc.Lift.WithdrawalRequest
+
+namespace Blanc.Lift.WithdrawalRequest.DrainControl
+open Jaune Blanc.Lift Blanc.ExecutionTrace Blanc.BlockForward FloodTx FeeCounterexample
+
+-- EIP-7002: systemEmpty_loadBearing_witness
+example : SystemEmptyLoadBearing :=
+  systemEmpty_loadBearing_witness
+
+end Blanc.Lift.WithdrawalRequest.DrainControl
+
+namespace Blanc.Lift.WithdrawalRequest
+open Jaune Blanc.ExecutionTrace
+
+-- EIP-7002: history_checked_system_totality
+example {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTrace cfg checkpoint future)
+    (code : checkpoint.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode)
+    {benv : Benv} (state : benv.state = future.state) (fork : CoveredFork benv.stat.fork) :
+    processCheckedSystemTransaction benv withdrawalRequestPredeployAddress [] =
+      .ok ((systemProtocolPost benv).state, systemProtocolOutput benv) ∧
+    (systemProtocolOutput benv).error = none ∧
+    (systemProtocolOutput benv).gasLeft = systemTransactionGas - systemProtocolGas benv ∧
+    systemProtocolGas benv ≤ 210000 ∧
+    (systemProtocolOutput benv).returnData = (systemProtocolPost benv).output ∧
+    (systemProtocolOutput benv).refundCounter = (systemProtocolPost benv).refundCounter :=
+  history_checked_system_totality history code state fork
+
+end Blanc.Lift.WithdrawalRequest
+
+namespace Blanc.Lift.WithdrawalRequest
+open Jaune
+
+-- EIP-7002: word_fee_eq_iff_natFeeDomain
+example {excess : B256} {iterations : Nat}
+    {output : B256}
+    (run : WordFakeExponential.Run excess 17 1 17 0 iterations output)
+    (model : Blanc.WithdrawalRequest.State) (excessEq : model.excess = excess.toNat) :
+    (output / (17 : B256)).toNat = Blanc.WithdrawalRequest.fee model ↔
+      NatFeeDomain excess iterations :=
+  word_fee_eq_iff_natFeeDomain run model excessEq
+
+end Blanc.Lift.WithdrawalRequest
+
+namespace Blanc.Lift.WithdrawalRequest.FeeCounterexample
+open Jaune Blanc.Lift Blanc.ExecutionTrace Blanc.BlockForward FloodTx FloodWalk
+
+-- EIP-7002: nat_fee_guarantee_refuted
+example : NatFeeGuaranteeRefuted :=
+  nat_fee_guarantee_refuted
+
+end Blanc.Lift.WithdrawalRequest.FeeCounterexample
+
+namespace Blanc.Lift.WithdrawalRequest
+open Jaune Blanc.ExecutionTrace
+
+-- EIP-7002: history_submission_nat_live
+example {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTrace cfg checkpoint future)
+    (code : checkpoint.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode)
+    (sevm : Sevm) (b : Devm) (data : Bytes) (fork : CoveredFork sevm.benvStat.fork)
+    (user : sevm.caller ≠ systemAddress) (length : data.length = 56) :
+    let fresh := historySubmissionSevm future.state sevm data
+    let base := b.withState future.state
+    (base.getStorVal withdrawalRequestPredeployAddress 0 = B256.max →
+      ∀ gas post, ¬ Nonempty (Exec 0 fresh (St base [] Mem.empty gas) (.ok post))) ∧
+    (base.getStorVal withdrawalRequestPredeployAddress 0 ≠ B256.max →
+      fakeExp 1 (base.getStorVal withdrawalRequestPredeployAddress 0).toNat 17 ≤
+        sevm.value.toNat →
+      ∃! result : Nat × B256,
+        WordFakeExponential.Run (base.getStorVal withdrawalRequestPredeployAddress 0)
+          17 1 17 0 result.1 result.2 ∧
+        ∀ G, gCallStipend < G →
+          Nonempty (Exec 0 fresh (St base [] Mem.empty
+            (G + (1258 + 87 * result.1 + sloadScheduleCost fresh (userSubmissionReads fresh base) +
+              submissionStoreGas fresh (afterSload fresh base 0) Mem.empty)))
+            (.ok (submissionPost fresh (afterSload fresh base 0) Mem.empty G)))) :=
+  history_submission_nat_live history code sevm b data fork user length
+
+end Blanc.Lift.WithdrawalRequest
+
+namespace Blanc.Lift.WithdrawalRequest.Creation
+open Jaune Blanc.Lift Blanc.WithdrawalRequest
+
+-- EIP-7002: deploy_initial
+example (fork : Fork) (hfork : CoveredFork fork) :
+    (deployMsg fork).currentTarget = withdrawalRequestPredeployAddress ∧
+    ∃ post, processCreateMessage (deployMsg fork) = .ok post ∧
+      post.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode ∧
+      RepresentsStorage (post.getStor withdrawalRequestPredeployAddress).get initial ∧
+      post.error = none :=
+  deploy_initial fork hfork
+
+end Blanc.Lift.WithdrawalRequest.Creation
+
+
+/-! The project definitions those headline statements are stated through, where the definition
+body is itself the claim, are pinned by unfolding (`Iff.rfl`), and record types by an exact
+field-wise equivalence, so a weakened body or an added/removed field fails here. -/
+
+namespace Blanc
+open Jaune
+
+-- WETH9 definition: SumNof
+example (f : Adr → B256) :
+    SumNof f ↔
+      (sum f < 2 ^ 256) :=
+  Iff.rfl
+
+end Blanc
+
+namespace Blanc.Lift.Weth9.State
+open Jaune Blanc
+
+-- WETH9 definition: Backed
+example (s : State) :
+    Backed s ↔
+      (s.ledger.total ≤ s.eth) :=
+  Iff.rfl
+
+end Blanc.Lift.Weth9.State
+
+namespace Blanc.Lift.Weth9
+open Jaune
+open Blanc
+open Classical in
+
+-- WETH9 definition: FootInv
+example (K : Key → Prop) (s : Stor) (b : B256) :
+    FootInv K s b ↔
+      (Support K s) ∧
+      (KeyInj K) ∧
+      (KeyApart K) ∧
+      (trackedSum K s ≤ b.toNat) :=
+  ⟨fun h => ⟨h.support, h.inj, h.apart, h.backed⟩, fun ⟨h0, h1, h2, h3⟩ => ⟨h0, h1, h2, h3⟩⟩
+
+end Blanc.Lift.Weth9
+
+namespace Blanc.Lift.BeaconDeposit
+open Jaune
+open Blanc.BeaconDeposit
+
+-- Beacon deposit definition: SolInv
+example (stor : Stor) (history : List B256) :
+    SolInv stor history ↔
+      (SolZeroHashesCorrect stor ∧ Inv Bytes.sha256 (solAcc stor) history) :=
+  Iff.rfl
+
+end Blanc.Lift.BeaconDeposit
+
+namespace Blanc.Lift.Curve3Crv
+open Jaune
+open Blanc.Curve3Crv (Conserved)
+
+-- Curve 3Crv definition: VyInv
+example (stor : Stor) (s : Curve3Crv.State) (K : Key → Prop) :
+    VyInv stor s K ↔
+      (stor.get vyDecimalsSlot = s.decimals) ∧
+      (stor.get vySupplySlot = s.totalSupply) ∧
+      (stor.get vyMinterSlot = s.minter.toB256) ∧
+      (VyStr stor vyNameBase 2 s.name) ∧
+      (VyStr stor vySymbolBase 1 s.symbol) ∧
+      (∀ k, K k → stor.get k.slot = k.val s) ∧
+      (∀ k, ¬ K k → k.val s = 0) ∧
+      (∀ x, stor.get x ≠ 0 → x ∈ vyFixedSlots ∨ ∃ k, K k ∧ k.slot = x) ∧
+      (∀ k k', K k → K k' → k.slot = k'.slot → k = k') ∧
+      (∀ k, K k → k.slot ∉ vyFixedSlots) ∧
+      (Conserved s) :=
+  ⟨fun h => ⟨h.decimals, h.supply, h.minter, h.name, h.symbol, h.known, h.unknown, h.support, h.inj, h.apart, h.conserved⟩, fun ⟨h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10⟩ => ⟨h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10⟩⟩
+
+end Blanc.Lift.Curve3Crv
+
+namespace Blanc.Curve3Crv
+open Jaune
+
+-- Curve 3Crv definition: Conserved
+example (s : State) :
+    Conserved s ↔
+      (s.totalSupply.toNat = sum s.balanceOf) :=
+  Iff.rfl
+
+end Blanc.Curve3Crv
+
+namespace Blanc.Lift.Curve3Crv
+open Jaune
+open Blanc.Curve3Crv (Call Ctx Event Ret)
+
+-- Curve 3Crv definition: OwnerAnswer
+example (sevm : Sevm) (b : Devm) (m : Adr) (w : B256) :
+    OwnerAnswer sevm b m w ↔
+      (∃ out, StaticAnswered sevm b m ownerCalldata out ∧ 32 ≤ out.length ∧
+    Bytes.toB256 (out.take 32) = w) :=
+  Iff.rfl
+
+end Blanc.Lift.Curve3Crv
+
+namespace Blanc.Lift.LidoCircuitBreakerDeployed
+open Jaune
+open Blanc
+open Blanc.Lift
+open Blanc.LidoCircuitBreaker
+
+-- Lido CircuitBreaker definition: L2Post
+example (entries : List Entry) (t : B256) (s : Stor) :
+    L2Post entries t s ↔
+      (nonzeroCanonicalAddress t ∧
+  addressSlotReadWord (s.get (mapSlot t 3)) = 0 ∧
+  s.get (mapSlot t 4) = 0 ∧
+  (∃ entries', RegistryWitness (solRegistryStorage s) entries' ∧ t ∉ entries'.map Prod.fst) ∧
+  match findEntry entries t with
+  | some (index, _) =>
+      addressSlotReadWord (s.get (registryArraySlot (entries.length - 1))) = 0 ∧
+      s.get 5 = Nat.toB256 (entries.length - 1) ∧
+      (index + 1 < entries.length →
+        addressSlotReadWord (s.get (registryArraySlot index)) = sourceLastTarget entries ∧
+        s.get (mapSlot (sourceLastTarget entries) 4) = Nat.toB256 (index + 1)) ∧
+      (index + 1 = entries.length → sourceLastTarget entries = t)
+  | none =>
+      addressSlotReadWord (s.get (registryArraySlot entries.length)) = 0 ∧
+      s.get 5 = Nat.toB256 entries.length) :=
+  Iff.rfl
+
+end Blanc.Lift.LidoCircuitBreakerDeployed
+
+namespace Blanc.Lift.LidoCircuitBreakerDeployed
+open Jaune
+open Blanc
+open Blanc.Lift
+open Blanc.LidoCircuitBreaker
+
+-- Lido CircuitBreaker definition: RegistryZeroRaw
+example (s : Stor) :
+    RegistryZeroRaw s ↔
+      (s.get 5 = 0 ∧
+  ∀ p, canonicalAddress p →
+    addressSlotReadWord (s.get (mapSlot p 3)) = 0 ∧
+    s.get (mapSlot p 4) = 0 ∧
+    s.get (mapSlot p 6) = 0) :=
+  Iff.rfl
+
+end Blanc.Lift.LidoCircuitBreakerDeployed
+
+namespace Blanc.LockExclusion
+open Jaune
+open Jaune.Exec.Deriv
+
+-- Vyper V± definition: CPFrame
+example (P : Adr) (code : ByteArray) (F : Exec.Deriv) :
+    CPFrame P code F ↔
+      (F.pc = 0 ∧ F.sevm.currentTarget = P ∧ F.sevm.code = code) :=
+  Iff.rfl
+
+end Blanc.LockExclusion
+
+namespace Blanc.LockExclusion.LockSpec
+open Jaune
+open Jaune.Exec.Deriv
+
+-- Vyper V± definition: Enters
+example (L : LockSpec) (P : Adr) (G : Exec.Deriv) :
+    Enters L P G ↔
+      (CPFrame P L.code G ∧ ∃ x, ParentPrefix G x ∧ x.pc ∈ L.bodies) :=
+  Iff.rfl
+
+end Blanc.LockExclusion.LockSpec
+
+namespace Blanc.LockExclusion.LockSpec
+open Jaune
+open Jaune.Exec.Deriv
+
+-- Vyper V± definition: HashAvoidIn
+example (L : LockSpec) (P : Adr)
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) :
+    HashAvoidIn L P run ↔
+      (∀ G ∈ Exec.rawFrameRoots run, CPFrame P L.code G → HashAvoid L.slot G) :=
+  Iff.rfl
+
+end Blanc.LockExclusion.LockSpec
+
+namespace Blanc.Lift.VyperNonreentrantDeployed.Fixed
+open Jaune Blanc.LockExclusion
+open Jaune.Exec.Deriv (ParentPrefix)
+
+-- Vyper V+ definition: ActiveRel
+example (P : Adr) (F h : Exec.Deriv) :
+    ActiveRel P F h ↔
+      (CPFrame P code F ∧ ParentPrefix F h ∧
+    ∃ b, ParentPrefix F b ∧ ParentPrefix b h ∧ b.pc ∈ lockMutBodies ∧
+      ∀ x, ParentPrefix b x → ParentPrefix x h → x ≠ h → x.pc ∉ lockReleasePcs) :=
+  Iff.rfl
+
+end Blanc.Lift.VyperNonreentrantDeployed.Fixed
+
+namespace Blanc.Lift.Witness
+open Jaune Blanc.Lift
+
+-- Vyper V− definition: SpawnedBy
+example (sevm : Sevm) (devm : Devm) (x : Xinst) (child : Evm) :
+    SpawnedBy sevm devm x child ↔
+      (∃ f rsm, Xinst.step sevm devm x = .spawn f rsm ∧ f.enter = .run child) :=
+  Iff.rfl
+
+end Blanc.Lift.Witness
+
+namespace Blanc.Lift.Witness
+open Jaune Blanc.Lift
+
+-- Vyper V− definition: Agree
+example (c : Cfg) :
+    Agree c ↔
+      ((∀ x, x ∈ c.devm.accessedStorageKeys ↔ x ∈ c.keys) ∧
+    (∀ a, a ∈ c.devm.accessedAddresses ↔ a ∈ c.adrs) ∧
+    (∀ a k, storOf c.devm.state a k = lookupS c.stor a k) ∧
+    AcctAgree c.devm.state c.acs) :=
+  Iff.rfl
+
+end Blanc.Lift.Witness
+
+namespace Blanc.Lift.WithdrawalRequest
+open Jaune ExecutionTrace ExecutionAccountingReplay Blanc.WithdrawalRequest
+
+-- EIP-7002 definition: BlockWordFifo
+example {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    (history : ConfiguredHistoryTrace cfg checkpoint pre)
+    (block : ConfiguredBlockTrace cfg pre post) :
+    BlockWordFifo history block ↔
+      (∃ past transactionEvents : List WordReplayEvent, ∃ reset : WordReplayEvent,
+    WordStorageReplay (checkpoint.state.getStor withdrawalRequestPredeployAddress)
+      ((past ++ transactionEvents) ++ [reset])
+      (post.state.getStor withdrawalRequestPredeployAddress) ∧
+    past.map WordReplayEvent.frame = history.settledFrames.flatMap balanceFrameObservation ∧
+    transactionEvents.map WordReplayEvent.frame =
+      block.bodyTrace.transactions.settledFrames.flatMap balanceFrameObservation ∧
+    reset.kind = .system ∧
+    reset.frame.pre.state = block.bodyTrace.requestBenv.state ∧
+    let model := (past ++ transactionEvents).foldl wordModelUpdate initial
+    WordHistory initial model (wordModelSubmissions (past ++ transactionEvents))
+      (wordModelOutputs initial past) ∧
+    RepresentsStorage (block.bodyTrace.requestBenv.state.getStor
+      withdrawalRequestPredeployAddress).get model ∧
+    block.bodyTrace.requests.withdrawalOut.returnData = systemOutput model ∧
+    block.blockOutput.requests = block.bodyTrace.transactionBout.requests ++
+      optionalRequestEntry 0 block.bodyTrace.requests.depositRequests ++
+      optionalRequestEntry 1 (systemOutput model) ++
+      optionalRequestEntry 2 block.bodyTrace.requests.consolidationOut.returnData ∧
+    (optionalRequestEntry 1 block.bodyTrace.requests.withdrawalOut.returnData = [] ↔
+      emitted model = []) ∧
+    WordHistory initial (Blanc.WithdrawalRequest.system model)
+      (wordModelSubmissions ((past ++ transactionEvents) ++ [reset]))
+      (wordModelOutputs initial past ++ emitted model) ∧
+    (wordModelSubmissions ((past ++ transactionEvents) ++ [reset])).map Submission.entry =
+      (wordModelOutputs initial past ++ emitted model) ++
+        (Blanc.WithdrawalRequest.system model).queue ∧
+    let submissions := wordSubmissionFrames (past ++ transactionEvents)
+    submissions.map Prod.fst =
+      ((history.settledFrames ++ block.bodyTrace.transactions.settledFrames).flatMap
+        submissionFramePayments).map Prod.fst ∧
+    submissions.map Prod.fst =
+      ((ConfiguredHistoryTrace.step history block).settledFrames.flatMap
+        submissionFramePayments).map Prod.fst ∧
+    (∀ pair ∈ submissions,
+      pair.1.sevm.caller = pair.2.caller ∧ pair.1.sevm.data = submissionPayload pair.2) ∧
+    submissions.map Prod.snd = (wordModelOutputs initial past ++ emitted model) ++
+      (Blanc.WithdrawalRequest.system model).queue ∧
+    RepresentsStorage (post.state.getStor withdrawalRequestPredeployAddress).get
+      (Blanc.WithdrawalRequest.system model) ∧
+    effectiveExcess model ≤ wordOccurrenceCap ∧ model.count ≤ wordOccurrenceCap ∧
+    model.head ≤ model.tail ∧ model.tail ≤ wordOccurrenceCap ∧
+    model.queue.length = model.tail - model.head ∧
+    effectiveExcess model + model.count < 2 ^ 256 ∧ queueBase model.tail + 2 < 2 ^ 256 ∧
+    effectiveExcess (Blanc.WithdrawalRequest.system model) ≤ wordOccurrenceCap ∧
+    (Blanc.WithdrawalRequest.system model).tail ≤ wordOccurrenceCap ∧
+    QueueSlotsSafe model ∧ QueueSlotsSafe (Blanc.WithdrawalRequest.system model)) :=
+  Iff.rfl
+
+end Blanc.Lift.WithdrawalRequest
+
+namespace Blanc.Lift.WithdrawalRequest
+open Jaune ExecutionTrace ExecutionAccountingReplay Blanc.WithdrawalRequest
+
+-- EIP-7002 definition: SystemEmptyLoadBearing
+example :
+    SystemEmptyLoadBearing ↔
+      (∃ (cfg : ChainConfig) (checkpoint pre post : BlockChain)
+    (history : ConfiguredHistoryTrace cfg checkpoint pre)
+    (block : ConfiguredBlockTrace cfg pre post),
+    SystemCodeInstalled checkpoint.state ∧
+    (ConfiguredHistoryTrace.step history block).NoSenderAt systemAddress ∧
+    (ConfiguredHistoryTrace.step history block).NoAuthorityAt systemAddress ∧
+    (∀ root ∈ (ConfiguredHistoryTrace.step history block).rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress) ∧
+    checkpoint.state.getCode systemAddress ≠ ByteArray.empty ∧
+    RepresentsStorage (checkpoint.state.getStor withdrawalRequestPredeployAddress).get initial ∧
+    ((ConfiguredHistoryTrace.step history block).settledFrames.flatMap
+      submissionFramePayments).length ≤ wordOccurrenceCap ∧
+    ¬ BlockWordFifo history block) :=
+  Iff.rfl
+
+end Blanc.Lift.WithdrawalRequest
+
+namespace Blanc.Lift.WithdrawalRequest
+open Jaune
+
+-- EIP-7002 definition: NatFeeDomain
+example (excess : B256) (iterations : Nat) :
+    NatFeeDomain excess iterations ↔
+      (∃ output, ∃ run : FakeExponential.Run excess.toNat
+      Blanc.WithdrawalRequest.feeUpdateFraction 1 Blanc.WithdrawalRequest.feeUpdateFraction
+      iterations output, FakeExponentialWordCorrespondence.NoWrap run 0) :=
+  Iff.rfl
+
+end Blanc.Lift.WithdrawalRequest
+
+namespace Blanc.Lift.WithdrawalRequest.FeeCounterexample
+open Jaune Blanc.Lift Blanc.ExecutionTrace Blanc.BlockForward FloodTx
+
+-- EIP-7002 definition: NatFeeGuaranteeRefuted
+example :
+    NatFeeGuaranteeRefuted ↔
+      (∃ (cfg : ChainConfig) (checkpoint future : BlockChain)
+    (trace : ConfiguredHistoryTrace cfg checkpoint future),
+    SystemCodeInstalled checkpoint.state ∧
+    trace.NoSenderAt systemAddress ∧ trace.NoAuthorityAt systemAddress ∧
+    (∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ systemAddress) ∧
+    checkpoint.state.getCode systemAddress = ByteArray.empty ∧
+    Blanc.WithdrawalRequest.RepresentsStorage
+      (checkpoint.state.getStor withdrawalRequestPredeployAddress).get
+      Blanc.WithdrawalRequest.initial ∧
+    ∃ frame ∈ trace.settledFrames.flatMap balanceFrameObservation,
+      ∃ (model : Blanc.WithdrawalRequest.State) (iterations : Nat) (output : B256),
+        submissionPaymentFrame frame ∧
+        model.excess = ((frame.pre.getStor withdrawalRequestPredeployAddress).get 0).toNat ∧
+        WordFakeExponential.Run ((frame.pre.getStor withdrawalRequestPredeployAddress).get 0)
+          17 1 17 0 iterations output ∧
+        (output / 17).toNat ≤ frame.sevm.value.toNat ∧
+        frame.sevm.value.toNat < Blanc.WithdrawalRequest.fee model) :=
+  Iff.rfl
+
+end Blanc.Lift.WithdrawalRequest.FeeCounterexample
+
+namespace Blanc.WithdrawalRequest
+open Jaune
+
+-- EIP-7002 definition: RepresentsStorage
+example (storage : B256 → B256) (state : State) :
+    RepresentsStorage storage state ↔
+      (Coherent state) ∧
+      (StorageBounds state) ∧
+      (storage 0 = state.excess.toB256) ∧
+      (storage 1 = state.count.toB256) ∧
+      (storage 2 = state.head.toB256) ∧
+      (storage 3 = state.tail.toB256) ∧
+      (∀ i (hi : i < state.queue.length),
+    storage (queueSlot (state.head + i) 0) = callerWord state.queue[i] ∧
+    storage (queueSlot (state.head + i) 1) = pubkeyWord state.queue[i] ∧
+    storage (queueSlot (state.head + i) 2) = pubkeyAmountWord state.queue[i]) :=
+  ⟨fun h => ⟨h.coherent, h.bounds, h.excess, h.count, h.head, h.tail, h.live⟩, fun ⟨h0, h1, h2, h3, h4, h5, h6⟩ => ⟨h0, h1, h2, h3, h4, h5, h6⟩⟩
+
+end Blanc.WithdrawalRequest
+
