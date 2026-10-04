@@ -211,8 +211,65 @@ theorem Evm.step_done_getStor {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm}
     exact ⟨_, RunFrame.of_done entered, resumed.symm⟩
   exact Xinst.none_getStor_eq xrun
 
+/-- A child entered by an executable instruction opens on its parent's storage at every
+code-bearing account, at pc zero with an empty machine and output, under the parent's block
+environment, with short calldata. -/
+theorem Xinst.spawn_child_world {sevm : Sevm} {pre : Devm} {x : Xinst}
+    {frame : Jaune.Frame} {resume : Resume} {child : Evm}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (spawn : Xinst.step sevm pre x = .spawn frame resume)
+    (entered : frame.enter = .run child) :
+    (∀ ca, pre.getCode ca ≠ .empty → Devm.getStor child.dyna ca = Devm.getStor pre ca) ∧
+      child.pc = 0 ∧
+      (child.dyna.stack = [] ∧ child.dyna.memory = Mem.empty ∧ child.dyna.output = []) ∧
+      child.sta.benvStat = sevm.benvStat ∧ CoveredFork child.sta.benvStat.fork ∧
+      child.sta.data.length < 2 ^ 256 := by
+  have stat : child.sta.benvStat = sevm.benvStat :=
+    (Jaune.Frame.enter_run_benvStat entered).trans (Xinst.step_spawn_benvStat spawn)
+  refine ⟨?_, Frame.enter_run_pc entered, ?_, stat, by rw [stat]; exact fork, ?_⟩
+  · intro ca nonempty
+    obtain ⟨storage, _⟩ := Xinst.step_spawn_world fork spawn nonempty
+    obtain ⟨benv, transfer, rfl⟩ := Frame.enter_run_inv entered
+    exact (congrFun (benvAfterTransfer_getStor_eq transfer) ca).trans storage
+  · refine ⟨?_, ?_, Frame.enter_run_output_empty entered⟩
+    · obtain ⟨benv, _, rfl⟩ := Jaune.Frame.enter_run_inv entered
+      rfl
+    · obtain ⟨benv, _, rfl⟩ := Jaune.Frame.enter_run_inv entered
+      rfl
+  · rw [ExecutionTrace.Frame.enter_data_eq entered]
+    exact ExecutionTrace.Xinst.step_spawn_inner_data_length_lt fork.rules_stateGas_none spawn
+
 /-- An entered child message leaves a code-bearing account's storage as the child's
 committed endpoint when it settles, and as before the call when it rolls back. -/
+theorem Xinst.spawn_run_getStor {sevm : Sevm} {pre inter : Devm} {x : Xinst}
+    {frame : Jaune.Frame} {resume : Resume} {childEvm : Evm} {raw : Execution}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (spawn : Xinst.step sevm pre x = .spawn frame resume)
+    (entered : frame.enter = .run childEvm)
+    (child : Exec childEvm.pc childEvm.sta childEvm.dyna raw)
+    (resumed : resume.run (frame.settle raw) = .ok inter)
+    {ca : Adr} (nonempty : pre.getCode ca ≠ .empty) :
+    (∀ settles : Frame.settlementCommits frame raw = true, ∀ key,
+      (Devm.getStor inter ca).get key =
+        (Devm.getStor (Execution.committedPost raw
+          (Frame.raw_commits_of_settlementCommits settles)) ca).get key) ∧
+    (¬ Frame.settlementCommits frame raw = true → ∀ key,
+      (Devm.getStor inter ca).get key = (Devm.getStor pre ca).get key) := by
+  obtain ⟨world, _, _, _, childFork, _⟩ := Xinst.spawn_child_world fork spawn entered
+  have replay := Xinst.storageReplay_some_of_body spawn (RunFrame.of_run entered) resumed
+    (fun committed => Exec.storageReplay_committedPost child committed childFork) fork
+  have entry := world ca nonempty
+  refine ⟨?_, ?_⟩
+  · intro settles key
+    rw [ite_eq_left settles] at replay
+    have body := Exec.storageReplay_committedPost child
+      (Frame.raw_commits_of_settlementCommits settles) childFork ca key
+    rw [replay ca key, body, entry]
+  · intro rolled key
+    rw [ite_eq_right rolled] at replay
+    simpa only [Exec.StorageWrite.replayCell, List.foldl_nil] using replay ca key
+
+/-- The same storage transport at a driver spawn. -/
 theorem Evm.step_run_getStor {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm}
     {frame : Jaune.Frame} {resume : Resume} {childEvm : Evm} {raw : Execution}
     (fork : CoveredFork sevm.benvStat.fork)
@@ -228,20 +285,58 @@ theorem Evm.step_run_getStor {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm}
     (¬ Frame.settlementCommits frame raw = true → ∀ key,
       (Devm.getStor inter ca).get key = (Devm.getStor pre ca).get key) := by
   rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
-  have childFork := Evm.step_spawn_child_fork step entered fork
-  have replay := Xinst.storageReplay_some_of_body spawn (RunFrame.of_run entered) resumed
-    (fun committed => Exec.storageReplay_committedPost child committed childFork) fork
-  have entry := (Evm.step_spawn_child_world fork step entered nonempty).1
-  change Devm.getStor childEvm.dyna ca = Devm.getStor pre ca at entry
-  refine ⟨?_, ?_⟩
-  · intro settles key
-    rw [ite_eq_left settles] at replay
-    have body := Exec.storageReplay_committedPost child
-      (Frame.raw_commits_of_settlementCommits settles) childFork ca key
-    rw [replay ca key, body, entry]
-  · intro rolled key
-    rw [ite_eq_right rolled] at replay
-    simpa only [Exec.StorageWrite.replayCell, List.foldl_nil] using replay ca key
+  exact Xinst.spawn_run_getStor fork spawn entered child resumed nonempty
+
+/-- A CALL or STATICCALL child of any frame runs the installed image of `ca` when it
+executes at `ca`. -/
+theorem CodeSem.At.callChild {sem : CodeSem} {ca : Adr} {sevm : Sevm} {pre : Devm}
+    {x : Xinst} {frame : Jaune.Frame} {resume : Resume} {child : Evm}
+    (spawn : Xinst.step sevm pre x = .spawn frame resume)
+    (entered : frame.enter = .run child) (callFamily : x = .call ∨ x = .staticcall)
+    (installed : some (pre.getCode ca).toList = sem.image) :
+    sem.At ca child.pc child.sta child.dyna := by
+  have nonempty : pre.getCode ca ≠ .empty := by
+    intro empty
+    have imageEmpty : sem.image = some [] := by
+      rw [← installed, empty, ByteArray.toList_empty]
+    exact sem.ne_nil imageEmpty rfl
+  refine ⟨?_, fun target => ⟨?_, Frame.enter_run_pc entered⟩⟩
+  · rw [Frame.enter_run_getCode entered ca, Xinst.step_spawn_getCode spawn ca]
+    exact installed
+  · have innerTarget : frame.inner.currentTarget = ca :=
+      (Frame.enter_run_currentTarget entered).symm.trans target
+    have notDelegation : ¬ isValidDelegation (pre.getCode frame.inner.currentTarget) := by
+      rw [innerTarget]
+      exact sem.not_delegation installed
+    have codeEq : frame.inner.code = pre.getCode frame.inner.currentTarget := by
+      rcases Xinst.step_spawn_source spawn with empty | same | source
+      · rw [innerTarget] at empty
+        exact (nonempty empty).elim
+      · rcases callFamily with rfl | rfl
+        · exact Xinst.step_call_sameTarget_code spawn same notDelegation
+        · exact Xinst.step_staticcall_sameTarget_code spawn same notDelegation
+      · exact source notDelegation
+    rw [Frame.enter_run_code entered, codeEq, innerTarget]
+    exact installed
+
+/-- Selected frames of the retained traversal are raw frame roots of the run, at `ca`. -/
+theorem Exec.retainedTargetFramesFromAt_rawFrameRoot (ca : Adr)
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true)
+    {located : Exec.LocatedFrame}
+    (member : located ∈ Exec.retainedTargetFramesFromAt ca [] 0 run committed) :
+    Exec.Frame.rootDeriv located.frame ∈ Exec.rawFrameRoots run ∧
+      located.frame.sevm.currentTarget = ca := by
+  have same : Exec.retainedTargetFramesFromAt ca [] 0 run committed =
+      (Exec.retainedTargetTurns ca run).filterMap Sum.getRight? := by
+    rw [← Exec.retainedTargetTurnsAt_filterMap_eq ca [] run committed]
+    rfl
+  rw [same] at member
+  obtain ⟨ordered, owned, _⟩ := Exec.retainedTargetTurns_spec ca run
+  refine ⟨Exec.mem_rawFrameRoots_of_mem_committedFrames run located.frame ?_,
+    owned located member⟩
+  rw [← Exec.committedFramePaths_map_frame]
+  exact List.mem_map_of_mem (ordered.subset member)
 
 /-! ## Logs across one step, from the public committed-log chronology -/
 

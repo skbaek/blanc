@@ -1,5 +1,6 @@
 import Blanc.Lift.TargetLogEvents
 import Blanc.Lift.UniswapV2Pair.ApproveSource
+import Blanc.Lift.Sound
 
 /-!
 # Turn queues of a mutable external call
@@ -393,5 +394,120 @@ theorem mutable_retained_fold_inv {pair : Adr} {Rep : State → Stor → Prop}
             (fun located member => good located (by rw [projection]; exact member))
         refine ⟨turns, c, added, L, rets, events, auth, finalRep, cLogs, ?_, images, consume⟩
         rw [rawLogs, rolledLogs settles]
+
+/-- One lifted CALL or STATICCALL step of a Pair frame, made while the model frame is at
+`frame`: its whole child is consumed by the fold. A child that is not entered or rolls back
+contributes no turn and leaves the Pair storage; an entered settling child contributes the
+derived events of its actual execution, which is a sub-derivation of `D`. -/
+theorem mutable_call_turns {pair : Adr} {Rep : State → Stor → Prop} {Good : Sevm → Prop}
+    {Auth : Sevm → Devm → Entry → Transcript → Prop} {owned : Event → Option Log}
+    (supply : PairFrameSupply pair Rep Good Auth owned)
+    (repCongr : ∀ st (s s' : Stor), (∀ k, s'.get k = s.get k) → Rep st s → Rep st s')
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    {D : Exec.Deriv} {frame : Frame} {request : Request} {sevm : Sevm} {pre d : Devm}
+    {x : Xinst} (call : Blanc.Lift.StepIn D sevm pre (.exec x) d)
+    (callFamily : x = .call ∨ x = .staticcall)
+    (pairEq : frame.context.pair = pair) (mutable : externalStatic frame request = false)
+    (installed : some (pre.getCode pair).toList = sem.image)
+    (rep : Rep frame.current.state (pre.getStor pair))
+    (time : frame.context.timestamp = sevm.benvStat.time)
+    (fork : CoveredFork sevm.benvStat.fork)
+    (good : ∀ F ∈ Exec.rawFrameRoots D.exc, F.sevm.currentTarget = pair → Good F.sevm) :
+    ∃ (turns : List MutableTurn) (c : Checkpoint) (added : List PendingLog)
+      (rets : List ChildReturn),
+      ExactTurns frame request 0 (mutableTranscript turns .done)
+        { complete := true, frame := { frame with current := c }, childReturns := rets } ∧
+      (∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns →
+        Auth located.frame.sevm located.frame.post entry nested) ∧
+      Rep c.state (d.getStor pair) ∧ c.logs = frame.current.logs ++ added ∧
+      ((turns = [] ∧ c = frame.current ∧ added = []) ∨
+        ∃ (child : Evm) (raw : Execution) (childRun : Exec child.pc child.sta child.dyna raw)
+          (committed : Execution.commits raw = true) (L : List Log),
+          (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots D.exc) ∧
+          turns.map MutableTurn.event = Exec.targetLogEventsFrom pair [] 0 childRun committed ∧
+          (Execution.committedPost raw committed).logs = child.dyna.logs ++ L ∧
+          added.map (PendingLog.rawWith owned) = L.map some) := by
+  have nonempty : pre.getCode pair ≠ .empty := by
+    intro empty
+    have imageEmpty : sem.image = some [] := by
+      rw [← installed, empty, ByteArray.toList_empty]
+    exact sem.ne_nil imageEmpty rfl
+  have unchanged : ∀ (s : Stor), (∀ k, s.get k = (pre.getStor pair).get k) →
+      ∃ (turns : List MutableTurn) (c : Checkpoint) (added : List PendingLog)
+        (rets : List ChildReturn),
+        ExactTurns frame request 0 (mutableTranscript turns .done)
+          { complete := true, frame := { frame with current := c }, childReturns := rets } ∧
+        (∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns →
+          Auth located.frame.sevm located.frame.post entry nested) ∧
+        Rep c.state s ∧ c.logs = frame.current.logs ++ added ∧
+        ((turns = [] ∧ c = frame.current ∧ added = []) ∨
+          ∃ (child : Evm) (raw : Execution) (childRun : Exec child.pc child.sta child.dyna raw)
+            (committed : Execution.commits raw = true) (L : List Log),
+            (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots D.exc) ∧
+            turns.map MutableTurn.event = Exec.targetLogEventsFrom pair [] 0 childRun committed ∧
+            (Execution.committedPost raw committed).logs = child.dyna.logs ++ L ∧
+            added.map (PendingLog.rawWith owned) = L.map some) := by
+    intro s same
+    refine ⟨[], frame.current, [], [], ExactTurns.done frame request 0, ?_,
+      repCongr _ _ _ same rep, (List.append_nil _).symm, Or.inl ⟨rfl, rfl, rfl⟩⟩
+    intro located entry nested member
+    simp only [List.not_mem_nil] at member
+  obtain ⟨xl, inRoots, pc, stepRun⟩ := call
+  have xrun : Xinst.Run sevm pre x xl (.ok d) := by
+    rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at stepRun
+    exact stepRun
+  cases xl with
+  | none =>
+    have storage := Xinst.none_getStor_eq xrun
+    exact unchanged (d.getStor pair) (fun k => by rw [storage])
+  | some slot =>
+    obtain ⟨child, raw⟩ := slot
+    obtain ⟨childRun, childRoots⟩ := inRoots
+    have spawnRun := xrun
+    unfold Xinst.Run XStep.Run at spawnRun
+    cases spawned : Xinst.step sevm pre x with
+    | done result =>
+      rw [spawned] at spawnRun
+      cases spawnRun.1
+    | spawn callee resume =>
+      rw [spawned] at spawnRun
+      obtain ⟨settled, runFrame, resumed⟩ := spawnRun
+      unfold RunFrame at runFrame
+      cases entered : callee.enter with
+      | done result =>
+        rw [entered] at runFrame
+        cases runFrame.1
+      | run evm =>
+        rw [entered] at runFrame
+        obtain ⟨raw', slotEq, settledEq⟩ := runFrame
+        cases slotEq
+        rw [settledEq] at resumed
+        obtain ⟨settledStorage, rolledStorage⟩ :=
+          Xinst.spawn_run_getStor fork spawned entered childRun resumed.symm nonempty
+        by_cases settles : Jaune.Frame.settlementCommits callee raw = true
+        · have committed := Jaune.Frame.raw_commits_of_settlementCommits settles
+          obtain ⟨world, _, entry, stat, childFork, short⟩ :=
+            Xinst.spawn_child_world fork spawned entered
+          have childInstalled := CodeSem.At.callChild spawned entered callFamily installed
+          have childRep : Rep frame.current.state (child.dyna.getStor pair) := by
+            rw [world pair nonempty]
+            exact rep
+          obtain ⟨turns, c, added, L, rets, events, auth, finalRep, cLogs, rawLogs, images,
+              consume⟩ :=
+            mutable_retained_fold_inv supply repCongr sem image childRun committed frame 0 0 []
+              pairEq mutable childInstalled childRep (fun _ => entry) short
+              (by rw [stat]; exact time) childFork
+              (fun located member => by
+                obtain ⟨root, target⟩ :=
+                  Exec.retainedTargetFramesFromAt_rawFrameRoot pair childRun committed member
+                exact good _ (childRoots _ root) target)
+          have finished := consume .done
+            { complete := true, frame := { frame with current := c }, childReturns := [] }
+            (ExactTurns.done _ request _)
+          refine ⟨turns, c, added, rets, ?_, auth,
+            repCongr _ _ _ (settledStorage settles) finalRep, cLogs,
+            Or.inr ⟨child, raw, childRun, committed, L, childRoots, events, rawLogs, images⟩⟩
+          simpa only [List.append_nil] using finished
+        · exact unchanged (d.getStor pair) (rolledStorage settles)
 
 end Blanc.Lift.UniswapV2Pair
