@@ -1858,6 +1858,17 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   `fixed-byte-offsets` matcher recognizes `Mem.Wf`, `Mem.Reads`, or
   `Bytes.writeAt` in a target, and does not recognize this byte-codec equality
   or a `Mem.read` equality alone. No broader trigger is registered.
+- For an ordered two-word and four-byte copy, use `copy68Memory` and
+  `copy68Memory_read` in
+  [`Blanc/Lift/ByteWindowMemory.lean`](../Blanc/Lift/ByteWindowMemory.lean).
+  The readback theorem requires `source + 68 ≤ target`; it covers an adjacent
+  destination even though the final padded source load overlaps earlier stores.
+  `PtrMem.extend` preserves the free-pointer carrier across an arbitrary
+  memory read, with the actual rounded allocation size.
+  `mergeFourMemory_read68` covers a four-byte prefix store that preserves the
+  following 64 bytes, at an arbitrary offset in well-formed memory. These
+  `Mem.read` equalities use the same manual discovery boundary as the codec
+  equality above; the existing matcher has no reliable trigger for them.
 - Fixed or padded memory windows: use `Mem.Wf` and `Mem.Reads` before adding a
   local take/drop proof.
 

@@ -2029,87 +2029,9 @@ private theorem safeTransfer_firstReturned_inv {P : Sevm → Devm → Ninst → 
 private theorem safeTransfer_copy128_image {M : Mem} {amount toWord : B256} :
     ((safeTransfer_call128Memory M amount toWord).read 292 68).1 =
       ((safeTransfer_payload128Memory M amount toWord).read 224 68).1 := by
-  unfold safeTransfer_call128Memory
-  dsimp only
-  generalize safeTransfer_payload128Memory M amount toWord = N0
-  let left := Bytes.toB256 (N0.read 224 32).1
-  let N1 := N0.write 292 left.toBytes
-  let right := Bytes.toB256 (N1.read 256 32).1
-  let N2 := N1.write 324 right.toBytes
-  let src := Bytes.toB256 (N2.read 288 32).1
-  let dst := Bytes.toB256 (N2.read 356 32).1
-  let mask := (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256)
-  have word0 : left.toBytes = (N0.read 224 32).1 :=
-    Bytes.toBytes_toB256_of_length (by simp only [Mem.read, Array.sliceD_eq_map, List.length_map, List.length_range])
-  have word1 : right.toBytes = (N1.read 256 32).1 :=
-    Bytes.toBytes_toB256_of_length (by simp only [Mem.read, Array.sliceD_eq_map, List.length_map, List.length_range])
-  have word2 : src.toBytes = (N2.read 288 32).1 :=
-    Bytes.toBytes_toB256_of_length (by simp only [Mem.read, Array.sliceD_eq_map, List.length_map, List.length_range])
-  have merge : (((src &&& ~~~mask) ||| (dst &&& mask)).toBytes) =
-      src.toBytes.take 4 ++ dst.toBytes.drop 4 := mergeFour_bytes src dst
-  have maskEq : B256.bexp 256 (32 - 4) - 1 = mask := by
-    rw [show (32 : B256) - 4 = 28 from rfl]
-    have expEq : Nat.powMod 256 28 (2 ^ 256) =
-        0x100000000000000000000000000000000000000000000000000000000 := by
-      norm_num [Nat.powMod, Nat.powMod.go]
-    unfold B256.bexp
-    change (Nat.powMod 256 28 (2 ^ 256)).toB256 - 1 = mask
-    rw [expEq]
-    rfl
-  rw [maskEq]
-  change (((N2.read 356 32).2.write 356 (((src &&& ~~~mask) ||| (dst &&& mask)).toBytes)).read 292 68).1 =
-    (N0.read 224 68).1
-  simp only [Mem.read, Array.sliceD_eq_map]
-  apply List.ext_get
-  · simp only [List.length_map, List.length_range]
-  · intro i hi hj
-    simp only [List.length_map, List.length_range] at hi
-    simp only [List.get_eq_getElem, List.getElem_map, List.getElem_range]
-    rw [Mem.getD_write_below_end _ 356
-      (by intro eq; have len := B256.length_toBytes ((src &&& ~~~mask) ||| (dst &&& mask)); rw [eq] at len; contradiction)
-      (by rw [B256.length_toBytes]; omega)]
-    by_cases first64 : i < 64
-    · rw [ite_eq_right (by omega)]
-      change N2.data.getD (292 + i) 0 = N0.data.getD (224 + i) 0
-      rw [Mem.getD_write_below_end N1 324
-        (by intro eq; have len := B256.length_toBytes right; rw [eq] at len; contradiction)
-        (by rw [B256.length_toBytes]; omega)]
-      by_cases first32 : i < 32
-      · rw [ite_eq_right (by omega), Mem.getD_write_below_end N0 292
-          (by intro eq; have len := B256.length_toBytes left; rw [eq] at len; contradiction)
-          (by rw [B256.length_toBytes]; omega), ite_eq_left (by omega),
-          show 292 + i - 292 = i by omega, word0]
-        simp only [Mem.read, Array.sliceD_eq_map, List.getD_eq_getElem?_getD,
-          List.getElem?_map, List.getElem?_range, first32, Option.map_some, Option.getD_some]
-      · rw [ite_eq_left (by omega), show 292 + i - 324 = i - 32 by omega, word1]
-        have sub : i - 32 < 32 := by omega
-        simp only [Mem.read, Array.sliceD_eq_map, List.getD_eq_getElem?_getD,
-          List.getElem?_map, List.getElem?_range, sub, Option.map_some, Option.getD_some]
-        rw [Mem.getD_write_below_end N0 292
-          (by intro eq; have len := B256.length_toBytes left; rw [eq] at len; contradiction)
-          (by rw [B256.length_toBytes]; omega), ite_eq_right (by omega)]
-        congr 1; omega
-    · rw [ite_eq_left (by omega), show 292 + i - 356 = i - 64 by omega, merge]
-      have sub : i - 64 < 4 := by omega
-      have srcLen : src.toBytes.length = 32 := B256.length_toBytes src
-      rw [List.getD_append_left (d := (0 : UInt8)) (by simp only [List.length_take, srcLen]; omega)]
-      rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem (by simp only [List.length_take, srcLen]; omega)]
-      simp only [Option.getD_some, List.getElem_take]
-      have index : i - 64 < src.toBytes.length := by rw [srcLen]; omega
-      have getEq : src.toBytes.getD (i - 64) 0 = src.toBytes[i - 64] := by
-        rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem index]
-        rfl
-      rw [← getEq, word2]
-      simp only [Mem.read, Array.sliceD_eq_map, List.getD_eq_getElem?_getD,
-        List.getElem?_map, List.getElem?_range, show i - 64 < 32 by omega,
-        Option.map_some, Option.getD_some]
-      rw [Mem.getD_write_below_end N1 324
-        (by intro eq; have len := B256.length_toBytes right; rw [eq] at len; contradiction)
-        (by rw [B256.length_toBytes]; omega), ite_eq_right (by omega),
-        Mem.getD_write_below_end N0 292
-          (by intro eq; have len := B256.length_toBytes left; rw [eq] at len; contradiction)
-          (by rw [B256.length_toBytes]; omega), ite_eq_right (by omega)]
-      congr 1; omega
+  change ((Blanc.Lift.copy68Memory (safeTransfer_payload128Memory M amount toWord) 224 292).read 292 68).1 =
+    ((safeTransfer_payload128Memory M amount toWord).read 224 68).1
+  exact Blanc.Lift.copy68Memory_read (by decide)
 
 
 /-- The actual first initializer emits canonical transfer calldata for arbitrary well-formed memory. -/
@@ -2141,61 +2063,18 @@ private theorem safeTransfer_payload128_data {M : Mem} {amount toWord : B256}
     ((0xa9059cbb00000000000000000000000000000000000000000000000000000000 : B256) |||
       ((0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256) &&& Bytes.toB256 (N7.read 224 32).1)).toBytes).read 224 68).1 =
     abiSelectorBytes 0xa9059cbb ++ recipient.toBytes ++ amount.toBytes
-  generalize N7 = V at wf7 pair7 ⊢
   let mask := (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256)
   let selectorWord := (0xa9059cbb00000000000000000000000000000000000000000000000000000000 : B256)
-  let loaded := Bytes.toB256 (V.read 224 32).1
+  let loaded := Bytes.toB256 (N7.read 224 32).1
   let merged := selectorWord ||| (mask &&& loaded)
   have mergeEq : merged = (selectorWord &&& ~~~mask) ||| (loaded &&& mask) := by
     rw [show selectorWord &&& ~~~mask = selectorWord from rfl]
     exact congrArg (fun x => selectorWord ||| x) (B256.and_comm mask loaded)
-  have mergeBytes : merged.toBytes = abiSelectorBytes 0xa9059cbb ++ ((V.read 224 32).1).drop 4 := by
-    rw [mergeEq, mergeFour_bytes]
-    rw [show selectorWord.toBytes.take 4 = abiSelectorBytes 0xa9059cbb from by decide,
-      Bytes.toBytes_toB256_of_length (by simp only [Mem.read, Array.sliceD_eq_map, List.length_map, List.length_range])]
-  have reads := Mem.reads_data V
-  have postReads := reads.write wf7 224 merged.toBytes
-  have image : V.data.toList.sliceD 228 64 0 = recipient.toBytes ++ amount.toBytes := by
-    rw [← reads.read]
-    exact pair7
-  change (((V.write 224 merged.toBytes).read 224 68).1) =
+  change (((N7.write 224 merged.toBytes).read 224 68).1) =
     abiSelectorBytes 0xa9059cbb ++ recipient.toBytes ++ amount.toBytes
-  rw [List.append_assoc]
-  simp only [Mem.read, Array.sliceD_eq_map]
-  apply List.ext_get
-  · simp only [List.length_map, List.length_range, List.length_append, abiSelectorBytes_length, B256.length_toBytes]
-  · intro i hi hj
-    simp only [List.length_map, List.length_range] at hi
-    simp only [List.get_eq_getElem, List.getElem_map, List.getElem_range]
-    have rhs : (abiSelectorBytes 0xa9059cbb ++ (recipient.toBytes ++ amount.toBytes)).getD i 0 =
-        (abiSelectorBytes 0xa9059cbb ++ (recipient.toBytes ++ amount.toBytes))[i] := by
-      rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hj]
-      rfl
-    refine Eq.trans ?_ rhs
-    rw [postReads (224 + i), Bytes.getD_writeAt]
-    by_cases isPrefix : i < 4
-    · rw [ite_eq_left (by rw [B256.length_toBytes]; omega),
-        show 224 + i - 224 = i by omega, mergeBytes,
-        List.getD_append_left (d := (0 : UInt8)) (by rw [abiSelectorBytes_length]; exact isPrefix),
-        List.getD_append_left (d := (0 : UInt8)) (by rw [abiSelectorBytes_length]; exact isPrefix)]
-    · rw [List.getD_append_right (d := (0 : UInt8)) (by rw [abiSelectorBytes_length]; omega),
-        abiSelectorBytes_length]
-      have old : V.data.toList.getD (224 + i) 0 =
-          (recipient.toBytes ++ amount.toBytes).getD (i - 4) 0 := by
-        have projected := congrArg (fun bs : Bytes => bs.getD (i - 4) 0) image
-        rw [Bytes.getD_sliceD_of_lt _ _ _ _ (by omega)] at projected
-        rw [show 228 + (i - 4) = 224 + i by omega] at projected
-        exact projected
-      by_cases first32 : i < 32
-      · rw [ite_eq_left (by rw [B256.length_toBytes]; omega),
-          show 224 + i - 224 = i by omega, mergeBytes,
-          List.getD_append_right (d := (0 : UInt8)) (by rw [abiSelectorBytes_length]; omega),
-          abiSelectorBytes_length, List.getD_drop]
-        rw [reads.read, Bytes.getD_sliceD_of_lt _ _ _ _ (by omega)]
-        rw [show 224 + (4 + (i - 4)) = 224 + i by omega]
-        exact old
-      · rw [ite_eq_right (by rw [B256.length_toBytes]; omega)]
-        exact old
+  rw [mergeEq, Blanc.Lift.mergeFourMemory_read68 selectorWord wf7,
+    show selectorWord.toBytes.take 4 = abiSelectorBytes 0xa9059cbb from by decide,
+    pair7, List.append_assoc]
 
 /-- The actual CALL reads the canonical 68-byte transfer payload produced by the first burn caller. -/
 private theorem safeTransfer_call128_data {M : Mem} {amount toWord : B256}
@@ -2842,6 +2721,83 @@ def safeTransfer_dynamicPayloadMemory (M : Mem) (p amount toWord : B256) : Mem :
   N7.write (p + 96).toNat ((0xa9059cbb00000000000000000000000000000000000000000000000000000000 : B256) |||
     ((0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256) &&& Bytes.toB256 (N7.read (p + 96).toNat 32).1)).toBytes
 
+/-- Canonical payload bytes at the pointer produced by an earlier transfer. -/
+theorem safeTransfer_dynamicPayload_data {M : Mem} {p amount toWord : B256}
+    (wf : Mem.Wf M) (lower : 128 ≤ p.toNat)
+    (width : p.toNat + 164 < 2 ^ 256) :
+    ((safeTransfer_dynamicPayloadMemory M p amount toWord).read (p + 96).toNat 68).1 =
+      abiSelectorBytes 0xa9059cbb ++
+        ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes ++ amount.toBytes := by
+  have addNat (k : Nat) (hk : k ≤ 164) : (p + k.toB256).toNat = p.toNat + k := by
+    rw [B256.toNat_add, B256.toNat_toB256_of_lt (by omega), Nat.lo_eq_of_lt (by omega)]
+  have nat32 : (p + 32).toNat = p.toNat + 32 := by
+    simpa only [show (32 : Nat).toB256 = (32 : B256) from rfl] using addNat 32 (by decide)
+  have nat64 : (p + 64).toNat = p.toNat + 64 := by
+    simpa only [show (64 : Nat).toB256 = (64 : B256) from rfl] using addNat 64 (by decide)
+  have nat96 : (p + 96).toNat = p.toNat + 96 := by
+    simpa only [show (96 : Nat).toB256 = (96 : B256) from rfl] using addNat 96 (by decide)
+  have nat100 : (p + 100).toNat = p.toNat + 100 := by
+    simpa only [show (100 : Nat).toB256 = (100 : B256) from rfl] using addNat 100 (by decide)
+  have nat132 : (p + 132).toNat = p.toNat + 132 := by
+    simpa only [show (132 : Nat).toB256 = (132 : B256) from rfl] using addNat 132 (by decide)
+  let recipient := (0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord
+  let N1 := M.write 64 (p + 64).toBytes
+  let N2 := N1.write p.toNat (25 : B256).toBytes
+  let N3 := N2.write (p.toNat + 32) (0x7472616e7366657228616464726573732c75696e743235362900000000000000 : B256).toBytes
+  let N4 := N3.write (p.toNat + 100) recipient.toBytes
+  let N5 := N4.write (p.toNat + 132) amount.toBytes
+  let N6 := N5.write (p.toNat + 64) (68 : B256).toBytes
+  let N7 := N6.write 64 (p + 164).toBytes
+  have wf3 : Mem.Wf N3 := ((wf.write 64 _).write p.toNat _).write (p.toNat + 32) _
+  have wf5 : Mem.Wf N5 := (wf3.write (p.toNat + 100) _).write (p.toNat + 132) _
+  have wf6 : Mem.Wf N6 := wf5.write (p.toNat + 64) _
+  have wf7 : Mem.Wf N7 := wf6.write 64 _
+  have r5 := Mem.reads_data N5
+  have r6 := r5.write wf5 (p.toNat + 64) (68 : B256).toBytes
+  have r7 := r6.write wf6 64 (p + 164).toBytes
+  have pair7 : (N7.read (p.toNat + 100) 64).1 = recipient.toBytes ++ amount.toBytes := by
+    rw [r7.read,
+      Bytes.sliceD_writeAt_after _ _ (p.toNat + 100) 64 64 (by rw [B256.length_toBytes]; omega),
+      Bytes.sliceD_writeAt_after _ _ (p.toNat + 100) 64 (p.toNat + 64) (by rw [B256.length_toBytes]; omega),
+      ← r5.read (p.toNat + 100) 64]
+    exact Mem.read_two_word_writes_at_raw N3 (p.toNat + 100) recipient amount
+  unfold safeTransfer_dynamicPayloadMemory
+  rw [nat32, nat64, nat96, nat100, nat132]
+  let mask := (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256)
+  let selectorWord := (0xa9059cbb00000000000000000000000000000000000000000000000000000000 : B256)
+  let loaded := Bytes.toB256 (N7.read (p.toNat + 96) 32).1
+  let merged := selectorWord ||| (mask &&& loaded)
+  have mergeEq : merged = (selectorWord &&& ~~~mask) ||| (loaded &&& mask) := by
+    rw [show selectorWord &&& ~~~mask = selectorWord from rfl]
+    exact congrArg (fun x => selectorWord ||| x) (B256.and_comm mask loaded)
+  change (((N7.write (p.toNat + 96) merged.toBytes).read (p.toNat + 96) 68).1) =
+    abiSelectorBytes 0xa9059cbb ++ recipient.toBytes ++ amount.toBytes
+  rw [mergeEq, Blanc.Lift.mergeFourMemory_read68 selectorWord wf7,
+    show selectorWord.toBytes.take 4 = abiSelectorBytes 0xa9059cbb from by decide,
+    pair7, List.append_assoc]
+
+/-- The second transfer's ordered copy starts at its current free-memory pointer. -/
+def safeTransfer_dynamicCallMemory (M : Mem) (p amount toWord : B256) : Mem :=
+  Blanc.Lift.copy68Memory (safeTransfer_dynamicPayloadMemory M p amount toWord)
+    (p + 96).toNat (p + 164).toNat
+
+/-- The moving CALL window contains the exact selector and both argument words. -/
+theorem safeTransfer_dynamicCall_data {M : Mem} {p amount toWord : B256}
+    (wf : Mem.Wf M) (lower : 128 ≤ p.toNat)
+    (width : p.toNat + 164 < 2 ^ 256) :
+    ((safeTransfer_dynamicCallMemory M p amount toWord).read (p + 164).toNat 68).1 =
+      abiSelectorBytes 0xa9059cbb ++
+        ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes ++ amount.toBytes := by
+  have addNat (k : Nat) (hk : k ≤ 164) : (p + k.toB256).toNat = p.toNat + k := by
+    rw [B256.toNat_add, B256.toNat_toB256_of_lt (by omega), Nat.lo_eq_of_lt (by omega)]
+  have nat96 : (p + 96).toNat = p.toNat + 96 := by
+    simpa only [show (96 : Nat).toB256 = (96 : B256) from rfl] using addNat 96 (by decide)
+  have nat164 : (p + 164).toNat = p.toNat + 164 := by
+    simpa only [show (164 : Nat).toB256 = (164 : B256) from rfl] using addNat 164 (by decide)
+  unfold safeTransfer_dynamicCallMemory
+  rw [Blanc.Lift.copy68Memory_read (by rw [nat96, nat164])]
+  exact safeTransfer_dynamicPayload_data wf lower width
+
 /-- The actual arbitrary-pointer initializer normalizes to the moving payload
 image, with its real allocation and all copy operands. The pointer bounds
 are intermediate obligations supplied by the first reply's producer. -/
@@ -2975,6 +2931,182 @@ theorem safeTransfer_initialize_dynamic_inv {P : Sevm → Devm → Ninst → Dev
     h8.read_self (by rw [nat64]; omega)] at h
   obtain ⟨residual, tail⟩ := h
   exact ⟨residual, tail, h8, fit8⟩
+
+/-- The moving helper reaches its primitive CALL with the exact ordered copy
+image and seven operands; its child world remains opaque. -/
+theorem safeTransfer_dynamicCall_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
+    {p amount toWord tokenWord rho : B256} {n : Nat}
+    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
+    (mem : PtrMem p n M) (lower : 128 ≤ p.toNat)
+    (width : p.toNat + 260 < 2 ^ 256) (notCopyCut : 71 ∉ C)
+    (run : SFunc.RunCutP P cert.prog sevm C
+      (St b (amount :: toWord :: tokenWord :: rho :: R) M G) t_1fdb_c57 r) :
+    let N := safeTransfer_dynamicCallMemory M p amount toWord
+    ∃ forwarded callGas d,
+      P sevm (St b (forwarded :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        0 :: (p + 164) :: 68 :: (p + 164) :: 0 :: (68 + (p + 164)) ::
+        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) N callGas) (.exec .call) d ∧
+      SFunc.RunCutP P cert.prog sevm C d safeTransfer_afterCall r ∧
+      PtrMem (p + 164) N.size N ∧ p.toNat + 260 ≤ N.size := by
+  have addNat (k : Nat) (hk : k ≤ 260) : (p + k.toB256).toNat = p.toNat + k := by
+    rw [B256.toNat_add, B256.toNat_toB256_of_lt (by omega), Nat.lo_eq_of_lt (by omega)]
+  have nat96 : (p + 96).toNat = p.toNat + 96 := by
+    simpa only [show (96 : Nat).toB256 = (96 : B256) from rfl] using addNat 96 (by decide)
+  have nat128 : (p + 128).toNat = p.toNat + 128 := by
+    simpa only [show (128 : Nat).toB256 = (128 : B256) from rfl] using addNat 128 (by decide)
+  have nat160 : (p + 160).toNat = p.toNat + 160 := by
+    simpa only [show (160 : Nat).toB256 = (160 : B256) from rfl] using addNat 160 (by decide)
+  have nat164 : (p + 164).toNat = p.toNat + 164 := by
+    simpa only [show (164 : Nat).toB256 = (164 : B256) from rfl] using addNat 164 (by decide)
+  have nat196 : (p + 196).toNat = p.toNat + 196 := by
+    simpa only [show (196 : Nat).toB256 = (196 : B256) from rfl] using addNat 196 (by decide)
+  have nat228 : (p + 228).toNat = p.toNat + 228 := by
+    simpa only [show (228 : Nat).toB256 = (228 : B256) from rfl] using addNat 228 (by decide)
+  have advance96 : 32 + (p + 96) = p + 128 := by
+    apply B256.toNat_inj
+    rw [B256.toNat_add, nat96, nat128, show (32 : B256).toNat = 32 from rfl,
+      Nat.lo_eq_of_lt (by omega)]
+    omega
+  have advance128 : 32 + (p + 128) = p + 160 := by
+    apply B256.toNat_inj
+    rw [B256.toNat_add, nat128, nat160, show (32 : B256).toNat = 32 from rfl,
+      Nat.lo_eq_of_lt (by omega)]
+    omega
+  have advance164 : 32 + (p + 164) = p + 196 := by
+    apply B256.toNat_inj
+    rw [B256.toNat_add, nat164, nat196, show (32 : B256).toNat = 32 from rfl,
+      Nat.lo_eq_of_lt (by omega)]
+    omega
+  have advance196 : 32 + (p + 196) = p + 228 := by
+    apply B256.toNat_inj
+    rw [B256.toNat_add, nat196, nat228, show (32 : B256).toNat = 32 from rfl,
+      Nat.lo_eq_of_lt (by omega)]
+    omega
+  let N0 := safeTransfer_dynamicPayloadMemory M p amount toWord
+  let N1 := N0.write (p + 164).toNat (Bytes.toB256 (N0.read (p + 96).toNat 32).1).toBytes
+  let N2 := N1.write (p + 196).toNat (Bytes.toB256 (N1.read (p + 128).toNat 32).1).toBytes
+  let mask := B256.bexp 256 (32 - 4) - 1
+  let word := ((Bytes.toB256 (N2.read (p + 160).toNat 32).1) &&& ~~~mask) |||
+    ((Bytes.toB256 (N2.read (p + 228).toNat 32).1) &&& mask)
+  let N3 := (N2.read (p + 228).toNat 32).2.write (p + 228).toNat word.toBytes
+  obtain ⟨gInit, initialized, h0, fit0⟩ :=
+    safeTransfer_initialize_dynamic_inv project mem lower (by omega) run
+  change PtrMem (p + 164) N0.size N0 at h0
+  change p.toNat + 164 ≤ N0.size at fit0
+  have h1 : PtrMem (p + 164) N1.size N1 := by
+    have hc := h0.write (p + 164).toNat (Bytes.toB256 (N0.read (p + 96).toNat 32).1)
+      (Or.inr (by rw [nat164]; omega))
+    rw [hc.size]; exact hc
+  have fit1 : p.toNat + 196 ≤ N1.size := by
+    have bound : (p + 164).toNat + 32 ≤ N1.size := (Mem.memWord_write_word N0 (p + 164).toNat
+      (Bytes.toB256 (N0.read (p + 96).toNat 32).1)).2
+    rw [nat164] at bound
+    exact bound
+  have h2 : PtrMem (p + 164) N2.size N2 := by
+    have hc := h1.write (p + 196).toNat (Bytes.toB256 (N1.read (p + 128).toNat 32).1)
+      (Or.inr (by rw [nat196]; omega))
+    rw [hc.size]; exact hc
+  have fit2 : p.toNat + 228 ≤ N2.size := by
+    have bound : (p + 196).toNat + 32 ≤ N2.size := (Mem.memWord_write_word N1 (p + 196).toNat
+      (Bytes.toB256 (N1.read (p + 128).toNat 32).1)).2
+    rw [nat196] at bound
+    exact bound
+  have h3 : PtrMem (p + 164) N3.size N3 := by
+    have extended := h2.extend (p + 228).toNat 32
+    have hc := extended.write (p + 228).toNat word (Or.inr (by rw [nat228]; omega))
+    rw [hc.size]; exact hc
+  have fit3 : p.toNat + 260 ≤ N3.size := by
+    have bound : (p + 228).toNat + 32 ≤ N3.size := (Mem.memWord_write_word (N2.read (p + 228).toNat 32).2
+      (p + 228).toNat word).2
+    rw [nat228] at bound
+    exact bound
+  obtain ⟨gCopy, copied⟩ := safeTransfer_copy68_inv project notCopyCut initialized
+  rw [h0.read_self (by rw [nat96]; omega), advance96, advance128,
+    advance164, advance196] at copied
+  change SFunc.RunCutP P cert.prog sevm C
+    (St b ((p + 160) :: (p + 228) :: 4 :: 68 :: (p + 96) :: (p + 164) ::
+      (p + 164) :: (p + 64) :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+      96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
+      ((N1.read (p + 128).toNat 32).2.write (p + 196).toNat
+        (Bytes.toB256 (N1.read (p + 128).toNat 32).1).toBytes) gCopy) t_20e1_c57 r at copied
+  rw [h1.read_self (by rw [nat128]; omega)] at copied
+  have call := safeTransfer_partialCall_inv project copied
+  dsimp only at call
+  rw [h2.read_self (by rw [nat160]; omega)] at call
+  change ∃ forwarded callGas d,
+    P sevm (St b (forwarded :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+      0 :: Bytes.toB256 (N3.read 64 32).1 ::
+      ((68 + (p + 164)) - Bytes.toB256 (N3.read 64 32).1) ::
+      Bytes.toB256 (N3.read 64 32).1 :: 0 :: (68 + (p + 164)) ::
+      (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+      96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
+      (N3.read 64 32).2 callGas) (.exec .call) d ∧
+    SFunc.RunCutP P cert.prog sevm C d safeTransfer_afterCall r at call
+  rw [show Bytes.toB256 (N3.read 64 32).1 = p + 164 from h3.word,
+    h3.read_self h3.ge] at call
+  have inputSize : (68 + (p + 164)) - (p + 164) = 68 := by
+    apply B256.toNat_inj
+    rw [B256.toNat_sub, B256.toNat_add, nat164,
+      show (68 : B256).toNat = 68 from rfl,
+      @Nat.lo_eq_of_lt (68 + (p.toNat + 164)) 256 (by omega)]
+    rw [show 2 ^ 256 + (68 + (p.toNat + 164)) - (p.toNat + 164) = 2 ^ 256 + 68 by omega,
+      Nat.two_pow_add_lo, Nat.lo_eq_of_lt (by decide)]
+  rw [inputSize] at call
+  have image : N3 = safeTransfer_dynamicCallMemory M p amount toWord := by
+    unfold safeTransfer_dynamicCallMemory Blanc.Lift.copy68Memory
+    simp only [N3, word, mask, N2, N1, N0, nat96, nat164, nat128, nat160, nat196, nat228, Nat.add_assoc]
+  rw [image] at h3 fit3 call
+  obtain ⟨forwarded, callGas, d, step, tail⟩ := call
+  exact ⟨forwarded, callGas, d, step, tail, h3, fit3⟩
+
+/-- Successful continuation settles the moving CALL without changing its
+prepaid parent memory or constraining the token child's world effects. -/
+theorem safeTransfer_dynamicCall_post_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
+    {p amount toWord tokenWord rho : B256} {n : Nat}
+    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem p n M)
+    (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256)
+    (notCopyCut : 71 ∉ C) (notAlloc : 16 ∉ C) (notGuard : 17 ∉ C)
+    (run : SFunc.RunCutP P cert.prog sevm C
+      (St b (amount :: toWord :: tokenWord :: rho :: R) M G) t_1fdb_c57 r) :
+    let N := safeTransfer_dynamicCallMemory M p amount toWord
+    ∃ forwarded callGas d,
+      P sevm (St b (forwarded :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        0 :: (p + 164) :: 68 :: (p + 164) :: 0 :: (68 + (p + 164)) ::
+        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) N callGas) (.exec .call) d ∧
+      SFunc.RunCutP P cert.prog sevm C d safeTransfer_afterCall r ∧
+      d.stack = 1 :: (68 + (p + 164)) ::
+        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R ∧
+      d.memory = N ∧ d.output = b.output ∧ d.returnData.length < 2 ^ 256 ∧
+      PtrMem (p + 164) N.size d.memory ∧ p.toNat + 260 ≤ N.size := by
+  obtain ⟨forwarded, callGas, d, step, tail, preMem, fit⟩ :=
+    safeTransfer_dynamicCall_inv project mem lower width notCopyCut run
+  let N := safeTransfer_dynamicCallMemory M p amount toWord
+  change PtrMem (p + 164) N.size N at preMem
+  change p.toNat + 260 ≤ N.size at fit
+  have nat164 : (p + 164).toNat = p.toNat + 164 := by
+    rw [B256.toNat_add, show (164 : B256).toNat = 164 from rfl,
+      Nat.lo_eq_of_lt (by omega)]
+  have covered : memExtsSize N.size [((p + 164).toNat, 68), ((p + 164).toNat, 0)] = N.size := by
+    simp only [memExtsSize]
+    rw [memExtSize_of_le preMem.n32 (by rw [nat164]; omega),
+      memExtSize_of_le preMem.n32 (by rw [nat164]; omega)]
+  have settled := safeTransfer_call_inv project fork notAlloc notGuard step tail
+  have memory : d.memory = N := by
+    rw [settled.2.1]
+    change (N.extends [((p + 164).toNat, 68), ((p + 164).toNat, 0)]).write
+      (p + 164).toNat (d.returnData.take 0) = N
+    rw [Mem.extends_covered covered]
+    simp only [List.take_zero, Mem.write]
+  refine ⟨forwarded, callGas, d, step, tail, settled.1, memory,
+    settled.2.2.1, settled.2.2.2, ?_, fit⟩
+  rw [memory]
+  exact preMem
 
 /-- An actual CALL observation supplies the first Burn reply's pointer and
 staging bounds directly; reply width is proved by Jaune rather than assumed. -/
