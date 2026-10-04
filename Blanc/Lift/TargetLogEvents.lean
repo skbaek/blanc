@@ -4,6 +4,7 @@ import Blanc.Lift.ReachChain
 import Blanc.ExecutionEntryAccounting
 import Blanc.ExecutionTraceCalldata
 import Blanc.ExecutionNoninterference
+import Blanc.Lift.Sound
 
 /-!
 # Retained target frames interleaved with actual foreign LOGs
@@ -519,5 +520,19 @@ theorem CodeSem.At.spawnChild {sem : CodeSem} {ca : Adr}
     rfl
   · obtain ⟨benv, _, rfl⟩ := Jaune.Frame.enter_run_inv enter
     rfl
+
+/-- A lifted instruction step, with its actual child if any, keeps every nonempty code. -/
+theorem Lift.StepIn.codePreserve {R : Exec.Deriv} {sevm : Sevm} {pre post : Devm} {n : Ninst}
+    (step : Lift.StepIn R sevm pre n post) : Devm.CodePreserve pre post := by
+  obtain ⟨xl, inRoots, pc, run⟩ := step
+  cases xl with
+  | none => exact Ninst.codePreserve_effectRec (xl := .none) n trivial run
+  | some slot =>
+    obtain ⟨child, raw⟩ := slot
+    obtain ⟨childRun, _⟩ := inRoots
+    exact Ninst.codePreserve_effectRec (xl := .some ⟨child, raw⟩) n
+      (Exec.effect codePreserve_refl_trans.1 codePreserve_refl_trans.2
+        Ninst.codePreserve_effectRec Jinst.codePreserve_effect Linst.codePreserve_effect
+        childRun) run
 
 end Blanc
