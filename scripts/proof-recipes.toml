@@ -1067,3 +1067,22 @@ anti_patterns = [
 ]
 review_owner = "proof-infrastructure"
 review_date = "2026-09-10"
+
+[[recipe]]
+id = "extcodesize-compiled-step"
+status = "active"
+triggers = ["goal-shape:extcodesize-compiled-step"]
+preferred_path = "Use Blanc.Lift.temporal_extcodesize_runCompiled from Blanc/Lift/CodeSizeWalk.lean for the actual code-size word and warm/cold account-access image. Supply the covered-fork fact, selected code-size equality and stack room, and align the entry gas with residual gas plus temporalAccountAccessCost. temporalAccountAccessBase names the possibly warmed successor. For a lifted exact continuation use rx_extcodesize; for an existing successful instruction use ri_extcodesize directly."
+boundary = "This advice matches only a literal EXTCODESIZE Ninst.RunCompiled goal. It does not solve fork, word, stack, gas or successor-state obligations, match another opcode, invert Ninst.Run, or identify a generic SFunc.RunExact goal as an EXTCODESIZE walk. It does not establish nonzero code size or callee liveness."
+owner_module = "Blanc/Lift/CodeSizeWalk.lean"
+canonical_example = "Blanc/LidoCircuitBreakerPauseSuffixWalk.lean:temporal_extcodesize_runCompiled"
+symbols = [
+  "module:Blanc/Lift/CodeSizeWalk.lean",
+  "declaration:Blanc.Lift.temporalAccountAccessBase",
+  "declaration:Blanc.Lift.temporalAccountAccessCost",
+  "declaration:Blanc.Lift.temporal_extcodesize_runCompiled",
+  "declaration:Blanc.Lift.ri_extcodesize",
+  "declaration:Blanc.Lift.rx_extcodesize",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-10-02"

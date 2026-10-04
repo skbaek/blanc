@@ -1,4 +1,5 @@
 import Blanc.ProofRecipeTactic
+import Blanc.Lift.CodeSizeWalk
 import Blanc.RootedExecution
 import Blanc.MessageExecution
 import Blanc.ExecutionNoninterference
@@ -100,6 +101,67 @@ elab "expect_no_recipe_offered" id:str : tactic =>
     let target ← Lean.instantiateMVars (← Lean.Elab.Tactic.getMainTarget)
     if ← proofRecipeMatches target (← proofRecipeById id.getString) then
       throwError "expected blanc_suggest not to offer proof recipe {id.getString} on this goal"
+
+-- EXPECT: extcodesize-compiled-step
+-- The named alias is a real compiled account-access step.
+example {sevm : Sevm} {base : Devm} {x v : B256}
+    {stack : List B256} {M : Mem} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (hval : (base.getCode x.toAdr).size.toB256 = v)
+    (hroom : stack.length < 1024) :
+    Ninst.RunCompiled sevm
+      (base.setMach ⟨x :: stack, M,
+        G + Lift.temporalAccountAccessCost base x.toAdr, base.stateGas⟩)
+      Ninst.extcodesize
+      ((Lift.temporalAccountAccessBase base x.toAdr).setMach
+        ⟨v :: stack, M, G, (Lift.temporalAccountAccessBase base x.toAdr).stateGas⟩) := by
+  expect_recipe_trigger "goal-shape:extcodesize-compiled-step"
+  expect_recipe_offered "extcodesize-compiled-step"
+  blanc_suggest
+  exact Lift.temporal_extcodesize_runCompiled hfork hval hroom
+
+-- EXPECT: extcodesize-compiled-step
+-- The literal constructor spelling must have the same bounded discovery path.
+example {sevm : Sevm} {base : Devm} {x v : B256}
+    {stack : List B256} {M : Mem} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (hval : (base.getCode x.toAdr).size.toB256 = v)
+    (hroom : stack.length < 1024) :
+    Ninst.RunCompiled sevm
+      (base.setMach ⟨x :: stack, M,
+        G + Lift.temporalAccountAccessCost base x.toAdr, base.stateGas⟩)
+      (.reg .extcodesize)
+      ((Lift.temporalAccountAccessBase base x.toAdr).setMach
+        ⟨v :: stack, M, G, (Lift.temporalAccountAccessBase base x.toAdr).stateGas⟩) := by
+  expect_recipe_trigger "goal-shape:extcodesize-compiled-step"
+  expect_recipe_offered "extcodesize-compiled-step"
+  blanc_suggest
+  exact Lift.temporal_extcodesize_runCompiled hfork hval hroom
+
+-- EXPECT-NO-MATCH: a different compiled opcode has no EXTCODESIZE advice.
+example {sevm : Sevm} {pre post : Devm}
+    (run : Ninst.RunCompiled sevm pre (.reg .sload) post) :
+    Ninst.RunCompiled sevm pre (.reg .sload) post := by
+  expect_no_recipe_trigger "goal-shape:extcodesize-compiled-step"
+  expect_no_recipe_offered "extcodesize-compiled-step"
+  exact run
+
+-- EXPECT-NO-MATCH: inversion is a sibling relation, even with this opcode.
+example {sevm : Sevm} {pre post : Devm}
+    (run : Ninst.Run sevm pre (.reg .extcodesize) post) :
+    Ninst.Run sevm pre (.reg .extcodesize) post := by
+  expect_no_recipe_trigger "goal-shape:extcodesize-compiled-step"
+  expect_no_recipe_offered "extcodesize-compiled-step"
+  exact run
+
+-- EXPECT-NO-MATCH: an exact walk is not a direct compiled instruction step.
+example {fs : List Lift.SFunc} {sevm : Sevm} {pre : Devm}
+    {f : Lift.SFunc} {o : Lift.Outcome}
+    (run : Lift.SFunc.RunExact fs sevm pre (.next (.reg .extcodesize) f) o) :
+    Lift.SFunc.RunExact fs sevm pre (.next (.reg .extcodesize) f) o := by
+  expect_no_recipe_trigger "goal-shape:extcodesize-compiled-step"
+  expect_no_recipe_offered "extcodesize-compiled-step"
+  exact run
 
 -- EXPECT: finite-coalition-ledger
 example {coalition : Finset Adr} {before after : Adr → B256}
