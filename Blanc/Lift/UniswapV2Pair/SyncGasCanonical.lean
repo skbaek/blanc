@@ -706,4 +706,90 @@ theorem syncPc0_canonical_live {K : WriterKey → Prop} {current : Checkpoint}
   · exact data0.symm.trans (congrArg Devm.returnData returned0Eq)
   · exact data1.symm.trans (congrArg Devm.returnData returned1Eq)
 
+/-- The actual result world of the shared update and unlock keeps every
+foreign account's complete storage map. -/
+private theorem syncResultWorld_getStor_foreign {sevm : Sevm} {b : Devm}
+    {balance0 balance1 : B256} {a : Adr} (foreign : a ≠ sevm.currentTarget) :
+    (syncResultWorld sevm b balance0 balance1).getStor a = b.getStor a := by
+  have other : sevm.currentTarget ≠ a := Ne.symm foreign
+  unfold syncResultWorld syncUpdatedWorld updateWorld updateSyncPost updatePackedPost
+  rw [afterSstore_getStor_ne _ _ _ _ _ other, Devm.addLog_getStor,
+    afterSstore_getStor_ne _ _ _ _ _ other, afterSload_getStor]
+  unfold updateOracleWorld
+  split
+  · unfold updateAccumulatorPost
+    rw [afterSstore_getStor_ne _ _ _ _ _ other, afterSload_getStor,
+      afterSstore_getStor_ne _ _ _ _ _ other, afterSload_getStor, afterSload_getStor,
+      afterSload_getStor]
+  · rw [afterSload_getStor, afterSload_getStor]
+
+/-- Every successful Sync run, hence every canonical Sync result of that run,
+leaves the complete storage of every foreign account unchanged. Both external
+observations are STATICCALLs whose actual posts keep all storage. -/
+theorem sync_bytecode_foreign_storage {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    ∀ a, a ≠ sevm.currentTarget → post.getStor a = b.getStor a := by
+  intro a foreign
+  obtain ⟨_, _, _, d, _, callee, postEq⟩ := sync_raw_inv codeEq fork selector run
+  obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
+    stor1, _, _, _, _, _, returned⟩ := syncCallee_inv fork getterInitMemory_ptr callee
+  have dEq := Outcome.returned.inj returned
+  have stStor : ∀ (x : Devm) (S : List B256) (M : Mem) (g : Nat),
+      (St x S M g).getStor a = x.getStor a := fun _ _ _ _ => rfl
+  rw [postEq, stStor, dEq, stStor, syncResultWorld_getStor_foreign foreign, stor1 a]
+  unfold syncFirstWorld syncLockedWorld
+  rw [afterSload_getStor, afterSstore_getStor_ne _ _ _ _ _ (Ne.symm foreign),
+    afterSload_getStor]
+
+/-- Headline Sync frame: a successful raw pc0 run with the Sync selector and
+fresh output consumes the typed `.sync` entry exactly, with exact Pair
+storage, unchanged foreign storage, the exact Sync log and empty output. -/
+theorem sync_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpoint}
+    {sevm : Sevm} {b post : Devm} {G : Nat}
+    (invocation : List Nat)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
+    (freshOutput : b.output = [])
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
+    (hashTInj : WriterInj (WriterExtend K
+      (syncTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)))
+    (hashTApart : WriterApart (WriterExtend K
+      (syncTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩))) :
+    sevm.value = 0 ∧ sevm.isStatic = false ∧
+    ∃ result : SyncCanonicalResult K current invocation
+        ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ b post,
+      let ctx := writerContext sevm invocation
+      let frame0 := syncSourceLockedFrame current ctx
+      let frame1 := syncSourceSecondFrame current ctx
+      let request0 := requestFor .syncBalance0 current.state.token0 (.balanceOf ctx.pair)
+      let request1 := requestFor .syncBalance1 current.state.token1 (.balanceOf ctx.pair)
+      ExactConsumes (startTyped current ctx .sync)
+        (.next (syncExternalReply result.out0) (staticViewTranscript result.views0 .done)
+          (.next (syncExternalReply result.out1) (staticViewTranscript result.views1 .done) .done))
+        {status := .success [],
+          frame := syncSourceUpdatedFrame (frame1.beginResume request1)
+            result.sourcePost result.event result.oracle,
+          remaining := .done,
+          childReturns := staticViewChildReturns frame0 request0 0 result.views0 ++
+            staticViewChildReturns frame1 request1 0 result.views1} ∧
+      WriterRep K (post.getStor ctx.pair) {result.sourcePost with unlocked := 1} ∧
+      (∀ a, a ≠ ctx.pair → post.getStor a = b.getStor a) ∧
+      post.logs = b.logs ++
+        [⟨ctx.pair, [updateSyncTopic],
+          encodeWords [Bytes.toB256 (result.out0.take 32), Bytes.toB256 (result.out1.take 32)]⟩] ∧
+      post.output = [] := by
+  obtain ⟨value, _, _, _, _, callee, _⟩ := sync_raw_inv codeEq fork selector run
+  obtain ⟨_, nonstatic, _⟩ := syncCallee_inv fork getterInitMemory_ptr callee
+  obtain ⟨result⟩ := sync_canonical_source_frame_result invocation rep sem image installed
+    codeEq fork selector run hashTInj hashTApart
+  obtain ⟨_, _, _, _, _, pairRep, _, _, _, _, _, _, _, _, consumed⟩ := result.sourceEffects
+  refine ⟨value, nonstatic, result, consumed, pairRep,
+    sync_bytecode_foreign_storage codeEq fork selector run, result.logs, ?_⟩
+  exact result.outputPreserved.trans freshOutput
+
 end Blanc.Lift.UniswapV2Pair
