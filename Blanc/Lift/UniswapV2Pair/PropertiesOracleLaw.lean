@@ -679,3 +679,5 @@ theorem runTyped_oracle_law {st : State} {ctx : Context} {entry : Entry}
   have accumulates := @runTyped_oracle_accumulates st ctx entry transcript
   exact ⟨driven.2.1, driven.2.2, accumulates.1, accumulates.2⟩
 
+
+end Blanc.Lift.UniswapV2Pair
