@@ -111,8 +111,9 @@ def removeCalldata2 : Bytes :=
   [0x3e, 0xb1, 0x71, 0x9f] ++ word 200 ++ word 0 ++ word 0 ++ word a2Address.toNat
 
 /-- The signature `(r, s)` of `tx0` under `E`'s key over `tx0`'s signing hash (`v = 0`,
-low `s`), computed outside Lean; that it recovers `E` is checked by the `#guard` below (evaluation, not the kernel:
-`secp256k1.recover` is not kernel-reducible). -/
+low `s`), computed outside Lean; that it recovers `E` is checked by the `#guard` below, an interpreter
+evaluation rather than a kernel theorem (the kernel can evaluate the recovery of a concrete
+transaction: `TxC.txC_recoveredSender` does it for `TxC.txC`). -/
 def sigR : Bytes :=
   [142, 12, 103, 253, 92, 30, 144, 150, 144, 11, 166, 180, 175, 215, 101, 117, 89, 113, 106, 20,
     203, 5, 242, 84, 72, 89, 111, 62, 244, 85, 188, 130]

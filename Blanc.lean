@@ -606,6 +606,7 @@ import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.ForkFrames
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.ForkKernel
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.ForkTop
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxTopC
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxCRecover
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Run
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Entry
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Outer
