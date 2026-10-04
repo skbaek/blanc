@@ -234,6 +234,8 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.PropertiesOracle",
         "Lift.UniswapV2Pair.PropertiesSwap",
         "Lift.UniswapV2Pair.PropertiesLedger",
+        "Lift.UniswapV2Pair.PropertiesOracleLaw",
+        "Lift.UniswapV2Pair.PropertiesMintBurn",
         "Lift.UniswapV2Pair.ModelControls",
         "Lift.UniswapV2Pair.SqrtWalk",
         "Lift.UniswapV2Pair.GetterMemory",
