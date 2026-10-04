@@ -33,6 +33,63 @@ def wordSystemStorage (storage : Stor) : Stor :=
   let pointers := wordSystemPointers storage
   (pointers.set 0 (wordSystemNewExcess pointers)).set 1 0
 
+/-- Negative control for the natural-number bookkeeping premise
+`effectiveExcess state + state.count < 2 ^ 256` of `systemNewExcess_represented`: at
+storage whose excess word is `2 ^ 256 - 2`, count word `10`, and head and tail `0`, some
+queue model is represented, yet the raw word update stores excess `6` while the natural
+recurrence `excess + count - 2` is `2 ^ 256 + 6`, so no represented model follows the
+specification's `system` step. -/
+theorem wordSystem_excess_wraps :
+    let storage := (Stor.empty.set 0 (2 ^ 256 - 2 : Nat).toB256).set 1 10
+    (∃ state, Blanc.WithdrawalRequest.RepresentsStorage storage.get state) ∧
+    ((wordSystemStorage storage).get 0).toNat = 6 ∧
+    ∀ state, Blanc.WithdrawalRequest.RepresentsStorage storage.get state →
+      (Blanc.WithdrawalRequest.system state).excess = 2 ^ 256 + 6 ∧
+      ¬ Blanc.WithdrawalRequest.RepresentsStorage (wordSystemStorage storage).get
+        (Blanc.WithdrawalRequest.system state) := by
+  intro storage
+  have get0 : storage.get 0 = (2 ^ 256 - 2 : Nat).toB256 := by
+    simp only [storage, Stor.get_set_ne _ (by decide : (1 : B256) ≠ 0), Stor.get_set_self]
+  have get1 : storage.get 1 = 10 := Stor.get_set_self _ _ _
+  have excessOf : ∀ state, Blanc.WithdrawalRequest.RepresentsStorage storage.get state →
+      state.excess = 2 ^ 256 - 2 ∧ state.count = 10 := by
+    intro state rep
+    have excess := congrArg B256.toNat (rep.excess.symm.trans get0)
+    have count := congrArg B256.toNat (rep.count.symm.trans get1)
+    rw [B256.toNat_toB256_of_lt rep.bounds.excess_lt,
+      B256.toNat_toB256_of_lt (by decide)] at excess
+    rw [B256.toNat_toB256_of_lt rep.bounds.count_lt] at count
+    exact ⟨excess, count⟩
+  have natural : ∀ state, Blanc.WithdrawalRequest.RepresentsStorage storage.get state →
+      (Blanc.WithdrawalRequest.system state).excess = 2 ^ 256 + 6 := by
+    intro state rep
+    obtain ⟨excess, count⟩ := excessOf state rep
+    rw [Blanc.WithdrawalRequest.system_excess,
+      Blanc.WithdrawalRequest.effectiveExcess, ite_eq_right (by rw [excess]; decide), excess, count]
+    decide
+  refine ⟨?_, ?_, fun state rep => ⟨natural state rep, fun next =>
+    absurd next.bounds.excess_lt (by rw [natural state rep]; decide)⟩⟩
+  · refine ⟨⟨2 ^ 256 - 2, 10, 0, 0, []⟩, ⟨rfl, ⟨by decide, by decide, by decide, by decide,
+      fun _ bound => absurd bound (Nat.not_lt_zero _)⟩, get0, get1, ?_, ?_,
+      fun _ bound => absurd bound (Nat.not_lt_zero _)⟩⟩
+    · simp only [storage, Stor.get_set_ne _ (by decide : (1 : B256) ≠ 2),
+        Stor.get_set_ne _ (by decide : (0 : B256) ≠ 2)]
+      rfl
+    · simp only [storage, Stor.get_set_ne _ (by decide : (1 : B256) ≠ 3),
+        Stor.get_set_ne _ (by decide : (0 : B256) ≠ 3)]
+      rfl
+  · have pointers0 : (wordSystemPointers storage).get 0 = storage.get 0 := by
+      unfold wordSystemPointers; dsimp only
+      split <;> simp only [Stor.get_set_ne _ (by decide : (3 : B256) ≠ 0),
+        Stor.get_set_ne _ (by decide : (2 : B256) ≠ 0)]
+    have pointers1 : (wordSystemPointers storage).get 1 = storage.get 1 := by
+      unfold wordSystemPointers; dsimp only
+      split <;> simp only [Stor.get_set_ne _ (by decide : (3 : B256) ≠ 1),
+        Stor.get_set_ne _ (by decide : (2 : B256) ≠ 1)]
+    simp only [wordSystemStorage, Stor.get_set_ne _ (by decide : (1 : B256) ≠ 0),
+      Stor.get_set_self, wordSystemNewExcess, pointers0, pointers1, get0, get1]
+    decide
+
 /-- Input-derived storage update; inadmissible branches are excluded by replay guards. -/
 def wordStorageUpdate (sevm : Sevm) (storage : Stor) : Stor :=
   if sevm.isStatic = false then
