@@ -1084,7 +1084,7 @@ theorem skimSliceD_prefix (xs : Bytes) {n : Nat} (enough : 32 ≤ n) :
 
 /-- The helper57 CALL and reply tail at a memory whose free pointer word is `ptr`:
 the flag is nonzero, the call entered, and the reply passes the optional-bool rule. -/
-theorem skimTransferTail_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+theorem skimTransferTail_flag_inv {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b out : Devm} {R : List B256} {N : Mem} {G : Nat}
     {forwarded tokenM ptr endWord amount toWord tokenWord rho : B256}
     (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
@@ -1097,6 +1097,7 @@ theorem skimTransferTail_inv {P : Sevm → Devm → Ninst → Devm → Prop}
       (.next (.exec .call) skimTransferReplyTree) (.done (.returned out))) :
     ∃ d, P sevm (St b (forwarded :: tokenM :: 0 :: ptr :: 68 :: ptr :: 0 :: endWord :: tokenM ::
         96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) (N.read 64 32).2 G) (.exec .call) d ∧
+      (∃ flag rest, d.stack = flag :: rest ∧ flag ≠ 0) ∧
       d.output = b.output ∧ d.returnData.length < 2 ^ 256 ∧
       (d.returnData = [] ∨ (32 ≤ d.returnData.length ∧
         Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0)) ∧
@@ -1107,7 +1108,7 @@ theorem skimTransferTail_inv {P : Sevm → Devm → Ninst → Devm → Prop}
   obtain ⟨_, h⟩ := skimTransferReply_inv project (by decide : 16 ∉ ([] : List Nat)) h
   obtain ⟨nonzero, outEq, accept⟩ := skimTransferDecode_inv project h
   obtain ⟨memory, output⟩ := entered nonzero
-  refine ⟨d, callP, output, width, ?_, outEq⟩
+  refine ⟨d, callP, ⟨flag, _, stack, nonzero⟩, output, width, ?_, outEq⟩
   have lenNat : d.returnData.length.toB256.toNat = d.returnData.length :=
     B256.toNat_toB256_of_lt width
   by_cases empty : d.returnData.length.toB256 = 0
@@ -1147,10 +1148,32 @@ theorem skimTransferTail_inv {P : Sevm → Devm → Ninst → Devm → Prop}
         Nat.sub_self, lenNat, skimSliceD_prefix _ enough] at head
       exact ⟨enough, head⟩
 
+/-- The same tail without the success flag. -/
+theorem skimTransferTail_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+    {sevm : Sevm} {b out : Devm} {R : List B256} {N : Mem} {G : Nat}
+    {forwarded tokenM ptr endWord amount toWord tokenWord rho : B256}
+    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
+    (fork : CoveredFork sevm.benvStat.fork) (wf : Mem.Wf (N.read 64 32).2)
+    (word : Bytes.toB256 (N.read 64 32).1 = ptr)
+    (low : 96 ≤ ptr.toNat) (high : ptr.toNat + 64 < 2 ^ 256)
+    (run : SFunc.RunCutP P cert.prog sevm []
+      (St b (forwarded :: tokenM :: 0 :: ptr :: 68 :: ptr :: 0 :: endWord :: tokenM :: 96 :: 0 ::
+        amount :: toWord :: tokenWord :: rho :: R) (N.read 64 32).2 G)
+      (.next (.exec .call) skimTransferReplyTree) (.done (.returned out))) :
+    ∃ d, P sevm (St b (forwarded :: tokenM :: 0 :: ptr :: 68 :: ptr :: 0 :: endWord :: tokenM ::
+        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) (N.read 64 32).2 G) (.exec .call) d ∧
+      d.output = b.output ∧ d.returnData.length < 2 ^ 256 ∧
+      (d.returnData = [] ∨ (32 ≤ d.returnData.length ∧
+        Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0)) ∧
+      ∃ M' residual, out = St d R M' residual := by
+  obtain ⟨d, callP, _, output, width, accept, outEq⟩ :=
+    skimTransferTail_flag_inv project fork wf word low high run
+  exact ⟨d, callP, output, width, accept, outEq⟩
+
 /-- A returned pointer-generic helper57 run at a fitting free pointer `p`: the SAME
 P-step CALL with canonical transfer calldata at `p+164`, the optional-bool acceptance
 of its full reply, and the returned frame. Child effects stay opaque in `d`. -/
-theorem skimTransfer_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+theorem skimTransfer_flag_inv {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b out : Devm} {R : List B256} {M : Mem} {G : Nat}
     {p amount toWord tokenWord rho : B256}
     (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
@@ -1167,6 +1190,7 @@ theorem skimTransfer_inv {P : Sevm → Devm → Ninst → Devm → Prop}
       (V.read (p.toNat + 164) 68).1 = abiSelectorBytes 0xa9059cbb ++
         ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes ++
           amount.toBytes ∧
+      (∃ flag rest, d.stack = flag :: rest ∧ flag ≠ 0) ∧
       d.output = b.output ∧ d.returnData.length < 2 ^ 256 ∧
       (d.returnData = [] ∨ (32 ≤ d.returnData.length ∧
         Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0)) ∧
@@ -1200,9 +1224,36 @@ theorem skimTransfer_inv {P : Sevm → Devm → Ninst → Devm → Prop}
   have fit68 : (64 + p + 100).toNat + 68 < 2 ^ 256 := by rw [h164]; omega
   rw [hq, skimAddSub fit68] at state
   rw [state] at h
-  obtain ⟨d, call, output, width, accept, outEq⟩ := skimTransferTail_inv project fork wN hq
+  obtain ⟨d, call, flagged, output, width, accept, outEq⟩ :=
+    skimTransferTail_flag_inv project fork wN hq
     (by rw [h164]; omega) (by rw [h164]; omega) h
-  exact ⟨forwarded, callGas, _, d, call, calldata.trans (skimPayloadImage_data low), output,
-    width, accept, outEq⟩
+  exact ⟨forwarded, callGas, _, d, call, calldata.trans (skimPayloadImage_data low), flagged,
+    output, width, accept, outEq⟩
+
+/-- The same helper inverse without the success flag. -/
+theorem skimTransfer_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+    {sevm : Sevm} {b out : Devm} {R : List B256} {M : Mem} {G : Nat}
+    {p amount toWord tokenWord rho : B256}
+    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
+    (fork : CoveredFork sevm.benvStat.fork)
+    (wf : Mem.Wf M) (word : Bytes.toB256 (M.read 64 32).1 = p)
+    (low : 96 ≤ p.toNat) (high : p.toNat + 1024 < 2 ^ 256)
+    (run : SFunc.RunP P cert.prog sevm
+      (St b (amount :: toWord :: tokenWord :: rho :: R) M G) t_1fdb_c57 (.returned out)) :
+    ∃ (forwarded : B256) (callGas : Nat) (V : Mem) (d : Devm),
+      P sevm (St b (forwarded :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        0 :: (64 + p + 100) :: 68 :: (64 + p + 100) :: 0 :: (68 + (64 + p + 100)) ::
+        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) :: 96 :: 0 :: amount ::
+        toWord :: tokenWord :: rho :: R) V callGas) (.exec .call) d ∧
+      (V.read (p.toNat + 164) 68).1 = abiSelectorBytes 0xa9059cbb ++
+        ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes ++
+          amount.toBytes ∧
+      d.output = b.output ∧ d.returnData.length < 2 ^ 256 ∧
+      (d.returnData = [] ∨ (32 ≤ d.returnData.length ∧
+        Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0)) ∧
+      ∃ M' residual, out = St d R M' residual := by
+  obtain ⟨forwarded, callGas, V, d, call, calldata, _, output, width, accept, outEq⟩ :=
+    skimTransfer_flag_inv project fork wf word low high run
+  exact ⟨forwarded, callGas, V, d, call, calldata, output, width, accept, outEq⟩
 
 end Blanc.Lift.UniswapV2Pair

@@ -301,16 +301,50 @@ def SkimSecondFacts (D : Exec.Deriv) (sevm : Sevm) (b : Devm) (M : Mem)
           Bytes.toB256 (d2.returnData.sliceD 0 32 0) ≠ 0)) ∧
         ∃ M' residual, post = St (afterSstore sevm d2 12 1) R0 M' residual
 
+/-- `SkimSecondFacts` with transfer1's nonzero CALL success flag. -/
+def SkimSecondFlagFacts (D : Exec.Deriv) (sevm : Sevm) (b : Devm) (M : Mem)
+    (p t1 t0 toWord tag : B256) (R0 : List B256) (post : Devm) : Prop :=
+    let W := afterSload sevm b 8
+    let tm := t1 &&& 0xffffffffffffffffffffffffffffffffffffffff
+    let r1 := skimReserve1Word (b.getStorVal sevm.currentTarget 8)
+    let S := (p + 36) :: 0x70a08231 :: tm :: r1 :: 0x1a26 :: toWord :: t1 :: 0x1aca :: t1 ::
+      t0 :: toWord :: tag :: R0
+    (W.getCode tm.toAdr).size.toB256 ≠ 0 ∧
+    ∃ (gw : B256) (callGas : Nat) (d1 : Devm) (out1 : Bytes),
+      StepIn D sevm
+        (St (temporalAccountAccessBase W tm.toAdr) (gw :: tm :: p :: 36 :: p :: 32 :: S)
+          (skimRequestMemory M p sevm.currentTarget) callGas) (.exec .staticcall) d1 ∧
+      StaticCallPost (temporalAccountAccessBase W tm.toAdr) d1 S
+        (skimRequestMemory M p sevm.currentTarget) p 36 p 32 1 out1 ∧
+      32 ≤ out1.length ∧ out1.length < 2 ^ 256 ∧
+      StaticAnswered sevm (temporalAccountAccessBase W tm.toAdr) tm.toAdr
+        (ExternalOperation.encode (.balanceOf sevm.currentTarget)) out1 ∧
+      r1 ≤ Bytes.toB256 (out1.take 32) ∧
+      ∃ (forwarded : B256) (callGas' : Nat) (V : Mem) (d2 : Devm),
+        let a1 := Bytes.toB256 (out1.take 32) - r1
+        StepIn D sevm (St d1 (forwarded ::
+          (t1 &&& 0xffffffffffffffffffffffffffffffffffffffff) :: 0 :: (64 + p + 100) :: 68 ::
+          (64 + p + 100) :: 0 :: (68 + (64 + p + 100)) ::
+          (t1 &&& 0xffffffffffffffffffffffffffffffffffffffff) :: 96 :: 0 :: a1 :: toWord :: t1 ::
+          0x1aca :: t1 :: t0 :: toWord :: tag :: R0) V callGas') (.exec .call) d2 ∧
+        (∃ flag rest, d2.stack = flag :: rest ∧ flag ≠ 0) ∧
+        (V.read (p.toNat + 164) 68).1 = abiSelectorBytes 0xa9059cbb ++
+          ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes ++ a1.toBytes ∧
+        d2.output = d1.output ∧ d2.returnData.length < 2 ^ 256 ∧
+        (d2.returnData = [] ∨ (32 ≤ d2.returnData.length ∧
+          Bytes.toB256 (d2.returnData.sliceD 0 32 0) ≠ 0)) ∧
+        ∃ M' residual, post = St (afterSstore sevm d2 12 1) R0 M' residual
+
 /-- The second skim query, transfer1 and unlock from the cached frame after transfer0, at
 a fitting moved free pointer `p`. The reserve1 field is read on the post-transfer0 world. -/
-theorem skimSecondHalf_inv {D : Exec.Deriv} {sevm : Sevm} {b post : Devm}
+theorem skimSecondHalf_flag_inv {D : Exec.Deriv} {sevm : Sevm} {b post : Devm}
     {R0 : List B256} {M : Mem} {G : Nat} {p t1 t0 toWord tag : B256}
     (fork : CoveredFork sevm.benvStat.fork) (ptr : PtrWord p M)
     (low : 96 ≤ p.toNat) (high : p.toNat + 1024 < 2 ^ 256)
     (run : SFunc.RunCutP (StepIn D) cert.prog sevm []
       (St b (t1 :: t0 :: toWord :: tag :: R0) M G) t_1a2b_c34 (.done (.halted post))) :
-    SkimSecondFacts D sevm b M p t1 t0 toWord tag R0 post := by
-  unfold SkimSecondFacts
+    SkimSecondFlagFacts D sevm b M p t1 t0 toWord tag R0 post := by
+  unfold SkimSecondFlagFacts
   dsimp only
   have h := run
   unfold t_1a2b_c34 at h
@@ -423,12 +457,28 @@ theorem skimSecondHalf_inv {D : Exec.Deriv} {sevm : Sevm} {b post : Devm}
           cases lookup
           have helper := (St.of_pop1 pop).2 ▸ callee
           have pM3 := (pR1.extend 64 32).extend p.toNat 32
-          obtain ⟨forwarded, callGas', V, d2, call2, calldata, output, width2, accepted2,
-            M', residual, outEq⟩ := skimTransfer_inv StepIn.toRun fork pM3.1 pM3.2 low high helper
+          obtain ⟨forwarded, callGas', V, d2, call2, calldata, flagged, output, width2, accepted2,
+            M', residual, outEq⟩ :=
+            skimTransfer_flag_inv StepIn.toRun fork pM3.1 pM3.2 low high helper
           rw [outEq] at tail
           obtain ⟨M'', g, final⟩ := skimUnlockTail_inv fork tail
           exact ⟨codeNonzero, gw, callGas, d1, out1, call, post1, width, bound, answered, cover,
-            forwarded, callGas', V, d2, call2, calldata, output, width2, accepted2, M'', g, final⟩
+            forwarded, callGas', V, d2, call2, flagged, calldata, output, width2, accepted2, M'', g,
+            final⟩
+
+/-- The same second half without the success flag. -/
+theorem skimSecondHalf_inv {D : Exec.Deriv} {sevm : Sevm} {b post : Devm}
+    {R0 : List B256} {M : Mem} {G : Nat} {p t1 t0 toWord tag : B256}
+    (fork : CoveredFork sevm.benvStat.fork) (ptr : PtrWord p M)
+    (low : 96 ≤ p.toNat) (high : p.toNat + 1024 < 2 ^ 256)
+    (run : SFunc.RunCutP (StepIn D) cert.prog sevm []
+      (St b (t1 :: t0 :: toWord :: tag :: R0) M G) t_1a2b_c34 (.done (.halted post))) :
+    SkimSecondFacts D sevm b M p t1 t0 toWord tag R0 post := by
+  obtain ⟨codeNonzero, gw, callGas, d1, out1, call, post1, width, bound, answered, cover,
+    forwarded, callGas', V, d2, call2, _, calldata, output, width2, accepted2, M', g, final⟩ :=
+    skimSecondHalf_flag_inv fork ptr low high run
+  exact ⟨codeNonzero, gw, callGas, d1, out1, call, post1, width, bound, answered, cover,
+    forwarded, callGas', V, d2, call2, calldata, output, width2, accepted2, M', g, final⟩
 
 /-- The free pointer left by transfer0's helper: 292 for an empty reply, else the modular bump. -/
 def skimFirstPointer (reply : Bytes) : B256 :=
@@ -460,7 +510,7 @@ head, unlocked, nonstatic), the four own external calls in order with their requ
 full replies and decoded words, both checked surpluses, both transfer acceptances, and
 the final unlock store. The second half is stated for a fitting transfer0 reply pointer
 (`skimFirstPointer_fit` discharges it for every reply below 2^128 bytes). -/
-theorem skim_raw_inv {sevm : Sevm} {b post : Devm} {G : Nat}
+theorem skim_raw_flag_inv {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (selector : Blanc.Sevm.selector sevm = 0xbc25cf77)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
@@ -471,7 +521,7 @@ theorem skim_raw_inv {sevm : Sevm} {b post : Devm} {G : Nat}
         (skimToWord sevm) (fun d Mres _ =>
           96 ≤ (skimFirstPointer d.returnData).toNat →
           (skimFirstPointer d.returnData).toNat + 1024 < 2 ^ 256 →
-          SkimSecondFacts D sevm d Mres (skimFirstPointer d.returnData)
+          SkimSecondFlagFacts D sevm d Mres (skimFirstPointer d.returnData)
             (skimToken1 sevm b) (skimToken0 sevm b)
             (skimToWord sevm) 0x0257 [0xbc25cf77] post) := by
   intro D
@@ -492,6 +542,31 @@ theorem skim_raw_inv {sevm : Sevm} {b post : Devm} {G : Nat}
     skimReserve0 sevm b) (toWord := skimToWord sevm)
     (reply := d.returnData) reply
   rw [← memory, ← hM] at ptr
-  exact skimSecondHalf_inv fork (p := skimFirstPointer d.returnData) ptr low high tail
+  exact skimSecondHalf_flag_inv fork (p := skimFirstPointer d.returnData) ptr low high tail
+
+/-- The same raw inverse without transfer1's success flag. -/
+theorem skim_raw_inv {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0xbc25cf77)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    let D : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
+      (32 : B256) ≤ sevm.data.length.toB256 - 4 ∧ b.getStorVal sevm.currentTarget 12 = 1 ∧
+      SkimFirstFacts D sevm b [0x0257, 0xbc25cf77] getterInitMemory
+        (skimToWord sevm) (fun d Mres _ =>
+          96 ≤ (skimFirstPointer d.returnData).toNat →
+          (skimFirstPointer d.returnData).toNat + 1024 < 2 ^ 256 →
+          SkimSecondFacts D sevm d Mres (skimFirstPointer d.returnData)
+            (skimToken1 sevm b) (skimToken0 sevm b)
+            (skimToWord sevm) 0x0257 [0xbc25cf77] post) := by
+  intro D
+  obtain ⟨value, size, abi, unlocked, first⟩ := skim_raw_flag_inv codeEq fork selector run
+  refine ⟨value, size, abi, unlocked, first.mono ?_⟩
+  intro _ d Mres g _ _ second low high
+  obtain ⟨codeNonzero, gw, callGas, d1, out1, call, post1, width, bound, answered, cover,
+    forwarded, callGas', V, d2, call2, _, calldata, output, width2, accepted2, M', g', final⟩ :=
+    second low high
+  exact ⟨codeNonzero, gw, callGas, d1, out1, call, post1, width, bound, answered, cover,
+    forwarded, callGas', V, d2, call2, calldata, output, width2, accepted2, M', g', final⟩
 
 end Blanc.Lift.UniswapV2Pair
