@@ -136,6 +136,44 @@ theorem StaticView.bytecode_refines {K : WriterKey → Prop} {sevm : Sevm}
       ⟨size, B256.zero_le _⟩, result, storage, logs⟩
 
 
+/-- Actual successful bytecode for a selected view constructs a finished source view at the current checkpoint. -/
+theorem staticView_source_handler_selected {K : WriterKey → Prop} {current : Checkpoint}
+    {ctx : Context} {sevm : Sevm} {b post : Devm} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (fresh : WriterFreshKeys K (staticViewDecodedKeys sevm))
+    (representable : sevm.data.length < 2 ^ 256)
+    (valueRep : ctx.value = sevm.value)
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (view : StaticView) (selector : Blanc.Sevm.selector sevm = view.selector)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧
+      view.argumentSize + 4 ≤ sevm.data.length ∧
+      some post.output = getterResult current.state (view.entry sevm) ∧
+      (∀ a, Devm.getStor post a = Devm.getStor b a) ∧ post.logs = b.logs ∧
+      let frame := Frame.enter current ctx (view.entry sevm)
+      startImmediate current ctx (view.entry sevm) = some (.finished frame post.output) ∧
+      startTyped current ctx (view.entry sevm) = .finished frame post.output ∧
+      ExactConsumes (startTyped current ctx (view.entry sevm)) .done
+        { status := .success post.output, frame := frame, remaining := .done, childReturns := [] } ∧
+      frame.current = current ∧ frame.checkpoint = current ∧ frame.context = ctx := by
+  have selectedFresh : WriterFreshKeys K (view.keys sevm) := by
+    rw [← view.keys_eq_decoded selector]
+    exact fresh
+  obtain ⟨value, length, result, storage, logs⟩ :=
+    view.bytecode_refines rep selectedFresh representable codeEq fork selector run
+  have contextValue : ctx.value = 0 := valueRep.trans value
+  have immediate : startImmediate current ctx (view.entry sevm) =
+      some (.finished (Frame.enter current ctx (view.entry sevm)) post.output) := by
+    simp only [startImmediate, contextValue, ne_eq, not_true_eq_false, ite_false,
+      ← result, Frame.finish]
+  have typed : startTyped current ctx (view.entry sevm) =
+      .finished (Frame.enter current ctx (view.entry sevm)) post.output := by
+    unfold startTyped
+    rw [immediate]
+  refine ⟨value, length, result, storage, logs, immediate, typed, ?_, rfl, rfl, rfl⟩
+  rw [typed]
+  exact ExactConsumes.finished (Frame.enter current ctx (view.entry sevm)) post.output
+
 /-- Actual successful static bytecode constructs a finished source view at the current checkpoint.
 The incoming freshness condition concerns only the selector's actual decoded mapping row. -/
 theorem staticView_source_handler_inv {K : WriterKey → Prop} {current : Checkpoint}
@@ -159,22 +197,10 @@ theorem staticView_source_handler_inv {K : WriterKey → Prop} {current : Checkp
         { status := .success post.output, frame := frame, remaining := .done, childReturns := [] } ∧
       frame.current = current ∧ frame.checkpoint = current ∧ frame.context = ctx := by
   obtain ⟨_, _, view, selector⟩ := staticView_bytecode_inv codeEq fork static run
-  have selectedFresh : WriterFreshKeys K (view.keys sevm) := by
-    rw [← view.keys_eq_decoded selector]
-    exact fresh
-  obtain ⟨value, length, result, storage, logs⟩ :=
-    view.bytecode_refines rep selectedFresh representable codeEq fork selector run
-  have contextValue : ctx.value = 0 := valueRep.trans value
-  have immediate : startImmediate current ctx (view.entry sevm) =
-      some (.finished (Frame.enter current ctx (view.entry sevm)) post.output) := by
-    simp only [startImmediate, contextValue, ne_eq, not_true_eq_false, ite_false,
-      ← result, Frame.finish]
-  have typed : startTyped current ctx (view.entry sevm) =
-      .finished (Frame.enter current ctx (view.entry sevm)) post.output := by
-    unfold startTyped
-    rw [immediate]
-  refine ⟨value, view, selector, length, result, storage, logs, immediate, typed, ?_, rfl, rfl, rfl⟩
-  rw [typed]
-  exact ExactConsumes.finished (Frame.enter current ctx (view.entry sevm)) post.output
+  obtain ⟨value, length, result, storage, logs, immediate, typed, exact, frameCurrent, frameCheckpoint,
+      frameContext⟩ :=
+    staticView_source_handler_selected rep fresh representable valueRep codeEq fork view selector run
+  exact ⟨value, view, selector, length, result, storage, logs, immediate, typed, exact, frameCurrent,
+    frameCheckpoint, frameContext⟩
 
 end Blanc.Lift.UniswapV2Pair

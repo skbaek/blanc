@@ -599,4 +599,35 @@ theorem TransferFromSourceResult.ledger_coalition {K : WriterKey → Prop} {curr
         (if transferFromRecipient sevm ∈ coalition then (transferFromAmount sevm).toNat else 0) := by
   exact Blanc.ledgerSumOn_transfer sumNof result.movement
 
+/-- Successful raw pc0 execution derives exact consumption for the typed transferFrom entry. -/
+theorem transferFrom_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpoint}
+    {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (fresh : WriterFreshKeys K (transferFromTouched (transferFromOwner sevm) sevm.caller (transferFromRecipient sevm)))
+    (representable : sevm.data.length < 2 ^ 256)
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0x23b872dd)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧ 100 ≤ sevm.data.length ∧ sevm.isStatic = false ∧
+      ∃ residual, TransferFromSourceResult K current invocation sevm b post residual ∧
+        ExactConsumes (startTyped current (writerContext sevm invocation) (transferFromDecodedEntry sevm)) .done
+          { status := .success post.output,
+            frame := transferFromSourceFrame current (writerContext sevm invocation)
+              (transferFromOwner sevm) (transferFromRecipient sevm) (transferFromAmount sevm),
+            remaining := .done, childReturns := [] } := by
+  obtain ⟨value, size, nonstatic, residual, result⟩ :=
+    transferFrom_bytecode_refines_source rep fresh representable codeEq fork selector run
+  have typed : startTyped current (writerContext sevm invocation) (transferFromDecodedEntry sevm) =
+      .finished (transferFromSourceFrame current (writerContext sevm invocation)
+        (transferFromOwner sevm) (transferFromRecipient sevm) (transferFromAmount sevm)) post.output := by
+    unfold startTyped
+    rw [result.accepted]
+    dsimp only []
+    rw [← result.output]
+  refine ⟨value, size, nonstatic, residual, result, ?_⟩
+  rw [typed]
+  exact ExactConsumes.finished (transferFromSourceFrame current (writerContext sevm invocation)
+    (transferFromOwner sevm) (transferFromRecipient sevm) (transferFromAmount sevm)) post.output
+
 end Blanc.Lift.UniswapV2Pair
+

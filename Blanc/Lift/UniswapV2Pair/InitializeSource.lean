@@ -243,4 +243,34 @@ theorem initialize_source_bytecode_exact {K : WriterKey → Prop} {current : Che
     initialize_bytecode_live_raw codeEq fork value size selector guard rawAuthorized sentry0 sentry1 nonstatic,
     frameEq, dataEq, initialize_public_source_result rep freshOutput value authorized nonstatic⟩
 
+/-- Successful raw pc0 execution derives exact consumption for the typed initialize entry. -/
+theorem initialize_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpoint}
+    {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (representable : sevm.data.length < 2 ^ 256) (freshOutput : b.output = [])
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0x485cc955)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧ 68 ≤ sevm.data.length ∧ sevm.caller = current.state.factory ∧
+      sevm.isStatic = false ∧ ∃ residual, InitializeSourceResult K current invocation sevm b post residual ∧
+        ExactConsumes (startTyped current (writerContext sevm invocation) (initializeDecodedEntry sevm)) .done
+          { status := .success post.output,
+            frame := initializeSourceFrame current (writerContext sevm invocation)
+              (initializeToken0 sevm) (initializeToken1 sevm),
+            remaining := .done, childReturns := [] } := by
+  obtain ⟨value, length, authorized, nonstatic, residual, result⟩ :=
+    initialize_bytecode_refines_source rep representable freshOutput codeEq fork selector run
+  have typed : startTyped current (writerContext sevm invocation) (initializeDecodedEntry sevm) =
+      .finished (initializeSourceFrame current (writerContext sevm invocation)
+        (initializeToken0 sevm) (initializeToken1 sevm)) post.output := by
+    unfold startTyped
+    rw [result.sourceImmediate]
+    dsimp only []
+    rw [← result.output]
+  refine ⟨value, length, authorized, nonstatic, residual, result, ?_⟩
+  rw [typed]
+  exact ExactConsumes.finished (initializeSourceFrame current (writerContext sevm invocation)
+    (initializeToken0 sevm) (initializeToken1 sevm)) post.output
+
 end Blanc.Lift.UniswapV2Pair
+

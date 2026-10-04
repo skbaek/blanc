@@ -475,4 +475,35 @@ theorem TransferSourceResult.ledger_coalition {K : WriterKey → Prop} {current 
         (if transferRecipient sevm ∈ coalition then (transferAmount sevm).toNat else 0) := by
   exact Blanc.ledgerSumOn_transfer sumNof result.movement
 
+/-- Successful raw pc0 execution derives exact consumption for the typed transfer entry. -/
+theorem transfer_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpoint}
+    {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (fresh : WriterFreshKeys K (transferTouched sevm.caller (transferRecipient sevm)))
+    (representable : sevm.data.length < 2 ^ 256)
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0xa9059cbb)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧ 68 ≤ sevm.data.length ∧ sevm.isStatic = false ∧
+      ∃ residual, TransferSourceResult K current invocation sevm b post residual ∧
+        ExactConsumes (startTyped current (writerContext sevm invocation) (transferDecodedEntry sevm)) .done
+          { status := .success post.output,
+            frame := transferSourceFrame current (writerContext sevm invocation)
+              (transferRecipient sevm) (transferAmount sevm),
+            remaining := .done, childReturns := [] } := by
+  obtain ⟨value, size, nonstatic, residual, result⟩ :=
+    transfer_bytecode_refines_source rep fresh representable codeEq fork selector run
+  have typed : startTyped current (writerContext sevm invocation) (transferDecodedEntry sevm) =
+      .finished (transferSourceFrame current (writerContext sevm invocation)
+        (transferRecipient sevm) (transferAmount sevm)) post.output := by
+    unfold startTyped
+    rw [result.accepted]
+    dsimp only []
+    rw [← result.output]
+  refine ⟨value, size, nonstatic, residual, result, ?_⟩
+  rw [typed]
+  exact ExactConsumes.finished (transferSourceFrame current (writerContext sevm invocation)
+    (transferRecipient sevm) (transferAmount sevm)) post.output
+
 end Blanc.Lift.UniswapV2Pair
+
