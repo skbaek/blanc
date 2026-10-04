@@ -921,6 +921,15 @@ Configured transitions and histories continue in
 `exists_configuredHistoryTrace_of_reachUsing` retain the schedule-selected
 rules and body traces without hard-coding a fork.
 
+To relate a configured history to a later one, use
+`ExecutionTrace.ConfiguredHistoryTrace.ExtendsBy` in
+[`Blanc/ExecutionHistoryExtension.lean`](../Blanc/ExecutionHistoryExtension.lean):
+`base.ExtendsBy trace n` says `trace` is `base` followed by exactly `n`
+configured blocks. Its lemmas `settledFrames` (base frames are a prefix),
+`rawFrames_mem`, `blockCount` (`trace.blockCount = base.blockCount + n`),
+`noSenderAt` and `noAuthorityAt` restrict an extension's retained frames and
+caller/authority exclusion premises to the history it extends.
+
 To identify the literal block in a retained configured transition, use
 `ExecutionTrace.ConfiguredBlockTrace.block_eq_of_transition` in
 [`Blanc/ExecutionHistoryExact.lean`](../Blanc/ExecutionHistoryExact.lean).
