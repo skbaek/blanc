@@ -97,6 +97,13 @@ REQUIRED_HEADLINES = [
     "Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness2.vplus_witness2_covered",
     "Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top.vminus_witness_covered",
     "Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.vminus_txC_process",
+    "Blanc.Lift.WithdrawalRequest.block_word_fifo",
+    "Blanc.Lift.WithdrawalRequest.DrainControl.systemEmpty_loadBearing_witness",
+    "Blanc.Lift.WithdrawalRequest.history_checked_system_totality",
+    "Blanc.Lift.WithdrawalRequest.word_fee_eq_iff_natFeeDomain",
+    "Blanc.Lift.WithdrawalRequest.FeeCounterexample.nat_fee_guarantee_refuted",
+    "Blanc.Lift.WithdrawalRequest.history_submission_nat_live",
+    "Blanc.Lift.WithdrawalRequest.Creation.deploy_initial",
 ]
 
 # Load-bearing disclosures; a rewording that drops one fails.
@@ -116,6 +123,15 @@ NONCLAIM_PHRASES = [
     "not chained",
     "no closed cost formula",
     "not reproduced by any gate",
+    "at most 2^254 committed submission-payment occurrences",
+    "the witness lives only in the model",
+    "success is classified, failure is not",
+    "not a code-only fact",
+    "not a proved minimum",
+    "no transaction-level liveness",
+    "validator authorization",
+    "not a practical attack",
+    "not that one fits mainnet's gas limits",
 ]
 
 # Process and internal-bookkeeping vocabulary the public map must not carry.
