@@ -535,4 +535,115 @@ theorem Lift.StepIn.codePreserve {R : Exec.Deriv} {sevm : Sevm} {pre post : Devm
         Ninst.codePreserve_effectRec Jinst.codePreserve_effect Linst.codePreserve_effect
         childRun) run
 
+/-- A clean committed call-frame body survives settlement unchanged. -/
+theorem Frame.ofCall_settle_clean {msg : Msg} {child : Devm} (clean : child.error = none) :
+    (Frame.ofCall msg).settle (.ok child) = .ok child := by
+  simp only [Frame.settle, Frame.settleMsg, Frame.ofCall, executeCode.handleErrorWith_ok,
+    processMessage.settle, Bind.bind, Except.bind, clean, Option.isSome_none,
+    Bool.false_eq_true, ite_false]
+
+/-- A successful CALL or STATICCALL step appends exactly its entered child's committed logs
+when the child commits, and nothing otherwise (no child, or a rolled-back child). -/
+theorem Xinst.call_run_logs {sevm : Sevm} {pre post : Devm} {x : Xinst} {xl : Xlot}
+    (fork : CoveredFork sevm.benvStat.fork) (callFamily : x = .call ∨ x = .staticcall)
+    (run : Xinst.Run sevm pre x xl (.ok post)) :
+    (xl = .none → post.logs = pre.logs) ∧
+    ∀ (child : Evm) (raw : Execution), xl = .some ⟨child, raw⟩ →
+      (∀ committed : Execution.commits raw = true,
+        post.logs = pre.logs ++ (Execution.committedPost raw committed).logs) ∧
+      (¬ Execution.commits raw = true → post.logs = pre.logs) := by
+  unfold Xinst.Run at run
+  rcases Lift.Xinst.step_shapeLogs sevm pre x fork with ⟨ex, shape, logs⟩ |
+    ⟨creates, d, e, na, mi, ms, logs, shape⟩ |
+    ⟨d, g, v, c, t, ca, stv, isSt, ii, isz, oi, osz, code, dp, logs, shape⟩ <;>
+    rw [shape] at run
+  · obtain ⟨none, outEq⟩ := run
+    subst outEq
+    refine ⟨fun _ => logs.symm, ?_⟩
+    intro child raw slot
+    rw [none] at slot
+    cases slot
+  · exfalso
+    rcases callFamily with rfl | rfl <;> rcases creates with h | h <;> cases h
+  · refine ⟨fun none => ?_, ?_⟩
+    · subst none
+      exact (Lift.GenericCall.logs_of_ok fork.rules_stateGas_none run trivial).trans logs
+    · intro child raw slot
+      subst slot
+      unfold genericCall.step at run
+      split at run
+      · rcases pushed : ((d.withReturnData []).withGasLeft ((d.withReturnData []).gasLeft + g)).push 0
+          with failure | pushedDevm <;>
+          simp only [pushed, XStep.ofExcept, bind, Except.bind, XStep.Run] at run
+        · cases run.2
+        · cases run.1
+      · obtain ⟨settled, frameRun, resumed⟩ := run
+        rcases settled with failure | settledChild
+        · exact (Resume.call_run_error resumed.symm).elim
+        have callLogs := Resume.call_logs resumed.symm
+        have settledEq := (RunFrame.some_inv frameRun).2
+        refine ⟨?_, ?_⟩
+        · intro committed
+          cases raw with
+          | error failure => simp only [Execution.commits, Bool.false_eq_true] at committed
+          | ok body =>
+            have clean : body.error = none := by
+              cases bodyError : body.error with
+              | none => rfl
+              | some reason =>
+                simp only [Execution.commits, bodyError, Option.isNone_some,
+                  Bool.false_eq_true] at committed
+            rw [Frame.ofCall_settle_clean clean] at settledEq
+            cases settledEq
+            have notError : ¬ settledChild.error.isSome = true := by
+              rw [clean]
+              exact Bool.false_ne_true
+            rw [ite_eq_right notError] at callLogs
+            rw [callLogs, ← logs]
+            rfl
+        · intro rolled
+          by_cases error : settledChild.error.isSome = true
+          · rw [ite_eq_left error] at callLogs
+            rw [callLogs, ← logs]
+            rfl
+          · have clean : settledChild.error.isSome = false := by
+              cases flag : settledChild.error.isSome with
+              | false => rfl
+              | true => exact (error flag).elim
+            exact (rolled (Frame.raw_commits_of_settlementCommits
+              (ProcessMessage.settlementCommits_of_some_ok_clean frameRun clean))).elim
+
+/-- The callee of a CALL or STATICCALL spawn is a message-call frame. -/
+theorem Xinst.call_spawn_ofCall {sevm : Sevm} {pre : Devm} {x : Xinst}
+    {callee : Jaune.Frame} {resume : Resume}
+    (fork : CoveredFork sevm.benvStat.fork) (callFamily : x = .call ∨ x = .staticcall)
+    (spawn : Xinst.step sevm pre x = .spawn callee resume) :
+    ∃ msg, callee = Frame.ofCall msg := by
+  rcases Lift.Xinst.step_shapeLogs sevm pre x fork with ⟨ex, shape, _⟩ |
+    ⟨creates, d, e, na, mi, ms, _, shape⟩ |
+    ⟨d, g, v, c, t, ca, stv, isSt, ii, isz, oi, osz, code, dp, _, shape⟩ <;>
+    rw [shape] at spawn
+  · cases spawn
+  · exfalso
+    rcases callFamily with rfl | rfl <;> rcases creates with h | h <;> cases h
+  · unfold genericCall.step at spawn
+    split at spawn
+    · rcases pushed : ((d.withReturnData []).withGasLeft ((d.withReturnData []).gasLeft + g)).push 0
+        with failure | pushedDevm <;>
+        simp only [pushed, XStep.ofExcept, bind, Except.bind, reduceCtorEq] at spawn
+      cases spawn
+    · exact ⟨_, (XStep.spawn.inj spawn).1.symm⟩
+
+/-- A child entered by an executable instruction starts with no logs. -/
+theorem Xinst.spawn_child_logs {sevm : Sevm} {pre : Devm} {x : Xinst}
+    {frame : Jaune.Frame} {resume : Resume} {child : Evm}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (spawn : Xinst.step sevm pre x = .spawn frame resume)
+    (entered : frame.enter = .run child) : child.dyna.logs = [] := by
+  obtain ⟨benv, transfer, rfl⟩ := Jaune.Frame.enter_run_inv entered
+  apply Lift.initDevm_logs
+  change benv.stat.rules.stateGas = none
+  rw [benvAfterTransfer_stat transfer, Xinst.step_spawn_benvStat spawn]
+  exact fork.rules_stateGas_none
+
 end Blanc

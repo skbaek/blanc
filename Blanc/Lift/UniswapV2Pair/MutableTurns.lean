@@ -420,6 +420,8 @@ theorem mutable_call_turns {pair : Adr} {Rep : State → Stor → Prop} {Good : 
       (∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns →
         Auth located.frame.sevm located.frame.post entry nested) ∧
       Rep c.state (d.getStor pair) ∧ c.logs = frame.current.logs ++ added ∧
+      (∃ L : List Log, d.logs = pre.logs ++ L ∧
+        added.map (PendingLog.rawWith owned) = L.map some) ∧
       ((turns = [] ∧ c = frame.current ∧ added = []) ∨
         ∃ (child : Evm) (raw : Execution) (childRun : Exec child.pc child.sta child.dyna raw)
           (committed : Execution.commits raw = true) (L : List Log),
@@ -433,6 +435,7 @@ theorem mutable_call_turns {pair : Adr} {Rep : State → Stor → Prop} {Good : 
       rw [← installed, empty, ByteArray.toList_empty]
     exact sem.ne_nil imageEmpty rfl
   have unchanged : ∀ (s : Stor), (∀ k, s.get k = (pre.getStor pair).get k) →
+      d.logs = pre.logs →
       ∃ (turns : List MutableTurn) (c : Checkpoint) (added : List PendingLog)
         (rets : List ChildReturn),
         ExactTurns frame request 0 (mutableTranscript turns .done)
@@ -440,6 +443,8 @@ theorem mutable_call_turns {pair : Adr} {Rep : State → Stor → Prop} {Good : 
         (∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns →
           Auth located.frame.sevm located.frame.post entry nested) ∧
         Rep c.state s ∧ c.logs = frame.current.logs ++ added ∧
+        (∃ L : List Log, d.logs = pre.logs ++ L ∧
+          added.map (PendingLog.rawWith owned) = L.map some) ∧
         ((turns = [] ∧ c = frame.current ∧ added = []) ∨
           ∃ (child : Evm) (raw : Execution) (childRun : Exec child.pc child.sta child.dyna raw)
             (committed : Execution.commits raw = true) (L : List Log),
@@ -447,9 +452,10 @@ theorem mutable_call_turns {pair : Adr} {Rep : State → Stor → Prop} {Good : 
             turns.map MutableTurn.event = Exec.targetLogEventsFrom pair [] 0 childRun committed ∧
             (Execution.committedPost raw committed).logs = child.dyna.logs ++ L ∧
             added.map (PendingLog.rawWith owned) = L.map some) := by
-    intro s same
+    intro s same unlogged
     refine ⟨[], frame.current, [], [], ExactTurns.done frame request 0, ?_,
-      repCongr _ _ _ same rep, (List.append_nil _).symm, Or.inl ⟨rfl, rfl, rfl⟩⟩
+      repCongr _ _ _ same rep, (List.append_nil _).symm,
+      ⟨[], by rw [unlogged, List.append_nil], rfl⟩, Or.inl ⟨rfl, rfl, rfl⟩⟩
     intro located entry nested member
     simp only [List.not_mem_nil] at member
   obtain ⟨xl, inRoots, pc, stepRun⟩ := call
@@ -460,6 +466,7 @@ theorem mutable_call_turns {pair : Adr} {Rep : State → Stor → Prop} {Good : 
   | none =>
     have storage := Xinst.none_getStor_eq xrun
     exact unchanged (d.getStor pair) (fun k => by rw [storage])
+      ((Xinst.call_run_logs fork callFamily xrun).1 rfl)
   | some slot =>
     obtain ⟨child, raw⟩ := slot
     obtain ⟨childRun, childRoots⟩ := inRoots
@@ -504,10 +511,19 @@ theorem mutable_call_turns {pair : Adr} {Rep : State → Stor → Prop} {Good : 
           have finished := consume .done
             { complete := true, frame := { frame with current := c }, childReturns := [] }
             (ExactTurns.done _ request _)
+          have callLogs := ((Xinst.call_run_logs fork callFamily xrun).2 child raw rfl).1 committed
+          have childLogs := Xinst.spawn_child_logs fork spawned entered
           refine ⟨turns, c, added, rets, ?_, auth,
             repCongr _ _ _ (settledStorage settles) finalRep, cLogs,
+            ⟨L, by rw [callLogs, rawLogs, childLogs, List.nil_append], images⟩,
             Or.inr ⟨child, raw, childRun, committed, L, childRoots, events, rawLogs, images⟩⟩
           simpa only [List.append_nil] using finished
-        · exact unchanged (d.getStor pair) (rolledStorage settles)
+        · have notCommitted : ¬ Execution.commits raw = true := by
+            intro committed
+            obtain ⟨msg, calleeEq⟩ := Xinst.call_spawn_ofCall fork callFamily spawned
+            subst calleeEq
+            exact settles (Jaune.Frame.settlementCommits_ofCall_of_raw_commits committed)
+          exact unchanged (d.getStor pair) (rolledStorage settles)
+            (((Xinst.call_run_logs fork callFamily xrun).2 child raw rfl).2 notCommitted)
 
 end Blanc.Lift.UniswapV2Pair

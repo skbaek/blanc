@@ -231,6 +231,8 @@ theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
         final.current.state.unlocked = 1 ∧
         final.current.state.liquidityCore = current.state.liquidityCore ∧
         final.current.logs = current.logs ++ added ∧
+        (∃ L : List Log, post.logs = b.logs ++ L ∧
+          added.map (PendingLog.rawWith (lockedOwnedRaw sevm.currentTarget)) = L.map some) ∧
         (∀ picked ∈ views0 ++ views1, Blanc.Sevm.selector picked.1.frame.sevm = picked.2.selector ∧
           picked.1.frame.sevm.currentTarget = sevm.currentTarget) ∧
         (∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns1 ++ turns3 →
@@ -322,7 +324,8 @@ theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
     unfold externalStatic
     rw [show frame1.context.isStatic = sevm.isStatic from rfl, nonstatic]
     rfl
-  obtain ⟨turns1, c1, added1, rets1, turns1Exact, auth1, rep1, logs1, derived1⟩ :=
+  obtain ⟨turns1, c1, added1, rets1, turns1Exact, auth1, rep1, logs1, ⟨L1, raw1, images1⟩,
+      derived1⟩ :=
     mutable_call_turns (frame := frame1) (request := request1) supply repCongr sem image call1
       (Or.inl rfl) rfl mutable1 (by rw [skim_St_getCode, codeD0]; exact installed)
       ⟨K, sub, by rw [skim_St_getStor, world0]; exact lockRep0, rfl⟩ rfl fork lockedGood
@@ -364,7 +367,8 @@ theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
     unfold externalStatic
     rw [show frame3.context.isStatic = sevm.isStatic from rfl, nonstatic]
     rfl
-  obtain ⟨turns3, c3, added3, rets3, turns3Exact, auth3, rep3, logs3, derived3⟩ :=
+  obtain ⟨turns3, c3, added3, rets3, turns3Exact, auth3, rep3, logs3, ⟨L3, raw3, images3⟩,
+      derived3⟩ :=
     mutable_call_turns (frame := frame3) (request := request3) supply repCongr sem image call3
       (Or.inl rfl) rfl mutable3 (by rw [skim_St_getCode, codeD1]; exact installed)
       ⟨K1, sub1, by rw [skim_St_getStor, world1]; exact wrep1, locked1⟩ rfl fork lockedGood
@@ -380,7 +384,7 @@ theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
     turns1Exact turns2Exact (fun absent => by cases absent) turns3Exact
   refine ⟨out1, d2, views0, views1, turns1, turns3, _, _, K3, added1 ++ added3,
     ⟨_, _, _, _, _, _, d1, call2, post2.returnData, call3⟩, consumed, rfl, rfl,
-    fun k tracked => sub3 k tracked, ?_, rfl, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    fun k tracked => sub3 k tracked, ?_, rfl, ?_, ?_, ⟨L1 ++ L3, ?_, ?_⟩, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [postEq, skim_St_getStor, afterSstore_getStor_self]
     exact wrep3.mint_unlock_store
   · exact skim_source_liquidity consumed rfl
@@ -389,6 +393,16 @@ theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
     change c1.logs ++ added3 = _
     rw [logs1, List.append_assoc]
     rfl
+  · rw [postEq]
+    change (afterSstore sevm d2 12 1).logs = _
+    rw [afterSstore_logs, raw3]
+    change d1.logs ++ L3 = _
+    rw [post2.logs, temporalAccountAccessBase_logs, afterSload_logs, raw1]
+    change d0.logs ++ L1 ++ L3 = _
+    rw [post0.logs, temporalAccountAccessBase_logs, List.append_assoc]
+    unfold skimCachedWorld syncLockedWorld
+    rw [afterSload_logs, afterSload_logs, afterSload_logs, afterSstore_logs, afterSload_logs]
+  · rw [List.map_append, List.map_append, images1, images3]
   · intro picked member
     rcases List.mem_append.mp member with left | right
     · exact ⟨(authentic0 picked left).2.2.2.2.2.1, (authentic0 picked left).1⟩
