@@ -217,6 +217,7 @@ NAMESPACE_RE = re.compile(rf"^\s*namespace\s+({QUALIFIED})\s*$")
 SECTION_RE = re.compile(
     rf"^\s*(?:noncomputable\s+)?section(?:\s+{QUALIFIED})?\s*$"
 )
+MUTUAL_RE = re.compile(r"^\s*mutual\s*$")
 END_RE = re.compile(rf"^\s*end(?:\s+{QUALIFIED})?\s*$")
 DECL_RE = re.compile(
     rf"^\s*(?:@\[[^]]+\]\s*)*"
@@ -296,6 +297,8 @@ def declarations(text: str) -> dict[str, Decl]:
             scopes.append(("namespace", match.group(1).split(".")))
         elif SECTION_RE.match(bare):
             scopes.append(("section", []))
+        elif MUTUAL_RE.match(bare):
+            scopes.append(("mutual", []))
         elif END_RE.match(bare):
             if not scopes:
                 raise ValueError(f"line {number}: unmatched end")
@@ -606,6 +609,16 @@ def ownership_controls(
     parsed = declarations(common)
     if "Blanc.Prog.function?" not in parsed or "Blanc.Prog.function" in parsed:
         raise ValueError("identifier parser did not preserve `Prog.function?`")
+    probe = declarations(
+        "namespace Blanc.ParserProbe\n"
+        "mutual\n"
+        "def sourceSite? : Nat := 0\n"
+        "end\n"
+        "def afterMutual : Nat := 1\n"
+        "end Blanc.ParserProbe\n"
+    )
+    if set(probe) != {"Blanc.ParserProbe.sourceSite?", "Blanc.ParserProbe.afterMutual"}:
+        raise ValueError("identifier parser did not preserve names across a mutual block")
     controls += 1
     return controls
 
