@@ -21,4 +21,28 @@ theorem PtrMem.write_bytes_of_le {p : B256} {n : Nat} {M : Mem}
     (by rw [h.size]; have := h.ge; omega) (by omega))]
   exact h.word
 
+/-- Four high bytes from the source and twenty-eight low bytes from the destination. -/
+theorem mergeFour_bytes (x y : B256) :
+    let mask := (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256)
+    ((x &&& ~~~mask) ||| (y &&& mask)).toBytes = x.toBytes.take 4 ++ y.toBytes.drop 4 := by
+  rcases x with ⟨⟨x3, x2⟩, ⟨x1, x0⟩⟩
+  rcases y with ⟨⟨y3, y2⟩, ⟨y1, y0⟩⟩
+  change (B256.toBytes (⟨⟨(x3 &&& 0xffffffff00000000) ||| (y3 &&& 0xffffffff),
+    (x2 &&& 0) ||| (y2 &&& (-1 : UInt64))⟩,
+    ⟨(x1 &&& 0) ||| (y1 &&& (-1 : UInt64)),
+      (x0 &&& 0) ||| (y0 &&& (-1 : UInt64))⟩⟩ : B256)) = _
+  simp only [UInt64.and_zero, UInt64.and_neg_one, UInt64.zero_or]
+  have high : (((x3 &&& 0xffffffff00000000) ||| (y3 &&& 0xffffffff)) >>> 32).toUInt32 =
+      (x3 >>> 32).toUInt32 := by
+    rw [UInt64.shiftRight_or, UInt64.shiftRight_and, UInt64.shiftRight_and,
+      UInt64.toUInt32_or, UInt64.toUInt32_and, UInt64.toUInt32_and]
+    change ((x3 >>> 32).toUInt32 &&& (-1 : UInt32)) ||| ((y3 >>> 32).toUInt32 &&& 0) = _
+    simp only [UInt32.and_neg_one, UInt32.and_zero, UInt32.or_zero]
+  have low : ((x3 &&& 0xffffffff00000000) ||| (y3 &&& 0xffffffff)).toUInt32 = y3.toUInt32 := by
+    rw [UInt64.toUInt32_or, UInt64.toUInt32_and, UInt64.toUInt32_and]
+    change (x3.toUInt32 &&& 0) ||| (y3.toUInt32 &&& (-1 : UInt32)) = _
+    simp only [UInt32.and_zero, UInt32.and_neg_one, UInt32.zero_or]
+  simp only [B256.toBytes, B128.toBytes, UInt64.toBytes, high, low,
+    UInt32.toBytes, UInt16.toBytes, List.cons_append, List.nil_append, List.take, List.drop]
+
 end Blanc.Lift

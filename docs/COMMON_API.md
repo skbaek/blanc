@@ -1837,6 +1837,15 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   `Bytes.toBytes_toB256_of_length`; shorten a padded read with
   `List.take_takeD_of_le`. The limb-level codec proofs are private
   implementation details of the public round-trip theorem.
+- For the fixed four-byte word merge, use `mergeFour_bytes` in
+  [`Blanc/Lift/ByteWindowMemory.lean`](../Blanc/Lift/ByteWindowMemory.lean).
+  It identifies `(source & ~mask) | (destination & mask)` with the first four
+  source bytes followed by the last twenty-eight destination bytes, for the
+  low-224-bit mask. This covers the selector store and partial last-word copy
+  without restricting either word. Discovery is manual: the existing
+  `fixed-byte-offsets` matcher recognizes `Mem.Wf`, `Mem.Reads`, or
+  `Bytes.writeAt` in a target, and does not recognize this byte-codec equality
+  or a `Mem.read` equality alone. No broader trigger is registered.
 - Fixed or padded memory windows: use `Mem.Wf` and `Mem.Reads` before adding a
   local take/drop proof.
 
@@ -3334,8 +3343,13 @@ contract-neutral.
   compiled step from the code-size word, stack-room and covered-fork facts.
   `ri_extcodesize` inverts the actual instruction into that world, exact word,
   unchanged memory and residual gas. `rx_extcodesize` consumes an exact
-  continuation at the selected warm/cold charge. The existing Lido temporal
-  access names are compatibility declarations over this common owner.
+  continuation at the selected warm/cold charge.
+  `temporalAccountAccessBase_state`, `temporalAccountAccessBase_output` and
+  `temporalAccountAccessBase_logs` project the unchanged state, output and logs
+  through account warming. Use these facts to compose an observed call without
+  unfolding the nested world update; the Pair mint prefix consumes all three.
+  The existing Lido temporal access names are compatibility declarations over
+  this common owner.
 - A `STATICCALL` to an arbitrary callee, whose code is unknown: its abstract outcome
   (`StaticCallPost`: flag, returned bytes as output window and return data, every storage
   map and the log list kept) and, for a set flag, the successful static child message
@@ -3478,6 +3492,8 @@ contract-neutral.
   It consumes the actual byte list and does not restrict it to a word-sized
   reply. The bare `PtrMem` head cannot distinguish this byte-write obligation
   from initialization, word writes or pointer changes; this is registry-only.
+  The same module's `mergeFour_bytes` gives the fixed high-four/low-twenty-eight
+  byte image of a masked word merge; see the M1 manual codec route above.
 - Gas-exact writer walks for solc-0.4-style runtimes: the scratch-memory invariant `FpMem n M` (word-aligned,
   free pointer `0x60`, kept for an arbitrary `M`; `FpMem.init`, `FpMem.write`, `FpMem.write_out`,
   `FpMem.readback`, `scratchW`), its steps (`rx_mstoreF`, `rx_mstoreOut`, `rx_mloadFp`, `rx_keccakF`,

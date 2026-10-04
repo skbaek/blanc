@@ -89,6 +89,35 @@ theorem staticCallGuard_exact {fs : List SFunc} {sevm : Sevm} {b d : Devm}
     rw [post.returnData] at body
     exact body
 
+/-- The literal seven instructions comparing the full returndata width. -/
+def returnWidthCompareLine : List Ninst :=
+  [.push [0x40] (by decide), .reg .mload, .reg .returndatasize,
+    .push [0x20] (by decide), .reg (.dup 1), .reg .lt, .reg .iszero]
+
+/-- The supplied linear execution retains the real width comparison state. -/
+theorem returnWidthCompareLine_inv {sevm : Sevm} {b d : Devm}
+    {R : List B256} {M : Mem} {G : Nat} {p : B256} {n : Nat}
+    (mem : PtrMem p n M)
+    (line : Line.Run sevm (St b R M G) returnWidthCompareLine d) :
+    ∃ G', d = St b
+      (B256.eqCheck (B256.ltCheck b.returnData.length.toB256 32) 0 ::
+        b.returnData.length.toB256 :: p :: R) M G' := by
+  dsimp only [returnWidthCompareLine] at line
+  obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨middle, hs, line⟩ := Line.of_run_cons line
+  obtain ⟨_, eq⟩ := ri_mload hs
+  have word : Bytes.toB256 (M.read 64 32).1 = p := mem.word
+  rw [show (Bytes.toB256 [0x40]).toNat = 64 from rfl, word,
+    mem.read_self mem.ge] at eq
+  subst middle
+  obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_returndatasize hs
+  obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_lt hs
+  obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_iszero hs
+  cases line
+  exact ⟨_, rfl⟩
+
 /-- The literal return-width guard derives width from full bounded returndata. -/
 theorem returnWidthGuard_invP {P : Sevm → Devm → Ninst → Devm → Prop}
     {fs : List SFunc} {sevm : Sevm} {b : Devm} {R : List B256}
@@ -114,18 +143,12 @@ theorem returnWidthGuard_invP {P : Sevm → Devm → Ninst → Devm → Prop}
   obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_pop (project hs)
   obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_pop (project hs)
   obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_pop (project hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hs)
-  obtain ⟨d, hs, h⟩ := ric_nextP h
-  obtain ⟨_, eq⟩ := ri_mload (project hs)
-  have word : Bytes.toB256 (M.read 64 32).1 = p := mem.word
-  rw [show (Bytes.toB256 [0x40]).toNat = 64 from rfl, word,
-    mem.read_self mem.ge] at eq
-  subst d
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_returndatasize (project hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_lt (project hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_iszero (project hs)
+  change SFunc.RunCutP P fs sevm C _
+    (returnWidthCompareLine.foldr SFunc.next (.next (.push destination le)
+      (.branch shortTree decodeTree))) seg at h
+  obtain ⟨compared, line, h⟩ := h.split_nexts (fun step => project step) returnWidthCompareLine
+  obtain ⟨_, state⟩ := returnWidthCompareLine_inv mem line
+  rw [state] at h
   obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hs)
   rcases ric_branchP h with ⟨_, _, failed⟩ | ⟨accepted, G', h⟩
   · exact (failed.false_of_noOk noShort).elim

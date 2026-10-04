@@ -16,6 +16,24 @@ warmed otherwise. -/
 def temporalAccountAccessBase (base : Devm) (a : Adr) : Devm :=
   if a ∈ base.accessedAddresses then base else addAccessedAddress base a
 
+/-- Account warming preserves the complete world state. -/
+theorem temporalAccountAccessBase_state (base : Devm) (a : Adr) :
+    (temporalAccountAccessBase base a).state = base.state := by
+  unfold temporalAccountAccessBase
+  split <;> rfl
+
+/-- Account warming preserves the parent output. -/
+theorem temporalAccountAccessBase_output (base : Devm) (a : Adr) :
+    (temporalAccountAccessBase base a).output = base.output := by
+  unfold temporalAccountAccessBase
+  split <;> rfl
+
+/-- Account warming preserves the ordered parent logs. -/
+theorem temporalAccountAccessBase_logs (base : Devm) (a : Adr) :
+    (temporalAccountAccessBase base a).logs = base.logs := by
+  unfold temporalAccountAccessBase
+  split <;> rfl
+
 /-- The warmth-dependent account-access charge. -/
 def temporalAccountAccessCost (base : Devm) (a : Adr) : Nat :=
   if a ∈ base.accessedAddresses then gasWarmAccess else gasColdAccountAccess
