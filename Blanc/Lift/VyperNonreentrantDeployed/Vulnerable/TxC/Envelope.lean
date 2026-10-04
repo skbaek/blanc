@@ -1,4 +1,5 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Closed
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxCRecover
 import Blanc.TransactionForward
 
 /-!
@@ -11,10 +12,9 @@ per-transaction cap of 2^24 = 16,777,216** that Osaka and the BPO forks enforce)
 BPO1, BPO2).  Every admission check is discharged here by evaluating it on the concrete
 transaction and block under each fork -- validation and intrinsic gas (with the per-transaction
 gas cap), chain id, fee rules with base fee 0, blob rules, nonce, balance against the maximum fee
-and value, EIP-3607 (the sender `E` has no code), receiver, authorization list -- except two
-things that are not evaluations of this block: the signature recovery, which is the one premise
-(`recoverSender 0 txC = .ok E`, true by evaluation: the `#guard` in `TxTopC`), and the room in the
-block for the transaction's gas (`bout.blockGasUsed`).  The debit, the prepared message (which is
+and value, EIP-3607 (the sender `E` has no code), receiver, authorization list, and the signature
+recovery (`TxC.txC_recoveredSender`, a kernel evaluation) -- except the room in the block for the
+transaction's gas (`bout.blockGasUsed`), which is the one premise.  The debit, the prepared message (which is
 the message of the closed message-level theorem) and the settlement are
 `Blanc.processTransaction_of_stages`.
 -/
@@ -71,11 +71,10 @@ theorem txC_sender :
     checkTransactionSenderAccount (benvPre.beginTransaction.state.get eAddress) txC 0 = .ok () := by
   kernel_rfl
 
-/-- **Admission**: with the signature recovering `E` and room in the block for the transaction's
-gas, `checkTransaction` accepts `txC` (blob-free, effective gas price 0). -/
+/-- **Admission**: with room in the block for the transaction's gas, `checkTransaction` accepts
+`txC` (blob-free, effective gas price 0). -/
 theorem txC_checked (hg : CoveredFork g) (bout : BlockOutput)
-    (hroom : bout.blockGasUsed + txC.gas ≤ 60000000)
-    (hrecover : recoverSender benvPre.stat.chainId txC = .ok eAddress) :
+    (hroom : bout.blockGasUsed + txC.gas ≤ 60000000) :
     checkTransaction (benvPre.withFork g).beginTransaction (transactionPreludeBout bout txC 0) txC =
       .ok (eAddress, 0, [], 0) := by
   have hgas : checkTransactionGasLimits (benvPre.withFork g).beginTransaction
@@ -87,7 +86,7 @@ theorem txC_checked (hg : CoveredFork g) (bout : BlockOutput)
         omega)
       (Nat.zero_le _)
     exact h
-  exact checkTransaction_ok_of_parts hgas (txC_chain hg) hrecover (txC_fee hg) (txC_blob hg)
+  exact checkTransaction_ok_of_parts hgas (txC_chain hg) txC_recoveredSender (txC_fee hg) (txC_blob hg)
     txC_receiver txC_auth txC_sender
 
 /-! ### The debit, the prepared message and the call wrapper -/
@@ -130,13 +129,12 @@ code), with 16,043,200 gas, below the EIP-7825 per-transaction cap of 2^24 -- ov
 contract the transaction calls (the reentrant `add_liquidity` inside `remove_liquidity`).  Every
 admission check (validation, intrinsic gas and the gas cap, chain id, fee rules with base fee 0,
 blob rules, nonce, balance against fee and value, EIP-3607 sender code, receiver, authorization
-list) is discharged above by evaluation; the premises are the signature (`hrecover`, true by
-evaluation: the `#guard` in `TxTopC`) and that the block has the room (`hroom`).  The settlement
+list) and the signature recovery (`txC_recoveredSender`) is discharged above by evaluation; the
+one premise is that the block has the room (`hroom`).  The settlement
 (the sender's gas refund and the coinbase's priority fee, both zero, and the message's empty set
 of accounts to delete) leaves `P`'s storage alone. -/
 theorem vminus_txC_process (g : Fork) (hg : CoveredFork g) (bout : BlockOutput)
-    (hroom : bout.blockGasUsed + txC.gas ≤ 60000000)
-    (hrecover : recoverSender benvPre.stat.chainId txC = .ok eAddress) :
+    (hroom : bout.blockGasUsed + txC.gas ≤ 60000000) :
     txC.gas < 2 ^ 24 ∧
     ∃ (st : State) (bout' : BlockOutput),
       processTransaction (benvPre.withFork g) bout txC 0 = .ok (st, bout') ∧
@@ -154,7 +152,7 @@ theorem vminus_txC_process (g : Fork) (hg : CoveredFork g) (bout : BlockOutput)
     (tx := txC) (index := 0) (intrinsicGas := 66664) (calldataFloorGas := 21160)
     (sender := eAddress) (effectiveGasPrice := 0) (blobVersionedHashes := []) (txBlobGasUsed := 0)
     (debit := worldTx) (msg := msgC.withFork g) (benvG_stateGas hg) (benvG_bal hg)
-    (txC_validated hg) (txC_checked hg bout hroom hrecover) (txC_debit hg) (txC_prepared hg)
+    (txC_validated hg) (txC_checked hg bout hroom) (txC_debit hg) (txC_prepared hg)
     hcall (by rfl)
   refine ⟨_, bout', hproc, ?_⟩
   have hlist : Std.HashSet.toList post.accountsToDelete = [] := by rw [hatd]; simp only [Std.HashSet.toList_emptyWithCapacity]

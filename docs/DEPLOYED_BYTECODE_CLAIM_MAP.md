@@ -89,7 +89,7 @@ reader (41 bytes) and a receiver (86 bytes).
 | Runtime identity | That the lifted bytes are the mainnet bytes | Recorded in each certificate's `provenance`: `eth_getCode` agreement across independent public providers (two for WETH9, five for 3Crv); the creation inputs of WETH9, the Beacon deposit contract and 3Crv fetched from two providers and equal byte for byte; the Lido creation input equal to the frozen reference template plus its constructor arguments; the two pool implementations taken from Sourcify v2 records. The codehashes in Section 2 are recomputed from the lifted files by the checker |
 | Fork scope | — | `CoveredFork` is Prague, Osaka, BPO1, BPO2. Amsterdam is not covered |
 | Chain arithmetic | Model bound | Configured traces carry total ETH plus withdrawals below 2^256 (`SumNof` at the checkpoint) |
-| Signature recovery | Premise, not proved | `recoverSender … = .ok E` is a transaction-admission premise (secp256k1 is not kernel-reducible) |
+| Signature recovery | Premise of the signature-generic transaction theorems | `recoverSender … = .ok E` is a premise of every theorem that quantifies over all signed transactions, since there is then no single signature to evaluate. For a concrete transaction the kernel evaluates recovery: `Blanc.Drip.concreteCreateRecoveredSender` (`Blanc/DripConcreteHistory/Deployment.lean:196`), `Blanc.Drip.concreteExitRecoveredSender` (`Blanc/DripConcreteHistory/AccrualExit.lean:1215`), `Blanc.Lift.WithdrawalRequest.FloodTx.txB_recoveredSender` (`Blanc/Lift/WithdrawalRequest/FloodTxRecover.lean:149`) and, for V−, `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.txC_recoveredSender` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/TxCRecover.lean:99`) |
 
 ## 4. Premise classes
 
@@ -374,7 +374,7 @@ The vulnerable implementation 0x6326, called through its proxy.
 | Claim | Theorem | Level / kind | Premises | Notes |
 |---|---|---|---|---|
 | Message level: a successful message execution in which `remove_liquidity` holds lock slot 2, its ETH callback reenters `add_liquidity` (lock slot 0) through the proxy, and the final ledger has `totalSupply = 1800 < 1906 = balanceOf[attacker]`. The two guards are on different slots (bytes 6900-6911 versus 88-99) | `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top.vminus_witness` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Top.lean:155`); all covered forks `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top.vminus_witness_covered` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/ForkTop.lean:159`) | Message / closed witness | none (closed) | synthetic prestate (Section 7); stated for Prague, other covered forks by transport |
-| **Transaction level, all covered forks:** conditional on signature recovery and block room, Jaune's `processTransaction` accepts a fixed signed type-2 transaction (zero fee and value, 16,043,200 gas, below 2^24, an access list of 19 addresses), and the returned world has `totalSupply = 1800 < 1906` in the pool | `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.vminus_txC_process` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/TxC/Envelope.lean:137`); closed message part `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.vminus_txC_message` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/TxC/Closed.lean:49`) (gas 15,822,837 left, refund 42,600, `accountsToDelete` empty) | Transaction / conditional witness | `hrecover : recoverSender … = .ok E` (**true by an interpreter `#guard` in `TxTopC.lean`, not a kernel fact**); block room `hroom` | every other admission check is kernel-evaluated on the concrete transaction and block |
+| **Transaction level, all covered forks:** conditional on block room, Jaune's `processTransaction` accepts a fixed signed type-2 transaction (zero fee and value, 16,043,200 gas, below 2^24, an access list of 19 addresses), and the returned world has `totalSupply = 1800 < 1906` in the pool | `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.vminus_txC_process` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/TxC/Envelope.lean:136`); closed message part `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.vminus_txC_message` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/TxC/Closed.lean:49`) (gas 15,822,837 left, refund 42,600, `accountsToDelete` empty) | Transaction / conditional witness | block room `hroom` | every other admission check, including signature recovery (`Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.txC_recoveredSender` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/TxCRecover.lean:99`)), is kernel-evaluated on the concrete transaction and block |
 
 **Fork coverage.** `vminus_witness_covered`, `vminus_txC_message` and
 `vminus_txC_process` quantify `g` with `CoveredFork g`. A Prague-only message
@@ -454,7 +454,7 @@ and history corollaries exist; per retained execution the world premises `hP`
 and `hI`, the root code identity and `HashAvoidIn` are not derivable from the
 trace (the transaction form derives `hroot`). [k] A transaction form exists
 for the exclusion; no admitted transaction *witness* reaches an active guarded
-body. [l] A fixed signed transaction; the recovery premise is true by `#guard`. [m] Up to 2^254 committed submission-payment occurrences since the checkpoint (user-approved scope); the fee is
+body. [l] A fixed signed transaction; its signature recovery is a kernel theorem (`txC_recoveredSender`). [m] Up to 2^254 committed submission-payment occurrences since the checkpoint (user-approved scope); the fee is
 the bytecode's executed word fee, and the EIP's unbounded-integer fee guarantee is refuted (§7 item 16).
 
 ## 7. Disclosures and limits
@@ -498,7 +498,7 @@ the bytecode's executed word fee, and the EIP's unbounded-integer fee guarantee 
 6. **The following witness and deployment forms cover Prague, Osaka,
    BPO1 and BPO2:** the listed V± message witnesses are closed;
    `vminus_txC_message` is closed, while `vminus_txC_process` requires
-   signature recovery and block room. The forms are
+   block room. The forms are
    `vplus_witness_covered`, `vplus_witness2_covered`, `vminus_witness_covered`,
    `vminus_txC_{message,process}`, `weth9_deploy_covered`,
    `weth9_deploy_init_covered`, `beacon_deploy_covered`,
@@ -512,8 +512,10 @@ the bytecode's executed word fee, and the EIP's unbounded-integer fee guarantee 
    `Tx.vminus_tx_message`) is about one fixed signed transaction: signature
    `(r,s)`, transaction hash, index 0, **coinbase = the sender E** (warm, so
    address-shadow literals hold), chain id 0, base fee 0, block gas limit
-   60,000,000. A signature-generic form is not built. `hrecover` is true by
-   interpreter evaluation (`#guard`), not by a kernel theorem.
+   60,000,000. A signature-generic form is not built. The transaction's
+   signature recovery is a kernel theorem (`txC_recoveredSender`). The
+   signature of the Prague-only `Tx` transaction `tx0` is checked only by an
+   interpreter `#guard`, not a kernel fact; no theorem cited here depends on it.
    `weth9_tx_withdraw` instead assumes coinbase ∉ {E, ca} and the signature
    premise.
 9. **Callee premises.** `SendOk` (WETH9 `withdraw` to a contract) and
