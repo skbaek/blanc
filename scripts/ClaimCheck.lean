@@ -73,6 +73,7 @@ import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness2.Top
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.ForkTop
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Envelope
 import Blanc.Lift.WithdrawalRequest.WordFifo
+import Blanc.Lift.WithdrawalRequest.WordDelivery
 import Blanc.Composition.WithdrawalRequestDrainControl
 import Blanc.Lift.WithdrawalRequest.SystemHistory
 import Blanc.Lift.WithdrawalRequest.ExactFeeDomain
@@ -7498,3 +7499,74 @@ example (storage : B256 → B256) (state : State) :
 
 end Blanc.WithdrawalRequest
 
+namespace Blanc.Lift.WithdrawalRequest
+open Jaune ExecutionTrace ExecutionAccountingReplay Blanc.WithdrawalRequest
+
+-- EIP-7002: block_word_delivery
+example
+    {cfg : ChainConfig} {checkpoint preB postB preD postD : BlockChain}
+    (historyB : ConfiguredHistoryTrace cfg checkpoint preB)
+    (blockB : ConfiguredBlockTrace cfg preB postB)
+    (historyD : ConfiguredHistoryTrace cfg checkpoint preD)
+    (blockD : ConfiguredBlockTrace cfg preD postD) {depth : Nat}
+    (extension : (ConfiguredHistoryTrace.step historyB blockB).ExtendsBy
+      (ConfiguredHistoryTrace.step historyD blockD) depth)
+    (installed : SystemCodeInstalled checkpoint.state)
+    (senders : (ConfiguredHistoryTrace.step historyD blockD).NoSenderAt systemAddress)
+    (authorities : (ConfiguredHistoryTrace.step historyD blockD).NoAuthorityAt systemAddress)
+    (avoid : ∀ root ∈ (ConfiguredHistoryTrace.step historyD blockD).rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
+    (systemEmpty : checkpoint.state.getCode systemAddress = ByteArray.empty)
+    (init : RepresentsStorage (checkpoint.state.getStor withdrawalRequestPredeployAddress).get initial)
+    (occurrences : ((ConfiguredHistoryTrace.step historyD blockD).settledFrames.flatMap
+      submissionFramePayments).length ≤ wordOccurrenceCap)
+    (modelB : Blanc.WithdrawalRequest.State)
+    (repB : RepresentsStorage (blockB.bodyTrace.requestBenv.state.getStor
+      withdrawalRequestPredeployAddress).get modelB)
+    {q : Nat} {entry : Blanc.WithdrawalRequest.Entry} (queued : modelB.queue[q]? = some entry)
+    (exactDepth : depth = q / 16) :
+    ∃ modelD : Blanc.WithdrawalRequest.State,
+      RepresentsStorage (blockD.bodyTrace.requestBenv.state.getStor
+        withdrawalRequestPredeployAddress).get modelD ∧
+      blockD.bodyTrace.requests.withdrawalOut.returnData = systemOutput modelD ∧
+      (emitted modelD)[q % 16]? = some entry ∧
+      (emitted modelD).take (q % 16 + 1) =
+        (modelB.queue.drop (16 * depth)).take (q % 16 + 1) :=
+  block_word_delivery historyB blockB historyD blockD extension installed senders authorities avoid systemEmpty init occurrences modelB repB queued exactDepth
+
+end Blanc.Lift.WithdrawalRequest
+
+namespace Blanc.Lift.WithdrawalRequest
+open Jaune ExecutionAccountingReplay
+
+-- EIP-7002: wordSystem_excess_wraps
+example :
+    let storage := (Stor.empty.set 0 (2 ^ 256 - 2 : Nat).toB256).set 1 10
+    (∃ state, Blanc.WithdrawalRequest.RepresentsStorage storage.get state) ∧
+    ((wordSystemStorage storage).get 0).toNat = 6 ∧
+    ∀ state, Blanc.WithdrawalRequest.RepresentsStorage storage.get state →
+      (Blanc.WithdrawalRequest.system state).excess = 2 ^ 256 + 6 ∧
+      ¬ Blanc.WithdrawalRequest.RepresentsStorage (wordSystemStorage storage).get
+        (Blanc.WithdrawalRequest.system state) :=
+  wordSystem_excess_wraps
+
+end Blanc.Lift.WithdrawalRequest
+
+namespace Blanc.ExecutionTrace
+open Jaune
+
+-- EIP-7002 definition: the history-extension relation `block_word_delivery` is stated over
+example {cfg : ChainConfig} {checkpoint current : BlockChain}
+    (base : ConfiguredHistoryTrace cfg checkpoint current) :
+    ConfiguredHistoryTrace.ExtendsBy base base 0 :=
+  .refl
+
+example {cfg : ChainConfig} {checkpoint current middle future : BlockChain}
+    {base : ConfiguredHistoryTrace cfg checkpoint current}
+    {trace : ConfiguredHistoryTrace cfg checkpoint middle} {n : Nat}
+    (prior : ConfiguredHistoryTrace.ExtendsBy base trace n)
+    (block : ConfiguredBlockTrace cfg middle future) :
+    ConfiguredHistoryTrace.ExtendsBy base (.step trace block) (n + 1) :=
+  .step prior block
+
+end Blanc.ExecutionTrace
