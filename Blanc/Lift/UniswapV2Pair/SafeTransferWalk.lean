@@ -2828,4 +2828,151 @@ theorem burnFirstTransfer_caller_exact {sevm : Sevm} {b d : Devm}
   apply rx_push (w := 0x1fdb) rfl (by simp only [burnPricedLocals, List.length_cons]; omega)
   exact rx_callRet rfl helper continuation
 
+/-- The helper's ordered payload writes at the moving pointer left by an
+earlier transfer. Every offset remains the literal modular word expression. -/
+def safeTransfer_dynamicPayloadMemory (M : Mem) (p amount toWord : B256) : Mem :=
+  let N1 := M.write 64 (p + 64).toBytes
+  let N2 := N1.write p.toNat (25 : B256).toBytes
+  let N3 := N2.write (p + 32).toNat (0x7472616e7366657228616464726573732c75696e743235362900000000000000 : B256).toBytes
+  let N4 := N3.write (p + 100).toNat ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes
+  let N5 := N4.write (p + 132).toNat amount.toBytes
+  let N6 := N5.write (p + 64).toNat (68 : B256).toBytes
+  let N7 := N6.write 64 (p + 164).toBytes
+  N7.write (p + 96).toNat ((0xa9059cbb00000000000000000000000000000000000000000000000000000000 : B256) |||
+    ((0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256) &&& Bytes.toB256 (N7.read (p + 96).toNat 32).1)).toBytes
+
+/-- The actual arbitrary-pointer initializer normalizes to the moving payload
+image, with its real allocation and all copy operands. The pointer bounds
+are intermediate obligations supplied by the first reply's producer. -/
+theorem safeTransfer_initialize_dynamic_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
+    {p amount toWord tokenWord rho : B256} {n : Nat}
+    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
+    (mem : PtrMem p n M) (lower : 128 ≤ p.toNat)
+    (width : p.toNat + 164 < 2 ^ 256)
+    (run : SFunc.RunCutP P cert.prog sevm C
+      (St b (amount :: toWord :: tokenWord :: rho :: R) M G) t_1fdb_c57 r) :
+    let N := safeTransfer_dynamicPayloadMemory M p amount toWord
+    ∃ residual, SFunc.RunCutP P cert.prog sevm C
+      (St b ((p + 96) :: (p + 164) :: 68 :: 68 :: (p + 96) :: (p + 164) ::
+        (p + 164) :: (p + 64) :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) N residual) t_20a4_c57 r ∧
+      PtrMem (p + 164) N.size N ∧ p.toNat + 164 ≤ N.size := by
+  have addNat (k : Nat) (hk : k ≤ 164) : (p + k.toB256).toNat = p.toNat + k := by
+    rw [B256.toNat_add, B256.toNat_toB256_of_lt (by omega),
+      Nat.lo_eq_of_lt (by omega)]
+  have nat32 : (p + 32).toNat = p.toNat + 32 := by
+    simpa only [show (32 : Nat).toB256 = (32 : B256) from rfl] using addNat 32 (by decide)
+  have nat64 : (p + 64).toNat = p.toNat + 64 := by
+    simpa only [show (64 : Nat).toB256 = (64 : B256) from rfl] using addNat 64 (by decide)
+  have nat96 : (p + 96).toNat = p.toNat + 96 := by
+    simpa only [show (96 : Nat).toB256 = (96 : B256) from rfl] using addNat 96 (by decide)
+  have nat100 : (p + 100).toNat = p.toNat + 100 := by
+    simpa only [show (100 : Nat).toB256 = (100 : B256) from rfl] using addNat 100 (by decide)
+  have nat132 : (p + 132).toNat = p.toNat + 132 := by
+    simpa only [show (132 : Nat).toB256 = (132 : B256) from rfl] using addNat 132 (by decide)
+  let N1 := M.write 64 (p + 64).toBytes
+  let N2 := N1.write p.toNat (25 : B256).toBytes
+  let N3 := N2.write (p + 32).toNat (0x7472616e7366657228616464726573732c75696e743235362900000000000000 : B256).toBytes
+  let N4 := N3.write (p + 100).toNat ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes
+  let N5 := N4.write (p + 132).toNat amount.toBytes
+  let N6 := N5.write (p + 64).toNat (68 : B256).toBytes
+  let N7 := N6.write 64 (p + 164).toBytes
+  let N8 := N7.write (p + 96).toNat ((0xa9059cbb00000000000000000000000000000000000000000000000000000000 : B256) |||
+    ((0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256) &&& Bytes.toB256 (N7.read (p + 96).toNat 32).1)).toBytes
+  have h1 : PtrMem (p + 64) N1.size N1 := by
+    have hc : PtrMem (p + 64) n N1 := mem.set
+    rw [hc.size]; exact hc
+  have h2 : PtrMem (p + 64) N2.size N2 := by
+    have hc := h1.write p.toNat 25 (Or.inr (by omega))
+    rw [hc.size]; exact hc
+  have h3 : PtrMem (p + 64) N3.size N3 := by
+    have hc := h2.write (p + 32).toNat
+      (0x7472616e7366657228616464726573732c75696e743235362900000000000000 : B256)
+      (Or.inr (by rw [nat32]; omega))
+    rw [hc.size]; exact hc
+  have h4 : PtrMem (p + 64) N4.size N4 := by
+    have hc := h3.write (p + 100).toNat
+      ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord)
+      (Or.inr (by rw [nat100]; omega))
+    rw [hc.size]; exact hc
+  have h5 : PtrMem (p + 64) N5.size N5 := by
+    have hc := h4.write (p + 132).toNat amount (Or.inr (by rw [nat132]; omega))
+    rw [hc.size]; exact hc
+  have fit5 : p.toNat + 164 ≤ N5.size := by
+    calc
+      p.toNat + 164 = (p + 132).toNat + 32 := by rw [nat132]
+      _ ≤ N5.size := (Mem.memWord_write_word N4 (p + 132).toNat amount).2
+  have h6 : PtrMem (p + 64) N6.size N6 := by
+    have hc := h5.write (p + 64).toNat 68 (Or.inr (by rw [nat64]; omega))
+    rw [hc.size]; exact hc
+  have fit6 : p.toNat + 164 ≤ N6.size :=
+    le_trans fit5 (Mem.write_agree N5 (p + 64).toNat (68 : B256).toBytes).1
+  have h7 : PtrMem (p + 164) N7.size N7 := by
+    have hc : PtrMem (p + 164) N6.size N7 := h6.set
+    rw [hc.size]; exact hc
+  have fit7 : p.toNat + 164 ≤ N7.size :=
+    le_trans fit6 (Mem.write_agree N6 64 (p + 164).toBytes).1
+  have h8 : PtrMem (p + 164) N8.size N8 := by
+    have hc := h7.write (p + 96).toNat
+      ((0xa9059cbb00000000000000000000000000000000000000000000000000000000 : B256) |||
+        ((0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256) &&& Bytes.toB256 (N7.read (p + 96).toNat 32).1))
+      (Or.inr (by rw [nat96]; omega))
+    rw [hc.size]; exact hc
+  have fit8 : p.toNat + 164 ≤ N8.size :=
+    le_trans fit7 (Mem.write_agree N7 (p + 96).toNat
+      ((0xa9059cbb00000000000000000000000000000000000000000000000000000000 : B256) |||
+        ((0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256) &&& Bytes.toB256 (N7.read (p + 96).toNat 32).1)).toBytes).1
+  have length6 := (Mem.memWord_write_word N5 (p + 64).toNat 68).1
+  have length7 : memWord N7 (p + 64).toNat = 68 := by
+    rw [memWord_congr (μ := N6) (fun k hk =>
+      (Mem.write_agree N6 64 (p + 164).toBytes).2 ((p + 64).toNat + k)
+        (by rw [nat64]; omega) (by rw [nat64, B256.length_toBytes]; right; omega))]
+    exact length6
+  have length8 : memWord N8 (p + 64).toNat = 68 := by
+    rw [memWord_congr (μ := N7) (fun k hk =>
+      (Mem.write_agree N7 (p + 96).toNat
+        ((0xa9059cbb00000000000000000000000000000000000000000000000000000000 : B256) |||
+          ((0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256) &&& Bytes.toB256 (N7.read (p + 96).toNat 32).1)).toBytes).2 ((p + 64).toNat + k)
+        (by rw [nat64]; omega) (by rw [nat64, nat96]; left; omega))]
+    exact length7
+  have read0 : Bytes.toB256 (M.read 64 32).1 = p := mem.word
+  have read3 : Bytes.toB256 (N3.read 64 32).1 = p + 64 := h3.word
+  have read5 : Bytes.toB256 (N5.read 64 32).1 = p + 64 := h5.word
+  have read8 : Bytes.toB256 (N8.read 64 32).1 = p + 164 := h8.word
+  change Bytes.toB256 (N8.read (p + 64).toNat 32).1 = 68 at length8
+  have combine36 : p + 64 + 36 = p + 100 := by
+    apply B256.toNat_inj
+    rw [B256.toNat_add, nat64, nat100, show (36 : B256).toNat = 36 from rfl,
+      Nat.lo_eq_of_lt (by omega)]
+  have combine68 : p + 64 + 68 = p + 132 := by
+    apply B256.toNat_inj
+    rw [B256.toNat_add, nat64, nat132, show (68 : B256).toNat = 68 from rfl,
+      Nat.lo_eq_of_lt (by omega)]
+  have combine100 : p + 64 + 100 = p + 164 := by
+    have nat164 : (p + 164).toNat = p.toNat + 164 := by
+      simpa only [show (164 : Nat).toB256 = (164 : B256) from rfl] using addNat 164 (by decide)
+    apply B256.toNat_inj
+    rw [B256.toNat_add, nat64, nat164, show (100 : B256).toNat = 100 from rfl,
+      Nat.lo_eq_of_lt (by omega)]
+  have combine32 : p + 64 + 32 = p + 96 := by
+    apply B256.toNat_inj
+    rw [B256.toNat_add, nat64, nat96, show (32 : B256).toNat = 32 from rfl,
+      Nat.lo_eq_of_lt (by omega)]
+  have h := safeTransfer_initialize_inv project run
+  dsimp only at h
+  simp only [show (64 : B256).toNat = 64 from rfl] at h
+  rw [read0, mem.read_self mem.ge,
+    show (64 : B256) + p = p + 64 from B256.add_comm,
+    show (32 : B256) + p = p + 32 from B256.add_comm] at h
+  rw [read3, h3.read_self h3.ge, combine36, combine68] at h
+  rw [read5, h5.read_self h5.ge,
+    show (68 : B256) + ((p + 64) - (p + 64)) = 68 from by rw [B256.sub_self, B256.add_zero],
+    combine100, combine32] at h
+  rw [h7.read_self (by rw [nat96]; omega)] at h
+  rw [read8, h8.read_self h8.ge, length8,
+    h8.read_self (by rw [nat64]; omega)] at h
+  obtain ⟨residual, tail⟩ := h
+  exact ⟨residual, tail, h8, fit8⟩
+
 end Blanc.Lift.UniswapV2Pair
