@@ -1,6 +1,7 @@
 import Blanc.Lift.UniswapV2Pair.PermitEntries
 import Blanc.Lift.UniswapV2Pair.ApproveSource
 import Blanc.Lift.CalldataGuards
+import Blanc.Lift.Ecrecover
 
 /-! The literal permit bytecode refines the typed permit segment and its recovery resume. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -461,5 +462,56 @@ theorem permit_source_bytecode_exact {K : WriterKey → Prop} {current : Checkpo
     permit_bytecode_live_raw codeEq fork paid size selector guard nonstatic timely sentry3 call
       success returnedGas recovered signer sentry,
     permit_public_source_result rep fresh freshOutput paid nonstatic timely post recovered signer⟩
+
+/-- With no delegation designator at address 1, the observed reply of the actual recovery
+call is the executed ECRECOVER precompile's output on the actual request; every covered fork
+activates address 1. This identifies the answer, it does not assert recovery succeeds. -/
+theorem permit_recovery_canonical {sevm : Sevm} {b : Devm} {owner : Adr} {input out : Bytes}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (noDelegation : getDelegatedCodeAddress (b.getCode 1) = none)
+    (answered : StaticAnswered sevm (permitNonceWorld sevm b owner) (1 : B256).toAdr input out) :
+    out = ecrecoverOutput input := by
+  obtain ⟨parent, child, xl, dp, na, code, gas, _, routing, _, run, clean, output⟩ := answered
+  have one : (1 : B256).toAdr = (1 : Adr) := by decide
+  have world : (permitNonceWorld sevm b owner).getCode 1 = b.getCode 1 := by
+    unfold permitNonceWorld
+    rw [afterSstore_getCode, afterSload_getCode, afterSload_getCode]
+  rw [one] at routing run
+  rcases routing with ⟨_, rfl, rfl, rfl⟩ | ⟨delegate, delegated, _, _, _⟩
+  · rw [← output]
+    exact (ecrecover_output_of_processMessage_clean (ecrecover_active fork) run clean fork).2
+  · rw [world, noDelegation] at delegated
+    cases delegated
+
+/-- The canonical-native specialization: without a delegation designator at address 1 the
+observed reply is the precompile's output on the model request, so the typed resume consumes
+exactly the native ECRECOVER answer and its copied word is the nonzero owner. -/
+theorem permit_bytecode_refines_source_canonical {K : WriterKey → Prop} {current : Checkpoint}
+    {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (fresh : WriterFreshKeys K (permitTouched (permitOwner sevm) (permitSpender sevm)))
+    (representable : sevm.data.length < 2 ^ 256)
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0xd505accf) (freshOutput : b.output = [])
+    (noDelegation : getDelegatedCodeAddress (b.getCode 1) = none)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧ 228 ≤ sevm.data.length ∧ sevm.isStatic = false ∧
+      sevm.benvStat.time ≤ permitDeadline sevm ∧
+      ∃ (gw : B256) (callGas : Nat) (d : Devm) (residual : Nat),
+        PermitRawCall sevm b 0xd505accf gw callGas d (ecrecoverOutput
+          (permitRequest current.state (permitOwner sevm) (permitSpender sevm) (permitValue sevm)
+            (permitDeadline sevm) (permitV sevm) (permitR sevm) (permitS sevm)).calldata) ∧
+        ∀ codeExists, PermitSourceResult K current invocation sevm b post d
+          (ecrecoverOutput (permitRequest current.state (permitOwner sevm) (permitSpender sevm)
+            (permitValue sevm) (permitDeadline sevm) (permitV sevm) (permitR sevm)
+            (permitS sevm)).calldata) codeExists residual := by
+  obtain ⟨paid, length, nonstatic, timely, gw, callGas, d, out, residual, call, result⟩ :=
+    permit_bytecode_refines_source (invocation := invocation) rep fresh representable codeEq fork
+      selector freshOutput run
+  have native := permit_recovery_canonical fork noDelegation call.2.2.2.1
+  have request := (result false).2.2.2.1
+  rw [← request] at native
+  subst native
+  exact ⟨paid, length, nonstatic, timely, gw, callGas, d, residual, call, result⟩
 
 end Blanc.Lift.UniswapV2Pair
