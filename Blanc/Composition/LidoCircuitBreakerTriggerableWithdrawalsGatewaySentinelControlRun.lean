@@ -1688,8 +1688,8 @@ private theorem sentinelGatewayPauseWorld_afterSetGatewaySeam :
       (by simpa only [gatewayRunMemoryLast,
         gatewayRunMemoryLast] using sentinelRunMem_sizeLast)
       (by
-        unfold temporalAccountAccessCost
-        rw [if_neg (show ¬ pauseWorldCallee.toB256.toAdr ∈
+        simp only [temporalAccountAccessCost, Lift.temporalAccountAccessCost]
+        rw [ite_eq_right (show ¬ pauseWorldCallee.toB256.toAdr ∈
             gatewayRunAfterSetBase.accessedAddresses from by
           rw [gatewayRunAfterSetBase_accessedAddresses]
           exact Std.HashSet.not_mem_emptyWithCapacity)]

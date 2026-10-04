@@ -2343,6 +2343,20 @@ precompile producers and child-input bounds; no bounded-callee-output ENV
 hypothesis is needed. Ordinary arbitrary-seed `exec_output` retains its explicit
 disjunction above.
 
+When rounded allocations need stronger headroom, the pinned Jaune's
+`Jaune/MemoryAccounting.lean` provides
+`Jaune.call_step_returnData_length_lt_two_pow_160` on actual `StepRun` plus
+`Filled`, and `Jaune.call_returnData_length_lt_two_pow_160` on actual
+`Ninst.Run` CALL. Both bound the complete reply below `2^160`, including
+failed children and native callees, from legacy state gas and parent gas
+measure plus charged-memory cost below `2^256`. The value stipend is covered.
+`Jaune.Exec.memory_accounting_output` preserves the paid memory potential
+across recursive execution and settlement on either outcome. Consumers must
+derive the parent potential from their initialized/reachable execution;
+it is an intermediate producer obligation, not a new bounded-callee-output
+or no-wrap environmental premise. A generic inequality goal alone does not
+identify this producer, so discovery remains in this registry.
+
 #### I need a bound on actual precompile output
 
 Use [`Blanc/Lift/PrecompileOutputBound.lean`](../Blanc/Lift/PrecompileOutputBound.lean).

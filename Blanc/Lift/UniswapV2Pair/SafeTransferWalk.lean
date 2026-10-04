@@ -1,6 +1,7 @@
 import Blanc.Lift.UniswapV2Pair.BurnPricingWalk
 import Blanc.Lift.ByteWindowMemory
 import Blanc.Lift.ReturnDataBound
+import Jaune.MemoryAccounting
 
 /-! Literal57 transfer call and its full optional-return decoder. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -2974,5 +2975,23 @@ theorem safeTransfer_initialize_dynamic_inv {P : Sevm → Devm → Ninst → Dev
     h8.read_self (by rw [nat64]; omega)] at h
   obtain ⟨residual, tail⟩ := h
   exact ⟨residual, tail, h8, fit8⟩
+
+/-- An actual CALL observation supplies the first Burn reply's pointer and
+staging bounds directly; reply width is proved by Jaune rather than assumed. -/
+theorem burnFirstTransfer_callLayout
+    {pc : Nat} {sevm : Sevm} {pre post : Devm} {xl : Xlot}
+    (filled : xl.Filled)
+    (call : Ninst.StepRun pc sevm pre (.exec .call) xl (.ok post))
+    (fork : CoveredFork sevm.benvStat.fork)
+    (potential : pre.gasMeasure + calculateMemoryGasCost pre.memory.size < 2 ^ 256) :
+    (burnFirstTransferPointer post.returnData).toNat =
+      (if post.returnData = [] then 292 else 292 + 32 * ((post.returnData.length + 63) / 32)) ∧
+    292 ≤ (burnFirstTransferPointer post.returnData).toNat ∧
+    (post.returnData ≠ [] →
+      324 + post.returnData.length ≤ (burnFirstTransferPointer post.returnData).toNat) ∧
+    (burnFirstTransferPointer post.returnData).toNat + 260 < 2 ^ 256 := by
+  exact burnFirstTransferPointer_layout
+    (Jaune.call_step_returnData_length_lt_two_pow_160 filled call
+      fork.rules_stateGas_none potential)
 
 end Blanc.Lift.UniswapV2Pair
