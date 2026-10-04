@@ -5,13 +5,14 @@ import Blanc.Lift.WalkSteps
 namespace Blanc.Lift
 open Jaune
 
-/-- An arbitrary in-bounds byte write outside the pointer word keeps allocation and pointer. -/
-theorem PtrMem.write_bytes_of_le {p : B256} {n : Nat} {M : Mem}
-    (h : PtrMem p n M) (i : Nat) (bs : Bytes) (fit : i + bs.length ≤ n)
+/-- A byte write outside the pointer word preserves the pointer and records
+its actual rounded allocation, including an arbitrarily long payload. -/
+theorem PtrMem.write_bytes {p : B256} {n : Nat} {M : Mem}
+    (h : PtrMem p n M) (i : Nat) (bs : Bytes)
     (miss : i + bs.length ≤ 64 ∨ 96 ≤ i) :
-    PtrMem p n (M.write i bs) := by
-  refine ⟨(Mem.size_write_of_le (by rw [h.size]; exact fit)).trans h.size,
-    h.n32, h.wf.write _ _, ?_⟩
+    PtrMem p (memExtSize n i bs.length) (M.write i bs) := by
+  refine ⟨Mem.size_write_of_size h.size h.n32 rfl,
+    memExtSize_mod_32 h.n32, h.wf.write _ _, ?_⟩
   intro o av hav
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hav
   cases hav
@@ -21,6 +22,15 @@ theorem PtrMem.write_bytes_of_le {p : B256} {n : Nat} {M : Mem}
   rw [memWord_congr (μ := M) (fun j hj => hag.2 (64 + j)
     (by rw [h.size]; have := h.ge; omega) (by omega))]
   exact h.word
+
+/-- An arbitrary in-bounds byte write outside the pointer word keeps allocation and pointer. -/
+theorem PtrMem.write_bytes_of_le {p : B256} {n : Nat} {M : Mem}
+    (h : PtrMem p n M) (i : Nat) (bs : Bytes) (fit : i + bs.length ≤ n)
+    (miss : i + bs.length ≤ 64 ∨ 96 ≤ i) :
+    PtrMem p n (M.write i bs) := by
+  have grown := h.write_bytes i bs miss
+  rw [memExtSize_of_le h.n32 fit] at grown
+  exact grown
 
 /-- Reading an arbitrary window grows allocation while preserving the pointer. -/
 theorem PtrMem.extend {p : B256} {n : Nat} {M : Mem}
@@ -215,5 +225,58 @@ theorem mergeFourMemory_read68 {M : Mem} {offset : Nat} (headWord : B256)
         exact old
       · rw [ite_eq_right (by rw [B256.length_toBytes]; omega)]
         exact old
+
+/-- A bytes-array header and full payload at the caller's allocation pointer. -/
+def bytesArrayMemory (M : Mem) (ptr : B256) (bytes : Bytes) : Mem :=
+  let len := bytes.length.toB256
+  ((M.write 64 (ptr + ((len + 63) &&& ~~~31)).toBytes).write ptr.toNat len.toBytes).write
+    (ptr + 32).toNat bytes
+
+/-- Array staging preserves the full payload, its header, and the updated
+free-pointer carrier, with allocation independent of the recorded pointer. -/
+theorem bytesArrayMemory_image {M : Mem} {ptr : B256} {bytes : Bytes} {n : Nat}
+    (mem : PtrMem ptr n M) (lower : 96 ≤ ptr.toNat)
+    (fit : ptr.toNat + 32 ≤ n) (width : ptr.toNat + 32 < 2 ^ 256) :
+    let len := bytes.length.toB256
+    let allocated := bytesArrayMemory M ptr bytes
+    PtrMem (ptr + ((len + 63) &&& ~~~31))
+      (memExtSize n (ptr + 32).toNat bytes.length) allocated ∧
+      memWord allocated ptr.toNat = len ∧
+      (32 ≤ bytes.length → (allocated.read (ptr + 32).toNat 32).1 = bytes.sliceD 0 32 0) := by
+  have nat32 : (ptr + 32).toNat = ptr.toNat + 32 := by
+    rw [B256.toNat_add, show (32 : B256).toNat = 32 from rfl, Nat.lo_eq_of_lt width]
+  let len := bytes.length.toB256
+  let q := ptr + ((len + 63) &&& ~~~31)
+  let N1 := M.write 64 q.toBytes
+  let N2 := N1.write ptr.toNat len.toBytes
+  have h1 : PtrMem q n N1 := mem.set
+  have h2 : PtrMem q n N2 := by
+    have hc := h1.write ptr.toNat len (Or.inr lower)
+    rw [memExtSize_of_le mem.n32 fit] at hc
+    exact hc
+  have h3 : PtrMem q (memExtSize n (ptr + 32).toNat bytes.length)
+      (N2.write (ptr + 32).toNat bytes) :=
+    h2.write_bytes (ptr + 32).toNat bytes (Or.inr (by rw [nat32]; omega))
+  have length2 := (Mem.memWord_write_word N1 ptr.toNat len).1
+  have length3 : memWord (N2.write (ptr + 32).toNat bytes) ptr.toNat = len := by
+    rw [memWord_congr (μ := N2) (fun k hk =>
+      (Mem.write_agree N2 (ptr + 32).toNat bytes).2 (ptr.toNat + k)
+        (by rw [h2.size]; omega) (by rw [nat32]; left; omega))]
+    exact length2
+  change PtrMem q (memExtSize n (ptr + 32).toNat bytes.length) (N2.write (ptr + 32).toNat bytes) ∧
+    memWord (N2.write (ptr + 32).toNat bytes) ptr.toNat = len ∧
+    (32 ≤ bytes.length → ((N2.write (ptr + 32).toNat bytes).read (ptr + 32).toNat 32).1 = bytes.sliceD 0 32 0)
+  refine ⟨h3, length3, ?_⟩
+  intro enough
+  have nonempty : bytes ≠ [] := by
+    intro empty
+    rw [empty] at enough
+    cases enough
+  simp only [Mem.read, Array.sliceD_eq_map, List.sliceD_eq_map]
+  apply List.map_congr_left
+  intro k hk
+  have short : k < 32 := List.mem_range.mp hk
+  rw [Mem.getD_write_below_end N2 (ptr + 32).toNat nonempty (by omega), ite_eq_left (by omega)]
+  rw [show (ptr + 32).toNat + k - (ptr + 32).toNat = k by omega, Nat.zero_add]
 
 end Blanc.Lift

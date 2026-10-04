@@ -1869,6 +1869,16 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   following 64 bytes, at an arbitrary offset in well-formed memory. These
   `Mem.read` equalities use the same manual discovery boundary as the codec
   equality above; the existing matcher has no reliable trigger for them.
+- For an arbitrary byte-array allocation, use `bytesArrayMemory` and
+  `bytesArrayMemory_image` in
+  [`Blanc/Lift/ByteWindowMemory.lean`](../Blanc/Lift/ByteWindowMemory.lean).
+  They stage the free-pointer word, the length header and the complete payload,
+  retaining the modular pointer and actual rounded memory size. The image
+  theorem needs a covered header and no wrap at the payload start; it supplies
+  the header readback and the first-word readback of a sufficiently long payload.
+  `PtrMem.write_bytes` preserves the pointer across a disjoint byte write that
+  may grow memory; `PtrMem.write_bytes_of_le` specializes it to a covered write.
+  Discovery of this carrier conjunction is manual, through this branch.
 - Fixed or padded memory windows: use `Mem.Wf` and `Mem.Reads` before adding a
   local take/drop proof.
 
