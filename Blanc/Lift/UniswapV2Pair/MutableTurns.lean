@@ -59,6 +59,17 @@ checkpoint, is consumed: an exact source invocation, its storage transport under
 and its own raw logs as the source's appended logs. `Good` is a trace-local admission of
 the frame (for example its decoded keys lie in a separated universe); `Auth` ties the
 source entry and nested transcript to the same raw frame. -/
+def PairFrameOutcome (pair : Adr) (Rep : State → Stor → Prop)
+    (Auth : Sevm → Devm → Entry → Transcript → Prop) (owned : Event → Option Log)
+    (current : Checkpoint) (invocation : List Nat) (sevm : Sevm) (b post : Devm) : Prop :=
+  ∃ (entry : Entry) (nested : Transcript) (child : RunResult) (added : List PendingLog)
+    (L : List Log),
+    Auth sevm post entry nested ∧
+    ExactConsumes (startTyped current (writerContext sevm invocation) entry) nested child ∧
+    Rep child.frame.current.state (post.getStor pair) ∧
+    child.frame.current.logs = current.logs ++ added ∧
+    post.logs = b.logs ++ L ∧ added.map (PendingLog.rawWith owned) = L.map some
+
 def PairFrameSupply (pair : Adr) (Rep : State → Stor → Prop) (Good : Sevm → Prop)
     (Auth : Sevm → Devm → Entry → Transcript → Prop) (owned : Event → Option Log) : Prop :=
   ∀ (current : Checkpoint) (invocation : List Nat) {sevm : Sevm} {b post : Devm} {G : Nat},
@@ -66,13 +77,7 @@ def PairFrameSupply (pair : Adr) (Rep : State → Stor → Prop) (Good : Sevm �
     sevm.currentTarget = pair → sevm.code = code → CoveredFork sevm.benvStat.fork →
     b.output = [] → sevm.data.length < 2 ^ 256 → Good sevm →
     Rep current.state (b.getStor pair) →
-    ∃ (entry : Entry) (nested : Transcript) (child : RunResult) (added : List PendingLog)
-      (L : List Log),
-      Auth sevm post entry nested ∧
-      ExactConsumes (startTyped current (writerContext sevm invocation) entry) nested child ∧
-      Rep child.frame.current.state (post.getStor pair) ∧
-      child.frame.current.logs = current.logs ++ added ∧
-      post.logs = b.logs ++ L ∧ added.map (PendingLog.rawWith owned) = L.map some
+    PairFrameOutcome pair Rep Auth owned current invocation sevm b post
 
 /-- What the fold derives from one committed run, at the incoming frame and turn. -/
 def MutableFoldResult (pair : Adr) (Rep : State → Stor → Prop)
