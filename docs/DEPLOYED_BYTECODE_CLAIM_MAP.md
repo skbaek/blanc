@@ -84,7 +84,7 @@ reader (41 bytes) and a receiver (86 bytes).
 | Component | What is trusted | Evidence |
 |---|---|---|
 | Lean toolchain `v4.34.0` | Kernel soundness | For every constant of every Blanc module, and therefore for every theorem this map cites, the reachable axioms are within `propext`, `Classical.choice`, `Quot.sound`; one from-scratch union walk (Section 8), not `#print axioms` or `collectAxioms` |
-| Jaune revision `b019bbf` | That its EVM and transaction definitions match Ethereum | Not a theorem. Conformance, as reported by that Jaune revision's own README and not re-run here: **5,006/5,006** supported fixture files and **34,205/34,205** cases of the execution-specs mainnet corpus (`tests@v20.0.2`), Prague through BPO2 including configured fork transitions |
+| Jaune revision `780ad71` | That its EVM and transaction definitions match Ethereum | Not a theorem. Conformance, as reported by that Jaune revision's own README and not re-run here: **5,006/5,006** supported fixture files and **34,205/34,205** cases of the execution-specs mainnet corpus (`tests@v20.0.2`), Prague through BPO2 including configured fork transitions |
 | Lift certificates | Nothing | The Python producers are untrusted. Each certificate is accepted only by its Lean `cert_check`, a kernel decision, against the literal bytes |
 | Runtime identity | That the lifted bytes are the mainnet bytes | Recorded in each certificate's `provenance`: `eth_getCode` agreement across independent public providers (two for WETH9, five for 3Crv); the creation inputs of WETH9, the Beacon deposit contract and 3Crv fetched from two providers and equal byte for byte; the Lido creation input equal to the frozen reference template plus its constructor arguments; the two pool implementations taken from Sourcify v2 records. The codehashes in Section 2 are recomputed from the lifted files by the checker |
 | Fork scope | — | `CoveredFork` is Prague, Osaka, BPO1, BPO2. Amsterdam is not covered |
@@ -109,8 +109,8 @@ whether a class is acceptable and whether deployment establishes INIT.
 
 The per-frame calldata bound (below 2^256) is not a premise of any history
 theorem: it holds for every raw frame of every configured history on all
-covered forks [`Blanc.ExecutionTrace.ConfiguredHistoryTrace.calldata_bound` (`Blanc/ExecutionTraceCalldata.lean:768`);
-`Blanc.ExecutionTrace.ConfiguredHistoryTrace.frameAdmitted_calldata` (`Blanc/ExecutionTraceCalldata.lean:785`)], because
+covered forks [`Blanc.ExecutionTrace.ConfiguredHistoryTrace.calldata_bound` (`Blanc/ExecutionTraceCalldata.lean:773`);
+`Blanc.ExecutionTrace.ConfiguredHistoryTrace.frameAdmitted_calldata` (`Blanc/ExecutionTraceCalldata.lean:790`)], because
 `tx.gas ≤ blockGasLimit < 2^63`. Frame-level (non-history) theorems still take
 it as a hypothesis about their own `sevm`.
 
