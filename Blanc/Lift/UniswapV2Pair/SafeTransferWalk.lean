@@ -1718,8 +1718,102 @@ def safeTransfer_reply292Memory (M : Mem) (reply : Bytes) : Mem :=
   let len := reply.length.toB256
   ((M.write 64 (292 + ((len + 63) &&& ~~~31)).toBytes).write 292 len.toBytes).write 324 reply
 
-/-- The first reply's physical bytes and word image use full arbitrary returndata.
-No natural no-wrap conclusion is inferred from its word-width bound. -/
+/-- The first transfer leaves this literal free-pointer word for the second helper. -/
+def burnFirstTransferPointer (reply : Bytes) : B256 :=
+  if reply = [] then 292 else 292 + ((reply.length.toB256 + 63) &&& ~~~31)
+
+/-- The producer's reply bound makes the actual modular allocation a natural
+allocation, with room for every fixed offset of the second transfer. -/
+theorem burnFirstTransferPointer_layout {reply : Bytes}
+    (width : reply.length < 2 ^ 160) :
+    (burnFirstTransferPointer reply).toNat =
+      (if reply = [] then 292 else 292 + 32 * ((reply.length + 63) / 32)) ∧
+    292 ≤ (burnFirstTransferPointer reply).toNat ∧
+    (reply ≠ [] → 324 + reply.length ≤ (burnFirstTransferPointer reply).toNat) ∧
+    (burnFirstTransferPointer reply).toNat + 260 < 2 ^ 256 := by
+  have margin : 2 ^ 160 + 615 < (2 ^ 256 : Nat) := by decide
+  have lenWidth : reply.length < 2 ^ 256 := by omega
+  have sumWidth : reply.length + 63 < 2 ^ 256 := by omega
+  have sumNat : (reply.length.toB256 + (63 : B256)).toNat = reply.length + 63 := by
+    rw [B256.toNat_add, B256.toNat_toB256_of_lt lenWidth,
+      show (63 : B256).toNat = 63 from rfl, Nat.lo_eq_of_lt sumWidth]
+  have maskNat : ((reply.length.toB256 + (63 : B256)) &&& ~~~31).toNat =
+      32 * ((reply.length + 63) / 32) := by
+    rw [B256.toNat_and, sumNat,
+      show (~~~ (31 : B256)).toNat = 2 ^ 256 - 32 from rfl,
+      Nat.and_mask32 sumWidth]
+  have division := Nat.mod_add_div (reply.length + 63) 32
+  have remainder : (reply.length + 63) % 32 < 32 := Nat.mod_lt _ (by decide)
+  have roundedWidth : 292 + 32 * ((reply.length + 63) / 32) < 2 ^ 256 := by omega
+  have pointerNat : (292 + ((reply.length.toB256 + (63 : B256)) &&& ~~~31)).toNat =
+      292 + 32 * ((reply.length + 63) / 32) := by
+    rw [B256.toNat_add, show (292 : B256).toNat = 292 from rfl,
+      maskNat, Nat.lo_eq_of_lt roundedWidth]
+  by_cases empty : reply = []
+  · simp only [burnFirstTransferPointer, empty, ite_true,
+      show (292 : B256).toNat = 292 from rfl]
+    exact ⟨True.intro, by omega, fun nonempty => False.elim (nonempty rfl), by decide⟩
+  · simp only [burnFirstTransferPointer, ite_eq_right empty, pointerNat]
+    exact ⟨True.intro, by omega, fun _ => by omega, by omega⟩
+
+/-- The second transfer starts its reply array after its own 164-byte staging
+area and advances only for its independently observed nonempty reply. -/
+def burnSecondTransferPointer (firstReply secondReply : Bytes) : B256 :=
+  let start := burnFirstTransferPointer firstReply + 164
+  if secondReply = [] then start else start + ((secondReply.length.toB256 + 63) &&& ~~~31)
+
+/-- Both independent reply allocations and the following fixed ABI area fit
+without word wrap; a nonempty second reply ends below the actual new pointer. -/
+theorem burnSecondTransferPointer_layout {firstReply secondReply : Bytes}
+    (firstWidth : firstReply.length < 2 ^ 160)
+    (secondWidth : secondReply.length < 2 ^ 160) :
+    (burnSecondTransferPointer firstReply secondReply).toNat =
+      (burnFirstTransferPointer firstReply).toNat + 164 +
+        (if secondReply = [] then 0 else 32 * ((secondReply.length + 63) / 32)) ∧
+    (burnFirstTransferPointer firstReply).toNat + 164 ≤
+      (burnSecondTransferPointer firstReply secondReply).toNat ∧
+    (secondReply ≠ [] →
+      (burnFirstTransferPointer firstReply).toNat + 196 + secondReply.length ≤
+        (burnSecondTransferPointer firstReply secondReply).toNat) ∧
+    (burnSecondTransferPointer firstReply secondReply).toNat + 64 < 2 ^ 256 := by
+  have firstLayout := burnFirstTransferPointer_layout firstWidth
+  have firstDivision := Nat.mod_add_div (firstReply.length + 63) 32
+  have firstBound : (burnFirstTransferPointer firstReply).toNat ≤ firstReply.length + 355 := by
+    rw [firstLayout.1]
+    split <;> omega
+  have margin : 2 * 2 ^ 160 + 646 < (2 ^ 256 : Nat) := by decide
+  have startWidth : (burnFirstTransferPointer firstReply).toNat + 164 < 2 ^ 256 := by omega
+  have startNat : (burnFirstTransferPointer firstReply + 164).toNat =
+      (burnFirstTransferPointer firstReply).toNat + 164 := by
+    rw [B256.toNat_add, show (164 : B256).toNat = 164 from rfl,
+      Nat.lo_eq_of_lt startWidth]
+  have lenWidth : secondReply.length < 2 ^ 256 := by omega
+  have sumWidth : secondReply.length + 63 < 2 ^ 256 := by omega
+  have sumNat : (secondReply.length.toB256 + (63 : B256)).toNat = secondReply.length + 63 := by
+    rw [B256.toNat_add, B256.toNat_toB256_of_lt lenWidth,
+      show (63 : B256).toNat = 63 from rfl, Nat.lo_eq_of_lt sumWidth]
+  have maskNat : ((secondReply.length.toB256 + (63 : B256)) &&& ~~~31).toNat =
+      32 * ((secondReply.length + 63) / 32) := by
+    rw [B256.toNat_and, sumNat,
+      show (~~~ (31 : B256)).toNat = 2 ^ 256 - 32 from rfl,
+      Nat.and_mask32 sumWidth]
+  have division := Nat.mod_add_div (secondReply.length + 63) 32
+  have remainder : (secondReply.length + 63) % 32 < 32 := Nat.mod_lt _ (by decide)
+  have roundedWidth : (burnFirstTransferPointer firstReply).toNat + 164 +
+      32 * ((secondReply.length + 63) / 32) < 2 ^ 256 := by omega
+  have pointerNat :
+      (burnFirstTransferPointer firstReply + 164 +
+        ((secondReply.length.toB256 + 63) &&& ~~~31)).toNat =
+      (burnFirstTransferPointer firstReply).toNat + 164 +
+        32 * ((secondReply.length + 63) / 32) := by
+    rw [B256.toNat_add, startNat, maskNat, Nat.lo_eq_of_lt roundedWidth]
+  by_cases empty : secondReply = []
+  · simp only [burnSecondTransferPointer, empty, ite_true, startNat, Nat.add_zero]
+    exact ⟨True.intro, by omega, fun nonempty => False.elim (nonempty rfl), by omega⟩
+  · simp only [burnSecondTransferPointer, ite_eq_right empty, pointerNat]
+    exact ⟨True.intro, by omega, fun _ => by omega, by omega⟩
+
+/-- The first reply's physical bytes and word image use full arbitrary returndata. -/
 private theorem safeTransfer_reply292_image {M : Mem} {reply : Bytes}
     (mem : PtrMem 292 416 M) :
     let len := reply.length.toB256
@@ -1759,6 +1853,51 @@ private theorem safeTransfer_reply292_image {M : Mem} {reply : Bytes}
   have short : k < 32 := List.mem_range.mp hk
   rw [Mem.getD_write_below_end N2 324 nonempty (by omega), ite_eq_left (by omega)]
   rw [show 324 + k - 324 = k by omega, Nat.zero_add]
+
+/-- The first helper's actual returned memory supplies the second helper's
+pointer carrier, untouched empty-array sentinel, and allocation separation. -/
+theorem burnFirstTransfer_memoryLayout {M : Mem} {reply : Bytes}
+    (mem : PtrMem 292 416 M) (sentinel : memWord M 96 = 0)
+    (width : reply.length < 2 ^ 160) :
+    let post := if reply = [] then M else safeTransfer_reply292Memory M reply
+    PtrMem (burnFirstTransferPointer reply)
+      (if reply = [] then 416 else memExtSize 416 324 reply.length) post ∧
+    memWord post 96 = 0 ∧
+    292 ≤ (burnFirstTransferPointer reply).toNat ∧
+    (reply ≠ [] → 324 + reply.length ≤ (burnFirstTransferPointer reply).toNat) ∧
+    (burnFirstTransferPointer reply).toNat + 260 < 2 ^ 256 := by
+  have layout := burnFirstTransferPointer_layout width
+  by_cases empty : reply = []
+  · simp only [empty, ite_true, burnFirstTransferPointer]
+    exact ⟨mem, sentinel, by decide,
+      fun nonempty => False.elim (nonempty rfl), by decide⟩
+  · simp only [ite_eq_right empty, burnFirstTransferPointer]
+    let len := reply.length.toB256
+    let q := 292 + ((len + 63) &&& ~~~31)
+    let N1 := M.write 64 q.toBytes
+    let N2 := N1.write 292 len.toBytes
+    have h1 : PtrMem q 416 N1 := mem.set
+    have h2 : PtrMem q 416 N2 := h1.write 292 len (Or.inr (by decide))
+    have sentinel1 : memWord N1 96 = 0 := by
+      rw [memWord_congr (μ := M) (fun k hk =>
+        (Mem.write_agree M 64 q.toBytes).2 (96 + k)
+          (by rw [mem.size]; omega)
+          (by rw [B256.length_toBytes]; right; omega))]
+      exact sentinel
+    have sentinel2 : memWord N2 96 = 0 := by
+      rw [memWord_congr (μ := N1) (fun k hk =>
+        (Mem.write_agree N1 292 len.toBytes).2 (96 + k)
+          (by rw [h1.size]; omega) (by left; omega))]
+      exact sentinel1
+    have sentinel3 : memWord (safeTransfer_reply292Memory M reply) 96 = 0 := by
+      change memWord (N2.write 324 reply) 96 = 0
+      rw [memWord_congr (μ := N2) (fun k hk =>
+        (Mem.write_agree N2 324 reply).2 (96 + k)
+          (by rw [h2.size]; omega) (by left; omega))]
+      exact sentinel2
+    have carrier := (safeTransfer_reply292_image mem (reply := reply)).1
+    simp only [burnFirstTransferPointer, ite_eq_right empty] at layout
+    exact ⟨carrier, sentinel3, layout.2.1, layout.2.2.1, layout.2.2.2⟩
 
 /-- The first actual callback-to-decoder composition retains the full reply and SAME P child step. -/
 private theorem safeTransfer_firstReply_inv {P : Sevm → Devm → Ninst → Devm → Prop}
