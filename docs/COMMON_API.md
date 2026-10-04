@@ -1047,6 +1047,22 @@ childless calls advance the parent counter; interpreted children use
 subtree before the parent continuation is appended. These equations support
 a local producer over the retained frames; they do not establish its request,
 reply or contract-model correspondence.
+For a fold that must also see the actual foreign LOGs in order (the turn queue of
+a mutable external call), use `Exec.targetLogEventsFrom` in
+[`Blanc/Lift/TargetLogEvents.lean`](../Blanc/Lift/TargetLogEvents.lean): retained
+target frames interleaved with each foreign frame's successful `Exec.logAt?`.
+`Exec.targetLogEventsFrom_frames` proves its frame projection equals
+`Exec.retainedTargetFramesFromAt`, with matching `_target`, `_halt`, `_cont`,
+`_doneOk` and `_runOk` equations. The same module transports one foreign step for
+arbitrary callee code: storage of a code-bearing owner (`Evm.step_cont_getStor_foreign`,
+`Evm.step_done_getStor`, `Xinst.spawn_run_getStor`/`Evm.step_run_getStor`: the settled
+child's committed endpoint or the rollback, pointwise), logs (`Exec.cont_logs_eq`,
+`Exec.doneOk_logs_eq`, `Exec.runOk_logs_eq`, path-independent `Exec.committed_logs_at`,
+and `Xinst.call_run_logs`: a CALL/STATICCALL appends exactly its committed child's
+logs), the installed image (`CodeSem.At.parentStep`, `CodeSem.At.spawnChild`,
+`CodeSem.At.callChild`, self-calls included), child entry (`Xinst.spawn_child_world`,
+`Xinst.spawn_child_logs`, `Xinst.call_spawn_ofCall`, `Frame.ofCall_settle_clean`),
+`Exec.retainedTargetFramesFromAt_rawFrameRoot` and `Lift.StepIn.codePreserve`.
 The existing `goal-head:StateReplay` recipe selects chronology continuity;
 the joint chunk/Link/observation premises are discovered through this registry.
 
@@ -1529,6 +1545,18 @@ laws live in [`Blanc/LadderBase.lean`](../Blanc/LadderBase.lean):
   supply those guard facts nor establish an execution path or history. The
   `finite-coalition-ledger` recipe reaches this branch from a target containing
   `ledgerSumOn`.
+- For a pure ledger read over a *finite key footprint* (a history observes only
+  the rows it touches), import
+  [`Blanc/Lift/LedgerFootprint.lean`](../Blanc/Lift/LedgerFootprint.lean).
+  `footprintSum keys balances` sums the rows a key list names and
+  `FootprintCovers keys balances` says the list names every nonzero row;
+  `footprintSum_eq_sum` equates a duplicate-free covering footprint's sum with
+  the full address `sum` (via `sum_eq_ledgerSumOn` for any covering
+  coalition), so a conservation law proved over `sum` (packaged as
+  `SumBacked balances supply`) is read over any covering footprint.
+  `FootprintCovers.extend` extends a footprint by the keys a step touches, and
+  `footprintSum_dup_ne_sum` is the statement control: a repeated nonzero key
+  breaks the equation.
 
 ### S6. I need a basic EVM-word identity
 
@@ -1879,6 +1907,33 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   `PtrMem.write_bytes` preserves the pointer across a disjoint byte write that
   may grow memory; `PtrMem.write_bytes_of_le` specializes it to a covered write.
   Discovery of this carrier conjunction is manual, through this branch.
+- Whole-word byte images and the low-byte mask live in
+  [`Blanc/Lift/WordImage.lean`](../Blanc/Lift/WordImage.lean).
+  `Bytes.sliceD_writeAt_word_after` keeps a window that starts past an earlier
+  word write; `Bytes.sliceD_writeAt_word_last` appends a word written exactly at
+  a window's end, so consecutive word stores (an ABI encoding, a recovery
+  request) read back as their concatenation, peeled from the right.
+  `Bytes.sliceD_writeAt_short` reads a short write (a call reply prefix of at
+  most 32 bytes) at the head of a word window followed by the old image, and
+  `B256.zero_toBytes_sliceD` reads zeros from any tail of the zero word.
+  `B256.and_ff_eq_toUInt8` and `UInt8.toB256_and_ff` identify `AND 0xff` with
+  the low byte as a `UInt8`, as a `uint8` ABI decoder masks it. Discovery is
+  manual; no trigger is registered. First consumer: the Uniswap V2 Pair permit
+  walk (`Blanc/Lift/UniswapV2Pair/PermitWalk.lean`).
+- The ECRECOVER precompile on arbitrary calldata lives in
+  [`Blanc/Lift/Ecrecover.lean`](../Blanc/Lift/Ecrecover.lean).
+  `ecrecoverOutput data` is the precompile's own success output (empty for a
+  malformed `v`, zero or out-of-range scalars, or failed recovery; otherwise the
+  recovered address as one word), defined through Jaune's `executeEcrecover`;
+  `executeEcrecover_eq` states it for any machine that can pay the fixed charge.
+  `ecrecover_output_of_processMessage_clean` turns a clean synchronous
+  non-delegated address-1 child (the `ProcessMessage` a `StaticAnswered` witness
+  exhibits) into `gasEcrecover ≤ gas` and that output, and `ecrecover_active`
+  discharges activation of address 1 on every covered fork by `CoveredFork.cases`.
+  It identifies the executed answer; it never asserts that recovery succeeds or
+  that signatures are unforgeable. Consumers: the Uniswap V2 Pair permit
+  canonical corollary; `Blanc/Weth10Permit.lean`'s two address-1 clean-child
+  theorems can become corollaries (proposed migration). Discovery is manual.
 - Fixed or padded memory windows: use `Mem.Wf` and `Mem.Reads` before adding a
   local take/drop proof.
 
@@ -3263,6 +3318,24 @@ contract-neutral.
   covered fork; they do not establish child context, settlement or ordered
   history. The joint node/tree premises are discovered here because the
   existential result alone is not a reliable recipe trigger.
+- To pin the *complete* actual state (gas and world metadata included) at a
+  later cursor of a successful raw suffix, use
+  [`Blanc/Lift/CursorExact.lean`](../Blanc/Lift/CursorExact.lean). Build
+  `SFunc.CutAt fs tgt f f'` along the actual path (`next` for frame-free
+  instructions, `dest`, `zero`/`succ`, `toZero`, and `toSucc` inlining
+  `fs[k]`), then prove the gas-exact synthetic run of the cut tree with the
+  usual `rx_*` kit ending in `rx_stop`; `cursor_cut_exact` returns the actual
+  node at `tgt`, its `ExecFreeUntil` span, cursor, unchanged static
+  environment/outcome and `N.devm` equal to the synthetic halting state.
+  `cursor_callNext_exact` crosses one internal call edge with its exact pop.
+  `Exec.Deriv.ExecFreeUntil.eq_of_execAt` identifies two frame-entry-free
+  spans from one node ending at decoded frame-entering instructions (use it to
+  identify a cut with a canonical occurrence), and `ninstRun_eq_of_runCompiled`
+  pins an actual primitive step against a compiled one from the same state.
+  `popBurnBy_eq_of_length`, `burnBy_eq` and `ConfStep.of_dest`/`of_branch`/
+  `of_branchTo`/`of_callNext` are the supporting inversions. Worked use:
+  `syncPc0_canonical_live` in
+  [`Blanc/Lift/UniswapV2Pair/SyncGasCanonical.lean`](../Blanc/Lift/UniswapV2Pair/SyncGasCanonical.lean).
 - To expose the six actual STATICCALL operands, use
   `cursor_staticcall_operands` in
   [`Blanc/Lift/CursorCuts.lean`](../Blanc/Lift/CursorCuts.lean). `CursorOK` and
@@ -3539,6 +3612,19 @@ contract-neutral.
   constructors need (`rx_push0`, `rx_slt`, `rx_codesize`, `rx_log2`, and `read_covered_len`, a
   window of any length inside an aligned image) in
   [`Blanc/Lift/CreationOps.lean`](../Blanc/Lift/CreationOps.lean).
+- Contract-neutral composition of the `CREATE2` opcode under a covered fork lives in
+  [`Blanc/Lift/Create2Deploy.lean`](../Blanc/Lift/Create2Deploy.lean).
+  `create2AddressOfHash` computes the CREATE2 address from an init-code digest
+  (with `create2NewAddress_eq_ofHash` its identity against Jaune's
+  `create2NewAddress`). An admitted `CREATE2` (non-static, affordable endowment,
+  creator nonce below the maximum, positive depth, empty target) steps to
+  `.spawn` via `Xinst.step_create2_spawn`, creating the frame over `create2Prepared`
+  at that address. When the creation message succeeds without error
+  (`processCreateMessage … = .ok child`, `child.error = none`),
+  `create2_runCompiled` closes the spawn into a compiled step (`Ninst.RunCompiled`)
+  to `create2Post` with the new address on the stack and the child's world installed.
+  Worked use: `pair_create2` in
+  [`Blanc/Lift/UniswapV2Pair/Creation/Deploy.lean`](../Blanc/Lift/UniswapV2Pair/Creation/Deploy.lean).
 - Free-pointer memory with a pointer independent of allocation: `PtrMem p n M`
   in [`Blanc/Lift/ExactWalkMemory.lean`](../Blanc/Lift/ExactWalkMemory.lean)
   combines aligned size, `Mem.Wf` and the existing `MemMatches` word at offset64.
@@ -3556,6 +3642,15 @@ contract-neutral.
   from initialization, word writes or pointer changes; this is registry-only.
   The same module's `mergeFour_bytes` gives the fixed high-four/low-twenty-eight
   byte image of a masked word merge; see the M1 manual codec route above.
+- Free-pointer word without an allocation size: `PtrWord p M` in
+  [`Blanc/Lift/PtrWordMemory.lean`](../Blanc/Lift/PtrWordMemory.lean) keeps only
+  `Mem.Wf M` and the pointer word at offset64. Use it instead of `PtrMem` when a
+  walk's allocation grows by an unbounded reply (for example a moved free pointer
+  after a full-returndata copy), so no size bound is owed. `PtrWord.of_ptrMem`
+  enters it; `write` (any byte list at offset96 or above), `extend`, `extends`
+  and `set` (pointer replacement) preserve it; `memRead_extend_fst` reads through
+  a read's extension. The Pair's skim walk consumes it for its second query and
+  transfer after transfer0's allocation.
 - Gas-exact writer walks for solc-0.4-style runtimes: the scratch-memory invariant `FpMem n M` (word-aligned,
   free pointer `0x60`, kept for an arbitrary `M`; `FpMem.init`, `FpMem.write`, `FpMem.write_out`,
   `FpMem.readback`, `scratchW`), its steps (`rx_mstoreF`, `rx_mstoreOut`, `rx_mloadFp`, `rx_keccakF`,
