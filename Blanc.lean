@@ -652,6 +652,14 @@ import Blanc.Lift.Curve3Crv.Creation.Deploy
 import Blanc.Lift.Curve3Crv.Exec
 import Blanc.Lift.Curve3Crv.Liveness
 
+-- The Uniswap V2 Pair contract, lifted from its runtime bytes (uv2nh-wiring).
+import Blanc.Lift.UniswapV2Pair.SyncGasCanonical
+import Blanc.Lift.UniswapV2Pair.PermitSource
+import Blanc.Lift.UniswapV2Pair.SkimCanonical
+import Blanc.Lift.UniswapV2Pair.PropertiesOracle
+import Blanc.Lift.UniswapV2Pair.PropertiesSwap
+import Blanc.Lift.UniswapV2Pair.Creation.DeployInit
+
 namespace Blanc
 
 def main : List String → IO Unit

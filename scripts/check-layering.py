@@ -168,12 +168,17 @@ SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.CheckAssembly", "Lift.ExactWalkO
            "Lift.InvWalkWorld", "Lift.InvWalkSha", "Lift.InvWalkDispatch", "Lift.InvWalkProvenance", "Lift.CodeSizeWalk"]
 # Creation code (deploy-init-v1): the size-optimised packed-hash site and the CREATE bridge
 # for lifted creation code; contract-neutral.
-SHARED += ["Lift.PackedShaSize", "Lift.Deploy", "Lift.CreationOps"]
+SHARED += ["Lift.PackedShaSize", "Lift.Deploy", "Lift.CreationOps", "Lift.Create2Deploy"]
 # Solc-0.4 scratch-memory walk kit and the value-bearing CALL to a code-free recipient
 # (weth9-liveness-v1): contract-neutral.
 SHARED += ["Lift.ExactWalkSolc", "Lift.ExactWalkCall"]
 # Parameterized free-pointer memory for lifted walks.
-SHARED += ["Lift.ExactWalkMemory", "Lift.ByteWindowMemory"]
+SHARED += ["Lift.ExactWalkMemory", "Lift.ByteWindowMemory", "Lift.WordImage", "Lift.Ecrecover"]
+# Size-free free-pointer word carrier for moved-pointer walks (uv2nh-skim)
+SHARED += ["Lift.PtrWordMemory"]
+# Retained target frames interleaved with actual foreign LOGs, and per-step storage/log
+# transport across arbitrary callee code (uv2nh-skim2): contract-neutral.
+SHARED += ["Lift.TargetLogEvents"]
 # Pure-model ledger updates (vyper-3crv-bytecode-v1): contract-neutral.
 SHARED += ["LedgerUpdate"]
 # Floor share bounds for two-reserve AMMs: contract-neutral.
@@ -187,7 +192,7 @@ SHARED += ["Lift.CommittedLogs", "Lift.SegmentedReplay", "Lift.SegmentedHistory"
 SHARED += ["Lift.CalldataGuards", "Lift.StaticCall", "Lift.StaticCallGuard", "Lift.WalkSteps", "Lift.MapSlot", "Lift.Vyper", "Lift.PackedWord"]
 # The frame cursor, the reentrancy-lock exclusion kit and its bytecode checker, owner
 # discipline, and concrete-run evaluation (deployed-lido-vyper-v1): contract-neutral.
-SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachChain", "Lift.Cursor", "Lift.CursorCuts", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
+SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachChain", "Lift.Cursor", "Lift.CursorCuts", "Lift.CursorExact", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
            "Lift.LockCheck", "Lift.LockCheckSound", "Lift.LockCheckFlow"]
 # The constant memory map and its checker, code tries as data, and the executable-witness
 # engine with its child runs and spawn facts (deployed-lido-vyper-v1, V-): contract-neutral.
@@ -217,9 +222,15 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.Creation.Cert",
         "Lift.UniswapV2Pair.Creation.Check",
         "Lift.UniswapV2Pair.Creation.Jumps",
+        "Lift.UniswapV2Pair.Creation.Walk",
+        "Lift.UniswapV2Pair.Creation.Deploy",
+        "Lift.UniswapV2Pair.Creation.DeployInit",
+        "Lift.UniswapV2Pair.Creation.Facts",
         "Lift.UniswapV2Pair.Model",
         "Lift.UniswapV2Pair.Execution",
         "Lift.UniswapV2Pair.Properties",
+        "Lift.UniswapV2Pair.PropertiesOracle",
+        "Lift.UniswapV2Pair.PropertiesSwap",
         "Lift.UniswapV2Pair.ModelControls",
         "Lift.UniswapV2Pair.SqrtWalk",
         "Lift.UniswapV2Pair.GetterMemory",
@@ -271,6 +282,17 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.SyncWalk",
         "Lift.UniswapV2Pair.SyncTurns",
         "Lift.UniswapV2Pair.SyncCanonical",
+        "Lift.UniswapV2Pair.SyncGasCanonical",
+        "Lift.UniswapV2Pair.SkimWalk",
+        "Lift.UniswapV2Pair.SkimTransferWalk",
+        "Lift.UniswapV2Pair.SkimSecondWalk",
+        "Lift.UniswapV2Pair.SkimSource",
+        "Lift.UniswapV2Pair.SkimHandler",
+        "Lift.UniswapV2Pair.SkimCanonical",
+        "Lift.UniswapV2Pair.MutableTurns",
+        "Lift.UniswapV2Pair.PairSelectors",
+        "Lift.UniswapV2Pair.PairLockedEntries",
+        "Lift.UniswapV2Pair.LockedSupply",
         "Lift.UniswapV2Pair.StaticViewClassify",
         "Lift.UniswapV2Pair.StaticViewSource",
         "Lift.UniswapV2Pair.StaticViewTurns",
@@ -281,6 +303,9 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.GetterStorageReservesMemory",
         "Lift.UniswapV2Pair.GetterStorageReservesWrapper",
         "Lift.UniswapV2Pair.GetterStorageReservesWalk",
+        "Lift.UniswapV2Pair.PermitWalk",
+        "Lift.UniswapV2Pair.PermitEntries",
+        "Lift.UniswapV2Pair.PermitSource",
     ],
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness",
                        # the deployed runtime, lifted (decision beacon-lift-layering-family-20260926)
