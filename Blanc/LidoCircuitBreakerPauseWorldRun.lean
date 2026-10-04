@@ -2151,8 +2151,8 @@ private theorem pauseLastWorld_master :
       lastMem_wfLast lastMem_readsLast lastMem_targetLast lastMem_durLast
       lastMem_sizeLast
       (by
-        unfold temporalAccountAccessCost
-        rw [if_neg (show ¬ pauseWorldCallee.toB256.toAdr ∈ _ from by
+        simp only [temporalAccountAccessCost, Lift.temporalAccountAccessCost]
+        rw [ite_eq_right (show ¬ pauseWorldCallee.toB256.toAdr ∈ _ from by
           rw [lastAddrs_B7]
           exact Std.HashSet.not_mem_emptyWithCapacity)]
         rfl)
@@ -4220,8 +4220,8 @@ private theorem pauseRetainedWorld_master :
       returnMem_wfLast returnMem_readsLast returnMem_targetLast returnMem_durLast
       returnMem_sizeLast
       (by
-        unfold temporalAccountAccessCost
-        rw [if_neg (show ¬ pauseWorldCallee.toB256.toAdr ∈ _ from by
+        simp only [temporalAccountAccessCost, Lift.temporalAccountAccessCost]
+        rw [ite_eq_right (show ¬ pauseWorldCallee.toB256.toAdr ∈ _ from by
           rw [returnAddrs_RB7]
           exact Std.HashSet.not_mem_emptyWithCapacity)]
         rfl)
