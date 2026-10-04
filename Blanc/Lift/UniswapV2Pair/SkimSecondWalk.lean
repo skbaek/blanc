@@ -1,5 +1,6 @@
 import Blanc.Lift.UniswapV2Pair.SkimWalk
 import Blanc.Lift.UniswapV2Pair.SkimTransferWalk
+import Blanc.Lift.PtrWordMemory
 
 /-! Skim's second balance query and second transfer after transfer0 moved the free
 pointer, the unlock tail, and the complete raw pc0 inverse. -/
@@ -8,51 +9,27 @@ namespace Blanc.Lift.UniswapV2Pair
 
 open Jaune
 
-/-- A well-formed memory whose free-pointer word reads `p`; no allocation size is tracked. -/
-def SkimPtr (p : B256) (M : Mem) : Prop :=
-  Mem.Wf M ∧ Bytes.toB256 (M.read 64 32).1 = p
-
-theorem SkimPtr.of_ptrMem {p : B256} {n : Nat} {M : Mem} (h : PtrMem p n M) : SkimPtr p M :=
-  ⟨h.wf, h.word⟩
-
-/-- Any byte write at or above the pointer word's end keeps the pointer. -/
-theorem SkimPtr.write {p : B256} {M : Mem} (h : SkimPtr p M) (i : Nat) (bs : Bytes)
-    (far : 96 ≤ i) : SkimPtr p (M.write i bs) := by
-  refine ⟨h.1.write i bs, ?_⟩
-  rw [(Mem.reads_data M |>.write h.1 i bs).read,
-    Bytes.sliceD_writeAt_before _ _ 64 32 i (by omega), ← (Mem.reads_data M).read]
-  exact h.2
-
-theorem SkimPtr.extend {p : B256} {M : Mem} (h : SkimPtr p M) (i n : Nat) :
-    SkimPtr p (M.read i n).2 :=
-  ⟨h.1.extend i n, h.2⟩
-
-theorem SkimPtr.set {p : B256} {M : Mem} (h : SkimPtr p M) (q : B256) :
-    SkimPtr q (M.write 64 q.toBytes) := by
-  refine ⟨h.1.write _ _, ?_⟩
-  rw [(Mem.reads_data M |>.write h.1 64 q.toBytes).read, Bytes.readWord_writeAt_self]
-
 /-- After transfer0 the free pointer is292 (empty reply) or the modular reply bump. -/
 theorem skimAfterFirst_ptr {M1 : Mem} {a0 toWord : B256} {reply : Bytes}
     (mem : PtrMem 128 192 M1) :
-    SkimPtr (if reply = [] then 292 else 292 + ((reply.length.toB256 + 63) &&& ~~~31))
+    PtrWord (if reply = [] then 292 else 292 + ((reply.length.toB256 + 63) &&& ~~~31))
       (if reply = [] then safeTransfer_call128Memory M1 a0 toWord else
         safeTransfer_reply292Memory (safeTransfer_call128Memory M1 a0 toWord) reply) := by
-  have h0 := SkimPtr.of_ptrMem mem
-  have call : SkimPtr 292 (safeTransfer_call128Memory M1 a0 toWord) := by
+  have h0 := PtrWord.of_ptrMem mem
+  have call : PtrWord 292 (safeTransfer_call128Memory M1 a0 toWord) := by
     unfold safeTransfer_call128Memory safeTransfer_payload128Memory
     dsimp only
-    apply SkimPtr.write _ _ _ (by decide)
-    apply SkimPtr.extend
-    apply SkimPtr.write _ _ _ (by decide)
-    apply SkimPtr.write _ _ _ (by decide)
-    apply SkimPtr.write _ _ _ (by decide)
-    refine SkimPtr.set (p := 192) ?_ 292
-    apply SkimPtr.write _ _ _ (by decide)
-    apply SkimPtr.write _ _ _ (by decide)
-    apply SkimPtr.write _ _ _ (by decide)
-    apply SkimPtr.write _ _ _ (by decide)
-    apply SkimPtr.write _ _ _ (by decide)
+    apply PtrWord.write _ _ _ (by decide)
+    apply PtrWord.extend
+    apply PtrWord.write _ _ _ (by decide)
+    apply PtrWord.write _ _ _ (by decide)
+    apply PtrWord.write _ _ _ (by decide)
+    refine PtrWord.set (p := 192) ?_ 292
+    apply PtrWord.write _ _ _ (by decide)
+    apply PtrWord.write _ _ _ (by decide)
+    apply PtrWord.write _ _ _ (by decide)
+    apply PtrWord.write _ _ _ (by decide)
+    apply PtrWord.write _ _ _ (by decide)
     exact h0.set 192
   by_cases empty : reply = []
   · rw [ite_eq_left empty, ite_eq_left empty]
@@ -60,8 +37,8 @@ theorem skimAfterFirst_ptr {M1 : Mem} {a0 toWord : B256} {reply : Bytes}
   · rw [ite_eq_right empty, ite_eq_right empty]
     unfold safeTransfer_reply292Memory
     dsimp only
-    apply SkimPtr.write _ _ _ (by decide)
-    apply SkimPtr.write _ _ _ (by decide)
+    apply PtrWord.write _ _ _ (by decide)
+    apply PtrWord.write _ _ _ (by decide)
     exact call.set _
 
 /-- The literal reserve1 reload and second balance request before its code guard. -/
@@ -132,7 +109,7 @@ def skimReserve1Word (slot : B256) : B256 :=
 
 theorem skimSecondLine_inv {sevm : Sevm} {b final : Devm}
     {R : List B256} {M : Mem} {G : Nat} {p t1 t0 toWord : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (ptr : SkimPtr p M)
+    (fork : CoveredFork sevm.benvStat.fork) (ptr : PtrWord p M)
     (low : 96 ≤ p.toNat) (high : p.toNat + 1024 < 2 ^ 256)
     (run : Line.Run sevm (St b (t1 :: t0 :: toWord :: R) M G) skimSecondLine final) :
     ∃ gas, final = St (afterSload sevm b 8)
@@ -219,10 +196,6 @@ theorem skimSecondLine_inv {sevm : Sevm} {b final : Devm}
   rw [B256.sub_self]
   rfl
 
-/-- Reading after a read's extension sees the same bytes. -/
-theorem skimRead_extend (μ : Mem) (i n j m : Nat) : ((μ.read i n).2.read j m).1 = (μ.read j m).1 :=
-  rfl
-
 /-- The decoded balance word at the reply window of a moved query. -/
 theorem skimReplyWord {Q : Mem} {p : B256} {out : Bytes} {pairs : List (Nat × Nat)}
     (wf : Mem.Wf Q) (long : 32 ≤ out.length) :
@@ -232,20 +205,14 @@ theorem skimReplyWord {Q : Mem} {p : B256} {out : Bytes} {pairs : List (Nat × N
     rw [List.length_take]; change min 32 out.length = 32; omega
   have image := Bytes.sliceD_writeAt Q.data.toList (out.take (32 : B256).toNat) p.toNat
   rw [len] at image
-  rw [skimRead_extend, (((Mem.reads_data Q).extends pairs).write (wf.extends pairs) p.toNat
+  rw [memRead_extend_fst, (((Mem.reads_data Q).extends pairs).write (wf.extends pairs) p.toNat
     (out.take (32 : B256).toNat)).read, image]
   rfl
 
-theorem SkimPtr.extends {p : B256} {M : Mem} (h : SkimPtr p M) (pairs : List (Nat × Nat)) :
-    SkimPtr p (M.extends pairs) := by
-  refine ⟨h.1.extends pairs, ?_⟩
-  rw [((Mem.reads_data M).extends pairs).read, ← (Mem.reads_data M).read]
-  exact h.2
-
 /-- The moved request keeps the free pointer. -/
-theorem skimRequestMemory_ptr {M : Mem} {p : B256} {pair : Adr} (ptr : SkimPtr p M)
+theorem skimRequestMemory_ptr {M : Mem} {p : B256} {pair : Adr} (ptr : PtrWord p M)
     (low : 96 ≤ p.toNat) (high : p.toNat + 1024 < 2 ^ 256) :
-    SkimPtr p (skimRequestMemory M p pair) := by
+    PtrWord p (skimRequestMemory M p pair) := by
   have p4 : (p + 4).toNat = p.toNat + 4 := skimOffset (by change p.toNat + 4 < 2 ^ 256; omega)
   exact (((ptr.extend 64 32).write p.toNat _ low).write (p + 4).toNat _ (by rw [p4]; omega)).extend
     64 32
@@ -338,7 +305,7 @@ def SkimSecondFacts (D : Exec.Deriv) (sevm : Sevm) (b : Devm) (M : Mem)
 a fitting moved free pointer `p`. The reserve1 field is read on the post-transfer0 world. -/
 theorem skimSecondHalf_inv {D : Exec.Deriv} {sevm : Sevm} {b post : Devm}
     {R0 : List B256} {M : Mem} {G : Nat} {p t1 t0 toWord tag : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (ptr : SkimPtr p M)
+    (fork : CoveredFork sevm.benvStat.fork) (ptr : PtrWord p M)
     (low : 96 ≤ p.toNat) (high : p.toNat + 1024 < 2 ^ 256)
     (run : SFunc.RunCutP (StepIn D) cert.prog sevm []
       (St b (t1 :: t0 :: toWord :: tag :: R0) M G) t_1a2b_c34 (.done (.halted post))) :
@@ -382,7 +349,7 @@ theorem skimSecondHalf_inv {D : Exec.Deriv} {sevm : Sevm} {b post : Devm}
       staticCallGuard_invP [0x1a, 0x02] (by decide) rfl StepIn.toRun fork (by decide) k
     rw [show (36 : B256).toNat = 36 from rfl,
       skimRequestMemory_read ptr.1 high] at answered
-    have pR1 : SkimPtr p ((((skimRequestMemory M p sevm.currentTarget).extends
+    have pR1 : PtrWord p ((((skimRequestMemory M p sevm.currentTarget).extends
         [(p.toNat, (36 : B256).toNat), (p.toNat, (32 : B256).toNat)]).write p.toNat
           (out1.take (32 : B256).toNat))) :=
       ((skimRequestMemory_ptr ptr low high).extends _).write p.toNat _ low
