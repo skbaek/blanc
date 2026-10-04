@@ -183,6 +183,8 @@ SHARED += ["Lift.TargetLogEvents"]
 SHARED += ["LedgerUpdate"]
 # Floor share bounds for two-reserve AMMs: contract-neutral.
 SHARED += ["Lift.AMMArithmetic", "Lift.BabylonianSqrt"]
+# Token-ledger sums read over a finite covering key footprint: contract-neutral.
+SHARED += ["Lift.LedgerFootprint"]
 # Ordinary interpreter output provenance for actual-call returndata bounds.
 SHARED += ["Lift.ReturnDataBound", "Lift.PrecompileOutputBound"]
 # Exact chunks and local simulation over existing configured state chronology.
@@ -231,6 +233,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.Properties",
         "Lift.UniswapV2Pair.PropertiesOracle",
         "Lift.UniswapV2Pair.PropertiesSwap",
+        "Lift.UniswapV2Pair.PropertiesLedger",
         "Lift.UniswapV2Pair.ModelControls",
         "Lift.UniswapV2Pair.SqrtWalk",
         "Lift.UniswapV2Pair.GetterMemory",

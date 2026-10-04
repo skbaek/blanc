@@ -1545,6 +1545,18 @@ laws live in [`Blanc/LadderBase.lean`](../Blanc/LadderBase.lean):
   supply those guard facts nor establish an execution path or history. The
   `finite-coalition-ledger` recipe reaches this branch from a target containing
   `ledgerSumOn`.
+- For a pure ledger read over a *finite key footprint* (a history observes only
+  the rows it touches), import
+  [`Blanc/Lift/LedgerFootprint.lean`](../Blanc/Lift/LedgerFootprint.lean).
+  `footprintSum keys balances` sums the rows a key list names and
+  `FootprintCovers keys balances` says the list names every nonzero row;
+  `footprintSum_eq_sum` equates a duplicate-free covering footprint's sum with
+  the full address `sum` (via `sum_eq_ledgerSumOn` for any covering
+  coalition), so a conservation law proved over `sum` (packaged as
+  `SumBacked balances supply`) is read over any covering footprint.
+  `FootprintCovers.extend` extends a footprint by the keys a step touches, and
+  `footprintSum_dup_ne_sum` is the statement control: a repeated nonzero key
+  breaks the equation.
 
 ### S6. I need a basic EVM-word identity
 

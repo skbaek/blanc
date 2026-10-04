@@ -658,6 +658,7 @@ import Blanc.Lift.UniswapV2Pair.PermitSource
 import Blanc.Lift.UniswapV2Pair.SkimCanonical
 import Blanc.Lift.UniswapV2Pair.PropertiesOracle
 import Blanc.Lift.UniswapV2Pair.PropertiesSwap
+import Blanc.Lift.UniswapV2Pair.PropertiesLedger
 import Blanc.Lift.UniswapV2Pair.Creation.DeployInit
 
 namespace Blanc
