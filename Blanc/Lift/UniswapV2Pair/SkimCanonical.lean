@@ -121,7 +121,7 @@ theorem skim_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Che
       (∀ a, Devm.getStor (temporalAccountAccessBase (afterSload sevm d 8)
         (skimToken1 sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr) a =
           Devm.getStor d a) ∧
-      (96 ≤ (skimFirstPointer d.returnData).toNat →
+      (128 ≤ (skimFirstPointer d.returnData).toNat →
         (skimFirstPointer d.returnData).toNat + 1024 < 2 ^ 256 →
       ∃ (out1 : Bytes) (d2 : Devm) (views0 views1 : List StaticViewTurn)
         (turns1 turns3 : List MutableTurn) (final : Frame) (rets : List ChildReturn)
@@ -255,11 +255,10 @@ theorem skim_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Che
     unfold externalStatic
     rw [show frame1.context.isStatic = sevm.isStatic from rfl, nonstatic]
     rfl
-  have ptr0 := PtrWord.of_ptrMem (balanceReplyMemory_ptr out0
-    (balanceRequestMemory_ptr getterInitMemory_ptr sevm.currentTarget))
+  have mem0 := balanceReplyMemory_ptr out0
+    (balanceRequestMemory_ptr getterInitMemory_ptr sevm.currentTarget)
   obtain ⟨_, _, _, d', call1', _, flag1, _, _, _, _, _, helperEq⟩ :=
-    skimTransfer_flag_inv Blanc.Lift.StepIn.toRun fork ptr0.1 ptr0.2 (by decide) (by decide)
-      helper
+    skimTransfer_flag_inv Blanc.Lift.StepIn.toRun fork mem0 (by decide) (by decide) helper
   have storEq : ∀ a, Devm.getStor d' a = Devm.getStor d a := fun a =>
     (congrArg (fun z => Devm.getStor z a) helperEq).symm
   have logsEq : d'.logs = d.logs := (congrArg Devm.logs helperEq).symm
@@ -397,7 +396,7 @@ theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
     let recipient := skimRecipient sevm
     sevm.value = 0 ∧ sevm.isStatic = false ∧
     ∃ (out0 : Bytes) (d : Devm), SkimFirstSteps root sevm b out0 d ∧
-      (96 ≤ (skimFirstPointer d.returnData).toNat →
+      (128 ≤ (skimFirstPointer d.returnData).toNat →
         (skimFirstPointer d.returnData).toNat + 1024 < 2 ^ 256 →
       ∃ (out1 : Bytes) (d2 : Devm) (views0 views1 : List StaticViewTurn)
         (turns1 turns3 : List MutableTurn) (final : Frame) (rets : List ChildReturn)

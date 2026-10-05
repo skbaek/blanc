@@ -9,37 +9,30 @@ namespace Blanc.Lift.UniswapV2Pair
 
 open Jaune
 
-/-- After transfer0 the free pointer is292 (empty reply) or the modular reply bump. -/
+/-- After transfer0 the actual memory carries the free pointer 292 (empty reply) or the
+modular reply bump, with its tracked allocation. -/
 theorem skimAfterFirst_ptr {M1 : Mem} {a0 toWord : B256} {reply : Bytes}
     (mem : PtrMem 128 192 M1) :
-    PtrWord (if reply = [] then 292 else 292 + ((reply.length.toB256 + 63) &&& ~~~31))
+    ∃ n, PtrMem (if reply = [] then 292 else 292 + ((reply.length.toB256 + 63) &&& ~~~31)) n
       (if reply = [] then safeTransfer_call128Memory M1 a0 toWord else
         safeTransfer_reply292Memory (safeTransfer_call128Memory M1 a0 toWord) reply) := by
-  have h0 := PtrWord.of_ptrMem mem
-  have call : PtrWord 292 (safeTransfer_call128Memory M1 a0 toWord) := by
+  have call : ∃ n, PtrMem 292 n (safeTransfer_call128Memory M1 a0 toWord) := by
     unfold safeTransfer_call128Memory safeTransfer_payload128Memory
     dsimp only
-    apply PtrWord.write _ _ _ (by decide)
-    apply PtrWord.extend
-    apply PtrWord.write _ _ _ (by decide)
-    apply PtrWord.write _ _ _ (by decide)
-    apply PtrWord.write _ _ _ (by decide)
-    refine PtrWord.set (p := 192) ?_ 292
-    apply PtrWord.write _ _ _ (by decide)
-    apply PtrWord.write _ _ _ (by decide)
-    apply PtrWord.write _ _ _ (by decide)
-    apply PtrWord.write _ _ _ (by decide)
-    apply PtrWord.write _ _ _ (by decide)
-    exact h0.set 192
+    exact ⟨_, (((((((((((mem.set (q := 192)).write 128 _ (Or.inr (by decide))).write 160 _
+      (Or.inr (by decide))).write 228 _ (Or.inr (by decide))).write 260 _
+      (Or.inr (by decide))).write 192 _ (Or.inr (by decide))).set (q := 292)).write 224 _
+      (Or.inr (by decide))).write 292 _ (Or.inr (by decide))).write 324 _
+      (Or.inr (by decide))).extend 356 32).write 356 _ (Or.inr (by decide))⟩
+  obtain ⟨n, call⟩ := call
   by_cases empty : reply = []
   · rw [ite_eq_left empty, ite_eq_left empty]
-    exact call
+    exact ⟨n, call⟩
   · rw [ite_eq_right empty, ite_eq_right empty]
     unfold safeTransfer_reply292Memory
     dsimp only
-    apply PtrWord.write _ _ _ (by decide)
-    apply PtrWord.write _ _ _ (by decide)
-    exact call.set _
+    exact ⟨_, ((call.set).write 292 _ (Or.inr (by decide))).write_bytes 324 reply
+      (Or.inr (by decide))⟩
 
 /-- The literal reserve1 reload and second balance request before its code guard. -/
 def skimSecondLine : List Ninst := [
@@ -121,7 +114,7 @@ theorem skimSecondLine_inv {sevm : Sevm} {b final : Devm}
       (skimRequestMemory M p sevm.currentTarget) gas := by
   have word0 : Bytes.toB256 (M.read 64 32).1 = p := ptr.2
   have p4 : (p + Bytes.toB256 [4]).toNat = p.toNat + 4 :=
-    skimOffset (by change p.toNat + 4 < 2 ^ 256; omega)
+    B256.toNat_add_eq_of_nof _ _ (by change p.toNat + 4 < 2 ^ 256; omega)
   have word1 : Bytes.toB256 ((((M.read 64 32).2.write p.toNat (Bytes.toB256 [0x70, 0xa0, 0x82,
       0x31, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
       0]).toBytes).write (p + Bytes.toB256 [4]).toNat sevm.currentTarget.toB256.toBytes).read 64
@@ -209,20 +202,21 @@ theorem skimReplyWord {Q : Mem} {p : B256} {out : Bytes} {pairs : List (Nat × N
     (out.take (32 : B256).toNat)).read, image]
   rfl
 
-/-- The moved request keeps the free pointer. -/
-theorem skimRequestMemory_ptr {M : Mem} {p : B256} {pair : Adr} (ptr : PtrWord p M)
+/-- The moved request keeps the free pointer in the actual memory, with its allocation. -/
+theorem skimRequestMemory_mem {M : Mem} {p : B256} {pair : Adr} {n : Nat} (mem : PtrMem p n M)
     (low : 96 ≤ p.toNat) (high : p.toNat + 1024 < 2 ^ 256) :
-    PtrWord p (skimRequestMemory M p pair) := by
-  have p4 : (p + 4).toNat = p.toNat + 4 := skimOffset (by change p.toNat + 4 < 2 ^ 256; omega)
-  exact (((ptr.extend 64 32).write p.toNat _ low).write (p + 4).toNat _ (by rw [p4]; omega)).extend
-    64 32
+    ∃ m, PtrMem p m (skimRequestMemory M p pair) := by
+  have p4 : (p + 4).toNat = p.toNat + 4 :=
+    B256.toNat_add_eq_of_nof _ _ (by change p.toNat + 4 < 2 ^ 256; omega)
+  exact ⟨_, (((mem.extend 64 32).write p.toNat _ (Or.inr low)).write (p + 4).toNat _
+    (Or.inr (by rw [p4]; omega))).extend 64 32⟩
 
 /-- The moved request's 36-byte window is exactly the source balanceOf calldata. -/
 theorem skimRequestMemory_read {M : Mem} {p : B256} {pair : Adr} (wf : Mem.Wf M)
     (high : p.toNat + 1024 < 2 ^ 256) :
     ((skimRequestMemory M p pair).read p.toNat 36).1 =
       ExternalOperation.encode (.balanceOf pair) := by
-  have p4 : (p + 4).toNat = p.toNat + 4 := skimOffset (by change p.toNat + 4 < 2 ^ 256; omega)
+  have p4 : (p + 4).toNat = p.toNat + 4 := B256.toNat_add_eq_of_nof _ _ (by change p.toNat + 4 < 2 ^ 256; omega)
   have w1 := wf.extend 64 32
   have r2 := ((Mem.reads_data M).extend 64 32).write w1 p.toNat
     (Bytes.toB256 [0x70, 0xa0, 0x82, 0x31, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -339,13 +333,17 @@ def SkimSecondFlagFacts (D : Exec.Deriv) (sevm : Sevm) (b : Devm) (M : Mem)
 a fitting moved free pointer `p`. The reserve1 field is read on the post-transfer0 world. -/
 theorem skimSecondHalf_flag_inv {D : Exec.Deriv} {sevm : Sevm} {b post : Devm}
     {R0 : List B256} {M : Mem} {G : Nat} {p t1 t0 toWord tag : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (ptr : PtrWord p M)
-    (low : 96 ≤ p.toNat) (high : p.toNat + 1024 < 2 ^ 256)
+    {n : Nat} (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem p n M)
+    (low : 128 ≤ p.toNat) (high : p.toNat + 1024 < 2 ^ 256)
     (run : SFunc.RunCutP (StepIn D) cert.prog sevm []
       (St b (t1 :: t0 :: toWord :: tag :: R0) M G) t_1a2b_c34 (.done (.halted post))) :
     SkimSecondFlagFacts D sevm b M p t1 t0 toWord tag R0 post := by
   unfold SkimSecondFlagFacts
   dsimp only
+  have ptr := PtrWord.of_ptrMem mem
+  have low96 : 96 ≤ p.toNat := by omega
+  obtain ⟨_, mReq⟩ := skimRequestMemory_mem (pair := sevm.currentTarget) mem low96 high
+  have reqPtr := PtrWord.of_ptrMem mReq
   have h := run
   unfold t_1a2b_c34 at h
   obtain ⟨_, h⟩ := ric_destP h
@@ -354,7 +352,7 @@ theorem skimSecondHalf_flag_inv {D : Exec.Deriv} {sevm : Sevm} {b post : Devm}
       (syncCodeGuardLine.foldr SFunc.next (.next (.push [0x19, 0xee] (by decide))
         (.branchTo t_1ac6_c34 67)))) _ at h
   obtain ⟨_, line, h⟩ := SFunc.RunCutP.split_nexts (fun step => StepIn.toRun step) skimSecondLine h
-  obtain ⟨_, state⟩ := skimSecondLine_inv fork ptr low high line
+  obtain ⟨_, state⟩ := skimSecondLine_inv fork ptr low96 high line
   rw [state] at h
   obtain ⟨_, line, h⟩ := SFunc.RunCutP.split_nexts (fun step => StepIn.toRun step) syncCodeGuardLine h
   obtain ⟨_, state⟩ := syncCodeGuardLine_inv fork line
@@ -386,10 +384,10 @@ theorem skimSecondHalf_flag_inv {D : Exec.Deriv} {sevm : Sevm} {b post : Devm}
     have pR1 : PtrWord p ((((skimRequestMemory M p sevm.currentTarget).extends
         [(p.toNat, (36 : B256).toNat), (p.toNat, (32 : B256).toNat)]).write p.toNat
           (out1.take (32 : B256).toNat))) :=
-      ((skimRequestMemory_ptr ptr low high).extends _).write p.toNat _ low
+      (reqPtr.extends _).write p.toNat _ low96
     have rR1 := (((Mem.reads_data (skimRequestMemory M p sevm.currentTarget)).extends
         [(p.toNat, (36 : B256).toNat), (p.toNat, (32 : B256).toNat)]).write
-          ((skimRequestMemory_ptr ptr low high).1.extends _) p.toNat
+          (reqPtr.1.extends _) p.toNat
           (out1.take (32 : B256).toNat))
     unfold t_1a02_c67 at k
     obtain ⟨_, k⟩ := ric_destP k
@@ -416,7 +414,7 @@ theorem skimSecondHalf_flag_inv {D : Exec.Deriv} {sevm : Sevm} {b post : Devm}
     change 32 ≤ out1.length at width
     have word1 := skimReplyWord (Q := skimRequestMemory M p sevm.currentTarget) (p := p)
       (pairs := [(p.toNat, (36 : B256).toNat), (p.toNat, (32 : B256).toNat)])
-      (skimRequestMemory_ptr ptr low high).1 width
+      reqPtr.1 width
     unfold t_1a18_c67 at k
     obtain ⟨_, k⟩ := ric_destP k
     obtain ⟨_, hs, k⟩ := ric_nextP k; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
@@ -456,10 +454,16 @@ theorem skimSecondHalf_flag_inv {D : Exec.Deriv} {sevm : Sevm} {b post : Devm}
           change some t_1fdb_c57 = _ at lookup
           cases lookup
           have helper := (St.of_pop1 pop).2 ▸ callee
-          have pM3 := (pR1.extend 64 32).extend p.toNat 32
+          have mR1 := ((mReq.extend p.toNat (36 : B256).toNat).extend
+            p.toNat (32 : B256).toNat).write_bytes p.toNat (out1.take (32 : B256).toNat)
+              (Or.inr low96)
+          change PtrMem p _ (((skimRequestMemory M p sevm.currentTarget).extends
+            [(p.toNat, (36 : B256).toNat), (p.toNat, (32 : B256).toNat)]).write p.toNat
+              (out1.take (32 : B256).toNat)) at mR1
+          have mM3 := (mR1.extend 64 32).extend p.toNat 32
           obtain ⟨forwarded, callGas', V, d2, call2, calldata, flagged, output, width2, accepted2,
             M', residual, outEq⟩ :=
-            skimTransfer_flag_inv StepIn.toRun fork pM3.1 pM3.2 low high helper
+            skimTransfer_flag_inv StepIn.toRun fork mM3 low (by omega) helper
           rw [outEq] at tail
           obtain ⟨M'', g, final⟩ := skimUnlockTail_inv fork tail
           exact ⟨codeNonzero, gw, callGas, d1, out1, call, post1, width, bound, answered, cover,
@@ -469,14 +473,14 @@ theorem skimSecondHalf_flag_inv {D : Exec.Deriv} {sevm : Sevm} {b post : Devm}
 /-- The same second half without the success flag. -/
 theorem skimSecondHalf_inv {D : Exec.Deriv} {sevm : Sevm} {b post : Devm}
     {R0 : List B256} {M : Mem} {G : Nat} {p t1 t0 toWord tag : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (ptr : PtrWord p M)
-    (low : 96 ≤ p.toNat) (high : p.toNat + 1024 < 2 ^ 256)
+    {n : Nat} (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem p n M)
+    (low : 128 ≤ p.toNat) (high : p.toNat + 1024 < 2 ^ 256)
     (run : SFunc.RunCutP (StepIn D) cert.prog sevm []
       (St b (t1 :: t0 :: toWord :: tag :: R0) M G) t_1a2b_c34 (.done (.halted post))) :
     SkimSecondFacts D sevm b M p t1 t0 toWord tag R0 post := by
   obtain ⟨codeNonzero, gw, callGas, d1, out1, call, post1, width, bound, answered, cover,
     forwarded, callGas', V, d2, call2, _, calldata, output, width2, accepted2, M', g, final⟩ :=
-    skimSecondHalf_flag_inv fork ptr low high run
+    skimSecondHalf_flag_inv fork mem low high run
   exact ⟨codeNonzero, gw, callGas, d1, out1, call, post1, width, bound, answered, cover,
     forwarded, callGas', V, d2, call2, calldata, output, width2, accepted2, M', g, final⟩
 
@@ -486,7 +490,7 @@ def skimFirstPointer (reply : Bytes) : B256 :=
 
 /-- Any reply below 2^128 bytes leaves a fitting pointer (no modular wrap). -/
 theorem skimFirstPointer_fit {reply : Bytes} (short : reply.length < 2 ^ 128) :
-    96 ≤ (skimFirstPointer reply).toNat ∧ (skimFirstPointer reply).toNat + 1024 < 2 ^ 256 := by
+    128 ≤ (skimFirstPointer reply).toNat ∧ (skimFirstPointer reply).toNat + 1024 < 2 ^ 256 := by
   unfold skimFirstPointer
   by_cases empty : reply = []
   · rw [ite_eq_left empty]
@@ -495,13 +499,14 @@ theorem skimFirstPointer_fit {reply : Bytes} (short : reply.length < 2 ^ 128) :
     have lenNat : reply.length.toB256.toNat = reply.length :=
       B256.toNat_toB256_of_lt (by omega)
     have sum : (reply.length.toB256 + 63).toNat = reply.length + 63 := by
-      rw [skimOffset (by rw [lenNat]; change reply.length + 63 < 2 ^ 256; omega), lenNat]; rfl
+      rw [B256.toNat_add_eq_of_nof _ _
+        (by change reply.length.toB256.toNat + 63 < 2 ^ 256; rw [lenNat]; omega), lenNat]; rfl
     have masked : ((reply.length.toB256 + 63) &&& ~~~(31 : B256)).toNat ≤ reply.length + 63 := by
       rw [B256.toNat_and, sum]
       exact Nat.and_le_left
     have total : (292 + ((reply.length.toB256 + 63) &&& ~~~31)).toNat =
         292 + ((reply.length.toB256 + 63) &&& ~~~(31 : B256)).toNat :=
-      skimOffset (by change 292 + _ < 2 ^ 256; omega)
+      B256.toNat_add_eq_of_nof _ _ (by change 292 + _ < 2 ^ 256; omega)
     rw [total]
     exact ⟨by omega, by omega⟩
 
@@ -519,7 +524,7 @@ theorem skim_raw_flag_inv {sevm : Sevm} {b post : Devm} {G : Nat}
       (32 : B256) ≤ sevm.data.length.toB256 - 4 ∧ b.getStorVal sevm.currentTarget 12 = 1 ∧
       SkimFirstFacts D sevm b [0x0257, 0xbc25cf77] getterInitMemory
         (skimToWord sevm) (fun d Mres _ =>
-          96 ≤ (skimFirstPointer d.returnData).toNat →
+          128 ≤ (skimFirstPointer d.returnData).toNat →
           (skimFirstPointer d.returnData).toNat + 1024 < 2 ^ 256 →
           SkimSecondFlagFacts D sevm d Mres (skimFirstPointer d.returnData)
             (skimToken1 sevm b) (skimToken0 sevm b)
@@ -542,7 +547,8 @@ theorem skim_raw_flag_inv {sevm : Sevm} {b post : Devm} {G : Nat}
     skimReserve0 sevm b) (toWord := skimToWord sevm)
     (reply := d.returnData) reply
   rw [← memory, ← hM] at ptr
-  exact skimSecondHalf_flag_inv fork (p := skimFirstPointer d.returnData) ptr low high tail
+  obtain ⟨_, mem⟩ := ptr
+  exact skimSecondHalf_flag_inv fork (p := skimFirstPointer d.returnData) mem low high tail
 
 /-- The same raw inverse without transfer1's success flag. -/
 theorem skim_raw_inv {sevm : Sevm} {b post : Devm} {G : Nat}
@@ -554,7 +560,7 @@ theorem skim_raw_inv {sevm : Sevm} {b post : Devm} {G : Nat}
       (32 : B256) ≤ sevm.data.length.toB256 - 4 ∧ b.getStorVal sevm.currentTarget 12 = 1 ∧
       SkimFirstFacts D sevm b [0x0257, 0xbc25cf77] getterInitMemory
         (skimToWord sevm) (fun d Mres _ =>
-          96 ≤ (skimFirstPointer d.returnData).toNat →
+          128 ≤ (skimFirstPointer d.returnData).toNat →
           (skimFirstPointer d.returnData).toNat + 1024 < 2 ^ 256 →
           SkimSecondFacts D sevm d Mres (skimFirstPointer d.returnData)
             (skimToken1 sevm b) (skimToken0 sevm b)
