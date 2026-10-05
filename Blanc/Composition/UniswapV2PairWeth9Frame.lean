@@ -193,7 +193,13 @@ invariant WETH9's history ladder carries to every admitted frame) with its keys 
 decode as `withdraw` and whose caller is not `p`: if `p`'s balance row is tracked and every tracked
 allowance granted by `p` is zero, they stay zero and `p`'s balance word does not fall.  (`withdraw` sends
 ether and may be re-entered; its own debit is the caller's, and its re-entered calls are separate frames,
-which the history reading `weth9_history_holder_noShrink` replays in order.) -/
+which the history reading `weth9_history_holder_noShrink` replays in order.)
+
+CROSS-HOST: conditional on `holderTracked`, `allowZero`.
+
+* `holderTracked`, `allowZero` — CROSS-HOST HYPOTHESIS (delete at consolidation): discharged by the
+  original host at the frame's entry (the pair's balance row is tracked in `U`, and its tracked WETH9
+  allowances are zero, carried from the checkpoint by `weth9_history_holder_noShrink`). -/
 theorem weth9_frame_holder_noShrink {U : Key → Prop} {sevm : Sevm} {pre post : Devm} {p : Adr}
     (hcode : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (run : Exec 0 sevm pre (.ok post))

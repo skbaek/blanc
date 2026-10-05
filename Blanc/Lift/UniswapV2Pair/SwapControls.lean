@@ -23,13 +23,13 @@ every successful raw swap run's two actual post-callback balance STATICCALL step
 the callback left, to the masked cached token words in the Pair's storage slots 6 and 7) reply
 with balance words below `2^112`. The bytecode half is a pure raw inversion of the pc-zero run:
 it needs no storage representation, no HASH-T premise and no typed checkpoint, only the CALL
-reply bound `short`. -/
+reply bound `short`.
+CROSS-HOST: conditional on `SwapCallReplyShort`. -/
 theorem swap_bytecode_uint112_control {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
-    (short : ∀ pre d, StepIn ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm pre (.exec .call) d →
-      d.returnData.length < 2 ^ 160) :
+    (short : SwapCallReplyShort ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm) :
     (swapCheck (Nat.toB256 (2 ^ 112)) 10
         (swapInputs (Nat.toB256 (2 ^ 112)) 10 1 0 10 10).1
         (swapInputs (Nat.toB256 (2 ^ 112)) 10 1 0 10 10).2 10 10 = .ok () ∧

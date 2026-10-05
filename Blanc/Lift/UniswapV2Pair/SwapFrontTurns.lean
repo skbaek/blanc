@@ -1,6 +1,7 @@
 import Blanc.Lift.UniswapV2Pair.SwapCallback
 import Blanc.Lift.UniswapV2Pair.SwapFrontTyped
 import Blanc.Lift.UniswapV2Pair.LockedSupply
+import Blanc.Lift.UniswapV2Pair.SwapCallWorld
 
 /-! The swap front's three optional external calls as source turns. Each actual CALL step of
 the same derivation is consumed by `mutable_call_turns` with the lock-free supply
@@ -38,6 +39,15 @@ structure SwapCallEnv (U : WriterKey → Prop) (D : Exec.Deriv) (sevm : Sevm) (s
   fork : CoveredFork sevm.benvStat.fork
   good : ∀ F ∈ Exec.rawFrameRoots D.exc, F.sevm.currentTarget = sevm.currentTarget → LockedGood U F
 
+/-- The provenance of one actual mutable CALL of the swap frame from world `w` to world `d`
+with turns `turns`: an actual CALL step of `D` whose pre-state has `w`'s storage and code, and
+whose child derivation explains both the turns and the storage of every code-bearing account
+after the call (`MutableCallWorld`). -/
+def SwapCallProvenance (pair : Adr) (D : Exec.Deriv) (sevm : Sevm) (w d : Devm)
+    (turns : List MutableTurn) : Prop :=
+  ∃ pre : Devm, StepIn D sevm pre (.exec .call) d ∧ (∀ a, pre.getStor a = w.getStor a) ∧
+    (∀ a, pre.getCode a = w.getCode a) ∧ MutableCallWorld pair D sevm pre .call d turns
+
 /-- One actual mutable CALL step of the swap frame, consumed whole. -/
 theorem swapMutableCall_step {U : WriterKey → Prop} {D : Exec.Deriv} {sevm : Sevm}
     {sem : CodeSem} {ctx : Context} {current : Checkpoint} {b : Devm} {F : Frame} {w pre d : Devm}
@@ -56,21 +66,22 @@ theorem swapMutableCall_step {U : WriterKey → Prop} {D : Exec.Deriv} {sevm : S
         { complete := true, frame := { F with current := c }, childReturns := rets } ∧
       (∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns →
         LockedAuth (Exec.Frame.rootDeriv located.frame) entry nested) ∧
-      SwapFrontState U sevm.currentTarget ctx current b { F with current := c } d := by
+      SwapFrontState U sevm.currentTarget ctx current b { F with current := c } d ∧
+      MutableCallWorld sevm.currentTarget D sevm pre .call d turns := by
   have repCongr : ∀ st (s s' : Stor), (∀ k, s'.get k = s.get k) →
       LockedRep U st s → LockedRep U st s' := fun _ _ _ same rep => LockedRep.congr same rep
   have nonemptyList : (b.getCode sevm.currentTarget).toList ≠ [] := by
     intro empty
     exact sem.ne_nil (installed.symm.trans (congrArg some empty)) rfl
-  obtain ⟨turns, c, added, rets, exact, auth, rep', logs', ⟨L, raw, images⟩, _⟩ :=
-    mutable_call_turns (frame := F) (request := request) env.supply repCongr sem env.image call
+  obtain ⟨turns, c, added, rets, exact, auth, rep', logs', ⟨L, raw, images⟩, world⟩ :=
+    mutable_call_world (frame := F) (request := request) env.supply repCongr sem env.image call
       (Or.inl rfl) (by rw [inv.context, pair])
       (by unfold externalStatic; rw [inv.context, nonstatic, kind]; rfl)
       (by rw [preCode, inv.code]; exact installed) (by rw [preStor]; exact inv.rep)
       (by rw [inv.context, time]) env.fork env.good
   obtain ⟨added0, L0, logs0, raw0, images0⟩ := inv.logs
   refine ⟨turns, c, rets, exact, auth, ⟨inv.context, rep', ?_, postOutput.trans inv.output,
-    ⟨added0 ++ added, L0 ++ L, ?_, ?_, ?_⟩, inv.checkpoint⟩⟩
+    ⟨added0 ++ added, L0 ++ L, ?_, ?_, ?_⟩, inv.checkpoint⟩, world⟩
   · rw [Lift.StepIn.codePreserve call sevm.currentTarget
       (by rw [preCode, inv.code]; exact nonemptyList), preCode, inv.code]
   · rw [logs', logs0, List.append_assoc]
@@ -100,7 +111,8 @@ theorem swapTransfer1_phase {U : WriterKey → Prop} {D : Exec.Deriv} {sevm : Se
       (∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns →
         LockedAuth (Exec.Frame.rootDeriv located.frame) entry nested) ∧
       ((locals.amount1Out = 0 ∧ T = id) ∨ (locals.amount1Out ≠ 0 ∧
-        T = fun tail => .next (swapTransferReply w'.returnData) (mutableTranscript turns .done) tail)) := by
+        T = (fun tail => .next (swapTransferReply w'.returnData) (mutableTranscript turns .done) tail) ∧
+        SwapCallProvenance sevm.currentTarget D sevm w w' turns)) := by
   rcases opt with ⟨zero, rfl, rfl, rfl⟩ | ⟨nonzero, call, rfl, rfl⟩
   · have skip : F.afterSwapTransfer0 locals = F.afterSwapTransfer1 locals := by
       unfold Frame.afterSwapTransfer0
@@ -112,7 +124,7 @@ theorem swapTransfer1_phase {U : WriterKey → Prop} {D : Exec.Deriv} {sevm : Se
   · obtain ⟨⟨forwarded, callGas, step⟩, _, _, output, _, accepted⟩ := call
     let request := requestFor .swapTransfer1 locals.token1
       (.transfer locals.recipient locals.amount1Out)
-    obtain ⟨turns, c, rets, exact, auth, state⟩ :=
+    obtain ⟨turns, c, rets, exact, auth, state, world⟩ :=
       swapMutableCall_step (request := request) env installed inv pair time nonstatic rfl step
         rfl rfl rfl output
     have suspend : F.afterSwapTransfer0 locals = .suspended F request (.swapTransfer1 locals) := by
@@ -120,7 +132,8 @@ theorem swapTransfer1_phase {U : WriterKey → Prop} {D : Exec.Deriv} {sevm : Se
       simp only [swap_pos_of_ne nonzero, ite_true]
       rfl
     refine ⟨({ F with current := c } : Frame).beginResume request, _, rets ++ [], turns, ?_,
-      state.beginResume request, auth, Or.inr ⟨nonzero, rfl⟩⟩
+      state.beginResume request, auth,
+      Or.inr ⟨nonzero, rfl, _, step, fun _ => rfl, fun _ => rfl, world⟩⟩
     rw [suspend]
     refine SwapFrontReaches.call exact rfl rfl (fun absent => by cases absent) ?_
     rw [swap_resume_transfer1 accepted]
@@ -146,7 +159,8 @@ theorem swapTransfer0_phase {U : WriterKey → Prop} {D : Exec.Deriv} {sevm : Se
       (∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns →
         LockedAuth (Exec.Frame.rootDeriv located.frame) entry nested) ∧
       ((locals.amount0Out = 0 ∧ T = id) ∨ (locals.amount0Out ≠ 0 ∧
-        T = fun tail => .next (swapTransferReply w'.returnData) (mutableTranscript turns .done) tail)) := by
+        T = (fun tail => .next (swapTransferReply w'.returnData) (mutableTranscript turns .done) tail) ∧
+        SwapCallProvenance sevm.currentTarget D sevm w w' turns)) := by
   rcases opt with ⟨zero, rfl, rfl, rfl⟩ | ⟨nonzero, call, rfl, rfl⟩
   · refine ⟨F, id, [], [], ?_, inv, (fun _ _ _ absent => by cases absent), Or.inl ⟨zero, rfl⟩⟩
     rw [zero]
@@ -155,11 +169,12 @@ theorem swapTransfer0_phase {U : WriterKey → Prop} {D : Exec.Deriv} {sevm : Se
   · obtain ⟨⟨forwarded, callGas, step⟩, _, _, output, _, accepted⟩ := call
     let request := requestFor .swapTransfer0 locals.token0
       (.transfer locals.recipient locals.amount0Out)
-    obtain ⟨turns, c, rets, exact, auth, state⟩ :=
+    obtain ⟨turns, c, rets, exact, auth, state, world⟩ :=
       swapMutableCall_step (request := request) env installed inv pair time nonstatic rfl step
         rfl rfl rfl output
     refine ⟨({ F with current := c } : Frame).beginResume request, _, rets ++ [], turns, ?_,
-      state.beginResume request, auth, Or.inr ⟨nonzero, rfl⟩⟩
+      state.beginResume request, auth,
+      Or.inr ⟨nonzero, rfl, _, step, fun _ => rfl, fun _ => rfl, world⟩⟩
     simp only [swap_pos_of_ne nonzero, ite_true]
     refine SwapFrontReaches.call exact rfl rfl (fun absent => by cases absent) ?_
     rw [swap_resume_transfer0 accepted]
@@ -195,7 +210,8 @@ theorem swapCallback_phase {U : WriterKey → Prop} {D : Exec.Deriv} {sevm : Sev
       (∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns →
         LockedAuth (Exec.Frame.rootDeriv located.frame) entry nested) ∧
       ((len = 0 ∧ T = id) ∨ (len ≠ 0 ∧
-        T = fun tail => .next (swapCallbackReply w'.returnData) (mutableTranscript turns .done) tail)) := by
+        T = (fun tail => .next (swapCallbackReply w'.returnData) (mutableTranscript turns .done) tail) ∧
+        SwapCallProvenance sevm.currentTarget D sevm w w' turns)) := by
   have dataLen : locals.data.length = len.toNat := by
     rw [data]
     exact List.length_sliceD _ _ _ _
@@ -216,7 +232,7 @@ theorem swapCallback_phase {U : WriterKey → Prop} {D : Exec.Deriv} {sevm : Sev
     obtain ⟨_, ⟨gas, callGas, step⟩, _, flag, flag0, post⟩ := call
     let request := requestFor .swapCallback locals.recipient
       (.callback F.context.sender locals.amount0Out locals.amount1Out locals.data)
-    obtain ⟨turns, c, rets, exact, auth, state⟩ :=
+    obtain ⟨turns, c, rets, exact, auth, state, world⟩ :=
       swapMutableCall_step (request := request) env installed inv pair time nonstatic rfl step
         (swap_tAAB_getStor _ _ _) (swap_tAAB_getCode _ _ _) (temporalAccountAccessBase_logs _ _)
         ((post.settled flag0).2.trans (temporalAccountAccessBase_output _ _))
@@ -231,7 +247,8 @@ theorem swapCallback_phase {U : WriterKey → Prop} {D : Exec.Deriv} {sevm : Sev
     have resume := swap_resume_callback (frame := ({ F with current := c } : Frame)) (locals := locals)
       (out := w'.returnData)
     refine ⟨({ F with current := c } : Frame).beginResume request, _, rets ++ [], turns, ?_,
-      state.beginResume request, auth, Or.inr ⟨nonzero, rfl⟩⟩
+      state.beginResume request, auth,
+      Or.inr ⟨nonzero, rfl, _, step, swap_tAAB_getStor _ _, swap_tAAB_getCode _ _, world⟩⟩
     rw [suspend]
     refine SwapFrontReaches.call exact rfl rfl (fun absent => by cases absent) ?_
     change SwapFrontReaches (resumeSegment ({ F with current := c } : Frame)
