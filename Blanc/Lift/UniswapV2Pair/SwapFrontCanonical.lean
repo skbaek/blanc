@@ -50,11 +50,25 @@ theorem swap_bytecode_front_cut {K U : WriterKey → Prop} {current : Checkpoint
     let ctx := writerContext sevm invocation
     let locals := swapFrontLocals sevm current.state
     let w := swapCutWords sevm current.state
+    let S := swapCutStack w 0x257 [0x022c0d9f]
     sevm.value = 0 ∧ sevm.isStatic = false ∧
-    ∃ (frame : Frame) (T : Transcript → Transcript) (R : List ChildReturn)
-      (turns0 turns1 turnsC : List MutableTurn) (K' : WriterKey → Prop) (d : Devm) (p : B256)
+    ∃ (frame : Frame) (T0 T1 TC : Transcript → Transcript) (R : List ChildReturn)
+      (turns0 turns1 turnsC : List MutableTurn) (K' : WriterKey → Prop)
+      (b1 b2 d : Devm) (M1 M2 : Mem) (p1 p : B256)
       (n : Nat) (M : Mem) (gas : Nat) (calleePost : Devm),
-      SwapFrontReaches (startTyped current ctx (swapDecodedEntry sevm)) T R
+      SwapTransferOpt root sevm (swapPrefixWorld sevm b) S getterInitMemory 128
+        (swapAmount0Out sevm) (swapRecipientWord sevm) current.state.token0.toB256 0x8d0 b1 M1 p1 ∧
+      SwapTransferOpt root sevm b1 S M1 p1
+        (swapAmount1Out sevm) (swapRecipientWord sevm) current.state.token1.toB256 0x8e1 b2 M2 p ∧
+      SwapCallbackOpt root sevm b2 S M2 p (swapRecipientWord sevm) (swapAmount0Out sevm)
+        (swapAmount1Out sevm) (swapDataLength sevm) (swapDataStart sevm) d M ∧
+      ((swapAmount0Out sevm = 0 ∧ T0 = id) ∨ (swapAmount0Out sevm ≠ 0 ∧
+        T0 = fun tail => .next (swapTransferReply b1.returnData) (mutableTranscript turns0 .done) tail)) ∧
+      ((swapAmount1Out sevm = 0 ∧ T1 = id) ∨ (swapAmount1Out sevm ≠ 0 ∧
+        T1 = fun tail => .next (swapTransferReply b2.returnData) (mutableTranscript turns1 .done) tail)) ∧
+      ((swapDataLength sevm = 0 ∧ TC = id) ∨ (swapDataLength sevm ≠ 0 ∧
+        TC = fun tail => .next (swapCallbackReply d.returnData) (mutableTranscript turnsC .done) tail)) ∧
+      SwapFrontReaches (startTyped current ctx (swapDecodedEntry sevm)) ((T0 ∘ T1) ∘ TC) R
         (.suspended frame (requestFor .swapBalance0 locals.token0 (.balanceOf ctx.pair))
           (.swapBalance0 locals)) ∧
       frame.checkpoint = current ∧ frame.context = ctx ∧
@@ -64,10 +78,10 @@ theorem swap_bytecode_front_cut {K U : WriterKey → Prop} {current : Checkpoint
         added.map (PendingLog.rawWith (lockedOwnedRaw sevm.currentTarget)) = L.map some) ∧
       (∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns0 ++ turns1 ++ turnsC →
         LockedAuth (Exec.Frame.rootDeriv located.frame) entry nested) ∧
-      SFunc.RunP (StepIn root) cert.prog sevm (St d (swapCutStack w 0x257 [0x022c0d9f]) M gas)
+      SFunc.RunP (StepIn root) cert.prog sevm (St d S M gas)
         t_09c3_c5 (.returned calleePost) ∧
       SFunc.RunCutP (StepIn root) cert.prog sevm [] calleePost t_0257_c99 (.done (.halted post)) := by
-  intro root ctx locals w
+  intro root ctx locals w S
   obtain ⟨f, entry, derived⟩ := lift_sound_in cert_check codeEq fork run
   rw [show cert.prog[0]? = some t_0000_c0 from rfl] at entry
   cases entry
@@ -105,11 +119,11 @@ theorem swap_bytecode_front_cut {K U : WriterKey → Prop} {current : Checkpoint
     · unfold swapPrefixWorld mintLockedWorld
       rw [afterSload_logs, afterSload_logs, afterSload_logs, afterSstore_logs, afterSload_logs,
         List.append_nil]
-  obtain ⟨F0, T0, R0, turns0, reach0, inv1, auth0, _⟩ :=
+  obtain ⟨F0, T0, R0, turns0, reach0, inv1, auth0, shape0⟩ :=
     swapTransfer0_phase (locals := locals) env installed pairEq time ctxStatic inv0 opt0
-  obtain ⟨F1, T1, R1, turns1, reach1, inv2, auth1, _⟩ :=
+  obtain ⟨F1, T1, R1, turns1, reach1, inv2, auth1, shape1⟩ :=
     swapTransfer1_phase (locals := locals) env installed pairEq time ctxStatic inv1 opt1
-  obtain ⟨F2, TC, RC, turnsC, reachC, inv3, authC, _⟩ :=
+  obtain ⟨F2, TC, RC, turnsC, reachC, inv3, authC, shapeC⟩ :=
     swapCallback_phase (locals := locals) env installed pairEq time ctxStatic inv2 rfl optC
   have start := swap_startTyped (current := current) (ctx := ctx) (data := swapData sevm) value
     nonstatic unlocked (output.imp swap_pos_of_ne swap_pos_of_ne) lt0 lt1 ne0 ne1
@@ -120,8 +134,8 @@ theorem swap_bytecode_front_cut {K U : WriterKey → Prop} {current : Checkpoint
     rw [start']
     exact (reach0.trans reach1).trans reachC
   obtain ⟨K', sub', wrep', locked'⟩ := inv3.rep
-  refine ⟨value, nonstatic, F2, _, _, turns0, turns1, turnsC, K', b3, p2, m3, M3, g3, calleePost,
-    reach, inv3.checkpoint, inv3.context, sub', ⟨ptr3, lower2, by omega, ?_, wrep', locked', (by rw [inv3.context]; rfl), (by rw [inv3.context]; rfl),
+  refine ⟨value, nonstatic, F2, T0, T1, TC, _, turns0, turns1, turnsC, K', b1, b2, b3, M1, M2, p1, p2,
+    m3, M3, g3, calleePost, opt0, opt1, optC, shape0, shape1, shapeC, reach, inv3.checkpoint, inv3.context, sub', ⟨ptr3, lower2, by omega, ?_, wrep', locked', (by rw [inv3.context]; rfl), (by rw [inv3.context]; rfl),
       (by rw [inv3.context]; rfl), rfl, rfl, rfl, rfl, swapRecipientWord_eq sevm, rfl, rfl, lt0, lt1⟩, inv3.logs, ?_,
     SFunc.runP_iff_runCutP_nil.mpr run3, tail⟩
   · rw [inv3.output, freshOutput]
