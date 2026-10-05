@@ -4222,6 +4222,76 @@ theorem safeTransfer_dynamicPayload_facts {M : Mem} {p amount toWord : B256} {n 
   exact ⟨h3, h5, h7, h8, fit7, fit8, read0, read3, read5, read8, length8r,
     combine36, combine68, combine100, combine32⟩
 
+/-- Exact moving initializer: specializes `safeTransfer_initialize_exact` to the
+free pointer `p`, with the fourteen memory charges over the dynamic staging
+memories. -/
+private theorem safeTransfer_initialize_dynamic_exact {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {G : Nat} {o : Outcome}
+    {p amount toWord tokenWord rho : B256} {n : Nat}
+    (mem : PtrMem p n M) (lower : 128 ≤ p.toNat)
+    (width : p.toNat + 260 < 2 ^ 256) (room : R.length ≤ 1008) :
+    let N1 := M.write 64 (p + 64).toBytes
+    let N2 := N1.write p.toNat (25 : B256).toBytes
+    let N3 := N2.write (p + 32).toNat
+      (0x7472616e7366657228616464726573732c75696e743235362900000000000000 : B256).toBytes
+    let N4 := N3.write (p + 100).toNat
+      ((0xffffffffffffffffffffffffffffffffffffffff &&& toWord) : B256).toBytes
+    let N5 := N4.write (p + 132).toNat amount.toBytes
+    let N6 := N5.write (p + 64).toNat (68 : B256).toBytes
+    let N7 := N6.write 64 (p + 164).toBytes
+    let N8 := N7.write (p + 96).toNat
+      ((0xa9059cbb00000000000000000000000000000000000000000000000000000000 |||
+        ((0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256) &&&
+          Bytes.toB256 (N7.read (p + 96).toNat 32).1)) : B256).toBytes
+    let d1 := gVerylow + (St b [] M 0).extCost [⟨64, 32⟩]
+    let d2 := gVerylow + (St b [] M 0).extCost [⟨64, 32⟩]
+    let d3 := gVerylow + (St b [] N1 0).extCost [⟨p.toNat, 32⟩]
+    let d4 := gVerylow + (St b [] N2 0).extCost [⟨(p + 32).toNat, 32⟩]
+    let d5 := gVerylow + (St b [] N3 0).extCost [⟨64, 32⟩]
+    let d6 := gVerylow + (St b [] N3 0).extCost [⟨(p + 100).toNat, 32⟩]
+    let d7 := gVerylow + (St b [] N4 0).extCost [⟨(p + 132).toNat, 32⟩]
+    let d8 := gVerylow + (St b [] N5 0).extCost [⟨64, 32⟩]
+    let d9 := gVerylow + (St b [] N5 0).extCost [⟨(p + 64).toNat, 32⟩]
+    let d10 := gVerylow + (St b [] N6 0).extCost [⟨64, 32⟩]
+    let d11 := gVerylow + (St b [] N7 0).extCost [⟨(p + 96).toNat, 32⟩]
+    let d12 := gVerylow + (St b [] N7 0).extCost [⟨(p + 96).toNat, 32⟩]
+    let d13 := gVerylow + (St b [] N8 0).extCost [⟨64, 32⟩]
+    let d14 := gVerylow + (St b [] N8 0).extCost [⟨(p + 64).toNat, 32⟩]
+    SFunc.RunExact cert.prog sevm
+      (St b ((p + 96) :: (p + 164) :: 68 :: 68 :: (p + 96) :: (p + 164) ::
+        (p + 164) :: (p + 64) :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) N8 G) t_20a4_c57 o →
+    SFunc.RunExact cert.prog sevm
+      (St b (amount :: toWord :: tokenWord :: rho :: R) M
+        (G + 199 + d1 + d2 + d3 + d4 + d5 + d6 + d7 + d8 + d9 + d10 + d11 + d12 + d13 + d14))
+      t_1fdb_c57 o := by
+  dsimp only
+  intro continuation
+  have raw := safeTransfer_initialize_exact (sevm := sevm) (b := b) (M := M)
+    (R := R) (G := G) (o := o) (amount := amount) (toWord := toWord)
+    (tokenWord := tokenWord) (rho := rho) room
+  dsimp only at raw
+  simp only [show (64 : B256).toNat = 64 from rfl] at raw
+  obtain ⟨h3, h5, h7, h8, fit7, fit8, read0, read3, read5, read8, length8r,
+    combine36, combine68, combine100, combine32⟩ :=
+    safeTransfer_dynamicPayload_facts (amount := amount) (toWord := toWord) mem lower width
+  obtain ⟨_, _, _, _, _, nat96, _, _,
+    _, nat64, _, _, _⟩ :=
+    safeTransfer_stageOffset width
+  rw [read0, mem.read_self mem.ge,
+    show (64 : B256) + p = p + 64 from B256.add_comm,
+    show (32 : B256) + p = p + 32 from B256.add_comm] at raw
+  rw [read3, h3.read_self h3.ge, combine36, combine68] at raw
+  rw [read5, h5.read_self h5.ge,
+    show (68 : B256) + ((p + 64) - (p + 64)) = 68 from by rw [B256.sub_self, B256.add_zero],
+    combine100, combine32] at raw
+  rw [h7.read_self (by rw [nat96]; omega)] at raw
+  rw [read8, h8.read_self h8.ge, length8r,
+    h8.read_self (by
+      have hle : (p + 64).toNat + 32 ≤ p.toNat + 164 := by rw [nat64]; omega
+      exact Nat.le_trans hle fit8)] at raw
+  exact raw continuation
+
 /- Complete pre-CALL forward construction for the moving `_safeTransfer`:
 initializer, 68-byte copy and four-byte merge, ending at the primitive `CALL`
 with gas `safeTransferPreCharge`. -/
