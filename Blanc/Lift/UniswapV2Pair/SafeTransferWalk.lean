@@ -3490,4 +3490,48 @@ theorem burnTransfers_caller_inv {P : Sevm → Devm → Ninst → Devm → Prop}
     (burnSecondTransferPointer_layout width0 width1).2.2.2, finalMem,
     continuation0, continuation1⟩
 
+/-- Ordered staging size of the dynamic `_safeTransfer` pre-CALL segment: the
+exact read/write access order of `safeTransfer_initialize_exact` (14 accesses),
+`safeTransfer_copy68_exact` (4 accesses) and `safeTransfer_partialCall_exact`
+(4 accesses), each folded through `memExtSize`. Offsets are relative to the
+free pointer `p`; `64` is the free-pointer slot. -/
+def safeTransferPreSize (n : Nat) (p : B256) : Nat :=
+  let q := p.toNat
+  List.foldl (fun s k => memExtSize s k 32) n
+    [64, 64, q, q + 32, 64, q + 100, q + 132, 64, q + 64, 64, q + 96, q + 96,
+      64, q + 64, q + 96, q + 164, q + 128, q + 196, q + 160, q + 228, q + 228, 64]
+
+/-- Exact pre-CALL charge at pointer `p` over memory of size `n`: the 599
+literal base opcodes plus the telescoped memory-expansion delta. -/
+def safeTransferPreCharge (n : Nat) (p : B256) : Nat :=
+  599 + (calculateMemoryGasCost (safeTransferPreSize n p) - calculateMemoryGasCost n)
+
+/-- Ordered size after the dynamic `_safeTransfer` post-CALL allocation: the
+free-pointer slot read, the free-pointer word store, the reply-length store at
+`p + 164`, and the full reply copy at `p + 196`. -/
+def safeTransferPostSize (n : Nat) (p : B256) (reply : Bytes) : Nat :=
+  let s := safeTransferPreSize n p
+  let q := p.toNat
+  memExtSize (memExtSize (memExtSize s 64 32) (q + 164) 32) (q + 196) reply.length
+
+/-- Exact post-CALL charge: 138 on the empty reply (no expansion past the
+staged image); otherwise the 253 literal base plus the copy charge with its
+memory-expansion delta. -/
+def safeTransferPostCharge (n : Nat) (p : B256) (reply : Bytes) : Nat :=
+  if reply = [] then 138
+  else 253 + (gVerylow + gReturnDataCopy * ceilDiv reply.length 32 +
+    (calculateMemoryGasCost (safeTransferPostSize n p reply) -
+      calculateMemoryGasCost (safeTransferPreSize n p)))
+
+/-- The fixed first-transfer pre charge is the dynamic charge at `128`/`192`. -/
+theorem safeTransfer_preCharge_128_192 : safeTransferPreCharge 192 128 = 620 := by
+  have h : (128 : B256).toNat = 128 := rfl
+  simp only [safeTransferPreCharge, safeTransferPreSize, h]
+  decide +kernel
+
+/-- The empty-reply post charge is unconditionally 138. -/
+theorem safeTransfer_postCharge_empty (n : Nat) (p : B256) :
+    safeTransferPostCharge n p [] = 138 :=
+  rfl
+
 end Blanc.Lift.UniswapV2Pair
