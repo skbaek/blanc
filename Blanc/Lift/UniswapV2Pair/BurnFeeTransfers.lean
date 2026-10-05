@@ -1124,27 +1124,6 @@ theorem burnPc0_source_authentic {U K : WriterKey → Prop} {current : Checkpoin
   · simp only [added, rawLogs, List.map_append, prefixImage,
       burn_pending_logs_preserves images0, burn_pending_logs_preserves images1, suffixImage]
 
-/-- The real pc-zero route supplies entry guards, all external queues, the ABI
-return, and the fee/LP/child/Sync/Burn log image in the unchanged derivation D. -/
-theorem burnPc0_source_finished {U K : WriterKey → Prop} {current : Checkpoint}
-    {D : Exec.Deriv} {b : Devm} {G : Nat} {o : Outcome}
-    (invocation : List Nat) (fork : CoveredFork D.sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector D.sevm = 0x89afcb44)
-    (rep : WriterRep K (b.getStor D.sevm.currentTarget) current.state)
-    (tracked : K (.balance D.sevm.currentTarget))
-    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
-    (trace : ∀ k ∈ mintTraceKeys D, U k)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (b.getCode D.sevm.currentTarget).toList = sem.image)
-    (good : ∀ F ∈ Exec.rawFrameRoots D.exc,
-      F.sevm.currentTarget = D.sevm.currentTarget → LockedGood U F)
-    (staticGood : ∀ F ∈ Exec.rawFrameRoots D.exc, F.sevm.currentTarget = D.sevm.currentTarget →
-      ∀ k ∈ staticViewDecodedKeys F.sevm, U k)
-    (run : SFunc.RunP (StepIn D) cert.prog D.sevm (St b [] Mem.empty G) t_0000_c0 o) :
-    BurnEntryFinished U current D b o invocation :=
-  (burnPc0_source_authentic invocation fork selector rep tracked inj apart sub trace
-    sem image installed good staticGood run).toTracked.toFinished
-
 /-- **Authenticated raw Burn frame.** The supplied raw root consumes the typed
 Burn source over a transcript fixed by its actual call answers, each tied to its
 call step in this root (`BurnCallProvenance`), with the full observable result
