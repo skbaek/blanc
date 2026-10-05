@@ -67,6 +67,7 @@ IDENT_PART = r"[A-Za-z_][A-Za-z0-9_']*[!?]?"
 IDENT = rf"{IDENT_PART}(?:\.{IDENT_PART})*"
 NAMESPACE_RE = re.compile(rf"^\s*namespace\s+({IDENT})\s*$")
 SECTION_RE = re.compile(r"^\s*(?:noncomputable\s+)?section(?:\s+[A-Za-z_][A-Za-z0-9_.']*)?\s*$")
+MUTUAL_RE = re.compile(r"^\s*mutual\s*$")
 END_RE = re.compile(r"^\s*end(?:\s+[A-Za-z_][A-Za-z0-9_.']*)?\s*$")
 DECL_RE = re.compile(
     rf"^\s*(?:@\[[^]]+\]\s*)*(?:(?:private|protected|noncomputable|unsafe)\s+)*(def|theorem|structure|abbrev|opaque|axiom|inductive|class)\s+({IDENT})(?=\s|$)"
@@ -236,6 +237,9 @@ def _declarations(path: str, text: str) -> dict[str, tuple[str, int]]:
             continue
         if SECTION_RE.match(line):
             scopes.append(("section", []))
+            continue
+        if MUTUAL_RE.match(line):
+            scopes.append(("mutual", []))
             continue
         if END_RE.match(line):
             if not scopes:
@@ -639,8 +643,11 @@ def negative_controls(root: Path) -> list[str]:
         parser_probe = Path(temp) / "TrailingQuestionMark.lean"
         parser_probe.write_text(
             "namespace Blanc.ParserProbe\n"
+            "mutual\n"
             "def sourceSite : Nat := 0\n"
             "def sourceSite? : Nat := 1\n"
+            "end\n"
+            "def afterMutual : Nat := 2\n"
             "end Blanc.ParserProbe\n",
             encoding="utf-8",
         )
@@ -649,6 +656,7 @@ def negative_controls(root: Path) -> list[str]:
             expected = {
                 "Blanc.ParserProbe.sourceSite",
                 "Blanc.ParserProbe.sourceSite?",
+                "Blanc.ParserProbe.afterMutual",
             }
             if set(parsed) != expected:
                 failures.append(

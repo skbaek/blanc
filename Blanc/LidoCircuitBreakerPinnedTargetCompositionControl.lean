@@ -1884,8 +1884,8 @@ private theorem stubPauseWorld_afterSetStubSeam :
       (by simpa only [stubRunImageLast] using stubRunMem_durLast)
       (by simpa only [stubRunMemoryLast] using stubRunMem_sizeLast)
       (by
-        unfold temporalAccountAccessCost
-        rw [if_neg (show ¬ pauseWorldCallee.toB256.toAdr ∈
+        simp only [temporalAccountAccessCost, Lift.temporalAccountAccessCost]
+        rw [ite_eq_right (show ¬ pauseWorldCallee.toB256.toAdr ∈
             stubRunAfterSetBase.accessedAddresses from by
           rw [stubRunAfterSetBase_accessedAddresses]
           exact Std.HashSet.not_mem_emptyWithCapacity)]
