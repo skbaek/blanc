@@ -194,7 +194,7 @@ SHARED += ["Lift.CommittedLogs", "Lift.SegmentedReplay", "Lift.SegmentedHistory"
 SHARED += ["Lift.CalldataGuards", "Lift.StaticCall", "Lift.StaticCallGuard", "Lift.WalkSteps", "Lift.MapSlot", "Lift.Vyper", "Lift.PackedWord"]
 # The frame cursor, the reentrancy-lock exclusion kit and its bytecode checker, owner
 # discipline, and concrete-run evaluation (deployed-lido-vyper-v1): contract-neutral.
-SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachChain", "Lift.Cursor", "Lift.CursorCuts", "Lift.CursorExact", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
+SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachChain", "Lift.ReachDispatch", "Lift.Cursor", "Lift.CursorCuts", "Lift.CursorExact", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
            "Lift.LockCheck", "Lift.LockCheckSound", "Lift.LockCheckFlow"]
 # The constant memory map and its checker, code tries as data, and the executable-witness
 # engine with its child runs and spawn facts (deployed-lido-vyper-v1, V-): contract-neutral.
@@ -280,6 +280,9 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.BurnDispatchWalk",
         "Lift.UniswapV2Pair.SourceReplay",
         "Lift.UniswapV2Pair.HistoryReplay",
+        "Lift.UniswapV2Pair.HistoryWriters",
+        "Lift.UniswapV2Pair.HistoryWriterCheck",
+        "Lift.UniswapV2Pair.HistoryWriterWalk",
         "Lift.UniswapV2Pair.ReplayWriterGas",
         "Lift.UniswapV2Pair.InitializedReplay",
         "Lift.UniswapV2Pair.PairCallShape",

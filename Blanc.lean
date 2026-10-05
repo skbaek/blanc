@@ -463,6 +463,7 @@ import Blanc.Lift.Reach
 import Blanc.Lift.Cursor
 import Blanc.Lift.ReachWalk
 import Blanc.Lift.ReachChain
+import Blanc.Lift.ReachDispatch
 import Blanc.Lift.CallRestriction
 import Blanc.Lift.StaticOnlyFrames
 import Blanc.LockExclusion
@@ -668,6 +669,9 @@ import Blanc.Lift.UniswapV2Pair.BurnFeeTransfers
 import Blanc.Lift.UniswapV2Pair.BurnDispatchWalk
 import Blanc.Lift.UniswapV2Pair.SourceReplay
 import Blanc.Lift.UniswapV2Pair.HistoryReplay
+import Blanc.Lift.UniswapV2Pair.HistoryWriters
+import Blanc.Lift.UniswapV2Pair.HistoryWriterCheck
+import Blanc.Lift.UniswapV2Pair.HistoryWriterWalk
 import Blanc.Lift.UniswapV2Pair.ReplayWriterGas
 import Blanc.Lift.UniswapV2Pair.InitializedReplay
 import Blanc.Lift.UniswapV2Pair.PropertiesOracle
