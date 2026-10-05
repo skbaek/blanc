@@ -809,6 +809,19 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   Worked examples: `Blanc/Lift/VyperNonreentrantDeployed/Fixed/Witness/Top.lean` (a read-only
   spawn) and `.../Fixed/Witness2/{Run,Frames,Top}.lean` (an ETH-paying body, a nested reentry
   through an EIP-1167 forwarder, a committing run).
+- To consume a call-family child whose code is a lifted certificate *without* walking it by the
+  kernel — the child's inputs symbolic, its run built forward as `SProg.RunExact` with
+  `Blanc/Lift/ExactWalk.lean` — use [`Blanc/Lift/ExactLeaf.lean`](../Blanc/Lift/ExactLeaf.lean).
+  `exact_leaf` turns the run (and `SpawnFreeReach` of the code) into the outcome and the empty raw
+  descendants of every derivation node at the child's start configuration, the premise
+  `spawn_resume_ok` asks for. `ChildAgree.afterSload`/`afterSstore`/`ret` move the witness
+  engine's shadows across the selected-access bases `afterSload`/`afterSstore` and a `RETURN`
+  over an `St`, so an explicit post state has explicit shadows; `ChildAgree.getStorVal`,
+  `sloadCost_shadow`/`sstoreCost_shadow` (`sloadCostS`/`sstoreCostS`) and
+  `afterSload_shadow`/`afterSstore_shadow` (`afterSloadS`/`afterSstoreS`) restate values, charges
+  and bases on the shadows, which the kernel evaluates without inspecting a hash set. Worked
+  example: the synthetic token's `transfer_child`, `transferFrom_child`, `approve_child`,
+  `balanceOf_child` in `Blanc/Lift/VyperNonreentrantDeployed/Token20/Frame.lean`.
 - To state a closed walk witness under every covered fork rather than the one its machine
   fixes, transport its kernel facts with
   [`Blanc/Lift/NodeWalkFork.lean`](../Blanc/Lift/NodeWalkFork.lean): `pwalk_withFork`
