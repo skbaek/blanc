@@ -674,7 +674,7 @@ private theorem burnPricingWords_exact {sevm : Sevm} {b : Devm} {R : List B256} 
   exact rxc_callRet (g := t_21e8_c58) rfl callee first
 
 /-- Accepted source pricing supplies exactly the actual checked products and divisor. -/
-private theorem burnPricing_source_inv {L b0 b1 supply : B256} {amount0 amount1 : Nat}
+theorem burnPricing_source_inv {L b0 b1 supply : B256} {amount0 amount1 : Nat}
     (accepted : burnAmounts L b0 b1 supply = .ok (amount0, amount1)) :
     B256.Nofm L b0 ∧ B256.Nofm L b1 ∧ supply ≠ 0 ∧
       (amount0, amount1) = (((L * b0) / supply).toNat, ((L * b1) / supply).toNat) := by

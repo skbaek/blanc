@@ -557,9 +557,9 @@ def burnSuffixTailGas (sevm : Sevm) (M : Mem) (p0 : B256) (w : BurnSuffixWords)
 
 /-- **Forward environment of Burn's suffix**, from the first transfer at `p0` to the callee's
 return: both transfer `CALL`s (`SwapTransferCallForward`), both final `balanceOf(pair)` callees
-(`SwapBalanceEnv`), each returning exactly the gas the next segment needs, and the primitive
-guards of the tail (both uint112 bounds, mutability, the update, checkpoint and unlock sentries).
-No successful suffix run is assumed. -/
+(`SwapBalanceEnv`), each returning exactly the gas the next segment needs, and the update,
+checkpoint and unlock sentries. The answers' uint112 bounds and the frame's mutability are the
+model's guards, premises of `burnBack_exact`. No successful suffix run is assumed. -/
 structure BurnBackForwardEnv (pre : Nat → B256 → Nat) (post : Nat → B256 → Bytes → Nat)
     (sevm : Sevm) (b : Devm) (M : Mem) (p0 : B256) (w : BurnSuffixWords) (R : List B256)
     (G : Nat) where
@@ -589,9 +589,6 @@ structure BurnBackForwardEnv (pre : Nat → B256 → Nat) (post : Nat → B256 �
       e0.returnData) (burnSuffixPtr p0 d0 d1) w.token1
     (w.locals w.balance1 (Bytes.toB256 (e0.returnData.take 32)) R) e1 balanceGas1
     (burnSuffixTailGas sevm M p0 w d0 d1 e0 e1 G)
-  bound0 : (Bytes.toB256 (e0.returnData.take 32)).toNat < 2 ^ 112
-  bound1 : (Bytes.toB256 (e1.returnData.take 32)).toNat < 2 ^ 112
-  static : sevm.isStatic = false
   sentries : SwapUpdateSentries sevm e1 (burnSuffixSize M p0 w d0 d1) (burnSuffixPtr p0 d0 d1)
     w.reserve0 w.reserve1 (Bytes.toB256 (e0.returnData.take 32))
     (Bytes.toB256 (e1.returnData.take 32))
@@ -644,7 +641,9 @@ theorem burnBack_exact {pre : Nat → B256 → Nat} {post : Nat → B256 → Byt
     (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem p0 n0 M) (sentinel : memWord M 96 = 0)
     (lower : 128 ≤ p0.toNat) (upper : p0.toNat < 2 ^ 161)
     (nonzero0 : w.amount0 ≠ 0) (nonzero1 : w.amount1 ≠ 0) (room : R.length ≤ 980)
-    (env : BurnBackForwardEnv pre post sevm b M p0 w R G) :
+    (static : sevm.isStatic = false) (env : BurnBackForwardEnv pre post sevm b M p0 w R G)
+    (bound0 : (Bytes.toB256 (env.e0.returnData.take 32)).toNat < 2 ^ 112)
+    (bound1 : (Bytes.toB256 (env.e1.returnData.take 32)).toNat < 2 ^ 112) :
     (∃ n, PtrMem (burnSuffixPtr p0 env.d0 env.d1) n env.memory ∧
       (burnSuffixPtr p0 env.d0 env.d1).toNat + 64 ≤ n) ∧
     128 ≤ (burnSuffixPtr p0 env.d0 env.d1).toNat ∧
@@ -702,9 +701,9 @@ theorem burnBack_exact {pre : Nat → B256 → Nat} {post : Nat → B256 → Byt
   refine burnFwdTransfer1_call helper fork room mem1' sentinel1 lower1 width1 env.transfer1 ?_
   refine burnFinalFirstBalance_exact fork mem2' lower2 width2 room env.first ?_
   refine burnFinalSecondBalance_exact fork mem2' lower2 width2 env.first.long room env.second ?_
-  refine burnUpdate_exact fork reply0 lower2 width2 env.second.long env.static env.bound0
-    env.bound1 room env.sentries ?_
-  refine burnKLast_exact fork room (fun _ => env.static) env.checkpoint ?_
-  exact burnEvent_exact fork synced lower2 width2 env.static room env.unlock
+  refine burnUpdate_exact fork reply0 lower2 width2 env.second.long static bound0
+    bound1 room env.sentries ?_
+  refine burnKLast_exact fork room (fun _ => static) env.checkpoint ?_
+  exact burnEvent_exact fork synced lower2 width2 static room env.unlock
 
 end Blanc.Lift.UniswapV2Pair
