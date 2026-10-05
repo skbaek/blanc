@@ -41,11 +41,6 @@ theorem burnInitialDecode_exact {sevm : Sevm} {b : Devm} {R : List B256}
     ((balanceReplyMemory_ptr out mem).read_self (by decide)) (by omega)
   exact body
 
-/-- A machine state over a machine state keeps only the outer machine. -/
-theorem St_St {b : Devm} {S S' : List B256} {M M' : Mem} {G G' : Nat} :
-    St (St b S M G) S' M' G' = St b S' M' G' := by
-  simp only [St, Devm.setMach_setMach, Devm.stateGas_setMach]
-
 /-- Every fee branch's post is an `St` over its own zero-gas world. -/
 theorem feeBranchPost_St {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {K w r0 r1 : B256} {G : Nat} :
@@ -54,16 +49,16 @@ theorem feeBranchPost_St {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
         (feeBranchPost sevm b R M K w r0 r1 0).memory G := by
   unfold feeBranchPost
   split
-  · simp only [St_St, St.memory]
+  · simp only [St, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
   · unfold feeOnPost
     split
-    · simp only [St_St, St.memory]
+    · simp only [St, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
     · split
       · unfold feeGrowthPost feeLiquidityPost
         split
-        · simp only [St_St, St.memory]
-        · simp only [lpMintPost, lpMintSupplyPost, lpMintCreditPost, St_St, St.memory]
-      · simp only [St_St, St.memory]
+        · simp only [St, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
+        · simp only [lpMintPost, lpMintSupplyPost, lpMintCreditPost, St, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
+      · simp only [St, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
 
 /-! ## Worlds and words of the prefix -/
 
@@ -209,7 +204,7 @@ theorem lpBurnPost_St {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {fromWord value : B256} {G : Nat} :
     lpBurnPost sevm b R M fromWord value G =
       St (lpBurnPost sevm b R M fromWord value 0) R (lpBurnPost sevm b R M fromWord value 0).memory G := by
-  simp only [lpBurnPost, lpBurnBalancePost, lpBurnSupplyPost, St_St, St.memory]
+  simp only [lpBurnPost, lpBurnBalancePost, lpBurnSupplyPost, St, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
 
 /-- `feeMintBranchGas` over a kLast word `K` instead of a model state. -/
 def feeBranchGasAt (sevm : Sevm) (b : Devm) (K w r0 r1 : B256) (G : Nat) : Nat :=

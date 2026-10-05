@@ -358,13 +358,21 @@ plus HASH-T freshness of its own `pairDerivKeys` gives `PairStepOutcome` from `f
 `pair_history_writer_live` (transfer/approve/transferFrom, cost `writer.cost`),
 `pair_history_sync_live` (cost `syncCalleePrefixGas … + 244`), `pair_history_mint_live`
 (`env.gas + 228`), `pair_history_swap_live` (both callback shapes; `swapFrontTransferGas … +
-swapPrefixGas … + 445`, `SwapSafeTransferForward` a named premise). Skim and burn instances are one
-`pair_live_outcome` call each once their forward theorems land. Model-acceptance bridges: writers
+swapPrefixGas … + 445`, `SwapSafeTransferForward` a named premise), `pair_history_burn_live`
+(`BurnForwardEnv.gas = initial.gas + 249`, `SwapSafeTransferForward` a named premise for both
+transfers). The skim instance is one `pair_live_outcome` call once its forward theorem lands.
+Model-acceptance bridges: writers
 (`startImmediate` at `finish`), sync (`finish.unlocked = 1` and `State.update` accepting the answers,
 `State.update_bounds`), swap (`SwapModelConditions` at the actual post-callback answers; the back half's
 input guard, `K` facts and bounds from `swapCheck_raw`, `SwapBackCalleeEnv` in `SwapForwardAccept.lean`),
 mint (`MintModelConditions` at the actual token and `feeTo` answers; the lock word, bounds, cover, fee
 guards and pricing facts from `MintPrefixCallee.accepted` in `MintForwardAccept.lean`, with HASH-T
-freshness of the address-zero, recipient and `feeTo` LP rows). Every callee environment now carries
+freshness of the address-zero, recipient and `feeTo` LP rows; `pair_history_mint_live` takes model
+acceptance itself through `runTyped_mint_conditions`), burn (`BurnModelConditions` at the two
+initial, the `feeTo` and the two final answers, from `runTyped_burn_conditions`; the fee mint,
+pricing, LP debit and update bounds become `BurnForwardGuards` in `BurnForwardEnv.guards_of_model`
+(`BurnForwardAccept.lean`), with HASH-T freshness of the Pair's own and the `feeTo` LP rows; the
+forward walk is `BurnForward*.lean`: `burnInitial_exact`, `burnFeePricing_exact`, `burnBack_exact`,
+`burnPc0_exact`, `burn_bytecode_forward_consumes` joined to `burnRaw_source_authentic`). Every callee environment now carries
 only callee answers, returned gas, charge equations and residual sentries. U3 fee-on: `SourceReplay.feeOn_product`,
 `pair_history_feeOn_product`.
