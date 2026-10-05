@@ -291,13 +291,11 @@ private theorem burnFee_finished_prepend {U : WriterKey → Prop}
     BurnTransferFinished U frame priced D sevm b w M ρ R o start
       (fun tail => wrap (oldWrap tail)) (childPrefix ++ oldPrefix) := by
   obtain ⟨K', d0, d1, entered0, entered1, turns0, turns1, final, rets, transcript,
-      post, finalM, gas, n, balance0, balance1, added0, added1, L0, L1,
-      sub, calls, prov0, prov1, consumed, returned, rep, checkpoint, context, unlocked,
-      mem, covered, bound0, bound1, raw, images0, images1, logs⟩ := finished
+      post, finalM, gas, n, balance0, balance1, added0, added1, L0, L1, final0, final1,
+      views0, views1, sub, calls, prov0, prov1, consumed, rest⟩ := finished
   refine ⟨K', d0, d1, entered0, entered1, turns0, turns1, final, rets, transcript,
-    post, finalM, gas, n, balance0, balance1, added0, added1, L0, L1,
-    sub, calls, prov0, prov1, ?_, returned, rep, checkpoint, context, unlocked,
-    mem, covered, bound0, bound1, raw, images0, images1, logs⟩
+    post, finalM, gas, n, balance0, balance1, added0, added1, L0, L1, final0, final1,
+    views0, views1, sub, calls, prov0, prov1, ?_, rest⟩
   simpa only [List.append_assoc] using reaches _ _ consumed
 
 /-- The actual factory fee reply and its authenticated static turns prepend the
@@ -563,6 +561,12 @@ theorem burnInitialBalances_source_finished {U K : WriterKey → Prop} {st : Sta
       PairViewProvenance D D.sevm prior st.token0.toB256 views0 ∧
       PairViewProvenance D D.sevm prior1 st.token1.toB256 views1 ∧
       PairViewProvenance D D.sevm prior2 st.factory.toB256 viewsF ∧
+      BurnStaticAnswer D D.sevm st.token0.toB256
+        (ExternalOperation.encode (.balanceOf D.sevm.currentTarget)) out0 ∧
+      BurnStaticAnswer D D.sevm st.token1.toB256
+        (ExternalOperation.encode (.balanceOf D.sevm.currentTarget)) out1 ∧
+      BurnStaticAnswer D D.sevm st.factory.toB256 (ExternalOperation.encode .feeTo) outF ∧
+      w.token0 = st.token0.toB256 ∧ w.token1 = st.token1.toB256 ∧ w.recipient = toWord ∧
       frame.current.logs = prior.current.logs ++ added ∧
       post.logs = b.logs ++ rawPrefix ∧
       added.map (PendingLog.rawWith (burnOwnedRaw D.sevm.currentTarget)) = rawPrefix.map some ∧
@@ -574,7 +578,7 @@ theorem burnInitialBalances_source_finished {U K : WriterKey → Prop} {st : Sta
         (staticViewChildReturns prior request0 0 views0 ++
           (staticViewChildReturns prior1 request1 0 views1 ++
             staticViewChildReturns prior2 requestF 0 viewsF)) := by
-  obtain ⟨unlocked, mutable, d0, out0, d1, out1, gas, call0, call1, _, _,
+  obtain ⟨unlocked, mutable, d0, out0, d1, out1, gas, call0, call1, answered0, answered1,
     long0, _, long1, _, feeRep, stor1, logs1, _, reply1, bound0, bound1, balance1, decoded⟩ :=
     burnInitialBalances_writer_inv fork mem rep run
   obtain ⟨gw0, cg0, _, step0, post0⟩ := call0
@@ -800,7 +804,7 @@ theorem burnInitialBalances_source_finished {U K : WriterKey → Prop} {st : Sta
     rfl
   refine ⟨unlocked, mutable, out0, out1, observation.out, views0, views1, viewsF,
     frame, priced, post, w, post.memory, added, rawPrefix, rfl, rfl, rfl, rfl, ?_, ?_, ?_,
-    pending, rawPrefixEq, prefixImage, ?_⟩
+    ?_, ?_, ?_, token0Word, token1Word, rfl, pending, rawPrefixEq, prefixImage, ?_⟩
   · rw [← token0Word]
     exact ⟨authentic0, derived0⟩
   · have masked : t1 &&& mask = st.token1.toB256 := by
@@ -809,6 +813,15 @@ theorem burnInitialBalances_source_finished {U K : WriterKey → Prop} {st : Sta
     exact ⟨authentic1, derived1⟩
   · rw [← factoryWord]
     exact provenanceF
+  · rw [← token0Word]
+    exact ⟨_, d0, gw0, _, _, cg0, step0, post0.returnData, answered0⟩
+  · have masked : t1 &&& mask = st.token1.toB256 := by
+      rw [token1Word, show mask = ~~~ addressMask from by decide, and_mask_word, toAdr_toB256]
+    rw [← masked]
+    exact ⟨_, d1, gw1, _, _, cg1, step1, post1.returnData, answered1⟩
+  · rw [← factoryWord]
+    exact ⟨_, observation.d, observation.gw, _, _, observation.callGas, observation.step,
+      observation.post.returnData, observation.answer⟩
   · simpa only [List.append_assoc, factoryWord, toAdr_toB256] using
       burnFee_finished_prepend (childPrefix := staticViewChildReturns prior request0 0 views0 ++
         staticViewChildReturns prior1 request1 0 views1) finished
@@ -909,9 +922,116 @@ theorem BurnEntryFinished.track {U K : WriterKey → Prop}
   · intro k old
     exact Or.inr ((finite k).mp old)
 
-/-- The real pc-zero route supplies entry guards, all external queues, the ABI
-return, and the fee/LP/child/Sync/Burn log image in the unchanged derivation D. -/
-theorem burnPc0_source_finished {U K : WriterKey → Prop} {current : Checkpoint}
+/-- Every reply the Burn source consumes, in call order: the two initial
+`balanceOf(pair)` replies, the factory `feeTo` reply, the two token `transfer`
+replies with their frame-entry bits, and the two final `balanceOf(pair)` replies,
+each with the Pair turns its child re-entered. -/
+structure BurnAnswers where
+  balance0 : Bytes
+  views0 : List StaticViewTurn
+  balance1 : Bytes
+  views1 : List StaticViewTurn
+  feeTo : Bytes
+  viewsF : List StaticViewTurn
+  reply0 : Bytes
+  entered0 : Bool
+  turns0 : List MutableTurn
+  reply1 : Bytes
+  entered1 : Bool
+  turns1 : List MutableTurn
+  final0 : Bytes
+  finalViews0 : List StaticViewTurn
+  final1 : Bytes
+  finalViews1 : List StaticViewTurn
+
+/-- The Burn source transcript built from its answers, in call order. -/
+def BurnAnswers.transcript (a : BurnAnswers) : Transcript :=
+  .next (feeObservedResult a.balance0) (staticViewTranscript a.views0 .done)
+    (.next (feeObservedResult a.balance1) (staticViewTranscript a.views1 .done)
+      (.next (feeObservedResult a.feeTo) (staticViewTranscript a.viewsF .done)
+        (burnTransferTranscript a.reply0 a.entered0 a.turns0 a.reply1 a.entered1 a.turns1
+          a.final0 a.finalViews0 a.final1 a.finalViews1)))
+
+/-- **Burn call provenance.** Each answer is what an actual external call step
+of the derivation `D` returned: the token and factory targets are the addresses
+stored in the Pair's entry storage `entry` (slots 6, 7, 5), the balance and fee
+calls carry their callee answers to the exact ABI inputs, the transfer CALLs carry
+the exact `transfer(recipient, amount)` input with the calldata recipient, and
+every queue of re-entered Pair turns is the one the same call's committed child
+produced (static views) or the legal locked turns of the child (mutable calls).
+Like the sibling families' provenance, each step is a `StepIn D` step; it does
+not assert an occurrence in `D`'s parent prefix. -/
+def BurnCallProvenance (D : Exec.Deriv) (entry : Stor) (amount0 amount1 : B256)
+    (a : BurnAnswers) : Prop :=
+  let token0 := (entry.get 6).toAdr.toB256
+  let token1 := (entry.get 7).toAdr.toB256
+  let factory := (entry.get 5).toAdr.toB256
+  let balanceOf := ExternalOperation.encode (.balanceOf D.sevm.currentTarget)
+  let payee := (Sevm.dataWord D.sevm 4).toAdr.toB256
+  BurnStaticAnswer D D.sevm token0 balanceOf a.balance0 ∧
+  PairViewOrigin D D.sevm token0 a.views0 ∧
+  BurnStaticAnswer D D.sevm token1 balanceOf a.balance1 ∧
+  PairViewOrigin D D.sevm token1 a.views1 ∧
+  BurnStaticAnswer D D.sevm factory (ExternalOperation.encode .feeTo) a.feeTo ∧
+  PairViewOrigin D D.sevm factory a.viewsF ∧
+  BurnTransferAnswer D D.sevm token0 payee amount0 a.reply0 ∧
+  PairMutableProvenance D D.sevm token0 a.entered0 a.turns0 ∧
+  BurnTransferAnswer D D.sevm token1 payee amount1 a.reply1 ∧
+  PairMutableProvenance D D.sevm token1 a.entered1 a.turns1 ∧
+  BurnStaticAnswer D D.sevm token0 balanceOf a.final0 ∧
+  PairViewOrigin D D.sevm token0 a.finalViews0 ∧
+  BurnStaticAnswer D D.sevm token1 balanceOf a.final1 ∧
+  PairViewOrigin D D.sevm token1 a.finalViews1
+
+/-- The Burn arm of a Pair frame's transcript authentication: the transcript is
+the one built from answers whose provenance is the frame's own call steps, read
+against the frame's own entry storage. -/
+def BurnFrameAuth (D : Exec.Deriv) (transcript : Transcript) : Prop :=
+  ∃ (a : BurnAnswers) (amount0 amount1 : B256), transcript = a.transcript ∧
+    BurnCallProvenance D (D.devm.getStor D.sevm.currentTarget) amount0 amount1 a
+
+/-- The full observable Burn result whose consumed transcript is fixed by the
+actual call answers before any model state is chosen, with incoming footprint
+growth. -/
+def BurnEntryAuthenticFinished (U K : WriterKey → Prop) (current : Checkpoint) (D : Exec.Deriv)
+    (b : Devm) (o : Outcome) (invocation : List Nat) : Prop :=
+  let ctx := mintSourceContext D.sevm invocation
+  let recipient := ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& Sevm.dataWord D.sevm 4).toAdr
+  ∃ (a : BurnAnswers) (amount0 amount1 : B256),
+    BurnCallProvenance D (b.getStor D.sevm.currentTarget) amount0 amount1 a ∧
+    ∃ (K' : WriterKey → Prop) (final : Frame) (rets : List ChildReturn) (publicPost : Devm)
+      (added : List PendingLog) (rawLogs : List Log),
+      (∀ k, K' k → U k) ∧ (∀ k, K k → K' k) ∧
+      ExactConsumes (startTyped current ctx (.burn recipient)) a.transcript
+        { status := .success (encodeWords [amount0, amount1]), frame := final,
+          remaining := .done, childReturns := rets } ∧
+      o = .halted publicPost ∧ publicPost.output = encodeWords [amount0, amount1] ∧
+      WriterRep K' (publicPost.getStor D.sevm.currentTarget) final.current.state ∧
+      final.checkpoint = current ∧ final.context = ctx ∧ final.current.state.unlocked = 1 ∧
+      final.current.logs = current.logs ++ added ∧ publicPost.logs = b.logs ++ rawLogs ∧
+      added.map (PendingLog.rawWith (burnOwnedRaw D.sevm.currentTarget)) = rawLogs.map some
+
+/-- Forget the call provenance. -/
+theorem BurnEntryAuthenticFinished.toTracked {U K : WriterKey → Prop}
+    {current : Checkpoint} {D : Exec.Deriv} {b : Devm} {o : Outcome} {invocation : List Nat}
+    (finished : BurnEntryAuthenticFinished U K current D b o invocation) :
+    BurnEntryTrackedFinished U K current D b o invocation := by
+  obtain ⟨a, amount0, amount1, _, K', final, rets, post, added, raw, facts⟩ := finished
+  exact ⟨K', final, a.transcript, rets, post, amount0, amount1, added, raw, facts⟩
+
+private theorem burn_adr_word_mask (a : Adr) :
+    a.toB256 &&& (0xffffffffffffffffffffffffffffffffffffffff : B256) = a.toB256 := by
+  rw [show (0xffffffffffffffffffffffffffffffffffffffff : B256) = ~~~ addressMask from by decide, and_mask_word, toAdr_toB256]
+
+private theorem burn_mask_mask (x : B256) :
+    (0xffffffffffffffffffffffffffffffffffffffff : B256) &&& ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& x) = x.toAdr.toB256 := by
+  rw [show (0xffffffffffffffffffffffffffffffffffffffff : B256) = ~~~ addressMask from by decide, B256.and_comm _ x, and_mask_word,
+    B256.and_comm, and_mask_word, toAdr_toB256]
+
+/-- **Authenticated Burn frame.** The real pc-zero route supplies entry guards,
+every external answer with its call provenance, the ABI return, and the
+fee/LP/child/Sync/Burn log image in the unchanged derivation D. -/
+theorem burnPc0_source_authentic {U K : WriterKey → Prop} {current : Checkpoint}
     {D : Exec.Deriv} {b : Devm} {G : Nat} {o : Outcome}
     (invocation : List Nat) (fork : CoveredFork D.sevm.benvStat.fork)
     (selector : Blanc.Sevm.selector D.sevm = 0x89afcb44)
@@ -926,7 +1046,7 @@ theorem burnPc0_source_finished {U K : WriterKey → Prop} {current : Checkpoint
     (staticGood : ∀ F ∈ Exec.rawFrameRoots D.exc, F.sevm.currentTarget = D.sevm.currentTarget →
       ∀ k ∈ staticViewDecodedKeys F.sevm, U k)
     (run : SFunc.RunP (StepIn D) cert.prog D.sevm (St b [] Mem.empty G) t_0000_c0 o) :
-    BurnEntryFinished U current D b o invocation := by
+    BurnEntryAuthenticFinished U K current D b o invocation := by
   obtain ⟨value, _, calleeGas, calleeOutcome, callee, tail⟩ := burnPc0_caller_inv selector run
   let toWord := (0xffffffffffffffffffffffffffffffffffffffff : B256) &&& Sevm.dataWord D.sevm 4
   let ctx := mintSourceContext D.sevm invocation
@@ -936,15 +1056,16 @@ theorem burnPc0_source_finished {U K : WriterKey → Prop} {current : Checkpoint
     burnInitialBalances_writer_inv fork getterInitMemory_ptr rep calleeCut
   obtain ⟨_, _, out0, out1, outF, views0, views1, viewsF, frame, priced, pricingPost, w, N,
       prefixAdded, prefixRaw, amount0, amount1, checkpoint, context, prov0, prov1, provF,
-      prefixPending, prefixLogs, prefixImage, finished⟩ :=
+      answer0, answer1, answerF, word0, word1, wordRecipient, prefixPending, prefixLogs, prefixImage, finished⟩ :=
     burnInitialBalances_source_finished fork getterInitMemory_ptr burnEntryMemory_sentinel
       rep tracked prior rfl mutable rfl rfl rfl inj apart sub trace sem image installed
       good staticGood calleeCut
   obtain ⟨K', d0, d1, entered0, entered1, turns0, turns1, final, rets, transcript,
-      post, finalM, gas, n, balance0, balance1, added0, added1, L0, L1,
-      sub', calls, mutable0, mutable1, consumed, returned, finalRep, finalCheckpoint,
-      finalContext, finalUnlocked, ptr, _, bound0, bound1, _, images0, images1,
-      finalLogs, low, high, finalPending⟩ := finished
+      post, finalM, gas, n, balance0, balance1, added0, added1, L0, L1, final0, final1,
+      finalViews0, finalViews1, sub', calls, mutable0, mutable1, consumed, returned, finalRep,
+      finalCheckpoint, finalContext, finalUnlocked, ptr, _, bound0, bound1, _, images0, images1,
+      finalLogs, low, high, finalPending, transcriptEq, finalAnswer0, finalOrigin0,
+      finalAnswer1, finalOrigin1⟩ := finished
   rw [returned] at tail
   have canonical : SFunc.RunCutP (StepIn D) cert.prog D.sevm []
       (St post (w.amount1 :: w.amount0 :: [0x89afcb44]) finalM gas) t_053d_c83 (.done o) := tail
@@ -980,21 +1101,74 @@ theorem burnPc0_source_finished {U K : WriterKey → Prop} {current : Checkpoint
   let allReturns := (staticViewChildReturns prior request0 0 views0 ++
     (staticViewChildReturns prior1 request1 0 views1 ++
       staticViewChildReturns prior2 (requestFor .burnFeeTo current.state.factory .feeTo) 0 viewsF)) ++ rets
-  refine ⟨K', final, nested, allReturns, publicPost, priced.amount0, priced.amount1, added, rawLogs,
-    sub', ?_, Seg.done.inj halted, ?_, ?_, finalCheckpoint.trans checkpoint,
-    finalContext.trans context, finalUnlocked, ?_, ?_, ?_⟩
+  obtain ⟨rows, finite⟩ := rep.finite
+  have rowInU : ∀ k ∈ rows, U k := fun k member => sub k ((finite k).mpr member)
+  have fresh : WriterFreshKeys K' rows :=
+    Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub' rowInU
+  let a : BurnAnswers := ⟨out0, views0, out1, views1, outF, viewsF, d0.returnData, entered0,
+    turns0, d1.returnData, entered1, turns1, final0, finalViews0, final1, finalViews1⟩
+  have token0 : ((b.getStor D.sevm.currentTarget).get 6).toAdr.toB256 =
+      current.state.token0.toB256 := by rw [rep.fixed.2.2.2.1]
+  have token1 : ((b.getStor D.sevm.currentTarget).get 7).toAdr.toB256 =
+      current.state.token1.toB256 := by rw [rep.fixed.2.2.2.2.1]
+  have factory : ((b.getStor D.sevm.currentTarget).get 5).toAdr.toB256 =
+      current.state.factory.toB256 := by rw [rep.fixed.2.2.1]
+  obtain ⟨transfer0, transfer1⟩ := calls.answers
+  rw [word0, burn_adr_word_mask] at mutable0 finalAnswer0 finalOrigin0 transfer0
+  rw [word1, burn_adr_word_mask] at mutable1 finalAnswer1 finalOrigin1 transfer1
+  rw [wordRecipient, burn_mask_mask, amount0] at transfer0
+  rw [wordRecipient, burn_mask_mask, amount1] at transfer1
+  have provenance : BurnCallProvenance D (b.getStor D.sevm.currentTarget)
+      priced.amount0 priced.amount1 a := by
+    unfold BurnCallProvenance
+    dsimp only
+    rw [token0, token1, factory]
+    exact ⟨answer0, prov0.origin rfl, answer1, prov1.origin rfl, answerF, provF.origin rfl,
+      transfer0, mutable0, transfer1, mutable1, finalAnswer0, finalOrigin0,
+      finalAnswer1, finalOrigin1⟩
+  refine ⟨a, priced.amount0, priced.amount1, provenance, WriterExtend K' rows, final,
+    allReturns, publicPost, added, rawLogs, ?_, ?_, ?_, Seg.done.inj halted, ?_, ?_,
+    finalCheckpoint.trans checkpoint, finalContext.trans context, finalUnlocked, ?_, ?_, ?_⟩
+  · intro k member
+    rcases member with old | row
+    · exact sub' k old
+    · exact rowInU k row
+  · intro k old
+    exact Or.inr ((finite k).mp old)
   · rw [typed]
+    rw [transcriptEq] at consumed
     exact consumed
   · simpa only [amount0, amount1, encodeWords, List.flatMap_cons, List.flatMap_nil,
       List.append_nil] using output
   · rw [stor]
-    exact finalRep
+    exact finalRep.extend fresh
   · rw [finalPending, prefixPending]
     simp only [added, suffixEvents, prior, burnSourceLockedFrame, List.append_assoc]
   · rw [logs, finalLogs, prefixLogs]
     simp only [rawLogs, suffixRaw, List.append_assoc]
   · simp only [added, rawLogs, List.map_append, prefixImage,
       burn_pending_logs_preserves images0, burn_pending_logs_preserves images1, suffixImage]
+
+/-- The real pc-zero route supplies entry guards, all external queues, the ABI
+return, and the fee/LP/child/Sync/Burn log image in the unchanged derivation D. -/
+theorem burnPc0_source_finished {U K : WriterKey → Prop} {current : Checkpoint}
+    {D : Exec.Deriv} {b : Devm} {G : Nat} {o : Outcome}
+    (invocation : List Nat) (fork : CoveredFork D.sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector D.sevm = 0x89afcb44)
+    (rep : WriterRep K (b.getStor D.sevm.currentTarget) current.state)
+    (tracked : K (.balance D.sevm.currentTarget))
+    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
+    (trace : ∀ k ∈ mintTraceKeys D, U k)
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    (installed : some (b.getCode D.sevm.currentTarget).toList = sem.image)
+    (good : ∀ F ∈ Exec.rawFrameRoots D.exc,
+      F.sevm.currentTarget = D.sevm.currentTarget → LockedGood U F)
+    (staticGood : ∀ F ∈ Exec.rawFrameRoots D.exc, F.sevm.currentTarget = D.sevm.currentTarget →
+      ∀ k ∈ staticViewDecodedKeys F.sevm, U k)
+    (run : SFunc.RunP (StepIn D) cert.prog D.sevm (St b [] Mem.empty G) t_0000_c0 o) :
+    BurnEntryFinished U current D b o invocation :=
+  (burnPc0_source_authentic invocation fork selector rep tracked inj apart sub trace
+    sem image installed good staticGood run).toTracked.toFinished
 
 /-- The supplied raw invocation is the root used by the lift and every source
 producer. U remains the caller's fixed HASH-T universe, including this root's
@@ -1022,6 +1196,45 @@ theorem burnRaw_source_finished {U K : WriterKey → Prop} {current : Checkpoint
   cases entry
   exact burnPc0_source_finished invocation fork selector rep tracked inj apart sub trace
     sem image installed good staticGood lifted
+
+/-- **Authenticated raw Burn frame.** The supplied raw root consumes the typed
+Burn source over a transcript fixed by its actual call answers, each tied to its
+call step in this root (`BurnCallProvenance`), with the full observable result
+and incoming footprint growth. Premises are the code, fork, selector, the entry
+representation and the fixed HASH-T universe only. -/
+theorem burnRaw_source_authentic {U K : WriterKey → Prop} {current : Checkpoint}
+    {sevm : Sevm} {b publicPost : Devm} {G : Nat}
+    (invocation : List Nat) (codeEq : sevm.code = code)
+    (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0x89afcb44)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (tracked : K (.balance sevm.currentTarget))
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok publicPost))
+    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
+    (trace : ∀ k ∈ mintTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok publicPost, run⟩, U k)
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
+    (good : ∀ F ∈ Exec.rawFrameRoots run,
+      F.sevm.currentTarget = sevm.currentTarget → LockedGood U F)
+    (staticGood : ∀ F ∈ Exec.rawFrameRoots run, F.sevm.currentTarget = sevm.currentTarget →
+      ∀ k ∈ staticViewDecodedKeys F.sevm, U k) :
+    BurnEntryAuthenticFinished U K current ⟨0, sevm, St b [] Mem.empty G, .ok publicPost, run⟩
+      b (.halted publicPost) invocation := by
+  obtain ⟨f, entry, lifted⟩ := lift_sound_in cert_check codeEq fork run
+  rw [show cert.prog[0]? = some t_0000_c0 from rfl] at entry
+  cases entry
+  exact burnPc0_source_authentic invocation fork selector rep tracked inj apart sub trace
+    sem image installed good staticGood lifted
+
+/-- At a raw root, call provenance against the entry world's Pair storage is the
+Burn arm of the frame's transcript authentication. -/
+theorem burnRaw_frameAuth {sevm : Sevm} {b publicPost : Devm} {G : Nat}
+    {run : Exec 0 sevm (St b [] Mem.empty G) (.ok publicPost)} {amount0 amount1 : B256}
+    {a : BurnAnswers}
+    (provenance : BurnCallProvenance ⟨0, sevm, St b [] Mem.empty G, .ok publicPost, run⟩
+      (b.getStor sevm.currentTarget) amount0 amount1 a) :
+    BurnFrameAuth ⟨0, sevm, St b [] Mem.empty G, .ok publicPost, run⟩ a.transcript :=
+  ⟨a, amount0, amount1, rfl, provenance⟩
 
 /-- The actual pc-zero source consumer also preserves every incoming key. -/
 theorem burnPc0_source_tracked_finished {U K : WriterKey → Prop} {current : Checkpoint}
