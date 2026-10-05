@@ -1,4 +1,5 @@
 import Blanc.Lift.UniswapV2Pair.SkimForward
+import Blanc.Lift.UniswapV2Pair.MintForwardAccept
 
 /-!
 # Skim liveness pieces: the callee-only environment and the model's guards
@@ -15,12 +16,26 @@ namespace Blanc.Lift.UniswapV2Pair
 
 open Jaune
 
+/-- The Pair's storage slots only lock-guarded entries write: `totalSupply` (0), the packed reserves
+(8), both price accumulators (9, 10), `kLast` (11) and the lock (12). The unlocked entries
+(`transfer`, `approve`, `transferFrom`, `permit`, `initialize`) write only balance, allowance and
+nonce rows and the token slots. -/
+def pairLockedSlots : List B256 := [0, 8, 9, 10, 11, 12]
+
+/-- **The goal's token-call clause (U6 `SendOk` shape).**  A token `CALL` made by a locked Pair frame,
+from the staged world `pre` to the settled world `post`, writes none of the Pair's lock-guarded slots:
+a re-entry into the Pair either hits the lock and reverts or is one of the unlocked writers, which
+touch only their own rows. This is ENV data about the callee's execution, stated on the `CALL`'s own
+pre and post worlds. -/
+def NoPairWriteOutsideLock (sevm : Sevm) (pre post : Devm) : Prop :=
+  ∀ k ∈ pairLockedSlots, post.getStorVal sevm.currentTarget k = pre.getStorVal sevm.currentTarget k
+
 /-- **The callee-only skim environment**: both `balanceOf(pair)` `STATICCALL`s (`SkimQueryEnv`) and
 both transfer `CALL`s through the shared helper (`SwapTransferCallForward`), each from its actual
 staged state with its success, reply and returned gas, the code checks of both tokens, the lock and
-unlock sentries, and `reserveKept`: the first transfer's callee leaves the Pair's packed reserve slot
-as the frame entered it (every Pair writer reverts under the frame's lock). No model acceptance fact
-and no successful run is part of it. -/
+unlock sentries, and the goal's token-call clause (`NoPairWriteOutsideLock`) for the first transfer
+`CALL`, the only one whose child the Pair's own later reads depend on. No model acceptance fact and no
+successful run is part of it. -/
 structure SkimForwardEnv (pre : Nat → B256 → Nat) (post : Nat → B256 → Bytes → Nat)
     (sevm : Sevm) (b : Devm) (g : Nat) where
   qd0 : Devm
@@ -140,7 +155,7 @@ structure SkimForwardEnv (pre : Nat → B256 → Nat) (post : Nat → B256 → B
         skimReserve1Word (dt0.getStorVal sevm.currentTarget 8))
       (skimToWord sevm) (skimToken1 sevm b) 0x1aca callGasT1 (g +
         sstoreCost sevm dt1 12 1 + 22) dt1
-  reserveKept : dt0.getStorVal sevm.currentTarget 8 = b.getStorVal sevm.currentTarget 8
+  keeps0 : NoPairWriteOutsideLock sevm qd0 dt0
 
 /-- The pc-zero gas. -/
 def SkimForwardEnv.gas {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
@@ -406,7 +421,21 @@ theorem SkimForwardEnv.run_of_model {K : WriterKey → Prop} {current : Checkpoi
     exact cover0
   have wordCover1 : skimReserve1Word (env.dt0.getStorVal sevm.currentTarget 8) ≤
       Bytes.toB256 (env.qd1.returnData.take 32) := by
-    rw [env.reserveKept, skimReserve1Word_eq, slots.2.1, B256.le_iff_toNat_le_toNat, nat1]
+    have queried := compiled_staticcall_stor fork env.qenv0.call
+    have kept : env.dt0.getStorVal sevm.currentTarget 8 = b.getStorVal sevm.currentTarget 8 :=
+      calc env.dt0.getStorVal sevm.currentTarget 8
+          = env.qd0.getStorVal sevm.currentTarget 8 :=
+            env.keeps0 8 (by simp only [pairLockedSlots, List.mem_cons, true_or, or_true])
+        _ = (Devm.getStor env.qd0 sevm.currentTarget).get 8 := rfl
+        _ = (Devm.getStor (skimCachedWorld sevm b) sevm.currentTarget).get 8 := by
+          rw [queried]
+          simp only [Devm.getStor, Devm.getAcct, temporalAccountAccessBase_state]
+        _ = b.getStorVal sevm.currentTarget 8 := by
+          unfold skimCachedWorld syncLockedWorld
+          rw [afterSload_getStor, afterSload_getStor, afterSload_getStor, afterSstore_getStor_self,
+            Stor.get_set_ne _ (by decide : (12 : B256) ≠ 8), afterSload_getStor]
+          rfl
+    rw [kept, skimReserve1Word_eq, slots.2.1, B256.le_iff_toNat_le_toNat, nat1]
     exact cover1
   obtain ⟨run, _⟩ := skim_bytecode_forward_consumes invocation rep sem image installed
     freshOutput codeEq fork value size selector abi unlocked nonstatic helper env.code0

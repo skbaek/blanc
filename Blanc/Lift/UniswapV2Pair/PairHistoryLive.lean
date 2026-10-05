@@ -521,8 +521,8 @@ theorem pair_history_burn_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
 
 /-- **`skim` after any configured history.**  Given the callee-only skim environment at the future
 world (`SkimForwardEnv`: both `balanceOf(pair)` `STATICCALL`s and both transfer `CALL`s with their
-replies and returned gas, the code checks, the lock and unlock sentries, and the first transfer's
-callee keeping the Pair's packed reserve slot) and the transfer helper `SwapSafeTransferForward` (a
+replies and returned gas, the code checks, the lock and unlock sentries, and the goal's token-call
+clause `NoPairWriteOutsideLock` for the first transfer) and the transfer helper `SwapSafeTransferForward` (a
 named premise until it is proved): whenever the model accepts the decoded skim at the history's
 state `finish` over a transcript whose balance answers are the callees' actual ones, a pc-zero run
 exists at gas `callee.gas` halting at residual `g`; under HASH-T freshness of its own rows its post

@@ -366,8 +366,11 @@ swapPrefixGas … + 445`, `SwapSafeTransferForward` a named premise), `pair_hist
 (`BurnForwardEnv.gas = initial.gas + 249`, `SwapSafeTransferForward` a named premise for both
 transfers), `pair_history_skim_live` (`SkimForwardEnv.gas`; `SkimModelConditions` — lock, mutability
 and both covers — from `runTyped_skim_conditions`, the reserve1 cover carried across the first transfer
-by `Frame.settleExternal_locked_core`; the callee env's `reserveKept` ties the bytes' post-transfer
-slot-8 read to the entry slot; `SkimForwardEnv.run_of_model` in `SkimForwardAccept.lean`).
+by `Frame.settleExternal_locked_core`; the bytes' post-transfer slot-8 read is tied to the entry
+slot by the goal's U6 token-call clause `NoPairWriteOutsideLock` (lock-guarded slots 0, 8–12 unwritten by
+the token `CALL`) on the first transfer — a callee premise in the WETH9 `SendOk` shape, not yet derived
+from the frame theory (deriving it needs `mutable_call_turns` over a derivation that contains the
+transfer step, i.e. after the run exists); `SkimForwardEnv.run_of_model` in `SkimForwardAccept.lean`).
 Model-acceptance bridges: writers
 (`startImmediate` at `finish`), sync (`finish.unlocked = 1` and `State.update` accepting the answers,
 `State.update_bounds`), swap (`SwapModelConditions` at the actual post-callback answers; the back half's
