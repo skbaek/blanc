@@ -191,8 +191,7 @@ and memory with the residual `g`. That same run satisfies the canonical swap fra
 storage (`swap_bytecode_exact_consumes_own`) under trace-local HASH-T over its own trace
 universe. The callee frames are forward-environment premises (ENV class): this is a
 conditional universal construction, not an existential execution for arbitrary callees.
-CROSS-HOST: conditional on `SwapCallReplyShort`, `SwapSafeTransferForward`,
-`SwapForwardReplyShort`. -/
+CROSS-HOST: conditional on `SwapSafeTransferForward`, `SwapForwardReplyShort`. -/
 theorem swap_bytecode_forward_consumes {K : WriterKey → Prop} {current : Checkpoint}
     {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
     {sevm : Sevm} {b d0 d1 dC : Devm} {cg0 cg1 cgC g : Nat}
@@ -223,7 +222,6 @@ theorem swap_bytecode_forward_consumes {K : WriterKey → Prop} {current : Check
           (swapTraceKeys ⟨0, sevm, St b [] Mem.empty (G + 279 + 166), _, run⟩)) →
         WriterApart (WriterExtend K
           (swapTraceKeys ⟨0, sevm, St b [] Mem.empty (G + 279 + 166), _, run⟩)) →
-        SwapCallReplyShort ⟨0, sevm, St b [] Mem.empty (G + 279 + 166), _, run⟩ sevm →
         (∀ a, a ≠ sevm.currentTarget → (swapPrefixWorld sevm b).getStor a = b.getStor a) ∧
         SwapCanonicalBody
           (fun d => ∀ a, a ≠ sevm.currentTarget →
@@ -234,8 +232,8 @@ theorem swap_bytecode_forward_consumes {K : WriterKey → Prop} {current : Check
     to0 to1 guards back front
   obtain ⟨run⟩ := lift_exact cert_check jumps_ok codeEq fork
     ⟨t_0000_c0, rfl, swapPc0_exact value size selector guards body⟩
-  exact ⟨run, fun inj apart short =>
+  exact ⟨run, fun inj apart =>
     swap_bytecode_exact_consumes_own invocation rep sem image installed freshOutput codeEq fork
-      selector run inj apart short⟩
+      selector run inj apart⟩
 
 end Blanc.Lift.UniswapV2Pair

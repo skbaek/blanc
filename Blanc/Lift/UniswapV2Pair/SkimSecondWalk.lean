@@ -488,8 +488,9 @@ theorem skimSecondHalf_inv {D : Exec.Deriv} {sevm : Sevm} {b post : Devm}
 def skimFirstPointer (reply : Bytes) : B256 :=
   if reply = [] then 292 else 292 + ((reply.length.toB256 + 63) &&& ~~~31)
 
-/-- Any reply below 2^128 bytes leaves a fitting pointer (no modular wrap). -/
-theorem skimFirstPointer_fit {reply : Bytes} (short : reply.length < 2 ^ 128) :
+/-- Any reply below 2^160 bytes leaves a fitting pointer (no modular wrap). Every
+actual transfer CALL reply satisfies this via the Jaune operand-derived bound. -/
+theorem skimFirstPointer_fit {reply : Bytes} (short : reply.length < 2 ^ 160) :
     128 ≤ (skimFirstPointer reply).toNat ∧ (skimFirstPointer reply).toNat + 1024 < 2 ^ 256 := by
   unfold skimFirstPointer
   by_cases empty : reply = []
@@ -513,8 +514,9 @@ theorem skimFirstPointer_fit {reply : Bytes} (short : reply.length < 2 ^ 128) :
 /-- Every successful raw skim run at the Pair code: the public guards (value zero, ABI
 head, unlocked, nonstatic), the four own external calls in order with their requests,
 full replies and decoded words, both checked surpluses, both transfer acceptances, and
-the final unlock store. The second half is stated for a fitting transfer0 reply pointer
-(`skimFirstPointer_fit` discharges it for every reply below 2^128 bytes). -/
+the final unlock store. The second half is unconditional: transfer0's actual 68-byte CALL
+bounds its reply below `2^160` bytes (the Jaune operand-derived bound), and
+`skimFirstPointer_fit` turns that into the moved-pointer fit. -/
 theorem skim_raw_flag_inv {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (selector : Blanc.Sevm.selector sevm = 0xbc25cf77)
@@ -524,8 +526,6 @@ theorem skim_raw_flag_inv {sevm : Sevm} {b post : Devm} {G : Nat}
       (32 : B256) ≤ sevm.data.length.toB256 - 4 ∧ b.getStorVal sevm.currentTarget 12 = 1 ∧
       SkimFirstFacts D sevm b [0x0257, 0xbc25cf77] getterInitMemory
         (skimToWord sevm) (fun d Mres _ =>
-          128 ≤ (skimFirstPointer d.returnData).toNat →
-          (skimFirstPointer d.returnData).toNat + 1024 < 2 ^ 256 →
           SkimSecondFlagFacts D sevm d Mres (skimFirstPointer d.returnData)
             (skimToken1 sevm b) (skimToken0 sevm b)
             (skimToWord sevm) 0x0257 [0xbc25cf77] post) := by
@@ -539,16 +539,26 @@ theorem skim_raw_flag_inv {sevm : Sevm} {b post : Devm} {G : Nat}
   obtain ⟨abi, _, h⟩ := skimWrapper_inv h
   obtain ⟨unlocked, _, h⟩ := skimLock_inv fork h
   refine ⟨value, size, abi, unlocked, ?_⟩
-  refine (skimFirstHalf_inv fork getterInitMemory_ptr h).mono ?_
-  intro out0 d Mres g memory hM tail low high
+  obtain ⟨static, code0, gw, callGas, d0, out0, call0, post0, long0, bound0, answered0,
+    cover0, helperGas, forwarded, callGas', d, residual, helper, step, calldata, memory,
+    output, width, accepted, tail⟩ :=
+    skimFirstHalf_inv fork getterInitMemory_ptr h
+  have width160 : d.returnData.length < 2 ^ 160 :=
+    Jaune.call_returnData_length_lt_two_pow_160_of_input_size
+      (StepIn.toRun step) rfl fork.rules_stateGas_none
+      (by decide : (68 : B256).toNat < 2 ^ 160)
+  have fit := skimFirstPointer_fit width160
+  refine ⟨static, code0, gw, callGas, d0, out0, call0, post0, long0, bound0, answered0,
+    cover0, helperGas, forwarded, callGas', d, residual, helper, step, calldata, memory,
+    output, width, accepted, ?_⟩
   have reply := balanceReplyMemory_ptr out0
     (balanceRequestMemory_ptr getterInitMemory_ptr sevm.currentTarget)
   have ptr := skimAfterFirst_ptr (a0 := Bytes.toB256 (out0.take 32) -
     skimReserve0 sevm b) (toWord := skimToWord sevm)
     (reply := d.returnData) reply
-  rw [← memory, ← hM] at ptr
+  rw [← memory] at ptr
   obtain ⟨_, mem⟩ := ptr
-  exact skimSecondHalf_flag_inv fork (p := skimFirstPointer d.returnData) mem low high tail
+  exact skimSecondHalf_flag_inv fork (p := skimFirstPointer d.returnData) mem fit.1 fit.2 tail
 
 /-- The same raw inverse without transfer1's success flag. -/
 theorem skim_raw_inv {sevm : Sevm} {b post : Devm} {G : Nat}
@@ -560,18 +570,16 @@ theorem skim_raw_inv {sevm : Sevm} {b post : Devm} {G : Nat}
       (32 : B256) ≤ sevm.data.length.toB256 - 4 ∧ b.getStorVal sevm.currentTarget 12 = 1 ∧
       SkimFirstFacts D sevm b [0x0257, 0xbc25cf77] getterInitMemory
         (skimToWord sevm) (fun d Mres _ =>
-          128 ≤ (skimFirstPointer d.returnData).toNat →
-          (skimFirstPointer d.returnData).toNat + 1024 < 2 ^ 256 →
           SkimSecondFacts D sevm d Mres (skimFirstPointer d.returnData)
             (skimToken1 sevm b) (skimToken0 sevm b)
             (skimToWord sevm) 0x0257 [0xbc25cf77] post) := by
   intro D
   obtain ⟨value, size, abi, unlocked, first⟩ := skim_raw_flag_inv codeEq fork selector run
   refine ⟨value, size, abi, unlocked, first.mono ?_⟩
-  intro _ d Mres g _ _ second low high
+  intro _ d Mres g _ _ second
   obtain ⟨codeNonzero, gw, callGas, d1, out1, call, post1, width, bound, answered, cover,
     forwarded, callGas', V, d2, call2, _, calldata, output, width2, accepted2, M', g', final⟩ :=
-    second low high
+    second
   exact ⟨codeNonzero, gw, callGas, d1, out1, call, post1, width, bound, answered, cover,
     forwarded, callGas', V, d2, call2, calldata, output, width2, accepted2, M', g', final⟩
 

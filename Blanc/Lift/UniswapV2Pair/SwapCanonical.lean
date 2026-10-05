@@ -178,13 +178,13 @@ theorem swap_event_image {K : WriterKey → Prop} {frame : Frame} {locals : Swap
     ← swap_input_word locals.reserves.reserve1.isLt cut.out1, cut.sender, recipient]
 
 /-- **Canonical swap frame, with foreign storage.** Every successful raw swap run of the
-original bytes, under trace-local HASH-T over `WriterExtend K (swapTraceKeys root)` and the
-CALL reply bound `short`, satisfies `SwapCanonicalBody` with the foreign-storage silence of the
+original bytes, under trace-local HASH-T over `WriterExtend K (swapTraceKeys root)`,
+satisfies `SwapCanonicalBody` with the foreign-storage silence of the
 post-callback tail: every account other than the Pair keeps, at the end, the storage the
 callback (or the last taken transfer) left; and the lock prefix before the first external call
 touches no foreign account. Between those points foreign storage changes only inside the
-actual transfer/callback CALL steps the body names.
-CROSS-HOST: conditional on `SwapCallReplyShort`. -/
+actual transfer/callback CALL steps the body names. Each taken transfer's reply bound is
+derived from its own actual 68-byte CALL (`swapTransferCall_replyShort`). -/
 theorem swap_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Checkpoint}
     {sevm : Sevm} {b post : Devm} {G : Nat}
     (invocation : List Nat)
@@ -198,8 +198,7 @@ theorem swap_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Che
     (hashTInj : WriterInj (WriterExtend K
       (swapTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)))
     (hashTApart : WriterApart (WriterExtend K
-      (swapTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)))
-    (short : SwapCallReplyShort ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm) :
+      (swapTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩))) :
     (∀ a, a ≠ sevm.currentTarget → (swapPrefixWorld sevm b).getStor a = b.getStor a) ∧
     SwapCanonicalBody (fun d => ∀ a, a ≠ sevm.currentTarget → post.getStor a = d.getStor a)
       K current invocation run := by
@@ -225,7 +224,7 @@ theorem swap_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Che
     p, n, M, gas, calleePost, opt0, opt1, optC, shape0, shape1, shapeC, reach, checkpoint, context,
     sub', cut, ⟨added, L, frameLogs, cutLogs, images⟩, auth, body, tail, codeD⟩ :=
     swap_bytecode_front_cut_code invocation rep sem image installed freshOutput codeEq fork selector
-      run hashTInj hashTApart sub lockedGood short
+      run hashTInj hashTApart sub lockedGood
   have installedD : some (d.getCode sevm.currentTarget).toList = sem.image := by
     rw [codeD]
     exact installed
@@ -265,9 +264,9 @@ theorem swap_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Che
 /-- **Canonical swap frame.** Every successful raw swap run of the original bytes consumes the
 typed source swap over the actual transcript, in all six successful shapes (each optimistic
 transfer present iff its amount is nonzero, the callback present iff the data is nonempty),
-under trace-local HASH-T over `WriterExtend K (swapTraceKeys root)` and the explicit CALL reply
-bound `short` (every actual CALL step of this derivation returns fewer than `2^160` bytes).
-CROSS-HOST: conditional on `SwapCallReplyShort`. -/
+under trace-local HASH-T over `WriterExtend K (swapTraceKeys root)`. Each taken transfer's
+reply bound (below `2^160` bytes) is derived from its own actual 68-byte CALL
+(`swapTransferCall_replyShort`). -/
 theorem swap_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpoint}
     {sevm : Sevm} {b post : Devm} {G : Nat}
     (invocation : List Nat)
@@ -281,14 +280,13 @@ theorem swap_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
     (hashTInj : WriterInj (WriterExtend K
       (swapTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)))
     (hashTApart : WriterApart (WriterExtend K
-      (swapTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)))
-    (short : SwapCallReplyShort ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm) :
+      (swapTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩))) :
     SwapCanonicalBody (fun _ => True) K current invocation run := by
   obtain ⟨_, value, nonstatic, frame, T0, T1, TC, turns0, turns1, turnsC, b1, b2, d, d0, d1, M1, M2,
     M, p1, p, out0, out1, views0, views1, final, rets, K', added, c1, c2, c3, c4, c5, c6, c7, c8, c9,
     c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, _⟩ :=
     swap_bytecode_exact_consumes_own invocation rep sem image installed freshOutput codeEq fork
-      selector run hashTInj hashTApart short
+      selector run hashTInj hashTApart
   exact ⟨value, nonstatic, frame, T0, T1, TC, turns0, turns1, turnsC, b1, b2, d, d0, d1, M1, M2,
     M, p1, p, out0, out1, views0, views1, final, rets, K', added, c1, c2, c3, c4, c5, c6, c7, c8, c9,
     c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, trivial⟩

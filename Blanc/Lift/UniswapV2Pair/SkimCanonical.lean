@@ -121,8 +121,6 @@ theorem skim_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Che
       (∀ a, Devm.getStor (temporalAccountAccessBase (afterSload sevm d 8)
         (skimToken1 sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr) a =
           Devm.getStor d a) ∧
-      (128 ≤ (skimFirstPointer d.returnData).toNat →
-        (skimFirstPointer d.returnData).toNat + 1024 < 2 ^ 256 →
       ∃ (out1 : Bytes) (d2 : Devm) (views0 views1 : List StaticViewTurn)
         (turns1 turns3 : List MutableTurn) (final : Frame) (rets : List ChildReturn)
         (K' : WriterKey → Prop) (added : List PendingLog),
@@ -180,7 +178,7 @@ theorem skim_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Che
           (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots root.exc) ∧
           turns3.map MutableTurn.event =
             Exec.targetLogEventsFrom sevm.currentTarget [] 0 childRun committed) ∧
-        post.output = []) := by
+        post.output = [] := by
   intro root ctx recipient
   let U := WriterExtend K (skimTraceKeys root)
   have sub : ∀ k, K k → U k := fun k tracked => Or.inl tracked
@@ -219,8 +217,7 @@ theorem skim_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Che
       afterSstore_getStor_ne _ _ _ _ _ (Ne.symm foreign), afterSload_getStor]
   · intro a
     rw [skim_tAAB_getStor, afterSload_getStor]
-  intro low high
-  have secondFacts := second low high
+  have secondFacts := second
   unfold SkimSecondFlagFacts at secondFacts
   dsimp only at secondFacts
   obtain ⟨_, _, _, d1, out1, call2, post2, long1, _, _, cover1, _, _, _, d2, call3, flag3, _,
@@ -376,7 +373,8 @@ theorem skim_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Che
 
 /-- Canonical skim frame: every successful raw skim run consumes the typed source skim
 over turn queues derived from its actual children, under trace-local HASH-T. The second
-half is stated for a fitting transfer0 reply pointer (`skimFirstPointer_fit`). -/
+half is unconditional: transfer0's actual CALL bounds its reply below `2^160` bytes, and
+`skimFirstPointer_fit` turns that into the moved-pointer fit. -/
 theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpoint}
     {sevm : Sevm} {b post : Devm} {G : Nat}
     (invocation : List Nat)
@@ -396,8 +394,6 @@ theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
     let recipient := skimRecipient sevm
     sevm.value = 0 ∧ sevm.isStatic = false ∧
     ∃ (out0 : Bytes) (d : Devm), SkimFirstSteps root sevm b out0 d ∧
-      (128 ≤ (skimFirstPointer d.returnData).toNat →
-        (skimFirstPointer d.returnData).toNat + 1024 < 2 ^ 256 →
       ∃ (out1 : Bytes) (d2 : Devm) (views0 views1 : List StaticViewTurn)
         (turns1 turns3 : List MutableTurn) (final : Frame) (rets : List ChildReturn)
         (K' : WriterKey → Prop) (added : List PendingLog),
@@ -454,14 +450,14 @@ theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
           (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots root.exc) ∧
           turns3.map MutableTurn.event =
             Exec.targetLogEventsFrom sevm.currentTarget [] 0 childRun committed) ∧
-        post.output = []) := by
+        post.output = [] := by
   intro root ctx recipient
   obtain ⟨value, nonstatic, out0, d, first, _, _, rest⟩ :=
     skim_bytecode_exact_consumes_own invocation rep sem image installed freshOutput codeEq fork
       selector run hashTInj hashTApart
-  refine ⟨value, nonstatic, out0, d, first, fun low high => ?_⟩
+  refine ⟨value, nonstatic, out0, d, first, ?_⟩
   obtain ⟨out1, d2, views0, views1, turns1, turns3, final, rets, K', added, second, _, result⟩ :=
-    rest low high
+    rest
   exact ⟨out1, d2, views0, views1, turns1, turns3, final, rets, K', added, second, result⟩
 
 end Blanc.Lift.UniswapV2Pair
