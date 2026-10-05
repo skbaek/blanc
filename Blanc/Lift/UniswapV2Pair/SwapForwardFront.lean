@@ -49,11 +49,10 @@ def swapFrontTransferGas (pre : Nat → B256 → Nat) (sevm : Sevm) (b d0 d1 : D
 
 /-- **Forward environment of the swap front half**, over the callee results `d0`, `d1`, `dC`
 and the `CALL` states' gas `cg0`, `cg1`, `cgC`: each taken token transfer's primitive `CALL`
-data (`SwapTransferCallForward`) and reply bound, the callback's primitive `CALL` data
-(`SwapCallbackCallForward`), and the lock-store stipend check. Each call's residual gas
-is tied to the next segment's need, ending at the join gas `Gc`. No successful suffix run is
-assumed.
-CROSS-HOST: conditional on `SwapForwardReplyShort`. -/
+data (`SwapTransferCallForward`; the reply bound is derived from the actual 68-byte `CALL`),
+the callback's primitive `CALL` data (`SwapCallbackCallForward`), and the lock-store
+stipend check. Each call's residual gas is tied to the next segment's need, ending at the
+join gas `Gc`. No successful suffix run is assumed. -/
 structure SwapFrontForwardEnv (pre : Nat → B256 → Nat) (post : Nat → B256 → Bytes → Nat)
     (sevm : Sevm) (b : Devm) (st : State) (d0 d1 dC : Devm) (cg0 cg1 cgC Gc : Nat) : Prop where
   transfer0 : swapAmount0Out sevm ≠ 0 → SwapTransferCallForward post sevm (swapPrefixWorld sevm b)
@@ -62,14 +61,12 @@ structure SwapFrontForwardEnv (pre : Nat → B256 → Nat) (post : Nat → B256 
     (swapOptGas pre (swapOptMem getterInitMemory 128 (swapAmount0Out sevm) (swapRecipientWord sevm) d0)
       (swapOptPtr 128 (swapAmount0Out sevm) d0) (swapAmount1Out sevm) cg1
       (swapFrontCallbackGas sevm b d0 d1 cgC Gc)) d0
-  short0 : swapAmount0Out sevm ≠ 0 → SwapForwardReplyShort d0
   transfer1 : swapAmount1Out sevm ≠ 0 → SwapTransferCallForward post sevm
     (swapOptWorld (swapAmount0Out sevm) (swapPrefixWorld sevm b) d0) (swapLocalsStack sevm st)
     (swapOptMem getterInitMemory 128 (swapAmount0Out sevm) (swapRecipientWord sevm) d0)
     (swapOptMem getterInitMemory 128 (swapAmount0Out sevm) (swapRecipientWord sevm) d0).size
     (swapOptPtr 128 (swapAmount0Out sevm) d0) (swapAmount1Out sevm) (swapRecipientWord sevm)
     st.token1.toB256 0x8e1 cg1 (swapFrontCallbackGas sevm b d0 d1 cgC Gc) d1
-  short1 : swapAmount1Out sevm ≠ 0 → SwapForwardReplyShort d1
   callback : swapDataLength sevm ≠ 0 → SwapCallbackCallForward sevm
     (swapFrontTransferWorld sevm b d0 d1) (swapLocalsStack sevm st)
     (swapFrontTransferMem sevm d0 d1) (swapFrontPtr sevm d0 d1) (swapRecipientWord sevm)
@@ -84,7 +81,7 @@ join, with the source-named locals (`swapLocalsStack`, the cut stack
 `swapCutStack (swapCutWords sevm st) 0x257 [0x022c0d9f]`). At the join
 the free-pointer carrier holds at `swapFrontPtr` with `128 ≤ p` and `p + 260 < 2^256`, and the
 output buffer is the entry one.
-CROSS-HOST: conditional on `SwapSafeTransferForward`, `SwapForwardReplyShort`. -/
+CROSS-HOST: conditional on `SwapSafeTransferForward`. -/
 theorem swapBody_front_exact {K : WriterKey → Prop} {st : State}
     {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
     {sevm : Sevm} {b d0 d1 dC : Devm} {cg0 cg1 cgC Gc : Nat}
@@ -129,7 +126,7 @@ theorem swapBody_front_exact {K : WriterKey → Prop} {st : State}
       (len := swapDataLength sevm) (start := swapDataStart sevm) (toWord := swapRecipientWord sevm)
       (a1 := swapAmount1Out sevm) (a0 := swapAmount0Out sevm) (ρ := 0x257)
       helper fork (by decide) getterInitMemory_ptr sentinel (by decide) (by decide)
-      env.transfer0 env.short0 env.transfer1 env.short1
+      env.transfer0 env.transfer1
   have width2 : p.toNat + 260 < 2 ^ 256 := by
     have : 2 ^ 163 + 260 < 2 ^ 256 := by decide
     simp only [p, swapFrontPtr]
