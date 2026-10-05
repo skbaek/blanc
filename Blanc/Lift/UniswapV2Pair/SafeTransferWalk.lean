@@ -2776,6 +2776,43 @@ theorem safeTransfer_dynamicCall_data {M : Mem} {p amount toWord : B256}
   rw [Blanc.Lift.copy68Memory_read (by rw [nat96, nat164])]
   exact safeTransfer_dynamicPayload_data wf lower width
 
+/-- The memory an actual `_safeTransfer` leaves at its return. (Moved down from
+`SwapTransfer` so the dynamic forward theorem sits with the stage lemmas.) -/
+def swapTransferMemory (M : Mem) (p amount toWord : B256) (reply : Bytes) : Mem :=
+  if reply = [] then safeTransfer_dynamicCallMemory M p amount toWord
+  else Blanc.Lift.bytesArrayMemory (safeTransfer_dynamicCallMemory M p amount toWord) (p + 164) reply
+
+/-- Forward `_safeTransfer` hypothesis (moved down from `SwapForwardTransfer`;
+statement unchanged): the `_safeTransfer` helper `t_1fdb_c57`, entered at free
+pointer `p` over memory of size `n` (with the zero slot `0x60` clear), reaches
+its actual token `CALL` after a pre-call charge `pre n p` with the canonical
+stack and staged memory; given that `CALL`'s primitive result (success flag on
+the caller's stack, an accepted optional-bool reply) and its residual gas
+`G + post n p reply`, the helper returns exactly to its caller with the
+transfer memory `swapTransferMemory` and gas `G`. The charge functions are
+parameters: for `p = 128` and `n = 192` the existing `safeTransfer_first_exact`
+fixes `pre = 620`. -/
+def SwapSafeTransferForward (pre : Nat → B256 → Nat) (post : Nat → B256 → Bytes → Nat) :
+    Prop :=
+  ∀ (sevm : Sevm) (b d : Devm) (L : List B256) (M : Mem) (n callGas G : Nat)
+    (p amount toWord token rho : B256),
+    CoveredFork sevm.benvStat.fork → PtrMem p n M → memWord M 96 = 0 →
+    128 ≤ p.toNat → p.toNat + 260 < 2 ^ 256 → L.length ≤ 1000 →
+    Ninst.RunCompiled sevm
+      (St b (callGas.toB256 :: (token &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        0 :: (p + 164) :: 68 :: (p + 164) :: 0 :: (68 + (p + 164)) ::
+        (token &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount :: toWord :: token :: rho :: L)
+        (safeTransfer_dynamicCallMemory M p amount toWord) callGas) (.exec .call) d →
+    d.stack = 1 :: (68 + (p + 164)) :: (token &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+      96 :: 0 :: amount :: toWord :: token :: rho :: L →
+    (d.returnData = [] ∨ (32 ≤ d.returnData.length ∧
+      Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0)) →
+    d.gasLeft = G + post n p d.returnData →
+    SFunc.RunExact cert.prog sevm
+      (St b (amount :: toWord :: token :: rho :: L) M (callGas + pre n p)) t_1fdb_c57
+      (.returned (St d L (swapTransferMemory M p amount toWord d.returnData) G))
+
 /-- The actual arbitrary-pointer initializer normalizes to the moving payload
 image, with its real allocation and all copy operands. The pointer bounds
 are intermediate obligations supplied by the first reply's producer. -/
