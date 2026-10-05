@@ -361,7 +361,10 @@ plus HASH-T freshness of its own `pairDerivKeys` gives `PairStepOutcome` from `f
 swapPrefixGas … + 445`, `SwapSafeTransferForward` a named premise). Skim and burn instances are one
 `pair_live_outcome` call each once their forward theorems land. Model-acceptance bridges: writers
 (`startImmediate` at `finish`), sync (`finish.unlocked = 1` and `State.update` accepting the answers,
-`State.update_bounds`), swap (`runTyped_swap_success_reserves`). Mint's acceptance conditions stay inside
-`MintPrefixForwardEnv` (lock word, bounds, cover, pricing), as do swap's answer-level facts inside
-`SwapBackForwardEnv` (input, `K`, bounds). U3 fee-on: `SourceReplay.feeOn_product`,
+`State.update_bounds`), swap (`SwapModelConditions` at the actual post-callback answers; the back half's
+input guard, `K` facts and bounds from `swapCheck_raw`, `SwapBackCalleeEnv` in `SwapForwardAccept.lean`),
+mint (`MintModelConditions` at the actual token and `feeTo` answers; the lock word, bounds, cover, fee
+guards and pricing facts from `MintPrefixCallee.accepted` in `MintForwardAccept.lean`, with HASH-T
+freshness of the address-zero, recipient and `feeTo` LP rows). Every callee environment now carries
+only callee answers, returned gas, charge equations and residual sentries. U3 fee-on: `SourceReplay.feeOn_product`,
 `pair_history_feeOn_product`.

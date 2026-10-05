@@ -1,6 +1,7 @@
 import Blanc.Lift.UniswapV2Pair.PairHistory
 import Blanc.Lift.UniswapV2Pair.ReplayWriterGas
 import Blanc.Lift.UniswapV2Pair.SwapForwardAccept
+import Blanc.Lift.UniswapV2Pair.MintForwardAccept
 import Blanc.SlotFootprintRestrict
 
 /-!
@@ -153,26 +154,6 @@ theorem pair_history_writer_live {pair : Adr} {cfg : ChainConfig} {checkpoint fu
   refine ⟨run, ?_, result⟩
   cases writer <;> rfl
 
-/-- The model's reserve update accepts only balances that fit `uint112`. -/
-theorem State.update_bounds {st : State} {ctx : Context} {balance0 balance1 : B256}
-    {reserve0 reserve1 : Nat} {result : State × Event × OracleUpdate}
-    (accepted : st.update ctx balance0 balance1 reserve0 reserve1 = .ok result) :
-    balance0.toNat < 2 ^ 112 ∧ balance1.toNat < 2 ^ 112 := by
-  rw [State.update] at accepted
-  by_cases bound0 : balance0.toNat < 2 ^ 112
-  · rw [dite_eq_left bound0] at accepted
-    by_cases bound1 : balance1.toNat < 2 ^ 112
-    · exact ⟨bound0, bound1⟩
-    · rw [dite_eq_right bound1] at accepted
-      cases accepted
-  · rw [dite_eq_right bound0] at accepted
-    cases accepted
-
-/-- The stored lock word is the model's lock. -/
-theorem WriterRep.unlocked_word {K : WriterKey → Prop} {s : Stor} {st : State}
-    (rep : WriterRep K s st) : s.get 12 = st.unlocked :=
-  rep.fixed.2.2.2.2.2.2.2.2.2.2.2
-
 /-- **`sync` after any configured history.**  When the model accepts `sync` at the history's state
 `finish` — the lock is open and its reserve update accepts the two actual `balanceOf(pair)` answers —
 a pc-zero run exists at gas `syncCalleePrefixGas sevm pre callGas0 + 15 + 229` (the lock, cache and
@@ -293,14 +274,17 @@ theorem pair_history_sync_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
   exact ⟨post, run, gas, fun newFresh => pair_live_outcome initial fresh futureCode replayed run
     target state codeEq fork output representable newFresh⟩
 
-/-- **`mint` after any configured history.**  Given the mint forward environment at the future world
-(`MintPrefixForwardEnv`: the two token `balanceOf` calls and the factory `feeTo` call with their replies
-and returned gas, the fee branch, the pricing arm and their charges; it carries the lock word, the
-`uint112` bounds and the cover of the actual answers), a pc-zero run exists at gas `env.gas + 228`
-(`env.gas`: the gas `callGas0` forwarded to token0 plus the closed lock, cache and request charges
-`sloadCost`/`sstoreCost`/`temporalAccountAccessCost`) ending at gas `G` and returning the liquidity
-word; under HASH-T freshness of its own rows its post storage represents the model's next state from
-the history's state `finish`. -/
+/-- **`mint` after any configured history.**  When the model accepts the mint at the history's state
+`finish` with the frame's actual answers (`MintModelConditions`: non-payable and non-static, the lock
+open, both token `balanceOf(pair)` answers covering the reserves, the protocol-fee mint at the
+factory's `feeTo` answer, the pricing, the minimum and recipient LP credits, positive liquidity and the
+reserve update all accepted), then given the callee-only environment at the future world
+(`MintPrefixCallee`: the three `STATICCALL`s with their replies and returned gas, and the charge
+equations and residual sentries) and HASH-T freshness of the LP rows of address zero, the recipient and
+the `feeTo` answer against the history universe, a pc-zero run exists at gas `callee.gas + 228`
+(`callee.gas`: the gas `callGas0` forwarded to token0 plus the closed lock, cache and request charges)
+ending at gas `G` and returning the liquidity word; under HASH-T freshness of its own rows its post
+storage represents the model's next state from `finish`. -/
 theorem pair_history_mint_live {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     {K₀ : WriterKey → Prop} {st₀ : State}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
@@ -314,27 +298,49 @@ theorem pair_history_mint_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
     (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
     (guard : (32 : B256) ≤ sevm.data.length.toB256 - 4)
     (selector : Blanc.Sevm.selector sevm = 0x6a627842)
-    (env : MintPrefixForwardEnv sevm pre [0x6a627842] getterInitMemory
-      (Sevm.dataWord sevm 4).toAdr.toB256 0x039b (G + 43)) :
+    (callee : MintPrefixCallee sevm pre [0x6a627842] getterInitMemory
+      (Sevm.dataWord sevm 4).toAdr.toB256 0x039b (G + 43))
+    (rowsFresh : WriterFreshKeys (pairHistoryUniverse pair trace K₀)
+      (lpMintTouched (0 : B256).toAdr ++ lpMintTouched (Sevm.dataWord sevm 4).toAdr ++
+        lpMintTouched callee.feeTo)) :
     ∃ (finish : State) (K' : WriterKey → Prop), PairHistoryReplayed pair trace K₀ st₀ finish K' ∧
-      ∃ (liquidity : B256)
-        (run : Exec 0 sevm (St pre [] Mem.empty (env.gas + 228))
-          (.ok (getterWordPost env.fee.post [0x6a627842] env.fee.post.memory liquidity G))),
-        (getterWordPost env.fee.post [0x6a627842] env.fee.post.memory liquidity G).gasLeft = G ∧
-        (getterWordPost env.fee.post [0x6a627842] env.fee.post.memory liquidity G).output =
-          liquidity.toBytes ∧
-        (WriterFreshKeys (pairHistoryUniverse pair trace K₀)
-            (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty (env.gas + 228), .ok _, run⟩) →
-          PairStepOutcome PairFrameAuth
-            (WriterExtend (pairHistoryUniverse pair trace K₀)
-              (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty (env.gas + 228), .ok _, run⟩))
-            { state := finish, logs := [], updates := [] } [] K'
-            ⟨0, sevm, St pre [] Mem.empty (env.gas + 228), .ok _, run⟩
-            (getterWordPost env.fee.post [0x6a627842] env.fee.post.memory liquidity G)) := by
+      (MintModelConditions finish (writerContext sevm []) (Sevm.dataWord sevm 4).toAdr
+          callee.balance0 callee.balance1 callee.feeTo →
+        ∃ (liquidity : B256)
+          (run : Exec 0 sevm (St pre [] Mem.empty (callee.gas + 228))
+            (.ok (getterWordPost callee.fee.post [0x6a627842] callee.fee.post.memory liquidity G))),
+          (getterWordPost callee.fee.post [0x6a627842] callee.fee.post.memory liquidity G).gasLeft = G ∧
+          (getterWordPost callee.fee.post [0x6a627842] callee.fee.post.memory liquidity G).output =
+            liquidity.toBytes ∧
+          (WriterFreshKeys (pairHistoryUniverse pair trace K₀)
+              (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty (callee.gas + 228), .ok _, run⟩) →
+            PairStepOutcome PairFrameAuth
+              (WriterExtend (pairHistoryUniverse pair trace K₀)
+                (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty (callee.gas + 228), .ok _, run⟩))
+              { state := finish, logs := [], updates := [] } [] K'
+              ⟨0, sevm, St pre [] Mem.empty (callee.gas + 228), .ok _, run⟩
+              (getterWordPost callee.fee.post [0x6a627842] callee.fee.post.memory liquidity G))) := by
   obtain ⟨futureCode, finish, K', replayed⟩ := pair_history_replayed trace installed initial fresh
+  refine ⟨finish, K', replayed, fun conditions => ?_⟩
+  have hist : WriterRep (pairHistoryUniverse pair trace K₀) (checkpoint.state.getStor pair) st₀ :=
+    initial.extend fresh
+  obtain ⟨rep, inside⟩ := replayed.at_frame target state
+  have rowIn : ∀ k ∈ lpMintTouched (0 : B256).toAdr ++ lpMintTouched (Sevm.dataWord sevm 4).toAdr ++
+      lpMintTouched callee.feeTo,
+      WriterExtend (pairHistoryUniverse pair trace K₀)
+        (lpMintTouched (0 : B256).toAdr ++ lpMintTouched (Sevm.dataWord sevm 4).toAdr ++
+          lpMintTouched callee.feeTo) k := fun k member => Or.inr member
+  obtain ⟨env, envGas, envPost⟩ := callee.accepted fork rep (hist.inj.extend rowsFresh)
+    (hist.apart.extend rowsFresh) (fun k tracked => Or.inl (inside k tracked))
+    (rowIn _ (by simp only [lpMintTouched, List.mem_append, List.mem_singleton, or_true]))
+    (rowIn _ (by simp only [lpMintTouched, List.mem_append, List.mem_singleton, true_or]))
+    (rowIn _ (by simp only [lpMintTouched, List.mem_append, List.mem_singleton, true_or, or_true]))
+    conditions
   obtain ⟨liquidity, ⟨run⟩, returned⟩ :=
     mintBytecode_exact codeEq fork value size guard selector env
-  exact ⟨finish, K', replayed, liquidity, run, rfl, returned, fun newFresh =>
+  rw [envGas, envPost] at run
+  rw [envPost] at returned
+  exact ⟨liquidity, run, rfl, returned, fun newFresh =>
     pair_live_outcome initial fresh futureCode replayed run target state codeEq fork output
       representable newFresh⟩
 
