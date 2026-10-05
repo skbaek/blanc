@@ -250,23 +250,10 @@ theorem burnTransfers_source_cut {U K : WriterKey → Prop} {frame : Frame} {pri
     rw [burn_resumeTransfer1 accepted1']
     exact rest
 
-/-- **Burn transfers through the final source return.** Starting at the produced
-post-pricing cut, the actual mutable queues and final balance views consume the
-source to its exact payout, represented returned world and unlock. Full pc-zero
-entry, initial queries and the fee-source prefix remain separate producers. -/
-theorem burnTransfers_source_finished {U K : WriterKey → Prop} {frame : Frame} {priced : BurnPriced}
-    {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnFinalWords} {ρ : B256}
-    {G : Nat} {M : Mem} {R : List B256} {o : Outcome}
-    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
-    (fork : CoveredFork sevm.benvStat.fork) (cut : BurnTransferCut K frame priced sevm b w M)
-    (good : ∀ F ∈ Exec.rawFrameRoots D.exc,
-      F.sevm.currentTarget = sevm.currentTarget → LockedGood U F)
-    (staticGood : ∀ F ∈ Exec.rawFrameRoots D.exc, F.sevm.currentTarget = frame.context.pair →
-      ∀ k ∈ staticViewDecodedKeys F.sevm, U k)
-    (run : SFunc.RunCutP (StepIn D) cert.prog sevm []
-      (St b (burnFinalStack w ρ R) M G) t_168d_c13 (.done o)) :
+/-- Complete observable result of the actual transfer/final-balance source suffix. -/
+def BurnTransferFinished (U : WriterKey → Prop) (frame : Frame) (priced : BurnPriced)
+    (D : Exec.Deriv) (sevm : Sevm) (b : Devm) (w : BurnFinalWords)
+    (M : Mem) (ρ : B256) (R : List B256) (o : Outcome) : Prop :=
     ∃ (K' : WriterKey → Prop) (d0 d1 : Devm) (entered0 entered1 : Bool)
       (turns0 turns1 : List MutableTurn) (final : Frame) (rets : List ChildReturn)
       (transcript : Transcript) (post : Devm) (finalM : Mem) (gas n : Nat)
@@ -294,7 +281,26 @@ theorem burnTransfers_source_finished {U K : WriterKey → Prop} {frame : Frame}
         [⟨frame.context.pair, [updateSyncTopic], encodeWords [balance0, balance1]⟩,
          ⟨frame.context.pair,
            [burnEventTopic, frame.context.sender.toB256, priced.observed.locals.recipient.toB256],
-           encodeWords [priced.amount0, priced.amount1]⟩] := by
+           encodeWords [priced.amount0, priced.amount1]⟩]
+
+/-- **Burn transfers through the final source return.** Starting at the produced
+post-pricing cut, the actual mutable queues and final balance views consume the
+source to its exact payout, represented returned world and unlock. Full pc-zero
+entry, initial queries and the fee-source prefix remain separate producers. -/
+theorem burnTransfers_source_finished {U K : WriterKey → Prop} {frame : Frame} {priced : BurnPriced}
+    {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnFinalWords} {ρ : B256}
+    {G : Nat} {M : Mem} {R : List B256} {o : Outcome}
+    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
+    (fork : CoveredFork sevm.benvStat.fork) (cut : BurnTransferCut K frame priced sevm b w M)
+    (good : ∀ F ∈ Exec.rawFrameRoots D.exc,
+      F.sevm.currentTarget = sevm.currentTarget → LockedGood U F)
+    (staticGood : ∀ F ∈ Exec.rawFrameRoots D.exc, F.sevm.currentTarget = frame.context.pair →
+      ∀ k ∈ staticViewDecodedKeys F.sevm, U k)
+    (run : SFunc.RunCutP (StepIn D) cert.prog sevm []
+      (St b (burnFinalStack w ρ R) M G) t_168d_c13 (.done o)) :
+    BurnTransferFinished U frame priced D sevm b w M ρ R o := by
   obtain ⟨K2, d0, d1, entered0, entered1, turns0, turns1, rets0, rets1, frame2, N, n, gas,
       sub2, calls, provenance0, provenance1, checkpoint2, context2, finalCut,
       installed2, tail, ⟨added0, added1, L0, L1, _, raw, images0, images1⟩, lift⟩ :=
