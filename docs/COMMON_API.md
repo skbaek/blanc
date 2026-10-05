@@ -3381,6 +3381,10 @@ contract-neutral.
   `seven` assembly mode (`check.assembly`), so sibling seven-entry
   certificates share the assembly instead of repeating the generic
   conjunction; hand-written `Jumps` modules call `jumpsOk_seven` directly.
+- Assemble a two-entry non-memory certificate with `Cert.check_two` (the two node checks plus
+  the startup Boolean) in [`Blanc/Lift/CheckAssemblyPair.lean`](../Blanc/Lift/CheckAssemblyPair.lean),
+  emitted by the registered producer in its opt-in `two` assembly mode (`check.assembly`); its own
+  module, so adding it rebuilt no existing certificate.
 - Execution to lifted run (safety): `lift_sound`, and `lift_sound_in`, which
   keeps each step's derivation (`StepIn`) for arguments about re-entrant child
   frames, in [`Blanc/Lift/Sound.lean`](../Blanc/Lift/Sound.lean).
@@ -3608,6 +3612,18 @@ contract-neutral.
   constructors need (`rx_push0`, `rx_slt`, `rx_codesize`, `rx_log2`, and `read_covered_len`, a
   window of any length inside an aligned image) in
   [`Blanc/Lift/CreationOps.lean`](../Blanc/Lift/CreationOps.lean).
+- The settled world of a zero-value CREATE as a closed term of its input world (so a later
+  message that takes it as `origState` can evaluate it): the entry world `entryState` and
+  `entry_state` (storage cleared, nonce incremented, the zero debit and credit, in Jaune's own
+  order), and `liftCreatePost_state` (the constructor's world with its output installed) in
+  [`Blanc/Lift/CreateEntry.lean`](../Blanc/Lift/CreateEntry.lean).
+- Creating an EIP-1167 clone of any implementation `I` by the 9-byte copier `602d3d8160093d39f3`:
+  `creationCode I` (copier ++ `forwarderCode I`), its certificate `copierCert`, the 28-gas walk
+  `run`, and `create` — a zero-value CREATE on every covered fork leaves `msg.gas - 28 - 9000`,
+  installs `forwarderCode I` with empty storage (`cloneAcct`), keeps every other account, and states
+  the settled world exactly — given the consumer's registered `Cert.check` of its input, in
+  [`Blanc/Lift/Clone1167.lean`](../Blanc/Lift/Clone1167.lean). A modeled harness: a consumer labels
+  its registered input synthetic (worked use: `Lift/VyperNonreentrantDeployed/Vulnerable/Reach/Deploy.lean`).
 - Gas-exact writer walks for solc-0.4-style runtimes: the scratch-memory invariant `FpMem n M` (word-aligned,
   free pointer `0x60`, kept for an arbitrary `M`; `FpMem.init`, `FpMem.write`, `FpMem.write_out`,
   `FpMem.readback`, `scratchW`), its steps (`rx_mstoreF`, `rx_mstoreOut`, `rx_mloadFp`, `rx_keccakF`,
