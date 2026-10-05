@@ -1,5 +1,6 @@
 import Blanc.Composition.UniswapV2PairWeth9
 import Blanc.Lift.UniswapV2Pair.PairCallShape
+import Blanc.Composition.Weth9SettledCallers
 
 /-!
 # The pair-side input of the WETH9 adapter: what the pair calls at WETH9
@@ -13,7 +14,7 @@ derives it from what the Pair code calls:
   fallback, a deposit;
 * `holderCalls_of_settled`: `HolderCalls` over the committed invocations follows from that property of
   every settled non-static WETH9 frame whose caller is `p`;
-* `pairCalls_holderCalls`: by the generic caller fold (`ConfiguredHistoryTrace.settledFrames_callerTarget`)
+* `pairCalls_holderCalls`: by the generic caller fold (`ConfiguredHistoryTrace.settledFrames_callerTarget_of_children`)
   such a frame is a direct child of a settled Pair frame, so the Pair's call shape
   (`pair_callsTransferOrCallback`) supplies it;
 * `weth9_history_holder_noShrink_pairCalls`: the adapter's history theorem with `HolderCalls`
@@ -94,20 +95,18 @@ def PairSendsNoRootMessage (p : Adr) {cfg : ChainConfig} {checkpoint future : Bl
     (trace : ConfiguredHistoryTrace cfg checkpoint future) : Prop :=
   ∀ R ∈ trace.settledRoots, R.sevm.caller ≠ p
 
-/-- LANE-OPEN OBLIGATION (second host): discharged by this lane's WETH9-side
-work: a direct child of a settled WETH9 frame that stays at `ca` is called by `ca` itself.  Expected
-source: the WETH9 certificate executes no external instruction but the `withdraw` CALL
-(`SFunc.execsSatisfy`, as in `Blanc/Lift/StaticOnlyFrames.lean`), a CALL spawn hands the current
-target as caller, and every settled frame at `ca` runs the WETH9 code (the accounting ladder's
-`CodeSem.At` invariant behind `weth9_history_committed`, which is not exported per frame). -/
+/-- A direct child of a settled non-static WETH9 frame is called by `ca` itself.  Discharged over the
+WETH9 history premises by `weth9_history_settled_children_caller`
+(`Blanc/Composition/Weth9SettledCallers.lean`). -/
 def Weth9SelfTargetChildren (ca : Adr) {cfg : ChainConfig} {checkpoint future : BlockChain}
     (trace : ConfiguredHistoryTrace cfg checkpoint future) : Prop :=
-  ∀ G ∈ trace.settledFrames, G.sevm.currentTarget = ca →
-    ∀ c ∈ Exec.childFrames G.run, c.sevm.currentTarget = ca → c.sevm.caller = ca
+  ∀ G ∈ trace.settledFrames, G.sevm.currentTarget = ca → G.sevm.isStatic = false →
+    ∀ c ∈ Exec.childFrames G.run, c.sevm.caller = ca
 
-/-- **The pair's WETH9 calls are transfers or deposits, over a configured history.**
+/-- **The pair's WETH9 calls are transfers or deposits, over a configured history.**  The WETH9 side
+enters as `Weth9SelfTargetChildren` (proved from the history premises in the headline below).
 CROSS-HOST: conditional on BurnCallShape, PairFramesRunPairCode, PairSendsNoRootMessage.
-LANE-OPEN: conditional on QuietEntriesCallShape, SkimCallShape, SwapCallShape, Weth9SelfTargetChildren. -/
+LANE-OPEN: conditional on QuietEntriesCallShape, SkimCallShape, SwapCallShape. -/
 theorem pairCalls_holderCalls {ca p : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (trace : ConfiguredHistoryTrace cfg checkpoint future) (apart : p ≠ ca)
     (quiet : UniswapV2Pair.QuietEntriesCallShape) (skim : UniswapV2Pair.SkimCallShape)
@@ -119,10 +118,10 @@ theorem pairCalls_holderCalls {ca p : Adr} {cfg : ChainConfig} {checkpoint futur
   have roots : ∀ R ∈ trace.settledRoots, CallerTarget p ca (WethQ p) R.sevm := by
     intro R member _ caller
     exact (noRoot R member caller).elim
-  have issuers : ∀ G ∈ trace.settledFrames,
-      CallerIssuers p ca (WethQ p) G.sevm (Exec.childFrames G.run) := by
-    intro G member
-    refine ⟨fun target => ?_, fun target c hc ctarget => ?_⟩
+  have children : ∀ G ∈ trace.settledFrames,
+      CallerChildren p ca (WethQ p) G.sevm (Exec.childFrames G.run) := by
+    intro G member which
+    rcases which with target | target
     · obtain ⟨codeEq, pcZero, entry, fork⟩ := pairCode G member target
       obtain ⟨pc, sevm, pre, out, run, committed⟩ := G
       dsimp only at codeEq pcZero entry fork ⊢
@@ -136,14 +135,20 @@ theorem pairCalls_holderCalls {ca p : Adr} {cfg : ChainConfig} {checkpoint futur
             codeEq fork
           intro c hc _ _ static
           exact wethHolderSafe_of_selector (shape c hc static)
-    · rw [wethSelf G member target c hc ctarget]
-      exact fun same => apart same.symm
-  exact trace.settledFrames_callerTarget roots issuers
+    · intro c hc _ caller
+      cases static : G.sevm.isStatic
+      · rw [wethSelf G member target static c hc] at caller
+        exact (apart caller.symm).elim
+      · intro nonStatic
+        rw [Exec.childFrames_isStatic G.run static c hc] at nonStatic
+        cases nonStatic
+  exact trace.settledFrames_callerTarget_of_children roots children
 
 /-- **`weth9_history_holder_noShrink` with the pair-side `HolderCalls` discharged.**  As
-`weth9_history_holder_noShrink`, with `pairCalls` replaced by what the Pair code calls.
+`weth9_history_holder_noShrink`, with `pairCalls` replaced by what the Pair code calls; the WETH9 side
+(`Weth9SelfTargetChildren`) is proved from the same history premises.
 CROSS-HOST: conditional on BurnCallShape, PairFramesRunPairCode, PairSendsNoRootMessage.
-LANE-OPEN: conditional on QuietEntriesCallShape, SkimCallShape, SwapCallShape, Weth9SelfTargetChildren. -/
+LANE-OPEN: conditional on QuietEntriesCallShape, SkimCallShape, SwapCallShape. -/
 theorem weth9_history_holder_noShrink_pairCalls {ca p : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {K₀ : Key → Prop}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
@@ -158,14 +163,15 @@ theorem weth9_history_holder_noShrink_pairCalls {ca p : Adr} {cfg : ChainConfig}
     (apart : p ≠ ca)
     (quiet : UniswapV2Pair.QuietEntriesCallShape) (skim : UniswapV2Pair.SkimCallShape)
     (swap : UniswapV2Pair.SwapCallShape) (burn : UniswapV2Pair.BurnCallShape)
-    (pairCode : PairFramesRunPairCode p trace) (noRoot : PairSendsNoRootMessage p trace)
-    (wethSelf : Weth9SelfTargetChildren ca trace) :
+    (pairCode : PairFramesRunPairCode p trace) (noRoot : PairSendsNoRootMessage p trace) :
     ((checkpoint.state.getStor ca).get (balSlot p)).toNat ≤
         ((future.state.getStor ca).get (balSlot p)).toNat +
           holderOut p (replayCalls (committedInvocations ca trace)) ∧
       ∀ g, historyKeyUniverse ca trace K₀ (.allow p g) →
         (future.state.getStor ca).get (allowSlot p g) = 0 :=
   weth9_history_holder_noShrink trace installed sumNof initial fresh holderTracked allowZero
-    (pairCalls_holderCalls trace apart quiet skim swap burn pairCode noRoot wethSelf) budget
+    (pairCalls_holderCalls trace apart quiet skim swap burn pairCode noRoot
+      (Weth9SettledCallers.weth9_history_settled_children_caller trace installed sumNof initial fresh))
+    budget
 
 end Blanc.Composition.UniswapV2PairWeth9
