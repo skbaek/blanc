@@ -252,20 +252,22 @@ private theorem burnFee_finished_prepend {U : WriterKey → Prop}
     {frame : Frame} {priced : BurnPriced} {D : Exec.Deriv} {sevm : Sevm}
     {b : Devm} {w : BurnFinalWords} {M : Mem} {ρ : B256} {R : List B256} {o : Outcome}
     {start : SegmentResult} {wrap : Transcript → Transcript} {childPrefix : List ChildReturn}
-    (finished : BurnTransferFinished U frame priced D sevm b w M ρ R o)
+    {oldStart : SegmentResult} {oldWrap : Transcript → Transcript} {oldPrefix : List ChildReturn}
+    (finished : BurnTransferFinished U frame priced D sevm b w M ρ R o oldStart oldWrap oldPrefix)
     (reaches : ∀ tail out,
-      ExactConsumes (.suspended frame (burnTransferRequest0 priced) (.burnTransfer0 priced))
-        tail out → ExactConsumes start (wrap tail)
+      ExactConsumes oldStart tail out → ExactConsumes start (wrap tail)
           { out with childReturns := childPrefix ++ out.childReturns }) :
-    BurnTransferFinished U frame priced D sevm b w M ρ R o start wrap childPrefix := by
+    BurnTransferFinished U frame priced D sevm b w M ρ R o start
+      (fun tail => wrap (oldWrap tail)) (childPrefix ++ oldPrefix) := by
   obtain ⟨K', d0, d1, entered0, entered1, turns0, turns1, final, rets, transcript,
       post, finalM, gas, n, balance0, balance1, added0, added1, L0, L1,
       sub, calls, prov0, prov1, consumed, returned, rep, checkpoint, context, unlocked,
       mem, covered, bound0, bound1, raw, images0, images1, logs⟩ := finished
-  exact ⟨K', d0, d1, entered0, entered1, turns0, turns1, final, rets, transcript,
+  refine ⟨K', d0, d1, entered0, entered1, turns0, turns1, final, rets, transcript,
     post, finalM, gas, n, balance0, balance1, added0, added1, L0, L1,
-    sub, calls, prov0, prov1, reaches _ _ consumed, returned, rep, checkpoint, context, unlocked,
+    sub, calls, prov0, prov1, ?_, returned, rep, checkpoint, context, unlocked,
     mem, covered, bound0, bound1, raw, images0, images1, logs⟩
+  simpa only [List.append_assoc] using reaches _ _ consumed
 
 /-- The actual factory fee reply and its authenticated static turns prepend the
 complete pricing, transfer and final-return consumer. The source starts at the
@@ -333,17 +335,32 @@ theorem burnFee_source_finished {U K : WriterKey → Prop} {st : State}
   obtain ⟨views, turns, provenance⟩ :=
     burnFee_factory_turns observation prior rep state pair time inj apart sub
       sem image installed fork staticGood
-  refine ⟨residual, views, provenance, cut, burnFee_finished_prepend finished ?_, typed⟩
-  intro tail out consumed
-  refine ExactConsumes.nextCall (result := feeObservedResult observation.out)
-    (by simp only [feeObservedResult, Bool.not_true, Bool.and_false])
-    (by intro absent; cases absent) turns ?_
-  change ExactConsumes (resumeSegment prior
-    (requestFor .burnFeeTo (feeFactoryWord sevm b).toAdr .feeTo)
-    (.burnFee (feeBurnObserved toWord token1 token0 L b1 b0 r1 r0 bound0 bound1))
-    (feeObservedResult observation.out)) tail out
-  rw [typed]
-  exact consumed
+  let observed := feeBurnObserved toWord token1 token0 L b1 b0 r1 r0 bound0 bound1
+  let fee := feeBranchSourceFee st sevm (feeKLastWorld sevm observation.d)
+    (Bytes.toB256 (observation.out.take 32)) r0 r1
+  let frame := burnPricedFrame
+    (prior.beginResume (requestFor .burnFeeTo (feeFactoryWord sevm b).toAdr .feeTo)) observed fee
+  let priced := burnPricedSource observed fee (L * b0 / feePost.getStorVal sevm.currentTarget 0)
+    (L * b1 / feePost.getStorVal sevm.currentTarget 0)
+  have reaches : ∀ tail out,
+      ExactConsumes (.suspended frame (burnTransferRequest0 priced) (.burnTransfer0 priced)) tail out →
+      ExactConsumes (.suspended prior (requestFor .burnFeeTo (feeFactoryWord sevm b).toAdr .feeTo)
+        (.burnFee (feeBurnObserved toWord token1 token0 L b1 b0 r1 r0 bound0 bound1)))
+        (.next (feeObservedResult observation.out) (staticViewTranscript views .done) tail)
+        { out with childReturns := (staticViewChildReturns prior
+          (requestFor .burnFeeTo (feeFactoryWord sevm b).toAdr .feeTo) 0 views ++ out.childReturns) } := by
+    intro tail out consumed
+    refine ExactConsumes.nextCall (result := feeObservedResult observation.out)
+      (by simp only [feeObservedResult, Bool.not_true, Bool.and_false])
+      (by intro absent; cases absent) turns ?_
+    change ExactConsumes (resumeSegment prior
+      (requestFor .burnFeeTo (feeFactoryWord sevm b).toAdr .feeTo)
+      (.burnFee (feeBurnObserved toWord token1 token0 L b1 b0 r1 r0 bound0 bound1))
+      (feeObservedResult observation.out)) tail out
+    rw [typed]
+    exact consumed
+  exact ⟨residual, views, provenance, cut,
+    by simpa only [id_eq, List.append_nil] using burnFee_finished_prepend finished reaches, typed⟩
 
 /-- The literal balance decoder/LP SLOAD caller produces the factory suspension
 and complete Burn source consumption in the original root derivation. Actual
@@ -447,5 +464,276 @@ theorem burnFeeCaller_source_finished {U K : WriterKey → Prop} {st : State}
     scratch same tracked suffix state locked nonstatic time pair sender inj apart sub
     (trace _ member) sem image beforeInstalled fork good staticGood
   exact ⟨cached, feeGas, feePost, observation, callee, answered, suffix, finished⟩
+
+/-- The first actual balance reply advances only the source segment and cache. -/
+theorem burn_resumeInitialBalance0 {frame : Frame} {locals : BurnLocals} {out : Bytes}
+    (long : 32 ≤ out.length) :
+    resumeSegment frame (requestFor .burnInitialBalance0 locals.token0 (.balanceOf frame.context.pair))
+        (.burnInitialBalance0 locals) (feeObservedResult out) =
+      .suspended
+        (frame.beginResume (requestFor .burnInitialBalance0 locals.token0 (.balanceOf frame.context.pair)))
+        (requestFor .burnInitialBalance1 locals.token1 (.balanceOf frame.context.pair))
+        (.burnInitialBalance1 locals (Bytes.toB256 (out.take 32))) := by
+  simp only [resumeSegment, decodeExternal, requestFor, feeObservedResult,
+    Bool.not_true, Bool.and_false, Bool.false_eq_true, ite_false, ite_true, long]
+  rfl
+
+/-- The second actual balance reply samples the old LP balance before fee minting. -/
+theorem burn_resumeInitialBalance1 {frame : Frame} {locals : BurnLocals} {out : Bytes}
+    {balance0 : B256} (long : 32 ≤ out.length) :
+    resumeSegment frame (requestFor .burnInitialBalance1 locals.token1 (.balanceOf frame.context.pair))
+        (.burnInitialBalance1 locals balance0) (feeObservedResult out) =
+      .suspended
+        (frame.beginResume (requestFor .burnInitialBalance1 locals.token1 (.balanceOf frame.context.pair)))
+        (requestFor .burnFeeTo frame.current.state.factory .feeTo)
+        (.burnFee ⟨locals, balance0, Bytes.toB256 (out.take 32),
+          frame.current.state.balanceOf frame.context.pair⟩) := by
+  simp only [resumeSegment, decodeExternal, requestFor, feeObservedResult,
+    Bool.not_true, Bool.and_false, Bool.false_eq_true, ite_false, ite_true, long]
+  rfl
+
+/-- Actual initial token replies and their authentic static queues feed the
+accepted fee/caller consumer in the original derivation. Cached token/reserve
+locals come from the entry representation; no source endpoint is assumed. -/
+theorem burnInitialBalances_source_finished {U K : WriterKey → Prop} {st : State}
+    {D : Exec.Deriv} {b : Devm} {R : List B256} {M : Mem} {G : Nat}
+    {toWord extρ : B256} {o : Outcome}
+    (fork : CoveredFork D.sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (sentinel : memWord M 96 = 0)
+    (rep : WriterRep K (b.getStor D.sevm.currentTarget) st)
+    (tracked : K (.balance D.sevm.currentTarget))
+    (prior : Frame) (state : prior.current.state = { st with unlocked := 0 })
+    (nonstatic : prior.context.isStatic = false)
+    (time : prior.context.timestamp = D.sevm.benvStat.time)
+    (pair : prior.context.pair = D.sevm.currentTarget)
+    (sender : prior.context.sender = D.sevm.caller)
+    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
+    (trace : ∀ k ∈ mintTraceKeys D, U k)
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    (installed : some (b.getCode D.sevm.currentTarget).toList = sem.image)
+    (good : ∀ F ∈ Exec.rawFrameRoots D.exc,
+      F.sevm.currentTarget = D.sevm.currentTarget → LockedGood U F)
+    (staticGood : ∀ F ∈ Exec.rawFrameRoots D.exc, F.sevm.currentTarget = prior.context.pair →
+      ∀ k ∈ staticViewDecodedKeys F.sevm, U k)
+    (run : SFunc.RunCutP (StepIn D) cert.prog D.sevm []
+      (St b (toWord :: extρ :: R) M G) t_13f5_c37 (.done o)) :
+    b.getStorVal D.sevm.currentTarget 12 = 1 ∧ D.sevm.isStatic = false ∧
+    let locals : BurnLocals := ⟨toWord.toAdr, st.cachedReserves, st.token0, st.token1⟩
+    let request0 := requestFor .burnInitialBalance0 locals.token0 (.balanceOf prior.context.pair)
+    let prior1 := prior.beginResume request0
+    let request1 := requestFor .burnInitialBalance1 locals.token1 (.balanceOf prior1.context.pair)
+    let prior2 := prior1.beginResume request1
+    let requestF := requestFor .burnFeeTo st.factory .feeTo
+    ∃ (out0 out1 outF : Bytes) (views0 views1 viewsF : List StaticViewTurn)
+      (frame : Frame) (priced : BurnPriced) (post : Devm) (w : BurnFinalWords) (N : Mem),
+      w.amount0 = priced.amount0 ∧ w.amount1 = priced.amount1 ∧
+      frame.checkpoint = prior.checkpoint ∧ frame.context = prior.context ∧
+      PairViewProvenance D D.sevm prior st.token0.toB256 views0 ∧
+      PairViewProvenance D D.sevm prior1 st.token1.toB256 views1 ∧
+      PairViewProvenance D D.sevm prior2 st.factory.toB256 viewsF ∧
+      BurnTransferFinished U frame priced D D.sevm post w N extρ R o
+        (.suspended prior request0 (.burnInitialBalance0 locals))
+        (fun tail => .next (feeObservedResult out0) (staticViewTranscript views0 .done)
+          (.next (feeObservedResult out1) (staticViewTranscript views1 .done)
+            (.next (feeObservedResult outF) (staticViewTranscript viewsF .done) tail)))
+        (staticViewChildReturns prior request0 0 views0 ++
+          (staticViewChildReturns prior1 request1 0 views1 ++
+            staticViewChildReturns prior2 requestF 0 viewsF)) := by
+  obtain ⟨unlocked, mutable, d0, out0, d1, out1, gas, call0, call1, _, _,
+    long0, _, long1, _, feeRep, stor1, _, _, reply1, bound0, bound1, balance1, decoded⟩ :=
+    burnInitialBalances_writer_inv fork mem rep run
+  obtain ⟨gw0, cg0, _, step0, post0⟩ := call0
+  obtain ⟨gw1, cg1, _, step1, post1⟩ := call1
+  let locked := burnLockedWorld D.sevm b
+  let reserveWorld := afterSload D.sevm locked 8
+  let r0 := reserve0Read (locked.getStorVal D.sevm.currentTarget 8)
+  let r1 := reserve1Read (locked.getStorVal D.sevm.currentTarget 8)
+  let mask : B256 := 0xffffffffffffffffffffffffffffffffffffffff
+  let t0 := mask &&& reserveWorld.getStorVal D.sevm.currentTarget 6
+  let t1 := mask &&& (afterSload D.sevm reserveWorld 6).getStorVal D.sevm.currentTarget 7
+  let loaded := burnTokensWorld D.sevm reserveWorld
+  let locals : BurnLocals := ⟨toWord.toAdr, st.cachedReserves, st.token0, st.token1⟩
+  let request0 := requestFor .burnInitialBalance0 locals.token0 (.balanceOf prior.context.pair)
+  let prior1 := prior.beginResume request0
+  let request1 := requestFor .burnInitialBalance1 locals.token1 (.balanceOf prior1.context.pair)
+  let prior2 := prior1.beginResume request1
+  let requestF := requestFor .burnFeeTo st.factory .feeTo
+  let M0 := balanceReplyMemory M D.sevm.currentTarget out0
+  let M1 := balanceReplyMemory M0 D.sevm.currentTarget out1
+  change StepIn D D.sevm
+    (St (temporalAccountAccessBase loaded t0.toAdr)
+      (gw0 :: t0 :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 :: t0 :: 0 ::
+        t1 :: t0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R)
+      (balanceRequestMemory M D.sevm.currentTarget) cg0) (.exec .staticcall) d0 at step0
+  change StepIn D D.sevm
+    (St (temporalAccountAccessBase d0 (t1 &&& mask).toAdr)
+      (gw1 :: (t1 &&& mask) :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
+        (t1 &&& mask) :: 0 :: Bytes.toB256 (out0.take 32) :: t1 :: t0 :: r1 :: r0 ::
+        0 :: 0 :: toWord :: extρ :: R)
+      (balanceRequestMemory M0 D.sevm.currentTarget) cg1) (.exec .staticcall) d1 at step1
+  have lockedRep := rep.burn_locked_world (sevm := D.sevm) (b := b)
+  have token0Word : t0 = st.token0.toB256 := by
+    change mask &&& reserveWorld.getStorVal D.sevm.currentTarget 6 = st.token0.toB256
+    rw [show mask = ~~~ addressMask from by decide, B256.and_comm, and_mask_word]
+    change (((afterSload D.sevm locked 8).getStor D.sevm.currentTarget).get 6).toAdr.toB256 = st.token0.toB256
+    rw [afterSload_getStor, lockedRep.fixed.2.2.2.1]
+  have token1Word : t1 = st.token1.toB256 := by
+    change mask &&& (afterSload D.sevm reserveWorld 6).getStorVal D.sevm.currentTarget 7 = st.token1.toB256
+    rw [show mask = ~~~ addressMask from by decide, B256.and_comm, and_mask_word]
+    change (((afterSload D.sevm (afterSload D.sevm locked 8) 6).getStor D.sevm.currentTarget).get 7).toAdr.toB256 = st.token1.toB256
+    rw [afterSload_getStor, afterSload_getStor, lockedRep.fixed.2.2.2.2.1]
+  have cache0 : r0.toNat = st.reserve0.val := by
+    rw [show r0 = st.reserve0.val.toB256 from lockedRep.fixed.2.2.2.2.2.1,
+      B256.toNat_toB256_of_lt (lt_trans st.reserve0.isLt (by decide : 2 ^ 112 < 2 ^ 256))]
+  have cache1 : r1.toNat = st.reserve1.val := by
+    rw [show r1 = st.reserve1.val.toB256 from lockedRep.fixed.2.2.2.2.2.2.1,
+      B256.toNat_toB256_of_lt (lt_trans st.reserve1.isLt (by decide : 2 ^ 112 < 2 ^ 256))]
+  have loadedCode (a : Adr) : loaded.getCode a = b.getCode a := by
+    dsimp only [loaded, reserveWorld, locked]
+    rw [burnTokensWorld, afterSload_getCode, afterSload_getCode,
+      afterSload_getCode, burnLockedWorld, afterSstore_getCode, afterSload_getCode]
+  have loadedStor (a : Adr) : loaded.getStor a = locked.getStor a := by
+    dsimp only [loaded, reserveWorld]
+    rw [burnTokensWorld, afterSload_getStor, afterSload_getStor, afterSload_getStor]
+  have stor0 (a : Adr) : d0.getStor a = locked.getStor a := by
+    rw [post0.stor]
+    change (temporalAccountAccessBase loaded t0.toAdr).state.getStor a = _
+    rw [temporalAccountAccessBase_state]
+    exact loadedStor a
+  have nonempty : (b.getCode D.sevm.currentTarget).toList ≠ [] := by
+    intro empty
+    exact sem.ne_nil (installed.symm.trans (congrArg some empty)) rfl
+  have code0 : d0.getCode D.sevm.currentTarget = b.getCode D.sevm.currentTarget := by
+    have preCode : (temporalAccountAccessBase loaded t0.toAdr).getCode D.sevm.currentTarget =
+        b.getCode D.sevm.currentTarget := by
+      have unchanged : (temporalAccountAccessBase loaded t0.toAdr).getCode D.sevm.currentTarget =
+          loaded.getCode D.sevm.currentTarget := by
+        simp only [Devm.getCode, Devm.getAcct, temporalAccountAccessBase_state]
+      exact unchanged.trans (loadedCode _)
+    have keep := Blanc.Lift.StepIn.codePreserve step0 D.sevm.currentTarget
+      (by simpa only [St, Devm.getCode_setMach, preCode] using nonempty)
+    simpa only [St, Devm.getCode_setMach, preCode] using keep
+  have code1 : d1.getCode D.sevm.currentTarget = b.getCode D.sevm.currentTarget := by
+    have preCode : (temporalAccountAccessBase d0 (t1 &&& mask).toAdr).getCode D.sevm.currentTarget =
+        b.getCode D.sevm.currentTarget := by
+      have unchanged : (temporalAccountAccessBase d0 (t1 &&& mask).toAdr).getCode D.sevm.currentTarget =
+          d0.getCode D.sevm.currentTarget := by
+        simp only [Devm.getCode, Devm.getAcct, temporalAccountAccessBase_state]
+      exact unchanged.trans code0
+    have keep := Blanc.Lift.StepIn.codePreserve step1 D.sevm.currentTarget
+      (by simpa only [St, Devm.getCode_setMach, preCode] using nonempty)
+    simpa only [St, Devm.getCode_setMach, preCode] using keep
+  obtain ⟨views0, turns0, authentic0, derived0⟩ :=
+    pair_static_call_turns (frame := prior) (request := request0) inj apart sub sem image
+      step0 (by simpa only [List.append_nil, St.stack] using pref_append _ ([] : List B256))
+      (by simp only [St, Devm.getCode_setMach]
+          simp only [Devm.getCode, Devm.getAcct, temporalAccountAccessBase_state]
+          change some (loaded.getCode prior.context.pair).toList = sem.image
+          rw [pair, loadedCode]; exact installed)
+      (by simp only [St, Devm.getStor, Devm.getAcct, Devm.setMach_state, temporalAccountAccessBase_state]
+          change WriterRep K (loaded.getStor prior.context.pair) prior.current.state
+          rw [pair, loadedStor, state]; exact lockedRep)
+      time fork ⟨1, _, post0.stack, by decide⟩ staticGood
+  obtain ⟨views1, turns1, authentic1, derived1⟩ :=
+    pair_static_call_turns (frame := prior1) (request := request1) inj apart sub sem image
+      step1 (by simpa only [List.append_nil, St.stack] using pref_append _ ([] : List B256))
+      (by simp only [St, Devm.getCode_setMach]
+          simp only [Devm.getCode, Devm.getAcct, temporalAccountAccessBase_state]
+          change some (d0.getCode prior.context.pair).toList = sem.image
+          rw [pair, code0]; exact installed)
+      (by simp only [St, Devm.getStor, Devm.getAcct, Devm.setMach_state, temporalAccountAccessBase_state]
+          change WriterRep K (d0.getStor prior.context.pair) prior1.current.state
+          rw [pair, stor0]
+          change WriterRep K (locked.getStor D.sevm.currentTarget) prior.current.state
+          rw [state]; exact lockedRep)
+      time fork ⟨1, _, post1.stack, by decide⟩ staticGood
+  have same : memWord M1 96 = 0 := by
+    rw [burnBalanceReply_sentinel
+      (balanceReplyMemory_ptr out0 (balanceRequestMemory_ptr mem D.sevm.currentTarget)).wf,
+      burnBalanceReply_sentinel mem.wf]
+    exact sentinel
+  obtain ⟨cached, feeGas, feePost, observation, _, _, _, residual, viewsF,
+      provenanceF, _, finished, _⟩ :=
+    burnFeeCaller_source_finished fork reply1 same feeRep tracked bound0 bound1
+      prior2 state rfl nonstatic time pair sender inj apart sub trace sem image
+      (by rw [code1]; exact installed) good staticGood decoded
+  have factoryWord : feeFactoryWord D.sevm (feeBurnWorld D.sevm d1) = st.factory.toB256 := by
+    unfold feeFactoryWord feeBurnWorld
+    change (((afterSload D.sevm d1 _).getStor D.sevm.currentTarget).get 5).toAdr.toB256 = _
+    rw [afterSload_getStor, feeRep.fixed.2.2.1]
+  have initialLocals :
+      (feeBurnObserved toWord t1 t0 (feeBurnLiquidity D.sevm d1)
+        (feeBurnBalance1 M1) (Bytes.toB256 (out0.take 32)) r1 r0 bound0 bound1).locals = locals := by
+    simp only [feeBurnObserved, locals, token0Word, token1Word, toAdr_toB256,
+      cache0, cache1, State.cachedReserves]
+  have observedEq : feeBurnObserved toWord t1 t0 (feeBurnLiquidity D.sevm d1)
+      (feeBurnBalance1 M1) (Bytes.toB256 (out0.take 32)) r1 r0 bound0 bound1 =
+      ⟨locals, Bytes.toB256 (out0.take 32), Bytes.toB256 (out1.take 32),
+        st.balanceOf prior.context.pair⟩ := by
+    change BurnObserved.mk
+      (feeBurnObserved toWord t1 t0 (feeBurnLiquidity D.sevm d1)
+        (feeBurnBalance1 M1) (Bytes.toB256 (out0.take 32)) r1 r0 bound0 bound1).locals
+      (Bytes.toB256 (out0.take 32)) (feeBurnBalance1 M1) (feeBurnLiquidity D.sevm d1) = _
+    rw [initialLocals]
+    change BurnObserved.mk locals (Bytes.toB256 (out0.take 32))
+      (feeBurnBalance1 (balanceReplyMemory (balanceReplyMemory M D.sevm.currentTarget out0)
+        D.sevm.currentTarget out1)) (feeBurnLiquidity D.sevm d1) = _
+    rw [balance1, cached]
+    rfl
+  have reaches : ∀ tail out,
+      ExactConsumes (.suspended prior2
+        (requestFor .burnFeeTo (feeFactoryWord D.sevm (feeBurnWorld D.sevm d1)).toAdr .feeTo)
+        (.burnFee (feeBurnObserved toWord t1 t0 (feeBurnLiquidity D.sevm d1)
+          (feeBurnBalance1 M1) (Bytes.toB256 (out0.take 32)) r1 r0 bound0 bound1))) tail out →
+      ExactConsumes (.suspended prior request0 (.burnInitialBalance0 locals))
+        (.next (feeObservedResult out0) (staticViewTranscript views0 .done)
+          (.next (feeObservedResult out1) (staticViewTranscript views1 .done) tail))
+        { out with childReturns := (staticViewChildReturns prior request0 0 views0 ++
+          (staticViewChildReturns prior1 request1 0 views1 ++ out.childReturns)) } := by
+    intro tail out consumed
+    refine ExactConsumes.nextCall (result := feeObservedResult out0)
+      (out := { out with childReturns := staticViewChildReturns prior1 request1 0 views1 ++ out.childReturns })
+      (by simp only [feeObservedResult, Bool.not_true, Bool.and_false])
+      (by intro absent; cases absent) turns0 ?_
+    change ExactConsumes (resumeSegment prior request0 (.burnInitialBalance0 locals)
+      (feeObservedResult out0)) _ _
+    rw [burn_resumeInitialBalance0 long0]
+    refine ExactConsumes.nextCall (result := feeObservedResult out1)
+      (by simp only [feeObservedResult, Bool.not_true, Bool.and_false])
+      (by intro absent; cases absent) turns1 ?_
+    change ExactConsumes (resumeSegment prior1 request1
+      (.burnInitialBalance1 locals (Bytes.toB256 (out0.take 32))) (feeObservedResult out1)) tail out
+    rw [burn_resumeInitialBalance1 long1]
+    simpa only [factoryWord, toAdr_toB256, observedEq,
+      prior2, prior1, request1, Frame.beginResume, state] using consumed
+  let observed := feeBurnObserved toWord t1 t0 (feeBurnLiquidity D.sevm d1)
+    (feeBurnBalance1 M1) (Bytes.toB256 (out0.take 32)) r1 r0 bound0 bound1
+  let fee := feeBranchSourceFee { st with unlocked := 0 } D.sevm
+    (feeKLastWorld D.sevm observation.d) (Bytes.toB256 (observation.out.take 32)) r0 r1
+  let supply := feePost.getStorVal D.sevm.currentTarget 0
+  let a0 := feeBurnLiquidity D.sevm d1 * Bytes.toB256 (out0.take 32) / supply
+  let a1 := feeBurnLiquidity D.sevm d1 * feeBurnBalance1 M1 / supply
+  let w : BurnFinalWords := ⟨supply, feeOnWord (Bytes.toB256 (observation.out.take 32)),
+    feeBurnLiquidity D.sevm d1, feeBurnBalance1 M1, Bytes.toB256 (out0.take 32),
+    t1, t0, r1, r0, a1, a0, toWord⟩
+  let frame := burnPricedFrame (prior2.beginResume
+    (requestFor .burnFeeTo (feeFactoryWord D.sevm (feeBurnWorld D.sevm d1)).toAdr .feeTo)) observed fee
+  let priced := burnPricedSource observed fee a0 a1
+  let post := lpBurnPost D.sevm (afterSload D.sevm feePost 0) (burnFinalStack w extρ R)
+    feePost.memory D.sevm.currentTarget.toB256 (feeBurnLiquidity D.sevm d1) residual
+  refine ⟨unlocked, mutable, out0, out1, observation.out, views0, views1, viewsF,
+    frame, priced, post, w, post.memory, rfl, rfl, rfl, rfl, ?_, ?_, ?_, ?_⟩
+  · rw [← token0Word]
+    exact ⟨authentic0, derived0⟩
+  · have masked : t1 &&& mask = st.token1.toB256 := by
+      rw [token1Word, show mask = ~~~ addressMask from by decide, and_mask_word, toAdr_toB256]
+    rw [← masked]
+    exact ⟨authentic1, derived1⟩
+  · rw [← factoryWord]
+    exact provenanceF
+  · simpa only [List.append_assoc, factoryWord, toAdr_toB256] using
+      burnFee_finished_prepend (childPrefix := staticViewChildReturns prior request0 0 views0 ++
+        staticViewChildReturns prior1 request1 0 views1) finished
+        (fun tail out consumed => by simpa only [List.append_assoc] using reaches tail out consumed)
 
 end Blanc.Lift.UniswapV2Pair

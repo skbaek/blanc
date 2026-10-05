@@ -558,8 +558,23 @@ theorem burnInitialBalances_writer_inv {K : WriterKey → Prop} {st : State} {D 
       let w1 := temporalAccountAccessBase d0 (t1 &&& mask).toAdr
       let M0 := balanceReplyMemory M sevm.currentTarget out0
       let M1 := balanceReplyMemory M0 sevm.currentTarget out1
-      (∃ call0, StepIn D sevm call0 (.exec .staticcall) d0) ∧
-      (∃ call1, StepIn D sevm call1 (.exec .staticcall) d1) ∧
+      (∃ gw0 callGas0,
+        ((burnTokensWorld sevm reserveWorld).getCode t0.toAdr).size.toB256 ≠ 0 ∧
+        StepIn D sevm (St w0 (gw0 :: t0 :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
+          t0 :: 0 :: t1 :: t0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R)
+          (balanceRequestMemory M sevm.currentTarget) callGas0) (.exec .staticcall) d0 ∧
+        StaticCallPost w0 d0 (164 :: 0x70a08231 :: t0 :: 0 :: t1 :: t0 :: r1 :: r0 ::
+          0 :: 0 :: toWord :: extρ :: R) (balanceRequestMemory M sevm.currentTarget)
+          128 36 128 32 1 out0) ∧
+      (∃ gw1 callGas1,
+        (d0.getCode (t1 &&& mask).toAdr).size.toB256 ≠ 0 ∧
+        StepIn D sevm (St w1 (gw1 :: (t1 &&& mask) :: 128 :: 36 :: 128 :: 32 ::
+          164 :: 0x70a08231 :: (t1 &&& mask) :: 0 :: Bytes.toB256 (out0.take 32) ::
+          t1 :: t0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R)
+          (balanceRequestMemory M0 sevm.currentTarget) callGas1) (.exec .staticcall) d1 ∧
+        StaticCallPost w1 d1 (164 :: 0x70a08231 :: (t1 &&& mask) :: 0 ::
+          Bytes.toB256 (out0.take 32) :: t1 :: t0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R)
+          (balanceRequestMemory M0 sevm.currentTarget) 128 36 128 32 1 out1) ∧
       StaticAnswered sevm w0 t0.toAdr (ExternalOperation.encode (.balanceOf sevm.currentTarget)) out0 ∧
       StaticAnswered sevm w1 (t1 &&& mask).toAdr
         (ExternalOperation.encode (.balanceOf sevm.currentTarget)) out1 ∧
@@ -597,7 +612,8 @@ theorem burnInitialBalances_writer_inv {K : WriterKey → Prop} {st : State} {D 
       Bytes.toB256 (out1.take 32) := by
     exact balanceReplyMemory_word (balanceReplyMemory_ptr out0
       (balanceRequestMemory_ptr mem sevm.currentTarget)).wf sevm.currentTarget out1 long1
-  exact ⟨unlocked, mutable, d0, out0, d1, out1, gas, ⟨_, call0⟩, ⟨_, call1⟩,
+  exact ⟨unlocked, mutable, d0, out0, d1, out1, gas,
+    ⟨gw0, cg0, code0, call0, post0⟩, ⟨gw1, cg1, code1, call1, post1⟩,
     answered0, answered1, long0, width0, long1, width1, lockedRep, stor1,
     logs1, output1, reply1, bound0, bound1, cached, decoded⟩
 
@@ -662,10 +678,12 @@ theorem burnEntry_fee_source_inv {K : WriterKey → Prop} {st : State} {D : Exec
   obtain ⟨unlocked, mutable, d0, out0, d1, out1, gas, call0, call1, answered0, answered1,
     long0, width0, long1, width1, feeRep, stor1, logs1, output1, reply1,
     bound0, bound1, balance1, decoded⟩ := burnInitialBalances_writer_inv fork mem rep run
+  obtain ⟨_, _, _, step0, _⟩ := call0
+  obtain ⟨_, _, _, step1, _⟩ := call1
   obtain ⟨cached, feeGas, feePost, callee, source, continuation⟩ :=
     feeBurn_source_caller_inv fork reply1 feeRep tracked bound0 bound1
       (fresh out0 d1 out1 gas feeRep decoded) decoded
-  exact ⟨unlocked, mutable, d0, out0, d1, out1, feeGas, feePost, call0, call1,
+  exact ⟨unlocked, mutable, d0, out0, d1, out1, feeGas, feePost, ⟨_, step0⟩, ⟨_, step1⟩,
     answered0, answered1, long0, width0, long1, width1, feeRep, cached,
     balance1, callee, source, continuation⟩
 
