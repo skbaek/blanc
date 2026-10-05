@@ -4783,4 +4783,247 @@ private theorem safeTransfer_afterCall_dynamic_exact {sevm : Sevm} {d : Devm}
     rw [show G + 146 + 34 + (64 + 3 + 3 + 3 + copyCharge) = G + (253 + copyCharge) by omega] at result
     simpa only [ite_eq_right empty] using result
 
+/-! ## Closed charges of the moving pre-CALL stages -/
+
+/-- A 32-byte access charge as a cost difference over the memory's own size. -/
+private theorem safeTransfer_wordCharge' {b : Devm} {X : Mem} {i : Nat} :
+    gVerylow + (St b [] X 0).extCost [⟨i, 32⟩] =
+      3 + (calculateMemoryGasCost (memExtSize X.size i 32) - calculateMemoryGasCost X.size) :=
+  safeTransfer_wordCharge rfl
+
+/-- The fourteen initializer charges telescope to the payload image's growth. -/
+private theorem safeTransfer_initGas {b : Devm} {M N1 N2 N3 N4 N5 N6 N7 N8 Q : Mem} {G : Nat}
+    {p : B256} (aM : M.size % 32 = 0) (geM : 96 ≤ M.size)
+    (z1 : N1.size = memExtSize M.size 64 32)
+    (z2 : N2.size = memExtSize N1.size p.toNat 32)
+    (z3 : N3.size = memExtSize N2.size (p + 32).toNat 32) (a3 : N3.size % 32 = 0)
+    (z4 : N4.size = memExtSize N3.size (p + 100).toNat 32)
+    (z5 : N5.size = memExtSize N4.size (p + 132).toNat 32) (a5 : N5.size % 32 = 0)
+    (c5 : (p + 132).toNat + 32 ≤ N5.size)
+    (z6 : N6.size = memExtSize N5.size (p + 64).toNat 32)
+    (c6 : (p + 64).toNat + 32 ≤ N6.size)
+    (z7 : N7.size = memExtSize N6.size 64 32) (a7 : N7.size % 32 = 0)
+    (z8 : N8.size = memExtSize N7.size (p + 96).toNat 32) (a8 : N8.size % 32 = 0)
+    (nat96 : (p + 96).toNat = p.toNat + 96) (nat132 : (p + 132).toNat = p.toNat + 132)
+    (hQ : N8 = Q) :
+    G + 199 + (gVerylow + (St b [] M 0).extCost [⟨64, 32⟩]) +
+      (gVerylow + (St b [] M 0).extCost [⟨64, 32⟩]) +
+      (gVerylow + (St b [] N1 0).extCost [⟨p.toNat, 32⟩]) +
+      (gVerylow + (St b [] N2 0).extCost [⟨(p + 32).toNat, 32⟩]) +
+      (gVerylow + (St b [] N3 0).extCost [⟨64, 32⟩]) +
+      (gVerylow + (St b [] N3 0).extCost [⟨(p + 100).toNat, 32⟩]) +
+      (gVerylow + (St b [] N4 0).extCost [⟨(p + 132).toNat, 32⟩]) +
+      (gVerylow + (St b [] N5 0).extCost [⟨64, 32⟩]) +
+      (gVerylow + (St b [] N5 0).extCost [⟨(p + 64).toNat, 32⟩]) +
+      (gVerylow + (St b [] N6 0).extCost [⟨64, 32⟩]) +
+      (gVerylow + (St b [] N7 0).extCost [⟨(p + 96).toNat, 32⟩]) +
+      (gVerylow + (St b [] N7 0).extCost [⟨(p + 96).toNat, 32⟩]) +
+      (gVerylow + (St b [] N8 0).extCost [⟨64, 32⟩]) +
+      (gVerylow + (St b [] N8 0).extCost [⟨(p + 64).toNat, 32⟩]) =
+    G + 241 + (calculateMemoryGasCost Q.size - calculateMemoryGasCost M.size) := by
+  subst hQ
+  have g2 : N1.size ≤ N2.size := by rw [z2]; exact memExtSize_ge _ _ _
+  have g3 : N2.size ≤ N3.size := by rw [z3]; exact memExtSize_ge _ _ _
+  have g4 : N3.size ≤ N4.size := by rw [z4]; exact memExtSize_ge _ _ _
+  have g5 : N4.size ≤ N5.size := by rw [z5]; exact memExtSize_ge _ _ _
+  have g6 : N5.size ≤ N6.size := by rw [z6]; exact memExtSize_ge _ _ _
+  have g7 : N6.size ≤ N7.size := by rw [z7]; exact memExtSize_ge _ _ _
+  have g8 : N7.size ≤ N8.size := by rw [z8]; exact memExtSize_ge _ _ _
+  have r7 : (p + 96).toNat + 32 ≤ N7.size := by omega
+  have r8 : (p + 64).toNat + 32 ≤ N8.size := by omega
+  have e1 : memExtSize M.size 64 32 = M.size := memExtSize_of_le aM (by omega)
+  have g1 : N1.size = M.size := by rw [z1, e1]
+  have e5 : memExtSize N3.size 64 32 = N3.size := memExtSize_of_le a3 (by omega)
+  have e8 : memExtSize N5.size 64 32 = N5.size := memExtSize_of_le a5 (by omega)
+  have e11 : memExtSize N7.size (p + 96).toNat 32 = N7.size := memExtSize_of_le a7 r7
+  have e13 : memExtSize N8.size 64 32 = N8.size := memExtSize_of_le a8 (by omega)
+  have e14 : memExtSize N8.size (p + 64).toNat 32 = N8.size := memExtSize_of_le a8 r8
+  simp only [safeTransfer_wordCharge']
+  rw [e1, ← z2, ← z3, e5, ← z4, ← z5, e8, ← z6, ← z7, e11, e13, e14]
+  rw [e11] at z8
+  rw [z8]
+  have m2 := calculateMemoryGasCost_mono g2
+  have m3 := calculateMemoryGasCost_mono g3
+  have m4 := calculateMemoryGasCost_mono g4
+  have m5 := calculateMemoryGasCost_mono g5
+  have m6 := calculateMemoryGasCost_mono g6
+  have m7 := calculateMemoryGasCost_mono g7
+  rw [g1] at m2 ⊢
+  generalize calculateMemoryGasCost M.size = cM at *
+  generalize calculateMemoryGasCost N2.size = c2 at *
+  generalize calculateMemoryGasCost N3.size = c3 at *
+  generalize calculateMemoryGasCost N4.size = c4 at *
+  generalize calculateMemoryGasCost N5.size = c5 at *
+  generalize calculateMemoryGasCost N6.size = c6 at *
+  generalize calculateMemoryGasCost N7.size = c7 at *
+  omega
+
+/-- The four copy charges telescope to the copy's growth. -/
+private theorem safeTransfer_copyGas {b : Devm} {P C1 C2 : Mem} {G : Nat} {p : B256}
+    (aP : P.size % 32 = 0) (rP : (p + 96).toNat + 32 ≤ P.size)
+    (z1 : C1.size = memExtSize P.size (p + 164).toNat 32) (a1 : C1.size % 32 = 0)
+    (r1 : (p + 128).toNat + 32 ≤ C1.size)
+    (z2 : C2.size = memExtSize C1.size (p + 196).toNat 32) :
+    G + 169 + (gVerylow + (St b [] P 0).extCost [⟨(p + 96).toNat, 32⟩]) +
+      (gVerylow + (St b [] P 0).extCost [⟨(p + 164).toNat, 32⟩]) +
+      (gVerylow + (St b [] C1 0).extCost [⟨(p + 128).toNat, 32⟩]) +
+      (gVerylow + (St b [] C1 0).extCost [⟨(p + 196).toNat, 32⟩]) =
+    G + 181 + (calculateMemoryGasCost C2.size - calculateMemoryGasCost P.size) := by
+  have g1 : P.size ≤ C1.size := by rw [z1]; exact memExtSize_ge _ _ _
+  have g2 : C1.size ≤ C2.size := by rw [z2]; exact memExtSize_ge _ _ _
+  have eR0 : memExtSize P.size (p + 96).toNat 32 = P.size := memExtSize_of_le aP rP
+  have eR1 : memExtSize C1.size (p + 128).toNat 32 = C1.size := memExtSize_of_le a1 r1
+  simp only [safeTransfer_wordCharge']
+  rw [eR0, ← z1, eR1, ← z2]
+  have m1 := calculateMemoryGasCost_mono g1
+  have m2 := calculateMemoryGasCost_mono g2
+  generalize calculateMemoryGasCost P.size = c0 at *
+  generalize calculateMemoryGasCost C1.size = c1 at *
+  generalize calculateMemoryGasCost C2.size = c2 at *
+  omega
+
+/-- The merged CALL image keeps the moved free pointer over the read-extended allocation. -/
+private theorem safeTransfer_mergePtr {C : Mem} {s : Nat} {p : B256}
+    (hC : PtrMem (p + 164) s C) (width : p.toNat + 260 < 2 ^ 256) :
+    let mask := B256.bexp 256 (32 - 4) - 1
+    PtrMem (p + 164) (memExtSize s (p + 228).toNat 32)
+      ((C.read (p + 228).toNat 32).2.write (p + 228).toNat
+        (((Bytes.toB256 (C.read (p + 160).toNat 32).1) &&& ~~~mask) |||
+          ((Bytes.toB256 (C.read (p + 228).toNat 32).1) &&& mask)).toBytes) := by
+  dsimp only
+  obtain ⟨_, _, _, _, _, _, nat164, nat228, _, _, _, _, _⟩ := safeTransfer_stageOffset width
+  let D := (C.read (p + 228).toNat 32).2
+  have hD : PtrMem (p + 164) (memExtSize s (p + 228).toNat 32) D := by
+    refine ⟨?_, memExtSize_mod_32 hC.n32, hC.wf.extend _ 32, ?_⟩
+    · change memExtSize C.size (p + 228).toNat 32 = _
+      rw [hC.size]
+    · exact MemMatches.of_data_eq (μ := C) (μ' := D) rfl (memExtSize_ge C.size _ 32) hC.map
+  have coverD : (p + 228).toNat + 32 ≤ memExtSize s (p + 228).toNat 32 :=
+    memExtSize_access_le _ _ _ (by decide)
+  have h := hD.write (p + 228).toNat
+    (((Bytes.toB256 (C.read (p + 160).toNat 32).1) &&& ~~~(B256.bexp 256 (32 - 4) - 1)) |||
+      ((Bytes.toB256 (C.read (p + 228).toNat 32).1) &&& (B256.bexp 256 (32 - 4) - 1)))
+    (Or.inr (by omega))
+  rw [memExtSize_of_le hD.n32 coverD] at h
+  exact h
+
+/-- The staged copy and merge images are the moving CALL memory. -/
+private theorem safeTransfer_callMemory_eq {M : Mem} {p amount toWord : B256}
+    (width : p.toNat + 260 < 2 ^ 256) :
+    let P := safeTransfer_dynamicPayloadMemory M p amount toWord
+    let C1 := P.write (p + 164).toNat (Bytes.toB256 (P.read (p + 96).toNat 32).1).toBytes
+    let C2 := C1.write (p + 196).toNat (Bytes.toB256 (C1.read (p + 128).toNat 32).1).toBytes
+    let mask := B256.bexp 256 (32 - 4) - 1
+    (C2.read (p + 228).toNat 32).2.write (p + 228).toNat
+        (((Bytes.toB256 (C2.read (p + 160).toNat 32).1) &&& ~~~mask) |||
+          ((Bytes.toB256 (C2.read (p + 228).toNat 32).1) &&& mask)).toBytes =
+      safeTransfer_dynamicCallMemory M p amount toWord := by
+  obtain ⟨_, _, _, _, _, nat96, nat164, nat228, _, _, _, _, nat196⟩ := safeTransfer_stageOffset width
+  obtain ⟨o128, _⟩ := safeTransfer_copyOffsets width
+  have o196 : (p + 196).toNat = (p + 164).toNat + 32 := by rw [nat196, nat164]
+  have o228 : (p + 228).toNat = (p + 164).toNat + 64 := by rw [nat228, nat164]
+  have o160 : (p + 160).toNat = (p + 96).toNat + 64 := by
+    rw [nat96, B256.toNat_add, show (160 : B256).toNat = 160 from rfl, Nat.lo_eq_of_lt (by omega)]
+  dsimp only
+  rw [o128, o196, o228, o160]
+  rfl
+
+/-- **Moving pre-CALL forward construction**: initializer, 68-byte copy and merge, ending at the
+primitive `CALL` over the staged CALL memory, with the closed charge `safeTransferPreCharge`. -/
+private theorem safeTransfer_dynamicPrepare_closed {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {G : Nat} {o : Outcome}
+    {p amount toWord tokenWord rho : B256} {n : Nat}
+    (mem : PtrMem p n M) (lower : 128 ≤ p.toNat)
+    (width : p.toNat + 260 < 2 ^ 256) (room : R.length ≤ 1000)
+    (continuation : SFunc.RunExact cert.prog sevm
+      (St b (G.toB256 :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        0 :: (p + 164) :: 68 :: (p + 164) :: 0 :: (68 + (p + 164)) ::
+        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
+        (safeTransfer_dynamicCallMemory M p amount toWord) G)
+      (.next (.exec .call) safeTransfer_afterCall) o) :
+    SFunc.RunExact cert.prog sevm
+      (St b (amount :: toWord :: tokenWord :: rho :: R) M (G + safeTransferPreCharge n p))
+      t_1fdb_c57 o := by
+  obtain ⟨_, _, _, _, _, nat96, nat164, nat228, _, nat64, _, nat132, nat196⟩ :=
+    safeTransfer_stageOffset width
+  obtain ⟨o128, _⟩ := safeTransfer_copyOffsets width
+  obtain ⟨z1, z2, z3, z4, z5, z6, z7, z8, a1, a2, a3, a4, a5, a6, a7, a8,
+    c1, c2, c3, c4, c5, c6, c7, c8, payFold, payMod, payBound⟩ :=
+    safeTransfer_payloadSizes (amount := amount) (toWord := toWord) mem lower width
+  obtain ⟨preEq, _⟩ := safeTransfer_copySizes (amount := amount) (toWord := toWord) mem lower width
+  let P := safeTransfer_dynamicPayloadMemory M p amount toWord
+  let C1 := P.write (p + 164).toNat (Bytes.toB256 (P.read (p + 96).toNat 32).1).toBytes
+  let C2 := C1.write (p + 196).toNat (Bytes.toB256 (C1.read (p + 128).toNat 32).1).toBytes
+  have hC1 : PtrMem (p + 164) C1.size C1 :=
+    safeTransfer_copyPtr128 (amount := amount) (toWord := toWord) mem lower width
+  have fit128 : (p + 128).toNat + 32 ≤ C1.size :=
+    safeTransfer_copyFit128 (amount := amount) (toWord := toWord) mem lower width
+  have hC2 := hC1.write (p + 196).toNat (Bytes.toB256 (C1.read (p + 128).toNat 32).1)
+    (Or.inr (by omega))
+  have cover2 : (p + 196).toNat + 32 ≤ memExtSize C1.size (p + 196).toNat 32 :=
+    memExtSize_access_le _ _ _ (by decide)
+  have fit2 : (p + 160).toNat + 32 ≤ memExtSize C1.size (p + 196).toNat 32 := by
+    have h160 : (p + 160).toNat = p.toNat + 160 := by
+      rw [B256.toNat_add, show (160 : B256).toNat = 160 from rfl, Nat.lo_eq_of_lt (by omega)]
+    omega
+  have part := safeTransfer_partial_dynamic_exact (sevm := sevm) (b := b)
+    (R := 96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) (G := G) (o := o)
+    (token := tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) hC2 fit2 width
+    (by simp only [List.length_cons]; omega)
+  have ceq := safeTransfer_callMemory_eq (M := M) (amount := amount) (toWord := toWord) width
+  dsimp only at part ceq
+  rw [ceq] at part
+  have run1 := part continuation
+  have copy := safeTransfer_copy_dynamic_exact (sevm := sevm) (b := b) (R := R)
+    (G := G + 177 + (calculateMemoryGasCost (memExtSize (memExtSize C1.size (p + 196).toNat 32)
+      (p + 228).toNat 32) - calculateMemoryGasCost (memExtSize C1.size (p + 196).toNat 32)))
+    (o := o) (amount := amount) (toWord := toWord) (tokenWord := tokenWord) (rho := rho)
+    mem lower width (by omega)
+  dsimp only at copy
+  have run2 := copy run1
+  have run3 := safeTransfer_initialize_dynamic_exact (sevm := sevm) (b := b) (R := R)
+    (o := o) (amount := amount) (toWord := toWord) (tokenWord := tokenWord) (rho := rho)
+    mem lower width (by omega) run2
+  rw [← mem.size] at z1
+  have aM : M.size % 32 = 0 := by rw [mem.size]; exact mem.n32
+  have geM : 96 ≤ M.size := by rw [mem.size]; exact mem.ge
+  have finish : ∀ {k : Nat}, SFunc.RunExact cert.prog sevm
+      (St b (amount :: toWord :: tokenWord :: rho :: R) M k) t_1fdb_c57 o →
+      k = G + safeTransferPreCharge n p →
+      SFunc.RunExact cert.prog sevm
+        (St b (amount :: toWord :: tokenWord :: rho :: R) M (G + safeTransferPreCharge n p))
+        t_1fdb_c57 o := fun r e => e ▸ r
+  refine finish run3 ?_
+  rw [safeTransfer_initGas (Q := safeTransfer_dynamicPayloadMemory M p amount toWord) aM geM z1 z2 z3 a3 z4 z5 a5 c5 z6 c6 z7 a7 z8 a8 nat96 nat132 rfl]
+  have zC1 : C1.size = memExtSize P.size (p + 164).toNat 32 :=
+    Mem.size_write_of_size rfl payMod (B256.length_toBytes _)
+  rw [safeTransfer_copyGas payMod (by omega) zC1 hC1.n32 fit128 hC2.size]
+  have hC3 := safeTransfer_mergePtr hC2 width
+  dsimp only at hC3
+  rw [ceq] at hC3
+  have gP : P.size ≤ C1.size := by rw [zC1]; exact memExtSize_ge _ _ _
+  have gC2 : C1.size ≤ memExtSize C1.size (p + 196).toNat 32 := memExtSize_ge _ _ _
+  have gE : memExtSize C1.size (p + 196).toNat 32 ≤
+      memExtSize (memExtSize C1.size (p + 196).toNat 32) (p + 228).toNat 32 := memExtSize_ge _ _ _
+  have gM : M.size ≤ P.size := by
+    rw [mem.size]
+    change n ≤ (safeTransfer_dynamicPayloadMemory M p amount toWord).size
+    rw [payFold]
+    iterate 14 refine Nat.le_trans ?_ (memExtSize_ge _ _ _)
+    exact Nat.le_refl n
+  unfold safeTransferPreCharge
+  rw [← preEq, hC3.size, ← mem.size, hC2.size]
+  have m1 := calculateMemoryGasCost_mono gM
+  have m2 := calculateMemoryGasCost_mono gP
+  have m3 := calculateMemoryGasCost_mono gC2
+  have m4 := calculateMemoryGasCost_mono gE
+  generalize calculateMemoryGasCost M.size = cM at *
+  generalize calculateMemoryGasCost P.size = cP at *
+  generalize calculateMemoryGasCost C1.size = c1 at *
+  generalize calculateMemoryGasCost (memExtSize C1.size (p + 196).toNat 32) = c2 at *
+  generalize calculateMemoryGasCost (memExtSize (memExtSize C1.size (p + 196).toNat 32)
+    (p + 228).toNat 32) = c3 at *
+  omega
+
 end Blanc.Lift.UniswapV2Pair
