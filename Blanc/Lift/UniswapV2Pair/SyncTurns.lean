@@ -2182,41 +2182,6 @@ theorem sync_root_first_static_answered_request_state_parent {sevm : Sevm} {b po
   exact ⟨    ⟨path, pc, sameSevm, instruction, edge, result, primitive, returnedFree, returnedPc, nodePath, nodePc,
     nodeSevm, outcome, tree, continuation, placed, stack, hpost, bound, answered one, driverSpawn⟩, storage, memory, token, inputOffset, inputSize, outputOffset, outputSize⟩
 
-theorem sync_root_first_static_answered_request_state {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-    ∃ (occurrence : Exec.NinstOccurrence root) (returned node : Exec.Deriv) (cursor : Cursor)
-      (g t ii is oi os : B256) (S : List B256) (out : Bytes),
-      ((Exec.Deriv.ExecFreeUntil root occurrence.node ∧ occurrence.node.pc = 0x1ee0 ∧
-      occurrence.node.sevm = sevm ∧ occurrence.instruction = .exec .staticcall ∧
-      Exec.Deriv.ParentStep returned occurrence.node ∧ occurrence.stepResult = .ok returned.devm ∧
-      Ninst.RunWith (Cursor.DescOf occurrence.node) sevm occurrence.node.devm
-        (.exec .staticcall) returned.devm ∧
-      Exec.Deriv.ExecFreeUntil returned node ∧ returned.pc = occurrence.node.pc + 1 ∧
-      Exec.Deriv.ParentPrefix root node ∧ node.pc = 0x1ef1 ∧ node.sevm = sevm ∧
-      node.exn = .ok post ∧ cursor.f = t_1ef1_c31 ∧
-      (∃ k K, cursor.K = k :: K ∧ k.f = t_0257_c78) ∧ CursorOK code cert node cursor ∧
-      occurrence.node.devm.stack = g :: t :: ii :: is :: oi :: os :: S ∧
-      StaticCallPost occurrence.node.devm returned.devm S occurrence.node.devm.memory
-        ii is oi os 1 out ∧ out.length < 2^256 ∧
-      StaticAnswered sevm occurrence.node.devm t.toAdr
-        (occurrence.node.devm.memory.read ii.toNat is.toNat).1 out ∧
-      (∃ (frame : Jaune.Frame) (resume : Resume),
-        Evm.step ⟨occurrence.node.pc, occurrence.node.sevm, occurrence.node.devm⟩ =
-          .spawn frame resume (occurrence.node.pc + 1))) ∧
-      occurrence.node.devm.getStor sevm.currentTarget = (b.getStor sevm.currentTarget).set 12 0 ∧
-      occurrence.node.devm.memory = balanceRequestMemory getterInitMemory sevm.currentTarget ∧
-      t = (b.getStorVal sevm.currentTarget 6).toAdr.toB256 ∧
-      ii = 128 ∧ is = 36 ∧ oi = 128 ∧ os = 32) ∧
-      node.devm.getStor = occurrence.node.devm.getStor ∧
-      node.devm.memory = balanceReplyMemory getterInitMemory sevm.currentTarget out ∧
-      node.devm.returnData = out ∧ node.devm.stack = 0 :: S := by
-  obtain ⟨occurrence, returned, node, cursor, g, t, ii, is, oi, os, S, out, facts, stor, memory, data, stack, _⟩ :=
-    sync_root_first_static_answered_request_state_parent codeEq fork selector run
-  exact ⟨occurrence, returned, node, cursor, g, t, ii, is, oi, os, S, out, facts, stor, memory, data, stack⟩
-
 /-- The actual tested first STATICCALL processes the authenticated occurrence's
 supplied slot and resumes its clean child, preserving delegated-code resolution
 the exact machine spawn, and the genuine immediate or interpreted frame entry. -/
