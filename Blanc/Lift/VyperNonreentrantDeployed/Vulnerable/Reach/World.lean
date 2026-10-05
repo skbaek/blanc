@@ -1,6 +1,8 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach.World
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Creation.Input
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Clone.Input
+import Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.Input
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.Creation.Input
 
 /-! # The disclosed V− reachable-setup world and its root messages
 
@@ -37,6 +39,9 @@ def proxyAddr : Adr := 0x5555555555555555555555555555555555555555
 
 /-- The shared token fixture's address (synthetic; coin 1). -/
 def tokenAddr : Adr := 0x3333333333333333333333333333333333333333
+
+/-- The reachable attacker's address (synthetic; the LP holder and reentrant receiver). -/
+def attackerAddr : Adr := 0x4444444444444444444444444444444444444444
 
 /-- A zero-value root CREATE from `creator` over world `W`, at transaction depth 1024. -/
 def createMsg (fork : Fork) (W : State) (target : Adr) (code : ByteArray) (gas : Nat) : Msg where
@@ -87,5 +92,17 @@ def implCreateMsg (fork : Fork) (W : State) : Msg :=
 def cloneCreateMsg (fork : Fork) (W : State) : Msg :=
   createMsg fork W proxyAddr Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Clone.cloneCreationCode
     100000
+
+/-- Message 4: the **synthetic** token creation input, at `tokenAddr`, 200,000 gas. The
+constructor mints `balanceOf[creator] := 10^6`. -/
+def tokenCreateMsg (fork : Fork) (W : State) : Msg :=
+  createMsg fork W tokenAddr
+    Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.creationCode 200000
+
+/-- Message 5: the **synthetic** reachable-attacker creation input, at `attackerAddr`,
+200,000 gas. -/
+def attackerCreateMsg (fork : Fork) (W : State) : Msg :=
+  createMsg fork W attackerAddr
+    Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.Creation.creationCode 200000
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach

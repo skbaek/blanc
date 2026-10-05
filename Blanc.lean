@@ -606,6 +606,7 @@ import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.InitSetup
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.InitRun
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.InitTop
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Init
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Fund
 import Blanc.Lift.VyperNonreentrantDeployed.Token20.Cert
 import Blanc.Lift.VyperNonreentrantDeployed.Token20.Check
 import Blanc.Lift.VyperNonreentrantDeployed.Token20.Run
