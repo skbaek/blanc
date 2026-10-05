@@ -1,216 +1,19 @@
 import Blanc.Lift.UniswapV2Pair.SafeTransferWalk
 
-/-! Pointer-generic literal helper57 (safeTransfer) walk for skim's second transfer.
+/-! Skim's helper57 (safeTransfer) inverse at a moved free pointer.
 
-The helper reads the free pointer from memory; these stages keep it symbolic so a
-caller whose free pointer moved (skim's transfer1 follows transfer0's allocation)
-can instantiate them. Consolidation note: SafeTransferWalk holds private,
-pointer-generic stages with the same semantics; see the lane report. -/
+The initializer is consumed from SafeTransferWalk's public pointer-generic API
+(`safeTransfer_initialize_dynamic_inv`) and the CALL window from
+`safeTransfer_dynamicCall_data`. Only public declarations of SafeTransferWalk are used.
+The ordered copy, CALL preparation and post-CALL decoder are walked here: the public
+CALL/returned theorems are stated over a private continuation or omit the CALL's
+success flag, which skim's commit/precompile discharge needs on the same step. -/
 
 namespace Blanc.Lift.UniswapV2Pair
 
 open Jaune
 
-/-- The literal eighty-instruction helper57 initializer before its copy loop. -/
-def skimTransferInitLine : List Ninst := [
-  .push [0x40] (by decide),
-  .reg (.dup 0),
-  .reg .mload,
-  .reg (.dup 0),
-  .reg (.dup 2),
-  .reg .add,
-  .reg (.dup 2),
-  .reg .mstore,
-  .push [0x19] (by decide),
-  .reg (.dup 1),
-  .reg .mstore,
-  .push [0x74, 0x72, 0x61, 0x6e, 0x73, 0x66, 0x65, 0x72, 0x28, 0x61, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73, 0x2c, 0x75, 0x69, 0x6e, 0x74, 0x32, 0x35, 0x36, 0x29, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00] (by decide),
-  .push [0x20] (by decide),
-  .reg (.swap 1),
-  .reg (.dup 2),
-  .reg .add,
-  .reg .mstore,
-  .reg (.dup 1),
-  .reg .mload,
-  .push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide),
-  .reg (.dup 5),
-  .reg (.dup 1),
-  .reg .and,
-  .push [0x24] (by decide),
-  .reg (.dup 3),
-  .reg .add,
-  .reg .mstore,
-  .push [0x44] (by decide),
-  .reg (.dup 0),
-  .reg (.dup 3),
-  .reg .add,
-  .reg (.dup 6),
-  .reg (.swap 0),
-  .reg .mstore,
-  .reg (.dup 4),
-  .reg .mload,
-  .reg (.dup 0),
-  .reg (.dup 4),
-  .reg .sub,
-  .reg (.swap 0),
-  .reg (.swap 1),
-  .reg .add,
-  .reg (.dup 1),
-  .reg .mstore,
-  .push [0x64] (by decide),
-  .reg (.swap 0),
-  .reg (.swap 2),
-  .reg .add,
-  .reg (.dup 4),
-  .reg .mstore,
-  .reg (.swap 1),
-  .reg (.dup 1),
-  .reg .add,
-  .reg (.dup 0),
-  .reg .mload,
-  .push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide),
-  .reg .and,
-  .push [0xa9, 0x05, 0x9c, 0xbb, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00] (by decide),
-  .reg .or,
-  .reg (.dup 1),
-  .reg .mstore,
-  .reg (.swap 2),
-  .reg .mload,
-  .reg (.dup 1),
-  .reg .mload,
-  .push [0x00] (by decide),
-  .reg (.swap 4),
-  .push [0x60] (by decide),
-  .reg (.swap 4),
-  .reg (.dup 9),
-  .reg .and,
-  .reg (.swap 3),
-  .reg (.swap 2),
-  .reg (.swap 1),
-  .reg (.dup 2),
-  .reg (.swap 1),
-  .reg (.swap 0),
-  .reg (.dup 0),
-  .reg (.dup 3),
-  .reg (.dup 3)]
-
-/-- Symbolic initializer state: every free-pointer read stays a read of the actual memory. -/
-theorem skimTransferInitLine_inv {sevm : Sevm} {b final : Devm} {R : List B256} {M : Mem}
-    {G : Nat} {amount toWord tokenWord rho : B256}
-    (run : Line.Run sevm (St b (amount :: toWord :: tokenWord :: rho :: R) M G)
-      skimTransferInitLine final) :
-    let p1 := Bytes.toB256 (M.read (64 : B256).toNat 32).1
-    let M1 := (M.read (64 : B256).toNat 32).2
-    let M2 := M1.write (64 : B256).toNat ((64 + p1) : B256).toBytes
-    let M3 := M2.write (p1 : B256).toNat (25 : B256).toBytes
-    let M4 := M3.write ((32 + p1) : B256).toNat
-      (0x7472616e7366657228616464726573732c75696e743235362900000000000000 : B256).toBytes
-    let p2 := Bytes.toB256 (M4.read (64 : B256).toNat 32).1
-    let M5 := (M4.read (64 : B256).toNat 32).2
-    let M6 := M5.write ((p2 + 36) : B256).toNat
-      ((0xffffffffffffffffffffffffffffffffffffffff &&& toWord) : B256).toBytes
-    let M7 := M6.write ((p2 + 68) : B256).toNat (amount : B256).toBytes
-    let p3 := Bytes.toB256 (M7.read (64 : B256).toNat 32).1
-    let M8 := (M7.read (64 : B256).toNat 32).2
-    let M9 := M8.write (p3 : B256).toNat ((68 + (p2 - p3)) : B256).toBytes
-    let M10 := M9.write (64 : B256).toNat ((p2 + 100) : B256).toBytes
-    let p4 := Bytes.toB256 (M10.read ((p3 + 32) : B256).toNat 32).1
-    let M11 := (M10.read ((p3 + 32) : B256).toNat 32).2
-    let M12 := M11.write ((p3 + 32) : B256).toNat
-      ((0xa9059cbb00000000000000000000000000000000000000000000000000000000 |||
-        (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff &&& p4)) : B256).toBytes
-    let p5 := Bytes.toB256 (M12.read (64 : B256).toNat 32).1
-    let M13 := (M12.read (64 : B256).toNat 32).2
-    let p6 := Bytes.toB256 (M13.read (p3 : B256).toNat 32).1
-    let M14 := (M13.read (p3 : B256).toNat 32).2
-    ∃ gas, final = St b ((p3 + 32) :: p5 :: p6 :: p6 :: (p3 + 32) :: p5 :: p5 :: p3 ::
-      (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) :: 96 :: 0 :: amount ::
-      toWord :: tokenWord :: rho :: R) M14 gas := by
-  dsimp only [skimTransferInitLine] at run
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_mload hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_mstore hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_mstore hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_mstore hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_mload hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_and hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_mstore hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_mstore hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_mload hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_sub hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_mstore hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_mstore hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_mload hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_and hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_or hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_mstore hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_mload hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_mload hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_and hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨gas, rfl⟩ := ri_dup rfl hs
-  cases run
-  exact ⟨gas, rfl⟩
-
-/-- The literal four-byte merge and CALL operand preparation of helper57. -/
+/-- The literal CALL preparation after helper57's copy loop. -/
 def skimTransferCallLine : List Ninst := [
   .push [0x01] (by decide),
   .reg (.dup 3),
@@ -627,392 +430,12 @@ theorem skimTransferDecode_inv {P : Sevm → Devm → Ninst → Devm → Prop}
             obtain ⟨nonzero, residual, result⟩ := skimTransferCheck_inv project head
             exact ⟨⟨_, residual, result⟩, Or.inr ⟨width, nonzero⟩⟩
 
-/-- No-wrap pointer arithmetic below the fit bound. -/
-theorem skimOffset {x y : B256} (fit : x.toNat + y.toNat < 2 ^ 256) :
-    (x + y).toNat = x.toNat + y.toNat :=
-  B256.toNat_add_eq_of_nof x y fit
-
-/-- The helper57 initializer's byte image over an arbitrary prior image, at a free
-pointer `p` (Nat offset `p.toNat`): selector table, recipient, amount, length word,
-two free-pointer bumps and the merged selector word. -/
-def skimPayloadImage (I : Bytes) (p amount toWord : B256) : Bytes :=
-  let q := p.toNat
-  let J1 := Bytes.writeAt I 64 (64 + p).toBytes
-  let J2 := Bytes.writeAt J1 q (25 : B256).toBytes
-  let J3 := Bytes.writeAt J2 (q + 32)
-    (0x7472616e7366657228616464726573732c75696e743235362900000000000000 : B256).toBytes
-  let J4 := Bytes.writeAt J3 (q + 100)
-    ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes
-  let J5 := Bytes.writeAt J4 (q + 132) amount.toBytes
-  let J6 := Bytes.writeAt J5 (q + 64) (68 : B256).toBytes
-  let J7 := Bytes.writeAt J6 64 (64 + p + 100).toBytes
-  Bytes.writeAt J7 (q + 96)
-    ((0xa9059cbb00000000000000000000000000000000000000000000000000000000 : B256) |||
-      ((0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256) &&&
-        Bytes.toB256 (J7.sliceD (q + 96) 32 0))).toBytes
-
-/-- Evaluation of the symbolic initializer at a fitting free pointer. -/
-theorem skimTransferInit_eval {M : Mem} {p amount toWord : B256}
-    (wf : Mem.Wf M) (word : Bytes.toB256 (M.read 64 32).1 = p)
-    (low : 96 ≤ p.toNat) (high : p.toNat + 1024 < 2 ^ 256) :
-    let p1 := Bytes.toB256 (M.read (64 : B256).toNat 32).1
-    let M1 := (M.read (64 : B256).toNat 32).2
-    let M2 := M1.write (64 : B256).toNat ((64 + p1) : B256).toBytes
-    let M3 := M2.write (p1 : B256).toNat (25 : B256).toBytes
-    let M4 := M3.write ((32 + p1) : B256).toNat
-      (0x7472616e7366657228616464726573732c75696e743235362900000000000000 : B256).toBytes
-    let p2 := Bytes.toB256 (M4.read (64 : B256).toNat 32).1
-    let M5 := (M4.read (64 : B256).toNat 32).2
-    let M6 := M5.write ((p2 + 36) : B256).toNat
-      ((0xffffffffffffffffffffffffffffffffffffffff &&& toWord) : B256).toBytes
-    let M7 := M6.write ((p2 + 68) : B256).toNat (amount : B256).toBytes
-    let p3 := Bytes.toB256 (M7.read (64 : B256).toNat 32).1
-    let M8 := (M7.read (64 : B256).toNat 32).2
-    let M9 := M8.write (p3 : B256).toNat ((68 + (p2 - p3)) : B256).toBytes
-    let M10 := M9.write (64 : B256).toNat ((p2 + 100) : B256).toBytes
-    let p4 := Bytes.toB256 (M10.read ((p3 + 32) : B256).toNat 32).1
-    let M11 := (M10.read ((p3 + 32) : B256).toNat 32).2
-    let M12 := M11.write ((p3 + 32) : B256).toNat
-      ((0xa9059cbb00000000000000000000000000000000000000000000000000000000 |||
-        (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff &&& p4)) : B256).toBytes
-    let p5 := Bytes.toB256 (M12.read (64 : B256).toNat 32).1
-    let M13 := (M12.read (64 : B256).toNat 32).2
-    let p6 := Bytes.toB256 (M13.read (p3 : B256).toNat 32).1
-    let M14 := (M13.read (p3 : B256).toNat 32).2
-    p1 = p ∧ p2 = 64 + p ∧ p3 = 64 + p ∧ p5 = 64 + p + 100 ∧ p6 = 68 ∧
-      Mem.Wf M14 ∧ Mem.Reads M14 (skimPayloadImage M.data.toList p amount toWord) := by
-  intro p1 M1 M2 M3 M4 p2 M5 M6 M7 p3 M8 M9 M10 p4 M11 M12 p5 M13 p6 M14
-  have q64 : (64 + p).toNat = p.toNat + 64 := by
-    rw [B256.add_comm, skimOffset (by change p.toNat + 64 < 2 ^ 256; omega)]; rfl
-  have hp1 : p1 = p := word
-  have r1 : Mem.Reads M1 M.data.toList := Mem.reads_data M
-  have w1 : Mem.Wf M1 := wf.extend _ _
-  have r2 := r1.write w1 64 (64 + p1).toBytes
-  change Mem.Reads M2 _ at r2
-  have w2 : Mem.Wf M2 := w1.write _ _
-  have r3 := r2.write w2 p1.toNat (25 : B256).toBytes
-  change Mem.Reads M3 _ at r3
-  have w3 : Mem.Wf M3 := w2.write _ _
-  have q32 : (32 + p1).toNat = p.toNat + 32 := by
-    rw [hp1, B256.add_comm, skimOffset (by change p.toNat + 32 < 2 ^ 256; omega)]; rfl
-  have r4 := r3.write w3 (32 + p1).toNat
-    (0x7472616e7366657228616464726573732c75696e743235362900000000000000 : B256).toBytes
-  change Mem.Reads M4 _ at r4
-  have w4 : Mem.Wf M4 := w3.write _ _
-  rw [q32, hp1] at r4
-  have hp2 : p2 = 64 + p := by
-    change Bytes.toB256 (M4.read 64 32).1 = 64 + p
-    rw [r4.read, Bytes.readWord_writeAt_of_disjoint _ 64 _ _ (Or.inl (by omega)),
-      Bytes.readWord_writeAt_of_disjoint _ 64 _ _ (Or.inl (by omega)),
-      Bytes.readWord_writeAt_self]
-  have w5 : Mem.Wf M5 := w4.extend _ _
-  have r5 : Mem.Reads M5 _ := r4.extend 64 32
-  have q100 : (p2 + 36).toNat = p.toNat + 100 := by
-    rw [hp2, skimOffset (by rw [q64]; change p.toNat + 64 + 36 < 2 ^ 256; omega), q64]; rfl
-  have q132 : (p2 + 68).toNat = p.toNat + 132 := by
-    rw [hp2, skimOffset (by rw [q64]; change p.toNat + 64 + 68 < 2 ^ 256; omega), q64]; rfl
-  have r6 := r5.write w5 (p2 + 36).toNat
-    ((0xffffffffffffffffffffffffffffffffffffffff &&& toWord) : B256).toBytes
-  change Mem.Reads M6 _ at r6
-  rw [q100] at r6
-  have w6 : Mem.Wf M6 := w5.write _ _
-  have r7 := r6.write w6 (p2 + 68).toNat amount.toBytes
-  change Mem.Reads M7 _ at r7
-  rw [q132] at r7
-  have w7 : Mem.Wf M7 := w6.write _ _
-  have hp3 : p3 = 64 + p := by
-    change Bytes.toB256 (M7.read 64 32).1 = 64 + p
-    rw [r7.read, Bytes.readWord_writeAt_of_disjoint _ 64 _ _ (Or.inl (by omega)),
-      Bytes.readWord_writeAt_of_disjoint _ 64 _ _ (Or.inl (by omega)),
-      Bytes.readWord_writeAt_of_disjoint _ 64 _ _ (Or.inl (by omega)),
-      Bytes.readWord_writeAt_of_disjoint _ 64 _ _ (Or.inl (by omega)),
-      Bytes.readWord_writeAt_self]
-  have w8 : Mem.Wf M8 := w7.extend _ _
-  have r8 : Mem.Reads M8 _ := r7.extend 64 32
-  have len68 : (68 + (p2 - p3) : B256) = 68 := by
-    rw [hp2, hp3, B256.sub_self]; rfl
-  have r9 := r8.write w8 p3.toNat (68 + (p2 - p3)).toBytes
-  change Mem.Reads M9 _ at r9
-  rw [len68, hp3, q64] at r9
-  have w9 : Mem.Wf M9 := w8.write _ _
-  have r10 := r9.write w9 64 (p2 + 100).toBytes
-  change Mem.Reads M10 _ at r10
-  rw [hp2] at r10
-  have w10 : Mem.Wf M10 := w9.write _ _
-  have q96 : (p3 + 32).toNat = p.toNat + 96 := by
-    rw [hp3, skimOffset (by rw [q64]; change p.toNat + 64 + 32 < 2 ^ 256; omega), q64]; rfl
-  have hp4 : p4 = Bytes.toB256 ((Bytes.writeAt (Bytes.writeAt (Bytes.writeAt
-      (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt M.data.toList 64
-        (64 + p).toBytes) p.toNat (25 : B256).toBytes) (p.toNat + 32)
-        (0x7472616e7366657228616464726573732c75696e743235362900000000000000 : B256).toBytes)
-        (p.toNat + 100) ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes)
-        (p.toNat + 132) amount.toBytes) (p.toNat + 64) (68 : B256).toBytes) 64
-        (64 + p + 100).toBytes).sliceD (p.toNat + 96) 32 0) := by
-    change Bytes.toB256 (M10.read (p3 + 32).toNat 32).1 = _
-    rw [q96, r10.read]
-  have w11 : Mem.Wf M11 := w10.extend _ _
-  have r11 : Mem.Reads M11 _ := r10.extend _ 32
-  have r12 := r11.write w11 (p3 + 32).toNat
-    ((0xa9059cbb00000000000000000000000000000000000000000000000000000000 |||
-      (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff &&& p4)) : B256).toBytes
-  change Mem.Reads M12 _ at r12
-  rw [q96, hp4] at r12
-  have w12 : Mem.Wf M12 := w11.write _ _
-  have hp5 : p5 = 64 + p + 100 := by
-    change Bytes.toB256 (M12.read 64 32).1 = 64 + p + 100
-    rw [r12.read, Bytes.readWord_writeAt_of_disjoint _ 64 _ _ (Or.inl (by omega)),
-      Bytes.readWord_writeAt_self]
-  have w13 : Mem.Wf M13 := w12.extend _ _
-  have r13 : Mem.Reads M13 _ := r12.extend 64 32
-  have hp6 : p6 = 68 := by
-    change Bytes.toB256 (M13.read p3.toNat 32).1 = 68
-    rw [hp3, q64, r13.read, Bytes.readWord_writeAt_of_disjoint _ _ _ _ (Or.inl (by omega)),
-      Bytes.readWord_writeAt_of_disjoint _ _ _ _ (Or.inr (by omega)),
-      Bytes.readWord_writeAt_self]
-  exact ⟨hp1, hp2, hp3, hp5, hp6, w13.extend _ _, r13.extend _ 32⟩
-
-/-- Canonical transfer calldata in the initializer image: the merged selector word
-followed by the recipient and amount words, for any prior image below the payload. -/
-theorem skimPayload_tail {J3 : Bytes} {q : Nat} {w64 rec amount : B256} (low : 96 ≤ q) :
-    let J7 := Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt J3 (q + 100)
-      rec.toBytes) (q + 132) amount.toBytes) (q + 64) (68 : B256).toBytes) 64 w64.toBytes
-    (Bytes.writeAt J7 (q + 96)
-      ((0xa9059cbb00000000000000000000000000000000000000000000000000000000 : B256) |||
-        ((0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256) &&&
-          Bytes.toB256 (J7.sliceD (q + 96) 32 0))).toBytes).sliceD (q + 96) 68 0 =
-      abiSelectorBytes 0xa9059cbb ++ rec.toBytes ++ amount.toBytes := by
-  intro J7
-  have pair : J7.sliceD (q + 100) 64 0 = rec.toBytes ++ amount.toBytes := by
-    change (Bytes.writeAt (Bytes.writeAt _ (q + 64) (68 : B256).toBytes) 64 w64.toBytes).sliceD
-      (q + 100) 64 0 = _
-    rw [Bytes.sliceD_writeAt_after _ _ _ 64 64 (by rw [B256.length_toBytes]; omega),
-      Bytes.sliceD_writeAt_after _ _ _ 64 (q + 64) (by rw [B256.length_toBytes]; omega)]
-    rw [show q + 132 = q + 100 + 32 by omega]
-    exact Bytes.read_two_word_writes_at J3 (q + 100) rec amount
-  let mask := (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256)
-  let selectorWord := (0xa9059cbb00000000000000000000000000000000000000000000000000000000 : B256)
-  let loaded := Bytes.toB256 (J7.sliceD (q + 96) 32 0)
-  have loadedBytes : loaded.toBytes = J7.sliceD (q + 96) 32 0 :=
-    Bytes.toBytes_toB256_of_length (by rw [List.sliceD_eq_map, List.length_map, List.length_range])
-  have mergeEq : selectorWord ||| (mask &&& loaded) =
-      (selectorWord &&& ~~~mask) ||| (loaded &&& mask) := by
-    rw [show selectorWord &&& ~~~mask = selectorWord from rfl]
-    exact congrArg (fun x => selectorWord ||| x) (B256.and_comm mask loaded)
-  have mergeBytes : (selectorWord ||| (mask &&& loaded)).toBytes =
-      abiSelectorBytes 0xa9059cbb ++ (J7.sliceD (q + 96) 32 0).drop 4 := by
-    rw [mergeEq, mergeFour_bytes, loadedBytes,
-      show selectorWord.toBytes.take 4 = abiSelectorBytes 0xa9059cbb from by decide]
-  change (Bytes.writeAt J7 (q + 96) (selectorWord ||| (mask &&& loaded)).toBytes).sliceD
-    (q + 96) 68 0 = _
-  rw [List.append_assoc, List.sliceD_eq_map]
-  apply List.ext_getElem
-  · simp only [List.length_map, List.length_range, List.length_append, abiSelectorBytes_length,
-      B256.length_toBytes]
-  · intro i hi hj
-    simp only [List.length_map, List.length_range] at hi
-    simp only [List.getElem_map, List.getElem_range]
-    have rhs : (abiSelectorBytes 0xa9059cbb ++ (rec.toBytes ++ amount.toBytes)).getD i 0 =
-        (abiSelectorBytes 0xa9059cbb ++ (rec.toBytes ++ amount.toBytes))[i] := by
-      rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hj]
-      rfl
-    refine Eq.trans ?_ rhs
-    rw [Bytes.getD_writeAt]
-    by_cases isPrefix : i < 4
-    · rw [ite_eq_left ⟨by omega, by rw [B256.length_toBytes]; omega⟩,
-        show q + 96 + i - (q + 96) = i by omega, mergeBytes,
-        List.getD_append_left (d := (0 : UInt8)) (by rw [abiSelectorBytes_length]; exact isPrefix),
-        List.getD_append_left (d := (0 : UInt8)) (by rw [abiSelectorBytes_length]; exact isPrefix)]
-    · rw [List.getD_append_right (d := (0 : UInt8)) (by rw [abiSelectorBytes_length]; omega),
-        abiSelectorBytes_length]
-      have old : J7.getD (q + 96 + i) 0 = (rec.toBytes ++ amount.toBytes).getD (i - 4) 0 := by
-        have projected : (J7.sliceD (q + 100) 64 0).getD (i - 4) 0 =
-            (rec.toBytes ++ amount.toBytes).getD (i - 4) 0 := by rw [pair]
-        rw [Bytes.getD_sliceD_of_lt _ _ _ _ (by omega),
-          show q + 100 + (i - 4) = q + 96 + i by omega] at projected
-        exact projected
-      by_cases first32 : i < 32
-      · rw [ite_eq_left ⟨by omega, by rw [B256.length_toBytes]; omega⟩,
-          show q + 96 + i - (q + 96) = i by omega, mergeBytes,
-          List.getD_append_right (d := (0 : UInt8)) (by rw [abiSelectorBytes_length]; omega),
-          abiSelectorBytes_length, List.getD_drop,
-          Bytes.getD_sliceD_of_lt _ _ _ _ (by omega),
-          show 4 + (i - 4) = i by omega]
-        exact old
-      · rw [ite_eq_right (by rw [B256.length_toBytes]; omega)]
-        exact old
-
-/-- The literal four-byte merge mask of helper57 is the low-28-byte mask. -/
-theorem skimMergeMask :
-    B256.bexp 256 (32 - 4) - 1 = (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256) := by
-  rw [show (32 : B256) - 4 = 28 from rfl]
-  have expEq : Nat.powMod 256 28 (2 ^ 256) = 2 ^ 224 := by
-    simp only [Nat.powMod, Nat.powMod.go, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMul,
-      Nat.reducePow, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLeDiff, ite_true, ite_false,
-      Nat.reduceEqDiff]
-  unfold B256.bexp
-  change (Nat.powMod 256 28 (2 ^ 256)).toB256 - 1 = _
-  rw [expEq]
-  rfl
-
-/-- The actual unaligned68-byte copy (two words, then the four-byte merge) moves the
-payload window exactly, at any free-pointer offset `q`. -/
-theorem skimCopy_image {J8 : Bytes} {q : Nat} :
-    let K1 := Bytes.writeAt J8 (q + 164) (Bytes.toB256 (J8.sliceD (q + 96) 32 0)).toBytes
-    let K2 := Bytes.writeAt K1 (q + 196) (Bytes.toB256 (K1.sliceD (q + 128) 32 0)).toBytes
-    let mask := B256.bexp 256 (32 - 4) - 1
-    let K3 := Bytes.writeAt K2 (q + 228)
-      (((Bytes.toB256 (K2.sliceD (q + 160) 32 0)) &&& ~~~mask) |||
-        ((Bytes.toB256 (K2.sliceD (q + 228) 32 0)) &&& mask)).toBytes
-    K3.sliceD (q + 164) 68 0 = J8.sliceD (q + 96) 68 0 := by
-  intro K1 K2 mask K3
-  have word32 : ∀ (X : Bytes) (s : Nat), (Bytes.toB256 (X.sliceD s 32 0)).toBytes = X.sliceD s 32 0 :=
-    fun X s => Bytes.toBytes_toB256_of_length
-      (by rw [List.sliceD_eq_map, List.length_map, List.length_range])
-  have merge : (((Bytes.toB256 (K2.sliceD (q + 160) 32 0)) &&& ~~~mask) |||
-      ((Bytes.toB256 (K2.sliceD (q + 228) 32 0)) &&& mask)).toBytes =
-      (K2.sliceD (q + 160) 32 0).take 4 ++ (K2.sliceD (q + 228) 32 0).drop 4 := by
-    change (((Bytes.toB256 (K2.sliceD (q + 160) 32 0)) &&& ~~~(B256.bexp 256 (32 - 4) - 1)) |||
-      ((Bytes.toB256 (K2.sliceD (q + 228) 32 0)) &&& (B256.bexp 256 (32 - 4) - 1))).toBytes = _
-    rw [skimMergeMask, mergeFour_bytes, word32, word32]
-  rw [List.sliceD_eq_map, List.sliceD_eq_map]
-  apply List.map_congr_left
-  intro i hi
-  have short := List.mem_range.mp hi
-  change (Bytes.writeAt K2 (q + 228) _).getD (q + 164 + i) 0 = J8.getD (q + 96 + i) 0
-  rw [Bytes.getD_writeAt, B256.length_toBytes]
-  by_cases tail4 : 64 ≤ i
-  · rw [ite_eq_left ⟨by omega, by omega⟩, merge,
-      List.getD_append_left (d := (0 : UInt8)) (by
-        rw [List.length_take, List.sliceD_eq_map, List.length_map, List.length_range]; omega),
-      List.getD_eq_getElem?_getD, List.getElem?_take_of_lt (by omega), ← List.getD_eq_getElem?_getD, Bytes.getD_sliceD_of_lt _ _ _ _ (by omega),
-      show q + 160 + (q + 164 + i - (q + 228)) = q + 96 + i by omega]
-    change (Bytes.writeAt K1 (q + 196) _).getD (q + 96 + i) 0 = _
-    rw [Bytes.getD_writeAt, B256.length_toBytes, ite_eq_right (by omega)]
-    change (Bytes.writeAt J8 (q + 164) _).getD (q + 96 + i) 0 = _
-    rw [Bytes.getD_writeAt, B256.length_toBytes, ite_eq_right (by omega)]
-  · rw [ite_eq_right (by omega)]
-    change (Bytes.writeAt K1 (q + 196) _).getD (q + 164 + i) 0 = _
-    rw [Bytes.getD_writeAt, B256.length_toBytes]
-    by_cases second : 32 ≤ i
-    · rw [ite_eq_left ⟨by omega, by omega⟩, word32, Bytes.getD_sliceD_of_lt _ _ _ _ (by omega),
-        show q + 128 + (q + 164 + i - (q + 196)) = q + 96 + i by omega]
-      change (Bytes.writeAt J8 (q + 164) _).getD (q + 96 + i) 0 = _
-      rw [Bytes.getD_writeAt, B256.length_toBytes, ite_eq_right (by omega)]
-    · rw [ite_eq_right (by omega)]
-      change (Bytes.writeAt J8 (q + 164) _).getD (q + 164 + i) 0 = _
-      rw [Bytes.getD_writeAt, B256.length_toBytes, ite_eq_left ⟨by omega, by omega⟩, word32,
-        Bytes.getD_sliceD_of_lt _ _ _ _ (by omega),
-        show q + 96 + (q + 164 + i - (q + 164)) = q + 96 + i by omega]
-
 theorem skimAddSub {x : B256} (fit : x.toNat + 68 < 2 ^ 256) : 68 + x - x = 68 := by
   apply B256.toNat_inj
-  rw [B256.toNat_sub, skimOffset (by change 68 + x.toNat < 2 ^ 256; omega)]
+  rw [B256.toNat_sub, B256.toNat_add_eq_of_nof 68 x (by change 68 + x.toNat < 2 ^ 256; omega)]
   change (2 ^ 256 + (68 + x.toNat) - x.toNat) % 2 ^ 256 = 68
   rw [show 2 ^ 256 + (68 + x.toNat) - x.toNat = 68 + 2 ^ 256 by omega, Nat.add_mod_right]
   rfl
-
-/-- The helper57 initializer at a fitting free pointer `p`: evaluated stack, and the
-memory's byte image is the payload image over the prior memory. -/
-theorem skimTransferInitEval_inv {sevm : Sevm} {b final : Devm} {R : List B256} {M : Mem}
-    {G : Nat} {p amount toWord tokenWord rho : B256}
-    (wf : Mem.Wf M) (word : Bytes.toB256 (M.read 64 32).1 = p)
-    (low : 96 ≤ p.toNat) (high : p.toNat + 1024 < 2 ^ 256)
-    (run : Line.Run sevm (St b (amount :: toWord :: tokenWord :: rho :: R) M G)
-      skimTransferInitLine final) :
-    ∃ V gas, final = St b ((64 + p + 32) :: (64 + p + 100) :: 68 :: 68 :: (64 + p + 32) ::
-      (64 + p + 100) :: (64 + p + 100) :: (64 + p) ::
-      (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) :: 96 :: 0 :: amount ::
-      toWord :: tokenWord :: rho :: R) V gas ∧ Mem.Wf V ∧
-      Mem.Reads V (skimPayloadImage M.data.toList p amount toWord) := by
-  have sym := skimTransferInitLine_inv run
-  have ev := skimTransferInit_eval (amount := amount) (toWord := toWord) wf word low high
-  dsimp only at sym ev
-  obtain ⟨gas, hfinal⟩ := sym
-  obtain ⟨_, _, e3, e5, e6, w14, r14⟩ := ev
-  refine ⟨_, gas, ?_, w14, r14⟩
-  rw [hfinal, e5, e6, e3]
-
-/-- Evaluation of the copy and CALL preparation over a known payload image: the CALL
-input pointer is the bumped free pointer and the68 CALL bytes are the payload window. -/
-theorem skimTransferCall_eval {V : Mem} {J : Bytes} {p : B256}
-    (wf : Mem.Wf V) (r : Mem.Reads V J)
-    (word64 : Bytes.toB256 (J.sliceD 64 32 0) = 64 + p + 100)
-    (low : 96 ≤ p.toNat) (high : p.toNat + 1024 < 2 ^ 256) :
-    let src : B256 := 64 + p + 32
-    let dst : B256 := 64 + p + 100
-    let C1 := (V.read src.toNat 32).2.write dst.toNat
-      (Bytes.toB256 (V.read src.toNat 32).1).toBytes
-    let C2 := (C1.read (32 + src).toNat 32).2.write (32 + dst).toNat
-      (Bytes.toB256 (C1.read (32 + src).toNat 32).1).toBytes
-    let mask := B256.bexp 256 (32 - 4) - 1
-    let N1 := (C2.read (32 + (32 + src)).toNat 32).2
-    let N2 := (N1.read (32 + (32 + dst)).toNat 32).2
-    let N3 := N2.write (32 + (32 + dst)).toNat
-      (((Bytes.toB256 (C2.read (32 + (32 + src)).toNat 32).1) &&& ~~~mask) |||
-        ((Bytes.toB256 (N1.read (32 + (32 + dst)).toNat 32).1) &&& mask)).toBytes
-    let q := Bytes.toB256 (N3.read 64 32).1
-    let N4 := (N3.read 64 32).2
-    q = 64 + p + 100 ∧ (N4.read (p.toNat + 164) 68).1 = J.sliceD (p.toNat + 96) 68 0 ∧
-      Mem.Wf N4 := by
-  intro src dst C1 C2 mask N1 N2 N3 q N4
-  have h64 : (64 + p).toNat = p.toNat + 64 := by
-    rw [B256.add_comm, skimOffset (by change p.toNat + 64 < 2 ^ 256; omega)]; rfl
-  have hs0 : src.toNat = p.toNat + 96 := by
-    have fit : (64 + p).toNat + (32 : B256).toNat < 2 ^ 256 := by
-      rw [h64]; change p.toNat + 64 + 32 < 2 ^ 256; omega
-    change (64 + p + 32).toNat = _
-    rw [skimOffset fit, h64]; change p.toNat + 64 + 32 = p.toNat + 96; omega
-  have hd0 : dst.toNat = p.toNat + 164 := by
-    have fit : (64 + p).toNat + (100 : B256).toNat < 2 ^ 256 := by
-      rw [h64]; change p.toNat + 64 + 100 < 2 ^ 256; omega
-    change (64 + p + 100).toNat = _
-    rw [skimOffset fit, h64]; change p.toNat + 64 + 100 = p.toNat + 164; omega
-  have hs1 : (32 + src).toNat = p.toNat + 128 := by
-    have fit : (32 : B256).toNat + src.toNat < 2 ^ 256 := by
-      rw [hs0]; change 32 + (p.toNat + 96) < 2 ^ 256; omega
-    rw [skimOffset fit, hs0]; change 32 + (p.toNat + 96) = p.toNat + 128; omega
-  have hd1 : (32 + dst).toNat = p.toNat + 196 := by
-    have fit : (32 : B256).toNat + dst.toNat < 2 ^ 256 := by
-      rw [hd0]; change 32 + (p.toNat + 164) < 2 ^ 256; omega
-    rw [skimOffset fit, hd0]; change 32 + (p.toNat + 164) = p.toNat + 196; omega
-  have hs2 : (32 + (32 + src)).toNat = p.toNat + 160 := by
-    have fit : (32 : B256).toNat + (32 + src).toNat < 2 ^ 256 := by
-      rw [hs1]; change 32 + (p.toNat + 128) < 2 ^ 256; omega
-    rw [skimOffset fit, hs1]; change 32 + (p.toNat + 128) = p.toNat + 160; omega
-  have hd2 : (32 + (32 + dst)).toNat = p.toNat + 228 := by
-    have fit : (32 : B256).toNat + (32 + dst).toNat < 2 ^ 256 := by
-      rw [hd1]; change 32 + (p.toNat + 196) < 2 ^ 256; omega
-    rw [skimOffset fit, hd1]; change 32 + (p.toNat + 196) = p.toNat + 228; omega
-  have w1 : Mem.Wf C1 := (wf.extend _ _).write _ _
-  have r1 := (r.extend src.toNat 32).write (wf.extend _ _) dst.toNat
-    (Bytes.toB256 (V.read src.toNat 32).1).toBytes
-  change Mem.Reads C1 _ at r1
-  rw [hd0, r.read, hs0] at r1
-  have w2 : Mem.Wf C2 := (w1.extend _ _).write _ _
-  have r2 := (r1.extend (32 + src).toNat 32).write (w1.extend _ _) (32 + dst).toNat
-    (Bytes.toB256 (C1.read (32 + src).toNat 32).1).toBytes
-  change Mem.Reads C2 _ at r2
-  rw [hd1, r1.read, hs1] at r2
-  have wN : Mem.Wf N3 := ((w2.extend _ _).extend _ _).write _ _
-  have rN := ((r2.extend (32 + (32 + src)).toNat 32).extend (32 + (32 + dst)).toNat 32).write
-    ((w2.extend _ _).extend _ _) (32 + (32 + dst)).toNat
-    (((Bytes.toB256 (C2.read (32 + (32 + src)).toNat 32).1) &&& ~~~mask) |||
-      ((Bytes.toB256 (N1.read (32 + (32 + dst)).toNat 32).1) &&& mask)).toBytes
-  change Mem.Reads N3 _ at rN
-  have readN1 : (N1.read (32 + (32 + dst)).toNat 32).1 = _ :=
-    (r2.extend (32 + (32 + src)).toNat 32).read (32 + (32 + dst)).toNat 32
-  rw [readN1, hd2, r2.read, hs2] at rN
-  have copied := skimCopy_image (J8 := J) (q := p.toNat)
-  dsimp only at copied
-  refine ⟨?_, ?_, wN.extend _ _⟩
-  · change Bytes.toB256 (N3.read 64 32).1 = _
-    rw [rN.read, Bytes.readWord_writeAt_of_disjoint _ 64 _ _ (Or.inl (by omega)),
-      Bytes.readWord_writeAt_of_disjoint _ 64 _ _ (Or.inl (by omega)),
-      Bytes.readWord_writeAt_of_disjoint _ 64 _ _ (Or.inl (by omega))]
-    exact word64
-  · have r4 : Mem.Reads N4 _ := rN.extend 64 32
-    rw [r4.read]
-    exact copied
 
 /-- The real helper57 CALL keeps the seven-operand frame below its pushed flag; a
 nonzero flag is an entered call whose parent memory and output settle literally. -/
@@ -1055,22 +478,6 @@ theorem skimTransferCallStep_inv {sevm : Sevm} {b d : Devm} {R : List B256} {M :
     rw [memory, parentMemory, returned]
     rfl
 
-/-- The payload image keeps the bumped free pointer in its pointer word. -/
-theorem skimPayloadImage_word {I : Bytes} {p amount toWord : B256} (low : 96 ≤ p.toNat) :
-    Bytes.toB256 ((skimPayloadImage I p amount toWord).sliceD 64 32 0) = 64 + p + 100 := by
-  unfold skimPayloadImage
-  dsimp only
-  rw [Bytes.readWord_writeAt_of_disjoint _ 64 _ _ (Or.inl (by omega)),
-    Bytes.readWord_writeAt_self]
-
-/-- Canonical transfer calldata at the payload window of the initializer image. -/
-theorem skimPayloadImage_data {I : Bytes} {p amount toWord : B256} (low : 96 ≤ p.toNat) :
-    (skimPayloadImage I p amount toWord).sliceD (p.toNat + 96) 68 0 =
-      abiSelectorBytes 0xa9059cbb ++
-        ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes ++
-          amount.toBytes := by
-  unfold skimPayloadImage
-  exact skimPayload_tail low
 
 /-- A window inside a zero-padded prefix slice reads the original prefix. -/
 theorem skimSliceD_prefix (xs : Bytes) {n : Nat} (enough : 32 ≤ n) :
@@ -1129,7 +536,7 @@ theorem skimTransferTail_flag_inv {P : Sevm → Devm → Ninst → Devm → Prop
         ← (Mem.reads_data N).read]
       exact word
     rw [hptr] at accept
-    have p32 : (ptr + 32).toNat = ptr.toNat + 32 := skimOffset (by change ptr.toNat + 32 < 2 ^ 256; omega)
+    have p32 : (ptr + 32).toNat = ptr.toNat + 32 := B256.toNat_add_eq_of_nof _ _ (by change ptr.toNat + 32 < 2 ^ 256; omega)
     have p32' : (32 + ptr).toNat = ptr.toNat + 32 := by rw [B256.add_comm]; exact p32
     have rD1 : Mem.Reads (d.memory.read 64 32).2 _ := rD.extend 64 32
     have wD1 : Mem.Wf (d.memory.read 64 32).2 := wD.extend 64 32
@@ -1148,38 +555,77 @@ theorem skimTransferTail_flag_inv {P : Sevm → Devm → Ninst → Devm → Prop
         Nat.sub_self, lenNat, skimSliceD_prefix _ enough] at head
       exact ⟨enough, head⟩
 
-/-- The same tail without the success flag. -/
-theorem skimTransferTail_inv {P : Sevm → Devm → Ninst → Devm → Prop}
-    {sevm : Sevm} {b out : Devm} {R : List B256} {N : Mem} {G : Nat}
-    {forwarded tokenM ptr endWord amount toWord tokenWord rho : B256}
-    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
-    (fork : CoveredFork sevm.benvStat.fork) (wf : Mem.Wf (N.read 64 32).2)
-    (word : Bytes.toB256 (N.read 64 32).1 = ptr)
-    (low : 96 ≤ ptr.toNat) (high : ptr.toNat + 64 < 2 ^ 256)
-    (run : SFunc.RunCutP P cert.prog sevm []
-      (St b (forwarded :: tokenM :: 0 :: ptr :: 68 :: ptr :: 0 :: endWord :: tokenM :: 96 :: 0 ::
-        amount :: toWord :: tokenWord :: rho :: R) (N.read 64 32).2 G)
-      (.next (.exec .call) skimTransferReplyTree) (.done (.returned out))) :
-    ∃ d, P sevm (St b (forwarded :: tokenM :: 0 :: ptr :: 68 :: ptr :: 0 :: endWord :: tokenM ::
-        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) (N.read 64 32).2 G) (.exec .call) d ∧
-      d.output = b.output ∧ d.returnData.length < 2 ^ 256 ∧
-      (d.returnData = [] ∨ (32 ≤ d.returnData.length ∧
-        Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0)) ∧
-      ∃ M' residual, out = St d R M' residual := by
-  obtain ⟨d, callP, _, output, width, accept, outEq⟩ :=
-    skimTransferTail_flag_inv project fork wf word low high run
-  exact ⟨d, callP, output, width, accept, outEq⟩
 
-/-- A returned pointer-generic helper57 run at a fitting free pointer `p`: the SAME
-P-step CALL with canonical transfer calldata at `p+164`, the optional-bool acceptance
-of its full reply, and the returned frame. Child effects stay opaque in `d`. -/
+/-- The memory the literal copy loop and CALL preparation leave before the CALL's
+free-pointer reload: two copied words, then the merged four-byte tail word. -/
+def skimCopyCallMemory (N : Mem) (src dst : B256) : Mem :=
+  let M1 := (N.read src.toNat 32).2.write dst.toNat (Bytes.toB256 (N.read src.toNat 32).1).toBytes
+  let M2 := (M1.read (32 + src).toNat 32).2.write (32 + dst).toNat
+    (Bytes.toB256 (M1.read (32 + src).toNat 32).1).toBytes
+  let mask := B256.bexp 256 (32 - 4) - 1
+  let M3 := (M2.read (32 + (32 + src)).toNat 32).2
+  (M3.read (32 + (32 + dst)).toNat 32).2.write (32 + (32 + dst)).toNat
+    (((Bytes.toB256 (M2.read (32 + (32 + src)).toNat 32).1) &&& ~~~mask) |||
+      ((Bytes.toB256 (M3.read (32 + (32 + dst)).toNat 32).1) &&& mask)).toBytes
+
+/-- The walked copy keeps the free pointer carried by the actual memory. -/
+theorem skimCopyCallMemory_ptr {N : Mem} {q src dst : B256} {n : Nat} (mem : PtrMem q n N)
+    (low : 96 ≤ dst.toNat) (d32 : (32 + dst).toNat = dst.toNat + 32)
+    (d64 : (32 + (32 + dst)).toNat = dst.toNat + 64) :
+    ∃ m, PtrMem q m (skimCopyCallMemory N src dst) := by
+  unfold skimCopyCallMemory
+  dsimp only
+  exact ⟨_, ((((((mem.extend _ 32).write _ _ (Or.inr low)).extend _ 32).write _ _
+    (Or.inr (by rw [d32]; omega))).extend _ 32).extend _ 32).write _ _
+      (Or.inr (by rw [d64]; omega))⟩
+
+/-- The walked copy has the same bytes as the API's ordered copy image. -/
+theorem skimCopyCallMemory_read {N : Mem} {src dst : B256} (wf : Mem.Wf N)
+    (s32 : (32 + src).toNat = src.toNat + 32) (s64 : (32 + (32 + src)).toNat = src.toNat + 64)
+    (d32 : (32 + dst).toNat = dst.toNat + 32) (d64 : (32 + (32 + dst)).toNat = dst.toNat + 64)
+    (i n : Nat) :
+    ((skimCopyCallMemory N src dst).read i n).1 =
+      ((Blanc.Lift.copy68Memory N src.toNat dst.toNat).read i n).1 := by
+  unfold skimCopyCallMemory Blanc.Lift.copy68Memory
+  dsimp only
+  rw [s32, s64, d32, d64]
+  simp only [show ∀ (μ : Mem) (j k : Nat), (μ.read j k).2 = μ.extend j k from fun _ _ _ => rfl]
+  have r0 := Mem.reads_data N
+  have rW1 := (r0.extend src.toNat 32).write (wf.extend src.toNat 32) dst.toNat
+    (Bytes.toB256 (N.read src.toNat 32).1).toBytes
+  have rD1 := r0.write wf dst.toNat (Bytes.toB256 (N.read src.toNat 32).1).toBytes
+  have wW1 := (wf.extend src.toNat 32).write dst.toNat (Bytes.toB256 (N.read src.toNat 32).1).toBytes
+  have wD1 := wf.write dst.toNat (Bytes.toB256 (N.read src.toNat 32).1).toBytes
+  rw [rW1.read (src.toNat + 32) 32, rD1.read (src.toNat + 32) 32]
+  have rW2 := (rW1.extend (src.toNat + 32) 32).write (wW1.extend (src.toNat + 32) 32)
+    (dst.toNat + 32) (Bytes.toB256 ((Bytes.writeAt N.data.toList dst.toNat
+      (Bytes.toB256 (N.read src.toNat 32).1).toBytes).sliceD (src.toNat + 32) 32 0)).toBytes
+  have rD2 := rD1.write wD1
+    (dst.toNat + 32) (Bytes.toB256 ((Bytes.writeAt N.data.toList dst.toNat
+      (Bytes.toB256 (N.read src.toNat 32).1).toBytes).sliceD (src.toNat + 32) 32 0)).toBytes
+  have wW2 := (wW1.extend (src.toNat + 32) 32).write (dst.toNat + 32) (Bytes.toB256
+    ((Bytes.writeAt N.data.toList dst.toNat
+      (Bytes.toB256 (N.read src.toNat 32).1).toBytes).sliceD (src.toNat + 32) 32 0)).toBytes
+  have wD2 := wD1.write (dst.toNat + 32) (Bytes.toB256
+    ((Bytes.writeAt N.data.toList dst.toNat
+      (Bytes.toB256 (N.read src.toNat 32).1).toBytes).sliceD (src.toNat + 32) 32 0)).toBytes
+  have rW3 := rW2.extend (src.toNat + 64) 32
+  have wW3 := wW2.extend (src.toNat + 64) 32
+  rw [rW2.read (src.toNat + 64) 32, rD2.read (src.toNat + 64) 32,
+    rW3.read (dst.toNat + 64) 32, rD2.read (dst.toNat + 64) 32,
+    ((rW3.extend (dst.toNat + 64) 32).write (wW3.extend (dst.toNat + 64) 32) _ _).read,
+    ((rD2.extend (dst.toNat + 64) 32).write (wD2.extend (dst.toNat + 64) 32) _ _).read]
+
+/-- A returned pointer-generic helper57 run at a free pointer `p` carried by the actual
+memory (`PtrMem`): the SAME P-step CALL with canonical transfer calldata at `p+164`, its
+nonzero success flag, the optional-bool acceptance of its full reply, and the returned
+frame. Child effects stay opaque in `d`. -/
 theorem skimTransfer_flag_inv {P : Sevm → Devm → Ninst → Devm → Prop}
-    {sevm : Sevm} {b out : Devm} {R : List B256} {M : Mem} {G : Nat}
+    {sevm : Sevm} {b out : Devm} {R : List B256} {M : Mem} {G : Nat} {n : Nat}
     {p amount toWord tokenWord rho : B256}
     (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
     (fork : CoveredFork sevm.benvStat.fork)
-    (wf : Mem.Wf M) (word : Bytes.toB256 (M.read 64 32).1 = p)
-    (low : 96 ≤ p.toNat) (high : p.toNat + 1024 < 2 ^ 256)
+    (mem : PtrMem p n M) (low : 128 ≤ p.toNat) (high : p.toNat + 260 < 2 ^ 256)
     (run : SFunc.RunP P cert.prog sevm
       (St b (amount :: toWord :: tokenWord :: rho :: R) M G) t_1fdb_c57 (.returned out)) :
     ∃ (forwarded : B256) (callGas : Nat) (V : Mem) (d : Devm),
@@ -1195,65 +641,69 @@ theorem skimTransfer_flag_inv {P : Sevm → Devm → Ninst → Devm → Prop}
       (d.returnData = [] ∨ (32 ≤ d.returnData.length ∧
         Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0)) ∧
       ∃ M' residual, out = St d R M' residual := by
-  have h := SFunc.runP_iff_runCutP_nil.mp run
-  unfold t_1fdb_c57 at h
-  obtain ⟨_, h⟩ := ric_destP h
+  have nat64 : (64 + p).toNat = p.toNat + 64 := by
+    rw [B256.add_comm (xs := 64)]
+    exact B256.toNat_add_eq_of_nof p 64 (by change p.toNat + 64 < 2 ^ 256; omega)
+  have nat96 : (p + 96).toNat = p.toNat + 96 :=
+    B256.toNat_add_eq_of_nof p 96 (by change p.toNat + 96 < 2 ^ 256; omega)
+  have nat164 : (p + 164).toNat = p.toNat + 164 :=
+    B256.toNat_add_eq_of_nof p 164 (by change p.toNat + 164 < 2 ^ 256; omega)
+  have shape : 64 + p + 100 = p + 164 := by
+    apply B256.toNat_inj
+    rw [B256.toNat_add_eq_of_nof (64 + p) 100
+      (by change (64 + p).toNat + 100 < 2 ^ 256; rw [nat64]; omega), nat64, nat164]
+    change p.toNat + 64 + 100 = p.toNat + 164
+    omega
+  rw [shape]
+  have h := (SFunc.runP_iff_runCutP_nil (P := P)).mp run
+  obtain ⟨_, init, carrier, room⟩ :=
+    safeTransfer_initialize_dynamic_inv project mem low (by omega) h
+  obtain ⟨_, copied⟩ := skimCopy68_inv project (by decide : 71 ∉ ([] : List Nat)) init
+  unfold t_20e1_c57 at copied
+  obtain ⟨_, copied⟩ := ric_destP copied
   change SFunc.RunCutP P cert.prog sevm [] _
-    (skimTransferInitLine.foldr SFunc.next t_20a4_c57) _ at h
-  obtain ⟨_, line, h⟩ := SFunc.RunCutP.split_nexts (fun step => project step)
-    skimTransferInitLine h
-  obtain ⟨V0, _, state, w0, r0⟩ := skimTransferInitEval_inv wf word low high line
-  rw [state] at h
-  obtain ⟨_, h⟩ := skimCopy68_inv project (by decide : 71 ∉ ([] : List Nat)) h
-  unfold t_20e1_c57 at h
-  obtain ⟨_, h⟩ := ric_destP h
-  change SFunc.RunCutP P cert.prog sevm [] _
-    (skimTransferCallLine.foldr SFunc.next (.next (.exec .call) skimTransferReplyTree)) _ at h
-  obtain ⟨_, line, h⟩ := SFunc.RunCutP.split_nexts (fun step => project step)
-    skimTransferCallLine h
+    (skimTransferCallLine.foldr SFunc.next (.next (.exec .call) skimTransferReplyTree)) _ at copied
+  obtain ⟨fin, line, tail⟩ := SFunc.RunCutP.split_nexts (fun step => project step)
+    skimTransferCallLine copied
   obtain ⟨forwarded, callGas, state⟩ := skimTransferCallLine_inv line
-  have ev := skimTransferCall_eval (V := V0) w0 r0 (skimPayloadImage_word low) low high
-  dsimp only at state ev
-  obtain ⟨hq, calldata, wN⟩ := ev
-  have h64 : (64 + p).toNat = p.toNat + 64 := by
-    rw [B256.add_comm, skimOffset (by change p.toNat + 64 < 2 ^ 256; omega)]; rfl
-  have h164 : (64 + p + 100).toNat = p.toNat + 164 := by
-    have fit : (64 + p).toNat + (100 : B256).toNat < 2 ^ 256 := by
-      rw [h64]; change p.toNat + 64 + 100 < 2 ^ 256; omega
-    rw [skimOffset fit, h64]; change p.toNat + 64 + 100 = p.toNat + 164; omega
-  have fit68 : (64 + p + 100).toNat + 68 < 2 ^ 256 := by rw [h164]; omega
-  rw [hq, skimAddSub fit68] at state
-  rw [state] at h
+  obtain ⟨C, hC⟩ : ∃ C, C = skimCopyCallMemory (safeTransfer_dynamicPayloadMemory M p amount toWord)
+      (p + 96) (p + 164) := ⟨_, rfl⟩
+  have s32 : (32 + (p + 96)).toNat = (p + 96).toNat + 32 := by
+    rw [B256.add_comm (xs := 32)]
+    exact B256.toNat_add_eq_of_nof (p + 96) 32
+      (by change (p + 96).toNat + 32 < 2 ^ 256; rw [nat96]; omega)
+  have s64 : (32 + (32 + (p + 96))).toNat = (p + 96).toNat + 64 := by
+    rw [B256.add_comm (xs := 32) (ys := 32 + (p + 96)),
+      B256.toNat_add_eq_of_nof (32 + (p + 96)) 32
+        (by change (32 + (p + 96)).toNat + 32 < 2 ^ 256; rw [s32, nat96]; omega), s32]
+    change (p + 96).toNat + 32 + 32 = (p + 96).toNat + 64
+    omega
+  have d32 : (32 + (p + 164)).toNat = (p + 164).toNat + 32 := by
+    rw [B256.add_comm (xs := 32)]
+    exact B256.toNat_add_eq_of_nof (p + 164) 32
+      (by change (p + 164).toNat + 32 < 2 ^ 256; rw [nat164]; omega)
+  have d64 : (32 + (32 + (p + 164))).toNat = (p + 164).toNat + 64 := by
+    rw [B256.add_comm (xs := 32) (ys := 32 + (p + 164)),
+      B256.toNat_add_eq_of_nof (32 + (p + 164)) 32
+        (by change (32 + (p + 164)).toNat + 32 < 2 ^ 256; rw [d32, nat164]; omega), d32]
+    change (p + 164).toNat + 32 + 32 = (p + 164).toNat + 64
+    omega
+  obtain ⟨_, cM⟩ := skimCopyCallMemory_ptr (src := p + 96) carrier (by rw [nat164]; omega) d32 d64
+  rw [← hC] at cM
+  have hq : Bytes.toB256 (C.read 64 32).1 = p + 164 := cM.word
+  have wq : Mem.Wf (C.read 64 32).2 := cM.wf.extend 64 32
+  have calldata : ((C.read 64 32).2.read (p.toNat + 164) 68).1 = abiSelectorBytes 0xa9059cbb ++
+      ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes ++
+        amount.toBytes := by
+    rw [cM.read_self (by have := cM.ge; omega), hC, ← nat164,
+      skimCopyCallMemory_read carrier.wf s32 s64 d32 d64]
+    exact safeTransfer_dynamicCall_data mem.wf low (by omega)
+  simp only [hC, skimCopyCallMemory] at hq wq calldata
+  rw [hq, skimAddSub (by rw [nat164]; omega)] at state
+  rw [state] at tail
   obtain ⟨d, call, flagged, output, width, accept, outEq⟩ :=
-    skimTransferTail_flag_inv project fork wN hq
-    (by rw [h164]; omega) (by rw [h164]; omega) h
-  exact ⟨forwarded, callGas, _, d, call, calldata.trans (skimPayloadImage_data low), flagged,
-    output, width, accept, outEq⟩
-
-/-- The same helper inverse without the success flag. -/
-theorem skimTransfer_inv {P : Sevm → Devm → Ninst → Devm → Prop}
-    {sevm : Sevm} {b out : Devm} {R : List B256} {M : Mem} {G : Nat}
-    {p amount toWord tokenWord rho : B256}
-    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
-    (fork : CoveredFork sevm.benvStat.fork)
-    (wf : Mem.Wf M) (word : Bytes.toB256 (M.read 64 32).1 = p)
-    (low : 96 ≤ p.toNat) (high : p.toNat + 1024 < 2 ^ 256)
-    (run : SFunc.RunP P cert.prog sevm
-      (St b (amount :: toWord :: tokenWord :: rho :: R) M G) t_1fdb_c57 (.returned out)) :
-    ∃ (forwarded : B256) (callGas : Nat) (V : Mem) (d : Devm),
-      P sevm (St b (forwarded :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        0 :: (64 + p + 100) :: 68 :: (64 + p + 100) :: 0 :: (68 + (64 + p + 100)) ::
-        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) :: 96 :: 0 :: amount ::
-        toWord :: tokenWord :: rho :: R) V callGas) (.exec .call) d ∧
-      (V.read (p.toNat + 164) 68).1 = abiSelectorBytes 0xa9059cbb ++
-        ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes ++
-          amount.toBytes ∧
-      d.output = b.output ∧ d.returnData.length < 2 ^ 256 ∧
-      (d.returnData = [] ∨ (32 ≤ d.returnData.length ∧
-        Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0)) ∧
-      ∃ M' residual, out = St d R M' residual := by
-  obtain ⟨forwarded, callGas, V, d, call, calldata, _, output, width, accept, outEq⟩ :=
-    skimTransfer_flag_inv project fork wf word low high run
-  exact ⟨forwarded, callGas, V, d, call, calldata, output, width, accept, outEq⟩
+    skimTransferTail_flag_inv project fork wq hq (by rw [nat164]; omega)
+      (by rw [nat164]; omega) tail
+  exact ⟨forwarded, callGas, _, d, call, calldata, flagged, output, width, accept, outEq⟩
 
 end Blanc.Lift.UniswapV2Pair
