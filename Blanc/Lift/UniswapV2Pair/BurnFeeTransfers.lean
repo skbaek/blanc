@@ -345,4 +345,107 @@ theorem burnFee_source_finished {U K : WriterKey → Prop} {st : State}
   rw [typed]
   exact consumed
 
+/-- The literal balance decoder/LP SLOAD caller produces the factory suspension
+and complete Burn source consumption in the original root derivation. Actual
+fee-recipient freshness and membership come from that root's finite trace rows;
+entry and initial-query correspondence remain for the pc-zero producer. -/
+theorem burnFeeCaller_source_finished {U K : WriterKey → Prop} {st : State}
+    {D : Exec.Deriv} {b : Devm} {R : List B256} {M : Mem} {G : Nat}
+    {len discarded b0 token1 token0 r1 r0 toWord extρ : B256} {o : Outcome}
+    (fork : CoveredFork D.sevm.benvStat.fork)
+    (mem : PtrMem 128 192 M) (sentinel : memWord M 96 = 0)
+    (rep : WriterRep K (b.getStor D.sevm.currentTarget) st)
+    (tracked : K (.balance D.sevm.currentTarget))
+    (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112)
+    (prior : Frame) (state : prior.current.state = st) (locked : st.unlocked = 0)
+    (nonstatic : prior.context.isStatic = false)
+    (time : prior.context.timestamp = D.sevm.benvStat.time)
+    (pair : prior.context.pair = D.sevm.currentTarget)
+    (sender : prior.context.sender = D.sevm.caller)
+    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
+    (trace : ∀ k ∈ mintTraceKeys D, U k)
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    (installed : some (b.getCode D.sevm.currentTarget).toList = sem.image)
+    (good : ∀ F ∈ Exec.rawFrameRoots D.exc,
+      F.sevm.currentTarget = D.sevm.currentTarget → LockedGood U F)
+    (staticGood : ∀ F ∈ Exec.rawFrameRoots D.exc, F.sevm.currentTarget = prior.context.pair →
+      ∀ k ∈ staticViewDecodedKeys F.sevm, U k)
+    (run : SFunc.RunCutP (StepIn D) cert.prog D.sevm []
+      (St b (len :: 128 :: discarded :: b0 :: token1 :: token0 :: r1 :: r0 ::
+        0 :: 0 :: toWord :: extρ :: R) M G) t_15c3_c37 (.done o)) :
+    feeBurnLiquidity D.sevm b = st.balanceOf prior.context.pair ∧
+    ∃ feeGas feePost, ∃ observation : FeeMintSourceObservation K st D D.sevm
+      (feeBurnWorld D.sevm b)
+      (burnFeeLocals (feeBurnLiquidity D.sevm b) (feeBurnBalance1 M) b0 token1 token0
+        r1 r0 toWord extρ R) (feeBurnMemory M D.sevm.currentTarget) r1 r0 0x15e2
+      (.returned feePost),
+      SFunc.RunP (StepIn D) cert.prog D.sevm
+        (St (feeBurnWorld D.sevm b)
+          (r1 :: r0 :: 0x15e2 :: burnFeeLocals (feeBurnLiquidity D.sevm b)
+            (feeBurnBalance1 M) b0 token1 token0 r1 r0 toWord extρ R)
+          (feeBurnMemory M D.sevm.currentTarget) feeGas) t_26ec_c68 (.returned feePost) ∧
+      StaticAnswered D.sevm (feeFactoryCallWorld D.sevm (feeBurnWorld D.sevm b)) st.factory
+        (requestFor .burnFeeTo st.factory .feeTo).calldata observation.out ∧
+      SFunc.RunCutP (StepIn D) cert.prog D.sevm [] feePost t_15e2_c37 (.done o) ∧
+    let observed := feeBurnObserved toWord token1 token0 (feeBurnLiquidity D.sevm b)
+      (feeBurnBalance1 M) b0 r1 r0 bound0 bound1
+    let fee := feeBranchSourceFee st D.sevm (feeKLastWorld D.sevm observation.d)
+      (Bytes.toB256 (observation.out.take 32)) r0 r1
+    let keys := feeBranchSourceKeys K st D.sevm (feeKLastWorld D.sevm observation.d)
+      (Bytes.toB256 (observation.out.take 32)) r0 r1
+    let supply := feePost.getStorVal D.sevm.currentTarget 0
+    let a0 := (feeBurnLiquidity D.sevm b * b0) / supply
+    let a1 := (feeBurnLiquidity D.sevm b * feeBurnBalance1 M) / supply
+    let w : BurnFinalWords := ⟨supply, feeOnWord (Bytes.toB256 (observation.out.take 32)),
+      feeBurnLiquidity D.sevm b, feeBurnBalance1 M, b0, token1, token0, r1, r0, a1, a0, toWord⟩
+    let frame := burnPricedFrame
+      (prior.beginResume
+        (requestFor .burnFeeTo (feeFactoryWord D.sevm (feeBurnWorld D.sevm b)).toAdr .feeTo)) observed fee
+    let priced := burnPricedSource observed fee a0 a1
+    ∃ residual, ∃ views : List StaticViewTurn,
+      let post := lpBurnPost D.sevm (afterSload D.sevm feePost 0) (burnFinalStack w extρ R)
+        feePost.memory D.sevm.currentTarget.toB256 (feeBurnLiquidity D.sevm b) residual
+      PairViewProvenance D D.sevm prior (feeFactoryWord D.sevm (feeBurnWorld D.sevm b)) views ∧
+      BurnTransferCut (WriterExtend keys (lpMintTouched D.sevm.currentTarget))
+        frame priced D.sevm post w post.memory ∧
+      BurnTransferFinished U frame priced D D.sevm post w post.memory extρ R o
+        (.suspended prior
+          (requestFor .burnFeeTo (feeFactoryWord D.sevm (feeBurnWorld D.sevm b)).toAdr .feeTo)
+          (.burnFee observed))
+        (fun tail => .next (feeObservedResult observation.out)
+          (staticViewTranscript views .done) tail)
+        (staticViewChildReturns prior
+          (requestFor .burnFeeTo (feeFactoryWord D.sevm (feeBurnWorld D.sevm b)).toAdr .feeTo) 0 views) ∧
+      resumeSegment prior (requestFor .burnFeeTo (feeFactoryWord D.sevm (feeBurnWorld D.sevm b)).toAdr .feeTo)
+        (.burnFee observed) (feeObservedResult observation.out) =
+          .suspended frame (burnTransferRequest0 priced) (.burnTransfer0 priced) := by
+  have scratch := feeBurnMemory_ptr mem D.sevm.currentTarget
+  have same : memWord (feeBurnMemory M D.sevm.currentTarget) 96 = 0 :=
+    (burnFeeScratch_sentinel mem.wf D.sevm.currentTarget).trans sentinel
+  have fresh : FeeMintSourceFresh K st D D.sevm (feeBurnWorld D.sevm b)
+      (burnFeeLocals (feeBurnLiquidity D.sevm b) (feeBurnBalance1 M) b0 token1 token0
+        r1 r0 toWord extρ R) (feeBurnMemory M D.sevm.currentTarget) r1 r0 0x15e2 := by
+    intro gw callGas d out call post
+    have member := mint_feeReply_mem fork scratch.wf call ⟨1, _, post.stack, by decide⟩
+    rw [post.returnData] at member
+    exact mint_feeFresh_of_universe inj apart sub (trace _ member) _ _ _ _ _
+  obtain ⟨cached, feeGas, feePost, observation, callee, answered, suffix, _⟩ :=
+    burnFeeCaller_pricing_source_inv fork
+      (by simp only [List.not_mem_nil, not_false_eq_true]) mem sentinel rep tracked
+      bound0 bound1 fresh prior state pair run
+  have beforeRep : WriterRep K ((feeBurnWorld D.sevm b).getStor D.sevm.currentTarget) st := by
+    rw [feeBurnWorld, afterSload_getStor]
+    exact rep
+  have beforeInstalled :
+      some ((feeBurnWorld D.sevm b).getCode D.sevm.currentTarget).toList = sem.image := by
+    rw [feeBurnWorld, afterSload_getCode]
+    exact installed
+  have member := mint_feeReply_mem fork scratch.wf observation.step
+    ⟨1, _, observation.post.stack, by decide⟩
+  rw [observation.post.returnData] at member
+  have finished := burnFee_source_finished observation bound0 bound1 prior beforeRep
+    scratch same tracked suffix state locked nonstatic time pair sender inj apart sub
+    (trace _ member) sem image beforeInstalled fork good staticGood
+  exact ⟨cached, feeGas, feePost, observation, callee, answered, suffix, finished⟩
+
 end Blanc.Lift.UniswapV2Pair

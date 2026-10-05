@@ -221,6 +221,7 @@ theorem burnFeeCaller_pricing_source_inv {K : WriterKey → Prop} {st : State} {
         t_26ec_c68 (.returned feePost) ∧
       StaticAnswered sevm (feeFactoryCallWorld sevm (feeBurnWorld sevm b)) st.factory
         (requestFor .burnFeeTo st.factory .feeTo).calldata observation.out ∧
+      SFunc.RunCutP (StepIn D) cert.prog sevm C feePost t_15e2_c37 seg ∧
       BurnFeePricingResult K st D sevm (feeBurnWorld sevm b) feePost R
         (feeBurnMemory M sevm.currentTarget) C seg (feeBurnLiquidity sevm b) (feeBurnBalance1 M)
         b0 token1 token0 r1 r0 toWord extρ observation bound0 bound1 prior := by
@@ -229,7 +230,7 @@ theorem burnFeeCaller_pricing_source_inv {K : WriterKey → Prop} {st : State} {
   have scratch := feeBurnMemory_ptr mem sevm.currentTarget
   have same : memWord (feeBurnMemory M sevm.currentTarget) 96 = 0 :=
     (burnFeeScratch_sentinel mem.wf sevm.currentTarget).trans sentinel
-  exact ⟨cached, feeGas, feePost, observation, callee, answered,
+  exact ⟨cached, feeGas, feePost, observation, callee, answered, suffix,
     burnFee_pricing_source_inv fork notCut13 scratch same observation tracked
       bound0 bound1 prior state pair suffix⟩
 
