@@ -176,6 +176,12 @@ SHARED += ["Lift.ExactWalkSolc", "Lift.ExactWalkCall"]
 SHARED += ["Lift.ExactWalkMemory", "Lift.ByteWindowMemory", "Lift.WordImage", "Lift.Ecrecover"]
 # Size-free free-pointer word carrier for moved-pointer walks (uv2nh-skim)
 SHARED += ["Lift.PtrWordMemory"]
+# Uniswap V2 second host (uv2sh-*): contract-neutral facilities hoisted from the Pair walks —
+# four-word memory windows, storage-local entry sets, precompile answers as finite root-fixed
+# reply sources, relation-preserving conditional gotos, mutable-CALL post states, and a
+# callee that fails on every input.
+SHARED += ["Lift.WordWindowMemory", "Lift.LocalStorage", "Lift.PrecompileAnswer",
+           "Lift.InvWalkBranchToP", "Lift.MutableCallPost", "Lift.RevertingCallee"]
 # Retained target frames interleaved with actual foreign LOGs, and per-step storage/log
 # transport across arbitrary callee code (uv2nh-skim2): contract-neutral.
 SHARED += ["Lift.TargetLogEvents"]
@@ -184,7 +190,7 @@ SHARED += ["LedgerUpdate"]
 # Floor share bounds for two-reserve AMMs: contract-neutral.
 SHARED += ["Lift.AMMArithmetic", "Lift.BabylonianSqrt"]
 # Token-ledger sums read over a finite covering key footprint: contract-neutral.
-SHARED += ["Lift.LedgerFootprint"]
+SHARED += ["Lift.LedgerFootprint", "Lift.LedgerFootprintOrder"]
 # Ordinary interpreter output provenance for actual-call returndata bounds.
 SHARED += ["Lift.ReturnDataBound", "Lift.PrecompileOutputBound"]
 # Exact chunks and local simulation over existing configured state chronology.
@@ -196,6 +202,8 @@ SHARED += ["Lift.CalldataGuards", "Lift.StaticCall", "Lift.StaticCallGuard", "Li
 # discipline, and concrete-run evaluation (deployed-lido-vyper-v1): contract-neutral.
 SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachChain", "Lift.Cursor", "Lift.CursorCuts", "Lift.CursorExact", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
            "Lift.LockCheck", "Lift.LockCheckSound", "Lift.LockCheckFlow"]
+# Gas erasure over whole lifted runs (uniswap-v2 second host, N5-2): contract-neutral.
+SHARED += ["Lift.GasErasureRun"]
 # The constant memory map and its checker, code tries as data, and the executable-witness
 # engine with its child runs and spawn facts (deployed-lido-vyper-v1, V-): contract-neutral.
 SHARED += ["Lift.MemMap", "Lift.CheckMem", "Lift.CodeTriesData", "Lift.WitnessArms", "Lift.Witness",
@@ -311,6 +319,28 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.PermitWalk",
         "Lift.UniswapV2Pair.PermitEntries",
         "Lift.UniswapV2Pair.PermitSource",
+        "Lift.UniswapV2Pair.PermitTurns",
+        "Lift.UniswapV2Pair.MintCanonical",
+        "Lift.UniswapV2Pair.MintCanonicalOwn",
+        "Lift.UniswapV2Pair.SwapAbi",
+        "Lift.UniswapV2Pair.SwapFront",
+        "Lift.UniswapV2Pair.SwapTransfer",
+        "Lift.UniswapV2Pair.SwapCallback",
+        "Lift.UniswapV2Pair.SwapFrontTyped",
+        "Lift.UniswapV2Pair.SwapFrontTurns",
+        "Lift.UniswapV2Pair.SwapFrontCanonical",
+        "Lift.UniswapV2Pair.SwapCut",
+        "Lift.UniswapV2Pair.SwapBalanceWalk",
+        "Lift.UniswapV2Pair.SwapCheckWalk",
+        "Lift.UniswapV2Pair.SwapUpdateWalk",
+        "Lift.UniswapV2Pair.SwapBack",
+        "Lift.UniswapV2Pair.SwapBackTurns",
+        "Lift.UniswapV2Pair.SwapCanonical",
+        "Lift.UniswapV2Pair.SwapControls",
+        "Lift.UniswapV2Pair.ModelMutants",
+        "Lift.UniswapV2Pair.LedgerKeyControl",
+        "Lift.UniswapV2Pair.OracleControls",
+        "Lift.UniswapV2Pair.CalleeControls",
     ],
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness",
                        # the deployed runtime, lifted (decision beacon-lift-layering-family-20260926)
@@ -637,6 +667,9 @@ COMPOSITION = [
     "Composition.ProrataWethVaultWithdrawLocator",
     "Composition.ProrataWethVaultLedgerFaithful",
     "Composition.Weth9WethGas",
+    "Composition.UniswapV2PairWeth9",
+    "Composition.UniswapV2PairWeth9GasFree",
+    "Composition.UniswapV2PairWeth9Frame",
     # Every joint owner is explicit; no family or shared module may import back.
 ]
 
