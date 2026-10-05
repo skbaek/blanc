@@ -2765,6 +2765,21 @@ it is an intermediate producer obligation, not a new bounded-callee-output
 or no-wrap environmental premise. A generic inequality goal alone does not
 identify this producer, so discovery remains in this registry.
 
+For bounded actual CALL input, the same pinned module provides
+`Jaune.call_step_returnData_length_lt_two_pow_160_of_input_size` on actual
+`Ninst.StepRun` plus `Filled`, and
+`Jaune.call_returnData_length_lt_two_pow_160_of_input_size` on actual `Ninst.Run`.
+Both require the seven actual CALL operands, `stateGas = none`, and
+`inputSize.toNat < 2^160`, and bound the complete reply below `2^160` on either
+child outcome. They require no parent gas/memory potential or output-copy-window
+bound. `burnTransfers_caller_inv` in
+`Blanc/Lift/UniswapV2Pair/SafeTransferWalk.lean` consumes the actual 68-byte
+input operands at both transfer calls with `CoveredFork.rules_stateGas_none`.
+The accepted `swapTransferCall_replyShort` in
+`Blanc/Lift/UniswapV2Pair/SwapTransfer.lean` and `skim_raw_flag_inv` in
+`Blanc/Lift/UniswapV2Pair/SkimSecondWalk.lean` use the same literal 68-byte
+operand bound for Swap and Skim reply allocation.
+
 #### I need a bound on actual precompile output
 
 Use [`Blanc/Lift/PrecompileOutputBound.lean`](../Blanc/Lift/PrecompileOutputBound.lean).
@@ -3847,6 +3862,15 @@ contract-neutral.
   [`Blanc/Lift/ReachWalk.lean`](../Blanc/Lift/ReachWalk.lean); worked use: Lido
   `lido_spawnEntry` in `Blanc/Lift/LidoCircuitBreakerDeployed/Reentry.lean`. Use it for safety facts
   about reverting or out-of-gas frames, which `lift_sound` cannot see.
+- Preserve an actual external-instruction target while routing a literal
+  comparison dispatcher: [`Blanc/Lift/ReachDispatch.lean`](../Blanc/Lift/ReachDispatch.lean)
+  provides `rr_cmp_gt` and `rr_cmp_eq` for `DUP`/`PUSH4`/comparison/`PUSH2`
+  branches. They preserve arbitrary instruction relation `P`, its soundness
+  projection, the original `AtExec` target and continuation stack; the equality
+  variant consumes the actual function lookup. Worked use:
+  `noncalling_no_exec` in `Blanc/Lift/UniswapV2Pair/HistoryWriterWalk.lean`
+  routes original same-frame prefixes into checked exec-free regions. These
+  projections alone do not identify a retained occurrence or child outcome.
 - From a cursor-placed node to *later* nodes of the same frame:
   [`Blanc/Lift/ReachChain.lean`](../Blanc/Lift/ReachChain.lean).
   `reach_between` is `reach_of_parentPrefix` started at any cursor-placed node;
