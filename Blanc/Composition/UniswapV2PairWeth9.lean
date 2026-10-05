@@ -11,7 +11,7 @@ why no other actor can lower the pair's WETH9 balance:
   every call keeps them zero, and `p`'s balance falls by at most the amounts `p` itself transfers
   away (`holderOut`), provided the calls `p` makes are `transfer`s or deposits (`HolderCalls`, the
   pair-side input) and the booked total is backed by ETH whose running value stays a word at every
-  deposit (`EthFits`; the cumulative bound `l.total + inflowSum` implies it, `ethFits_of_budget`).
+  deposit (`EthFits`).
 * `weth9_history_holder_noShrink` (history): the same over the settlement-committed WETH9 writer
   invocations of a configured history (`weth9_history_committed`), read back at the storage words of
   the checkpoint and the future state.  The pair-side input is the named hypothesis `HolderCalls`
@@ -48,9 +48,6 @@ def holderDebit (p : Adr) : Call → Nat
 
 /-- The total `p` sends away by its own `transfer`s. -/
 def holderOut (p : Adr) (cs : List Call) : Nat := (cs.map (holderDebit p)).sum
-
-/-- The ether the deposits of a call list bring in. -/
-def inflowSum (cs : List Call) : Nat := (cs.map Call.inflow).sum
 
 /-- Every allowance granted by `p` is zero. -/
 def AllowZero (p : Adr) (l : Ledger) : Prop := ∀ g, l.allow p g = 0
@@ -268,17 +265,6 @@ its deposit and subtracts its withdrawal, as `State.step` does), the ETH plus th
 def EthFits : Nat → List Call → Prop
   | _, [] => True
   | e, c :: cs => e + c.inflow < 2 ^ 256 ∧ EthFits (e + c.inflow - c.outflow) cs
-
-/-- **The cumulative budget implies the running one**: if the starting ETH plus every deposit of the
-list fits a word, the running ETH fits at every deposit.  (`EthFits` is the weaker premise: it allows
-any number of deposits that are withdrawn again.) -/
-theorem ethFits_of_budget : ∀ {e : Nat} {cs : List Call}, e + inflowSum cs < 2 ^ 256 → EthFits e cs
-  | _, [], _ => trivial
-  | e, c :: cs, h => by
-    have hs : inflowSum (c :: cs) = c.inflow + inflowSum cs := by
-      simp only [inflowSum, List.map_cons, List.sum_cons]
-    rw [hs] at h
-    exact ⟨by omega, ethFits_of_budget (by omega)⟩
 
 /-- **A run keeps `p`'s allowances zero and lowers `p`'s balance by at most `p`'s own transfers**, when
 the booked total is backed by ETH `e` whose running value fits a word at every deposit. -/

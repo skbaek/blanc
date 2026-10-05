@@ -16,15 +16,15 @@ two non-static transfer CALL children; these remain explicit implications/premis
 
 | Theorem | File:line | Statement (one line) | U |
 |---|---|---|---|
-| `skim_raw_inv` | SkimSecondWalk.lean:463 | Every successful raw run (code, covered fork, selector) gives value=0, ABI head (len-4 ≥ 32), slot12=1, then `SkimFirstFacts` (nonstatic, token0 code, balance0 STATICCALL at 128 with exact request/full reply ≥32, r0 ≤ b0, transfer0 helper with SAME-D CALL, canonical calldata, optional-bool acceptance) and, for a fitting pointer, `SkimSecondFacts` (reserve1 read on the post-transfer0 world, token1 code, balance1 STATICCALL at the moved pointer, r1 ≤ b1, transfer1 CALL/calldata/acceptance, post = afterSstore d2 12 1) | U2(a) raw + J1 inverse |
-| `skimFirstPointer_fit` | SkimSecondWalk.lean:438 | Any transfer0 reply below 2^128 bytes gives the fit (96 ≤ p, p+1024 < 2^256) | U2(a) discharge |
+| `skim_raw_inv` | SkimSecondWalk.lean:554 | Every successful raw run (code, covered fork, selector) gives value=0, ABI head (len-4 ≥ 32), slot12=1, then `SkimFirstFacts` (nonstatic, token0 code, balance0 STATICCALL at 128 with exact request/full reply ≥32, r0 ≤ b0, transfer0 helper with SAME-D CALL, canonical calldata, optional-bool acceptance) and, for a fitting pointer, `SkimSecondFacts` (reserve1 read on the post-transfer0 world, token1 code, balance1 STATICCALL at the moved pointer, r1 ≤ b1, transfer1 CALL/calldata/acceptance, post = afterSstore d2 12 1) | U2(a) raw + J1 inverse |
+| `skimFirstPointer_fit` | SkimSecondWalk.lean:492 | Any transfer0 reply below 2^128 bytes gives the fit (128 ≤ p, p+1024 < 2^256) | U2(a) discharge |
 | `skim_source_exact_consumption` | SkimSource.lean:162 | Four exact turn queues + four successful observations ⇒ ExactConsumes (startTyped current ctx (.skim r)) to success, final frame and ordered childReturns as conclusions | U2(a) source |
 | `skim_raw_source_consumption` | SkimHandler.lean:107 | Raw guard fields + slot reps + reserve1 transport ⇒ unlocked=1 and ∀ four exact turn queues, ExactConsumes on `writerContext sevm invocation` with the observed replies | U2(a) handler |
 | `skim_source_liquidity` | SkimSource.lean:279 | A consumed successful skim keeps supply/reserves (via existing `drive_startTyped_skim_liquidity`) | U2(a)/U3 corollary |
-| `skimTransfer_inv` | SkimTransferWalk.lean:1153 | Pointer-generic helper57 inverse at any fitting free pointer p: SAME-P CALL operands, calldata at p+164 = selector++to++amount, acceptance, returned frame | moved-pointer helper |
+| `skimTransfer_flag_inv` | SkimTransferWalk.lean:623 | Pointer-generic helper57 inverse at any fitting free pointer p (`skimTransfer_inv` was later deleted; this flag-bearing form is the only one): SAME-P CALL operands, calldata at p+164 = selector++to++amount, acceptance, returned frame | moved-pointer helper |
 
 Consumed intermediate lemmas (not leaves): skimSelector_inv, skimWrapper_inv, skimLock_inv, skimFirstLine_inv,
-skimFirstHalf_inv, SkimFirstFacts.mono (SkimWalk); skimAfterFirst_ptr, skimSecondLine_inv, skimRequestMemory_ptr/_read,
+skimFirstHalf_inv, SkimFirstFacts.mono (SkimWalk); skimAfterFirst_ptr, skimSecondLine_inv, skimRequestMemory_mem/_read,
 skimReplyWord, skimUnlockTail_inv, skimSecondHalf_inv (SkimSecondWalk); all SkimTransferWalk stages; skim_startTyped_suspended,
 skim_resume*, skim_decodeTransfer, driveTurns_frame_shape, ExactTurns.frame_shape, skim_transfer0_reserve1 (SkimSource);
 skimCache_source, skimReserve1Word_eq, skimSliceD_take, skimAccepted_source, skim_raw_source_guards (SkimHandler).
@@ -116,12 +116,14 @@ index 96f72494..be722374 100644
   `safeTransfer_payload128_data`, `safeTransfer_copy128_image`). Text differs (Line-based walks, image-based memory
   evaluation at arbitrary p), so the K1 gate does not flag it, but it is semantic duplication. This is exactly the
   original host's planned Burn moving-pointer helper: Burn's second transfer and final balance queries follow the same
-  moved pointer. Recommended consolidation: make `skimTransfer_inv` (or a renamed `safeTransfer_inv` at pointer p)
+  moved pointer. Recommended consolidation: make `skimTransfer_flag_inv` (or a renamed `safeTransfer_inv` at pointer p)
   the single helper57 inverse, re-derive `safeTransfer_first_inv` as its p=128 instance, and delete the private stages.
+  (Later update: `SkimTransferWalk.lean` now consumes SafeTransferWalk's public `safeTransfer_initialize_dynamic_inv`
+  and `safeTransfer_dynamicCall_data`; only the copy, CALL preparation and post-CALL decoder stages are still walked here.)
   Likewise `skimSecondLine_inv`/`skimRequestMemory_*` are a moved-pointer balance request that BalanceCallWalk's
   pointer-128 `balanceRead_*` cannot express.
 - `skimAfterFirst_ptr` re-proves the pointer/Wf part of private `safeTransfer_call128_ptr`/`safeTransfer_reply292_image`.
-- `skimOffset` is a thin implicit-argument alias of `B256.toNat_add_eq_of_nof` (kept for rw ergonomics).
+- `skimOffset` (a thin alias of `B256.toNat_add_eq_of_nof`) was later deleted by the second-host lane.
 
 ## Remaining obligations (for the canonical result)
 

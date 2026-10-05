@@ -15,13 +15,13 @@ bafaa428 (canonical ECRECOVER corollary). Final: **bafaa428**. Not pushed.
 | canonical-native | `permit_bytecode_refines_source_canonical` (+ `permit_recovery_canonical` :469) | PermitSource.lean:489 | With `getDelegatedCodeAddress (b.getCode 1) = none`: the observed reply is `ecrecoverOutput` of the model request calldata (activation by `ecrecover_active` on every covered fork); the typed resume consumes the native answer. No signer/unforgeability premise. |
 | J1 exclusions | inside `permit_bytecode_refines_source` | — | value≠0 (guard), len<228 (`word_calldata_guards_iff`), EXPIRED (`t_1b15` noOk), static (nonce SSTORE), failed call (`t_1cd3` noOk, flag = 1), INVALID_SIGNATURE (`t_1d5c` noOk both arms) are all excluded for `.ok`. |
 
-Supporting: `approve64_exact_at`/`approve64_inv_at` (ApproveCore.lean:46/:204; old `approve64_exact`/`_inv` :184/:375 are now specializations, statements unchanged); four literal lines in PermitWalk.lean (nonce 114 gas + 3 selected charges; struct 273; digest 192; request 174) each with inverse and exact; `permitSigner_inv/_exact`, `permitBody_inv/_exact` (PermitEntries.lean:59/:211/:601); `WriterRep.permit_store` (PermitSource.lean:154); `permit_startTyped_inv` / `permit_resume_inv` (:372/:402).
+Supporting: `approve64_exact_at`/`approve64_inv_at` (ApproveCore.lean:46/:204; old `approve64_exact`/`_inv` :184/:375 are now specializations, statements unchanged); four literal lines in PermitWalk.lean (nonce 114 gas + 3 selected charges; struct 273; digest 192; request 174) each with inverse and exact; `permitSigner_inv/_exact`, `permitBody_invP/permitBody_exact` (PermitEntries.lean:59/:560, :211/:645; `permitBody_inv` was replaced by the projection-parametric `permitBody_invP`); `WriterRep.permit_store` (PermitSource.lean:154); `permit_startTyped_inv` / `permit_resume_inv` (:372/:402).
 
 ## Source correspondence (UniswapV2ERC20.sol permit, lines 81–94)
 
 | Source | Bytecode / theorem |
 |---|---|
-| `require(deadline >= block.timestamp, 'EXPIRED')` | t_1b0c_c29 (TIMESTAMP, DUP5, LT, ISZERO, JUMPI); `timely` in `permitBody_inv` |
+| `require(deadline >= block.timestamp, 'EXPIRED')` | t_1b0c_c29 (TIMESTAMP, DUP5, LT, ISZERO, JUMPI); `timely` in `permitBody_invP` |
 | `nonces[owner]++` (old value in digest) | permitNonceLine: SLOAD 3, keccak(owner‖4), SLOAD, ADD 1, SSTORE; `permitNonceWorld`, `permit_reads` |
 | `keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, nonce, deadline))` | permitStructLine, window 160..352 = `encodeWords […]` (`permitStructImage_window`) |
 | `keccak256(abi.encodePacked('\x19\x01', DOMAIN_SEPARATOR, inner))` | permitDigestLine, overlapping writes 384/386/418, window 384..450 (`permitDigestImage_window`); `permitCallDigest_source` = model `permitDigest` |
