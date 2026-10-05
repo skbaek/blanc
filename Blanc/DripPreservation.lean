@@ -199,7 +199,7 @@ theorem join_units_le_value {value fresh units : B256}
     exact hfreshLower
   rw [hunits, B256.toNat_div hfresh, B256.toNat_mul_eq_of_nofm hmul]
   apply Nat.div_le_of_le_mul
-  simpa [Nat.mul_comm] using Nat.mul_le_mul_right value.toNat hfreshLower
+  simpa only [scaleNat_exact, Nat.mul_comm] using Nat.mul_le_mul_right value.toNat hfreshLower
 
 /-- The actual asset guard supplies the multiplication no-wrap fact used by
 the unit quotient; this is independent of the later wrapped-word cap checks. -/
@@ -263,24 +263,24 @@ theorem AccountingInv.join_write_of_effect {s : Stor} {holder : Adr}
   have hAccrued : AccountingInv accrued :=
     h.drip_write hfreshLower hfreshUpper
   have hrowNofAccrued : B256.Nof (accrued.get (pieSlot holder)) units := by
-    dsimp [accrued]
+    dsimp only [accrued]
     rw [Stor.get_set_ne _ (pieSlot_ne_rhoSlot holder).symm _,
       Stor.get_set_ne _ (pieSlot_ne_chiSlot holder).symm _]
     exact hrowNof
   have htotalNofAccrued : B256.Nof units (accrued.get totalUnitsSlot) := by
-    dsimp [accrued]
+    dsimp only [accrued]
     rw [Stor.get_set_ne _ scalarSlots_distinct.2.2 _,
       Stor.get_set_ne _ scalarSlots_distinct.2.1 _]
     exact htotalNof
   have hrowCapAccrued :
       (accrued.get (pieSlot holder) + units).toNat ≤ maxUnits.toNat := by
-    dsimp [accrued]
+    dsimp only [accrued]
     rw [Stor.get_set_ne _ (pieSlot_ne_rhoSlot holder).symm _,
       Stor.get_set_ne _ (pieSlot_ne_chiSlot holder).symm _]
     exact hrowCapN
   have htotalCapAccrued :
       (units + accrued.get totalUnitsSlot).toNat ≤ maxPie.toNat := by
-    dsimp [accrued]
+    dsimp only [accrued]
     rw [Stor.get_set_ne _ scalarSlots_distinct.2.2 _,
       Stor.get_set_ne _ scalarSlots_distinct.2.1 _]
     exact htotalCapN

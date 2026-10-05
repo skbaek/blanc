@@ -45,8 +45,8 @@ lemma solvent_of_same_stor {s s' : Stor} {v : B256} {b b' : B256} :
 
 lemma solvent_zero_of_solvent {s : Stor} {v : B256} {b : B256}
     (h : Stor.Solvent s v b) : Stor.Solvent s 0 b := by
-  simp [Stor.Solvent] at h
-  simp [Stor.Solvent, B256.toNat_zero]
+  simp only [Stor.Solvent] at h
+  simp only [Stor.Solvent, B256.toNat_zero, add_zero]
   omega
 
 structure Precond (wa : Adr) (sevm : Sevm) (devm : Devm) : Prop where
@@ -210,9 +210,9 @@ syntax "simple_solvent" : tactic
 set_option hygiene false in
 macro_rules
 | `(tactic| simple_solvent) =>
-  `(tactic| revert h_sv; simp [Devm.PostSolvent, Devm.PreSolvent]; intro h_sv;
+  `(tactic| unfold Devm.PostSolvent;
             apply solvent_zero_of_solvent;
-            apply solvent_of_same_stor h_sv <;>
+            apply solvent_of_same_stor (h_sv.1 rfl) <;>
             apply congr_fun <| Func.of_inv _ _ (by func_inv) run )
 
 lemma name_preserves_solvent {sevm : Sevm} {s r : Devm}
@@ -303,17 +303,17 @@ lemma approve_preserves_wbal {sevm : Sevm} {s r : Devm}
   rcases of_run_branch_revert h_run' with ⟨s3, h_pop, h_run⟩; clear h_run'
   have h_hv_eq_zero : hash_valid = 0 := by
     have h_pop_stk := h_pop.stack
-    simp [Stack.Pop, Split] at h_pop_stk
+    simp only [Stack.Pop, Split, List.cons_append, List.nil_append] at h_pop_stk
     have h_s2_pref : [0] <<+ s2.stack := by
       rw [h_pop_stk]
       exact pref_append _ _
     exact pref_head_unique h_s2_stk h_s2_pref
   rw [h_hv_eq_zero] at h_s2_stk
-  simp [h_hv_eq_zero] at h_iff
+  simp only [h_hv_eq_zero, true_iff] at h_iff
   clear h_hv_eq_zero hash_valid
   have h_s3_stk : [hash, wad] <<+ s3.stack := by
     have h_pop_stk := h_pop.stack
-    simp [Stack.Pop, Split] at h_pop_stk
+    simp only [Stack.Pop, Split, List.cons_append, List.nil_append] at h_pop_stk
     rw [h_pop_stk] at h_s2_stk
     exact cons_pref_cons_inv h_s2_stk
   clear h_s2_stk
@@ -341,7 +341,7 @@ lemma result_solvent_of_state_solvent {sevm : Sevm} {s r : Devm}
   unfold Stor.Solvent at h_sv'
   rw [← h_bal]
   have h_balSum_eq : balSum (Devm.getStor s sevm.currentTarget) = balSum (Devm.getStor r sevm.currentTarget) := by
-    simp [balSum, h_balSum]
+    simp only [balSum, h_balSum]
   rw [← h_balSum_eq]
   omega
 
@@ -402,10 +402,10 @@ lemma balSum_after_deposit {sevm : Sevm} {s r : Devm}
     intro a
     constructor
     · intro h_eq
-      simp [Stor.rest, ← h_eq, h_set, Stor.get_set_self]
+      simp only [Stor.rest, ← h_eq, Function.comp_apply, h_set, Stor.get_set_self]
       rw [← hcbal', B256.add_comm]
     · intro h_neq
-      simp [Stor.rest, h_set]
+      simp only [Stor.rest, Function.comp_apply, h_set]
       exact (Stor.get_set_ne _ (fun hc => h_neq (Adr.toB256_inj hc)) _).symm
 
   have h_nof' : B256.Nof ((Stor.rest (Devm.getStor s5 sevm.currentTarget)) sevm.caller) sevm.value := by
@@ -1094,7 +1094,7 @@ lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
     rw [hp11]
   have h_st9 : devm9.state = devm7.state := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).state) hp11
-    dsimp at h
+    dsimp only at h
     rw [← h, GasSchedule.accessDelegation_state]
     rfl
   -- charge the call gas

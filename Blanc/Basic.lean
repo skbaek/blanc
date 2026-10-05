@@ -16,9 +16,6 @@ open Jaune Jaune.List Jaune.B256
 
 -- Boolean lemmas --
 
-instance : @Zero Bool := ⟨false⟩
-instance : @One Bool := ⟨true⟩
-
 def Split {α} [HAppend α α α] : α → α → α → Prop
   | a, ab, b => ab = a ++ b
 
@@ -70,15 +67,15 @@ theorem pref_iff_isPrefix {ξ} {xs ys : List ξ} : xs <<+ ys ↔ xs <+: ys := by
   constructor <;> intro h <;> rcases h with ⟨zs, h⟩ <;> refine' ⟨zs, h.symm⟩
 
 theorem pref_trans {X} {x xy xyz : List X} : (x <<+ xy) → (xy <<+ xyz) → (x <<+ xyz) := by
-  simp [pref_iff_isPrefix]; apply List.IsPrefix.trans
+  simp only [pref_iff_isPrefix]; apply List.IsPrefix.trans
 
 theorem append_split {X} {x y z yz xyz : List X} (h : x <++ xyz ++> yz)
     (h' : y <++ yz ++> z) : (x ++ y) <++ xyz ++> z := by
-  simp [Split] at *; rw [h, h']
+  simp only [Split, List.append_assoc] at *; rw [h, h']
 
 theorem of_append_split {X} {x y z yz xyz : List X}
     (h : x <++ xyz ++> yz) (h' : (x ++ y) <++ xyz ++> z) : (y <++ yz ++> z) := by
-  simp [Split] at *; apply List.append_inj_right (Eq.trans h.symm h') rfl
+  simp only [Split, List.append_assoc] at *; apply List.append_inj_right (Eq.trans h.symm h') rfl
 
 theorem of_append_pref {X} {x y yz xyz : List X} :
     (x <++ xyz ++> yz) → (x ++ y <<+ xyz) → (y <<+ yz) := by

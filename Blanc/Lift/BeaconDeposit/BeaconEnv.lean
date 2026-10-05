@@ -45,15 +45,6 @@ namespace Blanc.Lift.BeaconDeposit
 
 open Jaune Blanc Blanc.ExecutionTrace
 
-/-- **The system exclusion is derived** from the static fact that the code a system frame runs
-spawns nothing and from the deposit contract not being a system address. -/
-theorem system_of_spawnFree {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future) {ca : Adr}
-    (systemSpawnFree : ∀ root ∈ trace.systemRawFrames, SpawnFree root.sevm.code)
-    (notSystem : ca ∉ systemTargets) :
-    ∀ root ∈ trace.systemRawFrames, root.sevm.currentTarget ≠ ca := by
-  intro root member h
-  exact notSystem (h ▸ trace.systemRawFrames_target_of_spawnFree systemSpawnFree root member)
 
 /-- The SHA-256 precompile is a precompile of every covered fork. -/
 theorem two_mem_precompiles {f : Fork} (hf : CoveredFork f) :
@@ -64,7 +55,7 @@ theorem two_mem_precompiles {f : Fork} (hf : CoveredFork f) :
 /-- Empty code is not a delegation designator. -/
 theorem getDelegatedCodeAddress_empty : getDelegatedCodeAddress ByteArray.empty = none := by
   have h : ¬ isValidDelegation ByteArray.empty := fun h => absurd h.1 (by decide)
-  simp [getDelegatedCodeAddress, h]
+  simp only [getDelegatedCodeAddress, h, ↓reduceIte]
 
 /-- **The environment part of `beaconEntry` at every deposit frame is derived.**  Warmth of `2`
 from the transaction pre-warm, no delegation at `2` from empty code at the checkpoint, no
@@ -89,68 +80,6 @@ theorem beaconEntry_of_env {cfg : ChainConfig} {checkpoint future : BlockChain}
       rw [hcode root htx]
       exact getDelegatedCodeAddress_empty
     · exact trace.txRawFrames_warm (fun f hf => two_mem_precompiles hf) root htx
-
-/-- **Committed-history soundness with the environment premises derived.**  The conclusion of
-`configuredHistory_solInv`, with `beaconEntry` replaced by the calldata bound and the trace-level
-premises above. -/
-theorem configuredHistory_solInv_env {ca : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {initialHistory : List B256}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (calldata : trace.FrameAdmitted ca (fun sevm _ => sevm.data.length < 2 ^ 256))
-    (systemSpawnFree : ∀ root ∈ trace.systemRawFrames, SpawnFree root.sevm.code)
-    (notSystem : ca ∉ systemTargets)
-    (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
-    (noAuthority : trace.NoAuthorityAt 2)
-    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
-      root.sevm.currentTarget ≠ 2)
-    (installed : checkpoint.state.getCode ca = code)
-    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
-    SolInv (future.state.getStor ca) (initialHistory ++ committedNodes ca trace) :=
-  configuredHistory_solInv trace
-    (beaconEntry_of_env trace calldata (system_of_spawnFree trace systemSpawnFree notSystem)
-      checkpointEmpty noAuthority noFrame)
-    installed invariant
-
-/-- The final deployed count word is the length of the same exact history. -/
-theorem configuredHistory_count_env {ca : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {initialHistory : List B256}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (calldata : trace.FrameAdmitted ca (fun sevm _ => sevm.data.length < 2 ^ 256))
-    (systemSpawnFree : ∀ root ∈ trace.systemRawFrames, SpawnFree root.sevm.code)
-    (notSystem : ca ∉ systemTargets)
-    (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
-    (noAuthority : trace.NoAuthorityAt 2)
-    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
-      root.sevm.currentTarget ≠ 2)
-    (installed : checkpoint.state.getCode ca = code)
-    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
-    (future.state.getStor ca).get solCountSlot =
-      Nat.toB256 (initialHistory ++ committedNodes ca trace).length ∧
-      (initialHistory ++ committedNodes ca trace).length < 2 ^ 32 :=
-  configuredHistory_count trace
-    (beaconEntry_of_env trace calldata (system_of_spawnFree trace systemSpawnFree notSystem)
-      checkpointEmpty noAuthority noFrame)
-    installed invariant
-
-/-- The final mixed root belongs to the same exact extracted node sequence. -/
-theorem configuredHistory_root_env {ca : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {initialHistory : List B256}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (calldata : trace.FrameAdmitted ca (fun sevm _ => sevm.data.length < 2 ^ 256))
-    (systemSpawnFree : ∀ root ∈ trace.systemRawFrames, SpawnFree root.sevm.code)
-    (notSystem : ca ∉ systemTargets)
-    (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
-    (noAuthority : trace.NoAuthorityAt 2)
-    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
-      root.sevm.currentTarget ≠ 2)
-    (installed : checkpoint.state.getCode ca = code)
-    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
-    BeaconDeposit.Acc.root Bytes.sha256 (solAcc (future.state.getStor ca)) =
-      BeaconDeposit.mixedRootOf Bytes.sha256 (initialHistory ++ committedNodes ca trace) :=
-  configuredHistory_root trace
-    (beaconEntry_of_env trace calldata (system_of_spawnFree trace systemSpawnFree notSystem)
-      checkpointEmpty noAuthority noFrame)
-    installed invariant
 
 /-! ### The calldata bound is derived too
 
@@ -192,12 +121,16 @@ theorem not_mem_systemTargets_of_installed {w : State} {ca : Adr}
     simp only [systemContracts, List.mem_cons, List.not_mem_nil, or_false] at hp
     rcases hp with rfl | rfl | rfl | rfl <;> revert this <;> decide +kernel
   rcases hmem with rfl | rfl | rfl | rfl
-  · exact hsize (beaconRootsAddress, beaconRootsCode) (by simp [systemContracts]) rfl
-  · exact hsize (historyStorageAddress, historyStorageCode) (by simp [systemContracts]) rfl
+  · exact hsize (beaconRootsAddress, beaconRootsCode) (by simp only [systemContracts,
+    List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or]) rfl
+  · exact hsize (historyStorageAddress, historyStorageCode) (by simp only [systemContracts,
+    List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or, or_true]) rfl
   · exact hsize (withdrawalRequestPredeployAddress, withdrawalRequestCode)
-      (by simp [systemContracts]) rfl
+      (by simp only [systemContracts, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+        true_or, or_true]) rfl
   · exact hsize (consolidationRequestPredeployAddress, consolidationRequestCode)
-      (by simp [systemContracts]) rfl
+      (by simp only [systemContracts, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+        or_true]) rfl
 
 /-- **The system exclusion is derived** from the canonical system code being installed at the
 checkpoint. -/

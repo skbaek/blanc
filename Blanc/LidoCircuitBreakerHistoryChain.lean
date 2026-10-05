@@ -31,7 +31,7 @@ are zero on both, and no well-formedness is needed to name the image. -/
 private theorem mem_reads_data (μ : Mem) : Mem.Reads μ μ.data.toList := by
   intro index
   by_cases bound : index < μ.data.size <;>
-    simp [Array.getD, bound, List.getD_eq_getElem?_getD]
+    simp only [Array.getD, bound, ↓reduceDIte, Array.getInternal_eq_getElem, List.getD_eq_getElem?_getD, Array.length_toList, getElem?_pos, Array.getElem_toList, Option.getD_some, not_false_eq_true, getElem?_neg, Option.getD_none]
 
 /-- The run-level bridge from an `mstoreAt` fragment to `Mem.write`.  This is
 the step the `Mem.Wf` binder buys: `Mem.write`'s growth branch reallocates to
@@ -584,7 +584,8 @@ private theorem coherent_registerPauser (dp : DeployParams)
         (Sevm.argWord sevm 1) = some trace := by
     cases hfind : findEntry entries (Sevm.argWord sevm 0) <;>
       by_cases hnew0 : Sevm.argWord sevm 1 = 0 <;>
-      simp [setPauserSourceTrace, setPauser, htarget0, hfind, hnew0]
+      simp only [setPauserSourceTrace, setPauser, htarget0, ↓reduceIte, hfind, hnew0,
+        Option.some.injEq, exists_eq']
   rcases setPauser_run_extracts_sourceTrace hwfk hrk hreadTarget hreadNew
       hreadCont rfl hw (canonicalAddress_of_validAdr hvalid₀)
       (canonicalAddress_of_validAdr hvalid₁) herror happend hafter hremove
@@ -821,7 +822,7 @@ theorem coherent_pauseAfterSet {dp : DeployParams} {sevm : Sevm} {s r : Devm}
   have hK := code_of_getCode_eq (Ninst.Hinv.inv (f := Devm.getCode) qgas) hK
   have hpcall : gw :: tw :: (0 : B256) :: (0x11c : B256) :: (36 : B256) ::
       (0 : B256) :: (0 : B256) :: ([] : Stack) <<+ d₈.stack := by
-    simpa using prefix_of_push hgw hptw
+    simpa only [List.append_nil, List.cons_append, List.nil_append] using prefix_of_push hgw hptw
   obtain ⟨hC, -⟩ := coherent_of_call ih hpcall hK hC qcall hfork
   have hK := code_of_ninst hK qcall
   rcases of_run_next hrun with ⟨d₁₀, qiz, hrun⟩
@@ -869,7 +870,7 @@ theorem coherent_pauseAfterSet {dp : DeployParams} {sevm : Sevm} {s r : Devm}
   have hK := code_of_getCode_eq (Ninst.Hinv.inv (f := Devm.getCode) qgas2) hK
   have hpstat : gw2 :: tw2 :: (0x11c : B256) :: (4 : B256) :: (0 : B256) ::
       (32 : B256) :: ([] : Stack) <<+ g₅.stack := by
-    simpa using prefix_of_push hgw2 hptw2
+    simpa only [List.append_nil, List.cons_append, List.nil_append] using prefix_of_push hgw2 hptw2
   obtain ⟨hC, -⟩ := coherent_of_staticcall ih hpstat hK hC qstat hfork
   rcases of_run_next hrun with ⟨g₇, qiz2, hrun⟩
   have hC := coherent_of_stor_eq (Ninst.Hinv.inv (f := Devm.getStor) qiz2) hC
@@ -927,13 +928,14 @@ private theorem coherent_of_pauseKernelRun (dp : DeployParams)
   have hzeroCanonical : canonicalAddress (0 : B256) := by
     unfold canonicalAddress
     change (0 : Nat) < 2 ^ 160
-    norm_num
+    norm_num only
   have htarget0 : target ≠ 0 :=
     (setPauser_run_extracts_nonzero_guard hwf hr htargetRead herror hrun).1
   obtain ⟨trace, htrace⟩ :
       ∃ trace, setPauserSourceTrace entries target 0 = some trace := by
     cases hfind : findEntry entries target <;>
-      simp [setPauserSourceTrace, setPauser, htarget0, hfind]
+      simp only [setPauserSourceTrace, setPauser, htarget0, ↓reduceIte, hfind, Option.some.injEq,
+        exists_eq']
   rcases setPauser_run_extracts_sourceTrace hwf hr htargetRead hnewRead
       hcontRead rfl hw htargetCanonical hzeroCanonical
       herror happend hafter hremove hfinish hrun htrace with
@@ -1731,16 +1733,13 @@ theorem emptyRegistryWorld_registryFields (dp : DeployParams) (ca : Adr) :
   have hw := emptyRegistryWorld_witness dp ca
   have hzero : Nat.toB256 0 = (0 : B256) := rfl
   refine ⟨?_, ?_, ?_⟩
-  · simpa [logicalStorageOfStor, hzero] using hw.lengthWord
-  · simpa [logicalStorageOfStor] using hw.zeroCount
+  · simpa only [logicalStorageOfStor, List.length_nil, hzero] using hw.lengthWord
+  · simpa only [logicalStorageOfStor] using hw.zeroCount
   · intro target htarget
     refine ⟨?_, ?_, ?_⟩
-    · simpa [logicalStorageOfStor, assignmentAt] using
-        hw.assignments target htarget
-    · simpa [logicalStorageOfStor, oneBasedIndexAt, hzero] using
-        hw.indices target htarget
-    · simpa [logicalStorageOfStor, assignmentCount, hzero] using
-        hw.counts target htarget
+    · simpa only [logicalStorageOfStor, assignmentAt] using hw.assignments target htarget
+    · simpa only [logicalStorageOfStor, oneBasedIndexAt, hzero] using hw.indices target htarget
+    · simpa only [logicalStorageOfStor, assignmentCount, hzero] using hw.counts target htarget
 
 /-- **Control 2, an arbitrary execution.**  The public frame theorem is applied
 to an unconstrained successful execution rooted at the contract's own program:
@@ -1773,10 +1772,10 @@ theorem arbitraryExec_post_registryFields (dp : DeployParams) (ca : Adr)
   obtain ⟨entries, hw⟩ :=
     (registrySpec_preserves dp ca sevm pre post hfork hexec hcode hwf hpre).inv
   refine ⟨entries, hw, ?_, ?_, ?_⟩
-  · simpa [logicalStorageOfStor] using hw.lengthWord
+  · simpa only [logicalStorageOfStor] using hw.lengthWord
   · intro index bound
-    simpa [logicalStorageOfStor] using hw.arrayWords index bound
-  · simpa [logicalStorageOfStor] using hw.zeroCount
+    simpa only [logicalStorageOfStor] using hw.arrayWords index bound
+  · simpa only [logicalStorageOfStor] using hw.zeroCount
 
 /-- **Control 3, fields at an arbitrary reachable future.**  From nothing but a
 stable checkpoint and a reachability witness, six `RegistryWitness` fields are
@@ -1811,12 +1810,12 @@ theorem arbitraryFuture_registryFields (dp : DeployParams) (ca : Adr)
     (chainUsing_preserves_registryStable dp ca cfg checkpoint future reach
       stable hcov).coherent
   refine ⟨entries, hw.targetsNodup, hw.pausersValid, ?_, ?_, ?_, ?_, ?_⟩
-  · simpa [logicalStorageOfStor] using hw.lengthWord
+  · simpa only [logicalStorageOfStor] using hw.lengthWord
   · intro index bound
-    simpa [logicalStorageOfStor] using hw.arrayWords index bound
+    simpa only [logicalStorageOfStor] using hw.arrayWords index bound
   · exact (membership_of_witness hw htarget).2.1
-  · simpa [logicalStorageOfStor] using hw.counts target htarget
-  · simpa [logicalStorageOfStor] using hw.zeroCount
+  · simpa only [logicalStorageOfStor] using hw.counts target htarget
+  · simpa only [logicalStorageOfStor] using hw.zeroCount
 
 end LidoCircuitBreaker
 

@@ -47,7 +47,7 @@ theorem beaconZeroStorUpTo_get_table {n : Nat} (hn : n ≤ 32) {h : Nat} (hh : h
   | succ n ih =>
     rw [beaconZeroStorUpTo, Stor.get_set_ite]
     by_cases e : h = n
-    · subst e; simp
+    · subst e; simp only [↓reduceIte]
     · have hne : solZeroHashSlot n ≠ solZeroHashSlot h := fun c =>
         e (solZeroHashSlot_inj (by omega) (by omega) c).symm
       simp only [hne, ↓reduceIte]
@@ -56,7 +56,8 @@ theorem beaconZeroStorUpTo_get_table {n : Nat} (hn : n ≤ 32) {h : Nat} (hh : h
 theorem beaconZeroStorUpTo_get_low {n : Nat} (hn : n ≤ 32) {x : B256} (hx : x.toNat < 33) :
     (beaconZeroStorUpTo n).get x = 0 := by
   induction n with
-  | zero => simp [beaconZeroStorUpTo, Stor.get, Stor.empty]
+  | zero => simp only [Stor.get, beaconZeroStorUpTo, Stor.empty, Std.TreeMap.empty_eq_emptyc,
+    Std.TreeMap.getD_emptyc]
   | succ n ih =>
     rw [beaconZeroStorUpTo, Stor.get_set_ite]
     have hne : solZeroHashSlot n ≠ x := fun c => by

@@ -72,14 +72,15 @@ private theorem silentCalls0_silent_refs {S : List Nat} {f : SFunc}
       exact ih h
   | jump k =>
       simp only [SFunc.silentCalls, SFunc.silent, SFunc.refs] at h ⊢
-      exact ⟨True.intro, by simpa using h⟩
+      exact ⟨True.intro, by simpa only [List.all_cons, List.all_nil, Bool.and_true,
+        decide_eq_true_eq] using h⟩
   | callNext k f ih =>
-      simp [SFunc.silentCalls] at h
-  | ret => simp [SFunc.silentCalls, SFunc.silent, SFunc.refs]
+      simp only [SFunc.silentCalls, Bool.false_eq_true] at h
+  | ret => simp only [SFunc.silent, SFunc.refs, List.all_nil, and_self]
   | pcAt p f ih =>
       simp only [SFunc.silentCalls, SFunc.silent, SFunc.refs] at h ⊢
       exact ih h
-  | undefined => simp [SFunc.silentCalls, SFunc.silent, SFunc.refs]
+  | undefined => simp only [SFunc.silent, SFunc.refs, List.all_nil, and_self]
 
 private theorem ninst_state_of_silent' {sevm : Sevm} {pre post : Devm} {n : Ninst}
     (hn : n.stateSilent = true) (run : Ninst.Run sevm pre n post) :
@@ -96,11 +97,11 @@ private theorem ninst_state_of_silent' {sevm : Sevm} {pre post : Devm} {n : Nins
       · have hsstore : r ≠ .sstore := by
           intro h
           subst r
-          simp [Ninst.stateSilent] at hn
+          simp only [Ninst.stateSilent, Bool.false_eq_true] at hn
         have hframe := Rinst.preserves_state (pc := pc) (sevm := sevm)
           (pre := pre) (post := post) hsstore ht hrun'
         exact hframe.symm
-  | exec x => simp [Ninst.stateSilent] at hn
+  | exec x => simp only [Ninst.stateSilent, Bool.false_eq_true] at hn
   | push bs hbs =>
       rcases run with ⟨xl, -, pc, hrun⟩
       have hxl : xl = .none := by
@@ -152,7 +153,7 @@ private theorem linst_state_of_silent' {sevm : Sevm} {pre post : Devm} {l : Lins
   have hnot : l ≠ .selfdestruct := by
     intro h
     subst l
-    simp at hl
+    simp only [bne_self_eq_false, Bool.false_eq_true] at hl
   have hframe := Linst.run_instructionFrame sevm pre l hnot
   have hframe' := hframe
   rw [run] at hframe'
@@ -215,7 +216,9 @@ theorem SFunc.RunP.hoare_single_call {P : Sevm → Devm → Ninst → Devm → P
         exact h01 _ (silent_preserve hstable0 run htarget hp')
     | last hrun =>
         intro hsc' hcalls' hp
-        have hstep := linst_state_of_silent' (by simpa [SFunc.silentCalls] using hsc') hrun
+        have hstep := linst_state_of_silent' (by simpa only [bne_iff_ne, ne_eq, silentCalls,
+          Bool.ite_true_right, Bool.or_false, Bool.not_eq_eq_eq_not, Bool.not_true,
+          decide_eq_false_iff_not] using hsc') hrun
         exact h01 _ (hstable0 hstep.symm hp)
     | next hrun run ih =>
         intro hsc' hcalls' hp
@@ -251,8 +254,8 @@ theorem SFunc.RunP.hoare_single_call {P : Sevm → Devm → Ninst → Devm → P
     | pcAt hrun _ run ih =>
         intro hsc' hcalls' hp
         have hstep := ninst_state_of_silent' (n := .reg .pc) rfl (hP hrun)
-        exact ih (by simpa [SFunc.silentCalls] using hsc')
-          (by simpa [SFunc.callRefs] using hcalls') (hstable0 hstep.symm hp)
+        exact ih (by simpa only [silentCalls] using hsc')
+          (by simpa only [List.all_eq_true, decide_eq_true_eq, callRefs] using hcalls') (hstable0 hstep.symm hp)
   exact go run hsc hcalls h0
 
 theorem SFunc.RunP.hoare_single_call_with_gotos {P : Sevm → Devm → Ninst → Devm → Prop}
@@ -280,7 +283,7 @@ theorem SFunc.RunP.hoare_single_call_with_gotos {P : Sevm → Devm → Ninst →
     intro Ψ hstable d g q r
     intro hzero' hp
     obtain ⟨hg, hrefs⟩ := silentCalls0_silent_refs
-      (by simpa [SFunc.silentCallsWith] using hzero')
+      (by simpa only [silentCallsWith] using hzero')
     apply hstable (SFunc.RunP.state_of_silent hP hS hg hrefs r).symm hp
   have go : ∀ {d : Devm} {g : SFunc} {q : Outcome},
       SFunc.RunP P fs sevm d g q → g.silentCallsWith S W 1 = true →
@@ -316,11 +319,13 @@ theorem SFunc.RunP.hoare_single_call_with_gotos {P : Sevm → Devm → Ninst →
         rcases hbranch with hs | hw
         · have htarget := hzero (of_decide_eq_true hs) lookup
           exact h01 _ (silent_preserve hstable0 run
-            (by simpa [SFunc.silentCallsWith] using htarget) hp')
+            (by simpa only [silentCallsWith] using htarget) hp')
         · exact hwrap (of_decide_eq_true hw) lookup hp' run
     | last hrun =>
         intro hsc' hcalls' hp
-        have hstep := linst_state_of_silent' (by simpa [SFunc.silentCallsWith] using hsc') hrun
+        have hstep := linst_state_of_silent' (by simpa only [bne_iff_ne, ne_eq, silentCallsWith,
+          Bool.ite_true_right, Bool.or_false, Bool.not_eq_eq_eq_not, Bool.not_true,
+          decide_eq_false_iff_not] using hsc') hrun
         exact h01 _ (hstable0 hstep.symm hp)
     | next hrun run ih =>
         intro hsc' hcalls' hp
@@ -338,7 +343,7 @@ theorem SFunc.RunP.hoare_single_call_with_gotos {P : Sevm → Devm → Ninst →
         rcases hsc' with hs | hw
         · have htarget := hzero (of_decide_eq_true hs) lookup
           exact h01 _ (silent_preserve hstable0 run
-            (by simpa [SFunc.silentCallsWith] using htarget) hp')
+            (by simpa only [silentCallsWith] using htarget) hp')
         · exact hwrap (of_decide_eq_true hw) lookup hp' run
     | ret d pop =>
         intro hsc' hcalls' hp
@@ -358,12 +363,12 @@ theorem SFunc.RunP.hoare_single_call_with_gotos {P : Sevm → Devm → Ninst →
         have hk : _ := of_decide_eq_true hcalls''.1
         have hcallee := hspec hk lookup (hstable0 pop.state hp) run
         exact silent_preserve hstable1 tail
-          (by simpa [SFunc.silentCallsWith] using hsc'') hcallee
+          (by simpa only [silentCallsWith] using hsc'') hcallee
     | pcAt hrun _ run ih =>
         intro hsc' hcalls' hp
         have hstep := ninst_state_of_silent' (n := .reg .pc) rfl (hP hrun)
-        exact ih (by simpa [SFunc.silentCallsWith] using hsc')
-          (by simpa [SFunc.callRefs] using hcalls') (hstable0 hstep.symm hp)
+        exact ih (by simpa only [silentCallsWith, zero_add] using hsc')
+          (by simpa only [List.all_eq_true, decide_eq_true_eq, callRefs] using hcalls') (hstable0 hstep.symm hp)
   exact go run hsc hcalls h0
 
 theorem SFunc.RunP.hoare_wrapper {P : Sevm → Devm → Ninst → Devm → Prop}
@@ -383,7 +388,7 @@ theorem SFunc.RunP.hoare_wrapper {P : Sevm → Devm → Ninst → Devm → Prop}
     Φ₁ (Outcome.devm o) := by
   apply SFunc.RunP.hoare_single_call hP hS hzero h01 hstable0 hstable1
     (fun {j g} hj hjg => by
-      have hjk : j = k := by simpa using hj
+      have hjk : j = k := by simpa only [List.mem_cons, List.not_mem_nil, or_false] using hj
       subst j
       have hcg : callee = g := Option.some.inj (hlookup.symm.trans hjg)
       subst g

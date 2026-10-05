@@ -80,14 +80,14 @@ inductive TriggerLabel
   | refundCall
   | balanceCheck
   | afterNestedValidation
-  deriving DecidableEq, Repr
+  deriving DecidableEq
 
 /-- Positional slot index for each Trigger auxiliary label (1..22).
 
 The equations are `@[simp]` so that the `*Slot` abbreviations below, which are
 now defined through `localSlotOf`, still reduce to their numeric literal in the
 downstream `simp [runtime, aux, baseAux, fooSlot]` table-lookup idiom. -/
-@[simp] def localSlotOf : TriggerLabel → Nat
+def localSlotOf : TriggerLabel → Nat
   | .malformedAbi => 1
   | .zeroMsgValue => 2
   | .zeroValidatorsData => 3
@@ -150,7 +150,7 @@ theorem localSlotOf_of_labelOfLocalSlot? {n : Nat} {lbl : TriggerLabel}
   all_goals
     first
       | (injection h with h; subst h; rfl)
-      | exact absurd h (by simp)
+      | exact absurd h (by simp only [reduceCtorEq, not_false_eq_true])
 
 /-- Qualified composite label for TWG runtime auxiliary table entries.
 Can be either the root dispatcher (0), a base runtime slot (1..17),
@@ -159,7 +159,7 @@ inductive CompositeLabel
   | root
   | base (slot : Nat)
   | trigger (lbl : TriggerLabel)
-  deriving DecidableEq, Repr
+  deriving DecidableEq
 
 /-- Unified coordinate mapping for the composite table. -/
 def compositeSlotOf (baseCount : Nat) : CompositeLabel → Nat
@@ -191,7 +191,8 @@ theorem compositeSlotOf_compositeLabelOfLocalSlot {n : Nat} (baseCount : Nat)
     (h : (labelOfLocalSlot? n).isSome) :
     compositeSlotOf baseCount (compositeLabelOfLocalSlot n) = baseCount + n := by
   rcases hd : labelOfLocalSlot? n with _ | lbl
-  · rw [hd] at h; exact absurd h (by simp)
+  · rw [hd] at h; exact absurd h (by simp only [Option.isSome_none, Bool.false_eq_true,
+    not_false_eq_true])
   · simp only [compositeLabelOfLocalSlot, hd, compositeSlotOf,
       localSlotOf_of_labelOfLocalSlot? hd]
 
@@ -219,8 +220,6 @@ def afterVaultCallSlot : Nat := localSlotOf .afterVaultCall
 def refundCallSlot : Nat := localSlotOf .refundCall
 def balanceCheckSlot : Nat := localSlotOf .balanceCheck
 def afterNestedValidationSlot : Nat := localSlotOf .afterNestedValidation
-
-def localAuxSlotCount : Nat := 22
 
 /-! ## Fixed scratch-memory words
 
@@ -360,7 +359,7 @@ def panicData (code : B256) : Bytes :=
 
 def selectorRevert (sel : B256) : Func :=
   Func.revertSelector (sel.toBytes.drop 28) (by
-    simp [B256.length_toBytes])
+    simp only [List.length_drop, B256.length_toBytes, Nat.reduceSub])
 
 def zeroMsgValueRevert : Func :=
   Func.revertData (zeroArgumentData "msg.value")
@@ -368,13 +367,10 @@ def zeroMsgValueRevert : Func :=
 def zeroValidatorsDataRevert : Func :=
   Func.revertData (zeroArgumentData "validatorsData")
 
-def resumedExpectedRevert : Func :=
-  selectorRevert resumedExpectedSelector
 
 def feeRefundFailedRevert : Func :=
   selectorRevert feeRefundFailedSelector
 
-def arithmeticPanicRevert : Func := Func.revertData (panicData 0x11)
 def divisionPanicRevert : Func := Func.revertData (panicData 0x12)
 def assertionPanicRevert : Func := Func.revertData (panicData 0x01)
 
@@ -796,40 +792,11 @@ def afterValidation : Func :=
              ((.call zeroValidatorsDataSlot) <?> .call consumeQuotaSlot)))))))
 
 /-- The runtime-integration body.  Its local calls use the slot table above;
-the final runtime must rebase them together with `localAux`. -/
+the final runtime rebases these calls through its integrated Trigger table. -/
 def triggerFullWithdrawals (dp : DeployParams) : Func :=
   validateCalldata
 
-def localAuxWithRoleFailure (dp : DeployParams) (roleFailure : Func) : List Func :=
-  [ Func.revert,
-    zeroMsgValueRevert,
-    zeroValidatorsDataRevert,
-    resumedExpectedRevert,
-    exitLimitExceededRevert,
-    insufficientFeeRevert,
-    feeRefundFailedRevert,
-    arithmeticPanicRevert,
-    divisionPanicRevert,
-    assertionPanicRevert,
-    -- AccessControl's dynamic source string is the one deliberate policy hook.
-    roleFailure,
-    validateArrayLoop,
-    afterValidation,
-    consumeExitRequestLimit (.call afterQuotaSlot),
-    afterQuota dp,
-    encodeArraysLoop,
-    afterEncoding,
-    bubbleRevert,
-    afterVaultCall dp,
-    refundCall,
-    balanceCheck,
-    afterNestedValidation ]
 
-/-- A closed standalone packet uses an empty revert at the AccessControl
-policy boundary.  Runtime integration should normally use
-`localAuxWithRoleFailure` to install the family-wide role failure body. -/
-def localAux (dp : DeployParams) : List Func :=
-  localAuxWithRoleFailure dp Func.revert
 
 /-- Shift every local table call by `delta`.  If the first appended trigger aux
 body will occupy global table slot `base`, use `delta = base - 1`: local slot
@@ -841,17 +808,6 @@ def rebaseLocalCalls (delta : Nat) : Func → Func
   | .next op rest => .next op (rebaseLocalCalls delta rest)
   | .call slot => .call (delta + slot)
 
-/-- The local-to-global rebase is the shared target renumbering owner
-(`Blanc.Func.mapTargets`) at `(delta + ·)`.  Kept as a bridge rather than a
-redefinition so that every existing `simp [rebaseLocalCalls]` site downstream
-keeps its normal form. -/
-theorem rebaseLocalCalls_eq_mapTargets (delta : Nat) (f : Func) :
-    rebaseLocalCalls delta f = f.mapTargets (delta + ·) := by
-  induction f with
-  | branch left right ihl ihr => simp only [rebaseLocalCalls, Func.mapTargets, ihl, ihr]
-  | last op => rfl
-  | next op rest ih => simp only [rebaseLocalCalls, Func.mapTargets, ih]
-  | call slot => rfl
 
 /-- Local-call rebasing commutes with the constant-store prefix used by
 `Func.revertData`.  The prefix contains no local calls, so only its tail can
@@ -867,90 +823,13 @@ theorem rebaseLocalCalls_prependStoresRev (delta : Nat)
       rw [ih]
       rfl
 
-def rebasedTrigger (delta : Nat) (dp : DeployParams) : Func :=
-  rebaseLocalCalls delta (triggerFullWithdrawals dp)
 
-def rebasedLocalAuxWithRoleFailure
-    (delta : Nat) (dp : DeployParams) (roleFailure : Func) : List Func :=
-  (localAuxWithRoleFailure dp roleFailure).map (rebaseLocalCalls delta)
 
-def packet (dp : DeployParams) : Prog :=
-  ⟨triggerFullWithdrawals dp, localAux dp⟩
 
-def packetCode (dp : DeployParams) : Bytes :=
-  (Prog.compile (packet dp)).getD []
 
-theorem packet_compileShape_eq_zero (dp : DeployParams) :
-    (packet dp).compileShape = (packet ⟨0⟩).compileShape := by
-  rfl
 
-private theorem packetCompilesZero :
-    Prog.compiles (packet ⟨0⟩) = true := by
-  decide +kernel
 
-theorem packet_compiles (dp : DeployParams) :
-    Prog.compiles (packet dp) = true := by
-  rw [Prog.compiles_eq_of_compileShape (packet_compileShape_eq_zero dp)]
-  exact packetCompilesZero
 
-def triggerLabels : List TriggerLabel :=
-  [ .malformedAbi, .zeroMsgValue, .zeroValidatorsData, .resumedExpected,
-    .exitLimitExceeded, .insufficientFee, .feeRefundFailed, .arithmeticPanic,
-    .divisionPanic, .assertionPanic, .roleFailureBoundary, .validateArrayLoop,
-    .afterValidation, .consumeQuota, .afterQuota, .encodeArraysLoop,
-    .afterEncoding, .bubbleRevert, .afterVaultCall, .refundCall,
-    .balanceCheck, .afterNestedValidation ]
-
-/-- Standard 17-base + 22-trigger auxiliary table layout. -/
-def standardCompositeAux (baseAux : List (CompositeLabel × SymbolicFunc CompositeLabel))
-    (triggerAux : List (TriggerLabel × SymbolicFunc CompositeLabel)) :
-    List (CompositeLabel × SymbolicFunc CompositeLabel) :=
-  baseAux ++ triggerAux.map (fun (lbl, body) => (.trigger lbl, body))
-
-/-- Concrete 17-base prefix skeleton for composite resolution verification. -/
-def base17AuxSkeleton : List (CompositeLabel × SymbolicFunc CompositeLabel) :=
-  (List.range 17).map fun i => (.base (i + 1), .last .stop)
-
-/-- Concrete Trigger auxiliary skeleton with exact 22 labels in order. -/
-def triggerAuxSkeleton : List (TriggerLabel × SymbolicFunc CompositeLabel) :=
-  triggerLabels.map fun lbl => (lbl, .last .stop)
-
-/-- Composite 39-entry auxiliary program testing exact label resolution. -/
-def composite17TriggerProg (main : SymbolicFunc CompositeLabel) :
-    SymbolicProg CompositeLabel :=
-  ⟨.root, main, standardCompositeAux base17AuxSkeleton triggerAuxSkeleton⟩
-
-/-- Convert a Trigger `Func` with local slot calls into a `SymbolicFunc
-CompositeLabel` by naming each call target.  The structural recursion is the
-shared owner `Blanc.Func.mapCalls`; only the naming function is local. -/
-def toCompositeSymbolic (f : Func) : SymbolicFunc CompositeLabel :=
-  f.mapCalls compositeLabelOfLocalSlot
-
-/-- Erasure of a named Trigger body is the rebased numeric body, for every body
-whose call targets all lie inside the local table.  `rebaseLocalCalls baseCount`
-shifts *every* target including `0`, while `toCompositeSymbolic` sends an
-undecodable target to `.base`, so the membership restriction is the content. -/
-theorem erase_toCompositeSymbolic (baseCount : Nat) (f : Func)
-    (hf : ∀ n ∈ f.callTargets, (labelOfLocalSlot? n).isSome) :
-    (toCompositeSymbolic f).erase (compositeSlotOf baseCount) =
-      rebaseLocalCalls baseCount f := by
-  rw [rebaseLocalCalls_eq_mapTargets]
-  exact Func.erase_mapCalls_eq_mapTargets compositeLabelOfLocalSlot
-    (compositeSlotOf baseCount) (baseCount + ·) f
-    (fun n hn => compositeSlotOf_compositeLabelOfLocalSlot baseCount (hf n hn))
-
-/-- Table form of `erase_toCompositeSymbolic`: one hypothesis for a whole
-auxiliary table. -/
-theorem erase_map_toCompositeSymbolic (baseCount : Nat) (bodies : List Func)
-    (h : ∀ n ∈ bodies.flatMap Func.callTargets, (labelOfLocalSlot? n).isSome) :
-    bodies.map (fun f => (toCompositeSymbolic f).erase (compositeSlotOf baseCount)) =
-      bodies.map (rebaseLocalCalls baseCount) := by
-  rw [show rebaseLocalCalls baseCount = Func.mapTargets (baseCount + ·) from
-    funext (rebaseLocalCalls_eq_mapTargets baseCount)]
-  exact Func.erase_map_mapCalls compositeLabelOfLocalSlot (compositeSlotOf baseCount)
-    (baseCount + ·) bodies
-    (fun f hf n hn => compositeSlotOf_compositeLabelOfLocalSlot baseCount
-      (h n (List.mem_flatMap.mpr ⟨f, hf, hn⟩)))
 
 /-! Deployment parameters reach the Trigger packet only through PUSH immediates.
 `Func.callTargets` discards every instruction payload, so the call-target
@@ -960,32 +839,6 @@ membership side conditions below close by `decide +kernel` on a closed term. -/
 theorem callTargets_triggerFullWithdrawals (dp : DeployParams) :
     (triggerFullWithdrawals dp).callTargets = (triggerFullWithdrawals ⟨0⟩).callTargets :=
   rfl
-
-/-- Symbolic representation of Trigger auxiliary functions with qualified labels. -/
-def symbolicLocalAuxWithRoleFailure (dp : DeployParams) (roleFailure : Func) :
-    List (CompositeLabel × SymbolicFunc CompositeLabel) :=
-  [ (.trigger .malformedAbi, toCompositeSymbolic Func.revert),
-    (.trigger .zeroMsgValue, toCompositeSymbolic zeroMsgValueRevert),
-    (.trigger .zeroValidatorsData, toCompositeSymbolic zeroValidatorsDataRevert),
-    (.trigger .resumedExpected, toCompositeSymbolic resumedExpectedRevert),
-    (.trigger .exitLimitExceeded, toCompositeSymbolic exitLimitExceededRevert),
-    (.trigger .insufficientFee, toCompositeSymbolic insufficientFeeRevert),
-    (.trigger .feeRefundFailed, toCompositeSymbolic feeRefundFailedRevert),
-    (.trigger .arithmeticPanic, toCompositeSymbolic arithmeticPanicRevert),
-    (.trigger .divisionPanic, toCompositeSymbolic divisionPanicRevert),
-    (.trigger .assertionPanic, toCompositeSymbolic assertionPanicRevert),
-    (.trigger .roleFailureBoundary, toCompositeSymbolic roleFailure),
-    (.trigger .validateArrayLoop, toCompositeSymbolic validateArrayLoop),
-    (.trigger .afterValidation, toCompositeSymbolic afterValidation),
-    (.trigger .consumeQuota, toCompositeSymbolic (consumeExitRequestLimit (.call afterQuotaSlot))),
-    (.trigger .afterQuota, toCompositeSymbolic (afterQuota dp)),
-    (.trigger .encodeArraysLoop, toCompositeSymbolic encodeArraysLoop),
-    (.trigger .afterEncoding, toCompositeSymbolic afterEncoding),
-    (.trigger .bubbleRevert, toCompositeSymbolic bubbleRevert),
-    (.trigger .afterVaultCall, toCompositeSymbolic (afterVaultCall dp)),
-    (.trigger .refundCall, toCompositeSymbolic refundCall),
-    (.trigger .balanceCheck, toCompositeSymbolic balanceCheck),
-    (.trigger .afterNestedValidation, toCompositeSymbolic afterNestedValidation) ]
 
 end Trigger
 end LidoTriggerableWithdrawalsGateway

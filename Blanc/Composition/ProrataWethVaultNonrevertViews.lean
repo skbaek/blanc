@@ -40,7 +40,7 @@ private theorem vault_maxMintCap_lookup :
 private theorem reads_self (devm : Devm) :
     Mem.Reads devm.memory devm.memory.data.toList := by
   intro index
-  simp
+  simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
 
 /-- **The `maxDeposit` view reverts only through a refused `balanceOf`.**  No
 stable-state premise: an unstable supply or zero receiver returns 0 before
@@ -205,8 +205,9 @@ theorem maxRedeem_no_reverting_walk
     canonicalAddressArg_avoiding argValid nil_pref bodyRun
   have free : Func.revertFreeIn [Blanc.ProrataWethVault.returnWordSlot]
       (arg 0 +++ sload ::: Blanc.ProrataWethVault.returnWord) = true := by
-    simp [Blanc.ProrataWethVault.returnWord, returnMemoryRange, Func.return_,
-      Func.revertFreeIn_prepend, Func.revertFreeIn]
+    simp only [ProrataWethVault.returnWord, returnMemoryRange, Func.return_,
+      Func.revertFreeIn_prepend, Func.revertFreeIn, bne_iff_ne, ne_eq, reduceCtorEq,
+      not_false_eq_true]
   exact Func.RunCompiledTo.not_revert_of_revertFreeIn
     (Blanc.ProrataWethVault.returnWord_table_revertFree vault_returnWord_lookup)
     readRun.1 free d rfl

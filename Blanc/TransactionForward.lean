@@ -1,6 +1,7 @@
 import Blanc.ExecutionTrace
 import Blanc.MessageExecution
 import Blanc.DeploymentMessage
+import Blanc.ForwardCall
 
 /-!
 # The forward direction of a successful transaction
@@ -16,6 +17,8 @@ transaction are evaluations) and the message's outcome, never a private copy of 
 * `processMessageCall_call_of_message`: the call wrapper of a code-free-of-delegation, auth-free
   message over a successful `processMessage`.
 * `processTransaction_of_stages`: the whole transaction.
+* `processTransaction_call_value_of_exec`: a type-2 call with arbitrary affordable value,
+  from its admission facts and the execution after value transfer.
 -/
 
 namespace Blanc
@@ -62,6 +65,27 @@ theorem checkTransaction_ok_of_parts {benv : Benv} {bout : BlockOutput} {tx : Tx
   unfold checkTransaction
   simp only [bind, Except.bind, Except.mapError, hgas, hchain, hrecover, hfee, hblob, hreceiver,
     hauth, hsender]
+
+/-- A successful admission check recovers the sender reported in its result. -/
+theorem checkTransaction_sender {benv : Benv} {bout : BlockOutput} {tx : Tx}
+    {sender : Adr} {effectiveGasPrice : Nat} {blobHashes : List B256} {blobGas : Nat}
+    (h : checkTransaction benv bout tx =
+      .ok (sender, effectiveGasPrice, blobHashes, blobGas)) :
+    recoverSender benv.stat.chainId tx = .ok sender := by
+  unfold checkTransaction at h
+  rcases Except.bind_eq_ok h with ⟨_, hgas, h⟩
+  rcases Except.bind_eq_ok h with ⟨_, hchain, h⟩
+  rcases Except.bind_eq_ok h with ⟨senderAddress, hrecover, h⟩
+  rw [Except.mapError_eq_ok_iff] at hrecover
+  rcases Except.bind_eq_ok h with ⟨_, hfee, h⟩
+  rcases Except.bind_eq_ok h with ⟨_, hblob, h⟩
+  rcases Except.bind_eq_ok h with ⟨_, hreceiver, h⟩
+  rcases Except.bind_eq_ok h with ⟨_, hauth, h⟩
+  rcases Except.bind_eq_ok h with ⟨_, hsender, h⟩
+  have hsender_eq : senderAddress = sender :=
+    congrArg Prod.fst (Except.ok.inj h)
+  rw [hsender_eq] at hrecover
+  exact hrecover
 
 /-- The block-gas check of a transaction without a state-gas dimension: the transaction's gas
 fits the block's remaining execution gas and its blob gas the remaining blob gas. -/
@@ -150,17 +174,17 @@ theorem validateTransaction_ok_of_facts {rules : ForkRules} {tx : Tx} {sender : 
     (hcap : checkTransactionGasCap rules.tx tx.gas = .ok ()) :
     validateTransaction rules tx sender = .ok (i, f) := by
   have hnone : tx.type.receiver?.isNone = false := by
-    cases h : tx.type.receiver? <;> simp_all
+    cases h : tx.type.receiver? <;> simp_all only [sup_le_iff, ne_eq, Option.isSome_none, Bool.false_eq_true, Option.isSome_some, Option.isNone_some]
   have hinit : checkInitcodeSize rules.code tx.type.receiver? tx.data.length = .ok () := by
     unfold checkInitcodeSize
-    simp [hnone]
+    simp only [hnone, gt_iff_lt, Bool.false_and, Bool.false_eq_true, ↓reduceIte]
   unfold validateTransaction
   simp only [hsg, hcost, Nat.not_lt.mpr hgas, ↓reduceIte]
   cases hm : rules.tx.maxGas with
   | none =>
-    simp [hnonce, hinit, bind, Except.bind]
+    simp only [hnonce, ↓reduceIte, bind, Except.bind, hinit]
   | some m =>
-    simp [hnonce, hinit, hcap, bind, Except.bind]
+    simp only [bind, Except.bind, hinit, hcap, hnonce, ↓reduceIte]
 
 /-- The message a call transaction with receiver `t` prepares: it calls `t`'s current code with the
 transaction's data and value, from the origin, at the outermost depth, with the origin, the receiver
@@ -215,7 +239,58 @@ theorem processMessage_call_of_exec {msg : Msg} {benv : Benv} {post : Devm} {t :
   refine MessageExecution.processMessage_clean_of_exec_afterTransfer_of_codeEntry msg benv post hentry ?_ hexec herror
   refine MessageExecution.executeCode_enter_of_codeAddress_not_precompile msg benv t hcodeAddress ?_
   rw [benvAfterTransfer_stat hentry]
-  simp [hprec]
+  simp only [hprec, Bool.false_eq_true, decide_false]
+
+/-- **A transaction from its stages, with its gas accounting and its receipt.**  The stages of
+`processTransaction_of_stages`, and the block output the transaction leaves: its cumulative and block
+gas used advance by the transaction's gas used (the larger of its gas less the gas left after the
+refund, capped at a fifth of the gas spent, and its calldata floor), its receipt key is appended, and
+the receipt at that key records the message's error, the cumulative gas and the message's logs. -/
+theorem processTransaction_of_stages_receipts
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {intrinsicGas calldataFloorGas : Nat} {sender : Adr} {effectiveGasPrice : Nat}
+    {blobVersionedHashes : List B256} {txBlobGasUsed : Nat}
+    {debit : State} {msg : Msg} {mpost : State} {mout : MsgCallOutput} {refund : Nat}
+    (hsg : benv.stat.rules.stateGas = none) (hbal : benv.stat.rules.bal = none)
+    (hvalid : validateTransaction benv.stat.rules tx 0 = .ok (intrinsicGas, calldataFloorGas))
+    (hchecked : checkTransaction benv.beginTransaction (transactionPreludeBout bout tx index) tx =
+      .ok (sender, effectiveGasPrice, blobVersionedHashes, txBlobGasUsed))
+    (hdebit : (benv.state.incrNonce sender).subBal sender
+      (tx.gas * effectiveGasPrice + transactionBlobGasFee benv tx).toB256 = some debit)
+    (hprepared : prepareMessage { benv.beginTransaction with state := debit }
+      (transactionTenv benv.beginTransaction tx index sender effectiveGasPrice intrinsicGas
+        blobVersionedHashes) tx = .ok msg)
+    (hcall : processMessageCall msg = .ok (mpost, mout))
+    (hrefund : Int.toNat? mout.refundCounter = some refund) :
+    ∃ bout', processTransaction benv bout tx index = .ok
+      (mout.accountsToDelete.toList.foldl destroyAccount
+        ((mpost.addBal sender
+            ((tx.gas -
+                max (tx.gas - mout.gasLeft - min ((tx.gas - mout.gasLeft) / 5) refund)
+                  calldataFloorGas) * effectiveGasPrice).toB256).addBal
+          benv.stat.coinbase
+            (max (tx.gas - mout.gasLeft - min ((tx.gas - mout.gasLeft) / 5) refund)
+                calldataFloorGas * (effectiveGasPrice - benv.stat.baseFeePerGas)).toB256),
+        bout') ∧
+      bout'.cumulativeGasUsed = bout.cumulativeGasUsed +
+        max (tx.gas - mout.gasLeft - min ((tx.gas - mout.gasLeft) / 5) refund) calldataFloorGas ∧
+      bout'.blockGasUsed = bout.blockGasUsed +
+        max (tx.gas - mout.gasLeft - min ((tx.gas - mout.gasLeft) / 5) refund) calldataFloorGas ∧
+      bout'.receiptKeys = bout.receiptKeys ++ [BLT.toBytes (.bytes index.toBytes)] ∧
+      bout'.receiptsTrie[BLT.toBytes (.bytes index.toBytes)]? =
+        some (makeReceipt tx mout.error bout'.cumulativeGasUsed mout.logs) := by
+  have hsg' : benv.beginTransaction.stat.rules.stateGas = none := hsg
+  unfold processTransaction
+  simp only [bind, Except.bind]
+  rw [recoverValidationSender_of_stateGas_none tx hsg']
+  simp only [BenvStat.rules, Benv.beginTransaction, transactionPreludeBout, transactionBlobGasFee,
+    transactionTenv, Except.mapError] at hvalid hchecked hdebit hprepared hsg hbal hsg' ⊢
+  generalize benv.stat.fork.ruleSet = R at *
+  simp only [hvalid, hchecked, hdebit, hprepared, Option.toExcept, allocateEvmGas, hsg, hcall, hrefund]
+  apply Exists.intro
+  simp only [settleSelfdestructs, hsg, hbal, settleTransactionGas]
+  refine ⟨rfl, rfl, rfl, rfl, ?_⟩
+  exact Std.TreeMap.getElem?_insert_self
 
 /-- **A transaction from its stages, with its gas accounting.**  The stages of
 `processTransaction_of_stages`, and the block output the transaction leaves: its cumulative and block
@@ -251,17 +326,9 @@ theorem processTransaction_of_stages_gasUsed
         max (tx.gas - mout.gasLeft - min ((tx.gas - mout.gasLeft) / 5) refund) calldataFloorGas ∧
       bout'.blockGasUsed = bout.blockGasUsed +
         max (tx.gas - mout.gasLeft - min ((tx.gas - mout.gasLeft) / 5) refund) calldataFloorGas := by
-  have hsg' : benv.beginTransaction.stat.rules.stateGas = none := hsg
-  unfold processTransaction
-  simp only [bind, Except.bind]
-  rw [recoverValidationSender_of_stateGas_none tx hsg']
-  simp only [BenvStat.rules, Benv.beginTransaction, transactionPreludeBout, transactionBlobGasFee,
-    transactionTenv, Except.mapError] at hvalid hchecked hdebit hprepared hsg hbal hsg' ⊢
-  generalize benv.stat.fork.ruleSet = R at *
-  simp only [hvalid, hchecked, hdebit, hprepared, Option.toExcept, allocateEvmGas, hsg, hcall, hrefund]
-  apply Exists.intro
-  simp only [settleSelfdestructs, hsg, hbal, settleTransactionGas]
-  refine ⟨rfl, rfl, rfl⟩
+  obtain ⟨bout', h, hcum, hblk, -, -⟩ := processTransaction_of_stages_receipts hsg hbal hvalid
+    hchecked hdebit hprepared hcall hrefund
+  exact ⟨bout', h, hcum, hblk⟩
 
 /-- **A transaction from its stages.**  Without a state-gas dimension or a block access list,
 the successful validation, admission check, debit, message preparation and message-call outcome
@@ -322,7 +389,7 @@ theorem transactionBlobGasFee_two {benv : Benv} {tx : Tx} {chainId : UInt64}
 
 theorem Int.toNat?_eq_some_of_nonneg {i : Int} (h : 0 ≤ i) : Int.toNat? i = some i.toNat := by
   unfold Int.toNat?
-  split <;> simp_all
+  split <;> simp_all only [Int.ofNat_eq_natCast, Nat.cast_nonneg, Int.toNat_natCast, Int.negSucc_not_nonneg]
 
 /-- The debit of a sender that can pay: the nonce is bumped and the amount taken from the balance. -/
 theorem subBal_incrNonce_of_le {st : State} {E : Adr} {v : B256} (h : v ≤ st.bal E) :
@@ -332,13 +399,230 @@ theorem subBal_incrNonce_of_le {st : State} {E : Adr} {v : B256} (h : v ≤ st.b
   simp only [B256.not_lt.mpr h, ↓reduceIte]
 
 /-- **A type-2 call transaction, from the outcome of its message's execution.**  A type-2 transaction
-from an externally owned account `E` to `t` with value `0`, whose fees, nonce, funds, gas and
+from an externally owned account `E` to `t`, whose fees, nonce, funds, gas and
 signature pass Jaune's admission checks (stated as facts about the fields and the sender's account),
-is processed exactly when its message's interpreter run succeeds: given that run (`hexec`, for the
+is processed whenever its message's interpreter run succeeds: given that run (`hexec`, for the
 debited state, the prepared message and its entry environment) succeeding with no frame error and a
 non-negative refund counter, `processTransaction` returns the message's world with the sender's gas
 refund and the coinbase's priority fee credited and the message's accounts to delete removed, and the
-block's gas counters advance by the transaction's gas used. -/
+block's gas counters advance by the transaction's gas used. The funds premise covers both
+the maximum gas fee and the transferred value, so message entry is derived.  The receipt the transaction appends records no error and the frame's logs. -/
+theorem processTransaction_call_value_of_exec_receipts
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat} {E t : Adr}
+    {chainId : UInt64} {maxPriorityFee maxFee intrinsicGas calldataFloorGas : Nat}
+    {Q : State → Devm → Prop}
+    (hfork : CoveredFork benv.stat.fork)
+    (htype : tx.type = .two chainId maxPriorityFee maxFee (some t) [])
+    (hchain : chainId = benv.stat.chainId)
+    (hprio : maxPriorityFee ≤ maxFee) (hbase : benv.stat.baseFeePerGas ≤ maxFee)
+    (hcost : calculateIntrinsicCost benv.stat.rules tx E = (intrinsicGas, calldataFloorGas))
+    (hgas : max intrinsicGas calldataFloorGas ≤ tx.gas)
+    (hcap : checkTransactionGasCap benv.stat.rules.tx tx.gas = .ok ())
+    (hnonceMax : tx.nonce ≠ UInt64.max)
+    (hroom : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed)
+    (hrecover : recoverSender benv.stat.chainId tx = .ok E)
+    (hnonce : (benv.state.get E).nonce = tx.nonce)
+    (hnocode : (benv.state.get E).code.isEmpty = true)
+    (hfunds : tx.gas * maxFee + tx.value ≤ (benv.state.get E).bal.toNat)
+    (hnodeleg : getDelegatedCodeAddress (benv.state.getCode t) = none)
+    (hprec : benv.stat.rules.isPrecomp t = false)
+    (hexec : ∀ (debit : State) (msg : Msg) (after : Benv),
+      (benv.state.incrNonce E).subBal E
+        (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+          benv.stat.baseFeePerGas)).toB256 = some debit →
+      prepareMessage { benv.beginTransaction with state := debit }
+        (transactionTenv benv.beginTransaction tx index E
+          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)
+          intrinsicGas []) tx = .ok msg →
+      msg.benvAfterTransfer = .ok after →
+      ∃ post, exec (initEvm (msg.withBenv after)) = .ok post ∧ post.error = none ∧
+        0 ≤ post.refundCounter ∧ Q debit post) :
+    ∃ (debit : State) (post : Devm) (bout' : BlockOutput), Q debit post ∧
+      processTransaction benv bout tx index = .ok
+        (post.accountsToDelete.toList.foldl destroyAccount
+          ((post.state.addBal E
+              ((tx.gas - txGasUsed tx.gas calldataFloorGas post.gasLeft post.refundCounter.toNat) *
+                (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+                  benv.stat.baseFeePerGas)).toB256).addBal
+            benv.stat.coinbase
+              (txGasUsed tx.gas calldataFloorGas post.gasLeft post.refundCounter.toNat *
+                (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas))).toB256),
+          bout') ∧
+      bout'.cumulativeGasUsed = bout.cumulativeGasUsed +
+        txGasUsed tx.gas calldataFloorGas post.gasLeft post.refundCounter.toNat ∧
+      bout'.blockGasUsed = bout.blockGasUsed +
+        txGasUsed tx.gas calldataFloorGas post.gasLeft post.refundCounter.toNat ∧
+      bout'.receiptKeys = bout.receiptKeys ++ [BLT.toBytes (.bytes index.toBytes)] ∧
+      bout'.receiptsTrie[BLT.toBytes (.bytes index.toBytes)]? =
+        some (makeReceipt tx none bout'.cumulativeGasUsed post.logs) := by
+  have hsg : benv.stat.rules.stateGas = none := CoveredFork.rules_stateGas_none hfork
+  have hbalr : benv.stat.rules.bal = none := CoveredFork.rules_bal_none hfork
+  have hmax : B256.max.toNat = 2 ^ 256 - 1 := by decide +kernel
+  have hlt256 := B256.toNat_lt (benv.state.get E).bal
+  have hvalid : validateTransaction benv.stat.rules tx 0 = .ok (intrinsicGas, calldataFloorGas) := by
+    refine validateTransaction_ok_of_facts hsg ?_ hgas hnonceMax (by rw [htype]; rfl) hcap
+    rw [calculateIntrinsicCost_sender_congr_none hsg]
+    exact hcost
+  have hfit : tx.gas * maxFee ≤ B256.max.toNat := by omega
+  have hfee := checkTransactionGasFee_two (benv := benv.beginTransaction) htype hprio hbase hfit
+  have hgaslim := checkTransactionGasLimits_ok_of_room (benv := benv.beginTransaction)
+    (bout := transactionPreludeBout bout tx index) (tx := tx) hsg hroom
+    (by rw [calculateTotalBlobGas_two htype]; exact Nat.zero_le _)
+  have hchecked : checkTransaction benv.beginTransaction (transactionPreludeBout bout tx index) tx =
+      .ok (E, min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas, [],
+        calculateTotalBlobGas tx) :=
+    checkTransaction_ok_of_parts hgaslim (checkTransactionChainId_two htype hchain) hrecover hfee
+      (checkTransactionBlobData_two htype _) (checkTransactionReceiver_two htype)
+      (checkTransactionAuthorizationList_two htype)
+      (checkTransactionSenderAccount_ok_of_noCode hnonce hfunds hnocode)
+  have heff_le : min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas ≤
+      maxFee := by omega
+  have hpay : tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+      benv.stat.baseFeePerGas) ≤ (benv.state.get E).bal.toNat :=
+    le_trans (Nat.mul_le_mul_left _ heff_le) (by omega)
+  have hle : (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+      benv.stat.baseFeePerGas)).toB256 ≤ benv.state.bal E := by
+    rw [B256.le_iff_toNat_le_toNat, B256.toNat_toB256_of_lt (by omega)]
+    exact hpay
+  have hdebit := subBal_incrNonce_of_le hle
+  have hprepared := prepareMessage_call (benv := { benv.beginTransaction with state :=
+      ((benv.state.incrNonce E).setBal E (benv.state.bal E -
+        (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+          benv.stat.baseFeePerGas)).toB256)) })
+    (tenv := transactionTenv benv.beginTransaction tx index E
+      (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)
+      intrinsicGas []) (tx := tx) (t := t) (by rw [htype]; rfl)
+  have hvalueFit : tx.value < 2 ^ 256 := by omega
+  have hfeeFit : tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+      benv.stat.baseFeePerGas) < 2 ^ 256 := by omega
+  have hremaining : tx.value.toB256 ≤ benv.state.bal E -
+      (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+        benv.stat.baseFeePerGas)).toB256 := by
+    rw [B256.le_iff_toNat_le_toNat, B256.toNat_toB256_of_lt hvalueFit,
+      B256.toNat_sub_eq_of_le _ _ hle, B256.toNat_toB256_of_lt hfeeFit]
+    have heffTotal := Nat.mul_le_mul_left tx.gas heff_le
+    change tx.value ≤ (benv.state.get E).bal.toNat - _
+    omega
+  obtain ⟨transferState, _, hentry⟩ := Msg.benvAfterTransfer_of_affordable
+    (callMessage { benv.beginTransaction with state :=
+      ((benv.state.incrNonce E).setBal E (benv.state.bal E -
+        (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+          benv.stat.baseFeePerGas)).toB256)) }
+      (transactionTenv benv.beginTransaction tx index E
+        (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)
+        intrinsicGas []) tx t) rfl (by
+      apply B256.not_lt.mpr
+      change tx.value.toB256 ≤
+        (((benv.state.incrNonce E).setBal E (benv.state.bal E -
+          (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+            benv.stat.baseFeePerGas)).toB256)).get E).bal
+      rw [State.setBal_get_self]
+      exact hremaining)
+  have hdebit' : (benv.state.incrNonce E).subBal E
+      (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+        benv.stat.baseFeePerGas) + transactionBlobGasFee benv tx).toB256 = some
+      ((benv.state.incrNonce E).setBal E (benv.state.bal E -
+        (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+          benv.stat.baseFeePerGas)).toB256)) := by
+    rw [transactionBlobGasFee_two htype, Nat.add_zero]
+    exact hdebit
+  obtain ⟨post, hex, herr, hrf, hQ⟩ := hexec _ _ _ hdebit hprepared hentry
+  have hpm := processMessage_call_of_exec (t := t) hentry rfl hprec hex herr
+  have hcode : getDelegatedCodeAddress (callMessage { benv.beginTransaction with state :=
+      ((benv.state.incrNonce E).setBal E (benv.state.bal E -
+        (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+          benv.stat.baseFeePerGas)).toB256)) }
+      (transactionTenv benv.beginTransaction tx index E
+        (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)
+        intrinsicGas []) tx t).code = none := by
+    show getDelegatedCodeAddress (((benv.state.incrNonce E).setBal E _).getCode t) = none
+    rw [State.setBal_getCode]
+    show getDelegatedCodeAddress (((benv.state.incrNonce E).get t).code) = none
+    rw [State.incrNonce_get_code]
+    exact hnodeleg
+  have hcall := processMessageCall_call_of_message (msg := callMessage { benv.beginTransaction with
+      state := ((benv.state.incrNonce E).setBal E (benv.state.bal E -
+        (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+          benv.stat.baseFeePerGas)).toB256)) }
+      (transactionTenv benv.beginTransaction tx index E
+        (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)
+        intrinsicGas []) tx t) hsg rfl
+    (by simp only [callMessage, transactionTenv, Tx.auths, htype, List.isEmpty_nil]) hcode
+    hpm herr (Int.toNat?_eq_some_of_nonneg hrf)
+  obtain ⟨bout', hproc, hcum, hblk, hkeys, hreceipt⟩ := processTransaction_of_stages_receipts
+    (benv := benv)
+    (bout := bout) (tx := tx) (index := index) (intrinsicGas := intrinsicGas)
+    (calldataFloorGas := calldataFloorGas) (sender := E)
+    (effectiveGasPrice := min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+      benv.stat.baseFeePerGas) (blobVersionedHashes := []) (txBlobGasUsed := calculateTotalBlobGas tx)
+    hsg hbalr hvalid hchecked hdebit' hprepared hcall
+    (by rw [Int.toNat?_eq_some_of_nonneg (by omega : (0 : Int) ≤ ((0 + post.refundCounter.toNat : Nat) : Int))])
+  refine ⟨_, post, bout', hQ, ?_, ?_, ?_, hkeys, hreceipt⟩
+  · simpa only [txGasUsed, Nat.zero_add, Nat.add_sub_cancel, Int.toNat_natCast] using hproc
+  · simpa only [txGasUsed, Nat.zero_add, Int.toNat_natCast] using hcum
+  · simpa only [txGasUsed, Nat.zero_add, Int.toNat_natCast] using hblk
+
+/-- **A type-2 call transaction, from the outcome of its message's execution.**  A type-2 transaction
+from an externally owned account `E` to `t`, whose fees, nonce, funds, gas and
+signature pass Jaune's admission checks (stated as facts about the fields and the sender's account),
+is processed whenever its message's interpreter run succeeds: given that run (`hexec`, for the
+debited state, the prepared message and its entry environment) succeeding with no frame error and a
+non-negative refund counter, `processTransaction` returns the message's world with the sender's gas
+refund and the coinbase's priority fee credited and the message's accounts to delete removed, and the
+block's gas counters advance by the transaction's gas used. The funds premise covers both
+the maximum gas fee and the transferred value, so message entry is derived. -/
+theorem processTransaction_call_value_of_exec
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat} {E t : Adr}
+    {chainId : UInt64} {maxPriorityFee maxFee intrinsicGas calldataFloorGas : Nat}
+    {Q : State → Devm → Prop}
+    (hfork : CoveredFork benv.stat.fork)
+    (htype : tx.type = .two chainId maxPriorityFee maxFee (some t) [])
+    (hchain : chainId = benv.stat.chainId)
+    (hprio : maxPriorityFee ≤ maxFee) (hbase : benv.stat.baseFeePerGas ≤ maxFee)
+    (hcost : calculateIntrinsicCost benv.stat.rules tx E = (intrinsicGas, calldataFloorGas))
+    (hgas : max intrinsicGas calldataFloorGas ≤ tx.gas)
+    (hcap : checkTransactionGasCap benv.stat.rules.tx tx.gas = .ok ())
+    (hnonceMax : tx.nonce ≠ UInt64.max)
+    (hroom : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed)
+    (hrecover : recoverSender benv.stat.chainId tx = .ok E)
+    (hnonce : (benv.state.get E).nonce = tx.nonce)
+    (hnocode : (benv.state.get E).code.isEmpty = true)
+    (hfunds : tx.gas * maxFee + tx.value ≤ (benv.state.get E).bal.toNat)
+    (hnodeleg : getDelegatedCodeAddress (benv.state.getCode t) = none)
+    (hprec : benv.stat.rules.isPrecomp t = false)
+    (hexec : ∀ (debit : State) (msg : Msg) (after : Benv),
+      (benv.state.incrNonce E).subBal E
+        (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+          benv.stat.baseFeePerGas)).toB256 = some debit →
+      prepareMessage { benv.beginTransaction with state := debit }
+        (transactionTenv benv.beginTransaction tx index E
+          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)
+          intrinsicGas []) tx = .ok msg →
+      msg.benvAfterTransfer = .ok after →
+      ∃ post, exec (initEvm (msg.withBenv after)) = .ok post ∧ post.error = none ∧
+        0 ≤ post.refundCounter ∧ Q debit post) :
+    ∃ (debit : State) (post : Devm) (bout' : BlockOutput), Q debit post ∧
+      processTransaction benv bout tx index = .ok
+        (post.accountsToDelete.toList.foldl destroyAccount
+          ((post.state.addBal E
+              ((tx.gas - txGasUsed tx.gas calldataFloorGas post.gasLeft post.refundCounter.toNat) *
+                (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+                  benv.stat.baseFeePerGas)).toB256).addBal
+            benv.stat.coinbase
+              (txGasUsed tx.gas calldataFloorGas post.gasLeft post.refundCounter.toNat *
+                (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas))).toB256),
+          bout') ∧
+      bout'.cumulativeGasUsed = bout.cumulativeGasUsed +
+        txGasUsed tx.gas calldataFloorGas post.gasLeft post.refundCounter.toNat ∧
+      bout'.blockGasUsed = bout.blockGasUsed +
+        txGasUsed tx.gas calldataFloorGas post.gasLeft post.refundCounter.toNat := by
+  obtain ⟨debit, post, bout', hQ, hproc, hcum, hblk, -, -⟩ :=
+    processTransaction_call_value_of_exec_receipts hfork htype hchain hprio hbase hcost hgas hcap
+      hnonceMax hroom hrecover hnonce hnocode hfunds hnodeleg hprec hexec
+  exact ⟨debit, post, bout', hQ, hproc, hcum, hblk⟩
+
+/-- Zero-value specialization of `processTransaction_call_value_of_exec`, preserving the
+original transaction constructor's interface. -/
 theorem processTransaction_call_of_exec
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat} {E t : Adr}
     {chainId : UInt64} {maxPriorityFee maxFee intrinsicGas calldataFloorGas : Nat}
@@ -384,93 +668,9 @@ theorem processTransaction_call_of_exec
         txGasUsed tx.gas calldataFloorGas post.gasLeft post.refundCounter.toNat ∧
       bout'.blockGasUsed = bout.blockGasUsed +
         txGasUsed tx.gas calldataFloorGas post.gasLeft post.refundCounter.toNat := by
-  have hsg : benv.stat.rules.stateGas = none := CoveredFork.rules_stateGas_none hfork
-  have hbalr : benv.stat.rules.bal = none := CoveredFork.rules_bal_none hfork
-  have hmax : B256.max.toNat = 2 ^ 256 - 1 := by decide +kernel
-  have hlt256 := B256.toNat_lt (benv.state.get E).bal
-  have hvalid : validateTransaction benv.stat.rules tx 0 = .ok (intrinsicGas, calldataFloorGas) := by
-    refine validateTransaction_ok_of_facts hsg ?_ hgas hnonceMax (by rw [htype]; rfl) hcap
-    rw [calculateIntrinsicCost_sender_congr_none hsg]
-    exact hcost
-  have hfit : tx.gas * maxFee ≤ B256.max.toNat := by omega
-  have hfee := checkTransactionGasFee_two (benv := benv.beginTransaction) htype hprio hbase hfit
-  have hgaslim := checkTransactionGasLimits_ok_of_room (benv := benv.beginTransaction)
-    (bout := transactionPreludeBout bout tx index) (tx := tx) hsg hroom
-    (by rw [calculateTotalBlobGas_two htype]; exact Nat.zero_le _)
-  have hchecked : checkTransaction benv.beginTransaction (transactionPreludeBout bout tx index) tx =
-      .ok (E, min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas, [],
-        calculateTotalBlobGas tx) :=
-    checkTransaction_ok_of_parts hgaslim (checkTransactionChainId_two htype hchain) hrecover hfee
-      (checkTransactionBlobData_two htype _) (checkTransactionReceiver_two htype)
-      (checkTransactionAuthorizationList_two htype)
-      (checkTransactionSenderAccount_ok_of_noCode hnonce
-        (by show tx.gas * maxFee + tx.value ≤ (benv.state.get E).bal.toNat; omega) hnocode)
-  have heff_le : min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas ≤
-      maxFee := by omega
-  have hpay : tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
-      benv.stat.baseFeePerGas) ≤ (benv.state.get E).bal.toNat :=
-    le_trans (Nat.mul_le_mul_left _ heff_le) hfunds
-  have hle : (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
-      benv.stat.baseFeePerGas)).toB256 ≤ benv.state.bal E := by
-    rw [B256.le_iff_toNat_le_toNat, B256.toNat_toB256_of_lt (by omega)]
-    exact hpay
-  have hdebit := subBal_incrNonce_of_le hle
-  have hprepared := prepareMessage_call (benv := { benv.beginTransaction with state :=
-      ((benv.state.incrNonce E).setBal E (benv.state.bal E -
-        (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
-          benv.stat.baseFeePerGas)).toB256)) })
-    (tenv := transactionTenv benv.beginTransaction tx index E
-      (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)
-      intrinsicGas []) (tx := tx) (t := t) (by rw [htype]; rfl)
-  obtain ⟨after, hentry⟩ := benvAfterTransfer_exists_of_value_zero
-    (msg := callMessage { benv.beginTransaction with state :=
-      ((benv.state.incrNonce E).setBal E (benv.state.bal E -
-        (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
-          benv.stat.baseFeePerGas)).toB256)) }
-      (transactionTenv benv.beginTransaction tx index E
-        (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)
-        intrinsicGas []) tx t) (by simp [callMessage, hvalue]; rfl)
-  have hdebit' : (benv.state.incrNonce E).subBal E
-      (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
-        benv.stat.baseFeePerGas) + transactionBlobGasFee benv tx).toB256 = some
-      ((benv.state.incrNonce E).setBal E (benv.state.bal E -
-        (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
-          benv.stat.baseFeePerGas)).toB256)) := by
-    rw [transactionBlobGasFee_two htype, Nat.add_zero]
-    exact hdebit
-  obtain ⟨post, hex, herr, hrf, hQ⟩ := hexec _ _ after hdebit hprepared hentry
-  have hpm := processMessage_call_of_exec (t := t) hentry rfl hprec hex herr
-  have hcode : getDelegatedCodeAddress (callMessage { benv.beginTransaction with state :=
-      ((benv.state.incrNonce E).setBal E (benv.state.bal E -
-        (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
-          benv.stat.baseFeePerGas)).toB256)) }
-      (transactionTenv benv.beginTransaction tx index E
-        (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)
-        intrinsicGas []) tx t).code = none := by
-    show getDelegatedCodeAddress (((benv.state.incrNonce E).setBal E _).getCode t) = none
-    rw [State.setBal_getCode]
-    show getDelegatedCodeAddress (((benv.state.incrNonce E).get t).code) = none
-    rw [State.incrNonce_get_code]
-    exact hnodeleg
-  have hcall := processMessageCall_call_of_message (msg := callMessage { benv.beginTransaction with
-      state := ((benv.state.incrNonce E).setBal E (benv.state.bal E -
-        (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
-          benv.stat.baseFeePerGas)).toB256)) }
-      (transactionTenv benv.beginTransaction tx index E
-        (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)
-        intrinsicGas []) tx t) hsg rfl (by simp [callMessage, transactionTenv, Tx.auths, htype]) hcode
-    hpm herr (Int.toNat?_eq_some_of_nonneg hrf)
-  obtain ⟨bout', hproc, hcum, hblk⟩ := processTransaction_of_stages_gasUsed (benv := benv)
-    (bout := bout) (tx := tx) (index := index) (intrinsicGas := intrinsicGas)
-    (calldataFloorGas := calldataFloorGas) (sender := E)
-    (effectiveGasPrice := min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
-      benv.stat.baseFeePerGas) (blobVersionedHashes := []) (txBlobGasUsed := calculateTotalBlobGas tx)
-    hsg hbalr hvalid hchecked hdebit' hprepared hcall
-    (by rw [Int.toNat?_eq_some_of_nonneg (by omega : (0 : Int) ≤ ((0 + post.refundCounter.toNat : Nat) : Int))])
-  refine ⟨_, post, bout', hQ, ?_, ?_, ?_⟩
-  · simpa only [txGasUsed, Nat.zero_add, Nat.add_sub_cancel, Int.toNat_natCast] using hproc
-  · simpa only [txGasUsed, Nat.zero_add, Int.toNat_natCast] using hcum
-  · simpa only [txGasUsed, Nat.zero_add, Int.toNat_natCast] using hblk
+  exact processTransaction_call_value_of_exec hfork htype hchain hprio hbase hcost hgas hcap
+    hnonceMax hroom hrecover hnonce hnocode
+    (by simpa only [hvalue, Nat.add_zero] using hfunds) hnodeleg hprec hexec
 
 /-! ### The intrinsic gas of a plain call -/
 
@@ -482,14 +682,14 @@ theorem calldataTokens_foldl (l : Bytes) (n : Nat) :
     l.foldl (fun acc x => acc + (if x = 0 then 1 else 4)) n = n + calldataTokens l := by
   unfold calldataTokens
   induction l generalizing n with
-  | nil => simp
+  | nil => simp only [List.foldl_nil, add_zero]
   | cons x xs ih =>
     simp only [List.foldl_cons, ih (n + _), ih (0 + _)]
     omega
 
 theorem calldataTokens_le (data : Bytes) : calldataTokens data ≤ 4 * data.length := by
   induction data with
-  | nil => simp [calldataTokens]
+  | nil => simp only [calldataTokens, List.foldl_nil, List.length_nil, mul_zero, Std.le_refl]
   | cons x xs ih =>
     have h := calldataTokens_foldl xs (if x = 0 then 1 else 4)
     have : calldataTokens (x :: xs) = (if x = 0 then 1 else 4) + calldataTokens xs := by
@@ -524,7 +724,8 @@ theorem calculateIntrinsicCost_two_call {rules : ForkRules} {tx : Tx} {sender : 
       (rules.gas.txBase + calldataTokens tx.data * standardCallDataTokenCost,
         calldataTokens tx.data * rules.gas.floorTokenCost + rules.gas.txBase) := by
   unfold calculateIntrinsicCost calldataTokens
-  simp [hsg, htype, TxType.receiver?]
+  simp only [TxType.receiver?, htype, hsg, add_zero, Option.isNone_some, Bool.false_eq_true,
+    ↓reduceIte, List.map_nil, List.sum_nil]
 
 /-- **The per-transaction gas cap on the covered forks**: no cap at Prague, the EIP-7825 cap `2 ^ 24`
 from Osaka; a transaction whose gas is at most `2 ^ 24` passes on every covered fork. -/
@@ -535,7 +736,7 @@ theorem CoveredFork.checkTransactionGasCap_ok {s : BenvStat} (h : CoveredFork s.
       (Fork.ruleSet f).tx.maxGas = some 16777216) (Or.inl rfl) (Or.inr rfl) (Or.inr rfl) (Or.inr rfl)
   unfold checkTransactionGasCap
   rcases hcap with hc | hc <;> rw [hc]
-  simp [Nat.not_lt.mpr hgas]
+  simp only [gt_iff_lt, Nat.not_lt.mpr hgas, ↓reduceIte]
 
 /-- The sender's debit (nonce bump and balance write) leaves every other account alone. -/
 theorem debit_get_ne {st : State} {E a : Adr} {v : B256} (h : E ≠ a) :
@@ -620,5 +821,57 @@ theorem deploymentFinalState_two {benv : Benv} {tx : Tx} {sender : Adr} {chainId
         benv.stat.coinbase (usedGas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas))).toB256 := by
   unfold deploymentFinalState
   rw [deploymentEffectiveGasPrice_two htype, Nat.add_sub_cancel]
+
+theorem txGasUsed_le {gas floor left refund : Nat} (h : floor ≤ gas) :
+    txGasUsed gas floor left refund ≤ gas := by
+  unfold txGasUsed
+  exact Nat.max_le.mpr ⟨by omega, h⟩
+
+/-- The fold over two indexed transactions: each settles in the state the previous left. -/
+theorem applyTransactions_two {benv : Benv} {bout bout1 bout2 : BlockOutput} {tx1 tx2 : Tx}
+    {s1 s2 : State} (h1 : processTransaction benv bout tx1 0 = .ok (s1, bout1))
+    (h2 : processTransaction (benv.withState s1) bout1 tx2 1 = .ok (s2, bout2)) :
+    applyTransactions [tx1, tx2].putIndex benv bout = .ok (benv.withState s2, bout2) := by
+  change applyTransactions [(0, tx1), (1, tx2)] benv bout = _
+  simp only [applyTransactions, h1, h2, bind, Except.bind]
+  rfl
+
+theorem receiptKey_zero : BLT.toBytes (.bytes (0 : Nat).toBytes) = [0x80] := by
+  have h0 : Nat.toBytes 0 = [] := by decide +kernel
+  rw [h0]
+  simp only [BLT.toBytes, List.length_nil, Nat.ofNat_pos, ↓reduceIte, Nat.toUInt8_eq,
+    UInt8.reduceOfNat, add_zero]
+
+theorem receiptKey_one : BLT.toBytes (.bytes (1 : Nat).toBytes) = [0x01] := by
+  have h1 : Nat.toBytes 1 = [1] := by simp only [Nat.toBytes, Nat.toBytes.aux,
+    Nat.succ_eq_add_one, zero_add, Nat.one_mod, Nat.toUInt8_eq, UInt8.ofNat_one, Nat.reduceDiv]
+  rw [h1]
+  simp only [BLT.toBytes, UInt8.reduceLT, ↓reduceIte]
+
+theorem receiptKey_ne :
+    BLT.toBytes (.bytes (1 : Nat).toBytes) ≠ BLT.toBytes (.bytes (0 : Nat).toBytes) := by
+  rw [receiptKey_zero, receiptKey_one]
+  decide
+
+/-- A successful transaction inserts exactly its own receipt: every other key of the receipts
+trie keeps its entry. -/
+theorem processTransaction_receiptsTrie {benv : Benv} {bout : BlockOutput} {tx : Tx}
+    {index : Nat} {p : State × BlockOutput} (hp : processTransaction benv bout tx index = .ok p) :
+    ∃ r, p.2.receiptsTrie = bout.receiptsTrie.insert (BLT.toBytes (.bytes index.toBytes)) r := by
+  unfold processTransaction at hp
+  obtain ⟨b1, hb1, hp⟩ := Except.bind_eq_ok hp
+  obtain ⟨_, _, hp⟩ := Except.bind_eq_ok hp
+  obtain ⟨_, _, hp⟩ := Except.bind_eq_ok hp
+  obtain ⟨_, _, hp⟩ := Except.bind_eq_ok hp
+  obtain ⟨_, _, hp⟩ := Except.bind_eq_ok hp
+  obtain ⟨_, _, hp⟩ := Except.bind_eq_ok hp
+  obtain ⟨_, _, hp⟩ := Except.bind_eq_ok hp
+  obtain ⟨_, _, hp⟩ := Except.bind_eq_ok hp
+  obtain ⟨b2, hb2, hp⟩ := Except.bind_eq_ok hp
+  obtain ⟨b3, hb3, hp⟩ := Except.bind_eq_ok hp
+  simp only [Except.ok.injEq] at hb1 hb2 hb3
+  cases hp
+  subst hb1 hb2 hb3
+  exact ⟨_, rfl⟩
 
 end Blanc

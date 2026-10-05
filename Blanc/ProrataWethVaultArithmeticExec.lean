@@ -90,7 +90,7 @@ theorem inverseSeed_trace
   have p4 := prefix_of_push (of_run_pushB256 pushTwoRun) p3
   have p5raw := prefix_of_xor xorRun p4
   have p5 : inverseSeedWord denominator :: tail <<+ s5.stack := by
-    simpa [inverseSeedWord, B256.xor_comm] using p5raw
+    simpa only [inverseSeedWord, B256.xor_comm] using p5raw
   have arithmeticMemory : s1.memory = s5.memory :=
     Line.of_inv Devm.memory (by line_inv)
       (Line.Run.cons pushThreeRun
@@ -180,7 +180,7 @@ theorem newtonStep_trace
   have p5raw := prefix_of_mul finalMulRun p4
   have p5 :
       inverseNewtonStepWord denominator inverse :: tail <<+ s5.stack := by
-    simpa [inverseNewtonStepWord] using p5raw
+    simpa only [inverseNewtonStepWord] using p5raw
   have productMemory : s4.memory = s5.memory :=
     Line.of_inv Devm.memory (by line_inv)
       (Line.Run.cons finalMulRun Line.Run.nil)
@@ -303,11 +303,9 @@ private theorem newtonSteps_trace
           finalDenominatorAt, finalInverseAt⟩ :=
         ih midWf midReads nextDenominatorAt nextInverseAt midStack restRun
       refine ⟨finalStack, finalWf, ?_, midState.trans finalState, ?_, ?_⟩
-      · simpa [inverseNewtonTraceImage, nextImage, next] using finalReads
-      · simpa [inverseNewtonTraceImage, nextImage, next] using
-          finalDenominatorAt
-      · simpa [inverseNewtonTraceImage, inverseNewtonIter, nextImage, next]
-          using finalInverseAt
+      · simpa only [inverseNewtonTraceImage] using finalReads
+      · simpa only [inverseNewtonTraceImage] using finalDenominatorAt
+      · simpa only [inverseNewtonTraceImage, inverseNewtonIter] using finalInverseAt
 
 /-- The runtime's exact six Newton lines preserve the surrounding stack and
 advance the staged inverse to six word-level refinements. -/
@@ -335,7 +333,7 @@ theorem sixNewtonSteps_trace
             (inverseWord * 32).toNat 32 0) =
         inverseNewtonIter denominator 6 inverse := by
   apply newtonSteps_trace 6 memoryWf memoryReads denominatorAt inverseAt stack
-  simpa [sixNewtonSteps, newtonStepsLine, List.append_assoc] using run
+  simpa only [newtonStepsLine, List.append_nil, sixNewtonSteps, List.append_assoc] using run
 
 /-! ## Full-width remainder staging -/
 
@@ -486,7 +484,7 @@ theorem wideRemainder_trace
   have p4raw := prefix_of_addmod addmodRun p3
   have p4 :
       wordModulusFactorWord denominator :: tail <<+ s4.stack := by
-    simpa [wordModulusFactorWord] using p4raw
+    simpa only [wordModulusFactorWord] using p4raw
   have factorMemory : s1.memory = s4.memory :=
     Line.of_inv Devm.memory (by line_inv)
       (Line.Run.cons pushOneRun
@@ -545,7 +543,7 @@ theorem wideRemainder_trace
   have p9raw := prefix_of_mulmod mulmodRun p8
   let scratch := B256.mulmod high factor denominator
   have p9 : scratch :: tail <<+ s9.stack := by
-    simpa [scratch] using p9raw
+    simpa only [scratch] using p9raw
   have mulmodMemory : s8.memory = s9.memory :=
     Line.of_inv Devm.memory (by line_inv)
       (Line.Run.cons mulmodRun Line.Run.nil)
@@ -608,7 +606,7 @@ theorem wideRemainder_trace
   have p14raw := prefix_of_addmod addmodRun2 p13
   let remainder := B256.addmod scratch low denominator
   have p14 : remainder :: tail <<+ s14.stack := by
-    simpa [remainder] using p14raw
+    simpa only [remainder] using p14raw
   have addmodMemory : s13.memory = s14.memory :=
     Line.of_inv Devm.memory (by line_inv)
       (Line.Run.cons addmodRun2 Line.Run.nil)
@@ -621,8 +619,7 @@ theorem wideRemainder_trace
   obtain ⟨p15, wf15, reads15, -⟩ :=
     of_run_mstoreAt_image p14 wf14 reads14 run
   refine ⟨p15, wf15, ?_, state⟩
-  simpa [wideRemainderTraceImage, image2, image1, remainder, scratch,
-    factor, wideRemainderWord, wordModulusFactorWord] using reads15
+  simpa only [wideRemainderTraceImage, image2, image1, remainder, scratch, factor, wideRemainderWord, wordModulusFactorWord] using reads15
 
 /-- The exact remainder-subtraction block of `divideWideCore`. -/
 def wideSubtractRemainderLine : Line :=
@@ -820,7 +817,7 @@ theorem wideSubtractRemainder_trace
   have p7raw := prefix_of_sub lowSubRun p6
   let low' := wideSubLowWord low remainder
   have p7 : low' :: tail <<+ s7.stack := by
-    simpa [low', wideSubLowWord] using p7raw
+    simpa only [low', wideSubLowWord] using p7raw
   have lowSubMemory : s6.memory = s7.memory :=
     Line.of_inv Devm.memory (by line_inv)
       (Line.Run.cons lowSubRun Line.Run.nil)
@@ -868,7 +865,7 @@ theorem wideSubtractRemainder_trace
   have p11raw := prefix_of_sub highSubRun p10
   let high' := wideSubHighWord high low remainder
   have p11 : high' :: tail <<+ s11.stack := by
-    simpa [high', wideSubHighWord] using p11raw
+    simpa only [high', wideSubHighWord] using p11raw
   have highSubMemory : s10.memory = s11.memory :=
     Line.of_inv Devm.memory (by line_inv)
       (Line.Run.cons highSubRun Line.Run.nil)
@@ -881,8 +878,7 @@ theorem wideSubtractRemainder_trace
   obtain ⟨p12, wf12, reads12, -⟩ :=
     of_run_mstoreAt_image p11 wf11 reads11 run
   refine ⟨p12, wf12, ?_, state⟩
-  simpa [wideSubtractRemainderTraceImage, image2, image1, high', low',
-    borrow] using reads12
+  simpa only [wideSubtractRemainderTraceImage, image2, image1, high', low', borrow] using reads12
 
 /-- The exact reduction prefix of `divideWideCore`: compute the two-word
 remainder and subtract it from the staged numerator. -/
@@ -1222,7 +1218,7 @@ theorem wideFactorFold_trace
   have p9raw := prefix_of_div denominatorDivRun p8
   let reducedDenominator := removeLowestSetBitWord denominator
   have p9 : reducedDenominator :: tail <<+ s9.stack := by
-    simpa [reducedDenominator, removeLowestSetBitWord, twos] using p9raw
+    simpa only [reducedDenominator, removeLowestSetBitWord, twos] using p9raw
   have denominatorDivMemory : s8.memory = s9.memory :=
     Line.of_inv Devm.memory (by line_inv)
       (Line.Run.cons denominatorDivRun Line.Run.nil)
@@ -1283,7 +1279,7 @@ theorem wideFactorFold_trace
   have p13raw := prefix_of_div lowDivRun p12
   let dividedLow := low / twos
   have p13 : dividedLow :: tail <<+ s13.stack := by
-    simpa [dividedLow] using p13raw
+    simpa only [dividedLow] using p13raw
   have lowDivMemory : s12.memory = s13.memory :=
     Line.of_inv Devm.memory (by line_inv)
       (Line.Run.cons lowDivRun Line.Run.nil)
@@ -1430,7 +1426,7 @@ theorem wideFactorFold_trace
   have p27raw := prefix_of_or orRun p26
   let folded := foldDividedWords high low twos
   have p27 : folded :: tail <<+ s27.stack := by
-    simpa [folded, foldDividedWords, dividedLow, factor] using p27raw
+    simpa only [folded, foldDividedWords, dividedLow, factor] using p27raw
   have orMemory : s26.memory = s27.memory :=
     Line.of_inv Devm.memory (by line_inv)
       (Line.Run.cons orRun Line.Run.nil)
@@ -1444,8 +1440,7 @@ theorem wideFactorFold_trace
   obtain ⟨p28, wf28, reads28, -⟩ :=
     of_run_mstoreAt_image p27 wf27 reads27 run
   refine ⟨p28, wf28, ?_, state⟩
-  simpa [wideFactorFoldTraceImage, image4, image3, image2, image1,
-    folded, factor, dividedLow, reducedDenominator, twos] using reads28
+  simpa only [wideFactorFoldTraceImage, image4, image3, image2, image1, folded, factor, dividedLow, reducedDenominator, twos] using reads28
 
 /-! ## Quotient store -/
 
@@ -1533,10 +1528,9 @@ theorem divideWideCore_eq_arithmeticLine
     (mode : QuotientMode) (continuation : Nat) :
     divideWideCore mode continuation =
       wideCoreArithmeticLine +++ finishQuotient mode continuation := by
-  simp [divideWideCore, wideCoreArithmeticLine, wideReductionLine,
-    wideRemainderLine, wideSubtractRemainderLine, wideFactorFoldLine,
-    inverseSeedLine, sixNewtonSteps, wideQuotientStoreLine,
-    prepend_append, List.append_assoc, prepend]
+  simp only [divideWideCore, sixNewtonSteps, List.append_assoc, prepend_append,
+    wideCoreArithmeticLine, wideReductionLine, wideRemainderLine, List.cons_append, List.nil_append,
+    wideSubtractRemainderLine, wideFactorFoldLine, inverseSeedLine, wideQuotientStoreLine, prepend]
 
 /-! ## Division arms -/
 
@@ -1651,7 +1645,7 @@ theorem finishQuotient_up_image_trace
 
   by_cases remainderZero : remainder = 0
   · have onePrefix : (1 : B256) :: tail <<+ remainderTest.stack := by
-      simpa [B256.eqCheck, remainderZero] using remainderTestPrefix
+      simpa only [B256.eqCheck, remainderZero, ↓reduceIte] using remainderTestPrefix
     obtain ⟨exactPre, exactPop, exactRun, exactPrefix⟩ :=
       Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
@@ -1684,7 +1678,7 @@ theorem finishQuotient_up_image_trace
               (of_run_loadWordAt_logs quotientRun)).trans
             (Devm.QuietFrame.mk' callBurn.state callBurn.logs)))
   · have zeroPrefix : (0 : B256) :: tail <<+ remainderTest.stack := by
-      simpa [B256.eqCheck, remainderZero] using remainderTestPrefix
+      simpa only [B256.eqCheck, remainderZero, ↓reduceIte] using remainderTestPrefix
     obtain ⟨roundPre, roundPop, roundRun, roundPrefix⟩ :=
       Func.WalkInv.zero_branch_of_prefix zeroPrefix branchRun
     have roundWf : Mem.Wf roundPre.memory := by
@@ -1716,7 +1710,7 @@ theorem finishQuotient_up_image_trace
     by_cases quotientMax : quotient = B256.max
     · have maxOnePrefix :
           (1 : B256) :: quotient :: tail <<+ maxTest.stack := by
-        simpa [quotientMax, B256.not_max, B256.eqCheck] using maxTestPrefix
+        simpa only [quotientMax, B256.eqCheck, B256.not_max, ↓reduceIte] using maxTestPrefix
       obtain ⟨overflowPre, overflowPop, overflowRun, overflowPrefix⟩ :=
         Func.WalkInv.succ_branch_of_prefix
           (by decide : (1 : B256) ≠ 0) maxOnePrefix maxBranchRun
@@ -1726,7 +1720,7 @@ theorem finishQuotient_up_image_trace
         exact quotientMax (B256.eq_max_of_not_eq_zero notZero)
       have maxZeroPrefix :
           (0 : B256) :: quotient :: tail <<+ maxTest.stack := by
-        simpa [B256.eqCheck, notNonzero] using maxTestPrefix
+        simpa only [B256.eqCheck, notNonzero, ↓reduceIte] using maxTestPrefix
       obtain ⟨addPre, maxPop, addRun, addPrefix⟩ :=
         Func.WalkInv.zero_branch_of_prefix maxZeroPrefix maxBranchRun
       obtain ⟨onePost, oneRun, addRun⟩ := Func.WalkInv.next addRun
@@ -1766,34 +1760,6 @@ theorem finishQuotient_up_image_trace
                 (of_run_loadWordAt_logs quotientRun)).trans
               (roundState.trans
                 (Devm.QuietFrame.mk' callBurn.state callBurn.logs))))
-
-/-- Ceiling-mode finishing selects the staged quotient when the staged
-remainder is zero. Otherwise it rejects the all-ones quotient through the
-compiled revert arm and passes the word successor to the continuation. -/
-theorem finishQuotient_up_trace
-    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
-    {fs : List Func} {sevm : Sevm} {pre final : Devm}
-    {image : Bytes} {quotient remainder : B256} {continuation : Nat}
-    {body : Func} {tail : Stack}
-    (memoryWf : Mem.Wf pre.memory)
-    (memoryReads : Mem.Reads pre.memory image)
-    (quotientAt : Bytes.toB256
-      (image.sliceD (quotientWord * 32).toNat 32 0) = quotient)
-    (remainderAt : Bytes.toB256
-      (image.sliceD (remainderWord * 32).toNat 32 0) = remainder)
-    (stack : tail <<+ pre.stack)
-    (lookup : fs[continuation]? = some body)
-    (run : R fs sevm pre
-      (finishQuotient .up continuation) final) :
-    (remainder ≠ 0 → quotient ≠ B256.max) ∧
-      ∃ bodyPre,
-        (if remainder = 0 then quotient else quotient + 1) :: tail <<+
-          bodyPre.stack ∧
-        R fs sevm bodyPre body final := by
-  obtain ⟨roundingSafe, bodyPre, roundedPrefix, -, -, bodyRun⟩ :=
-    finishQuotient_up_image_trace memoryWf memoryReads quotientAt remainderAt
-      stack lookup run
-  exact ⟨roundingSafe, bodyPre, roundedPrefix, bodyRun⟩
 
 /-- Capped floor finishing has the same successful continuation effect as
 ordinary floor finishing; only the earlier wide-overflow branch differs. -/
@@ -1886,7 +1852,7 @@ theorem finishQuotient_capCeilPred_trace
 
   by_cases remainderZero : remainder = 0
   · have onePrefix : (1 : B256) :: tail <<+ remainderTest.stack := by
-      simpa [B256.eqCheck, remainderZero] using remainderTestPrefix
+      simpa only [B256.eqCheck, remainderZero, ↓reduceIte] using remainderTestPrefix
     obtain ⟨exactPre, exactPop, exactRun, exactPrefix⟩ :=
       Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
@@ -1928,7 +1894,7 @@ theorem finishQuotient_capCeilPred_trace
     rw [← callBurn.stack]
     exact differencePrefix
   · have zeroPrefix : (0 : B256) :: tail <<+ remainderTest.stack := by
-      simpa [B256.eqCheck, remainderZero] using remainderTestPrefix
+      simpa only [B256.eqCheck, remainderZero, ↓reduceIte] using remainderTestPrefix
     obtain ⟨inexactPre, inexactPop, inexactRun, inexactPrefix⟩ :=
       Func.WalkInv.zero_branch_of_prefix zeroPrefix branchRun
     have inexactWf : Mem.Wf inexactPre.memory := by
@@ -2141,8 +2107,8 @@ theorem divideWideCore_staging_trace
         wideQuotientWord high low denominator := by
     unfold quotientImage
     rw [wideQuotientStoreTraceImage_quotient]
-    simp [folded, inverse, seed, reducedDenominator, reducedHigh, reducedLow,
-      wideQuotientWord, wideFoldedDividendWord]
+    simp only [wideQuotientWord, wideFoldedDividendWord, folded, reducedHigh, reducedLow, inverse,
+      reducedDenominator, seed]
   have quotientRemainderAt : Bytes.toB256
       (quotientImage.sliceD (remainderWord * 32).toNat 32 0) =
         wideRemainderWord high low denominator := by
@@ -2422,7 +2388,7 @@ theorem divideWide_arm_trace
     st1.trans (st2.trans (Devm.QuietFrame.ofNinst ltSource))
   by_cases noOverflow : high < denominator
   · have onePrefix : (1 : B256) :: tail <<+ s3.stack := by
-      simpa [B256.ltCheck, noOverflow] using p3
+      simpa only [B256.ltCheck, noOverflow, ↓reduceIte] using p3
     obtain ⟨corePre, corePop, coreRun, corePrefix⟩ :=
       Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
@@ -2435,7 +2401,7 @@ theorem divideWide_arm_trace
     exact Or.inl ⟨noOverflow, corePre, corePrefix, coreWf, coreReads,
       st3.trans (Devm.QuietFrame.ofPopBurn corePop), coreRun⟩
   · have zeroPrefix : (0 : B256) :: tail <<+ s3.stack := by
-      simpa [B256.ltCheck, noOverflow] using p3
+      simpa only [B256.ltCheck, noOverflow, ↓reduceIte] using p3
     obtain ⟨overflowPre, overflowPop, overflowRun, overflowPrefix⟩ :=
       Func.WalkInv.zero_branch_of_prefix zeroPrefix branchRun
     have overflowWf : Mem.Wf overflowPre.memory := by
@@ -2912,7 +2878,7 @@ theorem divideWide_capCeilPred_trace
           ceilDiv (wideNumeratorN high low) denominator.toNat - 1 := by
       by_cases exactDivision :
           wideNumeratorN high low % denominator.toNat = 0 <;>
-        simp [ceilDiv, exactDivision] <;>
+        simp only [ceilDiv, exactDivision, ↓reduceIte, add_zero, add_tsub_cancel_right] <;>
         unfold maxWordN at * <;> omega
     refine ⟨bodyPre, ?_, bodyRun⟩
     rw [Nat.min_eq_left maxLeRounded, toB256_maxWordN]
@@ -3084,7 +3050,7 @@ theorem divideSimple_staging_trace
   refine ⟨s8, p8, wf8, ?_,
     st1.trans (st2.trans (st3.trans (st4.trans
       (st5.trans (st6.trans (st7.trans st8)))))), run⟩
-  simpa [simpleDivisionTraceImage, image2, image1] using reads8
+  simpa only [simpleDivisionTraceImage] using reads8
 
 /-- A successful floor-mode walk through the single-word arm of `divide512`
 passes the exact EVM quotient to its continuation. The theorem deliberately
@@ -3120,30 +3086,6 @@ theorem divideSimple_down_image_trace
       lookup finishRun
   exact ⟨bodyPre, quotientPrefix, bodyImage,
     finishState.trans bodyState, bodyRun⟩
-
-/-- Unframed floor-mode single-word division. -/
-theorem divideSimple_down_trace
-    {R : List Func → Sevm → Devm → Func → Devm → Prop} [Func.WalkInv R]
-    {fs : List Func} {sevm : Sevm} {pre final : Devm}
-    {image : Bytes} {denominator low : B256} {continuation : Nat}
-    {body : Func} {tail : Stack}
-    (memoryWf : Mem.Wf pre.memory)
-    (memoryReads : Mem.Reads pre.memory image)
-    (denominatorAt : Bytes.toB256
-      (image.sliceD (denominatorWord * 32).toNat 32 0) = denominator)
-    (lowAt : Bytes.toB256
-      (image.sliceD (lowWord * 32).toNat 32 0) = low)
-    (stack : tail <<+ pre.stack)
-    (lookup : fs[continuation]? = some body)
-    (run : R fs sevm pre
-      (divideSimple .down continuation) final) :
-    ∃ bodyPre,
-      (low / denominator) :: tail <<+ bodyPre.stack ∧
-      R fs sevm bodyPre body final := by
-  obtain ⟨bodyPre, quotientPrefix, -, -, bodyRun⟩ :=
-    divideSimple_down_image_trace memoryWf memoryReads denominatorAt lowAt
-      stack lookup run
-  exact ⟨bodyPre, quotientPrefix, bodyRun⟩
 
 /-- A successful ceiling-mode single-word division passes its exact word
 quotient, incremented precisely when the staged remainder is nonzero. -/
@@ -3213,7 +3155,7 @@ theorem divideSimple_up_toB256_image_trace
       lookup run
   have floorFits : low.toNat / denominator.toNat < wordModulusN :=
     (Nat.div_le_self _ _).trans_lt (by
-      simpa [wordModulusN] using B256.toNat_lt low)
+      simpa only [wordModulusN, Nat.reducePow] using B256.toNat_lt low)
   have roundingFits :
       low.toNat % denominator.toNat ≠ 0 →
         low.toNat / denominator.toNat ≠ maxWordN := by
@@ -3340,7 +3282,7 @@ theorem divideSimple_capCeilPred_trace
       lookup finishRun
   have quotientBound : low.toNat / denominator.toNat < wordModulusN := by
     exact (Nat.div_le_self _ _).trans_lt (by
-      simpa [wordModulusN] using B256.toNat_lt low)
+      simpa only [wordModulusN, Nat.reducePow] using B256.toNat_lt low)
   have roundedEq :
       (if low % denominator = 0 then low / denominator - 1
         else low / denominator) =
@@ -3418,7 +3360,7 @@ theorem divide512_arm_trace
       apply denominatorNonzero
       exact denominatorZero
     have zeroPrefix : (0 : B256) :: tail <<+ denominatorTest.stack := by
-      simpa [B256.eqCheck, denominatorNonzero'] using denominatorTestPrefix
+      simpa only [B256.eqCheck, denominatorNonzero', ↓reduceIte] using denominatorTestPrefix
     obtain ⟨highPre, denominatorPop, highGuardRun, highPrePrefix⟩ :=
       Func.WalkInv.zero_branch_of_prefix zeroPrefix branchRun
     have highPreWf : Mem.Wf highPre.memory := by
@@ -3454,7 +3396,7 @@ theorem divide512_arm_trace
     · have highOnePrefix : (1 : B256) :: tail <<+ highTest.stack := by
         have highZero' : high = (0 : B256) :=
           highZero.trans (show B256.zero = (0 : B256) by rfl)
-        simpa [B256.eqCheck, highZero'] using highTestPrefix
+        simpa only [B256.eqCheck, highZero', ↓reduceIte] using highTestPrefix
       obtain ⟨simplePre, simplePop, simpleRun, simplePrefix⟩ :=
         Func.WalkInv.succ_branch_of_prefix
           (by decide : (1 : B256) ≠ 0) highOnePrefix highBranchRun
@@ -3473,7 +3415,7 @@ theorem divide512_arm_trace
         apply highZero
         exact highZero'
       have highZeroPrefix : (0 : B256) :: tail <<+ highTest.stack := by
-        simpa [B256.eqCheck, highNonzero] using highTestPrefix
+        simpa only [B256.eqCheck, highNonzero, ↓reduceIte] using highTestPrefix
       obtain ⟨widePre, highPop, wideRun, widePrefix⟩ :=
         Func.WalkInv.zero_branch_of_prefix highZeroPrefix highBranchRun
       have wideWf : Mem.Wf widePre.memory := by
@@ -3491,7 +3433,7 @@ theorem divide512_arm_trace
     have onePrefix : (1 : B256) :: tail <<+ denominatorTest.stack := by
       have denominatorZero' : denominator = (0 : B256) :=
         denominatorZero.trans (show B256.zero = (0 : B256) by rfl)
-      simpa [B256.eqCheck, denominatorZero'] using denominatorTestPrefix
+      simpa only [B256.eqCheck, denominatorZero', ↓reduceIte] using denominatorTestPrefix
     obtain ⟨revertPre, revertPop, revertRun, revertPrefix⟩ :=
       Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
@@ -3549,7 +3491,7 @@ theorem divide512_down_image_trace
         wideNumeratorN high low / denominator.toNat < wordModulusN := by
       rw [zeroNumerator]
       exact (Nat.div_le_self _ _).trans_lt (by
-        simpa [wordModulusN] using B256.toNat_lt low)
+        simpa only [wordModulusN, Nat.reducePow] using B256.toNat_lt low)
     refine ⟨quotientFits, bodyPre,
       simpleDivisionTraceImage image low denominator, ?_, bodyImage,
       simpleDivisionTraceImage_wordFrame image low denominator,
@@ -3724,7 +3666,7 @@ theorem divide512_capDown_image_trace
     have quotientBound :
         low.toNat / denominator.toNat < wordModulusN :=
       (Nat.div_le_self _ _).trans_lt (by
-        simpa [wordModulusN] using B256.toNat_lt low)
+        simpa only [wordModulusN, Nat.reducePow] using B256.toNat_lt low)
     have quotientLeMax :
         low.toNat / denominator.toNat ≤ maxWordN := by
       unfold maxWordN
@@ -3780,7 +3722,7 @@ theorem divide512_capDown_trace
     have quotientBound :
         low.toNat / denominator.toNat < wordModulusN :=
       (Nat.div_le_self _ _).trans_lt (by
-        simpa [wordModulusN] using B256.toNat_lt low)
+        simpa only [wordModulusN, Nat.reducePow] using B256.toNat_lt low)
     have quotientLeMax :
         low.toNat / denominator.toNat ≤ maxWordN := by
       unfold maxWordN
@@ -3839,7 +3781,7 @@ theorem divide512_capCeilPred_trace
     have quotientBound :
         low.toNat / denominator.toNat < wordModulusN :=
       (Nat.div_le_self _ _).trans_lt (by
-        simpa [wordModulusN] using B256.toNat_lt low)
+        simpa only [wordModulusN, Nat.reducePow] using B256.toNat_lt low)
     have roundedLeMax :
         ceilDiv low.toNat denominator.toNat - 1 ≤ maxWordN :=
       (ceilDiv_sub_one_le_div _ _).trans (by
@@ -4195,8 +4137,7 @@ theorem multiply512Arithmetic_trace
   obtain ⟨p21, wf21, reads21, -⟩ :=
     of_run_mstoreAt_image p20 wf20 reads20 run
   refine ⟨p21, wf21, ?_, state⟩
-  simpa [multiply512ArithmeticTraceImage, image4, image3, image2, image1]
-    using reads21
+  simpa only [multiply512ArithmeticTraceImage] using reads21
 
 /-! ## Product-producer composition -/
 
@@ -4363,8 +4304,7 @@ theorem ProducesWord.stagedDenominator
     @ProducesWord.addConst sevm (ProrataWethVault.loadWord supplyWord)
       image supply (ProducesWord.loadWord (sevm := sevm) supplyAt)
       virtualShares pre post tail memoryWf memoryReads stack rawRun
-  simpa [denominatorN, offsetN, wordAdd_eq_toB256_add,
-    virtualShares_toNat] using effect
+  simpa only [denominatorN, offsetN, wordAdd_eq_toB256_add, virtualShares_toNat] using effect
 
 /-- The staged asset factor produces the word embedding of `assets + 1`.
 For the all-ones asset word this is deliberately zero; callers select the
@@ -4384,8 +4324,7 @@ theorem ProducesWord.stagedAssetFactor
     @ProducesWord.addConst sevm (ProrataWethVault.loadWord assetsWord)
       image assets (ProducesWord.loadWord (sevm := sevm) assetsAt)
       1 pre post tail memoryWf memoryReads stack rawRun
-  simpa [assetFactorN, wordAdd_eq_toB256_add, B256.toNat_one] using
-    effect
+  simpa only [assetFactorN, wordAdd_eq_toB256_add, B256.toNat_one] using effect
 
 /-- Under the executed stable-supply guard, the compiled subtraction produces
 the exact remaining mintable share room. -/
@@ -4496,8 +4435,7 @@ theorem multiply512TraceImage_wordFrame
       (multiply512ArithmeticTraceImage image2 x y)
       arithmeticScratchEnd :=
     multiply512ArithmeticTraceImage_wordFrame image2 x y
-  simpa [multiply512TraceImage, image2, image1] using
-    frame1.trans (frame2.trans frame3)
+  simpa only [multiply512TraceImage] using frame1.trans (frame2.trans frame3)
 
 theorem multiply512TraceImage_low (image : Bytes) (x y : B256) :
     Bytes.toB256
@@ -4607,7 +4545,7 @@ theorem multiply512_trace
     unfold multiply512ArithmeticLine loadWord mstoreAt
     line_inv
   refine ⟨bodyPre, bodyPrefix, bodyWf, ?_, ?_, bodyRun⟩
-  · simpa [multiply512TraceImage, image2, image1] using bodyReads
+  · simpa only [multiply512TraceImage] using bodyReads
   · exact xState.trans
       (xStoreState.trans
         (yState.trans
@@ -4636,7 +4574,7 @@ theorem mulDivTraceImage_wordFrame
     exact readWord_writeAt_scratch_of_after _ denominatorWord _ offset
       (by decide +kernel) after
   have productFrame := multiply512TraceImage_wordFrame staged x y
-  simpa [mulDivTraceImage, staged] using stagingFrame.trans productFrame
+  simpa only [mulDivTraceImage] using stagingFrame.trans productFrame
 
 theorem mulDivTraceImage_denominator
     (image : Bytes) (x y denominator : B256) :
@@ -4705,7 +4643,7 @@ theorem mulDiv_staging_trace
     multiply512_trace multiplyWf multiplyReads xProduces yProduces
       multiplyPrefix multiplyRun
   refine ⟨dividePre, dividePrefix, divideWf, ?_, ?_, divideRun⟩
-  · simpa [mulDivTraceImage, denominatorImage] using divideReads
+  · simpa only [mulDivTraceImage] using divideReads
   · exact denominatorState.trans multiplyState
 
 /-- A successful floor-mode `mulDiv` executes the exact full-width product
@@ -5119,7 +5057,7 @@ theorem shiftedDiv_staging_trace
     denominatorProduces.store_trace denominatorWf denominatorReads
       denominatorPrefix run
   refine ⟨dividePre, dividePrefix, divideWf, ?_, ?_, divideRun⟩
-  · simpa [shiftedDivTraceImage, image2, image1] using divideReads
+  · simpa only [shiftedDivTraceImage] using divideReads
   · exact highState.trans (lowState.trans denominatorState)
 
 theorem shiftedDiv_down_trace
@@ -5404,7 +5342,7 @@ theorem productOverTwoPow256TraceImage_wordFrame
     intro offset after
     exact readWord_writeAt_scratch_of_after _ remainderWord _ offset
       (by decide +kernel) after
-  simpa [productOverTwoPow256TraceImage, quotientImage, productImage] using
+  simpa only [productOverTwoPow256TraceImage] using
     productFrame.trans (quotientFrame.trans remainderFrame)
 
 theorem productOverTwoPow256TraceImage_quotient
@@ -5475,7 +5413,7 @@ theorem productOverTwoPow256_staging_trace
     ProducesWord.store_trace (ProducesWord.loadWord lowAt1)
       remainderWf remainderReads remainderPrefix run
   refine ⟨finishPre, finishPrefix, finishWf, ?_, ?_, finishRun⟩
-  · simpa [productOverTwoPow256TraceImage, image1] using finishReads
+  · simpa only [productOverTwoPow256TraceImage] using finishReads
   · exact multiplyState.trans (quotientState.trans remainderState)
 
 /-- Framed floor product-over-`2^256`.  The fixed trace image lets callers
@@ -5513,7 +5451,7 @@ theorem productOverTwoPow256_down_image_trace
   have quotientFits :
       x.toNat * y.toNat / wordModulusN < wordModulusN := by
     rw [← productHighWord_toNat]
-    simpa [wordModulusN] using B256.toNat_lt (productHighWord x y)
+    simpa only [wordModulusN, Nat.reducePow] using B256.toNat_lt (productHighWord x y)
   refine ⟨quotientFits, bodyPre, ?_, bodyImage,
     finishState.trans bodyState, bodyRun⟩
   simpa only [productHighWord_eq_toB256_div_wordModulus] using quotientPrefix
@@ -5580,7 +5518,7 @@ theorem productOverTwoPow256_up_image_trace
   have floorFits :
       x.toNat * y.toNat / wordModulusN < wordModulusN := by
     rw [← productHighWord_toNat]
-    simpa [wordModulusN] using B256.toNat_lt (productHighWord x y)
+    simpa only [wordModulusN, Nat.reducePow] using B256.toNat_lt (productHighWord x y)
   have roundingFits :
       x.toNat * y.toNat % wordModulusN ≠ 0 →
         x.toNat * y.toNat / wordModulusN ≠ maxWordN := by

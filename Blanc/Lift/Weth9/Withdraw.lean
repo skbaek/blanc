@@ -60,12 +60,14 @@ def afterCall : SFunc :=
 theorem withdraw_tree_eq :
     t_09d9_c8 = .dest (chain ([.reg (.dup 0)] ++ slotLine ++ checkTail)
       (.branch t_0a23_c8 t_0a27_c8)) := by
-  simp [t_09d9_c8, slotLine, hashLine, hashBlock, checkTail, chain]
+  simp only [t_09d9_c8, Fin.isValue, slotLine, hashLine, hashBlock, List.cons_append,
+    List.nil_append, checkTail, chain]
 
 theorem debit_tree_eq :
     t_0a27_c8 = .dest (chain ([.reg (.dup 0)] ++ slotLine ++ updLine (.reg .sub) ++
       [Ninst.sstore] ++ sendLine ++ [.exec .call]) afterCall) := by
-  simp [t_0a27_c8, slotLine, hashLine, hashBlock, updLine, sendLine, afterCall, chain]
+  simp only [t_0a27_c8, Fin.isValue, slotLine, hashLine, hashBlock, List.cons_append,
+    List.nil_append, updLine, sendLine, afterCall, chain]
 
 theorem afterCall_silent : afterCall.silent = true := by decide
 
@@ -159,7 +161,7 @@ theorem send_walk {sevm : Sevm} {s s' : Devm} {y wad : B256} {xs : Stack}
   have hp6 : wad :: K :: c :: wad :: xs <<+ s6.stack :=
     prefix_of_dup_val h6 (by show_nth) hp5
   have hp7 : K :: wad :: c :: wad :: xs <<+ s7.stack :=
-    Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h7) hp6
   have hp8 : wad :: K :: wad :: c :: wad :: xs <<+ s8.stack :=
     prefix_of_dup_val h8 (by show_nth) hp7
@@ -168,7 +170,7 @@ theorem send_walk {sevm : Sevm} {s s' : Devm} {y wad : B256} {xs : Stack}
   obtain ⟨g, hp10⟩ : ∃ g : B256, g :: wad :: c :: wad :: xs <<+ s10.stack :=
     ⟨_, prefix_of_mul h10 hp9⟩
   have hp11 : wad :: g :: c :: wad :: xs <<+ s11.stack :=
-    Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h11) hp10
   -- PUSH1 0x40; MLOAD; PUSH1 0; PUSH1 0x40; MLOAD
   obtain ⟨p, hp12⟩ : ∃ p : B256, p :: wad :: g :: c :: wad :: xs <<+ s12.stack :=
@@ -225,11 +227,14 @@ theorem Weth9.withdraw_prefix {sevm : Sevm}
   obtain ⟨wad, hw, hpush⟩ := of_run_dup hdup1
   obtain ⟨rest, hrest⟩ : ∃ rest, d0.stack = wad :: rest := by
     cases h : d0.stack with
-    | nil => simp [h] at hw
+    | nil => simp only [h, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.length_nil,
+      lt_self_iff_false, not_false_eq_true, getElem?_neg, reduceCtorEq] at hw
     | cons x r =>
-        simp [h] at hw
+        simp only [h, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.length_cons,
+          lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true, getElem?_pos,
+          List.getElem_cons_zero, Option.some.injEq] at hw
         exact ⟨r, by rw [hw]⟩
-  have hp0 : wad :: rest <<+ d0.stack := ⟨[], by simp [Split, hrest]⟩
+  have hp0 : wad :: rest <<+ d0.stack := ⟨[], by simp only [Split, hrest, List.append_nil]⟩
   have hp1 : wad :: wad :: rest <<+ d1.stack := prefix_of_push hpush hp0
   obtain ⟨hp2, hs2stor, hs2bal, hs2code⟩ := slot_walk hp1 hslot
   obtain ⟨dd, hp3⟩ := check_walk hp2 hcheck
@@ -315,7 +320,9 @@ theorem Weth9.withdraw_walk_gen {P : Sevm → Devm → Ninst → Devm → Prop}
       gw :: cw :: wad :: ys <<+ d10.stack ∧
       P sevm d10 (.exec .call) sf ∧ (Outcome.devm o).state = sf.state := by
   have hg' : g = t_09d9_c8 := by
-    simpa [prog, Cert.prog, cert] using hg.symm
+    simpa only [prog, Cert.prog, cert, List.map_cons, List.map_nil, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero, Option.some.injEq] using hg.symm
   subst g
   rw [withdraw_tree_eq] at run
   cases run with
@@ -394,36 +401,6 @@ theorem Weth9.withdraw_post_gen {P : Sevm → Devm → Ninst → Devm → Prop}
     · rw [hbal10]; exact hleb
     · rw [hstor10, hbal10]; exact hinv
   exact ContractSpecSem.Post.of_state_eq hpost hstate
-
-/-- **WETH9 `withdraw(wad)` (entry 8) establishes the frame postcondition.**
-
-Stated over any `ContractSpecSem` whose invariant admits the debit
-(`hstep`: from `Inv s v b` and `wad ≤ balanceOf[caller]`, the ether covers `wad`
-and the invariant holds at the debited storage and balance).  `ih` is the
-deeper-frame hypothesis of `ContractSpecSem.Sound`, verbatim; `hpre` is the
-frame precondition at the entry's pre-state. -/
-theorem Weth9.withdraw_post {ca : Adr}
-    {sevm : Sevm}
-    (hstep : ∀ {s : Stor} {v b : B256} {wad : B256},
-      c.Inv s v b → wad ≤ s.get (balSlot sevm.caller) →
-      wad ≤ b ∧ c.Inv (s.set (balSlot sevm.caller) (s.get (balSlot sevm.caller) - wad)) 0
-        (b - wad))
-    {devm : Devm} {o : Outcome} {g : SFunc}
-    (hfork : CoveredFork sevm.benvStat.fork) (hca : sevm.currentTarget = ca)
-    (ih : ∀ pc' sevm' pre' post',
-        Exec pc' sevm' pre' (.ok post') →
-        sevm'.depth < sevm.depth →
-        CodeSem.At c.sem ca pc' sevm' pre' →
-        CoveredFork sevm'.benvStat.fork →
-        c.PreWf ca sevm' pre' →
-        c.Post ca sevm' post')
-    (hg : prog[8]? = some g) (run : SFunc.Run prog sevm devm g o)
-    (hpre : c.Pre ca sevm devm) :
-    c.Post ca sevm (Outcome.devm o) :=
-  Weth9.withdraw_post_gen (P := Ninst.Run) id hstep hfork hca
-    (fun hc hp hcode hside hle hinv =>
-      ContractSpecSem.post_of_call_self hfork hca ih hp hcode hside hle hinv hc)
-    hg run hpre
 
 /-- **WETH9 `withdraw(wad)` within a root derivation, under the admitted
 deeper-frame hypothesis.**  The run is a `StepIn R` run, so the `CALL`'s child

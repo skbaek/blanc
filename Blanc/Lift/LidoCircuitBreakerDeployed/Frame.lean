@@ -118,7 +118,6 @@ theorem entry0_gotos :
 theorem entry0_noCalls : t_0000_c0.callRefs.all (· ∈ ([] : List Nat)) = true := by
   decide +kernel
 
-private instance : Inhabited SFunc := ⟨.undefined⟩
 
 section Frame
 

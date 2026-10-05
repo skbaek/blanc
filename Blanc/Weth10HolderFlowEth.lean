@@ -49,12 +49,12 @@ def EthBound (ca : Adr) (pre post : State)
 theorem flowActionsEthMint_append (left right : List FlowAction) :
     flowActionsEthMint (left ++ right) =
       flowActionsEthMint left + flowActionsEthMint right := by
-  simp [flowActionsEthMint]
+  simp only [flowActionsEthMint, List.map_append, List.sum_append]
 
 theorem flowActionsEthRedemption_append (left right : List FlowAction) :
     flowActionsEthRedemption (left ++ right) =
       flowActionsEthRedemption left + flowActionsEthRedemption right := by
-  simp [flowActionsEthRedemption]
+  simp only [flowActionsEthRedemption, List.map_append, List.sum_append]
 
 /-! ## Frame-entry/body partition
 
@@ -73,13 +73,6 @@ def FlowAction.bodyEthActions (action : FlowAction) : List FlowAction :=
   match action.atom with
   | .ordinaryMint .. => []
   | _ => [action]
-
-theorem FlowAction.entryEthActions_append_bodyEthActions
-    (action : FlowAction) :
-    action.entryEthActions ++ action.bodyEthActions = [action] := by
-  rcases action with
-    ⟨atom, credit, debit, actualCaller, currentTarget, codeAddress, depth⟩
-  cases atom <;> rfl
 
 def flowActionEntryEthActions : Option FlowAction → List FlowAction
   | none => []
@@ -116,24 +109,24 @@ private theorem FlowAtom.ethMint_le_value_of_primaryFlowAtom_eq_some
       · split at h
         · dsimp only at h
           split at h <;> cases Option.some.inj h <;>
-            simp [FlowAtom.ethMint]
+            simp only [ethMint, zero_le]
         · split at h
           · dsimp only at h
             split at h <;> cases Option.some.inj h <;>
-              simp [FlowAtom.ethMint]
+              simp only [ethMint, zero_le]
           · split at h
             · cases Option.some.inj h
-              simp [FlowAtom.ethMint]
+              simp only [ethMint, zero_le]
             · split at h
               · cases Option.some.inj h
-                simp [FlowAtom.ethMint]
+                simp only [ethMint, zero_le]
               · split at h
                 · cases Option.some.inj h
-                  simp [FlowAtom.ethMint]
+                  simp only [ethMint, zero_le]
                 · split at h
                   · cases Option.some.inj h
-                    simp [FlowAtom.ethMint]
-                  · simp at h
+                    simp only [ethMint, zero_le]
+                  · simp only [reduceCtorEq] at h
 
 theorem Exec.Frame.flowActionsEthMint_entryEthActions_le_value
     {dp : DeployParams} {ca : Adr} (frame : Exec.Frame) :
@@ -145,15 +138,14 @@ theorem Exec.Frame.flowActionsEthMint_entryEthActions_le_value
   split
   · cases hprimary : primaryFlowAtom frame.sevm with
     | none =>
-        simp [flowActionEntryEthActions, flowActionsEthMint]
+        simp only [flowActionsEthMint, flowActionEntryEthActions, Option.map_none, List.map_nil,
+          List.sum_nil, zero_le]
     | some atom =>
         have hle :=
           FlowAtom.ethMint_le_value_of_primaryFlowAtom_eq_some hprimary
         cases atom <;>
-          simp_all [flowActionEntryEthActions,
-            FlowAction.entryEthActions, flowActionsEthMint,
-            FlowAtom.ethMint]
-  · simp [flowActionEntryEthActions, flowActionsEthMint]
+          simp_all only [FlowAtom.ethMint, flowActionsEthMint, flowActionEntryEthActions, Option.map_some, FlowAction.entryEthActions, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero, zero_le]
+  · simp only [flowActionsEthMint, flowActionEntryEthActions, List.map_nil, List.sum_nil, zero_le]
 
 /-- The root ordinary-mint action, if any.  This is the part funded by the
 actual value transfer into the entered frame. -/
@@ -198,7 +190,8 @@ theorem Exec.flowActions_eq_entry_append_body
 
 theorem EthBound.refl (ca : Adr) (state : State) :
     EthBound ca state state [] := by
-  simp [EthBound, flowActionsEthMint, flowActionsEthRedemption]
+  simp only [EthBound, flowActionsEthMint, List.map_nil, List.sum_nil, add_zero,
+    flowActionsEthRedemption, Std.le_refl]
 
 theorem EthBound.trans
     {ca : Adr} {first middle last : State}
@@ -268,22 +261,25 @@ theorem EthStep.bound
     EthBound ca pre post actions := by
   cases step with
   | silent balance_eq =>
-      simp [EthBound, flowActionsEthMint, flowActionsEthRedemption,
-        balance_eq]
+      simp only [EthBound, flowActionsEthMint, List.map_nil, List.sum_nil, add_zero, balance_eq,
+        flowActionsEthRedemption, Std.le_refl]
   | unrelatedTransfer caller_ne target_ne sub post_eq =>
       subst post
       have hbal := of_transfer_bal_other sub caller_ne target_ne
-      simp [EthBound, flowActionsEthMint, flowActionsEthRedemption, hbal]
+      simp only [EthBound, flowActionsEthMint, List.map_nil, List.sum_nil, add_zero, hbal,
+        flowActionsEthRedemption, Std.le_refl]
   | unclassifiedInward caller_ne sub post_eq sum_nof =>
       subst post
       have hbal := of_transfer_bal_target sub caller_ne sum_nof
-      simp [EthBound, flowActionsEthMint, flowActionsEthRedemption]
+      simp only [EthBound, flowActionsEthMint, List.map_nil, List.sum_nil, add_zero,
+        flowActionsEthRedemption, ge_iff_le]
       omega
   | ordinaryMint caller_ne sub post_eq sum_nof atom_eq =>
       subst post
       have hbal := of_transfer_bal_target sub caller_ne sum_nof
-      simp [EthBound, flowActionsEthMint, flowActionsEthRedemption,
-        atom_eq, FlowAtom.ethMint, FlowAtom.ethRedemption, hbal]
+      simp only [EthBound, flowActionsEthMint, FlowAtom.ethMint, List.map_cons, atom_eq,
+        List.map_nil, List.sum_cons, List.sum_nil, add_zero, hbal, flowActionsEthRedemption,
+        FlowAtom.ethRedemption, Std.le_refl]
   | redemption target_ne sub post_eq atom_eq =>
       rename_i debit target value action rawSource source ethRecipient
       subst post
@@ -295,17 +291,18 @@ theorem EthStep.bound
           State.setBal_get_ne target_ne, State.setBal_get_self]
         rfl
       have hnat := B256.toNat_sub_eq_of_le (pre.bal ca) value hle
-      simp [EthBound, flowActionsEthMint, flowActionsEthRedemption,
-        atom_eq, FlowAtom.ethMint, FlowAtom.ethRedemption, htarget]
+      simp only [EthBound, flowActionsEthMint, FlowAtom.ethMint, List.map_cons, atom_eq,
+        List.map_nil, List.sum_cons, List.sum_nil, add_zero, htarget, flowActionsEthRedemption,
+        FlowAtom.ethRedemption, ge_iff_le]
       omega
   | selfRedemptionMint sub post_eq redemption_eq mint_eq =>
       subst post
       rcases of_state_transfer_fields (callee := ca) sub with
         ⟨_, _, _, hself, _⟩
       have hbal := hself rfl
-      simp [EthBound, flowActionsEthMint, flowActionsEthRedemption,
-        redemption_eq, mint_eq, FlowAtom.ethMint,
-        FlowAtom.ethRedemption, hbal]
+      simp only [EthBound, flowActionsEthMint, FlowAtom.ethMint, List.map_cons, redemption_eq,
+        mint_eq, List.map_nil, List.sum_cons, List.sum_nil, add_zero, zero_add, hbal,
+        flowActionsEthRedemption, FlowAtom.ethRedemption, Std.le_refl]
   | externalCredit post_eq sum_nof =>
       rename_i recipient value
       subst post
@@ -319,13 +316,15 @@ theorem EthStep.bound
           show ((pre.setBal ca (pre.bal ca + value)).get ca).bal = _
           rw [State.setBal_get_self]
           rfl
-        simp [EthBound, flowActionsEthMint, flowActionsEthRedemption,
-          hbal, B256.toNat_add_eq_of_nof _ _ hnof]
+        simp only [EthBound, flowActionsEthMint, List.map_nil, List.sum_nil, add_zero, hbal,
+          B256.toNat_add_eq_of_nof _ _ hnof, flowActionsEthRedemption, le_add_iff_nonneg_right,
+          zero_le]
       · have hbal : (pre.addBal recipient value).bal ca = pre.bal ca := by
           show ((pre.setBal recipient _).get ca).bal = _
           rw [State.setBal_get_ne hrecipient]
           rfl
-        simp [EthBound, flowActionsEthMint, flowActionsEthRedemption, hbal]
+        simp only [EthBound, flowActionsEthMint, List.map_nil, List.sum_nil, add_zero, hbal,
+          flowActionsEthRedemption, Std.le_refl]
 
 /-- A contiguous sequence of concrete ETH movements. -/
 inductive EthChain (ca : Adr) :
@@ -382,8 +381,7 @@ theorem Exec.entryEthBound
           (Exec.entryEthActions dp ca run hcommit) ≤ msg.value.toNat := by
     have h := Blanc.Weth10.Exec.Frame.flowActionsEthMint_entryEthActions_le_value
       (dp := dp) (ca := ca) root
-    simpa [root, Exec.entryEthActions, Exec.Frame.ofRun,
-      initSevm, Msg.withBenv] using h
+    simpa only [root, Exec.entryEthActions, Exec.Frame.ofRun, initSevm, Msg.withBenv, entryEthActions, ge_iff_le] using h
   have hredeem :
       flowActionsEthRedemption
           (Exec.entryEthActions dp ca run hcommit) = 0 :=
@@ -411,9 +409,7 @@ theorem Exec.entryEthBound
       omega
     · have hbal := of_transfer_bal_other hsub (hcaller hstv) htarget
       have hentry : Exec.entryEthActions dp ca run hcommit = [] := by
-        simp [Exec.entryEthActions, Exec.Frame.flowAction?,
-          Exec.Frame.exactInvocation, Exec.Frame.ofRun, exactInvocation,
-          flowActionEntryEthActions, initSevm, Msg.withBenv, htarget]
+        simp only [Exec.entryEthActions, Exec.Frame.flowAction?, Exec.Frame.exactInvocation, Exec.Frame.ofRun, exactInvocation, flowActionEntryEthActions, initSevm, Msg.withBenv, htarget, entryEthActions, Frame.flowAction?, Frame.exactInvocation, false_and, and_false, ↓reduceIte]
       have hbenvState :
           benv.state = debit.addBal msg.currentTarget msg.value := by
         rw [hbenv]
@@ -449,11 +445,9 @@ theorem Exec.entryEthBound
           flowActionsEthMint (Exec.entryEthActions dp ca run hcommit) ≤
         (msg.benv.state.bal ca).toNat
       rw [hmintZero]
-      simp
+      simp only [add_zero, Std.le_refl]
     · have hentry : Exec.entryEthActions dp ca run hcommit = [] := by
-        simp [Exec.entryEthActions, Exec.Frame.flowAction?,
-          Exec.Frame.exactInvocation, Exec.Frame.ofRun, exactInvocation,
-          flowActionEntryEthActions, initSevm, Msg.withBenv, htarget]
+        simp only [Exec.entryEthActions, Exec.Frame.flowAction?, Exec.Frame.exactInvocation, Exec.Frame.ofRun, exactInvocation, flowActionEntryEthActions, initSevm, Msg.withBenv, htarget, entryEthActions, Frame.flowAction?, Frame.exactInvocation, false_and, and_false, ↓reduceIte]
       rw [hentry]
       exact EthBound.refl ca msg.benv.state
 
@@ -491,8 +485,7 @@ theorem Exec.redemptionEntryEthBound
           (Exec.entryEthActions dp ca run hcommit) ≤ msg.value.toNat := by
     have h := Blanc.Weth10.Exec.Frame.flowActionsEthMint_entryEthActions_le_value
       (dp := dp) (ca := ca) root
-    simpa [root, Exec.entryEthActions, Exec.Frame.ofRun,
-      initSevm, Msg.withBenv] using h
+    simpa only [root, Exec.entryEthActions, Exec.Frame.ofRun, initSevm, Msg.withBenv, entryEthActions, ge_iff_le] using h
   have hredeem :
       flowActionsEthRedemption
           (Exec.entryEthActions dp ca run hcommit) = 0 :=
@@ -524,9 +517,7 @@ theorem Exec.redemptionEntryEthBound
     rw [hbenvBal, hredeem]
     omega
   · have hentry : Exec.entryEthActions dp ca run hcommit = [] := by
-      simp [Exec.entryEthActions, Exec.Frame.flowAction?,
-        Exec.Frame.exactInvocation, Exec.Frame.ofRun, exactInvocation,
-        flowActionEntryEthActions, initSevm, Msg.withBenv, htarget]
+      simp only [Exec.entryEthActions, Exec.Frame.flowAction?, Exec.Frame.exactInvocation, Exec.Frame.ofRun, exactInvocation, flowActionEntryEthActions, initSevm, Msg.withBenv, htarget, entryEthActions, Frame.flowAction?, Frame.exactInvocation, false_and, and_false, ↓reduceIte]
     rw [hentry]
     exact (EthStep.of_benvAfterTransfer_redemption hstv hcaller
       htarget hatom htransfer).bound
@@ -591,7 +582,7 @@ theorem exists_acceptedValueCallTrace
     have hzero : ((0 : B256) =? 0) = 0 :=
       pref_head_unique htest (pref_append [(0 : B256)] guardPost.stack)
     rw [show ((0 : B256) =? 0) = 1 from by
-      simp [B256.eqCheck]] at hzero
+      simp only [B256.eqCheck, ↓reduceIte]] at hzero
     exact B256.zero_ne_one hzero.symm
   · rcases hsuccess with
       ⟨parent, child, slot, delegated, na, code, availableGas, pc, hstep,
@@ -668,7 +659,8 @@ theorem processWithdrawalsState_ethBound
           rfl hheadBound).bound
       have htail := ih next htailBound
       have hcombined := hhead.trans htail
-      simpa [processWithdrawalsState, next, value] using hcombined
+      simpa only [processWithdrawalsState, next, value, Nat.reducePow, List.foldl_cons, List.append_nil] using
+        hcombined
 
 theorem processWithdrawalsState_stable
     {dp : DeployParams} {ca : Adr}
@@ -770,7 +762,7 @@ theorem TransactionTrace.postMessage_ethBound
   have hcredits :
       EthBound ca trace.messageState
         (trace.coinbaseState chronology.refundCounter) [] := by
-    simpa using hrefundStep.trans htipStep
+    simpa only [List.append_nil] using hrefundStep.trans htipStep
   have hdelete := TransactionTrace.accountsToDelete_ne_ca trace
     hstable hnotCreated hfork
   have hdeleteBal :
@@ -782,8 +774,8 @@ theorem TransactionTrace.postMessage_ethBound
       state.bal ca = (trace.coinbaseState chronology.refundCounter).bal ca :=
     (congrArg (fun w : State => w.bal ca) chronology.finalState_eq).trans
       hdeleteBal
-  simpa [EthBound, flowActionsEthMint, flowActionsEthRedemption,
-    hstateBal] using hcredits
+  simpa only [EthBound, flowActionsEthMint, List.map_nil, List.sum_nil, add_zero, hstateBal,
+    flowActionsEthRedemption, ge_iff_le] using hcredits
 
 /-! ## The recursive execution seam -/
 
@@ -897,9 +889,9 @@ theorem ExecBodyEthSound.committedExecEthSound
     refine ⟨?_, rfl⟩
     rcases runReady.codeOrForeign with hcall | hforeign
     · exact runReady.ready.backed.code hcall
-        (by simpa [initSevm, Msg.withBenv] using htarget)
+        (by simpa only [initSevm, Msg.withBenv] using htarget)
     · exact False.elim (hforeign
-        (by simpa [initSevm, Msg.withBenv] using htarget))
+        (by simpa only [initSevm, Msg.withBenv] using htarget))
   have hroot : Exec.Frame.IsRoot (Exec.Frame.ofRun run hcommit) := by
     exact ⟨rfl, rfl⟩
   have hdirect :
@@ -908,9 +900,9 @@ theorem ExecBodyEthSound.committedExecEthSound
     intro htarget
     rcases runReady.codeOrForeign with hcall | hforeign
     · exact runReady.ready.backed.codeAddress hcall
-        (by simpa [initSevm, Msg.withBenv] using htarget)
+        (by simpa only [initSevm, Msg.withBenv] using htarget)
     · exact False.elim (hforeign
-        (by simpa [initSevm, Msg.withBenv] using htarget))
+        (by simpa only [initSevm, Msg.withBenv] using htarget))
   have hbody := sound run hcommit hat hroot hdirect hprecond hinitFork
   simpa only [Exec.flowActions_eq_entry_append_body
       (dp := dp) (ca := ca) run hcommit] using
@@ -922,7 +914,8 @@ theorem Exec.flowActions_eq_nil_of_not_commits
     (run : Exec pc sevm pre out)
     (hnot : Execution.commits out ≠ true) :
     Exec.flowActions dp ca run = [] := by
-  simp [Exec.flowActions, Exec.committedFrames, hnot]
+  simp only [flowActions, Exec.committedFrames, hnot, Bool.false_eq_true, ↓reduceDIte,
+    List.filterMap_nil]
 
 theorem ProcessMessage.ethBound_of_none_conditions
     {ca : Adr} {msg : Msg} {post : Devm}
@@ -930,9 +923,9 @@ theorem ProcessMessage.ethBound_of_none_conditions
     (hcaller : msg.shouldTransferValue = true → msg.caller ≠ ca)
     (hsum : sum msg.benv.state.bal < 2 ^ 256) :
     EthBound ca msg.benv.state post.state [] := by
-  simpa [EthBound, flowActionsEthMint, flowActionsEthRedemption] using
-    (_root_.Blanc.ProcessMessage.targetBalanceMono_of_none
-      hprocess hcaller hsum)
+  simpa only [EthBound, flowActionsEthMint, List.map_nil, List.sum_nil, add_zero,
+    flowActionsEthRedemption] using
+    (_root_.Blanc.ProcessMessage.targetBalanceMono_of_none hprocess hcaller hsum)
 
 theorem ProcessMessage.ethBound_of_none
     {dp : DeployParams} {ca : Adr} {msg : Msg} {post : Devm}
@@ -1008,7 +1001,7 @@ theorem ProcessMessage.ethBound_of_redemptionBodyBound
   have hsettleCommit :
       Jaune.Frame.settlementCommits (Frame.ofCall msg) out = true := by
     have hclean' : post.error.isNone = true := by
-      cases herror : post.error <;> simp_all
+      cases herror : post.error <;> simp_all only [ExceptT.stM_eq, Option.isSome_none, Option.isNone_none, Option.isSome_some, Bool.true_eq_false]
     unfold Jaune.Frame.settlementCommits
     rw [← hsettle]
     exact hclean'
@@ -1083,27 +1076,23 @@ theorem MessageReady.processCreateMessage_msg
     intro spec hinv
     have hstate : spec.StateInv ca
         (processCreateMessage.msg msg).benv.state := by
-      simpa [processCreateMessage.msg, Msg.withBenv,
-        addCreatedAccount, Benv.setStor, Benv.incrNonce] using
-        (ContractSpec.StateInv.incrNonce
-          (ContractSpec.StateInv.setStor_ne htargetNe hinv.state))
+      simpa only [processCreateMessage.msg, Msg.withBenv, Benv.incrNonce, addCreatedAccount,
+        Benv.setStor] using
+        (ContractSpec.StateInv.incrNonce (ContractSpec.StateInv.setStor_ne htargetNe hinv.state))
     refine ⟨hstate, ?_, ?_, ?_, ?_, ?_⟩
     · refine ⟨?_, ?_⟩
-      · simpa [processCreateMessage.msg, Msg.withBenv,
-          addCreatedAccount, Benv.setStor, Benv.incrNonce,
-          htargetNe] using hinv.nodel.ca
+      · simpa only [processCreateMessage.msg, Msg.withBenv, Benv.incrNonce, addCreatedAccount,
+        Benv.setStor, Std.HashSet.mem_insert, beq_iff_eq, htargetNe, false_or] using hinv.nodel.ca
       · exact fun hempty => Prog.compile_ne_nil
           (hstate.code.symm.trans (congrArg some hempty))
     · intro htarget
-      simp [processCreateMessage.msg, Msg.withBenv,
-        htargetNone] at htarget
+      simp only [processCreateMessage.msg, Msg.withBenv, htargetNone, Bool.true_eq_false] at htarget
     · intro htarget
-      simp [processCreateMessage.msg, Msg.withBenv,
-        htargetNone] at htarget
-    · simpa [processCreateMessage.msg, Msg.withBenv] using hinv.ne
+      simp only [processCreateMessage.msg, Msg.withBenv, htargetNone, Bool.true_eq_false] at htarget
+    · simpa only [processCreateMessage.msg, Msg.withBenv, ne_eq] using hinv.ne
     · intro _ hcurrent
       exact False.elim (htargetNe (by
-        simpa [processCreateMessage.msg, Msg.withBenv] using hcurrent))
+        simpa only [processCreateMessage.msg, Msg.withBenv] using hcurrent))
   exact ⟨one _ ready.backed, one _ ready.flash⟩
 
 theorem ne_ca_of_messageCreateCollision_false
@@ -1144,7 +1133,7 @@ theorem ProcessCreateMessageTrace.ethBound_of_committedExecSound
       rw [ProcessCreateMessage.rollback_of_error trace.run herror]
       exact EthBound.refl ca msg.benv.state
   | false =>
-      simp
+      simp only [Bool.false_eq_true, ↓reduceIte]
       rcases ProcessCreateMessage.ok_state_eq_inner_of_no_error
         trace.run herror with ⟨inner, hinner, hpost⟩
       let innerTrace : ProcessMessageTrace
@@ -1195,9 +1184,9 @@ theorem setDelegation_bal_eq
     ⟨⟨loopMsg, loopRefund⟩, hloop, hrest⟩
   have hbal := setDelegationLoop_bal_eq hloop
   cases hcode : loopMsg.codeAddress with
-  | none => simp [hcode] at hrest
+  | none => simp only [hcode, Except.bind_error, reduceCtorEq] at hrest
   | some address =>
-    simp [hcode] at hrest
+    simp only [hcode, Except.bind_ok, Except.ok.injEq, Prod.mk.injEq] at hrest
     rcases hrest with ⟨rfl, rfl⟩
     exact hbal
 
@@ -1459,7 +1448,7 @@ theorem TransactionTrace.ethBound
   have hsettled :=
     TransactionTrace.postMessage_ethBound trace hstable hnotCreated hfork
   have htotal := (hdebit.trans hmsg).trans hsettled
-  simpa [TransactionTrace.flowActions] using htotal
+  simpa only [flowActions, List.nil_append, List.append_nil] using htotal
 
 theorem SystemMessageTrace.messageReady
     {dp : DeployParams} {ca : Adr}
@@ -1488,8 +1477,8 @@ theorem SystemMessageTrace.ethBound
   have hready := SystemMessageTrace.messageReady trace hstable hnotCreated
   have hmsg := hmessage trace.message hready hfork
   unfold MessageCallTrace.EthAccounted at hmsg
-  simpa [SystemMessageTrace.flowActions, systemTransactionMessage,
-    processSystemTransactionMsg, Benv.beginTransaction] using hmsg
+  simpa only [flowActions, systemTransactionMessage, processSystemTransactionMsg,
+    Benv.beginTransaction, Lean.Elab.WF.paramLet] using hmsg
 
 /-- Stability and total-balance monotonicity transported across an actual
 unchecked system-message trace. -/
@@ -1571,8 +1560,8 @@ theorem ApplyTransactionsTrace.ethBound
         (TransactionTrace.ethBound head hmessage hstable hnotCreated hfork)
         (ApplyTransactionsTrace.ethBound dp ca hmessage tail
           (TransactionTrace.stable head hstable hnotCreated hfork)
-          (by simpa [Benv.withState] using hnotCreated)
-          (by simpa [Benv.withState] using hfork))
+          (by simpa only [Benv.withState] using hnotCreated)
+          (by simpa only [Benv.withState] using hfork))
 
 theorem RequestsTrace.ethBound
     {dp : DeployParams} {ca : Adr}
@@ -1594,11 +1583,11 @@ theorem RequestsTrace.ethBound
   have hconsolidation :=
     SystemMessageTrace.ethBound trace.consolidation hmessage
       hwithdrawalMeta.1
-      (by simpa [Benv.withState] using hnotCreated)
-      (by simpa [Benv.withState] using hfork)
+      (by simpa only [Benv.withState] using hnotCreated)
+      (by simpa only [Benv.withState] using hfork)
   have hboth := hwithdrawal.trans hconsolidation
-  simpa [RequestsTrace.flowActions, Benv.withState,
-    ExecutionTrace.RequestsTrace.state_eq_consolidationState trace] using hboth
+  simpa only [ExecutionTrace.RequestsTrace.state_eq_consolidationState trace, flowActions,
+    Benv.withState] using hboth
 
 /-! ## Block-body and history lifts -/
 
@@ -1626,22 +1615,22 @@ theorem AppliedBodyTrace.ethBound
       hfork
   have hhistoryMeta :=
     SystemMessageTrace.stable_and_sum_le trace.history hbeaconMeta.1
-      (by simpa [Benv.withState] using hnotCreated) hfork
+      (by simpa only [Benv.withState] using hnotCreated) hfork
   have hhistory :=
     SystemMessageTrace.ethBound trace.history hmessage hbeaconMeta.1
-      (by simpa [Benv.withState] using hnotCreated) hfork
+      (by simpa only [Benv.withState] using hnotCreated) hfork
   have htransactions :=
     ApplyTransactionsTrace.ethBound dp ca hmessage trace.transactions
       hhistoryMeta.1
-      (by simpa [Benv.withState] using hnotCreated) hfork
+      (by simpa only [Benv.withState] using hnotCreated) hfork
   have htxSum := ApplyTransactionsTrace.sum_le trace.transactions hfork
   have htxSum' :
       sum trace.transactionBenv.state.bal ≤
         sum trace.historyState.bal := by
-    simpa [Benv.withState] using htxSum
+    simpa only [Benv.withState] using htxSum
   have hhistorySum :
       sum trace.historyState.bal ≤ sum benv.state.bal :=
-    le_trans (by simpa [Benv.withState] using hhistoryMeta.2)
+    le_trans (by simpa only [Benv.withState] using hhistoryMeta.2)
       hbeaconMeta.2
   have hwithdrawalBound :
       sum trace.transactionBenv.state.bal + wdsum wds < 2 ^ 256 := by
@@ -1651,26 +1640,26 @@ theorem AppliedBodyTrace.ethBound
       hwithdrawalBound
   have htransactionsStable :=
     ApplyTransactionsTrace.stable trace.transactions hhistoryMeta.1
-      (by simpa [Benv.withState] using hnotCreated) hfork
+      (by simpa only [Benv.withState] using hnotCreated) hfork
   have hwithdrawalsStable :=
     processWithdrawalsState_stable trace.transactionBenv.state wds
       hwithdrawalBound htransactionsStable
   have htransactionNotCreated :
       ca ∉ trace.transactionBenv.createdAccounts := by
     rw [ApplyTransactionsTrace.createdAccounts_eq trace.transactions]
-    simpa [Benv.withState] using hnotCreated
+    simpa only [Benv.withState] using hnotCreated
   have htransactionFork : CoveredFork trace.transactionBenv.stat.fork := by
     rw [ExecutionTrace.ApplyTransactionsTrace.stat_eq trace.transactions]
     exact hfork
   have hrequests := RequestsTrace.ethBound trace.requests hmessage
     hwithdrawalsStable
-    (by simpa [Benv.withState] using htransactionNotCreated)
+    (by simpa only [Benv.withState] using htransactionNotCreated)
     htransactionFork
   have htotal :=
     (((hbeacon.trans hhistory).trans htransactions).trans hwithdrawals).trans
       hrequests
-  simpa [AppliedBodyTrace.flowActions, Benv.withState,
-    trace.requestState_eq, List.append_assoc] using htotal
+  simpa only [flowActions, Benv.withState, List.append_assoc, trace.requestState_eq,
+    List.append_nil] using htotal
 
 theorem AccountedBlock.ethBound
     {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
@@ -1681,10 +1670,10 @@ theorem AccountedBlock.ethBound
     EthBound ca pre.state post.state accounted.actions := by
   have hbody :=
     AppliedBodyTrace.ethBound accounted.bodyTrace hmessage hstable
-      (by simp [initBenv]) accounted.bound accounted.covered
+      (by simp only [initBenv, Std.HashSet.not_mem_emptyWithCapacity, not_false_eq_true]) accounted.bound accounted.covered
   have hpost := congrArg (fun chain : BlockChain => chain.state)
     accounted.postEq
-  simpa [initBenv, accounted.actions_eq, hpost] using hbody
+  simpa only [hpost, accounted.actions_eq, initBenv] using hbody
 
 /-- Global contract-ETH accounting across a proof-carrying configured
 history.  Once `MessageEthSound` is discharged from retained recursive
@@ -1704,17 +1693,6 @@ theorem AccountedHistory.ethBound
         (AccountedHistory.ethBound cfg dp ca hmessage prior hstable)
         (AccountedBlock.ethBound accounted hmessage
           (prior.future_stable hstable))
-
-/-- Full history accounting with all settlement/wrapper premises discharged;
-only the concrete committed raw-`Exec` theorem remains to be supplied. -/
-theorem AccountedHistory.ethBound_of_committedExecSound
-    (cfg : ChainConfig) (dp : DeployParams) (ca : Adr)
-    (hsound : CommittedExecEthSound dp ca) :
-    {checkpoint : BlockChain} → {future : BlockChain} →
-    (history : AccountedHistory cfg dp ca checkpoint future) →
-    Stable dp ca checkpoint.state →
-    EthBound ca checkpoint.state future.state history.flowActions :=
-  AccountedHistory.ethBound cfg dp ca hsound.messageEthSound
 
 end Weth10
 

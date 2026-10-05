@@ -107,25 +107,25 @@ private theorem Exec.rawFrameDescendants_trans
       simp only [Exec.rawFrameDescendants, List.not_mem_nil] at hd
   | cont hstep next ih =>
       have hd' : d ∈ Exec.rawFrameDescendants next := by
-        simpa [Exec.rawFrameDescendants] using hd
-      simpa [Exec.rawFrameDescendants] using ih hd' he
+        simpa only [rawFrameDescendants] using hd
+      simpa only [rawFrameDescendants] using ih hd' he
   | doneErr hstep henter hresume =>
       simp only [Exec.rawFrameDescendants, List.not_mem_nil] at hd
   | doneOk hstep henter hresume next ih =>
       have hd' : d ∈ Exec.rawFrameDescendants next := by
-        simpa [Exec.rawFrameDescendants] using hd
-      simpa [Exec.rawFrameDescendants] using ih hd' he
+        simpa only [rawFrameDescendants] using hd
+      simpa only [rawFrameDescendants] using ih hd' he
   | runErr hstep henter child hresume ih =>
       simp only [Exec.rawFrameDescendants, List.mem_cons] at hd ⊢
       rcases hd with rfl | hd
-      · simpa [Exec.rawFrameRoots, Exec.rawFrameDescendants] using he
+      · simpa only [rawFrameRoots, List.mem_cons] using he
       · exact Or.inr (ih hd he)
   | runOk hstep henter child hresume next childIh nextIh =>
       simp only [Exec.rawFrameDescendants, List.mem_cons, List.mem_append] at hd ⊢
       rcases hd with rfl | hd
       · have he' : e = (⟨_, _, _, _, child⟩ : Exec.Deriv) ∨
             e ∈ Exec.rawFrameDescendants child := by
-          simpa [Exec.rawFrameRoots, Exec.rawFrameDescendants] using he
+          simpa only [rawFrameRoots, List.mem_cons] using he
         rcases he' with rfl | he'
         · exact Or.inl rfl
         · exact Or.inr (Or.inl he')
@@ -141,7 +141,7 @@ theorem Exec.rawFrameRoots_trans
     e ∈ Exec.rawFrameRoots run := by
   simp only [Exec.rawFrameRoots, List.mem_cons] at hd ⊢
   rcases hd with rfl | hd
-  · simpa [Exec.rawFrameRoots] using he
+  · simpa only [rawFrameRoots, List.mem_cons] using he
   · exact Or.inr (Exec.rawFrameDescendants_trans hd he)
 
 /-- A childless source step's successful continuation: its raw descendants are
@@ -166,7 +166,7 @@ theorem Exec.rawFrameDescendants_sub_of_stepNone
       obtain ⟨-, interEq⟩ := step
       cases interEq
       cases Subsingleton.elim next next'
-      simpa [Exec.rawFrameDescendants] using member
+      simpa only [rawFrameDescendants] using member
   | doneOk h henter hr next' =>
       have hs := hstatic.symm.trans h
       cases Ninst.step_spawn_pc hs
@@ -178,7 +178,7 @@ theorem Exec.rawFrameDescendants_sub_of_stepNone
       rw [hr] at resultEq
       cases resultEq
       cases Subsingleton.elim next next'
-      simpa [Exec.rawFrameDescendants] using member
+      simpa only [rawFrameDescendants] using member
   | runOk h henter child hr next' =>
       have hs := hstatic.symm.trans h
       rw [hs] at step
@@ -262,7 +262,7 @@ theorem Exec.rawFrameDescendants_sub_of_jump
   | cont h next' =>
       cases hstatic.symm.trans h
       cases Subsingleton.elim next next'
-      simpa [Exec.rawFrameDescendants] using member
+      simpa only [rawFrameDescendants] using member
   | doneOk h henter hr next' => cases hstatic.symm.trans h
   | runOk h henter child hr next' => cases hstatic.symm.trans h
 

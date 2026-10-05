@@ -136,7 +136,8 @@ private theorem exactCalldata_funcSoundAt {Q : B256 → Prop}
 /-- The entry frame image every raw endpoint walk starts from. -/
 private theorem entryFrame {s : Devm} (hwf : Mem.Wf s.memory) :
     Frame s.memory.data.toList s s :=
-  ⟨hwf, fun i => by simp, rfl, rfl⟩
+  ⟨hwf, fun i => by simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD,
+    Array.getElem?_toList], rfl, rfl⟩
 
 private theorem drip_funcSoundAt {Q : B256 → Prop} {P : Stor → Prop}
     (hP : StepClosedAt Q P) (ca : Adr) : FuncSoundAt Q P ca drip := by
@@ -256,31 +257,36 @@ theorem soundAdmitted_of_stepClosedAt {Q : B256 → Prop} {P : Stor → Prop}
     simp only [selectors, List.mem_cons, List.not_mem_nil, or_false] at hselector
     rcases hselector with hselector | hselector | hselector | hselector | hselector
     · rcases main_body (f := nonpayable (exactCalldata 36 convertToAssets))
-        hmain hempty hselector (by simp [funcs]) with
+        hmain hempty hselector (by simp only [funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+          or_false, true_or]) with
         ⟨mid, hstate, hmemory, -, -, hbody⟩
       exact nonpayable_exactCalldata_funcSoundAt (convertToAssets_funcSoundAt ca)
         hfork hca hQ (hpreEntry.state_eq hstate.symm)
         (by rw [← hmemory]; exact hwfEntry) hih hbody
     · rcases main_body (f := nonpayable (exactCalldata 36 exit))
-        hmain hempty hselector (by simp [funcs]) with
+        hmain hempty hselector (by simp only [funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+          or_false, true_or, or_true]) with
         ⟨mid, hstate, hmemory, -, -, hbody⟩
       exact nonpayable_exactCalldata_funcSoundAt (exit_funcSoundAt hP ca)
         hfork hca hQ (hpreEntry.state_eq hstate.symm)
         (by rw [← hmemory]; exact hwfEntry) hih hbody
     · rcases main_body (f := nonpayable (exactCalldata 36 convertToUnits))
-        hmain hempty hselector (by simp [funcs]) with
+        hmain hempty hselector (by simp only [funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+          or_false, true_or, or_true]) with
         ⟨mid, hstate, hmemory, -, -, hbody⟩
       exact nonpayable_exactCalldata_funcSoundAt (convertToUnits_funcSoundAt ca)
         hfork hca hQ (hpreEntry.state_eq hstate.symm)
         (by rw [← hmemory]; exact hwfEntry) hih hbody
     · rcases main_body (f := nonpayable (exactCalldata 4 drip))
-        hmain hempty hselector (by simp [funcs]) with
+        hmain hempty hselector (by simp only [funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+          or_false, true_or, or_true]) with
         ⟨mid, hstate, hmemory, -, -, hbody⟩
       exact nonpayable_exactCalldata_funcSoundAt (drip_funcSoundAt hP ca)
         hfork hca hQ (hpreEntry.state_eq hstate.symm)
         (by rw [← hmemory]; exact hwfEntry) hih hbody
     · rcases main_body (f := exactCalldata 4 join)
-        hmain hempty hselector (by simp [funcs]) with
+        hmain hempty hselector (by simp only [funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+          or_false, or_true]) with
         ⟨mid, hstate, hmemory, -, -, hbody⟩
       exact exactCalldata_funcSoundAt (join_funcSoundAt hP ca)
         hfork hca hQ (hpreEntry.state_eq hstate.symm)

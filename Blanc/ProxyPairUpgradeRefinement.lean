@@ -86,7 +86,7 @@ theorem V1SharedChildExecution.logical_effect
   cases call with
   | value =>
       have data : (initSevm msg).data = valueCalldata := by
-        simpa [initSevm, sharedCalldata] using execution.data
+        simpa only [initSevm, sharedCalldata] using execution.data
       have effect := v1_value_run_effect execution.run rfl data
       have initialWord :
           (initDevm msg).getStorVal upgradeProxy v1ValueSlot =
@@ -99,7 +99,7 @@ theorem V1SharedChildExecution.logical_effect
           (storageWord pre upgradeProxy v1ValueSlot).toBytes
         have outputEffect : child.output =
             ((initDevm msg).getStorVal upgradeProxy v1ValueSlot).toBytes := by
-          simpa [ReturnsWord, initSevm, execution.owner] using effect.1
+          simpa only [ReturnsWord, initSevm, execution.owner] using effect.1
         exact outputEffect.trans (congrArg B256.toBytes initialWord)
       · intro key
         change (Devm.getStor child upgradeProxy).get key =
@@ -110,12 +110,12 @@ theorem V1SharedChildExecution.logical_effect
         exact execution.initialStorage key
   | setValue word =>
       have data : (initSevm msg).data = setValueCalldata word := by
-        simpa [initSevm, sharedCalldata] using execution.data
+        simpa only [initSevm, sharedCalldata] using execution.data
       have effect := v1_setValue_run_effect execution.run rfl data
       have arg : Sevm.argWord (initSevm msg) 0 = word :=
         setValueCalldata_arg0 data
       constructor
-      · simpa [v1Step, initDevm, Devm.output] using effect.2
+      · simpa only [Devm.output, v1Step, initDevm] using effect.2
       · intro key
         change (Devm.getStor child upgradeProxy).get key =
           ((pre.setStorVal upgradeProxy v1ValueSlot word).get
@@ -123,7 +123,7 @@ theorem V1SharedChildExecution.logical_effect
         have ownerStorage : Devm.getStor child upgradeProxy =
             (Devm.getStor (initDevm msg) upgradeProxy).set
               v1ValueSlot word := by
-          simpa [initSevm, execution.owner, arg] using effect.1
+          simpa only [initSevm, execution.owner] using effect.1
         rw [ownerStorage]
         simp only [State.setStorVal, State.get_set_self]
         by_cases same : key = v1ValueSlot
@@ -144,7 +144,7 @@ theorem V2SharedChildExecution.logical_effect
   cases call with
   | value =>
       have data : (initSevm msg).data = valueCalldata := by
-        simpa [initSevm, sharedCalldata] using execution.data
+        simpa only [initSevm, sharedCalldata] using execution.data
       have effect := v2_value_run_effect execution.run rfl data
       have initialWord :
           (initDevm msg).getStorVal upgradeProxy v2ValueSlot =
@@ -157,7 +157,7 @@ theorem V2SharedChildExecution.logical_effect
           (storageWord post upgradeProxy v2ValueSlot).toBytes
         have outputEffect : child.output =
             ((initDevm msg).getStorVal upgradeProxy v2ValueSlot).toBytes := by
-          simpa [ReturnsWord, initSevm, execution.owner] using effect.1
+          simpa only [ReturnsWord, initSevm, execution.owner] using effect.1
         exact outputEffect.trans (congrArg B256.toBytes initialWord)
       · intro key
         change (Devm.getStor child upgradeProxy).get key =
@@ -168,12 +168,12 @@ theorem V2SharedChildExecution.logical_effect
         exact execution.initialStorage key
   | setValue word =>
       have data : (initSevm msg).data = setValueCalldata word := by
-        simpa [initSevm, sharedCalldata] using execution.data
+        simpa only [initSevm, sharedCalldata] using execution.data
       have effect := v2_setValue_run_effect execution.run rfl data
       have arg : Sevm.argWord (initSevm msg) 0 = word :=
         setValueCalldata_arg0 data
       constructor
-      · simpa [v2Step, initDevm, Devm.output] using effect.2
+      · simpa only [Devm.output, v2Step, initDevm] using effect.2
       · intro key
         change (Devm.getStor child upgradeProxy).get key =
           ((post.setStorVal upgradeProxy v2ValueSlot word).get
@@ -181,7 +181,7 @@ theorem V2SharedChildExecution.logical_effect
         have ownerStorage : Devm.getStor child upgradeProxy =
             (Devm.getStor (initDevm msg) upgradeProxy).set
               v2ValueSlot word := by
-          simpa [initSevm, execution.owner, arg] using effect.1
+          simpa only [initSevm, execution.owner] using effect.1
         rw [ownerStorage]
         simp only [State.setStorVal, State.get_set_self]
         by_cases same : key = v2ValueSlot
@@ -471,7 +471,7 @@ private theorem sharedValuePrefixCost (state : State) :
     unfold ossifiableFallbackSloadCost
     rw [keys, if_neg]
     · rfl
-    · simp
+    · simp only [Std.HashSet.not_mem_emptyWithCapacity, not_false_eq_true]
   change ossifiableFallbackPrefixCost sevm entry = 2128
   unfold ossifiableFallbackPrefixCost
   rw [copyCost, cold]
@@ -536,7 +536,7 @@ private theorem sharedValueBeforeSload_cold (state : State) :
       (sharedValuePrefixBudget state).beforeSload.accessedStorageKeys := by
   change (upgradeProxy, implementationSlotLit) ∉
     (.emptyWithCapacity : Std.HashSet (Adr × B256))
-  simp
+  simp only [Std.HashSet.not_mem_emptyWithCapacity, not_false_eq_true]
 
 private theorem sharedValueCallPre_state (state : State) :
     (sharedValueCallPre state).state =
@@ -659,7 +659,8 @@ private def sharedValueSpawn
         exact toAdr_toB256 implementation,
         Devm.setMach_accessedAddresses,
         sharedValueCallPre_addresses]
-      simp [accessCost, gasColdAccountAccess]
+      simp only [accessCost, Std.HashSet.not_mem_emptyWithCapacity, ↓reduceIte,
+        gasColdAccountAccess, add_zero]
     splitEq := by
       change calculateMsgCallGas 0 4997697
         (sharedValueAfterAccess state implementation).gasLeft 0 2600 =
@@ -807,7 +808,7 @@ private theorem sharedValueRoute_exists
         rw [← selected, ← equal]
         exact member
       exact (upgradeWitnessSelectors_disjoint_proxy_surface valueSelector
-        (by simp [upgradeWitnessSelectors])) valueMember
+        (by simp only [upgradeWitnessSelectors, List.mem_cons, List.not_mem_nil, or_false, true_or])) valueMember
     implementationSlotWord := by
       rw [codeWord, ← implementationSlotLit_eq_slot,
         sharedValueAfterTransfer_stor]
@@ -844,7 +845,7 @@ private theorem sharedValueRoute_exists
     compileLink := by
       change some runtimeBaselineCode.toList = Prog.compile runtimeBaseline
       rw [runtimeBaseline_compile]
-      simp [runtimeBaselineCode, ByteArray.toList_eq_toList_data]
+      simp only [runtimeBaselineCode, ByteArray.toList_eq_toList_data]
   }
   have valid : route.ValidInstallation := {
     canonicalSlotWord := by
@@ -976,8 +977,8 @@ private theorem fixtureV1ValueChild_data :
       fixturePrestate_proxyCode v1Code_ordinary
       v1Implementation_notPrecompile v1Code_nonempty
   subst spawn
-  simpa [fixtureV1ValueChildMessage, v1ValueSpawn,
-    sharedValueMessage] using route.childData
+  simpa only [fixtureV1ValueChildMessage, sharedValueMessage, Lean.Elab.WF.paramLet,
+    v1ValueSpawn] using route.childData
 
 private theorem fixtureV2ValueChild_data :
     fixtureV2ValueChildMessage.data = valueCalldata := by
@@ -987,24 +988,8 @@ private theorem fixtureV2ValueChild_data :
       fixtureMigratedState_proxyCode v2Code_ordinary
       v2Implementation_notPrecompile v2Code_nonempty
   subst spawn
-  simpa [fixtureV2ValueChildMessage, v2ValueSpawn,
-    sharedValueMessage] using route.childData
-
-private theorem fixtureV1ValueChild_initialMemory :
-    (initDevm fixtureV1ValueChildMessage).memory = Mem.empty := by
-  rfl
-
-private theorem fixtureV2ValueChild_initialMemory :
-    (initDevm fixtureV2ValueChildMessage).memory = Mem.empty := by
-  rfl
-
-private theorem fixtureV1ValueChild_initialStack :
-    (initDevm fixtureV1ValueChildMessage).stack = [] := by
-  rfl
-
-private theorem fixtureV2ValueChild_initialStack :
-    (initDevm fixtureV2ValueChildMessage).stack = [] := by
-  rfl
+  simpa only [fixtureV2ValueChildMessage, sharedValueMessage, Lean.Elab.WF.paramLet,
+    v2ValueSpawn] using route.childData
 
 private theorem fixtureV1ValueChild_currentTarget :
     (initSevm fixtureV1ValueChildMessage).currentTarget = upgradeProxy := by
@@ -1096,7 +1081,9 @@ private theorem fixtureV1ValueChild_run :
         (initDevm fixtureV1ValueChildMessage).accessedStorageKeys := by
     rw [fixtureV1ValueChild_currentTarget,
       fixtureV1ValueChild_initialKeys]
-    simp [show implementationSlotLit ≠ v1ValueSlot by decide]
+    simp only [Std.HashSet.mem_insert, beq_iff_eq, Prod.mk.injEq,
+      show implementationSlotLit ≠ v1ValueSlot by decide, and_false,
+      Std.HashSet.not_mem_emptyWithCapacity, or_self, not_false_eq_true]
   apply Exists.intro
   refine ⟨?_, ?_, ?_, ?_⟩
   · apply Prog.runCompiledTo_intro (G := 4917048)
@@ -1109,14 +1096,14 @@ private theorem fixtureV1ValueChild_run :
         (memory := (initDevm fixtureV1ValueChildMessage).memory)
         (gas := 4917037)
       · apply selector_of_valueCalldata
-        simpa [initSevm] using fixtureV1ValueChild_data
+        simpa only [initSevm] using fixtureV1ValueChild_data
       · unfold v1Entries linearDispatchWith nonpayable loadScalar mstoreAt
         func_run [1, 1, 3]
         repeat (case h_legacy =>
           exact CoveredFork.rules_stateGas_none
             (by change CoveredFork .prague; exact CoveredFork.prague))
         all_goals try
-          norm_num [Devm.gasLeft_setMach, gBase, gVerylow, gHigh,
+          norm_num only [Devm.gasLeft_setMach, gBase, gVerylow, gHigh,
             gJumpdest, gasColdSload]
         case h_ext => decide
         case a =>
@@ -1150,7 +1137,9 @@ private theorem fixtureV2ValueChild_run :
         (initDevm fixtureV2ValueChildMessage).accessedStorageKeys := by
     rw [fixtureV2ValueChild_currentTarget,
       fixtureV2ValueChild_initialKeys]
-    simp [show implementationSlotLit ≠ v2ValueSlot by decide]
+    simp only [Std.HashSet.mem_insert, beq_iff_eq, Prod.mk.injEq,
+      show implementationSlotLit ≠ v2ValueSlot by decide, and_false,
+      Std.HashSet.not_mem_emptyWithCapacity, or_self, not_false_eq_true]
   apply Exists.intro
   refine ⟨?_, ?_, ?_, ?_⟩
   · apply Prog.runCompiledTo_intro (G := 4917048)
@@ -1163,14 +1152,14 @@ private theorem fixtureV2ValueChild_run :
         (memory := (initDevm fixtureV2ValueChildMessage).memory)
         (gas := 4917037)
       · apply selector_of_valueCalldata
-        simpa [initSevm] using fixtureV2ValueChild_data
+        simpa only [initSevm] using fixtureV2ValueChild_data
       · unfold v2Entries linearDispatchWith nonpayable loadScalar mstoreAt
         func_run [1, 1, 3]
         repeat (case h_legacy =>
           exact CoveredFork.rules_stateGas_none
             (by change CoveredFork .prague; exact CoveredFork.prague))
         all_goals try
-          norm_num [Devm.gasLeft_setMach, gBase, gVerylow, gHigh,
+          norm_num only [Devm.gasLeft_setMach, gBase, gVerylow, gHigh,
             gJumpdest, gasColdSload]
         case h_ext => decide
         case a =>
@@ -1286,12 +1275,12 @@ private noncomputable def delegatedChildCertificate_of_run
     (clean : child.error = none) :
     DelegatedChildCertificate spawn.child (.ok child) := by
   have raw : exec (initEvm spawn.child) = .ok child := by
-    simpa [initEvm] using Prog.exec_of_runCompiledTo run compiled
+    simpa only [initEvm] using Prog.exec_of_runCompiledTo run compiled
   have process : processMessage spawn.child = .ok child := by
     rw [MessageExecution.processMessage_eq_settle_exec_of_enter
       spawn.child (initEvm spawn.child) spawn.crossing.1, raw]
-    simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-      executeCode.handleErrorWith_ok, executeCode.handleError, processMessage.settle,
+    simp only [Frame.settle, Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
+      processMessage.settle, executeCode.handleErrorWith_ok, Except.bind_ok,
       show child.error.isSome = false by rw [clean]; rfl]
   let trace := Classical.choice
     (ExecutionTrace.exists_processMessageTrace spawn.child (.ok child)
@@ -1376,15 +1365,14 @@ theorem fixture_exactProxyPairSharedExecution_value :
       rw [DelegatecallSpawnDescriptor.child_code]
       rfl
     data := by
-      simpa [v1ValueSpawn, sharedCalldata, sharedValueMessage] using
+      simpa only [sharedValueMessage, Lean.Elab.WF.paramLet, v1ValueSpawn, sharedCalldata] using
         routeV1.childData
     owner := by rfl
     initialStorage := fixtureV1ValueChild_initialStorage
-    run := by simpa [fixtureV1ValueChildMessage] using runV1
+    run := by simpa only [fixtureV1ValueChildMessage] using runV1
     certificate := delegatedChildCertificate_of_run v1ValueSpawn
-      (by simpa [fixtureV1ValueChildMessage] using runV1)
-      (by simpa [fixtureV1ValueChildMessage] using
-        fixtureV1ValueChild_compiled)
+      (by simpa only [fixtureV1ValueChildMessage] using runV1)
+      (by simpa only [fixtureV1ValueChildMessage] using fixtureV1ValueChild_compiled)
       errorV1
     clean := by rw [errorV1]; rfl
   }
@@ -1394,15 +1382,14 @@ theorem fixture_exactProxyPairSharedExecution_value :
       rw [DelegatecallSpawnDescriptor.child_code]
       rfl
     data := by
-      simpa [v2ValueSpawn, sharedCalldata, sharedValueMessage] using
+      simpa only [sharedValueMessage, Lean.Elab.WF.paramLet, v2ValueSpawn, sharedCalldata] using
         routeV2.childData
     owner := by rfl
     initialStorage := fixtureV2ValueChild_initialStorage
-    run := by simpa [fixtureV2ValueChildMessage] using runV2
+    run := by simpa only [fixtureV2ValueChildMessage] using runV2
     certificate := delegatedChildCertificate_of_run v2ValueSpawn
-      (by simpa [fixtureV2ValueChildMessage] using runV2)
-      (by simpa [fixtureV2ValueChildMessage] using
-        fixtureV2ValueChild_compiled)
+      (by simpa only [fixtureV2ValueChildMessage] using runV2)
+      (by simpa only [fixtureV2ValueChildMessage] using fixtureV2ValueChild_compiled)
       errorV2
     clean := by rw [errorV2]; rfl
   }

@@ -37,7 +37,7 @@ namespace ExecutionTrace
 theorem Array.sliceD_length (xs : Array UInt8) (m n : Nat) (d : UInt8) :
     (Array.sliceD xs m n d).length = n := by
   rw [Array.sliceD_eq_map]
-  simp
+  simp only [Array.getD_eq_getD_getElem?, List.length_map, List.length_range]
 
 /-- Intrinsic calldata tokens dominate the byte length: every byte costs at
 least one token (zero bytes) and up to four (nonzero bytes). -/
@@ -49,7 +49,7 @@ theorem calldata_tokens_ge_length (l : Bytes) :
         l.foldl (fun acc x => acc + (if x = 0 then 1 else 4)) c := by
     intro c l
     induction l generalizing c with
-    | nil => simp
+    | nil => simp only [List.length_nil, zero_add, List.foldl_nil, Std.le_refl]
     | cons x xs ih =>
       simp only [List.length_cons, List.foldl_cons]
       have h1 : 1 ≤ (if x = (0 : UInt8) then 1 else 4) := by
@@ -57,7 +57,7 @@ theorem calldata_tokens_ge_length (l : Bytes) :
       have h2 := ih (c + (if x = (0 : UInt8) then 1 else 4))
       omega
   have h := aux 0 l
-  simpa using h
+  simpa only [ge_iff_le, add_zero] using h
 
 /-! ## Transaction validation implies the calldata bound -/
 
@@ -532,7 +532,8 @@ theorem Exec.rawFrameRoots_data_bound {pc : Nat} {sevm : Sevm} {pre : Devm}
       simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons] at member
       rcases member with rfl | member
       · exact hroot
-      · exact ih hroot hfork root (by simp [Exec.rawFrameRoots, member])
+      · exact ih hroot hfork root (by simp only [Exec.rawFrameRoots, List.mem_cons, member,
+        or_true])
   | doneErr hstep henter hresume =>
       intro hroot hfork root member
       simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons,
@@ -544,7 +545,8 @@ theorem Exec.rawFrameRoots_data_bound {pc : Nat} {sevm : Sevm} {pre : Devm}
       simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons] at member
       rcases member with rfl | member
       · exact hroot
-      · exact ih hroot hfork root (by simp [Exec.rawFrameRoots, member])
+      · exact ih hroot hfork root (by simp only [Exec.rawFrameRoots, List.mem_cons, member,
+        or_true])
   | runErr hstep henter child hresume ih =>
       intro hroot hfork root member
       obtain ⟨hchild, hforkc⟩ := Evm.step_spawn_child_data hfork hstep henter
@@ -552,7 +554,8 @@ theorem Exec.rawFrameRoots_data_bound {pc : Nat} {sevm : Sevm} {pre : Devm}
       rcases member with rfl | rfl | member
       · exact hroot
       · exact hchild
-      · exact ih hchild hforkc root (by simp [Exec.rawFrameRoots, member])
+      · exact ih hchild hforkc root (by simp only [Exec.rawFrameRoots, List.mem_cons, member,
+        or_true])
   | runOk hstep henter child hresume next ihChild ihNext =>
       intro hroot hfork root member
       obtain ⟨hchild, hforkc⟩ := Evm.step_spawn_child_data hfork hstep henter
@@ -561,8 +564,10 @@ theorem Exec.rawFrameRoots_data_bound {pc : Nat} {sevm : Sevm} {pre : Devm}
       rcases member with rfl | rfl | member | member
       · exact hroot
       · exact hchild
-      · exact ihChild hchild hforkc root (by simp [Exec.rawFrameRoots, member])
-      · exact ihNext hroot hfork root (by simp [Exec.rawFrameRoots, member])
+      · exact ihChild hchild hforkc root (by simp only [Exec.rawFrameRoots, List.mem_cons, member,
+        or_true])
+      · exact ihNext hroot hfork root (by simp only [Exec.rawFrameRoots, List.mem_cons, member,
+        or_true])
 
 /-! ## From retained slots to whole histories -/
 
@@ -576,7 +581,7 @@ theorem RetainedXlot.rawFrames_data_bound
     (hfork : CoveredFork frame.inner.benv.stat.fork) :
     ∀ root ∈ retained.rawFrames, root.sevm.data.length < 2 ^ 256 := by
   cases retained with
-  | none => intro root member; simp [RetainedXlot.rawFrames] at member
+  | none => intro root member; simp only [rawFrames, List.not_mem_nil] at member
   | @some pc sevm pre execution run =>
       obtain ⟨henter, _⟩ := RunFrame.some_inv hrun
       have hdata' : sevm.data = frame.inner.data := by
@@ -619,7 +624,7 @@ theorem MessageCallTrace.rawFrames_data_bound {msg : Msg} {state : State}
   cases trace with
   | createCollision _ _ _ =>
       intro root hmem
-      simp [MessageCallTrace.rawFrames] at hmem
+      simp only [rawFrames, List.not_mem_nil] at hmem
   | createRun _ _ _ _ core _ =>
       intro root hmem
       simp only [MessageCallTrace.rawFrames] at hmem
@@ -668,7 +673,7 @@ theorem TransactionTrace.rawFrames_data_bound {benv : Benv} {bout : BlockOutput}
     · rw [h]; decide
   have hfork_msg : CoveredFork trace.msg.benv.stat.fork := by
     rw [prepareMessage_benv trace.prepared]
-    simpa [Benv.beginTransaction] using hfork
+    simpa only [Benv.beginTransaction] using hfork
   intro root hmem
   simp only [TransactionTrace.rawFrames] at hmem
   exact MessageCallTrace.rawFrames_data_bound trace.message hmsg hfork_msg
@@ -706,7 +711,7 @@ theorem ApplyTransactionsTrace.rawFrames_data_bound
       intro trace hfork hlim root hmem
       cases trace with
       | nil _ _ =>
-        simp [ApplyTransactionsTrace.rawFrames] at hmem
+        simp only [rawFrames, List.not_mem_nil] at hmem
   | cons head txs ih =>
       intro trace hfork hlim root hmem
       cases trace with
@@ -779,7 +784,7 @@ theorem ConfiguredHistoryTrace.calldata_bound {cfg : ChainConfig}
   induction trace with
   | refl _ _ _ =>
       intro root hmem
-      simp [ConfiguredHistoryTrace.rawFrames] at hmem
+      simp only [rawFrames, List.not_mem_nil] at hmem
   | step prior block ih =>
       intro root hmem
       simp only [ConfiguredHistoryTrace.rawFrames, List.mem_append] at hmem

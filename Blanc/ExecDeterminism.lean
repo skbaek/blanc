@@ -15,8 +15,13 @@ theorem Exec.result_unique {pc : Nat} {sevm : Sevm} {devm : Devm}
 /-- An `Exec` derivation is uniquely determined by its indexed input and result. -/
 theorem Exec.unique {pc : Nat} {sevm : Sevm} {devm : Devm} {ex : Execution}
     (a b : Exec pc sevm devm ex) : a = b := by
-  induction a <;> cases b <;> simp_all <;>
-    aesop (add safe forward Exec.result_unique)
+  induction a <;> cases b <;> simp_all only [reduceCtorEq, Exec.cont.injEq, Exec.doneErr.injEq, Exec.doneOk.injEq, Exec.runErr.injEq, ExceptT.stM_eq, Exec.runOk.injEq] <;>
+    aesop (config := { enableSimp := false })
+      (add safe forward Exec.result_unique)
+      (add norm tactic (by
+        simp_all only [Step.cont.injEq, Step.spawn.injEq, FrameEntry.done.injEq,
+          FrameEntry.run.injEq, reduceCtorEq, Except.ok.injEq, heq_eq_eq,
+          eq_self, true_and, and_true]))
 
 instance {pc : Nat} {sevm : Sevm} {devm : Devm} {ex : Execution} :
     Subsingleton (Exec pc sevm devm ex) where
@@ -34,21 +39,21 @@ theorem Step.Run.unique_of_filled
     leftSlot = rightSlot ∧ leftOut = rightOut := by
   cases step with
   | halt out =>
-      simp [Step.Run] at leftRun rightRun
-      simp_all
+      simp only [Step.Run, ExceptT.stM_eq] at leftRun rightRun
+      simp_all only [ExceptT.stM_eq, and_self]
   | cont pc post =>
-      simp [Step.Run] at leftRun rightRun
-      simp_all
+      simp only [Step.Run, ExceptT.stM_eq] at leftRun rightRun
+      simp_all only [ExceptT.stM_eq, and_self]
   | spawn frame resume pc =>
       simp only [Step.Run] at leftRun rightRun
       rcases leftRun with ⟨leftResult, leftFrame, leftOutEq⟩
       rcases rightRun with ⟨rightResult, rightFrame, rightOutEq⟩
       cases henter : frame.enter with
       | done result =>
-          simp [RunFrame, henter] at leftFrame rightFrame
-          simp_all
+          simp only [RunFrame, henter, ExceptT.stM_eq] at leftFrame rightFrame
+          simp_all only [ExceptT.stM_eq, and_self]
       | run evm =>
-          simp [RunFrame, henter] at leftFrame rightFrame
+          simp only [RunFrame, henter, ExceptT.stM_eq] at leftFrame rightFrame
           rcases leftFrame with ⟨leftRaw, leftSlotEq, leftResultEq⟩
           rcases rightFrame with ⟨rightRaw, rightSlotEq, rightResultEq⟩
           subst leftSlot
@@ -59,6 +64,6 @@ theorem Step.Run.unique_of_filled
           have hraw : leftRaw = rightRaw :=
             Exec.result_unique leftExec rightExec
           subst rightRaw
-          simp_all
+          simp_all only [ExceptT.stM_eq, and_self]
 
 end Blanc

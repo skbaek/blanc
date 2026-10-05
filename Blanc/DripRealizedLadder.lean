@@ -21,18 +21,6 @@ noncomputable def ladder (coalition : Finset Adr) (ca : Adr) :
       callerNe hfork).imp fun _ both => both.1
   preserves := dripSpec_preserves ca
 
-/-- T4c. -/
-theorem retainedMessageCallReplay (coalition : Finset Adr)
-    {ca : Adr} {msg : Msg} {state : State} {out : MsgCallOutput}
-    (trace : ExecutionTrace.MessageCallTrace msg state out)
-    (ready : dripSpec.MessageRunReady ca msg)
-    (callerNe : msg.currentTarget = ca → msg.caller ≠ ca)
-    (sumNof : sum msg.benv.state.bal < 2 ^ 256)
-    (hfork : CoveredFork msg.benv.stat.fork) :
-    ∃ steps, RealizedChain (snapshot coalition ca msg.benv.state) steps
-      (snapshot coalition ca state) :=
-  (ladder coalition ca).messageCall trace ready callerNe sumNof hfork 0 none
-
 /-- T11. -/
 theorem retainedConfiguredHistoryReplay (coalition : Finset Adr)
     {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}

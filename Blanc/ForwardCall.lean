@@ -448,7 +448,7 @@ theorem Ninst.runCompiled_sstore_selected
     exact Ninst.runCompiled_sstore_cold hfork.rules_stateGas_none hstack hwarm hsentry hstatic
       rfl rfl hgas
 
-@[simp] theorem sstoreCost_setMach
+theorem sstoreCost_setMach
     {sevm : Sevm} {base : Devm} {mach : Mach} {key value : B256} :
     sstoreCost sevm (base.setMach mach) key value =
       sstoreCost sevm base key value := rfl
@@ -655,7 +655,8 @@ literal, so this needs the same `rcases` that `Mem.size_write_word` does. -/
 lemma Mem.size_write_word_at {N : Mem} {i : Nat} {w : B256} :
     (N.write i w.toBytes).size = if i + 32 ≤ N.size then N.size else ceil32 (i + 32) := by
   rcases hb : w.toBytes with _ | ⟨b, bs⟩
-  · exact absurd (hb ▸ B256.length_toBytes w) (by simp)
+  · exact absurd (hb ▸ B256.length_toBytes w) (by simp only [List.length_nil,
+    OfNat.zero_ne_ofNat, not_false_eq_true])
   · have hlen : (b :: bs).length = 32 := hb ▸ B256.length_toBytes w
     simp only [Mem.write, hlen]
     split_ifs <;> rfl
@@ -787,7 +788,8 @@ lemma Mem.size_write_of_length {N : Mem} {n len : Nat} {bs : Bytes}
     (N.write n bs).size =
       if n + len ≤ N.size then N.size else ceil32 (n + len) := by
   rcases bs with _ | ⟨x, xs⟩
-  · exact absurd hpos (by rw [← hlen]; simp)
+  · exact absurd hpos (by rw [← hlen]; simp only [List.length_nil, lt_self_iff_false,
+    not_false_eq_true])
   · subst hlen
     exact Mem.size_write_cons
 
@@ -811,7 +813,8 @@ lemma Mem.size_write_of_size {N : Mem} {bs : Bytes} {i n len : Nat}
   · have hzero : len = 0 := hlen.symm
     subst hzero
     rfl
-  · have hpos : 0 < len := by rw [← hlen]; simp
+  · have hpos : 0 < len := by rw [← hlen]; simp only [List.length_cons, lt_add_iff_pos_left,
+    add_pos_iff, zero_lt_one, or_true]
     rw [Mem.size_write_of_length hlen hpos]
     by_cases hfit : i + len ≤ N.size
     · rw [if_pos hfit, memExtSize_of_le h32 hfit]
@@ -2021,7 +2024,7 @@ lemma exec_empty_code (evm : Evm) (h : evm.sta.code.size = 0) :
     exec evm = .ok evm.dyna := by
   rw [← exec_iff_exec_eq]
   refine ⟨Exec.halt ?_⟩
-  simp [Evm.step, Evm.getInst, ByteArray.getInst, h, Linst.run]
+  simp only [Evm.step, Evm.getInst, ByteArray.getInst, h, not_lt_zero, ↓reduceDIte, Linst.run]
 
 /-- A value-transfer message whose sender can afford the value prepares the
 debit/credit world successfully.  The intermediate debit state is produced by
@@ -2036,7 +2039,7 @@ lemma Msg.benvAfterTransfer_of_affordable (msg : Msg)
   have hsub : msg.benv.state.subBal msg.caller msg.value =
       some (msg.benv.state.setBal msg.caller
         (msg.benv.state.bal msg.caller - msg.value)) := by
-    simp [State.subBal, h_affordable]
+    simp only [State.subBal, h_affordable, ↓reduceIte]
   refine ⟨_, hsub, ?_⟩
   unfold Msg.benvAfterTransfer
   rw [h_transfer]
@@ -2060,7 +2063,7 @@ lemma Frame.enter_run_of_nonprecompile {f : Frame} {benv : Benv} {adr : Adr}
   intro h
   have hn : ¬ (f.inner.withBenv benv).benv.stat.rules.isPrecomp adr := by
     rw [h_nonprecompile]
-    simp
+    simp only [Bool.false_eq_true, not_false_eq_true]
   simp only [Bool.and_eq_true, decide_eq_true_eq] at h
   exact (hn h.2).elim
 
@@ -2490,11 +2493,11 @@ def NonConsensus (e : EvmError) : Prop := ∀ sh : SettledHalt, sh.toEvmError �
 
 /-- A cryptographic failure is non-consensus. -/
 lemma nonConsensus_crypto {r : CryptoError} : NonConsensus (.crypto r) := by
-  intro sh; cases sh <;> simp [SettledHalt.toEvmError]
+  intro sh; cases sh <;> simp only [SettledHalt.toEvmError, ne_eq, reduceCtorEq, not_false_eq_true]
 
 /-- An internal fault is non-consensus. -/
 lemma nonConsensus_internal {r : InternalError} : NonConsensus (.internal r) := by
-  intro sh; cases sh <;> simp [SettledHalt.toEvmError]
+  intro sh; cases sh <;> simp only [SettledHalt.toEvmError, ne_eq, reduceCtorEq, not_false_eq_true]
 
 /-- The only errors `executeCode.handleError` re-raises are the two
 non-consensus channels: a halt or a revert is *stored* and comes back `.ok`. -/
@@ -2518,24 +2521,27 @@ private lemma executeCode.handleErrorWith_error_inv {sg : Option StateGasRules}
     executeCode.handleError raw = .error p := by
   cases sg with
   | none =>
-      simpa [executeCode.handleErrorWith] using h
+      simpa only [executeCode.handleErrorWith] using h
   | some sg =>
       cases raw with
       | ok d =>
-          simp [executeCode.handleErrorWith, executeCode.handleErrorAmsterdam] at h
+          simp only [executeCode.handleErrorWith, executeCode.handleErrorAmsterdam,
+            reduceCtorEq] at h
       | error d =>
           rcases d with ⟨e, d⟩
           cases e with
           | halt reason =>
-              simp [executeCode.handleErrorWith, executeCode.handleErrorAmsterdam] at h
+              simp only [executeCode.handleErrorWith, executeCode.handleErrorAmsterdam,
+                reduceCtorEq] at h
           | revert =>
-              simp [executeCode.handleErrorWith, executeCode.handleErrorAmsterdam] at h
+              simp only [executeCode.handleErrorWith, executeCode.handleErrorAmsterdam,
+                reduceCtorEq] at h
           | crypto reason =>
-              simpa [executeCode.handleErrorWith, executeCode.handleErrorAmsterdam,
-                executeCode.handleError] using h
+              simpa only [executeCode.handleError, Except.error.injEq, executeCode.handleErrorWith,
+                executeCode.handleErrorAmsterdam] using h
           | internal reason =>
-              simpa [executeCode.handleErrorWith, executeCode.handleErrorAmsterdam,
-                executeCode.handleError] using h
+              simpa only [executeCode.handleError, Except.error.injEq, executeCode.handleErrorWith,
+                executeCode.handleErrorAmsterdam] using h
 
 /-- A call frame's settlement passes an error through untouched: the settle
 step only inspects `.ok` results. -/
@@ -2549,7 +2555,7 @@ lemma Frame.settle_error_inv {f : Frame} {raw : Execution}
   rcases hh : executeCode.handleErrorWith f.inner.benv.stat.rules.stateGas raw with q | evm <;>
     rw [hh] at h
   · have hq : q = p := by
-      simpa [processMessage.settle] using h
+      simpa only [processMessage.settle, Except.bind_error, Except.error.injEq] using h
     rw [← hq]
     exact executeCode.handleErrorWith_error_inv hh
   · unfold processMessage.settle at h
@@ -2581,7 +2587,7 @@ lemma Frame.enter_done_error_inv {f : Frame}
     have h_pass : f.settleMsg (.error e) = .error e := by
       unfold Frame.settleMsg
       rw [h_call]
-      simp [processMessage.settle]
+      simp only [Bool.false_eq_true, ↓reduceIte, processMessage.settle, Except.bind_error]
     rw [h_pass] at h_eq
     cases h_eq
     exact Msg.benvAfterTransfer_error_inv hb
@@ -2644,7 +2650,7 @@ lemma Func.execTo_next {fs : List Func} {sevm : Sevm} {devm : Devm} {i : Ninst}
   rcases of_subcode sub with ⟨cd, h_eq', h_slice⟩
   rcases of_bind_eq_some h_eq' with ⟨cd', h_eq'', h_rw⟩
   rcases of_bind_eq_some h_rw with ⟨p_bts, h_p, h_rw⟩
-  simp [pure] at h_rw
+  simp only [pure, Option.some.injEq] at h_rw
   rw [← h_rw] at h_slice
   rcases h_n with ⟨xl, h_filled, h_step⟩
   exact Ninst.exec_of_stepRun (Ninst.at_of_slice (List.slice_prefix h_slice))
@@ -2782,7 +2788,7 @@ lemma Func.execTo_next_error {fs : List Func} {sevm : Sevm} {devm : Devm}
   rcases of_subcode sub with ⟨cd, h_eq', h_slice⟩
   rcases of_bind_eq_some h_eq' with ⟨cd', h_eq'', h_rw⟩
   rcases of_bind_eq_some h_rw with ⟨p_bts, h_p, h_rw⟩
-  simp [pure] at h_rw
+  simp only [pure, Option.some.injEq] at h_rw
   rw [← h_rw] at h_slice
   rcases h with ⟨xl, h_filled, h_step⟩
   exact Ninst.exec_of_stepRun_error
@@ -3494,7 +3500,7 @@ lemma Ninst.runCompiled_call_nonzero_codeFree {sevm : Sevm} {devm : Devm}
   have hsettle : (Frame.ofCall msg).settle (exec child) = .ok child.dyna := by
     rw [hexec]
     rw [Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
-    simp [Frame.ofCall, Frame.settleMsg, processMessage.settle, child, initEvm, initDevm]
+    simp only [Frame.ofCall, Frame.settleMsg, processMessage.settle, child, initEvm, initDevm, Bool.false_eq_true, ↓reduceIte, Msg.withBenv_gas, Msg.withBenv_stat_rules, Except.bind_ok, ite_eq_right_iff, Except.ok.injEq]
     intro h
     cases h
   have hdi := accessDelegation_inv h_del
@@ -3529,7 +3535,7 @@ lemma Ninst.runCompiled_call_nonzero_codeFree {sevm : Sevm} {devm : Devm}
   have hrun : Ninst.RunCompiled sevm devm (.exec .call) post :=
     Ninst.runCompiled_call_nonzero hfork h_stk h_value h_ext h_del h_acc h_create
       h_split h_gas h_dynamic h_sender h_depth
-        (by simpa [p, msg]) (by simpa [p, msg] using hres)
+        (by simpa only [p, msg]) (by simpa only [p, msg, ExceptT.stM_eq] using hres)
   have hout : child.dyna.output = [] := rfl
   have hpostError : post.error = p.error := by
     dsimp only [post]
@@ -3553,7 +3559,7 @@ lemma Ninst.runCompiled_call_nonzero_codeFree {sevm : Sevm} {devm : Devm}
       exact hfork.rules_stateGas_none
     change p.logs ++ (match benv'.stat.rules.stateGas with | none => [] | some _ => _) = p.logs
     rw [hsg]
-    simp
+    simp only [List.append_nil]
   have hpostRefund : post.refundCounter = p.refundCounter := by
     dsimp only [post, child, initEvm, initDevm]
     change p.refundCounter + 0 = p.refundCounter
@@ -3563,7 +3569,8 @@ lemma Ninst.runCompiled_call_nonzero_codeFree {sevm : Sevm} {devm : Devm}
     dsimp only [post, child, initEvm, initDevm]
     change (p.accountsToDelete.union
       Std.HashSet.emptyWithCapacity).isEmpty = p.accountsToDelete.isEmpty
-    simp
+    simp only [Std.HashSet.union_eq, Std.HashSet.isEmpty_union,
+      Std.HashSet.isEmpty_emptyWithCapacity, Bool.and_true]
   have hpostState : post.state = stmid.addBal cw.toAdr vw := by
     dsimp only [post, child, benv', initEvm, initDevm]
     rfl
@@ -3581,7 +3588,7 @@ lemma Ninst.runCompiled_call_nonzero_codeFree {sevm : Sevm} {devm : Devm}
   · rw [hfields.2.1]
     change d1.memory.extends [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = _
     rw [hd1mem]
-  · simpa [p, callSpawnParent] using hfields.2.2
+  · simpa only [p, callSpawnParent, Devm.withReturnData_gasLeft, Devm.memExtends_gasLeft, Devm.setMach_gasLeft] using hfields.2.2
   · rw [hpostError]
     exact (show p.error = d1.error from rfl).trans hd1error'
   · rw [hpostOutput]
@@ -3596,7 +3603,7 @@ lemma Ninst.runCompiled_call_nonzero_codeFree {sevm : Sevm} {devm : Devm}
     rw [hd1delete]
   · rw [← hd1state]
     have hsub' : p.state.subBal sevm.currentTarget vw = some stmid := by
-      simpa [msg, valueCallSpawnMsg, callMsg] using hsub
+      simpa only [msg, valueCallSpawnMsg, callMsg, Bool.false_or] using hsub
     rw [show p.state = d1.state from rfl] at hsub'
     exact hsub'
   · exact hpostState
@@ -3661,7 +3668,7 @@ lemma Ninst.runCompiled_call_zero_value_codeFree {sevm : Sevm} {devm : Devm}
   have hsettle : (Frame.ofCall msg).settle (exec child) = .ok child.dyna := by
     rw [hexec]
     rw [Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
-    simp [Frame.ofCall, Frame.settleMsg, processMessage.settle, child, initEvm, initDevm]
+    simp only [Frame.ofCall, Frame.settleMsg, processMessage.settle, child, initEvm, initDevm, Bool.false_eq_true, ↓reduceIte, Msg.withBenv_gas, Msg.withBenv_stat_rules, Except.bind_ok, ite_eq_right_iff, Except.ok.injEq]
     intro h
     cases h
   have hdi := accessDelegation_inv h_del
@@ -3695,7 +3702,7 @@ lemma Ninst.runCompiled_call_zero_value_codeFree {sevm : Sevm} {devm : Devm}
     rw [hsettle, Resume.run_call_ok (by rfl) hpstack]
   have hrun : Ninst.RunCompiled sevm devm (.exec .call) post :=
     Ninst.runCompiled_call_zero_value hfork h_stk h_ext h_del h_acc h_split h_gas
-      h_depth (by simpa [p, msg]) (by simpa [p, msg] using hres)
+      h_depth (by simpa only [p, msg]) (by simpa only [p, msg, ExceptT.stM_eq] using hres)
   have hout : child.dyna.output = [] := rfl
   have hpostError : post.error = p.error := by
     dsimp only [post]
@@ -3719,7 +3726,7 @@ lemma Ninst.runCompiled_call_zero_value_codeFree {sevm : Sevm} {devm : Devm}
       exact hfork.rules_stateGas_none
     change p.logs ++ (match benv'.stat.rules.stateGas with | none => [] | some _ => _) = p.logs
     rw [hsg]
-    simp
+    simp only [List.append_nil]
   have hpostRefund : post.refundCounter = p.refundCounter := by
     dsimp only [post, child, initEvm, initDevm]
     change p.refundCounter + 0 = p.refundCounter
@@ -3729,7 +3736,8 @@ lemma Ninst.runCompiled_call_zero_value_codeFree {sevm : Sevm} {devm : Devm}
     dsimp only [post, child, initEvm, initDevm]
     change (p.accountsToDelete.union
       Std.HashSet.emptyWithCapacity).isEmpty = p.accountsToDelete.isEmpty
-    simp
+    simp only [Std.HashSet.union_eq, Std.HashSet.isEmpty_union,
+      Std.HashSet.isEmpty_emptyWithCapacity, Bool.and_true]
   have hpostState : post.state = stmid.addBal cw.toAdr 0 := by
     dsimp only [post, child, benv', initEvm, initDevm]
     rfl
@@ -3747,7 +3755,7 @@ lemma Ninst.runCompiled_call_zero_value_codeFree {sevm : Sevm} {devm : Devm}
   · rw [hfields.2.1]
     change d1.memory.extends [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = _
     rw [hd1mem]
-  · simpa [p, callSpawnParent] using hfields.2.2
+  · simpa only [p, callSpawnParent, Devm.withReturnData_gasLeft, Devm.memExtends_gasLeft, Devm.setMach_gasLeft] using hfields.2.2
   · rw [hpostError]
     exact (show p.error = d1.error from rfl).trans hd1error'
   · rw [hpostOutput]
@@ -3762,7 +3770,7 @@ lemma Ninst.runCompiled_call_zero_value_codeFree {sevm : Sevm} {devm : Devm}
     rw [hd1delete]
   · rw [← hd1state]
     have hsub' : p.state.subBal sevm.currentTarget 0 = some stmid := by
-      simpa [msg, callSpawnMsg, callMsg] using hsub
+      simpa only [msg, callSpawnMsg, callMsg, Bool.false_or] using hsub
     rw [show p.state = d1.state from rfl] at hsub'
     exact hsub'
   · exact hpostState

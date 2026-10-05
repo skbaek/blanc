@@ -20,6 +20,8 @@ registry has identified the likely vocabulary.
   [S — state and machine updates](#s--state-and-machine-updates).
 - Reason about bytes or EVM memory: go to
   [M — bytes and memory](#m--bytes-and-memory).
+- Reason about the integer exponential loop and its iteration count: go to
+  [S9](#s9-i-need-the-integer-exponential-recurrence-or-a-finite-loop-witness).
 - Relate raw execution to message/frame settlement: go to
   [T — settlement](#t--settlement).
 - Relate source programs, compiled code, and deployed artifacts: go to
@@ -77,6 +79,9 @@ registry has identified the likely vocabulary.
   `exec_withFork`, `exec_out_withFork`, `runFrame_withFork`, `processMessage_withFork`,
   `processCreateMessage_withFork` (same outcome). A closed `*_deploy` instance needs none of
   this when its general `*_create` already quantifies `CoveredFork`.
+- Build a configured block *forward* from proof-produced evidence about its
+  parts (a reachable history, a counterexample, a liveness witness): go to
+  [T7](#t7-i-must-construct-a-configured-block-forward-from-its-parts).
 
 ## E — execution
 
@@ -193,6 +198,22 @@ registry has identified the likely vocabulary.
   instead of broadening that trigger or unfolding a concrete state tower. The lower
   one-write primitive is `setStorVal_getStor_ne` in
   [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean).
+- For exact ordered SLOAD accounting, `SloadSchedule` retains the incoming
+  state and key at each read. `sloadScheduleCost_eq` separates the warm base
+  cost from the cold surcharge, and `sloadColdCount_le` /
+  `sloadScheduleCost_le` bound that schedule in
+  [`Blanc/StorageAccessGas.lean`](../Blanc/StorageAccessGas.lean).
+  The same module bounds an SSTORE: `sstoreCost_le_value` (cold access plus the
+  value charge), `sstoreValueCost_le` (at most a fresh set) and
+  `sstoreValueCost_of_ne` (a dirty slot costs the warm charge).
+- `sstoreNewRefundCounter_ge_of_original_eq_current` proves an SSTORE whose
+  original and current slot values agree cannot decrease an arbitrary refund
+  counter; `afterSstore_refundCounter_ge_of_original_eq_current` carries this
+  to the selected warm/cold SSTORE state for checked-message settlement; more
+  generally `RefundSafe orig cur` (original equals current, original zero, or
+  current nonzero) rules out the clearing-reversal branch:
+  `sstoreNewRefundCounter_ge_of_safe` / `afterSstore_refundCounter_ge_of_safe` in
+  [`Blanc/StorageRefund.lean`](../Blanc/StorageRefund.lean).
 - For TWG trigger packets, local-call rebasing commutes with constant-store
   prefixes by `Trigger.rebaseLocalCalls_prependStoresRev` in
   [`Blanc/LidoTriggerableWithdrawalsGatewayTrigger.lean`](../Blanc/LidoTriggerableWithdrawalsGatewayTrigger.lean).
@@ -341,6 +362,27 @@ Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
   four-instruction selector prefix before the residual function.
 - `Func.ExecSat` / `Prog.ExecSat` package predicates over outcomes.
 - The `Ninst.runCompiled_*call*` family constructs concrete call crossings.
+- When the walk already holds the callee's own exact run, use
+  [`Blanc/Lift/ExactWalkCallChild.lean`](../Blanc/Lift/ExactWalkCallChild.lean):
+  `Ninst.runCompiled_call_nonzero_child` resumes a nonzero-value `CALL` into a
+  non-precompile callee from `exec (initEvm (callChildMsg …)) = .ok cpost` with
+  `cpost.error = none`, the child message being the parent-built message over
+  the debited world; the parent lands in `callChildPost` (child world and
+  warm sets adopted, gas returned, flag `1` pushed, output copied), and
+  `callChildPost_facts` projects every field when the child returned nothing.
+  A lifted callee supplies `exec … = .ok _` through `exec_iff_exec_eq` from its
+  `Exec` derivation; a code-free callee is `Ninst.runCompiled_call_nonzero_codeFree`.
+  `adrSet_union_isEmpty` carries an empty deletion set through the resumed
+  parent's `accountsToDelete` union.
+  The zero-value sibling is `Ninst.runCompiled_call_zero_child` (child message
+  `callChildMsg … 0 …`); `callChildPost_facts_zero` projects the resumed parent
+  when the output window is empty, whatever the child returned.
+  For a loop that calls once per iteration (`GAS; CALL` forwarding everything),
+  `calculateMsgCallGas_all` closes `calculateMsgCallGas` to all but one 64th of
+  the gas left after the fixed charge (plus the stipend), and the cut-run steps
+  `rxc_push0` / `rxc_calldataload` complete the `rxc_*` kit for
+  `SFunc.RunExactCut.iterate` bodies; the EIP-7002 flood looper
+  (`Blanc/Lift/WithdrawalRequest/FloodRun.lean`) is the worked example.
 - `accessDelegation_worldMeta` carries transient storage and the storage-access
   warm set through the exact delegation-resolution equation.
 - `state_subBal_stor` preserves every account's storage across a successful
@@ -874,6 +916,9 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   `Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/{TxTopC,TxC/*}.lean`
   (`vminus_txC_message`, `vminus_txC_process`: a 16,043,200-gas transaction, one kernel run of the
   Prague chain, every frame lemma restated for `withFork g`).
+  Its signature premise is discharged for the concrete transaction by `TxC.txC_recoveredSender`
+  (`TxCRecover.lean`): the access-list encoding by `toBLT_noKeys`/`join_entries`, the signing hash and
+  secp256k1 recovery by `decide +kernel` (the kernel cannot unfold `BLT.toBytes`, so rewrite the encoding first).
 - Determinism of execution witnesses:
   [`Blanc/ExecDeterminism.lean`](../Blanc/ExecDeterminism.lean).
 - Identifying an execution's descendant frames across one step (`Exec.descendantFrames_eq_of_nextNone`, `_of_jump`,
@@ -908,7 +953,23 @@ and constructor families cover every modelled wrapper layer:
   `RequestsTrace`, and `AppliedBodyTrace`, together with their `exists_*Trace`
   theorems, retain transaction lists, system messages, requests, and the full
   block body. `RequestsTrace.state_eq_consolidationState` identifies the final
-  request state.
+  request state, and `AppliedBodyTrace.decodedTxs_nil` / `AppliedBodyTrace.decodedTxs_of_mapM`
+  decode `trace.decodedTxs` from empty or mapped `txs.mapM decodeTx` runs.
+
+For the exact request bytes appended by a retained request pass, import
+[`Blanc/RequestsOutput.lean`](../Blanc/RequestsOutput.lean).
+`ExecutionTrace.RequestsTrace.requests_eq` preserves the arbitrary incoming
+`bout.requests` and appends the optional type-0 deposit payload, type-1
+withdrawal return data and type-2 consolidation return data, in that order.
+`ExecutionTrace.optionalRequestEntry` contributes a singleton typed request
+for a nonempty payload and no entry for an empty one;
+`optionalRequestEntry_eq_nil_iff` identifies the empty case.
+`append_optionalRequestEntry` is the conditional-append equation
+used by the trace theorem. No premise excludes type-1 entries from the incoming
+prefix or empties consolidation output. Payload validity, withdrawal FIFO
+provenance, configured-history correspondence and contract refinement remain
+separate obligations. This projected requests equality has no carrier-specific
+goal head, so discovery stays here rather than in an execution recipe.
 
 Configured transitions and histories continue in
 [`Blanc/ExecutionHistory.lean`](../Blanc/ExecutionHistory.lean):
@@ -918,9 +979,20 @@ Configured transitions and histories continue in
 `exists_configuredHistoryTrace_of_reachUsing` retain the schedule-selected
 rules and body traces without hard-coding a fork.
 
+To relate a configured history to a later one, use
+`ExecutionTrace.ConfiguredHistoryTrace.ExtendsBy` in
+[`Blanc/ExecutionHistoryExtension.lean`](../Blanc/ExecutionHistoryExtension.lean):
+`base.ExtendsBy trace n` says `trace` is `base` followed by exactly `n`
+configured blocks. Its lemmas `settledFrames` (base frames are a prefix),
+`rawFrames_mem`, `blockCount` (`trace.blockCount = base.blockCount + n`),
+`noSenderAt` and `noAuthorityAt` restrict an extension's retained frames and
+caller/authority exclusion premises to the history it extends.
+
 To identify the literal block in a retained configured transition, use
 `ExecutionTrace.ConfiguredBlockTrace.block_eq_of_transition` in
 [`Blanc/ExecutionHistoryExact.lean`](../Blanc/ExecutionHistoryExact.lean).
+For an append-shaped post-chain equality, `BlockForward.ConfiguredBlockTrace.block_eq`
+directly identifies the retained block.
 Supply a successful transition with the same configuration and endpoints;
 the post-world last-block field identifies the retained block without
 reconstructing its body trace. This remains COMMON_API-only: the projected
@@ -1882,6 +1954,104 @@ closed `ProrataAttackPath` yields `attacker_no_profit_of_attackPath` and
 or a program; the WETH-backed vault is the second consumer of arithmetic
 first stated for PRORATA's ETH-denominated shares.
 
+### S9. I need the integer exponential recurrence or a finite loop witness
+
+The canonical natural-number definitions already live in the pinned Jaune
+package's `Jaune/Machine.lean`: `Jaune.fakeExpAux` uses a well-founded
+lexicographic measure `(numerator + 1 - i, accumulator)`, and `Jaune.fakeExp`
+starts at index 1 with accumulator `factor * denominator`, then divides the
+sum by the denominator. Consume `Jaune.fakeExpAux_zero`,
+`Jaune.fakeExpAux_succ`, `Jaune.FakeExpSpec`, `Jaune.fakeExpAux_spec` and
+`Jaune.fakeExpAux_spec_unique`; do not duplicate the recurrence or give it a
+guessed fuel bound.
+
+[`Blanc/FakeExponential.lean`](../Blanc/FakeExponential.lean) adds
+`Blanc.FakeExponential.Run`, a finite recurrence trace carrying the iteration
+count and series output. `Run.output_eq` identifies every trace's output with
+the canonical series.
+`accumulator_le` and `factor_le` provide lower bounds; the latter requires a
+positive denominator. `accumulator_zero_numerator` and `value_zero_numerator`
+give the exact zero-numerator boundary, with positivity required for the
+final division. The withdrawal-request model consumes these for positive
+fees and the zero-excess fee, and its later fee-loop/gas refinement can consume
+the finite trace. These statements establish no finite-word no-overflow,
+bytecode refinement, gas cost or history property. This is a theorem-directed
+numeric interface; it has no execution-goal recipe.
+
+[`Blanc/FakeExponentialEval.lean`](../Blanc/FakeExponentialEval.lean) provides
+`Blanc.FakeExponentialEval.runFuel` and `fakeExpFuel`, an explicit Option-valued
+Nat evaluator. `run_iff_runFuel` relates a finite Nat trace to sufficient fuel,
+and `fakeExpFuel_eq_fakeExp` identifies a completed evaluation with Jaune's
+total `fakeExp`.
+
+For a symbolic lower bound from a finite growing prefix, use
+[`Blanc/FakeExponentialGrowth.lean`](../Blanc/FakeExponentialGrowth.lean).
+`Blanc.FakeExponential.accumulator_mul_pow_le` bounds the canonical series
+below by `accumulator * q^n` when a positive denominator and counter satisfy
+`denominator * (counter + n) * q ≤ numerator`.
+`factor_mul_pow_le` consumes that bound at canonical initialization and final
+division, giving `factor * q^n ≤ fakeExp factor numerator denominator`.
+These are necessary-bound tools for downstream arithmetic domains; they do
+not establish finite-word equality or reachable-state admission. The interface
+uses named arithmetic theorems and has no execution-goal recipe.
+
+For the unsigned B256 recurrence, use
+[`Blanc/WordFakeExponential.lean`](../Blanc/WordFakeExponential.lean).
+`Blanc.WordFakeExponential.Run` carries the initial output prefix, active-body
+count and final word sum. `run_exists` supplies a finite run bounded by
+`measure`; `Run.deterministic` identifies both its count and output, and
+`run_exists_unique` packages the unique pair. Termination uses the counter's
+countdown to zero and unsigned division by zero, for arbitrary word numerator
+and denominator. These theorems establish no equality with the Nat recurrence,
+bytecode refinement, gas bound or history property. This interface has no
+execution-goal recipe.
+
+[`Blanc/WordFakeExponentialEval.lean`](../Blanc/WordFakeExponentialEval.lean)
+spells out the word recurrence as a Nat evaluator: `nextNat` and `addNat`
+apply `% 2^256` at each word operation. `runFuel_of_run` transports an
+existing word trace through Jaune's `B256.toNat` bridges, while
+`run_of_runFuel` reifies a completed Nat evaluation as a word trace; closed
+computations using this evaluator never evaluate B256 limb arithmetic in the
+kernel.
+
+For a shorter word-run bound under a sufficiently large eventual divisor, use
+[`Blanc/WordFakeExponentialBound.lean`](../Blanc/WordFakeExponentialBound.lean).
+`WordFakeExponential.Run.iterations_le_of_halving_horizon` allows an arbitrary
+warm-up of `H` steps and bounds the remaining active steps by the word width,
+256. It takes positive Nat counter/denominator, an exact-divisor margin through
+`counter + H + 256`, and `2 * numerator.toNat ≤ denominator * (counter + H)`.
+The numerator products and output sums may wrap; the proof uses modular
+reduction decreasing the quotient, then repeated halving. This is an arithmetic
+run-length bound, with no execution or gas premise.
+
+For a sufficient domain relating these two recurrences, use
+[`Blanc/FakeExponentialWordCorrespondence.lean`](../Blanc/FakeExponentialWordCorrespondence.lean).
+`NoWrap` is indexed by an existing `FakeExponential.Run` and its initial sum
+prefix. It bounds each active prefixed sum, accumulator product and divisor
+product, plus the stopped prefix. `NoWrap.final_sum_lt` gives the final sum
+width; `NoWrap.to_word_run` constructs the word run with the same count;
+`NoWrap.word_result` identifies any word run's count and canonical prefixed
+Nat sum. `NoWrap.fakeExp_eq` gives the canonical value after final division
+under an explicit denominator width. Cast counter increment needs no extra
+width premise. These APIs establish neither a maximal equality domain nor
+reachability, bytecode, gas or history properties. Their namespace is
+`Blanc.FakeExponentialWordCorrespondence`; they have no execution-goal recipe.
+
+For the converse on a bounded executed word trace, use
+[`Blanc/FakeExponentialWordDomain.lean`](../Blanc/FakeExponentialWordDomain.lean).
+`FakeExponentialWordDomain.Run.quotient_eq_iff_noWrap` takes positive Nat
+counter `c` and denominator `d`, zero initial output, and
+`d * d * (c + iterations) ≤ 2 ^ 256`. Equality of the final quotient with the
+canonical Nat recurrence is then equivalent to an existing Nat run of the
+same length with `NoWrap` at prefix zero. The margin makes active divisors
+exact and each overflowing product lose enough to affect final division;
+extra Nat terms after early word termination are included. This is an exact
+arithmetic domain within that window, with no reachable-history claim.
+`FakeExponentialWordDomain.Run.quotient_le` takes the same bounded window and
+proves that the word quotient is at most the Nat quotient, without any
+no-wrap premise. It supports sufficient-payment liveness without requiring
+fee equality; it does not turn a successful word-fee guard into Nat payment.
+
 ## M — bytes and memory
 
 For concrete RLP encoding and parsing, use
@@ -1947,6 +2117,13 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   `intended_overlap_guard_rejected`, `intended_empty_write_inside_observation`,
   `intended_empty_observation_inside_write`,
   `intended_relation_with_memory_shape`).
+- For the selected gas of those ordered primitive writes, use
+  [`Blanc/MemoryStageGas.lean`](../Blanc/MemoryStageGas.lean).
+  `MemoryStage.selectedGas_eq` telescopes the actual expansion charges into
+  the per-write base charge plus the final-minus-initial memory cost, given
+  word-aligned initial allocation. `applyMemory_aligned` preserves that
+  alignment; `memExtsSize_le` and `memExtsSize_ge_window` bound the actual
+  allocation from the access windows. Empty writes retain their base charge.
 - Decode an exact word without losing bytes with
   `Bytes.toBytes_toB256_of_length`; shorten a padded read with
   `List.take_takeD_of_le`. The limb-level codec proofs are private
@@ -2008,6 +2185,19 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   that signatures are unforgeable. Consumers: the Uniswap V2 Pair permit
   canonical corollary; `Blanc/Weth10Permit.lean`'s two address-1 clean-child
   theorems can become corollaries (proposed migration). Discovery is manual.
+- For an exact eight-byte big-endian limb, use
+  [`Blanc/WordByteRoundtrip.lean`](../Blanc/WordByteRoundtrip.lean):
+  `Blanc.Bytes.toBytes_toUInt64_of_length` proves that decoding and encoding
+  preserves every byte under the length-eight premise. It derives the result
+  from the public complete-word codec and needs no execution-goal recipe.
+- For fixed-width shift and mask byte images, use
+  [`Blanc/WordByteCodecs.lean`](../Blanc/WordByteCodecs.lean), namespace
+  `Blanc.WordByteCodecs`. `high128_mask_bytes` identifies the first sixteen
+  bytes followed by sixteen zeros; `shift96_take20_toAdr_bytes` identifies
+  the leading address bytes after left alignment;
+  `shift64_low_bytes_reverse_slice16` identifies ascending low-byte shifts
+  with the reversed eight-byte lane at offsets 16 through 23. These pure
+  word conversions have no execution-goal recipe.
 - Fixed or padded memory windows: use `Mem.Wf` and `Mem.Reads` before adding a
   local take/drop proof.
 
@@ -2300,6 +2490,22 @@ Blanc's [`Blanc/ExecutionOccurrence.lean`](../Blanc/ExecutionOccurrence.lean):
 - For exact retained wrapper carriers continue to E6; for their ordered state
   chronology continue to E8.
 
+For a gas budget on retained frame multiplicity, use
+[`Blanc/ExecutionCommittedGas.lean`](../Blanc/ExecutionCommittedGas.lean).
+`Blanc.Exec.descendantFrames_settledGas` bounds the descendant count plus
+returned gas after error handling by the actual execution's entry gas measure.
+`Blanc.Exec.committedFrames_length_gas_le` includes the root with one extra
+unit: a root may execute a free STOP. Child settlement determines which
+descendants survive; this is a count of list occurrences, not distinct frames.
+The bound itself needs no code-identity or successful-child premise.
+For message wrappers, use
+[`Blanc/ExecutionMessageGas.lean`](../Blanc/ExecutionMessageGas.lean):
+`ExecutionTrace.MessageCallTrace.settledFrames_length_gas_le` bounds retained
+frame occurrences plus returned execution gas by the message grant plus one
+on covered forks. Its `ProcessMessageTrace` and `ProcessCreateMessageTrace`
+companions use the settled machine's gas measure. The call wrapper follows
+delegation and the create wrapper includes code-deposit settlement.
+
 ### T2a. I need a frame invariant under trace-local entry premises
 
 Before lifting through a wrapper, an invariant may need a positive condition
@@ -2321,7 +2527,12 @@ for `SystemMessageTrace`, `RequestsTrace` and `AppliedBodyTrace`, and
 for `ConfiguredBlockTrace` and `ConfiguredHistoryTrace`.  Each module owns only
 the `FrameAdmitted` predicate of its own carriers and the transport theorem
 through them; withdrawals and other direct state steps keep their ordinary
-invariant proofs.  Import
+invariant proofs. For the exact boundary before request processing, use
+[`Blanc/ExecutionBodyPrefixAdmission.lean`](../Blanc/ExecutionBodyPrefixAdmission.lean):
+`AppliedBodyTrace.requestBenv` names the transaction-plus-withdrawals environment;
+`requestBenv_covered` transports the fork and `requestBenvInv_admitted_sem`
+transports the invariant using the existing admission and opening balance bound.
+Neither request-call outcome is consumed by this prefix proof.  Import
 [`Blanc/ExecutionTraceFresh.lean`](../Blanc/ExecutionTraceFresh.lean) when the
 consumer needs canonical interpreter ingress as one conjunct:
 
@@ -2359,6 +2570,29 @@ consumer needs canonical interpreter ingress as one conjunct:
   and use its `settledFrames` projections instead of `rawFrames`; it mirrors
   the same trace-carrier route and concatenation order while applying the
   message and CREATE settlement tests at their roots.
+  `ApplyTransactionsTrace.settledFrames_nil` shows an empty transaction fold
+  settles no frames, while `ApplyTransactionsTrace.head_of_cons` and
+  `ApplyTransactionsTrace.single_head` place the head transaction's settled
+  frames among the fold's.
+- To apply a property of raw transaction roots to a settlement-committed
+  transaction frame, import
+  [`Blanc/ExecutionTraceSettledOrigin.lean`](../Blanc/ExecutionTraceSettledOrigin.lean).
+  `ApplyTransactionsTrace.mem_rawFrames_of_mem_settledFrames` places the
+  frame's `Exec.Frame.rootDeriv` in the transaction traversal's `rawFrames`.
+  It preserves the outer message and CREATE settlement filters and proves
+  membership only, not uniqueness or a full chronology. The withdrawal
+  `block_settled_transaction_caller_ne_system` consumes it with the existing
+  trace-level caller-exclusion theorem.
+  `SystemMessageTrace.mem_rawFrames_of_mem_settledFrames` supplies the same
+  membership transport for a protocol system invocation.
+- To place the entered top-level root frame of a committed message or call transaction among settled frames, import [`Blanc/ExecutionTraceRootFrame.lean`](../Blanc/ExecutionTraceRootFrame.lean).
+- To preserve fixed nonempty, nondelegating code across a configured history
+  and the next block's protocol boundaries, import
+  [`Blanc/ExecutionImmutableCode.lean`](../Blanc/ExecutionImmutableCode.lean).
+  `ConfiguredHistoryTrace.block_code_boundaries` gives exact code identity at
+  the opening, after beacon processing, before requests and after withdrawal
+  processing. It uses the actual trace's admission and resource facts; it
+  requires no address exclusions or contract-specific frame-entry premise.
 - When a consumer needs every entered frame's block environment (timestamp,
   number, …) to be the execution root's, import
   [`Blanc/ExecutionFrameTime.lean`](../Blanc/ExecutionFrameTime.lean):
@@ -2421,7 +2655,17 @@ consumer needs canonical interpreter ingress as one conjunct:
   ([`Blanc/ExecutionCodeAt.lean`](../Blanc/ExecutionCodeAt.lean),
   [`Blanc/ExecutionTraceCodeAt.lean`](../Blanc/ExecutionTraceCodeAt.lean)) keep the
   code at an address empty through a trace given no CREATE frame targets it and no
-  authorization recovers to it (`NoAuthorityAt`). `SpawnFree` and
+  authorization recovers to it (`NoAuthorityAt`). For transaction caller
+  exclusion, `Exec.rawFrameRoots_caller_excluded` in
+  [`Blanc/ExecutionCallerExclusion.lean`](../Blanc/ExecutionCallerExclusion.lean)
+  tracks actual CALL/CREATE/DELEGATECALL callers and empty executing code.
+  `ConfiguredHistoryTrace.txRawFrames_caller_excluded` in
+  [`Blanc/ExecutionTraceCallerExclusion.lean`](../Blanc/ExecutionTraceCallerExclusion.lean)
+  derives that exclusion from initially empty code, retained `NoSenderAt`,
+  `NoAuthorityAt`, and trace-local CREATE avoidance (`ApplyTransactionsTrace.noSender_nil`
+  supplies `NoSenderAt a` vacuously for an empty transaction list). Calls to the empty-code
+  address remain allowed; system frames are outside the conclusion.
+  `SpawnFree` and
   `ConfiguredHistoryTrace.systemRawFrames_target_of_spawnFree`
   ([`Blanc/ExecutionTraceSystem.lean`](../Blanc/ExecutionTraceSystem.lean)) confine
   system-message frames to the four system addresses when their code spawns
@@ -2444,6 +2688,20 @@ consumer needs canonical interpreter ingress as one conjunct:
   shows that with the canonical code installed at the checkpoint every system
   message enters no frame but its own. `Lift.BeaconDeposit.configuredHistory_solInv_sys`
   (and `_count_`/`_root_`) is the worked consumer.
+- To discharge the creation-avoidance premise
+  `∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none → root.sevm.currentTarget ≠ a`
+  for a concrete witness whose code makes calls (so `SpawnFreeReach` fails): show the world is
+  call-only, `CodesCallOnly` (every installed code reaches only `CALL` at positions no `PUSH`
+  immediate covers, `CallOnlyReach`, and none is a delegation designator), and that the
+  block's transactions are calls without authorizations. `Exec.callOnly_roots` gives every raw
+  frame a code address for one derivation, and `ConfiguredBlockTrace.callOnly` lifts it through
+  the message, transaction, system-call, request and body traces, returning the post-chain
+  world call-only again ([`Blanc/ExecutionTraceCallOnly.lean`](../Blanc/ExecutionTraceCallOnly.lean)).
+  Decide `CallOnlyReach` for concrete bytes with `callOnlyReach_of_check`
+  (`callOnlyCheck`, the linear walk), and get it from `SpawnFreeReach` with
+  `callOnlyReach_of_spawnFreeReach`. `Xinst.step_call_spawn` is the per-`CALL` fact: the child
+  has a code address and runs the callee's own code when it holds no designator.
+  `Lift.WithdrawalRequest.FeeCounterexample.blockOk_of` is the worked consumer.
 - To discharge the per-frame premise `sevm.data.length < 2 ^ 256` for every raw
   frame of a configured history with no premise at all:
   `ConfiguredHistoryTrace.calldata_bound` and
@@ -2588,6 +2846,27 @@ rather than restating them:
   `ProcessMessage.targetBalanceCredits_of_body` and
   `targetBalanceCredits_of_balance_mono` are its restated seams, and they are
   what keeps the interface from quietly acquiring a ledger-shaped premise.
+- `signedBalanceCarrier` retains exact message values with an `Int` entry
+  boundary, avoiding a raw-frame value≤balance premise. `SignedBalanceCredit`
+  distinguishes message-frame credits from incidental credits;
+  `signedBalanceEntry_eq_ofState` connects that boundary to actual value transfer
+  and `signedBalanceCarrier_append` composes replay. `SignedBalanceCredit.frames`
+  observes message frames; `signedBalanceCredit_frames_sum_le` bounds their
+  total values by the total recorded credits.
+  [`Blanc/ExecutionAccountingSignedBalance.lean`](../Blanc/ExecutionAccountingSignedBalance.lean).
+- `storageFoldCarrier` records a pure storage update for each event, with
+  message transfers and incidental balance credits silent.
+  `GuardedStorageReplay` checks each event's guard against the incoming storage
+  at that occurrence, before applying its update; `.append` composes connected
+  segments and `.fold_eq` gives the exact final storage. The contract supplies
+  the update, guard and event observation; the carrier imposes no queue model.
+  [`Blanc/ExecutionAccountingStorageFold.lean`](../Blanc/ExecutionAccountingStorageFold.lean).
+  For the inverse decomposition at an exact list boundary, import
+  [`Blanc/ExecutionAccountingStoragePrefix.lean`](../Blanc/ExecutionAccountingStoragePrefix.lean).
+  `GuardedStorageReplay.split` retains both guarded segments at the computed
+  prefix storage; `.head_guard` exposes the first event's incoming guard.
+  The registered recipe triggers do not recognize this custom relation or
+  carrier-construction need, so discovery remains in this branch.
 
 `Blanc/ProrataRealizedAccounting.lean`'s `ProrataAccountingReplay.carrier` is
 the worked ledger-shaped example.  This module classifies no transition as a
@@ -2794,6 +3073,16 @@ use `ExecutionTrace.TransactionStateChronology`,
 `ExecutionTrace.TransactionStateChronology.stateReplay` in
 [`Blanc/ExecutionTransactionStateTrace.lean`](../Blanc/ExecutionTransactionStateTrace.lean).
 
+For the actual trace's gas counters, use
+[`Blanc/ExecutionTransactionGas.lean`](../Blanc/ExecutionTransactionGas.lean).
+On a covered fork, `ExecutionTrace.TransactionTrace.exists_gasSettlement`
+identifies the counter increments with the retained message outcome and its
+refund. `TransactionTrace.grossGas_refund_bound` gives
+`4 * grossGas ≤ 5 * blockGasIncrement`, and `TransactionTrace.chargedGas_le`
+bounds the charge by the validated transaction reservation. These statements
+account for the refund cap and calldata floor. The block gas limit bounds the
+settled counter increments; it does not bound the sum of transaction gas reservations.
+
 For the converse (a transaction *succeeds*, and I have its stages) use
 [`Blanc/TransactionForward.lean`](../Blanc/TransactionForward.lean):
 `checkTransactionGasLimits_ok_of_room` and `checkTransaction_ok_of_parts` assemble the
@@ -2804,18 +3093,30 @@ prepared message and message-call outcome, with the exact settled state (gas ref
 fee credited, accounts deleted).  Worked use:
 `Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Tx/Envelope.lean`.
 For a *symbolic* type-2 call to a contract (no concrete transaction to evaluate) the same module discharges
-the whole envelope from field-level facts: `processTransaction_call_of_exec` takes the fee, nonce, funds,
+the whole envelope from field-level facts: `processTransaction_call_value_of_exec` takes the fee, nonce, funds,
 code-free sender, gas and signature facts (`hrecover` the only cryptographic premise) and the message's
 interpreter run `hexec` (a success with no frame error and a non-negative refund counter, for the debited
 state, `callMessage` and its entry environment), and returns `processTransaction`'s settled state and the
-block's gas counters (`txGasUsed`); its parts are `checkTransactionGasFee_two`, `checkTransactionChainId_two`,
+block's gas counters (`txGasUsed`); `processTransaction_call_value_of_exec_receipts` is the same
+envelope that also returns the appended receipt key and the receipt at it (`makeReceipt tx none`, the
+cumulative gas, the frame's logs), and `processTransaction_of_stages_receipts` is the stage form behind
+it. Its funds premise covers `tx.gas * maxFee + tx.value`;
+it derives affordability after the gas debit and constructs the value transfer with the shared
+`Msg.benvAfterTransfer_of_affordable` lemma. The signature and successful raw execution remain
+premises; the theorem does not construct a signed transaction or a configured history.
+`processTransaction_call_of_exec` retains the original zero-value interface as a specialization.
+The shared parts are `checkTransactionGasFee_two`, `checkTransactionChainId_two`,
 `checkTransactionBlobData_two`, `checkTransactionReceiver_two`, `checkTransactionAuthorizationList_two`,
-`checkTransactionSenderAccount_ok_of_noCode`, `validateTransaction_ok_of_facts`,
+`checkTransactionSenderAccount_ok_of_noCode`, `checkTransaction_sender`,
+`validateTransaction_ok_of_facts`,
 `calculateIntrinsicCost_two_call` (with `calldataTokens` and the covered-fork constants
 `CoveredFork.rules_txBase`, `rules_floorTokenCost`, `rules_storageClearRefund`,
 `CoveredFork.checkTransactionGasCap_ok`), `prepareMessage_call`/`callMessage`,
 `benvAfterTransfer_get_of_value_zero`, `processMessage_call_of_exec`, `debit_get_ne`/`debit_get_self`,
-`addBal_get_self`/`addBal_get_ne`, `sender_net_toNat`, and `processTransaction_of_stages_gasUsed` (the
+`addBal_get_self`/`addBal_get_ne`, `sender_net_toNat`, `txGasUsed_le` (bounds `txGasUsed ≤ gas` from `floor ≤ gas`),
+`applyTransactions_two` (folds two sequential successful transactions into `applyTransactions`),
+`processTransaction_receiptsTrie` (identifies the inserted receipt key), `receiptKey_zero`/`receiptKey_one`/`receiptKey_ne`
+(evaluate and distinguish the receipt keys at index 0 and 1), and `processTransaction_of_stages_gasUsed` (the
 stage lemma with the block output's gas counters).  Worked use: the deployed WETH9's
 `Blanc/Lift/Weth9/LiveTx.lean` (`weth9_tx_withdraw`, `weth9_history_tx_withdraw`), which feeds it the frame of
 `weth9_withdraw_live_post`.
@@ -2855,6 +3156,28 @@ Use
 
 ### T5. The wrapper is a block body and the fact is about an installed contract
 
+For a gas-derived bound on actual retained frame occurrences, use
+[`Blanc/ExecutionBodyGas.lean`](../Blanc/ExecutionBodyGas.lean).
+`ExecutionTrace.ApplyTransactionsTrace.settledFrames_gas_budget` telescopes
+the actual settled transaction increments, with the refund factor retained.
+`AppliedBodyTrace.settledFrames_gas_bound` adds all four protocol system-call
+grants, including their descendants without any code-identity premise.
+`ConfiguredBlockTrace.settledFrames_length_lt` combines that budget with the
+same block's validated header limit to obtain a count below `2 ^ 64`.
+The counted list is the ordinary settlement-retained full-body trace.
+`ConfiguredHistoryTrace.blockCount` counts a history's appended blocks, and
+`ConfiguredHistoryTrace.settledFrames_length_le` lifts the per-block bound to
+`settledFrames.length ≤ blockCount * 2 ^ 64` for a whole configured history.
+
+For ordered cuts around consecutive protocol withdrawal calls, use
+[`Blanc/ExecutionRequestSegments.lean`](../Blanc/ExecutionRequestSegments.lean).
+`ConfiguredBlockTrace.beforeWithdrawalFrames` retains beacon, history and
+transaction frames; `afterWithdrawalFrames` retains consolidation frames.
+`consecutive_withdrawal_segments` partitions the two actual consecutive block
+lists around their complete withdrawal-message subtrees, preserving the
+previous suffix followed by the next prefix. These are whole-subtree cuts;
+the theorem does not identify an internal storage reset or prove its counter.
+
 Use [`Blanc/ExecutionBodyEffects.lean`](../Blanc/ExecutionBodyEffects.lean),
 the body-level sibling of T3:
 
@@ -2892,6 +3215,23 @@ the body-level sibling of T3:
 
 For the same system-message, transaction-list, withdrawal, request, and body
 layers in exact state order, use the chronology APIs named in E8.
+
+For the converse (a system call *succeeds*, and I have its raw frame) use
+[`Blanc/SystemCallForward.lean`](../Blanc/SystemCallForward.lean):
+`processSystemTransaction_of_exec`, `processUncheckedSystemTransaction_of_exec` and
+`processCheckedSystemTransaction_of_exec` return the call's exact `(post.state,
+systemCallOutput post)` for any member of `systemContracts` on a covered fork, from
+`exec (initEvm (systemCallMsg benv target code data)) = .ok post` with no frame error and a
+non-negative refund counter (and, for the block-level forms, the canonical code installed).
+`systemContracts_not_precompile`, `systemContracts_nondelegated` and
+`systemContracts_nonempty` are the envelope facts; `afterSstore_state`,
+`afterSstore_getAcct_ne`, `State.get_setStorVal_ne` and `State.getStor_setStorVal_self`
+read a store's world-state effect and account/storage preservation. Worked uses: the EIP-4788 and
+EIP-2935 walks `Blanc/Lift/BeaconRoots/SystemWalk.lean` and
+`Blanc/Lift/HistoryStorage/SystemWalk.lean` (`processUncheckedSystemTransaction_beaconRoots`,
+`processUncheckedSystemTransaction_historyStorage`), and the EIP-7251 empty-queue walk
+`Blanc/Lift/ConsolidationRequest/SystemWalk.lean`
+(`processCheckedSystemTransaction_consolidationRequest_empty`, via the checked form).
 
 ### T6. The wrapper is a configured block or a whole chain history
 
@@ -2961,6 +3301,56 @@ history that crosses later activations; a fresh current-fork creation block is
 evidence for a different claim. If a future fork changes execution semantics
 rather than rule data already represented by Jaune, update Jaune and re-prove
 the consumer instead of adding a premise that assumes the new semantics away.
+
+### T7. I must construct a configured block forward from its parts
+
+Use [`Blanc/BlockForward.lean`](../Blanc/BlockForward.lean), the forward
+direction of T5/T6: it turns proof-produced evidence about the parts of a block
+body into Jaune's own `applyBody`, `stateTransitionUsing` and
+`ConfiguredBlockTrace` results, so a reachable history (a liveness witness or
+a counterexample) is built without evaluating any root, bloom or hash.
+Nothing in it names a contract; the only fork premise is `CoveredFork`.
+
+- `BlockForward.applyBody_forward`: from the two unchecked system calls (each
+  `processUncheckedSystemTransaction … = .ok _`), the retained last block hash,
+  the decoded transaction list (`txs.mapM decodeTx = .ok txList`), the fold
+  `applyTransactions txList.putIndex … BlockOutput.init = .ok _`, an empty
+  deposit parse and the two checked request calls, conclude
+  `applyBody benv txs [] = .ok (stC, requestsOutput boutTxs wData cData)`;
+  `requestsOutput` is the transaction output with the two optional request
+  entries appended and an empty block access list. Withdrawals must be `[]`.
+- `BlockForward.parseDepositRequests_of_no_logs` /
+  `parseDepositRequests_of_no_receipts` discharge the deposit parse for
+  receipts without logs, and `parseDepositRequests_of_no_deposit_logs` for
+  receipts whose logs all sit away from the deposit contract (via the
+  body-generic `forIn_logs_yield_of_skip`);
+  `BlockForward.runRequestContracts_prague` and
+  `processGeneralPurposeRequests_forward` are the request-pass pieces.
+- `BlockForward.validateHeader_ok_of_facts`: header validity from the parent
+  tip and field equalities (parent hash, computed base fee, excess blob gas,
+  `gasUsed ≤ gasLimit`, strictly later timestamp, `number + 1`, extra data,
+  zero difficulty/nonce, empty ommers, rule-dependent field presence);
+  `checkGasLimit_self` and `calculateBaseFeePerGas_unit` settle an unchanged
+  admissible gas limit and a unit base fee when the parent used at most its
+  target, so the base fee is a bound, never an evaluation.
+- `BlockForward.commitHeader` and `BlockForward.commitHeader_ok` fill the parent,
+  body commitments, successor number/timestamp, and excess-blob-gas fields before
+  applying the shared header validator.
+- `BlockForward.stateTransitionChecks_ok_of_eq` and
+  `stateTransitionUsing_forward`: the configured transition
+  `stateTransitionUsing cfg pre block = .ok ⟨appendBlock pre.blocks block, st, pre.chainId⟩`
+  once the header commits, by construction, to the body's `blockGasUsed`,
+  transaction/receipt/withdrawal roots, bloom, blob gas and
+  `some (computeRequestsHash bout.requests)`.
+- `BlockForward.configuredBlockTrace_forward` packages that transition into the
+  `ConfiguredBlockTrace` carrier of T6 from `sum pre.state.bal < 2 ^ 256`, and
+  `BlockForward.ConfiguredBlockTrace.sum_post_le` carries that bound to the
+  next block when the withdrawal list is empty.
+- `BlockForward.blockHashes_getLast_of_ne` supplies the last retained block hash
+  (`getLast? = some lastHash`) for any chain with nonempty blocks.
+
+This remains COMMON_API-only: the goal shape is a fixed Jaune equation and the
+current recipe matchers have no forward-transition shape to bind.
 
 ## C — compilation and deployment
 
@@ -3342,14 +3732,20 @@ contract-neutral.
   are linear per instruction and a 1,474-node entry of the 6,358-byte beacon
   deposit contract passed 16 GiB, while the trie decides it in 6 s / 3.4 GiB
   (`Blanc/Lift/BeaconDeposit/Check.lean` is the template).
-- For a plain singleton certificate whose only entry starts at pc0 with an
-  empty frame, use `Cert.check_singleton` in
-  [`Blanc/Lift/CheckAssembly.lean`](../Blanc/Lift/CheckAssembly.lean). It assembles
-  the unchanged `checkNode` proof for that entry into `Cert.check`; the entry
-  check remains an explicit premise. The registered producer uses it for the
-  Pair creation and Vminus Attacker2 certificates. Singleton shape is hidden
-  behind named certificate definitions, so discovery stays here without a
-  broad execution-relation tactic trigger.
+- Assemble a single-entry non-memory certificate with `Cert.check_singleton` in
+  [`Blanc/Lift/CheckAssembly.lean`](../Blanc/Lift/CheckAssembly.lean). Supply the
+  existing startup Boolean and sole `checkNode` result; the theorem preserves
+  the ordinary `Cert.check` proposition. The registered producer uses it for
+  singleton checks, including the final owner of split check files.
+  Its jump counterpart `Cert.jumpsOk_singleton` takes the sole `jumpsOkNode`
+  result; hand-written single-entry `Jumps` modules call it directly.
+- Assemble a seven-entry non-memory certificate with `Cert.check_seven` and its
+  jump counterpart `Cert.jumpsOk_seven` in the same module: supply the seven
+  per-entry `checkNode`/`jumpsOkNode` results plus the startup Boolean (check
+  only). The registered producer emits a call to `check_seven` in its opt-in
+  `seven` assembly mode (`check.assembly`), so sibling seven-entry
+  certificates share the assembly instead of repeating the generic
+  conjunction; hand-written `Jumps` modules call `jumpsOk_seven` directly.
 - To relate the unsigned ABI word-length guards to a natural calldata bound,
   use `word_calldata_guards_iff` in
   [`Blanc/Lift/CalldataGuards.lean`](../Blanc/Lift/CalldataGuards.lean).

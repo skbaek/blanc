@@ -53,7 +53,7 @@ theorem L2Post.set_foreign {entries : List Entry} {t : B256} {s : Stor} {w v : B
     L2Post entries t (s.set w v) := by
   have ht : canonicalAddress t := h.1.2
   have hlt : entries.length < 2 ^ 252 := by
-    have : (2 : Nat) ^ 160 < 2 ^ 252 := by norm_num
+    have : (2 : Nat) ^ 160 < 2 ^ 252 := by norm_num only
     omega
   have gA : (s.set w v).get (mapSlot t 3) = s.get (mapSlot t 3) := by
     rw [← solKey_assignmentSlot ht]; exact foreign_get hfa (Or.inl ⟨t, ht, rfl⟩)
@@ -84,7 +84,7 @@ theorem L2Post.set_foreign {entries : List Entry} {t : B256} {s : Stor} {w v : B
     refine ⟨by rw [gArr (by omega)]; exact h1, by rw [gL]; exact h2, fun hnl => ?_, h4⟩
     obtain ⟨h31, h32⟩ := h3 hnl
     obtain ⟨lastE, hlastE⟩ := last_some_of_length_pos entries (by omega)
-    have hsrc : sourceLastTarget entries = lastE.1 := by simp [sourceLastTarget, hlastE]
+    have hsrc : sourceLastTarget entries = lastE.1 := by simp only [sourceLastTarget, hlastE]
     refine ⟨by rw [gArr (by omega)]; exact h31, ?_⟩
     have hmc : canonicalAddress (sourceLastTarget entries) := by
       rw [hsrc]
@@ -110,7 +110,7 @@ theorem l2_registerPauser_zero_wrapper {sevm : Sevm} {d : Devm} {o : Outcome} {w
     L2Post entries (Sevm.dataWord sevm 4) (Devm.getStor (Outcome.devm o) sevm.currentTarget) := by
   have hlen : entries.length < 2 ^ 160 := by
     have := hwit.entries_length_le
-    have : 0 < 2 ^ 160 := by norm_num
+    have : 0 < 2 ^ 160 := by norm_num only
     omega
   have hAe := hA entries hwit
   refine registerPauser_wrapper_foreign (Φ := L2Post entries (Sevm.dataWord sevm 4))
@@ -206,7 +206,7 @@ theorem registerPauser_dispatch {sevm : Sevm} {pre post : Devm}
     obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
     obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_eq step
     obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
-    rcases ric_branchTo (by simp) (by rfl) run with ⟨_, G, run⟩ | ⟨hnz, _⟩
+    rcases ric_branchTo (by simp only [List.not_mem_nil, not_false_eq_true]) (by rfl) run with ⟨_, G, run⟩ | ⟨hnz, _⟩
     swap
     · exfalso; apply hnz; decide
     unfold t_00f4_c0 at run
@@ -214,7 +214,7 @@ theorem registerPauser_dispatch {sevm : Sevm} {pre post : Devm}
     obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
     obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_eq step
     obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
-    rcases ric_branchTo (by simp) (by rfl) run with ⟨_, G, run⟩ | ⟨hnz, _⟩
+    rcases ric_branchTo (by simp only [List.not_mem_nil, not_false_eq_true]) (by rfl) run with ⟨_, G, run⟩ | ⟨hnz, _⟩
     swap
     · exfalso; apply hnz; decide
     unfold t_00ff_c0 at run
@@ -222,7 +222,7 @@ theorem registerPauser_dispatch {sevm : Sevm} {pre post : Devm}
     obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
     obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_eq step
     obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
-    rcases ric_branchTo (by simp) (by rfl) run with ⟨_, G, run⟩ | ⟨hnz, _⟩
+    rcases ric_branchTo (by simp only [List.not_mem_nil, not_false_eq_true]) (by rfl) run with ⟨_, G, run⟩ | ⟨hnz, _⟩
     swap
     · exfalso; apply hnz; decide
     unfold t_010a_c0 at run
@@ -230,7 +230,7 @@ theorem registerPauser_dispatch {sevm : Sevm} {pre post : Devm}
     obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
     obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_eq step
     obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
-    rcases ric_branchTo (by simp) (by rfl) run with ⟨hz, _⟩ | ⟨_, G, run⟩
+    rcases ric_branchTo (by simp only [List.not_mem_nil, not_false_eq_true]) (by rfl) run with ⟨hz, _⟩ | ⟨_, G, run⟩
     · exfalso; revert hz; decide
     refine ⟨G, ?_⟩
     simpa only [registerPauser_selector_eq] using run.uncut

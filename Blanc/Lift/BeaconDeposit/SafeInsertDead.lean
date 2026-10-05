@@ -120,7 +120,7 @@ theorem safe_insertDead {sevm : Sevm} {b : Devm} {sz nd : B256} {R : List B256} 
     (n := 1024 + 96 * h) (f := 928 + 96 * h)
     (show prog[22]? = some (mcpyTree 0x10 0x25 0x0f 0xe8 22
       (mergeTree (shaCallTree 0x10 0x82 0x10 0x97 t_1079_c22 t_1093_c22 t_1097_c22))) from rfl)
-    (by simp) (by decide) hwf hr hs (by omega) (by omega) (by omega) (by omega) (by omega)
+    (by simp only [List.mem_cons, Nat.reduceEqDiff, List.not_mem_nil, or_self, not_false_eq_true]) (by decide) hwf hr hs (by omega) (by omega) (by omega) (by omega) (by omega)
     (by omega) hfp' hok1.nodeleg hok1.warm hok1.pre hok1.fork run
   -- t_1097_c22: the digest, `size / 2`, `h + 1` and the jump to the head
   have hF : (Nat.toB256 (928 + 96 * h + 96)).toNat = 928 + 96 * h + 96 :=
@@ -145,8 +145,9 @@ theorem safe_insertDead {sevm : Sevm} {b : Devm} {sz nd : B256} {R : List B256} 
     (by rw [show Bytes.toB256 [0x01] = Nat.toB256 1 by decide, toB256_add_toB256 (by omega),
       Nat.add_comm]) (ri_add s1)
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨Gf, hr⟩ := ric_jumpCut (by simp) run
-  refine ⟨b', M', Gf, Keep.of_sha hpost, ⟨hwf', by rw [hs']; omega, _, hr', ?_, by simp⟩, hr⟩
+  obtain ⟨Gf, hr⟩ := ric_jumpCut (by simp only [List.mem_cons, List.not_mem_nil, or_false]) run
+  refine ⟨b', M', Gf, Keep.of_sha hpost, ⟨hwf', by rw [hs']; omega, _, hr', ?_, by simp only [List.not_mem_nil,
+    IsEmpty.forall_iff, implies_true]⟩, hr⟩
   rw [shaImg_out (by omega), packImg_word64 (by omega)]
   congr 2
   omega

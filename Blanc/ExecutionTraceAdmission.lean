@@ -20,7 +20,7 @@ theorem RetainedXlot.frameAdmitted_iff_rawFrames
       ∀ root ∈ trace.rawFrames,
         root.sevm.currentTarget = ca → entry root.sevm root.devm := by
   cases trace with
-  | none => simp [RetainedXlot.FrameAdmitted, RetainedXlot.rawFrames]
+  | none => simp only [FrameAdmitted, rawFrames, List.not_mem_nil, IsEmpty.forall_iff, implies_true]
   | some run => rfl
 
 theorem ProcessMessageTrace.frameAdmitted_iff_rawFrames
@@ -73,7 +73,7 @@ theorem ApplyTransactionsTrace.frameAdmitted_iff_rawFrames
       ∀ root ∈ trace.rawFrames,
         root.sevm.currentTarget = ca → entry root.sevm root.devm := by
   induction trace with
-  | nil => simp [ApplyTransactionsTrace.FrameAdmitted, ApplyTransactionsTrace.rawFrames]
+  | nil => simp only [FrameAdmitted, rawFrames, List.not_mem_nil, IsEmpty.forall_iff, implies_true]
   | cons head tail ih =>
       simp only [ApplyTransactionsTrace.FrameAdmitted, ApplyTransactionsTrace.rawFrames,
         head.frameAdmitted_iff_rawFrames ca entry, ih,
@@ -139,7 +139,7 @@ theorem ConfiguredHistoryTrace.frameAdmitted_iff_rawFrames
       ∀ root ∈ trace.rawFrames,
         root.sevm.currentTarget = ca → entry root.sevm root.devm := by
   induction trace with
-  | refl => simp [ConfiguredHistoryTrace.FrameAdmitted, ConfiguredHistoryTrace.rawFrames]
+  | refl => simp only [FrameAdmitted, rawFrames, List.not_mem_nil, IsEmpty.forall_iff, implies_true]
   | step prior block ih =>
       simp only [ConfiguredHistoryTrace.FrameAdmitted, ConfiguredHistoryTrace.rawFrames,
         ih, block.frameAdmitted_iff_rawFrames ca entry, List.mem_append, or_imp, forall_and]

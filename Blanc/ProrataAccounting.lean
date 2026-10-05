@@ -14,7 +14,6 @@ open scoped BigOperators
 structure AccountingSnapshot where
   supply : Nat
   balance : Nat
-deriving DecidableEq
 
 /-- The four SF-frozen accounting classes. -/
 inductive ProrataAccountingKind where
@@ -32,7 +31,6 @@ structure ProrataAccountingProvenance where
   transactionIndex : Option Nat
   framePath : List Nat
   actor : Option Jaune.Adr
-deriving DecidableEq
 
 /-- The exact state equation and pricing fact for one accounting step. -/
 inductive ProrataAccountingEffect (o : Nat) :
@@ -228,7 +226,9 @@ theorem dust_telescope_of_step {n : Nat} {x d epsilon : Nat → Nat}
             (∏ j ∈ Finset.Icc (i + 2) n, d j) := by
   induction n with
   | zero =>
-      simp
+      simp only [Finset.range_zero, Finset.prod_empty, mul_one, Order.lt_one_iff,
+        Finset.Icc_eq_empty_of_lt, lt_add_iff_pos_left, add_pos_iff, Order.lt_two_iff, zero_le,
+        or_true, Finset.sum_empty, add_zero]
   | succ n ih =>
       have hprior : ∀ i < n,
           x (i + 1) * d i = x i * d (i + 1) + epsilon i := by
@@ -258,7 +258,8 @@ theorem dust_telescope_of_step {n : Nat} {x d epsilon : Nat → Nat}
         ac_rfl
       have hlastSuffix :
           (∏ j ∈ Finset.Icc (n + 2) (n + 1), d j) = 1 := by
-        simp
+        simp only [add_lt_add_iff_left, Order.lt_two_iff, Std.le_refl, Finset.Icc_eq_empty_of_lt,
+          Finset.prod_empty]
       rw [Finset.prod_range_succ]
       calc
         x (n + 1) * ((∏ j ∈ Finset.range n, d j) * d n) =
@@ -343,18 +344,7 @@ def first {o : Nat} (path : ProrataAccountingPath o) : AccountingSnapshot :=
 def last {o : Nat} (path : ProrataAccountingPath o) : AccountingSnapshot :=
   path.snapshot ⟨path.steps.length, Nat.lt_succ_self _⟩
 
-@[simp] theorem nil_first {o : Nat} (snapshot : AccountingSnapshot) :
-    (nil o snapshot).first = snapshot := rfl
-
-@[simp] theorem nil_last {o : Nat} (snapshot : AccountingSnapshot) :
-    (nil o snapshot).last = snapshot := rfl
-
-@[simp] theorem cons_first {o : Nat} (step : ProrataAccountingStep o)
-    (tail : ProrataAccountingPath o)
-    (connect : step.post = tail.first) :
-    (cons step tail connect).first = step.pre := rfl
-
-@[simp] theorem cons_last {o : Nat} (step : ProrataAccountingStep o)
+theorem cons_last {o : Nat} (step : ProrataAccountingStep o)
     (tail : ProrataAccountingPath o)
     (connect : step.post = tail.first) :
     (cons step tail connect).last = tail.last := by
@@ -400,7 +390,7 @@ theorem dust_exact_at {o : Nat} (path : ProrataAccountingPath o)
       path.snapshotAt i = path.snapshot index.castSucc := by
         apply congrArg path.snapshot
         apply Fin.ext
-        simp [index, Nat.min_eq_left (Nat.le_of_lt hi)]
+        simp only [Nat.min_eq_left (Nat.le_of_lt hi), Fin.castSucc_mk, index]
       _ = step.pre := by
         simpa only [step] using path.pre_eq index
   have hpost : path.snapshotAt (i + 1) = step.post := by
@@ -408,7 +398,8 @@ theorem dust_exact_at {o : Nat} (path : ProrataAccountingPath o)
       path.snapshotAt (i + 1) = path.snapshot index.succ := by
         apply congrArg path.snapshot
         apply Fin.ext
-        simp [index, Nat.min_eq_left (Nat.succ_le_iff.mpr hi)]
+        simp only [Nat.min_eq_left (Nat.succ_le_iff.mpr hi), Nat.succ_eq_add_one, Fin.succ_mk,
+          index]
       _ = step.post := by
         simpa only [step] using path.post_eq index
   have hstep := ProrataAccountingStep.dust_exact ho step

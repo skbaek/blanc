@@ -18,7 +18,8 @@ same set *term* under every covered fork (`Blanc/TransactionFork.lean`): the 18 
 intrinsic gas is 66,664 and the message runs with 15,976,536 gas.
 
 The pre-state, the block and the chain are `TxTop`'s.  The signature is a real one over the new
-signing hash, checked by the `#guard` below.
+signing hash, and that it recovers `E` is the kernel theorem
+`TxC.txC_recoveredSender` (`TxCRecover`).
 -/
 
 namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC
@@ -28,8 +29,8 @@ open Blanc.Lift.VyperNonreentrantDeployed Blanc.Lift.VyperNonreentrantDeployed.V
 open Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxTop
 
 /-- The signature `(r, s)` of `txC` under `E`'s key over `txC`'s signing hash (`v = 0`, low `s`),
-computed outside Lean; that it recovers `E` is checked by the `#guard` below (evaluation, not the
-kernel: `secp256k1.recover` is not kernel-reducible). -/
+computed outside Lean; that it recovers `E` is the kernel theorem `txC_recoveredSender`
+(`TxCRecover`). -/
 def sigRC : Bytes :=
   [2, 107, 40, 147, 207, 207, 8, 151, 9, 73, 250, 60, 167, 47, 209, 200, 79, 210, 155, 165, 218,
     222, 124, 138, 34, 120, 94, 94, 157, 67, 59, 42]
@@ -47,8 +48,6 @@ def accessListC : List (Adr × List B256) :=
 def txC : Tx :=
   { nonce := 0, gas := 16043200, value := 0, data := START, v := 0, r := sigRC, s := sigSC,
     type := .two (0 : UInt64) 0 0 (some a2Address) accessListC }
-
-#guard (recoverSender 0 txC).toOption == some eAddress
 
 /-- The gas the message runs with: the transaction's less the intrinsic 66,664 (21,000, the 64 of
 the four nonzero calldata bytes and the 2,400 of each of the access list's 19 addresses). -/
@@ -145,7 +144,7 @@ theorem e0C_keys : ∀ x, x ∈ e0C.dyna.accessedStorageKeys ↔ x ∈ ([] : Lis
   rw [he]
   show x ∈ msgC.accessedStorageKeys ↔ _
   rw [msgC_keys_empty]
-  simp
+  simp only [Std.HashSet.ofList_nil, Std.HashSet.not_mem_empty, List.not_mem_nil]
 
 theorem e0C_stor : ∀ a k, storOf e0C.dyna.state a k = storOf worldTx a k := by
   obtain ⟨benv, hb, he⟩ := e0C_meta

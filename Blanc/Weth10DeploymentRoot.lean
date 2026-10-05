@@ -272,16 +272,16 @@ theorem canonicalDeploymentSystemPrefix
   obtain ⟨outBeacon, hbeacon, _⟩ :=
     processUncheckedSystemTransaction_deploymentSystemProgram
       initial beaconRootsAddress cb.block.header.parentBeaconBlockRoot.toBytes
-      (by simpa [initial, initBenv] using hbase.beaconCode)
+      (by simpa only [initBenv, initial] using hbase.beaconCode)
       hbase.beacon_not_precompile
-      (by simpa [initial, initBenv, initBenvStat] using hfork)
+      (by simpa only [initBenv, initBenvStat, initial] using hfork)
   obtain ⟨lastHash, hlast⟩ := hbase.lastBlockHash
   obtain ⟨outHistory, hhistory, _⟩ :=
     processUncheckedSystemTransaction_deploymentSystemProgram
       (initial.withState base.state) historyStorageAddress lastHash.toBytes
-      (by simpa [initial, initBenv, Benv.withState] using hbase.historyCode)
+      (by simpa only [Benv.withState, initBenv, initial] using hbase.historyCode)
       hbase.history_not_precompile
-      (by simpa [initial, initBenv, initBenvStat, Benv.withState] using hfork)
+      (by simpa only [Benv.withState, initBenv, initBenvStat, initial] using hfork)
   refine ⟨⟨initial, {
     stBeacon := base.state
     outBeacon := outBeacon
@@ -295,8 +295,8 @@ theorem canonicalDeploymentSystemPrefix
     environment_eq := by rfl
     state_eq := by rfl
     createdAccounts_eq := by rfl }⟩⟩
-  · simpa [initial, initBenv, initBenvStat, Benv.withState] using hlast
-  · simpa [initial, Benv.withState] using hhistory
+  · simpa only [Benv.withState, initBenv, initBenvStat] using hlast
+  · simpa only [Benv.withState] using hhistory
 
 /-- Produce the real transaction input, transaction-local origin boundary,
 upfront nonce/fee debit, and the message returned by `prepareMessage`.
@@ -317,7 +317,7 @@ theorem prepareCanonicalDeploymentContext
   let fee := deploymentTx.gas *
     deploymentEffectiveGasPrice txInput deploymentTx
   have hbegun_state : begun.state = base.state := by
-    simpa [begun, Benv.beginTransaction] using hprefix.state_eq
+    simpa only [begun, Benv.beginTransaction] using hprefix.state_eq
   have hfee_le : fee ≤ (begun.state.bal sender).toNat := by
     rw [hbegun_state]
     have hprice : deploymentEffectiveGasPrice txInput deploymentTx =
@@ -325,7 +325,7 @@ theorem prepareCanonicalDeploymentContext
           (initBenv fork base cb.block.header) deploymentTx := by
       rw [hprefix.txInput_eq]
       rfl
-    simpa [fee, hprice] using henv.upfront_funded
+    simpa only [fee, hprice, ge_iff_le] using henv.upfront_funded
   have hfee_lt : fee < 2 ^ 256 :=
     hfee_le.trans_lt (B256.toNat_lt _)
   have hfeeEncoded : fee.toB256.toNat = fee :=
@@ -373,7 +373,7 @@ theorem prepareCanonicalDeploymentContext
   have hprepare : prepareMessage msgBenv tenv deploymentTx = .ok msg := by
     unfold prepareMessage
     rw [hreceiver]
-    simp [msg, msgBenv, currentTarget, hreceiver]
+    simp only [msg, msgBenv, currentTarget, hreceiver, Except.ok.injEq, Msg.mk.injEq, true_and]
     rfl
   have hdebit_nonce :
       debit.getNonce sender = base.state.getNonce sender + 1 := by
@@ -391,7 +391,7 @@ theorem prepareCanonicalDeploymentContext
     dsimp only [msg, currentTarget]
     change computeContractAddress sender (debit.getNonce sender - 1) = ca
     rw [hdebit_nonce]
-    simp
+    simp only [add_sub_cancel_right]
     exact hbase.target_eq.symm
   have htx_chain : txInput.stat.chainId = base.chainId := by
     rw [hprefix.txInput_eq]
@@ -404,8 +404,7 @@ theorem prepareCanonicalDeploymentContext
     rfl
   have hmsg_chain : msg.benv.stat.chainId = cfg.chainId := by
     dsimp only [msg, msgBenv, begun]
-    simpa [Benv.beginTransaction] using
-      htx_chain.trans hbase.chainId_eq.symm
+    simpa only [Benv.beginTransaction] using htx_chain.trans hbase.chainId_eq.symm
   have hmsg_rules : msg.benv.stat.rules = Fork.ruleSet fork := by
     change begun.stat.rules = Fork.ruleSet fork
     change txInput.stat.rules = Fork.ruleSet fork
@@ -424,12 +423,12 @@ theorem prepareCanonicalDeploymentContext
     dsimp only [msg, msgBenv]
     have hpre := hbase.target_noCodeOrNonce
     unfold accountHasCodeOrNonce at hpre ⊢
-    simpa [State.getNonce, State.getCode, hdebit_ca] using hpre
+    simpa only [State.getNonce, State.getCode, hdebit_ca, gt_iff_lt, Bool.or_eq_false_iff, decide_eq_false_iff_not, not_lt, UInt64.le_zero_iff, Bool.not_eq_eq_eq_not, Bool.not_false] using hpre
   have hnostor : accountHasStorage msg.benv.state ca = false := by
     dsimp only [msg, msgBenv]
     have hpre := hbase.target_noStorage
     unfold accountHasStorage at hpre ⊢
-    simpa [State.getStor, hdebit_ca] using hpre
+    simpa only [State.getStor, hdebit_ca, Bool.not_eq_eq_eq_not, Bool.not_false] using hpre
   exact ⟨{
     txInput := txInput
     begun := begun
@@ -438,12 +437,12 @@ theorem prepareCanonicalDeploymentContext
     msg := msg
     systemPrefix := hprefix
     begun_eq := rfl
-    debit_eq := by simpa [fee] using hdebit
+    debit_eq := by simpa only [fee] using hdebit
     tenv_eq := rfl
     prepare_eq := hprepare
     msg_benv_eq := rfl
     msg_caller_eq := rfl
-    msg_target_eq := by simpa [msg] using hreceiver
+    msg_target_eq := by simpa only [msg] using hreceiver
     msg_gas_eq := rfl
     msg_value_eq := by
       rw [show msg.value = deploymentTx.value.toB256 from rfl,
@@ -460,7 +459,7 @@ theorem prepareCanonicalDeploymentContext
     msg_fork_eq := hmsg_fork
     msg_chainId_eq := hmsg_chain
     target_eq := htarget
-    params_eq := by simp [hmsg_chain, htarget]
+    params_eq := by simp only [hmsg_chain, htarget]
     noCodeOrNonce := hnocode
     noStorage := hnostor
   }⟩
@@ -544,7 +543,7 @@ theorem canonicalDeploymentMessage_succeeds
   subst stablePost
   have hstable' :
       Stable (freshDeployParams cfg.chainId.toB256 ca) ca post.state := by
-    simpa [ctx.msg_chainId_eq, ctx.target_eq] using hstable
+    simpa only [ctx.msg_chainId_eq, ctx.target_eq] using hstable
   rcases of_processCreateMessage ctx.msg (.ok post) hcreate with
     ⟨xl, hfilled, hcreateRel⟩
   have hcodeRel : Xlot.Rel Devm.CodePreserve xl :=
@@ -574,7 +573,7 @@ theorem canonicalDeploymentMessage_succeeds
       apply Prog.compile_ne_nil (p := deploymentSystemProgram)
       rw [← hbaseCode, hempty]
     have hne' : a ≠ ctx.msg.currentTarget := by
-      simpa [ctx.target_eq] using hne
+      simpa only [ctx.target_eq, ne_eq] using hne
     have hc := hcreateCode a hne' hnonempty
     change post.state.getCode a = ctx.msg.benv.state.getCode a at hc
     rw [hinputCode] at hc
@@ -609,21 +608,22 @@ theorem canonicalDeploymentMessage_succeeds
     unfold processMessageCall.create
     simp only [if_true]
     rw [ctx.target_eq]
-    simp [ctx.noCodeOrNonce, ctx.noStorage, Except.bimap, hcreate, herr,
+    simp only [ctx.noCodeOrNonce, ctx.noStorage, Bool.or_self, Bool.false_eq_true, ↓reduceIte,
+      Except.bimap, hcreate, id_eq, Option.isNone_iff_eq_none, Except.bind_ok, Nat.cast_zero, herr,
       htoNat, out]
     rw [hmsgStateGas]
     rfl
   refine ⟨post.state, out, hrun, hstable', ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
     ?_, hwithdrawalCode, hconsolidationCode⟩
-  · simpa [ctx.target_eq, ctx.msg_chainId_eq] using hstable'.code
-  · simpa [ctx.target_eq] using hempty
-  · simpa [ctx.target_eq] using hinv
-  · simpa [out] using hlogs
-  · simpa [out, ctx.target_eq, ctx.msg_chainId_eq] using houtput
-  · simpa [out] using hleft
-  · simpa [out] using herr
+  · simpa only using hstable'.code
+  · simpa only [ctx.target_eq] using hempty
+  · simpa only [ctx.target_eq] using hinv
+  · simpa only using hlogs
+  · simpa only [ctx.msg_chainId_eq, ctx.target_eq] using houtput
+  · simpa only using hleft
+  · simpa only using herr
   · rfl
-  · simpa [out] using hdelete
+  · simpa only using hdelete
 
 structure CanonicalDeploymentTransactionResult
     (cfg : ChainConfig) (fork : Fork) (ca : Adr)
@@ -694,7 +694,7 @@ theorem canonicalDeploymentTransaction_succeeds
           (deploymentTxPreludeBout .init deploymentTx 0) deploymentTx =
         .ok (sender, deploymentEffectiveGasPrice ctx.txInput deploymentTx,
           [], 0) := by
-    simpa [ctx.systemPrefix.environment_eq, hprice] using henv.checked
+    simpa only [ctx.systemPrefix.environment_eq, hprice] using henv.checked
   have hdebit := ctx.debit_eq
   rw [ctx.begun_eq] at hdebit
   simp only [Benv.beginTransaction] at hdebit
@@ -708,7 +708,8 @@ theorem canonicalDeploymentTransaction_succeeds
   have hintrinsic :
       calculateIntrinsicCost (Fork.ruleSet fork) deploymentTx 0 =
         calculateIntrinsicCost (Fork.ruleSet fork) deploymentTx sender := by
-    simp [calculateIntrinsicCost, htype, hforkStateGas]
+    simp only [calculateIntrinsicCost, htype, hforkStateGas, Option.isNone_iff_eq_none,
+      List.map_nil, List.sum_nil, add_zero]
   have hprepare := ctx.prepare_eq
   rw [ctx.begun_eq, ctx.tenv_eq] at hprepare
   have hrun : processTransaction ctx.txInput .init deploymentTx 0 =
@@ -761,11 +762,11 @@ theorem canonicalDeploymentTransaction_succeeds
           messageOut.gasLeft messageOut.stateGasLeft messageOut.refundCounter.toNat
           messageOut.stateGasUsed =
           ⟨usedGas, deploymentTx.gas - usedGas, usedGas, 0⟩ := by
-      simp [settleTransactionGas, hforkStateGas, usedGas,
-        deploymentUsedGasFromMessage, Blanc.deploymentUsedGasFromMessage,
-        Blanc.deploymentCalldataFloorGas]
+      simp only [settleTransactionGas, hforkStateGas, deploymentUsedGasFromMessage,
+        Blanc.deploymentUsedGasFromMessage, Blanc.deploymentCalldataFloorGas,
+        TransactionGasSettlement.mk.injEq, and_true, usedGas]
       rw [htxRules]
-      simp
+      simp only [and_self]
     rw [hsettlement]
     simp only [BlockOutput.withGasSettlement, hforkBalNone, List.foldl_nil,
       Nat.add_zero]
@@ -797,19 +798,16 @@ theorem canonicalDeploymentTransaction_succeeds
     exact hmessage.emptyStorage
   have hblockLogs : bout.blockLogs = [] := by
     dsimp only [bout, deploymentFinalBout, Blanc.deploymentFinalBout]
-    simp [Blanc.deploymentTxPreludeBout,
-      ExecutionTrace.transactionPreludeBout,
-      hmessage.logs, BlockOutput.init]
+    simp only [Blanc.deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout,
+      BlockOutput.init, Std.TreeMap.empty_eq_emptyc, hmessage.logs, List.append_nil]
   have hrequests : bout.requests = [] := by
     dsimp only [bout, deploymentFinalBout, Blanc.deploymentFinalBout]
-    simp [Blanc.deploymentTxPreludeBout,
-      ExecutionTrace.transactionPreludeBout,
-      BlockOutput.init]
+    simp only [Blanc.deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout,
+      BlockOutput.init, Std.TreeMap.empty_eq_emptyc]
   have hblockAccessList : bout.blockAccessList = [] := by
     dsimp only [bout, deploymentFinalBout, Blanc.deploymentFinalBout]
-    simp [Blanc.deploymentTxPreludeBout,
-      ExecutionTrace.transactionPreludeBout,
-      BlockOutput.init]
+    simp only [Blanc.deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout,
+      BlockOutput.init, Std.TreeMap.empty_eq_emptyc]
   have hwithdrawalCode :
       some (post.getCode withdrawalRequestPredeployAddress).toList =
         Prog.compile deploymentSystemProgram := by
@@ -849,13 +847,13 @@ theorem canonicalDeploymentTransaction_succeeds
     unfold parseDepositRequests
     have hkeys : bout.receiptKeys = [deploymentReceiptKey 0] := by
       dsimp only [bout, deploymentFinalBout, Blanc.deploymentFinalBout]
-      simp [Blanc.deploymentTxPreludeBout,
-        ExecutionTrace.transactionPreludeBout, deploymentReceiptKey,
-        BlockOutput.init]
+      simp only [Blanc.deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout,
+        BlockOutput.init, Std.TreeMap.empty_eq_emptyc, List.nil_append, deploymentReceiptKey]
     rw [hkeys]
     have hentry' := hentry
     change bout.receiptsTrie[deploymentReceiptKey 0]? = _ at hentry'
-    simp
+    simp only [bind_pure_comp, List.forIn_cons, List.forIn_nil, bind_assoc, bind_map_left,
+      bind_pure]
     rw [hentry']
     unfold makeReceipt
     rw [htype, hmessage.logs]
@@ -864,7 +862,7 @@ theorem canonicalDeploymentTransaction_succeeds
       (Std.TreeMap.get? bout.receiptsTrie (deploymentReceiptKey 0)).map
         (fun entry => entry.2.succeeded) = some true := by
     rw [hentry]
-    simp [makeReceipt, hmessage.error]
+    simp only [makeReceipt, Fin.isValue, hmessage.error, Option.isNone_none, Option.map_some]
   exact ⟨post, bout, hrun, hstable, hcode, hstor, hblockLogs, hrequests,
     hblockAccessList, hdeposit, hwithdrawalCode, hconsolidationCode, hreceipt⟩
 
@@ -914,7 +912,7 @@ theorem canonicalDeploymentSuffix_succeeds
     exact hfork
   have hpostPostFork :
       CoveredFork ((ctx.txInput.withState post).withState post).stat.fork := by
-    simpa [Benv.withState] using hpostFork
+    simpa only [Benv.withState] using hpostFork
   have hrequests : (ctx.txInput.withState post).stat.rules.requests =
       [(1, withdrawalRequestPredeployAddress),
        (2, consolidationRequestPredeployAddress)] := by
@@ -923,7 +921,7 @@ theorem canonicalDeploymentSuffix_succeeds
   obtain ⟨withdrawalOut, hwithdrawal, _, _, _, _, hwithdrawalReturn⟩ :=
     processCheckedSystemTransaction_deploymentSystemProgram
       (ctx.txInput.withState post) withdrawalRequestPredeployAddress []
-      (by simpa [Benv.withState] using htx.withdrawalRequestCode)
+      (by simpa only [Benv.withState] using htx.withdrawalRequestCode)
       (by
         rw [ctx.systemPrefix.environment_eq]
         exact hbase.withdrawalRequest_not_precompile)
@@ -933,7 +931,7 @@ theorem canonicalDeploymentSuffix_succeeds
     processCheckedSystemTransaction_deploymentSystemProgram
       ((ctx.txInput.withState post).withState post)
       consolidationRequestPredeployAddress []
-      (by simpa [Benv.withState] using htx.consolidationRequestCode)
+      (by simpa only [Benv.withState] using htx.consolidationRequestCode)
       (by
         rw [ctx.systemPrefix.environment_eq]
         exact hbase.consolidationRequest_not_precompile)
@@ -941,17 +939,18 @@ theorem canonicalDeploymentSuffix_succeeds
   have hwithdrawal' :
       processCheckedSystemTransaction (ctx.txInput.withState post)
         withdrawalRequestPredeployAddress [] = .ok (post, withdrawalOut) := by
-    simpa [Benv.withState] using hwithdrawal
+    simpa only [Benv.withState] using hwithdrawal
   have hbalNone : ctx.txInput.stat.rules.bal = none := by
-    simpa [Benv.withState] using hpostFork.rules_bal_none
+    simpa only [Benv.withState] using hpostFork.rules_bal_none
   have hrun : processGeneralPurposeRequests
       (ctx.txInput.withState post) bout = .ok (post, bout) := by
     unfold processGeneralPurposeRequests processGeneralPurposeRequestsAt
     rw [htx.depositRequests]
     rw [hrequests]
-    simp [runRequestContracts, hwithdrawal', hconsolidation,
-      hwithdrawalReturn, hconsolidationReturn, htx.requests,
-      hbalNone]
+    simp only [runRequestContracts, hwithdrawal', gt_iff_lt, htx.requests, List.nil_append,
+      List.cons_append, Benv.withState_stat, hbalNone, Except.bind_ok, hconsolidation,
+      hwithdrawalReturn, List.length_nil, lt_self_iff_false, ↓reduceIte, hconsolidationReturn,
+      Except.ok.injEq, Prod.mk.injEq]
     constructor
     · rfl
     · rw [← htx.requests]
@@ -960,7 +959,7 @@ theorem canonicalDeploymentSuffix_succeeds
     rw [show (ctx.txInput.withState post).createdAccounts =
       ctx.txInput.createdAccounts by rfl,
       ctx.systemPrefix.createdAccounts_eq]
-    simp
+    simp only [Std.HashSet.not_mem_emptyWithCapacity, not_false_eq_true]
   have hbackedInput :
       (backedSpec weth10
         (freshDeployParams cfg.chainId.toB256 ca)).BenvInv ca
@@ -1016,7 +1015,7 @@ theorem canonicalDeploymentApplyBody_succeeds
         ctx.systemPrefix.stHistory
         (historyStorageAddress :: ctx.systemPrefix.outHistory.accountReads.toList)
         ctx.systemPrefix.outHistory.storageReads.toList = (BlockOutput.init : BlockOutput).bal := by
-    simp [BalBuilder.incorporateSystem, hbalNone]
+    simp only [BalBuilder.incorporateSystem, hbalNone, Std.TreeMap.empty_eq_emptyc]
     change ({} : BalBuilder) = ({} : BalBuilder)
     rfl
   unfold applyBody
@@ -1129,7 +1128,7 @@ theorem canonicalDeploymentStep_establishes_root
     rw [stateTransitionUsing_eq_of_chainId_eq
       (cfg := cfg) (ch := base) hbase.chainId_eq] at h
     rw [henv.forkAt] at h
-    simpa [Except.mapError, Bind.bind, Except.bind] using h
+    simpa only [Except.bind, Except.mapError] using h
   have hstate : post = deployed.state := by
     have hinvert := hwith
     rw [stateTransitionAt_eq_ok_iff, stateTransitionE] at hinvert

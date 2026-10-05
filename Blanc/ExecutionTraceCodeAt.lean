@@ -36,7 +36,8 @@ theorem RetainedXlot.codeAt_of_runFrame
     Xlot.InvAt a slot ∧
       ∀ root ∈ retained.rawFrames, root.devm.getCode a = frame.inner.benv.state.getCode a := by
   cases retained with
-  | none => exact ⟨trivial, fun root member => by simp [RetainedXlot.rawFrames] at member⟩
+  | none => exact ⟨trivial, fun root member => by simp only [rawFrames,
+    List.not_mem_nil] at member⟩
   | @some pc sevm pre execution run =>
       obtain ⟨henter, _⟩ := RunFrame.some_inv hrun
       have hstat := Frame.enter_run_benvStat henter
@@ -117,9 +118,9 @@ private theorem setDelegation_getCode
     ⟨⟨loopMsg, loopRefund⟩, loop, rest⟩
   have code := setDelegationLoop_getCode hauth loop
   cases codeAddress : loopMsg.codeAddress with
-  | none => simp [codeAddress] at rest
+  | none => simp only [codeAddress, Except.bind_error, reduceCtorEq] at rest
   | some address =>
-      simp [codeAddress] at rest
+      simp only [codeAddress, Except.bind_ok, Except.ok.injEq, Prod.mk.injEq] at rest
       rcases rest with ⟨rfl, rfl⟩
       exact code
 
@@ -178,8 +179,8 @@ theorem ProcessCreateMessageTrace.codeAt
       have hne : a ≠ msg.currentTarget := by
         intro h
         have hself := avoid ⟨pc, sevm, pre, execution, run⟩
-          (by simp [ProcessCreateMessageTrace.rawFrames, RetainedXlot.rawFrames,
-            Exec.rawFrameRoots])
+          (by simp only [rawFrames, RetainedXlot.rawFrames, Exec.rawFrameRoots, List.mem_cons,
+            true_or])
         have hcode : sevm.codeAddress = none := by
           obtain ⟨benv, -, hevm⟩ := Frame.enter_run_inv henter
           have := congrArg (fun e : Evm => e.sta.codeAddress) hevm
@@ -202,7 +203,7 @@ theorem MessageCallTrace.codeAt
       ∀ root ∈ trace.rawFrames, root.devm.getCode a = msg.benv.state.getCode a := by
   cases trace with
   | createCollision target collision result =>
-      refine ⟨?_, fun root member => by simp [MessageCallTrace.rawFrames] at member⟩
+      refine ⟨?_, fun root member => by simp only [rawFrames, List.not_mem_nil] at member⟩
       rw [processMessageCall_createCollision_state_eq target collision result hfork]
   | createRun target collision evm core coreTrace result =>
       obtain ⟨hpost, hroots⟩ := coreTrace.codeAt hfork (hca target) avoid
@@ -252,7 +253,7 @@ theorem prepareMessage_fields {benv : Benv} {tenv : Tenv} {tx : Tx} {msg : Msg}
     obtain rfl := Except.ok.inj h
     refine ⟨rfl, ?_⟩
     intro hnone
-    simp_all
+    simp_all only [Option.isNone_iff_eq_none, Prod.mk.injEq, List.nil_eq]
 
 /-- **A transaction keeps the code at `a`, and so does every frame it enters**, when no frame it
 enters targets `a` and none of its authorizations recovers to `a`.  A transaction that starts
@@ -285,7 +286,7 @@ theorem TransactionTrace.codeAt_empty
   have hmsgAuth : ∀ auth ∈ trace.msg.tenv.stat.auths, ∀ authority,
       recoverAuthority auth = .ok authority → authority ≠ a := by
     rw [htenv]
-    simpa [transactionTenv] using hauth
+    simpa only [transactionTenv, Std.TreeMap.empty_eq_emptyc, ne_eq] using hauth
   obtain ⟨hpost, hroots⟩ := trace.message.codeAt hmsgFork hca hmsgAuth avoid
   refine ⟨fun root member => (hroots root member).trans hmsgState, ?_⟩
   obtain ⟨refundCounter, -, hfinal⟩ := trace.exists_finalStateForm hfork
@@ -307,7 +308,7 @@ theorem ApplyTransactionsTrace.codeAt_empty
     (∀ root ∈ trace.rawFrames, root.devm.getCode a = ByteArray.empty) ∧
       finalBenv.state.getCode a = ByteArray.empty := by
   induction trace with
-  | nil => exact ⟨fun root member => by simp [ApplyTransactionsTrace.rawFrames] at member,
+  | nil => exact ⟨fun root member => by simp only [rawFrames, List.not_mem_nil] at member,
       hempty⟩
   | @cons index tx txs benv bout txState txBout finalBenv finalBout head tail ih =>
       obtain ⟨hroots, hstate⟩ := head.codeAt_empty hfork
@@ -342,12 +343,13 @@ theorem SystemMessageTrace.codeAt
   have hca : (systemTransactionMessage benv target data).target.isNone = true →
       (systemTransactionMessage benv target data).codeAddress = none := by
     intro h
-    simp [systemTransactionMessage, processSystemTransactionMsg] at h
+    simp only [systemTransactionMessage, processSystemTransactionMsg, Option.isNone_some,
+      Bool.false_eq_true] at h
   have hauth : ∀ auth ∈ (systemTransactionMessage benv target data).tenv.stat.auths,
       ∀ authority, recoverAuthority auth = .ok authority → authority ≠ a := by
     intro auth hauth
-    simp [systemTransactionMessage, processSystemTransactionMsg,
-      processSystemTransactionTenv] at hauth
+    simp only [systemTransactionMessage, processSystemTransactionMsg, processSystemTransactionTenv,
+      Std.TreeMap.empty_eq_emptyc, List.not_mem_nil] at hauth
   exact trace.message.codeAt hmsgFork hca hauth avoid
 
 theorem processWithdrawalsState_getCode (st : State) (wds : List Withdrawal) (a : Adr) :
@@ -478,7 +480,7 @@ theorem ConfiguredHistoryTrace.codeAt_empty
     (∀ root ∈ trace.txRawFrames, root.devm.getCode a = ByteArray.empty) ∧
       future.state.getCode a = ByteArray.empty := by
   induction trace with
-  | refl => exact ⟨fun root member => by simp [ConfiguredHistoryTrace.txRawFrames] at member,
+  | refl => exact ⟨fun root member => by simp only [txRawFrames, List.not_mem_nil] at member,
       hempty⟩
   | step prior block ih =>
       obtain ⟨hroots, hstate⟩ := ih hauth.1

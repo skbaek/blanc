@@ -140,8 +140,9 @@ private theorem initExecutionGasFormula_eq
   subst runtimeLength
   subst chainWords
   subst domainWords
-  simp [gBase, gVerylow, gHigh, gJumpdest, gasCopy, gMemory,
-    calculateMemoryGasCost, gKeccak256, gasKeccak256Word, ceilDiv]
+  simp only [gBase, gVerylow, Nat.reduceAdd, gHigh, gJumpdest, gasCopy, ceilDiv, Nat.reduceDiv,
+    Nat.reduceMod, OfNat.ofNat_ne_zero, ↓reduceIte, Nat.reduceMul, calculateMemoryGasCost, gMemory,
+    add_zero, Nat.reducePow, Nat.reduceSub, gKeccak256, gasKeccak256Word]
 
 theorem weth10InitExecutionGasAccounting_eq :
     weth10InitExecutionGasAccounting = 1471 := by
@@ -195,13 +196,8 @@ private theorem weth10CreateMessageGas_sub_certificate
       (g - 1471) - 1262600 = g - 1264071 := by
   constructor
   · apply Nat.le_sub_of_add_le
-    simpa using h
-  · simpa using (Nat.sub_sub g 1471 1262600)
-
-/-- Closed core charged by an internal `CREATE`, excluding the caller's
-memory-extension term and the instructions used to place initcode in memory. -/
-def weth10CreateOpcodeCoreGasAccounting : Nat :=
-  gasCreate + weth10Eip3860InitCodeGas + weth10CreateMessageGasAccounting
+    simpa only [Nat.reduceAdd] using h
+  · simpa only [Nat.reduceAdd] using (Nat.sub_sub g 1471 1262600)
 
 /-- Exact closed accounting expression for a zero-access-list top-level
 creation transaction followed by the successful direct creation-message path. -/
@@ -372,7 +368,10 @@ private theorem chargeCodeGas_weth10_output
   have hlen : (weth10Code dp).length = 6313 :=
     weth10Code_length dp
   rw [processCreateMessage.chargeCodeGas_legacy_eq_ok h_legacy
-    (by rw [h_output, hcons]; simp <;> decide) (by rw [h_output, hlen]; exact h_gas)
+    (by
+      rw [h_output, hcons]
+      change (some (91 : UInt8) : Option UInt8) ≠ some 239
+      decide) (by rw [h_output, hlen]; exact h_gas)
     (by rw [h_output, hlen]; exact h_max), h_output, hlen]
   rfl
 
@@ -757,7 +756,7 @@ theorem freshDeployment_staticCertificate
     weth10TopLevelDeploymentGasAccounting_le_bound,
     weth10TopLevelDeploymentGasBound_eq⟩
   intro msg h_target
-  simpa [h_target] using processCreateMessage_msg_weth10Inv msg
+  simpa only [h_target] using processCreateMessage_msg_weth10Inv msg
 
 end Weth10
 

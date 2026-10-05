@@ -52,11 +52,6 @@ def controlPauseCalldata (duration : B256) : Bytes :=
 def controlQueryCalldata : Bytes :=
   abiSelectorBytes selIsPaused
 
-def controlPausedUntil (_target : Adr) (stor : Stor) : B256 :=
-  stor.get resumeSinceSlot
-
-def controlProtectedSurface : List B256 :=
-  [selTriggerFullWithdrawals]
 
 /-! ## Installed role and program world -/
 

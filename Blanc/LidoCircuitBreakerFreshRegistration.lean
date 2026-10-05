@@ -37,9 +37,9 @@ private theorem temporalSloadBase_preserves_cold
   split
   · exact h
   · rcases base with ⟨mach, mt, world⟩
-    simpa [addAccessedStorageKey, liftMachMetaPure,
-      Meta.addAccessedStorageKey, Devm.accessedStorageKeys] using
-      And.intro hne h
+    simpa only [Devm.accessedStorageKeys, addAccessedStorageKey, liftMachMetaPure,
+      Meta.addAccessedStorageKey, Std.HashSet.mem_insert, beq_iff_eq, Prod.mk.injEq, true_and,
+      not_or, ne_eq] using And.intro hne h
 
 /-- The fresh/nonzero model branch determines the exact five-write source
 trace and its refined Registry witness.  This is the semantic target used by
@@ -75,9 +75,8 @@ theorem freshRegistration_sourceTrace_witness
     { postEntries := entries ++ [(target, newPauser)]
       writes := writes }
   refine ⟨trace, ?_, rfl, rfl, ?_⟩
-  · simp [trace, writes, setPauserSourceTrace, setPauser,
-      htarget.1, hfind, hnew.1, setPauserSourceWrites,
-      Option.getD]
+  · simp only [setPauserSourceTrace, setPauser, htarget.1, ↓reduceIte, hfind, hnew.1, Option.getD,
+    setPauserSourceWrites, List.cons_append, List.nil_append, trace, writes]
   · dsimp only [trace, writes]
     exact hw.applyFreshWrites htarget hnew hfind
 
@@ -132,7 +131,8 @@ private theorem registerAfterSet_freshNonzero_runCompiled
     rw [Mem.Reads.read hreads]
     exact hprevious
   have hstoreCost : sstoreValueCost 0 0 expiry = gasStorageSet := by
-    simp [sstoreValueCost, gasStorageSet]
+    simp only [sstoreValueCost, ne_eq, true_and, ↓reduceIte, gasStorageSet, ite_not,
+      ite_eq_right_iff]
     intro h
     exact False.elim (hexpiryNonzero h.symm)
   have hstipend : gCallStipend < G + 1395 + gasStorageSet := by
@@ -141,7 +141,7 @@ private theorem registerAfterSet_freshNonzero_runCompiled
     omega
   have htail := registerAfterSet_nonzeroNewPauserTail_runCompiled (hfork := hfork) fs sevm base
     M img newPauser timestamp interval expiry 0 0 [carry] gasStorageSet G
-    (by simp) hwf hreads hnew hnewNonzero hsize halign htime hinterval
+    (by simp only [List.length_cons, List.length_nil, zero_add, Std.le_refl]) hwf hreads hnew hnewNonzero hsize halign htime hinterval
     hintervalCold hexpiry hexpiryOrig hwarmExpiry hstoreCost hstipend hstatic
     hextension
   have hrun : Func.RunCompiled fs sevm
@@ -156,8 +156,8 @@ private theorem registerAfterSet_freshNonzero_runCompiled
     func_run (4) [3, 1]
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign hpreviousCovered]
-      norm_num [gVerylow]
-    case h_val => simp [hpreviousValue, B256.eqCheck]
+      norm_num only [gVerylow]
+    case h_val => simp only [B256.eqCheck, hpreviousValue, ↓reduceIte]
     case h_arm =>
       rw [hpreviousMemory]
       have hg : G + 23592 - 23 = G + 3569 + gasStorageSet := by
@@ -252,7 +252,8 @@ private theorem finishSetPauser_freshNonzero_runCompiled
       hexpiryNonzero with ⟨post, hregister, hgas, hstore, hlogs⟩
   refine ⟨post, ?_, hgas, hstore, ?_⟩
   · have h := finishSetPauser_registerAfterSet_runCompiled dp sevm base M img
-      target 0 newPauser [carry] (G + 23592) post (by simp)
+      target 0 newPauser [carry] (G + 23592) post (by simp only [List.length_cons, List.length_nil,
+        zero_add, Std.le_refl])
       hreads htarget hprevious hnew hcontinuation hsize halign hstatic
       hregister
     have hg : G + 23592 + 1935 = G + 25527 := by omega
@@ -260,7 +261,7 @@ private theorem finishSetPauser_freshNonzero_runCompiled
     exact h
   · have heventLogs : eventBase.logs = base.logs ++ [eventLog] := rfl
     rw [heventLogs] at hlogs
-    simpa [eventLog, List.append_assoc] using hlogs
+    simpa only [List.append_assoc, List.cons_append, List.nil_append] using hlogs
 
 private theorem afterOldPauser_freshNonzero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
@@ -321,10 +322,10 @@ private theorem afterOldPauser_freshNonzero_runCompiled
     simpa only [countKey, countSlot, heartbeatIntervalSlot] using
       slot_ne_of_region_ne
         (leftRegion := countRegion) (rightRegion := configRegion)
-        (by norm_num [countRegion]) (by norm_num [configRegion])
+        (by norm_num only [countRegion]) (by norm_num only [configRegion])
         (canonicalAddress_payload_lt hnewValid.2)
-        (by change (1 : Nat) < 2 ^ 252; norm_num)
-        (by norm_num [countRegion, configRegion])
+        (by change (1 : Nat) < 2 ^ 252; norm_num only)
+        (by norm_num only [countRegion, configRegion])
   have hcountExpiry : countKey ≠ expirySlot newPauser := by
     exact Ne.symm
       (expirySlot_ne_registryAddressFamilies hnewValid.2 hnewValid.2
@@ -366,9 +367,9 @@ private theorem afterOldPauser_freshNonzero_runCompiled
   refine ⟨post, ?_, hgas, hstoreExpiry, ?_⟩
   · have h := afterOldPauser_finishSetPauser_runCompiled (hfork := hfork) dp sevm base M img
       newPauser count nextCount countOriginal [carry] countCost (G + 25527)
-      post (by simp) hreads hnew hnewValid.1 (by omega) halign hcount
+      post (by simp only [List.length_cons, List.length_nil, zero_add, Std.le_refl]) hreads hnew hnewValid.1 (by omega) halign hcount
       hcountOrig hcountNext hcountCost
-      (by norm_num [gCallStipend]; omega) hstatic hfinish
+      (by norm_num only [gCallStipend]; omega) hstatic hfinish
     have hg : G + 25527 + 64 +
         temporalSloadCost sevm base (countSlot newPauser) + countCost =
         G + 25591 +
@@ -486,10 +487,10 @@ private theorem appendTarget_freshNonzero_runCompiled
       slot_ne_of_region_ne
         (leftRegion := arrayRegion) (rightRegion := configRegion)
         (left := (0 : B256)) (right := (1 : B256))
-        (by norm_num [arrayRegion]) (by norm_num [configRegion])
-        (by change (0 : Nat) < 2 ^ 252; norm_num)
-        (by change (1 : Nat) < 2 ^ 252; norm_num)
-        (by norm_num [arrayRegion, configRegion])
+        (by norm_num only [arrayRegion]) (by norm_num only [configRegion])
+        (by change (0 : Nat) < 2 ^ 252; norm_num only)
+        (by change (1 : Nat) < 2 ^ 252; norm_num only)
+        (by norm_num only [arrayRegion, configRegion])
   have pairNe {left right : B256} (h : left ≠ right) :
       (sevm.currentTarget, left) ≠ (sevm.currentTarget, right) := by
     intro hp
@@ -559,19 +560,19 @@ private theorem appendTarget_freshNonzero_runCompiled
           slot_ne_of_region_ne
           (leftRegion := configRegion) (rightRegion := indexRegion)
           (left := (1 : B256)) (right := target)
-          (by norm_num [configRegion]) (by norm_num [indexRegion])
-          (by change (1 : Nat) < 2 ^ 252; norm_num)
+          (by norm_num only [configRegion]) (by norm_num only [indexRegion])
+          (by change (1 : Nat) < 2 ^ 252; norm_num only)
           (canonicalAddress_payload_lt htargetValid.2)
-          (by norm_num [configRegion, indexRegion])))]
+          (by norm_num only [configRegion, indexRegion])))]
     rw [temporalSstorePost_other sevm lengthBase arrayKey target
       sevm.currentTarget heartbeatIntervalSlot (pairNe (by
         simpa only [heartbeatIntervalSlot, arrayKey, arrayEntrySlot] using
           slot_ne_of_region_ne
           (leftRegion := configRegion) (rightRegion := arrayRegion)
           (left := (1 : B256)) (right := next)
-          (by norm_num [configRegion]) (by norm_num [arrayRegion])
-          (by change (1 : Nat) < 2 ^ 252; norm_num) hnextBound
-          (by norm_num [configRegion, arrayRegion])))]
+          (by norm_num only [configRegion]) (by norm_num only [arrayRegion])
+          (by change (1 : Nat) < 2 ^ 252; norm_num only) hnextBound
+          (by norm_num only [configRegion, arrayRegion])))]
     rw [temporalSloadBase_getStorVal]
     exact hinterval
   have hintervalColdPost : (sevm.currentTarget, heartbeatIntervalSlot) ∉
@@ -653,7 +654,9 @@ private theorem appendTarget_freshNonzero_runCompiled
     ⟨post, hafter, hgas, hstoreExpiry, hlogs⟩
   let fs := (runtime dp).main :: (runtime dp).aux
   have hafterLookup : fs[afterOldPauserSlot]? = some afterOldPauser := by
-    simp [fs, runtime, aux, afterOldPauserSlot]
+    simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      afterOldPauserSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero, fs]
   have hafterCall : Func.RunCompiled fs sevm
       (lengthPost.setMach ⟨[next], M', afterGas + 12, lengthPost.stateGas⟩)
       (.call afterOldPauserSlot) post := by
@@ -666,7 +669,7 @@ private theorem appendTarget_freshNonzero_runCompiled
           (devm := lengthPost.setMach ⟨[next], M', afterGas + 12, lengthPost.stateGas⟩)
           (cost := gVerylow + gMid + gJumpdest) (G := afterGas)
           (by simp only [Devm.gasLeft_setMach];
-              norm_num [gVerylow, gMid, gJumpdest]))
+              norm_num only [gVerylow, gMid, gJumpdest]))
     · exact hafter
   have hstoreLength : Func.RunCompiled fs sevm
       (indexPost.setMach ⟨[arrayLengthSlot, next, next], M',
@@ -674,7 +677,7 @@ private theorem appendTarget_freshNonzero_runCompiled
       (Ninst.sstore ::: .call afterOldPauserSlot) post := by
     exact Func.RunCompiled.next
       (temporal_sstore_runCompiled (hfork := hfork) hlengthIndex hlengthOrig hlengthCost
-        hwarmLengthIndex (by norm_num [gCallStipend]; omega) hstatic)
+        hwarmLengthIndex (by norm_num only [gCallStipend]; omega) hstatic)
       hafterCall
   have hlengthTail : Func.RunCompiled fs sevm
       (indexPost.setMach ⟨[next], M', afterGas + 21 + lengthCost, indexPost.stateGas⟩)
@@ -683,7 +686,7 @@ private theorem appendTarget_freshNonzero_runCompiled
     func_run (3) [3]
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign' harrayLengthOff']
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       have hmem : (M'.read (arrayLengthWord * 32).toNat 32).2 = M' := by
         rw [Mem.read_snd_eq_self
@@ -706,7 +709,7 @@ private theorem appendTarget_freshNonzero_runCompiled
         .call afterOldPauserSlot) post := by
     exact Func.RunCompiled.next
       (temporal_sstore_runCompiled (hfork := hfork) hindexArray hindexOrig hindexCost
-        hwarmIndexArray (by norm_num [gCallStipend]; omega) hstatic)
+        hwarmIndexArray (by norm_num only [gCallStipend]; omega) hstatic)
       hlengthTail
   have htargetOff' : (targetWord * 32).toNat + 32 ≤ M'.size := by
     have hoff : (targetWord * 32).toNat + 32 ≤ 640 := by decide
@@ -748,7 +751,7 @@ private theorem appendTarget_freshNonzero_runCompiled
     func_run (2) [3]
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign' htargetOff']
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [htargetVal, htargetMem]
       have hg : afterGas + 33 + lengthCost + indexCost - 6 =
@@ -764,7 +767,7 @@ private theorem appendTarget_freshNonzero_runCompiled
     func_run (2) [3]
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign' hlengthOff']
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hlengthVal, hlengthMem]
       have hg : afterGas + 39 + lengthCost + indexCost - 6 =
@@ -780,7 +783,7 @@ private theorem appendTarget_freshNonzero_runCompiled
         .call afterOldPauserSlot) post := by
     exact Func.RunCompiled.next
       (temporal_sstore_runCompiled (hfork := hfork) harrayBase harrayOrig harrayCost
-        hwarmArrayBase (by norm_num [gCallStipend]; omega) hstatic)
+        hwarmArrayBase (by norm_num only [gCallStipend]; omega) hstatic)
       hindexTail
   have harrayTag : Func.RunCompiled fs sevm
       (lengthBase.setMach ⟨[next, target, next], M',
@@ -805,7 +808,7 @@ private theorem appendTarget_freshNonzero_runCompiled
     func_run (2) [3]
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign' hlengthOff']
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hlengthVal, hlengthMem]
       have hg : afterGas + 51 + arrayCost + indexCost + lengthCost - 6 =
@@ -823,7 +826,7 @@ private theorem appendTarget_freshNonzero_runCompiled
     func_run (2) [3]
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign' htargetOff']
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [htargetVal, htargetMem]
       have hg : afterGas + 57 + arrayCost + indexCost + lengthCost - 6 =
@@ -1058,8 +1061,7 @@ theorem setPauserKernel_freshNonzero_runCompiled
       (countSlot newPauser) + countCost
   have hassignment : base.getStorVal sevm.currentTarget assignmentKey = 0 := by
     change (Devm.getStor base sevm.currentTarget).get assignmentKey = 0
-    simpa [logicalStorageOfStor, assignmentKey,
-      findEntry_none_assignmentAt hfind] using
+    simpa only [logicalStorageOfStor, findEntry_none_assignmentAt hfind] using
       hw.assignments target htargetValid.2
   have hassignmentBase : assignBase.getStorVal sevm.currentTarget
       assignmentKey = 0 := by
@@ -1083,7 +1085,7 @@ theorem setPauserKernel_freshNonzero_runCompiled
       sevm.currentTarget arrayLengthSlot = length
     rw [temporalSloadBase_getStorVal]
     change (Devm.getStor base sevm.currentTarget).get arrayLengthSlot = length
-    simpa [logicalStorageOfStor, length] using hw.lengthWord
+    simpa only [logicalStorageOfStor] using hw.lengthWord
   have hindex : assignPost.getStorVal sevm.currentTarget
       (indexSlot target) = 0 := by
     have hne := registryAddressFamilies_pairwise
@@ -1100,7 +1102,7 @@ theorem setPauserKernel_freshNonzero_runCompiled
     change (Devm.getStor base sevm.currentTarget).get (indexSlot target) = 0
     change (Devm.getStor base sevm.currentTarget).get (indexSlot target) =
       Nat.toB256 0
-    simpa [logicalStorageOfStor, findEntry_none_oneBasedIndexAt hfind] using
+    simpa only [logicalStorageOfStor, findEntry_none_oneBasedIndexAt hfind] using
       hw.indices target htargetValid.2
   have hcount : assignPost.getStorVal sevm.currentTarget
       (countSlot newPauser) = count := by
@@ -1117,8 +1119,7 @@ theorem setPauserKernel_freshNonzero_runCompiled
     rw [temporalSloadBase_getStorVal]
     change (Devm.getStor base sevm.currentTarget).get
       (countSlot newPauser) = count
-    simpa [logicalStorageOfStor, count] using
-      hw.counts newPauser hnewValid.2
+    simpa only [logicalStorageOfStor] using hw.counts newPauser hnewValid.2
   have hnextBound : next.toNat < 2 ^ 252 := by
     dsimp only [next]
     rw [B256.toNat_toB256_of_lt hw.fresh_length_lt_2pow256]
@@ -1201,7 +1202,7 @@ theorem setPauserKernel_freshNonzero_runCompiled
     post target newPauser assignmentOriginal assignmentCost appendGas
     hwf hreads htarget hnew htargetValid hsize halign hassignment
     hassignmentOrig hassignmentCost
-    (by simp only [appendGas]; norm_num [gCallStipend]; omega) hstatic
+    (by simp only [appendGas]; norm_num only [gCallStipend]; omega) hstatic
     happend
   rcases freshRegistration_sourceTrace_witness hw htargetValid hnewValid hfind with
     ⟨trace, htrace, hpostEntries, hwrites, hwpost⟩
@@ -1362,8 +1363,8 @@ private theorem freshRegisterPauserBody_fromStage_runCompiled
           .call setPauserSlot)) post := by
     unfold onlyAdmin pushDeployWord
     func_run (4) [1]
-    case h_val => simp [hadmin, B256.eqCheck]
-    case h_arm => simpa using hstage
+    case h_val => simp only [B256.eqCheck, hadmin, ↓reduceIte]
+    case h_arm => simpa only [add_tsub_cancel_right] using hstage
   have hnewRun :=
     freshCanonicalAddressArg1_success_runCompiled hargNew hnewMask hadminRun
   have htargetRun :=
@@ -1751,7 +1752,7 @@ theorem registerPauser_freshNonzero_success_settled_effects
          ⟨ca, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩] := by
   have hdataInit : (initSevm msg).data =
       registerPauserCalldata target newPauser := by
-    simpa [initSevm] using hdata
+    simpa only [initSevm] using hdata
   rcases registerPauserCalldata_spec (initSevm msg) target newPauser hdataInit with
     ⟨hdataLengthRaw, hselectorRaw, hargTargetRaw, hargNewRaw⟩
   have hdataLength : (initSevm msg).data.length.toB256 = 68 :=
@@ -1763,37 +1764,37 @@ theorem registerPauser_freshNonzero_success_settled_effects
   have hargNew : Sevm.dataWord (initSevm msg) (32 * 1 + 4) = newPauser := by
     exact hargNewRaw
   have hvalueInit : (initSevm msg).value = 0 := by
-    simpa [initSevm] using hvalue
+    simpa only [initSevm] using hvalue
   have hownerInit : (initSevm msg).currentTarget = ca := by
-    simpa [initSevm] using howner
+    simpa only [initSevm] using howner
   have hcodeAddressInit : (initSevm msg).codeAddress =
       some (initSevm msg).currentTarget := by
-    simpa [initSevm, howner] using hcodeAddress
+    simpa only [initSevm, howner] using hcodeAddress
   have hcodeInit : (initSevm msg).code.toList =
       lidoCircuitBreakerCode dp := by
-    simpa [initSevm] using hcode
+    simpa only [initSevm] using hcode
   have hadminInit : (initSevm msg).caller.toB256 = dp.admin := by
-    simpa [initSevm] using hadmin
+    simpa only [initSevm] using hadmin
   rcases registerPauser_runCompiledTo_freshNonzero (hfork := hfork) dp (initSevm msg)
       (initDevm msg) entries target newPauser timestamp interval expiry
       assignmentOriginal arrayOriginal indexOriginal lengthOriginal
       countOriginal assignmentCost arrayCost indexCost lengthCost countCost G
       hdataLength hvalueInit hselector hcodeAddressInit hcodeInit hadminInit
-      hargTarget hargNew (by simpa [hownerInit] using hw) hfind htargetValid
-      hnewValid htime (by simpa [hownerInit] using hassignmentOrig)
-      hassignmentCost (by simpa [hownerInit] using harray)
-      (by simpa [hownerInit] using harrayOrig) harrayCost
-      (by simpa [hownerInit] using hwarmArray)
-      (by simpa [hownerInit] using hindexOrig) hindexCost
-      (by simpa [hownerInit] using hwarmIndex)
-      (by simpa [hownerInit] using hlengthOrig) hlengthCost hlengthNextWord
-      (by simpa [hownerInit] using hcountOrig) hcountCost hcountNextWord
-      (by simpa [hownerInit] using hcountCold)
-      (by simpa [hownerInit] using hinterval)
-      (by simpa [hownerInit] using hintervalCold)
-      (by simpa [hownerInit] using hexpiry)
-      (by simpa [hownerInit] using hexpiryOrig)
-      (by simpa [hownerInit] using hwarmExpiry) hstatic hextension
+      hargTarget hargNew (by simpa only [hownerInit] using hw) hfind htargetValid
+      hnewValid htime (by simpa only [hownerInit] using hassignmentOrig)
+      hassignmentCost (by simpa only [hownerInit] using harray)
+      (by simpa only [hownerInit] using harrayOrig) harrayCost
+      (by simpa only [hownerInit] using hwarmArray)
+      (by simpa only [hownerInit] using hindexOrig) hindexCost
+      (by simpa only [hownerInit] using hwarmIndex)
+      (by simpa only [hownerInit] using hlengthOrig) hlengthCost hlengthNextWord
+      (by simpa only [hownerInit] using hcountOrig) hcountCost hcountNextWord
+      (by simpa only [hownerInit] using hcountCold)
+      (by simpa only [hownerInit] using hinterval)
+      (by simpa only [hownerInit] using hintervalCold)
+      (by simpa only [hownerInit] using hexpiry)
+      (by simpa only [hownerInit] using hexpiryOrig)
+      (by simpa only [hownerInit] using hwarmExpiry) hstatic hextension
       hexpiryNonzero with
     ⟨trace, post, htrace, hpostEntries, hwpost, hrun, hgas,
       hstoreExpiry, hlogs, hcompile⟩
@@ -1824,8 +1825,8 @@ theorem registerPauser_freshNonzero_success_settled_effects
   have hsettledPost : settled = post := hsettledFinal.trans hfinalPost
   rw [hsettledPost]
   refine ⟨trace, htrace, hpostEntries, ?_, hgas, ?_, ?_⟩
-  · simpa [hownerInit] using hwpost
-  · simpa [hownerInit] using hstoreExpiry
-  · simpa [hownerInit] using hlogs
+  · simpa only [hownerInit] using hwpost
+  · simpa only [hownerInit] using hstoreExpiry
+  · simpa only [hownerInit] using hlogs
 
 end Blanc.LidoCircuitBreaker

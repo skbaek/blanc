@@ -100,7 +100,8 @@ private theorem drip_funcSound {P : Stor → Prop} (hP : StepClosed P) (ca : Adr
   let image := s.memory.data.toList
   have hreads : Mem.Reads s.memory image := by
     intro i
-    simp [image]
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList,
+      image]
   let frame : Frame image s s := ⟨hwf, hreads, rfl, rfl⟩
   rcases of_run_drip auxLookup_runtime frame nil_pref hrun with
     ⟨-, -, hclock, -, hguards, hnof, hcap, hstor, -⟩
@@ -120,7 +121,8 @@ private theorem join_funcSound {P : Stor → Prop} (hP : StepClosed P) (ca : Adr
   let image := s.memory.data.toList
   have hreads : Mem.Reads s.memory image := by
     intro i
-    simp [image]
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList,
+      image]
   let frame : Frame image s s := ⟨hwf, hreads, rfl, rfl⟩
   rcases of_run_join_full auxLookup_runtime frame nil_pref hrun with
     ⟨hasset, -, -, -, -, hclock, -, hguards, hnof, hcap,
@@ -142,7 +144,8 @@ private theorem convertToAssets_funcSound {P : Stor → Prop} (ca : Adr) :
   let image := s.memory.data.toList
   have hreads : Mem.Reads s.memory image := by
     intro i
-    simp [image]
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList,
+      image]
   let frame : Frame image s s := ⟨hwf, hreads, rfl, rfl⟩
   rcases of_run_convertToAssets auxLookup_runtime frame nil_pref hrun with
     ⟨-, -, -, -, -, -, hstor, -⟩
@@ -162,7 +165,8 @@ private theorem convertToUnits_funcSound {P : Stor → Prop} (ca : Adr) :
   let image := s.memory.data.toList
   have hreads : Mem.Reads s.memory image := by
     intro i
-    simp [image]
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList,
+      image]
   let frame : Frame image s s := ⟨hwf, hreads, rfl, rfl⟩
   rcases of_run_convertToUnits auxLookup_runtime frame nil_pref hrun with
     ⟨-, -, -, -, -, -, hstor, -⟩
@@ -184,7 +188,8 @@ private theorem exit_funcSound {P : Stor → Prop} (hP : StepClosed P) (ca : Adr
   let image := s.memory.data.toList
   have hreads : Mem.Reads s.memory image := by
     intro i
-    simp [image]
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList,
+      image]
   let frame : Frame image s s := ⟨hwf, hreads, rfl, rfl⟩
   rcases exit_pays_exactly_full auxLookup_runtime frame nil_pref hrun hfork with
     ⟨-, -, -, hrowCover, htotalCover, -, -, hclock, -, hguards, hnof, hcap,
@@ -243,31 +248,36 @@ theorem sound_of_stepClosed {P : Stor → Prop} (hP : StepClosed P) (ca : Adr) :
     simp only [selectors, List.mem_cons, List.not_mem_nil, or_false] at hselector
     rcases hselector with hselector | hselector | hselector | hselector | hselector
     · rcases main_body (f := nonpayable (exactCalldata 36 convertToAssets))
-        hmain hempty hselector (by simp [funcs]) with
+        hmain hempty hselector (by simp only [funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+          or_false, true_or]) with
         ⟨mid, hstate, hmemory, -, -, hbody⟩
       exact (nonpayable_exactCalldata_funcSound ca (convertToAssets_funcSound ca))
         hfork hca (hpreEntry.state_eq hstate.symm)
         (by rw [← hmemory]; exact hwfEntry) hih hbody
     · rcases main_body (f := nonpayable (exactCalldata 36 exit))
-        hmain hempty hselector (by simp [funcs]) with
+        hmain hempty hselector (by simp only [funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+          or_false, true_or, or_true]) with
         ⟨mid, hstate, hmemory, -, -, hbody⟩
       exact (nonpayable_exactCalldata_funcSound ca (exit_funcSound hP ca))
         hfork hca (hpreEntry.state_eq hstate.symm)
         (by rw [← hmemory]; exact hwfEntry) hih hbody
     · rcases main_body (f := nonpayable (exactCalldata 36 convertToUnits))
-        hmain hempty hselector (by simp [funcs]) with
+        hmain hempty hselector (by simp only [funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+          or_false, true_or, or_true]) with
         ⟨mid, hstate, hmemory, -, -, hbody⟩
       exact (nonpayable_exactCalldata_funcSound ca (convertToUnits_funcSound ca))
         hfork hca (hpreEntry.state_eq hstate.symm)
         (by rw [← hmemory]; exact hwfEntry) hih hbody
     · rcases main_body (f := nonpayable (exactCalldata 4 drip))
-        hmain hempty hselector (by simp [funcs]) with
+        hmain hempty hselector (by simp only [funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+          or_false, true_or, or_true]) with
         ⟨mid, hstate, hmemory, -, -, hbody⟩
       exact (nonpayable_exactCalldata_funcSound ca (drip_funcSound hP ca))
         hfork hca (hpreEntry.state_eq hstate.symm)
         (by rw [← hmemory]; exact hwfEntry) hih hbody
     · rcases main_body (f := exactCalldata 4 join)
-        hmain hempty hselector (by simp [funcs]) with
+        hmain hempty hselector (by simp only [funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+          or_false, or_true]) with
         ⟨mid, hstate, hmemory, -, -, hbody⟩
       exact (exactCalldata_funcSound ca (join_funcSound hP ca))
         hfork hca (hpreEntry.state_eq hstate.symm)

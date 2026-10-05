@@ -195,14 +195,15 @@ theorem OssifiableConstructorDelegateBoundary.settled_child_exact
       (pref_append
         [gasWord, implementation, 0x100, Nat.toB256 setupData.length, 0, 0]
         tail)
-      (by simpa using pCall)
+      (by simpa only [List.cons_append, List.nil_append] using pCall)
   have spawnPref :
       ([spawn.gasWord, spawn.codeWord, spawn.inputOffsetWord,
           spawn.inputSizeWord, spawn.outputOffsetWord,
           spawn.outputSizeWord] : List B256) <<+ callPre.stack := by
     rw [spawn.stackEq]
     exact ⟨spawn.stackTail, rfl⟩
-  have operands := List.pref_unique (by simp) knownPref spawnPref
+  have operands := List.pref_unique (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd]) knownPref spawnPref
   simp only [List.cons.injEq, and_true] at operands
   rcases operands with
     ⟨gasEq, codeEq, inputOffsetEq, inputSizeEq, outputOffsetEq,
@@ -269,135 +270,6 @@ theorem OssifiableConstructorSetupSelectionRoute.delegate_boundary
         (funext (getStor_eq_of_state_eq burn.state))
     · exact logsDelegate.trans burn.logs
 
-/-- The zero-length setup arm skips `DELEGATECALL` and enters `_changeAdmin`
-directly.  This is the constructor's canonical empty-data path, stated before
-specializing the already-committed implementation write and `Upgraded` log. -/
-theorem OssifiableConstructorSetupSelectionRoute.empty_afterSetup_success
-    {runtimeOffset runtimeLength : Nat}
-    {sevm : Sevm} {pre post : Devm} {tail : Stack}
-    {image runtimeBytes : Bytes} {length : B256}
-    {requestedAdmin : Adr}
-    (selection : OssifiableConstructorSetupSelectionRoute
-      (ossifiableConstructorFunctions runtimeOffset runtimeLength)
-      sevm pre (.ok post) tail image length)
-    (lengthZero : length = 0)
-    (hrequested :
-      Bytes.toB256 (image.sliceD 32 32 0) = requestedAdmin.toB256)
-    (hruntime :
-      sevm.code.sliceD runtimeOffset runtimeLength
-        (Linst.toUInt8 .stop) = runtimeBytes)
-    (hruntimeLength : runtimeBytes.length = runtimeLength)
-    (hruntimeNonempty : runtimeBytes ≠ [])
-    (hoffsetBound : runtimeOffset < 2 ^ 256)
-    (hlengthBound : runtimeLength < 2 ^ 256) :
-    requestedAdmin ≠ 0 ∧
-      Devm.getStor post sevm.currentTarget =
-        (Devm.getStor pre sevm.currentTarget).set adminSlotLit
-          (addressSlotWriteWord
-            (pre.getStorVal sevm.currentTarget adminSlotLit)
-            requestedAdmin.toB256) ∧
-      post.logs = pre.logs ++
-        [ossifiableConstructorAdminChangedLog sevm.currentTarget
-          (pre.getStorVal sevm.currentTarget adminSlotLit)
-          requestedAdmin] ∧
-      post.output = runtimeBytes := by
-  rcases selection with
-    ⟨afterPre, _, afterRun, pAfter, wfAfter, readsAfter,
-      storageAfter, logsAfter⟩ |
-    ⟨_, lengthNonzero, _, _, _, _, _, _⟩
-  · obtain ⟨bodyPre, burn, bodyRun⟩ := runCompiledTo_call_inv
-      (ossifiableConstructorFunctions_afterSetup runtimeOffset runtimeLength)
-      afterRun
-    have pBody : tail <<+ bodyPre.stack := by
-      rw [← burn.stack]
-      exact pAfter
-    have wfBody : Mem.Wf bodyPre.memory := by
-      rw [← burn.memory]
-      exact wfAfter
-    have readsBody : Mem.Reads bodyPre.memory image := by
-      rw [← burn.memory]
-      exact readsAfter
-    have preToBodyStor : Devm.getStor pre = Devm.getStor bodyPre :=
-      storageAfter.trans (funext (getStor_eq_of_state_eq burn.state))
-    have bodyToPreStor : Devm.getStor bodyPre = Devm.getStor pre :=
-      preToBodyStor.symm
-    have bodyAdmin :
-        bodyPre.getStorVal sevm.currentTarget adminSlotLit =
-          pre.getStorVal sevm.currentTarget adminSlotLit := by
-      exact congrArg (fun stor => stor.get adminSlotLit)
-        (congrFun bodyToPreStor sevm.currentTarget)
-    have bodyLogs : bodyPre.logs = pre.logs :=
-      burn.logs.symm.trans logsAfter.symm
-    rcases ossifiableConstructorAfterSetup_success
-        (ossifiableConstructorFunctions_zeroAdmin runtimeOffset runtimeLength)
-        wfBody readsBody hrequested hruntime hruntimeLength hruntimeNonempty
-        hoffsetBound hlengthBound pBody bodyRun with
-      ⟨adminNonzero, postStorage, postLogs, postOutput⟩
-    refine ⟨adminNonzero, ?_, ?_, postOutput⟩
-    · rw [postStorage, congrFun bodyToPreStor sevm.currentTarget, bodyAdmin]
-    · rw [postLogs, bodyLogs, bodyAdmin]
-  · exact (lengthNonzero lengthZero).elim
-
-/-- Compose the empty setup selection with the already-proved implementation
-commit.  The result states the exact two writes and the source log chronology
-without assuming an initially empty admin slot. -/
-theorem OssifiableConstructorPreparedRoute.empty_afterSetup_success
-    {runtimeOffset runtimeLength : Nat}
-    {sevm : Sevm} {pre post : Devm} {tail : Stack}
-    {image runtimeBytes : Bytes} {implementation length : B256}
-    {requestedAdmin : Adr}
-    (route : OssifiableConstructorPreparedRoute
-      (ossifiableConstructorFunctions runtimeOffset runtimeLength)
-      sevm pre (.ok post) tail image implementation length)
-    (lengthZero : length = 0)
-    (hrequested :
-      Bytes.toB256 (image.sliceD 32 32 0) = requestedAdmin.toB256)
-    (hruntime :
-      sevm.code.sliceD runtimeOffset runtimeLength
-        (Linst.toUInt8 .stop) = runtimeBytes)
-    (hruntimeLength : runtimeBytes.length = runtimeLength)
-    (hruntimeNonempty : runtimeBytes ≠ [])
-    (hoffsetBound : runtimeOffset < 2 ^ 256)
-    (hlengthBound : runtimeLength < 2 ^ 256) :
-    requestedAdmin ≠ 0 ∧
-      Devm.getStor post sevm.currentTarget =
-        ((Devm.getStor pre sevm.currentTarget).set implementationSlotLit
-          (addressSlotUpdateRaw pre sevm.currentTarget
-            implementationSlotLit implementation)).set adminSlotLit
-          (addressSlotWriteWord
-            (((Devm.getStor pre sevm.currentTarget).set implementationSlotLit
-              (addressSlotUpdateRaw pre sevm.currentTarget
-                implementationSlotLit implementation)).get adminSlotLit)
-            requestedAdmin.toB256) ∧
-      post.logs =
-        pre.logs ++ [rawUpgradedLog sevm.currentTarget implementation] ++
-          [ossifiableConstructorAdminChangedLog sevm.currentTarget
-            (((Devm.getStor pre sevm.currentTarget).set
-              implementationSlotLit
-              (addressSlotUpdateRaw pre sevm.currentTarget
-                implementationSlotLit implementation)).get adminSlotLit)
-            requestedAdmin] ∧
-      post.output = runtimeBytes := by
-  rcases route with
-    noCode |
-    ⟨next, _, nextStorage, nextLogs, selection⟩
-  · rcases noCode with
-      ⟨_, _, _, _, _, _, _, _, noCodeOutcome⟩
-    rcases noCodeOutcome with
-      ⟨_, impossible, _, _, _⟩ | ⟨_, impossible, _, _, _, _⟩ <;>
-        cases impossible
-  · rcases selection.empty_afterSetup_success lengthZero hrequested hruntime
-        hruntimeLength hruntimeNonempty hoffsetBound hlengthBound with
-      ⟨adminNonzero, postStorage, postLogs, postOutput⟩
-    have nextAdmin :
-        next.getStorVal sevm.currentTarget adminSlotLit =
-          (((Devm.getStor pre sevm.currentTarget).set implementationSlotLit
-            (addressSlotUpdateRaw pre sevm.currentTarget
-              implementationSlotLit implementation)).get adminSlotLit) := by
-      exact congrArg (fun stor => stor.get adminSlotLit) nextStorage
-    refine ⟨adminNonzero, ?_, ?_, postOutput⟩
-    · rw [postStorage, nextStorage, nextAdmin]
-    · rw [postLogs, nextLogs, nextAdmin, List.append_assoc]
 
 /-! ## Accepted decoder into the prepared constructor route -/
 

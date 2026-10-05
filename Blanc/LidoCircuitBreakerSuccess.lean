@@ -339,19 +339,21 @@ private theorem of_logWith101_val {e : Sevm} {s s' : Devm}
   rw [h32word] at hb32
   rw [h0word] at hb0
   have hp1 : (32 : B256) :: ev :: a :: xs <<+ s1.stack := by
-    simpa using prefix_of_push hb32 hp
+    simpa only [List.cons_append, List.nil_append] using prefix_of_push hb32 hp
   have hp2 : (0 : B256) :: 32 :: ev :: a :: xs <<+ s2.stack := by
-    simpa using prefix_of_push hb0 hp1
+    simpa only [List.cons_append, List.nil_append] using prefix_of_push hb0 hp1
   rcases of_run_log_val hlog with ⟨mi, sz, topics, hlen, hpop, hlogs⟩
   have hknown : ([0, 32, ev, a] : List B256) <<+ s2.stack := by
     exact @pref_trans _ [0, 32, ev, a]
-      ([0, 32, ev, a] ++ xs) _ ⟨xs, rfl⟩ (by simpa using hp2)
+      ([0, 32, ev, a] ++ xs) _ ⟨xs, rfl⟩ (by simpa only [List.cons_append,
+        List.nil_append] using hp2)
   have heq : ([0, 32, ev, a] : List B256) = mi :: sz :: topics :=
-    List.pref_unique (by simp [hlen]) hknown (pref_of_split hpop)
+    List.pref_unique (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      hlen, Fin.isValue, Fin.succ_one_eq_two, Fin.coe_ofNat_eq_mod, Nat.reduceMod]) hknown (pref_of_split hpop)
   simp only [List.cons.injEq] at heq
   rcases heq with ⟨rfl, rfl, rfl⟩
   constructor
-  · exact of_append_pref hpop (by simpa using hp2)
+  · exact of_append_pref hpop (by simpa only [List.cons_append, List.nil_append] using hp2)
   · rw [hlogs, ← hb0.logs, ← hb32.logs, ← hb0.memory, ← hb32.memory]
     rfl
 
@@ -436,7 +438,7 @@ private theorem storeHeartbeatExpiryFromStack_result
     intro h
     have hlen := B256.length_toBytes value
     rw [h] at hlen
-    simp at hlen
+    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
   have hmem2to6 : s2.memory = s6.memory :=
     (Line.of_inv Devm.memory (by line_inv) rcallerKey).trans
       (((of_run_pushB256 qregion).memory.trans
@@ -586,7 +588,7 @@ theorem PauseSuccessFinishTrace.result
     ⟨_, hlock, hother, _, hframe, _⟩
   have hstopRun := runCompiledTo_last_inv hstop
   have hpost : post = lockPost := by
-    simp [Linst.Run, Linst.run] at hstopRun
+    simp only [Linst.Run, Linst.run, Except.ok.injEq] at hstopRun
     exact hstopRun.symm
   subst post
   have hstorPushZero : Devm.getStor storePost = Devm.getStor zeroPost :=
@@ -638,7 +640,7 @@ private theorem pauseExpiryFinish_trace
   obtain ⟨lockPost, htstore, hstop⟩ := runCompiledTo_next_inv run
   have hstopRun := runCompiledTo_last_inv hstop
   have hex : ex = .ok lockPost := by
-    simp [Linst.Run, Linst.run] at hstopRun
+    simp only [Linst.Run, Linst.run] at hstopRun
     exact hstopRun.symm
   have hstop' : Func.RunCompiledTo fs sevm lockPost Func.stop (.ok lockPost) := by
     rw [← hex]
@@ -818,7 +820,7 @@ private theorem pauseSuccess_trace_dichotomy
           (pref_of_split (show [(0 : B256)] <++ checkedPost.stack ++>
             finishPre.stack by
               unfold Split
-              simpa using hcheckedStack))).left
+              simpa only [List.cons_append, List.nil_append] using hcheckedStack))).left
       have hnoWrap :
           ¬ (interval + sevm.benvStat.time < sevm.benvStat.time) := by
         intro hlt
@@ -843,7 +845,7 @@ private theorem pauseSuccess_trace_dichotomy
           (pref_of_split (show [checkedWord] <++ checkedPost.stack ++>
             panicPre.stack by
               unfold Split
-              simpa using hcheckedStack))).left
+              simpa only [List.cons_append, List.nil_append] using hcheckedStack))).left
       have hwrap : interval + sevm.benvStat.time < sevm.benvStat.time := by
         by_contra hcontra
         rw [B256.ltCheck, if_neg hcontra] at hflag
@@ -924,12 +926,15 @@ theorem pauseSuccess_ok_getStorVal_eq_of_ne
     cases hnil
     obtain ⟨value, hhead, -⟩ := of_run_dup hdup
     cases hstack : finishPre.stack with
-    | nil => simp [hstack] at hhead
+    | nil => simp only [hstack, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.length_nil,
+      lt_self_iff_false, not_false_eq_true, getElem?_neg, reduceCtorEq] at hhead
     | cons head tail =>
-      simp [hstack] at hhead
+      simp only [hstack, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.length_cons,
+        lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true, getElem?_pos,
+        List.getElem_cons_zero, Option.some.injEq] at hhead
       subst head
       have hvalue : value :: ([] : List B256) <<+ finishPre.stack := by
-        exact ⟨tail, by unfold Split; simp [hstack]⟩
+        exact ⟨tail, by unfold Split; simp only [hstack, List.cons_append, List.nil_append]⟩
       obtain ⟨_, hex, trace⟩ := pauseExpiryFinish_trace hvalue hfinish
       cases Except.ok.inj hex
       have hstor := (PauseSuccessFinishTrace.result trace).2.1 owner
@@ -1018,12 +1023,15 @@ theorem pauseSuccess_ok_getStor_eq_of_owner_ne
     cases hnil
     obtain ⟨value, hhead, -⟩ := of_run_dup hdup
     cases hstack : finishPre.stack with
-    | nil => simp [hstack] at hhead
+    | nil => simp only [hstack, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.length_nil,
+      lt_self_iff_false, not_false_eq_true, getElem?_neg, reduceCtorEq] at hhead
     | cons head tail =>
-      simp [hstack] at hhead
+      simp only [hstack, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.length_cons,
+        lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true, getElem?_pos,
+        List.getElem_cons_zero, Option.some.injEq] at hhead
       subst head
       have hvalue : value :: ([] : List B256) <<+ finishPre.stack := by
-        exact ⟨tail, by unfold Split; simp [hstack]⟩
+        exact ⟨tail, by unfold Split; simp only [hstack, List.cons_append, List.nil_append]⟩
       obtain ⟨_, hex, trace⟩ := pauseExpiryFinish_trace hvalue hfinish
       cases Except.ok.inj hex
       have hstor := (PauseSuccessFinishTrace.result trace).2.1 owner
@@ -1468,8 +1476,8 @@ private lemma success_of_extcodesize_val
   simp only [Rinst.run, Rinst.runCore] at hrun
   rcases Except.bind_eq_ok hrun with ⟨⟨adr, d1⟩, hpopAdr, hrun⟩
   rw [Devm.popToAdr_def] at hpopAdr
-  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at hpopAdr
-  rcases hpop : Devm.pop s with _ | ⟨word, d0⟩ <;> simp [hpop] at hpopAdr
+  dsimp only [Functor.mapRev, Functor.map, Except.map] at hpopAdr
+  rcases hpop : Devm.pop s with _ | ⟨word, d0⟩ <;> simp only [hpop, reduceCtorEq, Except.ok.injEq] at hpopAdr
   rcases hpopAdr with ⟨rfl, rfl⟩
   have hpop' := Devm.pop_of_pop hpop
   have hx : x = word :=
@@ -1634,7 +1642,7 @@ private theorem pauseAfterCall_arms_words
     cases hchild : child.error.isSome
     · exfalso
       apply hwordNonzero
-      simpa [hchild] using hflag.symm
+      simpa only [hchild, Bool.false_eq_true, ↓reduceIte] using hflag.symm
     · rfl
 
 /-- Public window-carrying code-guard decomposition used by public-entry
@@ -1988,7 +1996,8 @@ theorem pauseObservation_committed_outcomes
     · obtain ⟨_, -, hbody⟩ := runCompiledTo_call_inv h_failed hfailed
       rw [show pauseFailedError =
         Func.revertSelector (customErrorData "PauseFailed")
-          (by simp [customErrorData, B256.length_toBytes]) from rfl] at hbody
+          (by simp only [customErrorData, List.length_take, B256.length_toBytes, Nat.reduceLeDiff,
+            inf_of_le_left]) from rfl] at hbody
       exact Or.inr (Or.inr (Or.inl
         ⟨hsuccess, hnotShort, hlong, hzero,
           runCompiledTo_revertSelector_inv hbody⟩))
@@ -2125,12 +2134,5 @@ theorem PauseSuccessInputs.of_noninterference
   refine ⟨htarget, hduration, ?_, ?_⟩
   · exact hcountEq
   · exact hintervalEq
-
-/-! Compatibility names retained for the established public Lido boundary
-theorems after hoisting `MemWordAt`. -/
-abbrev MemWordAt.acrossPauseCallStagingBoundary :=
-  @Blanc.MemWordAt.acrossPauseCallStagingBoundary
-abbrev MemWordAt.acrossPauseStatStagingBoundary :=
-  @Blanc.MemWordAt.acrossPauseStatStagingBoundary
 
 end Blanc.LidoCircuitBreaker

@@ -92,18 +92,6 @@ def immutableWordOffsetsValid (field : ImmutableParameter) : Bool :=
   CreationArtifact.immutableWordOffsetsValid runtimeTemplateCode
     (lidoCircuitBreakerCode (immutableMarkerParams field))
 
-/-- Five named generated lists consumed by constructor generation and emitted
-by differential evaluators. -/
-def adminWordOffsets : List Nat := immutableWordOffsets .admin
-def minPauseDurationWordOffsets : List Nat :=
-  immutableWordOffsets .minPauseDuration
-def maxPauseDurationWordOffsets : List Nat :=
-  immutableWordOffsets .maxPauseDuration
-def minHeartbeatIntervalWordOffsets : List Nat :=
-  immutableWordOffsets .minHeartbeatInterval
-def maxHeartbeatIntervalWordOffsets : List Nat :=
-  immutableWordOffsets .maxHeartbeatInterval
-
 def immutableOffsetMetadataValid : Bool :=
   immutableParameters.all immutableWordOffsetsValid
 
@@ -111,7 +99,6 @@ structure ImmutablePatch where
   field : ImmutableParameter
   offset : Nat
   value : B256
-deriving DecidableEq
 
 /-- The generated patch plan for a member of the runtime family.  Downstream
 creation-code generation consumes this list directly. -/
@@ -143,7 +130,6 @@ def runtimePatchControlsValid : Bool :=
     runtimePatchIdentityValid officialParams &&
     runtimePatchIdentityValid independentConstructorArgs.toDeployParams
 
-/-- Selector inventory generated from the executable dispatcher owner. -/
 def lidoCircuitBreakerSelectors : List B256 :=
   (funcs zeroDeployParams).map Prod.fst
 

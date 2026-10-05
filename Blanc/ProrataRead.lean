@@ -244,20 +244,20 @@ private theorem convertToShares_guardPrefix_effect
   have ha : ¬ maxValue < Sevm.argWord sevm 0 := by
     intro ha
     by_cases hb : maxBalance < Devm.getBal pre sevm.currentTarget
-    · have hz : (1 : B256) + 1 = 0 := by simpa [B256.ltCheck, ha, hb] using hzero
+    · have hz : (1 : B256) + 1 = 0 := by simpa only [B256.ltCheck, ha, ↓reduceIte, hb] using hzero
       exact (by decide +kernel : (1 : B256) + 1 ≠ 0) hz
-    · have hz : (1 : B256) + 0 = 0 := by simpa [B256.ltCheck, ha, hb] using hzero
+    · have hz : (1 : B256) + 0 = 0 := by simpa only [B256.ltCheck, ha, ↓reduceIte, hb] using hzero
       exact (by decide +kernel : (1 : B256) + 0 ≠ 0) hz
   have hb : ¬ maxBalance < Devm.getBal pre sevm.currentTarget := by
     intro hb
     by_cases ha : maxValue < Sevm.argWord sevm 0
-    · have hz : (1 : B256) + 1 = 0 := by simpa [B256.ltCheck, ha, hb] using hzero
+    · have hz : (1 : B256) + 1 = 0 := by simpa only [B256.ltCheck, ha, ↓reduceIte, hb] using hzero
       exact (by decide +kernel : (1 : B256) + 1 ≠ 0) hz
-    · have hz : (0 : B256) + 1 = 0 := by simpa [B256.ltCheck, ha, hb] using hzero
+    · have hz : (0 : B256) + 1 = 0 := by simpa only [B256.ltCheck, ha, ↓reduceIte, hb] using hzero
       exact (by decide +kernel : (0 : B256) + 1 ≠ 0) hz
   have hfA : maxBalance.shiftRight 30 <? Sevm.argWord sevm 0 = 0 := by
     rw [hV]
-    simp [B256.ltCheck, ha]
+    simp only [B256.ltCheck, ha, ↓reduceIte]
   have hfAraw :
       (B256.shiftRight (B256.shiftRight B256.max 130) 30 <?
         Sevm.argWord sevm 0) = 0 := by
@@ -326,7 +326,7 @@ private theorem convertToShares_tail_effect
     let S := (Devm.getStor mid sevm.currentTarget).get supplySlot
     let m := Sevm.argWord sevm 0 * (S + offset) / (B + 1)
     S + m ≤ maxSupply ∧ ReturnsWord m post ∧ Devm.getCode mid = Devm.getCode post := by
-  dsimp
+  dsimp only [Lean.Elab.WF.paramLet]
   let B := Devm.getBal mid sevm.currentTarget
   let S := (Devm.getStor mid sevm.currentTarget).get supplySlot
   let m := Sevm.argWord sevm 0 * (S + offset) / (B + 1)
@@ -442,7 +442,7 @@ theorem convertToShares_effect
     (run : Func.Run fs sevm pre convertToShares post) :
     SharesViewEffect sevm pre post := by
   unfold SharesViewEffect
-  dsimp
+  dsimp only [Lean.Elab.WF.paramLet]
   rcases convertToShares_guardPrefix_effect run with
     ⟨hamount, hbalance, mid, htail, hp, hmem, hcode⟩
   have hstorWhole : Devm.getStor pre = Devm.getStor post :=
@@ -595,19 +595,19 @@ private theorem convertToAssets_guardPrefix_effect
   have ha : ¬ maxSupply < Sevm.argWord sevm 0 := by
     intro ha
     by_cases hb : maxBalance < Devm.getBal pre sevm.currentTarget
-    · have hz : (1 : B256) + 1 = 0 := by simpa [B256.ltCheck, ha, hb] using hzero
+    · have hz : (1 : B256) + 1 = 0 := by simpa only [B256.ltCheck, ha, ↓reduceIte, hb] using hzero
       exact (by decide +kernel : (1 : B256) + 1 ≠ 0) hz
-    · have hz : (1 : B256) + 0 = 0 := by simpa [B256.ltCheck, ha, hb] using hzero
+    · have hz : (1 : B256) + 0 = 0 := by simpa only [B256.ltCheck, ha, ↓reduceIte, hb] using hzero
       exact (by decide +kernel : (1 : B256) + 0 ≠ 0) hz
   have hb : ¬ maxBalance < Devm.getBal pre sevm.currentTarget := by
     intro hb
     by_cases ha : maxSupply < Sevm.argWord sevm 0
-    · have hz : (1 : B256) + 1 = 0 := by simpa [B256.ltCheck, ha, hb] using hzero
+    · have hz : (1 : B256) + 1 = 0 := by simpa only [B256.ltCheck, ha, ↓reduceIte, hb] using hzero
       exact (by decide +kernel : (1 : B256) + 1 ≠ 0) hz
-    · have hz : (0 : B256) + 1 = 0 := by simpa [B256.ltCheck, ha, hb] using hzero
+    · have hz : (0 : B256) + 1 = 0 := by simpa only [B256.ltCheck, ha, ↓reduceIte, hb] using hzero
       exact (by decide +kernel : (0 : B256) + 1 ≠ 0) hz
   have hfA : maxSupply <? Sevm.argWord sevm 0 = 0 := by
-    simp [B256.ltCheck, ha]
+    simp only [B256.ltCheck, ha, ↓reduceIte]
   have hfAraw :
       (B256.shiftRight B256.max 130 <? Sevm.argWord sevm 0) = 0 := by
     rw [hS]
@@ -653,7 +653,7 @@ private theorem convertToAssets_tail_effect
     let S := (Devm.getStor mid sevm.currentTarget).get supplySlot
     let p := Sevm.argWord sevm 0 * (B + 1) / (S + offset)
     ReturnsWord p post ∧ Devm.getCode mid = Devm.getCode post := by
-  dsimp
+  dsimp only [Lean.Elab.WF.paramLet]
   let B := Devm.getBal mid sevm.currentTarget
   let S := (Devm.getStor mid sevm.currentTarget).get supplySlot
   let p := Sevm.argWord sevm 0 * (B + 1) / (S + offset)
@@ -732,7 +732,7 @@ theorem convertToAssets_effect
     (run : Func.Run fs sevm pre convertToAssets post) :
     AssetsViewEffect sevm pre post := by
   unfold AssetsViewEffect
-  dsimp
+  dsimp only [Lean.Elab.WF.paramLet]
   rcases convertToAssets_guardPrefix_effect run with
     ⟨hshares, hbalance, mid, htail, hp, hmem, hcode⟩
   have hstorWhole : Devm.getStor pre = Devm.getStor post :=

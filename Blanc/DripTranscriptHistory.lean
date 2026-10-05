@@ -100,11 +100,11 @@ theorem realized_segment_certified
   have chiL' :
       segmentIndex scale.toNat half.toNat rate.toNat scale.toNat left =
         chiN (futureL.state.getStor ca) := by
-    simpa [snapshot] using chiL
+    simpa only [scaleNat_exact, halfNat_exact, rateNat_exact, snapshot] using chiL
   have chiR' :
       segmentIndex scale.toNat half.toNat rate.toNat scale.toNat right =
         chiN (futureR.state.getStor ca) := by
-    simpa [snapshot] using chiR
+    simpa only [scaleNat_exact, halfNat_exact, rateNat_exact, snapshot] using chiR
   have certified := drip_segment_certified (chi := scale.toNat) sameElapsed
   rw [chiL', chiR'] at certified
   exact certified
@@ -124,7 +124,7 @@ theorem dripCalls_ne_nil_of_totalUnits
     (by rw [faithful, none])
   rw [root.snapshot_eq coalition] at total
   apply moved
-  simpa [snapshot] using total
+  simpa only [snapshot] using total
 
 noncomputable def concreteHistoryTrace :
     ExecutionTrace.ConfiguredHistoryTrace concreteConfig concreteDeployed concreteExited :=

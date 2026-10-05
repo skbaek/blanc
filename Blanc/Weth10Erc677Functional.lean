@@ -30,8 +30,9 @@ private lemma decodesTwo_split {e : Sevm} {sel a b : B256} {data : Bytes}
     e.data = abiSelectorBytes sel ++
       (a.toBytes ++ (b.toBytes ++
         ((Nat.toB256 96).toBytes ++ abiBytesTail data))) := by
-  simpa [Sevm.DecodesCallWithTail, abiCallWithTail,
-    List.append_assoc] using h
+  simpa only [Sevm.DecodesCallWithTail, abiCallWithTail, List.map_cons, List.map_nil,
+    List.flatten_cons, List.flatten_nil, List.append_nil, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceMul, List.append_assoc] using h
 
 private lemma argWord_zero_of_decodesTwo
     {e : Sevm} {sel a b : B256} {data : Bytes}
@@ -79,8 +80,9 @@ private lemma tailLen_two_of_decodes
         (Nat.toB256 96).toBytes) ++
       ((Nat.toB256 data.length).toBytes ++
         (data ++ List.replicate (ceil32 data.length - data.length) 0)) := by
-    simpa [Sevm.DecodesCallWithTail, abiCallWithTail, abiBytesTail,
-      List.append_assoc] using h
+    simpa only [List.append_assoc, Sevm.DecodesCallWithTail, abiCallWithTail, List.map_cons,
+      List.map_nil, List.flatten_cons, List.flatten_nil, List.append_nil, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceMul, abiBytesTail] using h
   exact dataWord_of_append
     (by rw [List.length_append, List.length_append,
       List.length_append, abiSelectorBytes_length,
@@ -103,21 +105,25 @@ private lemma tailBytes_two_of_decodes
       ((abiSelectorBytes sel ++ a.toBytes ++ b.toBytes ++
         (Nat.toB256 96).toBytes) ++ (Nat.toB256 data.length).toBytes) ++
       (data ++ List.replicate (ceil32 data.length - data.length) 0) := by
-    simpa [Sevm.DecodesCallWithTail, abiCallWithTail, abiBytesTail,
-      List.append_assoc] using h
+    simpa only [List.append_assoc, Sevm.DecodesCallWithTail, abiCallWithTail, List.map_cons,
+      List.map_nil, List.flatten_cons, List.flatten_nil, List.append_nil, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceMul, abiBytesTail] using h
   show List.sliceD e.data 132 data.length 0 = data
   rw [hd, List.sliceD,
     List.drop_length_append' (by
-      simp [abiSelectorBytes_length, B256.length_toBytes]),
-    List.takeD_eq_take _ (by simp [List.length_append]),
+      simp only [List.append_assoc, List.length_append, abiSelectorBytes_length,
+        B256.length_toBytes, Nat.reduceAdd]),
+    List.takeD_eq_take _ (by simp only [List.length_append, List.length_replicate,
+      le_add_iff_nonneg_right, zero_le]),
     List.take_length_append' rfl]
 
 private lemma decodesOne_split {e : Sevm} {sel a : B256} {data : Bytes}
     (h : Sevm.DecodesCallWithTail e sel [a] data) :
     e.data = abiSelectorBytes sel ++
       (a.toBytes ++ ((Nat.toB256 64).toBytes ++ abiBytesTail data)) := by
-  simpa [Sevm.DecodesCallWithTail, abiCallWithTail,
-    List.append_assoc] using h
+  simpa only [Sevm.DecodesCallWithTail, abiCallWithTail, List.map_cons, List.map_nil,
+    List.flatten_cons, List.flatten_nil, List.append_nil, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceMul, List.append_assoc] using h
 
 private lemma argWord_zero_of_decodesOne
     {e : Sevm} {sel a : B256} {data : Bytes}
@@ -150,8 +156,9 @@ private lemma tailLen_one_of_decodes
       (abiSelectorBytes sel ++ a.toBytes ++ (Nat.toB256 64).toBytes) ++
       ((Nat.toB256 data.length).toBytes ++
         (data ++ List.replicate (ceil32 data.length - data.length) 0)) := by
-    simpa [Sevm.DecodesCallWithTail, abiCallWithTail, abiBytesTail,
-      List.append_assoc] using h
+    simpa only [List.append_assoc, Sevm.DecodesCallWithTail, abiCallWithTail, List.map_cons,
+      List.map_nil, List.flatten_cons, List.flatten_nil, List.append_nil, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceMul, abiBytesTail] using h
   exact dataWord_of_append
     (by rw [List.length_append, List.length_append,
       abiSelectorBytes_length, B256.length_toBytes,
@@ -173,13 +180,16 @@ private lemma tailBytes_one_of_decodes
       ((abiSelectorBytes sel ++ a.toBytes ++ (Nat.toB256 64).toBytes) ++
         (Nat.toB256 data.length).toBytes) ++
       (data ++ List.replicate (ceil32 data.length - data.length) 0) := by
-    simpa [Sevm.DecodesCallWithTail, abiCallWithTail, abiBytesTail,
-      List.append_assoc] using h
+    simpa only [List.append_assoc, Sevm.DecodesCallWithTail, abiCallWithTail, List.map_cons,
+      List.map_nil, List.flatten_cons, List.flatten_nil, List.append_nil, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceMul, abiBytesTail] using h
   show List.sliceD e.data 100 data.length 0 = data
   rw [hd, List.sliceD,
     List.drop_length_append' (by
-      simp [abiSelectorBytes_length, B256.length_toBytes]),
-    List.takeD_eq_take _ (by simp [List.length_append]),
+      simp only [List.append_assoc, List.length_append, abiSelectorBytes_length,
+        B256.length_toBytes, Nat.reduceAdd]),
+    List.takeD_eq_take _ (by simp only [List.length_append, List.length_replicate,
+      le_add_iff_nonneg_right, zero_le]),
     List.take_length_append' rfl]
 
 private lemma normalize_adr_toB256 (a : Adr) :
@@ -204,7 +214,7 @@ private lemma normalize_adr_toB256 (a : Adr) :
     · rfl
     · change (-1 : UInt32).toUInt64 &&& ahi.toUInt64 = ahi.toUInt64
       rw [← UInt32.toUInt64_and]
-      simp
+      simp only [UInt32.neg_one_and]
   · exact b128_and_max alo
 
 /-! ## Canonical token-callback image -/
@@ -303,9 +313,10 @@ private lemma Bytes.writeAt_after_prefix
     Bytes.writeAt (pre ++ tail) pre.length new =
       pre ++ new ++ tail.drop new.length := by
   unfold Bytes.writeAt
-  rw [List.takeD_eq_take _ (by simp), List.take_left,
+  rw [List.takeD_eq_take _ (by simp only [List.length_append, le_add_iff_nonneg_right, zero_le]), List.take_left,
     List.drop_append]
-  simp [List.append_assoc]
+  simp only [add_tsub_cancel_left, List.append_assoc, List.append_cancel_left_eq,
+    List.append_left_eq_self, List.drop_eq_nil_iff, le_add_iff_nonneg_right, zero_le]
 
 private lemma tokenCallbackImage_of_short
     (img : Bytes) (sel caller value len : B256) (payload : Bytes)
@@ -358,7 +369,8 @@ private lemma tokenCallbackImage_of_short
   unfold tokenCallbackImage
   rw [e0, e1, e2, e3, e4, hdrop]
   simp only [List.append_nil]
-  rw [Bytes.writeAt_of_length_eq (by simp [hlen])]
+  rw [Bytes.writeAt_of_length_eq (by simp only [List.append_assoc, List.length_append, hlen,
+    Nat.reduceAdd])]
 
 private lemma tokenCallbackWindow
     (sel caller value : B256) (payload : Bytes) :
@@ -376,7 +388,7 @@ private lemma tokenCallbackWindow
       sel.toBytes ++ (caller.toBytes ++ value.toBytes ++
         (0x60 : B256).toBytes ++ (Nat.toB256 payload.length).toBytes ++
         payload) := by
-    simp [List.append_assoc]
+    simp only [List.append_assoc]
   unfold List.sliceD
   rw [himg, List.drop_append_of_le_length (by rw [hlen]; omega)]
   rw [List.takeD_of_length_le]
@@ -386,7 +398,7 @@ private lemma tokenCallbackWindow
     rw [show 132 + ceil32 payload.length -
         (32 - 28 + (32 + (32 + (32 + (32 + payload.length))))) =
         ceil32 payload.length - payload.length from by omega]
-    norm_num
+    norm_num only
     rfl
   · simp only [List.length_append, List.length_drop, hlen]
     omega
@@ -465,7 +477,7 @@ private theorem boolReturn_success_effect
     simp only [Rinst.run, Rinst.runCore] at hreg
     exact Devm.diffBurn_of_applyUnary hreg
   rw [show ((1 : B256) =? 0) = 0 from by
-    simp [B256.eqCheck]] at hp1
+    simp only [B256.eqCheck, ite_eq_right_iff, imp_self]] at hp1
   rcases of_run_branch run1 with
       ⟨s2, hpopCall, hcontinue⟩ |
       ⟨w, s2, s3, hnz, hpopCall, hburn, hbubble⟩
@@ -623,7 +635,9 @@ private theorem boolReturn_success_effect
     · exact (hlogs_s_s4.trans (hlogsPrefix.trans hlogsTail)).symm
   · rcases of_run_call hbubble with ⟨f, sb, hget, hburn', hrun⟩
     have hf : f = bubbleRevert := by
-      simpa [weth10Aux, bubbleRevertSlot] using hget.symm
+      simpa only [weth10Aux, bubbleRevertSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using hget.symm
     subst f
     exact absurd hrun not_run_bubbleRevert
 
@@ -1344,29 +1358,6 @@ def RawTokenCallbackIndexedStepBoundary (dp : DeployParams) (e : Sevm)
     Func.Run ((weth10 dp).main :: weth10Aux) e
       callPost (.call boolReturnSlot) post
 
-/-- Forgetting only the parent `StepRun` recovers the established raw
-callback API. -/
-theorem RawTokenCallbackStepBoundary.toRaw
-    {dp : DeployParams} {e : Sevm} {self target : Adr}
-    {rawTarget sel value tailLen inputSize : B256} {tail input : Bytes}
-    {pre post : Devm}
-    (h : RawTokenCallbackStepBoundary dp e self target rawTarget sel value
-      tailLen inputSize tail input pre post) :
-    RawTokenCallbackBoundary dp e self target rawTarget sel value tailLen
-      inputSize tail input pre post := by
-  rcases h with
-    ⟨htarget, hsize, callPre, callPost, parent, child, xl, delegated,
-      code, gasWord, avail, pc, _hstep, hdepth, hstack, hinput,
-      hreads, hstor, hbal, hcode, hlogs, houtput, hparentState,
-      hparentMemory, hparentLogs, hparentOutput, hdelegation, hfilled,
-      hmessage, hclean, hresume, hcallPostState, hreturnData, hmemory,
-      hcallPostStack, hbool⟩
-  exact ⟨htarget, hsize, callPre, callPost, parent, child, xl,
-    delegated, code, gasWord, avail, hdepth, hstack, hinput, hreads,
-    hstor, hbal, hcode, hlogs, houtput, hparentState, hparentMemory,
-    hparentLogs, hparentOutput, hdelegation, hfilled, hmessage, hclean,
-    hresume, hcallPostState, hreturnData, hmemory, hcallPostStack, hbool⟩
-
 /-- The exact ABI-size word passed to the ERC-677 callback `CALL`. -/
 def tokenCallbackSizeWord (data : Bytes) : B256 :=
   0x84 + ((~~~ (31 : B256)) &&& (31 + Nat.toB256 data.length))
@@ -1434,7 +1425,8 @@ private theorem not_run_call_boolReturn_of_zero
   have hlookup :
       ((weth10 dp).main :: weth10Aux)[boolReturnSlot]? =
         some boolReturn := by
-    simp [weth10, weth10Aux, boolReturnSlot]
+    simp only [weth10, weth10Aux, boolReturnSlot, List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   have hf : f = boolReturn := by
     rw [hlookup] at hget
     exact Option.some.inj hget.symm
@@ -1445,7 +1437,7 @@ private theorem not_run_call_boolReturn_of_zero
   simp only [boolReturn] at hbool
   rcases of_run_next hbool with ⟨s1, hiszero, hbranch⟩
   have hp1 := prefix_of_iszero hiszero hpb
-  rw [show ((0 : B256) =? 0) = 1 from by simp [B256.eqCheck]] at hp1
+  rw [show ((0 : B256) =? 0) = 1 from by simp only [B256.eqCheck, ↓reduceIte]] at hp1
   rcases of_run_branch hbranch with
       ⟨s2, hpop, -⟩ |
       ⟨w, s2, s3, hnz, hpop, hburnCall, hbubbleCall⟩
@@ -1460,7 +1452,8 @@ private theorem not_run_call_boolReturn_of_zero
     have hlookupb :
         ((weth10 dp).main :: weth10Aux)[bubbleRevertSlot]? =
           some bubbleRevert := by
-      simp [weth10, weth10Aux, bubbleRevertSlot]
+      simp only [weth10, weth10Aux, bubbleRevertSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
     have hfb : fb = bubbleRevert := by
       rw [hlookupb] at hgetb
       exact Option.some.inj hgetb.symm
@@ -1723,14 +1716,15 @@ theorem callBoolCallback_successEffect
     have h_bool_lookup :
         ((weth10 dp).main :: weth10Aux)[boolReturnSlot]? =
           some boolReturn := by
-      simp [weth10, weth10Aux, boolReturnSlot]
+      simp only [weth10, weth10Aux, boolReturnSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
     have hf : f = boolReturn := by
       rw [h_bool_lookup] at h_get
       exact Option.some.inj h_get.symm
     subst f
     have hp_post : (1 : B256) :: parent.stack <<+ callPost.stack := by
       rw [h_post_stack]
-      simpa using (pref_append ((1 : B256) :: parent.stack) [])
+      simpa only [List.append_nil] using (pref_append ((1 : B256) :: parent.stack) [])
     have hp_decode : (1 : B256) :: parent.stack <<+ decode.stack := by
       rw [← h_burn.stack]
       exact hp_post
@@ -2148,7 +2142,8 @@ theorem weth10_approveAndCall_successEffect (dp : DeployParams)
   have h_mem :
       (approveAndCallSelector, nonpayable approveAndCall) ∈
         weth10Funcs dp := by
-    simp [approveAndCallSelector, weth10Funcs]
+    simp only [weth10Funcs, approveAndCallSelector, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+      or_false, true_or, or_true]
   rcases exec_enters_weth10Nonpayable_logs exc h_code h_sel h_nonempty
       h_mem with
     ⟨bodyPre, hvalue, hstor, hbal, hcodeFrame, hmemory,
@@ -2391,7 +2386,8 @@ theorem weth10_depositToAndCall_rawSuccessEffect (dp : DeployParams)
     DepositToAndCallRawSuccessEffect dp e pre post := by
   have h_mem :
       (depositToAndCallSelector, depositToAndCall) ∈ weth10Funcs dp := by
-    simp [depositToAndCallSelector, weth10Funcs]
+    simp only [weth10Funcs, depositToAndCallSelector, List.mem_cons, Prod.mk.injEq,
+      List.not_mem_nil, or_false, true_or, or_true]
   rcases exec_enters_weth10Selector_logs exc h_code h_sel h_nonempty
       h_mem with
     ⟨bodyPre, hstor, hbal, hcodeFrame, hmemory, hlogs, houtput, hbody⟩
@@ -2419,7 +2415,8 @@ theorem weth10_depositToAndCall_rawStepSuccessEffect (dp : DeployParams)
     DepositToAndCallRawStepSuccessEffect dp e pre post := by
   have h_mem :
       (depositToAndCallSelector, depositToAndCall) ∈ weth10Funcs dp := by
-    simp [depositToAndCallSelector, weth10Funcs]
+    simp only [weth10Funcs, depositToAndCallSelector, List.mem_cons, Prod.mk.injEq,
+      List.not_mem_nil, or_false, true_or, or_true]
   rcases exec_enters_weth10Selector_logs exc h_code h_sel h_nonempty
       h_mem with
     ⟨bodyPre, hstor, hbal, hcodeFrame, hmemory, hlogs, houtput, hbody⟩
@@ -2527,7 +2524,8 @@ theorem weth10_depositToAndCall_successEffect (dp : DeployParams)
     DepositToAndCallSuccessEffect e pre post recipient data := by
   have h_mem :
       (depositToAndCallSelector, depositToAndCall) ∈ weth10Funcs dp := by
-    simp [depositToAndCallSelector, weth10Funcs]
+    simp only [weth10Funcs, depositToAndCallSelector, List.mem_cons, Prod.mk.injEq,
+      List.not_mem_nil, or_false, true_or, or_true]
   rcases exec_enters_weth10Selector_logs exc h_code h_sel h_nonempty
       h_mem with
     ⟨bodyPre, hstor, hbal, hcodeFrame, hmemory, hlogs, houtput, hbody⟩
@@ -2731,7 +2729,8 @@ theorem weth10_transferAndCall_rawSuccessEffect (dp : DeployParams)
   have h_mem :
       (transferAndCallSelector, nonpayable transferAndCall) ∈
         weth10Funcs dp := by
-    simp [transferAndCallSelector, weth10Funcs]
+    simp only [weth10Funcs, transferAndCallSelector, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+      or_false, true_or, or_true]
   rcases exec_enters_weth10Nonpayable_logs exc h_code h_sel h_nonempty
       h_mem with
     ⟨bodyPre, hvalue, hstor, hbal, hcodeFrame, hmemory,
@@ -2771,7 +2770,8 @@ theorem weth10_transferAndCall_rawStepSuccessEffect (dp : DeployParams)
   have h_mem :
       (transferAndCallSelector, nonpayable transferAndCall) ∈
         weth10Funcs dp := by
-    simp [transferAndCallSelector, weth10Funcs]
+    simp only [weth10Funcs, transferAndCallSelector, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+      or_false, true_or, or_true]
   rcases exec_enters_weth10Nonpayable_logs exc h_code h_sel h_nonempty
       h_mem with
     ⟨bodyPre, hvalue, hstor, hbal, hcodeFrame, hmemory,
@@ -2921,7 +2921,8 @@ theorem weth10_transferAndCall_successEffect (dp : DeployParams)
   have h_mem :
       (transferAndCallSelector, nonpayable transferAndCall) ∈
         weth10Funcs dp := by
-    simp [transferAndCallSelector, weth10Funcs]
+    simp only [weth10Funcs, transferAndCallSelector, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+      or_false, true_or, or_true]
   rcases exec_enters_weth10Nonpayable_logs exc h_code h_sel h_nonempty
       h_mem with
     ⟨bodyPre, hvalue, hstor, hbal, hcodeFrame, hmemory,

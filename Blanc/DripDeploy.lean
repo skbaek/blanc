@@ -70,13 +70,9 @@ def constructorInitPrefix : Bytes :=
 def creationCode : Bytes :=
   constructorInitPrefix ++ code
 
-def constructorCreationCode : Bytes := creationCode
-
 def creationCodeSize : Nat := creationCode.length
 
 def eip3860InitcodeLimit : Nat := pragueCodeLimits.maxInitCodeSize
-
-def creationCodeHeadroom : Nat := eip3860InitcodeLimit - creationCodeSize
 
 theorem constructorProgram_eq :
     constructorProgram =
@@ -106,10 +102,6 @@ theorem creationCode_eq_prefix_append_runtime :
     creationCode = constructorInitPrefix ++ code := by
   rfl
 
-theorem creationCode_drop_prefix :
-    creationCode.drop constructorInitPrefix.length = code := by
-  simp [creationCode]
-
 /-- The constructor's CODECOPY window is exactly the appended runtime. -/
 theorem creationCode_slice_runtime :
     creationCode.sliceD constructorRuntimeOffset codeSize 0 = code := by
@@ -117,7 +109,7 @@ theorem creationCode_slice_runtime :
   unfold creationCode List.sliceD
   rw [List.drop_length_append' rfl]
   change List.takeD code.length code 0 = code
-  rw [List.takeD_eq_take _ (by simp)]
+  rw [List.takeD_eq_take _ (by simp only [Std.le_refl])]
   exact List.take_length
 
 theorem eip3860InitcodeLimit_exact : eip3860InitcodeLimit = 49152 := by
@@ -187,7 +179,7 @@ private theorem run_body_of_run_nonpayable_stack {fs : List Func} {sevm : Sevm}
     have hv : sevm.value = 0 := by
       by_cases hv : sevm.value = 0
       · exact hv
-      · simp [B256.eqCheck, hv] at hflag
+      · simp only [B256.eqCheck, hv, ↓reduceIte, ne_eq, not_true_eq_false] at hflag
     have htail3 : tail <<+ s3.stack := by
       rw [← hburn.stack]
       exact htail2
@@ -242,7 +234,7 @@ theorem of_run_constructorProgram_main {fs : List Func} {sevm : Sevm} {s r : Dev
     prefix_of_eq heq hpC
   rw [hsize] at hpF
   have hflag1 : (Nat.toB256 2001 =? Nat.toB256 2001) = 1 := by
-    simp [B256.eqCheck]
+    simp only [B256.eqCheck, ↓reduceIte]
   rw [hflag1] at hpF
   rcases of_run_branch hbody with
     ⟨_, _, hrev⟩ | ⟨_, b1, b2, _, hpop, hburn, hbody⟩
@@ -462,15 +454,17 @@ theorem constructorProgram_runCompiled {sevm : Sevm} {pre : Devm} {G : Nat}
   have htime0 : (0 : B256) ≠ sevm.benvStat.time := Ne.symm htime
   have hne : (1 : B256) ≠ 0 := by decide
   have hvcS : sstoreValueCost 0 0 scale = gasStorageSet := by
-    simp [sstoreValueCost, hScaleNe0]
+    simp only [sstoreValueCost, ne_eq, hScaleNe0, not_false_eq_true, and_self, ↓reduceIte]
   have hvcT : sstoreValueCost 0 0 sevm.benvStat.time = gasStorageSet := by
-    simp [sstoreValueCost, htime0]
+    simp only [sstoreValueCost, ne_eq, htime0, not_false_eq_true, and_self, ↓reduceIte]
   have hgasRules : sevm.benvStat.rules.gas = pragueRules.gas :=
     BenvStat.gas_eq_prague_of_stateGas_none hfork.rules_stateGas_none
   have hrcS : sstoreNewRefundCounter sevm.benvStat.rules.gas scale 0 0 0 = 0 := by
-    simp [hgasRules, sstoreNewRefundCounter, hScaleNe0]
+    simp only [sstoreNewRefundCounter, ne_eq, hScaleNe0, not_false_eq_true, ↓reduceIte,
+      not_true_eq_false, and_true, false_and, and_self]
   have hrcT : sstoreNewRefundCounter sevm.benvStat.rules.gas sevm.benvStat.time 0 0 0 = 0 := by
-    simp [hgasRules, sstoreNewRefundCounter, htime0]
+    simp only [sstoreNewRefundCounter, ne_eq, htime0, not_false_eq_true, ↓reduceIte,
+      not_true_eq_false, and_true, false_and, and_self]
   let fs := constructorProgram.main :: constructorProgram.aux
   let F0 : Func := Func.return_
   let F1 : Func := pushB256 0 ::: F0
@@ -522,7 +516,8 @@ theorem constructorProgram_runCompiled {sevm : Sevm} {pre : Devm} {G : Nat}
       (Ninst.runCompiled_pushItem (sevm := sevm) (devm := mid) (r := .callvalue) (x := sevm.value) (cost := gBase) (G := G + 44608) (by rintro ⟨⟩) rfl (by simp only [mid, Devm.gasLeft_setMach, gBase]) (by simp only [mid, Devm.stack_setMach, List.length_nil]; omega))
   have h2 : Ninst.RunCompiled sevm s1 iszero s2 := by
     simpa only [s2, s1, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
-      (Ninst.runCompiled_unary (sevm := sevm) (devm := s1) (r := .iszero) (cost := gVerylow) (G := G + 44605) (x := sevm.value) (v := 1) (s := []) (by rintro ⟨⟩) rfl (by simp only [s1, Devm.stack_setMach]) (by show B256.eqCheck sevm.value 0 = 1; rw [hvalue]; simp [B256.eqCheck]) (by simp only [s1, Devm.gasLeft_setMach, gVerylow]) (by simp only [List.length_nil]; omega))
+      (Ninst.runCompiled_unary (sevm := sevm) (devm := s1) (r := .iszero) (cost := gVerylow) (G := G + 44605) (x := sevm.value) (v := 1) (s := []) (by rintro ⟨⟩) rfl (by simp only [s1, Devm.stack_setMach]) (by show B256.eqCheck sevm.value 0 = 1; rw [hvalue]; simp only [B256.eqCheck,
+        ↓reduceIte]) (by simp only [s1, Devm.gasLeft_setMach, gVerylow]) (by simp only [List.length_nil]; omega))
   have hpop1 : Devm.PopBurnBy [(1 : B256)] (gVerylow + gHigh + gJumpdest) s2 s3 := by
     simpa only [s3, s2, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
       Devm.popBurnBy_setMach (devm := s2) (x := 1) (s := []) (cost := gVerylow + gHigh + gJumpdest) (G := G + 44591) (by simp only [s2, Devm.stack_setMach]) (by simp only [s2, Devm.gasLeft_setMach, gVerylow, gHigh, gJumpdest])
@@ -536,7 +531,8 @@ theorem constructorProgram_runCompiled {sevm : Sevm} {pre : Devm} {G : Nat}
       (Ninst.runCompiled_pushItem (sevm := sevm) (devm := s4) (r := .codesize) (x := sevm.code.size.toB256) (cost := gBase) (G := G + 44586) (by rintro ⟨⟩) rfl (by simp only [s4, Devm.gasLeft_setMach, gBase]) (by simp only [s4, Devm.stack_setMach, List.length_cons, List.length_nil]; omega))
   have h6 : Ninst.RunCompiled sevm s5 eq s6 := by
     simpa only [s6, s5, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
-      (Ninst.runCompiled_binary (sevm := sevm) (devm := s5) (r := .eq) (cost := gVerylow) (G := G + 44583) (x := sevm.code.size.toB256) (y := Nat.toB256 2001) (v := 1) (s := []) (by rintro ⟨⟩) rfl (by simp only [s5, Devm.stack_setMach]) (by show B256.eqCheck sevm.code.size.toB256 (Nat.toB256 2001) = 1; rw [hsize]; simp [B256.eqCheck]) (by simp only [s5, Devm.gasLeft_setMach, gVerylow]) (by simp only [List.length_nil]; omega))
+      (Ninst.runCompiled_binary (sevm := sevm) (devm := s5) (r := .eq) (cost := gVerylow) (G := G + 44583) (x := sevm.code.size.toB256) (y := Nat.toB256 2001) (v := 1) (s := []) (by rintro ⟨⟩) rfl (by simp only [s5, Devm.stack_setMach]) (by show B256.eqCheck sevm.code.size.toB256 (Nat.toB256 2001) = 1; rw [hsize]; simp only [B256.eqCheck,
+        ↓reduceIte]) (by simp only [s5, Devm.gasLeft_setMach, gVerylow]) (by simp only [List.length_nil]; omega))
   have hpop2 : Devm.PopBurnBy [(1 : B256)] (gVerylow + gHigh + gJumpdest) s6 s7 := by
     simpa only [s7, s6, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
       Devm.popBurnBy_setMach (devm := s6) (x := 1) (s := []) (cost := gVerylow + gHigh + gJumpdest) (G := G + 44569) (by simp only [s6, Devm.stack_setMach]) (by simp only [s6, Devm.gasLeft_setMach, gVerylow, gHigh, gJumpdest])
@@ -925,7 +921,10 @@ private theorem chargeCodeGas_drip_output
   obtain ⟨tail, hcons⟩ := code_cons
   have hlen : code.length = 1762 := codeSize_exact
   rw [processCreateMessage.chargeCodeGas_legacy_eq_ok hstateGas
-    (by rw [h_output, hcons]; simp <;> decide) (by rw [h_output, hlen]; exact h_gas)
+    (by
+      rw [h_output, hcons]
+      change (some (91 : UInt8) : Option UInt8) ≠ some 239
+      decide) (by rw [h_output, hlen]; exact h_gas)
     (by rw [h_output, hlen]; exact h_max), h_output, hlen]
   rfl
 
@@ -1327,17 +1326,17 @@ theorem canonicalDeploymentSystemPrefix
   have hbeaconRun := processUncheckedSystemTransaction_deploymentSystemProgram
     (initBenv fork base cb.block.header)
     beaconRootsAddress cb.block.header.parentBeaconBlockRoot.toBytes
-    (by simpa [initBenv] using hbase.beaconCode)
+    (by simpa only [initBenv] using hbase.beaconCode)
     hbase.beacon_not_precompile
-    (by simpa [initBenv, initBenvStat] using hfork)
+    (by simpa only [initBenv, initBenvStat] using hfork)
   obtain ⟨outBeacon, hbeaconEq, _, _, _, _, _⟩ := hbeaconRun
   obtain ⟨lastHash, hlast⟩ := hbase.lastBlockHash
   have hhistoryRun := processUncheckedSystemTransaction_deploymentSystemProgram
     ((initBenv fork base cb.block.header).withState base.state)
     historyStorageAddress lastHash.toBytes
-    (by simpa [initBenv, Benv.withState] using hbase.historyCode)
+    (by simpa only [Benv.withState, initBenv] using hbase.historyCode)
     hbase.history_not_precompile
-    (by simpa [initBenv, initBenvStat, Benv.withState] using hfork)
+    (by simpa only [Benv.withState, initBenv, initBenvStat] using hfork)
   obtain ⟨outHistory, hhistoryEq, _, _, _, _, _⟩ := hhistoryRun
   refine ⟨⟨_, {
     outBeacon := outBeacon
@@ -1347,9 +1346,9 @@ theorem canonicalDeploymentSystemPrefix
     stHistory := base.state
     beaconRun := hbeaconEq
     lastHashEq := by
-      simpa [initBenv, initBenvStat, Benv.withState] using hlast
+      simpa only [Benv.withState, initBenv, initBenvStat] using hlast
     historyRun := by
-      simpa [Benv.withState] using hhistoryEq
+      simpa only [Benv.withState] using hhistoryEq
     txInput_eq := rfl
     environment_eq := rfl
     state_eq := rfl
@@ -1426,7 +1425,7 @@ theorem prepareCanonicalDeploymentContext
   let fee := deploymentTx.gas *
     deploymentEffectiveGasPrice txInput deploymentTx
   have hbegun_state : begun.state = base.state := by
-    simpa [begun, Benv.beginTransaction] using hprefix.state_eq
+    simpa only [begun, Benv.beginTransaction] using hprefix.state_eq
   have hprice : deploymentEffectiveGasPrice txInput deploymentTx =
       deploymentEffectiveGasPrice
         (initBenv fork base cb.block.header) deploymentTx := by
@@ -1434,7 +1433,7 @@ theorem prepareCanonicalDeploymentContext
     rfl
   have hfee_le : fee ≤ (begun.state.bal sender).toNat := by
     rw [hbegun_state]
-    simpa [fee, hprice] using henv.upfront_funded
+    simpa only [fee, hprice] using henv.upfront_funded
   have hfee_lt : fee < 2 ^ 256 :=
     hfee_le.trans_lt (B256.toNat_lt _)
   have hfeeEncoded : fee.toB256.toNat = fee :=
@@ -1482,7 +1481,7 @@ theorem prepareCanonicalDeploymentContext
   have hprepare : prepareMessage msgBenv tenv deploymentTx = .ok msg := by
     unfold prepareMessage
     rw [hreceiver]
-    simp [msg, msgBenv, currentTarget, hreceiver]
+    simp only [msg, msgBenv, currentTarget, hreceiver, Except.ok.injEq, Msg.mk.injEq, true_and]
     rfl
   have hdebit_nonce :
       debit.getNonce sender = base.state.getNonce sender + 1 := by
@@ -1500,7 +1499,7 @@ theorem prepareCanonicalDeploymentContext
     dsimp only [msg, currentTarget]
     change computeContractAddress sender (debit.getNonce sender - 1) = ca
     rw [hdebit_nonce]
-    simp
+    simp only [add_sub_cancel_right]
     exact hbase.target_eq.symm
   have htx_chain : txInput.stat.chainId = base.chainId := by
     rw [hprefix.txInput_eq]
@@ -1513,8 +1512,7 @@ theorem prepareCanonicalDeploymentContext
     rfl
   have hmsg_chain : msg.benv.stat.chainId = cfg.chainId := by
     dsimp only [msg, msgBenv, begun]
-    simpa [Benv.beginTransaction] using
-      htx_chain.trans hbase.chainId_eq.symm
+    simpa only [Benv.beginTransaction] using htx_chain.trans hbase.chainId_eq.symm
   have hmsg_rules : msg.benv.stat.rules = Fork.ruleSet fork := by
     change begun.stat.rules = Fork.ruleSet fork
     change txInput.stat.rules = Fork.ruleSet fork
@@ -1533,17 +1531,17 @@ theorem prepareCanonicalDeploymentContext
     dsimp only [msg, msgBenv]
     have hpre := hbase.target_noCodeOrNonce
     unfold accountHasCodeOrNonce at hpre ⊢
-    simpa [State.getNonce, State.getCode, hdebit_ca] using hpre
+    simpa only [State.getNonce, State.getCode, hdebit_ca, gt_iff_lt, Bool.or_eq_false_iff, decide_eq_false_iff_not, not_lt, UInt64.le_zero_iff, Bool.not_eq_eq_eq_not, Bool.not_false] using hpre
   have hnostor : accountHasStorage msg.benv.state ca = false := by
     dsimp only [msg, msgBenv]
     have hpre := hbase.target_noStorage
     unfold accountHasStorage at hpre ⊢
-    simpa [State.getStor, hdebit_ca] using hpre
+    simpa only [State.getStor, hdebit_ca, Bool.not_eq_eq_eq_not, Bool.not_false] using hpre
   have hempty : base.state.getStor ca = Stor.empty := by
     have hisEmpty : (base.state.getStor ca).isEmpty = true := by
       have hpre := hbase.target_noStorage
       unfold accountHasStorage at hpre
-      simpa using hpre
+      simpa only [Bool.not_eq_eq_eq_not, Bool.not_false] using hpre
     exact Std.TreeMap.eq_empty_of_isEmpty hisEmpty
   have horig_state : (processCreateMessage.msg msg).benv.stat.origState =
       base.state := by
@@ -1580,10 +1578,12 @@ theorem prepareCanonicalDeploymentContext
   have hcoldEmpty : tenv.stat.accessListStorageKeys = .ofList [] := rfl
   have hcoldChi : ⟨msg.currentTarget, chiSlot⟩ ∉ msg.accessedStorageKeys := by
     rw [hcoldKeys, hcoldEmpty, Std.HashSet.mem_ofList]
-    simp
+    simp only [List.contains_eq_mem, List.not_mem_nil, decide_false, Bool.false_eq_true,
+      not_false_eq_true]
   have hcoldRho : ⟨msg.currentTarget, rhoSlot⟩ ∉ msg.accessedStorageKeys := by
     rw [hcoldKeys, hcoldEmpty, Std.HashSet.mem_ofList]
-    simp
+    simp only [List.contains_eq_mem, List.not_mem_nil, decide_false, Bool.false_eq_true,
+      not_false_eq_true]
   have hbalZero : msg.benv.state.bal msg.currentTarget = 0 := by
     have e : msg.benv.state = debit := rfl
     rw [e, htarget]
@@ -1598,12 +1598,12 @@ theorem prepareCanonicalDeploymentContext
     msg := msg
     systemPrefix := hprefix
     begun_eq := rfl
-    debit_eq := by simpa [fee] using hdebit
+    debit_eq := by simpa only [fee] using hdebit
     tenv_eq := rfl
     prepare_eq := hprepare
     msg_benv_eq := rfl
     msg_caller_eq := rfl
-    msg_target_eq := by simpa [msg] using hreceiver
+    msg_target_eq := by simpa only [msg] using hreceiver
     msg_gas_eq := rfl
     msg_value_eq := by
       rw [show msg.value = deploymentTx.value.toB256 from rfl,
@@ -1705,7 +1705,8 @@ theorem canonicalDeploymentMessage_succeeds
     unfold processMessageCall.create
     simp only [if_true]
     rw [ctx.target_eq]
-    simp [ctx.noCodeOrNonce, ctx.noStorage, Except.bimap, hcreate, herr,
+    simp only [ctx.noCodeOrNonce, ctx.noStorage, Bool.or_self, Bool.false_eq_true, ↓reduceIte,
+      Except.bimap, hcreate, id_eq, Option.isNone_iff_eq_none, Except.bind_ok, Nat.cast_zero, herr,
       htoNat, directCreateMessageOutputOf]
     rw [hmsgStateGas]
     rfl
@@ -1738,7 +1739,7 @@ theorem canonicalDeploymentMessage_succeeds
       apply Prog.compile_ne_nil (p := deploymentSystemProgram)
       rw [← hbaseCode, hempty]
     have hne' : a ≠ ctx.msg.currentTarget := by
-      simpa [ctx.target_eq] using hne
+      simpa only [ctx.target_eq, ne_eq] using hne
     have hc := hcreateCode a hne' hnonempty
     change post.state.getCode a = ctx.msg.benv.state.getCode a at hc
     rw [hinputCode] at hc
@@ -1858,7 +1859,7 @@ theorem canonicalDeploymentTransaction_succeeds
           (deploymentTxPreludeBout .init deploymentTx 0) deploymentTx =
         .ok (sender, deploymentEffectiveGasPrice ctx.txInput deploymentTx,
           [], 0) := by
-    simpa [ctx.systemPrefix.environment_eq, hprice] using henv.checked
+    simpa only [ctx.systemPrefix.environment_eq, hprice] using henv.checked
   have hdebit := ctx.debit_eq
   rw [ctx.begun_eq] at hdebit
   simp only [Benv.beginTransaction] at hdebit
@@ -1872,7 +1873,8 @@ theorem canonicalDeploymentTransaction_succeeds
   have hintrinsic :
       calculateIntrinsicCost (Fork.ruleSet fork) deploymentTx 0 =
         calculateIntrinsicCost (Fork.ruleSet fork) deploymentTx sender := by
-    simp [calculateIntrinsicCost, htype, hforkStateGas]
+    simp only [calculateIntrinsicCost, htype, hforkStateGas, Option.isNone_iff_eq_none,
+      List.map_nil, List.sum_nil, add_zero]
   have hprepare := ctx.prepare_eq
   rw [ctx.begun_eq, ctx.tenv_eq] at hprepare
   have hrun : processTransaction ctx.txInput .init deploymentTx 0 =
@@ -1912,7 +1914,7 @@ theorem canonicalDeploymentTransaction_succeeds
     rw [hprepare]
     simp only [hmessage.run]
     rw [hrefund]
-    simp only [hdelete, List.foldl_nil]
+    simp only [hdelete]
     simp only [settleSelfdestructs, hforkStateGas]
     have hforkBalNone : (Fork.ruleSet fork).bal = none := by
       rw [← htxRules]
@@ -1925,10 +1927,10 @@ theorem canonicalDeploymentTransaction_succeeds
           messageOut.gasLeft messageOut.stateGasLeft messageOut.refundCounter.toNat
           messageOut.stateGasUsed =
           ⟨usedGas, deploymentTx.gas - usedGas, usedGas, 0⟩ := by
-      simp [settleTransactionGas, hforkStateGas, usedGas,
-        deploymentUsedGasFromMessage, deploymentCalldataFloorGas]
+      simp only [settleTransactionGas, hforkStateGas, deploymentUsedGasFromMessage,
+        deploymentCalldataFloorGas, TransactionGasSettlement.mk.injEq, and_true, usedGas]
       rw [htxRules]
-      simp
+      simp only [and_self]
     rw [hsettlement]
     simp only [BlockOutput.withGasSettlement, hforkBalNone, List.foldl_nil,
       Nat.add_zero]
@@ -1967,19 +1969,16 @@ theorem canonicalDeploymentTransaction_succeeds
     exact hmessage.bal
   have hblockLogs : bout.blockLogs = [] := by
     dsimp only [bout, deploymentFinalBout]
-    simp [deploymentTxPreludeBout,
-      ExecutionTrace.transactionPreludeBout,
-      hmessage.logs, BlockOutput.init]
+    simp only [deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout, BlockOutput.init,
+      Std.TreeMap.empty_eq_emptyc, hmessage.logs, List.append_nil]
   have hrequests : bout.requests = [] := by
     dsimp only [bout, deploymentFinalBout]
-    simp [deploymentTxPreludeBout,
-      ExecutionTrace.transactionPreludeBout,
-      BlockOutput.init]
+    simp only [deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout, BlockOutput.init,
+      Std.TreeMap.empty_eq_emptyc]
   have hblockAccessList : bout.blockAccessList = [] := by
     dsimp only [bout, deploymentFinalBout]
-    simp [deploymentTxPreludeBout,
-      ExecutionTrace.transactionPreludeBout,
-      BlockOutput.init]
+    simp only [deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout, BlockOutput.init,
+      Std.TreeMap.empty_eq_emptyc]
   have hwithdrawalCode :
       some (post.getCode withdrawalRequestPredeployAddress).toList =
         Prog.compile deploymentSystemProgram := by
@@ -2010,13 +2009,13 @@ theorem canonicalDeploymentTransaction_succeeds
     unfold parseDepositRequests
     have hkeys : bout.receiptKeys = [deploymentReceiptKey 0] := by
       dsimp only [bout, deploymentFinalBout]
-      simp [deploymentTxPreludeBout,
-        ExecutionTrace.transactionPreludeBout, deploymentReceiptKey,
-        BlockOutput.init]
+      simp only [deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout, BlockOutput.init,
+        Std.TreeMap.empty_eq_emptyc, deploymentReceiptKey, List.nil_append]
     rw [hkeys]
     have hentry' := hentry
     change bout.receiptsTrie[deploymentReceiptKey 0]? = _ at hentry'
-    simp
+    simp only [bind_pure_comp, List.forIn_cons, List.forIn_nil, bind_assoc, bind_map_left,
+      bind_pure]
     rw [hentry']
     unfold makeReceipt
     rw [htype, hmessage.logs]
@@ -2025,7 +2024,7 @@ theorem canonicalDeploymentTransaction_succeeds
       (Std.TreeMap.get? bout.receiptsTrie (deploymentReceiptKey 0)).map
         (fun entry => entry.2.succeeded) = some true := by
     rw [hentry]
-    simp [makeReceipt, hmessage.error]
+    simp only [makeReceipt, Fin.isValue, hmessage.error, Option.isNone_none, Option.map_some]
   have htotal : deploymentIntrinsicGas ctx.txInput deploymentTx sender +
       dripCreateMessageGasAccounting ≤ deploymentTx.gas := by
     rw [ctx.systemPrefix.environment_eq]
@@ -2103,7 +2102,7 @@ theorem canonicalDeploymentSuffix_succeeds
     exact hfork
   have hpostPostFork :
       CoveredFork ((ctx.txInput.withState post).withState post).stat.fork := by
-    simpa [Benv.withState] using hpostFork
+    simpa only [Benv.withState] using hpostFork
   have hrequests : (ctx.txInput.withState post).stat.rules.requests =
       [(1, withdrawalRequestPredeployAddress),
        (2, consolidationRequestPredeployAddress)] := by
@@ -2113,7 +2112,7 @@ theorem canonicalDeploymentSuffix_succeeds
       hwithdrawalReturn⟩ :=
     processCheckedSystemTransaction_deploymentSystemProgram
       (ctx.txInput.withState post) withdrawalRequestPredeployAddress []
-      (by simpa [Benv.withState] using htx.withdrawalRequestCode)
+      (by simpa only [Benv.withState] using htx.withdrawalRequestCode)
       (by
         rw [ctx.systemPrefix.environment_eq]
         exact hbase.withdrawalRequest_not_precompile)
@@ -2123,7 +2122,7 @@ theorem canonicalDeploymentSuffix_succeeds
     processCheckedSystemTransaction_deploymentSystemProgram
       ((ctx.txInput.withState post).withState post)
       consolidationRequestPredeployAddress []
-      (by simpa [Benv.withState] using htx.consolidationRequestCode)
+      (by simpa only [Benv.withState] using htx.consolidationRequestCode)
       (by
         rw [ctx.systemPrefix.environment_eq]
         exact hbase.consolidationRequest_not_precompile)
@@ -2131,17 +2130,18 @@ theorem canonicalDeploymentSuffix_succeeds
   have hwithdrawal' :
       processCheckedSystemTransaction (ctx.txInput.withState post)
         withdrawalRequestPredeployAddress [] = .ok (post, withdrawalOut) := by
-    simpa [Benv.withState] using hwithdrawal
+    simpa only [Benv.withState] using hwithdrawal
   have hbalNone : ctx.txInput.stat.rules.bal = none := by
-    simpa [Benv.withState] using hpostFork.rules_bal_none
+    simpa only [Benv.withState] using hpostFork.rules_bal_none
   have hrun : processGeneralPurposeRequests
       (ctx.txInput.withState post) bout = .ok (post, bout) := by
     unfold processGeneralPurposeRequests processGeneralPurposeRequestsAt
     rw [htx.depositRequests]
     rw [hrequests]
-    simp [runRequestContracts, hwithdrawal', hconsolidation,
-      hwithdrawalReturn, hconsolidationReturn, htx.requests,
-      hbalNone]
+    simp only [runRequestContracts, hwithdrawal', gt_iff_lt, htx.requests, List.nil_append,
+      List.cons_append, Benv.withState_stat, hbalNone, Except.bind_ok, hconsolidation,
+      hwithdrawalReturn, List.length_nil, lt_self_iff_false, ↓reduceIte, hconsolidationReturn,
+      Except.ok.injEq, Prod.mk.injEq]
     constructor
     · rfl
     · rw [← htx.requests]
@@ -2179,7 +2179,7 @@ theorem canonicalDeploymentApplyBody_succeeds
         ctx.systemPrefix.stHistory
         (historyStorageAddress :: ctx.systemPrefix.outHistory.accountReads.toList)
         ctx.systemPrefix.outHistory.storageReads.toList = (BlockOutput.init : BlockOutput).bal := by
-    simp [BalBuilder.incorporateSystem, hbalNone]
+    simp only [BalBuilder.incorporateSystem, hbalNone, Std.TreeMap.empty_eq_emptyc]
     change ({} : BalBuilder) = ({} : BalBuilder)
     rfl
   unfold applyBody
@@ -2295,7 +2295,7 @@ theorem canonicalDeploymentStep_establishes_root
     rw [stateTransitionUsing_eq_of_chainId_eq
       (cfg := cfg) (ch := base) hbase.chainId_eq] at h
     rw [henv.forkAt] at h
-    simpa [Except.mapError, Bind.bind, Except.bind] using h
+    simpa only [Except.bind, Except.mapError] using h
   have hstate : post = deployed.state := by
     have hinvert := hwith
     rw [stateTransitionAt_eq_ok_iff, stateTransitionE] at hinvert
@@ -2338,12 +2338,6 @@ theorem canonicalDeploymentStep_establishes_root
     exact htx.pie
   · rw [← hstate]
     exact htx.bal
-
-theorem DeploymentRoot.reflReach
-    (hroot : DeploymentRoot cfg base deployed ca) :
-    BlockChain.ReachUsing cfg deployed deployed := by
-  exact .refl deployed hroot.configValid hroot.deployed_validContext
-    hroot.deployed_chainId
 
 end Drip
 end Blanc

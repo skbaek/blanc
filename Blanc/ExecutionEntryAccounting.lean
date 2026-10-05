@@ -62,8 +62,8 @@ theorem Xinst.step_spawn_world {sevm : Sevm} {devm : Devm} {x : Xinst}
       exact ha ((hf.getCode na).trans hcode.2.2)
     refine ⟨?_, ?_⟩
     · simp only [Frame.ofCreate]
-      dsimp [processCreateMessage.msg, Msg.withBenv, addCreatedAccount, Benv.setStor,
-        Benv.incrNonce, State.getStor, createMsg]
+      dsimp only [createMsg, processCreateMessage.msg, Msg.withBenv, Benv.setStor,
+        addCreatedAccount, Benv.incrNonce, State.getStor]
       rw [State.incrNonce_get_stor, State.setStor_get_stor_ne hna, addAccessedAddress_state]
       show ((((d.withGasLeft (d.gasLeft - except64th d.gasLeft)).withReturnData []).state.incrNonce
         sevm.currentTarget).get a).stor = _
@@ -281,7 +281,7 @@ theorem spawnChild {C : ReplayCarrier ca} {V : ReplayObservation C}
     exact installed.1
   have nodeCodeNe : nodePre.getCode ca ≠ .empty := fun empty => by
     rw [empty] at nodeInstalled
-    exact sem.ne_nil nodeInstalled.symm (by simp)
+    exact sem.ne_nil nodeInstalled.symm (by simp only [ByteArray.toList_empty])
   have nodeFork : CoveredFork nodeSevm.benvStat.fork := by rw [sevmEq]; exact fork
   have childFork := Evm.step_spawn_child_fork step enter nodeFork
   have childDepth : cevm.sta.depth < sevm₀.depth := by
@@ -340,15 +340,18 @@ private theorem entryChain (kinds : SpawnKinds ca sem) (spawn : SpawnEntry ca se
           EntryGood ca sem entry I f) := by
   intro pc sevm d out run
   induction run with
-  | halt step => intro _; simp [Exec.descendantFrames]
+  | halt step => intro _; simp only [descendantFrames, List.flatMap_nil, implies_true,
+    Nat.reducePow, List.not_mem_nil, IsEmpty.forall_iff, and_self]
   | cont step next ih =>
     intro chain
     simpa only [Exec.descendantFrames] using ih (chain.snoc (.cont step next))
-  | doneErr step enter resume => intro _; simp [Exec.descendantFrames]
+  | doneErr step enter resume => intro _; simp only [descendantFrames, List.flatMap_nil,
+    implies_true, Nat.reducePow, List.not_mem_nil, IsEmpty.forall_iff, and_self]
   | doneOk step enter resume next ih =>
     intro chain
     simpa only [Exec.descendantFrames] using ih (chain.snoc (.doneOk step enter resume next))
-  | runErr step enter child resume ih => intro _; simp [Exec.descendantFrames]
+  | runErr step enter child resume ih => intro _; simp only [descendantFrames, List.flatMap_nil,
+    implies_true, Nat.reducePow, List.not_mem_nil, IsEmpty.forall_iff, and_self]
   | runOk step enter child resume next childIH nextIH =>
     rename_i nodePc nodeSevm nodePre frame rsm nextPc cevm raw inter final
     intro chain
@@ -369,7 +372,7 @@ private theorem entryChain (kinds : SpawnKinds ca sem) (spawn : SpawnEntry ca se
           List.append_assoc]
       · rw [Exec.descendantFrames_runOk_of_not_settlementCommits step enter child resume next
           settles]
-        simp [settles]
+        simp only [settles, Bool.false_eq_true, ↓reduceIte, List.nil_append]
     rw [split]
     refine ⟨fun static => ?_, fun bound hI => ?_⟩
     · rw [nextStatic static, List.append_nil]
@@ -396,7 +399,7 @@ private theorem entryChain (kinds : SpawnKinds ca sem) (spawn : SpawnEntry ca se
           change f ∈ (entryObservation ca sem entry I).obs steps
           rw [observed]
           exact member
-        · simp at member
+        · simp only [List.not_mem_nil] at member
       · exact nextGood bound hI f member
 
 /-- **Target-parent spawn accounting.**  For the entry carrier of `I`, a
@@ -423,7 +426,8 @@ theorem entryTarget (preserve : FramePreserves ca sem entry I) (kinds : SpawnKin
     rw [Exec.committedFrames, dite_eq_left committed, List.flatMap_cons]
   refine ⟨fun static => ?_, fun bound => ⟨_, fun hI => ⟨?_, fun f member => ?_⟩, rfl⟩⟩
   · rw [self, descStatic static, List.append_nil]
-    simp [entryObservation, Exec.Frame.ofRun, static]
+    simp only [entryObservation, Exec.Frame.ofRun, static, Bool.true_eq_false, and_false,
+      ↓reduceIte]
   · exact preserve run hrun target fork installed admitted bound hI
   · change f ∈ (Exec.committedFrames run).flatMap (entryObservation ca sem entry I).frameObs
       at member
@@ -434,7 +438,7 @@ theorem entryTarget (preserve : FramePreserves ca sem entry I) (kinds : SpawnKin
       · rw [List.mem_singleton] at member
         subst member
         exact ⟨rfl, fork, installed, admitted.root target, hI⟩
-      · simp at member
+      · simp only [List.not_mem_nil] at member
     · exact descGood bound hI f member
 
 end Exec.CoreAccounting
@@ -466,7 +470,7 @@ def entryLadder (preserves : c.PreservesAdmitted ca entry)
       (fun frame foreign => by
         change (if frame.sevm.currentTarget = ca ∧ frame.sevm.isStatic = false then [frame]
           else []) = []
-        simp [foreign])
+        simp only [foreign, false_and, ↓reduceIte])
       (fun hrun target deeper =>
         Exec.CoreAccounting.entryTarget preserve kinds spawn hrun target deeper)
     exact (core pc sevm pre out run installed run committed fork installed admitted).2 entryBound
@@ -504,7 +508,8 @@ theorem ConfiguredHistoryTrace.entryGood_settled {c : ContractSpecSem} {ca : Adr
     if f.sevm.currentTarget = ca ∧ f.sevm.isStatic = false then [f] else []) at observed
   refine ⟨final, fun f member target static => good f ?_⟩
   rw [observed]
-  exact List.mem_flatMap.mpr ⟨f, member, by simp [target, static]⟩
+  exact List.mem_flatMap.mpr ⟨f, member, by simp only [target, static, and_self, ↓reduceIte,
+    List.mem_cons, List.not_mem_nil, or_false]⟩
 
 end ExecutionTrace
 

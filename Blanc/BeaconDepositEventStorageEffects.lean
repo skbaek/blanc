@@ -81,12 +81,15 @@ theorem stageDepositEvent_storageEffectRun
     simpa only [stopPost] using hlift hstop
   have hprefix : Func.RunCompiledTo.SuccessfulStopPrefix hrun := by
     apply Func.RunCompiledTo.SuccessfulStopPrefix.of_execFree hrun
-    · simp [stageDepositEvent, copyDynamicPayload, storeLe64At, loadWord,
-        mstoreAt, logWith, prepend, funcExecFree, Ninst.pushB256]
-    · simp [stageDepositEvent, copyDynamicPayload, storeLe64At, loadWord,
-        mstoreAt, logWith, prepend, Func.LocalSstoreFree, Ninst.pushB256]
-    · simp [stageDepositEvent, copyDynamicPayload, storeLe64At, loadWord,
-        mstoreAt, logWith, prepend, Func.SuccessStopOnly, Ninst.pushB256]
+    · simp only [stageDepositEvent, pushB256, mstoreAt, List.cons_append, List.nil_append,
+      copyDynamicPayload, loadWord, storeLe64At, Fin.isValue, logWith, Fin.succ_zero_eq_one,
+      prepend, funcExecFree]
+    · simp only [stageDepositEvent, pushB256, mstoreAt, List.cons_append, List.nil_append,
+      copyDynamicPayload, loadWord, storeLe64At, Fin.isValue, logWith, Fin.succ_zero_eq_one,
+      prepend, Func.LocalSstoreFree, ne_eq, reduceCtorEq, not_false_eq_true, reg.injEq, and_self]
+    · simp only [stageDepositEvent, pushB256, mstoreAt, List.cons_append, List.nil_append,
+      copyDynamicPayload, loadWord, storeLe64At, Fin.isValue, logWith, Fin.succ_zero_eq_one,
+      prepend, Func.SuccessStopOnly]
   have hspliced := hprefix.splice htail
   simpa only [Func.replaceStopWith_prepend, Func.replaceStopWith] using
     hspliced

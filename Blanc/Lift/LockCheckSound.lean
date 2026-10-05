@@ -275,11 +275,11 @@ theorem Val.filter {sp : Spec} {F n : Exec.Deriv} {kv : List Nat} {fs : List Fac
 theorem forall₂_getElem? {ρ : Nat → B256} :
     ∀ {kv : List Nat} {S : List B256}, List.Forall₂ (fun s w => ρ s = w) kv S →
       ∀ {j : Nat} {s : Nat}, kv[j]? = some s → S[j]? = some (ρ s)
-  | [], [], _, j, s, h => by simp at h
+  | [], [], _, j, s, h => by simp only [List.length_nil, not_lt_zero, not_false_eq_true, getElem?_neg, reduceCtorEq] at h
   | _ :: _, _ :: _, .cons h0 hr, j, s, h => by
     cases j with
-    | zero => simp at h ⊢; rw [← h, h0]
-    | succ j => simpa using forall₂_getElem? hr (by simpa using h)
+    | zero => simp only [List.length_cons, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true, getElem?_pos, List.getElem_cons_zero, Option.some.injEq] at h ⊢; rw [← h, h0]
+    | succ j => simpa only [List.getElem?_cons_succ] using forall₂_getElem? hr (by simpa only [List.getElem?_cons_succ] using h)
 
 theorem forall₂_update_of_not_mem {ρ : Nat → B256} {r : Nat} {w : B256} :
     ∀ {kv : List Nat} {S : List B256}, r ∉ kv →
@@ -314,7 +314,8 @@ theorem indexPattern_map_wordOf (hlen : S.length ≤ 1024) :
     | some j =>
       simp only [wordOf, label, Option.bind_some, List.getElem?_map]
       cases S[j.toNat]? <;> rfl
-  have h := indexPattern_map_label (a := S.map AVal.const) (ρ := 0) (by simpa using hlen)
+  have h := indexPattern_map_label (a := S.map AVal.const) (ρ := 0) (by simpa only [List.length_map] using
+    hlen)
   rw [List.length_map] at h
   rw [hφ, h, List.map_map]
   rfl
@@ -326,7 +327,7 @@ theorem transfer_combine_zero (hS : List.Forall₂ (fun s w => ρ s = w) kv S) (
       AbstractStackSafety.Matches (out.map (wordOf S)) S' → out.count none = 0 →
       List.Forall₂ (fun s x => Function.update ρ r w s = x) kv' S'
   | [], kv', S', hm, hM, _ => by
-    simp at hm; subst hm
+    simp only [List.mapM_nil, Option.pure_def, Option.some.injEq, List.nil_eq] at hm; subst hm
     cases S' with
     | nil => exact .nil
     | cons _ _ => cases hM
@@ -336,21 +337,22 @@ theorem transfer_combine_zero (hS : List.Forall₂ (fun s w => ρ s = w) kv S) (
     | cons x S' =>
       rw [List.mapM_cons] at hm
       cases l with
-      | none => simp at hc
+      | none => simp only [List.count_cons_self, Nat.add_eq_zero_iff, one_ne_zero, and_false] at hc
       | some j =>
         simp only [Option.bind_eq_bind] at hm
         cases hs : kv[j.toNat]? with
-        | none => simp [hs] at hm
+        | none => simp only [hs, Option.pure_def, Option.bind_none, reduceCtorEq] at hm
         | some s =>
           cases ht : out.mapM (fun l => match l with | none => some r | some j => kv[j.toNat]?) with
-          | none => simp [hs, ht] at hm
+          | none => simp only [hs, ht, Option.pure_def, Option.bind_none, Option.bind_fun_none, reduceCtorEq] at hm
           | some kt =>
-            simp [hs, ht] at hm
+            simp only [hs, ht, Option.pure_def, Option.bind_some, Option.some.injEq] at hm
             subst hm
-            have hc' : out.count none = 0 := by simpa [List.count_cons] using hc
+            have hc' : out.count none = 0 := by simpa only [ne_eq, reduceCtorEq, not_false_eq_true,
+              List.count_cons_of_ne] using hc
             refine .cons ?_ (transfer_combine_zero hS hr w ht hM.2 hc')
             have hw := hM.1
-            simp only [List.map_cons, wordOf, Option.bind_some,
+            simp only [wordOf, Option.bind_some,
               forall₂_getElem? hS hs] at hw
             rw [Function.update_of_ne (by rintro rfl; exact hr (List.mem_of_getElem? hs))]
             exact (AbstractStackSafety.WordMatches.eq_of_some hw).symm
@@ -360,7 +362,7 @@ theorem transfer_combine (hS : List.Forall₂ (fun s w => ρ s = w) kv S) (hr : 
       out.mapM (fun l => match l with | none => some r | some j => kv[j.toNat]?) = some kv' →
       AbstractStackSafety.Matches (out.map (wordOf S)) S' → out.count none ≤ 1 →
       ∃ w, List.Forall₂ (fun s x => Function.update ρ r w s = x) kv' S'
-  | [], kv', S', hm, hM, hc => ⟨0, transfer_combine_zero hS hr 0 hm hM (by simp)⟩
+  | [], kv', S', hm, hM, hc => ⟨0, transfer_combine_zero hS hr 0 hm hM (by simp only [List.count_nil])⟩
   | l :: out, kv', S', hm, hM, hc => by
     cases S' with
     | nil => cases hM
@@ -368,25 +370,25 @@ theorem transfer_combine (hS : List.Forall₂ (fun s w => ρ s = w) kv S) (hr : 
       have hm0 := hm
       rw [List.mapM_cons] at hm
       cases ht : out.mapM (fun l => match l with | none => some r | some j => kv[j.toNat]?) with
-      | none => cases l <;> simp [ht] at hm <;> (split at hm <;> simp at hm)
+      | none => cases l <;> simp only [ht, Option.pure_def, Option.bind_eq_bind, Option.bind_none, Option.bind_fun_none, reduceCtorEq] at hm
       | some kt =>
         cases l with
         | none =>
-          simp [ht] at hm
+          simp only [ht, Option.pure_def, Option.bind_eq_bind, Option.bind_some, Option.some.injEq] at hm
           subst hm
-          have hc' : out.count none = 0 := by simp [List.count_cons] at hc; omega
-          exact ⟨x, .cons (by simp) (transfer_combine_zero hS hr x ht hM.2 hc')⟩
+          have hc' : out.count none = 0 := by simp only [List.count_cons_self, add_le_iff_nonpos_left, nonpos_iff_eq_zero] at hc; omega
+          exact ⟨x, .cons (by simp only [Function.update_self]) (transfer_combine_zero hS hr x ht hM.2 hc')⟩
         | some j =>
           cases hs : kv[j.toNat]? with
-          | none => simp [hs] at hm
+          | none => simp only [hs, Option.pure_def, Option.bind_eq_bind, Option.bind_none, reduceCtorEq] at hm
           | some s =>
-            simp [hs, ht] at hm
+            simp only [hs, ht, Option.pure_def, Option.bind_eq_bind, Option.bind_some, Option.some.injEq] at hm
             subst hm
-            have hc' : out.count none ≤ 1 := by simp [List.count_cons] at hc; omega
+            have hc' : out.count none ≤ 1 := by simp only [ne_eq, reduceCtorEq, not_false_eq_true, List.count_cons_of_ne] at hc; omega
             obtain ⟨w, hw⟩ := transfer_combine hS hr ht hM.2 hc'
             refine ⟨w, .cons ?_ hw⟩
             have hx := hM.1
-            simp only [List.map_cons, wordOf, Option.bind_some,
+            simp only [wordOf, Option.bind_some,
               forall₂_getElem? hS hs] at hx
             rw [Function.update_of_ne (by rintro rfl; exact hr (List.mem_of_getElem? hs))]
             exact (AbstractStackSafety.WordMatches.eq_of_some hx).symm
@@ -431,7 +433,7 @@ theorem binary_top {f : B256 → B256 → B256} {c : Nat} {d d' : Devm}
   rw [hs] at hpop
   simp only [List.cons_append, List.nil_append, List.cons.injEq] at hpop
   obtain ⟨rfl, rfl, rfl⟩ := hpop
-  simpa using hpush
+  simpa only [List.cons_append, List.nil_append] using hpush
 
 theorem unary_top {f : B256 → B256} {c : Nat} {d d' : Devm}
     (h : applyUnary f c d = .ok d') {x : B256} {rest : List B256}
@@ -442,7 +444,7 @@ theorem unary_top {f : B256 → B256} {c : Nat} {d d' : Devm}
   rw [hs] at hpop
   simp only [List.cons_append, List.nil_append, List.cons.injEq] at hpop
   obtain ⟨rfl, rfl⟩ := hpop
-  simpa using hpush
+  simpa only [List.cons_append, List.nil_append] using hpush
 
 variable {sevm : Sevm} {d d' : Devm} {x y : B256} {rest : List B256}
 
@@ -523,7 +525,7 @@ theorem opFacts_sound {kv : List Nat} {S rest : List B256} {i : Ninst}
   have hsevm : n.sevm = F.sevm := Blanc.Exec.Deriv.ParentPrefix.sevm_eq reach
   have upd : ∀ s ∈ kv, Function.update ρ r w s = ρ s := fun s hs =>
     Function.update_of_ne (by rintro rfl; exact hr hs) _ _
-  have hwr : Function.update ρ r w r = w := by simp
+  have hwr : Function.update ρ r w r = w := by simp only [Function.update_self]
   -- the top two input words
   have two : ∀ {x y : Nat} {kt : List Nat}, kv = x :: y :: kt →
       ∃ St, n.devm.stack = ρ x :: ρ y :: St := by
@@ -541,21 +543,21 @@ theorem opFacts_sound {kv : List Nat} {S rest : List B256} {i : Ninst}
   have headOf : ∀ {v : B256} {St : List B256}, n'.devm.stack = v :: St → w = v := by
     intro v St h
     rw [h] at htop
-    simp at htop
+    simp only [List.head?_cons, Option.some.injEq] at htop
     exact htop.symm
   intro f hm
   cases i with
-  | push _ _ => simp [opFacts] at hm
-  | exec _ => simp [opFacts] at hm
-  | dupn _ => simp [opFacts] at hm
-  | swapn _ => simp [opFacts] at hm
-  | exchange _ => simp [opFacts] at hm
+  | push _ _ => simp only [opFacts, List.not_mem_nil] at hm
+  | exec _ => simp only [opFacts, List.not_mem_nil] at hm
+  | dupn _ => simp only [opFacts, List.not_mem_nil] at hm
+  | swapn _ => simp only [opFacts, List.not_mem_nil] at hm
+  | exchange _ => simp only [opFacts, List.not_mem_nil] at hm
   | reg rr =>
   cases rr
-  all_goals first | (simp [opFacts] at hm; done) | skip
+  all_goals first | (simp only [opFacts, List.contains_eq_mem, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq, List.not_mem_nil, List.mem_cons, or_false] at hm; done) | skip
   case sload =>
     rcases kv with _ | ⟨x, kt⟩
-    · simp [opFacts] at hm
+    · simp only [opFacts, List.not_mem_nil] at hm
     simp only [opFacts] at hm
     split at hm
     · rename_i hc
@@ -568,8 +570,8 @@ theorem opFacts_sound {kv : List Nat} {S rest : List B256} {i : Ninst}
     · cases hm
   case eq =>
     rcases kv with _ | ⟨x, _ | ⟨y, kt⟩⟩
-    · simp [opFacts] at hm
-    · simp [opFacts] at hm
+    · simp only [opFacts, List.not_mem_nil] at hm
+    · simp only [opFacts, List.not_mem_nil] at hm
     simp only [opFacts] at hm
     split at hm
     · rename_i hc
@@ -581,7 +583,7 @@ theorem opFacts_sound {kv : List Nat} {S rest : List B256} {i : Ninst}
       rw [hwr, hv] at h0
       have hne : ρ x ≠ ρ y := by
         intro he
-        simp [B256.eqCheck, he] at h0
+        simp only [B256.eqCheck, he, ↓reduceIte] at h0
         exact B256.one_ne_zero' h0
       simp only [Bool.or_eq_true, Bool.and_eq_true, List.contains_iff_mem,
         decide_eq_true_eq] at hc
@@ -604,8 +606,8 @@ theorem opFacts_sound {kv : List Nat} {S rest : List B256} {i : Ninst}
     exact hhash rfl (by rw [htop, h])
   case add =>
     rcases kv with _ | ⟨x, _ | ⟨y, kt⟩⟩
-    · simp [opFacts] at hm
-    · simp [opFacts] at hm
+    · simp only [opFacts, List.not_mem_nil] at hm
+    · simp only [opFacts, List.not_mem_nil] at hm
     obtain ⟨St, hst⟩ := two rfl
     have hv := headOf (run_add_top run hst)
     have hx := bnd2_sound hf x
@@ -646,8 +648,8 @@ theorem opFacts_sound {kv : List Nat} {S rest : List B256} {i : Ninst}
       · cases hm
   case gt =>
     rcases kv with _ | ⟨x, _ | ⟨y, kt⟩⟩
-    · simp [opFacts] at hm
-    · simp [opFacts] at hm
+    · simp only [opFacts, List.not_mem_nil] at hm
+    · simp only [opFacts, List.not_mem_nil] at hm
     simp only [opFacts] at hm
     split at hm
     · rename_i k hc
@@ -657,7 +659,7 @@ theorem opFacts_sound {kv : List Nat} {S rest : List B256} {i : Ninst}
       have hv := headOf (run_gt_top run hst)
       have hk := constOf_sound hf hc
       show (_ = 0 → _) ∧ (_ ≠ 0 → _)
-      rw [hwr, upd x (by simp), hv]
+      rw [hwr, upd x (by simp only [List.mem_cons, true_or]), hv]
       unfold B256.gtCheck
       by_cases hlt : ρ x > ρ y
       · have := B256.lt_iff_toNat_lt_toNat.mp hlt
@@ -670,13 +672,13 @@ theorem opFacts_sound {kv : List Nat} {S rest : List B256} {i : Ninst}
     · cases hm
   case iszero =>
     rcases kv with _ | ⟨x, kt⟩
-    · simp [opFacts] at hm
+    · simp only [opFacts, List.not_mem_nil] at hm
     simp only [opFacts, List.mem_singleton] at hm
     subst hm
     obtain ⟨St, hst⟩ := one rfl
     have hv := headOf (run_iszero_top run hst)
     show (_ = 0 → _) ∧ (_ ≠ 0 → _)
-    rw [hwr, upd x (by simp), hv]
+    rw [hwr, upd x (by simp only [List.mem_cons, true_or]), hv]
     unfold B256.eqCheck
     by_cases h0 : ρ x = 0
     · simp only [h0, ite_true]
@@ -685,14 +687,14 @@ theorem opFacts_sound {kv : List Nat} {S rest : List B256} {i : Ninst}
       exact ⟨fun _ => h0, fun h => (h rfl).elim⟩
   case xor =>
     rcases kv with _ | ⟨x, _ | ⟨y, kt⟩⟩
-    · simp [opFacts] at hm
-    · simp [opFacts] at hm
+    · simp only [opFacts, List.not_mem_nil] at hm
+    · simp only [opFacts, List.not_mem_nil] at hm
     simp only [opFacts, List.mem_singleton] at hm
     subst hm
     obtain ⟨St, hst⟩ := two rfl
     have hv := headOf (run_xor_top run hst)
     show _ ≠ 0 → _ ≠ _
-    rw [hwr, upd x (by simp), upd y (by simp), hv]
+    rw [hwr, upd x (by simp only [List.mem_cons, true_or]), upd y (by simp only [List.mem_cons, true_or, or_true]), hv]
     intro h he
     rw [he, B256.xor_self'] at h
     exact h rfl

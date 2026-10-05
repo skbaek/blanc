@@ -86,7 +86,7 @@ private theorem target_replay {ca : Adr} {U : Key → Prop}
       rw [c3crv_writer_nonstatic hcode fork hcd hstack hmem run writer] at static
       cases static
     rw [nodes, self]
-    simp [quiet]
+    simp only [quiet, ↓reduceIte]
   · by_cases writer : IsWriter (decodeCall sevm)
     · refine ⟨[⟨sevm, pre, post, ownerWordOf sevm⟩], ?_, by rw [nodes, self]; simp only [writer, ↓reduceIte]; rfl⟩
       change CurveReplay U (Devm.getStor pre ca)
@@ -106,7 +106,8 @@ private theorem target_replay {ca : Adr} {U : Key → Prop}
         · simpa only [invocationKeys_singleton] using invariant'
     · refine ⟨[], ?_, by rw [nodes, self]; simp only [writer, ↓reduceIte]; rfl⟩
       change CurveReplay U (Devm.getStor pre ca) [] (Devm.getStor post ca)
-      refine ⟨by simp [invocationKeys], fun s K included invariant => ⟨s, rfl, ?_⟩⟩
+      refine ⟨by simp only [invocationKeys, List.flatMap_nil, List.not_mem_nil,
+        IsEmpty.forall_iff, implies_true], fun s K included invariant => ⟨s, rfl, ?_⟩⟩
       simp only [invocationKeys, List.flatMap_nil, Key.extend_nil]
       subst target
       have fresh := FreshKeys.of_universe injective apart included touched

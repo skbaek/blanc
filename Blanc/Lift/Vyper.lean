@@ -74,7 +74,7 @@ theorem B256.toAdr_toB256_of_lt {x : B256} (h : x.toNat < 2 ^ 160) : x.toAdr.toB
 theorem B256.xor_zero (x : B256) : x ^^^ 0 = x := by
   obtain ⟨⟨a, b⟩, ⟨c, d⟩⟩ := x
   show ((⟨⟨a ^^^ 0, b ^^^ 0⟩, ⟨c ^^^ 0, d ^^^ 0⟩⟩ : B256)) = _
-  simp
+  simp only [UInt64.xor_zero]
 
 /-- `x != y` compiles to `XOR`: the word is zero exactly when the operands agree. -/
 theorem B256.xor_eq_zero_iff (x y : B256) : x ^^^ y = 0 ↔ x = y := by
@@ -174,10 +174,14 @@ theorem vyImg_selector (w : B256) : Bytes.toB256 ((vyImg [] w).sliceD 0 32 0) = 
   have e : (Bytes.writeAt [] 28 w.toBytes).sliceD 0 32 0 =
       List.replicate 28 0 ++ w.toBytes.take 4 := by
     simp only [Bytes.writeAt, List.sliceD, List.drop_zero, List.drop_nil, List.append_nil]
-    rw [List.takeD_eq_take _ (by simp [B256.length_toBytes]), hw]
-    simp [List.takeD]
+    rw [List.takeD_eq_take _ (by simp only [List.takeD_succ, List.head?_nil, Option.getD_none,
+      List.tail_nil, List.takeD_nil, List.replicate_zero, List.cons_append, List.nil_append,
+      List.length_cons, B256.length_toBytes, Nat.reduceAdd, Nat.reduceLeDiff]), hw]
+    simp only [List.takeD, List.headD_eq_head?_getD, List.head?_nil, Option.getD_none,
+      List.tail_nil, List.take_append_drop, List.cons_append, List.nil_append, List.take_succ_cons,
+      List.reduceReplicate]
   rw [e]
-  simp [Bytes.toB256_zero_cons]
+  simp only [List.reduceReplicate, List.cons_append, List.nil_append, Bytes.toB256_zero_cons]
 
 /-- The address clamp an image with the constants yields to `MLOAD 0x20`. -/
 theorem VyClamps.clamp {img : Bytes} (h : VyClamps img) :
@@ -224,29 +228,29 @@ theorem rx_vyPrologue {o : Outcome} (hroom : S.length + 2 < 1024)
   unfold vyPrologue
   refine rx_push rfl (by omega) ?_
   refine rx_calldataload (by omega) ?_
-  refine rx_push rfl (by first | omega | (simp; omega)) ?_
+  refine rx_push rfl (by first | omega | (simp only [List.length_cons]; omega)) ?_
   refine rx_mstore (c := 9) ?_ rfl ?_
   · rw [St.extCost_eq rfl]; decide
   refine rx_push rfl (by omega) ?_
-  refine rx_push rfl (by first | omega | (simp; omega)) ?_
+  refine rx_push rfl (by first | omega | (simp only [List.length_cons]; omega)) ?_
   refine rx_mstore (c := 3) ?_ rfl ?_
-  · rw [St.extCost_eq (n := 64) (by simp [Mem.size_write_word_at]; rfl)]; decide
+  · rw [St.extCost_eq (n := 64) (by simp only [Mem.size_write_word_at]; rfl)]; decide
   refine rx_push rfl (by omega) ?_
-  refine rx_push rfl (by first | omega | (simp; omega)) ?_
+  refine rx_push rfl (by first | omega | (simp only [List.length_cons]; omega)) ?_
   refine rx_mstore (c := 6) ?_ rfl ?_
-  · rw [St.extCost_eq (n := 64) (by simp [Mem.size_write_word_at]; rfl)]; decide
+  · rw [St.extCost_eq (n := 64) (by simp only [Mem.size_write_word_at]; rfl)]; decide
   refine rx_push rfl (by omega) ?_
-  refine rx_push rfl (by first | omega | (simp; omega)) ?_
+  refine rx_push rfl (by first | omega | (simp only [List.length_cons]; omega)) ?_
   refine rx_mstore (c := 6) ?_ rfl ?_
-  · rw [St.extCost_eq (n := 96) (by simp [Mem.size_write_word_at]; rfl)]; decide
+  · rw [St.extCost_eq (n := 96) (by simp only [Mem.size_write_word_at]; rfl)]; decide
   refine rx_push rfl (by omega) ?_
-  refine rx_push rfl (by first | omega | (simp; omega)) ?_
+  refine rx_push rfl (by first | omega | (simp only [List.length_cons]; omega)) ?_
   refine rx_mstore (c := 6) ?_ rfl ?_
-  · rw [St.extCost_eq (n := 128) (by simp [Mem.size_write_word_at]; rfl)]; decide
+  · rw [St.extCost_eq (n := 128) (by simp only [Mem.size_write_word_at]; rfl)]; decide
   refine rx_push rfl (by omega) ?_
-  refine rx_push rfl (by first | omega | (simp; omega)) ?_
+  refine rx_push rfl (by first | omega | (simp only [List.length_cons]; omega)) ?_
   refine rx_mstore (c := 6) ?_ rfl ?_
-  · rw [St.extCost_eq (n := 160) (by simp [Mem.size_write_word_at]; rfl)]; decide
+  · rw [St.extCost_eq (n := 160) (by simp only [Mem.size_write_word_at]; rfl)]; decide
   exact k
 
 end Walks
@@ -261,14 +265,16 @@ variable {fs : List SFunc} {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G
 
 /-- The non-payable guard's tree: `CALLVALUE ISZERO PUSH2 ok JUMPI`, reverting on fall-through. -/
 def vyNonpayable (h l : UInt8) (fail ok : SFunc) : SFunc :=
-  .next (.reg .callvalue) (.next (.reg .iszero) (.next (.push [h, l] (by simp))
+  .next (.reg .callvalue) (.next (.reg .iszero) (.next (.push [h, l] (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLeDiff]))
     (.branch fail (.dest ok))))
 
 /-- An address argument's clamp: `PUSH1 p CALLDATALOAD PUSH1 0x20 MLOAD DUP2 LT PUSH2 ok JUMPI`,
 reverting on fall-through, then `JUMPDEST POP` before `ok`. -/
 def vyAddrArg (p h l : UInt8) (fail ok : SFunc) : SFunc :=
-  .next (.push [p] (by simp)) (.next (.reg .calldataload) (.next (.push [0x20] (by decide))
-    (.next (.reg .mload) (.next (.reg (.dup 1)) (.next (.reg .lt) (.next (.push [h, l] (by simp))
+  .next (.push [p] (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_le_ofNat])) (.next (.reg .calldataload) (.next (.push [0x20] (by decide))
+    (.next (.reg .mload) (.next (.reg (.dup 1)) (.next (.reg .lt) (.next (.push [h, l] (by simp only [List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLeDiff]))
       (.branch fail (.dest (.next (.reg .pop) ok)))))))))
 
 theorem rx_vyNonpayable {o : Outcome} {h l : UInt8} {fail : SFunc} (hv : sevm.value = 0)
@@ -278,8 +284,8 @@ theorem rx_vyNonpayable {o : Outcome} {h l : UInt8} {fail : SFunc} (hv : sevm.va
   rw [show G + 19 = G + 1 + 10 + 3 + 3 + 2 by omega]
   refine rx_callvalue (by omega) ?_
   rw [hv]
-  refine rx_iszero (v := 1) (by simp [B256.eqCheck]) (by omega) ?_
-  refine rx_push rfl (by simp; omega) ?_
+  refine rx_iszero (v := 1) (by simp only [B256.eqCheck, ↓reduceIte]) (by omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
   exact rx_branch_succ (by decide) (rx_dest k)
 
 theorem ric_vyNonpayable {C : List Nat} {r : Seg} {h l : UInt8} {fail : SFunc}
@@ -295,7 +301,7 @@ theorem ric_vyNonpayable {C : List Nat} {r : Seg} {h l : UInt8} {fail : SFunc}
   obtain ⟨G5, run⟩ := ric_dest run
   refine ⟨?_, G5, run⟩
   by_contra hne
-  exact hw (by simp [B256.eqCheck, hne])
+  exact hw (by simp only [B256.eqCheck, hne, ↓reduceIte])
 
 /-- **An address argument's clamp, forward** (34 gas), over a memory image with the clamp
 constants, word-aligned and covering `0x40`. -/
@@ -309,15 +315,15 @@ theorem rx_vyAddrArg {o : Outcome} {img : Bytes} {p h l : UInt8} {fail : SFunc}
   rw [show G + 34 = G + 2 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 by omega]
   refine rx_push rfl (by omega) ?_
   refine rx_calldataload (by omega) ?_
-  refine rx_push rfl (by simp; omega) ?_
-  refine rx_mload (c := 3) ?_ (v := Bytes.toB256 vyC20) ?_ ?_ (by simp; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_mload (c := 3) ?_ (v := Bytes.toB256 vyC20) ?_ ?_ (by simp only [List.length_cons]; omega) ?_
   · rw [St, Devm.extCost_zero_of_le hs (by rw [h20]; omega)]; rfl
   · rw [h20, hr.read, hc.clamp]
   · rw [h20]; exact read_covered rfl hs (by omega)
-  refine rx_dup (n := 1) rfl (by simp; omega) ?_
-  refine rx_lt (v := 1) ?_ (by simp; omega) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_lt (v := 1) ?_ (by simp only [List.length_cons]; omega) ?_
   · simp only [B256.ltCheck, B256.lt_iff_toNat_lt_toNat, vyC20_toB256, harg, ite_true]
-  refine rx_push rfl (by simp; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
   exact rx_branch_succ (by decide) (rx_dest (rx_pop k))
 
 /-- **An address argument's clamp, inverted.** -/
@@ -374,8 +380,11 @@ variable {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b : Devm} {S : List B25
 /-- The `HashMap` slot sequence: from `[key, slot]`, `mstore(0xe0, key); mstore(0xc0, slot);
 keccak(0xc0, 0x40)`, then `f`. -/
 def vySlot (f : SFunc) : SFunc :=
-  .next (.push [0xe0] (by simp)) (.next (.reg .mstore) (.next (.push [0xc0] (by simp))
-    (.next (.reg .mstore) (.next (.push [0x40] (by simp)) (.next (.push [0xc0] (by simp))
+  .next (.push [0xe0] (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_le_ofNat])) (.next (.reg .mstore) (.next (.push [0xc0] (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.one_le_ofNat]))
+    (.next (.reg .mstore) (.next (.push [0x40] (by simp only [List.length_cons, List.length_nil,
+      zero_add, Nat.one_le_ofNat])) (.next (.push [0xc0] (by simp only [List.length_cons,
+      List.length_nil, zero_add, Nat.one_le_ofNat]))
       (.next (.reg .keccak256) f))))))
 
 /-- The memory the slot sequence leaves. -/
@@ -407,9 +416,11 @@ theorem ric_vySlot {key slot : B256}
 `DUP1 SLOAD PUSH1 p CALLDATALOAD DUP1 DUP3 LT ISZERO PUSH2 ok JUMPI` (reverting on fall-through),
 `JUMPDEST DUP1 DUP3 SUB SWAP1 POP SWAP1 POP DUP2 SSTORE POP`. -/
 def vySubStore (p h l : UInt8) (fail rest : SFunc) : SFunc :=
-  .next (.reg (.dup 0)) (.next (.reg .sload) (.next (.push [p] (by simp))
+  .next (.reg (.dup 0)) (.next (.reg .sload) (.next (.push [p] (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.one_le_ofNat]))
     (.next (.reg .calldataload) (.next (.reg (.dup 0)) (.next (.reg (.dup 2)) (.next (.reg .lt)
-      (.next (.reg .iszero) (.next (.push [h, l] (by simp)) (.branch fail
+      (.next (.reg .iszero) (.next (.push [h, l] (by simp only [List.length_cons, List.length_nil,
+        zero_add, Nat.reduceAdd, Nat.reduceLeDiff])) (.branch fail
         (.dest (.next (.reg (.dup 0)) (.next (.reg (.dup 2)) (.next (.reg .sub)
           (.next (.reg (.swap 0)) (.next (.reg .pop) (.next (.reg (.swap 0)) (.next (.reg .pop)
             (.next (.reg (.dup 1)) (.next (.reg .sstore) (.next (.reg .pop) rest))))))))))))))))))))
@@ -418,9 +429,11 @@ def vySubStore (p h l : UInt8) (fail rest : SFunc) : SFunc :=
 ok JUMPI` (the sum wrapped below the old value reverts), `JUMPDEST DUP1 DUP3 ADD SWAP1 POP SWAP1
 POP DUP2 SSTORE POP`. -/
 def vyAddStore (p h l : UInt8) (fail rest : SFunc) : SFunc :=
-  .next (.reg (.dup 0)) (.next (.reg .sload) (.next (.push [p] (by simp))
+  .next (.reg (.dup 0)) (.next (.reg .sload) (.next (.push [p] (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.one_le_ofNat]))
     (.next (.reg .calldataload) (.next (.reg (.dup 1)) (.next (.reg (.dup 1)) (.next (.reg (.dup 3))
-      (.next (.reg .add) (.next (.reg .lt) (.next (.reg .iszero) (.next (.push [h, l] (by simp))
+      (.next (.reg .add) (.next (.reg .lt) (.next (.reg .iszero) (.next (.push [h, l] (by simp only [List.length_cons,
+        List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLeDiff]))
         (.branch fail (.dest (.next (.reg (.dup 0)) (.next (.reg (.dup 2)) (.next (.reg .add)
           (.next (.reg (.swap 0)) (.next (.reg .pop) (.next (.reg (.swap 0)) (.next (.reg .pop)
             (.next (.reg (.dup 1)) (.next (.reg .sstore) (.next (.reg .pop)
@@ -525,7 +538,7 @@ theorem ric_vyAddStore {slot : B256} {p h l : UInt8} {fail rest : SFunc}
   have h0 := eq_zero_of_iszero_ne_zero hw
   rw [B256.nof_iff_not_add_lt]
   intro hlt
-  simp [B256.ltCheck, hlt] at h0
+  simp only [B256.ltCheck, hlt, ↓reduceIte] at h0
   exact absurd h0 (by decide)
 
 end Stores
@@ -554,15 +567,15 @@ theorem rx_vySlot {n c1 : Nat} (hM : M.size = n) (hn : n ≤ 256) (h32 : n % 32 
   have hs2 : ((M.write 224 key.toBytes).write 192 slot.toBytes).size = 256 := by
     rw [Mem.size_write_word_at, hs1]; rfl
   unfold vySlot
-  refine rx_push rfl (by simp; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_mstore (c := c1) ?_ (M' := M.write 224 key.toBytes) (by rw [he0]) ?_
   · rw [he0, St.extCost_eq hM]; exact hc1
-  refine rx_push rfl (by simp; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_mstore (c := 3) ?_ (M' := (M.write 224 key.toBytes).write 192 slot.toBytes)
     (by rw [hc0]) ?_
   · rw [hc0, St, Devm.extCost_zero_of_le (by rw [hs1]) (by rw [hs1]; omega)]; rfl
   refine rx_push rfl (by omega) ?_
-  refine rx_push rfl (by simp; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_keccak (c := 42) ?_ ?_ ?_ (by omega) k
   · rw [hc0, h40, St, Devm.extCost_zero_of_le (by rw [hs2]) (by rw [hs2])]; decide
   · rw [hc0, h40]; exact vySlot_keccak M slot key
@@ -584,30 +597,31 @@ theorem rx_vySubStore {slot : B256} {p h l : UInt8} {fail rest : SFunc}
       (vySubStore p h l fail rest) o := by
   intro x v
   unfold vySubStore
-  refine rx_dup (n := 0) rfl (by simp; omega) ?_
-  refine rx_sload_sel hfork (by simp; omega) ?_
-  refine rx_push rfl (by simp; omega) ?_
-  refine rx_calldataload (by simp; omega) ?_
-  refine rx_dup (n := 0) rfl (by simp; omega) ?_
-  refine rx_dup (n := 2) rfl (by simp; omega) ?_
-  refine rx_lt (v := 0) ?_ (by simp; omega) ?_
+  refine rx_dup (n := 0) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_sload_sel hfork (by simp only [List.length_cons]; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_calldataload (by simp only [List.length_cons]; omega) ?_
+  refine rx_dup (n := 0) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_dup (n := 2) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_lt (v := 0) ?_ (by simp only [List.length_cons]; omega) ?_
   · simp only [B256.ltCheck]
     rw [ite_eq_right_iff]
     intro hlt
     rw [B256.lt_iff_toNat_lt_toNat] at hlt
     have := B256.le_iff_toNat_le_toNat.mp hle
     omega
-  refine rx_iszero (v := 1) (by simp [B256.eqCheck]) (by simp; omega) ?_
-  refine rx_push rfl (by simp; omega) ?_
+  refine rx_iszero (v := 1) (by simp only [B256.eqCheck, ↓reduceIte]) (by simp only [List.length_cons]; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_branch_succ (by decide) (rx_dest ?_)
-  refine rx_dup (n := 0) rfl (by simp; omega) ?_
-  refine rx_dup (n := 2) rfl (by simp; omega) ?_
-  refine rx_sub (by simp; omega) ?_
+  refine rx_dup (n := 0) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_dup (n := 2) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_sub (by simp only [List.length_cons]; omega) ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_pop ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_pop ?_
-  refine rx_dup (n := 1) rfl (by simp; omega) ?_
+  refine rx_dup (n := 1) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
+    List.set_cons_zero, List.length_cons]; omega) ?_
   refine rx_sstore hfork (by omega) hstatic ?_
   exact rx_pop k
 
@@ -627,30 +641,31 @@ theorem rx_vyAddStore {slot : B256} {p h l : UInt8} {fail rest : SFunc}
       (vyAddStore p h l fail rest) o := by
   intro x v
   unfold vyAddStore
-  refine rx_dup (n := 0) rfl (by simp; omega) ?_
-  refine rx_sload_sel hfork (by simp; omega) ?_
-  refine rx_push rfl (by simp; omega) ?_
-  refine rx_calldataload (by simp; omega) ?_
-  refine rx_dup (n := 1) rfl (by simp; omega) ?_
-  refine rx_dup (n := 1) rfl (by simp; omega) ?_
-  refine rx_dup (n := 3) rfl (by simp; omega) ?_
-  refine rx_add (by simp; omega) ?_
-  refine rx_lt (v := 0) ?_ (by simp; omega) ?_
+  refine rx_dup (n := 0) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_sload_sel hfork (by simp only [List.length_cons]; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_calldataload (by simp only [List.length_cons]; omega) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_dup (n := 3) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_add (by simp only [List.length_cons]; omega) ?_
+  refine rx_lt (v := 0) ?_ (by simp only [List.length_cons]; omega) ?_
   · simp only [B256.ltCheck]
     rw [ite_eq_right_iff]
     intro hlt
     exact absurd hlt ((B256.nof_iff_not_add_lt _ _).mp hnof)
-  refine rx_iszero (v := 1) (by simp [B256.eqCheck]) (by simp; omega) ?_
-  refine rx_push rfl (by simp; omega) ?_
+  refine rx_iszero (v := 1) (by simp only [B256.eqCheck, ↓reduceIte]) (by simp only [List.length_cons]; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_branch_succ (by decide) (rx_dest ?_)
-  refine rx_dup (n := 0) rfl (by simp; omega) ?_
-  refine rx_dup (n := 2) rfl (by simp; omega) ?_
-  refine rx_add (by simp; omega) ?_
+  refine rx_dup (n := 0) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_dup (n := 2) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_add (by simp only [List.length_cons]; omega) ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_pop ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_pop ?_
-  refine rx_dup (n := 1) rfl (by simp; omega) ?_
+  refine rx_dup (n := 1) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
+    List.set_cons_zero, List.length_cons]; omega) ?_
   refine rx_sstore hfork (by omega) hstatic ?_
   exact rx_pop k
 
@@ -670,7 +685,9 @@ falls through), `rx_vyLoadExit` (the failing test). -/
 def vyLoadLoopTree (e0 e1 x0 x1 r0 r1 : UInt8) (j k : Nat) (exitT : SFunc) : SFunc :=
   .dest (.next (.reg (.dup 2)) (.next (.push [0x01, 0x20] (by decide)) (.next (.reg .mload)
   (.next (.push [0x20] (by decide)) (.next (.reg .mul) (.next (.reg .gt) (.next (.reg .iszero)
-  (.next (.push [e0, e1] (by simp)) (.branch (.next (.push [x0, x1] (by simp)) (.jump j))
+  (.next (.push [e0, e1] (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLeDiff])) (.branch (.next (.push [x0, x1] (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLeDiff])) (.jump j))
   (.dest (.next (.push [0x01, 0x20] (by decide)) (.next (.reg .mload) (.next (.reg (.dup 5))
   (.next (.reg .add) (.next (.reg .sload) (.next (.push [0x01, 0x20] (by decide))
   (.next (.reg .mload) (.next (.push [0x20] (by decide)) (.next (.reg .mul) (.next (.reg (.dup 5))
@@ -678,7 +695,8 @@ def vyLoadLoopTree (e0 e1 x0 x1 r0 r1 : UInt8) (j k : Nat) (exitT : SFunc) : SFu
   (.dest (.next (.reg (.dup 1)) (.next (.reg .mload) (.next (.push [0x01] (by decide))
   (.next (.reg .add) (.next (.reg (.dup 0)) (.next (.reg (.dup 3)) (.next (.reg .mstore)
   (.next (.reg (.dup 1)) (.next (.reg .eq) (.next (.reg .iszero)
-  (.next (.push [r0, r1] (by simp)) (.branchTo exitT k)))))))))))))))))))))))))))))))))))
+  (.next (.push [r0, r1] (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLeDiff])) (.branchTo exitT k)))))))))))))))))))))))))))))))))))
 
 /-- The load loop's stack. -/
 def vyLoadStack (cap lp dst base : B256) (R : List B256) : List B256 :=
@@ -708,7 +726,8 @@ private theorem rx_vyLoadBody (hfork : CoveredFork sevm.benvStat.fork) (hroom : 
         ((M.write (dst.toNat + 32 * i)
           (b.getStorVal sevm.currentTarget (base + Nat.toB256 i)).toBytes).write 0x120
           (Nat.toB256 (i + 1)).toBytes) G)
-      (.next (.reg .iszero) (.next (.push [r0, r1] (by simp)) (.branchTo exitT k))) o) :
+      (.next (.reg .iszero) (.next (.push [r0, r1] (by simp only [List.length_cons, List.length_nil,
+        zero_add, Nat.reduceAdd, Nat.reduceLeDiff])) (.branchTo exitT k))) o) :
     SFunc.RunExact fs sevm (St b (vyLoadStack cap lp dst base R) M
       (G + 101 + sloadCost sevm b (base + Nat.toB256 i) +
         (calculateMemoryGasCost (dst.toNat + 32 * i + 32) - calculateMemoryGasCost s)))
@@ -744,50 +763,50 @@ private theorem rx_vyLoadBody (hfork : CoveredFork sevm.benvStat.fork) (hroom : 
   unfold vyLoadLoopTree vyLoadStack
   unfold vyLoadStack at kk
   refine rx_dest ?_
-  refine rx_dup (n := 2) rfl (by simp; omega) ?_
-  refine rx_push hp120 (by simp; omega) ?_
+  refine rx_dup (n := 2) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_push hp120 (by simp only [List.length_cons]; omega) ?_
   refine rx_mload (c := 3) (v := Nat.toB256 i) ?_ (by rw [h120]; exact hi') (by rw [h120]; exact hM)
-    (by simp; omega) ?_
+    (by simp only [List.length_cons]; omega) ?_
   · rw [h120, St.extCost_eq hs, memExtSize_of_le hs32 (by omega), Nat.sub_self]; rfl
-  refine rx_push rfl (by simp; omega) ?_
-  refine rx_mul h32i (by simp; omega) ?_
-  refine rx_gt hgt (by simp; omega) ?_
-  refine rx_iszero (v := 1) (by decide) (by simp; omega) ?_
-  refine rx_push rfl (by simp; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_mul h32i (by simp only [List.length_cons]; omega) ?_
+  refine rx_gt hgt (by simp only [List.length_cons]; omega) ?_
+  refine rx_iszero (v := 1) (by decide) (by simp only [List.length_cons]; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_branch_succ (by decide) (rx_dest ?_)
-  refine rx_push hp120 (by simp; omega) ?_
+  refine rx_push hp120 (by simp only [List.length_cons]; omega) ?_
   refine rx_mload (c := 3) (v := Nat.toB256 i) ?_ (by rw [h120]; exact hi') (by rw [h120]; exact hM)
-    (by simp; omega) ?_
+    (by simp only [List.length_cons]; omega) ?_
   · rw [h120, St.extCost_eq hs, memExtSize_of_le hs32 (by omega), Nat.sub_self]; rfl
-  refine rx_dup (n := 5) rfl (by simp; omega) ?_
-  refine rx_add (by simp; omega) ?_
-  refine rx_sload_sel (k' := base + Nat.toB256 i) hfork (by simp; omega) ?_
-  refine rx_push hp120 (by simp; omega) ?_
+  refine rx_dup (n := 5) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_add (by simp only [List.length_cons]; omega) ?_
+  refine rx_sload_sel (k' := base + Nat.toB256 i) hfork (by simp only [List.length_cons]; omega) ?_
+  refine rx_push hp120 (by simp only [List.length_cons]; omega) ?_
   refine rx_mload (c := 3) (v := Nat.toB256 i) ?_ (by rw [h120]; exact hi') (by rw [h120]; exact hM)
-    (by simp; omega) ?_
+    (by simp only [List.length_cons]; omega) ?_
   · rw [h120, St.extCost_eq hs, memExtSize_of_le hs32 (by omega), Nat.sub_self]; rfl
-  refine rx_push rfl (by simp; omega) ?_
-  refine rx_mul h32i (by simp; omega) ?_
-  refine rx_dup (n := 5) rfl (by simp; omega) ?_
-  refine rx_add (by simp; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_mul h32i (by simp only [List.length_cons]; omega) ?_
+  refine rx_dup (n := 5) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_add (by simp only [List.length_cons]; omega) ?_
   refine rx_mstore (c := 3 + ce) ?_ (M' := M1) (by rw [hdn]) ?_
   · rw [hdn, St.extCost_eq hs, memExtSize_word_aligned hs32 (by omega), Nat.max_eq_right hs2]
     rfl
   refine rx_dest ?_
-  refine rx_dup (n := 1) rfl (by simp; omega) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_mload (c := 3) (v := Nat.toB256 i) ?_ (by rw [h120, hctr1, B256.toB256_toBytes])
-    (by rw [h120]; exact hM1) (by simp; omega) ?_
+    (by rw [h120]; exact hM1) (by simp only [List.length_cons]; omega) ?_
   · rw [h120, St.extCost_eq hM1s, memExtSize_of_le (by omega) (by omega), Nat.sub_self]; rfl
-  refine rx_push rfl (by simp; omega) ?_
-  refine rx_add (by simp; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_add (by simp only [List.length_cons]; omega) ?_
   rw [hone]
-  refine rx_dup (n := 0) rfl (by simp; omega) ?_
-  refine rx_dup (n := 3) rfl (by simp; omega) ?_
+  refine rx_dup (n := 0) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_dup (n := 3) rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_mstore (c := 3) ?_ (M' := M1.write 0x120 (Nat.toB256 (i + 1)).toBytes)
     (by rw [h120]) ?_
   · rw [h120, St.extCost_eq hM1s, memExtSize_of_le (by omega) (by omega), Nat.sub_self]; rfl
-  refine rx_dup (n := 1) rfl (by simp; omega) ?_
-  exact rx_eq rfl (by simp; omega) kk
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons]; omega) ?_
+  exact rx_eq rfl (by simp only [List.length_cons]; omega) kk
 
 /-- **An iteration that loops back**: `32 i ≤ lp`, the counter `i + 1` has not reached `cap`. -/
 theorem rx_vyLoadStep (hfork : CoveredFork sevm.benvStat.fork) (hroom : R.length + 12 < 1024)
@@ -807,9 +826,9 @@ theorem rx_vyLoadStep (hfork : CoveredFork sevm.benvStat.fork) (hroom : R.length
   subst hdd hce
   rw [show G + 117 = G + 10 + 3 + 3 + 101 by omega]
   refine rx_vyLoadBody hfork hroom hi hwf hs hs32 hs1 hs2 hd32 hd hbig hctr ?_
-  refine rx_iszero (v := 1) ?_ (by simp [vyLoadStack]; omega) ?_
-  · simp [B256.eqCheck, hcap]
-  refine rx_push rfl (by simp [vyLoadStack]; omega) ?_
+  refine rx_iszero (v := 1) ?_ (by simp only [vyLoadStack, List.length_cons]; omega) ?_
+  · simp only [B256.eqCheck, hcap, ↓reduceIte]
+  refine rx_push rfl (by simp only [vyLoadStack, List.length_cons]; omega) ?_
   exact rx_branchTo_succ (by decide) hk kk
 
 /-- **An iteration that falls through**: `32 i ≤ lp`, the counter `i + 1` reached `cap`. -/
@@ -830,9 +849,9 @@ theorem rx_vyLoadLast (hfork : CoveredFork sevm.benvStat.fork) (hroom : R.length
   subst hdd hce
   rw [show G + 117 = G + 10 + 3 + 3 + 101 by omega]
   refine rx_vyLoadBody hfork hroom hi hwf hs hs32 hs1 hs2 hd32 hd hbig hctr ?_
-  refine rx_iszero (v := 0) ?_ (by simp [vyLoadStack]; omega) ?_
-  · simp [B256.eqCheck, hcap]
-  refine rx_push rfl (by simp [vyLoadStack]; omega) ?_
+  refine rx_iszero (v := 0) ?_ (by simp only [vyLoadStack, List.length_cons]; omega) ?_
+  · simp only [B256.eqCheck, hcap, ↓reduceIte, ite_eq_right_iff, imp_self]
+  refine rx_push rfl (by simp only [vyLoadStack, List.length_cons]; omega) ?_
   exact rx_branchTo_zero kk
 
 /-- **The failing test**: `32 i > lp`, on to entry `j`. -/
@@ -853,18 +872,18 @@ theorem rx_vyLoadExit (hroom : R.length + 12 < 1024) {i : Nat} (hi : lp.toNat < 
   unfold vyLoadLoopTree vyLoadStack
   unfold vyLoadStack at kk
   refine rx_dest ?_
-  refine rx_dup (n := 2) rfl (by simp; omega) ?_
-  refine rx_push hp120 (by simp; omega) ?_
+  refine rx_dup (n := 2) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_push hp120 (by simp only [List.length_cons]; omega) ?_
   refine rx_mload (c := 3) (v := Nat.toB256 i) ?_ (by rw [h120, hctr, B256.toB256_toBytes])
-    (by rw [h120]; exact hM) (by simp; omega) ?_
+    (by rw [h120]; exact hM) (by simp only [List.length_cons]; omega) ?_
   · rw [h120, St.extCost_eq hs, memExtSize_of_le hs32 (by omega), Nat.sub_self]; rfl
-  refine rx_push rfl (by simp; omega) ?_
-  refine rx_mul (vy_mul32 hi') (by simp; omega) ?_
-  refine rx_gt hgt (by simp; omega) ?_
-  refine rx_iszero (v := 0) (by decide) (by simp; omega) ?_
-  refine rx_push rfl (by simp; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_mul (vy_mul32 hi') (by simp only [List.length_cons]; omega) ?_
+  refine rx_gt hgt (by simp only [List.length_cons]; omega) ?_
+  refine rx_iszero (v := 0) (by decide) (by simp only [List.length_cons]; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_branch_zero ?_
-  refine rx_push rfl (by simp; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
   exact rx_jump hj kk
 
 /-- **One pass of the load loop, inverted**: either the test fails and the run goes on at
@@ -998,7 +1017,9 @@ The setter's side of the string copy: stack `cap :: 0x120 :: lp :: base :: src :
 def vyStoreLoopTree (e0 e1 x0 x1 r0 r1 : UInt8) (j k : Nat) (exitT : SFunc) : SFunc :=
   .dest (.next (.reg (.dup 2)) (.next (.push [0x01, 0x20] (by decide)) (.next (.reg .mload)
   (.next (.push [0x20] (by decide)) (.next (.reg .mul) (.next (.reg .gt) (.next (.reg .iszero)
-  (.next (.push [e0, e1] (by simp)) (.branch (.next (.push [x0, x1] (by simp)) (.jump j))
+  (.next (.push [e0, e1] (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLeDiff])) (.branch (.next (.push [x0, x1] (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLeDiff])) (.jump j))
   (.dest (.next (.push [0x01, 0x20] (by decide)) (.next (.reg .mload)
   (.next (.push [0x20] (by decide)) (.next (.reg .mul) (.next (.reg (.dup 5)) (.next (.reg .add)
   (.next (.reg .mload) (.next (.push [0x01, 0x20] (by decide)) (.next (.reg .mload)
@@ -1006,7 +1027,8 @@ def vyStoreLoopTree (e0 e1 x0 x1 r0 r1 : UInt8) (j k : Nat) (exitT : SFunc) : SF
   (.dest (.next (.reg (.dup 1)) (.next (.reg .mload) (.next (.push [0x01] (by decide))
   (.next (.reg .add) (.next (.reg (.dup 0)) (.next (.reg (.dup 3)) (.next (.reg .mstore)
   (.next (.reg (.dup 1)) (.next (.reg .eq) (.next (.reg .iszero)
-  (.next (.push [r0, r1] (by simp)) (.branchTo exitT k)))))))))))))))))))))))))))))))))))
+  (.next (.push [r0, r1] (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLeDiff])) (.branchTo exitT k)))))))))))))))))))))))))))))))))))
 
 /-- The store loop's stack. -/
 def vyStoreStack (cap lp base src : B256) (R : List B256) : List B256 :=
@@ -1038,7 +1060,8 @@ private theorem rx_vyStoreBody (hfork : CoveredFork sevm.benvStat.fork)
       (St (afterSstore sevm b (base + Nat.toB256 i) (Bytes.toB256 (M.read (sn + 32 * i) 32).1))
         (B256.eqCheck cap (Nat.toB256 (i + 1)) :: vyStoreStack cap lp base src R)
         (M.write 0x120 (Nat.toB256 (i + 1)).toBytes) G)
-      (.next (.reg .iszero) (.next (.push [r0, r1] (by simp)) (.branchTo exitT k))) o) :
+      (.next (.reg .iszero) (.next (.push [r0, r1] (by simp only [List.length_cons, List.length_nil,
+        zero_add, Nat.reduceAdd, Nat.reduceLeDiff])) (.branchTo exitT k))) o) :
     SFunc.RunExact fs sevm (St b (vyStoreStack cap lp base src R) M
       (G + 101 + sstoreCost sevm b (base + Nat.toB256 i)
         (Bytes.toB256 (M.read (sn + 32 * i) 32).1)))
@@ -1069,50 +1092,50 @@ private theorem rx_vyStoreBody (hfork : CoveredFork sevm.benvStat.fork)
   unfold vyStoreLoopTree vyStoreStack
   unfold vyStoreStack at kk
   refine rx_dest ?_
-  refine rx_dup (n := 2) rfl (by simp; omega) ?_
-  refine rx_push hp120 (by simp; omega) ?_
+  refine rx_dup (n := 2) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_push hp120 (by simp only [List.length_cons]; omega) ?_
   refine rx_mload (c := 3) (v := Nat.toB256 i) ?_ (by rw [h120]; exact hi')
-    (by rw [h120]; exact hM) (by simp; omega) ?_
+    (by rw [h120]; exact hM) (by simp only [List.length_cons]; omega) ?_
   · rw [h120, St.extCost_eq hs, memExtSize_of_le hs32 (by omega)]; exact hc0
-  refine rx_push rfl (by simp; omega) ?_
-  refine rx_mul h32i (by simp; omega) ?_
-  refine rx_gt hgt (by simp; omega) ?_
-  refine rx_iszero (v := 1) (by decide) (by simp; omega) ?_
-  refine rx_push rfl (by simp; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_mul h32i (by simp only [List.length_cons]; omega) ?_
+  refine rx_gt hgt (by simp only [List.length_cons]; omega) ?_
+  refine rx_iszero (v := 1) (by decide) (by simp only [List.length_cons]; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_branch_succ (by decide) (rx_dest ?_)
-  refine rx_push hp120 (by simp; omega) ?_
+  refine rx_push hp120 (by simp only [List.length_cons]; omega) ?_
   refine rx_mload (c := 3) (v := Nat.toB256 i) ?_ (by rw [h120]; exact hi')
-    (by rw [h120]; exact hM) (by simp; omega) ?_
+    (by rw [h120]; exact hM) (by simp only [List.length_cons]; omega) ?_
   · rw [h120, St.extCost_eq hs, memExtSize_of_le hs32 (by omega)]; exact hc0
-  refine rx_push rfl (by simp; omega) ?_
-  refine rx_mul h32i (by simp; omega) ?_
-  refine rx_dup (n := 5) rfl (by simp; omega) ?_
-  refine rx_add (by simp; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_mul h32i (by simp only [List.length_cons]; omega) ?_
+  refine rx_dup (n := 5) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_add (by simp only [List.length_cons]; omega) ?_
   refine rx_mload (c := 3) (v := w) ?_ (by rw [hsa]) (by rw [hsa]; exact read_covered hs hs32 hsrc)
-    (by simp; omega) ?_
+    (by simp only [List.length_cons]; omega) ?_
   · rw [hsa, St.extCost_eq hs, memExtSize_of_le hs32 hsrc]; exact hc0
-  refine rx_push hp120 (by simp; omega) ?_
+  refine rx_push hp120 (by simp only [List.length_cons]; omega) ?_
   refine rx_mload (c := 3) (v := Nat.toB256 i) ?_ (by rw [h120]; exact hi')
-    (by rw [h120]; exact hM) (by simp; omega) ?_
+    (by rw [h120]; exact hM) (by simp only [List.length_cons]; omega) ?_
   · rw [h120, St.extCost_eq hs, memExtSize_of_le hs32 (by omega)]; exact hc0
-  refine rx_dup (n := 5) rfl (by simp; omega) ?_
-  refine rx_add (by simp; omega) ?_
+  refine rx_dup (n := 5) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_add (by simp only [List.length_cons]; omega) ?_
   refine rx_sstore hfork (by omega) hstatic ?_
   refine rx_dest ?_
-  refine rx_dup (n := 1) rfl (by simp; omega) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_mload (c := 3) (v := Nat.toB256 i) ?_ (by rw [h120]; exact hi')
-    (by rw [h120]; exact hM) (by simp; omega) ?_
+    (by rw [h120]; exact hM) (by simp only [List.length_cons]; omega) ?_
   · rw [h120, St.extCost_eq hs, memExtSize_of_le hs32 (by omega)]; exact hc0
-  refine rx_push rfl (by simp; omega) ?_
-  refine rx_add (by simp; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_add (by simp only [List.length_cons]; omega) ?_
   rw [hone]
-  refine rx_dup (n := 0) rfl (by simp; omega) ?_
-  refine rx_dup (n := 3) rfl (by simp; omega) ?_
+  refine rx_dup (n := 0) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_dup (n := 3) rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_mstore (c := 3) ?_ (M' := M.write 0x120 (Nat.toB256 (i + 1)).toBytes)
     (by rw [h120]) ?_
   · rw [h120, St.extCost_eq hs, memExtSize_of_le hs32 (by omega)]; exact hc0
-  refine rx_dup (n := 1) rfl (by simp; omega) ?_
-  exact rx_eq rfl (by simp; omega) kk
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons]; omega) ?_
+  exact rx_eq rfl (by simp only [List.length_cons]; omega) kk
 
 /-- **A store iteration that loops back.** -/
 theorem rx_vyStoreStep (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
@@ -1130,9 +1153,9 @@ theorem rx_vyStoreStep (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.
       (vyStoreLoopTree e0 e1 x0 x1 r0 r1 j k exitT) o := by
   rw [show G + 117 = G + 10 + 3 + 3 + 101 by omega]
   refine rx_vyStoreBody hfork hstatic hroom hi hs hs32 hs1 hsn hsrc hbig hctr (by omega) ?_
-  refine rx_iszero (v := 1) ?_ (by simp [vyStoreStack]; omega) ?_
-  · simp [B256.eqCheck, hcap]
-  refine rx_push rfl (by simp [vyStoreStack]; omega) ?_
+  refine rx_iszero (v := 1) ?_ (by simp only [vyStoreStack, List.length_cons]; omega) ?_
+  · simp only [B256.eqCheck, hcap, ↓reduceIte]
+  refine rx_push rfl (by simp only [vyStoreStack, List.length_cons]; omega) ?_
   exact rx_branchTo_succ (by decide) hk kk
 
 /-- **A store iteration that falls through** (the counter reached `cap`). -/
@@ -1151,9 +1174,9 @@ theorem rx_vyStoreLast (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.
       (vyStoreLoopTree e0 e1 x0 x1 r0 r1 j k exitT) o := by
   rw [show G + 117 = G + 10 + 3 + 3 + 101 by omega]
   refine rx_vyStoreBody hfork hstatic hroom hi hs hs32 hs1 hsn hsrc hbig hctr (by omega) ?_
-  refine rx_iszero (v := 0) ?_ (by simp [vyStoreStack]; omega) ?_
-  · simp [B256.eqCheck, hcap]
-  refine rx_push rfl (by simp [vyStoreStack]; omega) ?_
+  refine rx_iszero (v := 0) ?_ (by simp only [vyStoreStack, List.length_cons]; omega) ?_
+  · simp only [B256.eqCheck, hcap, ↓reduceIte, ite_eq_right_iff, imp_self]
+  refine rx_push rfl (by simp only [vyStoreStack, List.length_cons]; omega) ?_
   exact rx_branchTo_zero kk
 
 /-- **The store loop's failing test**: `32 i > lp`, on to entry `j`. -/
@@ -1174,18 +1197,18 @@ theorem rx_vyStoreExit (hroom : R.length + 12 < 1024) {i : Nat} (hi : lp.toNat <
   unfold vyStoreLoopTree vyStoreStack
   unfold vyStoreStack at kk
   refine rx_dest ?_
-  refine rx_dup (n := 2) rfl (by simp; omega) ?_
-  refine rx_push hp120 (by simp; omega) ?_
+  refine rx_dup (n := 2) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_push hp120 (by simp only [List.length_cons]; omega) ?_
   refine rx_mload (c := 3) (v := Nat.toB256 i) ?_ (by rw [h120, hctr, B256.toB256_toBytes])
-    (by rw [h120]; exact hM) (by simp; omega) ?_
+    (by rw [h120]; exact hM) (by simp only [List.length_cons]; omega) ?_
   · rw [h120, St.extCost_eq hs, memExtSize_of_le hs32 (by omega), Nat.sub_self]; rfl
-  refine rx_push rfl (by simp; omega) ?_
-  refine rx_mul (vy_mul32 hi') (by simp; omega) ?_
-  refine rx_gt hgt (by simp; omega) ?_
-  refine rx_iszero (v := 0) (by decide) (by simp; omega) ?_
-  refine rx_push rfl (by simp; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_mul (vy_mul32 hi') (by simp only [List.length_cons]; omega) ?_
+  refine rx_gt hgt (by simp only [List.length_cons]; omega) ?_
+  refine rx_iszero (v := 0) (by decide) (by simp only [List.length_cons]; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_branch_zero ?_
-  refine rx_push rfl (by simp; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
   exact rx_jump hj kk
 
 /-- **One pass of the store loop, inverted**: either the test fails and the run goes on at
@@ -1309,12 +1332,14 @@ theorem Mem.read_write_disjoint {M : Mem} (hwf : Mem.Wf M) (n : Nat) (xs : Bytes
 /-- The store loop's set-up: `mstore(0xc0, sl); keccak(0xc0, 0x20)` for the base, the length
 word at `src` plus 32, the counter `0` at `0x120`, the cap `cp`. -/
 def vyStoreHead (s0 s1 sl cp : UInt8) (loopT : SFunc) : SFunc :=
-  .next (.push [s0, s1] (by simp)) (.next (.reg (.dup 0)) (.next (.push [sl] (by simp))
+  .next (.push [s0, s1] (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLeDiff])) (.next (.reg (.dup 0)) (.next (.push [sl] (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.one_le_ofNat]))
   (.next (.push [0xc0] (by decide)) (.next (.reg .mstore) (.next (.push [0x20] (by decide))
   (.next (.push [0xc0] (by decide)) (.next (.reg .keccak256) (.next (.push [0x20] (by decide))
   (.next (.reg (.dup 2)) (.next (.reg .mload) (.next (.reg .add)
   (.next (.push [0x01, 0x20] (by decide)) (.next (.push [0x00] (by decide))
-  (.next (.push [cp] (by simp)) (.next (.reg (.dup 1)) (.next (.reg (.dup 3))
+  (.next (.push [cp] (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_le_ofNat])) (.next (.reg (.dup 1)) (.next (.reg (.dup 3))
   (.next (.reg .mstore) (.next (.reg .add) loopT))))))))))))))))))
 
 section StoreHead
@@ -1349,31 +1374,31 @@ theorem rx_vyStoreHead (hroom : S.length + 8 < 1024) {s sn : Nat} (hs : M.size =
     by omega]
   unfold vyStoreHead
   refine rx_push rfl (by omega) ?_
-  refine rx_dup (n := 0) rfl (by simp; omega) ?_
-  refine rx_push rfl (by simp; omega) ?_
-  refine rx_push rfl (by simp; omega) ?_
+  refine rx_dup (n := 0) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_mstore (c := 3) ?_ (M' := M1) (by rw [hc0]) ?_
   · rw [hc0, St.extCost_eq hs]; exact hx s rfl
-  refine rx_push rfl (by simp; omega) ?_
-  refine rx_push rfl (by simp; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_keccak (c := 36) ?_ (by rw [hc0, h20, Mem.read_write_word_of_wf hwf])
-    (by rw [hc0, h20]; exact read_covered hM1 (by omega) (by omega)) (by simp; omega) ?_
+    (by rw [hc0, h20]; exact read_covered hM1 (by omega) (by omega)) (by simp only [List.length_cons]; omega) ?_
   · rw [hc0, h20, St, Devm.extCost_zero_of_le (by rw [hM1]; exact hs32) (by rw [hM1]; omega)]
     decide
-  refine rx_push rfl (by simp; omega) ?_
-  refine rx_dup (n := 2) rfl (by simp; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_dup (n := 2) rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_mload (c := 3) (v := Bytes.toB256 (M.read sn 32).1) ?_ (by rw [hsn, hL])
-    (by rw [hsn]; exact read_covered hM1 (by omega) hsn2) (by simp; omega) ?_
+    (by rw [hsn]; exact read_covered hM1 (by omega) hsn2) (by simp only [List.length_cons]; omega) ?_
   · rw [hsn, St.extCost_eq hM1, memExtSize_of_le hs32 hsn2, Nat.sub_self]; rfl
-  refine rx_add (by simp; omega) ?_
-  refine rx_push (w := 0x120) (by decide) (by simp; omega) ?_
-  refine rx_push (w := Nat.toB256 0) (by decide) (by simp; omega) ?_
-  refine rx_push rfl (by simp; omega) ?_
-  refine rx_dup (n := 1) rfl (by simp; omega) ?_
-  refine rx_dup (n := 3) rfl (by simp; omega) ?_
+  refine rx_add (by simp only [List.length_cons]; omega) ?_
+  refine rx_push (w := 0x120) (by decide) (by simp only [List.length_cons]; omega) ?_
+  refine rx_push (w := Nat.toB256 0) (by decide) (by simp only [List.length_cons]; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_dup (n := 3) rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_mstore (c := 3) ?_ (by rw [h120]) ?_
   · rw [h120, St.extCost_eq hM1, memExtSize_of_le hs32 (by omega), Nat.sub_self]; rfl
-  exact rx_add (by simp; omega) kk
+  exact rx_add (by simp only [List.length_cons]; omega) kk
 
 /-- **The store loop's set-up, inverted.** -/
 theorem ric_vyStoreHead {C : List Nat} {r : Seg} {s sn : Nat} (hs : M.size = s)
@@ -1437,13 +1462,15 @@ the counter `0` at `0x120`, and the load loop `loopT` (stack `vyLoadStack`, dest
 
 /-- The string view's body up to its load loop `loopT`. -/
 def vyStrView (h0 h1 sl cp : UInt8) (fail loopT : SFunc) : SFunc :=
-  .next (.reg .callvalue) (.next (.reg .iszero) (.next (.push [h0, h1] (by simp))
-  (.branch fail (.dest (.next (.push [sl] (by simp)) (.next (.reg (.dup 0))
+  .next (.reg .callvalue) (.next (.reg .iszero) (.next (.push [h0, h1] (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLeDiff]))
+  (.branch fail (.dest (.next (.push [sl] (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.one_le_ofNat])) (.next (.reg (.dup 0))
   (.next (.push [0xc0] (by decide)) (.next (.reg .mstore) (.next (.push [0x20] (by decide))
   (.next (.push [0xc0] (by decide)) (.next (.reg .keccak256) (.next (.push [0x01, 0x80] (by decide))
   (.next (.push [0x20] (by decide)) (.next (.reg (.dup 2)) (.next (.reg .sload) (.next (.reg .add)
   (.next (.push [0x01, 0x20] (by decide)) (.next (.push [0x00] (by decide))
-  (.next (.push [cp] (by simp)) (.next (.reg (.dup 1)) (.next (.reg (.dup 3))
+  (.next (.push [cp] (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_le_ofNat])) (.next (.reg (.dup 1)) (.next (.reg (.dup 3))
   (.next (.reg .mstore) (.next (.reg .add) loopT)))))))))))))))))))))))
 
 /-- `ceil32` as a subtraction of the residue. -/
@@ -1459,6 +1486,7 @@ theorem sliceD_data_end (bs : Bytes) (z : Nat) : bs.sliceD bs.length z 0 = List.
   rw [List.drop_length]
   induction z with
   | zero => rfl
-  | succ z ih => simp [List.takeD, ih, List.replicate_succ]
+  | succ z ih => simp only [List.takeD, List.headD_eq_head?_getD, List.head?_nil, Option.getD_none,
+    List.tail_nil, ih, List.replicate_succ]
 
 end Blanc.Lift

@@ -134,13 +134,4 @@ theorem c3crvCarriedSpec_soundAdmitted (ca : Adr) (initial : Blanc.Curve3Crv.Sta
     rw [(refinement.2 writer).1 sevm.currentTarget]
     exact invariant
 
-/-- The frame preservation consumed by the actual configured-history ladder. -/
-theorem c3crvCarriedSpec_preservesAdmitted (ca : Adr) (initial : Blanc.Curve3Crv.State)
-    (initialKeys U : Key → Prop)
-    (injective : ∀ k k', U k → U k' → k.slot = k'.slot → k = k')
-    (apart : ∀ k, U k → k.slot ∉ vyFixedSlots) :
-    (c3crvCarriedSpec ca initial initialKeys U).PreservesAdmitted ca (carriedFrameEntry U) :=
-  (c3crvCarriedSpec ca initial initialKeys U).preserves_inv_admitted ca (carriedFrameEntry U)
-    (c3crvCarriedSpec_soundAdmitted ca initial initialKeys U injective apart)
-
 end Blanc.Lift.Curve3Crv

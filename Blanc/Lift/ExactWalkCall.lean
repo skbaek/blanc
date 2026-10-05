@@ -71,7 +71,7 @@ theorem callNZ_ex {gw cw vw iiw isw oiw osw : B256} {c : Nat}
   have hext : ∀ (S' : List B256) (G' : Nat), ((St b S' M G').extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]) = 0 := by
     intro S' G'
-    simp [Devm.extCost, memExtsSize, memExtSize, hisw, hosw]
+    simp only [Devm.extCost, memExtsSize, memExtSize, hosw, ↓reduceIte, hisw, St.memory, tsub_self]
   have hnodel : getDelegatedCodeAddress (b.state.getCode cw.toAdr) = none := by
     have h23 : ¬ isValidDelegation (b.state.getCode cw.toAdr) := fun h => by
       have := h.1
@@ -79,7 +79,7 @@ theorem callNZ_ex {gw cw vw iiw isw oiw osw : B256} {c : Nat}
       rw [hcode] at this
       exact absurd this (by decide)
     unfold getDelegatedCodeAddress
-    simp [h23]
+    simp only [h23, ↓reduceIte]
   set devm : Devm := St b (gw :: cw :: vw :: iiw :: isw :: oiw :: osw :: S) M (G + c) with hdevm
   set X : Devm := addAccessedAddress (devm.setMach ⟨S, devm.memory, devm.gasLeft, devm.stateGas⟩)
     cw.toAdr with hX
@@ -106,7 +106,7 @@ theorem callNZ_ex {gw cw vw iiw isw oiw osw : B256} {c : Nat}
         (if ¬ (b.getAcct cw.toAdr).Empty then 0 else gNewAccount) + gasCallValue, gCallStipend⟩ := by
     unfold calculateMsgCallGas
     simp only [hgw, hvw', ite_false]
-    split_ifs <;> simp
+    split_ifs <;> simp only [zero_add, tsub_zero, zero_le, inf_of_le_left, add_zero]
   obtain ⟨post, hrun, hstk, hmem, hgasl, herr, hout, hrd, hlogs, hrefund, hdelete, stmid, hsub,
     hstate⟩ := Ninst.runCompiled_call_nonzero_codeFree (sevm := sevm) (devm := devm)
     (gw := gw) (cw := cw) (vw := vw) (iiw := iiw) (isw := isw) (oiw := oiw) (osw := osw) (s := S)
@@ -135,7 +135,7 @@ theorem callNZ_ex {gw cw vw iiw isw oiw osw : B256} {c : Nat}
     rw [hmem]
     have hM : devm.memory = M := rfl
     rw [hM]
-    simp [Mem.extends, memExtsSize, memExtSize, hisw, hosw]
+    simp only [Mem.extends, memExtsSize, memExtSize, hosw, ↓reduceIte, hisw]
   have hgas'' : post.gasLeft = G := by
     rw [hgasl]
     have hgas' : X.gasLeft = G + c := rfl
@@ -184,7 +184,7 @@ theorem callZ_ex {gw cw iiw isw oiw osw : B256} {c : Nat}
   have hext : ∀ (S' : List B256) (G' : Nat), ((St b S' M G').extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩]) = 0 := by
     intro S' G'
-    simp [Devm.extCost, memExtsSize, memExtSize, hisw, hosw]
+    simp only [Devm.extCost, memExtsSize, memExtSize, hosw, ↓reduceIte, hisw, St.memory, tsub_self]
   have hnodel : getDelegatedCodeAddress (b.state.getCode cw.toAdr) = none := by
     have h23 : ¬ isValidDelegation (b.state.getCode cw.toAdr) := fun h => by
       have := h.1
@@ -192,7 +192,7 @@ theorem callZ_ex {gw cw iiw isw oiw osw : B256} {c : Nat}
       rw [hcode] at this
       exact absurd this (by decide)
     unfold getDelegatedCodeAddress
-    simp [h23]
+    simp only [h23, ↓reduceIte]
   set devm : Devm := St b (gw :: cw :: 0 :: iiw :: isw :: oiw :: osw :: S) M (G + c) with hdevm
   set X : Devm := addAccessedAddress (devm.setMach ⟨S, devm.memory, devm.gasLeft, devm.stateGas⟩)
     cw.toAdr with hX
@@ -214,7 +214,7 @@ theorem callZ_ex {gw cw iiw isw oiw osw : B256} {c : Nat}
     have : ¬ (G + accessCost cw.toAdr b.accessedAddresses < accessCost cw.toAdr b.accessedAddresses + 0) := by
       omega
     simp only [this, ite_false]
-    simp
+    simp only [tsub_zero, add_tsub_cancel_right, ↓reduceIte, add_zero]
   obtain ⟨post, hrun, hstk, hmem, hgasl, herr, hout, hrd, hlogs, hrefund, hdelete, stmid, hsub,
     hstate⟩ := Ninst.runCompiled_call_zero_value_codeFree (sevm := sevm) (devm := devm)
     (gw := gw) (cw := cw) (iiw := iiw) (isw := isw) (oiw := oiw) (osw := osw) (s := S)
@@ -231,7 +231,7 @@ theorem callZ_ex {gw cw iiw isw oiw osw : B256} {c : Nat}
     rw [hmem]
     have hM : devm.memory = M := rfl
     rw [hM]
-    simp [Mem.extends, memExtsSize, memExtSize, hisw, hosw]
+    simp only [Mem.extends, memExtsSize, memExtSize, hosw, ↓reduceIte, hisw]
   have hgas'' : post.gasLeft = G := by
     rw [hgasl, hg', hc]
     omega

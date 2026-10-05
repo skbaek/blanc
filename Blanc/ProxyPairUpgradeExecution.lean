@@ -166,7 +166,7 @@ private theorem nonpayable_body_of_ok_frame
   have pValue := prefix_of_push valuePush hp
   have pTest := prefix_of_iszero rzero pValue
   have pOne : (1 : B256) :: tail <<+ testPre.stack := by
-    simpa [valueZero, B256.eqCheck] using pTest
+    simpa only [B256.eqCheck, valueZero, ↓reduceIte, List.append_eq, List.nil_append] using pTest
   obtain ⟨bodyPre, _, -, hpop, bodyRun, pBody⟩ :=
     Func.RunCompiledTo.succ_branch_of_prefix
       (by decide : (1 : B256) ≠ 0) pOne branchRun
@@ -203,14 +203,17 @@ private theorem upgradeToAndCall_body_of_program_frame
     runtime_selected_body_of_prog_run_empty_frame
       (body := nonpayable (.call upgradeToAndCallSlot)) hprog hentryStack
       (selector_of_proxyUpgradeToAndCallCalldata hdata)
-      (by simp [runtimeBaselineEntries])
+      (by simp only [runtimeBaselineEntries, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, or_true])
   have pDispatch : ([] : Stack) <<+ dispatchPre.stack :=
     ⟨dispatchPre.stack, rfl⟩
   obtain ⟨_, callPre, callRun, pCall, callFrame⟩ :=
     nonpayable_body_of_ok_frame pDispatch dispatchRun
   obtain ⟨bodyPre, callBurn, bodyRun⟩ := runCompiledTo_call_inv
     (k := upgradeToAndCallSlot) (f := upgradeToAndCall)
-    (by simp [runtimeBaseline, runtimeBaselineAux, upgradeToAndCallSlot])
+    (by simp only [runtimeBaseline, runtimeBaselineAux, upgradeToAndCallSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero])
     callRun
   have pBody : ([] : Stack) <<+ bodyPre.stack := by
     rw [← callBurn.stack]
@@ -310,14 +313,14 @@ theorem v1_value_run_effect
       (selected := valueSelector) (body := loadScalar v1ValueSlot)
       hprog hstack
       (selector_of_valueCalldata hdata) v1Entries_selectorUnique
-      (by simp [v1Entries])
+      (by simp only [v1Entries, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or])
   have effect := loadScalar_run_effect bodyStack bodyRun
   have wordEq : bodyPre.getStorVal sevm.currentTarget v1ValueSlot =
       pre.getStorVal sevm.currentTarget v1ValueSlot := by
     change (Devm.getStor bodyPre sevm.currentTarget).get v1ValueSlot =
       (Devm.getStor pre sevm.currentTarget).get v1ValueSlot
     rw [← congrFun entryBodyStor sevm.currentTarget]
-  exact ⟨by simpa [wordEq] using effect.1,
+  exact ⟨by simpa only [wordEq] using effect.1,
     entryBodyStor.trans effect.2⟩
 
 /-- Exact compiled v2 `value()` behavior over S2. -/
@@ -332,14 +335,14 @@ theorem v2_value_run_effect
       (selected := valueSelector) (body := loadScalar v2ValueSlot)
       hprog hstack
       (selector_of_valueCalldata hdata) v2Entries_selectorUnique
-      (by simp [v2Entries])
+      (by simp only [v2Entries, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or])
   have effect := loadScalar_run_effect bodyStack bodyRun
   have wordEq : bodyPre.getStorVal sevm.currentTarget v2ValueSlot =
       pre.getStorVal sevm.currentTarget v2ValueSlot := by
     change (Devm.getStor bodyPre sevm.currentTarget).get v2ValueSlot =
       (Devm.getStor pre sevm.currentTarget).get v2ValueSlot
     rw [← congrFun entryBodyStor sevm.currentTarget]
-  exact ⟨by simpa [wordEq] using effect.1,
+  exact ⟨by simpa only [wordEq] using effect.1,
     entryBodyStor.trans effect.2⟩
 
 /-- Exact compiled v1 `setValue(uint256)` behavior over S1. -/
@@ -357,7 +360,7 @@ theorem v1_setValue_run_effect
       (selected := setValueSelector) (body := storeScalar v1ValueSlot)
       hprog hstack
       (selector_of_setValueCalldata hdata) v1Entries_selectorUnique
-      (by simp [v1Entries])
+      (by simp only [v1Entries, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, or_true])
   have effect := storeScalar_run_effect bodyStack bodyRun
   constructor
   · rw [effect.1, setValueCalldata_arg0 hdata,
@@ -380,7 +383,8 @@ theorem v2_setValue_run_effect
       (selected := setValueSelector) (body := storeScalar v2ValueSlot)
       hprog hstack
       (selector_of_setValueCalldata hdata) v2Entries_selectorUnique
-      (by simp [v2Entries])
+      (by simp only [v2Entries, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+        or_true])
   have effect := storeScalar_run_effect bodyStack bodyRun
   constructor
   · rw [effect.1, setValueCalldata_arg0 hdata,
@@ -492,14 +496,17 @@ theorem v2_initializer_run_storage_effect
     rw [← hselector]
     exact hs
   have huniq : selectorUnique v2Entries := by
-    simp [selectorUnique, v2Entries, valueSelector, setValueSelector,
-      initializeV2Selector, migrationMarkerSelector]
+    simp only [selectorUnique, ne_eq, v2Entries, valueSelector, setValueSelector,
+      initializeV2Selector, migrationMarkerSelector, List.pairwise_cons, List.mem_cons,
+      List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq, IsEmpty.forall_iff, implies_true,
+      List.Pairwise.nil, and_self, and_true]
     repeat' apply And.intro
     all_goals decide +kernel
   have selected := dispatchBodyWitness_of_runCompiledTo
     huniq
     (show (initializeV2Selector, nonpayable initializeV2Body) ∈ v2Entries by
-      simp [v2Entries])
+      simp only [v2Entries, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+        or_true])
     hafterSigStack hdispatch
   rcases selected with
     ⟨selectedPre, _, selectedRun, selectedStack, dispatchFrame⟩
@@ -555,7 +562,8 @@ theorem upgradeToAndCallDelegateTail_success_state
   cases status : child.error.isSome with
   | false =>
       have pOne : (1 : B256) :: spawn.parent.stack <<+ callPost.stack :=
-        ⟨[], by simpa [Split, status] using stack⟩
+        ⟨[], by simpa only [Split, List.append_nil, status, Bool.false_eq_true, ↓reduceIte] using
+          stack⟩
       obtain ⟨stopPre, _, _, branchPop, stopRun, _⟩ :=
         Func.RunCompiledTo.succ_branch_of_prefix
           (by decide : (1 : B256) ≠ 0) pOne run
@@ -563,10 +571,11 @@ theorem upgradeToAndCallDelegateTail_success_state
       · rw [Func.RunCompiledTo.stop_eq stopRun]
         exact branchPop.state.symm.trans callState
       · rw [Func.RunCompiledTo.stop_eq stopRun]
-        exact branchPop.logs.symm.trans (by simpa [status] using callLogs)
+        exact branchPop.logs.symm.trans (by simpa only [status, Bool.false_eq_true,
+          ↓reduceIte] using callLogs)
   | true =>
       have pZero : (0 : B256) :: spawn.parent.stack <<+ callPost.stack :=
-        ⟨[], by simpa [Split, status] using stack⟩
+        ⟨[], by simpa only [Split, List.append_nil, status, ↓reduceIte] using stack⟩
       obtain ⟨failedPre, failedPop, failedRun, _⟩ :=
         Func.RunCompiledTo.zero_branch_of_prefix pZero run
       obtain ⟨sizePost, sizeRun, payloadBranch⟩ :=
@@ -579,21 +588,23 @@ theorem upgradeToAndCallDelegateTail_success_state
       · have pLengthZero : (0 : B256) :: failedPre.stack <<+
             sizePost.stack :=
           ⟨[], by
-            simpa [Split, Stack.Push, failedReturnData,
-              lengthWordZero] using sizePush.stack⟩
+            simpa only [Split, List.append_nil, Stack.Push, failedReturnData, lengthWordZero,
+              List.cons_append, List.nil_append] using sizePush.stack⟩
         obtain ⟨_, _, errorRun, _⟩ :=
           Func.RunCompiledTo.zero_branch_of_prefix pLengthZero payloadBranch
         have hget :
             (runtimeBaseline.main :: runtimeBaseline.aux)[
                 emptyDelegatecallErrorSlot]? =
               some (Func.revertData emptyDelegatecallErrorData) := by
-          simp [runtimeBaseline, runtimeBaselineAux,
-            emptyDelegatecallErrorSlot, emptyDelegatecallError]
+          simp only [runtimeBaseline, runtimeBaselineAux, emptyDelegatecallError,
+            emptyDelegatecallErrorSlot, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+            Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
         exact (Func.RunCompiledTo.not_ok_call_revertData hget errorRun).elim
       · have pLength : Nat.toB256 child.output.length :: failedPre.stack <<+
             sizePost.stack :=
           ⟨[], by
-            simpa [Split, Stack.Push, failedReturnData] using sizePush.stack⟩
+            simpa only [Split, List.append_nil, Stack.Push, failedReturnData, List.cons_append,
+              List.nil_append] using sizePush.stack⟩
         obtain ⟨_, _, _, _, bubbleRun, _⟩ :=
           Func.RunCompiledTo.succ_branch_of_prefix
             lengthWordZero pLength payloadBranch
@@ -746,7 +757,7 @@ private theorem primary_outer_boundary_of_program
           have committedLogs' : afterPre.logs = checkPre.logs ++
               [rawUpgradedLog sevm.currentTarget
                 v2Implementation.toB256] := by
-            simpa [arg0] using committedLogs
+            simpa only [arg0] using committedLogs
           cases setupRoute with
           | nonempty _ delegatePre delegateRun pDelegate delegateWf
               delegateReads setupState setupLogs =>
@@ -841,7 +852,7 @@ theorem upgradeToAndCall_primary_realizes_migration
       post.logs = entry.logs ++
         [rawUpgradedLog upgradeProxy v2Implementation.toB256] := by
   have proxyRun : Prog.RunCompiledTo sevm entry runtimeBaseline (.ok post) := by
-    simpa [hproxy] using houter
+    simpa only [hproxy] using houter
   have _callerExact : sevm.caller = upgradeAdmin := hcaller
   have _v1Exact := hv1Installed
   have _v2CodeExact := hv2Code
@@ -869,7 +880,8 @@ theorem upgradeToAndCall_primary_realizes_migration
     apply selector_eq_of_data_eq_abiSelectorBytes_append
         (selected := initializeV2Selector) (tail := [])
     · rfl
-    · simpa [initializeV2Calldata] using childData'
+    · simpa only [Msg.initSevm_data, DelegatecallSpawnDescriptor.child_data, List.append_nil,
+      initializeV2Calldata] using childData'
   have childEffect := v2_initializer_run_storage_effect childRun rfl
     childSelector
   have success := upgradeToAndCallDelegateTail_success_state settled tailRun'
@@ -902,7 +914,8 @@ theorem upgradeToAndCall_primary_realizes_migration
           (Devm.getStorVal (initDevm spawn.child)
             sevm.currentTarget v1ValueSlot)).set
         migrationMarkerSlot migrationMarkerValue := by
-    simpa using childEffect.1
+    simpa only [Msg.initSevm_currentTarget, DelegatecallSpawnDescriptor.child_currentTarget] using
+      childEffect.1
   have initialV1 : Devm.getStorVal (initDevm spawn.child)
       sevm.currentTarget v1ValueSlot =
       Devm.getStorVal entry sevm.currentTarget v1ValueSlot := by
@@ -974,7 +987,7 @@ theorem upgradeToAndCall_primary_realizes_migration
         (show migrationMarkerSlot ≠ v2ValueSlot by decide),
       Stor.get_set_self]
     rfl
-  · simpa [howner] using postLogsAtEntry
+  · simpa only [howner] using postLogsAtEntry
 
 /-! ## Identity routes -/
 
@@ -1055,7 +1068,7 @@ theorem upgradeTo_realizes_identity
         storageWord post.state upgradeProxy migrationMarkerSlot =
           storageWord entry.state upgradeProxy migrationMarkerSlot := by
   have proxyRun : Prog.RunCompiledTo sevm entry runtimeBaseline (.ok post) := by
-    simpa [hproxy] using houter
+    simpa only [hproxy] using houter
   have _callerExact : sevm.caller = upgradeAdmin := hcaller
   have _v1Exact := hv1Installed
   have _v2CodeExact := hv2Code
@@ -1064,8 +1077,9 @@ theorem upgradeTo_realizes_identity
       hentryStack hvalue hdata hliveAdmin hauthorized
   have effect := upgradeImplementationControl_success
     (fs := runtimeBaseline.main :: runtimeBaseline.aux)
-    (by simp [runtimeBaseline, runtimeBaselineAux,
-      noCodeImplementationErrorSlot, noCodeImplementationError])
+    (by simp only [runtimeBaseline, runtimeBaselineAux, noCodeImplementationError,
+      noCodeImplementationErrorSlot, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero])
     pCheck checkRun
   have arg0 : Sevm.argWord sevm 0 = v2Implementation.toB256 :=
     proxyUpgradeToCalldata_arg0 hdata
@@ -1087,7 +1101,7 @@ theorem upgradeTo_realizes_identity
     simpa only [arg0, toAdr_toB256] using effect.1
   have logs : post.logs = checkPre.logs ++
       [rawUpgradedLog sevm.currentTarget v2Implementation.toB256] := by
-    simpa [arg0] using effect.2.2
+    simpa only [arg0] using effect.2.2
   have finalStorCurrent : Devm.getStor post sevm.currentTarget =
       (Devm.getStor entry sevm.currentTarget).set implementationSlotLit
         v2Implementation.toB256 := by
@@ -1150,7 +1164,7 @@ theorem upgradeToAndCall_skipped_empty_realizes_identity
       storageWord post.state upgradeProxy migrationMarkerSlot =
         storageWord entry.state upgradeProxy migrationMarkerSlot := by
   have _proxyRun : Prog.RunCompiledTo sevm entry runtimeBaseline (.ok post) := by
-    simpa [hproxy] using houter
+    simpa only [hproxy] using houter
   have _callerExact : sevm.caller = upgradeAdmin := hcaller
   have _dataExact := hdata
   have _authorizedExact := hauthorized
@@ -1168,7 +1182,7 @@ theorem upgradeToAndCall_skipped_empty_realizes_identity
   | nonempty setupNonempty _ _ _ _ _ _ =>
       exact (setupNonempty rfl).elim
   | forced _ forceTrue _ _ _ _ _ _ =>
-      simp at forceTrue
+      simp only [Bool.false_eq_true] at forceTrue
   | skipped _ _ stopPre stopRun _ _ _ setupState =>
       have postEq : post = stopPre := Func.RunCompiledTo.stop_eq stopRun
       have postAfterState : post.state = afterPre.state := by

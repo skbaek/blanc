@@ -79,7 +79,7 @@ theorem deposit_body {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {M : Mem
     exact rx_ret
   case out =>
     have h : ∀ (d : Devm) (L : Log), (d.addLog L).output = d.output := fun _ _ => rfl
-    rw [h]; simp
+    rw [h]; simp only [afterSstore_output, afterSload_output]
 
 /-- A payable entry (the `deposit()` wrapper and the fallback): two pushes, the call into the body,
 a `STOP`.  `15` gas before the body, `1` after it. -/
@@ -145,15 +145,17 @@ theorem dispatch_short {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome}
     (h_short : sevm.data.length.toB256 < 4)
     (k : SFunc.RunExact prog sevm (St b [] memFp g) t_00af_c0 o) :
     SFunc.RunExact prog sevm (St b [] Mem.empty (g + 39)) t_0000_c0 o := by
-  refine rx_push (w := 0x60) (by decide) (by simp) ?_
-  refine rx_push (w := 0x40) (by decide) (by simp) ?_
+  refine rx_push (w := 0x60) (by decide) (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  refine rx_push (w := 0x40) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.one_lt_ofNat]) ?_
   refine rx_mstore (c := 12) (M' := memFp) ?_ rfl ?_
   · rw [St.extCost_eq (n := 0) rfl]; decide
-  refine rx_push (w := 4) (by decide) (by simp) ?_
-  refine rx_calldatasize (by simp) ?_
-  refine rx_lt (v := 1) ?_ (by simp) ?_
-  · simp [B256.ltCheck, h_short]
-  refine rx_push rfl (by simp) ?_
+  refine rx_push (w := 4) (by decide) (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  refine rx_calldatasize (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.one_lt_ofNat]) ?_
+  refine rx_lt (v := 1) ?_ (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  · simp only [B256.ltCheck, h_short, ↓reduceIte]
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
   exact rx_branch_succ (by decide) k
 
 /-- Calldata of four bytes or more whose selector matches no comparison: all eleven miss and the
@@ -234,7 +236,8 @@ theorem weth9_deposit_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
       (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) + sevm.value) = s at this ⊢
     omega
   obtain ⟨post, hrun, hpg, hpo⟩ := deposit_wrap (T := t_03ca_c19) (S := [Sevm.selector sevm])
-    (G := G) (b := pre) rfl hfork h_static (by simp) hs
+    (G := G) (b := pre) rfl hfork h_static (by simp only [List.length_cons, List.length_nil,
+      zero_add, Nat.one_lt_ofNat]) hs
   refine ⟨post, ⟨_, rfl, ?_⟩, hpg, hpo⟩
   have h0 := dispatch_deposit (b := pre) h_len h_len' hsel hrun
   rw [pre_eq_St h_stack h_mem hg] at h0
@@ -268,7 +271,7 @@ theorem weth9_fallback_short_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
       (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) + sevm.value) = s at this ⊢
     omega
   obtain ⟨post, hrun, hpg, hpo⟩ := deposit_wrap (T := t_00af_c0) (S := [])
-    (G := G) (b := pre) rfl hfork h_static (by simp) hs
+    (G := G) (b := pre) rfl hfork h_static (by simp only [List.length_nil, Nat.ofNat_pos]) hs
   refine ⟨post, ⟨_, rfl, ?_⟩, hpg, hpo⟩
   have h0 := dispatch_short (b := pre) h_short hrun
   rw [pre_eq_St h_stack h_mem hg] at h0
@@ -303,7 +306,8 @@ theorem weth9_fallback_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
       (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) + sevm.value) = s at this ⊢
     omega
   obtain ⟨post, hrun, hpg, hpo⟩ := deposit_wrap (T := t_00af_c0) (S := [Sevm.selector sevm])
-    (G := G) (b := pre) rfl hfork h_static (by simp) hs
+    (G := G) (b := pre) rfl hfork h_static (by simp only [List.length_cons, List.length_nil,
+      zero_add, Nat.one_lt_ofNat]) hs
   refine ⟨post, ⟨_, rfl, ?_⟩, hpg, hpo⟩
   have h0 := dispatch_miss (b := pre) h_len h_len' hmiss hrun
   rw [pre_eq_St h_stack h_mem hg] at h0

@@ -658,10 +658,10 @@ def hopInv : Lean.Elab.Tactic.TacticM Unit :=
   | _ => dbg_trace "Not a Linst.Inv goal"
 
 lemma Devm.Burn.getBal {s s' : Devm} (h : Devm.Burn s s') (a : Adr) : s'.getBal a = s.getBal a := by
-  simp [Devm.getBal, Devm.getAcct]; rw [h.state]
+  simp only [Devm.getBal, Devm.getAcct]; rw [h.state]
 
 lemma Devm.PopBurn.getBal {xs} {s s' : Devm} (h : Devm.PopBurn xs s s') (a : Adr) : s'.getBal a = s.getBal a := by
-  simp [Devm.getBal, Devm.getAcct]; rw [h.state]
+  simp only [Devm.getBal, Devm.getAcct]; rw [h.state]
 
 lemma Func.of_inv {ξ : Type} {e s r} (f g) {p : Func} :
   @Func.Inv ξ f g p → Func.Run c e s p r → f s = g r := λ h => h

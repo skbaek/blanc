@@ -87,8 +87,8 @@ PINS = {
     "OfficialDeploymentTransactionResult": "4123d37aa90ea893ad37cbcf73184a94b0dcb2146b7c021a086487935364c62f",
     "OfficialDeploymentSuffixResult": "3c359fd060bd6c981d177062d40bc52e4e7ce5d9d69220e31966b5a02e0f4977",
     "DeploymentRoot": "a08eea760782c5710c499be7d56dfbf12be1cdbc4fb314aee7995373365509a1",
-    "canonicalDeploymentStep_establishes_root": "532a763de35f499e8299556623dab63c8bff89100addac1fa23c395d7183423c",
-    "DeploymentRoot.reflReach": "db5340c05d64eaacd1a250c81e4c87d285672e8ad7a348b5c87f59db04d4e8e7",
+    "canonicalDeploymentStep_establishes_root": "ddc38d5f4d05121894327a05ced4271865dfc62cb97b868225b2a9b212ebb287",
+    "DeploymentRoot.reflReach": "9df07c7df5c23375cee939340a5af51ea9fbb6a619f2ed9f41fd41b0c9af4926",
     "DeploymentRoot.reachable_registryStable": "77b599141a87f3797980f3648b28fbed30445bc9db224cfd310b125d1e01833a",
     "DeploymentRoot.reachable_code": "81a6786d083b03c2385428f6ca09a79e935ac1ce73242349fe4ecbf136fabbbd",
     "DeploymentRoot.reachable_installedCode": "d7f912846c7b60d6fce05d7ca07e381b861cb00471c5febe7495fb29964db4b8",
@@ -275,7 +275,7 @@ REDUCTION_CERTIFICATE_PINS = {
     "constructorEventScratchForProof_eq":
         "11f3afd3869a7e088b05f8caa35ccfa886affccbd42bf837698b8471abaea304",
     "pushFixedNatForProof_eq":
-        "e23ff17bf282441826503a63e5419677cf0616eb4b125da7809dc0ca255a8013",
+        "8af2621c0d97c0fdf4c5bf2036f57390f65538f7c410ef581a30705626953cc8",
     "pushCompactNatForProof_eq":
         "48aacc9dac407e821560027485983269bb99e8dc534008e548fed5934ef43d89",
     "loadArgumentIndexForProof_eq":
@@ -283,7 +283,7 @@ REDUCTION_CERTIFICATE_PINS = {
     "storeByteOffsetForProof_eq":
         "1ec139ad147a1801a4f25652729dd959f6974d198f9a8282db32fa4f1a47bec0",
     "constructorErrorForProof_eq":
-        "ff541721e248d7f02be52facab2615accbb03c7bc39d05c304926c27fb320f41",
+        "d4763987d91be32150036da6352592d42c87a86b277d0ede0d33f13e60c1c8cc",
     "patchArgumentIndexForProof_eq":
         "ee7bb202f8884d084b181f6afbd4940ed2953d9529bdb2a7f9705fa3c7f5da52",
     "patchFieldLineForProof_eq":

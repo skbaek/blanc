@@ -14,17 +14,6 @@
       "ceiling": 803
     },
     {
-      "id": "Blanc/FmintGas.lean::Blanc.Fmint.dcSel_ne_tsSel#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/FmintGas.lean",
-      "declaration": "Blanc.Fmint.dcSel_ne_tsSel",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 589,
-      "ceiling": 589
-    },
-    {
       "id": "Blanc/FmintGas.lean::Blanc.Fmint.decimals_runCompiled#1::command_scoped::-::maxRecDepth#1",
       "file": "Blanc/FmintGas.lean",
       "declaration": "Blanc.Fmint.decimals_runCompiled",

@@ -108,7 +108,7 @@ theorem safe_insert_loop {sevm : Sevm} {b₀ : Devm} {x : Nat} {node0 : B256}
   have hszv : (Nat.toB256 (x / 2 ^ h)).toNat = x / 2 ^ h := B256.toNat_toB256_of_lt hxh
   rcases Nat.mod_two_eq_zero_or_one (x / 2 ^ h) with hbit | hbit
   · obtain ⟨hh32, b', M', G', hK, hM', rfl⟩ := safe_insertDead (hsha.of_eq hL.code hL.addrs) hh
-      (by rw [hszv]; exact hbit) (by simp [T]; omega) hMh hrun
+      (by rw [hszv]; exact hbit) (by simp only [T, List.cons_append, List.nil_append, List.length_cons, Nat.reduceLeDiff]; omega) hMh hrun
     refine ⟨h + 1, b', M', G', ?_, by omega, ?_, hL.step hK, ?_⟩
     · have hsz : Nat.toB256 (x / 2 ^ h) / 2 = Nat.toB256 (x / 2 ^ (h + 1)) := by
         rw [toB256_div_two hxh, Nat.div_div_eq_div_mul, ← Nat.pow_succ]
@@ -189,8 +189,11 @@ theorem deposit_route {sevm : Sevm} {pre post : Devm} {history : List B256} {G1 
     rw [hK1.addrs, afterSload_accessedAddresses]; rfl
   set ev := bodyEvent sevm pP wP sP a w
   have hlen : (BeaconDeposit.abiDepositEvent ev).length = 576 := by
-    simp [ev, bodyEvent, BeaconDeposit.abiDepositEvent, abiBytesTail, List.length_sliceD,
-      BeaconDeposit.le64, ceil32, B256.length_toBytes]
+    simp only [BeaconDeposit.abiDepositEvent, List.append_assoc, abiBytesTail, bodyEvent,
+      BeaconDeposit.le64, Nat.toUInt8_eq, List.length_sliceD, ceil32, Nat.reduceMod, Nat.reduceAdd,
+      Nat.succ_eq_add_one, Nat.reduceSub, List.reduceReplicate, Nat.mod_self, tsub_self,
+      List.replicate_zero, List.append_nil, List.cons_append, List.nil_append, List.length_cons,
+      List.length_nil, zero_add, List.length_append, B256.length_toBytes, ev]
   obtain ⟨b3, M3, G5, hK3, hM3, run3⟩ := safe_pubkeyRoot (sevm := sevm) (b := b2) (a := a)
     (hsha.of_eq (fun x => by rw [hK2.code, hc1]) (by rw [hK2.addrs, ha1])) hlen hM2 run2
   have hc3 : ∀ x, b3.getCode x = pre.getCode x := fun x => by
@@ -231,7 +234,7 @@ theorem deposit_route {sevm : Sevm} {pre post : Devm} {history : List B256} {G1 
     rw [hK6.stor, afterSstore_getStor_self, hstor5]
   have hbr : ∀ h < 32, stor1.get (solBranchSlot h) = br h := fun h hh => by
     rw [Stor.get_set_ne _ (Ne.symm (solBranchSlot_ne_count hh))]
-    simp [br, solAcc, hh, stor]
+    simp only [solAcc, hh, ↓reduceIte, stor, br]
   have hc6 : ∀ y, b6.getCode y = pre.getCode y := fun y => by
     rw [hK6.code, afterSstore_getCode, hK5.code, hK4.code, hc3]
   have ha6 : b6.accessedAddresses = pre.accessedAddresses := by
@@ -244,7 +247,8 @@ theorem deposit_route {sevm : Sevm} {pre post : Devm} {history : List B256} {G1 
     omega
   rw [t_0f6e_c20_eq, hroot, e1] at run6
   obtain ⟨h, bf, Mf, Gf, hd, hh, hdead, hlive, hW⟩ := safe_insert_loop (b₀ := b6) (x := x)
-    (node0 := rt) (br := br) (stor1 := stor1) (rest := [sel]) hfork (hsha.of_eq hc6 ha6) (by simp)
+    (node0 := rt) (br := br) (stor1 := stor1) (rest := [sel]) hfork (hsha.of_eq hc6 ha6) (by simp only [List.length_cons,
+      List.length_nil, zero_add, Nat.one_le_ofNat])
     (by omega) hb6stor hbr (M := M6) (G := G8) hM6 run6
   cases hd
   have hn : h = insertDepth 32 x := insertDepth_unique (by omega) hx32 hdead hlive
@@ -286,7 +290,7 @@ theorem deposit_route {sevm : Sevm} {pre post : Devm} {history : List B256} {G1 
       · rw [ite_eq_right hj]
         unfold BeaconDeposit.setSlot
         rw [ite_eq_right (by omega)]
-        simp [br, solAcc, hj]
+        simp only [solAcc, hj, ↓reduceIte, br]
     · rw [Stor.get_set_ne _ (solBranchSlot_ne_count hh), Stor.get_set_self]
       have := congrArg B256.toNat e1
       rw [Nat.pow_zero, Nat.div_one, B256.toNat_toB256_of_lt (by omega)] at this

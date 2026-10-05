@@ -25,15 +25,15 @@ open Jaune
 def St (b : Devm) (S : List B256) (M : Mem) (G : Nat) : Devm :=
   b.setMach ⟨S, M, G, b.stateGas⟩
 
-@[simp] theorem St.stack {b : Devm} {S : List B256} {M : Mem} {G : Nat} :
+theorem St.stack {b : Devm} {S : List B256} {M : Mem} {G : Nat} :
     (St b S M G).stack = S := rfl
-@[simp] theorem St.memory {b : Devm} {S : List B256} {M : Mem} {G : Nat} :
+theorem St.memory {b : Devm} {S : List B256} {M : Mem} {G : Nat} :
     (St b S M G).memory = M := rfl
-@[simp] theorem St.gasLeft {b : Devm} {S : List B256} {M : Mem} {G : Nat} :
+theorem St.gasLeft {b : Devm} {S : List B256} {M : Mem} {G : Nat} :
     (St b S M G).gasLeft = G := rfl
-@[simp] theorem St.getStorVal {b : Devm} {S : List B256} {M : Mem} {G : Nat} {a : Adr}
+theorem St.getStorVal {b : Devm} {S : List B256} {M : Mem} {G : Nat} {a : Adr}
     {k : B256} : (St b S M G).getStorVal a k = b.getStorVal a k := rfl
-@[simp] theorem St.accessedStorageKeys {b : Devm} {S : List B256} {M : Mem} {G : Nat} :
+theorem St.accessedStorageKeys {b : Devm} {S : List B256} {M : Mem} {G : Nat} :
     (St b S M G).accessedStorageKeys = b.accessedStorageKeys := rfl
 
 /-- The expansion charge of a window over an image of known size. -/
@@ -276,8 +276,9 @@ theorem rx_exp {x y : B256} (hy : y.bytecount = 0) (hroom : S.length < 1024)
   refine .next ?_ k
   have h := Ninst.runCompiled_reg (sevm := sevm) (r := .exp) (by rintro ⟨⟩)
     (Rinst.runCore_exp_eq_ok (devm := St b (x :: y :: S) M (G + 10)) rfl
-      (by simp [hy, gExp]) hroom)
-  simpa [hy, gExp, St, Devm.setMach_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using h
+      (by simp only [gExp, hy, mul_zero, add_zero, St.gasLeft, le_add_iff_nonneg_left, zero_le]) hroom)
+  simpa only [St, Devm.memory_setMach, Devm.setMach_gasLeft, gExp, hy, mul_zero, add_zero,
+    add_tsub_cancel_right, Devm.stateGas_setMach, Devm.setMach_setMach] using h
 
 theorem rx_sload_cold {k' : B256} (hlegacy : sevm.benvStat.rules.stateGas = none)
     (hcold : (⟨sevm.currentTarget, k'⟩ : Adr × B256) ∉ b.accessedStorageKeys)
@@ -347,11 +348,14 @@ theorem cmp_miss {sel : B256} {c0 c1 c2 c3 d0 d1 : UInt8} {l1 l2} {nxt : SFunc} 
     SFunc.RunExact fs sevm (St b [sel] M (G + 22))
       (.next (.reg (.dup 0)) (.next (.push [c0, c1, c2, c3] l1) (.next (.reg .eq)
         (.next (.push [d0, d1] l2) (.branchTo nxt j))))) o := by
-  refine rx_dup1 (by simp) ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_eq (v := 0) ?_ (by simp) ?_
-  · simp [B256.eqCheck, hne]
-  refine rx_push rfl (by simp) ?_
+  refine rx_dup1 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_eq (v := 0) ?_ (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.one_lt_ofNat]) ?_
+  · simp only [B256.eqCheck, hne, ↓reduceIte]
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   exact rx_branchTo_zero k
 
 /-- One solc dispatcher comparison that matches, jumping to entry `j`. -/
@@ -361,11 +365,14 @@ theorem cmp_hit {sel : B256} {c0 c1 c2 c3 d0 d1 : UInt8} {l1 l2} {nxt tgt : SFun
     SFunc.RunExact fs sevm (St b [sel] M (G + 22))
       (.next (.reg (.dup 0)) (.next (.push [c0, c1, c2, c3] l1) (.next (.reg .eq)
         (.next (.push [d0, d1] l2) (.branchTo nxt j))))) o := by
-  refine rx_dup1 (by simp) ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_eq (v := 1) ?_ (by simp) ?_
-  · simp [B256.eqCheck, heq]
-  refine rx_push rfl (by simp) ?_
+  refine rx_dup1 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_eq (v := 1) ?_ (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.one_lt_ofNat]) ?_
+  · simp only [B256.eqCheck, heq, ↓reduceIte]
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   exact rx_branchTo_succ (by decide) hj k
 
 end Steps

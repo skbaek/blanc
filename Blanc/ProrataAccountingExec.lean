@@ -73,7 +73,7 @@ theorem Exec.CoreProrataAccounting.error
     {error : EvmError × Devm} :
     Exec.CoreProrataAccounting ca pc sevm pre (.error error) := by
   intro _ committed
-  simp [Execution.commits] at committed
+  simp only [Execution.commits, Bool.false_eq_true] at committed
 
 /-- The compiled PRORATA frame handler.  Ordinary deployed routes close in
 one classified replay; withdrawal prefixes recurse only into the exact
@@ -158,8 +158,7 @@ theorem Exec.CoreProrataAccounting.atTarget
           have childTargetNe :
               childSevm.currentTarget ≠ sevm.currentTarget := by
             rw [childSevmEq]
-            simpa [initSevm, Msg.withBenv] using
-              withdrawal.payout.targetNe
+            simpa only [initSevm, Msg.withBenv, ne_eq] using withdrawal.payout.targetNe
           have childAt : Prog.At prorata sevm.currentTarget childPc
               childSevm childPre := by
             refine ⟨?_, fun childTarget => (childTargetNe childTarget).elim⟩
@@ -280,7 +279,7 @@ theorem Exec.CoreProrataAccounting.last
     blockIndex transactionIndex framePath _
   cases out with
   | error error =>
-      simp [Execution.commits] at committed
+      simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have sumNof : sum pre.state.bal < 2 ^ 256 := precondition.side
       let provenance : ProrataAccountingProvenance :=
@@ -359,14 +358,15 @@ theorem Exec.CoreProrataAccounting.nextSome
       have hxrun := XStep.run_toStep.mp step
       cases spawnEq : Xinst.step sevm pre x with
       | done execution =>
-          simp [spawnEq, XStep.Run] at hxrun
+          simp only [XStep.Run, spawnEq, ExceptT.stM_eq, reduceCtorEq, false_and] at hxrun
       | spawn frame resume =>
           simp only [spawnEq, XStep.Run] at hxrun
           obtain ⟨result, frameRun, resumeRun⟩ := hxrun
           cases result with
           | error error =>
               cases resume <;>
-                simp [Resume.run, liftToExecution] at resumeRun
+                simp only [ExceptT.stM_eq, Resume.run, liftToExecution, Except.bind_error,
+                  reduceCtorEq] at resumeRun
           | ok settled =>
               have enter := (RunFrame.some_inv frameRun).1
               have evmStep : Evm.step ⟨pc, sevm, pre⟩ =
@@ -415,7 +415,7 @@ theorem Exec.CoreProrataAccounting.nextSome
                           (not_delegation_of_compile installed.1)])
                 have childCodeAddress :=
                   congrArg (fun evm : Evm => evm.sta.codeAddress) childEvmEq
-                dsimp [initEvm, initSevm, Msg.withBenv] at childCodeAddress
+                dsimp only [Msg.withBenv, initEvm, initSevm] at childCodeAddress
                 rw [childCodeAddress, codeAddress, innerTarget]
               have childCaller : cevm.sta.currentTarget = ca →
                   cevm.sta.caller.toB256.toAdr ≠ ca := by
@@ -428,7 +428,7 @@ theorem Exec.CoreProrataAccounting.nextSome
                     spawnEq target_ne innerTarget
                 have childCallerEq :=
                   congrArg (fun evm : Evm => evm.sta.caller) childEvmEq
-                dsimp [initEvm, initSevm, Msg.withBenv] at childCallerEq
+                dsimp only [Msg.withBenv, initEvm, initSevm] at childCallerEq
                 rw [childCallerEq, toAdr_toB256]
                 exact callerNe
               obtain ⟨childPrecondition, continuationOfPost⟩ :=
@@ -561,25 +561,25 @@ theorem Exec.prorataAccountingReplay_of_messageRoot
     refine ⟨?_, rfl⟩
     rcases ready.runReady.codeOrForeign with call | foreign
     · exact ready.runReady.ready.code call
-        (by simpa [initSevm, Msg.withBenv] using target)
+        (by simpa only [initSevm, Msg.withBenv] using target)
     · exact False.elim (foreign
-        (by simpa [initSevm, Msg.withBenv] using target))
+        (by simpa only [initSevm, Msg.withBenv] using target))
   have direct :
       (initSevm (msg.withBenv entry)).currentTarget = ca →
         (initSevm (msg.withBenv entry)).codeAddress = some ca := by
     intro target
     rcases ready.runReady.codeOrForeign with call | foreign
     · exact ready.runReady.ready.codeAddress call
-        (by simpa [initSevm, Msg.withBenv] using target)
+        (by simpa only [initSevm, Msg.withBenv] using target)
     · exact False.elim (foreign
-        (by simpa [initSevm, Msg.withBenv] using target))
+        (by simpa only [initSevm, Msg.withBenv] using target))
   have caller :
       (initSevm (msg.withBenv entry)).currentTarget = ca →
         (initSevm (msg.withBenv entry)).caller.toB256.toAdr ≠ ca := by
     intro target
     rw [toAdr_toB256]
     exact ready.caller_ne
-      (by simpa [initSevm, Msg.withBenv] using target)
+      (by simpa only [initSevm, Msg.withBenv] using target)
   have all := Exec.coreProrataAccounting (ca := ca)
   have core := all 0 (initSevm (msg.withBenv entry))
     (initDevm (msg.withBenv entry)) out run installed

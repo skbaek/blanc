@@ -88,13 +88,13 @@ theorem balanceOfCalldata_facts {sevm : Sevm} {vault : Adr}
           (0x70a08231 : B256) := by decide +kernel
       rw [hsel]
       rfl
-    · simpa [balanceOfCalldata] using hdata
+    · simpa only [balanceOfCalldata] using hdata
   · apply dataWord_of_append
       (pre := abiSelectorBytes (selector "balanceOf" [.address]))
       (post := [])
     · rw [abiSelectorBytes_length]
       rfl
-    · simpa [balanceOfCalldata] using hdata
+    · simpa only [List.append_nil, balanceOfCalldata] using hdata
 
 /-- Selector and all three raw ABI words of the canonical delegated transfer. -/
 theorem transferFromCalldata_facts
@@ -110,7 +110,7 @@ theorem transferFromCalldata_facts
           (selector "transferFrom" [.address, .address, .uint256]) ++
         (owner.toB256.toBytes ++
           (vault.toB256.toBytes ++ assets.toBytes)) := by
-    simpa [transferFromCalldata, List.append_assoc] using hdata
+    simpa only [transferFromCalldata, List.append_assoc] using hdata
   constructor
   · apply selector_eq_of_data_eq_abiSelectorBytes_append
       (selected :=
@@ -122,7 +122,7 @@ theorem transferFromCalldata_facts
             (0x23b872dd : B256) := by decide +kernel
       rw [hsel]
       rfl
-    · simpa [List.append_assoc] using dataShape
+    · simpa only [List.append_assoc] using dataShape
   · constructor
     · apply dataWord_of_append
         (pre := abiSelectorBytes
@@ -139,9 +139,9 @@ theorem transferFromCalldata_facts
             owner.toB256.toBytes)
           (w := vault.toB256)
           (post := assets.toBytes) ?_ ?_
-        · simp [abiSelectorBytes_length, B256.length_toBytes,
-            show (36 : B256).toNat = 36 by decide +kernel]
-        · simpa [List.append_assoc] using dataShape
+        · simp only [show (36 : B256).toNat = 36 by decide +kernel, List.length_append,
+          abiSelectorBytes_length, B256.length_toBytes, Nat.reduceAdd]
+        · simpa only [List.append_assoc] using dataShape
       · refine dataWord_of_append
           (idx := (68 : B256))
           (pre := abiSelectorBytes
@@ -149,9 +149,9 @@ theorem transferFromCalldata_facts
             owner.toB256.toBytes ++ vault.toB256.toBytes)
           (w := assets)
           (post := []) ?_ ?_
-        · simp [abiSelectorBytes_length, B256.length_toBytes,
-            show (68 : B256).toNat = 68 by decide +kernel]
-        · simpa [List.append_assoc] using dataShape
+        · simp only [show (68 : B256).toNat = 68 by decide +kernel, List.append_assoc,
+          List.length_append, abiSelectorBytes_length, B256.length_toBytes, Nat.reduceAdd]
+        · simpa only [List.append_assoc, List.append_nil] using dataShape
 
 /-- Selector and both raw ABI words of the canonical outbound transfer. -/
 theorem transferCalldata_facts
@@ -163,7 +163,7 @@ theorem transferCalldata_facts
   have dataShape : sevm.data =
       abiSelectorBytes (selector "transfer" [.address, .uint256]) ++
         (receiver.toB256.toBytes ++ assets.toBytes) := by
-    simpa [transferCalldata, List.append_assoc] using hdata
+    simpa only [transferCalldata, List.append_assoc] using hdata
   constructor
   · apply selector_eq_of_data_eq_abiSelectorBytes_append
       (selected := selector "transfer" [.address, .uint256])
@@ -188,9 +188,9 @@ theorem transferCalldata_facts
           receiver.toB256.toBytes)
         (w := assets)
         (post := []) ?_ ?_
-      · simp [abiSelectorBytes_length, B256.length_toBytes,
-          show (36 : B256).toNat = 36 by decide +kernel]
-      · simpa [List.append_assoc] using dataShape
+      · simp only [show (36 : B256).toNat = 36 by decide +kernel, List.length_append,
+        abiSelectorBytes_length, B256.length_toBytes, Nat.reduceAdd]
+      · simpa only [List.append_nil, List.append_assoc] using dataShape
 
 /-! ## Actual child occurrences -/
 

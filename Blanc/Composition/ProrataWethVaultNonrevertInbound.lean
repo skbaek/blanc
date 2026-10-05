@@ -82,7 +82,7 @@ theorem shareRoomGuard_avoiding {pre : Devm} {out : Execution}
     rw [roomNat] at this
     omega
   have zeroPrefix : (0 : B256) :: tail <<+ branchPre.stack := by
-    simpa [B256.ltCheck, roomLarge] using testPrefix
+    simpa only [B256.ltCheck, roomLarge, ↓reduceIte] using testPrefix
   obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
     Func.RunCompiledToAvoiding.zero_branch_of_prefix zeroPrefix branchRun
   have bodyPop' := Devm.PopBurn.of_popBurnBy bodyPop
@@ -181,7 +181,7 @@ theorem inboundCredit_avoiding {pre : Devm} {out : Execution}
     rw [B256.toNat_add_eq_of_nof _ _ noWrap'] at this
     omega
   have zeroPrefix : (0 : B256) :: tail <<+ s10.stack := by
-    simpa [B256.ltCheck, notLess] using flag
+    simpa only [B256.ltCheck, notLess, ↓reduceIte] using flag
   obtain ⟨bodyPre, -, bodyRun, -⟩ :=
     Func.RunCompiledToAvoiding.zero_branch_of_prefix zeroPrefix branchRun
   exact ⟨bodyPre, bodyRun⟩
@@ -297,8 +297,9 @@ theorem inboundGuardedTail_revert {fs : List Func} {sevm : Sevm}
           (Blanc.ProrataWethVault.loadWord sharesWord) +++
         Blanc.ProrataWethVault.loadWord Blanc.ProrataWethVault.quoteWord +++
         Blanc.ProrataWethVault.returnWord) = true := by
-    simp [Func.revertFreeIn_prepend, Func.revertFreeIn,
-      Blanc.ProrataWethVault.returnWord, returnMemoryRange, Func.return_]
+    simp only [ProrataWethVault.returnWord, returnMemoryRange, Func.return_,
+      Func.revertFreeIn_prepend, Func.revertFreeIn, bne_iff_ne, ne_eq, reduceCtorEq,
+      not_false_eq_true]
   exact Func.RunCompiledTo.not_revert_of_revertFreeIn (safe := [])
     (fun _ member => absurd member List.not_mem_nil) run.1 free d rfl
 

@@ -50,7 +50,7 @@ theorem addressSlotReadWord_eq_toAdr_toB256 (raw : B256) :
     · exact lowMask middle
   · exact b128AndMax low
 
-@[simp] theorem addressSlotReadWord_toB256 (address : Adr) :
+theorem addressSlotReadWord_toB256 (address : Adr) :
     addressSlotReadWord address.toB256 = address.toB256 := by
   rw [addressSlotReadWord_eq_toAdr_toB256, toAdr_toB256]
 
@@ -77,12 +77,12 @@ theorem addressMask_and_eq_zero_of_lt {word : B256}
     omega
   have hz : wz = 0 := by
     apply UInt64.toNat_inj.mp
-    simpa using hzNat
+    simpa only [UInt64.toNat_zero] using hzNat
   have hwh : wh.toUInt32.toUInt64 = wh := by
     apply UInt64.toNat_inj.mp
     simp only [UInt32.toNat_toUInt64, UInt64.toNat_toUInt32]
     rw [Nat.mod_eq_of_lt hwhLt]
-  exact ⟨⟨wh.toUInt32, wl⟩, by simp [Adr.toB256, hz, hwh]; rfl⟩
+  exact ⟨⟨wh.toUInt32, wl⟩, by simp only [Adr.toB256, hwh, hz]; rfl⟩
 
 /-- A word below `2^160` already reads back as itself through the packed
 address projection: the direct fact a caller needs when a value being
@@ -107,7 +107,7 @@ theorem addressSlotReadWord_write_of_clean (raw clean : B256)
       UInt64.toBitVec_not]
     rw [BitVec.and_or_distrib_left, ← BitVec.and_assoc,
       BitVec.not_and_self]
-    simp [hv']
+    simp only [BitVec.ofNat_eq_ofNat, BitVec.zero_and, hv', BitVec.zero_or]
   unfold addressSlotReadWord at hclean ⊢
   unfold addressSlotWriteWord
   rcases hmask : addressMask with ⟨⟨m0, m1⟩, ⟨m2, m3⟩⟩
@@ -140,8 +140,8 @@ theorem addressSlotReadWord_get_set_packed (s : Stor)
       if key = probe then value else addressSlotReadWord (s.get probe) := by
   by_cases h : key = probe
   · subst probe
-    simp [Stor.get_set_self, addressSlotReadWord_write_of_clean _ _ hclean]
-  · simp [h, Stor.get_set_ne _ h]
+    simp only [Stor.get_set_self, addressSlotReadWord_write_of_clean _ _ hclean, ↓reduceIte]
+  · simp only [Stor.get_set_ne _ h, h, ↓reduceIte]
 
 private theorem shr96_ones_eq_not_addressMask :
     (~~~ (0 : B256)) >>> (96 : Nat).toB256.toNat = ~~~ addressMask := by
@@ -184,8 +184,8 @@ theorem of_loadAddressWordAt_val
     change (Devm.getStor slotPost sevm.currentTarget).get slot =
       (Devm.getStor pre sevm.currentTarget).get slot
     rw [← congrFun slotStor sevm.currentTarget]
-  refine ⟨by simpa [addressSlotReadWord, hraw,
-      shr96_ones_eq_not_addressMask] using pAddress, ?_, ?_, ?_⟩
+  refine ⟨by simpa only [addressSlotReadWord, shr96_ones_eq_not_addressMask, hraw, List.append_eq,
+    List.nil_append] using pAddress, ?_, ?_, ?_⟩
   · exact (Line.of_inv Devm.memory (by line_inv) run).symm
   · exact (Line.of_inv Devm.logs (by line_inv) run).symm
   · exact (Line.of_inv Devm.getStor (by line_inv) run).symm

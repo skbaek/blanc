@@ -53,19 +53,23 @@ theorem exampleRegistryOn_of_check
     apply registryQueries_observable exampleProbes_valid
     simp only [exampleInitialWrites, List.mem_cons, List.not_mem_nil, or_false] at hw
     rcases hw with rfl | rfl | rfl | rfl | rfl <;>
-      simp [registryQueries, exampleProbes, show Nat.toB256 1 = (1 : B256) from rfl]
+      simp only [registryQueries, List.range_one, List.map_cons, zero_add,
+        show Nat.toB256 1 = (1 : B256) from rfl, List.map_nil, exampleProbes, List.flatMap_cons,
+        List.flatMap_nil, List.append_nil, List.cons_append, List.nil_append, List.mem_cons,
+        List.not_mem_nil, or_false, true_or, or_true]
   have hclean : ∀ w ∈ exampleInitialWrites,
       RegistryAddressFamily 1 w.1 → addressSlotReadWord w.2 = w.2 := by
     intro w hw _
     simp only [exampleInitialWrites, List.mem_cons, List.not_mem_nil, or_false] at hw
     rcases hw with rfl | rfl | rfl | rfl | rfl <;> rfl
   unfold exampleStorage
-  rw [solRegistryStorage_applyRegistryRawWrites_at (by norm_num : 1 < 2 ^ 252)
+  rw [solRegistryStorage_applyRegistryRawWrites_at (by norm_num only : 1 < 2 ^ 252)
     (fun t ht => SlotFootprint.checkFaithfulOn_eq_true.mp hcheck t ht key hk)
     hwobs hclean hobs]
   have hzero : (solRegistryStorage Stor.empty).read key = 0 := by
     have hz : addressSlotReadWord 0 = 0 := rfl
-    simp [solRegistryStorage, Stor.get, Stor.empty, hz]
+    simp only [solRegistryStorage, Nat.reducePow, Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc,
+      Std.TreeMap.getD_emptyc, hz, ite_self]
   rw [hzero]
 
 /-- Concrete separation for the constructed five-write pre-state, discharged

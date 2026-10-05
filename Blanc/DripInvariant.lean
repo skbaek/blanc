@@ -95,7 +95,7 @@ theorem balSum_eq_zero_of_rows_zero {s : Stor}
     apply B256.toNat_inj
     change (s.get holder.toB256).toNat = (0 : B256).toNat
     rw [B256.toNat_zero]
-    simpa [pieSlot] using hnat
+    simpa only [pieSlot] using hnat
   rw [balSum, hrest, sum, sumBelow_zero]
 
 /-- The constructor's actual scalar and all-row facts establish the storage

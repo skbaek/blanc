@@ -50,8 +50,8 @@ theorem deposit_residue_eq (assets : Nat) (pre : Snapshot) :
     assets pre.balance pre.supply
   have h' : Blanc.ProrataWethVault.convertToSharesN assets pre.balance pre.supply * X pre ≤
       assets * D pre := by
-    simpa [X, D, Blanc.ProrataWethVault.assetFactorN,
-      Blanc.ProrataWethVault.denominatorN, Nat.mul_comm] using h
+    simpa only [X, Nat.mul_comm, D, ProrataWethVault.assetFactorN,
+      ProrataWethVault.denominatorN] using h
   unfold X D at h'
   clear h
   omega
@@ -65,8 +65,8 @@ theorem deposit_residue_lt (assets : Nat) (pre : Snapshot) :
     assets pre.balance pre.supply
   have h' : assets * D pre <
       Blanc.ProrataWethVault.convertToSharesN assets pre.balance pre.supply * X pre + X pre := by
-    simpa [X, D, Blanc.ProrataWethVault.assetFactorN,
-      Blanc.ProrataWethVault.denominatorN, Nat.mul_add, Nat.mul_comm] using h
+    simpa only [D, Nat.mul_add, X, Nat.mul_comm, ProrataWethVault.denominatorN,
+      ProrataWethVault.assetFactorN, mul_one] using h
   unfold X D at h'
   clear h
   omega
@@ -81,8 +81,8 @@ theorem mint_residue_eq (shares : Nat) (pre : Snapshot) :
   have h := Blanc.ProrataWethVault.previewMintN_covers shares pre.balance pre.supply
   have h' : shares * X pre ≤
       Blanc.ProrataWethVault.previewMintN shares pre.balance pre.supply * D pre := by
-    simpa [X, D, Blanc.ProrataWethVault.assetFactorN,
-      Blanc.ProrataWethVault.denominatorN, Nat.mul_comm] using h
+    simpa only [X, D, Nat.mul_comm, ProrataWethVault.assetFactorN,
+      ProrataWethVault.denominatorN] using h
   unfold X D at h'
   clear h
   omega
@@ -96,16 +96,16 @@ theorem mint_residue_lt (shares : Nat) (pre : Snapshot) :
     shares pre.balance pre.supply
   have h' : Blanc.ProrataWethVault.previewMintN shares pre.balance pre.supply * D pre <
       shares * X pre + D pre := by
-    simpa [X, D, Blanc.ProrataWethVault.assetFactorN,
-      Blanc.ProrataWethVault.denominatorN, Nat.mul_comm] using h
+    simpa only [D, Nat.mul_comm, X, ProrataWethVault.denominatorN,
+      ProrataWethVault.assetFactorN] using h
   unfold X D at h'
   clear h
   have hcover := Blanc.ProrataWethVault.previewMintN_covers shares pre.balance pre.supply
   have hcover' : shares * (pre.balance + 1) ≤
       Blanc.ProrataWethVault.previewMintN shares pre.balance pre.supply *
         (pre.supply + Blanc.ProrataWethVault.offsetN) := by
-    simpa [Blanc.ProrataWethVault.assetFactorN,
-      Blanc.ProrataWethVault.denominatorN, Nat.mul_comm] using hcover
+    simpa only [Nat.mul_comm, ProrataWethVault.assetFactorN, ProrataWethVault.denominatorN] using
+      hcover
   omega
 
 theorem withdraw_residue_eq (assets : Nat) (pre : Snapshot) :
@@ -118,8 +118,8 @@ theorem withdraw_residue_eq (assets : Nat) (pre : Snapshot) :
     assets pre.balance pre.supply
   have h' : assets * D pre ≤
       Blanc.ProrataWethVault.previewWithdrawN assets pre.balance pre.supply * X pre := by
-    simpa [X, D, Blanc.ProrataWethVault.assetFactorN,
-      Blanc.ProrataWethVault.denominatorN, Nat.mul_comm] using h
+    simpa only [D, X, Nat.mul_comm, ProrataWethVault.denominatorN,
+      ProrataWethVault.assetFactorN] using h
   unfold X D at h'
   clear h
   omega
@@ -133,8 +133,8 @@ theorem withdraw_residue_lt (assets : Nat) (pre : Snapshot) :
     assets pre.balance pre.supply
   have h' : Blanc.ProrataWethVault.previewWithdrawN assets pre.balance pre.supply * X pre <
       assets * D pre + X pre := by
-    simpa [X, D, Blanc.ProrataWethVault.assetFactorN,
-      Blanc.ProrataWethVault.denominatorN, Nat.mul_add, Nat.mul_comm] using h
+    simpa only [X, Nat.mul_comm, D, Nat.mul_add, ProrataWethVault.assetFactorN,
+      ProrataWethVault.denominatorN] using h
   unfold X D at h'
   clear h
   omega
@@ -150,8 +150,8 @@ theorem redeem_residue_eq (shares : Nat) (pre : Snapshot) :
     shares pre.balance pre.supply
   have h' : Blanc.ProrataWethVault.convertToAssetsN shares pre.balance pre.supply * D pre ≤
       shares * X pre := by
-    simpa [X, D, Blanc.ProrataWethVault.assetFactorN,
-      Blanc.ProrataWethVault.denominatorN, Nat.mul_comm] using h
+    simpa only [D, Nat.mul_comm, X, ProrataWethVault.denominatorN,
+      ProrataWethVault.assetFactorN] using h
   unfold X D at h'
   clear h
   omega
@@ -165,16 +165,16 @@ theorem redeem_residue_lt (shares : Nat) (pre : Snapshot) :
     shares pre.balance pre.supply
   have h' : shares * X pre <
       Blanc.ProrataWethVault.convertToAssetsN shares pre.balance pre.supply * D pre + D pre := by
-    simpa [X, D, Blanc.ProrataWethVault.assetFactorN,
-      Blanc.ProrataWethVault.denominatorN, Nat.mul_add, Nat.mul_comm] using h
+    simpa only [X, Nat.mul_add, mul_one, D, Nat.mul_comm, ProrataWethVault.assetFactorN,
+      ProrataWethVault.denominatorN] using h
   unfold X D at h'
   clear h
   have hfloor := Blanc.ProrataWethVault.convertToAssetsN_floor_le
     shares pre.balance pre.supply
   have hfloor' : Blanc.ProrataWethVault.convertToAssetsN shares pre.balance pre.supply *
       (pre.supply + Blanc.ProrataWethVault.offsetN) ≤ shares * (pre.balance + 1) := by
-    simpa [Blanc.ProrataWethVault.assetFactorN,
-      Blanc.ProrataWethVault.denominatorN, Nat.mul_comm] using hfloor
+    simpa only [Nat.mul_comm, ProrataWethVault.denominatorN, ProrataWethVault.assetFactorN] using
+      hfloor
   omega
 
 theorem normalInbound_price
@@ -456,9 +456,9 @@ theorem withdraw_compiled_normal_snapshot
   have quote' : burned.toNat = Blanc.ProrataWethVault.previewWithdrawN
       (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
         (snapshotAt sevm pre).supply := by
-    simpa [snapshotAt, vaultSnapshot, supplyEq] using quote
+    simpa only [snapshotAt, vaultSnapshot, supplyEq] using quote
   have burnable' : burned.toNat ≤ (snapshotAt sevm pre).supply := by
-    simpa [snapshotAt, vaultSnapshot, supplyEq] using burnable
+    simpa only [snapshotAt, vaultSnapshot, supplyEq] using burnable
   exact ⟨burned, quote', outboundEffect_normal_snapshot receiverNotVault burnable'
     (outboundEffect_covered effect) effect⟩
 
@@ -544,7 +544,7 @@ theorem deposit_compiled_normal_snapshot
   have quote' : shares.toNat = Blanc.ProrataWethVault.convertToSharesN
       (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
         (snapshotAt sevm pre).supply := by
-    simpa [snapshotAt, vaultSnapshot, supplyEq] using quote
+    simpa only [snapshotAt, vaultSnapshot, supplyEq] using quote
   have supplyNof : B256.Nof (Devm.getStorVal pre sevm.currentTarget
       Blanc.ProrataWethVault.supplySlot) shares := by
     rw [← supplyEq]
@@ -579,7 +579,7 @@ theorem mint_compiled_normal_snapshot
   have quote' : charged.toNat = Blanc.ProrataWethVault.previewMintN
       (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
         (snapshotAt sevm pre).supply := by
-    simpa [snapshotAt, vaultSnapshot, supplyEq] using quote
+    simpa only [snapshotAt, vaultSnapshot, supplyEq] using quote
   have supplyNof : B256.Nof (Devm.getStorVal pre sevm.currentTarget
       Blanc.ProrataWethVault.supplySlot) (Sevm.argWord sevm 0) := by
     rw [← supplyEq]
@@ -609,10 +609,10 @@ theorem withdraw_compiled_retained_snapshot
   have quote' : burned.toNat = Blanc.ProrataWethVault.previewWithdrawN
       (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
         (snapshotAt sevm pre).supply := by
-    simpa [snapshotAt, vaultSnapshot, supplyEq] using quote
+    simpa only [snapshotAt, vaultSnapshot, supplyEq] using quote
   exact ⟨burned, quote',
     outboundEffect_retained_snapshot receiverIsVault
-      (by simpa [snapshotAt, vaultSnapshot, supplyEq] using burnable) effect⟩
+      (by simpa only [snapshotAt, vaultSnapshot, supplyEq] using burnable) effect⟩
 
 /-- The compiled `redeem` reaches the real normal debit boundary when its
 receiver differs from the vault. -/
@@ -636,9 +636,9 @@ theorem redeem_compiled_normal_snapshot
   have quote' : assets.toNat = Blanc.ProrataWethVault.convertToAssetsN
       (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
         (snapshotAt sevm pre).supply := by
-    simpa [snapshotAt, vaultSnapshot, supplyEq] using quote
+    simpa only [snapshotAt, vaultSnapshot, supplyEq] using quote
   exact ⟨assets, quote', outboundEffect_normal_snapshot receiverNotVault
-    (by simpa [snapshotAt, vaultSnapshot, supplyEq] using burnable)
+    (by simpa only [snapshotAt, vaultSnapshot, supplyEq] using burnable)
     (outboundEffect_covered effect) effect⟩
 
 /-- The compiled `redeem` reaches the retained boundary when it pays the vault
@@ -663,9 +663,9 @@ theorem redeem_compiled_retained_snapshot
   have quote' : assets.toNat = Blanc.ProrataWethVault.convertToAssetsN
       (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
         (snapshotAt sevm pre).supply := by
-    simpa [snapshotAt, vaultSnapshot, supplyEq] using quote
+    simpa only [snapshotAt, vaultSnapshot, supplyEq] using quote
   exact ⟨assets, quote', outboundEffect_retained_snapshot receiverIsVault
-    (by simpa [snapshotAt, vaultSnapshot, supplyEq] using burnable) effect⟩
+    (by simpa only [snapshotAt, vaultSnapshot, supplyEq] using burnable) effect⟩
 
 /-- A third-party WETH transfer with an unchanged vault supply row reaches the
 credited snapshot boundary.  This is deliberately a raw local effect bridge;
@@ -682,12 +682,11 @@ theorem externalCredit_snapshot
   apply congrArg₂ Blanc.Prorata.AccountingSnapshot.mk
   · show (Devm.getStorVal post vault Blanc.ProrataWethVault.supplySlot).toNat = _
     rw [supplyKept]
-    simp [vaultSnapshot]
+    simp only [vaultSnapshot, add_zero]
   · show (Stor.rest (Devm.getStor post wethAccount) vault).toNat = _
     rw [credited_of_transfer effect sourceNotVault]
-    simpa [vaultSnapshot] using
-      B256.toNat_add_eq_of_nof
-        (Stor.rest (Devm.getStor pre wethAccount) vault) assets rowNof
+    simpa only [vaultSnapshot] using
+      B256.toNat_add_eq_of_nof (Stor.rest (Devm.getStor pre wethAccount) vault) assets rowNof
 
 /-- The two accounting coordinates read directly from a stable `State`
 boundary. -/
@@ -695,7 +694,7 @@ def stateSnapshot (vault : Adr) (state : State) : Snapshot :=
   ⟨((state.getStor vault).get Blanc.ProrataWethVault.supplySlot).toNat,
     (Stor.rest (state.getStor wethAccount) vault).toNat⟩
 
-@[simp] theorem vaultSnapshot_state (vault : Adr) (state : Devm) :
+theorem vaultSnapshot_state (vault : Adr) (state : Devm) :
     vaultSnapshot vault state = stateSnapshot vault state.state := rfl
 
 /-- The vault-side storage equation of an actual inbound effect is one exact
@@ -1236,7 +1235,7 @@ private theorem transfer_share_rows_of_compiled
   have receiverEq : receiverAdr = words.receiver.toAdr := by
     apply Adr.toB256_inj
     rw [receiverAdrEq, toB256_toAdr wordsReceiverValid, receiver]
-  simpa [owner, amount, receiverEq] using raw
+  simpa only [owner, amount, receiverEq] using raw
 
 private theorem transferFrom_share_rows_of_compiled
     {sevm : Sevm} {pre post : Devm} (words : ShareTransferFromWords)
@@ -1300,7 +1299,7 @@ private theorem transferFrom_share_rows_of_compiled
   have receiverEq : receiverAdr = words.receiver.toAdr := by
     apply Adr.toB256_inj
     rw [receiverAdrEq, toB256_toAdr wordsReceiverValid, receiver]
-  simpa [amount, ownerEq, receiverEq] using raw
+  simpa only [amount, ownerEq, receiverEq] using raw
 
 private theorem approve_share_rows_of_compiled
     {sevm : Sevm} {pre post : Devm}
@@ -1366,34 +1365,34 @@ theorem FourQuoteShareEvidence.actual_share_rows_move
     FourQuoteShareRowsMove operation := by
   cases evidence with
   | deposit words target depositorNotVault supplyNof wethRowNof quote effect receiverArg receiverValid supply supplyEq stable room =>
-      dsimp [FourQuoteShareRowsMove]
+      dsimp only [FourQuoteShareRowsMove]
       exact inboundEffect_share_increase (toB256_toAdr receiverValid) effect
   | mint words target depositorNotVault supplyNof wethRowNof quote effect receiverArg receiverValid supply supplyEq stable room =>
-      dsimp [FourQuoteShareRowsMove]
+      dsimp only [FourQuoteShareRowsMove]
       exact inboundEffect_share_increase (toB256_toAdr receiverValid) effect
   | withdrawNormal words target receiverNotVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
-      dsimp [FourQuoteShareRowsMove]
+      dsimp only [FourQuoteShareRowsMove]
       exact outboundEffect_share_decrease (toB256_toAdr ownerValid) effect
   | redeemNormal words target receiverNotVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
-      dsimp [FourQuoteShareRowsMove]
+      dsimp only [FourQuoteShareRowsMove]
       exact outboundEffect_share_decrease (toB256_toAdr ownerValid) effect
   | withdrawSelf words target receiverIsVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
-      dsimp [FourQuoteShareRowsMove]
+      dsimp only [FourQuoteShareRowsMove]
       exact outboundEffect_share_decrease (toB256_toAdr ownerValid) effect
   | redeemSelf words target receiverIsVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
-      dsimp [FourQuoteShareRowsMove]
+      dsimp only [FourQuoteShareRowsMove]
       exact outboundEffect_share_decrease (toB256_toAdr ownerValid) effect
   | credit words wethTarget sourceNotVault supplyKept rowNof effect vaultKept =>
-      dsimp [FourQuoteShareRowsMove]
+      dsimp only [FourQuoteShareRowsMove]
       rw [vaultKept]
   | transfer words target owner receiver amount config memoryWf run selectorEq =>
-      dsimp [FourQuoteShareRowsMove]
+      dsimp only [FourQuoteShareRowsMove]
       exact transfer_share_rows_of_compiled words owner receiver amount memoryWf run selectorEq
   | transferFrom words target spender owner receiver amount config memoryWf run selectorEq =>
-      dsimp [FourQuoteShareRowsMove]
+      dsimp only [FourQuoteShareRowsMove]
       exact transferFrom_share_rows_of_compiled words owner receiver amount memoryWf run selectorEq
   | approve words target owner spender amount config memoryWf run selectorEq =>
-      dsimp [FourQuoteShareRowsMove]
+      dsimp only [FourQuoteShareRowsMove]
       exact approve_share_rows_of_compiled memoryWf run selectorEq
 
 /-- A conserved pre-state turns each actual row movement into its exact
@@ -1409,48 +1408,48 @@ theorem FourQuoteShareEvidence.coalition
     FourQuoteShareCoalition coalition operation := by
   cases evidence with
   | deposit words target depositorNotVault supplyNof wethRowNof quote effect receiverArg receiverValid supply supplyEq stable room =>
-      dsimp [FourQuoteShareCoalition]
+      dsimp only [FourQuoteShareCoalition]
       exact ledgerSumOn_increase
         (inboundEffect_share_increase (toB256_toAdr receiverValid) effect)
         (inbound_share_nof_of_conserved supplyEq stable room conserved)
   | mint words target depositorNotVault supplyNof wethRowNof quote effect receiverArg receiverValid supply supplyEq stable room =>
-      dsimp [FourQuoteShareCoalition]
+      dsimp only [FourQuoteShareCoalition]
       exact ledgerSumOn_increase
         (inboundEffect_share_increase (toB256_toAdr receiverValid) effect)
         (inbound_share_nof_of_conserved supplyEq stable room conserved)
   | withdrawNormal words target receiverNotVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
-      dsimp [FourQuoteShareCoalition]
+      dsimp only [FourQuoteShareCoalition]
       exact ledgerSumOn_decrease
         (outboundEffect_share_decrease (toB256_toAdr ownerValid) effect)
         (share_covered_of_nat ownerValid covered)
   | redeemNormal words target receiverNotVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
-      dsimp [FourQuoteShareCoalition]
+      dsimp only [FourQuoteShareCoalition]
       exact ledgerSumOn_decrease
         (outboundEffect_share_decrease (toB256_toAdr ownerValid) effect)
         (share_covered_of_nat ownerValid covered)
   | withdrawSelf words target receiverIsVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
-      dsimp [FourQuoteShareCoalition]
+      dsimp only [FourQuoteShareCoalition]
       exact ledgerSumOn_decrease
         (outboundEffect_share_decrease (toB256_toAdr ownerValid) effect)
         (share_covered_of_nat ownerValid covered)
   | redeemSelf words target receiverIsVault burnable quote effect receiverArg ownerArg receiverValid ownerValid covered =>
-      dsimp [FourQuoteShareCoalition]
+      dsimp only [FourQuoteShareCoalition]
       exact ledgerSumOn_decrease
         (outboundEffect_share_decrease (toB256_toAdr ownerValid) effect)
         (share_covered_of_nat ownerValid covered)
   | credit words wethTarget sourceNotVault supplyKept rowNof effect vaultKept =>
-      dsimp [FourQuoteShareCoalition]
+      dsimp only [FourQuoteShareCoalition]
       rw [vaultKept]
   | transfer words target owner receiver amount config memoryWf run selectorEq =>
-      dsimp [FourQuoteShareCoalition]
+      dsimp only [FourQuoteShareCoalition]
       exact ledgerSumOn_transfer conserved.sumNof
         (transfer_share_rows_of_compiled words owner receiver amount memoryWf run selectorEq)
   | transferFrom words target spender owner receiver amount config memoryWf run selectorEq =>
-      dsimp [FourQuoteShareCoalition]
+      dsimp only [FourQuoteShareCoalition]
       exact ledgerSumOn_transfer conserved.sumNof
         (transferFrom_share_rows_of_compiled words owner receiver amount memoryWf run selectorEq)
   | approve words target owner spender amount config memoryWf run selectorEq =>
-      dsimp [FourQuoteShareCoalition]
+      dsimp only [FourQuoteShareCoalition]
       rw [approve_share_rows_of_compiled memoryWf run selectorEq]
 
 /-- A real `deposit` run supplies the indexed operation and its non-credit
@@ -1508,8 +1507,7 @@ theorem deposit_compiled_share_evidence
     change shares.toNat = Blanc.ProrataWethVault.convertToSharesN
       (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
         (snapshotAt sevm pre).supply
-    simpa [snapshotAt, vaultSnapshot, supplyEq, balanceEq] using
-      quoteRaw
+    simpa only [snapshotAt, vaultSnapshot, balanceEq, supplyEq] using quoteRaw
   have effect : InboundEffect sevm words.receiver words.assets words.shares
       words.returned pre post := by
     change InboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 0)
@@ -1578,8 +1576,7 @@ theorem mint_compiled_share_evidence
     change assets.toNat = Blanc.ProrataWethVault.previewMintN
       (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
         (snapshotAt sevm pre).supply
-    simpa [snapshotAt, vaultSnapshot, supplyEq, balanceEq] using
-      quoteRaw
+    simpa only [snapshotAt, vaultSnapshot, balanceEq, supplyEq] using quoteRaw
   have effect : InboundEffect sevm words.receiver words.assets words.shares
       words.returned pre post := by
     change InboundEffect sevm (Sevm.argWord sevm 1) assets
@@ -1626,7 +1623,7 @@ private theorem withdraw_compiled_share_raw
   have quote : shares.toNat = Blanc.ProrataWethVault.previewWithdrawN
       (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
         (snapshotAt sevm pre).supply := by
-    simpa [snapshotAt, vaultSnapshot, supplyEq, balanceEq] using quoteRaw
+    simpa only [snapshotAt, vaultSnapshot, balanceEq, supplyEq] using quoteRaw
   have burnable : shares.toNat ≤ (snapshotAt sevm pre).supply := by
     change shares.toNat ≤ (Devm.getStorVal pre sevm.currentTarget
       Blanc.ProrataWethVault.supplySlot).toNat
@@ -1671,7 +1668,7 @@ private theorem redeem_compiled_share_raw
   have quote : assets.toNat = Blanc.ProrataWethVault.convertToAssetsN
       (Sevm.argWord sevm 0).toNat (snapshotAt sevm pre).balance
         (snapshotAt sevm pre).supply := by
-    simpa [snapshotAt, vaultSnapshot, supplyEq, balanceEq] using quoteRaw
+    simpa only [snapshotAt, vaultSnapshot, balanceEq, supplyEq] using quoteRaw
   have burnable : (Sevm.argWord sevm 0).toNat ≤ (snapshotAt sevm pre).supply := by
     change (Sevm.argWord sevm 0).toNat ≤ (Devm.getStorVal pre sevm.currentTarget
       Blanc.ProrataWethVault.supplySlot).toNat
@@ -1956,8 +1953,8 @@ private theorem deposit_step_exact {vault : Adr} {sevm : Sevm} {pre post : Devm}
   simp only [snapshotAt_eq] at shape quote
   rw [target] at shape quote
   rw [shape]
-  simpa using normalInbound_price words.assets.toNat words.shares.toNat
-    (vaultSnapshot vault pre) quote
+  simpa only [vaultSnapshot_state] using
+    normalInbound_price words.assets.toNat words.shares.toNat (vaultSnapshot vault pre) quote
 
 private theorem mint_step_exact {vault : Adr} {sevm : Sevm} {pre post : Devm}
     (words : InboundWords) (target : sevm.currentTarget = vault)
@@ -1977,7 +1974,8 @@ private theorem mint_step_exact {vault : Adr} {sevm : Sevm} {pre post : Devm}
   rw [target] at shape quote
   rw [quote] at shape
   rw [shape]
-  simpa [quote] using normalInbound_price_mint words.shares.toNat (vaultSnapshot vault pre)
+  simpa only [vaultSnapshot_state, quote] using
+    normalInbound_price_mint words.shares.toNat (vaultSnapshot vault pre)
 
 private theorem withdrawNormal_step_exact {vault : Adr} {sevm : Sevm} {pre post : Devm}
     (words : OutboundWords) (target : sevm.currentTarget = vault)
@@ -1996,11 +1994,11 @@ private theorem withdrawNormal_step_exact {vault : Adr} {sevm : Sevm} {pre post 
   have burnable' : Blanc.ProrataWethVault.previewWithdrawN words.assets.toNat
       (vaultSnapshot vault pre).balance (vaultSnapshot vault pre).supply ≤
       (vaultSnapshot vault pre).supply := by
-    simpa [quote] using burnable
+    simpa only [vaultSnapshot_state, quote] using burnable
   rw [quote] at shape
   rw [shape]
-  simpa [quote] using normalOutbound_price_withdraw words.assets.toNat
-    (vaultSnapshot vault pre) burnable' covered
+  simpa only [vaultSnapshot_state, quote] using
+    normalOutbound_price_withdraw words.assets.toNat (vaultSnapshot vault pre) burnable' covered
 
 private theorem redeemNormal_step_exact {vault : Adr} {sevm : Sevm} {pre post : Devm}
     (words : OutboundWords) (target : sevm.currentTarget = vault)
@@ -2019,11 +2017,11 @@ private theorem redeemNormal_step_exact {vault : Adr} {sevm : Sevm} {pre post : 
   have covered' : Blanc.ProrataWethVault.convertToAssetsN words.shares.toNat
       (vaultSnapshot vault pre).balance (vaultSnapshot vault pre).supply ≤
       (vaultSnapshot vault pre).balance := by
-    simpa [quote] using covered
+    simpa only [vaultSnapshot_state, quote] using covered
   rw [quote] at shape
   rw [shape]
-  simpa [quote] using normalOutbound_price_redeem words.shares.toNat
-    (vaultSnapshot vault pre) burnable covered'
+  simpa only [vaultSnapshot_state, quote] using
+    normalOutbound_price_redeem words.shares.toNat (vaultSnapshot vault pre) burnable covered'
 
 private theorem withdrawSelf_step_exact {vault : Adr} {sevm : Sevm} {pre post : Devm}
     (words : OutboundWords) (target : sevm.currentTarget = vault)
@@ -2042,7 +2040,8 @@ private theorem withdrawSelf_step_exact {vault : Adr} {sevm : Sevm} {pre post : 
   have residue : words.shares.toNat * X (vaultSnapshot vault pre) =
       words.assets.toNat * D (vaultSnapshot vault pre) +
         outboundResidue words.assets.toNat words.shares.toNat (vaultSnapshot vault pre) := by
-    simpa [quote] using withdraw_residue_eq words.assets.toNat (vaultSnapshot vault pre)
+    simpa only [quote, vaultSnapshot_state] using
+      withdraw_residue_eq words.assets.toNat (vaultSnapshot vault pre)
   rw [shape]
   exact retainedOutbound_price words.assets.toNat words.shares.toNat
     (vaultSnapshot vault pre) burnable residue
@@ -2064,7 +2063,8 @@ private theorem redeemSelf_step_exact {vault : Adr} {sevm : Sevm} {pre post : De
   have residue : words.shares.toNat * X (vaultSnapshot vault pre) =
       words.assets.toNat * D (vaultSnapshot vault pre) +
         outboundResidue words.assets.toNat words.shares.toNat (vaultSnapshot vault pre) := by
-    simpa [quote] using redeem_residue_eq words.shares.toNat (vaultSnapshot vault pre)
+    simpa only [vaultSnapshot_state, quote] using
+      redeem_residue_eq words.shares.toNat (vaultSnapshot vault pre)
   rw [shape]
   exact retainedOutbound_price words.assets.toNat words.shares.toNat
     (vaultSnapshot vault pre) burnable residue
@@ -2095,7 +2095,7 @@ private theorem silent_step_exact {vault : Adr} {sevm : Sevm} {pre post : Devm}
   simp only [snapshotAt_eq] at shape
   rw [target] at shape
   rw [shape]
-  simp
+  simp only [vaultSnapshot_state, add_zero]
 
 /-- One State-linked, actual-effect accounting transition. -/
 structure FourQuoteTransition (vault : Adr) (before after : State) : Type where
@@ -2156,35 +2156,44 @@ theorem FourQuoteOperation.step_exact {vault : Adr} {sevm : Sevm} {pre post : De
         roundingContribution operation + retainedContribution operation + creditContribution operation := by
   cases operation with
   | deposit words target depositorNotVault supplyNof rowNof quote effect =>
-      simpa [roundingContribution, retainedContribution, creditContribution] using
+      simpa only [vaultSnapshot_state, roundingContribution, retainedContribution, add_zero,
+        creditContribution] using
         deposit_step_exact words target depositorNotVault supplyNof rowNof quote effect
   | mint words target depositorNotVault supplyNof rowNof quote effect =>
-      simpa [roundingContribution, retainedContribution, creditContribution] using
+      simpa only [vaultSnapshot_state, roundingContribution, retainedContribution, add_zero,
+        creditContribution] using
         mint_step_exact words target depositorNotVault supplyNof rowNof quote effect
   | withdrawNormal words target receiverNotVault burnable quote effect =>
-      simpa [roundingContribution, retainedContribution, creditContribution] using
+      simpa only [vaultSnapshot_state, roundingContribution, retainedContribution, add_zero,
+        creditContribution] using
         withdrawNormal_step_exact words target receiverNotVault burnable quote effect
   | redeemNormal words target receiverNotVault burnable quote effect =>
-      simpa [roundingContribution, retainedContribution, creditContribution] using
+      simpa only [vaultSnapshot_state, roundingContribution, retainedContribution, add_zero,
+        creditContribution] using
         redeemNormal_step_exact words target receiverNotVault burnable quote effect
   | withdrawSelf words target receiverIsVault burnable quote effect =>
-      simpa [roundingContribution, retainedContribution, creditContribution] using
+      simpa only [vaultSnapshot_state, roundingContribution, retainedContribution,
+        creditContribution, add_zero] using
         withdrawSelf_step_exact words target receiverIsVault burnable quote effect
   | redeemSelf words target receiverIsVault burnable quote effect =>
-      simpa [roundingContribution, retainedContribution, creditContribution] using
+      simpa only [vaultSnapshot_state, roundingContribution, retainedContribution,
+        creditContribution, add_zero] using
         redeemSelf_step_exact words target receiverIsVault burnable quote effect
   | credit words wethTarget sourceNotVault supplyKept rowNof effect =>
-      simpa [roundingContribution, retainedContribution, creditContribution] using
+      simpa only [vaultSnapshot_state, roundingContribution, add_zero, retainedContribution,
+        creditContribution] using
         credit_step_exact words wethTarget sourceNotVault supplyKept rowNof effect
   | transfer words target owner receiver amount config memoryWf run selectorEq =>
-      simpa [roundingContribution, retainedContribution, creditContribution] using
+      simpa only [vaultSnapshot_state, roundingContribution, add_zero, retainedContribution,
+        creditContribution] using
         silent_step_exact target (transferEffect_accountingStep config memoryWf run selectorEq)
   | transferFrom words target spender owner receiver amount config memoryWf run selectorEq =>
-      simpa [roundingContribution, retainedContribution, creditContribution] using
-        silent_step_exact target
-          (transferFromEffect_accountingStep config memoryWf run selectorEq)
+      simpa only [vaultSnapshot_state, roundingContribution, add_zero, retainedContribution,
+        creditContribution] using
+        silent_step_exact target (transferFromEffect_accountingStep config memoryWf run selectorEq)
   | approve words target owner spender amount config memoryWf run selectorEq =>
-      simpa [roundingContribution, retainedContribution, creditContribution] using
+      simpa only [vaultSnapshot_state, roundingContribution, add_zero, retainedContribution,
+        creditContribution] using
         silent_step_exact target (approveEffect_accountingStep config memoryWf run selectorEq)
 
 /-- Every actual four-quote operation weakly increases the virtual-asset
@@ -2220,8 +2229,8 @@ theorem FourQuoteStep.trace_exact {vault : Adr} (step : FourQuoteStep vault) :
           creditContribution step.event.operation := by
   rcases step with ⟨before, after, sevm, entry, exit, preState, postState, operation⟩
   have hstep := operation.step_exact
-  simpa [FourQuoteStep.stateTransition, FourQuoteTransition.stateTransition,
-    vaultSnapshot_state, preState, postState] using hstep
+  simpa only [stateTransition, FourQuoteTransition.stateTransition, vaultSnapshot_state, postState,
+    preState] using hstep
 
 /-- A connected finite trace of State-linked actual effects. -/
 structure FourQuotePath (vault : Adr) : Type where
@@ -2276,7 +2285,7 @@ theorem step_exact_at {vault : Adr} (path : FourQuotePath vault)
       path.worldAt i = path.world index.castSucc := by
         apply congrArg path.world
         apply Fin.ext
-        simp [index, Nat.min_eq_left (Nat.le_of_lt hi)]
+        simp only [Nat.min_eq_left (Nat.le_of_lt hi), Fin.castSucc_mk, index]
       _ = step.before := by
         simpa only [step] using path.pre_eq index
   have hpost : path.worldAt (i + 1) = step.after := by
@@ -2284,7 +2293,8 @@ theorem step_exact_at {vault : Adr} (path : FourQuotePath vault)
       path.worldAt (i + 1) = path.world index.succ := by
         apply congrArg path.world
         apply Fin.ext
-        simp [index, Nat.min_eq_left (Nat.succ_le_iff.mpr hi)]
+        simp only [Nat.min_eq_left (Nat.succ_le_iff.mpr hi), Nat.succ_eq_add_one, Fin.succ_mk,
+          index]
       _ = step.after := by
         simpa only [step] using path.post_eq index
   have hstep := step.trace_exact
@@ -2304,7 +2314,7 @@ theorem priceLe_step_at {vault : Adr} (path : FourQuotePath vault)
       path.worldAt i = path.world index.castSucc := by
         apply congrArg path.world
         apply Fin.ext
-        simp [index, Nat.min_eq_left (Nat.le_of_lt hi)]
+        simp only [Nat.min_eq_left (Nat.le_of_lt hi), Fin.castSucc_mk, index]
       _ = step.before := by
         simpa only [step] using path.pre_eq index
   have hpost : path.worldAt (i + 1) = step.after := by
@@ -2312,7 +2322,8 @@ theorem priceLe_step_at {vault : Adr} (path : FourQuotePath vault)
       path.worldAt (i + 1) = path.world index.succ := by
         apply congrArg path.world
         apply Fin.ext
-        simp [index, Nat.min_eq_left (Nat.succ_le_iff.mpr hi)]
+        simp only [Nat.min_eq_left (Nat.succ_le_iff.mpr hi), Nat.succ_eq_add_one, Fin.succ_mk,
+          index]
       _ = step.after := by
         simpa only [step] using path.post_eq index
   have hprice := step.event.operation.priceLe
@@ -2337,8 +2348,7 @@ theorem priceLe_snapshotAt {vault : Adr} (path : FourQuotePath vault) :
           apply congrArg path.world
           apply Fin.ext
           have hle : path.steps.length ≤ i := Nat.le_of_not_lt hi
-          simp [Nat.min_eq_right hle,
-            Nat.min_eq_right (Nat.le_succ_of_le hle)]
+          simp only [Nat.min_eq_right (Nat.le_succ_of_le hle), Nat.min_eq_right hle]
         rw [hstay]
         exact ih
 

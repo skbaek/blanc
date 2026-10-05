@@ -46,7 +46,7 @@ theorem booked_set_off (s : Stor) (k w : B256) (hk : ∀ a, balSlot a ≠ k) :
 theorem booked_rep (s : Stor) {r a : Adr} (hr : BalRep r)
     (hra : balSlot r = balSlot a) : booked s r = s.get (balSlot a) := by
   classical
-  simp [booked, hr, hra]
+  simp only [booked, hr, ↓reduceIte, hra]
 
 theorem booked_set_bal (s : Stor) {r a : Adr} (w : B256) (hr : BalRep r)
     (hra : balSlot r = balSlot a) :
@@ -129,7 +129,7 @@ theorem bookedSum_withdraw {s : Stor} {a : Adr} {v : B256}
     exact hvnat.trans le_sum
   have hs' : bookedSum s - v.toNat =
       bookedSum (s.set (balSlot a) (s.get (balSlot a) - v)) := by
-    simpa [bookedSum] using hs
+    simpa only [bookedSum] using hs
   omega
 
 theorem bookedSum_transfer {s : Stor} {src dst : Adr} {wad : B256}
@@ -137,7 +137,7 @@ theorem bookedSum_transfer {s : Stor} {src dst : Adr} {wad : B256}
     let s₁ := s.set (balSlot src) (s.get (balSlot src) - wad)
     bookedSum (s₁.set (balSlot dst) (s₁.get (balSlot dst) + wad)) = bookedSum s := by
   classical
-  dsimp
+  dsimp only [Lean.Elab.WF.paramLet]
   obtain ⟨rs, hrs, hrsa⟩ := exists_balRep src
   obtain ⟨rd, hrd, hrda⟩ := exists_balRep dst
   have hle' : wad ≤ booked s rs := by

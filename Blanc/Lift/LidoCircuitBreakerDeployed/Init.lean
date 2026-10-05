@@ -26,15 +26,19 @@ def lidoInitWorld (ca : Adr) : State :=
   (Std.TreeMap.empty : State).insert ca { Acct.nil with code := code }
 
 theorem lidoInitWorld_getCode (ca : Adr) : (lidoInitWorld ca).getCode ca = code := by
-  simp [lidoInitWorld, State.getCode, State.get]
+  simp only [State.getCode, State.get, lidoInitWorld, Std.TreeMap.empty_eq_emptyc,
+    Std.TreeMap.getD_insert_self]
 
 theorem lidoInitWorld_getStor (ca : Adr) : (lidoInitWorld ca).getStor ca = Stor.empty := by
-  simp [lidoInitWorld, State.getStor, State.get, Acct.nil]
+  simp only [State.getStor, State.get, lidoInitWorld, Std.TreeMap.empty_eq_emptyc, Acct.nil,
+    Std.TreeMap.getD_insert_self]
 
 /-- The empty storage satisfies the raw-slot Registry zero premise. -/
 theorem registryZeroRaw_empty : RegistryZeroRaw Stor.empty := by
-  refine ⟨by simp [Stor.get, Stor.empty], fun p _ => ?_⟩
-  simp [Stor.get, Stor.empty, addressSlotReadWord]
+  refine ⟨by simp only [Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc,
+    Std.TreeMap.getD_emptyc], fun p _ => ?_⟩
+  simp only [addressSlotReadWord, Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc,
+    Std.TreeMap.getD_emptyc, and_self, and_true]
   rfl
 
 /-- **The Lido raw checkpoint premise is satisfiable.** -/

@@ -81,23 +81,6 @@ def last {vault : Adr} (path : RealizedPath vault) : Snapshot :=
   path.snapshot ⟨path.steps.length, Nat.lt_succ_self _⟩
 -- PA:364–370.
 
-@[simp] theorem nil_steps {vault : Adr} (q : Snapshot) : (nil vault q).steps = [] := rfl
-@[simp] theorem nil_first {vault : Adr} (q : Snapshot) : (nil vault q).first = q := rfl
-@[simp] theorem nil_last {vault : Adr} (q : Snapshot) : (nil vault q).last = q := rfl
-
-@[simp] theorem cons_steps {vault : Adr} (step : FourQuoteStep vault) (tail : RealizedPath vault)
-    (connect : stateSnapshot vault step.after = tail.first) :
-    (cons step tail connect).steps = step :: tail.steps := rfl
-
-@[simp] theorem cons_first {vault : Adr} (step : FourQuoteStep vault) (tail : RealizedPath vault)
-    (connect : stateSnapshot vault step.after = tail.first) :
-    (cons step tail connect).first = stateSnapshot vault step.before := rfl
-
-@[simp] theorem cons_last {vault : Adr} (step : FourQuoteStep vault) (tail : RealizedPath vault)
-    (connect : stateSnapshot vault step.after = tail.first) :
-    (cons step tail connect).last = tail.last := by
-  rfl
--- PA:372–385.
 
 /-- Total snapshot lookup; the telescope only uses in-range indices. -/
 def snapshotAt {vault : Adr} (path : RealizedPath vault) (i : Nat) : Snapshot :=
@@ -147,7 +130,7 @@ theorem snapshotAt_pre {vault : Adr} (path : RealizedPath vault) {i : Nat}
   rw [← path.pre_eq ⟨i, hi⟩]
   apply congrArg path.snapshot
   apply Fin.ext
-  simp [Nat.min_eq_left (Nat.le_of_lt hi)]
+  simp only [Nat.min_eq_left (Nat.le_of_lt hi), Fin.castSucc_mk]
 
 /-- The successor of an in-range index is the post-snapshot of its step. -/
 theorem snapshotAt_post {vault : Adr} (path : RealizedPath vault) {i : Nat}
@@ -156,7 +139,7 @@ theorem snapshotAt_post {vault : Adr} (path : RealizedPath vault) {i : Nat}
   rw [← path.post_eq ⟨i, hi⟩]
   apply congrArg path.snapshot
   apply Fin.ext
-  simp [Nat.min_eq_left (Nat.succ_le_iff.mpr hi)]
+  simp only [Nat.min_eq_left (Nat.succ_le_iff.mpr hi), Nat.succ_eq_add_one, Fin.succ_mk]
 -- the two `calc` blocks of A:2253–2268, factored once.
 
 /-- An in-range step exposes the exact three-contribution recurrence. -/
@@ -205,17 +188,6 @@ theorem dust_telescope_separate {vault : Adr} (path : RealizedPath vault) :
 
 end RealizedPath
 
-/-- Every world-connected G7 path is snapshot-connected, with the same boundary snapshots. -/
-def FourQuotePath.toRealizedPath {vault : Adr} (path : FourQuotePath vault) :
-    RealizedPath vault where
-  steps := path.steps
-  snapshot := fun i => stateSnapshot vault (path.world i)
-  pre_eq := fun i => congrArg (stateSnapshot vault) (path.pre_eq i)
-  post_eq := fun i => congrArg (stateSnapshot vault) (path.post_eq i)
-
-@[simp] theorem FourQuotePath.toRealizedPath_snapshotAt {vault : Adr}
-    (path : FourQuotePath vault) (i : Nat) :
-    path.toRealizedPath.snapshotAt i = path.snapshotAt i := rfl
 -- new; A:2220–2225 (`worldAt`, `snapshotAt`) unfold to the same term.
 
 end FourQuote
@@ -238,9 +210,9 @@ theorem PairStep.fourQuoteStep?_eq_some {vault : Adr} {before after : State}
       subst h
       exact ⟨rfl, rfl⟩
   | authorizedDebit call foreign owner pair moved vaultKept =>
-      simp [PairStep.fourQuoteStep?] at h
+      simp only [fourQuoteStep?, reduceCtorEq] at h
   | silent caller vaultKept rowKept =>
-      simp [PairStep.fourQuoteStep?] at h
+      simp only [fourQuoteStep?, reduceCtorEq] at h
 
 /-- **A dropped step keeps the accounting snapshot.**  A silent WETH-frame step keeps both
 coordinates by its own fields; a runtime-authorized debit keeps them when it moves nothing. -/
@@ -250,7 +222,7 @@ theorem PairStep.snapshot_eq_of_fourQuoteStep?_eq_none {vault : Adr} {before aft
     FourQuote.stateSnapshot vault after = FourQuote.stateSnapshot vault before := by
   cases step with
   | operation t evidence =>
-      simp [PairStep.fourQuoteStep?] at dropped
+      simp only [fourQuoteStep?, reduceCtorEq] at dropped
   | authorizedDebit call foreign owner pair moved vaultKept =>
       have wad0 : Sevm.argWord call.sevm 2 = 0 :=
         B256.toNat_inj _ _ (by rw [B256.toNat_zero]; exact zero)
@@ -291,17 +263,20 @@ theorem PairReplay.exists_realizedPath {vault : Adr} {pre post : PairBoundary}
       exact ⟨FourQuote.RealizedPath.nil vault (boundary.snapshot vault), rfl, rfl, rfl⟩
   | @cons pre mid post record steps preEq postEq tail ih =>
       intro zero
-      obtain ⟨path, hsteps, hfirst, hlast⟩ := ih fun r member => zero r (by simp [member])
+      obtain ⟨path, hsteps, hfirst, hlast⟩ := ih fun r member => zero r (by simp only [List.mem_cons,
+        member, or_true])
       subst preEq
       subst postEq
       rw [PairBoundary.snapshot_ofState] at hfirst
       cases hq : record.step.fourQuoteStep? with
       | none =>
           have kept :=
-            PairStep.snapshot_eq_of_fourQuoteStep?_eq_none hq (zero record (by simp))
+            PairStep.snapshot_eq_of_fourQuoteStep?_eq_none hq (zero record (by simp only [List.mem_cons,
+              true_or]))
           refine ⟨path, ?_, ?_, hlast⟩
           · rw [hsteps]
-            simp [PairStepRecord.fourQuoteSteps, PairStepRecord.fourQuoteStep?, hq]
+            simp only [PairStepRecord.fourQuoteSteps, PairStepRecord.fourQuoteStep?, hq,
+              List.filterMap_cons_none]
           · rw [hfirst, PairBoundary.snapshot_ofState, kept]
       | some q =>
           obtain ⟨hbefore, hafter⟩ := PairStep.fourQuoteStep?_eq_some hq
@@ -310,7 +285,8 @@ theorem PairReplay.exists_realizedPath {vault : Adr} {pre post : PairBoundary}
           refine ⟨FourQuote.RealizedPath.cons q path connect, ?_, ?_, hlast⟩
           · show q :: path.steps = _
             rw [hsteps]
-            simp [PairStepRecord.fourQuoteSteps, PairStepRecord.fourQuoteStep?, hq]
+            simp only [PairStepRecord.fourQuoteSteps, PairStepRecord.fourQuoteStep?, hq,
+              Option.some.injEq, List.filterMap_cons_some]
           · show FourQuote.stateSnapshot vault q.before = _
             rw [hbefore, PairBoundary.snapshot_ofState]
 -- PR:1148–1166 (`ProrataAccountingReplay.exists_path`); induction shape U6 §5 (`PairReplay.priceLe`).
@@ -366,9 +342,9 @@ theorem pair_realized_dust_trace_exact {cfg : ChainConfig} {deployed future : Bl
   have hend : path.snapshotAt path.steps.length = FourQuote.stateSnapshot vault future.state := by
     rw [path.snapshotAt_length, hlast]
   have hX : path.xAt 0 = 1 := by
-    simp [FourQuote.RealizedPath.xAt, FourQuote.X, hzero]
+    simp only [FourQuote.RealizedPath.xAt, FourQuote.X, hzero, zero_add]
   have hD : path.dAt 0 = Blanc.ProrataWethVault.offsetN := by
-    simp [FourQuote.RealizedPath.dAt, FourQuote.D, hzero]
+    simp only [FourQuote.RealizedPath.dAt, FourQuote.D, hzero, zero_add]
   refine ⟨path, hsteps, hzero, hend, hX, hD, ?_⟩
   have hexact := path.dust_telescope_separate
   rw [hX, Nat.one_mul] at hexact

@@ -228,9 +228,9 @@ theorem prorata_realized_dust_trace_exact
   have hzero : path.snapshotAt 0 = ⟨0, 0⟩ := by
     rw [path.snapshotAt_zero, hgenesis]
   have hX : path.XAt 0 = 1 := by
-    simp [ProrataAccountingPath.XAt, ProrataAccountingStep.X, hzero]
+    simp only [ProrataAccountingPath.XAt, ProrataAccountingStep.X, hzero, zero_add]
   have hD : path.DAt 0 = offset.toNat := by
-    simp [ProrataAccountingPath.DAt, ProrataAccountingStep.D, hzero]
+    simp only [ProrataAccountingPath.DAt, ProrataAccountingStep.D, hzero, offset_toNat, zero_add]
   refine ⟨path, hsteps, hgenesis, hlast, hX, hD, ?_⟩
   have hexact : path.XAt path.steps.length *
       (∏ j ∈ Finset.range path.steps.length, path.DAt j) =
@@ -239,7 +239,8 @@ theorem prorata_realized_dust_trace_exact
             (path.rhoAt i + path.kappaAt i) *
               (∏ j ∈ Finset.range i, path.DAt j) *
                 (∏ j ∈ Finset.Icc (i + 2) path.steps.length, path.DAt j) :=
-    ProrataAccountingPath.prorata_dust_trace_exact (by simp) path
+    ProrataAccountingPath.prorata_dust_trace_exact (by simp only [offset_toNat, ne_eq,
+      OfNat.ofNat_ne_zero, not_false_eq_true]) path
   rw [hsteps, hX, Nat.one_mul] at hexact
   exact hexact
 

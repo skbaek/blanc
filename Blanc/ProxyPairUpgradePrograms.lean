@@ -22,8 +22,6 @@ def setValueSelector : B256 := 0x55241077
 def initializeV2Selector : B256 := 0x5cd8a76b
 def migrationMarkerSelector : B256 := 0x8d8a346e
 
-def sharedSelectors : List B256 := [valueSelector, setValueSelector]
-
 def upgradeWitnessSelectors : List B256 :=
   [valueSelector, setValueSelector, initializeV2Selector,
     migrationMarkerSelector]
@@ -51,7 +49,7 @@ theorem selector_of_valueCalldata {sevm : Sevm}
   apply selector_eq_of_data_eq_abiSelectorBytes_append
       (selected := valueSelector) (tail := [])
   · rfl
-  · simpa [valueCalldata] using hdata
+  · simpa only [List.append_nil, valueCalldata] using hdata
 
 theorem selector_of_setValueCalldata {sevm : Sevm} {word : B256}
     (hdata : sevm.data = setValueCalldata word) :
@@ -59,7 +57,7 @@ theorem selector_of_setValueCalldata {sevm : Sevm} {word : B256}
   apply selector_eq_of_data_eq_abiSelectorBytes_append
       (selected := setValueSelector) (tail := word.toBytes)
   · rfl
-  · simpa [setValueCalldata] using hdata
+  · simpa only [setValueCalldata] using hdata
 
 theorem setValueCalldata_arg0 {sevm : Sevm} {word : B256}
     (hdata : sevm.data = setValueCalldata word) :
@@ -69,7 +67,7 @@ theorem setValueCalldata_arg0 {sevm : Sevm} {word : B256}
     (pre := abiSelectorBytes setValueSelector) (post := [])
   · rw [abiSelectorBytes_length]
     rfl
-  · simpa [setValueCalldata] using hdata
+  · simpa only [List.append_nil, setValueCalldata] using hdata
 
 /-! ## Frozen scalar layout -/
 
@@ -78,8 +76,6 @@ def v2ValueSlot : B256 := 8
 def migrationMarkerSlot : B256 := 9
 def migrationMarkerValue : B256 := 1
 
-def scalarSlots : List B256 :=
-  [v1ValueSlot, v2ValueSlot, migrationMarkerSlot]
 
 theorem scalarSlots_erc1967_separated :
     v1ValueSlot ≠ implementationSlot ∧
@@ -143,12 +139,16 @@ def v2Entries : List (B256 × Func) :=
       nonpayable (loadScalar migrationMarkerSlot)) ]
 
 theorem v1Entries_selectorUnique : selectorUnique v1Entries := by
-  simp [selectorUnique, v1Entries, valueSelector, setValueSelector]
+  simp only [selectorUnique, ne_eq, v1Entries, valueSelector, setValueSelector, List.pairwise_cons,
+    List.mem_cons, List.not_mem_nil, or_false, forall_eq, IsEmpty.forall_iff, implies_true,
+    List.Pairwise.nil, and_self, and_true]
   decide +kernel
 
 theorem v2Entries_selectorUnique : selectorUnique v2Entries := by
-  simp [selectorUnique, v2Entries, valueSelector, setValueSelector,
-    initializeV2Selector, migrationMarkerSelector]
+  simp only [selectorUnique, ne_eq, v2Entries, valueSelector, setValueSelector,
+    initializeV2Selector, migrationMarkerSelector, List.pairwise_cons, List.mem_cons,
+    List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq, IsEmpty.forall_iff, implies_true,
+    List.Pairwise.nil, and_self, and_true]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -174,11 +174,11 @@ theorem v1Prog_compile : Prog.compile v1Prog = some v1Bytes :=
 theorem v2Prog_compile : Prog.compile v2Prog = some v2Bytes :=
   Prog.compile_eq_some_getD_of_compiles _ v2Prog_compiles
 
-@[simp] theorem v1Code_toList : v1Code.toList = v1Bytes := by
-  simp [v1Code, ByteArray.toList_eq_toList_data]
+theorem v1Code_toList : v1Code.toList = v1Bytes := by
+  simp only [v1Code, ByteArray.toList_eq_toList_data]
 
-@[simp] theorem v2Code_toList : v2Code.toList = v2Bytes := by
-  simp [v2Code, ByteArray.toList_eq_toList_data]
+theorem v2Code_toList : v2Code.toList = v2Bytes := by
+  simp only [v2Code, ByteArray.toList_eq_toList_data]
 
 theorem v1Bytes_length : v1Bytes.length = 74 := by decide +kernel
 

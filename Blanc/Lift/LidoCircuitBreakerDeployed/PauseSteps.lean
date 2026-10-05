@@ -77,9 +77,9 @@ variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
 
 /-- A full-stack pattern of known words matches only that stack. -/
 theorem matches_known_iff : ∀ (S rest : List B256), Matches (S.map some) rest ↔ rest = S
-  | [], [] => by simp
-  | [], _ :: _ => by simp [Matches]
-  | _ :: _, [] => by simp [Matches]
+  | [], [] => by simp only [List.map_nil, matches_nil]
+  | [], _ :: _ => by simp only [List.map_nil, Matches, reduceCtorEq]
+  | _ :: _, [] => by simp only [List.map_cons, Matches, List.nil_eq, reduceCtorEq]
   | x :: S, y :: rest => by
       simp only [List.map_cons, Matches, WordMatches, reduceCtorEq, false_or, Option.some.injEq,
         List.cons.injEq, matches_known_iff S rest]
@@ -142,7 +142,7 @@ theorem SFunc.RunP.code_of_regOnly {P : Sevm → Devm → Ninst → Devm → Pro
     intro k g hk hget
     have h := (List.all_eq_true.mp hS) k hk
     rw [hget] at h
-    simpa using h
+    simpa only [List.all_eq_true, decide_eq_true_eq, Bool.and_eq_true] using h
   have ofState : ∀ {a c : Devm}, a.state = c.state → Devm.getCode a = Devm.getCode c :=
     fun h => funext (getCode_eq_of_state_eq h)
   induction run with
@@ -224,7 +224,7 @@ where
   canonicalAddress_zero : canonicalAddress (0 : B256) := by
     unfold canonicalAddress
     change (0 : Nat) < 2 ^ 160
-    norm_num
+    norm_num only
 
 /-! ## The single-address decoder (entry 7) and the bool decoder (entry 33) -/
 

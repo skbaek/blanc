@@ -111,7 +111,7 @@ theorem frame3_child : ChildOk e2.sta aCall post3 ∧ ChildAgree post3 keys3 adr
     exact ⟨.ok post3, hx3, frame_settle_ok hcr3 hsg3 herr⟩
   · show a ∈ post3.accessedAddresses ↔ _
     rw [show post3 = post3F post4 from rfl, hka, (hacc.1 a), hpe, hpa a, ha4.1 a]
-    simp [adrs3']
+    simp only [true_and, adrs3', List.mem_append]
   · show x ∈ post3.accessedStorageKeys ↔ _
     rw [show post3 = post3F post4 from rfl, hkk, (hacc.2 x), hpe, hpk, ha4.2.1 x]
     simp only [true_and, keys3, List.mem_append]

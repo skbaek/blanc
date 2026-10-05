@@ -35,21 +35,21 @@ namespace Curve3Crv
 
 theorem step_eq_ok {ctx : Ctx} {c : Call} {s : State} {out : Out} :
     step ctx c s = .ok out ↔ ctx.value = 0 ∧ body ctx c s = .ok out := by
-  cases c <;> simp only [step, body] <;> (try split_ifs) <;> simp_all
+  cases c <;> simp only [step, body] <;> (try split_ifs) <;> simp_all only [ExceptT.stM_eq, true_and, false_and, reduceCtorEq, and_false]
 
 theorem setMinter_eq_ok {ctx : Ctx} {m : B256} {s : State} {out : Out} :
     setMinter ctx m s = .ok out ↔
       m.toNat < 2 ^ 160 ∧ ctx.sender = s.minter ∧
       out = ({ s with minter := m.toAdr }, [], .stop) := by
-  unfold setMinter; split_ifs <;> simp_all [eq_comm]
+  unfold setMinter; split_ifs <;> simp_all only [Nat.reducePow, ExceptT.stM_eq, eq_comm, Except.ok.injEq, true_and, false_and, and_false, not_lt, false_iff, not_and, isEmpty_Prop, IsEmpty.forall_iff]
 
 theorem setName_eq_ok {ctx : Ctx} {n y : Bytes} {s : State} {out : Out} :
     setName ctx n y s = .ok out ↔
       n.length ≤ 64 ∧ y.length ≤ 32 ∧ ctx.ownerOf s.minter = some ctx.sender.toB256 ∧
       out = ({ s with name := n, symbol := y }, [], .stop) := by
   unfold setName
-  cases hw : ctx.ownerOf s.minter <;> split_ifs <;> simp_all
-  split_ifs <;> simp_all [eq_comm]
+  cases hw : ctx.ownerOf s.minter <;> split_ifs <;> simp_all only [false_and, and_false, not_le, ExceptT.stM_eq, Option.some.injEq, true_and, false_iff, not_and, isEmpty_Prop, IsEmpty.forall_iff]
+  split_ifs <;> simp_all only [eq_comm, Except.ok.injEq, true_and, false_and]
 
 theorem transfer_eq_ok {ctx : Ctx} {d v : B256} {s : State} {out : Out} :
     transfer ctx d v s = .ok out ↔
@@ -58,7 +58,7 @@ theorem transfer_eq_ok {ctx : Ctx} {d v : B256} {s : State} {out : Out} :
       out = ({ s with balanceOf :=
                 (ledgerCredit (ledgerDebit s.balanceOf ctx.sender v) d.toAdr v) },
              [.transfer ctx.sender d.toAdr v], .bool true) := by
-  unfold transfer B256.Nof; split_ifs <;> simp_all [eq_comm]
+  unfold transfer B256.Nof; split_ifs <;> simp_all only [Nat.reducePow, ExceptT.stM_eq, eq_comm, Except.ok.injEq, true_and, not_lt, false_iff, not_and, isEmpty_Prop, IsEmpty.forall_iff, not_le]
 
 theorem transferFrom_eq_ok {ctx : Ctx} {f d v : B256} {s : State} {out : Out} :
     transferFrom ctx f d v s = .ok out ↔
@@ -71,7 +71,7 @@ theorem transferFrom_eq_ok {ctx : Ctx} {f d v : B256} {s : State} {out : Out} :
                   Function.update s.allowances f.toAdr
                     (ledgerDebit (s.allowances f.toAdr) ctx.sender v)) },
              [.transfer f.toAdr d.toAdr v], .bool true) := by
-  unfold transferFrom B256.Nof; split_ifs <;> simp_all [eq_comm]
+  unfold transferFrom B256.Nof; split_ifs <;> simp_all only [Nat.reducePow, ne_eq, ExceptT.stM_eq, eq_comm, Except.ok.injEq, not_false_eq_true, imp_self, true_and, not_le, forall_const, false_iff, not_and, isEmpty_Prop, IsEmpty.forall_iff, not_true_eq_false, not_lt]
 
 theorem approve_eq_ok {ctx : Ctx} {p v : B256} {s : State} {out : Out} :
     approve ctx p v s = .ok out ↔
@@ -79,7 +79,7 @@ theorem approve_eq_ok {ctx : Ctx} {p v : B256} {s : State} {out : Out} :
       out = ({ s with allowances := (Function.update s.allowances ctx.sender
                 (Function.update (s.allowances ctx.sender) p.toAdr v)) },
              [.approval ctx.sender p.toAdr v], .bool true) := by
-  unfold approve; split_ifs <;> simp_all [eq_comm]
+  unfold approve; split_ifs <;> simp_all only [Nat.reducePow, eq_comm, ExceptT.stM_eq, Except.ok.injEq, true_and, not_or, or_self, false_and, and_false, not_lt, false_iff, not_and, isEmpty_Prop, IsEmpty.forall_iff]
 
 theorem mint_eq_ok {ctx : Ctx} {d v : B256} {s : State} {out : Out} :
     mint ctx d v s = .ok out ↔
@@ -88,7 +88,7 @@ theorem mint_eq_ok {ctx : Ctx} {d v : B256} {s : State} {out : Out} :
       out = ({ s with totalSupply := s.totalSupply + v,
                       balanceOf := ledgerCredit s.balanceOf d.toAdr v },
              [.transfer 0 d.toAdr v], .bool true) := by
-  unfold mint B256.Nof; split_ifs <;> simp_all [eq_comm]
+  unfold mint B256.Nof; split_ifs <;> simp_all only [Nat.reducePow, ne_eq, ExceptT.stM_eq, eq_comm, Except.ok.injEq, not_false_eq_true, true_and, not_lt, false_iff, not_and, isEmpty_Prop, IsEmpty.forall_iff, Decidable.not_not, not_true_eq_false, false_and, and_false]
 
 theorem burnFrom_eq_ok {ctx : Ctx} {f v : B256} {s : State} {out : Out} :
     burnFrom ctx f v s = .ok out ↔
@@ -97,7 +97,7 @@ theorem burnFrom_eq_ok {ctx : Ctx} {f v : B256} {s : State} {out : Out} :
       out = ({ s with totalSupply := s.totalSupply - v,
                       balanceOf := ledgerDebit s.balanceOf f.toAdr v },
              [.transfer f.toAdr 0 v], .bool true) := by
-  unfold burnFrom; split_ifs <;> simp_all [eq_comm]
+  unfold burnFrom; split_ifs <;> simp_all only [Nat.reducePow, ne_eq, ExceptT.stM_eq, eq_comm, Except.ok.injEq, not_false_eq_true, true_and, not_le, false_iff, not_and, isEmpty_Prop, IsEmpty.forall_iff, Decidable.not_not, not_true_eq_false, false_and, and_false, not_lt]
 
 /-- The six views. -/
 def Call.IsView : Call → Prop
@@ -111,7 +111,7 @@ theorem body_view {ctx : Ctx} {c : Call} {s : State} {out : Out}
   all_goals simp only [body, totalSupplyView, allowanceView, nameView, symbolView,
     decimalsView, balanceOfView] at h
   all_goals (try split_ifs at h)
-  all_goals (simp only [Except.ok.injEq] at h; subst h; simp)
+  all_goals (simp only [Except.ok.injEq] at h; subst h; simp only [and_self])
 
 /-! ## Supply conservation -/
 
@@ -150,7 +150,7 @@ theorem body_conserved {ctx : Ctx} {c : Call} {s : State} {out : Out}
     obtain ⟨-, -, -, hsup, hbal, rfl⟩ := burnFrom_eq_ok.mp h
     show _ = _
     rw [sum_ledgerDebit hbal, B256.toNat_sub_eq_of_le _ _ hsup, hs]
-  | other => simp [body] at h
+  | other => simp only [ExceptT.stM_eq, body, reduceCtorEq] at h
   | totalSupply | allowance _ _ | name | symbol | decimals | balanceOf _ =>
     have hv := (body_view (by trivial) h).1
     rw [hv]; exact hs
@@ -172,9 +172,10 @@ theorem init_conserved {ctx : Ctx} {n y : Bytes} {d sup : B256} {s : State}
   have word : (Nat.toB256 (sup.toNat * 10 ^ d.toNat)).toNat = sup.toNat * 10 ^ d.toNat :=
     B256.toNat_toB256_of_lt hmul
   rw [sum_eq_add_of_row_add (f := fun _ => 0) (x := ctx.sender)
-      (m := sup.toNat * 10 ^ d.toNat) (by simp [word, B256.toNat_zero])
-      (fun b hb => by simp [Function.update_of_ne hb])]
-  simp [sum, sumBelow_zero, word]
+      (m := sup.toNat * 10 ^ d.toNat) (by simp only [Function.update_self, word, B256.toNat_zero,
+        zero_add])
+      (fun b hb => by simp only [Function.update_of_ne hb])]
+  simp only [word, sum, Nat.succ_eq_add_one, sumBelow_zero, zero_add]
 
 /-! ## Minter authority -/
 
@@ -192,7 +193,7 @@ theorem supply_change_by_minter {ctx : Ctx} {c : Call} {s : State} {out : Out}
   | transferFrom f d v =>
     obtain ⟨-, -, -, -, -, rfl⟩ := transferFrom_eq_ok.mp h; exact absurd rfl hne
   | approve p v => obtain ⟨-, -, rfl⟩ := approve_eq_ok.mp h; exact absurd rfl hne
-  | other => simp [body] at h
+  | other => simp only [ExceptT.stM_eq, body, reduceCtorEq] at h
   | totalSupply | allowance _ _ | name | symbol | decimals | balanceOf _ =>
     have hv := (body_view (by trivial) h).1
     rw [hv] at hne; exact absurd rfl hne
@@ -211,7 +212,7 @@ theorem minter_change_by_minter {ctx : Ctx} {c : Call} {s : State} {out : Out}
   | transferFrom f d v =>
     obtain ⟨-, -, -, -, -, rfl⟩ := transferFrom_eq_ok.mp h; exact absurd rfl hne
   | approve p v => obtain ⟨-, -, rfl⟩ := approve_eq_ok.mp h; exact absurd rfl hne
-  | other => simp [body] at h
+  | other => simp only [ExceptT.stM_eq, body, reduceCtorEq] at h
   | totalSupply | allowance _ _ | name | symbol | decimals | balanceOf _ =>
     have hv := (body_view (by trivial) h).1
     rw [hv] at hne; exact absurd rfl hne
@@ -226,7 +227,7 @@ theorem transferFrom_spends_allowance {ctx : Ctx} {f d v : B256} {s : State} {ou
       out.1.allowances f.toAdr ctx.sender = s.allowances f.toAdr ctx.sender - v := by
   obtain ⟨-, h⟩ := step_eq_ok.mp h
   obtain ⟨-, -, -, -, hal, rfl⟩ := transferFrom_eq_ok.mp h
-  exact ⟨hal hm, by simp [hm]⟩
+  exact ⟨hal hm, by simp only [hm, ↓reduceIte, Function.update_self, ledgerDebit_self]⟩
 
 /-- **No infinite approval at this revision**: even the all-ones allowance is
 decremented by a non-minter `transferFrom` of a nonzero value. -/
@@ -251,7 +252,7 @@ theorem transferFrom_minter_keeps_allowances {ctx : Ctx} {f d v : B256} {s : Sta
     (hm : ctx.sender = s.minter) : out.1.allowances = s.allowances := by
   obtain ⟨-, h⟩ := step_eq_ok.mp h
   obtain ⟨-, -, -, -, -, rfl⟩ := transferFrom_eq_ok.mp h
-  simp [hm]
+  simp only [hm, ↓reduceIte]
 
 /-- `approve` enforces the zero-first discipline its comment recommends: a
 nonzero allowance can only be set from zero. -/
@@ -260,7 +261,7 @@ theorem approve_zero_first {ctx : Ctx} {p v : B256} {s : State} {out : Out}
     s.allowances ctx.sender p.toAdr = 0 ∧ out.1.allowances ctx.sender p.toAdr = v := by
   obtain ⟨-, h⟩ := step_eq_ok.mp h
   obtain ⟨-, hz, rfl⟩ := approve_eq_ok.mp h
-  exact ⟨hz.resolve_left hv, by simp⟩
+  exact ⟨hz.resolve_left hv, by simp only [Function.update_self]⟩
 
 /-- **Only the owner's `approve` or the spender's own non-minter
 `transferFrom` moves an allowance.** -/
@@ -276,23 +277,25 @@ theorem allowance_change_authorized {ctx : Ctx} {c : Call} {s : State} {out : Ou
     by_cases ho : o = ctx.sender
     · by_cases hp : p = w.toAdr
       · exact .inl ⟨ho.symm, w, v, rfl, hp.symm⟩
-      · subst ho; simp [Function.update_of_ne hp] at hne
-    · simp [Function.update_of_ne ho] at hne
+      · subst ho; simp only [Function.update_self, Function.update_of_ne hp, ne_eq,
+        not_true_eq_false] at hne
+    · simp only [Function.update_of_ne ho, ne_eq, not_true_eq_false] at hne
   | transferFrom f d v =>
     obtain ⟨-, -, -, -, -, rfl⟩ := transferFrom_eq_ok.mp h
     by_cases hm : ctx.sender = s.minter
-    · simp [hm] at hne
+    · simp only [hm, ↓reduceIte, ne_eq, not_true_eq_false] at hne
     · by_cases ho : o = f.toAdr
       · by_cases hp : p = ctx.sender
         · exact .inr ⟨hp.symm, hm, f, d, v, rfl, ho.symm⟩
-        · subst ho; simp [hm, ledgerDebit_ne v hp] at hne
-      · simp [hm, Function.update_of_ne ho] at hne
+        · subst ho; simp only [hm, ↓reduceIte, Function.update_self, ledgerDebit_ne v hp, ne_eq,
+          not_true_eq_false] at hne
+      · simp only [hm, ↓reduceIte, Function.update_of_ne ho, ne_eq, not_true_eq_false] at hne
   | setMinter m => obtain ⟨-, -, rfl⟩ := setMinter_eq_ok.mp h; exact absurd rfl hne
   | setName n y => obtain ⟨-, -, -, rfl⟩ := setName_eq_ok.mp h; exact absurd rfl hne
   | transfer d v => obtain ⟨-, -, -, rfl⟩ := transfer_eq_ok.mp h; exact absurd rfl hne
   | mint d v => obtain ⟨-, -, -, -, -, rfl⟩ := mint_eq_ok.mp h; exact absurd rfl hne
   | burnFrom f v => obtain ⟨-, -, -, -, -, rfl⟩ := burnFrom_eq_ok.mp h; exact absurd rfl hne
-  | other => simp [body] at h
+  | other => simp only [ExceptT.stM_eq, body, reduceCtorEq] at h
   | totalSupply | allowance _ _ | name | symbol | decimals | balanceOf _ =>
     have hv := (body_view (by trivial) h).1
     rw [hv] at hne; exact absurd rfl hne
@@ -323,14 +326,15 @@ theorem balance_debit_authorized {ctx : Ctx} {c : Call} {s : State} {out : Out}
     · exact .inr (.inl hm)
     by_cases ha : a = f.toAdr
     · subst ha
-      exact .inr (.inr ⟨f, d, v, rfl, rfl, hal hm, by simp [hm]⟩)
+      exact .inr (.inr ⟨f, d, v, rfl, rfl, hal hm, by simp only [hm, ↓reduceIte,
+        Function.update_self, ledgerDebit_self]⟩)
     · exact absurd hlt (not_lt.mpr (ledgerDebit_credit_ge_of_ne nof ha))
   | burnFrom f v => exact .inr (.inl (burnFrom_eq_ok.mp h).2.1)
   | mint d v => exact .inr (.inl (mint_eq_ok.mp h).2.1)
   | setMinter m => obtain ⟨-, -, rfl⟩ := setMinter_eq_ok.mp h; exact absurd hlt (keep rfl)
   | setName n y => obtain ⟨-, -, -, rfl⟩ := setName_eq_ok.mp h; exact absurd hlt (keep rfl)
   | approve p v => obtain ⟨-, -, rfl⟩ := approve_eq_ok.mp h; exact absurd hlt (keep rfl)
-  | other => simp [body] at h
+  | other => simp only [ExceptT.stM_eq, body, reduceCtorEq] at h
   | totalSupply | allowance _ _ | name | symbol | decimals | balanceOf _ =>
     have hv := (body_view (by trivial) h).1
     rw [hv] at hlt; exact absurd hlt (lt_irrefl _)

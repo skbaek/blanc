@@ -123,8 +123,8 @@ theorem stubPause_cold_runCompiledTo
       · simp only [Devm.gasLeft_setMach]
         omega
     all_goals try {
-      simp [show (32 * (0 : B256) + 4) = 4 by decide, harg,
-        pauseInfiniteSentinel, B256.eqCheck] }
+      simp only [B256.eqCheck, pauseInfiniteSentinel,
+        show (32 * (0 : B256) + 4) = 4 by decide, harg] }
     all_goals try {
       have hcost' := hcost
       rw [← compact_pause_word_eq_projection] at hcost'
@@ -174,7 +174,7 @@ theorem stubQuery_true_warm_runCompiledTo
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     case h_val =>
       rw [Devm.getStorVal_setMach, hstored]
-      simp [B256.ltCheck, hpaused]
+      simp only [B256.ltCheck, hpaused, ↓reduceIte]
     case h_ext => exact Devm.extCost_empty_word
     case a =>
       apply Func.runCompiledTo_return_word (i := 0) (sz := 32) (s := [])
@@ -231,7 +231,7 @@ private theorem stubBaseMain_pause_cold_runCompiledTo
   unfold stubBaseMain stubDispatchLine
   func_run (4) [1]
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  case h_val => simp [B256.eqCheck, hsize]
+  case h_val => simp only [B256.eqCheck, hsize, ↓reduceIte]
   case h_arm =>
     have hg : G + 22154 - 22 = G + 22132 := by omega
     rw [hg]
@@ -255,7 +255,7 @@ private theorem protected_zero_tail_runCompiledTo
     · simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
       omega
   · func_run (2) [0]
-    case h_val => simp [B256.eqCheck, hne]
+    case h_val => simp only [B256.eqCheck, hne, ↓reduceIte]
     case h_arm => exact body
 
 private theorem fsig_prepend_runCompiledTo
@@ -462,24 +462,27 @@ private lemma shiftRight224_of_take4_eq_pause (x : B256)
     (h : x.toBytes.take 4 = [0xf3, 0xf4, 0x49, 0xc7]) :
     x >>> 224 = (0xf3f449c7 : B256) := by
   rcases x with ⟨⟨x3, x2⟩, ⟨x1, x0⟩⟩
-  simp [B256.toBytes, B128.toBytes, UInt64.toBytes, UInt32.toBytes,
-    UInt16.toBytes, List.take] at h
+  simp only [B256.toBytes, B128.toBytes, UInt64.toBytes, UInt32.toBytes, UInt16.toBytes,
+    UInt32.toUInt8_toUInt16, UInt64.toUInt16_toUInt32, UInt64.toUInt8_toUInt16, List.cons_append,
+    List.nil_append, List.take_succ_cons, List.take, List.cons.injEq, and_true] at h
   change B256.shiftRight (⟨⟨_, _⟩, ⟨_, _⟩⟩ : B256) 224 = _
   simp only [B256.shiftRight]
   change (⟨0, B128.shiftRight ⟨_, _⟩ 96⟩ : B256) = _
   simp only [B128.shiftRight]
-  norm_num
+  dsimp only [B128]
+  norm_num only
+  simp only [ite_true, ite_false]
   congr 3
   change x3 >>> (32 : UInt64) = (4092873159 : UInt64)
   rcases h with ⟨h0, h1, h2, h3⟩
   have h1' :
       ((x3 >>> 32).toUInt32 >>> 16).toUInt16.toUInt8 = 244 := by
-    simpa using h1
+    simpa only [UInt32.toUInt8_toUInt16] using h1
   have h2' :
       ((x3 >>> 32).toUInt32.toUInt16 >>> 8).toUInt8 = 73 := by
-    simpa using h2
+    simpa only [UInt64.toUInt16_toUInt32] using h2
   have h3' : (x3 >>> 32).toUInt32.toUInt16.toUInt8 = 199 := by
-    simpa using h3
+    simpa only [UInt64.toUInt16_toUInt32, UInt64.toUInt8_toUInt16] using h3
   have hbytes :
       (x3 >>> 32).toUInt32.toBytes = [243, 244, 73, 199] := by
     simp only [UInt32.toBytes, UInt16.toBytes]
@@ -493,7 +496,7 @@ private lemma shiftRight224_of_take4_eq_pause (x : B256)
     rw [UInt64.toNat_shiftRight]
     change x3.toNat >>> 32 < 4294967296
     rw [Nat.shiftRight_eq_div_pow]
-    norm_num
+    norm_num only
     have hx := UInt64.toNat_lt x3
     omega
   rw [← UInt64.toNat_inj]
@@ -505,24 +508,27 @@ private lemma shiftRight224_of_take4_eq_query (x : B256)
     (h : x.toBytes.take 4 = [0xb1, 0x87, 0xbd, 0x26]) :
     x >>> 224 = (0xb187bd26 : B256) := by
   rcases x with ⟨⟨x3, x2⟩, ⟨x1, x0⟩⟩
-  simp [B256.toBytes, B128.toBytes, UInt64.toBytes, UInt32.toBytes,
-    UInt16.toBytes, List.take] at h
+  simp only [B256.toBytes, B128.toBytes, UInt64.toBytes, UInt32.toBytes, UInt16.toBytes,
+    UInt32.toUInt8_toUInt16, UInt64.toUInt16_toUInt32, UInt64.toUInt8_toUInt16, List.cons_append,
+    List.nil_append, List.take_succ_cons, List.take, List.cons.injEq, and_true] at h
   change B256.shiftRight (⟨⟨_, _⟩, ⟨_, _⟩⟩ : B256) 224 = _
   simp only [B256.shiftRight]
   change (⟨0, B128.shiftRight ⟨_, _⟩ 96⟩ : B256) = _
   simp only [B128.shiftRight]
-  norm_num
+  dsimp only [B128]
+  norm_num only
+  simp only [ite_true, ite_false]
   congr 3
   change x3 >>> (32 : UInt64) = (2978463014 : UInt64)
   rcases h with ⟨h0, h1, h2, h3⟩
   have h1' :
       ((x3 >>> 32).toUInt32 >>> 16).toUInt16.toUInt8 = 135 := by
-    simpa using h1
+    simpa only [UInt32.toUInt8_toUInt16] using h1
   have h2' :
       ((x3 >>> 32).toUInt32.toUInt16 >>> 8).toUInt8 = 189 := by
-    simpa using h2
+    simpa only [UInt64.toUInt16_toUInt32] using h2
   have h3' : (x3 >>> 32).toUInt32.toUInt16.toUInt8 = 38 := by
-    simpa using h3
+    simpa only [UInt64.toUInt16_toUInt32, UInt64.toUInt8_toUInt16] using h3
   have hbytes :
       (x3 >>> 32).toUInt32.toBytes = [177, 135, 189, 38] := by
     simp only [UInt32.toBytes, UInt16.toBytes]
@@ -536,7 +542,7 @@ private lemma shiftRight224_of_take4_eq_query (x : B256)
     rw [UInt64.toNat_shiftRight]
     change x3.toNat >>> 32 < 4294967296
     rw [Nat.shiftRight_eq_div_pow]
-    norm_num
+    norm_num only
     have hx := UInt64.toNat_lt x3
     omega
   rw [← UInt64.toNat_inj]
@@ -570,7 +576,8 @@ private theorem pauseForCalldata_facts {sevm : Sevm} {duration : B256}
     exact firstFour
   · constructor
     · rw [hdata]
-      simp [pauseForCalldata, abiSelectorBytes_length, B256.length_toBytes]
+      simp only [pauseForCalldata, List.length_append, abiSelectorBytes_length, B256.length_toBytes,
+        Nat.reduceAdd]
       decide +kernel
     · apply dataWord_of_append
         (pre := abiSelectorBytes pauseForSelector) (post := [])
@@ -603,7 +610,7 @@ private theorem isPausedCalldata_facts {sevm : Sevm}
       rfl
     exact firstFour
   · rw [hdata]
-    simp [isPausedCalldata, abiSelectorBytes_length]
+    simp only [isPausedCalldata, abiSelectorBytes_length]
     decide +kernel
 
 private lemma sliceD_split {ξ : Type} (xs : List ξ) (d : ξ) :
@@ -612,7 +619,7 @@ private lemma sliceD_split {ξ : Type} (xs : List ξ) (d : ξ) :
         xs.sliceD m a d ++ xs.sliceD (m + a) b d := by
   intro a
   induction a with
-  | zero => intro m b; simp [List.sliceD, List.takeD]
+  | zero => intro m b; simp only [List.sliceD, zero_add, List.takeD, add_zero, List.nil_append]
   | succ a ih =>
     intro m b
     rw [show a + 1 + b = (a + b) + 1 from by omega, List.sliceD_succ,
@@ -740,7 +747,7 @@ theorem stubPause_exec (m : Msg) (duration : B256) (G : Nat)
       Prog.compile stubProgram := by
     show some m.code.toList = _
     rw [hcode, stubProgram_compile]
-    simp [stubCode, stubBytes, ByteArray.toList_eq_toList_data]
+    simp only [stubCode, stubBytes, ByteArray.toList_eq_toList_data]
   refine ⟨post, Prog.exec_of_runCompiledTo hrun hcompile, ?_, ?_, gas,
     hmeta, world, effect⟩
   · rw [error]
@@ -812,13 +819,13 @@ theorem stubPause_sentinel_execution :
         rw [h_orig, h_cur, pauseForProjection]
         have hmax : (0 : B256) ≠ B256.max := by
           decide +kernel
-        simp [pauseInfiniteSentinel, sstoreValueCost, gasStorageSet,
-          gasColdSload, hmax])
+        simp only [gasColdSload, sstoreValueCost, pauseInfiniteSentinel, ↓reduceIte, ne_eq, hmax,
+          not_false_eq_true, and_self, gasStorageSet, Nat.reduceAdd])
   refine ⟨post, hexec, herr, ?_, ?_⟩
-  · simpa [stubPauseSentinelMsg, initSevm, pauseForProjection] using hstored
+  · simpa only [initSevm, stubPauseSentinelMsg, pauseForProjection, ↓reduceIte] using hstored
   · rw [show post.getStorVal stubPauseSentinelTarget pausedUntilSlot =
       pauseInfiniteSentinel by
-        simpa [stubPauseSentinelMsg, initSevm, pauseForProjection] using hstored]
+        simpa only [initSevm, stubPauseSentinelMsg, pauseForProjection, ↓reduceIte] using hstored]
     decide +kernel
 
 /-- A message carrying the installed stub and exact `isPaused()` calldata
@@ -860,7 +867,7 @@ theorem stubQuery_exec (m : Msg) (storedUntil : B256) (G : Nat)
       Prog.compile stubProgram := by
     show some m.code.toList = _
     rw [hcode, stubProgram_compile]
-    simp [stubCode, stubBytes, ByteArray.toList_eq_toList_data]
+    simp only [stubCode, stubBytes, ByteArray.toList_eq_toList_data]
   refine ⟨post, Prog.exec_of_runCompiledTo hrun hcompile, ?_, output, gas,
     hmeta, world, effect⟩
   rw [error]

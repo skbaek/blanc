@@ -78,16 +78,15 @@ theorem AppliedBodyTrace.transactionBound
     (hfork : CoveredFork benv.stat.fork) :
     sum trace.transactionBenv.state.bal + wdsum wds < 2 ^ 256 := by
   have beacon := processMessageCall_sum_le
-    (by simpa [systemTransactionMessage, processSystemTransactionMsg,
-      Benv.beginTransaction, BenvStat.rules] using hfork.rules_stateGas_none)
+    (by simpa only [BenvStat.rules, systemTransactionMessage, processSystemTransactionMsg,
+      Benv.beginTransaction] using hfork.rules_stateGas_none)
     trace.beacon.message.result
   have history := processMessageCall_sum_le
-    (by simpa [systemTransactionMessage, processSystemTransactionMsg,
-      Benv.beginTransaction, Benv.withState, BenvStat.rules] using
-      hfork.rules_stateGas_none)
+    (by simpa only [BenvStat.rules, systemTransactionMessage, processSystemTransactionMsg,
+      Benv.beginTransaction, Benv.withState] using hfork.rules_stateGas_none)
     trace.history.message.result
   have transactions := trace.transactions.sum_le (by
-    simpa [Benv.withState] using hfork)
+    simpa only [Benv.withState] using hfork)
   simp only [systemTransactionMessage_benv_state, Benv.withState] at beacon history transactions
   omega
 
@@ -173,8 +172,8 @@ theorem _root_.Blanc.ExecutionTrace.MessageCallTrace.settledFrames_eq_nil_of_col
     trace.settledFrames = [] := by
   cases trace with
   | createCollision => rfl
-  | createRun _ noCollision => simp_all
-  | callRun noTarget => simp_all
+  | createRun _ noCollision => simp_all only [Bool.false_eq_true]
+  | callRun noTarget => simp_all only [Bool.false_eq_true]
 
 
 namespace AccountingLadderAdmitted
@@ -184,7 +183,7 @@ variable {c : ContractSpecSem} {ca : Adr} {entry : Sevm → Devm → Prop}
 private theorem ite_flatMap {α β : Type} (c : Prop) [Decidable c]
     (l : List α) (f : α → List β) :
     (if c then l else []).flatMap f = if c then l.flatMap f else [] := by
-  split <;> simp
+  split <;> simp only [List.flatMap_nil]
 
 /-- G1, observed. -/
 theorem processMessage (L : AccountingLadderAdmitted c ca entry)
@@ -210,7 +209,8 @@ theorem processMessage (L : AccountingLadderAdmitted c ca entry)
               process) ca)
           (_root_.Blanc.ProcessMessage.targetBalanceMono_of_none process
             runReady.ready.ne sumNof)
-      exact ⟨steps, replay, by simp [observed]⟩
+      exact ⟨steps, replay, by simp only [observed,
+        ExecutionTrace.ProcessMessageTrace.settledFrames, List.flatMap_nil]⟩
   | @some pc sevm pre out run =>
       have enter := (RunFrame.some_inv process).1
       rcases Frame.enter_run_inv enter with ⟨entry, transfer, evmEq⟩
@@ -257,7 +257,8 @@ theorem processCreateMessage (L : AccountingLadderAdmitted c ca entry)
               process fresh) ca)
           (_root_.Blanc.ProcessCreateMessage.targetBalanceMono_of_none process
             runReady.ready.ne sumNof)
-      exact ⟨steps, replay, by simp [observed]⟩
+      exact ⟨steps, replay, by simp only [observed,
+        ExecutionTrace.ProcessCreateMessageTrace.settledFrames, List.flatMap_nil]⟩
   | @some pc sevm pre out run =>
       have preparedInv :=
         runReady.ready.processCreateMessage_msg targetNone targetNe
@@ -265,7 +266,7 @@ theorem processCreateMessage (L : AccountingLadderAdmitted c ca entry)
           (processCreateMessage.msg msg).currentTarget ≠ ca := by
         intro target
         exact targetNe (by
-          simpa [processCreateMessage.msg, Msg.withBenv] using target)
+          simpa only [processCreateMessage.msg, Msg.withBenv] using target)
       have preparedSum :
           sum (processCreateMessage.msg msg).benv.state.bal < 2 ^ 256 := by
         rw [_root_.Jaune.processCreateMessage_msg_bal_eq]
@@ -319,7 +320,8 @@ theorem messageCall (L : AccountingLadderAdmitted c ca entry)
           (L.tag blockIndex transactionIndex)
           (pre := msg.benv.state) (post := state)
           (by rw [stateEq]) (by rw [stateEq])
-      exact ⟨steps, replay, by simp [observed]⟩
+      exact ⟨steps, replay, by simp only [observed, MessageCallTrace.settledFrames,
+        List.flatMap_nil]⟩
   | createRun targetNone collision evm core inner result =>
       have targetNe : msg.currentTarget ≠ ca := by
         rcases runReady.codeOrForeign with call | foreign
@@ -329,7 +331,8 @@ theorem messageCall (L : AccountingLadderAdmitted c ca entry)
       obtain ⟨steps, replay, observed⟩ :=
         L.processCreateMessage inner admitted runReady hfork sumNof targetNone targetNe
           fresh blockIndex transactionIndex
-      refine ⟨steps, ?_, by simpa using observed⟩
+      refine ⟨steps, ?_, by simpa only [MessageCallTrace.settledFrames,
+        ProcessCreateMessageTrace.settledFrames, ExceptT.stM_eq] using observed⟩
       rw [processMessageCall_createRun_state_eq targetNone collision core result hfork]
       exact replay
   | callRun targetSome delegated refund delegation execMsg execMsgEq evm
@@ -382,7 +385,8 @@ theorem messageCall (L : AccountingLadderAdmitted c ca entry)
       obtain ⟨steps, replay, observed⟩ :=
         L.processMessage inner admitted execReady execCallerNe execFork execSum
           blockIndex transactionIndex
-      refine ⟨steps, ?_, by simpa using observed⟩
+      refine ⟨steps, ?_, by simpa only [MessageCallTrace.settledFrames,
+        ProcessMessageTrace.settledFrames, ExceptT.stM_eq] using observed⟩
       rw [stateEq, ← snapshotEq]
       exact replay
 
@@ -404,7 +408,7 @@ theorem transactionMessage (L : AccountingLadderAdmitted c ca entry)
     trace.msg_shouldTransferValue
   have msgFork : CoveredFork trace.msg.benv.stat.fork := by
     rw [prepareMessage_benv trace.prepared]
-    simpa [Benv.beginTransaction] using hfork
+    simpa only [Benv.beginTransaction] using hfork
   simp only [TransactionTrace.settledFrames]
   by_cases target : trace.msg.currentTarget = ca
   · cases receiver : trace.msg.target.isNone with
@@ -424,7 +428,7 @@ theorem transactionMessage (L : AccountingLadderAdmitted c ca entry)
             trace.message.result msgFork
         refine ⟨[], L.carrier.nilOfEq (congrArg L.carrier.ofState stateEq), ?_⟩
         rw [trace.message.settledFrames_eq_nil_of_collision receiver collision]
-        simpa using L.view.obs_nil
+        simpa only [List.flatMap_nil] using L.view.obs_nil
   · exact L.messageCall trace.message admitted (msgInv.runReady_of_foreign target)
       (fun current => absurd current target) msgFork sumNof blockIndex transactionIndex
 
@@ -479,7 +483,7 @@ theorem transaction (L : AccountingLadderAdmitted c ca entry)
     (state := trace.coinbaseState chronology.refundCounter)
     (trace.message.stateInv_admitted_sem L.preserves (by
       rw [prepareMessage_benv trace.prepared]
-      simpa [Benv.beginTransaction] using hfork) admitted
+      simpa only [Benv.beginTransaction] using hfork) admitted
       (trace.msgInv_sem inv notCreated)).2
   have finalSnapshot :
       L.carrier.ofState state =
@@ -497,7 +501,9 @@ theorem transaction (L : AccountingLadderAdmitted c ca entry)
     L.append messageReplay (L.append refundReplay' tipReplay'), ?_⟩
   rw [L.view.obs_append, L.view.obs_append, messageObserved, refundObserved,
     tipObserved]
-  simp
+  simp only [TransactionTrace.settledFrames, MessageCallTrace.settledFrames,
+    ProcessCreateMessageTrace.settledFrames, ExceptT.stM_eq, ProcessMessageTrace.settledFrames,
+    List.append_nil]
 
 open _root_.Blanc.ExecutionTrace in
 /-- G5, observed. -/
@@ -516,7 +522,8 @@ theorem transactionList (L : AccountingLadderAdmitted c ca entry)
       L.view.obs steps = trace.settledFrames.flatMap L.view.frameObs := by
   induction trace with
   | nil =>
-      exact ⟨[], L.carrier.nilOfEq rfl, by simpa using L.view.obs_nil⟩
+      exact ⟨[], L.carrier.nilOfEq rfl, by simpa only [ApplyTransactionsTrace.settledFrames,
+        List.flatMap_nil] using L.view.obs_nil⟩
   | @cons index tx txs benv bout txState txBout finalBenv finalBout head tail
       ih =>
       obtain ⟨headSteps, headReplay, headObserved⟩ :=
@@ -525,14 +532,16 @@ theorem transactionList (L : AccountingLadderAdmitted c ca entry)
         head.benvInv_admitted_sem L.preserves hfork admitted.1 sumNof ⟨inv, notCreated⟩
       have nextSum : sum (benv.withState txState).state.bal < 2 ^ 256 :=
         Nat.lt_of_le_of_lt
-          (by simpa [Benv.withState] using
+          (by simpa only [Benv.withState] using
             processTransaction_sum_le head.result hfork.rules_stateGas_none)
           sumNof
       obtain ⟨tailSteps, tailReplay, tailObserved⟩ :=
-        ih admitted.2 next.state next.ca nextSum (by simpa [Benv.withState] using hfork)
+        ih admitted.2 next.state next.ca nextSum (by simpa only [Benv.withState] using hfork)
       refine ⟨headSteps ++ tailSteps, L.append headReplay tailReplay, ?_⟩
       rw [L.view.obs_append, headObserved, tailObserved]
-      simp
+      simp only [TransactionTrace.settledFrames, MessageCallTrace.settledFrames,
+        ProcessCreateMessageTrace.settledFrames, ExceptT.stM_eq, ProcessMessageTrace.settledFrames,
+        ApplyTransactionsTrace.settledFrames, List.flatMap_append]
 
 open _root_.Blanc.ExecutionTrace in
 /-- G6, observed. -/
@@ -562,10 +571,12 @@ theorem systemMessage (L : AccountingLadderAdmitted c ca entry)
   obtain ⟨steps, replay, observed⟩ := L.messageCall trace.message admitted
     (msgInv.runReady_of_call
       (systemTransactionMessage_target_isNone benv target data))
-    callerNe (by simpa [systemTransactionMessage, processSystemTransactionMsg,
+    callerNe (by simpa only [systemTransactionMessage, processSystemTransactionMsg,
       Benv.beginTransaction] using hfork) sumNof blockIndex none
   rw [systemTransactionMessage_benv_state] at replay
-  exact ⟨steps, replay, by simpa using observed⟩
+  exact ⟨steps, replay, by simpa only [SystemMessageTrace.settledFrames,
+    MessageCallTrace.settledFrames, ProcessCreateMessageTrace.settledFrames, ExceptT.stM_eq,
+    ProcessMessageTrace.settledFrames] using observed⟩
 
 open _root_.Blanc.ExecutionTrace in
 /-- G7, observed. -/
@@ -593,12 +604,14 @@ theorem requests (L : AccountingLadderAdmitted c ca entry)
       sumNof
   obtain ⟨consolidationSteps, consolidationReplay, consolidationObserved⟩ :=
     L.systemMessage trace.consolidation admitted.consolidation withdrawalInv.state withdrawalInv.ca
-      (by decide) withdrawalSum (by simpa [Benv.withState] using hfork) blockIndex
+      (by decide) withdrawalSum (by simpa only [Benv.withState] using hfork) blockIndex
   refine ⟨withdrawalSteps ++ consolidationSteps, ?_, ?_⟩
   · rw [RequestsTrace.state_eq_consolidationState trace]
     exact L.append withdrawalReplay consolidationReplay
   · rw [L.view.obs_append, withdrawalObserved, consolidationObserved]
-    simp
+    simp only [SystemMessageTrace.settledFrames, MessageCallTrace.settledFrames,
+      ProcessCreateMessageTrace.settledFrames, ExceptT.stM_eq, ProcessMessageTrace.settledFrames,
+      RequestsTrace.settledFrames, List.flatMap_append]
 
 open _root_.Blanc.ExecutionTrace in
 /-- G8, observed: direct withdrawals are observed as nothing. -/
@@ -645,7 +658,7 @@ theorem body (L : AccountingLadderAdmitted c ca entry)
   have beaconMeta :=
     trace.beacon.stateInv_and_sum_le_admitted_sem L.preserves hfork admitted.beacon ⟨inv, notCreated⟩
   have beaconInv : c.BenvInv ca (benv.withState trace.beaconState) :=
-    ⟨beaconMeta.1, by simpa [Benv.withState] using notCreated⟩
+    ⟨beaconMeta.1, by simpa only [Benv.withState] using notCreated⟩
   have beaconSum :
       sum (benv.withState trace.beaconState).state.bal < 2 ^ 256 := by
     have le := beaconMeta.2
@@ -654,12 +667,12 @@ theorem body (L : AccountingLadderAdmitted c ca entry)
   -- (2) history storage
   obtain ⟨historySteps, historyReplay, historyObserved⟩ :=
     L.systemMessage trace.history admitted.history beaconInv.state beaconInv.ca (by decide)
-      beaconSum (by simpa [Benv.withState] using hfork) blockIndex
+      beaconSum (by simpa only [Benv.withState] using hfork) blockIndex
   have historyMeta := trace.history.stateInv_and_sum_le_admitted_sem L.preserves
-    (by simpa [Benv.withState] using hfork) admitted.history beaconInv
+    (by simpa only [Benv.withState] using hfork) admitted.history beaconInv
   have historyInv : c.BenvInv ca
       ((benv.withState trace.beaconState).withState trace.historyState) :=
-    ⟨historyMeta.1, by simpa [Benv.withState] using beaconInv.ca⟩
+    ⟨historyMeta.1, by simpa only [Benv.withState] using beaconInv.ca⟩
   have historySum :
       sum ((benv.withState trace.beaconState).withState
         trace.historyState).state.bal < 2 ^ 256 := by
@@ -669,23 +682,23 @@ theorem body (L : AccountingLadderAdmitted c ca entry)
   -- (3) the transaction list, by G5
   obtain ⟨txSteps, txReplay, txObserved⟩ :=
     L.transactionList trace.transactions admitted.transactions historyInv.state historyInv.ca
-      historySum (by simpa [Benv.withState] using hfork) blockIndex
+      historySum (by simpa only [Benv.withState] using hfork) blockIndex
   have txInv : c.BenvInv ca trace.transactionBenv :=
     trace.transactions.benvInv_admitted_sem L.preserves
-      (by simpa [Benv.withState] using hfork) admitted.transactions historySum historyInv
+      (by simpa only [Benv.withState] using hfork) admitted.transactions historySum historyInv
   have hforkTransaction : CoveredFork trace.transactionBenv.stat.fork := by
     rw [trace.transactions.stat_eq]
-    simpa [Benv.withState] using hfork
+    simpa only [Benv.withState] using hfork
   -- (4) direct withdrawals, by G8
   have txBound :
       sum trace.transactionBenv.state.bal + wdsum wds < 2 ^ 256 := by
     have hbeacon := beaconMeta.2
     have hhistory : sum trace.historyState.bal ≤ sum trace.beaconState.bal := by
-      simpa [Benv.withState] using historyMeta.2
+      simpa only [Benv.withState] using historyMeta.2
     have htx : sum trace.transactionBenv.state.bal ≤
         sum trace.historyState.bal := by
-      simpa [Benv.withState] using trace.transactions.sum_le
-        (by simpa [Benv.withState] using hfork)
+      simpa only [Benv.withState] using trace.transactions.sum_le
+        (by simpa only [Benv.withState] using hfork)
     omega
   obtain ⟨wdSteps, wdReplay, wdObserved⟩ :=
     L.directWithdrawal trace.transactionBenv.state wds txBound blockIndex
@@ -697,11 +710,11 @@ theorem body (L : AccountingLadderAdmitted c ca entry)
   -- (5) request calls, by G7
   obtain ⟨requestSteps, requestReplay, requestObserved⟩ :=
     L.requests trace.requests admitted.requests wdInv.state wdInv.ca wdSum
-      (by simpa [Benv.withState] using hforkTransaction) blockIndex
+      (by simpa only [Benv.withState] using hforkTransaction) blockIndex
   refine ⟨beaconSteps ++ (historySteps ++ (txSteps ++ (wdSteps ++ requestSteps))),
     L.append beaconReplay (L.append historyReplay
       (L.append txReplay (L.append wdReplay
-        (by simpa [Benv.withState, trace.requestState_eq] using requestReplay)))), ?_⟩
+        (by simpa only [Benv.withState, trace.requestState_eq] using requestReplay)))), ?_⟩
   simp only [L.view.obs_append, beaconObserved, historyObserved, txObserved,
     wdObserved, requestObserved, AppliedBodyTrace.settledFrames,
     List.flatMap_append, List.nil_append, List.append_assoc]
@@ -719,7 +732,12 @@ theorem configuredBlock (L : AccountingLadderAdmitted c ca entry)
   obtain ⟨steps, replay, observed⟩ :=
     L.body trace.bodyTrace admitted (trace.openingState ▸ inv)
       (trace.not_mem_openingCreatedAccounts ca) trace.openingBound trace.covered blockIndex
-  refine ⟨steps, ?_, by simpa using observed⟩
+  refine ⟨steps, ?_, by simpa only [ExecutionTrace.ConfiguredBlockTrace.settledFrames,
+    ExecutionTrace.AppliedBodyTrace.settledFrames, ExecutionTrace.SystemMessageTrace.settledFrames,
+    ExecutionTrace.MessageCallTrace.settledFrames,
+    ExecutionTrace.ProcessCreateMessageTrace.settledFrames, ExceptT.stM_eq,
+    ExecutionTrace.ProcessMessageTrace.settledFrames, List.append_assoc,
+    ExecutionTrace.RequestsTrace.settledFrames, List.flatMap_append] using observed⟩
   rw [trace.postState]
   rwa [trace.openingState] at replay
 
@@ -735,7 +753,8 @@ theorem configuredHistory (L : AccountingLadderAdmitted c ca entry) {cfg : Chain
       L.view.obs steps = history.settledFrames.flatMap L.view.frameObs := by
   induction history with
   | refl hcfg hctx hid =>
-      exact ⟨[], L.carrier.nilOfEq rfl, by simpa using L.view.obs_nil⟩
+      exact ⟨[], L.carrier.nilOfEq rfl, by simpa only [ExecutionTrace.ConfiguredHistoryTrace.settledFrames,
+        List.flatMap_nil] using L.view.obs_nil⟩
   | step prior block ih =>
       obtain ⟨priorSteps, priorReplay, priorObserved⟩ := ih admitted.1
       obtain ⟨blockSteps, blockReplay, blockObserved⟩ :=
@@ -744,7 +763,14 @@ theorem configuredHistory (L : AccountingLadderAdmitted c ca entry) {cfg : Chain
           block.block.header.number
       refine ⟨priorSteps ++ blockSteps, L.append priorReplay blockReplay, ?_⟩
       rw [L.view.obs_append, priorObserved, blockObserved]
-      simp
+      simp only [ExecutionTrace.ConfiguredBlockTrace.settledFrames,
+        ExecutionTrace.AppliedBodyTrace.settledFrames,
+        ExecutionTrace.SystemMessageTrace.settledFrames,
+        ExecutionTrace.MessageCallTrace.settledFrames,
+        ExecutionTrace.ProcessCreateMessageTrace.settledFrames, ExceptT.stM_eq,
+        ExecutionTrace.ProcessMessageTrace.settledFrames, List.append_assoc,
+        ExecutionTrace.RequestsTrace.settledFrames, List.flatMap_append,
+        ExecutionTrace.ConfiguredHistoryTrace.settledFrames]
 
 
 end AccountingLadderAdmitted

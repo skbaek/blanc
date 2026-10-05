@@ -139,7 +139,8 @@ theorem Exec.storageView_committedPost_eq_of_static
   rw [Exec.retainedStorageWrites_eq_nil_of_static run hstatic] at replay
   funext owner
   funext key
-  simpa [Devm.storageView, Exec.StorageWrite.replayCell] using replay owner key
+  simpa only [Devm.storageView, StorageWrite.replayCell, StorageWrite.matches_eq_true,
+    List.foldl_nil] using replay owner key
 
 /-- Every successful `STATICCALL` preserves persistent storage, including the
 case where it enters arbitrary interpreted code. -/
@@ -175,15 +176,16 @@ theorem Ninst.staticcall_inv_getStor
         rw [enter]
         exact ⟨out, rfl, rfl⟩
       have replay : Exec.StorageReplay pre post [] := by
-        simpa using Xinst.storageReplay_some_of_body spawn frameRun resumed.symm
+        simpa only [ite_self] using Xinst.storageReplay_some_of_body spawn frameRun resumed.symm
           (writes := []) (fun committed owner key => by
             have equal := Exec.storageView_committedPost_eq_of_static
               childRun childStatic committed childFork
-            simpa [Devm.storageView, Exec.StorageWrite.replayCell] using
+            simpa only [Exec.StorageWrite.replayCell, Exec.StorageWrite.matches_eq_true,
+              List.foldl_nil, Devm.storageView] using
               congrFun (congrFun equal owner) key) hfork
       funext owner
       funext key
-      simpa [Devm.storageView, Exec.StorageWrite.replayCell] using
-        (replay owner key).symm
+      simpa only [Devm.storageView, Exec.StorageWrite.replayCell, Exec.StorageWrite.matches_eq_true,
+        List.foldl_nil] using (replay owner key).symm
 
 end Blanc

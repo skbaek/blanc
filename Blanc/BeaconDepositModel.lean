@@ -174,7 +174,6 @@ inductive Reason
   /-- `assert(false)` (line 158) — the walk fell through; proved
   unreachable. -/
   | assert_false
-deriving DecidableEq
 
 /-- The `DepositEvent` payload (source lines 19–25, 120–126): five dynamic
 `bytes` fields, none indexed. -/
@@ -184,7 +183,6 @@ structure DepositEvent where
   amount : Bytes
   signature : Bytes
   index : Bytes
-deriving DecidableEq
 
 /-- `1 ether` in wei. -/
 def oneEther : Nat := 10 ^ 18

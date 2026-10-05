@@ -180,7 +180,7 @@ private theorem post_of_run_linearDispatch {fallback : Func}
           h_run
       · have hs := DispatchInv.line (by line_inv) (by line_inv) h h₁
           (Devm.popBurn_of_popBurn_of_pop h_pop h_burn)
-        exact h_all (word, body) (by simp) hs.2.2.2.2 hs.1 hs.2.1 hs.2.2.1
+        exact h_all (word, body) (by simp only [List.mem_cons, List.not_mem_nil, or_false]) hs.2.2.2.2 hs.1 hs.2.1 hs.2.2.1
           hs.2.2.2.1 h_run
     | hd' :: tl' =>
       intro h_all e s r h
@@ -189,10 +189,10 @@ private theorem post_of_run_linearDispatch {fallback : Func}
       rcases of_run_branch h_branch with
         ⟨s₂, h_pop, h_run⟩ | ⟨w, s₂, s₃, hw, h_pop, h_burn, h_run⟩
       · have hs := DispatchInv.line (by line_inv) (by line_inv) h h₁ h_pop
-        exact ih (fun p hp => h_all p (by simp [hp])) hs h_run
+        exact ih (fun p hp => h_all p (by simp only [List.mem_cons, hp, or_true])) hs h_run
       · have hs := DispatchInv.line (by line_inv) (by line_inv) h h₁
           (Devm.popBurn_of_popBurn_of_pop h_pop h_burn)
-        exact funcSound_pop (h_all (word, body) (by simp))
+        exact funcSound_pop (h_all (word, body) (by simp only [List.mem_cons, true_or]))
           hs.2.2.2.2 hs.1 hs.2.1 hs.2.2.1 hs.2.2.2.1 h_run
 
 /-- One balanced pivot. -/

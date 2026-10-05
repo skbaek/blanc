@@ -572,7 +572,8 @@ theorem ProcessMessage.clean_logs {msg : Msg} {xl : Xlot} {child : Devm}
     (body : Xlot.KeepsLogs xl) : child.logs = [] := by
   obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp run
   obtain ⟨evm2, rfl, hcase⟩ := processMessage.settle_ok_cases hset.symm
-  have hclean' : ¬ child.error.isSome = true := by simp [hclean]
+  have hclean' : ¬ child.error.isSome = true := by simp only [hclean, Bool.false_eq_true,
+    not_false_eq_true]
   have hc : evm2 = child := by
     rcases hcase with ⟨herr, hrb⟩ | ⟨_, h⟩
     · exfalso
@@ -600,7 +601,7 @@ theorem ProcessMessage.clean_logs {msg : Msg} {xl : Xlot} {child : Devm}
         · cases hent
         · cases hent; rfl
     have hkeep := body (by
-      cases h : evm2.error <;> simp_all [Execution.commits])
+      cases h : evm2.error <;> simp_all only [Option.isSome_none, Bool.false_eq_true, false_and, not_false_eq_true, and_self, or_true, Msg.withBenv_stat_rules, ExceptT.stM_eq, Execution.commits, Option.isNone_none, Option.isSome_some, Bool.true_eq_false])
     change evm2.logs = evm.dyna.logs at hkeep
     rw [hkeep, hevm]
     exact initDevm_logs hsg'
@@ -647,7 +648,7 @@ theorem GenericCall.logs_of_ok {sevm : Sevm} {d post : Devm} {gas : Nat} {value 
       simp only [herr, Bool.false_eq_true, ↓reduceIte] at hlogs
       have hnil := ProcessMessage.clean_logs (msg := callMsg sevm (d.withReturnData []) gas
         value caller target codeAddress stv isSt _ code dp) hsg hframe
-        (by simpa using herr) body
+        (by simpa only [Option.isSome_eq_false_iff, Option.isNone_iff_eq_none] using herr) body
       rw [hlogs, hnil, List.append_nil]
       rfl
 
@@ -660,7 +661,7 @@ theorem GenericCreate.not_ok_of_static {sevm : Sevm} {d post : Devm} {endowment 
   unfold genericCreate.step at run
   simp only [Bind.bind, Except.bind, Except.assert, assertDynamic, hs] at run
   repeat' split at run
-  all_goals simp_all [XStep.ofExcept, XStep.Run]
+  all_goals simp_all only [XStep.Run, XStep.ofExcept, ExceptT.stM_eq, reduceCtorEq, and_false, ite_eq_left_iff, not_le, imp_false, not_lt, Bool.not_true, Bool.false_eq_true, ↓reduceIte, Except.error.injEq]
 
 /-- **A successful executable instruction keeps the log list** on a covered fork, given
 that its interpreted child, if any, keeps its entry log list.  A create is excluded by a
@@ -694,7 +695,8 @@ theorem Rinst.log_not_ok_of_static {pc : Nat} {sevm : Sevm} {pre post : Devm} {n
   rcases Except.bind_eq_ok run₂ with ⟨_, _, run₃⟩
   rcases Except.bind_eq_ok run₃ with ⟨_, _, run₄⟩
   rcases Except.bind_eq_ok run₄ with ⟨_, hassert, _⟩
-  simp [assertDynamic, Except.assert, hs] at hassert
+  simp only [assertDynamic, Except.assert, hs, Bool.not_true, Bool.false_eq_true, ↓reduceIte,
+    reduceCtorEq] at hassert
 
 /-- `SELFDESTRUCT` cannot succeed in a static frame of a covered fork. -/
 theorem Linst.selfdestruct_not_ok_of_static {sevm : Sevm} {pre post : Devm}
@@ -708,21 +710,22 @@ theorem Linst.selfdestruct_not_ok_of_static {sevm : Sevm} {pre post : Devm}
   rcases Except.bind_eq_ok run₃ with ⟨_, _, run₄⟩
   rcases Except.bind_eq_ok run₄ with ⟨_, _, run₅⟩
   rcases Except.bind_eq_ok run₅ with ⟨_, hassert, _⟩
-  simp [assertDynamic, Except.assert, hs] at hassert
+  simp only [assertDynamic, Except.assert, hs, Bool.not_true, Bool.false_eq_true, ↓reduceIte,
+    reduceCtorEq] at hassert
 
 /-- `REVERT` never succeeds. -/
 theorem Linst.revert_not_ok {sevm : Sevm} {pre post : Devm}
     (run : Linst.Run sevm pre .revert (.ok post)) : False := by
   simp only [Linst.Run, Linst.run] at run
   cases h : pre.popToNat with
-  | error e => simp [h] at run
+  | error e => simp only [h, Except.bind_error, reduceCtorEq] at run
   | ok x =>
     cases h2 : x.2.popToNat with
-    | error e => simp [h, h2] at run
+    | error e => simp only [h, Except.bind_ok, h2, Except.bind_error, reduceCtorEq] at run
     | ok y =>
       cases h3 : chargeGas (y.2.extCost [(x.1, y.1)]) y.2 with
-      | error e => simp [h, h2, h3] at run
-      | ok d => simp [h, h2, h3] at run
+      | error e => simp only [h, Except.bind_ok, h2, h3, Except.bind_error, reduceCtorEq] at run
+      | ok d => simp only [h, Except.bind_ok, h2, h3, reduceCtorEq] at run
 
 /-- A successful jump keeps the log list. -/
 theorem Jinst.logs_of_ok {evm : Evm} {j : Jinst} {pc : Nat} {post : Devm}
@@ -844,7 +847,7 @@ private theorem Execution.committedPost_logs_of_ok {out : Execution} {pre : Devm
     (h : ∀ post, out = .ok post → post.logs = pre.logs) (committed : Execution.commits out = true) :
     (Execution.committedPost out committed).logs = pre.logs := by
   cases out with
-  | error _ => simp [Execution.commits] at committed
+  | error _ => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post => exact h post rfl
 
 /-- **Static execution keeps the log list.**  A successful execution (`.ok post`, committing
@@ -944,7 +947,7 @@ theorem Ninst.world_of_quiet {sevm : Sevm} {pre post : Devm} {n : Ninst}
       exact ⟨(funext (Devm.InstructionFrame.getStor frame)).symm,
              Ninst.exchange_logs ⟨.none, trivial, pc, hrun⟩⟩
   | exec x =>
-      have hx : x = .staticcall := by simpa [Ninst.quiet] using hn
+      have hx : x = .staticcall := by simpa only [Ninst.quiet, beq_iff_eq] using hn
       subst hx
       refine ⟨(Ninst.staticcall_inv_getStor_exact hfork run).symm, ?_⟩
       rcases run with ⟨slot, filled, pc, stepRun⟩
@@ -966,10 +969,10 @@ theorem Ninst.world_of_quiet {sevm : Sevm} {pre post : Devm} {n : Ninst}
   | reg r =>
       have hs : r ≠ .sstore := by
         rintro rfl
-        simp [Ninst.quiet] at hn
+        simp only [Ninst.quiet, Bool.false_eq_true] at hn
       have hr : ∀ n, r ≠ .log n := by
         rintro n rfl
-        simp [Ninst.quiet] at hn
+        simp only [Ninst.quiet, Bool.false_eq_true] at hn
       rcases of_run_reg run with ⟨pc, rrun⟩
       exact ⟨(Rinst.preserves_stor hs rrun).symm, Rinst.logs_of_ok hr rrun⟩
 
@@ -985,24 +988,26 @@ theorem Linst.world_of_ok {sevm : Sevm} {pre post : Devm} {l : Linst}
     Devm.getStor post = Devm.getStor pre ∧ post.logs = pre.logs := by
   cases l with
   | stop =>
-      have hf := Linst.run_instructionFrame sevm pre .stop (by simp)
+      have hf := Linst.run_instructionFrame sevm pre .stop (by simp only [ne_eq, reduceCtorEq,
+        not_false_eq_true])
       rw [run] at hf
       exact ⟨funext (fun a => (hf.getStor a).symm), (Linst.Hinv.inv run).symm⟩
   | return_ =>
-      have hf := Linst.run_instructionFrame sevm pre .return_ (by simp)
+      have hf := Linst.run_instructionFrame sevm pre .return_ (by simp only [ne_eq, reduceCtorEq,
+        not_false_eq_true])
       rw [run] at hf
       exact ⟨funext (fun a => (hf.getStor a).symm), (Linst.Hinv.inv run).symm⟩
   | revert =>
       simp only [Linst.Run, Linst.run] at run
       cases h : pre.popToNat with
-      | error e => simp [h] at run
+      | error e => simp only [h, Except.bind_error, reduceCtorEq] at run
       | ok x =>
         cases h2 : x.2.popToNat with
-        | error e => simp [h, h2] at run
+        | error e => simp only [h, Except.bind_ok, h2, Except.bind_error, reduceCtorEq] at run
         | ok y =>
           cases h3 : chargeGas (y.2.extCost [(x.1, y.1)]) y.2 with
-          | error e => simp [h, h2, h3] at run
-          | ok d => simp [h, h2, h3] at run
+          | error e => simp only [h, Except.bind_ok, h2, h3, Except.bind_error, reduceCtorEq] at run
+          | ok d => simp only [h, Except.bind_ok, h2, h3, reduceCtorEq] at run
   | selfdestruct => exact (hl rfl).elim
 
 /-- A synthetic tree whose instructions are quiet and whose terminals are not
@@ -1047,7 +1052,7 @@ theorem SFunc.Run.world_of_quiet {fs : List SFunc} {S : List Nat}
     intro k g hk hget
     have h := (List.all_eq_true.mp hS) k hk
     rw [hget] at h
-    simpa using h
+    simpa only [List.all_eq_true, decide_eq_true_eq, Bool.and_eq_true] using h
   have tr : ∀ {a b c : Devm}, (Devm.getStor c = Devm.getStor b ∧ c.logs = b.logs) →
       (Devm.getStor b = Devm.getStor a ∧ b.logs = a.logs) →
       Devm.getStor c = Devm.getStor a ∧ c.logs = a.logs :=
@@ -1069,7 +1074,7 @@ theorem SFunc.Run.world_of_quiet {fs : List SFunc} {S : List Nat}
       have ht := closed (of_decide_eq_true hrefs.1) lookup
       exact tr (ih ht.1 ht.2) (PopBurn.world pop)
   | last hrun =>
-      exact Linst.world_of_ok (by simpa [SFunc.quiet] using hf) hrun
+      exact Linst.world_of_ok (by simpa only [ne_eq, quiet, bne_iff_ne] using hf) hrun
   | next hrun run ih =>
       simp only [SFunc.quiet, Bool.and_eq_true] at hf
       exact tr (ih hf.2 hrefs) (Ninst.world_of_quiet hfork hf.1 hrun)

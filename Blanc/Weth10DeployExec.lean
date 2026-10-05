@@ -162,7 +162,10 @@ theorem weth10PreHashStage_split (sevm : Sevm) :
 /-- All five scratch writes miss `[0, 6313)`. -/
 theorem weth10ScratchStage_avoids (sevm : Sevm) :
     (weth10ScratchStage sevm).avoids 0 6313 = true := by
-  simp [weth10ScratchStage, MemoryStage.avoids]
+  simp only [MemoryStage.avoids, weth10ScratchStage, List.length_eq_zero_iff, OfNat.ofNat_ne_zero,
+    zero_add, nonpos_iff_eq_zero, Nat.add_eq_zero_iff, false_or, Bool.decide_or, Bool.decide_and,
+    List.all_cons, Nat.reduceLeDiff, decide_true, decide_false, Bool.false_and, Bool.or_false,
+    Bool.or_true, List.all_nil, Bool.and_self]
 
 /-- One guard replaces the five-peel `hpre`: the observed runtime window sees
 only the copy prefix. -/
@@ -430,12 +433,12 @@ private lemma Bytes.writeAt_append_payload
       Bytes.writeAt bs n xs = List.takeD n bs 0 ++ xs := by
     unfold Bytes.writeAt
     rw [List.drop_eq_nil_of_le (by omega)]
-    simp
+    simp only [List.append_nil]
   rw [hfirst]
   rw [Bytes.writeAt_of_length_eq (by rw [List.length_append, List.takeD_length])]
   unfold Bytes.writeAt
   rw [List.drop_eq_nil_of_le (by omega)]
-  simp [List.append_assoc]
+  simp only [List.append_assoc, List.append_nil]
 
 private lemma Bytes.sliceD_five_b256_writes
     (bs : Bytes) (n : Nat) (hbs : bs.length ≤ n)
@@ -483,7 +486,8 @@ theorem weth10InitPreHashMemory_read (sevm : Sevm) :
   let I2 := Bytes.writeAt I1 691 chain.toBytes
   let I3 := Bytes.writeAt I2 2875 chain.toBytes
   have h0 : I0.length = 6313 := by
-    simp [I0, copied, Bytes.writeAt, ByteArray.length_sliceD]
+    simp only [Bytes.writeAt, List.takeD_nil, List.replicate_zero, List.nil_append,
+      ByteArray.length_sliceD, zero_add, List.drop_nil, List.append_nil, I0, copied]
   have h1 : I1.length = 6313 := by
     rw [show I1 = Bytes.writeAt I0 372 chain.toBytes from rfl,
       Bytes.length_writeAt_of_le (by rw [h0, B256.length_toBytes]; omega), h0]
@@ -588,7 +592,7 @@ theorem weth10InitMemory_read_runtime {sevm : Sevm}
       MemoryStage.applyImage_cons, MemoryStage.applyImage_cons,
       MemoryStage.applyImage_nil, weth10InitCode_slice_runtime h_code]
     rw [show Bytes.writeAt [] 0 weth10RuntimeTemplate =
-      weth10RuntimeTemplate from Bytes.writeAt_zero_of_le (by simp)]
+      weth10RuntimeTemplate from Bytes.writeAt_zero_of_le (by simp only [List.length_nil, zero_le])]
   have hI3len : I3.length = 6313 := by
     rw [← hcopyimg, MemoryStage.applyImage_length]
     simp only [weth10CopyStage, List.foldl_cons, List.foldl_nil,
@@ -622,9 +626,6 @@ theorem weth10InitMemory_read_runtime {sevm : Sevm}
   rw [Mem.Reads.read (weth10InitMemory_reads sevm) 0 6313]
   rw [hsep2, Bytes.sliceD_zero_length h5]
   rfl
-
-private theorem memRead_fst_eq (d : Devm) (index size : Nat) :
-    (d.memRead index size).1 = (d.memory.read index size).1 := rfl
 
 private def weth10InitReturnPre
     (base : Devm) (M : Mem) (g : Nat) : Devm :=
@@ -932,9 +933,8 @@ private theorem weth10InitPreHashLine_runCompiled
           apply weth10InitPreHashAddress_runCompiled
               (g := g - 50) (h_size := hs7)
           · omega
-          · simpa [weth10InitPreHashMemory, M3, M4, M5, M6, M7, chain,
-              weth10InitPreHashTail5, weth10InitPreHashLine, prepend,
-              initGas_preHash50 h_gas] using h_rest
+          · simpa only [initGas_preHash50 h_gas, weth10InitPreHashTail5, weth10InitPreHashLine,
+            List.drop_succ_cons, List.drop_nil, prepend, weth10InitPreHashMemory] using h_rest
 
 private theorem weth10InitPreHashMemory_size (sevm : Sevm) :
     (weth10InitPreHashMemory sevm).size = 6496 := by
@@ -1079,7 +1079,7 @@ private theorem weth10InitRet_runCompiled
     (e := 0) (out := out) (d' := d')
   · exact h_stack
   · exact h_ext
-  · simpa using h_gas
+  · simpa only [add_zero] using h_gas
   · exact h_read
 
 private theorem initGas_hash {g : Nat} (h : 1471 ≤ g) :
@@ -1159,7 +1159,7 @@ private theorem weth10InitSuccess_runCompiled_zero
     · rw [hpre_size]
     · rfl
     · exact hread_image
-    · simpa [weth10InitBeforeSeparator, hg_hash] using hseparator
+    · simpa only [hg_hash, weth10InitBeforeSeparator] using hseparator
   have hg_pre := initGas_preHash h_gas
   have hprehash :
       Func.RunCompiled [weth10InitFunc] sevm
@@ -1171,7 +1171,7 @@ private theorem weth10InitSuccess_runCompiled_zero
         (weth10InitPost sevm base g) := by
     apply weth10InitPreHashLine_runCompiled (g := g - 1318)
     · omega
-    · simpa [Mpre, hg_pre] using hhash
+    · simpa only [hg_pre] using hhash
   have hg_chain := initGas_chain h_gas
   have hchain :
       Func.RunCompiled [weth10InitFunc] sevm
@@ -1184,7 +1184,7 @@ private theorem weth10InitSuccess_runCompiled_zero
         (weth10InitPost sevm base g) := by
     apply weth10InitChainLine_runCompiled (g := g - 1294)
     · omega
-    · simpa [hg_chain] using hprehash
+    · simpa only [hg_chain] using hprehash
   have hg_copy := initGas_copy h_gas
   have hcopy :
       Func.RunCompiled [weth10InitFunc] sevm
@@ -1198,7 +1198,7 @@ private theorem weth10InitSuccess_runCompiled_zero
         (weth10InitPost sevm base g) := by
     apply weth10InitCopyLine_runCompiled (g := g - 19)
     · omega
-    · simpa [hg_copy] using hchain
+    · simpa only [hg_copy] using hchain
   exact hcopy
 
 /-- On zero endowment, the constructor's successful branch has a complete
@@ -1279,7 +1279,7 @@ theorem weth10Init_exec_zero
   apply Func.exec_of_runCompiled_prefix
     (weth10InitFunc_runCompiled_zero h_value h_gas).1
     weth10InitFunc_noCalls weth10InitFunc_compile
-  simpa [weth10InitCode] using h_code
+  simpa only [weth10InitCode] using h_code
 
 /-- Exact pre-settlement state of the constructor's nonpayable rejection arm. -/
 def weth10InitRejectPost (base : Devm) (g : Nat) : Devm :=
@@ -1295,7 +1295,7 @@ theorem weth10InitFunc_runCompiledTo_nonzero
       (.error (.revert, weth10InitRejectPost base g)) := by
   unfold weth10InitFunc weth10InitRejectPost
   func_run (3) [0]
-  · simp [B256.eqCheck, h_value]
+  · simp only [B256.eqCheck, h_value, ↓reduceIte]
   · exact Func.runCompiledTo_revert_func
       (devm := base.setMach ⟨[], Mem.empty, g - 18, base.stateGas⟩) (G := g - 22)
       (by simp only [Devm.gasLeft_setMach, gBase]; omega)
@@ -1312,7 +1312,7 @@ theorem weth10Init_exec_nonzero
   apply Func.exec_of_runCompiledTo_prefix
     (weth10InitFunc_runCompiledTo_nonzero h_value h_gas)
     weth10InitFunc_noCalls weth10InitFunc_compile
-  simpa [weth10InitCode] using h_code
+  simpa only [weth10InitCode] using h_code
 
 
 end Weth10

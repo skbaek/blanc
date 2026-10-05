@@ -41,7 +41,6 @@ structure Entry : Type where
   pc : Nat
   frame : List AVal
   rets : Nat
-deriving DecidableEq
 
 /-- The byte at `pc`, if any.  Both byte readers go through `code.data.toList`,
 a projection, rather than `ByteArray.toList`, whose index loop is quadratic

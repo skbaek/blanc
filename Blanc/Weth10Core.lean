@@ -15,7 +15,6 @@ the generated program, not in storage. -/
 structure DeployParams where
   deploymentChainId : B256
   cachedDomainSeparator : B256
-deriving DecidableEq
 
 /-- The source strings are definitions, rather than manually copied digests.
 The network-free reference gate independently checks both UTF-8 preimages and
@@ -67,7 +66,7 @@ private lemma B128.and_max' (x : B128) : x &&& B128.max = x := by
 theorem nonceKey_formula (a : Adr) :
     nonceKey a = Nat.toB256 (2 ^ 254) ||| a.toB256 := by
   have htag : Nat.toB256 (2 ^ 254) = (⟨⟨nonceTag, 0⟩, 0⟩ : B256) := by
-    norm_num [Nat.toB256, Nat.toB128, Nat.shiftRight_eq_div_pow, nonceTag]
+    norm_num only [Nat.toB256, Nat.toB128, Nat.shiftRight_eq_div_pow, nonceTag]
     rfl
   rw [htag]
   change (⟨⟨nonceTag, a.1.toUInt64⟩, a.2⟩ : B256) =
@@ -79,7 +78,7 @@ theorem low254_formula (w : B256) :
     low254 w = w &&& Nat.toB256 (2 ^ 254 - 1) := by
   have hmask : Nat.toB256 (2 ^ 254 - 1) =
       (⟨⟨payloadMask, UInt64.max⟩, B128.max⟩ : B256) := by
-    norm_num [Nat.toB256, Nat.toB128, Nat.shiftRight_eq_div_pow, payloadMask]
+    norm_num only [Nat.toB256, Nat.toB128, Nat.shiftRight_eq_div_pow, payloadMask]
     rfl
   rw [hmask]
   change (⟨⟨w.1.1 &&& payloadMask, w.1.2⟩, w.2⟩ : B256) =
@@ -92,7 +91,7 @@ theorem allowanceKey_formula (owner spender : Adr) :
       Nat.toB256 (2 ^ 255) ||| low254 (allowanceHash owner spender) := by
   have htag : Nat.toB256 (2 ^ 255) =
       (⟨⟨allowanceTag, 0⟩, 0⟩ : B256) := by
-    norm_num [Nat.toB256, Nat.toB128, Nat.shiftRight_eq_div_pow, allowanceTag]
+    norm_num only [Nat.toB256, Nat.toB128, Nat.shiftRight_eq_div_pow, allowanceTag]
     rfl
   rw [htag]
   change
@@ -128,10 +127,10 @@ private lemma allowanceTag_bits (x : UInt64) :
       allowanceTag.toBitVec := by rfl
   have hmask : tagMask.toBitVec &&& payloadMask.toBitVec = 0 := by rfl
   rw [htags, hmask]
-  simp
+  simp only [BitVec.ofNat_eq_ofNat, BitVec.and_zero, BitVec.or_zero]
 
 theorem balanceKey_region (a : Adr) : InRegion .balance (balanceKey a) := by
-  simp [InRegion, keyTag, balanceKey, regionTag, tagMask, Adr.toB256]
+  simp only [InRegion, keyTag, tagMask, balanceKey, Adr.toB256, UInt64.and_zero, regionTag]
 
 theorem nonceKey_region (a : Adr) : InRegion .nonce (nonceKey a) := by
   change tagMask &&& nonceTag = nonceTag
@@ -147,8 +146,7 @@ theorem flashMintedSlot_region : InRegion .flash flashMintedSlot := by
 
 theorem regionTag_injective : Function.Injective regionTag := by
   intro x y
-  cases x <;> cases y <;>
-    simp [regionTag, nonceTag, allowanceTag, tagMask] at *
+  cases x <;> cases y <;> decide +kernel
 
 /-- One generic theorem covers all six pairwise region-disjointness cases. -/
 theorem regions_disjoint {x y : KeyRegion} (hne : x ≠ y) :
@@ -158,7 +156,6 @@ theorem regions_disjoint {x y : KeyRegion} (hne : x ≠ y) :
   apply regionTag_injective
   rw [← hx, ← hy]
 
-theorem balanceKey_valid (a : Adr) : ValidAdr (balanceKey a) := ⟨a, rfl⟩
 
 theorem nonceKey_not_valid (a : Adr) : ¬ ValidAdr (nonceKey a) := by
   rintro ⟨b, hb⟩
@@ -226,26 +223,12 @@ theorem allowanceRegion_ne_flashSlot {key : B256}
   rw [h]
   exact flashMintedSlot_region
 
-private theorem rest_set_of_not_valid {s : Stor} {k v : B256}
-    (h : ¬ ValidAdr k) : Stor.rest (s.set k v) = Stor.rest s := by
-  funext a
-  unfold Stor.rest Function.comp
-  rw [Stor.get_set_ne]
-  intro heq
-  exact h ⟨a, heq.symm⟩
-
 /-! ## Logical projection
 
 Balances, nonces, flashMinted, and ETH are total.  Allowances are observed only
 on a finite trace-local set with an explicit local collision exclusion; no
 global property of keccak is assumed. -/
 
-def balanceOf (s : Stor) (a : Adr) : B256 := s.get (balanceKey a)
-def nonceOf (s : Stor) (a : Adr) : B256 := s.get (nonceKey a)
-def allowanceOf (s : Stor) (owner spender : Adr) : B256 :=
-  s.get (allowanceKey owner spender)
-def flashMintedOf (s : Stor) : B256 := s.get flashMintedSlot
-def ethOf (ethBalance : Adr → B256) (self : Adr) : B256 := ethBalance self
 
 structure LogicalState where
   balances : Adr → B256
@@ -253,34 +236,13 @@ structure LogicalState where
   flashMinted : B256
   eth : B256
 
-/-- Projection is relative to the identity of the compared contract. -/
-def project (s : Stor) (ethBalance : Adr → B256) (self : Adr) : LogicalState where
-  balances := balanceOf s
-  nonces := nonceOf s
-  flashMinted := flashMintedOf s
-  eth := ethOf ethBalance self
 
-abbrev AllowancePair := Adr × Adr
-
-def AllowanceNoncolliding (observed : Finset AllowancePair) : Prop :=
-  ∀ p ∈ observed, ∀ q ∈ observed,
-    allowanceKey p.1 p.2 = allowanceKey q.1 q.2 → p = q
-
-def ObservedAllowances (observed : Finset AllowancePair) (s : Stor)
-    (logical : AllowancePair → B256) : Prop :=
-  AllowanceNoncolliding observed ∧
-    ∀ p ∈ observed, logical p = allowanceOf s p.1 p.2
 
 /-- Explicitly maps the deployed reference's `address(this)` to the Blanc
 instance's `address(this)` while leaving ordinary non-self addresses fixed. -/
 structure AddressCorrespondence where
   referenceSelf : Adr
   blancSelf : Adr
-
-def AddressCorrespondence.Rel (c : AddressCorrespondence)
-    (reference blanc : Adr) : Prop :=
-  (reference = c.referenceSelf ∧ blanc = c.blancSelf) ∨
-  (reference ≠ c.referenceSelf ∧ blanc ≠ c.blancSelf ∧ reference = blanc)
 
 end Weth10
 

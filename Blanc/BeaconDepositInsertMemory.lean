@@ -70,13 +70,6 @@ theorem InsertionMemoryCarrier.readNode
     Bytes.toB256 (memory.read 640 32).1 = node := by
   rw [Mem.Reads.read h.reads, h.node_read, B256.toB256_toBytes]
 
-/-- Forget the shifted-count register before the commit stage overwrites it. -/
-def InsertionMemoryCarrier.toStart
-    {memory : Mem} {oldCount shiftedSize node : B256}
-    (h : InsertionMemoryCarrier memory oldCount shiftedSize node) :
-    InsertionStartMemoryCarrier memory oldCount node :=
-  ⟨h.image, h.wf, h.reads, h.size_eq, h.oldCount_read, h.node_read⟩
-
 /-- The final reconstruction image contains exactly the two registers needed
 before the commit stage writes word 19. -/
 def ReconstructRegistersMemoryCarrier.toInsertionStart
@@ -118,19 +111,6 @@ def InsertionStartMemoryCarrier.writeShiftedSize
     rw [Bytes.sliceD_writeAt_after _ _ _ _ _ (by
       rw [B256.length_toBytes])]
     exact h.node_read
-
-/-- The final reconstruction image becomes the first insertion image after
-the incremented count is staged in word 19. -/
-def ReconstructRegistersMemoryCarrier.startInsertion
-    {memory : Mem}
-    {pubkeyInput signatureFirst signatureTail withdrawal amountPadded : Bytes}
-    {oldCount amount node intermediate second shiftedSize : B256}
-    (h : ReconstructRegistersMemoryCarrier memory pubkeyInput signatureFirst
-      signatureTail withdrawal amountPadded oldCount amount node intermediate
-      second 768) :
-    InsertionMemoryCarrier (memory.write 608 shiftedSize.toBytes)
-      oldCount shiftedSize node := by
-  exact h.toInsertionStart.writeShiftedSize shiftedSize
 
 /-- A covered write below the register bank preserves all three insertion
 words. -/

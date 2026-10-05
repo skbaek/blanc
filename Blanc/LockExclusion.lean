@@ -126,7 +126,7 @@ theorem Evm.step_cont_getStor_get
               apply Stor.get_set_ne
               intro same
               apply notStore rfl decoded
-              simp [Split] at stackEq
+              simp only [Split, List.cons_append, List.nil_append] at stackEq
               rw [stackEq, same]
               rfl
             · rw [Ninst.none_getStor_eq_of_ne_sstore nrun store]
@@ -199,10 +199,10 @@ theorem Exec.rawFrameDescendants_entry
     ∀ root ∈ Exec.rawFrameDescendants run,
       root.pc = 0 ∧ CoveredFork root.sevm.benvStat.fork := by
   induction run with
-  | halt => simp [Exec.rawFrameDescendants]
+  | halt => simp only [rawFrameDescendants, List.not_mem_nil, IsEmpty.forall_iff, implies_true]
   | cont hstep next ih =>
       simpa only [Exec.rawFrameDescendants] using ih hfork
-  | doneErr => simp [Exec.rawFrameDescendants]
+  | doneErr => simp only [rawFrameDescendants, List.not_mem_nil, IsEmpty.forall_iff, implies_true]
   | doneOk hstep henter hresume next ih =>
       simpa only [Exec.rawFrameDescendants] using ih hfork
   | runErr hstep henter child hresume ih =>
@@ -430,7 +430,8 @@ theorem noRetainedWriteTo_of_nodeSafe
   refine ⟨identities.1, decoded, ?_⟩
   simp only [Split] at stackEq
   rw [stackEq]
-  simpa [Exec.SuccessfulSstoreOccurrence.storageWrite] using identities.2
+  simpa only [List.cons_append, List.nil_append, List.head?_cons, Option.some.injEq,
+    Exec.SuccessfulSstoreOccurrence.storageWrite] using identities.2
 
 /-- A parent resuming from a child all of whose raw nodes are safe finds the
 lock cell where it left it: a committed child retained no write to it, and a
@@ -611,7 +612,7 @@ theorem lockAt_of_segment (dom : L.Dominance) {F b h : Exec.Deriv}
             exact locked
           have childSafe := nodeSafe_of_lockedFrom dom child _
             (Frame.enter_run_pc henter) (.refl _)
-            (okDesc _ (childMember _ (by simp [Exec.rawFrameRoots])))
+            (okDesc _ (childMember _ (by simp only [Exec.rawFrameRoots, List.mem_cons, true_or])))
             (fun G member => okDesc G (childMember G (by
               simp only [Exec.rawFrameRoots, List.mem_cons]
               exact Or.inr member)))
@@ -708,7 +709,7 @@ theorem LockSpec.lock_exclusion
           exact hLocked
         exact nodeSafe_of_lockedFrom dom child _
           (Frame.enter_run_pc henter) (.refl _)
-          (okDesc _ (childMember _ (by simp [Exec.rawFrameRoots])))
+          (okDesc _ (childMember _ (by simp only [Exec.rawFrameRoots, List.mem_cons, true_or])))
           (fun D member => okDesc D (childMember D (by
             simp only [Exec.rawFrameRoots, List.mem_cons]
             exact Or.inr member)))
@@ -721,7 +722,7 @@ theorem LockSpec.lock_exclusion
           exact hLocked
         exact nodeSafe_of_lockedFrom dom child _
           (Frame.enter_run_pc henter) (.refl _)
-          (okDesc _ (childMember _ (by simp [Exec.rawFrameRoots])))
+          (okDesc _ (childMember _ (by simp only [Exec.rawFrameRoots, List.mem_cons, true_or])))
           (fun D member => okDesc D (childMember D (by
             simp only [Exec.rawFrameRoots, List.mem_cons]
             exact Or.inr member)))
@@ -821,7 +822,7 @@ theorem stopLock_dominance (slot locked : B256) :
   subst atRoot
   refine ⟨?_, ?_⟩
   · rintro (body | store)
-    · simp [pc0] at body
+    · simp only [pc0, List.mem_cons, zero_ne_one, List.not_mem_nil, or_self] at body
     · have decoded := store.1
       rw [code, pc0] at decoded
       have stop : stopCode.getInst 0 = some (.last .stop) := rfl
@@ -829,7 +830,7 @@ theorem stopLock_dominance (slot locked : B256) :
       rw [stop] at decoded
       cases decoded
   · intro body
-    simp [pc0] at body
+    simp only [pc0, List.mem_cons, zero_ne_one, List.not_mem_nil, or_self] at body
 
 /-- Hash avoidance holds for any frame whose code has no `KECCAK256`. -/
 theorem hashAvoid_of_no_keccak {slot : B256} {F : Exec.Deriv}

@@ -53,7 +53,7 @@ theorem memMatches_nil (ρ : B256) (μ : Mem) : MemMatches ρ [] μ := by
   intro o v h; cases h
 
 theorem memKill_zero (mem : MemMap) (lo : Nat) : memKill mem lo 0 = mem := by
-  simp [memKill]
+  simp only [memKill, zero_le, decide_true, Bool.or_true, List.filter_true]
 
 theorem memWord_congr {μ μ' : Mem} {o : Nat}
     (h : ∀ j, j < 32 → μ'.data.getD (o + j) 0 = μ.data.getD (o + j) 0) :
@@ -147,7 +147,8 @@ theorem Mem.write_agree (μ : Mem) (n : Nat) (ys : Bytes) :
   cases ys with
   | nil => exact Mem.AgreeOutside.refl μ _ _
   | cons y ys =>
-    obtain ⟨A, hdata, hA, hsz, _, hagree⟩ := Mem.write_base μ n (ys := y :: ys) (by simp)
+    obtain ⟨A, hdata, hA, hsz, _, hagree⟩ := Mem.write_base μ n (ys := y :: ys) (by simp only [ne_eq,
+      reduceCtorEq, not_false_eq_true])
     refine ⟨hsz, fun i hi hout => ?_⟩
     rw [hdata, Array.getD_writeD 0 _ A n i hA, if_neg (by omega)]
     exact hagree i hi
@@ -157,7 +158,7 @@ theorem Mem.memWord_write_word (μ : Mem) (n : Nat) (v : B256) :
     memWord (μ.write n v.toBytes) n = v ∧ n + 32 ≤ (μ.write n v.toBytes).size := by
   have hlen : v.toBytes.length = 32 := B256.length_toBytes v
   have hne : v.toBytes ≠ [] := by
-    intro h; rw [h] at hlen; simp at hlen
+    intro h; rw [h] at hlen; simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
   obtain ⟨A, hdata, hA, _, hfit, _⟩ := Mem.write_base μ n hne
   refine ⟨?_, by rw [← hlen]; exact hfit⟩
   unfold memWord Mem.read
@@ -165,11 +166,13 @@ theorem Mem.memWord_write_word (μ : Mem) (n : Nat) (v : B256) :
   have hmap : (List.range 32).map (fun j => (Array.writeD A n v.toBytes).getD (n + j) 0) =
       v.toBytes := by
     apply List.ext_getElem
-    · simp [hlen]
+    · simp only [Array.getD_eq_getD_getElem?, List.length_map, List.length_range, hlen]
     · intro j h1 h2
       simp only [List.getElem_map, List.getElem_range]
-      rw [Array.getD_writeD 0 _ A n (n + j) hA, if_pos (by simp at h1; omega)]
-      simp [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h2]
+      rw [Array.getD_writeD 0 _ A n (n + j) hA,
+        if_pos (by simp only [Array.getD_eq_getD_getElem?, List.length_map, List.length_range] at h1; omega)]
+      simp only [add_tsub_cancel_left, List.getD_eq_getElem?_getD,
+        List.getElem?_eq_getElem h2, Option.getD_some]
   rw [hmap]
   exact B256.toB256_toBytes v
 
@@ -229,7 +232,7 @@ theorem memKeep_pushItem {d d' : Devm} {x : B256} {c : Nat} (h : pushItem x c d 
 theorem rinstMemKeeps_run {pc : Nat} {sevm : Sevm} {devm devm' : Devm} {r : Rinst}
     (hr : rinstMemKeeps r = true) (h : Rinst.runCore pc devm sevm r = .ok devm') :
     MemKeep devm devm' := by
-  cases r <;> simp [rinstMemKeeps] at hr <;> simp only [Rinst.runCore] at h
+  cases r <;> simp only [rinstMemKeeps, Bool.false_eq_true] at hr <;> simp only [Rinst.runCore] at h
   case add | mul | sub | div | sdiv | mod | smod | signextend | lt | gt | slt | sgt | eq
       | and | or | xor | byte | shl | shr | sar =>
     obtain ⟨_, _, hd⟩ := Devm.diffBurn_of_applyBinary h
@@ -253,7 +256,8 @@ theorem rinstMemKeeps_run {pc : Nat} {sevm : Sevm} {devm devm' : Devm} {r : Rins
     exact (memKeep_pop h1).trans ((memKeep_chargeGas h2).trans (memKeep_push h3))
   case pop =>
     cases hp : devm.pop with
-    | error e => simp [hp] at h
+    | error e => simp only [ExceptT.stM_eq, hp, Except.map_error, Except.bind_error,
+      reduceCtorEq] at h
     | ok r =>
       obtain ⟨x, d1⟩ := r
       simp only [hp] at h
@@ -373,10 +377,10 @@ theorem ninstMemKeeps_run {sevm : Sevm} {pre post : Devm} {n : Ninst}
   | reg r =>
     rcases of_run_reg run with ⟨pc, h⟩
     exact rinstMemKeeps_run hn h
-  | exec _ => simp [ninstMemKeeps] at hn
-  | dupn _ => simp [ninstMemKeeps] at hn
-  | swapn _ => simp [ninstMemKeeps] at hn
-  | exchange _ => simp [ninstMemKeeps] at hn
+  | exec _ => simp only [ninstMemKeeps, Bool.false_eq_true] at hn
+  | dupn _ => simp only [ninstMemKeeps, Bool.false_eq_true] at hn
+  | swapn _ => simp only [ninstMemKeeps, Bool.false_eq_true] at hn
+  | exchange _ => simp only [ninstMemKeeps, Bool.false_eq_true] at hn
 
 /-- `MSTORE` writes its second operand's bytes at its first operand. -/
 theorem mstore_run_memory {sevm : Sevm} {pre post : Devm} {o v : B256} {rest : List B256}
@@ -467,16 +471,16 @@ theorem mload_run_stack {sevm : Sevm} {pre post : Devm} {o : B256} {rest : List 
 theorem mem_of_lookup_eq_some {mem : MemMap} {o : Nat} {v : AVal}
     (h : mem.lookup o = some v) : (o, v) ∈ mem := by
   induction mem with
-  | nil => simp at h
+  | nil => simp only [List.lookup_nil, reduceCtorEq] at h
   | cons p mem ih =>
     obtain ⟨o', v'⟩ := p
     by_cases ho : o = o'
     · subst ho
-      simp [List.lookup] at h
+      simp only [List.lookup, BEq.rfl, Option.some.injEq] at h
       subst h
       exact List.mem_cons_self
-    · have hb : (o == o') = false := by simpa using ho
-      have h' : mem.lookup o = some v := by simpa [List.lookup, hb] using h
+    · have hb : (o == o') = false := by simpa only [beq_eq_false_iff_ne, ne_eq] using ho
+      have h' : mem.lookup o = some v := by simpa only [List.lookup, hb] using h
       exact List.mem_cons_of_mem _ (ih h')
 
 theorem absMem_sound {sevm : Sevm} {pre post : Devm} {n : Ninst} {a : List AVal}
@@ -489,12 +493,13 @@ theorem absMem_sound {sevm : Sevm} {pre post : Devm} {n : Ninst} {a : List AVal}
   · rcases hframe with _ | ⟨h0, _ | ⟨h1, _⟩⟩
     simp only [AVal.Matches] at h0
     subst h0
-    rw [mstore_run_memory run (by simpa using hstack)]
+    rw [mstore_run_memory run (by simpa only [List.cons_append] using hstack)]
     exact MemMatches.write_word h1 hm
   · rcases hframe with _ | ⟨h0, _ | ⟨_, _ | ⟨h2, _⟩⟩⟩
     simp only [AVal.Matches] at h0 h2
     subst h0 h2
-    obtain ⟨ys, hlen, hmem⟩ := calldatacopy_run_memory run (by simpa using hstack)
+    obtain ⟨ys, hlen, hmem⟩ := calldatacopy_run_memory run (by simpa only [List.cons_append] using
+      hstack)
     rw [hmem, ← hlen]
     exact MemMatches.write _ _ hm
   · split
@@ -514,7 +519,7 @@ theorem memTop_sound {sevm : Sevm} {pre post : Devm} {n : Ninst} {a : List AVal}
   · rcases hframe with _ | ⟨h0, _⟩
     simp only [AVal.Matches] at h0
     subst h0
-    exact ⟨_, _, mload_run_stack run (by simpa using hstack),
+    exact ⟨_, _, mload_run_stack run (by simpa only [List.cons_append] using hstack),
       (hm _ _ (mem_of_lookup_eq_some ht)).2⟩
   · cases ht
 
@@ -566,7 +571,8 @@ def RetIn (a : List AVal) (μ : MemMap) : Prop :=
 theorem RetIn.of_frame {a a' : List AVal} {μ : MemMap} (h : AVal.ret ∈ a' → AVal.ret ∈ a)
     (hr : RetIn a' μ) : RetIn a μ := hr.imp_left h
 
-theorem retIn_nil_nil : ¬ RetIn [] [] := by simp [RetIn]
+theorem retIn_nil_nil : ¬ RetIn [] [] := by simp only [RetIn, List.not_mem_nil, List.map_nil,
+  or_self, not_false_eq_true]
 
 theorem mem_snd_memKill {mem : MemMap} {lo hi : Nat} {v : AVal}
     (h : v ∈ (memKill mem lo hi).map Prod.snd) : v ∈ mem.map Prod.snd := by
@@ -580,12 +586,12 @@ theorem mem_snd_absMem {n : Ninst} {a : List AVal} {mem : MemMap} {v : AVal}
   split at h
   · rw [List.map_cons] at h
     rcases List.mem_cons.mp h with h | h
-    · left; subst h; simp
+    · left; subst h; simp only [List.mem_cons, true_or, or_true]
     · right; exact mem_snd_memKill h
   · right; exact mem_snd_memKill h
   · split at h
     · exact .inr h
-    · simp at h
+    · simp only [List.map_nil, List.not_mem_nil] at h
 
 /-- The return address after a checked step was already in the frame or the map. -/
 theorem RetIn.of_step (b : Bool) {n : Ninst} {a a' : List AVal} {μ : MemMap}
@@ -594,8 +600,8 @@ theorem RetIn.of_step (b : Bool) {n : Ninst} {a a' : List AVal} {μ : MemMap}
   cases b with
   | false =>
     rcases h with h | h
-    · exact .inl (by simpa using h)
-    · simp at h
+    · exact .inl (by simpa only [Bool.false_eq_true, ↓reduceIte] using h)
+    · simp only [Bool.false_eq_true, ↓reduceIte, List.map_nil, List.not_mem_nil] at h
   | true =>
     simp only [if_true] at h
     rcases h with h | h

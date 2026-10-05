@@ -7,6 +7,13 @@ frame-relative control structure from raw runtime bytes; it proves nothing.  The
 only trust boundary is Lean: `Cert.check code cert = true`, decided by the kernel
 in the generated or hand-written `Check.lean`, is what a lift theorem consumes.
 
+`--code-import MODULE --code-ref QUALIFIED_NAME` (paired registry options
+`code_import`/`code_ref`) references an existing canonical ByteArray definition
+instead of emitting another byte literal. The hex input is still checked and
+analyzed normally; the kernel certificate checks the referenced definition.
+Both names use unquoted ASCII Lean identifier components; the reference must
+be qualified. Omitting the pair preserves the historical literal output.
+
 Provenance.  This file is the union of the historical producer forks kept as
 Plans evidence (`solc-bytecode-v1/w3/lift.py`, `beacon-deposit-bytecode-v1/w0/lift.py`,
 `vyper-3crv-bytecode-v1/v1/lift.py`) and the deployed Lido adaptation
@@ -175,6 +182,7 @@ LEAN_REG: Dict[int, str] = {
     0x34: ".reg .callvalue", 0x35: ".reg .calldataload", 0x36: ".reg .calldatasize",
     0x37: ".reg .calldatacopy", 0x38: ".reg .codesize", 0x39: ".reg .codecopy", 0x3b: ".reg .extcodesize",
     0x3d: ".reg .returndatasize", 0x3e: ".reg .returndatacopy", 0x42: ".reg .timestamp",
+    0x43: ".reg .number",
     0x46: ".reg .chainid", 0x47: ".reg .selfbalance", 0x50: ".reg .pop",
     0x51: ".reg .mload", 0x52: ".reg .mstore", 0x53: ".reg .mstore8",
     0x54: ".reg .sload", 0x55: ".reg .sstore", 0x5a: ".reg .gas",
@@ -263,6 +271,22 @@ def check_lean_transfers(root: Path) -> None:
         raise SystemExit("lift: producer opcode table disagrees with the Lean transfer set:\n  " + "\n  ".join(errors))
 
 
+def code_reference_error(code_import: Any, code_ref: Any) -> Optional[str]:
+    """Validate the paired external-code names before emitting Lean source."""
+    if (code_import is None) != (code_ref is None):
+        return "--code-import and --code-ref must be supplied together"
+    if code_import is None:
+        return None
+    component = r"[A-Za-z_][A-Za-z0-9_']*"
+    for name, value, qualified in (("--code-import", code_import, False),
+                                   ("--code-ref", code_ref, True)):
+        if (not isinstance(value, str)
+                or re.fullmatch(component + r"(?:\." + component + r")*", value) is None
+                or "_" in value.split(".") or (qualified and "." not in value)):
+            return f"{name} must be {'a qualified' if qualified else 'an'} unquoted ASCII Lean name"
+    return None
+
+
 def run_registry(args: argparse.Namespace) -> int:
     """Regenerate every registered certificate and compare with (or write) the committed files."""
     root = args.blanc_root
@@ -278,6 +302,15 @@ def run_registry(args: argparse.Namespace) -> int:
     with tempfile.TemporaryDirectory(prefix="lift-registry-") as tmp:
         for row in rows:
             ident = row["id"]
+            opts = row.get("options", {})
+            supplied = [option for option in ("code_import", "code_ref") if option in opts]
+            error = ("code_import/code_ref registry options must be strings"
+                     if any(not isinstance(opts[option], str) for option in supplied)
+                     else code_reference_error(opts.get("code_import"), opts.get("code_ref")))
+            if error is not None:
+                print(f"FAIL {ident}: {error}")
+                failures += 1
+                continue
             hex_file = root / row["input"]["hex"]
             file_sha = hashlib.sha256(hex_file.read_bytes()).hexdigest()
             if file_sha != row["input"]["file_sha256"]:
@@ -289,7 +322,9 @@ def run_registry(args: argparse.Namespace) -> int:
             argv = [sys.executable, str(SCRIPT), "--blanc-root", str(root),
                     "--hex", str(hex_file), "--sha256", row["input"]["runtime_sha256"],
                     "--namespace", row["namespace"], "--cert-out", str(out / "Cert.lean")]
-            opts = row.get("options", {})
+            for option in ("code_import", "code_ref"):
+                if opts.get(option) is not None:
+                    argv += ["--" + option.replace("_", "-"), opts[option]]
             if opts.get("join_entries") is False:
                 argv.append("--no-join-entries")
             if "wrapper_order" in opts:
@@ -317,6 +352,8 @@ def run_registry(args: argparse.Namespace) -> int:
                     argv += ["--check-parts", str(check["parts"])]
                 if check.get("literal_tries") is True:
                     argv.append("--check-literal-tries")
+                if check.get("assembly") == "seven":
+                    argv += ["--check-assembly", "seven"]
             jumps = row.get("jumps")
             if jumps:
                 argv += ["--jumps-out", str(out / "Jumps.lean"), "--jumps-header", jumps["header"]]
@@ -387,6 +424,10 @@ parser.add_argument("--timeout", type=int, default=600, help="registry mode: per
 parser.add_argument("--hex", type=Path, default=None, help="runtime bytecode as hex text")
 parser.add_argument("--sha256", type=str, default=None, help="expected SHA-256 of the runtime bytes")
 parser.add_argument("--namespace", type=str, default=None, help="Lean namespace of the certificate")
+parser.add_argument("--code-import", type=str, default=None,
+                    help="import the module owning an existing ByteArray (paired with --code-ref)")
+parser.add_argument("--code-ref", type=str, default=None,
+                    help="qualified canonical ByteArray reference instead of a byte literal (paired with --code-import)")
 parser.add_argument("--cert-out", type=Path, default=None, help="Cert.lean to write")
 parser.add_argument("--check-out", type=Path, default=None, help="per-entry Check.lean to write (optional)")
 parser.add_argument("--header", type=str, default=DEFAULT_HEADER, help="Cert.lean generator comment")
@@ -400,6 +441,8 @@ parser.add_argument("--check-parts", type=int, default=0,
                     help="split the generated Check into CheckTries, CheckPart0..N-1 and the assembling Check (N >= 2; registry check.parts)")
 parser.add_argument("--check-literal-tries", action="store_true",
                     help="emit the code tries as data checked once against LTrie.ofList (registry check.literal_tries)")
+parser.add_argument("--check-assembly", choices=("seven",), default=None,
+                    help="emit cert_check as a call to the shared seven-entry assembler Cert.check_seven (Blanc.Lift.CheckAssembly) instead of the generic conjunction (registry check.assembly); opt-in per certificate so other certificates regenerate byte-identically")
 parser.add_argument("--no-join-entries", action="store_true",
                     help="do not promote multi-predecessor JUMPDESTs to join entries (solc-w3 exploration)")
 parser.add_argument("--wrapper-order", choices=("taken-first", "fall-first"), default="taken-first",
@@ -427,6 +470,9 @@ parser.add_argument("--widen", choices=("agree", "control"), default="agree", he
 parser.add_argument("--no-callee-join-exempt", action="store_true", help="PROBE (inline): do not exempt joins whose disagreeing positions hold jump destinations")
 
 args = parser.parse_args()
+error = code_reference_error(args.code_import, args.code_ref)
+if error is not None:
+    parser.error(error)
 MEMRET = args.memret != "off"
 FOLD_ADD = MEMRET and not args.no_fold_add
 CONST_MEM = MEMRET and args.const_mem
@@ -1737,6 +1783,8 @@ for e_idx in sorted(trees.keys()):
 # Generate Cert.lean
 lean_lines = []
 lean_lines.append("import Blanc.Lift.CheckMem" if MEMRET else "import Blanc.Lift.Check")
+if args.code_import is not None:
+    lean_lines.append(f"import {args.code_import}")
 lean_lines.append("")
 lean_lines.append(f"/-! {args.header} -/")
 lean_lines.append("")
@@ -1758,7 +1806,9 @@ def byte_lines(data: bytes) -> List[str]:
     return out
 
 
-if len(code) <= CODE_LITERAL_MAX:
+if args.code_ref is not None:
+    lean_lines.append(f"def code : ByteArray := {args.code_ref}")
+elif len(code) <= CODE_LITERAL_MAX:
     lean_lines.append("def code : ByteArray := ⟨#[")
     lean_lines.extend(byte_lines(code))
     lean_lines.append("]⟩")
@@ -2332,16 +2382,23 @@ def check_source() -> Any:
                     "show ((none : Option Bool) == some true) = false from by decide",
                     "show ((none : Option Bool) == some false) = false from by decide",
                 ] if len(node.children) == 2 else [])
+                # The default-simp-set facts these steps used, captured with `simp?` from
+                # every split node of the registered row: the step is an explicit
+                # `simp only`, so removing a global simp registration cannot change it.
+                normal_forms = ["Nat.reduceAdd", "zero_add", "Fin.isValue",
+                                "Fin.coe_ofNat_eq_mod", "Nat.one_mod", "Nat.toUInt8_eq",
+                                "UInt8.ofNat_one", "UInt8.reduceAdd",
+                                "Bool.and_eq_true", "beq_iff_eq"]
                 simp_names = ([node.sfunc, "checkNodeT", "AVal.jumps?", "Ninst.size",
                                "Ninst.pcFree", "Ninst.toBytes", "Rinst.toUInt8", "Xinst.toUInt8",
                                "pushToB8L", "bytesAtT", "LTrie.get?",
-                               "List.length_cons", "List.length_nil"] +
+                               "List.length_cons", "List.length_nil"] + normal_forms +
                               branch_only + node.hints + child_names)
                 block.extend([
                     f"theorem {thm} :",
                     f"    checkNodeT code {depth} codeTries.bytes (Cert.entries cert) {rets} "
                     f"0x{node.pc:x} {stack_lean(node.st)} {node.sfunc} = true := by",
-                    "  simp [" + ", ".join(simp_names) + "] <;> decide",
+                    "  simp only [" + ", ".join(simp_names) + "] <;> decide",
                     "",
                 ])
                 return thm
@@ -2370,12 +2427,23 @@ def check_source() -> Any:
             "",
         ])
     n = len(cert_entries_lines)
-    # For one entry, the parsed pc/frame above describe the certificate root.
-    if n == 1 and int(pc, 16) == 0 and frame == "[]":
-        lines.insert(2, "import Blanc.Lift.CheckAssembly")
+    if args.check_assembly == "seven":
+        # Share the seven-entry checker/list assembly; the node decisions stay
+        # local. Opt-in per certificate (registry check.assembly), so every
+        # other certificate regenerates byte-identically.
+        if n != 7:
+            raise RuntimeError(
+                f"--check-assembly seven needs 7 certificate entries, found {n}")
         assembly = [
             "theorem cert_check : Cert.check code cert = true :=",
-            "  Cert.check_singleton entry_0",
+            "  Cert.check_seven entry_0 entry_1 entry_2 entry_3 entry_4 entry_5 entry_6",
+            "    (by decide +kernel)",
+        ]
+    elif n == 1:
+        # Share the checker/list assembly; the actual node decision stays local.
+        assembly = [
+            "theorem cert_check : Cert.check code cert = true := by",
+            "  exact Cert.check_singleton (by decide +kernel) entry_0",
         ]
     else:
         assembly = [
@@ -2390,6 +2458,9 @@ def check_source() -> Any:
         ]
         assembly.extend(f"  · exact entry_{i}" for i in range(n))
     files = split_check(lines, blocks, assembly)
+    if n == 1 or args.check_assembly == "seven":
+        # Add only to the assembly owner, including a split Check if requested.
+        files["Check"] = "import Blanc.Lift.CheckAssembly\n" + files["Check"]
     return files if args.check_parts >= 2 else files["Check"]
 
 

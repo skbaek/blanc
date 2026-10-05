@@ -11,11 +11,11 @@ namespace Blanc.BeaconDeposit
 
 open Jaune
 
-@[simp] theorem InsertionLoopState.step_height_eq
+theorem InsertionLoopState.step_height_eq
     (owner : Adr) (stor : Stor) (s : InsertionLoopState) :
     (s.step owner stor).height = s.height + 1 := rfl
 
-@[simp] theorem InsertionLoopState.step_node_eq
+theorem InsertionLoopState.step_node_eq
     (owner : Adr) (stor : Stor) (s : InsertionLoopState) :
     (s.step owner stor).node =
       hashPair Bytes.sha256 (stor.get s.key) s.node := rfl

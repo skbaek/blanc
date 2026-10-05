@@ -28,7 +28,7 @@ theorem pairTraceRealizes_faithful_of_configuredHistoryTrace {cfg : ChainConfig}
   | refl hcfg hctx hid =>
       refine ⟨[], .refl, ?_⟩
       intro call member
-      simp [PairStepRecord.ledger] at member
+      simp only [PairStepRecord.ledger, List.filterMap_nil, List.not_mem_nil] at member
   | step prior block ih =>
       obtain ⟨priorSteps, priorRealizes, priorFaithful⟩ := ih
       obtain ⟨blockSteps, blockReplay, blockOk⟩ :=

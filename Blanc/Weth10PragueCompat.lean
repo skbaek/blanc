@@ -14,19 +14,6 @@ open Jaune
 
 namespace Weth10
 
-abbrev PragueDeploymentRoot
-    (chainId : UInt64) (base deployed : BlockChain)
-    (dp : DeployParams) (ca : Adr) : Prop :=
-  DeploymentRoot (ChainConfig.pragueOnly chainId) base deployed dp ca
-
-/-- A Prague-only schedule selects only the covered Prague fork. -/
-private theorem pragueOnly_covered (chainId : UInt64) :
-    ∀ t f, (ChainConfig.pragueOnly chainId).forkAt t = .ok f → CoveredFork f := by
-  intro t f h
-  rw [ChainConfig.pragueOnly_forkAt] at h
-  cases h
-  exact CoveredFork.prague
-
 /-! ## Legacy fixed-Prague entry points -/
 
 theorem chain_preserves_stable

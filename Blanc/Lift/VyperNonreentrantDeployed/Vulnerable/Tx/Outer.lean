@@ -148,7 +148,7 @@ theorem tx_message_of_child (d1 : Devm)
       (wrun_cont callCfg_eq).trans (callResume_cont hc hok ha)
     generalize hr : wrun fs2 e0tx.sta 2 c = r at hk
     rcases r with c' | ⟨post | post, cl⟩ | _
-    · simp [obs0] at hk
+    · simp only [obs0, reduceCtorEq] at hk
     · simp only [obs0, Option.some.injEq, Prod.mk.injEq, Bool.and_eq_true,
         decide_eq_true_eq] at hk
       obtain ⟨hgas, hout, ⟨herr, hrf⟩, hstor, hatd⟩ := hk
@@ -177,8 +177,8 @@ theorem tx_message_of_child (d1 : Devm)
       show f0tx.settle (exec ⟨e0tx.pc, e0tx.sta, e0tx.dyna⟩) = _
       rw [hex]
       exact frame_settle_ok rfl hsg0 herr'
-    · simp [obs0] at hk
-    · simp [obs0] at hk
-  · simp [obs0] at hk
+    · simp only [obs0, reduceCtorEq] at hk
+    · simp only [obs0, reduceCtorEq] at hk
+  · simp only [obs0, reduceCtorEq] at hk
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx

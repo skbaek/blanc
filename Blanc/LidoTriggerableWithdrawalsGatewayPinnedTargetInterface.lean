@@ -34,10 +34,11 @@ def protectedSurface : List B256 :=
 
 theorem pauseForCalldata_length (duration : B256) :
     (pauseForCalldata duration).length = 36 := by
-  simp [pauseForCalldata, abiSelectorBytes_length, B256.length_toBytes]
+  simp only [pauseForCalldata, List.length_append, abiSelectorBytes_length, B256.length_toBytes,
+    Nat.reduceAdd]
 
 theorem isPausedCalldata_length : isPausedCalldata.length = 4 := by
-  simp [isPausedCalldata, abiSelectorBytes_length]
+  simp only [isPausedCalldata, abiSelectorBytes_length]
 
 theorem pauseInfinitely_eq_shared_sentinel :
     pauseInfinitely = pauseInfiniteSentinel := by

@@ -315,11 +315,11 @@ def genesis (o : Nat) : PairAttackState o where
 theorem genesis_invariant (o : Nat) : (genesis o).Invariant := by
   have h := ProrataAttackState.genesis_invariant o
   refine ⟨h.1, h.2.1, trivial, ?_, ?_⟩
-  · simp [GiftBook, genesis]
+  · simp only [GiftBook, genesis, zero_add, zero_le]
   · have hclaim := h.2.2.2
     unfold ProrataAttackState.ClaimBound at hclaim
     unfold ClaimBound
-    simpa [genesis] using hclaim
+    simpa only [genesis, add_zero, ge_iff_le] using hclaim
 
 /-- Inbound step paid by a non-victim, shares to a non-victim. -/
 def inbound (pre : PairAttackState o) (attribution : AttackAttribution)
@@ -412,7 +412,6 @@ inductive PairAttackKind where
   | victimDeposit (amount minted : Nat)
   | victimExit (shares paid : Nat)
   | silent
-deriving DecidableEq
 
 /-- Exact state change of one classified pair step. -/
 inductive PairAttackEffect (o : Nat) :
@@ -952,41 +951,5 @@ theorem victim_loss_bound_of_pairAttackPath (ho : 2 ≤ o)
 end PairAttackPath
 
 /-! ## PRORATA is the same-role fragment -/
-
-/-- A PRORATA classification read as a pair classification with every role on
-its own side. -/
-def PairAttackKind.ofProrata : ProrataAttackKind → PairAttackKind
-  | .nonVictimDeposit attribution amount minted =>
-      .nonVictimDeposit attribution amount minted true
-  | .nonVictimWithdraw attribution shares paid =>
-      .nonVictimWithdraw attribution shares paid true
-  | .externalCredit attribution amount => .externalCredit attribution amount
-  | .victimDeposit amount minted => .victimDeposit amount minted
-  | .victimExit shares paid => .victimExit shares paid
-  | .silent => .silent
-
-/-- Where the roles coincide the overlay is PRORATA's effect verbatim and the
-priced totals do not move. -/
-theorem PairAttackEffect.ofProrata {o : Nat} {pre post : ProrataAttackState o}
-    {kind : ProrataAttackKind} (effect : ProrataAttackEffect o pre kind post)
-    (sharesIn sharesOut : Nat) :
-    PairAttackEffect o ⟨pre, sharesIn, sharesOut⟩ (.ofProrata kind)
-      ⟨post, sharesIn, sharesOut⟩ := by
-  cases effect with
-  | nonVictimDeposit attribution amount minted hminted =>
-      exact .nonVictimDeposit ⟨pre, sharesIn, sharesOut⟩ attribution amount minted
-        (Nat.le_of_eq hminted)
-  | nonVictimWithdraw attribution shares paid hshares hpaid =>
-      exact .nonVictimWithdraw ⟨pre, sharesIn, sharesOut⟩ attribution shares paid
-        hshares (Nat.le_of_eq hpaid)
-  | externalCredit attribution amount hpositive =>
-      exact .externalCredit ⟨pre, sharesIn, sharesOut⟩ attribution amount
-  | victimDeposit amount minted hphase hminted hbacked =>
-      exact .victimDeposit ⟨pre, sharesIn, sharesOut⟩
-        ⟨pre.accounting, amount, minted, hminted, hbacked⟩ hphase rfl
-  | victimExit deposit paid hphase hfull hpaid =>
-      exact .victimExit ⟨pre, sharesIn, sharesOut⟩ deposit
-        ⟨pre.accounting, paid, hpaid⟩ hphase rfl
-  | silent => exact .silent _
 
 end Blanc.Composition.ProrataWethVault

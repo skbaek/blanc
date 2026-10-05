@@ -52,7 +52,7 @@ theorem Ninst.Run.getBal_of_balSilent {sevm : Sevm} {pre post : Devm} {n : Ninst
       simp only [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at hrun
       have hrun' : Rinst.run ⟨pc, sevm, pre⟩ r = .ok post := hrun.2.symm
       exact (Rinst.preserves_bal hrun').symm
-  | exec x => simp [Ninst.balSilent] at hn
+  | exec x => simp only [Ninst.balSilent, Bool.false_eq_true] at hn
   | push bs hbs =>
       rcases run with ⟨xl, -, pc, hrun⟩
       have hxl : xl = .none := by
@@ -105,7 +105,7 @@ private theorem linst_getBal {sevm : Sevm} {pre post : Devm} {l : Linst}
   have hnot : l ≠ .selfdestruct := by
     intro h
     subst l
-    simp at hl
+    simp only [↓reduceIte, Bool.false_eq_true] at hl
   have hframe := Linst.run_instructionFrame sevm pre l hnot
   rw [run] at hframe
   exact funext (getBal_eq_of_state_eq hframe.state.symm)
@@ -122,7 +122,7 @@ theorem SFunc.RunP.getBal_of_balSilent {P : Sevm → Devm → Ninst → Devm →
     intro k g hk hget
     have h := (List.all_eq_true.mp hS) k hk
     rw [hget] at h
-    simpa using h
+    simpa only [List.all_eq_true, decide_eq_true_eq, Bool.and_eq_true] using h
   have popBal : ∀ {xs : List B256} {a b : Devm}, Devm.PopBurn xs a b →
       b.getBal = a.getBal := fun pop => funext (getBal_eq_of_state_eq pop.state.symm)
   induction run with
@@ -148,7 +148,8 @@ theorem SFunc.RunP.getBal_of_balSilent {P : Sevm → Devm → Ninst → Devm →
       have htarget := closed (of_decide_eq_true hfr.1) lookup
       exact (ih htarget.1 htarget.2).trans (popBal pop)
   | last hrun =>
-      exact linst_getBal (by simpa [SFunc.balSilent] using hf) hrun
+      exact linst_getBal (by simpa only [Bool.ite_true_right, Bool.or_false, Bool.not_eq_eq_eq_not,
+        Bool.not_true, decide_eq_false_iff_not, balSilent] using hf) hrun
   | next hrun run ih =>
       have hfn := hf
       simp only [SFunc.balSilent, Bool.and_eq_true] at hfn
@@ -175,7 +176,8 @@ theorem SFunc.RunP.getBal_of_balSilent {P : Sevm → Devm → Ninst → Devm →
       simp only [SFunc.balSilent] at hfn
       exact (ihTail hfn hfr.2).trans ((ihRun htarget.1 htarget.2).trans (popBal pop))
   | pcAt hrun _ run ih =>
-      exact (ih (by simpa [SFunc.balSilent] using hf) (by simpa [SFunc.refs] using hrefs)).trans
+      exact (ih (by simpa only [balSilent] using hf) (by simpa only [List.all_eq_true,
+        decide_eq_true_eq, refs] using hrefs)).trans
         (Ninst.Run.getBal_of_balSilent (n := .reg .pc) rfl (hP hrun))
 
 end Blanc.Lift

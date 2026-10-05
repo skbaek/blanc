@@ -80,14 +80,14 @@ theorem wstep_halt_keep {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {d : Devm}
       (try split at h) <;> cases h
   | callNext k f => simp only [wstep] at h; split at h <;> (try split at h) <;> cases h
   | pcAt p g => simp only [wstep] at h; split at h <;> cases h
-  | undefined => simp [wstep] at h
+  | undefined => simp only [wstep, reduceCtorEq] at h
 
 /-- A run that halts: the halted machine keeps the halting configuration's accessed
 sets and world. -/
 theorem wrun_halt_keep {fs : List SFunc} {sevm : Sevm} :
     ∀ {n : Nat} {c c' : Cfg} {d : Devm}, wrun fs sevm n c = .done (.halted d) c' →
       AccKeep c'.devm d
-  | 0, c, c', d, h => by simp [wrun] at h
+  | 0, c, c', d, h => by simp only [wrun, reduceCtorEq] at h
   | n + 1, c, c', d, h => by
     simp only [wrun] at h
     split at h
@@ -122,8 +122,9 @@ theorem frameEnterS_run {f : Frame} {acs : AcctShadow} {cevm : Evm}
 theorem frame_settle_ok {f : Frame} {post : Devm} (hcr : f.isCreate = false)
     (hsg : f.inner.benv.stat.rules.stateGas = none) (he : post.error = none) :
     f.settle (.ok post) = .ok post := by
-  simp [Frame.settle, Frame.settleMsg, hcr, executeCode.handleErrorWith, hsg,
-    executeCode.handleError, processMessage.settle, bind, Except.bind, he]
+  simp only [Frame.settle, Frame.settleMsg, hcr, Bool.false_eq_true, ↓reduceIte,
+    processMessage.settle, bind, Except.bind, executeCode.handleErrorWith, hsg,
+    executeCode.handleError, he, Option.isSome_none]
 
 /-- The start configuration of a frame entered with shadows agrees, given that the
 frame's message agrees with them. -/

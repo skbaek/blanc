@@ -169,12 +169,6 @@ def Weth9.XferEff (sevm : Sevm) (d : Devm) (o : Outcome) (wad dst src : B256) : 
           xferStor ((Devm.getStor d sevm.currentTarget).set
             (allowKey src.toAdr.toB256 sevm.caller.toB256) w) src.toAdr dst.toAdr wad))
 
-theorem Weth9.XferEff.of_same {sevm : Sevm} {d d' : Devm} {o : Outcome} {wad dst src : B256}
-    (h : Same d d') (e : XferEff sevm d' o wad dst src) : XferEff sevm d o wad dst src := by
-  unfold XferEff at *
-  rw [h.1, h.2]
-  exact e
-
 /-- `allowance[src][caller]`: the word the transfer reads to decide whether to debit it. -/
 def Weth9.allowWord (sevm : Sevm) (d : Devm) (src : B256) : B256 :=
   (Devm.getStor d sevm.currentTarget).get (allowKey src.toAdr.toB256 sevm.caller.toB256)
@@ -721,17 +715,12 @@ theorem Weth9.transferFrom_okX_of_prefix {sevm : Sevm} {d : Devm} {o : Outcome}
     (hg : prog[9]? = some g) (hp : wad :: dst :: src :: rest <<+ d.stack)
     (run : SFunc.Run prog sevm d g o) : Weth9.XferOkX sevm d o wad dst src := by
   have hg' : g = t_068c_c9 := by
-    simpa [prog, Cert.prog, cert] using hg.symm
+    simpa only [prog, Cert.prog, cert, List.map_cons, List.map_nil, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero, Option.some.injEq] using hg.symm
   subst g
   exact xfer_068c hp run
 
-/-- **Entry 9 (`transferFrom`) as a callee**, for any frame whose stack starts with the three
-arguments. -/
-theorem Weth9.transferFrom_ok_of_prefix {sevm : Sevm} {d : Devm} {o : Outcome}
-    {g : SFunc} {wad dst src : B256} {rest : Stack}
-    (hg : prog[9]? = some g) (hp : wad :: dst :: src :: rest <<+ d.stack)
-    (run : SFunc.Run prog sevm d g o) : Weth9.XferOk sevm d o wad dst src :=
-  (Weth9.transferFrom_okX_of_prefix hg hp run).toOk
 
 /-- Entry 9 as a callee, exactly: a `callNext 9` from a frame whose stack starts with the three
 arguments below a return address, continued by a state-silent tree. -/
@@ -792,7 +781,7 @@ private theorem solvent_of_xfer {sevm : Sevm} {d : Devm} {o : Outcome} {wad dst 
       refine ⟨_, ?_, ?_, hs⟩
       · have hbk := booked_set_off (Devm.getStor d sevm.currentTarget)
           (allowKey src.toAdr.toB256 sevm.caller.toB256) w hk
-        simpa [bookedSum] using congrArg sum hbk
+        simpa only [bookedSum] using congrArg sum hbk
       · rw [Stor.get_set_ne _ (fun e => hk _ e.symm)]
         exact hle
   obtain ⟨S1, hsum, hle1, hs1⟩ := key
@@ -802,24 +791,6 @@ private theorem solvent_of_xfer {sevm : Sevm} {d : Devm} {o : Outcome} {wad dst 
     bookedSum_transfer hle1 (by omega)
   rw [hs1, ht, hb, B256.toNat_zero]
   omega
-
-/-- **WETH9 `transferFrom` (entry 9) preserves solvency**, for any frame whose
-stack starts with the three arguments.  The allowance-slot premise is needed
-only when the masked `src` differs from the caller, and is the local
-collision premise of `Premise.lean` in its `allowKey owner spender` form. -/
-theorem Weth9.transferFrom_solvent_of_prefix {sevm : Sevm} {d : Devm} {o : Outcome}
-    {g : SFunc} {wad dst src : B256} {rest : Stack}
-    (hg : prog[9]? = some g) (hp : wad :: dst :: src :: rest <<+ d.stack)
-    (hoff : (src &&& ~~~ addressMask) ≠ sevm.caller.toB256 →
-      ∀ a, balSlot a ≠ allowKey (src &&& ~~~ addressMask) sevm.caller.toB256)
-    (h : Solvent (Devm.getStor d sevm.currentTarget) sevm.value
-      (d.getBal sevm.currentTarget))
-    (run : SFunc.Run prog sevm d g o) :
-    Solvent (Devm.getStor (Outcome.devm o) sevm.currentTarget) 0
-      ((Outcome.devm o).getBal sevm.currentTarget) := by
-  rw [and_mask_word] at hoff
-  obtain ⟨e, hle⟩ := Weth9.transferFrom_ok_of_prefix hg hp run
-  exact solvent_of_xfer hoff e hle h
 
 /-- Entry 9 as a callee: a `callNext 9` from a frame whose stack starts with
 `wad, dst, src`, continued by a state-silent tree, preserves solvency. -/
@@ -850,7 +821,9 @@ theorem Weth9.transfer_okX {sevm : Sevm} {d : Devm} {o : Outcome} {g : SFunc}
     (hstk : wad :: dst :: rest <<+ d.stack) (run : SFunc.Run prog sevm d g o) :
     Weth9.XferOkX sevm d o wad dst sevm.caller.toB256 := by
   have hg' : g = t_0bce_c3 := by
-    simpa [prog, Cert.prog, cert] using hg.symm
+    simpa only [prog, Cert.prog, cert, List.map_cons, List.map_nil, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero, Option.some.injEq] using hg.symm
   subst g
   rw [tree_0bce] at run
   cases run with
@@ -892,7 +865,9 @@ theorem Weth9.transfer_solvent {sevm : Sevm} {d : Devm} {o : Outcome} {g : SFunc
     Solvent (Devm.getStor (Outcome.devm o) sevm.currentTarget) 0
       ((Outcome.devm o).getBal sevm.currentTarget) := by
   have hg' : g = t_0bce_c3 := by
-    simpa [prog, Cert.prog, cert] using hg.symm
+    simpa only [prog, Cert.prog, cert, List.map_cons, List.map_nil, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero, Option.some.injEq] using hg.symm
   subst g
   rw [tree_0bce] at run
   cases run with
@@ -931,7 +906,9 @@ theorem Weth9.transfer_solvent {sevm : Sevm} {d : Devm} {o : Outcome} {g : SFunc
   exact call9_solvent (by decide) (by decide) hp1 hoff (solvent_of_same s01 h) run
 
 private theorem entry3_lookup : prog[3]? = some t_0bce_c3 := by
-  simp [prog, Cert.prog, cert]
+  simp only [prog, Cert.prog, cert, List.map_cons, List.map_nil, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+    List.getElem_cons_zero]
 
 private theorem hzero_weth9 {j : Nat} {g : SFunc} (hj : j ∈ Weth9.silentSet)
     (hjg : prog[j]? = some g) : g.silentCalls Weth9.silentSet 0 = true := by
@@ -955,7 +932,9 @@ theorem Weth9.transfer_wrapper_solvent {sevm : Sevm} {d : Devm} {o : Outcome} {g
     Solvent (Devm.getStor (Outcome.devm o) sevm.currentTarget) 0
       ((Outcome.devm o).getBal sevm.currentTarget) := by
   have hg' : g = t_0370_c20 := by
-    simpa [prog, Cert.prog, cert] using hg.symm
+    simpa only [prog, Cert.prog, cert, List.map_cons, List.map_nil, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero, Option.some.injEq] using hg.symm
   subst g
   exact SFunc.Run.hoare_wrapper (S := Weth9.silentSet) (k := 3)
     (Φ₀ := fun d => Solvent (Devm.getStor d sevm.currentTarget) sevm.value
@@ -1005,7 +984,7 @@ private theorem argM_walk {sevm : Sevm} {s s' : Devm} {o b : B256} {ys : Stack}
     have := prefix_of_and h4 (prefix_of_push (of_run_push h3) q2)
     rwa [ff20_and_word] at this
   have q5 : o :: (Sevm.dataWord sevm o).toAdr.toB256 :: b :: ys <<+ a5.stack :=
-    Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h5) q4
   have q7 : ((32 : B256) + o) :: (Sevm.dataWord sevm o).toAdr.toB256 :: b :: ys
       <<+ a7.stack := by
@@ -1013,13 +992,13 @@ private theorem argM_walk {sevm : Sevm} {s s' : Devm} {o b : B256} {ys : Stack}
     rwa [w20_eq] at this
   have q8 : (Sevm.dataWord sevm o).toAdr.toB256 :: ((32 : B256) + o) :: b :: ys
       <<+ a8.stack :=
-    Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h8) q7
   have q9 : b :: ((32 : B256) + o) :: (Sevm.dataWord sevm o).toAdr.toB256 :: ys
       <<+ a9.stack :=
-    Stack.prefix_of_swap (n := 1) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 1) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h9) q8
-  exact Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+  exact Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h10) q9
 
 private theorem argU_walk {sevm : Sevm} {s s' : Devm} {o b : B256} {ys : Stack}
@@ -1041,18 +1020,18 @@ private theorem argU_walk {sevm : Sevm} {s s' : Devm} {o b : B256} {ys : Stack}
   have q2 : Sevm.dataWord sevm o :: o :: b :: ys <<+ a2.stack :=
     prefix_of_calldataload_val h2 q1
   have q3 : o :: Sevm.dataWord sevm o :: b :: ys <<+ a3.stack :=
-    Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h3) q2
   have q5 : ((32 : B256) + o) :: Sevm.dataWord sevm o :: b :: ys <<+ a5.stack := by
     have := prefix_of_add h5 (prefix_of_push (of_run_push h4) q3)
     rwa [w20_eq] at this
   have q6 : Sevm.dataWord sevm o :: ((32 : B256) + o) :: b :: ys <<+ a6.stack :=
-    Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h6) q5
   have q7 : b :: ((32 : B256) + o) :: Sevm.dataWord sevm o :: ys <<+ a7.stack :=
-    Stack.prefix_of_swap (n := 1) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 1) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h7) q6
-  exact Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+  exact Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h8) q7
 
 private def head01d5 : List Ninst :=
@@ -1081,7 +1060,9 @@ theorem Weth9.transferFrom_wrapper_okX {sevm : Sevm} {d : Devm} {o : Outcome}
     Weth9.XferOkX sevm d o (Sevm.dataWord sevm 68) (Sevm.dataWord sevm 36).toAdr.toB256
       (Sevm.dataWord sevm 4).toAdr.toB256 := by
   have hg' : g = t_01ca_c25 := by
-    simpa [prog, Cert.prog, cert] using hg.symm
+    simpa only [prog, Cert.prog, cert, List.map_cons, List.map_nil, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero, Option.some.injEq] using hg.symm
   subst g
   rw [tree_01ca] at run
   cases run with
@@ -1198,7 +1179,9 @@ theorem Weth9.transfer_wrapper_okX {sevm : Sevm} {d : Devm} {o : Outcome} {g : S
       sevm.caller.toB256 := by
   rw [← Weth9.w32_add_4]
   have hg' : g = t_0370_c20 := by
-    simpa [prog, Cert.prog, cert] using hg.symm
+    simpa only [prog, Cert.prog, cert, List.map_cons, List.map_nil, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero, Option.some.injEq] using hg.symm
   subst g
   rw [tree_0370] at run
   cases run with

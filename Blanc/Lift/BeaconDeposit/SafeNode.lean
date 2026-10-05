@@ -68,7 +68,7 @@ private theorem inv_node1 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : 
   have hw2 : img4.sliceD (672 + 32) 32 0 = (cdWord sevm wP.toNat).toBytes := by
     rw [himg4, sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg3,
       sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg2]
-    simpa using sliceD_cd_word img1 sevm 704 wP.toNat 32 0 (by omega)
+    simpa only [Nat.reduceAdd, add_zero] using sliceD_cd_word img1 sevm 704 wP.toNat 32 0 (by omega)
   have h640 : (0x280 : B256).toNat = 640 := rfl
   have h40 : (Bytes.toB256 [0x40]).toNat = 64 := rfl
   have t640 : (Nat.toB256 640).toNat = 640 := toNat_toB256' (by decide)
@@ -165,7 +165,7 @@ private theorem inv_node1 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : 
   obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_copy_sha (s := 672) (d := 736) (n := 832)
     (x1 := Nat.toB256 672) (x3 := Nat.toB256 736) (x4 := Nat.toB256 640)
     (R := 2 :: 0 :: sR :: pkR :: 0x80 :: a :: rt :: 96 :: sP :: 32 :: wP :: R)
-    prog_17 (by simp) (by decide) hwf4 hr4 hs4 (by decide) (by decide) (by decide) (by decide)
+    prog_17 (by simp only [List.not_mem_nil, not_false_eq_true]) (by decide) hwf4 hr4 hs4 (by decide) (by decide) (by decide) (by decide)
     (by decide) (by decide) hfp4 hw1 hw2 hsha.nodeleg hsha.warm hsha.pre hsha.fork run
   rw [cdWord_toBytes] at hpost
   exact ⟨b', M', G', hpost, hwf', hr', by rw [hs']; rfl, run⟩
@@ -388,7 +388,7 @@ private theorem inv_node2 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : 
   obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_copy_sha (s := 768) (d := 832) (n := 832)
     (x1 := Nat.toB256 768) (x3 := Nat.toB256 832) (x4 := Nat.toB256 736)
     (R := n1 :: 2 :: 0 :: sR :: pkR :: 0x80 :: a :: rt :: 96 :: sP :: 32 :: wP :: R)
-    prog_19 (by simp) (by decide) hwf5 hr5 hs5 (by decide) (by decide) (by decide) (by decide)
+    prog_19 (by simp only [List.not_mem_nil, not_false_eq_true]) (by decide) hwf5 hr5 hs5 (by decide) (by decide) (by decide) (by decide)
     (by decide) (by decide) hfp5 (hpack ▸ node2Pack_w1 ha0) (hpack ▸ node2Pack_w2)
     hsha.nodeleg hsha.warm hsha.pre hsha.fork run
   rw [amtWord_toBytes] at hpost
@@ -526,7 +526,7 @@ private theorem inv_node3 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : 
   rw [t_0df7_c19_eq] at run
   obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_copy_sha (s := 864) (d := 928) (n := 928)
     (x1 := Nat.toB256 864) (x3 := Nat.toB256 928) (x4 := Nat.toB256 832) (R := R)
-    prog_20 (by simp) (by decide) hwf4 hr4 hs4 (by decide) (by decide) (by decide) (by decide)
+    prog_20 (by simp only [List.not_mem_nil, not_false_eq_true]) (by decide) hwf4 hr4 hs4 (by decide) (by decide) (by decide) (by decide)
     (by decide) (by decide) hfp4 hw1 hw2 hsha.nodeleg hsha.warm hsha.pre hsha.fork run
   exact ⟨b', M', G', hpost, hwf', hr', by rw [hs']; rfl, run⟩
 
@@ -557,14 +557,17 @@ theorem safe_dataNode {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR sR : B256}
   have hfp0 : img.sliceD 64 32 0 = (Nat.toB256 640).toBytes := by
     rw [hfp]; rfl
   have hsR : img.sliceD 640 32 0 = sR.toBytes := by
-    have := hf (0x280, sR.toBytes) (by simp)
+    have := hf (0x280, sR.toBytes) (by simp only [List.mem_cons, Prod.mk.injEq, Nat.reduceEqDiff,
+      false_and, List.not_mem_nil, or_false, or_true])
     rwa [B256.length_toBytes] at this
   have h80 : img.sliceD 128 32 0 = (Nat.toB256 8).toBytes := by
-    have := hf (0x80, (8 : B256).toBytes) (by simp)
+    have := hf (0x80, (8 : B256).toBytes) (by simp only [List.mem_cons, Prod.mk.injEq,
+      Nat.reduceEqDiff, false_and, List.not_mem_nil, or_self, or_false])
     rw [B256.length_toBytes] at this
     rw [this]; rfl
   have ha0 : img.sliceD 160 8 0 = BeaconDeposit.le64 a.toNat :=
-    hf (0xa0, BeaconDeposit.le64 a.toNat) (by simp)
+    hf (0xa0, BeaconDeposit.le64 a.toNat) (by simp only [List.mem_cons, Prod.mk.injEq,
+      Nat.reduceEqDiff, false_and, List.not_mem_nil, or_self, or_false, or_true])
   set R := [(48 : B256), pP, 0x01b8, sel] with hR
   -- site 1
   obtain ⟨b1, M1, G1, hp1, hwf1, hr1, hs1, run⟩ :=

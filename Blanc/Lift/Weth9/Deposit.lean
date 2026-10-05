@@ -40,7 +40,8 @@ private def depositPost : List Ninst :=
 
 private theorem deposit_tree_eq :
     t_0440_c1 = .dest (chain (depositPre ++ [Ninst.sstore] ++ depositPost) .ret) := by
-  simp [t_0440_c1, depositPre, depositPost, chain]
+  simp only [t_0440_c1, Fin.isValue, depositPre, List.cons_append, List.nil_append, depositPost,
+    chain]
 
 private theorem split_deposit_run {fs : List SFunc} {sevm : Sevm}
     {devm : Devm} {o : Outcome}
@@ -139,7 +140,7 @@ private theorem deposit_pre_stack {sevm : Sevm} {s s' : Devm}
     have := prefix_of_add h12 hp11
     rwa [w32_add_0] at this
   have hp13 : (3 : B256) :: (32 : B256) :: sevm.value :: s.stack <<+ s13.stack :=
-    Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h13) hp12
   have hp14 : (32 : B256) :: (3 : B256) :: (32 : B256) :: sevm.value :: s.stack
       <<+ s14.stack := prefix_of_dup_val h14 (by show_nth) hp13
@@ -209,7 +210,7 @@ private theorem deposit_pre_stack {sevm : Sevm} {s s' : Devm}
   have hp25 : sevm.value :: (0 : B256) :: balSlot sevm.caller ::
       (s.getStorVal sevm.currentTarget (balSlot sevm.caller) + sevm.value) :: s.stack
       <<+ s25.stack :=
-    Stack.prefix_of_swap (n := 2) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 2) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h25) hp24
   have hp27 := prefix_of_pop (of_run_pop h27) (prefix_of_pop (of_run_pop h26) hp25)
   have hp28 := prefix_of_dup_val h28 (by show_nth) hp27
@@ -217,7 +218,7 @@ private theorem deposit_pre_stack {sevm : Sevm} {s s' : Devm}
       (s.getStorVal sevm.currentTarget (balSlot sevm.caller) + sevm.value) ::
       (s.getStorVal sevm.currentTarget (balSlot sevm.caller) + sevm.value) :: s.stack
       <<+ s'.stack :=
-    Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h29) hp28
   exact ⟨[], nil_pref, pref_trans ⟨_ :: s.stack, rfl⟩ hp29, hmem2 s.memory⟩
 
@@ -230,7 +231,9 @@ theorem Weth9.deposit_effect {sevm : Sevm} {devm : Devm} {o : Outcome} {g : SFun
           ((Devm.getStor devm sevm.currentTarget).get (balSlot sevm.caller) + sevm.value) ∧
       (Outcome.devm o).getBal = devm.getBal := by
   have hg' : g = t_0440_c1 := by
-    simpa [prog, Cert.prog, cert] using hg.symm
+    simpa only [prog, Cert.prog, cert, List.map_cons, List.map_nil, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.one_lt_ofNat, getElem?_pos,
+      List.getElem_cons_succ, List.getElem_cons_zero, Option.some.injEq] using hg.symm
   subst g
   rcases split_deposit_run run with
     ⟨d0, d1, d2, d3, dret, hburn, hpre, hsstore, hpost, hret⟩

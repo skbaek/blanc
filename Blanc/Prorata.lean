@@ -66,8 +66,6 @@ def pushMaxWord : Line := [pushB256 0, not]
 def pushMaxAndCap : Line :=
   [pushB256 0, not, dup 0, pushB256 130, shr]
 
-def pushSupplySlot : Line := pushMaxWord
-
 -- deposit() — payable --
 
 -- Mint `m = a·(S+offset) / (B₀+1)` shares to caller, where `a` is the call

@@ -25,9 +25,6 @@ def eip170RuntimeLimit : Nat :=
 
 def codeSize : Nat := code.length
 
-def codeHeadroom : Nat :=
-  eip170RuntimeLimit - codeSize
-
 theorem runtime_compiles : Prog.compiles runtime = true := by
   decide +kernel
 
@@ -51,21 +48,6 @@ private def isSstore : Ninst → Bool
   | .reg .sstore => true
   | _ => false
 
-private def isStaticcall : Ninst → Bool
-  | .exec .staticcall => true
-  | _ => false
-
-private def isLog1 : Ninst → Bool
-  | .reg (.log 1) => true
-  | _ => false
-
-private def isExternalExecution : Ninst → Bool
-  | .exec _ => true
-  | _ => false
-
-private def isMstore8 : Ninst → Bool
-  | .reg .mstore8 => true
-  | _ => false
 
 private def sourceSitesMatching
     (predicate : Ninst → Bool) : List Prog.SourceSite :=
@@ -73,18 +55,6 @@ private def sourceSitesMatching
 
 def runtimeSstoreSourceSites : List Prog.SourceSite :=
   sourceSitesMatching isSstore
-
-def runtimeStaticcallSourceSites : List Prog.SourceSite :=
-  sourceSitesMatching isStaticcall
-
-def runtimeLog1SourceSites : List Prog.SourceSite :=
-  sourceSitesMatching isLog1
-
-def runtimeExternalExecutionSourceSites : List Prog.SourceSite :=
-  sourceSitesMatching isExternalExecution
-
-def runtimeMstore8SourceSites : List Prog.SourceSite :=
-  sourceSitesMatching isMstore8
 
 /-- Membership in the runtime SSTORE inventory is exactly membership in the
 compiler source map at a source-level SSTORE instruction. -/
@@ -94,21 +64,13 @@ theorem mem_runtimeSstoreSourceSites_iff
       site ∈ runtime.sourceSites ∧ site.instruction = .reg .sstore := by
   rcases site with ⟨path, pc, instruction⟩
   cases instruction <;>
-    simp [runtimeSstoreSourceSites, sourceSitesMatching, isSstore]
+    simp only [runtimeSstoreSourceSites, sourceSitesMatching, isSstore, List.mem_filter, Ninst.reg.injEq, and_congr_right_iff, Bool.false_eq_true, and_false, reduceCtorEq]
   rename_i regular
   cases regular <;>
-    simp
+    simp only [Bool.false_eq_true, reduceCtorEq, implies_true]
 
 theorem runtimeSstoreSourceSites_pcs :
     Prog.SourceSite.pcs runtimeSstoreSourceSites = [1070, 2869] := by
-  decide +kernel
-
-/-- Coupled function-table/PC identities for the two runtime write sites.
-Keeping the coordinates paired prevents a consumer from mixing the main-body
-count site with the insertion-loop branch site. -/
-theorem runtimeSstoreSourceSites_coordinates :
-    Prog.SourceSite.coordinates runtimeSstoreSourceSites =
-      [(0, 1070), (13, 2869)] := by
   decide +kernel
 
 /-- The complete runtime source-level SSTORE population is the count write in
@@ -120,22 +82,6 @@ theorem runtimeSstoreSourceSite_pc
   have pcMember : site.pc ∈ Prog.SourceSite.pcs runtimeSstoreSourceSites :=
     List.mem_map_of_mem member
   rw [runtimeSstoreSourceSites_pcs] at pcMember
-  simpa using pcMember
-
-theorem runtimeSstoreSourceSite_coordinate
-    {site : Prog.SourceSite}
-    (member : site ∈ runtimeSstoreSourceSites) :
-    (site.path.functionIndex = 0 ∧ site.pc = 1070) ∨
-      (site.path.functionIndex = 13 ∧ site.pc = 2869) := by
-  have coordinateMember :
-      (site.path.functionIndex, site.pc) ∈
-        Prog.SourceSite.coordinates runtimeSstoreSourceSites :=
-    List.mem_map_of_mem member
-  rw [runtimeSstoreSourceSites_coordinates] at coordinateMember
-  simpa using coordinateMember
-
-theorem runtimeStaticcallSourceSites_length :
-    runtimeStaticcallSourceSites.length = 11 := by
-  decide +kernel
+  simpa only [List.mem_cons, List.not_mem_nil, or_false] using pcMember
 
 end Blanc.BeaconDeposit

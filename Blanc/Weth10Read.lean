@@ -31,11 +31,13 @@ lemma slice_three_words (img : Bytes) (a b c : B256) :
       List.nil_append, Nat.zero_add]
   have e2 : Bytes.writeAt (a.toBytes ++ img.drop 32) 32 b.toBytes =
       a.toBytes ++ (b.toBytes ++ (img.drop 32).drop 32) := by
-    rw [Bytes.writeAt, hb, List.takeD_eq_take _ (by simp [ha]),
+    rw [Bytes.writeAt, hb, List.takeD_eq_take _ (by simp only [List.length_append, ha,
+      List.length_drop, le_add_iff_nonneg_right, zero_le]),
       List.take_left' ha,
       show 32 + 32 = a.toBytes.length + 32 from by rw [ha],
       List.drop_append, List.append_assoc]
-    simp [ha]
+    simp only [ha, Nat.reduceAdd, Nat.reduceSub, List.drop_drop, List.append_cancel_left_eq,
+      List.append_left_eq_self, List.drop_eq_nil_iff, Nat.reduceLeDiff]
   have e3 : Bytes.writeAt
       (a.toBytes ++ (b.toBytes ++ (img.drop 32).drop 32))
       64 c.toBytes =
@@ -45,22 +47,26 @@ lemma slice_three_words (img : Bytes) (a b c : B256) :
         (a.toBytes ++ b.toBytes) ++ (img.drop 32).drop 32 by
           rw [List.append_assoc],
       Bytes.writeAt, hc,
-      List.takeD_eq_take _ (by simp [ha, hb]; omega),
-      List.take_left' (by simp [ha, hb]),
+      List.takeD_eq_take _ (by simp only [List.drop_drop, Nat.reduceAdd, List.append_assoc,
+        List.length_append, ha, hb, List.length_drop]; omega),
+      List.take_left' (by simp only [List.length_append, ha, hb, Nat.reduceAdd]),
       show 64 + 32 = (a.toBytes ++ b.toBytes).length + 32 by
-        simp [ha, hb],
+        simp only [Nat.reduceAdd, List.length_append, ha, hb],
       List.drop_append, List.append_assoc]
-    simp [ha, hb, List.append_assoc]
+    simp only [List.length_append, ha, hb, Nat.reduceAdd, Nat.reduceSub, List.drop_drop,
+      List.append_assoc, List.append_cancel_left_eq, List.append_left_eq_self, List.drop_eq_nil_iff,
+      Nat.reduceLeDiff]
   rw [e1, e2, e3]
   unfold List.sliceD
   rw [List.drop_zero,
-    List.takeD_eq_take _ (by simp [ha, hb, hc]; omega)]
+    List.takeD_eq_take _ (by simp only [List.drop_drop, Nat.reduceAdd, List.length_append, ha, hb,
+      hc, List.length_drop]; omega)]
   rw [show a.toBytes ++ (b.toBytes ++
       (c.toBytes ++ List.drop 32 (List.drop 32 (List.drop 32 img)))) =
       (a.toBytes ++ b.toBytes ++ c.toBytes) ++
         List.drop 32 (List.drop 32 (List.drop 32 img)) by
-          simp [List.append_assoc],
-    List.take_left' (by simp [ha, hb, hc])]
+          simp only [List.drop_drop, Nat.reduceAdd, List.append_assoc],
+    List.take_left' (by simp only [List.append_assoc, List.length_append, ha, hb, hc, Nat.reduceAdd])]
 
 /-- Store three known stack words into consecutive memory words and return the
 complete 96-byte ABI window. The prior memory image is arbitrary because all
@@ -343,7 +349,7 @@ theorem domainSeparator_output {fs : List Func} {sevm : Sevm}
   · have hp4 : (1 : B256) ::
         sevm.benvStat.chainId.toB256 :: xs <<+ s4.stack := by
       have heq := prefix_of_eq q4 hp3
-      simpa [hchain, B256.eqCheck] using heq
+      simpa only [hchain, B256.eqCheck, ↓reduceIte] using heq
     rcases of_run_branch run with
         ⟨sp, hpop, hfork⟩ |
         ⟨w, sp, sb, hnz, hpop, hburn, hcached⟩
@@ -371,14 +377,14 @@ theorem domainSeparator_output {fs : List Func} {sevm : Sevm}
       refine ⟨?_, hcode4.trans (hpopCode.trans
         (hburnCode.trans ((Ninst.Hinv.inv (f := Devm.getCode) q5).trans
           hcode5)))⟩
-      simpa [permitDomainSeparator, hchain] using hout
+      simpa only [permitDomainSeparator, hchain, ↓reduceIte] using hout
   · have hrev :
         dp.deploymentChainId ≠ sevm.benvStat.chainId.toB256 :=
       fun h => hchain h.symm
     have hp4 : (0 : B256) ::
         sevm.benvStat.chainId.toB256 :: xs <<+ s4.stack := by
       have heq := prefix_of_eq q4 hp3
-      simpa [B256.eqCheck, hrev] using heq
+      simpa only [B256.eqCheck, hrev, ↓reduceIte] using heq
     rcases of_run_branch run with
         ⟨sp, hpop, hfork⟩ |
         ⟨w, sp, sb, hnz, hpop, hburn, hcached⟩
@@ -396,7 +402,7 @@ theorem domainSeparator_output {fs : List Func} {sevm : Sevm}
         exact getCode_eq_of_state_eq hpop.state a
       refine ⟨?_, hcode4.trans (hpopCode.trans
         (hcode5.symm.trans hcodeTail))⟩
-      simpa [permitDomainSeparator, hchain] using hout
+      simpa only [permitDomainSeparator, hchain, ↓reduceIte] using hout
     · have hw0 : w = 0 := (popBurn_pref hpop hp4).1
       exact (hnz hw0).elim
 
@@ -513,7 +519,8 @@ theorem allowance_output
         (Line.Run.cons q1 (Line.Run.cons q2 Line.Run.nil)))]
       exact hrd1) 0 64]
     have hlen : payload.length = 64 :=
-      by simp [payload, List.sliceD]
+      by simp only [List.sliceD, List.takeD_succ, List.head?_drop, List.tail_drop, Nat.reduceAdd,
+        List.takeD_zero, List.length_cons, List.length_nil, zero_add, payload]
     rw [← hlen, Bytes.sliceD_writeAt]
   have hk3' : Bytes.keccak payload :: xs <<+ u3.stack := by
     rw [← hhash]
@@ -782,7 +789,7 @@ theorem flashFee_output
       have hne' :
           sevm.currentTarget.toB256 ≠ Sevm.argWord sevm 0 := by
         exact fun h => hne h.symm
-      simp [B256.eqCheck, hne'] at hflag
+      simp only [B256.eqCheck, hne', ↓reduceIte] at hflag
       exact B256.zero_ne_one hflag.symm
     have hm : s.memory = s2.memory :=
       (Line.of_inv Devm.memory (by
@@ -826,7 +833,9 @@ theorem flashFee_output
       have hlookup :
           ((weth10 dp).main :: weth10Aux)[flashTokenErrorSlot]? =
             some flashTokenError := by
-        simp [weth10, weth10Aux, flashTokenErrorSlot]
+        simp only [weth10, weth10Aux, flashTokenErrorSlot, List.length_cons, List.length_nil,
+          zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+          List.getElem_cons_zero]
       rw [hlookup] at hget
       exact Option.some.inj hget.symm
     subst f
@@ -951,7 +960,7 @@ theorem maxFlashLoan_output
     have hne : Sevm.argWord sevm 0 ≠ sevm.currentTarget.toB256 := by
       intro heq
       rw [heq] at hflag
-      simp [B256.eqCheck] at hflag
+      simp only [B256.eqCheck, ↓reduceIte] at hflag
       exact B256.zero_ne_one hflag.symm
     have hm : s.memory = s2.memory :=
       (Line.of_inv Devm.memory (by
@@ -1084,7 +1093,7 @@ theorem name_exec_output
     (by func_inv) (by func_inv)
     (fun hwf hrd run => name_output nil_pref hwf hrd run)
     h_wf h_reads exc h_code h_sel h_nonempty
-    (by simp [weth10Funcs])
+    (by simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or])
 
 theorem symbol_exec_output
     {dp : DeployParams} {sevm : Sevm} {pre post : Devm} {img : Bytes}
@@ -1100,7 +1109,8 @@ theorem symbol_exec_output
     (by func_inv) (by func_inv)
     (fun hwf hrd run => symbol_output nil_pref hwf hrd run)
     h_wf h_reads exc h_code h_sel h_nonempty
-    (by simp [weth10Funcs])
+    (by simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true])
 
 theorem callbackSuccess_exec_output
     {dp : DeployParams} {sevm : Sevm} {pre post : Devm} {img : Bytes}
@@ -1116,7 +1126,8 @@ theorem callbackSuccess_exec_output
     (by func_inv) (by func_inv)
     (fun hwf hrd run => callbackSuccess_output nil_pref hwf hrd run)
     h_wf h_reads exc h_code h_sel h_nonempty
-    (by simp [weth10Funcs])
+    (by simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true])
 
 theorem permitTypehash_exec_output
     {dp : DeployParams} {sevm : Sevm} {pre post : Devm} {img : Bytes}
@@ -1132,7 +1143,8 @@ theorem permitTypehash_exec_output
     (by func_inv) (by func_inv)
     (fun hwf hrd run => permitTypehash_output nil_pref hwf hrd run)
     h_wf h_reads exc h_code h_sel h_nonempty
-    (by simp [weth10Funcs])
+    (by simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true])
 
 theorem decimals_exec_output
     {dp : DeployParams} {sevm : Sevm} {pre post : Devm} {img : Bytes}
@@ -1148,7 +1160,8 @@ theorem decimals_exec_output
     (by func_inv) (by func_inv)
     (fun hwf hrd run => decimals_output nil_pref hwf hrd run)
     h_wf h_reads exc h_code h_sel h_nonempty
-    (by simp [weth10Funcs])
+    (by simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true])
 
 theorem deploymentChainId_exec_output
     {dp : DeployParams} {sevm : Sevm} {pre post : Devm} {img : Bytes}
@@ -1165,7 +1178,8 @@ theorem deploymentChainId_exec_output
     (by unfold deploymentChainId returnDeployWord pushDeployWord; func_inv)
     (fun hwf hrd run => deploymentChainId_output nil_pref hwf hrd run)
     h_wf h_reads exc h_code h_sel h_nonempty
-    (by simp [weth10Funcs])
+    (by simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true])
 
 theorem domainSeparator_exec_output
     {dp : DeployParams} {sevm : Sevm} {pre post : Devm} {img : Bytes}
@@ -1193,7 +1207,8 @@ theorem domainSeparator_exec_output
     (fun hwf hrd run =>
       domainSeparator_output nil_pref hwf hrd run)
     h_wf h_reads exc h_code h_sel h_nonempty
-    (by simp [weth10Funcs])
+    (by simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true])
 
 theorem balanceOf_exec_output
     {dp : DeployParams} {sevm : Sevm} {pre post : Devm} {img : Bytes}
@@ -1210,7 +1225,8 @@ theorem balanceOf_exec_output
     (by func_inv) (by func_inv)
     (fun hwf hrd run => balanceOf_output nil_pref hwf hrd run)
     h_wf h_reads exc h_code h_sel h_nonempty
-    (by simp [weth10Funcs])
+    (by simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true])
 
 theorem allowance_exec_output
     {dp : DeployParams} {sevm : Sevm} {pre post : Devm} {img : Bytes}
@@ -1227,7 +1243,7 @@ theorem allowance_exec_output
     (by func_inv) (by func_inv)
     (fun hwf hrd run => allowance_output nil_pref hwf hrd run)
     h_wf h_reads exc h_code h_sel h_nonempty
-    (by simp [weth10Funcs])
+    (by simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, or_true])
 
 theorem nonces_exec_output
     {dp : DeployParams} {sevm : Sevm} {pre post : Devm} {img : Bytes}
@@ -1244,7 +1260,8 @@ theorem nonces_exec_output
     (by func_inv) (by func_inv)
     (fun hwf hrd run => nonces_output nil_pref hwf hrd run)
     h_wf h_reads exc h_code h_sel h_nonempty
-    (by simp [weth10Funcs])
+    (by simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true])
 
 theorem flashMinted_exec_output
     {dp : DeployParams} {sevm : Sevm} {pre post : Devm} {img : Bytes}
@@ -1261,7 +1278,8 @@ theorem flashMinted_exec_output
     (by func_inv) (by func_inv)
     (fun hwf hrd run => flashMinted_output nil_pref hwf hrd run)
     h_wf h_reads exc h_code h_sel h_nonempty
-    (by simp [weth10Funcs])
+    (by simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true])
 
 theorem totalSupply_exec_output
     {dp : DeployParams} {sevm : Sevm} {pre post : Devm} {img : Bytes}
@@ -1277,7 +1295,8 @@ theorem totalSupply_exec_output
           pre.getBal sevm.currentTarget)) sevm pre post := by
   rcases exec_enters_weth10Nonpayable (body := totalSupply)
       exc h_code h_sel h_nonempty
-      (by simp [weth10Funcs]) with
+      (by simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+        or_true]) with
     ⟨mid, hvalue, hstor0, hbal0, hcode0, hmemory, run⟩
   have hwf : Mem.Wf mid.memory := by
     rw [hmemory]
@@ -1313,7 +1332,8 @@ theorem maxFlashLoan_exec_output
          else 0))
       sevm pre post := by
   rcases exec_enters_weth10Nonpayable (body := maxFlashLoan)
-      exc h_code h_sel h_nonempty (by simp [weth10Funcs]) with
+      exc h_code h_sel h_nonempty (by simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq,
+        List.not_mem_nil, or_false, true_or, or_true]) with
     ⟨mid, hvalue, hstor0, hbal0, hcode0, hmemory, run⟩
   have hwf : Mem.Wf mid.memory := by
     rw [hmemory]
@@ -1347,7 +1367,8 @@ theorem flashFee_exec_output
           ReturnsWord 0 d)
       sevm pre post := by
   rcases exec_enters_weth10Nonpayable (body := flashFee)
-      exc h_code h_sel h_nonempty (by simp [weth10Funcs]) with
+      exc h_code h_sel h_nonempty (by simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq,
+        List.not_mem_nil, or_false, true_or, or_true]) with
     ⟨mid, hvalue, hstor0, hbal0, hcode0, hmemory, run⟩
   have hwf : Mem.Wf mid.memory := by
     rw [hmemory]

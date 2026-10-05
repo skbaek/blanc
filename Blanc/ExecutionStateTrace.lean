@@ -80,7 +80,6 @@ inductive Exec.StateBoundaryKind where
   | childRollback
   /-- The current frame executed its terminal instruction. -/
   | terminal
-  deriving DecidableEq
 
 /-- Provenance of one exact retained execution-state boundary.  The committing
 driver suffix retains the concrete execution proof at the boundary. -/
@@ -121,13 +120,13 @@ def Exec.stateBoundariesOfCommits (framePath : List Nat) (nextChild : Nat)
       Exec.stateBoundary framePath driver .instruction pre.state
           (Exec.startState next) ::
         Exec.stateBoundariesOfCommits framePath nextChild next committed
-  | .doneErr _ _ _ => by simp [Execution.commits] at committed
+  | .doneErr _ _ _ => by simp only [Execution.commits, Bool.false_eq_true] at committed
   | .doneOk _ _ _ next =>
       Exec.stateBoundary framePath driver .childless pre.state
           (Exec.startState next) ::
         Exec.stateBoundariesOfCommits
           framePath (nextChild + 1) next committed
-  | .runErr _ _ _ _ => by simp [Execution.commits] at committed
+  | .runErr _ _ _ _ => by simp only [Execution.commits, Bool.false_eq_true] at committed
   | .runOk (f := frame) (raw := raw) _ _ child _ next =>
       let childPath := framePath ++ [nextChild]
       if h : Frame.settlementCommits frame raw = true then
@@ -182,7 +181,7 @@ private theorem Exec.stateReplay_of_commits
           (Exec.startState (.cont step next)) (Exec.startState next))
         (ih framePath nextChild committed)
   | doneErr step enter resume =>
-      simp [Execution.commits] at committed
+      simp only [Execution.commits, Bool.false_eq_true] at committed
   | doneOk step enter resume next ih =>
       simp only [Exec.stateBoundariesOfCommits]
       exact .cons
@@ -192,7 +191,7 @@ private theorem Exec.stateReplay_of_commits
           (Exec.startState next))
         (ih framePath (nextChild + 1) committed)
   | runErr step enter child resume ih =>
-      simp [Execution.commits] at committed
+      simp only [Execution.commits, Bool.false_eq_true] at committed
   | runOk step enter child resume next childIh nextIh =>
       simp only [Exec.stateBoundariesOfCommits]
       split
@@ -233,7 +232,7 @@ theorem Exec.committedStateReplay
     (committed : Execution.commits out = true) :
     StateReplay pre.state (Exec.committedStateBoundaries run)
       (Execution.committedPost out committed).state := by
-  simpa [Exec.committedStateBoundaries, committed] using
+  simpa only [committedStateBoundaries, committed, ↓reduceDIte] using
     Exec.stateReplay_of_commits [] 0 run committed
 
 end Blanc

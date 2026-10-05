@@ -69,7 +69,7 @@ theorem ossifiableConstructorProgram_prepare_of_ok
   have pValue := prefix_of_push (of_run_callvalue valueRun) pMain
   have pTest := prefix_of_iszero zeroRun pValue
   have pOne : (1 : B256) :: tail <<+ testPre.stack := by
-    simpa [valueZero, B256.eqCheck] using pTest
+    simpa only [B256.eqCheck, valueZero, ↓reduceIte, List.append_eq, List.nil_append] using pTest
   obtain ⟨decodePre, _, _, branchPop, decodeRun, pDecode⟩ :=
     Func.RunCompiledTo.succ_branch_of_prefix
       (by decide : (1 : B256) ≠ 0) pOne branchRun

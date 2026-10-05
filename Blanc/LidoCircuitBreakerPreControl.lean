@@ -265,26 +265,20 @@ theorem pauseAfterSetEntry_assignment (sevm : Sevm) (base : Devm)
   have hlength : assignmentSlot target ≠ arrayLengthSlot :=
     (registryAddressFamilies_ne_arrayLengthSlot htarget holdPauser).1
   have hlastIndex : assignmentSlot target ≠ indexSlot lastTarget := by
-    simpa [assignmentSlot, indexSlot] using
-      addressSlots_ne_of_region_ne
-        (leftRegion := assignmentRegion) (rightRegion := indexRegion)
-        (by norm_num [assignmentRegion]) (by norm_num [indexRegion])
-        htarget hlastTarget
-        (by norm_num [assignmentRegion, indexRegion])
+    simpa only [assignmentSlot, indexSlot, ne_eq] using
+      addressSlots_ne_of_region_ne (leftRegion := assignmentRegion) (rightRegion := indexRegion)
+        (by norm_num only [assignmentRegion]) (by norm_num only [indexRegion]) htarget hlastTarget
+        (by norm_num only [assignmentRegion, indexRegion])
   have hindex : assignmentSlot target ≠ indexSlot target := by
-    simpa [assignmentSlot, indexSlot] using
-      addressSlots_ne_of_region_ne
-        (leftRegion := assignmentRegion) (rightRegion := indexRegion)
-        (by norm_num [assignmentRegion]) (by norm_num [indexRegion])
-        htarget htarget
-        (by norm_num [assignmentRegion, indexRegion])
+    simpa only [assignmentSlot, indexSlot, ne_eq] using
+      addressSlots_ne_of_region_ne (leftRegion := assignmentRegion) (rightRegion := indexRegion)
+        (by norm_num only [assignmentRegion]) (by norm_num only [indexRegion]) htarget htarget
+        (by norm_num only [assignmentRegion, indexRegion])
   have hcount : assignmentSlot target ≠ countSlot oldPauser := by
-    simpa [assignmentSlot, countSlot] using
-      addressSlots_ne_of_region_ne
-        (leftRegion := assignmentRegion) (rightRegion := countRegion)
-        (by norm_num [assignmentRegion]) (by norm_num [countRegion])
-        htarget holdPauser
-        (by norm_num [assignmentRegion, countRegion])
+    simpa only [assignmentSlot, countSlot, ne_eq] using
+      addressSlots_ne_of_region_ne (leftRegion := assignmentRegion) (rightRegion := countRegion)
+        (by norm_num only [assignmentRegion]) (by norm_num only [countRegion]) htarget holdPauser
+        (by norm_num only [assignmentRegion, countRegion])
   rw [addLog_setMach_getStorVal,
     removalPost_getStorVal_other _ _ _ _ _ _ _ _ hmoved hlastIndex htail
       hlength hindex]
@@ -516,21 +510,22 @@ theorem pause_body_runCompiledTo_error_of_locked
           (value := base.getTransVal sevm.currentTarget lockKey)
           (stack := []) (G := total - 157) rfl rfl
           (by simp only [Devm.gasLeft_setMach, gasWarmAccess, htotal]; omega)
-          (by simp)
+          (by simp only [List.length_nil, Nat.ofNat_pos])
         simpa only [Devm.memory_setMach, Devm.setMach_setMach, Devm.stateGas_setMach] using h
       refine Func.RunCompiledTo.next htload ?_
       func_run (3) [0]
       case h_val =>
-        simp [B256.eqCheck, hlocked]
+        simp only [B256.eqCheck, hlocked, ↓reduceIte]
       case h_body =>
         apply Func.runCompiledTo_revertSelector (G := G)
-        · simp [customErrorData, B256.length_toBytes]
+        · simp only [customErrorData, List.length_take, B256.length_toBytes, Nat.reduceLeDiff,
+          inf_of_le_left]
         · exact Mem.wf_empty
         · exact Mem.reads_empty
         · rfl
         · simp only [Devm.gasLeft_setMach, revertSelectorCost]
           rw [Devm.extCost_empty_word]
-          norm_num [gVerylow, gBase, gMemory]
+          norm_num only [gVerylow, gBase, gMemory]
           omega
         · simp only [Devm.stack_setMach, List.length_nil]
           omega

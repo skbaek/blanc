@@ -61,7 +61,7 @@ theorem checkAllowanceSlotCollision_zero {pre post : Devm} {key : B256}
     exact notSupply (B256.eq_max_of_not_eq_zero notZero)
   have flagZero : ((~~~ key) =? 0) ||| addressFlag = 0 := by
     rw [addressZero.mpr notAddress]
-    simp [B256.eqCheck, notNonzero]
+    simp only [B256.eqCheck, notNonzero, ↓reduceIte]
     rfl
   rw [flagZero] at orPrefix
   exact orPrefix
@@ -263,7 +263,7 @@ theorem ownerHasShares_avoiding {pre : Devm} {out : Execution}
     have := B256.toNat_lt_toNat less
     omega
   have zeroPrefix : (0 : B256) :: tail <<+ s6.stack := by
-    simpa [B256.ltCheck, notLess] using flag
+    simpa only [B256.ltCheck, notLess, ↓reduceIte] using flag
   obtain ⟨bodyPre, pop, bodyRun, bodyTail⟩ :=
     Func.RunCompiledToAvoiding.zero_branch_of_prefix zeroPrefix branchRun
   have pop' := Devm.PopBurn.of_popBurnBy pop
@@ -383,7 +383,7 @@ theorem spendAllowance_avoiding {pre : Devm} {out : Execution}
       (Line.of_inv Devm.state (by line_inv) maxLine')
   by_cases allowanceMax : allowance = B256.max
   · have onePrefix : (1 : B256) :: tail <<+ s7.stack := by
-      simpa [allowanceMax, B256.not_max, B256.eqCheck] using maxFlag
+      simpa only [B256.eqCheck, allowanceMax, B256.not_max, ↓reduceIte] using maxFlag
     obtain ⟨callPre, pop, callRun, -⟩ :=
       Func.RunCompiledToAvoiding.succ_branch_of_prefix (by decide) onePrefix
         branchRun
@@ -403,7 +403,7 @@ theorem spendAllowance_avoiding {pre : Devm} {out : Execution}
       intro notZero
       exact allowanceMax (B256.eq_max_of_not_eq_zero notZero)
     have zeroPrefix : (0 : B256) :: tail <<+ s7.stack := by
-      simpa [B256.eqCheck, notNonzero] using maxFlag
+      simpa only [B256.eqCheck, notNonzero, ↓reduceIte] using maxFlag
     obtain ⟨checkPre, pop, run, checkTail⟩ :=
       Func.RunCompiledToAvoiding.zero_branch_of_prefix zeroPrefix branchRun
     have pop' := Devm.PopBurn.of_popBurnBy pop
@@ -426,7 +426,7 @@ theorem spendAllowance_avoiding {pre : Devm} {out : Execution}
       have := B256.toNat_lt_toNat less
       omega
     have spendZero : (0 : B256) :: tail <<+ c3.stack := by
-      simpa [B256.ltCheck, notLess] using prefix_of_lt ltSource q2
+      simpa only [B256.ltCheck, notLess, ↓reduceIte] using prefix_of_lt ltSource q2
     obtain ⟨spendPre, pop2, run, spendTail⟩ :=
       Func.RunCompiledToAvoiding.zero_branch_of_prefix spendZero spendBranch
     have pop2' := Devm.PopBurn.of_popBurnBy pop2
@@ -529,7 +529,7 @@ theorem outboundBurn_revert {pre d : Devm} {sharesWord assetsSourceWord : B256}
     have := B256.toNat_lt_toNat less
     omega
   have zeroPrefix : (0 : B256) :: [] <<+ s8.stack := by
-    simpa [B256.ltCheck, notLess] using prefix_of_lt ltSource q7
+    simpa only [B256.ltCheck, notLess, ↓reduceIte] using prefix_of_lt ltSource q7
   obtain ⟨s9, pop, run, -⟩ :=
     Func.RunCompiledToAvoiding.zero_branch_of_prefix zeroPrefix branchRun
   have pop' := Devm.PopBurn.of_popBurnBy pop
@@ -599,8 +599,9 @@ theorem outboundBurn_revert {pre d : Devm} {sharesWord assetsSourceWord : B256}
           (Blanc.ProrataWethVault.loadWord sharesWord) +++
         Blanc.ProrataWethVault.loadWord Blanc.ProrataWethVault.quoteWord +++
         Blanc.ProrataWethVault.returnWord) = true := by
-    simp [Func.revertFreeIn_prepend, Func.revertFreeIn,
-      Blanc.ProrataWethVault.returnWord, returnMemoryRange, Func.return_]
+    simp only [ProrataWethVault.returnWord, returnMemoryRange, Func.return_,
+      Func.revertFreeIn_prepend, Func.revertFreeIn, bne_iff_ne, ne_eq, reduceCtorEq,
+      not_false_eq_true]
   exact Func.RunCompiledTo.not_revert_of_revertFreeIn (safe := [])
     (fun _ member => absurd member List.not_mem_nil) bodyRun.1 free d rfl
 
@@ -744,7 +745,7 @@ theorem outboundGuardedTail_revert {entry d : Devm}
       (Blanc.ProrataWethVault.balanceWord * 32).toNat := by decide +kernel
   by_cases selfBurn : sevm.caller.toB256 = owner
   · have onePrefix : (1 : B256) :: tail <<+ s7.stack := by
-      simpa [B256.eqCheck, selfBurn] using flag
+      simpa only [B256.eqCheck, selfBurn, ↓reduceIte] using flag
     obtain ⟨callPre, pop, callRun, -⟩ :=
       Func.RunCompiledToAvoiding.succ_branch_of_prefix (by decide) onePrefix
         branchRun
@@ -765,7 +766,7 @@ theorem outboundGuardedTail_revert {entry d : Devm}
       (moveB (move4 (Or.inl receiverMiss) receiverWindow))
       (by omega) receiverValid sharesLe burnRun
   · have zeroPrefix : (0 : B256) :: tail <<+ s7.stack := by
-      simpa [B256.eqCheck, selfBurn] using flag
+      simpa only [B256.eqCheck, selfBurn, ↓reduceIte] using flag
     obtain ⟨spendPre, pop, spendRun, spendTail⟩ :=
       Func.RunCompiledToAvoiding.zero_branch_of_prefix zeroPrefix branchRun
     have pop' := Devm.PopBurn.of_popBurnBy pop

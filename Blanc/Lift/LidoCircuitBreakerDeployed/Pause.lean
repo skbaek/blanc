@@ -673,7 +673,7 @@ theorem entry13_regInv {A : List Entry → Sevm → Prop}
     · have hc := congrFun hcode2 sevm.currentTarget
       rw [getStor_St_code] at hc
       rw [getStor_St_code, getCode_eq_of_state_eq hst, hc]
-      simpa [getStor_St_code, afterSload_getCode, getCode_setTransVal] using hcode
+      simpa only [afterSload_getCode, getCode_setTransVal] using hcode
     · show RegInv (Devm.getStor d1 sevm.currentTarget)
       rw [getStor_eq_of_state_eq hst]
       exact hinv2
@@ -695,7 +695,6 @@ theorem entry13_regInv {A : List Entry → Sevm → Prop}
 
 /-! ## The `pause` selector wrapper (entry 49) -/
 
-private instance : Inhabited SFunc := ⟨.undefined⟩
 
 /-- **`pause(address)` (wrapper 49) establishes the frame postcondition** inside
 a root derivation: the `pause` field of `LidoWriterSpecsM lidoA`. -/

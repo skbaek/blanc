@@ -101,7 +101,7 @@ theorem l2_entry32_found {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
   have hlenLt := hw.entries_length_lt_2pow252
   obtain ⟨lastE, hlastE⟩ := last_some_of_length_pos entries (by omega)
   have hsrc : sourceLastTarget entries = lastE.1 := by
-    simp [sourceLastTarget, hlastE]
+    simp only [sourceLastTarget, hlastE]
   have hpostLen := swapPop_length_of_findEntry hfind
   -- `t` is gone from the post entries.
   have hnotmem : target ∉ (swapPop entries index).map Prod.fst := by
@@ -122,9 +122,9 @@ theorem l2_entry32_found {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     exact h
   · -- tail clear, from the raw post and two separations of the faithful premise
     have hmemLen : arrayLengthSlot ∈ removalWriteKeys entries target oldPauser index := by
-      simp [removalWriteKeys]
+      simp only [removalWriteKeys, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
     have hmemIdx : indexSlot target ∈ removalWriteKeys entries target oldPauser index := by
-      simp [removalWriteKeys]
+      simp only [removalWriteKeys, List.mem_cons, List.not_mem_nil, or_false, or_true]
     have htailKey : solKey (arrayEntrySlot (Nat.toB256 entries.length)) =
         registryArraySlot (entries.length - 1) := by
       have h := solKey_arrayEntrySlot (index := entries.length - 1) (by omega)
@@ -206,9 +206,11 @@ theorem l2_entry32_absent {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
   · exact Classical.not_not.mp (fun h => hnotmem (hl1.2.1.mp h))
   · -- the pushed slot: the seventh write clears it, the last two miss it
     have hmemLen : arrayLengthSlot ∈ (absentZeroWrites entries target).map Prod.fst := by
-      simp [absentZeroWrites]
+      simp only [absentZeroWrites, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil,
+        or_false, true_or, or_true, or_self]
     have hmemIdx : indexSlot target ∈ (absentZeroWrites entries target).map Prod.fst := by
-      simp [absentZeroWrites]
+      simp only [absentZeroWrites, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil,
+        or_false, or_true, or_self]
     have hkey : solKey (arrayEntrySlot (Nat.toB256 (entries.length + 1))) =
         registryArraySlot entries.length := solKey_arrayEntrySlot hlenLt
     have hobs : RegistryObservable (entries.length + 1)

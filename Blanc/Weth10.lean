@@ -526,11 +526,6 @@ def permit (dp : DeployParams) : Func :=
       .call permitRecoverSlot) <?>
     (swap 0 ::: calculateDomainSeparator +++ .call permitRecoverSlot))
 
-/-- Dispatcher misses reach this slot.  Only truly empty calldata is receive;
-an unknown nonempty selector is an empty-data revert. -/
-def receiveOrRevert : Func :=
-  calldatasize ::: iszero ::: (receiveEther <?> Func.revert)
-
 /-! ## Complete runtime program -/
 
 /-- The 27 deployed selectors in strict ascending order.  Payability is local
@@ -609,73 +604,81 @@ private theorem dispatchCompileShape_build_eq
       cases xs with
       | nil =>
           cases ys <;>
-            simp [dispatchEntryShapes, DispatchTree.build,
-              dispatchCompileShape] at h ⊢
+            simp only [dispatchEntryShapes, List.map_nil, DispatchTree.build, dispatchCompileShape, List.map_cons, List.nil_eq, reduceCtorEq] at h ⊢
       | cons x xs =>
           cases xs with
           | nil =>
               cases ys with
-              | nil => simp [dispatchEntryShapes] at h
+              | nil => simp only [dispatchEntryShapes, List.map_cons, List.map_nil,
+                List.cons_ne_self] at h
               | cons y ys =>
                   cases ys with
                   | nil =>
-                      simp [dispatchEntryShapes, DispatchTree.build,
-                        dispatchCompileShape] at h ⊢
+                      simp only [dispatchEntryShapes, List.map_cons, List.map_nil, List.cons.injEq,
+                        Prod.mk.injEq, and_true, DispatchTree.build, dispatchCompileShape,
+                        DispatchCompileShape.leaf.injEq] at h ⊢
                       exact h
                   | cons y' ys =>
-                      simp [dispatchEntryShapes] at h
+                      simp only [dispatchEntryShapes, List.map_cons, List.map_nil, List.cons.injEq,
+                        Prod.mk.injEq, List.nil_eq, reduceCtorEq, and_false] at h
           | cons x' xs =>
               cases ys with
-              | nil => simp [dispatchEntryShapes] at h
+              | nil => simp only [dispatchEntryShapes, List.map_cons, List.map_nil,
+                reduceCtorEq] at h
               | cons y ys =>
                   cases ys with
-                  | nil => simp [dispatchEntryShapes] at h
+                  | nil => simp only [dispatchEntryShapes, List.map_cons, List.map_nil,
+                    List.cons.injEq, Prod.mk.injEq, reduceCtorEq, and_false] at h
                   | cons y' ys =>
-                      simpa [dispatchEntryShapes, DispatchTree.build,
-                        dispatchCompileShape] using congrArg List.head? h
+                      simpa only [DispatchTree.build, dispatchCompileShape,
+                        DispatchCompileShape.leaf.injEq, dispatchEntryShapes, List.map_cons,
+                        List.head?_cons, Option.some.injEq, Prod.mk.injEq] using
+                        congrArg List.head? h
   | succ fuel ih =>
       cases xs with
       | nil =>
           cases ys <;>
-            simp [dispatchEntryShapes, DispatchTree.build,
-              dispatchCompileShape] at h ⊢
+            simp only [dispatchEntryShapes, List.map_nil, DispatchTree.build, dispatchCompileShape, List.map_cons, List.nil_eq, reduceCtorEq] at h ⊢
       | cons x xs =>
           cases xs with
           | nil =>
               cases ys with
-              | nil => simp [dispatchEntryShapes] at h
+              | nil => simp only [dispatchEntryShapes, List.map_cons, List.map_nil,
+                List.cons_ne_self] at h
               | cons y ys =>
                   cases ys with
                   | nil =>
-                      simp [dispatchEntryShapes, DispatchTree.build,
-                        dispatchCompileShape] at h ⊢
+                      simp only [dispatchEntryShapes, List.map_cons, List.map_nil, List.cons.injEq,
+                        Prod.mk.injEq, and_true, DispatchTree.build, dispatchCompileShape,
+                        DispatchCompileShape.leaf.injEq] at h ⊢
                       exact h
                   | cons y' ys =>
-                      simp [dispatchEntryShapes] at h
+                      simp only [dispatchEntryShapes, List.map_cons, List.map_nil, List.cons.injEq,
+                        Prod.mk.injEq, List.nil_eq, reduceCtorEq, and_false] at h
           | cons x' xs =>
               cases ys with
-              | nil => simp [dispatchEntryShapes] at h
+              | nil => simp only [dispatchEntryShapes, List.map_cons, List.map_nil,
+                reduceCtorEq] at h
               | cons y ys =>
                   cases ys with
-                  | nil => simp [dispatchEntryShapes] at h
+                  | nil => simp only [dispatchEntryShapes, List.map_cons, List.map_nil,
+                    List.cons.injEq, Prod.mk.injEq, reduceCtorEq, and_false] at h
                   | cons y' ys =>
                       have hlen : xs.length = ys.length := by
-                        simpa [dispatchEntryShapes] using
-                          congrArg List.length h
+                        simpa only [dispatchEntryShapes, List.map_cons, List.length_cons,
+                          List.length_map, Nat.add_right_cancel_iff] using congrArg List.length h
                       simp only [DispatchTree.build, dispatchCompileShape,
                         List.length_cons]
                       rw [← hlen]
                       congr 1
                       · apply ih
-                        simpa [dispatchEntryShapes] using
-                          congrArg
-                            (List.take
-                              (((x :: x' :: xs).length + 1) / 2)) h
+                        simpa only [dispatchEntryShapes, Prod.mk.eta, List.map_take, List.map_cons,
+                          List.length_cons] using
+                          congrArg (List.take (((x :: x' :: xs).length + 1) / 2)) h
                       · apply ih
-                        simpa [dispatchEntryShapes] using
-                          congrArg
-                            (List.drop
-                              (((x :: x' :: xs).length + 1) / 2)) h
+                        simpa only [dispatchEntryShapes, Prod.mk.eta, List.map_drop, List.map_cons,
+                          List.length_cons] using
+                          congrArg (List.drop (((x :: x' :: xs).length + 1) / 2)) h
 
 private theorem leftmostFsig_eq_of_dispatchCompileShape
     {t t' : DispatchTree}
@@ -690,11 +693,11 @@ private theorem leftmostFsig_eq_of_dispatchCompileShape
                 match s with
                 | DispatchCompileShape.leaf w _ => w
                 | DispatchCompileShape.fork _ _ => 0) h
-          simpa [dispatchCompileShape, leftmostFsig] using hw
-      | fork _ _ => simp [dispatchCompileShape] at h
+          simpa only [leftmostFsig, dispatchCompileShape] using hw
+      | fork _ _ => simp only [dispatchCompileShape, reduceCtorEq] at h
   | fork l r ihl ihr =>
       cases t' with
-      | leaf _ _ => simp [dispatchCompileShape] at h
+      | leaf _ _ => simp only [dispatchCompileShape, reduceCtorEq] at h
       | fork l' r' =>
           simp only [dispatchCompileShape,
             DispatchCompileShape.fork.injEq] at h
@@ -711,45 +714,45 @@ private theorem dispatchWith_compileShape_eq
       | leaf w' p' =>
           simp only [dispatchCompileShape,
             DispatchCompileShape.leaf.injEq] at h
-          simp [dispatchWith, Func.compileShape, h.1, h.2]
-      | fork _ _ => simp [dispatchCompileShape] at h
+          simp only [dispatchWith, h.1, Func.compileShape, h.2]
+      | fork _ _ => simp only [dispatchCompileShape, reduceCtorEq] at h
   | fork l r ihl ihr =>
       cases t' with
-      | leaf _ _ => simp [dispatchCompileShape] at h
+      | leaf _ _ => simp only [dispatchCompileShape, reduceCtorEq] at h
       | fork l' r' =>
           simp only [dispatchCompileShape,
             DispatchCompileShape.fork.injEq] at h
           have hw := leftmostFsig_eq_of_dispatchCompileShape h.2
-          simp [dispatchWith, Func.compileShape, hw, ihl h.1, ihr h.2]
+          simp only [dispatchWith, Fin.isValue, hw, Func.compileShape, ihr h.2, ihl h.1]
 
 private theorem pushDeployWord_size (w : B256) :
     (pushDeployWord w).size = 33 := by
-  simp [pushDeployWord, Ninst.size, B256.length_toBytes]
+  simp only [size, pushDeployWord, B256.length_toBytes, Nat.reduceAdd]
 
 private theorem pushDeployWord_immAccepted (w : B256) :
     Ninst.immAccepted (pushDeployWord w) = true := by
-  simp [pushDeployWord, Ninst.immAccepted]
+  simp only [immAccepted, pushDeployWord]
 
 private theorem domainSeparator_compileShape_eq (dp : DeployParams) :
     (nonpayable (domainSeparator dp)).compileShape =
       (nonpayable
         (domainSeparator (⟨0, 0⟩ : DeployParams))).compileShape := by
-  simp [nonpayable, domainSeparator, Func.compileShape,
-    pushDeployWord_size, pushDeployWord_immAccepted, returnDeployWord]
+  simp only [nonpayable, domainSeparator, Fin.isValue, returnDeployWord, Func.compileShape,
+    pushDeployWord_size, pushDeployWord_immAccepted]
 
 private theorem deploymentChainId_compileShape_eq (dp : DeployParams) :
     (nonpayable (deploymentChainId dp)).compileShape =
       (nonpayable
         (deploymentChainId (⟨0, 0⟩ : DeployParams))).compileShape := by
-  simp [nonpayable, deploymentChainId, returnDeployWord, Func.compileShape,
+  simp only [nonpayable, deploymentChainId, returnDeployWord, Func.compileShape,
     pushDeployWord_size, pushDeployWord_immAccepted]
 
 private theorem permit_compileShape_eq (dp : DeployParams) :
     (nonpayable (permit dp)).compileShape =
       (nonpayable (permit (⟨0, 0⟩ : DeployParams))).compileShape := by
-  simp [nonpayable, permit, Func.compileShape, arg, addressArg,
-    normalizeAddress, tagNonceKey, mstoreAt, argCopy, pushList,
-    calculateDomainSeparator, cdl, cdc, pushAddressMask, prepend,
+  simp only [nonpayable, permit, arg, cdl, addressArg, normalizeAddress, pushAddressMask,
+    List.cons_append, List.nil_append, Fin.isValue, tagNonceKey, mstoreAt, argCopy, cdc, pushList,
+    List.map_cons, List.map_nil, calculateDomainSeparator, prepend, Func.compileShape,
     pushDeployWord_size, pushDeployWord_immAccepted]
 
 private theorem weth10EntryShapes_eq (dp : DeployParams) :
@@ -766,7 +769,7 @@ private theorem weth10Tree_compileShape_eq (dp : DeployParams) :
   unfold weth10Tree DispatchTree.ofSorted
   have hlen :
       (weth10Funcs dp).length = (weth10Funcs ⟨0, 0⟩).length := by
-    simpa [dispatchEntryShapes] using
+    simpa only [dispatchEntryShapes, List.length_map] using
       congrArg List.length (weth10EntryShapes_eq dp)
   rw [← hlen]
   exact dispatchCompileShape_build_eq (weth10EntryShapes_eq dp) _
@@ -805,11 +808,11 @@ private theorem weth10Main_compileShape_eq (dp : DeployParams) :
   have hd :=
     dispatchWith_compileShape_eq (weth10Tree_compileShape_eq dp) fallbackSlot
   have hp := Func.compileShape_prepend_congr fsig hd
-  simp [weth10Main, Func.compileShape, hp]
+  simp only [weth10Main, Func.compileShape, hp]
 
 private theorem weth10_compileShape_eq (dp : DeployParams) :
     (weth10 dp).compileShape = (weth10 ⟨0, 0⟩).compileShape := by
-  simp [weth10, Prog.compileShape, weth10Main_compileShape_eq dp]
+  simp only [Prog.compileShape, weth10, weth10Main_compileShape_eq dp]
 
 /-- Deployment parameters alter fixed-width pushed words, but never the
 compiler-relevant shape of the complete runtime program. -/

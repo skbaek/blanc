@@ -55,7 +55,7 @@ theorem Func.runCompiledTo_revert_empty_at_zero
       change gas = gas +
         (base.setMach ⟨[0, 0], memory, gas, base.stateGas⟩).extCost [⟨0, 0⟩]
       rw [Devm.extCost_empty_window]
-      simp) (by exact Devm.memRead_zero)
+      simp only [add_zero]) (by exact Devm.memRead_zero)
   simpa only [Devm.setMach_setMach,
     show Nat.toB256 0 = (0 : B256) by decide] using hrun
 

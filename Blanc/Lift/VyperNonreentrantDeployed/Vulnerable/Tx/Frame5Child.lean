@@ -39,14 +39,14 @@ theorem obs5_facts {r : Res} (h : obs5 r = obs5EELS) : ∃ d cl, r = .done (.hal
     cl.adrs = adrs5T ∧ cl.stor = storAT ∧ cl.acs = acsAT ∧ d.refundCounter = refund5 ∧
     d.accountsToDelete = .emptyWithCapacity := by
   rcases r with c | ⟨d | d, cl⟩ | _
-  · simp [obs5, obs5EELS] at h
+  · simp only [obs5, obs5EELS, reduceCtorEq] at h
   · simp only [obs5, obs5EELS, Option.some.injEq, Prod.mk.injEq, Bool.and_eq_true,
       decide_eq_true_eq] at h
     obtain ⟨hg, ho, ⟨⟨⟨⟨he, hk⟩, ha⟩, hs⟩, hrf⟩, hc, hatd⟩ := h
     exact ⟨d, cl, rfl, hg, List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) ho,
       Option.isNone_iff_eq_none.mp he, hk, ha, hs, hc, hrf, hatd⟩
-  · simp [obs5, obs5EELS] at h
-  · simp [obs5, obs5EELS] at h
+  · simp only [obs5, obs5EELS, reduceCtorEq] at h
+  · simp only [obs5, obs5EELS, reduceCtorEq] at h
 
 theorem r5_facts : r5 = .done (.halted post5T) cl5T ∧ post5T.gasLeft = gas5T ∧
     post5T.output = word 106 ∧ post5T.error = none ∧ cl5T.keys = keys5T ∧ cl5T.adrs = adrs5T ∧

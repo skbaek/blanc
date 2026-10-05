@@ -160,11 +160,11 @@ theorem Devm.pop_map_okOn {pre d : Devm} (h : Devm.AccGrow pre d) :
 
 theorem Devm.AccGrow.balReadAccount {pre d : Devm} (h : Devm.AccGrow pre d)
     (rules : ForkRules) (a : Adr) : Devm.AccGrow pre (d.balReadAccount rules a) :=
-  h.keep (by simp)
+  h.keep (by simp only [Devm.balReadAccount_accessedAddresses])
 
 theorem Devm.AccGrow.balReadStorage {pre d : Devm} (h : Devm.AccGrow pre d)
     (rules : ForkRules) (a : Adr) (k : B256) : Devm.AccGrow pre (d.balReadStorage rules a k) :=
-  h.keep (by simp)
+  h.keep (by simp only [Devm.balReadStorage_accessedAddresses])
 
 theorem Devm.AccGrow.memWrite {pre d : Devm} (h : Devm.AccGrow pre d) (i : Nat) (v : Bytes) :
     Devm.AccGrow pre (d.memWrite i v) := h.keep (Eq.refl _)
@@ -231,7 +231,8 @@ theorem Devm.subBal_okOn {pre d : Devm} (h : Devm.AccGrow pre d) (a : Adr) (v : 
   intro r hr
   unfold Devm.subBal at hr
   cases hs : d.state.subBal a v with
-  | none => simp [hs, Option.toExcept] at hr
+  | none => simp only [Option.toExcept, hs, Option.bind_eq_bind, Option.bind_none,
+    reduceCtorEq] at hr
   | some st =>
     simp only [hs, Option.toExcept] at hr
     cases hr
@@ -357,7 +358,7 @@ theorem Rinst.balanceCore_acc (rules : ForkRules) (world : World) (mach : Mach) 
         simp only [Except.ok.injEq, Prod.mk.injEq] at h
         obtain ⟨-, -, rfl⟩ := h
         intro a ha
-        split <;> (try split) <;> simp_all [Meta.readAccount, Meta.addAccessedAddress]
+        split <;> (try split) <;> simp_all only [ExceptT.stM_eq, ↓reduceIte, Meta.readAccount, Meta.addAccessedAddress, Std.HashSet.mem_insert, beq_iff_eq, or_true, Bool.not_eq_true, Option.isSome_eq_false_iff, Option.isNone_iff_eq_none]
 
 theorem Rinst.balance_okOn (rules : ForkRules) (devm : Devm) :
     Except.OkOn (Devm.AccGrow devm) (liftMachMetaWorldExecution (Rinst.balanceCore rules) devm) :=
@@ -620,7 +621,7 @@ theorem Exec.rawFrameRoots_warm (a : Adr) {pc : Nat} {sevm : Sevm} {pre : Devm}
       rcases member with rfl | member
       · exact ha
       · exact ih hsg (Evm.step_cont_accGrow hsg hstep a ha) root
-          (by simp [Exec.rawFrameRoots, member])
+          (by simp only [rawFrameRoots, List.mem_cons, member, or_true])
   | doneErr hstep henter hresume =>
       intro hsg ha root member
       simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons,
@@ -633,7 +634,7 @@ theorem Exec.rawFrameRoots_warm (a : Adr) {pc : Nat} {sevm : Sevm} {pre : Devm}
       rcases member with rfl | member
       · exact ha
       · exact ih hsg (Evm.step_resume_accGrow hsg hstep hresume a ha) root
-          (by simp [Exec.rawFrameRoots, member])
+          (by simp only [rawFrameRoots, List.mem_cons, member, or_true])
   | runErr hstep henter child hresume ih =>
       intro hsg ha root member
       obtain ⟨hgrow, hsgc⟩ := Evm.step_spawn_child_warm hsg hstep henter
@@ -641,7 +642,8 @@ theorem Exec.rawFrameRoots_warm (a : Adr) {pc : Nat} {sevm : Sevm} {pre : Devm}
       rcases member with rfl | rfl | member
       · exact ha
       · exact hgrow a ha
-      · exact ih hsgc (hgrow a ha) root (by simp [Exec.rawFrameRoots, member])
+      · exact ih hsgc (hgrow a ha) root (by simp only [rawFrameRoots, List.mem_cons, member,
+        or_true])
   | runOk hstep henter child hresume next ihChild ihNext =>
       intro hsg ha root member
       obtain ⟨hgrow, hsgc⟩ := Evm.step_spawn_child_warm hsg hstep henter
@@ -650,8 +652,9 @@ theorem Exec.rawFrameRoots_warm (a : Adr) {pc : Nat} {sevm : Sevm} {pre : Devm}
       rcases member with rfl | rfl | member | member
       · exact ha
       · exact hgrow a ha
-      · exact ihChild hsgc (hgrow a ha) root (by simp [Exec.rawFrameRoots, member])
+      · exact ihChild hsgc (hgrow a ha) root (by simp only [rawFrameRoots, List.mem_cons, member,
+        or_true])
       · exact ihNext hsg (Evm.step_resume_accGrow hsg hstep hresume a ha) root
-          (by simp [Exec.rawFrameRoots, member])
+          (by simp only [rawFrameRoots, List.mem_cons, member, or_true])
 
 end Blanc

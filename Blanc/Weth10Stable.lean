@@ -129,25 +129,6 @@ theorem chainUsing_preserves_stable
       (flashExactSpec_preserves dp ca 0) cfg ch ch' h_reach
       h_inv.flashStateInv hcov)
 
-/-- Block import at an explicitly named covered fork preserves WETH10
-stability. -/
-theorem addBlockToChainAt_preserves_stable
-    (dp : DeployParams) (ca : Adr) (f : Fork)
-    (ch ch' : BlockChain) (rlp : Bytes)
-    (h_run : addBlockToChainAt f ch rlp = .ok (.inl ch'))
-    (h_wds : ∀ block hash, rlpToBlock rlp = .ok ⟨block, hash⟩ →
-      sum ch.state.bal + wdsum block.wds < 2 ^ 256)
-    (h_inv : Stable dp ca ch.state)
-    (hfork : CoveredFork f) :
-    Stable dp ca ch'.state :=
-  Stable.ofStateInvs
-    (ContractSpec.addBlockToChainAt_preserves_inv ca
-      (backedSpec_preserves dp ca) f ch ch' rlp h_run h_wds
-      h_inv.backedStateInv hfork)
-    (ContractSpec.addBlockToChainAt_preserves_inv ca
-      (flashExactSpec_preserves dp ca 0) f ch ch' rlp h_run h_wds
-      h_inv.flashStateInv hfork)
-
 /-- Configured-chain block import preserves WETH10 stability. -/
 theorem addBlockToChainUsing_preserves_stable
     (dp : DeployParams) (ca : Adr) (cfg : ChainConfig)

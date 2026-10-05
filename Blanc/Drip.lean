@@ -33,10 +33,6 @@ def nowWord : B256 := 6
 def exponentWord : B256 := 0
 def baseWord : B256 := 7
 def accumulatorWord : B256 := 8
-def freshChiWord : B256 := 8
-def resultWord : B256 := 0
-def newRowWord : B256 := 5
-def newTotalWord : B256 := 7
 def roundedWord : B256 := 14
 
 def loadWord (word : B256) : Line :=
@@ -192,9 +188,6 @@ def freshStart : Func :=
 def commitFresh : Line :=
   [pushB256 chiSlot, sstore] ++
   loadWord nowWord ++ [pushB256 rhoSlot, sstore]
-
-def returnScratch (word : B256) : Func :=
-  loadWord word +++ mstoreAt 0 +++ returnMemoryRange 0 32
 
 def afterDrip : Func :=
   dup 0 :::

@@ -31,7 +31,6 @@ inductive OssifiableConstructorDecodeResult where
   | accepted (implementation requestedAdmin : B256) (setupData : Bytes)
   | emptyRevert
   | allocationPanic
-  deriving DecidableEq
 
 def ossifiableConstructorAbiMaxUint64 : B256 := 0xffffffffffffffff
 
@@ -101,7 +100,7 @@ theorem ossifiableConstructorDecodeSpec_shortHead
     {code : Bytes} {argsOffset : Nat}
     (short : code.length < argsOffset + 96) :
     ossifiableConstructorDecodeSpec code argsOffset = .emptyRevert := by
-  simp [ossifiableConstructorDecodeSpec, short]
+  simp only [ossifiableConstructorDecodeSpec, short, ↓reduceIte]
 
 theorem ossifiableConstructorDecodeSpec_dirtyImplementation
     {code : Bytes} {argsOffset : Nat}
@@ -109,7 +108,8 @@ theorem ossifiableConstructorDecodeSpec_dirtyImplementation
     (dirty : addressMask &&&
       ossifiableConstructorCodeWord code argsOffset ≠ 0) :
     ossifiableConstructorDecodeSpec code argsOffset = .emptyRevert := by
-  simp [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head, dirty]
+  simp only [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head, ↓reduceIte, ne_eq, dirty,
+    not_false_eq_true]
 
 theorem ossifiableConstructorDecodeSpec_dirtyAdmin
     {code : Bytes} {argsOffset : Nat}
@@ -119,8 +119,8 @@ theorem ossifiableConstructorDecodeSpec_dirtyAdmin
     (adminDirty : addressMask &&&
       ossifiableConstructorCodeWord code (argsOffset + 32) ≠ 0) :
     ossifiableConstructorDecodeSpec code argsOffset = .emptyRevert := by
-  simp [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head,
-    implementationClean, adminDirty]
+  simp only [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head, ↓reduceIte, implementationClean,
+    ne_eq, not_true_eq_false, adminDirty, not_false_eq_true]
 
 theorem ossifiableConstructorDecodeSpec_largeOffset
     {code : Bytes} {argsOffset : Nat}
@@ -132,8 +132,8 @@ theorem ossifiableConstructorDecodeSpec_largeOffset
     (large : ossifiableConstructorAbiMaxUint64 <
       ossifiableConstructorCodeWord code (argsOffset + 64)) :
     ossifiableConstructorDecodeSpec code argsOffset = .emptyRevert := by
-  simp [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head,
-    implementationClean, adminClean, large]
+  simp only [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head, ↓reduceIte, implementationClean,
+    ne_eq, not_true_eq_false, adminClean, large]
 
 theorem ossifiableConstructorDecodeSpec_incompleteLength
     {code : Bytes} {argsOffset : Nat}
@@ -148,8 +148,8 @@ theorem ossifiableConstructorDecodeSpec_incompleteLength
       (ossifiableConstructorDataPointer argsOffset
         (ossifiableConstructorCodeWord code (argsOffset + 64)) + 32).toNat) :
     ossifiableConstructorDecodeSpec code argsOffset = .emptyRevert := by
-  simp [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head,
-    implementationClean, adminClean, offsetBound, short]
+  simp only [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head, ↓reduceIte, implementationClean,
+    ne_eq, not_true_eq_false, adminClean, offsetBound, short]
 
 theorem ossifiableConstructorDecodeSpec_largeLength
     {code : Bytes} {argsOffset : Nat}
@@ -169,9 +169,8 @@ theorem ossifiableConstructorDecodeSpec_largeLength
         (ossifiableConstructorDataPointer argsOffset
           (ossifiableConstructorCodeWord code (argsOffset + 64))).toNat) :
     ossifiableConstructorDecodeSpec code argsOffset = .allocationPanic := by
-  simp [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head,
-    implementationClean, adminClean, offsetBound,
-    Nat.not_lt.mpr lengthComplete, large]
+  simp only [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head, ↓reduceIte, implementationClean,
+    ne_eq, not_true_eq_false, adminClean, offsetBound, Nat.not_lt.mpr lengthComplete, large]
 
 theorem ossifiableConstructorDecodeSpec_payloadOutOfBounds
     {code : Bytes} {argsOffset : Nat}
@@ -205,9 +204,8 @@ theorem ossifiableConstructorDecodeSpec_payloadOutOfBounds
             (ossifiableConstructorCodeWord code (argsOffset + 64))).toNat).toNat := by
     simpa only [ossifiableConstructorDataEnd,
       ossifiableConstructorDataStart] using payloadShort
-  simp [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head,
-    implementationClean, adminClean, offsetBound,
-    Nat.not_lt.mpr lengthComplete, lengthBound,
+  simp only [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head, ↓reduceIte, implementationClean,
+    ne_eq, not_true_eq_false, adminClean, offsetBound, Nat.not_lt.mpr lengthComplete, lengthBound,
     payloadShort']
 
 theorem ossifiableConstructorDecodeSpec_accepted
@@ -254,21 +252,16 @@ theorem ossifiableConstructorDecodeSpec_accepted
         ≤ code.length := by
     simpa only [ossifiableConstructorDataEnd,
       ossifiableConstructorDataStart] using payloadComplete
-  simp [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head,
-    implementationClean, adminClean, offsetBound,
-    Nat.not_lt.mpr lengthComplete, lengthBound,
-    payloadComplete', ossifiableConstructorDataStart]
+  simp only [ossifiableConstructorDecodeSpec, Nat.not_lt.mpr head, ↓reduceIte, implementationClean,
+    ne_eq, not_true_eq_false, adminClean, offsetBound, Nat.not_lt.mpr lengthComplete, lengthBound,
+    ossifiableConstructorDataStart, ite_eq_right_iff, reduceCtorEq, imp_false, not_lt,
+    payloadComplete']
 
 /-! ## Implementation validation and ordered installation effect -/
 
 inductive OssifiableImplementationValidation where
   | noCode
   | accepted
-  deriving DecidableEq, Repr
-
-def ossifiableImplementationValidation
-    (code : ByteArray) : OssifiableImplementationValidation :=
-  if code.size.toB256 = 0 then .noCode else .accepted
 
 /-- The exact raw word produced by Solidity address assignment. -/
 def ossifiableConstructorAddressWrite
@@ -372,20 +365,6 @@ structure OssifiableConstructorAdminEffect
       [ossifiableConstructorAdminChangedLog
         proxy postSetupRaw requestedAdmin]
 
-/-- The event reads the post-setup word and cleans it before encoding. -/
-@[simp] theorem ossifiableConstructorAdminChangedLog_data
-    (proxy : Adr) (postSetupRaw : B256) (requestedAdmin : Adr) :
-    (ossifiableConstructorAdminChangedLog
-      proxy postSetupRaw requestedAdmin).data =
-      (ossifiableConstructorAddressRead postSetupRaw).toBytes ++
-        requestedAdmin.toB256.toBytes := by
-  rfl
 
-@[simp] theorem ossifiableConstructorAdminChangedLog_topics
-    (proxy : Adr) (postSetupRaw : B256) (requestedAdmin : Adr) :
-    (ossifiableConstructorAdminChangedLog
-      proxy postSetupRaw requestedAdmin).topics =
-      [adminChangedEventTopic] := by
-  rfl
 
 end Blanc.ProxyPair

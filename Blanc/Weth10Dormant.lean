@@ -106,11 +106,11 @@ private theorem delegatedKey_inv {e : Sevm} {pre post : Devm}
     rw [hbranch] at hkey
     by_cases hself : Sevm.argWord e 0 = e.caller.toB256
     · rw [show callerAllowanceBranch e pre 2 = .selfBypass by
-        simp [callerAllowanceBranch, hself]] at hkey
-      simp [delegatedKey?] at hkey
+        simp only [callerAllowanceBranch, hself, ↓reduceIte]] at hkey
+      simp only [delegatedKey?, reduceCtorEq] at hkey
     · refine ⟨hself, ?_⟩
       simp only [callerAllowanceBranch, if_neg hself] at hkey
-      split at hkey <;> simpa [delegatedKey?] using hkey.symm
+      split at hkey <;> simpa only [delegatedKey?, Option.some.injEq] using hkey.symm
   simp only [primaryDebitProvenance] at hdebit
   split_ifs at hdebit with h1 h2 h3 h4 h5
   all_goals (try cases hdebit)
@@ -118,7 +118,7 @@ private theorem delegatedKey_inv {e : Sevm} {pre post : Devm}
     first
       | exact ⟨h1, Or.inl h3, hdelegated rfl⟩
       | exact ⟨h1, Or.inr h4, hdelegated rfl⟩
-      | simp [delegatedKey?] at hkey
+      | simp only [delegatedKey?, reduceCtorEq] at hkey
 
 /-- The allowance event of a delegated invocation reports the exact word the
 runtime read at its own entry state. -/
@@ -144,21 +144,21 @@ private theorem frameAllowanceEvent_spend_read
           if before = B256.max then .spendMax
           else .spendFinite before (before - Sevm.argWord e 2) } := by
     rcases hsel with h | h
-    · simp [frameAllowanceEvent, hnonempty, h, hnotself,
-        transferFromSelector_ne_approveSelector,
-        transferFromSelector_ne_approveAndCallSelector,
-        transferFromSelector_ne_permitSelector]
-    · simp [frameAllowanceEvent, hnonempty, h, hnotself,
-        withdrawFromSelector_ne_approveSelector,
-        withdrawFromSelector_ne_approveAndCallSelector,
-        withdrawFromSelector_ne_permitSelector,
-        withdrawFromSelector_ne_transferFromSelector]
+    · simp only [frameAllowanceEvent, hnonempty, ↓reduceIte, h,
+      transferFromSelector_ne_approveSelector, decide_false,
+      transferFromSelector_ne_approveAndCallSelector, Bool.or_self, Bool.false_eq_true,
+      transferFromSelector_ne_permitSelector, decide_true, Bool.true_or, hnotself]
+    · simp only [frameAllowanceEvent, hnonempty, ↓reduceIte, h,
+      withdrawFromSelector_ne_approveSelector, decide_false,
+      withdrawFromSelector_ne_approveAndCallSelector, Bool.or_self, Bool.false_eq_true,
+      withdrawFromSelector_ne_permitSelector, withdrawFromSelector_ne_transferFromSelector,
+      decide_true, Bool.or_true, hnotself]
   rw [hshape] at hevent
   cases hevent
   by_cases hmax : (Devm.getStor pre e.currentTarget).get
       (callerAllowanceRuntimeKey e) = B256.max
-  · simp [AllowanceVisit.read?, hmax]
-  · simp [AllowanceVisit.read?, hmax]
+  · simp only [AllowanceVisit.read?, hmax, ↓reduceIte]
+  · simp only [AllowanceVisit.read?, hmax, ↓reduceIte]
 
 /-- A rooted delegated invocation that read a zero allowance word requested a
 zero amount: the accepted finite arm bounds the request by the word read, and
@@ -175,7 +175,7 @@ private theorem argWord_two_toNat_eq_zero_of_read_zero
     (Sevm.argWord frame.sevm 2).toNat = 0 := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := hroot.1
       subst pc
@@ -226,9 +226,11 @@ private theorem outflow_eq_zero_of_argWord_two_toNat_zero
         ∃ rs rr s r, atom = .transfer rs rr s r 0) → atom.outflow u = 0 := by
     rintro _ (⟨raw, src, eth, rfl⟩ | ⟨rs, rr, s, r, rfl⟩)
     · by_cases hsrc : src = u <;>
-        simp [FlowAtom.outflow, FlowAtom.holderFlow, HolderFlow.zero, hsrc]
+        simp only [FlowAtom.outflow, FlowAtom.holderFlow, hsrc, ↓reduceIte, HolderFlow.zero,
+          add_zero]
     · by_cases hs : s = u <;> by_cases hr : r = u <;>
-        simp [FlowAtom.outflow, FlowAtom.holderFlow, HolderFlow.zero, hs, hr]
+        simp only [FlowAtom.outflow, FlowAtom.holderFlow, hs, ↓reduceIte, hr, HolderFlow.zero,
+          add_zero]
   refine hzeroAtom atom ?_
   rw [← hamount]
   rcases hsel with h | h
@@ -240,12 +242,10 @@ private theorem outflow_eq_zero_of_argWord_two_toNat_zero
           some (FlowAtom.transfer (Sevm.argWord e 0) (Sevm.argWord e 1)
             (Sevm.argWord e 0).toAdr (Sevm.argWord e 1).toAdr
             (Sevm.argWord e 2).toNat)) := by
-      simp [primaryFlowAtom, hnonempty, h,
-        transferFromSelector_ne_depositSelector,
-        transferFromSelector_ne_depositToSelector,
-        transferFromSelector_ne_depositToAndCallSelector,
-        transferFromSelector_ne_transferSelector,
-        transferFromSelector_ne_transferAndCallSelector]
+      simp only [primaryFlowAtom, hnonempty, ↓reduceIte, h, transferFromSelector_ne_depositSelector,
+        transferFromSelector_ne_depositToSelector, decide_false,
+        transferFromSelector_ne_depositToAndCallSelector, Bool.or_self, Bool.false_eq_true,
+        transferFromSelector_ne_transferSelector, transferFromSelector_ne_transferAndCallSelector]
     rw [hchain] at hprimary
     by_cases hto : Sevm.argWord e 1 = 0
     · rw [if_pos hto] at hprimary
@@ -257,14 +257,11 @@ private theorem outflow_eq_zero_of_argWord_two_toNat_zero
   · have hchain : primaryFlowAtom e =
         some (FlowAtom.redemption (Sevm.argWord e 0) (Sevm.argWord e 0).toAdr
           (Sevm.argWord e 1).toAdr (Sevm.argWord e 2).toNat) := by
-      simp [primaryFlowAtom, hnonempty, h,
-        withdrawFromSelector_ne_depositSelector,
-        withdrawFromSelector_ne_depositToSelector,
-        withdrawFromSelector_ne_depositToAndCallSelector,
-        withdrawFromSelector_ne_transferSelector,
-        withdrawFromSelector_ne_transferAndCallSelector,
-        withdrawFromSelector_ne_transferFromSelector,
-        withdrawFromSelector_ne_withdrawSelector,
+      simp only [primaryFlowAtom, hnonempty, ↓reduceIte, h, withdrawFromSelector_ne_depositSelector,
+        withdrawFromSelector_ne_depositToSelector, decide_false,
+        withdrawFromSelector_ne_depositToAndCallSelector, Bool.or_self, Bool.false_eq_true,
+        withdrawFromSelector_ne_transferSelector, withdrawFromSelector_ne_transferAndCallSelector,
+        withdrawFromSelector_ne_transferFromSelector, withdrawFromSelector_ne_withdrawSelector,
         withdrawFromSelector_ne_withdrawToSelector]
     rw [hchain] at hprimary
     cases hprimary
@@ -301,8 +298,8 @@ theorem CountedFrame.permanentOutflow_eq_zero_of_read_zero
     primaryDebit_witness (pre := frame.pre) (post := frame.post)
       hprimary hatomout
   rcases hwitness with ⟨-, hcaller⟩ | ⟨ev, hev, -, hkey⟩
-  · simp [CountedFrame.authorizes, haction, hactionDebit, hdebit, hcaller]
-      at hself
+  · simp only [authorizes, haction, hactionDebit, hdebit, hcaller, decide_true, Bool.true_or,
+    Bool.true_eq_false] at hself
   · have hevEq : ev = event := by
       have hrec : frameAllowanceEvent frame.sevm frame.pre frame.post =
           some event := hevent
@@ -362,8 +359,8 @@ theorem CountedFrame.checkpointRooted_of_dormant
       hprimary hatomout
   rcases hwitness with ⟨-, hcaller⟩ | ⟨event, hevent, howner, hkey⟩
   · exfalso
-    simp [CountedFrame.authorizes, haction, hactionDebit, hdebit, hcaller]
-      at hself
+    simp only [authorizes, haction, hactionDebit, hdebit, hcaller, decide_true, Bool.true_or,
+      Bool.true_eq_false] at hself
   · refine ⟨event, hevent, howner, ?_⟩
     rcases attributionRootAt_cases recent event.key with
       hroot | ⟨other, hother, ev, hev, hevkey, hcase⟩
@@ -391,12 +388,12 @@ theorem CountedFrame.checkpointRooted_of_dormant
         rw [Bool.or_eq_false_iff] at hotherDormant
         have hfalse := hotherDormant.2
         rw [hev] at hfalse
-        simp [hvisit, hevCaller] at hfalse
+        simp only [hvisit, hevCaller, decide_true, Bool.true_eq_false] at hfalse
       · unfold CountedFrame.authorizes at hotherDormant
         rw [Bool.or_eq_false_iff] at hotherDormant
         have hfalse := hotherDormant.2
         rw [hev] at hfalse
-        simp [hvisit, hevOwner] at hfalse
+        simp only [hvisit, hevOwner, decide_true, Bool.true_eq_false] at hfalse
 
 /-! ## The ledger fold
 
@@ -446,7 +443,7 @@ private theorem ledgerOutflow_eq_zero_of_dormant_go
               refine hcross p (mem_touchedPairs_reverse.mpr hp) q ?_
               rcases mem_touchedPairs.mp hq with ⟨other, hother, ev, hev, hq⟩
               rw [List.mem_singleton] at hother
-              exact mem_touchedPairs.mpr ⟨other, by simp [hother], ev, hev, hq⟩)
+              exact mem_touchedPairs.mpr ⟨other, by simp only [hother, List.mem_cons, true_or], ev, hev, hq⟩)
             (hdormant record hrecordWhole)
             (fun other hother => hdormant other (hmemWhole other hother))
             hout
@@ -454,7 +451,8 @@ private theorem ledgerOutflow_eq_zero_of_dormant_go
           (hcheckpoint recent.reverse record tail hchain.symm event hevent
             howner (by rwa [List.reverse_reverse]))
       show record.permanentOutflow u + ledgerOutflow u tail = 0
-      rw [hhead, ih (record :: recent) (by simpa using hchain), Nat.add_zero]
+      rw [hhead, ih (record :: recent) (by simpa only [List.reverse_cons, List.append_assoc,
+        List.cons_append, List.nil_append] using hchain), Nat.add_zero]
 
 /-- A dormant holder's public permanent outflow is zero, provided no counted
 record debits that holder's balance through a checkpoint-governed allowance
@@ -476,7 +474,7 @@ theorem AccountedHistory.permanentOutflow_eq_zero_of_dormant
   rw [← history.ledgerOutflow_eq_permanentOutflow]
   refine ledgerOutflow_eq_zero_of_dormant_go u history.attributionLedger
     history.ledgerMirrors.origins hdormant ?_ hcheckpoint
-    history.attributionLedger [] (by simp)
+    history.attributionLedger [] (by simp only [List.reverse_nil, List.nil_append])
   rw [← touchedAllowancePairs_eq_touchedPairs history]
   exact hnc
 
@@ -562,29 +560,29 @@ private theorem frameAllowanceEvent_spendFinite_inv
       after = before - Sevm.argWord e 2 := by
   unfold frameAllowanceEvent at hevent
   split at hevent
-  · exact absurd hevent (by simp)
+  · exact absurd hevent (by simp only [reduceCtorEq, not_false_eq_true])
   · rename_i hne0
     split at hevent
-    · cases hevent; exact absurd hvisit (by simp)
+    · cases hevent; exact absurd hvisit (by simp only [reduceCtorEq, not_false_eq_true])
     · split at hevent
-      · cases hevent; exact absurd hvisit (by simp)
+      · cases hevent; exact absurd hvisit (by simp only [reduceCtorEq, not_false_eq_true])
       · split at hevent
         · rename_i hsel
           split at hevent
-          · exact absurd hevent (by simp)
+          · exact absurd hevent (by simp only [reduceCtorEq, not_false_eq_true])
           · rename_i hnotself
             cases hevent
-            refine ⟨hne0, by simpa using hsel, hnotself, ?_⟩
+            refine ⟨hne0, by simpa only [Bool.or_eq_true, decide_eq_true_eq] using hsel, hnotself, ?_⟩
             split at hvisit
-            · exact absurd hvisit (by simp)
+            · exact absurd hvisit (by simp only [reduceCtorEq, not_false_eq_true])
             · cases hvisit
               exact ⟨rfl, rfl⟩
         · split at hevent
           · cases hevent
-            split at hvisit <;> exact absurd hvisit (by simp)
+            split at hvisit <;> exact absurd hvisit (by simp only [reduceCtorEq, not_false_eq_true])
           · split at hevent
-            · cases hevent; exact absurd hvisit (by simp)
-            · exact absurd hevent (by simp)
+            · cases hevent; exact absurd hvisit (by simp only [reduceCtorEq, not_false_eq_true])
+            · exact absurd hevent (by simp only [reduceCtorEq, not_false_eq_true])
 
 /-- Inversion of the recorded flash settlement: only `flashLoan` records one,
 its written word is the committed post-state word at the repayment cell, and
@@ -602,29 +600,29 @@ private theorem frameAllowanceEvent_flashFinite_inv
       after ≠ B256.max := by
   unfold frameAllowanceEvent at hevent
   split at hevent
-  · exact absurd hevent (by simp)
+  · exact absurd hevent (by simp only [reduceCtorEq, not_false_eq_true])
   · rename_i hne0
     split at hevent
-    · cases hevent; exact absurd hvisit (by simp)
+    · cases hevent; exact absurd hvisit (by simp only [reduceCtorEq, not_false_eq_true])
     · split at hevent
-      · cases hevent; exact absurd hvisit (by simp)
+      · cases hevent; exact absurd hvisit (by simp only [reduceCtorEq, not_false_eq_true])
       · split at hevent
         · split at hevent
-          · exact absurd hevent (by simp)
+          · exact absurd hevent (by simp only [reduceCtorEq, not_false_eq_true])
           · cases hevent
-            split at hvisit <;> exact absurd hvisit (by simp)
+            split at hvisit <;> exact absurd hvisit (by simp only [reduceCtorEq, not_false_eq_true])
         · split at hevent
           · rename_i hsel
             cases hevent
             refine ⟨hne0, hsel, ?_⟩
             split at hvisit
-            · exact absurd hvisit (by simp)
+            · exact absurd hvisit (by simp only [reduceCtorEq, not_false_eq_true])
             · rename_i hmax
               cases hvisit
               exact ⟨rfl, rfl, hmax⟩
           · split at hevent
-            · cases hevent; exact absurd hvisit (by simp)
-            · exact absurd hevent (by simp)
+            · cases hevent; exact absurd hvisit (by simp only [reduceCtorEq, not_false_eq_true])
+            · exact absurd hevent (by simp only [reduceCtorEq, not_false_eq_true])
 
 /-- A rooted exact `flashLoan` invocation exposes its post-callback allowance
 fork and the shared burn continuation.  This is the allowance-only slice of
@@ -644,7 +642,7 @@ private theorem exists_flashAllowanceOutcome
         frame.post := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := hroot.1
       subst pc
@@ -700,7 +698,7 @@ private theorem written_eq_zero_of_read_zero
   cases hvisit : event.visit with
   | viewRead v =>
       rw [hvisit] at hwritten
-      exact absurd hwritten (by simp [AllowanceVisit.written?])
+      exact absurd hwritten (by simp only [AllowanceVisit.written?, reduceCtorEq, not_false_eq_true])
   | approveStore v =>
       exfalso
       have hclean : event.owner = event.caller.toB256 :=
@@ -711,17 +709,17 @@ private theorem written_eq_zero_of_read_zero
       rw [Bool.or_eq_false_iff] at hself
       have hfalse := hself.2
       rw [hevent] at hfalse
-      simp [hvisit, hcaller] at hfalse
+      simp only [hvisit, hcaller, decide_true, Bool.true_eq_false] at hfalse
   | permitStore v =>
       exfalso
       unfold CountedFrame.authorizes at hself
       rw [Bool.or_eq_false_iff] at hself
       have hfalse := hself.2
       rw [hevent] at hfalse
-      simp [hvisit, howner] at hfalse
+      simp only [hvisit, howner, decide_true, Bool.true_eq_false] at hfalse
   | spendMax =>
       rw [hvisit] at hwritten
-      exact absurd hwritten (by simp [AllowanceVisit.written?])
+      exact absurd hwritten (by simp only [AllowanceVisit.written?, reduceCtorEq, not_false_eq_true])
   | spendFinite before after =>
       obtain ⟨hne0, hsel, hnotself, hbefore, hafter⟩ :=
         frameAllowanceEvent_spendFinite_inv hev hvisit
@@ -736,7 +734,7 @@ private theorem written_eq_zero_of_read_zero
       exact B256.sub_self 0
   | flashMax =>
       rw [hvisit] at hwritten
-      exact absurd hwritten (by simp [AllowanceVisit.written?])
+      exact absurd hwritten (by simp only [AllowanceVisit.written?, reduceCtorEq, not_false_eq_true])
   | flashFinite before after =>
       obtain ⟨hne0, hsel, hafterEq, hbefore, hmax⟩ :=
         frameAllowanceEvent_flashFinite_inv hev hvisit
@@ -748,7 +746,7 @@ private theorem written_eq_zero_of_read_zero
       have hbranch : flashAllowanceBranchFromPost frame.sevm frame.post =
           .finite (flashAllowanceRuntimeKey frame.sevm)
             (after + Sevm.argWord frame.sevm 2) after := by
-        simp [flashAllowanceBranchFromPost, ← hafterEq, hmax]
+        simp only [flashAllowanceBranchFromPost, ← hafterEq, hmax, ↓reduceIte]
       have haccept := flashSettlement_reconstruction houtcome hburn
       rw [hbranch] at haccept
       obtain ⟨-, -, -, hle, hsub⟩ := haccept.2
@@ -783,16 +781,16 @@ private theorem written_eq_zero_of_checkpointRoot
   cases hvisit : event.visit with
   | viewRead v =>
       rw [hvisit] at hwritten
-      exact absurd hwritten (by simp [AllowanceVisit.written?])
+      exact absurd hwritten (by simp only [AllowanceVisit.written?, reduceCtorEq, not_false_eq_true])
   | approveStore v =>
       exfalso
-      simp [attributionRootAt, hevent, hvisit] at hcheckpoint
+      simp only [attributionRootAt, hevent, ↓reduceIte, hvisit, reduceCtorEq] at hcheckpoint
   | permitStore v =>
       exfalso
-      simp [attributionRootAt, hevent, hvisit] at hcheckpoint
+      simp only [attributionRootAt, hevent, ↓reduceIte, hvisit, reduceCtorEq] at hcheckpoint
   | spendMax =>
       rw [hvisit] at hwritten
-      exact absurd hwritten (by simp [AllowanceVisit.written?])
+      exact absurd hwritten (by simp only [AllowanceVisit.written?, reduceCtorEq, not_false_eq_true])
   | spendFinite before after =>
       obtain ⟨hne0, hsel, hnotself, hbefore, hafter⟩ :=
         frameAllowanceEvent_spendFinite_inv hev hvisit
@@ -807,7 +805,7 @@ private theorem written_eq_zero_of_checkpointRoot
       exact B256.sub_self 0
   | flashMax =>
       rw [hvisit] at hwritten
-      exact absurd hwritten (by simp [AllowanceVisit.written?])
+      exact absurd hwritten (by simp only [AllowanceVisit.written?, reduceCtorEq, not_false_eq_true])
   | flashFinite before after =>
       obtain ⟨hne0, hsel, hafterEq, hbefore, hmax⟩ :=
         frameAllowanceEvent_flashFinite_inv hev hvisit
@@ -819,7 +817,7 @@ private theorem written_eq_zero_of_checkpointRoot
       have hbranch : flashAllowanceBranchFromPost frame.sevm frame.post =
           .finite (flashAllowanceRuntimeKey frame.sevm)
             (after + Sevm.argWord frame.sevm 2) after := by
-        simp [flashAllowanceBranchFromPost, ← hafterEq, hmax]
+        simp only [flashAllowanceBranchFromPost, ← hafterEq, hmax, ↓reduceIte]
       have haccept := flashSettlement_reconstruction houtcome hburn
       rw [hbranch] at haccept
       obtain ⟨-, -, -, hle, hsub⟩ := haccept.2
@@ -855,13 +853,17 @@ private theorem applyAllowanceLedger_append_singleton
   unfold applyAllowanceLedger
   rw [List.reverse_append]
   cases hallow : record.allowance with
-  | none => simp [lastAllowanceWriteAt, hallow]
+  | none => simp only [List.reverse_cons, List.reverse_nil, List.nil_append, List.cons_append,
+    lastAllowanceWriteAt, hallow]
   | some event =>
       by_cases hkey : event.key = key
       · cases hwrite : event.visit.written? with
-        | some value => simp [lastAllowanceWriteAt, hallow, hkey, hwrite]
-        | none => simp [lastAllowanceWriteAt, hallow, hkey, hwrite]
-      · simp [lastAllowanceWriteAt, hallow, hkey]
+        | some value => simp only [List.reverse_cons, List.reverse_nil, List.nil_append,
+          List.cons_append, lastAllowanceWriteAt, hallow, hkey, ↓reduceIte, hwrite]
+        | none => simp only [List.reverse_cons, List.reverse_nil, List.nil_append, List.cons_append,
+          lastAllowanceWriteAt, hallow, hkey, ↓reduceIte, hwrite]
+      · simp only [List.reverse_cons, List.reverse_nil, List.nil_append, List.cons_append,
+        lastAllowanceWriteAt, hallow, hkey, ↓reduceIte]
 
 private theorem applyAllowanceLedger_eq_zero_of_checkpointRoot
     {dp : DeployParams} {ca : Adr}
@@ -881,7 +883,7 @@ private theorem applyAllowanceLedger_eq_zero_of_checkpointRoot
   | append_singleton init record ih =>
       intro rest hsplit key hroot
       have hsplit' : whole = init ++ record :: rest := by
-        simpa using hsplit
+        simpa only [List.append_assoc, List.cons_append, List.nil_append] using hsplit
       have hrecordWhole : record ∈ whole := by
         rw [hsplit']
         exact List.mem_append_right _ List.mem_cons_self
@@ -889,7 +891,8 @@ private theorem applyAllowanceLedger_eq_zero_of_checkpointRoot
       cases hallow : record.allowance with
       | none =>
           apply ih (record :: rest) hsplit' key
-          simpa [List.reverse_append, attributionRootAt, hallow] using hroot
+          simpa only [List.reverse_append, List.reverse_cons, List.reverse_nil, List.nil_append,
+            List.cons_append, attributionRootAt, hallow] using hroot
       | some event =>
           dsimp only
           by_cases hkey : event.key = key
@@ -898,26 +901,23 @@ private theorem applyAllowanceLedger_eq_zero_of_checkpointRoot
             | none =>
                 apply ih (record :: rest) hsplit' key
                 cases hvisit : event.visit <;>
-                  simp [List.reverse_append, attributionRootAt, hallow,
-                    hkey, hvisit, AllowanceVisit.written?]
-                    at hroot hwrite ⊢ <;> assumption
+                  simp only [List.reverse_append, List.reverse_cons, List.reverse_nil, List.nil_append, List.cons_append, attributionRootAt, hallow, hkey, ↓reduceIte, hvisit, AllowanceVisit.written?, reduceCtorEq] at hroot hwrite ⊢ <;> assumption
             | some value =>
                 have hprior :
                     attributionRootAt init.reverse event.key = .checkpoint := by
                   cases hvisit : event.visit <;>
-                    simp [List.reverse_append, attributionRootAt, hallow,
-                      hkey, hvisit, AllowanceVisit.written?]
-                      at hroot hwrite ⊢ <;> assumption
+                    simp only [List.reverse_append, List.reverse_cons, List.reverse_nil, List.nil_append, List.cons_append, attributionRootAt, hallow, hkey, ↓reduceIte, hvisit, AllowanceVisit.written?, reduceCtorEq, Option.some.injEq] at hroot hwrite ⊢ <;> assumption
                 apply written_eq_zero_of_checkpointRoot
                   (hrooted record hrecordWhole) hallow
-                  (by simpa [List.reverse_append, hkey] using hroot) ?_ hwrite
+                  (by simpa only [hkey, List.reverse_append, List.reverse_cons, List.reverse_nil,
+                    List.nil_append, List.cons_append] using hroot) ?_ hwrite
                 intro v hv
                 rw [hsound init record rest hsplit' event hallow v hv]
                 exact ih (record :: rest) hsplit' event.key hprior
           · rw [if_neg hkey]
             apply ih (record :: rest) hsplit' key
-            simpa [List.reverse_append, attributionRootAt, hallow, hkey]
-              using hroot
+            simpa only [List.reverse_append, List.reverse_cons, List.reverse_nil, List.nil_append,
+              List.cons_append, attributionRootAt, hallow, hkey, ↓reduceIte] using hroot
 
 private theorem CountedFrame.permanentOutflow_eq_zero_of_delegated_read_zero
     {dp : DeployParams} {ca u : Adr} {record : CountedFrame}
@@ -1154,7 +1154,8 @@ private theorem zeroReads_go
           (mem_touchedPairs.mpr ⟨head, hheadWhole, ev, hev, rfl⟩)
       rcases List.mem_cons.mp hrecord with rfl | hrest
       · exact hheadRead event hevent howner value hread
-      · refine ih (earlier ++ [head]) (by simpa using hchain) ?_ record hrest
+      · refine ih (earlier ++ [head]) (by simpa only [List.append_assoc, List.cons_append,
+        List.nil_append] using hchain) ?_ record hrest
           event hevent howner value hread
         intro owner spender howner' hmem
         rw [applyAllowanceLedger_append_singleton]
@@ -1209,7 +1210,7 @@ theorem AccountedHistory.zeroReads_of_dormant
   refine zeroReads_go (checkpoint.state.getStor ca)
     history.attributionLedger history.rootedLedger hdormant hpairs
     (history.allowanceTransportedSound_of_compiled hstable).2
-    history.attributionLedger [] (by simp) ?_
+    history.attributionLedger [] (by simp only [List.nil_append]) ?_
   intro owner spender howner _
   rw [applyAllowanceLedger_nil]
   exact hquiet owner spender howner

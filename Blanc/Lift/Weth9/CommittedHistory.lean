@@ -28,13 +28,13 @@ open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
 theorem committedFrameInvocations_static {ca : Adr} {f : Exec.Frame} (h : f.sevm.isStatic = true) :
     committedFrameInvocations ca f = [] := by
   unfold committedFrameInvocations
-  simp [h]
+  simp only [h, Bool.true_eq_false, false_and, and_false, ↓reduceIte]
 
 /-- The observation of a frame at another address is empty. -/
 theorem committedFrameInvocations_foreign {ca : Adr} {f : Exec.Frame}
     (h : f.sevm.currentTarget ≠ ca) : committedFrameInvocations ca f = [] := by
   unfold committedFrameInvocations
-  simp [h]
+  simp only [h, false_and, ↓reduceIte]
 
 /-- **The accounting ladder of the WETH9 ledger replay** over a tracked universe `U` with injective slots:
 the footprint frame theorem, the spawn obligations of `withdraw`, and the generic ladder for everything

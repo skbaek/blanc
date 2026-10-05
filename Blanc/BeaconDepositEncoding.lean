@@ -51,14 +51,18 @@ theorem abiDynamicBytesReturn_le64_eq (n : Nat) :
     abiDynamicBytesReturn (le64 n) =
       (32 : B256).toBytes ++ (8 : B256).toBytes ++
         le64 n ++ List.replicate 24 0 := by
-  simp [abiDynamicBytesReturn, abiBytesTail, le64, ceil32,
-    List.append_assoc]
+  simp only [abiDynamicBytesReturn, abiBytesTail, le64, Nat.toUInt8_eq, List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, ceil32, Nat.reduceMod, Nat.succ_eq_add_one,
+    Nat.reduceSub, List.reduceReplicate, List.append_assoc, List.cons_append, List.nil_append,
+    List.append_cancel_left_eq, List.append_cancel_right_eq]
   decide +kernel
 
 theorem abiDynamicBytesReturn_le64_length (n : Nat) :
     (abiDynamicBytesReturn (le64 n)).length = 96 := by
   rw [abiDynamicBytesReturn_le64_eq]
-  simp [le64, B256.length_toBytes]
+  simp only [le64, Nat.toUInt8_eq, List.append_assoc, List.reduceReplicate, List.cons_append,
+    List.nil_append, List.length_append, B256.length_toBytes, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd]
 
 theorem abiDepositEvent_length
     (event : DepositEvent)
@@ -94,27 +98,30 @@ theorem abiDepositEvent_fixed_layout
   have hpubkeyTail : abiBytesTail event.pubkey =
       (48 : B256).toBytes ++ event.pubkey ++ zeros 16 := by
     rw [abiBytesTail, hpubkey]
-    simp [ceil32, zeros]
+    simp only [ceil32, Nat.reduceAdd, Nat.succ_eq_add_one, Nat.reduceSub, List.reduceReplicate,
+      List.append_assoc, zeros, List.append_cancel_right_eq]
     decide +kernel
   have hwithdrawalTail : abiBytesTail event.withdrawal_credentials =
       (32 : B256).toBytes ++ event.withdrawal_credentials := by
     rw [abiBytesTail, hwithdrawal]
-    simp [ceil32]
+    simp only [ceil32, tsub_self, List.replicate_zero, List.append_nil, List.append_cancel_right_eq]
     decide +kernel
   have hamountTail : abiBytesTail event.amount =
       (8 : B256).toBytes ++ event.amount ++ zeros 24 := by
     rw [abiBytesTail, hamount]
-    simp [ceil32, zeros]
+    simp only [ceil32, Nat.reduceAdd, Nat.succ_eq_add_one, Nat.reduceSub, List.reduceReplicate,
+      List.append_assoc, zeros, List.append_cancel_right_eq]
     decide +kernel
   have hsignatureTail : abiBytesTail event.signature =
       (96 : B256).toBytes ++ event.signature := by
     rw [abiBytesTail, hsignature]
-    simp [ceil32]
+    simp only [ceil32, tsub_self, List.replicate_zero, List.append_nil, List.append_cancel_right_eq]
     decide +kernel
   have hindexTail : abiBytesTail event.index =
       (8 : B256).toBytes ++ event.index ++ zeros 24 := by
     rw [abiBytesTail, hindex]
-    simp [ceil32, zeros]
+    simp only [ceil32, Nat.reduceAdd, Nat.succ_eq_add_one, Nat.reduceSub, List.reduceReplicate,
+      List.append_assoc, zeros, List.append_cancel_right_eq]
     decide +kernel
   simp only [abiDepositEvent, hpubkeyTail, hwithdrawalTail, hamountTail,
     hsignatureTail, hindexTail, List.append_assoc]
@@ -144,9 +151,10 @@ theorem abiDepositEvent_pubkeyInput_read
           (8 : B256).toBytes ++ event.index ++ zeros 24
   have h := Bytes.sliceD_append_middle pre middle post
   have hpre : pre.length = 192 := by
-    simp [pre, B256.length_toBytes]
+    simp only [List.append_assoc, List.length_append, B256.length_toBytes, Nat.reduceAdd, pre]
   have hmiddle : middle.length = 64 := by
-    simp [middle, hpubkey, zeros]
+    simp only [zeros, List.reduceReplicate, List.length_append, hpubkey, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, middle]
   rw [hpre, hmiddle] at h
   simpa only [pre, middle, post, List.append_assoc] using h
 
@@ -175,7 +183,8 @@ theorem abiDepositEvent_withdrawal_read
         (8 : B256).toBytes ++ event.index ++ zeros 24
   have h := Bytes.sliceD_append_middle pre middle post
   have hpre : pre.length = 288 := by
-    simp [pre, B256.length_toBytes, hpubkey, zeros]
+    simp only [List.append_assoc, zeros, List.reduceReplicate, List.cons_append, List.nil_append,
+      List.length_append, B256.length_toBytes, hpubkey, List.length_cons, Nat.reduceAdd, pre]
   have hmiddle : middle.length = 32 := by
     simpa only [middle] using hwithdrawal
   rw [hpre, hmiddle] at h
@@ -206,9 +215,12 @@ theorem abiDepositEvent_amountPadded_read
       (8 : B256).toBytes ++ event.index ++ zeros 24
   have h := Bytes.sliceD_append_middle pre middle post
   have hpre : pre.length = 352 := by
-    simp [pre, B256.length_toBytes, hpubkey, hwithdrawal, zeros]
+    simp only [List.append_assoc, zeros, List.reduceReplicate, List.cons_append, List.nil_append,
+      List.length_append, B256.length_toBytes, hpubkey, List.length_cons, hwithdrawal,
+      Nat.reduceAdd, pre]
   have hmiddle : middle.length = 32 := by
-    simp [middle, hamount, zeros]
+    simp only [zeros, List.reduceReplicate, List.length_append, hamount, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, middle]
   rw [hpre, hmiddle] at h
   simpa only [pre, middle, post, List.append_assoc] using h
 
@@ -236,7 +248,9 @@ theorem abiDepositEvent_signature_read
     (8 : B256).toBytes ++ event.index ++ zeros 24
   have h := Bytes.sliceD_append_middle pre middle post
   have hpre : pre.length = 416 := by
-    simp [pre, B256.length_toBytes, hpubkey, hwithdrawal, hamount, zeros]
+    simp only [List.append_assoc, zeros, List.reduceReplicate, List.cons_append, List.nil_append,
+      List.length_append, B256.length_toBytes, hpubkey, List.length_cons, hwithdrawal, hamount,
+      Nat.reduceAdd, pre]
   have hmiddle : middle.length = 96 := by
     simpa only [middle] using hsignature
   rw [hpre, hmiddle] at h
@@ -250,7 +264,8 @@ private theorem calldataWord_append_word
   simp only [calldataWord, List.sliceD]
   rw [List.append_assoc,
     List.drop_length_append' rfl,
-    List.takeD_eq_take _ (by simp [B256.length_toBytes]),
+    List.takeD_eq_take _ (by simp only [List.length_append, B256.length_toBytes,
+      le_add_iff_nonneg_right, zero_le]),
     List.take_length_append' (B256.length_toBytes word).symm,
     B256.toB256_toBytes]
 
@@ -262,7 +277,8 @@ private theorem calldataWord_append_abiBytesTail
   rw [List.append_assoc,
     List.drop_length_append' rfl,
     List.append_assoc, List.append_assoc,
-    List.takeD_eq_take _ (by simp [B256.length_toBytes]),
+    List.takeD_eq_take _ (by simp only [List.length_append, B256.length_toBytes,
+      List.length_replicate, le_add_iff_nonneg_right, zero_le]),
     List.take_length_append'
       (B256.length_toBytes (Nat.toB256 data.length)).symm,
     B256.toB256_toBytes]
@@ -275,7 +291,7 @@ private theorem sliceD_append_abiBytesTail
     (pre ++ (Nat.toB256 data.length).toBytes)
     data
     (List.replicate (ceil32 data.length - data.length) 0 ++ post) using 1
-  all_goals simp [abiBytesTail, List.append_assoc, B256.length_toBytes]
+  all_goals simp only [abiBytesTail, List.append_assoc, List.length_append, B256.length_toBytes]
 
 private def depositCallHead
     (pubkey withdrawalCredentials : Bytes)
@@ -292,7 +308,8 @@ private theorem depositCallHead_length
     (depositDataRoot : B256) :
     (depositCallHead pubkey withdrawalCredentials depositDataRoot).length =
       132 := by
-  simp [depositCallHead, abiSelectorBytes_length, B256.length_toBytes]
+  simp only [depositCallHead, List.append_assoc, List.length_append, abiSelectorBytes_length,
+    B256.length_toBytes, Nat.reduceAdd]
 
 private theorem abiDepositCall_eq_head_tails
     (pubkey withdrawalCredentials signature : Bytes)
@@ -310,14 +327,14 @@ private theorem abiDepositCall_offsetWord_zero
         (abiDepositCall pubkey withdrawalCredentials signature depositDataRoot)
         4 =
       Nat.toB256 firstDepositTailOffset := by
-  simpa [abiDepositCall, List.append_assoc, abiSelectorBytes_length] using
-    calldataWord_append_word
-      (abiSelectorBytes depositSelector)
+  simpa only [abiDepositCall, List.append_assoc, abiSelectorBytes_length] using
+    calldataWord_append_word (abiSelectorBytes depositSelector)
       ((Nat.toB256 (secondDepositTailOffset pubkey)).toBytes ++
-        (Nat.toB256
-          (thirdDepositTailOffset pubkey withdrawalCredentials)).toBytes ++
-        depositDataRoot.toBytes ++ abiBytesTail pubkey ++
-        abiBytesTail withdrawalCredentials ++ abiBytesTail signature)
+                (Nat.toB256 (thirdDepositTailOffset pubkey withdrawalCredentials)).toBytes ++
+              depositDataRoot.toBytes ++
+            abiBytesTail pubkey ++
+          abiBytesTail withdrawalCredentials ++
+        abiBytesTail signature)
       (Nat.toB256 firstDepositTailOffset)
 
 private theorem abiDepositCall_offsetWord_one
@@ -327,15 +344,15 @@ private theorem abiDepositCall_offsetWord_one
         (abiDepositCall pubkey withdrawalCredentials signature depositDataRoot)
         36 =
       Nat.toB256 (secondDepositTailOffset pubkey) := by
-  simpa [abiDepositCall, List.append_assoc, abiSelectorBytes_length,
-      B256.length_toBytes] using
+  simpa only [abiDepositCall, List.append_assoc, List.length_append, abiSelectorBytes_length,
+    B256.length_toBytes, Nat.reduceAdd] using
     calldataWord_append_word
-      (abiSelectorBytes depositSelector ++
-        (Nat.toB256 firstDepositTailOffset).toBytes)
-      ((Nat.toB256
-          (thirdDepositTailOffset pubkey withdrawalCredentials)).toBytes ++
-        depositDataRoot.toBytes ++ abiBytesTail pubkey ++
-        abiBytesTail withdrawalCredentials ++ abiBytesTail signature)
+      (abiSelectorBytes depositSelector ++ (Nat.toB256 firstDepositTailOffset).toBytes)
+      ((Nat.toB256 (thirdDepositTailOffset pubkey withdrawalCredentials)).toBytes ++
+              depositDataRoot.toBytes ++
+            abiBytesTail pubkey ++
+          abiBytesTail withdrawalCredentials ++
+        abiBytesTail signature)
       (Nat.toB256 (secondDepositTailOffset pubkey))
 
 private theorem abiDepositCall_offsetWord_two
@@ -346,16 +363,14 @@ private theorem abiDepositCall_offsetWord_two
         68 =
       Nat.toB256
         (thirdDepositTailOffset pubkey withdrawalCredentials) := by
-  simpa [abiDepositCall, List.append_assoc, abiSelectorBytes_length,
-      B256.length_toBytes] using
+  simpa only [abiDepositCall, List.append_assoc, List.length_append, abiSelectorBytes_length,
+    B256.length_toBytes, Nat.reduceAdd] using
     calldataWord_append_word
-      (abiSelectorBytes depositSelector ++
-        (Nat.toB256 firstDepositTailOffset).toBytes ++
+      (abiSelectorBytes depositSelector ++ (Nat.toB256 firstDepositTailOffset).toBytes ++
         (Nat.toB256 (secondDepositTailOffset pubkey)).toBytes)
-      (depositDataRoot.toBytes ++ abiBytesTail pubkey ++
-        abiBytesTail withdrawalCredentials ++ abiBytesTail signature)
-      (Nat.toB256
-        (thirdDepositTailOffset pubkey withdrawalCredentials))
+      (depositDataRoot.toBytes ++ abiBytesTail pubkey ++ abiBytesTail withdrawalCredentials ++
+        abiBytesTail signature)
+      (Nat.toB256 (thirdDepositTailOffset pubkey withdrawalCredentials))
 
 private theorem abiDepositCall_rootWord
     (pubkey withdrawalCredentials signature : Bytes)
@@ -364,16 +379,13 @@ private theorem abiDepositCall_rootWord
         (abiDepositCall pubkey withdrawalCredentials signature depositDataRoot)
         100 =
       depositDataRoot := by
-  simpa [abiDepositCall, List.append_assoc, abiSelectorBytes_length,
-      B256.length_toBytes] using
+  simpa only [abiDepositCall, List.append_assoc, List.length_append, abiSelectorBytes_length,
+    B256.length_toBytes, Nat.reduceAdd] using
     calldataWord_append_word
-      (abiSelectorBytes depositSelector ++
-        (Nat.toB256 firstDepositTailOffset).toBytes ++
-        (Nat.toB256 (secondDepositTailOffset pubkey)).toBytes ++
-        (Nat.toB256
-          (thirdDepositTailOffset pubkey withdrawalCredentials)).toBytes)
-      (abiBytesTail pubkey ++ abiBytesTail withdrawalCredentials ++
-        abiBytesTail signature)
+      (abiSelectorBytes depositSelector ++ (Nat.toB256 firstDepositTailOffset).toBytes ++
+          (Nat.toB256 (secondDepositTailOffset pubkey)).toBytes ++
+        (Nat.toB256 (thirdDepositTailOffset pubkey withdrawalCredentials)).toBytes)
+      (abiBytesTail pubkey ++ abiBytesTail withdrawalCredentials ++ abiBytesTail signature)
       depositDataRoot
 
 private theorem abiDepositCall_lengthWord_zero
@@ -384,11 +396,9 @@ private theorem abiDepositCall_lengthWord_zero
         132 =
       Nat.toB256 pubkey.length := by
   rw [abiDepositCall_eq_head_tails]
-  simpa [depositCallHead_length, List.append_assoc] using
-    calldataWord_append_abiBytesTail
-      (depositCallHead pubkey withdrawalCredentials depositDataRoot)
-      pubkey
-      (abiBytesTail withdrawalCredentials ++ abiBytesTail signature)
+  simpa only [List.append_assoc, depositCallHead_length] using
+    calldataWord_append_abiBytesTail (depositCallHead pubkey withdrawalCredentials depositDataRoot)
+      pubkey (abiBytesTail withdrawalCredentials ++ abiBytesTail signature)
 
 private theorem abiDepositCall_lengthWord_one
     (pubkey withdrawalCredentials signature : Bytes)
@@ -453,11 +463,9 @@ private theorem abiDepositCall_payload_zero
       pubkey := by
   unfold dynamicPayload
   rw [hoffset, hlength, abiDepositCall_eq_head_tails]
-  simpa [depositCallHead_length, firstDepositTailOffset,
-      List.append_assoc] using
-    sliceD_append_abiBytesTail
-      (depositCallHead pubkey withdrawalCredentials depositDataRoot)
-      pubkey
+  simpa only [List.append_assoc, firstDepositTailOffset, Nat.reduceMul, Nat.reduceAdd,
+    depositCallHead_length] using
+    sliceD_append_abiBytesTail (depositCallHead pubkey withdrawalCredentials depositDataRoot) pubkey
       (abiBytesTail withdrawalCredentials ++ abiBytesTail signature)
 
 private theorem abiDepositCall_payload_one
@@ -554,7 +562,7 @@ theorem canonicalDepositCalldata_decodable
   have hsignatureBound : signature.length < 2 ^ 32 := by
     omega
   have hfirstOffsetBound : firstDepositTailOffset < 2 ^ 32 := by
-    norm_num [firstDepositTailOffset]
+    norm_num only [firstDepositTailOffset]
   have hsecondOffsetBound :
       secondDepositTailOffset pubkey < 2 ^ 32 := by
     simp only [secondDepositTailOffset, firstDepositTailOffset,
@@ -607,7 +615,7 @@ theorem canonicalDepositCalldata_decodable
     unfold dynamicLength
     rw [hoffsetZero,
       show 4 + firstDepositTailOffset = 132 by
-        norm_num [firstDepositTailOffset],
+        norm_num only [firstDepositTailOffset],
       abiDepositCall_lengthWord_zero]
     exact B256.toNat_toB256_of_lt hpubkeyWordBound
   have hlengthOne : dynamicLength

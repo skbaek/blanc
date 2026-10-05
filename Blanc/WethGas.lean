@@ -133,7 +133,7 @@ theorem weth_decimals_runCompiled {sevm : Sevm} {pre : Devm}
         (by rw [h_stack, h_mem])
         (by
           have h_value_zero : B256.eqCheck sevm.value 0 = 1 := by
-            simp [B256.eqCheck, h_value]
+            simp only [B256.eqCheck, h_value, ↓reduceIte]
           func_run [dcSel, 0, 1, 1, 1, 1, 1, 3]
           · exact Devm.extCost_empty_word
           · exact Func.runCompiled_return_word (G := g - 158) (e := 0) rfl
@@ -251,7 +251,7 @@ theorem weth_balanceOf_gas_exact {sevm : Sevm} {pre : Devm}
           (by rw [h_stack, h_mem])
           (by
             have h_value_zero : B256.eqCheck sevm.value 0 = 1 := by
-              simp [B256.eqCheck, h_value]
+              simp only [B256.eqCheck, h_value, ↓reduceIte]
             func_run [boSel, 0, 1, 1, 0, 1, 1, 3]
             · exact Devm.extCost_empty_word
             · exact Func.runCompiled_return_word (G := g - 2260) (e := 0) rfl
@@ -344,7 +344,7 @@ theorem weth_balanceOf_warm_runCompiled {sevm : Sevm} {pre : Devm}
         (by rw [h_stack, h_mem])
         (by
           have h_value_zero : B256.eqCheck sevm.value 0 = 1 := by
-            simp [B256.eqCheck, h_value]
+            simp only [B256.eqCheck, h_value, ↓reduceIte]
           func_run [boSel, 0, 1, 1, 0, 1, 1, 3]
           · exact Devm.extCost_empty_word
           · exact Func.runCompiled_return_word (G := g - 260) (e := 0) rfl
@@ -499,7 +499,7 @@ cost is `balanceOfGasWarm` or `balanceOfGas` according to the pre-state's
 accessed-key set. **This is the arc's combined cold/warm statement of the cost
 itself**; `weth_balanceOf_gas_exact_wethGas` is the combined statement of the
 run. -/
-@[simp] theorem wethGas_boSel {sevm : Sevm} {pre : Devm} :
+theorem wethGas_boSel {sevm : Sevm} {pre : Devm} :
     wethGas boSel sevm pre =
       some (if (⟨sevm.currentTarget, Sevm.dataWord sevm 4⟩ : Adr × B256)
               ∈ pre.accessedStorageKeys then balanceOfGasWarm else balanceOfGas) := by
@@ -513,7 +513,7 @@ run. -/
     rfl
 
 /-- `wethGas` at `decimals()`, for every state: it reads no storage. -/
-@[simp] theorem wethGas_dcSel {sevm : Sevm} {pre : Devm} :
+theorem wethGas_dcSel {sevm : Sevm} {pre : Devm} :
     wethGas dcSel sevm pre = some decimalsGas := by
   simp only [wethGas, wethGasWith, if_neg dcSel_ne_boSel]
   rfl
@@ -701,6 +701,6 @@ theorem wethGas_le_max {sel : B256} {sevm : Sevm} {pre : Devm} {cost : Nat}
       subst h_cost
       exact Nat.le_refl _
     · rw [if_neg hd] at h_cost
-      exact absurd h_cost (by simp)
+      exact absurd h_cost (by simp only [reduceCtorEq, not_false_eq_true])
 
 end Blanc

@@ -124,7 +124,7 @@ theorem gatewayCode_compile
     Prog.compile (LidoTriggerableWithdrawalsGateway.runtime dp) =
       some (gatewayCode dp).toList := by
   rw [LidoTriggerableWithdrawalsGateway.lidoTwgCode_compile]
-  simp [gatewayCode, ByteArray.toList_eq_toList_data]
+  simp only [gatewayCode, ByteArray.toList_eq_toList_data]
 
 /-- **The direct-target adapter.**  A successful `pauseAfterSet` suffix against
 an account carrying the exact compiled gateway runtime supplies both actual

@@ -813,6 +813,7 @@ SOUNDNESS_AUTHORITY_NAMES = frozenset({
     "component_clock", "component_material_output", "fingerprint", "empty_cache", "read_cache",
     "_safe_host_label", "host_mismatch_warning", "read_active_cache", "lookup",
     "store", "commit_shared_records", "prune_details", "tree_identity", "plan",
+    "validate_elab_deferral",
     "capture_verdict",
     "execute", "host_identity", "build_source_identity", "build_trace_state",
     "read_build_certificate", "write_build_certificate",
@@ -1835,9 +1836,24 @@ def tree_identity(root: Path) -> dict[str, str]:
     return identity
 
 
+def validate_elab_deferral(registry: dict[str, Any], fresh: bool) -> None:
+    """Only the one registered timing command may remain explicitly pending."""
+    if fresh:
+        raise GateCacheError("--defer-elab cannot be combined with --fresh")
+    elab = [gate for gate in registry["gates"]
+            if gate["id"] == "elab" or gate["command"] == ["scripts/check-elab.sh", "--no-build"]]
+    if (len(elab) != 1 or elab[0]["id"] != "elab"
+            or elab[0]["command"] != ["scripts/check-elab.sh", "--no-build"]
+            or elab[0].get("prerequisite")):
+        raise GateCacheError("--defer-elab requires exactly the non-prerequisite elab command: scripts/check-elab.sh --no-build")
+
+
 def plan(
-    root: Path, registry: dict[str, Any], cache: dict[str, Any], fresh: bool
+    root: Path, registry: dict[str, Any], cache: dict[str, Any], fresh: bool,
+    defer_elab: bool = False,
 ) -> list[dict[str, Any]]:
+    if defer_elab:
+        validate_elab_deferral(registry, fresh)
     has_build_row = any(gate["id"] == "lake-build" for gate in registry["gates"])
     build_current, build_reason, _ = (
         build_certificate_status(root) if has_build_row else (True, "not required", None)
@@ -1854,6 +1870,13 @@ def plan(
             "components": None,
             "record": None,
         }
+        if defer_elab and gate["id"] == "elab":
+            # No baseline, fingerprint, successful record lookup or execution:
+            # this row is pending even if older timing evidence exists.
+            row["disposition"] = "deferred"
+            row["reason"] = "elaboration timing explicitly deferred; no timing verdict"
+            rows.append(row)
+            continue
         if gate["id"] == "lake-build" and not fresh and build_current:
             row["disposition"] = "certified"
             row["reason"] = build_reason
@@ -2167,6 +2190,15 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
         pass
 
     registry = load_registry(registry_path(root))
+    defer_elab = getattr(arguments, "defer_elab", False)
+    if defer_elab:
+        validate_elab_deferral(registry, arguments.fresh)
+        current, reason, _ = build_certificate_status(root)
+        if not current:
+            print("REFUSED — check-gates: --defer-elab requires a current exact owned-build "
+                  f"certificate ({reason}); build through the compilation owner and certify first",
+                  file=sys.stderr)
+            return 2
     # A snapshot, read without the shared lock: the store is only ever
     # replaced atomically, so a reader sees a complete old or new file.  This
     # run's own records are merged into whatever the store holds when the run
@@ -2200,7 +2232,18 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
     def executed(gate: dict[str, Any], label: str) -> tuple[dict[str, Any], float]:
         with log_file.open("a", encoding="utf-8") as log:
             log.write(f"\n=== [{label}] {command_text(gate)}\n")
-        verdict, elapsed = execute(root, gate, echo=arguments.echo, log_path=log_file)
+        try:
+            verdict, elapsed = execute(root, gate, echo=arguments.echo, log_path=log_file)
+        except OSError as error:
+            if not defer_elab:
+                raise
+            # A missing/non-executable selected command produced no terminal
+            # exit. Preserve its row and the launch failure in incomplete evidence.
+            verdict = {"exit": None, "summary": [], "passed": False,
+                       "problems": [f"command could not start: {error}"],
+                       "launch_error": str(error),
+                       "output_digest": digest_of(str(error))}
+            elapsed = 0.0
         with log_file.open("a", encoding="utf-8") as log:
             log.write(f"=== exit {verdict['exit']} after {elapsed:.1f}s\n")
         return verdict, elapsed
@@ -2230,6 +2273,12 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
                     "elapsed": 0.0,
                 }
                 continue
+            if defer_elab:
+                # Rechecked at this boundary: a changed certificate must never
+                # fall through to this runner's bare build prerequisite.
+                print(f"REFUSED — check-gates: build certificate changed before prerequisite: {reason}",
+                      file=sys.stderr)
+                return 2
         print(f"[fresh ] {command_text(gate)}   (prerequisite refresh)")
         # The one row this runner elaborates itself, and the broadest
         # elaboration in the catalogue.  Every other row coordinates inside its
@@ -2269,11 +2318,17 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
         return 1
 
     forget_digests()
-    rows = plan(root, registry, cache, fresh=arguments.fresh)
+    rows = plan(root, registry, cache, fresh=arguments.fresh, defer_elab=defer_elab)
     planned = {row["id"]: row["fingerprint"] for row in rows}
 
     for row in rows:
         label = command_text(row["gate"])
+        if row["disposition"] == "deferred":
+            row["elapsed"] = 0.0
+            row["cached"] = False
+            row["cache_reason"] = row["reason"]
+            print(f"[defer ] {label}   ({row['reason']})")
+            continue
         done = prerequisites.get(row["id"])
         if done is not None:
             row["disposition"] = done["disposition"]
@@ -2409,6 +2464,24 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
         if after != planned[row["id"]]:
             drifted.append(f"{command_text(row['gate'])}: inputs changed during the run")
 
+    if defer_elab:
+        # Incomplete evidence still describes the final candidate. Include
+        # fresh and dirty-worktree verdicts, which cannot seed shared records.
+        forget_digests()
+        for row in rows:
+            if row["disposition"] != "fresh" or row["kind"] != "cacheable":
+                continue
+            try:
+                after, _ = fingerprint(root, row["gate"])
+            except Unresolvable as error:
+                drifted.append(f"{command_text(row['gate'])}: {error}")
+                continue
+            if row["fingerprint"] is None or after != planned[row["id"]]:
+                drifted.append(f"{command_text(row['gate'])}: inputs changed or were unidentifiable during the run")
+        current, reason, _ = build_certificate_status(root)
+        if not current:
+            drifted.append(f"owned-build certificate no longer describes this tree: {reason}")
+
     wall = time.monotonic() - wall_started
     if not drifted:
         # Always a transaction, even with nothing admitted: a run leaves a
@@ -2426,7 +2499,8 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
     write_report(root, rows, identity, started_utc, wall, failures, drifted)
 
     if drifted:
-        print("DRIFT: reused evidence no longer describes this tree:", file=sys.stderr)
+        print("DRIFT: " + ("selected" if defer_elab else "reused")
+              + " evidence no longer describes this tree:", file=sys.stderr)
         for line in drifted:
             print(f"  {line}", file=sys.stderr)
         print("DRIFT: cache not advanced; re-run on a settled tree", file=sys.stderr)
@@ -2440,6 +2514,11 @@ def run(root: Path, arguments: argparse.Namespace) -> int:
     executed = sum(1 for row in rows if row["disposition"] == "fresh")
     reused = sum(1 for row in rows if row["disposition"] == "reused")
     certified = sum(1 for row in rows if row["disposition"] == "certified")
+    if defer_elab:
+        print(f"GATES INCOMPLETE: {len(rows)} rows, {executed} executed, {reused} reused, "
+              f"{certified} build-certified; non-timing rows verified; elab deferred; no timing verdict")
+        print(f"check-gates: report {REPORT_RELATIVE}, manifest {MANIFEST_RELATIVE}")
+        return 3
     print(
         f"GATES OK: {len(rows)} rows, {executed} executed, {reused} reused, "
         f"{certified} build-certified "
@@ -2469,8 +2548,9 @@ def write_report(
     gate's body ran.
     """
 
+    deferred = [row["id"] for row in rows if row["disposition"] == "deferred"]
     lines = [
-        "# Blanc selective gate checkpoint",
+        "# Blanc non-timing gate run (incomplete)" if deferred else "# Blanc selective gate checkpoint",
         "",
         f"- started: {started_utc}",
         f"- commit: {identity['commit']}",
@@ -2481,6 +2561,8 @@ def write_report(
         f"- reused: {sum(1 for r in rows if r['disposition'] == 'reused')}",
         f"- build-certified: {sum(1 for r in rows if r['disposition'] == 'certified')}",
         f"- blocked: {sum(1 for r in rows if r['disposition'] == 'blocked')}",
+        *(["- complete: false", "- scope: non-timing", "- deferred: elab; no timing verdict",
+           f"- non-timing green: {str(not failures and not drifted).lower()}"] if deferred else []),
         f"- run log (every executed row's streamed output): {RUN_LOG_RELATIVE}",
         "",
         "| # | command | disposition | verdict | evidence from |",
@@ -2490,7 +2572,11 @@ def write_report(
     for row in rows:
         verdict = row.get("verdict", {})
         summary = " / ".join(verdict.get("summary", [])) or "(no summary captured)"
-        if row["disposition"] == "reused":
+        if row["disposition"] == "deferred":
+            source = row["reason"]
+            disposition = "deferred"
+            summary = "no timing verdict"
+        elif row["disposition"] == "reused":
             provenance = row["record"]["provenance"]
             source = f"{provenance.get('commit', '?')[:12]} @ {provenance.get('recorded_utc', '?')}"
             disposition = "reused successful evidence"
@@ -2500,6 +2586,9 @@ def write_report(
         elif row["disposition"] == "blocked":
             source = row.get("reason", "required evidence absent or red")
             disposition = "blocked"
+        elif verdict.get("launch_error"):
+            source = "command did not start"
+            disposition = "launch failed"
         else:
             source = "executed now"
             disposition = "executed now"
@@ -2588,7 +2677,9 @@ def write_report(
             "started_utc": started_utc,
             "wall_s": round(wall, 3),
             "tree": identity,
-            "green": not failures and not drifted,
+            "green": not failures and not drifted and not deferred,
+            **({"complete": False, "scope": "non-timing", "deferred": deferred,
+                "non_timing_green": not failures and not drifted} if deferred else {}),
             "rows": manifest_rows,
         },
     )
@@ -2783,7 +2874,8 @@ def show_plan(root: Path, arguments: argparse.Namespace) -> int:
     cache, cache_reason = read_active_cache(root)
     if cache_reason:
         print(f"cache: {cache_reason}")
-    rows = plan(root, registry, cache, fresh=arguments.fresh)
+    defer_elab = getattr(arguments, "defer_elab", False)
+    rows = plan(root, registry, cache, fresh=arguments.fresh, defer_elab=defer_elab)
     executed = sum(1 for row in rows if row["disposition"] == "fresh")
     reused = sum(1 for row in rows if row["disposition"] == "reused")
     certified = sum(1 for row in rows if row["disposition"] == "certified")
@@ -2791,17 +2883,22 @@ def show_plan(root: Path, arguments: argparse.Namespace) -> int:
         marker = {
             "reused": "reuse ",
             "certified": "cert  ",
+            "deferred": "defer ",
         }.get(row["disposition"], "RUN   ")
         print(f"{row['order']:>3} {marker} {command_text(row['gate'])}")
-        if row["disposition"] == "fresh":
+        if row["disposition"] in {"fresh", "deferred"}:
             print(f"    reason: {row['reason']}")
-            if arguments.explain:
+            if arguments.explain and row["disposition"] == "fresh":
                 for line in explain_row(cache, row):
                     print(line)
     print(
         f"PLAN: {len(rows)} rows, {executed} would execute, {reused} would reuse, "
         f"{certified} build-certified"
     )
+    if defer_elab:
+        current, reason, _ = build_certificate_status(root)
+        print(f"PLAN INCOMPLETE: elab deferred; no timing verdict; "
+              f"execution requires a current exact owned-build certificate ({reason})")
     return 0
 
 
@@ -2894,7 +2991,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     commands = parser.add_subparsers(dest="mode", required=True)
 
-    runner = commands.add_parser("run", help="evaluate the registered full set")
+    runner = commands.add_parser("run", help="evaluate the registered full set", allow_abbrev=False)
     runner.add_argument(
         "--fresh",
         action="store_true",
@@ -2904,9 +3001,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--echo", action="store_true", help="stream each executed gate's own output"
     )
 
-    planner = commands.add_parser("plan", help="report what would run, without running it")
+    planner = commands.add_parser("plan", help="report what would run, without running it", allow_abbrev=False)
     planner.add_argument("--explain", action="store_true", help="name the inputs that moved")
     planner.add_argument("--fresh", action="store_true", help=argparse.SUPPRESS)
+    for command in (runner, planner):
+        command.add_argument("--defer-elab", action="store_true",
+                             help="retain elab as pending; no timing verdict or complete checkpoint")
 
     commands.add_parser("audit", help="check the registry against the catalogue and CI")
 
@@ -2925,6 +3025,8 @@ def main(argv: list[str]) -> int:
     arguments = build_parser().parse_args(argv)
     root = ROOT
     try:
+        if getattr(arguments, "defer_elab", False) and arguments.fresh:
+            raise GateCacheError("--defer-elab cannot be combined with --fresh")
         if arguments.mode == "plan":
             return show_plan(root, arguments)
         if arguments.mode == "audit":

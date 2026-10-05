@@ -116,7 +116,7 @@ theorem frame1_child : ∃ (d1 : Devm) (ck : List (Adr × B256)) (ca : List Adr)
     rw [e1T_eq] at he'; cases he'
     exact ⟨.ok (post1TF post2), hx1, frame_settle_ok hcr1 hsg1 herr⟩
   · rw [hka, (hacc.1 a), hpe, hpa a, ha2.1 a]
-    simp
+    simp only [true_and, List.mem_append]
   · rw [hkk, (hacc.2 x), hpe, hpk, ha2.2.1 x]
     simp only [true_and, List.mem_append]
     rw [show e1T31.dyna.accessedStorageKeys = e1T.dyna.accessedStorageKeys from rfl, e1T_keys x]

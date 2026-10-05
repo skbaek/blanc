@@ -73,14 +73,14 @@ theorem TransactionTrace.codeAt_keep
   have hmsgAuth : ∀ auth ∈ trace.msg.tenv.stat.auths, ∀ authority,
       recoverAuthority auth = .ok authority → authority ≠ a := by
     rw [htenv]
-    simpa [transactionTenv] using hauth
+    simpa only [transactionTenv, Std.TreeMap.empty_eq_emptyc, ne_eq] using hauth
   obtain ⟨hpost, hroots⟩ := trace.message.codeAt hmsgFork hca hmsgAuth avoid
   refine ⟨fun root member => (hroots root member).trans hmsgState, ?_⟩
   obtain ⟨refundCounter, -, hfinal⟩ := trace.exists_finalStateForm hfork
   have hnodel : Msg.NoDel a trace.msg := by
     refine ⟨?_, ?_⟩
     · rw [hbenv]
-      simpa [Benv.beginTransaction] using notCreated
+      simpa only [Benv.beginTransaction] using notCreated
     · rw [hmsgState]
       exact hne
   have hndMsg : ¬ isValidDelegation (trace.msg.benv.state.getCode a) := by

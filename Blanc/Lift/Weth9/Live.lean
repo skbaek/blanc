@@ -26,7 +26,7 @@ theorem sel_extract (x : B256) :
   rw [B256.toNat_and, B256.toNat_div hP0, hP, hm, Nat.and_comm, Nat.and_two_pow_sub_one_eq_mod]
   rcases x with ⟨⟨x3, x2⟩, lo⟩
   have h1 : B256.shiftRight ((x3, x2), lo) 224 = ((0 : B128), B128.shiftRight (x3, x2) 96) := by
-    simp [B256.shiftRight]; rfl
+    simp only [B256.shiftRight, OfNat.ofNat_ne_zero, ↓reduceIte, Nat.reduceLT, Nat.reduceSub]; rfl
   have h2 : B128.shiftRight (x3, x2) 96 = ((0 : UInt64), x3 >>> (32 : UInt64)) := by
     simp only [B128.shiftRight]; rfl
   change B256.toNat ((x3, x2), lo) / 2 ^ 224 % 2 ^ 32 = B256.toNat (B256.shiftRight ((x3, x2), lo) 224)
@@ -76,7 +76,7 @@ theorem memBal_size (a : B256) : (memBal a).size = 96 :=
 
 theorem memBal_keccak (a : B256) :
     ((memBal a).read 0 64).1 = a.toBytes ++ (3 : B256).toBytes := by
-  simpa [memBal] using Mem.read_two_word_writes_at_raw_right_first memFp 0 a 3
+  simpa only [memBal, zero_add] using Mem.read_two_word_writes_at_raw_right_first memFp 0 a 3
 
 theorem reads_memBal (a : B256) : Mem.Reads (memBal a)
     (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt [] 64 (0x60 : B256).toBytes) 32
@@ -118,11 +118,14 @@ theorem cmp_miss {sevm : Sevm} {b : Devm} {M : Mem} {g : Nat} {o : Outcome} {sel
     SFunc.RunExact prog sevm (St b [sel] M (g + 22))
       (.next (.reg (.dup 0)) (.next (.push [c0, c1, c2, c3] l1) (.next (.reg .eq)
         (.next (.push [d0, d1] l2) (.branchTo nxt j))))) o := by
-  refine rx_dup1 (by simp) ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_eq (v := 0) ?_ (by simp) ?_
-  · simp [B256.eqCheck, hne]
-  refine rx_push rfl (by simp) ?_
+  refine rx_dup1 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_eq (v := 0) ?_ (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.one_lt_ofNat]) ?_
+  · simp only [B256.eqCheck, hne, ↓reduceIte]
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   exact rx_branchTo_zero k
 
 open Blanc.Lift in
@@ -134,11 +137,14 @@ theorem cmp_hit {sevm : Sevm} {b : Devm} {M : Mem} {g : Nat} {o : Outcome} {sel 
     SFunc.RunExact prog sevm (St b [sel] M (g + 22))
       (.next (.reg (.dup 0)) (.next (.push [c0, c1, c2, c3] l1) (.next (.reg .eq)
         (.next (.push [d0, d1] l2) (.branchTo nxt j))))) o := by
-  refine rx_dup1 (by simp) ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_eq (v := 1) ?_ (by simp) ?_
-  · simp [B256.eqCheck, heq]
-  refine rx_push rfl (by simp) ?_
+  refine rx_dup1 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_eq (v := 1) ?_ (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.one_lt_ofNat]) ?_
+  · simp only [B256.eqCheck, heq, ↓reduceIte]
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   exact rx_branchTo_succ (by decide) hj k
 
 open Blanc.Lift in
@@ -150,28 +156,30 @@ theorem dispatch_head {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome}
     (hname : Bytes.toB256 [0x06, 0xfd, 0xde, 0x03] ≠ Sevm.selector sevm)
     (k : SFunc.RunExact prog sevm (St b [Sevm.selector sevm] memFp g) t_0041_c0 o) :
     SFunc.RunExact prog sevm (St b [] Mem.empty (g + 84)) t_0000_c0 o := by
-  refine rx_push (w := 0x60) (by decide) (by simp) ?_
-  refine rx_push (w := 0x40) (by decide) (by simp) ?_
+  refine rx_push (w := 0x60) (by decide) (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  refine rx_push (w := 0x40) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.one_lt_ofNat]) ?_
   refine rx_mstore (c := 12) (M' := memFp) ?_ rfl ?_
   · rw [St.extCost_eq (n := 0) rfl]; decide
-  refine rx_push (w := 4) (by decide) (by simp) ?_
-  refine rx_calldatasize (by simp) ?_
-  refine rx_lt (v := 0) ?_ (by simp) ?_
+  refine rx_push (w := 4) (by decide) (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  refine rx_calldatasize (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.one_lt_ofNat]) ?_
+  refine rx_lt (v := 0) ?_ (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   · rw [B256.ltCheck, if_neg]
     intro h
     have h1 := B256.toNat_lt_toNat h
     rw [B256.toNat_toB256_of_lt h_len'] at h1
     have h4 : (4 : B256).toNat = 4 := rfl
     omega
-  refine rx_push rfl (by simp) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
   refine rx_branch_zero ?_
-  refine rx_push (w := 0) (by decide) (by simp) ?_
-  refine rx_calldataload (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_push (w := 0) (by decide) (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  refine rx_calldataload (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
   refine rx_swap1 ?_
-  refine rx_div rfl (by simp) ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_and (sel_extract _) (by simp) ?_
+  refine rx_div rfl (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_and (sel_extract _) (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   exact cmp_miss hname k
 
 /-! ## `balanceOf(address)` -/
@@ -184,22 +192,22 @@ theorem bal_callee_pre {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome} {a r : B
       (.next (.reg .sload) (.next (.reg (.dup 1)) .ret)) o) :
     SFunc.RunExact prog sevm (St b (a :: r :: S) memFp (g + 80)) t_0b18_c6 o := by
   refine rx_dest ?_
-  refine rx_push (w := 3) (by decide) (by simp; omega) ?_
-  refine rx_push (w := 32) (by decide) (by simp; omega) ?_
+  refine rx_push (w := 3) (by decide) (by simp only [List.length_cons]; omega) ?_
+  refine rx_push (w := 32) (by decide) (by simp only [List.length_cons]; omega) ?_
   refine rx_mstore (c := 3) (M' := memFp.write 32 (3 : B256).toBytes) ?_ rfl ?_
   · rw [St.extCost_eq memFp_size]; decide
-  refine rx_dup1 (by simp; omega) ?_
-  refine rx_push (w := 0) (by decide) (by simp; omega) ?_
+  refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
+  refine rx_push (w := 0) (by decide) (by simp only [List.length_cons]; omega) ?_
   refine rx_mstore (c := 3) (M' := memBal a) ?_ rfl ?_
   · rw [St.extCost_eq (size_write_in memFp_size (by omega))]; decide
-  refine rx_push (w := 64) (by decide) (by simp; omega) ?_
-  refine rx_push (w := 0) (by decide) (by simp; omega) ?_
-  refine rx_keccak (c := 42) (v := mapSlot a 3) ?_ ?_ ?_ (by simp; omega) ?_
+  refine rx_push (w := 64) (by decide) (by simp only [List.length_cons]; omega) ?_
+  refine rx_push (w := 0) (by decide) (by simp only [List.length_cons]; omega) ?_
+  refine rx_keccak (c := 42) (v := mapSlot a 3) ?_ ?_ ?_ (by simp only [List.length_cons]; omega) ?_
   · rw [St.extCost_eq (memBal_size a)]; decide
   · show Bytes.keccak ((memBal a).read 0 64).1 = _
     rw [memBal_keccak]; rfl
   · exact read_snd_self64 (memBal_size a) (by decide) (by decide)
-  refine rx_push (w := 0) (by decide) (by simp; omega) ?_
+  refine rx_push (w := 0) (by decide) (by simp only [List.length_cons]; omega) ?_
   refine rx_swap2 ?_
   refine rx_pop ?_
   refine rx_swap1 ?_
@@ -212,8 +220,8 @@ theorem bal_callee_cold {sevm : Sevm} {b : Devm} {g : Nat} {a r : B256} {S : Lis
     SFunc.RunExact prog sevm (St b (a :: r :: S) memFp (g + 2191)) t_0b18_c6
       (.returned (St (addAccessedStorageKey b sevm.currentTarget (mapSlot a 3))
         (b.getStorVal sevm.currentTarget (mapSlot a 3) :: r :: S) (memBal a) g)) :=
-  bal_callee_pre hroom (rx_sload_cold hlegacy hcold (by simp; omega)
-    (rx_dup2 (by simp; omega) rx_ret))
+  bal_callee_pre hroom (rx_sload_cold hlegacy hcold (by simp only [List.length_cons]; omega)
+    (rx_dup2 (by simp only [List.length_cons]; omega) rx_ret))
 
 open Blanc.Lift in
 theorem bal_callee_warm {sevm : Sevm} {b : Devm} {g : Nat} {a r : B256} {S : List B256}
@@ -221,8 +229,8 @@ theorem bal_callee_warm {sevm : Sevm} {b : Devm} {g : Nat} {a r : B256} {S : Lis
     (hwarm : (⟨sevm.currentTarget, mapSlot a 3⟩ : Adr × B256) ∈ b.accessedStorageKeys) :
     SFunc.RunExact prog sevm (St b (a :: r :: S) memFp (g + 191)) t_0b18_c6
       (.returned (St b (b.getStorVal sevm.currentTarget (mapSlot a 3) :: r :: S) (memBal a) g)) :=
-  bal_callee_pre hroom (rx_sload_warm hlegacy hwarm (by simp; omega)
-    (rx_dup2 (by simp; omega) rx_ret))
+  bal_callee_pre hroom (rx_sload_warm hlegacy hwarm (by simp only [List.length_cons]; omega)
+    (rx_dup2 (by simp only [List.length_cons]; omega) rx_ret))
 
 open Blanc.Lift in
 /-- The ABI-encoding tail shared by the one-word views: write the answer at the
@@ -235,31 +243,41 @@ theorem word_tail {sevm : Sevm} {b : Devm} {g : Nat} {v r sel : B256} {μ : Mem}
   refine ⟨?post, ?run, ?gas, ?out⟩
   case run =>
     refine rx_dest ?_
-    refine rx_push (w := 64) (by decide) (by simp) ?_
+    refine rx_push (w := 64) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.reduceLT]) ?_
     refine rx_mload (c := 3) (v := 0x60) ?_ ?_ (read_covered hs (by decide) (by decide))
-      (by simp) ?_
+      (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
     · rw [St.extCost_eq hs]; decide
     · show Bytes.toB256 (μ.read 64 32).1 = _
       rw [hfp, B256.toB256_toBytes]
-    refine rx_dup1 (by simp) ?_
-    refine rx_dup3 (by simp) ?_
-    refine rx_dup2 (by simp) ?_
+    refine rx_dup1 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT]) ?_
+    refine rx_dup3 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT]) ?_
+    refine rx_dup2 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT]) ?_
     refine rx_mstore (c := 6) (M' := memOut μ v) ?_ rfl ?_
     · rw [St.extCost_eq hs]; decide
-    refine rx_push (w := 32) (by decide) (by simp) ?_
-    refine rx_add (by simp) ?_
+    refine rx_push (w := 32) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.reduceLT]) ?_
+    refine rx_add (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT]) ?_
     refine rx_swap2 ?_
     refine rx_pop ?_
     refine rx_pop ?_
-    refine rx_push (w := 64) (by decide) (by simp) ?_
+    refine rx_push (w := 64) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.reduceLT]) ?_
     refine rx_mload (c := 3) (v := 0x60) ?_ ?_
-      (read_covered (memOut_size hs v) (by decide) (by decide)) (by simp) ?_
+      (read_covered (memOut_size hs v) (by decide) (by decide)) (by simp only [List.length_cons,
+        List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
     · rw [St.extCost_eq (memOut_size hs v)]; decide
     · show Bytes.toB256 ((memOut μ v).read 64 32).1 = _
       rw [memOut_fp hwf hr hfp, B256.toB256_toBytes]
-    refine rx_dup1 (by simp) ?_
+    refine rx_dup1 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT]) ?_
     refine rx_swap2 ?_
-    refine rx_sub (by simp) ?_
+    refine rx_sub (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT]) ?_
     refine rx_swap1 ?_
     refine rx_return (out := v.toBytes) ?_ ?_
     · rw [St.extCost_eq (memOut_size hs v)]; decide
@@ -287,27 +305,38 @@ theorem bal_entry {sevm : Sevm} {b b' : Devm} {g G : Nat} {sel v : B256} {μ : M
       (sel := sel) hs hwf hr hfp
   refine ⟨post, ?_, hg, ho⟩
   refine rx_dest ?_
-  refine rx_callvalue (by simp) ?_
-  refine rx_iszero (v := 1) (by simp [B256.eqCheck, hval]) (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_callvalue (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_iszero (v := 1) (by simp only [B256.eqCheck, hval, ↓reduceIte]) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   refine rx_branch_succ (by decide) ?_
   refine rx_dest ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_push (w := 4) (by decide) (by simp) ?_
-  refine rx_dup1 (by simp) ?_
-  refine rx_dup1 (by simp) ?_
-  refine rx_calldataload (by simp) ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_and (ff20_and_word _) (by simp) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_push (w := 4) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup1 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_dup1 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_calldataload (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_and (ff20_and_word _) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap1 ?_
-  refine rx_push (w := 32) (by decide) (by simp) ?_
-  refine rx_add (by simp) ?_
+  refine rx_push (w := 32) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   refine rx_swap1 ?_
   refine rx_swap2 ?_
   refine rx_swap1 ?_
   refine rx_pop ?_
   refine rx_pop ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   exact rx_callRet (j := 6) rfl hcall hrun
 
 /-- WETH9's `balanceOf(address)` selector, from its ABI signature. -/
@@ -347,7 +376,7 @@ Blanc-WETH (which returns the constant `0x12`) the call reads storage:
 theorem bexp_256_0 : B256.bexp (Bytes.toB256 [0x01, 0x00]) 0 = 1 := by
   unfold B256.bexp
   rw [show (0 : B256).toNat = 0 from rfl]
-  simp [Nat.powMod, Nat.powMod.go]
+  simp only [Nat.powMod, Nat.reducePow, Nat.not_ofNat_le_one, ↓reduceIte, Nat.powMod.go]
   rfl
 
 theorem div_one' (s : B256) : s / 1 = s := by
@@ -365,8 +394,8 @@ theorem dec_callee_pre {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome} {r : B25
             .ret))))))))) o) :
     SFunc.RunExact prog sevm (St b (r :: S) M (g + 10)) t_0b05_c7 o := by
   refine rx_dest ?_
-  refine rx_push (w := 2) (by decide) (by simp; omega) ?_
-  refine rx_push (w := 0) (by decide) (by simp; omega) ?_
+  refine rx_push (w := 2) (by decide) (by simp only [List.length_cons]; omega) ?_
+  refine rx_push (w := 0) (by decide) (by simp only [List.length_cons]; omega) ?_
   exact rx_swap1 k
 
 open Blanc.Lift in
@@ -380,13 +409,13 @@ theorem dec_callee_post {sevm : Sevm} {b : Devm} {g : Nat} {r x : B256}
             .ret))))))))
       (.returned (St b ((Bytes.toB256 [0xff] &&& x) :: r :: S) M g)) := by
   refine rx_swap1 ?_
-  refine rx_push rfl (by simp; omega) ?_
-  refine rx_exp (by decide) (by simp; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_exp (by decide) (by simp only [List.length_cons]; omega) ?_
   refine rx_swap1 ?_
-  refine rx_div (v := x) (by rw [bexp_256_0, div_one']) (by simp; omega) ?_
-  refine rx_push rfl (by simp; omega) ?_
-  refine rx_and rfl (by simp; omega) ?_
-  exact rx_dup2 (by simp; omega) rx_ret
+  refine rx_div (v := x) (by rw [bexp_256_0, div_one']) (by simp only [List.length_cons]; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_and rfl (by simp only [List.length_cons]; omega) ?_
+  exact rx_dup2 (by simp only [List.length_cons]; omega) rx_ret
 
 open Blanc.Lift in
 theorem dec_callee_cold {sevm : Sevm} {b : Devm} {g : Nat} {r : B256} {S : List B256} {M : Mem}
@@ -395,7 +424,7 @@ theorem dec_callee_cold {sevm : Sevm} {b : Devm} {g : Nat} {r : B256} {S : List 
     SFunc.RunExact prog sevm (St b (r :: S) M (g + 2151)) t_0b05_c7
       (.returned (St (addAccessedStorageKey b sevm.currentTarget 2)
         ((Bytes.toB256 [0xff] &&& b.getStorVal sevm.currentTarget 2) :: r :: S) M g)) :=
-  dec_callee_pre hroom (rx_sload_cold hlegacy hcold (by simp; omega) (dec_callee_post hroom))
+  dec_callee_pre hroom (rx_sload_cold hlegacy hcold (by simp only [List.length_cons]; omega) (dec_callee_post hroom))
 
 open Blanc.Lift in
 theorem dec_callee_warm {sevm : Sevm} {b : Devm} {g : Nat} {r : B256} {S : List B256} {M : Mem}
@@ -404,7 +433,7 @@ theorem dec_callee_warm {sevm : Sevm} {b : Devm} {g : Nat} {r : B256} {S : List 
     SFunc.RunExact prog sevm (St b (r :: S) M (g + 151)) t_0b05_c7
       (.returned (St b ((Bytes.toB256 [0xff] &&& b.getStorVal sevm.currentTarget 2) :: r :: S)
         M g)) :=
-  dec_callee_pre hroom (rx_sload_warm hlegacy hwarm (by simp; omega) (dec_callee_post hroom))
+  dec_callee_pre hroom (rx_sload_warm hlegacy hwarm (by simp only [List.length_cons]; omega) (dec_callee_post hroom))
 
 open Blanc.Lift in
 /-- The `decimals` ABI tail at 0x279: mask to `uint8` twice, write at the
@@ -416,35 +445,49 @@ theorem dec_tail {sevm : Sevm} {b : Devm} {g : Nat} {d r sel : B256} :
   refine ⟨?post, ?run, ?gas, ?out⟩
   case run =>
     refine rx_dest ?_
-    refine rx_push (w := 64) (by decide) (by simp) ?_
+    refine rx_push (w := 64) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.reduceLT]) ?_
     refine rx_mload (c := 3) (v := 0x60) ?_ ?_ (read_covered memFp_size (by decide) (by decide))
-      (by simp) ?_
+      (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
     · rw [St.extCost_eq memFp_size]; decide
     · show Bytes.toB256 (memFp.read 64 32).1 = _
       rw [memFp_fp, B256.toB256_toBytes]
-    refine rx_dup1 (by simp) ?_
-    refine rx_dup3 (by simp) ?_
-    refine rx_push rfl (by simp) ?_
-    refine rx_and rfl (by simp) ?_
-    refine rx_push rfl (by simp) ?_
-    refine rx_and rfl (by simp) ?_
-    refine rx_dup2 (by simp) ?_
+    refine rx_dup1 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT]) ?_
+    refine rx_dup3 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT]) ?_
+    refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT]) ?_
+    refine rx_and rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT]) ?_
+    refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT]) ?_
+    refine rx_and rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT]) ?_
+    refine rx_dup2 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT]) ?_
     refine rx_mstore (c := 6) (M' := memOut memFp _) ?_ rfl ?_
     · rw [St.extCost_eq memFp_size]; decide
-    refine rx_push (w := 32) (by decide) (by simp) ?_
-    refine rx_add (by simp) ?_
+    refine rx_push (w := 32) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.reduceLT]) ?_
+    refine rx_add (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT]) ?_
     refine rx_swap2 ?_
     refine rx_pop ?_
     refine rx_pop ?_
-    refine rx_push (w := 64) (by decide) (by simp) ?_
+    refine rx_push (w := 64) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.reduceLT]) ?_
     refine rx_mload (c := 3) (v := 0x60) ?_ ?_
-      (read_covered (memOut_size memFp_size _) (by decide) (by decide)) (by simp) ?_
+      (read_covered (memOut_size memFp_size _) (by decide) (by decide)) (by simp only [List.length_cons,
+        List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
     · rw [St.extCost_eq (memOut_size memFp_size _)]; decide
     · show Bytes.toB256 ((memOut memFp _).read 64 32).1 = _
       rw [memOut_fp wf_memFp reads_memFp memFp_fp, B256.toB256_toBytes]
-    refine rx_dup1 (by simp) ?_
+    refine rx_dup1 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT]) ?_
     refine rx_swap2 ?_
-    refine rx_sub (by simp) ?_
+    refine rx_sub (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT]) ?_
     refine rx_swap1 ?_
     refine rx_return (out := (Bytes.toB256 [0xff] &&& (Bytes.toB256 [0xff] &&& d)).toBytes) ?_ ?_
     · rw [St.extCost_eq (memOut_size memFp_size _)]; decide
@@ -469,13 +512,16 @@ theorem dec_entry {sevm : Sevm} {b b' : Devm} {g G : Nat} {sel d : B256}
       (sel := sel)
   refine ⟨post, ?_, hg, ho⟩
   refine rx_dest ?_
-  refine rx_callvalue (by simp) ?_
-  refine rx_iszero (v := 1) (by simp [B256.eqCheck, hval]) (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_callvalue (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_iszero (v := 1) (by simp only [B256.eqCheck, hval, ↓reduceIte]) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   refine rx_branch_succ (by decide) ?_
   refine rx_dest ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   exact rx_callRet (j := 7) rfl hcall hrun
 
 open Blanc.Lift in
@@ -642,7 +688,7 @@ theorem weth9Gas_le_max {sel : B256} {sevm : Sevm} {pre : Devm} {cost : Nat}
       subst h_cost
       split <;> decide
     · rw [if_neg hd] at h_cost
-      exact absurd h_cost (by simp)
+      exact absurd h_cost (by simp only [reduceCtorEq, not_false_eq_true])
 
 /-! ## The runs -/
 
@@ -679,7 +725,7 @@ theorem weth9_balanceOf_runExact {sevm : Sevm} {pre : Devm} {cost : Nat}
     obtain ⟨post, hrun, hg, ho⟩ := bal_entry (b := pre) (g := pre.gasLeft - 534)
       (G := pre.gasLeft - 534 + 53 + 191) h_value
       (bal_callee_warm (b := pre) (g := pre.gasLeft - 534 + 53) (S := [Sevm.selector sevm])
-        (by simp) hleg hw)
+        (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) hleg hw)
       (memBal_size _) (wf_memBal _) (reads_memBal _) (memBal_fp _)
     have h0 := dispatch_balanceOf (b := pre) h_len h_len' hsel hrun
     rw [pre_eq_St h_stack h_mem (by omega)] at h0
@@ -689,7 +735,7 @@ theorem weth9_balanceOf_runExact {sevm : Sevm} {pre : Devm} {cost : Nat}
     obtain ⟨post, hrun, hg, ho⟩ := bal_entry (b := pre) (g := pre.gasLeft - 2534)
       (G := pre.gasLeft - 2534 + 53 + 2191) h_value
       (bal_callee_cold (b := pre) (g := pre.gasLeft - 2534 + 53) (S := [Sevm.selector sevm])
-        (by simp) hleg hw)
+        (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) hleg hw)
       (memBal_size _) (wf_memBal _) (reads_memBal _) (memBal_fp _)
     have h0 := dispatch_balanceOf (b := pre) h_len h_len' hsel hrun
     rw [pre_eq_St h_stack h_mem (by omega)] at h0
@@ -719,7 +765,7 @@ theorem weth9_decimals_runExact {sevm : Sevm} {pre : Devm} {cost : Nat}
     obtain ⟨post, hrun, hg, ho⟩ := dec_entry (b := pre) (g := pre.gasLeft - 444)
       (G := pre.gasLeft - 444 + 65 + 151) h_value
       (dec_callee_warm (b := pre) (g := pre.gasLeft - 444 + 65) (S := [Sevm.selector sevm])
-        (by simp) hleg hw)
+        (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) hleg hw)
     have h0 := dispatch_decimals (b := pre) h_len h_len' hsel hrun
     rw [pre_eq_St h_stack h_mem (by omega)] at h0
     refine ⟨post, ⟨_, rfl, h0⟩, by omega, ?_⟩
@@ -729,7 +775,7 @@ theorem weth9_decimals_runExact {sevm : Sevm} {pre : Devm} {cost : Nat}
     obtain ⟨post, hrun, hg, ho⟩ := dec_entry (b := pre) (g := pre.gasLeft - 2444)
       (G := pre.gasLeft - 2444 + 65 + 2151) h_value
       (dec_callee_cold (b := pre) (g := pre.gasLeft - 2444 + 65) (S := [Sevm.selector sevm])
-        (by simp) hleg hw)
+        (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) hleg hw)
     have h0 := dispatch_decimals (b := pre) h_len h_len' hsel hrun
     rw [pre_eq_St h_stack h_mem (by omega)] at h0
     refine ⟨post, ⟨_, rfl, h0⟩, by omega, ?_⟩

@@ -11,7 +11,6 @@ or to the diagnostic open context. -/
 inductive AttackAttribution where
   | coalition
   | outside
-deriving DecidableEq
 
 namespace AttackAttribution
 
@@ -66,10 +65,6 @@ def input {o : Nat} : VictimPhase o → Nat
 def output {o : Nat} : VictimPhase o → Nat
   | .before | .open _ => 0
   | .exited _ exit => exit.payout
-
-def hasDeposit {o : Nat} : VictimPhase o → Prop
-  | .before => False
-  | .open _ | .exited _ _ => True
 
 end VictimPhase
 
@@ -138,9 +133,9 @@ def genesis (o : Nat) : ProrataAttackState o where
   phase := .before
 
 theorem genesis_invariant (o : Nat) : (genesis o).Invariant := by
-  simp [Invariant, SharesPartition, FlowExact, VictimConsistent, ClaimBound,
-    genesis, totalIn, totalOut, nonVictimClaim, VictimPhase.input,
-    VictimPhase.output, claimN, payN]
+  simp only [Invariant, SharesPartition, genesis, add_zero, FlowExact, totalOut, VictimPhase.output,
+    totalIn, VictimPhase.input, VictimConsistent, ClaimBound, nonVictimClaim, claimN, payN,
+    zero_add, mul_one, Nat.zero_div, Std.le_refl, and_self]
 
 theorem victimConsistent_of_priceLe {o : Nat} (ho : o ≠ 0)
     {pre post : ProrataAttackState o}
@@ -177,7 +172,6 @@ inductive ProrataAttackKind where
   | victimDeposit (amount minted : Nat)
   | victimExit (shares paid : Nat)
   | silent
-deriving DecidableEq
 
 namespace ProrataAttackKind
 
@@ -336,9 +330,7 @@ theorem flowExact {o : Nat} (ho : o ≠ 0)
   cases effect with
   | nonVictimDeposit attribution amount minted hminted =>
       cases attribution <;>
-        simp [ProrataAttackState.FlowExact, ProrataAttackState.totalIn,
-          ProrataAttackState.totalOut, AttackAttribution.coalitionAmount,
-          AttackAttribution.outsideAmount] at hflow ⊢ <;>
+        simp only [ProrataAttackState.FlowExact, ProrataAttackState.totalOut, ProrataAttackState.totalIn, AttackAttribution.coalitionAmount, AttackAttribution.outsideAmount, add_zero] at hflow ⊢ <;>
         omega
   | nonVictimWithdraw attribution shares paid hshares hpaid =>
       have hsharesSupply : shares ≤ pre.accounting.supply := by
@@ -348,20 +340,15 @@ theorem flowExact {o : Nat} (ho : o ≠ 0)
         rw [hpaid]
         exact payN_le_balance ho hsharesSupply
       cases attribution <;>
-        simp [ProrataAttackState.FlowExact, ProrataAttackState.totalIn,
-          ProrataAttackState.totalOut, AttackAttribution.coalitionAmount,
-          AttackAttribution.outsideAmount] at hflow ⊢ <;>
+        simp only [ProrataAttackState.FlowExact, ProrataAttackState.totalOut, ProrataAttackState.totalIn, AttackAttribution.coalitionAmount, AttackAttribution.outsideAmount, add_zero] at hflow ⊢ <;>
         omega
   | externalCredit attribution amount hpositive =>
       cases attribution <;>
-        simp [ProrataAttackState.FlowExact, ProrataAttackState.totalIn,
-          ProrataAttackState.totalOut, AttackAttribution.coalitionAmount,
-          AttackAttribution.outsideAmount] at hflow ⊢ <;>
+        simp only [ProrataAttackState.FlowExact, ProrataAttackState.totalOut, ProrataAttackState.totalIn, AttackAttribution.coalitionAmount, AttackAttribution.outsideAmount, add_zero] at hflow ⊢ <;>
         omega
   | victimDeposit amount minted hphase hminted hbacked =>
-      simp [ProrataAttackState.FlowExact, ProrataAttackState.totalIn,
-        ProrataAttackState.totalOut, VictimPhase.input, VictimPhase.output,
-        hphase] at hflow ⊢
+      simp only [ProrataAttackState.FlowExact, ProrataAttackState.totalOut, VictimPhase.output,
+        hphase, add_zero, ProrataAttackState.totalIn, VictimPhase.input] at hflow ⊢
       omega
   | victimExit deposit paid hphase hfull hpaid =>
       have hsharesSupply : deposit.minted ≤ pre.accounting.supply := by
@@ -370,9 +357,8 @@ theorem flowExact {o : Nat} (ho : o ≠ 0)
       have hpaidBalance : paid ≤ pre.accounting.balance := by
         rw [hpaid]
         exact payN_le_balance ho hsharesSupply
-      simp [ProrataAttackState.FlowExact, ProrataAttackState.totalIn,
-        ProrataAttackState.totalOut, VictimPhase.input, VictimPhase.output,
-        hphase] at hflow ⊢
+      simp only [ProrataAttackState.FlowExact, ProrataAttackState.totalOut, VictimPhase.output,
+        hphase, add_zero, ProrataAttackState.totalIn, VictimPhase.input] at hflow ⊢
       omega
   | silent =>
       exact hflow

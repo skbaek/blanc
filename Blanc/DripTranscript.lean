@@ -16,12 +16,10 @@ def callKinds {scale : Nat} {fresh : Nat → Nat → Nat}
     (steps : List (Step scale fresh)) : List Kind :=
   (steps.map Step.kind).filter Kind.isCall
 
-@[simp] theorem callKinds_nil {scale : Nat} {fresh : Nat → Nat → Nat} :
-    callKinds ([] : List (Step scale fresh)) = [] := rfl
 theorem callKinds_append {scale : Nat} {fresh : Nat → Nat → Nat}
     (left right : List (Step scale fresh)) :
     callKinds (left ++ right) = callKinds left ++ callKinds right := by
-  simp [callKinds]
+  simp only [callKinds, List.map_append, List.filter_append]
 
 def Kind.advance (scale : Nat) (fresh : Nat → Nat → Nat) (chi cu : Nat) :
     Kind → Nat × Nat
@@ -89,18 +87,15 @@ theorem Chain.transcriptTally_eq {scale : Nat} {fresh : Nat → Nat → Nat}
         Chain.paidSum steps, Chain.exitResidueSum steps,
         Chain.allJoinedSum steps, Chain.allPaidSum steps⟩ := by
   induction chain with
-  | nil s => simp [callKinds, transcriptTally, CallTally.zero]
+  | nil s => simp only [callKinds, List.map_nil, List.filter_nil, transcriptTally, CallTally.zero,
+    accrualSum_nil, joinedSum_nil, joinResidueSum_nil, paidSum_nil, exitResidueSum_nil,
+    allJoinedSum_nil, allPaidSum_nil]
   | cons entry tail ih =>
       rename_i s t step rest
       subst s
       rcases step with ⟨pre, kind, post, effect⟩
       cases effect <;>
-        simp_all [callKinds, List.filter, Kind.isCall, transcriptTally, Kind.callTally, Kind.advance,
-          CallTally.add, Step.accrual, Step.joined, Step.joinResidue,
-          Step.paid, Step.exitResidue, Step.allJoined, Step.allPaid,
-          Chain.accrualSum, Chain.joinedSum, Chain.joinResidueSum,
-          Chain.paidSum, Chain.exitResidueSum, Chain.allJoinedSum,
-          Chain.allPaidSum]
+        simp_all only [callKinds, accrualSum, joinedSum, joinResidueSum, paidSum, exitResidueSum, allJoinedSum, allPaidSum, List.map_cons, List.filter, Kind.isCall, transcriptTally, CallTally.add, Kind.callTally, Kind.advance, zero_add, Step.accrual, List.sum_cons, Step.joined, Step.joinResidue, Step.paid, Step.exitResidue, Step.allJoined, Step.allPaid, Bool.false_eq_true, not_false_eq_true, List.filter_cons_of_neg]
 
 theorem Chain.transcriptState_eq {scale : Nat} {fresh : Nat → Nat → Nat}
     {s t : Snapshot} {steps : List (Step scale fresh)}
@@ -114,7 +109,7 @@ theorem Chain.transcriptState_eq {scale : Nat} {fresh : Nat → Nat → Nat}
       subst s
       rcases step with ⟨pre, kind, post, effect⟩
       cases effect <;>
-        simp_all [callKinds, List.filter, Kind.isCall, transcriptState, Kind.advance]
+        simp_all only [callKinds, List.map_cons, List.filter, Kind.isCall, transcriptState, Kind.advance, Bool.false_eq_true, not_false_eq_true, List.filter_cons_of_neg]
 
 /-- Non-call steps never move the total supply. -/
 theorem Chain.totalUnits_eq_of_callKinds_nil {scale : Nat}
@@ -128,19 +123,35 @@ theorem Chain.totalUnits_eq_of_callKinds_nil {scale : Nat}
       subst s
       rcases step with ⟨pre, kind, post, effect⟩
       cases effect with
-      | drip => simp [callKinds, Kind.isCall] at none
-      | joinCounted => simp [callKinds, Kind.isCall] at none
-      | joinOutside => simp [callKinds, Kind.isCall] at none
-      | exitCounted => simp [callKinds, Kind.isCall] at none
-      | exitOutside => simp [callKinds, Kind.isCall] at none
+      | drip => simp only [callKinds, List.map_cons, List.filter_eq_nil_iff, List.mem_cons,
+        List.mem_map, Kind.isCall, Bool.not_eq_true, forall_eq_or_imp, Bool.true_eq_false,
+        forall_exists_index, and_imp, forall_apply_eq_imp_iff₂, false_and] at none
+      | joinCounted => simp only [callKinds, List.map_cons, List.filter_eq_nil_iff, List.mem_cons,
+        List.mem_map, Kind.isCall, Bool.not_eq_true, forall_eq_or_imp, Bool.true_eq_false,
+        forall_exists_index, and_imp, forall_apply_eq_imp_iff₂, false_and] at none
+      | joinOutside => simp only [callKinds, List.map_cons, List.filter_eq_nil_iff, List.mem_cons,
+        List.mem_map, Kind.isCall, Bool.not_eq_true, forall_eq_or_imp, Bool.true_eq_false,
+        forall_exists_index, and_imp, forall_apply_eq_imp_iff₂, false_and] at none
+      | exitCounted => simp only [callKinds, List.map_cons, List.filter_eq_nil_iff, List.mem_cons,
+        List.mem_map, Kind.isCall, Bool.not_eq_true, forall_eq_or_imp, Bool.true_eq_false,
+        forall_exists_index, and_imp, forall_apply_eq_imp_iff₂, false_and] at none
+      | exitOutside => simp only [callKinds, List.map_cons, List.filter_eq_nil_iff, List.mem_cons,
+        List.mem_map, Kind.isCall, Bool.not_eq_true, forall_eq_or_imp, Bool.true_eq_false,
+        forall_exists_index, and_imp, forall_apply_eq_imp_iff₂, false_and] at none
       | externalCredit =>
           have hnone : callKinds rest = [] := by
-            simpa [callKinds, Kind.isCall] using none
-          simpa using ih hnone
+            simpa only [callKinds, List.filter_eq_nil_iff, List.mem_map, Kind.isCall,
+              Bool.not_eq_true, forall_exists_index, and_imp, forall_apply_eq_imp_iff₂,
+              List.map_cons, Bool.false_eq_true, not_false_eq_true, List.filter_cons_of_neg] using
+              none
+          simpa only using ih hnone
       | silent =>
           have hnone : callKinds rest = [] := by
-            simpa [callKinds, Kind.isCall] using none
-          simpa using ih hnone
+            simpa only [callKinds, List.filter_eq_nil_iff, List.mem_map, Kind.isCall,
+              Bool.not_eq_true, forall_exists_index, and_imp, forall_apply_eq_imp_iff₂,
+              List.map_cons, Bool.false_eq_true, not_false_eq_true, List.filter_cons_of_neg] using
+              none
+          simpa only using ih hnone
 
 theorem transcriptState_drips (chi cu : Nat) (ks : List Nat) :
     (transcriptState scale.toNat freshNat chi cu (ks.map Kind.drip)).1 =
@@ -153,6 +164,7 @@ theorem transcriptState_drips (chi cu : Nat) (ks : List Nat) :
           (rest.map Kind.drip)).1 =
           segmentIndexFrom scale.toNat half.toNat rate.toNat
             (freshNat chi elapsed) rest
-      simpa [segmentIndex] using ih (freshNat chi elapsed) cu
+      simpa only [scaleNat_exact, halfNat_exact, rateNat_exact, segmentIndex] using
+        ih (freshNat chi elapsed) cu
 
 end Blanc.Drip

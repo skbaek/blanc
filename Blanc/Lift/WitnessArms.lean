@@ -71,7 +71,7 @@ def rinstAccKeeps : Rinst → Bool
 theorem rinstAccKeeps_run {pc : Nat} {sevm : Sevm} {devm devm' : Devm} {r : Rinst}
     (hr : rinstAccKeeps r = true) (h : Rinst.runCore pc devm sevm r = .ok devm') :
     AccKeep devm devm' := by
-  cases r <;> simp [rinstAccKeeps] at hr <;> simp only [Rinst.runCore] at h
+  cases r <;> simp only [rinstAccKeeps, Bool.false_eq_true] at hr <;> simp only [Rinst.runCore] at h
   case add | mul | sub | div | sdiv | mod | smod | signextend | lt | gt | slt | sgt | eq
       | and | or | xor | byte | shl | shr | sar =>
     obtain ⟨_, _, hd⟩ := Devm.diffBurn_of_applyBinary h
@@ -112,7 +112,8 @@ theorem rinstAccKeeps_run {pc : Nat} {sevm : Sevm} {devm devm' : Devm} {r : Rins
       ((accKeep_popToNat h3).trans ((accKeep_chargeGas h4).trans ⟨rfl, rfl, rfl⟩)))
   case pop =>
     cases hp : devm.pop with
-    | error e => simp [hp] at h
+    | error e => simp only [ExceptT.stM_eq, hp, Except.map_error, Except.bind_error,
+      reduceCtorEq] at h
     | ok r =>
       obtain ⟨x, d1⟩ := r
       simp only [hp] at h
@@ -180,14 +181,14 @@ theorem ninstAccKeeps_step {sevm : Sevm} {devm devm' : Devm} {n : Ninst} {pc pc'
     · cases h
       rename_i hd
       exact rinstAccKeeps_run hn hd
-  | exec _ => simp [ninstAccKeeps] at hn
-  | dupn _ => simp [ninstAccKeeps] at hn
-  | swapn _ => simp [ninstAccKeeps] at hn
-  | exchange _ => simp [ninstAccKeeps] at hn
+  | exec _ => simp only [ninstAccKeeps, Bool.false_eq_true] at hn
+  | dupn _ => simp only [ninstAccKeeps, Bool.false_eq_true] at hn
+  | swapn _ => simp only [ninstAccKeeps, Bool.false_eq_true] at hn
+  | exchange _ => simp only [ninstAccKeeps, Bool.false_eq_true] at hn
 
 theorem pcFree_of_ninstAccKeeps {n : Ninst} (hn : ninstAccKeeps n = true) : Ninst.pcFree n = true := by
   cases n with
-  | reg r => cases r <;> simp_all [ninstAccKeeps, rinstAccKeeps, Ninst.pcFree]
+  | reg r => cases r <;> simp_all only [ninstAccKeeps, rinstAccKeeps, Ninst.pcFree, Bool.false_eq_true]
   | _ => rfl
 
 /-! ## Kernel-cheap memory writes
@@ -203,7 +204,8 @@ def padTo (xs : Array UInt8) (m : Nat) : Array UInt8 :=
 theorem copyD_replicate_eq_padTo (xs : Array UInt8) (m : Nat) :
     Array.copyD xs (Array.replicate m 0) = padTo xs m := by
   apply Array.ext
-  · rw [Array.size_copyD]; simp [padTo]; omega
+  · rw [Array.size_copyD]; simp only [Array.size_replicate, padTo, List.size_toArray,
+    List.length_take, List.length_append, Array.length_toList, List.length_replicate, left_eq_inf]; omega
   · intro i h1 h2
     rw [Array.size_copyD, Array.size_replicate] at h1
     have e1 : (Array.copyD xs (Array.replicate m 0))[i] =
@@ -211,13 +213,17 @@ theorem copyD_replicate_eq_padTo (xs : Array UInt8) (m : Nat) :
       rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem]; rfl
     rw [e1]
     by_cases hi : i < xs.size
-    · rw [Array.getD_copyD_of_lt _ _ _ _ hi (by simpa using h1)]
-      simp [padTo, List.getElem_take, List.getElem_append_left (by simpa using hi : i < xs.toList.length),
-        Array.getD_eq_getD_getElem?, hi]
+    · rw [Array.getD_copyD_of_lt _ _ _ _ hi (by simpa only [Array.size_replicate] using h1)]
+      simp only [Array.getD_eq_getD_getElem?, hi, getElem?_pos, Option.getD_some, padTo,
+        List.getElem_toArray, List.getElem_take,
+        List.getElem_append_left
+            (by simpa only [Array.length_toList] using hi : i < xs.toList.length),
+        Array.getElem_toList]
     · rw [Array.getD_copyD_of_size_le _ _ _ _ (by omega)]
       simp only [padTo, List.getElem_toArray, List.getElem_take]
-      rw [List.getElem_append_right (by simp; omega)]
-      simp [Array.getD_eq_getD_getElem?, h1]
+      rw [List.getElem_append_right (by simp only [Array.length_toList]; omega)]
+      simp only [Array.getD_eq_getD_getElem?, Array.size_replicate, h1, getElem?_pos,
+        Array.getElem_replicate, Option.getD_some, Array.length_toList, List.getElem_replicate]
 
 /-- `Array.writeD` within bounds, as one splice (a single level for later reads). -/
 def spliceD (a : Array UInt8) (n : Nat) (xs : Bytes) : Array UInt8 :=
@@ -226,7 +232,7 @@ def spliceD (a : Array UInt8) (n : Nat) (xs : Bytes) : Array UInt8 :=
 theorem writeD_eq_spliceD (a : Array UInt8) (n : Nat) (xs : Bytes) (h : n + xs.length ≤ a.size) :
     Array.writeD a n xs = spliceD a n xs := by
   apply Array.ext
-  · rw [Array.size_writeD]; simp [spliceD]; omega
+  · rw [Array.size_writeD]; simp only [spliceD, List.append_assoc, List.size_toArray, List.length_append, List.length_take, Array.length_toList, List.length_drop]; omega
   · intro i h1 h2
     rw [Array.size_writeD] at h1
     have e1 : (Array.writeD a n xs)[i] = (Array.writeD a n xs).getD i 0 := by
@@ -235,20 +241,25 @@ theorem writeD_eq_spliceD (a : Array UInt8) (n : Nat) (xs : Bytes) (h : n + xs.l
     simp only [spliceD, List.getElem_toArray]
     by_cases hi : i < n
     · simp only [show ¬(n ≤ i ∧ i < n + xs.length) from by omega, ↓reduceIte]
-      rw [List.getElem_append_left (by simp; omega), List.getElem_append_left (by simp; omega)]
-      simp [Array.getD_eq_getD_getElem?, h1]
+      rw [List.getElem_append_left (by simp only [List.length_append, List.length_take, Array.length_toList]; omega), List.getElem_append_left (by simp only [List.length_take, Array.length_toList, lt_min_iff]; omega)]
+      simp only [Array.getD_eq_getD_getElem?, h1, getElem?_pos, Option.getD_some, List.getElem_take,
+        Array.getElem_toList]
     · by_cases hj : i < n + xs.length
       · simp only [show n ≤ i ∧ i < n + xs.length from ⟨by omega, hj⟩, and_self, ↓reduceIte]
-        rw [List.getElem_append_left (by simp; omega), List.getElem_append_right (by simp; omega)]
-        simp [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem (by omega : i - n < xs.length),
-          Nat.min_eq_left (by omega : n ≤ a.size)]
+        rw [List.getElem_append_left (by simp only [List.length_append, List.length_take, Array.length_toList]; omega), List.getElem_append_right (by simp only [List.length_take, Array.length_toList, min_le_iff]; omega)]
+        simp only [List.getD_eq_getElem?_getD,
+          List.getElem?_eq_getElem (by omega : i - n < xs.length), Option.getD_some,
+          List.length_take, Array.length_toList, Nat.min_eq_left (by omega : n ≤ a.size)]
       · simp only [show ¬(n ≤ i ∧ i < n + xs.length) from by omega, ↓reduceIte]
-        rw [List.getElem_append_right (by simp; omega)]
-        simp [Array.getD_eq_getD_getElem?, h1, Nat.min_eq_left (by omega : n ≤ a.size)]
+        rw [List.getElem_append_right (by simp only [List.length_append, List.length_take, Array.length_toList]; omega)]
+        simp only [Array.getD_eq_getD_getElem?, h1, getElem?_pos, Option.getD_some,
+          List.length_append, List.length_take, Array.length_toList,
+          Nat.min_eq_left (by omega : n ≤ a.size), List.getElem_drop, Array.getElem_toList]
         congr 1; omega
 
 theorem padTo_size (xs : Array UInt8) (m : Nat) : (padTo xs m).size = m := by
-  simp [padTo]; omega
+  simp only [padTo, List.size_toArray, List.length_take, List.length_append, Array.length_toList,
+    List.length_replicate, inf_eq_left]; omega
 
 theorem ceil32_ge (n : Nat) : n ≤ ceil32 n := by
   unfold ceil32; split <;> omega
@@ -309,8 +320,8 @@ def AcctAgree (st : State) (acs : AcctShadow) : Prop :=
 theorem acctView_get_set (st : State) (a b : Adr) (ac : Acct) :
     acctView ((State.set st a ac).get b) = if a = b then acctView ac else acctView (st.get b) := by
   by_cases h : a = b
-  · subst h; rw [State.get_set_self]; simp
-  · rw [State.get_set_ne _ h]; simp [h]
+  · subst h; rw [State.get_set_self]; simp only [↓reduceIte]
+  · rw [State.get_set_ne _ h]; simp only [h, ↓reduceIte]
 
 theorem acctAgree_set {st : State} {acs : AcctShadow} (h : AcctAgree st acs) (a : Adr)
     (ac : Acct) : AcctAgree (State.set st a ac) ((a, acctView ac) :: acs) := by
@@ -428,7 +439,7 @@ theorem array_sliceD_eq_list (xs : Array UInt8) (m n : Nat) :
   rw [Array.sliceD_eq_map, List.sliceD_eq_map]
   apply List.map_congr_left
   intro j _
-  simp [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD]
+  simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
 
 /-- `MLOAD` reading memory through `List.sliceD` (`Ninst.runCompiled_mload_of`). -/
 def mloadStep (c : Cfg) (g : SFunc) : Option Cfg :=
@@ -528,10 +539,12 @@ theorem benvAfterTransfer_eq_B (msg : Msg) : msg.benvAfterTransfer = benvAfterTr
   by_cases ht : msg.shouldTransferValue = true
   · simp only [ht, ↓reduceIte]
     by_cases hb : msg.benv.state.bal msg.caller < msg.value
-    · simp [hb, Benv.subBal, State.subBal, Option.toExcept]
-    · simp [hb, Benv.subBal, State.subBal, Option.toExcept, Benv.addBal, State.addBal]
+    · simp only [Option.toExcept, Benv.subBal, State.subBal, hb, ↓reduceIte, Option.bind_eq_bind,
+      Option.bind_none, Except.bind_error]
+    · simp only [Option.toExcept, Benv.subBal, State.subBal, hb, ↓reduceIte, Option.bind_eq_bind,
+      Option.bind_some, Benv.addBal, State.addBal, Except.bind_ok, Except.ok.injEq]
       rfl
-  · simp [ht]
+  · simp only [ht, Bool.false_eq_true, ↓reduceIte]
 
 /-- `Frame.enter` through `benvAfterTransferB`. -/
 def frameEnterB (f : Frame) : FrameEntry :=
@@ -642,7 +655,7 @@ theorem resumeCallB_sound {p d : Devm} {oi os : Nat}
     {r : Except (EvmError × State × AdrSet × Tra) Devm} (h : resumeCallB p oi os r = some d) :
     Resume.run (.call p oi os) r = .ok d := by
   rcases r with e | child
-  · simp [resumeCallB] at h
+  · simp only [resumeCallB, reduceCtorEq] at h
   · simp only [resumeCallB] at h
     simp only [Resume.run, liftToExecution, bind, Except.bind]
     split at h
@@ -690,9 +703,9 @@ theorem resumeCallB_acc {p d child : Devm} {oi os : Nat}
       have hp := Devm.push_of_push h2
       refine ⟨fun a => ?_, fun k => ?_⟩
       · show a ∈ e2.accessedAddresses ↔ _
-        rw [← hp.accessedAddresses]; simp [he, incorporateChildOnError]; rfl
+        rw [← hp.accessedAddresses]; simp only [he, incorporateChildOnError, Std.HashSet.union_eq, Bool.true_eq_false, false_and, or_false]; rfl
       · show k ∈ e2.accessedStorageKeys ↔ _
-        rw [← hp.accessedStorageKeys]; simp [he, incorporateChildOnError]; rfl
+        rw [← hp.accessedStorageKeys]; simp only [he, incorporateChildOnError, Std.HashSet.union_eq, Bool.true_eq_false, false_and, or_false]; rfl
     · cases h
   · rename_i he
     split at h
@@ -703,11 +716,11 @@ theorem resumeCallB_acc {p d child : Devm} {oi os : Nat}
       · show a ∈ e2.accessedAddresses ↔ _
         rw [← hp.accessedAddresses]
         simp only [Bool.not_eq_true] at he
-        exact Std.HashSet.mem_union_iff.trans (by simp [he]; exact Iff.rfl)
+        exact Std.HashSet.mem_union_iff.trans (by simp only [he, Std.HashSet.contains_iff_mem, true_and]; exact Iff.rfl)
       · show k ∈ e2.accessedStorageKeys ↔ _
         rw [← hp.accessedStorageKeys]
         simp only [Bool.not_eq_true] at he
-        exact Std.HashSet.mem_union_iff.trans (by simp [he]; exact Iff.rfl)
+        exact Std.HashSet.mem_union_iff.trans (by simp only [he, Std.HashSet.contains_iff_mem, true_and]; exact Iff.rfl)
     · cases h
 
 /-- The new-account charge of a value-bearing `CALL`. -/
@@ -864,7 +877,8 @@ theorem frameEnterB_done_acc {f : Frame} {child : Devm} (hf : f.isCreate = false
       ∀ a k, storOf child.state a k = storOf f.inner.benv.state a k := by
   unfold frameEnterB at h
   split at h
-  · simp [Frame.settleMsg, hf, processMessage.settle, bind, Except.bind] at h
+  · simp only [Frame.settleMsg, hf, Bool.false_eq_true, ↓reduceIte, processMessage.settle, bind,
+    Except.bind, FrameEntry.done.injEq, reduceCtorEq] at h
   · rename_i benv hb
     split at h
     · cases h
@@ -883,10 +897,10 @@ theorem frameEnterB_done_acc {f : Frame} {child : Devm} (hf : f.isCreate = false
           split at h
           · rename_i m cost _
             cases m <;>
-              simp [executeCode.handleError, processMessage.settle, bind, Except.bind] at h <;>
+              simp only [processMessage.settle, bind, Except.bind, executeCode.handleError, reduceCtorEq] at h <;>
               (try split at h) <;> (try cases h) <;>
               first | exact ⟨rfl, rfl, fun _ _ => rfl⟩ | exact ⟨rfl, rfl, benvAfterTransferB_stor hb⟩
-          · simp [executeCode.handleError, processMessage.settle, bind, Except.bind] at h
+          · simp only [processMessage.settle, bind, Except.bind, executeCode.handleError] at h
             split at h <;> cases h <;>
               first | exact ⟨rfl, rfl, fun _ _ => rfl⟩ | exact ⟨rfl, rfl, benvAfterTransferB_stor hb⟩
         · cases he
@@ -898,7 +912,8 @@ theorem frameEnterB_done_ok_state {f : Frame} {child : Devm} (hf : f.isCreate = 
     ∃ benv, benvAfterTransferB f.inner = .ok benv ∧ child.state = benv.state := by
   unfold frameEnterB at h
   split at h
-  · simp [Frame.settleMsg, hf, processMessage.settle, bind, Except.bind] at h
+  · simp only [Frame.settleMsg, hf, Bool.false_eq_true, ↓reduceIte, processMessage.settle, bind,
+    Except.bind, FrameEntry.done.injEq, reduceCtorEq] at h
   · rename_i benv hb
     refine ⟨benv, hb, ?_⟩
     split at h
@@ -918,10 +933,14 @@ theorem frameEnterB_done_ok_state {f : Frame} {child : Devm} (hf : f.isCreate = 
           split at h
           · rename_i m cost _
             cases m <;>
-              simp [executeCode.handleError, processMessage.settle, bind, Except.bind] at h <;>
-              (try split at h) <;> (try cases h) <;> first | rfl | (exfalso; simp_all [Devm.rollback, Devm.setWorld, Devm.error])
-          · simp [executeCode.handleError, processMessage.settle, bind, Except.bind] at h
-            split at h <;> cases h <;> first | rfl | (exfalso; simp_all [Devm.rollback, Devm.setWorld, Devm.error])
+              simp only [processMessage.settle, bind, Except.bind, executeCode.handleError, reduceCtorEq] at h <;>
+              (try split at h) <;> (try cases h) <;> first | rfl | (exfalso; simp_all only [Msg.withBenv_stat_rules,
+                Bool.and_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true, Devm.error, Devm.rollback,
+                Devm.setWorld, Bool.true_eq_false])
+          · simp only [processMessage.settle, bind, Except.bind, executeCode.handleError] at h
+            split at h <;> cases h <;> first | rfl | (exfalso; simp_all only [Msg.withBenv_stat_rules,
+              Bool.and_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true, Devm.error, Devm.rollback,
+              Devm.setWorld, Bool.true_eq_false])
         · cases he
 
 /-- A frame whose entry is the same under every covered fork: its code address is neither
@@ -1036,7 +1055,7 @@ theorem wrun_add (fs : List SFunc) (sevm : Sevm) :
         match wrun fs sevm n c with
         | .cont c' => wrun fs sevm m c'
         | r => r
-  | 0, m, c => by simp [wrun]
+  | 0, m, c => by simp only [zero_add, wrun]
   | n + 1, m, c => by
     simp only [Nat.succ_add, wrun]
     cases h : wstep fs sevm c with

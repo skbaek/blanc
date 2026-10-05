@@ -47,7 +47,7 @@ theorem ri_push {xs : Bytes} {le : xs.length ≤ 32} {d : Devm}
   have hp := of_run_push h
   have hs : d.stack = xs.toB256 :: S := by
     have := hp.stack
-    simpa [Stack.Push, Split] using this
+    simpa only [Stack.Push, Split, St.stack, List.cons_append, List.nil_append] using this
   have e := St.of_stackRel hp
   rw [hs] at e
   exact ⟨_, e⟩
@@ -131,7 +131,8 @@ theorem ri_dup {n : Fin 16} {w : B256} {d : Devm} (hget : S[n.val]? = some w)
   obtain ⟨x, hx, hp⟩ := of_run_dup h
   simp only [St.stack, hget, Option.some.injEq] at hx
   subst hx
-  have hs : d.stack = w :: S := by simpa [Stack.Push, Split] using hp.stack
+  have hs : d.stack = w :: S := by simpa only [Stack.Push, Split, St.stack, List.cons_append,
+    List.nil_append] using hp.stack
   have e := St.of_stackRel hp
   rw [hs] at e
   exact ⟨_, e⟩
@@ -320,7 +321,8 @@ theorem ri_sstore_nonstatic {k v : B256} {d : Devm} (hfork : CoveredFork sevm.be
     simp only [Except.bind_ok] at run
     rcases Except.bind_eq_ok run with ⟨_, -, run₃⟩
     rcases Except.bind_eq_ok run₃ with ⟨_, -, run₇⟩
-    simp [Bind.bind, Except.bind, Except.assert, assertDynamic, hs] at run₇
+    simp only [bind, Except.bind, assertDynamic, Except.assert, hs, Bool.not_true,
+      Bool.false_eq_true, ↓reduceIte, reduceCtorEq] at run₇
 
 end World
 

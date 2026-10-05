@@ -106,7 +106,8 @@ theorem holds_code_ne_nil {s : State} {P : Adr}
   have size : (s.getCode P).size = 0 := by
     rw [ByteArray.size_eq_length_toList, empty]; rfl
   rcases hP with h | h <;> rw [h] at size
-  · simp [forwarderCode, ByteArray.size] at size
+  · simp only [ByteArray.size, forwarderCode, List.size_toArray, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, OfNat.ofNat_ne_zero] at size
   · rw [code_size] at size
     exact absurd size (by decide)
 
@@ -167,10 +168,11 @@ theorem holds_not_delegation {s : State} {P : Adr}
   have notDelegation : ¬ isValidDelegation (s.getCode P) := by
     rintro ⟨size, -⟩
     rcases hP with h | h <;> rw [h] at size
-    · simp [forwarderCode, ByteArray.size, eoaDelegatedCodeLength] at size
+    · simp only [ByteArray.size, forwarderCode, List.size_toArray, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, eoaDelegatedCodeLength, Nat.reduceEqDiff] at size
     · rw [code_size] at size
-      simp [eoaDelegatedCodeLength] at size
-  simp [getDelegatedCodeAddress, notDelegation]
+      simp only [eoaDelegatedCodeLength, Nat.reduceEqDiff] at size
+  simp only [getDelegatedCodeAddress, notDelegation, ↓reduceIte]
 
 /-- **V+ for a settled message call's retained execution.**  Without an EIP-7702
 authorization list (`noAuths`; a delegation rewrites the authorities' code before the
@@ -228,12 +230,13 @@ theorem _root_.Blanc.ExecutionTrace.TransactionTrace.prepared_facts {benv : Benv
   have prepared := trace.prepared
   refine ⟨?_, prepareMessage_benv prepared, ?_⟩
   · unfold prepareMessage at prepared
-    cases hrecv : tx.type.receiver? <;> simp [hrecv] at prepared <;> rw [← prepared] <;> rfl
+    cases hrecv : tx.type.receiver? <;> simp only [hrecv, Except.ok.injEq] at prepared <;> rw [← prepared] <;> rfl
   · unfold prepareMessage at prepared
     cases hrecv : tx.type.receiver? with
-    | none => simp [hrecv] at prepared; rw [← prepared]; simp
+    | none => simp only [hrecv, Except.ok.injEq] at prepared; rw [← prepared]; simp only [Option.isNone_none,
+      Bool.true_eq_false, IsEmpty.forall_iff]
     | some target =>
-        simp [hrecv] at prepared
+        simp only [hrecv, Except.ok.injEq] at prepared
         rw [← prepared]
         intro _
         rfl
@@ -260,7 +263,7 @@ theorem _root_.Blanc.ExecutionTrace.TransactionTrace.vplus {benv : Benv} {bout :
     rw [benvEq]
     exact (State.subBal_getCode trace.debit).trans State.incrNonce_get_code
   refine trace.message.vplus ?_ ?_ ?_ ?_ ?_
-  · rw [benvEq]; simpa [Benv.beginTransaction] using hfork
+  · rw [benvEq]; simpa only [Benv.beginTransaction] using hfork
   · rw [debit]; exact hP
   · rw [debit]; exact hI
   · intro isCall target

@@ -171,35 +171,35 @@ theorem Func.RunCompiledTo.NoRawSstorePath.of_execFree
             (instructionRun.childless_of_not_exec (by
               intro external impossible
               cases impossible))
-            (ih (by simpa [funcExecFree] using execFree) storeFree.2)
+            (ih (by simpa only [funcExecFree] using execFree) storeFree.2)
       | push bytes size =>
           exact .next (instructionRun := instructionRun) storeFree.1
             (instructionRun.childless_of_not_exec (by
               intro external impossible
               cases impossible))
-            (ih (by simpa [funcExecFree] using execFree) storeFree.2)
+            (ih (by simpa only [funcExecFree] using execFree) storeFree.2)
       | dupn immediate =>
           exact .next (instructionRun := instructionRun) storeFree.1
             (instructionRun.childless_of_not_exec (by
               intro external impossible
               cases impossible))
-            (ih (by simpa [funcExecFree] using execFree) storeFree.2)
+            (ih (by simpa only [funcExecFree] using execFree) storeFree.2)
       | swapn immediate =>
           exact .next (instructionRun := instructionRun) storeFree.1
             (instructionRun.childless_of_not_exec (by
               intro external impossible
               cases impossible))
-            (ih (by simpa [funcExecFree] using execFree) storeFree.2)
+            (ih (by simpa only [funcExecFree] using execFree) storeFree.2)
       | exchange immediate =>
           exact .next (instructionRun := instructionRun) storeFree.1
             (instructionRun.childless_of_not_exec (by
               intro external impossible
               cases impossible))
-            (ih (by simpa [funcExecFree] using execFree) storeFree.2)
+            (ih (by simpa only [funcExecFree] using execFree) storeFree.2)
       | exec operation =>
-          simp [funcExecFree] at execFree
+          simp only [funcExecFree] at execFree
   | call lookup room burn tail ih =>
-      simp [funcExecFree] at execFree
+      simp only [funcExecFree] at execFree
 
 private theorem prependStoresRev_execFree
     (iws : List (B256 × Nat)) (rest : Func)
@@ -209,7 +209,7 @@ private theorem prependStoresRev_execFree
   | nil => exact hrest
   | cons iw iws ih =>
       apply ih
-      simpa [prependStore, Ninst.pushB256, funcExecFree] using hrest
+      simpa only [prependStore, Ninst.pushB256, funcExecFree] using hrest
 
 private theorem prependStoresRev_localSstoreFree
     (iws : List (B256 × Nat)) (rest : Func)
@@ -219,7 +219,8 @@ private theorem prependStoresRev_localSstoreFree
   | nil => exact hrest
   | cons iw iws ih =>
       apply ih
-      simpa [prependStore, Ninst.pushB256, Func.LocalSstoreFree] using hrest
+      simpa only [prependStore, Ninst.pushB256, Func.LocalSstoreFree, ne_eq, reduceCtorEq,
+        not_false_eq_true, Ninst.reg.injEq, true_and] using hrest
 
 /-- Every compiled constant `Error(string)` body is raw-SSTORE-free.  The
 reason remains symbolic: the proof traverses the reverse-store constructor
@@ -232,10 +233,10 @@ theorem Func.RunCompiledTo.NoRawSstorePath.of_revertWith
   apply Func.RunCompiledTo.NoRawSstorePath.of_execFree run
   · unfold Func.revertWith Func.revertData
     apply prependStoresRev_execFree
-    simp [Ninst.pushB256, funcExecFree]
+    simp only [Ninst.pushB256, funcExecFree]
   · unfold Func.revertWith Func.revertData
     apply prependStoresRev_localSstoreFree
-    simp [Ninst.pushB256, Func.LocalSstoreFree]
+    simp only [LocalSstoreFree, Ninst.pushB256, ne_eq, reduceCtorEq, not_false_eq_true, and_self]
 
 /-- A selected nonzero guard, internal call, and `Func.revert` auxiliary are
 raw-SSTORE-free.  The stack facts rule out the continuation arm before the
@@ -262,9 +263,9 @@ theorem Func.RunCompiledTo.NoRawSstorePath.of_emptyRevertGuard
           exact .succ (nonzero := nonzero) (room := room) (pop := pop)
             (.call (lookup := lookup) (room := callRoom) (burn := burn)
               (Func.RunCompiledTo.NoRawSstorePath.of_execFree revertRun
-                (by simp [Func.revert, Ninst.pushB256, funcExecFree])
-                (by simp [Func.revert, Ninst.pushB256,
-                  Func.LocalSstoreFree])))
+                (by simp only [revert, Ninst.pushB256, funcExecFree])
+                (by simp only [revert, Ninst.pushB256, LocalSstoreFree, ne_eq, reduceCtorEq,
+                  not_false_eq_true, and_self])))
 
 /-- Prepending an instruction-only line that is externally execution-free and
 locally SSTORE-free preserves a selected tail certificate.  The tail premise
@@ -283,21 +284,21 @@ theorem Func.RunCompiledTo.NoRawSstorePath.of_prepend_nonexec
     Func.RunCompiledTo.NoRawSstorePath run := by
   induction line generalizing pre with
   | nil =>
-      exact tailSafe (by simpa [prepend] using run)
+      exact tailSafe (by simpa only [prepend] using run)
   | cons instruction line ih =>
       cases run with
       | next instructionRun tail =>
           exact .next (instructionRun := instructionRun)
-            (notSstore instruction (by simp))
+            (notSstore instruction (by simp only [List.mem_cons, true_or]))
             (instructionRun.childless_of_not_exec
-              (notExec instruction (by simp)))
+              (notExec instruction (by simp only [List.mem_cons, true_or])))
             (ih tail
               (by
                 intro next reached
-                exact notSstore next (by simp [reached]))
+                exact notSstore next (by simp only [List.mem_cons, reached, or_true]))
               (by
                 intro next reached operation
-                exact notExec next (by simp [reached]) operation))
+                exact notExec next (by simp only [List.mem_cons, reached, or_true]) operation))
 
 private theorem
     Func.RunCompiledTo.NoRawSstorePath.of_entrySstoreFree_reachableExecFree_core :

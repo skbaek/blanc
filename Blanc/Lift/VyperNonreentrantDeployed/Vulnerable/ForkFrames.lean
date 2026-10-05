@@ -202,7 +202,7 @@ theorem frame3_child_at (hg : CoveredFork g) :
     exact ⟨.ok post3, hx3, frame_settle_ok hcr3 hsg3 herr⟩
   · show a ∈ post3.accessedAddresses ↔ _
     rw [show post3 = post3F post4 from rfl, hka, (hacc.1 a), hpe, hpa a, ha4.1 a]
-    simp [adrs3']
+    simp only [true_and, adrs3', List.mem_append]
   · show x ∈ post3.accessedStorageKeys ↔ _
     rw [show post3 = post3F post4 from rfl, hkk, (hacc.2 x), hpe, hpk, ha4.2.1 x]
     simp only [true_and, keys3, List.mem_append]
@@ -233,7 +233,7 @@ theorem attacker_of_child_at (hg : CoveredFork g) (d3 : Devm)
       (callResume_withFork hf2 hg _ _ _ _ _ _).trans hc
     generalize hr : wrun fs2 e2.sta 2 c = r at hk ⊢
     rcases r with c' | ⟨d | d, cl⟩ | _
-    · simp [obs2] at hk
+    · simp only [obs2, reduceCtorEq] at hk
     · simp only [obs2, Option.some.injEq, Prod.mk.injEq, Bool.and_eq_true,
         decide_eq_true_eq] at hk
       obtain ⟨hgas, ho, ⟨⟨⟨he, hkk⟩, hka⟩, hks⟩, hkc⟩ := hk
@@ -247,9 +247,9 @@ theorem attacker_of_child_at (hg : CoveredFork g) (d3 : Devm)
       rw [hkk, hka, hks, hkc] at hag
       exact ⟨hok, hag, hgas, List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) ho,
         herr⟩
-    · simp [obs2] at hk
-    · simp [obs2] at hk
-  · simp [obs2] at hk
+    · simp only [obs2, reduceCtorEq] at hk
+    · simp only [obs2, reduceCtorEq] at hk
+  · simp only [obs2, reduceCtorEq] at hk
 
 /-- **The attacker's subtree as frame 1's child, under any covered fork.** -/
 theorem attacker_child_at (hg : CoveredFork g) :
@@ -301,7 +301,7 @@ theorem frame1_full_at (hg : CoveredFork g) (d1 : Devm)
             have s := s3.trans (callResume_cont h4 k2 a2)
             generalize hr : wrun fs1 (sevm1.withFork g) 188 c4 = r at hk'
             rcases r with c | ⟨post | post, cl⟩ | _
-            · simp [obs1, obs1EELS] at hk'
+            · simp only [obs1, obs1EELS, List.map_append, reduceCtorEq] at hk'
             · simp only [obs1, obs1EELS, Option.some.injEq, Prod.mk.injEq] at hk'
               obtain ⟨hgas, ho, h26, hA, h2', he⟩ := hk'
               obtain ⟨run, hcl, hst⟩ := wrun_done hr (s.1 c0_agree)
@@ -313,13 +313,13 @@ theorem frame1_full_at (hg : CoveredFork g) (d1 : Devm)
               · rw [hs]; exact hA
               · rw [hs]; exact h2'
               · exact Option.isNone_iff_eq_none.mp he
-            · simp [obs1, obs1EELS] at hk'
-            · simp [obs1, obs1EELS] at hk'
-          · simp [obs1, obs1EELS] at hk'
-        all_goals simp [obs1, obs1EELS] at hk'
-      · simp [obs1, obs1EELS] at hk'
-    · simp [obs1, obs1EELS] at hk'
-  · simp [obs1, obs1EELS] at hk'
+            · simp only [obs1, obs1EELS, List.map_append, reduceCtorEq] at hk'
+            · simp only [obs1, obs1EELS, List.map_append, reduceCtorEq] at hk'
+          · simp only [obs1, obs1EELS, List.map_append, reduceCtorEq] at hk'
+        all_goals simp only [obs1, obs1EELS, List.map_append, reduceCtorEq] at hk'
+      · simp only [obs1, obs1EELS, List.map_append, reduceCtorEq] at hk'
+    · simp only [obs1, obs1EELS, List.map_append, reduceCtorEq] at hk'
+  · simp only [obs1, obs1EELS, List.map_append, reduceCtorEq] at hk'
 
 /-- **Frame 1 of the V- witness, closed, under any covered fork** (`frame1_closed`). -/
 theorem frame1_closed_at (hg : CoveredFork g) :

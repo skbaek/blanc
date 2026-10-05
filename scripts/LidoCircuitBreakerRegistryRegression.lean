@@ -35,21 +35,21 @@ private theorem emptyStorWitness :
   have hread (key : B256) : Stor.empty.get key = 0 := by
     rw [Stor.get_eq_getD_find?, Stor.find?_empty]
     rfl
-  refine ⟨by simp, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · intro entry hmem; simp at hmem
-  · intro entry hmem; simp at hmem
+  refine ⟨by simp only [List.map_nil, List.nodup_nil], ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · intro entry hmem; simp only [List.not_mem_nil] at hmem
+  · intro entry hmem; simp only [List.not_mem_nil] at hmem
   · change Stor.empty.get arrayLengthSlot = 0
     exact hread arrayLengthSlot
-  · intro index hindex; simp at hindex
+  · intro index hindex; simp only [List.length_nil, not_lt_zero] at hindex
   · intro target htarget
-    simpa [logicalStorageOfStor, assignmentAt] using hread (assignmentSlot target)
+    simpa only [logicalStorageOfStor, assignmentAt] using hread (assignmentSlot target)
   · intro target htarget
     change Stor.empty.get (indexSlot target) = 0
     exact hread (indexSlot target)
   · intro pauser hpauser
     change Stor.empty.get (countSlot pauser) = 0
     exact hread (countSlot pauser)
-  · simpa [logicalStorageOfStor] using hread (countSlot 0)
+  · simpa only [logicalStorageOfStor] using hread (countSlot 0)
 
 namespace RegistryMutants
 
@@ -80,24 +80,24 @@ def threeStor : Stor :=
 theorem oneEntry_pre_witness :
     RegistryWitness (logicalStorageOfStor oneStor) [(7, 9)] := by
   exact emptyStorWitness.applyFreshWrites
-    (nonzeroCanonicalSmall 7 (by omega) (by norm_num))
-    (nonzeroCanonicalSmall 9 (by omega) (by norm_num))
+    (nonzeroCanonicalSmall 7 (by omega) (by norm_num only))
+    (nonzeroCanonicalSmall 9 (by omega) (by norm_num only))
     (by decide)
 
 theorem twoEntry_pre_witness :
     RegistryWitness (logicalStorageOfStor twoStor)
       [(7, 9), (8, 10)] := by
   exact oneEntry_pre_witness.applyFreshWrites
-    (nonzeroCanonicalSmall 8 (by omega) (by norm_num))
-    (nonzeroCanonicalSmall 10 (by omega) (by norm_num))
+    (nonzeroCanonicalSmall 8 (by omega) (by norm_num only))
+    (nonzeroCanonicalSmall 10 (by omega) (by norm_num only))
     (by decide)
 
 theorem threeEntry_pre_witness :
     RegistryWitness (logicalStorageOfStor threeStor)
       [(7, 9), (8, 10), (11, 12)] := by
   exact twoEntry_pre_witness.applyFreshWrites
-    (nonzeroCanonicalSmall 11 (by omega) (by norm_num))
-    (nonzeroCanonicalSmall 12 (by omega) (by norm_num))
+    (nonzeroCanonicalSmall 11 (by omega) (by norm_num only))
+    (nonzeroCanonicalSmall 12 (by omega) (by norm_num only))
     (by decide)
 
 /-! ### Assignment/membership mutant -/
@@ -113,7 +113,7 @@ theorem assignmentOmitted_rejected :
     ¬ RegistryWitness
       (logicalStorageOfStor assignmentOmittedStor) [(7, 9)] := by
   intro hw
-  have h := hw.assignments 7 (canonicalSmall 7 (by norm_num))
+  have h := hw.assignments 7 (canonicalSmall 7 (by norm_num only))
   have hactual : assignmentOmittedStor.get (assignmentSlot 7) = 0 := by
     decide
   have hexpected : assignmentAt [(7, 9)] 7 = 9 := by decide
@@ -133,7 +133,7 @@ theorem distinctOldCountOmitted_rejected :
     ¬ RegistryWitness
       (logicalStorageOfStor oldCountOmittedStor) [(7, 11)] := by
   intro hw
-  have h := hw.counts 9 (canonicalSmall 9 (by norm_num))
+  have h := hw.counts 9 (canonicalSmall 9 (by norm_num only))
   have hactual : oldCountOmittedStor.get (countSlot 9) = 1 := by decide
   have hexpected : assignmentCount [(7, 11)] 9 = 0 := by decide
   change oldCountOmittedStor.get (countSlot 9) =
@@ -152,7 +152,7 @@ theorem distinctNewCountOmitted_rejected :
     ¬ RegistryWitness
       (logicalStorageOfStor newCountOmittedStor) [(7, 11)] := by
   intro hw
-  have h := hw.counts 11 (canonicalSmall 11 (by norm_num))
+  have h := hw.counts 11 (canonicalSmall 11 (by norm_num only))
   have hactual : newCountOmittedStor.get (countSlot 11) = 0 := by decide
   have hexpected : assignmentCount [(7, 11)] 11 = 1 := by decide
   change newCountOmittedStor.get (countSlot 11) =
@@ -225,7 +225,7 @@ theorem movedIndexOmitted_rejected :
       (logicalStorageOfStor movedIndexOmittedStor)
       [(7, 9), (11, 12)] := by
   intro hw
-  have h := hw.indices 11 (canonicalSmall 11 (by norm_num))
+  have h := hw.indices 11 (canonicalSmall 11 (by norm_num only))
   have hactual : movedIndexOmittedStor.get (indexSlot 11) = 3 := by decide
   have hexpected : oneBasedIndexAt [(7, 9), (11, 12)] 11 = 2 := by decide
   change movedIndexOmittedStor.get (indexSlot 11) =
@@ -249,7 +249,7 @@ theorem removedTargetIndexClearOmitted_rejected :
       (logicalStorageOfStor removedIndexClearOmittedStor)
       [(7, 9), (11, 12)] := by
   intro hw
-  have h := hw.indices 8 (canonicalSmall 8 (by norm_num))
+  have h := hw.indices 8 (canonicalSmall 8 (by norm_num only))
   have hactual : removedIndexClearOmittedStor.get (indexSlot 8) = 2 := by
     decide
   have hexpected : oneBasedIndexAt [(7, 9), (11, 12)] 8 = 0 := by decide
@@ -369,11 +369,12 @@ private theorem targetZeroMutant_funcRun :
     (Func.RunCompiled.next targetZeroMutant_pushKey
       (Func.RunCompiled.next targetZeroMutant_store (by
         func_run [1]
-        all_goals try simp [targetZeroMutantD3,
+        all_goals try simp only [targetZeroMutantD3,
           targetZeroMutantPost, targetZeroMutantD0,
           targetZeroMutantBase, targetZeroMutantSevm,
           targetZeroMutantOwner, targetZeroGuardAfterAssignment,
-          gVerylow, gHigh, gJumpdest]
+          gVerylow, gHigh, gJumpdest,
+          Devm.setMach_gasLeft, Nat.reduceSub, Nat.reduceAdd]
         case h_arm =>
           apply Func.RunCompiled.last
           rfl)))

@@ -27,41 +27,10 @@ private theorem temporalSloadBase_accessedAddresses (sevm : Sevm) (base : Devm)
 
 /-! ## Slot-pair inequalities lifted to accessed-key pairs -/
 
-private theorem addAccessedStorageKey_getStorVal (devm : Devm) (a : Adr)
-    (k : B256) (a' : Adr) (key : B256) :
-    (addAccessedStorageKey devm a k).getStorVal a' key =
-      devm.getStorVal a' key := rfl
-
 private theorem addAccessedStorageKey_accessedStorageKeys' (devm : Devm)
     (a : Adr) (k : B256) :
     (addAccessedStorageKey devm a k).accessedStorageKeys =
       devm.accessedStorageKeys.insert (a, k) := rfl
-
-private theorem addAccessedStorageKey_accessedAddresses (devm : Devm) (a : Adr)
-    (k : B256) : (addAccessedStorageKey devm a k).accessedAddresses =
-      devm.accessedAddresses := rfl
-
-private theorem addAccessedStorageKey_error (devm : Devm) (a : Adr) (k : B256) :
-    (addAccessedStorageKey devm a k).error = devm.error := rfl
-
-private theorem addAccessedStorageKey_output (devm : Devm) (a : Adr)
-    (k : B256) : (addAccessedStorageKey devm a k).output = devm.output := rfl
-
-private theorem addAccessedStorageKey_logs (devm : Devm) (a : Adr) (k : B256) :
-    (addAccessedStorageKey devm a k).logs = devm.logs := rfl
-
-private theorem lengthWritePost_error (sevm : Sevm) (base : Devm) (ol : B256) :
-    (lengthWritePost sevm base ol).error = base.error := rfl
-
-private theorem lengthWritePost_output (sevm : Sevm) (base : Devm) (ol : B256) :
-    (lengthWritePost sevm base ol).output = base.output := rfl
-
-private theorem lengthWritePost_logs (sevm : Sevm) (base : Devm) (ol : B256) :
-    (lengthWritePost sevm base ol).logs = base.logs := rfl
-
-private theorem lengthWritePost_accessedAddresses (sevm : Sevm) (base : Devm)
-    (ol : B256) : (lengthWritePost sevm base ol).accessedAddresses =
-      base.accessedAddresses := rfl
 
 private theorem keyPairNe {a₁ a₂ : Adr} {k₁ k₂ : B256} (h : k₂ ≠ k₁) :
     (a₁, k₁) ≠ (a₂, k₂) := fun hp => h (congrArg Prod.snd hp).symm
@@ -305,38 +274,10 @@ private theorem gatewayRunKeys_removeBase3 :
 
 /-! ## One-layer projection helpers -/
 
-private theorem temporalSstorePost_error (sevm : Sevm) (base : Devm)
-    (key value : B256) :
-    (temporalSstorePost sevm base key value).error = base.error := rfl
-
-private theorem temporalSstorePost_output (sevm : Sevm) (base : Devm)
-    (key value : B256) :
-    (temporalSstorePost sevm base key value).output = base.output := rfl
-
-private theorem temporalSstorePost_transientStorage (sevm : Sevm)
-    (base : Devm) (key value : B256) :
-    (temporalSstorePost sevm base key value).transientStorage =
-      base.transientStorage := rfl
-
 private theorem temporalSstorePost_accessedAddresses (sevm : Sevm)
     (base : Devm) (key value : B256) :
     (temporalSstorePost sevm base key value).accessedAddresses =
       base.accessedAddresses := rfl
-
-private theorem addLog_getCode (devm : Devm) (l : Log) (x : Adr) :
-    (devm.addLog l).getCode x = devm.getCode x := rfl
-
-private theorem addLog_logs (devm : Devm) (l : Log) :
-    (devm.addLog l).logs = devm.logs ++ [l] := rfl
-
-private theorem addLog_error (devm : Devm) (l : Log) :
-    (devm.addLog l).error = devm.error := rfl
-
-private theorem addLog_output (devm : Devm) (l : Log) :
-    (devm.addLog l).output = devm.output := rfl
-
-private theorem addLog_transientStorage (devm : Devm) (l : Log) :
-    (devm.addLog l).transientStorage = devm.transientStorage := rfl
 
 private theorem addLog_accessedStorageKeys (devm : Devm) (l : Log) :
     (devm.addLog l).accessedStorageKeys = devm.accessedStorageKeys := rfl
@@ -348,35 +289,9 @@ private theorem addLog_getStorVal (devm : Devm) (l : Log) (a : Adr)
     (key : B256) : (devm.addLog l).getStorVal a key = devm.getStorVal a key :=
   rfl
 
-private theorem setTransVal_getStorVal (devm : Devm) (a : Adr) (k v : B256)
-    (a' : Adr) (key : B256) :
-    (devm.setTransVal a k v).getStorVal a' key = devm.getStorVal a' key := rfl
-
-private theorem setTransVal_logs (devm : Devm) (a : Adr) (k v : B256) :
-    (devm.setTransVal a k v).logs = devm.logs := rfl
-
-private theorem setTransVal_error (devm : Devm) (a : Adr) (k v : B256) :
-    (devm.setTransVal a k v).error = devm.error := rfl
-
-private theorem setTransVal_output (devm : Devm) (a : Adr) (k v : B256) :
-    (devm.setTransVal a k v).output = devm.output := rfl
-
 private theorem setMach_getStorVal (devm : Devm) (m : Mach) (a : Adr)
     (key : B256) : (devm.setMach m).getStorVal a key = devm.getStorVal a key :=
   rfl
-
-private theorem setMach_getTransVal (devm : Devm) (m : Mach) (a : Adr)
-    (key : B256) :
-    (devm.setMach m).getTransVal a key = devm.getTransVal a key := rfl
-
-private theorem setMach_logs (devm : Devm) (m : Mach) :
-    (devm.setMach m).logs = devm.logs := rfl
-
-private theorem setMach_error (devm : Devm) (m : Mach) :
-    (devm.setMach m).error = devm.error := rfl
-
-private theorem setMach_output (devm : Devm) (m : Mach) :
-    (devm.setMach m).output = devm.output := rfl
 
 /-! ## The cold and warm charges, resolved at the row-19 world -/
 
@@ -607,12 +522,6 @@ private theorem gatewayRunStor_assignPost_other {key : B256}
   rw [temporalSloadBase_getStorVal]
   exact gatewayRunStor_kernelBase key
 
-private theorem gatewayRunStor_assignPost_self :
-    (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0).getStorVal configWorldOwner (assignmentSlot pauseWorldCallee.toB256) = 0 := by
-  unfold assignmentPost
-  exact temporalSstorePost_self _ _ _ _
 
 private theorem gatewayRunStor_countPost_other {key : B256}
     (ha : assignmentSlot pauseWorldCallee.toB256 ≠ key)
@@ -625,17 +534,6 @@ private theorem gatewayRunStor_countPost_other {key : B256}
   rw [temporalSstorePost_other _ _ _ _ _ _ (keyPairNe hc),
     temporalSloadBase_getStorVal]
   exact gatewayRunStor_assignPost_other ha
-
-private theorem gatewayRunStor_countPost_assign :
-    (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0).getStorVal configWorldOwner (assignmentSlot pauseWorldCallee.toB256) = 0 := by
-  rw [temporalSstorePost_other _ _ _ _ _ _
-    (keyPairNe pauseWorld_assignCallee_ne_count.symm),
-    temporalSloadBase_getStorVal]
-  exact gatewayRunStor_assignPost_self
 
 private theorem gatewayRunStor_countPost_count :
     (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
@@ -672,19 +570,6 @@ private theorem gatewayRunStor_removeBase3_count :
   rw [temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
     temporalSloadBase_getStorVal]
   exact gatewayRunStor_countPost_count
-
-private theorem gatewayRunStor_removeBase3_assign :
-    (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
-      (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)).getStorVal configWorldOwner (assignmentSlot pauseWorldCallee.toB256) = 0 := by
-  rw [temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
-    temporalSloadBase_getStorVal]
-  exact gatewayRunStor_countPost_assign
 
 /-! The five removal-walk writes, peeled from the outside of `B6`:
 `indexClearPost` writes the index clear over the length restore, and
@@ -906,10 +791,6 @@ private theorem temporalSloadBase_getCode (sevm : Sevm) (base : Devm)
     (temporalSloadBase sevm base key).getCode a = base.getCode a :=
   (temporalSloadBase_carriers sevm base key).2.2.2 a
 
-
-private theorem addAccessedStorageKey_getCode (devm : Devm) (a : Adr)
-    (k : B256) (x : Adr) :
-    (addAccessedStorageKey devm a k).getCode x = devm.getCode x := rfl
 
 private theorem gatewayRunAddrs_B7 :
     ((indexClearPost sentinelGatewayPauseWorldSevm (entryClearPost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
@@ -1708,10 +1589,10 @@ private theorem sentinelGatewayPauseWorld_afterSetGatewaySeam :
       (by show (1024 : Nat) ≠ 0; decide)
       (by simpa only [toAdr_toB256] using
         sentinelGatewayPauseWorld_target_not_precompile)
-      (by norm_num)
+      (by norm_num only)
       (by
         simp only [gatewayPauseChildCost]
-        norm_num)
+        norm_num only [ite_true])
   rcases hchain with ⟨st₁, st₂, hsub₁, hsub₂, hstate⟩
   have htargetOwner : pauseWorldCallee.toB256.toAdr ≠
       configWorldOwner := by
@@ -1754,9 +1635,9 @@ private theorem sentinelGatewayPauseWorld_afterSetGatewaySeam :
       (Or.inl gatewayRunAfterSetBase_warmExpiry)), ?_⟩
   intro final hrun
   have h := hclose final hrun
-  simp [gatewayPauseChildCost] at h
+  simp only [gatewayPauseChildCost, ↓reduceIte, Nat.reduceAdd] at h
   simpa only [show (42362 + 25567 + 594 + 2600 : Nat) = 71123 from by
-    norm_num] using h
+    norm_num only] using h
 
 private theorem sentinelGatewayPauseWorld_originalExpiry :
     getOrigStorVal sentinelGatewayPauseWorldSevm configWorldOwner
@@ -1868,11 +1749,11 @@ private theorem sentinelGatewayPauseWorld_successSuffix :
       exact sentinelGatewayPauseWorld_originalExpiry)
     hwarmExpiry
     (stubRunSvc_reset (by decide) (by decide))
-    (by norm_num [gCallStipend])
+    (by norm_num only [gCallStipend])
     rfl
   have hmidEta : mid.setMach
       ⟨[], gatewayRunDecodedMemory, 35999 + 3322 + 100 + 2900, mid.stateGas⟩ = mid := by
-    rw [show (35999 + 3322 + 100 + 2900 : Nat) = 42321 from by norm_num,
+    rw [show (35999 + 3322 + 100 + 2900 : Nat) = 42321 from by norm_num only,
       gatewayRunDecodedMemory, ← hgas, ← hmem, ← hstk]
     rfl
   rw [hmidEta] at hW8
@@ -1932,7 +1813,7 @@ private theorem sentinelGatewayPauseWorld_productionRun :
     (by
       simpa only [gatewayRunAfterSetNoLog, gatewayRunAfterSetBase,
         gatewayRunRemoveBase3, gatewayRunCountPost, gatewayRunKernelBase] using hafter)
-  rw [show (71123 + 1934 : Nat) = 73057 from by norm_num] at hfin
+  rw [show (71123 + 1934 : Nat) = 73057 from by norm_num only] at hfin
   have hrem := removeTarget_toFinish_coldEntry_runCompiled (hfork := by first | (change CoveredFork .prague; exact CoveredFork.prague) | decide) officialParams
     sentinelGatewayPauseWorldSevm gatewayRunCountPost gatewayRunMemory1 gatewayRunImage1
     pauseWorldCallee.toB256 0 1 [] (by decide)
@@ -1961,10 +1842,10 @@ private theorem sentinelGatewayPauseWorld_productionRun :
     (stubRunSvc_reset (by decide) (by decide))
     (stubRunSvc_reset (by decide) (by decide))
     (stubRunSvc_reset (by decide) (by decide))
-    (by decide) (by norm_num [gCallStipend]) rfl _
+    (by decide) (by norm_num only [gCallStipend]) rfl _
     (by dsimp only; exact hfin)
   rw [show (0 + 73057 + 139 + 0 + 0 + 0 + 2100 + 2100 + 2100 + 100 +
-    100 + 2900 + 2900 + 2900 : Nat) = 88396 from by norm_num] at hrem
+    100 + 2900 + 2900 + 2900 : Nat) = 88396 from by norm_num only] at hrem
   have hglue := afterOldPauser_removeTarget_runCompiled officialParams
     sentinelGatewayPauseWorldSevm gatewayRunCountPost gatewayRunMemory1 gatewayRunImage1 []
     88396 _ (by decide)
@@ -1973,7 +1854,7 @@ private theorem sentinelGatewayPauseWorld_productionRun :
     (by rw [gatewayRunMemory1, sentinelRunMem_size1]; decide)
     (by rw [gatewayRunMemory1, sentinelRunMem_size1])
     hrem
-  rw [show (88396 + 35 : Nat) = 88431 from by norm_num] at hglue
+  rw [show (88396 + 35 : Nat) = 88431 from by norm_num only] at hglue
   have hker := setPauserKernel_found_runCompiled (hfork := by first | (change CoveredFork .prague; exact CoveredFork.prague) | decide) officialParams
     sentinelGatewayPauseWorldSevm gatewayRunKernelBase
     (pauseMemory pauseWorldCallee.toB256 pauseInfiniteSentinel)
@@ -1998,7 +1879,7 @@ private theorem sentinelGatewayPauseWorld_productionRun :
       sentinelPauseLastStor_count)
     ((sentinelGatewayPauseWorld_getOrigStorVal _).trans sentinelPauseLastStor_count)
     (stubRunSvc_reset (by decide) (by decide))
-    (by norm_num [gCallStipend]) rfl
+    (by norm_num only [gCallStipend]) rfl
     (by
       dsimp only [gatewayRunKernelBase, gatewayRunCountPost, gatewayRunMemory1,
         gatewayRunImage1]
@@ -2008,7 +1889,7 @@ private theorem sentinelGatewayPauseWorld_productionRun :
       gatewayRunKernelBase pauseWorldCallee.toB256 0 pauseWorldPauser
       2900 2900 = 8122 from by
         simpa only [gatewayRunKernelBase] using gatewayRunKernelPrefixGas,
-    show (0 + 88431 + 8122 : Nat) = 96553 from by norm_num] at hker
+    show (0 + 88431 + 8122 : Nat) = 96553 from by norm_num only] at hker
   have hcalldata := pauseCalldata_facts
     sentinelGatewayPauseWorld_publicPausePremises.calldata
   have hbody := pause_body_runCompiled (hfork := by first | (change CoveredFork .prague; exact CoveredFork.prague) | decide) officialParams sentinelGatewayPauseWorldSevm
@@ -2032,7 +1913,7 @@ private theorem sentinelGatewayPauseWorld_productionRun :
       exact (gatewayRunStor_lockPost _).trans sentinelPauseLastStor_duration)
     gatewayRunCost_duration rfl hker
   rw [show (96553 + (469 + 2100 + 2100 + 2100) : Nat) = 103322 from by
-    norm_num] at hbody
+    norm_num only] at hbody
   have hbodyTo := Func.RunCompiledTo.of_runCompiled hbody
   obtain ⟨hprog, _hcompile⟩ := pause_dispatch_runCompiledTo officialParams
     sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre 103322 0 _
@@ -2047,7 +1928,7 @@ private theorem sentinelGatewayPauseWorld_productionRun :
       ⟨[], Mem.empty, 0 + pauseDispatchGas + 103322, sentinelGatewayPauseWorldPre.stateGas⟩ =
       sentinelGatewayPauseWorldPre := by
     rw [show (0 + pauseDispatchGas + 103322 : Nat) = sentinelGatewayPauseWorldGas from by
-      norm_num [pauseDispatchGas, sentinelGatewayPauseWorldGas]]
+      norm_num only [pauseDispatchGas, sentinelGatewayPauseWorldGas]]
     rfl
   rw [hentry] at hprog
   exact ⟨successPre, final, hprog, hsuccessTo, hafterTo, hni⟩
@@ -2213,7 +2094,7 @@ theorem sentinelGatewayPauseWorld_storesInfiniteSentinel :
     _ = pauseForProjection sentinelGatewayPauseWorldSevm.benvStat.time
           pauseInfiniteSentinel := by
         simpa only [toAdr_toB256] using hchild
-    _ = pauseInfiniteSentinel := by simp [pauseForProjection]
+    _ = pauseInfiniteSentinel := by simp only [pauseForProjection, ↓reduceIte]
 
 end LidoCircuitBreakerTwgSentinel
 

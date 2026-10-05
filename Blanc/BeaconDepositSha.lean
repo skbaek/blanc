@@ -323,7 +323,7 @@ theorem sha64_success_prefix_runCompiledTo
     omega
   simpa only [Nat.add_zero, Mem.extends_covered hcovered] using
     (sha64_success_prefix_runCompiledTo_ext (hfork := hfork)
-      (ext := 0) hext hnodeleg hwarm hpre hdepth (by simpa using hbound) hroom)
+      (ext := 0) hext hnodeleg hwarm hpre hdepth (by simpa only [add_zero, Nat.reducePow] using hbound) hroom)
 
 /-! ## Source-level successful-run inversion -/
 
@@ -410,7 +410,7 @@ theorem sha64_success_of_run
     rw [hpopStack] at hpFlag
     have hbad : (((0 : B256) =? 0) : B256) = 0 :=
       pref_head_unique hpFlag (pref_append [(0 : B256)] afterBranch.stack)
-    rw [show (((0 : B256) =? 0) : B256) = 1 by simp [B256.eqCheck]] at hbad
+    rw [show (((0 : B256) =? 0) : B256) = 1 by simp only [B256.eqCheck, ↓reduceIte]] at hbad
     exact False.elim (B256.zero_ne_one hbad.symm)
   · rcases hsuccess with
       ⟨parent, child, xl, dp, na, code, avail,
@@ -545,23 +545,23 @@ theorem sha64_success_of_run
 
 /-! ## Contract-site cost specializations -/
 
-@[simp] theorem sha64SuccessCost_zero_node :
+theorem sha64SuccessCost_zero_node :
     sha64SuccessCost 0 nodeWord = 237 := by
   decide +kernel
 
-@[simp] theorem sha64SuccessCost_zero_intermediate :
+theorem sha64SuccessCost_zero_intermediate :
     sha64SuccessCost 0 intermediateWord = 237 := by
   decide +kernel
 
-@[simp] theorem sha64SuccessCost_zero_secondIntermediate :
+theorem sha64SuccessCost_zero_secondIntermediate :
     sha64SuccessCost 0 secondIntermediateWord = 237 := by
   decide +kernel
 
-@[simp] theorem sha64SuccessCost_six_node :
+theorem sha64SuccessCost_six_node :
     sha64SuccessCost 6 nodeWord = 238 := by
   decide +kernel
 
-@[simp] theorem sha64SuccessCost_thirteen_intermediate :
+theorem sha64SuccessCost_thirteen_intermediate :
     sha64SuccessCost 13 intermediateWord = 238 := by
   decide +kernel
 

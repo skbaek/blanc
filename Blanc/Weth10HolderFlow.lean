@@ -31,7 +31,6 @@ structure HolderFlow (u : Adr) where
   selfTransfer : Nat
   flashCredit : Nat
   flashRepayment : Nat
-deriving DecidableEq
 
 def HolderFlow.zero (u : Adr) : HolderFlow u :=
   ⟨0, 0, 0, 0, 0, 0⟩
@@ -44,22 +43,22 @@ def HolderFlow.add {u : Adr} (x y : HolderFlow u) : HolderFlow u :=
     x.flashCredit + y.flashCredit,
     x.flashRepayment + y.flashRepayment⟩
 
-@[simp] theorem HolderFlow.zero_add {u : Adr} (x : HolderFlow u) :
+theorem HolderFlow.zero_add {u : Adr} (x : HolderFlow u) :
     (HolderFlow.zero u).add x = x := by
   cases x
-  simp [HolderFlow.zero, HolderFlow.add]
+  simp only [add, zero, _root_.zero_add]
 
-@[simp] theorem HolderFlow.add_zero {u : Adr} (x : HolderFlow u) :
+theorem HolderFlow.add_zero {u : Adr} (x : HolderFlow u) :
     x.add (HolderFlow.zero u) = x := by
   cases x
-  simp [HolderFlow.zero, HolderFlow.add]
+  simp only [add, zero, _root_.add_zero]
 
 theorem HolderFlow.add_assoc {u : Adr} (x y z : HolderFlow u) :
     (x.add y).add z = x.add (y.add z) := by
   cases x
   cases y
   cases z
-  simp [HolderFlow.add, Nat.add_assoc]
+  simp only [add, Nat.add_assoc]
 
 /-- The exact runtime arm accepted before a delegated debit.  Raw keys and
 before/after allowance words are retained for the successor provenance goal;
@@ -68,7 +67,6 @@ inductive AllowanceBranch
   | selfBypass
   | finite (key before after : B256)
   | maximum (key : B256)
-deriving DecidableEq
 
 /-- Mechanical debit provenance: direct caller, delegated allowance arm, or
 flash settlement's post-callback allowance arm. -/
@@ -76,7 +74,6 @@ inductive DebitBranch
   | direct
   | delegated (allowance : AllowanceBranch)
   | flash (allowance : AllowanceBranch)
-deriving DecidableEq
 
 /-- Per-debit data retained by the committed ledger.  `rawSource` is the word
 used by the runtime branch/key path; `source` is its normalized balance key. -/
@@ -85,7 +82,6 @@ structure DebitProvenance where
   rawSource : B256
   source : Adr
   branch : DebitBranch
-deriving DecidableEq
 
 /-- Data-level tag for the caller allowance arm selected by the runtime.  The
 full state/log effect remains in `CallerAllowanceOutcome`; this tag makes the
@@ -151,7 +147,6 @@ inductive FlowAtom
   | redemption (rawSource : B256) (source : Adr)
       (ethRecipient : Adr) (amount : Nat)
   | flashPair (rawReceiver : B256) (receiver : Adr) (amount : Nat)
-deriving DecidableEq
 
 /-- The exact modular addition site underlying one credited balance write.
 `before` is the recipient word immediately before that addition (after the
@@ -161,7 +156,6 @@ structure CreditOccurrence where
   recipient : Adr
   before : B256
   amountWord : B256
-deriving DecidableEq
 
 def CreditOccurrence.loss (credit : CreditOccurrence) : Nat :=
   creditLoss credit.before credit.amountWord
@@ -184,7 +178,6 @@ structure FlowAction where
   currentTarget : Adr
   codeAddress : Option Adr
   depth : Nat
-deriving DecidableEq
 
 def FlowAtom.creditOccurrence (pre : Devm) (ca : Adr) :
     FlowAtom → Option CreditOccurrence
@@ -240,7 +233,7 @@ def FlowAtom.holderFlow (atom : FlowAtom) (u : Adr) : HolderFlow u :=
 theorem FlowAtom.holderFlow_flash_eq (atom : FlowAtom) (u : Adr) :
     (atom.holderFlow u).flashCredit =
       (atom.holderFlow u).flashRepayment := by
-  cases atom <;> simp only [FlowAtom.holderFlow] <;> aesop
+  cases atom <;> simp only [FlowAtom.holderFlow] <;> aesop (config := {enableSimp := false})
 
 /-- The public numeric fold used by `AccountedHistory.weth10Flow`. -/
 def holderFlowOfActions (actions : List FlowAction) (u : Adr) : HolderFlow u :=
@@ -254,7 +247,7 @@ private theorem holderFlowOfActions_from_eq_add
     initial.add (holderFlowOfActions actions u) := by
   unfold holderFlowOfActions
   induction actions generalizing initial with
-  | nil => simp
+  | nil => simp only [List.foldl_nil, HolderFlow.add_zero]
   | cons action actions ih =>
       simp only [List.foldl_cons]
       rw [ih]
@@ -318,7 +311,6 @@ structure FlowObservation where
   currentTarget : Adr
   codeAddress : Option Adr
   depth : Nat
-deriving DecidableEq
 
 def FlowAction.observation (action : FlowAction) : FlowObservation :=
   { atom := action.atom
@@ -331,22 +323,6 @@ def holderFlowOfObservations (observations : List FlowObservation)
     (u : Adr) : HolderFlow u :=
   observations.foldl (fun total observation =>
     total.add (observation.atom.holderFlow u)) (HolderFlow.zero u)
-
-private theorem holderFlowOfObservations_from_eq_add
-    (observations : List FlowObservation) (u : Adr)
-    (initial : HolderFlow u) :
-    observations.foldl (fun total observation =>
-      total.add (observation.atom.holderFlow u)) initial =
-    initial.add (holderFlowOfObservations observations u) := by
-  unfold holderFlowOfObservations
-  induction observations generalizing initial with
-  | nil => simp
-  | cons observation observations ih =>
-      simp only [List.foldl_cons]
-      rw [ih]
-      rw [ih (initial := (HolderFlow.zero u).add
-        (observation.atom.holderFlow u))]
-      rw [HolderFlow.zero_add, HolderFlow.add_assoc]
 
 theorem holderFlowOfObservations_map_observation
     (actions : List FlowAction) (u : Adr) :
@@ -555,10 +531,6 @@ def Exec.Frame.flowAction? (dp : DeployParams) (ca : Adr)
         depth := frame.sevm.depth }
   else none
 
-def Exec.Frame.flowObservation? (dp : DeployParams) (ca : Adr)
-    (frame : Exec.Frame) : Option FlowObservation :=
-  (Exec.Frame.flowAction? dp ca frame).map FlowAction.observation
-
 def Exec.flowActions (dp : DeployParams) (ca : Adr)
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) : List FlowAction :=
@@ -592,17 +564,10 @@ theorem Exec.retainedChildActions_eq_nil_of_create_codeDepositRollback
     unfold Jaune.Frame.settlementCommits at hcommit
     rw [hframeSettle] at hcommit
     cases hoption : settled.error with
-    | none => simp [hoption] at herror
-    | some error => simp [hoption] at hcommit
+    | none => simp only [hoption, Option.isSome_none, Bool.false_eq_true] at herror
+    | some error => simp only [hoption, Option.isNone_some, Bool.false_eq_true] at hcommit
   simp only [if_neg hnot]
 
-/-- Executable observations for one root derivation, in enclosing-frame then
-depth-first child order.  Classification proofs later show that this includes
-every and only committed balance-writing WETH10 invocation. -/
-def Exec.flowObservations (dp : DeployParams) (ca : Adr)
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out) : List FlowObservation :=
-  (Exec.flowActions dp ca run).map FlowAction.observation
 /-! ## Contract-neutral retained-trace compatibility
 
 The carriers and replay proofs are owned by `Blanc.ExecutionTrace`.  These
@@ -830,15 +795,6 @@ def AccountedBlock.ofConfiguredBlockTrace
   observations_eq := rfl
   postEq := trace.postEq
 }
-
-theorem AccountedBlock.toConfiguredBlockTrace_ofConfiguredBlockTrace
-    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
-    {pre post : BlockChain}
-    (trace : ExecutionTrace.ConfiguredBlockTrace cfg pre post) :
-    (AccountedBlock.ofConfiguredBlockTrace
-      (dp := dp) (ca := ca) trace).toConfiguredBlockTrace = trace := by
-  cases trace
-  rfl
 
 /-- A proof-carrying configured replay from a checkpoint to an endpoint. -/
 inductive AccountedHistory

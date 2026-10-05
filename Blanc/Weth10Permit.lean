@@ -632,11 +632,11 @@ lemma permitEcrecoverResult_eq (digest : B256) (v : UInt8) (r s : B256) :
   case h_1 =>
     split
     · rfl
-    · cases hrec : secp256k1.recover digest false r s <;> simp [hrec]
+    · cases hrec : secp256k1.recover digest false r s <;> simp only [hrec]
   case h_2 =>
     split
     · rfl
-    · cases hrec : secp256k1.recover digest true r s <;> simp [hrec]
+    · cases hrec : secp256k1.recover digest true r s <;> simp only [hrec]
   case h_3 => rfl
 
 private lemma toB256_sliceD_word {idx : Nat} {pre post : Bytes} {w : B256}
@@ -644,14 +644,15 @@ private lemma toB256_sliceD_word {idx : Nat} {pre post : Bytes} {w : B256}
     Bytes.toB256 ((pre ++ (w.toBytes ++ post)).sliceD idx 32 0) = w := by
   simp only [List.sliceD]
   rw [List.drop_length_append' hlen,
-    List.takeD_eq_take _ (by simp [List.length_append, B256.length_toBytes]),
+    List.takeD_eq_take _ (by simp only [List.length_append, B256.length_toBytes,
+      le_add_iff_nonneg_right, zero_le]),
     List.take_length_append' (B256.length_toBytes w).symm,
     B256.toB256_toBytes]
 
 private lemma toB256_sliceD_word₀ {post : Bytes} {w : B256} :
     Bytes.toB256 ((w.toBytes ++ post).sliceD 0 32 0) = w := by
-  simpa using toB256_sliceD_word (idx := 0) (pre := []) (w := w)
-    (post := post) rfl
+  simpa only [List.nil_append] using
+    toB256_sliceD_word (idx := 0) (pre := []) (w := w) (post := post) rfl
 
 lemma permitEcrecoverImage_word_zero (digest : B256) (v : UInt8)
     (r s : B256) :
@@ -1785,7 +1786,7 @@ private lemma permit_normalizeAddress_owner (owner : Adr) :
     · rfl
     · change (-1 : UInt32).toUInt64 &&& ahi.toUInt64 = ahi.toUInt64
       rw [← UInt32.toUInt64_and]
-      simp
+      simp only [UInt32.neg_one_and]
   · exact b128_and_max alo
 
 private lemma permit_prefix_of_addressArg {e : Sevm} {k : B256}
@@ -2172,7 +2173,7 @@ theorem of_permitDomainDispatch_cached (dp : DeployParams)
   have hp3 : (1 : B256) :: structHash ::
       sevm.benvStat.chainId.toB256 :: xs <<+ s3.stack := by
     have h := prefix_of_eq q3 hp2
-    simpa [hchain, B256.eqCheck] using h
+    simpa only [hchain, B256.eqCheck, ↓reduceIte] using h
   have hstor3 : Devm.getStor s = Devm.getStor s3 := by
     calc
       Devm.getStor s = Devm.getStor s1 :=
@@ -2213,7 +2214,9 @@ theorem of_permitDomainDispatch_cached (dp : DeployParams)
       prefix_of_pushDeployWord hp7 q6
     rcases of_run_call hcall with ⟨f, t, hget, hcallBurn, hrecover⟩
     have hf : f = permitRecover := by
-      simpa [weth10Aux, permitRecoverSlot] using hget.symm
+      simpa only [weth10Aux, permitRecoverSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.lt_add_one, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using hget.symm
     subst f
     have hstor : Devm.getStor s = Devm.getStor t := by
       calc
@@ -2331,7 +2334,7 @@ theorem of_permitDomainDispatch_fork (dp : DeployParams)
   have hp3 : (0 : B256) :: structHash ::
       sevm.benvStat.chainId.toB256 :: xs <<+ s3.stack := by
     have h := prefix_of_eq q3 hp2
-    simpa [B256.eqCheck, hrev] using h
+    simpa only [B256.eqCheck, hrev, ↓reduceIte] using h
   have hstor3 : Devm.getStor s = Devm.getStor s3 := by
     calc
       Devm.getStor s = Devm.getStor s1 :=
@@ -2418,7 +2421,9 @@ theorem of_permitDomainDispatch_fork (dp : DeployParams)
       ⟨hp7, hwf5, hr5, hdomainCode, hdomainLogs, hdomainOutput⟩
     rcases of_run_call hcall with ⟨f, t, hget, hcallBurn, hrecover⟩
     have hf : f = permitRecover := by
-      simpa [weth10Aux, permitRecoverSlot] using hget.symm
+      simpa only [weth10Aux, permitRecoverSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.lt_add_one, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using hget.symm
     subst f
     have hstor : Devm.getStor s = Devm.getStor t := by
       calc
@@ -2484,13 +2489,13 @@ theorem of_permitDomainDispatch (dp : DeployParams)
   · rcases of_permitDomainDispatch_cached dp hchain hp hwf hr run with
       ⟨t, hp', hstor, hcode, hlogs, houtput, hwf', hr', hrecover⟩
     refine ⟨t, ?_, hstor, hcode, hlogs, houtput, hwf', ?_, hrecover⟩
-    · simpa [permitDomainSeparator, hchain] using hp'
-    · simpa [permitDomainDispatchMemoryImage, hchain] using hr'
+    · simpa only [permitDomainSeparator, hchain, ↓reduceIte] using hp'
+    · simpa only [permitDomainDispatchMemoryImage, hchain, ↓reduceIte] using hr'
   · rcases of_permitDomainDispatch_fork dp hchain hp hwf hr run with
       ⟨t, hp', hstor, hcode, hlogs, houtput, hwf', hr', hrecover⟩
     refine ⟨t, ?_, hstor, hcode, hlogs, houtput, hwf', ?_, hrecover⟩
-    · simpa [permitDomainSeparator, hchain] using hp'
-    · simpa [permitDomainDispatchMemoryImage, hchain] using hr'
+    · simpa only [permitDomainSeparator, hchain, ↓reduceIte] using hp'
+    · simpa only [permitDomainDispatchMemoryImage, hchain, ↓reduceIte] using hr'
 
 /-! ## The digest walk
 
@@ -2538,8 +2543,10 @@ lemma permitDigest_window (img : Bytes) (domain structHash : B256) :
   change (Bytes.writeAt B 2 domain.toBytes).sliceD 0 66 0 = _
   unfold Bytes.writeAt List.sliceD
   rw [hd, eBtake, eBdrop, List.drop_zero,
-    List.takeD_eq_take _ (by simp [hp, hd, hs]; omega),
-    ← List.append_assoc, List.take_left' (by simp [hp, hd, hs])]
+    List.takeD_eq_take _ (by simp only [List.append_assoc, List.length_append, List.length_take, hp,
+      Nat.reduceLeDiff, inf_of_le_left, hd, hs, List.length_drop]; omega),
+    ← List.append_assoc, List.take_left' (by simp only [List.append_assoc, List.length_append,
+      List.length_take, hp, Nat.reduceLeDiff, inf_of_le_left, hd, hs, Nat.reduceAdd])]
 
 /-- Exact value-carrying inversion of WETH10's `permitDigest` line.  No hash
 collision, preimage, or signature assumption occurs: the conclusion names the
@@ -2667,10 +2674,6 @@ private lemma output_eq_of_timestamp {e : Sevm} {s s' : Devm}
   simp only [Rinst.run, Rinst.runCore] at run
   exact (Devm.pushBurn_of_pushItem run).output
 
-lemma permitDeadlineFlag_expired {timestamp deadline : B256}
-    (h : timestamp > deadline) : (timestamp >? deadline) = 1 := by
-  simp [B256.gtCheck, h]
-
 /-- A successful selected-body execution must enter the live deadline arm.
 The returned machine is exactly the start of the nonce prefix; the guard and
 branch pop preserve storage and memory. -/
@@ -2736,7 +2739,9 @@ theorem of_permitDeadlineLive (dp : DeployParams)
           _ = flagState.output := Ninst.Hinv.inv (f := Devm.output) hgt)
   · rcases of_run_call hexpired with ⟨f, s3, hget, hcallBurn, hrev⟩
     have hf : f = expiredPermitError := by
-      simpa [weth10Aux, expiredPermitErrorSlot] using hget.symm
+      simpa only [weth10Aux, expiredPermitErrorSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using hget.symm
     subst f
     exact absurd hrev Func.not_run_revertWith
 
@@ -2957,7 +2962,7 @@ theorem of_permitSignerGuards_frame (dp : DeployParams)
     have hsigner : signer ≠ 0 := by
       intro hz
       subst signer
-      simp [B256.eqCheck] at hflag1
+      simp only [B256.eqCheck, ↓reduceIte] at hflag1
       exact B256.zero_ne_one hflag1
     have hp3 : signer :: xs <<+ s3.stack := (popBurn_pref hpop1 hp2).2
     rcases of_run_prepend (arg 0) _ run with ⟨s4, harg0, run⟩
@@ -2978,7 +2983,7 @@ theorem of_permitSignerGuards_frame (dp : DeployParams)
       have howner : signer = owner.toB256 := by
         by_contra hne
         have hne' : owner.toB256 ≠ signer := Ne.symm hne
-        simp [B256.eqCheck, hne'] at hflag2
+        simp only [B256.eqCheck, hne', ↓reduceIte] at hflag2
         exact B256.zero_ne_one hflag2
       have hstor : Devm.getStor t = Devm.getStor s := by
         symm
@@ -3026,12 +3031,16 @@ theorem of_permitSignerGuards_frame (dp : DeployParams)
         hstor, hmemory, hlogs, houtput, happrove⟩
     · rcases of_run_call hinvalid2 with ⟨f, u, hget, hcallBurn, hrev⟩
       have hf : f = invalidPermitError := by
-        simpa [weth10Aux, invalidPermitErrorSlot] using hget.symm
+        simpa only [weth10Aux, invalidPermitErrorSlot, List.length_cons, List.length_nil, zero_add,
+          Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+          Option.some.injEq] using hget.symm
       subst f
       exact absurd hrev Func.not_run_revertWith
   · rcases of_run_call hinvalid1 with ⟨f, u, hget, hcallBurn, hrev⟩
     have hf : f = invalidPermitError := by
-      simpa [weth10Aux, invalidPermitErrorSlot] using hget.symm
+      simpa only [weth10Aux, invalidPermitErrorSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using hget.symm
     subst f
     exact absurd hrev Func.not_run_revertWith
 
@@ -3351,7 +3360,9 @@ private theorem permit_success_not_expired_core (dp : DeployParams)
     exact B256.zero_ne_one hflag
   · rcases of_run_call hcall with ⟨f, s3, hget, hcallBurn, hrev⟩
     have hf : f = expiredPermitError := by
-      simpa [weth10Aux, expiredPermitErrorSlot] using hget.symm
+      simpa only [weth10Aux, expiredPermitErrorSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using hget.symm
     subst f
     exact absurd hrev Func.not_run_revertWith
 
@@ -3359,7 +3370,8 @@ private theorem permit_success_not_expired_core (dp : DeployParams)
 
 lemma permit_mem_weth10Funcs (dp : DeployParams) :
     (permitSelector, nonpayable (permit dp)) ∈ weth10Funcs dp := by
-  simp [weth10Funcs, permitSelector]
+  simp only [weth10Funcs, permitSelector, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+    true_or, or_true]
 
 /-- A successful canonical selected `permit` body has the exact ERC-2612
 effect.  The signed nonce is the pre-state nonce, the nonce increment precedes

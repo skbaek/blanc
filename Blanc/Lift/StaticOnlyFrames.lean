@@ -44,7 +44,7 @@ theorem parentPrefix_exec_staticcall_of_cert {code : ByteArray} {c : Cert}
   obtain ⟨cursor, reachable, ok⟩ := cursor_of_parentPrefix checked pc installed fork chain
   have allowed := ok.execsSatisfy
     (cursor.execsSatisfy_of_reachable only reachable) instruction
-  cases x <;> simp_all [Xinst.isStaticcall]
+  cases x <;> simp_all only [Xinst.isStaticcall, Bool.false_eq_true]
 
 end Blanc.Lift
 
@@ -95,19 +95,20 @@ theorem Exec.staticOnly_descendantFrames_flatMap_eq_nil {α : Type}
       (Exec.descendantFrames run).flatMap obs = [] := by
   intro pc sevm pre out run
   induction run with
-  | halt step => simp [Exec.descendantFrames]
+  | halt step => simp only [descendantFrames, List.flatMap_nil, implies_true]
   | cont step next ih =>
     intro chain entries
     simpa only [Exec.descendantFrames] using
       ih (chain.snoc (.cont step next)) (by
         simpa only [Exec.rawFrameDescendants] using entries)
-  | doneErr step enter resume => simp [Exec.descendantFrames]
+  | doneErr step enter resume => simp only [descendantFrames, List.flatMap_nil, implies_true]
   | doneOk step enter resume next ih =>
     intro chain entries
     simpa only [Exec.descendantFrames] using
       ih (chain.snoc (.doneOk step enter resume next)) (by
         simpa only [Exec.rawFrameDescendants] using entries)
-  | runErr step enter child resume ih => simp [Exec.descendantFrames]
+  | runErr step enter child resume ih => simp only [descendantFrames, List.flatMap_nil,
+    implies_true]
   | runOk step enter child resume next childIH nextIH =>
     rename_i nodePc nodeSevm nodePre frame rsm nextPc cevm raw inter final
     intro chain entries

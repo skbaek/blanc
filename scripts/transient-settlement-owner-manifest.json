@@ -19,14 +19,14 @@
     "exists_transactionTrace"
   ],
   "frozenAssuranceFiles": {
-    "Blanc/CycleWriteFree.lean": "3262e96081c30e3e712183d8a902327ae331265e5575ac73f90280539a73dd6a",
-    "Blanc/ExecutionFrames.lean": "1da68cd39d9038c49748b65d10026411336cbf1d2ab2464280e3e7305c0c1963",
-    "Blanc/ExecutionOccurrence.lean": "9e09ae7d44406fcb9e9c3b4ebfaf3c9bca25895d6176d2e46317701b4209b285",
-    "Blanc/ExecutionSettlement.lean": "a812568df48e78a953f28639a99413809379f45a20f4b6b0fc9b6d257cb3cfce",
-    "scripts/CycleWriteFreeRegression.lean": "598ac1819b04fdb45304033d8fb7b70f401fc99f940d554b4825705c1948d654",
-    "scripts/ExecutionOccurrenceControls.lean": "2d58ede6ca1a973d25e56ec1f97c24db3eb52a5068e9557a31ecf834c11b7ab6",
-    "scripts/ExecutionOccurrenceRegression.lean": "da7dd3dba15aa363367e00b26d94a7340aa4ff7878bc412441903b237876f87b",
-    "scripts/ExecutionSettlementRegression.lean": "d1e4fc1aeb4e31a9188af49a9df1ce2bf23b87571544f7f31e0af1abcea74c2f",
+    "Blanc/CycleWriteFree.lean": "a4cdc754d3588257f68ab4757e050dce894c8878cc298a5558e21acd0908ebdf",
+    "Blanc/ExecutionFrames.lean": "a147927cc95201658279baf1cffcdd91d19033f8fd05fee2dec6ef28dfc27580",
+    "Blanc/ExecutionOccurrence.lean": "b1fad7d0d12bef2c733445a22504c5eec0a028776b485954157130aa985263c2",
+    "Blanc/ExecutionSettlement.lean": "9a56389710ee21c5ec3a9e4783db8eb9b751bdf34fe4926fdfac18c3d0b8c0b3",
+    "scripts/CycleWriteFreeRegression.lean": "475a66a8bc821d1c4a041af8465ba85613f8129c0db2c12927ec7b90126e2012",
+    "scripts/ExecutionOccurrenceControls.lean": "d421c2246e470dedcce9b8996c442cfac0987992774b076afd86aaa21525a780",
+    "scripts/ExecutionOccurrenceRegression.lean": "64096bc951777de75d3c42c4c9187b391ee3cd0613614509d8af4e434c832cca",
+    "scripts/ExecutionSettlementRegression.lean": "1fd8772c0637e47690d712754eaba3496f1385f6c3916fab86d8122fe7c4d2a0",
     "scripts/check-cycle-write-free.py": "21802b54202850d298556c0d93e08cfdf7a4948895ac68882ec78d9e1c24d7a8",
     "scripts/check-execution-occurrence.py": "eef2afbc290b3374fe3a9f97b37fc12f82c2664c4f5ce8a3f660acb84841134f",
     "scripts/check-execution-raw-attribution-ownership.py": "d71734cea2d7e580eb6550eb77d6e1fdd51bb6eadb491adf5fd3ec6013790fee",
@@ -37,8 +37,8 @@
     "scripts/execution-settlement-lift-manifest.json": "fa966e7a2f858db1f1bdbfc8f719032f249373dddfeb23783ec9d7c2558d322b"
   },
   "jaunePinFiles": {
-    "lake-manifest.json": "f44ea96d3fae18edd4e04cf31a3a45fd632f4ec120acd8c5095ec385e50ec272",
-    "lakefile.lean": "dcb09354e1384e5e28014361267cd3dc6ef5f987b6df3a91fce4eea240ae8672"
+    "lake-manifest.json": "50c01e2ef8060deff3d2aac228b2ba5408955e415a1e84e3cb4a2abfd3c322ed",
+    "lakefile.lean": "23ac532c420fce75dc153b1b396c826c2d43a585b1c374c47ee1752623262899"
   },
   "movedDonors": [
     [
@@ -189,12 +189,12 @@
     "tstore_run_cell": "6877e3c99880c1eec12c9d675bf123364d7f07fc18527de4f4de64b9bcc16db5"
   },
   "touchedConsumerHashes": {
-    "Blanc/Weth10AllowanceArmsPermit.lean": "7eb10689c547fe601fdc0d630a93f888b4a9230872d54959c7b82d9d9bacacaf",
-    "Blanc/Weth10StaticSilence.lean": "9564d2d722de7e2a07a0cacce0e2f10227a62a23b9b6c2ee0ff5a021398df1a5"
+    "Blanc/Weth10AllowanceArmsPermit.lean": "dd7faf2875413e863a615cce323bf2f943a5c4396bbb46d4e4c29f3bfac1e5de",
+    "Blanc/Weth10StaticSilence.lean": "fab857ae4c96a44a9753c63161bf23e04cf00048347158d0761ec90ba4135789"
   },
   "touchedConsumers": [
     "Blanc/Weth10StaticSilence.lean",
     "Blanc/Weth10AllowanceArmsPermit.lean"
   ],
-  "wethPublicHeaderAggregate": "0d4e75b8cefb7dcd17a221fdf7cef9cad38146977c8173cb934f9bb795a43760"
+  "wethPublicHeaderAggregate": "882c7a80017c12f44c73d35c0163286ec7411044afdf4fdeee282dddcc71a983"
 }

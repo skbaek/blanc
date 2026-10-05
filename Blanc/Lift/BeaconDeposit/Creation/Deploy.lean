@@ -112,7 +112,9 @@ theorem depositAddress_eq : depositAddress = computeContractAddress deployer 0 :
       0x05, 0xaa, 0x83, 0x4d, 0xe7, 0x15, 0x6c, 0x68, 0xb2, 0xe1, 0xd0], .bytes []]) =
       [0xd6, 0x94, 0xb2, 0x0a, 0x60, 0x8c, 0x62, 0x4c, 0xa5, 0x00, 0x39, 0x05, 0xaa, 0x83, 0x4d,
         0xe7, 0x15, 0x6c, 0x68, 0xb2, 0xe1, 0xd0, 0x80] := by
-    simp [BLT.toBytes, BLTs.toBytes, BLTs.toBytesJoin]
+    simp only [BLT.toBytes, BLTs.toBytes, BLTs.toBytesJoin, List.length_cons, List.length_nil,
+      zero_add, Nat.reduceAdd, Nat.reduceLT, ↓reduceIte, Nat.toUInt8_eq, UInt8.reduceOfNat,
+      UInt8.reduceAdd, Nat.ofNat_pos, add_zero, List.append_nil, List.cons_append, List.nil_append]
   unfold computeContractAddress
   simp only [hsender, hnonce, hrlp]
   decide +kernel

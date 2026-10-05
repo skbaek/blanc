@@ -54,8 +54,7 @@ theorem StorageFlowAccounting.toState
 theorem StateStorageFlowAccounting.refl (ca : Adr) (state : State) :
     StateStorageFlowAccounting ca state state [] := by
   constructor <;>
-    simp [holderFlowOfActions, HolderFlow.zero, supplyFlowOfActions,
-      SupplyFlow.zero, holderCreditLossOfActions, creditLossOfActions]
+    simp only [holderFlowOfActions, HolderFlow.zero, List.foldl_nil, add_zero, holderCreditLossOfActions, List.map_nil, List.sum_nil, implies_true, supplyFlowOfActions, SupplyFlow.zero, creditLossOfActions]
 
 /-- Exact accounting composes in chronological action-list order. -/
 theorem StateStorageFlowAccounting.append
@@ -82,8 +81,7 @@ theorem StateStorageFlowAccounting.of_getStor_eq
     (h : pre.getStor ca = post.getStor ca) :
     StateStorageFlowAccounting ca pre post [] := by
   constructor <;>
-    simp [holderFlowOfActions, HolderFlow.zero, supplyFlowOfActions,
-      SupplyFlow.zero, holderCreditLossOfActions, creditLossOfActions, h]
+    simp only [h, holderFlowOfActions, HolderFlow.zero, List.foldl_nil, add_zero, holderCreditLossOfActions, List.map_nil, List.sum_nil, implies_true, supplyFlowOfActions, SupplyFlow.zero, creditLossOfActions]
 
 private theorem state_setBal_getStor_eq
     (state : State) (address : Adr) (value : B256) :
@@ -171,9 +169,9 @@ theorem CompiledBodyStorageHandler.committedExecStorageSound
     refine ⟨?_, rfl⟩
     rcases runReady.codeOrForeign with hcall | hforeign
     · exact runReady.ready.backed.code hcall
-        (by simpa [initSevm, Msg.withBenv] using htarget)
+        (by simpa only [initSevm, Msg.withBenv] using htarget)
     · exact False.elim (hforeign
-        (by simpa [initSevm, Msg.withBenv] using htarget))
+        (by simpa only [initSevm, Msg.withBenv] using htarget))
   have hroot : Exec.Frame.IsRoot (Exec.Frame.ofRun run hcommit) :=
     ⟨rfl, rfl⟩
   have hdirect :
@@ -182,9 +180,9 @@ theorem CompiledBodyStorageHandler.committedExecStorageSound
     intro htarget
     rcases runReady.codeOrForeign with hcall | hforeign
     · exact runReady.ready.backed.codeAddress hcall
-        (by simpa [initSevm, Msg.withBenv] using htarget)
+        (by simpa only [initSevm, Msg.withBenv] using htarget)
     · exact False.elim (hforeign
-        (by simpa [initSevm, Msg.withBenv] using htarget))
+        (by simpa only [initSevm, Msg.withBenv] using htarget))
   have hfa := Exec.coreStorageSound_of_compiledBodyStorageHandler handler
   have hcore := hfa 0 (initSevm (msg.withBenv benv))
     (initDevm (msg.withBenv benv)) out run hat
@@ -280,7 +278,8 @@ theorem ProcessCreateMessage.ok_getStor_eq_inner_of_no_error
     ⟨result, hinner, hsettle⟩
   cases result with
   | error error =>
-      simp [processCreateMessage.settle] at hsettle
+      simp only [processCreateMessage.settle, Option.isNone_iff_eq_none, ExceptT.stM_eq,
+        Except.bind_error, reduceCtorEq] at hsettle
   | ok inner =>
       unfold processCreateMessage.settle at hsettle
       simp only [bind, Except.bind] at hsettle
@@ -297,9 +296,7 @@ theorem ProcessCreateMessage.ok_getStor_eq_inner_of_no_error
                 have heq := Except.ok.inj hsettle
                 rw [heq] at herror
                 split at herror <;>
-                  simp [processCreateMessage.exceptionalHalt,
-                    processCreateMessage.exceptionalHaltAmsterdam,
-                    Devm.error, Devm.setMeta] at herror
+                  simp only [Devm.error, processCreateMessage.exceptionalHalt, Devm.setMeta, Option.isSome_some, Bool.true_eq_false, processCreateMessage.exceptionalHaltAmsterdam] at herror
             | revert => cases hsettle
             | crypto reason => cases hsettle
             | internal reason => cases hsettle
@@ -313,16 +310,16 @@ theorem ProcessCreateMessage.ok_getStor_eq_inner_of_no_error
                     ⟨⟨charged.output⟩⟩).state.getStor ca :=
                 congrArg (fun d : Devm => d.state.getStor ca) heq
               _ = charged.state.getStor ca := by
-                simpa [Devm.setCode, Devm.withState, Devm.setWorld,
-                  Devm.state] using
-                  congrFun (state_setCode_getStor_eq charged.state
-                    msg.currentTarget ⟨⟨charged.output⟩⟩) ca
+                simpa only [Devm.state, Devm.setCode, Devm.withState, Devm.setWorld] using
+                  congrFun
+                    (state_setCode_getStor_eq charged.state msg.currentTarget ⟨⟨charged.output⟩⟩) ca
               _ = inner.state.getStor ca := by
                 rw [chargeCodeGas_state_ok hcharge]
       · rw [if_neg hinnerNone] at hsettle
         have heq := Except.ok.inj hsettle
         rw [heq] at herror
-        simp [Devm.rollback, Devm.setWorld, Devm.error] at herror
+        simp only [Devm.error, Devm.rollback, Devm.setWorld, Option.isSome_eq_false_iff,
+          Option.isNone_iff_eq_none] at herror
         apply False.elim
         apply hinnerNone
         rw [show inner.error = none from herror]
@@ -345,7 +342,7 @@ theorem ProcessCreateMessageTrace.storageAccounting_of_committedExecSound
       rw [ProcessCreateMessage.rollback_of_error trace.run herror]
       exact StateStorageFlowAccounting.refl ca msg.benv.state
   | false =>
-      simp
+      simp only [Bool.false_eq_true, ↓reduceIte]
       rcases ProcessCreateMessage.ok_getStor_eq_inner_of_no_error
         trace.run herror htargetNe with ⟨inner, hinner, hpost⟩
       let innerTrace : ProcessMessageTrace
@@ -357,7 +354,7 @@ theorem ProcessCreateMessageTrace.storageAccounting_of_committedExecSound
           MessageRunReady dp ca (processCreateMessage.msg msg) :=
         hprepared.runReady_of_foreign (by
           exact fun h => htargetNe (by
-            simpa [processCreateMessage.msg, Msg.withBenv] using h))
+            simpa only [processCreateMessage.msg, Msg.withBenv] using h))
       have haccounting :=
         ProcessMessageTrace.storageAccounting_of_committedExecSound
           innerTrace hsound hrunReady
@@ -366,8 +363,8 @@ theorem ProcessCreateMessageTrace.storageAccounting_of_committedExecSound
         (msg := msg) (ca := ca) htargetNe
       constructor
       · intro u
-        simpa [hpre, hpost] using haccounting.holderEquation u
-      · simpa [hpre, hpost] using haccounting.supplyEquation
+        simpa only [hpost, hpre] using haccounting.holderEquation u
+      · simpa only [hpost, hpre] using haccounting.supplyEquation
 
 lemma setDelegationStep_getStor_eq
     {auth : Auth} {msg msg' : Msg} {rc rc' : B256}
@@ -430,9 +427,9 @@ lemma setDelegation_getStor_eq
     ⟨⟨loopMsg, loopRefund⟩, hloop, hrest⟩
   have hstor := setDelegationLoop_getStor_eq hloop
   cases hcode : loopMsg.codeAddress with
-  | none => simp [hcode] at hrest
+  | none => simp only [hcode, Except.bind_error, reduceCtorEq] at hrest
   | some address =>
-      simp [hcode] at hrest
+      simp only [hcode, Except.bind_ok, Except.ok.injEq, Prod.mk.injEq] at hrest
       rcases hrest with ⟨rfl, rfl⟩
       exact hstor
 
@@ -511,10 +508,8 @@ theorem CommittedExecStorageSound.messageStorageSound
         (trace.retained.flowActions dp ca)
       constructor
       · intro u
-        simpa [hstate, ← congrFun hpre ca] using
-          haccounting.holderEquation u
-      · simpa [hstate, ← congrFun hpre ca] using
-          haccounting.supplyEquation
+        simpa only [← congrFun hpre ca, hstate] using haccounting.holderEquation u
+      · simpa only [← congrFun hpre ca, hstate] using haccounting.supplyEquation
 
 /-! ## Transaction-envelope storage identities -/
 
@@ -567,9 +562,9 @@ theorem TransactionTrace.message_ready
       (transactionTenv benv.beginTransaction tx index trace.sender
         trace.effectiveGasPrice trace.intrinsicGas
         trace.blobVersionedHashes).stat.origin ≠ ca := by
-    simpa [transactionTenv] using hsender
+    simpa only [transactionTenv, Std.TreeMap.empty_eq_emptyc, ne_eq] using hsender
   have hnotBegin : ca ∉ benv.beginTransaction.createdAccounts := by
-    simpa [Benv.beginTransaction] using hnotCreated
+    simpa only [Benv.beginTransaction] using hnotCreated
   have hbackedMsg : (backedSpec weth10 dp).MsgInv ca trace.msg :=
     ContractSpec.prepareMessage_preserves_inv trace.prepared
       hbackedDebit hnotBegin horigin
@@ -589,10 +584,10 @@ theorem foldl_destroyAccount_getStor_eq
       rw [List.foldl_cons, ih]
       · have hget : (Jaune.destroyAccount state address).get ca =
             state.get ca :=
-          State.get_erase_ne (Ne.symm (hne address (by simp)))
+          State.get_erase_ne (Ne.symm (hne address (by simp only [List.mem_cons, true_or])))
         exact congrArg Acct.stor hget
       · intro tail htail
-        exact hne tail (by simp [htail])
+        exact hne tail (by simp only [List.mem_cons, htail, or_true])
 
 theorem TransactionTrace.postMessage_getStor_eq
     {dp : DeployParams} {ca : Adr}
@@ -633,10 +628,8 @@ theorem TransactionTrace.storageAccounting
   have hpost := trace.postMessage_getStor_eq hstable hnotCreated hfork
   constructor
   · intro u
-    simpa [TransactionTrace.flowActions, hpre, hpost] using
-      hmsg.holderEquation u
-  · simpa [TransactionTrace.flowActions, hpre, hpost] using
-      hmsg.supplyEquation
+    simpa only [flowActions, hpost, hpre] using hmsg.holderEquation u
+  · simpa only [flowActions, hpost, hpre] using hmsg.supplyEquation
 
 theorem ApplyTransactionsTrace.storageAccounting
     (dp : DeployParams) (ca : Adr)
@@ -657,8 +650,8 @@ theorem ApplyTransactionsTrace.storageAccounting
           hfork)
         (ApplyTransactionsTrace.storageAccounting dp ca hmessage tail
           (TransactionTrace.stable head hstable hnotCreated hfork)
-          (by simpa [Benv.withState] using hnotCreated)
-          (by simpa [Benv.withState] using hfork))
+          (by simpa only [Benv.withState] using hnotCreated)
+          (by simpa only [Benv.withState] using hfork))
 
 theorem SystemMessageTrace.storageAccounting
     {dp : DeployParams} {ca : Adr}
@@ -674,8 +667,8 @@ theorem SystemMessageTrace.storageAccounting
   have hmsg := hmessage trace.message
     (trace.messageReady hstable hnotCreated) hfork
   unfold MessageCallTrace.StorageAccounted at hmsg
-  simpa [SystemMessageTrace.flowActions, systemTransactionMessage,
-    processSystemTransactionMsg, Benv.beginTransaction] using hmsg
+  simpa only [flowActions, systemTransactionMessage, processSystemTransactionMsg,
+    Benv.beginTransaction, Lean.Elab.WF.paramLet] using hmsg
 
 theorem processWithdrawalsState_getStor_eq
     (ca : Adr) (state : State) (withdrawals : List Withdrawal) :
@@ -712,12 +705,12 @@ theorem RequestsTrace.storageAccounting
   have hconsolidation :=
     SystemMessageTrace.storageAccounting trace.consolidation
       hmessage hwithdrawalMeta.1
-      (by simpa [Benv.withState] using hnotCreated)
-      (by simpa [Benv.withState] using hfork)
+      (by simpa only [Benv.withState] using hnotCreated)
+      (by simpa only [Benv.withState] using hfork)
   have hboth := hwithdrawal.append hconsolidation
   have hstate :=
     ExecutionTrace.RequestsTrace.state_eq_consolidationState trace
-  simpa [RequestsTrace.flowActions, Benv.withState, hstate] using hboth
+  simpa only [hstate, flowActions, Benv.withState] using hboth
 
 theorem AppliedBodyTrace.storageAccounting
     {dp : DeployParams} {ca : Adr}
@@ -740,36 +733,36 @@ theorem AppliedBodyTrace.storageAccounting
   have hhistory :=
     SystemMessageTrace.storageAccounting trace.history
       hmessage hbeaconMeta.1
-      (by simpa [Benv.withState] using hnotCreated) hfork
+      (by simpa only [Benv.withState] using hnotCreated) hfork
   have hhistoryMeta :=
     SystemMessageTrace.stable_and_sum_le trace.history hbeaconMeta.1
-      (by simpa [Benv.withState] using hnotCreated) hfork
+      (by simpa only [Benv.withState] using hnotCreated) hfork
   have htransactions :=
     ApplyTransactionsTrace.storageAccounting dp ca hmessage
       trace.transactions hhistoryMeta.1
-      (by simpa [Benv.withState] using hnotCreated) hfork
+      (by simpa only [Benv.withState] using hnotCreated) hfork
   have htxSum := ApplyTransactionsTrace.sum_le trace.transactions hfork
   have htxSum' :
       sum trace.transactionBenv.state.bal ≤
         sum trace.historyState.bal := by
-    simpa [Benv.withState] using htxSum
+    simpa only [Benv.withState] using htxSum
   have hhistorySum :
       sum trace.historyState.bal ≤ sum benv.state.bal :=
-    le_trans (by simpa [Benv.withState] using hhistoryMeta.2)
+    le_trans (by simpa only [Benv.withState] using hhistoryMeta.2)
       hbeaconMeta.2
   have hwithdrawalBound :
       sum trace.transactionBenv.state.bal + wdsum wds < 2 ^ 256 := by
     omega
   have htransactionsStable :=
     ApplyTransactionsTrace.stable trace.transactions hhistoryMeta.1
-      (by simpa [Benv.withState] using hnotCreated) hfork
+      (by simpa only [Benv.withState] using hnotCreated) hfork
   have hwithdrawalsStable :=
     processWithdrawalsState_stable trace.transactionBenv.state wds
       hwithdrawalBound htransactionsStable
   have htransactionNotCreated :
       ca ∉ trace.transactionBenv.createdAccounts := by
     rw [ApplyTransactionsTrace.createdAccounts_eq trace.transactions]
-    simpa [Benv.withState] using hnotCreated
+    simpa only [Benv.withState] using hnotCreated
   have hwithdrawals :
       StateStorageFlowAccounting ca trace.transactionBenv.state
         (processWithdrawalsState trace.transactionBenv.state wds) [] :=
@@ -780,13 +773,13 @@ theorem AppliedBodyTrace.storageAccounting
     exact hfork
   have hrequests := RequestsTrace.storageAccounting trace.requests
     hmessage hwithdrawalsStable
-      (by simpa [Benv.withState] using htransactionNotCreated)
+      (by simpa only [Benv.withState] using htransactionNotCreated)
       htransactionFork
   have htotal :=
     (((hbeacon.append hhistory).append htransactions).append
       hwithdrawals).append hrequests
-  simpa [AppliedBodyTrace.flowActions, Benv.withState,
-    trace.requestState_eq, List.append_assoc] using htotal
+  simpa only [flowActions, Benv.withState, List.append_assoc, trace.requestState_eq,
+    List.append_nil] using htotal
 
 theorem AccountedBlock.storageAccounting
     {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
@@ -796,10 +789,11 @@ theorem AccountedBlock.storageAccounting
     (hstable : Stable dp ca pre.state) :
     StateStorageFlowAccounting ca pre.state post.state accounted.actions := by
   have hbody := AppliedBodyTrace.storageAccounting accounted.bodyTrace
-    hmessage hstable (by simp [initBenv]) accounted.bound accounted.covered
+    hmessage hstable (by simp only [initBenv, Std.HashSet.not_mem_emptyWithCapacity,
+      not_false_eq_true]) accounted.bound accounted.covered
   have hpost := congrArg (fun chain : BlockChain => chain.state)
     accounted.postEq
-  simpa [initBenv, accounted.actions_eq, hpost] using hbody
+  simpa only [hpost, accounted.actions_eq, initBenv] using hbody
 
 theorem AccountedHistory.storageAccounting
     (cfg : ChainConfig) (dp : DeployParams) (ca : Adr)
@@ -843,8 +837,8 @@ theorem flowActionsEthMint_eq_supplyFlowOrdinaryIn
       rcases action with
         ⟨atom, credit, debit, actualCaller, currentTarget, codeAddress, depth⟩
       cases atom <;>
-        simp [supplyFlowOfActions, FlowAtom.supplyFlow, FlowAtom.ethMint,
-          SupplyFlow.zero, SupplyFlow.add]
+        simp only [FlowAtom.ethMint, supplyFlowOfActions, SupplyFlow.add, FlowAtom.supplyFlow,
+          SupplyFlow.zero, List.foldl_cons, zero_add, add_zero, List.foldl_nil]
 
 theorem flowActionsEthRedemption_eq_supplyFlowRedeemed
     (actions : List FlowAction) :
@@ -860,8 +854,8 @@ theorem flowActionsEthRedemption_eq_supplyFlowRedeemed
       rcases action with
         ⟨atom, credit, debit, actualCaller, currentTarget, codeAddress, depth⟩
       cases atom <;>
-        simp [supplyFlowOfActions, FlowAtom.supplyFlow,
-          FlowAtom.ethRedemption, SupplyFlow.zero, SupplyFlow.add]
+        simp only [FlowAtom.ethRedemption, supplyFlowOfActions, SupplyFlow.add, FlowAtom.supplyFlow,
+          SupplyFlow.zero, zero_add, List.foldl_cons, add_zero, List.foldl_nil]
 
 /-! ## Premise-free recursive soundness -/
 
@@ -956,7 +950,7 @@ theorem holderFlow_conserved_of_sounds
     (holderFlowOfActions history.flowActions u)
     (hstorage.holderEquation u) hloss
   rw [← history.weth10Flow_eq_holderFlowOfActions u] at hconserved
-  simpa [bookedBalanceNat] using hconserved
+  simpa only [bookedBalanceNat] using hconserved
 
 theorem holderFlow_flash_cancelled_of_sounds
     {cfg : ChainConfig} {dp : DeployParams} {ca u : Adr}
@@ -1146,14 +1140,14 @@ theorem holderFlow_dirty_alias_is_self_transfer
         rawRecipient.toAdr amount).holderFlow u =
       { HolderFlow.zero u with selfTransfer := amount } := by
   rw [hsource, hrecipient]
-  simp [FlowAtom.holderFlow]
+  simp only [FlowAtom.holderFlow, ↓reduceIte]
 
 /-- A zero-valued transfer contributes no holder flow in any alias branch. -/
 theorem holderFlow_zero_transfer_eq_zero
     (rawSource rawRecipient : B256) (source recipient u : Adr) :
     (FlowAtom.transfer rawSource rawRecipient source recipient 0).holderFlow u =
       HolderFlow.zero u := by
-  simp [FlowAtom.holderFlow, HolderFlow.zero]
+  simp only [FlowAtom.holderFlow, HolderFlow.zero, ite_self]
 
 /-- Runtime ingress follows the machine-word calldata-size test exactly.  In
 particular, a list whose length reduces to zero in `B256` takes the receive
@@ -1162,7 +1156,7 @@ theorem primaryFlowAtom_wordZero_length_is_receive
     (e : Sevm) (hsize : e.data.length.toB256 = 0) :
     primaryFlowAtom e =
       some (.ordinaryMint e.caller.toB256 e.caller e.value.toNat) := by
-  simp [primaryFlowAtom, hsize]
+  simp only [primaryFlowAtom, hsize, ↓reduceIte]
 
 /-- A raw-nonzero transfer destination remains on the transfer branch even
 when its low 160 bits normalize to address zero. -/
@@ -1175,9 +1169,10 @@ theorem primaryFlowAtom_dirty_zero_is_transfer
     primaryFlowAtom e =
       some (.transfer e.caller.toB256 (Sevm.argWord e 0)
         e.caller 0 (Sevm.argWord e 1).toNat) := by
-  simp [primaryFlowAtom, hnonempty, hselector, hraw, hnormalized,
-    transferSelector_ne_depositSelector, transferSelector_ne_depositToSelector,
-    transferSelector_ne_depositToAndCallSelector]
+  simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector, transferSelector_ne_depositSelector,
+    transferSelector_ne_depositToSelector, decide_false,
+    transferSelector_ne_depositToAndCallSelector, Bool.or_self, Bool.false_eq_true, decide_true,
+    Bool.true_or, hraw, hnormalized]
 
 /-- The callback-bearing transfer uses the same raw-word branch: a dirty
 nonzero destination normalizing to address zero is still an ordinary transfer
@@ -1191,11 +1186,11 @@ theorem primaryFlowAtom_dirty_zero_transferAndCall_is_transfer
     primaryFlowAtom e =
       some (.transfer e.caller.toB256 (Sevm.argWord e 0)
         e.caller 0 (Sevm.argWord e 1).toNat) := by
-  simp [primaryFlowAtom, hnonempty, hselector, hraw, hnormalized,
-    transferAndCallSelector_ne_depositSelector,
-    transferAndCallSelector_ne_depositToSelector,
-    transferAndCallSelector_ne_depositToAndCallSelector,
-    transferAndCallSelector_ne_transferSelector]
+  simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+    transferAndCallSelector_ne_depositSelector, transferAndCallSelector_ne_depositToSelector,
+    decide_false, transferAndCallSelector_ne_depositToAndCallSelector, Bool.or_self,
+    Bool.false_eq_true, transferAndCallSelector_ne_transferSelector, decide_true, Bool.or_true,
+    hraw, hnormalized]
 
 /-- Delegated transfers likewise branch on the untouched raw recipient word;
 normalization to address zero does not retrospectively make the action an ETH
@@ -1209,12 +1204,11 @@ theorem primaryFlowAtom_dirty_zero_transferFrom_is_transfer
     primaryFlowAtom e =
       some (.transfer (Sevm.argWord e 0) (Sevm.argWord e 1)
         (Sevm.argWord e 0).toAdr 0 (Sevm.argWord e 2).toNat) := by
-  simp [primaryFlowAtom, hnonempty, hselector, hrawTo, hnormalized,
-    transferFromSelector_ne_depositSelector,
-    transferFromSelector_ne_depositToSelector,
-    transferFromSelector_ne_depositToAndCallSelector,
-    transferFromSelector_ne_transferSelector,
-    transferFromSelector_ne_transferAndCallSelector]
+  simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
+    transferFromSelector_ne_depositSelector, transferFromSelector_ne_depositToSelector,
+    decide_false, transferFromSelector_ne_depositToAndCallSelector, Bool.or_self,
+    Bool.false_eq_true, transferFromSelector_ne_transferSelector,
+    transferFromSelector_ne_transferAndCallSelector, hrawTo, hnormalized]
 
 /-- Library-style or delegated execution cannot satisfy the exact direct
 WETH10 invocation boundary, even when the code bytes look identical. -/
@@ -1320,9 +1314,9 @@ theorem holderFlow_multiStep_fixture_totals (u v : Adr) (hne : u ≠ v) :
     flow.selfTransfer = 5 ∧
     flow.flashCredit = 7 ∧
     flow.flashRepayment = 7 := by
-  simp [multiStepFlowFixture, fixtureObservation,
-    holderFlowOfObservations, FlowAtom.holderFlow, HolderFlow.zero,
-    HolderFlow.add, hne.symm]
+  simp only [holderFlowOfObservations, HolderFlow.add, FlowAtom.holderFlow, HolderFlow.zero,
+    multiStepFlowFixture, fixtureObservation, List.foldl_cons, ↓reduceIte, zero_add, add_zero,
+    hne.symm, Nat.reduceAdd, List.foldl_nil, and_self]
 
 private def nestedFlashFlowFixture (u : Adr) : List FlowObservation :=
   [ fixtureObservation (.flashPair u.toB256 u 2)
@@ -1332,9 +1326,9 @@ private def nestedFlashFlowFixture (u : Adr) : List FlowObservation :=
 theorem holderFlow_nestedFlash_fixture_totals (u : Adr) :
     let flow := holderFlowOfObservations (nestedFlashFlowFixture u) u
     flow.flashCredit = 5 ∧ flow.flashRepayment = 5 := by
-  simp [nestedFlashFlowFixture, fixtureObservation,
-    holderFlowOfObservations, FlowAtom.holderFlow, HolderFlow.zero,
-    HolderFlow.add]
+  simp only [holderFlowOfObservations, HolderFlow.add, FlowAtom.holderFlow, HolderFlow.zero,
+    nestedFlashFlowFixture, fixtureObservation, List.foldl_cons, ↓reduceIte, add_zero, zero_add,
+    Nat.reduceAdd, List.foldl_nil, and_self]
 
 private def maximumFlashFlowFixture (u : Adr) : List FlowObservation :=
   [fixtureObservation (.flashPair u.toB256 u maxFlashMinted)]
@@ -1345,9 +1339,9 @@ theorem holderFlow_maximumFlash_fixture_totals (u : Adr) :
     let flow := holderFlowOfObservations (maximumFlashFlowFixture u) u
     flow.flashCredit = maxFlashMinted ∧
       flow.flashRepayment = maxFlashMinted := by
-  simp [maximumFlashFlowFixture, fixtureObservation,
-    holderFlowOfObservations, FlowAtom.holderFlow, HolderFlow.zero,
-    HolderFlow.add]
+  simp only [holderFlowOfObservations, HolderFlow.add, FlowAtom.holderFlow, HolderFlow.zero,
+    maximumFlashFlowFixture, fixtureObservation, List.foldl_cons, ↓reduceIte, add_zero, zero_add,
+    List.foldl_nil, and_self]
 
 private def maxOneMintCandidate (ca u : Adr) : FlowAction :=
   { atom := .ordinaryMint u.toB256 u 1
@@ -1376,8 +1370,8 @@ private def maxOneTransferCandidate
 addition as natural-number conservation before the history no-wrap proof. -/
 theorem maxOneMintCandidate_creditLoss (ca u : Adr) :
     (maxOneMintCandidate ca u).creditLossTotal = 2 ^ 256 := by
-  simp [maxOneMintCandidate, FlowAction.creditLossTotal,
-    CreditOccurrence.loss, creditLoss_max_one_eq_modulus]
+  simp only [FlowAction.creditLossTotal, maxOneMintCandidate, CreditOccurrence.loss,
+    creditLoss_max_one_eq_modulus, Nat.reducePow]
 
 /-- The corresponding incoming-transfer candidate exposes the same full-word
 loss; the committed theorem must rule it out rather than simplify it away. -/
@@ -1385,8 +1379,8 @@ theorem maxOneTransferCandidate_creditLoss
     (ca source recipient : Adr) :
     (maxOneTransferCandidate ca source recipient).creditLossTotal =
       2 ^ 256 := by
-  simp [maxOneTransferCandidate, FlowAction.creditLossTotal,
-    CreditOccurrence.loss, creditLoss_max_one_eq_modulus]
+  simp only [FlowAction.creditLossTotal, maxOneTransferCandidate, CreditOccurrence.loss,
+    creditLoss_max_one_eq_modulus, Nat.reducePow]
 
 end Weth10
 

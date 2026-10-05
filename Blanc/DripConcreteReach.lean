@@ -61,7 +61,7 @@ theorem concreteConfig_covered {timestamp : Nat} {fork : Fork}
     (hfork : concreteConfig.forkAt timestamp = .ok fork) :
     CoveredFork fork := by
   have hprague : concreteConfig.forkAt timestamp = .ok .prague := by
-    simpa [concreteConfig] using ChainConfig.pragueOnly_forkAt 1 timestamp
+    simpa only [concreteConfig] using ChainConfig.pragueOnly_forkAt 1 timestamp
   rw [hprague] at hfork
   cases hfork
   exact CoveredFork.prague
@@ -195,18 +195,6 @@ noncomputable def concreteExitBlockTrace :
       exact (congrArg (fun n => n < 2 ^ 256) balance).mpr
         concrete_world_sum_bounds.2.2.2.1)
     concreteExit_step concreteConfig_covered)
-
-/-- The named typed traces retain these literal blocks, not just the same
-endpoints. No transition's body evidence is reconstructed here. -/
-theorem concreteBlockTraces_blocks :
-    concreteDeploymentBlockTrace.block = concreteDeploymentEnvelope.block ∧
-    concreteJoinBlockTrace.block = concreteJoinBlock ∧
-    concreteDripBlockTrace.block = concreteDripBlock ∧
-    concreteExitBlockTrace.block = concreteExitBlock :=
-  ⟨concreteDeploymentBlockTrace.block_eq_of_transition concreteDeploymentStep,
-    concreteJoinBlockTrace.block_eq_of_transition concreteJoin_step,
-    concreteDripBlockTrace.block_eq_of_transition concreteDrip_step,
-    concreteExitBlockTrace.block_eq_of_transition concreteExit_step⟩
 
 /-- Retain the four named block/body executions as an explicit constructor
 spine, with every intermediate world fixed by the block trace's type. -/

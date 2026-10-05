@@ -29,14 +29,14 @@ theorem RetainedXlot.rawFrames_warm
     (ha : a ∈ frame.inner.accessedAddresses) :
     ∀ root ∈ retained.rawFrames, a ∈ root.devm.accessedAddresses := by
   cases retained with
-  | none => intro root member; simp [RetainedXlot.rawFrames] at member
+  | none => intro root member; simp only [rawFrames, List.not_mem_nil] at member
   | @some pc sevm pre execution run =>
       obtain ⟨henter, _⟩ := RunFrame.some_inv hrun
       obtain ⟨benv, _, hevm⟩ := Frame.enter_run_inv henter
       have hstat := Frame.enter_run_benvStat henter
       have hpre : a ∈ pre.accessedAddresses := by
         have h : (⟨pc, sevm, pre⟩ : Evm) = initEvm (frame.inner.withBenv benv) := by
-          simpa using hevm
+          simpa only using hevm
         cases h
         exact ha
       exact Exec.rawFrameRoots_warm a run (by rw [hstat]; exact hsg) hpre
@@ -116,9 +116,9 @@ private theorem setDelegation_accessed
     ⟨⟨loopMsg, loopRefund⟩, loop, rest⟩
   have grow := setDelegationLoop_accessed loop
   cases codeAddress : loopMsg.codeAddress with
-  | none => simp [codeAddress] at rest
+  | none => simp only [codeAddress, Except.bind_error, reduceCtorEq] at rest
   | some address =>
-      simp [codeAddress] at rest
+      simp only [codeAddress, Except.bind_ok, Except.ok.injEq, Prod.mk.injEq] at rest
       rcases rest with ⟨rfl, rfl⟩
       exact grow
 
@@ -154,7 +154,7 @@ theorem MessageCallTrace.rawFrames_warm
     (hsg : msg.benv.stat.rules.stateGas = Option.none) (ha : a ∈ msg.accessedAddresses) :
     ∀ root ∈ trace.rawFrames, a ∈ root.devm.accessedAddresses := by
   cases trace with
-  | createCollision => intro root member; simp [MessageCallTrace.rawFrames] at member
+  | createCollision => intro root member; simp only [rawFrames, List.not_mem_nil] at member
   | createRun target collision evm core coreTrace result =>
       exact coreTrace.rawFrames_warm hsg ha
   | callRun target delegated refund delegation execMsg execMsgEq evm core coreTrace result =>
@@ -201,7 +201,7 @@ theorem ApplyTransactionsTrace.rawFrames_precompile_warm
     (ha : a ∈ benv.stat.rules.precompiles) :
     ∀ root ∈ trace.rawFrames, a ∈ root.devm.accessedAddresses := by
   induction trace with
-  | nil => intro root member; simp [ApplyTransactionsTrace.rawFrames] at member
+  | nil => intro root member; simp only [rawFrames, List.not_mem_nil] at member
   | cons head tail ih =>
       intro root member
       simp only [ApplyTransactionsTrace.rawFrames, List.mem_append] at member
@@ -263,7 +263,7 @@ theorem ConfiguredHistoryTrace.rawFrames_system_or_tx
     (trace : ConfiguredHistoryTrace cfg checkpoint future) :
     ∀ root ∈ trace.rawFrames, root ∈ trace.systemRawFrames ∨ root ∈ trace.txRawFrames := by
   induction trace with
-  | refl => intro root member; simp [ConfiguredHistoryTrace.rawFrames] at member
+  | refl => intro root member; simp only [rawFrames, List.not_mem_nil] at member
   | step prior block ih =>
       intro root member
       simp only [ConfiguredHistoryTrace.rawFrames, ConfiguredHistoryTrace.systemRawFrames,
@@ -284,7 +284,7 @@ theorem ConfiguredHistoryTrace.txRawFrames_warm
     (ha : ∀ f, CoveredFork f → a ∈ (Fork.ruleSet f).precompiles) :
     ∀ root ∈ trace.txRawFrames, a ∈ root.devm.accessedAddresses := by
   induction trace with
-  | refl => intro root member; simp [ConfiguredHistoryTrace.txRawFrames] at member
+  | refl => intro root member; simp only [txRawFrames, List.not_mem_nil] at member
   | step prior block ih =>
       intro root member
       simp only [ConfiguredHistoryTrace.txRawFrames, List.mem_append] at member

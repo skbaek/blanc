@@ -36,7 +36,8 @@ theorem eq_of_eqCheck_ne {a b : B256} (h : B256.eqCheck a b ≠ 0) : a = b := by
 theorem canonical_toAdr_toB256 (x : B256) : canonicalAddress x.toAdr.toB256 := by
   unfold canonicalAddress
   have e : x.toAdr.toB256.toNat = x.toAdr.toNat := by
-    simp [Adr.toB256, Adr.toNat, B256.toNat, B128.toNat]
+    simp only [B256.toNat, B128.toNat, Adr.toB256, UInt64.toNat_zero, Nat.zero_shiftLeft,
+      UInt32.toNat_toUInt64, Nat.zero_or, Adr.toNat]
   rw [e]
   exact Adr.toNat_lt_size _
 
@@ -354,7 +355,8 @@ theorem rawFresh_preservesRegistry_of_faithful
         (fun cur w => if w.1 = key then w.2 else cur) ((solRegistryStorage before).read key)⟩)
     hw ht hnp hfind (fun _ => rfl)
   have harr : entries.length < entries.length + 1 := by omega
-  refine RegistryWitness.ofRawRegistryWrites (writes := freshWrites entries t np) hlen (by simp)
+  refine RegistryWitness.ofRawRegistryWrites (writes := freshWrites entries t np) hlen (by simp only [List.length_append,
+    List.length_cons, List.length_nil, zero_add, Std.le_refl])
     hfaithful ?_ ?_
     (fun key => by rw [hwrites, rawFreshPost_eq_apply _ _ ht.2 hnp.2 hlen]) hlogical
   · intro w hw'
@@ -866,8 +868,6 @@ theorem entry21_foreign {Φ : Stor → Prop}
     exact ⟨h, b2, M2, G2, hpost⟩
 
 /-! ## The `registerPauser` selector wrapper (entry 59) -/
-
-private instance : Inhabited SFunc := ⟨.undefined⟩
 
 /-- **The `registerPauser(address,address)` wrapper (entry 59)**, for any storage
 predicate `Φ` stable under off-Registry writes that every successful entry-32

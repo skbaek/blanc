@@ -19,8 +19,6 @@ def Func.toString : Func → String
   | .branch p q => "{" ++ q.toString ++ "} <?> {" ++ p.toString ++ "}"
   | .call _ => "[TAIL]"
 
-instance : Repr Func := ⟨λ p _ => Func.toString p⟩
-
 def Ninst.pushB256 (w : B256) : Ninst :=
   Jaune.Ninst.push w.toBytes.sig <|
     le_of_le_of_eq (List.length_dropWhile_le _ _) (B256.length_toBytes _)
@@ -449,9 +447,6 @@ before the endpoint body, and reverts with empty data. -/
 def nonpayable (body : Func) : Func :=
   callvalue ::: iszero ::: (body <?> Func.revert)
 
-abbrev Prog.Pred : Type :=
-  Nat → Sevm → Devm → Prog → Execution → Prop
-
 def sumBelow (f : Adr → B256) : Nat → Nat
   | 0 => 0
   | n + 1 => sumBelow f n + (f n.toAdr).toNat
@@ -557,7 +552,7 @@ lemma Table.compile_cons_eq_some {l n p l' bs}
       bs = [Jinst.toUInt8 .jumpdest] ++ cp ++ cl' := by
   rcases of_bind_eq_some h with ⟨cp, h_cp, h'⟩; clear h
   rcases of_bind_eq_some h' with ⟨cl', h_cl', h_eq⟩; clear h'
-  simp at h_eq; refine' ⟨cp, cl', h_cp, h_cl', h_eq.symm⟩
+  simp only [cons_append, nil_append, Option.pure_def, Option.some.injEq] at h_eq; refine' ⟨cp, cl', h_cp, h_cl', h_eq.symm⟩
 
 def Prog.compile (p : Prog) : Option Bytes :=
   let t : List (Nat × Func) := table 0 (p.main :: p.aux)
@@ -566,7 +561,8 @@ def Prog.compile (p : Prog) : Option Bytes :=
 lemma Prog.compile_ne_nil {p} : Prog.compile p ≠ some [] := by
   simp only [Prog.compile]; intro h
   rcases of_bind_eq_some h with ⟨bs, _, h'⟩; clear h
-  rcases of_bind_eq_some h' with ⟨bs', _, h⟩; clear h'; simp at h
+  rcases of_bind_eq_some h' with ⟨bs', _, h⟩; clear h'; simp only [cons_append, nil_append,
+    Option.pure_def, Option.some.injEq, reduceCtorEq] at h
 
 def subcode (cd : Bytes) (k : Nat) : Option Bytes → Prop
   | none => False
@@ -601,19 +597,19 @@ lemma toInstType_toUInt8_swap (x : Fin 16) :
     (Rinst.toUInt8 (Rinst.swap x)).toInstType = .R := by
   rcases x with ⟨n, h⟩; revert h n
   repeat (rw [Nat.forall_lt_succ_left']; refine' ⟨rfl, _⟩)
-  simp
+  simp only [_root_.not_lt_zero, IsEmpty.forall_iff, implies_true]
 
 lemma toInstType_toUInt8_dup (x : Fin 16) :
     (Rinst.toUInt8 (Rinst.dup x)).toInstType = .R := by
   rcases x with ⟨n, h⟩; revert h n
   repeat (rw [Nat.forall_lt_succ_left']; refine' ⟨rfl, _⟩)
-  simp
+  simp only [_root_.not_lt_zero, IsEmpty.forall_iff, implies_true]
 
 lemma toInstType_toUInt8_log (x : Fin 5) :
     (Rinst.toUInt8 (Rinst.log x)).toInstType = .R := by
   rcases x with ⟨n, h⟩; revert h n
   repeat (rw [Nat.forall_lt_succ_left']; refine' ⟨rfl, _⟩)
-  simp
+  simp only [_root_.not_lt_zero, IsEmpty.forall_iff, implies_true]
 
 lemma Rinst.toInstType_toUInt8 (r : Rinst) :
     (Rinst.toUInt8 r).toInstType = .R := by
@@ -637,15 +633,20 @@ lemma ByteArray.toList_eq_toList_data {xs : ByteArray} :
       | nil =>
         unfold _root_.ByteArray.toList.loop
         rw [if_neg _, List.reverse_reverse, List.append_nil]
-        simp [ByteArray.size]
+        simp only [ByteArray.size, append_nil, size_toArray, lt_self_iff_false, not_false_eq_true]
       | cons y ys ih =>
         unfold _root_.ByteArray.toList.loop
         have rw : ByteArray.get! ⟨⟨xs ++ y :: ys⟩⟩ xs.length = y := by
-          simp [ByteArray.get!]
-        have rw' : xs.length + 1 = (xs ++ [y]).length := by simp
-        have rw'' : y :: xs.reverse = (xs ++ [y]).reverse := by simp
+          simp only [ByteArray.get!, size_toArray, length_append, length_cons, lt_add_iff_pos_right,
+            add_pos_iff, zero_lt_one, or_true, getElem!_pos, getElem_toArray, Std.le_refl,
+            getElem_append_right, tsub_self, getElem_cons_zero]
+        have rw' : xs.length + 1 = (xs ++ [y]).length := by simp only [length_append, length_cons,
+          length_nil, zero_add]
+        have rw'' : y :: xs.reverse = (xs ++ [y]).reverse := by simp only [reverse_append,
+          reverse_cons, reverse_nil, nil_append, cons_append]
         rw [if_pos _, rw, List.append_cons, rw', rw'', ih]
-        simp [ByteArray.size]
+        simp only [ByteArray.size, size_toArray, length_append, length_cons, lt_add_iff_pos_right,
+          add_pos_iff, zero_lt_one, or_true]
   rcases xs with ⟨⟨xs⟩⟩; apply gen [] xs
 
 lemma ByteArray.lt_size_of_getElem?_eq_some {xs : ByteArray} {n} {x}
@@ -765,7 +766,7 @@ lemma toUInt8_toXinst {o : Xinst} :
 lemma toNat_pushToB8_eq {xs : Bytes} (le : xs.length ≤ 32) :
     (pushToB8 xs).toNat = xs.length + 95:= by
   simp only [pushToB8]; rw [UInt8.toNat_add_lo, Nat.lo_eq_of_lt] <;>
-  {simp [UInt8.toNat_ofNat, UInt8.toNat_ofNat', Nat.toUInt8]; omega}
+  {simp only [UInt8.toNat_ofNat, reducePow, reduceMod, toUInt8, UInt8.toNat_ofNat']; omega}
 
 lemma ByteArray.size_eq_length_toList (xs : ByteArray) :
     xs.size = xs.toList.length := by
@@ -794,7 +795,7 @@ lemma ByteArray.sliceD_eq (xs : ByteArray) (m n : Nat) (d : UInt8) :
         apply lt
       rw [List.sliceD_succ, ih]
       rw [ByteArray.getElem_of_getElem?_eq_some (List.getElem?_eq_getElem lt') lt]
-      simp [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem lt']
+      simp only [getD_eq_getElem?_getD, List.getElem?_eq_getElem lt', Option.getD_some]
     · rename (¬ _ < _) => nlt
       rw [not_lt] at nlt
       simp only [List.replicate]
@@ -820,7 +821,7 @@ lemma pushAt_of_slice {code : ByteArray} {pc} {xs : Bytes} (le : xs.length ≤ 3
   have rw' : UInt8.toNat (code[pc]'(ByteArray.lt_size_of_getElem?_eq_some eq)) - 95
       = xs.length := by
     rw [rw, toNat_pushToB8_eq le]; omega
-  rw [rw', ByteArray.sliceD_eq]; simp [pushToB8L] at slice
+  rw [rw', ByteArray.sliceD_eq]; simp only [pushToB8L] at slice
   rw [List.length_slice? slice, List.length_cons] at slice
   apply List.sliceD_eq_of_slice?_eq_some (List.slice?_eq_cons_iff.mp slice).2
 
@@ -829,7 +830,7 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
     Ninst.At code pc n := by
   cases n
   case reg r =>
-    simp [Ninst.toBytes] at slice
+    simp only [Ninst.toBytes] at slice
     have eq := List.get?_eq_of_slice slice
     simp only [Ninst.At, ByteArray.getInst]
     rw [dif_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
@@ -846,12 +847,12 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
     have hsome := toUInt8_toRinst (i := r)
     simp only [rw]
     split
-    · simp_all
-    · simp_all
-    · simp_all
+    · simp_all only [reduceCtorEq]
+    · simp_all only [reduceCtorEq]
+    · simp_all only [reduceCtorEq]
     · rw [toUInt8_toRinst]; rfl
   case exec x =>
-    simp [Ninst.toBytes] at slice
+    simp only [Ninst.toBytes] at slice
     have eq := List.get?_eq_of_slice slice
     simp only [Ninst.At, ByteArray.getInst]
     rw [dif_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
@@ -885,8 +886,10 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
           rw [hbyte0, hR] at h; cases h }
     split
     · simp only [hD]
-    · simp_all
-    · simp_all
+    · have hfalse : (230 : UInt8) = 231 := hbyte0.symm.trans (by assumption)
+      exact False.elim ((by decide : (230 : UInt8) ≠ 231) hfalse)
+    · have hfalse : (230 : UInt8) = 232 := hbyte0.symm.trans (by assumption)
+      exact False.elim ((by decide : (230 : UInt8) ≠ 232) hfalse)
     · simp only [hbyte0, hmapnone]
       rename_i hne230 hne231 hne232
       have hEq : ∀ (p : UInt8.toInstType code[pc] = InstType.R), p ≍ hR :=
@@ -915,9 +918,11 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
     try { rename (UInt8.toInstType _ = _) => h
           rw [hbyte0, hR] at h; cases h }
     split
-    · simp_all
+    · have hfalse : (231 : UInt8) = 230 := hbyte0.symm.trans (by assumption)
+      exact False.elim ((by decide : (231 : UInt8) ≠ 230) hfalse)
     · simp only [hD]
-    · simp_all
+    · have hfalse : (231 : UInt8) = 232 := hbyte0.symm.trans (by assumption)
+      exact False.elim ((by decide : (231 : UInt8) ≠ 232) hfalse)
     · simp only [hbyte0, hmapnone]
       rename_i hne230 hne231 hne232
       have hEq : ∀ (p : UInt8.toInstType code[pc] = InstType.R), p ≍ hR :=
@@ -946,8 +951,10 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
     try { rename (UInt8.toInstType _ = _) => h
           rw [hbyte0, hR] at h; cases h }
     split
-    · simp_all
-    · simp_all
+    · have hfalse : (232 : UInt8) = 230 := hbyte0.symm.trans (by assumption)
+      exact False.elim ((by decide : (232 : UInt8) ≠ 230) hfalse)
+    · have hfalse : (232 : UInt8) = 231 := hbyte0.symm.trans (by assumption)
+      exact False.elim ((by decide : (232 : UInt8) ≠ 231) hfalse)
     · simp only [hD]
     · simp only [hbyte0, hmapnone]
       rename_i hne230 hne231 hne232
@@ -987,15 +994,17 @@ lemma subcode_compile_branch {code : ByteArray} {k l p q}
   have h' := List.slice_suffix h; clear h
   rw [← List.singleton_append] at h'
   have jat : Jinst.At code (k + 3) Jinst.jumpi := by
-    simp [Nat.toUInt8, List.length] at h'
+    simp only [append_nil, toUInt8, UInt8.ofNat_add, UInt8.reduceOfNat, cons_append, nil_append,
+      length_cons, length, zero_add, reduceAdd] at h'
     apply Jinst.at_of_slice (List.slice_prefix h')
   refine' ⟨jat, _⟩; clear jat
   have h := List.slice_suffix h'; clear h'
-  rw [Nat.add_assoc] at h; simp [List.length] at h; rw [h_qcd]
+  rw [Nat.add_assoc] at h; simp only [append_nil, toUInt8_eq, UInt8.ofNat_add, UInt8.reduceOfNat,
+    cons_append, nil_append, length_cons, length, zero_add, reduceAdd] at h; rw [h_qcd]
   refine' ⟨List.slice_prefix h, _⟩
   have h' := List.slice_suffix h; clear h
   have h_rw : k + 4 + List.length qcd = k + List.length qcd + 4 := by omega
-  rw [h_rw, ← List.singleton_append] at h'; simp [loc]; rw [h_pcd]
+  rw [h_rw, ← List.singleton_append] at h'; simp only [loc]; rw [h_pcd]
   refine' ⟨Jinst.at_of_slice (List.slice_prefix h'), List.slice_suffix h'⟩
 
 lemma Prog.get?_table {m n} {c : List Func} :
@@ -1005,8 +1014,9 @@ lemma Prog.get?_table {m n} {c : List Func} :
   | nil => rfl
   | cons p c' ih =>
     cases n with
-    | zero => simp [table]
-    | succ n => simp [table]; apply ih
+    | zero => simp only [table, length_cons, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true,
+      getElem?_pos, getElem_cons_zero, Option.map_eq_map, Option.map_some]
+    | succ n => simp only [table, getElem?_cons_succ, Option.map_eq_map]; apply ih
 
 -- alternative version of Exec which rolls all arguments into a structure.
 
@@ -1106,11 +1116,7 @@ lemma Devm.pushBurn_of_run {x : B256} {pre inter : Devm} {cost : Nat} :
       split at run; {cases run}
       injection run with eq_inter; subst eq_inter
       constructor <;>
-        simp [Stack.Push, Split, Devm.Rels.eq, Devm.setMach, Devm.stack,
-          Devm.memory, Devm.gasLeft, Devm.logs, Devm.refundCounter, Devm.output,
-          Devm.accountsToDelete, Devm.returnData, Devm.error, Devm.accessedAddresses,
-          Devm.accessedStorageKeys, Devm.state, Devm.createdAccounts,
-          Devm.transientStorage, Devm.stateGas]
+        simp only [Stack.Push, Split, Devm.stack, Devm.setMach, Devm.gasLeft, cons_append, nil_append, Devm.Rels.eq, Devm.memory, ge_iff_le, tsub_le_iff_right, le_add_iff_nonneg_right, _root_.zero_le, Devm.logs, Devm.refundCounter, Devm.output, Devm.accountsToDelete, Devm.returnData, Devm.error, Devm.accessedAddresses, Devm.accessedStorageKeys, Devm.state, Devm.createdAccounts, Devm.transientStorage, Devm.stateGas]
     · contradiction
 
 lemma Devm.pop_of_pop {x : B256} {devm devm' : Devm} :
@@ -1119,7 +1125,7 @@ lemma Devm.pop_of_pop {x : B256} {devm devm' : Devm} :
   simp only [Devm.pop_def] at pop
   split at pop; {cases pop}
   injection pop with eq; injection eq with eq eq'
-  constructor <;> simp <;> rw [← eq'] <;> try {rfl}
+  constructor <;> simp only <;> rw [← eq'] <;> try {rfl}
   rename (devm.stack = _) => rw; rw [rw, eq]; rfl
 
 lemma Devm.burn_of_chargeGas {cost : Nat} {devm devm' : Devm} :
@@ -1327,8 +1333,8 @@ lemma Stack.push_cons_pop_cons
     (h : Stack.Push (x :: xs) s s')
     (h' : Stack.Pop (y :: ys) s' s'') :
     (x = y ∧ ∃ zs, Stack.Push xs s zs ∧ Stack.Pop ys zs s'') := by
-  simp [Stack.Push, Split] at h
-  simp [Stack.Pop, Split] at h'
+  simp only [Push, Split, cons_append] at h
+  simp only [Pop, Split, cons_append] at h'
   match s' with
   | [] => cases h
   | z :: zs =>
@@ -1419,7 +1425,7 @@ lemma table_suffix {c k pfx sfx} (h : pfx <++ (table k c) ++> sfx) :
   induction c generalizing k pfx sfx with
   | nil => refine' ⟨k, [], (List.append_eq_nil_iff.mp h.symm).right⟩
   | cons p ps ih =>
-    simp [table] at h
+    simp only [table] at h
     rcases List.cons_eq_append_iff.mp h with
       ⟨_, h'⟩ | ⟨pfx', _, h'⟩
     · refine ⟨k, p :: ps, h'⟩
@@ -1432,21 +1438,22 @@ lemma Func.length_compile {l k p bs} (h : Func.compile l k p = some bs) :
     rcases of_bind_eq_some h with ⟨cp, h_cp, h'⟩; clear h
     rcases of_guard_eq_some h' with ⟨h'', h⟩; clear h' h''
     rcases of_bind_eq_some h with ⟨cq, h_cq, h'⟩; clear h
-    simp at h'; rw [← h']
-    simp [List.length_append, List.length, compsize]
+    simp only [toUInt8_eq, UInt8.ofNat_add, UInt8.reduceOfNat, cons_append, nil_append,
+      append_assoc, Option.pure_def, Option.some.injEq] at h'; rw [← h']
+    simp only [length, length_append, compsize, Nat.add_right_cancel_iff]
     rw [ihp h_cp, ihq h_cq]; omega
-  | last o => simp [compile] at h; rw [← h]; rfl
+  | last o => simp only [compile, Option.pure_def, Option.some.injEq] at h; rw [← h]; rfl
   | next o p ih =>
     rcases of_bind_eq_some h with ⟨_, _, h'⟩; clear h
     rcases of_bind_eq_some h' with ⟨bs', h, h'⟩;
-    simp at h'; rw [← h']
-    simp [List.length_append, compsize]
+    simp only [Option.pure_def, Option.some.injEq] at h'; rw [← h']
+    simp only [length_append, compsize]
     rw [ih h, Nat.add_comm]
   | call m =>
     rcases of_bind_eq_some h with ⟨⟨_, _⟩, _, h'⟩; clear h
     rcases of_guard_eq_some h' with ⟨h'', h⟩; clear h' h''
-    simp at h; rw [← h];
-    simp [List.length, compsize]
+    simp only [toUInt8_eq, cons_append, nil_append, Option.pure_def, Option.some.injEq] at h; rw [← h];
+    simp only [length, zero_add, reduceAdd, compsize]
 
 /-- Successful table compilation emits one `JUMPDEST` followed by each
 function's `compsize` bytes. -/
@@ -1454,7 +1461,7 @@ lemma Table.length_compile {l t bs} (h : Table.compile l t = some bs) :
     bs.length = (t.map fun np => 1 + compsize np.2).sum := by
   induction t generalizing bs with
   | nil =>
-      simp [Table.compile] at h
+      simp only [compile, Option.pure_def, Option.some.injEq, nil_eq] at h
       subst h
       rfl
   | cons np t ih =>
@@ -1501,7 +1508,6 @@ inductive Func.CompileShape : Type
   | next (size : Nat) (acc : Bool) (rest : Func.CompileShape)
   | branch (left right : Func.CompileShape)
   | call (index : Nat)
-deriving DecidableEq
 
 /-- The part of a function that can affect compiler success: instruction
 widths, fork structure, and table-call indices. -/
@@ -1517,15 +1523,14 @@ private def Func.CompileShape.compsize : Func.CompileShape → Nat
   | .branch p q => p.compsize + q.compsize + 5
   | .call _ => 4
 
-@[simp] private theorem Func.compsize_compileShape (p : Func) :
+private theorem Func.compsize_compileShape (p : Func) :
     p.compileShape.compsize = compsize p := by
   induction p with
   | last => rfl
   | next i p ih =>
-      simp [Func.compileShape, Func.CompileShape.compsize, compsize, ih,
-        Ninst.size_eq_length_toBytes]
+      simp only [compileShape, size_eq_length_toBytes, CompileShape.compsize, ih, compsize]
   | branch p q ihp ihq =>
-      simp [Func.compileShape, Func.CompileShape.compsize, compsize, ihp, ihq]
+      simp only [compileShape, CompileShape.compsize, ihp, ihq, compsize]
   | call => rfl
 
 private theorem Func.compsize_eq_of_compileShape {p q : Func}
@@ -1536,7 +1541,6 @@ private theorem Func.compsize_eq_of_compileShape {p q : Func}
 structure Prog.CompileShape where
   main : Func.CompileShape
   aux : List Func.CompileShape
-deriving DecidableEq
 
 /-- Erase byte contents and terminal opcodes from a program, retaining exactly
 the structure that can affect compiler success. -/
@@ -1549,8 +1553,9 @@ private def Table.locations (l : List (Nat × Func)) : List Nat :=
 private theorem Table.getElem?_locations (l : List (Nat × Func)) (k : Nat) :
     (Table.locations l)[k]? = (l[k]?).map Prod.fst := by
   induction l generalizing k with
-  | nil => simp [Table.locations]
-  | cons x xs ih => cases k <;> simp [Table.locations]
+  | nil => simp only [locations, map_nil, length_nil, _root_.not_lt_zero, not_false_eq_true,
+    getElem?_neg, Option.map_none]
+  | cons x xs ih => cases k <;> simp only [locations, map_cons, length_cons, length_map, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true, getElem?_pos, getElem_cons_zero, Option.map_some, getElem?_cons_succ, getElem?_map]
 
 private def Func.compileDecision (l : List (Nat × Func)) (n : Nat) :
     Func → Bool × Nat
@@ -1574,16 +1579,15 @@ private def Func.compileDecision (l : List (Nat × Func)) (n : Nat) :
 def Func.compiles (l : List (Nat × Func)) (n : Nat) (p : Func) : Bool :=
   (Func.compileDecision l n p).1
 
-@[simp] private theorem Func.compileDecision_snd
+private theorem Func.compileDecision_snd
     (l : List (Nat × Func)) (n : Nat) (p : Func) :
     (Func.compileDecision l n p).2 = compsize p := by
   induction p generalizing n with
   | last => rfl
   | next i p ih =>
-      simp [Func.compileDecision, compsize, ih,
-        Ninst.size_eq_length_toBytes]
+      simp only [compileDecision, size_eq_length_toBytes, ih, compsize]
   | branch p q ihp ihq =>
-      simp [Func.compileDecision, compsize, ihp, ihq]
+      simp only [compileDecision, ihp, reducePow, ihq, compsize]
   | call => rfl
 
 private theorem Func.compileDecision_eq_of_compileShape
@@ -1593,7 +1597,7 @@ private theorem Func.compileDecision_eq_of_compileShape
     Func.compileDecision l n p = Func.compileDecision l' n q := by
   induction p generalizing n q with
   | last o =>
-      cases q <;> simp [Func.compileShape] at hp
+      cases q <;> simp only [compileShape, reduceCtorEq] at hp
       rfl
   | next i p ih =>
       cases q with
@@ -1602,7 +1606,7 @@ private theorem Func.compileDecision_eq_of_compileShape
           rcases hp with ⟨hsize, hacc, hshape⟩
           simp only [Func.compileDecision]
           rw [hsize, hacc, ih hshape]
-      | last o | branch _ _ | call _ => simp [Func.compileShape] at hp
+      | last o | branch _ _ | call _ => simp only [compileShape, reduceCtorEq] at hp
   | branch p r ihp ihr =>
       cases q with
       | branch q s =>
@@ -1610,13 +1614,13 @@ private theorem Func.compileDecision_eq_of_compileShape
           rcases hp with ⟨hp, hr⟩
           simp only [Func.compileDecision]
           rw [ihp hp, ihr hr]
-      | last _ | next _ _ | call _ => simp [Func.compileShape] at hp
+      | last _ | next _ _ | call _ => simp only [compileShape, reduceCtorEq] at hp
   | call k =>
       cases q with
       | call m =>
           simp only [Func.compileShape, Func.CompileShape.call.injEq] at hp
-          simp [Func.compileDecision, hl, hp]
-      | last _ | next _ _ | branch _ _ => simp [Func.compileShape] at hp
+          simp only [compileDecision, hl, hp, reducePow]
+      | last _ | next _ _ | branch _ _ => simp only [compileShape, reduceCtorEq] at hp
 
 private theorem Func.compiles_eq_of_compileShape
     {l l' : List (Nat × Func)}
@@ -1644,10 +1648,10 @@ private theorem Table.compiles_eq_of_compileShape
     Table.compiles l t = Table.compiles l' t' := by
   induction t generalizing t' with
   | nil =>
-      cases t' <;> simp [Table.compileShape, Table.compiles] at ht ⊢
+      cases t' <;> simp only [compileShape, map_nil, compiles, map_cons, nil_eq, reduceCtorEq] at ht ⊢
   | cons np t ih =>
       cases t' with
-      | nil => simp [Table.compileShape] at ht
+      | nil => simp only [compileShape, map_cons, map_nil, reduceCtorEq] at ht
       | cons np' t' =>
           rcases np with ⟨n, p⟩
           rcases np' with ⟨n', p'⟩
@@ -1664,10 +1668,10 @@ private theorem Table.compileShape_table
     Table.compileShape (table k ps) = Table.compileShape (table k qs) := by
   induction ps generalizing qs k with
   | nil =>
-      cases qs <;> simp [Table.compileShape, table] at h ⊢
+      cases qs <;> simp only [map_nil, compileShape, table, map_cons, nil_eq, reduceCtorEq] at h ⊢
   | cons p ps ih =>
       cases qs with
-      | nil => simp at h
+      | nil => simp only [map_cons, map_nil, reduceCtorEq] at h
       | cons q qs =>
           simp only [List.map_cons, List.cons.injEq] at h
           rcases h with ⟨hp, hps⟩
@@ -1689,9 +1693,9 @@ without reopening the byte-producing compiler. -/
 theorem Prog.compiles_eq_of_compileShape {p q : Prog}
     (h : p.compileShape = q.compileShape) : p.compiles = q.compiles := by
   have hm : p.main.compileShape = q.main.compileShape := by
-    simpa [Prog.compileShape] using congrArg Prog.CompileShape.main h
+    simpa only [compileShape] using congrArg Prog.CompileShape.main h
   have ha : p.aux.map Func.compileShape = q.aux.map Func.compileShape := by
-    simpa [Prog.compileShape] using congrArg Prog.CompileShape.aux h
+    simpa only [compileShape] using congrArg Prog.CompileShape.aux h
   have hfs :
       (p.main :: p.aux).map Func.compileShape =
         (q.main :: q.aux).map Func.compileShape := by
@@ -1702,8 +1706,7 @@ theorem Prog.compiles_eq_of_compileShape {p q : Prog}
       Table.locations (table 0 (p.main :: p.aux)) =
         Table.locations (table 0 (q.main :: q.aux)) := by
     have hloc := congrArg (List.map Prod.fst) ht
-    simpa [Table.compileShape, Table.locations, List.map_map,
-      Function.comp_def] using hloc
+    simpa only [Table.locations, Table.compileShape, map_map, Function.comp_def] using hloc
   unfold Prog.compiles
   exact Table.compiles_eq_of_compileShape hl ht
 
@@ -1720,29 +1723,40 @@ theorem Func.isSome_compile (l : List (Nat × Func)) (n : Nat) (p : Func) :
           have hs := ih (n := n + i.size)
           rw [h] at hs
           simp only [Option.isSome_none] at hs
-          simp [Func.compile, Func.compiles, Func.compileDecision, h, hs]
+          simp only [compile, h, Option.pure_def, Option.bind_eq_bind, Option.bind_none,
+            Option.bind_fun_none, Option.isSome_none, hs, compiles, compileDecision,
+            compileDecision_snd, Bool.eq_and_self, isEmpty_Prop, Bool.not_eq_true,
+            IsEmpty.forall_iff]
       | some pbs =>
           have hs := ih (n := n + i.size)
           rw [h] at hs
           simp only [Option.isSome_some] at hs
           cases hacc : Ninst.immAccepted i
-          · simp [Func.compile, Func.compiles, Func.compileDecision, hacc]
-          · simp [Func.compile, Func.compiles, Func.compileDecision, h, hs, hacc,
-              guard]
+          · simp only [compile, hacc, Bool.false_eq_true, guard_false, Option.failure_eq_none,
+            Option.pure_def, Option.bind_eq_bind, Option.bind_none, Option.isSome_none, compiles,
+            compileDecision, Bool.false_and, compileDecision_snd]
+          · simp only [compile, guard, hacc, hs, compiles, ↓reduceIte, Option.pure_def, h,
+            Option.bind_eq_bind, Option.bind_some, Option.isSome_some, compileDecision,
+            Bool.and_self, compileDecision_snd]
   | call k =>
       generalize h : l[k]? = entry
       cases entry with
       | none =>
-          simp [Func.compile, Func.compiles, Func.compileDecision,
-            Table.getElem?_locations, h]
+          simp only [compile, h, reducePow, toUInt8_eq, cons_append, nil_append, Option.pure_def,
+            Option.bind_eq_bind, Option.bind_none, Option.isSome_none, compiles, compileDecision,
+            Table.getElem?_locations, Option.map_none]
       | some np =>
           rcases np with ⟨loc, p⟩
-          by_cases hg : loc < 2 ^ 16 <;> norm_num at hg
-          · simp [Func.compile, Func.compiles, Func.compileDecision,
-              Table.getElem?_locations, guard, h, hg]
+          by_cases hg : loc < 2 ^ 16 <;> norm_num only at hg
+          · simp only [compile, h, guard, reducePow, Option.pure_def, Option.failure_eq_none,
+            toUInt8_eq, cons_append, nil_append, Option.bind_eq_bind, Option.bind_some, hg,
+            ↓reduceIte, Option.isSome_some, compiles, compileDecision, Table.getElem?_locations,
+            Option.map_some, decide_true]
           · have hng : ¬ loc < 65536 := by omega
-            simp [Func.compile, Func.compiles, Func.compileDecision,
-              Table.getElem?_locations, guard, h, hng]
+            simp only [compile, h, guard, reducePow, Option.pure_def, Option.failure_eq_none,
+              toUInt8_eq, cons_append, nil_append, Option.bind_eq_bind, Option.bind_some, hng,
+              ↓reduceIte, Option.bind_none, Option.isSome_none, compiles, compileDecision,
+              Table.getElem?_locations, Option.map_some, decide_false]
   | branch p q ihp ihq =>
       generalize hp : Func.compile l (n + 4) p = cp
       cases cp with
@@ -1752,7 +1766,10 @@ theorem Func.isSome_compile (l : List (Nat × Func)) (n : Nat) (p : Func) :
           simp only [Option.isSome_none] at hs
           have hsp : (Func.compileDecision l (n + 4) p).1 = false := by
             simpa only [Func.compiles] using hs.symm
-          simp [Func.compile, Func.compiles, Func.compileDecision, hp, hsp]
+          simp only [compile, hp, reducePow, toUInt8_eq, UInt8.ofNat_add, UInt8.reduceOfNat,
+            cons_append, nil_append, append_assoc, Option.pure_def, Option.bind_eq_bind,
+            Option.bind_none, Option.isSome_none, compiles, compileDecision, hsp,
+            compileDecision_snd, Bool.false_and]
       | some pbs =>
           have hlen := Func.length_compile hp
           have hs := ihp (n := n + 4)
@@ -1760,7 +1777,7 @@ theorem Func.isSome_compile (l : List (Nat × Func)) (n : Nat) (p : Func) :
           simp only [Option.isSome_some] at hs
           have hsp : (Func.compileDecision l (n + 4) p).1 = true := by
             simpa only [Func.compiles] using hs.symm
-          by_cases hg : n + compsize p + 4 < 2 ^ 16 <;> norm_num at hg
+          by_cases hg : n + compsize p + 4 < 2 ^ 16 <;> norm_num only at hg
           · generalize hq :
               Func.compile l (n + compsize p + 4 + 1) q = cq
             cases cq with
@@ -1772,8 +1789,12 @@ theorem Func.isSome_compile (l : List (Nat × Func)) (n : Nat) (p : Func) :
                     (Func.compileDecision l
                       (n + compsize p + 4 + 1) q).1 = false := by
                   simpa only [Func.compiles] using hsq.symm
-                simp [Func.compile, Func.compiles, Func.compileDecision,
-                  guard, hp, hlen, hg, hq, hsp, hsq']
+                simp only [compile, hp, guard, reducePow, Option.pure_def, Option.failure_eq_none,
+                  toUInt8_eq, UInt8.ofNat_add, UInt8.reduceOfNat, cons_append, nil_append,
+                  append_assoc, Option.bind_eq_bind, Option.bind_some, hlen, hg, ↓reduceIte, hq,
+                  Option.bind_none, Option.bind_fun_none, Option.isSome_none, compiles,
+                  compileDecision, hsp, compileDecision_snd, decide_true, Bool.and_self, hsq',
+                  Bool.and_false]
             | some qbs =>
                 have hsq := ihq (n := n + compsize p + 4 + 1)
                 rw [hq] at hsq
@@ -1782,11 +1803,17 @@ theorem Func.isSome_compile (l : List (Nat × Func)) (n : Nat) (p : Func) :
                     (Func.compileDecision l
                       (n + compsize p + 4 + 1) q).1 = true := by
                   simpa only [Func.compiles] using hsq.symm
-                simp [Func.compile, Func.compiles, Func.compileDecision,
-                  guard, hp, hlen, hg, hq, hsp, hsq']
+                simp only [compile, hp, guard, reducePow, Option.pure_def, Option.failure_eq_none,
+                  toUInt8_eq, UInt8.ofNat_add, UInt8.reduceOfNat, cons_append, nil_append,
+                  append_assoc, Option.bind_eq_bind, Option.bind_some, hlen, hg, ↓reduceIte, hq,
+                  Option.isSome_some, compiles, compileDecision, hsp, compileDecision_snd,
+                  decide_true, Bool.and_self, hsq']
           · have hng : ¬ n + compsize p + 4 < 65536 := by omega
-            simp [Func.compile, Func.compiles, Func.compileDecision,
-              guard, hp, hlen, hng, hsp]
+            simp only [compile, hp, guard, reducePow, Option.pure_def, Option.failure_eq_none,
+              toUInt8_eq, UInt8.ofNat_add, UInt8.reduceOfNat, cons_append, nil_append, append_assoc,
+              Option.bind_eq_bind, Option.bind_some, hlen, hng, ↓reduceIte, Option.bind_none,
+              Option.isSome_none, compiles, compileDecision, hsp, compileDecision_snd, decide_false,
+              Bool.and_false, Bool.false_and]
 
 /-- `Table.compiles` decides exactly whether table compilation succeeds. -/
 theorem Table.isSome_compile (l t : List (Nat × Func)) :
@@ -1801,7 +1828,8 @@ theorem Table.isSome_compile (l t : List (Nat × Func)) :
           have hs := Func.isSome_compile l (n + 1) p
           rw [hp] at hs
           simp only [Option.isSome_none] at hs
-          simp [Table.compile, Table.compiles, hp, ← hs]
+          simp only [compile, hp, cons_append, nil_append, Option.pure_def, Option.bind_eq_bind,
+            Option.bind_none, Option.isSome_none, compiles, ← hs, Bool.false_and]
       | some pbs =>
           have hs := Func.isSome_compile l (n + 1) p
           rw [hp] at hs
@@ -1811,17 +1839,21 @@ theorem Table.isSome_compile (l t : List (Nat × Func)) :
           | none =>
               rw [ht] at ih
               simp only [Option.isSome_none] at ih
-              simp [Table.compile, Table.compiles, hp, ht, ← hs, ← ih]
+              simp only [compile, hp, ht, cons_append, nil_append, Option.pure_def,
+                Option.bind_eq_bind, Option.bind_none, Option.bind_fun_none, Option.isSome_none,
+                compiles, ← hs, ← ih, Bool.and_false]
           | some tbs =>
               rw [ht] at ih
               simp only [Option.isSome_some] at ih
-              simp [Table.compile, Table.compiles, hp, ht, ← hs, ← ih]
+              simp only [compile, hp, ht, cons_append, nil_append, Option.pure_def,
+                Option.bind_eq_bind, Option.bind_some, Option.isSome_some, compiles, ← hs, ← ih,
+                Bool.and_self]
 
 /-- `Prog.compiles` decides exactly whether complete-program compilation
 succeeds. -/
 theorem Prog.isSome_compile (p : Prog) :
     (Prog.compile p).isSome = Prog.compiles p := by
-  simp [Prog.compile, Prog.compiles, Table.isSome_compile]
+  simp only [compile, Table.isSome_compile, compiles]
 
 /-- Turn a successful structural decision into the canonical `getD` compile
 witness used by generated code artifacts. -/
@@ -1850,12 +1882,13 @@ lemma of_get?_table_eq_some {f fs} {bs} {m n : ℕ} {p : Func}
   induction m with
   | zero =>
     intro n p h_get
-    simp [table] at h_get
+    simp only [table, zero_add, length_cons, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true,
+      getElem?_pos, getElem_cons_zero, Option.some.injEq, Prod.mk.injEq] at h_get
     cases h_get.left; cases h_get.right; clear h_get
     simp only [table]
     refine' ⟨ [], _ , rfl, List.nil_append _, [],
               bs, rfl, (List.nil_append _).symm, _ ⟩
-    rw [h_eq]; simp [Prog.compile, table]
+    rw [h_eq]; simp only [Prog.compile, table, zero_add]
   | succ m ih =>
     intro n p h_get
     rcases List.of_get?_succ_eq_some h_get with ⟨⟨k, q⟩, h⟩
@@ -1868,28 +1901,30 @@ lemma of_get?_table_eq_some {f fs} {bs} {m n : ℕ} {p : Func}
       have h_le : List.length lft ≤ Nat.succ m := by
         rw [h_lft]; apply Nat.le_succ
       have heq : (lft ++ (k, q) :: rgt)[m.succ]? = ((k, q) :: rgt)[m.succ - lft.length]? := by
-        simp [List.getElem?_append_right, h_le]
+        simp only [succ_eq_add_one, h_le, getElem?_append_right]
       rw [h_split, heq, h_lft, h_sub] at h_get
       match rgt with
-      | [] => simp  at h_get
+      | [] => simp only [length_cons, length_nil, zero_add, lt_self_iff_false, not_false_eq_true,
+        getElem?_neg, reduceCtorEq] at h_get
       | _ :: rgt' =>
-        simp at h_get
+        simp only [length_cons, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true,
+          getElem?_pos, getElem_cons_succ, getElem_cons_zero, Option.some.injEq] at h_get
         rw [h_get]; refine ⟨_, rfl⟩
     rcases h with ⟨rgt', h_rgt'⟩
     refine' ⟨rgt', _, _, _⟩
-    · simp [List.length, h_lft]
-    · simp [Split]; rw [← h_rgt', h_split]
+    · simp only [length_append, h_lft, length, zero_add]
+    · simp only [Split, append_assoc, cons_append, nil_append]; rw [← h_rgt', h_split]
     · rcases Table.compile_cons_eq_some h_sfx.symm with
         ⟨cq, cl, h_cq, h_cl, h_sfx'⟩
       refine' ⟨pfx ++ ([Jinst.jumpdest.toUInt8] ++ cq), cl, _, _, _⟩
       · have hn : n = k + compsize q + 1 := by
           rcases table_suffix h_split with
-            ⟨k', _ | ⟨q', c'⟩, h⟩ <;> simp [table] at h
+            ⟨k', _ | ⟨q', c'⟩, h⟩ <;> simp only [table, reduceCtorEq, cons.injEq, Prod.mk.injEq] at h
           rcases h with ⟨⟨⟨_⟩,⟨_⟩⟩, h⟩
           rw [h_rgt'] at h
-          cases c' <;> simp [table] at h
+          cases c' <;> simp only [table, reduceCtorEq, cons.injEq, Prod.mk.injEq] at h
           apply h.left.left
-        simp [List.length_append, List.length]
+        simp only [cons_append, nil_append, length_append, length]
         rw [h_pfx, hn, Func.length_compile h_cq]
         omega
       · simp only [Split]; rw [List.append_assoc, ← h_sfx', h_split']
@@ -1909,7 +1944,7 @@ lemma subcode_of_get?_eq_some {f fs} {code : ByteArray} {k loc : ℕ} {p : Func}
   constructor
   · apply Jinst.at_of_slice
     apply List.slice_prefix h_slice
-  · rw [h_bs]; simp [subcode]
+  · rw [h_bs]; simp only [subcode]
     apply List.slice_prefix <| List.slice_suffix h_slice
 
 lemma subcode_compile_call {code : ByteArray} {l m n}
@@ -1921,11 +1956,13 @@ lemma subcode_compile_call {code : ByteArray} {l m n}
       Jinst.At code (m + 3) Jinst.jump := by
   rcases of_subcode h with ⟨cd, h', h_slice⟩; clear h
   rcases of_bind_eq_some h' with ⟨⟨loc, p⟩, h_get, h⟩; clear h'
-  simp at h
+  simp only [reducePow, toUInt8_eq, cons_append, nil_append, Option.pure_def,
+    Option.bind_eq_bind] at h
   rcases of_guard_eq_some h with ⟨h_lt, h_eq⟩; clear h
   refine' ⟨loc, p, h_get, h_lt, _⟩
-  simp at h_eq; rw [← h_eq] at h_slice
-  have le : ([(loc >>> 8).toUInt8, loc.toUInt8] : Bytes).length ≤ 32 := by simp [List.length]
+  simp only [Option.some.injEq] at h_eq; rw [← h_eq] at h_slice
+  have le : ([(loc >>> 8).toUInt8, loc.toUInt8] : Bytes).length ≤ 32 := by simp only [length,
+    zero_add, reduceAdd, reduceLeDiff]
   have h_push_slice : List.Slice code.toList m
       (Ninst.toBytes (Ninst.push [(loc >>> 8).toUInt8, loc.toUInt8] le)) := by
     exact List.slice_prefix h_slice
@@ -1950,7 +1987,7 @@ theorem correct_core (f : Func) (fs : List Func) :
     rcases of_subcode sub with ⟨cd, h_eq', h_slice⟩;
     rcases of_bind_eq_some h_eq' with ⟨_, _, h_rw⟩; clear h_eq'
     rcases of_bind_eq_some h_rw with ⟨cd', h_eq'', h_rw⟩;
-    simp [pure] at h_rw;
+    simp only [pure, Option.some.injEq] at h_rw;
     rw [← h_rw] at h_slice;
     have h_at : Ninst.At sevm.code pc n := by
       apply Ninst.at_of_slice
@@ -1983,7 +2020,7 @@ theorem correct_core (f : Func) (fs : List Func) :
         ∃ (devm' : Devm) (exc' : Exec (pc + 3) sevm devm' (.ok post)),
           Devm.PushBurn [Nat.toB256 loc] pre devm' ∧
           ⟨pc + 3, sevm, devm', .ok post, exc'⟩ ≺ ⟨pc, sevm, pre, .ok post, exc⟩ := by
-      simp at pushAt
+      simp only [toUInt8_eq] at pushAt
       rcases push_of_pushAt exc ⟨_, pushAt⟩ with ⟨s', cr', h, h_prec⟩
       rw [List.toB256_pair _ h_loc] at h
       refine' ⟨s', cr', h, h_prec⟩

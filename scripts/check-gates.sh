@@ -35,6 +35,7 @@
 #   scripts/check-gates.sh --fresh        # execute every row, refresh evidence
 #   scripts/check-gates.sh --plan         # what would run, without running it
 #   scripts/check-gates.sh --explain      # ... and which inputs moved
+#   scripts/check-gates.sh --defer-elab   # non-timing evidence; incomplete, exit 3
 #   scripts/check-gates.sh --audit        # registry vs catalogue vs CI
 #   scripts/check-gates.sh --self-test    # the fail-closed control suite
 #   scripts/check-gates.sh --inventory    # regenerate docs/GATE_INPUTS.md
@@ -55,17 +56,21 @@ fi
 
 MODE=(run)
 ECHO=()
+DEFER=()
+FRESH_REQUESTED=false
+INCOMPATIBLE_DEFER=false
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --fresh) MODE=(run --fresh) ;;
+    --fresh) MODE=(run --fresh); FRESH_REQUESTED=true ;;
     --echo) ECHO=(--echo) ;;
+    --defer-elab) DEFER=(--defer-elab) ;;
     --plan) MODE=(plan) ;;
     --explain) MODE=(plan --explain) ;;
-    --audit) MODE=(audit) ;;
-    --self-test) MODE=(self-test) ;;
-    --inventory) MODE=(inventory --output docs/GATE_INPUTS.md) ;;
-    --certify-build) MODE=(certify-build) ;;
+    --audit) MODE=(audit); INCOMPATIBLE_DEFER=true ;;
+    --self-test) MODE=(self-test); INCOMPATIBLE_DEFER=true ;;
+    --inventory) MODE=(inventory --output docs/GATE_INPUTS.md); INCOMPATIBLE_DEFER=true ;;
+    --certify-build) MODE=(certify-build); INCOMPATIBLE_DEFER=true ;;
     --force)
       echo "check-gates: there is no --force. Use --fresh, which adds execution." >&2
       exit 2
@@ -82,7 +87,13 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
+if [ "${#DEFER[@]}" -gt 0 ] && { "$FRESH_REQUESTED" || "$INCOMPATIBLE_DEFER"; }; then
+  echo "check-gates: --defer-elab supports only run/plan/explain without --fresh" >&2
+  exit 2
+fi
+
 case "${MODE[0]}" in
-  run) exec python3 "$SCRIPT_DIR/gate-cache.py" "${MODE[@]}" ${ECHO[@]+"${ECHO[@]}"} ;;
+  run) exec python3 "$SCRIPT_DIR/gate-cache.py" "${MODE[@]}" ${ECHO[@]+"${ECHO[@]}"} ${DEFER[@]+"${DEFER[@]}"} ;;
+  plan) exec python3 "$SCRIPT_DIR/gate-cache.py" "${MODE[@]}" ${DEFER[@]+"${DEFER[@]}"} ;;
   *) exec python3 "$SCRIPT_DIR/gate-cache.py" "${MODE[@]}" ;;
 esac

@@ -55,7 +55,7 @@ private theorem decodeForwardHeadMemory_size (sevm : Sevm) :
   have hne : sevm.code.sliceD 3437 96 (Linst.toUInt8 .stop) ≠ [] := by
     intro hnil
     rw [hnil] at hlength
-    simp at hlength
+    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlength
   have hlt : Mem.empty.size < 0 +
       (sevm.code.sliceD 3437 96 (Linst.toUInt8 .stop)).length := by
     rw [hlength]
@@ -72,8 +72,8 @@ private theorem decodeForwardHeadMemory_reads (sevm : Sevm) :
     Mem.Reads (decodeForwardHeadMemory sevm) (decodeForwardHeadImage sevm) := by
   have hread := Mem.Reads.write Mem.wf_empty Mem.reads_empty 0
     (sevm.code.sliceD 3437 96 (Linst.toUInt8 .stop))
-  simpa [decodeForwardHeadMemory, decodeForwardHeadImage,
-    ByteArray.sliceD_eq, show Linst.toUInt8 .stop = 0 by decide] using hread
+  simpa only [decodeForwardHeadMemory, show Linst.toUInt8 .stop = 0 by decide, ByteArray.sliceD_eq,
+    decodeForwardHeadImage] using hread
 
 private theorem decodeForwardHeadImage_implementation
     {sevm : Sevm} {implementation : Adr}
@@ -118,7 +118,7 @@ private theorem decodeForwardPointerMemory_size (sevm : Sevm) :
   have hne : (Nat.toB256 3533).toBytes ≠ [] := by
     intro hnil
     rw [hnil] at hlength
-    simp at hlength
+    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlength
   have hlt : (decodeForwardHeadMemory sevm).size <
       96 + (Nat.toB256 3533).toBytes.length := by
     rw [decodeForwardHeadMemory_size, hlength]
@@ -131,7 +131,7 @@ private theorem decodeForwardPointerMemory_reads (sevm : Sevm) :
       (decodeForwardPointerImage sevm) := by
   have hread := Mem.Reads.write (decodeForwardHeadMemory_wf sevm)
     (decodeForwardHeadMemory_reads sevm) 96 (Nat.toB256 3533).toBytes
-  simpa [decodeForwardPointerMemory, decodeForwardPointerImage] using hread
+  simpa only [decodeForwardPointerMemory, decodeForwardPointerImage] using hread
 
 private theorem decodeForwardPointerImage_pointer (sevm : Sevm) :
     Bytes.toB256 ((decodeForwardPointerImage sevm).sliceD 96 32 0) =
@@ -150,7 +150,7 @@ private theorem decodeForwardLengthMemory_size (sevm : Sevm) :
   have hne : sevm.code.sliceD 3533 32 (Linst.toUInt8 .stop) ≠ [] := by
     intro hnil
     rw [hnil] at hlength
-    simp at hlength
+    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlength
   have hlt : (decodeForwardPointerMemory sevm).size < 128 +
       (sevm.code.sliceD 3533 32 (Linst.toUInt8 .stop)).length := by
     rw [decodeForwardPointerMemory_size, hlength]
@@ -180,10 +180,9 @@ private theorem decodeForwardLengthMemory_reads (sevm : Sevm) :
     (Nat.toB256 3533).toBytes
   have hlength := Mem.Reads.write hwfPointer hpointer 128
     (sevm.code.sliceD 3533 32 (Linst.toUInt8 .stop))
-  simpa [decodeForwardLengthMemory, decodeForwardPointerMemory,
-    decodeForwardHeadMemory, decodeForwardLengthImage,
-    decodeForwardPointerImage, decodeForwardHeadImage,
-    ByteArray.sliceD_eq, show Linst.toUInt8 .stop = 0 by decide] using hlength
+  simpa only [decodeForwardLengthMemory, decodeForwardPointerMemory, decodeForwardHeadMemory,
+    show Linst.toUInt8 .stop = 0 by decide, ByteArray.sliceD_eq, decodeForwardLengthImage,
+    decodeForwardPointerImage, decodeForwardHeadImage] using hlength
 
 private theorem decodeForwardLengthImage_implementation
     {sevm : Sevm} {implementation : Adr}
@@ -345,7 +344,7 @@ private theorem decodeForwardImplementationStage_runCompiled
   · simp only [Devm.stack_setMach]
     decide
   · simp only [Devm.gasLeft_setMach]
-    norm_num [gVerylow, gHigh]
+    norm_num only [gVerylow, gHigh]
   · simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using hrest
 
 private theorem decodeForwardAdminStage_runCompiled
@@ -399,7 +398,7 @@ private theorem decodeForwardAdminStage_runCompiled
   · simp only [Devm.stack_setMach]
     decide
   · simp only [Devm.gasLeft_setMach]
-    norm_num [gVerylow, gHigh]
+    norm_num only [gVerylow, gHigh]
   · simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using hrest
 
 private theorem decodeForwardOffsetBoundStage_runCompiled
@@ -435,7 +434,7 @@ private theorem decodeForwardOffsetBoundStage_runCompiled
     exact Devm.extCost_add_of_size
       (a := gVerylow) (decodeForwardHeadMemory_size sevm) (by decide)
   func_run (1)
-  simpa using hrest
+  simpa only [add_tsub_cancel_right] using hrest
 
 private theorem decodeForwardPointerStoreStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
@@ -510,7 +509,7 @@ private theorem decodeForwardLengthCompleteStage_runCompiled
     exact Devm.extCost_add_of_size
       (a := gVerylow) (decodeForwardPointerMemory_size sevm) (by decide)
   func_run (1)
-  simpa using hrest
+  simpa only [add_tsub_cancel_right] using hrest
 
 private theorem decodeForwardLengthCopyStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
@@ -582,7 +581,7 @@ private theorem decodeForwardLengthBoundStage_runCompiled
     exact Devm.extCost_add_of_size
       (a := gVerylow) (decodeForwardLengthMemory_size sevm) (by decide)
   func_run (1)
-  simpa using hrest
+  simpa only [add_tsub_cancel_right] using hrest
 
 private theorem decodeForwardPayloadBoundStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
@@ -631,7 +630,7 @@ private theorem decodeForwardPayloadBoundStage_runCompiled
     exact Devm.extCost_add_of_size
       (a := gVerylow) (decodeForwardLengthMemory_size sevm) (by decide)
   func_run (1)
-  simpa using hrest
+  simpa only [add_tsub_cancel_right] using hrest
 
 private theorem decodeForwardPayloadCopyStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
@@ -687,7 +686,7 @@ private theorem decodeForwardPayloadCopyStage_runCompiled
     show (0 : B256).toNat = 0 by decide,
     show (Nat.toB256 3565).toNat = 3565 by decide,
     show (256 : B256).toNat = 256 by decide]
-  simp
+  simp only [add_tsub_cancel_right]
   change Func.RunCompiled fs sevm
     (base.setMach ⟨[], decodeForwardLengthMemory sevm, G, base.stateGas⟩) body post
   exact hrest
@@ -750,7 +749,7 @@ theorem decodeForwardOneWordPayloadMemory_size (sevm : Sevm) :
   have hne : sevm.code.sliceD 3565 32 (Linst.toUInt8 .stop) ≠ [] := by
     intro hnil
     rw [hnil] at hlength
-    simp at hlength
+    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlength
   have hlt : (decodeForwardLengthMemory sevm).size < 0x100 +
       (sevm.code.sliceD 3565 32 (Linst.toUInt8 .stop)).length := by
     rw [decodeForwardLengthMemory_size, hlength]
@@ -769,9 +768,8 @@ theorem decodeForwardOneWordPayloadMemory_reads (sevm : Sevm) :
   have hread := Mem.Reads.write (decodeForwardLengthMemory_wf sevm)
     (decodeForwardLengthMemory_reads sevm) 0x100
     (sevm.code.sliceD 3565 32 (Linst.toUInt8 .stop))
-  simpa [decodeForwardOneWordPayloadMemory,
-    decodeForwardOneWordPayloadImage, ByteArray.sliceD_eq,
-    show Linst.toUInt8 .stop = 0 by decide] using hread
+  simpa only [decodeForwardOneWordPayloadMemory, show Linst.toUInt8 .stop = 0 by decide,
+    ByteArray.sliceD_eq, decodeForwardOneWordPayloadImage] using hread
 
 theorem decodeForwardOneWordPayloadImage_implementation
     {sevm : Sevm} {implementation : Adr}
@@ -884,7 +882,7 @@ private theorem decodeForwardOneWordLengthCompleteStage_runCompiled
     exact Devm.extCost_add_of_size
       (a := gVerylow) (decodeForwardPointerMemory_size sevm) (by decide)
   func_run (1)
-  simpa using hrest
+  simpa only [add_tsub_cancel_right] using hrest
 
 private theorem decodeForwardOneWordLengthBoundStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
@@ -916,7 +914,7 @@ private theorem decodeForwardOneWordLengthBoundStage_runCompiled
     exact Devm.extCost_add_of_size
       (a := gVerylow) (decodeForwardLengthMemory_size sevm) (by decide)
   func_run (1)
-  simpa using hrest
+  simpa only [add_tsub_cancel_right] using hrest
 
 private theorem decodeForwardOneWordPayloadBoundStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
@@ -966,7 +964,7 @@ private theorem decodeForwardOneWordPayloadBoundStage_runCompiled
     exact Devm.extCost_add_of_size
       (a := gVerylow) (decodeForwardLengthMemory_size sevm) (by decide)
   func_run (1)
-  simpa using hrest
+  simpa only [add_tsub_cancel_right] using hrest
 
 private theorem decodeForwardOneWordPayloadCopyStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm}
@@ -1169,8 +1167,8 @@ private theorem decodeForwardProgramMainStage_runCompiled
       (ossifiableConstructorProgram 1249 3437 2188).main post := by
   rw [ossifiableConstructorProgram_main_shape]
   func_run (3) [1]
-  all_goals try simp [B256.eqCheck, hvalue]
-  simpa using hrest
+  all_goals try simp only [B256.eqCheck, hvalue, ↓reduceIte, add_tsub_cancel_right]
+  simpa only using hrest
 
 /-- Execute the complete canonical-coordinate creation program from its real
 program entry.  The additional 20 gas consists of the value guard's accepted
@@ -1233,7 +1231,7 @@ theorem ossifiableConstructorProgram_emptySetup_runCompiled
     decodeForwardProgramMainStage_runCompiled hvalue hdecode
   refine ⟨post, ?_, hstorage, hlogs, houtput, hgasPost, herrorPost⟩
   apply Prog.runCompiled_intro (G := G + 319)
-  · norm_num [gJumpdest]
+  · norm_num only [gJumpdest, Devm.gasLeft_setMach]
   · rfl
   · change Func.RunCompiled
       (ossifiableConstructorFunctions 1249 2188) sevm
@@ -1454,14 +1452,13 @@ theorem ossifiableConstructorProgram_canonicalEmptyInput_runCompiled
   have hcode :
       sevm.code.sliceD 1249 2188 (Linst.toUInt8 .stop) =
         runtimeBaselineBytes := by
-    simpa [ByteArray.sliceD_eq,
-      show Linst.toUInt8 .stop = 0 by decide, hinput] using
+    simpa only [show Linst.toUInt8 .stop = 0 by decide, ByteArray.sliceD_eq, hinput] using
       ossifiableEmptyDataCreateInput_runtime implementation requestedAdmin
   have hruntimeNonempty : runtimeBaselineBytes ≠ [] := by
     intro hnil
     have hlengthExact := runtimeBaselineBytes_length_exact
     rw [hnil] at hlengthExact
-    simp at hlengthExact
+    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlengthExact
   exact ossifiableConstructorProgram_emptySetup_runCompiled (hfork := hfork)
     hvalue hcodeSize himplementation hrequested hoffset hlength
     himplementationNonzero hrequestedNonzero hcodeSizeNonzero haddressCold

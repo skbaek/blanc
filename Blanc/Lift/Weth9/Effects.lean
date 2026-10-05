@@ -51,7 +51,7 @@ def Call.keys : Call → List Key
 theorem decodeCall_keys {e : Sevm} {c : Call} (h : decodeCall e = some c) :
     ∀ k ∈ c.keys, k ∈ frameKeys e := by
   unfold decodeCall at h
-  split_ifs at h <;> (try cases h) <;> simp [Call.keys, frameKeys]
+  split_ifs at h <;> (try cases h) <;> simp only [Call.keys, List.mem_cons, List.not_mem_nil, or_false, frameKeys, forall_eq, Key.bal.injEq, reduceCtorEq, or_self, true_or, forall_eq_or_imp, or_true, and_self, Key.allow.injEq]
 
 /-! ## The storage effect of a call -/
 
@@ -149,13 +149,15 @@ theorem Call.stor_ledger (hK : KeyInj K) {s' : Stor} {c : Call} (hkeys : ∀ k �
     (h : c.stor s = some s') : (ledger K s).step c = some (ledger K s') := by
   cases c with
   | deposit who v =>
-    have hw : K (.bal who) := hkeys _ (by simp [Call.keys])
+    have hw : K (.bal who) := hkeys _ (by simp only [keys, List.mem_cons, List.not_mem_nil,
+      or_false])
     have hb : (ledger K s).bal who = s.get (balSlot who) := tracked_self hw
     simp only [Call.stor] at h
     cases h
     rw [Ledger.step_deposit, ledger_set_bal hK hw, hb]
   | withdraw who w =>
-    have hw : K (.bal who) := hkeys _ (by simp [Call.keys])
+    have hw : K (.bal who) := hkeys _ (by simp only [keys, List.mem_cons, List.not_mem_nil,
+      or_false])
     have hb : (ledger K s).bal who = s.get (balSlot who) := tracked_self hw
     simp only [Call.stor] at h
     rw [Ledger.step_withdraw, hb]
@@ -166,18 +168,24 @@ theorem Call.stor_ledger (hK : KeyInj K) {s' : Stor} {c : Call} (hkeys : ∀ k �
       cases h
       rw [ledger_set_bal hK hw]
   | transfer who dst w =>
-    have hw : K (.bal who) := hkeys _ (by simp [Call.keys])
-    have hd : K (.bal dst) := hkeys _ (by simp [Call.keys])
+    have hw : K (.bal who) := hkeys _ (by simp only [keys, List.mem_cons, Key.bal.injEq,
+      List.not_mem_nil, or_false, true_or])
+    have hd : K (.bal dst) := hkeys _ (by simp only [keys, List.mem_cons, Key.bal.injEq,
+      List.not_mem_nil, or_false, or_true])
     rw [Ledger.step_transfer]
     exact xferStorStep_ledger hK hw hd (fun h => absurd rfl h) h
   | transferFrom who src dst w =>
-    have hsrc : K (.bal src) := hkeys _ (by simp [Call.keys])
-    have hdst : K (.bal dst) := hkeys _ (by simp [Call.keys])
-    have hal : K (.allow src who) := hkeys _ (by simp [Call.keys])
+    have hsrc : K (.bal src) := hkeys _ (by simp only [keys, List.mem_cons, Key.bal.injEq,
+      reduceCtorEq, List.not_mem_nil, or_self, or_false, true_or])
+    have hdst : K (.bal dst) := hkeys _ (by simp only [keys, List.mem_cons, Key.bal.injEq,
+      reduceCtorEq, List.not_mem_nil, or_self, or_false, or_true])
+    have hal : K (.allow src who) := hkeys _ (by simp only [keys, List.mem_cons, reduceCtorEq,
+      List.not_mem_nil, or_false, or_true])
     rw [Ledger.step_transferFrom]
     exact xferStorStep_ledger hK hsrc hdst (fun _ => hal) h
   | approve who g w =>
-    have hk : K (.allow who g) := hkeys _ (by simp [Call.keys])
+    have hk : K (.allow who g) := hkeys _ (by simp only [keys, List.mem_cons, List.not_mem_nil,
+      or_false])
     simp only [Call.stor] at h
     cases h
     rw [Ledger.step_approve, ledger_set_allow hK hk]
@@ -203,7 +211,7 @@ theorem decode_miss {e : Sevm}
     decodeCall e = some (.deposit e.caller e.value) := by
   by_cases hs : shortCall e
   · unfold decodeCall
-    simp [hs]
+    simp only [hs, ↓reduceIte]
   · rcases h with h | hm
     · exact absurd h hs
     have hm' : ∀ x ∈ linkSels, Sevm.selector e ≠ x := by
@@ -211,19 +219,28 @@ theorem decode_miss {e : Sevm}
       obtain ⟨l, hl, rfl⟩ := mem_linkSels.mp hx
       exact hm l hl
     rw [linkSels_eq] at hm'
-    have n1 := hm' 0x06fdde03 (by simp)
-    have n2 := hm' 0x095ea7b3 (by simp)
-    have n3 := hm' 0x18160ddd (by simp)
-    have n4 := hm' 0x23b872dd (by simp)
-    have n5 := hm' 0x2e1a7d4d (by simp)
-    have n6 := hm' 0x313ce567 (by simp)
-    have n7 := hm' 0x70a08231 (by simp)
-    have n8 := hm' 0x95d89b41 (by simp)
-    have n9 := hm' 0xa9059cbb (by simp)
-    have n10 := hm' 0xd0e30db0 (by simp)
-    have n11 := hm' 0xdd62ed3e (by simp)
+    have n1 := hm' 0x06fdde03 (by simp only [List.mem_cons, List.not_mem_nil, or_false, true_or])
+    have n2 := hm' 0x095ea7b3 (by simp only [List.mem_cons, List.not_mem_nil, or_false, true_or,
+      or_true])
+    have n3 := hm' 0x18160ddd (by simp only [List.mem_cons, List.not_mem_nil, or_false, true_or,
+      or_true])
+    have n4 := hm' 0x23b872dd (by simp only [List.mem_cons, List.not_mem_nil, or_false, true_or,
+      or_true])
+    have n5 := hm' 0x2e1a7d4d (by simp only [List.mem_cons, List.not_mem_nil, or_false, true_or,
+      or_true])
+    have n6 := hm' 0x313ce567 (by simp only [List.mem_cons, List.not_mem_nil, or_false, true_or,
+      or_true])
+    have n7 := hm' 0x70a08231 (by simp only [List.mem_cons, List.not_mem_nil, or_false, true_or,
+      or_true])
+    have n8 := hm' 0x95d89b41 (by simp only [List.mem_cons, List.not_mem_nil, or_false, true_or,
+      or_true])
+    have n9 := hm' 0xa9059cbb (by simp only [List.mem_cons, List.not_mem_nil, or_false, true_or,
+      or_true])
+    have n10 := hm' 0xd0e30db0 (by simp only [List.mem_cons, List.not_mem_nil, or_false, true_or,
+      or_true])
+    have n11 := hm' 0xdd62ed3e (by simp only [List.mem_cons, List.not_mem_nil, or_false, or_true])
     unfold decodeCall
-    simp [hs, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11]
+    simp only [hs, ↓reduceIte, n5, n9, n4, n2, n10, n1, n3, n6, n7, n8, n11, or_self]
 
 /-! ## The writer entries -/
 
@@ -326,37 +343,42 @@ theorem decode_hit {e : Sevm} (hshort : ¬ shortCall e) {l : Link} (hl : l ∈ l
   rcases hl with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   · have h : Sevm.selector e = 0x06fdde03 := hsel.trans (by decide)
     left
-    exact ⟨by decide, by simp (config := {decide := true}) [hshort, h]⟩
+    exact ⟨by decide, by simp (config := { decide := true }) only [hshort, ↓reduceIte, h, or_self,
+      or_false]⟩
   · have h : Sevm.selector e = 0x095ea7b3 := hsel.trans (by decide)
     right; right; right; right; left
-    exact ⟨rfl, by simp (config := {decide := true}) [hshort, h]⟩
+    exact ⟨rfl, by simp (config := { decide := true }) only [hshort, ↓reduceIte, h]⟩
   · have h : Sevm.selector e = 0x18160ddd := hsel.trans (by decide)
     left
-    exact ⟨by decide, by simp (config := {decide := true}) [hshort, h]⟩
+    exact ⟨by decide, by simp (config := { decide := true }) only [hshort, ↓reduceIte, h, or_self,
+      or_false, or_true]⟩
   · have h : Sevm.selector e = 0x23b872dd := hsel.trans (by decide)
     right; right; right; left
-    exact ⟨rfl, by simp (config := {decide := true}) [hshort, h]⟩
+    exact ⟨rfl, by simp (config := { decide := true }) only [hshort, ↓reduceIte, h]⟩
   · have h : Sevm.selector e = 0x2e1a7d4d := hsel.trans (by decide)
     right; left
-    exact ⟨rfl, by simp (config := {decide := true}) [hshort, h]⟩
+    exact ⟨rfl, by simp (config := { decide := true }) only [hshort, ↓reduceIte, h]⟩
   · have h : Sevm.selector e = 0x313ce567 := hsel.trans (by decide)
     left
-    exact ⟨by decide, by simp (config := {decide := true}) [hshort, h]⟩
+    exact ⟨by decide, by simp (config := { decide := true }) only [hshort, ↓reduceIte, h, or_self,
+      or_false, or_true]⟩
   · have h : Sevm.selector e = 0x70a08231 := hsel.trans (by decide)
     left
-    exact ⟨by decide, by simp (config := {decide := true}) [hshort, h]⟩
+    exact ⟨by decide, by simp (config := { decide := true }) only [hshort, ↓reduceIte, h, or_self,
+      or_false, or_true]⟩
   · have h : Sevm.selector e = 0x95d89b41 := hsel.trans (by decide)
     left
-    exact ⟨by decide, by simp (config := {decide := true}) [hshort, h]⟩
+    exact ⟨by decide, by simp (config := { decide := true }) only [hshort, ↓reduceIte, h,
+      or_false, or_true]⟩
   · have h : Sevm.selector e = 0xa9059cbb := hsel.trans (by decide)
     right; right; left
-    exact ⟨rfl, by simp (config := {decide := true}) [hshort, h]⟩
+    exact ⟨rfl, by simp (config := { decide := true }) only [hshort, ↓reduceIte, h]⟩
   · have h : Sevm.selector e = 0xd0e30db0 := hsel.trans (by decide)
     right; right; right; right; right
-    exact ⟨rfl, by simp (config := {decide := true}) [hshort, h]⟩
+    exact ⟨rfl, by simp (config := { decide := true }) only [hshort, ↓reduceIte, h]⟩
   · have h : Sevm.selector e = 0xdd62ed3e := hsel.trans (by decide)
     left
-    exact ⟨by decide, by simp (config := {decide := true}) [hshort, h]⟩
+    exact ⟨by decide, by simp (config := { decide := true }) only [hshort, ↓reduceIte, h, or_true]⟩
 
 /-- The exact effect of entry 9 is the storage step of `transferFrom`. -/
 theorem xferStorStep_of_okX {sevm : Sevm} {d : Devm} {o : Outcome} {wad dstW srcW : B256}
@@ -449,7 +471,10 @@ theorem weth9_frame_effect {P : Sevm → Devm → Ninst → Devm → Prop}
     · right; left
       refine ⟨_, hd, (fun _ _ h => by cases h), ?_⟩
       rw [hk] at hg
-      have hg' : g = t_03ca_c19 := by simpa [prog, Cert.prog, cert] using hg.symm
+      have hg' : g = t_03ca_c19 := by simpa only [prog, Cert.prog, cert, List.map_cons,
+        List.map_nil, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT,
+        getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero, Option.some.injEq] using
+        hg.symm
       subst hg'
       rw [tree_03ca] at run
       obtain ⟨hst, -⟩ := depositCall_effect hfork (f := t_03d2_c19) (by decide) (by decide)

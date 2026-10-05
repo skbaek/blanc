@@ -44,14 +44,6 @@ theorem burnBalanceError_lookup (dp : DeployParams) :
     ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
       some (Func.revertWith "WETH: burn amount exceeds balance") := by rfl
 
-theorem expiredPermitError_lookup (dp : DeployParams) :
-    ((weth10 dp).main :: weth10Aux)[expiredPermitErrorSlot]? =
-      some (Func.revertWith "WETH: Expired permit") := by rfl
-
-theorem invalidPermitError_lookup (dp : DeployParams) :
-    ((weth10 dp).main :: weth10Aux)[invalidPermitErrorSlot]? =
-      some (Func.revertWith "WETH: invalid permit") := by rfl
-
 theorem transferBalanceError_lookup (dp : DeployParams) :
     ((weth10 dp).main :: weth10Aux)[transferBalanceErrorSlot]? =
       some (Func.revertWith "WETH: transfer amount exceeds balance") := by rfl
@@ -78,163 +70,15 @@ inductive LockedError where
   | transferBalance
   | ethTransfer
   | etherTransfer
-  deriving DecidableEq
 
-def LockedError.reason : LockedError → String
-  | .flashToken => "WETH: flash mint only WETH10"
-  | .individualLimit => "WETH: individual loan limit exceeded"
-  | .totalLimit => "WETH: total loan limit exceeded"
-  | .flashFailed => "WETH: flash loan failed"
-  | .allowance => "WETH: request exceeds allowance"
-  | .burnBalance => "WETH: burn amount exceeds balance"
-  | .expiredPermit => "WETH: Expired permit"
-  | .invalidPermit => "WETH: invalid permit"
-  | .transferBalance => "WETH: transfer amount exceeds balance"
-  | .ethTransfer => "WETH: ETH transfer failed"
-  | .etherTransfer => "WETH: Ether transfer failed"
 
-def LockedError.slot : LockedError → Nat
-  | .flashToken => flashTokenErrorSlot
-  | .individualLimit => individualLimitErrorSlot
-  | .totalLimit => totalLimitErrorSlot
-  | .flashFailed => flashFailedErrorSlot
-  | .allowance => allowanceErrorSlot
-  | .burnBalance => burnBalanceErrorSlot
-  | .expiredPermit => expiredPermitErrorSlot
-  | .invalidPermit => invalidPermitErrorSlot
-  | .transferBalance => transferBalanceErrorSlot
-  | .ethTransfer => ethTransferErrorSlot
-  | .etherTransfer => etherTransferErrorSlot
 
-theorem lockedError_lookup (dp : DeployParams) (e : LockedError) :
-    ((weth10 dp).main :: weth10Aux)[e.slot]? =
-      some (Func.revertWith e.reason) := by
-  cases e <;> rfl
-
-/-- Every locked WETH10 error genre has one gas-exact branch/call walk to its
-exact ABI reason.  `otherwise` is unreachable on the nonzero flag and remains
-abstract, so this single theorem applies at every site without manufacturing
-duplicate wrappers. -/
-theorem lockedErrorGuard_runCompiledTo {dp : DeployParams} {sevm : Sevm}
-    {base : Devm} {G : Nat} {w : B256} {stack : List B256} {img : Bytes}
-    {otherwise : Func} (e : LockedError)
-    (h_ne : w ≠ 0)
-    (hwf : Mem.Wf base.memory) (hr : Mem.Reads base.memory img)
-    (halign : base.memory.size % 32 = 0)
-    (h_blob : (errorData e.reason).length < 2 ^ 256)
-    (h_words : 32 * (bytesWords (errorData e.reason)).length < 2 ^ 256)
-    (h_room : stack.length < 1022) :
-    Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
-      (base.setMach
-        ⟨w :: stack, base.memory, G + errorGuardCost base e.reason,
-          base.stateGas⟩)
-      ((.call e.slot) <?> otherwise)
-      (.error (.revert,
-        (base.setMach ⟨stack,
-          Mem.writeStoresRev base.memory (bytesWords (errorData e.reason)).zipIdx,
-          G, base.stateGas⟩).withOutput (errorData e.reason))) := by
-  exact Func.runCompiledTo_errorGuard (lockedError_lookup dp e) h_ne rfl
-    hwf hr halign h_blob h_words (by
-      simp only [Devm.gasLeft_setMach, errorGuardCost, errorCallCost,
-        errorBodyCost, Devm.extCost, Devm.memory_setMach]) (by
-      simp only [Devm.stack_setMach, List.length_cons]
-      omega)
 
 /-! ## Exact empty and bubbled callback errors -/
 
-/-- The post-`EXTCODESIZE` continuation shared by typed Boolean callbacks and
-the flash callback: a zero code size becomes a nonzero branch flag and
-empty-reverts before any child `CALL`. -/
-def codelessCallbackCost : Nat :=
-  gVerylow + (gVerylow + gHigh + gJumpdest) + (gBase + gBase)
 
-theorem codelessCallbackCost_eq : codelessCallbackCost = 21 := by decide
 
-theorem codelessCallback_runCompiledTo {dp : DeployParams} {sevm : Sevm}
-    {base : Devm} {G : Nat} {stack : List B256} {afterCall : Func}
-    (h_room : stack.length < 1022) :
-    Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
-      (base.setMach ⟨0 :: stack, base.memory, G + codelessCallbackCost,
-        base.stateGas⟩)
-      (iszero ::: Func.revert <?> afterCall)
-      (.error (.revert,
-        (base.setMach ⟨stack, base.memory, G, base.stateGas⟩).withOutput [])) := by
-  rw [codelessCallbackCost_eq]
-  func_run (2) [1]
-  all_goals try {
-    simp only [Devm.stack_setMach, List.length_cons] at *
-    omega }
-  all_goals try omega
-  exact Func.runCompiledTo_revert_func
-    (devm := base.setMach ⟨stack, base.memory, G + 4, base.stateGas⟩) (G := G) (by
-    simp only [Devm.gasLeft_setMach, gBase]) (by
-      simp only [Devm.stack_setMach]
-      omega)
 
-/-- Exact continuation cost when a preceding child call returned failure.
-It includes `ISZERO`, the taken branch, the internal bubble tail-call and the
-complete `RETURNDATACOPY; REVERT` program. -/
-def bubbleContinuationCost (devm : Devm) : Nat :=
-  gVerylow +
-    (gVerylow + gHigh + gJumpdest) +
-    (gVerylow + gMid + gJumpdest) +
-    revertReturnDataCost devm
-
-/-- A failed callback bubbles the child's returndata byte-for-byte.  This is
-the common post-`CALL` continuation; `afterSuccess` is unreachable on this
-path and is therefore left abstract. -/
-theorem callbackBubble_runCompiledTo {dp : DeployParams} {sevm : Sevm}
-    {base : Devm} {G : Nat} {stack : List B256} {img : Bytes}
-    {afterSuccess : Func}
-    (hwf : Mem.Wf base.memory) (hr : Mem.Reads base.memory img)
-    (halign : base.memory.size % 32 = 0)
-    (h_len : base.returnData.length < 2 ^ 256)
-    (h_room : stack.length < 1021) :
-    Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
-      (base.setMach
-        ⟨0 :: stack, base.memory, G + bubbleContinuationCost base,
-          base.stateGas⟩)
-      (iszero ::: (.call bubbleRevertSlot) <?> afterSuccess)
-      (.error (.revert,
-        (base.setMach
-          ⟨stack, base.memory.write 0 base.returnData, G, base.stateGas⟩).withOutput
-            base.returnData)) := by
-  rw [show G + bubbleContinuationCost base =
-      (G + revertReturnDataCost base) + 29 by
-    simp only [bubbleContinuationCost, gVerylow, gHigh, gJumpdest, gMid]
-    omega]
-  func_run (3) [1]
-  all_goals try {
-    simp only [Devm.stack_setMach, List.length_cons] at *
-    omega }
-  all_goals try omega
-  exact Func.runCompiledTo_revertReturnData
-    (devm := base.setMach
-      ⟨stack, base.memory, G + revertReturnDataCost base, base.stateGas⟩)
-    (G := G) hwf hr halign h_len (by
-      simp only [Devm.gasLeft_setMach, revertReturnDataCost,
-        Devm.returnData_setMach, Devm.extCost, Devm.memory_setMach]) (by
-      simp only [Devm.stack_setMach]
-      omega)
-
-/-- Boolean callback failure uses the common byte-for-byte bubble continuation
-in Blanc's `boolReturn` auxiliary, matching the deployed oracle. -/
-theorem boolReturn_childRevert_runCompiledTo {dp : DeployParams}
-    {sevm : Sevm} {base : Devm} {G : Nat} {stack : List B256} {img : Bytes}
-    (hwf : Mem.Wf base.memory) (hr : Mem.Reads base.memory img)
-    (halign : base.memory.size % 32 = 0)
-    (h_len : base.returnData.length < 2 ^ 256)
-    (h_room : stack.length < 1021) :
-    Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
-      (base.setMach
-        ⟨0 :: stack, base.memory, G + bubbleContinuationCost base,
-          base.stateGas⟩) boolReturn
-      (.error (.revert,
-        (base.setMach
-          ⟨stack, base.memory.write 0 base.returnData, G, base.stateGas⟩).withOutput
-            base.returnData)) := by
-  simpa only [boolReturn] using
-    callbackBubble_runCompiledTo hwf hr halign h_len h_room
 
 /-- The exact post-`CALL` decoder embedded in `flashLoan`. -/
 def flashCallbackReturn : Func :=
@@ -268,60 +112,8 @@ locked flash-failure guard. -/
 def flashCallbackHeadBase (base : Devm) (stack : List B256) : Devm :=
   base.setMach ⟨stack, flashCallbackHeadMemory base, 0, base.stateGas⟩
 
-/-- Exact cost of accepting a successful child-call flag, detecting returndata
-shorter than one word and empty-reverting. -/
-def shortReturnCost : Nat :=
-  gVerylow + (gVerylow + gHigh) +
-    (gVerylow + gBase + gVerylow) +
-    (gVerylow + gHigh + gJumpdest) +
-    (gBase + gBase)
 
-theorem shortReturnCost_eq : shortReturnCost = 42 := by decide
 
-/-- A successful callback whose returndata is shorter than 32 bytes reverts
-with empty data.  The full-word decoder is abstract because this path cannot
-reach it. -/
-theorem callbackShort_runCompiledTo {dp : DeployParams} {sevm : Sevm}
-    {base : Devm} {G : Nat} {stack : List B256} {fullWord : Func}
-    (h_short : base.returnData.length < 32)
-    (h_room : stack.length < 1020) :
-    Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
-      (base.setMach ⟨1 :: stack, base.memory, G + shortReturnCost,
-        base.stateGas⟩)
-      (iszero :::
-        (.call bubbleRevertSlot) <?>
-        (returnDataShorterThan 32 +++ Func.revert <?> fullWord))
-      (.error (.revert,
-        (base.setMach ⟨stack, base.memory, G, base.stateGas⟩).withOutput [])) := by
-  rw [shortReturnCost_eq]
-  func_run (6) [0, 1]
-  all_goals try {
-    simp only [Devm.stack_setMach, Devm.returnData_setMach,
-      List.length_cons] at *
-    omega }
-  all_goals try omega
-  · simp only [B256.ltCheck, Devm.returnData_setMach]
-    exact if_pos (by
-      rw [B256.lt_iff_toNat_lt_toNat,
-        B256.toNat_toB256_of_lt (by omega)]
-      exact h_short)
-  · exact Func.runCompiledTo_revert_func
-      (devm := base.setMach ⟨stack, base.memory, G + 4, base.stateGas⟩) (G := G) (by
-        simp only [Devm.gasLeft_setMach, gBase]) (by
-        simp only [Devm.stack_setMach]
-        omega)
-
-theorem boolReturn_short_runCompiledTo {dp : DeployParams} {sevm : Sevm}
-    {base : Devm} {G : Nat} {stack : List B256}
-    (h_short : base.returnData.length < 32)
-    (h_room : stack.length < 1020) :
-    Func.RunCompiledTo ((weth10 dp).main :: weth10Aux) sevm
-      (base.setMach ⟨1 :: stack, base.memory, G + shortReturnCost,
-        base.stateGas⟩) boolReturn
-      (.error (.revert,
-        (base.setMach ⟨stack, base.memory, G, base.stateGas⟩).withOutput [])) := by
-  simpa only [boolReturn] using
-    callbackShort_runCompiledTo h_short h_room
 
 /-- The successful-call/full-word prefix costs exactly 37 gas before entering
 the word decoder.  `fullWord` is abstract so the short-return and magic-word
@@ -490,11 +282,11 @@ theorem callbackMagicMismatchPrefix_runCompiledTo {dp : DeployParams}
     omega
   rw [show G + (pushCost CALLBACK_SUCCESS.toBytes.sig + 24) =
       (G + (pushCost CALLBACK_SUCCESS.toBytes.sig + 11)) + 13 by omega]
-  simpa [checkReturnDataHead, pushList, prepend,
-      show (0 * 32 : B256) = 0 from by decide] using
+  simpa only [checkReturnDataHead, pushList, show (0 * 32 : B256) = 0 from by decide, List.map_cons,
+    List.map_nil, List.cons_append, List.nil_append, prepend] using
     callbackHeadCopyPrefix_runCompiledTo h_len h32 h_msz
-      (callbackHeadMismatchReadPrefix_runCompiledTo h_neq hs1 h32 h_msz
-        h_tail (by omega)) (by omega)
+      (callbackHeadMismatchReadPrefix_runCompiledTo h_neq hs1 h32 h_msz h_tail (by omega))
+      (by omega)
 
 /-- From the full-word decoder, a magic mismatch reaches the exact locked
 flash-failure payload.  The symbolic-width decoder and error guard are
@@ -597,7 +389,7 @@ theorem nonpayable_runCompiledTo {dp : DeployParams} {sevm : Sevm}
     simp only [Devm.stack_setMach, List.length_cons] at *
     omega }
   all_goals try omega
-  · simp [B256.eqCheck, h_value]
+  · simp only [B256.eqCheck, h_value, ↓reduceIte]
   · exact Func.runCompiledTo_revert_func
       (devm := base.setMach ⟨base.stack, base.memory, G + 4, base.stateGas⟩) (G := G) (by
       simp only [Devm.gasLeft_setMach, gBase]) (by
@@ -638,7 +430,7 @@ theorem flashFee_wrongToken_runCompiledTo {dp : DeployParams} {sevm : Sevm}
   all_goals try omega
   · change sevm.currentTarget.toB256 =? Sevm.argWord sevm 0 = 0
     rw [h_arg]
-    simp [B256.eqCheck, Ne.symm h_ne]
+    simp only [B256.eqCheck, Ne.symm h_ne, ↓reduceIte]
   · exact Func.runCompiledTo_errorGuard (flashTokenError_lookup dp)
       (by decide) rfl hwf hr halign h_blob h_words (by
         simp only [Devm.gasLeft_setMach, errorGuardCost, errorCallCost,
@@ -723,27 +515,6 @@ theorem withdraw_lockedGuardOrder :
       [burnBalanceErrorSlot, etherTransferErrorSlot] := by
   exact ⟨rfl, rfl, rfl⟩
 
-/-- In a finite allowance arm the allowance error precedes the tail call into
-the transfer/withdraw core; its balance error can therefore be reached only
-after the allowance check has fallen through. -/
-theorem spendCallerAllowanceThen_finitePrecedence
-    (amount : B256) (nextSlot : Nat) :
-    ∃ finite,
-      spendCallerAllowanceThen amount nextSlot =
-        (arg 0 +++ caller ::: eq :::
-          (.call nextSlot) <?>
-          (arg 0 +++ mstoreAt 0 +++ caller ::: mstoreAt 1 +++
-            allowanceKeyFromMemory +++ dup 0 ::: sload ::: dup 0 ::: isMax +++
-            (pop ::: pop ::: .call nextSlot) <?> finite)) ∧
-      finite =
-        (arg amount +++ swap 0 ::: balanceTooSmall +++
-          (.call allowanceErrorSlot) <?>
-          (sub ::: dup 0 ::: swap 1 ::: sstore :::
-            arg 0 +++ swap 0 ::: caller ::: emitApproval +++
-            pop ::: pop ::: .call nextSlot)) := by
-  refine ⟨_, rfl, ?_⟩
-  rfl
-
 /-- Flash settlement has the same precedence: a finite allowance failure is
 reported before the burn continuation can inspect the receiver balance. -/
 theorem flashSettle_finitePrecedence :
@@ -774,52 +545,6 @@ theorem flashCallback_errorPrecedence :
             (pop ::: pop ::: .call flashSettleSlot)))) := by
   rfl
 
-/-! ## Message-frame rollback transport -/
-
-/-- A gas-exact WETH10 compiled walk ending in `REVERT` settles the enclosing
-message frame with that exact output and restores persistent and transient
-state.  This is deliberately message-call altitude: it says nothing about
-transaction validity, intrinsic gas or transaction-level rollback. -/
-theorem rollback_revert_of_weth10_runCompiledTo
-    {dp : DeployParams} {msg : Msg} {benv : Benv} {xl : Xlot}
-    {out d : Devm} {bs : Bytes}
-    (h_pm : ProcessMessage msg xl (.ok out))
-    (h_fill : Xlot.Filled xl)
-    (h_bt : msg.benvAfterTransfer = .ok benv)
-    (h_prec : ∀ adr, msg.codeAddress = some adr →
-      ¬ (!msg.disablePrecompiles &&
-        decide (benv.stat.rules.isPrecomp adr)) = true)
-    (h_code : some (initSevm (msg.withBenv benv)).code.toList =
-      (weth10 dp).compile)
-    (h_run : Prog.RunCompiledTo (initSevm (msg.withBenv benv))
-      (initDevm (msg.withBenv benv)) (weth10 dp)
-      (.error (.revert, d.withOutput bs))) :
-    out.error = some .revert ∧ out.output = bs ∧
-      out.state = msg.benv.state ∧
-      out.transientStorage = msg.tenv.transientStorage := by
-  exact rollback_revert_of_runCompiledTo h_pm h_fill h_bt h_prec h_code h_run
-
-/-- A WETH10 `Error(string)` walk restores the frame and exposes precisely the
-ABI payload of the selected reason. -/
-theorem rollback_errorData_of_weth10_runCompiledTo
-    {dp : DeployParams} {msg : Msg} {benv : Benv} {xl : Xlot}
-    {out d : Devm} {reason : String}
-    (h_pm : ProcessMessage msg xl (.ok out))
-    (h_fill : Xlot.Filled xl)
-    (h_bt : msg.benvAfterTransfer = .ok benv)
-    (h_prec : ∀ adr, msg.codeAddress = some adr →
-      ¬ (!msg.disablePrecompiles &&
-        decide (benv.stat.rules.isPrecomp adr)) = true)
-    (h_code : some (initSevm (msg.withBenv benv)).code.toList =
-      (weth10 dp).compile)
-    (h_run : Prog.RunCompiledTo (initSevm (msg.withBenv benv))
-      (initDevm (msg.withBenv benv)) (weth10 dp)
-      (.error (.revert, d.withOutput (errorData reason)))) :
-    out.error = some .revert ∧ out.output = errorData reason ∧
-      out.state = msg.benv.state ∧
-      out.transientStorage = msg.tenv.transientStorage := by
-  exact rollback_revert_of_weth10_runCompiledTo
-    h_pm h_fill h_bt h_prec h_code h_run
 
 end Weth10
 end Blanc

@@ -75,8 +75,7 @@ lemma lift_admitted
       Prog.At p ca pc sevm pre →
       Exec.FrameAdmitted ca entry run →
       R sevm pre post := by
-  simpa [Prog.codeSem, CodeSem.At, Prog.At, ForallDeeperAtSem, ForallDeeperAt,
-    ForallSubExecAdmittedSem, ForallSubExecAdmitted] using
+  simpa only [Prog.At, and_imp, CodeSem.At, Prog.codeSem] using
     (lift_admitted_sem entry R ca p.codeSem depth_ind nextNone nextSome jump last)
 /-- Trace-admitted counterpart of `lift_inv`. The invariant transport outside
 the target is unchanged; only target-frame entry and recursive target frames
@@ -135,7 +134,6 @@ lemma lift_inv_admitted
       Exec.FrameAdmitted ca entry run →
       σ sevm pre →
       ρ sevm post := by
-  simpa [Prog.codeSem, CodeSem.At, Prog.At, ForallDeeperAtSem, ForallDeeperAt,
-    ForallSubExecAdmittedSem, ForallSubExecAdmitted] using
+  simpa only [Prog.At, and_imp, CodeSem.At, Prog.codeSem] using
     (lift_inv_admitted_sem entry ca p.codeSem σ ρ with_depth_ind nextNone nextSome jump last)
 end Blanc

@@ -97,11 +97,6 @@ theorem eRe_static : eRe.pc = 0 ∧ eRe.sta.currentTarget = proxyAddress ∧ eRe
   exact ⟨(Prod.mk.inj h).1, (Prod.mk.inj (Prod.mk.inj h).2).1, (Prod.mk.inj (Prod.mk.inj (Prod.mk.inj h).2).2).1,
     (Prod.mk.inj (Prod.mk.inj (Prod.mk.inj h).2).2).2⟩
 
-theorem eTop_withFork_prague : eTop.sta.withFork .prague = eTop.sta := by
-  have h := Sevm.withFork_self eTop.sta
-  rw [eTop_static.2.2.2] at h
-  exact h
-
 /-- **The run, on every derivation, under any covered fork.**  Whatever derivation `R` of the
 forwarder frame's machine is taken, with its fork changed to any covered fork, it succeeds with
 `dTop`, and it has the nodes the V+ antecedent names.  The kernel facts of the Prague walks are
@@ -192,12 +187,15 @@ theorem vplus_run2_at {S : Sevm} (hS : ∃ g, CoveredFork g ∧ S = eTop.sta.wit
     (by rw [hF.2.1]; exact eB_static.2.2), hcodeF⟩, ppFb.trans ppbh, b, ppFb, ppbh,
     by rw [hbpc]; decide, hrel⟩, sph, hHash, hhpc, hath,
     (by rw [hxr.2.1]; exact eRcv_static.1), (by rw [hxr.2.1]; exact eRcv_static.2.1),
-    (by rw [hxr.2.1]; exact eRcv_static.2.2), memD xr q (by rw [dsr]; simp),
-    (by rw [hq.2.1]; exact eCb_static.1), hqcode, memD q g (by rw [dsq]; simp),
-    memD xr g (by rw [dsr]; simp),
+    (by rw [hxr.2.1]; exact eRcv_static.2.2), memD xr q (by rw [dsr]; simp only [List.mem_cons,
+      List.not_mem_nil, or_false, true_or]),
+    (by rw [hq.2.1]; exact eCb_static.1), hqcode, memD q g (by rw [dsq]; simp only [List.mem_cons,
+      List.not_mem_nil, or_false]),
+    memD xr g (by rw [dsr]; simp only [List.mem_cons, List.not_mem_nil, or_false, or_true]),
     ⟨(hg.1.trans eRe_static.1), (by rw [hg.2.1]; exact eRe_static.2.1), hcodeG⟩,
     (by rw [hg.2.1]; exact eRe_static.2.2.2), hre.1, fun x hx => (hashG x hx).2, hre.2.2⟩
-  exact List.mem_cons_of_mem _ (by rw [hdescR]; simp)
+  exact List.mem_cons_of_mem _ (by rw [hdescR]; simp only [List.mem_cons, List.not_mem_nil,
+    or_false, true_or])
 
 /-! ### The closed theorem -/
 

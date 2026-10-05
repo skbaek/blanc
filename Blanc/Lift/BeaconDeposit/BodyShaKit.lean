@@ -30,33 +30,33 @@ theorem slice13 {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {x len st en ret dv
   subst hd ha
   unfold t_16fe_c13
   refine rx_dest ?_
-  refine rx_push rfl (by simp; omega) ?_
-  refine rx_dup (n := 0) rfl (by simp; omega) ?_
-  refine rx_dup (n := 5) rfl (by simp; omega) ?_
-  refine rx_dup (n := 5) rfl (by simp; omega) ?_
-  refine rx_gt h1 (by simp; omega) ?_
-  refine rx_iszero (v := 1) (by decide) (by simp; omega) ?_
-  refine rx_push rfl (by simp; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_dup (n := 0) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_dup (n := 5) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_dup (n := 5) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_gt h1 (by simp only [List.length_cons]; omega) ?_
+  refine rx_iszero (v := 1) (by decide) (by simp only [List.length_cons]; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_branch_succ (by decide) ?_
   unfold t_170d_c13
   refine rx_dest ?_
-  refine rx_dup (n := 3) rfl (by simp; omega) ?_
-  refine rx_dup (n := 6) rfl (by simp; omega) ?_
-  refine rx_gt h2 (by simp; omega) ?_
-  refine rx_iszero (v := 1) (by decide) (by simp; omega) ?_
-  refine rx_push rfl (by simp; omega) ?_
+  refine rx_dup (n := 3) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_dup (n := 6) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_gt h2 (by simp only [List.length_cons]; omega) ?_
+  refine rx_iszero (v := 1) (by decide) (by simp only [List.length_cons]; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_branch_succ (by decide) ?_
   unfold t_1719_c13
   refine rx_dest ?_
   refine rx_pop ?_
   refine rx_pop ?_
-  refine rx_dup (n := 2) rfl (by simp; omega) ?_
-  refine rx_add (by simp; omega) ?_
+  refine rx_dup (n := 2) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_add (by simp only [List.length_cons]; omega) ?_
   refine rx_swap (n := 3) rfl ?_
   refine rx_swap (n := 1) rfl ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_swap (n := 2) rfl ?_
-  refine rx_sub (by simp; omega) ?_
+  refine rx_sub (by simp only [List.set_cons_succ, List.set_cons_zero, List.length_cons]; omega) ?_
   refine rx_swap (n := 1) rfl ?_
   refine rx_pop ?_
   exact rx_ret

@@ -95,56 +95,23 @@ structure RootLoopCarrier (origin base : Devm) (memory : Mem)
   output : base.output = origin.output
   error : base.error = origin.error
 
-@[simp] theorem rootReadGas_eq_rootSloadCost
+theorem rootReadGas_eq_rootSloadCost
     (sevm : Sevm) (base : Devm) (key : B256) :
     rootReadGas sevm.currentTarget base.accessedStorageKeys key =
       sloadCost sevm base key := rfl
 
-@[simp] theorem rootAfterSload_accessedStorageKeys
+theorem rootAfterSload_accessedStorageKeys
     (sevm : Sevm) (base : Devm) (key : B256) :
     (afterSload sevm base key).accessedStorageKeys =
       rootReadKeys sevm.currentTarget base.accessedStorageKeys key := by
   unfold afterSload rootReadKeys sloadAccessedStorageKeys
   split <;> rfl
 
-@[simp] theorem rootAfterSload_getStor
-    (sevm : Sevm) (base : Devm) (key : B256) (address : Adr) :
-    Devm.getStor (afterSload sevm base key) address =
-      Devm.getStor base address := by
-  unfold afterSload
-  split <;> rfl
 
-@[simp] theorem rootAfterSload_getCode
-    (sevm : Sevm) (base : Devm) (key : B256) (address : Adr) :
-    (afterSload sevm base key).getCode address =
-      base.getCode address := by
-  unfold afterSload
-  split <;> rfl
 
-@[simp] theorem rootAfterSload_accessedAddresses
-    (sevm : Sevm) (base : Devm) (key : B256) :
-    (afterSload sevm base key).accessedAddresses =
-      base.accessedAddresses := by
-  unfold afterSload
-  split <;> rfl
 
-@[simp] theorem rootAfterSload_logs
-    (sevm : Sevm) (base : Devm) (key : B256) :
-    (afterSload sevm base key).logs = base.logs := by
-  unfold afterSload
-  split <;> rfl
 
-@[simp] theorem rootAfterSload_output
-    (sevm : Sevm) (base : Devm) (key : B256) :
-    (afterSload sevm base key).output = base.output := by
-  unfold afterSload
-  split <;> rfl
 
-@[simp] theorem rootAfterSload_error
-    (sevm : Sevm) (base : Devm) (key : B256) :
-    (afterSload sevm base key).error = base.error := by
-  unfold afterSload
-  split <;> rfl
 
 theorem rootLoopStepGas_ge (owner : Adr) (s : RootLoopState) :
     362 ≤ rootLoopStepGas owner s := by
@@ -219,17 +186,17 @@ def rootLoopCarrier_step_live
       (callPost.memory.write 608 (s.size >>> 1).toBytes)
       oldCount (s.step sevm.currentTarget stor) := by
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · simpa [RootLoopState.step, hlive] using hmem.shiftSize
+  · simpa only [RootLoopState.step, hlive, ↓reduceIte] using hmem.shiftSize
   · intro a
-    rw [hstorage, rootAfterSload_getStor, carrier.stor]
+    rw [hstorage, Blanc.afterSload_getStor, carrier.stor]
   · intro a
-    rw [hcode, rootAfterSload_getCode, carrier.code]
-  · rw [haddresses, rootAfterSload_accessedAddresses, carrier.addresses]
+    rw [hcode, Blanc.afterSload_getCode, carrier.code]
+  · rw [haddresses, Blanc.afterSload_accessedAddresses, carrier.addresses]
   · rw [hkeys, rootAfterSload_accessedStorageKeys, carrier.keys]
     rfl
-  · rw [hlogs, rootAfterSload_logs, carrier.logs]
-  · rw [houtput, rootAfterSload_output, carrier.output]
-  · rw [herror, rootAfterSload_error, carrier.error]
+  · rw [hlogs, Blanc.afterSload_logs, carrier.logs]
+  · rw [houtput, Blanc.afterSload_output, carrier.output]
+  · rw [herror, Blanc.afterSload_error, carrier.error]
 
 def rootLoopCarrier_step_dead
     {sevm : Sevm} {origin base callPost : Devm}
@@ -253,17 +220,17 @@ def rootLoopCarrier_step_dead
       (callPost.memory.write 608 (s.size >>> 1).toBytes)
       oldCount (s.step sevm.currentTarget stor) := by
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · simpa [RootLoopState.step, hdead] using hmem.shiftSize
+  · simpa only [RootLoopState.step, hdead, ↓reduceIte] using hmem.shiftSize
   · intro a
-    rw [hstorage, rootAfterSload_getStor, carrier.stor]
+    rw [hstorage, Blanc.afterSload_getStor, carrier.stor]
   · intro a
-    rw [hcode, rootAfterSload_getCode, carrier.code]
-  · rw [haddresses, rootAfterSload_accessedAddresses, carrier.addresses]
+    rw [hcode, Blanc.afterSload_getCode, carrier.code]
+  · rw [haddresses, Blanc.afterSload_accessedAddresses, carrier.addresses]
   · rw [hkeys, rootAfterSload_accessedStorageKeys, carrier.keys]
     rfl
-  · rw [hlogs, rootAfterSload_logs, carrier.logs]
-  · rw [houtput, rootAfterSload_output, carrier.output]
-  · rw [herror, rootAfterSload_error, carrier.error]
+  · rw [hlogs, Blanc.afterSload_logs, carrier.logs]
+  · rw [houtput, Blanc.afterSload_output, carrier.output]
+  · rw [herror, Blanc.afterSload_error, carrier.error]
 
 /-- Exact existential CPS composition of any active prefix of root-fold
 iterations. -/
@@ -353,11 +320,11 @@ theorem rootLoop_iterations_exists_runCompiledTo
         have hnodelegSha :
             getDelegatedCodeAddress (shaBase.getCode 2) = none := by
           simpa only [shaBase, loaded, Devm.getCode_setMach,
-            rootAfterSload_getCode] using hnodelegBase
+            Blanc.afterSload_getCode] using hnodelegBase
         have hwarmSha : (2 : Adr) ∈ shaBase.accessedAddresses := by
           change (2 : Adr) ∈ loaded.accessedAddresses
           dsimp only [loaded]
-          rw [rootAfterSload_accessedAddresses]
+          rw [Blanc.afterSload_accessedAddresses]
           exact hwarmBase
         obtain ⟨callPost, _hstack, _hmemory, hcallMemNE,
             _hgas, _hreturn, hstorage, hcode, haddresses, hkeys,
@@ -461,11 +428,11 @@ theorem rootLoop_iterations_exists_runCompiledTo
         have hnodelegSha :
             getDelegatedCodeAddress (shaBase.getCode 2) = none := by
           simpa only [shaBase, loaded, Devm.getCode_setMach,
-            rootAfterSload_getCode] using hnodelegBase
+            Blanc.afterSload_getCode] using hnodelegBase
         have hwarmSha : (2 : Adr) ∈ shaBase.accessedAddresses := by
           change (2 : Adr) ∈ loaded.accessedAddresses
           dsimp only [loaded]
-          rw [rootAfterSload_accessedAddresses]
+          rw [Blanc.afterSload_accessedAddresses]
           exact hwarmBase
         obtain ⟨callPost, _hstack, _hmemory, hcallMemNE,
             _hgas, _hreturn, hstorage, hcode, haddresses, hkeys,

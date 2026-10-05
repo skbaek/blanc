@@ -270,8 +270,8 @@ lemma Rinst.runCore_extcodesize_cold_eq_ok {pc : Nat} {devm : Devm}
       d.push (d.getCode adr).size.toB256) from by
     have h_bal := BenvStat.bal_none_of_stateGas_none h_legacy
     have h_gas := BenvStat.gas_eq_prague_of_stateGas_none h_legacy
-    simp [Rinst.runCore, h_legacy, h_bal, h_gas,
-      Devm.balReadAccount_of_bal_none, Devm.balReadStorage_of_bal_none]]
+    simp only [ExceptT.stM_eq, Rinst.runCore, h_gas, pragueRules_gas_codeReadSurcharge, add_zero,
+      h_bal, Devm.balReadAccount_of_bal_none, pragueRules_gas_coldAccountAccess]]
   rw [Devm.popToAdr_def, Devm.pop_eq_ok h_stk]
   simp only [Functor.mapRev, Functor.map, Except.map, Prod.mapFst, Prod.map,
     id, bind, Except.bind]
@@ -322,8 +322,8 @@ lemma Rinst.runCore_extcodesize_warm_eq_ok {pc : Nat} {devm : Devm}
       d.push (d.getCode adr).size.toB256) from by
     have h_bal := BenvStat.bal_none_of_stateGas_none h_legacy
     have h_gas := BenvStat.gas_eq_prague_of_stateGas_none h_legacy
-    simp [Rinst.runCore, h_legacy, h_bal, h_gas,
-      Devm.balReadAccount_of_bal_none, Devm.balReadStorage_of_bal_none]]
+    simp only [ExceptT.stM_eq, Rinst.runCore, h_gas, pragueRules_gas_codeReadSurcharge, add_zero,
+      h_bal, Devm.balReadAccount_of_bal_none, pragueRules_gas_coldAccountAccess]]
   rw [Devm.popToAdr_def, Devm.pop_eq_ok h_stk]
   simp only [Functor.mapRev, Functor.map, Except.map, Prod.mapFst, Prod.map,
     id, bind, Except.bind]
@@ -371,8 +371,7 @@ lemma Rinst.runCore_sload_cold_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
       d.push (d.getStorVal sevm.currentTarget key)) from by
     have h_bal := BenvStat.bal_none_of_stateGas_none h_legacy
     have h_gas := BenvStat.gas_eq_prague_of_stateGas_none h_legacy
-    simp [Rinst.runCore, h_legacy, h_bal, h_gas,
-      Devm.balReadAccount_of_bal_none, Devm.balReadStorage_of_bal_none]]
+    simp only [ExceptT.stM_eq, Rinst.runCore, h_bal, Devm.balReadStorage_of_bal_none]]
   rw [Devm.pop_eq_ok h_stk]
   simp only [bind, Except.bind]
   have h_keys : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedStorageKeys
@@ -430,8 +429,7 @@ lemma Rinst.runCore_sload_warm_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
       d.push (d.getStorVal sevm.currentTarget key)) from by
     have h_bal := BenvStat.bal_none_of_stateGas_none h_legacy
     have h_gas := BenvStat.gas_eq_prague_of_stateGas_none h_legacy
-    simp [Rinst.runCore, h_legacy, h_bal, h_gas,
-      Devm.balReadAccount_of_bal_none, Devm.balReadStorage_of_bal_none]]
+    simp only [ExceptT.stM_eq, Rinst.runCore, h_bal, Devm.balReadStorage_of_bal_none]]
   rw [Devm.pop_eq_ok h_stk]
   simp only [bind, Except.bind]
   have h_keys : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedStorageKeys
@@ -892,8 +890,8 @@ lemma Rinst.runCore_sstore_cold_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
       .ok (d.setStorVal sevm.currentTarget key new_value)) from by
     have h_bal := BenvStat.bal_none_of_stateGas_none h_legacy
     have h_gas := BenvStat.gas_eq_prague_of_stateGas_none h_legacy
-    simp [Rinst.runCore, h_legacy, h_bal, h_gas,
-      Devm.balReadAccount_of_bal_none, Devm.balReadStorage_of_bal_none]]
+    simp only [ExceptT.stM_eq, Rinst.runCore, h_legacy, h_bal, Devm.balReadStorage_of_bal_none,
+      ite_not, ne_eq, h_gas, Devm.balReadAccount_of_bal_none, Except.bind_ok]]
   rw [Devm.pop_eq_ok h_stk]
   simp only [bind, Except.bind]
   rw [Devm.pop_eq_ok
@@ -903,7 +901,7 @@ lemma Rinst.runCore_sstore_cold_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   change (Except.assert (gCallStipend < devm.gasLeft) _ >>= _) = _
   simp only [Except.assert, if_pos h_sentry, bind, Except.bind]
   simp only [Devm.setMach_accessedStorageKeys]
-  simp [h_cold, sstoreValueCost_add]
+  simp only [ne_eq, h_cold, not_false_eq_true, ↓reduceIte, sstoreValueCost_add]
   -- The popped state's world projections are the pre-state's; naming them so
   -- lets `chargeGas_eq_ok` match syntactically rather than only up to `rfl`.
   rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).getStorVal
@@ -965,8 +963,8 @@ lemma Rinst.runCore_sstore_warm_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
       .ok (d.setStorVal sevm.currentTarget key new_value)) from by
     have h_bal := BenvStat.bal_none_of_stateGas_none h_legacy
     have h_gas := BenvStat.gas_eq_prague_of_stateGas_none h_legacy
-    simp [Rinst.runCore, h_legacy, h_bal, h_gas,
-      Devm.balReadAccount_of_bal_none, Devm.balReadStorage_of_bal_none]]
+    simp only [ExceptT.stM_eq, Rinst.runCore, h_legacy, h_bal, Devm.balReadStorage_of_bal_none,
+      ite_not, ne_eq, h_gas, Devm.balReadAccount_of_bal_none, Except.bind_ok]]
   rw [Devm.pop_eq_ok h_stk]
   simp only [bind, Except.bind]
   rw [Devm.pop_eq_ok
@@ -976,7 +974,7 @@ lemma Rinst.runCore_sstore_warm_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   change (Except.assert (gCallStipend < devm.gasLeft) _ >>= _) = _
   simp only [Except.assert, if_pos h_sentry, bind, Except.bind]
   simp only [Devm.setMach_accessedStorageKeys]
-  simp [h_warm, sstoreValueCost_add]
+  simp only [ne_eq, h_warm, not_true_eq_false, ↓reduceIte, zero_add]
   rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).getStorVal
         sevm.currentTarget k = devm.getStorVal sevm.currentTarget k from rfl,
     show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).refundCounter
@@ -1002,9 +1000,10 @@ contract: the word is arbitrary and the offset is the ABI's. -/
 lemma Mem.size_write_word {w : B256} :
     (Mem.empty.write 0 w.toBytes).size = 32 := by
   rcases hb : w.toBytes with _ | ⟨b, bs⟩
-  · exact absurd (hb ▸ B256.length_toBytes w) (by simp)
+  · exact absurd (hb ▸ B256.length_toBytes w) (by simp only [List.length_nil,
+    OfNat.zero_ne_ofNat, not_false_eq_true])
   · have hlen : (b :: bs).length = 32 := hb ▸ B256.length_toBytes w
-    simp only [Mem.write, Mem.empty, hlen, if_neg (by simp : ¬ (0 + 32 ≤ 0))]
+    simp only [Mem.write, Mem.empty, hlen, if_neg (by decide : ¬ (0 + 32 ≤ 0))]
     rfl
 
 /-- And reading that word back gives it unchanged: `Mem.Reads` carries the image
@@ -1013,7 +1012,8 @@ lemma Mem.read_write_word {w : B256} :
     ((Mem.empty.write 0 w.toBytes).read 0 32).1 = w.toBytes := by
   have h_reads : Mem.Reads (Mem.empty.write 0 w.toBytes) w.toBytes := by
     have h := Mem.Reads.write Mem.wf_empty Mem.reads_empty 0 w.toBytes
-    rw [show Bytes.writeAt [] 0 w.toBytes = w.toBytes by simp [Bytes.writeAt]] at h
+    rw [show Bytes.writeAt [] 0 w.toBytes = w.toBytes by simp only [Bytes.writeAt, List.takeD_nil,
+      List.replicate_zero, List.nil_append, zero_add, List.drop_nil, List.append_nil]] at h
     exact h
   rw [Mem.Reads.read h_reads 0 32]
   show List.takeD 32 (List.drop 0 w.toBytes) 0 = w.toBytes
@@ -1023,15 +1023,18 @@ lemma Mem.read_write_word {w : B256} :
 `1 / 512`. -/
 lemma Devm.extCost_empty_word {devm : Devm} {S : List B256} {G : Nat} :
     (devm.setMach ⟨S, Mem.empty, G, devm.stateGas⟩).extCost [⟨0, 32⟩] = gMemory := by
-  simp [Devm.extCost, Devm.memory_setMach, memExtsSize, memExtSize,
-    calculateMemoryGasCost, ceilDiv, Mem.empty, gMemory]
+  simp only [Devm.extCost, calculateMemoryGasCost, gMemory, ceilDiv, memExtsSize, memExtSize,
+    OfNat.ofNat_ne_zero, ↓reduceIte, Mem.empty, memory_setMach, Nat.zero_div, Nat.zero_mod,
+    add_zero, zero_add, Nat.ofNat_pos, Nat.div_self, Nat.mod_self, zero_le, sup_of_le_right,
+    mul_one, one_pow, Nat.reduceDiv, mul_zero, ne_eq, not_false_eq_true, zero_pow, tsub_zero]
 
 /-- Reading a window memory already covers is free. -/
 lemma Devm.extCost_word_word {devm : Devm} {S : List B256} {N : Mem} {G : Nat}
     (h : N.size = 32) :
     (devm.setMach ⟨S, N, G, devm.stateGas⟩).extCost [⟨0, 32⟩] = 0 := by
-  simp [Devm.extCost, Devm.memory_setMach, memExtsSize, memExtSize,
-    calculateMemoryGasCost, ceilDiv, h, gMemory]
+  simp only [Devm.extCost, calculateMemoryGasCost, gMemory, ceilDiv, memExtsSize, memExtSize,
+    OfNat.ofNat_ne_zero, ↓reduceIte, memory_setMach, h, Nat.ofNat_pos, Nat.div_self, Nat.mod_self,
+    add_zero, zero_add, max_self, mul_one, one_pow, Nat.reduceDiv, tsub_self]
 
 /-- `Mem.read_write_word` at the `Devm` altitude, in the exact shape
 `Func.RunCompiled`'s `.last .return_` premise wants.
@@ -1108,7 +1111,7 @@ lemma pushCost_toBytes (w : B256) : pushCost w.toBytes = gVerylow := by
   intro h
   have hlen := B256.length_toBytes w
   rw [h] at hlen
-  simp at hlen
+  simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
 
 /-- The fixed-width 32-byte form of a word push.  This is distinct from
 `Ninst.pushB256`: it retains leading zero bytes in the compiled immediate. -/
@@ -1789,10 +1792,9 @@ theorem Func.CompileShape.byteSize_compileShape (p : Func) :
   induction p with
   | last => rfl
   | next i p ih =>
-      simp [Func.compileShape, Func.CompileShape.byteSize, compsize, ih,
-        Ninst.size_eq_length_toBytes]
+      simp only [compileShape, Ninst.size_eq_length_toBytes, byteSize, ih, compsize]
   | branch p q ihp ihq =>
-      simp [Func.compileShape, Func.CompileShape.byteSize, compsize, ihp, ihq]
+      simp only [compileShape, byteSize, ihp, ihq, compsize]
   | call => rfl
 
 /-- Emit opcode contents while taking all layout decisions from an explicit
@@ -1846,24 +1848,31 @@ theorem Func.length_emitByShape (locations : List Nat) (n : Nat)
   induction p generalizing n shape with
   | last o =>
       cases shape <;>
-        simp [Func.emitByShape, Func.CompileShape.byteSize]
+        simp only [emitByShape, List.length_cons, List.length_nil, zero_add, CompileShape.byteSize,
+          List.length_replicate, List.reduceReplicate, Nat.reduceAdd]
   | next i p ih =>
       cases shape <;>
-        simp [Func.emitByShape, Func.CompileShape.byteSize, ih, Nat.add_comm]
+        simp only [emitByShape, CompileShape.byteSize, List.replicate_one, List.length_cons,
+          List.length_nil, zero_add, List.length_append, List.takeD_length, ih, Nat.add_comm,
+          List.length_replicate, List.reduceReplicate, Nat.reduceAdd]
   | branch p q ihp ihq =>
       cases shape <;>
-        simp [Func.emitByShape, Func.CompileShape.byteSize, ihp, ihq,
-          Nat.add_assoc]
+        simp only [emitByShape, CompileShape.byteSize, List.replicate_one, List.length_cons,
+          List.length_nil, zero_add, List.length_replicate, Nat.add_assoc, Nat.toUInt8_eq,
+          UInt8.ofNat_add, UInt8.reduceOfNat, List.cons_append, List.nil_append, Nat.reduceAdd,
+          List.append_assoc, List.length_append, ihp, ihq, List.reduceReplicate]
   | call k =>
       cases shape <;>
-        simp [Func.emitByShape, Func.CompileShape.byteSize]
+        simp only [emitByShape, CompileShape.byteSize, List.replicate_one, List.length_cons,
+          List.length_nil, zero_add, List.length_replicate, List.getD_eq_getElem?_getD,
+          Nat.toUInt8_eq, List.cons_append, List.nil_append, Nat.reduceAdd]
 
 private lemma List.getD_append_inspect {α} (xs ys : List α)
     (i : Nat) (d : α) :
     (xs ++ ys).getD i d =
       if i < xs.length then xs.getD i d
       else ys.getD (i - xs.length) d := by
-  simp [List.getD_eq_getElem?_getD, List.getElem?_append]
+  simp only [List.getD_eq_getElem?_getD, List.getElem?_append]
   split <;> rfl
 
 /-- Read one emitted byte without constructing any off-index subtree.  The
@@ -1917,7 +1926,7 @@ theorem Func.getD_emitByShape (locations : List Nat) (n : Nat)
       Func.byteAtByShape locations n shape p i d := by
   induction p generalizing n shape i with
   | last o =>
-      cases shape <;> simp [Func.emitByShape, Func.byteAtByShape]
+      cases shape <;> simp only [emitByShape, List.getD_eq_getElem?_getD, byteAtByShape]
   | next inst p ih =>
       cases shape <;>
         simp only [Func.emitByShape, Func.byteAtByShape,
@@ -1928,7 +1937,7 @@ theorem Func.getD_emitByShape (locations : List Nat) (n : Nat)
           List.getD_append_inspect, Func.length_emitByShape,
           List.length_singleton, ihp, ihq]
   | call k =>
-      cases shape <;> simp [Func.emitByShape, Func.byteAtByShape]
+      cases shape <;> simp only [emitByShape, List.getD_eq_getElem?_getD, byteAtByShape, Nat.toUInt8_eq, List.cons_append, List.nil_append]
 
 /-- A function indexed by its own compiler shape is the ordinary unchecked
 inspection view. -/
@@ -1941,11 +1950,13 @@ theorem Func.emitByShape_compileShape
   | next i p ih =>
       rw [Func.compileShape, Func.emitByShape, Func.emitUnchecked,
         List.takeD_eq_self 0 (Ninst.size_eq_length_toBytes i)]
-      simp [ih]
+      simp only [ih]
   | branch p q ihp ihq =>
-      simp [Func.compileShape, Func.emitByShape, Func.emitUnchecked,
-        ihp, ihq, Func.CompileShape.byteSize_compileShape]
-  | call k => simp [Func.compileShape, Func.emitByShape, Func.emitUnchecked]
+      simp only [compileShape, emitByShape, CompileShape.byteSize_compileShape, Nat.toUInt8_eq,
+        UInt8.ofNat_add, UInt8.reduceOfNat, ihp, List.cons_append, List.nil_append, ihq,
+        List.append_assoc, emitUnchecked]
+  | call k => simp only [compileShape, emitByShape, List.getD_eq_getElem?_getD, Nat.toUInt8_eq,
+    List.cons_append, List.nil_append, emitUnchecked]
 
 /-- Table entry locations computed solely from compiler shapes. -/
 def Func.CompileShape.locations : Nat → List Func.CompileShape → List Nat
@@ -1960,8 +1971,7 @@ theorem Func.CompileShape.locations_compileShapes
   induction fs generalizing n with
   | nil => rfl
   | cons f fs ih =>
-      simp [Func.CompileShape.locations, table,
-        Func.CompileShape.byteSize_compileShape, ih]
+      simp only [List.map_cons, locations, byteSize_compileShape, ih, table]
 
 /-- Shape-indexed emission of a flat table. -/
 def Table.emitByShape (locations : List Nat) :
@@ -1981,9 +1991,9 @@ theorem Table.emitByShape_compileShapes
   induction fs generalizing n with
   | nil => rfl
   | cons f fs ih =>
-      simp [Func.CompileShape.locations, table, Table.emitByShape,
-        Table.emitUnchecked, Func.emitByShape_compileShape,
-        Func.CompileShape.byteSize_compileShape, ih]
+      simp only [List.map_cons, Func.CompileShape.locations,
+        Func.CompileShape.byteSize_compileShape, emitByShape, Func.emitByShape_compileShape, ih,
+        List.cons_append, table, emitUnchecked]
 
 /-- Inspect a program's opcode contents under an explicit compiler shape. -/
 def Prog.emitByShape (shape : Prog.CompileShape) (p : Prog) : Bytes :=
@@ -2014,35 +2024,40 @@ theorem Func.compile_eq_emitUnchecked
     bs = Func.emitUnchecked (l.map Prod.fst) n p := by
   induction p generalizing n bs with
   | last o =>
-      simp [Func.compile] at h
+      simp only [compile, Option.pure_def, Option.some.injEq] at h
       exact h.symm
   | next i p ih =>
       rcases of_bind_eq_some h with ⟨_, _hguard, h⟩
       rcases of_bind_eq_some h with ⟨pbs, hq, hbs⟩
-      simp at hbs
+      simp only [Option.pure_def, Option.some.injEq] at hbs
       subst bs
-      simp [Func.emitUnchecked, ih hq]
+      simp only [ih hq, emitUnchecked]
   | branch p q ihp ihq =>
       rcases of_bind_eq_some h with ⟨pbs, hp, h⟩
       rcases of_guard_eq_some h with ⟨_, h⟩
       rcases of_bind_eq_some h with ⟨qbs, hq, hbs⟩
-      simp at hbs
+      simp only [Nat.toUInt8_eq, UInt8.ofNat_add, UInt8.reduceOfNat, List.cons_append,
+        List.nil_append, List.append_assoc, Option.pure_def, Option.some.injEq] at hbs
       subst bs
       have hp' := ihp hp
       have hq' := ihq hq
       have hlenp := Func.length_compile hp
-      simp [Func.emitUnchecked, ← hp', hlenp, hq']
+      simp only [hlenp, hq', emitUnchecked, Nat.toUInt8_eq, UInt8.ofNat_add, UInt8.reduceOfNat,
+        List.cons_append, List.nil_append, ← hp', List.append_assoc]
   | call k =>
       unfold Func.compile at h
       generalize hk : l[k]? = entry at h
       cases entry with
-      | none => simp at h
+      | none => simp only [Nat.reducePow, Nat.toUInt8_eq, List.cons_append, List.nil_append,
+        Option.pure_def, Option.bind_eq_bind, Option.bind_none, reduceCtorEq] at h
       | some entry =>
           rcases entry with ⟨loc, f⟩
           rcases of_guard_eq_some h with ⟨_, h⟩
-          simp at h
+          simp only [Nat.toUInt8_eq, List.cons_append, List.nil_append, Option.pure_def,
+            Option.some.injEq] at h
           subst bs
-          simp [Func.emitUnchecked, List.getElem?_map, hk]
+          simp only [emitUnchecked, List.getD_eq_getElem?_getD, List.getElem?_map, hk,
+            Option.map_some, Option.getD_some, Nat.toUInt8_eq, List.cons_append, List.nil_append]
 
 /-- A successful table compilation is exactly its unchecked inspection view. -/
 theorem Table.compile_eq_emitUnchecked
@@ -2051,16 +2066,16 @@ theorem Table.compile_eq_emitUnchecked
     bs = Table.emitUnchecked (l.map Prod.fst) t := by
   induction t generalizing bs with
   | nil =>
-      simp [Table.compile] at h
+      simp only [compile, Option.pure_def, Option.some.injEq, List.nil_eq] at h
       subst bs
       rfl
   | cons entry rest ih =>
       rcases entry with ⟨n, p⟩
       rcases of_bind_eq_some h with ⟨pbs, hp, h⟩
       rcases of_bind_eq_some h with ⟨rbs, hr, hbs⟩
-      simp at hbs
+      simp only [List.cons_append, List.nil_append, Option.pure_def, Option.some.injEq] at hbs
       subst bs
-      simp [Table.emitUnchecked, Func.compile_eq_emitUnchecked hp, ih hr]
+      simp only [Func.compile_eq_emitUnchecked hp, ih hr, emitUnchecked, List.cons_append]
 
 /-- A successful complete-program compilation is exactly its unchecked
 inspection view. -/
@@ -2097,8 +2112,8 @@ table call. -/
 theorem Func.NoCalls.prepend (xs : Line) {f : Func} (hf : f.NoCalls) :
     (xs +++ f).NoCalls := by
   induction xs with
-  | nil => simpa [Blanc.prepend] using hf
-  | cons _ xs ih => simpa [Blanc.prepend, Func.NoCalls] using ih
+  | nil => simpa only [Blanc.prepend] using hf
+  | cons _ xs ih => simpa only [Blanc.prepend, NoCalls] using ih
 
 /-- A gas-exact call-free walk executes from any bytecode window containing
 the corresponding compiled function.  Unlike the whole-program bridge, this
@@ -2144,7 +2159,7 @@ theorem Func.exec_of_runCompiled_subcode
     rcases of_subcode sub with ⟨cd, h_eq', h_slice⟩
     rcases of_bind_eq_some h_eq' with ⟨_, _hguard, h⟩
     rcases of_bind_eq_some h with ⟨cd', _h_eq'', h_rw⟩
-    simp [pure] at h_rw
+    simp only [pure, Option.some.injEq] at h_rw
     rw [← h_rw] at h_slice
     rcases h_n with ⟨xl, h_filled, h_step⟩
     exact Ninst.exec_of_stepRun
@@ -2170,7 +2185,7 @@ theorem Func.exec_of_runCompiled_prefix
     rw [h_code]
     exact List.slice_prefix (List.slice_refl (pfx ++ sfx))
   have h_bound : noPushBefore sevm.code 0 32 = true := by
-    simp [noPushBefore]
+    simp only [noPushBefore]
   obtain ⟨h_exec⟩ :=
     Func.exec_of_runCompiled_subcode h_run h_noCalls 0 h_sub h_bound
   rw [← exec_iff_exec_eq]
@@ -2255,7 +2270,6 @@ structure RelSpec where
   branchSucc : Name
   /-- An internal tail call into the flat table. -/
   call : Name
-  deriving Inhabited
 
 /-- `Blanc/Compiled.lean`'s `Func.RunCompiled`, with this module's wrappers. -/
 def okSpec : RelSpec where
@@ -2537,15 +2551,15 @@ def gasTacs : ForwardM (List (TSyntax `tactic)) := do
 
 /-- The stack-headroom obligation, on a literal stack. -/
 def roomTacs : ForwardM (List (TSyntax `tactic)) := do
-  let a ← `(tactic| (simp only [Devm.stack_setMach]; simp))
-  let b ← `(tactic| simp)
+  let a ← `(tactic| (simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega))
+  let b ← `(tactic| (simp only [List.length_cons, List.length_nil]; omega))
   let c ← `(tactic| decide)
   return [a, b, c]
 
 /-- The stack-shape obligation, true by construction. -/
 def rflTacs : ForwardM (List (TSyntax `tactic)) := do
   let a ← `(tactic| rfl)
-  let b ← `(tactic| simp)
+  let b ← `(tactic| simp only [Devm.stack_setMach])
   return [a, b]
 
 /-- A value obligation `f x … = v`: `rfl` when the walk kept the application,
@@ -2555,8 +2569,7 @@ def valTacs : ForwardM (List (TSyntax `tactic)) := do
   let b ← `(tactic| assumption)
   let c ← `(tactic| decide)
   let d ← `(tactic| decide +kernel)
-  let e ← `(tactic| simp)
-  return [a, b, c, d, e]
+  return [a, b, c, d]
 
 /-- Elaborate the next hint at the expected type, or nothing if none is left. -/
 def nextHint (g : MVarId) (expected : Expr) : ForwardM (Option Expr) := do

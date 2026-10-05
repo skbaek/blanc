@@ -218,7 +218,7 @@ theorem Func.RunCompiledTo.stop_eq
     (run : Func.RunCompiledTo fs sevm pre Func.stop (.ok post)) :
     post = pre := by
   have terminal := runCompiledTo_last_inv run
-  simp [Linst.Run, Linst.run] at terminal
+  simp only [Linst.Run, Linst.run, Except.ok.injEq] at terminal
   exact terminal.symm
 
 /-- `REVERT` cannot produce a successful outcome, however its operand reads
@@ -243,7 +243,7 @@ private theorem prependStoresRev_not_ok
   induction iws generalizing rest with
   | nil =>
       intro pre post run
-      exact terminal (by simpa [prependStoresRev] using run)
+      exact terminal (by simpa only [prependStoresRev] using run)
   | cons iw iws ih =>
       intro pre post run
       apply ih (rest := prependStore iw.1 iw.2 rest)
@@ -253,7 +253,7 @@ private theorem prependStoresRev_not_ok
         obtain ⟨_, -, innerRun⟩ := runCompiledTo_next_inv innerRun
         obtain ⟨_, -, innerRun⟩ := runCompiledTo_next_inv innerRun
         exact terminal innerRun
-      · simpa [prependStoresRev] using run
+      · simpa only [prependStoresRev] using run
 
 /-- `Func.revertData` cannot end in a successful outcome.  This is the exact
 compiled-walk elimination seam: it peels the generated constant-word stores
@@ -286,7 +286,7 @@ theorem Func.RunCompiledTo.zero_branch_of_prefix
     exact ⟨armPre, hpop, harm, tail⟩
   · rcases hsucc with ⟨w, armPre, hw, hstack, -, -⟩
     have pw : w :: ([] : Stack) <<+ pre.stack :=
-      ⟨armPre.stack, by simpa [Split] using hstack⟩
+      ⟨armPre.stack, by simpa only [Split, List.cons_append, List.nil_append] using hstack⟩
     exact (hw (pref_head_unique hp pw).symm).elim
 
 /-- A known nonzero stack head forces the jumped arm of a compiled branch and
@@ -304,11 +304,11 @@ theorem Func.RunCompiledTo.succ_branch_of_prefix
   rcases runCompiledTo_branch_inv run with hzero | hsucc
   · rcases hzero with ⟨armPre, hstack, -, -⟩
     have pzero : (0 : B256) :: ([] : Stack) <<+ pre.stack :=
-      ⟨armPre.stack, by simpa [Split] using hstack⟩
+      ⟨armPre.stack, by simpa only [Split, List.cons_append, List.nil_append] using hstack⟩
     exact (hw (pref_head_unique hp pzero)).elim
   · rcases hsucc with ⟨branchWord, armPre, hnz, hstack, hpop, harm⟩
     have pword : branchWord :: ([] : Stack) <<+ pre.stack :=
-      ⟨armPre.stack, by simpa [Split] using hstack⟩
+      ⟨armPre.stack, by simpa only [Split, List.cons_append, List.nil_append] using hstack⟩
     have hword : branchWord = w := pref_head_unique pword hp
     subst branchWord
     have tail := (popBurn_pref (Devm.PopBurn.of_popBurnBy hpop) hp).2
@@ -336,7 +336,7 @@ theorem Func.RunCompiledTo.nonpayable_body_of_value_zero
   have pValue := prefix_of_push (of_run_callvalue rvalue) hp
   have pTest := prefix_of_iszero rzero pValue
   have pOne : (1 : B256) :: tail <<+ testPre.stack := by
-    simpa [valueZero, B256.eqCheck] using pTest
+    simpa only [B256.eqCheck, valueZero, ↓reduceIte, List.append_eq, List.nil_append] using pTest
   obtain ⟨bodyPre, _, -, hpop, bodyRun, pBody⟩ :=
     Func.RunCompiledTo.succ_branch_of_prefix
       (by decide : (1 : B256) ≠ 0) pOne branchRun
@@ -422,7 +422,7 @@ instance : Func.WalkInv Func.RunOk where
       exact ⟨_, _, hget, Devm.Burn.of_burnBy hburn, hrest⟩
   noRevert h := by
     obtain ⟨_, hex, -⟩ := runCompiledTo_revert_inv h
-    exact absurd hex (by simp)
+    exact absurd hex (by simp only [ExceptT.stM_eq, reduceCtorEq, not_false_eq_true])
   toRun h := Func.Run.of_runCompiled (Func.RunCompiled.of_runCompiledTo_ok h)
 
 /-- A compiled walk of `nonpayable body` at nonzero call value takes the
@@ -444,7 +444,7 @@ theorem Func.RunCompiledTo.nonpayable_revert_of_value_nonzero
     (of_run_callvalue (Ninst.Run.of_runCompiled qvalue)) hp
   have pTest := prefix_of_iszero (Ninst.Run.of_runCompiled qzero) pValue
   have pZero : (0 : B256) :: tail <<+ testPre.stack := by
-    simpa [B256.eqCheck, valueNonzero] using pTest
+    simpa only [B256.eqCheck, valueNonzero, ↓reduceIte, List.append_eq, List.nil_append] using pTest
   obtain ⟨revertPre, _, revertRun, _⟩ :=
     Func.RunCompiledTo.zero_branch_of_prefix pZero branchRun
   exact runCompiledTo_revert_inv revertRun
@@ -514,9 +514,11 @@ private lemma read_selector_of_write_zero {μ : Mem} {ys : Bytes}
 private lemma toBytes_toB256_drop28 (data : Bytes) (h : data.length = 4) :
     data.toB256.toBytes.drop 28 = data := by
   have hp := Bytes.toBytes_toB256_of_length
-    (xs := List.replicate 28 0 ++ data) (by simp [h])
+    (xs := List.replicate 28 0 ++ data) (by simp only [List.reduceReplicate, List.cons_append,
+      List.nil_append, List.length_cons, h, Nat.reduceAdd])
   exact (by
-    simpa [Bytes.toB256_zero_cons] using congrArg (List.drop 28) hp)
+    simpa only [List.reduceReplicate, List.cons_append, List.nil_append, Bytes.toB256_zero_cons,
+      List.drop_succ_cons, List.drop_zero] using congrArg (List.drop 28) hp)
 
 /-- `Func.revertSelector` reverts with its four-byte payload, or can run out of gas
 on the final nonempty revert window. -/
@@ -570,10 +572,10 @@ theorem runCompiledTo_prependStoresRev_frame_inv
   | nil =>
       exact ⟨pre, run, rfl, rfl, rfl, rfl⟩
   | cons store stores ih =>
-      have hhead : 32 * store.2 < 2 ^ 256 := hbound store (by simp)
+      have hhead : 32 * store.2 < 2 ^ 256 := hbound store (by simp only [List.mem_cons, true_or])
       have htail : ∀ item ∈ stores, 32 * item.2 < 2 ^ 256 := by
         intro item hitem
-        exact hbound item (by simp [hitem])
+        exact hbound item (by simp only [List.mem_cons, hitem, or_true])
       change Func.RunCompiledTo fs sevm pre
         (prependStoresRev stores
           (prependStore store.1 store.2 rest)) ex at run
@@ -1038,7 +1040,7 @@ theorem sig_mem_of_dispatchWith_ok :
     · exact ⟨p, by rw [hit]; exact rfl⟩
     · exfalso
       have zeroPrefix : (0 : B256) :: tail <<+ testPost.stack := by
-        simpa [B256.eqCheck, hit] using testPrefix
+        simpa only [B256.eqCheck, hit, ↓reduceIte] using testPrefix
       obtain ⟨missPre, -, missRun, -⟩ :=
         Func.RunCompiledTo.zero_branch_of_prefix zeroPrefix branchRun
       exact Func.RunCompiledTo.not_ok_call_revert revertLookup missRun

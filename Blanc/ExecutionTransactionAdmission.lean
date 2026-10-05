@@ -49,8 +49,8 @@ theorem TransactionTrace.sender_ne_sem
     trace.sender ≠ ca := by
   have beginInv : c.BenvInv ca benv.beginTransaction := by
     refine ⟨?_, ?_⟩
-    · simpa [Benv.beginTransaction] using inv
-    · simpa [Benv.beginTransaction] using notCreated
+    · simpa only [Benv.beginTransaction] using inv
+    · simpa only [Benv.beginTransaction] using notCreated
   exact ContractSpecSem.checkTransaction_sender_ne_of_inv trace.checked beginInv
 
 /-- The generic prepared-message invariant used by the transaction rung. -/
@@ -68,9 +68,9 @@ theorem TransactionTrace.msgInv_sem
       (transactionTenv benv.beginTransaction tx index trace.sender
         trace.effectiveGasPrice trace.intrinsicGas
         trace.blobVersionedHashes).stat.origin ≠ ca := by
-    simpa [transactionTenv] using senderNe
+    simpa only [transactionTenv, Std.TreeMap.empty_eq_emptyc, ne_eq] using senderNe
   exact prepareMessage_preserves_inv trace.prepared debitInv
-    (by simpa [Benv.beginTransaction] using notCreated) origin
+    (by simpa only [Benv.beginTransaction] using notCreated) origin
 
 theorem TransactionTrace.benvInv_admitted_sem
     {ca : Adr} {entry : Sevm → Devm → Prop}
@@ -87,7 +87,7 @@ theorem TransactionTrace.benvInv_admitted_sem
     trace.msgInv_sem inv.state inv.ca
   have msgFork : CoveredFork trace.msg.benv.stat.fork := by
     rw [prepareMessage_benv trace.prepared]
-    simpa [Benv.beginTransaction] using hfork
+    simpa only [Benv.beginTransaction] using hfork
   have messageInv :=
     trace.message.stateInv_admitted_sem preserves msgFork admitted msgInv
   rcases trace.exists_stateChronology hfork with ⟨chronology⟩
@@ -103,7 +103,7 @@ theorem TransactionTrace.benvInv_admitted_sem
       (trace.messageOut.accountsToDelete.toList.foldl destroyAccount
         (trace.coinbaseState chronology.refundCounter)) :=
     StateInv.foldl_destroyAccount messageInv.2 coinbaseInv
-  refine ⟨?_, by simpa [Benv.withState] using inv.ca⟩
+  refine ⟨?_, by simpa only [Benv.withState] using inv.ca⟩
   rw [chronology.finalState_eq]
   exact finalInv
 
@@ -131,7 +131,7 @@ theorem ApplyTransactionsTrace.benvInv_admitted_sem
         exact hfork
       have nextSum : sum (benv.withState txState).state.bal < 2 ^ 256 := by
         exact Nat.lt_of_le_of_lt
-          (by simpa [Benv.withState] using
+          (by simpa only [Benv.withState] using
             processTransaction_sum_le head.result hfork.rules_stateGas_none)
           sumNof
       exact ih nextFork admitted.2 nextSum headInv

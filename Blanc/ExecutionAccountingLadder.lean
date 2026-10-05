@@ -106,7 +106,8 @@ def trivial (L : AccountingLadder S ca) : L.Observed where
       evmEq committed runReady callerNe hfork sumNof
     exact (L.root blockIndex transactionIndex run transfer evmEq committed
       runReady callerNe hfork sumNof).imp fun _ replay =>
-        ⟨replay, by simp [ReplayObservation.trivial]⟩
+        ⟨replay, by simp only [ReplayObservation.trivial, List.nil_eq, List.flatMap_eq_nil_iff,
+          implies_true]⟩
 
 /-- The ordinary source-program ladder is the semantic admitted ladder with
 fresh entry supplied by the retained trace itself. Existing root and frame
@@ -549,7 +550,8 @@ theorem Observed.traceRealizes_of_configuredHistoryTrace
     ∃ steps, L.TraceRealizes cfg root steps future ∧
       O.view.obs steps = history.settledFrames.flatMap O.view.frameObs := by
   induction history with
-  | refl hcfg hctx hid => exact ⟨[], .refl, by simpa using O.view.obs_nil⟩
+  | refl hcfg hctx hid => exact ⟨[], .refl, by simpa only [ExecutionTrace.ConfiguredHistoryTrace.settledFrames,
+    List.flatMap_nil] using O.view.obs_nil⟩
   | step prior block ih =>
       obtain ⟨priorSteps, priorRealizes, priorObserved⟩ := ih
       obtain ⟨blockSteps, blockReplay, blockObserved⟩ :=
@@ -557,7 +559,14 @@ theorem Observed.traceRealizes_of_configuredHistoryTrace
           block.block.header.number
       refine ⟨priorSteps ++ blockSteps, .step priorRealizes block blockReplay, ?_⟩
       rw [O.view.obs_append, priorObserved, blockObserved]
-      simp
+      simp only [ExecutionTrace.ConfiguredBlockTrace.settledFrames,
+        ExecutionTrace.AppliedBodyTrace.settledFrames,
+        ExecutionTrace.SystemMessageTrace.settledFrames,
+        ExecutionTrace.MessageCallTrace.settledFrames,
+        ExecutionTrace.ProcessCreateMessageTrace.settledFrames, ExceptT.stM_eq,
+        ExecutionTrace.ProcessMessageTrace.settledFrames, List.append_assoc,
+        ExecutionTrace.RequestsTrace.settledFrames, List.flatMap_append,
+        ExecutionTrace.ConfiguredHistoryTrace.settledFrames]
 -- mirrors ProrataAccountingHistory.lean:146–159, carrying the observation.
 
 namespace TraceRealizes

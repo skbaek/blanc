@@ -97,7 +97,7 @@ theorem shareRoomN_add_one_lt_wordModulusN (supply : Nat) :
     unfold maxSupplyN
     exact Nat.sub_add_cancel (by
       unfold maxWordN wordModulusN offsetN
-      norm_num)
+      norm_num only)
   have offsetPositive : 0 < offsetN := by decide
   have roomPlusOneLe : shareRoomN supply + 1 ≤ maxWordN := by
     omega
@@ -137,7 +137,7 @@ theorem denominatorN_le_maxWord
   simp only [denominatorN, maxSupplyN, offsetN] at stable ⊢
   have hlarge : 1000 ≤ maxWordN := by
     unfold maxWordN wordModulusN
-    norm_num
+    norm_num only
   omega
 
 theorem supply_add_shareRoomN
@@ -152,29 +152,6 @@ theorem supply_add_le_maxSupplyN_of_le_shareRoomN
     supply + shares ≤ maxSupplyN := by
   rw [← supply_add_shareRoomN stable]
   exact Nat.add_le_add_left room supply
-
-private theorem maxWord_mul_div_wordModulus
-    {d : Nat} (hd : 0 < d) (hle : d ≤ maxWordN) :
-    maxWordN * d / wordModulusN = d - 1 := by
-  apply Nat.div_eq_of_lt_le
-  · rw [Nat.sub_mul, Nat.one_mul]
-    unfold maxWordN
-    rw [Nat.sub_mul, Nat.one_mul, Nat.mul_comm d wordModulusN]
-    apply Nat.sub_le_sub_left
-    exact hle.trans (Nat.le_of_lt maxWordN_lt_wordModulusN)
-  · have hdOne : d - 1 + 1 = d := Nat.sub_add_cancel (by omega)
-    rw [hdOne, Nat.mul_comm d wordModulusN]
-    unfold maxWordN
-    rw [Nat.sub_mul, Nat.one_mul]
-    exact Nat.sub_lt (Nat.mul_pos wordModulusN_pos hd) hd
-
-theorem maxWord_mul_denominator_div_assetFactor_maxWord
-    {supply : Nat} (stable : supply ≤ maxSupplyN) :
-    maxWordN * denominatorN supply / assetFactorN maxWordN =
-      denominatorN supply - 1 := by
-  rw [assetFactorN_maxWord]
-  exact maxWord_mul_div_wordModulus (denominatorN_pos supply)
-    (denominatorN_le_maxWord stable)
 
 /-! ## Exact rounding directions -/
 

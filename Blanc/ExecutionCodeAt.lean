@@ -47,7 +47,7 @@ lemma ExecuteCode.codeAt
     subst h_err
     rw [executeCode.handleErrorWith_getCode]
     rw [h_xl] at inv
-    dsimp [Xlot.InvAt] at inv
+    dsimp only [ExceptT.stM_eq, Xlot.InvAt] at inv
     rw [executeCode.enter_inl henter] at inv
     exact inv.symm
   · rcases run with ⟨h_xl, h_err⟩
@@ -66,18 +66,18 @@ lemma ProcessMessage.codeAt
   unfold FrameBody at hbody
   rcases h_benv : msg.benvAfterTransfer with e | benv <;> rw [h_benv] at hbody
   · rw [hbody.2]
-    dsimp [MsgResult.getCode, processMessage.settle]
-    dsimp [Msg.benvAfterTransfer, Msg.shouldTransferValue] at h_benv
+    dsimp only [processMessage.settle, Except.bind_error, MsgResult.getCode]
+    dsimp only [Msg.benvAfterTransfer] at h_benv
     split at h_benv
     · cases h_sub : msg.benv.subBal msg.caller msg.value
-      · simp [h_sub, Option.toExcept, Bind.bind, Except.bind] at h_benv
+      · simp only [bind, Except.bind, Option.toExcept, h_sub, Except.error.injEq] at h_benv
         subst h_benv
         rfl
-      · simp [h_sub, Option.toExcept, Bind.bind, Except.bind] at h_benv
+      · simp only [bind, Except.bind, Option.toExcept, h_sub, reduceCtorEq] at h_benv
     · contradiction
   · have h_benv_code := benvAfterTransfer_ok_getCode h_benv a
     have h_exec_cond := ExecuteCode.codeAt inv hbody
-    dsimp [Msg.withBenv] at h_exec_cond
+    dsimp only [Msg.withBenv] at h_exec_cond
     rw [h_benv_code] at h_exec_cond
     unfold processMessage.settle
     rcases r0 with e' | evm
@@ -120,7 +120,7 @@ lemma ProcessCreateMessage.codeAt
       | ok devm_charge =>
         dsimp only [MsgResult.getCode]
         have h_getCode := processCreateMessage.chargeCodeGas_getCode_gen h_charge a
-        dsimp [Execution.getCode] at h_getCode
+        dsimp only [Execution.getCode] at h_getCode
         rw [setCode_getCode hne.symm]
         rw [h_getCode]
         exact h_exec_cond
@@ -269,7 +269,7 @@ lemma GenericCreate.codeAt
           simp only [Bind.bind, Except.bind, Except.assert, assertDynamic, Pure.pure,
             Except.pure]
           repeat' split
-          all_goals first | rfl | simp_all
+          all_goals first | rfl | simp_all only [ne_eq, reduceCtorEq, Bool.not_eq_eq_eq_not, Bool.not_true, ite_eq_left_iff, Bool.not_eq_false, imp_false, Bool.not_eq_true, not_or, not_lt, ByteArray.size_eq_zero_iff, Decidable.not_not, ExceptT.stM_eq, not_le, Bool.not_false, ↓reduceIte, not_true_eq_false]
         exact ProcessCreateMessage.codeAt hne' inv hframe
     rw [Resume.create_getCode ?_, h_parent a]
     exact hmsg.trans (by rw [createMsg_benv_state_getCode, h_parent a])
@@ -324,7 +324,8 @@ theorem Xinst.step_spawn_create_codeAddress {sevm : Sevm} {devm : Devm} {x : Xin
       hf, -, -, -, hsh⟩ <;> rw [hsh] at hs
   · cases hs
   · exact genericCreate.step_spawn_codeAddress hs
-  · exact absurd hc (by rw [genericCall.step_spawn_isCreate_false hs]; simp)
+  · exact absurd hc (by rw [genericCall.step_spawn_isCreate_false hs]; simp only [Bool.false_eq_true,
+    not_false_eq_true])
 
 /-- The CREATE frame this instruction enters, if any, never targets `a`. -/
 def Xinst.AvoidsAt (a : Adr) (sevm : Sevm) (devm : Devm) (x : Xinst) : Prop :=
@@ -465,13 +466,14 @@ theorem Exec.codeAt_avoid {a : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out :
         simp only [Exec.rawFrameRoots, List.mem_cons] at member
         rcases member with rfl | member
         · exact hself
-        · exact avoid root (by simp [Exec.rawFrameRoots, Exec.rawFrameDescendants, member]))
+        · exact avoid root (by simp only [rawFrameRoots, rawFrameDescendants, mem_cons, member,
+          or_true]))
       refine ⟨Execution.Rel.trans_left (Devm.codeAt_trans a) hc hrel, ?_⟩
       intro root member
       simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons] at member
       rcases member with rfl | member
       · rfl
-      · exact (hroots root (by simp [Exec.rawFrameRoots, member])).trans hc
+      · exact (hroots root (by simp only [rawFrameRoots, mem_cons, member, or_true])).trans hc
   | doneErr hstep henter hresume =>
       intro hfork avoid
       have hc := Evm.step_codeAt (a := a) (xl := .none) (out := .error _) hfork
@@ -498,20 +500,22 @@ theorem Exec.codeAt_avoid {a : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out :
         simp only [Exec.rawFrameRoots, List.mem_cons] at member
         rcases member with rfl | member
         · exact hself
-        · exact avoid root (by simp [Exec.rawFrameRoots, Exec.rawFrameDescendants, member]))
+        · exact avoid root (by simp only [rawFrameRoots, rawFrameDescendants, mem_cons, member,
+          or_true]))
       refine ⟨Execution.Rel.trans_left (Devm.codeAt_trans a) hc hrel, ?_⟩
       intro root member
       simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons] at member
       rcases member with rfl | member
       · rfl
-      · exact (hroots root (by simp [Exec.rawFrameRoots, member])).trans hc
+      · exact (hroots root (by simp only [rawFrameRoots, mem_cons, member, or_true])).trans hc
   | @runErr pc sevm devm f rsm pc' cevm raw e hstep henter child hresume ih =>
       intro hfork avoid
       have hfork_c := Evm.step_spawn_child_fork hstep henter hfork
       have hstart := (Evm.step_spawn_child hstep henter).2.1 a
       have hcavoid : cevm.sta.codeAddress = none → cevm.sta.currentTarget ≠ a :=
         avoid ⟨cevm.pc, cevm.sta, cevm.dyna, raw, child⟩
-          (by simp [Exec.rawFrameRoots, Exec.rawFrameDescendants])
+          (by simp only [rawFrameRoots, rawFrameDescendants, mem_cons, Exec.Deriv.mk.injEq,
+            ExceptT.stM_eq, true_or, or_true])
       have hcode : cevm.sta.codeAddress = f.inner.codeAddress := by
         obtain ⟨benv, -, h⟩ := Frame.enter_run_inv henter
         rw [h]
@@ -534,7 +538,7 @@ theorem Exec.codeAt_avoid {a : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out :
       rcases member with rfl | rfl | member
       · rfl
       · exact hstart
-      · exact (hroots root (by simp [Exec.rawFrameRoots, member])).trans hstart
+      · exact (hroots root (by simp only [rawFrameRoots, mem_cons, member, or_true])).trans hstart
   | @runOk pc sevm devm f rsm pc' cevm raw devm' ex hstep henter child hresume next
       ihChild ihNext =>
       intro hfork avoid
@@ -545,7 +549,8 @@ theorem Exec.codeAt_avoid {a : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out :
       have hstart := (Evm.step_spawn_child hstep henter).2.1 a
       have hcavoid : cevm.sta.codeAddress = none → cevm.sta.currentTarget ≠ a :=
         avoid ⟨cevm.pc, cevm.sta, cevm.dyna, raw, child⟩
-          (by simp [Exec.rawFrameRoots, Exec.rawFrameDescendants])
+          (by simp only [rawFrameRoots, rawFrameDescendants, mem_cons, Exec.Deriv.mk.injEq,
+            ExceptT.stM_eq, mem_append, true_or, or_true])
       have hcode : cevm.sta.codeAddress = f.inner.codeAddress := by
         obtain ⟨benv, -, h⟩ := Frame.enter_run_inv henter
         rw [h]
@@ -581,7 +586,7 @@ theorem Exec.codeAt_avoid {a : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out :
       rcases member with rfl | rfl | member | member
       · rfl
       · exact hstart
-      · exact (hrootsChild root (by simp [Exec.rawFrameRoots, member])).trans hstart
-      · exact (hroots root (by simp [Exec.rawFrameRoots, member])).trans hc
+      · exact (hrootsChild root (by simp only [rawFrameRoots, mem_cons, member, or_true])).trans hstart
+      · exact (hroots root (by simp only [rawFrameRoots, mem_cons, member, or_true])).trans hc
 
 end Blanc

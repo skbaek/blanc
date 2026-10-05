@@ -27,7 +27,7 @@ theorem Inv.mint_balSum_eq {s : Stor} {value balance : B256}
     have hle := B256.toNat_le_toNat (h.share_word_le_supply a)
     omega
   have hnof_t : B256.Nof (t.get a.toB256) m := by
-    dsimp [t]
+    dsimp only [t]
     rw [Stor.get_set_ne _ (toB256_ne_supplySlot a).symm _]
     exact hnof_a
   have hinc : Increase a m (Stor.rest t) (Stor.rest u) := by
@@ -37,14 +37,14 @@ theorem Inv.mint_balSum_eq {s : Stor} {value balance : B256}
     balSum u = balSum t + m.toNat := (sum_add_assoc hinc hnof_t).symm
     _ = balSum s + m.toNat := by
       unfold balSum
-      dsimp [t]
+      dsimp only [t]
       rw [Stor.rest_set_prorataSupplySlot]
     _ = supplyN s + m.toNat := by rw [h.balSum_eq]
     _ = supplyN u := by
       unfold supplyN
-      dsimp [u]
+      dsimp only [u]
       rw [Stor.get_prorataSupplySlot_set (validAdr_toB256 a)]
-      dsimp [t]
+      dsimp only [t]
       rw [Stor.get_set_self]
       rw [B256.toNat_add_eq_of_nof _ _ hnof]
 
@@ -67,13 +67,13 @@ theorem Inv.burn_balSum_eq {s : Stor} {value balance : B256}
   calc
     balSum u = balSum t := by
       unfold balSum
-      dsimp [u]
+      dsimp only [u]
       rw [Stor.rest_set_prorataSupplySlot]
     _ = balSum s - x.toNat := (sum_sub_assoc hdec hcover).symm
     _ = supplyN s - x.toNat := by rw [h.balSum_eq]
     _ = supplyN u := by
       unfold supplyN
-      dsimp [u]
+      dsimp only [u]
       rw [Stor.get_set_self]
       rw [B256.toNat_sub_eq_of_le _ _ hsupply]
 
@@ -114,7 +114,7 @@ theorem Inv.deposit_price_bound {s : Stor} {value balance : B256}
     (hv : value ≤ maxValue) (hb : balance - value ≤ maxBalance) :
     let m := value * (s.get supplySlot + offset) / (balance - value + 1)
     supplyN s + m.toNat ≤ offset.toNat * balance.toNat := by
-  dsimp
+  dsimp only [Lean.Elab.WF.paramLet]
   have hvb : value ≤ balance :=
     B256.le_of_toNat_le_toNat h.value_le_balance
   have hprice :
@@ -151,7 +151,7 @@ theorem Inv.withdraw_price_bound
     let p := shares * (balance + 1) / (s.get supplySlot + offset)
     supplyN s - shares.toNat ≤
       offset.toNat * (balance.toNat - p.toNat) := by
-  dsimp
+  dsimp only [Lean.Elab.WF.paramLet]
   have hsharesSupply : shares ≤ s.get supplySlot :=
     hcover.trans (h.share_word_le_supply a)
   have hsharesCap : shares ≤ maxSupply :=
@@ -234,7 +234,7 @@ theorem WithdrawPreCallEffect.settlement_inv
   let C := stor.get sevm.caller.toB256
   let S := stor.get supplySlot
   let p := shares * (B + 1) / (S + offset)
-  dsimp
+  dsimp only [Lean.Elab.WF.paramLet]
   change Inv stor sevm.value B at h
   change shares ≤ C ∧ B ≤ maxBalance ∧
     Devm.getStor callPre sevm.currentTarget =

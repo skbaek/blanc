@@ -160,7 +160,7 @@ private lemma runCompiled_call_zero_value_gatewayPause
     exact h_data
   have hsubD1 : d1.state.subBal sevm.currentTarget 0 = some stmid := by
     have hsubP : p.state.subBal sevm.currentTarget 0 = some stmid := by
-      simpa [msg, callSpawnMsg, callMsg] using hsub
+      simpa only [msg, callSpawnMsg, callMsg, Bool.false_or] using hsub
     rw [show p.state = d1.state from rfl] at hsubP
     exact hsubP
   have hchildStor (key : B256) :
@@ -209,46 +209,40 @@ private lemma runCompiled_call_zero_value_gatewayPause
     by_cases hinfinite : duration = pauseInfiniteSentinel
     · subst duration
       have hmcsSentinel : 25567 ≤ mcs := by
-        simpa [gatewayPauseChildCost] using h_mcs
-      simpa [exactOut, gatewayPauseChildPost, gatewayPauseChildCost,
-        child, childSevm, childBase] using
+        simpa only [gatewayPauseChildCost, ↓reduceIte] using h_mcs
+      simpa only [exactOut, gatewayPauseChildPost, gatewayPauseChildCost, child, childSevm, childBase, ↓reduceIte] using
         pauseForSentinel_exec childMsg controlDeployParams (mcs - 25567)
           (by change CoveredFork sevm.benvStat.fork; exact hfork) hcompile hchildData
-          (by change mcs = mcs - 25567 + 25567; omega)
-          rfl hchildMembership hchildCold
-          hchildResume hchildOriginal hchildColdResume
-          (by change sevm.isStatic = false; exact h_dynamic)
+          (by change mcs = mcs - 25567 + 25567; omega) rfl hchildMembership hchildCold hchildResume
+          hchildOriginal hchildColdResume (by change sevm.isStatic = false; exact h_dynamic)
     · have hfinite : duration ≠ pauseInfinitely := hinfinite
       have hmcsFinite : 25598 ≤ mcs := by
-        simpa [gatewayPauseChildCost, hinfinite] using h_mcs
+        simpa only [gatewayPauseChildCost, hinfinite, ↓reduceIte] using h_mcs
       have htimeFinite : sevm.benvStat.time <
           duration + sevm.benvStat.time := by
         rw [pauseForProjection, if_neg hinfinite] at h_time
         exact lt_of_lt_of_eq h_time
           (B256.add_comm (xs := sevm.benvStat.time) (ys := duration))
-      simpa [exactOut, gatewayPauseChildPost, gatewayPauseChildCost,
-        hinfinite, child, childSevm, childBase] using
+      simpa only [exactOut, gatewayPauseChildPost, gatewayPauseChildCost, hinfinite, child, childSevm, childBase, ↓reduceIte] using
         pauseForFinite_exec childMsg controlDeployParams duration (mcs - 25598)
           (by change CoveredFork sevm.benvStat.fork; exact hfork) hcompile hchildData
-          (by change mcs = mcs - 25598 + 25598; omega)
-          rfl hchildMembership hchildCold
-          hchildResume hchildOriginal hchildColdResume
-          (by change sevm.isStatic = false; exact h_dynamic)
+          (by change mcs = mcs - 25598 + 25598; omega) rfl hchildMembership hchildCold hchildResume
+          hchildOriginal hchildColdResume (by change sevm.isStatic = false; exact h_dynamic)
           h_duration hfinite htimeFinite
   generalize houtDef : exactOut = out at hexec
   have herr : out.error = none := by
     rw [← houtDef]
     simp only [exactOut, gatewayPauseChildPost]
-    split <;> simp <;> rfl
+    split <;> simp only [pauseSentinelPost_error, pauseFinitePost_error] <;> rfl
   have hout : out.output = [] := by
     rw [← houtDef]
     simp only [exactOut, gatewayPauseChildPost]
-    split <;> simp <;> rfl
+    split <;> simp only [pauseSentinelPost_output, pauseFinitePost_output] <;> rfl
   have hgasOut : out.gasLeft =
       mcs - gatewayPauseChildCost duration := by
     rw [← houtDef]
     simp only [exactOut, gatewayPauseChildPost]
-    split <;> simp
+    split <;> simp only [pauseSentinelPost_gasLeft, pauseFinitePost_gasLeft]
   have hchildLogs : childBase.logs = [] := by
     have hsg : childSevm.benvStat.rules.stateGas = none := by
       change sevm.benvStat.rules.stateGas = none
@@ -280,11 +274,11 @@ private lemma runCompiled_call_zero_value_gatewayPause
   have hatdOut : out.accountsToDelete = Std.HashSet.emptyWithCapacity := by
     rw [← houtDef]
     simp only [exactOut, gatewayPauseChildPost]
-    split <;> simp <;> rfl
+    split <;> simp only [pauseSentinelPost_accountsToDelete, pauseFinitePost_accountsToDelete] <;> rfl
   have haaOut : out.accessedAddresses = p.accessedAddresses := by
     rw [← houtDef]
     simp only [exactOut, gatewayPauseChildPost]
-    split <;> simp <;> rfl
+    split <;> simp only [pauseSentinelPost_accessedAddresses, pauseFinitePost_accessedAddresses] <;> rfl
   have haskOut : out.accessedStorageKeys =
       gatewayPauseKeys d1.accessedStorageKeys cw.toAdr
         sevm.currentTarget.toB256 := by
@@ -295,7 +289,7 @@ private lemma runCompiled_call_zero_value_gatewayPause
   have htransOut : out.transientStorage = p.transientStorage := by
     rw [← houtDef]
     simp only [exactOut, gatewayPauseChildPost]
-    split <;> simp <;> rfl
+    split <;> simp only [pauseSentinelPost_transientStorage, pauseFinitePost_transientStorage] <;> rfl
   have hstateOut : out.state =
       (stmid.addBal cw.toAdr 0).setStorVal cw.toAdr resumeSinceSlot
         (pauseForProjection sevm.benvStat.time duration) := by
@@ -331,7 +325,7 @@ private lemma runCompiled_call_zero_value_gatewayPause
   have hsettle : (Frame.ofCall msg).settle (exec child) = .ok out := by
     rw [hexec, Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
     show processMessage.settle _ (.ok out) = .ok out
-    simp [processMessage.settle, herr]
+    simp only [processMessage.settle, herr, Except.bind_ok, Option.isSome_none, Bool.false_eq_true, ↓reduceIte]
   have hdi := accessDelegation_inv h_del
   have hd1stack : d1.stack = s := by
     have h := hdi.1
@@ -396,7 +390,8 @@ private lemma runCompiled_call_zero_value_gatewayPause
       devm.accountsToDelete.isEmpty
     rw [hatdOut]
     rw [show p.accountsToDelete = devm.accountsToDelete from hd1delete]
-    simp
+    simp only [Std.HashSet.union_eq, Std.HashSet.isEmpty_union,
+      Std.HashSet.isEmpty_emptyWithCapacity, Bool.and_true]
   · change out.transientStorage = devm.transientStorage
     rw [htransOut]
     exact hd1wm.1
@@ -414,7 +409,7 @@ private lemma runCompiled_call_zero_value_gatewayPause
     exact heffectOut
   · rw [← hd1state]
     have hsub' : p.state.subBal sevm.currentTarget 0 = some stmid := by
-      simpa [msg, callSpawnMsg, callMsg] using hsub
+      simpa only [msg, callSpawnMsg, callMsg, Bool.false_or] using hsub
     rw [show p.state = d1.state from rfl] at hsub'
     exact hsub'
   · change out.state = _
@@ -496,7 +491,7 @@ private lemma gatewayPause_call_crossing
     intro hvalid
     have hs := hvalid.1
     rw [hsize] at hs
-    norm_num [eoaDelegatedCodeLength] at hs
+    norm_num only [eoaDelegatedCodeLength] at hs
   have hdel : accessDelegation
       (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         target.toAdr) target.toAdr =
@@ -541,7 +536,7 @@ private lemma gatewayPause_call_crossing
         unfold except64th
         omega
       rw [Nat.min_eq_right h1]
-      norm_num
+      norm_num only [Nat.sub_zero]
     rw [hmin] at hsplit
     have h1 : except64th (G - 100) + 100 = mcc :=
       congrArg Prod.fst hsplit
@@ -549,9 +544,9 @@ private lemma gatewayPause_call_crossing
       congrArg Prod.snd hsplit
     unfold except64th at h1 h2
     by_cases hinfinite : duration = pauseInfiniteSentinel
-    · simp [gatewayPauseChildCost, hinfinite] at hfloor ⊢
+    · simp only [gatewayPauseChildCost, hinfinite, ↓reduceIte, Nat.reduceAdd, add_zero] at hfloor ⊢
       exact ⟨by omega, by omega, by omega⟩
-    · simp [gatewayPauseChildCost, hinfinite] at hfloor ⊢
+    · simp only [gatewayPauseChildCost, hinfinite, ↓reduceIte, Nat.reduceAdd, add_zero] at hfloor ⊢
       exact ⟨by omega, by omega, by omega⟩
   have hd0mem : d0.memory = devm.memory := rfl
   have hd0membership : d0.getStorVal target.toAdr
@@ -672,7 +667,7 @@ private lemma runCompiled_statcall_gatewayQuery
     exact h_data
   have hsubD1 : d1.state.subBal sevm.currentTarget 0 = some stmid := by
     have hsubP : p.state.subBal sevm.currentTarget 0 = some stmid := by
-      simpa [msg, staticcallSpawnMsg, callMsg] using hsub
+      simpa only [msg, staticcallSpawnMsg, callMsg, Bool.true_or] using hsub
     rw [show p.state = d1.state from rfl] at hsubP
     exact hsubP
   have hchildStored :
@@ -754,7 +749,7 @@ private lemma runCompiled_statcall_gatewayQuery
     rw [show exec child = .ok out from hexec, Frame.settle_eq_settleMsg_handleErrorWith,
       executeCode.handleErrorWith_ok]
     show processMessage.settle _ (.ok out) = .ok out
-    simp [processMessage.settle, herr0]
+    simp only [processMessage.settle, herr0, Except.bind_ok, Option.isSome_none, Bool.false_eq_true, ↓reduceIte]
   have hdi := accessDelegation_inv h_del
   have hd1stack : d1.stack = s := by
     have h := hdi.1
@@ -820,7 +815,8 @@ private lemma runCompiled_statcall_gatewayQuery
       devm.accountsToDelete.isEmpty
     rw [hatdOut]
     rw [show p.accountsToDelete = devm.accountsToDelete from hd1delete]
-    simp
+    simp only [Std.HashSet.union_eq, Std.HashSet.isEmpty_union,
+      Std.HashSet.isEmpty_emptyWithCapacity, Bool.and_true]
   · change out.transientStorage = devm.transientStorage
     rw [htransOut]
     exact hd1wm.1
@@ -841,7 +837,7 @@ private lemma runCompiled_statcall_gatewayQuery
     exact heffectOut
   · rw [← hd1state]
     have hsub' : p.state.subBal sevm.currentTarget 0 = some stmid := by
-      simpa [msg, staticcallSpawnMsg, callMsg] using hsub
+      simpa only [msg, staticcallSpawnMsg, callMsg, Bool.true_or] using hsub
     rw [show p.state = d1.state from rfl] at hsub'
     exact hsub'
   · change out.state = stmid.addBal tw.toAdr 0
@@ -903,7 +899,7 @@ private lemma gatewayQuery_statcall_crossing
     intro hvalid
     have hs := hvalid.1
     rw [hsize] at hs
-    norm_num [eoaDelegatedCodeLength] at hs
+    norm_num only [eoaDelegatedCodeLength] at hs
   have hdel : accessDelegation
       (addAccessedAddress (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         target.toAdr) target.toAdr =
@@ -947,7 +943,7 @@ private lemma gatewayQuery_statcall_crossing
         unfold except64th
         omega
       rw [Nat.min_eq_right h1]
-      norm_num
+      norm_num only [Nat.sub_zero]
     rw [hmin] at hsplit
     have h1 : except64th (G - 100) + 100 = mcc :=
       congrArg Prod.fst hsplit
@@ -1001,7 +997,7 @@ private theorem installedCodeGuard_runCompiled
       (Ninst.iszero :::
         ((Func.call emptyRevertSlot) <?> (Ninst.pop ::: tail))) post := by
   func_run (3) [0]
-  case h_val => simp [B256.eqCheck, hcodeSize]
+  case h_val => simp only [B256.eqCheck, hcodeSize, ↓reduceIte]
   case a =>
     have hg : G + 18 - 18 = G := by omega
     rw [hg]
@@ -1191,7 +1187,7 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
     intro h
     have hlen := B256.length_toBytes (1 : B256)
     rw [h] at hlen
-    simp at hlen
+    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
   have hdecodedValue :
       ((pauseDecodedMemory M duration).read 0 32).1.toB256 = 1 := by
     rw [pauseDecodedMemory, show (32 : Nat) =
@@ -1266,7 +1262,7 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
         rw [temporalAccountAccessBase_accessedStorageKeys]
         exact hcoldResume)
       hdynamic hdurationNonzero hnew hpaused hdepth hnp
-      (by omega) hbound (by simp)
+      (by omega) hbound (by simp only [List.length_nil, Nat.ofNat_pos])
   have hgas1' : post1.gasLeft = Gb + 426 := by
     rw [hgas1]
     omega
@@ -1348,7 +1344,7 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
         rw [hask1']
         exact gatewayPauseKeys_union_resume_mem base.accessedStorageKeys
           target.toAdr sevm.currentTarget.toB256)
-      hpaused hdepth hnp (by omega) (by omega) (by simp)
+      hpaused hdepth hnp (by omega) (by omega) (by simp only [List.length_nil, Nat.ofNat_pos])
   have hgas2' : post2.gasLeft = Gb + 40 := by
     rw [hgas2]
     omega
@@ -1453,7 +1449,7 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
     case h_cost =>
       simp only [show ((0 : B256) * 32).toNat = 0 by decide]
       rw [Devm.extCost_zero_of_le (by omega) (by omega)]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case h_arm =>
       have hg : Gb + 40 - 81 = Gb - 41 := by omega
       rw [hg, show ((0 : B256) * 32).toNat = 0 from by decide,
@@ -1486,7 +1482,7 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
       rw [Devm.extCost_zero_of_le halign3 (by
         have hoff : (targetWord * 32).toNat + 32 ≤ 768 := by decide
         omega)]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [htargetValue3]
       have hg : Gb + 401 - 19 = Gb + 382 := by omega
@@ -1591,7 +1587,8 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
     have h := temporal_extcodesize_runCompiled (hfork := hfork) (sevm := sevm) (base := base)
       (x := target) (v := (gatewayCode controlDeployParams).size.toB256) (stack := [target])
       (M := M) (G := Gb + gatewayPauseChildCost duration + 585)
-      (by rw [hgatewayCode]) (by simp)
+      (by rw [hgatewayCode]) (by simp only [List.length_cons, List.length_nil, zero_add,
+        Nat.one_lt_ofNat])
     rw [hcodeCost] at h
     exact h
   func_run (3) [3]
@@ -1600,7 +1597,7 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
     rw [Devm.extCost_zero_of_le halign (by
       have hoff : (targetWord * 32).toNat + 32 ≤ 768 := by decide
       omega)]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case a =>
     rw [htargetValue0, htargetMemory0]
     have hg : Gb + gatewayPauseChildCost duration + 594 + codeCost - 9 =

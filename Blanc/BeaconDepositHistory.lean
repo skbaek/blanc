@@ -30,7 +30,7 @@ def HistoryExtends (baseline : List B256) (stor : Stor) : Prop :=
 
 theorem HistoryExtends.base {baseline : List B256} {stor : Stor}
     (artifact : ArtifactInv stor baseline) : HistoryExtends baseline stor := by
-  exact ⟨[], by simpa using artifact⟩
+  exact ⟨[], by simpa only [List.append_nil] using artifact⟩
 
 /-- Baseline history validity is extensional in observable storage words. -/
 theorem HistoryExtends.of_get_eq
@@ -99,14 +99,6 @@ the contract-specific external-execution boundary; fresh stack and memory are
 facts of the actual entered frame, not assumptions about an arbitrary Devm. -/
 def HistoryEntry (sevm : Sevm) (pre : Devm) : Prop :=
   NativeShaEntry sevm pre ∧ Exec.FreshEntry sevm pre
-
-/-- Every actually entered frame executing at the Beacon storage owner has a
-native SHA-256 boundary.  This is trace-local: unrelated frames need no such
-fact, and no result or poststorage premise appears. -/
-def Exec.NativeShaAdmitted
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (ca : Adr) (run : Exec pc sevm pre out) : Prop :=
-  Exec.FrameAdmitted ca NativeShaEntry run
 
 /-- Native SHA admission combined with the fresh machine state supplied by
 the concrete frame-entry trace. -/

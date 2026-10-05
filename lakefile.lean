@@ -25,3 +25,8 @@ lean_lib «Blanc» where
   needs := #[`@jaune/Assurance]
 lean_exe «blanc» where
   root := `Main
+
+/-- One-file parser/InfoTree producer; execution requires host admission. -/
+lean_exe «simpCollector» where
+  root := `scripts.SimpCollector
+  supportInterpreter := true

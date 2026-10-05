@@ -672,53 +672,6 @@ theorem upgradeToAndCallDelegateSetup_boundary
 
 /-! ## Setup child settlement -/
 
-/-- The three exact post-setup outcomes.  A clean child reaches `STOP` with
-its committed world and logs.  A failed child is already rolled back to the
-suspended parent before the runtime distinguishes an empty payload from a
-nonempty byte-for-byte bubble. -/
-inductive UpgradeToAndCallDelegateOutcome
-    {sevm : Sevm} {callPre callPost : Devm}
-    (spawn : DelegatecallSpawnDescriptor sevm callPre)
-    (child : Devm) (out : Execution) : Prop
-  | success (post : Devm)
-      (certificate : Nonempty
-        (DelegatedChildCertificate spawn.child (.ok child)))
-      (childClean : child.error.isSome = false)
-      (returnData : callPost.returnData = child.output)
-      (outcome : out = .ok post)
-      (state : post.state = child.state)
-      (transientStorage :
-        post.transientStorage = child.transientStorage)
-      (logs : post.logs = spawn.parent.logs ++ child.logs)
-  | emptyFailure (errorPre : Devm)
-      (certificate : Nonempty
-        (DelegatedChildCertificate spawn.child (.ok child)))
-      (childFailed : child.error.isSome = true)
-      (outputEmpty : child.output = [])
-      (returnData : callPost.returnData = child.output)
-      (callState : callPost.state = spawn.parent.state)
-      (callTransientStorage :
-        callPost.transientStorage = spawn.parent.transientStorage)
-      (callLogs : callPost.logs = spawn.parent.logs)
-      (errorEntryState : errorPre.state = callPost.state)
-      (outcome : ControlErrorOutcome errorPre
-        emptyDelegatecallErrorData out)
-  | bubbledFailure (bubblePre : Devm)
-      (certificate : Nonempty
-        (DelegatedChildCertificate spawn.child (.ok child)))
-      (childFailed : child.error.isSome = true)
-      (outputNonempty : child.output ≠ [])
-      (returnData : callPost.returnData = child.output)
-      (callState : callPost.state = spawn.parent.state)
-      (callTransientStorage :
-        callPost.transientStorage = spawn.parent.transientStorage)
-      (callLogs : callPost.logs = spawn.parent.logs)
-      (bubbleEntryState : bubblePre.state = callPost.state)
-      (outcome :
-        (∃ d, out = .error (.halt (.outOfGas .none), d)) ∨
-          (∃ post, out = .error (.revert, post) ∧
-            post.output = child.output))
-
 /-- Message settlement restores the complete entry world for any settled
 `upgradeToAndCall` failure.  The raw child/tail theorem above identifies why
 the frame failed; this theorem supplies the outer-frame atomic rollback. -/

@@ -466,7 +466,7 @@ private theorem rootLoopLive_storageEffectRun
       (by rw [hoff, hmem.size_eq]; omega)
   unfold rootLoop loadWord
   storage_effect_run (9) [1, 3, ((1 : B256) &&& shiftedSize)]
-  case h_val => simp [B256.ltCheck, hheight]
+  case h_val => simp only [B256.ltCheck, hheight, ↓reduceIte]
   case h_val =>
     rw [hread]
     change ((1 : B256) &&& shiftedSize) =
@@ -717,7 +717,7 @@ private theorem rootLoopDead_storageEffectRun
       (by rw [hoff, hmem.size_eq]; omega)
   unfold rootLoop loadWord
   storage_effect_run (9) [1, 3, ((1 : B256) &&& shiftedSize)]
-  case h_val => simp [B256.ltCheck, hheight]
+  case h_val => simp only [B256.ltCheck, hheight, ↓reduceIte]
   case h_val =>
     rw [hread]
     change ((1 : B256) &&& shiftedSize) =
@@ -822,11 +822,11 @@ theorem rootLoop_iterations_exists_storageEffectRun
         have hnodelegSha :
             getDelegatedCodeAddress (shaBase.getCode 2) = none := by
           simpa only [shaBase, loaded, Devm.getCode_setMach,
-            rootAfterSload_getCode] using hnodelegBase
+            Blanc.afterSload_getCode] using hnodelegBase
         have hwarmSha : (2 : Adr) ∈ shaBase.accessedAddresses := by
           change (2 : Adr) ∈ loaded.accessedAddresses
           dsimp only [loaded]
-          rw [rootAfterSload_accessedAddresses]
+          rw [Blanc.afterSload_accessedAddresses]
           exact hwarmBase
         obtain ⟨callPost, _hstack, _hmemory, hcallMemNE,
             _hgas, _hreturn, hstorage, hcode, haddresses, hkeys,
@@ -942,11 +942,11 @@ theorem rootLoop_iterations_exists_storageEffectRun
         have hnodelegSha :
             getDelegatedCodeAddress (shaBase.getCode 2) = none := by
           simpa only [shaBase, loaded, Devm.getCode_setMach,
-            rootAfterSload_getCode] using hnodelegBase
+            Blanc.afterSload_getCode] using hnodelegBase
         have hwarmSha : (2 : Adr) ∈ shaBase.accessedAddresses := by
           change (2 : Adr) ∈ loaded.accessedAddresses
           dsimp only [loaded]
-          rw [rootAfterSload_accessedAddresses]
+          rw [Blanc.afterSload_accessedAddresses]
           exact hwarmBase
         obtain ⟨callPost, _hstack, _hmemory, hcallMemNE,
             _hgas, _hreturn, hstorage, hcode, haddresses, hkeys,
@@ -1264,12 +1264,12 @@ private theorem rootFinish_storageEffectRun
     have hprefix :
         Func.RunCompiledTo.SuccessfulStopPrefix hprefixRun := by
       apply Func.RunCompiledTo.SuccessfulStopPrefix.of_execFree hprefixRun
-      · simp [loadWord, mstoreAt, storeLe64At, prepend, Func.stop,
-          funcExecFree, Ninst.pushB256]
-      · simp [loadWord, mstoreAt, storeLe64At, prepend, Func.stop,
-          Func.LocalSstoreFree, Ninst.pushB256]
-      · simp [loadWord, mstoreAt, storeLe64At, prepend, Func.stop,
-          Func.SuccessStopOnly, Ninst.pushB256]
+      · simp only [funcExecFree, loadWord, pushB256, mstoreAt, storeLe64At, Fin.isValue, Func.stop,
+        prepend]
+      · simp only [Func.LocalSstoreFree, ne_eq, reg.injEq, reduceCtorEq, not_false_eq_true,
+        loadWord, pushB256, mstoreAt, storeLe64At, Fin.isValue, Func.stop, prepend, and_self]
+      · simp only [Func.SuccessStopOnly, loadWord, pushB256, mstoreAt, storeLe64At, Fin.isValue,
+        Func.stop, prepend]
     have hspliced := hprefix.splice hsha
     simpa only [rootFinish, Func.stop, Func.replaceStopWith_prepend,
         Func.replaceStopWith] using hspliced
@@ -1456,12 +1456,12 @@ theorem getDepositRootEndpoint_runCompiled
     ∃ post, ex = .ok post ∧ Good post
   have hloadedStor :
       Devm.getStor loaded sevm.currentTarget = stor := by
-    simpa only [loaded, rootAfterSload_getStor] using hstor
+    simpa only [loaded, Blanc.afterSload_getStor] using hstor
   have hloadedNodeleg :
       getDelegatedCodeAddress (loaded.getCode 2) = none := by
-    simpa only [loaded, rootAfterSload_getCode] using hnodeleg
+    simpa only [loaded, Blanc.afterSload_getCode] using hnodeleg
   have hloadedWarm : (2 : Adr) ∈ loaded.accessedAddresses := by
-    simpa only [loaded, rootAfterSload_accessedAddresses] using hwarm
+    simpa only [loaded, Blanc.afterSload_accessedAddresses] using hwarm
   have hactive : RootLoopActive sevm.currentTarget stor 32 initial := by
     simpa only [initial] using
       rootLoopActive_32_initial sevm.currentTarget stor loaded count
@@ -1539,17 +1539,17 @@ theorem getDepositRootEndpoint_runCompiled
               using hreturnData
           · intro a
             rw [hpostStor, carrier.stor]
-            simp only [loaded, rootAfterSload_getStor]
+            simp only [loaded, Blanc.afterSload_getStor]
           · intro a
             rw [hpostCode, carrier.code]
-            simp only [loaded, rootAfterSload_getCode]
+            simp only [loaded, Blanc.afterSload_getCode]
           · rw [hpostAddresses, carrier.addresses]
-            simp only [loaded, rootAfterSload_accessedAddresses]
+            simp only [loaded, Blanc.afterSload_accessedAddresses]
           · rw [hpostKeys, carrier.keys]
           · rw [hpostLogs, carrier.logs]
-            simp only [loaded, rootAfterSload_logs]
+            simp only [loaded, Blanc.afterSload_logs]
           · rw [hpostError, carrier.error]
-            simp only [loaded, rootAfterSload_error]
+            simp only [loaded, Blanc.afterSload_error]
         · change Func.RunCompiledTo fs sevm
             (base'.setMach ⟨[final.height], memory', G + 416, base'.stateGas⟩)
             rootLoop (.ok post)
@@ -1649,12 +1649,12 @@ theorem getDepositRootEndpoint_storageEffectRun
     ∃ post, ex = .ok post ∧ Good post
   have hloadedStor :
       Devm.getStor loaded sevm.currentTarget = stor := by
-    simpa only [loaded, rootAfterSload_getStor] using hstor
+    simpa only [loaded, Blanc.afterSload_getStor] using hstor
   have hloadedNodeleg :
       getDelegatedCodeAddress (loaded.getCode 2) = none := by
-    simpa only [loaded, rootAfterSload_getCode] using hnodeleg
+    simpa only [loaded, Blanc.afterSload_getCode] using hnodeleg
   have hloadedWarm : (2 : Adr) ∈ loaded.accessedAddresses := by
-    simpa only [loaded, rootAfterSload_accessedAddresses] using hwarm
+    simpa only [loaded, Blanc.afterSload_accessedAddresses] using hwarm
   have hactive : RootLoopActive sevm.currentTarget stor 32 initial := by
     simpa only [initial] using
       rootLoopActive_32_initial sevm.currentTarget stor loaded count
@@ -1730,17 +1730,17 @@ theorem getDepositRootEndpoint_storageEffectRun
               using hreturnData
           · intro a
             rw [hpostStor, carrier.stor]
-            simp only [loaded, rootAfterSload_getStor]
+            simp only [loaded, Blanc.afterSload_getStor]
           · intro a
             rw [hpostCode, carrier.code]
-            simp only [loaded, rootAfterSload_getCode]
+            simp only [loaded, Blanc.afterSload_getCode]
           · rw [hpostAddresses, carrier.addresses]
-            simp only [loaded, rootAfterSload_accessedAddresses]
+            simp only [loaded, Blanc.afterSload_accessedAddresses]
           · rw [hpostKeys, carrier.keys]
           · rw [hpostLogs, carrier.logs]
-            simp only [loaded, rootAfterSload_logs]
+            simp only [loaded, Blanc.afterSload_logs]
           · rw [hpostError, carrier.error]
-            simp only [loaded, rootAfterSload_error]
+            simp only [loaded, Blanc.afterSload_error]
         · change Func.StorageEffectRun (runtime.main :: runtime.aux) sevm
             (base'.setMach ⟨[final.height], memory', G + 416, base'.stateGas⟩)
             rootLoop (.ok post) []
@@ -2443,12 +2443,8 @@ theorem getDepositRootEndpoint_nonpayable_zero_storageEffectRun
       (nonpayableEndpoint getDepositRootEndpoint) out effects := by
   unfold nonpayableEndpoint nonpayableEndpointZeroGas
   storage_effect_run (1)
-  · simp only [Devm.stack_setMach]
-    omega
   · rw [hvalue]
     storage_effect_run (1)
-    · simp only [Devm.stack_setMach, List.length_cons]
-      omega
     case h_arm =>
       simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas,
           show G + 15 - 15 = G by omega] using hbody
@@ -2467,8 +2463,6 @@ theorem getDepositRootEndpoint_nonpayable_nonzero_storageEffectRun
         (base.setMach ⟨base.stack, base.memory, G, base.stateGas⟩).withOutput [])) [] := by
   unfold nonpayableEndpoint nonpayableEndpointRevertGas
   storage_effect_run (1)
-  · simp only [Devm.stack_setMach]
-    omega
   · apply Func.StorageEffectRun.succ hvalue
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)
       (by

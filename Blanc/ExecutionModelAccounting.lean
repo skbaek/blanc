@@ -133,10 +133,10 @@ theorem Exec.descendantFrames_eq_nil_of_noExec {pc : Nat} {sevm : Sevm} {d : Dev
       ∀ x, ¬ Ninst.At N.sevm.code N.pc (.exec x)) :
     Exec.descendantFrames run = [] := by
   induction run with
-  | halt step => simp [Exec.descendantFrames]
+  | halt step => simp only [descendantFrames]
   | cont step next ih =>
       have := ih (fun N hN x => h N (.step (.cont step next) hN) x)
-      simpa [Exec.descendantFrames] using this
+      simpa only [descendantFrames] using this
   | doneErr step enter resume =>
       obtain ⟨x, instruction, -, -⟩ := Evm.step_spawn_inv step
       exact (h _ (.refl _) x instruction).elim
@@ -167,7 +167,7 @@ theorem Exec.descendantFrames_flatMap_runOk {O : Type} (f : Exec.Frame → List 
     simp only [settles, ↓reduceIte, List.flatMap_cons, List.flatMap_append, List.append_assoc]
   · rw [Exec.descendantFrames_runOk_of_not_settlementCommits step enter child hresume next
       settles]
-    simp [settles]
+    simp only [settles, Bool.false_eq_true, ↓reduceIte, List.nil_append]
 
 /-- **The storage across a spawning step**, by words: a settled child hands its committed storage back to
 the parent, and a child that does not settle leaves the parent's storage as it was. -/
@@ -191,7 +191,8 @@ theorem Exec.spawn_seam {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm} {frame :
   · simp only [settles, ↓reduceIte] at replay
     have hc := Exec.storageReplay_committedPost child h childFork a k
     rw [replay a k, hc, hstor]
-  · have hf : Frame.settlementCommits frame raw = false := by simpa using settles
+  · have hf : Frame.settlementCommits frame raw = false := by simpa only [ne_eq,
+    Bool.not_eq_true] using settles
     simp only [hf, Bool.false_eq_true, ↓reduceIte] at replay
     exact replay a k
 
@@ -214,16 +215,16 @@ private theorem staticChain (kinds : SpawnKinds ca sem)
       sevm.isStatic = true → (Exec.descendantFrames run).flatMap V.frameObs = [] := by
   intro pc sevm d out run
   induction run with
-  | halt step => intro _ _; simp [Exec.descendantFrames]
+  | halt step => intro _ _; simp only [descendantFrames, List.flatMap_nil]
   | cont step next ih =>
       intro chain hs
       simpa only [Exec.descendantFrames] using ih (chain.snoc (.cont step next)) hs
-  | doneErr step enter resume => intro _ _; simp [Exec.descendantFrames]
+  | doneErr step enter resume => intro _ _; simp only [descendantFrames, List.flatMap_nil]
   | doneOk step enter resume next ih =>
       intro chain hs
       simpa only [Exec.descendantFrames] using
         ih (chain.snoc (.doneOk step enter resume next)) hs
-  | runErr step enter child resume ih => intro _ _; simp [Exec.descendantFrames]
+  | runErr step enter child resume ih => intro _ _; simp only [descendantFrames, List.flatMap_nil]
   | runOk step enter child resume next childIH nextIH =>
       rename_i nodePc nodeSevm nodePre frame rsm nextPc cevm raw inter final
       intro chain hs
@@ -297,7 +298,7 @@ theorem spawnReplayTarget
       exact C.nil _
     · rw [hobs]
       exact V.obs_nil
-  · have hs' : sevm.isStatic = false := by simpa using hs
+  · have hs' : sevm.isStatic = false := by simpa only [Bool.not_eq_true] using hs
     refine ⟨fun h => absurd h hs, fun bound => ?_⟩
     obtain ⟨own, hown, c3, c12⟩ := spawn run committed hrun target fork installed admitted bound hs'
     rw [self]
@@ -388,7 +389,8 @@ theorem spawnReplayTarget
               ofStateGet fun k => (seamB settles ca k).symm
             refine ⟨own ++ [], append (e3 ▸ hc1) hrep2, ?_⟩
             rw [V.obs_append, V.obs_nil, hown]
-            have hf : Frame.settlementCommits frame raw = false := by simpa using settles
+            have hf : Frame.settlementCommits frame raw = false := by simpa only [Bool.not_eq_true] using
+              settles
             simp only [hf, Bool.false_eq_true, ↓reduceIte, List.append_nil]
 
 end Exec.CoreAccounting

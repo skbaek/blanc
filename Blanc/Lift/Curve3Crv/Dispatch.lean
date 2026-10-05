@@ -22,9 +22,12 @@ open Blanc.Curve3Crv (Call)
 
 /-- The first selector test, inline in `t_000d_c0` after the prologue. -/
 def test0 : SFunc :=
-  .next (.push [0x16, 0x52, 0xe9, 0xfc] (by simp)) (.next (.push [0x00] (by simp))
+  .next (.push [0x16, 0x52, 0xe9, 0xfc] (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLeDiff])) (.next (.push [0x00] (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.one_le_ofNat]))
     (.next (.reg .mload) (.next (.reg .eq) (.next (.reg .iszero)
-      (.next (.push [0x00, 0xe2] (by simp)) (.branch t_00b0_c0 t_00e2_c0))))))
+      (.next (.push [0x00, 0xe2] (by simp only [List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLeDiff])) (.branch t_00b0_c0 t_00e2_c0))))))
 
 theorem t_000d_eq : t_000d_c0 = .dest (vyPrologue test0) := rfl
 
@@ -36,9 +39,12 @@ local notation "Mv" => vyMem Mem.empty (Sevm.dataWord sevm 0)
 
 /-- One selector test's tree. -/
 def selTest (c0 c1 c2 c3 h l : UInt8) (f nxt : SFunc) : SFunc :=
-  .next (.push [c0, c1, c2, c3] (by simp)) (.next (.push [0x00] (by simp))
+  .next (.push [c0, c1, c2, c3] (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLeDiff])) (.next (.push [0x00] (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.one_le_ofNat]))
     (.next (.reg .mload) (.next (.reg .eq) (.next (.reg .iszero)
-      (.next (.push [h, l] (by simp)) (.branch f nxt))))))
+      (.next (.push [h, l] (by simp only [List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLeDiff])) (.branch f nxt))))))
 
 theorem mload_selector :
     Bytes.toB256 ((Mv).read (Bytes.toB256 [0x00]).toNat 32).1 = Sevm.selector sevm ∧
@@ -54,28 +60,29 @@ private theorem test_rx {v : B256} (hv : B256.eqCheck (B256.eqCheck (Sevm.select
   obtain ⟨hs, hM⟩ := mload_selector (sevm := sevm)
   unfold selTest
   rw [show G + 18 = G + 3 + 3 + 3 + 3 + 3 + 3 by omega]
-  refine rx_push rfl (by simp) ?_
-  refine rx_push rfl (by simp) ?_
-  refine rx_mload (c := 3) ?_ hs hM (by simp) ?_
+  refine rx_push rfl (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_mload (c := 3) ?_ hs hM (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.one_lt_ofNat]) ?_
   · rw [St, Devm.extCost_zero_of_le (by rw [vyMem_empty_size]) (by
       rw [vyMem_empty_size]; decide)]; rfl
-  refine rx_eq rfl (by simp) ?_
-  refine rx_iszero hv (by simp) ?_
-  exact rx_push rfl (by simp) k
+  refine rx_eq rfl (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  refine rx_iszero hv (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  exact rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) k
 
 /-- A missed test: control passes to the next test. -/
 theorem test_miss (hne : Sevm.selector sevm ≠ Bytes.toB256 [c0, c1, c2, c3]) {G : Nat}
     (k : SFunc.RunExact prog sevm (St b [] Mv G) nxt o) :
     SFunc.RunExact prog sevm (St b [] Mv (G + 28)) (selTest c0 c1 c2 c3 h l f nxt) o := by
   rw [show G + 28 = G + 10 + 18 by omega]
-  exact test_rx (v := 1) (by simp [B256.eqCheck, hne]) (rx_branch_succ (by decide) k)
+  exact test_rx (v := 1) (by simp only [B256.eqCheck, hne, ↓reduceIte]) (rx_branch_succ (by decide) k)
 
 /-- A hit: control falls into the body. -/
 theorem test_hit (heq : Sevm.selector sevm = Bytes.toB256 [c0, c1, c2, c3]) {G : Nat}
     (k : SFunc.RunExact prog sevm (St b [] Mv G) f o) :
     SFunc.RunExact prog sevm (St b [] Mv (G + 28)) (selTest c0 c1 c2 c3 h l f nxt) o := by
   rw [show G + 28 = G + 10 + 18 by omega]
-  exact test_rx (v := 0) (by simp [B256.eqCheck, heq]) (rx_branch_zero k)
+  exact test_rx (v := 0) (by simp only [B256.eqCheck, heq, ↓reduceIte, ite_eq_right_iff, imp_self]) (rx_branch_zero k)
 
 /-- The size test and the prologue, forward (100 gas). -/
 theorem disp_prefix (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256) {G : Nat}
@@ -83,18 +90,19 @@ theorem disp_prefix (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 
     SFunc.RunExact prog sevm (St b [] Mem.empty (G + 75 + 1 + 24)) t_0000_c0 o := by
   unfold t_0000_c0
   rw [show G + 75 + 1 + 24 = G + 75 + 1 + 10 + 3 + 3 + 3 + 2 + 3 by omega]
-  refine rx_push rfl (by simp) ?_
-  refine rx_calldatasize (by simp) ?_
-  refine rx_lt (v := 0) ?_ (by simp) ?_
+  refine rx_push rfl (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  refine rx_calldatasize (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.one_lt_ofNat]) ?_
+  refine rx_lt (v := 0) ?_ (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   · have h4 : (Bytes.toB256 [0x04]).toNat = 4 := by decide
     simp only [B256.ltCheck, B256.lt_iff_toNat_lt_toNat, h4,
       B256.toNat_toB256_of_lt hcd]
     rw [ite_eq_right_iff]; intro h; omega
-  refine rx_iszero (v := 1) (by simp [B256.eqCheck]) (by simp) ?_
-  refine rx_push rfl (by simp) ?_
+  refine rx_iszero (v := 1) (by simp only [B256.eqCheck, ↓reduceIte]) (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
   refine rx_branch_succ (by decide) ?_
   rw [t_000d_eq]
-  exact rx_dest (rx_vyPrologue (by simp) k)
+  exact rx_dest (rx_vyPrologue (by simp only [List.length_nil, zero_add, Nat.reduceLT]) k)
 
 /-- A test, inverted. -/
 theorem test_inv {C : List Nat} {r : Seg} {G : Nat}
@@ -117,10 +125,11 @@ theorem test_inv {C : List Nat} {r : Seg} {G : Nat}
     refine ⟨?_, G7, run⟩
     by_contra hne
     have h10 : (1 : B256) ≠ 0 := by decide
-    simp [B256.eqCheck, hne, h10] at hw
+    simp only [B256.eqCheck, hne, ↓reduceIte, h10] at hw
   · right
     refine ⟨fun he => ?_, G7, run⟩
-    simp [B256.eqCheck, he] at hw
+    simp only [B256.eqCheck, he, ↓reduceIte, ne_eq, ite_eq_right_iff, imp_self,
+      not_true_eq_false] at hw
 
 /-- The size test and the prologue, inverted. -/
 theorem disp_prefix_inv {r : Seg} {G : Nat} (hcd : sevm.data.length < 2 ^ 256)
@@ -135,7 +144,8 @@ theorem disp_prefix_inv {r : Seg} {G : Nat} (hcd : sevm.data.length < 2 ^ 256)
   rcases ric_branch run with ⟨-, G6, run⟩ | ⟨hw, G6, run⟩
   · unfold t_0009_c0 at run
     obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1
-    obtain ⟨G8, run⟩ := ric_jump (g := t_08de_c7) (by simp) rfl run
+    obtain ⟨G8, run⟩ := ric_jump (g := t_08de_c7) (by simp only [List.not_mem_nil,
+      not_false_eq_true]) rfl run
     exact (run.false_of_noOk (by decide)).elim
   rw [t_000d_eq] at run
   obtain ⟨G7, run⟩ := ric_dest run
@@ -145,7 +155,7 @@ theorem disp_prefix_inv {r : Seg} {G : Nat} (hcd : sevm.data.length < 2 ^ 256)
   apply hw
   have h4 : (Bytes.toB256 [0x04]).toNat = 4 := by decide
   have hl : sevm.data.length.toB256.toNat = sevm.data.length := B256.toNat_toB256_of_lt hcd
-  simp [B256.eqCheck, B256.ltCheck, B256.lt_iff_toNat_lt_toNat, h4, hl]
+  simp only [B256.eqCheck, B256.ltCheck, B256.lt_iff_toNat_lt_toNat, hl, h4, ite_eq_right_iff]
   intro h
   exact h (by omega)
 

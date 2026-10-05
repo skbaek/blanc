@@ -170,7 +170,6 @@ structure LidoWriterSpecsM (A : List LidoCircuitBreaker.Entry → Sevm → Prop)
     lidoSpec.Post sevm.currentTarget sevm (Outcome.devm o)
 
 
-private instance : Inhabited SFunc := ⟨.undefined⟩
 
 section Frame
 

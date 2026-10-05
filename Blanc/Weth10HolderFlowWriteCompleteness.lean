@@ -29,36 +29,7 @@ theorem Exec.Deriv.ParentStepActions.unique
     (right : Exec.Deriv.ParentStepActions dp ca
       nextRight root rightActions) :
     nextLeft = nextRight ∧ leftActions = rightActions := by
-  cases left <;> cases right <;> simp_all
-
-/-- Same-frame prefixes from one concrete `Exec` proof form a linear chain.
-This is the generic ordering fact needed to compare an arbitrary occurrence
-with a compiled source cursor. -/
-theorem Exec.Deriv.ParentPrefixActions.linear
-    {dp : DeployParams} {ca : Adr}
-    {root leftTail rightTail : Exec.Deriv}
-    {leftActions rightActions : List FlowAction}
-    (left : Exec.Deriv.ParentPrefixActions dp ca
-      root leftTail leftActions)
-    (right : Exec.Deriv.ParentPrefixActions dp ca
-      root rightTail rightActions) :
-    (∃ suffix, Exec.Deriv.ParentPrefixActions dp ca
-      leftTail rightTail suffix) ∨
-    (∃ suffix, Exec.Deriv.ParentPrefixActions dp ca
-      rightTail leftTail suffix) := by
-  induction left generalizing rightTail rightActions with
-  | refl =>
-      exact Or.inl ⟨rightActions, right⟩
-  | @step root next leftTail headActions leftActions head rest ih =>
-      cases right with
-      | refl =>
-          exact Or.inr ⟨headActions ++ leftActions, .step head rest⟩
-      | @step _ rightNext rightTail rightHeadActions rightActions
-          rightHead rightRest =>
-          have unique := head.unique rightHead
-          cases unique.1
-          cases unique.2
-          exact ih rightRest
+  cases left <;> cases right <;> simp_all only [and_self, ExceptT.stM_eq]
 
 /-- An actual proof-indexed `SSTORE` whose raw key is an address-shaped WETH
 balance key.  The machine states, recursive slot, raw key, stored value, and
@@ -543,11 +514,11 @@ theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_after_line
       change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs sourceTable
         (.next source (line +++ tail)) final at cursor
       have sourceNotStore : source ≠ .reg .sstore :=
-        noStore source (by simp)
+        noStore source (by simp only [List.mem_cons, true_or])
       rcases cursor.balanceSstoreOccurrence_next_ne sourceNotStore
           occurrence with
         ⟨nextCursor, sourceSlot, sourceOccurrence, remaining⟩
-      rcases ih nextCursor (fun n hn => noStore n (by simp [hn]))
+      rcases ih nextCursor (fun n hn => noStore n (by simp only [List.mem_cons, hn, or_true]))
           remaining with
         ⟨tailCursor, tailRun, retained⟩
       exact ⟨tailCursor, .cons sourceOccurrence.run tailRun, retained⟩
@@ -647,12 +618,12 @@ private theorem ninst_ne_sstore_of_free {source : Ninst}
     source ≠ .reg .sstore := by
   cases source with
   | reg operation =>
-      cases operation <;> simp [ninstSstoreFree] at free ⊢
-  | exec operation => simp
-  | push bytes size => simp
-  | dupn a => simp
-  | swapn a => simp
-  | exchange a => simp
+      cases operation <;> simp only [ninstSstoreFree, ne_eq, Ninst.reg.injEq, reduceCtorEq, not_false_eq_true, Bool.false_eq_true] at free ⊢
+  | exec operation => simp only [ne_eq, reduceCtorEq, not_false_eq_true]
+  | push bytes size => simp only [ne_eq, reduceCtorEq, not_false_eq_true]
+  | dupn a => simp only [ne_eq, reduceCtorEq, not_false_eq_true]
+  | swapn a => simp only [ne_eq, reduceCtorEq, not_false_eq_true]
+  | exchange a => simp only [ne_eq, reduceCtorEq, not_false_eq_true]
 
 /-- Executable finite certificate that a source body and every table body it
 can call within `fuel` contain no `SSTORE`.  A zero fuel is deliberately
@@ -690,7 +661,7 @@ private theorem Func.sstoreFreeWithin_eq_of_noCalls
           simp only [Func.NoCalls] at noCalls
           simp only [Func.sstoreFreeWithin]
           rw [ih noCalls]
-      | call k => simp [Func.NoCalls] at noCalls
+      | call k => simp only [Func.NoCalls] at noCalls
 
 /-- Soundness of the executable no-SSTORE certificate against an arbitrary
 actual occurrence.  The proof still follows the executed cursor branch/call;
@@ -706,11 +677,11 @@ theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_of_free
     (occurrence : Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) cursor
       (.reg .sstore) stepPre stepPost slot) : False := by
   induction fuel generalizing body with
-  | zero => simp [Func.sstoreFreeWithin] at free
+  | zero => simp only [Func.sstoreFreeWithin, Bool.false_eq_true] at free
   | succ fuel ih =>
       cases body with
       | branch left right =>
-          simp [Func.sstoreFreeWithin] at free
+          simp only [Func.sstoreFreeWithin, Bool.and_eq_true] at free
           rcases cursor.balanceSstoreOccurrence_branch occurrence with
             ⟨leftCursor, inside⟩ | ⟨rightCursor, inside⟩
           · exact ih leftCursor free.1 inside
@@ -718,16 +689,16 @@ theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_of_free
       | last i =>
           exact cursor.no_balanceSstoreOccurrence_last occurrence
       | next source tail =>
-          simp [Func.sstoreFreeWithin] at free
+          simp only [Func.sstoreFreeWithin, Bool.and_eq_true] at free
           have notStore := ninst_ne_sstore_of_free free.1
           rcases cursor.balanceSstoreOccurrence_next_ne notStore occurrence with
             ⟨tailCursor, sourceSlot, sourceOccurrence, inside⟩
           exact ih tailCursor free.2 inside
       | call k =>
           cases hlookup : (f₀ :: aux)[k]? with
-          | none => simp [Func.sstoreFreeWithin, hlookup] at free
+          | none => simp only [Func.sstoreFreeWithin, hlookup, Bool.false_eq_true] at free
           | some called =>
-            simp [Func.sstoreFreeWithin, hlookup] at free
+            simp only [Func.sstoreFreeWithin, hlookup] at free
             rcases cursor.balanceSstoreOccurrence_call hcode occurrence with
               ⟨actualBody, actualLookup, bodyCursor, inside⟩
             have bodyEq : actualBody = called := by
@@ -774,11 +745,11 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_routedToCall
         Blanc.Weth10.Exec.Frame.NinstOccurrenceFromCursor (frame := frame) targetCursor (.reg .sstore)
           stepPre stepPost slot := by
   induction fuel generalizing body with
-  | zero => simp [Func.balanceSstoreRoutedToCallWithin] at routed
+  | zero => simp only [Func.balanceSstoreRoutedToCallWithin, Bool.false_eq_true] at routed
   | succ fuel ih =>
       cases body with
       | branch left right =>
-          simp [Func.balanceSstoreRoutedToCallWithin] at routed
+          simp only [Func.balanceSstoreRoutedToCallWithin, Bool.and_eq_true] at routed
           rcases cursor.balanceSstoreOccurrence_branch occurrence with
             ⟨leftCursor, inside⟩ | ⟨rightCursor, inside⟩
           · exact ih leftCursor routed.1 inside
@@ -786,7 +757,7 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_routedToCall
       | last terminal =>
           exact (cursor.no_balanceSstoreOccurrence_last occurrence).elim
       | next source tail =>
-          simp [Func.balanceSstoreRoutedToCallWithin] at routed
+          simp only [Func.balanceSstoreRoutedToCallWithin, Bool.and_eq_true] at routed
           rcases cursor.balanceSstoreOccurrence_next_ne
               (ninst_ne_sstore_of_free routed.1) occurrence with
             ⟨tailCursor, _sourceSlot, _sourceOccurrence, insideTail⟩
@@ -795,11 +766,11 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_routedToCall
           by_cases selected : k = target
           · subst k
             exact cursor.balanceSstoreOccurrence_call hcode occurrence
-          · simp [Func.balanceSstoreRoutedToCallWithin, selected] at routed
+          · simp only [Func.balanceSstoreRoutedToCallWithin, selected, ↓reduceIte] at routed
             cases lookup : (f₀ :: aux)[k]? with
-            | none => simp [lookup] at routed
+            | none => simp only [lookup, Bool.false_eq_true] at routed
             | some called =>
-                simp [lookup] at routed
+                simp only [lookup] at routed
                 rcases cursor.balanceSstoreOccurrence_call hcode occurrence with
                   ⟨actualBody, actualLookup, bodyCursor, insideBody⟩
                 have bodyEq : actualBody = called :=
@@ -822,7 +793,7 @@ private theorem Exec.Frame.compiledMainCursorWithSourcePrefix
         ⟨cursor.pc, frame.sevm, cursor.pre, frame.out, cursor.current⟩ := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -924,7 +895,8 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_main
       (.branch (fsig +++ dispatchWith fallbackSlot (weth10Tree dp))
         receiveEther)) frame.post at cursor
   rcases cursor.balanceSstoreOccurrence_after_line
-      (by simp) occurrence with
+      (by simp only [List.mem_cons, List.not_mem_nil, or_false, ne_eq, forall_eq_or_imp,
+        Ninst.reg.injEq, reduceCtorEq, not_false_eq_true, forall_eq, and_self]) occurrence with
     ⟨branchCursor, entryRun, atBranch⟩
   have flagPrefix :
       [frame.sevm.data.length.toB256 =? 0] <<+
@@ -948,7 +920,7 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_main
     have nonempty : frame.sevm.data.length.toB256 ≠ 0 := by
       intro empty
       rw [empty] at flagEq
-      simp [B256.eqCheck] at flagEq
+      simp only [B256.eqCheck, ↓reduceIte] at flagEq
       exact (by decide : (1 : B256) ≠ 0) flagEq
     exact Or.inl ⟨dispatchCursor, nonempty, inside⟩
   · have selectedPrefix : [flag] <<+ branchCursor.pre.stack :=
@@ -958,7 +930,7 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_main
     have empty : frame.sevm.data.length.toB256 = 0 := by
       by_contra nonempty
       have checkZero : (frame.sevm.data.length.toB256 =? 0) = 0 := by
-        simp [B256.eqCheck, nonempty]
+        simp only [B256.eqCheck, nonempty, ↓reduceIte]
       apply nonzero
       rw [← flagEq]
       exact checkZero
@@ -996,7 +968,8 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_dispatchWith :
       rcases cursor.balanceSstoreOccurrence_after_line
           (line := [Ninst.pushB256 word, Ninst.eq])
           (tail := .branch (.call k) body)
-          (by simp [Ninst.pushB256]) occurrence with
+          (by simp only [Ninst.pushB256, List.mem_cons, List.not_mem_nil, or_false, ne_eq,
+            forall_eq_or_imp, reduceCtorEq, not_false_eq_true, forall_eq, Ninst.reg.injEq, and_self]) occurrence with
         ⟨branchCursor, compareRun, atBranch⟩
       have flagPrefix : (word =? sig) :: stack <<+
           branchCursor.pre.stack := by
@@ -1006,8 +979,8 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_dispatchWith :
           ⟨afterEq, eqStep, emptyLine⟩
         cases emptyLine
         have pushed : word :: sig :: stack <<+ afterPush.stack := by
-          simpa using prefix_of_push
-            (of_run_pushB256 pushStep) selectorPrefix
+          simpa only [List.cons_append, List.nil_append] using
+            prefix_of_push (of_run_pushB256 pushStep) selectorPrefix
         exact prefix_of_eq eqStep pushed
       rcases branchCursor.balanceSstoreOccurrence_branchWithFlag atBranch with
         ⟨fallbackCursor, pop, insideFallback⟩ |
@@ -1031,7 +1004,7 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_dispatchWith :
         have wordEq : word = sig := by
           by_contra different
           have checkZero : (word =? sig) = 0 := by
-            simp [B256.eqCheck, different]
+            simp only [B256.eqCheck, different, ↓reduceIte]
           apply nonzero
           rw [← flagEq]
           exact checkZero
@@ -1045,7 +1018,9 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_dispatchWith :
           (line := [Ninst.dup 0, Ninst.pushB256 (leftmostFsig right),
             Ninst.gt])
           (tail := .branch (dispatchWith k right) (dispatchWith k left))
-          (by simp [Ninst.pushB256]) occurrence with
+          (by simp only [Fin.isValue, Ninst.pushB256, List.mem_cons, List.not_mem_nil, or_false,
+            ne_eq, forall_eq_or_imp, Ninst.reg.injEq, reduceCtorEq, not_false_eq_true, forall_eq,
+            and_self]) occurrence with
         ⟨branchCursor, compareRun, atBranch⟩
       have flagPrefix :
           (leftmostFsig right >? sig) :: sig :: stack <<+
@@ -1061,8 +1036,8 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_dispatchWith :
           prefix_of_dup_val dupStep (by show_nth) selectorPrefix
         have pushed : leftmostFsig right :: sig :: sig :: stack <<+
             afterPush.stack := by
-          simpa using prefix_of_push
-            (of_run_pushB256 pushStep) duplicated
+          simpa only [List.cons_append, List.nil_append] using
+            prefix_of_push (of_run_pushB256 pushStep) duplicated
         exact prefix_of_gt gtStep pushed
       rcases branchCursor.balanceSstoreOccurrence_branchWithFlag atBranch with
         ⟨rightCursor, pop, insideRight⟩ |
@@ -1110,7 +1085,9 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_selectorBody
   · rcases dispatchPrefixCursor.balanceSstoreOccurrence_after_line
         (line := fsig)
         (tail := dispatchWith fallbackSlot (weth10Tree dp))
-        (by simp [fsig, cdl, shiftRight, Ninst.pushB256])
+        (by simp only [fsig, cdl, Ninst.pushB256, shiftRight, List.cons_append, List.nil_append,
+          List.mem_cons, List.not_mem_nil, or_false, ne_eq, forall_eq_or_imp, reduceCtorEq,
+          not_false_eq_true, Ninst.reg.injEq, forall_eq, and_self])
         insideDispatch with
       ⟨dispatchCursor, fsigRun, insideTree⟩
     have selectorPrefix : Sevm.selector frame.sevm :: [] <<+
@@ -1119,7 +1096,9 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_selectorBody
     have fallbackLookup :
         (((weth10 dp).main :: weth10Aux)[fallbackSlot]?) =
           some Func.revert := by
-      simp [fallbackSlot, weth10, weth10Aux]
+      simp only [weth10, weth10Aux, fallbackSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.one_lt_ofNat, getElem?_pos, List.getElem_cons_succ,
+        List.getElem_cons_zero]
     have fallbackFree : Func.sstoreFreeWithin 4
         ((weth10 dp).main :: weth10Aux) Func.revert = true := by
       rfl
@@ -1130,7 +1109,7 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_selectorBody
     have listMember :
         (Sevm.selector frame.sevm, body) ∈ weth10Funcs dp :=
       DispatchTree.mem_of_mem_ofSorted
-        (by simp [weth10Funcs]) (by simpa [weth10Tree] using treeMember)
+        (by simp only [weth10Funcs, ne_eq, reduceCtorEq, not_false_eq_true]) (by simpa only [weth10Tree] using treeMember)
     exact ⟨body, listMember, bodyCursor, bodyStack, insideBody⟩
   · exact (nonempty selectedEmpty).elim
 
@@ -1153,7 +1132,8 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_nonpayable
   rcases cursor.balanceSstoreOccurrence_after_line
       (line := [Ninst.callvalue, Ninst.iszero])
       (tail := .branch Func.revert body)
-      (by simp) fromCursor with
+      (by simp only [List.mem_cons, List.not_mem_nil, or_false, ne_eq, forall_eq_or_imp,
+        Ninst.reg.injEq, reduceCtorEq, not_false_eq_true, forall_eq, and_self]) fromCursor with
     ⟨branchCursor, _guardRun, atBranch⟩
   rcases branchCursor.balanceSstoreOccurrence_branch atBranch with
     ⟨revertCursor, insideRevert⟩ | ⟨bodyCursor, insideBody⟩
@@ -1178,74 +1158,6 @@ private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_nonpayable_
     ⟨bodyCursor, insideBody⟩
   exact bodyCursor.no_balanceSstoreOccurrence_of_free
     hcode free insideBody
-
-/-- Exhaustive structural view of the exact 27-entry WETH10 dispatcher.
-Keeping the selected selector and body as indices lets later occurrence proofs
-case-split without losing their dependent body cursor. -/
-inductive Weth10BodyCase (dp : DeployParams) : B256 → Func → Prop
-  | nameCase : Weth10BodyCase dp
-      (selector "name" []) (nonpayable name)
-  | approveCase : Weth10BodyCase dp
-      (selector "approve" [.address, .uint256]) (nonpayable approve)
-  | totalSupplyCase : Weth10BodyCase dp
-      (selector "totalSupply" []) (nonpayable totalSupply)
-  | withdrawToCase : Weth10BodyCase dp
-      (selector "withdrawTo" [.address, .uint256]) (nonpayable withdrawTo)
-  | transferFromCase : Weth10BodyCase dp
-      (selector "transferFrom" [.address, .address, .uint256])
-      (nonpayable transferFrom)
-  | withdrawCase : Weth10BodyCase dp
-      (selector "withdraw" [.uint256]) (nonpayable withdraw)
-  | permitTypehashCase : Weth10BodyCase dp
-      (selector "PERMIT_TYPEHASH" []) (nonpayable permitTypehash)
-  | decimalsCase : Weth10BodyCase dp
-      (selector "decimals" []) (nonpayable decimals)
-  | domainSeparatorCase : Weth10BodyCase dp
-      (selector "DOMAIN_SEPARATOR" []) (nonpayable (domainSeparator dp))
-  | transferAndCallCase : Weth10BodyCase dp
-      (selector "transferAndCall" [.address, .uint256, .dynBytes])
-      (nonpayable transferAndCall)
-  | flashLoanCase : Weth10BodyCase dp
-      (selector "flashLoan" [.address, .address, .uint256, .dynBytes])
-      (nonpayable flashLoan)
-  | depositToAndCallCase : Weth10BodyCase dp
-      (selector "depositToAndCall" [.address, .dynBytes]) depositToAndCall
-  | maxFlashLoanCase : Weth10BodyCase dp
-      (selector "maxFlashLoan" [.address]) (nonpayable maxFlashLoan)
-  | balanceOfCase : Weth10BodyCase dp
-      (selector "balanceOf" [.address]) (nonpayable balanceOfEndpoint)
-  | noncesCase : Weth10BodyCase dp
-      (selector "nonces" [.address]) (nonpayable nonces)
-  | callbackSuccessCase : Weth10BodyCase dp
-      (selector "CALLBACK_SUCCESS" []) (nonpayable callbackSuccess)
-  | flashMintedCase : Weth10BodyCase dp
-      (selector "flashMinted" []) (nonpayable flashMinted)
-  | withdrawFromCase : Weth10BodyCase dp
-      (selector "withdrawFrom" [.address, .address, .uint256])
-      (nonpayable withdrawFrom)
-  | symbolCase : Weth10BodyCase dp
-      (selector "symbol" []) (nonpayable symbol)
-  | transferCase : Weth10BodyCase dp
-      (selector "transfer" [.address, .uint256]) (nonpayable transfer)
-  | depositToCase : Weth10BodyCase dp
-      (selector "depositTo" [.address]) depositTo
-  | approveAndCallCase : Weth10BodyCase dp
-      (selector "approveAndCall" [.address, .uint256, .dynBytes])
-      (nonpayable approveAndCall)
-  | deploymentChainIdCase : Weth10BodyCase dp
-      (selector "deploymentChainId" [])
-      (nonpayable (deploymentChainId dp))
-  | depositCase : Weth10BodyCase dp
-      (selector "deposit" []) deposit
-  | permitCase : Weth10BodyCase dp
-      (selector "permit"
-        [.address, .address, .uint256, .uint256, .uint 8, .bytes 32,
-          .bytes 32])
-      (nonpayable (permit dp))
-  | flashFeeCase : Weth10BodyCase dp
-      (selector "flashFee" [.address, .uint256]) (nonpayable flashFee)
-  | allowanceCase : Weth10BodyCase dp
-      (selector "allowance" [.address, .address]) (nonpayable allowance)
 
 /-- The exact local role of one balance-region stored word.  Transfer and
 flash actions have separate debit and credit constructors; for a self
@@ -1337,7 +1249,8 @@ theorem Exec.Frame.primaryFlowAtom_eq_some_of_flowAction_eq_some
   unfold Blanc.Weth10.Exec.Frame.flowAction? at classified
   rw [if_pos context.invocation] at classified
   have mapped := congrArg (Option.map FlowAction.atom) classified
-  simpa [Function.comp_def] using mapped
+  simpa only [Option.map_map, Function.comp_def, Option.map_id_fun', id_eq, Option.map_some] using
+    mapped
 
 /-- Package an immediate source-site role once the same atom is selected by
 the executable primary classifier.  This is the non-circular bridge from the
@@ -1358,7 +1271,7 @@ theorem Exec.Frame.BalanceSstoreOccurrence.classify_of_primary_role
   | none =>
       unfold Blanc.Weth10.Exec.Frame.flowAction? at classified
       rw [if_pos context.invocation, primary] at classified
-      simp at classified
+      simp only [Option.map_some, reduceCtorEq] at classified
   | some action =>
       have selected :=
         Blanc.Weth10.Exec.Frame.primaryFlowAtom_eq_some_of_flowAction_eq_some (frame := frame)
@@ -1435,8 +1348,8 @@ private def mintToAfterSstore (continuation : Func) : Func :=
 private theorem mintToPrefix_eq_lineSplit :
     mintToPrefix =
       mintToBeforeSstore ++ [Ninst.sstore] ++ mintToAfterSstoreLine := by
-  simp [mintToPrefix, mintToBeforeSstore, mintToAfterSstoreLine,
-    List.append_assoc]
+  simp only [mintToPrefix, List.append_assoc, List.cons_append, List.nil_append, Fin.isValue,
+    mintToBeforeSstore, mintToAfterSstoreLine]
 
 private theorem mintToPrefix_append_eq_sstoreSplit (continuation : Func) :
     mintToPrefix +++ continuation =
@@ -1470,7 +1383,8 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_mintCaller
       fromCursor with
     ⟨splitCursor, _splitPre, fromSplit⟩
   rcases splitCursor.balanceSstoreOccurrence_after_line
-      (by simp [mintCallerBeforeSstore]) fromSplit with
+      (by simp only [mintCallerBeforeSstore, List.mem_cons, List.not_mem_nil, or_false, ne_eq,
+        forall_eq_or_imp, Ninst.reg.injEq, reduceCtorEq, not_false_eq_true, forall_eq, and_self]) fromSplit with
     ⟨storeCursor, prefixRun, atStore⟩
   rcases storeCursor.ninstOccurrenceFromCursor_head_or_tail atStore with
     ⟨_sourceEq, preEq⟩ |
@@ -1542,7 +1456,7 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_mintCaller
         [frame.sevm.caller.toB256,
           Stor.rest (Devm.getStor storeCursor.pre ca) frame.sevm.caller +
             Nat.toB256 frame.sevm.value.toNat] :=
-      List.pref_unique (by simp) occurrencePairPrefix expectedPrefix
+      List.pref_unique (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd]) occurrencePairPrefix expectedPrefix
     injection pairEq with keyEq valueTailEq
     injection valueTailEq with valueEq
     have holderEq : holder = frame.sevm.caller := by
@@ -1587,8 +1501,9 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_mintTo
   rcases splitCursor.balanceSstoreOccurrence_after_line
       (by
         rintro n hn rfl
-        simp [mintToBeforeSstore, addressArg, normalizeAddress,
-          pushAddressMask, arg, cdl, Ninst.pushB256] at hn) fromSplit with
+        simp only [mintToBeforeSstore, addressArg, arg, cdl, Ninst.pushB256, normalizeAddress,
+          pushAddressMask, List.cons_append, List.nil_append, List.mem_cons, reduceCtorEq,
+          Ninst.reg.injEq, List.not_mem_nil, or_self] at hn) fromSplit with
     ⟨storeCursor, prefixRun, atStore⟩
   rcases storeCursor.ninstOccurrenceFromCursor_head_or_tail atStore with
     ⟨_sourceEq, preEq⟩ |
@@ -1607,8 +1522,7 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_mintTo
     cases emptyLine
     have recipientPrefix : normalizedAddressArg frame.sevm 0 :: [] <<+
         afterRecipient.stack := by
-      simpa [normalizedAddressArg] using
-        prefix_of_addressArg nil_pref recipientRun
+      simpa only [normalizedAddressArg] using prefix_of_addressArg nil_pref recipientRun
     rcases prefix_of_sload loadStep recipientPrefix with
       ⟨recipientBalance, balancePrefix, recipientBalanceEq⟩
     have valuePrefix : frame.sevm.value :: recipientBalance :: [] <<+
@@ -1621,8 +1535,7 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_mintTo
         normalizedAddressArg frame.sevm 0 ::
           (frame.sevm.value + recipientBalance) :: [] <<+
             storeCursor.pre.stack := by
-      simpa [normalizedAddressArg] using
-        prefix_of_addressArg sumPrefix recipientAgainRun
+      simpa only [normalizedAddressArg] using prefix_of_addressArg sumPrefix recipientAgainRun
     have storLoad : Devm.getStor afterRecipient =
         Devm.getStor afterLoad :=
       Ninst.Hinv.inv (f := Devm.getStor) loadStep
@@ -1673,7 +1586,7 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_mintTo
           Stor.rest (Devm.getStor storeCursor.pre ca)
               (Sevm.argWord frame.sevm 0).toAdr +
             Nat.toB256 frame.sevm.value.toNat] :=
-      List.pref_unique (by simp) occurrencePairPrefix expectedPrefix
+      List.pref_unique (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd]) occurrencePairPrefix expectedPrefix
     injection pairEq with occurrenceKeyEq valueTailEq
     injection valueTailEq with occurrenceValueEq
     have holderEq : holder = (Sevm.argWord frame.sevm 0).toAdr := by
@@ -1707,7 +1620,7 @@ private theorem Exec.Frame.CompiledCursor.balanceSstorePrimaryRole_deposit
           frame.sevm.value.toNat) holder value := by
   refine ⟨?_, cursor.balanceSstoreRole_mintCaller
     fromCursor occurrence context⟩
-  simp [primaryFlowAtom, nonempty, selectorEq]
+  simp only [primaryFlowAtom, nonempty, ↓reduceIte, selectorEq]
 
 private theorem Exec.Frame.CompiledCursor.balanceSstorePrimaryRole_depositTo
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
@@ -1736,8 +1649,8 @@ private theorem Exec.Frame.CompiledCursor.balanceSstorePrimaryRole_depositTo
     rfl
   refine ⟨?_, cursor.balanceSstoreRole_mintTo
     fromCursor occurrence context freeTail⟩
-  simp [primaryFlowAtom, nonempty, selectorEq,
-    depositToSelector_ne_depositSelector]
+  simp only [primaryFlowAtom, nonempty, ↓reduceIte, selectorEq,
+    depositToSelector_ne_depositSelector, decide_true, Bool.true_or]
 
 private theorem Exec.Frame.CompiledCursor.balanceSstorePrimaryRole_depositToAndCall
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
@@ -1769,8 +1682,8 @@ private theorem Exec.Frame.CompiledCursor.balanceSstorePrimaryRole_depositToAndC
     rfl
   refine ⟨?_, cursor.balanceSstoreRole_mintTo
     fromCursor occurrence context freeTail⟩
-  simp [primaryFlowAtom, nonempty, selectorEq,
-    depositToAndCallSelector_ne_depositSelector]
+  simp only [primaryFlowAtom, nonempty, ↓reduceIte, selectorEq,
+    depositToAndCallSelector_ne_depositSelector, decide_true, Bool.or_true]
 
 private theorem debitLoadedBalance_append_eq_sstoreSplit
     (continuation : Func) :
@@ -1816,7 +1729,8 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_debitLoadedBal
     rw [splitPre]
     exact balanceEq
   rcases splitCursor.balanceSstoreOccurrence_after_line
-      (by simp) fromSplit with
+      (by simp only [Fin.isValue, List.mem_cons, List.not_mem_nil, or_false, ne_eq,
+        forall_eq_or_imp, Ninst.reg.injEq, reduceCtorEq, not_false_eq_true, forall_eq, and_self]) fromSplit with
     ⟨storeCursor, prefixRun, atStore⟩
   rcases storeCursor.ninstOccurrenceFromCursor_head_or_tail atStore with
     ⟨_sourceEq, preEq⟩ |
@@ -1858,7 +1772,7 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_debitLoadedBal
     have pairEq : [key, value] =
         [owner.toB256,
           Stor.rest (Devm.getStor storeCursor.pre ca) owner - amount] :=
-      List.pref_unique (by simp) occurrencePairPrefix expectedPrefix
+      List.pref_unique (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd]) occurrencePairPrefix expectedPrefix
     injection pairEq with occurrenceKeyEq occurrenceValueTailEq
     injection occurrenceValueTailEq with occurrenceValueEq
     have holderEq : holder = owner := by
@@ -1908,8 +1822,9 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_callerDebit
   rcases cursor.balanceSstoreOccurrence_after_line
       (by
         rintro n hn rfl
-        simp [callerDebitGuardLine, loadCallerBalanceAmount,
-          balanceTooSmall, arg, cdl, Ninst.pushB256] at hn) fromCursor with
+        simp only [callerDebitGuardLine, loadCallerBalanceAmount, Fin.isValue, arg, cdl,
+          Ninst.pushB256, List.cons_append, List.nil_append, balanceTooSmall, List.mem_cons,
+          Ninst.reg.injEq, reduceCtorEq, List.not_mem_nil, or_self] at hn) fromCursor with
     ⟨branchCursor, guardRun, atBranch⟩
   rcases of_run_append (loadCallerBalanceAmount amountArg) guardRun with
     ⟨afterLoad, loadRun, guardTailRun⟩
@@ -1964,13 +1879,13 @@ private theorem prependStoresRev_noCalls
   | nil => exact tailNoCalls
   | cons store stores ih =>
       apply ih
-      simp [prependStore, Func.NoCalls, tailNoCalls]
+      simp only [prependStore, Func.NoCalls, tailNoCalls]
 
 private theorem revertWith_noCalls (reason : String) :
     (Func.revertWith reason).NoCalls := by
   unfold Func.revertWith Func.revertData
   apply prependStoresRev_noCalls
-  simp [Func.NoCalls]
+  simp only [Func.NoCalls]
 
 private theorem burnBalanceError_sstoreFree (fs : List Func) :
     Func.sstoreFreeWithin 256 fs burnBalanceError = true := by
@@ -2143,8 +2058,8 @@ private theorem withdrawAfterDebit_eq_stopOrError :
 
 private theorem withdraw_eq_callerDebitSource :
     withdraw = callerDebitSource 0 burnBalanceErrorSlot withdrawAfterDebit := by
-  simp [withdraw, callerDebitSource, callerDebitGuardLine,
-    withdrawAfterDebit, prepend_append]
+  simp only [withdraw, Fin.isValue, callerDebitSource, callerDebitGuardLine, withdrawAfterDebit,
+    prepend_append]
 
 private theorem Exec.Frame.CompiledCursor.balanceSstorePrimaryRole_withdraw
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
@@ -2170,12 +2085,10 @@ private theorem Exec.Frame.CompiledCursor.balanceSstorePrimaryRole_withdraw
   have primary : primaryFlowAtom frame.sevm = some
       (.redemption frame.sevm.caller.toB256 frame.sevm.caller
         frame.sevm.caller (Sevm.argWord frame.sevm 0).toNat) := by
-    simp [primaryFlowAtom, nonempty, selectorEq,
-      withdrawSelector_ne_depositSelector,
-      withdrawSelector_ne_depositToSelector,
-      withdrawSelector_ne_depositToAndCallSelector,
-      withdrawSelector_ne_transferSelector,
-      withdrawSelector_ne_transferAndCallSelector,
+    simp only [primaryFlowAtom, nonempty, ↓reduceIte, selectorEq,
+      withdrawSelector_ne_depositSelector, withdrawSelector_ne_depositToSelector, decide_false,
+      withdrawSelector_ne_depositToAndCallSelector, Bool.or_self, Bool.false_eq_true,
+      withdrawSelector_ne_transferSelector, withdrawSelector_ne_transferAndCallSelector,
       withdrawSelector_ne_transferFromSelector]
   rcases cursor.castSourceWithOccurrence withdraw_eq_callerDebitSource
       fromCursor with
@@ -2183,7 +2096,8 @@ private theorem Exec.Frame.CompiledCursor.balanceSstorePrimaryRole_withdraw
   have errorLookup :
       (((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]?) =
         some burnBalanceError := by
-    simp [burnBalanceErrorSlot, weth10, weth10Aux]
+    simp only [weth10, weth10Aux, burnBalanceErrorSlot, List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   have errorFree : Func.sstoreFreeWithin 256
       ((weth10 dp).main :: weth10Aux) burnBalanceError = true := by
     exact burnBalanceError_sstoreFree _
@@ -2207,16 +2121,19 @@ private theorem Exec.Frame.CompiledCursor.balanceSstorePrimaryRole_withdraw
     have errorLookup :
         (((weth10 dp).main :: weth10Aux)[ethTransferErrorSlot]?) =
           some ethTransferError := by
-      simp [ethTransferErrorSlot, weth10, weth10Aux]
+      simp only [weth10, weth10Aux, ethTransferErrorSlot, List.length_cons, List.length_nil,
+        zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+        List.getElem_cons_zero]
     have errorFree : Func.sstoreFreeWithin 256
         ((weth10 dp).main :: weth10Aux) ethTransferError = true :=
       ethTransferError_sstoreFree _
     exact (tailSplitCursor.no_balanceSstoreOccurrence_stopOrError
       (by
         rintro n hn rfl
-        simp [redemptionAfterDebitPrefix, sendValueToCaller, pushList,
-          emitTransfer, Blanc.transferFromLog, arg, cdl, mstoreAt,
-          logWith, Ninst.pushB256] at hn)
+        simp only [redemptionAfterDebitPrefix, arg, cdl, Ninst.pushB256, List.cons_append,
+          List.nil_append, emitTransfer, transferFromLog, Fin.isValue, mstoreAt, logWith,
+          Fin.reduceSucc, sendValueToCaller, pushList, List.map_cons, List.map_nil, List.mem_cons,
+          Ninst.reg.injEq, reduceCtorEq, List.not_mem_nil, or_self] at hn)
       context errorLookup errorFree insideTailSplit).elim
 
 private def withdrawToAfterDebit : Func :=
@@ -2234,8 +2151,8 @@ private theorem withdrawToAfterDebit_eq_stopOrError :
 private theorem withdrawTo_eq_callerDebitSource :
     withdrawTo =
       callerDebitSource 1 burnBalanceErrorSlot withdrawToAfterDebit := by
-  simp [withdrawTo, callerDebitSource, callerDebitGuardLine,
-    withdrawToAfterDebit, prepend_append]
+  simp only [withdrawTo, Fin.isValue, callerDebitSource, callerDebitGuardLine, withdrawToAfterDebit,
+    prepend_append]
 
 private theorem Exec.Frame.CompiledCursor.balanceSstorePrimaryRole_withdrawTo
     {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
@@ -2263,21 +2180,19 @@ private theorem Exec.Frame.CompiledCursor.balanceSstorePrimaryRole_withdrawTo
       (.redemption frame.sevm.caller.toB256 frame.sevm.caller
         (Sevm.argWord frame.sevm 0).toAdr
         (Sevm.argWord frame.sevm 1).toNat) := by
-    simp [primaryFlowAtom, nonempty, selectorEq,
-      withdrawToSelector_ne_depositSelector,
-      withdrawToSelector_ne_depositToSelector,
-      withdrawToSelector_ne_depositToAndCallSelector,
-      withdrawToSelector_ne_transferSelector,
-      withdrawToSelector_ne_transferAndCallSelector,
-      withdrawToSelector_ne_transferFromSelector,
-      withdrawToSelector_ne_withdrawSelector]
+    simp only [primaryFlowAtom, nonempty, ↓reduceIte, selectorEq,
+      withdrawToSelector_ne_depositSelector, withdrawToSelector_ne_depositToSelector, decide_false,
+      withdrawToSelector_ne_depositToAndCallSelector, Bool.or_self, Bool.false_eq_true,
+      withdrawToSelector_ne_transferSelector, withdrawToSelector_ne_transferAndCallSelector,
+      withdrawToSelector_ne_transferFromSelector, withdrawToSelector_ne_withdrawSelector]
   rcases cursor.castSourceWithOccurrence withdrawTo_eq_callerDebitSource
       fromCursor with
     ⟨sourceCursor, _sourcePre, fromSource⟩
   have errorLookup :
       (((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]?) =
         some burnBalanceError := by
-    simp [burnBalanceErrorSlot, weth10, weth10Aux]
+    simp only [weth10, weth10Aux, burnBalanceErrorSlot, List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   have errorFree : Func.sstoreFreeWithin 256
       ((weth10 dp).main :: weth10Aux) burnBalanceError = true := by
     exact burnBalanceError_sstoreFree _
@@ -2302,16 +2217,19 @@ private theorem Exec.Frame.CompiledCursor.balanceSstorePrimaryRole_withdrawTo
     have errorLookup :
         (((weth10 dp).main :: weth10Aux)[ethTransferErrorSlot]?) =
           some ethTransferError := by
-      simp [ethTransferErrorSlot, weth10, weth10Aux]
+      simp only [weth10, weth10Aux, ethTransferErrorSlot, List.length_cons, List.length_nil,
+        zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+        List.getElem_cons_zero]
     have errorFree : Func.sstoreFreeWithin 256
         ((weth10 dp).main :: weth10Aux) ethTransferError = true :=
       ethTransferError_sstoreFree _
     exact (tailSplitCursor.no_balanceSstoreOccurrence_stopOrError
       (by
         rintro n hn rfl
-        simp [redemptionAfterDebitPrefix, sendValueToArg, pushList,
-          emitTransfer, Blanc.transferFromLog, arg, cdl, mstoreAt,
-          logWith, Ninst.pushB256] at hn)
+        simp only [redemptionAfterDebitPrefix, arg, cdl, Ninst.pushB256, List.cons_append,
+          List.nil_append, emitTransfer, transferFromLog, Fin.isValue, mstoreAt, logWith,
+          Fin.reduceSucc, sendValueToArg, pushList, List.map_cons, List.map_nil, List.mem_cons,
+          Ninst.reg.injEq, reduceCtorEq, List.not_mem_nil, or_self] at hn)
       context errorLookup errorFree insideTailSplit).elim
 
 private def creditAddressArgBeforeSstore
@@ -2352,8 +2270,9 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_creditAddressA
   rcases cursor.balanceSstoreOccurrence_after_line
       (by
         rintro n hn rfl
-        simp [creditAddressArgBeforeSstore, addressArg, normalizeAddress,
-          pushAddressMask, arg, cdl, Ninst.pushB256] at hn) fromCursor with
+        simp only [creditAddressArgBeforeSstore, addressArg, arg, cdl, Ninst.pushB256,
+          normalizeAddress, pushAddressMask, List.cons_append, List.nil_append, Fin.isValue,
+          List.mem_cons, reduceCtorEq, Ninst.reg.injEq, List.not_mem_nil, or_self] at hn) fromCursor with
     ⟨storeCursor, prefixRun, atStore⟩
   rcases storeCursor.ninstOccurrenceFromCursor_head_or_tail atStore with
     ⟨_sourceEq, preEq⟩ |
@@ -2374,8 +2293,7 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_creditAddressA
     cases emptyLine
     have ownerPrefix : normalizedAddressArg frame.sevm ownerArg :: [] <<+
         afterOwner.stack := by
-      simpa [normalizedAddressArg] using
-        prefix_of_addressArg nil_pref ownerRun
+      simpa only [normalizedAddressArg] using prefix_of_addressArg nil_pref ownerRun
     have dupPrefix : normalizedAddressArg frame.sevm ownerArg ::
         normalizedAddressArg frame.sevm ownerArg :: [] <<+
           afterDup.stack :=
@@ -2469,7 +2387,7 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_creditAddressA
           Stor.rest (Devm.getStor storeCursor.pre ca)
               (Sevm.argWord frame.sevm ownerArg).toAdr +
             Sevm.argWord frame.sevm amountArg] :=
-      List.pref_unique (by simp) occurrencePairPrefix expectedPrefix
+      List.pref_unique (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd]) occurrencePairPrefix expectedPrefix
     injection pairEq with occurrenceKeyEq occurrenceValueTailEq
     injection occurrenceValueTailEq with occurrenceValueEq
     have holderEq : holder =
@@ -2519,7 +2437,8 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_transferThen
   rcases selectCursor.balanceSstoreOccurrence_after_line
       (by
         rintro n hn rfl
-        simp [transferSelectLine, arg, cdl, Ninst.pushB256] at hn)
+        simp only [transferSelectLine, arg, cdl, Ninst.pushB256, List.cons_append, List.nil_append,
+          List.mem_cons, reduceCtorEq, Ninst.reg.injEq, List.not_mem_nil, or_self] at hn)
       fromSelect with
     ⟨branchCursor, selectRun, atBranch⟩
   rcases of_run_append (arg 0) selectRun with
@@ -2542,7 +2461,7 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_transferThen
     have rawNonzero : Sevm.argWord frame.sevm 0 ≠ 0 := by
       intro rawZero
       rw [rawZero] at flagEq
-      simp [B256.eqCheck] at flagEq
+      simp only [B256.eqCheck, ↓reduceIte] at flagEq
       exact (by decide : (1 : B256) ≠ 0) flagEq
     exact Or.inl ⟨rawNonzero, nonzeroCursor, insideNonzero⟩
   · have selectedPrefix : [flag] <<+ branchCursor.pre.stack :=
@@ -2552,7 +2471,7 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_transferThen
     have rawZero : Sevm.argWord frame.sevm 0 = 0 := by
       by_contra rawNonzero
       have checkZero : (Sevm.argWord frame.sevm 0 =? 0) = 0 := by
-        simp [B256.eqCheck, rawNonzero]
+        simp only [B256.eqCheck, rawNonzero, ↓reduceIte]
       apply flagNonzero
       rw [← flagEq]
       exact checkZero
@@ -2621,7 +2540,9 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_transferNonzeroThen
   have errorLookup :
       (((weth10 dp).main :: weth10Aux)[transferBalanceErrorSlot]?) =
         some transferBalanceError := by
-    simp [transferBalanceErrorSlot, weth10, weth10Aux]
+    simp only [weth10, weth10Aux, transferBalanceErrorSlot, List.length_cons, List.length_nil,
+      zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]
   have errorFree : Func.sstoreFreeWithin 256
       ((weth10 dp).main :: weth10Aux) transferBalanceError = true :=
     transferBalanceError_sstoreFree _
@@ -2683,7 +2604,8 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_transferZeroThen
   have errorLookup :
       (((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]?) =
         some burnBalanceError := by
-    simp [burnBalanceErrorSlot, weth10, weth10Aux]
+    simp only [weth10, weth10Aux, burnBalanceErrorSlot, List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   have errorFree : Func.sstoreFreeWithin 256
       ((weth10 dp).main :: weth10Aux) burnBalanceError = true :=
     burnBalanceError_sstoreFree _
@@ -2707,16 +2629,19 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_transferZeroThen
     have transferErrorLookup :
         (((weth10 dp).main :: weth10Aux)[ethTransferErrorSlot]?) =
           some ethTransferError := by
-      simp [ethTransferErrorSlot, weth10, weth10Aux]
+      simp only [weth10, weth10Aux, ethTransferErrorSlot, List.length_cons, List.length_nil,
+        zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+        List.getElem_cons_zero]
     have transferErrorFree : Func.sstoreFreeWithin 256
         ((weth10 dp).main :: weth10Aux) ethTransferError = true :=
       ethTransferError_sstoreFree _
     exact (tailSplitCursor.no_balanceSstoreOccurrence_successOrError
       (by
         rintro n hn rfl
-        simp [redemptionAfterDebitPrefix, sendValueToCaller, pushList,
-          emitTransfer, Blanc.transferFromLog, arg, cdl, mstoreAt,
-          logWith, Ninst.pushB256] at hn)
+        simp only [redemptionAfterDebitPrefix, arg, cdl, Ninst.pushB256, List.cons_append,
+          List.nil_append, emitTransfer, transferFromLog, Fin.isValue, mstoreAt, logWith,
+          Fin.reduceSucc, sendValueToCaller, pushList, List.map_cons, List.map_nil, List.mem_cons,
+          Ninst.reg.injEq, reduceCtorEq, List.not_mem_nil, or_self] at hn)
       context continuationFree transferErrorLookup transferErrorFree
       insideTailSplit).elim
 
@@ -2802,18 +2727,18 @@ private theorem Exec.Frame.CompiledCursor.classifyBalanceSstore_transfer
         (.transfer frame.sevm.caller.toB256 (Sevm.argWord frame.sevm 0)
           frame.sevm.caller (Sevm.argWord frame.sevm 0).toAdr
           (Sevm.argWord frame.sevm 1).toNat) := by
-      simp [primaryFlowAtom, nonempty, selectorEq,
-        transferSelector_ne_depositSelector,
-        transferSelector_ne_depositToSelector,
-        transferSelector_ne_depositToAndCallSelector, rawNonzero]
+      simp only [primaryFlowAtom, nonempty, ↓reduceIte, selectorEq,
+        transferSelector_ne_depositSelector, transferSelector_ne_depositToSelector, decide_false,
+        transferSelector_ne_depositToAndCallSelector, Bool.or_self, Bool.false_eq_true, decide_true,
+        Bool.true_or, rawNonzero]
     exact occurrence.classify_of_primary_role context primary role
   · have primary : primaryFlowAtom frame.sevm = some
         (.redemption frame.sevm.caller.toB256 frame.sevm.caller
           frame.sevm.caller (Sevm.argWord frame.sevm 1).toNat) := by
-      simp [primaryFlowAtom, nonempty, selectorEq,
-        transferSelector_ne_depositSelector,
-        transferSelector_ne_depositToSelector,
-        transferSelector_ne_depositToAndCallSelector, rawZero]
+      simp only [primaryFlowAtom, nonempty, ↓reduceIte, selectorEq,
+        transferSelector_ne_depositSelector, transferSelector_ne_depositToSelector, decide_false,
+        transferSelector_ne_depositToAndCallSelector, Bool.or_self, Bool.false_eq_true, decide_true,
+        Bool.true_or, rawZero]
     exact occurrence.classify_of_primary_role context primary role
 
 /-- Package the same two exact transfer roles when the committed source suffix
@@ -2856,20 +2781,20 @@ private theorem Exec.Frame.CompiledCursor.classifyBalanceSstore_transferAndCall
         (.transfer frame.sevm.caller.toB256 (Sevm.argWord frame.sevm 0)
           frame.sevm.caller (Sevm.argWord frame.sevm 0).toAdr
           (Sevm.argWord frame.sevm 1).toNat) := by
-      simp [primaryFlowAtom, nonempty, selectorEq,
-        transferAndCallSelector_ne_depositSelector,
-        transferAndCallSelector_ne_depositToSelector,
-        transferAndCallSelector_ne_depositToAndCallSelector,
-        transferAndCallSelector_ne_transferSelector, rawNonzero]
+      simp only [primaryFlowAtom, nonempty, ↓reduceIte, selectorEq,
+        transferAndCallSelector_ne_depositSelector, transferAndCallSelector_ne_depositToSelector,
+        decide_false, transferAndCallSelector_ne_depositToAndCallSelector, Bool.or_self,
+        Bool.false_eq_true, transferAndCallSelector_ne_transferSelector, decide_true, Bool.or_true,
+        rawNonzero]
     exact occurrence.classify_of_primary_role context primary role
   · have primary : primaryFlowAtom frame.sevm = some
         (.redemption frame.sevm.caller.toB256 frame.sevm.caller
           frame.sevm.caller (Sevm.argWord frame.sevm 1).toNat) := by
-      simp [primaryFlowAtom, nonempty, selectorEq,
-        transferAndCallSelector_ne_depositSelector,
-        transferAndCallSelector_ne_depositToSelector,
-        transferAndCallSelector_ne_depositToAndCallSelector,
-        transferAndCallSelector_ne_transferSelector, rawZero]
+      simp only [primaryFlowAtom, nonempty, ↓reduceIte, selectorEq,
+        transferAndCallSelector_ne_depositSelector, transferAndCallSelector_ne_depositToSelector,
+        decide_false, transferAndCallSelector_ne_depositToAndCallSelector, Bool.or_self,
+        Bool.false_eq_true, transferAndCallSelector_ne_transferSelector, decide_true, Bool.or_true,
+        rawZero]
     exact occurrence.classify_of_primary_role context primary role
 
 private def argDebitGuardLine (ownerArg amountArg : B256) : Line :=
@@ -2914,9 +2839,10 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_argDebit
   rcases cursor.balanceSstoreOccurrence_after_line
       (by
         rintro n hn rfl
-        simp [argDebitGuardLine, loadArgBalanceAmount, balanceTooSmall,
-          addressArg, normalizeAddress, pushAddressMask, arg, cdl,
-          Ninst.pushB256] at hn) fromCursor with
+        simp only [argDebitGuardLine, loadArgBalanceAmount, addressArg, arg, cdl, Ninst.pushB256,
+          normalizeAddress, pushAddressMask, List.cons_append, List.nil_append, Fin.isValue,
+          balanceTooSmall, List.mem_cons, reduceCtorEq, Ninst.reg.injEq, List.not_mem_nil,
+          or_self] at hn) fromCursor with
     ⟨branchCursor, guardRun, atBranch⟩
   rcases of_run_append (loadArgBalanceAmount ownerArg amountArg) guardRun with
     ⟨afterLoad, loadRun, guardTailRun⟩
@@ -3012,7 +2938,8 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_spendCallerAll
       (line := arg 0 ++ [Ninst.caller, Ninst.eq])
       (by
         rintro n hn rfl
-        simp [arg, cdl, Ninst.pushB256] at hn) fromCursor with
+        simp only [arg, cdl, Ninst.pushB256, List.cons_append, List.nil_append, List.mem_cons,
+          reduceCtorEq, Ninst.reg.injEq, List.not_mem_nil, or_self] at hn) fromCursor with
     ⟨callerBranchCursor, _callerRun, atCallerBranch⟩
   rcases callerBranchCursor.balanceSstoreOccurrence_branch atCallerBranch with
     ⟨allowanceCursor, insideAllowance⟩ |
@@ -3033,9 +2960,10 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_spendCallerAll
     rcases allowanceCursor.balanceSstoreOccurrence_after_line
         (by
           rintro n hn rfl
-          simp [spendAllowanceLoadLine, arg, cdl, mstoreAt,
-            allowanceKeyFromMemory, pushList, isMax,
-            Ninst.pushB256] at hn) insideAllowance with
+          simp only [spendAllowanceLoadLine, arg, cdl, Ninst.pushB256, mstoreAt, List.cons_append,
+            List.nil_append, allowanceKeyFromMemory, pushList, List.map_cons, List.map_nil,
+            Fin.isValue, isMax, List.mem_cons, reduceCtorEq, Ninst.reg.injEq, List.not_mem_nil,
+            or_self] at hn) insideAllowance with
       ⟨maxBranchCursor, allowanceRun, atMaxBranch⟩
     rcases prefix_of_callerAllowanceIsMax 0 nil_pref allowanceRun with
       ⟨hash, allowance, _allowanceEq, allowancePrefix⟩
@@ -3051,8 +2979,9 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_spendCallerAll
       rcases finiteCursor.balanceSstoreOccurrence_after_line
           (by
             rintro n hn rfl
-            simp [spendAllowanceCheckLine, arg, cdl, balanceTooSmall,
-              Ninst.pushB256] at hn) insideFinite with
+            simp only [spendAllowanceCheckLine, arg, cdl, Ninst.pushB256, Fin.isValue,
+              List.cons_append, List.nil_append, balanceTooSmall, List.mem_cons, reduceCtorEq,
+              Ninst.reg.injEq, List.not_mem_nil, or_self] at hn) insideFinite with
         ⟨spendBranchCursor, checkRun, atSpendBranch⟩
       rcases of_run_append (arg amount) checkRun with
         ⟨afterAmount, amountRun, afterAmountRun⟩
@@ -3090,7 +3019,9 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_spendCallerAll
           prefix_of_pop
             ⟨0, Devm.PopBurn.of_popBurnBy successPop⟩ guardPrefix
         rcases successCursor.balanceSstoreOccurrence_after_line
-            (by simp [spendAllowanceBeforeStore]) insideSuccess with
+            (by simp only [spendAllowanceBeforeStore, Fin.isValue, List.mem_cons, List.not_mem_nil,
+              or_false, ne_eq, forall_eq_or_imp, Ninst.reg.injEq, reduceCtorEq, not_false_eq_true,
+              forall_eq, and_self]) insideSuccess with
           ⟨storeCursor, beforeStoreRun, atStore⟩
         rcases Line.of_run_cons beforeStoreRun with
           ⟨afterSub, subStep, afterSubRun⟩
@@ -3148,7 +3079,8 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_spendCallerAll
           have pairEq : [key, value] =
               [allowanceTagWord ||| (allowancePayloadMask &&& hash),
                 allowance - Sevm.argWord frame.sevm amount] :=
-            List.pref_unique (by simp) occurrencePairPrefix
+            List.pref_unique (by simp only [List.length_cons, List.length_nil, zero_add,
+              Nat.reduceAdd]) occurrencePairPrefix
               expectedPairPrefix
           injection pairEq with keyEq _valueTailEq
           exact (runtimeAllowanceKey_not_valid hash
@@ -3156,8 +3088,9 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_spendCallerAll
         · rcases tailCursor.balanceSstoreOccurrence_after_line
               (by
                 rintro n hn rfl
-                simp [arg, cdl, emitApproval,
-                  mstoreAt, logWith, Ninst.pushB256] at hn)
+                simp only [arg, cdl, Ninst.pushB256, Fin.isValue, List.cons_append, List.nil_append,
+                  emitApproval, mstoreAt, logWith, Fin.reduceSucc, List.mem_cons, reduceCtorEq,
+                  Ninst.reg.injEq, List.not_mem_nil, or_self] at hn)
               insideTail with
             ⟨coreCallCursor, _afterStoreRun, insideCoreCall⟩
           exact coreCallCursor.balanceSstoreOccurrence_call
@@ -3166,14 +3099,16 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_spendCallerAll
             context.invocation.2.2.2 insideError with
           ⟨errorBody, errorLookup, errorBodyCursor, insideErrorBody⟩
         have bodyEq : errorBody = allowanceError := by
-          simpa [allowanceErrorSlot, weth10, weth10Aux] using
-            errorLookup.symm
+          simpa only [weth10, weth10Aux, allowanceErrorSlot, List.length_cons, List.length_nil,
+            zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+            List.getElem_cons_zero, Option.some.injEq] using errorLookup.symm
         subst errorBody
         exact (errorBodyCursor.no_balanceSstoreOccurrence_of_free
           context.invocation.2.2.2 (allowanceError_sstoreFree _)
           insideErrorBody).elim
     · rcases maxCursor.balanceSstoreOccurrence_after_line
-          (by simp) insideMax with
+          (by simp only [List.mem_cons, List.not_mem_nil, or_false, or_self, ne_eq, forall_eq,
+            Ninst.reg.injEq, reduceCtorEq, not_false_eq_true]) insideMax with
         ⟨coreCallCursor, _popRun, insideCoreCall⟩
       exact coreCallCursor.balanceSstoreOccurrence_call
         context.invocation.2.2.2 insideCoreCall
@@ -3253,8 +3188,9 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_transferFromCo
   rcases selectCursor.balanceSstoreOccurrence_after_line
       (by
         rintro n hn rfl
-        simp [transferFromSelectLine_writeCompleteness, arg, cdl,
-          Ninst.pushB256] at hn) fromSelect with
+        simp only [transferFromSelectLine_writeCompleteness, arg, cdl, Ninst.pushB256,
+          List.cons_append, List.nil_append, List.mem_cons, reduceCtorEq, Ninst.reg.injEq,
+          List.not_mem_nil, or_self] at hn) fromSelect with
     ⟨branchCursor, selectRun, atBranch⟩
   rcases of_run_append (arg 1) selectRun with
     ⟨afterArg, argRun, afterArgRun⟩
@@ -3276,7 +3212,7 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_transferFromCo
     have rawNonzero : Sevm.argWord frame.sevm 1 ≠ 0 := by
       intro rawZero
       rw [rawZero] at flagEq
-      simp [B256.eqCheck] at flagEq
+      simp only [B256.eqCheck, ↓reduceIte] at flagEq
       exact (by decide : (1 : B256) ≠ 0) flagEq
     exact Or.inl ⟨rawNonzero, nonzeroCursor, insideNonzero⟩
   · have selectedPrefix : [flag] <<+ branchCursor.pre.stack :=
@@ -3286,7 +3222,7 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreOccurrence_transferFromCo
     have rawZero : Sevm.argWord frame.sevm 1 = 0 := by
       by_contra rawNonzero
       have checkZero : (Sevm.argWord frame.sevm 1 =? 0) = 0 := by
-        simp [B256.eqCheck, rawNonzero]
+        simp only [B256.eqCheck, rawNonzero, ↓reduceIte]
       apply flagNonzero
       rw [← flagEq]
       exact checkZero
@@ -3317,7 +3253,9 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_transferFromNonzero
   have errorLookup :
       (((weth10 dp).main :: weth10Aux)[transferBalanceErrorSlot]?) =
         some transferBalanceError := by
-    simp [transferBalanceErrorSlot, weth10, weth10Aux]
+    simp only [weth10, weth10Aux, transferBalanceErrorSlot, List.length_cons, List.length_nil,
+      zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]
   have errorFree : Func.sstoreFreeWithin 256
       ((weth10 dp).main :: weth10Aux) transferBalanceError = true :=
     transferBalanceError_sstoreFree _
@@ -3378,7 +3316,8 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_transferFromZero
   have errorLookup :
       (((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]?) =
         some burnBalanceError := by
-    simp [burnBalanceErrorSlot, weth10, weth10Aux]
+    simp only [weth10, weth10Aux, burnBalanceErrorSlot, List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   have errorFree : Func.sstoreFreeWithin 256
       ((weth10 dp).main :: weth10Aux) burnBalanceError = true :=
     burnBalanceError_sstoreFree _
@@ -3405,17 +3344,20 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_transferFromZero
     have transferErrorLookup :
         (((weth10 dp).main :: weth10Aux)[ethTransferErrorSlot]?) =
           some ethTransferError := by
-      simp [ethTransferErrorSlot, weth10, weth10Aux]
+      simp only [weth10, weth10Aux, ethTransferErrorSlot, List.length_cons, List.length_nil,
+        zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+        List.getElem_cons_zero]
     have transferErrorFree : Func.sstoreFreeWithin 256
         ((weth10 dp).main :: weth10Aux) ethTransferError = true :=
       ethTransferError_sstoreFree _
     exact (tailSplitCursor.no_balanceSstoreOccurrence_successOrError
       (by
         rintro n hn rfl
-        simp [transferFromZeroAfterDebitPrefix, addressArg,
-          normalizeAddress, pushAddressMask, sendValueToCaller, pushList,
-          emitTransfer, Blanc.transferFromLog, arg, cdl, mstoreAt,
-          logWith, Ninst.pushB256] at hn)
+        simp only [transferFromZeroAfterDebitPrefix, addressArg, arg, cdl, Ninst.pushB256,
+          normalizeAddress, pushAddressMask, List.cons_append, List.nil_append, emitTransfer,
+          transferFromLog, Fin.isValue, mstoreAt, logWith, Fin.reduceSucc, sendValueToCaller,
+          pushList, List.map_cons, List.map_nil, List.mem_cons, reduceCtorEq, Ninst.reg.injEq,
+          List.not_mem_nil, or_self] at hn)
       context successFree transferErrorLookup transferErrorFree
       insideTailSplit).elim
 
@@ -3447,7 +3389,9 @@ private theorem Exec.Frame.CompiledCursor.classifyBalanceSstore_transferFrom
       fromCursor occurrence context with
     ⟨body, bodyLookup, coreCursor, insideCore⟩
   have bodyEq : body = transferFromCore := by
-    simpa [transferFromCoreSlot, weth10, weth10Aux] using bodyLookup.symm
+    simpa only [weth10, weth10Aux, transferFromCoreSlot, List.length_cons, List.length_nil,
+      zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero, Option.some.injEq] using bodyLookup.symm
   subst body
   rcases coreCursor.balanceSstoreOccurrence_transferFromCore insideCore with
     ⟨rawNonzero, armCursor, insideArm⟩ |
@@ -3459,13 +3403,11 @@ private theorem Exec.Frame.CompiledCursor.classifyBalanceSstore_transferFrom
           (Sevm.argWord frame.sevm 0).toAdr
           (Sevm.argWord frame.sevm 1).toAdr
           (Sevm.argWord frame.sevm 2).toNat) := by
-      simp [primaryFlowAtom, nonempty, selectorEq,
-        transferFromSelector_ne_depositSelector,
-        transferFromSelector_ne_depositToSelector,
-        transferFromSelector_ne_depositToAndCallSelector,
-        transferFromSelector_ne_transferSelector,
-        transferFromSelector_ne_transferAndCallSelector,
-        rawNonzero]
+      simp only [primaryFlowAtom, nonempty, ↓reduceIte, selectorEq,
+        transferFromSelector_ne_depositSelector, transferFromSelector_ne_depositToSelector,
+        decide_false, transferFromSelector_ne_depositToAndCallSelector, Bool.or_self,
+        Bool.false_eq_true, transferFromSelector_ne_transferSelector,
+        transferFromSelector_ne_transferAndCallSelector, rawNonzero]
     exact occurrence.classify_of_primary_role context primary role
   · have role := armCursor.balanceSstoreRole_transferFromZero
       insideArm occurrence context
@@ -3473,13 +3415,11 @@ private theorem Exec.Frame.CompiledCursor.classifyBalanceSstore_transferFrom
         (.redemption (Sevm.argWord frame.sevm 0)
           (Sevm.argWord frame.sevm 0).toAdr frame.sevm.caller
           (Sevm.argWord frame.sevm 2).toNat) := by
-      simp [primaryFlowAtom, nonempty, selectorEq,
-        transferFromSelector_ne_depositSelector,
-        transferFromSelector_ne_depositToSelector,
-        transferFromSelector_ne_depositToAndCallSelector,
-        transferFromSelector_ne_transferSelector,
-        transferFromSelector_ne_transferAndCallSelector,
-        rawZero]
+      simp only [primaryFlowAtom, nonempty, ↓reduceIte, selectorEq,
+        transferFromSelector_ne_depositSelector, transferFromSelector_ne_depositToSelector,
+        decide_false, transferFromSelector_ne_depositToAndCallSelector, Bool.or_self,
+        Bool.false_eq_true, transferFromSelector_ne_transferSelector,
+        transferFromSelector_ne_transferAndCallSelector, rawZero]
     exact occurrence.classify_of_primary_role context primary role
 
 private def withdrawFromAfterDebitPrefix : Line :=
@@ -3529,7 +3469,8 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_withdrawFromCore
   have errorLookup :
       (((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]?) =
         some burnBalanceError := by
-    simp [burnBalanceErrorSlot, weth10, weth10Aux]
+    simp only [weth10, weth10Aux, burnBalanceErrorSlot, List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   have errorFree : Func.sstoreFreeWithin 256
       ((weth10 dp).main :: weth10Aux) burnBalanceError = true :=
     burnBalanceError_sstoreFree _
@@ -3554,14 +3495,17 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_withdrawFromCore
     have errorLookup :
         (((weth10 dp).main :: weth10Aux)[etherTransferErrorSlot]?) =
           some etherTransferError := by
-      simp [etherTransferErrorSlot, weth10, weth10Aux]
+      simp only [weth10, weth10Aux, etherTransferErrorSlot, List.length_cons, List.length_nil,
+        zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+        List.getElem_cons_zero]
     exact (tailSplitCursor.no_balanceSstoreOccurrence_stopOrError
       (by
         rintro n hn rfl
-        simp [withdrawFromAfterDebitPrefix, addressArg,
-          normalizeAddress, pushAddressMask, sendValueToArg, pushList,
-          emitTransfer, Blanc.transferFromLog, arg, cdl, mstoreAt,
-          logWith, Ninst.pushB256] at hn)
+        simp only [withdrawFromAfterDebitPrefix, addressArg, arg, cdl, Ninst.pushB256,
+          normalizeAddress, pushAddressMask, List.cons_append, List.nil_append, emitTransfer,
+          transferFromLog, Fin.isValue, mstoreAt, logWith, Fin.reduceSucc, sendValueToArg, pushList,
+          List.map_cons, List.map_nil, List.mem_cons, reduceCtorEq, Ninst.reg.injEq,
+          List.not_mem_nil, or_self] at hn)
       context errorLookup (etherTransferError_sstoreFree _)
       insideTailSplit).elim
 
@@ -3590,7 +3534,9 @@ private theorem Exec.Frame.CompiledCursor.classifyBalanceSstore_withdrawFrom
       fromCursor occurrence context with
     ⟨body, bodyLookup, coreCursor, insideCore⟩
   have bodyEq : body = withdrawFromCore := by
-    simpa [withdrawFromCoreSlot, weth10, weth10Aux] using bodyLookup.symm
+    simpa only [weth10, weth10Aux, withdrawFromCoreSlot, List.length_cons, List.length_nil,
+      zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero, Option.some.injEq] using bodyLookup.symm
   subst body
   have role := coreCursor.balanceSstoreRole_withdrawFromCore
     insideCore occurrence context
@@ -3599,15 +3545,12 @@ private theorem Exec.Frame.CompiledCursor.classifyBalanceSstore_withdrawFrom
         (Sevm.argWord frame.sevm 0).toAdr
         (Sevm.argWord frame.sevm 1).toAdr
         (Sevm.argWord frame.sevm 2).toNat) := by
-    simp [primaryFlowAtom, nonempty, selectorEq,
-      withdrawFromSelector_ne_depositSelector,
-      withdrawFromSelector_ne_depositToSelector,
-      withdrawFromSelector_ne_depositToAndCallSelector,
-      withdrawFromSelector_ne_transferSelector,
-      withdrawFromSelector_ne_transferAndCallSelector,
-      withdrawFromSelector_ne_transferFromSelector,
-      withdrawFromSelector_ne_withdrawSelector,
-      withdrawFromSelector_ne_withdrawToSelector]
+    simp only [primaryFlowAtom, nonempty, ↓reduceIte, selectorEq,
+      withdrawFromSelector_ne_depositSelector, withdrawFromSelector_ne_depositToSelector,
+      decide_false, withdrawFromSelector_ne_depositToAndCallSelector, Bool.or_self,
+      Bool.false_eq_true, withdrawFromSelector_ne_transferSelector,
+      withdrawFromSelector_ne_transferAndCallSelector, withdrawFromSelector_ne_transferFromSelector,
+      withdrawFromSelector_ne_withdrawSelector, withdrawFromSelector_ne_withdrawToSelector]
   exact occurrence.classify_of_primary_role context primary role
 
 private def flashBurnAfterDebitBeforeSlot : Line :=
@@ -3656,7 +3599,8 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_flashBurn
   have errorLookup :
       (((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]?) =
         some burnBalanceError := by
-    simp [burnBalanceErrorSlot, weth10, weth10Aux]
+    simp only [weth10, weth10Aux, burnBalanceErrorSlot, List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   rcases sourceCursor.balanceSstoreOccurrence_argDebit fromSource context
       errorLookup (burnBalanceError_sstoreFree _) with
     ⟨balance, debitCursor, debitPrefix, balanceEq, insideDebit⟩
@@ -3674,11 +3618,11 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_flashBurn
   · rcases tailCursor.balanceSstoreOccurrence_after_line
         (by
           rintro n hn rfl
-          simp [flashBurnAfterDebitBeforeStore,
-            flashBurnAfterDebitBeforeSlot, addressArg, normalizeAddress,
-            pushAddressMask, pushFlashMintedSlot, emitTransfer,
-            Blanc.transferFromLog, arg, cdl, mstoreAt, logWith,
-            Ninst.pushB256] at hn) insideTail with
+          simp only [flashBurnAfterDebitBeforeStore, flashBurnAfterDebitBeforeSlot, addressArg, arg,
+            cdl, Ninst.pushB256, normalizeAddress, pushAddressMask, List.cons_append,
+            List.nil_append, emitTransfer, transferFromLog, Fin.isValue, mstoreAt, logWith,
+            Fin.reduceSucc, pushFlashMintedSlot, List.mem_cons, reduceCtorEq, Ninst.reg.injEq,
+            List.not_mem_nil, or_self] at hn) insideTail with
       ⟨storeCursor, beforeStoreRun, atStore⟩
     rcases of_run_append flashBurnAfterDebitBeforeSlot beforeStoreRun with
       ⟨beforeSlot, _beforeSlotRun, slotRun⟩
@@ -3759,9 +3703,10 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_flashSettle
   rcases cursor.balanceSstoreOccurrence_after_line
       (by
         rintro n hn rfl
-        simp [flashSettleLoadLine, addressArg, normalizeAddress,
-          pushAddressMask, arg, cdl, mstoreAt, allowanceKeyFromMemory,
-          pushList, isMax, Ninst.pushB256] at hn) fromCursor with
+        simp only [flashSettleLoadLine, addressArg, arg, cdl, Ninst.pushB256, normalizeAddress,
+          pushAddressMask, List.cons_append, List.nil_append, mstoreAt, allowanceKeyFromMemory,
+          pushList, List.map_cons, List.map_nil, Fin.isValue, isMax, List.mem_cons, reduceCtorEq,
+          Ninst.reg.injEq, List.not_mem_nil, or_self] at hn) fromCursor with
     ⟨maxBranchCursor, allowanceRun, atMaxBranch⟩
   rcases prefix_of_selfAllowanceIsMax 0 nil_pref allowanceRun with
     ⟨hash, allowance, _allowanceEq, allowancePrefix⟩
@@ -3777,8 +3722,9 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_flashSettle
     rcases finiteCursor.balanceSstoreOccurrence_after_line
         (by
           rintro n hn rfl
-          simp [flashSettleCheckLine, arg, cdl, balanceTooSmall,
-            Ninst.pushB256] at hn) insideFinite with
+          simp only [flashSettleCheckLine, arg, cdl, Ninst.pushB256, Fin.isValue, List.cons_append,
+            List.nil_append, balanceTooSmall, List.mem_cons, reduceCtorEq, Ninst.reg.injEq,
+            List.not_mem_nil, or_self] at hn) insideFinite with
       ⟨spendBranchCursor, checkRun, atSpendBranch⟩
     rcases of_run_append (arg 2) checkRun with
       ⟨afterAmount, amountRun, afterAmountRun⟩
@@ -3815,7 +3761,9 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_flashSettle
         prefix_of_pop
           ⟨0, Devm.PopBurn.of_popBurnBy successPop⟩ guardPrefix
       rcases successCursor.balanceSstoreOccurrence_after_line
-          (by simp [spendAllowanceBeforeStore]) insideSuccess with
+          (by simp only [spendAllowanceBeforeStore, Fin.isValue, List.mem_cons, List.not_mem_nil,
+            or_false, ne_eq, forall_eq_or_imp, Ninst.reg.injEq, reduceCtorEq, not_false_eq_true,
+            forall_eq, and_self]) insideSuccess with
         ⟨storeCursor, beforeStoreRun, atStore⟩
       rcases Line.of_run_cons beforeStoreRun with
         ⟨afterSub, subStep, afterSubRun⟩
@@ -3857,15 +3805,18 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_flashSettle
       rcases afterStoreCursor.balanceSstoreOccurrence_after_line
           (by
             rintro n hn rfl
-            simp [emitFlashApproval, arg, cdl,
-              mstoreAt, logWith, Ninst.pushB256] at hn)
+            simp only [emitFlashApproval, Fin.isValue, mstoreAt, Ninst.pushB256, List.cons_append,
+              List.nil_append, arg, cdl, logWith, Fin.reduceSucc, List.mem_cons, Ninst.reg.injEq,
+              reduceCtorEq, List.not_mem_nil, or_self] at hn)
           insideAfterStore with
         ⟨burnCallCursor, _approvalRun, insideBurnCall⟩
       rcases burnCallCursor.balanceSstoreOccurrence_call
           context.invocation.2.2.2 insideBurnCall with
         ⟨body, bodyLookup, burnCursor, insideBurn⟩
       have bodyEq : body = flashBurn := by
-        simpa [flashBurnSlot, weth10, weth10Aux] using bodyLookup.symm
+        simpa only [weth10, weth10Aux, flashBurnSlot, List.length_cons, List.length_nil, zero_add,
+          Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+          Option.some.injEq] using bodyLookup.symm
       subst body
       exact burnCursor.balanceSstoreRole_flashBurn
         insideBurn occurrence context
@@ -3873,19 +3824,24 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_flashSettle
           context.invocation.2.2.2 insideError with
         ⟨body, bodyLookup, errorCursor, insideErrorBody⟩
       have bodyEq : body = allowanceError := by
-        simpa [allowanceErrorSlot, weth10, weth10Aux] using bodyLookup.symm
+        simpa only [weth10, weth10Aux, allowanceErrorSlot, List.length_cons, List.length_nil,
+          zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+          List.getElem_cons_zero, Option.some.injEq] using bodyLookup.symm
       subst body
       exact (errorCursor.no_balanceSstoreOccurrence_of_free
         context.invocation.2.2.2 (allowanceError_sstoreFree _)
         insideErrorBody).elim
   · rcases maxCursor.balanceSstoreOccurrence_after_line
-        (by simp) insideMax with
+        (by simp only [List.mem_cons, List.not_mem_nil, or_false, or_self, ne_eq, forall_eq,
+          Ninst.reg.injEq, reduceCtorEq, not_false_eq_true]) insideMax with
       ⟨burnCallCursor, _popRun, insideBurnCall⟩
     rcases burnCallCursor.balanceSstoreOccurrence_call
         context.invocation.2.2.2 insideBurnCall with
       ⟨body, bodyLookup, burnCursor, insideBurn⟩
     have bodyEq : body = flashBurn := by
-      simpa [flashBurnSlot, weth10, weth10Aux] using bodyLookup.symm
+      simpa only [weth10, weth10Aux, flashBurnSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using bodyLookup.symm
     subst body
     exact burnCursor.balanceSstoreRole_flashBurn insideBurn occurrence context
 
@@ -3931,11 +3887,14 @@ private theorem flashLoanAfterCredit_routedToSettle (dp : DeployParams) :
     Func.balanceSstoreRoutedToCallWithin 512
       ((weth10 dp).main :: weth10Aux) flashSettleSlot
       flashLoanAfterCredit = true := by
-  simp [flashLoanAfterCredit, Func.balanceSstoreRoutedToCallWithin, prepend,
-    mstoreAt, logWith, pushList, forwardArgTail, flashCallbackArgsSize,
-    storeFlashCallbackHead, returnDataShorterThan, checkReturnDataHead,
-    flashSettleSlot, bubbleRevertSlot, flashFailedErrorSlot, weth10,
-    weth10Aux, ninstSstoreFree, arg, cdl, Ninst.pushB256, Func.revert]
+  simp only [weth10, weth10Aux, Func.revert, Ninst.pushB256, flashSettleSlot, flashLoanAfterCredit,
+    Fin.isValue, mstoreAt, logWith, Fin.reduceSucc, storeFlashCallbackHead, List.cons_append,
+    List.nil_append, pushList, List.map_cons, List.map_nil, forwardArgTail, arg, cdl,
+    flashCallbackArgsSize, returnDataShorterThan, checkReturnDataHead, flashFailedErrorSlot,
+    prepend, bubbleRevertSlot, Func.balanceSstoreRoutedToCallWithin, ninstSstoreFree, ↓reduceIte,
+    Bool.and_self, Nat.reduceEqDiff, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero, Bool.true_and,
+    Bool.and_true, Bool.and_eq_true]
   constructor
   · calc
       Func.sstoreFreeWithin 434 ((weth10 dp).main :: weth10Aux)
@@ -3951,7 +3910,7 @@ private theorem flashLoanAfterCredit_routedToSettle (dp : DeployParams) :
           Func.sstoreFreeWithin_eq_of_noCalls
             (by
               unfold bubbleRevert Func.revertReturnData
-              simp [Func.NoCalls]) _ _
+              simp only [Func.NoCalls]) _ _
       _ = true := by decide +kernel
 
 private def flashLoanAfterCounterStore : Func :=
@@ -4007,7 +3966,9 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_flashLoan
   rcases sourceCursor.balanceSstoreOccurrence_after_line
       (by
         rintro n hn rfl
-        simp [flashLoanTokenGuardLine, arg, cdl, Ninst.pushB256] at hn)
+        simp only [flashLoanTokenGuardLine, arg, cdl, Ninst.pushB256, List.cons_append,
+          List.nil_append, List.mem_cons, reduceCtorEq, Ninst.reg.injEq, List.not_mem_nil,
+          or_self] at hn)
       fromSource with
     ⟨tokenBranchCursor, _tokenRun, atTokenBranch⟩
   rcases tokenBranchCursor.balanceSstoreOccurrence_branch atTokenBranch with
@@ -4015,8 +3976,9 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_flashLoan
   · rcases limitCursor.balanceSstoreOccurrence_after_line
         (by
           rintro n hn rfl
-          simp [flashLoanIndividualLimitLine, arg, cdl,
-            Ninst.pushB256] at hn) insideLimit with
+          simp only [flashLoanIndividualLimitLine, arg, cdl, Ninst.pushB256, Fin.isValue,
+            List.cons_append, List.nil_append, List.mem_cons, reduceCtorEq, Ninst.reg.injEq,
+            List.not_mem_nil, or_self] at hn) insideLimit with
       ⟨limitBranchCursor, limitRun, atLimitBranch⟩
     rcases of_run_append (arg 2) limitRun with
       ⟨afterAmount, amountRun, afterAmountRun⟩
@@ -4051,8 +4013,9 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_flashLoan
       rcases counterCursor.balanceSstoreOccurrence_after_line
           (by
             rintro n hn rfl
-            simp [flashLoanCounterBeforeStore, flashLoanCounterBeforeSlot,
-              pushFlashMintedSlot, Ninst.pushB256] at hn)
+            simp only [flashLoanCounterBeforeStore, flashLoanCounterBeforeSlot, pushFlashMintedSlot,
+              Ninst.pushB256, Fin.isValue, List.cons_append, List.nil_append, List.mem_cons,
+              reduceCtorEq, Ninst.reg.injEq, List.not_mem_nil, or_self] at hn)
           insideCounter with
         ⟨counterStoreCursor, counterRun, atCounterStore⟩
       rcases of_run_append flashLoanCounterBeforeSlot counterRun with
@@ -4135,8 +4098,9 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_flashLoan
         rcases capCursor.balanceSstoreOccurrence_after_line
             (by
               rintro n hn rfl
-              simp [flashLoanCapLine, pushFlashMintedSlot,
-                Ninst.pushB256] at hn) insideCap with
+              simp only [flashLoanCapLine, pushFlashMintedSlot, Ninst.pushB256, Fin.isValue,
+                List.cons_append, List.nil_append, List.mem_cons, reduceCtorEq, Ninst.reg.injEq,
+                List.not_mem_nil, or_self] at hn) insideCap with
           ⟨capBranchCursor, capRun, atCapBranch⟩
         rcases of_run_append pushFlashMintedSlot capRun with
           ⟨afterCapKey, capKeyRun, capTailRun⟩
@@ -4188,9 +4152,9 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_flashLoan
           rcases creditCursor.balanceSstoreOccurrence_after_line
               (by
                 rintro n hn rfl
-                simp [flashLoanCreditBeforeStore, addressArg,
-                  normalizeAddress, pushAddressMask, arg, cdl,
-                  Ninst.pushB256] at hn) insideCredit with
+                simp only [flashLoanCreditBeforeStore, addressArg, arg, cdl, Ninst.pushB256,
+                  normalizeAddress, pushAddressMask, List.cons_append, List.nil_append, Fin.isValue,
+                  List.mem_cons, Ninst.reg.injEq, reduceCtorEq, List.not_mem_nil, or_self] at hn) insideCredit with
             ⟨creditStoreCursor, creditRun, atCreditStore⟩
           rcases Line.of_run_cons creditRun with
             ⟨afterDiscard, discardStep, creditRun⟩
@@ -4201,7 +4165,7 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_flashLoan
             ⟨afterRecipient, recipientRun, creditRun⟩
           have recipientPrefix : normalizedAddressArg frame.sevm 0 ::
               Sevm.argWord frame.sevm 2 :: [] <<+ afterRecipient.stack := by
-            simpa [normalizedAddressArg] using
+            simpa only [normalizedAddressArg] using
               prefix_of_addressArg creditAmountPrefix recipientRun
           rcases Line.of_run_cons creditRun with
             ⟨afterRecipientDup, recipientDupStep, creditRun⟩
@@ -4301,7 +4265,8 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_flashLoan
                   Stor.rest (Devm.getStor creditStoreCursor.pre ca)
                       (Sevm.argWord frame.sevm 0).toAdr +
                     Sevm.argWord frame.sevm 2] :=
-              List.pref_unique (by simp) occurrencePairPrefix
+              List.pref_unique (by simp only [List.length_cons, List.length_nil, zero_add,
+                Nat.reduceAdd]) occurrencePairPrefix
                 expectedPairPrefix
             injection pairEq with keyEq valueTailEq
             injection valueTailEq with valueEq
@@ -4323,8 +4288,9 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_flashLoan
                 insideAfterCredit with
               ⟨body, bodyLookup, settleCursor, insideSettle⟩
             have bodyEq : body = flashSettle := by
-              simpa [flashSettleSlot, weth10, weth10Aux] using
-                bodyLookup.symm
+              simpa only [weth10, weth10Aux, flashSettleSlot, List.length_cons, List.length_nil,
+                zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+                List.getElem_cons_zero, Option.some.injEq] using bodyLookup.symm
             subst body
             exact settleCursor.balanceSstoreRole_flashSettle
               insideSettle occurrence context
@@ -4332,8 +4298,9 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_flashLoan
               context.invocation.2.2.2 insideCapError with
             ⟨body, bodyLookup, errorCursor, insideErrorBody⟩
           have bodyEq : body = totalLimitError := by
-            simpa [totalLimitErrorSlot, weth10, weth10Aux] using
-              bodyLookup.symm
+            simpa only [weth10, weth10Aux, totalLimitErrorSlot, List.length_cons, List.length_nil,
+              zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+              List.getElem_cons_zero, Option.some.injEq] using bodyLookup.symm
           subst body
           exact (errorCursor.no_balanceSstoreOccurrence_of_free
             context.invocation.2.2.2 (totalLimitError_sstoreFree _)
@@ -4342,8 +4309,9 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_flashLoan
           context.invocation.2.2.2 insideLimitError with
         ⟨body, bodyLookup, errorCursor, insideErrorBody⟩
       have bodyEq : body = individualLimitError := by
-        simpa [individualLimitErrorSlot, weth10, weth10Aux] using
-          bodyLookup.symm
+        simpa only [weth10, weth10Aux, individualLimitErrorSlot, List.length_cons, List.length_nil,
+          zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+          List.getElem_cons_zero, Option.some.injEq] using bodyLookup.symm
       subst body
       exact (errorCursor.no_balanceSstoreOccurrence_of_free
         context.invocation.2.2.2 (individualLimitError_sstoreFree _)
@@ -4352,7 +4320,9 @@ private theorem Exec.Frame.CompiledCursor.balanceSstoreRole_flashLoan
         context.invocation.2.2.2 insideTokenError with
       ⟨body, bodyLookup, errorCursor, insideErrorBody⟩
     have bodyEq : body = flashTokenError := by
-      simpa [flashTokenErrorSlot, weth10, weth10Aux] using bodyLookup.symm
+      simpa only [weth10, weth10Aux, flashTokenErrorSlot, List.length_cons, List.length_nil,
+        zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+        List.getElem_cons_zero, Option.some.injEq] using bodyLookup.symm
     subst body
     exact (errorCursor.no_balanceSstoreOccurrence_of_free
       context.invocation.2.2.2 (flashTokenError_sstoreFree _)
@@ -4383,16 +4353,12 @@ private theorem Exec.Frame.CompiledCursor.classifyBalanceSstore_flashLoan
       (.flashPair (Sevm.argWord frame.sevm 0)
         (Sevm.argWord frame.sevm 0).toAdr
         (Sevm.argWord frame.sevm 2).toNat) := by
-    simp [primaryFlowAtom, nonempty, selectorEq,
-      flashLoanSelector_ne_depositSelector,
-      flashLoanSelector_ne_depositToSelector,
-      flashLoanSelector_ne_depositToAndCallSelector,
-      flashLoanSelector_ne_transferSelector,
-      flashLoanSelector_ne_transferAndCallSelector,
-      flashLoanSelector_ne_transferFromSelector,
-      flashLoanSelector_ne_withdrawSelector,
-      flashLoanSelector_ne_withdrawToSelector,
-      flashLoanSelector_ne_withdrawFromSelector]
+    simp only [primaryFlowAtom, nonempty, ↓reduceIte, selectorEq,
+      flashLoanSelector_ne_depositSelector, flashLoanSelector_ne_depositToSelector, decide_false,
+      flashLoanSelector_ne_depositToAndCallSelector, Bool.or_self, Bool.false_eq_true,
+      flashLoanSelector_ne_transferSelector, flashLoanSelector_ne_transferAndCallSelector,
+      flashLoanSelector_ne_transferFromSelector, flashLoanSelector_ne_withdrawSelector,
+      flashLoanSelector_ne_withdrawToSelector, flashLoanSelector_ne_withdrawFromSelector]
   exact occurrence.classify_of_primary_role context primary role
 
 private def approveEntryBeforeKey : Line :=
@@ -4439,9 +4405,10 @@ private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_approvePref
   rcases sourceCursor.balanceSstoreOccurrence_after_line
       (by
         rintro n hn rfl
-        simp [approveEntryBeforeStore, approveEntryBeforeKey,
-          allowanceKeyFromMemory, argCopy, cdc, arg, cdl, mstoreAt, pushList,
-          Ninst.pushB256] at hn)
+        simp only [approveEntryBeforeStore, approveEntryBeforeKey, mstoreAt, Ninst.pushB256,
+          List.cons_append, List.nil_append, argCopy, cdc, allowanceKeyFromMemory, pushList,
+          List.map_cons, List.map_nil, arg, cdl, Fin.isValue, List.mem_cons, Ninst.reg.injEq,
+          reduceCtorEq, List.not_mem_nil, or_self] at hn)
       fromSource with
     ⟨storeCursor, beforeStoreRun, atStore⟩
   change Line.Run frame.sevm sourceCursor.pre
@@ -4516,8 +4483,10 @@ private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_approvePerm
   rcases sourceCursor.balanceSstoreOccurrence_after_line
       (by
         rintro n hn rfl
-        simp [approvePermitBeforeStore, allowanceKeyFromMemory,
-          argCopy, cdc, arg, cdl, pushList, Ninst.pushB256] at hn)
+        simp only [approvePermitBeforeStore, argCopy, cdc, Ninst.pushB256, allowanceKeyFromMemory,
+          pushList, List.map_cons, List.map_nil, List.cons_append, List.nil_append, arg, cdl,
+          Fin.isValue, List.mem_cons, reduceCtorEq, Ninst.reg.injEq, List.not_mem_nil,
+          or_self] at hn)
       fromSource with
     ⟨storeCursor, beforeStoreRun, atStore⟩
   change Line.Run frame.sevm sourceCursor.pre
@@ -4599,9 +4568,10 @@ private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_permitRecov
   rcases sourceCursor.balanceSstoreOccurrence_after_line
       (by
         rintro n hn rfl
-        simp [permitRecoverFirstGuardLine, permitDigest,
-          recoverPermitSigner, arg, cdl, mstoreAt, pushList,
-          Ninst.pushB256] at hn)
+        simp only [permitRecoverFirstGuardLine, permitDigest, Fin.isValue, Ninst.pushB256, mstoreAt,
+          List.cons_append, List.nil_append, pushList, List.map_cons, List.map_nil,
+          recoverPermitSigner, arg, cdl, List.mem_cons, Ninst.reg.injEq, reduceCtorEq,
+          List.not_mem_nil, or_self] at hn)
       fromSource with
     ⟨firstBranchCursor, _firstGuardRun, atFirstBranch⟩
   rcases firstBranchCursor.balanceSstoreOccurrence_branch atFirstBranch with
@@ -4610,8 +4580,9 @@ private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_permitRecov
   · rcases secondGuardCursor.balanceSstoreOccurrence_after_line
         (by
           rintro n hn rfl
-          simp [permitRecoverSecondGuardLine, arg, cdl,
-            Ninst.pushB256] at hn)
+          simp only [permitRecoverSecondGuardLine, arg, cdl, Ninst.pushB256, List.cons_append,
+            List.nil_append, List.mem_cons, reduceCtorEq, Ninst.reg.injEq, List.not_mem_nil,
+            or_self] at hn)
         insideSecondGuard with
       ⟨secondBranchCursor, _secondGuardRun, atSecondBranch⟩
     rcases secondBranchCursor.balanceSstoreOccurrence_branch
@@ -4624,8 +4595,9 @@ private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_permitRecov
           context.invocation.2.2.2 insideSecondError with
         ⟨body, bodyLookup, errorCursor, insideErrorBody⟩
       have bodyEq : body = invalidPermitError := by
-        simpa [invalidPermitErrorSlot, weth10, weth10Aux] using
-          bodyLookup.symm
+        simpa only [weth10, weth10Aux, invalidPermitErrorSlot, List.length_cons, List.length_nil,
+          zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+          List.getElem_cons_zero, Option.some.injEq] using bodyLookup.symm
       subst body
       exact (errorCursor.no_balanceSstoreOccurrence_of_free
         context.invocation.2.2.2 (invalidPermitError_sstoreFree _)
@@ -4634,8 +4606,9 @@ private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_permitRecov
         context.invocation.2.2.2 insideFirstError with
       ⟨body, bodyLookup, errorCursor, insideErrorBody⟩
     have bodyEq : body = invalidPermitError := by
-      simpa [invalidPermitErrorSlot, weth10, weth10Aux] using
-        bodyLookup.symm
+      simpa only [weth10, weth10Aux, invalidPermitErrorSlot, List.length_cons, List.length_nil,
+        zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+        List.getElem_cons_zero, Option.some.injEq] using bodyLookup.symm
     subst body
     exact (errorCursor.no_balanceSstoreOccurrence_of_free
       context.invocation.2.2.2 (invalidPermitError_sstoreFree _)
@@ -4714,7 +4687,9 @@ private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_permit
   rcases sourceCursor.balanceSstoreOccurrence_after_line
       (by
         rintro n hn rfl
-        simp [permitDeadlineGuardLine, arg, cdl, Ninst.pushB256] at hn)
+        simp only [permitDeadlineGuardLine, arg, cdl, Ninst.pushB256, List.cons_append,
+          List.nil_append, List.mem_cons, reduceCtorEq, Ninst.reg.injEq, List.not_mem_nil,
+          or_self] at hn)
       fromSource with
     ⟨deadlineBranchCursor, _deadlineRun, atDeadlineBranch⟩
   rcases deadlineBranchCursor.balanceSstoreOccurrence_branch
@@ -4724,9 +4699,9 @@ private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_permit
   · rcases nonceCursor.balanceSstoreOccurrence_after_line
         (by
           rintro n hn rfl
-          simp [permitNonceBeforeStore, addressArg, normalizeAddress,
-            pushAddressMask, tagNonceKey, arg, cdl, mstoreAt,
-            Ninst.pushB256] at hn)
+          simp only [permitNonceBeforeStore, addressArg, arg, cdl, Ninst.pushB256, normalizeAddress,
+            pushAddressMask, List.cons_append, List.nil_append, Fin.isValue, tagNonceKey, mstoreAt,
+            List.mem_cons, Ninst.reg.injEq, reduceCtorEq, List.not_mem_nil, or_self] at hn)
         insideNonce with
       ⟨storeCursor, beforeStoreRun, atStore⟩
     change Line.Run frame.sevm nonceCursor.pre
@@ -4848,7 +4823,9 @@ private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_permit
         insideAfterNonce with
       ⟨body, bodyLookup, recoverCursor, insideRecover⟩
     have bodyEq : body = permitRecover := by
-      simpa [permitRecoverSlot, weth10, weth10Aux] using bodyLookup.symm
+      simpa only [weth10, weth10Aux, permitRecoverSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.lt_add_one, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using bodyLookup.symm
     subst body
     exact recoverCursor.no_balanceSstoreOccurrence_permitRecover
       insideRecover occurrence context
@@ -4856,8 +4833,9 @@ private theorem Exec.Frame.CompiledCursor.no_balanceSstoreOccurrence_permit
         context.invocation.2.2.2 insideDeadlineError with
       ⟨body, bodyLookup, errorCursor, insideErrorBody⟩
     have bodyEq : body = expiredPermitError := by
-      simpa [expiredPermitErrorSlot, weth10, weth10Aux] using
-        bodyLookup.symm
+      simpa only [weth10, weth10Aux, expiredPermitErrorSlot, List.length_cons, List.length_nil,
+        zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+        List.getElem_cons_zero, Option.some.injEq] using bodyLookup.symm
     subst body
     exact (errorCursor.no_balanceSstoreOccurrence_of_free
       context.invocation.2.2.2 (expiredPermitError_sstoreFree _)
@@ -4887,7 +4865,7 @@ theorem Exec.Frame.BalanceSstoreOccurrence.classify_of_receive
     | none =>
         unfold Blanc.Weth10.Exec.Frame.flowAction? at classified
         rw [if_pos context.invocation] at classified
-        simp [primaryFlowAtom, empty] at classified
+        simp only [primaryFlowAtom, empty, ↓reduceIte, Option.map_some, reduceCtorEq] at classified
     | some action =>
         have atomEq : action.atom =
             .ordinaryMint frame.sevm.caller.toB256 frame.sevm.caller
@@ -4895,133 +4873,11 @@ theorem Exec.Frame.BalanceSstoreOccurrence.classify_of_receive
           have selected :=
             Blanc.Weth10.Exec.Frame.primaryFlowAtom_eq_some_of_flowAction_eq_some (frame := frame)
               context classified
-          simpa [primaryFlowAtom, empty] using selected.symm
+          simpa only [primaryFlowAtom, empty, ↓reduceIte, Option.some.injEq] using selected.symm
         refine ⟨action,
           occurrence.classify_of_role context classified ?_⟩
         rw [atomEq]
         exact role
-
-/-- Reach the exact generated receive body while preserving its original
-proof-indexed frame execution. -/
-private theorem Exec.Frame.compiledReceiveCursor
-    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
-    (empty : frame.sevm.data.length.toB256 = 0) :
-    ∃ receiveCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
-        ((weth10 dp).main :: weth10Aux)
-        (table 0 ((weth10 dp).main :: weth10Aux))
-        receiveEther frame.post,
-      [] <<+ receiveCursor.pre.stack ∧ receiveCursor.actions = [] := by
-  rcases Blanc.Weth10.Exec.Frame.compiledMainCursor (frame := frame) context with
-    ⟨mainCursor, mainActions⟩
-  change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame
-    ((weth10 dp).main :: weth10Aux)
-    (table 0 ((weth10 dp).main :: weth10Aux))
-    ([Ninst.calldatasize, Ninst.iszero] +++
-      (receiveEther <?>
-        (fsig +++ dispatchWith fallbackSlot (weth10Tree dp))))
-    frame.post at mainCursor
-  rcases mainCursor.peelChildlessLine
-      (by simp [NinstIsChildless]) with
-    ⟨entryBranchCursor, entryLine, entryActions⟩
-  have flagPrefix :
-      [frame.sevm.data.length.toB256 =? 0] <<+
-        entryBranchCursor.pre.stack := by
-    rcases Line.of_run_cons entryLine with
-      ⟨afterSize, sizeStep, restSize⟩
-    rcases Line.of_run_cons restSize with
-      ⟨afterZero, zeroStep, emptyLine⟩
-    cases emptyLine
-    have sizePrefix : [frame.sevm.data.length.toB256] <<+
-        afterSize.stack :=
-      prefix_of_push (of_run_calldatasize sizeStep) nil_pref
-    exact prefix_of_iszero zeroStep sizePrefix
-  rw [empty] at flagPrefix
-  have one : ((0 : B256) =? 0) = 1 := by simp [B256.eqCheck]
-  rw [one] at flagPrefix
-  rcases entryBranchCursor.selectBranchSucc (flag := (1 : B256))
-      (by decide) flagPrefix with
-    ⟨receiveCursor, receiveStack, receiveActions⟩
-  exact ⟨receiveCursor, receiveStack,
-    receiveActions.trans (entryActions.trans mainActions)⟩
-
-/-- The receive branch's unique source `SSTORE` is an actual balance-region
-occurrence at the caller key, with the exact word computed by its immediate
-load/add prefix. -/
-theorem Exec.Frame.exists_balanceSstoreOccurrence_of_receive
-    {dp : DeployParams} {ca : Adr} {frame : Exec.Frame}
-    (context : Blanc.Weth10.Exec.Frame.AuthenticContext dp ca frame)
-    (empty : frame.sevm.data.length.toB256 = 0) :
-    ∃ (storePre storePost : Devm) (slot : Xlot),
-      Blanc.Weth10.Exec.Frame.BalanceSstoreOccurrence dp ca frame storePre storePost slot
-        frame.sevm.caller.toB256
-        (Stor.rest (Devm.getStor storePre ca) frame.sevm.caller +
-          Nat.toB256 frame.sevm.value.toNat)
-        frame.sevm.caller := by
-  rcases Blanc.Weth10.Exec.Frame.compiledReceiveCursor (frame := frame) context empty with
-    ⟨receiveCursor, _receiveStack, _receiveActions⟩
-  rw [receiveEther_eq_sstoreSplit] at receiveCursor
-  rcases receiveCursor.peelChildlessLine
-      (by simp [mintCallerBeforeSstore, NinstIsChildless]) with
-    ⟨storeCursor, prefixRun, _prefixActions⟩
-  rcases Line.of_run_cons prefixRun with
-    ⟨afterCaller, callerStep, restCaller⟩
-  rcases Line.of_run_cons restCaller with
-    ⟨afterLoad, loadStep, restLoad⟩
-  rcases Line.of_run_cons restLoad with
-    ⟨afterValue, valueStep, restValue⟩
-  rcases Line.of_run_cons restValue with
-    ⟨afterAdd, addStep, restAdd⟩
-  rcases Line.of_run_cons restAdd with
-    ⟨afterCallerAgain, callerAgainStep, emptyLine⟩
-  cases emptyLine
-  have callerPrefix : [frame.sevm.caller.toB256] <<+
-      afterCaller.stack :=
-    prefix_of_push (of_run_caller callerStep) nil_pref
-  rcases prefix_of_sload loadStep callerPrefix with
-    ⟨callerBalance, balancePrefix, callerBalanceEq⟩
-  have valuePrefix : [frame.sevm.value, callerBalance] <<+
-      afterValue.stack :=
-    prefix_of_push (of_run_callvalue valueStep) balancePrefix
-  have sumPrefix : [frame.sevm.value + callerBalance] <<+
-      afterAdd.stack :=
-    prefix_of_add addStep valuePrefix
-  have storePrefix :
-      [frame.sevm.caller.toB256, frame.sevm.value + callerBalance] <<+
-        storeCursor.pre.stack :=
-    prefix_of_push (of_run_caller callerAgainStep) sumPrefix
-  have storLoad : Devm.getStor afterCaller = Devm.getStor afterLoad :=
-    Ninst.Hinv.inv (f := Devm.getStor) loadStep
-  have storValue : Devm.getStor afterLoad = Devm.getStor afterValue :=
-    Ninst.Hinv.inv (f := Devm.getStor) valueStep
-  have storAdd : Devm.getStor afterValue = Devm.getStor afterAdd :=
-    Ninst.Hinv.inv (f := Devm.getStor) addStep
-  have storCaller : Devm.getStor afterAdd = Devm.getStor storeCursor.pre :=
-    Ninst.Hinv.inv (f := Devm.getStor) callerAgainStep
-  have callerBalanceAtStore :
-      callerBalance =
-        (Devm.getStor storeCursor.pre frame.sevm.currentTarget).get
-          frame.sevm.caller.toB256 := by
-    rw [callerBalanceEq]
-    change
-      (Devm.getStor afterCaller frame.sevm.currentTarget).get
-          frame.sevm.caller.toB256 = _
-    rw [storLoad, storValue, storAdd, storCaller]
-  have target : frame.sevm.currentTarget = ca := context.invocation.2.1
-  have storedWord :
-      frame.sevm.value + callerBalance =
-        Stor.rest (Devm.getStor storeCursor.pre ca) frame.sevm.caller +
-          Nat.toB256 frame.sevm.value.toNat := by
-    rw [Jaune.toB256_toNat, callerBalanceAtStore, target]
-    simp only [Stor.rest, Function.comp_apply]
-    exact B256.add_comm
-  rcases storeCursor.selectNextChildless
-      (by simp [NinstIsChildless]) with
-    ⟨tailCursor, slot, _storeRun, occurrence, _storeActions⟩
-  refine ⟨storeCursor.pre, tailCursor.pre, slot, occurrence,
-    balanceKey_valid frame.sevm.caller, rfl, [], ?_⟩
-  rw [← storedWord]
-  exact storePrefix
 
 private theorem name_sstoreFree (fs : List Func) :
     Func.sstoreFreeWithin 64 fs name = true := by

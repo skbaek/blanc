@@ -18,9 +18,6 @@ open Jaune
 
 namespace LidoTriggerableWithdrawalsGateway
 
-private theorem accessedStorageKeys_setMach
-    {base : Devm} {mach : Mach} :
-    (base.setMach mach).accessedStorageKeys = base.accessedStorageKeys := rfl
 
 private theorem addAccessedStorageKey_setMach
     {base : Devm} {mach : Mach} {a : Adr} {k : B256} :
@@ -40,9 +37,6 @@ private theorem addAccessedStorageKey_output_local
     (base : Devm) (a : Adr) (k : B256) :
     (addAccessedStorageKey base a k).output = base.output := rfl
 
-private theorem addAccessedStorageKey_returnData_local
-    (base : Devm) (a : Adr) (k : B256) :
-    (addAccessedStorageKey base a k).returnData = base.returnData := rfl
 
 private theorem addAccessedStorageKey_logs_local
     (base : Devm) (a : Adr) (k : B256) :
@@ -72,15 +66,7 @@ private theorem addAccessedStorageKey_state_local
     (base : Devm) (a : Adr) (k : B256) :
     (addAccessedStorageKey base a k).state = base.state := rfl
 
-private theorem addAccessedStorageKey_getCode_local
-    (base : Devm) (a : Adr) (k : B256) (x : Adr) :
-    (addAccessedStorageKey base a k).getCode x = base.getCode x := rfl
 
-private theorem afterSstore_returnData_local
-    (sevm : Sevm) (base : Devm) (key value : B256) :
-    (afterSstore sevm base key value).returnData = base.returnData := by
-  unfold afterSstore
-  split <;> rfl
 
 private theorem afterSstore_transientStorage_local
     (sevm : Sevm) (base : Devm) (key value : B256) :
@@ -119,10 +105,6 @@ private theorem pauseResumeWarm_output (sevm : Sevm) (base : Devm) :
   simp only [pauseResumeWarm, pauseRoleWarm,
     addAccessedStorageKey_output_local]
 
-private theorem pauseResumeWarm_returnData (sevm : Sevm) (base : Devm) :
-    (pauseResumeWarm sevm base).returnData = base.returnData := by
-  simp only [pauseResumeWarm, pauseRoleWarm,
-    addAccessedStorageKey_returnData_local]
 
 private theorem pauseResumeWarm_logs (sevm : Sevm) (base : Devm) :
     (pauseResumeWarm sevm base).logs = base.logs := by
@@ -158,11 +140,6 @@ private theorem pauseResumeWarm_state (sevm : Sevm) (base : Devm) :
   simp only [pauseResumeWarm, pauseRoleWarm,
     addAccessedStorageKey_state_local]
 
-private theorem pauseResumeWarm_getCode
-    (sevm : Sevm) (base : Devm) (a : Adr) :
-    (pauseResumeWarm sevm base).getCode a = base.getCode a := by
-  simp only [pauseResumeWarm, pauseRoleWarm,
-    addAccessedStorageKey_getCode_local]
 
 private theorem pauseResumeWarm_getStorVal
     (sevm : Sevm) (base : Devm) (a : Adr) (key : B256) :
@@ -284,9 +261,6 @@ private theorem setMach_error_local (base : Devm) (mach : Mach) :
 private theorem setMach_output_local (base : Devm) (mach : Mach) :
     (base.setMach mach).output = base.output := rfl
 
-private theorem setMach_returnData_local (base : Devm) (mach : Mach) :
-    (base.setMach mach).returnData = base.returnData := rfl
-
 private theorem setMach_logs_local (base : Devm) (mach : Mach) :
     (base.setMach mach).logs = base.logs := rfl
 
@@ -308,9 +282,6 @@ private theorem setMach_accessedStorageKeys_local (base : Devm) (mach : Mach) :
 private theorem setMach_state_local (base : Devm) (mach : Mach) :
     (base.setMach mach).state = base.state := rfl
 
-private theorem setMach_getCode_local (base : Devm) (mach : Mach) (a : Adr) :
-    (base.setMach mach).getCode a = base.getCode a := rfl
-
 private theorem setMach_getStorVal_local
     (base : Devm) (mach : Mach) (a : Adr) (key : B256) :
     (base.setMach mach).getStorVal a key = base.getStorVal a key := rfl
@@ -320,9 +291,6 @@ private theorem addLog_error_local (base : Devm) (event : Log) :
 
 private theorem addLog_output_local (base : Devm) (event : Log) :
     (base.addLog event).output = base.output := rfl
-
-private theorem addLog_returnData_local (base : Devm) (event : Log) :
-    (base.addLog event).returnData = base.returnData := rfl
 
 private theorem addLog_logs_local (base : Devm) (event : Log) :
     (base.addLog event).logs = base.logs ++ [event] := rfl
@@ -344,10 +312,6 @@ private theorem addLog_accessedStorageKeys_local (base : Devm) (event : Log) :
 
 private theorem addLog_state_local (base : Devm) (event : Log) :
     (base.addLog event).state = base.state := rfl
-
-private theorem addLog_getCode_local
-    (base : Devm) (event : Log) (a : Adr) :
-    (base.addLog event).getCode a = base.getCode a := rfl
 
 private theorem addLog_getStorVal_local
     (base : Devm) (event : Log) (a : Adr) (key : B256) :
@@ -378,11 +342,6 @@ private theorem pauseStored_output
     (sevm : Sevm) (base : Devm) (duration : B256) :
     (pauseStored sevm base duration).output = base.output := by
   rw [pauseStored, afterSstore_output, pauseResumeWarm_output]
-
-private theorem pauseStored_returnData
-    (sevm : Sevm) (base : Devm) (duration : B256) :
-    (pauseStored sevm base duration).returnData = base.returnData := by
-  rw [pauseStored, afterSstore_returnData_local, pauseResumeWarm_returnData]
 
 private theorem pauseStored_logs
     (sevm : Sevm) (base : Devm) (duration : B256) :
@@ -427,42 +386,37 @@ private theorem pauseStored_state
         (duration + sevm.benvStat.time) := by
   rw [pauseStored, afterSstore_state_local, pauseResumeWarm_state]
 
-private theorem pauseStored_getCode
-    (sevm : Sevm) (base : Devm) (duration : B256) (a : Adr) :
-    (pauseStored sevm base duration).getCode a = base.getCode a := by
-  rw [pauseStored, afterSstore_getCode, pauseResumeWarm_getCode]
-
-@[simp] theorem pauseFinitePost_gasLeft
+theorem pauseFinitePost_gasLeft
     (sevm : Sevm) (base : Devm) (duration : B256) (G : Nat) :
     (pauseFinitePost sevm base duration G).gasLeft = G := rfl
 
-@[simp] theorem pauseFinitePost_error
+theorem pauseFinitePost_error
     (sevm : Sevm) (base : Devm) (duration : B256) (G : Nat) :
     (pauseFinitePost sevm base duration G).error = base.error := by
   rw [pauseFinitePost, setMach_error_local, pauseLogged,
     addLog_error_local, pauseStored_error]
 
-@[simp] theorem pauseFinitePost_output
+theorem pauseFinitePost_output
     (sevm : Sevm) (base : Devm) (duration : B256) (G : Nat) :
     (pauseFinitePost sevm base duration G).output = base.output := by
   rw [pauseFinitePost, setMach_output_local, pauseLogged,
     addLog_output_local, pauseStored_output]
 
-@[simp] theorem pauseFinitePost_logs
+theorem pauseFinitePost_logs
     (sevm : Sevm) (base : Devm) (duration : B256) (G : Nat) :
     (pauseFinitePost sevm base duration G).logs =
       base.logs ++ [pauseEvent sevm duration] := by
   rw [pauseFinitePost, setMach_logs_local, pauseLogged, addLog_logs_local,
     pauseStored_logs]
 
-@[simp] theorem pauseFinitePost_accountsToDelete
+theorem pauseFinitePost_accountsToDelete
     (sevm : Sevm) (base : Devm) (duration : B256) (G : Nat) :
     (pauseFinitePost sevm base duration G).accountsToDelete =
       base.accountsToDelete := by
   rw [pauseFinitePost, setMach_accountsToDelete_local, pauseLogged,
     addLog_accountsToDelete_local, pauseStored_accountsToDelete]
 
-@[simp] theorem pauseFinitePost_refundCounter
+theorem pauseFinitePost_refundCounter
     (sevm : Sevm) (base : Devm) (duration : B256) (G : Nat) :
     (pauseFinitePost sevm base duration G).refundCounter =
       sstoreNewRefundCounter sevm.benvStat.rules.gas (duration + sevm.benvStat.time)
@@ -472,14 +426,14 @@ private theorem pauseStored_getCode
   rw [pauseFinitePost, setMach_refundCounter_local, pauseLogged,
     addLog_refundCounter_local, pauseStored_refundCounter]
 
-@[simp] theorem pauseFinitePost_transientStorage
+theorem pauseFinitePost_transientStorage
     (sevm : Sevm) (base : Devm) (duration : B256) (G : Nat) :
     (pauseFinitePost sevm base duration G).transientStorage =
       base.transientStorage := by
   rw [pauseFinitePost, setMach_transientStorage_local, pauseLogged,
     addLog_transientStorage_local, pauseStored_transientStorage]
 
-@[simp] theorem pauseFinitePost_accessedAddresses
+theorem pauseFinitePost_accessedAddresses
     (sevm : Sevm) (base : Devm) (duration : B256) (G : Nat) :
     (pauseFinitePost sevm base duration G).accessedAddresses =
       base.accessedAddresses := by
@@ -518,30 +472,30 @@ theorem pauseFinitePost_accessedStorageKeys
   unfold sloadAccessedStorageKeys
   rw [if_pos hwarm]
 
-@[simp] theorem pauseSentinelPost_gasLeft
+theorem pauseSentinelPost_gasLeft
     (sevm : Sevm) (base : Devm) (G : Nat) :
     (pauseSentinelPost sevm base G).gasLeft = G := rfl
 
-@[simp] theorem pauseSentinelPost_error
+theorem pauseSentinelPost_error
     (sevm : Sevm) (base : Devm) (G : Nat) :
     (pauseSentinelPost sevm base G).error = base.error := by
   rw [pauseSentinelPost, setMach_error_local, addLog_error_local,
     afterSstore_error, pauseResumeWarm_error]
 
-@[simp] theorem pauseSentinelPost_output
+theorem pauseSentinelPost_output
     (sevm : Sevm) (base : Devm) (G : Nat) :
     (pauseSentinelPost sevm base G).output = base.output := by
   rw [pauseSentinelPost, setMach_output_local, addLog_output_local,
     afterSstore_output, pauseResumeWarm_output]
 
-@[simp] theorem pauseSentinelPost_logs
+theorem pauseSentinelPost_logs
     (sevm : Sevm) (base : Devm) (G : Nat) :
     (pauseSentinelPost sevm base G).logs =
       base.logs ++ [pauseEvent sevm pauseInfinitely] := by
   rw [pauseSentinelPost, setMach_logs_local, addLog_logs_local,
     afterSstore_logs, pauseResumeWarm_logs]
 
-@[simp] theorem pauseSentinelPost_accountsToDelete
+theorem pauseSentinelPost_accountsToDelete
     (sevm : Sevm) (base : Devm) (G : Nat) :
     (pauseSentinelPost sevm base G).accountsToDelete =
       base.accountsToDelete := by
@@ -549,7 +503,7 @@ theorem pauseFinitePost_accessedStorageKeys
     addLog_accountsToDelete_local, afterSstore_accountsToDelete,
     pauseResumeWarm_accountsToDelete]
 
-@[simp] theorem pauseSentinelPost_refundCounter
+theorem pauseSentinelPost_refundCounter
     (sevm : Sevm) (base : Devm) (G : Nat) :
     (pauseSentinelPost sevm base G).refundCounter =
       sstoreNewRefundCounter sevm.benvStat.rules.gas pauseInfinitely
@@ -560,7 +514,7 @@ theorem pauseFinitePost_accessedStorageKeys
     addLog_refundCounter_local, afterSstore_refundCounter,
     pauseResumeWarm_getStorVal, pauseResumeWarm_refundCounter]
 
-@[simp] theorem pauseSentinelPost_transientStorage
+theorem pauseSentinelPost_transientStorage
     (sevm : Sevm) (base : Devm) (G : Nat) :
     (pauseSentinelPost sevm base G).transientStorage =
       base.transientStorage := by
@@ -568,7 +522,7 @@ theorem pauseFinitePost_accessedStorageKeys
     addLog_transientStorage_local, afterSstore_transientStorage_local,
     pauseResumeWarm_transientStorage]
 
-@[simp] theorem pauseSentinelPost_accessedAddresses
+theorem pauseSentinelPost_accessedAddresses
     (sevm : Sevm) (base : Devm) (G : Nat) :
     (pauseSentinelPost sevm base G).accessedAddresses =
       base.accessedAddresses := by
@@ -682,7 +636,7 @@ theorem pauseOnlyRole_runCompiledTo
   -- Abstract the staged image across the outer walk: `func_run` recurses over
   -- the concrete write tower past the default `maxRecDepth` (term-size
   -- breaker per PROOF_RECIPES runcompiled-construction, as in
-  -- `pauseEvent_runCompiledTo`).  Size facts go through `hsize`; the key
+  -- `pauseEvent_exact_runCompiledTo`).  Size facts go through `hsize`; the key
   -- namings concretize via `hstaged` only where they must match.
   generalize hstaged : ((((Mem.empty.write ((0 : B256) * 32).toNat
       pauseRole.toBytes).write ((1 : B256) * 32).toNat
@@ -753,75 +707,6 @@ theorem pauseOnlyRole_runCompiledTo
 
 /-! ## The pause event tail -/
 
-/-- Emit the gateway's exact `Paused(uint256)` log from an abstract two-word
-memory image.  Naming the memory is the term-size boundary: it avoids reducing
-the concrete 64-byte scratch write in every later state. -/
-private theorem pauseEvent_runCompiledTo
-    {fs : List Func} {sevm : Sevm} {base : Devm} {memory : Mem}
-    {duration : B256} {G : Nat}
-    (hstatic : sevm.isStatic = false)
-    (hsize : memory.size = 64)
-    (hread : (memory.read 0 32).1 = duration.toBytes) :
-    ∃ post, Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], memory, G + 1014, base.stateGas⟩)
-      (([Ninst.pushB256 (signatureHash "Paused" [.uint256])] ++
-        logWith 0 0 1) +++ Func.stop) (.ok post) := by
-  obtain ⟨logged, _, _, _, _, _, _, _, _, _, hlift⟩ :=
-    Func.runCompiledTo_log_step_exists (fs := fs) (sevm := sevm)
-      (devm := base.setMach
-        ⟨[(0 : B256), (32 : B256),
-          signatureHash "Paused" [.uint256]], memory, G + 1006, base.stateGas⟩)
-      (n := (0 : Fin 4).succ)
-      (i := (0 : B256)) (sz := (32 : B256))
-      (topics := [signatureHash "Paused" [.uint256]]) (s := [])
-      (c := 1006) (G := G) (M := memory) (M' := memory)
-      (payload := duration.toBytes) (rest := Func.stop)
-      rfl rfl hstatic rfl
-      (by
-        rw [show (0 : B256).toNat = 0 by decide,
-          show (32 : B256).toNat = 32 by decide,
-          Devm.extCost_of_size (N := memory) (i := 0) (sz := 32) (n := 64)
-            (e := 0) hsize (by decide)]
-        decide)
-      (by
-        simpa only [show (0 : B256).toNat = 0 by decide,
-          show (32 : B256).toNat = 32 by decide] using hread)
-      (by
-        apply Mem.read_snd_eq_self
-        apply memExtSize_of_le
-        · rw [hsize]
-        · rw [hsize]
-          decide)
-      (by simp only [Devm.gasLeft_setMach])
-  refine ⟨logged.setMach ⟨[], memory, G, logged.stateGas⟩, ?_⟩
-  unfold logWith
-  apply Func.RunCompiledTo.next
-  · exact Ninst.runCompiled_pushB256
-      (c := gVerylow) (G := G + 1011)
-      (pushCost_of_ne_zero (by decide +kernel))
-      (by simp only [Devm.gasLeft_setMach, gVerylow])
-      (by simp only [Devm.stack_setMach, List.length_nil]; omega)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
-  apply Func.RunCompiledTo.next
-  · exact Ninst.runCompiled_pushB256
-      (c := gVerylow) (G := G + 1008)
-      (pushCost_of_ne_zero (by decide))
-      (by simp only [Devm.gasLeft_setMach, gVerylow])
-      (by
-        simp only [Devm.stack_setMach, List.length_cons,
-          List.length_nil]
-        omega)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
-  apply Func.RunCompiledTo.next
-  · exact Ninst.runCompiled_pushB256
-      (c := gBase) (G := G + 1006) pushCost_zero
-      (by simp only [Devm.gasLeft_setMach, gBase])
-      (by
-        simp only [Devm.stack_setMach, List.length_cons,
-          List.length_nil]
-        omega)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
-  exact hlift (Func.RunCompiledTo.last rfl)
 
 /-- Exact-state variant of the event tail.  The abstract-memory boundary is
 retained, but the post state is named so a parent `CALL` crossing can consume
@@ -889,74 +774,6 @@ private theorem pauseEvent_exact_runCompiledTo
       (by simp only [Devm.gasLeft_setMach])
   exact Func.RunCompiledTo.last rfl
 
-/-- Store the non-indexed event word and emit `Paused(uint256)`.  The calldata
-load and covered one-word store add `11` gas to the abstract event tail. -/
-private theorem pauseFiniteLogTail_runCompiledTo
-    {fs : List Func} {sevm : Sevm} {base : Devm}
-    {duration : B256} {G : Nat}
-    (harg : Sevm.dataWord sevm 4 = duration)
-    (hstatic : sevm.isStatic = false) :
-    ∃ post, Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], pauseAuthScratch sevm.caller.toB256, G + 1025, base.stateGas⟩)
-      ((arg 0 ++ mstoreAt 0 ++
-        [Ninst.pushB256 (signatureHash "Paused" [.uint256])] ++
-        logWith 0 0 1) +++ Func.stop) (.ok post) := by
-  -- Abstract the scratch image: `func_run`'s tactic scans exceed the
-  -- default `maxRecDepth` over the concrete write tower.
-  generalize hstaged2 : (pauseAuthScratch sevm.caller.toB256) = staged2
-  have hlen : duration.toBytes.length = 32 := B256.length_toBytes duration
-  have hne : duration.toBytes ≠ [] := by
-    intro h
-    rw [h] at hlen
-    simp at hlen
-  have hscratchread : (((staged2.write
-      ((0 : B256) * 32).toNat duration.toBytes).read 0 32).1) =
-      duration.toBytes := by
-    rw [← hlen]
-    exact Mem.read_write_zero _ hne
-  have hscratchsize : ((staged2.write
-      ((0 : B256) * 32).toNat duration.toBytes).size) = 64 := by
-    have hscratch64 : staged2.size = 64 := by
-      rw [← hstaged2]
-      unfold pauseAuthScratch
-      rw [Mem.size_write_word_at, Mem.size_write_word_at,
-        Mem.size_write_word_at, Mem.size_write_word_at]
-      decide
-    have h0 : ((0 : B256) * 32).toNat = 0 := by decide
-    rw [Mem.size_write_word_at, hscratch64, h0]
-    decide
-  obtain ⟨post, eventRun⟩ := pauseEvent_runCompiledTo
-    (fs := fs) (sevm := sevm) (base := base)
-    (memory := (staged2.write
-      ((0 : B256) * 32).toNat duration.toBytes))
-    (duration := duration) (G := G) hstatic hscratchsize
-    hscratchread
-  -- Clear the concrete-tower facts before walking: they break the same
-  -- scans.  The abstract continuation run stays.
-  clear hlen hne hscratchread hscratchsize
-  refine ⟨post, ?_⟩
-  unfold arg cdl
-  func_run (2)
-  rw [show 32 * (0 : B256) + 4 = 4 by decide, harg]
-  apply Func.runCompiledTo_mstoreAt
-      (memory := staged2) (stack := []) (value := duration)
-      (word := 0) (G := G + 1014) (pushGas := gBase)
-      (extGas := 0) (body :=
-        ([Ninst.pushB256 (signatureHash "Paused" [.uint256])] ++
-          logWith 0 0 1) +++ Func.stop)
-  · exact pushCost_zero
-  · simp
-  · intro S G'
-    have hscratch64 : staged2.size = 64 := by
-      rw [← hstaged2]
-      unfold pauseAuthScratch
-      rw [Mem.size_write_word_at, Mem.size_write_word_at,
-        Mem.size_write_word_at, Mem.size_write_word_at]
-      decide
-    have h0 : ((0 : B256) * 32).toNat = 0 := by decide
-    exact Devm.extCost_zero_of_le (by omega) (by omega)
-  · simpa only [show ((0 : B256) * 32).toNat = 0 by decide,
-      gBase, gVerylow] using eventRun
 
 private theorem pauseFiniteLogTail_exact_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
@@ -978,7 +795,7 @@ private theorem pauseFiniteLogTail_exact_runCompiledTo
   have hne : duration.toBytes ≠ [] := by
     intro h
     rw [h] at hlen
-    simp at hlen
+    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
   have hscratchread : (((staged2.write
       ((0 : B256) * 32).toNat duration.toBytes).read 0 32).1) =
       duration.toBytes := by
@@ -1012,7 +829,7 @@ private theorem pauseFiniteLogTail_exact_runCompiledTo
         ([Ninst.pushB256 (signatureHash "Paused" [.uint256])] ++
           logWith 0 0 1) +++ Func.stop)
   · exact pushCost_zero
-  · simp
+  · simp only [List.length_nil, Nat.ofNat_pos]
   · intro S G'
     have hscratch64 : staged2.size = 64 := by
       rw [← hstaged2]
@@ -1049,58 +866,13 @@ private theorem pauseFiniteSstore_runCompiled
     unfold sstoreCost
     simp only [hwarm, if_pos, Nat.zero_add, horiginal, hresume]
     rw [sstoreValueCost, if_pos ⟨rfl, hvalueNonzero.symm⟩, if_pos rfl]
-    norm_num [gasStorageSet]
+    norm_num only [gasStorageSet]
   simpa only [hcost] using
     (Ninst.runCompiled_sstore_selected_setMach
       (sevm := sevm) (base := base) (key := resumeSinceSlot)
       (value := value) (stack := []) (memory := memory) (G := G)
-      hfork (by norm_num [hcost, gCallStipend]) hstatic)
+      hfork (by norm_num only [hcost, gCallStipend]; omega) hstatic)
 
-/-- Install the finite resume timestamp, then execute the calldata/event tail.
-The guard's preceding `SLOAD` has already warmed `resumeSinceSlot`, so the
-zero-to-nonzero `SSTORE` charge is exactly `20000`. -/
-private theorem pauseFiniteWrite_runCompiledTo
-    {fs : List Func} {sevm : Sevm} {base : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    {duration value : B256} {G : Nat}
-    (harg : Sevm.dataWord sevm 4 = duration)
-    (hresume : base.getStorVal sevm.currentTarget resumeSinceSlot = 0)
-    (horiginal : getOrigStorVal sevm sevm.currentTarget resumeSinceSlot = 0)
-    (hwarm : (sevm.currentTarget, resumeSinceSlot) ∈
-      base.accessedStorageKeys)
-    (hstatic : sevm.isStatic = false)
-    (hvalueNonzero : value ≠ 0) :
-    ∃ post, Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[value], pauseAuthScratch sevm.caller.toB256,
-        G + 21028, base.stateGas⟩)
-      (([Ninst.pushB256 resumeSinceSlot, Ninst.sstore] ++
-        arg 0 ++ mstoreAt 0 ++
-        [Ninst.pushB256 (signatureHash "Paused" [.uint256])] ++
-        logWith 0 0 1) +++ Func.stop) (.ok post) := by
-  generalize hstaged3 : (pauseAuthScratch sevm.caller.toB256) = staged3
-  obtain ⟨post, tailRun⟩ := pauseFiniteLogTail_runCompiledTo
-    (fs := fs) (sevm := sevm)
-    (base := afterSstore sevm base resumeSinceSlot value)
-    (duration := duration) (G := G) harg hstatic
-  refine ⟨post, ?_⟩
-  apply Func.RunCompiledTo.next
-  · exact Ninst.runCompiled_pushB256
-      (c := gVerylow) (G := G + 21025)
-      (pushCost_of_ne_zero (by decide +kernel))
-      (by simp only [Devm.gasLeft_setMach, gVerylow])
-      (by simp only [Devm.stack_setMach, List.length_cons,
-        List.length_nil]; omega)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
-  rw [show G + 21025 = G + 1025 + 20000 from by omega]
-  apply Func.RunCompiledTo.next
-  · exact pauseFiniteSstore_runCompiled (hfork := hfork)
-      (memory := staged3)
-      (G := G + 1025) hresume horiginal hwarm hstatic hvalueNonzero
-  rw [← hstaged3]
-  have hsg : (afterSstore sevm base resumeSinceSlot value).stateGas =
-      base.stateGas := afterSstore_stateGas
-  rw [hsg] at tailRun
-  exact tailRun
 
 private theorem pauseFiniteWrite_exact_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
@@ -1151,167 +923,10 @@ private theorem pauseFiniteWrite_exact_runCompiledTo
 
 /-! ## The finite-duration body -/
 
-/-- Execute the checked finite-duration arm.  Its arithmetic/source prefix and
-zero branch cost `32` gas; the exact write-and-log suffix above costs `21031`.
-The strict timestamp inequality is precisely the successful no-overflow arm. -/
-private theorem pauseForFinite_runCompiledTo
-    {fs : List Func} {sevm : Sevm} {base : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    {duration : B256} {G : Nat}
-    (harg : Sevm.dataWord sevm 4 = duration)
-    (hresume : base.getStorVal sevm.currentTarget resumeSinceSlot = 0)
-    (horiginal : getOrigStorVal sevm sevm.currentTarget resumeSinceSlot = 0)
-    (hwarm : (sevm.currentTarget, resumeSinceSlot) ∈
-      base.accessedStorageKeys)
-    (hstatic : sevm.isStatic = false)
-    (htime : sevm.benvStat.time < duration + sevm.benvStat.time) :
-    ∃ post, Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], pauseAuthScratch sevm.caller.toB256, G + 21060, base.stateGas⟩)
-      pauseForFinite (.ok post) := by
-  have hvalueNonzero : duration + sevm.benvStat.time ≠ 0 := by
-    intro hzero
-    rw [hzero] at htime
-    have hn := B256.toNat_lt_toNat htime
-    rw [B256.toNat_zero] at hn
-    exact Nat.not_lt_zero _ hn
-  -- Stage the scratch image opaquely for the whole walk: the concrete
-  -- tower breaks the walk's defeq past `maxRecDepth` (as at 977), while
-  -- a named equation breaks the hinted scans (as at 811-815).  Reverting
-  -- the continuation first abstracts its type too, so no bridge is needed.
-  have writeRun := pauseFiniteWrite_runCompiledTo (hfork := hfork)
-    (fs := fs) (sevm := sevm) (base := base)
-    (duration := duration) (value := duration + sevm.benvStat.time)
-    (G := G) harg hresume horiginal hwarm hstatic hvalueNonzero
-  obtain ⟨post, writeRun⟩ := writeRun
-  revert writeRun
-  generalize (pauseAuthScratch sevm.caller.toB256) = staged3
-  intro writeRun
-  refine ⟨post, ?_⟩
-  unfold pauseForFinite arg cdl
-  func_run (3)
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  func_run (1)
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  -- Name the sum by rewriting: only the stack occurrence is normalized.
-  nth_rewrite 1 [show 32 * (0 : B256) + 4 = 4 by decide]
-  rw [harg]
-  func_run (1)
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  func_run (2) [0]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  case h_val =>
-    simp [B256.gtCheck, not_lt_of_ge (le_of_lt htime)]
-  func_run (1)
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  have hgas : G + 21060 - 32 = G + 21028 := by omega
-  rw [hgas]
-  unfold arg cdl at writeRun
-  exact writeRun
 
-/-- Lift the finite body through the successful nonzero and non-sentinel
-duration guards.  The two tests and their selected branches cost `47` gas. -/
-private theorem pauseForUnpausedFinite_runCompiledTo
-    {fs : List Func} {sevm : Sevm} {base : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    {duration : B256} {G : Nat}
-    (harg : Sevm.dataWord sevm 4 = duration)
-    (hresume : base.getStorVal sevm.currentTarget resumeSinceSlot = 0)
-    (horiginal : getOrigStorVal sevm sevm.currentTarget resumeSinceSlot = 0)
-    (hwarm : (sevm.currentTarget, resumeSinceSlot) ∈
-      base.accessedStorageKeys)
-    (hstatic : sevm.isStatic = false)
-    (hduration : duration ≠ 0)
-    (hfinite : duration ≠ pauseInfinitely)
-    (htime : sevm.benvStat.time < duration + sevm.benvStat.time) :
-    ∃ post, Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], pauseAuthScratch sevm.caller.toB256, G + 21107, base.stateGas⟩)
-      pauseForUnpaused (.ok post) := by
-  obtain ⟨post, finiteRun⟩ := pauseForFinite_runCompiledTo (hfork := hfork)
-    (fs := fs) (sevm := sevm) (base := base)
-    (duration := duration) (G := G) harg hresume horiginal hwarm hstatic htime
-  -- Stage opaquely (as in `pauseForFinite_runCompiledTo` above).
-  revert finiteRun
-  generalize (pauseAuthScratch sevm.caller.toB256) = staged4
-  intro finiteRun
-  refine ⟨post, ?_⟩
-  unfold pauseForUnpaused arg cdl
-  func_run (3) [0]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  case h_val =>
-    rw [show 32 * (0 : B256) + 4 = 4 by decide, harg]
-    simp [B256.eqCheck, hduration]
-  func_run (1)
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  func_run (4) [0]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  case h_val =>
-    rw [show 32 * (0 : B256) + 4 = 4 by decide, harg]
-    simp [B256.eqCheck, Ne.symm hfinite]
-  func_run (1)
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  have hgas : G + 21107 - 47 = G + 21060 := by omega
-  rw [hgas]
-  exact finiteRun
 
 /-! ## The pause-state guard -/
 
-/-- From a cold zero resume slot, execute the exact unpaused guard and enter
-the finite-duration body.  The cold `SLOAD`, five surrounding instructions,
-and selected nonzero branch cost `2125` gas. -/
-private theorem pauseForGuardFinite_runCompiledTo
-    {fs : List Func} {sevm : Sevm} {base : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    {duration : B256} {G : Nat}
-    (harg : Sevm.dataWord sevm 4 = duration)
-    (hresume : base.getStorVal sevm.currentTarget resumeSinceSlot = 0)
-    (horiginal : getOrigStorVal sevm sevm.currentTarget resumeSinceSlot = 0)
-    (hcold : (sevm.currentTarget, resumeSinceSlot) ∉
-      base.accessedStorageKeys)
-    (hstatic : sevm.isStatic = false)
-    (hduration : duration ≠ 0)
-    (hfinite : duration ≠ pauseInfinitely)
-    (htime : sevm.benvStat.time < duration + sevm.benvStat.time) :
-    ∃ post, Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], pauseAuthScratch sevm.caller.toB256, G + 23232, base.stateGas⟩)
-      (([Ninst.pushB256 resumeSinceSlot, Ninst.sload, Ninst.timestamp,
-          Ninst.lt, Ninst.iszero]) +++
-        (pauseForUnpaused <?> .call resumedExpectedSlot)) (.ok post) := by
-  let warm := addAccessedStorageKey base sevm.currentTarget resumeSinceSlot
-  have hresumeWarm : warm.getStorVal sevm.currentTarget resumeSinceSlot = 0 := by
-    simpa only [warm, getStorVal_addAccessedStorageKey] using hresume
-  have hwarm : (sevm.currentTarget, resumeSinceSlot) ∈
-      warm.accessedStorageKeys := by
-    unfold warm
-    change (sevm.currentTarget, resumeSinceSlot) ∈
-      base.accessedStorageKeys.insert (sevm.currentTarget, resumeSinceSlot)
-    exact Std.HashSet.mem_insert_self
-  obtain ⟨post, unpausedRun⟩ := pauseForUnpausedFinite_runCompiledTo (hfork := hfork)
-    (fs := fs) (sevm := sevm) (base := warm)
-    (duration := duration) (G := G) harg hresumeWarm horiginal hwarm hstatic
-    hduration hfinite htime
-  have hnotlt : ¬ sevm.benvStat.time < (0 : B256) := by
-    intro h
-    have hn := B256.toNat_lt_toNat h
-    rw [B256.toNat_zero] at hn
-    exact Nat.not_lt_zero _ hn
-  -- Stage opaquely (as in `pauseForFinite_runCompiledTo` above).
-  revert unpausedRun
-  generalize (pauseAuthScratch sevm.caller.toB256) = staged5
-  intro unpausedRun
-  refine ⟨post, ?_⟩
-  func_run (5) [0, 1]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  case h_val =>
-    rw [Devm.getStorVal_setMach, hresume]
-    simp [B256.ltCheck, hnotlt]
-  func_run (1)
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  change Func.RunCompiledTo fs sevm
-    (warm.setMach ⟨[], staged5, G + 23232 - 2125, warm.stateGas⟩)
-    pauseForUnpaused (.ok post)
-  have hgas : G + 23232 - 2125 = G + 21107 := by omega
-  rw [hgas]
-  exact unpausedRun
 
 /-! ## Authorization and ABI-length guard -/
 
@@ -1355,7 +970,7 @@ private theorem pauseForFinite_exact_runCompiledTo
   case h_val =>
     rw [show 32 * (0 : B256) + 4 = 4 by decide, harg]
   case h_val =>
-    simp [B256.gtCheck, not_lt_of_ge (le_of_lt htime)]
+    simp only [B256.gtCheck, gt_iff_lt, not_lt_of_ge (le_of_lt htime), ↓reduceIte]
   func_run (1)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   have hgas : G + 21060 - 32 = G + 21028 := by omega
@@ -1396,14 +1011,14 @@ private theorem pauseForUnpausedFinite_exact_runCompiledTo
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_val =>
     rw [show 32 * (0 : B256) + 4 = 4 by decide, harg]
-    simp [B256.eqCheck, hduration]
+    simp only [B256.eqCheck, hduration, ↓reduceIte]
   func_run (1)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   func_run (4) [0]
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_val =>
     rw [show 32 * (0 : B256) + 4 = 4 by decide, harg]
-    simp [B256.eqCheck, Ne.symm hfinite]
+    simp only [B256.eqCheck, Ne.symm hfinite, ↓reduceIte]
   func_run (1)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   have hgas : G + 21107 - 47 = G + 21060 := by omega
@@ -1461,7 +1076,7 @@ private theorem pauseForGuardFinite_exact_runCompiledTo
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_val =>
     rw [Devm.getStorVal_setMach, hresume]
-    simp [B256.ltCheck, hnotlt]
+    simp only [B256.ltCheck, hnotlt, ↓reduceIte]
   func_run (1)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   change Func.RunCompiledTo fs sevm
@@ -1546,7 +1161,7 @@ private theorem routeSkipped_runCompiledTo
         (taken <?> tail)) (.ok post) := by
   func_run (4) [0]
   case h_val =>
-    simp [B256.eqCheck, Ne.symm hne]
+    simp only [B256.eqCheck, Ne.symm hne, ↓reduceIte]
   have hgas : G + 22 - 22 = G := by omega
   rw [hgas]
   exact htail
@@ -1718,7 +1333,7 @@ theorem pauseForFinite_exec
     apply selector_eq_of_data_eq_abiSelectorBytes_append
       (selected := selPauseFor) (tail := duration.toBytes)
     · rfl
-    · simpa [pauseForCalldata] using hdata'
+    · simpa only [pauseForCalldata] using hdata'
   have hsize : (initSevm m).data.length.toB256 <? 36 = 0 := by
     rw [hdata', pauseForCalldata_length]
     decide
@@ -1727,7 +1342,7 @@ theorem pauseForFinite_exec
       (pre := abiSelectorBytes selPauseFor) (post := [])
     · rw [abiSelectorBytes_length]
       rfl
-    · simpa [pauseForCalldata] using hdata'
+    · simpa only [List.append_nil, pauseForCalldata] using hdata'
   have walk := pauseForFinite_runtime_runCompiledTo (hfork := hfork)
     (dp := dp) (sevm := initSevm m) (base := initDevm m)
     (duration := duration) (G := G) hguard hselector hsize hvalue
@@ -1743,71 +1358,6 @@ theorem pauseForFinite_exec
 
 /-! ## Independent infinite-sentinel arm -/
 
-private theorem pauseSentinelEventTail_runCompiledTo
-    {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}
-    (hstatic : sevm.isStatic = false) :
-    ∃ post, Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], pauseAuthScratch sevm.caller.toB256, G + 1022, base.stateGas⟩)
-      ((emitOneWord (signatureHash "Paused" [.uint256]) pauseInfinitely) +++
-        Func.stop) (.ok post) := by
-  -- Abstract the scratch image (as in `pauseFiniteLogTail_runCompiledTo`).
-  generalize hstagedS : (pauseAuthScratch sevm.caller.toB256) = staged9
-  have hlen : pauseInfinitely.toBytes.length = 32 :=
-    B256.length_toBytes pauseInfinitely
-  have hne : pauseInfinitely.toBytes ≠ [] := by
-    intro h
-    rw [h] at hlen
-    simp at hlen
-  have hscratchread : (((staged9.write
-      ((0 : B256) * 32).toNat pauseInfinitely.toBytes).read 0 32).1) =
-      pauseInfinitely.toBytes := by
-    rw [← hlen]
-    exact Mem.read_write_zero _ hne
-  have hscratchsize : ((staged9.write
-      ((0 : B256) * 32).toNat pauseInfinitely.toBytes).size) = 64 := by
-    have hscratch64 : staged9.size = 64 := by
-      rw [← hstagedS]
-      unfold pauseAuthScratch
-      rw [Mem.size_write_word_at, Mem.size_write_word_at,
-        Mem.size_write_word_at, Mem.size_write_word_at]
-      decide
-    have h0 : ((0 : B256) * 32).toNat = 0 := by decide
-    rw [Mem.size_write_word_at, hscratch64, h0]
-    decide
-  obtain ⟨post, eventRun⟩ := pauseEvent_runCompiledTo
-    (fs := fs) (sevm := sevm) (base := base)
-    (memory := (staged9.write
-      ((0 : B256) * 32).toNat pauseInfinitely.toBytes))
-    (duration := pauseInfinitely) (G := G) hstatic hscratchsize
-    hscratchread
-  refine ⟨post, ?_⟩
-  unfold emitOneWord
-  apply Func.RunCompiledTo.next
-  · exact Ninst.runCompiled_pushB256
-      (c := gVerylow) (G := G + 1019)
-      (pushCost_of_ne_zero (by decide +kernel))
-      (by simp only [Devm.gasLeft_setMach, gVerylow])
-      (by simp only [Devm.stack_setMach, List.length_nil]; omega)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
-  apply Func.runCompiledTo_mstoreAt
-      (memory := staged9) (stack := []) (value := pauseInfinitely)
-      (word := 0) (G := G + 1014) (pushGas := gBase)
-      (extGas := 0) (body :=
-        ([Ninst.pushB256 (signatureHash "Paused" [.uint256])] ++
-          logWith 0 0 1) +++ Func.stop)
-  · exact pushCost_zero
-  · simp
-  · intro S G'
-    have hscratch64 : staged9.size = 64 := by
-      rw [← hstagedS]
-      unfold pauseAuthScratch
-      rw [Mem.size_write_word_at, Mem.size_write_word_at,
-        Mem.size_write_word_at, Mem.size_write_word_at]
-      decide
-    have h0 : ((0 : B256) * 32).toNat = 0 := by decide
-    exact Devm.extCost_zero_of_le (by omega) (by omega)
-  · simpa only [show ((0 : B256) * 32).toNat = 0 by decide,
-      gBase, gVerylow] using eventRun
 
 private theorem pauseSentinelEventTail_exact_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}
@@ -1819,14 +1369,14 @@ private theorem pauseSentinelEventTail_exact_runCompiledTo
       (.ok ((base.addLog (pauseEvent sevm pauseInfinitely)).setMach
         ⟨[], (pauseAuthScratch sevm.caller.toB256).write
           ((0 : B256) * 32).toNat pauseInfinitely.toBytes, G, (base.addLog (pauseEvent sevm pauseInfinitely)).stateGas⟩)) := by
-  -- Abstract the scratch image (as in `pauseFiniteLogTail_runCompiledTo`).
+  -- Abstract the scratch image (as in `pauseFiniteLogTail_exact_runCompiledTo`).
   generalize hstagedS : (pauseAuthScratch sevm.caller.toB256) = staged9
   have hlen : pauseInfinitely.toBytes.length = 32 :=
     B256.length_toBytes pauseInfinitely
   have hne : pauseInfinitely.toBytes ≠ [] := by
     intro h
     rw [h] at hlen
-    simp at hlen
+    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
   have hscratchread : (((staged9.write
       ((0 : B256) * 32).toNat pauseInfinitely.toBytes).read 0 32).1) =
       pauseInfinitely.toBytes := by
@@ -1864,7 +1414,7 @@ private theorem pauseSentinelEventTail_exact_runCompiledTo
         ([Ninst.pushB256 (signatureHash "Paused" [.uint256])] ++
           logWith 0 0 1) +++ Func.stop)
   · exact pushCost_zero
-  · simp
+  · simp only [List.length_nil, Nat.ofNat_pos]
   · intro S G'
     have hscratch64 : staged9.size = 64 := by
       rw [← hstagedS]
@@ -1877,51 +1427,6 @@ private theorem pauseSentinelEventTail_exact_runCompiledTo
   · simpa only [show ((0 : B256) * 32).toNat = 0 by decide,
       gBase, gVerylow, pauseEvent] using eventRun
 
-/-- The sentinel store and its fixed event consume exactly `21028` gas. -/
-private theorem pauseForSentinel_runCompiledTo
-    {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (hresume : base.getStorVal sevm.currentTarget resumeSinceSlot = 0)
-    (horiginal : getOrigStorVal sevm sevm.currentTarget resumeSinceSlot = 0)
-    (hwarm : (sevm.currentTarget, resumeSinceSlot) ∈
-      base.accessedStorageKeys)
-    (hstatic : sevm.isStatic = false) :
-    ∃ post, Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], pauseAuthScratch sevm.caller.toB256, G + 21028, base.stateGas⟩)
-      pauseForSentinel (.ok post) := by
-  obtain ⟨post, eventRun⟩ := pauseSentinelEventTail_runCompiledTo
-    (fs := fs) (sevm := sevm)
-    (base := afterSstore sevm base resumeSinceSlot pauseInfinitely)
-    (G := G) hstatic
-  refine ⟨post, ?_⟩
-  unfold pauseForSentinel emitOneWord
-  apply Func.RunCompiledTo.next
-  · exact Ninst.runCompiled_pushB256
-      (c := gVerylow) (G := G + 21025)
-      (pushCost_of_ne_zero (by decide +kernel))
-      (by simp only [Devm.gasLeft_setMach, gVerylow])
-      (by simp only [Devm.stack_setMach, List.length_nil]; omega)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
-  apply Func.RunCompiledTo.next
-  · exact Ninst.runCompiled_pushB256
-      (c := gVerylow) (G := G + 21022)
-      (pushCost_of_ne_zero (by decide +kernel))
-      (by simp only [Devm.gasLeft_setMach, gVerylow])
-      (by simp only [Devm.stack_setMach, List.length_cons,
-        List.length_nil]; omega)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
-  rw [show G + 21022 = G + 1022 + 20000 from by omega]
-  apply Func.RunCompiledTo.next
-  · exact pauseFiniteSstore_runCompiled (hfork := hfork)
-      (G := G + 1022) hresume horiginal hwarm hstatic
-      (by decide +kernel)
-  -- Collapse the push-lemma projection chain: over the folded scratch
-  -- image the defeq would otherwise unfold past `maxRecDepth`.
-  simp only [Devm.stack_setMach, Devm.memory_setMach]
-  have hsg : (afterSstore sevm base resumeSinceSlot pauseInfinitely).stateGas =
-      base.stateGas := afterSstore_stateGas
-  rw [hsg] at eventRun
-  exact eventRun
 
 private theorem pauseForSentinel_exact_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}
@@ -1971,47 +1476,6 @@ private theorem pauseForSentinel_exact_runCompiledTo
   rw [hsg] at eventRun
   exact eventRun
 
-/-- Select the sentinel arm after the successful nonzero test.  Its positive
-sentinel branch is one gas dearer than the finite zero branch, so the two
-guards cost `48` gas. -/
-private theorem pauseForUnpausedSentinel_runCompiledTo
-    {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (harg : Sevm.dataWord sevm 4 = pauseInfinitely)
-    (hresume : base.getStorVal sevm.currentTarget resumeSinceSlot = 0)
-    (horiginal : getOrigStorVal sevm sevm.currentTarget resumeSinceSlot = 0)
-    (hwarm : (sevm.currentTarget, resumeSinceSlot) ∈
-      base.accessedStorageKeys)
-    (hstatic : sevm.isStatic = false) :
-    ∃ post, Func.RunCompiledTo fs sevm
-      (base.setMach ⟨[], pauseAuthScratch sevm.caller.toB256, G + 21076, base.stateGas⟩)
-      pauseForUnpaused (.ok post) := by
-  obtain ⟨post, sentinelRun⟩ := pauseForSentinel_runCompiledTo (hfork := hfork)
-    (fs := fs) (sevm := sevm) (base := base) (G := G)
-    hresume horiginal hwarm hstatic
-  -- Stage opaquely (as in `pauseForFinite_runCompiledTo` above).
-  revert sentinelRun
-  generalize (pauseAuthScratch sevm.caller.toB256) = staged10
-  intro sentinelRun
-  refine ⟨post, ?_⟩
-  unfold pauseForUnpaused arg cdl
-  func_run (3) [0]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  case h_val =>
-    rw [show 32 * (0 : B256) + 4 = 4 by decide, harg]
-    decide +kernel
-  func_run (1)
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  func_run (4) [1]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  case h_val =>
-    rw [show 32 * (0 : B256) + 4 = 4 by decide, harg]
-    simp [B256.eqCheck]
-  func_run (1)
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  have hgas : G + 21076 - 48 = G + 21028 := by omega
-  rw [hgas]
-  exact sentinelRun
 
 private theorem pauseForUnpausedSentinel_exact_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm} {G : Nat}
@@ -2048,7 +1512,7 @@ private theorem pauseForUnpausedSentinel_exact_runCompiledTo
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_val =>
     rw [show 32 * (0 : B256) + 4 = 4 by decide, harg]
-    simp [B256.eqCheck]
+    simp only [B256.eqCheck, ↓reduceIte]
   func_run (1)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   have hgas : G + 21076 - 48 = G + 21028 := by omega
@@ -2100,7 +1564,7 @@ private theorem pauseForGuardSentinel_exact_runCompiledTo
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_val =>
     rw [Devm.getStorVal_setMach, hresume]
-    simp [B256.ltCheck, hnotlt]
+    simp only [B256.ltCheck, hnotlt, ↓reduceIte]
   func_run (1)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   change Func.RunCompiledTo fs sevm
@@ -2213,7 +1677,7 @@ theorem pauseForSentinel_exec
     apply selector_eq_of_data_eq_abiSelectorBytes_append
       (selected := selPauseFor) (tail := pauseInfinitely.toBytes)
     · rfl
-    · simpa [pauseForCalldata] using hdata'
+    · simpa only [pauseForCalldata] using hdata'
   have hsize : (initSevm m).data.length.toB256 <? 36 = 0 := by
     rw [hdata', pauseForCalldata_length]
     decide
@@ -2222,7 +1686,7 @@ theorem pauseForSentinel_exec
       (pre := abiSelectorBytes selPauseFor) (post := [])
     · rw [abiSelectorBytes_length]
       rfl
-    · simpa [pauseForCalldata] using hdata'
+    · simpa only [List.append_nil, pauseForCalldata] using hdata'
   have walk := pauseForSentinel_runtime_exact_runCompiledTo (hfork := hfork)
     (dp := dp) (sevm := initSevm m) (base := initDevm m) (G := G)
     hguard hselector hsize hvalue hmembership hcold harg hresume horiginal
@@ -2273,7 +1737,7 @@ private theorem isPaused_true_warm_runCompiledTo
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     case h_val =>
       rw [Devm.getStorVal_setMach, hstored]
-      simp [B256.ltCheck, hpaused]
+      simp only [B256.ltCheck, hpaused, ↓reduceIte]
     case h_ext => exact Devm.extCost_empty_word
     case a =>
       apply Func.runCompiledTo_return_word (i := 0) (sz := 32) (s := [])
@@ -2415,7 +1879,7 @@ theorem isPaused_true_warm_exec
     apply selector_eq_of_data_eq_abiSelectorBytes_append
       (selected := selIsPaused) (tail := [])
     · rfl
-    · simpa [isPausedCalldata] using hdata'
+    · simpa only [List.append_nil, isPausedCalldata] using hdata'
   obtain ⟨post, walk, output, stored, gas, error, hmeta, world⟩ :=
     isPaused_true_warm_runtime_runCompiledTo (hfork := hfork)
       (dp := dp) (sevm := initSevm m) (base := initDevm m)
@@ -2457,7 +1921,7 @@ private theorem isPaused_true_cold_runCompiledTo
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     case h_val =>
       rw [Devm.getStorVal_setMach, hstored]
-      simp [B256.ltCheck, hpaused]
+      simp only [B256.ltCheck, hpaused, ↓reduceIte]
     case h_ext => exact Devm.extCost_empty_word
     case a =>
       apply Func.runCompiledTo_return_word (i := 0) (sz := 32) (s := [])

@@ -69,7 +69,7 @@ theorem meta_of_processMessage_sha256_64_clean
         split
         · rfl
         · rename_i heq
-          exact absurd (heq.symm.trans hsg) (by simp)
+          exact absurd (heq.symm.trans hsg) (by simp only [reduceCtorEq, not_false_eq_true])
     · exact False.elim (hinterp.1 hpre)
 
 /-- The successful resume of a call: access sets merged, error kept. -/
@@ -146,7 +146,7 @@ theorem ri_staticcall_sha {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G 
       ⟨_, Devm.eq_setGas_of_burn (Devm.burn_of_chargeGas hcharge)⟩
     simp only [bind, Except.bind] at h_run
     split at h_run
-    · simp [XStep.Run] at h_run
+    · simp only [XStep.Run, ExceptT.stM_eq, reduceCtorEq, and_false] at h_run
     · rename_i d' hp
       split at hp
       · cases hp
@@ -169,14 +169,15 @@ theorem ri_staticcall_sha {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G 
     simp only [herr, ↓reduceIte] at hstk
     exact hstk
   right
-  have hclean : child.error.isSome = false := by simpa using herr
+  have hclean : child.error.isSome = false := by simpa only [Option.isSome_eq_false_iff,
+    Option.isNone_iff_eq_none, Bool.not_eq_true] using herr
   simp only [hclean, Bool.false_eq_true, ↓reduceIte] at hstk
   set P := ((St b S M Gv).memExtends [(ii.toNat, 64), (oi.toNat, 32)]).withReturnData [] with hP
   have hcd : Array.sliceD P.memory.data ii.toNat 64 0 = (M.read ii.toNat 64).1 := rfl
   rw [hcd] at run_pm₀
   obtain ⟨gas, pm⟩ : ∃ gas, ProcessMessage (callMsg sevm P gas 0 sevm.currentTarget 2 2 true true
       (M.read ii.toNat 64).1 (b.getCode 2) false) xl (.ok child) :=
-    ⟨_, by simpa [ProcessMessage] using run_pm₀⟩
+    ⟨_, by simpa only [ProcessMessage, St.gasLeft, add_zero] using run_pm₀⟩
   have hlen : (M.read ii.toNat 64).1.length = 64 := by
     rw [← hcd, Array.sliceD_eq_map, List.length_map, List.length_range]
   have hout := output_of_processMessage_sha256_64_clean hpre hlen pm hclean
@@ -220,8 +221,8 @@ theorem ric_mcpy_iter {s d l n : Nat} (hl : 32 ≤ l) (hl' : l < 2 ^ 256) (hs : 
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_lt s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_push s1
   have hlt : B256.ltCheck (Nat.toB256 l) (Bytes.toB256 [0x20]) = 0 := by
-    rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, lt_toB256 hl' (by norm_num)]
-    simp [show ¬ l < 32 by omega]
+    rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, lt_toB256 hl' (by norm_num only)]
+    simp only [show ¬l < 32 by omega, ↓reduceIte]
   rw [hlt] at run
   rcases ric_branch run with ⟨-, G6, run⟩ | ⟨hw, -⟩
   swap; · exact absurd rfl hw
@@ -261,8 +262,8 @@ theorem ric_mcpy_exit {s d l : Nat} (hl : l < 32)
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_lt s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_push s1
   have hlt : B256.ltCheck (Nat.toB256 l) (Bytes.toB256 [0x20]) = 1 := by
-    rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, lt_toB256 (by omega) (by norm_num)]
-    simp [hl]
+    rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, lt_toB256 (by omega) (by norm_num only)]
+    simp only [hl, ↓reduceIte]
   rw [hlt] at run
   rcases ric_branch run with ⟨hw, -⟩ | ⟨-, G6, run⟩
   · exact absurd hw (by decide)
@@ -402,8 +403,8 @@ theorem ric_shaCall {img : Bytes} {n d : Nat} {x1 x3 x4 : B256} {c0 c1 v0 v1 : U
   obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G35, rfl⟩ := ri_iszero s2
   obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G36, rfl⟩ := ri_push s2
   have hlt : B256.ltCheck (Nat.toB256 32) (Bytes.toB256 [0x20]) = 0 := by
-    rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, lt_toB256 (by norm_num) (by norm_num)]
-    simp
+    rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, lt_toB256 (by norm_num only) (by norm_num only)]
+    simp only [lt_self_iff_false, ↓reduceIte]
   rw [hlt, show B256.eqCheck (0 : B256) 0 = 1 by decide] at run
   rcases ric_branch run with ⟨hw, -⟩ | ⟨-, G37, run⟩
   · exact absurd hw (by decide)

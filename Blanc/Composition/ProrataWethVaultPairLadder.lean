@@ -37,12 +37,6 @@ def PairInBlock {vault : Adr} (blockIndex : Nat) (r : PairStepRecord vault) : Pr
   r.provenance.blockIndex = blockIndex
 
 
-theorem PairReplayBetween.toWith {vault : Adr} {blockIndex : Nat}
-    {transactionIndex : Option Nat} {framePath : List Nat} {pre post : PairBoundary}
-    (replay : PairReplayBetween vault blockIndex transactionIndex framePath pre post) :
-    PairReplayWith vault (PairProvenanceOk blockIndex transactionIndex framePath) pre post :=
-  replay
-
 /-- A faithful replay re-graded: weaken the admissibility half and enlarge the frame universe. -/
 theorem PairReplayWith.faithfulLift {vault : Adr} {p q : PairStepRecord vault → Prop}
     {F G : List Exec.Deriv} {pre post : PairBoundary}
@@ -345,7 +339,7 @@ theorem Exec.pairReplay_of_messageRootFaithful {vault : Adr} {msg : Msg} {entry 
   have targetEq : ∀ {a : Adr},
       (initSevm (msg.withBenv entry)).currentTarget = a → msg.currentTarget = a := by
     intro a hit
-    simpa [initSevm, Msg.withBenv] using hit
+    simpa only [initSevm, Msg.withBenv] using hit
   -- both programs, at `pc = 0`
   have vaultAt : Prog.At Blanc.ProrataWethVault.vault vault 0
       (initSevm (msg.withBenv entry)) (initDevm (msg.withBenv entry)) := by
@@ -376,19 +370,19 @@ theorem Exec.pairReplay_of_messageRootFaithful {vault : Adr} {msg : Msg} {entry 
       (initSevm (msg.withBenv entry)).codeAddress = some vault ∧
         (initSevm (msg.withBenv entry)).caller ≠ vault := by
     intro hit
-    refine ⟨?_, by simpa [initSevm, Msg.withBenv] using ready.callerNotVault⟩
+    refine ⟨?_, by simpa only [initSevm, Msg.withBenv, ne_eq] using ready.callerNotVault⟩
     rcases ready.codeOrForeign with call | ⟨vaultNe, -⟩
-    · simpa [initSevm, Msg.withBenv] using ready.vault.codeAddress call (targetEq hit)
+    · simpa only [initSevm, Msg.withBenv] using ready.vault.codeAddress call (targetEq hit)
     · exact absurd (targetEq hit) vaultNe
   have wethDirect : (initSevm (msg.withBenv entry)).currentTarget = wethAccount →
       (initSevm (msg.withBenv entry)).codeAddress = some wethAccount ∧
         (initSevm (msg.withBenv entry)).caller ≠ vault ∧
         (initSevm (msg.withBenv entry)).caller ≠ wethAccount := by
     intro hit
-    refine ⟨?_, by simpa [initSevm, Msg.withBenv] using ready.callerNotVault,
-      by simpa [initSevm, Msg.withBenv] using ready.callerNotWeth⟩
+    refine ⟨?_, by simpa only [initSevm, Msg.withBenv, ne_eq] using ready.callerNotVault,
+      by simpa only [initSevm, Msg.withBenv, ne_eq] using ready.callerNotWeth⟩
     rcases ready.codeOrForeign with call | ⟨-, wethNe⟩
-    · simpa [initSevm, Msg.withBenv] using ready.weth.codeAddress call (targetEq hit)
+    · simpa only [initSevm, Msg.withBenv] using ready.weth.codeAddress call (targetEq hit)
     · exact absurd (targetEq hit) wethNe
   have core := Exec.corePairReplay vault 0 (initSevm (msg.withBenv entry))
     (initDevm (msg.withBenv entry)) out run wethAt
@@ -468,21 +462,21 @@ theorem retainedProcessCreateMessagePairReplayFaithful {vault : Adr} {msg : Msg}
       have preparedNe : ∀ {a : Adr}, msg.currentTarget ≠ a →
           (processCreateMessage.msg msg).currentTarget ≠ a := by
         intro a ne hit
-        exact ne (by simpa [processCreateMessage.msg, Msg.withBenv] using hit)
+        exact ne (by simpa only [processCreateMessage.msg, Msg.withBenv] using hit)
       have preparedReady : PairMessageReady vault (processCreateMessage.msg msg) :=
         { vault := ready.vault.processCreateMessage_msg targetNone vaultNe
           weth := ready.weth.processCreateMessage_msg targetNone wethNe
           distinct := ready.distinct
           wethNonprecompile := by
-            simpa [processCreateMessage.msg, Msg.withBenv, addCreatedAccount,
-              Benv.setStor, Benv.incrNonce] using ready.wethNonprecompile
+            simpa only [processCreateMessage.msg, Msg.withBenv, Benv.incrNonce, addCreatedAccount,
+              Benv.setStor, Bool.false_eq_true, eq_iff_iff, iff_false] using ready.wethNonprecompile
           covered := by
-            simpa [processCreateMessage.msg, Msg.withBenv, addCreatedAccount,
-              Benv.setStor, Benv.incrNonce] using ready.covered
+            simpa only [processCreateMessage.msg, Msg.withBenv, Benv.incrNonce, addCreatedAccount,
+              Benv.setStor] using ready.covered
           callerNotVault := by
-            simpa [processCreateMessage.msg, Msg.withBenv] using ready.callerNotVault
+            simpa only [processCreateMessage.msg, Msg.withBenv, ne_eq] using ready.callerNotVault
           callerNotWeth := by
-            simpa [processCreateMessage.msg, Msg.withBenv] using ready.callerNotWeth
+            simpa only [processCreateMessage.msg, Msg.withBenv, ne_eq] using ready.callerNotWeth
           codeOrForeign := Or.inr ⟨preparedNe vaultNe, preparedNe wethNe⟩ }
       have enter := (RunFrame.some_inv process).1
       rcases Frame.enter_run_inv enter with ⟨entry, transfer, evmEq⟩
@@ -655,8 +649,8 @@ theorem retainedSystemMessagePairReplayFaithful {vault : Adr} {benv : Benv} {tar
       distinct := inv.world.distinct
       wethNonprecompile := inv.wethNonprecompile
       covered := by
-        simpa [systemTransactionMessage, processSystemTransactionMsg, Benv.beginTransaction]
-          using inv.covered
+        simpa only [systemTransactionMessage, processSystemTransactionMsg,
+          Benv.beginTransaction] using inv.covered
       callerNotVault := envelope.1
       callerNotWeth := envelope.2 }
   have replay := retainedMessageCallPairReplayFaithful trace.message ready blockIndex none
@@ -732,17 +726,21 @@ theorem retainedBodyPairReplayFaithful {vault : Adr} {benv : Benv} {txs : List (
     fun {_} inside {_} weaken {_ _} replay => replay.faithfulLift weaken inside
   rw [congrArg (PairBoundary.ofState vault) trace.requestState_eq] at requestReplay
   exact (sub (F := trace.beacon.rawFrames)
-      (fun d member => by simp [AppliedBodyTrace.rawFrames, member])
+      (fun d member => by simp only [AppliedBodyTrace.rawFrames, List.append_assoc, List.mem_append,
+        member, true_or])
       (fun r (ok : PairProvenanceOk blockIndex none [] r) => ok.block) beaconReplay).append
     ((sub (F := trace.history.rawFrames)
-      (fun d member => by simp [AppliedBodyTrace.rawFrames, member])
+      (fun d member => by simp only [AppliedBodyTrace.rawFrames, List.append_assoc, List.mem_append,
+        member, true_or, or_true])
       (fun r (ok : PairProvenanceOk blockIndex none [] r) => ok.block) historyReplay).append
     ((sub (F := trace.transactions.rawFrames)
-      (fun d member => by simp [AppliedBodyTrace.rawFrames, member])
+      (fun d member => by simp only [AppliedBodyTrace.rawFrames, List.append_assoc, List.mem_append,
+        member, true_or, or_true])
       (fun _ ok => ok) txReplay).append
     (wdReplay.append
       (sub (F := trace.requests.rawFrames)
-        (fun d member => by simp [AppliedBodyTrace.rawFrames, member])
+        (fun d member => by simp only [AppliedBodyTrace.rawFrames, List.append_assoc,
+          List.mem_append, member, or_true])
         (fun r (ok : PairProvenanceOk blockIndex none [] r) => ok.block) requestReplay))))
 
 -- PB:163–222 / G:504–572; `transactionBound` is §4 (G+4), the inline `txBound` of PB:190–198 / G:548–556.
@@ -765,7 +763,7 @@ theorem retainedConfiguredBlockPairReplayFaithful {vault : Adr} {cfg : ChainConf
       by rw [show (initBenv trace.fork pre trace.block.header).stat.rules = trace.rules
           from trace.rulesEq]
          exact wethNonprecompile,
-      by simpa [initBenv, initBenvStat] using trace.covered⟩
+      by simpa only [initBenv, initBenvStat] using trace.covered⟩
   have replay :=
     retainedBodyPairReplayFaithful trace.bodyTrace benvInv trace.openingBound blockIndex
   have postBoundary := congrArg (PairBoundary.ofState vault) trace.postState

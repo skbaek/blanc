@@ -128,83 +128,119 @@ private theorem view_message_getStor
     ⟨sel, rfl⟩
   · exact readOnly_message_getStor (words := 0)
       (body := Blanc.ProrataWethVault.totalAssets) hfork run sel
-      (by simp [Blanc.ProrataWethVault.vaultFuncs])
-      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+      (by simp only [ProrataWethVault.vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or])
+      (by simp only [ProrataWethVault.readOnlyFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or])
   · exact readOnly_message_getStor (words := 0)
       (body := Blanc.ProrataWethVault.name) hfork run sel
-      (by simp [Blanc.ProrataWethVault.vaultFuncs])
-      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+      (by simp only [ProrataWethVault.vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
+      (by simp only [ProrataWethVault.readOnlyFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
   · exact readOnly_message_getStor (words := 1)
       (body := Blanc.ProrataWethVault.convertToAssets) hfork run sel
-      (by simp [Blanc.ProrataWethVault.vaultFuncs])
-      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+      (by simp only [ProrataWethVault.vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
+      (by simp only [ProrataWethVault.readOnlyFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
   · exact absurd sel notApprove
   · exact readOnly_message_getStor (words := 1)
       (body := Blanc.ProrataWethVault.previewWithdraw) hfork run sel
-      (by simp [Blanc.ProrataWethVault.vaultFuncs])
-      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+      (by simp only [ProrataWethVault.vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
+      (by simp only [ProrataWethVault.readOnlyFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
   · exact readOnly_message_getStor (words := 0)
       (body := Blanc.ProrataWethVault.totalSupply) hfork run sel
-      (by simp [Blanc.ProrataWethVault.vaultFuncs])
-      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+      (by simp only [ProrataWethVault.vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
+      (by simp only [ProrataWethVault.readOnlyFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
   · exact absurd sel notTransferFrom
   · exact readOnly_message_getStor (words := 0)
       (body := Blanc.ProrataWethVault.decimals) hfork run sel
-      (by simp [Blanc.ProrataWethVault.vaultFuncs])
-      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+      (by simp only [ProrataWethVault.vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
+      (by simp only [ProrataWethVault.readOnlyFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
   · exact readOnly_message_getStor (words := 0)
       (body := Blanc.ProrataWethVault.asset) hfork run sel
-      (by simp [Blanc.ProrataWethVault.vaultFuncs])
-      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+      (by simp only [ProrataWethVault.vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
+      (by simp only [ProrataWethVault.readOnlyFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
   · exact readOnly_message_getStor (words := 1)
       (body := Blanc.ProrataWethVault.maxDeposit) hfork run sel
-      (by simp [Blanc.ProrataWethVault.vaultFuncs])
-      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+      (by simp only [ProrataWethVault.vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
+      (by simp only [ProrataWethVault.readOnlyFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
   · exact readOnly_message_getStor (words := 1)
       (body := Blanc.ProrataWethVault.previewRedeem) hfork run sel
-      (by simp [Blanc.ProrataWethVault.vaultFuncs])
-      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+      (by simp only [ProrataWethVault.vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
+      (by simp only [ProrataWethVault.readOnlyFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
   · exact absurd sel notDeposit
   · exact readOnly_message_getStor (words := 1)
       (body := Blanc.ProrataWethVault.balanceOf) hfork run sel
-      (by simp [Blanc.ProrataWethVault.vaultFuncs])
-      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+      (by simp only [ProrataWethVault.vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
+      (by simp only [ProrataWethVault.readOnlyFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
   · exact absurd sel notMint
   · exact readOnly_message_getStor (words := 0)
       (body := Blanc.ProrataWethVault.symbol) hfork run sel
-      (by simp [Blanc.ProrataWethVault.vaultFuncs])
-      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+      (by simp only [ProrataWethVault.vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
+      (by simp only [ProrataWethVault.readOnlyFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
   · exact absurd sel notTransfer
   · exact readOnly_message_getStor (words := 1)
       (body := Blanc.ProrataWethVault.previewMint) hfork run sel
-      (by simp [Blanc.ProrataWethVault.vaultFuncs])
-      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+      (by simp only [ProrataWethVault.vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
+      (by simp only [ProrataWethVault.readOnlyFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
   · exact absurd sel notWithdraw
   · exact absurd sel notRedeem
   · exact readOnly_message_getStor (words := 1)
       (body := Blanc.ProrataWethVault.maxMint) hfork run sel
-      (by simp [Blanc.ProrataWethVault.vaultFuncs])
-      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+      (by simp only [ProrataWethVault.vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
+      (by simp only [ProrataWethVault.readOnlyFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
   · exact readOnly_message_getStor (words := 1)
       (body := Blanc.ProrataWethVault.convertToShares) hfork run sel
-      (by simp [Blanc.ProrataWethVault.vaultFuncs])
-      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+      (by simp only [ProrataWethVault.vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
+      (by simp only [ProrataWethVault.readOnlyFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
   · exact readOnly_message_getStor (words := 1)
       (body := Blanc.ProrataWethVault.maxWithdraw) hfork run sel
-      (by simp [Blanc.ProrataWethVault.vaultFuncs])
-      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+      (by simp only [ProrataWethVault.vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
+      (by simp only [ProrataWethVault.readOnlyFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
   · exact readOnly_message_getStor (words := 1)
       (body := Blanc.ProrataWethVault.maxRedeem) hfork run sel
-      (by simp [Blanc.ProrataWethVault.vaultFuncs])
-      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+      (by simp only [ProrataWethVault.vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
+      (by simp only [ProrataWethVault.readOnlyFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
   · exact readOnly_message_getStor (words := 2)
       (body := Blanc.ProrataWethVault.allowance) hfork run sel
-      (by simp [Blanc.ProrataWethVault.vaultFuncs])
-      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+      (by simp only [ProrataWethVault.vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
+      (by simp only [ProrataWethVault.readOnlyFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true])
   · exact readOnly_message_getStor (words := 1)
       (body := Blanc.ProrataWethVault.previewDeposit) hfork run sel
-      (by simp [Blanc.ProrataWethVault.vaultFuncs])
-      (by simp [Blanc.ProrataWethVault.readOnlyFuncs])
+      (by simp only [ProrataWethVault.vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, or_true])
+      (by simp only [ProrataWethVault.readOnlyFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, or_true])
 
 /-! ## One accepted vault operation as one record -/
 
@@ -418,7 +454,7 @@ theorem vaultFramePairSegment (vault : Adr) : VaultFramePairSegment vault := by
         Blanc.ProrataWethVault.previewMintN (Sevm.argWord sevm 0).toNat
           ((pre.state.getStor wethAccount).get sevm.currentTarget.toB256).toNat
           supply.toNat := by
-        simp [snapshotAt, vaultSnapshot, supplyEq]
+        simp only [snapshotAt, vaultSnapshot, supplyEq]
         rfl
       unfold B256.Nof
       have pairLe := add_le_sum_of_ne
@@ -507,6 +543,6 @@ theorem vaultFramePairSegment (vault : Adr) : VaultFramePairSegment vault := by
     isApprove isTransfer isTransferFrom
   exact ⟨[], PairReplay.nil_of_eq
     (PairBoundary.ofState_eq (congrFun kept vault) (congrFun kept wethAccount)),
-    by simp⟩
+    by simp only [List.not_mem_nil, IsEmpty.forall_iff, implies_true]⟩
 
 end Blanc.Composition.ProrataWethVault

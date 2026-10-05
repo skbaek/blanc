@@ -73,7 +73,7 @@ theorem code_pos : 0 < code.size := by rw [code_size]; decide
 theorem code_not_delegation : ¬ isValidDelegation code := fun h => by
   have := h.1
   rw [code_size] at this
-  simp [eoaDelegatedCodeLength] at this
+  simp only [eoaDelegatedCodeLength, Nat.reduceEqDiff] at this
 
 /-- No frame of an execution that runs the comparator executes `DELEGATECALL`
 or `CALLCODE` (from the certificate cursor; no hash premise). -/

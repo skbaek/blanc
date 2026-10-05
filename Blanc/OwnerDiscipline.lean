@@ -96,7 +96,7 @@ private theorem Inst.plainReg_spec {o : Option Inst} (h : Inst.plainReg o = true
     ∃ r, o = some (.next (.reg r)) ∧ r ≠ .sstore := by
   rcases o with _ | ((_ | _) | (r | _ | _ | _ | _ | _) | _) <;>
     simp only [Inst.plainReg, reduceCtorEq] at h
-  · exact ⟨r, rfl, by rintro rfl; simp at h⟩
+  · exact ⟨r, rfl, by rintro rfl; simp only [Bool.false_eq_true] at h⟩
 
 private theorem Inst.push20Target_spec {o : Option Inst} {I : Adr}
     (h : Inst.push20Target o = some I) :
@@ -124,7 +124,8 @@ private theorem Inst.isDelegatecall_spec {o : Option Inst}
 
 private theorem Inst.tailOk_spec {o : Option Inst} (h : Inst.tailOk o = true) :
     (∀ x, o ≠ some (.next (.exec x))) ∧ o ≠ some (.next (.reg .sstore)) := by
-  refine ⟨fun x hx => ?_, fun hx => ?_⟩ <;> subst hx <;> simp [Inst.tailOk] at h
+  refine ⟨fun x hx => ?_, fun hx => ?_⟩ <;> subst hx <;> simp only [tailOk,
+    Bool.false_eq_true] at h
 
 /-- The forwarder's reachable pcs and its stack at the `DELEGATECALL`: the
 prefix `0..9`, `GAS` at 30 with `I` on top, `DELEGATECALL` at 31 with `I`
@@ -148,7 +149,7 @@ theorem Jinst.runCore_ok_pc {pc pc' : Nat} {d d' : Devm} {s : Sevm} {j : Jinst}
     (h : Jinst.runCore pc d s j = .ok ⟨pc', d'⟩) :
     pc' = pc + 1 ∨ jumpable s.code pc' = true := by
   cases j <;> simp only [Jinst.runCore, bind, Except.bind, Except.assert] at h <;>
-    (repeat' split at h) <;> simp_all
+    (repeat' split at h) <;> simp_all only [reduceCtorEq, ExceptT.stM_eq, ite_eq_left_iff, Bool.not_eq_true, imp_false, Bool.not_eq_false, Except.ok.injEq, Prod.mk.injEq, or_true, true_or]
 
 private theorem ForwarderShape.getInst_stop {K : ByteArray} {I : Adr}
     (hK : ForwarderShape K I) {pc : Nat} (hpc : 45 ≤ pc) :
@@ -251,16 +252,16 @@ theorem Xinst.step_delegatecall_spawn_code {sevm : Sevm} {devm : Devm}
   subst hcadr
   rcases h3 : d2.popToNat with err | ⟨ii, d3⟩
   · cases hsg : sevm.benvStat.rules.stateGas <;>
-      simp [Xinst.step, hsg, h1, h2, h3, XStep.ofExcept] at spawn
+      simp only [Xinst.step, hsg, XStep.ofExcept, h1, bind_pure_comp, Except.bind_ok, h2, h3, Except.bind_error, reduceCtorEq, add_zero, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft] at spawn
   rcases h4 : d3.popToNat with err | ⟨isz, d4⟩
   · cases hsg : sevm.benvStat.rules.stateGas <;>
-      simp [Xinst.step, hsg, h1, h2, h3, h4, XStep.ofExcept] at spawn
+      simp only [Xinst.step, hsg, XStep.ofExcept, h1, bind_pure_comp, Except.bind_ok, h2, h3, h4, Except.bind_error, reduceCtorEq, add_zero, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft] at spawn
   rcases h5 : d4.popToNat with err | ⟨oi, d5⟩
   · cases hsg : sevm.benvStat.rules.stateGas <;>
-      simp [Xinst.step, hsg, h1, h2, h3, h4, h5, XStep.ofExcept] at spawn
+      simp only [Xinst.step, hsg, XStep.ofExcept, h1, bind_pure_comp, Except.bind_ok, h2, h3, h4, h5, Except.bind_error, reduceCtorEq, add_zero, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft] at spawn
   rcases h6 : d5.popToNat with err | ⟨osz, d6⟩
   · cases hsg : sevm.benvStat.rules.stateGas <;>
-      simp [Xinst.step, hsg, h1, h2, h3, h4, h5, h6, XStep.ofExcept] at spawn
+      simp only [Xinst.step, hsg, XStep.ofExcept, h1, bind_pure_comp, Except.bind_ok, h2, h3, h4, h5, h6, Except.bind_error, reduceCtorEq, add_zero, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft] at spawn
   have hcode : (addAccessedAddress d6 w.toAdr).getCode w.toAdr =
       devm.getCode w.toAdr := by
     rw [addAccessedAddress_getCode, Devm.popToNat_getCode h6,
@@ -315,26 +316,26 @@ theorem Xinst.step_directCall_spawn_code {sevm : Sevm} {devm : Devm} {x : Xinst}
     f.inner.code = devm.getCode f.inner.currentTarget := by
   rcases h1 : devm.pop with err | ⟨gas, d1⟩
   · rcases direct with rfl | rfl <;> cases hsg : sevm.benvStat.rules.stateGas <;>
-      simp [Xinst.step, hsg, h1, XStep.ofExcept] at spawn
+      simp only [Xinst.step, hsg, XStep.ofExcept, h1, Bool.not_eq_eq_eq_not, Bool.not_true, bind_pure_comp, Except.bind_error, reduceCtorEq, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft, ne_eq, Bool.decide_and, decide_not, Except.bind_ok, add_zero] at spawn
   rcases h2 : d1.popToAdr with err | ⟨callee, d2⟩
   · rcases direct with rfl | rfl <;> cases hsg : sevm.benvStat.rules.stateGas <;>
-      simp [Xinst.step, hsg, h1, h2, XStep.ofExcept] at spawn
+      simp only [Xinst.step, hsg, XStep.ofExcept, h1, Bool.not_eq_eq_eq_not, Bool.not_true, bind_pure_comp, Except.bind_ok, h2, Except.bind_error, reduceCtorEq, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft, ne_eq, Bool.decide_and, decide_not, add_zero] at spawn
   rcases direct with rfl | rfl
   · rcases h3 : d2.pop with err | ⟨value, d3⟩
     · cases hsg : sevm.benvStat.rules.stateGas <;>
-        simp [Xinst.step, hsg, h1, h2, h3, XStep.ofExcept] at spawn
+        simp only [Xinst.step, hsg, XStep.ofExcept, h1, Bool.not_eq_eq_eq_not, Bool.not_true, bind_pure_comp, Except.bind_ok, h2, h3, Except.bind_error, reduceCtorEq, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft, ne_eq, Bool.decide_and, decide_not] at spawn
     rcases h4 : d3.popToNat with err | ⟨ii, d4⟩
     · cases hsg : sevm.benvStat.rules.stateGas <;>
-        simp [Xinst.step, hsg, h1, h2, h3, h4, XStep.ofExcept] at spawn
+        simp only [Xinst.step, hsg, XStep.ofExcept, h1, Bool.not_eq_eq_eq_not, Bool.not_true, bind_pure_comp, Except.bind_ok, h2, h3, h4, Except.bind_error, reduceCtorEq, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft, ne_eq, Bool.decide_and, decide_not] at spawn
     rcases h5 : d4.popToNat with err | ⟨isz, d5⟩
     · cases hsg : sevm.benvStat.rules.stateGas <;>
-        simp [Xinst.step, hsg, h1, h2, h3, h4, h5, XStep.ofExcept] at spawn
+        simp only [Xinst.step, hsg, XStep.ofExcept, h1, Bool.not_eq_eq_eq_not, Bool.not_true, bind_pure_comp, Except.bind_ok, h2, h3, h4, h5, Except.bind_error, reduceCtorEq, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft, ne_eq, Bool.decide_and, decide_not] at spawn
     rcases h6 : d5.popToNat with err | ⟨oi, d6⟩
     · cases hsg : sevm.benvStat.rules.stateGas <;>
-        simp [Xinst.step, hsg, h1, h2, h3, h4, h5, h6, XStep.ofExcept] at spawn
+        simp only [Xinst.step, hsg, XStep.ofExcept, h1, Bool.not_eq_eq_eq_not, Bool.not_true, bind_pure_comp, Except.bind_ok, h2, h3, h4, h5, h6, Except.bind_error, reduceCtorEq, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft, ne_eq, Bool.decide_and, decide_not] at spawn
     rcases h7 : d6.popToNat with err | ⟨osz, d7⟩
     · cases hsg : sevm.benvStat.rules.stateGas <;>
-        simp [Xinst.step, hsg, h1, h2, h3, h4, h5, h6, h7, XStep.ofExcept] at spawn
+        simp only [Xinst.step, hsg, XStep.ofExcept, h1, Bool.not_eq_eq_eq_not, Bool.not_true, bind_pure_comp, Except.bind_ok, h2, h3, h4, h5, h6, h7, Except.bind_error, reduceCtorEq, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft, ne_eq, Bool.decide_and, decide_not] at spawn
     have hcode : (addAccessedAddress d7 callee).getCode callee = devm.getCode callee := by
       rw [addAccessedAddress_getCode, Devm.popToNat_getCode h7, Devm.popToNat_getCode h6,
         Devm.popToNat_getCode h5, Devm.popToNat_getCode h4, Devm.pop_getCode h3,
@@ -353,16 +354,16 @@ theorem Xinst.step_directCall_spawn_code {sevm : Sevm} {devm : Devm} {x : Xinst}
           (Or.inr hf.2.2)
   · rcases h3 : d2.popToNat with err | ⟨ii, d3⟩
     · cases hsg : sevm.benvStat.rules.stateGas <;>
-        simp [Xinst.step, hsg, h1, h2, h3, XStep.ofExcept] at spawn
+        simp only [Xinst.step, hsg, XStep.ofExcept, h1, bind_pure_comp, Except.bind_ok, h2, h3, Except.bind_error, reduceCtorEq, add_zero, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft] at spawn
     rcases h4 : d3.popToNat with err | ⟨isz, d4⟩
     · cases hsg : sevm.benvStat.rules.stateGas <;>
-        simp [Xinst.step, hsg, h1, h2, h3, h4, XStep.ofExcept] at spawn
+        simp only [Xinst.step, hsg, XStep.ofExcept, h1, bind_pure_comp, Except.bind_ok, h2, h3, h4, Except.bind_error, reduceCtorEq, add_zero, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft] at spawn
     rcases h5 : d4.popToNat with err | ⟨oi, d5⟩
     · cases hsg : sevm.benvStat.rules.stateGas <;>
-        simp [Xinst.step, hsg, h1, h2, h3, h4, h5, XStep.ofExcept] at spawn
+        simp only [Xinst.step, hsg, XStep.ofExcept, h1, bind_pure_comp, Except.bind_ok, h2, h3, h4, h5, Except.bind_error, reduceCtorEq, add_zero, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft] at spawn
     rcases h6 : d5.popToNat with err | ⟨osz, d6⟩
     · cases hsg : sevm.benvStat.rules.stateGas <;>
-        simp [Xinst.step, hsg, h1, h2, h3, h4, h5, h6, XStep.ofExcept] at spawn
+        simp only [Xinst.step, hsg, XStep.ofExcept, h1, bind_pure_comp, Except.bind_ok, h2, h3, h4, h5, h6, Except.bind_error, reduceCtorEq, add_zero, Devm.balReadAccount_gasLeft, addAccessedAddress_gasLeft] at spawn
     have hcode : (addAccessedAddress d6 callee).getCode callee = devm.getCode callee := by
       rw [addAccessedAddress_getCode, Devm.popToNat_getCode h6, Devm.popToNat_getCode h5,
         Devm.popToNat_getCode h4, Devm.popToNat_getCode h3,
@@ -562,20 +563,20 @@ private theorem Exec.ownerLoc_descendants (hK : ForwarderShape K I) (hC : 0 < C.
       ∀ G ∈ Exec.rawFrameDescendants run, OwnerLoc K C P I G.pc G.sevm G.devm := by
   intro pc sevm pre out run
   induction run with
-  | halt _ => intro _ _ G hG; simp [Exec.rawFrameDescendants] at hG
-  | doneErr _ _ _ => intro _ _ G hG; simp [Exec.rawFrameDescendants] at hG
+  | halt _ => intro _ _ G hG; simp only [rawFrameDescendants, List.not_mem_nil] at hG
+  | doneErr _ _ _ => intro _ _ G hG; simp only [rawFrameDescendants, List.not_mem_nil] at hG
   | cont hstep next ih =>
       intro loc free G hG
       simp only [Exec.rawFrameDescendants] at hG
       refine ih (OwnerLoc.next hK hC hCdel (.cont hstep next) loc)
         (fun n hn => free n ?_) G hG
-      simp [Exec.rawNodes, hn]
+      simp only [Exec.rawNodes, List.mem_cons, hn, or_true]
   | doneOk hstep henter hresume next ih =>
       intro loc free G hG
       simp only [Exec.rawFrameDescendants] at hG
       refine ih (OwnerLoc.next hK hC hCdel (.doneOk hstep henter hresume next) loc)
         (fun n hn => free n ?_) G hG
-      simp [Exec.rawNodes, hn]
+      simp only [Exec.rawNodes, List.mem_cons, hn, or_true]
   | runErr hstep henter child hresume ih =>
       intro loc free G hG
       have cloc := OwnerLoc.child hK hC hCdel hstep henter loc
@@ -583,7 +584,7 @@ private theorem Exec.ownerLoc_descendants (hK : ForwarderShape K I) (hC : 0 < C.
       simp only [Exec.rawFrameDescendants, List.mem_cons] at hG
       rcases hG with rfl | hG
       · exact cloc
-      · exact ih cloc (fun n hn => free n (by simp [Exec.rawNodes, hn])) G hG
+      · exact ih cloc (fun n hn => free n (by simp only [Exec.rawNodes, List.mem_cons, hn, or_true])) G hG
   | runOk hstep henter child hresume next childIh nextIh =>
       intro loc free G hG
       have cloc := OwnerLoc.child hK hC hCdel hstep henter loc
@@ -591,10 +592,12 @@ private theorem Exec.ownerLoc_descendants (hK : ForwarderShape K I) (hC : 0 < C.
       simp only [Exec.rawFrameDescendants, List.mem_cons, List.mem_append] at hG
       rcases hG with rfl | hG | hG
       · exact cloc
-      · exact childIh cloc (fun n hn => free n (by simp [Exec.rawNodes, hn])) G hG
+      · exact childIh cloc (fun n hn => free n (by simp only [Exec.rawNodes, List.mem_cons,
+        List.mem_append, hn, true_or, or_true])) G hG
       · exact nextIh (OwnerLoc.next hK hC hCdel
           (.runOk hstep henter child hresume next) loc)
-          (fun n hn => free n (by simp [Exec.rawNodes, hn])) G hG
+          (fun n hn => free n (by simp only [Exec.rawNodes, List.mem_cons, List.mem_append, hn,
+            or_true])) G hG
 
 end Induction
 
@@ -659,7 +662,7 @@ theorem noSstore_of_scan {K : ByteArray}
   · have := scan pc hpc
     unfold Ninst.At at hat
     rw [hat] at this
-    simp [Inst.notSstore] at this
+    simp only [Inst.notSstore, Bool.false_eq_true] at this
   · unfold Ninst.At ByteArray.getInst at hat
     simp only [hpc, ↓reduceDIte] at hat
     cases hat

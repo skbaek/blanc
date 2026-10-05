@@ -104,17 +104,17 @@ private theorem Exec.descendantFramePaths_map_frame
       Exec.descendantFrames run := by
   induction run generalizing parentPath nextChild with
   | halt =>
-      simp [Exec.descendantFramePaths, Exec.descendantFrames]
+      simp only [descendantFramePaths, List.map_nil, descendantFrames]
   | cont hstep next ih =>
-      simpa [Exec.descendantFramePaths, Exec.descendantFrames] using
+      simpa only [descendantFramePaths, descendantFrames] using
         ih (parentPath := parentPath) (nextChild := nextChild)
   | doneErr =>
-      simp [Exec.descendantFramePaths, Exec.descendantFrames]
+      simp only [descendantFramePaths, List.map_nil, descendantFrames]
   | doneOk hstep henter hresume next ih =>
-      simpa [Exec.descendantFramePaths, Exec.descendantFrames] using
+      simpa only [descendantFramePaths, descendantFrames] using
         ih (parentPath := parentPath) (nextChild := nextChild + 1)
   | runErr =>
-      simp [Exec.descendantFramePaths, Exec.descendantFrames]
+      simp only [descendantFramePaths, List.map_nil, descendantFrames]
   | runOk hstep henter child hresume next childIh nextIh =>
       simp only [Exec.descendantFramePaths, Exec.descendantFrames,
         List.map_append]
@@ -169,7 +169,7 @@ private theorem Exec.descendantFramePaths_entering
     Nonempty (Exec.LocatedFrame.EnteringOccurrence root child) := by
   cases current with
   | halt hstep =>
-      simp [Exec.descendantFramePaths] at member
+      simp only [descendantFramePaths, List.not_mem_nil] at member
   | cont hstep next =>
       let edge : Exec.Deriv.ParentStep
           (⟨_, parentSevm, _, parentOut, next⟩ : Exec.Deriv)
@@ -180,10 +180,10 @@ private theorem Exec.descendantFramePaths_entering
         (sameFramePrefix.snoc edge) nextChild child
       · intro descendant descendantMember
         apply descendantsMember descendant
-        simpa [Exec.descendantFramePaths] using descendantMember
-      · simpa [Exec.descendantFramePaths] using member
+        simpa only [descendantFramePaths] using descendantMember
+      · simpa only [descendantFramePaths] using member
   | doneErr hstep henter hresume =>
-      simp [Exec.descendantFramePaths] at member
+      simp only [descendantFramePaths, List.not_mem_nil] at member
   | doneOk hstep henter hresume next =>
       let edge : Exec.Deriv.ParentStep
           (⟨_, parentSevm, _, parentOut, next⟩ : Exec.Deriv)
@@ -195,10 +195,10 @@ private theorem Exec.descendantFramePaths_entering
         (sameFramePrefix.snoc edge) (nextChild + 1) child
       · intro descendant descendantMember
         apply descendantsMember descendant
-        simpa [Exec.descendantFramePaths] using descendantMember
-      · simpa [Exec.descendantFramePaths] using member
+        simpa only [descendantFramePaths] using descendantMember
+      · simpa only [descendantFramePaths] using member
   | runErr hstep henter exec hresume =>
-      simp [Exec.descendantFramePaths] at member
+      simp only [descendantFramePaths, List.not_mem_nil] at member
   | runOk hstep henter exec hresume next =>
       rename_i frame resume nextPc childEvm raw post
       simp only [Exec.descendantFramePaths] at member
@@ -211,15 +211,15 @@ private theorem Exec.descendantFramePaths_entering
               Exec.Frame.ofRun exec childCommitted⟩ ∈
               Exec.committedFramePaths root := by
           apply descendantsMember
-          simp [Exec.descendantFramePaths, childSettles]
+          simp only [descendantFramePaths, childSettles, ↓reduceDIte, List.cons_append,
+            List.mem_cons, List.mem_append, true_or]
         have splitMember :
             child = ⟨parentPath ++ [nextChild],
               Exec.Frame.ofRun exec childCommitted⟩ ∨
               child ∈ Exec.descendantFramePaths
                 (parentPath ++ [nextChild]) 0 exec ∨
               child ∈ Exec.descendantFramePaths parentPath (nextChild + 1) next := by
-          simpa [Exec.descendantFramePaths, childSettles, List.mem_append]
-            using member
+          simpa only [List.cons_append, List.mem_cons, List.mem_append] using member
         clear member
         rcases splitMember with direct | nested | resumed
         · subst child
@@ -231,7 +231,7 @@ private theorem Exec.descendantFramePaths_entering
               (Blanc.Exec.Frame.rootDeriv (Exec.Frame.ofRun parentRun parentCommitted)).exc := by
             obtain ⟨before, chronology⟩ := (Blanc.Exec.Deriv.ParentPrefix.rawNodes_decomposition sameFramePrefix)
             rw [chronology]
-            simp [node, Exec.rawNodes]
+            simp only [Exec.rawNodes, List.mem_append, List.mem_cons, true_or, or_true, node]
           let occurrence : Exec.NinstOccurrence
               (Blanc.Exec.Frame.rootDeriv (Exec.Frame.ofRun parentRun parentCommitted)) :=
             { node := node
@@ -251,7 +251,7 @@ private theorem Exec.descendantFramePaths_entering
             simpa only [occurrence, node] using sameFramePrefix
           have parentFrameRetained : Exec.Frame.ofRun parentRun parentCommitted ∈
               Exec.committedFrames parentRun := by
-            simp [Exec.committedFrames, parentCommitted]
+            simp only [committedFrames, parentCommitted, ↓reduceDIte, List.mem_cons, true_or]
           have retained : occurrence.Retained := by
             unfold Exec.NinstOccurrence.Retained
             apply (Exec.mem_retainedNodes_iff_committedFrame_parentPrefix
@@ -269,8 +269,8 @@ private theorem Exec.descendantFramePaths_entering
             (Exec.Deriv.ParentPrefix.refl _) 0 child
           · intro descendant descendantMember
             apply descendantsMember descendant
-            simp [Exec.descendantFramePaths, childSettles, List.mem_append,
-              descendantMember]
+            simp only [descendantFramePaths, childSettles, ↓reduceDIte, List.cons_append,
+              List.mem_cons, List.mem_append, descendantMember, true_or, or_true]
           · exact nested
         · let edge : Exec.Deriv.ParentStep
               (⟨_, parentSevm, _, parentOut, next⟩ : Exec.Deriv)
@@ -282,8 +282,8 @@ private theorem Exec.descendantFramePaths_entering
             (sameFramePrefix.snoc edge) (nextChild + 1) child
           · intro descendant descendantMember
             apply descendantsMember descendant
-            simp [Exec.descendantFramePaths, childSettles, List.mem_append,
-              descendantMember]
+            simp only [descendantFramePaths, childSettles, ↓reduceDIte, List.cons_append,
+              List.mem_cons, List.mem_append, descendantMember, or_true]
           · exact resumed
       next childDoesNotSettle =>
         let edge : Exec.Deriv.ParentStep
@@ -293,13 +293,14 @@ private theorem Exec.descendantFramePaths_entering
           .runOk hstep henter exec hresume next
         have resumed : child ∈ Exec.descendantFramePaths
             parentPath (nextChild + 1) next := by
-          simpa [Exec.descendantFramePaths, childDoesNotSettle] using member
+          simpa only [List.nil_append] using member
         apply Exec.descendantFramePaths_entering root rootCommitted parentPath
           parentRun parentCommitted parentMember next
           (sameFramePrefix.snoc edge) (nextChild + 1) child
         · intro descendant descendantMember
           apply descendantsMember descendant
-          simp [Exec.descendantFramePaths, childDoesNotSettle, descendantMember]
+          simp only [descendantFramePaths, childDoesNotSettle, Bool.false_eq_true, ↓reduceDIte,
+            List.nil_append, descendantMember]
         · exact resumed
 termination_by sizeOf current
 
@@ -324,12 +325,13 @@ theorem Exec.LocatedFrame.exists_enteringOccurrence
       simp only [root]
     · have rootMember :
           ⟨[], Exec.Frame.ofRun run committed⟩ ∈ Exec.committedFramePaths run := by
-        simp [Exec.committedFramePaths, committed]
+        simp only [committedFramePaths, committed, ↓reduceDIte, List.mem_cons, true_or]
       apply Exec.descendantFramePaths_entering run committed [] run committed
         rootMember run (Exec.Deriv.ParentPrefix.refl _) 0 child
       · intro candidate candidateMember
-        simp [Exec.committedFramePaths, committed, candidateMember]
+        simp only [committedFramePaths, committed, ↓reduceDIte, List.mem_cons, candidateMember,
+          or_true]
       · exact descendant
-  next notCommitted => simp at member
+  next notCommitted => simp only [List.not_mem_nil] at member
 
 end Blanc

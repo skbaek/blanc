@@ -455,7 +455,8 @@ theorem routeTo_line {body : Func} {functionIndex : Nat}
           (steps ++ [Prog.SourceStep.rest]) ++
               List.replicate line.length .rest =
             steps ++ List.replicate (instruction :: line).length .rest := by
-        simp [List.replicate_succ]
+        simp only [List.append_assoc, List.cons_append, List.nil_append, List.length_cons,
+          List.replicate_succ]
       rw [appended]
       exact bodyRoute devm''
         (.cons (Ninst.Run.of_runCompiled instructionRun) lineRun) tailBody
@@ -654,7 +655,7 @@ theorem Func.RunCompiledTo.not_commits_of_alwaysRevertsWithin
   induction fuel with
   | zero =>
       intro _devm _body _out _run certified
-      simp [Func.alwaysRevertsWithin] at certified
+      simp only [alwaysRevertsWithin, Bool.false_eq_true] at certified
   | succ fuel ih =>
       intro devm body out run certified
       cases body with
@@ -674,7 +675,7 @@ theorem Func.RunCompiledTo.not_commits_of_alwaysRevertsWithin
           | next instructionRun rest => exact ih rest certified
       | call index =>
           cases hlookup : fs[index]? with
-          | none => simp [Func.alwaysRevertsWithin, hlookup] at certified
+          | none => simp only [alwaysRevertsWithin, hlookup, Bool.false_eq_true] at certified
           | some called =>
               simp only [Func.alwaysRevertsWithin, hlookup] at certified
               cases run with
@@ -695,7 +696,7 @@ theorem Func.RunCompiledTo.not_ok_of_alwaysRevertsWithin
   induction fuel with
   | zero =>
       intro _devm _body _post _run certified
-      simp [Func.alwaysRevertsWithin] at certified
+      simp only [alwaysRevertsWithin, Bool.false_eq_true] at certified
   | succ fuel ih =>
       intro devm body post run certified
       cases body with
@@ -715,7 +716,7 @@ theorem Func.RunCompiledTo.not_ok_of_alwaysRevertsWithin
           | next instructionRun rest => exact ih rest certified
       | call index =>
           cases hlookup : fs[index]? with
-          | none => simp [Func.alwaysRevertsWithin, hlookup] at certified
+          | none => simp only [alwaysRevertsWithin, hlookup, Bool.false_eq_true] at certified
           | some called =>
               simp only [Func.alwaysRevertsWithin, hlookup] at certified
               cases run with
@@ -879,7 +880,7 @@ theorem Func.exec_of_runCompiledTo_routeTo_core :
         (node := ⟨pc, sevm, pre, out, exc⟩)
         (Exec.mem_rawNodes_self exc) h_at
     refine ⟨exc, occurrence, ⟨⟨functionIndex, steps⟩, pc, instr⟩, rfl,
-      included _ (by simp [Func.sourceSites]), ?_, hinstr, rfl, ?_⟩
+      included _ (by simp only [sourceSites, List.mem_cons, true_or]), ?_, hinstr, rfl, ?_⟩
     · rw [hnode]
     · rw [hnode]
       exact .refl _
@@ -897,7 +898,7 @@ theorem Func.exec_of_runCompiledTo_routeTo_core :
       hprefix⟩ :=
       ih h_eq hFS (pc + instr.size) sub' hb'
         (fun site member => included site
-          (by simp [Func.sourceSites, member]))
+          (by simp only [sourceSites, List.mem_cons, member, or_true]))
     rcases instructionRun with ⟨xl, h_filled, h_step⟩
     obtain ⟨exc, hsub, hpre⟩ :=
       Ninst.exec_of_stepRun_extend h_at h_filled (h_step pc) excTail
@@ -1025,7 +1026,8 @@ theorem Prog.exec_of_runCompiledTo_routeTo {sevm : Sevm} {pre mid : Devm}
     Func.exec_of_runCompiledTo_routeTo_core h_route h_eq' rfl 1 h_sub h_npb
       (fun site member => by
         simp only [Prog.sourceSites, List.mem_flatMap]
-        refine ⟨0, by simp, ?_⟩
+        refine ⟨0, by simp only [List.length_cons, List.mem_range, lt_add_iff_pos_left,
+          add_pos_iff, zero_lt_one, or_true], ?_⟩
         simpa only [h_get] using member)
   exact ⟨.cont h1 exc,
     ⟨occurrence.node, occurrence.instruction, occurrence.slot,

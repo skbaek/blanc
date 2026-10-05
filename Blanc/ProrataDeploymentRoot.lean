@@ -66,10 +66,6 @@ theorem DeploymentRoot.reachable_accountingInvariant
     simpa only [B256.toNat_zero, Nat.mul_zero, Nat.add_zero] using
       invariant.backed⟩
 
-/-- Current-mainnet specialization of the schedule-parametric root. -/
-abbrev MainnetDeploymentRoot (deployed : BlockChain) (ca : Adr) : Prop :=
-  DeploymentRoot mainnetChainConfig deployed ca
-
 end Prorata
 
 end Blanc

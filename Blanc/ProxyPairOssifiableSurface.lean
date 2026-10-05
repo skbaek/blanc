@@ -50,7 +50,7 @@ theorem mem_runtimeSelectors_iff (selected : B256) :
       selected = proxyChangeAdminSelector ∨
       selected = proxyUpgradeToSelector ∨
       selected = proxyUpgradeToAndCallSelector := by
-  simp [runtimeSelectors]
+  simp only [runtimeSelectors, List.mem_cons, List.not_mem_nil, or_false]
 
 /-! ## Event topics and exact log shapes -/
 
@@ -63,52 +63,19 @@ def adminChangedEventTopic : B256 :=
 def proxyOssifiedEventTopic : B256 :=
   0x158b204828f9326d9bb3c2be9336986c14911b4a72b93d1801f207aac3c68b9f
 
-def eventTopics : List B256 :=
-  [upgradedEventTopic, adminChangedEventTopic, proxyOssifiedEventTopic]
-
 /-- `Upgraded(address)`: the implementation is indexed and data is empty. -/
 def upgradedLog (proxy implementation : Adr) : Log :=
   ⟨proxy, [upgradedEventTopic, implementation.toB256], []⟩
 
-/-- `AdminChanged(address,address)`: neither argument is indexed. -/
-def adminChangedLog (proxy previousAdmin newAdmin : Adr) : Log :=
-  ⟨proxy, [adminChangedEventTopic],
-    previousAdmin.toB256.toBytes ++ newAdmin.toB256.toBytes⟩
 
 /-- `ProxyOssified()`: no indexed arguments and no data. -/
 def proxyOssifiedLog (proxy : Adr) : Log :=
   ⟨proxy, [proxyOssifiedEventTopic], []⟩
 
-@[simp] theorem upgradedLog_topics (proxy implementation : Adr) :
-    (upgradedLog proxy implementation).topics =
-      [upgradedEventTopic, implementation.toB256] := rfl
-
-@[simp] theorem upgradedLog_data (proxy implementation : Adr) :
-    (upgradedLog proxy implementation).data = [] := rfl
-
-@[simp] theorem adminChangedLog_topics
-    (proxy previousAdmin newAdmin : Adr) :
-    (adminChangedLog proxy previousAdmin newAdmin).topics =
-      [adminChangedEventTopic] := rfl
-
-@[simp] theorem adminChangedLog_data
-    (proxy previousAdmin newAdmin : Adr) :
-    (adminChangedLog proxy previousAdmin newAdmin).data =
-      previousAdmin.toB256.toBytes ++ newAdmin.toB256.toBytes := rfl
-
-@[simp] theorem proxyOssifiedLog_topics (proxy : Adr) :
-    (proxyOssifiedLog proxy).topics = [proxyOssifiedEventTopic] := rfl
-
-@[simp] theorem proxyOssifiedLog_data (proxy : Adr) :
-    (proxyOssifiedLog proxy).data = [] := rfl
-
 /-! ## Custom errors and inherited `Error(string)` payloads -/
 
 def notAdminErrorSelector : B256 := 0x7bfa4b9f
 def proxyIsOssifiedErrorSelector : B256 := 0xb83646a9
-
-def customErrorSelectors : List B256 :=
-  [notAdminErrorSelector, proxyIsOssifiedErrorSelector]
 
 def notAdminErrorData : Bytes := abiSelectorBytes notAdminErrorSelector
 def proxyIsOssifiedErrorData : Bytes :=
@@ -164,37 +131,5 @@ def proxyUpgradeToAndCallCalldata
     (96 : B256).toBytes ++
     (if forceCall then (1 : B256) else 0).toBytes ++
     abiBytesTail setupCalldata
-
-def DecodesProxyGetAdmin (sevm : Sevm) : Prop :=
-  sevm.data = proxyGetAdminCalldata
-
-def DecodesProxyGetImplementation (sevm : Sevm) : Prop :=
-  sevm.data = proxyGetImplementationCalldata
-
-def DecodesProxyGetIsOssified (sevm : Sevm) : Prop :=
-  sevm.data = proxyGetIsOssifiedCalldata
-
-def DecodesProxyOssify (sevm : Sevm) : Prop :=
-  sevm.data = proxyOssifyCalldata
-
-def DecodesProxyChangeAdmin (sevm : Sevm) (newAdmin : Adr) : Prop :=
-  sevm.data = proxyChangeAdminCalldata newAdmin
-
-def DecodesProxyUpgradeTo (sevm : Sevm) (newImplementation : Adr) : Prop :=
-  sevm.data = proxyUpgradeToCalldata newImplementation
-
-def DecodesProxyUpgradeToAndCall
-    (sevm : Sevm) (newImplementation : Adr) (setupCalldata : Bytes)
-    (forceCall : Bool) : Prop :=
-  sevm.data = proxyUpgradeToAndCallCalldata
-    newImplementation setupCalldata forceCall
-
-def proxyAdminReturnData (admin : Adr) : Bytes := admin.toB256.toBytes
-
-def proxyImplementationReturnData (implementation : Adr) : Bytes :=
-  implementation.toB256.toBytes
-
-def proxyIsOssifiedReturnData (isOssified : Bool) : Bytes :=
-  (if isOssified then (1 : B256) else 0).toBytes
 
 end Blanc.ProxyPair

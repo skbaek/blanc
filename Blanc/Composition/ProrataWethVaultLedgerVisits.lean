@@ -58,11 +58,6 @@ def NoVaultVisitKeyCollision
     ∀ q ∈ visits.filterMap AllowanceVisit.writtenPair?, p ≠ q →
       wethAllowanceKey p.1 p.2 ≠ wethAllowanceKey q.1 q.2
 
-instance (visits : List AllowanceVisit) (vault : Adr) :
-    Decidable (NoVaultVisitKeyCollision visits vault) := by
-  unfold NoVaultVisitKeyCollision
-  infer_instance
-
 /-- Antitonicity from the real-chain visit universe to the recorded ledger. -/
 theorem noVaultAllowanceKeyCollision_of_visits
     {history : List WethAllowanceInvocation}
@@ -123,7 +118,7 @@ theorem pairVisit?_eq_none_of_foreign {d : Exec.Deriv}
     (wethNe : d.sevm.currentTarget ≠ Composition.ProrataWethVault.wethAccount)
     (vaultNe : d.sevm.currentTarget ≠ vault) :
     (Blanc.Exec.Deriv.pairVisit? vault d) = none := by
-  simp [pairVisit?, wethNe, vaultNe]
+  simp only [pairVisit?, wethNe, false_and, and_false, ↓reduceIte, vaultNe]
 
 end Exec.Deriv
 

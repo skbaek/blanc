@@ -197,44 +197,6 @@ private theorem temporalSloadBase_accessedAddresses (sevm : Sevm) (base : Devm)
       base.accessedAddresses :=
   (temporalSloadBase_carriers sevm base key).2.2.1
 
-/-! ## Slot-pair inequalities lifted to accessed-key pairs -/
-
-private theorem addAccessedStorageKey_getStorVal (devm : Devm) (a : Adr)
-    (k : B256) (a' : Adr) (key : B256) :
-    (addAccessedStorageKey devm a k).getStorVal a' key =
-      devm.getStorVal a' key := rfl
-
-private theorem addAccessedStorageKey_accessedStorageKeys' (devm : Devm)
-    (a : Adr) (k : B256) :
-    (addAccessedStorageKey devm a k).accessedStorageKeys =
-      devm.accessedStorageKeys.insert (a, k) := rfl
-
-private theorem addAccessedStorageKey_accessedAddresses (devm : Devm) (a : Adr)
-    (k : B256) : (addAccessedStorageKey devm a k).accessedAddresses =
-      devm.accessedAddresses := rfl
-
-private theorem addAccessedStorageKey_error (devm : Devm) (a : Adr) (k : B256) :
-    (addAccessedStorageKey devm a k).error = devm.error := rfl
-
-private theorem addAccessedStorageKey_output (devm : Devm) (a : Adr)
-    (k : B256) : (addAccessedStorageKey devm a k).output = devm.output := rfl
-
-private theorem addAccessedStorageKey_logs (devm : Devm) (a : Adr) (k : B256) :
-    (addAccessedStorageKey devm a k).logs = devm.logs := rfl
-
-private theorem lengthWritePost_error (sevm : Sevm) (base : Devm) (ol : B256) :
-    (lengthWritePost sevm base ol).error = base.error := rfl
-
-private theorem lengthWritePost_output (sevm : Sevm) (base : Devm) (ol : B256) :
-    (lengthWritePost sevm base ol).output = base.output := rfl
-
-private theorem lengthWritePost_logs (sevm : Sevm) (base : Devm) (ol : B256) :
-    (lengthWritePost sevm base ol).logs = base.logs := rfl
-
-private theorem lengthWritePost_accessedAddresses (sevm : Sevm) (base : Devm)
-    (ol : B256) : (lengthWritePost sevm base ol).accessedAddresses =
-      base.accessedAddresses := rfl
-
 private theorem keyPairNe {a₁ a₂ : Adr} {k₁ k₂ : B256} (h : k₂ ≠ k₁) :
     (a₁, k₁) ≠ (a₂, k₂) := fun hp => h (congrArg Prod.snd hp).symm
 
@@ -492,38 +454,10 @@ private theorem stubRunKeys_removeBase3 :
 
 /-! ## One-layer projection helpers -/
 
-private theorem temporalSstorePost_error (sevm : Sevm) (base : Devm)
-    (key value : B256) :
-    (temporalSstorePost sevm base key value).error = base.error := rfl
-
-private theorem temporalSstorePost_output (sevm : Sevm) (base : Devm)
-    (key value : B256) :
-    (temporalSstorePost sevm base key value).output = base.output := rfl
-
-private theorem temporalSstorePost_transientStorage (sevm : Sevm)
-    (base : Devm) (key value : B256) :
-    (temporalSstorePost sevm base key value).transientStorage =
-      base.transientStorage := rfl
-
 private theorem temporalSstorePost_accessedAddresses (sevm : Sevm)
     (base : Devm) (key value : B256) :
     (temporalSstorePost sevm base key value).accessedAddresses =
       base.accessedAddresses := rfl
-
-private theorem addLog_getCode (devm : Devm) (l : Log) (x : Adr) :
-    (devm.addLog l).getCode x = devm.getCode x := rfl
-
-private theorem addLog_logs (devm : Devm) (l : Log) :
-    (devm.addLog l).logs = devm.logs ++ [l] := rfl
-
-private theorem addLog_error (devm : Devm) (l : Log) :
-    (devm.addLog l).error = devm.error := rfl
-
-private theorem addLog_output (devm : Devm) (l : Log) :
-    (devm.addLog l).output = devm.output := rfl
-
-private theorem addLog_transientStorage (devm : Devm) (l : Log) :
-    (devm.addLog l).transientStorage = devm.transientStorage := rfl
 
 private theorem addLog_accessedStorageKeys (devm : Devm) (l : Log) :
     (devm.addLog l).accessedStorageKeys = devm.accessedStorageKeys := rfl
@@ -535,35 +469,9 @@ private theorem addLog_getStorVal (devm : Devm) (l : Log) (a : Adr)
     (key : B256) : (devm.addLog l).getStorVal a key = devm.getStorVal a key :=
   rfl
 
-private theorem setTransVal_getStorVal (devm : Devm) (a : Adr) (k v : B256)
-    (a' : Adr) (key : B256) :
-    (devm.setTransVal a k v).getStorVal a' key = devm.getStorVal a' key := rfl
-
-private theorem setTransVal_logs (devm : Devm) (a : Adr) (k v : B256) :
-    (devm.setTransVal a k v).logs = devm.logs := rfl
-
-private theorem setTransVal_error (devm : Devm) (a : Adr) (k v : B256) :
-    (devm.setTransVal a k v).error = devm.error := rfl
-
-private theorem setTransVal_output (devm : Devm) (a : Adr) (k v : B256) :
-    (devm.setTransVal a k v).output = devm.output := rfl
-
 private theorem setMach_getStorVal (devm : Devm) (m : Mach) (a : Adr)
     (key : B256) : (devm.setMach m).getStorVal a key = devm.getStorVal a key :=
   rfl
-
-private theorem setMach_getTransVal (devm : Devm) (m : Mach) (a : Adr)
-    (key : B256) :
-    (devm.setMach m).getTransVal a key = devm.getTransVal a key := rfl
-
-private theorem setMach_logs (devm : Devm) (m : Mach) :
-    (devm.setMach m).logs = devm.logs := rfl
-
-private theorem setMach_error (devm : Devm) (m : Mach) :
-    (devm.setMach m).error = devm.error := rfl
-
-private theorem setMach_output (devm : Devm) (m : Mach) :
-    (devm.setMach m).output = devm.output := rfl
 
 /-! ## The cold and warm charges, resolved at the row-19 world -/
 
@@ -786,12 +694,6 @@ private theorem stubRunStor_assignPost_other {key : B256}
   rw [temporalSloadBase_getStorVal]
   exact stubRunStor_kernelBase key
 
-private theorem stubRunStor_assignPost_self :
-    (assignmentPost stubPauseWorldSevm
-      (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0).getStorVal configWorldOwner (assignmentSlot pauseWorldCallee.toB256) = 0 := by
-  unfold assignmentPost
-  exact temporalSstorePost_self _ _ _ _
 
 private theorem stubRunStor_countPost_other {key : B256}
     (ha : assignmentSlot pauseWorldCallee.toB256 ≠ key)
@@ -804,17 +706,6 @@ private theorem stubRunStor_countPost_other {key : B256}
   rw [temporalSstorePost_other _ _ _ _ _ _ (keyPairNe hc),
     temporalSloadBase_getStorVal]
   exact stubRunStor_assignPost_other ha
-
-private theorem stubRunStor_countPost_assign :
-    (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
-      (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0).getStorVal configWorldOwner (assignmentSlot pauseWorldCallee.toB256) = 0 := by
-  rw [temporalSstorePost_other _ _ _ _ _ _
-    (keyPairNe pauseWorld_assignCallee_ne_count.symm),
-    temporalSloadBase_getStorVal]
-  exact stubRunStor_assignPost_self
 
 private theorem stubRunStor_countPost_count :
     (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
@@ -851,19 +742,6 @@ private theorem stubRunStor_removeBase3_count :
   rw [temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
     temporalSloadBase_getStorVal]
   exact stubRunStor_countPost_count
-
-private theorem stubRunStor_removeBase3_assign :
-    (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
-      (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
-      pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
-      (countSlot pauseWorldPauser))
-      (countSlot pauseWorldPauser) 0)
-      (indexSlot pauseWorldCallee.toB256))
-      arrayLengthSlot)
-      (arrayEntrySlot 1)).getStorVal configWorldOwner (assignmentSlot pauseWorldCallee.toB256) = 0 := by
-  rw [temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
-    temporalSloadBase_getStorVal]
-  exact stubRunStor_countPost_assign
 
 /-! The five removal-walk writes, peeled from the outside of `B6`:
 `indexClearPost` writes the index clear over the length restore, and
@@ -1280,11 +1158,11 @@ theorem stubRunMem_durLast :
 theorem stubRunSvc_reset {orig new : B256} (hnew : orig ≠ new)
     (hzero : ¬ orig = 0) : sstoreValueCost orig orig new = 2900 := by
   rw [sstoreValueCost, if_pos ⟨rfl, hnew⟩, if_neg hzero]
-  norm_num [gasStorageUpdate, gasColdSload]
+  norm_num only [gasStorageUpdate, gasColdSload]
 
 theorem stubRunSvc_noop {orig cur : B256} :
     sstoreValueCost orig cur cur = 100 := by
-  rw [sstoreValueCost, if_neg (by simp)]
+  rw [sstoreValueCost, if_neg (by simp only [ne_eq, not_true_eq_false, and_false, not_false_eq_true])]
   rfl
 
 /-! ## The kernel prefix reserve, closed -/
@@ -1369,10 +1247,6 @@ private theorem temporalSloadBase_getCode (sevm : Sevm) (base : Devm)
     (temporalSloadBase sevm base key).getCode a = base.getCode a :=
   (temporalSloadBase_carriers sevm base key).2.2.2 a
 
-
-private theorem addAccessedStorageKey_getCode (devm : Devm) (a : Adr)
-    (k : B256) (x : Adr) :
-    (addAccessedStorageKey devm a k).getCode x = devm.getCode x := rfl
 
 private theorem stubRunAddrs_B7 :
     ((indexClearPost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
@@ -1901,8 +1775,8 @@ private theorem stubPauseWorld_afterSetStubSeam :
       (by show (1024 : Nat) ≠ 0; decide)
       (by simpa only [toAdr_toB256] using
         stubPauseWorld_target_not_precompile)
-      (by norm_num)
-      (by norm_num)
+      (by norm_num only)
+      (by norm_num only)
   rcases hchain with ⟨st₁, st₂, hsub₁, hsub₂, hstate⟩
   have htargetOwner : pauseWorldCallee.toB256.toAdr ≠
       configWorldOwner := by
@@ -1942,7 +1816,7 @@ private theorem stubPauseWorld_afterSetStubSeam :
     (hask _).mpr (Or.inr stubRunAfterSetBase_warmExpiry), ?_⟩
   intro final hrun
   have h := hclose final hrun
-  rw [show (42362 + 22731 + 2600 : Nat) = 67693 from by norm_num] at h
+  rw [show (42362 + 22731 + 2600 : Nat) = 67693 from by norm_num only] at h
   exact h
 
 private theorem stubPauseWorld_originalExpiry :
@@ -2056,11 +1930,11 @@ private theorem stubPauseWorld_successSuffix :
       exact stubPauseWorld_originalExpiry)
     hwarmExpiry
     (stubRunSvc_reset (by decide) (by decide))
-    (by norm_num [gCallStipend])
+    (by norm_num only [gCallStipend])
     rfl
   have hmidEta : mid.setMach
       ⟨[], stubRunDecodedMemory, 36021 + 3322 + 100 + 2900, mid.stateGas⟩ = mid := by
-    rw [show (36021 + 3322 + 100 + 2900 : Nat) = 42343 from by norm_num,
+    rw [show (36021 + 3322 + 100 + 2900 : Nat) = 42343 from by norm_num only,
       stubRunDecodedMemory, ← hgas, ← hmem, ← hstk]
     rfl
   rw [hmidEta] at hW8
@@ -2110,7 +1984,7 @@ private theorem stubPauseWorld_productionRun :
     (by
       simpa only [stubRunAfterSetNoLog, stubRunAfterSetBase,
         stubRunRemoveBase3, stubRunCountPost, stubRunKernelBase] using hafter)
-  rw [show (67693 + 1934 : Nat) = 69627 from by norm_num] at hfin
+  rw [show (67693 + 1934 : Nat) = 69627 from by norm_num only] at hfin
   have hrem := removeTarget_toFinish_coldEntry_runCompiled (hfork := hfork) officialParams
     stubPauseWorldSevm stubRunCountPost stubRunMemory1 stubRunImage1
     pauseWorldCallee.toB256 0 1 [] (by decide)
@@ -2139,10 +2013,10 @@ private theorem stubPauseWorld_productionRun :
     (stubRunSvc_reset (by decide) (by decide))
     (stubRunSvc_reset (by decide) (by decide))
     (stubRunSvc_reset (by decide) (by decide))
-    (by decide) (by norm_num [gCallStipend]) rfl _
+    (by decide) (by norm_num only [gCallStipend]) rfl _
     (by dsimp only; exact hfin)
   rw [show (0 + 69627 + 139 + 0 + 0 + 0 + 2100 + 2100 + 2100 + 100 +
-    100 + 2900 + 2900 + 2900 : Nat) = 84966 from by norm_num] at hrem
+    100 + 2900 + 2900 + 2900 : Nat) = 84966 from by norm_num only] at hrem
   have hglue := afterOldPauser_removeTarget_runCompiled officialParams
     stubPauseWorldSevm stubRunCountPost stubRunMemory1 stubRunImage1 []
     84966 _ (by decide)
@@ -2151,7 +2025,7 @@ private theorem stubPauseWorld_productionRun :
     (by rw [stubRunMemory1, stubRunMem_size1]; decide)
     (by rw [stubRunMemory1, stubRunMem_size1])
     hrem
-  rw [show (84966 + 35 : Nat) = 85001 from by norm_num] at hglue
+  rw [show (84966 + 35 : Nat) = 85001 from by norm_num only] at hglue
   have hker := setPauserKernel_found_runCompiled (hfork := hfork) officialParams
     stubPauseWorldSevm stubRunKernelBase
     (pauseMemory pauseWorldCallee.toB256 pauseWorldDuration)
@@ -2176,7 +2050,7 @@ private theorem stubPauseWorld_productionRun :
       pauseLastStor_count)
     ((stubPauseWorld_getOrigStorVal _).trans pauseLastStor_count)
     (stubRunSvc_reset (by decide) (by decide))
-    (by norm_num [gCallStipend]) rfl
+    (by norm_num only [gCallStipend]) rfl
     (by
       dsimp only [stubRunKernelBase, stubRunCountPost, stubRunMemory1,
         stubRunImage1]
@@ -2186,7 +2060,7 @@ private theorem stubPauseWorld_productionRun :
       stubRunKernelBase pauseWorldCallee.toB256 0 pauseWorldPauser
       2900 2900 = 8122 from by
         simpa only [stubRunKernelBase] using stubRunKernelPrefixGas,
-    show (0 + 85001 + 8122 : Nat) = 93123 from by norm_num] at hker
+    show (0 + 85001 + 8122 : Nat) = 93123 from by norm_num only] at hker
   have hcalldata := pauseCalldata_facts
     stubPauseWorld_publicPausePremises.calldata
   have hbody := pause_body_runCompiled (hfork := hfork) officialParams stubPauseWorldSevm
@@ -2210,7 +2084,7 @@ private theorem stubPauseWorld_productionRun :
       exact (stubRunStor_lockPost _).trans pauseLastStor_duration)
     stubRunCost_duration rfl hker
   rw [show (93123 + (469 + 2100 + 2100 + 2100) : Nat) = 99892 from by
-    norm_num] at hbody
+    norm_num only] at hbody
   have hbodyTo := Func.RunCompiledTo.of_runCompiled hbody
   obtain ⟨hprog, _hcompile⟩ := pause_dispatch_runCompiledTo officialParams
     stubPauseWorldSevm stubPauseWorldPre 99892 0 _
@@ -2225,7 +2099,7 @@ private theorem stubPauseWorld_productionRun :
       ⟨[], Mem.empty, 0 + pauseDispatchGas + 99892, stubPauseWorldPre.stateGas⟩ =
       stubPauseWorldPre := by
     rw [show (0 + pauseDispatchGas + 99892 : Nat) = stubPauseWorldGas from by
-      norm_num [pauseDispatchGas, stubPauseWorldGas]]
+      norm_num only [pauseDispatchGas, stubPauseWorldGas]]
     rfl
   rw [hentry] at hprog
   exact ⟨successPre, final, hprog, hsuccessTo, hafterTo, hni⟩

@@ -69,7 +69,7 @@ def replayCalls (invs : List Invocation) : List Call :=
 
 theorem replayCalls_append (xs ys : List Invocation) :
     replayCalls (xs ++ ys) = replayCalls xs ++ replayCalls ys := by
-  simp [replayCalls, List.filterMap_append]
+  simp only [replayCalls, List.filterMap_append]
 
 /-- The connected replay: the model run of the decoded calls. -/
 def LedgerReplay (a : Ledger) (invs : List Invocation) (b : Ledger) : Prop :=
@@ -129,6 +129,6 @@ theorem decode_of_withdraw_selector {e : Sevm} (hshort : ¬ shortCall e)
     decodeCall e = some (.withdraw e.caller (Sevm.dataWord e 4)) := by
   have h : Sevm.selector e = 0x2e1a7d4d := hsel.trans (by decide)
   unfold decodeCall
-  simp [hshort, h]
+  simp only [hshort, ↓reduceIte, h]
 
 end Blanc.Lift.Weth9

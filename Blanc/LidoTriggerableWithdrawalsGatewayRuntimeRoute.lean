@@ -21,21 +21,28 @@ def CallerHasRole (stor : Stor) (role account : B256) : Prop :=
 
 /-- The concrete TWG selector table has no duplicate selectors. -/
 theorem funcs_selector_unique (dp : DeployParams) : selectorUnique (funcs dp) := by
-  simp [selectorUnique, funcs, selPauseFor, selIsPaused, selTriggerFullWithdrawals, selPauseRole, selResumeRole, selAddFullWithdrawalRequestRole, selTwExitLimitManagerRole, selTwrLimitPosition, selVersion, selResume, selPauseUntil, selSetExitRequestLimit, selGetExitRequestLimitFullInfo, selPauseInfinitely, selGetResumeSinceTimestamp, selDefaultAdminRole, selSupportsInterface, selHasRole, selGetRoleAdmin, selGrantRole, selRevokeRole, selRenounceRole, selGetRoleMember, selGetRoleMemberCount]
+  simp only [selectorUnique, ne_eq, funcs, selPauseFor, selIsPaused, selTriggerFullWithdrawals,
+    selPauseRole, selResumeRole, selAddFullWithdrawalRequestRole, selTwExitLimitManagerRole,
+    selTwrLimitPosition, selVersion, selResume, selPauseUntil, selSetExitRequestLimit,
+    selGetExitRequestLimitFullInfo, selPauseInfinitely, selGetResumeSinceTimestamp,
+    selDefaultAdminRole, selSupportsInterface, selHasRole, selGetRoleAdmin, selGrantRole,
+    selRevokeRole, selRenounceRole, selGetRoleMember, selGetRoleMemberCount, List.pairwise_cons,
+    List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq, IsEmpty.forall_iff,
+    implies_true, List.Pairwise.nil, and_self, and_true]
   repeat' apply And.intro
   all_goals decide +kernel
 
 /-- The optimized shared-nonpayable table also retains unique selectors. -/
 theorem sharedNonpayableFuncs_selector_unique :
     selectorUnique sharedNonpayableFuncs := by
-  simp [selectorUnique, sharedNonpayableFuncs, selPauseFor, selIsPaused,
-    selHasRole, selGetRoleMember, selGetRoleMemberCount, selSupportsInterface,
-    selResume, selDefaultAdminRole, selPauseInfinitely,
-    selGetResumeSinceTimestamp, selRenounceRole, selPauseRole, selResumeRole,
-    selAddFullWithdrawalRequestRole, selTwExitLimitManagerRole,
-    selTwrLimitPosition, selVersion, selPauseUntil, selSetExitRequestLimit,
-    selGetExitRequestLimitFullInfo, selGetRoleAdmin, selGrantRole,
-    selRevokeRole]
+  simp only [selectorUnique, ne_eq, sharedNonpayableFuncs, selPauseFor, selIsPaused, selHasRole,
+    selGetRoleMember, selGetRoleMemberCount, selSupportsInterface, selResume, selDefaultAdminRole,
+    selPauseInfinitely, selGetResumeSinceTimestamp, selRenounceRole, selPauseRole, selResumeRole,
+    selAddFullWithdrawalRequestRole, selTwExitLimitManagerRole, selTwrLimitPosition, selVersion,
+    selPauseUntil, selSetExitRequestLimit, selGetExitRequestLimitFullInfo, selGetRoleAdmin,
+    selGrantRole, selRevokeRole, List.pairwise_cons, List.mem_cons, List.not_mem_nil, or_false,
+    forall_eq_or_imp, forall_eq, IsEmpty.forall_iff, implies_true, List.Pairwise.nil, and_self,
+    and_true]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -90,7 +97,7 @@ private lemma prefix_of_viewRoleDataSlot
   rcases prefix_of_keccak256_val qkeccak p6 with ⟨p7, _⟩
   change (s6.memory.read 0 64).1.keccak :: tail <<+ post.stack at p7
   rw [hread] at p7
-  simpa [roleDataSlot] using p7
+  simpa only [roleDataSlot] using p7
 
 theorem prefix_of_viewRoleMembershipSlotForCaller
     {sevm : Sevm} {pre post : Devm} {tail : Stack} {role : B256}
@@ -125,7 +132,7 @@ theorem prefix_of_viewRoleMembershipSlotForCaller
   rcases prefix_of_keccak256_val qkeccak p6 with ⟨p7, _⟩
   change (s6.memory.read 0 64).1.keccak :: tail <<+ post.stack at p7
   rw [hread] at p7
-  simpa [roleMembershipSlot] using p7
+  simpa only [roleMembershipSlot] using p7
 
 private lemma prefix_of_roleDataSlot
     {sevm : Sevm} {pre post : Devm} {tail : Stack} {role : B256}
@@ -171,7 +178,7 @@ private lemma prefix_of_roleDataSlot
   change (s6.memory.read (storageKeyScratchWord * 32).toNat 64).1.keccak ::
     tail <<+ post.stack at p7
   rw [hread] at p7
-  simpa [roleDataSlot] using p7
+  simpa only [roleDataSlot] using p7
 
 theorem prefix_of_roleMembershipSlotForCaller
     {sevm : Sevm} {pre post : Devm} {tail : Stack} {role : B256}
@@ -217,7 +224,7 @@ theorem prefix_of_roleMembershipSlotForCaller
   change (s6.memory.read (storageKeyScratchWord * 32).toNat 64).1.keccak ::
     tail <<+ post.stack at p7
   rw [hread] at p7
-  simpa [roleMembershipSlot] using p7
+  simpa only [roleMembershipSlot] using p7
 
 /-! These are the source expressions computed by the finite/sentinel arms. -/
 
@@ -368,7 +375,7 @@ theorem dispatcher_body_of_prog_run_empty_frame
     exact ⟨x, y, hdiff.stack⟩
   have hguardStack : afterGuard.stack = (0 : B256) :: [] := by
     have hs := stack_of_diffBurn_two hltDiff hsizeStack
-    simpa [hguard] using hs
+    simpa only [hguard] using hs
   obtain ⟨dispatchEntry, hpop, hzero⟩ : ∃ dispatchEntry,
       Devm.PopBurnBy [0] (gVerylow + gHigh) afterGuard dispatchEntry ∧
       Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm
@@ -427,7 +434,9 @@ theorem dispatcher_body_of_prog_run_empty_frame
   have htriggerEq := Ninst.Run.of_runCompiled htriggerEqCompiled
   rcases of_run_dup hdup with ⟨dupWord, hdupWord, hdupPush⟩
   have hdupWordEq : dupWord = selector := by
-    simpa [hafterSigStack] using hdupWord.symm
+    simpa only [hafterSigStack, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.length_cons,
+      List.length_nil, zero_add, zero_lt_one, getElem?_pos, List.getElem_cons_zero,
+      Option.some.injEq] using hdupWord.symm
   subst dupWord
   have hdupStack : afterDup.stack = selector :: selector :: [] :=
     stack_of_pushBurn hdupPush hafterSigStack
@@ -442,7 +451,7 @@ theorem dispatcher_body_of_prog_run_empty_frame
     exact ⟨x, y, hdiff.stack⟩
   have htriggerEqStack : afterTriggerEq.stack = (0 : B256) :: selector :: [] := by
     have hs := stack_of_diffBurn_two htriggerEqDiff htriggerPushStack
-    simpa [B256.eqCheck, hnotTrigger, Ne.symm hnotTrigger] using hs
+    simpa only [B256.eqCheck, Ne.symm hnotTrigger, ↓reduceIte] using hs
   obtain ⟨nonTriggerPre, htriggerPop, hnonTrigger⟩ : ∃ nonTriggerPre,
       Devm.PopBurnBy [0] (gVerylow + gHigh) afterTriggerEq nonTriggerPre ∧
       Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm
@@ -476,7 +485,7 @@ theorem dispatcher_body_of_prog_run_empty_frame
   have hvalueZeroStack : afterValueZero.stack =
       (1 : B256) :: selector :: [] := by
     have hs := stack_of_diffBurn_one hvalueZeroDiff hafterValueStack
-    simpa [hvalue, B256.eqCheck] using hs
+    simpa only [B256.eqCheck, hvalue, ↓reduceIte] using hs
   obtain ⟨dispatchEntry, hvaluePop, hdispatch⟩ : ∃ dispatchEntry,
       Devm.PopBurnBy [1] (gVerylow + gHigh + gJumpdest)
         afterValueZero dispatchEntry ∧
@@ -497,15 +506,14 @@ theorem dispatcher_body_of_prog_run_empty_frame
     stack_of_popBurnBy hvaluePop hvalueZeroStack
   have hwitness := dispatchBodyWitness_of_runCompiledTo
     (by
-      simp [selectorUnique, sharedNonpayableFuncs, selPauseFor, selIsPaused,
-        selSupportsInterface, selResume, selDefaultAdminRole,
-        selPauseInfinitely, selGetResumeSinceTimestamp, selRenounceRole,
-        selHasRole, selGetRoleMember, selGetRoleMemberCount, selPauseRole,
-        selResumeRole, selAddFullWithdrawalRequestRole,
-        selTwExitLimitManagerRole, selTwrLimitPosition, selVersion,
-        selPauseUntil, selSetExitRequestLimit,
-        selGetExitRequestLimitFullInfo, selGetRoleAdmin, selGrantRole,
-        selRevokeRole]
+      simp only [selectorUnique, ne_eq, sharedNonpayableFuncs, selPauseFor, selIsPaused, selHasRole,
+        selGetRoleMember, selGetRoleMemberCount, selSupportsInterface, selResume,
+        selDefaultAdminRole, selPauseInfinitely, selGetResumeSinceTimestamp, selRenounceRole,
+        selPauseRole, selResumeRole, selAddFullWithdrawalRequestRole, selTwExitLimitManagerRole,
+        selTwrLimitPosition, selVersion, selPauseUntil, selSetExitRequestLimit,
+        selGetExitRequestLimitFullInfo, selGetRoleAdmin, selGrantRole, selRevokeRole,
+        List.pairwise_cons, List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq,
+        IsEmpty.forall_iff, implies_true, List.Pairwise.nil, and_self, and_true]
       repeat' apply And.intro
       all_goals decide +kernel)
     hmember hdispatchStack hdispatch
@@ -580,7 +588,7 @@ theorem runtime_value_zero_of_prog_run_ok_of_nontrigger
     exact ⟨x, y, hdiff.stack⟩
   have hguardStack : afterGuard.stack = (0 : B256) :: [] := by
     have hs := stack_of_diffBurn_two hltDiff hsizeStack
-    simpa [hguard] using hs
+    simpa only [hguard] using hs
   obtain ⟨dispatchEntry, _hguardPop, hzero⟩ : ∃ dispatchEntry,
       Devm.PopBurnBy [0] (gVerylow + gHigh) afterGuard dispatchEntry ∧
       Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm
@@ -602,7 +610,7 @@ theorem runtime_value_zero_of_prog_run_ok_of_nontrigger
   have pDispatch : ([] : Stack) <<+ dispatchEntry.stack := nil_pref
   have pSig : selector :: [] <<+ afterSig.stack := by
     have p := prefix_of_fsig pDispatch hsig
-    simpa [hselector] using p
+    simpa only [hselector] using p
   obtain ⟨afterDup, hdupCompiled, hroute⟩ :=
     runCompiledTo_next_inv hroute
   obtain ⟨afterTriggerPush, htriggerPushCompiled, hroute⟩ :=
@@ -616,7 +624,9 @@ theorem runtime_value_zero_of_prog_run_ok_of_nontrigger
   have hdupWordEq : dupWord = selector := by
     rcases pSig with ⟨tail, hstack⟩
     rw [hstack] at hdupWord
-    simpa using hdupWord.symm
+    simpa only [List.cons_append, List.nil_append, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
+      List.length_cons, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true, getElem?_pos,
+      List.getElem_cons_zero, Option.some.injEq] using hdupWord.symm
   subst dupWord
   have pDup : selector :: selector :: [] <<+ afterDup.stack :=
     prefix_of_push hdupPush pSig
@@ -626,14 +636,14 @@ theorem runtime_value_zero_of_prog_run_ok_of_nontrigger
   have pTriggerEq : (0 : B256) :: selector :: [] <<+
       afterTriggerEq.stack := by
     have p := prefix_of_eq htriggerEq pTriggerPush
-    simpa [B256.eqCheck, hnotTrigger, Ne.symm hnotTrigger] using p
+    simpa only [B256.eqCheck, Ne.symm hnotTrigger, ↓reduceIte] using p
   obtain ⟨nonTriggerPre, _htriggerPop, hnonTrigger, pNonTrigger⟩ :=
     Func.RunCompiledTo.zero_branch_of_prefix pTriggerEq htriggerBranch
   have hwrapped : Func.RunCompiledTo
       ((runtime dp).main :: (runtime dp).aux) sevm nonTriggerPre
       (nonpayable (linearDispatchWith fallbackSlot sharedNonpayableFuncs))
       (.ok post) := by
-    simpa [nonpayable] using hnonTrigger
+    simpa only [nonpayable] using hnonTrigger
   obtain ⟨valueZero, _bodyPre, _bodyRun, _pBody, _bodyStor⟩ :=
     Func.RunCompiledTo.nonpayable_body_of_ok pNonTrigger hwrapped
   exact valueZero
@@ -683,7 +693,7 @@ theorem trigger_body_of_prog_run_empty_frame
     exact ⟨x, y, hdiff.stack⟩
   have hguardStack : afterGuard.stack = (0 : B256) :: [] := by
     have hs := stack_of_diffBurn_two hltDiff hsizeStack
-    simpa [hguard] using hs
+    simpa only [hguard] using hs
   obtain ⟨dispatchEntry, hguardPop, hzero⟩ : ∃ dispatchEntry,
       Devm.PopBurnBy [0] (gVerylow + gHigh) afterGuard dispatchEntry ∧
       Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux) sevm
@@ -740,7 +750,9 @@ theorem trigger_body_of_prog_run_empty_frame
   have htriggerEq := Ninst.Run.of_runCompiled htriggerEqCompiled
   rcases of_run_dup hdup with ⟨dupWord, hdupWord, hdupPush⟩
   have hdupWordEq : dupWord = selTriggerFullWithdrawals := by
-    simpa [hafterSigStack] using hdupWord.symm
+    simpa only [hafterSigStack, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.length_cons,
+      List.length_nil, zero_add, zero_lt_one, getElem?_pos, List.getElem_cons_zero,
+      Option.some.injEq] using hdupWord.symm
   subst dupWord
   have hdupStack : afterDup.stack =
       selTriggerFullWithdrawals :: selTriggerFullWithdrawals :: [] :=
@@ -758,7 +770,7 @@ theorem trigger_body_of_prog_run_empty_frame
   have htriggerEqStack : afterTriggerEq.stack =
       (1 : B256) :: selTriggerFullWithdrawals :: [] := by
     have hs := stack_of_diffBurn_two htriggerEqDiff htriggerPushStack
-    simpa [B256.eqCheck] using hs
+    simpa only [B256.eqCheck, ↓reduceIte] using hs
   obtain ⟨triggerPre, htriggerPop, htriggerArm⟩ : ∃ triggerPre,
       Devm.PopBurnBy [1] (gVerylow + gHigh + gJumpdest)
         afterTriggerEq triggerPre ∧
@@ -783,8 +795,8 @@ theorem trigger_body_of_prog_run_empty_frame
   rcases of_run_pop hselectorPop with ⟨popped, hpopBurn⟩
   have hpopStack :
       selTriggerFullWithdrawals = popped ∧ bodyPre.stack = [] := by
-    simpa [Devm.PopBurn, Stack.Pop, Split, htriggerPreStack] using
-      hpopBurn.stack
+    simpa only [Stack.Pop, Split, htriggerPreStack, List.cons_append, List.nil_append,
+      List.cons.injEq, List.nil_eq] using hpopBurn.stack
   have hpopped : popped = selTriggerFullWithdrawals := by
     exact hpopStack.1.symm
   subst popped

@@ -413,7 +413,7 @@ private theorem benvAfterTransfer_bal_le_of_value_zero
     (msg.benv.state.bal account).toNat ≤ (entry.state.bal account).toNat := by
   cases stv : msg.shouldTransferValue with
   | false =>
-      rw [of_benvAfterTransfer_no (by simp [stv]) transfer]
+      rw [of_benvAfterTransfer_no (by simp only [stv, Bool.false_eq_true, not_false_eq_true]) transfer]
   | true =>
       have inert : ∀ x : B256, (x - msg.value).toNat = x.toNat := by
         intro x
@@ -466,7 +466,7 @@ theorem vault_processMessage_preserves_stable
   by_cases settles : Frame.settlementCommits (Frame.ofCall msg) out = true
   · have committed := Frame.raw_commits_of_settlementCommits settles
     cases out with
-    | error err => simp [Execution.commits] at committed
+    | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
     | ok execPost =>
         subst pcEq
         have postEq : post.state = execPost.state :=
@@ -597,7 +597,7 @@ theorem vault_processMessage_preserves_stable
         unfold Frame.settlementCommits
         rw [← settledEq]
         exact clean
-      cases errorEq : post.error <;> simp_all
+      cases errorEq : post.error <;> simp_all only [ExceptT.stM_eq, ne_eq, Bool.not_eq_true, Option.isNone_none, not_true_eq_false, Option.isNone_some, Bool.false_eq_true, not_false_eq_true, Option.isSome_some]
     rw [(ProcessMessage.rollback_of_error process postError).1]
     exact stable
 
@@ -713,16 +713,6 @@ inductive PairInFlight (vault : Adr) (sevm : Sevm) (entry : Devm) :
   entry world again, so the prior stable boundary is the projection. -/
   | reverting {cur : Devm} (rollback : cur.state = entry.state) :
       PairInFlight vault sevm entry .reverting cur
-
-/-- The four stages that settle an operation.  `reverting` is deliberately
-excluded below: it is the one stage that reads the whole world rather than the
-two ledgers, and a prefix that leaves storage alone need not leave the world
-alone — the quote snapshot's `STATICCALL` warms an address.  `reverting` is
-produced at its own crossing and consumed by the settlement rollback, never
-transported. -/
-def PairStage.settles : PairStage → Prop
-  | .reverting => False
-  | _ => True
 
 /-! ### Exiting a stage -/
 

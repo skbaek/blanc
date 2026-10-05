@@ -1127,7 +1127,7 @@ theorem constructorFinish_storageEffectRun
     intro empty
     have lengths := congrArg List.length empty
     rw [codeLength, codeSize_exact] at lengths
-    simp at lengths
+    simp only [List.length_nil, OfNat.ofNat_ne_zero] at lengths
   have copiedSize : copied.size = 2912 := by
     rw [copiedDef]
     rw [Mem.size_write_of_size memoryCarrier.size_eq
@@ -1489,7 +1489,7 @@ private theorem constructorZeroHashLoop_remaining_storageEffectRun
               rfl
             rw [originalZero, currentZero]
             unfold sstoreNewRefundCounter
-            by_cases different : (0 : B256) ≠ node <;> simp [different]
+            by_cases different : (0 : B256) ≠ node <;> simp only [ne_eq, different, not_false_eq_true, ↓reduceIte, not_true_eq_false, and_true, false_and, and_self]
           _ = base.refundCounter := shaRefund
       have finalLogs : post.logs = base.logs := by
         calc

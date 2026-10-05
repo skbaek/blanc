@@ -70,7 +70,7 @@ theorem ledgerSumOn_increase {coalition : Finset Adr} {receiver : Adr}
       intro same
       subst same
       exact member accountMember
-    simpa [member] using (ledgerSumOn_congr same).symm
+    simpa only [member, ↓reduceIte, add_zero] using (ledgerSumOn_congr same).symm
 
 /-- A covered debit changes exactly the selected owner row. -/
 theorem ledgerSumOn_decrease {coalition : Finset Adr} {owner : Adr}
@@ -101,7 +101,7 @@ theorem ledgerSumOn_decrease {coalition : Finset Adr} {owner : Adr}
       intro same
       subst same
       exact member accountMember
-    simpa [member] using (ledgerSumOn_congr same).symm
+    simpa only [member, ↓reduceIte, add_zero] using (ledgerSumOn_congr same).symm
 
 /-- A covered transfer gives the exact coalition movement equation.  The
 pre-state `SumNof` witness is needed to rule out the receiver-side wrap which

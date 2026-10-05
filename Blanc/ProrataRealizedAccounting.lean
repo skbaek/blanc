@@ -66,7 +66,7 @@ def messageEntry (ca : Adr) (msg : Msg) (state : State) :
   else ofState ca state
 
 /-- The realized boundary projects onto the frozen accounting snapshot. -/
-@[simp] theorem snapshot_ofState (ca : Adr) (state : State) :
+theorem snapshot_ofState (ca : Adr) (state : State) :
     (ofState ca state).snapshot = AccountingSnapshot.ofWorldState ca state := rfl
 
 theorem ofState_snapshot (ca : Adr) (state : State) :
@@ -92,15 +92,15 @@ theorem messageEntry_eq_ofState
   cases shouldTransfer : msg.shouldTransferValue with
   | false =>
       have noTransfer : ¬ msg.shouldTransferValue = true := by
-        simp [shouldTransfer]
+        simp only [shouldTransfer, Bool.false_eq_true, not_false_eq_true]
       have entry_eq := of_benvAfterTransfer_no noTransfer transfer
       subst entry
       by_cases target_eq : msg.currentTarget = ca
       · have valueNat : msg.value.toNat = 0 := by
           rw [value_zero shouldTransfer target_eq]
           rfl
-        simp [messageEntry, target_eq, beforeCredit, ofState, valueNat]
-      · simp [messageEntry, target_eq]
+        simp only [messageEntry, target_eq, ↓reduceIte, beforeCredit, valueNat, tsub_zero, ofState]
+      · simp only [messageEntry, target_eq, ↓reduceIte]
   | true =>
       rcases of_benvAfterTransfer shouldTransfer transfer with
         ⟨debit, sub, rfl⟩
@@ -133,17 +133,17 @@ def execEntry (ca : Adr) (sevm : Sevm) (state : State) :
   if sevm.currentTarget = ca then beforeCredit ca sevm.value state
   else ofState ca state
 
-@[simp] theorem execEntry_of_target
+theorem execEntry_of_target
     {ca : Adr} {sevm : Sevm} {state : State}
     (target : sevm.currentTarget = ca) :
     execEntry ca sevm state = beforeCredit ca sevm.value state := by
-  simp [execEntry, target]
+  simp only [execEntry, target, ↓reduceIte]
 
-@[simp] theorem execEntry_of_target_ne
+theorem execEntry_of_target_ne
     {ca : Adr} {sevm : Sevm} {state : State}
     (target : sevm.currentTarget ≠ ca) :
     execEntry ca sevm state = ofState ca state := by
-  simp [execEntry, target]
+  simp only [execEntry, target, ↓reduceIte]
 
 end RealizedSnapshot
 
@@ -282,7 +282,7 @@ theorem exactInvocation_route
   subst pc
   cases out with
   | error error =>
-      simp [Execution.commits] at committed
+      simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       apply classify_prorata_exec_route run
       apply Option.some.inj
@@ -595,7 +595,7 @@ theorem WithdrawPreCallEffect.accountingEffect_of_acceptedPayout
   obtain ⟨trace⟩ := payout.exists_trace recipient_ne
   have fields := effect
   unfold WithdrawPreCallEffect at fields
-  dsimp at fields
+  dsimp only [Lean.Elab.WF.paramLet] at fields
   rcases fields with ⟨_, _, _, hcallBalance, _, _, _, _, _⟩
   have hcallBalanceAt :
       callPre.state.bal sevm.currentTarget =
@@ -634,7 +634,7 @@ theorem WithdrawPreCallEffect.acceptedPayoutChildPre
     precondition.inv.left rfl
   have effectFields := effect
   unfold WithdrawPreCallEffect at effectFields
-  dsimp at effectFields
+  dsimp only [Lean.Elab.WF.paramLet] at effectFields
   rcases effectFields with
     ⟨_, _, _, callBalance, callCode, _, _, _, _⟩
   have childCode :
@@ -917,7 +917,7 @@ theorem BodyEntry.sharesAccountingEffect
   rcases entry with ⟨bodyPre, hstor, hbal, -, run⟩
   have effect := convertToShares_effect run
   unfold SharesViewEffect at effect
-  dsimp at effect
+  dsimp only [Lean.Elab.WF.paramLet] at effect
   rcases effect with ⟨-, -, -, -, hpostStor, hpostBal, -, -⟩
   exact accountingEffect_silentBeforeCredit hvalue
     (congrFun (hpostStor.trans hstor) sevm.currentTarget)
@@ -934,7 +934,7 @@ theorem BodyEntry.assetsAccountingEffect
   rcases entry with ⟨bodyPre, hstor, hbal, -, run⟩
   have effect := convertToAssets_effect run
   unfold AssetsViewEffect at effect
-  dsimp at effect
+  dsimp only [Lean.Elab.WF.paramLet] at effect
   rcases effect with ⟨-, -, -, hpostStor, hpostBal, -, -⟩
   exact accountingEffect_silentBeforeCredit hvalue
     (congrFun (hpostStor.trans hstor) sevm.currentTarget)
@@ -977,9 +977,10 @@ theorem append {o : Nat} {pre mid post : RealizedSnapshot}
     ProrataAccountingReplay o pre (left ++ right) post := by
   induction before with
   | nil boundary =>
-      simpa using after
+      simpa only [List.nil_append] using after
   | cons pre_eq post_eq ledger tail ih =>
-      simpa using ProrataAccountingReplay.cons pre_eq post_eq ledger (ih after)
+      simpa only [List.cons_append] using
+        ProrataAccountingReplay.cons pre_eq post_eq ledger (ih after)
 
 /-- Equal realized boundaries contribute no accounting step. -/
 theorem nil_of_eq {o : Nat} {pre post : RealizedSnapshot}
@@ -1144,7 +1145,7 @@ theorem exists_path {o : Nat} {pre post : RealizedSnapshot}
       · simp only [ProrataAccountingPath.cons]
         rw [hsteps]
       · exact pre_eq
-      · simpa using hlast
+      · simpa only [ProrataAccountingPath.cons_last] using hlast
 
 end ProrataAccountingReplay
 

@@ -15,8 +15,8 @@ theorem Stor.get_set_ite (s : Stor) (key value probe : B256) :
       if key = probe then value else s.get probe := by
   by_cases h : key = probe
   · subst probe
-    simp [Stor.get_set_self]
-  · simp [h, Stor.get_set_ne _ h]
+    simp only [Stor.get_set_self, ↓reduceIte]
+  · simp only [Stor.get_set_ne _ h, h, ↓reduceIte]
 
 -- Splitting a body's line at any point and prepending the pieces in order is
 -- the same as prepending the whole line. Every module that decomposes a
@@ -26,7 +26,7 @@ lemma prepend_append (left right : Line) (tail : Func) :
     (left ++ right) +++ tail = left +++ (right +++ tail) := by
   induction left with
   | nil => rfl
-  | cons head left ih => simp [prepend, ih]
+  | cons head left ih => simp only [cons_append, prepend, ih]
 
 /-- Prepending the same instruction line preserves equality of compile shapes. -/
 theorem Func.compileShape_prepend_congr (l : Line) {p q : Func}
@@ -34,7 +34,7 @@ theorem Func.compileShape_prepend_congr (l : Line) {p q : Func}
     (l +++ p).compileShape = (l +++ q).compileShape := by
   induction l with
   | nil => exact h
-  | cons i l ih => simp [prepend, Func.compileShape, ih]
+  | cons i l ih => simp only [prepend, compileShape, ih]
 
 -- The statement is unchanged by the `.revert` normalization (`Func.revert` in
 -- `Blanc/CommonCore.lean`); only the walk is. `Func.revert` is now two `PUSH0`s
@@ -183,7 +183,7 @@ theorem DispatchTree.mem_of_mem_build :
     · exact absurd rfl h_ne
     · rcases xs' with _ | ⟨y, ys⟩
       · have h : wp = (w, p) := h_mem
-        simp [h]
+        simp only [h, mem_cons, not_mem_nil, or_false]
       · simp only [List.length_cons] at h_len; omega
   | succ n ih =>
     intro xs wp h_ne h_len h_mem
@@ -191,7 +191,7 @@ theorem DispatchTree.mem_of_mem_build :
     · exact absurd rfl h_ne
     · rcases xs' with _ | ⟨y, ys⟩
       · have h : wp = (w, p) := h_mem
-        simp [h]
+        simp only [h, mem_cons, not_mem_nil, or_false]
       · have h_len' : ys.length ≤ n := by
           simp only [List.length_cons] at h_len; omega
         have h_split :
@@ -400,9 +400,9 @@ lemma liftMach_worldEq_of_ok {core : Mach → Footprint.Outcome Mach α}
     Devm.WorldEq d d' := by
   unfold liftMach Footprint.liftOutcome at h
   cases hc : core d.mach with
-  | error err => simp [hc] at h
+  | error err => simp only [hc, reduceCtorEq] at h
   | ok out =>
-    simp [hc] at h
+    simp only [hc, Except.ok.injEq, Prod.mk.injEq] at h
     rcases h with ⟨_, rfl⟩
     exact Devm.worldEq_setMach d out.2
 
@@ -412,19 +412,19 @@ lemma liftMach_worldEq_of_error {core : Mach → Footprint.Outcome Mach α}
   unfold liftMach Footprint.liftOutcome at h
   cases hc : core d.mach with
   | error out =>
-    simp [hc] at h
+    simp only [hc, Except.error.injEq] at h
     rcases h with ⟨_, rfl⟩
     exact Devm.worldEq_setMach d out.2
-  | ok out => simp [hc] at h
+  | ok out => simp only [hc, reduceCtorEq] at h
 
 lemma liftMach_error_of_ok {core : Mach → Footprint.Outcome Mach α}
     {d d' : Devm} {x : α} (h : liftMach core d = .ok (x, d')) :
     d'.error = d.error := by
   unfold liftMach Footprint.liftOutcome at h
   cases hc : core d.mach with
-  | error err => simp [hc] at h
+  | error err => simp only [hc, reduceCtorEq] at h
   | ok out =>
-    simp [hc] at h
+    simp only [hc, Except.ok.injEq, Prod.mk.injEq] at h
     rcases h with ⟨_, rfl⟩
     exact Devm.setMach_error d out.2
 
@@ -533,7 +533,7 @@ lemma addCreatedAccount_getCode {benv : Benv} {adr a : Adr} : (addCreatedAccount
   rfl
 
 lemma Benv.setStor_getCode {benv : Benv} {adr a : Adr} {stor : Stor} : (benv.setStor adr stor).state.getCode a = benv.state.getCode a := by
-  dsimp [Benv.setStor, Benv.state, State.setStor, State.set, State.getCode]
+  dsimp only [Benv.setStor, State.setStor, State.set, State.getCode]
   split_ifs with h_if
   · unfold State.get
     by_cases h : compare adr a = Ordering.eq
@@ -544,33 +544,21 @@ lemma Benv.setStor_getCode {benv : Benv} {adr a : Adr} {stor : Stor} : (benv.set
       · have h3 := congrArg Acct.code h_if
         exact h3.symm
     · rw [Std.TreeMap.getD_erase]
-      simp [h]
+      simp only [h, ↓reduceIte]
   · unfold State.get
     by_cases h : compare adr a = Ordering.eq
     · have h2 : adr = a := compare_eq_iff_eq.mp h
       subst h2
       rw [Std.TreeMap.getD_insert]
-      simp
+      simp only [Std.compare_self, ↓reduceIte]
     · rw [Std.TreeMap.getD_insert]
-      simp [h]
+      simp only [h, ↓reduceIte]
 
 lemma ExecuteCode.depth_eq
     {msg : Msg} {evm_ exn_ ex}
     (run : ExecuteCode msg (.some ⟨evm_, exn_⟩) ex) :
     evm_.sta.depth = msg.depth := by
   rw [(ExecuteCode.some_inv run).1]; rfl
-
-lemma ProcessMessage.depth_eq
-    {msg : Msg} {evm_ exn_ ex}
-    (run : ProcessMessage msg (.some ⟨evm_, exn_⟩) ex) :
-    evm_.sta.depth = msg.depth :=
-  RunFrame.depth_eq run
-
-lemma ProcessCreateMessage.depth_eq
-    {msg : Msg} {evm_ exn_ ex}
-    (run : ProcessCreateMessage msg (.some ⟨evm_, exn_⟩) ex) :
-    evm_.sta.depth = msg.depth :=
-  RunFrame.depth_eq run
 
 lemma GenericCall.depth_lt
     {sevm devm msgCallGas value caller currentTarget target
@@ -646,8 +634,8 @@ lemma Devm.push_getCode_eq {v devm devm'} (h : Devm.push v devm = .ok devm') (a 
 lemma Devm.popToAdr_getCode_eq {devm devm' adr} (h : Devm.popToAdr devm = .ok ⟨adr, devm'⟩) (a : Adr) : devm'.getCode a = devm.getCode a := by
   exact (liftMach_worldEq_of_ok (core := Mach.popToAdr) h).getCode a |>.symm
 
-@[simp] lemma Except.bind_error {α β ε} (e : ε) (f : α → Except ε β) : (Except.error e >>= f) = Except.error e := rfl
-@[simp] lemma Except.bind_ok {α β ε} (x : α) (f : α → Except ε β) : (Except.ok x >>= f) = f x := rfl
+lemma Except.bind_error {α β ε} (e : ε) (f : α → Except ε β) : (Except.error e >>= f) = Except.error e := rfl
+lemma Except.bind_ok {α β ε} (x : α) (f : α → Except ε β) : (Except.ok x >>= f) = f x := rfl
 
 lemma chargeGas_getBal_eq {cost devm devm'} (h : chargeGas cost devm = .ok devm') (a : Adr) : devm'.getBal a = devm.getBal a := by
   exact (chargeGas_worldEq_of_ok h).getBal a |>.symm
@@ -676,11 +664,11 @@ lemma Devm.WorldEq.getStor {d d' : Devm} (h : Devm.WorldEq d d') (a : Adr) :
 
 lemma Devm.Burn.getStor {s s' : Devm} (h : Devm.Burn s s') (a : Adr) :
     Devm.getStor s' a = Devm.getStor s a := by
-  simp [Devm.getStor, Devm.getAcct]; rw [h.state]
+  simp only [Devm.getStor, Devm.getAcct]; rw [h.state]
 
 lemma Devm.PopBurn.getStor {xs} {s s' : Devm} (h : Devm.PopBurn xs s s') (a : Adr) :
     Devm.getStor s' a = Devm.getStor s a := by
-  simp [Devm.getStor, Devm.getAcct]; rw [h.state]
+  simp only [Devm.getStor, Devm.getAcct]; rw [h.state]
 
 instance : PopBurn.Inv Devm.getStor := ⟨by
   intros xs s s' h
@@ -943,11 +931,12 @@ def Meta.InstructionFrame (a b : Meta) : Prop :=
 
 lemma Devm.Rels.instructionFrame_refl :
     Devm.Rels.Refl Devm.Rels.instructionFrame := by
-  simp [Devm.Rels.Refl, Devm.Rels.instructionFrame, ReflexiveRel]
+  simp only [Devm.Rels.Refl, ReflexiveRel, instructionFrame, implies_true, and_self]
 
 lemma Devm.Rels.instructionFrame_trans :
     Devm.Rels.Trans Devm.Rels.instructionFrame := by
-  simp [Devm.Rels.Trans, Devm.Rels.instructionFrame, TransitiveRel]
+  simp only [Devm.Rels.Trans, TransitiveRel, instructionFrame, imp_self, implies_true,
+    forall_apply_eq_imp_iff, and_self]
 
 lemma Devm.instructionFrame_refl : ReflexiveRel Devm.InstructionFrame :=
   Devm.rel_refl Devm.Rels.instructionFrame_refl
@@ -1111,8 +1100,8 @@ pools move. The `instructionFrame`/`machFrame` relations both relax `stack`,
 so walks that track it need this equation. -/
 lemma Devm.chargeStateGas_stack {amount : Nat} {d d' : Devm}
     (h : chargeStateGas amount d = .ok d') : d'.stack = d.stack := by
-  dsimp [chargeStateGas, liftMachExecution, liftMach, Footprint.liftOutcome,
-    Footprint.toExecution, Mach.chargeStateGas] at h
+  dsimp only [ExceptT.stM_eq, chargeStateGas, liftMachExecution, Footprint.toExecution, liftMach,
+    Footprint.liftOutcome, Mach.chargeStateGas, Lean.Elab.WF.paramLet, tsub_le_iff_right] at h
   by_cases h1 : amount ≤ d.mach.stateGas.left
   · simp only [h1] at h
     injection h with heq; subst heq; rfl
@@ -1126,8 +1115,8 @@ lemma Devm.chargeStateGas_stack {amount : Nat} {d d' : Devm}
 /-- A successful state-gas charge preserves memory, for the same walks. -/
 lemma Devm.chargeStateGas_memory {amount : Nat} {d d' : Devm}
     (h : chargeStateGas amount d = .ok d') : d'.memory = d.memory := by
-  dsimp [chargeStateGas, liftMachExecution, liftMach, Footprint.liftOutcome,
-    Footprint.toExecution, Mach.chargeStateGas] at h
+  dsimp only [ExceptT.stM_eq, chargeStateGas, liftMachExecution, Footprint.toExecution, liftMach,
+    Footprint.liftOutcome, Mach.chargeStateGas, Lean.Elab.WF.paramLet, tsub_le_iff_right] at h
   by_cases h1 : amount ≤ d.mach.stateGas.left
   · simp only [h1] at h
     injection h with heq; subst heq; rfl
@@ -1141,8 +1130,8 @@ lemma Devm.chargeStateGas_memory {amount : Nat} {d d' : Devm}
 /-- A successful state-gas charge preserves the log list. -/
 lemma Devm.chargeStateGas_logs {amount : Nat} {d d' : Devm}
     (h : chargeStateGas amount d = .ok d') : d'.logs = d.logs := by
-  dsimp [chargeStateGas, liftMachExecution, liftMach, Footprint.liftOutcome,
-    Footprint.toExecution, Mach.chargeStateGas] at h
+  dsimp only [ExceptT.stM_eq, chargeStateGas, liftMachExecution, Footprint.toExecution, liftMach,
+    Footprint.liftOutcome, Mach.chargeStateGas, Lean.Elab.WF.paramLet, tsub_le_iff_right] at h
   by_cases h1 : amount ≤ d.mach.stateGas.left
   · simp only [h1] at h
     injection h with heq; subst heq; rfl
@@ -1156,8 +1145,8 @@ lemma Devm.chargeStateGas_logs {amount : Nat} {d d' : Devm}
 /-- A successful state-gas charge preserves the output buffer. -/
 lemma Devm.chargeStateGas_output {amount : Nat} {d d' : Devm}
     (h : chargeStateGas amount d = .ok d') : d'.output = d.output := by
-  dsimp [chargeStateGas, liftMachExecution, liftMach, Footprint.liftOutcome,
-    Footprint.toExecution, Mach.chargeStateGas] at h
+  dsimp only [ExceptT.stM_eq, chargeStateGas, liftMachExecution, Footprint.toExecution, liftMach,
+    Footprint.liftOutcome, Mach.chargeStateGas, Lean.Elab.WF.paramLet, tsub_le_iff_right] at h
   by_cases h1 : amount ≤ d.mach.stateGas.left
   · simp only [h1] at h
     injection h with heq; subst heq; rfl
@@ -1171,8 +1160,8 @@ lemma Devm.chargeStateGas_output {amount : Nat} {d d' : Devm}
 /-- A successful state-gas charge preserves loaded storage. -/
 lemma Devm.chargeStateGas_getStor {amount : Nat} {d d' : Devm}
     (h : chargeStateGas amount d = .ok d') : Devm.getStor d = Devm.getStor d' := by
-  dsimp [chargeStateGas, liftMachExecution, liftMach, Footprint.liftOutcome,
-    Footprint.toExecution, Mach.chargeStateGas] at h
+  dsimp only [ExceptT.stM_eq, chargeStateGas, liftMachExecution, Footprint.toExecution, liftMach,
+    Footprint.liftOutcome, Mach.chargeStateGas, Lean.Elab.WF.paramLet, tsub_le_iff_right] at h
   by_cases h1 : amount ≤ d.mach.stateGas.left
   · simp only [h1] at h
     injection h with heq; subst heq; rfl
@@ -1373,25 +1362,25 @@ lemma State.setStorVal_balCodeEq (st : Jaune.State)
     State.BalCodeEq st (st.setStorVal adr key value) := by
   unfold State.BalCodeEq State.setStorVal State.get State.set
   funext adr'
-  dsimp
+  dsimp only [Lean.Elab.WF.paramLet]
   split_ifs with h_if
   · by_cases h_cmp : compare adr adr' = Ordering.eq
     · have h : adr = adr' := compare_eq_iff_eq.mp h_cmp
       subst h
       rw [Std.TreeMap.getD_erase]
-      simp
+      simp only [Std.compare_self, ↓reduceIte, Prod.mk.injEq]
       constructor
       · simpa only using congrArg Acct.bal h_if
       · simpa only using congrArg Acct.code h_if
     · rw [Std.TreeMap.getD_erase]
-      simp [h_cmp]
+      simp only [h_cmp, ↓reduceIte]
   · by_cases h_cmp : compare adr adr' = Ordering.eq
     · have h : adr = adr' := compare_eq_iff_eq.mp h_cmp
       subst h
       rw [Std.TreeMap.getD_insert]
-      simp
+      simp only [Std.compare_self, ↓reduceIte]
     · rw [Std.TreeMap.getD_insert]
-      simp [h_cmp]
+      simp only [h_cmp, ↓reduceIte]
 
 /-- `SSTORE` may change storage in `state`, but preserves balances, code, and
     the other world/frame fields. -/
@@ -1411,23 +1400,23 @@ abbrev Devm.TransientWriteFrame : Devm → Devm → Prop :=
 
 lemma Devm.Rels.stateWriteFrame_refl :
     Devm.Rels.Refl Devm.Rels.stateWriteFrame := by
-  simp [Devm.Rels.Refl, Devm.Rels.stateWriteFrame,
-    Devm.Rels.instructionFrame, State.BalCodeEq, ReflexiveRel]
+  simp only [Devm.Rels.Refl, ReflexiveRel, stateWriteFrame, instructionFrame, implies_true,
+    State.BalCodeEq, and_self]
 
 lemma Devm.Rels.stateWriteFrame_trans :
     Devm.Rels.Trans Devm.Rels.stateWriteFrame := by
-  simp_all [Devm.Rels.Trans, Devm.Rels.stateWriteFrame,
-    Devm.Rels.instructionFrame, State.BalCodeEq, TransitiveRel]
+  simp_all only [Devm.Rels.Trans, TransitiveRel, stateWriteFrame, instructionFrame, imp_self,
+    implies_true, State.BalCodeEq, and_self]
 
 lemma Devm.Rels.transientWriteFrame_refl :
     Devm.Rels.Refl Devm.Rels.transientWriteFrame := by
-  simp [Devm.Rels.Refl, Devm.Rels.transientWriteFrame,
-    Devm.Rels.instructionFrame, ReflexiveRel]
+  simp only [Devm.Rels.Refl, ReflexiveRel, transientWriteFrame, instructionFrame, implies_true,
+    and_self]
 
 lemma Devm.Rels.transientWriteFrame_trans :
     Devm.Rels.Trans Devm.Rels.transientWriteFrame := by
-  simp [Devm.Rels.Trans, Devm.Rels.transientWriteFrame,
-    Devm.Rels.instructionFrame, TransitiveRel]
+  simp only [Devm.Rels.Trans, TransitiveRel, transientWriteFrame, instructionFrame, imp_self,
+    implies_true, forall_apply_eq_imp_iff, and_self]
 
 lemma Devm.stateWriteFrame_refl : ReflexiveRel Devm.StateWriteFrame :=
   Devm.rel_refl Devm.Rels.stateWriteFrame_refl
@@ -1998,7 +1987,7 @@ lemma processCreateMessage.chargeCodeGas_getCode_gen {rules : ForkRules}
   split at h
   · split at h
     · subst h; rfl
-    · dsimp [Bind.bind, Except.bind] at h
+    · dsimp only [ExceptT.stM_eq, bind, Except.bind] at h
       split at h
       · rename_i eq_err; subst h
         have h_charge := chargeGas_getCode_gen eq_err a
@@ -2174,11 +2163,11 @@ lemma executeCode.handleErrorWith_halt_isSome (sg : Option StateGasRules)
         .ok handled ∧ handled.error.isSome = true := by
   cases sg with
   | none =>
-      simp [executeCode.handleErrorWith, executeCode.handleError, Devm.error,
-        Devm.setMeta]
+      simp only [executeCode.handleErrorWith, executeCode.handleError, Devm.setMeta,
+        Except.ok.injEq, Devm.error, exists_eq_left', Option.isSome_some]
   | some _ =>
-      simp [executeCode.handleErrorWith, executeCode.handleErrorAmsterdam,
-        Devm.error, Devm.setMeta]
+      simp only [executeCode.handleErrorWith, executeCode.handleErrorAmsterdam, Devm.setMeta,
+        Except.ok.injEq, Devm.error, exists_eq_left', Option.isSome_some]
 
 /-- A reverted child settles to a handled devm with its error marker set, on
 either fork handler. -/
@@ -2189,11 +2178,11 @@ lemma executeCode.handleErrorWith_revert_isSome (sg : Option StateGasRules)
         .ok handled ∧ handled.error.isSome = true := by
   cases sg with
   | none =>
-      simp [executeCode.handleErrorWith, executeCode.handleError, Devm.error,
-        Devm.withError, Devm.setMeta]
+      simp only [executeCode.handleErrorWith, executeCode.handleError, Devm.withError, Devm.setMeta,
+        Except.ok.injEq, Devm.error, exists_eq_left', Option.isSome_some]
   | some _ =>
-      simp [executeCode.handleErrorWith, executeCode.handleErrorAmsterdam,
-        Devm.error, Devm.withError, Devm.setMeta]
+      simp only [executeCode.handleErrorWith, executeCode.handleErrorAmsterdam, Devm.withError,
+        Devm.setMeta, Except.ok.injEq, Devm.error, exists_eq_left', Option.isSome_some]
 
 /-- A clean retained child message installs exactly the committed raw child's
 world state.  Message settlement changes only wrapper metadata on this path. -/
@@ -2207,17 +2196,17 @@ theorem ProcessMessage.ok_state_eq_committedPost
   have hsettle := (RunFrame.some_inv hprocess).2
   cases out with
   | error err =>
-      simp [Execution.commits] at hcommit
+      simp only [Execution.commits, Bool.false_eq_true] at hcommit
   | ok raw =>
       simp only [Execution.commits] at hcommit
       cases herr : raw.error with
       | none =>
-          simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-            executeCode.handleErrorWith_ok, processMessage.settle,
-            herr] at hsettle
+          simp only [Frame.settle, Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
+            processMessage.settle, executeCode.handleErrorWith_ok, Except.bind_ok, herr,
+            Option.isSome_none, Except.ok.injEq] at hsettle
           exact congrArg Devm.state hsettle
       | some error =>
-          simp [herr] at hcommit
+          simp only [herr, Option.isNone_some, Bool.false_eq_true] at hcommit
 
 /-- A raw child execution that does not commit is rolled back to the message
 entry world before its parent resumes. -/
@@ -2239,7 +2228,7 @@ theorem ProcessMessage.ok_state_eq_of_not_commits
             ⟨handled, hhandle, hhandled⟩
           have hsettle' :
               (.ok post) = processMessage.settle msg (.ok handled) := by
-            simpa [Frame.ofCall, Frame.settle, Frame.settleMsg,
+            simpa only [Frame.settle, Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
               hhandle] using hsettle
           unfold processMessage.settle at hsettle'
           simp only [bind, Except.bind] at hsettle'
@@ -2257,7 +2246,7 @@ theorem ProcessMessage.ok_state_eq_of_not_commits
             ⟨handled, hhandle, hhandled⟩
           have hsettle' :
               (.ok post) = processMessage.settle msg (.ok handled) := by
-            simpa [Frame.ofCall, Frame.settle, Frame.settleMsg,
+            simpa only [Frame.settle, Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
               hhandle] using hsettle
           unfold processMessage.settle at hsettle'
           simp only [bind, Except.bind] at hsettle'
@@ -2270,21 +2259,21 @@ theorem ProcessMessage.ok_state_eq_of_not_commits
               congrArg Devm.state heq
             _ = msg.benv.state := rfl
       | crypto reason =>
-          simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-            executeCode.handleErrorWith_crypto,
-            processMessage.settle] at hsettle
+          simp only [Frame.settle, Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
+            processMessage.settle, executeCode.handleErrorWith_crypto, Except.bind_error,
+            reduceCtorEq] at hsettle
       | internal reason =>
-          simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-            executeCode.handleErrorWith_internal,
-            processMessage.settle] at hsettle
+          simp only [Frame.settle, Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
+            processMessage.settle, executeCode.handleErrorWith_internal, Except.bind_error,
+            reduceCtorEq] at hsettle
   | ok raw =>
       cases herr : raw.error with
       | none =>
-          simp [Execution.commits, herr] at hnot
+          simp only [Execution.commits, herr, Option.isNone_none, ne_eq, not_true_eq_false] at hnot
       | some error =>
-          simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-            executeCode.handleErrorWith_ok, processMessage.settle,
-            herr] at hsettle
+          simp only [Frame.settle, Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
+            processMessage.settle, executeCode.handleErrorWith_ok, Except.bind_ok, herr,
+            Option.isSome_some, Except.ok.injEq] at hsettle
           exact congrArg Devm.state hsettle
 
 /-- Handling a synchronous precompile result preserves the message-entry world
@@ -2300,22 +2289,22 @@ theorem executeCode.handle_precompile_ok_state
     cases hpre : precompileRun (initEvm msg) address with
     | error error cost =>
         simp only [hpre] at h
-        cases error <;> simp [executeCode.handleError] at h
+        cases error <;> simp only [executeCode.handleError, Except.ok.injEq, reduceCtorEq] at h
         · exact (congrArg Devm.state h).symm.trans rfl
         · exact (congrArg Devm.state h).symm.trans rfl
     | ok cost output =>
-        simp [hpre, executeCode.handleError] at h
+        simp only [executeCode.handleError, hpre, Except.ok.injEq] at h
         exact (congrArg Devm.state h).symm.trans rfl
   · simp only [hsg, executeCode.handleErrorWith] at h
     unfold executePrecomp applyPrecompResult at h
     cases hpre : precompileRun (initEvm msg) address with
     | error error cost =>
         simp only [hpre] at h
-        cases error <;> simp [executeCode.handleErrorAmsterdam] at h
+        cases error <;> simp only [executeCode.handleErrorAmsterdam, Except.ok.injEq, reduceCtorEq] at h
         · exact (congrArg Devm.state h).symm.trans rfl
         · exact (congrArg Devm.state h).symm.trans rfl
     | ok cost output =>
-        simp [hpre, executeCode.handleErrorAmsterdam] at h
+        simp only [executeCode.handleErrorAmsterdam, hpre, Except.ok.injEq] at h
         exact (congrArg Devm.state h).symm.trans rfl
 
 /-- Successful CREATE code-gas charging preserves the frame error marker. -/
@@ -2361,7 +2350,8 @@ theorem ProcessCreateMessage.rollback_of_error
     ⟨result, _hinner, hsettle⟩
   cases result with
   | error error =>
-      simp [processCreateMessage.settle] at hsettle
+      simp only [processCreateMessage.settle, Option.isNone_iff_eq_none, ExceptT.stM_eq,
+        Except.bind_error, reduceCtorEq] at hsettle
   | ok inner =>
       unfold processCreateMessage.settle at hsettle
       simp only [bind, Except.bind] at hsettle
@@ -2399,10 +2389,10 @@ theorem ProcessCreateMessage.rollback_of_error
             have hchargedError :=
               processCreateMessage.chargeCodeGas_error_eq hcharge
             cases hinner : inner.error <;>
-              simp [hinner] at hinnerNone hchargedError
+              simp only [hinner, Option.isNone_none, Option.isNone_some, Bool.false_eq_true] at hinnerNone hchargedError
             rw [hsettle] at herror
             change charged.error.isSome = true at herror
-            simp [hchargedError] at herror
+            simp only [hchargedError, Option.isSome_none, Bool.false_eq_true] at herror
       · rw [if_neg hinnerNone] at hsettle
         have heq := Except.ok.inj hsettle
         calc
@@ -2416,7 +2406,7 @@ theorem ProcessCreateMessage.rollback_of_error
 storage) preserves code. -/
 lemma processCreateMessage.msg_getCode (msg : Msg) (a : Adr) :
     (processCreateMessage.msg msg).benv.state.getCode a = msg.benv.state.getCode a := by
-  dsimp [processCreateMessage.msg, Msg.withBenv]
+  dsimp only [processCreateMessage.msg, Msg.withBenv]
   rw [Benv.incrNonce_getCode, addCreatedAccount_getCode, Benv.setStor_getCode]
 
 lemma processCreateMessage.msg_benvStat (msg : Msg) :
@@ -2438,7 +2428,7 @@ lemma ExecuteCode.codePreserve
     subst h_err
     rw [executeCode.handleErrorWith_getCode]
     rw [h_xl] at inv
-    dsimp [Xlot.InvGetCode] at inv
+    dsimp only [ExceptT.stM_eq, Xlot.InvGetCode, ne_eq] at inv
     rw [executeCode.enter_inl henter] at inv
     exact (inv a ha).symm
   · rcases run with ⟨h_xl, h_err⟩
@@ -2458,22 +2448,22 @@ lemma ProcessMessage.codePreserve
   unfold FrameBody at hbody
   rcases h_benv : msg.benvAfterTransfer with e | benv <;> rw [h_benv] at hbody
   · rw [hbody.2]
-    dsimp [MsgResult.getCode, processMessage.settle]
-    dsimp [Msg.benvAfterTransfer, Msg.shouldTransferValue] at h_benv
+    dsimp only [processMessage.settle, Except.bind_error, MsgResult.getCode]
+    dsimp only [Msg.benvAfterTransfer] at h_benv
     split at h_benv
     · cases h_sub : msg.benv.subBal msg.caller msg.value
-      · simp [h_sub, Option.toExcept, Bind.bind, Except.bind] at h_benv
+      · simp only [bind, Except.bind, Option.toExcept, h_sub, Except.error.injEq] at h_benv
         subst h_benv
         rfl
-      · simp [h_sub, Option.toExcept, Bind.bind, Except.bind] at h_benv
+      · simp only [bind, Except.bind, Option.toExcept, h_sub, reduceCtorEq] at h_benv
     · contradiction
   · have h_benv_code := benvAfterTransfer_ok_getCode h_benv a
     have ha' : ( (msg.withBenv benv).benv.state.getCode a ).toList ≠ [] := by
-      dsimp [Msg.withBenv]
+      dsimp only [Msg.withBenv, ne_eq]
       rw [h_benv_code]
       exact ha
     have h_exec_cond := ExecuteCode.codePreserve inv hbody a ha'
-    dsimp [Msg.withBenv] at h_exec_cond
+    dsimp only [Msg.withBenv] at h_exec_cond
     rw [h_benv_code] at h_exec_cond
     unfold processMessage.settle
     rcases r0 with e' | evm
@@ -2494,20 +2484,19 @@ lemma ProcessMessage.preserves_getCode_gen
 
 lemma setCode_getCode {evm : Devm} {a b : Adr} {code : ByteArray} (h : a ≠ b) :
   (evm.setCode a code).getCode b = evm.getCode b := by
-  dsimp [Devm.setCode, Devm.withState, Devm.setWorld, Devm.world,
-    Devm.getCode, Devm.state, Devm.getAcct, State.setCode, State.set,
-    State.getCode]
+  dsimp only [Devm.setCode, Devm.withState, Devm.setWorld, Devm.state, State.setCode, State.set,
+    Lean.Elab.WF.paramLet, Devm.getCode, Devm.getAcct]
   split_ifs with h_if
   · unfold State.get
     by_cases hc : compare a b = Ordering.eq
     · exact False.elim (h (compare_eq_iff_eq.mp hc))
     · rw [Std.TreeMap.getD_erase]
-      simp [hc]
+      simp only [hc, ↓reduceIte]
   · unfold State.get
     by_cases hc : compare a b = Ordering.eq
     · exact False.elim (h (compare_eq_iff_eq.mp hc))
     · rw [Std.TreeMap.getD_insert]
-      simp [hc]
+      simp only [hc, ↓reduceIte]
 
 /-- Master: `processCreateMessage` preserves the code of every nonempty-code
 address *other than* the create target.  Create preparation
@@ -2546,12 +2535,12 @@ lemma ProcessCreateMessage.codePreserve
             · rfl
             · rfl
         | _ =>
-            simp only [MsgResult.getCode, processCreateMessage.exceptionalHalt]
+            simp only [MsgResult.getCode]
             rw [h_getCode]; exact h_exec_cond
       | ok devm_charge =>
         dsimp only [MsgResult.getCode]
         have h_getCode := processCreateMessage.chargeCodeGas_getCode_gen h_charge a
-        dsimp [Execution.getCode] at h_getCode
+        dsimp only [Execution.getCode] at h_getCode
         rw [setCode_getCode h_a.symm]
         rw [h_getCode]
         exact h_exec_cond
@@ -2723,8 +2712,7 @@ lemma GenericCreateAmsterdam.codePreserve
     Execution.CodePreserve devm exn := by
   intro a ha
   unfold GenericCreateAmsterdam genericCreateAmsterdam.step at run
-  simp only [Bind.bind, Except.bind, Except.assert, assertDynamic,
-    Pure.pure, Except.pure] at run
+  simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at run
   repeat' split at run
   all_goals simp only [XStep.ofExcept, XStep.Run] at run
   all_goals first
@@ -3401,7 +3389,7 @@ lemma GasSchedule.delegationCost_of_not_delegation {gas : GasSchedule} {d : Devm
 /-- Undelegated Amsterdam completion reads the target's own code. -/
 lemma completeDelegationAccess_code_of_not_delegated {d : Devm} {adr : Adr} :
     (completeDelegationAccess d false adr).1 = d.state.getCode adr := by
-  simp [completeDelegationAccess]
+  simp only [completeDelegationAccess, Bool.false_eq_true, ↓reduceIte]
 
 /-- Amsterdam call code resolution under no delegation: the completed code is
     the target's own code. -/
@@ -4538,14 +4526,15 @@ lemma Linst.selfdestruct_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Ex
     (run : Linst.Run sevm devm .selfdestruct exn) :
     ∀ adr : Adr, Execution.getCode exn adr = devm.getCode adr := by
   intro adr
-  dsimp [Linst.Run, Linst.run] at run
+  dsimp only [Linst.Run, Linst.run, ne_eq, Except.bind_ok, ite_not, Lean.Elab.WF.paramLet,
+    Devm.balReadAccount_accessedAddresses, Devm.balReadAccount_getAcct] at run
   revert run
   cases hsg : sevm.benvStat.rules.stateGas
   · -- Covered-fork lane: pop, read both accounts, price, charge, sweep.
     intro run
-    dsimp [bind, Except.bind] at run
+    dsimp only [Devm.balReadAccount_accessedAddresses, ite_not, bind, Except.bind] at run
     revert run
-    cases h1 : devm.popToAdr <;> dsimp
+    cases h1 : devm.popToAdr <;> dsimp only [Devm.balReadAccount_accessedAddresses, ite_not]
     case error err =>
       intro run; rw [← run]; exact (Devm.popToAdr_getCode_err h1 adr)
     case ok res1 =>
@@ -4555,7 +4544,7 @@ lemma Linst.selfdestruct_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Ex
         split
         · exact addAccessedAddress_getCode.trans h_br2
         · exact h_br2
-      cases h2 : chargeGas _ _ <;> dsimp
+      cases h2 : chargeGas _ _ <;> dsimp only
       case error err =>
         intro run; rw [← run]
         change err.2.getCode adr = devm.getCode adr
@@ -4564,26 +4553,26 @@ lemma Linst.selfdestruct_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Ex
         cases h3 : assertDynamic sevm res2
         case error err =>
           intro run; rw [← run]
-          dsimp [assertDynamic, Except.assert] at h3
+          dsimp only [assertDynamic, assert, Bool.not_eq_eq_eq_not, Bool.not_true] at h3
           split at h3
           · contradiction
           · simp only [Except.error.injEq] at h3; subst h3
             change res2.getCode adr = devm.getCode adr
             exact (chargeGas_getCode_eq h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr))
         case ok _ =>
-          cases h4 : res2.subBal _ _ <;> dsimp [Option.toExcept]
+          cases h4 : res2.subBal _ _ <;> dsimp only [Option.toExcept]
           case none =>
             intro run; rw [← run]
             change res2.getCode adr = devm.getCode adr
             exact (chargeGas_getCode_eq h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr))
           case some res3 =>
             have h_sub : res3.getCode adr = res2.getCode adr := by
-              dsimp [Devm.subBal] at h4
+              dsimp only [Devm.subBal, Option.bind_eq_bind] at h4
               cases h_st : res2.state.subBal _ _
               case none =>
                 rw [h_st] at h4; contradiction
               case some st =>
-                rw [h_st] at h4; dsimp at h4
+                rw [h_st] at h4; dsimp only [Option.bind_some] at h4
                 simp only [Option.some.injEq] at h4; subst h4
                 change st.getCode adr = res2.getCode adr
                 exact State.subBal_getCode h_st
@@ -4592,9 +4581,9 @@ lemma Linst.selfdestruct_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Ex
               intro run; rw [← run]
               change (addAccountToDelete _ _).getCode adr = devm.getCode adr
               have h_add : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode adr = res3.getCode adr := by
-                dsimp [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
+                dsimp only [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
               have h_set : ((res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).setBal sevm.currentTarget 0).getCode adr = (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode adr := by
-                dsimp [Devm.setBal, Devm.getCode]; exact State.setBal_getCode _ _ _ _
+                dsimp only [Devm.setBal, Devm.getCode]; exact State.setBal_getCode _ _ _ _
               have h_del : (addAccountToDelete ((res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).setBal sevm.currentTarget 0) sevm.currentTarget).getCode adr = ((res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).setBal sevm.currentTarget 0).getCode adr := by
                 rfl
               exact h_del.trans (h_set.trans (h_add.trans (h_sub.trans ((chargeGas_getCode_eq h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr))))))
@@ -4602,30 +4591,30 @@ lemma Linst.selfdestruct_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Ex
               intro run; rw [← run]
               change (res3.addBal _ _).getCode adr = devm.getCode adr
               have h_add : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode adr = res3.getCode adr := by
-                dsimp [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
+                dsimp only [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
               exact h_add.trans (h_sub.trans ((chargeGas_getCode_eq h2 adr).trans (h_acc.trans (Devm.popToAdr_getCode_eq h1 adr))))
   · -- Amsterdam lane: static check first, priced access, state charges, logging sweep.
     rename_i state
     intro run
-    dsimp [bind, Except.bind] at run
+    dsimp only [Devm.balReadAccount_accessedAddresses, ite_not, bind, Except.bind] at run
     revert run
-    cases h0 : assertDynamic sevm devm <;> dsimp
+    cases h0 : assertDynamic sevm devm <;> dsimp only [ite_not]
     case error err =>
       intro run; rw [← run]
-      dsimp [assertDynamic, Except.assert] at h0
+      dsimp only [assertDynamic, assert, Bool.not_eq_eq_eq_not, Bool.not_true] at h0
       split at h0
       · contradiction
       · simp only [Except.error.injEq] at h0; subst h0
         rfl
     case ok _ =>
-      cases h1 : devm.popToAdr <;> dsimp
+      cases h1 : devm.popToAdr <;> dsimp only [ite_not]
       case error err =>
         intro run; rw [← run]; exact (Devm.popToAdr_getCode_err h1 adr)
       case ok res1 =>
-        cases hg : Except.assert (gasSelfDestruct + (if res1.1 ∉ res1.2.accessedAddresses then sevm.benvStat.rules.gas.coldAccountAccess else 0) ≤ res1.2.gasLeft) (⟨.halt (.outOfGas .none), res1.2⟩ : EvmError × Devm) <;> dsimp
+        cases hg : Except.assert (gasSelfDestruct + (if res1.1 ∉ res1.2.accessedAddresses then sevm.benvStat.rules.gas.coldAccountAccess else 0) ≤ res1.2.gasLeft) (⟨.halt (.outOfGas .none), res1.2⟩ : EvmError × Devm) <;> dsimp only [ite_not]
         case error err =>
           intro run; rw [← run]
-          dsimp [Except.assert] at hg
+          dsimp only [assert, ite_not] at hg
           by_cases hle : gasSelfDestruct + (if res1.1 ∉ res1.2.accessedAddresses then sevm.benvStat.rules.gas.coldAccountAccess else 0) ≤ res1.2.gasLeft
           · simp only [hle, if_true] at hg
             contradiction
@@ -4639,33 +4628,33 @@ lemma Linst.selfdestruct_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Ex
             · rfl
           have h_wb : (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 (if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2))).getCode adr = res1.2.getCode adr :=
             Devm.balReadAccount_getCode.trans (Devm.balReadAccount_getCode.trans h_warm)
-          cases hchg : chargeGas _ _ <;> dsimp
+          cases hchg : chargeGas _ _ <;> dsimp only [ite_not]
           case error err =>
             intro run; rw [← run]
             exact (chargeGas_getCode_err hchg adr).trans (h_wb.trans (Devm.popToAdr_getCode_eq h1 adr))
           case ok res2 =>
-            cases hstg : chargeStateGas _ _ <;> dsimp
+            cases hstg : chargeStateGas _ _ <;> dsimp only [ite_not]
             case error err =>
               intro run; rw [← run]
               exact (chargeStateGas_getCode_err hstg adr).trans ((chargeGas_getCode_eq hchg adr).trans (h_wb.trans (Devm.popToAdr_getCode_eq h1 adr)))
             case ok res2b =>
-              cases h4 : res2b.subBal _ _ <;> dsimp [Option.toExcept]
+              cases h4 : res2b.subBal _ _ <;> dsimp only [Option.toExcept, ite_not]
               case none =>
                 intro run; rw [← run]
                 exact (chargeStateGas_getCode_eq hstg adr).trans ((chargeGas_getCode_eq hchg adr).trans (h_wb.trans (Devm.popToAdr_getCode_eq h1 adr)))
               case some res3 =>
                 have h_sub : res3.getCode adr = res2b.getCode adr := by
-                  dsimp [Devm.subBal] at h4
+                  dsimp only [Devm.subBal, Option.bind_eq_bind] at h4
                   cases h_st : res2b.state.subBal _ _
                   case none =>
                     rw [h_st] at h4; contradiction
                   case some st =>
-                    rw [h_st] at h4; dsimp at h4
+                    rw [h_st] at h4; dsimp only [Option.bind_some] at h4
                     simp only [Option.some.injEq] at h4; subst h4
                     change st.getCode adr = res2b.getCode adr
                     exact State.subBal_getCode h_st
                 have h_add : (res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).getCode adr = res3.getCode adr := by
-                  dsimp [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
+                  dsimp only [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
                 have h_emit : ((res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).getCode adr = (res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).getCode adr :=
                   ((Devm.emitTransferLog_instructionFrame _ _ _ _).getCode adr).symm
                 by_cases h_if : sevm.currentTarget ∈ ((res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).createdAccounts
@@ -5810,8 +5799,7 @@ lemma lift
       Exec pc sevm pre (.ok post) →
       Prog.At p ca pc sevm pre →
       R sevm pre post := by
-  simpa [Prog.codeSem, CodeSem.At, Prog.At, ForallSubExecSem, ForallSubExec,
-    ForallDeeperAtSem, ForallDeeperAt] using
+  simpa only [Prog.At, and_imp, CodeSem.At, Prog.codeSem] using
     (lift_sem R ca p.codeSem depth_ind nextNone nextSome jump last)
 
 
@@ -5846,7 +5834,8 @@ infix:70 " =? "  => B256.eqCheck
 
 lemma Bytes.sig_zero_cons (xs) : Bytes.sig (0 :: xs) = Bytes.sig xs := rfl
 lemma Bytes.sig_nonzero_cons (x xs) (h : x ≠ 0) : Bytes.sig (x :: xs) = x :: xs := by
-  simp only [Jaune.Bytes.sig]; rw [List.dropWhile_cons_of_neg]; simp [h]
+  simp only [Jaune.Bytes.sig]; rw [List.dropWhile_cons_of_neg]; simp only [h, decide_false,
+    Bool.false_eq_true, not_false_eq_true]
 
 lemma Bytes.toB256_sig (bs : Bytes) : Bytes.toB256 (Bytes.sig bs) = bs.toB256 := by
   induction bs with
@@ -5882,7 +5871,7 @@ lemma Devm.push_of_push {x : B256} {s s' : Devm} (h : Devm.push x s = .ok s') :
   · cases h
   · injection h with eq; subst eq
     constructor <;>
-      simp [Devm.Rels.eq, Stack.Push, Split, Devm.setMach]
+      simp only [Stack.Push, Split, Devm.setMach, cons_append, nil_append, Devm.Rels.eq]
     all_goals rfl
 
 lemma Devm.pushBurn_of_burn_of_push {xs : List B256} {s s' s'' : Devm}
@@ -5958,8 +5947,8 @@ lemma Devm.pop_of_popToNat {k : Nat} {devm devm' : Devm}
     (h : Devm.popToNat devm = .ok ⟨k, devm'⟩) :
     ∃ x, Devm.Pop [x] devm devm' := by
   rw [Devm.popToNat_def] at h
-  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at h
-  rcases hp : devm.pop with _ | ⟨x, devm1⟩ <;> simp [hp] at h
+  dsimp only [Functor.mapRev, Functor.map, Except.map] at h
+  rcases hp : devm.pop with _ | ⟨x, devm1⟩ <;> simp only [hp, reduceCtorEq, Except.ok.injEq] at h
   rcases h with ⟨_, rfl⟩
   exact ⟨x, Devm.pop_of_pop hp⟩
 
@@ -5975,8 +5964,8 @@ lemma Devm.pop_of_popToNat_val {k : Nat} {devm devm' : Devm}
     (h : Devm.popToNat devm = .ok ⟨k, devm'⟩) :
     ∃ x, Devm.Pop [x] devm devm' ∧ k = x.toNat := by
   rw [Devm.popToNat_def] at h
-  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at h
-  rcases hp : devm.pop with _ | ⟨x, devm1⟩ <;> simp [hp] at h
+  dsimp only [Functor.mapRev, Functor.map, Except.map] at h
+  rcases hp : devm.pop with _ | ⟨x, devm1⟩ <;> simp only [hp, reduceCtorEq, Except.ok.injEq] at h
   rcases h with ⟨rfl, rfl⟩
   exact ⟨x, Devm.pop_of_pop hp, rfl⟩
 
@@ -6007,16 +5996,16 @@ theorem of_run_sstore_not_static {e : Sevm} {s s' : Devm}
     unfold assertDynamic Except.assert at hassert
     split at hassert
     · rename_i hdynamic
-      simpa using hdynamic
-    · exact absurd hassert (by simp)
+      simpa only [Bool.not_eq_eq_eq_not, Bool.not_true] using hdynamic
+    · exact absurd hassert (by simp only [reduceCtorEq, not_false_eq_true])
   · -- Amsterdam: assertDynamic first.
     simp only [hsg] at run
     rcases Except.bind_eq_ok run with ⟨_, hassert, _⟩
     unfold assertDynamic Except.assert at hassert
     split at hassert
     · rename_i hdynamic
-      simpa using hdynamic
-    · exact absurd hassert (by simp)
+      simpa only [Bool.not_eq_eq_eq_not, Bool.not_true] using hdynamic
+    · exact absurd hassert (by simp only [reduceCtorEq, not_false_eq_true])
 
 lemma of_run_push {e s s' xs p} (h : Ninst.Run e s (push xs p) s') :
     Devm.PushBurn [xs.toB256] s s' := by
@@ -6046,7 +6035,7 @@ lemma of_run_pop {e : Sevm} {s s' : Devm} (h : Ninst.Run e s pop s') :
   simp only [Rinst.run, Rinst.runCore] at run
   rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
   simp only [Functor.mapRev, Functor.map, Except.map] at h1
-  rcases hp : Devm.pop s with _ | ⟨x, s₂⟩ <;> simp [hp] at h1
+  rcases hp : Devm.pop s with _ | ⟨x, s₂⟩ <;> simp only [hp, reduceCtorEq, Except.ok.injEq] at h1
   subst h1
   exact ⟨x, Devm.popBurn_of_pop_of_burn (Devm.pop_of_pop hp) (Devm.burn_of_chargeGas h2)⟩
 
@@ -6130,7 +6119,7 @@ lemma Devm.pop_of_popN {n : Nat} {devm devm' : Devm} {l : List B256}
     injection eq with eq1 eq2
     subst eq1; subst eq2
     refine ⟨rfl, ?_⟩
-    constructor <;> simp [Devm.Rels.eq, Stack.Pop, Split]
+    constructor <;> simp only [Stack.Pop, Split, nil_append, Devm.Rels.eq]
   | succ n ih =>
     rw [Devm.popN_def] at hp
     rcases Except.bind_eq_ok hp with ⟨⟨x, devm1⟩, hp1, hp2⟩
@@ -6139,7 +6128,7 @@ lemma Devm.pop_of_popN {n : Nat} {devm devm' : Devm} {l : List B256}
     injection eq with eq1 eq2
     subst eq1; subst eq2
     rcases ih hp3 with ⟨h_len, h_pop⟩
-    refine ⟨by simp [h_len], Devm.pop_append (Devm.pop_of_pop hp1) h_pop⟩
+    refine ⟨by simp only [length_cons, h_len], Devm.pop_append (Devm.pop_of_pop hp1) h_pop⟩
 
 lemma of_run_sstore {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sstore s') :
     ∃ x y, Stack.Pop [x, y] s.stack s'.stack := by
@@ -6195,7 +6184,7 @@ lemma of_run_sstore {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sstore s') :
     exact hp
 
 /-- `Devm.memWrite` changes memory to the requested write. -/
-@[simp] lemma Devm.memWrite_memory (devm : Devm) (i : Nat) (val : Bytes) :
+lemma Devm.memWrite_memory (devm : Devm) (i : Nat) (val : Bytes) :
     (devm.memWrite i val).memory = devm.memory.write i val := rfl
 
 /-- `Devm.memWrite` leaves the operand stack unchanged. -/
@@ -6315,7 +6304,7 @@ lemma of_run_log {e : Sevm} {s s' : Devm} {n : Fin 5} (h : Ninst.Run e s (log n)
     rw [h_read] at h_mem
     injection h_mem with _ h_devm
     rw [← h_devm]; rfl
-  refine ⟨x :: y :: topics, by simp [h_len], ?_⟩
+  refine ⟨x :: y :: topics, by simp only [length_cons, h_len], ?_⟩
   have hp := (Devm.pop_append p1 (Devm.pop_append p2 p3)).stack
   rw [← eq]
   show Stack.Pop (x :: y :: topics) s.stack s₅.stack
@@ -6443,10 +6432,12 @@ lemma Stack.swapCore_of_swap {n} {xxs yys : Stack} (h : Swap n xxs yys) :
     ∃ x y xs ys, xxs = x :: xs ∧ yys = y :: ys ∧ SwapCore x y n xs ys := by
   cases xxs; cases h; cases yys; cases h; refine ⟨_, _, _, _, rfl, rfl, h⟩
 
-lemma Stack.swapCore_zero {x y s} : SwapCore x y 0 (y :: s) (x :: s) := by simp [SwapCore]
+lemma Stack.swapCore_zero {x y s} : SwapCore x y 0 (y :: s) (x :: s) := by simp only [SwapCore,
+  and_self]
 
 lemma Stack.swapCore_succ {n x y z s s'} :
-    SwapCore x z n s s' → SwapCore x z (n + 1) (y :: s) (y :: s') := by simp [SwapCore]
+    SwapCore x z n s s' → SwapCore x z (n + 1) (y :: s) (y :: s') := by simp only [SwapCore,
+      true_and, imp_self]
 
 lemma Stack.swapCore_getElem_set {x y : B256} {n : Nat} {xs xs' : Stack}
     (h : SwapCore x y n xs xs') (t : Stack) :
@@ -6463,7 +6454,7 @@ lemma Stack.swapCore_getElem_set {x y : B256} {n : Nat} {xs xs' : Stack}
     subst hz
     rcases ih h with ⟨h1, h2⟩
     constructor
-    · simpa using h1
+    · simpa only [cons_append, getElem?_cons_succ] using h1
     · simp only [List.cons_append, List.set_cons_succ]
       rw [h2]
 
@@ -6801,9 +6792,9 @@ lemma prefix_of_extcodesize_val
   simp only [Rinst.run, Rinst.runCore] at hrun
   rcases Except.bind_eq_ok hrun with ⟨⟨adr, d1⟩, hpopAdr, hrun⟩
   rw [Devm.popToAdr_def] at hpopAdr
-  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at hpopAdr
+  dsimp only [Functor.mapRev, Functor.map, Except.map] at hpopAdr
   rcases hpop : Devm.pop s with _ | ⟨word, d0⟩ <;>
-    simp [hpop] at hpopAdr
+    simp only [hpop, reduceCtorEq, Except.ok.injEq] at hpopAdr
   rcases hpopAdr with ⟨rfl, rfl⟩
   have hpop' := Devm.pop_of_pop hpop
   have hx : x = word :=
@@ -6859,7 +6850,8 @@ lemma dataWord_of_append {e : Sevm} {idx : B256} {pre post : Bytes} {w : B256}
     Sevm.dataWord e idx = w := by
   simp only [Sevm.dataWord, hdata, List.sliceD]
   rw [List.drop_length_append' hlen,
-      List.takeD_eq_take _ (by simp [List.length_append, B256.length_toBytes]),
+      List.takeD_eq_take _ (by simp only [length_append, B256.length_toBytes,
+        le_add_iff_nonneg_right, _root_.zero_le]),
       List.take_length_append' (B256.length_toBytes w).symm, B256.toB256_toBytes]
 
 /-- `fsig` leaves the calldata's function selector on the stack.
@@ -6880,7 +6872,7 @@ lemma prefix_of_fsig {e xs} {s s' : Devm} :
   exact prefix_of_shr h_op (prefix_of_push (of_run_pushB256 h_push) h1)
 
 lemma abiSelectorBytes_length (sel : B256) : (abiSelectorBytes sel).length = 4 := by
-  simp [abiSelectorBytes, B256.length_toBytes]
+  simp only [abiSelectorBytes, length_drop, B256.length_toBytes, reduceSub]
 
 private lemma UInt64.high_concat32 (x y : UInt32) :
     ((((x.toUInt64 <<< 32) ||| y.toUInt64) >>> 32).toUInt32) = x := by
@@ -6893,7 +6885,7 @@ private lemma UInt64.high_concat32 (x y : UInt32) :
   have hx : x.toNat <<< 32 < 2 ^ 64 := by
     rw [Nat.shiftLeft_eq]
     have := UInt32.toNat_lt x
-    norm_num at this ⊢
+    norm_num only at this ⊢
     omega
   unfold Nat.lo
   rw [Nat.mod_eq_of_lt hx, Nat.shiftRight_or_distrib,
@@ -6912,7 +6904,7 @@ private lemma UInt64.low_concat32 (x y : UInt32) :
   have hx : x.toNat <<< 32 < 2 ^ 64 := by
     rw [Nat.shiftLeft_eq]
     have := UInt32.toNat_lt x
-    norm_num at this ⊢
+    norm_num only at this ⊢
     omega
   unfold Nat.lo
   rw [Nat.mod_eq_of_lt hx, Nat.or_mod_two_pow]
@@ -6931,7 +6923,7 @@ private lemma UInt32.high_concat16 (x y : UInt16) :
   have hx : x.toNat <<< 16 < 2 ^ 32 := by
     rw [Nat.shiftLeft_eq]
     have := UInt16.toNat_lt x
-    norm_num at this ⊢
+    norm_num only at this ⊢
     omega
   unfold Nat.lo
   rw [Nat.mod_eq_of_lt hx, Nat.shiftRight_or_distrib,
@@ -6950,7 +6942,7 @@ private lemma UInt32.low_concat16 (x y : UInt16) :
   have hx : x.toNat <<< 16 < 2 ^ 32 := by
     rw [Nat.shiftLeft_eq]
     have := UInt16.toNat_lt x
-    norm_num at this ⊢
+    norm_num only at this ⊢
     omega
   unfold Nat.lo
   rw [Nat.mod_eq_of_lt hx, Nat.or_mod_two_pow]
@@ -6969,7 +6961,7 @@ private lemma UInt16.high_concat8 (x y : UInt8) :
   have hx : x.toNat <<< 8 < 2 ^ 16 := by
     rw [Nat.shiftLeft_eq]
     have := UInt8.toNat_lt x
-    norm_num at this ⊢
+    norm_num only at this ⊢
     omega
   unfold Nat.lo
   rw [Nat.mod_eq_of_lt hx, Nat.shiftRight_or_distrib,
@@ -6988,7 +6980,7 @@ private lemma UInt16.low_concat8 (x y : UInt8) :
   have hx : x.toNat <<< 8 < 2 ^ 16 := by
     rw [Nat.shiftLeft_eq]
     have := UInt8.toNat_lt x
-    norm_num at this ⊢
+    norm_num only at this ⊢
     omega
   unfold Nat.lo
   rw [Nat.mod_eq_of_lt hx, Nat.or_mod_two_pow]
@@ -7005,7 +6997,7 @@ private lemma UInt64.toBytes_ofBytes (a b c d e f g h : UInt8) :
   rw [UInt32.ofBytes_eq_halves, UInt32.ofBytes_eq_halves]
   simp only [UInt32.high_concat16, UInt32.low_concat16, UInt16.toBytes,
     UInt16.ofBytes, UInt16.high_concat8, UInt16.low_concat8]
-  simp
+  simp only [cons_append, nil_append]
 
 /-- The 32-byte codec is an exact round trip, in the concrete shape used by
 `Bytes.toBytes_toB256_of_length`. -/
@@ -7028,81 +7020,81 @@ private lemma Bytes.toBytes_toB256_32
       Bytes.toB256_go_eight_cons, Bytes.toB256_go_eight_cons]
   simp only [Bytes.toB256.go, B256.toBytes, B128.toBytes, List.append_assoc,
     UInt64.toBytes_ofBytes]
-  simp
+  simp only [cons_append, nil_append]
 
 /-- `Bytes.toB256` loses no information on an exact word. -/
 lemma Bytes.toBytes_toB256_of_length {xs : Bytes} (h : xs.length = 32) :
     (Bytes.toB256 xs).toBytes = xs := by
   rcases xs with _ | ⟨a00, xs⟩
-  · simp at h
+  · simp only [length_nil, OfNat.zero_ne_ofNat] at h
   rcases xs with _ | ⟨a01, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, OfNat.one_ne_ofNat] at h
   rcases xs with _ | ⟨a02, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a03, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a04, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a05, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a06, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a07, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a08, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a09, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a10, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a11, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a12, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a13, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a14, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a15, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a16, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a17, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a18, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a19, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a20, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a21, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a22, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a23, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a24, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a25, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a26, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a27, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a28, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a29, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a30, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   rcases xs with _ | ⟨a31, xs⟩
-  · simp at h
+  · simp only [length_cons, length_nil, zero_add, reduceAdd, reduceEqDiff] at h
   cases xs with
   | nil =>
-      simpa using (Bytes.toBytes_toB256_32 a00 a01 a02 a03 a04 a05 a06 a07
-        a08 a09 a10 a11 a12 a13 a14 a15 a16 a17 a18 a19 a20 a21 a22 a23
-        a24 a25 a26 a27 a28 a29 a30 a31)
-  | cons a32 xs => simp at h
+      simpa only using
+        (Bytes.toBytes_toB256_32 a00 a01 a02 a03 a04 a05 a06 a07 a08 a09 a10 a11 a12 a13 a14 a15 a16
+          a17 a18 a19 a20 a21 a22 a23 a24 a25 a26 a27 a28 a29 a30 a31)
+  | cons a32 xs => simp only [length_cons, reduceEqDiff] at h
 
 private lemma Bytes.toB256_uint32_toBytes (x : UInt32) :
     Bytes.toB256 x.toBytes = x.toB256 := by
@@ -7115,9 +7107,10 @@ private lemma Bytes.toB256_uint32_toBytes (x : UInt32) :
     (⟨⟨(0 : UInt64), 0⟩, ⟨0, x.toUInt64⟩⟩ : B256)
   change Bytes.toB256 x.toBytes =
     (⟨⟨(0 : UInt64), 0⟩, ⟨0, x.toUInt64⟩⟩ : B256)
-  simpa [UInt32.toB256, B256.toBytes, B128.toBytes, UInt64.toBytes,
-    UInt32.toBytes, UInt16.toBytes, highZero,
-    Bytes.toB256_zero_cons] using roundtrip
+  simpa only [UInt32.toBytes, UInt16.toBytes, UInt32.toUInt8_toUInt16, cons_append, nil_append,
+    B256.toBytes, B128.toBytes, UInt64.toBytes, UInt64.zero_shiftRight, UInt64.toUInt32_ofNat,
+    UInt32.zero_shiftRight, UInt32.toUInt16_ofNat, UInt16.zero_shiftRight, UInt16.toUInt8_ofNat,
+    highZero, UInt32.toUInt32_toUInt64, Bytes.toB256_zero_cons] using roundtrip
 
 /-- Shifting a word down by 224 bits is its first four big-endian bytes,
 repacked as a `B256`. -/
@@ -7135,13 +7128,15 @@ lemma shiftRight_224_eq_toB256_take_four (x : B256) :
   simp only [B256.shiftRight]
   change (⟨0, B128.shiftRight ⟨_, _⟩ 96⟩ : B256) = _
   simp only [B128.shiftRight]
-  norm_num
+  dsimp only [B128]
+  norm_num only
+  simp only [ite_true, ite_false]
   congr 3
   have hlt : (x3 >>> 32).toNat < 4294967296 := by
     rw [UInt64.toNat_shiftRight]
     change x3.toNat >>> 32 < 4294967296
     rw [Nat.shiftRight_eq_div_pow]
-    norm_num
+    norm_num only
     have hx := UInt64.toNat_lt x3
     omega
   rw [← UInt64.toNat_inj]
@@ -7205,7 +7200,8 @@ theorem selector_eq_of_data_eq_abiSelectorBytes_append
     simp only [List.sliceD, List.drop_zero]
     rw [List.take_takeD_of_le _ _ _ _ (by omega)]
     rw [List.takeD_eq_take _ (by
-      simp [data, abiSelectorBytes_length])]
+      simp only [data, length_append, abiSelectorBytes_length, le_add_iff_nonneg_right,
+        _root_.zero_le])]
     rw [data, List.take_append_of_le_length]
     · exact List.take_of_length_le (by rw [abiSelectorBytes_length])
     · rw [abiSelectorBytes_length]
@@ -7228,7 +7224,9 @@ lemma decodes_split {e : Sevm} {sel a b c : B256} {data : Bytes}
     (h : Sevm.DecodesCallWithTail e sel [a, b, c] data) :
     e.data = abiSelectorBytes sel ++ (B256.toBytes a ++ (B256.toBytes b ++
       (B256.toBytes c ++ (B256.toBytes (Nat.toB256 128) ++ abiBytesTail data)))) := by
-  simpa [Sevm.DecodesCallWithTail, abiCallWithTail, List.append_assoc] using h
+  simpa only [Sevm.DecodesCallWithTail, abiCallWithTail, map_cons, map_nil, flatten_cons,
+    flatten_nil, append_nil, length_cons, length_nil, zero_add, reduceAdd, reduceMul,
+    append_assoc] using h
 
 lemma argWord_zero_of_decodes {e : Sevm} {sel a b c : B256} {data : Bytes}
     (h : Sevm.DecodesCallWithTail e sel [a, b, c] data) : Sevm.argWord e 0 = a :=
@@ -7796,8 +7794,8 @@ instance {x} : Ninst.Hinv Devm.getBal (Ninst.pushB256 x) := ⟨by
   intros e s s' h
   have run := Ninst.run_push_eq h
   rcases hc : chargeGas (if (x.toBytes.sig) = [] then gBase else gVerylow) s with _ | s_gas
-  · rw [hc] at run; dsimp [bind, Except.bind] at run; contradiction
-  · rw [hc] at run; dsimp [bind, Except.bind] at run
+  · rw [hc] at run; dsimp only [Except.bind_error] at run; contradiction
+  · rw [hc] at run; dsimp only [Except.bind_ok] at run
     rcases hp : Devm.push x.toBytes.sig.toB256 s_gas with _ | s''
     · rw [hp] at run; contradiction
     · rw [hp] at run
@@ -7810,8 +7808,8 @@ instance {x} : Ninst.Hinv Devm.getStor (Ninst.pushB256 x) := ⟨by
   intros e s s' h
   have run := Ninst.run_push_eq h
   rcases hc : chargeGas (if (x.toBytes.sig) = [] then gBase else gVerylow) s with _ | s_gas
-  · rw [hc] at run; dsimp [bind, Except.bind] at run; contradiction
-  · rw [hc] at run; dsimp [bind, Except.bind] at run
+  · rw [hc] at run; dsimp only [Except.bind_error] at run; contradiction
+  · rw [hc] at run; dsimp only [Except.bind_ok] at run
     rcases hp : Devm.push x.toBytes.sig.toB256 s_gas with _ | s''
     · rw [hp] at run; contradiction
     · rw [hp] at run
@@ -7823,8 +7821,8 @@ instance {x} : Ninst.Hinv Devm.getCode (Ninst.pushB256 x) := ⟨by
   intros e s s' h
   have run := Ninst.run_push_eq h
   rcases hc : chargeGas (if (x.toBytes.sig) = [] then gBase else gVerylow) s with _ | s_gas
-  · rw [hc] at run; dsimp [bind, Except.bind] at run; contradiction
-  · rw [hc] at run; dsimp [bind, Except.bind] at run
+  · rw [hc] at run; dsimp only [Except.bind_error] at run; contradiction
+  · rw [hc] at run; dsimp only [Except.bind_ok] at run
     rcases hp : Devm.push x.toBytes.sig.toB256 s_gas with _ | s''
     · rw [hp] at run; contradiction
     · rw [hp] at run
@@ -7865,15 +7863,15 @@ instance {xs} {p : xs.length ≤ 32} : Ninst.Hinv Devm.getCode (Ninst.push xs p)
 instance : Ninst.Hinv Devm.state (Ninst.reg Rinst.eq) := ⟨by
   intros e s s' h
   obtain ⟨pc, run⟩ := of_run_reg h
-  dsimp [Rinst.run, Rinst.runCore] at run
+  dsimp only [ExceptT.stM_eq, Rinst.run, Rinst.runCore] at run
   rw [applyBinary_def] at run
   rcases hp1 : Devm.pop s with _ | val1
-  · rw [hp1] at run; dsimp [bind, Except.bind] at run; contradiction
-  · rw [hp1] at run; dsimp [bind, Except.bind] at run
+  · rw [hp1] at run; dsimp only [bind, Except.bind, Except.bind_error] at run; contradiction
+  · rw [hp1] at run; dsimp only [bind, Except.bind, Except.bind_ok] at run
     rcases val1 with ⟨x1, s1⟩
     rcases hp2 : Devm.pop s1 with _ | val2
-    · rw [hp2] at run; dsimp [bind, Except.bind] at run; contradiction
-    · rw [hp2] at run; dsimp [bind, Except.bind] at run
+    · rw [hp2] at run; dsimp only at run; contradiction
+    · rw [hp2] at run; dsimp only at run
       rcases val2 with ⟨x2, s2⟩
       rcases hpush : pushItem _ gVerylow s2 with _ | s''
       · rw [hpush] at run; contradiction
@@ -7891,15 +7889,15 @@ instance : Ninst.Hinv Devm.state (Ninst.reg Rinst.eq) := ⟨by
 instance {n} : Ninst.Hinv Devm.state (Ninst.dup n) := ⟨by
   intros e s s' h
   obtain ⟨pc, run⟩ := of_run_reg h
-  dsimp [Rinst.run, Rinst.runCore] at run
+  dsimp only [ExceptT.stM_eq, Rinst.run, Rinst.runCore, Fin.getElem?_fin] at run
   rcases hc : chargeGas gVerylow s with _ | s_gas
-  · rw [hc] at run; dsimp [bind, Except.bind] at run; contradiction
-  · rw [hc] at run; dsimp [bind, Except.bind] at run
+  · rw [hc] at run; dsimp only [Except.bind_error] at run; contradiction
+  · rw [hc] at run; dsimp only [Except.bind_ok] at run
     split at run
     · contradiction
     · rename_i rh word
       have h_run_eq : (chargeGas gVerylow s >>= fun d => d.push rh) = .ok s' := by
-        dsimp [bind, Except.bind]; rw [hc]; exact run
+        dsimp only [bind, Except.bind]; rw [hc]; exact run
       have h_pb := Devm.pushBurn_of_run h_run_eq
       rcases h_pb with ⟨_, _, _, _, _, _, _, _, _, _, _, h_state, _⟩
       exact h_state
@@ -7920,15 +7918,15 @@ instance {n} : Ninst.Hinv Devm.state (Ninst.swap n) := ⟨by
 instance : Ninst.Hinv Devm.state (Ninst.reg Rinst.gt) := ⟨by
   intros e s s' h
   obtain ⟨pc, run⟩ := of_run_reg h
-  dsimp [Rinst.run, Rinst.runCore] at run
+  dsimp only [ExceptT.stM_eq, Rinst.run, Rinst.runCore] at run
   rw [applyBinary_def] at run
   rcases hp1 : Devm.pop s with _ | val1
-  · rw [hp1] at run; dsimp [bind, Except.bind] at run; contradiction
-  · rw [hp1] at run; dsimp [bind, Except.bind] at run
+  · rw [hp1] at run; dsimp only [bind, Except.bind, Except.bind_error] at run; contradiction
+  · rw [hp1] at run; dsimp only [bind, Except.bind, Except.bind_ok] at run
     rcases val1 with ⟨x1, s1⟩
     rcases hp2 : Devm.pop s1 with _ | val2
-    · rw [hp2] at run; dsimp [bind, Except.bind] at run; contradiction
-    · rw [hp2] at run; dsimp [bind, Except.bind] at run
+    · rw [hp2] at run; dsimp only at run; contradiction
+    · rw [hp2] at run; dsimp only at run
       rcases val2 with ⟨x2, s2⟩
       rcases hpush : pushItem _ gVerylow s2 with _ | s''
       · rw [hpush] at run; contradiction
@@ -8021,7 +8019,7 @@ instance : Rinst.Hinv Devm.memory Rinst.pop := ⟨by
   simp only [Rinst.run, Rinst.runCore] at run
   rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
   simp only [Functor.mapRev, Functor.map, Except.map] at h1
-  rcases hp : Devm.pop pre with _ | ⟨x, s₂⟩ <;> simp [hp] at h1
+  rcases hp : Devm.pop pre with _ | ⟨x, s₂⟩ <;> simp only [hp, reduceCtorEq, Except.ok.injEq] at h1
   subst h1
   exact (Devm.popBurn_of_pop_of_burn (Devm.pop_of_pop hp)
     (Devm.burn_of_chargeGas h2)).memory⟩
@@ -8294,7 +8292,7 @@ scoped instance : Rinst.Hinv Devm.logs Rinst.pop := ⟨by
   simp only [Rinst.run, Rinst.runCore] at run
   rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
   simp only [Functor.mapRev, Functor.map, Except.map] at h1
-  rcases hp : Devm.pop pre with _ | ⟨x, s₂⟩ <;> simp [hp] at h1
+  rcases hp : Devm.pop pre with _ | ⟨x, s₂⟩ <;> simp only [hp, reduceCtorEq, Except.ok.injEq] at h1
   subst h1
   exact (Devm.popBurn_of_pop_of_burn (Devm.pop_of_pop hp)
     (Devm.burn_of_chargeGas h2)).logs⟩
@@ -8304,7 +8302,7 @@ scoped instance : Rinst.Hinv Devm.output Rinst.pop := ⟨by
   simp only [Rinst.run, Rinst.runCore] at run
   rcases Except.bind_eq_ok run with ⟨s₁, h1, h2⟩
   simp only [Functor.mapRev, Functor.map, Except.map] at h1
-  rcases hp : Devm.pop pre with _ | ⟨x, s₂⟩ <;> simp [hp] at h1
+  rcases hp : Devm.pop pre with _ | ⟨x, s₂⟩ <;> simp only [hp, reduceCtorEq, Except.ok.injEq] at h1
   subst h1
   exact (Devm.popBurn_of_pop_of_burn (Devm.pop_of_pop hp)
     (Devm.burn_of_chargeGas h2)).output⟩
@@ -8358,9 +8356,9 @@ scoped instance : Rinst.Hinv Devm.logs Rinst.extcodesize := ⟨by
   simp only [Rinst.run, Rinst.runCore] at run
   rcases Except.bind_eq_ok run with ⟨⟨adr, s₁⟩, h1, run₁⟩
   rw [Devm.popToAdr_def] at h1
-  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at h1
+  dsimp only [Functor.mapRev, Functor.map, Except.map] at h1
   rcases hp : Devm.pop pre with _ | ⟨word, d0⟩ <;>
-    simp [hp] at h1
+    simp only [hp, reduceCtorEq, Except.ok.injEq] at h1
   rcases h1 with ⟨rfl, rfl⟩
   have hpop := Devm.pop_of_pop hp
   split at run₁
@@ -8377,9 +8375,9 @@ scoped instance : Rinst.Hinv Devm.output Rinst.extcodesize := ⟨by
   simp only [Rinst.run, Rinst.runCore] at run
   rcases Except.bind_eq_ok run with ⟨⟨adr, s₁⟩, h1, run₁⟩
   rw [Devm.popToAdr_def] at h1
-  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at h1
+  dsimp only [Functor.mapRev, Functor.map, Except.map] at h1
   rcases hp : Devm.pop pre with _ | ⟨word, d0⟩ <;>
-    simp [hp] at h1
+    simp only [hp, reduceCtorEq, Except.ok.injEq] at h1
   rcases h1 with ⟨rfl, rfl⟩
   have hpop := Devm.pop_of_pop hp
   split at run₁
@@ -8729,7 +8727,7 @@ theorem run_body_of_run_nonpayable_frame
     have hv : sevm.value = 0 := by
       by_cases hv : sevm.value = 0
       · exact hv
-      · simp [B256.eqCheck, hv] at hflag
+      · simp only [B256.eqCheck, hv, ↓reduceIte, ne_eq, not_true_eq_false] at hflag
     refine ⟨s3, hv, ?_, ?_, hbody⟩
     · exact (Line.of_inv Devm.state (by line_inv) hline).trans
         (hpop.state.trans hburn.state)
@@ -8784,7 +8782,7 @@ lemma reach_of_dispatchWith_leaf {sig w : B256} {f p : Func}
   subst h_sig; subst h_f
   func_execute 2; intro h₂
   have h_pfx1 : (sig =? sig) :: ws <<+ s₁.stack := by generalize_line_prefix
-  rw [show (sig =? sig) = 1 from by simp [B256.eqCheck]] at h_pfx1
+  rw [show (sig =? sig) = 1 from by simp only [B256.eqCheck, ↓reduceIte]] at h_pfx1
   rcases of_run_branch h₂ with ⟨s₂, h_pop, h_runf⟩ | ⟨v, s₂, s₃, h_ne, h_pop, h_burn, h_runf⟩
   · exact absurd (popBurn_pref h_pop h_pfx1).left B256.zero_ne_one
   · rcases popBurn_pref h_pop h_pfx1 with ⟨-, h_pfx2⟩
@@ -8962,7 +8960,7 @@ private lemma reach_of_dispatch_leaf {sig w : B256} {f p : Func}
   intro h₂
   have h_pfx1 : (sig =? sig) :: ws <<+ s₁.stack := by
     generalize_line_prefix
-  rw [show (sig =? sig) = 1 from by simp [B256.eqCheck]] at h_pfx1
+  rw [show (sig =? sig) = 1 from by simp only [B256.eqCheck, ↓reduceIte]] at h_pfx1
   rcases of_run_branch h₂ with
       ⟨s₂, h_pop, h_runf⟩ |
       ⟨v, s₂, s₃, h_ne, h_pop, h_burn, h_runf⟩
@@ -9245,7 +9243,7 @@ lemma reach_of_dispatchWith_leaf_logs {sig w : B256} {f p : Func}
   subst h_sig; subst h_f
   func_execute 2; intro h₂
   have h_pfx1 : (sig =? sig) :: ws <<+ s₁.stack := by generalize_line_prefix
-  rw [show (sig =? sig) = 1 from by simp [B256.eqCheck]] at h_pfx1
+  rw [show (sig =? sig) = 1 from by simp only [B256.eqCheck, ↓reduceIte]] at h_pfx1
   rcases of_run_branch h₂ with ⟨s₂, h_pop, h_runf⟩ |
       ⟨v, s₂, s₃, h_ne, h_pop, h_burn, h_runf⟩
   · exact absurd (popBurn_pref h_pop h_pfx1).left B256.zero_ne_one
@@ -9441,7 +9439,7 @@ theorem run_body_of_run_nonpayable_logs
     have hv : sevm.value = 0 := by
       by_cases hv : sevm.value = 0
       · exact hv
-      · simp [B256.eqCheck, hv] at hflag
+      · simp only [B256.eqCheck, hv, ↓reduceIte, ne_eq, not_true_eq_false] at hflag
     refine ⟨s3, hv, ?_, ?_, ?_, ?_, hbody⟩
     · exact (Line.of_inv Devm.state (by line_inv) hline).trans
         (hpop.state.trans hburn.state)
@@ -9462,7 +9460,7 @@ namespace AdrSet
 theorem not_mem_insert {a b : Adr} {s : AdrSet} (hne : a ≠ b) (hs : a ∉ s) :
     a ∉ s.insert b := by
   simp only [Std.HashSet.mem_insert, not_or]
-  exact ⟨by simpa using Ne.symm hne, hs⟩
+  exact ⟨by simpa only [beq_iff_eq, ne_eq] using Ne.symm hne, hs⟩
 
 theorem not_mem_union {a : Adr} {m₁ m₂ : AdrSet} (h₁ : a ∉ m₁) (h₂ : a ∉ m₂) :
     a ∉ m₁.union m₂ := by
@@ -9472,7 +9470,7 @@ theorem not_mem_union {a : Adr} {m₁ m₂ : AdrSet} (h₁ : a ∉ m₁) (h₂ :
 
 theorem not_mem_empty {a : Adr} {c : Nat} :
     a ∉ (Std.HashSet.emptyWithCapacity c : AdrSet) := by
-  simp
+  simp only [Std.HashSet.not_mem_emptyWithCapacity, not_false_eq_true]
 
 end AdrSet
 
@@ -9573,7 +9571,7 @@ lemma ne_wa_of_code_size_zero {st : State} {wa b : Adr}
   have h_empty : (st.get b).code.toList = [] := by
     unfold ByteArray.toList
     unfold ByteArray.toList.loop
-    simp [hb]
+    simp only [hb, lt_self_iff_false, ↓reduceIte, reverse_nil]
   unfold State.getCode at hwa
   rw [h_empty] at hwa
   exact hwa rfl
@@ -9588,16 +9586,17 @@ lemma ne_wa_of_not_hasCodeOrNonce {st : State} {wa ct : Adr}
   rw [Bool.or_eq_false_iff] at h
   have h_empty_not := h.2
   have h_empty : (st.getCode ct).isEmpty = true := by
-    simp at h_empty_not
+    simp only [Bool.not_eq_eq_eq_not, Bool.not_false] at h_empty_not
     exact h_empty_not
   have hb : (st.getCode ct).size = 0 := by
     unfold ByteArray.isEmpty at h_empty
-    simp at h_empty
-    simpa using congrArg ByteArray.size h_empty
+    simp only [beq_iff_eq, ByteArray.size_eq_zero_iff] at h_empty
+    simpa only [ByteArray.size_eq_zero_iff, ByteArray.size_empty] using
+      congrArg ByteArray.size h_empty
   have h_empty_list : (st.getCode ct).toList = [] := by
     unfold ByteArray.toList
     unfold ByteArray.toList.loop
-    simp [hb]
+    simp only [hb, lt_self_iff_false, ↓reduceIte, reverse_nil]
   rw [h_empty_list] at hwa
   exact hwa rfl
 
@@ -9644,9 +9643,9 @@ lemma liftMach_delSets_of_ok {core : Mach → Footprint.Outcome Mach α}
     Devm.delSets d' = Devm.delSets d := by
   unfold liftMach Footprint.liftOutcome at h
   cases hc : core d.mach with
-  | error err => simp [hc] at h
+  | error err => simp only [hc, reduceCtorEq] at h
   | ok out =>
-    simp [hc] at h
+    simp only [hc, Except.ok.injEq, Prod.mk.injEq] at h
     rcases h with ⟨_, rfl⟩
     rfl
 
@@ -9656,10 +9655,10 @@ lemma liftMach_delSets_of_error {core : Mach → Footprint.Outcome Mach α}
   unfold liftMach Footprint.liftOutcome at h
   cases hc : core d.mach with
   | error out =>
-    simp [hc] at h
+    simp only [hc, Except.error.injEq] at h
     rcases h with ⟨_, rfl⟩
     rfl
-  | ok out => simp [hc] at h
+  | ok out => simp only [hc, reduceCtorEq] at h
 
 lemma liftMachExecution_delSets_of_ok {core : Mach → Footprint.Outcome Mach Unit}
     {d d' : Devm} (h : liftMachExecution core d = .ok d') :
@@ -9761,14 +9760,15 @@ lemma Jinst.inv_delSets_err {pc : Nat} {sevm : Sevm} {devm : Devm} {j : Jinst}
 lemma Linst.selfdestruct_preserves_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
     {exn : Execution} (run : Linst.Run sevm devm .selfdestruct exn)
     (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
-  dsimp [Linst.Run, Linst.run] at run
+  dsimp only [Linst.Run, Linst.run, ne_eq, Except.bind_ok, ite_not, Lean.Elab.WF.paramLet,
+    Devm.balReadAccount_accessedAddresses, Devm.balReadAccount_getAcct] at run
   revert run
   cases hsg : sevm.benvStat.rules.stateGas
   · -- Covered-fork lane: pop, read both accounts, price, charge, sweep.
     intro run
-    dsimp [bind, Except.bind] at run
+    dsimp only [Devm.balReadAccount_accessedAddresses, ite_not, bind, Except.bind] at run
     revert run
-    cases h1 : devm.popToAdr <;> dsimp
+    cases h1 : devm.popToAdr <;> dsimp only [Devm.balReadAccount_accessedAddresses, ite_not]
     case error err =>
       intro run; rw [← run]; exact Devm.NoDel.of_eqs (Devm.popToAdr_delSets_err h1).symm (Devm.popToAdr_getCode_err h1 wa).symm h
     case ok res1 =>
@@ -9786,7 +9786,7 @@ lemma Linst.selfdestruct_preserves_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
         · rfl
       have h_acc_ds : Devm.delSets res1.2 = Devm.delSets (if res1.1 ∉ (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)).accessedAddresses then (addAccessedAddress (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)) res1.1, gasSelfDestruct + sevm.benvStat.rules.gas.coldAccountAccess) else ((Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)), gasSelfDestruct)).1 :=
         h_br2_ds.trans h_acc_ds0.symm
-      cases h2 : chargeGas _ _ <;> dsimp
+      cases h2 : chargeGas _ _ <;> dsimp only
       case error err =>
         intro run; rw [← run]
         exact Devm.NoDel.of_eqs (chargeGas_delSets_err h2).symm (chargeGas_getCode_err h2 wa).symm (Devm.NoDel.of_eqs h_acc_ds h_acc.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
@@ -9794,34 +9794,34 @@ lemma Linst.selfdestruct_preserves_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
         cases h3 : assertDynamic sevm res2
         case error err =>
           intro run; rw [← run]
-          dsimp [assertDynamic, Except.assert] at h3
+          dsimp only [assertDynamic, assert, Bool.not_eq_eq_eq_not, Bool.not_true] at h3
           split at h3
           · contradiction
           · simp only [Except.error.injEq] at h3; subst h3
             exact Devm.NoDel.of_eqs (chargeGas_delSets_eq h2).symm (chargeGas_getCode_eq h2 wa).symm (Devm.NoDel.of_eqs h_acc_ds h_acc.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
         case ok _ =>
-          cases h4 : res2.subBal _ _ <;> dsimp [Option.toExcept]
+          cases h4 : res2.subBal _ _ <;> dsimp only [Option.toExcept]
           case none =>
             intro run; rw [← run]
             exact Devm.NoDel.of_eqs (chargeGas_delSets_eq h2).symm (chargeGas_getCode_eq h2 wa).symm (Devm.NoDel.of_eqs h_acc_ds h_acc.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
           case some res3 =>
             have hd : Devm.NoDel wa res2 := Devm.NoDel.of_eqs (chargeGas_delSets_eq h2).symm (chargeGas_getCode_eq h2 wa).symm (Devm.NoDel.of_eqs h_acc_ds h_acc.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
             have h_sub : res3.getCode wa = res2.getCode wa := by
-              dsimp [Devm.subBal] at h4
+              dsimp only [Devm.subBal, Option.bind_eq_bind] at h4
               cases h_st : res2.state.subBal _ _
               case none =>
                 rw [h_st] at h4; contradiction
               case some st =>
-                rw [h_st] at h4; dsimp at h4
+                rw [h_st] at h4; dsimp only [Option.bind_some] at h4
                 simp only [Option.some.injEq] at h4; subst h4
                 change st.getCode wa = res2.getCode wa
                 exact State.subBal_getCode h_st
             have h_sub_ds : Devm.delSets res3 = Devm.delSets res2 := by
-              dsimp [Devm.subBal] at h4
+              dsimp only [Devm.subBal, Option.bind_eq_bind] at h4
               cases h_st : res2.state.subBal _ _
               case none => rw [h_st] at h4; contradiction
               case some st =>
-                rw [h_st] at h4; dsimp at h4
+                rw [h_st] at h4; dsimp only [Option.bind_some] at h4
                 simp only [Option.some.injEq] at h4; subst h4
                 rfl
             have hd3 : Devm.NoDel wa res3 := Devm.NoDel.of_eqs h_sub_ds.symm h_sub.symm hd
@@ -9837,9 +9837,9 @@ lemma Linst.selfdestruct_preserves_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
               · exact AdrSet.not_mem_insert (Ne.symm h_ne) hd3.atd
               · exact hd3.ca
               · have h_add : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode wa = res3.getCode wa := by
-                  dsimp [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
+                  dsimp only [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
                 have h_set : ((res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).setBal sevm.currentTarget 0).getCode wa = (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode wa := by
-                  dsimp [Devm.setBal, Devm.getCode]; exact State.setBal_getCode _ _ _ _
+                  dsimp only [Devm.setBal, Devm.getCode]; exact State.setBal_getCode _ _ _ _
                 have h_code : (addAccountToDelete ((res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).setBal sevm.currentTarget 0) sevm.currentTarget).getCode wa = res3.getCode wa :=
                   h_set.trans h_add
                 rw [h_code]; exact hd3.code
@@ -9849,30 +9849,30 @@ lemma Linst.selfdestruct_preserves_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
               · exact hd3.atd
               · exact hd3.ca
               · have h_add : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode wa = res3.getCode wa := by
-                  dsimp [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
+                  dsimp only [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
                 rw [h_add]; exact hd3.code
   · -- Amsterdam lane: static check first, priced access, state charges, logging sweep.
     rename_i state
     intro run
-    dsimp [bind, Except.bind] at run
+    dsimp only [Devm.balReadAccount_accessedAddresses, ite_not, bind, Except.bind] at run
     revert run
-    cases h0 : assertDynamic sevm devm <;> dsimp
+    cases h0 : assertDynamic sevm devm <;> dsimp only [ite_not]
     case error err =>
       intro run; rw [← run]
-      dsimp [assertDynamic, Except.assert] at h0
+      dsimp only [assertDynamic, assert, Bool.not_eq_eq_eq_not, Bool.not_true] at h0
       split at h0
       · contradiction
       · simp only [Except.error.injEq] at h0; subst h0
         exact h
     case ok _ =>
-      cases h1 : devm.popToAdr <;> dsimp
+      cases h1 : devm.popToAdr <;> dsimp only [ite_not]
       case error err =>
         intro run; rw [← run]; exact Devm.NoDel.of_eqs (Devm.popToAdr_delSets_err h1).symm (Devm.popToAdr_getCode_err h1 wa).symm h
       case ok res1 =>
-        cases hg : Except.assert (gasSelfDestruct + (if res1.1 ∉ res1.2.accessedAddresses then sevm.benvStat.rules.gas.coldAccountAccess else 0) ≤ res1.2.gasLeft) (⟨.halt (.outOfGas .none), res1.2⟩ : EvmError × Devm) <;> dsimp
+        cases hg : Except.assert (gasSelfDestruct + (if res1.1 ∉ res1.2.accessedAddresses then sevm.benvStat.rules.gas.coldAccountAccess else 0) ≤ res1.2.gasLeft) (⟨.halt (.outOfGas .none), res1.2⟩ : EvmError × Devm) <;> dsimp only [ite_not]
         case error err =>
           intro run; rw [← run]
-          dsimp [Except.assert] at hg
+          dsimp only [assert, ite_not] at hg
           by_cases hle : gasSelfDestruct + (if res1.1 ∉ res1.2.accessedAddresses then sevm.benvStat.rules.gas.coldAccountAccess else 0) ≤ res1.2.gasLeft
           · simp only [hle, if_true] at hg
             contradiction
@@ -9892,43 +9892,43 @@ lemma Linst.selfdestruct_preserves_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
             Devm.balReadAccount_getCode.trans (Devm.balReadAccount_getCode.trans h_warm)
           have h_wb_ds : Devm.delSets res1.2 = Devm.delSets (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 (if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2))) :=
             h_warm_ds.trans ((Devm.balReadAccount_instructionFrame _ _ _).delSets.trans (Devm.balReadAccount_instructionFrame _ _ _).delSets)
-          cases hchg : chargeGas _ _ <;> dsimp
+          cases hchg : chargeGas _ _ <;> dsimp only [ite_not]
           case error err =>
             intro run; rw [← run]
             exact Devm.NoDel.of_eqs (chargeGas_delSets_err hchg).symm (chargeGas_getCode_err hchg wa).symm (Devm.NoDel.of_eqs h_wb_ds h_wb.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h))
           case ok res2 =>
-            cases hstg : chargeStateGas _ _ <;> dsimp
+            cases hstg : chargeStateGas _ _ <;> dsimp only [ite_not]
             case error err =>
               intro run; rw [← run]
               exact Devm.NoDel.of_eqs (chargeStateGas_delSets_err hstg).symm (chargeStateGas_getCode_err hstg wa).symm (Devm.NoDel.of_eqs (chargeGas_delSets_eq hchg).symm (chargeGas_getCode_eq hchg wa).symm (Devm.NoDel.of_eqs h_wb_ds h_wb.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h)))
             case ok res2b =>
-              cases h4 : res2b.subBal _ _ <;> dsimp [Option.toExcept]
+              cases h4 : res2b.subBal _ _ <;> dsimp only [Option.toExcept, ite_not]
               case none =>
                 intro run; rw [← run]
                 exact Devm.NoDel.of_eqs (chargeStateGas_delSets_eq hstg).symm (chargeStateGas_getCode_eq hstg wa).symm (Devm.NoDel.of_eqs (chargeGas_delSets_eq hchg).symm (chargeGas_getCode_eq hchg wa).symm (Devm.NoDel.of_eqs h_wb_ds h_wb.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h)))
               case some res3 =>
                 have hd : Devm.NoDel wa res2b := Devm.NoDel.of_eqs (chargeStateGas_delSets_eq hstg).symm (chargeStateGas_getCode_eq hstg wa).symm (Devm.NoDel.of_eqs (chargeGas_delSets_eq hchg).symm (chargeGas_getCode_eq hchg wa).symm (Devm.NoDel.of_eqs h_wb_ds h_wb.symm (Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h)))
                 have h_sub : res3.getCode wa = res2b.getCode wa := by
-                  dsimp [Devm.subBal] at h4
+                  dsimp only [Devm.subBal, Option.bind_eq_bind] at h4
                   cases h_st : res2b.state.subBal _ _
                   case none =>
                     rw [h_st] at h4; contradiction
                   case some st =>
-                    rw [h_st] at h4; dsimp at h4
+                    rw [h_st] at h4; dsimp only [Option.bind_some] at h4
                     simp only [Option.some.injEq] at h4; subst h4
                     change st.getCode wa = res2b.getCode wa
                     exact State.subBal_getCode h_st
                 have h_sub_ds : Devm.delSets res3 = Devm.delSets res2b := by
-                  dsimp [Devm.subBal] at h4
+                  dsimp only [Devm.subBal, Option.bind_eq_bind] at h4
                   cases h_st : res2b.state.subBal _ _
                   case none => rw [h_st] at h4; contradiction
                   case some st =>
-                    rw [h_st] at h4; dsimp at h4
+                    rw [h_st] at h4; dsimp only [Option.bind_some] at h4
                     simp only [Option.some.injEq] at h4; subst h4
                     rfl
                 have hd3 : Devm.NoDel wa res3 := Devm.NoDel.of_eqs h_sub_ds.symm h_sub.symm hd
                 have h_add : (res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).getCode wa = res3.getCode wa := by
-                  dsimp [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
+                  dsimp only [Devm.addBal, Devm.getCode]; exact State.addBal_getCode res3.state _ _ _
                 have h_add_ds : Devm.delSets ((res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal)) = Devm.delSets res3 := by
                   rfl
                 have hdA : Devm.NoDel wa ((res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal)) :=
@@ -9987,7 +9987,7 @@ lemma Msg.NoDel.benvAfterTransfer_err {wa : Adr} {msg : Msg}
       subst h_run
       exact ⟨h.ca, h.code⟩
     · rw [h_sub] at h_run
-      dsimp [Option.toExcept] at h_run
+      dsimp only [Option.toExcept, Except.bind_ok] at h_run
       contradiction
   · unfold Msg.benvAfterTransfer at h_run
     rw [if_neg h_stv] at h_run
@@ -10090,28 +10090,28 @@ lemma Devm.pop_err_snd {d : Devm} {x : EvmError × Devm}
   simp only [Devm.pop_def] at h
   split at h
   · injection h with h; exact (congrArg Prod.snd h).symm
-  · exact absurd h (by simp)
+  · exact absurd h (by simp only [reduceCtorEq, not_false_eq_true])
 
 lemma Devm.popToAdr_err_snd {d : Devm} {x : EvmError × Devm}
     (h : Devm.popToAdr d = .error x) : x.2 = d := by
   rw [Devm.popToAdr_def] at h
   rcases hp : d.pop with e | ⟨v, d0⟩
   · rw [hp] at h; injection h with h; rw [← h]; exact Devm.pop_err_snd hp
-  · rw [hp] at h; exact absurd h (by simp)
+  · rw [hp] at h; exact absurd h (by simp only [Except.map_ok, reduceCtorEq, not_false_eq_true])
 
 lemma chargeGas_err_snd {cost : Nat} {d : Devm} {x : EvmError × Devm}
     (h : chargeGas cost d = .error x) : x.2 = d := by
   simp only [chargeGas_def] at h
   split at h
   · injection h with h; exact (congrArg Prod.snd h).symm
-  · exact absurd h (by simp)
+  · exact absurd h (by simp only [ExceptT.stM_eq, reduceCtorEq, not_false_eq_true])
 
 lemma Except.assert_err_snd {p : Prop} [Decidable p] {d : Devm} {s : EvmError}
     {x : EvmError × Devm} (h : Except.assert p (⟨s, d⟩ : EvmError × Devm) = .error x) :
     x.2 = d := by
   simp only [Except.assert] at h
   split at h
-  · exact absurd h (by simp)
+  · exact absurd h (by simp only [reduceCtorEq, not_false_eq_true])
   · injection h with h; exact (congrArg Prod.snd h).symm
 
 lemma Devm.NoDel.pop {wa : Adr} {d d' : Devm} {v : B256}
@@ -10214,12 +10214,6 @@ def Devm.BalNoninc (pre post : Devm) : Prop :=
 def State.BalGrowth (allowance : Nat) (pre post : Jaune.State) : Prop :=
   State.balSum post ≤ State.balSum pre + allowance
 
-def State.SumNof (st : Jaune.State) : Prop :=
-  State.balSum st < 2 ^ 256
-
-def Devm.SumNof (d : Devm) : Prop :=
-  Devm.balSum d < 2 ^ 256
-
 lemma balNoninc_refl_trans :
     (ReflexiveRel State.BalNoninc ∧ TransitiveRel State.BalNoninc) ∧
     (ReflexiveRel Devm.BalNoninc ∧ TransitiveRel Devm.BalNoninc) := by
@@ -10249,10 +10243,10 @@ lemma sumBelow_setBal_eq_local (st : Jaune.State) (a : Adr) (v : B256)
     have hget : (st.setBal a v).get n.toAdr = st.get n.toAdr :=
       State.get_set_ne _ hne.symm _
     have hbal : (st.setBal a v).bal n.toAdr = st.bal n.toAdr := by
-      dsimp [State.bal, State.setBal]
+      dsimp only [State.setBal, State.bal]
       have hget' : (st.set a ((st.get a).withBal v)).get n.toAdr =
           st.get n.toAdr := by
-        simpa [State.setBal] using hget
+        simpa only [State.setBal] using hget
       rw [hget']
     rw [hbal]
 
@@ -10288,7 +10282,7 @@ lemma sumBelow_setBal_add_local (st : Jaune.State) (a : Adr) (v : B256)
       change sumBelow (fun x => st.bal x) n +
           ((st.setBal a v).get a).bal.toNat + (st.bal a).toNat =
         sumBelow (fun x => st.bal x) n + (st.get a).bal.toNat + v.toNat
-      dsimp [State.setBal]
+      dsimp only [State.setBal]
       rw [State.get_set_self]
       change sumBelow (fun x => st.bal x) n + v.toNat +
           (st.get a).bal.toNat =
@@ -10302,9 +10296,8 @@ lemma State.balSum_setBal (st : Jaune.State) (a : Adr) (v : B256) :
   have ha : a.toNat < Adr.max.toNat.succ := by
     rw [hmax]
     exact Adr.toNat_lt_size a
-  simpa [State.balSum, sum] using
-    (sumBelow_setBal_add_local st a v Adr.max.toNat.succ
-      (by rw [hmax]) ha)
+  simpa only [balSum, sum, succ_eq_add_one] using
+    (sumBelow_setBal_add_local st a v Adr.max.toNat.succ (by rw [hmax]) ha)
 
 lemma State.balSum_subBal {st mid : Jaune.State} {a : Adr} {v : B256}
     (h : st.subBal a v = some mid) :
@@ -10336,9 +10329,9 @@ lemma State.sub_addBal_noninc {st mid : Jaune.State}
     {src dst : Adr} {v : B256}
     (hsub : st.subBal src v = some mid) :
     State.BalNoninc st (mid.addBal dst v) := by
-  dsimp [State.BalNoninc]
+  dsimp only [BalNoninc]
   have h1 := State.addBal_growth mid dst v
-  dsimp [State.BalGrowth] at h1
+  dsimp only [BalGrowth] at h1
   have h2 := State.balSum_subBal hsub
   omega
 
@@ -10383,13 +10376,14 @@ theorem processMessage_settle_ok_state_cases
         raw.error.isSome = false ∧ post.state = raw.state := by
   cases result with
   | error error =>
-      simp [processMessage.settle] at h
+      simp only [processMessage.settle, Except.bind_error, reduceCtorEq] at h
   | ok raw =>
       unfold processMessage.settle at h
       simp only [bind, Except.bind] at h
       cases herr : raw.error.isSome with
       | false =>
-          rw [if_neg (by simpa using herr)] at h
+          rw [if_neg (by simpa only [Bool.not_eq_true, Option.isSome_eq_false_iff,
+            Option.isNone_iff_eq_none] using herr)] at h
           exact Or.inr ⟨raw, rfl, herr,
             (congrArg Devm.state (Except.ok.inj h)).symm⟩
       | true =>
@@ -10414,8 +10408,8 @@ theorem ProcessMessage.none_ok_state_cases
   rcases RunFrame.decompose hprocess with
     ⟨error, _htransfer, _hslot, hresult⟩ |
     ⟨benv, _result, htransfer, hexecute, hresult⟩
-  · simp [Frame.ofCall, Frame.settleMsg,
-      processMessage.settle] at hresult
+  · simp only [Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
+    processMessage.settle, Except.bind_error, reduceCtorEq] at hresult
   · change msg.benvAfterTransfer = .ok benv at htransfer
     change ExecuteCode (msg.withBenv benv) .none _result at hexecute
     change (.ok post) = processMessage.settle msg _result at hresult
@@ -10528,14 +10522,15 @@ lemma Devm.chargeStateGas_balNoninc_of_ok {amount : Nat} {d d' : Devm}
 lemma Linst.selfdestruct_balance_effect :
     Linst.Effect Devm.BalNoninc .selfdestruct := by
   intro sevm pre out run
-  dsimp [Linst.Run, Linst.run] at run
+  dsimp only [Linst.Run, Linst.run, ne_eq, Except.bind_ok, ite_not, Lean.Elab.WF.paramLet,
+    Devm.balReadAccount_accessedAddresses, Devm.balReadAccount_getAcct] at run
   revert run
   cases hsg : sevm.benvStat.rules.stateGas
   · -- Covered-fork lane: priced access over balance reads, charge, sweep.
     intro run
-    dsimp [bind, Except.bind] at run
+    dsimp only [Devm.balReadAccount_accessedAddresses, ite_not, bind, Except.bind] at run
     revert run
-    cases h1 : pre.popToAdr <;> dsimp
+    cases h1 : pre.popToAdr <;> dsimp only [Devm.balReadAccount_accessedAddresses, ite_not]
     case error err =>
       intro run
       rw [← run]
@@ -10551,7 +10546,7 @@ lemma Linst.selfdestruct_balance_effect :
         · show (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)).getBal a = res1.2.getBal a
           exact (Devm.balReadAccount_getBal _ _ _ _).trans (Devm.balReadAccount_getBal _ _ _ _)
         · exact (Devm.balReadAccount_getBal _ _ _ _).trans (Devm.balReadAccount_getBal _ _ _ _)
-      cases h2 : chargeGas _ _ <;> dsimp
+      cases h2 : chargeGas _ _ <;> dsimp only
       case error err =>
         intro run
         rw [← run]
@@ -10569,12 +10564,12 @@ lemma Linst.selfdestruct_balance_effect :
           rw [← run]
           apply Devm.balNoninc_of_getBal_eq
           have herr : err.2 = res2 := by
-            dsimp [assertDynamic] at h3
+            dsimp only [assertDynamic] at h3
             exact Except.assert_err_snd h3
           rw [herr]
           exact hpre
         case ok _ =>
-          cases h4 : res2.subBal _ _ <;> dsimp [Option.toExcept]
+          cases h4 : res2.subBal _ _ <;> dsimp only [Option.toExcept]
           case none =>
             intro run
             rw [← run]
@@ -10582,7 +10577,7 @@ lemma Linst.selfdestruct_balance_effect :
           case some res3 =>
             have hsub : res2.state.subBal sevm.currentTarget
                 (res1.2.getAcct sevm.currentTarget).bal = some res3.state := by
-              dsimp [Devm.subBal, Option.bind] at h4
+              dsimp only [Devm.subBal, Option.bind_eq_bind, Option.bind] at h4
               cases hs : res2.state.subBal sevm.currentTarget
                   (res1.2.getAcct sevm.currentTarget).bal
               · rw [hs] at h4
@@ -10617,18 +10612,18 @@ lemma Linst.selfdestruct_balance_effect :
   · -- Amsterdam lane: static check, priced access, state charges, logging sweep.
     rename_i state
     intro run
-    dsimp [bind, Except.bind] at run
+    dsimp only [Devm.balReadAccount_accessedAddresses, ite_not, bind, Except.bind] at run
     revert run
-    cases h0 : assertDynamic sevm pre <;> dsimp
+    cases h0 : assertDynamic sevm pre <;> dsimp only [ite_not]
     case error err =>
       intro run; rw [← run]
       apply Devm.balNoninc_of_getBal_eq
       have herr : err.2 = pre := by
-        dsimp [assertDynamic] at h0
+        dsimp only [assertDynamic] at h0
         exact Except.assert_err_snd h0
       rw [herr]
     case ok _ =>
-      cases h1 : pre.popToAdr <;> dsimp
+      cases h1 : pre.popToAdr <;> dsimp only [ite_not]
       case error err =>
         intro run; rw [← run]
         apply Devm.balNoninc_of_getBal_eq
@@ -10637,7 +10632,7 @@ lemma Linst.selfdestruct_balance_effect :
         have hpop : res1.2.getBal = pre.getBal := by
           funext a
           exact Devm.popToAdr_getBal_eq h1 a
-        cases hg : Except.assert (gasSelfDestruct + (if res1.1 ∉ res1.2.accessedAddresses then sevm.benvStat.rules.gas.coldAccountAccess else 0) ≤ res1.2.gasLeft) (⟨.halt (.outOfGas .none), res1.2⟩ : EvmError × Devm) <;> dsimp
+        cases hg : Except.assert (gasSelfDestruct + (if res1.1 ∉ res1.2.accessedAddresses then sevm.benvStat.rules.gas.coldAccountAccess else 0) ≤ res1.2.gasLeft) (⟨.halt (.outOfGas .none), res1.2⟩ : EvmError × Devm) <;> dsimp only [ite_not]
         case error err =>
           intro run; rw [← run]
           apply Devm.balNoninc_of_getBal_eq
@@ -10652,7 +10647,7 @@ lemma Linst.selfdestruct_balance_effect :
             have e2 : (if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2).getBal a = res1.2.getBal a := by
               split <;> rfl
             exact e1.trans e2
-          cases hchg : chargeGas _ _ <;> dsimp
+          cases hchg : chargeGas _ _ <;> dsimp only [ite_not]
           case error err =>
             intro run; rw [← run]
             apply Devm.balNoninc_of_getBal_eq
@@ -10663,7 +10658,7 @@ lemma Linst.selfdestruct_balance_effect :
               funext a
               exact (chargeGas_getBal_eq hchg a).trans
                 (congrFun (hwb.trans hpop) a)
-            cases hstg : chargeStateGas _ _ <;> dsimp
+            cases hstg : chargeStateGas _ _ <;> dsimp only [ite_not]
             case error err =>
               intro run; rw [← run]
               exact Execution.Rel.trans_left balNoninc_refl_trans.2.2
@@ -10674,16 +10669,16 @@ lemma Linst.selfdestruct_balance_effect :
                 balNoninc_refl_trans.2.2 (Devm.balNoninc_of_getBal_eq hpre2)
                   (Devm.chargeStateGas_balNoninc_of_ok hstg)
               have hPreState : State.BalNoninc pre.state res2b.state := hPre
-              cases h4 : res2b.subBal _ _ <;> dsimp [Option.toExcept]
+              cases h4 : res2b.subBal _ _ <;> dsimp only [Option.toExcept, ite_not]
               case none =>
                 intro run; rw [← run]
                 exact hPre
               case some res3 =>
                 have hsub : res2b.state.subBal sevm.currentTarget (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal = some res3.state := by
-                  dsimp [Devm.subBal, Option.bind] at h4
+                  dsimp only [Devm.subBal, Option.bind_eq_bind, Option.bind] at h4
                   cases hs : res2b.state.subBal sevm.currentTarget (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal
                   · rw [hs] at h4
-                    simp at h4
+                    simp only [reduceCtorEq] at h4
                   · rw [hs] at h4
                     injection h4 with heq
                     subst heq
@@ -10752,7 +10747,7 @@ lemma processCreateMessage.chargeCodeGas_balance_effect
       · simp only [Except.error.injEq] at h
         cases h
         exact balNoninc_refl_trans.2.1 pre
-      · dsimp [Bind.bind, Except.bind] at h
+      · dsimp only [ExceptT.stM_eq, bind, Except.bind] at h
         split at h
         · rename_i code neq ex errCharge hCharge
           simp only [Except.error.injEq] at h
@@ -10773,7 +10768,7 @@ lemma processCreateMessage.chargeCodeGas_balance_effect
     · simp only [id]
       split at h
       · cases h
-      · dsimp [Bind.bind, Except.bind] at h
+      · dsimp only [ExceptT.stM_eq, bind, Except.bind] at h
         split at h
         · cases h
         · split at h
@@ -10799,14 +10794,14 @@ lemma processCreateMessage.chargeCodeGas_balance_effect
           exact balNoninc_refl_trans.2.1 pre
         · rcases hcg : chargeGas _ pre with ⟨e, dd⟩ | dd
           · rw [hcg] at h
-            dsimp [Bind.bind, Except.bind] at h
+            dsimp only [ExceptT.stM_eq, Except.bind_error] at h
             cases h
             have hcarried := chargeGas_err_snd hcg
             change d = pre at hcarried
             rw [hcarried]
             exact balNoninc_refl_trans.2.1 pre
           · rw [hcg] at h
-            dsimp [Bind.bind, Except.bind] at h
+            dsimp only [ExceptT.stM_eq, Except.bind_ok] at h
             rcases hcsg : chargeStateGas _ dd with ⟨e2, dd2⟩ | dd2
             · rw [hcsg] at h
               cases h
@@ -10938,7 +10933,8 @@ theorem processMessage.settle_ok_cases {msg : Msg}
           evm.rollback msg.benv.state msg.tenv.transientStorage = post
         ∨ ¬ evm.error.isSome = true ∧ evm = post) := by
   cases r with
-  | error e => exact absurd hset (by rw [processMessage.settle_error]; simp)
+  | error e => exact absurd hset (by rw [processMessage.settle_error]; simp only [reduceCtorEq,
+    not_false_eq_true])
   | ok evm =>
     refine ⟨evm, rfl, ?_⟩
     unfold processMessage.settle at hset
@@ -11446,8 +11442,7 @@ lemma GenericCreateAmsterdam.balanceEffect
         sevm.currentTarget) :=
     Devm.incrNonce_balance_effect _ sevm.currentTarget
   unfold GenericCreateAmsterdam genericCreateAmsterdam.step at run
-  simp only [Bind.bind, Except.bind, Except.assert, assertDynamic,
-    Pure.pure, Except.pure] at run
+  simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at run
   repeat' split at run
   all_goals simp only [XStep.ofExcept, XStep.Run] at run
   -- preflight abort, push failed
@@ -12054,7 +12049,7 @@ lemma B256.le_not_of_nof {x y : B256} (h : B256.Nof x y) : y ≤ ~~~ x := by
     omega
 
 lemma B128.zero_and {x : B128} : 0 &&& x = 0 := by
-  simp [B128.and_eq_and_prod_and]
+  simp only [and_eq_and_prod_and]
   apply Prod.ext <;> change (0 : UInt64) &&& _ = 0 <;> apply UInt64.zero_and
 
 lemma UInt64.mask_and_eq_zero (x : UInt32) :
@@ -12082,12 +12077,14 @@ lemma UInt64.toUInt32_toUInt64_eq_of_highMask_and_eq_zero {x : UInt64}
     have hmask : ((0xffffffff00000000 : UInt64).toBitVec)[i] = true := by
       change (((-1 : UInt64) <<< 32).toBitVec)[i] = true
       rw [UInt64.toBitVec_shiftLeft, BitVec.getElem_shiftLeft' hi]
-      simp [hi32]
+      simp only [UInt64.toBitVec_ofNat, BitVec.ofNat_eq_ofNat, BitVec.reduceMod, BitVec.toNat_ofNat,
+        reducePow, reduceMod, hi32, decide_false, Bool.not_false, UInt64.toBitVec_neg,
+        BitVec.reduceNeg, Bool.true_and]
       change (BitVec.allOnes 64)[i - 32] = true
       rw [BitVec.getElem_eq_testBit_toNat _ _ (by omega), BitVec.toNat_allOnes]
-      rw [Nat.testBit_two_pow_sub_succ (x := 0) (by norm_num)]
+      rw [Nat.testBit_two_pow_sub_succ (x := 0) (by norm_num only)]
       have hi64 : i - 32 < 64 := by omega
-      simp [hi64]
+      simp only [hi64, decide_true, zero_testBit, Bool.not_false, Bool.and_self]
     rw [hmask] at hb_i
     exact hb_i.symm
 
@@ -12099,14 +12096,14 @@ lemma validAdr_iff {w : B256} :
       B128.and 0 a128) = (0 : B256)
     have h_high : B128.and (UInt64.max, 0xffffffff00000000) (0, a32.toUInt64) = 0 := by
       change (UInt64.max &&& 0, (0xffffffff00000000 : UInt64) &&& a32.toUInt64) = (0, 0)
-      simp [UInt64.mask_and_eq_zero]
+      simp only [UInt64.and_zero, UInt64.mask_and_eq_zero]
     have h_low : B128.and 0 a128 = 0 := by exact B128.zero_and
     rw [h_high, h_low]
     change ((0 : B128), (0 : B128)) = ((0 : B128), (0 : B128))
     rfl
   · refine' ⟨w.toAdr, _⟩
     rcases w with ⟨⟨wz, wh⟩, wl⟩
-    simp only [addressMask, B256.and_eq_and_prod_and, B128.and_eq_and_prod_and] at h
+    simp only [addressMask] at h
     have hz := congrArg (fun x : B256 => x.1.1) h
     have hm := congrArg (fun x : B256 => x.1.2) h
     change UInt64.max &&& wz = 0 at hz
@@ -12114,7 +12111,7 @@ lemma validAdr_iff {w : B256} :
     have h_wz : wz = 0 := by
       simp only [UInt64.max] at hz
       change (-1 : UInt64) &&& wz = 0 at hz
-      simpa using hz
+      simpa only [UInt64.neg_one_and] using hz
     have h_wh : wh.toUInt32.toUInt64 = wh := by
       exact UInt64.toUInt32_toUInt64_eq_of_highMask_and_eq_zero hm
     simp only [B256.toAdr, Adr.toB256, h_wz, h_wh]
@@ -12167,7 +12164,7 @@ lemma of_check_address {e : Sevm} {s s' : Devm} {x xs} :
 
 /-- Replacing the machine component before an accessed-storage-key update is
 irrelevant once the caller supplies the final machine component. -/
-@[simp] theorem Devm.addAccessedStorageKey_setMach_setMach
+theorem Devm.addAccessedStorageKey_setMach_setMach
     {base : Devm} {target : Adr} {key : B256} {mach mach' : Mach} :
     (addAccessedStorageKey (base.setMach mach) target key).setMach mach' =
       (addAccessedStorageKey base target key).setMach mach' := rfl
@@ -12179,7 +12176,7 @@ lemma setStorVal_getStor_self {devm : Devm} {adr : Adr} {key val : B256} :
   simp only [Devm.state, State.get_set_self]
 
 /-- Persistent storage read-after-write at the same address and key. -/
-@[simp] theorem Devm.getStorVal_setStorVal_self
+theorem Devm.getStorVal_setStorVal_self
     (devm : Devm) (adr : Adr) (key val : B256) :
     (devm.setStorVal adr key val).getStorVal adr key = val := by
   show (Devm.getStor (devm.setStorVal adr key val) adr).get key = val
@@ -12611,15 +12608,17 @@ lemma Array.size_writeD {ξ : Type} :
     intro xs n
     rw [Array.writeD]
     split
-    · rw [ih]; simp
+    · rw [ih]; simp only [Array.size_set]
     · rfl
 
 lemma Array.getD_set {ξ : Type} (xs : Array ξ) (n : Nat) (y : ξ) (h : n < xs.size)
     (i : Nat) (d : ξ) :
     (xs.set n y h).getD i d = if i = n then y else xs.getD i d := by
   by_cases hi : i = n
-  · subst hi; simp [Array.getD, h]
-  · simp [Array.getD, Array.getElem_set, hi, Ne.symm hi]
+  · subst hi; simp only [Array.getD, Array.size_set, h, ↓reduceDIte, Array.getInternal_eq_getElem,
+    Array.getElem_set_self, ↓reduceIte]
+  · simp only [Array.getD, Array.size_set, Array.getInternal_eq_getElem, Array.getElem_set,
+    Ne.symm hi, ↓reduceIte, hi]
 
 /-- Read-over-write for `Array.writeD`, the primitive behind `Mem.write`.
 
@@ -12632,7 +12631,9 @@ lemma Array.getD_writeD {ξ : Type} (d : ξ) :
         if n ≤ i ∧ i < n + ys.length then ys.getD (i - n) d else xs.getD i d := by
   intro ys
   induction ys with
-  | nil => intro xs n i _; simp [Array.writeD]
+  | nil => intro xs n i _; simp only [Array.writeD, Array.getD_eq_getD_getElem?, length_nil,
+    add_zero, getD_eq_getElem?_getD, _root_.not_lt_zero, not_false_eq_true, getElem?_neg,
+    Option.getD_none, right_eq_ite_iff, isEmpty_Prop, not_and, not_lt, imp_self, IsEmpty.forall_iff]
   | cons y ys ih =>
     intro xs n i h
     simp only [List.length_cons] at h
@@ -12642,7 +12643,8 @@ lemma Array.getD_writeD {ξ : Type} (d : ξ) :
     rw [Array.getD_set]
     by_cases hi : i = n
     · subst hi
-      rw [if_neg (by omega), if_pos rfl, if_pos (by simp), Nat.sub_self]
+      rw [if_neg (by omega), if_pos rfl, if_pos (by simp only [Std.le_refl, length_cons,
+        lt_add_iff_pos_right, add_pos_iff, zero_lt_one, or_true, and_self]), Nat.sub_self]
       rfl
     · by_cases hlt : n ≤ i ∧ i < n + (y :: ys).length
       · have h1 : n + 1 ≤ i ∧ i < n + 1 + ys.length := by
@@ -12667,7 +12669,9 @@ lemma Array.foldl_setIfInBounds_getD {ξ : Type} (d : ξ) :
         if k ≤ i ∧ i < k + l.length then l.getD (i - k) d else a.getD i d := by
   intro l
   induction l with
-  | nil => intro a k i _; simp
+  | nil => intro a k i _; simp only [foldl_nil, Array.getD_eq_getD_getElem?, length_nil, add_zero,
+    getD_eq_getElem?_getD, _root_.not_lt_zero, not_false_eq_true, getElem?_neg, Option.getD_none,
+    right_eq_ite_iff, isEmpty_Prop, not_and, not_lt, imp_self, IsEmpty.forall_iff]
   | cons x l ih =>
     intro a k i h
     simp only [List.length_cons] at h
@@ -12678,7 +12682,8 @@ lemma Array.foldl_setIfInBounds_getD {ξ : Type} (d : ξ) :
     rw [Array.getD_setIfInBounds a k x hk]
     by_cases hi : i = k
     · subst hi
-      rw [if_neg (by omega), if_pos rfl, if_pos (by simp), Nat.sub_self]
+      rw [if_neg (by omega), if_pos rfl, if_pos (by simp only [Std.le_refl, length_cons,
+        lt_add_iff_pos_right, add_pos_iff, zero_lt_one, or_true, and_self]), Nat.sub_self]
       rfl
     · by_cases hlt : k ≤ i ∧ i < k + (x :: l).length
       · have h1 : k + 1 ≤ i ∧ i < k + 1 + l.length := by
@@ -12698,11 +12703,14 @@ lemma Array.getD_copyD {ξ : Type} (xs ys : Array ξ) (d : ξ) (h : xs.size ≤ 
     (Array.copyD xs ys).getD i d = if i < xs.size then xs.getD i d else ys.getD i d := by
   simp only [Array.copyD]
   rw [← Array.foldl_toList]
-  rw [Array.foldl_setIfInBounds_getD d xs.toList ys 0 i (by simpa using h)]
+  rw [Array.foldl_setIfInBounds_getD d xs.toList ys 0 i (by simpa only [Array.length_toList,
+    zero_add] using h)]
   by_cases hi : i < xs.size
-  · rw [if_pos (by simpa using hi), if_pos hi, Nat.sub_zero]
-    simp [Array.getD, hi]
-  · rw [if_neg (by simpa using hi), if_neg hi]
+  · rw [if_pos (by simpa only [_root_.zero_le, Array.length_toList, zero_add, true_and] using hi), if_pos hi, Nat.sub_zero]
+    simp only [getD_eq_getElem?_getD, Array.length_toList, hi, getElem?_pos, Array.getElem_toList,
+      Option.getD_some, Array.getD, ↓reduceDIte, Array.getInternal_eq_getElem]
+  · rw [if_neg (by simpa only [_root_.zero_le, Array.length_toList, zero_add, true_and,
+    not_lt] using hi), if_neg hi]
 
 /-- Pointwise read-back for an in-bounds source byte copied into an in-bounds
 target byte.  Unlike `Array.getD_copyD`, this does not require the whole source
@@ -12725,7 +12733,7 @@ lemma Array.getD_copyD_of_lt {ξ : Type} (xs ys : Array ξ) (d : ξ) (i : Nat)
           values.getD (index - offset) d := by
     intro values
     induction values with
-    | nil => intro array offset index _ after before; simp at before; omega
+    | nil => intro array offset index _ after before; simp only [length_nil, add_zero] at before; omega
     | cons value rest ih =>
       intro array offset index inBounds after before
       simp only [List.foldl_cons]
@@ -12747,17 +12755,21 @@ lemma Array.getD_copyD_of_lt {ξ : Type} (xs ys : Array ξ) (d : ξ) (i : Nat)
             by_cases offsetInBounds : offset < array.size
             · rw [Array.getD_setIfInBounds _ _ _ offsetInBounds,
                 if_neg (by omega)]
-            · simp [Array.setIfInBounds, offsetInBounds]
+            · simp only [Array.setIfInBounds, offsetInBounds, ↓reduceDIte,
+              Array.getD_eq_getD_getElem?]
         rw [preservesBefore _ _ _ _ (by omega)]
         rw [Array.getD_setIfInBounds _ _ _ inBounds, if_pos rfl]
-        simp
+        simp only [tsub_self, getD_eq_getElem?_getD, length_cons, add_pos_iff, zero_lt_one, or_true,
+          getElem?_pos, getElem_cons_zero, Option.getD_some]
       · rw [ih _ _ _ (by rw [Array.size_setIfInBounds]; exact inBounds)
-          (by omega) (by simp at before ⊢; omega)]
+          (by omega) (by simp only [length_cons] at before ⊢; omega)]
         have hsub : index - offset = (index - (offset + 1)) + 1 := by omega
         rw [hsub]
         rfl
-  rw [readsMember xs.toList ys 0 i hys (by omega) (by simpa using hxs)]
-  simp [Array.getD, hxs]
+  rw [readsMember xs.toList ys 0 i hys (by omega) (by simpa only [Array.length_toList,
+    zero_add] using hxs)]
+  simp only [tsub_zero, getD_eq_getElem?_getD, Array.length_toList, hxs, getElem?_pos,
+    Array.getElem_toList, Option.getD_some, Array.getD, ↓reduceDIte, Array.getInternal_eq_getElem]
 
 /-- A copied array preserves a target byte at and after the end of the source.
 This is the other pointwise half needed when the source is longer than the
@@ -12782,44 +12794,45 @@ lemma Array.getD_copyD_of_size_le {ξ : Type} (xs ys : Array ξ) (d : ξ)
     | cons value rest ih =>
       intro array offset index after
       simp only [List.foldl_cons]
-      rw [ih _ _ _ (by simp at after ⊢; omega)]
+      rw [ih _ _ _ (by simp only [length_cons] at after ⊢; omega)]
       by_cases offsetInBounds : offset < array.size
       · rw [Array.getD_setIfInBounds _ _ _ offsetInBounds,
-          if_neg (by simp at after; omega)]
-      · simp [Array.setIfInBounds, offsetInBounds]
-  exact preservesAfter xs.toList ys 0 i (by simpa using hxs)
+          if_neg (by simp only [length_cons] at after; omega)]
+      · simp only [Array.setIfInBounds, offsetInBounds, ↓reduceDIte, Array.getD_eq_getD_getElem?]
+  exact preservesAfter xs.toList ys 0 i (by simpa only [Array.length_toList, zero_add] using hxs)
 
 /-! ### The list side of `Bytes.writeAt` -/
 
 lemma List.getD_append_left {ξ : Type} {l₁ l₂ : List ξ} {i : Nat} (d : ξ)
     (h : i < l₁.length) : (l₁ ++ l₂).getD i d = l₁.getD i d := by
-  simp [List.getD_eq_getElem?_getD, List.getElem?_append_left h]
+  simp only [getD_eq_getElem?_getD, List.getElem?_append_left h]
 
 lemma List.getD_append_right {ξ : Type} {l₁ l₂ : List ξ} {i : Nat} (d : ξ)
     (h : l₁.length ≤ i) : (l₁ ++ l₂).getD i d = l₂.getD (i - l₁.length) d := by
-  simp [List.getD_eq_getElem?_getD, List.getElem?_append_right h]
+  simp only [getD_eq_getElem?_getD, List.getElem?_append_right h]
 
 lemma List.getD_drop {ξ : Type} (l : List ξ) (k j : Nat) (d : ξ) :
     (l.drop k).getD j d = l.getD (k + j) d := by
-  simp [List.getD_eq_getElem?_getD, List.getElem?_drop]
+  simp only [getD_eq_getElem?_getD, getElem?_drop]
 
 lemma List.getD_takeD {ξ : Type} (d : ξ) :
     ∀ (n : Nat) (l : List ξ) (i : Nat),
       (List.takeD n l d).getD i d = if i < n then l.getD i d else d := by
   intro n
   induction n with
-  | zero => intro l i; simp
+  | zero => intro l i; simp only [takeD_zero, getD_eq_getElem?_getD, length_nil, _root_.not_lt_zero,
+    not_false_eq_true, getElem?_neg, Option.getD_none, ↓reduceIte]
   | succ n ih =>
     intro l i
     rw [List.takeD_succ]
     cases i with
-    | zero => cases l <;> simp
+    | zero => cases l <;> simp only [head?_nil, Option.getD_none, tail_nil, takeD_nil, getD_eq_getElem?_getD, length_cons, length_replicate, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true, getElem?_pos, getElem_cons_zero, Option.getD_some, ↓reduceIte, length_nil, lt_self_iff_false, not_false_eq_true, getElem?_neg, head?_cons, tail_cons, takeD_length]
     | succ i =>
       rw [show ((l.head?.getD d :: List.takeD n l.tail d).getD (i + 1) d)
             = (List.takeD n l.tail d).getD i d from rfl, ih l.tail i]
       by_cases hi : i < n
       · rw [if_pos hi, if_pos (by omega)]
-        cases l <;> simp
+        cases l <;> simp only [tail_nil, getD_eq_getElem?_getD, length_nil, _root_.not_lt_zero, not_false_eq_true, getElem?_neg, Option.getD_none, tail_cons, getElem?_cons_succ]
       · rw [if_neg hi, if_neg (by omega)]
 
 lemma List.takeD_nil_eq_replicate {ξ} (d : ξ) :
@@ -12842,16 +12855,18 @@ lemma List.takeD_of_length_le {ξ} (d : ξ) :
       List.takeD n l d = l ++ List.replicate (n - l.length) d := by
   intro l
   induction l with
-  | nil => intro n _; rw [List.takeD_nil_eq_replicate]; simp
+  | nil => intro n _; rw [List.takeD_nil_eq_replicate]; simp only [length_nil, tsub_zero,
+    nil_append]
   | cons a l ih =>
     intro n hn
     cases n with
-    | zero => simp at hn
+    | zero => simp only [length_cons, nonpos_iff_eq_zero, Nat.add_eq_zero_iff, length_eq_zero_iff,
+      one_ne_zero, and_false] at hn
     | succ m =>
-      have hm : l.length ≤ m := by simp at hn; omega
+      have hm : l.length ≤ m := by simp only [length_cons, add_le_add_iff_right] at hn; omega
       show (a :: l).head?.getD d :: List.takeD m ((a :: l).tail) d = _
       rw [show (a :: l).tail = l from rfl, ih m hm]
-      simp
+      simp only [head?_cons, Option.getD_some, length_cons, reduceSubDiff, cons_append]
 
 /-- `Bytes.writeAt` read pointwise: inside the written range it is the payload,
 outside it is the old image.  Every `Mem.Reads` step below is this equation
@@ -12890,7 +12905,7 @@ lemma List.sliceD_split {ξ : Type} (xs : List ξ) (d : ξ) :
         xs.sliceD m a d ++ xs.sliceD (m + a) b d := by
   intro a
   induction a with
-  | zero => intro m b; simp [List.sliceD, List.takeD]
+  | zero => intro m b; simp only [sliceD, zero_add, takeD, add_zero, nil_append]
   | succ a ih =>
       intro m b
       rw [show a + 1 + b = (a + b) + 1 by omega, List.sliceD_succ,
@@ -12930,7 +12945,8 @@ lemma Bytes.sliceD_writeAt (bs xs : Bytes) (n : Nat) :
   rw [Bytes.writeAt, List.append_assoc,
     List.drop_append_of_le_length (by rw [List.takeD_length]),
     List.drop_eq_nil_of_le (by rw [List.takeD_length]), List.nil_append,
-    List.takeD_eq_take _ (by simp), List.take_left]
+    List.takeD_eq_take _ (by simp only [length_append, length_drop, le_add_iff_nonneg_right,
+      _root_.zero_le]), List.take_left]
 
 /-! ### `Mem.Wf` and `Mem.Reads` -/
 
@@ -12994,11 +13010,12 @@ lemma Nat.le_ceil32 (n : Nat) : n ≤ ceil32 n := by
 
 lemma Array.getD_replicate_zero (k i : Nat) :
     (Array.replicate k (0 : UInt8)).getD i 0 = 0 := by
-  simp [Array.getD]
+  simp only [Array.getD, Array.size_replicate, Array.getInternal_eq_getElem,
+    Array.getElem_replicate, dite_eq_ite, ite_self]
 
 lemma Array.getD_of_size_le {ξ : Type} {xs : Array ξ} {i : Nat} (d : ξ)
     (h : xs.size ≤ i) : xs.getD i d = d := by
-  simp [Array.getD, Nat.not_lt.mpr h]
+  simp only [Array.getD, Nat.not_lt.mpr h, ↓reduceDIte]
 
 /-- `Mem.write`'s three branches, factored.
 
@@ -13055,7 +13072,7 @@ lemma Mem.Wf.write {μ : Mem} (h : Mem.Wf μ) (n : Nat) (ys : Bytes) :
   cases ys with
   | nil => exact h
   | cons y ys =>
-    rcases Mem.write_aux h n (ys := y :: ys) (by simp) with ⟨A, hdata, _, hsz, _⟩
+    rcases Mem.write_aux h n (ys := y :: ys) (by simp only [ne_eq, reduceCtorEq, not_false_eq_true]) with ⟨A, hdata, _, hsz, _⟩
     simp only [Mem.Wf, hdata, Array.size_writeD]
     exact hsz
 
@@ -13074,7 +13091,8 @@ lemma Mem.Reads.write {μ : Mem} {bs : Bytes} (hwf : Mem.Wf μ) (h : Mem.Reads �
     rw [if_neg (by omega)]
     exact h i
   | cons y ys =>
-    rcases Mem.write_aux hwf n (ys := y :: ys) (by simp) with
+    rcases Mem.write_aux hwf n (ys := y :: ys) (by simp only [ne_eq, reduceCtorEq,
+      not_false_eq_true]) with
       ⟨A, hdata, hlen, _, hreads⟩
     intro i
     rw [hdata, Array.getD_writeD 0 _ A n i hlen, Bytes.getD_writeAt]
@@ -13102,13 +13120,14 @@ lemma Array.sliceD_aux_eq {ξ : Type} (xs : Array ξ) (d : ξ) :
     rw [show Array.sliceD.aux xs Acc m (n + 1) d
           = Array.sliceD.aux xs (xs.getD (m + n) d :: Acc) m n d from rfl,
       ih, List.range_succ]
-    simp
+    simp only [Array.getD_eq_getD_getElem?, map_append, map_cons, map_nil, append_assoc,
+      cons_append, nil_append]
 
 lemma Array.sliceD_eq_map {ξ : Type} (xs : Array ξ) (m n : Nat) (d : ξ) :
     Array.sliceD xs m n d = (List.range n).map (fun j => xs.getD (m + j) d) := by
   rw [show Array.sliceD xs m n d = Array.sliceD.aux xs [] m n d from rfl,
     Array.sliceD_aux_eq]
-  simp
+  simp only [Array.getD_eq_getD_getElem?, append_nil]
 
 lemma List.sliceD_eq_map {ξ : Type} (ys : List ξ) (d : ξ) :
     ∀ (n m : Nat), List.sliceD ys m n d
@@ -13132,7 +13151,8 @@ lemma Bytes.getD_sliceD_of_lt
     (bs : Bytes) (start len i : Nat) (hi : i < len) :
     (bs.sliceD start len 0).getD i 0 = bs.getD (start + i) 0 := by
   rw [List.sliceD_eq_map]
-  simp [List.getD_eq_getElem?_getD, hi]
+  simp only [getD_eq_getElem?_getD, length_map, length_range, hi, getElem?_pos, getElem_map,
+    getElem_range, Option.getD_some]
 
 /-- A subwindow wholly inside a padded slice is the corresponding slice of the
 original image.  This is the word-projection rule for a multiword ABI copy. -/
@@ -13268,7 +13288,7 @@ lemma Mem.read_two_word_writes {μ : Mem} {image : Bytes}
     (hwf : Mem.Wf μ) (hreads : Mem.Reads μ image) (left right : B256) :
     ((((μ.write 0 left.toBytes).write 32 right.toBytes).read 0 64).1) =
       left.toBytes ++ right.toBytes := by
-  simpa using Mem.read_two_word_writes_at hwf hreads 0 left right
+  simpa only [zero_add] using Mem.read_two_word_writes_at hwf hreads 0 left right
 
 /-- Reading back a nonempty byte string immediately after writing it at offset
 zero returns that byte string, independently of the old memory image.  Unlike
@@ -13283,30 +13303,31 @@ lemma Mem.read_write_zero (μ : Mem) {ys : Bytes} (hne : ys ≠ []) :
     · split
       · simp only [Mem.read, Array.sliceD_eq_map]
         apply List.ext_get
-        · simp
+        · simp only [zero_add, Array.getD_eq_getD_getElem?, length_cons, length_map, length_range]
         · intro n h1 h2
           simp only [List.length_map, List.length_range] at h1
           simp only [List.get_eq_getElem, List.getElem_map,
             List.getElem_range, zero_add]
           rw [Array.getD_writeD 0 (b :: bs) μ.data 0 n (by omega),
             if_pos (by omega)]
-          simp [List.getD_eq_getElem?_getD,
-            List.getElem?_eq_getElem h2]
+          simp only [tsub_zero, getD_eq_getElem?_getD, List.getElem?_eq_getElem h2,
+            Option.getD_some]
       · simp only [Mem.read, Array.sliceD_eq_map]
         apply List.ext_get
-        · simp
+        · simp only [length_cons, zero_add, Array.getD_eq_getD_getElem?, length_map, length_range]
         · intro n h1 h2
           simp only [List.length_map, List.length_range] at h1
           simp only [List.get_eq_getElem, List.getElem_map,
             List.getElem_range, zero_add]
           rw [Array.getD_writeD 0 (b :: bs)
             (Array.copyD μ.data (Array.replicate (b :: bs).length 0))
-            0 n (by simp [Array.size_copyD]), if_pos (by omega)]
-          simp [List.getD_eq_getElem?_getD,
-            List.getElem?_eq_getElem h2]
+            0 n (by simp only [length_cons, zero_add, Array.size_copyD, Array.size_replicate,
+              Std.le_refl]), if_pos (by omega)]
+          simp only [tsub_zero, getD_eq_getElem?_getD, List.getElem?_eq_getElem h2,
+            Option.getD_some]
     · simp only [Mem.read, Array.sliceD_eq_map]
       apply List.ext_get
-      · simp
+      · simp only [length_cons, zero_add, Array.getD_eq_getD_getElem?, length_map, length_range]
       · intro n h1 h2
         simp only [List.length_map, List.length_range] at h1
         simp only [List.get_eq_getElem, List.getElem_map,
@@ -13316,10 +13337,9 @@ lemma Mem.read_write_zero (μ : Mem) {ys : Bytes} (hne : ys ≠ []) :
             (Array.replicate (ceil32 (b :: bs).length) 0))
           0 n (by
             rw [Array.size_copyD, Array.size_replicate]
-            simpa using Nat.le_ceil32 (b :: bs).length),
+            simpa only [length_cons, zero_add] using Nat.le_ceil32 (b :: bs).length),
           if_pos (by omega)]
-        simp [List.getD_eq_getElem?_getD,
-          List.getElem?_eq_getElem h2]
+        simp only [tsub_zero, getD_eq_getElem?_getD, List.getElem?_eq_getElem h2, Option.getD_some]
 
 /-- Pointwise read-back below the allocated end of a nonempty memory write.
 Inside the written interval the payload wins; below its start the old byte is
@@ -13343,13 +13363,13 @@ lemma Mem.getD_write_below_end (μ : Mem) (start : Nat) {ys : Bytes}
       · rw [Array.getD_writeD (0 : UInt8) (b :: bs)
           (Array.copyD μ.data
             (Array.replicate (start + (b :: bs).length) (0 : UInt8)))
-          start i (by simp [Array.size_copyD])]
+          start i (by simp only [length_cons, Array.size_copyD, Array.size_replicate, Std.le_refl])]
         by_cases hstart : start ≤ i
         · rw [if_pos (by omega), if_pos hstart]
         · rw [if_neg (by omega), if_neg hstart]
           by_cases hold : i < μ.data.size
           · rw [Array.getD_copyD_of_lt _ _ _ _ hold
-              (by simp [Array.size_replicate]; omega)]
+              (by simp only [length_cons, Array.size_replicate]; omega)]
           · rw [Array.getD_copyD_of_size_le _ _ _ _ (Nat.le_of_not_gt hold),
               Array.getD_replicate_zero,
               Array.getD_of_size_le 0 (Nat.not_lt.mp hold)]
@@ -13365,7 +13385,7 @@ lemma Mem.getD_write_below_end (μ : Mem) (start : Nat) {ys : Bytes}
       · rw [if_neg (by omega), if_neg hstart]
         by_cases hold : i < μ.data.size
         · rw [Array.getD_copyD_of_lt _ _ _ _ hold
-            (by simp [Array.size_replicate]; exact lt_of_lt_of_le hi (Nat.le_ceil32 _))]
+            (by simp only [length_cons, Array.size_replicate]; exact lt_of_lt_of_le hi (Nat.le_ceil32 _))]
         · rw [Array.getD_copyD_of_size_le _ _ _ _ (Nat.le_of_not_gt hold),
             Array.getD_replicate_zero,
             Array.getD_of_size_le 0 (Nat.not_lt.mp hold)]
@@ -13380,8 +13400,9 @@ lemma Mem.write_end_le_data_size (μ : Mem) (start : Nat) {ys : Bytes}
   · simp only [Mem.write]
     split
     · split
-      · simpa [Array.size_writeD]
-      · simp [Array.size_writeD, Array.size_copyD, Array.size_replicate]
+      · simpa only [length_cons, Array.size_writeD]
+      · simp only [length_cons, Array.size_writeD, Array.size_copyD, Array.size_replicate,
+        Std.le_refl]
     · simp only [Array.size_writeD, Array.size_copyD, Array.size_replicate]
       exact Nat.le_ceil32 _
 
@@ -13404,7 +13425,8 @@ lemma Mem.read_two_word_writes_at_raw (μ : Mem) (start : Nat)
       start 64).1) = left.toBytes ++ right.toBytes := by
   simp only [Mem.read, Array.sliceD_eq_map]
   apply List.ext_get
-  · simp [B256.length_toBytes]
+  · simp only [Array.getD_eq_getD_getElem?, length_map, length_range, length_append,
+    B256.length_toBytes, reduceAdd]
   · intro i hleft hright
     simp only [List.length_map, List.length_range] at hleft
     simp only [List.get_eq_getElem, List.getElem_map, List.getElem_range]
@@ -13412,21 +13434,21 @@ lemma Mem.read_two_word_writes_at_raw (μ : Mem) (start : Nat)
       (by
         intro h
         have hlen := B256.length_toBytes right
-        simp [h] at hlen)
-      (by simp [B256.length_toBytes]; omega)]
+        simp only [h, length_nil, OfNat.zero_ne_ofNat] at hlen)
+      (by simp only [B256.length_toBytes]; omega)]
     by_cases hhalf : i < 32
     · rw [if_neg (by omega), Mem.getD_write_below_end _ start
         (by
           intro h
           have hlen := B256.length_toBytes left
-          simp [h] at hlen)
-        (by simp [B256.length_toBytes]; omega), if_pos (by omega)]
+          simp only [h, length_nil, OfNat.zero_ne_ofNat] at hlen)
+        (by simp only [B256.length_toBytes, add_lt_add_iff_left]; omega), if_pos (by omega)]
       calc
         left.toBytes.getD (start + i - start) 0 =
             left.toBytes.getD i 0 := by congr 1 <;> omega
         _ = (left.toBytes ++ right.toBytes).getD i 0 :=
           (List.getD_append_left (d := (0 : UInt8))
-            (by simpa [B256.length_toBytes] using hhalf)).symm
+            (by simpa only [B256.length_toBytes] using hhalf)).symm
         _ = (left.toBytes ++ right.toBytes)[i] := by
           rw [List.getD_eq_getElem?_getD,
             List.getElem?_eq_getElem hright]
@@ -13438,7 +13460,7 @@ lemma Mem.read_two_word_writes_at_raw (μ : Mem) (start : Nat)
         right.toBytes.getD (i - 32) 0 =
             (left.toBytes ++ right.toBytes).getD i 0 := by
           rw [List.getD_append_right (d := (0 : UInt8))
-            (by simp [B256.length_toBytes]; omega), B256.length_toBytes]
+            (by simp only [B256.length_toBytes]; omega), B256.length_toBytes]
         _ = (left.toBytes ++ right.toBytes)[i] := by
           rw [List.getD_eq_getElem?_getD,
             List.getElem?_eq_getElem hright]
@@ -13454,19 +13476,19 @@ lemma Mem.read_two_word_writes_at_raw_right_first (μ : Mem) (start : Nat)
   have hright : right.toBytes ≠ [] := by
     intro h
     have hlen := B256.length_toBytes right
-    simp [h] at hlen
+    simp only [h, length_nil, OfNat.zero_ne_ofNat] at hlen
   have hleft : left.toBytes ≠ [] := by
     intro h
     have hlen := B256.length_toBytes left
-    simp [h] at hlen
+    simp only [h, length_nil, OfNat.zero_ne_ofNat] at hlen
   let μ' := μ.write (start + 32) right.toBytes
   have hdata : start + left.toBytes.length ≤ μ'.data.size := by
-    dsimp [μ']
+    dsimp only [μ']
     have h := Mem.write_end_le_data_size μ (start + 32) hright
     simp only [B256.length_toBytes] at h ⊢
     omega
   have hsize : start + left.toBytes.length ≤ μ'.size := by
-    dsimp [μ']
+    dsimp only [μ']
     have h := Mem.write_end_le_size μ (start + 32) hright
     simp only [B256.length_toBytes] at h ⊢
     omega
@@ -13500,9 +13522,9 @@ lemma Mem.read_two_word_writes_at_raw_right_first (μ : Mem) (start : Nat)
             List.getElem?_eq_getElem hout]
           rfl
     · rw [if_neg (by omega)]
-      dsimp [μ']
+      dsimp only [cons_append, μ']
       rw [Mem.getD_write_below_end μ (start + 32) hright
-        (by simp [B256.length_toBytes]; omega), if_pos (by omega)]
+        (by simp only [B256.length_toBytes]; omega), if_pos (by omega)]
       have hsub : start + i - (start + 32) = i - 32 := by omega
       rw [hsub]
       calc
@@ -13794,7 +13816,7 @@ theorem mstoreAt_stack_head
   injection hstack with hoff htail
   refine ⟨word, post.stack, ?_⟩
   rw [htail]
-  simpa using (pref_append (word :: post.stack) [])
+  simpa only [append_nil] using (pref_append (word :: post.stack) [])
 
 /-- `mstoreAt k` writes the stack top into memory word `k`.
 
@@ -14157,15 +14179,15 @@ lemma of_logWith_val {e : Sevm} {s s' : Devm} {k : Fin 4}
   have hknown : ((x * 32) :: (y * 32) :: topics) <<+ s₂.stack := by
     exact @pref_trans _ ((x * 32) :: (y * 32) :: topics)
       (((x * 32) :: (y * 32) :: topics) ++ xs) _
-      ⟨xs, rfl⟩ (by simpa [List.append_assoc] using hp₂)
+      ⟨xs, rfl⟩ (by simpa only [cons_append] using hp₂)
   have heq : ((x * 32) :: (y * 32) :: topics) =
       mi :: sz :: actualTopics :=
-    List.pref_unique (by simp [hlen, hactualLen]) hknown
+    List.pref_unique (by simp only [length_cons, hlen, hactualLen, Fin.val_succ]) hknown
       (pref_of_split hpop)
   simp only [List.cons.injEq] at heq
   rcases heq with ⟨rfl, rfl, rfl⟩
   constructor
-  · exact of_append_pref hpop (by simpa [List.append_assoc] using hp₂)
+  · exact of_append_pref hpop (by simpa only [cons_append] using hp₂)
   · rw [hlogs, ← hboffset.logs, ← hbsize.logs,
       ← hboffset.memory, ← hbsize.memory]
 
@@ -14214,20 +14236,21 @@ lemma of_logWith201_val {e : Sevm} {s s' : Devm}
   rw [h32word] at hb32
   rw [h0word] at hb0
   have hp₁ : (32 : B256) :: ev :: a :: b :: xs <<+ s₁.stack := by
-    simpa using prefix_of_push hb32 hp
+    simpa only [cons_append, nil_append] using prefix_of_push hb32 hp
   have hp₂ : (0 : B256) :: 32 :: ev :: a :: b :: xs <<+ s₂.stack := by
-    simpa using prefix_of_push hb0 hp₁
+    simpa only [cons_append, nil_append] using prefix_of_push hb0 hp₁
   rcases of_run_log_val hlog with
     ⟨mi, sz, topics, hlen, hpop, hlogs⟩
   have hknown : ([0, 32, ev, a, b] : List B256) <<+ s₂.stack := by
     exact @pref_trans _ [0, 32, ev, a, b]
-      ([0, 32, ev, a, b] ++ xs) _ ⟨xs, rfl⟩ (by simpa using hp₂)
+      ([0, 32, ev, a, b] ++ xs) _ ⟨xs, rfl⟩ (by simpa only [cons_append, nil_append] using hp₂)
   have heq : ([0, 32, ev, a, b] : List B256) = mi :: sz :: topics :=
-    List.pref_unique (by simp [hlen]) hknown (pref_of_split hpop)
+    List.pref_unique (by simp only [length_cons, length_nil, zero_add, reduceAdd, hlen, Fin.isValue,
+      Fin.reduceSucc, Fin.coe_ofNat_eq_mod, reduceMod]) hknown (pref_of_split hpop)
   simp only [List.cons.injEq] at heq
   rcases heq with ⟨rfl, rfl, rfl⟩
   constructor
-  · exact of_append_pref hpop (by simpa using hp₂)
+  · exact of_append_pref hpop (by simpa only [cons_append, nil_append] using hp₂)
   · rw [hlogs, ← hb0.logs, ← hb32.logs, ← hb0.memory, ← hb32.memory]
     rfl
 
@@ -14253,16 +14276,17 @@ lemma of_logWith201_mem {e : Sevm} {s s' : Devm}
   rw [h32word] at hb32
   rw [h0word] at hb0
   have hp₁ : (32 : B256) :: ev :: a :: b :: xs <<+ s₁.stack := by
-    simpa using prefix_of_push hb32 hp
+    simpa only [cons_append, nil_append] using prefix_of_push hb32 hp
   have hp₂ : (0 : B256) :: 32 :: ev :: a :: b :: xs <<+ s₂.stack := by
-    simpa using prefix_of_push hb0 hp₁
+    simpa only [cons_append, nil_append] using prefix_of_push hb0 hp₁
   rcases of_run_log_mem_val hlog with
     ⟨mi, sz, topics, hlen, hpop, hmemory⟩
   have hknown : ([0, 32, ev, a, b] : List B256) <<+ s₂.stack := by
     exact @pref_trans _ [0, 32, ev, a, b]
-      ([0, 32, ev, a, b] ++ xs) _ ⟨xs, rfl⟩ (by simpa using hp₂)
+      ([0, 32, ev, a, b] ++ xs) _ ⟨xs, rfl⟩ (by simpa only [cons_append, nil_append] using hp₂)
   have heq : ([0, 32, ev, a, b] : List B256) = mi :: sz :: topics :=
-    List.pref_unique (by simp [hlen]) hknown (pref_of_split hpop)
+    List.pref_unique (by simp only [length_cons, length_nil, zero_add, reduceAdd, hlen, Fin.isValue,
+      Fin.reduceSucc, Fin.coe_ofNat_eq_mod, reduceMod]) hknown (pref_of_split hpop)
   simp only [List.cons.injEq] at heq
   rcases heq with ⟨rfl, rfl, rfl⟩
   rw [hmemory, ← hb0.memory, ← hb32.memory]
@@ -14568,7 +14592,7 @@ theorem of_run_loadWordAt_image
     prefix_of_mload_val loadRun pPush pushReads
   refine ⟨?_, ?_, ?_, Line.of_inv Devm.state (by line_inv)
     (Line.Run.cons pushRun (Line.Run.cons loadRun Line.Run.nil))⟩
-  · simpa [hvalue] using loaded
+  · simpa only [hvalue, append_eq, nil_append] using loaded
   · rw [memory]
     exact pushWf.extend _ _
   · rw [memory]
@@ -14606,7 +14630,7 @@ theorem of_run_loadWordAt_image_memory
     prefix_of_mload_val loadRun pPush pushReads
   refine ⟨?_, ?_, ?_, Line.of_inv Devm.state (by line_inv)
     (Line.Run.cons pushRun (Line.Run.cons loadRun Line.Run.nil)), ?_⟩
-  · simpa [hvalue] using loaded
+  · simpa only [hvalue, append_eq, nil_append] using loaded
   · rw [memory]
     exact pushWf.extend _ _
   · rw [memory]
@@ -14781,8 +14805,9 @@ lemma decodes_split_tail {e : Sevm} {sel a b c : B256} {data : Bytes}
       B256.toBytes c ++ B256.toBytes (Nat.toB256 128)) ++
       (B256.toBytes (Nat.toB256 data.length) ++
         (data ++ List.replicate (ceil32 data.length - data.length) 0)) := by
-  simpa [Sevm.DecodesCallWithTail, abiCallWithTail, abiBytesTail,
-    List.append_assoc] using h
+  simpa only [append_assoc, Sevm.DecodesCallWithTail, abiCallWithTail, map_cons, map_nil,
+    flatten_cons, flatten_nil, append_nil, length_cons, length_nil, zero_add, reduceAdd, reduceMul,
+    abiBytesTail] using h
 
 lemma decodes_head_length (sel a b c : B256) :
     (abiSelectorBytes sel ++ B256.toBytes a ++ B256.toBytes b ++
@@ -14819,7 +14844,8 @@ lemma tailBytes_three_of_decodes {e : Sevm} {sel a b c : B256} {data : Bytes}
   show List.sliceD e.data (Nat.toB256 132 + 32).toNat data.length 0 = data
   rw [show (Nat.toB256 132 + (32 : B256)).toNat = 164 from rfl, hd,
     List.sliceD, List.drop_length_append' (by rw [hpre]),
-    List.takeD_eq_take _ (by simp [List.length_append]),
+    List.takeD_eq_take _ (by simp only [length_append, length_replicate, le_add_iff_nonneg_right,
+      _root_.zero_le]),
     List.take_length_append' rfl]
 
 /-! ### `ceil32` as the EVM computes it
@@ -14848,8 +14874,8 @@ lemma Nat.and_or_shiftLeft {a b c d k : Nat} (hb : b < 2 ^ k) (hd : d < 2 ^ k) :
   · have hpow : (2 : Nat) ^ k ≤ 2 ^ i := Nat.pow_le_pow_right (by omega) hi
     rw [Nat.testBit_lt_two_pow (Nat.lt_of_lt_of_le hb hpow),
       Nat.testBit_lt_two_pow (Nat.lt_of_lt_of_le hd hpow)]
-    simp [hi]
-  · simp [hi]
+    simp only [ge_iff_le, hi, decide_true, Bool.true_and, Bool.or_false, Bool.and_self]
+  · simp only [ge_iff_le, hi, decide_false, Bool.false_and, Bool.false_or]
 
 lemma B128.toNat_and (x y : B128) : (x &&& y).toNat = x.toNat &&& y.toNat := by
   show ((x.1 &&& y.1).toNat <<< 64) ||| (x.2 &&& y.2).toNat = _

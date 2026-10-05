@@ -244,7 +244,7 @@ private lemma responder_call_crossing
       have h1 : except64th (G - 0 - 100) ≤ G := by
         unfold except64th; omega
       rw [Nat.min_eq_right h1]
-      norm_num
+      norm_num only [Nat.sub_zero]
     rw [hmin] at hsplit
     have h1 : except64th (G - 100) + 100 = mcc := congrArg Prod.fst hsplit
     have h2 : except64th (G - 100) + 0 = mcs := congrArg Prod.snd hsplit
@@ -352,7 +352,7 @@ private lemma responder_staticcall_crossing
       have h1 : except64th (G - 0 - 100) ≤ G := by
         unfold except64th; omega
       rw [Nat.min_eq_right h1]
-      norm_num
+      norm_num only [Nat.sub_zero]
     rw [hmin] at hsplit
     have h1 : except64th (G - 100) + 100 = mcc := congrArg Prod.fst hsplit
     have h2 : except64th (G - 100) + 0 = mcs := congrArg Prod.snd hsplit
@@ -426,7 +426,7 @@ theorem pauseExpiryFinish_ok_runCompiled
     intro h
     have hlen := B256.length_toBytes value
     rw [h] at hlen
-    simp at hlen
+    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
   have hsizeM' : M'.size = M.size :=
     Mem.size_write_of_le (by
       simpa only [B256.length_toBytes] using
@@ -465,7 +465,7 @@ theorem pauseExpiryFinish_ok_runCompiled
       simp only [show ((0 : B256) * 32).toNat = 0 by decide,
         show ((1 : B256) * 32).toNat = 32 by decide]
       rw [Devm.extCost_zero_of_le halign' hzeroCovered']
-      norm_num [gLog, gLogdata, gLogtopic]
+      norm_num only [gLog, gLogdata, gLogtopic, Fin.val_succ, Fin.val_two]
     case a =>
       simp only [show ((0 : B256) * 32).toNat = 0 by decide,
         show ((1 : B256) * 32).toNat = 32 by decide]
@@ -501,7 +501,7 @@ theorem pauseExpiryFinish_ok_runCompiled
     simp only [show ((0 : B256) * 32).toNat = 0 by decide]
     exact Devm.extCost_zero_of_le halign (by omega)
   case h_val =>
-    simpa [expirySlot, slot] using
+    simpa only [expirySlot, slot] using
       congrArg (fun x : B256 => (regionWord expiryRegion).or x) hcaller
   case a =>
     simp only [show ((0 : B256) * 32).toNat = 0 by decide]
@@ -601,7 +601,7 @@ theorem pauseSuccess_zeroCount_ok_runCompiled
     intro h
     have hlen := B256.length_toBytes duration
     rw [h] at hlen
-    simp at hlen
+    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
   have hsizeM' : (M.write 0 duration.toBytes).size = M.size :=
     Mem.size_write_of_le (by
       simpa only [B256.length_toBytes] using hzeroCovered)
@@ -681,7 +681,7 @@ theorem pauseSuccess_zeroCount_ok_runCompiled
     have h := temporal_sload_runCompiled (hfork := hfork) (sevm := sevm) (base := eventBase)
       (key := countSlot pauser) (value := 0) (stack := [])
       (M := M.write 0 duration.toBytes)
-      (G := G + 1531 + storeCost) hcount (by simp)
+      (G := G + 1531 + storeCost) hcount (by simp only [List.length_nil, Nat.ofNat_pos])
     rw [show temporalSloadCost sevm eventBase (countSlot pauser) =
       countCost from hcountCost] at h
     exact h
@@ -694,18 +694,18 @@ theorem pauseSuccess_zeroCount_ok_runCompiled
   all_goals try simp_rw [htargetMemory']
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hdurationCovered]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case h_ext =>
     exact Devm.extCost_zero_of_le halign hzeroCovered
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign' htargetCovered']
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case h_cost =>
     simp only [show ((1 : B256) * 32).toNat = 32 by decide]
     rw [Devm.extCost_zero_of_le halign' hzeroCovered']
-    norm_num [gLog, gLogdata, gLogtopic]
+    norm_num only [gLog, gLogdata, gLogtopic, Fin.val_succ, Fin.val_two]
   case h_val =>
-    simpa [countSlot, slot] using
+    simpa only [countSlot, slot] using
       congrArg (fun x : B256 => (regionWord countRegion).or x) hcaller
   case a =>
     simp only [show ((1 : B256) * 32).toNat = 32 by decide]
@@ -794,7 +794,7 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
     intro h
     have hlen := B256.length_toBytes duration
     rw [h] at hlen
-    simp at hlen
+    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
   have hsizeM' : (M.write 0 duration.toBytes).size = M.size :=
     Mem.size_write_of_le (by
       simpa only [B256.length_toBytes] using hzeroCovered)
@@ -900,7 +900,8 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
     have h := temporal_sload_runCompiled (hfork := hfork) (sevm := sevm) (base := countBase)
       (key := heartbeatIntervalSlot) (value := interval)
       (stack := [sevm.benvStat.time]) (M := M.write 0 duration.toBytes)
-      (G := G + 1539 + storeCost) hvalue (by simp)
+      (G := G + 1539 + storeCost) hvalue (by simp only [List.length_cons, List.length_nil, zero_add,
+        Nat.one_lt_ofNat])
     rw [hcost] at h
     exact h
   -- the count test, the fall-through branch, and the checked-arm prefix
@@ -934,7 +935,8 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
     have h := temporal_sload_runCompiled (hfork := hfork) (sevm := sevm) (base := eventBase)
       (key := countSlot pauser) (value := count) (stack := [])
       (M := M.write 0 duration.toBytes)
-      (G := G + 1560 + intervalCost + storeCost) hcount (by simp)
+      (G := G + 1560 + intervalCost + storeCost) hcount (by simp only [List.length_nil,
+        Nat.ofNat_pos])
     rw [show temporalSloadCost sevm eventBase (countSlot pauser) =
       countCost from hcountCost] at h
     exact h
@@ -947,18 +949,18 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
   all_goals try simp_rw [htargetMemory']
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hdurationCovered]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case h_ext =>
     exact Devm.extCost_zero_of_le halign hzeroCovered
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign' htargetCovered']
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case h_cost =>
     simp only [show ((1 : B256) * 32).toNat = 32 by decide]
     rw [Devm.extCost_zero_of_le halign' hzeroCovered']
-    norm_num [gLog, gLogdata, gLogtopic]
+    norm_num only [gLog, gLogdata, gLogtopic, Fin.val_succ, Fin.val_two]
   case h_val =>
-    simpa [countSlot, slot] using
+    simpa only [countSlot, slot] using
       congrArg (fun x : B256 => (regionWord countRegion).or x) hcaller
   case a =>
     simp only [show ((1 : B256) * 32).toNat = 32 by decide]
@@ -1150,7 +1152,7 @@ theorem pauseAfterSet_toSuccess_runCompiled
     intro h
     have hlen := B256.length_toBytes (1 : B256)
     rw [h] at hlen
-    simp at hlen
+    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
   have hdecodedValue :
       ((pauseDecodedMemory M duration).read 0 32).1.toB256 = 1 := by
     rw [pauseDecodedMemory, show (32 : Nat) =
@@ -1187,7 +1189,7 @@ theorem pauseAfterSet_toSuccess_runCompiled
         rw [temporalAccountAccessBase_getCode]
         exact hcalleeCode)
       (temporalAccountAccessBase_warm base target.toAdr)
-      hdepth hnp (by omega) hbound (by simp)
+      hdepth hnp (by omega) hbound (by simp only [List.length_nil, Nat.ofNat_pos])
   have hgas1' : post1.gasLeft = Gb + 242 := by
     rw [hgas1]
     omega
@@ -1234,7 +1236,7 @@ theorem pauseAfterSet_toSuccess_runCompiled
         exact hcode1)
       ((haa1 target.toAdr).mpr (temporalAccountAccessBase_warm base
         target.toAdr))
-      hdepth hnp (by omega) (by omega) (by simp)
+      hdepth hnp (by omega) (by omega) (by simp only [List.length_nil, Nat.ofNat_pos])
   have hgas2' : post2.gasLeft = Gb + 81 := by
     rw [hgas2]
     omega
@@ -1329,7 +1331,7 @@ theorem pauseAfterSet_toSuccess_runCompiled
     case h_cost =>
       simp only [show ((0 : B256) * 32).toNat = 0 by decide]
       rw [Devm.extCost_zero_of_le (by omega) (by omega)]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case h_arm =>
       have hg : Gb + 81 - 81 = Gb := by omega
       rw [hg, show ((0 : B256) * 32).toNat = 0 from by decide, hdecodedMemory]
@@ -1355,7 +1357,7 @@ theorem pauseAfterSet_toSuccess_runCompiled
       rw [Devm.extCost_zero_of_le halign3 (by
         have hoff : (targetWord * 32).toNat + 32 ≤ 768 := by decide
         omega)]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [htargetValue3]
       have hg : Gb + 242 - 44 = Gb + 198 := by omega
@@ -1393,14 +1395,14 @@ theorem pauseAfterSet_toSuccess_runCompiled
       rw [Devm.extCost_zero_of_le (by omega) (by
         have hoff : (durationWord * 32).toNat + 32 ≤ 768 := by decide
         omega)]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case h_ext =>
       exact Devm.extCost_zero_of_le (by omega) (by omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign2 (by
         have hoff : (targetWord * 32).toNat + 32 ≤ 768 := by decide
         omega)]
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [htargetValue2]
       have hg : Gb + 418 - 59 = Gb + 359 := by omega
@@ -1417,7 +1419,8 @@ theorem pauseAfterSet_toSuccess_runCompiled
     have h := temporal_extcodesize_runCompiled (hfork := hfork) (sevm := sevm) (base := base)
       (x := target) (v := calleeCode.size.toB256) (stack := [target])
       (M := M) (G := Gb + 418)
-      (by rw [hcalleeCode]) (by simp)
+      (by rw [hcalleeCode]) (by simp only [List.length_cons, List.length_nil, zero_add,
+        Nat.one_lt_ofNat])
     rw [hcodeCost] at h
     exact h
   func_run (3) [3]
@@ -1426,7 +1429,7 @@ theorem pauseAfterSet_toSuccess_runCompiled
     rw [Devm.extCost_zero_of_le halign (by
       have hoff : (targetWord * 32).toNat + 32 ≤ 768 := by decide
       omega)]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case a =>
     rw [htargetValue0, htargetMemory0]
     have hg : Gb + 427 + codeCost - 9 = Gb + 418 + codeCost := by omega

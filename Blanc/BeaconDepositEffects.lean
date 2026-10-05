@@ -25,22 +25,14 @@ def supportsInterfaceWord (word : B256) : Bool :=
 def supportsInterfaceArg (sevm : Sevm) : Bool :=
   supportsInterfaceWord (Sevm.argWord sevm 0 >>> 224)
 
-@[simp] theorem supportsInterfaceWord_eq_true_iff (word : B256) :
+theorem supportsInterfaceWord_eq_true_iff (word : B256) :
     supportsInterfaceWord word = true ↔
       word = erc165InterfaceId ∨ word = depositInterfaceId := by
-  simp [supportsInterfaceWord]
+  simp only [supportsInterfaceWord, Bool.decide_or, Bool.or_eq_true, decide_eq_true_eq]
 
-@[simp] theorem supportsInterfaceWord_erc165 :
+theorem supportsInterfaceWord_erc165 :
     supportsInterfaceWord erc165InterfaceId = true := by
-  simp
-
-@[simp] theorem supportsInterfaceWord_deposit :
-    supportsInterfaceWord depositInterfaceId = true := by
-  simp
-
-@[simp] theorem supportsInterfaceWord_ffffffff :
-    supportsInterfaceWord (0xffffffff : B256) = false := by
-  decide +kernel
+  simp only [supportsInterfaceWord_eq_true_iff, true_or]
 
 private def supportsInterfaceResultWord (sevm : Sevm) : B256 :=
   B256.or
@@ -61,8 +53,8 @@ private theorem supportsInterfaceWord_eqCheck_or (word : B256) :
       decide +kernel
     · have herc' : erc165InterfaceId ≠ word := Ne.symm herc
       have hdeposit' : depositInterfaceId ≠ word := Ne.symm hdeposit
-      (simp [supportsInterfaceWord, B256.eqCheck, herc, hdeposit,
-          herc', hdeposit'];
+      (simp only [B256.eqCheck, hdeposit', ↓reduceIte, herc', supportsInterfaceWord, herc, hdeposit,
+        or_self, decide_false, Bool.false_eq_true];
         decide +kernel)
 
 def supportsInterfaceEndpointGas : Nat := 67
@@ -260,13 +252,11 @@ theorem nonpayableEndpoint_zero_runCompiled
       (nonpayableEndpoint body) post := by
   unfold nonpayableEndpoint nonpayableEndpointZeroGas
   func_run (1) []
-  · simp only [Devm.stack_setMach]
-    omega
-  · rw [hvalue]
+  case a =>
+    rw [hvalue]
     func_run (1) []
-    · simp only [Devm.stack_setMach, List.length_cons]
-      omega
-    · have hboundary : G + 15 - 15 = G := by omega
+    case h_arm =>
+      have hboundary : G + 15 - 15 = G := by omega
       simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, hboundary] using hbody
 
 theorem nonpayableEndpoint_zero_runCompiledTo
@@ -282,13 +272,11 @@ theorem nonpayableEndpoint_zero_runCompiledTo
       (nonpayableEndpoint body) out := by
   unfold nonpayableEndpoint nonpayableEndpointZeroGas
   func_run (1) []
-  · simp only [Devm.stack_setMach]
-    omega
-  · rw [hvalue]
+  case a =>
+    rw [hvalue]
     func_run (1) []
-    · simp only [Devm.stack_setMach, List.length_cons]
-      omega
-    · have hboundary : G + 15 - 15 = G := by omega
+    case h_arm =>
+      have hboundary : G + 15 - 15 = G := by omega
       simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, hboundary] using hbody
 
 /-- Nonzero value is rejected before `body` can inspect calldata or world
@@ -306,9 +294,8 @@ theorem nonpayableEndpoint_nonzero_runCompiledTo
         (base.setMach ⟨base.stack, base.memory, G, base.stateGas⟩).withOutput [])) := by
   unfold nonpayableEndpoint nonpayableEndpointRevertGas
   func_run (1) []
-  · simp only [Devm.stack_setMach]
-    omega
-  · refine Func.runCompiledTo_branch_succ (G := G + 4)
+  case a =>
+    refine Func.runCompiledTo_branch_succ (G := G + 4)
       hvalue rfl ?_ ?_ ?_
     · simp only [Devm.stack_setMach, List.length_cons]
       omega
@@ -1364,7 +1351,7 @@ theorem supportsInterface_erc165_runCompiled
       some sevm.code.toList = Prog.compile runtime := by
   apply supportsInterfaceAnswer_runCompiled sevm base G true
     hdataLength hdataBound hvalue hselector hcode
-  simp [supportsInterfaceArg, harg]
+  simp only [supportsInterfaceArg, harg, supportsInterfaceWord_erc165]
 
 /-! ## The deposit selector path -/
 

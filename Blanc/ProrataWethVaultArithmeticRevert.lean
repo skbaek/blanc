@@ -42,8 +42,9 @@ theorem divide512_capped_tail_revertFreeIn {safe : List Nat} {k : Nat}
       (loadWord highWord +++ iszero :::
         (divideSimple mode k <?> divideWide mode k)) = true := by
   rcases capped with rfl | rfl <;>
-    simp [Func.revertFreeIn_prepend, Func.revertFreeIn, divideSimple,
-      divideWide, divideWideCore, finishQuotient, divisionOverflow, safeK]
+    simp only [divideWide, divisionOverflow, divideWideCore, finishQuotient, divideSimple,
+      Func.revertFreeIn_prepend, Func.revertFreeIn, List.contains_eq_mem, safeK, decide_true,
+      Bool.and_self]
 
 /-- A capped `divide512` whose staged denominator is nonzero has no reverting
 walk, once its continuation table is revert-free. -/
@@ -72,7 +73,7 @@ theorem divide512_capped_no_revert {pre d : Devm} {image : Bytes}
   have testPrefix :=
     prefix_of_iszero (Ninst.Run.of_runCompiled zeroRun) loadPrefix
   have zeroPrefix : (0 : B256) :: tail <<+ testPre.stack := by
-    simpa [B256.eqCheck, denominatorNonzero] using testPrefix
+    simpa only [B256.eqCheck, denominatorNonzero, ↓reduceIte] using testPrefix
   obtain ⟨restPre, -, restRun, -⟩ :=
     Func.RunCompiledToAvoiding.zero_branch_of_prefix zeroPrefix branchRun
   exact Func.RunCompiledTo.not_revert_of_revertFreeIn tableSafe restRun.1
@@ -231,7 +232,7 @@ theorem ProducesWord.isMax_arm_avoiding {pre : Devm} {out : Execution}
       (Line.Run.cons notRun (Line.Run.cons zeroRun Line.Run.nil))
   by_cases valueMax : value = B256.max
   · have onePrefix : (1 : B256) :: tail <<+ testPre.stack := by
-      simpa [valueMax, B256.not_max, B256.eqCheck] using testPrefix
+      simpa only [B256.eqCheck, valueMax, B256.not_max, ↓reduceIte] using testPrefix
     obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
       Func.RunCompiledToAvoiding.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
@@ -243,7 +244,7 @@ theorem ProducesWord.isMax_arm_avoiding {pre : Devm} {out : Execution}
       intro notZero
       exact valueMax (B256.eq_max_of_not_eq_zero notZero)
     have zeroPrefix : (0 : B256) :: tail <<+ testPre.stack := by
-      simpa [B256.eqCheck, notNonzero] using testPrefix
+      simpa only [B256.eqCheck, notNonzero, ↓reduceIte] using testPrefix
     obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
       Func.RunCompiledToAvoiding.zero_branch_of_prefix zeroPrefix branchRun
     have bodyMemory : valuePre.memory = bodyPre.memory :=
@@ -389,8 +390,9 @@ theorem maxMint_postTotalAssets_no_revert {pre d : Devm} {image : Bytes}
   · have free : Func.revertFreeIn [maxMintAfterAssetCapSlot, returnWordSlot]
         (productOverTwoPow256 [pushB256 B256.max] stagedDenominator .down
           maxMintAfterAssetCapSlot) = true := by
-      simp [productOverTwoPow256, multiply512, finishQuotient,
-        Func.revertFreeIn_prepend, Func.revertFreeIn]
+      simp only [productOverTwoPow256, multiply512, finishQuotient, Func.revertFreeIn_prepend,
+        Func.revertFreeIn, List.contains_eq_mem, List.mem_cons, List.not_mem_nil, or_false, true_or,
+        decide_true]
     exact Func.RunCompiledTo.not_revert_of_revertFreeIn tableSafe bodyRun.1
       free d rfl
   · exact mulDiv_capped_no_revert (Or.inl rfl)
@@ -463,8 +465,8 @@ theorem maxWithdraw_postTotalAssets_no_revert {pre d : Devm} {image : Bytes}
 /-- `returnConstant` has no `REVERT` and calls nothing. -/
 theorem returnConstant_revertFreeIn (w : B256) :
     Func.revertFreeIn [] (returnConstant w) = true := by
-  simp [returnConstant, returnWord, returnMemoryRange, Func.return_,
-    Func.revertFreeIn_prepend, Func.revertFreeIn]
+  simp only [returnConstant, returnWord, returnMemoryRange, Func.return_, Func.revertFreeIn,
+    Func.revertFreeIn_prepend, bne_iff_ne, ne_eq, reduceCtorEq, not_false_eq_true]
 
 /-- A reverting walk that meets a `returnConstant` arm has taken the other. -/
 theorem returnConstant_no_revert {pre d : Devm} {w : B256}
@@ -501,13 +503,13 @@ theorem zeroArgCapacityBranch_revert {pre d : Devm} {body : Func}
   have testPrefix := prefix_of_iszero zeroSource argPrefix
   by_cases argZero : Sevm.argWord sevm 0 = 0
   · have onePrefix : (1 : B256) :: tail <<+ branchPre.stack := by
-      simpa [B256.eqCheck, argZero] using testPrefix
+      simpa only [B256.eqCheck, argZero, ↓reduceIte] using testPrefix
     obtain ⟨zeroPre, -, zeroRoute, -⟩ :=
       Func.RunCompiledToAvoiding.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
     exact (returnConstant_no_revert zeroRoute.1).elim
   · have zeroPrefix : (0 : B256) :: tail <<+ branchPre.stack := by
-      simpa [B256.eqCheck, argZero] using testPrefix
+      simpa only [B256.eqCheck, argZero, ↓reduceIte] using testPrefix
     obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
       Func.RunCompiledToAvoiding.zero_branch_of_prefix zeroPrefix branchRun
     have bodyPop' := Devm.PopBurn.of_popBurnBy bodyPop
@@ -617,13 +619,13 @@ theorem stableCapacityBranch_revert {pre d : Devm} {supply : B256}
   have testPrefix := prefix_of_lt testSource maxPrefix
   by_cases unstable : maxSupply < supply
   · have onePrefix : (1 : B256) :: tail <<+ branchPre.stack := by
-      simpa [B256.ltCheck, unstable] using testPrefix
+      simpa only [B256.ltCheck, unstable, ↓reduceIte] using testPrefix
     obtain ⟨zeroPre, -, zeroRoute, -⟩ :=
       Func.RunCompiledToAvoiding.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
     exact (returnConstant_no_revert zeroRoute.1).elim
   · have zeroPrefix : (0 : B256) :: tail <<+ branchPre.stack := by
-      simpa [B256.ltCheck, unstable] using testPrefix
+      simpa only [B256.ltCheck, unstable, ↓reduceIte] using testPrefix
     obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
       Func.RunCompiledToAvoiding.zero_branch_of_prefix zeroPrefix branchRun
     have bodyPop' := Devm.PopBurn.of_popBurnBy bodyPop
@@ -669,7 +671,7 @@ theorem loadWord_head {pre post : Devm} {w : B256} {tail : Stack}
   have selfReads : Mem.Reads afterPush.memory
       afterPush.memory.data.toList := by
     intro index
-    simp
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
   obtain ⟨loaded, -, -⟩ :=
     prefix_of_mload_val loadRun (prefix_of_push pushed stack) selfReads
   exact ⟨_, loaded⟩
@@ -699,7 +701,7 @@ theorem finishQuotient_up_split {pre : Devm} {out : Execution} {k : Nat}
   have testPrefix := prefix_of_iszero zeroSource remStack
   by_cases remZero : remw = 0
   · have onePrefix : (1 : B256) :: [] <<+ testPost.stack := by
-      simpa [B256.eqCheck, remZero] using testPrefix
+      simpa only [B256.eqCheck, remZero, ↓reduceIte] using testPrefix
     obtain ⟨armPre, pop, armRun, -⟩ :=
       Func.RunCompiledToAvoiding.succ_branch_of_prefix (by decide) onePrefix
         branchRun
@@ -709,7 +711,7 @@ theorem finishQuotient_up_split {pre : Devm} {out : Execution} {k : Nat}
     exact Or.inl ⟨mid, Func.Run.prepend_line remRun (Func.Run.next zeroSource
       (Func.Run.succ_of_popBurnBy (by decide) pop armSource)), bodyRun⟩
   · have zeroPrefix : (0 : B256) :: [] <<+ testPost.stack := by
-      simpa [B256.eqCheck, remZero] using testPrefix
+      simpa only [B256.eqCheck, remZero, ↓reduceIte] using testPrefix
     obtain ⟨armPre, pop, armRun, -⟩ :=
       Func.RunCompiledToAvoiding.zero_branch_of_prefix zeroPrefix branchRun
     obtain ⟨qPost, qRun, armRun⟩ := Func.RunCompiledToAvoiding.prepend_inv armRun
@@ -741,7 +743,7 @@ theorem finishQuotient_up_split {pre : Devm} {out : Execution} {k : Nat}
         intro notZero
         exact qMax (B256.eq_max_of_not_eq_zero notZero)
       have zeroPrefix2 : (0 : B256) :: qw :: [] <<+ maxPost.stack := by
-        simpa [B256.eqCheck, notNonzero] using maxPrefix
+        simpa only [B256.eqCheck, notNonzero, ↓reduceIte] using maxPrefix
       obtain ⟨roundPre, pop2, roundRun, -⟩ :=
         Func.RunCompiledToAvoiding.zero_branch_of_prefix zeroPrefix2 branch2
       obtain ⟨mid, roundSource, bodyRun⟩ :=
@@ -795,8 +797,8 @@ def simpleDivisionLine : Line :=
 
 theorem divideSimple_eq_line (mode : QuotientMode) (k : Nat) :
     divideSimple mode k = simpleDivisionLine +++ finishQuotient mode k := by
-  simp [divideSimple, simpleDivisionLine, prepend_append, List.append_assoc,
-    prepend]
+  simp only [divideSimple, simpleDivisionLine, List.append_assoc, List.cons_append, List.nil_append,
+    prepend_append, prepend]
 
 theorem ProducesWord.loadsMod {image : Bytes} {denominator low : B256}
     (denominatorAt : Bytes.toB256
@@ -905,7 +907,7 @@ theorem simpleDivisionLine_image {pre mid : Devm} {image : Bytes}
     ProducesWord.store_trace (R := Func.Run)
       (ProducesWord.loadsDiv (sevm := sevm) denominatorAt1 lowAt1) wf4 reads4 p4 run
   obtain rfl := Func.Run.stop_inv run
-  exact ⟨p8, wf8, by simpa [simpleDivisionTraceImage, image1] using reads8,
+  exact ⟨p8, wf8, by simpa only [simpleDivisionTraceImage, image1] using reads8,
     st4.trans st8⟩
 
 /-- A word quotient of a nonzero remainder division is never the all-ones
@@ -984,7 +986,7 @@ theorem divide512_down_run {pre : Devm} {out : Execution} {image : Bytes}
   obtain ⟨s2, zRun, -, run⟩ := Func.RunCompiledToAvoiding.next_inv run
   have zSource := Ninst.Run.of_runCompiled zRun
   have p2 : (0 : B256) :: tail <<+ s2.stack := by
-    simpa [B256.eqCheck, denominatorNonzero] using prefix_of_iszero zSource p1
+    simpa only [B256.eqCheck, denominatorNonzero, ↓reduceIte] using prefix_of_iszero zSource p1
   obtain ⟨s3, pop, run, p3⟩ :=
     Func.RunCompiledToAvoiding.zero_branch_of_prefix p2 run
   have memory3 : s1.memory = s3.memory :=
@@ -1000,7 +1002,7 @@ theorem divide512_down_run {pre : Devm} {out : Execution} {image : Bytes}
   have flag := prefix_of_iszero z2Source p4
   by_cases highZero : high = 0
   · have onePrefix : (1 : B256) :: tail <<+ s5.stack := by
-      simpa [B256.eqCheck, highZero] using flag
+      simpa only [B256.eqCheck, highZero, ↓reduceIte] using flag
     obtain ⟨s6, pop2, run, -⟩ :=
       Func.RunCompiledToAvoiding.succ_branch_of_prefix (by decide) onePrefix
         run
@@ -1013,7 +1015,7 @@ theorem divide512_down_run {pre : Devm} {out : Execution} {image : Bytes}
           (Func.Run.succ_of_popBurnBy (by decide) pop2 simpleSource))))),
       bodyRun⟩
   · have zeroPrefix : (0 : B256) :: tail <<+ s5.stack := by
-      simpa [B256.eqCheck, highZero] using flag
+      simpa only [B256.eqCheck, highZero, ↓reduceIte] using flag
     obtain ⟨s6, pop2, run, p6⟩ :=
       Func.RunCompiledToAvoiding.zero_branch_of_prefix zeroPrefix run
     have memory6 : s4.memory = s6.memory :=
@@ -1032,7 +1034,7 @@ theorem divide512_down_run {pre : Devm} {out : Execution} {image : Bytes}
     have ltSource := Ninst.Run.of_runCompiled ltRun
     have noOverflow := high_lt_of_wide_fits denominatorNonzero fits
     have onePrefix : (1 : B256) :: tail <<+ s9.stack := by
-      simpa [B256.ltCheck, noOverflow] using prefix_of_lt ltSource p8
+      simpa only [B256.ltCheck, noOverflow, ↓reduceIte] using prefix_of_lt ltSource p8
     obtain ⟨s10, pop3, run, -⟩ :=
       Func.RunCompiledToAvoiding.succ_branch_of_prefix (by decide) onePrefix
         run
@@ -1094,7 +1096,7 @@ theorem divide512_up_run {pre : Devm} {out : Execution} {image : Bytes}
   obtain ⟨s2, zRun, -, run⟩ := Func.RunCompiledToAvoiding.next_inv run
   have zSource := Ninst.Run.of_runCompiled zRun
   have p2 : (0 : B256) :: tail <<+ s2.stack := by
-    simpa [B256.eqCheck, denominatorNonzero] using prefix_of_iszero zSource p1
+    simpa only [B256.eqCheck, denominatorNonzero, ↓reduceIte] using prefix_of_iszero zSource p1
   obtain ⟨s3, pop, run, p3⟩ :=
     Func.RunCompiledToAvoiding.zero_branch_of_prefix p2 run
   have memory3 : s1.memory = s3.memory :=
@@ -1110,7 +1112,7 @@ theorem divide512_up_run {pre : Devm} {out : Execution} {image : Bytes}
   have flag := prefix_of_iszero z2Source p4
   by_cases highZero : high = 0
   · have onePrefix : (1 : B256) :: tail <<+ s5.stack := by
-      simpa [B256.eqCheck, highZero] using flag
+      simpa only [B256.eqCheck, highZero, ↓reduceIte] using flag
     obtain ⟨s6, pop2, run, p6⟩ :=
       Func.RunCompiledToAvoiding.succ_branch_of_prefix (by decide) onePrefix
         run
@@ -1139,7 +1141,7 @@ theorem divide512_up_run {pre : Devm} {out : Execution} {image : Bytes}
           (Func.Run.succ_of_popBurnBy (by decide) pop2 simpleSource))))),
       bodyRun⟩
   · have zeroPrefix : (0 : B256) :: tail <<+ s5.stack := by
-      simpa [B256.eqCheck, highZero] using flag
+      simpa only [B256.eqCheck, highZero, ↓reduceIte] using flag
     obtain ⟨s6, pop2, run, p6⟩ :=
       Func.RunCompiledToAvoiding.zero_branch_of_prefix zeroPrefix run
     have memory6 : s4.memory = s6.memory :=
@@ -1158,7 +1160,7 @@ theorem divide512_up_run {pre : Devm} {out : Execution} {image : Bytes}
     have ltSource := Ninst.Run.of_runCompiled ltRun
     have noOverflow := high_lt_of_wide_fits denominatorNonzero floorFits
     have onePrefix : (1 : B256) :: tail <<+ s9.stack := by
-      simpa [B256.ltCheck, noOverflow] using prefix_of_lt ltSource p8
+      simpa only [B256.ltCheck, noOverflow, ↓reduceIte] using prefix_of_lt ltSource p8
     obtain ⟨s10, pop3, run, p10⟩ :=
       Func.RunCompiledToAvoiding.succ_branch_of_prefix (by decide) onePrefix
         run
@@ -1284,7 +1286,7 @@ theorem ProducesWord.isMax_split {pre : Devm} {out : Execution}
       (Line.Run.cons notRun (Line.Run.cons zeroRun Line.Run.nil))
   by_cases valueMax : value = B256.max
   · have onePrefix : (1 : B256) :: tail <<+ testPre.stack := by
-      simpa [valueMax, B256.not_max, B256.eqCheck] using testPrefix
+      simpa only [B256.eqCheck, valueMax, B256.not_max, ↓reduceIte] using testPrefix
     obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
       Func.RunCompiledToAvoiding.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
@@ -1299,7 +1301,7 @@ theorem ProducesWord.isMax_split {pre : Devm} {out : Execution}
       intro notZero
       exact valueMax (B256.eq_max_of_not_eq_zero notZero)
     have zeroPrefix : (0 : B256) :: tail <<+ testPre.stack := by
-      simpa [B256.eqCheck, notNonzero] using testPrefix
+      simpa only [B256.eqCheck, notNonzero, ↓reduceIte] using testPrefix
     obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
       Func.RunCompiledToAvoiding.zero_branch_of_prefix zeroPrefix branchRun
     have bodyMemory : valuePre.memory = bodyPre.memory :=
@@ -1425,7 +1427,7 @@ theorem shiftedDiv_split {pre : Devm} {out : Execution} {image : Bytes}
       denominatorReads denominatorPrefix denominatorRun
   obtain rfl := Func.Run.stop_inv bodyRun
   refine ⟨dividePre, bodyPrefix, bodyWf, ?_, divideRun, ?_⟩
-  · simpa [shiftedDivTraceImage] using bodyReads
+  · simpa only [shiftedDivTraceImage] using bodyReads
   · intro table mid source
     rw [walkSplit]
     exact Func.Run.prepend_line stagingRun source
@@ -1496,7 +1498,7 @@ theorem productLine_image {pre mid : Devm} {image : Bytes} {x y : B256}
       remainderWf remainderReads remainderPrefix run
   obtain rfl := Func.Run.stop_inv run
   exact ⟨finishPrefix, finishWf,
-    by simpa [productOverTwoPow256TraceImage, image1] using finishReads⟩
+    by simpa only [productOverTwoPow256TraceImage, image1] using finishReads⟩
 
 /-- A product's high word cannot round up past the word while the ceiling of
 the product over `2^256` fits. -/
@@ -1516,7 +1518,7 @@ theorem productQuotient_ne_max {x y : B256}
       (productHighWord x y).toNat := by
     rw [Nat.add_comm, Nat.add_mul_div_right _ _ wPos,
       Nat.div_eq_of_lt (by unfold wordModulusN; exact lLt)]
-    simp
+    simp only [zero_add]
   have mod : ((productHighWord x y).toNat * wordModulusN +
       (productLowWord x y).toNat) % wordModulusN =
       (productLowWord x y).toNat := by
@@ -1616,8 +1618,8 @@ theorem depositQuote_avoiding {pre : Devm} {out : Execution}
           (mulDivTraceImage_high _ _ _ _) (stagedAssetFactor_ne_zero assetsNotMax)
           (by
             rw [wideNumeratorN_productWords]
-            simpa [convertToSharesN, stagedDenominator_toNat stable,
-              stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quoteFits)
+            simpa only [stagedDenominator_toNat stable,
+              stagedAssetFactor_toNat_of_ne_max assetsNotMax, convertToSharesN] using quoteFits)
           divideStack lookup divideRun
       exact ⟨mid, lift _ _ (divideLift _ _ divideSource), bodyRun⟩
   have stopLookup := Func.stopTable_get depositAfterQuoteSlot
@@ -1637,8 +1639,8 @@ theorem depositQuote_avoiding {pre : Devm} {out : Execution}
       quoteImage,
       productOverTwoPow256TraceImage_wordFrame image amount denominator,
       armState.trans quoteState, bodyRun⟩
-    simpa [convertToSharesN, denominator, assetsMax, maxWord_toNat,
-      assetFactorN_maxWord, stagedDenominator_toNat stable] using quoteStack
+    simpa only [convertToSharesN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
+      stagedDenominator_toNat stable] using quoteStack
   · rcases ordinaryArm with
       ⟨assetsNotMax, armPre, armStack, armWf, armReads, armState, armRun⟩
     obtain ⟨-, quotePre, quoteImage, quoteStack, quoteMemImage, quoteFrame,
@@ -1651,7 +1653,7 @@ theorem depositQuote_avoiding {pre : Devm} {out : Execution}
     obtain rfl := Func.Run.stop_inv quoteRun
     refine ⟨mid, quoteImage, ?_, quoteMemImage, quoteFrame,
       armState.trans quoteState, bodyRun⟩
-    simpa [convertToSharesN, stagedDenominator_toNat stable,
+    simpa only [convertToSharesN, stagedDenominator_toNat stable,
       stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quoteStack
 
 
@@ -1709,9 +1711,8 @@ theorem mintQuote_avoiding {pre : Devm} {out : Execution}
           (by
             have fits : ceilDiv (amount.toNat * wordModulusN)
                   (Nat.toB256 (denominatorN supply.toNat)).toNat < wordModulusN := by
-              simpa [previewMintN, assetsMax, maxWord_toNat,
-                assetFactorN_maxWord, stagedDenominator_toNat stable] using
-                quoteFits
+              simpa only [stagedDenominator_toNat stable, previewMintN, assetsMax, maxWord_toNat,
+                assetFactorN_maxWord] using quoteFits
             simpa only [wideNumeratorN, B256.toNat_zero, Nat.add_zero] using
               fits)
           divideStack lookup divideRun
@@ -1729,8 +1730,8 @@ theorem mintQuote_avoiding {pre : Devm} {out : Execution}
           (stagedDenominator_ne_zero stable)
           (by
             rw [wideNumeratorN_productWords]
-            simpa [previewMintN, stagedDenominator_toNat stable,
-              stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quoteFits)
+            simpa only [stagedAssetFactor_toNat_of_ne_max assetsNotMax,
+              stagedDenominator_toNat stable, previewMintN] using quoteFits)
           divideStack lookup divideRun
       exact ⟨mid, lift _ _ (divideLift _ _ divideSource), bodyRun⟩
   have stopLookup := Func.stopTable_get mintAfterQuoteSlot
@@ -1748,7 +1749,7 @@ theorem mintQuote_avoiding {pre : Devm} {out : Execution}
     obtain rfl := Func.Run.stop_inv quoteRun
     refine ⟨mid, quoteImage, ?_, quoteMemImage, quoteFrame,
       armState.trans quoteState, bodyRun⟩
-    simpa [previewMintN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
+    simpa only [previewMintN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
       stagedDenominator_toNat stable] using quoteStack
   · rcases ordinaryArm with
       ⟨assetsNotMax, armPre, armStack, armWf, armReads, armState, armRun⟩
@@ -1762,8 +1763,8 @@ theorem mintQuote_avoiding {pre : Devm} {out : Execution}
     obtain rfl := Func.Run.stop_inv quoteRun
     refine ⟨mid, quoteImage, ?_, quoteMemImage, quoteFrame,
       armState.trans quoteState, bodyRun⟩
-    simpa [previewMintN, stagedDenominator_toNat stable,
-      stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quoteStack
+    simpa only [previewMintN, stagedAssetFactor_toNat_of_ne_max assetsNotMax,
+      stagedDenominator_toNat stable] using quoteStack
 
 /-- `withdraw`'s quote along an avoiding walk: the exact ceiling burn quote
 reaches `withdrawAfterQuote` whenever it fits a word. -/
@@ -1811,9 +1812,8 @@ theorem withdrawQuote_avoiding {pre : Devm} {out : Execution}
           (ProducesWord.loadWord amountAt)
           (ProducesWord.stagedDenominator_after_productScratch supplyAt)
           (by
-            simpa [previewWithdrawN, assetsMax, maxWord_toNat,
-              assetFactorN_maxWord, stagedDenominator_toNat stable] using
-              quoteFits)
+            simpa only [stagedDenominator_toNat stable, previewWithdrawN, assetsMax, maxWord_toNat,
+              assetFactorN_maxWord] using quoteFits)
           bodyStack lookup armRun
       exact ⟨mid, lift _ _ armSource, bodyRun⟩
     · obtain ⟨dividePre, divideStack, divideWf, divideReads, divideRun,
@@ -1829,8 +1829,8 @@ theorem withdrawQuote_avoiding {pre : Devm} {out : Execution}
           (stagedAssetFactor_ne_zero assetsNotMax)
           (by
             rw [wideNumeratorN_productWords]
-            simpa [previewWithdrawN, stagedDenominator_toNat stable,
-              stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quoteFits)
+            simpa only [stagedDenominator_toNat stable,
+              stagedAssetFactor_toNat_of_ne_max assetsNotMax, previewWithdrawN] using quoteFits)
           divideStack lookup divideRun
       exact ⟨mid, lift _ _ (divideLift _ _ divideSource), bodyRun⟩
   have stopLookup := Func.stopTable_get withdrawAfterQuoteSlot
@@ -1850,8 +1850,8 @@ theorem withdrawQuote_avoiding {pre : Devm} {out : Execution}
       quoteImage,
       productOverTwoPow256TraceImage_wordFrame image amount denominator,
       armState.trans quoteState, bodyRun⟩
-    simpa [previewWithdrawN, denominator, assetsMax, maxWord_toNat,
-      assetFactorN_maxWord, stagedDenominator_toNat stable] using quoteStack
+    simpa only [previewWithdrawN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
+      stagedDenominator_toNat stable] using quoteStack
   · rcases ordinaryArm with
       ⟨assetsNotMax, armPre, armStack, armWf, armReads, armState, armRun⟩
     obtain ⟨-, quotePre, quoteImage, quoteStack, quoteMemImage, quoteFrame,
@@ -1864,7 +1864,7 @@ theorem withdrawQuote_avoiding {pre : Devm} {out : Execution}
     obtain rfl := Func.Run.stop_inv quoteRun
     refine ⟨mid, quoteImage, ?_, quoteMemImage, quoteFrame,
       armState.trans quoteState, bodyRun⟩
-    simpa [previewWithdrawN, stagedDenominator_toNat stable,
+    simpa only [previewWithdrawN, stagedDenominator_toNat stable,
       stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quoteStack
 
 /-- `redeem`'s quote along an avoiding walk: the exact floor payout quote
@@ -1943,8 +1943,8 @@ theorem redeemQuote_avoiding {pre : Devm} {out : Execution}
           (stagedDenominator_ne_zero stable)
           (by
             rw [wideNumeratorN_productWords]
-            simpa [previewRedeemN, convertToAssetsN, stagedDenominator_toNat stable,
-              stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quoteFits)
+            simpa only [stagedAssetFactor_toNat_of_ne_max assetsNotMax,
+              stagedDenominator_toNat stable, previewRedeemN, convertToAssetsN] using quoteFits)
           divideStack lookup divideRun
       exact ⟨mid, lift _ _ (divideLift _ _ divideSource), bodyRun⟩
   have stopLookup := Func.stopTable_get redeemAfterQuoteSlot
@@ -1962,8 +1962,8 @@ theorem redeemQuote_avoiding {pre : Devm} {out : Execution}
     obtain rfl := Func.Run.stop_inv quoteRun
     refine ⟨mid, quoteImage, ?_, quoteMemImage, quoteFrame,
       armState.trans quoteState, bodyRun⟩
-    simpa [previewRedeemN, convertToAssetsN, assetsMax, maxWord_toNat,
-      assetFactorN_maxWord, stagedDenominator_toNat stable] using quoteStack
+    simpa only [previewRedeemN, convertToAssetsN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
+      stagedDenominator_toNat stable] using quoteStack
   · rcases ordinaryArm with
       ⟨assetsNotMax, armPre, armStack, armWf, armReads, armState, armRun⟩
     obtain ⟨-, quotePre, quoteImage, quoteStack, quoteMemImage, quoteFrame,
@@ -1976,8 +1976,8 @@ theorem redeemQuote_avoiding {pre : Devm} {out : Execution}
     obtain rfl := Func.Run.stop_inv quoteRun
     refine ⟨mid, quoteImage, ?_, quoteMemImage, quoteFrame,
       armState.trans quoteState, bodyRun⟩
-    simpa [previewRedeemN, convertToAssetsN, stagedDenominator_toNat stable,
-      stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quoteStack
+    simpa only [previewRedeemN, convertToAssetsN, stagedAssetFactor_toNat_of_ne_max assetsNotMax,
+      stagedDenominator_toNat stable] using quoteStack
 
 end
 

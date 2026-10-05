@@ -59,35 +59,30 @@ theorem LocalActionSegment.bookedSum_eq
   | ordinaryMint rawRecipient recipient amountWord atom_eq credit_eq
       debit_eq increase =>
       unfold FlowAction.ExactCredit at credit_eq
-      simpa [LocalSegmentKind.bookedIn, LocalSegmentKind.bookedOut,
-        LocalSegmentKind.bookedLoss, FlowAction.bookedCreditLoss,
-        CreditOccurrence.loss, atom_eq, credit_eq] using
-        (sum_increase_add_creditLoss increase)
+      simpa only [LocalSegmentKind.bookedIn, atom_eq, LocalSegmentKind.bookedOut, add_zero,
+        LocalSegmentKind.bookedLoss, FlowAction.bookedCreditLoss, credit_eq,
+        CreditOccurrence.loss] using (sum_increase_add_creditLoss increase)
   | ordinaryTransfer rawSource rawRecipient source recipient amountWord
       atom_eq transfer credit_eq debit_source =>
       unfold FlowAction.ExactCredit at credit_eq
-      simpa [LocalSegmentKind.bookedIn, LocalSegmentKind.bookedOut,
-        LocalSegmentKind.bookedLoss, FlowAction.bookedCreditLoss,
-        CreditOccurrence.loss, atom_eq, credit_eq] using
-        (transfer_steps_sum_add_creditLoss transfer.amount_le
-          transfer.decrease transfer.increase)
+      simpa only [LocalSegmentKind.bookedIn, add_zero, LocalSegmentKind.bookedOut,
+        LocalSegmentKind.bookedLoss, FlowAction.bookedCreditLoss, credit_eq,
+        CreditOccurrence.loss] using
+        (transfer_steps_sum_add_creditLoss transfer.amount_le transfer.decrease transfer.increase)
   | redemption rawSource source ethRecipient amountWord atom_eq credit_eq
       debit_source amount_le decrease =>
-      simpa [LocalSegmentKind.bookedIn, LocalSegmentKind.bookedOut,
-        LocalSegmentKind.bookedLoss, atom_eq] using
-        (sum_decrease_add decrease amount_le).symm
+      simpa only [LocalSegmentKind.bookedIn, add_zero, LocalSegmentKind.bookedOut, atom_eq,
+        LocalSegmentKind.bookedLoss] using (sum_decrease_add decrease amount_le).symm
   | flashCredit rawReceiver receiver amountWord atom_eq credit_eq
       debit_source increase =>
       unfold FlowAction.ExactCredit at credit_eq
-      simpa [LocalSegmentKind.bookedIn, LocalSegmentKind.bookedOut,
-        LocalSegmentKind.bookedLoss, FlowAction.bookedCreditLoss,
-        CreditOccurrence.loss, atom_eq, credit_eq] using
-        (sum_increase_add_creditLoss increase)
+      simpa only [LocalSegmentKind.bookedIn, atom_eq, LocalSegmentKind.bookedOut, add_zero,
+        LocalSegmentKind.bookedLoss, FlowAction.bookedCreditLoss, credit_eq,
+        CreditOccurrence.loss] using (sum_increase_add_creditLoss increase)
   | flashRepayment rawReceiver receiver amountWord creditBefore atom_eq
       credit_eq debit_source amount_le decrease =>
-      simpa [LocalSegmentKind.bookedIn, LocalSegmentKind.bookedOut,
-        LocalSegmentKind.bookedLoss, atom_eq] using
-        (sum_decrease_add decrease amount_le).symm
+      simpa only [LocalSegmentKind.bookedIn, add_zero, LocalSegmentKind.bookedOut, atom_eq,
+        LocalSegmentKind.bookedLoss] using (sum_decrease_add decrease amount_le).symm
 
 def localSegmentsBookedIn
     (segments : List (LocalSegmentKind × FlowAction)) : Nat :=
@@ -111,8 +106,8 @@ theorem LocalSegmentChain.bookedSum_eq
         localSegmentsBookedLoss segments := by
   induction chain with
   | nil balances =>
-      simp [localSegmentsBookedIn, localSegmentsBookedOut,
-        localSegmentsBookedLoss]
+      simp only [localSegmentsBookedIn, List.map_nil, List.sum_nil, add_zero,
+        localSegmentsBookedOut, localSegmentsBookedLoss]
   | cons head rest ih =>
       have hhead := head.bookedSum_eq
       simp only [localSegmentsBookedIn, localSegmentsBookedOut,
@@ -188,7 +183,7 @@ theorem Exec.mem_flowActions_iff
     action ∈ Blanc.Weth10.Exec.flowActions dp ca run ↔
       ∃ frame ∈ Blanc.Exec.committedFrames run,
         Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action := by
-  simp [Blanc.Weth10.Exec.flowActions, List.mem_filterMap]
+  simp only [flowActions, List.mem_filterMap]
 
 /-- With the raw root's installed-code and fresh-entry facts, retained-action
 membership upgrades to the complete compiled-functional context. -/
@@ -260,7 +255,7 @@ theorem RetainedXlot.hasExecOrigin_of_mem_flowActions
       Blanc.Weth10.RetainedXlot.flowActions dp ca retained) :
     action.HasExecOrigin dp ca := by
   cases retained with
-  | none => simp [RetainedXlot.flowActions] at h
+  | none => simp only [flowActions, List.not_mem_nil] at h
   | some run =>
       rcases (Exec.mem_flowActions_iff run action).mp h with
         ⟨frame, hframe, hclassified⟩
@@ -287,11 +282,6 @@ theorem ProcessCreateMessageTrace.hasExecOrigin_of_mem_flowActions
   RetainedXlot.hasExecOrigin_of_mem_flowActions trace.retained
     (ProcessCreateMessageTrace.allFramesRoot trace) h
 
-private theorem frame_enter_run_memory_empty
-    {frame : Frame} {child : Evm}
-    (h : frame.enter = .run child) : child.dyna.memory = Mem.empty :=
-  frame_enter_run_memory h
-
 theorem MessageCallTrace.hasExecOrigin_of_mem_flowActions
     {dp : DeployParams} {ca : Adr} {msg : Msg} {state : State}
     {out : MsgCallOutput} (trace : MessageCallTrace msg state out)
@@ -300,11 +290,11 @@ theorem MessageCallTrace.hasExecOrigin_of_mem_flowActions
     action.HasExecOrigin dp ca := by
   cases trace with
   | createCollision htarget hcollision hresult =>
-      simp [MessageCallTrace.flowActions] at h
+      simp only [flowActions, List.not_mem_nil] at h
   | createRun htarget hcollision evm hcore trace hresult =>
       simp only [MessageCallTrace.flowActions] at h
       split at h
-      · simp at h
+      · simp only [List.not_mem_nil] at h
       · exact
           ProcessCreateMessageTrace.hasExecOrigin_of_mem_flowActions trace h
   | callRun htarget delegated refund hdelegation execMsg hexecMsg evm
@@ -330,7 +320,7 @@ theorem ApplyTransactionsTrace.hasExecOrigin_of_mem_flowActions
     action.HasExecOrigin dp ca := by
   induction trace with
   | nil benv bout =>
-      simp [ApplyTransactionsTrace.flowActions] at h
+      simp only [flowActions, List.not_mem_nil] at h
   | cons head tail ih =>
       simp only [ApplyTransactionsTrace.flowActions,
         List.mem_append] at h
@@ -361,33 +351,6 @@ theorem RequestsTrace.hasExecOrigin_of_mem_flowActions
   · exact SystemMessageTrace.hasExecOrigin_of_mem_flowActions
       trace.consolidation hconsolidation
 
-theorem AppliedBodyTrace.hasExecOrigin_of_mem_flowActions
-    {dp : DeployParams} {ca : Adr} {benv : Benv}
-    {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
-    {state : State} {bout : BlockOutput}
-    (trace : AppliedBodyTrace benv txs wds state bout)
-    {action : FlowAction}
-    (h : action ∈ Blanc.Weth10.AppliedBodyTrace.flowActions dp ca trace) :
-    action.HasExecOrigin dp ca := by
-  simp only [AppliedBodyTrace.flowActions, List.mem_append] at h
-  rcases h with ((hbeacon | hhistory) | htransactions) | hrequests
-  · exact SystemMessageTrace.hasExecOrigin_of_mem_flowActions
-      trace.beacon hbeacon
-  · exact SystemMessageTrace.hasExecOrigin_of_mem_flowActions
-      trace.history hhistory
-  · exact ApplyTransactionsTrace.hasExecOrigin_of_mem_flowActions
-      trace.transactions htransactions
-  · exact RequestsTrace.hasExecOrigin_of_mem_flowActions
-      trace.requests hrequests
-
-theorem AccountedBlock.hasExecOrigin_of_mem_actions
-    {cfg : ChainConfig} {dp : DeployParams} {ca : Adr}
-    {pre post : BlockChain}
-    (accounted : AccountedBlock cfg dp ca pre post)
-    {action : FlowAction} (h : action ∈ accounted.actions) :
-    action.HasExecOrigin dp ca := by
-  rw [accounted.actions_eq] at h
-  exact AppliedBodyTrace.hasExecOrigin_of_mem_flowActions accounted.bodyTrace h
 
 end Weth10
 

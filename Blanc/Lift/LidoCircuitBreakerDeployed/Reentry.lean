@@ -69,7 +69,8 @@ theorem entry13_reach {R : Exec.Deriv} {sevm : Sevm} {b : Devm} {M : Mem} {G : N
   obtain ⟨d1, s1, run⟩ := rr_next run hT
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
   rcases rr_branch run hT with ⟨-, G2, run⟩ | ⟨-, G2, run⟩
-  · exact (Reach.false_of_execFree execFreeEntries_set run hT (by decide) (by simp)).elim
+  · exact (Reach.false_of_execFree execFreeEntries_set run hT (by decide) (by simp only [List.not_mem_nil,
+    IsEmpty.forall_iff, implies_true])).elim
   unfold t_05e8_c13 at run
   obtain ⟨G3, run⟩ := rr_dest run hT
   obtain ⟨d1, s1, run⟩ := rr_next run hT
@@ -144,7 +145,8 @@ theorem entry13_reach {R : Exec.Deriv} {sevm : Sevm} {b : Devm} {M : Mem} {G : N
   obtain ⟨d1, s1, run⟩ := rr_next run hT
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
   rcases rr_branch run hT with ⟨-, G4, run⟩ | ⟨-, G4, run⟩
-  · exact (Reach.false_of_execFree execFreeEntries_set run hT (by decide) (by simp)).elim
+  · exact (Reach.false_of_execFree execFreeEntries_set run hT (by decide) (by simp only [List.not_mem_nil,
+    IsEmpty.forall_iff, implies_true])).elim
   unfold t_0673_c13 at run
   obtain ⟨G5, run⟩ := rr_dest run hT
   obtain ⟨d1, s1, run⟩ := rr_next run hT
@@ -187,7 +189,8 @@ theorem entry13_reach {R : Exec.Deriv} {sevm : Sevm} {b : Devm} {M : Mem} {G : N
   obtain ⟨d1, s1, run⟩ := rr_next run hT
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
   rcases rr_branch run hT with ⟨-, G6, run⟩ | ⟨-, G6, run⟩
-  · exact (Reach.false_of_execFree execFreeEntries_set run hT (by decide) (by simp)).elim
+  · exact (Reach.false_of_execFree execFreeEntries_set run hT (by decide) (by simp only [List.not_mem_nil,
+    IsEmpty.forall_iff, implies_true])).elim
   unfold t_06ba_c13 at run
   obtain ⟨G7, run⟩ := rr_dest run hT
   obtain ⟨d1, s1, run⟩ := rr_next run hT
@@ -298,7 +301,8 @@ theorem entry13_reach {R : Exec.Deriv} {sevm : Sevm} {b : Devm} {M : Mem} {G : N
   obtain ⟨d1, s1, run⟩ := rr_next run hT
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
   rcases rr_branch run hT with ⟨-, G11, run⟩ | ⟨-, G11, run⟩
-  · exact (Reach.false_of_execFree execFreeEntries_set run hT (by decide) (by simp)).elim
+  · exact (Reach.false_of_execFree execFreeEntries_set run hT (by decide) (by simp only [List.not_mem_nil,
+    IsEmpty.forall_iff, implies_true])).elim
   unfold t_0733_c13 at run
   obtain ⟨G12, run⟩ := rr_dest run hT
   obtain ⟨d1, s1, run⟩ := rr_next run hT
@@ -319,7 +323,7 @@ theorem entry13_reach {R : Exec.Deriv} {sevm : Sevm} {b : Devm} {M : Mem} {G : N
     · have hc := congrFun hcode2 sevm.currentTarget
       rw [getStor_St_code] at hc
       rw [getStor_St_code, getCode_eq_of_state_eq hst, hc]
-      simpa [getStor_St_code, afterSload_getCode, getCode_setTransVal] using hcode
+      simpa only [afterSload_getCode, getCode_setTransVal] using hcode
     · show RegInv (Devm.getStor d1 sevm.currentTarget)
       rw [getStor_eq_of_state_eq hst]
       exact hinv2
@@ -334,9 +338,8 @@ theorem entry13_reach {R : Exec.Deriv} {sevm : Sevm} {b : Devm} {M : Mem} {G : N
       exact hΨ)
     (fun pop hΨ => by rw [getStor_eq_of_state_eq pop.state.symm]; exact hΨ)
     (fun burn hΨ => by rw [getStor_eq_of_state_eq burn.state.symm]; exact hΨ)
-    run hT (by decide) (by simp) hinvF
+    run hT (by decide) (by simp only [List.not_mem_nil, IsEmpty.forall_iff, implies_true]) hinvF
 
-private instance : Inhabited SFunc := ⟨.undefined⟩
 
 /-- **`RegInv` at the external instructions reached through the `pause` wrapper
 (entry 49)**: decoder 7 is crossed as a big-step callee (`entry7_ret`), the body
@@ -372,7 +375,8 @@ theorem pause_wrapper_reach {R : Exec.Deriv} {sevm : Sevm} {d : Devm} {T : Conf}
   obtain ⟨d1, s1, run⟩ := rr_next run hT
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun s1)
   obtain ⟨G5, T', r13, rfl⟩ :=
-    rr_callInto execFreeEntries_set (g := t_05ac_c13) rfl (by decide) (by simp) run hT
+    rr_callInto execFreeEntries_set (g := t_05ac_c13) rfl (by decide) (by simp only [List.not_mem_nil,
+      IsEmpty.forall_iff, implies_true]) run hT
   exact entry13_reach (T := T') hfork ihQ hmem hwit hpre.code ht (fun ht0 => hAe.2 ⟨ht0, ht⟩)
     r13 hT
 
@@ -409,7 +413,8 @@ theorem lido_frame_reach {R : Exec.Deriv} {sevm : Sevm} {pre : Devm} {T : Conf}
         rfl | rfl | rfl | rfl | rfl
       all_goals first | exact absurd rfl h49 | decide
     exact (Reach.false_of_execFree execFreeEntries_set rest hT
-      (ExecFreeSet.lookup execFreeEntries_set hkE hg) (by simp)).elim
+      (ExecFreeSet.lookup execFreeEntries_set hkE hg) (by simp only [List.not_mem_nil,
+        IsEmpty.forall_iff, implies_true])).elim
 
 /-! ## The three obligations of the entry-invariant ladder -/
 

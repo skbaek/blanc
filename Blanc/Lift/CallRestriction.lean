@@ -24,7 +24,7 @@ theorem SStep.execsSatisfy {c : Cert} {allowed : Xinst → Bool}
     (holds : before.ExecsSatisfy allowed) : after.ExecsSatisfy allowed := by
   cases step with
   | @next n f pc a a' m K hn =>
-      cases n <;> simp_all [Cursor.ExecsSatisfy, SFunc.execsSatisfy]
+      cases n <;> simp_all only [Cursor.ExecsSatisfy, SFunc.execsSatisfy, implies_true, and_self, Bool.and_eq_true]
   | dest | toZero | pcAt => exact holds
   | zero =>
       simp only [Cursor.ExecsSatisfy, SFunc.execsSatisfy, Bool.and_eq_true] at holds
@@ -42,15 +42,18 @@ theorem SStep.execsSatisfy {c : Cert} {allowed : Xinst → Bool}
         exact holds.1
       · exact holds.2 k member
   | ret =>
-      exact ⟨holds.2 _ (by simp), fun k member => holds.2 k (by simp [member])⟩
+      exact ⟨holds.2 _ (by simp only [List.mem_cons, true_or]), fun k member => holds.2 k (by simp only [List.mem_cons, member,
+        or_true])⟩
 
 theorem Cursor.start_execsSatisfy {c : Cert} {allowed : Xinst → Bool}
     (checked : ∀ f ∈ c.prog, f.execsSatisfy allowed = true) :
     (Cursor.start c).ExecsSatisfy allowed := by
   cases c with
-  | nil => exact ⟨rfl, by simp [Cursor.start]⟩
+  | nil => exact ⟨rfl, by simp only [start, List.not_mem_nil, IsEmpty.forall_iff, implies_true]⟩
   | cons entry rest =>
-      exact ⟨checked entry.2 (by simp [Cert.prog]), by simp [Cursor.start]⟩
+      exact ⟨checked entry.2 (by simp only [Cert.prog, List.map_cons, List.mem_cons, List.mem_map,
+        Prod.exists, exists_eq_right, true_or]), by simp only [start, List.not_mem_nil,
+        IsEmpty.forall_iff, implies_true]⟩
 
 theorem Cursor.execsSatisfy_of_reachable {c : Cert} {allowed : Xinst → Bool}
     (checked : ∀ f ∈ c.prog, f.execsSatisfy allowed = true)
@@ -90,42 +93,42 @@ theorem CursorOK.execsSatisfy {code : ByteArray} {c : Cert} {node : Exec.Deriv}
     exact holds.1.1
   | last l =>
     have hl := byteAt_linst_at (show byteAt code pc = some l.toUInt8 by
-      simpa [checkNode] using hcheck)
+      simpa only [checkNode, beq_iff_eq] using hcheck)
     unfold Linst.At at hl
     unfold Ninst.At at hat
     rw [hat] at hl
     cases hl
   | undefined =>
     have hnone : code.getInst pc = none := by
-      simpa [checkNode, Option.isNone_iff_eq_none] using hcheck
+      simpa only [checkNode, Option.isNone_iff_eq_none] using hcheck
     unfold Ninst.At at hat
     rw [hat] at hnone
     cases hnone
-  | dest g => exact (hjump _ (by simp [checkNode] at hcheck; exact hcheck.1)).elim
+  | dest g => exact (hjump _ (by simp only [checkNode, Bool.and_eq_true, beq_iff_eq] at hcheck; exact hcheck.1)).elim
   | branch g h =>
     simp only [checkNode] at hcheck
     split at hcheck
-    · exact (hjump _ (by simp at hcheck; exact hcheck.1.1)).elim
+    · exact (hjump _ (by simp only [Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true] at hcheck; exact hcheck.1.1)).elim
     · cases hcheck
   | branchTo g k =>
     simp only [checkNode] at hcheck
     split at hcheck
-    · exact (hjump _ (by simp at hcheck; exact hcheck.1.1.1.1)).elim
+    · exact (hjump _ (by simp only [Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true] at hcheck; exact hcheck.1.1.1.1)).elim
     · cases hcheck
   | jump k =>
     simp only [checkNode] at hcheck
     split at hcheck
-    · exact (hjump _ (by simp at hcheck; exact hcheck.1.1.1)).elim
+    · exact (hjump _ (by simp only [Bool.and_eq_true, beq_iff_eq] at hcheck; exact hcheck.1.1.1)).elim
     · cases hcheck
   | callNext k g =>
     simp only [checkNode] at hcheck
     split at hcheck
-    · exact (hjump _ (by simp at hcheck; exact hcheck.1.1.1)).elim
+    · exact (hjump _ (by simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hcheck; exact hcheck.1.1.1)).elim
     · cases hcheck
   | ret =>
     simp only [checkNode] at hcheck
     split at hcheck
-    · exact (hjump _ (by simp at hcheck; exact hcheck.1)).elim
+    · exact (hjump _ (by simp only [Bool.and_eq_true, beq_iff_eq] at hcheck; exact hcheck.1)).elim
     · cases hcheck
   | pcAt p g =>
     simp only [checkNode, Bool.and_eq_true] at hcheck

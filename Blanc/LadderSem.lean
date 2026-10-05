@@ -119,22 +119,6 @@ def SoundNoMem (c : ContractSpecSem) (ca : Adr) : Prop :=
     c.Pre ca sevm pre →
     c.Post ca sevm post
 
-def SoundWith (c : ContractSpecSem) (ca : Adr) (mw : Mem → Prop) : Prop :=
-  ∀ {sevm pre post},
-    CoveredFork sevm.benvStat.fork →
-    c.sem.Run sevm pre post →
-    sevm.currentTarget = ca →
-    ( ∀ pc' sevm' pre' post',
-        Exec pc' sevm' pre' (.ok post') →
-        sevm'.depth < sevm.depth →
-        CodeSem.At c.sem ca pc' sevm' pre' →
-        CoveredFork sevm'.benvStat.fork →
-        c.PreWf ca sevm' pre' →
-        c.Post ca sevm' post' ) →
-    mw pre.memory →
-    c.Pre ca sevm pre →
-    c.Post ca sevm post
-
 def Preserves (c : ContractSpecSem) (ca : Adr) : Prop :=
   ∀ sevm pre post,
     CoveredFork sevm.benvStat.fork →
@@ -182,12 +166,12 @@ lemma Pre.state_eq {wa sevm devm devm'}
   cases h_pc with
   | mk h_code h_nof h_solv =>
     have h_bal : devm'.getBal = devm.getBal := by
-      funext a; simp [Devm.getBal, Devm.getAcct]; rw [h_eq]
+      funext a; simp only [Devm.getBal, Devm.getAcct]; rw [h_eq]
     have h_stor : ∀ a, Devm.getStor devm' a = Devm.getStor devm a := by
-      intro a; simp [Devm.getStor, Devm.getAcct]; rw [h_eq]
+      intro a; simp only [Devm.getStor, Devm.getAcct]; rw [h_eq]
     constructor
     · have h_gc : devm'.getCode wa = devm.getCode wa := by
-        simp [Devm.getCode, Devm.getAcct]; rw [h_eq]
+        simp only [Devm.getCode, Devm.getAcct]; rw [h_eq]
       rw [h_gc]; exact h_code
     · rw [h_bal]; exact h_nof
     · cases h_solv with
@@ -979,7 +963,7 @@ lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
     c.Post wa sevm post := by
   cases l
   case stop =>
-    dsimp [Linst.Run, Linst.run] at h_run
+    dsimp only [Linst.Run, Linst.run] at h_run
     injection h_run with h_eq; subst h_eq
     exact post_of_pre h_pc
   case return_ =>
@@ -995,7 +979,7 @@ lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
       rw [hb, hs]
       exact h_pc.inv.right h_ne
   case revert =>
-    dsimp [Linst.Run, Linst.run] at h_run
+    dsimp only [Linst.Run, Linst.run, Lean.Elab.WF.paramLet] at h_run
     rcases Except.bind_eq_ok h_run with ⟨_, _, h2⟩
     rcases Except.bind_eq_ok h2 with ⟨_, _, h4⟩
     rcases Except.bind_eq_ok h4 with ⟨_, _, h6⟩
@@ -1004,7 +988,8 @@ lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
     have hsg : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
     have hbal : sevm.benvStat.rules.bal = none :=
       BenvStat.bal_none_of_stateGas_none hsg
-    dsimp [Linst.Run, Linst.run] at h_run
+    dsimp only [Linst.Run, Linst.run, ne_eq, Except.bind_ok, ite_not, Lean.Elab.WF.paramLet,
+      Devm.balReadAccount_accessedAddresses, Devm.balReadAccount_getAcct] at h_run
     rw [hsg] at h_run
     simp only [Devm.balReadAccount_of_bal_none hbal] at h_run
     rcases Except.bind_eq_ok h_run with ⟨⟨dest_a, devm1⟩, h_pop, h_run1⟩
@@ -1016,7 +1001,7 @@ lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
       · rw [eq] at h_sub; contradiction
       · rw [eq] at h_sub; injection h_sub with h; subst h; rfl
     have h_sub_st : devm2.state.subBal sevm.currentTarget ((dest_a, devm1).2.getAcct sevm.currentTarget).bal = some devm3.state := by
-      dsimp [Devm.subBal, Option.bind] at h_sub_some
+      dsimp only [Devm.subBal, Option.bind_eq_bind, Option.bind] at h_sub_some
       cases h : devm2.state.subBal sevm.currentTarget ((dest_a, devm1).2.getAcct sevm.currentTarget).bal
       · rw [h] at h_sub_some; contradiction
       · rw [h] at h_sub_some; injection h_sub_some with h2; subst h2; rfl
@@ -1025,7 +1010,7 @@ lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
       have h1 := chargeGas_getBal_eq h_charge a
       rw [h1]
       split
-      · simp [Devm.getBal, Devm.getAcct]
+      · simp only [Devm.getBal, Devm.getAcct]
         rw [addAccessedAddress_state]
       · rfl
     have h_pc1 : c.Pre wa sevm devm1 := by
@@ -1240,7 +1225,7 @@ theorem StateInv.destroyAccount {ca a : Adr} {w : Jaune.State}
   · have h0 : ((Jaune.destroyAccount w a).get a).bal = 0 := by
       show (State.get (w.erase a) a).bal = 0
       unfold State.get
-      rw [Std.TreeMap.getD_erase]; simp [Acct.nil]
+      rw [Std.TreeMap.getD_erase]; simp only [Std.compare_self, ↓reduceIte, Acct.nil]
     have hdec : Decrease a (w.bal a) w.bal (Jaune.destroyAccount w a).bal := by
       intro b; constructor
       · intro heq; subst heq
@@ -1585,11 +1570,13 @@ lemma setDelegationStep_preserves_inv {wa : Adr} {auth : Auth} {msg msg' : Msg}
               subst authority
               by_cases h_empty : (msg.benv.state.get wa).code.isEmpty = true
               · have h_size : (msg.benv.state.get wa).code.size = 0 := by
-                  simpa [ByteArray.isEmpty] using h_empty
+                  simpa only [ByteArray.size_eq_zero_iff, ByteArray.isEmpty, beq_iff_eq] using
+                    h_empty
                 exact (ne_wa_of_code_size_zero h_code_ne h_size) rfl
               · have h_valid : isValidDelegation (msg.benv.state.get wa).code := by
-                  simp_all
-                exact h_not_del (by simpa [State.getCode] using h_valid)
+                  simp_all only [Bool.and_eq_true, bne_iff_ne, ne_eq, not_and, Decidable.not_not,
+                    Bool.false_eq_true, false_or, ite_not, Bool.not_eq_true]
+                exact h_not_del (by simpa only [State.getCode] using h_valid)
             change c.StateInv wa ((msg.benv.state.setCode authority _).incrNonce authority)
             exact StateInv.incrNonce (StateInv.setCode_ne h_ne h_inv)
 
@@ -1613,14 +1600,14 @@ lemma setDelegation_preserves_inv {wa : Adr} {msg msg' : Msg} {v : B256}
     (h_inv : c.StateInv wa msg.benv.state) :
     c.StateInv wa msg'.benv.state := by
   unfold setDelegation at h_run
-  dsimp [bind, Except.bind] at h_run
+  dsimp only [Except.bind_error, Except.bind_ok, Lean.Elab.WF.paramLet, bind, Except.bind] at h_run
   apply Except.bind_eq_ok at h_run
   rcases h_run with ⟨⟨msg_mid, refundCounter⟩, h_loop, h_rest⟩
   have h_eq_benv : msg_mid.benv = msg'.benv := by
     dsimp only at h_rest
     split at h_rest
     · contradiction
-    · simpa using congrArg Msg.benv (congrArg Prod.fst (Except.ok.inj h_rest))
+    · simpa only using congrArg Msg.benv (congrArg Prod.fst (Except.ok.inj h_rest))
   rw [← h_eq_benv]
   exact setDelegationLoop_preserves_inv h_loop h_inv
 
@@ -1643,7 +1630,7 @@ lemma MsgInv.pc {wa : Adr} {msg : Msg} {codeSrc : Adr → ByteArray}
     · intro h_tgt h_ct
       have h_not_del : ¬ isValidDelegation msg.code :=
         c.sem.not_delegation
-          (h.code (by simpa using h_tgt) (by simpa using h_ct))
+          (h.code (by simpa only [Option.isNone_eq_false_iff] using h_tgt) (by simpa only using h_ct))
       unfold getDelegatedCodeAddress at h_dca
       split at h_dca
       · rename_i h_del
@@ -1652,7 +1639,7 @@ lemma MsgInv.pc {wa : Adr} {msg : Msg} {codeSrc : Adr → ByteArray}
     · intro h_tgt h_ct
       have h_not_del : ¬ isValidDelegation msg.code :=
         c.sem.not_delegation
-          (h.code (by simpa using h_tgt) (by simpa using h_ct))
+          (h.code (by simpa only [Option.isNone_eq_false_iff] using h_tgt) (by simpa only using h_ct))
       unfold getDelegatedCodeAddress at h_dca
       split at h_dca
       · rename_i h_del
@@ -1670,7 +1657,8 @@ lemma setDelegation_preserves_msgInv {wa : Adr} {msg msg' : Msg} {v : B256}
     setDelegation_msg_noDel h_run h.nodel h_not_del, ?_, ?_, ?_, ?_⟩
   · intro h_tgt h_ct
     unfold setDelegation at h_run
-    dsimp [bind, Except.bind] at h_run
+    dsimp only [Except.bind_error, Except.bind_ok, Lean.Elab.WF.paramLet, bind,
+      Except.bind] at h_run
     apply Except.bind_eq_ok at h_run
     rcases h_run with ⟨⟨msg_mid, refundCounter⟩, h_loop, h_rest⟩
     rcases setDelegationLoop_fields h_loop with ⟨_, h_mid_tgt, h_mid_ct, _, _, h_mid_ca⟩
@@ -1704,7 +1692,8 @@ lemma setDelegation_preserves_msgInv {wa : Adr} {msg msg' : Msg} {v : B256}
       exact h.state.code
   · intro h_tgt h_ct
     unfold setDelegation at h_run_orig
-    dsimp [bind, Except.bind] at h_run_orig
+    dsimp only [Except.bind_error, Except.bind_ok, Lean.Elab.WF.paramLet, bind,
+      Except.bind] at h_run_orig
     apply Except.bind_eq_ok at h_run_orig
     rcases h_run_orig with ⟨⟨msg_mid, refundCounter⟩, h_loop, h_rest⟩
     rcases setDelegationLoop_fields h_loop with ⟨_, h_mid_tgt, h_mid_ct, _, _, h_mid_ca⟩
@@ -1726,7 +1715,8 @@ lemma setDelegation_preserves_msgInv {wa : Adr} {msg msg' : Msg} {v : B256}
       · exact h_ct
   · intro h_stv
     unfold setDelegation at h_run_orig
-    dsimp [bind, Except.bind] at h_run_orig
+    dsimp only [Except.bind_error, Except.bind_ok, Lean.Elab.WF.paramLet, bind,
+      Except.bind] at h_run_orig
     apply Except.bind_eq_ok at h_run_orig
     rcases h_run_orig with ⟨⟨msg_mid, refundCounter⟩, h_loop, h_rest⟩
     rcases setDelegationLoop_fields h_loop with ⟨h_mid_caller, _, _, h_mid_stv, _, _⟩
@@ -1745,7 +1735,8 @@ lemma setDelegation_preserves_msgInv {wa : Adr} {msg msg' : Msg} {v : B256}
       rwa [h_mid_stv] at h_stv
   · intro h_stv h_ct
     unfold setDelegation at h_run_orig
-    dsimp [bind, Except.bind] at h_run_orig
+    dsimp only [Except.bind_error, Except.bind_ok, Lean.Elab.WF.paramLet, bind,
+      Except.bind] at h_run_orig
     apply Except.bind_eq_ok at h_run_orig
     rcases h_run_orig with ⟨⟨msg_mid, refundCounter⟩, h_loop, h_rest⟩
     rcases setDelegationLoop_fields h_loop with ⟨_, _, h_mid_ct, h_mid_stv, h_mid_val, _⟩
@@ -1810,7 +1801,7 @@ theorem processMessageCall_preserves_inv {wa : Adr} {msg : Msg} {st' : Jaune.Sta
           exact h_pm
   · rename_i h_target
     have h_target_false : msg.target.isNone = false := by
-      cases ht : msg.target.isNone <;> simp [ht] at h_target ⊢
+      cases ht : msg.target.isNone <;> simp only [ht, Bool.false_eq_true, not_false_eq_true, not_true_eq_false] at h_target ⊢
     unfold processMessageCall.call at h_run
     dsimp only at h_run
     rw [hsg] at h_run
@@ -1845,7 +1836,7 @@ theorem processMessageCall_preserves_inv {wa : Adr} {msg : Msg} {st' : Jaune.Sta
                   accessedAddresses := msg.accessedAddresses.insert dca,
                   code := msg.benv.state.getCode dca,
                   codeAddress := some dca }).target.isNone = false := by
-            split <;> simpa using h_target_false
+            split <;> simpa only [Option.isNone_eq_false_iff] using h_target_false
           have hfork' : CoveredFork               (match getDelegatedCodeAddress msg.code with
               | none => msg
               | some dca =>
@@ -1914,7 +1905,7 @@ theorem processMessageCall_preserves_inv {wa : Adr} {msg : Msg} {st' : Jaune.Sta
                     accessedAddresses := msgDelegation.accessedAddresses.insert dca,
                     code := msgDelegation.benv.state.getCode dca,
                     codeAddress := some dca }).target.isNone = false := by
-              split <;> simpa using h_msgDelegation_target_false
+              split <;> simpa only [Option.isNone_eq_false_iff] using h_msgDelegation_target_false
             have hfork' : CoveredFork                 (match getDelegatedCodeAddress msgDelegation.code with
                 | none => msgDelegation
                 | some dca =>
@@ -1996,10 +1987,13 @@ lemma checkTransaction_sender_ne_of_inv {wa : Adr}
     · have h_empty' : (benv.state.getCode wa).toList = [] := by
         apply List.eq_nil_of_length_eq_zero
         rw [← ByteArray.size_eq_length_toList]
-        unfold ByteArray.isEmpty at h_empty; simp at h_empty; simpa [State.getCode] using congrArg ByteArray.size h_empty
+        unfold ByteArray.isEmpty at h_empty; simp only [beq_iff_eq,
+          ByteArray.size_eq_zero_iff] at h_empty; simpa only [State.getCode,
+          ByteArray.size_eq_zero_iff, ByteArray.size_empty] using congrArg ByteArray.size h_empty
       exact (c.sem.ne_nil (by rw [← h_inv.state.code, h_empty'])) rfl
     · exact c.sem.not_delegation h_inv.state.code h_del
-  simp [checkTransactionSenderCode, h_no] at hg
+  simp only [checkTransactionSenderCode, h_no, not_false_eq_true, ↓reduceIte,
+    Except.mapError_eq_ok_iff, reduceCtorEq] at hg
 
 lemma prepareMessage_preserves_inv {wa : Adr}
     {benv : Benv} {tenv : Tenv} {tx : Tx} {msg : Msg}
@@ -2016,17 +2010,18 @@ lemma prepareMessage_preserves_inv {wa : Adr}
   unfold prepareMessage at h_prep
   cases hrecv : tx.type.receiver? with
   | none =>
-    simp [hrecv] at h_prep
+    simp only [hrecv, Except.ok.injEq] at h_prep
     subst msg
     refine ⟨h_state, ⟨h_ca, ?_⟩, ?_, ?_, ?_, ?_⟩
     · intro h_empty
       exact (c.sem.ne_nil (by rw [← h_state.code, h_empty])) rfl
-    · simp
-    · simp
-    · simpa using h_origin_ne
-    · simp
+    · simp only [Option.isNone_none, Bool.true_eq_false, IsEmpty.forall_iff]
+    · simp only [Option.isNone_none, Bool.true_eq_false, reduceCtorEq, imp_false,
+      IsEmpty.forall_iff]
+    · simpa only [ne_eq, forall_const] using h_origin_ne
+    · simp only [Bool.true_eq_false, IsEmpty.forall_iff]
   | some target =>
-    simp [hrecv] at h_prep
+    simp only [hrecv, Except.ok.injEq] at h_prep
     subst msg
     refine ⟨h_state, ⟨h_ca, ?_⟩, ?_, ?_, ?_, ?_⟩
     · intro h_empty
@@ -2034,13 +2029,13 @@ lemma prepareMessage_preserves_inv {wa : Adr}
     · intro _ h_target
       change target = wa at h_target
       subst target
-      simpa using h_state.code
+      simpa only using h_state.code
     · intro _ h_target
       change target = wa at h_target
       subst target
       rfl
-    · simpa using h_origin_ne
-    · simp
+    · simpa only [ne_eq, forall_const] using h_origin_ne
+    · simp only [Bool.true_eq_false, IsEmpty.forall_iff]
 
 lemma StateInv.add_transaction_gas_credits {wa : Adr}
     {baseState debitState postMsgState : Jaune.State}
@@ -2218,7 +2213,7 @@ theorem processTransaction_preserves_inv (wa : Adr)
             Tenv).stat.origin ≠ wa := by
     exact hsender
   have hmsg : c.MsgInv wa msg :=
-    prepareMessage_preserves_inv hprep hstate1 (by simpa using h_inv.ca) horigin
+    prepareMessage_preserves_inv hprep hstate1 (by simpa only using h_inv.ca) horigin
   have hfork_msg : CoveredFork msg.benv.stat.fork := by
     rw [prepareMessage_benv hprep]
     exact hfork
@@ -2261,7 +2256,7 @@ theorem processTransaction_preserves_inv (wa : Adr)
     simp only [settleSelfdestructs, settleTransactionGas, BenvStat.rules] at hsg ⊢
     simp only [hsg] at ⊢
     exact StateInv.foldl_destroyAccount hpm_inv.2 hcredits
-  · simpa [Benv.withState] using h_inv.ca
+  · simpa only [Benv.withState] using h_inv.ca
 
 theorem applyTransactions_preserves_inv (wa : Adr) (hp : c.Preserves wa)
     (txis : List (Nat × Tx)) (benv benv' : Benv) (bout bout' : BlockOutput)
@@ -2283,7 +2278,7 @@ theorem applyTransactions_preserves_inv (wa : Adr) (hp : c.Preserves wa)
     have hstep := processTransaction_preserves_inv wa hp benv bout bout'' tx i st h1 h_sum h_inv hfork
     have hsum' : sum (benv.withState st).state.bal < 2 ^ 256 := by
       have := processTransaction_sum_le h1 hfork.rules_stateGas_none
-      simpa [Benv.withState] using Nat.lt_of_le_of_lt this h_sum
+      simpa only [Benv.withState, Nat.reducePow, gt_iff_lt] using Nat.lt_of_le_of_lt this h_sum
     exact ih (benv.withState st) bout'' h2 hsum' hstep hfork
 
 /-
@@ -2302,7 +2297,7 @@ lemma processUncheckedSystemTransaction_preserves_inv_sum_le (wa : Adr)
     (h_inv : c.BenvInv wa benv)
     (hfork : CoveredFork benv.stat.fork) :
     c.StateInv wa st ∧ sum st.bal ≤ sum benv.state.bal := by
-  dsimp [processUncheckedSystemTransaction, processSystemTransaction] at h_run
+  dsimp only [processUncheckedSystemTransaction, processSystemTransaction] at h_run
   -- The system transaction opens on `benv.beginTransaction`; that only
   -- refreshes `stat.origState`, so every field the invariant reads is defeq to
   -- the corresponding field of `benv`.
@@ -2325,8 +2320,8 @@ lemma processUncheckedSystemTransaction_preserves_inv_sum_le (wa : Adr)
       simp only [processSystemTransactionMsg] at htarget ⊢
       subst target
       rfl
-    · simp [processSystemTransactionMsg]
-    · simp [processSystemTransactionMsg]
+    · simp only [processSystemTransactionMsg, Bool.false_eq_true, ne_eq, IsEmpty.forall_iff]
+    · simp only [processSystemTransactionMsg, implies_true]
   have hgas_msg : (processSystemTransactionMsg benv.beginTransaction
     (processSystemTransactionTenv benv.beginTransaction)
     target data (benv.state.getCode target)).benv.stat.rules.stateGas = none :=
@@ -2358,7 +2353,7 @@ lemma processWithdrawalsState_preserves_inv (wa : Adr)
   | nil => exact h_inv
   | cons wd wds ih =>
     have h_cons : wdsum (wd :: wds) = wd.amount.toNat * 10 ^ 9 + wdsum wds := by
-      simp [wdsum]
+      simp only [wdsum, Nat.reducePow, List.map_cons, List.sum_cons]
     rw [h_cons] at h_bound
     have h_val : (wd.amount * (10 ^ 9).toB256).toNat =
         wd.amount.toNat * 10 ^ 9 := by
@@ -2406,10 +2401,10 @@ lemma runRequestContracts_preserves_inv_sum_le (wa : Adr)
       address [] state output (processCheckedSystemTransaction_to_unchecked h1)
       h_inv hfork
     have h_inv1 : c.BenvInv wa (benv.withState state) :=
-      ⟨hu.1, by simpa [Benv.withState] using h_inv.ca⟩
+      ⟨hu.1, by simpa only [Benv.withState] using h_inv.ca⟩
     dsimp only at h_run
     have ih' := ih _ _ _ h_run h_inv1 hfork
-    exact ⟨ih'.1, le_trans (by simpa [Benv.withState] using ih'.2) hu.2⟩
+    exact ⟨ih'.1, le_trans (by simpa only [Benv.withState] using ih'.2) hu.2⟩
 
 /-
 (1) Difficulty: ★★☆☆☆
@@ -2455,19 +2450,19 @@ theorem applyBody_preserves_inv (wa : Adr) (hp : c.Preserves wa)
       beaconRootsAddress benv.stat.parentBeaconBlockRoot.toBytes
       stBeacon outBeacon h_beacon h_inv hfork
   have h_benv_beacon : c.BenvInv wa (benv.withState stBeacon) :=
-    ⟨h_beacon_inv.1, by simpa [Benv.withState] using h_inv.ca⟩
+    ⟨h_beacon_inv.1, by simpa only [Benv.withState] using h_inv.ca⟩
   have h_history_inv :=
     processUncheckedSystemTransaction_preserves_inv_sum_le wa hp
       (benv.withState stBeacon) historyStorageAddress lastHash.toBytes
       stHistory outHistory h_history h_benv_beacon hfork
   have h_benv_history :
       c.BenvInv wa ((benv.withState stBeacon).withState stHistory) :=
-    ⟨h_history_inv.1, by simpa [Benv.withState] using h_benv_beacon.ca⟩
+    ⟨h_history_inv.1, by simpa only [Benv.withState] using h_benv_beacon.ca⟩
   have h_hist_bound :
       sum ((benv.withState stBeacon).withState stHistory).state.bal < 2 ^ 256 := by
     have h_beacon_sum : sum stBeacon.bal ≤ sum benv.state.bal := h_beacon_inv.2
     have h_history_sum : sum stHistory.bal ≤ sum stBeacon.bal := by
-      simpa [Benv.withState] using h_history_inv.2
+      simpa only [Benv.withState] using h_history_inv.2
     simp only [Benv.withState]
     omega
   have h_txs_inv : c.BenvInv wa benvTxs :=
@@ -2475,22 +2470,22 @@ theorem applyBody_preserves_inv (wa : Adr) (hp : c.Preserves wa)
       ((benv.withState stBeacon).withState stHistory) benvTxs
       _ boutTxs h_txs h_hist_bound h_benv_history hfork
   have h_txs_sum := applyTransactions_sum_le h_txs hfork.rules_stateGas_none
-  dsimp [processWithdrawals] at h_requests
+  dsimp only [processWithdrawals] at h_requests
   have h_txs_bound : sum benvTxs.state.bal + wdsum wds < 2 ^ 256 := by
     have h_history_sum : sum stHistory.bal ≤ sum stBeacon.bal := by
-      simpa [Benv.withState] using h_history_inv.2
+      simpa only [Benv.withState] using h_history_inv.2
     have h_txs_sum' : sum benvTxs.state.bal ≤ sum stHistory.bal := by
-      simpa [Benv.withState] using h_txs_sum
+      simpa only [Benv.withState] using h_txs_sum
     omega
   have h_wds_inv :=
     processWithdrawalsState_preserves_inv wa benvTxs.state wds
       h_txs_bound h_txs_inv.state
   have h_benv_wds : c.BenvInv wa
       (benvTxs.withState (processWithdrawalsState benvTxs.state wds)) :=
-    ⟨h_wds_inv, by simpa [Benv.withState] using h_txs_inv.ca⟩
+    ⟨h_wds_inv, by simpa only [Benv.withState] using h_txs_inv.ca⟩
   have hfork_txs : CoveredFork benvTxs.stat.fork := by
     rw [applyTransactions_benvStat_eq h_txs]
-    simpa [Benv.withState] using hfork
+    simpa only [Benv.withState] using hfork
   -- `h_requests` still runs the request pass and the access-list check after
   -- the withdrawals; invert both binds, then the request pass is `h_req`.
   obtain ⟨⟨stReq, boutReq⟩, h_req, h_requests⟩ := Except.bind_eq_ok h_requests
@@ -2613,12 +2608,12 @@ theorem addBlockToChainUsing_preserves_inv (wa : Adr) (hp : c.Preserves wa)
   cases hE : addBlockToChainUsingE cfg ch rlp with
   | error failure =>
       rw [hE] at h_run
-      simp [ImportOutcome.renderLegacy] at h_run
+      simp only [ImportOutcome.renderLegacy, reduceCtorEq] at h_run
   | ok outcome =>
       rw [hE] at h_run
       cases outcome with
       | inr rejection =>
-          simp [ImportOutcome.renderLegacy] at h_run
+          simp only [ImportOutcome.renderLegacy, Except.ok.injEq, reduceCtorEq] at h_run
       | inl chResult =>
           simp only [ImportOutcome.renderLegacy, Except.ok.injEq,
             Sum.inl.injEq] at h_run
@@ -2627,7 +2622,7 @@ theorem addBlockToChainUsing_preserves_inv (wa : Adr) (hp : c.Preserves wa)
           obtain ⟨_, _, hE⟩ := Except.bind_eq_ok hE
           obtain ⟨_, _, hE⟩ := Except.bind_eq_ok hE
           split at hE
-          · simp at hE
+          · simp only [Except.ok.injEq, reduceCtorEq] at hE
           · rename_i block hash h_decode
             obtain ⟨f, hf, hE⟩ := Except.bind_eq_ok hE
             obtain ⟨_, h_st⟩ := addBlockToChainCanonicalE_eq_ok_inl hE
@@ -2875,7 +2870,7 @@ theorem post_of_call_self_with {Q : ∀ pc sevm devm exn, Exec pc sevm devm exn 
     rw [hp11]
   have h_st9 : devm9.state = devm7.state := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).state) hp11
-    dsimp at h
+    dsimp only at h
     rw [← h, GasSchedule.accessDelegation_state]
     rfl
   -- charge the call gas
@@ -3036,34 +3031,6 @@ theorem post_of_call_self_with {Q : ∀ pc sevm devm exn, Exec pc sevm devm exn 
           exact ih 0 (initSevm (childMsg.withBenv benv')) (initDevm (childMsg.withBenv benv'))
             child ex_sub hq h_depth_lt hat hchildFork ⟨hchildPre, fun _ => Mem.wf_empty⟩
       exact Post.of_state_eq hchildPost h_sf_state
-
-/-- **A successful `CALL` in the contract's own frame preserves the frame
-postcondition**, given the invariant at the debited balance and the
-deeper-frame hypothesis of `ContractSpecSem.Sound`.  The generic core of
-`Blanc/Solvent.lean`'s `of_send_to_caller`; `post_of_call_self_with` is the
-same fact for a deeper-frame hypothesis restricted to the child derivations a
-predicate `Q` admits. -/
-theorem post_of_call_self {ca : Adr} {sevm : Sevm} {s sf : Devm}
-    {gas dst value : B256} {xs : Stack}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (hca : sevm.currentTarget = ca)
-    (ih : ∀ pc' sevm' pre' post',
-        Exec pc' sevm' pre' (.ok post') →
-        sevm'.depth < sevm.depth →
-        CodeSem.At c.sem ca pc' sevm' pre' →
-        CoveredFork sevm'.benvStat.fork →
-        c.PreWf ca sevm' pre' →
-        c.Post ca sevm' post')
-    (hp : gas :: dst :: value :: xs <<+ s.stack)
-    (hcode : some (s.getCode ca).toList = c.sem.image)
-    (hside : c.Side s.getBal)
-    (hle : value ≤ s.getBal ca)
-    (hinv : c.Inv (Devm.getStor s ca) 0 (s.getBal ca - value))
-    (run : Ninst.Run sevm s (.exec .call) sf) :
-    c.Post ca sevm sf :=
-  post_of_call_self_with (Q := fun _ _ _ _ _ => True) hfork hca
-    (fun pc' sevm' pre' post' child _ => ih pc' sevm' pre' post' child)
-    hp hcode hside hle hinv run.toRunWith
 
 end ContractSpecSem
 

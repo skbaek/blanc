@@ -152,10 +152,10 @@ theorem Func.RunPrefix.getBal_eq {fs : List Func} {e : Sevm}
         | reg r => exact (inferInstance : Ninst.Hinv Devm.getBal (.reg r)).inv step
         | push xs p =>
             exact (inferInstance : Ninst.Hinv Devm.getBal (.push xs p)).inv step
-        | exec x => simp [Ninst.gasFree] at free
-        | dupn imm => simp [Ninst.gasFree] at free
-        | swapn imm => simp [Ninst.gasFree] at free
-        | exchange imm => simp [Ninst.gasFree] at free
+        | exec x => simp only [Ninst.gasFree, Bool.false_eq_true] at free
+        | dupn imm => simp only [Ninst.gasFree, Bool.false_eq_true] at free
+        | swapn imm => simp only [Ninst.gasFree, Bool.false_eq_true] at free
+        | exchange imm => simp only [Ninst.gasFree, Bool.false_eq_true] at free
       exact ih.trans stepEq.symm
   | zero pop _ ih =>
       exact ih.trans (funext fun a => getBal_eq_of_state_eq pop.state.symm a)

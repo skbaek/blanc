@@ -54,7 +54,7 @@ theorem hash_block {sevm : Sevm} {s s' : Devm} {a b : B256} {xs : Stack}
     have := prefix_of_add h4 hp3
     rwa [w32_add_0] at this
   have hp5 : b :: (32 : B256) :: xs <<+ s5.stack :=
-    Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h5) hp4
   have hp6 : (32 : B256) :: b :: (32 : B256) :: xs <<+ s6.stack :=
     prefix_of_dup_val h6 (by show_nth) hp5
@@ -173,11 +173,11 @@ theorem upd_walk {sevm : Sevm} {s s' : Devm} {op : Ninst} {f : B256 → B256 →
     have hp5 := hop h5 hp4
     have hp6 : w :: (0 : B256) :: slot ::
         f (s.getStorVal sevm.currentTarget slot) w :: y :: xs <<+ s6.stack :=
-      Stack.prefix_of_swap (n := 2) (by simp [Stack.Swap, Stack.SwapCore])
+      Stack.prefix_of_swap (n := 2) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
         (of_run_swap h6) hp5
     have hp8 := prefix_of_pop (of_run_pop h8) (prefix_of_pop (of_run_pop h7) hp6)
     have hp9 := prefix_of_dup_val h9 (by show_nth) hp8
-    exact Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+    exact Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h10) hp9
   · rw [← hst10, ← (hopStor h5).1, ← hst4]
   · rw [← hbal10, ← (hopStor h5).2, ← hbal4]
@@ -221,7 +221,7 @@ theorem not_run_revert_tail {P : Sevm → Devm → Ninst → Devm → Prop}
   rcases run with _ | _ | _ | _ | _ | ⟨_, run⟩
   rcases run with _ | _ | _ | _ | _ | ⟨_, run⟩
   rcases run with _ | _ | _ | _ | ⟨h_run⟩
-  dsimp [Linst.Run, Linst.run] at h_run
+  dsimp only [Linst.Run, Linst.run, Lean.Elab.WF.paramLet] at h_run
   rcases Except.bind_eq_ok h_run with ⟨_, _, h2⟩
   rcases Except.bind_eq_ok h2 with ⟨_, _, h4⟩
   rcases Except.bind_eq_ok h4 with ⟨_, _, h6⟩

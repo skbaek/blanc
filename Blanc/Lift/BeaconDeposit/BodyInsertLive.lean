@@ -52,33 +52,33 @@ theorem body_insertLive {sevm : Sevm} {b : Devm}
     ((G + 51) + sstoreCost sevm b (solBranchSlot h) nd) + 92 by omega]
   unfold t_0f6e_c23
   refine rx_dest ?_
-  refine rx_push rfl (by simp; omega) ?_
-  refine rx_dup (n := 1) rfl (by simp; omega) ?_
-  refine rx_lt hlt (by simp; omega) ?_
-  refine rx_iszero (v := 0) (by decide) (by simp; omega) ?_
-  refine rx_push rfl (by simp; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_lt hlt (by simp only [List.length_cons]; omega) ?_
+  refine rx_iszero (v := 0) (by decide) (by simp only [List.length_cons]; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_branch_zero ?_
   unfold t_0f78_c23
-  refine rx_dup (n := 1) rfl (by simp; omega) ?_
-  refine rx_push rfl (by simp; omega) ?_
-  refine rx_and hbit (by simp; omega) ?_
-  refine rx_push rfl (by simp; omega) ?_
-  refine rx_eq (v := 1) (by decide) (by simp; omega) ?_
-  refine rx_iszero (v := 0) (by decide) (by simp; omega) ?_
-  refine rx_push rfl (by simp; omega) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_and hbit (by simp only [List.length_cons]; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_eq (v := 1) (by decide) (by simp only [List.length_cons]; omega) ?_
+  refine rx_iszero (v := 0) (by decide) (by simp only [List.length_cons]; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_branch_zero ?_
   unfold t_0f84_c23
-  refine rx_dup (n := 2) rfl (by simp; omega) ?_
-  refine rx_push rfl (by simp; omega) ?_
-  refine rx_dup (n := 2) rfl (by simp; omega) ?_
-  refine rx_push rfl (by simp; omega) ?_
-  refine rx_dup (n := 1) rfl (by simp; omega) ?_
-  refine rx_lt hlt (by simp; omega) ?_
-  refine rx_push rfl (by simp; omega) ?_
+  refine rx_dup (n := 2) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_dup (n := 2) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rx_lt hlt (by simp only [List.length_cons]; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_branch_succ (by decide) ?_
   unfold t_0f91_c23
   refine rx_dest ?_
-  refine rx_add (by simp; omega) ?_
+  refine rx_add (by simp only [List.length_cons]; omega) ?_
   rw [hkey]
   refine .next (Ninst.runCompiled_sstore_selected_setMach hfork (by omega) hstatic) ?_
   rw [show (afterSstore sevm b (solBranchSlot h) nd).setMach
@@ -88,7 +88,7 @@ theorem body_insertLive {sevm : Sevm} {b : Devm}
         x₄ :: y₁ :: y₂ :: y₃ :: y₄ :: y₅ :: y₆ :: y₇ :: d :: rest) M (G + 51) by
     rw [St, afterSstore_stateGas]]
   refine rx_pop ?_
-  refine rx_push rfl (by simp; omega) ?_
+  refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_swap (n := 5) rfl ?_
   refine rx_pop ?_
   refine rx_pop ?_

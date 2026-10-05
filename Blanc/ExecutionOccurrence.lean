@@ -55,15 +55,15 @@ theorem Exec.retainedNodesOfCommits_sublist_rawNodes
     List.Sublist (Exec.retainedNodesOfCommits run committed)
       (Exec.rawNodes run) := by
   induction run with
-  | halt => simp [Exec.retainedNodesOfCommits, Exec.rawNodes]
+  | halt => simp only [Exec.retainedNodesOfCommits, Exec.rawNodes, List.Sublist.refl]
   | cont hstep next ih =>
       simp only [Exec.retainedNodesOfCommits, Exec.rawNodes]
       exact (ih committed).cons_cons _
-  | doneErr => simp [Execution.commits] at committed
+  | doneErr => simp only [Execution.commits, Bool.false_eq_true] at committed
   | doneOk hstep henter hresume next ih =>
       simp only [Exec.retainedNodesOfCommits, Exec.rawNodes]
       exact (ih committed).cons_cons _
-  | runErr => simp [Execution.commits] at committed
+  | runErr => simp only [Execution.commits, Bool.false_eq_true] at committed
   | runOk hstep henter child hresume next childIh nextIh =>
       simp only [Exec.retainedNodesOfCommits, Exec.rawNodes]
       split
@@ -90,9 +90,9 @@ private def Exec.retainedTailOfCommits
   match run with
   | .halt _ => []
   | .cont _ next => Exec.retainedNodesOfCommits next committed
-  | .doneErr _ _ _ => by simp [Execution.commits] at committed
+  | .doneErr _ _ _ => by simp only [Execution.commits, Bool.false_eq_true] at committed
   | .doneOk _ _ _ next => Exec.retainedNodesOfCommits next committed
-  | .runErr _ _ _ _ => by simp [Execution.commits] at committed
+  | .runErr _ _ _ _ => by simp only [Execution.commits, Bool.false_eq_true] at committed
   | .runOk (f := frame) (raw := raw) _ _ child _ next =>
       (if h : Frame.settlementCommits frame raw = true then
           Exec.retainedNodesOfCommits child
@@ -106,12 +106,12 @@ private theorem Exec.retainedNodesOfCommits_eq_root_cons
       ⟨pc, sevm, pre, out, run⟩ ::
         Exec.retainedTailOfCommits run committed := by
   cases run with
-  | halt => simp [Exec.retainedNodesOfCommits, Exec.retainedTailOfCommits]
-  | cont => simp [Exec.retainedNodesOfCommits, Exec.retainedTailOfCommits]
-  | doneErr => simp [Execution.commits] at committed
-  | doneOk => simp [Exec.retainedNodesOfCommits, Exec.retainedTailOfCommits]
-  | runErr => simp [Execution.commits] at committed
-  | runOk => simp [Exec.retainedNodesOfCommits, Exec.retainedTailOfCommits]
+  | halt => simp only [Exec.retainedNodesOfCommits, retainedTailOfCommits]
+  | cont => simp only [Exec.retainedNodesOfCommits, retainedTailOfCommits]
+  | doneErr => simp only [Execution.commits, Bool.false_eq_true] at committed
+  | doneOk => simp only [Exec.retainedNodesOfCommits, retainedTailOfCommits]
+  | runErr => simp only [Execution.commits, Bool.false_eq_true] at committed
+  | runOk => simp only [Exec.retainedNodesOfCommits, retainedTailOfCommits]
 
 private theorem Exec.descendantFrameRoots_sublist_retainedNodesOfCommits
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
@@ -119,17 +119,17 @@ private theorem Exec.descendantFrameRoots_sublist_retainedNodesOfCommits
     List.Sublist ((Exec.descendantFrames run).map Exec.Frame.rootDeriv)
       (Exec.retainedTailOfCommits run committed) := by
   induction run with
-  | halt => simp [Exec.descendantFrames, Exec.retainedTailOfCommits]
+  | halt => simp only [descendantFrames, List.map_nil, retainedTailOfCommits, List.Sublist.refl]
   | cont hstep next ih =>
       simp only [Exec.descendantFrames, Exec.retainedTailOfCommits]
       rw [(Blanc.Exec.retainedNodesOfCommits_eq_root_cons next) committed]
       exact (ih committed).cons _
-  | doneErr => simp [Execution.commits] at committed
+  | doneErr => simp only [Execution.commits, Bool.false_eq_true] at committed
   | doneOk hstep henter hresume next ih =>
       simp only [Exec.descendantFrames, Exec.retainedTailOfCommits]
       rw [(Blanc.Exec.retainedNodesOfCommits_eq_root_cons next) committed]
       exact (ih committed).cons _
-  | runErr => simp [Execution.commits] at committed
+  | runErr => simp only [Execution.commits, Bool.false_eq_true] at committed
   | runOk hstep henter child hresume next childIh nextIh =>
       simp only [Exec.descendantFrames, Exec.retainedTailOfCommits]
       split
@@ -193,13 +193,13 @@ private theorem List.exists_eq_append_cons_of_mem
     {α : Type} {x : α} {xs : List α} (h : x ∈ xs) :
     ∃ before after, xs = before ++ x :: after := by
   induction xs with
-  | nil => simp at h
+  | nil => simp only [List.not_mem_nil] at h
   | cons head tail ih =>
       simp only [List.mem_cons] at h
       rcases h with rfl | htail
       · exact ⟨[], tail, rfl⟩
       · rcases ih htail with ⟨before, after, hsplit⟩
-        exact ⟨head :: before, after, by simp [hsplit]⟩
+        exact ⟨head :: before, after, by simp only [hsplit, List.cons_append]⟩
 
 /-- Every occurrence splits the enclosing chronology at its exact proof node. -/
 theorem Exec.NinstOccurrence.rawNodes_decomposition
@@ -308,16 +308,16 @@ theorem Exec.rawFrameDescendants_eq_nil_of_no_xinstAt
       ¬ Ninst.At node.sevm.code node.pc (.exec x)) :
     Exec.rawFrameDescendants run = [] := by
   induction run with
-  | halt => simp [Exec.rawFrameDescendants]
+  | halt => simp only [rawFrameDescendants]
   | cont hstep next ih =>
       simp only [Exec.rawFrameDescendants]
       refine ih fun node reached => ?_
-      exact childless node (by simp [Exec.rawNodes, reached])
-  | doneErr => simp [Exec.rawFrameDescendants]
+      exact childless node (by simp only [Exec.rawNodes, List.mem_cons, reached, or_true])
+  | doneErr => simp only [rawFrameDescendants]
   | doneOk hstep henter hresume next ih =>
       simp only [Exec.rawFrameDescendants]
       refine ih fun node reached => ?_
-      exact childless node (by simp [Exec.rawNodes, reached])
+      exact childless node (by simp only [Exec.rawNodes, List.mem_cons, reached, or_true])
   | runErr hstep henter child hresume childIh =>
       rcases Evm.step_spawn_inv hstep with ⟨x, decoded, -, -⟩
       exact absurd decoded
@@ -397,7 +397,7 @@ def Exec.StorageWrite.effectTriple
     (value : left.value = right.value) : left = right := by
   cases left
   cases right
-  simp_all
+  simp_all only
 
 /-- Executably recognize a successful SSTORE driver node and project its raw
 stack key/value.  Terminal and spawning nodes cannot be successful SSTOREs. -/
@@ -425,7 +425,7 @@ def Exec.retainedStorageEffectTriples
 
 /-- A committed continuing step contributes its recognized storage effect,
 followed by the retained effects of its tail. -/
-@[simp] theorem Exec.retainedStorageEffectTriples_cont
+theorem Exec.retainedStorageEffectTriples_cont
     {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
     {step : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' post}
     {out : Execution} (tail : Exec pc' sevm post out)
@@ -442,11 +442,11 @@ followed by the retained effects of its tail. -/
   rw [← Exec.retainedNodes_eq_of_commits tail committed]
   cases h : Exec.Deriv.successfulSstore?
       (⟨pc, sevm, pre, out, Exec.cont step tail⟩ : Exec.Deriv) <;>
-    simp [Exec.retainedStorageEffectTriples, Exec.retainedStorageWrites]
+    simp only [Option.toList_none, List.map_nil, retainedStorageEffectTriples, retainedStorageWrites, List.nil_append, List.map_cons, Option.toList_some, List.cons_append]
 
 /-- A synchronously resolved childless frame contributes no child-frame
 storage effects; retained effects resume at the same-frame tail. -/
-@[simp] theorem Exec.retainedStorageEffectTriples_doneOk
+theorem Exec.retainedStorageEffectTriples_doneOk
     {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
     {frame : Jaune.Frame} {resume : Resume}
     {settled : Except (EvmError × State × AdrSet × Tra) Devm}
@@ -466,17 +466,17 @@ storage effects; retained effects resume at the same-frame tail. -/
   have hnone : Exec.Deriv.successfulSstore?
       (⟨pc, sevm, pre, out, Exec.doneOk step entered resumed tail⟩ :
         Exec.Deriv) = none := rfl
-  simp [hnone, Exec.retainedStorageEffectTriples, Exec.retainedStorageWrites]
+  simp only [hnone, retainedStorageEffectTriples, retainedStorageWrites]
 
 /-- A committed halt has no retained SSTORE driver node. -/
-@[simp] theorem Exec.retainedStorageEffectTriples_halt
+theorem Exec.retainedStorageEffectTriples_halt
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     {step : Evm.step ⟨pc, sevm, pre⟩ = .halt out}
     (committed : Execution.commits out = true) :
     Exec.retainedStorageEffectTriples (.halt step) = [] := by
-  simp [Exec.retainedStorageEffectTriples, Exec.retainedStorageWrites,
-    Exec.retainedNodes, committed, Exec.retainedNodesOfCommits,
-    Exec.Deriv.successfulSstore?]
+  simp only [retainedStorageEffectTriples, retainedStorageWrites, Deriv.successfulSstore?,
+    Exec.retainedNodes, committed, ↓reduceDIte, Exec.retainedNodesOfCommits, List.map_eq_nil_iff,
+    List.filterMap_eq_nil_iff, List.mem_cons, List.not_mem_nil, or_false, forall_eq]
 
 /-- Project the data fields of an exact successful SSTORE occurrence. -/
 def Exec.SuccessfulSstoreOccurrence.storageWrite
@@ -492,11 +492,11 @@ def Exec.StorageWrite.matches
     (write : Exec.StorageWrite) (owner : Adr) (key : B256) : Bool :=
   write.owner == owner && write.key == key
 
-@[simp] theorem Exec.StorageWrite.matches_eq_true
+theorem Exec.StorageWrite.matches_eq_true
     {write : Exec.StorageWrite} {owner : Adr} {key : B256} :
     write.matches owner key = true ↔
       write.owner = owner ∧ write.key = key := by
-  simp [Exec.StorageWrite.matches]
+  simp only [«matches», Bool.and_eq_true, beq_iff_eq]
 
 /-- Replay the selected storage word through chronological successful writes. -/
 def Exec.StorageWrite.replayCell
@@ -517,7 +517,7 @@ private theorem Exec.StorageWrite.foldlCell_append
         (left.foldl
           (fun current write =>
             if write.matches owner key then write.value else current) initial) := by
-  simp [List.foldl_append]
+  simp only [matches_eq_true, List.foldl_append]
 
 private theorem Exec.StorageWrite.foldlCell_eq_of_none
     {owner : Adr} {key : B256} {writes : List Exec.StorageWrite}
@@ -531,10 +531,10 @@ private theorem Exec.StorageWrite.foldlCell_eq_of_none
   | nil => rfl
   | cons head tail ih =>
       simp only [List.foldl_cons]
-      rw [if_neg (none head (by simp))]
+      rw [if_neg (none head (by simp only [List.mem_cons, true_or]))]
       exact ih initial (by
         intro write member
-        exact none write (by simp [member]))
+        exact none write (by simp only [List.mem_cons, member, or_true]))
 
 private theorem Exec.StorageWrite.exists_last_matching
     {owner : Adr} {key : B256} {writes : List Exec.StorageWrite}
@@ -544,13 +544,13 @@ private theorem Exec.StorageWrite.exists_last_matching
       write.matches owner key = true ∧
       ∀ later ∈ after, later.matches owner key ≠ true := by
   induction writes with
-  | nil => simp at existsMatch
+  | nil => simp only [List.not_mem_nil, matches_eq_true, false_and, exists_false] at existsMatch
   | cons head tail ih =>
       by_cases tailMatch : ∃ write ∈ tail,
           write.matches owner key = true
       · rcases ih tailMatch with ⟨before, write, after, hsplit,
           hmatch, hlast⟩
-        exact ⟨head :: before, write, after, by simp [hsplit], hmatch, hlast⟩
+        exact ⟨head :: before, write, after, by simp only [hsplit, List.cons_append], hmatch, hlast⟩
       · have headMatch : head.matches owner key = true := by
           rcases existsMatch with ⟨write, member, hmatch⟩
           simp only [List.mem_cons] at member
@@ -589,7 +589,7 @@ theorem Exec.StorageReplay.of_getStor_eq
     {pre post : Devm} (equal : Devm.getStor post = Devm.getStor pre) :
     Exec.StorageReplay pre post [] := by
   intro owner key
-  simpa [Exec.StorageWrite.replayCell] using
+  simpa only [StorageWrite.replayCell, StorageWrite.matches_eq_true, List.foldl_nil] using
     congrArg (fun storage : Stor => storage.get key) (congrFun equal owner)
 
 theorem Exec.StorageReplay.append
@@ -655,7 +655,7 @@ theorem ProcessMessage.storageReplay_of_body
         unfold Frame.settlementCommits
         rw [← settledEq]
         exact clean
-      cases errorEq : post.error <;> simp_all
+      cases errorEq : post.error <;> simp_all only [ExceptT.stM_eq, Bool.not_eq_true, Option.isNone_none, ne_eq, not_true_eq_false, Option.isNone_some, Bool.false_eq_true, not_false_eq_true, Option.isSome_some]
     have rollback := (ProcessMessage.rollback_of_error process postError).1
     apply Exec.StorageReplay.of_getStor_eq
     funext owner
@@ -675,7 +675,8 @@ theorem ProcessCreateMessage.ok_getStor_eq_inner_of_clean
   rcases ProcessCreateMessage.iff_processMessage.mp process with
     ⟨result, innerProcess, settled⟩
   cases result with
-  | error error => simp [processCreateMessage.settle] at settled
+  | error error => simp only [processCreateMessage.settle, Option.isNone_iff_eq_none,
+    ExceptT.stM_eq, Except.bind_error, reduceCtorEq] at settled
   | ok inner =>
       unfold processCreateMessage.settle at settled
       simp only [bind, Except.bind] at settled
@@ -693,12 +694,12 @@ theorem ProcessCreateMessage.ok_getStor_eq_inner_of_clean
                 cases hsg : msg.benv.stat.rules.stateGas with
                 | none =>
                     simp only [hsg] at clean
-                    simp [processCreateMessage.exceptionalHalt,
-                      Devm.error, Devm.setMeta] at clean
+                    simp only [Devm.error, processCreateMessage.exceptionalHalt, Devm.setMeta,
+                      Option.isSome_some, Bool.true_eq_false] at clean
                 | some sg =>
                     simp only [hsg] at clean
-                    simp [processCreateMessage.exceptionalHaltAmsterdam,
-                      Devm.error, Devm.setMeta] at clean
+                    simp only [Devm.error, processCreateMessage.exceptionalHaltAmsterdam,
+                      Devm.setMeta, Option.isSome_some, Bool.true_eq_false] at clean
             | revert => cases settled
             | crypto reason => cases settled
             | internal reason => cases settled
@@ -719,7 +720,7 @@ theorem ProcessCreateMessage.ok_getStor_eq_inner_of_clean
                 _ = Devm.getStor inner owner := by
                   exact congrArg (fun state : State => state.getStor owner)
                     (chargeCodeGas_state_ok charge)
-            · cases errorEq : inner.error <;> simp_all
+            · cases errorEq : inner.error <;> simp_all only [Option.isSome_eq_false_iff, Option.isNone_iff_eq_none, Option.isNone_none, ExceptT.stM_eq, Option.isSome_none, Option.isNone_some, Bool.false_eq_true]
       · rw [if_neg innerClean] at settled
         have eq := Except.ok.inj settled
         rw [eq] at clean
@@ -727,7 +728,7 @@ theorem ProcessCreateMessage.ok_getStor_eq_inner_of_clean
           msg.tenv.transientStorage).error.isSome = false at clean
         change inner.error.isSome = false at clean
         have innerNone : inner.error.isNone = true := by
-          cases errorEq : inner.error <;> simp_all
+          cases errorEq : inner.error <;> simp_all only [Option.isNone_none, not_true_eq_false, Option.isNone_some, Bool.false_eq_true, not_false_eq_true, Option.isSome_some, Bool.true_eq_false]
         exact (innerClean innerNone).elim
 
 /-- CREATE's fresh-account preparation is storage-silent when the target was
@@ -740,14 +741,14 @@ theorem processCreateMessage_msg_getStor_eq_of_empty
   funext owner
   by_cases target : msg.currentTarget = owner
   · subst owner
-    dsimp [processCreateMessage.msg, Msg.withBenv, addCreatedAccount,
-      Benv.setStor, Benv.incrNonce, State.getStor]
+    dsimp only [processCreateMessage.msg, Msg.withBenv, Benv.setStor, addCreatedAccount,
+      Benv.incrNonce, State.getStor]
     rw [State.incrNonce_get_stor]
     unfold State.setStor
     rw [State.get_set_self]
     exact empty.symm
-  · dsimp [processCreateMessage.msg, Msg.withBenv, addCreatedAccount,
-      Benv.setStor, Benv.incrNonce, State.getStor]
+  · dsimp only [processCreateMessage.msg, Msg.withBenv, Benv.setStor, addCreatedAccount,
+    Benv.incrNonce, State.getStor]
     rw [State.incrNonce_get_stor, State.setStor_get_stor_ne target]
 
 /-- Settlement-aware replay transport for a concrete CREATE constructor.  The
@@ -772,7 +773,7 @@ theorem ProcessCreateMessage.storageReplay_of_body
       have settledEq := (RunFrame.some_inv process).2
       unfold Frame.settlementCommits at settles
       rw [← settledEq] at settles
-      cases errorEq : post.error <;> simp_all
+      cases errorEq : post.error <;> simp_all only [ExceptT.stM_eq, Option.isNone_none, Option.isSome_none, Option.isNone_some, Bool.false_eq_true]
     rcases ProcessCreateMessage.ok_getStor_eq_inner_of_clean process clean with
       ⟨inner, innerProcess, postEq, innerClean⟩
     let prepared : Devm :=
@@ -792,7 +793,7 @@ theorem ProcessCreateMessage.storageReplay_of_body
       have innerEq := (RunFrame.some_inv innerProcess).2
       unfold Frame.settlementCommits
       rw [← innerEq]
-      cases errorEq : inner.error <;> simp_all
+      cases errorEq : inner.error <;> simp_all only [ExceptT.stM_eq, Option.isSome_eq_false_iff, Option.isNone_iff_eq_none, Option.isSome_none, Option.isNone_none, Option.isSome_some, Bool.true_eq_false]
     have innerReplay := ProcessMessage.storageReplay_of_body
       innerProcess (parent := prepared) rfl body
     rw [if_pos innerSettles] at innerReplay
@@ -807,8 +808,8 @@ theorem ProcessCreateMessage.storageReplay_of_body
         apply settles
         unfold Frame.settlementCommits
         rw [← settledEq]
-        cases errorEq : post.error <;> simp_all
-      cases errorEq : post.error <;> simp_all
+        cases errorEq : post.error <;> simp_all only [ExceptT.stM_eq, Bool.not_eq_true, Option.isSome_none, Option.isNone_none, Option.isSome_some, Bool.true_eq_false]
+      cases errorEq : post.error <;> simp_all only [ExceptT.stM_eq, Bool.not_eq_true, Option.isSome_none, ne_eq, not_true_eq_false, Option.isSome_some, Bool.true_eq_false, not_false_eq_true]
     have rollback := ProcessCreateMessage.rollback_of_error process postError
     apply Exec.StorageReplay.of_getStor_eq
     funext owner
@@ -871,7 +872,7 @@ theorem GenericCall.storageReplay_some_of_body
           (callMsg sevm (pre.withReturnData []) gas value caller target
             codeAddress stv isStatic ((pre.memory.read ii is).1) code
             disablePrecompiles)) out = true <;>
-      simp [retain]
+      simp only [retain, ↓reduceIte, List.append_nil, List.nil_append, Bool.false_eq_true]
 
 /-- Replay transport through the concrete recursive slot of a generic CREATE,
 including pruning on failed code deposit. -/
@@ -911,7 +912,8 @@ theorem GenericCreate.storageReplay_some_of_body
   obtain ⟨result, process, resumeRun⟩ := run
   cases result with
   | error error =>
-      simp [Resume.run, liftToExecution] at resumeRun
+      simp only [ExceptT.stM_eq, Resume.run, liftToExecution, Except.bind_error,
+        reduceCtorEq] at resumeRun
   | ok settled =>
       let createPre :=
         addAccessedAddress
@@ -955,7 +957,7 @@ theorem GenericCreate.storageReplay_some_of_body
                   []).incrNonce sevm.currentTarget) newAddress)
               (except64th pre.gasLeft) endowment newAddress
               ((pre.memory.read mi ms).1))) out = true <;>
-        simp [retain]
+        simp only [retain, ↓reduceIte, List.append_nil, List.nil_append, Bool.false_eq_true]
 
 /-- Contract-neutral recursive executable-instruction transport. -/
 theorem Xinst.storageReplay_some_of_body
@@ -1048,46 +1050,46 @@ theorem Exec.Deriv.successfulSstore?_sound
     (Exec.retainedNodes_sublist_rawNodes root.exc).subset retained
   rcases node with ⟨pc, sevm, pre, out, run⟩
   cases run with
-  | halt hstep => simp [Exec.Deriv.successfulSstore?] at found
+  | halt hstep => simp only [successfulSstore?, reduceCtorEq] at found
   | doneErr hstep henter hresume =>
-      simp [Exec.Deriv.successfulSstore?] at found
+      simp only [successfulSstore?, reduceCtorEq] at found
   | doneOk hstep henter hresume next =>
-      simp [Exec.Deriv.successfulSstore?] at found
+      simp only [successfulSstore?, reduceCtorEq] at found
   | runErr hstep henter child hresume =>
-      simp [Exec.Deriv.successfulSstore?] at found
+      simp only [successfulSstore?, reduceCtorEq] at found
   | runOk hstep henter child hresume next =>
-      simp [Exec.Deriv.successfulSstore?] at found
+      simp only [successfulSstore?, reduceCtorEq] at found
   | cont hstep next =>
       cases hget : Evm.getInst ⟨pc, sevm, pre⟩ with
-      | none => simp [Exec.Deriv.successfulSstore?, hget] at found
+      | none => simp only [successfulSstore?, hget, reduceCtorEq] at found
       | some instruction =>
           cases instruction with
-          | jump jumpInst => simp [Exec.Deriv.successfulSstore?, hget] at found
-          | last last => simp [Exec.Deriv.successfulSstore?, hget] at found
+          | jump jumpInst => simp only [successfulSstore?, hget, reduceCtorEq] at found
+          | last last => simp only [successfulSstore?, hget, reduceCtorEq] at found
           | next instruction =>
               cases instruction with
               | exec exec =>
-                  simp [Exec.Deriv.successfulSstore?, hget] at found
+                  simp only [successfulSstore?, hget, reduceCtorEq] at found
               | push bytes size =>
-                  simp [Exec.Deriv.successfulSstore?, hget] at found
+                  simp only [successfulSstore?, hget, reduceCtorEq] at found
               | dupn imm =>
-                  simp [Exec.Deriv.successfulSstore?, hget] at found
+                  simp only [successfulSstore?, hget, reduceCtorEq] at found
               | swapn imm =>
-                  simp [Exec.Deriv.successfulSstore?, hget] at found
+                  simp only [successfulSstore?, hget, reduceCtorEq] at found
               | exchange imm =>
-                  simp [Exec.Deriv.successfulSstore?, hget] at found
+                  simp only [successfulSstore?, hget, reduceCtorEq] at found
               | reg regular =>
                   cases regular <;>
-                    try simp [Exec.Deriv.successfulSstore?, hget] at found
+                    try simp only [successfulSstore?, hget, reduceCtorEq] at found
                   cases hstack : pre.stack with
                   | nil =>
-                      simp [hstack] at found
+                      simp only [hstack, reduceCtorEq] at found
                   | cons key rest =>
                       cases rest with
                       | nil =>
-                          simp [hstack] at found
+                          simp only [hstack, reduceCtorEq] at found
                       | cons value tail =>
-                          simp [hstack] at found
+                          simp only [hstack, Option.some.injEq] at found
                           subst event
                           let occurrence : Exec.NinstOccurrence root :=
                             { node := ⟨pc, sevm, pre, out, .cont hstep next⟩
@@ -1120,10 +1122,9 @@ theorem Exec.Deriv.successfulSstore?_sound
                               rw [hwrite]
                             · unfold Exec.SuccessfulSstoreOccurrence.storageWrite
                               rw [hwrite]
-                            · simpa [Exec.SuccessfulSstoreOccurrence.storageWrite]
-                                using hkey.symm
-                            · simpa [Exec.SuccessfulSstoreOccurrence.storageWrite]
-                                using hvalue.symm
+                            · simpa only [SuccessfulSstoreOccurrence.storageWrite] using hkey.symm
+                            · simpa only [SuccessfulSstoreOccurrence.storageWrite] using
+                              hvalue.symm
 
 /-- Every retained projected event has an exact retained SSTORE occurrence. -/
 theorem Exec.exists_successfulSstore_of_mem_retainedStorageWrites
@@ -1188,20 +1189,21 @@ private theorem Exec.exists_lastRetainedSstore_of_replay
       ⟨event, member, matchEvent⟩ with
     ⟨before, lastEvent, after, split, lastMatch, maximal⟩
   rcases Exec.exists_successfulSstore_of_mem_retainedStorageWrites
-      (event := lastEvent) (by rw [split]; simp) with
+      (event := lastEvent) (by rw [split]; simp only [List.mem_append, List.mem_cons, true_or,
+        or_true]) with
     ⟨write, retained, eventEq⟩
   have identities := Exec.StorageWrite.matches_eq_true.mp lastMatch
   have valueEq : write.value = final := by
     rw [replay]
     unfold Exec.StorageWrite.replayCell
     rw [Exec.StorageWrite.last_value_eq_foldlCell split lastMatch maximal]
-    simpa [Exec.SuccessfulSstoreOccurrence.storageWrite] using
+    simpa only [SuccessfulSstoreOccurrence.storageWrite] using
       congrArg Exec.StorageWrite.value eventEq
   refine ⟨write, retained, ?_, ?_, valueEq, ?_⟩
   · change write.occurrence.node.sevm.currentTarget = owner
     exact (congrArg Exec.StorageWrite.owner eventEq).trans identities.1
-  · simpa [Exec.SuccessfulSstoreOccurrence.storageWrite] using
-      (congrArg Exec.StorageWrite.key eventEq).trans identities.2
+  · simpa only [SuccessfulSstoreOccurrence.storageWrite] using
+    (congrArg Exec.StorageWrite.key eventEq).trans identities.2
   · refine ⟨before, after, ?_, ?_⟩
     · rw [eventEq]
       exact split
@@ -1247,7 +1249,8 @@ private theorem Exec.storageReplay_cont_head
               have frame :=
                 Jinst.run_instructionFrame ⟨pc, sevm, pre⟩ jumpInst
               rw [jumpEq] at frame
-              simpa [Exec.Deriv.successfulSstore?, decoded] using
+              simpa only [Deriv.successfulSstore?, decoded, List.filterMap_cons_none,
+                List.filterMap_nil] using
                 Exec.StorageReplay.of_getStor_eq (funext frame.getStor).symm
       | last last =>
           rw [Evm.step_last decoded] at step
@@ -1270,35 +1273,35 @@ private theorem Exec.storageReplay_cont_head
                 Ninst.Hinv.inv (f := Devm.getStor)
                   (show Ninst.Run sevm pre (.push bytes bound) post from
                     ⟨.none, trivial, pc, nrun⟩)
-              simpa [Exec.Deriv.successfulSstore?, decoded] using
-                Exec.StorageReplay.of_getStor_eq equal.symm
+              simpa only [Deriv.successfulSstore?, decoded, List.filterMap_cons_none,
+                List.filterMap_nil] using Exec.StorageReplay.of_getStor_eq equal.symm
           | dupn imm =>
               have frame := Ninst.dupn_instructionFrame_effectRec
                 (xl := .none) trivial nrun
               have equal : Devm.getStor pre = Devm.getStor post :=
                 funext (Devm.InstructionFrame.getStor frame)
-              simpa [Exec.Deriv.successfulSstore?, decoded] using
-                Exec.StorageReplay.of_getStor_eq equal.symm
+              simpa only [Deriv.successfulSstore?, decoded, List.filterMap_cons_none,
+                List.filterMap_nil] using Exec.StorageReplay.of_getStor_eq equal.symm
           | swapn imm =>
               have frame := Ninst.swapn_instructionFrame_effectRec
                 (xl := .none) trivial nrun
               have equal : Devm.getStor pre = Devm.getStor post :=
                 funext (Devm.InstructionFrame.getStor frame)
-              simpa [Exec.Deriv.successfulSstore?, decoded] using
-                Exec.StorageReplay.of_getStor_eq equal.symm
+              simpa only [Deriv.successfulSstore?, decoded, List.filterMap_cons_none,
+                List.filterMap_nil] using Exec.StorageReplay.of_getStor_eq equal.symm
           | exchange imm =>
               have frame := Ninst.exchange_instructionFrame_effectRec
                 (xl := .none) trivial nrun
               have equal : Devm.getStor pre = Devm.getStor post :=
                 funext (Devm.InstructionFrame.getStor frame)
-              simpa [Exec.Deriv.successfulSstore?, decoded] using
-                Exec.StorageReplay.of_getStor_eq equal.symm
+              simpa only [Deriv.successfulSstore?, decoded, List.filterMap_cons_none,
+                List.filterMap_nil] using Exec.StorageReplay.of_getStor_eq equal.symm
           | exec executable =>
               have xrun : Xinst.Run sevm pre executable .none (.ok post) :=
                 XStep.run_toStep.mp nrun
-              simpa [Exec.Deriv.successfulSstore?, decoded] using
-                Exec.StorageReplay.of_getStor_eq
-                  (Xinst.none_getStor_eq xrun)
+              simpa only [Deriv.successfulSstore?, decoded, List.filterMap_cons_none,
+                List.filterMap_nil] using
+                Exec.StorageReplay.of_getStor_eq (Xinst.none_getStor_eq xrun)
           | reg regular =>
               have rrun : Rinst.run ⟨pc, sevm, pre⟩ regular = .ok post := by
                 have equal : (.ok post : Execution) =
@@ -1316,7 +1319,8 @@ private theorem Exec.storageReplay_cont_head
                     rcases of_run_sstore sstoreRun with ⟨key, value, popped⟩
                     have pref := pref_of_split popped
                     rcases pref with ⟨suffix, impossible⟩
-                    simp [Split, stackEq] at impossible
+                    simp only [Split, stackEq, List.cons_append, List.nil_append, List.nil_eq,
+                      reduceCtorEq] at impossible
                 | cons key rest =>
                     cases rest with
                     | nil =>
@@ -1324,7 +1328,8 @@ private theorem Exec.storageReplay_cont_head
                           ⟨actualKey, value, popped⟩
                         have pref := pref_of_split popped
                         rcases pref with ⟨suffix, impossible⟩
-                        simp [Split, stackEq] at impossible
+                        simp only [Split, stackEq, List.cons_append, List.nil_append,
+                          List.cons.injEq, List.nil_eq, reduceCtorEq, and_false] at impossible
                     | cons value tail =>
                         intro owner storageKey
                         by_cases ownerEq : sevm.currentTarget = owner
@@ -1336,22 +1341,28 @@ private theorem Exec.storageReplay_cont_head
                           rw [updated]
                           by_cases keyEq : key = storageKey
                           · subst storageKey
-                            simp [Exec.Deriv.successfulSstore?, decoded,
-                              stackEq, Exec.StorageWrite.replayCell,
-                              Exec.StorageWrite.matches, Stor.get_set_self]
-                          · simp [Exec.Deriv.successfulSstore?, decoded,
-                              stackEq, Exec.StorageWrite.replayCell,
-                              Exec.StorageWrite.matches, keyEq,
-                              Stor.get_set_ne _ keyEq]
+                            simp only [Stor.get_set_self, StorageWrite.replayCell,
+                              StorageWrite.matches, Bool.and_eq_true, beq_iff_eq,
+                              Deriv.successfulSstore?, decoded, stackEq, Option.some.injEq,
+                              List.filterMap_cons_some, List.filterMap_nil, List.foldl_cons,
+                              and_self, ↓reduceIte, List.foldl_nil]
+                          · simp only [Stor.get_set_ne _ keyEq, StorageWrite.replayCell,
+                            StorageWrite.matches, Bool.and_eq_true, beq_iff_eq,
+                            Deriv.successfulSstore?, decoded, stackEq, Option.some.injEq,
+                            List.filterMap_cons_some, List.filterMap_nil, List.foldl_cons, keyEq,
+                            and_false, ↓reduceIte, List.foldl_nil]
                         · have unchanged :=
                             sstore_preserves_getStor_ne rrun ownerEq
                           rw [unchanged]
-                          simp [Exec.Deriv.successfulSstore?, decoded,
-                            stackEq, Exec.StorageWrite.replayCell,
-                            Exec.StorageWrite.matches, ownerEq]
+                          simp only [StorageWrite.replayCell, StorageWrite.matches,
+                            Bool.and_eq_true, beq_iff_eq, Deriv.successfulSstore?, decoded, stackEq,
+                            Option.some.injEq, List.filterMap_cons_some, List.filterMap_nil,
+                            List.foldl_cons, ownerEq, false_and, ↓reduceIte, List.foldl_nil]
               · have equal : Devm.getStor pre = Devm.getStor post :=
                   Rinst.preserves_stor store rrun
-                simpa [Exec.Deriv.successfulSstore?, decoded, store] using
+                simpa only [Deriv.successfulSstore?, decoded, Option.some.injEq, Inst.next.injEq,
+                  Ninst.reg.injEq, store, imp_false, IsEmpty.forall_iff, implies_true,
+                  List.filterMap_cons_none, List.filterMap_nil] using
                   Exec.StorageReplay.of_getStor_eq equal.symm
 
 /-- A childless successful executable spawn is persistent-storage silent. -/
@@ -1380,7 +1391,7 @@ private theorem Exec.halt_getStor_eq
     Devm.getStor (Execution.committedPost out committed) =
       Devm.getStor pre := by
   cases out with
-  | error error => simp [Execution.commits] at committed
+  | error error => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       cases decoded : Evm.getInst ⟨pc, sevm, pre⟩ with
       | none =>
@@ -1420,20 +1431,18 @@ theorem Exec.storageReplay_committedPost
   | halt step =>
       have hnone : Exec.Deriv.successfulSstore?
           (⟨_, _, _, _, Exec.halt step⟩ : Exec.Deriv) = none := rfl
-      simpa [Exec.retainedStorageWrites,
-        Exec.retainedNodes_eq_of_commits _ committed,
-        Exec.retainedNodesOfCommits, List.filterMap_cons, hnone] using
-        Exec.StorageReplay.of_getStor_eq
-          (Exec.halt_getStor_eq step committed)
+      simpa only [retainedStorageWrites, Exec.retainedNodes_eq_of_commits _ committed,
+        Exec.retainedNodesOfCommits, hnone, List.filterMap_cons_none, List.filterMap_nil] using
+        Exec.StorageReplay.of_getStor_eq (Exec.halt_getStor_eq step committed)
   | cont step next ih =>
       have head := Exec.storageReplay_cont_head step next hfork
       have tail := ih committed hfork
       convert head.append tail using 1
-      simp [Exec.retainedStorageWrites, Exec.retainedNodes, committed,
-        Exec.retainedNodesOfCommits, List.filterMap_cons]
-      split <;> simp_all
+      simp only [retainedStorageWrites, Exec.retainedNodes, committed, ↓reduceDIte,
+        Exec.retainedNodesOfCommits, List.filterMap_cons, List.filterMap_nil]
+      split <;> simp_all only [imp_self, List.filterMap_cons_none, List.filterMap_nil, List.nil_append, Option.some.injEq, List.filterMap_cons_some, List.cons_append]
   | doneErr step enter resume =>
-      simp [Execution.commits] at committed
+      simp only [Execution.commits, Bool.false_eq_true] at committed
   | doneOk step enter resume next ih =>
       have head := Exec.StorageReplay.of_getStor_eq
         (Exec.doneOk_getStor_eq step enter resume hfork)
@@ -1441,12 +1450,11 @@ theorem Exec.storageReplay_committedPost
       have hnone : Exec.Deriv.successfulSstore?
           (⟨_, _, _, _, Exec.doneOk step enter resume next⟩ :
             Exec.Deriv) = none := rfl
-      simpa [Exec.retainedStorageWrites,
-        Exec.retainedNodes_eq_of_commits _ committed,
-        Exec.retainedNodesOfCommits, List.filterMap_cons, hnone] using
+      simpa only [retainedStorageWrites, Exec.retainedNodes_eq_of_commits _ committed,
+        Exec.retainedNodesOfCommits, hnone, List.filterMap_cons_none, List.nil_append] using
         head.append tail
   | runErr step enter child resume ih =>
-      simp [Execution.commits] at committed
+      simp only [Execution.commits, Bool.false_eq_true] at committed
   | runOk step enter child resume next childIH nextIH =>
       rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
       have hfork_c := Evm.step_spawn_child_fork step enter hfork
@@ -1597,9 +1605,9 @@ private theorem Exec.mem_rawNodes_iff_rawFrameDescendant_parentPrefix :
         exact Or.inl (.refl _)
       · rintro (h | ⟨root, hroot, _⟩)
         · cases h with
-          | refl => simp [Exec.rawNodes]
+          | refl => simp only [Exec.rawNodes, List.mem_cons, List.not_mem_nil, or_false]
           | step edge _ => cases edge
-        · simp [Exec.rawFrameDescendants] at hroot
+        · simp only [rawFrameDescendants, List.not_mem_nil] at hroot
   | cont hstep next ih =>
       intro node
       let edge : Exec.Deriv.ParentStep
@@ -1608,7 +1616,7 @@ private theorem Exec.mem_rawNodes_iff_rawFrameDescendant_parentPrefix :
         .cont hstep next
       simp only [Exec.rawNodes, Exec.rawFrameDescendants, List.mem_cons, ih]
       rw [(Blanc.Exec.Deriv.ParentStep.parentPrefix_iff edge)]
-      aesop
+      aesop (config := { enableSimp := false })
   | doneErr hstep henter hresume =>
       intro node
       constructor
@@ -1618,9 +1626,9 @@ private theorem Exec.mem_rawNodes_iff_rawFrameDescendant_parentPrefix :
         exact Or.inl (.refl _)
       · rintro (h | ⟨root, hroot, _⟩)
         · cases h with
-          | refl => simp [Exec.rawNodes]
+          | refl => simp only [Exec.rawNodes, List.mem_cons, List.not_mem_nil, or_false]
           | step edge _ => cases edge
-        · simp [Exec.rawFrameDescendants] at hroot
+        · simp only [rawFrameDescendants, List.not_mem_nil] at hroot
   | doneOk hstep henter hresume next ih =>
       intro node
       let edge : Exec.Deriv.ParentStep
@@ -1629,7 +1637,7 @@ private theorem Exec.mem_rawNodes_iff_rawFrameDescendant_parentPrefix :
         .doneOk hstep henter hresume next
       simp only [Exec.rawNodes, Exec.rawFrameDescendants, List.mem_cons, ih]
       rw [(Blanc.Exec.Deriv.ParentStep.parentPrefix_iff edge)]
-      aesop
+      aesop (config := { enableSimp := false })
   | runErr hstep henter child hresume ih =>
       intro node
       constructor
@@ -1641,12 +1649,12 @@ private theorem Exec.mem_rawNodes_iff_rawFrameDescendant_parentPrefix :
           rcases (ih node).mp hchild with
             hprefix | ⟨root, hroot, hprefix⟩
           · exact ⟨⟨_, _, _, _, child⟩,
-              by simp [Exec.rawFrameDescendants], hprefix⟩
+              by simp only [rawFrameDescendants, List.mem_cons, true_or], hprefix⟩
           · exact ⟨root,
-              by simp [Exec.rawFrameDescendants, hroot], hprefix⟩
+              by simp only [rawFrameDescendants, List.mem_cons, hroot, or_true], hprefix⟩
       · rintro (hprefix | ⟨root, hroot, hprefix⟩)
         · cases hprefix with
-          | refl => simp [Exec.rawNodes]
+          | refl => simp only [Exec.rawNodes, List.mem_cons, true_or]
           | step edge _ => cases edge
         · simp only [Exec.rawFrameDescendants, List.mem_cons] at hroot
           rcases hroot with rfl | hroot
@@ -1672,18 +1680,19 @@ private theorem Exec.mem_rawNodes_iff_rawFrameDescendant_parentPrefix :
             rcases (childIh node).mp hchild with
               hprefix | ⟨root, hroot, hprefix⟩
             · exact ⟨⟨_, _, _, _, child⟩,
-                by simp [Exec.rawFrameDescendants], hprefix⟩
+                by simp only [rawFrameDescendants, List.mem_cons, List.mem_append, true_or], hprefix⟩
             · exact ⟨root,
-                by simp [Exec.rawFrameDescendants, hroot], hprefix⟩
+                by simp only [rawFrameDescendants, List.mem_cons, List.mem_append, hroot, true_or,
+                  or_true], hprefix⟩
           · rcases (nextIh node).mp hnext with
               hprefix | ⟨root, hroot, hprefix⟩
             · exact Or.inl (.step edge hprefix)
             · exact Or.inr ⟨root,
-                by simp [Exec.rawFrameDescendants, hroot], hprefix⟩
+                by simp only [rawFrameDescendants, List.mem_cons, List.mem_append, hroot, or_true], hprefix⟩
       · rintro (hprefix | ⟨root, hroot, hprefix⟩)
         · rw [(Blanc.Exec.Deriv.ParentStep.parentPrefix_iff edge)] at hprefix
           rcases hprefix with rfl | hnext
-          · simp [Exec.rawNodes]
+          · simp only [Exec.rawNodes, List.mem_cons, List.mem_append, true_or]
           · simp only [Exec.rawNodes, List.mem_cons, List.mem_append]
             exact Or.inr (Or.inr
               ((nextIh node).mpr (Or.inl hnext)))
@@ -1711,7 +1720,7 @@ theorem Exec.mem_rawNodes_iff_rawFrameRoot_parentPrefix
         Exec.Deriv.ParentPrefix root node := by
   rw [Exec.mem_rawNodes_iff_rawFrameDescendant_parentPrefix run node]
   simp only [Exec.rawFrameRoots, List.mem_cons]
-  aesop
+  aesop (config := { enableSimp := false })
 
 /-- Same-frame strengthening of `Exec.rawFrameDescendants_eq_nil_of_no_xinstAt`:
 only the outer root's own continuation chain has to be free of executable
@@ -1727,12 +1736,12 @@ theorem Exec.rawFrameDescendants_eq_nil_of_no_sameFrame_xinstAt
         ∀ x : Xinst, ¬ Ninst.At node.sevm.code node.pc (.exec x)) :
     Exec.rawFrameDescendants run = [] := by
   induction run with
-  | halt => simp [Exec.rawFrameDescendants]
+  | halt => simp only [rawFrameDescendants]
   | cont hstep next ih =>
       simp only [Exec.rawFrameDescendants]
       exact ih fun node hprefix =>
         childless node (.step (.cont hstep next) hprefix)
-  | doneErr => simp [Exec.rawFrameDescendants]
+  | doneErr => simp only [rawFrameDescendants]
   | doneOk hstep henter hresume next ih =>
       simp only [Exec.rawFrameDescendants]
       exact ih fun node hprefix =>
@@ -1778,9 +1787,10 @@ private theorem Exec.mem_retainedNodesOfCommits_iff_parentPrefix
         exact Or.inl (.refl _)
       · rintro (hprefix | ⟨frame, member, _⟩)
         · cases hprefix with
-          | refl => simp [Exec.retainedNodesOfCommits]
+          | refl => simp only [Exec.retainedNodesOfCommits, List.mem_cons, List.not_mem_nil,
+            or_false]
           | step edge _ => cases edge
-        · simp [Exec.descendantFrames] at member
+        · simp only [descendantFrames, List.not_mem_nil] at member
   | cont hstep next ih =>
       let edge : Exec.Deriv.ParentStep
           (⟨_, _, _, _, next⟩ : Exec.Deriv)
@@ -1789,8 +1799,8 @@ private theorem Exec.mem_retainedNodesOfCommits_iff_parentPrefix
       simp only [Exec.retainedNodesOfCommits, Exec.descendantFrames,
         List.mem_cons, ih committed]
       rw [(Blanc.Exec.Deriv.ParentStep.parentPrefix_iff edge)]
-      aesop
-  | doneErr hstep henter hresume => simp [Execution.commits] at committed
+      aesop (config := { enableSimp := false })
+  | doneErr hstep henter hresume => simp only [Execution.commits, Bool.false_eq_true] at committed
   | doneOk hstep henter hresume next ih =>
       let edge : Exec.Deriv.ParentStep
           (⟨_, _, _, _, next⟩ : Exec.Deriv)
@@ -1799,9 +1809,9 @@ private theorem Exec.mem_retainedNodesOfCommits_iff_parentPrefix
       simp only [Exec.retainedNodesOfCommits, Exec.descendantFrames,
         List.mem_cons, ih committed]
       rw [(Blanc.Exec.Deriv.ParentStep.parentPrefix_iff edge)]
-      aesop
+      aesop (config := { enableSimp := false })
   | runErr hstep henter child hresume =>
-      simp [Execution.commits] at committed
+      simp only [Execution.commits, Bool.false_eq_true] at committed
   | runOk hstep henter child hresume next childIh nextIh =>
       let edge : Exec.Deriv.ParentStep
           (⟨_, _, _, _, next⟩ : Exec.Deriv)
@@ -1817,11 +1827,11 @@ private theorem Exec.mem_retainedNodesOfCommits_iff_parentPrefix
         simp only [childIh childCommits, nextIh committed, List.mem_cons]
         rw [(Blanc.Exec.Deriv.ParentStep.parentPrefix_iff edge)]
         simp only [Exec.Frame.rootDeriv, Exec.Frame.ofRun]
-        aesop
+        aesop (config := { enableSimp := false })
       next childDoesNotSettle =>
         simp only [List.not_mem_nil, false_or, nextIh committed]
         rw [(Blanc.Exec.Deriv.ParentStep.parentPrefix_iff edge)]
-        aesop
+        aesop (config := { enableSimp := false })
 
 /-- A node survives settlement exactly when it is owned by the same-frame
 prefix of one of `committedFrames`.  This is the membership counterpart of
@@ -1838,8 +1848,8 @@ theorem Exec.mem_retainedNodes_iff_committedFrame_parentPrefix
   next committed =>
     rw [Exec.mem_retainedNodesOfCommits_iff_parentPrefix run committed node]
     simp only [List.mem_cons, Exec.Frame.rootDeriv, Exec.Frame.ofRun]
-    aesop
-  next notCommitted => simp
+    aesop (config := { enableSimp := false })
+  next notCommitted => simp only [List.not_mem_nil, false_and, exists_false]
 
 /-- One same-frame edge splits the global chronology.  A successful entered
 child belongs to the nonempty crossed prefix before the parent resumes. -/
@@ -1851,15 +1861,17 @@ theorem Exec.Deriv.ParentStep.rawNodes_decomposition
       Exec.rawNodes root.exc = crossed ++ Exec.rawNodes next.exc := by
   cases edge with
   | cont hstep next =>
-      refine ⟨[⟨_, _, _, _, .cont hstep next⟩], by simp, ?_⟩
-      simp [Exec.rawNodes]
+      refine ⟨[⟨_, _, _, _, .cont hstep next⟩], by simp only [ne_eq, List.cons_ne_self,
+        not_false_eq_true], ?_⟩
+      simp only [Exec.rawNodes, List.cons_append, List.nil_append]
   | doneOk hstep henter hresume next =>
-      refine ⟨[⟨_, _, _, _, .doneOk hstep henter hresume next⟩], by simp, ?_⟩
-      simp [Exec.rawNodes]
+      refine ⟨[⟨_, _, _, _, .doneOk hstep henter hresume next⟩], by simp only [ne_eq,
+        List.cons_ne_self, not_false_eq_true], ?_⟩
+      simp only [Exec.rawNodes, List.cons_append, List.nil_append]
   | runOk hstep henter child hresume next =>
       refine ⟨⟨_, _, _, _, .runOk hstep henter child hresume next⟩ ::
-        Exec.rawNodes child, by simp, ?_⟩
-      simp [Exec.rawNodes]
+        Exec.rawNodes child, by simp only [ne_eq, reduceCtorEq, not_false_eq_true], ?_⟩
+      simp only [Exec.rawNodes, List.cons_append]
 
 /-- Every same-frame prefix gives an exact split of the enclosing global
 chronology at its endpoint. -/
@@ -2013,7 +2025,7 @@ theorem Exec.Deriv.ParentPrefix.advance_jumpToward
       Jinst.Run ⟨start.pc, start.sevm, start.devm⟩ instruction
         (.ok ⟨nextPc, inter⟩) := by
   rcases start with ⟨pc, sevm, pre, out, run⟩
-  dsimp at reached storeAt jumpAt
+  dsimp only at reached storeAt jumpAt
   cases reached with
   | refl => exact ((Blanc.Ninst.At.false_of_jinstAt storeAt) jumpAt).elim
   | step edge rest =>
@@ -2046,13 +2058,13 @@ inductive Prog.SourceStep where
   | rest
   | branchLeft
   | branchRight
-deriving DecidableEq, Repr
+deriving DecidableEq
 
 /-- Stable structural identity of a source instruction. -/
 structure Prog.SourcePath where
   functionIndex : Nat
   steps : List Prog.SourceStep
-deriving DecidableEq, Repr
+deriving DecidableEq
 
 /-- An executable compiler-produced source instruction site. -/
 structure Prog.SourceSite where
@@ -2109,7 +2121,7 @@ theorem Func.sourceSites_sound
     Ninst.At code site.pc site.instruction := by
   induction body generalizing pc steps with
   | last outcome =>
-      simp [Func.sourceSites] at member
+      simp only [sourceSites, List.not_mem_nil] at member
   | next instruction tail ih =>
       simp only [Func.sourceSites, List.mem_cons] at member
       rcases member with rfl | member
@@ -2132,7 +2144,7 @@ theorem Func.sourceSites_sound
         rw [hpc] at rightSub rightBoundary
         exact right_ih rightSub rightBoundary rightMember
   | call index =>
-      simp [Func.sourceSites] at member
+      simp only [sourceSites, List.not_mem_nil] at member
 
 /-- The program-level source map is sound against the exact compiler output. -/
 theorem Prog.sourceSites_sound
@@ -2148,7 +2160,7 @@ theorem Prog.sourceSites_sound
     have boundary := (Prog.jumpable_of_get?_table compiled hentry).2
     exact Func.sourceSites_sound sub boundary member
   next hnone =>
-    simp at member
+    simp only [List.not_mem_nil] at member
 
 /-- A successful executable lookup has the requested PC and decodes exactly
 as recorded. -/
@@ -2159,7 +2171,7 @@ theorem Prog.sourceSiteAt_sound
     site.pc = pc ∧ Ninst.At code site.pc site.instruction := by
   constructor
   · have h := List.find?_some found
-    simpa [BEq.beq] using h
+    simpa only [BEq.beq, decide_eq_true_eq] using h
   · exact program.sourceSites_sound compiled
       (List.mem_of_find?_eq_some found)
 
@@ -2175,12 +2187,6 @@ def Exec.Deriv.exactInvocation
     root.sevm.currentTarget = storageTarget ∧
     root.sevm.codeAddress = some codeAddress ∧
     some root.sevm.code.toList = program.compile
-
-instance (program : Prog) (storageTarget codeAddress : Adr)
-    (root : Exec.Deriv) :
-    Decidable ((Blanc.Exec.Deriv.exactInvocation program storageTarget codeAddress root)) := by
-  unfold Exec.Deriv.exactInvocation
-  infer_instance
 
 /-- Exact contract-neutral identity of one retained compiled invocation.
 `currentTarget` is the storage owner, `codeAddress` names the executing code
@@ -2247,7 +2253,7 @@ theorem Exec.Deriv.SourceCursor.mainToward
       Exec.Deriv.ParentPrefix cursor.node target := by
   rcases root with ⟨pc, sevm, pre, out, run⟩
   rcases invocation with ⟨hpc, htarget, haddress, hcode⟩
-  dsimp at hpc htarget haddress hcode reached storeAt
+  dsimp only at hpc htarget haddress hcode reached storeAt
   subst pc
   have hget :
       (table 0 (program.main :: program.aux))[0]? =
@@ -2284,7 +2290,8 @@ theorem Exec.Deriv.SourceCursor.mainToward
             ⟨1, _, next, parentPrefix, sourceSlice, sourceBoundary, by
               intro site member
               simp only [Prog.sourceSites, List.mem_flatMap]
-              refine ⟨0, by simp, ?_⟩
+              refine ⟨0, by simp only [List.length_cons, List.mem_range, lt_add_iff_pos_left,
+                add_pos_iff, zero_lt_one, or_true], ?_⟩
               simpa only [hget] using member⟩
           have notStore : ¬ Ninst.At sevm.code 0 (.reg .sstore) := by
             intro storeHere
@@ -2325,7 +2332,7 @@ theorem Exec.Deriv.SourceCursor.nextOfParentStep
       (functionIndex := path.functionIndex) (steps := path.steps)
       (site := { path := path, pc := cursorPc, instruction := instruction })
       (by rcases path with ⟨functionIndex, steps⟩
-          simp [Func.sourceSites])
+          simp only [Func.sourceSites, List.mem_cons, true_or])
   rcases Func.noPushBefore_next codeSlice codeBoundary with
     ⟨tailBoundary, tailSlice⟩
   cases edge with
@@ -2340,7 +2347,7 @@ theorem Exec.Deriv.SourceCursor.nextOfParentStep
       refine ⟨⟨_, _, next, nextPrefix, tailSlice, tailBoundary, ?_⟩, rfl⟩
       intro site member
       apply sourceIncluded
-      simp [Func.sourceSites, member]
+      simp only [Func.sourceSites, List.mem_cons, member, or_true]
   | doneOk hstep henter hresume next =>
       have sourceStep := (Evm.step_next sourceAt).symm.trans hstep
       cases Ninst.step_spawn_pc sourceStep
@@ -2353,7 +2360,7 @@ theorem Exec.Deriv.SourceCursor.nextOfParentStep
       refine ⟨⟨_, _, next, nextPrefix, tailSlice, tailBoundary, ?_⟩, rfl⟩
       intro site member
       apply sourceIncluded
-      simp [Func.sourceSites, member]
+      simp only [Func.sourceSites, List.mem_cons, member, or_true]
   | runOk hstep henter child hresume next =>
       have sourceStep := (Evm.step_next sourceAt).symm.trans hstep
       cases Ninst.step_spawn_pc sourceStep
@@ -2366,7 +2373,7 @@ theorem Exec.Deriv.SourceCursor.nextOfParentStep
       refine ⟨⟨_, _, next, nextPrefix, tailSlice, tailBoundary, ?_⟩, rfl⟩
       intro site member
       apply sourceIncluded
-      simp [Func.sourceSites, member]
+      simp only [Func.sourceSites, List.mem_cons, member, or_true]
 
 /-- Select the source branch arm that contains the nominated reached source
 instruction.
@@ -2394,7 +2401,8 @@ theorem Exec.Deriv.SourceCursor.branchToward
       cursor.codeBoundary with
     ⟨loc, hlocEq, hloc, pushAt, jumpiAt, leftSlice, leftBoundary,
       jumpdestAt, jumpable, rightSlice, rightBoundary⟩
-  rcases (Blanc.Exec.Deriv.ParentPrefix.advance_pushToward reached) ⟨_, pushAt⟩ (by simp)
+  rcases (Blanc.Exec.Deriv.ParentPrefix.advance_pushToward reached) ⟨_, pushAt⟩ (by simp only [Nat.toUInt8_eq,
+    ne_eq, reduceCtorEq, not_false_eq_true])
       targetNonPush storeAt with
     ⟨afterPushPre, afterPush, pushEdge, afterPushReached, pushBurn⟩
   rw [List.toB256_pair _ hloc] at pushBurn
@@ -2509,7 +2517,8 @@ theorem Exec.Deriv.SourceCursor.branchFlagToward
       cursor.codeBoundary with
     ⟨loc, hlocEq, hloc, pushAt, jumpiAt, leftSlice, leftBoundary,
       jumpdestAt, jumpable, rightSlice, rightBoundary⟩
-  rcases (Blanc.Exec.Deriv.ParentPrefix.advance_pushToward reached) ⟨_, pushAt⟩ (by simp)
+  rcases (Blanc.Exec.Deriv.ParentPrefix.advance_pushToward reached) ⟨_, pushAt⟩ (by simp only [Nat.toUInt8_eq,
+    ne_eq, reduceCtorEq, not_false_eq_true])
       targetNonPush instructionAt with
     ⟨afterPushPre, afterPush, pushEdge, afterPushReached, pushBurn⟩
   rw [List.toB256_pair _ hloc] at pushBurn
@@ -2598,8 +2607,9 @@ theorem Exec.Deriv.SourceCursor.callToward
   have hgetBody : (program.main :: program.aux)[index]? = some body := by
     have h := @Prog.get?_table 0 index (program.main :: program.aux)
     rw [hgetTable] at h
-    simpa using h.symm
-  rcases (Blanc.Exec.Deriv.ParentPrefix.advance_pushToward reached) ⟨pushLe, pushAt⟩ (by simp)
+    simpa only [Option.map_eq_map, Option.map_some] using h.symm
+  rcases (Blanc.Exec.Deriv.ParentPrefix.advance_pushToward reached) ⟨pushLe, pushAt⟩ (by simp only [Nat.toUInt8_eq,
+    ne_eq, reduceCtorEq, not_false_eq_true])
       targetNonPush storeAt with
     ⟨afterPushPre, afterPush, pushEdge, afterPushReached, pushBurn⟩
   rw [List.toB256_pair _ hloc] at pushBurn
@@ -2767,8 +2777,8 @@ private theorem Exec.Deriv.SourceCursor.Toward.sourceSite
   | atTarget cursor chronology site siteEq sourceMember targetEq instructionEq =>
       refine ⟨site, sourceMember, ?_, ?_⟩
       · have pcEq := congrArg Exec.Deriv.pc targetEq
-        simpa [Exec.Deriv.SourceCursor.node, siteEq] using pcEq
-      · simpa [siteEq] using instructionEq
+        simpa only [siteEq, node] using pcEq
+      · simpa only [siteEq] using instructionEq
   | next cursor chronology tailCursor edge rest ih => exact ih
   | branchLeft cursor chronology arm compilerPrefix rest ih => exact ih
   | branchRight cursor chronology arm compilerPrefix rest ih => exact ih
@@ -2844,7 +2854,7 @@ private theorem Exec.Deriv.SourceCursor.toward_core :
               Func.sourceSites path.functionIndex path.steps cursor.pc
                 (.next instruction tail) := by
             rcases path with ⟨functionIndex, steps⟩
-            simp [site, Func.sourceSites]
+            simp only [Func.sourceSites, List.mem_cons, true_or, site]
           have sourceAt : Ninst.At root.sevm.code cursor.pc instruction :=
             Func.sourceSites_sound cursor.codeSlice cursor.codeBoundary
               localMember
@@ -3028,7 +3038,7 @@ theorem Exec.Deriv.SourceCursor.ninstRun_of_nextEdge
       (functionIndex := path.functionIndex) (steps := path.steps)
       (site := { path := path, pc := cursorPc, instruction := instruction })
       (by rcases path with ⟨functionIndex, steps⟩
-          simp [Func.sourceSites])
+          simp only [Func.sourceSites, List.mem_cons, true_or])
   cases edge with
   | cont hstep next =>
       have actual := (Evm.step_next sourceAt).symm.trans hstep
@@ -3073,10 +3083,10 @@ theorem Exec.Deriv.SourceCursor.Toward.dropLineRun
       change Exec.Deriv.SourceCursor root program path
         (.next instruction (rest +++ tail)) at cursor
       rcases route.next_of_instruction_ne
-          (lineNe instruction (by simp)) with
+          (lineNe instruction (by simp only [List.mem_cons, true_or])) with
         ⟨chronology, restCursor, edge, restRoute⟩
       rcases ih restRoute (fun candidate member =>
-          lineNe candidate (by simp [member])) with
+          lineNe candidate (by simp only [List.mem_cons, member, or_true])) with
         ⟨tailPath, tailCursor, lineRun, tailChronology, tailRoute⟩
       exact ⟨tailPath, tailCursor,
         Line.Run.cons (cursor.ninstRun_of_nextEdge edge) lineRun,
@@ -3297,7 +3307,7 @@ def Exec.Frame.SourceCursor.toRaw
   ⟨cursor.pc, cursor.pre, cursor.current, cursor.parentPrefix,
     cursor.codeSlice, cursor.codeBoundary, cursor.sourceIncluded⟩
 
-@[simp] theorem Exec.Frame.SourceCursor.toRaw_node
+theorem Exec.Frame.SourceCursor.toRaw_node
     {frame : Exec.Frame} {program : Prog}
     {path : Prog.SourcePath} {source : Func}
     (cursor : Exec.Frame.SourceCursor frame program path source) :
@@ -3334,15 +3344,15 @@ def Prog.SourceSite.matchesSstore
     | .reg .sstore => true
     | _ => false
 
-@[simp] theorem Prog.SourceSite.matchesSstore_eq_true
+theorem Prog.SourceSite.matchesSstore_eq_true
     {site : Prog.SourceSite} {path : Prog.SourcePath} {pc : Nat} :
     site.matchesSstore path pc = true ↔
       site.path = path ∧ site.pc = pc ∧
         site.instruction = .reg .sstore := by
   rcases site with ⟨sitePath, sitePc, instruction⟩
-  cases instruction <;> simp [Prog.SourceSite.matchesSstore]
+  cases instruction <;> simp only [matchesSstore, Bool.and_eq_true, beq_iff_eq, Ninst.reg.injEq, Bool.and_false, Bool.false_eq_true, reduceCtorEq, and_false]
   rename_i regular
-  cases regular <;> simp
+  cases regular <;> simp only [Bool.false_eq_true, and_false, reduceCtorEq, and_true]
 
 /-- Decide whether a structural path and compiled PC name a source SSTORE. -/
 def Prog.acceptsSstoreSite
@@ -3356,7 +3366,7 @@ theorem Prog.acceptsSstoreSite_iff
       ∃ site ∈ program.sourceSites,
         site.path = path ∧ site.pc = pc ∧
           site.instruction = .reg .sstore := by
-  simp [Prog.acceptsSstoreSite]
+  simp only [acceptsSstoreSite, List.any_eq_true, SourceSite.matchesSstore_eq_true]
 
 /-- Checker acceptance decodes the exact SSTORE byte at the requested PC. -/
 theorem Prog.acceptsSstoreSite_sound

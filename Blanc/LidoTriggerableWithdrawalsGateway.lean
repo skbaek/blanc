@@ -40,7 +40,8 @@ def customErrorData (name : String) (args : List ArgType := []) : Bytes :=
 
 def runtimeError (name : String) (args : List ArgType := []) : Func :=
   Func.revertSelector (customErrorData name args) (by
-    simp [customErrorData, B256.length_toBytes])
+    simp only [customErrorData, List.length_take, B256.length_toBytes, Nat.reduceLeDiff,
+      inf_of_le_left])
 
 def fallbackSlot : Nat := 1
 def missingRoleSlot : Nat := 2
@@ -59,33 +60,6 @@ def setLimitAfterCurrentSlot : Nat := 14
 def setLimitWriteSlot : Nat := 15
 def consumeAfterCurrentSlot : Nat := 16
 def exitRequestsLimitExceededSlot : Nat := 17
-
-def roleKeyFromMemory (region : Nat) : Line :=
-  mloadWord 0 ++ mloadWord 1 ++
-  [pushB256 addressMask, and, xor,
-   pushB256 low252Mask, and, pushB256 (regionWord region), or]
-
-def roleKeyFromMemoryAt (roleWord accountWord : Nat) (region : Nat) : Line :=
-  mloadWord (Nat.toB256 roleWord) ++ mloadWord (Nat.toB256 accountWord) ++
-  [pushB256 addressMask, and, xor,
-   pushB256 low252Mask, and, pushB256 (regionWord region), or]
-
-def roleKeyFromArgs (region : Nat) : Line :=
-  arg 0 ++ arg 1 ++
-  [pushB256 addressMask, and, xor,
-   pushB256 low252Mask, and, pushB256 (regionWord region), or]
-
-def roleKeyForCaller (role region : B256) : Line :=
-  [pushB256 role, caller, pushB256 addressMask, and, xor,
-   pushB256 low252Mask, and, pushB256 region, or]
-
-def enumKeyFromMemory (region : Nat) : Line :=
-  mloadWord 2 ++
-  [pushB256 low252Mask, and, pushB256 (regionWord region), or]
-
-def enumKeyFromMemoryAt (word : Nat) (region : Nat) : Line :=
-  mloadWord (Nat.toB256 word) ++
-  [pushB256 low252Mask, and, pushB256 (regionWord region), or]
 
 def onlyRole (role : B256) (body : Func) : Func :=
   viewRoleMembershipSlotFrom [pushB256 role] [caller] +++
@@ -212,12 +186,6 @@ def consumeAfterCurrent : Func :=
   (mloadWord 8 ++ mloadWord 14 ++ [gt]) +++
     ((.call exitRequestsLimitExceededSlot) <?>
       consumeAfterCurrentSuccess)
-
-def consumeExitLimit : Func :=
-  ( loadPackedLimitWorkingWords ++
-    [timestamp] ++ mstoreAt 12 ++ [pushB256 2] ++ mstoreAt 11) +++
-    ((mloadWord 13 ++ [iszero]) +++
-      (Func.stop <?> .call limitCurrentComputeSlot))
 
 def getExitRequestLimitFullInfo : Func :=
   ( loadPackedLimitWorkingWords ++
@@ -595,7 +563,8 @@ theorem integratedSlotOf_integratedLabel (n : Nat)
     (h : (Trigger.labelOfLocalSlot? n).isSome) :
     integratedSlotOf (integratedLabelOfLocalSlot n) = integratedTriggerSlot n := by
   rcases heq : Trigger.labelOfLocalSlot? n with _ | lbl
-  · rw [heq] at h; exact absurd h (by simp)
+  · rw [heq] at h; exact absurd h (by simp only [Option.isSome_none, Bool.false_eq_true,
+    not_false_eq_true])
   · exact integratedSlotOf_integratedLabelOfLocalSlot heq
 
 /-- The integrated rebase is the shared target renumbering owner
@@ -728,32 +697,6 @@ theorem flatMap_callTargets_integratedTriggerLocalBodies (dp : DeployParams) :
 def symbolicAux (dp : DeployParams) :
     List (Trigger.CompositeLabel × SymbolicFunc Trigger.CompositeLabel) :=
   symbolicBaseAux ++ symbolicTriggerAux dp
-
-def symbolicFuncs (dp : DeployParams) : List (B256 × SymbolicFunc Trigger.CompositeLabel) :=
-  [ (selPauseFor, toBaseSymbolic (nonpayable pauseFor)),
-    (selIsPaused, toBaseSymbolic (nonpayable isPaused)),
-    (selTriggerFullWithdrawals, toIntegratedSymbolic (Trigger.triggerFullWithdrawals dp)),
-    (selPauseRole, toBaseSymbolic (nonpayable (constantWord pauseRole))),
-    (selResumeRole, toBaseSymbolic (nonpayable (constantWord resumeRole))),
-    (selAddFullWithdrawalRequestRole, toBaseSymbolic (nonpayable (constantWord addFullWithdrawalRequestRole))),
-    (selTwExitLimitManagerRole, toBaseSymbolic (nonpayable (constantWord twExitLimitManagerRole))),
-    (selTwrLimitPosition, toBaseSymbolic (nonpayable (constantWord twrLimitPosition))),
-    (selVersion, toBaseSymbolic (nonpayable (constantWord version))),
-    (selResume, toBaseSymbolic (nonpayable resume)),
-    (selPauseUntil, toBaseSymbolic (nonpayable pauseUntil)),
-    (selSetExitRequestLimit, toBaseSymbolic (nonpayable setExitRequestLimit)),
-    (selGetExitRequestLimitFullInfo, toBaseSymbolic (nonpayable getExitRequestLimitFullInfo)),
-    (selPauseInfinitely, toBaseSymbolic (nonpayable (constantWord pauseInfinitely))),
-    (selGetResumeSinceTimestamp, toBaseSymbolic (nonpayable getResumeSinceTimestamp)),
-    (selDefaultAdminRole, toBaseSymbolic (nonpayable (constantWord defaultAdminRole))),
-    (selSupportsInterface, toBaseSymbolic (nonpayable supportsInterface)),
-    (selHasRole, toBaseSymbolic (nonpayable hasRole)),
-    (selGetRoleAdmin, toBaseSymbolic (nonpayable getRoleAdmin)),
-    (selGrantRole, toBaseSymbolic (nonpayable grantRole)),
-    (selRevokeRole, toBaseSymbolic (nonpayable revokeRole)),
-    (selRenounceRole, toBaseSymbolic (nonpayable renounceRole)),
-    (selGetRoleMember, toBaseSymbolic (nonpayable getRoleMember)),
-    (selGetRoleMemberCount, toBaseSymbolic (nonpayable getRoleMemberCount)) ]
 
 local infixr:65 " ++++ " => SymbolicFunc.prepend
 
@@ -933,7 +876,7 @@ theorem runtime_compiles (dp : DeployParams) :
 
 theorem runtime_compile (dp : DeployParams) :
     Prog.compile (runtime dp) = some (runtimeCode dp) := by
-  simpa [runtimeCode] using
+  simpa only [runtimeCode] using
     Prog.compile_eq_some_getD_of_compiles (runtime dp) (runtime_compiles dp)
 
 /-- Checked link certificate for the symbolic gateway runtime.  `runtime` is left
@@ -962,14 +905,15 @@ private theorem runtimeStructuralLength_eq_zero (dp : DeployParams) :
       (((runtime ⟨0⟩).main :: (runtime ⟨0⟩).aux).map fun f => 1 + compsize f).sum := by
   have h := runtime_compileShape_eq_zero dp
   have hm : (runtime dp).main.compileShape = (runtime ⟨0⟩).main.compileShape := by
-    simpa [Prog.compileShape] using congrArg Prog.CompileShape.main h
+    simpa only [Prog.compileShape] using congrArg Prog.CompileShape.main h
   have ha : (runtime dp).aux.map Func.compileShape =
       (runtime ⟨0⟩).aux.map Func.compileShape := by
-    simpa [Prog.compileShape] using congrArg Prog.CompileShape.aux h
+    simpa only [Prog.compileShape] using congrArg Prog.CompileShape.aux h
   have hmap : ∀ l : List Func, (l.map fun f => 1 + compsize f) =
       (l.map Func.compileShape).map (fun sh => 1 + sh.byteSize) := by
     intro l
-    simp [List.map_map, Func.CompileShape.byteSize_compileShape]
+    simp only [List.map_map, List.map_inj_left, Function.comp_apply,
+      Func.CompileShape.byteSize_compileShape, implies_true]
   rw [List.map_cons, List.map_cons, List.sum_cons, List.sum_cons, hmap, hmap,
     ← Func.CompileShape.byteSize_compileShape, ← Func.CompileShape.byteSize_compileShape,
     hm, ha]
@@ -979,27 +923,6 @@ theorem runtimeCode_length (dp : DeployParams) : (runtimeCode dp).length = 8094 
   ((Prog.length_compile (runtime_compile dp)).trans
     (runtimeStructuralLength_eq_zero dp)).trans runtimeStructuralLengthZero
 
-def sourceSstoreSiteCount : Func → Nat :=
-  Func.sourceSiteCount fun
-    | .reg .sstore => true
-    | _ => false
-
-def sourceSstoreCount (dp : DeployParams) : Nat :=
-  (funcs dp).foldl (fun n p => n + sourceSstoreSiteCount p.2) 0
-
-def sourceInventory (dp : DeployParams) : SourceInventory :=
-  { persistentWrites :=
-      [({label := "pause", offset := 0}, .pause),
-       ({label := "limit", offset := 1}, .limit),
-       ({label := "roles", offset := 2}, .roleMembership),
-       ({label := "enumeration", offset := 3}, .enumeration)]
-    externalCalls :=
-      [({label := "locatorVault", offset := 0}, .locatorVault),
-       ({label := "vaultFee", offset := 1}, .vaultFee),
-       ({label := "withdrawalRequests", offset := 2}, .withdrawalRequests),
-       ({label := "locatorRouter", offset := 3}, .locatorRouter),
-       ({label := "stakingNotification", offset := 4}, .stakingNotification),
-       ({label := "refund", offset := 5}, .refund)] }
 
 end LidoTriggerableWithdrawalsGateway
 end Blanc

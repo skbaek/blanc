@@ -99,13 +99,13 @@ private lemma getStor_of_state {s t : Devm} (h : s.state = t.state) :
 private lemma getBal_of_state {s t : Devm} (h : s.state = t.state) :
     Devm.getBal s = Devm.getBal t := by
   funext a
-  simp [Devm.getBal, Devm.getAcct]
+  simp only [Devm.getBal, Devm.getAcct]
   rw [h]
 
 private lemma getCode_of_state {s t : Devm} (h : s.state = t.state) :
     Devm.getCode s = Devm.getCode t := by
   funext a
-  simp [Devm.getCode, Devm.getAcct]
+  simp only [Devm.getCode, Devm.getAcct]
   rw [h]
 
 private lemma entryFrame_line {e : Sevm} {s t : Devm} {l : Line}
@@ -175,8 +175,8 @@ private lemma selector_flag {e : Sevm} {s t : Devm} {sig expected : B256}
   have hflag : (expected =? sig) :: sig :: [] <<+ t.stack :=
     prefix_of_eq heq hp2
   by_cases h : sig = expected
-  · simpa [B256.eqCheck, h] using hflag
-  · simpa [B256.eqCheck, h, Ne.symm h] using hflag
+  · simpa only [B256.eqCheck, h, ↓reduceIte] using hflag
+  · simpa only [B256.eqCheck, h, ↓reduceIte, Ne.symm h] using hflag
 
 private lemma plain_selector_flag {e : Sevm} {s t : Devm} {sig expected : B256}
     (hp : sig :: [] <<+ s.stack)
@@ -190,8 +190,8 @@ private lemma plain_selector_flag {e : Sevm} {s t : Devm} {sig expected : B256}
   have hflag : (expected =? sig) :: [] <<+ t.stack :=
     prefix_of_eq heq hp1
   by_cases h : sig = expected
-  · simpa [B256.eqCheck, h] using hflag
-  · simpa [B256.eqCheck, h, Ne.symm h] using hflag
+  · simpa only [B256.eqCheck, h, ↓reduceIte] using hflag
+  · simpa only [B256.eqCheck, h, ↓reduceIte, Ne.symm h] using hflag
 
 private lemma not_run_pop_donate {fs : List Func} {e : Sevm} {s r : Devm}
     (h_nonempty : e.data.length.toB256 ≠ 0) :
@@ -222,7 +222,7 @@ private theorem deposit_body_of_prorataMain
   intro hbranch
   have hflag := selector_flag hp h₁
   rw [show (selector "deposit" [] =? selector "deposit" []) = 1 from
-    by simp [B256.eqCheck]] at hflag
+    by simp only [B256.eqCheck, ↓reduceIte]] at hflag
   rcases of_run_branch hbranch with
     ⟨u, hpop, hwrong⟩ | ⟨w, u, v, hnz, hpop, hburn, hbody⟩
   · exact (B256.zero_ne_one (popBurn_pref hpop hflag).1).elim
@@ -269,7 +269,7 @@ private theorem withdraw_body_of_prorataMain
         (popBurn_pref hpopValue hvaluePrefix).2
       have hwithdrawFlag := selector_flag hpAfterValue hwithdrawLine
       rw [show (selector "withdraw" [.uint256] =? selector "withdraw" [.uint256]) = 1 from
-        by simp [B256.eqCheck]] at hwithdrawFlag
+        by simp only [B256.eqCheck, ↓reduceIte]] at hwithdrawFlag
       rcases of_run_branch hwithdrawBranch with
         ⟨a, hpopWithdraw, hwrong⟩ |
         ⟨q, a, b, hnzWithdraw, hpopWithdraw, hburnWithdraw, hbody⟩
@@ -335,7 +335,7 @@ private theorem convertToShares_body_of_prorataMain
           (popBurn_pref hpopWithdraw hwithdrawFlag).2
         have hsharesFlag := selector_flag hpAfterWithdraw hsharesLine
         rw [show (selector "convertToShares" [.uint256] =?
-            selector "convertToShares" [.uint256]) = 1 from by simp [B256.eqCheck]] at hsharesFlag
+            selector "convertToShares" [.uint256]) = 1 from by simp only [B256.eqCheck, ↓reduceIte]] at hsharesFlag
         rcases of_run_branch hsharesBranch with
           ⟨c, hpopShares, hwrong⟩ |
           ⟨q, c, d, hnzShares, hpopShares, hburnShares, hbody⟩
@@ -416,7 +416,8 @@ private theorem convertToAssets_body_of_prorataMain
             (popBurn_pref hpopShares hsharesFlag).2
           have hassetsFlag := plain_selector_flag hpAfterShares hassetsLine
           rw [show (selector "convertToAssets" [.uint256] =?
-              selector "convertToAssets" [.uint256]) = 1 from by simp [B256.eqCheck]] at hassetsFlag
+              selector "convertToAssets" [.uint256]) = 1 from by simp only [B256.eqCheck,
+                ↓reduceIte]] at hassetsFlag
           rcases of_run_branch hassetsBranch with
             ⟨q, hpopAssets, hwrong⟩ |
             ⟨q, a, b, hnzAssets, hpopAssets, hburnAssets, hassets⟩
@@ -623,7 +624,7 @@ theorem exec_enters_prorataSelector_logs
       rw [hsig] at hp
       rcases deposit_body_of_prorataMain hp hmain with ⟨entry, hroute, hbody⟩
       exact (entryFrame_burn burn).trans ((entryFrame_fsig hfsig).trans hroute) |>.exists_run hbody
-    · simp at hnil
+    · simp only [List.not_mem_nil] at hnil
 
 end Prorata
 

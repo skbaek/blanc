@@ -48,8 +48,8 @@ private theorem b256_sub_zero (x : B256) : x - 0 = x := by
 private theorem b256_add_zero (x : B256) : x + 0 = x := by
   apply B256.toNat_inj
   rw [B256.toNat_add, B256.toNat_zero]
-  norm_num [Nat.lo_eq]
-  exact B256.toNat_lt x
+  norm_num only [Nat.lo_eq, Nat.add_zero]
+  exact Nat.mod_eq_of_lt (B256.toNat_lt x)
 -- Weth10Redeemable.lean:2283–2288 verbatim.
 
 /-- A zero-amount `Transfer` leaves its source row where it was, whatever its destination — the source
@@ -73,7 +73,7 @@ theorem transfer_src_row_of_zero {b d : Adr → B256} {kd ki : Adr}
 def PairBoundary.snapshot (vault : Adr) (b : PairBoundary) : FourQuote.Snapshot :=
   ⟨(b.vault.get Blanc.ProrataWethVault.supplySlot).toNat, (Stor.rest b.weth vault).toNat⟩
 
-@[simp] theorem PairBoundary.snapshot_ofState (vault : Adr) (w : State) :
+theorem PairBoundary.snapshot_ofState (vault : Adr) (w : State) :
     (PairBoundary.ofState vault w).snapshot vault = FourQuote.stateSnapshot vault w := rfl
 -- `stateSnapshot` A:684 reads exactly these two coordinates.
 
@@ -85,7 +85,8 @@ theorem PairRoot.genesisSnapshot {cfg : ChainConfig} {deployed : BlockChain} {va
   rw [root.vaultEmpty, root.wethEmpty]
   congr
   change (Stor.empty.get vault.toB256).toNat = 0
-  simp [Stor.empty, Stor.get, B256.toNat_zero]
+  simp only [Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc, Std.TreeMap.getD_emptyc,
+    B256.toNat_zero]
 -- PH:193–197 (`DeploymentRoot.accountingSnapshot`).
 
 /-- The pair root is its own configured reach. -/
@@ -117,7 +118,7 @@ theorem WethAllowanceInvocation.vaultDebit_wad_eq_zero {vault : Adr}
       Prod.mk.injEq] at pair
     exact absurd (Adr.toB256_inj pair.1) foreign
   · -- self `transferFrom`: no pair is visited
-    simp [WethAllowanceInvocation.pair?, approval, same] at pair
+    simp only [pair?, approval, Bool.false_eq_true, ↓reduceIte, same, reduceCtorEq] at pair
   · -- maximum allowance: the visited cell reads `B256.max`, never zero
     have ownerEq : Sevm.argWord call.sevm 0 = vault.toB256 := by
       simp only [WethAllowanceInvocation.pair?, approval, Bool.false_eq_true, ↓reduceIte,
@@ -335,10 +336,11 @@ theorem PairReplay.priceLe {vault : Adr} {pre post : PairBoundary}
       intro zero
       subst preEq
       subst postEq
-      have head := record.step.priceLe_of_debitAmount_eq_zero (zero record (by simp))
+      have head := record.step.priceLe_of_debitAmount_eq_zero (zero record (by simp only [List.mem_cons,
+        true_or]))
       rw [← PairBoundary.snapshot_ofState, ← PairBoundary.snapshot_ofState] at head
       exact Blanc.Prorata.PriceLe.trans Blanc.ProrataWethVault.offsetN_ne_zero head
-        (ih fun r member => zero r (by simp [member]))
+        (ih fun r member => zero r (by simp only [List.mem_cons, member, or_true]))
 
 /-- **Unconditional classification of a replay.**  A connected replay is priced end to end, or it retains a
 runtime-authorized debit of positive amount. -/
@@ -411,7 +413,7 @@ theorem PairReplay.rootedAllowanceHistory {vault : Adr} {full : List WethAllowan
   induction replay with
   | nil boundary =>
       intro done s chain _
-      simpa [PairStepRecord.ledger] using chain
+      simpa only [PairStepRecord.ledger, List.filterMap_nil, List.append_nil] using chain
   | @cons pre mid post record steps preEq postEq tail ih =>
       intro done s chain sub
       subst preEq
@@ -420,7 +422,7 @@ theorem PairReplay.rootedAllowanceHistory {vault : Adr} {full : List WethAllowan
       | none =>
           have ledgerEq : PairStepRecord.ledger (record :: steps) =
               PairStepRecord.ledger steps := by
-            simp [PairStepRecord.ledger, hown]
+            simp only [PairStepRecord.ledger, hown, List.filterMap_cons_none]
           rw [ledgerEq] at sub ⊢
           refine ih (.silent done s _ _ chain ?_) sub
           intro p touched _
@@ -429,12 +431,13 @@ theorem PairReplay.rootedAllowanceHistory {vault : Adr} {full : List WethAllowan
           obtain ⟨preLink, postLink, staged⟩ := record.linked call hown
           have ledgerEq : PairStepRecord.ledger (record :: steps) =
               call :: PairStepRecord.ledger steps := by
-            simp [PairStepRecord.ledger, hown]
+            simp only [PairStepRecord.ledger, hown, Option.some.injEq, List.filterMap_cons_some]
           rw [ledgerEq] at sub ⊢
           have step : RootedAllowanceHistory vault full (done ++ [call]) s
               (record.after.getStor wethAccount) :=
-            .invoked done s _ _ call chain (sub call (by simp)) preLink postLink.symm staged
-          have tailChain := ih step (fun c member => sub c (by simp [member]))
+            .invoked done s _ _ call chain (sub call (by simp only [List.mem_cons, true_or])) preLink postLink.symm staged
+          have tailChain := ih step (fun c member => sub c (by simp only [List.mem_cons, member,
+            or_true]))
           simpa only [List.append_assoc, List.singleton_append] using tailChain
 -- constructors R:809–830; key shape R:435.  Induction shape L:113–124.
 

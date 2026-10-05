@@ -65,8 +65,9 @@ theorem empty_calldata_runCompiledTo
           List.length_nil]; omega))
   have hrevSafe : Func.RunCompiledTo.NoRawSstorePath hrev := by
     exact Func.RunCompiledTo.NoRawSstorePath.of_execFree hrev
-      (by simp [Func.revert, Ninst.pushB256, funcExecFree])
-      (by simp [Func.revert, Ninst.pushB256, Func.LocalSstoreFree])
+      (by simp only [Func.revert, pushB256, funcExecFree])
+      (by simp only [Func.revert, pushB256, Func.LocalSstoreFree, ne_eq, reduceCtorEq,
+        not_false_eq_true, and_self])
   have hbranch : Func.RunCompiledTo
       (runtime.main :: runtime.aux) sevm afterSize
       (Func.main tree <?> Func.revert) out := by
@@ -171,8 +172,9 @@ private theorem noMatchLeaf_runCompiledTo_with_path
           List.length_nil]; omega))
   have hrevSafe : Func.RunCompiledTo.NoRawSstorePath hrev :=
     Func.RunCompiledTo.NoRawSstorePath.of_execFree hrev
-      (by simp [Func.revert, Ninst.pushB256, funcExecFree])
-      (by simp [Func.revert, Ninst.pushB256, Func.LocalSstoreFree])
+      (by simp only [Func.revert, pushB256, funcExecFree])
+      (by simp only [Func.revert, pushB256, Func.LocalSstoreFree, ne_eq, reduceCtorEq,
+        not_false_eq_true, and_self])
   let branchPre :=
     base.setMach ⟨[(0 : B256)], Mem.empty, G + 17, base.stateGas⟩
   have hbranchRoom : branchPre.stack.length < 1024 := by

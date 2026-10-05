@@ -295,63 +295,112 @@ theorem fn1_run {sevm : Sevm} {b : Devm} {G : Nat} :
       (.returned (St b [0x1e13380, 0x1baf80, 0x5a39a80, 0x278d00, 0x4f1a00, 0x69780, 0x3e40d73eb977dc6a537af587d48316fee66e9c8c] mem3 G)) := by
   unfold t_026d_c1
   refine rx_dest ?_
-  refine rx_push0 (by simp) ?_
-  refine rx_push0 (by simp) ?_
-  refine rx_push0 (by simp) ?_
-  refine rx_push0 (by simp) ?_
-  refine rx_push0 (by simp) ?_
-  refine rx_push0 (by simp) ?_
-  refine rx_push0 (by simp) ?_
-  refine rx_push (w := 0xe0) (by decide) (by simp) ?_
-  refine rx_dup (n := 8) rfl (by simp) ?_
-  refine rx_dup (n := 10) rfl (by simp) ?_
-  refine rx_sub' (v := 0xe0) (by decide +kernel) (by simp) ?_
-  refine rx_slt (v := 0x0) (by decide +kernel) (by simp) ?_
-  refine rx_iszero (v := 0x1) (by decide +kernel) (by simp) ?_
-  refine rx_push (w := 0x283) (by decide) (by simp) ?_
+  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_push (w := 0xe0) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 8) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 10) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_sub' (v := 0xe0) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_slt (v := 0x0) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_iszero (v := 0x1) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x283) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_branch_succ (by decide) ?_
   unfold t_0283_c1
   refine rx_dest ?_
-  refine rx_dup (n := 7) rfl (by simp) ?_
-  refine rx_mload (c := 3) (v := 0x3e40d73eb977dc6a537af587d48316fee66e9c8c) (by rw [St.extCost_eq mem3_size]; decide) (by rw [Mem.Reads.read mem3_reads]; decide +kernel) (read_covered mem3_size (by decide) (by decide)) (by simp) ?_
-  refine rx_push (w := 0x1) (by decide) (by simp) ?_
-  refine rx_push (w := 0x1) (by decide) (by simp) ?_
-  refine rx_push (w := 0xa0) (by decide) (by simp) ?_
-  refine rx_shl (v := 0x10000000000000000000000000000000000000000) (by decide +kernel) (by simp) ?_
-  refine rx_sub' (v := 0xffffffffffffffffffffffffffffffffffffffff) (by decide +kernel) (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_and (v := 0x3e40d73eb977dc6a537af587d48316fee66e9c8c) (by decide +kernel) (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_eq (v := 0x1) (by decide +kernel) (by simp) ?_
-  refine rx_push (w := 0x299) (by decide) (by simp) ?_
+  refine rx_dup (n := 7) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_mload (c := 3) (v := 0x3e40d73eb977dc6a537af587d48316fee66e9c8c) (by rw [St.extCost_eq mem3_size]; decide) (by rw [Mem.Reads.read mem3_reads]; decide +kernel) (read_covered mem3_size (by decide) (by decide)) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x1) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x1) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0xa0) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_shl (v := 0x10000000000000000000000000000000000000000) (by decide +kernel) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_sub' (v := 0xffffffffffffffffffffffffffffffffffffffff) (by decide +kernel) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_and (v := 0x3e40d73eb977dc6a537af587d48316fee66e9c8c) (by decide +kernel) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_eq (v := 0x1) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x299) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_branch_succ (by decide) ?_
   unfold t_0299_c1
   refine rx_dest ?_
-  refine rx_push (w := 0x20) (by decide) (by simp) ?_
-  refine rx_dup (n := 9) rfl (by simp) ?_
-  refine rx_add' (v := 0x140) (by decide +kernel) (by simp) ?_
-  refine rx_mload (c := 3) (v := 0x69780) (by rw [St.extCost_eq mem3_size]; decide) (by rw [Mem.Reads.read mem3_reads]; decide +kernel) (read_covered mem3_size (by decide) (by decide)) (by simp) ?_
-  refine rx_push (w := 0x40) (by decide) (by simp) ?_
-  refine rx_dup (n := 10) rfl (by simp) ?_
-  refine rx_add' (v := 0x160) (by decide +kernel) (by simp) ?_
-  refine rx_mload (c := 3) (v := 0x4f1a00) (by rw [St.extCost_eq mem3_size]; decide) (by rw [Mem.Reads.read mem3_reads]; decide +kernel) (read_covered mem3_size (by decide) (by decide)) (by simp) ?_
-  refine rx_push (w := 0x60) (by decide) (by simp) ?_
-  refine rx_dup (n := 11) rfl (by simp) ?_
-  refine rx_add' (v := 0x180) (by decide +kernel) (by simp) ?_
-  refine rx_mload (c := 3) (v := 0x278d00) (by rw [St.extCost_eq mem3_size]; decide) (by rw [Mem.Reads.read mem3_reads]; decide +kernel) (read_covered mem3_size (by decide) (by decide)) (by simp) ?_
-  refine rx_push (w := 0x80) (by decide) (by simp) ?_
-  refine rx_dup (n := 12) rfl (by simp) ?_
-  refine rx_add' (v := 0x1a0) (by decide +kernel) (by simp) ?_
-  refine rx_mload (c := 3) (v := 0x5a39a80) (by rw [St.extCost_eq mem3_size]; decide) (by rw [Mem.Reads.read mem3_reads]; decide +kernel) (read_covered mem3_size (by decide) (by decide)) (by simp) ?_
-  refine rx_push (w := 0xa0) (by decide) (by simp) ?_
-  refine rx_dup (n := 13) rfl (by simp) ?_
-  refine rx_add' (v := 0x1c0) (by decide +kernel) (by simp) ?_
-  refine rx_mload (c := 3) (v := 0x1baf80) (by rw [St.extCost_eq mem3_size]; decide) (by rw [Mem.Reads.read mem3_reads]; decide +kernel) (read_covered mem3_size (by decide) (by decide)) (by simp) ?_
-  refine rx_push (w := 0xc0) (by decide) (by simp) ?_
+  refine rx_push (w := 0x20) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 9) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 0x140) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_mload (c := 3) (v := 0x69780) (by rw [St.extCost_eq mem3_size]; decide) (by rw [Mem.Reads.read mem3_reads]; decide +kernel) (read_covered mem3_size (by decide) (by decide)) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x40) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 10) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 0x160) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_mload (c := 3) (v := 0x4f1a00) (by rw [St.extCost_eq mem3_size]; decide) (by rw [Mem.Reads.read mem3_reads]; decide +kernel) (read_covered mem3_size (by decide) (by decide)) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x60) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 11) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 0x180) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_mload (c := 3) (v := 0x278d00) (by rw [St.extCost_eq mem3_size]; decide) (by rw [Mem.Reads.read mem3_reads]; decide +kernel) (read_covered mem3_size (by decide) (by decide)) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x80) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 12) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 0x1a0) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_mload (c := 3) (v := 0x5a39a80) (by rw [St.extCost_eq mem3_size]; decide) (by rw [Mem.Reads.read mem3_reads]; decide +kernel) (read_covered mem3_size (by decide) (by decide)) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0xa0) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 13) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 0x1c0) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_mload (c := 3) (v := 0x1baf80) (by rw [St.extCost_eq mem3_size]; decide) (by rw [Mem.Reads.read mem3_reads]; decide +kernel) (read_covered mem3_size (by decide) (by decide)) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0xc0) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_swap (n := 13) rfl ?_
-  refine rx_add' (v := 0x1e0) (by decide +kernel) (by simp) ?_
-  refine rx_mload (c := 3) (v := 0x1e13380) (by rw [St.extCost_eq mem3_size]; decide) (by rw [Mem.Reads.read mem3_reads]; decide +kernel) (read_covered mem3_size (by decide) (by decide)) (by simp) ?_
+  refine rx_add' (v := 0x1e0) (by decide +kernel) (by simp only [List.set_cons_succ,
+    List.set_cons_zero, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_mload (c := 3) (v := 0x1e13380) (by rw [St.extCost_eq mem3_size]; decide) (by rw [Mem.Reads.read mem3_reads]; decide +kernel) (read_covered mem3_size (by decide) (by decide)) (by simp only [List.set_cons_succ,
+    List.set_cons_zero, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 4) rfl ?_
   refine rx_swap (n := 14) rfl ?_
   refine rx_swap (n := 3) rfl ?_
@@ -384,50 +433,85 @@ theorem fn2_run {sevm : Sevm} (fr : CtorFrame sevm) {b : Devm} {G : Nat} (hG : 2
   rw [show G + fn2Cost sevm b = G + 8 + sstoreCost sevm ((afterSload sevm b 0x0).addLog ⟨sevm.currentTarget, [pw1], logData2⟩) 0x0 0x1baf80 + 1327 + sloadCost sevm b 0x0 + 61 by unfold fn2Cost; omega]
   unfold t_0160_c2
   refine rx_dest ?_
-  refine rx_push (w := 0xa0) (by decide) (by simp) ?_
-  refine rx_mload (c := 3) (v := 0x69780) (by rw [St.extCost_eq mem12_size]; decide) (by rw [Mem.Reads.read mem12_reads]; decide +kernel) (read_covered mem12_size (by decide) (by decide)) (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_lt (v := 0x0) (by decide +kernel) (by simp) ?_
-  refine rx_iszero (v := 0x1) (by decide +kernel) (by simp) ?_
-  refine rx_push (w := 0x183) (by decide) (by simp) ?_
+  refine rx_push (w := 0xa0) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_mload (c := 3) (v := 0x69780) (by rw [St.extCost_eq mem12_size]; decide) (by rw [Mem.Reads.read mem12_reads]; decide +kernel) (read_covered mem12_size (by decide) (by decide)) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_lt (v := 0x0) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_iszero (v := 0x1) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x183) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_branch_succ (by decide) ?_
   unfold t_0183_c2
   refine rx_dest ?_
-  refine rx_push (w := 0xc0) (by decide) (by simp) ?_
-  refine rx_mload (c := 3) (v := 0x4f1a00) (by rw [St.extCost_eq mem12_size]; decide) (by rw [Mem.Reads.read mem12_reads]; decide +kernel) (read_covered mem12_size (by decide) (by decide)) (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_gt (v := 0x0) (by decide +kernel) (by simp) ?_
-  refine rx_iszero (v := 0x1) (by decide +kernel) (by simp) ?_
-  refine rx_push (w := 0x1a6) (by decide) (by simp) ?_
+  refine rx_push (w := 0xc0) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_mload (c := 3) (v := 0x4f1a00) (by rw [St.extCost_eq mem12_size]; decide) (by rw [Mem.Reads.read mem12_reads]; decide +kernel) (read_covered mem12_size (by decide) (by decide)) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_gt (v := 0x0) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_iszero (v := 0x1) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x1a6) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_branch_succ (by decide) ?_
   unfold t_01a6_c2
   refine rx_dest ?_
-  refine rx_push0 (by simp) ?_
-  refine rx_sload_sel fr.fork (by simp) ?_
+  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_sload_sel fr.fork (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   rw [hz0]
-  refine rx_push (w := 0x40) (by decide) (by simp) ?_
-  refine rx_dup (n := 0) rfl (by simp) ?_
-  refine rx_mload (c := 3) (v := 0x200) (by rw [St.extCost_eq mem12_size]; decide) (by rw [Mem.Reads.read mem12_reads]; decide +kernel) (read_covered mem12_size (by decide) (by decide)) (by simp) ?_
+  refine rx_push (w := 0x40) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 0) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_mload (c := 3) (v := 0x200) (by rw [St.extCost_eq mem12_size]; decide) (by rw [Mem.Reads.read mem12_reads]; decide +kernel) (read_covered mem12_size (by decide) (by decide)) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 1) rfl ?_
-  refine rx_dup (n := 2) rfl (by simp) ?_
+  refine rx_dup (n := 2) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.one_mod,
+    List.set_cons_succ, List.set_cons_zero, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_mstore (c := 3) (M' := mem13) (by rw [St.extCost_eq mem12_size]; decide) rfl ?_
-  refine rx_push (w := 0x20) (by decide) (by simp) ?_
-  refine rx_dup (n := 2) rfl (by simp) ?_
-  refine rx_add' (v := 0x220) (by decide +kernel) (by simp) ?_
-  refine rx_dup (n := 3) rfl (by simp) ?_
+  refine rx_push (w := 0x20) (by decide) (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod,
+    Nat.one_mod, List.set_cons_succ, List.set_cons_zero, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 2) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.one_mod,
+    List.set_cons_succ, List.set_cons_zero, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 0x220) (by decide +kernel) (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod,
+    Nat.one_mod, List.set_cons_succ, List.set_cons_zero, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 3) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.one_mod,
+    List.set_cons_succ, List.set_cons_zero, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_mstore (c := 3) (M' := mem14) (by rw [St.extCost_eq mem13_size]; decide) rfl ?_
-  refine rx_push (w := pw1) rfl (by simp) ?_
+  refine rx_push (w := pw1) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.one_mod,
+    List.set_cons_succ, List.set_cons_zero, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 1) rfl ?_
-  refine rx_add' (v := 0x240) (by decide +kernel) (by simp) ?_
-  refine rx_push (w := 0x40) (by decide) (by simp) ?_
-  refine rx_mload (c := 3) (v := 0x200) (by rw [St.extCost_eq mem14_size]; decide) (by rw [Mem.Reads.read mem14_reads]; decide +kernel) (read_covered mem14_size (by decide) (by decide)) (by simp) ?_
-  refine rx_dup (n := 0) rfl (by simp) ?_
+  refine rx_add' (v := 0x240) (by decide +kernel) (by simp only [List.set_cons_zero,
+    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x40) (by decide) (by simp only [List.set_cons_zero, List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_mload (c := 3) (v := 0x200) (by rw [St.extCost_eq mem14_size]; decide) (by rw [Mem.Reads.read mem14_reads]; decide +kernel) (read_covered mem14_size (by decide) (by decide)) (by simp only [List.set_cons_zero,
+    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 0) rfl (by simp only [List.set_cons_zero, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 1) rfl ?_
-  refine rx_sub' (v := 0x40) (by decide +kernel) (by simp) ?_
+  refine rx_sub' (v := 0x40) (by decide +kernel) (by simp only [List.set_cons_zero,
+    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_log1 (c := 1262) (data := logData2) fr.static (by rw [St.extCost_eq mem14_size]; decide) rfl (read_covered_len mem14_size (by decide) (by decide)) ?_
-  refine rx_push0 (by simp) ?_
+  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   refine rx_sstore fr.fork (by unfold gCallStipend; omega) fr.static ?_
   exact rx_ret
 
@@ -445,50 +529,85 @@ theorem fn3_run {sevm : Sevm} (fr : CtorFrame sevm) {b : Devm} {G : Nat} (hG : 2
   rw [show G + fn3Cost sevm b = G + 8 + sstoreCost sevm ((afterSload sevm b 0x1).addLog ⟨sevm.currentTarget, [pw2], logData3⟩) 0x1 0x1e13380 + 1328 + sloadCost sevm b 0x1 + 62 by unfold fn3Cost; omega]
   unfold t_01e5_c3
   refine rx_dest ?_
-  refine rx_push (w := 0xe0) (by decide) (by simp) ?_
-  refine rx_mload (c := 3) (v := 0x278d00) (by rw [St.extCost_eq mem14_size]; decide) (by rw [Mem.Reads.read mem14_reads]; decide +kernel) (read_covered mem14_size (by decide) (by decide)) (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_lt (v := 0x0) (by decide +kernel) (by simp) ?_
-  refine rx_iszero (v := 0x1) (by decide +kernel) (by simp) ?_
-  refine rx_push (w := 0x208) (by decide) (by simp) ?_
+  refine rx_push (w := 0xe0) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_mload (c := 3) (v := 0x278d00) (by rw [St.extCost_eq mem14_size]; decide) (by rw [Mem.Reads.read mem14_reads]; decide +kernel) (read_covered mem14_size (by decide) (by decide)) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_lt (v := 0x0) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_iszero (v := 0x1) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x208) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_branch_succ (by decide) ?_
   unfold t_0208_c3
   refine rx_dest ?_
-  refine rx_push (w := 0x100) (by decide) (by simp) ?_
-  refine rx_mload (c := 3) (v := 0x5a39a80) (by rw [St.extCost_eq mem14_size]; decide) (by rw [Mem.Reads.read mem14_reads]; decide +kernel) (read_covered mem14_size (by decide) (by decide)) (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_gt (v := 0x0) (by decide +kernel) (by simp) ?_
-  refine rx_iszero (v := 0x1) (by decide +kernel) (by simp) ?_
-  refine rx_push (w := 0x22c) (by decide) (by simp) ?_
+  refine rx_push (w := 0x100) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_mload (c := 3) (v := 0x5a39a80) (by rw [St.extCost_eq mem14_size]; decide) (by rw [Mem.Reads.read mem14_reads]; decide +kernel) (read_covered mem14_size (by decide) (by decide)) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_gt (v := 0x0) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_iszero (v := 0x1) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x22c) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_branch_succ (by decide) ?_
   unfold t_022c_c3
   refine rx_dest ?_
-  refine rx_push (w := 0x1) (by decide) (by simp) ?_
-  refine rx_sload_sel fr.fork (by simp) ?_
+  refine rx_push (w := 0x1) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_sload_sel fr.fork (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   rw [hz1]
-  refine rx_push (w := 0x40) (by decide) (by simp) ?_
-  refine rx_dup (n := 0) rfl (by simp) ?_
-  refine rx_mload (c := 3) (v := 0x200) (by rw [St.extCost_eq mem14_size]; decide) (by rw [Mem.Reads.read mem14_reads]; decide +kernel) (read_covered mem14_size (by decide) (by decide)) (by simp) ?_
+  refine rx_push (w := 0x40) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 0) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_mload (c := 3) (v := 0x200) (by rw [St.extCost_eq mem14_size]; decide) (by rw [Mem.Reads.read mem14_reads]; decide +kernel) (read_covered mem14_size (by decide) (by decide)) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 1) rfl ?_
-  refine rx_dup (n := 2) rfl (by simp) ?_
+  refine rx_dup (n := 2) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.one_mod,
+    List.set_cons_succ, List.set_cons_zero, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_mstore (c := 3) (M' := mem15) (by rw [St.extCost_eq mem14_size]; decide) rfl ?_
-  refine rx_push (w := 0x20) (by decide) (by simp) ?_
-  refine rx_dup (n := 2) rfl (by simp) ?_
-  refine rx_add' (v := 0x220) (by decide +kernel) (by simp) ?_
-  refine rx_dup (n := 3) rfl (by simp) ?_
+  refine rx_push (w := 0x20) (by decide) (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod,
+    Nat.one_mod, List.set_cons_succ, List.set_cons_zero, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 2) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.one_mod,
+    List.set_cons_succ, List.set_cons_zero, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 0x220) (by decide +kernel) (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod,
+    Nat.one_mod, List.set_cons_succ, List.set_cons_zero, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 3) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.one_mod,
+    List.set_cons_succ, List.set_cons_zero, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_mstore (c := 3) (M' := mem16) (by rw [St.extCost_eq mem15_size]; decide) rfl ?_
-  refine rx_push (w := pw2) rfl (by simp) ?_
+  refine rx_push (w := pw2) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.one_mod,
+    List.set_cons_succ, List.set_cons_zero, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 1) rfl ?_
-  refine rx_add' (v := 0x240) (by decide +kernel) (by simp) ?_
-  refine rx_push (w := 0x40) (by decide) (by simp) ?_
-  refine rx_mload (c := 3) (v := 0x200) (by rw [St.extCost_eq mem16_size]; decide) (by rw [Mem.Reads.read mem16_reads]; decide +kernel) (read_covered mem16_size (by decide) (by decide)) (by simp) ?_
-  refine rx_dup (n := 0) rfl (by simp) ?_
+  refine rx_add' (v := 0x240) (by decide +kernel) (by simp only [List.set_cons_zero,
+    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x40) (by decide) (by simp only [List.set_cons_zero, List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_mload (c := 3) (v := 0x200) (by rw [St.extCost_eq mem16_size]; decide) (by rw [Mem.Reads.read mem16_reads]; decide +kernel) (read_covered mem16_size (by decide) (by decide)) (by simp only [List.set_cons_zero,
+    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 0) rfl (by simp only [List.set_cons_zero, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 1) rfl ?_
-  refine rx_sub' (v := 0x40) (by decide +kernel) (by simp) ?_
+  refine rx_sub' (v := 0x40) (by decide +kernel) (by simp only [List.set_cons_zero,
+    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_log1 (c := 1262) (data := logData3) fr.static (by rw [St.extCost_eq mem16_size]; decide) rfl (read_covered_len mem16_size (by decide) (by decide)) ?_
-  refine rx_push (w := 0x1) (by decide) (by simp) ?_
+  refine rx_push (w := 0x1) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_sstore fr.fork (by unfold gCallStipend; omega) fr.static ?_
   exact rx_ret
 
@@ -518,151 +637,244 @@ theorem ctor_run {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
   rw [show G + ctorCost sevm b = G + 1077 + fn3Cost sevm (afterSstore sevm ((afterSload sevm (b.addLog ⟨sevm.currentTarget, [pw0, 0x3e40d73eb977dc6a537af587d48316fee66e9c8c], logData1⟩) 0x0).addLog ⟨sevm.currentTarget, [pw1], logData2⟩) 0x0 0x1baf80) + 18 + fn2Cost sevm (b.addLog ⟨sevm.currentTarget, [pw0, 0x3e40d73eb977dc6a537af587d48316fee66e9c8c], logData1⟩) + 2888 by unfold ctorCost; omega]
 
   unfold t_0000_c0
-  refine rx_push (w := 0x120) (by decide) (by simp) ?_
-  refine rx_push (w := 0x40) (by decide) (by simp) ?_
+  refine rx_push (w := 0x120) (by decide) (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  refine rx_push (w := 0x40) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.one_lt_ofNat]) ?_
   refine rx_mstore (c := 12) (M' := mem1) (by rw [St.extCost_eq mem0_size]; decide) rfl ?_
-  refine rx_callvalue (by simp) ?_
+  refine rx_callvalue (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   rw [hvalue]
-  refine rx_dup (n := 0) rfl (by simp) ?_
-  refine rx_iszero (v := 0x1) (by decide +kernel) (by simp) ?_
-  refine rx_push (w := 0x10) (by decide) (by simp) ?_
+  refine rx_dup (n := 0) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.one_lt_ofNat]) ?_
+  refine rx_iszero (v := 0x1) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_push (w := 0x10) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_branch_succ (by decide) ?_
   unfold t_0010_c0
   refine rx_dest ?_
   refine rx_pop ?_
-  refine rx_push (w := 0x40) (by decide) (by simp) ?_
-  refine rx_mload (c := 3) (v := 0x120) (by rw [St.extCost_eq mem1_size]; decide) (by rw [Mem.Reads.read mem1_reads]; decide +kernel) (read_covered mem1_size (by decide) (by decide)) (by simp) ?_
-  refine rx_push (w := 0x1526) (by decide) (by simp) ?_
-  refine rx_codesize (by simp) ?_
+  refine rx_push (w := 0x40) (by decide) (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  refine rx_mload (c := 3) (v := 0x120) (by rw [St.extCost_eq mem1_size]; decide) (by rw [Mem.Reads.read mem1_reads]; decide +kernel) (read_covered mem1_size (by decide) (by decide)) (by simp only [List.length_nil,
+    Nat.ofNat_pos]) ?_
+  refine rx_push (w := 0x1526) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_codesize (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   rw [hcode, code_size]
-  refine rx_sub' (v := 0xe0) (by decide +kernel) (by simp) ?_
-  refine rx_dup (n := 0) rfl (by simp) ?_
-  refine rx_push (w := 0x1526) (by decide) (by simp) ?_
-  refine rx_dup (n := 3) rfl (by simp) ?_
+  refine rx_sub' (v := 0xe0) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_dup (n := 0) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x1526) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 3) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_codecopy (c := 63) (M' := mem2) (by rw [St.extCost_eq mem1_size]; decide) (by rw [hcode]; rfl) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_add' (v := 0x200) (by decide +kernel) (by simp) ?_
-  refine rx_push (w := 0x40) (by decide) (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 0x200) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_push (w := 0x40) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_mstore (c := 3) (M' := mem3) (by rw [St.extCost_eq mem2_size]; decide) rfl ?_
-  refine rx_push (w := 0x2f) (by decide) (by simp) ?_
+  refine rx_push (w := 0x2f) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 1) rfl ?_
-  refine rx_push (w := 0x26d) (by decide) (by simp) ?_
+  refine rx_push (w := 0x26d) (by decide) (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod,
+    Nat.one_mod, List.set_cons_succ, List.set_cons_zero, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_callRet (j := 1) rfl (fn1_run) ?_
   unfold t_002f_c0
   refine rx_dest ?_
-  refine rx_push (w := 0x1) (by decide) (by simp) ?_
-  refine rx_push (w := 0x1) (by decide) (by simp) ?_
-  refine rx_push (w := 0xa0) (by decide) (by simp) ?_
-  refine rx_shl (v := 0x10000000000000000000000000000000000000000) (by decide +kernel) (by simp) ?_
-  refine rx_sub' (v := 0xffffffffffffffffffffffffffffffffffffffff) (by decide +kernel) (by simp) ?_
-  refine rx_dup (n := 7) rfl (by simp) ?_
-  refine rx_and (v := 0x3e40d73eb977dc6a537af587d48316fee66e9c8c) (by decide +kernel) (by simp) ?_
-  refine rx_push (w := 0x56) (by decide) (by simp) ?_
+  refine rx_push (w := 0x1) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x1) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0xa0) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_shl (v := 0x10000000000000000000000000000000000000000) (by decide +kernel) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_sub' (v := 0xffffffffffffffffffffffffffffffffffffffff) (by decide +kernel) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 7) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_and (v := 0x3e40d73eb977dc6a537af587d48316fee66e9c8c) (by decide +kernel) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x56) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_branch_succ (by decide) ?_
   unfold t_0056_c0
   refine rx_dest ?_
-  refine rx_dup (n := 5) rfl (by simp) ?_
-  refine rx_push0 (by simp) ?_
-  refine rx_sub' (v := 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffff96880) (by decide +kernel) (by simp) ?_
-  refine rx_push (w := 0x76) (by decide) (by simp) ?_
+  refine rx_dup (n := 5) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_sub' (v := 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffff96880) (by decide +kernel) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x76) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_branch_succ (by decide) ?_
   unfold t_0076_c0
   refine rx_dest ?_
-  refine rx_dup (n := 4) rfl (by simp) ?_
-  refine rx_dup (n := 6) rfl (by simp) ?_
-  refine rx_gt (v := 0x0) (by decide +kernel) (by simp) ?_
-  refine rx_iszero (v := 0x1) (by decide +kernel) (by simp) ?_
-  refine rx_push (w := 0x97) (by decide) (by simp) ?_
+  refine rx_dup (n := 4) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 6) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_gt (v := 0x0) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_iszero (v := 0x1) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x97) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_branch_succ (by decide) ?_
   unfold t_0097_c0
   refine rx_dest ?_
-  refine rx_dup (n := 3) rfl (by simp) ?_
-  refine rx_push0 (by simp) ?_
-  refine rx_sub' (v := 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd87300) (by decide +kernel) (by simp) ?_
-  refine rx_push (w := 0xb7) (by decide) (by simp) ?_
+  refine rx_dup (n := 3) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_sub' (v := 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd87300) (by decide +kernel) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0xb7) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_branch_succ (by decide) ?_
   unfold t_00b7_c0
   refine rx_dest ?_
-  refine rx_dup (n := 2) rfl (by simp) ?_
-  refine rx_dup (n := 4) rfl (by simp) ?_
-  refine rx_gt (v := 0x0) (by decide +kernel) (by simp) ?_
-  refine rx_iszero (v := 0x1) (by decide +kernel) (by simp) ?_
-  refine rx_push (w := 0xd8) (by decide) (by simp) ?_
+  refine rx_dup (n := 2) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 4) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_gt (v := 0x0) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_iszero (v := 0x1) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0xd8) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_branch_succ (by decide) ?_
   unfold t_00d8_c0
   refine rx_dest ?_
-  refine rx_push (w := 0x1) (by decide) (by simp) ?_
-  refine rx_push (w := 0x1) (by decide) (by simp) ?_
-  refine rx_push (w := 0xa0) (by decide) (by simp) ?_
-  refine rx_shl (v := 0x10000000000000000000000000000000000000000) (by decide +kernel) (by simp) ?_
-  refine rx_sub' (v := 0xffffffffffffffffffffffffffffffffffffffff) (by decide +kernel) (by simp) ?_
-  refine rx_dup (n := 7) rfl (by simp) ?_
-  refine rx_and (v := 0x3e40d73eb977dc6a537af587d48316fee66e9c8c) (by decide +kernel) (by simp) ?_
-  refine rx_push (w := 0x80) (by decide) (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
+  refine rx_push (w := 0x1) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x1) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0xa0) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_shl (v := 0x10000000000000000000000000000000000000000) (by decide +kernel) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_sub' (v := 0xffffffffffffffffffffffffffffffffffffffff) (by decide +kernel) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 7) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_and (v := 0x3e40d73eb977dc6a537af587d48316fee66e9c8c) (by decide +kernel) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x80) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_mstore (c := 3) (M' := mem4) (by rw [St.extCost_eq mem3_size]; decide) rfl ?_
-  refine rx_push (w := 0xa0) (by decide) (by simp) ?_
-  refine rx_dup (n := 8) rfl (by simp) ?_
+  refine rx_push (w := 0xa0) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 8) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_mstore (c := 3) (M' := mem5) (by rw [St.extCost_eq mem4_size]; decide) rfl ?_
-  refine rx_push (w := 0xc0) (by decide) (by simp) ?_
-  refine rx_dup (n := 7) rfl (by simp) ?_
+  refine rx_push (w := 0xc0) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 7) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_mstore (c := 3) (M' := mem6) (by rw [St.extCost_eq mem5_size]; decide) rfl ?_
-  refine rx_push (w := 0xe0) (by decide) (by simp) ?_
-  refine rx_dup (n := 6) rfl (by simp) ?_
+  refine rx_push (w := 0xe0) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 6) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_mstore (c := 3) (M' := mem7) (by rw [St.extCost_eq mem6_size]; decide) rfl ?_
-  refine rx_push (w := 0x100) (by decide) (by simp) ?_
-  refine rx_dup (n := 5) rfl (by simp) ?_
+  refine rx_push (w := 0x100) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 5) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_mstore (c := 3) (M' := mem8) (by rw [St.extCost_eq mem7_size]; decide) rfl ?_
-  refine rx_push (w := 0x40) (by decide) (by simp) ?_
-  refine rx_dup (n := 0) rfl (by simp) ?_
-  refine rx_mload (c := 3) (v := 0x200) (by rw [St.extCost_eq mem8_size]; decide) (by rw [Mem.Reads.read mem8_reads]; decide +kernel) (read_covered mem8_size (by decide) (by decide)) (by simp) ?_
-  refine rx_dup (n := 9) rfl (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
+  refine rx_push (w := 0x40) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 0) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_mload (c := 3) (v := 0x200) (by rw [St.extCost_eq mem8_size]; decide) (by rw [Mem.Reads.read mem8_reads]; decide +kernel) (read_covered mem8_size (by decide) (by decide)) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 9) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_mstore (c := 6) (M' := mem9) (by rw [St.extCost_eq mem8_size]; decide) rfl ?_
-  refine rx_push (w := 0x20) (by decide) (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_add' (v := 0x220) (by decide +kernel) (by simp) ?_
-  refine rx_dup (n := 9) rfl (by simp) ?_
+  refine rx_push (w := 0x20) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 0x220) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 9) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_mstore (c := 6) (M' := mem10) (by rw [St.extCost_eq mem9_size]; decide) rfl ?_
   refine rx_swap (n := 0) rfl ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_add' (v := 0x240) (by decide +kernel) (by simp) ?_
-  refine rx_dup (n := 7) rfl (by simp) ?_
+  refine rx_dup (n := 1) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
+    List.set_cons_zero, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 0x240) (by decide +kernel) (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod,
+    Nat.zero_mod, List.set_cons_zero, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_dup (n := 7) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
+    List.set_cons_zero, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_mstore (c := 6) (M' := mem11) (by rw [St.extCost_eq mem10_size]; decide) rfl ?_
-  refine rx_push (w := 0x60) (by decide) (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_add' (v := 0x260) (by decide +kernel) (by simp) ?_
-  refine rx_dup (n := 6) rfl (by simp) ?_
+  refine rx_push (w := 0x60) (by decide) (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod,
+    Nat.zero_mod, List.set_cons_zero, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
+    List.set_cons_zero, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 0x260) (by decide +kernel) (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod,
+    Nat.zero_mod, List.set_cons_zero, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_dup (n := 6) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
+    List.set_cons_zero, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_mstore (c := 6) (M' := mem12) (by rw [St.extCost_eq mem11_size]; decide) rfl ?_
-  refine rx_push (w := pw0) rfl (by simp) ?_
+  refine rx_push (w := pw0) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
+    List.set_cons_zero, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 1) rfl ?_
-  refine rx_add' (v := 0x280) (by decide +kernel) (by simp) ?_
-  refine rx_push (w := 0x40) (by decide) (by simp) ?_
-  refine rx_mload (c := 3) (v := 0x200) (by rw [St.extCost_eq mem12_size]; decide) (by rw [Mem.Reads.read mem12_reads]; decide +kernel) (read_covered mem12_size (by decide) (by decide)) (by simp) ?_
-  refine rx_dup (n := 0) rfl (by simp) ?_
+  refine rx_add' (v := 0x280) (by decide +kernel) (by simp only [List.set_cons_zero,
+    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x40) (by decide) (by simp only [List.set_cons_zero, List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_mload (c := 3) (v := 0x200) (by rw [St.extCost_eq mem12_size]; decide) (by rw [Mem.Reads.read mem12_reads]; decide +kernel) (read_covered mem12_size (by decide) (by decide)) (by simp only [List.set_cons_zero,
+    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 0) rfl (by simp only [List.set_cons_zero, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 1) rfl ?_
-  refine rx_sub' (v := 0x80) (by decide +kernel) (by simp) ?_
+  refine rx_sub' (v := 0x80) (by decide +kernel) (by simp only [List.set_cons_zero,
+    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_log2 (c := 2149) (data := logData1) fr.static (by rw [St.extCost_eq mem12_size]; decide) rfl (read_covered_len mem12_size (by decide) (by decide)) ?_
-  refine rx_push (w := 0x14b) (by decide) (by simp) ?_
-  refine rx_dup (n := 2) rfl (by simp) ?_
-  refine rx_push (w := 0x160) (by decide) (by simp) ?_
+  refine rx_push (w := 0x14b) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 2) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x160) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_callRet (j := 2) rfl (fn2_run fr (by omega) (by show (Devm.getStor _ sevm.currentTarget).get _ = 0; simp only [Devm.addLog_getStor, hempty]; decide +kernel)) ?_
   unfold t_014b_c0
   refine rx_dest ?_
-  refine rx_push (w := 0x154) (by decide) (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_push (w := 0x1e5) (by decide) (by simp) ?_
+  refine rx_push (w := 0x154) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x1e5) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_callRet (j := 3) rfl (fn3_run fr (by omega) (by show (Devm.getStor _ sevm.currentTarget).get _ = 0; simp only [Devm.addLog_getStor, afterSload_getStor, afterSstore_getStor_self, Stor.get_set_ite, hempty]; decide +kernel)) ?_
   unfold t_0154_c0
   refine rx_dest ?_
@@ -673,81 +885,135 @@ theorem ctor_run {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
   refine rx_pop ?_
   refine rx_pop ?_
   refine rx_pop ?_
-  refine rx_push (w := 0x2d0) (by decide) (by simp) ?_
+  refine rx_push (w := 0x2d0) (by decide) (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   refine rx_jump (j := 4) rfl ?_
   unfold t_02d0_c4
   refine rx_dest ?_
-  refine rx_push (w := 0x80) (by decide) (by simp) ?_
-  refine rx_mload (c := 3) (v := 0x3e40d73eb977dc6a537af587d48316fee66e9c8c) (by rw [St.extCost_eq mem16_size]; decide) (by rw [Mem.Reads.read mem16_reads]; decide +kernel) (read_covered mem16_size (by decide) (by decide)) (by simp) ?_
-  refine rx_push (w := 0xa0) (by decide) (by simp) ?_
-  refine rx_mload (c := 3) (v := 0x69780) (by rw [St.extCost_eq mem16_size]; decide) (by rw [Mem.Reads.read mem16_reads]; decide +kernel) (read_covered mem16_size (by decide) (by decide)) (by simp) ?_
-  refine rx_push (w := 0xc0) (by decide) (by simp) ?_
-  refine rx_mload (c := 3) (v := 0x4f1a00) (by rw [St.extCost_eq mem16_size]; decide) (by rw [Mem.Reads.read mem16_reads]; decide +kernel) (read_covered mem16_size (by decide) (by decide)) (by simp) ?_
-  refine rx_push (w := 0xe0) (by decide) (by simp) ?_
-  refine rx_mload (c := 3) (v := 0x278d00) (by rw [St.extCost_eq mem16_size]; decide) (by rw [Mem.Reads.read mem16_reads]; decide +kernel) (read_covered mem16_size (by decide) (by decide)) (by simp) ?_
-  refine rx_push (w := 0x100) (by decide) (by simp) ?_
-  refine rx_mload (c := 3) (v := 0x5a39a80) (by rw [St.extCost_eq mem16_size]; decide) (by rw [Mem.Reads.read mem16_reads]; decide +kernel) (read_covered mem16_size (by decide) (by decide)) (by simp) ?_
-  refine rx_push (w := 0x11e8) (by decide) (by simp) ?_
-  refine rx_push (w := 0x33e) (by decide) (by simp) ?_
-  refine rx_push0 (by simp) ?_
+  refine rx_push (w := 0x80) (by decide) (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  refine rx_mload (c := 3) (v := 0x3e40d73eb977dc6a537af587d48316fee66e9c8c) (by rw [St.extCost_eq mem16_size]; decide) (by rw [Mem.Reads.read mem16_reads]; decide +kernel) (read_covered mem16_size (by decide) (by decide)) (by simp only [List.length_nil,
+    Nat.ofNat_pos]) ?_
+  refine rx_push (w := 0xa0) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.one_lt_ofNat]) ?_
+  refine rx_mload (c := 3) (v := 0x69780) (by rw [St.extCost_eq mem16_size]; decide) (by rw [Mem.Reads.read mem16_reads]; decide +kernel) (read_covered mem16_size (by decide) (by decide)) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_push (w := 0xc0) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_mload (c := 3) (v := 0x4f1a00) (by rw [St.extCost_eq mem16_size]; decide) (by rw [Mem.Reads.read mem16_reads]; decide +kernel) (read_covered mem16_size (by decide) (by decide)) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0xe0) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_mload (c := 3) (v := 0x278d00) (by rw [St.extCost_eq mem16_size]; decide) (by rw [Mem.Reads.read mem16_reads]; decide +kernel) (read_covered mem16_size (by decide) (by decide)) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x100) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_mload (c := 3) (v := 0x5a39a80) (by rw [St.extCost_eq mem16_size]; decide) (by rw [Mem.Reads.read mem16_reads]; decide +kernel) (read_covered mem16_size (by decide) (by decide)) (by simp only [List.length_cons,
+    List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x11e8) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x33e) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
   refine rx_codecopy (c := 847) (M' := mem17) (by rw [St.extCost_eq mem16_size]; decide) (by rw [hcode]; rfl) ?_
-  refine rx_push0 (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_push (w := 0x247) (by decide) (by simp) ?_
-  refine rx_add' (v := 0x247) (by decide +kernel) (by simp) ?_
+  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x247) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 0x247) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_mstore (c := 3) (M' := mem18) (by rw [St.extCost_eq mem17_size]; decide) rfl ?_
-  refine rx_push (w := 0xe07) (by decide) (by simp) ?_
-  refine rx_add' (v := 0xe07) (by decide +kernel) (by simp) ?_
+  refine rx_push (w := 0xe07) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 0xe07) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_mstore (c := 3) (M' := mem19) (by rw [St.extCost_eq mem18_size]; decide) rfl ?_
-  refine rx_push0 (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_push (w := 0x281) (by decide) (by simp) ?_
-  refine rx_add' (v := 0x281) (by decide +kernel) (by simp) ?_
+  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x281) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 0x281) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_mstore (c := 3) (M' := mem20) (by rw [St.extCost_eq mem19_size]; decide) rfl ?_
-  refine rx_push (w := 0xdad) (by decide) (by simp) ?_
-  refine rx_add' (v := 0xdad) (by decide +kernel) (by simp) ?_
+  refine rx_push (w := 0xdad) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 0xdad) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_mstore (c := 3) (M' := mem21) (by rw [St.extCost_eq mem20_size]; decide) rfl ?_
-  refine rx_push0 (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_push (w := 0x139) (by decide) (by simp) ?_
-  refine rx_add' (v := 0x139) (by decide +kernel) (by simp) ?_
+  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x139) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 0x139) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_mstore (c := 3) (M' := mem22) (by rw [St.extCost_eq mem21_size]; decide) rfl ?_
-  refine rx_push (w := 0xefc) (by decide) (by simp) ?_
-  refine rx_add' (v := 0xefc) (by decide +kernel) (by simp) ?_
+  refine rx_push (w := 0xefc) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 0xefc) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_mstore (c := 3) (M' := mem23) (by rw [St.extCost_eq mem22_size]; decide) rfl ?_
-  refine rx_push0 (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_push (w := 0x220) (by decide) (by simp) ?_
-  refine rx_add' (v := 0x220) (by decide +kernel) (by simp) ?_
+  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+    Nat.reduceLT]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x220) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 0x220) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_mstore (c := 3) (M' := mem24) (by rw [St.extCost_eq mem23_size]; decide) rfl ?_
-  refine rx_push (w := 0xea2) (by decide) (by simp) ?_
-  refine rx_add' (v := 0xea2) (by decide +kernel) (by simp) ?_
+  refine rx_push (w := 0xea2) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 0xea2) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_mstore (c := 3) (M' := mem25) (by rw [St.extCost_eq mem24_size]; decide) rfl ?_
-  refine rx_push0 (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_push (w := 0x160) (by decide) (by simp) ?_
-  refine rx_add' (v := 0x160) (by decide +kernel) (by simp) ?_
+  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x160) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 0x160) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_mstore (c := 3) (M' := mem26) (by rw [St.extCost_eq mem25_size]; decide) rfl ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_push (w := 0x334) (by decide) (by simp) ?_
-  refine rx_add' (v := 0x334) (by decide +kernel) (by simp) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x334) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 0x334) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_mstore (c := 3) (M' := mem27) (by rw [St.extCost_eq mem26_size]; decide) rfl ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_dup (n := 1) rfl (by simp) ?_
-  refine rx_push (w := 0x549) (by decide) (by simp) ?_
-  refine rx_add' (v := 0x549) (by decide +kernel) (by simp) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_push (w := 0x549) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 0x549) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_mstore (c := 3) (M' := mem28) (by rw [St.extCost_eq mem27_size]; decide) rfl ?_
-  refine rx_push (w := 0x8d4) (by decide) (by simp) ?_
-  refine rx_add' (v := 0x8d4) (by decide +kernel) (by simp) ?_
+  refine rx_push (w := 0x8d4) (by decide) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
+  refine rx_add' (v := 0x8d4) (by decide +kernel) (by simp only [List.length_cons, List.length_nil,
+    zero_add, Nat.one_lt_ofNat]) ?_
   refine rx_mstore (c := 3) (M' := mem29) (by rw [St.extCost_eq mem28_size]; decide) rfl ?_
-  refine rx_push (w := 0x11e8) (by decide) (by simp) ?_
-  refine rx_push0 (by simp) ?_
+  refine rx_push (w := 0x11e8) (by decide) (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
+  refine rx_push0 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
   exact rx_return_any rfl (by rw [St.extCost_eq mem29_size]; decide)
 
 theorem ctorCost_le (sevm : Sevm) (b : Devm) : ctorCost sevm b ≤ 55177 := by

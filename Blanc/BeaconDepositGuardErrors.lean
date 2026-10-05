@@ -310,7 +310,7 @@ private theorem depositPostHashError_endpoint_runCompiledTo
       (oldCount := oldCount) (amount := amount) (stack := [])
       (success := depositSuccessGuards) (K := K)
       hsource hnodeleg' hwarm' hpre hdepth (by
-        simpa only [K] using hbound) (by simp)
+        simpa only [K] using hbound) (by simp only [List.length_nil, Nat.ofNat_pos])
   obtain ⟨hregisters⟩ := hregisters
   have hnodeEq := reconstructedDepositNode_eq_model pubkey
     withdrawalCredentials signature (le64 amount.toNat)
@@ -430,7 +430,7 @@ private theorem depositLengthGuard_failure_runCompiledTo
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
     Devm.memory_setMach]
   func_run (2) [0, 1]
-  case h_val => simp [B256.eqCheck, Ne.symm hne]
+  case h_val => simp only [B256.eqCheck, Ne.symm hne, ↓reduceIte]
   simpa only [guardBase, errorCost, Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas,
       Devm.memory_setMach, Nat.add_sub_cancel] using
     (reachableErrorGuard_exact_runCompiledTo
@@ -468,7 +468,7 @@ private theorem depositValueLowerGuard_failure_runCompiledTo
   have hmod : memory.size % 32 = 0 := by
     rw [hmem.size_eq]
   func_run (3) [1]
-  case h_val => simp [B256.ltCheck, hlower]
+  case h_val => simp only [B256.ltCheck, hlower, ↓reduceIte]
   simpa only [guardBase, errorCost, Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas,
       Devm.memory_setMach, ReachableReason.slot,
       Nat.add_sub_cancel] using
@@ -605,11 +605,11 @@ private theorem depositRootGuard_failure_runCompiledTo
   case h_cost =>
     simp only [show (nodeWord * 32 : B256).toNat = 640 by decide +kernel]
     rw [Devm.extCost_zero_of_le hmod hcovered]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case h_val =>
     change Sevm.argWord sevm 3 =? (memory.read 640 32).1.toB256 = 0
     rw [hread]
-    simp [B256.eqCheck, hroot]
+    simp only [B256.eqCheck, hroot, ↓reduceIte]
   simpa only [guardBase, errorCost, Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas,
       Devm.memory_setMach,
       show (nodeWord * 32 : B256).toNat = 640 by decide +kernel,
@@ -661,7 +661,7 @@ private theorem depositCapGuard_failure_runCompiledTo
   case h_cost =>
     rw [show (oldCountWord * 32 : B256).toNat = 576 by decide +kernel]
     rw [Devm.extCost_zero_of_le hmod hcovered]
-    norm_num [gVerylow]
+    norm_num only [gVerylow]
   case h_val =>
     rw [show (oldCountWord * 32 : B256).toNat = 576 by decide +kernel,
       hread]
@@ -912,7 +912,7 @@ theorem deposit_valueTooLow_error_endpoint_runCompiledTo
     depositDecodedMemory_carrier sevm.data
   have hlowerWord : sevm.value < Nat.toB256 oneEther := by
     rw [B256.lt_iff_toNat_lt_toNat,
-      B256.toNat_toB256_of_lt (by norm_num [oneEther])]
+      B256.toNat_toB256_of_lt (by norm_num only [oneEther])]
     exact hlowerNat
   let guardBase := base.setMach ⟨[], memory, 0, base.stateGas⟩
   let guardCost := errorGuardCost guardBase
@@ -963,14 +963,14 @@ theorem deposit_valueNotGweiMultiple_error_endpoint_runCompiledTo
   have hdenNe : Nat.toB256 oneGwei ≠ 0 := by
     intro hzero
     have natural := congrArg B256.toNat hzero
-    rw [B256.toNat_toB256_of_lt (by norm_num [oneGwei]),
+    rw [B256.toNat_toB256_of_lt (by norm_num only [oneGwei]),
       B256.toNat_zero] at natural
-    norm_num [oneGwei] at natural
+    norm_num only [oneGwei] at natural
   have hdenNat : (Nat.toB256 oneGwei).toNat = oneGwei :=
-    B256.toNat_toB256_of_lt (by norm_num [oneGwei])
+    B256.toNat_toB256_of_lt (by norm_num only [oneGwei])
   have hlowerWord : Nat.toB256 oneEther ≤ sevm.value := by
     rw [B256.le_iff_toNat_le_toNat,
-      B256.toNat_toB256_of_lt (by norm_num [oneEther])]
+      B256.toNat_toB256_of_lt (by norm_num only [oneEther])]
     exact hlowerNat
   have hremainderWord : sevm.value % Nat.toB256 oneGwei ≠ 0 := by
     intro hzero
@@ -1031,17 +1031,17 @@ theorem deposit_valueTooHigh_error_endpoint_runCompiledTo
   have hdenNe : Nat.toB256 oneGwei ≠ 0 := by
     intro hzero
     have natural := congrArg B256.toNat hzero
-    rw [B256.toNat_toB256_of_lt (by norm_num [oneGwei]),
+    rw [B256.toNat_toB256_of_lt (by norm_num only [oneGwei]),
       B256.toNat_zero] at natural
-    norm_num [oneGwei] at natural
+    norm_num only [oneGwei] at natural
   have hdenNat : (Nat.toB256 oneGwei).toNat = oneGwei :=
-    B256.toNat_toB256_of_lt (by norm_num [oneGwei])
+    B256.toNat_toB256_of_lt (by norm_num only [oneGwei])
   have hamountNat : amount.toNat = sevm.value.toNat / oneGwei := by
     dsimp only [amount]
     rw [B256.toNat_div hdenNe, hdenNat]
   have hlowerWord : Nat.toB256 oneEther ≤ sevm.value := by
     rw [B256.le_iff_toNat_le_toNat,
-      B256.toNat_toB256_of_lt (by norm_num [oneEther])]
+      B256.toNat_toB256_of_lt (by norm_num only [oneEther])]
     exact hlowerNat
   have hgweiWord : sevm.value % Nat.toB256 oneGwei = 0 := by
     apply B256.toNat_inj
@@ -1133,17 +1133,17 @@ theorem deposit_depositDataRootMismatch_error_endpoint_runCompiledTo
   have hdenNe : Nat.toB256 oneGwei ≠ 0 := by
     intro hzero
     have natural := congrArg B256.toNat hzero
-    rw [B256.toNat_toB256_of_lt (by norm_num [oneGwei]),
+    rw [B256.toNat_toB256_of_lt (by norm_num only [oneGwei]),
       B256.toNat_zero] at natural
-    norm_num [oneGwei] at natural
+    norm_num only [oneGwei] at natural
   have hdenNat : (Nat.toB256 oneGwei).toNat = oneGwei :=
-    B256.toNat_toB256_of_lt (by norm_num [oneGwei])
+    B256.toNat_toB256_of_lt (by norm_num only [oneGwei])
   have hamountNat : amount.toNat = sevm.value.toNat / oneGwei := by
     dsimp only [amount]
     rw [B256.toNat_div hdenNe, hdenNat]
   have hlowerWord : Nat.toB256 oneEther ≤ sevm.value := by
     rw [B256.le_iff_toNat_le_toNat,
-      B256.toNat_toB256_of_lt (by norm_num [oneEther])]
+      B256.toNat_toB256_of_lt (by norm_num only [oneEther])]
     exact hlowerNat
   have hgweiWord : sevm.value % Nat.toB256 oneGwei = 0 := by
     apply B256.toNat_inj
@@ -1232,17 +1232,17 @@ theorem deposit_merkleTreeFull_error_endpoint_runCompiledTo
   have hdenNe : Nat.toB256 oneGwei ≠ 0 := by
     intro hzero
     have natural := congrArg B256.toNat hzero
-    rw [B256.toNat_toB256_of_lt (by norm_num [oneGwei]),
+    rw [B256.toNat_toB256_of_lt (by norm_num only [oneGwei]),
       B256.toNat_zero] at natural
-    norm_num [oneGwei] at natural
+    norm_num only [oneGwei] at natural
   have hdenNat : (Nat.toB256 oneGwei).toNat = oneGwei :=
-    B256.toNat_toB256_of_lt (by norm_num [oneGwei])
+    B256.toNat_toB256_of_lt (by norm_num only [oneGwei])
   have hamountNat : amount.toNat = sevm.value.toNat / oneGwei := by
     dsimp only [amount]
     rw [B256.toNat_div hdenNe, hdenNat]
   have hlowerWord : Nat.toB256 oneEther ≤ sevm.value := by
     rw [B256.le_iff_toNat_le_toNat,
-      B256.toNat_toB256_of_lt (by norm_num [oneEther])]
+      B256.toNat_toB256_of_lt (by norm_num only [oneEther])]
     exact hlowerNat
   have hgweiWord : sevm.value % Nat.toB256 oneGwei = 0 := by
     apply B256.toNat_inj

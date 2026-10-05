@@ -24,13 +24,13 @@ namespace Blanc.Lift
 
 open Jaune
 
-@[simp] theorem St.returnData {b : Devm} {S : List B256} {M : Mem} {G : Nat} :
+theorem St.returnData {b : Devm} {S : List B256} {M : Mem} {G : Nat} :
     (St b S M G).returnData = b.returnData := rfl
 
-@[simp] theorem St.memRead_fst {b : Devm} {S : List B256} {M : Mem} {G i sz : Nat} :
+theorem St.memRead_fst {b : Devm} {S : List B256} {M : Mem} {G i sz : Nat} :
     ((St b S M G).memRead i sz).1 = (M.read i sz).1 := rfl
 
-@[simp] theorem St.memRead_snd {b : Devm} {S : List B256} {M : Mem} {G i sz : Nat} :
+theorem St.memRead_snd {b : Devm} {S : List B256} {M : Mem} {G i sz : Nat} :
     ((St b S M G).memRead i sz).2 = St b S (M.read i sz).2 G := rfl
 
 section Steps
@@ -168,7 +168,7 @@ theorem ri_callvalue {d : Devm}
   have hp := of_run_callvalue h
   have hs : d.stack = sevm.value :: S := by
     have := hp.stack
-    simpa [Stack.Push, Split] using this
+    simpa only [Stack.Push, Split, St.stack, List.cons_append, List.nil_append] using this
   have e := St.of_stackRel hp
   rw [hs] at e
   exact ⟨_, e⟩
@@ -180,7 +180,7 @@ theorem ri_calldatasize {d : Devm}
   have hp := of_run_calldatasize h
   have hs : d.stack = sevm.data.length.toB256 :: S := by
     have := hp.stack
-    simpa [Stack.Push, Split] using this
+    simpa only [Stack.Push, Split, St.stack, List.cons_append, List.nil_append] using this
   have e := St.of_stackRel hp
   rw [hs] at e
   exact ⟨_, e⟩
@@ -192,7 +192,8 @@ theorem ri_returndatasize {d : Devm}
   have hp := of_run_returndatasize_val h
   have hs : d.stack = b.returnData.length.toB256 :: S := by
     have := hp.stack
-    simpa [Stack.Push, Split, St.stack, St.returnData] using this
+    simpa only [Stack.Push, Split, St.returnData, St.stack, List.cons_append, List.nil_append] using
+      this
   have e := St.of_stackRel hp
   rw [hs] at e
   exact ⟨_, e⟩
@@ -204,7 +205,7 @@ theorem ri_gas {d : Devm}
   obtain ⟨w, hp⟩ := of_run_gas h
   have hs : d.stack = w :: S := by
     have := hp.stack
-    simpa [Stack.Push, Split] using this
+    simpa only [Stack.Push, Split, St.stack, List.cons_append, List.nil_append] using this
   have e := St.of_stackRel hp
   rw [hs] at e
   exact ⟨w, _, e⟩
@@ -243,7 +244,7 @@ theorem ri_mload {i : B256} {d : Devm}
   have hp := Devm.push_of_push run₂
   have hs : d.stack = Bytes.toB256 (M.read i.toNat 32).1 :: S := by
     have := hp.stack
-    simpa [Stack.Push, Split, St.stack] using this
+    simpa only [Stack.Push, Split, St.stack, List.cons_append, List.nil_append] using this
   have e := St.of_stackRel (S := S) (M := (M.read i.toNat 32).2) (G := s₂.gasLeft) hp
   rw [hs] at e
   exact ⟨_, e⟩

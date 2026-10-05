@@ -31,7 +31,7 @@ private lemma takeD_add {ξ : Type} :
     ∀ (m n : Nat) (l : List ξ) (d : ξ),
       List.takeD (m + n) l d =
         List.takeD m l d ++ List.takeD n (l.drop m) d
-  | 0, n, l, d => by simp
+  | 0, n, l, d => by simp only [zero_add, List.takeD_zero, List.drop_zero, List.nil_append]
   | m + 1, n, l, d => by
       rw [show m + 1 + n = (m + n) + 1 from by omega,
         List.takeD_succ, List.takeD_succ, takeD_add m n l.tail d,
@@ -228,7 +228,7 @@ theorem of_permitSignerGuards_raw_frame (dp : DeployParams)
     have hsigner : signer ≠ 0 := by
       intro hz
       subst signer
-      simp [B256.eqCheck] at hflag1
+      simp only [B256.eqCheck, ↓reduceIte] at hflag1
       exact B256.zero_ne_one hflag1
     have hp3 : signer :: xs <<+ s3.stack := (popBurn_pref hpop1 hp2).2
     rcases of_run_prepend (arg 0) _ run with ⟨s4, harg0, run⟩
@@ -248,7 +248,7 @@ theorem of_permitSignerGuards_raw_frame (dp : DeployParams)
       have howner : signer = Sevm.argWord sevm 0 := by
         by_contra hne
         have hne' : Sevm.argWord sevm 0 ≠ signer := Ne.symm hne
-        simp [B256.eqCheck, hne'] at hflag2
+        simp only [B256.eqCheck, hne', ↓reduceIte] at hflag2
         exact B256.zero_ne_one hflag2
       have hstor : Devm.getStor t = Devm.getStor s := by
         symm
@@ -296,12 +296,16 @@ theorem of_permitSignerGuards_raw_frame (dp : DeployParams)
         hstor, hmemory, hlogs, houtput, happrove⟩
     · rcases of_run_call hinvalid2 with ⟨f, u, hget, hcallBurn, hrev⟩
       have hf : f = invalidPermitError := by
-        simpa [weth10Aux, invalidPermitErrorSlot] using hget.symm
+        simpa only [weth10Aux, invalidPermitErrorSlot, List.length_cons, List.length_nil, zero_add,
+          Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+          Option.some.injEq] using hget.symm
       subst f
       exact absurd hrev Func.not_run_revertWith
   · rcases of_run_call hinvalid1 with ⟨f, u, hget, hcallBurn, hrev⟩
     have hf : f = invalidPermitError := by
-      simpa [weth10Aux, invalidPermitErrorSlot] using hget.symm
+      simpa only [weth10Aux, invalidPermitErrorSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using hget.symm
     subst f
     exact absurd hrev Func.not_run_revertWith
 
@@ -567,7 +571,7 @@ theorem of_permitStructPrepare_raw {sevm : Sevm} {s t : Devm} {xs : Stack}
 image is available for free whenever one is needed only as a witness. -/
 lemma mem_reads_self (μ : Mem) : Mem.Reads μ μ.data.toList := by
   intro i
-  simp
+  simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
 
 /-! ## Reaching the recovery body -/
 

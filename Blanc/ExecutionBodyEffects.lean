@@ -66,31 +66,30 @@ theorem systemTransactionMessage_msgInv
     c.MsgInv ca (systemTransactionMessage benv target data) := by
   have state : c.StateInv ca
       (systemTransactionMessage benv target data).benv.state := by
-    simpa [systemTransactionMessage, processSystemTransactionMsg,
-      Benv.beginTransaction] using inv
+    simpa only [systemTransactionMessage, processSystemTransactionMsg, Benv.beginTransaction] using
+      inv
   refine ⟨state, ?_, ?_, ?_, ?_, ?_⟩
   · refine ⟨?_, ?_⟩
-    · simpa [systemTransactionMessage, processSystemTransactionMsg,
-        Benv.beginTransaction] using notCreated
+    · simpa only [systemTransactionMessage, processSystemTransactionMsg,
+      Benv.beginTransaction] using notCreated
     · exact fun empty => Prog.compile_ne_nil
         (state.code.symm.trans (congrArg some empty))
   · intro _ current
     have htarget : target = ca := by
-      simpa [systemTransactionMessage, processSystemTransactionMsg] using
-        current
+      simpa only [systemTransactionMessage, processSystemTransactionMsg] using current
     subst target
-    simpa [systemTransactionMessage, processSystemTransactionMsg,
-      Benv.beginTransaction] using state.code
+    simpa only [systemTransactionMessage, processSystemTransactionMsg, Benv.beginTransaction] using
+      state.code
   · intro _ current
     have htarget : target = ca := by
-      simpa [systemTransactionMessage, processSystemTransactionMsg] using
-        current
+      simpa only [systemTransactionMessage, processSystemTransactionMsg] using current
     subst target
-    simp [systemTransactionMessage, processSystemTransactionMsg]
+    simp only [systemTransactionMessage, processSystemTransactionMsg]
   · intro transfer
-    simp [systemTransactionMessage, processSystemTransactionMsg] at transfer
+    simp only [systemTransactionMessage, processSystemTransactionMsg,
+      Bool.false_eq_true] at transfer
   · intro _ _
-    simp [systemTransactionMessage, processSystemTransactionMsg]
+    simp only [systemTransactionMessage, processSystemTransactionMsg]
 
 /-- A retained system message preserves an arbitrary contract invariant and
 cannot increase the world's total balance. -/
@@ -116,7 +115,7 @@ theorem SystemMessageTrace.benvInv
     (hfork : CoveredFork benv.stat.fork) :
     c.BenvInv ca (benv.withState state) :=
   ⟨(trace.stateInv_and_sum_le preserves inv hfork).1,
-    by simpa [Benv.withState] using inv.ca⟩
+    by simpa only [Benv.withState] using inv.ca⟩
 
 /-! ## Transaction lists -/
 
@@ -132,7 +131,8 @@ theorem ApplyTransactionsTrace.sum_le
   | cons head tail ih =>
       have hhead := processTransaction_sum_le head.result hfork.rules_stateGas_none
       exact le_trans
-        (by simpa [Benv.withState] using ih (by simpa [Benv.withState] using hfork))
+        (by simpa only [Benv.withState] using
+          ih (by simpa only [Benv.withState] using hfork))
         hhead
 
 /-- A transaction list threads its block environment by state alone, so the
@@ -145,7 +145,7 @@ theorem ApplyTransactionsTrace.createdAccounts_eq
   induction trace with
   | nil => rfl
   | cons head tail ih =>
-      simpa [Benv.withState] using ih
+      simpa only [Benv.withState] using ih
 
 /-- The transaction list the trace retains is exactly the one the semantics
 ran, so every list-level ladder rung applies to a trace unchanged. -/
@@ -195,7 +195,7 @@ theorem withdrawalCredit_bounds
       sum (st.addBal wd.recipient (wd.amount * (10 ^ 9).toB256)).bal +
         wdsum wds < 2 ^ 256 := by
   have cons : wdsum (wd :: wds) = wd.amount.toNat * 10 ^ 9 + wdsum wds := by
-    simp [wdsum]
+    simp only [wdsum, Nat.reducePow, List.map_cons, List.sum_cons]
   rw [cons] at bound
   have value := withdrawalCredit_toNat (wd := wd) (by omega)
   have head : sum st.bal + (wd.amount * (10 ^ 9).toB256).toNat < 2 ^ 256 := by
@@ -213,7 +213,7 @@ theorem benvInv_processWithdrawalsState
     c.BenvInv ca (benv.withState (processWithdrawalsState benv.state wds)) :=
   ⟨ContractSpec.processWithdrawalsState_preserves_inv ca benv.state wds bound
       inv.state,
-    by simpa [Benv.withState] using inv.ca⟩
+    by simpa only [Benv.withState] using inv.ca⟩
 
 /-! ## Request messages -/
 
@@ -240,39 +240,36 @@ theorem AppliedBodyTrace.sum_le_of_empty_withdrawals
     (hfork : CoveredFork benv.stat.fork) :
     sum state.bal ≤ sum benv.state.bal := by
   have hforkHistory : CoveredFork (benv.withState trace.beaconState).stat.fork := by
-    simpa [Benv.withState] using hfork
+    simpa only [Benv.withState] using hfork
   have hforkTransactions : CoveredFork trace.transactionBenv.stat.fork := by
     rw [trace.transactions.stat_eq]
     exact hfork
   have hforkRequests : CoveredFork
       (trace.transactionBenv.withState
         (processWithdrawalsState trace.transactionBenv.state [])).stat.fork := by
-    simpa [Benv.withState] using hforkTransactions
+    simpa only [Benv.withState] using hforkTransactions
   have hforkConsolidation : CoveredFork
       ((trace.transactionBenv.withState
         (processWithdrawalsState trace.transactionBenv.state [])).withState
         trace.requests.withdrawalState).stat.fork := by
-    simpa [Benv.withState] using hforkRequests
+    simpa only [Benv.withState] using hforkRequests
   have beacon := processMessageCall_sum_le
-    (by simpa [systemTransactionMessage, processSystemTransactionMsg,
-      Benv.beginTransaction, BenvStat.rules] using hfork.rules_stateGas_none)
+    (by simpa only [BenvStat.rules, systemTransactionMessage, processSystemTransactionMsg,
+      Benv.beginTransaction] using hfork.rules_stateGas_none)
     trace.beacon.message.result
   have history := processMessageCall_sum_le
-    (by simpa [systemTransactionMessage, processSystemTransactionMsg,
-      Benv.beginTransaction, Benv.withState, BenvStat.rules] using
-      hforkHistory.rules_stateGas_none)
+    (by simpa only [BenvStat.rules, systemTransactionMessage, processSystemTransactionMsg,
+      Benv.beginTransaction, Benv.withState] using hforkHistory.rules_stateGas_none)
     trace.history.message.result
   have transactions := trace.transactions.sum_le (by
-    simpa [Benv.withState] using hfork)
+    simpa only [Benv.withState] using hfork)
   have withdrawal := processMessageCall_sum_le
-    (by simpa [systemTransactionMessage, processSystemTransactionMsg,
-      Benv.beginTransaction, Benv.withState, BenvStat.rules] using
-      hforkRequests.rules_stateGas_none)
+    (by simpa only [BenvStat.rules, systemTransactionMessage, processSystemTransactionMsg,
+      Benv.beginTransaction, Benv.withState] using hforkRequests.rules_stateGas_none)
     trace.requests.withdrawal.message.result
   have consolidation := processMessageCall_sum_le
-    (by simpa [systemTransactionMessage, processSystemTransactionMsg,
-      Benv.beginTransaction, Benv.withState, BenvStat.rules] using
-      hforkConsolidation.rules_stateGas_none)
+    (by simpa only [BenvStat.rules, systemTransactionMessage, processSystemTransactionMsg,
+      Benv.beginTransaction, Benv.withState] using hforkConsolidation.rules_stateGas_none)
     trace.requests.consolidation.message.result
   simp only [systemTransactionMessage_benv_state, Benv.withState,
     processWithdrawalsState, List.foldl_nil] at beacon history transactions withdrawal consolidation

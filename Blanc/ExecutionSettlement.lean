@@ -34,7 +34,7 @@ lemma processCheckedSystemTransaction_to_unchecked {benv : Benv}
     {target : Adr} {data : Bytes} {st : Jaune.State} {out : MsgCallOutput}
     (h : processCheckedSystemTransaction benv target data = .ok ⟨st, out⟩) :
     processUncheckedSystemTransaction benv target data = .ok ⟨st, out⟩ := by
-  dsimp [processCheckedSystemTransaction, processUncheckedSystemTransaction] at h ⊢
+  dsimp only [processCheckedSystemTransaction, processUncheckedSystemTransaction] at h ⊢
   split at h
   · cases h
   · rcases Except.bind_eq_ok h with ⟨⟨st', out'⟩, h1, h2⟩

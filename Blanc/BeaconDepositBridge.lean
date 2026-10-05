@@ -283,7 +283,7 @@ theorem accOfStor_applyDepositWrites
       by_cases same : selected = height
       · subst selected
         rw [Stor.get_set_self]
-        simp
+        simp only [↓reduceIte]
       · have keyNe : branchSlot height ≠ branchSlot selected := by
           intro slotEqual
           apply same

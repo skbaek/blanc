@@ -7,4 +7,8 @@ LeafFixture.headline_one
 LeafFixture.headline_two
 LeafFixture.instNonemptyPt
 LeafFixture.simp_nonrfl_fact
+LeafFixture.simp_only_fact
+LeafFixture.uses_definition
 LeafFixture.uses_gq
+LeafFixture.uses_qt
+LeafFixture.uses_two

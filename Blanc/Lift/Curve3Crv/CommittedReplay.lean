@@ -78,7 +78,7 @@ def invocationKeys (invs : List WriterInvocation) : List Key :=
 
 theorem invocationKeys_singleton (inv : WriterInvocation) :
     invocationKeys [inv] = callKeys inv.sevm.caller (decodeCall inv.sevm) := by
-  simp [invocationKeys]
+  simp only [invocationKeys, List.flatMap_cons, List.flatMap_nil, List.append_nil]
 
 /-- One model step of an invocation, with the frame's own static-call evidence:
 the model accepts the call with the recorded owner word, and a recorded owner
@@ -147,9 +147,9 @@ theorem step_ownerWordOf {sevm : Sevm} {ow : Option B256} {s : Blanc.Curve3Crv.S
               · rw [h4]
               · simp only [h4, ↓reduceIte] at accepted
                 cases accepted
-          · simp [h1, h2, h3] at accepted
-        · simp [h1, h2] at accepted
-      · simp [h1] at accepted
+          · simp only [ExceptT.stM_eq, h1, ↓reduceIte, h2, h3, reduceCtorEq] at accepted
+        · simp only [ExceptT.stM_eq, h1, ↓reduceIte, h2, reduceCtorEq] at accepted
+      · simp only [ExceptT.stM_eq, h1, ↓reduceIte, reduceCtorEq] at accepted
     subst key
     exact ⟨accepted, fun w h => h⟩
   | setMinter _ => exact ⟨accepted, fun _ h => by cases h⟩
@@ -189,12 +189,12 @@ theorem VyInv.of_get_eq {stor stor' : Stor} {s : Blanc.Curve3Crv.State} {K : Key
 
 theorem Key.extend_nil (K : Key → Prop) : Key.extend K [] = K := by
   funext k
-  simp [Key.extend, SlotFootprint.extendBy]
+  simp only [extend, SlotFootprint.extendBy, List.not_mem_nil, or_false]
 
 theorem Key.extend_append (K : Key → Prop) (xs ys : List Key) :
     Key.extend (Key.extend K xs) ys = Key.extend K (xs ++ ys) := by
   funext k
-  simp [Key.extend, SlotFootprint.extendBy, or_assoc]
+  simp only [extend, SlotFootprint.extendBy, or_assoc, List.mem_append]
 
 /-- The connected replay of committed writer invocations over one storage
 boundary of the contract. It is stated for every model abstraction of the opening
@@ -209,7 +209,8 @@ def CurveReplay (U : Key → Prop) (pre : Stor) (invs : List WriterInvocation)
       ∃ s', InvRun s invs s' ∧ VyInv post s' (Key.extend K (invocationKeys invs))
 
 theorem CurveReplay.nil (U : Key → Prop) (stor : Stor) : CurveReplay U stor [] stor := by
-  refine ⟨by simp [invocationKeys], fun s K _ h => ⟨s, rfl, ?_⟩⟩
+  refine ⟨by simp only [invocationKeys, List.flatMap_nil, List.not_mem_nil, IsEmpty.forall_iff,
+    implies_true], fun s K _ h => ⟨s, rfl, ?_⟩⟩
   simpa only [invocationKeys, List.flatMap_nil, Key.extend_nil] using h
 
 theorem CurveReplay.append {U : Key → Prop} {a b c : Stor} {xs ys : List WriterInvocation}

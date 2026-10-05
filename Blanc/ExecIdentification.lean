@@ -143,8 +143,8 @@ theorem Exec.descendantFrames_flatMap_of_nextSome {α : Type} (f : Exec.Frame �
       by_cases settles : Frame.settlementCommits frame raw = true
       · rw [Exec.descendantFrames_runOk_of_settlementCommits hstep henter child
           _ next settles, if_pos settles]
-        simp [Exec.committedFrames,
-          Frame.raw_commits_of_settlementCommits settles]
+        simp only [List.cons_append, List.flatMap_cons, List.flatMap_append, committedFrames,
+          Frame.raw_commits_of_settlementCommits settles, ↓reduceDIte, List.append_assoc]
       · rw [Exec.descendantFrames_runOk_of_not_settlementCommits hstep henter
           child _ next settles, if_neg settles, List.nil_append]
   | halt hstep => cases hroot.symm.trans hstep
@@ -185,7 +185,7 @@ theorem Exec.Deriv.descendantFrames_eq_of_stepRun {node next : Exec.Deriv}
       obtain ⟨hxl, -⟩ := stepRun
       subst hxl
       cases retained
-      simp [Exec.descendantFrames]
+      simp only [descendantFrames, ExecutionTrace.RetainedXlot.settledFrames, List.nil_append]
   | doneOk hstep henter hresume next =>
       rw [hstep] at stepRun
       obtain ⟨r, frameRun, -⟩ := stepRun
@@ -194,7 +194,7 @@ theorem Exec.Deriv.descendantFrames_eq_of_stepRun {node next : Exec.Deriv}
       obtain ⟨hxl, -⟩ := frameRun
       subst hxl
       cases retained
-      simp [Exec.descendantFrames]
+      simp only [descendantFrames, ExecutionTrace.RetainedXlot.settledFrames, List.nil_append]
   | runOk hstep henter child hresume next =>
       have stepRun' := stepRun
       rw [hstep] at stepRun'
@@ -211,6 +211,7 @@ theorem Exec.Deriv.descendantFrames_eq_of_stepRun {node next : Exec.Deriv}
           have runEq : run = child := Exec.unique _ _
           subst runEq
           have hraw := Frame.raw_commits_of_settlementCommits commits
-          simp [commits, Exec.committedFrames, hraw]
+          simp only [commits, Exec.descendantFrames_runOk_of_settlementCommits, List.cons_append,
+            ExecutionTrace.RetainedXlot.settledFrames, committedFrames, hraw, ↓reduceDIte]
 
 end Blanc

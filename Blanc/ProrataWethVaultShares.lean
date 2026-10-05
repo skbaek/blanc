@@ -263,8 +263,9 @@ theorem transferStaged_trace
       (Bytes.writeAt creditImage 0 amount.toBytes) := by
     rw [← eventPush.memory]; exact e4Reads
   obtain ⟨trueStack, emitted⟩ :=
-    of_logWith_val (topics := [transferEvent, owner, receiver]) (by simp)
-      (by simpa using e5Prefix) logRun
+    of_logWith_val (topics := [transferEvent, owner, receiver]) (by simp only [List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.reduceMod])
+      (by simpa only [List.cons_append, List.nil_append] using e5Prefix) logRun
   obtain ⟨trueWf, trueReads⟩ := of_logWith_image e5Wf e5Reads logRun
   have logWindow : (e5.memory.read ((0 : B256) * 32).toNat
       ((1 : B256) * 32).toNat).1 = amount.toBytes := by
@@ -458,7 +459,7 @@ theorem approve_body_effect
   unfold approve at run
   have entryReads : Mem.Reads pre.memory pre.memory.data.toList := by
     intro index
-    simp
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
   obtain ⟨spenderPre, callerNonzero, spenderStack, callerMemory, callerState,
       callerLogs, run⟩ := nonzeroCaller_trace stack run
   have spenderWf : Mem.Wf spenderPre.memory := by
@@ -652,7 +653,8 @@ theorem approve_body_effect
   obtain ⟨trueStack, emitted⟩ :=
     of_logWith_val
       (topics := [approvalEvent, sevm.caller.toB256, Sevm.argWord sevm 0])
-      (by simp) (by simpa using e4Prefix) logRun
+      (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Fin.isValue,
+        Fin.coe_ofNat_eq_mod, Nat.reduceMod]) (by simpa only [List.cons_append, List.nil_append] using e4Prefix) logRun
   obtain ⟨trueWf, trueReads⟩ := of_logWith_image e4Wf e4Reads logRun
   have logWindow : (e4.memory.read ((0 : B256) * 32).toNat
       ((1 : B256) * 32).toNat).1 = (Sevm.argWord sevm 1).toBytes := by
@@ -756,7 +758,7 @@ theorem transfer_body_effect
   unfold transfer at run
   have entryReads : Mem.Reads pre.memory pre.memory.data.toList := by
     intro index
-    simp
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
   obtain ⟨receiverPre, callerNonzero, receiverStack, callerMemory,
       callerState, callerLogs, run⟩ := nonzeroCaller_trace stack run
   have receiverWf : Mem.Wf receiverPre.memory := by
@@ -903,7 +905,7 @@ theorem transferFrom_body_effect
   unfold transferFrom at run
   have entryReads : Mem.Reads pre.memory pre.memory.data.toList := by
     intro index
-    simp
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
   obtain ⟨ownerPre, callerNonzero, ownerStack, callerMemory, callerState,
       callerLogs, run⟩ := nonzeroCaller_trace stack run
   have ownerWf : Mem.Wf ownerPre.memory := by
@@ -1060,7 +1062,9 @@ theorem transferFrom_body_effect
 theorem transferStaged_lookup :
     (vault.main :: vault.aux)[transferFromAfterAllowanceSlot]? =
       some transferStaged := by
-  simp [vault, vaultAux, transferFromAfterAllowanceSlot]
+  simp only [vault, vaultAux, transferFromAfterAllowanceSlot, List.length_cons, List.length_nil,
+    zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+    List.getElem_cons_zero]
 
 /-! ## Public compiled share operations
 
@@ -1093,7 +1097,8 @@ theorem approve_compiled_effect
   have member :
       (selector "approve" [.address, .uint256], routed 2 approve) ∈
         vaultFuncs := by
-    simp [vaultFuncs]
+    simp only [vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   rcases runCompiled_enters_body_compiled_logs run selectorEq member with
     ⟨bodyPre, valueZero, -, entryState, entryMemory, entryLogs, -, bodyRun⟩
   have bodyWf : Mem.Wf bodyPre.memory := by
@@ -1146,7 +1151,8 @@ theorem transfer_compiled_effect
   have member :
       (selector "transfer" [.address, .uint256], routed 2 transfer) ∈
         vaultFuncs := by
-    simp [vaultFuncs]
+    simp only [vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   rcases runCompiled_enters_body_compiled_logs run selectorEq member with
     ⟨bodyPre, valueZero, -, entryState, entryMemory, entryLogs, -, bodyRun⟩
   have bodyWf : Mem.Wf bodyPre.memory := by
@@ -1221,7 +1227,8 @@ theorem transferFrom_compiled_effect
   have member :
       (selector "transferFrom" [.address, .address, .uint256],
         routed 3 transferFrom) ∈ vaultFuncs := by
-    simp [vaultFuncs]
+    simp only [vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   rcases runCompiled_enters_body_compiled_logs run selectorEq member with
     ⟨bodyPre, valueZero, -, entryState, entryMemory, entryLogs, -, bodyRun⟩
   have bodyWf : Mem.Wf bodyPre.memory := by
@@ -1424,7 +1431,8 @@ theorem approve_preserves_conserved
     (conserved : Conserved (Devm.getStor pre sevm.currentTarget)) :
     Conserved (Devm.getStor post sevm.currentTarget) := by
   have member : (selector "approve" [.address, .uint256], routed 2 approve) ∈ vaultFuncs := by
-    simp [vaultFuncs]
+    simp only [vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   obtain ⟨bodyPre, bodyWf, storEq, bodyRun⟩ :=
     enter_share_body memoryWf run selectorEq member
   rw [congrFun storEq sevm.currentTarget] at conserved
@@ -1440,7 +1448,8 @@ theorem transfer_preserves_conserved
     (conserved : Conserved (Devm.getStor pre sevm.currentTarget)) :
     Conserved (Devm.getStor post sevm.currentTarget) := by
   have member : (selector "transfer" [.address, .uint256], routed 2 transfer) ∈ vaultFuncs := by
-    simp [vaultFuncs]
+    simp only [vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   obtain ⟨bodyPre, bodyWf, storEq, bodyRun⟩ :=
     enter_share_body memoryWf run selectorEq member
   rw [congrFun storEq sevm.currentTarget] at conserved
@@ -1456,7 +1465,8 @@ theorem transferFrom_preserves_conserved
     (conserved : Conserved (Devm.getStor pre sevm.currentTarget)) :
     Conserved (Devm.getStor post sevm.currentTarget) := by
   have member : (selector "transferFrom" [.address, .address, .uint256], routed 3 transferFrom) ∈ vaultFuncs := by
-    simp [vaultFuncs]
+    simp only [vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   obtain ⟨bodyPre, bodyWf, storEq, bodyRun⟩ :=
     enter_share_body memoryWf run selectorEq member
   rw [congrFun storEq sevm.currentTarget] at conserved

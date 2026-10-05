@@ -49,7 +49,7 @@ theorem canonicalDeploymentSuffix_succeeds
     exact CoveredFork.prague
   have hpostPostFork :
       CoveredFork ((ctx.txInput.withState post).withState post).stat.fork := by
-    simpa [Benv.withState] using hpostFork
+    simpa only [Benv.withState] using hpostFork
   have hrequests : (ctx.txInput.withState post).stat.rules.requests =
       [(1, withdrawalRequestPredeployAddress),
        (2, consolidationRequestPredeployAddress)] := by
@@ -59,7 +59,7 @@ theorem canonicalDeploymentSuffix_succeeds
   obtain ⟨withdrawalOut, hwithdrawal, _, _, _, _, hwithdrawalReturn⟩ :=
     processCheckedSystemTransaction_deploymentSystemProgram
       (ctx.txInput.withState post) withdrawalRequestPredeployAddress []
-      (by simpa [Benv.withState] using htx.withdrawalRequestCode)
+      (by simpa only [Benv.withState] using htx.withdrawalRequestCode)
       (by
         rw [ctx.systemPrefix.environment_eq]
         change ¬ pragueRules.isPrecomp withdrawalRequestPredeployAddress
@@ -70,7 +70,7 @@ theorem canonicalDeploymentSuffix_succeeds
     processCheckedSystemTransaction_deploymentSystemProgram
       ((ctx.txInput.withState post).withState post)
       consolidationRequestPredeployAddress []
-      (by simpa [Benv.withState] using htx.consolidationRequestCode)
+      (by simpa only [Benv.withState] using htx.consolidationRequestCode)
       (by
         rw [ctx.systemPrefix.environment_eq]
         change ¬ pragueRules.isPrecomp consolidationRequestPredeployAddress
@@ -79,7 +79,7 @@ theorem canonicalDeploymentSuffix_succeeds
   have hwithdrawal' :
       processCheckedSystemTransaction (ctx.txInput.withState post)
         withdrawalRequestPredeployAddress [] = .ok (post, withdrawalOut) := by
-    simpa [Benv.withState] using hwithdrawal
+    simpa only [Benv.withState] using hwithdrawal
   have hbalNone : ctx.txInput.stat.rules.bal = none := by
     rw [ctx.systemPrefix.environment_eq]
     rfl
@@ -88,8 +88,10 @@ theorem canonicalDeploymentSuffix_succeeds
     unfold processGeneralPurposeRequests processGeneralPurposeRequestsAt
     rw [htx.depositRequests]
     rw [hrequests]
-    simp [runRequestContracts, hwithdrawal', hconsolidation,
-      hwithdrawalReturn, hconsolidationReturn, htx.requests, hbalNone]
+    simp only [runRequestContracts, hwithdrawal', gt_iff_lt, htx.requests, List.nil_append,
+      List.cons_append, Benv.withState_stat, hbalNone, Except.bind_ok, hconsolidation,
+      hwithdrawalReturn, List.length_nil, lt_self_iff_false, ↓reduceIte, hconsolidationReturn,
+      Except.ok.injEq, Prod.mk.injEq]
     constructor
     · rfl
     · rw [← htx.requests]
@@ -127,7 +129,7 @@ theorem canonicalDeploymentApplyBody_succeeds
         ctx.systemPrefix.stHistory
         (historyStorageAddress :: ctx.systemPrefix.outHistory.accountReads.toList)
         ctx.systemPrefix.outHistory.storageReads.toList = (BlockOutput.init : BlockOutput).bal := by
-    simp [BalBuilder.incorporateSystem, hbalNone]
+    simp only [BalBuilder.incorporateSystem, hbalNone, Std.TreeMap.empty_eq_emptyc]
     change ({} : BalBuilder) = ({} : BalBuilder)
     rfl
   unfold applyBody

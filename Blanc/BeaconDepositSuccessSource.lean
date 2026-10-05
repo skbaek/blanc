@@ -1267,13 +1267,14 @@ theorem logWith0_success_of_run
       s2.stack := by
     exact @pref_trans _ [0 * 32, 18 * 32, topic]
       ([0 * 32, 18 * 32, topic] ++ tail) _
-      ⟨tail, rfl⟩ (by simpa using hp2)
+      ⟨tail, rfl⟩ (by simpa only [List.cons_append, List.nil_append] using hp2)
   have words : ([0 * 32, 18 * 32, topic] : List B256) =
       mi :: sz :: topics :=
-    List.pref_unique (by simp [hlen]) known (pref_of_split hpop)
+    List.pref_unique (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      hlen, Fin.isValue, Fin.succ_zero_eq_one, Fin.coe_ofNat_eq_mod, Nat.one_mod]) known (pref_of_split hpop)
   simp only [List.cons.injEq] at words
   rcases words with ⟨rfl, rfl, rfl⟩
-  refine ⟨of_append_pref hpop (by simpa using hp2), ?_⟩
+  refine ⟨of_append_pref hpop (by simpa only [List.cons_append, List.nil_append] using hp2), ?_⟩
   rw [memory, ← offsetPush.memory, ← sizePush.memory,
     show (0 * 32 : B256).toNat = 0 by decide +kernel,
     show (18 * 32 : B256).toNat = 576 by decide +kernel]
@@ -1522,7 +1523,7 @@ theorem depositRootGuard_success_of_run
     branchRevWith_success_of_prefix hget hpTest branchRun
   have hroot : Sevm.argWord sevm 3 = node := by
     by_contra hne
-    simp [B256.eqCheck, hne] at hflag
+    simp only [B256.eqCheck, hne, ↓reduceIte] at hflag
     exact (by decide +kernel : (1 : B256) ≠ 0) hflag
   have covered :
       pre.memory.extend (nodeWord * 32).toNat 32 = pre.memory := by
@@ -2427,7 +2428,7 @@ private theorem depositLengthGuard_success_of_run
   have heq : actual = expected := by
     by_contra hne
     have hne' : expected ≠ actual := Ne.symm hne
-    simp [B256.eqCheck, hne'] at hflag
+    simp only [B256.eqCheck, hne', ↓reduceIte] at hflag
     exact (by decide +kernel : (1 : B256) ≠ 0) hflag
   have covered : pre.memory.extend (word * 32).toNat 32 = pre.memory := by
     change (pre.memory.read (word * 32).toNat 32).2 = pre.memory
@@ -2479,7 +2480,7 @@ private theorem depositValueLowerGuard_success_of_run
     apply B256.not_lt.mp
     intro hlt
     have hone : (sevm.value <? Nat.toB256 oneEther) = 1 := by
-      simp [B256.ltCheck, hlt]
+      simp only [B256.ltCheck, hlt, ↓reduceIte]
     exact (by decide +kernel : (1 : B256) ≠ 0) (hone.symm.trans hflag)
   refine ⟨hlower, next, hpNext, restRun, ?_, ?_⟩
   · exact memoryNext.trans
@@ -2871,17 +2872,17 @@ theorem depositEndpoint_history_success_of_run
   have hdenNe : Nat.toB256 oneGwei ≠ 0 := by
     intro hzero
     have h := congrArg B256.toNat hzero
-    rw [B256.toNat_toB256_of_lt (by norm_num [oneGwei])] at h
+    rw [B256.toNat_toB256_of_lt (by norm_num only [oneGwei])] at h
     simp only [B256.toNat_zero] at h
-    norm_num [oneGwei] at h
+    norm_num only [oneGwei] at h
   have hdenNat : (Nat.toB256 oneGwei).toNat = oneGwei :=
-    B256.toNat_toB256_of_lt (by norm_num [oneGwei])
+    B256.toNat_toB256_of_lt (by norm_num only [oneGwei])
   have amountNat : amount.toNat = sevm.value.toNat / oneGwei := by
     dsimp only [amount]
     rw [B256.toNat_div hdenNe, hdenNat]
   have lowerNat : oneEther ≤ sevm.value.toNat := by
     have h := (B256.le_iff_toNat_le_toNat).mp hlower
-    rw [B256.toNat_toB256_of_lt (by norm_num [oneEther])] at h
+    rw [B256.toNat_toB256_of_lt (by norm_num only [oneEther])] at h
     exact h
   have gweiNat : sevm.value.toNat % oneGwei = 0 := by
     have h := congrArg B256.toNat hgwei

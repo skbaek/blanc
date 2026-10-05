@@ -82,7 +82,7 @@ theorem ProducesWord.isMax_arm_trace
         (Line.Run.cons notRun (Line.Run.cons zeroRun Line.Run.nil)))
   by_cases valueMax : value = B256.max
   · have onePrefix : (1 : B256) :: tail <<+ testPre.stack := by
-      simpa [valueMax, B256.not_max, B256.eqCheck] using testPrefix
+      simpa only [B256.eqCheck, valueMax, B256.not_max, ↓reduceIte] using testPrefix
     obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
       Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
@@ -98,7 +98,7 @@ theorem ProducesWord.isMax_arm_trace
       intro notZero
       exact valueMax (B256.eq_max_of_not_eq_zero notZero)
     have zeroPrefix : (0 : B256) :: tail <<+ testPre.stack := by
-      simpa [B256.eqCheck, notNonzero] using testPrefix
+      simpa only [B256.eqCheck, notNonzero, ↓reduceIte] using testPrefix
     obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
       Func.WalkInv.zero_branch_of_prefix zeroPrefix branchRun
     have bodyWf : Mem.Wf bodyPre.memory := by
@@ -164,13 +164,13 @@ theorem guardStableSupply_trace
     exact supplyReads
   by_cases overflow : maxSupply < supply
   · have onePrefix : (1 : B256) :: tail <<+ testPre.stack := by
-      simpa [B256.ltCheck, overflow] using testPrefix
+      simpa only [B256.ltCheck, overflow, ↓reduceIte] using testPrefix
     obtain ⟨revertPre, revertPop, revertRun, revertPrefix⟩ :=
       Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
     exact absurd revertRun Func.WalkInv.noRevert
   · have zeroPrefix : (0 : B256) :: tail <<+ testPre.stack := by
-      simpa [B256.ltCheck, overflow] using testPrefix
+      simpa only [B256.ltCheck, overflow, ↓reduceIte] using testPrefix
     obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
       Func.WalkInv.zero_branch_of_prefix zeroPrefix branchRun
     have stableWord : supply ≤ maxSupply := B256.not_lt.mp overflow
@@ -334,7 +334,7 @@ theorem conversionStaging_trace
     line_inv
   refine ⟨supply, bodyPre, supplyAtEntry, stable, bodyPrefix, bodyWf, ?_,
     ?_, ?_, ?_, bodyRun⟩
-  · simpa [conversionStagingImage, image2, image1] using bodyReads
+  · simpa only [conversionStagingImage] using bodyReads
   · exact (funext (getStor_eq_of_state_eq assetsState)).trans
       ((funext (getStor_eq_of_state_eq slotState)).trans
         (sloadStorage.trans
@@ -510,10 +510,10 @@ theorem convertToShares_arithmetic_trace
         bodyStack lookup bodyRun
     have returned := returnWord_trace quotientStack returnRun
     constructor
-    · simpa [convertToSharesN, assetsMax, maxWord_toNat,
-        assetFactorN_maxWord, stagedDenominator_toNat stable] using quotientFits
-    · simpa [convertToSharesN, assetsMax, maxWord_toNat,
-        assetFactorN_maxWord, stagedDenominator_toNat stable] using returned
+    · simpa only [convertToSharesN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
+      stagedDenominator_toNat stable] using quotientFits
+    · simpa only [convertToSharesN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
+      stagedDenominator_toNat stable] using returned
   · rcases ordinaryArm with
       ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, -, bodyRun⟩
     let factor := Nat.toB256 (assetFactorN assets.toNat)
@@ -528,12 +528,10 @@ theorem convertToShares_arithmetic_trace
         bodyStack lookup bodyRun
     have returned := returnWord_trace quotientStack returnRun
     constructor
-    · simpa [convertToSharesN, factor, amount,
-        stagedDenominator_toNat stable,
-        stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quotientFits
-    · simpa [convertToSharesN, factor, amount,
-        stagedDenominator_toNat stable,
-        stagedAssetFactor_toNat_of_ne_max assetsNotMax] using returned
+    · simpa only [convertToSharesN, stagedDenominator_toNat stable,
+      stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quotientFits
+    · simpa only [convertToSharesN, stagedDenominator_toNat stable,
+      stagedAssetFactor_toNat_of_ne_max assetsNotMax] using returned
 
 /-- The conversion-to-assets arithmetic suffix returns exactly the G1
 full-width natural formula in either asset arm. -/
@@ -573,10 +571,10 @@ theorem convertToAssets_arithmetic_trace
         bodyStack lookup bodyRun
     have returned := returnWord_trace quotientStack returnRun
     constructor
-    · simpa [convertToAssetsN, assetsMax, maxWord_toNat,
-        assetFactorN_maxWord, stagedDenominator_toNat stable] using quotientFits
-    · simpa [convertToAssetsN, assetsMax, maxWord_toNat,
-        assetFactorN_maxWord, stagedDenominator_toNat stable] using returned
+    · simpa only [convertToAssetsN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
+      stagedDenominator_toNat stable] using quotientFits
+    · simpa only [convertToAssetsN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
+      stagedDenominator_toNat stable] using returned
   · rcases ordinaryArm with
       ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, -, bodyRun⟩
     let denominator := Nat.toB256 (denominatorN supply.toNat)
@@ -591,12 +589,10 @@ theorem convertToAssets_arithmetic_trace
         bodyStack lookup bodyRun
     have returned := returnWord_trace quotientStack returnRun
     constructor
-    · simpa [convertToAssetsN, denominator, amount,
-        stagedDenominator_toNat stable,
-        stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quotientFits
-    · simpa [convertToAssetsN, denominator, amount,
-        stagedDenominator_toNat stable,
-        stagedAssetFactor_toNat_of_ne_max assetsNotMax] using returned
+    · simpa only [convertToAssetsN, stagedAssetFactor_toNat_of_ne_max assetsNotMax,
+      stagedDenominator_toNat stable] using quotientFits
+    · simpa only [convertToAssetsN, stagedAssetFactor_toNat_of_ne_max assetsNotMax,
+      stagedDenominator_toNat stable] using returned
 
 /-- `previewMint` uses the same full-width asset ratio as
 `convertToAssets`, with exact ceiling division. -/
@@ -636,10 +632,10 @@ theorem previewMint_arithmetic_trace
         bodyStack lookup bodyRun
     have returned := returnWord_trace quotientStack returnRun
     constructor
-    · simpa [previewMintN, assetsMax, maxWord_toNat,
-        assetFactorN_maxWord, stagedDenominator_toNat stable] using quotientFits
-    · simpa [previewMintN, assetsMax, maxWord_toNat,
-        assetFactorN_maxWord, stagedDenominator_toNat stable] using returned
+    · simpa only [previewMintN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
+      stagedDenominator_toNat stable] using quotientFits
+    · simpa only [previewMintN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
+      stagedDenominator_toNat stable] using returned
   · rcases ordinaryArm with
       ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, -, bodyRun⟩
     let denominator := Nat.toB256 (denominatorN supply.toNat)
@@ -654,12 +650,10 @@ theorem previewMint_arithmetic_trace
         bodyStack lookup bodyRun
     have returned := returnWord_trace quotientStack returnRun
     constructor
-    · simpa [previewMintN, denominator, amount,
-        stagedDenominator_toNat stable,
-        stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quotientFits
-    · simpa [previewMintN, denominator, amount,
-        stagedDenominator_toNat stable,
-        stagedAssetFactor_toNat_of_ne_max assetsNotMax] using returned
+    · simpa only [previewMintN, stagedAssetFactor_toNat_of_ne_max assetsNotMax,
+      stagedDenominator_toNat stable] using quotientFits
+    · simpa only [previewMintN, stagedAssetFactor_toNat_of_ne_max assetsNotMax,
+      stagedDenominator_toNat stable] using returned
 
 /-- `previewWithdraw` uses the same full-width share ratio as
 `convertToShares`, with exact ceiling division. -/
@@ -700,10 +694,10 @@ theorem previewWithdraw_arithmetic_trace
         bodyStack lookup bodyRun
     have returned := returnWord_trace quotientStack returnRun
     constructor
-    · simpa [previewWithdrawN, assetsMax, maxWord_toNat,
-        assetFactorN_maxWord, stagedDenominator_toNat stable] using quotientFits
-    · simpa [previewWithdrawN, assetsMax, maxWord_toNat,
-        assetFactorN_maxWord, stagedDenominator_toNat stable] using returned
+    · simpa only [previewWithdrawN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
+      stagedDenominator_toNat stable] using quotientFits
+    · simpa only [previewWithdrawN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
+      stagedDenominator_toNat stable] using returned
   · rcases ordinaryArm with
       ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, -, bodyRun⟩
     let factor := Nat.toB256 (assetFactorN assets.toNat)
@@ -718,12 +712,10 @@ theorem previewWithdraw_arithmetic_trace
         bodyStack lookup bodyRun
     have returned := returnWord_trace quotientStack returnRun
     constructor
-    · simpa [previewWithdrawN, factor, amount,
-        stagedDenominator_toNat stable,
-        stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quotientFits
-    · simpa [previewWithdrawN, factor, amount,
-        stagedDenominator_toNat stable,
-        stagedAssetFactor_toNat_of_ne_max assetsNotMax] using returned
+    · simpa only [previewWithdrawN, stagedDenominator_toNat stable,
+      stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quotientFits
+    · simpa only [previewWithdrawN, stagedDenominator_toNat stable,
+      stagedAssetFactor_toNat_of_ne_max assetsNotMax] using returned
 
 /-! ## Staged endpoint-body effects -/
 

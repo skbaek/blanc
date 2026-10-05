@@ -54,7 +54,8 @@ def customErrorData (name : String) (args : List ArgType := []) : Bytes :=
 
 private def runtimeError (name : String) : Func :=
   Func.revertSelector (customErrorData name) (by
-    simp [customErrorData, B256.length_toBytes])
+    simp only [customErrorData, List.length_take, B256.length_toBytes, Nat.reduceLeDiff,
+      inf_of_le_left])
 
 def pausableZeroError : Func := runtimeError "PausableZero"
 def senderNotAdminError : Func := runtimeError "SenderNotAdmin"
@@ -114,14 +115,14 @@ inductive Label : Type
   | pauseAfterSet
   | enumLoop
   | arithmeticPanic
-  deriving DecidableEq, Repr
+  deriving DecidableEq
 
 /-- Positional auxiliary slot index corresponding to each label.
 
 The equations are `@[simp]` so that the `*Slot` abbreviations below, which are
 now defined through `slotOf`, still reduce to their numeric literal in the
 downstream `simp [runtime, aux, fooSlot]` table-lookup idiom. -/
-@[simp] def slotOf : Label → Nat
+def slotOf : Label → Nat
   | .root => 0
   | .fallback => 1
   | .pausableZeroError => 2
@@ -902,12 +903,14 @@ private theorem linearDispatchWith_compileShape_eq
   | nil =>
       cases ys with
       | nil => rfl
-      | cons y ys => simp [dispatchEntryShapes] at h
+      | cons y ys => simp only [dispatchEntryShapes, List.map_nil, List.map_cons, List.nil_eq,
+        reduceCtorEq] at h
   | cons x xs ih =>
       cases xs with
       | nil =>
           cases ys with
-          | nil => simp [dispatchEntryShapes] at h
+          | nil => simp only [dispatchEntryShapes, List.map_cons, List.map_nil,
+            List.cons_ne_self] at h
           | cons y ys =>
               cases ys with
               | nil =>
@@ -915,16 +918,19 @@ private theorem linearDispatchWith_compileShape_eq
                   | mk xw xb =>
                     cases y with
                     | mk yw yb =>
-                      simp [dispatchEntryShapes] at h
+                      simp only [dispatchEntryShapes, List.map_cons, List.map_nil, List.cons.injEq,
+                        Prod.mk.injEq, and_true] at h
                       rcases h with ⟨rfl, hb⟩
-                      simp [linearDispatchWith, Func.compileShape, hb]
-              | cons y' ys => simp [dispatchEntryShapes] at h
+                      simp only [linearDispatchWith, Func.compileShape, hb]
+              | cons y' ys => simp only [dispatchEntryShapes, List.map_cons, List.map_nil,
+                List.cons.injEq, Prod.mk.injEq, List.nil_eq, reduceCtorEq, and_false] at h
       | cons x' xs =>
           cases ys with
-          | nil => simp [dispatchEntryShapes] at h
+          | nil => simp only [dispatchEntryShapes, List.map_cons, List.map_nil, reduceCtorEq] at h
           | cons y ys =>
               cases ys with
-              | nil => simp [dispatchEntryShapes] at h
+              | nil => simp only [dispatchEntryShapes, List.map_cons, List.map_nil, List.cons.injEq,
+                Prod.mk.injEq, reduceCtorEq, and_false] at h
               | cons y' ys =>
                   cases x with
                   | mk xw xb =>
@@ -932,11 +938,13 @@ private theorem linearDispatchWith_compileShape_eq
                     | mk yw yb =>
                       have hhead :
                           (xw, xb.compileShape) = (yw, yb.compileShape) := by
-                        simpa [dispatchEntryShapes] using congrArg List.head? h
+                        simpa only [Prod.mk.injEq, dispatchEntryShapes, List.map_cons,
+                          List.head?_cons, Option.some.injEq] using congrArg List.head? h
                       have htail :
                           dispatchEntryShapes (x' :: xs) =
                             dispatchEntryShapes (y' :: ys) := by
-                        simpa [dispatchEntryShapes] using congrArg List.tail h
+                        simpa only [dispatchEntryShapes, List.map_cons, List.cons.injEq,
+                          Prod.mk.injEq, List.tail_cons] using congrArg List.tail h
                       have hw : xw = yw := congrArg Prod.fst hhead
                       have hb : xb.compileShape = yb.compileShape :=
                         congrArg Prod.snd hhead
@@ -952,7 +960,7 @@ private theorem splitDispatch_compileShape_eq
     (splitDispatch pivot left right).compileShape =
       (splitDispatch pivot' left' right').compileShape := by
   subst pivot'
-  simp [splitDispatch, Func.compileShape, hl, hr]
+  simp only [splitDispatch, Fin.isValue, Func.compileShape, hr, hl]
 
 private theorem firstSelector_eq_of_dispatchEntryShapes_eq
     {xs ys : List (B256 × Func)}
@@ -962,15 +970,18 @@ private theorem firstSelector_eq_of_dispatchEntryShapes_eq
   | nil =>
       cases ys with
       | nil => rfl
-      | cons y ys => simp [dispatchEntryShapes] at h
+      | cons y ys => simp only [dispatchEntryShapes, List.map_nil, List.map_cons, List.nil_eq,
+        reduceCtorEq] at h
   | cons x xs =>
       cases ys with
-      | nil => simp [dispatchEntryShapes] at h
+      | nil => simp only [dispatchEntryShapes, List.map_cons, List.map_nil, reduceCtorEq] at h
       | cons y ys =>
           have hhead :
               (x.1, x.2.compileShape) = (y.1, y.2.compileShape) := by
-            simpa [dispatchEntryShapes] using congrArg List.head? h
-          simpa [firstSelector] using congrArg Prod.fst hhead
+            simpa only [Prod.mk.injEq, dispatchEntryShapes, List.map_cons, List.head?_cons,
+              Option.some.injEq] using congrArg List.head? h
+          simpa only [firstSelector, List.head?_cons, Option.map_some, Option.getD_some] using
+            congrArg Prod.fst hhead
 
 private theorem hybridDispatchWith_compileShape_eq
     {xs ys : List (B256 × Func)}
@@ -979,14 +990,15 @@ private theorem hybridDispatchWith_compileShape_eq
       (hybridDispatchWith k ys).compileShape := by
   have htake (n : Nat) :
       dispatchEntryShapes (xs.take n) = dispatchEntryShapes (ys.take n) := by
-    simpa [dispatchEntryShapes] using congrArg (List.take n) h
+    simpa only [dispatchEntryShapes, List.map_take] using congrArg (List.take n) h
   have hdrop (n : Nat) :
       dispatchEntryShapes (xs.drop n) = dispatchEntryShapes (ys.drop n) := by
-    simpa [dispatchEntryShapes] using congrArg (List.drop n) h
+    simpa only [dispatchEntryShapes, List.map_drop] using congrArg (List.drop n) h
   have hslice (drop take : Nat) :
       dispatchEntryShapes ((xs.drop drop).take take) =
         dispatchEntryShapes ((ys.drop drop).take take) := by
-    simpa [dispatchEntryShapes] using congrArg (List.take take) (hdrop drop)
+    simpa only [dispatchEntryShapes, List.map_take, List.map_drop] using
+      congrArg (List.take take) (hdrop drop)
   unfold hybridDispatchWith
   apply splitDispatch_compileShape_eq
   · exact firstSelector_eq_of_dispatchEntryShapes_eq (hslice 9 4)
@@ -1014,13 +1026,13 @@ private theorem runtimeMain_compileShape_eq (dp : DeployParams) :
   unfold runtimeMain
   exact Func.compileShape_prepend_congr
     [callvalue, pushB256 4, calldatasize, lt, Ninst.or] <| by
-      simp [Func.compileShape, hp]
+      simp only [Func.compileShape, hp]
 
 /-- All deployment parameters occupy fixed-width PUSH32 instructions. -/
 theorem legacyRuntime_compileShape_eq_zero (dp : DeployParams) :
     (legacyRuntime dp).compileShape =
       (legacyRuntime ⟨0, 0, 0, 0, 0⟩).compileShape := by
-  simp [legacyRuntime, Prog.compileShape, runtimeMain_compileShape_eq dp]
+  simp only [Prog.compileShape, legacyRuntime, runtimeMain_compileShape_eq dp]
 
 private theorem legacyRuntimeCompilesZero :
     Prog.compiles (legacyRuntime ⟨0, 0, 0, 0, 0⟩) = true := by
@@ -1038,13 +1050,13 @@ theorem findLabel?_symbolicRuntime (dp : DeployParams) (target : Label) :
 
 theorem erase_symbolicAux :
     symbolicAux.map (fun (_, body) => body.erase slotOf) = aux := by
-  dsimp [symbolicAux, aux,
-    symbolicFallback, symbolicPausableZeroError, symbolicSenderNotAdminError,
+  dsimp only [symbolicAux, symbolicFallback, symbolicPausableZeroError, symbolicSenderNotAdminError,
     symbolicSenderNotPauserError, symbolicPauseBelowMinError, symbolicPauseAboveMaxError,
     symbolicHeartbeatBelowMinError, symbolicHeartbeatAboveMaxError, symbolicHeartbeatExpiredError,
-    symbolicPauseFailedError, symbolicReentrantCallError, symbolicEmptyRevert,
-    symbolicBubbleRevert, symbolicArithmeticPanic]
-  simp [Func.erase_liftCallFree]
+    symbolicPauseFailedError, symbolicReentrantCallError, symbolicEmptyRevert, symbolicBubbleRevert,
+    symbolicArithmeticPanic, aux]
+  simp only [List.map_cons, Func.erase_liftCallFree, List.map_nil, List.cons.injEq, and_true,
+    true_and]
   exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 theorem erase_symbolicRuntimeMain (dp : DeployParams) :
@@ -1077,15 +1089,15 @@ now anchored on the certificate, so `simp [runtime, ...]` rewrites a goal to
 `(symbolicLinkCert dp).resolved`; without this `@[simp]` lemma simp cannot
 delta-unfold `symbolicLinkCert` and the 50-odd `simp [runtime, aux, fooSlot]`
 table-lookup sites stall. -/
-@[simp] theorem symbolicLinkCert_resolved (dp : DeployParams) :
+theorem symbolicLinkCert_resolved (dp : DeployParams) :
     (symbolicLinkCert dp).resolved = legacyRuntime dp :=
   rfl
 
-@[simp] theorem legacyRuntime_main (dp : DeployParams) :
+theorem legacyRuntime_main (dp : DeployParams) :
     (legacyRuntime dp).main = runtimeMain dp :=
   rfl
 
-@[simp] theorem legacyRuntime_aux (dp : DeployParams) :
+theorem legacyRuntime_aux (dp : DeployParams) :
     (legacyRuntime dp).aux = aux :=
   rfl
 
@@ -1103,9 +1115,6 @@ theorem runtime_eq_mk (dp : DeployParams) :
 theorem runtime_compiles (dp : DeployParams) :
     Prog.compiles (runtime dp) = true :=
   (symbolicLinkCert dp).compiles
-
-def runtimeCode (dp : DeployParams) : Bytes :=
-  (Prog.compile (runtime dp)).getD []
 
 def sourceSstoreSiteCount : Func → Nat :=
   Func.sourceSiteCount fun
@@ -1203,8 +1212,5 @@ theorem enumeration_writing_mutant_rejected :
 
 
 end LidoCircuitBreaker
-
-/-- Public alias for the CircuitBreaker symbolic label type. -/
-abbrev CircuitBreaker.Label := LidoCircuitBreaker.Label
 
 end Blanc

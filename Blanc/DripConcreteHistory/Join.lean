@@ -95,7 +95,7 @@ theorem concreteJoinMessage_code : concreteJoinMessage.code.toList = code := by
   rw [State.incrNonce_get_code]
   change (concreteDeployed.state.getCode concreteCreateTarget).toList = code
   rw [concreteDeploymentRoot.installed]
-  simp [ByteArray.toList_eq_toList_data]
+  simp only [ByteArray.toList_eq_toList_data]
 
 theorem concreteJoinDebit_balance :
     concreteJoinDebit.bal concreteCreateSender = 999999999998040182 := by
@@ -276,7 +276,7 @@ theorem concreteJoinDevm_pie (k : B256) (hc : k ≠ chiSlot) (hr : k ≠ rhoSlot
 theorem concreteJoinDevm_cold (k : B256) :
     (concreteCreateTarget, k) ∉ concreteJoinDevm.accessedStorageKeys := by
   change (concreteCreateTarget, k) ∉ (∅ : Std.HashSet (Adr × B256))
-  simp
+  simp only [Std.HashSet.not_mem_empty, not_false_eq_true]
 
 /-- The exponent-one initialization leaves exponent zero at the loop entry. -/
 private theorem concreteJoin_rpowZero (base post : Devm) (M : Mem) (G : Nat)
@@ -824,7 +824,7 @@ private theorem concreteJoinStorageBase_warm (k : B256)
       (concreteCreateTarget, concreteCreateSender.toB256)).insert
       (concreteCreateTarget, totalUnitsSlot)).insert
       (concreteCreateTarget, chiSlot)).insert (concreteCreateTarget, rhoSlot)
-  rcases hk with h | h | h | h <;> subst k <;> simp
+  rcases hk with h | h | h | h <;> subst k <;> simp only [Std.HashSet.mem_insert, beq_iff_eq, Prod.mk.injEq, true_and, BEq.rfl, true_or, or_true]
 
 noncomputable def concreteJoinChiBase : Devm :=
   (concreteJoinStorageBase.withRefundCounter 0).setStorVal concreteCreateTarget chiSlot rate
@@ -1136,8 +1136,9 @@ theorem concreteJoin_processMessage :
     processMessage concreteJoinMessage = .ok (concreteJoinRuntimePost 423856) := by
   unfold processMessage runFrame
   rw [concreteJoin_frameEntry]
-  simp [Frame.settle_eq_settleMsg_handleErrorWith, Frame.settleMsg, concreteJoin_exec,
-    executeCode.handleErrorWith_ok, Frame.ofCall, processMessage.settle, concreteJoin_postError]
+  simp only [Frame.ofCall, concreteJoin_exec, Frame.settle_eq_settleMsg_handleErrorWith,
+    Frame.settleMsg, Bool.false_eq_true, ↓reduceIte, processMessage.settle,
+    executeCode.handleErrorWith_ok, Except.bind_ok, concreteJoin_postError, Option.isSome_none]
 
 noncomputable def concreteJoinMessageState : State := (concreteJoinRuntimePost 423856).state
 
@@ -1295,12 +1296,13 @@ theorem concreteJoin_requestSuffix :
   obtain ⟨withdrawalOut, hw, _, _, _, _, hwr⟩ :=
     processCheckedSystemTransaction_deploymentSystemProgram
       (concreteJoinTxInput.withState concreteJoinTransactionState) withdrawalRequestPredeployAddress []
-      (hcode _ (by simp)) (by change ¬ pragueRules.isPrecomp withdrawalRequestPredeployAddress; decide)
+      (hcode _ (by simp only [List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])) (by change ¬ pragueRules.isPrecomp withdrawalRequestPredeployAddress; decide)
       CoveredFork.prague
   obtain ⟨consolidationOut, hc, _, _, _, _, hcr⟩ :=
     processCheckedSystemTransaction_deploymentSystemProgram
       ((concreteJoinTxInput.withState concreteJoinTransactionState).withState concreteJoinTransactionState)
-      consolidationRequestPredeployAddress [] (hcode _ (by simp))
+      consolidationRequestPredeployAddress [] (hcode _ (by simp only [List.mem_cons,
+        List.not_mem_nil, or_false, or_true]))
       (by change ¬ pragueRules.isPrecomp consolidationRequestPredeployAddress; decide) CoveredFork.prague
   have hrequests :
       (concreteJoinTxInput.withState concreteJoinTransactionState).stat.rules.requests =
@@ -1312,7 +1314,7 @@ theorem concreteJoin_requestSuffix :
       (concreteJoinTxInput.withState concreteJoinTransactionState)
       withdrawalRequestPredeployAddress [] =
       .ok (concreteJoinTransactionState, withdrawalOut) := by
-    simpa [Benv.withState] using hw
+    simpa only [Benv.withState] using hw
   have hbalNone :
       (concreteJoinTxInput.withState concreteJoinTransactionState).stat.rules.bal = none := by
     change pragueRules.bal = none
@@ -1324,13 +1326,16 @@ theorem concreteJoin_requestSuffix :
     unfold parseDepositRequests
     have hk : concreteJoinTransactionBout.receiptKeys = [deploymentReceiptKey 0] := rfl
     rw [hk]
-    simp
+    simp only [bind_pure_comp, List.forIn_cons, List.forIn_nil, bind_assoc, bind_map_left,
+      bind_pure]
     rw [concreteJoin_receiptEntry]
     unfold makeReceipt
     rfl
   unfold processGeneralPurposeRequests processGeneralPurposeRequestsAt
   rw [hd, hrequests]
-  simp [runRequestContracts, hw', hc, hwr, hcr, hbalNone, hbaseBalNone]
+  simp only [runRequestContracts, hw', gt_iff_lt, List.cons_append, List.nil_append,
+    Benv.withState_stat, hbaseBalNone, Except.bind_ok, hc, hwr, List.length_nil, lt_self_iff_false,
+    ↓reduceIte, hcr, Except.ok.injEq, Prod.mk.injEq, and_true]
   rfl
 
 theorem concreteJoin_body :
@@ -1338,12 +1343,13 @@ theorem concreteJoin_body :
       .ok (concreteJoinTransactionState, concreteJoinTransactionBout) := by
   obtain ⟨beaconOut, hb, _⟩ := processUncheckedSystemTransaction_deploymentSystemProgram
     concreteJoinTxInput beaconRootsAddress concreteJoinTxInput.stat.parentBeaconBlockRoot.toBytes
-    (concreteDeployedSystemCode _ (by simp))
+    (concreteDeployedSystemCode _ (by simp only [List.mem_cons, List.not_mem_nil, or_false, true_or]))
     (by change ¬ pragueRules.isPrecomp beaconRootsAddress; decide) CoveredFork.prague
   obtain ⟨historyOut, hh, _⟩ := processUncheckedSystemTransaction_deploymentSystemProgram
     (concreteJoinTxInput.withState concreteDeployed.state) historyStorageAddress
     concreteDeploymentEnvelope.block.header.hash.toBytes
-    (concreteDeployedSystemCode _ (by simp))
+    (concreteDeployedSystemCode _ (by simp only [List.mem_cons, List.not_mem_nil, or_false, true_or,
+      or_true]))
     (by change ¬ pragueRules.isPrecomp historyStorageAddress; decide) CoveredFork.prague
   have hl : (concreteJoinTxInput.withState concreteDeployed.state).stat.blockHashes.getLast? =
       some concreteDeploymentEnvelope.block.header.hash := by rfl
@@ -1639,8 +1645,11 @@ theorem concreteDripSigningEncoded :
   change 2 :: (BLT.list [.bytes [1], .bytes [2], .bytes (Nat.toBytes 1),
     .bytes (Nat.toBytes 8), .bytes (Nat.toBytes 500000), .bytes concreteCreateTarget.toBytes,
     .bytes (Nat.toBytes 0), .bytes [0x9f, 0x67, 0x8c, 0xca], .list []]).toBytes = _
-  simp [BLT.toBytes, BLTs.toBytes, BLTs.toBytesJoin, ht, hlen,
-    Nat.toBytes, Nat.toBytes.aux, concreteDripSigningPayload]
+  simp only [Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, zero_add, Nat.one_mod,
+    Nat.toUInt8_eq, UInt8.ofNat_one, Nat.reduceDiv, Nat.reduceAdd, Nat.reduceMod, UInt8.reduceOfNat,
+    BLT.toBytes, BLTs.toBytes, BLTs.toBytesJoin, UInt8.reduceLT, ↓reduceIte, List.length_cons,
+    List.length_nil, Nat.reduceLT, UInt8.reduceAdd, ht, Nat.ofNat_pos, add_zero, List.append_nil,
+    List.cons_append, List.nil_append, List.length_append, hlen, concreteDripSigningPayload]
 
 theorem concreteDripSigningHash :
     concreteDripTx.signingHash =

@@ -851,14 +851,14 @@ theorem priceLe_snapshotAt {o : Nat} (ho : o ≠ 0)
             Nat.lt_succ_of_le (Nat.min_le_right i path.steps.length)⟩ :
               Fin (path.steps.length + 1))
             = (⟨i, hlt⟩ : Fin path.steps.length).castSucc :=
-          Fin.ext (by simp [Nat.min_eq_left (Nat.le_of_lt hlt)])
+          Fin.ext (by simp only [Nat.min_eq_left (Nat.le_of_lt hlt), Fin.castSucc_mk])
         exact (congrArg path.snapshot hidx).trans (path.pre_eq ⟨i, hlt⟩)
       have hpost : path.snapshotAt (i + 1) = (path.steps.get ⟨i, hlt⟩).post := by
         have hidx : (⟨min (i + 1) path.steps.length,
             Nat.lt_succ_of_le (Nat.min_le_right (i + 1) path.steps.length)⟩ :
               Fin (path.steps.length + 1))
             = (⟨i, hlt⟩ : Fin path.steps.length).succ :=
-          Fin.ext (by simp [Nat.min_eq_left hlt])
+          Fin.ext (by simp only [Nat.min_eq_left hlt, Nat.succ_eq_add_one, Fin.succ_mk])
         exact (congrArg path.snapshot hidx).trans (path.post_eq ⟨i, hlt⟩)
       refine PriceLe.trans ho ih ?_
       rw [hpre, hpost]
@@ -872,8 +872,7 @@ theorem priceLe_snapshotAt {o : Nat} (ho : o ≠ 0)
               Nat.lt_succ_of_le (Nat.min_le_right i path.steps.length)⟩ :=
           Fin.ext (by
             have hle : path.steps.length ≤ i := Nat.le_of_not_lt hlt
-            simp [Nat.min_eq_right hle,
-              Nat.min_eq_right (Nat.le_succ_of_le hle)])
+            simp only [Nat.min_eq_right (Nat.le_succ_of_le hle), Nat.min_eq_right hle])
         exact congrArg path.snapshot hidx
       rw [hstay]
       exact ih
@@ -887,10 +886,10 @@ theorem priceLe_first_last {o : Nat} (ho : o ≠ 0)
   have h := priceLe_snapshotAt ho path path.steps.length
   have hfirst : path.snapshotAt 0 = path.first := by
     unfold ProrataAccountingPath.snapshotAt ProrataAccountingPath.first
-    simp
+    simp only [zero_le, inf_of_le_left, Fin.zero_eta]
   have hlast : path.snapshotAt path.steps.length = path.last := by
     unfold ProrataAccountingPath.snapshotAt ProrataAccountingPath.last
-    simp
+    simp only [min_self]
   rwa [hfirst, hlast] at h
 
 end ProrataAccountingPath

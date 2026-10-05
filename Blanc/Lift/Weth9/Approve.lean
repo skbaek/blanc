@@ -45,7 +45,8 @@ private def approvePost : List Ninst :=
 private theorem approve_tree_eq :
     t_057b_c11 = .dest (chain (approveA ++ (hashBlock ++ (approveB ++
       (hashBlock ++ (approveC ++ ([Ninst.sstore] ++ approvePost)))))) .ret) := by
-  simp [t_057b_c11, approveA, approveB, approveC, approvePost, hashBlock, pF, chain]
+  simp only [t_057b_c11, Fin.isValue, approveA, pF, hashBlock, approveB, approveC, approvePost,
+    List.cons_append, List.nil_append, chain]
 
 private theorem approve_segA {sevm : Sevm} {s s' : Devm} {v sp : B256} {xs : Stack}
     (run : Line.Run sevm s approveA s') (hp : v :: sp :: xs <<+ s.stack) :
@@ -112,7 +113,7 @@ private theorem approve_segC {sevm : Sevm} {s s' : Devm} {k v : B256} {xs : Stac
   obtain ⟨s2, h2, run⟩ := Line.of_run_cons run
   cases run
   have hp1 : v :: k :: v :: xs <<+ s1.stack := prefix_of_dup_val h1 (by show_nth) hp
-  exact Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+  exact Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
     (of_run_swap h2) hp1
 
 /-- The storage and balance effect of entry 11: exactly one SSTORE, of the
@@ -126,7 +127,9 @@ theorem approve_effect {sevm : Sevm} {d : Devm} {o : Outcome} {g : SFunc}
           (allowKey sevm.caller.toB256 (spender &&& ~~~ addressMask)) value ∧
       Devm.getBal (Outcome.devm o) = Devm.getBal d := by
   have hg' : g = t_057b_c11 := by
-    simpa [prog, Cert.prog, cert] using hg.symm
+    simpa only [prog, Cert.prog, cert, List.map_cons, List.map_nil, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero, Option.some.injEq] using hg.symm
   subst g
   rw [approve_tree_eq] at run
   cases run with
@@ -219,7 +222,7 @@ private def wrapLine : List Ninst :=
 
 private theorem wrap_tree_eq :
     t_0152_c27 = .dest (chain (wrapLine ++ []) (.callNext 11 t_0187_c27)) := by
-  simp [t_0152_c27, wrapLine, pF, chain]
+  simp only [t_0152_c27, Fin.isValue, wrapLine, pF, List.append_nil, chain]
 
 private theorem wrap_line_stack {sevm : Sevm} {s s' : Devm}
     (run : Line.Run sevm s wrapLine s') :
@@ -263,7 +266,7 @@ private theorem wrap_line_stack {sevm : Sevm} {s s' : Devm}
     have := prefix_of_and h7 (prefix_of_push (of_run_push h6) hp5)
     rwa [ff20_and_dataWord] at this
   have hp8 : [(4 : B256), allowArg sevm, 4, r] <<+ s8.stack :=
-    Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h8) hp7
   have hp9 : [(32 : B256), 4, allowArg sevm, 4, r] <<+ s9.stack := by
     have := prefix_of_push (of_run_push h9) hp8
@@ -271,13 +274,13 @@ private theorem wrap_line_stack {sevm : Sevm} {s s' : Devm}
   have hp10 : [(32 : B256) + 4, allowArg sevm, 4, r] <<+ s10.stack :=
     prefix_of_add h10 hp9
   have hp11 : [allowArg sevm, (32 : B256) + 4, 4, r] <<+ s11.stack :=
-    Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h11) hp10
   have hp12 : [(4 : B256), (32 : B256) + 4, allowArg sevm, r] <<+ s12.stack :=
-    Stack.prefix_of_swap (n := 1) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 1) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h12) hp11
   have hp13 : [(32 : B256) + 4, 4, allowArg sevm, r] <<+ s13.stack :=
-    Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h13) hp12
   have hp14 : [(32 : B256) + 4, (32 : B256) + 4, 4, allowArg sevm, r] <<+ s14.stack :=
     prefix_of_dup_val h14 (by show_nth) hp13
@@ -287,18 +290,18 @@ private theorem wrap_line_stack {sevm : Sevm} {s s' : Devm}
     rwa [h36] at this
   generalize Sevm.dataWord sevm 36 = v at hp15 ⊢
   have hp16 : [(32 : B256) + 4, v, 4, allowArg sevm, r] <<+ s16.stack :=
-    Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h16) hp15
   obtain ⟨u, hp18⟩ : ∃ u : B256, [u, v, 4, allowArg sevm, r] <<+ s18.stack :=
     ⟨_, prefix_of_add h18 (prefix_of_push (of_run_push h17) hp16)⟩
   have hp19 : [v, u, 4, allowArg sevm, r] <<+ s19.stack :=
-    Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h19) hp18
   have hp20 : [(4 : B256), u, v, allowArg sevm, r] <<+ s20.stack :=
-    Stack.prefix_of_swap (n := 1) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 1) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h20) hp19
   have hp21 : [u, (4 : B256), v, allowArg sevm, r] <<+ s21.stack :=
-    Stack.prefix_of_swap (n := 0) (by simp [Stack.Swap, Stack.SwapCore])
+    Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
       (of_run_swap h21) hp20
   have hp23 := prefix_of_pop (of_run_pop h23) (prefix_of_pop (of_run_pop h22) hp21)
   exact ⟨_, [r], prefix_of_push (of_run_push h24) hp23⟩
@@ -313,7 +316,9 @@ theorem approve_wrapper_ok {sevm : Sevm} {d : Devm} {o : Outcome} {w : SFunc}
         (Devm.getStor d sevm.currentTarget).set
           (allowSlot sevm.caller (Sevm.dataWord sevm 4).toAdr) (Sevm.dataWord sevm 36) := by
   have hw' : w = t_0147_c27 := by
-    simpa [prog, Cert.prog, cert] using hw.symm
+    simpa only [prog, Cert.prog, cert, List.map_cons, List.map_nil, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero, Option.some.injEq] using hw.symm
   subst w
   unfold t_0147_c27 at run
   cases run with

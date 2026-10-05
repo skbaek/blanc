@@ -487,7 +487,7 @@ private theorem rootLoopBit_runCompiledTo
       (cost := gVerylow) (x := height) (y := 32) (v := 1)
       (s := height :: stack) (G := K + 26)
       (by rintro ⟨⟩) rfl rfl
-      (by simp [B256.ltCheck, hheight])
+      (by simp only [B256.ltCheck, hheight, ↓reduceIte])
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [List.length_cons]; omega)) ?_
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
@@ -702,7 +702,7 @@ theorem rootLoopFinish_dispatch_runCompiledTo
       (cost := gVerylow) (x := height) (y := 32) (v := 0)
       (s := height :: stack) (G := K + 13)
       (by rintro ⟨⟩) rfl rfl
-      (by simp [B256.ltCheck, hheight])
+      (by simp only [B256.ltCheck, hheight, ↓reduceIte])
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [List.length_cons]; omega)) ?_
   simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
@@ -1022,7 +1022,9 @@ def RootMemoryCarrier.stageFinish
     decide +kernel
   let explicit : Bytes := node.toBytes ++ zeros 8 ++ zeros 24
   have hexplicitLength : explicit.length = 64 := by
-    simp [explicit, zeros, B256.length_toBytes]
+    simp only [List.append_assoc, zeros, List.reduceReplicate, List.cons_append, List.nil_append,
+      List.length_append, B256.length_toBytes, List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, explicit]
   have hpairExplicit :
       pair.image.sliceD 0 64 0 = explicit := by
     calc
@@ -1046,10 +1048,13 @@ def RootMemoryCarrier.stageFinish
       (pre := node.toBytes) (old := zeros 8) (suffix := zeros 24)
       (replacement := le64 oldCount.toNat) (offset := 32)
       (B256.length_toBytes node)
-      (by simp [zeros, le64])
+      (by simp only [zeros, List.reduceReplicate, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, le64, Nat.toUInt8_eq])
   have hdesiredLength :
       (node.toBytes ++ le64 oldCount.toNat ++ zeros 24).length = 64 := by
-    simp [B256.length_toBytes, le64, zeros]
+    simp only [le64, Nat.toUInt8_eq, zeros, List.reduceReplicate, List.append_assoc,
+      List.cons_append, List.nil_append, List.length_append, B256.length_toBytes, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd]
   have himage :
       (Bytes.writeAt pair.image 32 (le64 oldCount.toNat)).sliceD 0 64 0 =
         node.toBytes ++ le64 oldCount.toNat ++ zeros 24 := by
@@ -1347,7 +1352,7 @@ theorem rootFinishReturn_runCompiled
             intro hnil
             have := B256.length_toBytes digest
             rw [hnil] at this
-            simp at this))
+            simp only [List.length_nil, OfNat.zero_ne_ofNat] at this))
     · change
         base.setMach ⟨[], (Mret.read 0 32).2, G, base.stateGas⟩ =
           base.setMach ⟨[], Mret, G, base.stateGas⟩

@@ -95,7 +95,7 @@ theorem Exec.mem_descendantFrames_installedCode
   induction run with
   | halt hstep =>
       intro hcode frame hmem
-      simp [Jaune.Exec.descendantFrames] at hmem
+      simp only [Exec.descendantFrames, List.not_mem_nil] at hmem
   | cont hstep next ih =>
       intro hcode frame hmem
       apply ih
@@ -105,7 +105,7 @@ theorem Exec.mem_descendantFrames_installedCode
       · simpa only [Jaune.Exec.descendantFrames] using hmem
   | doneErr hstep henter hresume =>
       intro hcode frame hmem
-      simp [Jaune.Exec.descendantFrames] at hmem
+      simp only [Exec.descendantFrames, List.not_mem_nil] at hmem
   | doneOk hstep henter hresume next ih =>
       intro hcode frame hmem
       apply ih
@@ -117,7 +117,7 @@ theorem Exec.mem_descendantFrames_installedCode
       · simpa only [Jaune.Exec.descendantFrames] using hmem
   | runErr hstep henter child hresume ihChild =>
       intro hcode frame hmem
-      simp [Jaune.Exec.descendantFrames] at hmem
+      simp only [Exec.descendantFrames, List.not_mem_nil] at hmem
   | @runOk pc sevm pre f rsm pc' cevm raw nextPre out hstep henter child
       hresume next ihChild ihNext =>
       intro hcode frame hmem
@@ -171,17 +171,17 @@ theorem Exec.mem_descendantFrames_isRoot
     Blanc.Weth10.Exec.Frame.IsRoot frame := by
   induction run with
   | halt hstep =>
-      simp [Jaune.Exec.descendantFrames] at hmem
+      simp only [Exec.descendantFrames, List.not_mem_nil] at hmem
   | cont hstep next ih =>
       apply ih
       simpa only [Jaune.Exec.descendantFrames] using hmem
   | doneErr hstep henter hresume =>
-      simp [Jaune.Exec.descendantFrames] at hmem
+      simp only [Exec.descendantFrames, List.not_mem_nil] at hmem
   | doneOk hstep henter hresume next ih =>
       apply ih
       simpa only [Jaune.Exec.descendantFrames] using hmem
   | runErr hstep henter child hresume ihChild =>
-      simp [Jaune.Exec.descendantFrames] at hmem
+      simp only [Exec.descendantFrames, List.not_mem_nil] at hmem
   | runOk hstep henter child hresume next ihChild ihNext =>
       simp only [Jaune.Exec.descendantFrames] at hmem
       split at hmem
@@ -203,15 +203,15 @@ theorem Exec.mem_descendantFrames_covered
     CoveredFork frame.sevm.benvStat.fork := by
   induction run with
   | halt hstep =>
-      simp [Jaune.Exec.descendantFrames] at hmem
+      simp only [Exec.descendantFrames, List.not_mem_nil] at hmem
   | cont hstep next ih =>
       exact ih hfork (by simpa only [Jaune.Exec.descendantFrames] using hmem)
   | doneErr hstep henter hresume =>
-      simp [Jaune.Exec.descendantFrames] at hmem
+      simp only [Exec.descendantFrames, List.not_mem_nil] at hmem
   | doneOk hstep henter hresume next ih =>
       exact ih hfork (by simpa only [Jaune.Exec.descendantFrames] using hmem)
   | runErr hstep henter child hresume ihChild =>
-      simp [Jaune.Exec.descendantFrames] at hmem
+      simp only [Exec.descendantFrames, List.not_mem_nil] at hmem
   | runOk hstep henter child hresume next ihChild ihNext =>
       have hchildFork := Evm.step_spawn_child_fork hstep henter hfork
       simp only [Jaune.Exec.descendantFrames] at hmem
@@ -265,7 +265,7 @@ theorem Exec.Frame.exactInvocation_of_flowAction?_eq_some
   unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
   split at haction
   · assumption
-  · simp at haction
+  · simp only [reduceCtorEq] at haction
 
 /-- Any retained frame whose executable context already pins an exact direct
 WETH10 invocation has the full compiled-functional context.  Unlike the
@@ -322,7 +322,7 @@ theorem ProcessMessageTrace.allFramesRoot
     Blanc.Weth10.RetainedXlot.AllFramesRoot trace.retained := by
   rcases trace with ⟨slot, retained, hrun⟩
   cases retained with
-  | none => simp [RetainedXlot.AllFramesRoot]
+  | none => simp only [RetainedXlot.AllFramesRoot]
   | @some pc sevm pre execution run =>
       have henter : (Frame.ofCall msg).enter =
           .run ⟨pc, sevm, pre⟩ :=
@@ -337,7 +337,7 @@ theorem ProcessCreateMessageTrace.allFramesRoot
     Blanc.Weth10.RetainedXlot.AllFramesRoot trace.retained := by
   rcases trace with ⟨slot, retained, hrun⟩
   cases retained with
-  | none => simp [RetainedXlot.AllFramesRoot]
+  | none => simp only [RetainedXlot.AllFramesRoot]
   | @some pc sevm pre execution run =>
       have henter : (Frame.ofCreate msg).enter =
           .run ⟨pc, sevm, pre⟩ :=
@@ -363,7 +363,7 @@ private theorem AccountedBlock.stable
   rw [accounted.forkAt] at hfork
   cases hfork
   exact stateTransitionAt_preserves_stable dp ca accounted.fork _ _ _ hrun
-    (by simpa using accounted.bound) hstable accounted.covered
+    (by simpa only [Nat.reducePow] using accounted.bound) hstable accounted.covered
 
 /-- Accounted replay transports the checkpoint invariant to the endpoint; each
 block carries the coverage of the fork its schedule selected, so no global

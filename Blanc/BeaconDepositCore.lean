@@ -34,12 +34,12 @@ def accOfStor (stor : Stor) : Acc :=
       if height < 32 then stor.get (branchSlot height) else 0
     count := (stor.get depositCountSlot).toNat }
 
-@[simp] theorem accOfStor_branch_of_lt (stor : Stor) (height : Nat)
+theorem accOfStor_branch_of_lt (stor : Stor) (height : Nat)
     (h : height < 32) :
     (accOfStor stor).branch height = stor.get (branchSlot height) := by
-  simp [accOfStor, h]
+  simp only [accOfStor, h, ↓reduceIte]
 
-@[simp] theorem accOfStor_count (stor : Stor) :
+theorem accOfStor_count (stor : Stor) :
     (accOfStor stor).count = (stor.get depositCountSlot).toNat := rfl
 
 /-- The constructor-owned zero-hash region is canonical through depth 31. -/
@@ -67,12 +67,6 @@ def beaconSelectors : List B256 :=
 
 def erc165InterfaceId : B256 := 0x01ffc9a7
 def depositInterfaceId : B256 := 0x85640907
-
-def erc165InterfaceIdBytes : Bytes :=
-  [0x01, 0xff, 0xc9, 0xa7]
-
-def depositInterfaceIdBytes : Bytes :=
-  [0x85, 0x64, 0x09, 0x07]
 
 def depositEventTopic : B256 :=
   signatureHash "DepositEvent"
@@ -164,15 +158,6 @@ def CanonicalDepositCalldata
     depositDataRoot ∧
   (abiDepositCall pubkey withdrawalCredentials signature
     depositDataRoot).length < 2 ^ 32
-
-def abiSupportsInterfaceCall (interfaceId : Bytes) : Bytes :=
-  abiSelectorBytes supportsInterfaceSelector ++ interfaceId ++
-    List.replicate (32 - interfaceId.length) 0
-
-def CanonicalSupportsInterfaceCalldata
-    (data interfaceId : Bytes) : Prop :=
-  interfaceId.length = 4 ∧
-    data = abiSupportsInterfaceCall interfaceId
 
 /-! ## Return and event encodings -/
 

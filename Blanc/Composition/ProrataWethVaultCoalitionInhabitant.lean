@@ -15,7 +15,7 @@ theorem pair_attack_carrier_inhabited :
     .snoc ⟨_, _, _, prov,
       .nonVictimDeposit
         (PairAttackState.genesis Blanc.ProrataWethVault.offsetN)
-        .coalition 1 1000 (by norm_num [Blanc.ProrataWethVault.offsetN,
+        .coalition 1 1000 (by norm_num only [Blanc.ProrataWethVault.offsetN,
           PairAttackState.genesis,
           Blanc.Prorata.ProrataAttackState.genesis,
           Blanc.Prorata.mintN, Blanc.Prorata.payN])⟩ .genesis
@@ -28,7 +28,7 @@ theorem pair_attack_carrier_inhabited :
     .snoc ⟨_, _, _, prov,
       .victimDeposit _
         ⟨_, 1000000, 1999, rfl,
-          (by norm_num [Blanc.ProrataWethVault.offsetN, PairAttackState.genesis,
+          (by norm_num only [Blanc.ProrataWethVault.offsetN, PairAttackState.genesis,
             Blanc.Prorata.ProrataAttackState.genesis, PairAttackState.inbound,
             PairAttackState.credited,
             Blanc.Prorata.mintN, Blanc.Prorata.payN])⟩
@@ -37,24 +37,21 @@ theorem pair_attack_carrier_inhabited :
   have p4 : PairAttackPath Blanc.ProrataWethVault.offsetN _ :=
     .snoc ⟨_, _, _, prov,
       .nonVictimWithdraw _ .coalition 1000 500125
-        (by norm_num [Blanc.ProrataWethVault.offsetN, PairAttackState.genesis,
+        (by norm_num only [Blanc.ProrataWethVault.offsetN, PairAttackState.genesis,
           Blanc.Prorata.ProrataAttackState.genesis, PairAttackState.inbound,
           PairAttackState.credited, PairAttackState.victimDeposited,
           Blanc.Prorata.VictimDeposit.post,
           Blanc.Prorata.mintN, Blanc.Prorata.payN])
-        (by norm_num [Blanc.ProrataWethVault.offsetN, PairAttackState.genesis,
+        (by norm_num only [Blanc.ProrataWethVault.offsetN, PairAttackState.genesis,
           Blanc.Prorata.ProrataAttackState.genesis, PairAttackState.inbound,
           PairAttackState.credited, PairAttackState.victimDeposited,
           Blanc.Prorata.VictimDeposit.post,
           Blanc.Prorata.mintN, Blanc.Prorata.payN])⟩ p3
   refine ⟨_, p4, ?_, ?_, ?_, ?_, ?_⟩ <;>
-    simp [Blanc.ProrataWethVault.offsetN, PairAttackState.genesis,
-      Blanc.Prorata.ProrataAttackState.genesis,
-      PairAttackState.inbound,
-      PairAttackState.credited, PairAttackState.victimDeposited,
-      PairAttackState.outbound, Blanc.Prorata.AttackAttribution.coalitionAmount,
-      Blanc.Prorata.AttackAttribution.outsideAmount,
-      Blanc.Prorata.VictimDeposit.post,
-      Blanc.Prorata.mintN, Blanc.Prorata.payN]
+    simp only [ProrataWethVault.offsetN, PairAttackState.outbound, PairAttackState.victimDeposited,
+      VictimDeposit.post, PairAttackState.credited, PairAttackState.inbound,
+      PairAttackState.genesis, ProrataAttackState.genesis, zero_add,
+      AttackAttribution.coalitionAmount, AttackAttribution.outsideAmount, add_zero, Nat.reduceAdd,
+      Nat.reduceSub, tsub_self]
 
 end Blanc.Composition.ProrataWethVault

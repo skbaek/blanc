@@ -59,7 +59,7 @@ theorem Prog.jumpable_of_get?_table_appended
   have hlt := ByteArray.lt_size_of_getElem?_eq_some hw.right
   have hbyte := ByteArray.getElem_of_getElem?_eq_some hw.right hlt
   refine ⟨?_, noPushBefore_succ_of_getElem? hw.right
-    (by rw [Jinst.toInstType_toUInt8]; simp) hw.left⟩
+    (by rw [Jinst.toInstType_toUInt8]; simp only [ne_eq, reduceCtorEq, not_false_eq_true]) hw.left⟩
   unfold jumpable
   rw [dif_pos hlt, hbyte, if_pos rfl]
   exact hw.left
@@ -110,7 +110,7 @@ theorem Func.exec_of_runCompiled_appended_core :
     rcases of_subcode sub with ⟨cd, h_eq', h_slice⟩
     rcases of_guard_eq_some h_eq' with ⟨-, h_rest⟩
     rcases of_bind_eq_some h_rest with ⟨cd', h_eq'', h_rw⟩
-    simp [pure] at h_rw
+    simp only [pure, Option.some.injEq] at h_rw
     rw [← h_rw] at h_slice
     rcases h_n with ⟨xl, h_filled, h_step⟩
     exact Ninst.exec_of_stepRun (Ninst.at_of_slice (List.slice_prefix h_slice))
@@ -182,7 +182,7 @@ theorem Func.exec_of_runCompiledTo_appended_core :
     rcases of_subcode sub with ⟨cd, h_eq', h_slice⟩
     rcases of_guard_eq_some h_eq' with ⟨-, h_rest⟩
     rcases of_bind_eq_some h_rest with ⟨cd', h_eq'', h_rw⟩
-    simp [pure] at h_rw
+    simp only [pure, Option.some.injEq] at h_rw
     rw [← h_rw] at h_slice
     rcases h_n with ⟨xl, h_filled, h_step⟩
     exact Ninst.exec_of_stepRun (Ninst.at_of_slice (List.slice_prefix h_slice))

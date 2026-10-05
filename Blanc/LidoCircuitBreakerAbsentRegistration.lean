@@ -51,7 +51,7 @@ theorem absentZeroRegistration_sourceTrace_witness
       RegistryWitness
         (logicalStorageOfStor (applyRegistryWrites s trace.writes)) entries := by
   have hpost : setPauser entries target 0 = some entries := by
-    simp [setPauser, htarget.1, hfind]
+    simp only [setPauser, htarget.1, ↓reduceIte, hfind]
   have htrace : setPauserSourceTrace entries target 0 =
       some { postEntries := entries
              writes :=
@@ -64,8 +64,8 @@ theorem absentZeroRegistration_sourceTrace_witness
                 (arrayEntrySlot (Nat.toB256 (entries.length + 1)), 0),
                 (arrayLengthSlot, Nat.toB256 entries.length),
                 (indexSlot target, 0)] } := by
-    simp [setPauserSourceTrace, hpost,
-      setPauserSourceWrites_absent_zero entries target htarget.1 hfind]
+    simp only [setPauserSourceTrace, hpost,
+      setPauserSourceWrites_absent_zero entries target htarget.1 hfind, Option.getD_some]
   refine ⟨_, htrace, rfl, rfl, ?_⟩
   exact hw.applyAbsentZeroWrites htarget hfind
 
@@ -105,17 +105,17 @@ private theorem registerAfterSet_absentZero_runCompiled
     exact hnew
   unfold registerAfterSet
   func_run (10) [3, 1, 3, 1]
-  all_goals try { simp [hpreviousValue, B256.eqCheck] }
+  all_goals try { simp only [Nat.reduceSubDiff, B256.eqCheck, hpreviousValue, ↓reduceIte, ite_eq_left_iff, add_tsub_cancel_right] }
   all_goals try {
     rw [Devm.extCost_zero_of_le halign hpreviousCovered]
-    norm_num [gVerylow] }
+    norm_num only [gVerylow] }
   all_goals try {
     rw [hpreviousMemory]
     rw [Devm.extCost_zero_of_le halign hnewCovered]
-    norm_num [gVerylow] }
+    norm_num only [gVerylow] }
   case h_val =>
     rw [hpreviousMemory, hnewValue]
-    simp [B256.eqCheck]
+    simp only [B256.eqCheck, ↓reduceIte]
   case h_arm =>
     rw [hpreviousMemory, hnewMemory]
     exact Func.RunCompiled.last rfl
@@ -148,7 +148,7 @@ private theorem finishSetPauser_absentZero_runCompiled
     target 0 0 [carry] (G + 46)
     ((base.addLog ⟨sevm.currentTarget,
       [pauserSetEvent, target, 0, 0], []⟩).setMach ⟨[carry], M, G, (base.addLog ⟨sevm.currentTarget, [pauserSetEvent, target, 0, 0], []⟩).stateGas⟩)
-    (by simp) hreads htarget hprevious hnew hcontinuation hsize halign
+    (by simp only [List.length_cons, List.length_nil, zero_add, Std.le_refl]) hreads htarget hprevious hnew hcontinuation hsize halign
     hstatic hregister
   have hg : G + 46 + 1935 = G + 1981 := by omega
   rw [hg] at h
@@ -297,7 +297,8 @@ private theorem afterOldPauser_absentZero_runCompiled
     MLast imgLast target carry G hreadsLast htargetLast hpreviousLast
     hnewLast hcontinuationLast (by rw [hsizeLast]; decide) halignLast hstatic
   have hremove := removeTarget_runCompiled (hfork := hfork) dp sevm base M img
-    target oldLength next 0 [carry] (by simp) arrayOriginal indexOriginal
+    target oldLength next 0 [carry] (by simp only [List.length_cons, List.length_nil, zero_add,
+      Std.le_refl]) arrayOriginal indexOriginal
     lengthOriginal
     holeCost movedIndexCost tailClearCost lengthRestoreCost indexClearCost
     1981 G hwf hreads htarget htargetValid
@@ -315,7 +316,7 @@ private theorem afterOldPauser_absentZero_runCompiled
     (((indexClearPost sevm
         (entryClearPost sevm base target next)
         target oldLength).addLog eventLog).setMach ⟨[carry], MLast, G, ((indexClearPost sevm (entryClearPost sevm base target next) target oldLength).addLog eventLog).stateGas⟩)
-    (by simp) hreads hnew (by omega) halign
+    (by simp only [List.length_cons, List.length_nil, zero_add, Std.le_refl]) hreads hnew (by omega) halign
     (by simpa only [fs, MIndex, MLength, MLast, eventLog, Nat.add_zero]
       using hremove)
   have hg : G + 2424 + holeCost + movedIndexCost + tailClearCost +
@@ -464,7 +465,9 @@ private theorem appendTarget_then_runCompiled
       indexKey] using hafter
   let fs := (runtime dp).main :: (runtime dp).aux
   have hafterLookup : fs[afterOldPauserSlot]? = some afterOldPauser := by
-    simp [fs, runtime, aux, afterOldPauserSlot]
+    simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
+      afterOldPauserSlot, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero, fs]
   have hafterCall : Func.RunCompiled fs sevm
       (lengthPost.setMach ⟨[next], M', afterGas + 12, lengthPost.stateGas⟩)
       (.call afterOldPauserSlot) post := by
@@ -477,7 +480,7 @@ private theorem appendTarget_then_runCompiled
           (devm := lengthPost.setMach ⟨[next], M', afterGas + 12, lengthPost.stateGas⟩)
           (cost := gVerylow + gMid + gJumpdest) (G := afterGas)
           (by simp only [Devm.gasLeft_setMach]
-              norm_num [gVerylow, gMid, gJumpdest]))
+              norm_num only [gVerylow, gMid, gJumpdest]))
     · exact hafter'
   have hstoreLength : Func.RunCompiled fs sevm
       (indexPost.setMach ⟨[arrayLengthSlot, next, next], M',
@@ -494,7 +497,7 @@ private theorem appendTarget_then_runCompiled
     func_run (3) [3]
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign' harrayLengthOff']
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       have hmem : (M'.read (arrayLengthWord * 32).toNat 32).2 = M' := by
         rw [Mem.read_snd_eq_self
@@ -557,7 +560,7 @@ private theorem appendTarget_then_runCompiled
     func_run (2) [3]
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign' htargetOff']
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [htargetVal, htargetMem]
       have hg : afterGas + 33 + lengthCost + indexCost - 6 =
@@ -573,7 +576,7 @@ private theorem appendTarget_then_runCompiled
     func_run (2) [3]
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign' harrayLengthOff']
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hlengthVal, hlengthMem]
       have hg : afterGas + 39 + lengthCost + indexCost - 6 =
@@ -614,7 +617,7 @@ private theorem appendTarget_then_runCompiled
     func_run (2) [3]
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign' harrayLengthOff']
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [hlengthVal, hlengthMem]
       have hg : afterGas + 51 + arrayCost + indexCost + lengthCost - 6 =
@@ -632,7 +635,7 @@ private theorem appendTarget_then_runCompiled
     func_run (2) [3]
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign' htargetOff']
-      norm_num [gVerylow]
+      norm_num only [gVerylow]
     case a =>
       rw [htargetVal, htargetMem]
       have hg : afterGas + 57 + arrayCost + indexCost + lengthCost - 6 =
@@ -1079,8 +1082,7 @@ theorem setPauserKernel_absentZero_runCompiled
     tailClearCost + lengthRestoreCost + indexClearCost
   have hassignment : base.getStorVal sevm.currentTarget assignmentKey = 0 := by
     change (Devm.getStor base sevm.currentTarget).get assignmentKey = 0
-    simpa [logicalStorageOfStor, assignmentKey,
-      findEntry_none_assignmentAt hfind] using
+    simpa only [logicalStorageOfStor, findEntry_none_assignmentAt hfind] using
       hw.assignments target htargetValid.2
   have hassignmentBase : assignBase.getStorVal sevm.currentTarget
       assignmentKey = 0 := by
@@ -1104,7 +1106,7 @@ theorem setPauserKernel_absentZero_runCompiled
     rw [temporalSloadBase_getStorVal]
     change (Devm.getStor base sevm.currentTarget).get arrayLengthSlot =
       oldLength
-    simpa [logicalStorageOfStor, oldLength] using hw.lengthWord
+    simpa only [logicalStorageOfStor] using hw.lengthWord
   have hindex : assignPost.getStorVal sevm.currentTarget
       (indexSlot target) = 0 := by
     have hne := registryAddressFamilies_pairwise
@@ -1121,7 +1123,7 @@ theorem setPauserKernel_absentZero_runCompiled
     change (Devm.getStor base sevm.currentTarget).get (indexSlot target) = 0
     change (Devm.getStor base sevm.currentTarget).get (indexSlot target) =
       Nat.toB256 0
-    simpa [logicalStorageOfStor, findEntry_none_oneBasedIndexAt hfind] using
+    simpa only [logicalStorageOfStor, findEntry_none_oneBasedIndexAt hfind] using
       hw.indices target htargetValid.2
   have hnextBound : next.toNat < 2 ^ 252 := by
     dsimp only [next]
@@ -1207,7 +1209,7 @@ theorem setPauserKernel_absentZero_runCompiled
     post target 0 assignmentOriginal assignmentCost appendGas
     hwf hreads htarget hnew htargetValid (by omega) halign hassignment
     hassignmentOrig hassignmentCost
-    (by simp only [appendGas]; norm_num [gCallStipend]; omega) hstatic
+    (by simp only [appendGas]; norm_num only [gCallStipend]; omega) hstatic
     happend
   rcases absentZeroRegistration_sourceTrace_witness hw htargetValid hfind with
     ⟨trace, htrace, hpostEntries, _hwrites, hwpost⟩
@@ -1405,8 +1407,8 @@ private theorem absentZeroRegisterPauserBody_fromStage_runCompiled
           .call setPauserSlot)) post := by
     unfold onlyAdmin pushDeployWord
     func_run (4) [1]
-    case h_val => simp [hadmin, B256.eqCheck]
-    case h_arm => simpa using hstage
+    case h_val => simp only [B256.eqCheck, hadmin, ↓reduceIte]
+    case h_arm => simpa only [add_tsub_cancel_right] using hstage
   have htargetRun := absentCanonicalAddressArgs_success_runCompiled
     hargTarget hargNew htargetMask hnewMask hadminRun
   have hstaticRun : Func.RunCompiled
@@ -1753,35 +1755,35 @@ theorem registerPauser_absentZero_success_settled_effects
           (initDevm msg).getStorVal ca (expirySlot pauser) := by
   have hdataInit : (initSevm msg).data =
       registerPauserCalldata target 0 := by
-    simpa [initSevm] using hdata
+    simpa only [initSevm] using hdata
   rcases registerPauserCalldata_spec (initSevm msg) target 0 hdataInit with
     ⟨hdataLength, hselector, hargTarget, hargNew⟩
   have hvalueInit : (initSevm msg).value = 0 := by
-    simpa [initSevm] using hvalue
+    simpa only [initSevm] using hvalue
   have hownerInit : (initSevm msg).currentTarget = ca := by
-    simpa [initSevm] using howner
+    simpa only [initSevm] using howner
   have hcodeAddressInit : (initSevm msg).codeAddress =
       some (initSevm msg).currentTarget := by
-    simpa [initSevm, howner] using hcodeAddress
+    simpa only [initSevm, howner] using hcodeAddress
   have hcodeInit : (initSevm msg).code.toList =
       lidoCircuitBreakerCode dp := by
-    simpa [initSevm] using hcode
+    simpa only [initSevm] using hcode
   have hadminInit : (initSevm msg).caller.toB256 = dp.admin := by
-    simpa [initSevm] using hadmin
+    simpa only [initSevm] using hadmin
   rcases registerPauser_runCompiledTo_absentZero (hfork := hfork) dp (initSevm msg)
       (initDevm msg) entries target assignmentOriginal arrayOriginal
       indexOriginal lengthOriginal assignmentCost arrayCost indexCost
       lengthCost holeCost movedIndexCost tailClearCost lengthRestoreCost
       indexClearCost G hdataLength hvalueInit hselector hcodeAddressInit
       hcodeInit hadminInit hargTarget hargNew
-      (by simpa [hownerInit] using hw) hfind htargetValid
-      (by simpa [hownerInit] using hassignmentOrig) hassignmentCost
-      (by simpa [hownerInit] using harray)
-      (by simpa [hownerInit] using harrayOrig) harrayCost
-      (by simpa [hownerInit] using hwarmArray)
-      (by simpa [hownerInit] using hindexOrig) hindexCost
-      (by simpa [hownerInit] using hwarmIndex)
-      (by simpa [hownerInit] using hlengthOrig) hlengthCost hholeCost
+      (by simpa only [hownerInit] using hw) hfind htargetValid
+      (by simpa only [hownerInit] using hassignmentOrig) hassignmentCost
+      (by simpa only [hownerInit] using harray)
+      (by simpa only [hownerInit] using harrayOrig) harrayCost
+      (by simpa only [hownerInit] using hwarmArray)
+      (by simpa only [hownerInit] using hindexOrig) hindexCost
+      (by simpa only [hownerInit] using hwarmIndex)
+      (by simpa only [hownerInit] using hlengthOrig) hlengthCost hholeCost
       hmovedIndexCost htailClearCost hlengthRestoreCost hindexClearCost
       hlengthNextWord hsubWord hgasFinal hstatic with
     ⟨trace, post, htrace, hpostEntries, hwpost, hrun, hgas, hlogs,
@@ -1814,9 +1816,9 @@ theorem registerPauser_absentZero_success_settled_effects
   have hsettledPost : settled = post := hsettledFinal.trans hfinalPost
   rw [hsettledPost]
   refine ⟨trace, htrace, hpostEntries, ?_, hgas, ?_, ?_⟩
-  · simpa [hownerInit] using hwpost
-  · simpa [hownerInit] using hlogs
+  · simpa only [hownerInit] using hwpost
+  · simpa only [hownerInit] using hlogs
   · intro pauser hpauser
-    simpa [hownerInit] using hexpiries pauser hpauser
+    simpa only [hownerInit] using hexpiries pauser hpauser
 
 end Blanc.LidoCircuitBreaker

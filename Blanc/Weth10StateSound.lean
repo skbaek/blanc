@@ -21,7 +21,8 @@ theorem normalizedAddress_valid (w : B256) :
     apply UInt64.toBitVec_inj.mp
     simp only [UInt64.toBitVec_and]
     rw [← BitVec.and_assoc]
-    simp
+    simp only [UInt64.toBitVec_not, BitVec.and_not_self, BitVec.ofNat_eq_ofNat, BitVec.zero_and,
+      UInt64.toBitVec_ofNat]
   rcases w with ⟨⟨whh, whl⟩, ⟨wlh, wll⟩⟩
   simp only [addressMask, B256.and_eq_and_prod_and,
     B128.and_eq_and_prod_and]
@@ -104,7 +105,7 @@ theorem runtimeAllowanceKey_region (w : B256) :
           (0x3fffffffffffffff : UInt64).toBitVec = 0 := by
     rfl
   rw [htags, ← BitVec.and_assoc, hmask]
-  simp
+  simp only [UInt64.toBitVec_ofNat, BitVec.ofNat_eq_ofNat, BitVec.zero_and, BitVec.or_zero]
 
 theorem runtimeAllowanceKey_not_valid (w : B256) :
     ¬ ValidAdr (allowanceTagWord ||| (allowancePayloadMask &&& w)) := by
@@ -413,7 +414,9 @@ theorem of_run_spendCallerAllowanceThen
       have h_allowance_lookup :
           ((weth10 dp).main :: weth10Aux)[allowanceErrorSlot]? =
             some (Func.revertWith "WETH: request exceeds allowance") := by
-        simp [weth10, weth10Aux, allowanceErrorSlot, allowanceError]
+        simp only [weth10, weth10Aux, allowanceError, allowanceErrorSlot, List.length_cons,
+          List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos,
+          List.getElem_cons_succ, List.getElem_cons_zero]
       rcases of_run_branch_call_revertWith h_allowance_lookup runGuard with
         ⟨sb, hguardPop, runMutate⟩
       have hguardStack := hguardPop.stack
@@ -1151,8 +1154,9 @@ theorem backedPre_of_transferNonzeroThen (dp : DeployParams) (ca : Adr)
   have h_error_lookup :
       ((weth10 dp).main :: weth10Aux)[transferBalanceErrorSlot]? =
         some (Func.revertWith "WETH: transfer amount exceeds balance") := by
-    simp [weth10, weth10Aux, transferBalanceErrorSlot,
-      transferBalanceError]
+    simp only [weth10, weth10Aux, transferBalanceError, transferBalanceErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]
   rcases of_run_branch_call_revertWith h_error_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
@@ -1427,7 +1431,7 @@ theorem backedPost_of_value_call
     · have : child.error.isSome = true := by
         rw [← h_eq]
         exact h_err2
-      simp [h_child_clean] at this
+      simp only [h_child_clean, Bool.false_eq_true] at this
     rw [h_eq_child] at h_exec h_err2
     have h_child_post : (backedSpec weth10 dp).Post ca
         (initSevm (childMsg.withBenv benv)) child := by
@@ -1799,7 +1803,9 @@ theorem backedPre_of_transferZeroThen (dp : DeployParams) (ca : Adr)
   have h_burn_lookup :
       ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
         some (Func.revertWith "WETH: burn amount exceeds balance") := by
-    simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
+    simp only [weth10, weth10Aux, burnBalanceError, burnBalanceErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]
   rcases of_run_branch_call_revertWith h_burn_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
@@ -1868,7 +1874,9 @@ theorem backedPre_of_transferZeroThen (dp : DeployParams) (ca : Adr)
   have h_eth_lookup :
       ((weth10 dp).main :: weth10Aux)[ethTransferErrorSlot]? =
         some (Func.revertWith "WETH: ETH transfer failed") := by
-    simp [weth10, weth10Aux, ethTransferErrorSlot, ethTransferError]
+    simp only [weth10, weth10Aux, ethTransferError, ethTransferErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]
   rcases of_run_branch_call_revertWith h_eth_lookup run7 with
     ⟨sb, hpopCall, hnext⟩
   have h_eth_le :
@@ -2021,7 +2029,9 @@ theorem backedSpec_withdraw_funcSound (dp : DeployParams) (ca : Adr) :
   have h_burn_lookup :
       ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
         some (Func.revertWith "WETH: burn amount exceeds balance") := by
-    simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
+    simp only [weth10, weth10Aux, burnBalanceError, burnBalanceErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]
   rcases of_run_branch_call_revertWith h_burn_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
@@ -2095,7 +2105,9 @@ theorem backedSpec_withdraw_funcSound (dp : DeployParams) (ca : Adr) :
   have h_eth_lookup :
       ((weth10 dp).main :: weth10Aux)[ethTransferErrorSlot]? =
         some (Func.revertWith "WETH: ETH transfer failed") := by
-    simp [weth10, weth10Aux, ethTransferErrorSlot, ethTransferError]
+    simp only [weth10, weth10Aux, ethTransferError, ethTransferErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]
   rcases of_run_branch_call_revertWith h_eth_lookup run7 with
     ⟨sb, hpopCall, hstop⟩
   have h_eth_le :
@@ -2257,7 +2269,9 @@ theorem backedSpec_withdrawTo_funcSound (dp : DeployParams) (ca : Adr) :
   have h_burn_lookup :
       ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
         some (Func.revertWith "WETH: burn amount exceeds balance") := by
-    simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
+    simp only [weth10, weth10Aux, burnBalanceError, burnBalanceErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]
   rcases of_run_branch_call_revertWith h_burn_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
@@ -2329,7 +2343,9 @@ theorem backedSpec_withdrawTo_funcSound (dp : DeployParams) (ca : Adr) :
   have h_eth_lookup :
       ((weth10 dp).main :: weth10Aux)[ethTransferErrorSlot]? =
         some (Func.revertWith "WETH: ETH transfer failed") := by
-    simp [weth10, weth10Aux, ethTransferErrorSlot, ethTransferError]
+    simp only [weth10, weth10Aux, ethTransferError, ethTransferErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]
   rcases of_run_branch_call_revertWith h_eth_lookup run7 with
     ⟨sb, hpopCall, hstop⟩
   have h_eth_le :
@@ -2426,8 +2442,9 @@ theorem backedPost_of_transferFromNonzero (dp : DeployParams) (ca : Adr)
   have h_error_lookup :
       ((weth10 dp).main :: weth10Aux)[transferBalanceErrorSlot]? =
         some (Func.revertWith "WETH: transfer amount exceeds balance") := by
-    simp [weth10, weth10Aux, transferBalanceErrorSlot,
-      transferBalanceError]
+    simp only [weth10, weth10Aux, transferBalanceError, transferBalanceErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]
   rcases of_run_branch_call_revertWith h_error_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
@@ -2543,7 +2560,9 @@ theorem backedPost_of_transferFromZero (dp : DeployParams) (ca : Adr)
   have h_burn_lookup :
       ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
         some (Func.revertWith "WETH: burn amount exceeds balance") := by
-    simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
+    simp only [weth10, weth10Aux, burnBalanceError, burnBalanceErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]
   rcases of_run_branch_call_revertWith h_burn_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
@@ -2609,7 +2628,9 @@ theorem backedPost_of_transferFromZero (dp : DeployParams) (ca : Adr)
   have h_eth_lookup :
       ((weth10 dp).main :: weth10Aux)[ethTransferErrorSlot]? =
         some (Func.revertWith "WETH: ETH transfer failed") := by
-    simp [weth10, weth10Aux, ethTransferErrorSlot, ethTransferError]
+    simp only [weth10, weth10Aux, ethTransferError, ethTransferErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]
   rcases of_run_branch_call_revertWith h_eth_lookup run7 with
     ⟨sb, hpopCall, hreturn⟩
   have h_eth_le :
@@ -2764,7 +2785,8 @@ theorem backedSpec_transferFrom_funcSound (dp : DeployParams) (ca : Adr) :
   have h_core_lookup :
       ((weth10 dp).main :: weth10Aux)[transferFromCoreSlot]? =
         some transferFromCore := by
-    simp [weth10, weth10Aux, transferFromCoreSlot]
+    simp only [weth10, weth10Aux, transferFromCoreSlot, List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   obtain ⟨sc, hcore, h_silent, h_bal, h_code⟩ :=
     of_run_spendCallerAllowanceThen dp 2 transferFromCoreSlot
       transferFromCore h_core_lookup h_body
@@ -2810,7 +2832,9 @@ theorem backedPost_of_withdrawFromCore (dp : DeployParams) (ca : Adr)
   have h_burn_lookup :
       ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
         some (Func.revertWith "WETH: burn amount exceeds balance") := by
-    simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
+    simp only [weth10, weth10Aux, burnBalanceError, burnBalanceErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]
   rcases of_run_branch_call_revertWith h_burn_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
@@ -2876,7 +2900,9 @@ theorem backedPost_of_withdrawFromCore (dp : DeployParams) (ca : Adr)
   have h_eth_lookup :
       ((weth10 dp).main :: weth10Aux)[etherTransferErrorSlot]? =
         some (Func.revertWith "WETH: Ether transfer failed") := by
-    simp [weth10, weth10Aux, etherTransferErrorSlot, etherTransferError]
+    simp only [weth10, weth10Aux, etherTransferError, etherTransferErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]
   rcases of_run_branch_call_revertWith h_eth_lookup run7 with
     ⟨sb, hpopCall, hstop⟩
   have h_eth_le :
@@ -2956,7 +2982,8 @@ theorem backedSpec_withdrawFrom_funcSound (dp : DeployParams) (ca : Adr) :
   have h_core_lookup :
       ((weth10 dp).main :: weth10Aux)[withdrawFromCoreSlot]? =
         some withdrawFromCore := by
-    simp [weth10, weth10Aux, withdrawFromCoreSlot]
+    simp only [weth10, weth10Aux, withdrawFromCoreSlot, List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   obtain ⟨sc, hcore, h_silent, h_bal, h_code⟩ :=
     of_run_spendCallerAllowanceThen dp 2 withdrawFromCoreSlot
       withdrawFromCore h_core_lookup h_body
@@ -2979,7 +3006,7 @@ theorem mintToPrefix_storage {fs : List Func} {sevm : Sevm}
         (Devm.getStor s sevm.currentTarget).get flashMintedSlot := by
   have hstop : Func.Run fs sevm r Func.stop r := by
     apply Func.Run.last
-    simp [Linst.Run, Linst.run]
+    simp only [Linst.Run, Linst.run]
   have hrun : Func.Run fs sevm s depositTo r := by
     have prepend_stop :
         ∀ {d d' : Devm} {line : Line},
@@ -3086,7 +3113,8 @@ theorem boolReturn_preserves_fields (dp : DeployParams)
     have hlookup :
         ((weth10 dp).main :: weth10Aux)[bubbleRevertSlot]? =
           some bubbleRevert := by
-      simp [weth10, weth10Aux, bubbleRevertSlot]
+      simp only [weth10, weth10Aux, bubbleRevertSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
     have hf : f = bubbleRevert := by
       rw [hlookup] at hget
       exact Option.some.inj hget.symm
@@ -3107,7 +3135,8 @@ theorem of_run_call_boolReturn_preserves_fields (dp : DeployParams)
   have hlookup :
       ((weth10 dp).main :: weth10Aux)[boolReturnSlot]? =
         some boolReturn := by
-    simp [weth10, weth10Aux, boolReturnSlot]
+    simp only [weth10, weth10Aux, boolReturnSlot, List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   have hf : f = boolReturn := by
     rw [hlookup] at hget
     exact Option.some.inj hget.symm
@@ -3526,14 +3555,11 @@ theorem backedSpec_transferAndCall_funcSound
       rfl ih h_pre_next.code h_pre_next.side h_inv_next
       (by line_inv) (by line_inv) (by line_inv) hcallback hfork
 
-/-! ## Flash-counter floor closure
+/-! ## Flash-counter assertions
 
-The backing invariant intentionally forgets the exact flash counter at a
-successful callback boundary.  Flash settlement needs one more fact: the
-outer loan remains included in that counter while arbitrary borrower code is
-running.  The auxiliary spec below carries only that lower bound.  It does not
-change `backedSpec`; it closes independently over the same exact dispatcher
-and is consumed by the final backing proof for `flashLoan`. -/
+The backing proof uses a lower bound on the outstanding flash counter at
+settlement and exact-counter stability across successful reentrant dispatches.
+These assertions remain separate from the backing invariant. -/
 
 /-- The runtime flash cap together with a lower bound on WETH10's outstanding
 flash-minted counter.  The cap is essential: it rules out modular wrap in a
@@ -3542,44 +3568,6 @@ def Stor.FlashFloor (floor : B256) (s : Stor) : Prop :=
   (s.get flashMintedSlot).toNat ≤ maxFlashMinted ∧
     floor ≤ s.get flashMintedSlot
 
-/-- The storage-only auxiliary contract spec used to retain an outer flash
-loan's amount through arbitrary reentrant WETH10 executions. -/
-def flashFloorSpec (dp : DeployParams) (floor : B256) : ContractSpec where
-  prog := weth10 dp
-  Inv := fun s _ _ => Stor.FlashFloor floor s
-  Side := fun _ => True
-  inv_forget := id
-  inv_mono := fun h _ => h
-  inv_recv := fun h _ => h
-  side_le := fun _ _ => trivial
-  side_transfer := fun _ _ => trivial
-  side_addBal := fun _ _ => trivial
-  inv_transfer := by
-    intro st st' caller callee ca wad v h_sub h_ne _ h_inv
-    show Stor.FlashFloor floor _
-    have h_stor : (st'.addBal callee wad).getStor ca = st.getStor ca := by
-      rcases State.of_subBal h_sub with ⟨-, h_st'⟩
-      show ((st'.setBal callee _).get ca).stor = (st.get ca).stor
-      rw [State.setBal_get_stor, h_st', State.setBal_get_stor]
-    rw [h_stor]
-    exact h_inv
-  inv_recv_transfer := by
-    intro st st' caller ca wad h_sub h_ne _ h_inv
-    show Stor.FlashFloor floor _
-    have h_stor : (st'.addBal ca wad).getStor ca = st.getStor ca := by
-      rcases State.of_subBal h_sub with ⟨-, h_st'⟩
-      show ((st'.setBal ca _).get ca).stor = (st.get ca).stor
-      rw [State.setBal_get_stor, h_st', State.setBal_get_stor]
-    rw [h_stor]
-    exact h_inv
-  inv_addBal := by
-    intro w ca a val v _ _ h_inv
-    show Stor.FlashFloor floor _
-    have h_stor : (w.addBal a val).getStor ca = w.getStor ca := by
-      show ((w.setBal a _).get ca).stor = (w.get ca).stor
-      rw [State.setBal_get_stor]
-    rw [h_stor]
-    exact h_inv
 
 /-- Exact flash-slot preservation for a body in WETH10's runtime context. -/
 def FlashStable (dp : DeployParams) (f : Func) : Prop :=
@@ -3588,22 +3576,6 @@ def FlashStable (dp : DeployParams) (f : Func) : Prop :=
     (Devm.getStor r sevm.currentTarget).get flashMintedSlot =
       (Devm.getStor s sevm.currentTarget).get flashMintedSlot
 
-/-- A flash-stable body satisfies every flash-floor `FuncSoundNoMem`
-obligation. -/
-theorem flashFloor_funcSound_of_stable
-    (dp : DeployParams) (floor : B256) (ca : Adr) {f : Func}
-    (hstable : FlashStable dp f) :
-    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux f := by
-  intro sevm s r hfork h_target h_pre _ run
-  subst ca
-  refine ⟨trivial, ?_⟩
-  change Stor.FlashFloor floor (Devm.getStor r sevm.currentTarget)
-  have hfloor := h_pre.inv.1 rfl
-  change Stor.FlashFloor floor
-    (Devm.getStor s sevm.currentTarget) at hfloor
-  unfold Stor.FlashFloor at hfloor ⊢
-  rw [hstable run]
-  exact hfloor
 
 /-- A whole-storage invariant is sufficient for flash-slot stability. -/
 theorem FlashStable.of_inv (dp : DeployParams) {f : Func}
@@ -3629,262 +3601,11 @@ theorem FlashStable.nonpayable (dp : DeployParams) {body : Func}
   exact (hbody hrun).trans (congrArg (fun st => st.get flashMintedSlot)
     h_stor).symm
 
-/-- A body-level floor proof lifts through the state-equivalent nonpayable
-entry wrapper while retaining the same deeper-frame hypothesis. -/
-theorem flashFloor_nonpayable_funcSound_of_body
-    (dp : DeployParams) (floor : B256) (ca : Adr) {body : Func}
-    (hbody : (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux body) :
-    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
-      (nonpayable body) := by
-  intro sevm s r hfork h_target h_pre ih run
-  rcases run_body_of_run_nonpayable run with
-    ⟨mid, _, h_state, hrun⟩
-  exact hbody hfork h_target (h_pre.state_eq h_state.symm) ih hrun
-
-/-- An arbitrary value `CALL` preserves a flash-counter floor.  Value transfer
-never changes storage; if the child reenters WETH10, the auxiliary spec's
-deeper-frame hypothesis supplies exactly the retained floor. -/
-theorem flashFloorPost_of_value_call
-    (dp : DeployParams) (floor : B256) (ca : Adr)
-    {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
-    {xs : Stack}
-    (h_target : sevm.currentTarget = ca)
-    (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((flashFloorSpec dp floor).PreWf ca)
-      ((flashFloorSpec dp floor).Post ca))
-    (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
-    (h_code : some (s.getCode ca).toList = Prog.compile (weth10 dp))
-    (h_floor : Stor.FlashFloor floor (Devm.getStor s ca))
-    (h_run : Ninst.Run sevm s call sf)
-    (hfork : CoveredFork sevm.benvStat.fork) :
-    (flashFloorSpec dp floor).Post ca sevm sf := by
-  rcases of_run_call_val_with_depth hp h_run hfork with
-    ⟨_, h_world⟩ |
-      ⟨parent, child, xl, delegated, na, code, avail, h_depth,
-        h_stack, h_parent_state, h_parent_memory, h_delegation,
-        h_fill, h_pm, h_child_clean, h_resume, h_sf_state,
-        h_returnData, h_memory, h_sf_stack⟩
-  · refine ⟨trivial, ?_⟩
-    change Stor.FlashFloor floor (Devm.getStor sf ca)
-    rw [← h_world.getStor ca]
-    exact h_floor
-  · let childMsg :=
-      callMsg sevm parent
-        (min g.toNat (except64th avail) +
-          (if v.toNat = 0 then 0 else gCallStipend))
-        v sevm.currentTarget c.toAdr na true false
-        ((s.memory.read ii.toNat is.toNat).1) code delegated
-    change ProcessMessage childMsg xl (.ok child) at h_pm
-    have hc_state : childMsg.benv.state = s.state := by
-      change parent.state = s.state
-      exact h_parent_state
-    have hc_stv : childMsg.shouldTransferValue = true := rfl
-    have hc_caller : childMsg.caller = ca := by
-      change sevm.currentTarget = ca
-      exact h_target
-    have hc_value : childMsg.value = v := rfl
-    have hc_target : childMsg.currentTarget = c.toAdr := rfl
-    have hc_codeAddress : childMsg.codeAddress = some na := rfl
-    obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp h_pm
-    unfold FrameBody at hbody
-    rcases h_bt : childMsg.benvAfterTransfer with e | benv <;>
-      rw [h_bt] at hbody
-    · rw [hbody.2, processMessage.settle_error] at hset
-      cases hset
-    have h_exec : ExecuteCode (childMsg.withBenv benv) xl r0 := hbody
-    rcases of_benvAfterTransfer hc_stv h_bt with
-      ⟨st_mid, h_sub, h_benv⟩
-    rw [hc_state, hc_caller, hc_value] at h_sub
-    have h_benv_state :
-        benv.state = st_mid.addBal c.toAdr v := by
-      rw [h_benv, hc_target, hc_value]
-      rfl
-    rcases of_state_transfer_fields (callee := c.toAdr) h_sub with
-      ⟨h_t_stor, h_t_code, h_le, h_t_self, h_t_ne⟩
-    have h_pre : (flashFloorSpec dp floor).Pre ca
-        (initSevm (childMsg.withBenv benv))
-        (initDevm (childMsg.withBenv benv)) := by
-      refine ⟨?_, trivial, ?_, ?_⟩
-      · show some (benv.state.getCode ca).toList =
-          Prog.compile (weth10 dp)
-        rw [h_benv_state]
-        change some ((st_mid.addBal c.toAdr v).get ca).code.toList =
-          Prog.compile (weth10 dp)
-        rw [h_t_code ca]
-        exact h_code
-      · intro _
-        change Stor.FlashFloor floor (benv.state.getStor ca)
-        rw [h_benv_state]
-        change Stor.FlashFloor floor
-          ((st_mid.addBal c.toAdr v).get ca).stor
-        rw [h_t_stor ca]
-        exact h_floor
-      · intro _
-        change Stor.FlashFloor floor (benv.state.getStor ca)
-        rw [h_benv_state]
-        change Stor.FlashFloor floor
-          ((st_mid.addBal c.toAdr v).get ca).stor
-        rw [h_t_stor ca]
-        exact h_floor
-    obtain ⟨evm2, h_r0, h_settle⟩ := processMessage.settle_ok_cases hset.symm
-    subst h_r0
-    rcases h_settle with ⟨h_err2, h_eq⟩ | ⟨h_err2, h_eq_child⟩
-    · have : child.error.isSome = true := by
-        rw [← h_eq]
-        exact h_err2
-      simp [h_child_clean] at this
-    rw [h_eq_child] at h_exec h_err2
-    have h_child_post : (flashFloorSpec dp floor).Post ca
-        (initSevm (childMsg.withBenv benv)) child := by
-      have hc_codeAddress' :
-          (childMsg.withBenv benv).codeAddress = some na :=
-        hc_codeAddress
-      rcases of_executeCode_someCode hc_codeAddress' h_exec with
-        ⟨h_precompile, h_xl_none, h_handle⟩ |
-        ⟨h_precompile, exn, h_xl_some, h_handle⟩
-      · have h_child_state :
-            child.state = (initDevm (childMsg.withBenv benv)).state :=
-          state_of_executePrecomp_ok h_handle h_err2
-        exact (flashFloorSpec dp floor).post_of_pre
-          (h_pre.state_eq h_child_state)
-      · have h_exn : exn = .ok child :=
-          exec_ok_of_handleError h_handle h_err2
-        rw [h_xl_some, h_exn] at h_fill
-        obtain ⟨h_exec_child⟩ := h_fill
-        have h_at : Prog.At (weth10 dp) ca 0
-            (initSevm (childMsg.withBenv benv))
-            (initDevm (childMsg.withBenv benv)) := by
-          refine ⟨h_pre.code, ?_⟩
-          intro h_child_target
-          refine ⟨?_, rfl⟩
-          have h_to_ca : c.toAdr = ca :=
-            hc_target.symm.trans h_child_target
-          change some code.toList = Prog.compile (weth10 dp)
-          rcases h_delegation with
-            ⟨h_none, _, h_code_self, h_not_delegated⟩ |
-            ⟨d, h_some, _, h_code_delegated, h_delegated⟩
-          · rw [h_code_self, h_to_ca]
-            exact h_code
-          · exfalso
-            have h_not : ¬ isValidDelegation (s.getCode ca) :=
-              not_delegation_of_compile h_code
-            apply h_not
-            unfold getDelegatedCodeAddress at h_some
-            split at h_some
-            · rename_i h_valid
-              rw [h_to_ca] at h_valid
-              exact h_valid
-            · cases h_some
-        have h_depth_lt :
-            (initSevm (childMsg.withBenv benv)).depth < sevm.depth := by
-          change sevm.depth - 1 < sevm.depth
-          omega
-        have h_child_fork :
-            CoveredFork (initSevm (childMsg.withBenv benv)).benvStat.fork := by
-          rw [initSevm_benvStat, Msg.withBenv_benvStat,
-            benvAfterTransfer_stat h_bt, callMsg_stat]
-          exact hfork
-        exact ih 0
-          (initSevm (childMsg.withBenv benv))
-          (initDevm (childMsg.withBenv benv))
-          (.ok child) h_exec_child h_depth_lt h_at h_child_fork
-          ⟨h_pre, fun _ => Mem.wf_empty⟩
-    refine ⟨trivial, ?_⟩
-    change Stor.FlashFloor floor (Devm.getStor sf ca)
-    have h_stor : Devm.getStor sf ca = Devm.getStor child ca :=
-      getStor_eq_of_state_eq h_sf_state ca
-    rw [h_stor]
-    exact h_child_post.inv
 
 /-! ### Flash-stable non-reentrant leaves -/
 
 /-! ### Reentrant callback closure -/
 
-/-- The exact Boolean callback tail retains a flash floor across its
-zero-value external call and its world-state-silent decoder. -/
-theorem flashFloorPost_of_run_callBoolCallback
-    (dp : DeployParams) (floor : B256) (ca : Adr)
-    {sevm : Sevm} {s r : Devm} {sel target dataArg : B256}
-    {value : Line}
-    (h_target : sevm.currentTarget = ca)
-    (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((flashFloorSpec dp floor).PreWf ca)
-      ((flashFloorSpec dp floor).Post ca))
-    (h_code : some (s.getCode ca).toList = Prog.compile (weth10 dp))
-    (h_floor : Stor.FlashFloor floor (Devm.getStor s ca))
-    (h_value_stor : Line.Inv Devm.getStor value)
-    (h_value_bal : Line.Inv Devm.getBal value)
-    (h_value_code : Line.Inv Devm.getCode value)
-    (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
-      (callBoolCallback sel target dataArg value) r)
-    (hfork : CoveredFork sevm.benvStat.fork) :
-    (flashFloorSpec dp floor).Post ca sevm r := by
-  obtain ⟨sc, sf, g, inputSize, xs, hpCall, hcall, hbool,
-      h_stor_s_sc, h_bal_s_sc, h_code_s_sc⟩ :=
-    of_run_callBoolCallback dp sel target dataArg value
-      h_value_stor h_value_bal h_value_code run
-  have h_floor_sc : Stor.FlashFloor floor (Devm.getStor sc ca) := by
-    rw [← congrFun h_stor_s_sc ca]
-    exact h_floor
-  have h_code_sc :
-      some (sc.getCode ca).toList = Prog.compile (weth10 dp) := by
-    rw [← h_target, ← h_code_s_sc, h_target]
-    exact h_code
-  have h_post_call := flashFloorPost_of_value_call dp floor ca
-    h_target ih hpCall h_code_sc h_floor_sc hcall hfork
-  obtain ⟨h_stor_tail, h_bal_tail, h_code_tail⟩ :=
-    of_run_call_boolReturn_preserves_fields dp hbool
-  refine ⟨trivial, ?_⟩
-  change Stor.FlashFloor floor (Devm.getStor r ca)
-  rw [← congrFun h_stor_tail ca]
-  exact h_post_call.inv
-
-/-- An accepted `CALL` result (`iszero` followed by the successful zero-flag
-branch) carries both the flash floor and the contract's compiled code to the
-post-guard state. -/
-theorem flashFloorCode_of_call_success_guard
-    (dp : DeployParams) (floor : B256) (ca : Adr)
-    {sevm : Sevm} {sc s6 si sb : Devm}
-    {g c v ii is oi os : B256} {xs : Stack}
-    (h_target : sevm.currentTarget = ca)
-    (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((flashFloorSpec dp floor).PreWf ca)
-      ((flashFloorSpec dp floor).Post ca))
-    (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ sc.stack)
-    (h_code : some (sc.getCode ca).toList = Prog.compile (weth10 dp))
-    (h_floor : Stor.FlashFloor floor (Devm.getStor sc ca))
-    (hcall : Ninst.Run sevm sc call s6)
-    (hiszero : Ninst.Run sevm s6 iszero si)
-    (hpop : Devm.PopBurn [0] si sb)
-    (hfork : CoveredFork sevm.benvStat.fork) :
-    Stor.FlashFloor floor (Devm.getStor sb ca) ∧
-      some (sb.getCode ca).toList = Prog.compile (weth10 dp) := by
-  have h_post_call := flashFloorPost_of_value_call dp floor ca
-    h_target ih hp h_code h_floor hcall hfork
-  have h_stor_s6_si : Devm.getStor s6 = Devm.getStor si :=
-    Line.of_inv Devm.getStor (by line_inv)
-      (Line.Run.cons hiszero Line.Run.nil)
-  have h_stor_si_sb : Devm.getStor si = Devm.getStor sb :=
-    PopBurn.Inv.inv hpop
-  have h_floor_sb : Stor.FlashFloor floor (Devm.getStor sb ca) := by
-    rw [← congrFun h_stor_si_sb ca, ← congrFun h_stor_s6_si ca]
-    exact h_post_call.inv
-  have h_code_nonempty : (sc.getCode ca).toList ≠ [] := by
-    intro he
-    apply Prog.compile_ne_nil (p := weth10 dp)
-    rw [← h_code, he]
-  have h_code_s6_sc : s6.getCode ca = sc.getCode ca :=
-    code_eq_of_ninst_run h_code_nonempty hcall
-  have h_code_s6_si : s6.getCode ca = si.getCode ca :=
-    congrFun (Line.of_inv Devm.getCode (by line_inv)
-      (Line.Run.cons hiszero Line.Run.nil)) ca
-  have h_code_si_sb : si.getCode ca = sb.getCode ca :=
-    getCode_eq_of_state_eq hpop.state ca
-  have h_code_sb_sc : sb.getCode ca = sc.getCode ca :=
-    (h_code_s6_si.trans h_code_si_sb).symm.trans h_code_s6_sc
-  refine ⟨h_floor_sb, ?_⟩
-  rw [h_code_sb_sc]
-  exact h_code
 
 /-- The nonzero-recipient transfer prefix preserves the exact flash counter
 and exposes its continuation state. -/
@@ -3911,8 +3632,9 @@ theorem of_transferNonzeroThen_flash
   have h_error_lookup :
       ((weth10 dp).main :: weth10Aux)[transferBalanceErrorSlot]? =
         some (Func.revertWith "WETH: transfer amount exceeds balance") := by
-    simp [weth10, weth10Aux, transferBalanceErrorSlot,
-      transferBalanceError]
+    simp only [weth10, weth10Aux, transferBalanceError, transferBalanceErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]
   rcases of_run_branch_call_revertWith h_error_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
@@ -3973,134 +3695,6 @@ theorem of_transferNonzeroThen_flash
     h_flash_credit, h_flash_debit,
     ← congrFun h_stor_s_s3 sevm.currentTarget]
 
-/-- Generic caller-burn/value-send prefix used by `withdraw`, `withdrawTo`,
-and the zero-recipient transfer branch.  The sender-specific line is supplied
-only through its exact CALL exposure theorem. -/
-theorem of_callerBurnThen_floor
-    (dp : DeployParams) (floor : B256) (ca : Adr)
-    (amountArg : B256) (send : Line) (sendErrorSlot : Nat)
-    (sendError : String) {next : Func}
-    {sevm : Sevm} {s r : Devm}
-    (h_target : sevm.currentTarget = ca)
-    (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((flashFloorSpec dp floor).PreWf ca)
-      ((flashFloorSpec dp floor).Post ca))
-    (h_code : some (s.getCode ca).toList = Prog.compile (weth10 dp))
-    (h_floor : Stor.FlashFloor floor (Devm.getStor s ca))
-    (h_send : ∀ {s0 r0 : Devm} {value : B256} {xs : Stack},
-      value :: xs <<+ s0.stack → Line.Run sevm s0 send r0 →
-      ∃ sc g target,
-        (g :: target :: value :: 0 :: 0 :: 0 :: 0 :: xs) <<+ sc.stack ∧
-        Ninst.Run sevm sc call r0 ∧
-        Devm.getStor s0 = Devm.getStor sc ∧
-        s0.getCode = sc.getCode)
-    (h_error_lookup :
-      ((weth10 dp).main :: weth10Aux)[sendErrorSlot]? =
-        some (Func.revertWith sendError))
-    (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
-      (loadCallerBalanceAmount amountArg +++ balanceTooSmall +++
-        (.call burnBalanceErrorSlot) <?>
-        (debitLoadedBalance +++
-          caller ::: arg amountArg +++ pushB256 0 ::: emitTransfer +++
-          swap 0 ::: pop :::
-          send +++ iszero :::
-          (.call sendErrorSlot) <?> next)) r)
-    (hfork : CoveredFork sevm.benvStat.fork) :
-    ∃ snext,
-      Stor.FlashFloor floor (Devm.getStor snext ca) ∧
-      some (snext.getCode ca).toList = Prog.compile (weth10 dp) ∧
-      Func.Run ((weth10 dp).main :: weth10Aux) sevm snext next r := by
-  subst ca
-  rcases of_run_prepend (loadCallerBalanceAmount amountArg) _ run with
-    ⟨s1, hload, run1⟩
-  rcases prefix_of_loadCallerBalanceAmount nil_pref hload with
-    ⟨balance, h_balance, hp1⟩
-  rcases of_run_prepend balanceTooSmall _ run1 with
-    ⟨s2, hguard, run2⟩
-  have hp2 :
-      (balance <? Sevm.argWord sevm amountArg) :: balance ::
-        Sevm.argWord sevm amountArg :: sevm.caller.toB256 :: [] <<+
-          s2.stack :=
-    prefix_of_balanceTooSmall hp1 hguard
-  have h_burn_lookup :
-      ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
-        some (Func.revertWith "WETH: burn amount exceeds balance") := by
-    simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
-  rcases of_run_branch_call_revertWith h_burn_lookup run2 with
-    ⟨s3, hpopGuard, run3⟩
-  have hpopStack := hpopGuard.stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
-  rw [hpopStack] at hp2
-  have h_flag : (balance <? Sevm.argWord sevm amountArg) = 0 :=
-    pref_head_unique hp2 (pref_append [0] s3.stack)
-  have h_token_le : Sevm.argWord sevm amountArg ≤ balance := by
-    rw [← B256.not_lt]
-    intro hlt
-    rw [B256.ltCheck, if_pos hlt] at h_flag
-    exact B256.zero_ne_one h_flag.symm
-  rw [h_flag] at hp2
-  have hp3 :
-      [balance, Sevm.argWord sevm amountArg, sevm.caller.toB256] <<+
-        s3.stack := cons_pref_cons_inv hp2
-  have h_stor_s_s3 : Devm.getStor s = Devm.getStor s3 :=
-    (Line.of_inv Devm.getStor (by line_inv) hload).trans
-      ((Line.of_inv Devm.getStor (by line_inv) hguard).trans
-        (PopBurn.Inv.inv hpopGuard))
-  have h_code_s_s3 :
-      s.getCode sevm.currentTarget = s3.getCode sevm.currentTarget :=
-    (congrFun (Line.of_inv Devm.getCode (by line_inv) hload)
-      sevm.currentTarget).trans
-      ((congrFun (Line.of_inv Devm.getCode (by line_inv) hguard)
-        sevm.currentTarget).trans
-        (getCode_eq_of_state_eq hpopGuard.state sevm.currentTarget))
-  have h_balance3 :
-      balance =
-        (Devm.getStor s3 sevm.currentTarget).get sevm.caller.toB256 := by
-    rw [h_balance, congrFun h_stor_s_s3 sevm.currentTarget]
-  rcases of_run_prepend debitLoadedBalance _ run3 with
-    ⟨s4, hdebit, run4⟩
-  obtain ⟨h_dec, h_cover, h_flash⟩ :=
-    debitLoadedBalance_storage (validAdr_toB256 sevm.caller)
-      h_balance3 h_token_le hp3 hdebit
-  let eventLine : Line :=
-    [caller] ++ arg amountArg ++ [pushB256 0] ++ emitTransfer ++
-      [swap 0, pop]
-  rcases of_run_prepend eventLine _ run4 with
-    ⟨s5, hevent, run5⟩
-  have hp5 : Sevm.argWord sevm amountArg :: [] <<+ s5.stack := by
-    apply prefix_of_burnEvent amountArg nil_pref
-    simpa only [eventLine] using hevent
-  rcases of_run_prepend send _ run5 with ⟨s6, hsend, run6⟩
-  obtain ⟨sc, g, target, hpCall, hcall, h_stor_s5_sc,
-      h_code_s5_sc⟩ := h_send hp5 hsend
-  rcases of_run_next run6 with ⟨si, hiszero, run7⟩
-  rcases of_run_branch_call_revertWith h_error_lookup run7 with
-    ⟨sb, hpopCall, hnext⟩
-  have h_stor_s4_sc : Devm.getStor s4 = Devm.getStor sc :=
-    (Line.of_inv Devm.getStor (by line_inv) hevent).trans h_stor_s5_sc
-  have h_code_s3_sc :
-      s3.getCode sevm.currentTarget = sc.getCode sevm.currentTarget :=
-    (congrFun (Line.of_inv Devm.getCode (by line_inv) hdebit)
-      sevm.currentTarget).trans
-      ((congrFun (Line.of_inv Devm.getCode (by line_inv) hevent)
-        sevm.currentTarget).trans
-        (congrFun h_code_s5_sc sevm.currentTarget))
-  have h_code_sc :
-      some (sc.getCode sevm.currentTarget).toList =
-        Prog.compile (weth10 dp) := by
-    rw [← h_code_s3_sc, ← h_code_s_s3]
-    exact h_code
-  have h_floor_sc : Stor.FlashFloor floor
-      (Devm.getStor sc sevm.currentTarget) := by
-    unfold Stor.FlashFloor at h_floor ⊢
-    rw [← congrFun h_stor_s4_sc sevm.currentTarget,
-      h_flash, ← congrFun h_stor_s_s3 sevm.currentTarget]
-    exact h_floor
-  obtain ⟨h_floor_sb, h_code_sb⟩ :=
-    flashFloorCode_of_call_success_guard dp floor sevm.currentTarget
-      rfl ih hpCall h_code_sc h_floor_sc hcall hiszero hpopCall hfork
-  exact ⟨sb, h_floor_sb, h_code_sb, hnext⟩
-
 /-- The normalized-source/nonzero-recipient transfer-from core preserves the
 exact flash counter. -/
 theorem transferFromNonzero_flashStable (dp : DeployParams) :
@@ -4120,8 +3714,9 @@ theorem transferFromNonzero_flashStable (dp : DeployParams) :
   have h_error_lookup :
       ((weth10 dp).main :: weth10Aux)[transferBalanceErrorSlot]? =
         some (Func.revertWith "WETH: transfer amount exceeds balance") := by
-    simp [weth10, weth10Aux, transferBalanceErrorSlot,
-      transferBalanceError]
+    simp only [weth10, weth10Aux, transferBalanceError, transferBalanceErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]
   rcases of_run_branch_call_revertWith h_error_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
@@ -4169,496 +3764,6 @@ theorem transferFromNonzero_flashStable (dp : DeployParams) :
     h_flash_credit, h_flash_debit,
     ← congrFun h_stor_s_s3 sevm.currentTarget]
 
-/-- Generic normalized-source burn/value-send prefix used by
-`transferFromZero` and `withdrawFromCore`. -/
-theorem of_argBurnThen_floor
-    (dp : DeployParams) (floor : B256) (ca : Adr)
-    (ownerArg amountArg : B256) (send : Line) (sendErrorSlot : Nat)
-    (sendError : String) {next : Func}
-    {sevm : Sevm} {s r : Devm}
-    (h_target : sevm.currentTarget = ca)
-    (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((flashFloorSpec dp floor).PreWf ca)
-      ((flashFloorSpec dp floor).Post ca))
-    (h_code : some (s.getCode ca).toList = Prog.compile (weth10 dp))
-    (h_floor : Stor.FlashFloor floor (Devm.getStor s ca))
-    (h_send : ∀ {s0 r0 : Devm} {value : B256} {xs : Stack},
-      value :: xs <<+ s0.stack → Line.Run sevm s0 send r0 →
-      ∃ sc g target,
-        (g :: target :: value :: 0 :: 0 :: 0 :: 0 :: xs) <<+ sc.stack ∧
-        Ninst.Run sevm sc call r0 ∧
-        Devm.getStor s0 = Devm.getStor sc ∧
-        s0.getCode = sc.getCode)
-    (h_error_lookup :
-      ((weth10 dp).main :: weth10Aux)[sendErrorSlot]? =
-        some (Func.revertWith sendError))
-    (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
-      (loadArgBalanceAmount ownerArg amountArg +++ balanceTooSmall +++
-        (.call burnBalanceErrorSlot) <?>
-        (debitLoadedBalance +++
-          addressArg ownerArg +++ arg amountArg +++ pushB256 0 :::
-          emitTransfer +++ swap 0 ::: pop :::
-          send +++ iszero :::
-          (.call sendErrorSlot) <?> next)) r)
-    (hfork : CoveredFork sevm.benvStat.fork) :
-    ∃ snext,
-      Stor.FlashFloor floor (Devm.getStor snext ca) ∧
-      some (snext.getCode ca).toList = Prog.compile (weth10 dp) ∧
-      Func.Run ((weth10 dp).main :: weth10Aux) sevm snext next r := by
-  subst ca
-  rcases of_run_prepend (loadArgBalanceAmount ownerArg amountArg) _ run with
-    ⟨s1, hload, run1⟩
-  rcases prefix_of_loadArgBalanceAmount ownerArg amountArg nil_pref hload with
-    ⟨balance, owner, h_owner, h_balance, hp1⟩
-  rcases of_run_prepend balanceTooSmall _ run1 with
-    ⟨s2, hguard, run2⟩
-  have hp2 :
-      (balance <? Sevm.argWord sevm amountArg) :: balance ::
-        Sevm.argWord sevm amountArg :: owner :: [] <<+ s2.stack :=
-    prefix_of_balanceTooSmall hp1 hguard
-  have h_burn_lookup :
-      ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
-        some (Func.revertWith "WETH: burn amount exceeds balance") := by
-    simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
-  rcases of_run_branch_call_revertWith h_burn_lookup run2 with
-    ⟨s3, hpopGuard, run3⟩
-  have hpopStack := hpopGuard.stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
-  rw [hpopStack] at hp2
-  have h_flag : (balance <? Sevm.argWord sevm amountArg) = 0 :=
-    pref_head_unique hp2 (pref_append [0] s3.stack)
-  have h_token_le : Sevm.argWord sevm amountArg ≤ balance := by
-    rw [← B256.not_lt]
-    intro hlt
-    rw [B256.ltCheck, if_pos hlt] at h_flag
-    exact B256.zero_ne_one h_flag.symm
-  rw [h_flag] at hp2
-  have hp3 : [balance, Sevm.argWord sevm amountArg, owner] <<+ s3.stack :=
-    cons_pref_cons_inv hp2
-  have h_stor_s_s3 : Devm.getStor s = Devm.getStor s3 :=
-    (Line.of_inv Devm.getStor (by line_inv) hload).trans
-      ((Line.of_inv Devm.getStor (by line_inv) hguard).trans
-        (PopBurn.Inv.inv hpopGuard))
-  have h_code_s_s3 :
-      s.getCode sevm.currentTarget = s3.getCode sevm.currentTarget :=
-    (congrFun (Line.of_inv Devm.getCode (by line_inv) hload)
-      sevm.currentTarget).trans
-      ((congrFun (Line.of_inv Devm.getCode (by line_inv) hguard)
-        sevm.currentTarget).trans
-        (getCode_eq_of_state_eq hpopGuard.state sevm.currentTarget))
-  have h_balance3 : balance =
-      (Devm.getStor s3 sevm.currentTarget).get owner := by
-    rw [h_balance, congrFun h_stor_s_s3 sevm.currentTarget]
-  rcases of_run_prepend debitLoadedBalance _ run3 with
-    ⟨s4, hdebit, run4⟩
-  obtain ⟨h_dec, h_cover, h_flash⟩ :=
-    debitLoadedBalance_storage (by
-      rw [h_owner]
-      exact normalizedAddress_valid (Sevm.argWord sevm ownerArg))
-      h_balance3 h_token_le hp3 hdebit
-  let eventLine : Line :=
-    addressArg ownerArg ++ arg amountArg ++ [pushB256 0] ++
-      emitTransfer ++ [swap 0, pop]
-  rcases of_run_prepend eventLine _ run4 with
-    ⟨s5, hevent, run5⟩
-  have hp5 : Sevm.argWord sevm amountArg :: [] <<+ s5.stack := by
-    apply prefix_of_burnEventFromArg ownerArg amountArg nil_pref
-    simpa only [eventLine] using hevent
-  rcases of_run_prepend send _ run5 with ⟨s6, hsend, run6⟩
-  obtain ⟨sc, g, target, hpCall, hcall, h_stor_s5_sc,
-      h_code_s5_sc⟩ := h_send hp5 hsend
-  rcases of_run_next run6 with ⟨si, hiszero, run7⟩
-  rcases of_run_branch_call_revertWith h_error_lookup run7 with
-    ⟨sb, hpopCall, hnext⟩
-  have h_stor_s4_sc : Devm.getStor s4 = Devm.getStor sc :=
-    (Line.of_inv Devm.getStor (by line_inv) hevent).trans h_stor_s5_sc
-  have h_code_s3_sc :
-      s3.getCode sevm.currentTarget = sc.getCode sevm.currentTarget :=
-    (congrFun (Line.of_inv Devm.getCode (by line_inv) hdebit)
-      sevm.currentTarget).trans
-      ((congrFun (Line.of_inv Devm.getCode (by line_inv) hevent)
-        sevm.currentTarget).trans
-        (congrFun h_code_s5_sc sevm.currentTarget))
-  have h_code_sc :
-      some (sc.getCode sevm.currentTarget).toList =
-        Prog.compile (weth10 dp) := by
-    rw [← h_code_s3_sc, ← h_code_s_s3]
-    exact h_code
-  have h_floor_sc : Stor.FlashFloor floor
-      (Devm.getStor sc sevm.currentTarget) := by
-    unfold Stor.FlashFloor at h_floor ⊢
-    rw [← congrFun h_stor_s4_sc sevm.currentTarget,
-      h_flash, ← congrFun h_stor_s_s3 sevm.currentTarget]
-    exact h_floor
-  obtain ⟨h_floor_sb, h_code_sb⟩ :=
-    flashFloorCode_of_call_success_guard dp floor sevm.currentTarget
-      rfl ih hpCall h_code_sc h_floor_sc hcall hiszero hpopCall hfork
-  exact ⟨sb, h_floor_sb, h_code_sb, hnext⟩
-
-/-- The zero-recipient transfer prefix retains a flash floor across its
-accepted ETH call and exposes the continuation state. -/
-theorem of_transferZeroThen_floor
-    (dp : DeployParams) (floor : B256) (ca : Adr)
-    {sevm : Sevm} {s r : Devm} {next : Func}
-    (h_target : sevm.currentTarget = ca)
-    (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((flashFloorSpec dp floor).PreWf ca)
-      ((flashFloorSpec dp floor).Post ca))
-    (h_code : some (s.getCode ca).toList = Prog.compile (weth10 dp))
-    (h_floor : Stor.FlashFloor floor (Devm.getStor s ca))
-    (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
-      (transferZeroThen next) r)
-    (hfork : CoveredFork sevm.benvStat.fork) :
-    ∃ snext,
-      Stor.FlashFloor floor (Devm.getStor snext ca) ∧
-      some (snext.getCode ca).toList = Prog.compile (weth10 dp) ∧
-      Func.Run ((weth10 dp).main :: weth10Aux) sevm snext next r := by
-  subst ca
-  simp only [transferZeroThen] at run
-  rcases of_run_prepend (loadCallerBalanceAmount 1) _ run with
-    ⟨s1, hload, run1⟩
-  rcases prefix_of_loadCallerBalanceAmount nil_pref hload with
-    ⟨balance, h_balance, hp1⟩
-  rcases of_run_prepend balanceTooSmall _ run1 with
-    ⟨s2, hguard, run2⟩
-  have hp2 :
-      (balance <? Sevm.argWord sevm 1) :: balance ::
-        Sevm.argWord sevm 1 :: sevm.caller.toB256 :: [] <<+ s2.stack :=
-    prefix_of_balanceTooSmall hp1 hguard
-  have h_burn_lookup :
-      ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
-        some (Func.revertWith "WETH: burn amount exceeds balance") := by
-    simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
-  rcases of_run_branch_call_revertWith h_burn_lookup run2 with
-    ⟨s3, hpopGuard, run3⟩
-  have hpopStack := hpopGuard.stack
-  simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
-  rw [hpopStack] at hp2
-  have h_flag : (balance <? Sevm.argWord sevm 1) = 0 :=
-    pref_head_unique hp2 (pref_append [0] s3.stack)
-  have h_token_le : Sevm.argWord sevm 1 ≤ balance := by
-    rw [← B256.not_lt]
-    intro hlt
-    rw [B256.ltCheck, if_pos hlt] at h_flag
-    exact B256.zero_ne_one h_flag.symm
-  rw [h_flag] at hp2
-  have hp3 :
-      [balance, Sevm.argWord sevm 1, sevm.caller.toB256] <<+ s3.stack :=
-    cons_pref_cons_inv hp2
-  have h_stor_s_s3 : Devm.getStor s = Devm.getStor s3 :=
-    (Line.of_inv Devm.getStor (by line_inv) hload).trans
-      ((Line.of_inv Devm.getStor (by line_inv) hguard).trans
-        (PopBurn.Inv.inv hpopGuard))
-  have h_code_s_s3 :
-      s.getCode sevm.currentTarget = s3.getCode sevm.currentTarget :=
-    (congrFun (Line.of_inv Devm.getCode (by line_inv) hload)
-      sevm.currentTarget).trans
-      ((congrFun (Line.of_inv Devm.getCode (by line_inv) hguard)
-        sevm.currentTarget).trans
-        (getCode_eq_of_state_eq hpopGuard.state sevm.currentTarget))
-  have h_balance3 :
-      balance =
-        (Devm.getStor s3 sevm.currentTarget).get sevm.caller.toB256 := by
-    rw [h_balance, congrFun h_stor_s_s3 sevm.currentTarget]
-  rcases of_run_prepend debitLoadedBalance _ run3 with
-    ⟨s4, hdebit, run4⟩
-  obtain ⟨h_dec, h_cover, h_flash⟩ :=
-    debitLoadedBalance_storage (validAdr_toB256 sevm.caller)
-      h_balance3 h_token_le hp3 hdebit
-  let eventLine : Line :=
-    [caller] ++ arg 1 ++ [pushB256 0] ++ emitTransfer ++ [swap 0, pop]
-  rcases of_run_prepend eventLine _ run4 with
-    ⟨s5, hevent, run5⟩
-  have hp5 : Sevm.argWord sevm 1 :: [] <<+ s5.stack := by
-    apply prefix_of_burnEvent 1 nil_pref
-    simpa only [eventLine] using hevent
-  rcases of_run_prepend sendValueToCaller _ run5 with
-    ⟨s6, hsend, run6⟩
-  obtain ⟨sc, g, hpCall, hcall, h_stor_s5_sc, h_bal_s5_sc,
-      h_code_s5_sc⟩ := of_sendValueToCaller hp5 hsend
-  rcases of_run_next run6 with ⟨si, hiszero, run7⟩
-  have h_eth_lookup :
-      ((weth10 dp).main :: weth10Aux)[ethTransferErrorSlot]? =
-        some (Func.revertWith "WETH: ETH transfer failed") := by
-    simp [weth10, weth10Aux, ethTransferErrorSlot, ethTransferError]
-  rcases of_run_branch_call_revertWith h_eth_lookup run7 with
-    ⟨sb, hpopCall, hnext⟩
-  have h_stor_s4_sc : Devm.getStor s4 = Devm.getStor sc :=
-    (Line.of_inv Devm.getStor (by line_inv) hevent).trans h_stor_s5_sc
-  have h_code_s3_sc :
-      s3.getCode sevm.currentTarget = sc.getCode sevm.currentTarget :=
-    (congrFun (Line.of_inv Devm.getCode (by line_inv) hdebit)
-      sevm.currentTarget).trans
-      ((congrFun (Line.of_inv Devm.getCode (by line_inv) hevent)
-        sevm.currentTarget).trans
-        (congrFun h_code_s5_sc sevm.currentTarget))
-  have h_code_sc :
-      some (sc.getCode sevm.currentTarget).toList =
-        Prog.compile (weth10 dp) := by
-    rw [← h_code_s3_sc, ← h_code_s_s3]
-    exact h_code
-  have h_floor_sc : Stor.FlashFloor floor
-      (Devm.getStor sc sevm.currentTarget) := by
-    unfold Stor.FlashFloor at h_floor ⊢
-    rw [← congrFun h_stor_s4_sc sevm.currentTarget,
-      h_flash, ← congrFun h_stor_s_s3 sevm.currentTarget]
-    exact h_floor
-  have h_post_call := flashFloorPost_of_value_call dp floor
-    sevm.currentTarget rfl ih hpCall h_code_sc h_floor_sc hcall hfork
-  have h_stor_s6_si : Devm.getStor s6 = Devm.getStor si :=
-    Line.of_inv Devm.getStor (by line_inv)
-      (Line.Run.cons hiszero Line.Run.nil)
-  have h_stor_si_sb : Devm.getStor si = Devm.getStor sb :=
-    PopBurn.Inv.inv hpopCall
-  have h_floor_sb : Stor.FlashFloor floor
-      (Devm.getStor sb sevm.currentTarget) := by
-    rw [← congrFun h_stor_si_sb sevm.currentTarget,
-      ← congrFun h_stor_s6_si sevm.currentTarget]
-    exact h_post_call.inv
-  have h_code_nonempty :
-      (sc.getCode sevm.currentTarget).toList ≠ [] := by
-    intro he
-    apply Prog.compile_ne_nil (p := weth10 dp)
-    rw [← h_code_sc, he]
-  have h_code_s6_sc :
-      s6.getCode sevm.currentTarget = sc.getCode sevm.currentTarget :=
-    code_eq_of_ninst_run h_code_nonempty hcall
-  have h_code_s6_si :
-      s6.getCode sevm.currentTarget = si.getCode sevm.currentTarget :=
-    congrFun (Line.of_inv Devm.getCode (by line_inv)
-      (Line.Run.cons hiszero Line.Run.nil)) sevm.currentTarget
-  have h_code_si_sb :
-      si.getCode sevm.currentTarget = sb.getCode sevm.currentTarget :=
-    getCode_eq_of_state_eq hpopCall.state sevm.currentTarget
-  have h_code_sb_sc :
-      sb.getCode sevm.currentTarget = sc.getCode sevm.currentTarget :=
-    (h_code_s6_si.trans h_code_si_sb).symm.trans h_code_s6_sc
-  refine ⟨sb, h_floor_sb, ?_, hnext⟩
-  rw [h_code_sb_sc]
-  exact h_code_sc
-
-/-- `transferThen` preserves a flash floor up to its arbitrary continuation,
-for both the normalized credit branch and the raw-zero ETH branch. -/
-theorem of_transferThen_floor
-    (dp : DeployParams) (floor : B256) (ca : Adr)
-    {sevm : Sevm} {s r : Devm} {next : Func}
-    (h_target : sevm.currentTarget = ca)
-    (ih : Exec.InvDepth sevm.depth ca (weth10 dp)
-      ((flashFloorSpec dp floor).PreWf ca)
-      ((flashFloorSpec dp floor).Post ca))
-    (h_code : some (s.getCode ca).toList = Prog.compile (weth10 dp))
-    (h_floor : Stor.FlashFloor floor (Devm.getStor s ca))
-    (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
-      (transferThen next) r)
-    (hfork : CoveredFork sevm.benvStat.fork) :
-    ∃ snext,
-      Stor.FlashFloor floor (Devm.getStor snext ca) ∧
-      some (snext.getCode ca).toList = Prog.compile (weth10 dp) ∧
-      Func.Run ((weth10 dp).main :: weth10Aux) sevm snext next r := by
-  subst ca
-  simp only [transferThen] at run
-  rcases of_run_prepend (arg 0) _ run with ⟨s1, harg, run1⟩
-  have hp1 : Sevm.argWord sevm 0 :: [] <<+ s1.stack :=
-    prefix_of_arg nil_pref harg
-  rcases of_run_next run1 with ⟨s2, hiszero, run2⟩
-  have hp2 : (Sevm.argWord sevm 0 =? 0) :: [] <<+ s2.stack :=
-    prefix_of_iszero hiszero hp1
-  rcases of_run_branch run2 with
-      ⟨s3, hpop, hnonzero⟩ |
-      ⟨w, s3, s4, hnz, hpop, hburn, hzero⟩
-  · have h_stor_s_s3 : Devm.getStor s = Devm.getStor s3 :=
-      (Line.of_inv Devm.getStor (by line_inv) harg).trans
-        ((Line.of_inv Devm.getStor (by line_inv)
-          (Line.Run.cons hiszero Line.Run.nil)).trans
-            (PopBurn.Inv.inv hpop))
-    have h_code_s_s3 :
-        s.getCode sevm.currentTarget = s3.getCode sevm.currentTarget :=
-      (congrFun (Line.of_inv Devm.getCode (by line_inv) harg)
-        sevm.currentTarget).trans
-        ((congrFun (Line.of_inv Devm.getCode (by line_inv)
-          (Line.Run.cons hiszero Line.Run.nil))
-          sevm.currentTarget).trans
-          (getCode_eq_of_state_eq hpop.state sevm.currentTarget))
-    obtain ⟨snext, h_flash, h_code_next, hnext⟩ :=
-      of_transferNonzeroThen_flash dp hnonzero
-    refine ⟨snext, ?_, ?_, hnext⟩
-    · unfold Stor.FlashFloor at h_floor ⊢
-      rw [h_flash, ← congrFun h_stor_s_s3 sevm.currentTarget]
-      exact h_floor
-    · rw [h_code_next, ← h_code_s_s3]
-      exact h_code
-  · have h_stor_s_s4 : Devm.getStor s = Devm.getStor s4 :=
-      (Line.of_inv Devm.getStor (by line_inv) harg).trans
-        ((Line.of_inv Devm.getStor (by line_inv)
-          (Line.Run.cons hiszero Line.Run.nil)).trans
-            ((PopBurn.Inv.inv hpop).trans (Burn.Inv.inv hburn)))
-    have h_code_s_s4 :
-        s.getCode sevm.currentTarget = s4.getCode sevm.currentTarget :=
-      (congrFun (Line.of_inv Devm.getCode (by line_inv) harg)
-        sevm.currentTarget).trans
-        ((congrFun (Line.of_inv Devm.getCode (by line_inv)
-          (Line.Run.cons hiszero Line.Run.nil))
-          sevm.currentTarget).trans
-          ((getCode_eq_of_state_eq hpop.state sevm.currentTarget).trans
-            (getCode_eq_of_state_eq hburn.state sevm.currentTarget)))
-    have h_floor4 : Stor.FlashFloor floor
-        (Devm.getStor s4 sevm.currentTarget) := by
-      unfold Stor.FlashFloor at h_floor ⊢
-      rw [← congrFun h_stor_s_s4 sevm.currentTarget]
-      exact h_floor
-    have h_code4 :
-        some (s4.getCode sevm.currentTarget).toList =
-          Prog.compile (weth10 dp) := by
-      rw [← h_code_s_s4]
-      exact h_code
-    exact of_transferZeroThen_floor dp floor sevm.currentTarget
-      rfl ih h_code4 h_floor4 hzero hfork
-
-theorem flashFloorSpec_transferFromNonzero_funcSound
-    (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
-      transferFromNonzero :=
-  flashFloor_funcSound_of_stable dp floor ca
-    (transferFromNonzero_flashStable dp)
-
-theorem flashFloorSpec_transferFromZero_funcSound
-    (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
-      transferFromZero := by
-  intro sevm s r hfork h_target h_pre ih run
-  change Func.Run ((weth10 dp).main :: weth10Aux) sevm s
-    transferFromZero r at run
-  have h_floor := h_pre.inv.1 h_target
-  change Stor.FlashFloor floor (Devm.getStor s ca) at h_floor
-  obtain ⟨snext, h_floor_next, h_code_next, hreturn⟩ :=
-    of_argBurnThen_floor dp floor ca 0 2 sendValueToCaller
-      ethTransferErrorSlot "WETH: ETH transfer failed"
-      h_target ih h_pre.code h_floor (by
-        intro s0 r0 value xs hp hsend
-        rcases of_sendValueToCaller hp hsend with
-          ⟨sc, g, hpCall, hcall, hstor, hbal, hcode⟩
-        exact ⟨sc, g, sevm.caller.toB256, hpCall, hcall, hstor, hcode⟩)
-      (by
-        simp [weth10, weth10Aux, ethTransferErrorSlot,
-          ethTransferError])
-      (by simpa only [transferFromZero] using run) hfork
-  refine ⟨trivial, ?_⟩
-  change Stor.FlashFloor floor (Devm.getStor r ca)
-  have hs : Devm.getStor snext = Devm.getStor r :=
-    Func.of_inv Devm.getStor Devm.getStor (by func_inv) hreturn
-  rw [← congrFun hs ca]
-  exact h_floor_next
-
-/-- A floor-only counterpart of `backedPre_of_silent`. -/
-theorem flashFloorPre_of_silent
-    (dp : DeployParams) (floor : B256) (ca : Adr)
-    {sevm : Sevm} {s sc : Devm}
-    (h_pre : (flashFloorSpec dp floor).Pre ca sevm s)
-    (h_silent : Stor.Weth10Silent
-      (Devm.getStor s ca) (Devm.getStor sc ca))
-    (h_code : Devm.getCode s ca = Devm.getCode sc ca) :
-    (flashFloorSpec dp floor).Pre ca sevm sc := by
-  refine ⟨?_, trivial, ?_, ?_⟩
-  · rw [← h_code]
-    exact h_pre.code
-  · intro h_target
-    have h := h_pre.inv.1 h_target
-    change Stor.FlashFloor floor (Devm.getStor sc ca)
-    unfold Stor.FlashFloor at h ⊢
-    rw [h_silent.2]
-    exact h
-  · intro h_target
-    have h := h_pre.inv.2 h_target
-    change Stor.FlashFloor floor (Devm.getStor sc ca)
-    unfold Stor.FlashFloor at h ⊢
-    rw [h_silent.2]
-    exact h
-
-theorem flashFloorSpec_transferFromCore_funcSound
-    (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
-      transferFromCore := by
-  intro sevm s r hfork h_target h_pre ih run
-  change Func.Run ((weth10 dp).main :: weth10Aux) sevm s
-    transferFromCore r at run
-  simp only [transferFromCore] at run
-  rcases of_run_prepend (arg 1) _ run with ⟨s1, harg, run1⟩
-  have hp1 : Sevm.argWord sevm 1 :: [] <<+ s1.stack :=
-    prefix_of_arg nil_pref harg
-  rcases of_run_next run1 with ⟨s2, hiszero, run2⟩
-  have hp2 : (Sevm.argWord sevm 1 =? 0) :: [] <<+ s2.stack :=
-    prefix_of_iszero hiszero hp1
-  rcases of_run_branch run2 with
-      ⟨s3, hpop, hnonzero⟩ |
-      ⟨w, s3, s4, hnz, hpop, hburn, hzero⟩
-  · have h_stor_s_s3 : Devm.getStor s = Devm.getStor s3 :=
-      (Line.of_inv Devm.getStor (by line_inv) harg).trans
-        ((Line.of_inv Devm.getStor (by line_inv)
-          (Line.Run.cons hiszero Line.Run.nil)).trans
-            (PopBurn.Inv.inv hpop))
-    have h_code_s_s3 :
-        s.getCode sevm.currentTarget = s3.getCode sevm.currentTarget :=
-      (congrFun (Line.of_inv Devm.getCode (by line_inv) harg)
-        sevm.currentTarget).trans
-        ((congrFun (Line.of_inv Devm.getCode (by line_inv)
-          (Line.Run.cons hiszero Line.Run.nil))
-          sevm.currentTarget).trans
-          (getCode_eq_of_state_eq hpop.state sevm.currentTarget))
-    have h_pre3 := flashFloorPre_of_silent dp floor ca h_pre
-      (Stor.Weth10Silent.of_eq
-        (congrFun h_stor_s_s3 ca))
-      (by simpa only [h_target] using h_code_s_s3)
-    exact flashFloorSpec_transferFromNonzero_funcSound dp floor ca
-      hfork h_target h_pre3 ih hnonzero
-  · have h_stor_s_s4 : Devm.getStor s = Devm.getStor s4 :=
-      (Line.of_inv Devm.getStor (by line_inv) harg).trans
-        ((Line.of_inv Devm.getStor (by line_inv)
-          (Line.Run.cons hiszero Line.Run.nil)).trans
-            ((PopBurn.Inv.inv hpop).trans (Burn.Inv.inv hburn)))
-    have h_code_s_s4 :
-        s.getCode sevm.currentTarget = s4.getCode sevm.currentTarget :=
-      (congrFun (Line.of_inv Devm.getCode (by line_inv) harg)
-        sevm.currentTarget).trans
-        ((congrFun (Line.of_inv Devm.getCode (by line_inv)
-          (Line.Run.cons hiszero Line.Run.nil))
-          sevm.currentTarget).trans
-          ((getCode_eq_of_state_eq hpop.state sevm.currentTarget).trans
-            (getCode_eq_of_state_eq hburn.state sevm.currentTarget)))
-    have h_pre4 := flashFloorPre_of_silent dp floor ca h_pre
-      (Stor.Weth10Silent.of_eq
-        (congrFun h_stor_s_s4 ca))
-      (by simpa only [h_target] using h_code_s_s4)
-    exact flashFloorSpec_transferFromZero_funcSound dp floor ca
-      hfork h_target h_pre4 ih hzero
-
-theorem flashFloorSpec_withdrawFromCore_funcSound
-    (dp : DeployParams) (floor : B256) (ca : Adr) :
-    (flashFloorSpec dp floor).FuncSoundNoMem ca weth10Aux
-      withdrawFromCore := by
-  intro sevm s r hfork h_target h_pre ih run
-  change Func.Run ((weth10 dp).main :: weth10Aux) sevm s
-    withdrawFromCore r at run
-  have h_floor := h_pre.inv.1 h_target
-  change Stor.FlashFloor floor (Devm.getStor s ca) at h_floor
-  obtain ⟨snext, h_floor_next, h_code_next, hstop⟩ :=
-    of_argBurnThen_floor dp floor ca 0 2 (sendValueToArg 1)
-      etherTransferErrorSlot "WETH: Ether transfer failed"
-      h_target ih h_pre.code h_floor (by
-        intro s0 r0 value xs hp hsend
-        rcases of_sendValueToArg 1 hp hsend with
-          ⟨sc, g, hpCall, hcall, hstor, hbal, hcode⟩
-        exact ⟨sc, g, Sevm.argWord sevm 1, hpCall, hcall,
-          hstor, hcode⟩)
-      (by
-        simp [weth10, weth10Aux, etherTransferErrorSlot,
-          etherTransferError])
-      (by simpa only [withdrawFromCore] using run) hfork
-  refine ⟨trivial, ?_⟩
-  change Stor.FlashFloor floor (Devm.getStor r ca)
-  have hs : Devm.getStor snext = Devm.getStor r :=
-    Func.of_inv Devm.getStor Devm.getStor (by func_inv) hstop
-  rw [← congrFun hs ca]
-  exact h_floor_next
 
 /-! ### Exact flash settlement -/
 
@@ -4749,7 +3854,9 @@ theorem flashBurn_storage_at_receiver
   have h_burn_lookup :
       ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
         some (Func.revertWith "WETH: burn amount exceeds balance") := by
-    simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
+    simp only [weth10, weth10Aux, burnBalanceError, burnBalanceErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]
   rcases of_run_branch_call_revertWith h_burn_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
@@ -4895,7 +4002,9 @@ theorem flashBurn_storage_get_of_not_valid
   have hlookup :
       ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
         some (Func.revertWith "WETH: burn amount exceeds balance") := by
-    simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
+    simp only [weth10, weth10Aux, burnBalanceError, burnBalanceErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]
   rcases of_run_branch_call_revertWith hlookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
@@ -5035,7 +4144,8 @@ theorem of_run_flashSettle
   let key := allowanceTagWord ||| (allowancePayloadMask &&& hash)
   have h_burn_lookup :
       ((weth10 dp).main :: weth10Aux)[flashBurnSlot]? = some flashBurn := by
-    simp [weth10, weth10Aux, flashBurnSlot]
+    simp only [weth10, weth10Aux, flashBurnSlot, List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   rcases of_run_branch runLoad with
       ⟨sf, hfinitePop, hfinite⟩ |
       ⟨wmax, sm1, sm2, hnzmax, hmaxPop, hmaxBurn, hmax⟩
@@ -5070,7 +4180,9 @@ theorem of_run_flashSettle
     have h_allowance_lookup :
         ((weth10 dp).main :: weth10Aux)[allowanceErrorSlot]? =
           some (Func.revertWith "WETH: request exceeds allowance") := by
-      simp [weth10, weth10Aux, allowanceErrorSlot, allowanceError]
+      simp only [weth10, weth10Aux, allowanceError, allowanceErrorSlot, List.length_cons,
+        List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos,
+        List.getElem_cons_succ, List.getElem_cons_zero]
     rcases of_run_branch_call_revertWith h_allowance_lookup runGuard with
       ⟨sb, hguardPop, runMutate⟩
     have hguardStack := hguardPop.stack
@@ -5301,9 +4413,9 @@ theorem of_extcodesize_frame
   rcases Except.bind_eq_ok hrun with
     ⟨⟨adr, d1⟩, hpopAdr, hrun⟩
   rw [Devm.popToAdr_def] at hpopAdr
-  dsimp [(· <&> ·), Functor.mapRev, Functor.map, Except.map] at hpopAdr
+  dsimp only [Functor.mapRev, Functor.map, Except.map] at hpopAdr
   rcases hpop : Devm.pop s with _ | ⟨word, d0⟩ <;>
-    simp [hpop] at hpopAdr
+    simp only [hpop, reduceCtorEq, Except.ok.injEq] at hpopAdr
   rcases hpopAdr with ⟨rfl, rfl⟩
   have hpop' := Devm.pop_of_pop hpop
   have hx : x = word :=
@@ -5547,7 +4659,9 @@ theorem of_flashLoan_toCall_frame
   have h_token_lookup :
       ((weth10 dp).main :: weth10Aux)[flashTokenErrorSlot]? =
         some (Func.revertWith "WETH: flash mint only WETH10") := by
-    simp [weth10, weth10Aux, flashTokenErrorSlot, flashTokenError]
+    simp only [weth10, weth10Aux, flashTokenError, flashTokenErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]
   rcases of_run_branch_call_revertWith h_token_lookup run0 with
     ⟨st1, htokenPop, run1⟩
   have htokenStack := htokenPop.stack
@@ -5561,7 +4675,7 @@ theorem of_flashLoan_toCall_frame
     by_contra hne
     have hne' : sevm.currentTarget.toB256 ≠ Sevm.argWord sevm 1 :=
       Ne.symm hne
-    simp [B256.eqCheck, hne'] at h_token_flag
+    simp only [B256.eqCheck, hne', ↓reduceIte] at h_token_flag
     exact B256.zero_ne_one h_token_flag
   have hstor := hstor.trans (PopBurn.Inv.inv htokenPop)
   have hcode := hcode.trans
@@ -5610,8 +4724,9 @@ theorem of_flashLoan_toCall_frame
   have h_individual_lookup :
       ((weth10 dp).main :: weth10Aux)[individualLimitErrorSlot]? =
         some (Func.revertWith "WETH: individual loan limit exceeded") := by
-    simp [weth10, weth10Aux, individualLimitErrorSlot,
-      individualLimitError]
+    simp only [weth10, weth10Aux, individualLimitError, individualLimitErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]
   rcases of_run_branch_call_revertWith h_individual_lookup run2 with
     ⟨sa5, hamountPop, run3⟩
   have hpopStack := hamountPop.stack
@@ -5750,7 +4865,9 @@ theorem of_flashLoan_toCall_frame
   have h_total_lookup :
       ((weth10 dp).main :: weth10Aux)[totalLimitErrorSlot]? =
         some (Func.revertWith "WETH: total loan limit exceeded") := by
-    simp [weth10, weth10Aux, totalLimitErrorSlot, totalLimitError]
+    simp only [weth10, weth10Aux, totalLimitError, totalLimitErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]
   rcases of_run_branch_call_revertWith h_total_lookup run5 with
     ⟨st8, htotalPop, run6⟩
   have htotalStack := htotalPop.stack
@@ -6004,7 +5121,7 @@ theorem of_flashLoan_toCall_frame
     intro hnil
     have hlen := B256.length_toBytes (Sevm.argWord sevm 2)
     rw [hnil] at hlen
-    simp at hlen
+    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
   have h_event_data : (ec5.memory.read 0 32).1 =
       (Sevm.argWord sevm 2).toBytes := by
     rw [← hmem_ec2_ec5, hmemE2']
@@ -6466,7 +5583,9 @@ theorem of_run_flashLoanFromCall
     have h_failed_lookup :
         ((weth10 dp).main :: weth10Aux)[flashFailedErrorSlot]? =
           some (Func.revertWith "WETH: flash loan failed") := by
-      simp [weth10, weth10Aux, flashFailedErrorSlot, flashFailedError]
+      simp only [weth10, weth10Aux, flashFailedError, flashFailedErrorSlot, List.length_cons,
+        List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos,
+        List.getElem_cons_succ, List.getElem_cons_zero]
     rcases of_run_branch_call_revertWith h_failed_lookup run5 with
       ⟨s6, hpopCheck, run6⟩
     rcases of_run_next run6 with ⟨s7, hpop1, run7⟩
@@ -6476,7 +5595,8 @@ theorem of_run_flashLoanFromCall
     have h_settle_lookup :
         ((weth10 dp).main :: weth10Aux)[flashSettleSlot]? =
           some flashSettle := by
-      simp [weth10, weth10Aux, flashSettleSlot]
+      simp only [weth10, weth10Aux, flashSettleSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
     have hf : f = flashSettle := by
       rw [h_settle_lookup] at hget
       exact Option.some.inj hget.symm
@@ -6513,110 +5633,23 @@ theorem of_run_flashLoanFromCall
     have h_bubble_lookup :
         ((weth10 dp).main :: weth10Aux)[bubbleRevertSlot]? =
           some bubbleRevert := by
-      simp [weth10, weth10Aux, bubbleRevertSlot]
+      simp only [weth10, weth10Aux, bubbleRevertSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
     have hf : f = bubbleRevert := by
       rw [h_bubble_lookup] at hget
       exact Option.some.inj hget.symm
     subst f
     exact absurd hbubble not_run_bubbleRevert
 
-/-! ### Relational flash-floor dispatch
 
-A fixed-floor `FuncSoundNoMem` induction hypothesis cannot be instantiated at
-the
-larger counter created immediately before a flash callback.  The relation
-below quantifies the floor outside `Pre`/`Post`; a successful subexecution can
-therefore be reused at the counter actually present at that subexecution's
-entry. -/
 
-/-- Every admissible flash floor at `pre` remains admissible at `post`. -/
-def FlashFloorsRel (dp : DeployParams) (ca : Adr)
-    (_sevm : Sevm) (pre post : Devm) : Prop :=
-  ∀ floor,
-    (flashFloorSpec dp floor).Pre ca _sevm pre →
-    (flashFloorSpec dp floor).Post ca _sevm post
 
-/-- The relational deeper-frame hypothesis used only by the flash-floor
-closure. -/
-def FlashFloorsDepth (dp : DeployParams) (ca : Adr) (depth : Nat) : Prop :=
-  ForallSubExec depth ca (weth10 dp) fun sevm pre post =>
-    CoveredFork sevm.benvStat.fork → FlashFloorsRel dp ca sevm pre post
-
-/-- A selector body preserves an arbitrary caller-supplied floor while its
-deeper WETH10 executions preserve every admissible floor. -/
-def FloorRelFuncSound (dp : DeployParams) (ca : Adr) (f : Func) : Prop :=
-  ∀ {floor : B256} {sevm : Sevm} {s r : Devm},
-    CoveredFork sevm.benvStat.fork →
-    sevm.currentTarget = ca →
-    (flashFloorSpec dp floor).Pre ca sevm s →
-    FlashFloorsDepth dp ca sevm.depth →
-    Func.Run ((weth10 dp).main :: weth10Aux) sevm s f r →
-    (flashFloorSpec dp floor).Post ca sevm r
-
-/-- Specialize a relational deeper-frame hypothesis at one concrete floor. -/
-theorem flashFloorInvDepth_of_rel
-    (dp : DeployParams) (ca : Adr) (floor : B256) {depth : Nat}
-    (ih : FlashFloorsDepth dp ca depth) :
-    Exec.InvDepth depth ca (weth10 dp)
-      ((flashFloorSpec dp floor).PreWf ca)
-      ((flashFloorSpec dp floor).Post ca) := by
-  intro pc' sevm' pre' exn' ex' h_depth h_at
-  cases exn' with
-  | error e => simp only [ifOk, implies_true]
-  | ok post' =>
-    intro hfork' h_pre'
-    exact ih pc' sevm' pre' post' ex' h_depth h_at hfork' floor h_pre'.pre
-
-/-- Generated-dispatch decomposition for the relational leaf interface. -/
-theorem flashFloorPost_of_run_dispatch
-    (dp : DeployParams) (ca : Adr)
-    (h_funcs : ∀ p ∈ weth10Funcs dp,
-      FloorRelFuncSound dp ca p.2)
-    (h_fall : FloorRelFuncSound dp ca Func.revert)
-    {floor : B256} {sevm : Sevm} {s r : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (h_target : sevm.currentTarget = ca)
-    (h_pre : (flashFloorSpec dp floor).Pre ca sevm s)
-    (ih : FlashFloorsDepth dp ca sevm.depth)
-    (run : Func.Run ((weth10 dp).main :: weth10Aux) sevm s
-      (dispatchWith fallbackSlot (weth10Tree dp)) r) :
-    (flashFloorSpec dp floor).Post ca sevm r := by
-  apply
-    (@dispatchWith_inv
-      ((weth10 dp).main :: weth10Aux) fallbackSlot Func.revert
-      (fun e s =>
-        CoveredFork e.benvStat.fork ∧
-        e.currentTarget = ca ∧
-        (flashFloorSpec dp floor).Pre ca e s ∧
-        FlashFloorsDepth dp ca e.depth)
-      (fun e r => (flashFloorSpec dp floor).Post ca e r)
-      ?_ ?_ ?_ ?_ (weth10Tree dp) ?_
-      sevm s r ⟨hfork, h_target, h_pre, ih⟩ run)
-  · intro e s0 x w s' s'' ⟨h_f, h_ct, hp, hih⟩ hline hpop
-    refine ⟨h_f, h_ct, ?_, hih⟩
-    have h_state : s0.state = s'.state :=
-      Line.of_inv Devm.state (by line_inv) hline
-    exact hp.state_eq (hpop.state.symm.trans h_state.symm)
-  · intro e s0 x w s' s'' ⟨h_f, h_ct, hp, hih⟩ hline hpop
-    refine ⟨h_f, h_ct, ?_, hih⟩
-    have h_state : s0.state = s'.state :=
-      Line.of_inv Devm.state (by line_inv) hline
-    exact hp.state_eq (hpop.state.symm.trans h_state.symm)
-  · simp [weth10, weth10Aux, fallbackSlot]
-  · intro e s0 s' r0 ⟨h_f, h_ct, hp, hih⟩ hburn hrun
-    exact h_fall h_f h_ct (hp.state_eq hburn.state.symm) hih hrun
-  · intro e s0 r0 wf h_mem ⟨h_f, h_ct, hp, hih⟩ hrun
-    exact h_funcs wf
-      (DispatchTree.mem_of_mem_ofSorted
-        (List.cons_ne_nil _ _) h_mem)
-      h_f h_ct hp hih hrun
 
 /-! ### Exact flash-counter stability
 
-The floor relation above is deliberately one-sided.  Flash settlement also
-needs the stronger fact that a successful reentrant WETH10 dispatch restores
-the exact counter present at its entry.  This relation is kept separate from
-the frozen backing spec and from the floor relation. -/
+Flash settlement needs the fact that a successful reentrant WETH10 dispatch
+restores the exact counter present at its entry.  The exact-counter relation
+is kept separate from the frozen backing spec. -/
 
 /-- Equality to one caller-chosen flash-counter value. -/
 def Stor.FlashAt (flash : B256) (s : Stor) : Prop :=
@@ -6888,7 +5921,7 @@ theorem flashExactRel_of_value_call
     · have : child.error.isSome = true := by
         rw [← h_eq]
         exact h_err2
-      simp [h_child_clean] at this
+      simp only [h_child_clean, Bool.false_eq_true] at this
     rw [h_eq_child] at h_exec h_err2
     have h_child_exact :
         FlashExactRel dp ca (initSevm (childMsg.withBenv benv))
@@ -7044,7 +6077,7 @@ theorem backedPost_of_static_call
     · have : child.error.isSome = true := by
         rw [← h_eq]
         exact h_err2
-      simp [h_child_clean] at this
+      simp only [h_child_clean, Bool.false_eq_true] at this
     rw [h_eq_child] at h_exec h_err2
     have h_child_post : (backedSpec weth10 dp).Post ca
         (initSevm (childMsg.withBenv benv)) child := by
@@ -7183,7 +6216,7 @@ theorem flashExactRel_of_static_call
     · have : child.error.isSome = true := by
         rw [← h_eq]
         exact h_err2
-      simp [h_child_clean] at this
+      simp only [h_child_clean, Bool.false_eq_true] at this
     rw [h_eq_child] at h_exec h_err2
     have h_child_exact :
         FlashExactRel dp ca (initSevm (childMsg.withBenv benv))
@@ -7467,7 +6500,7 @@ private lemma exists_head_of_run_mstoreAt
   injection hs with hoff htail
   refine ⟨word, t.stack, ?_⟩
   rw [htail]
-  simpa using (pref_append (word :: t.stack) [])
+  simpa only [List.append_nil] using (pref_append (word :: t.stack) [])
 
 /-- Stack and world frame at permit's recovery `STATICCALL`. -/
 private theorem permitRecoverFlashPrepare_frame
@@ -7775,12 +6808,16 @@ private theorem permitSignerFlashGuards_balanceSilent
     · rcases of_run_call hinvalid2 with
         ⟨f, u, hget, hcallBurn, hrev⟩
       have hf : f = invalidPermitError := by
-        simpa [weth10Aux, invalidPermitErrorSlot] using hget.symm
+        simpa only [weth10Aux, invalidPermitErrorSlot, List.length_cons, List.length_nil, zero_add,
+          Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+          Option.some.injEq] using hget.symm
       subst f
       exact absurd hrev Func.not_run_revertWith
   · rcases of_run_call hinvalid1 with ⟨f, u, hget, hcallBurn, hrev⟩
     have hf : f = invalidPermitError := by
-      simpa [weth10Aux, invalidPermitErrorSlot] using hget.symm
+      simpa only [weth10Aux, invalidPermitErrorSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using hget.symm
     subst f
     exact absurd hrev Func.not_run_revertWith
 
@@ -7852,13 +6889,17 @@ private theorem permitSignerFlashGuards_exactRel
     · rcases of_run_call hinvalid2 with
         ⟨f, u, hget, hcallBurn, hrev⟩
       have hf : f = invalidPermitError := by
-        simpa [weth10Aux, invalidPermitErrorSlot] using hget.symm
+        simpa only [weth10Aux, invalidPermitErrorSlot, List.length_cons, List.length_nil, zero_add,
+          Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+          Option.some.injEq] using hget.symm
       subst f
       exact absurd hrev Func.not_run_revertWith
   · rcases of_run_call hinvalid1 with
       ⟨f, u, hget, hcallBurn, hrev⟩
     have hf : f = invalidPermitError := by
-      simpa [weth10Aux, invalidPermitErrorSlot] using hget.symm
+      simpa only [weth10Aux, invalidPermitErrorSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using hget.symm
     subst f
     exact absurd hrev Func.not_run_revertWith
 
@@ -7923,13 +6964,17 @@ private theorem permitSignerFlashGuards_backedPost
     · rcases of_run_call hinvalid2 with
         ⟨f, u, hget, hcallBurn, hrev⟩
       have hf : f = invalidPermitError := by
-        simpa [weth10Aux, invalidPermitErrorSlot] using hget.symm
+        simpa only [weth10Aux, invalidPermitErrorSlot, List.length_cons, List.length_nil, zero_add,
+          Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+          Option.some.injEq] using hget.symm
       subst f
       exact absurd hrev Func.not_run_revertWith
   · rcases of_run_call hinvalid1 with
       ⟨f, u, hget, hcallBurn, hrev⟩
     have hf : f = invalidPermitError := by
-      simpa [weth10Aux, invalidPermitErrorSlot] using hget.symm
+      simpa only [weth10Aux, invalidPermitErrorSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using hget.symm
     subst f
     exact absurd hrev Func.not_run_revertWith
 
@@ -8054,7 +7099,9 @@ private theorem permitDomainFlashDispatch_balanceOwnSilent
     rcases of_run_call hcall with
       ⟨f, recoverPre, hget, hcallBurn, hrecover⟩
     have hf : f = permitRecover := by
-      simpa [weth10Aux, permitRecoverSlot] using hget.symm
+      simpa only [weth10Aux, permitRecoverSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.lt_add_one, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using hget.symm
     subst f
     have hstor : Devm.getStor s = Devm.getStor recoverPre := by
       calc
@@ -8076,7 +7123,9 @@ private theorem permitDomainFlashDispatch_balanceOwnSilent
     rcases of_run_call hcall with
       ⟨f, recoverPre, hget, hcallBurn, hrecover⟩
     have hf : f = permitRecover := by
-      simpa [weth10Aux, permitRecoverSlot] using hget.symm
+      simpa only [weth10Aux, permitRecoverSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.lt_add_one, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using hget.symm
     subst f
     have hstor : Devm.getStor s = Devm.getStor recoverPre := by
       calc
@@ -8139,7 +7188,9 @@ private theorem permitDomainFlashDispatch_exactRel
     rcases of_run_call hcall with
       ⟨f, t, hget, hcallBurn, hrecover⟩
     have hf : f = permitRecover := by
-      simpa [weth10Aux, permitRecoverSlot] using hget.symm
+      simpa only [weth10Aux, permitRecoverSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.lt_add_one, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using hget.symm
     subst f
     have hstor : Devm.getStor s = Devm.getStor t := by
       calc
@@ -8181,7 +7232,9 @@ private theorem permitDomainFlashDispatch_exactRel
     rcases of_run_call hcall with
       ⟨f, t, hget, hcallBurn, hrecover⟩
     have hf : f = permitRecover := by
-      simpa [weth10Aux, permitRecoverSlot] using hget.symm
+      simpa only [weth10Aux, permitRecoverSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.lt_add_one, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using hget.symm
     subst f
     have hstor : Devm.getStor s = Devm.getStor t := by
       calc
@@ -8277,7 +7330,9 @@ private theorem permitDomainFlashDispatch_backed
     rcases of_run_call hcall with
       ⟨f, t, hget, hcallBurn, hrecover⟩
     have hf : f = permitRecover := by
-      simpa [weth10Aux, permitRecoverSlot] using hget.symm
+      simpa only [weth10Aux, permitRecoverSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.lt_add_one, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using hget.symm
     subst f
     have hstor : Devm.getStor s = Devm.getStor t := by
       calc
@@ -8325,7 +7380,9 @@ private theorem permitDomainFlashDispatch_backed
     rcases of_run_call hcall with
       ⟨f, t, hget, hcallBurn, hrecover⟩
     have hf : f = permitRecover := by
-      simpa [weth10Aux, permitRecoverSlot] using hget.symm
+      simpa only [weth10Aux, permitRecoverSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.lt_add_one, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using hget.symm
     subst f
     have hstor : Devm.getStor s = Devm.getStor t := by
       calc
@@ -8518,7 +7575,9 @@ private theorem permitBody_balanceOwnSilent
   · rcases of_run_call hexpired with
       ⟨f, u, hget, hcallBurn, hrev⟩
     have hf : f = expiredPermitError := by
-      simpa [weth10Aux, expiredPermitErrorSlot] using hget.symm
+      simpa only [weth10Aux, expiredPermitErrorSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using hget.symm
     subst f
     exact absurd hrev Func.not_run_revertWith
 
@@ -8558,7 +7617,9 @@ private theorem permitBody_exactRelFuncSound
   · rcases of_run_call hexpired with
       ⟨f, u, hget, hcallBurn, hrev⟩
     have hf : f = expiredPermitError := by
-      simpa [weth10Aux, expiredPermitErrorSlot] using hget.symm
+      simpa only [weth10Aux, expiredPermitErrorSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using hget.symm
     subst f
     exact absurd hrev Func.not_run_revertWith
 
@@ -8605,7 +7666,9 @@ private theorem permitBody_backed
   · rcases of_run_call hexpired with
       ⟨f, u, hget, hcallBurn, hrev⟩
     have hf : f = expiredPermitError := by
-      simpa [weth10Aux, expiredPermitErrorSlot] using hget.symm
+      simpa only [weth10Aux, expiredPermitErrorSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using hget.symm
     subst f
     exact absurd hrev Func.not_run_revertWith
 
@@ -8727,7 +7790,8 @@ theorem flashExactPost_of_run_dispatch
     have h_state : s0.state = s'.state :=
       Line.of_inv Devm.state (by line_inv) hline
     exact hp.state_eq (hpop.state.symm.trans h_state.symm)
-  · simp [weth10, weth10Aux, fallbackSlot]
+  · simp only [weth10, weth10Aux, fallbackSlot, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.one_lt_ofNat, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   · intro e s0 s' r0 ⟨h_f, h_ct, hp, hih⟩ hburn hrun
     have hpre := hp.state_eq hburn.state.symm
     exact (flashExactSpecsRel_of_rel dp ca
@@ -8902,7 +7966,9 @@ theorem of_transferZeroThen_exact
   have h_burn_lookup :
       ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
         some (Func.revertWith "WETH: burn amount exceeds balance") := by
-    simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
+    simp only [weth10, weth10Aux, burnBalanceError, burnBalanceErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]
   rcases of_run_branch_call_revertWith h_burn_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
@@ -8954,7 +8020,9 @@ theorem of_transferZeroThen_exact
   have h_eth_lookup :
       ((weth10 dp).main :: weth10Aux)[ethTransferErrorSlot]? =
         some (Func.revertWith "WETH: ETH transfer failed") := by
-    simp [weth10, weth10Aux, ethTransferErrorSlot, ethTransferError]
+    simp only [weth10, weth10Aux, ethTransferError, ethTransferErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]
   rcases of_run_branch_call_revertWith h_eth_lookup run7 with
     ⟨sb, hpopCall, hnext⟩
   have h_stor_s4_sc : Devm.getStor s4 = Devm.getStor sc :=
@@ -9196,7 +8264,9 @@ theorem of_callerBurnThen_exact
   have h_burn_lookup :
       ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
         some (Func.revertWith "WETH: burn amount exceeds balance") := by
-    simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
+    simp only [weth10, weth10Aux, burnBalanceError, burnBalanceErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]
   rcases of_run_branch_call_revertWith h_burn_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
@@ -9320,7 +8390,9 @@ theorem of_argBurnThen_exact
   have h_burn_lookup :
       ((weth10 dp).main :: weth10Aux)[burnBalanceErrorSlot]? =
         some (Func.revertWith "WETH: burn amount exceeds balance") := by
-    simp [weth10, weth10Aux, burnBalanceErrorSlot, burnBalanceError]
+    simp only [weth10, weth10Aux, burnBalanceError, burnBalanceErrorSlot, List.length_cons,
+      List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]
   rcases of_run_branch_call_revertWith h_burn_lookup run2 with
     ⟨s3, hpopGuard, run3⟩
   have hpopStack := hpopGuard.stack
@@ -9497,8 +8569,9 @@ theorem withdraw_exactRelFuncSound
           ⟨sc, g, hpCall, hcall, hstor, hbal, hcode⟩
         exact ⟨sc, g, sevm.caller.toB256, hpCall, hcall, hstor, hcode⟩)
       (by
-        simp [weth10, weth10Aux, ethTransferErrorSlot,
-          ethTransferError])
+        simp only [weth10, weth10Aux, ethTransferError, ethTransferErrorSlot, List.length_cons,
+          List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos,
+          List.getElem_cons_succ, List.getElem_cons_zero])
       (by simpa only [withdraw] using run) hfork
   have hs : Devm.getStor snext = Devm.getStor r :=
     Func.of_inv Devm.getStor Devm.getStor (by func_inv) hstop
@@ -9524,8 +8597,9 @@ theorem withdrawTo_exactRelFuncSound
         exact ⟨sc, g, Sevm.argWord sevm 0, hpCall, hcall,
           hstor, hcode⟩)
       (by
-        simp [weth10, weth10Aux, ethTransferErrorSlot,
-          ethTransferError])
+        simp only [weth10, weth10Aux, ethTransferError, ethTransferErrorSlot, List.length_cons,
+          List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos,
+          List.getElem_cons_succ, List.getElem_cons_zero])
       (by simpa only [withdrawTo] using run) hfork
   have hs : Devm.getStor snext = Devm.getStor r :=
     Func.of_inv Devm.getStor Devm.getStor (by func_inv) hstop
@@ -9548,8 +8622,9 @@ theorem transferFromZero_exactRelFuncSound
           ⟨sc, g, hpCall, hcall, hstor, hbal, hcode⟩
         exact ⟨sc, g, sevm.caller.toB256, hpCall, hcall, hstor, hcode⟩)
       (by
-        simp [weth10, weth10Aux, ethTransferErrorSlot,
-          ethTransferError])
+        simp only [weth10, weth10Aux, ethTransferError, ethTransferErrorSlot, List.length_cons,
+          List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos,
+          List.getElem_cons_succ, List.getElem_cons_zero])
       (by simpa only [transferFromZero] using run) hfork
   have hs : Devm.getStor snext = Devm.getStor r :=
     Func.of_inv Devm.getStor Devm.getStor (by func_inv) hreturn
@@ -9616,7 +8691,8 @@ theorem transferFrom_exactRelFuncSound
   have h_core_lookup :
       ((weth10 dp).main :: weth10Aux)[transferFromCoreSlot]? =
         some transferFromCore := by
-    simp [weth10, weth10Aux, transferFromCoreSlot]
+    simp only [weth10, weth10Aux, transferFromCoreSlot, List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   obtain ⟨sc, hcore, h_silent, h_bal, h_code_s_sc⟩ :=
     of_run_spendCallerAllowanceThen dp 2 transferFromCoreSlot
       transferFromCore h_core_lookup (by
@@ -9647,8 +8723,9 @@ theorem withdrawFromCore_exactRelFuncSound
         exact ⟨sc, g, Sevm.argWord sevm 1, hpCall, hcall,
           hstor, hcode⟩)
       (by
-        simp [weth10, weth10Aux, etherTransferErrorSlot,
-          etherTransferError])
+        simp only [weth10, weth10Aux, etherTransferError, etherTransferErrorSlot, List.length_cons,
+          List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos,
+          List.getElem_cons_succ, List.getElem_cons_zero])
       (by simpa only [withdrawFromCore] using run) hfork
   have hs : Devm.getStor snext = Devm.getStor r :=
     Func.of_inv Devm.getStor Devm.getStor (by func_inv) hstop
@@ -9665,7 +8742,8 @@ theorem withdrawFrom_exactRelFuncSound
   have h_core_lookup :
       ((weth10 dp).main :: weth10Aux)[withdrawFromCoreSlot]? =
         some withdrawFromCore := by
-    simp [weth10, weth10Aux, withdrawFromCoreSlot]
+    simp only [weth10, weth10Aux, withdrawFromCoreSlot, List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   obtain ⟨sc, hcore, h_silent, h_bal, h_code_s_sc⟩ :=
     of_run_spendCallerAllowanceThen dp 2 withdrawFromCoreSlot
       withdrawFromCore h_core_lookup (by
@@ -9766,7 +8844,7 @@ theorem weth10Funcs_exactRelFuncSound
   · exact ExactRelFuncSound.of_stable dp ca (flashFee_flashStable dp)
   · exact ExactRelFuncSound.of_stable dp ca
       (FlashStable.nonpayable dp (FlashStable.of_inv dp (by func_inv)))
-  · simp at hnil
+  · simp only [List.not_mem_nil] at hnil
 
 theorem receiveEther_exactRelFuncSound
     (dp : DeployParams) (ca : Adr) :
@@ -10039,7 +9117,7 @@ theorem weth10Funcs_backed_funcSound
   · exact backedSpec_permit_funcSound dp ca
   · exact backedSpec_flashFee_funcSound dp ca
   · exact backedSpec_allowance_funcSound dp ca
-  · simp at hnil
+  · simp only [List.not_mem_nil] at hnil
 
 /-- Premise-free receive-aware soundness of the compiled Blanc WETH10 program
 for the frozen backing invariant.  Premise-free in both senses: no unproved

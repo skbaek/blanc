@@ -92,7 +92,7 @@ theorem depositRootGuard_storageEffectRun
       (r := .eq) (f := B256.eqCheck) (cost := gVerylow)
       (x := Sevm.argWord sevm 3) (y := node) (v := 1) (s := [])
       (G := G + 16) (by rintro ⟨⟩) rfl rfl
-      (by rw [hroot]; simp [B256.eqCheck])
+      (by rw [hroot]; simp only [B256.eqCheck, ↓reduceIte])
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [List.length_nil]; omega))
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)
@@ -281,7 +281,7 @@ theorem reconstructDepositDataNode_successGuards_storageEffectRun
       (oldCount := oldCount) (amount := amount) (stack := [])
       (success := depositSuccessGuards) (K := G + 59)
       (effects := effects)
-      source hnodeleg hwarm hpre hdepth hbound (by simp)
+      source hnodeleg hwarm hpre hdepth hbound (by simp only [List.length_nil, Nat.ofNat_pos])
   obtain ⟨hcarrier⟩ := hregisters
   refine ⟨finalPost, ⟨?_⟩, ?_, hmeta, ?_⟩
   · rw [← hnodeEq]

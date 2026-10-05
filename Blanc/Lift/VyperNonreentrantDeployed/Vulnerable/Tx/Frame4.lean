@@ -120,7 +120,7 @@ theorem frame4_child : ChildOk e3T.sta aCallT post4T ∧ ChildAgree post4T keysH
     exact ⟨.ok post4T, hx3, frame_settle_ok hcr3 hsg3 herr⟩
   · show a ∈ post4T.accessedAddresses ↔ _
     rw [show post4T = post4TF post5T from rfl, hka, (hacc.1 a), hpe, hpa a, ha4.1 a]
-    simp [adrsH4T]
+    simp only [true_and, adrsH4T, List.mem_append]
   · show x ∈ post4T.accessedStorageKeys ↔ _
     rw [show post4T = post4TF post5T from rfl, hkk, (hacc.2 x), hpe, hpk, ha4.2.1 x]
     simp only [true_and, keysH4T, List.mem_append]

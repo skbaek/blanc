@@ -274,22 +274,25 @@ theorem of_run_main_nonexit_terminal_prefix {sevm : Sevm} {entry post : Devm}
   simp only [selectors, List.mem_cons, List.not_mem_nil, or_false] at hmemSel
   rcases hmemSel with hsel | hsel | hsel | hsel | hsel <;> rw [hsel] at hpfx
   · exact of_run_dispatch_nonpayable_terminal_prefix (size := 36)
-      (body := Drip.convertToAssets) (by simp [funcs]) hpfx
+      (body := Drip.convertToAssets) (by simp only [funcs, List.mem_cons, Prod.mk.injEq,
+        List.not_mem_nil, or_false, true_or]) hpfx
       hmem2 hdispatch fun frame body => by
         unfold Drip.convertToAssets at body ⊢
         exact of_run_viewEntry_terminal_prefix hlookup frame (by decide) body
   · exact (hselector hsel).elim
   · exact of_run_dispatch_nonpayable_terminal_prefix (size := 36)
-      (body := Drip.convertToUnits) (by simp [funcs]) hpfx
+      (body := Drip.convertToUnits) (by simp only [funcs, List.mem_cons, Prod.mk.injEq,
+        List.not_mem_nil, or_false, true_or, or_true]) hpfx
       hmem2 hdispatch fun frame body => by
         unfold Drip.convertToUnits at body ⊢
         exact of_run_viewEntry_terminal_prefix hlookup frame (by decide) body
   · exact of_run_dispatch_nonpayable_terminal_prefix (size := 4)
-      (body := Drip.drip) (by simp [funcs]) hpfx
+      (body := Drip.drip) (by simp only [funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+        or_false, true_or, or_true]) hpfx
       hmem2 hdispatch fun frame body =>
         of_run_drip_terminal_prefix hlookup frame body
   · rcases reach_of_dispatch_logs (path := path2) funcs_sorted
-        (by simp [funcs] : (joinSelector, exactCalldata 4 join) ∈ funcs) hpfx
+        (by simp only [funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, or_true] : (joinSelector, exactCalldata 4 join) ∈ funcs) hpfx
         hdispatch with
       ⟨s3, path3, -, -, hmm3, -, -, hpre3, hwrapped⟩
     rcases of_run_exactCalldata_prefix (path := path3) hwrapped with
@@ -434,7 +437,7 @@ theorem exit_exec_handoffAt (coalition : Finset Adr) {sevm : Sevm} {pre post : D
         (Frame.ofCall m).settle raw = .ok child := fun m hm =>
       ofCall_settle_of_clean _ m settled.symm clean (by rw [hm]; rfl)
     rw [key]
-    · cases hError : child.error <;> simp_all
+    · cases hError : child.error <;> simp_all only [ne_eq, not_lt, ExceptT.stM_eq, Option.isSome_none, Option.isNone_none, Option.isSome_some, Bool.true_eq_false]
     · rfl
   have frames : Exec.descendantFrames exc = retained.settledFrames := by
     have head := nodeFree.descendantFrames_eq

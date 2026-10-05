@@ -48,10 +48,11 @@ theorem hashSet_insert_of_mem {α : Type} [BEq α] [Hashable α] (s : Std.HashSe
 theorem hashSet_insertMany_of_subset {α : Type} [BEq α] [Hashable α] (s : Std.HashSet α)
     (l : List α) (h : ∀ a ∈ l, s.contains a = true) : s.insertMany l = s := by
   induction l with
-  | nil => simp
+  | nil => simp only [Std.HashSet.insertMany_nil]
   | cons x xs ih =>
-    rw [Std.HashSet.insertMany_cons, hashSet_insert_of_mem s x (h x (by simp))]
-    exact ih (fun a ha => h a (by simp [ha]))
+    rw [Std.HashSet.insertMany_cons, hashSet_insert_of_mem s x (h x (by simp only [List.mem_cons,
+      true_or]))]
+    exact ih (fun a ha => h a (by simp only [List.mem_cons, ha, or_true]))
 
 /-- **A message prepared under a covered fork is the message prepared under another with its fork
 changed**, for a call transaction whose access list warms the origin, the target and the

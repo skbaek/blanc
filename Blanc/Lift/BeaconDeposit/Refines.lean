@@ -97,19 +97,4 @@ theorem frame_solInv {sevm : Sevm} {pre post : Devm} {history : List B256}
   · rw [ite_eq_right hsel, List.append_nil, (hr.2 hsel).1]
     exact hinv
 
-/-- **P8 counterpart: an admitted history of frames.**  From the storage abstraction for `h₀`,
-a chain of successful frames ends in the abstraction for `h₀` extended by exactly the nodes of
-its `deposit`-selector frames, in order.
-
-Superseded as a headline by `configuredHistory_solInv`, which derives the frame chaining from an actual configured history instead of taking a `FrameHistory` premise. -/
-theorem frameHistory_solInv {ca : Adr} {stor₀ stor : Stor} {accepted h₀ : List B256}
-    (hh : FrameHistory ca stor₀ accepted stor) (hinv : SolInv stor₀ h₀) :
-    SolInv stor (h₀ ++ accepted) := by
-  induction hh generalizing h₀ with
-  | nil => rw [List.append_nil]; exact hinv
-  | cons hca hpre hcode hfork hcd hstack hmem hsha exc _ ih =>
-    subst hca hpre
-    rw [← List.append_assoc]
-    exact ih (frame_solInv hcode hfork hcd hstack hmem hsha hinv exc)
-
 end Blanc.Lift.BeaconDeposit

@@ -30,31 +30,6 @@ namespace LidoTriggerableWithdrawalsGateway
 
 /-! ## Exact role-gate census -/
 
-def roleGatedEntries (dp : DeployParams) :
-    List (B256 × B256 × Func) :=
-  [ (selPauseFor, pauseRole, pauseFor),
-    (selPauseUntil, pauseRole, pauseUntil),
-    (selResume, resumeRole, resume),
-    (selSetExitRequestLimit, twExitLimitManagerRole, setExitRequestLimit),
-    (selTriggerFullWithdrawals, addFullWithdrawalRequestRole,
-      triggerFullWithdrawals dp),
-    (selGrantRole, defaultAdminRole, grantRole),
-    (selRevokeRole, defaultAdminRole, revokeRole) ]
-
-/-- The same census at the actual `funcs` dispatcher boundary.  In particular,
-the payable trigger is not wrapped in `nonpayable`; every other protected entry
-is. -/
-def roleGatedDispatchEntries (dp : DeployParams) :
-    List (B256 × B256 × Func) :=
-  [ (selPauseFor, pauseRole, nonpayable pauseFor),
-    (selPauseUntil, pauseRole, nonpayable pauseUntil),
-    (selResume, resumeRole, nonpayable resume),
-    (selSetExitRequestLimit, twExitLimitManagerRole,
-      nonpayable setExitRequestLimit),
-    (selTriggerFullWithdrawals, addFullWithdrawalRequestRole,
-      triggerFullWithdrawals dp),
-    (selGrantRole, defaultAdminRole, nonpayable grantRole),
-    (selRevokeRole, defaultAdminRole, nonpayable revokeRole) ]
 
 /-! ## Exact authorization calldata
 
@@ -85,29 +60,29 @@ def revokeRoleAuthorizationCalldata (role : B256) (account : Adr) : Bytes :=
 
 theorem pauseUntilAuthorizationCalldata_length (expiry : B256) :
     (pauseUntilAuthorizationCalldata expiry).length = 36 := by
-  simp [pauseUntilAuthorizationCalldata, abiSelectorBytes_length,
-    B256.length_toBytes]
+  simp only [pauseUntilAuthorizationCalldata, List.length_append, abiSelectorBytes_length,
+    B256.length_toBytes, Nat.reduceAdd]
 
 theorem resumeAuthorizationCalldata_length :
     resumeAuthorizationCalldata.length = 4 := by
-  simp [resumeAuthorizationCalldata, abiSelectorBytes_length]
+  simp only [resumeAuthorizationCalldata, abiSelectorBytes_length]
 
 theorem setExitRequestLimitAuthorizationCalldata_length
     (maximum exitsPerFrame frameDuration : B256) :
     (setExitRequestLimitAuthorizationCalldata maximum exitsPerFrame
       frameDuration).length = 100 := by
-  simp [setExitRequestLimitAuthorizationCalldata, abiSelectorBytes_length,
-    B256.length_toBytes]
+  simp only [setExitRequestLimitAuthorizationCalldata, List.append_assoc, List.length_append,
+    abiSelectorBytes_length, B256.length_toBytes, Nat.reduceAdd]
 
 theorem grantRoleAuthorizationCalldata_length (role : B256) (account : Adr) :
     (grantRoleAuthorizationCalldata role account).length = 68 := by
-  simp [grantRoleAuthorizationCalldata, abiSelectorBytes_length,
-    B256.length_toBytes]
+  simp only [grantRoleAuthorizationCalldata, List.length_append, abiSelectorBytes_length,
+    B256.length_toBytes, Nat.reduceAdd]
 
 theorem revokeRoleAuthorizationCalldata_length (role : B256) (account : Adr) :
     (revokeRoleAuthorizationCalldata role account).length = 68 := by
-  simp [revokeRoleAuthorizationCalldata, abiSelectorBytes_length,
-    B256.length_toBytes]
+  simp only [revokeRoleAuthorizationCalldata, List.length_append, abiSelectorBytes_length,
+    B256.length_toBytes, Nat.reduceAdd]
 
 /-! Every image above, together with the existing `pauseForCalldata`, fixes the
 public selector by the shared canonical-selector theorem.  These facts are
@@ -120,7 +95,7 @@ theorem selector_of_pauseForAuthorizationCalldata
   apply selector_eq_of_data_eq_abiSelectorBytes_append
       (selected := selPauseFor) (tail := duration.toBytes)
   · rfl
-  · simpa [pauseForCalldata] using hdata
+  · simpa only [pauseForCalldata] using hdata
 
 theorem selector_of_pauseUntilAuthorizationCalldata
     {sevm : Sevm} {expiry : B256}
@@ -129,7 +104,7 @@ theorem selector_of_pauseUntilAuthorizationCalldata
   apply selector_eq_of_data_eq_abiSelectorBytes_append
       (selected := selPauseUntil) (tail := expiry.toBytes)
   · rfl
-  · simpa [pauseUntilAuthorizationCalldata] using hdata
+  · simpa only [pauseUntilAuthorizationCalldata] using hdata
 
 theorem selector_of_resumeAuthorizationCalldata
     {sevm : Sevm} (hdata : sevm.data = resumeAuthorizationCalldata) :
@@ -137,7 +112,7 @@ theorem selector_of_resumeAuthorizationCalldata
   apply selector_eq_of_data_eq_abiSelectorBytes_append
       (selected := selResume) (tail := [])
   · rfl
-  · simpa [resumeAuthorizationCalldata] using hdata
+  · simpa only [List.append_nil, resumeAuthorizationCalldata] using hdata
 
 theorem selector_of_setExitRequestLimitAuthorizationCalldata
     {sevm : Sevm} {maximum exitsPerFrame frameDuration : B256}
@@ -149,7 +124,7 @@ theorem selector_of_setExitRequestLimitAuthorizationCalldata
       (tail := maximum.toBytes ++ exitsPerFrame.toBytes ++
         frameDuration.toBytes)
   · rfl
-  · simpa [setExitRequestLimitAuthorizationCalldata] using hdata
+  · simpa only [List.append_assoc, setExitRequestLimitAuthorizationCalldata] using hdata
 
 theorem selector_of_grantRoleAuthorizationCalldata
     {sevm : Sevm} {role : B256} {account : Adr}
@@ -159,7 +134,7 @@ theorem selector_of_grantRoleAuthorizationCalldata
       (selected := selGrantRole)
       (tail := role.toBytes ++ account.toB256.toBytes)
   · rfl
-  · simpa [grantRoleAuthorizationCalldata] using hdata
+  · simpa only [grantRoleAuthorizationCalldata] using hdata
 
 theorem selector_of_revokeRoleAuthorizationCalldata
     {sevm : Sevm} {role : B256} {account : Adr}
@@ -169,7 +144,7 @@ theorem selector_of_revokeRoleAuthorizationCalldata
       (selected := selRevokeRole)
       (tail := role.toBytes ++ account.toB256.toBytes)
   · rfl
-  · simpa [revokeRoleAuthorizationCalldata] using hdata
+  · simpa only [revokeRoleAuthorizationCalldata] using hdata
 
 /- These equalities are deliberately redundant with the runtime definitions:
    they pin the modifier order which the later route proofs must preserve. -/
@@ -279,7 +254,7 @@ theorem zeroIndex_role_failure_outcome_of_route
     (hroute : Func.RunCompiledTo ((runtime dp).main :: (runtime dp).aux)
       sevm entry (.call missingRoleSlot) out) :
     MissingRoleFailure out := by
-  simpa [MissingRoleFailure] using missingRole_call_reverts_exact hroute
+  simpa only [MissingRoleFailure, ExceptT.stM_eq] using missingRole_call_reverts_exact hroute
 
 /-! ## From an `onlyRole` route to the exact absent-role outcome -/
 
@@ -433,7 +408,8 @@ theorem pauseFor_absent_role_reverts
     rw [hdata]; exact pauseForCalldata_length duration
   refine absentRole_of_static_entry (words := 1) hprog hentryStack hvalue
     ?_ ?_ (selector_of_pauseForAuthorizationCalldata hdata)
-    (by simp [sharedNonpayableFuncs])
+    (by simp only [sharedNonpayableFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+      true_or])
     pauseFor_role_gate_exact lacksRole
   · rw [hlen]; decide
   · rw [hlen]; decide
@@ -453,7 +429,8 @@ theorem pauseUntil_absent_role_reverts
     rw [hdata]; exact pauseUntilAuthorizationCalldata_length expiry
   refine absentRole_of_static_entry (words := 1) hprog hentryStack hvalue
     ?_ ?_ (selector_of_pauseUntilAuthorizationCalldata hdata)
-    (by simp [sharedNonpayableFuncs]) pauseUntil_role_gate_exact lacksRole
+    (by simp only [sharedNonpayableFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+      true_or, or_true]) pauseUntil_role_gate_exact lacksRole
   · rw [hlen]; decide
   · rw [hlen]; decide
 
@@ -476,7 +453,8 @@ theorem setExitRequestLimit_absent_role_reverts
       exitsPerFrame frameDuration
   refine absentRole_of_static_entry (words := 3) hprog hentryStack hvalue
     ?_ ?_ (selector_of_setExitRequestLimitAuthorizationCalldata hdata)
-    (by simp [sharedNonpayableFuncs]) setExitRequestLimit_role_gate_exact
+    (by simp only [sharedNonpayableFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+      true_or, or_true]) setExitRequestLimit_role_gate_exact
     lacksRole
   · rw [hlen]; decide
   · rw [hlen]; decide
@@ -495,7 +473,8 @@ theorem resume_absent_role_reverts
     rw [hdata]; exact resumeAuthorizationCalldata_length
   refine absentRole_of_plain_entry hprog hentryStack hvalue ?_
     (selector_of_resumeAuthorizationCalldata hdata)
-    (by simp [sharedNonpayableFuncs])
+    (by simp only [sharedNonpayableFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+      true_or, or_true])
     resume_role_gate_exact lacksRole
   · rw [hlen]; decide
 
@@ -508,10 +487,10 @@ theorem grantRoleAuthorization_arg1
   apply dataWord_of_append
     (pre := abiSelectorBytes selGrantRole ++ role.toBytes)
     (post := [])
-  · simp [abiSelectorBytes_length, B256.length_toBytes]
+  · simp only [List.length_append, abiSelectorBytes_length, B256.length_toBytes, Nat.reduceAdd]
     rfl
   · rw [hdata, grantRoleAuthorizationCalldata]
-    simp [List.append_assoc]
+    simp only [List.append_nil, List.append_assoc]
 
 theorem revokeRoleAuthorization_arg1
     {sevm : Sevm} {role : B256} {account : Adr}
@@ -521,10 +500,10 @@ theorem revokeRoleAuthorization_arg1
   apply dataWord_of_append
     (pre := abiSelectorBytes selRevokeRole ++ role.toBytes)
     (post := [])
-  · simp [abiSelectorBytes_length, B256.length_toBytes]
+  · simp only [List.length_append, abiSelectorBytes_length, B256.length_toBytes, Nat.reduceAdd]
     rfl
   · rw [hdata, revokeRoleAuthorizationCalldata]
-    simp [List.append_assoc]
+    simp only [List.append_nil, List.append_assoc]
 
 /-- `grantRole` reverts for a caller without the default admin role. -/
 theorem grantRole_absent_role_reverts
@@ -541,7 +520,8 @@ theorem grantRole_absent_role_reverts
     rw [hdata]; exact grantRoleAuthorizationCalldata_length role account
   refine absentRole_of_canonical_entry (words := 2) hprog hentryStack hvalue
     ?_ ?_ ?_ (selector_of_grantRoleAuthorizationCalldata hdata)
-    (by simp [sharedNonpayableFuncs]) grantRole_role_gate_exact lacksRole
+    (by simp only [sharedNonpayableFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+      true_or, or_true]) grantRole_role_gate_exact lacksRole
   · rw [hlen]; decide
   · rw [hlen]; decide
   · rw [grantRoleAuthorization_arg1 hdata]; exact ⟨account, rfl⟩
@@ -561,7 +541,8 @@ theorem revokeRole_absent_role_reverts
     rw [hdata]; exact revokeRoleAuthorizationCalldata_length role account
   refine absentRole_of_canonical_entry (words := 2) hprog hentryStack hvalue
     ?_ ?_ ?_ (selector_of_revokeRoleAuthorizationCalldata hdata)
-    (by simp [sharedNonpayableFuncs]) revokeRole_role_gate_exact lacksRole
+    (by simp only [sharedNonpayableFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+      or_true]) revokeRole_role_gate_exact lacksRole
   · rw [hlen]; decide
   · rw [hlen]; decide
   · rw [revokeRoleAuthorization_arg1 hdata]; exact ⟨account, rfl⟩

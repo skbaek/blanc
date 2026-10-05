@@ -32,17 +32,17 @@ def freshNat (chi k : Nat) : Nat :=
 def compositionResidue (chi k : Nat) : Nat :=
   chi * factorNat k % scale.toNat
 
-@[simp] theorem scaleNat_exact : scale.toNat = 1000000000000000000000000000 := by
+theorem scaleNat_exact : scale.toNat = 1000000000000000000000000000 := by
   decide +kernel
 
-@[simp] theorem rateNat_exact :
+theorem rateNat_exact :
     rate.toNat = 1000000001547125957863212448 := by
   decide +kernel
 
-@[simp] theorem halfNat_exact : half.toNat = 500000000000000000000000000 := by
+theorem halfNat_exact : half.toNat = 500000000000000000000000000 := by
   decide +kernel
 
-@[simp] theorem maxElapsedNat_exact : maxElapsed.toNat = 4294967295 := by
+theorem maxElapsedNat_exact : maxElapsed.toNat = 4294967295 := by
   decide +kernel
 
 theorem scaleNat_ne_zero : scale.toNat ≠ 0 := by
@@ -118,7 +118,7 @@ private theorem binaryDepth_le_of_lt_pow_two {n b : Nat}
   | zero =>
       have hn : n = 0 := by omega
       subst n
-      simp [binaryDepth]
+      simp only [binaryDepth, ↓reduceDIte, Std.le_refl]
   | succ b ih =>
       rw [binaryDepth]
       split
@@ -135,7 +135,7 @@ private theorem binaryWeight_le_of_lt_pow_two {n b : Nat}
   | zero =>
       have hn : n = 0 := by omega
       subst n
-      simp [binaryWeight]
+      simp only [binaryWeight, ↓reduceDIte, Std.le_refl]
   | succ b ih =>
       rw [binaryWeight]
       split
@@ -161,10 +161,10 @@ theorem drip_rpow_runtime_ops_le_62 {k : Nat}
   rw [maxElapsedNat_exact] at hk
   by_cases hk0 : k = 0
   · subst k
-    simp [rpowOps]
+    simp only [rpowOps, rateNat_exact, OfNat.ofNat_ne_zero, ↓reduceIte, zero_le]
   · rw [drip_rpow_runtime_ops_exact, if_neg hk0]
     have hhalf : k / 2 < 2 ^ 31 := by
-      norm_num
+      norm_num only
       omega
     have hd := binaryDepth_le_of_lt_pow_two hhalf
     have hw := binaryWeight_le_of_lt_pow_two hhalf
@@ -213,19 +213,6 @@ theorem segment_spread_witness :
 arithmetic, not by a special case. -/
 theorem drip_factorNat_zero : factorNat 0 = scale.toNat :=
   Jaune.rpow_exponent_zero _ _ _
-
-/-- The frozen base word is nonzero. -/
-theorem drip_rate_ne_zero : rate ≠ 0 := by
-  decide +kernel
-
-/-- The frozen base never takes the word loop's zero arm: low-bit
-initialization followed by the halved loop, exactly the runtime's order. -/
-theorem drip_word_rpow_unfold_nonzero {k : Nat} (hk : k ≠ 0) :
-    B256.rpow scale half rate k =
-      B256.rpowLoop scale half (if k % 2 = 1 then rate else scale) rate
-        (k / 2) := by
-  unfold B256.rpow
-  rw [if_neg drip_rate_ne_zero, if_neg hk]
 
 end Drip
 

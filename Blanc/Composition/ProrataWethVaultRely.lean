@@ -265,83 +265,6 @@ structure VaultFrameConfiguration (vault : Adr) (sevm : Sevm) (pre : Devm) :
   code : sevm.currentTarget = vault →
     some sevm.code.toList = Prog.compile Blanc.ProrataWethVault.vault
 
-/-- The installed vault runtime is nonempty. -/
-private theorem vaultCode_toList_ne_nil {vault : Adr} {pre : Devm}
-    (installed : some (pre.getCode vault).toList =
-      Prog.compile Blanc.ProrataWethVault.vault) :
-    (pre.getCode vault).toList ≠ [] := by
-  intro empty
-  rw [empty] at installed
-  exact Prog.compile_ne_nil installed.symm
-
-/-- The configuration survives any same-frame step that preserves nonempty
-code. -/
-theorem VaultFrameConfiguration.of_codePreserve
-    {vault : Adr} {sevm : Sevm} {pre inter : Devm}
-    (configuration : VaultFrameConfiguration vault sevm pre)
-    (preserve : Devm.CodePreserve pre inter) :
-    VaultFrameConfiguration vault sevm inter := by
-  refine ⟨configuration.config.of_codePreserve rfl preserve, ?_,
-    configuration.code⟩
-  rw [preserve vault (vaultCode_toList_ne_nil configuration.installed)]
-  exact configuration.installed
-
-/-- **Same-frame transport.**  The configuration at a frame root holds at
-every node of that frame's actual same-frame chronology, including every
-continuation resumed after a child. -/
-theorem VaultFrameConfiguration.parentPrefix {vault : Adr}
-    {root node : Exec.Deriv}
-    (sameFrame : Exec.Deriv.ParentPrefix root node)
-    (configuration : VaultFrameConfiguration vault root.sevm root.devm) :
-    VaultFrameConfiguration vault node.sevm node.devm := by
-  induction sameFrame with
-  | refl => exact configuration
-  | step head _ ih =>
-      apply ih
-      rw [(Blanc.Exec.Deriv.ParentStep.sevm_eq head)]
-      exact configuration.of_codePreserve (Blanc.Exec.Deriv.ParentStep.codePreserve head)
-
-/-- **Child-entry transport.**  A spawned interpreter child inherits the
-world's code and the block statics from the spawning instruction's pre-state.
-Its own frame runs the vault code whenever its target is the vault, provided
-the spawn is not a `CALLCODE`/`DELEGATECALL` from the vault's own frame —
-excluded either because the parent frame is foreign or because the child does
-not target the vault, which is what the vault's staged children satisfy (they
-target the asset, `wethAccount ≠ vault`). -/
-theorem VaultFrameConfiguration.childEntry {vault : Adr}
-    {pc nextPc : Nat} {sevm : Sevm} {pre : Devm}
-    {frame : Jaune.Frame} {resume : Resume} {childEvm : Evm}
-    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume nextPc)
-    (entered : frame.enter = .run childEvm)
-    (configuration : VaultFrameConfiguration vault sevm pre)
-    (foreign : sevm.currentTarget ≠ vault ∨
-      childEvm.sta.currentTarget ≠ vault) :
-    VaultFrameConfiguration vault childEvm.sta childEvm.dyna := by
-  obtain ⟨x, _execAt, spawn, _⟩ := Evm.step_spawn_inv step
-  have childCode : Devm.CodePreserve pre childEvm.dyna := by
-    intro a _
-    rw [Frame.enter_run_getCode entered a]
-    exact Xinst.step_spawn_getCode spawn a
-  have childStat : childEvm.sta.benvStat = sevm.benvStat := by
-    rw [Frame.enter_run_benvStat entered]
-    exact Xinst.step_spawn_benvStat spawn
-  refine ⟨configuration.config.of_codePreserve childStat childCode, ?_, ?_⟩
-  · rw [childCode vault (vaultCode_toList_ne_nil configuration.installed)]
-    exact configuration.installed
-  · intro childTarget
-    have targetEq := Frame.enter_run_currentTarget entered
-    rw [Frame.enter_run_code entered]
-    rw [childTarget] at targetEq
-    rcases Xinst.step_spawn_source spawn with empty | same | source
-    · rw [← targetEq] at empty
-      exact absurd empty (not_empty_of_compile configuration.installed)
-    · rw [← targetEq] at same
-      rcases foreign with parentNe | childNe
-      · exact absurd same.symm parentNe
-      · exact absurd childTarget childNe
-    · rw [← targetEq] at source
-      rw [source (not_delegation_of_compile configuration.installed)]
-      exact configuration.installed
 
 /-! ## Allowance-debit authorization
 
@@ -379,10 +302,12 @@ theorem touchedWethAllowancePairs_keys_nonaddress
       call.memoryWf call.run selected
     dsimp only at effect
     by_cases same : Sevm.argWord call.sevm 0 = call.sevm.caller.toB256
-    · simp [WethAllowanceInvocation.pair?, approval, same] at pairEq
+    · simp only [WethAllowanceInvocation.pair?, approval, Bool.false_eq_true, ↓reduceIte, same,
+      reduceCtorEq] at pairEq
     · simp only [if_neg same] at effect
       obtain ⟨valid, _⟩ := effect
-      simp [WethAllowanceInvocation.pair?, approval, same] at pairEq
+      simp only [WethAllowanceInvocation.pair?, approval, Bool.false_eq_true, ↓reduceIte, same,
+        Option.some.injEq] at pairEq
       cases pairEq
       exact valid
 
@@ -455,18 +380,19 @@ theorem allowance_debit_classification (call : WethAllowanceInvocation) :
     by_cases same : Sevm.argWord call.sevm 0 = call.sevm.caller.toB256
     · simp only [if_pos same] at effect
       refine Or.inr (Or.inl ⟨rfl, same, ?_, effect⟩)
-      simp [WethAllowanceInvocation.writtenPair?,
-        WethAllowanceInvocation.pair?, approval, same]
+      simp only [WethAllowanceInvocation.writtenPair?, approval, Bool.false_eq_true, ↓reduceIte,
+        WethAllowanceInvocation.pair?, same, Option.filter_none]
     · simp only [if_neg same] at effect
       obtain ⟨valid, result⟩ := effect
       rcases result with ⟨maximum, silent⟩ | ⟨finite, covered, stored, witness⟩
       · refine Or.inr (Or.inr (Or.inl ⟨rfl, same, maximum, ?_, silent⟩))
-        simp [WethAllowanceInvocation.writtenPair?,
-          WethAllowanceInvocation.pair?, approval, same, Option.filter, maximum]
+        simp only [WethAllowanceInvocation.writtenPair?, approval, Bool.false_eq_true, ↓reduceIte,
+          Option.filter, WethAllowanceInvocation.pair?, same, maximum, bne_self_eq_false]
       · refine Or.inr (Or.inr
           (Or.inr ⟨rfl, same, finite, covered, ?_, valid, stored, witness⟩))
-        simp [WethAllowanceInvocation.writtenPair?,
-          WethAllowanceInvocation.pair?, approval, same, Option.filter, finite]
+        simp only [WethAllowanceInvocation.writtenPair?, approval, Bool.false_eq_true, ↓reduceIte,
+          Option.filter, WethAllowanceInvocation.pair?, same, bne_iff_ne, ne_eq, finite,
+          not_false_eq_true]
 
 /-- An approval invocation debits no balance row: its exact raw write lands at
 a non-address-shaped key, which the balance view cannot see. Unconditional. -/
@@ -547,9 +473,9 @@ theorem foreign_debit_excluded
               writtenWethAllowancePairs history := by
             apply List.mem_filterMap.mpr
             refine ⟨call, member, ?_⟩
-            simp [WethAllowanceInvocation.writtenPair?,
-              WethAllowanceInvocation.pair?, approval, same, Option.filter,
-              finite]
+            simp only [WethAllowanceInvocation.writtenPair?, approval, Bool.false_eq_true,
+              ↓reduceIte, Option.filter, WethAllowanceInvocation.pair?, same, bne_iff_ne, ne_eq,
+              finite, not_false_eq_true]
           have keys := collision p touched owner _ writer (Ne.symm pairEq)
           have frame := stored _ keyShape
           rw [Stor.get_set_ne _ (Ne.symm keys)] at frame
@@ -608,7 +534,7 @@ theorem VaultStagedCalldata.not_approve {call : WethAllowanceInvocation}
     rcases staged with ⟨v, hdata⟩ | ⟨owner, dst, assets, hdata⟩ | ⟨receiver, assets, hdata⟩
     · have sel := (balanceOfCalldata_facts hdata).1
       have mem : selector "balanceOf" [.address] ∈ allowedWethSelectors := by
-        simp [allowedWethSelectors]
+        simp only [allowedWethSelectors, List.mem_cons, List.not_mem_nil, or_false, true_or]
       rw [sel]
       intro hEq
       rw [hEq] at mem
@@ -616,14 +542,15 @@ theorem VaultStagedCalldata.not_approve {call : WethAllowanceInvocation}
     · have sel := (transferFromCalldata_facts hdata).1
       have mem : selector "transferFrom" [.address, .address, .uint256] ∈
           allowedWethSelectors := by
-        simp [allowedWethSelectors]
+        simp only [allowedWethSelectors, List.mem_cons, List.not_mem_nil, or_false, true_or,
+          or_true]
       rw [sel]
       intro hEq
       rw [hEq] at mem
       exact approveSelector_not_allowed mem
     · have sel := (transferCalldata_facts hdata).1
       have mem : selector "transfer" [.address, .uint256] ∈ allowedWethSelectors := by
-        simp [allowedWethSelectors]
+        simp only [allowedWethSelectors, List.mem_cons, List.not_mem_nil, or_false, or_true]
       rw [sel]
       intro hEq
       rw [hEq] at mem
@@ -678,7 +605,7 @@ theorem RootedAllowanceHistory.all_quiet
       rw [← r.wethEmpty]
       exact h
     · intro call hmem
-      simp at hmem
+      simp only [List.not_mem_nil] at hmem
   | invoked _done _s mid fin call _prev member entry exit staged ih =>
     obtain ⟨zeroT, quietDone⟩ := ih
     have quietPre : ∀ p ∈ touchedWethAllowancePairs full, p.1 = vault.toB256 →
@@ -707,7 +634,7 @@ theorem RootedAllowanceHistory.all_quiet
           | ⟨_, _, _, _, frameMax⟩
           | ⟨_, _, _, covered, writtenEq, _, stored, _⟩
         · rw [approvalFalse] at hAppr
-          simp at hAppr
+          simp only [Bool.false_eq_true] at hAppr
         · apply finish
           have quiet := quietPre p touched owner
           have preEq : (Devm.getStor call.pre wethAccount).get
@@ -839,7 +766,7 @@ theorem weth_run_mkTransferFromInvocation
     rfl, rfl, rfl, rfl⟩
   · rw [memEmpty]
     exact Mem.wf_empty
-  · simpa using selected
+  · simpa only [Bool.false_eq_true, ↓reduceIte] using selected
 
 /-- **Slotless message preserves every cell.**  With no interpreted
 slot the message settles to its entry world or its post-transfer
@@ -901,7 +828,7 @@ theorem weth_static_processMessage_some_preserves_cell
         unfold Frame.settlementCommits
         rw [← settledEq]
         exact clean
-      cases errorEq : post.error <;> simp_all
+      cases errorEq : post.error <;> simp_all only [ExceptT.stM_eq, Bool.not_eq_true, Option.isNone_none, ne_eq, not_true_eq_false, Option.isNone_some, Bool.false_eq_true, not_false_eq_true, Option.isSome_some]
     have rollback := (ProcessMessage.rollback_of_error process postError).1
     rw [rollback]
 

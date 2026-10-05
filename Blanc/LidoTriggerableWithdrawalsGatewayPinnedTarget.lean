@@ -111,7 +111,9 @@ private theorem pauseComponent_arithmeticPanic (dp : DeployParams) :
         some (Func.revertData
           ((signatureHash "Panic" [.uint256]).toBytes.take 4 ++
             (Nat.toB256 0x11).toBytes)) := by
-    simp [Prog.function?, runtime, aux, baseAux, arithmeticPanicSlot]
+    simp only [Prog.function?, runtime, aux, baseAux, List.cons_append, List.nil_append,
+      List.append_assoc, arithmeticPanicSlot, List.length_cons, lt_add_iff_pos_left, add_pos_iff,
+      Nat.ofNat_pos, or_true, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   rw [lookup]
   decide +kernel
 
@@ -175,7 +177,7 @@ private theorem processMessage_entry_value
   have enter := (RunFrame.some_inv process).1
   rcases Frame.enter_run_inv enter with ⟨benv, _transfer, evmEq⟩
   have value := congrArg (fun evm : Evm => evm.sta.value) evmEq
-  simpa [Frame.ofCall, initEvm, initSevm, Msg.withBenv] using value
+  simpa only [initEvm, initSevm, Msg.withBenv, Frame.ofCall] using value
 
 /-- Any same-frame source `.exec` reached by an exact runtime invocation must
 lie in the calldata-selected entry.  A reachable-exec-free certificate for
@@ -220,7 +222,8 @@ private theorem noExec_of_selectedRuntimeEntry
     at mainCursor
   have mainRoute := mainCursor.toward compiled mainReached
     (by trivial) execAt
-  rcases mainRoute.dropLineRun (by simp [Ninst.pushB256]) with
+  rcases mainRoute.dropLineRun (by simp only [Ninst.pushB256, List.mem_cons, List.not_mem_nil,
+    or_false, ne_eq, forall_eq_or_imp, reduceCtorEq, not_false_eq_true, forall_eq, and_self]) with
     ⟨_guardPath, guardCursor, guardRun, _guardChronology, guardRoute⟩
   rcases Line.of_run_cons guardRun with
     ⟨afterPush, pushRun, restRun⟩
@@ -246,7 +249,9 @@ private theorem noExec_of_selectedRuntimeEntry
       (by trivial) execAt flagPrefix with
     ⟨dispatchCursor, dispatchRoute, _guardTailPrefix⟩
   rcases dispatchRoute.dropLineRun (by
-      simp [fsig, cdl, shiftRight, Ninst.pushB256]) with
+      simp only [fsig, cdl, Ninst.pushB256, shiftRight, List.cons_append, List.nil_append,
+        List.mem_cons, List.not_mem_nil, or_false, ne_eq, forall_eq_or_imp, reduceCtorEq,
+        not_false_eq_true, forall_eq, and_self]) with
     ⟨_selectorPath, selectorCursor, selectorRun,
       _selectorChronology, selectorRoute⟩
   have selectorPrefix : selector :: [] <<+ selectorCursor.pre.stack := by
@@ -264,7 +269,9 @@ private theorem noExec_of_selectedRuntimeEntry
           (Ninst.callvalue ::: Ninst.iszero :::
             (linearDispatchWith fallbackSlot sharedNonpayableFuncs <?>
               Func.revert)))) at selectorCursor
-  rcases selectorRoute.dropLineRun (by simp [Ninst.pushB256]) with
+  rcases selectorRoute.dropLineRun (by simp only [Fin.isValue, Ninst.pushB256, List.mem_cons,
+    List.not_mem_nil, or_false, ne_eq, forall_eq_or_imp, reduceCtorEq, not_false_eq_true, forall_eq,
+    and_self]) with
     ⟨_triggerBranchPath, triggerBranchCursor, triggerLineRun,
       _triggerChronology, triggerBranchRoute⟩
   rcases Line.of_run_cons triggerLineRun with
@@ -278,13 +285,14 @@ private theorem noExec_of_selectedRuntimeEntry
     prefix_of_dup_val dupRun (by show_nth) selectorPrefix
   have triggerPushed : selTriggerFullWithdrawals :: selector :: selector :: [] <<+
       afterTriggerPush.stack := by
-    simpa using prefix_of_push (of_run_pushB256 triggerPushRun) duplicated
+    simpa only [List.cons_append, List.nil_append] using
+      prefix_of_push (of_run_pushB256 triggerPushRun) duplicated
   have triggerFlagPrefix :
       (selTriggerFullWithdrawals =? selector) :: selector :: [] <<+
         triggerBranchCursor.pre.stack :=
     prefix_of_eq triggerEqRun triggerPushed
   rw [show (selTriggerFullWithdrawals =? selector) = 0 from by
-    simp [B256.eqCheck, Ne.symm notTrigger]] at triggerFlagPrefix
+    simp only [B256.eqCheck, Ne.symm notTrigger, ↓reduceIte]] at triggerFlagPrefix
   rcases triggerBranchRoute.selectBranchZero triggerBranchCursor compiled
       (by trivial) execAt triggerFlagPrefix with
     ⟨nonTriggerCursor, nonTriggerRoute, nonTriggerPrefix⟩
@@ -296,7 +304,8 @@ private theorem noExec_of_selectedRuntimeEntry
       ([Ninst.callvalue, Ninst.iszero] +++
         (linearDispatchWith fallbackSlot sharedNonpayableFuncs <?>
           Func.revert)) at nonTriggerCursor
-  rcases nonTriggerRoute.dropLineRun (by simp) with
+  rcases nonTriggerRoute.dropLineRun (by simp only [List.mem_cons, List.not_mem_nil, or_false,
+    ne_eq, forall_eq_or_imp, reduceCtorEq, not_false_eq_true, forall_eq, and_self]) with
     ⟨_valueBranchPath, valueBranchCursor, valueLineRun,
       _valueChronology, valueBranchRoute⟩
   rcases Line.of_run_cons valueLineRun with
@@ -305,12 +314,13 @@ private theorem noExec_of_selectedRuntimeEntry
     ⟨_afterValueZero, valueZeroRun, valueLineNil⟩
   cases valueLineNil
   have valuePrefix : sevm.value :: selector :: [] <<+ afterValue.stack := by
-    simpa using prefix_of_push (of_run_callvalue valueRun) nonTriggerPrefix
+    simpa only [List.cons_append, List.nil_append] using
+      prefix_of_push (of_run_callvalue valueRun) nonTriggerPrefix
   have valueFlagPrefix : (sevm.value =? 0) :: selector :: [] <<+
       valueBranchCursor.pre.stack :=
     prefix_of_iszero valueZeroRun valuePrefix
   rw [valueZero, show ((0 : B256) =? 0) = 1 from by
-    simp [B256.eqCheck]] at valueFlagPrefix
+    simp only [B256.eqCheck, ↓reduceIte]] at valueFlagPrefix
   rcases valueBranchRoute.selectBranchSucc valueBranchCursor compiled
       (by trivial) execAt (by decide) valueFlagPrefix with
     ⟨dispatchCursor, dispatchRoute, dispatchPrefix⟩
@@ -360,7 +370,7 @@ theorem pinnedPauseTarget_pauseFor_effect
   rw [stateEq]
   change rawPost.getStorVal gateway resumeSinceSlot =
     pauseForProjection msg.benv.stat.time duration
-  simpa [current.trans exactCall.currentTarget, time] using effect.2.2
+  simpa only [current.trans exactCall.currentTarget, time] using effect.2.2
 
 /-- Clause (ii): the exact clean static query preserves the pause projection
 and returns the canonical word corresponding to the entry-time predicate. -/
@@ -403,7 +413,7 @@ theorem pinnedPauseTarget_isPaused_truthful
   have postClean : post.error = none := by
     cases errorEq : post.error with
     | none => rfl
-    | some err => simp [errorEq] at clean
+    | some err => simp only [errorEq, Option.isSome_some, Bool.true_eq_false] at clean
   let rawPaused : Prop :=
     sevm.benvStat.time <
       pre.getStorVal sevm.currentTarget resumeSinceSlot
@@ -448,12 +458,12 @@ theorem pinnedPauseTarget_isPaused_truthful
           exact (show (0 : B256) ≠ 1 by decide) wordEq
       · intro paused
         have raw := pausedEq.mpr paused
-        simp [raw]
+        simp only [raw, ↓reduceIte]
   · intro notPaused
     left
     apply (acceptedIff 0).mpr
     have notRaw : ¬ rawPaused := fun paused => notPaused (pausedEq.mp paused)
-    simp [notRaw]
+    simp only [notRaw, ↓reduceIte]
 
 /-- Exact pause and query messages executing the concrete TWG runtime retain
 no successful write to any nominated CircuitBreaker cell.  The proof splits
@@ -506,12 +516,13 @@ theorem pinnedPauseTarget_circuitBreaker_noninterference
           apply selector_eq_of_data_eq_abiSelectorBytes_append
             (selected := selPauseFor) (tail := duration.toBytes)
           · rfl
-          · simpa [pauseForCalldata] using dataEq
+          · simpa only [pauseForCalldata] using dataEq
         have valueZero : sevm.value = 0 :=
           (processMessage_entry_value process).trans exactCall.valueZero
         exact noExec_of_selectedRuntimeEntry actualRun invocation guardZero
           valueZero selectorEq (by decide)
-          (by simp [sharedNonpayableFuncs]) pauseExecMembers
+          (by simp only [sharedNonpayableFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+            or_false, true_or]) pauseExecMembers
             (pauseForShared_reachableExecFree dp) sameFrame x execAt
       · have invocation :
             (Blanc.Exec.Deriv.exactInvocation
@@ -530,12 +541,13 @@ theorem pinnedPauseTarget_circuitBreaker_noninterference
           apply selector_eq_of_data_eq_abiSelectorBytes_append
             (selected := selIsPaused) (tail := [])
           · rfl
-          · simpa [isPausedCalldata] using dataEq
+          · simpa only [List.append_nil, isPausedCalldata] using dataEq
         have valueZero : sevm.value = 0 :=
           (processMessage_entry_value process).trans exactCall.valueZero
         exact noExec_of_selectedRuntimeEntry actualRun invocation guardZero
           valueZero selectorEq (by decide)
-          (by simp [sharedNonpayableFuncs]) []
+          (by simp only [sharedNonpayableFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil,
+            or_false, true_or, or_true]) []
             (isPausedShared_reachableExecFree dp) sameFrame x execAt
   · exact Exec.noRetainedWriteTo_of_not_commits actualRun committed
       circuitBreaker key

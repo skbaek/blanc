@@ -72,7 +72,7 @@ theorem error {pc : Nat} {sevm : Sevm} {pre : Devm}
     {error : EvmError × Devm} :
     Exec.CoreAccounting ca sem entry C V pc sevm pre (.error error) := by
   intro _ committed
-  simp [Execution.commits] at committed
+  simp only [Execution.commits, Bool.false_eq_true] at committed
 
 theorem nextNone
     (append : ∀ {a b c xs ys}, C.Replay a xs b → C.Replay b ys c →
@@ -91,7 +91,7 @@ theorem nextNone
     Exec.CoreAccounting ca sem entry C V pc sevm pre out := by
   intro run committed hfork installed admitted
   cases out with
-  | error error => simp [Execution.commits] at committed
+  | error error => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
     have codeNe : (pre.getCode ca).toList ≠ [] := fun empty =>
       (sem.ne_nil (installed.1.symm.trans (congrArg some empty))) rfl
@@ -133,7 +133,7 @@ theorem jump
     Exec.CoreAccounting ca sem entry C V pc sevm pre out := by
   intro run committed hfork installed admitted
   cases out with
-  | error error => simp [Execution.commits] at committed
+  | error error => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
     have stateEq := Jinst.preserves_state step
     have interAt : sem.At ca pc' sevm inter :=
@@ -166,7 +166,7 @@ theorem last
     Exec.CoreAccounting ca sem entry C V pc sevm pre out := by
   intro run committed _ _ _
   cases out with
-  | error error => simp [Execution.commits] at committed
+  | error error => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
     have observations : (Exec.committedFrames run).flatMap V.frameObs = [] := by
       rw [foreign_observation obsForeign run committed targetNe,
@@ -198,13 +198,15 @@ private theorem foreignSpawn
     XStep.run_toStep.mp step
   have hxrun := XStep.run_toStep.mp step
   cases spawnEq : Xinst.step sevm pre x with
-  | done execution => simp [spawnEq, XStep.Run] at hxrun
+  | done execution => simp only [XStep.Run, spawnEq, ExceptT.stM_eq, reduceCtorEq,
+    false_and] at hxrun
   | spawn frame resume =>
     simp only [spawnEq, XStep.Run] at hxrun
     obtain ⟨result, frameRun, resumeRun⟩ := hxrun
     cases result with
     | error error =>
-      cases resume <;> simp [Resume.run, liftToExecution] at resumeRun
+      cases resume <;> simp only [ExceptT.stM_eq, Resume.run, liftToExecution, Except.bind_error,
+        reduceCtorEq] at resumeRun
     | ok settled =>
       have enter := (RunFrame.some_inv frameRun).1
       have evmStep : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume (pc + 1) := by
@@ -264,7 +266,7 @@ theorem nextSome
   | exec x =>
     intro run committed hfork installed admitted
     cases out with
-    | error error => simp [Execution.commits] at committed
+    | error error => simp only [Execution.commits, Bool.false_eq_true] at committed
     | ok post =>
       obtain ⟨frame, resume, settled, spawnEq, frameRun, resumeRun,
           childAt, interAt, childFork⟩ := foreignSpawn hat step child targetNe installed hfork
@@ -340,8 +342,8 @@ theorem messageRoot_facts {c : ContractSpecSem} {msg : Msg} {entryBenv : Benv}
     refine ⟨?_, rfl⟩
     rcases ready.codeOrForeign with call | foreign
     · exact ready.ready.code call
-        (by simpa [initSevm, Msg.withBenv] using target)
-    · exact (foreign (by simpa [initSevm, Msg.withBenv] using target)).elim
+        (by simpa only [initSevm, Msg.withBenv] using target)
+    · exact (foreign (by simpa only [initSevm, Msg.withBenv] using target)).elim
   · change sum entryBenv.state.bal < 2 ^ 256
     have transferred := Msg.benvAfterTransfer_balance_effect
       (out := .ok entryBenv) transfer

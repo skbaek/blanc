@@ -21,12 +21,12 @@ def sloadCostOfKeys (target : Adr) (keys : KeySet)
   if (⟨target, key⟩ : Adr × B256) ∈ keys then gasWarmAccess
   else gasColdSload
 
-@[simp] theorem sloadCostOfKeys_eq_sloadCost
+theorem sloadCostOfKeys_eq_sloadCost
     (sevm : Sevm) (base : Devm) (key : B256) :
     sloadCostOfKeys sevm.currentTarget base.accessedStorageKeys key =
       sloadCost sevm base key := rfl
 
-@[simp] theorem afterSload_accessedStorageKeys
+theorem afterSload_accessedStorageKeys
     (sevm : Sevm) (base : Devm) (key : B256) :
     (afterSload sevm base key).accessedStorageKeys =
       sloadAccessedStorageKeys sevm.currentTarget
@@ -34,39 +34,39 @@ def sloadCostOfKeys (target : Adr) (keys : KeySet)
   unfold afterSload sloadAccessedStorageKeys
   split <;> rfl
 
-@[simp] theorem afterSload_getStor
+theorem afterSload_getStor
     (sevm : Sevm) (base : Devm) (key : B256) (address : Adr) :
     Devm.getStor (afterSload sevm base key) address =
       Devm.getStor base address := by
   unfold afterSload
   split <;> rfl
 
-@[simp] theorem afterSload_getCode
+theorem afterSload_getCode
     (sevm : Sevm) (base : Devm) (key : B256) (address : Adr) :
     (afterSload sevm base key).getCode address = base.getCode address := by
   unfold afterSload
   split <;> rfl
 
-@[simp] theorem afterSload_accessedAddresses
+theorem afterSload_accessedAddresses
     (sevm : Sevm) (base : Devm) (key : B256) :
     (afterSload sevm base key).accessedAddresses =
       base.accessedAddresses := by
   unfold afterSload
   split <;> rfl
 
-@[simp] theorem afterSload_logs
+theorem afterSload_logs
     (sevm : Sevm) (base : Devm) (key : B256) :
     (afterSload sevm base key).logs = base.logs := by
   unfold afterSload
   split <;> rfl
 
-@[simp] theorem afterSload_output
+theorem afterSload_output
     (sevm : Sevm) (base : Devm) (key : B256) :
     (afterSload sevm base key).output = base.output := by
   unfold afterSload
   split <;> rfl
 
-@[simp] theorem afterSload_error
+theorem afterSload_error
     (sevm : Sevm) (base : Devm) (key : B256) :
     (afterSload sevm base key).error = base.error := by
   unfold afterSload
@@ -88,7 +88,7 @@ private theorem sstoreCore_getCode (devm : Devm) (rc : Int) (target : Adr)
   · rw [State.get_set_ne _ h]
     rfl
 
-@[simp] theorem afterSstore_getCode
+theorem afterSstore_getCode
     (sevm : Sevm) (base : Devm) (key value : B256) (address : Adr) :
     (afterSstore sevm base key value).getCode address =
       base.getCode address := by
@@ -97,14 +97,14 @@ private theorem sstoreCore_getCode (devm : Devm) (rc : Int) (target : Adr)
   · exact sstoreCore_getCode base _ _ _ _ _
   · exact sstoreCore_getCode _ _ _ _ _ _
 
-@[simp] theorem afterSstore_accessedAddresses
+theorem afterSstore_accessedAddresses
     (sevm : Sevm) (base : Devm) (key value : B256) :
     (afterSstore sevm base key value).accessedAddresses =
       base.accessedAddresses := by
   unfold afterSstore
   split <;> rfl
 
-@[simp] theorem afterSstore_accessedStorageKeys
+theorem afterSstore_accessedStorageKeys
     (sevm : Sevm) (base : Devm) (key value : B256) :
     (afterSstore sevm base key value).accessedStorageKeys =
       sloadAccessedStorageKeys sevm.currentTarget
@@ -112,7 +112,7 @@ private theorem sstoreCore_getCode (devm : Devm) (rc : Int) (target : Adr)
   unfold afterSstore sloadAccessedStorageKeys
   split <;> rfl
 
-@[simp] theorem afterSstore_getStor_self
+theorem afterSstore_getStor_self
     (sevm : Sevm) (base : Devm) (key value : B256) :
     Devm.getStor (afterSstore sevm base key value) sevm.currentTarget =
       (Devm.getStor base sevm.currentTarget).set key value := by
@@ -122,7 +122,7 @@ private theorem sstoreCore_getCode (devm : Devm) (rc : Int) (target : Adr)
   · rw [setStorVal_getStor_self, Devm.withRefundCounter_getStor,
       addAccessedStorageKey_getStor]
 
-@[simp] theorem afterSstore_getStor_ne
+theorem afterSstore_getStor_ne
     (sevm : Sevm) (base : Devm) (key value : B256) (address : Adr)
     (haddress : sevm.currentTarget ≠ address) :
     Devm.getStor (afterSstore sevm base key value) address =
@@ -133,13 +133,13 @@ private theorem sstoreCore_getCode (devm : Devm) (rc : Int) (target : Adr)
   · rw [setStorVal_getStor_ne haddress, Devm.withRefundCounter_getStor,
       addAccessedStorageKey_getStor]
 
-@[simp] theorem afterSstore_logs
+theorem afterSstore_logs
     (sevm : Sevm) (base : Devm) (key value : B256) :
     (afterSstore sevm base key value).logs = base.logs := by
   unfold afterSstore
   split <;> rfl
 
-@[simp] theorem afterSstore_refundCounter
+theorem afterSstore_refundCounter
     (sevm : Sevm) (base : Devm) (key value : B256) :
     (afterSstore sevm base key value).refundCounter =
       sstoreNewRefundCounter sevm.benvStat.rules.gas value
@@ -148,20 +148,20 @@ private theorem sstoreCore_getCode (devm : Devm) (rc : Int) (target : Adr)
   unfold afterSstore
   split <;> rfl
 
-@[simp] theorem afterSstore_accountsToDelete
+theorem afterSstore_accountsToDelete
     (sevm : Sevm) (base : Devm) (key value : B256) :
     (afterSstore sevm base key value).accountsToDelete =
       base.accountsToDelete := by
   unfold afterSstore
   split <;> rfl
 
-@[simp] theorem afterSstore_output
+theorem afterSstore_output
     (sevm : Sevm) (base : Devm) (key value : B256) :
     (afterSstore sevm base key value).output = base.output := by
   unfold afterSstore
   split <;> rfl
 
-@[simp] theorem afterSstore_error
+theorem afterSstore_error
     (sevm : Sevm) (base : Devm) (key value : B256) :
     (afterSstore sevm base key value).error = base.error := by
   unfold afterSstore

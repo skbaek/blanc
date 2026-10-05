@@ -85,12 +85,12 @@ theorem body_insertDead {sevm : Sevm} {b : Devm} {sz nd : B256} {R : List B256} 
       (v0 := 0x10) (v1 := 0x97) (k := 22) (fail1 := t_1079_c22) (fail2 := t_1093_c22)
       (T := t_1097_c22) (img := img) (n := 1024 + 96 * h) (f := 928 + 96 * h) (a := br)
       (bw := nd)
-      prog_22 (by simp) hwf hr hs (by omega) (by omega) (by omega) (by omega) (by omega)
-      (by omega) hfp' (by simp; omega) hok1.nodeleg hok1.warm hok1.pre hok1.fork hdepth
+      prog_22 (by simp only [List.not_mem_nil, not_false_eq_true]) hwf hr hs (by omega) (by omega) (by omega) (by omega) (by omega)
+      (by omega) hfp' (by simp only [List.length_cons]; omega) hok1.nodeleg hok1.warm hok1.pre hok1.fork hdepth
       (by unfold deadGas at hG; omega)
   refine ⟨b', M', ⟨hpost.stor, hpost.code, hpost.addrs, hpost.keys, hpost.logs, hpost.output,
     hpost.error⟩, ⟨hwf', by rw [hs']; omega, img', hr', by rw [hw']; congr 2; omega,
-      by simp⟩, fun o k => ?_⟩
+      by simp only [List.not_mem_nil, IsEmpty.forall_iff, implies_true]⟩, fun o k => ?_⟩
   rw [SFunc.runExact_iff_runExactCut_nil] at k ⊢
   unfold deadGas
   rw [show G + (867 + (calculateMemoryGasCost (1120 + 96 * h) -
@@ -100,36 +100,36 @@ theorem body_insertDead {sevm : Sevm} {b : Devm} {sz nd : B256} {R : List B256} 
     rw [show 928 + 96 * h + 192 = 1120 + 96 * h by omega]; omega]
   unfold t_0f6e_c23
   refine rxc_dest ?_
-  refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_dup (n := 1) rfl (by simp; omega) ?_
-  refine rxc_lt hlt (by simp; omega) ?_
-  refine rxc_iszero (v := 0) (by decide) (by simp; omega) ?_
-  refine rxc_push rfl (by simp; omega) ?_
+  refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_dup (n := 1) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_lt hlt (by simp only [List.length_cons]; omega) ?_
+  refine rxc_iszero (v := 0) (by decide) (by simp only [List.length_cons]; omega) ?_
+  refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rxc_branch_zero ?_
   unfold t_0f78_c23
-  refine rxc_dup (n := 1) rfl (by simp; omega) ?_
-  refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_and hbit (by simp; omega) ?_
-  refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_eq (v := 0) (by decide) (by simp; omega) ?_
-  refine rxc_iszero (v := 1) (by decide) (by simp; omega) ?_
-  refine rxc_push rfl (by simp; omega) ?_
+  refine rxc_dup (n := 1) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_and hbit (by simp only [List.length_cons]; omega) ?_
+  refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_eq (v := 0) (by decide) (by simp only [List.length_cons]; omega) ?_
+  refine rxc_iszero (v := 1) (by decide) (by simp only [List.length_cons]; omega) ?_
+  refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rxc_branch_succ (by decide) ?_
   unfold t_0fa0_c23
   refine rxc_dest ?_
-  refine rxc_push (w := 2) (by decide) (by simp; omega) ?_
-  refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_dup (n := 2) rfl (by simp; omega) ?_
-  refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_dup (n := 1) rfl (by simp; omega) ?_
-  refine rxc_lt hlt (by simp; omega) ?_
-  refine rxc_push rfl (by simp; omega) ?_
+  refine rxc_push (w := 2) (by decide) (by simp only [List.length_cons]; omega) ?_
+  refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_dup (n := 2) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_dup (n := 1) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_lt hlt (by simp only [List.length_cons]; omega) ?_
+  refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rxc_branch_succ (by decide) ?_
   rw [t_0faf_c23_eq]
   refine rxc_dest ?_
-  refine rxc_add' hkey (by simp; omega) ?_
-  refine rxc_sload_sel hsha.fork (by simp; omega) ?_
-  refine rxc_dup (n := 4) rfl (by simp; omega) ?_
+  refine rxc_add' hkey (by simp only [List.length_cons]; omega) ?_
+  refine rxc_sload_sel hsha.fork (by simp only [List.length_cons]; omega) ?_
+  refine rxc_dup (n := 4) rfl (by simp only [List.length_cons]; omega) ?_
   refine hrun _ ?_
   unfold t_1097_c22
   have hF : (Nat.toB256 (928 + 96 * h + 96)).toNat = 928 + 96 * h + 96 :=
@@ -137,20 +137,20 @@ theorem body_insertDead {sevm : Sevm} {b : Devm} {sz nd : B256} {R : List B256} 
   refine rxc_dest ?_
   refine rxc_pop ?_
   refine rxc_mload (c := 3) (v := BeaconDeposit.hashPair Bytes.sha256 br nd) ?_
-    (by rw [hF]; exact read_word hr' _ hh') ?_ (by simp; omega) ?_
+    (by rw [hF]; exact read_word hr' _ hh') ?_ (by simp only [List.length_cons]; omega) ?_
   · rw [hF]; exact charge_covered hs' (by omega) (by omega)
   · rw [hF]; exact read_covered hs' (by omega) (by omega)
   refine rxc_swap (n := 2) rfl ?_
   refine rxc_pop ?_
-  refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_dup (n := 2) rfl (by simp; omega) ?_
+  refine rxc_push rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.reduceMod, List.set_cons_succ, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 2) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.reduceMod, List.set_cons_succ, List.set_cons_zero, List.length_cons]; omega) ?_
   refine rxc_div (v := sz / 2) (by rw [show Bytes.toB256 [0x02] = 2 by decide])
-    (by simp; omega) ?_
+    (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.reduceMod, List.set_cons_succ, List.set_cons_zero, List.length_cons]; omega) ?_
   refine rxc_swap (n := 1) rfl ?_
   refine rxc_pop ?_
-  refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_add' (one_add_toB256 (by omega)) (by simp; omega) ?_
-  refine rxc_push rfl (by simp; omega) ?_
-  exact rxc_jump prog_23 (by simp) k
+  refine rxc_push rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.reduceMod, List.set_cons_succ, List.set_cons_zero, Nat.one_mod, List.length_cons]; omega) ?_
+  refine rxc_add' (one_add_toB256 (by omega)) (by simp only [List.set_cons_succ, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_push rfl (by simp only [List.set_cons_succ, List.set_cons_zero, List.length_cons]; omega) ?_
+  exact rxc_jump prog_23 (by simp only [List.not_mem_nil, not_false_eq_true]) k
 
 end Blanc.Lift.BeaconDeposit

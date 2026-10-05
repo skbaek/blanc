@@ -215,7 +215,7 @@ private theorem callee_exec_low_gas {m : Msg}
     ∃ (e : EvmError) (d : Devm), exec (initEvm m) = .error ⟨e, d⟩ := by
   have hc : (initSevm m).code = calleeCode := hcode
   have hbytes : calleeCode.toList = calleeBytes := by
-    simp [calleeCode, ByteArray.toList_eq_toList_data]
+    simp only [calleeCode, ByteArray.toList_eq_toList_data]
   have at0 : Jinst.At (initSevm m).code 0 .jumpdest := by
     rw [hc]
     exact Jinst.at_of_slice (xs := []) ⟨1, by rw [hbytes]; decide⟩
@@ -519,7 +519,7 @@ private lemma responder_crossing_tail {sevm : Sevm} {p : Devm} {mcs : Nat}
   · -- the clean leg: the responder's own execution, at either budget class
     have hce' : child2.error.isSome = false := by
       revert hce
-      cases child2.error.isSome <;> simp
+      cases child2.error.isSome <;> simp only [Bool.false_eq_true, not_false_eq_true, imp_self, not_true_eq_false, Bool.true_eq_false]
     rw [hsettle, Resume.run_call_ok hce' hroom] at hres
     have hpost : postC = ((incorporateChildOnSuccess p child2
         child2.output).setMach ⟨1 :: p.stack, p.memory,
@@ -1438,7 +1438,7 @@ theorem pauseRetainedWorld_join :
   · refine absurd (show B256.Nof pauseRetainedSevm.benvStat.time
       pauseWorldInterval from ?_) hwrap
     show pauseWorldTime.toNat + pauseWorldInterval.toNat < 2 ^ 256
-    norm_num [show pauseWorldTime.toNat = 10 from by decide,
+    norm_num only [show pauseWorldTime.toNat = 10 from by decide,
       show pauseWorldInterval.toNat = 2592000 from by decide]
 
 end Blanc.LidoCircuitBreaker

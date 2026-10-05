@@ -173,7 +173,7 @@ theorem deposit_success_retainedStorageEffectTriples
   obtain ⟨execution, hrun, heffects, hcompiled⟩ :=
     deposit_route_retainedStorageEffectTriples
       hlengthWordNe hselector hendpoint'
-        (by simpa [Execution.commits] using hpostError) hcode
+        (by simpa only [Execution.commits, Option.isNone_iff_eq_none] using hpostError) hcode
   refine ⟨post, execution, ?_, ?_, hcompiled⟩
   · simpa only [depositRuntimeSuccessGas, s] using hrun
   · exact heffects

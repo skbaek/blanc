@@ -64,14 +64,14 @@ theorem Reach.silentTo {ok : Ninst → Bool} {Ψ : Devm → Prop}
     | succ t w hw hp =>
         simp only [SFunc.silentTree, Bool.and_eq_true] at hf
         exact ih hf.2 hK (hpop hp hΨ)
-    | toZero t hp => simp [SFunc.silentTree] at hf
-    | toSucc t w hw hk hp => simp [SFunc.silentTree] at hf
-    | jump t hk hp => simp [SFunc.silentTree] at hf
-    | call t hk hp => simp [SFunc.silentTree] at hf
+    | toZero t hp => simp only [SFunc.silentTree, Bool.false_eq_true] at hf
+    | toSucc t w hw hk hp => simp only [SFunc.silentTree, Bool.false_eq_true] at hf
+    | jump t hk hp => simp only [SFunc.silentTree, Bool.false_eq_true] at hf
+    | call t hk hp => simp only [SFunc.silentTree, Bool.false_eq_true] at hf
     | @ret d d' f₀ K₀ t hp =>
         exact ih (hK f₀ List.mem_cons_self) (fun s hs => hK s (List.mem_cons_of_mem _ hs))
           (hpop hp hΨ)
-    | pcAt hp hr => simp [SFunc.silentTree] at hf
+    | pcAt hp hr => simp only [SFunc.silentTree, Bool.false_eq_true] at hf
 
 end Silent
 
@@ -82,11 +82,11 @@ theorem Exec.rawFrameDescendants_eq_nil_of_noExec {pc : Nat} {sevm : Sevm} {d : 
       ∀ x, ¬ Ninst.At N.sevm.code N.pc (.exec x)) :
     Exec.rawFrameDescendants run = [] := by
   induction run with
-  | halt step => simp [Exec.rawFrameDescendants]
+  | halt step => simp only [Exec.rawFrameDescendants]
   | cont step next ih =>
       have := ih (fun N hN x => h N (.step (.cont step next) hN) x)
-      simpa [Exec.rawFrameDescendants] using this
-  | doneErr step enter resume => simp [Exec.rawFrameDescendants]
+      simpa only [Exec.rawFrameDescendants] using this
+  | doneErr step enter resume => simp only [Exec.rawFrameDescendants]
   | doneOk step enter resume next ih =>
       obtain ⟨x, instruction, -, -⟩ := Evm.step_spawn_inv step
       exact (h _ (.refl _) x instruction).elim

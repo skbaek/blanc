@@ -94,7 +94,7 @@ private theorem getTransVal_setTransVal_self (devm : Devm) (a : Adr)
   rw [Std.TreeMap.getD_eq_getD_getElem?, Tra.getElem?_set, if_pos rfl]
   split
   · show Stor.get .empty k = 0
-    simp [Stor.get, Stor.empty]
+    simp only [Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc, Std.TreeMap.getD_emptyc]
   · show ((Option.getD (some _)) Stor.empty).get k = 0
     exact Stor.get_set_self _ _ _
 
@@ -392,11 +392,6 @@ private theorem temporalSstorePost_output (sevm : Sevm) (base : Devm)
     (key value : B256) :
     (temporalSstorePost sevm base key value).output = base.output := rfl
 
-private theorem temporalSstorePost_transientStorage (sevm : Sevm)
-    (base : Devm) (key value : B256) :
-    (temporalSstorePost sevm base key value).transientStorage =
-      base.transientStorage := rfl
-
 private theorem temporalSstorePost_accessedAddresses (sevm : Sevm)
     (base : Devm) (key value : B256) :
     (temporalSstorePost sevm base key value).accessedAddresses =
@@ -413,9 +408,6 @@ private theorem addLog_error (devm : Devm) (l : Log) :
 
 private theorem addLog_output (devm : Devm) (l : Log) :
     (devm.addLog l).output = devm.output := rfl
-
-private theorem addLog_transientStorage (devm : Devm) (l : Log) :
-    (devm.addLog l).transientStorage = devm.transientStorage := rfl
 
 private theorem addLog_accessedStorageKeys (devm : Devm) (l : Log) :
     (devm.addLog l).accessedStorageKeys = devm.accessedStorageKeys := rfl
@@ -443,10 +435,6 @@ private theorem setTransVal_output (devm : Devm) (a : Adr) (k v : B256) :
 private theorem setMach_getStorVal (devm : Devm) (m : Mach) (a : Adr)
     (key : B256) : (devm.setMach m).getStorVal a key = devm.getStorVal a key :=
   rfl
-
-private theorem setMach_getTransVal (devm : Devm) (m : Mach) (a : Adr)
-    (key : B256) :
-    (devm.setMach m).getTransVal a key = devm.getTransVal a key := rfl
 
 private theorem setMach_logs (devm : Devm) (m : Mach) :
     (devm.setMach m).logs = devm.logs := rfl
@@ -1365,11 +1353,11 @@ private theorem lastMem_durLast :
 private theorem lastSvc_reset {orig new : B256} (hnew : orig ≠ new)
     (hzero : ¬ orig = 0) : sstoreValueCost orig orig new = 2900 := by
   rw [sstoreValueCost, if_pos ⟨rfl, hnew⟩, if_neg hzero]
-  norm_num [gasStorageUpdate, gasColdSload]
+  norm_num only [gasStorageUpdate, gasColdSload]
 
 private theorem lastSvc_noop {orig cur : B256} :
     sstoreValueCost orig cur cur = 100 := by
-  rw [sstoreValueCost, if_neg (by simp)]
+  rw [sstoreValueCost, if_neg (by simp only [ne_eq, not_true_eq_false, and_false, not_false_eq_true])]
   rfl
 
 /-! ## The kernel prefix reserve, closed -/
@@ -1703,7 +1691,7 @@ writes -/
 private theorem lastPayload_of_canonical {w : B256}
     (h : canonicalAddress w) : w.toNat < 2 ^ 252 := by
   unfold canonicalAddress at h
-  exact lt_trans h (by norm_num)
+  exact lt_trans h (by norm_num only)
 
 private theorem lastExpiry_ne_of_ne {p : B256} (hc : canonicalAddress p)
     (hne : p ≠ pauseWorldPauser) :
@@ -2161,7 +2149,7 @@ private theorem pauseLastWorld_master :
         show (1024 : Nat) ≠ 0
         decide)
       (by decide)
-      (by norm_num)
+      (by norm_num only)
   -- the boundary facts the dichotomy interface consumes
   have hmidCount : mid.getStorVal configWorldOwner
       (countSlot pauseWorldPauser) = 0 := by
@@ -2222,7 +2210,7 @@ private theorem pauseLastWorld_master :
       pauseLastStor_expiry)
     hmidWarmExpiry
     (lastSvc_reset (by decide) (by decide))
-    (by norm_num [gCallStipend])
+    (by norm_num only [gCallStipend])
     rfl
   have hmid_eta : mid.setMach ⟨[], pauseDecodedMemory (((((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes).write
@@ -2230,14 +2218,14 @@ private theorem pauseLastWorld_master :
       (arrayLengthWord * 32).toNat (1 : B256).toBytes).write
       (lastTargetWord * 32).toNat pauseWorldCallee.toB256.toBytes) pauseWorldDuration,
       0 + 3322 + 100 + 2900, mid.stateGas⟩ = mid := by
-    rw [show (0 + 3322 + 100 + 2900 : Nat) = 6322 from by norm_num, ← hgas,
+    rw [show (0 + 3322 + 100 + 2900 : Nat) = 6322 from by norm_num only, ← hgas,
       ← hmem, ← hstk]
     rfl
   rw [hmid_eta] at hW8
   have hboundary := Func.RunCompiledTo.of_runCompiled hW8
   -- extend through pauseAfterSet
   have hafter := hclose _ hW8
-  rw [show (6322 + 427 + 2600 : Nat) = 9349 from by norm_num] at hafter
+  rw [show (6322 + 427 + 2600 : Nat) = 9349 from by norm_num only] at hafter
   -- through finishSetPauser
   have hfin := finishSetPauser_pauseAfterSet_runCompiled officialParams
     pauseLastSevm (indexClearPost pauseLastSevm (entryClearPost pauseLastSevm (temporalSloadBase pauseLastSevm (temporalSloadBase pauseLastSevm (temporalSloadBase pauseLastSevm (temporalSstorePost pauseLastSevm (temporalSloadBase pauseLastSevm (assignmentPost pauseLastSevm
@@ -2259,7 +2247,7 @@ private theorem pauseLastWorld_master :
     lastMem_contLast (by rw [lastMem_sizeLast]; decide)
     (by rw [lastMem_sizeLast]) rfl
     hafter
-  rw [show (9349 + 1934 : Nat) = 0 + 11283 from by norm_num] at hfin
+  rw [show (9349 + 1934 : Nat) = 0 + 11283 from by norm_num only] at hfin
   -- through the cold-entry removal walk
   have hrem := removeTarget_toFinish_coldEntry_runCompiled (hfork := hfork) officialParams
     pauseLastSevm (temporalSstorePost pauseLastSevm (temporalSloadBase pauseLastSevm (assignmentPost pauseLastSevm
@@ -2291,12 +2279,12 @@ private theorem pauseLastWorld_master :
     lastSvc_noop lastSvc_noop (lastSvc_reset (by decide) (by decide))
     (lastSvc_reset (by decide) (by decide))
     (lastSvc_reset (by decide) (by decide))
-    (by decide) (by norm_num [gCallStipend]) rfl _
+    (by decide) (by norm_num only [gCallStipend]) rfl _
     (by
       dsimp only
       exact hfin)
   rw [show (0 + 11283 + 139 + 0 + 0 + 0 + 2100 + 2100 + 2100 + 100 + 100 +
-    2900 + 2900 + 2900 : Nat) = 26622 from by norm_num] at hrem
+    2900 + 2900 + 2900 : Nat) = 26622 from by norm_num only] at hrem
   -- through the afterOldPauser glue
   have hglue := afterOldPauser_removeTarget_runCompiled officialParams
     pauseLastSevm (temporalSstorePost pauseLastSevm (temporalSloadBase pauseLastSevm (assignmentPost pauseLastSevm
@@ -2308,7 +2296,7 @@ private theorem pauseLastWorld_master :
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes)
     [] 26622 _ (by decide) lastMem_reads1 lastMem_new1
     (by rw [lastMem_size1]; decide) (by rw [lastMem_size1]) hrem
-  rw [show (26622 + 35 : Nat) = 0 + 26657 from by norm_num] at hglue
+  rw [show (26622 + 35 : Nat) = 0 + 26657 from by norm_num only] at hglue
   -- through the shared Registry kernel
   have hker := setPauserKernel_found_runCompiled (hfork := hfork) officialParams pauseLastSevm
     (pauseKernelBase pauseLastSevm pauseLastPre
@@ -2332,13 +2320,13 @@ private theorem pauseLastWorld_master :
     ((pauseWorld_getOrigStor pauseLastWorldStor pauseLastWorldGas).trans
       pauseLastStor_count)
     (lastSvc_reset (by decide) (by decide))
-    (by norm_num [gCallStipend]) rfl
+    (by norm_num only [gCallStipend]) rfl
     (by
       dsimp only
       rw [show (1 - 1 : B256) = 0 from by decide]
       exact hglue)
   rw [lastKernelPrefixGas,
-    show (0 + 26657 + 8122 : Nat) = 34779 from by norm_num] at hker
+    show (0 + 26657 + 8122 : Nat) = 34779 from by norm_num only] at hker
   -- through the guarded body
   have hbody := pause_body_runCompiled (hfork := hfork) officialParams pauseLastSevm
     pauseLastPre pauseWorldCallee.toB256 pauseWorldPauser pauseWorldExpiry
@@ -2363,7 +2351,7 @@ private theorem pauseLastWorld_master :
       exact (lastStor_lockPost _).trans pauseLastStor_duration)
     lastCost_duration rfl hker
   rw [show (34779 + (469 + 2100 + 2100 + 2100) : Nat) = 0 + 41548 from by
-    norm_num] at hbody
+    norm_num only] at hbody
   have hbodyTo := Func.RunCompiledTo.of_runCompiled hbody
   -- through the dispatcher
   obtain ⟨hprog, hcompile⟩ := pause_dispatch_runCompiledTo officialParams
@@ -2377,7 +2365,7 @@ private theorem pauseLastWorld_master :
   have hentry : pauseLastPre.setMach ⟨[], Mem.empty,
       0 + pauseDispatchGas + 41548, pauseLastPre.stateGas⟩ = pauseLastPre := by
     rw [show (0 + pauseDispatchGas + 41548 : Nat) = pauseLastWorldGas from by
-      norm_num [pauseDispatchGas, pauseLastWorldGas]]
+      norm_num only [pauseDispatchGas, pauseLastWorldGas]]
     rfl
   rw [hentry] at hprog
   have hexec : exec ⟨0, pauseLastSevm, pauseLastPre⟩ = .ok _ :=
@@ -4000,7 +3988,7 @@ private theorem returnStor_RB6_duration :
 private theorem returnPayload_of_canonical {w : B256}
     (h : canonicalAddress w) : w.toNat < 2 ^ 252 := by
   unfold canonicalAddress at h
-  exact lt_trans h (by norm_num)
+  exact lt_trans h (by norm_num only)
 
 private theorem returnExpiry_ne_of_ne {p : B256} (hc : canonicalAddress p)
     (hne : p ≠ pauseWorldPauser) : expirySlot pauseWorldPauser ≠ expirySlot p := by
@@ -4228,7 +4216,7 @@ private theorem pauseRetainedWorld_master :
       returnCode_RB7
       (by show (1024 : Nat) ≠ 0; decide)
       (by decide)
-      (by norm_num)
+      (by norm_num only)
   have hmidCount : mid.getStorVal configWorldOwner
       (countSlot pauseWorldPauser) = 1 := by
     rw [seam_getStorVal hchain, addLog_getStorVal]
@@ -4301,7 +4289,7 @@ private theorem pauseRetainedWorld_master :
       exact lastSvc_reset (by decide) (by decide))
     (by
       show gCallStipend < 0 + 1496 + 2900
-      norm_num [gCallStipend])
+      norm_num only [gCallStipend])
     rfl
   have hmid_eta : mid.setMach ⟨[], pauseDecodedMemory (((((pauseMemory pauseWorldCallee.toB256 pauseWorldDuration).write
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes).write
@@ -4309,13 +4297,13 @@ private theorem pauseRetainedWorld_master :
       (arrayLengthWord * 32).toNat (2 : B256).toBytes).write
       (lastTargetWord * 32).toNat pauseWorldT2.toBytes) pauseWorldDuration,
       0 + 3351 + 100 + 2100 + 2900, mid.stateGas⟩ = mid := by
-    rw [show (0 + 3351 + 100 + 2100 + 2900 : Nat) = 8451 from by norm_num,
+    rw [show (0 + 3351 + 100 + 2100 + 2900 : Nat) = 8451 from by norm_num only,
       ← hgas, ← hmem, ← hstk]
     rfl
   rw [hmid_eta] at hW8
   have hboundary := Func.RunCompiledTo.of_runCompiled hW8
   have hafter := hclose _ hW8
-  rw [show (8451 + 427 + 2600 : Nat) = 11478 from by norm_num] at hafter
+  rw [show (8451 + 427 + 2600 : Nat) = 11478 from by norm_num only] at hafter
   have hfin := finishSetPauser_pauseAfterSet_runCompiled officialParams
     pauseRetainedSevm (temporalSstorePost pauseRetainedSevm (lengthWritePost pauseRetainedSevm (temporalSstorePost pauseRetainedSevm (temporalSstorePost pauseRetainedSevm
       (addAccessedStorageKey (temporalSstorePost pauseRetainedSevm
@@ -4344,7 +4332,7 @@ private theorem pauseRetainedWorld_master :
     returnMem_contLast (by rw [returnMem_sizeLast]; decide)
     (by rw [returnMem_sizeLast]) rfl
     hafter
-  rw [show (11478 + 1934 : Nat) = 0 + 13412 from by norm_num] at hfin
+  rw [show (11478 + 1934 : Nat) = 0 + 13412 from by norm_num only] at hfin
   have hrem := removeTarget_swapPop_toFinish_coldEntry_runCompiled (hfork := hfork) officialParams
     pauseRetainedSevm (temporalSstorePost pauseRetainedSevm (temporalSloadBase pauseRetainedSevm (assignmentPost pauseRetainedSevm
       (pauseKernelBase pauseRetainedSevm pauseRetainedPre
@@ -4386,11 +4374,11 @@ private theorem pauseRetainedWorld_master :
     (lastSvc_reset (by decide) (by decide))
     (lastSvc_reset (by decide) (by decide))
     (lastSvc_reset (by decide) (by decide))
-    (by decide) (by norm_num [gCallStipend]) rfl _
+    (by decide) (by norm_num only [gCallStipend]) rfl _
     (by dsimp only; exact hfin)
   rw [show (0 + 13412 + 139 + 0 + 0 + 0 + 2100 + 2100 + 2100 + gasColdSload +
     gasColdSload + 2900 + 2900 + 2900 + 2900 + 2900 : Nat) = 38551 from by
-    norm_num [gasColdSload]] at hrem
+    norm_num only [gasColdSload]] at hrem
   have hglue := afterOldPauser_removeTarget_runCompiled officialParams
     pauseRetainedSevm (temporalSstorePost pauseRetainedSevm (temporalSloadBase pauseRetainedSevm (assignmentPost pauseRetainedSevm
       (pauseKernelBase pauseRetainedSevm pauseRetainedPre
@@ -4401,7 +4389,7 @@ private theorem pauseRetainedWorld_master :
       (previousPauserWord * 32).toNat pauseWorldPauser.toBytes)
     [] 38551 _ (by decide) returnMem_reads1 returnMem_new1
     (by rw [returnMem_size1]; decide) (by rw [returnMem_size1]) hrem
-  rw [show (38551 + 35 : Nat) = 0 + 38586 from by norm_num] at hglue
+  rw [show (38551 + 35 : Nat) = 0 + 38586 from by norm_num only] at hglue
   have hker := setPauserKernel_found_runCompiled (hfork := hfork) officialParams pauseRetainedSevm
     (pauseKernelBase pauseRetainedSevm pauseRetainedPre
       pauseWorldCallee.toB256 pauseWorldPauser) (pauseMemory pauseWorldCallee.toB256 pauseWorldDuration) (pauseImage pauseWorldCallee.toB256 pauseWorldDuration) _
@@ -4420,7 +4408,7 @@ private theorem pauseRetainedWorld_master :
       pauseRetainedStor_count)
     ((pauseWorld_getOrigStor pauseRetainedWorldStor pauseRetainedWorldGas).trans pauseRetainedStor_count)
     (lastSvc_reset (by decide) (by decide))
-    (by norm_num [gCallStipend]) rfl
+    (by norm_num only [gCallStipend]) rfl
     (by
       dsimp only
       rw [show (2 - 1 : B256) = 1 from by decide]
@@ -4430,7 +4418,7 @@ private theorem pauseRetainedWorld_master :
       8122 from by
     unfold foundSetPauserKernelPrefixGas
     rw [returnCost_assignWarm, returnCost_countCold],
-    show (0 + 38586 + 8122 : Nat) = 46708 from by norm_num] at hker
+    show (0 + 38586 + 8122 : Nat) = 46708 from by norm_num only] at hker
   have hbody := pause_body_runCompiled (hfork := hfork) officialParams pauseRetainedSevm
     pauseRetainedPre pauseWorldCallee.toB256 pauseWorldPauser pauseWorldExpiry pauseWorldDuration 2100 2100 2100 46708 _
     (pauseWorld_dataLength pauseRetainedWorldStor pauseRetainedWorldGas) (by decide) rfl
@@ -4450,7 +4438,7 @@ private theorem pauseRetainedWorld_master :
       exact (returnStor_lockPost _).trans pauseRetainedStor_duration)
     returnCost_duration rfl hker
   rw [show (46708 + (469 + 2100 + 2100 + 2100) : Nat) = 0 + 53477 from by
-    norm_num] at hbody
+    norm_num only] at hbody
   have hbodyTo := Func.RunCompiledTo.of_runCompiled hbody
   obtain ⟨hprog, hcompile⟩ := pause_dispatch_runCompiledTo officialParams
     pauseRetainedSevm pauseRetainedPre 53477 0 _
@@ -4461,7 +4449,7 @@ private theorem pauseRetainedWorld_master :
   have hentry : pauseRetainedPre.setMach ⟨[], Mem.empty,
       0 + pauseDispatchGas + 53477, pauseRetainedPre.stateGas⟩ = pauseRetainedPre := by
     rw [show (0 + pauseDispatchGas + 53477 : Nat) = pauseRetainedWorldGas from by
-      norm_num [pauseDispatchGas, pauseRetainedWorldGas]]
+      norm_num only [pauseDispatchGas, pauseRetainedWorldGas]]
     rfl
   rw [hentry] at hprog
   have hexec : exec ⟨0, pauseRetainedSevm, pauseRetainedPre⟩ = .ok _ :=

@@ -191,12 +191,10 @@ theorem depositQuote_arithmetic_trace
       productOverTwoPow256TraceImage image amount denominator, ?_, quoteImage,
       productOverTwoPow256TraceImage_wordFrame image amount denominator,
       bodyState.trans quoteState, quoteRun⟩
-    · simpa [convertToSharesN, denominator, assetsMax, maxWord_toNat,
-        assetFactorN_maxWord, stagedDenominator_toNat stable] using
-        quotientFits
-    · simpa [convertToSharesN, denominator, assetsMax, maxWord_toNat,
-        assetFactorN_maxWord, stagedDenominator_toNat stable] using
-        quoteStack
+    · simpa only [convertToSharesN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
+      stagedDenominator_toNat stable] using quotientFits
+    · simpa only [convertToSharesN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
+      stagedDenominator_toNat stable] using quoteStack
   · rcases ordinaryArm with
       ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyState,
         bodyRun⟩
@@ -209,10 +207,10 @@ theorem depositQuote_arithmetic_trace
         bodyStack lookup bodyRun
     refine ⟨?_, quotePre, quoteImage, ?_, quoteMemImage, quoteFrame,
       bodyState.trans quoteState, quoteRun⟩
-    · simpa [convertToSharesN, stagedDenominator_toNat stable,
-        stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quotientFits
-    · simpa [convertToSharesN, stagedDenominator_toNat stable,
-        stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quoteStack
+    · simpa only [convertToSharesN, stagedDenominator_toNat stable,
+      stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quotientFits
+    · simpa only [convertToSharesN, stagedDenominator_toNat stable,
+      stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quoteStack
 
 /-- The `mint` arithmetic suffix quotes exactly `ceil(shares*X/D)` from the
 pre-transfer booked assets and supply and calls `mintAfterQuote`. -/
@@ -259,10 +257,10 @@ theorem mintQuote_arithmetic_trace
         bodyStack lookup bodyRun
     refine ⟨?_, quotePre, quoteImage, ?_, quoteMemImage, quoteFrame,
       bodyState.trans quoteState, quoteRun⟩
-    · simpa [previewMintN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
-        stagedDenominator_toNat stable] using ceilingFits
-    · simpa [previewMintN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
-        stagedDenominator_toNat stable] using quoteStack
+    · simpa only [previewMintN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
+      stagedDenominator_toNat stable] using ceilingFits
+    · simpa only [previewMintN, assetsMax, maxWord_toNat, assetFactorN_maxWord,
+      stagedDenominator_toNat stable] using quoteStack
   · rcases ordinaryArm with
       ⟨assetsNotMax, bodyPre, bodyStack, bodyWf, bodyReads, bodyState,
         bodyRun⟩
@@ -275,10 +273,10 @@ theorem mintQuote_arithmetic_trace
         bodyStack lookup bodyRun
     refine ⟨?_, quotePre, quoteImage, ?_, quoteMemImage, quoteFrame,
       bodyState.trans quoteState, quoteRun⟩
-    · simpa [previewMintN, stagedDenominator_toNat stable,
-        stagedAssetFactor_toNat_of_ne_max assetsNotMax] using ceilingFits
-    · simpa [previewMintN, stagedDenominator_toNat stable,
-        stagedAssetFactor_toNat_of_ne_max assetsNotMax] using quoteStack
+    · simpa only [previewMintN, stagedAssetFactor_toNat_of_ne_max assetsNotMax,
+      stagedDenominator_toNat stable] using ceilingFits
+    · simpa only [previewMintN, stagedAssetFactor_toNat_of_ne_max assetsNotMax,
+      stagedDenominator_toNat stable] using quoteStack
 
 /-- A successful zero-caller guard proves the executing frame's caller is
 nonzero and leaves memory, state, and logs untouched. -/
@@ -314,13 +312,13 @@ theorem nonzeroCaller_trace
   have callerNonzero : sevm.caller.toB256 ≠ 0 := by
     intro callerZero
     have onePrefix : (1 : B256) :: tail <<+ zeroTest.stack := by
-      simpa [B256.eqCheck, callerZero] using zeroTestPrefix
+      simpa only [B256.eqCheck, callerZero, ↓reduceIte] using zeroTestPrefix
     obtain ⟨succArmPre, -, revertRun, -⟩ :=
       Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix callerBranchRun
     exact absurd revertRun Func.WalkInv.noRevert
   have callerZeroPrefix : (0 : B256) :: tail <<+ zeroTest.stack := by
-    simpa [B256.eqCheck, callerNonzero] using zeroTestPrefix
+    simpa only [B256.eqCheck, callerNonzero, ↓reduceIte] using zeroTestPrefix
   obtain ⟨bodyPre, callerPop, bodyRun, bodyStack⟩ :=
     Func.WalkInv.zero_branch_of_prefix callerZeroPrefix callerBranchRun
   exact ⟨bodyPre, callerNonzero, bodyStack,
@@ -401,13 +399,13 @@ theorem canonicalNonzeroAddress_trace
     have valueNonzero : value ≠ 0 := by
       intro valueZero
       have onePrefix : (1 : B256) :: tail <<+ testPre.stack := by
-        simpa [B256.eqCheck, valueZero] using testPrefix
+        simpa only [B256.eqCheck, valueZero, ↓reduceIte] using testPrefix
       obtain ⟨revertPre, -, revertRun, -⟩ :=
         Func.WalkInv.succ_branch_of_prefix
           (by decide : (1 : B256) ≠ 0) onePrefix testBranchRun
       exact absurd revertRun Func.WalkInv.noRevert
     have testZeroPrefix : (0 : B256) :: tail <<+ testPre.stack := by
-      simpa [B256.eqCheck, valueNonzero] using testPrefix
+      simpa only [B256.eqCheck, valueNonzero, ↓reduceIte] using testPrefix
     obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
       Func.WalkInv.zero_branch_of_prefix testZeroPrefix testBranchRun
     have bodyWf : Mem.Wf bodyPre.memory := by
@@ -551,13 +549,13 @@ theorem shareRoomGuard_trace
   have roomLarge : ¬ Nat.toB256 (shareRoomN supply.toNat) < shares := by
     intro roomLt
     have onePrefix : (1 : B256) :: tail <<+ branchPre.stack := by
-      simpa [B256.ltCheck, roomLt] using testPrefix
+      simpa only [B256.ltCheck, roomLt, ↓reduceIte] using testPrefix
     obtain ⟨revertPre, revertPop, revertRun, -⟩ :=
       Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
     exact absurd revertRun Func.WalkInv.noRevert
   have zeroPrefix : (0 : B256) :: tail <<+ branchPre.stack := by
-    simpa [B256.ltCheck, roomLarge] using testPrefix
+    simpa only [B256.ltCheck, roomLarge, ↓reduceIte] using testPrefix
   obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
     Func.WalkInv.zero_branch_of_prefix zeroPrefix branchRun
   have bodyWf : Mem.Wf bodyPre.memory := by
@@ -749,13 +747,13 @@ theorem inboundCredit_trace
   have noWrap : ¬ (balance + shares) < balance := by
     intro wrapped
     have onePrefix : (1 : B256) :: tail <<+ branchPre.stack := by
-      simpa [B256.ltCheck, wrapped] using testPrefix
+      simpa only [B256.ltCheck, wrapped, ↓reduceIte] using testPrefix
     obtain ⟨succArmPre, -, revertRun, -⟩ :=
       Func.WalkInv.succ_branch_of_prefix
         (by decide : (1 : B256) ≠ 0) onePrefix branchRun
     exact absurd revertRun Func.WalkInv.noRevert
   have zeroPrefix : (0 : B256) :: tail <<+ branchPre.stack := by
-    simpa [B256.ltCheck, noWrap] using testPrefix
+    simpa only [B256.ltCheck, noWrap, ↓reduceIte] using testPrefix
   obtain ⟨bodyPre, bodyPop, bodyRun, bodyPrefix⟩ :=
     Func.WalkInv.zero_branch_of_prefix zeroPrefix branchRun
   have bodyWf : Mem.Wf bodyPre.memory := by

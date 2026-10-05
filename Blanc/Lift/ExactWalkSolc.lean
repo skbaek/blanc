@@ -33,7 +33,8 @@ namespace Blanc.Lift
 
 open Jaune
 
-macro "rroom" : tactic => `(tactic| (first | omega | (simp <;> omega)))
+macro "rroom" : tactic =>
+  `(tactic| (first | omega | (simp only [List.length_cons, List.length_nil] <;> omega)))
 
 section Steps
 
@@ -114,7 +115,7 @@ theorem FpMem.init : FpMem 96 (Mem.empty.write 64 (0x60 : B256).toBytes) := by
 
 theorem Mem.size_write_word_of_le {μ : Mem} {n i : Nat} {w : B256} (hs : μ.size = n)
     (hw : i + 32 ≤ n) : (μ.write i w.toBytes).size = n := by
-  rw [Mem.size_write_word_at, hs]; simp [hw]
+  rw [Mem.size_write_word_at, hs]; simp only [hw, ↓reduceIte]
 
 theorem FpMem.write {n : Nat} {M : Mem} (h : FpMem n M) (i : Nat) (v : B256) (hi : i + 32 ≤ n)
     (hd : i + 32 ≤ 64 ∨ 96 ≤ i) : FpMem n (M.write i v.toBytes) := by
@@ -335,7 +336,7 @@ theorem afterSstore_empty {sevm : Sevm} {b : Devm} {key value : B256} (a : Adr) 
   rfl
 
 theorem ltCheck_zero_of_le {x y : B256} (h : y ≤ x) : B256.ltCheck x y = 0 := by
-  simp [B256.ltCheck, B256.not_lt.mpr h]
+  simp only [B256.ltCheck, B256.not_lt.mpr h, ↓reduceIte]
 
 /-- `require(x >= y)` on a value just read from storage: the comparison, its three `ISZERO`s and the
 jump (taken).  The hypothesis `h : y ≤ x` is named (a search of the context could compare

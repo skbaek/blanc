@@ -69,7 +69,7 @@ theorem exit_gasHead_prefix {sevm : Sevm} {pre post : Devm}
     ⟨s2, path2, hst2, hmm2, -, -, hpfx, hpre2, hdispatch⟩
   rw [hsel] at hpfx
   have hmem : (exitSelector, nonpayable (exactCalldata 36 exit)) ∈ funcs := by
-    simp [funcs]
+    simp only [funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or, or_true]
   rcases reach_of_dispatch_logs (path := path2) funcs_sorted hmem hpfx
       hdispatch with
     ⟨s3, path3, -, hst3, hmm3, -, -, hpre3, hwrapped⟩
@@ -122,7 +122,7 @@ theorem runtime_call_site_pc {site : Prog.SourceSite}
     (isCall : site.instruction = call) : site.pc = exitCallSitePc := by
   have checked := List.all_eq_true.mp runtime_call_sites_checked site member
   rw [isCall] at checked
-  simpa [isCallInstruction] using checked
+  simpa only [isCallInstruction, Bool.not_true, Bool.false_or, beq_iff_eq] using checked
 
 /-- Spine twin of `exit_callNode_identity_of_exec`: the same actual `CALL`
 node, with the whole same-frame chain before it and after its resume free of
@@ -212,7 +212,8 @@ theorem exit_callNode_spine_of_exec {sevm : Sevm} {pre post : Devm}
       (callCursor.sourceIncluded
         (site := ⟨⟨target.functionIndex, target.steps ++ [.rest]⟩,
           callCursor.pc, call⟩)
-        (by simp [Func.sourceSites])) rfl
+        (by simp only [Func.sourceSites, List.append_assoc, List.cons_append, List.nil_append,
+          List.mem_cons, List.mem_append, true_or])) rfl
   have stateT : t.state = gasCursor.pre.state := agree.state
   have stackT : t.stack = gasCursor.pre.stack := agree.stack
   have memoryT : t.memory = gasCursor.pre.memory := agree.memory
@@ -276,92 +277,6 @@ theorem exit_callNode_spine_of_exec {sevm : Sevm} {pre post : Devm}
       hfilled, hmessage, hclean, hresume, hpostState, hpostReturnData,
       hpostMemory, hpostStack⟩
 
-/-- **Exit payout identity.** A successful `exit` of the installed runtime has
-an actual same-frame `CALL` node whose storage, code, payout stack words and
-memory well-formedness are the settled ones. The `gas` word is existential and
-is the actual node's own. -/
-theorem exit_callNode_identity_of_exec {sevm : Sevm} {pre post : Devm}
-    (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code.toList = code)
-    (hsel : Sevm.selector sevm = exitSelector)
-    (hnonempty : sevm.data.length.toB256 ≠ 0)
-    (hcanon : pre.memory = Mem.empty)
-    (hfork : CoveredFork sevm.benvStat.fork) :
-    let units := Sevm.dataWord sevm (32 * 0 + 4)
-    let freshChi := (B256.rpow scale half rate
-      (sevm.benvStat.time - Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat *
-      Devm.getStorVal pre sevm.currentTarget chiSlot) / scale
-    let payout := (freshChi * units) / scale
-    ∃ (node : Exec.NinstOccurrence ⟨0, sevm, pre, .ok post, exc⟩)
-      (gasWord : B256),
-      node.instruction = call ∧
-      node.node.pc = exitCallSitePc ∧
-      Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, exc⟩ node.node ∧
-      Devm.getStor node.node.devm sevm.currentTarget =
-        ((((Devm.getStor pre sevm.currentTarget).set chiSlot freshChi).set
-            rhoSlot sevm.benvStat.time).set sevm.caller.toB256
-            (Devm.getStorVal pre sevm.currentTarget sevm.caller.toB256 - units)).set
-          totalUnitsSlot
-            (Devm.getStorVal pre sevm.currentTarget totalUnitsSlot - units) ∧
-      Devm.getCode node.node.devm = Devm.getCode pre ∧
-      (gasWord :: sevm.caller.toB256 :: payout :: 0 :: 0 :: 0 :: 0 :: payout ::
-        [] <<+ node.node.devm.stack) ∧
-      Mem.Wf node.node.devm.memory ∧
-      ∃ callPost guardPost returnPre, node.stepResult = .ok callPost ∧
-        AcceptedPayout sevm payout node.node.devm callPost guardPost
-          returnPre := by
-  rcases exit_callNode_spine_of_exec exc hcode hsel hnonempty hcanon hfork with
-    ⟨node, gasWord, isCall, sitePc, sameFrame, storEq, codeEq, stackPref,
-      memWf, -, -, callPost, guardPost, returnPre, stepEq, accepted, -⟩
-  exact ⟨node, gasWord, isCall, sitePc, sameFrame, storEq, codeEq, stackPref,
-    memWf, callPost, guardPost, returnPre, stepEq, accepted⟩
-
-/-- The selected body's compiled exit has an actual same-frame `CALL` node in
-its own retained execution, carrying the settled ledger, the exact payout
-words, and the accepted payout stated at that node's state. Unlike
-`exit_preCallback`, the pre-callback state here is the node's, not a witness. -/
-theorem BodyExecutionOccurrence.exit_callNode_identity
-    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
-    {state : State} {bout : BlockOutput}
-    {body : ExecutionTrace.AppliedBodyTrace benv txs wds state bout}
-    (occurrence : BodyExecutionOccurrence body)
-    (codeEq : occurrence.execution.sevm.code.toList = code)
-    (selector : Sevm.selector occurrence.execution.sevm = exitSelector)
-    (nonempty : occurrence.execution.sevm.data.length.toB256 ≠ 0)
-    (canonicalEntry : occurrence.execution.entryState.memory = Mem.empty)
-    (hfork : CoveredFork occurrence.execution.sevm.benvStat.fork) :
-    let sevm := occurrence.execution.sevm
-    let initial := occurrence.execution.entryState
-    let units := Sevm.dataWord sevm (32 * 0 + 4)
-    let freshChi := (B256.rpow scale half rate
-      (sevm.benvStat.time - Devm.getStorVal initial sevm.currentTarget rhoSlot).toNat *
-      Devm.getStorVal initial sevm.currentTarget chiSlot) / scale
-    let payout := (freshChi * units) / scale
-    ∃ (node : Exec.NinstOccurrence
-        ⟨0, sevm, initial, .ok occurrence.execution.postState,
-          occurrence.execution.run⟩)
-      (gasWord : B256),
-      node.instruction = call ∧
-      node.node.pc = exitCallSitePc ∧
-      Exec.Deriv.ParentPrefix
-        ⟨0, sevm, initial, .ok occurrence.execution.postState,
-          occurrence.execution.run⟩ node.node ∧
-      Devm.getStor node.node.devm sevm.currentTarget =
-        ((((Devm.getStor initial sevm.currentTarget).set chiSlot freshChi).set
-            rhoSlot sevm.benvStat.time).set sevm.caller.toB256
-            (Devm.getStorVal initial sevm.currentTarget sevm.caller.toB256 - units)).set
-          totalUnitsSlot
-            (Devm.getStorVal initial sevm.currentTarget totalUnitsSlot - units) ∧
-      Devm.getCode node.node.devm = Devm.getCode initial ∧
-      (gasWord :: sevm.caller.toB256 :: payout :: 0 :: 0 :: 0 :: 0 :: payout ::
-        [] <<+ node.node.devm.stack) ∧
-      Mem.Wf node.node.devm.memory ∧
-      ∃ callPost guardPost returnPre, node.stepResult = .ok callPost ∧
-        AcceptedPayout sevm payout node.node.devm callPost guardPost
-          returnPre :=
-  exit_callNode_identity_of_exec occurrence.execution.run codeEq selector
-    nonempty canonicalEntry hfork
-
 /-- Public twin of the private clean-settlement lemma below: a clean call-frame
 settlement does not read the message. -/
 theorem ofCall_settle_of_clean {raw : Execution} {child : Devm}
@@ -383,20 +298,11 @@ theorem ofCall_settle_of_clean {raw : Execution} {child : Devm}
       · simp only [bind, Except.bind, flagged, if_true, Except.ok.injEq] at settled
         subst settled
         exfalso
-        simp [Devm.rollback, Devm.setWorld, Devm.error] at clean
-        simp [Devm.error, clean] at flagged
+        simp only [Devm.error, Devm.rollback, Devm.setWorld, Option.isSome_eq_false_iff,
+          Option.isNone_iff_eq_none] at clean
+        simp only [Devm.error, clean, Option.isSome_none, Bool.false_eq_true] at flagged
       · simp only [bind, Except.bind, flagged, Bool.false_eq_true, if_false] at settled ⊢
         exact settled
-
-/-- A clean call-frame settlement does not read the message: an `.ok` result
-without an error flag is the handled raw machine itself. -/
-private theorem ofCall_settle_clean {raw : Execution} {child : Devm}
-    (left right : Msg)
-    (settled : (Frame.ofCall left).settle raw = .ok child)
-    (clean : child.error.isSome = false)
-    (stateGasEq : left.benv.stat.rules.stateGas = right.benv.stat.rules.stateGas) :
-    (Frame.ofCall right).settle raw = .ok child :=
-  ofCall_settle_of_clean left right settled clean stateGasEq
 
 end Drip
 

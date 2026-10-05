@@ -125,17 +125,17 @@ theorem depositEndpoint_success_storageEffectRun
   have hdenNe : Nat.toB256 oneGwei ≠ 0 := by
     intro hzero
     have h := congrArg B256.toNat hzero
-    rw [B256.toNat_toB256_of_lt (by norm_num [oneGwei])] at h
+    rw [B256.toNat_toB256_of_lt (by norm_num only [oneGwei])] at h
     simp only [B256.toNat_zero] at h
-    norm_num [oneGwei] at h
+    norm_num only [oneGwei] at h
   have hdenNat : (Nat.toB256 oneGwei).toNat = oneGwei :=
-    B256.toNat_toB256_of_lt (by norm_num [oneGwei])
+    B256.toNat_toB256_of_lt (by norm_num only [oneGwei])
   have hamountNat : amount.toNat = sevm.value.toNat / oneGwei := by
     dsimp only [amount]
     rw [B256.toNat_div hdenNe, hdenNat]
   have hlowerWord : Nat.toB256 oneEther ≤ sevm.value := by
     rw [B256.le_iff_toNat_le_toNat,
-      B256.toNat_toB256_of_lt (by norm_num [oneEther])]
+      B256.toNat_toB256_of_lt (by norm_num only [oneEther])]
     exact hlowerNat
   have hgweiWord : sevm.value % Nat.toB256 oneGwei = 0 := by
     apply B256.toNat_inj

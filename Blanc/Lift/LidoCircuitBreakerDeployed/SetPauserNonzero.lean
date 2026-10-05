@@ -388,7 +388,7 @@ theorem setPauser_nonzero_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
   have hmemT : ∀ t, t = assignmentSlot target ∨ t = countSlot oldPauser ∨
       t = countSlot newPauser → t ∈ (nonzeroWrites entries target newPauser oldPauser).map
         Prod.fst := by
-    rintro t (rfl | rfl | rfl) <;> simp [nonzeroWrites]
+    rintro t (rfl | rfl | rfl) <;> simp only [nonzeroWrites, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
   have hk3c6 : mapSlot target 3 ≠ mapSlot oldPauser 6 := by
     rw [← solKey_assignmentSlot htarget.2, ← solKey_countSlot hold.2]
     exact solKey_ne_of_faithful hfaithful (hmemT _ (.inr (.inl rfl)))

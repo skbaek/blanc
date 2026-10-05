@@ -422,7 +422,7 @@ lemma Ninst.stepRun_pc_irrel {n : Ninst} (h : Ninst.pcFree n = true)
     rw [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hs ⊢
     exact hs
   | reg r =>
-    have hr : r ≠ Rinst.pc := by rintro rfl; simp [Ninst.pcFree] at h
+    have hr : r ≠ Rinst.pc := by rintro rfl; simp only [pcFree, Bool.false_eq_true] at h
     rw [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at hs ⊢
     refine ⟨hs.1, ?_⟩
     rw [hs.2]
@@ -624,8 +624,8 @@ theorem Func.runCompiled_of_exec_core (f : Func) (fs : List Func) :
           pre.gasLeft = devm'.gasLeft + gVerylow ∧
           ⟨pc + 3, sevm, devm', .ok post, exc'⟩ ≺
             ⟨pc, sevm, pre, .ok post, exc⟩ := by
-      simp at pushAt
-      rcases pushAt_exact exc ⟨_, pushAt⟩ (by simp) with
+      simp only [Nat.toUInt8_eq] at pushAt
+      rcases pushAt_exact exc ⟨_, pushAt⟩ (by simp only [ne_eq, reduceCtorEq, not_false_eq_true]) with
         ⟨s', cr', h, h_room, h_gas, h_prec⟩
       rw [List.toB256_pair _ h_loc] at h
       exact ⟨s', cr', h, h_room, h_gas, h_prec⟩
@@ -689,7 +689,8 @@ theorem Func.runCompiled_of_exec_core (f : Func) (fs : List Func) :
         pre.gasLeft = devm'.gasLeft + gVerylow ∧
         ⟨pc + 3, sevm, devm', .ok post, exc'⟩ ≺
           ⟨pc, sevm, pre, .ok post, exc⟩ := by
-      rcases pushAt_exact exc pushAt (by simp) with
+      rcases pushAt_exact exc pushAt (by simp only [Nat.toUInt8_eq, ne_eq, reduceCtorEq,
+        not_false_eq_true]) with
         ⟨inter, exc', h, h_room, h_gas, h_prec⟩
       rw [List.toB256_pair _ h_loc] at h
       exact ⟨inter, exc', h, h_room, h_gas, h_prec⟩
@@ -746,7 +747,7 @@ lemma toInstType_eq_p_of_bounds {b : UInt8}
     (h1 : 96 ≤ b.toNat) (h2 : b.toNat ≤ 127) : b.toInstType = .P := by
   have hh : b.highs = 6 ∨ b.highs = 7 := by
     have h : b.highs.toNat = 6 ∨ b.highs.toNat = 7 := by
-      simp [UInt8.highs, UInt8.toNat_shiftRight]; omega
+      simp only [UInt8.highs, UInt8.toNat_shiftRight, UInt8.reduceToNat, Nat.reduceMod]; omega
     rcases h with h | h
     · left; exact UInt8.toNat_inj.mp h
     · right; exact UInt8.toNat_inj.mp h
@@ -780,8 +781,9 @@ lemma peel_inst_of_push {bs : Bytes} (le : bs.length ≤ 32) :
     (((pushToB8 bs).toNat < 96 ∨ 127 < (pushToB8 bs).toNat) ∧ bs = []) := by
   rw [toNat_pushToB8_eq le]
   match hbs : bs with
-  | [] => exact Or.inr ⟨Or.inl (by simp), rfl⟩
-  | x :: bs' => exact Or.inl ⟨by simp, by simp at le ⊢; omega, by simp⟩
+  | [] => exact Or.inr ⟨Or.inl (by simp only [List.length_nil, zero_add, Nat.lt_add_one]), rfl⟩
+  | x :: bs' => exact Or.inl ⟨by simp only [List.length_cons, le_add_iff_nonneg_left, zero_le], by simp only [List.length_cons, Nat.reduceLeDiff] at le ⊢; omega, by simp only [List.length_cons,
+    Nat.reduceSubDiff, Nat.add_right_cancel_iff, Nat.add_left_cancel_iff]⟩
 
 /-- An accepted `DUPN`/`SWAPN` immediate is never a `PUSH`-class byte, so the
 boundary walk can peel it as data. Peels all 256 bytes by the
@@ -808,7 +810,7 @@ lemma noPushBefore_peel1 {code : ByteArray} {k : Nat} {b : UInt8} {zs : Bytes}
     (hne : b.toInstType ≠ .P) :
     noPushBefore code (k + 1) 32 = true ∧ List.Slice code.toList (k + 1) zs := by
   refine noPushBefore_peel (ys := []) ?_ hb rfl (peel_inst_of_ne_p hne)
-  simpa using h
+  simpa only [List.cons_append, List.nil_append] using h
 
 /-- Peel the `PUSH2` that opens every jump `Func.compile` emits. -/
 lemma noPushBefore_peel2 {code : ByteArray} {k : Nat} {x y : UInt8} {zs : Bytes}
@@ -834,35 +836,43 @@ lemma Func.noPushBefore_next {code : ByteArray} {l : List (Nat × Func)}
       List.Slice code.toList (k + i.size) pbs := by
     cases i with
     | reg o =>
-      exact noPushBefore_peel1 h_slice hb (by rw [Rinst.toInstType_toUInt8]; simp)
+      exact noPushBefore_peel1 h_slice hb (by rw [Rinst.toInstType_toUInt8]; simp only [ne_eq,
+        reduceCtorEq, not_false_eq_true])
     | exec o =>
-      exact noPushBefore_peel1 h_slice hb (by rw [Xinst.toInstType_toUInt8]; simp)
+      exact noPushBefore_peel1 h_slice hb (by rw [Xinst.toInstType_toUInt8]; simp only [ne_eq,
+        reduceCtorEq, not_false_eq_true])
     | push bs le =>
       exact noPushBefore_peel h_slice hb rfl (peel_inst_of_push le)
     | dupn a =>
         have hdec : decodeSingle a ≠ none := by
-          simpa [Ninst.immAccepted] using hacc
+          simpa only [ne_eq, Ninst.immAccepted, decide_not, Bool.not_eq_eq_eq_not, Bool.not_true,
+            decide_eq_false_iff_not] using hacc
         have hne : a.toInstType ≠ .P := toInstType_ne_p_of_decodeSingle hdec
         have step1 := noPushBefore_peel1 h_slice hb
-          (by show (InstType.R ≠ InstType.P); simp : (0xE6 : UInt8).toInstType ≠ .P)
+          (by show (InstType.R ≠ InstType.P); simp only [ne_eq, reduceCtorEq, not_false_eq_true] : (0xE6 : UInt8).toInstType ≠ .P)
         have step2 := noPushBefore_peel1 step1.right step1.left hne
-        simpa [Ninst.size, Nat.add_assoc] using step2
+        simpa only [Ninst.size, Nat.add_assoc, Nat.reduceAdd, List.append_eq, List.nil_append] using
+          step2
     | swapn a =>
         have hdec : decodeSingle a ≠ none := by
-          simpa [Ninst.immAccepted] using hacc
+          simpa only [ne_eq, Ninst.immAccepted, decide_not, Bool.not_eq_eq_eq_not, Bool.not_true,
+            decide_eq_false_iff_not] using hacc
         have hne : a.toInstType ≠ .P := toInstType_ne_p_of_decodeSingle hdec
         have step1 := noPushBefore_peel1 h_slice hb
-          (by show (InstType.R ≠ InstType.P); simp : (0xE7 : UInt8).toInstType ≠ .P)
+          (by show (InstType.R ≠ InstType.P); simp only [ne_eq, reduceCtorEq, not_false_eq_true] : (0xE7 : UInt8).toInstType ≠ .P)
         have step2 := noPushBefore_peel1 step1.right step1.left hne
-        simpa [Ninst.size, Nat.add_assoc] using step2
+        simpa only [Ninst.size, Nat.add_assoc, Nat.reduceAdd, List.append_eq, List.nil_append] using
+          step2
     | exchange a =>
         have hdec : decodePair a ≠ none := by
-          simpa [Ninst.immAccepted] using hacc
+          simpa only [ne_eq, Ninst.immAccepted, decide_not, Bool.not_eq_eq_eq_not, Bool.not_true,
+            decide_eq_false_iff_not] using hacc
         have hne : a.toInstType ≠ .P := toInstType_ne_p_of_decodePair hdec
         have step1 := noPushBefore_peel1 h_slice hb
-          (by show (InstType.R ≠ InstType.P); simp : (0xE8 : UInt8).toInstType ≠ .P)
+          (by show (InstType.R ≠ InstType.P); simp only [ne_eq, reduceCtorEq, not_false_eq_true] : (0xE8 : UInt8).toInstType ≠ .P)
         have step2 := noPushBefore_peel1 step1.right step1.left hne
-        simpa [Ninst.size, Nat.add_assoc] using step2
+        simpa only [Ninst.size, Nat.add_assoc, Nat.reduceAdd, List.append_eq, List.nil_append] using
+          step2
   exact ⟨key.left, by rw [h_pbs]; exact key.right⟩
 
 /-- **The boundary walk.**  A compiled `Func` block whose first byte no `PUSH`
@@ -879,7 +889,7 @@ lemma Func.noPushBefore_compile {code : ByteArray} {l : List (Nat × Func)} :
   | last o =>
     intro k sub hb
     exact (noPushBefore_peel1 (zs := []) sub hb
-      (by rw [Linst.toInstType_toUInt8]; simp)).left
+      (by rw [Linst.toInstType_toUInt8]; simp only [ne_eq, reduceCtorEq, not_false_eq_true])).left
   | next i p ih =>
     intro k sub hb
     have key := Func.noPushBefore_next sub hb
@@ -897,7 +907,7 @@ lemma Func.noPushBefore_compile {code : ByteArray} {l : List (Nat × Func)} :
     simp only [List.append_assoc, List.cons_append, List.nil_append] at h_slice
     have h3 := noPushBefore_peel2 h_slice hb
     have h4 := noPushBefore_peel1 h3.right h3.left
-      (by rw [Jinst.toInstType_toUInt8]; simp)
+      (by rw [Jinst.toInstType_toUInt8]; simp only [ne_eq, reduceCtorEq, not_false_eq_true])
     have hlenp : pbs.length = compsize p := Func.length_compile h_pbs
     have harm : noPushBefore code (k + 3 + 1 + compsize p) 32 = true := by
       refine ihp (k + 3 + 1) ?_ h4.left
@@ -906,7 +916,8 @@ lemma Func.noPushBefore_compile {code : ByteArray} {l : List (Nat × Func)} :
         (Jinst.toUInt8 .jumpdest :: qbs) := by
       have := List.slice_suffix h4.right
       rwa [hlenp] at this
-    have h5 := noPushBefore_peel1 hjd harm (by rw [Jinst.toInstType_toUInt8]; simp)
+    have h5 := noPushBefore_peel1 hjd harm (by rw [Jinst.toInstType_toUInt8]; simp only [ne_eq,
+      reduceCtorEq, not_false_eq_true])
     have h_qbs' : Func.compile l (k + 3 + 1 + compsize p + 1) q = some qbs := by
       have hidx : k + 3 + 1 + compsize p + 1 = k + pbs.length + 4 + 1 := by omega
       rw [hidx]; exact h_qbs
@@ -923,7 +934,7 @@ lemma Func.noPushBefore_compile {code : ByteArray} {l : List (Nat × Func)} :
     simp only [List.cons_append, List.nil_append] at h_slice
     have h3 := noPushBefore_peel2 h_slice hb
     have h4 := noPushBefore_peel1 h3.right h3.left
-      (by rw [Jinst.toInstType_toUInt8]; simp)
+      (by rw [Jinst.toInstType_toUInt8]; simp only [ne_eq, reduceCtorEq, not_false_eq_true])
     exact h4.left
 
 /-- The boundary walk across one opcode, from the byte rather than from a
@@ -948,7 +959,8 @@ lemma Table.noPushBefore_compile {code : ByteArray} {l : List (Nat × Func)} :
         code.toList[loc]? = some (Jinst.toUInt8 .jumpdest) := by
   intro c
   induction c with
-  | nil => intro k bs _ _ _ n loc r h_get; simp [table] at h_get
+  | nil => intro k bs _ _ _ n loc r h_get; simp only [table, List.length_nil, not_lt_zero,
+    not_false_eq_true, getElem?_neg, reduceCtorEq] at h_get
   | cons g c' ih =>
     intro k bs h_cmp h_slice hb n loc r h_get
     simp only [table] at h_cmp h_get
@@ -962,7 +974,8 @@ lemma Table.noPushBefore_compile {code : ByteArray} {l : List (Nat × Func)} :
       subst h1
       exact ⟨hb, List.get?_eq_of_slice h_slice⟩
     | m + 1 =>
-      have h1 := noPushBefore_peel1 h_slice hb (by rw [Jinst.toInstType_toUInt8]; simp)
+      have h1 := noPushBefore_peel1 h_slice hb (by rw [Jinst.toInstType_toUInt8]; simp only [ne_eq,
+        reduceCtorEq, not_false_eq_true])
       have hlen : cg.length = compsize g := Func.length_compile h_cg
       have harm : noPushBefore code (k + 1 + compsize g) 32 = true := by
         refine @Func.noPushBefore_compile code l g (k + 1) ?_ h1.left
@@ -996,7 +1009,7 @@ theorem Prog.jumpable_of_get?_table {f fs} {code : ByteArray} {n loc : Nat} {r :
   have hlt := ByteArray.lt_size_of_getElem?_eq_some hw.right
   have hbyte := ByteArray.getElem_of_getElem?_eq_some hw.right hlt
   refine ⟨?_, noPushBefore_succ_of_getElem? hw.right
-    (by rw [Jinst.toInstType_toUInt8]; simp) hw.left⟩
+    (by rw [Jinst.toInstType_toUInt8]; simp only [ne_eq, reduceCtorEq, not_false_eq_true]) hw.left⟩
   unfold jumpable
   rw [dif_pos hlt, hbyte, if_pos rfl]
   exact hw.left
@@ -1038,7 +1051,7 @@ lemma subcode_compile_branch_jumpable {code : ByteArray} {k : Nat}
   simp only [List.append_assoc, List.cons_append, List.nil_append] at h_slice
   have h3 := noPushBefore_peel2 h_slice hb
   have h4 := noPushBefore_peel1 h3.right h3.left
-    (by rw [Jinst.toInstType_toUInt8]; simp)
+    (by rw [Jinst.toInstType_toUInt8]; simp only [ne_eq, reduceCtorEq, not_false_eq_true])
   have hjumpi : Jinst.At code (k + 3) Jinst.jumpi := Jinst.at_of_slice h3.right
   rw [show k + 3 + 1 = k + 4 from by omega] at h4
   have hsubp : subcode code.toList (k + 4) (Func.compile l (k + 4) p) := by
@@ -1049,7 +1062,8 @@ lemma subcode_compile_branch_jumpable {code : ByteArray} {k : Nat}
       (Jinst.toUInt8 .jumpdest :: qbs) := by
     have hs := List.slice_suffix h4.right
     rwa [hlenp] at hs
-  have h5 := noPushBefore_peel1 hjd harm (by rw [Jinst.toInstType_toUInt8]; simp)
+  have h5 := noPushBefore_peel1 hjd harm (by rw [Jinst.toInstType_toUInt8]; simp only [ne_eq,
+    reduceCtorEq, not_false_eq_true])
   have hidx : k + pbs.length + 4 = k + 4 + compsize p := by omega
   refine ⟨k + pbs.length + 4, by omega, h_loc, hpush, hjumpi, hsubp, ?_, ?_, ?_, ?_, ?_⟩
   · exact h4.left
@@ -1357,7 +1371,8 @@ lemma Evm.branch_zero_steps {pc loc : Nat} {sevm : Sevm} {devm tgt : Devm}
   have h_v : Bytes.toB256 [(loc >>> 8).toUInt8, loc.toUInt8] = loc.toB256 :=
     List.toB256_pair _ h_loc
   constructor
-  · have h1 := Evm.push_cont (le := le) (by simp) h_push (by omega) h_room
+  · have h1 := Evm.push_cont (le := le) (by simp only [Nat.toUInt8_eq, ne_eq, reduceCtorEq,
+    not_false_eq_true]) h_push (by omega) h_room
     rw [h_v] at h1
     exact h1
   · have h2 := Evm.jumpi_cont_zero
@@ -1417,7 +1432,8 @@ lemma Evm.branch_succ_steps {pc loc : Nat} {sevm : Sevm} {devm tgt : Devm}
     rw [Nat.pow_lt_pow_iff_right] <;> omega
   have h_toNat : (loc.toB256).toNat = loc := B256.toNat_toB256_of_lt h_loc'
   refine ⟨?_, ?_, ?_⟩
-  · have h1 := Evm.push_cont (le := le) (by simp) h_push (by omega) h_room
+  · have h1 := Evm.push_cont (le := le) (by simp only [Nat.toUInt8_eq, ne_eq, reduceCtorEq,
+    not_false_eq_true]) h_push (by omega) h_room
     rw [h_v] at h1
     exact h1
   · have h2 := Evm.jumpi_cont_jump
@@ -1481,7 +1497,8 @@ lemma Evm.call_steps {pc loc : Nat} {sevm : Sevm} {devm tgt : Devm}
     rw [Nat.pow_lt_pow_iff_right] <;> omega
   have h_toNat : (loc.toB256).toNat = loc := B256.toNat_toB256_of_lt h_loc'
   refine ⟨?_, ?_, ?_⟩
-  · have h1 := Evm.push_cont (le := le) (by simp) h_push (by omega) h_room
+  · have h1 := Evm.push_cont (le := le) (by simp only [Nat.toUInt8_eq, ne_eq, reduceCtorEq,
+    not_false_eq_true]) h_push (by omega) h_room
     rw [h_v] at h1
     exact h1
   · have h2 := Evm.jump_cont

@@ -120,7 +120,8 @@ theorem visit_sound (reach : PP F n) (hfl : Flags sp F σ n)
     split at hv
     · rename_i hc
       cases hv
-      have hm : n.pc ∉ sp.mutBodies := by simpa using hmut
+      have hm : n.pc ∉ sp.mutBodies := by simpa only [List.contains_eq_mem,
+        decide_eq_true_eq] using hmut
       simp only [Bool.and_eq_true, Bool.or_eq_true, Bool.not_eq_true'] at hc
       refine ⟨⟨hfl.passed, hfl.setNow, fun h b hb hbn => ?_⟩, rfl, rfl, rfl, rfl,
         fun hb => ?_, fun h => (hm h).elim⟩
@@ -182,8 +183,8 @@ theorem effSetNow_sound {i : Ninst} {σ : LSt} {S rest : List B256} {b : Bool}
   · subst hsst
     obtain ⟨ρ, hS, hf⟩ := hv
     rcases hkv : σ.kv with _ | ⟨k, _ | ⟨v, kt⟩⟩
-    · simp [effSetNow, hkv] at he
-    · simp [effSetNow, hkv] at he
+    · simp only [effSetNow, hkv, reduceCtorEq] at he
+    · simp only [effSetNow, hkv, reduceCtorEq] at he
     rw [hkv] at hS
     obtain ⟨St, hst⟩ : ∃ St, n.devm.stack = ρ k :: ρ v :: St := by
       cases hS with
@@ -191,7 +192,7 @@ theorem effSetNow_sound {i : Ninst} {σ : LSt} {S rest : List B256} {b : Bool}
         cases h1 with
         | cons h1 _ => exact ⟨_, by rw [hstack, ← h0, ← h1]; rfl⟩
     have hset := sstore_getStor_set run (x := ρ k) (y := ρ v) (xs := St) ⟨[], by
-      simp [Split, hst]⟩
+      simp only [Split, hst, List.append_nil]⟩
     simp only [effSetNow, hkv] at he
     intro hb
     unfold lockAt
@@ -247,20 +248,24 @@ theorem lstep_nonpush {pc : Nat} {i : Ninst} {σ σ' : LSt}
     | _ => rfl
   rw [e] at h
   cases ho : ninstTransfer i (indexPattern σ.kv.length) with
-  | none => simp [ho] at h
+  | none => simp only [ho, List.filter_append, Option.bind_eq_bind, Option.bind_none,
+    reduceCtorEq] at h
   | some out =>
     by_cases hc : out.count none ≤ 1
     · cases hm : out.mapM (fun l => match l with
           | none => some (freshSym σ.kv σ.facts) | some j => σ.kv[j.toNat]?) with
-      | none => simp [ho, hc, hm] at h
+      | none => simp only [ho, List.filter_append, Option.bind_eq_bind, Option.bind_some, hc,
+        guard_true, Option.pure_def, hm, Option.bind_none, Option.bind_fun_none, reduceCtorEq] at h
       | some kv' =>
         cases hb : effSetNow sp pc i σ with
-        | none => simp [ho, hb] at h
+        | none => simp only [ho, hb, List.filter_append, Option.bind_eq_bind, Option.bind_none,
+          Option.bind_fun_none, reduceCtorEq] at h
         | some b =>
           simp only [ho, hc, hm, hb, Option.bind_eq_bind, Option.bind_some, guard,
             ite_true, Option.pure_def, Option.some.injEq] at h
           exact ⟨out, kv', b, rfl, hc, hm, rfl, h.symm⟩
-    · simp [ho, hc] at h
+    · simp only [ho, List.filter_append, Option.bind_eq_bind, Option.bind_some, hc, guard_false,
+      Option.failure_eq_none, Option.bind_none, reduceCtorEq] at h
 
 /-- The instructions with fact rules push their one computed result on top. -/
 theorem opFacts_head {fs : List Fact} {kv : List Nat} {i : Ninst} {r : Nat} {p out : Pattern}
@@ -270,20 +275,20 @@ theorem opFacts_head {fs : List Fact} {kv : List Nat} {i : Ninst} {r : Nat} {p o
   | reg rr =>
     cases rr
     all_goals first
-      | (exfalso; apply hne; simp [opFacts]; done)
+      | (exfalso; apply hne; simp only [opFacts, List.contains_eq_mem, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq, List.cons_ne_self]; done)
       | skip
     all_goals
       simp only [ninstTransfer, liftRegularTransfer, regularTransfer, binaryTransfer,
         unaryTransfer] at hout
       split at hout <;> simp only [Option.some.injEq, reduceCtorEq] at hout
       exact ⟨_, hout.symm⟩
-  | _ => exact (hne (by simp [opFacts])).elim
+  | _ => exact (hne (by simp only [opFacts])).elim
 
 theorem forall₂_update_head {ρ : Nat → B256} {r : Nat} {w : B256} {kv : List Nat}
     {S : List B256} (h : List.Forall₂ (fun s x => Function.update ρ r w s = x) (r :: kv) S) :
     S.head? = some w := by
   cases h with
-  | cons h0 _ => simp [← h0]
+  | cons h0 _ => simp only [← h0, Function.update_self, List.head?_cons]
 
 theorem allHold_append {sp : Spec} {F n : Exec.Deriv} {ρ : Nat → B256} {fs gs : List Fact}
     (h1 : AllHold sp F n ρ fs) (h2 : AllHold sp F n ρ gs) : AllHold sp F n ρ (fs ++ gs) :=
@@ -318,11 +323,11 @@ theorem lstep_sound {i : Ninst} {σ σ' : LSt} {S rest : List B256} {a a' : List
       Nat.lt_irrefl _ (lt_fresh_fact hm h)
     refine ⟨Bytes.toB256 bs :: S, by rw [push_run_stack run, hstack]; rfl, ?_, rfl, rfl, ?_⟩
     · refine ⟨Function.update ρ (freshSym σ.kv σ.facts) (Bytes.toB256 bs),
-        .cons (by simp) (forall₂_update_of_not_mem hr hS), ?_⟩
+        .cons (by simp only [Function.update_self]) (forall₂_update_of_not_mem hr hS), ?_⟩
       intro f hm
       rcases List.mem_cons.mp hm with rfl | hm
       · show _ ≤ (Function.update ρ _ _ _).toNat ∧ (Function.update ρ _ _ _).toNat ≤ _
-        simp
+        simp only [Function.update_self, Std.le_refl, and_self]
       · exact Fact.holds_mono hnn (allHold_update hrf hf f hm)
     · intro hb
       rw [← hsevm, lockAt_edge edge hfork (noexec_of_ninst hat (fun _ h => by cases h))
@@ -349,7 +354,8 @@ theorem lstep_sound {i : Ninst} {σ σ' : LSt} {S rest : List B256} {a a' : List
         rw [List.mapM_cons] at hm
         cases ho : o.mapM (fun l => match l with
             | none => some (freshSym σ.kv σ.facts) | some j => σ.kv[j.toNat]?) with
-        | none => simp [ho] at hm
+        | none => simp only [ho, Option.pure_def, Option.bind_eq_bind, Option.bind_none,
+          Option.bind_fun_none, reduceCtorEq] at hm
         | some kt =>
           simp only [ho, Option.bind_eq_bind, Option.bind_some, Option.pure_def,
             Option.some.injEq] at hm
@@ -358,8 +364,9 @@ theorem lstep_sound {i : Ninst} {σ σ' : LSt} {S rest : List B256} {a a' : List
             rw [hst']
             have := forall₂_update_head hS'
             cases S' with
-            | nil => simp at this
-            | cons x S' => simpa using this
+            | nil => simp only [List.head?_nil, reduceCtorEq] at this
+            | cons x S' => simpa only [List.cons_append, List.head?_cons, Option.some.injEq] using
+              this
           exact opFacts_sound hf hr hS hstack run reach edge htop (fun hi => by
             subst hi
             exact hhash n n' reach edge hat)
@@ -439,7 +446,7 @@ theorem refineFacts_sound {ρ : Nat → B256} {fs : List Fact} {c : Nat} {zero :
           simp only [Fact.Holds] at this; omega
         · cases hm
     · cases hm
-  | _ => simp at hm
+  | _ => simp only [List.not_mem_nil] at hm
 
 /-- The facts of a branch state hold on the branch taken. -/
 theorem refine_sound {n' : Exec.Deriv} {σ : LSt} {d c : Nat} {kv : List Nat}
@@ -471,9 +478,11 @@ theorem forall₂_symMap {ρ : Nat → B256} {g : Nat → Nat} :
   | [], [], [], _, _, _ => .nil
   | a :: A, s :: kv, w :: S, hl, hz, .cons h0 hr =>
     .cons (by simp only [Function.comp]; rw [hz (a, s) List.mem_cons_self]; exact h0)
-      (forall₂_symMap (by simpa using hl) (fun p hp => hz p (List.mem_cons_of_mem _ hp)) hr)
-  | [], _ :: _, _, hl, _, _ => by simp at hl
-  | _ :: _, [], _, hl, _, _ => by simp at hl
+      (forall₂_symMap (by simpa only [List.length_cons, Nat.add_right_cancel_iff] using hl) (fun p hp => hz p (List.mem_cons_of_mem _ hp)) hr)
+  | [], _ :: _, _, hl, _, _ => by simp only [List.length_nil, List.length_cons, Nat.right_eq_add,
+    Nat.add_eq_zero_iff, List.length_eq_zero_iff, one_ne_zero, and_false] at hl
+  | _ :: _, [], _, hl, _, _ => by simp only [List.length_cons, List.length_nil, Nat.add_eq_zero_iff,
+    List.length_eq_zero_iff, one_ne_zero, and_false] at hl
 
 /-- An incoming state satisfying an annotation gives the annotation's meaning. -/
 theorem compat_sound {σ A : LSt} {S : List B256} (hc : compat σ A = true)
@@ -486,7 +495,7 @@ theorem compat_sound {σ A : LSt} {S : List B256} (hc : compat σ A = true)
   refine ⟨⟨ρ ∘ symMap A.kv σ.kv, forall₂_symMap hlen.symm (fun p hp' => ?_) hS,
     fun f hf' => Fact.holds_rename (entails_sound hf (hfa f hf'))⟩, ?_, ?_, ?_⟩
   · have := hzip p hp'
-    simpa using this
+    simpa only using this
   · intro h; rcases hp with hp | hp
     · rw [h] at hp; cases hp
     · exact hfl.passed hp
@@ -511,7 +520,7 @@ theorem resume_val {σ : LSt} {S1 S' : List B256} {rets : Nat}
   refine ⟨ρ', List.rel_append ?_ ?_, fun f hm => Fact.holds_congr
     (fun s hs => (hold s (lt_fresh_fact hm hs)).symm) (hf f hm)⟩
   · rw [List.forall₂_iff_get]
-    refine ⟨by simp, fun i h1 h2 => ?_⟩
+    refine ⟨by simp only [List.length_map, List.length_range], fun i h1 h2 => ?_⟩
     simp only [List.get_eq_getElem, List.getElem_map, List.getElem_range, ρ']
     simp only [fr, Nat.le_add_right, ite_true, Nat.add_sub_cancel_left,
       List.getElem?_eq_getElem h2, Option.getD_some]
@@ -528,13 +537,17 @@ theorem resume_val {σ : LSt} {S1 S' : List B256} {rets : Nat}
 theorem zip_mem_of_getElem? {α β : Type} :
     ∀ (l1 : List α) (l2 : List β) (k : Nat) (x : α) (y : β),
       l1[k]? = some x → l2[k]? = some y → (x, y) ∈ l1.zip l2
-  | [], _, _, _, _, h, _ => by simp at h
-  | _ :: _, [], _, _, _, _, h => by simp at h
+  | [], _, _, _, _, h, _ => by simp only [List.length_nil, not_lt_zero, not_false_eq_true,
+    getElem?_neg, reduceCtorEq] at h
+  | _ :: _, [], _, _, _, _, h => by simp only [List.length_nil, not_lt_zero, not_false_eq_true,
+    getElem?_neg, reduceCtorEq] at h
   | a :: l1, b :: l2, 0, x, y, h1, h2 => by
-    simp at h1 h2; subst h1; subst h2; exact List.mem_cons_self
+    simp only [List.length_cons, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true,
+      getElem?_pos, List.getElem_cons_zero, Option.some.injEq] at h1 h2; subst h1; subst h2; exact List.mem_cons_self
   | a :: l1, b :: l2, k + 1, x, y, h1, h2 =>
-    List.mem_cons_of_mem _ (zip_mem_of_getElem? l1 l2 k x y (by simpa using h1)
-      (by simpa using h2))
+    List.mem_cons_of_mem _ (zip_mem_of_getElem? l1 l2 k x y (by simpa only [List.getElem?_cons_succ] using
+      h1)
+      (by simpa only [List.getElem?_cons_succ] using h2))
 
 /-- Every entry tree is accepted from its annotation. -/
 theorem lockCert_at {c : Cert} {ann : List LSt} (h : lockCert sp c ann = true) {k : Nat}
@@ -545,8 +558,8 @@ theorem lockCert_at {c : Cert} {ann : List LSt} (h : lockCert sp c ann = true) {
   have hc : c[k]? = some (e, g) := by
     simp only [Cert.entries, Cert.prog, List.getElem?_map] at he hg
     cases hck : c[k]? with
-    | none => simp [hck] at he
-    | some p => simp [hck] at he hg; rw [← he, ← hg]
+    | none => simp only [hck, Option.map_none, reduceCtorEq] at he
+    | some p => simp only [hck, Option.map_some, Option.some.injEq] at he hg; rw [← he, ← hg]
   exact h.2 _ (zip_mem_of_getElem? c ann k _ _ hc hA)
 
 end Joins
@@ -623,25 +636,30 @@ theorem lock_start (hc : Cert.check code c = true) (hl : lockCert sp c ann = tru
     LockOK sp code c ann F F (Cursor.start c) LSt.init := by
   have hcur := cursor_start hc hpc hcode
   cases c with
-  | nil => simp [Cert.check] at hc
+  | nil => simp only [Cert.check, List.all_nil, Bool.and_true, Bool.false_eq_true] at hc
   | cons p c =>
     rcases p with ⟨e, f⟩
     have hc0 : Cert.check code ((e, f) :: c) = true := hc
-    simp [Cert.check] at hc
-    have hepc : e.pc = 0 := by simpa using hc.1.1
-    have hef : e.frame = [] := by simpa using hc.1.2
+    simp only [Cert.check, List.beq_nil_eq, List.all_cons, Bool.and_eq_true, beq_iff_eq,
+      List.isEmpty_iff, List.all_eq_true, Prod.forall] at hc
+    have hepc : e.pc = 0 := by simpa only using hc.1.1
+    have hef : e.frame = [] := by simpa only using hc.1.2
     have hA : ann[0]? = some LSt.init := by
       simp only [lockCert, Bool.and_eq_true, beq_iff_eq] at hl; exact hl.1.2
-    have hlock := lockCert_at hl (k := 0) (e := e) (g := f) (by simp [Cert.entries])
-      (by simp [Cert.prog]) hA
+    have hlock := lockCert_at hl (k := 0) (e := e) (g := f) (by simp only [Cert.entries,
+      List.map_cons, List.length_cons, List.length_map, lt_add_iff_pos_left, add_pos_iff,
+      zero_lt_one, or_true, getElem?_pos, List.getElem_cons_zero])
+      (by simp only [Cert.prog, List.map_cons, List.length_cons, List.length_map,
+        lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true, getElem?_pos,
+        List.getElem_cons_zero]) hA
     refine ⟨.refl _, hcur.code_eq, hcur.pc_eq, hcur.check, hcur.retOK, ?_, ?_, ?_⟩
-    · simpa [Cursor.start, hepc, hef] using hlock
+    · simpa only [Cursor.start, hepc, hef] using hlock
     · refine ⟨fun h => ?_, fun h => ?_, fun _ b h1 h2 hne => ?_⟩
       · cases h
       · cases h
       · exact (hne (Exec.Deriv.ParentPrefix.antisymm h2 h1)).elim
     · exact ⟨[], F.devm.stack, rfl, .nil, ⟨fun _ => 0, .nil, fun f hf => by
-        simp [LSt.init] at hf⟩, .nil _⟩
+        simp only [LSt.init, List.not_mem_nil] at hf⟩, .nil _⟩
 
 end InvariantLemmas
 
@@ -720,23 +738,23 @@ theorem lock_step (hc : Cert.check code c = true) (hl : lockCert sp c ann = true
   have hcode' : n'.sevm.code = code := by rw [Cursor.parentStep_sevm edge]; exact hcode
   have hK' := hK.mono hnn
   cases hvis : visit sp pc σ with
-  | none => cases f <;> simp [lockNode, hvis] at hlock
+  | none => cases f <;> simp only [lockNode, hvis, Bool.false_eq_true, Option.isSome_none, Bool.false_and] at hlock
   | some σv =>
   obtain ⟨hFV, hkv, hfacts, hpass, hset, -, -⟩ :=
     visit_sound reach hfl (by rw [hpc]; exact hvis)
   have hvalv : Val sp F n σv.kv σv.facts S := by rw [hkv, hfacts]; exact hval
   cases f with
-  | pcAt _ _ => simp [lockNode] at hlock
+  | pcAt _ _ => simp only [lockNode, Bool.false_eq_true] at hlock
   | next i f =>
     simp only [checkNode, Bool.and_eq_true] at hcheck
     obtain ⟨⟨hbytes, _⟩, hrest⟩ := hcheck
     cases habs : absNinst i a with
-    | none => simp [habs] at hrest
+    | none => simp only [habs, Bool.false_eq_true] at hrest
     | some a' =>
       simp only [habs] at hrest
       simp only [lockNode, hvis, habs] at hlock
       cases hls : lstep sp pc i σv with
-      | none => simp [hls] at hlock
+      | none => simp only [hls, Bool.false_eq_true] at hlock
       | some σ' =>
         simp only [hls] at hlock
         have hat : Ninst.At n.sevm.code n.pc i := by
@@ -748,19 +766,19 @@ theorem lock_step (hc : Cert.check code c = true) (hl : lockCert sp c ann = true
           habs hframe hvalv hstack hFV.setNow (by rw [hpc]; exact hls)
         have hSS : S'' = S' := List.append_cancel_right (hst''.symm.trans hst')
         subst hSS
-        refine ⟨⟨f, pc + i.size, a', m, K⟩, σ', reach', hcode', by simp [hpc', hpc], hrest,
+        refine ⟨⟨f, pc + i.size, a', m, K⟩, σ', reach', hcode', by simp only [hpc', hpc], hrest,
           fun hm => hret (Cursor.ret_mem_of_absNinst habs hm), hlock,
           flags_succ reach edge hFV (fun h => Or.inl (hp' ▸ h)) hs'
             (fun h => hm' ▸ h), S'', rest, hst', hfr', hv', hK'⟩
   | dest f =>
     have h' : byteAt code pc = some (Jinst.toUInt8 .jumpdest) ∧
         checkNode code c.entries m (pc + 1) a f = true := by
-      simpa [checkNode] using hcheck
+      simpa only [checkNode, Bool.and_eq_true, beq_iff_eq] using hcheck
     have hat : Jinst.At n.sevm.code n.pc .jumpdest := by
       rw [hcode, hpc]; exact byteAt_jinst_at h'.1
     obtain ⟨hpc', burn⟩ := of_jumpdest_run (Cursor.parentStep_jinst edge hat)
     simp only [lockNode, hvis] at hlock
-    refine ⟨⟨f, pc + 1, a, m, K⟩, σv, reach', hcode', by simp [hpc', hpc], h'.2, hret, hlock,
+    refine ⟨⟨f, pc + 1, a, m, K⟩, σv, reach', hcode', by simp only [hpc', hpc], h'.2, hret, hlock,
       jump_flags reach edge hfork hat hFV (fun h => Or.inl h) id id, S, rest, ?_, hframe,
       hvalv.mono hnn, hK'⟩
     rw [← burn.stack, hstack]
@@ -770,14 +788,14 @@ theorem lock_step (hc : Cert.check code c = true) (hl : lockCert sp c ann = true
       have h' : (byteAt code pc = some (Jinst.toUInt8 .jumpi) ∧
             (v.jumps? = some true ∨ checkNode code c.entries m (pc + 1) a' f = true)) ∧
           (v.jumps? = some false ∨ checkNode code c.entries m t.toNat a' g = true) := by
-        simpa [checkNode] using hcheck
+        simpa only [checkNode, Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true] using hcheck
       have hat : Jinst.At n.sevm.code n.pc .jumpi := by
         rw [hcode, hpc]; exact byteAt_jinst_at h'.1.1
       have hret' : RetOK a' m K := fun hm =>
         hret (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ hm))
       rcases hkvv : σv.kv with _ | ⟨d, _ | ⟨cc, kv⟩⟩
-      · simp [lockNode, hvis, hkvv] at hlock
-      · simp [lockNode, hvis, hkvv] at hlock
+      · simp only [lockNode, hvis, hkvv, Bool.false_eq_true] at hlock
+      · simp only [lockNode, hvis, hkvv, Bool.false_eq_true] at hlock
       simp only [lockNode, hvis, hkvv, Bool.and_eq_true] at hlock
       rw [hkvv] at hvalv
       rcases of_jumpi_run (Cursor.parentStep_jinst edge hat) with
@@ -786,7 +804,7 @@ theorem lock_step (hc : Cert.check code c = true) (hl : lockCert sp c ann = true
         obtain ⟨_, S1, rfl, hst, hfr⟩ := frame_pop_two hframe hstack pop
         obtain ⟨hv1, hp1⟩ := refine_sound (zero := true) hnn hvalv (fun _ => rfl)
           (fun h => by cases h)
-        exact ⟨⟨f, pc + 1, a', m, K⟩, _, reach', hcode', by simp [hpc', hpc], hlive, hret',
+        exact ⟨⟨f, pc + 1, a', m, K⟩, _, reach', hcode', by simp only [hpc', hpc], hlive, hret',
           hlock.1, jump_flags reach edge hfork hat hFV hp1 id id, S1, rest, hst, hfr, hv1, hK'⟩
       · have hlive := live_taken hy (Cursor.pop_two_second hstack hframe pop) h'.2
         obtain ⟨hx, S1, rfl, hst, hfr⟩ := frame_pop_two hframe hstack pop
@@ -796,21 +814,21 @@ theorem lock_step (hc : Cert.check code c = true) (hl : lockCert sp c ann = true
           (fun _ => hy)
         exact ⟨⟨g, x.toNat, a', m, K⟩, _, reach', hcode', hpc', hlive, hret',
           hlock.2, jump_flags reach edge hfork hat hFV hp1 id id, S1, rest, hst, hfr, hv1, hK'⟩
-    | [], hcheck, _, _ => simp [checkNode] at hcheck
-    | [.const _], hcheck, _, _ => simp [checkNode] at hcheck
-    | .ret :: _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .unk :: _, hcheck, _, _ => simp [checkNode] at hcheck
+    | [], hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | [.const _], hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .ret :: _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .unk :: _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
   | branchTo f k =>
     match a, hcheck, hret, hframe with
     | .const t :: v :: a', hcheck, hret, hframe =>
       cases hk : c.entries[k]? with
-      | none => simp [checkNode, hk] at hcheck
+      | none => simp only [checkNode, hk, Bool.false_eq_true] at hcheck
       | some e =>
         have h' : (((byteAt code pc = some (Jinst.toUInt8 .jumpi) ∧
               e.pc = t.toNat) ∧ e.rets = m) ∧
               gotoCompat a' e.frame = true) ∧
               (v.jumps? = some true ∨ checkNode code c.entries m (pc + 1) a' f = true) := by
-          simpa [checkNode, hk] using hcheck
+          simpa only [checkNode, hk, Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true] using hcheck
         have hat : Jinst.At n.sevm.code n.pc .jumpi := by
           rw [hcode, hpc]; exact byteAt_jinst_at h'.1.1.1.1
         have hret' : RetOK a' m K := fun hm =>
@@ -818,11 +836,11 @@ theorem lock_step (hc : Cert.check code c = true) (hl : lockCert sp c ann = true
         cases hA : ann[k]? with
         | none =>
           rcases hkvv : σv.kv with _ | ⟨d, _ | ⟨cc, kv⟩⟩ <;>
-            simp [lockNode, hvis, hkvv, hA] at hlock
+            simp only [lockNode, hvis, hkvv, hA, Bool.false_eq_true] at hlock
         | some A =>
         rcases hkvv : σv.kv with _ | ⟨d, _ | ⟨cc, kv⟩⟩
-        · simp [lockNode, hvis, hkvv] at hlock
-        · simp [lockNode, hvis, hkvv] at hlock
+        · simp only [lockNode, hvis, hkvv, Bool.false_eq_true] at hlock
+        · simp only [lockNode, hvis, hkvv, Bool.false_eq_true] at hlock
         simp only [lockNode, hvis, hkvv, hA, Bool.and_eq_true] at hlock
         rw [hkvv] at hvalv
         rcases of_jumpi_run (Cursor.parentStep_jinst edge hat) with
@@ -831,7 +849,7 @@ theorem lock_step (hc : Cert.check code c = true) (hl : lockCert sp c ann = true
           obtain ⟨_, S1, rfl, hst, hfr⟩ := frame_pop_two hframe hstack pop
           obtain ⟨hv1, hp1⟩ := refine_sound (zero := true) hnn hvalv (fun _ => rfl)
             (fun h => by cases h)
-          exact ⟨⟨f, pc + 1, a', m, K⟩, _, reach', hcode', by simp [hpc', hpc], hlive, hret',
+          exact ⟨⟨f, pc + 1, a', m, K⟩, _, reach', hcode', by simp only [hpc', hpc], hlive, hret',
             hlock.1, jump_flags reach edge hfork hat hFV hp1 id id, S1, rest, hst, hfr, hv1,
             hK'⟩
         · obtain ⟨hx, S1, rfl, hst, hfr⟩ := frame_pop_two hframe hstack pop
@@ -842,34 +860,36 @@ theorem lock_step (hc : Cert.check code c = true) (hl : lockCert sp c ann = true
           obtain ⟨hvA, hflA⟩ := compat_sound hlock.2 hv1
             (jump_flags reach edge hfork hat hFV hp1 id id)
           obtain ⟨g, hg⟩ := cert_prog_of_entry c k e hk
-          refine ⟨⟨g, e.pc, e.frame, e.rets, K⟩, A, reach', hcode', by simp [hpc', h'.1.1.1.2],
+          refine ⟨⟨g, e.pc, e.frame, e.rets, K⟩, A, reach', hcode', by simp only [hpc',
+            h'.1.1.1.2],
             cert_check_at hc k e g hk hg, ?_, lockCert_at hl hk hg hA, hflA, S1, rest, hst,
             frameMatches_gotoCompat h'.1.2 hfr, hvA, hK'⟩
           intro hm
           rw [h'.1.1.2]
           exact hret' (ret_mem_of_gotoCompat h'.1.2 hm)
-    | [], hcheck, _, _ => simp [checkNode] at hcheck
-    | [.const _], hcheck, _, _ => simp [checkNode] at hcheck
-    | .ret :: _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .unk :: _, hcheck, _, _ => simp [checkNode] at hcheck
+    | [], hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | [.const _], hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .ret :: _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .unk :: _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
   | jump k =>
     match a, hcheck, hret, hframe with
     | .const t :: a', hcheck, hret, hframe =>
       cases hk : c.entries[k]? with
-      | none => simp [checkNode, hk] at hcheck
+      | none => simp only [checkNode, hk, Bool.false_eq_true] at hcheck
       | some e =>
         have h' : (((byteAt code pc = some (Jinst.toUInt8 .jump) ∧
               e.pc = t.toNat) ∧ e.rets = m) ∧
               gotoCompat a' e.frame = true) := by
-          simpa [checkNode, hk] using hcheck
+          simpa only [checkNode, hk, Bool.and_eq_true, beq_iff_eq] using hcheck
         have hat : Jinst.At n.sevm.code n.pc .jump := by
           rw [hcode, hpc]; exact byteAt_jinst_at h'.1.1.1
         cases hA : ann[k]? with
         | none =>
-          rcases hkvv : σv.kv with _ | ⟨d, kv⟩ <;> simp [lockNode, hvis, hkvv, hA] at hlock
+          rcases hkvv : σv.kv with _ | ⟨d, kv⟩ <;> simp only [lockNode, hvis, hkvv, hA,
+            Bool.false_eq_true] at hlock
         | some A =>
         rcases hkvv : σv.kv with _ | ⟨d, kv⟩
-        · simp [lockNode, hvis, hkvv] at hlock
+        · simp only [lockNode, hvis, hkvv, Bool.false_eq_true] at hlock
         simp only [lockNode, hvis, hkvv, hA] at hlock
         rw [hkvv] at hvalv
         obtain ⟨x, hpc', pop, _⟩ := of_jump_run (Cursor.parentStep_jinst edge hat)
@@ -879,20 +899,21 @@ theorem lock_step (hc : Cert.check code c = true) (hl : lockCert sp c ann = true
         obtain ⟨hvA, hflA⟩ := compat_sound hlock ((hv1.filter _).mono hnn)
           (jump_flags reach edge hfork hat hFV (fun h => Or.inl h) id id)
         obtain ⟨g, hg⟩ := cert_prog_of_entry c k e hk
-        refine ⟨⟨g, e.pc, e.frame, e.rets, K⟩, A, reach', hcode', by simp [hpc', h'.1.1.2],
+        refine ⟨⟨g, e.pc, e.frame, e.rets, K⟩, A, reach', hcode', by simp only [hpc',
+          h'.1.1.2],
           cert_check_at hc k e g hk hg, ?_, lockCert_at hl hk hg hA, hflA, S1, rest, hst,
           frameMatches_gotoCompat h'.2 hfr, hvA, hK'⟩
         intro hm
         rw [h'.1.2]
         exact hret (List.mem_cons_of_mem _ (ret_mem_of_gotoCompat h'.2 hm))
-    | [], hcheck, _, _ => simp [checkNode] at hcheck
-    | .ret :: _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .unk :: _, hcheck, _, _ => simp [checkNode] at hcheck
+    | [], hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .ret :: _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .unk :: _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
   | callNext k f =>
     match a, f, hcheck, hret, hframe with
     | .const t :: a', .dest f0, hcheck, hret, hframe =>
       cases hk : c.entries[k]? with
-      | none => simp [checkNode, hk] at hcheck
+      | none => simp only [checkNode, hk, Bool.false_eq_true] at hcheck
       | some e =>
         simp only [checkNode, hk, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hcheck
         obtain ⟨⟨⟨hbyte, hepc⟩, hlen⟩, hmatch⟩ := hcheck
@@ -900,10 +921,11 @@ theorem lock_step (hc : Cert.check code c = true) (hl : lockCert sp c ann = true
           rw [hcode, hpc]; exact byteAt_jinst_at hbyte
         cases hA : ann[k]? with
         | none =>
-          rcases hkvv : σv.kv with _ | ⟨d, kv⟩ <;> simp [lockNode, hvis, hkvv, hk, hA] at hlock
+          rcases hkvv : σv.kv with _ | ⟨d, kv⟩ <;> simp only [lockNode, hvis, hkvv, hk, hA,
+            Bool.false_eq_true] at hlock
         | some A =>
         rcases hkvv : σv.kv with _ | ⟨d, kv⟩
-        · simp [lockNode, hvis, hkvv] at hlock
+        · simp only [lockNode, hvis, hkvv, Bool.false_eq_true] at hlock
         simp only [lockNode, hvis, hkvv, hk, hA, Bool.and_eq_true] at hlock
         obtain ⟨hcompat, hcont⟩ := hlock
         rw [hkvv] at hvalv
@@ -934,7 +956,7 @@ theorem lock_step (hc : Cert.check code c = true) (hl : lockCert sp c ann = true
           obtain ⟨hvA, hflA, -⟩ := split_val hS0 hsf
           let κc : Cont := ⟨.dest f0, 0, a'.drop e.frame.length, m, e.rets, false⟩
           refine ⟨⟨g, e.pc, e.frame, e.rets, κc :: K⟩, A, reach', hcode',
-            by simp [hpc', hepc], hentry, ?_, lockCert_at hl hk hg hA, hflA, sf, sr ++ rest,
+            by simp only [hpc', hepc], hentry, ?_, lockCert_at hl hk hg hA, hflA, sf, sr ++ rest,
             by rw [hst, hS0, List.append_assoc], hsf, hvA,
             .cons hsr hretDrop (fun h => by cases h) (fun h => by cases h) hK'⟩
           intro hm
@@ -942,11 +964,11 @@ theorem lock_step (hc : Cert.check code c = true) (hl : lockCert sp c ann = true
         | some i =>
           simp only [hi] at hmatch hcont
           cases har : a'[i]? with
-          | none => simp [har] at hmatch
+          | none => simp only [har, Bool.false_eq_true] at hmatch
           | some av =>
             cases av with
-            | ret => simp [har] at hmatch
-            | unk => simp [har] at hmatch
+            | ret => simp only [har, Bool.false_eq_true] at hmatch
+            | unk => simp only [har, Bool.false_eq_true] at hmatch
             | const r =>
               simp only [har, Bool.and_eq_true] at hmatch hcont
               obtain ⟨hcall, hcontc⟩ := hmatch
@@ -954,32 +976,35 @@ theorem lock_step (hc : Cert.check code c = true) (hl : lockCert sp c ann = true
               obtain ⟨hvA, hflA, hvd⟩ := split_val hS0 hsf
               let κc : Cont := ⟨.dest f0, r, a'.drop e.frame.length, m, e.rets, true⟩
               refine ⟨⟨g, e.pc, e.frame, e.rets, κc :: K⟩, A, reach', hcode',
-                by simp [hpc', hepc], hentry, fun _ => ⟨κc, K, rfl, rfl, rfl⟩,
+                by simp only [hpc', hepc], hentry, fun _ => ⟨κc, K, rfl, rfl, rfl⟩,
                 lockCert_at hl hk hg hA, hflA, sf, sr ++ rest,
                 by rw [hst, hS0, List.append_assoc], hsf, hvA,
                 .cons hsr hretDrop (fun _ => by
                   show checkNode code c.entries m r.toNat
                     (List.replicate e.rets .unk ++ a'.drop e.frame.length) (.dest f0) = true
-                  simpa [checkNode] using hcontc)
+                  simpa only [checkNode, Bool.and_eq_true, beq_iff_eq] using hcontc)
                   (fun _ => ⟨saved σv (kv.drop e.frame.length), hcont, hvd, fun hp => ?_⟩) hK'⟩
               obtain ⟨m0, a1, a2, a3⟩ := hFV.passed hp
               exact ⟨m0, a1, a2.trans hnn, a3⟩
-    | [], _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .ret :: _, _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .unk :: _, _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .const _ :: _, .next _ _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .const _ :: _, .branch _ _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .const _ :: _, .branchTo _ _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .const _ :: _, .last _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .const _ :: _, .jump _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .const _ :: _, .callNext _ _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .const _ :: _, .ret, hcheck, _, _ => simp [checkNode] at hcheck
-    | .const _ :: _, .undefined, hcheck, _, _ => simp [checkNode] at hcheck
+    | [], _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .ret :: _, _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .unk :: _, _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .const _ :: _, .next _ _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .const _ :: _, .branch _ _, hcheck, _, _ => simp only [checkNode,
+      Bool.false_eq_true] at hcheck
+    | .const _ :: _, .branchTo _ _, hcheck, _, _ => simp only [checkNode,
+      Bool.false_eq_true] at hcheck
+    | .const _ :: _, .last _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .const _ :: _, .jump _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .const _ :: _, .callNext _ _, hcheck, _, _ => simp only [checkNode,
+      Bool.false_eq_true] at hcheck
+    | .const _ :: _, .ret, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .const _ :: _, .undefined, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
   | ret =>
     match a, hcheck, hret, hframe with
     | .ret :: a', hcheck, hret, hframe =>
       have h' : byteAt code pc = some (Jinst.toUInt8 .jump) ∧ a'.length = m := by
-        simpa [checkNode] using hcheck
+        simpa only [checkNode, Bool.and_eq_true, beq_iff_eq] using hcheck
       obtain ⟨k, K', rfl, hlive, hrets⟩ := hret List.mem_cons_self
       cases hK' with
       | @cons _ _ S1 rest1 hS1 hretk hchk hlk hK2 =>
@@ -998,21 +1023,22 @@ theorem lock_step (hc : Cert.check code c = true) (hl : lockCert sp c ann = true
           by rw [hst, List.append_assoc], ?_, resume_val hlk2 hlenS, hK2⟩
         · intro hm
           rcases List.mem_append.mp hm with hm | hm
-          · simp [List.mem_replicate] at hm
+          · simp only [List.mem_replicate, ne_eq, reduceCtorEq, and_false] at hm
           · exact hretk hm
         · rw [← hlenS]
           exact List.rel_append (frameMatches_unk_length S') hS1
-    | [], hcheck, _, _ => simp [checkNode] at hcheck
-    | .const _ :: _, hcheck, _, _ => simp [checkNode] at hcheck
-    | .unk :: _, hcheck, _, _ => simp [checkNode] at hcheck
+    | [], hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .const _ :: _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
+    | .unk :: _, hcheck, _, _ => simp only [checkNode, Bool.false_eq_true] at hcheck
   | last l =>
-    have hbyte : byteAt code pc = some l.toUInt8 := by simpa [checkNode] using hcheck
+    have hbyte : byteAt code pc = some l.toUInt8 := by simpa only [checkNode, beq_iff_eq] using
+      hcheck
     have hat : Linst.At n.sevm.code n.pc l := by
       rw [hcode, hpc]; exact byteAt_linst_at hbyte
     exact (Cursor.parentStep_false_of_linst edge hat).elim
   | undefined =>
     have hnone : n.sevm.code.getInst n.pc = none := by
-      rw [hcode, hpc]; simpa [checkNode, Option.isNone_iff_eq_none] using hcheck
+      rw [hcode, hpc]; simpa only [checkNode, Option.isNone_iff_eq_none] using hcheck
     exact (Cursor.parentStep_false_of_none edge hnone).elim
 
 end Step
@@ -1048,7 +1074,7 @@ theorem LockOK.visit_some {n : Exec.Deriv} {κ : Cursor} {σ : LSt}
   obtain ⟨f, pc, a, m, K⟩ := κ
   dsimp only at hl ⊢
   cases hv : visit sp pc σ with
-  | none => cases f <;> simp [lockNode, hv] at hl
+  | none => cases f <;> simp only [lockNode, hv, Bool.false_eq_true, Option.isSome_none, Bool.false_and] at hl
   | some σv => exact ⟨σv, rfl⟩
 
 /-- A cursor-placed node that decodes an `SSTORE` sits at an `SSTORE` node of
@@ -1078,42 +1104,42 @@ theorem cursor_sstore_node {n : Exec.Deriv} {κ : Cursor} (ok : CursorOK code c 
     exact ⟨g, by rw [ninstAt_inj hi hat]⟩
   | last l =>
     have hl := byteAt_linst_at (show byteAt code pc = some l.toUInt8 by
-      simpa [checkNode] using hcheck)
+      simpa only [checkNode, beq_iff_eq] using hcheck)
     unfold Linst.At at hl
     unfold Ninst.At at hat
     rw [hat] at hl
     cases hl
   | undefined =>
     have hnone : code.getInst pc = none := by
-      simpa [checkNode, Option.isNone_iff_eq_none] using hcheck
+      simpa only [checkNode, Option.isNone_iff_eq_none] using hcheck
     unfold Ninst.At at hat
     rw [hat] at hnone
     cases hnone
-  | dest g => exact (hjump _ (by simp [checkNode] at hcheck; exact hcheck.1)).elim
+  | dest g => exact (hjump _ (by simp only [checkNode, Bool.and_eq_true, beq_iff_eq] at hcheck; exact hcheck.1)).elim
   | branch g h =>
     simp only [checkNode] at hcheck
     split at hcheck
-    · exact (hjump _ (by simp at hcheck; exact hcheck.1.1)).elim
+    · exact (hjump _ (by simp only [Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true] at hcheck; exact hcheck.1.1)).elim
     · cases hcheck
   | branchTo g k =>
     simp only [checkNode] at hcheck
     split at hcheck
-    · exact (hjump _ (by simp at hcheck; exact hcheck.1.1.1.1)).elim
+    · exact (hjump _ (by simp only [Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true] at hcheck; exact hcheck.1.1.1.1)).elim
     · cases hcheck
   | jump k =>
     simp only [checkNode] at hcheck
     split at hcheck
-    · exact (hjump _ (by simp at hcheck; exact hcheck.1.1.1)).elim
+    · exact (hjump _ (by simp only [Bool.and_eq_true, beq_iff_eq] at hcheck; exact hcheck.1.1.1)).elim
     · cases hcheck
   | callNext k g =>
     simp only [checkNode] at hcheck
     split at hcheck
-    · exact (hjump _ (by simp at hcheck; exact hcheck.1.1.1)).elim
+    · exact (hjump _ (by simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hcheck; exact hcheck.1.1.1)).elim
     · cases hcheck
   | ret =>
     simp only [checkNode] at hcheck
     split at hcheck
-    · exact (hjump _ (by simp at hcheck; exact hcheck.1)).elim
+    · exact (hjump _ (by simp only [Bool.and_eq_true, beq_iff_eq] at hcheck; exact hcheck.1)).elim
     · cases hcheck
 
 /-- At a slot-addressed `SSTORE` the walk had `passed`, and the pc is a
@@ -1131,21 +1157,21 @@ theorem LockOK.sstore_site {n : Exec.Deriv} {κ : Cursor} {σ : LSt}
   rw [hg, ← ok.pc_eq] at hl
   simp only [lockNode, hvis] at hl
   cases hls : lstep sp n.pc (.reg .sstore) σv with
-  | none => simp [hls] at hl
+  | none => simp only [hls, reduceCtorEq, imp_self, implies_true, Bool.false_eq_true] at hl
   | some σ' =>
     obtain ⟨-, -, b, -, -, -, hb, -⟩ := lstep_nonpush (fun _ _ h => by cases h) hls
     obtain ⟨ρ, hS, hf⟩ := hval
     rw [← hkv] at hS
     rw [← hfacts] at hf
     rcases hkvv : σv.kv with _ | ⟨k, _ | ⟨v, kt⟩⟩
-    · simp [effSetNow, hkvv] at hb
-    · simp [effSetNow, hkvv] at hb
+    · simp only [effSetNow, hkvv, reduceCtorEq] at hb
+    · simp only [effSetNow, hkvv, reduceCtorEq] at hb
     rw [hkvv] at hS
     have hk : ρ k = sp.slot := by
       cases hS with
       | cons h0 _ =>
         rw [hstack, ← h0] at hkey
-        simpa using hkey
+        simpa only [List.cons_append, List.head?_cons, Option.some.injEq] using hkey
     simp only [effSetNow, hkvv] at hb
     split at hb
     · rename_i hex
@@ -1174,14 +1200,14 @@ theorem LockOK.not_selfdestruct {n : Exec.Deriv} {κ : Cursor} {σ : LSt}
     rw [hat] at hj
     cases hj
   cases f with
-  | pcAt _ _ => simp [lockNode] at hl
+  | pcAt _ _ => simp only [lockNode, Bool.false_eq_true] at hl
   | last l =>
     have hl' := byteAt_linst_at (show byteAt code pc = some l.toUInt8 by
-      simpa [checkNode] using hcheck)
+      simpa only [checkNode, beq_iff_eq] using hcheck)
     unfold Linst.At at hl' hat
     rw [hat] at hl'
     cases hl'
-    simp [lockNode] at hl
+    simp only [lockNode, bne_self_eq_false, Bool.and_false, Bool.false_eq_true] at hl
   | next i g =>
     simp only [checkNode, Bool.and_eq_true] at hcheck
     have hi := Ninst.at_of_slice (bytesAt_slice (ninst_bytes_ne_nil i) hcheck.1.1)
@@ -1191,35 +1217,35 @@ theorem LockOK.not_selfdestruct {n : Exec.Deriv} {κ : Cursor} {σ : LSt}
     cases hi
   | undefined =>
     have hnone : code.getInst pc = none := by
-      simpa [checkNode, Option.isNone_iff_eq_none] using hcheck
+      simpa only [checkNode, Option.isNone_iff_eq_none] using hcheck
     unfold Linst.At at hat
     rw [hat] at hnone
     cases hnone
-  | dest g => exact (hjump _ (by simp [checkNode] at hcheck; exact hcheck.1)).elim
+  | dest g => exact (hjump _ (by simp only [checkNode, Bool.and_eq_true, beq_iff_eq] at hcheck; exact hcheck.1)).elim
   | branch g h =>
     simp only [checkNode] at hcheck
     split at hcheck
-    · exact (hjump _ (by simp at hcheck; exact hcheck.1.1)).elim
+    · exact (hjump _ (by simp only [Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true] at hcheck; exact hcheck.1.1)).elim
     · cases hcheck
   | branchTo g k =>
     simp only [checkNode] at hcheck
     split at hcheck
-    · exact (hjump _ (by simp at hcheck; exact hcheck.1.1.1.1)).elim
+    · exact (hjump _ (by simp only [Bool.and_eq_true, beq_iff_eq, Bool.or_eq_true] at hcheck; exact hcheck.1.1.1.1)).elim
     · cases hcheck
   | jump k =>
     simp only [checkNode] at hcheck
     split at hcheck
-    · exact (hjump _ (by simp at hcheck; exact hcheck.1.1.1)).elim
+    · exact (hjump _ (by simp only [Bool.and_eq_true, beq_iff_eq] at hcheck; exact hcheck.1.1.1)).elim
     · cases hcheck
   | callNext k g =>
     simp only [checkNode] at hcheck
     split at hcheck
-    · exact (hjump _ (by simp at hcheck; exact hcheck.1.1.1)).elim
+    · exact (hjump _ (by simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hcheck; exact hcheck.1.1.1)).elim
     · cases hcheck
   | ret =>
     simp only [checkNode] at hcheck
     split at hcheck
-    · exact (hjump _ (by simp at hcheck; exact hcheck.1)).elim
+    · exact (hjump _ (by simp only [Bool.and_eq_true, beq_iff_eq] at hcheck; exact hcheck.1)).elim
     · cases hcheck
 
 end Frame

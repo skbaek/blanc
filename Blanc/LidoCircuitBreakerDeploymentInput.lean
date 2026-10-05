@@ -139,7 +139,7 @@ theorem prepareCanonicalDeploymentContext
   let begun := txInput.beginTransaction
   let fee := tx.gas * deploymentEffectiveGasPrice txInput tx
   have hbegunState : begun.state = base.state := by
-    simpa [begun, Benv.beginTransaction] using hprefix.state_eq
+    simpa only [begun, Benv.beginTransaction] using hprefix.state_eq
   have hfeeLe : fee ≤ (begun.state.bal sender).toNat := by
     rw [hbegunState]
     have hprice : deploymentEffectiveGasPrice txInput tx =
@@ -147,7 +147,7 @@ theorem prepareCanonicalDeploymentContext
           (initBenv .prague base cb.block.header) tx := by
       rw [hprefix.txInput_eq]
       rfl
-    simpa [fee, hprice] using henv.upfront_funded
+    simpa only [fee, hprice, ge_iff_le] using henv.upfront_funded
   have hfeeLt : fee < 2 ^ 256 :=
     hfeeLe.trans_lt (B256.toNat_lt _)
   have hfeeEncoded : fee.toB256.toNat = fee :=
@@ -196,7 +196,7 @@ theorem prepareCanonicalDeploymentContext
   have hprepare : prepareMessage msgBenv tenv tx = .ok msg := by
     unfold prepareMessage
     rw [hreceiver]
-    simp [msg, msgBenv, currentTarget, hreceiver, htenvStateGas]
+    simp only [msg, msgBenv, currentTarget, hreceiver, htenvStateGas]
   have hdebitNonce :
       debit.getNonce sender = base.state.getNonce sender + 1 := by
     dsimp only [debit]
@@ -213,7 +213,7 @@ theorem prepareCanonicalDeploymentContext
     dsimp only [msg, currentTarget]
     change computeContractAddress sender (debit.getNonce sender - 1) = ca
     rw [hdebitNonce]
-    simp
+    simp only [add_sub_cancel_right]
     exact hbase.target_eq.symm
   have htxChain : txInput.stat.chainId = base.chainId := by
     rw [hprefix.txInput_eq]
@@ -223,8 +223,7 @@ theorem prepareCanonicalDeploymentContext
     rfl
   have hmsgChain : msg.benv.stat.chainId = chainId := by
     dsimp only [msg, msgBenv, begun]
-    simpa [Benv.beginTransaction] using
-      htxChain.trans hbase.chainId_eq.symm
+    simpa only [Benv.beginTransaction] using htxChain.trans hbase.chainId_eq.symm
   have hmsgRules : msg.benv.stat.rules = pragueRules := by
     dsimp only [msg, msgBenv, begun]
     rw [hprefix.environment_eq]
@@ -239,27 +238,27 @@ theorem prepareCanonicalDeploymentContext
     dsimp only [msg, msgBenv]
     have hpre := hbase.target_noCodeOrNonce
     unfold accountHasCodeOrNonce at hpre ⊢
-    simpa [State.getNonce, State.getCode, hdebitTarget] using hpre
+    simpa only [State.getNonce, State.getCode, hdebitTarget, gt_iff_lt, Bool.or_eq_false_iff, decide_eq_false_iff_not, not_lt, UInt64.le_zero_iff, Bool.not_eq_eq_eq_not, Bool.not_false] using hpre
   have hnostor : accountHasStorage msg.benv.state ca = false := by
     dsimp only [msg, msgBenv]
     have hpre := hbase.target_noStorage
     unfold accountHasStorage at hpre ⊢
-    simpa [State.getStor, hdebitTarget] using hpre
+    simpa only [State.getStor, hdebitTarget, Bool.not_eq_eq_eq_not, Bool.not_false] using hpre
   have horiginal : msg.benv.stat.origState = base.state := by
     dsimp only [msg, msgBenv, begun]
-    simpa [Benv.beginTransaction] using hprefix.state_eq
+    simpa only [Benv.beginTransaction] using hprefix.state_eq
   have hbaseStorageEmpty : base.state.getStor ca = Stor.empty := by
     have hisEmpty : (base.state.getStor ca).isEmpty = true := by
       have hpre := hbase.target_noStorage
       unfold accountHasStorage at hpre
-      simpa using hpre
+      simpa only [Bool.not_eq_eq_eq_not, Bool.not_false] using hpre
     exact Std.TreeMap.eq_empty_of_isEmpty hisEmpty
   have hpauseCold : (ca, pauseDurationSlot) ∉
       msg.accessedStorageKeys := by
-    simp [msg, tenv, deploymentTenv]
+    simp only [msg, tenv, deploymentTenv, Std.TreeMap.empty_eq_emptyc, Std.HashSet.ofList_singleton, Std.HashSet.ofList_nil, Std.HashSet.not_mem_empty, not_false_eq_true]
   have hheartbeatCold : (ca, heartbeatIntervalSlot) ∉
       msg.accessedStorageKeys := by
-    simp [msg, tenv, deploymentTenv]
+    simp only [msg, tenv, deploymentTenv, Std.TreeMap.empty_eq_emptyc, Std.HashSet.ofList_singleton, Std.HashSet.ofList_nil, Std.HashSet.not_mem_empty, not_false_eq_true]
   have hpauseOriginal :
       (msg.benv.stat.origState.get ca).stor.get pauseDurationSlot = 0 := by
     rw [horiginal]
@@ -280,12 +279,12 @@ theorem prepareCanonicalDeploymentContext
     msg := msg
     systemPrefix := hprefix
     begun_eq := rfl
-    debit_eq := by simpa [fee] using hdebit
+    debit_eq := by simpa only [fee] using hdebit
     tenv_eq := rfl
     prepare_eq := hprepare
     msg_benv_eq := rfl
     msg_caller_eq := rfl
-    msg_target_eq := by simpa [msg] using hreceiver
+    msg_target_eq := by simpa only [msg] using hreceiver
     msg_gas_eq := rfl
     msg_value_eq := by
       rw [show msg.value = tx.value.toB256 from rfl, henv.value_eq]

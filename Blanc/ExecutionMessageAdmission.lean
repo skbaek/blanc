@@ -83,25 +83,22 @@ theorem MsgInv.processCreateMessage_msg
     c.MsgInv ca (processCreateMessage.msg msg) := by
   have state : c.StateInv ca
       (processCreateMessage.msg msg).benv.state := by
-    simpa [processCreateMessage.msg, Msg.withBenv,
-      addCreatedAccount, Benv.setStor, Benv.incrNonce] using
-      (StateInv.incrNonce
-        (StateInv.setStor_ne targetNe ready.state))
+    simpa only [processCreateMessage.msg, Msg.withBenv, Benv.incrNonce, addCreatedAccount,
+      Benv.setStor] using (StateInv.incrNonce (StateInv.setStor_ne targetNe ready.state))
   refine ⟨state, ?_, ?_, ?_, ?_, ?_⟩
   · refine ⟨?_, ?_⟩
-    · simpa [processCreateMessage.msg, Msg.withBenv,
-        addCreatedAccount, Benv.setStor, Benv.incrNonce,
-        targetNe] using ready.nodel.ca
+    · simpa only [processCreateMessage.msg, Msg.withBenv, Benv.incrNonce, addCreatedAccount,
+      Benv.setStor, Std.HashSet.mem_insert, beq_iff_eq, targetNe, false_or] using ready.nodel.ca
     · exact fun empty =>
         (c.sem.ne_nil (state.code.symm.trans (congrArg some empty))) rfl
   · intro target
-    simp [processCreateMessage.msg, Msg.withBenv, targetNone] at target
+    simp only [processCreateMessage.msg, Msg.withBenv, targetNone, Bool.true_eq_false] at target
   · intro target
-    simp [processCreateMessage.msg, Msg.withBenv, targetNone] at target
-  · simpa [processCreateMessage.msg, Msg.withBenv] using ready.ne
+    simp only [processCreateMessage.msg, Msg.withBenv, targetNone, Bool.true_eq_false] at target
+  · simpa only [processCreateMessage.msg, Msg.withBenv, ne_eq] using ready.ne
   · intro _ current
     exact False.elim (targetNe (by
-      simpa [processCreateMessage.msg, Msg.withBenv] using current))
+      simpa only [processCreateMessage.msg, Msg.withBenv] using current))
 
 theorem MsgInv.of_messageCallDelegation
     {ca : Adr} {msg delegated : Msg} {refund : Nat}
@@ -186,7 +183,7 @@ lemma StateInv.of_exec_precond_admitted
   exact stateInv_ofSem (ContractSpecSem.StateInv.of_exec_precond_admitted_sem
     (c := c.toSem) (preservesAdmitted_toSem c ca entry preserves)
     hfork (pre_toSem precond)
-    (fun target => by simpa [ContractSpec.toSem, Prog.codeSem] using code target)
+    (fun target => by simpa only [toSem, Prog.codeSem] using code target)
     wf run admitted)
 
 end ContractSpec
@@ -249,8 +246,7 @@ theorem ProcessMessageTrace.stateInv_admitted_sem
       cases retained with
       | some execution =>
           have admitted' : Exec.FrameAdmitted ca entry execution := by
-            simpa [ExecutionTrace.ProcessMessageTrace.FrameAdmitted,
-              ExecutionTrace.RetainedXlot.FrameAdmitted] using admitted
+            simpa only [FrameAdmitted, RetainedXlot.FrameAdmitted] using admitted
           have outputEq : exception = .ok evm :=
             exec_ok_of_handleError handled failed
           subst exception
@@ -285,7 +281,7 @@ theorem ProcessCreateMessageTrace.stateInv_admitted_sem
     ⟨trace.slot, trace.retained, innerRun⟩
   have innerReady : c.MessageRunReady ca (processCreateMessage.msg msg) :=
     (ready.processCreateMessage_msg targetNone targetNe).runReady_of_foreign
-      (by simpa [processCreateMessage.msg, Msg.withBenv] using targetNe)
+      (by simpa only [processCreateMessage.msg, Msg.withBenv, ne_eq] using targetNe)
   have hfork' : CoveredFork (processCreateMessage.msg msg).benv.stat.fork := by
     rw [processCreateMessage.msg_benvStat]
     exact hfork

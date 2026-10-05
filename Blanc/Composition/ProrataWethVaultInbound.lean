@@ -247,12 +247,12 @@ theorem inboundAfterQuote_effect_linked
       simp only [List.map, List.cons_append, List.nil_append]
       line_inv) staging
   have stagingStack : Blanc.Split ([] : Stack) callPre.stack callPre.stack :=
-    by simp [Blanc.Split]
+    by simp only [Split, List.nil_append]
 
   -- Transport every operation word across the calldata frame and the child.
   have tailReads : Mem.Reads tailPre.memory tailPre.memory.data.toList := by
     intro index
-    simp
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
   have carry : ∀ {offset : Nat} {w : B256}, 128 ≤ offset →
       Bytes.toB256
         ((Bytes.writeAt image
@@ -360,7 +360,7 @@ theorem inboundQuoteStaging_effect
       Func.RunCompiledTo fs sevm quotePre arithmetic (.ok post) := by
   have entryReads : Mem.Reads entry.memory entry.memory.data.toList := by
     intro index
-    simp
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
   obtain ⟨readPre, readStack, readWf, readReads, argState, argLogs,
       readRun⟩ :=
     Blanc.ProrataWethVault.inboundArgs_trace (R := Func.RunOk) memoryWf entryReads stack run
@@ -835,28 +835,32 @@ private theorem depositAfterQuote_lookup :
       Blanc.ProrataWethVault.vault.aux)[
         Blanc.ProrataWethVault.depositAfterQuoteSlot]? =
       some Blanc.ProrataWethVault.depositAfterQuote := by
-  simp [Blanc.ProrataWethVault.vault, Blanc.ProrataWethVault.vaultAux,
-    Blanc.ProrataWethVault.depositAfterQuoteSlot]
+  simp only [ProrataWethVault.vault, ProrataWethVault.vaultAux,
+    ProrataWethVault.depositAfterQuoteSlot, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
 
 private theorem mintAfterQuote_lookup :
     (Blanc.ProrataWethVault.vault.main ::
       Blanc.ProrataWethVault.vault.aux)[
         Blanc.ProrataWethVault.mintAfterQuoteSlot]? =
       some Blanc.ProrataWethVault.mintAfterQuote := by
-  simp [Blanc.ProrataWethVault.vault, Blanc.ProrataWethVault.vaultAux,
-    Blanc.ProrataWethVault.mintAfterQuoteSlot]
+  simp only [ProrataWethVault.vault, ProrataWethVault.vaultAux, ProrataWethVault.mintAfterQuoteSlot,
+    List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos,
+    List.getElem_cons_succ, List.getElem_cons_zero]
 
 private theorem deposit_mem_vaultFuncs :
     (selector "deposit" [.uint256, .address],
       Blanc.ProrataWethVault.routed 2 Blanc.ProrataWethVault.deposit) ∈
       Blanc.ProrataWethVault.vaultFuncs := by
-  simp [Blanc.ProrataWethVault.vaultFuncs]
+  simp only [ProrataWethVault.vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+    true_or, or_true]
 
 private theorem mint_mem_vaultFuncs :
     (selector "mint" [.uint256, .address],
       Blanc.ProrataWethVault.routed 2 Blanc.ProrataWethVault.mint) ∈
       Blanc.ProrataWethVault.vaultFuncs := by
-  simp [Blanc.ProrataWethVault.vaultFuncs]
+  simp only [ProrataWethVault.vaultFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+    true_or, or_true]
 
 /-- `deposit_compiled_effect` together with the flow's linked WETH child. -/
 theorem deposit_compiled_effect_linked

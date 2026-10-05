@@ -121,16 +121,16 @@ import tomllib
 SHARED = ["Basic", "Semantics", "CommonCore", "MachineDataFacts", "CreationArtifact", "RlpConcrete",
           "ProofRecipesGenerated", "ProofRecipeTactic", "Tactics", "CommonProofs", "Ladder", "Upgrade",
           "BalanceAlgebra", "LedgerConservation", "StorageOnlySpec", "SlotFootprint", "OffsetPricing", "ProrataAccounting",
-          "ProrataAttackModel", "ProrataAttackPath", "WordArithmetic", "MemoryImage", "BytesWrite", "MemoryLayout",
+          "ProrataAttackModel", "ProrataAttackPath", "FakeExponential", "FakeExponentialGrowth", "FakeExponentialEval", "WordFakeExponential", "WordFakeExponentialBound", "WordFakeExponentialEval", "FakeExponentialWordCorrespondence", "FakeExponentialWordDomain", "WordArithmetic", "WordByteCodecs", "WordByteRoundtrip", "MemoryImage", "BytesWrite", "MemoryLayout", "MemoryStageGas",
           "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward",
-          "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "ForwardSha256",
+          "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "StorageAccessGas", "StorageRefund", "ForwardSha256",
           "StaticPrecompileMessage", "StaticStorage", "ForwardNoRawSstore", "ForwardStorageEffects",
           "ForwardDispatchMiss", "ForwardLog", "CompiledStackSafety", "AbstractStackSafety",
           "AbstractStackTransfer", "AbstractStackCertificate", "GasErasure", "RunPrefix", "ReachDispatchPrefix", "PrefixTransport",
           "RevertPayload", "CompiledWalkInversion", "RevertCause", "CompiledFixedInvariance", "NonpayableInversion",
           "LinearDispatch", "LinearDispatchCorrectness", "ExecDeterminism", "ExecIdentification", "ExecutionSettlement", "ExecutionPath",
-          "ExecutionPathLocator", "ExecutionStateTrace", "ExecutionTrace", "ExecutionMessageStateTrace",
-          "ExecutionTransactionStateTrace", "ExecutionBodyStateTrace", "ExecutionHistory", "ExecutionHistoryExact",
+          "ExecutionPathLocator", "ExecutionStateTrace", "ExecutionTrace", "RequestsOutput", "ExecutionMessageStateTrace",
+          "ExecutionTransactionStateTrace", "ExecutionTransactionGas", "ExecutionBodyGas", "ExecutionBodyStateTrace", "ExecutionHistory", "ExecutionHistoryExact", "ExecutionHistoryExtension",
           "ExecutionHistoryStateTrace", "ExecutionOccurrence", "ExecutionNoninterference", "CycleWriteFree",
           "ReachableExecFree", "ReachableExecFreeControl", "TransientSettlement", "SourceAttainment",
           "TransientInvariance", "PinnedPauseTarget"]
@@ -141,17 +141,18 @@ SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "TaggedStorage",
            "DelegatecallEnvelope",
            "StaticStores",
-           "ExecutionFrames", "ExecutionFrameEntry", "ExecutionFrameTime", "ExecutionAdmission", "ContractAdmission",
+           "ExecutionFrames", "ExecutionCommittedGas", "ExecutionMessageGas", "ExecutionFrameEntry", "ExecutionCallerExclusion", "ExecutionTraceCallerExclusion", "ExecutionFrameTime", "ExecutionAdmission", "ContractAdmission",
            "ExecutionMessageAdmission", "ExecutionTransactionAdmission",
-           "ExecutionBodyAdmission", "ExecutionHistoryAdmission",
-           "ExecutionTraceFresh",
+           "ExecutionBodyAdmission", "ExecutionBodyPrefixAdmission", "ExecutionHistoryAdmission",
+           "ExecutionTraceFresh", "ExecutionImmutableCode",
            "ExecutionMessageEffects", "ExecutionTransactionEffects",
            "ExecutionBodyEffects", "ExecutionHistoryEffects",
-           "ExecutionAccountingReplay",
+           "ExecutionAccountingReplay", "ExecutionAccountingSignedBalance", "ExecutionAccountingStorageFold",
+           "ExecutionAccountingStoragePrefix",
            "ExecutionAccountingLadder", "CallSpawnExact", "StaticCallStorage",
            "ChargeGas", "CallOutOfGas", "SourceSiteCount", "CompiledShape",
            "SymbolicProgram",
-           "ExecutionTraceFrames", "ExecutionTraceAdmission", "ExecutionTraceSettledFrames", "ExecutionTraceEntry",
+           "ExecutionTraceFrames", "ExecutionTraceAdmission", "ExecutionTraceSettledFrames", "ExecutionTraceSettledOrigin", "ExecutionTraceRootFrame", "ExecutionRequestSegments", "ExecutionTraceEntry",
            "ExecutionAccountingObserved", "ExecutionAccountingAdmission", "ExecutionAccountingCore", "ExecutionEntryAccounting", "ExecutionModelAccounting", "ExecutionDirectCode", "FuncMainPrefix",
            "ChunkedDecide"]
 # The ladder over arbitrary code images and the generic bytecode lift
@@ -179,6 +180,9 @@ SHARED += ["Lift.PtrWordMemory"]
 # Retained target frames interleaved with actual foreign LOGs, and per-step storage/log
 # transport across arbitrary callee code (uv2nh-skim2): contract-neutral.
 SHARED += ["Lift.TargetLogEvents"]
+# Forward construction of one configured block from proof-produced body evidence
+# (eip7002-withdrawal-predeploy-v1): contract-neutral.
+SHARED += ["BlockForward", "Lift.ExactWalkCallChild"]
 # Pure-model ledger updates (vyper-3crv-bytecode-v1): contract-neutral.
 SHARED += ["LedgerUpdate"]
 # Floor share bounds for two-reserve AMMs: contract-neutral.
@@ -203,11 +207,16 @@ SHARED += ["Lift.MemMap", "Lift.CheckMem", "Lift.CodeTriesData", "Lift.WitnessAr
 # Chunk boundaries and stage composition of a witness run, the literal-free scaffolding the
 # V- witness's heavy frames instantiate (vminus-tx-v1): contract-neutral.
 SHARED += ["Lift.WitnessBoundary", "TransactionForward"]
+# The system-call envelope over a successful raw frame of canonical system code
+# (eip7002-system-paths): contract-neutral.
+SHARED += ["SystemCallForward"]
 # Generic warmth / code-at-address / system-frame execution facts (beacon-env-v1): contract-neutral.
 SHARED += ["ExecutionWarmth", "ExecutionTraceWarmth", "ExecutionCodeAt", "ExecutionTraceCodeAt", "ExecutionTraceSystem"]
 # Reachable program counters, the canonical consensus system-contract code and system frames that
 # run it (beacon-env-v2): contract-neutral (the four system contracts are protocol, not a Blanc contract).
 SHARED += ["ExecutionReachable", "SystemContracts", "ExecutionTraceCodeKeep", "ExecutionTraceSystemCode"]
+# Call-only executions enter no CREATE frame (eip7002-withdrawal-predeploy-v1).
+SHARED += ["ExecutionTraceCallOnly"]
 # Generic per-frame calldata-length bound of a configured history (calldata-bound-v1): contract-neutral.
 SHARED += ["ExecutionTraceCalldata", "ForkUniform", "Lift.NodeWalkFork", "Lift.WitnessFork", "TransactionFork"]
 
@@ -368,6 +377,74 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.PermitEntries",
         "Lift.UniswapV2Pair.PermitSource",
     ],
+    "withdrawal-request": ["Lift.WithdrawalRequest.Cert", "Lift.WithdrawalRequest.Check",
+                           "Lift.WithdrawalRequest.Jumps", "Lift.WithdrawalRequest.Model",
+                           "Lift.WithdrawalRequest.Layout", "Lift.WithdrawalRequest.Prog",
+                           "Lift.WithdrawalRequest.Dispatch", "Lift.WithdrawalRequest.SystemSetup",
+                           "Lift.WithdrawalRequest.UserSetup", "Lift.WithdrawalRequest.FeeLoop",
+                           "Lift.WithdrawalRequest.SystemMemory", "Lift.WithdrawalRequest.SystemAmount",
+                           "Lift.WithdrawalRequest.SystemBody", "Lift.WithdrawalRequest.UserFeeDispatch",
+                           "Lift.WithdrawalRequest.FeeGetter", "Lift.WithdrawalRequest.SystemLoop",
+                           "Lift.WithdrawalRequest.SystemImage", "Lift.WithdrawalRequest.SystemOutput",
+                           "Lift.WithdrawalRequest.SubmissionState", "Lift.WithdrawalRequest.SubmissionBody",
+                           "Lift.WithdrawalRequest.SystemBookkeepingState",
+                           "Lift.WithdrawalRequest.SystemBookkeeping",
+                           "Lift.WithdrawalRequest.SystemStorage", "Lift.WithdrawalRequest.SubmissionLayout",
+                           "Lift.WithdrawalRequest.SystemMemoryGas", "Lift.WithdrawalRequest.SystemGas",
+                           "Lift.WithdrawalRequest.FrameEffects",
+                           "Lift.WithdrawalRequest.BalanceHistory", "Lift.WithdrawalRequest.BlockRequests",
+                           "Lift.WithdrawalRequest.WordReplay", "Lift.WithdrawalRequest.NatFee",
+                           "Lift.WithdrawalRequest.WordBudget",
+                           "Lift.WithdrawalRequest.NatFeeBound",
+                           "Lift.WithdrawalRequest.NumericFacts",
+                           "Lift.WithdrawalRequest.WordModelReplay",
+                           "Lift.WithdrawalRequest.WordModelCount",
+                           "Lift.WithdrawalRequest.UserOccurrence",
+                           "Lift.WithdrawalRequest.ProtocolOccurrences",
+                           "Lift.WithdrawalRequest.ModelBlockRequests",
+                           "Lift.WithdrawalRequest.WordHistory",
+                           "Lift.WithdrawalRequest.WordFifo", "Lift.WithdrawalRequest.WordDelivery",
+                           "Lift.WithdrawalRequest.ResetOccurrence",
+                           "Lift.WithdrawalRequest.ExactFeeDomain",
+                           "Lift.WithdrawalRequest.NatLiveness",
+                           "Lift.WithdrawalRequest.SubmissionCount",
+                           "Lift.WithdrawalRequest.ResetWindowCount",
+                           "Lift.WithdrawalRequest.CodeFacts",
+                           "Lift.WithdrawalRequest.Semantics",
+                           "Lift.WithdrawalRequest.SystemHistory",
+                           "Lift.WithdrawalRequest.SystemProtocol",
+                           "Lift.WithdrawalRequest.UserGas",
+                           "Lift.FloodLooper.Cert", "Lift.FloodLooper.Check",
+                           "Lift.FloodLooper.Jumps",
+                           "Lift.WithdrawalRequest.FloodWalk", "Lift.WithdrawalRequest.FloodRun",
+                           "Lift.WithdrawalRequest.FloodTx",
+                           "Lift.WithdrawalRequest.FloodTxRecover",
+                           "Lift.WithdrawalRequest.SystemDrain",
+                           "Lift.WithdrawalRequest.SystemFrameEffects",
+                           "Lift.WithdrawalRequest.DrainTx",
+                           "Lift.WithdrawalRequest.FifoDrainControl",
+                           "Lift.SystemDrainer.Cert", "Lift.SystemDrainer.Check",
+                           "Lift.SystemDrainer.Jumps",
+                           "Lift.WithdrawalRequest.Creation.Address",
+                           "Lift.WithdrawalRequest.Creation.Cert",
+                           "Lift.WithdrawalRequest.Creation.Check",
+                           "Lift.WithdrawalRequest.Creation.Deploy",
+                           "Lift.WithdrawalRequest.Creation.Init",
+                           "Lift.WithdrawalRequest.Creation.Input",
+                           "Lift.WithdrawalRequest.Creation.State",
+                           "Lift.WithdrawalRequest.Creation.Walk"],
+    "beacon-roots": ["Lift.BeaconRoots.Cert", "Lift.BeaconRoots.Check",
+                      "Lift.BeaconRoots.Jumps", "Lift.BeaconRoots.Prog",
+                      "Lift.BeaconRoots.SystemWalk"],
+    "history-storage": ["Lift.HistoryStorage.Cert", "Lift.HistoryStorage.Check",
+                         "Lift.HistoryStorage.Jumps", "Lift.HistoryStorage.Prog",
+                         "Lift.HistoryStorage.SystemWalk"],
+    "consolidation-request": ["Lift.ConsolidationRequest.Cert", "Lift.ConsolidationRequest.Check",
+                               "Lift.ConsolidationRequest.CheckTries",
+                               "Lift.ConsolidationRequest.CheckPart0",
+                               "Lift.ConsolidationRequest.CheckPart1",
+                               "Lift.ConsolidationRequest.Jumps", "Lift.ConsolidationRequest.Prog",
+                               "Lift.ConsolidationRequest.SystemWalk"],
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness",
                        # the deployed runtime, lifted (decision beacon-lift-layering-family-20260926)
                        "Lift.BeaconDeposit.Body", "Lift.BeaconDeposit.BodyCount", "Lift.BeaconDeposit.BodyEvent", "Lift.BeaconDeposit.BodyEventHead", "Lift.BeaconDeposit.BodyEventKit", "Lift.BeaconDeposit.BodyEventLoop", "Lift.BeaconDeposit.BodyEventSig", "Lift.BeaconDeposit.BodyGuards", "Lift.BeaconDeposit.BodyInsertDead", "Lift.BeaconDeposit.BodyInsertLive", "Lift.BeaconDeposit.BodyNode", "Lift.BeaconDeposit.BodyPubkeyRoot", "Lift.BeaconDeposit.BodyShaKit", "Lift.BeaconDeposit.BodySignatureRoot", "Lift.BeaconDeposit.BodySpec", "Lift.BeaconDeposit.Cert", "Lift.BeaconDeposit.Check", "Lift.BeaconDeposit.Creation.Cert", "Lift.BeaconDeposit.Creation.Check", "Lift.BeaconDeposit.Creation.Deploy", "Lift.BeaconDeposit.Creation.Walk", "Lift.BeaconDeposit.CountView", "Lift.BeaconDeposit.DepositArgs", "Lift.BeaconDeposit.DepositDecode", "Lift.BeaconDeposit.DepositExec", "Lift.BeaconDeposit.Erc165", "Lift.BeaconDeposit.Jumps", "Lift.BeaconDeposit.Ladder", "Lift.BeaconDeposit.Layout", "Lift.BeaconDeposit.Init", "Lift.BeaconDeposit.Lift", "Lift.BeaconDeposit.LittleEndian", "Lift.BeaconDeposit.Prog", "Lift.BeaconDeposit.Refines", "Lift.BeaconDeposit.CommittedReplay", "Lift.BeaconDeposit.CommittedExec", "Lift.BeaconDeposit.CommittedHistory", "Lift.BeaconDeposit.BeaconEnv", "Lift.BeaconDeposit.Liveness", "Lift.BeaconDeposit.RootLoop", "Lift.BeaconDeposit.RootView", "Lift.BeaconDeposit.Safe", "Lift.BeaconDeposit.SafeCount", "Lift.BeaconDeposit.SafeDecoder", "Lift.BeaconDeposit.SafeDispatch", "Lift.BeaconDeposit.SafeEvent", "Lift.BeaconDeposit.SafeGuards", "Lift.BeaconDeposit.SafeInsertDead", "Lift.BeaconDeposit.SafeInsertLive", "Lift.BeaconDeposit.SafeLittleEndian", "Lift.BeaconDeposit.SafeNode", "Lift.BeaconDeposit.SafePubkeyRoot", "Lift.BeaconDeposit.SafeSignatureRoot", "Lift.BeaconDeposit.SafeViews", "Lift.BeaconDeposit.Views",
@@ -644,7 +721,7 @@ CONTRACTS = {
                              "Lift.LidoCircuitBreakerDeployed.Wrappers",
                              "Lift.LidoCircuitBreakerDeployed.Writers"],
     # The deployed Vyper 0.3.7 nonreentrant comparator 0x847e and its proxy (deployed-lido-vyper-v1).
-    "vyper-nonreentrant-deployed": ["Lift.VyperNonreentrantDeployed.Code", "Lift.VyperNonreentrantDeployed.CodeFacts", "Lift.VyperNonreentrantDeployed.Concrete.Fixture", "Lift.VyperNonreentrantDeployed.Concrete.ProxyConcrete", "Lift.VyperNonreentrantDeployed.Fixed.Cert", "Lift.VyperNonreentrantDeployed.Fixed.Check", "Lift.VyperNonreentrantDeployed.Fixed.Exclusion", "Lift.VyperNonreentrantDeployed.Fixed.ExclusionTrace", "Lift.VyperNonreentrantDeployed.Fixed.LockAnn", "Lift.VyperNonreentrantDeployed.Fixed.LockCheck", "Lift.VyperNonreentrantDeployed.Fixed.LockDominance", "Lift.VyperNonreentrantDeployed.Fixed.LockSpec", "Lift.VyperNonreentrantDeployed.ProxyEntry", "Lift.VyperNonreentrantDeployed.Fixed.CheckPart0", "Lift.VyperNonreentrantDeployed.Fixed.CheckPart1", "Lift.VyperNonreentrantDeployed.Fixed.CheckPart2", "Lift.VyperNonreentrantDeployed.Fixed.CheckPart3", "Lift.VyperNonreentrantDeployed.Fixed.CheckTries", "Lift.VyperNonreentrantDeployed.Fixed.Reader.Cert", "Lift.VyperNonreentrantDeployed.Fixed.Witness.Setup", "Lift.VyperNonreentrantDeployed.Fixed.Witness.RunF", "Lift.VyperNonreentrantDeployed.Fixed.Witness.RunRest", "Lift.VyperNonreentrantDeployed.Fixed.Witness.Top", "Lift.VyperNonreentrantDeployed.Vulnerable.Attacker.Cert", "Lift.VyperNonreentrantDeployed.Vulnerable.Cert", "Lift.VyperNonreentrantDeployed.Vulnerable.Check", "Lift.VyperNonreentrantDeployed.Vulnerable.CheckPart0", "Lift.VyperNonreentrantDeployed.Vulnerable.CheckPart1", "Lift.VyperNonreentrantDeployed.Vulnerable.CheckPart2", "Lift.VyperNonreentrantDeployed.Vulnerable.CheckPart3", "Lift.VyperNonreentrantDeployed.Vulnerable.CheckPart4", "Lift.VyperNonreentrantDeployed.Vulnerable.CheckPart5", "Lift.VyperNonreentrantDeployed.Vulnerable.CheckTries", "Lift.VyperNonreentrantDeployed.Vulnerable.Frame0", "Lift.VyperNonreentrantDeployed.Vulnerable.Frame1", "Lift.VyperNonreentrantDeployed.Vulnerable.Frame1Full", "Lift.VyperNonreentrantDeployed.Vulnerable.Frame1Kernel", "Lift.VyperNonreentrantDeployed.Vulnerable.Frame1Run", "Lift.VyperNonreentrantDeployed.Vulnerable.Frame2", "Lift.VyperNonreentrantDeployed.Vulnerable.Frame3", "Lift.VyperNonreentrantDeployed.Vulnerable.Frame4", "Lift.VyperNonreentrantDeployed.Vulnerable.Frame4Child", "Lift.VyperNonreentrantDeployed.Vulnerable.Frame4ChunkA", "Lift.VyperNonreentrantDeployed.Vulnerable.Frame4ChunkB", "Lift.VyperNonreentrantDeployed.Vulnerable.Frame4Chunks", "Lift.VyperNonreentrantDeployed.Vulnerable.Frame4Full", "Lift.VyperNonreentrantDeployed.Vulnerable.TxTopC", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Run", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Entry", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Outer", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.OuterAt", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Fork", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.ForkKernel", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame1", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame2Full", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame2Kernel", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame2Run", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame3", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame4", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame5", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame5Child", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame5ChunkA", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame5ChunkB", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame5Chunks", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame5Full", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Closed", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Envelope", "Lift.VyperNonreentrantDeployed.Vulnerable.ForkFrames", "Lift.VyperNonreentrantDeployed.Vulnerable.ForkKernel", "Lift.VyperNonreentrantDeployed.Vulnerable.ForkTop", "Lift.VyperNonreentrantDeployed.Vulnerable.Locks", "Lift.VyperNonreentrantDeployed.Vulnerable.SubtreeRun", "Lift.VyperNonreentrantDeployed.Vulnerable.Token.Cert", "Lift.VyperNonreentrantDeployed.Vulnerable.Top", "Lift.VyperNonreentrantDeployed.Vulnerable.WitnessCerts", "Lift.VyperNonreentrantDeployed.Vulnerable.Attacker2.Cert", "Lift.VyperNonreentrantDeployed.Vulnerable.Attacker2.Check", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Outer", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Closed", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Envelope", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame1", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame2Full", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame2Kernel", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame2Run", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame3", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame4", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5Child", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5Full", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5ChunkB", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5ChunkA", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5Chunks", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Entry", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Run", "Lift.VyperNonreentrantDeployed.Vulnerable.TxTop", "Lift.VyperNonreentrantDeployed.Fixed.Receiver.Cert", "Lift.VyperNonreentrantDeployed.Fixed.Witness2.Setup", "Lift.VyperNonreentrantDeployed.Fixed.Witness2.Run", "Lift.VyperNonreentrantDeployed.Fixed.Witness2.Frames", "Lift.VyperNonreentrantDeployed.Fixed.Witness2.Top"],
+    "vyper-nonreentrant-deployed": ["Lift.VyperNonreentrantDeployed.Code", "Lift.VyperNonreentrantDeployed.CodeFacts", "Lift.VyperNonreentrantDeployed.Concrete.Fixture", "Lift.VyperNonreentrantDeployed.Concrete.ProxyConcrete", "Lift.VyperNonreentrantDeployed.Fixed.Cert", "Lift.VyperNonreentrantDeployed.Fixed.Check", "Lift.VyperNonreentrantDeployed.Fixed.Exclusion", "Lift.VyperNonreentrantDeployed.Fixed.ExclusionTrace", "Lift.VyperNonreentrantDeployed.Fixed.LockAnn", "Lift.VyperNonreentrantDeployed.Fixed.LockCheck", "Lift.VyperNonreentrantDeployed.Fixed.LockDominance", "Lift.VyperNonreentrantDeployed.Fixed.LockSpec", "Lift.VyperNonreentrantDeployed.ProxyEntry", "Lift.VyperNonreentrantDeployed.Fixed.CheckPart0", "Lift.VyperNonreentrantDeployed.Fixed.CheckPart1", "Lift.VyperNonreentrantDeployed.Fixed.CheckPart2", "Lift.VyperNonreentrantDeployed.Fixed.CheckPart3", "Lift.VyperNonreentrantDeployed.Fixed.CheckTries", "Lift.VyperNonreentrantDeployed.Fixed.Reader.Cert", "Lift.VyperNonreentrantDeployed.Fixed.Witness.Setup", "Lift.VyperNonreentrantDeployed.Fixed.Witness.RunF", "Lift.VyperNonreentrantDeployed.Fixed.Witness.RunRest", "Lift.VyperNonreentrantDeployed.Fixed.Witness.Top", "Lift.VyperNonreentrantDeployed.Vulnerable.Attacker.Cert", "Lift.VyperNonreentrantDeployed.Vulnerable.Cert", "Lift.VyperNonreentrantDeployed.Vulnerable.Check", "Lift.VyperNonreentrantDeployed.Vulnerable.CheckPart0", "Lift.VyperNonreentrantDeployed.Vulnerable.CheckPart1", "Lift.VyperNonreentrantDeployed.Vulnerable.CheckPart2", "Lift.VyperNonreentrantDeployed.Vulnerable.CheckPart3", "Lift.VyperNonreentrantDeployed.Vulnerable.CheckPart4", "Lift.VyperNonreentrantDeployed.Vulnerable.CheckPart5", "Lift.VyperNonreentrantDeployed.Vulnerable.CheckTries", "Lift.VyperNonreentrantDeployed.Vulnerable.Frame0", "Lift.VyperNonreentrantDeployed.Vulnerable.Frame1", "Lift.VyperNonreentrantDeployed.Vulnerable.Frame1Full", "Lift.VyperNonreentrantDeployed.Vulnerable.Frame1Kernel", "Lift.VyperNonreentrantDeployed.Vulnerable.Frame1Run", "Lift.VyperNonreentrantDeployed.Vulnerable.Frame2", "Lift.VyperNonreentrantDeployed.Vulnerable.Frame3", "Lift.VyperNonreentrantDeployed.Vulnerable.Frame4", "Lift.VyperNonreentrantDeployed.Vulnerable.Frame4Child", "Lift.VyperNonreentrantDeployed.Vulnerable.Frame4ChunkA", "Lift.VyperNonreentrantDeployed.Vulnerable.Frame4ChunkB", "Lift.VyperNonreentrantDeployed.Vulnerable.Frame4Chunks", "Lift.VyperNonreentrantDeployed.Vulnerable.Frame4Full", "Lift.VyperNonreentrantDeployed.Vulnerable.TxTopC", "Lift.VyperNonreentrantDeployed.Vulnerable.TxCRecover", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Run", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Entry", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Outer", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.OuterAt", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Fork", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.ForkKernel", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame1", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame2Full", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame2Kernel", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame2Run", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame3", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame4", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame5", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame5Child", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame5ChunkA", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame5ChunkB", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame5Chunks", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame5Full", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Closed", "Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Envelope", "Lift.VyperNonreentrantDeployed.Vulnerable.ForkFrames", "Lift.VyperNonreentrantDeployed.Vulnerable.ForkKernel", "Lift.VyperNonreentrantDeployed.Vulnerable.ForkTop", "Lift.VyperNonreentrantDeployed.Vulnerable.Locks", "Lift.VyperNonreentrantDeployed.Vulnerable.SubtreeRun", "Lift.VyperNonreentrantDeployed.Vulnerable.Token.Cert", "Lift.VyperNonreentrantDeployed.Vulnerable.Top", "Lift.VyperNonreentrantDeployed.Vulnerable.WitnessCerts", "Lift.VyperNonreentrantDeployed.Vulnerable.Attacker2.Cert", "Lift.VyperNonreentrantDeployed.Vulnerable.Attacker2.Check", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Outer", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Closed", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Envelope", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame1", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame2Full", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame2Kernel", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame2Run", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame3", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame4", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5Child", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5Full", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5ChunkB", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5ChunkA", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5Chunks", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Entry", "Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Run", "Lift.VyperNonreentrantDeployed.Vulnerable.TxTop", "Lift.VyperNonreentrantDeployed.Fixed.Receiver.Cert", "Lift.VyperNonreentrantDeployed.Fixed.Witness2.Setup", "Lift.VyperNonreentrantDeployed.Fixed.Witness2.Run", "Lift.VyperNonreentrantDeployed.Fixed.Witness2.Frames", "Lift.VyperNonreentrantDeployed.Fixed.Witness2.Top"],
 }
 
 # The composition stratum: `Blanc/Composition/*.lean`, spelled here exactly as
@@ -664,6 +741,9 @@ COMPOSITION = [
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControl",
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControlRun",
     "Composition.ProrataWethVaultBoundary",
+    "Composition.WithdrawalRequestFeeCounterexample",
+    "Composition.WithdrawalRequestFeeRefutation",
+    "Composition.WithdrawalRequestDrainControl",
     "Composition.ProrataWethVaultEffects",
     "Composition.ProrataWethVaultStaging",
     "Composition.ProrataWethVaultViews",

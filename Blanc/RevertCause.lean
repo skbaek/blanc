@@ -397,13 +397,13 @@ def SettledNoRevert : Except (EvmError × State × AdrSet × Tra) Devm → Prop
 theorem handleError_noRevert (raw : Execution) :
     SettledNoRevert (executeCode.handleError raw) := by
   rcases raw with ⟨e, d⟩ | d
-  · cases e <;> simp [executeCode.handleError, SettledNoRevert]
+  · cases e <;> simp only [SettledNoRevert, executeCode.handleError, ne_eq, reduceCtorEq, not_false_eq_true]
   · trivial
 
 theorem handleErrorAmsterdam_noRevert (raw : Execution) :
     SettledNoRevert (executeCode.handleErrorAmsterdam raw) := by
   rcases raw with ⟨e, d⟩ | d
-  · cases e <;> simp [executeCode.handleErrorAmsterdam, SettledNoRevert]
+  · cases e <;> simp only [SettledNoRevert, executeCode.handleErrorAmsterdam, ne_eq, reduceCtorEq, not_false_eq_true]
   · trivial
 
 theorem handleErrorWith_noRevert (stateGas : Option StateGasRules)
@@ -453,7 +453,7 @@ theorem processCreateMessage.settle_noRevert (msg : Msg)
     · have hc := processCreateMessage.chargeCodeGas_noRevert
         msg.benv.stat.rules d
       split <;> rename_i heq <;> rw [heq] at hc <;>
-        simp_all [SettledNoRevert, NoRevertOut]
+        simp_all only [SettledNoRevert, Option.isNone_iff_eq_none, NoRevertOut, ExceptT.stM_eq, ne_eq, reduceCtorEq, not_false_eq_true, not_true_eq_false]
     · trivial
 
 theorem Frame.settleMsg_noRevert (f : Frame)
@@ -827,8 +827,9 @@ theorem Func.runCompiledTo_of_exec_core (f : Func) (fs : List Func) :
           pre.stack.length < 1024 ∧
           pre.gasLeft = devm'.gasLeft + gVerylow ∧
           ⟨pc + 3, sevm, devm', exn, exc'⟩ ≺ ⟨pc, sevm, pre, exn, exc⟩ := by
-      simp at pushAt
-      rcases pushAt_exact_revertOrOk exc hro ⟨_, pushAt⟩ (by simp) with
+      simp only [Nat.toUInt8_eq] at pushAt
+      rcases pushAt_exact_revertOrOk exc hro ⟨_, pushAt⟩ (by simp only [ne_eq, reduceCtorEq,
+        not_false_eq_true]) with
         ⟨s', cr', h, h_room, h_gas, h_prec⟩
       rw [List.toB256_pair _ h_loc] at h
       exact ⟨s', cr', h, h_room, h_gas, h_prec⟩
@@ -890,7 +891,8 @@ theorem Func.runCompiledTo_of_exec_core (f : Func) (fs : List Func) :
         pre.stack.length < 1024 ∧
         pre.gasLeft = devm'.gasLeft + gVerylow ∧
         ⟨pc + 3, sevm, devm', exn, exc'⟩ ≺ ⟨pc, sevm, pre, exn, exc⟩ := by
-      rcases pushAt_exact_revertOrOk exc hro pushAt (by simp) with
+      rcases pushAt_exact_revertOrOk exc hro pushAt (by simp only [Nat.toUInt8_eq, ne_eq,
+        reduceCtorEq, not_false_eq_true]) with
         ⟨inter, exc', h, h_room, h_gas, h_prec⟩
       rw [List.toB256_pair _ h_loc] at h
       exact ⟨inter, exc', h, h_room, h_gas, h_prec⟩
@@ -1005,7 +1007,7 @@ def Func.terminalsReturnOrRevert : Func → Bool
 theorem Func.terminalsReturnOrRevert_sound :
     ∀ {f : Func}, f.terminalsReturnOrRevert = true → f.TerminalsReturnOrRevert
   | .last l, h => by
-    simpa [Func.terminalsReturnOrRevert, Func.TerminalsReturnOrRevert] using h
+    simpa only [TerminalsReturnOrRevert, terminalsReturnOrRevert, beq_iff_eq] using h
   | .next n f, h => by
     simp only [Func.terminalsReturnOrRevert, Bool.or_eq_true] at h
     rcases h with h | h
@@ -1098,7 +1100,7 @@ theorem zero_branch_of_prefix {pre : Devm} {left right : Func}
   · exact ⟨armPre, hpop, harm,
       (popBurn_pref (Devm.PopBurn.of_popBurnBy hpop) hp).2⟩
   · have pw : w :: ([] : Stack) <<+ pre.stack :=
-      ⟨armPre.stack, by simpa [Split] using hstack⟩
+      ⟨armPre.stack, by simpa only [Split, List.cons_append, List.nil_append] using hstack⟩
     exact (hw (pref_head_unique hp pw).symm).elim
 
 /-- A known nonzero stack head forces the jumped arm. -/
@@ -1112,10 +1114,10 @@ theorem succ_branch_of_prefix {pre : Devm} {left right : Func}
   rcases branch_inv h with ⟨armPre, hstack, -, -⟩ |
       ⟨w', armPre, -, hstack, hpop, harm⟩
   · have pzero : (0 : B256) :: ([] : Stack) <<+ pre.stack :=
-      ⟨armPre.stack, by simpa [Split] using hstack⟩
+      ⟨armPre.stack, by simpa only [Split, List.cons_append, List.nil_append] using hstack⟩
     exact (hw (pref_head_unique hp pzero)).elim
   · have pword : w' :: ([] : Stack) <<+ pre.stack :=
-      ⟨armPre.stack, by simpa [Split] using hstack⟩
+      ⟨armPre.stack, by simpa only [Split, List.cons_append, List.nil_append] using hstack⟩
     obtain rfl : w' = w := pref_head_unique pword hp
     exact ⟨armPre, hpop, harm,
       (popBurn_pref (Devm.PopBurn.of_popBurnBy hpop) hp).2⟩
@@ -1192,7 +1194,7 @@ theorem Linst.Run.not_revert_of_revertFreeIn {safe : List Nat} {sevm : Sevm}
     ∀ d, ex ≠ .error (.revert, d) := by
   intro d hex
   have hl : l ≠ .revert := by
-    simpa [Func.revertFreeIn] using free
+    simpa only [ne_eq, Func.revertFreeIn, bne_iff_ne] using free
   have hn := Linst.run_noRevert_of_ne (sevm := sevm) (devm := devm) hl
   have run' : Linst.run sevm devm l = ex := run
   rw [run', hex] at hn
@@ -1216,9 +1218,10 @@ theorem Func.RunCompiledTo.not_revert_of_revertFreeIn {fs : List Func}
   | last hrun =>
     exact Linst.Run.not_revert_of_revertFreeIn hrun free
   | next _ _ ih =>
-    exact ih (by simpa [Func.revertFreeIn] using free)
+    exact ih (by simpa only [revertFreeIn] using free)
   | call hget _ _ _ ih =>
-    exact ih (tableSafe _ (by simpa [Func.revertFreeIn] using free) _ hget)
+    exact ih (tableSafe _ (by simpa only [revertFreeIn, List.contains_eq_mem,
+      decide_eq_true_eq] using free) _ hget)
 
 /-! ## Entry through the shared wrappers, for avoiding walks
 
@@ -1253,7 +1256,7 @@ theorem nonpayable_body_of_value_zero {pre : Devm} {out : Execution}
   have pValue := prefix_of_push (of_run_callvalue rvalue) hp
   have pTest := prefix_of_iszero rzero pValue
   have pOne : (1 : B256) :: tail <<+ testPre.stack := by
-    simpa [valueZero, B256.eqCheck] using pTest
+    simpa only [B256.eqCheck, valueZero, ↓reduceIte, List.append_eq, List.nil_append] using pTest
   obtain ⟨bodyPre, hpop, bodyRun, pBody⟩ :=
     succ_branch_of_prefix (by decide : (1 : B256) ≠ 0) pOne branchRun
   exact ⟨bodyPre, bodyRun, pBody,
@@ -1288,7 +1291,7 @@ private theorem reach_of_dispatchWith_leaf
     simpa only [List.cons_append, List.nil_append] using pushed
   have p2 : (1 : B256) :: tail <<+ testPre.stack := by
     have compared := prefix_of_eq qeq p1
-    simpa [B256.eqCheck] using compared
+    simpa only [B256.eqCheck, ↓reduceIte, List.append_eq, List.nil_append] using compared
   obtain ⟨bodyPre, hpop, bodyRun, bodyStack⟩ :=
     succ_branch_of_prefix (by decide : (1 : B256) ≠ 0) p2 branchRun
   refine ⟨bodyPre, bodyStack, ?_, ?_, bodyRun⟩
@@ -1480,7 +1483,8 @@ def Func.stopTable (k : Nat) : List Func := List.replicate (k + 1) Func.stop
 
 theorem Func.stopTable_get (k : Nat) :
     (Func.stopTable k)[k]? = some Func.stop := by
-  simp [Func.stopTable]
+  simp only [stopTable, List.length_replicate, lt_add_iff_pos_right, zero_lt_one, getElem?_pos,
+    List.getElem_replicate]
 
 /-- The straight-line prefix of a body that ends in one `call`. -/
 def Func.lineCall : Func → Option (Line × Nat)
@@ -1504,13 +1508,13 @@ theorem Func.eq_of_lineCall {f : Func} :
     simp only [Func.lineCall, Option.some.injEq, Prod.mk.injEq] at h
     obtain ⟨rfl, rfl⟩ := h
     rfl
-  | last _ => intro l k h; simp [Func.lineCall] at h
-  | branch _ _ _ _ => intro l k h; simp [Func.lineCall] at h
+  | last _ => intro l k h; simp only [lineCall, reduceCtorEq] at h
+  | branch _ _ _ _ => intro l k h; simp only [lineCall, reduceCtorEq] at h
 
 theorem Func.lineCall_prepend (l : Line) (f : Func) :
     (l +++ f).lineCall = f.lineCall.map fun p => (l ++ p.1, p.2) := by
   induction l with
-  | nil => cases h : f.lineCall <;> simp [prepend, h]
+  | nil => cases h : f.lineCall <;> simp only [prepend, h, List.nil_append, Prod.mk.eta, Option.map_none, Option.map_some]
   | cons i l ih =>
     change ((l +++ f).lineCall).map _ = _
     rw [ih, Option.map_map]

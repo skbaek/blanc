@@ -99,9 +99,9 @@ theorem Exec.Deriv.ParentStepCounted.descendantCounted_eq
       counted ++ Exec.Deriv.descendantCounted dp ca next := by
   cases edge with
   | cont =>
-      simp [Exec.Deriv.descendantCounted, Exec.attributionInner]
+      simp only [descendantCounted, attributionInner, List.nil_append]
   | doneOk =>
-      simp [Exec.Deriv.descendantCounted, Exec.attributionInner]
+      simp only [descendantCounted, attributionInner, List.nil_append]
   | runOk hstep henter child hresume next =>
       simp only [Exec.Deriv.descendantCounted, Exec.attributionInner]
 
@@ -115,7 +115,7 @@ theorem Exec.Deriv.ParentPrefixCounted.descendantCounted_eq
     Exec.Deriv.descendantCounted dp ca root =
       counted ++ Exec.Deriv.descendantCounted dp ca tail := by
   induction hprefix with
-  | refl => simp
+  | refl => simp only [List.nil_append]
   | step head rest ih =>
       rw [head.descendantCounted_eq, ih, List.append_assoc]
 
@@ -127,7 +127,7 @@ theorem Exec.Deriv.ParentPrefixCounted.trans
     (hright : Exec.Deriv.ParentPrefixCounted dp ca mid tail right) :
     Exec.Deriv.ParentPrefixCounted dp ca root tail (left ++ right) := by
   induction hleft with
-  | refl => simpa using hright
+  | refl => simpa only [List.nil_append] using hright
   | step head rest ih =>
       simpa only [List.append_assoc] using
         Exec.Deriv.ParentPrefixCounted.step head (ih hright)
@@ -141,21 +141,8 @@ theorem Exec.Deriv.ParentPrefixCounted.snoc
     Exec.Deriv.ParentPrefixCounted dp ca root next
       (before ++ selected) := by
   apply hprefix.trans
-  simpa using Exec.Deriv.ParentPrefixCounted.step hedge
-    (Exec.Deriv.ParentPrefixCounted.refl next)
-
-/-- The same-frame continuation edge out of a fixed proof-indexed derivation
-is unique, including its counted-frame label. -/
-theorem Exec.Deriv.ParentStepCounted.unique
-    {dp : DeployParams} {ca : Adr}
-    {root nextLeft nextRight : Exec.Deriv}
-    {leftCounted rightCounted : List CountedFrame}
-    (left : Exec.Deriv.ParentStepCounted dp ca
-      nextLeft root leftCounted)
-    (right : Exec.Deriv.ParentStepCounted dp ca
-      nextRight root rightCounted) :
-    nextLeft = nextRight ∧ leftCounted = rightCounted := by
-  cases left <;> cases right <;> simp_all
+  simpa only [List.append_nil] using
+    Exec.Deriv.ParentPrefixCounted.step hedge (Exec.Deriv.ParentPrefixCounted.refl next)
 
 /-! ## Relabelling bridges from the action-labelled chronology -/
 
@@ -188,30 +175,30 @@ theorem Exec.attributionInner_eq_nil_of_descendantFrames_eq_nil
   induction run with
   | halt hstep =>
       intro h
-      simp [Exec.attributionInner]
+      simp only [attributionInner]
   | cont hstep next ih =>
       intro h
       simp only [Exec.attributionInner]
       exact ih (by simpa only [Exec.descendantFrames] using h)
   | doneErr hstep henter hresume =>
       intro h
-      simp [Exec.attributionInner]
+      simp only [attributionInner]
   | doneOk hstep henter hresume next ih =>
       intro h
       simp only [Exec.attributionInner]
       exact ih (by simpa only [Exec.descendantFrames] using h)
   | runErr hstep henter child hresume ihChild =>
       intro h
-      simp [Exec.attributionInner]
+      simp only [attributionInner]
   | runOk hstep henter child hresume next ihChild ihNext =>
       intro h
       simp only [Exec.descendantFrames] at h
       simp only [Exec.attributionInner]
       split at h
-      · exact absurd h (by simp)
+      · exact absurd h (by simp only [List.cons_append, reduceCtorEq, not_false_eq_true])
       · rename_i hnot
         rw [dif_neg hnot, List.nil_append]
-        exact ihNext (by simpa using h)
+        exact ihNext (by simpa only [List.nil_append] using h)
 
 /-- Public analog of the compiled module's halt-step emptiness: a derivation
 whose step halts retains no descendant frames. -/
@@ -221,7 +208,7 @@ theorem Exec.descendantFrames_eq_nil_of_halt_step
     (hstep : Evm.step ⟨pc, sevm, pre⟩ = .halt haltOut) :
     Exec.descendantFrames run = [] := by
   cases run with
-  | halt h => simp [Exec.descendantFrames]
+  | halt h => simp only [Exec.descendantFrames]
   | cont h next => cases hstep.symm.trans h
   | doneErr h henter hresume => cases hstep.symm.trans h
   | doneOk h henter hresume next => cases hstep.symm.trans h
@@ -254,7 +241,7 @@ private theorem Exec.Deriv.ParentPrefixCounted.snocNil
     (hprefix : Exec.Deriv.ParentPrefixCounted dp ca root current [])
     (hedge : Exec.Deriv.ParentStepCounted dp ca next current []) :
     Exec.Deriv.ParentPrefixCounted dp ca root next [] := by
-  simpa using hprefix.snoc hedge
+  simpa only [List.append_nil] using hprefix.snoc hedge
 
 /-! ## Counted childless walk over the compiled runtime -/
 
@@ -303,7 +290,7 @@ theorem Exec.Frame.advance_cont_counted
   rcases hprefix with ⟨before, hbefore⟩
   rcases frame with ⟨rootPc, sevm, rootPre, out, rootRun, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok final =>
       cases current with
       | halt h => cases hstep.symm.trans h
@@ -358,9 +345,9 @@ theorem Exec.Frame.CountedCursor.peelChildlessLine
   | cons n line ih =>
       change Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
         (.next n (line +++ tail)) final at cursor
-      rcases cursor.selectNextChildless (hchildless n (by simp)) with
+      rcases cursor.selectNextChildless (hchildless n (by simp only [List.mem_cons, true_or])) with
         ⟨nextCursor, hrun⟩
-      rcases ih nextCursor (fun i hi => hchildless i (by simp [hi])) with
+      rcases ih nextCursor (fun i hi => hchildless i (by simp only [List.mem_cons, hi, or_true])) with
         ⟨tailCursor, hline⟩
       exact ⟨tailCursor, .cons hrun hline⟩
 
@@ -462,16 +449,18 @@ private theorem Exec.Frame.CountedCursor.reachDispatchLeaf
   change Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
     ([Ninst.pushB256 sig, Ninst.eq] +++ (f <?> .call k)) final at cursor
   rcases cursor.peelChildlessLine
-      (by simp [NinstIsChildless, Ninst.pushB256]) with
+      (by simp only [Ninst.pushB256, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+        forall_eq_or_imp, forall_eq, and_self]) with
     ⟨branchCursor, hline⟩
   have hflag : (sig =? sig) :: stack <<+ branchCursor.pre.stack := by
     rcases Line.of_run_cons hline with ⟨afterPush, hpush, hrest⟩
     rcases Line.of_run_cons hrest with ⟨afterEq, heqRun, hnil⟩
     cases hnil
     have hpushed : sig :: sig :: stack <<+ afterPush.stack := by
-      simpa using prefix_of_push (of_run_pushB256 hpush) hstack
+      simpa only [List.cons_append, List.nil_append] using
+        prefix_of_push (of_run_pushB256 hpush) hstack
     exact prefix_of_eq heqRun hpushed
-  rw [show (sig =? sig) = 1 from by simp [B256.eqCheck]] at hflag
+  rw [show (sig =? sig) = 1 from by simp only [B256.eqCheck, ↓reduceIte]] at hflag
   rcases branchCursor.selectBranchSucc
       (left := .call k) (right := f) (flag := (1 : B256))
       (by decide) hflag with
@@ -569,7 +558,8 @@ private theorem Exec.Frame.CountedCursor.reachDispatchWith_build :
                     ((((w, body) :: y :: ys).length + 1) / 2))))) final
           at cursor
         rcases cursor.peelChildlessLine
-            (by simp [NinstIsChildless, Ninst.pushB256]) with
+            (by simp only [Fin.isValue, Ninst.pushB256, List.length_cons, List.mem_cons,
+              List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
           ⟨branchCursor, hline⟩
         have hflagPrefix :
             (leftmostFsig (DispatchTree.build n
@@ -590,7 +580,8 @@ private theorem Exec.Frame.CountedCursor.reachDispatchWith_build :
                   (((w, body) :: y :: ys).drop
                     ((((w, body) :: y :: ys).length + 1) / 2))) ::
                 sig :: sig :: stack <<+ afterPush.stack := by
-            simpa using prefix_of_push (of_run_pushB256 hpush) hdupStack
+            simpa only [List.length_cons, List.cons_append, List.nil_append] using
+              prefix_of_push (of_run_pushB256 hpush) hdupStack
           exact prefix_of_gt hgt hpushStack
         have hleftmost :
             leftmostFsig (DispatchTree.build n
@@ -607,7 +598,7 @@ private theorem Exec.Frame.CountedCursor.reachDispatchWith_build :
             exact DispatchTree.fst_lt_of_sorted_append
               hsortedSplit hmemTake hz
           have hcheck : (z.fst >? sig) = 1 := by
-            simp [B256.gtCheck, hlt]
+            simp only [B256.gtCheck, gt_iff_lt, hlt, ↓reduceIte]
           rw [hcheck] at hflagPrefix
           rcases branchCursor.selectBranchSucc (flag := (1 : B256))
               (by decide) hflagPrefix with
@@ -622,7 +613,7 @@ private theorem Exec.Frame.CountedCursor.reachDispatchWith_build :
             rw [hdrop] at hmemDrop
             exact DispatchTree.fst_le_of_sorted_mem hsortedZ hmemDrop
           have hcheck : (z.fst >? sig) = 0 := by
-            simp [B256.gtCheck, not_lt_of_ge hle]
+            simp only [B256.gtCheck, gt_iff_lt, not_lt_of_ge hle, ↓reduceIte]
           rw [hcheck] at hflagPrefix
           rcases branchCursor.selectBranchZero hflagPrefix with
             ⟨rightCursor, hrightStack⟩
@@ -658,7 +649,7 @@ theorem Exec.Frame.compiledMainCursorCounted
       (weth10 dp).main frame.post) := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -716,7 +707,8 @@ theorem Exec.Frame.compiledSelectorBodyCursorCounted
         (fsig +++ dispatchWith fallbackSlot (weth10Tree dp))))
     frame.post at mainCursor
   rcases mainCursor.peelChildlessLine
-      (by simp [NinstIsChildless]) with
+      (by simp only [List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp,
+        forall_eq, and_self]) with
     ⟨entryBranchCursor, hentryLine⟩
   have hflagPrefix :
       [frame.sevm.data.length.toB256 =? 0] <<+
@@ -731,7 +723,7 @@ theorem Exec.Frame.compiledSelectorBodyCursorCounted
       prefix_of_push (of_run_calldatasize hsize) nil_pref
     exact prefix_of_iszero hzero hsizePrefix
   have hflagZero : (frame.sevm.data.length.toB256 =? 0) = 0 := by
-    simp [B256.eqCheck, hnonempty]
+    simp only [B256.eqCheck, hnonempty, ↓reduceIte]
   rw [hflagZero] at hflagPrefix
   rcases entryBranchCursor.selectBranchZero hflagPrefix with
     ⟨dispatchPrefixCursor, _hdispatchStack⟩
@@ -741,8 +733,9 @@ theorem Exec.Frame.compiledSelectorBodyCursorCounted
     (fsig +++ dispatchWith fallbackSlot (weth10Tree dp))
     frame.post at dispatchPrefixCursor
   rcases dispatchPrefixCursor.peelChildlessLine
-      (by simp [fsig, cdl, shiftRight, NinstIsChildless,
-        Ninst.pushB256]) with
+      (by simp only [fsig, cdl, Ninst.pushB256, shiftRight, List.cons_append, List.nil_append,
+        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
+        and_self]) with
     ⟨dispatchCursor, hfsig⟩
   have hselectorPrefix : Sevm.selector frame.sevm :: [] <<+
       dispatchCursor.pre.stack :=
@@ -773,7 +766,8 @@ theorem Exec.Frame.CountedCursor.enterNonpayable
     ([Ninst.callvalue, Ninst.iszero] +++ (body <?> Func.revert)) final
     at cursor
   rcases cursor.peelChildlessLine
-      (by simp [NinstIsChildless]) with
+      (by simp only [List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp,
+        forall_eq, and_self]) with
     ⟨branchCursor, hline⟩
   have hflagPrefix : [frame.sevm.value =? 0] <<+
       branchCursor.pre.stack := by
@@ -786,7 +780,7 @@ theorem Exec.Frame.CountedCursor.enterNonpayable
       prefix_of_push (of_run_callvalue hcallvalue) nil_pref
     exact prefix_of_iszero hzero hvaluePrefix
   rw [hvalue] at hflagPrefix
-  have hone : ((0 : B256) =? 0) = 1 := by simp [B256.eqCheck]
+  have hone : ((0 : B256) =? 0) = 1 := by simp only [B256.eqCheck, ↓reduceIte]
   rw [hone] at hflagPrefix
   rcases branchCursor.selectBranchSucc (flag := (1 : B256))
       (by decide) hflagPrefix with
@@ -812,7 +806,7 @@ theorem Exec.Frame.CountedCursor.finishAttributionInner
   change Exec.attributionInner dp ca frame.run =
     [] ++ Exec.attributionInner dp ca cursor.current at hp
   rw [htail] at hp
-  simpa using hp
+  simpa only [List.append_nil] using hp
 
 /-- Any listed nonpayable selector whose guarded body is a childless line
 ending in a terminal instruction contributes an empty proper-descendant
@@ -980,16 +974,18 @@ theorem Exec.Frame.CountedCursor.reachDispatchLeafSilent
   change Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
     ([Ninst.pushB256 sig, Ninst.eq] +++ (f <?> .call k)) final at cursor
   rcases cursor.peelChildlessLine
-      (by simp [NinstIsChildless, Ninst.pushB256]) with
+      (by simp only [Ninst.pushB256, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+        forall_eq_or_imp, forall_eq, and_self]) with
     ⟨branchCursor, hline⟩
   have hflag : (sig =? sig) :: stack <<+ branchCursor.pre.stack := by
     rcases Line.of_run_cons hline with ⟨afterPush, hpush, hrest⟩
     rcases Line.of_run_cons hrest with ⟨afterEq, heqRun, hnil⟩
     cases hnil
     have hpushed : sig :: sig :: stack <<+ afterPush.stack := by
-      simpa using prefix_of_push (of_run_pushB256 hpush) hstack
+      simpa only [List.cons_append, List.nil_append] using
+        prefix_of_push (of_run_pushB256 hpush) hstack
     exact prefix_of_eq heqRun hpushed
-  rw [show (sig =? sig) = 1 from by simp [B256.eqCheck]] at hflag
+  rw [show (sig =? sig) = 1 from by simp only [B256.eqCheck, ↓reduceIte]] at hflag
   rcases branchCursor.selectBranchSuccSilent
       (left := .call k) (right := f) (flag := (1 : B256))
       (by decide) hflag with
@@ -1088,7 +1084,8 @@ theorem Exec.Frame.CountedCursor.reachDispatchWithSilent_build :
                     ((((w, body) :: y :: ys).length + 1) / 2))))) final
           at cursor
         rcases cursor.peelChildlessLine
-            (by simp [NinstIsChildless, Ninst.pushB256]) with
+            (by simp only [Fin.isValue, Ninst.pushB256, List.length_cons, List.mem_cons,
+              List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
           ⟨branchCursor, hline⟩
         have hlineSilent := Devm.DispatchSilent.of_dupPushGt hline
         have hflagPrefix :
@@ -1110,7 +1107,8 @@ theorem Exec.Frame.CountedCursor.reachDispatchWithSilent_build :
                   (((w, body) :: y :: ys).drop
                     ((((w, body) :: y :: ys).length + 1) / 2))) ::
                 sig :: sig :: stack <<+ afterPush.stack := by
-            simpa using prefix_of_push (of_run_pushB256 hpush) hdupStack
+            simpa only [List.length_cons, List.cons_append, List.nil_append] using
+              prefix_of_push (of_run_pushB256 hpush) hdupStack
           exact prefix_of_gt hgt hpushStack
         have hleftmost :
             leftmostFsig (DispatchTree.build n
@@ -1127,7 +1125,7 @@ theorem Exec.Frame.CountedCursor.reachDispatchWithSilent_build :
             exact DispatchTree.fst_lt_of_sorted_append
               hsortedSplit hmemTake hz
           have hcheck : (z.fst >? sig) = 1 := by
-            simp [B256.gtCheck, hlt]
+            simp only [B256.gtCheck, gt_iff_lt, hlt, ↓reduceIte]
           rw [hcheck] at hflagPrefix
           rcases branchCursor.selectBranchSuccSilent (flag := (1 : B256))
               (by decide) hflagPrefix with
@@ -1143,7 +1141,7 @@ theorem Exec.Frame.CountedCursor.reachDispatchWithSilent_build :
             rw [hdrop] at hmemDrop
             exact DispatchTree.fst_le_of_sorted_mem hsortedZ hmemDrop
           have hcheck : (z.fst >? sig) = 0 := by
-            simp [B256.gtCheck, not_lt_of_ge hle]
+            simp only [B256.gtCheck, gt_iff_lt, not_lt_of_ge hle, ↓reduceIte]
           rw [hcheck] at hflagPrefix
           rcases branchCursor.selectBranchZeroSilent hflagPrefix with
             ⟨rightCursor, hrightStack, hbranchSilent⟩
@@ -1165,7 +1163,7 @@ theorem Exec.Frame.compiledMainCursorCountedSilent
       Devm.DispatchSilent frame.pre cursor.pre := by
   rcases frame with ⟨pc, e, pre, out, run, committed⟩
   cases out with
-  | error err => simp [Execution.commits] at committed
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have hpc : pc = 0 := context.root.1
       subst pc
@@ -1228,7 +1226,8 @@ theorem Exec.Frame.compiledSelectorBodyCursorCountedSilent
         (fsig +++ dispatchWith fallbackSlot (weth10Tree dp))))
     frame.post at mainCursor
   rcases mainCursor.peelChildlessLine
-      (by simp [NinstIsChildless]) with
+      (by simp only [List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp,
+        forall_eq, and_self]) with
     ⟨entryBranchCursor, hentryLine⟩
   have hentrySilent := Devm.DispatchSilent.of_entryFlag hentryLine
   have hflagPrefix :
@@ -1244,7 +1243,7 @@ theorem Exec.Frame.compiledSelectorBodyCursorCountedSilent
       prefix_of_push (of_run_calldatasize hsize) nil_pref
     exact prefix_of_iszero hzero hsizePrefix
   have hflagZero : (frame.sevm.data.length.toB256 =? 0) = 0 := by
-    simp [B256.eqCheck, hnonempty]
+    simp only [B256.eqCheck, hnonempty, ↓reduceIte]
   rw [hflagZero] at hflagPrefix
   rcases entryBranchCursor.selectBranchZeroSilent hflagPrefix with
     ⟨dispatchPrefixCursor, _hdispatchStack, hentryBranchSilent⟩
@@ -1254,8 +1253,9 @@ theorem Exec.Frame.compiledSelectorBodyCursorCountedSilent
     (fsig +++ dispatchWith fallbackSlot (weth10Tree dp))
     frame.post at dispatchPrefixCursor
   rcases dispatchPrefixCursor.peelChildlessLine
-      (by simp [fsig, cdl, shiftRight, NinstIsChildless,
-        Ninst.pushB256]) with
+      (by simp only [fsig, cdl, Ninst.pushB256, shiftRight, List.cons_append, List.nil_append,
+        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
+        and_self]) with
     ⟨dispatchCursor, hfsig⟩
   have hfsigSilent := Devm.DispatchSilent.of_fsig hfsig
   have hselectorPrefix : Sevm.selector frame.sevm :: [] <<+
@@ -1291,7 +1291,8 @@ theorem Exec.Frame.CountedCursor.enterNonpayableSilent
     ([Ninst.callvalue, Ninst.iszero] +++ (body <?> Func.revert)) final
     at cursor
   rcases cursor.peelChildlessLine
-      (by simp [NinstIsChildless]) with
+      (by simp only [List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp,
+        forall_eq, and_self]) with
     ⟨branchCursor, hline⟩
   have hlineSilent := Devm.DispatchSilent.of_callvalueFlag hline
   have hflagPrefix : [frame.sevm.value =? 0] <<+
@@ -1305,7 +1306,7 @@ theorem Exec.Frame.CountedCursor.enterNonpayableSilent
       prefix_of_push (of_run_callvalue hcallvalue) nil_pref
     exact prefix_of_iszero hzero hvaluePrefix
   rw [hvalue] at hflagPrefix
-  have hone : ((0 : B256) =? 0) = 1 := by simp [B256.eqCheck]
+  have hone : ((0 : B256) =? 0) = 1 := by simp only [B256.eqCheck, ↓reduceIte]
   rw [hone] at hflagPrefix
   rcases branchCursor.selectBranchSuccSilent (flag := (1 : B256))
       (by decide) hflagPrefix with
@@ -1573,13 +1574,13 @@ theorem Exec.Deriv.ParentStepCounted.selected_eq_retained_of_call
           · have hcommit : Jaune.Frame.settlementCommits
                 (Frame.ofCall msg) raw = true :=
               Frame.settlementCommits_ofCall_of_raw_commits hraw
-            simp [hcommit, RetainedXlot.attributionStream,
-              Exec.attributionStream, hraw]
+            simp only [hcommit, ↓reduceDIte, RetainedXlot.attributionStream, attributionStream,
+              hraw]
           · have hnot : ¬ Jaune.Frame.settlementCommits
                 (Frame.ofCall msg) raw = true := fun h =>
               hraw (Jaune.Frame.raw_commits_of_settlementCommits h)
-            simp [RetainedXlot.attributionStream,
-              Exec.attributionStream, hnot, hraw]
+            simp only [hnot, Bool.false_eq_true, ↓reduceDIte, RetainedXlot.attributionStream,
+              attributionStream, hraw]
 
 end Weth10
 

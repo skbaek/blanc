@@ -22,12 +22,10 @@ structure DeployParams where
   maxPauseDuration : B256
   minHeartbeatInterval : B256
   maxHeartbeatInterval : B256
-deriving DecidableEq
 
 structure ConstructorArgs extends DeployParams where
   initialPauseDuration : B256
   initialHeartbeatInterval : B256
-deriving DecidableEq
 
 def officialParams : DeployParams :=
   { admin := 0x3e40D73EB977Dc6a537aF587D48316feE66E9C8c
@@ -61,7 +59,6 @@ inductive ConstructorError
   | pauseDurationAboveMax
   | heartbeatIntervalBelowMin
   | heartbeatIntervalAboveMax
-deriving DecidableEq
 
 /-- Solidity constructor and its two internal setters, in source evaluation
 order.  This is intentionally a classifier, not a conjunction of bounds. -/
@@ -82,9 +79,6 @@ def ConstructorArgs.validationError? (args : ConstructorArgs) : Option Construct
   else if args.initialHeartbeatInterval.toNat > args.maxHeartbeatInterval.toNat then
     some .heartbeatIntervalAboveMax
   else none
-
-def ConstructorArgs.Valid (args : ConstructorArgs) : Prop :=
-  args.validationError? = none
 
 /-! ## Tagged logical storage projection -/
 
@@ -160,30 +154,6 @@ inductive CustomError
   | minHeartbeatIntervalZero | minHeartbeatIntervalExceedsMax
   | heartbeatIntervalBelowMin | heartbeatIntervalAboveMax
   | heartbeatExpired | pauseFailed | reentrantCall
-deriving DecidableEq
-
-def CustomError.name : CustomError → String
-  | .pausableZero => "PausableZero" | .senderNotAdmin => "SenderNotAdmin"
-  | .senderNotPauser => "SenderNotPauser" | .adminZero => "AdminZero"
-  | .minPauseDurationZero => "MinPauseDurationZero"
-  | .minPauseDurationExceedsMax => "MinPauseDurationExceedsMax"
-  | .pauseDurationBelowMin => "PauseDurationBelowMin"
-  | .pauseDurationAboveMax => "PauseDurationAboveMax"
-  | .minHeartbeatIntervalZero => "MinHeartbeatIntervalZero"
-  | .minHeartbeatIntervalExceedsMax => "MinHeartbeatIntervalExceedsMax"
-  | .heartbeatIntervalBelowMin => "HeartbeatIntervalBelowMin"
-  | .heartbeatIntervalAboveMax => "HeartbeatIntervalAboveMax"
-  | .heartbeatExpired => "HeartbeatExpired" | .pauseFailed => "PauseFailed"
-  | .reentrantCall => "ReentrantCall"
-
-def CustomError.selector (error : CustomError) : B256 := _root_.Blanc.selector error.name []
-def customErrors : List CustomError :=
-  [.pausableZero, .senderNotAdmin, .senderNotPauser, .adminZero,
-   .minPauseDurationZero, .minPauseDurationExceedsMax,
-   .pauseDurationBelowMin, .pauseDurationAboveMax,
-   .minHeartbeatIntervalZero, .minHeartbeatIntervalExceedsMax,
-   .heartbeatIntervalBelowMin, .heartbeatIntervalAboveMax,
-   .heartbeatExpired, .pauseFailed, .reentrantCall]
 
 structure EventMetadata where
   name : String
@@ -208,8 +178,8 @@ inductive PersistentWriteClass
   | configuration | heartbeatExpiry | registryAssignment | registryCount | registryArray | registryIndex
 deriving DecidableEq
 
-inductive TransientWriteClass | reentrancyLock deriving DecidableEq
-inductive ExternalCallClass | pauseQuery | pauseInvoke deriving DecidableEq
+inductive TransientWriteClass | reentrancyLock
+inductive ExternalCallClass | pauseQuery | pauseInvoke
 
 structure SourceSite where
   label : String

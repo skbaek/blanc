@@ -16,13 +16,13 @@ open Jaune
 def storageWord (state : State) (owner : Adr) (slot : B256) : B256 :=
   (state.get owner).stor.get slot
 
-@[simp] theorem storageWord_setStorVal_self
+theorem storageWord_setStorVal_self
     (state : State) (owner : Adr) (slot value : B256) :
     storageWord (state.setStorVal owner slot value) owner slot = value := by
   unfold storageWord State.setStorVal
   rw [State.get_set_self, Stor.get_set_self]
 
-@[simp] theorem storageWord_setStorVal_ne
+theorem storageWord_setStorVal_ne
     (state : State) (owner : Adr) (written read value : B256)
     (hne : written ≠ read) :
     storageWord (state.setStorVal owner written value) owner read =
@@ -61,12 +61,13 @@ def architecture (proxyProg : Prog) (proxy : Adr) :
 theorem migration_writes_v2 (proxy : Adr) (state : State) :
     storageWord (migration proxy state) proxy v2ValueSlot =
       storageWord state proxy v1ValueSlot := by
-  simp [migration, v2ValueSlot_ne_migrationMarkerSlot.symm]
+  simp only [migration, ne_eq, v2ValueSlot_ne_migrationMarkerSlot.symm, not_false_eq_true,
+    storageWord_setStorVal_ne, storageWord_setStorVal_self]
 
 theorem migration_writes_marker (proxy : Adr) (state : State) :
     storageWord (migration proxy state) proxy migrationMarkerSlot =
       migrationMarkerValue := by
-  simp [migration]
+  simp only [migration, storageWord_setStorVal_self]
 
 theorem migration_establishes_initializedDomain
     (proxy : Adr) (state : State) :
@@ -91,7 +92,6 @@ theorem migration_sound (proxyProg : Prog) (proxy : Adr) :
 inductive SharedCall where
   | value
   | setValue (word : B256)
-deriving DecidableEq
 
 def sharedCalldata : SharedCall → Bytes
   | .value => valueCalldata
@@ -135,7 +135,7 @@ theorem shared_setter_refinement (pre post : State) (word : B256)
     rw [storageWord_setStorVal_ne _ _ _ _ _
       v2ValueSlot_ne_migrationMarkerSlot]
     exact hInitialized
-  · simp [v1Step, v2Step, upgradeRelation]
+  · simp only [upgradeRelation, v1Step, storageWord_setStorVal_self, v2Step]
 
 theorem v2Step_preserves_initializedDomain (post : State)
     (call : SharedCall)
@@ -203,7 +203,7 @@ theorem wrong_relation_mutant_bites :
       wrongRelationPoststate := by
   intro relation
   rw [upgradeRelation, ordinaryLogicalPrestate_values.1] at relation
-  simp [wrongRelationPoststate] at relation
+  simp only [wrongRelationPoststate, storageWord_setStorVal_self] at relation
   exact (by decide : (42 : B256) ≠ 41) relation
 
 theorem relation_does_not_protect_marker :

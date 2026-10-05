@@ -47,7 +47,7 @@ theorem solvent_of_off_write {sevm : Sevm} {d d' : Devm} {k value : B256}
   have hb := booked_set_off (Devm.getStor d sevm.currentTarget) k value hoff
   have hsum : bookedSum ((Devm.getStor d sevm.currentTarget).set k value) =
       bookedSum (Devm.getStor d sevm.currentTarget) := by
-    simpa [bookedSum] using congrArg sum hb
+    simpa only [bookedSum] using congrArg sum hb
   unfold Solvent at h ⊢
   rw [hset, hsum, hbal]
   rw [B256.toNat_zero, Nat.add_zero]

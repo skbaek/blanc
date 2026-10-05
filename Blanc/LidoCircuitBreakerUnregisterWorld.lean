@@ -129,40 +129,40 @@ slots and the per-address slots, whose regions do not. -/
 
 private theorem unregWorld_payload_zero : (0 : B256).toNat < 2 ^ 252 := by
   change (0 : Nat) < 2 ^ 252
-  norm_num
+  norm_num only
 
 private theorem unregWorld_payload_one : (1 : B256).toNat < 2 ^ 252 := by
   change (1 : Nat) < 2 ^ 252
-  norm_num
+  norm_num only
 
 private theorem unregWorld_payload_target :
     unregWorldTarget.toNat < 2 ^ 252 := by
   unfold unregWorldTarget
   change (7 : Nat) < 2 ^ 252
-  norm_num
+  norm_num only
 
 private theorem unregWorld_payload_pauser :
     unregWorldPauser.toNat < 2 ^ 252 := by
   unfold unregWorldPauser
   change (9 : Nat) < 2 ^ 252
-  norm_num
+  norm_num only
 
 private theorem unregWorld_payload_of_canonical {w : B256}
     (h : canonicalAddress w) : w.toNat < 2 ^ 252 := by
   unfold canonicalAddress at h
-  exact lt_trans h (by norm_num)
+  exact lt_trans h (by norm_num only)
 
 theorem unregWorld_targetValid : nonzeroCanonicalAddress unregWorldTarget := by
   refine ⟨by decide, ?_⟩
   unfold canonicalAddress unregWorldTarget
   change (7 : Nat) < 2 ^ 160
-  norm_num
+  norm_num only
 
 theorem unregWorld_pauserValid : nonzeroCanonicalAddress unregWorldPauser := by
   refine ⟨by decide, ?_⟩
   unfold canonicalAddress unregWorldPauser
   change (9 : Nat) < 2 ^ 160
-  norm_num
+  norm_num only
 
 /-! ### The fifteen separations the entry storage is read through
 
@@ -171,93 +171,93 @@ reading the `n`-th from the outside peels the `n - 1` cells outside it. -/
 
 theorem unregWorld_expiry_ne_count :
     expirySlot unregWorldPauser ≠ countSlot unregWorldPauser :=
-  slot_ne_of_region_ne (by norm_num [expiryRegion]) (by norm_num [countRegion])
+  slot_ne_of_region_ne (by norm_num only [expiryRegion]) (by norm_num only [countRegion])
     unregWorld_payload_pauser unregWorld_payload_pauser
-    (by norm_num [expiryRegion, countRegion])
+    (by norm_num only [expiryRegion, countRegion])
 
 theorem unregWorld_expiry_ne_index :
     expirySlot unregWorldPauser ≠ indexSlot unregWorldTarget :=
-  slot_ne_of_region_ne (by norm_num [expiryRegion]) (by norm_num [indexRegion])
+  slot_ne_of_region_ne (by norm_num only [expiryRegion]) (by norm_num only [indexRegion])
     unregWorld_payload_pauser unregWorld_payload_target
-    (by norm_num [expiryRegion, indexRegion])
+    (by norm_num only [expiryRegion, indexRegion])
 
 theorem unregWorld_expiry_ne_assignment :
     expirySlot unregWorldPauser ≠ assignmentSlot unregWorldTarget :=
-  slot_ne_of_region_ne (by norm_num [expiryRegion])
-    (by norm_num [assignmentRegion]) unregWorld_payload_pauser
-    unregWorld_payload_target (by norm_num [expiryRegion, assignmentRegion])
+  slot_ne_of_region_ne (by norm_num only [expiryRegion])
+    (by norm_num only [assignmentRegion]) unregWorld_payload_pauser
+    unregWorld_payload_target (by norm_num only [expiryRegion, assignmentRegion])
 
 theorem unregWorld_expiry_ne_entry :
     expirySlot unregWorldPauser ≠ arrayEntrySlot 1 :=
-  slot_ne_of_region_ne (by norm_num [expiryRegion]) (by norm_num [arrayRegion])
+  slot_ne_of_region_ne (by norm_num only [expiryRegion]) (by norm_num only [arrayRegion])
     unregWorld_payload_pauser unregWorld_payload_one
-    (by norm_num [expiryRegion, arrayRegion])
+    (by norm_num only [expiryRegion, arrayRegion])
 
 theorem unregWorld_expiry_ne_length :
     expirySlot unregWorldPauser ≠ arrayLengthSlot :=
-  slot_ne_of_region_ne (by norm_num [expiryRegion]) (by norm_num [arrayRegion])
+  slot_ne_of_region_ne (by norm_num only [expiryRegion]) (by norm_num only [arrayRegion])
     unregWorld_payload_pauser unregWorld_payload_zero
-    (by norm_num [expiryRegion, arrayRegion])
+    (by norm_num only [expiryRegion, arrayRegion])
 
 theorem unregWorld_count_ne_index :
     countSlot unregWorldPauser ≠ indexSlot unregWorldTarget :=
-  slot_ne_of_region_ne (by norm_num [countRegion]) (by norm_num [indexRegion])
+  slot_ne_of_region_ne (by norm_num only [countRegion]) (by norm_num only [indexRegion])
     unregWorld_payload_pauser unregWorld_payload_target
-    (by norm_num [countRegion, indexRegion])
+    (by norm_num only [countRegion, indexRegion])
 
 theorem unregWorld_count_ne_assignment :
     countSlot unregWorldPauser ≠ assignmentSlot unregWorldTarget :=
-  slot_ne_of_region_ne (by norm_num [countRegion])
-    (by norm_num [assignmentRegion]) unregWorld_payload_pauser
-    unregWorld_payload_target (by norm_num [countRegion, assignmentRegion])
+  slot_ne_of_region_ne (by norm_num only [countRegion])
+    (by norm_num only [assignmentRegion]) unregWorld_payload_pauser
+    unregWorld_payload_target (by norm_num only [countRegion, assignmentRegion])
 
 theorem unregWorld_count_ne_entry :
     countSlot unregWorldPauser ≠ arrayEntrySlot 1 :=
-  slot_ne_of_region_ne (by norm_num [countRegion]) (by norm_num [arrayRegion])
+  slot_ne_of_region_ne (by norm_num only [countRegion]) (by norm_num only [arrayRegion])
     unregWorld_payload_pauser unregWorld_payload_one
-    (by norm_num [countRegion, arrayRegion])
+    (by norm_num only [countRegion, arrayRegion])
 
 theorem unregWorld_count_ne_length :
     countSlot unregWorldPauser ≠ arrayLengthSlot :=
-  slot_ne_of_region_ne (by norm_num [countRegion]) (by norm_num [arrayRegion])
+  slot_ne_of_region_ne (by norm_num only [countRegion]) (by norm_num only [arrayRegion])
     unregWorld_payload_pauser unregWorld_payload_zero
-    (by norm_num [countRegion, arrayRegion])
+    (by norm_num only [countRegion, arrayRegion])
 
 theorem unregWorld_index_ne_assignment :
     indexSlot unregWorldTarget ≠ assignmentSlot unregWorldTarget :=
-  slot_ne_of_region_ne (by norm_num [indexRegion])
-    (by norm_num [assignmentRegion]) unregWorld_payload_target
-    unregWorld_payload_target (by norm_num [indexRegion, assignmentRegion])
+  slot_ne_of_region_ne (by norm_num only [indexRegion])
+    (by norm_num only [assignmentRegion]) unregWorld_payload_target
+    unregWorld_payload_target (by norm_num only [indexRegion, assignmentRegion])
 
 theorem unregWorld_index_ne_entry :
     indexSlot unregWorldTarget ≠ arrayEntrySlot 1 :=
-  slot_ne_of_region_ne (by norm_num [indexRegion]) (by norm_num [arrayRegion])
+  slot_ne_of_region_ne (by norm_num only [indexRegion]) (by norm_num only [arrayRegion])
     unregWorld_payload_target unregWorld_payload_one
-    (by norm_num [indexRegion, arrayRegion])
+    (by norm_num only [indexRegion, arrayRegion])
 
 theorem unregWorld_index_ne_length :
     indexSlot unregWorldTarget ≠ arrayLengthSlot :=
-  slot_ne_of_region_ne (by norm_num [indexRegion]) (by norm_num [arrayRegion])
+  slot_ne_of_region_ne (by norm_num only [indexRegion]) (by norm_num only [arrayRegion])
     unregWorld_payload_target unregWorld_payload_zero
-    (by norm_num [indexRegion, arrayRegion])
+    (by norm_num only [indexRegion, arrayRegion])
 
 theorem unregWorld_assignment_ne_entry :
     assignmentSlot unregWorldTarget ≠ arrayEntrySlot 1 :=
-  slot_ne_of_region_ne (by norm_num [assignmentRegion])
-    (by norm_num [arrayRegion]) unregWorld_payload_target
-    unregWorld_payload_one (by norm_num [assignmentRegion, arrayRegion])
+  slot_ne_of_region_ne (by norm_num only [assignmentRegion])
+    (by norm_num only [arrayRegion]) unregWorld_payload_target
+    unregWorld_payload_one (by norm_num only [assignmentRegion, arrayRegion])
 
 theorem unregWorld_assignment_ne_length :
     assignmentSlot unregWorldTarget ≠ arrayLengthSlot :=
-  slot_ne_of_region_ne (by norm_num [assignmentRegion])
-    (by norm_num [arrayRegion]) unregWorld_payload_target
-    unregWorld_payload_zero (by norm_num [assignmentRegion, arrayRegion])
+  slot_ne_of_region_ne (by norm_num only [assignmentRegion])
+    (by norm_num only [arrayRegion]) unregWorld_payload_target
+    unregWorld_payload_zero (by norm_num only [assignmentRegion, arrayRegion])
 
 /-- The array's length cell and its first entry cell share the array region, so
 only their payloads separate them. -/
 theorem unregWorld_entry_ne_length : arrayEntrySlot 1 ≠ arrayLengthSlot := by
   intro heq
-  exact absurd (slot_injective_payload (by norm_num [arrayRegion])
+  exact absurd (slot_injective_payload (by norm_num only [arrayRegion])
     unregWorld_payload_one unregWorld_payload_zero heq) (by decide)
 
 /-! ## The entry storage, read cell by cell -/
@@ -276,7 +276,7 @@ private theorem unregWorld_stor_zero {key : B256}
     Stor.get_set_ne _ hindex, Stor.get_set_ne _ hassignment,
     Stor.get_set_ne _ hentry, Stor.get_set_ne _ hlength,
     Stor.get_set_ne _ hinterval]
-  simp [Stor.get, Stor.empty]
+  simp only [Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc, Std.TreeMap.getD_emptyc]
 
 theorem unregWorld_stor_expiry :
     unregWorldStor.get (expirySlot unregWorldPauser) =
@@ -320,27 +320,27 @@ theorem unregWorld_stor_assignment_other {t : B256}
     unregWorldStor.get (assignmentSlot t) = 0 := by
   have hp : t.toNat < 2 ^ 252 := unregWorld_payload_of_canonical hcanonical
   refine unregWorld_stor_zero ?_ ?_ ?_ ?_ ?_ ?_ ?_
-  · exact slot_ne_of_region_ne (by norm_num [configRegion])
-      (by norm_num [assignmentRegion]) unregWorld_payload_one hp
-      (by norm_num [configRegion, assignmentRegion])
-  · exact slot_ne_of_region_ne (by norm_num [arrayRegion])
-      (by norm_num [assignmentRegion]) unregWorld_payload_zero hp
-      (by norm_num [arrayRegion, assignmentRegion])
-  · exact slot_ne_of_region_ne (by norm_num [arrayRegion])
-      (by norm_num [assignmentRegion]) unregWorld_payload_one hp
-      (by norm_num [arrayRegion, assignmentRegion])
+  · exact slot_ne_of_region_ne (by norm_num only [configRegion])
+      (by norm_num only [assignmentRegion]) unregWorld_payload_one hp
+      (by norm_num only [configRegion, assignmentRegion])
+  · exact slot_ne_of_region_ne (by norm_num only [arrayRegion])
+      (by norm_num only [assignmentRegion]) unregWorld_payload_zero hp
+      (by norm_num only [arrayRegion, assignmentRegion])
+  · exact slot_ne_of_region_ne (by norm_num only [arrayRegion])
+      (by norm_num only [assignmentRegion]) unregWorld_payload_one hp
+      (by norm_num only [arrayRegion, assignmentRegion])
   · intro heq
-    exact hne (slot_injective_payload (by norm_num [assignmentRegion])
+    exact hne (slot_injective_payload (by norm_num only [assignmentRegion])
       unregWorld_payload_target hp heq).symm
-  · exact slot_ne_of_region_ne (by norm_num [indexRegion])
-      (by norm_num [assignmentRegion]) unregWorld_payload_target hp
-      (by norm_num [indexRegion, assignmentRegion])
-  · exact slot_ne_of_region_ne (by norm_num [countRegion])
-      (by norm_num [assignmentRegion]) unregWorld_payload_pauser hp
-      (by norm_num [countRegion, assignmentRegion])
-  · exact slot_ne_of_region_ne (by norm_num [expiryRegion])
-      (by norm_num [assignmentRegion]) unregWorld_payload_pauser hp
-      (by norm_num [expiryRegion, assignmentRegion])
+  · exact slot_ne_of_region_ne (by norm_num only [indexRegion])
+      (by norm_num only [assignmentRegion]) unregWorld_payload_target hp
+      (by norm_num only [indexRegion, assignmentRegion])
+  · exact slot_ne_of_region_ne (by norm_num only [countRegion])
+      (by norm_num only [assignmentRegion]) unregWorld_payload_pauser hp
+      (by norm_num only [countRegion, assignmentRegion])
+  · exact slot_ne_of_region_ne (by norm_num only [expiryRegion])
+      (by norm_num only [assignmentRegion]) unregWorld_payload_pauser hp
+      (by norm_num only [expiryRegion, assignmentRegion])
 
 /-- Every canonical target other than `7` has a zero reverse index. -/
 theorem unregWorld_stor_index_other {t : B256}
@@ -348,27 +348,27 @@ theorem unregWorld_stor_index_other {t : B256}
     unregWorldStor.get (indexSlot t) = 0 := by
   have hp : t.toNat < 2 ^ 252 := unregWorld_payload_of_canonical hcanonical
   refine unregWorld_stor_zero ?_ ?_ ?_ ?_ ?_ ?_ ?_
-  · exact slot_ne_of_region_ne (by norm_num [configRegion])
-      (by norm_num [indexRegion]) unregWorld_payload_one hp
-      (by norm_num [configRegion, indexRegion])
-  · exact slot_ne_of_region_ne (by norm_num [arrayRegion])
-      (by norm_num [indexRegion]) unregWorld_payload_zero hp
-      (by norm_num [arrayRegion, indexRegion])
-  · exact slot_ne_of_region_ne (by norm_num [arrayRegion])
-      (by norm_num [indexRegion]) unregWorld_payload_one hp
-      (by norm_num [arrayRegion, indexRegion])
-  · exact slot_ne_of_region_ne (by norm_num [assignmentRegion])
-      (by norm_num [indexRegion]) unregWorld_payload_target hp
-      (by norm_num [assignmentRegion, indexRegion])
+  · exact slot_ne_of_region_ne (by norm_num only [configRegion])
+      (by norm_num only [indexRegion]) unregWorld_payload_one hp
+      (by norm_num only [configRegion, indexRegion])
+  · exact slot_ne_of_region_ne (by norm_num only [arrayRegion])
+      (by norm_num only [indexRegion]) unregWorld_payload_zero hp
+      (by norm_num only [arrayRegion, indexRegion])
+  · exact slot_ne_of_region_ne (by norm_num only [arrayRegion])
+      (by norm_num only [indexRegion]) unregWorld_payload_one hp
+      (by norm_num only [arrayRegion, indexRegion])
+  · exact slot_ne_of_region_ne (by norm_num only [assignmentRegion])
+      (by norm_num only [indexRegion]) unregWorld_payload_target hp
+      (by norm_num only [assignmentRegion, indexRegion])
   · intro heq
-    exact hne (slot_injective_payload (by norm_num [indexRegion])
+    exact hne (slot_injective_payload (by norm_num only [indexRegion])
       unregWorld_payload_target hp heq).symm
-  · exact slot_ne_of_region_ne (by norm_num [countRegion])
-      (by norm_num [indexRegion]) unregWorld_payload_pauser hp
-      (by norm_num [countRegion, indexRegion])
-  · exact slot_ne_of_region_ne (by norm_num [expiryRegion])
-      (by norm_num [indexRegion]) unregWorld_payload_pauser hp
-      (by norm_num [expiryRegion, indexRegion])
+  · exact slot_ne_of_region_ne (by norm_num only [countRegion])
+      (by norm_num only [indexRegion]) unregWorld_payload_pauser hp
+      (by norm_num only [countRegion, indexRegion])
+  · exact slot_ne_of_region_ne (by norm_num only [expiryRegion])
+      (by norm_num only [indexRegion]) unregWorld_payload_pauser hp
+      (by norm_num only [expiryRegion, indexRegion])
 
 /-- Every canonical pauser other than `9` holds no assignment. -/
 theorem unregWorld_stor_count_other {p : B256}
@@ -376,55 +376,27 @@ theorem unregWorld_stor_count_other {p : B256}
     unregWorldStor.get (countSlot p) = 0 := by
   have hp : p.toNat < 2 ^ 252 := unregWorld_payload_of_canonical hcanonical
   refine unregWorld_stor_zero ?_ ?_ ?_ ?_ ?_ ?_ ?_
-  · exact slot_ne_of_region_ne (by norm_num [configRegion])
-      (by norm_num [countRegion]) unregWorld_payload_one hp
-      (by norm_num [configRegion, countRegion])
-  · exact slot_ne_of_region_ne (by norm_num [arrayRegion])
-      (by norm_num [countRegion]) unregWorld_payload_zero hp
-      (by norm_num [arrayRegion, countRegion])
-  · exact slot_ne_of_region_ne (by norm_num [arrayRegion])
-      (by norm_num [countRegion]) unregWorld_payload_one hp
-      (by norm_num [arrayRegion, countRegion])
-  · exact slot_ne_of_region_ne (by norm_num [assignmentRegion])
-      (by norm_num [countRegion]) unregWorld_payload_target hp
-      (by norm_num [assignmentRegion, countRegion])
-  · exact slot_ne_of_region_ne (by norm_num [indexRegion])
-      (by norm_num [countRegion]) unregWorld_payload_target hp
-      (by norm_num [indexRegion, countRegion])
+  · exact slot_ne_of_region_ne (by norm_num only [configRegion])
+      (by norm_num only [countRegion]) unregWorld_payload_one hp
+      (by norm_num only [configRegion, countRegion])
+  · exact slot_ne_of_region_ne (by norm_num only [arrayRegion])
+      (by norm_num only [countRegion]) unregWorld_payload_zero hp
+      (by norm_num only [arrayRegion, countRegion])
+  · exact slot_ne_of_region_ne (by norm_num only [arrayRegion])
+      (by norm_num only [countRegion]) unregWorld_payload_one hp
+      (by norm_num only [arrayRegion, countRegion])
+  · exact slot_ne_of_region_ne (by norm_num only [assignmentRegion])
+      (by norm_num only [countRegion]) unregWorld_payload_target hp
+      (by norm_num only [assignmentRegion, countRegion])
+  · exact slot_ne_of_region_ne (by norm_num only [indexRegion])
+      (by norm_num only [countRegion]) unregWorld_payload_target hp
+      (by norm_num only [indexRegion, countRegion])
   · intro heq
-    exact hne (slot_injective_payload (by norm_num [countRegion])
+    exact hne (slot_injective_payload (by norm_num only [countRegion])
       unregWorld_payload_pauser hp heq).symm
-  · exact slot_ne_of_region_ne (by norm_num [expiryRegion])
-      (by norm_num [countRegion]) unregWorld_payload_pauser hp
-      (by norm_num [expiryRegion, countRegion])
-
-/-- Every canonical pauser other than `9` has a zero heartbeat expiry. -/
-theorem unregWorld_stor_expiry_other {p : B256}
-    (hcanonical : canonicalAddress p) (hne : p ≠ unregWorldPauser) :
-    unregWorldStor.get (expirySlot p) = 0 := by
-  have hp : p.toNat < 2 ^ 252 := unregWorld_payload_of_canonical hcanonical
-  refine unregWorld_stor_zero ?_ ?_ ?_ ?_ ?_ ?_ ?_
-  · exact slot_ne_of_region_ne (by norm_num [configRegion])
-      (by norm_num [expiryRegion]) unregWorld_payload_one hp
-      (by norm_num [configRegion, expiryRegion])
-  · exact slot_ne_of_region_ne (by norm_num [arrayRegion])
-      (by norm_num [expiryRegion]) unregWorld_payload_zero hp
-      (by norm_num [arrayRegion, expiryRegion])
-  · exact slot_ne_of_region_ne (by norm_num [arrayRegion])
-      (by norm_num [expiryRegion]) unregWorld_payload_one hp
-      (by norm_num [arrayRegion, expiryRegion])
-  · exact slot_ne_of_region_ne (by norm_num [assignmentRegion])
-      (by norm_num [expiryRegion]) unregWorld_payload_target hp
-      (by norm_num [assignmentRegion, expiryRegion])
-  · exact slot_ne_of_region_ne (by norm_num [indexRegion])
-      (by norm_num [expiryRegion]) unregWorld_payload_target hp
-      (by norm_num [indexRegion, expiryRegion])
-  · exact slot_ne_of_region_ne (by norm_num [countRegion])
-      (by norm_num [expiryRegion]) unregWorld_payload_pauser hp
-      (by norm_num [countRegion, expiryRegion])
-  · intro heq
-    exact hne (slot_injective_payload (by norm_num [expiryRegion])
-      unregWorld_payload_pauser hp heq).symm
+  · exact slot_ne_of_region_ne (by norm_num only [expiryRegion])
+      (by norm_num only [countRegion]) unregWorld_payload_pauser hp
+      (by norm_num only [expiryRegion, countRegion])
 
 /-! ## The Registry witness
 
@@ -440,7 +412,8 @@ private theorem unregWorld_toB256_zero : Nat.toB256 0 = (0 : B256) := by decide
 theorem unregWorldStor_witness :
     RegistryWitness (logicalStorageOfStor unregWorldStor)
       [(unregWorldTarget, unregWorldPauser)] := by
-  refine ⟨by simp, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨by simp only [List.map_cons, List.map_nil, List.nodup_cons, List.not_mem_nil,
+    not_false_eq_true, List.nodup_nil, and_self], ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro entry member
     rw [List.mem_singleton] at member
     subst member
@@ -464,10 +437,10 @@ theorem unregWorldStor_witness :
     by_cases ht : t = unregWorldTarget
     · subst ht
       rw [unregWorld_stor_assignment]
-      simp [assignmentAt]
+      simp only [assignmentAt, ↓reduceIte]
     · rw [unregWorld_stor_assignment_other canonical ht]
       have hne : unregWorldTarget ≠ t := fun h => ht h.symm
-      simp [assignmentAt, hne]
+      simp only [assignmentAt, hne, ↓reduceIte]
   · intro t canonical
     show unregWorldStor.get (indexSlot t) =
       Nat.toB256 (oneBasedIndexAt [(unregWorldTarget, unregWorldPauser)] t)
@@ -496,7 +469,7 @@ theorem unregWorldStor_witness :
     refine unregWorld_stor_count_other ?_ (by decide)
     unfold canonicalAddress
     change (0 : Nat) < 2 ^ 160
-    norm_num
+    norm_num only
 
 /-! ## Gas
 
@@ -520,7 +493,7 @@ private theorem unregWorld_resetCost {orig new : B256} (hnew : orig ≠ new)
 
 private theorem unregWorld_noopCost {orig cur : B256} :
     sstoreValueCost orig cur cur = gasWarmAccess := by
-  rw [sstoreValueCost, if_neg (by simp)]
+  rw [sstoreValueCost, if_neg (by simp only [ne_eq, not_true_eq_false, and_false, not_false_eq_true])]
 
 /-- The exact body reserve of the retiring unregistration at this world: `221`
 decoder/admin prefix and `21931` of kernel walk, staged loads and value
@@ -688,13 +661,6 @@ theorem unregWorld_assignment :
     Devm.getStorVal unregWorldPre unregWorldOwner
       (assignmentSlot unregWorldTarget) = unregWorldPauser := by
   rw [unregWorld_getStorVal, unregWorld_stor_assignment]
-
-/-- The admin address is a canonical address distinct from the retiring
-pauser, so its own heartbeat cell is untouched and zero. -/
-theorem unregWorld_adminCanonical :
-    canonicalAddress unregWorldAdmin.toB256 := by
-  unfold canonicalAddress unregWorldAdmin
-  decide
 
 theorem unregWorld_preWitness :
     RegistryWitness
@@ -867,7 +833,7 @@ theorem unregWorld_bodyGasEq :
   rw [hunfold,unregWorld_warmCost unregWorld_accessed unregWorld_warmAssignment,
     unregWorld_warmCost unregWorld_assignmentPost_accessed
       unregWorld_warmCount]
-  norm_num [unregWorldBodyGas, unregWorldResetCost, gasWarmAccess,
+  norm_num only [unregWorldBodyGas, unregWorldResetCost, gasWarmAccess,
     gasStorageUpdate, gasColdSload]
 
 /-- The message's own `gas` field is that reserve on the nose, with `G = 0`:
@@ -880,14 +846,14 @@ theorem unregWorld_gasEntry :
         unregWorldResetCost unregWorldResetCost unregWorldResetCost := by
   rw [unregWorld_bodyGasEq]
   show unregWorldGas = 0 + registerPauserDispatchGas + unregWorldBodyGas
-  norm_num [unregWorldGas, unregWorldBodyGas, registerPauserDispatchGas]
+  norm_num only [unregWorldGas, unregWorldBodyGas, registerPauserDispatchGas]
 
 /-! ### The model-side entry list -/
 
 theorem unregWorld_find :
     findEntry [(unregWorldTarget, unregWorldPauser)] unregWorldTarget =
       some (0, unregWorldPauser) := by
-  simp [findEntry]
+  simp only [findEntry, ↓reduceIte]
 
 theorem unregWorld_last :
     0 + 1 = ([(unregWorldTarget, unregWorldPauser)] : List Entry).length := rfl
@@ -956,7 +922,7 @@ theorem unregisterWorld_effects :
       (unregWorld_resetCost (by decide) (by decide))
       (unregWorld_resetCost (by decide) (by decide))
       unregWorld_warmEntry unregWorld_warmIndex unregWorld_warmLength
-      unregWorld_warmExpiry (by norm_num [gCallStipend, unregWorldResetCost,
+      unregWorld_warmExpiry (by norm_num only [gCallStipend, unregWorldResetCost,
         gasStorageUpdate, gasColdSload]) unregWorld_static with
     ⟨trace, post, htrace, hpostEntries, hwitness, hrun, hgas, hlogs,
       holdExpiry, hexpiries, hcompile⟩
@@ -1046,7 +1012,7 @@ theorem unregisterWorld_settles :
   refine ⟨post, hexec, ?_⟩
   intro hclean
   have hnot : post.error.isSome ≠ true := by
-    cases herror : post.error <;> simp_all
+    cases herror : post.error <;> simp_all only [ne_eq, Option.isNone_none, Option.isSome_none, Bool.false_eq_true, not_false_eq_true, Option.isNone_some]
   have hprocess := RunFrame.of_run (f := Frame.ofCall unregWorldMsg)
     (raw := (.ok post : Execution)) unregWorld_frameEntry
   have hsettle :
@@ -1082,7 +1048,7 @@ theorem unregisterWorld_settles :
       (unregWorld_resetCost (by decide) (by decide))
       unregWorld_warmEntry unregWorld_warmIndex unregWorld_warmLength
       unregWorld_warmExpiry
-      (by norm_num [gCallStipend, unregWorldResetCost, gasStorageUpdate,
+      (by norm_num only [gCallStipend, unregWorldResetCost, gasStorageUpdate,
         gasColdSload])
       unregWorld_static hprocess hfilled hclean with
     ⟨trace, htrace, hpostEntries, hwitness, hgas, hlogs, holdExpiry,

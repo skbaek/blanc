@@ -1,0 +1,864 @@
+import Blanc.Lift.WithdrawalRequest.FloodTx
+import Blanc.Lift.WithdrawalRequest.FloodTxRecover
+import Blanc.Lift.WithdrawalRequest.ProtocolOccurrences
+import Blanc.Lift.WithdrawalRequest.BalanceHistory
+import Blanc.BlockForward
+import Blanc.Lift.BeaconRoots.SystemWalk
+import Blanc.Lift.HistoryStorage.SystemWalk
+import Blanc.Lift.WithdrawalRequest.SystemProtocol
+import Blanc.Lift.WithdrawalRequest.SystemFrameEffects
+
+/-!
+# The mathematical-fee refutation: block assembly
+
+The witness history is three configured blocks on a Prague chain:
+
+* **A** activates the fork: no transactions, the four system calls.
+* **B** carries `txB`, which runs the flood caller for `2895` fee-1 submissions.
+* **C** carries `txC`, the direct `2 ^ 245`-wei submission at excess `2893`.
+
+This module holds the vocabulary of the witness: the concrete checkpoint and genesis
+chain, the system-call and settlement preservation legs, the statement `NatFeeGuarantee`
+with its refutation `NatFeeGuaranteeRefuted`, and the reduction of a refutation to a
+`RefutationWitness`.  `Blanc/Composition/WithdrawalRequestFeeRefutation.lean` builds the
+three blocks and proves `nat_fee_guarantee_refuted` with no hypotheses.
+-/
+
+namespace Blanc.Lift.WithdrawalRequest.FeeCounterexample
+
+open Jaune Blanc.Lift Blanc.ExecutionTrace Blanc.BlockForward FloodTx
+
+/-- The transaction fold over a single indexed transaction is that transaction's
+settlement, its state installed. -/
+theorem applyTransactions_single {benv : Benv} {bout bout' : BlockOutput} {tx : Tx}
+    {index : Nat} {st : State}
+    (h : processTransaction benv bout tx index = .ok (st, bout')) :
+    applyTransactions [(index, tx)] benv bout = .ok (benv.withState st, bout') := by
+  unfold applyTransactions
+  rw [h]
+  rfl
+
+theorem putIndex_single (tx : Tx) : [tx].putIndex = [(0, tx)] := rfl
+
+theorem decode_single (tx : Tx) : [Sum.inr tx].mapM decodeTx = .ok [tx] := rfl
+
+theorem AppliedBodyTrace.decodedTxs_eq_of_txs_eq
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {tx : Tx} {wds : List Withdrawal}
+    {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs wds state bout)
+    (htxs : txs = [Sum.inr tx]) :
+    trace.decodedTxs = [tx] := by
+  have hdecode : txs.mapM decodeTx = .ok [tx] := by
+    rw [htxs]
+    exact decode_single tx
+  exact Except.ok.inj (trace.decodeRun.symm.trans hdecode)
+
+theorem noSenderAt_single {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    {tx : Tx} (trace : ApplyTransactionsTrace [(0, tx)] benv bout finalBenv finalBout)
+    (hrecover : recoverSender benv.stat.chainId tx = .ok senderE) :
+    trace.NoSenderAt systemAddress := by
+  cases trace with
+  | cons head tail =>
+    cases tail with
+    | nil =>
+      refine ⟨?_, trivial⟩
+      intro hsender
+      have hrecover' := checkTransaction_sender head.checked
+      have hrecover'' : recoverSender benv.stat.chainId tx = .ok head.sender := by
+        simpa only [Benv.beginTransaction] using hrecover'
+      have hsender' : senderE = head.sender :=
+        Except.ok.inj (hrecover.symm.trans hrecover'')
+      exact (by decide : senderE ≠ systemAddress) (hsender'.trans hsender)
+
+/-- The settled state of a transaction whose frame scheduled no deletion and whose
+sender and coinbase are credited, as `processTransaction` returns it. -/
+def settledState (post : Devm) (E coinbase : Adr) (refund tip : B256) : State :=
+  (post.state.addBal E refund).addBal coinbase tip
+
+/-- The settled state once the frame's deletion set is known empty. -/
+theorem settled_of_no_deletions (post : Devm) (E coinbase : Adr) (refund tip : B256)
+    (hdel : post.accountsToDelete.isEmpty = true) :
+    post.accountsToDelete.toList.foldl destroyAccount
+      ((post.state.addBal E refund).addBal coinbase tip) =
+      settledState post E coinbase refund tip := by
+  have hlist : post.accountsToDelete.toList = [] := by
+    apply List.isEmpty_iff.mp
+    rw [Std.HashSet.isEmpty_toList]
+    exact hdel
+  rw [hlist]
+  rfl
+
+/-- The deposit parse of a block output holding one receipt whose logs all sit at the
+withdrawal predeploy. -/
+theorem parseDepositRequests_of_predeploy_logs {bout : BlockOutput} {tx : Tx} {cum : Nat}
+    {logs : List Log} {index : Nat}
+    (hkeys : bout.receiptKeys = [BLT.toBytes (.bytes index.toBytes)])
+    (hreceipt : bout.receiptsTrie[BLT.toBytes (.bytes index.toBytes)]? =
+      some (makeReceipt tx none cum logs))
+    (hlogs : ∀ log ∈ logs, log.address = withdrawalRequestPredeployAddress) :
+    parseDepositRequests bout = .ok [] := by
+  apply parseDepositRequests_of_no_deposit_logs
+  intro key hkey
+  rw [hkeys, List.mem_singleton] at hkey
+  subst hkey
+  refine ⟨_, hreceipt, ?_⟩
+  intro log hlog
+  change log ∈ logs at hlog
+  rw [hlogs log hlog]
+  decide
+
+/-- The state after the EIP-4788 beacon-roots system call. -/
+def stBeacon (benv : Benv) : State :=
+  (BeaconRoots.systemPost benv).state
+
+/-- The state after the EIP-2935 history-storage system call. -/
+def stHistory (benv : Benv) : State :=
+  (HistoryStorage.systemPost (benv.withState (stBeacon benv))).state
+
+/-- The call output of the EIP-4788 beacon-roots system call. -/
+def outBeacon (benv : Benv) : MsgCallOutput :=
+  systemCallOutput (BeaconRoots.systemPost benv)
+
+/-- The call output of the EIP-2935 history-storage system call. -/
+def outHistory (benv : Benv) : MsgCallOutput :=
+  systemCallOutput (HistoryStorage.systemPost (benv.withState (stBeacon benv)))
+
+theorem systemCodeInstalled_beaconRoots {w : State} (h : SystemCodeInstalled w) :
+    w.getCode beaconRootsAddress = beaconRootsCode :=
+  h (beaconRootsAddress, beaconRootsCode)
+    (by simp only [systemContracts, List.mem_cons, true_or])
+
+theorem systemCodeInstalled_historyStorage {w : State} (h : SystemCodeInstalled w) :
+    w.getCode historyStorageAddress = historyStorageCode :=
+  h (historyStorageAddress, historyStorageCode)
+    (by simp only [systemContracts, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])
+
+theorem stBeacon_step {benv : Benv} (hfork : CoveredFork benv.stat.fork)
+    (hcode : benv.state.getCode beaconRootsAddress = beaconRootsCode) :
+    processUncheckedSystemTransaction benv beaconRootsAddress
+        benv.stat.parentBeaconBlockRoot.toBytes =
+      .ok (stBeacon benv, outBeacon benv) ∧
+    ∀ a, beaconRootsAddress ≠ a → (stBeacon benv).get a = benv.state.get a := by
+  have h := BeaconRoots.processUncheckedSystemTransaction_beaconRoots hfork hcode
+  exact ⟨h.1, h.2.2⟩
+
+theorem stHistory_step {benv : Benv} {lastHash : B256}
+    (hfork : CoveredFork benv.stat.fork)
+    (hbeaconCode : benv.state.getCode beaconRootsAddress = beaconRootsCode)
+    (hhistoryCode : benv.state.getCode historyStorageAddress = historyStorageCode)
+    (hlast : benv.stat.blockHashes.getLast? = some lastHash) :
+    processUncheckedSystemTransaction (benv.withState (stBeacon benv)) historyStorageAddress
+        lastHash.toBytes = .ok (stHistory benv, outHistory benv) ∧
+    ∀ a, historyStorageAddress ≠ a → (stHistory benv).get a = (stBeacon benv).get a := by
+  have hB := stBeacon_step hfork hbeaconCode
+  have hneBH : beaconRootsAddress ≠ historyStorageAddress := by decide
+  have hgetH : (stBeacon benv).get historyStorageAddress = benv.state.get historyStorageAddress :=
+    hB.2 historyStorageAddress hneBH
+  have hcodeH : (stBeacon benv).getCode historyStorageAddress = historyStorageCode := by
+    change ((stBeacon benv).get historyStorageAddress).code = historyStorageCode
+    rw [hgetH]
+    exact hhistoryCode
+  have hlast' : (benv.withState (stBeacon benv)).stat.blockHashes.getLast? = some lastHash := hlast
+  have h := HistoryStorage.processUncheckedSystemTransaction_historyStorage
+    (benv := benv.withState (stBeacon benv)) hfork hcodeH hlast'
+  exact ⟨h.1, h.2.2⟩
+
+theorem stHistory_get {benv : Benv} {lastHash : B256} {a : Adr}
+    (hfork : CoveredFork benv.stat.fork)
+    (hbeaconCode : benv.state.getCode beaconRootsAddress = beaconRootsCode)
+    (hhistoryCode : benv.state.getCode historyStorageAddress = historyStorageCode)
+    (hlast : benv.stat.blockHashes.getLast? = some lastHash)
+    (hneB : beaconRootsAddress ≠ a) (hneH : historyStorageAddress ≠ a) :
+    (stHistory benv).get a = benv.state.get a := by
+  have hB := stBeacon_step hfork hbeaconCode
+  have hH := stHistory_step hfork hbeaconCode hhistoryCode hlast
+  rw [hH.2 a hneH, hB.2 a hneB]
+
+theorem stHistory_get_of_installed {benv : Benv} {lastHash : B256} {a : Adr}
+    (hfork : CoveredFork benv.stat.fork)
+    (installed : SystemCodeInstalled benv.state)
+    (hlast : benv.stat.blockHashes.getLast? = some lastHash)
+    (hneB : beaconRootsAddress ≠ a) (hneH : historyStorageAddress ≠ a) :
+    (stHistory benv).get a = benv.state.get a :=
+  stHistory_get hfork
+    (systemCodeInstalled_beaconRoots installed)
+    (systemCodeInstalled_historyStorage installed)
+    hlast hneB hneH
+
+/-! ## Preservation through settlement -/
+
+/-- Settlement credits preserve every account's code, via shared
+`State.addBal_getCode`. -/
+theorem settledState_getCode (post : Devm) (E coinbase a : Adr) (refund tip : B256) :
+    (settledState post E coinbase refund tip).getCode a = post.state.getCode a := by
+  unfold settledState
+  rw [State.addBal_getCode, State.addBal_getCode]
+
+/-- Settlement credits preserve every account's storage map: `addBal` is a `setBal`,
+whose storage projection is shared `State.setBal_get_stor`. -/
+theorem settledState_getStor (post : Devm) (E coinbase a : Adr) (refund tip : B256) :
+    (settledState post E coinbase refund tip).getStor a = post.state.getStor a := by
+  simp only [settledState, State.getStor, State.addBal, State.setBal_get_stor]
+
+/-- Block C's settled state keeps every installed code: its frame already does
+(`TxCPost`'s code leg). -/
+theorem TxCPost_settled_codes {benv : Benv} {σ : Blanc.WithdrawalRequest.State}
+    {iters : Nat} {post : Devm} (hQ : TxCPost benv σ iters post)
+    (E coinbase a : Adr) (refund tip : B256) :
+    (settledState post E coinbase refund tip).getCode a = benv.state.getCode a := by
+  rw [settledState_getCode]
+  exact hQ.2.2.2.1 a
+
+/-- Block C's settled state keeps the 7251 storage map: its frame keeps every
+non-predeploy map (`TxCPost`'s storage leg). -/
+theorem TxCPost_settled_stor7251 {benv : Benv} {σ : Blanc.WithdrawalRequest.State}
+    {iters : Nat} {post : Devm} (hQ : TxCPost benv σ iters post)
+    (hne : consolidationRequestPredeployAddress ≠ withdrawalRequestPredeployAddress)
+    (E coinbase : Adr) (refund tip : B256) :
+    (settledState post E coinbase refund tip).getStor
+      consolidationRequestPredeployAddress =
+      benv.state.getStor consolidationRequestPredeployAddress := by
+  rw [settledState_getStor]
+  exact hQ.2.2.1 consolidationRequestPredeployAddress hne
+
+/-- Block B's settled state keeps the 7002 code: its frame says so directly. -/
+theorem TxBPost_settled_7002code {benv : Benv} {σ0 : Blanc.WithdrawalRequest.State}
+    {post : Devm} (hQ : TxBPost benv σ0 post)
+    (E coinbase : Adr) (refund tip : B256) :
+    (settledState post E coinbase refund tip).getCode
+      withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode := by
+  rw [settledState_getCode]
+  exact hQ.1
+
+/-- Block B's settled state keeps any other account's code: its frame keeps the
+whole account (`TxBPost`'s others leg). -/
+theorem TxBPost_settled_otherCode {benv : Benv} {σ0 : Blanc.WithdrawalRequest.State}
+    {post : Devm} (hQ : TxBPost benv σ0 post)
+    (a : Adr) (hE : a ≠ senderE) (hL : a ≠ looperAddress)
+    (hP : a ≠ withdrawalRequestPredeployAddress)
+    (E coinbase : Adr) (refund tip : B256) :
+    (settledState post E coinbase refund tip).getCode a = benv.state.getCode a := by
+  have hget := hQ.2.2.2.2.2.2 a hE hL hP
+  rw [settledState_getCode]
+  exact congrArg (·.code) hget
+
+/-- Block B's settled state keeps the 7251 storage map, by the same others leg. -/
+theorem TxBPost_settled_stor7251 {benv : Benv} {σ0 : Blanc.WithdrawalRequest.State}
+    {post : Devm} (hQ : TxBPost benv σ0 post)
+    (hE : consolidationRequestPredeployAddress ≠ senderE)
+    (hL : consolidationRequestPredeployAddress ≠ looperAddress)
+    (hP : consolidationRequestPredeployAddress ≠ withdrawalRequestPredeployAddress)
+    (E coinbase : Adr) (refund tip : B256) :
+    (settledState post E coinbase refund tip).getStor
+      consolidationRequestPredeployAddress =
+      benv.state.getStor consolidationRequestPredeployAddress := by
+  have hget := hQ.2.2.2.2.2.2 consolidationRequestPredeployAddress hE hL hP
+  rw [settledState_getStor]
+  exact congrArg (·.stor) hget
+
+/-! ## Preservation through the 7002 system call -/
+
+/-- The 7002 checked system call preserves every account's code. -/
+theorem systemW_post_getCode (benvTxs : Benv) (address : Adr) :
+    (Blanc.Lift.WithdrawalRequest.systemProtocolPost benvTxs).state.getCode address =
+      benvTxs.state.getCode address := by
+  obtain ⟨_, _, _, _, _, _, _, _, _, _, _, hstate, _, _, _, _, _⟩ :=
+    Blanc.Lift.WithdrawalRequest.systemProtocol_seed benvTxs
+  unfold Blanc.Lift.WithdrawalRequest.systemProtocolPost
+  rw [← Devm.getCode_state, Blanc.Lift.WithdrawalRequest.systemFramePost_getCode, Devm.getCode_state, hstate]
+
+/-- The 7002 checked system call preserves every other account's storage map, via
+shared `systemFramePost_other_storage`. -/
+theorem systemW_post_getStor_other (benvTxs : Benv) (address : Adr)
+    (hne : address ≠ withdrawalRequestPredeployAddress) :
+    (Blanc.Lift.WithdrawalRequest.systemProtocolPost benvTxs).state.getStor address =
+      benvTxs.state.getStor address := by
+  obtain ⟨_, htarg, _, _, _, _, _, _, _, _, _, hstate, _, _, _, _, _⟩ :=
+    Blanc.Lift.WithdrawalRequest.systemProtocol_seed benvTxs
+  have hother : (Blanc.Lift.WithdrawalRequest.systemProtocolSevm benvTxs).currentTarget ≠
+      address := by
+    rw [htarg]
+    exact Ne.symm hne
+  have h := Blanc.Lift.WithdrawalRequest.systemFramePost_other_storage
+    (Blanc.Lift.WithdrawalRequest.systemProtocolSevm benvTxs)
+    (Blanc.Lift.WithdrawalRequest.systemProtocolBase benvTxs) .empty
+    (systemTransactionGas - Blanc.Lift.WithdrawalRequest.systemProtocolGas benvTxs)
+    address hother
+  unfold Blanc.Lift.WithdrawalRequest.systemProtocolPost
+  simp only [Devm.getStor, Devm.getAcct, State.getStor] at h ⊢
+  rw [hstate] at h
+  exact h
+
+/-- The history-storage system call preserves an untouched account's code, via
+the chained `stHistory_get`. -/
+theorem stHistory_getCode_of_ne {benv : Benv} {lastHash : B256}
+    (hfork : CoveredFork benv.stat.fork)
+    (hbeaconCode : benv.state.getCode beaconRootsAddress = beaconRootsCode)
+    (hhistoryCode : benv.state.getCode historyStorageAddress = historyStorageCode)
+    (hlast : benv.stat.blockHashes.getLast? = some lastHash)
+    (a : Adr) (hneB : beaconRootsAddress ≠ a) (hneH : historyStorageAddress ≠ a) :
+    (stHistory benv).getCode a = benv.state.getCode a := by
+  have h := stHistory_get hfork hbeaconCode hhistoryCode hlast hneB hneH
+  exact congrArg (·.code) h
+
+/-- The history-storage system call preserves an untouched account's storage map. -/
+theorem stHistory_getStor_of_ne {benv : Benv} {lastHash : B256}
+    (hfork : CoveredFork benv.stat.fork)
+    (hbeaconCode : benv.state.getCode beaconRootsAddress = beaconRootsCode)
+    (hhistoryCode : benv.state.getCode historyStorageAddress = historyStorageCode)
+    (hlast : benv.stat.blockHashes.getLast? = some lastHash)
+    (a : Adr) (hneB : beaconRootsAddress ≠ a) (hneH : historyStorageAddress ≠ a) :
+    (stHistory benv).getStor a = benv.state.getStor a := by
+  have h := stHistory_get hfork hbeaconCode hhistoryCode hlast hneB hneH
+  exact congrArg (·.stor) h
+
+/-! ## The concrete checkpoint -/
+
+/-- Witness chain config: Prague-only, chain id 1. -/
+def witnessConfig : ChainConfig := ChainConfig.pragueOnly 1
+
+theorem witnessConfig_valid : witnessConfig.Valid := ChainConfig.pragueOnly_valid 1
+
+theorem witnessConfig_chainId : witnessConfig.chainId = 1 := rfl
+
+theorem witnessConfig_forkAt (t : Nat) : witnessConfig.forkAt t = .ok .prague :=
+  Blanc.ChainConfig.pragueOnly_forkAt 1 t
+
+/-- Funded sender balance: covers block C's `2 ^ 20 * 8 + 2 ^ 245` with room. -/
+def senderEFunds : Nat := 2 ^ 245 + 2 ^ 31
+
+theorem senderEFunds_lt : senderEFunds < 2 ^ 256 := by
+  unfold senderEFunds
+  omega
+
+/-- The 7002 storage at the inhibitor/empty queue: only slot 0 set. -/
+def checkpoint7002Stor : Stor := Stor.ofList [(0, Blanc.WithdrawalRequest.excessInhibitor.toB256)]
+
+/-- The concrete checkpoint state: four system codes, the 7002 predeploy at the
+inhibitor/empty queue, the 7251 empty queue, the looper code, funded senderE,
+and no entry (hence no code) at `systemAddress`. -/
+def checkpointState : State := State.ofList
+  [(beaconRootsAddress, { Acct.nil with code := Blanc.beaconRootsCode }),
+   (historyStorageAddress, { Acct.nil with code := Blanc.historyStorageCode }),
+   (withdrawalRequestPredeployAddress,
+     { Acct.nil with code := Blanc.withdrawalRequestCode, stor := checkpoint7002Stor }),
+   (consolidationRequestPredeployAddress,
+     { Acct.nil with code := Blanc.consolidationRequestCode }),
+   (looperAddress, { Acct.nil with code := Blanc.Lift.FloodLooper.code }),
+   (senderE, { Acct.nil with nonce := 0, bal := senderEFunds.toB256 })]
+
+/-- Lookup tactic note: closed lookups go through `simp (disch := decide +kernel)`
+over the `ofList` fold with the get/set lemmas (discharger sees only address
+disequalities, never storage images or bytecode); open-address facts peel by hand. -/
+
+theorem checkpoint_get_beaconRoots :
+    checkpointState.get beaconRootsAddress =
+      { Acct.nil with code := Blanc.beaconRootsCode } := by
+  simp (disch := decide +kernel) only [checkpointState, State.ofList,
+    List.foldl_cons, List.foldl_nil, State.get_set_ne, State.get_set_self]
+
+theorem checkpoint_get_historyStorage :
+    checkpointState.get historyStorageAddress =
+      { Acct.nil with code := Blanc.historyStorageCode } := by
+  simp (disch := decide +kernel) only [checkpointState, State.ofList,
+    List.foldl_cons, List.foldl_nil, State.get_set_ne, State.get_set_self]
+
+theorem checkpoint_get_7002 :
+    checkpointState.get withdrawalRequestPredeployAddress =
+      { Acct.nil with code := Blanc.withdrawalRequestCode, stor := checkpoint7002Stor } := by
+  simp (disch := decide +kernel) only [checkpointState, State.ofList,
+    List.foldl_cons, List.foldl_nil, State.get_set_ne, State.get_set_self]
+
+theorem checkpoint_get_7251 :
+    checkpointState.get consolidationRequestPredeployAddress =
+      { Acct.nil with code := Blanc.consolidationRequestCode } := by
+  simp (disch := decide +kernel) only [checkpointState, State.ofList,
+    List.foldl_cons, List.foldl_nil, State.get_set_ne, State.get_set_self]
+
+theorem checkpoint_get_looper :
+    checkpointState.get looperAddress =
+      { Acct.nil with code := Blanc.Lift.FloodLooper.code } := by
+  simp (disch := decide +kernel) only [checkpointState, State.ofList,
+    List.foldl_cons, List.foldl_nil, State.get_set_ne, State.get_set_self]
+
+theorem checkpoint_get_senderE :
+    checkpointState.get senderE =
+      { Acct.nil with nonce := 0, bal := senderEFunds.toB256 } := by
+  simp (disch := decide +kernel) only [checkpointState, State.ofList,
+    List.foldl_cons, List.foldl_nil, State.get_set_self]
+
+theorem checkpoint_get_systemAddress :
+    checkpointState.get systemAddress = Acct.nil := by
+  simp (disch := decide +kernel) only [checkpointState, State.ofList,
+    List.foldl_cons, List.foldl_nil, State.get_set_ne]
+  rfl
+
+theorem checkpoint_systemEmpty :
+    checkpointState.getCode systemAddress = ByteArray.empty := by
+  rw [show checkpointState.getCode systemAddress =
+    (checkpointState.get systemAddress).code from rfl]
+  rw [checkpoint_get_systemAddress]
+  rfl
+
+theorem checkpoint_senderE_noCode :
+    (checkpointState.get senderE).code.isEmpty = true := by
+  rw [checkpoint_get_senderE]
+  rfl
+
+theorem checkpoint_senderE_fundsB :
+    2 ^ 28 * 8 + 2895 ≤ (checkpointState.get senderE).bal.toNat := by
+  have hbal : (checkpointState.get senderE).bal = senderEFunds.toB256 := by
+    rw [checkpoint_get_senderE]
+  rw [hbal, B256.toNat_toB256_of_lt senderEFunds_lt]
+  unfold senderEFunds
+  omega
+
+/-- Every non-sender account holds zero balance. -/
+theorem checkpoint_bal_other (b : Adr) (hne : b ≠ senderE) :
+    checkpointState.bal b = 0 := by
+  change (checkpointState.get b).bal = 0
+  unfold checkpointState State.ofList
+  simp only [List.foldl_cons, List.foldl_nil]
+  by_cases hE : senderE = b
+  · exact absurd hE.symm hne
+  · rw [State.get_set_ne _ hE]
+    by_cases hL : looperAddress = b
+    · rw [hL, State.get_set_self]
+      rfl
+    · rw [State.get_set_ne _ hL]
+      by_cases hC : consolidationRequestPredeployAddress = b
+      · rw [hC, State.get_set_self]
+        rfl
+      · rw [State.get_set_ne _ hC]
+        by_cases hW : withdrawalRequestPredeployAddress = b
+        · rw [hW, State.get_set_self]
+          rfl
+        · rw [State.get_set_ne _ hW]
+          by_cases hH : historyStorageAddress = b
+          · rw [hH, State.get_set_self]
+            rfl
+          · rw [State.get_set_ne _ hH]
+            by_cases hB : beaconRootsAddress = b
+            · rw [hB, State.get_set_self]
+              rfl
+            · rw [State.get_set_ne _ hB]
+              rfl
+
+theorem checkpoint_sum : sum checkpointState.bal = senderEFunds := by
+  have h0 : (0 : B256).toNat = 0 := B256.toNat_toB256_of_lt (by decide)
+  have hbal : (checkpointState.bal senderE).toNat = senderEFunds := by
+    have hb : checkpointState.bal senderE = senderEFunds.toB256 := by
+      change (checkpointState.get senderE).bal = _
+      rw [checkpoint_get_senderE]
+    rw [hb, B256.toNat_toB256_of_lt senderEFunds_lt]
+  have row : (checkpointState.bal senderE).toNat =
+      ((fun _ => (0 : B256)) senderE).toNat + senderEFunds := by
+    simp only [hbal, h0, Nat.zero_add]
+  have rest : ∀ b : Adr, b ≠ senderE →
+      checkpointState.bal b = (fun _ => (0 : B256)) b :=
+    fun b hb => checkpoint_bal_other b hb
+  have total := Blanc.sum_eq_add_of_row_add (f := fun _ => (0 : B256)) row rest
+  have zero : sum (fun _ => (0 : B256)) = 0 := Blanc.sumBelow_zero _
+  exact total.trans ((congrArg (fun n => n + senderEFunds) zero).trans (Nat.zero_add _))
+
+theorem checkpoint_sum_bound : sum checkpointState.bal < 2 ^ 256 := by
+  rw [checkpoint_sum]
+  exact senderEFunds_lt
+
+theorem checkpoint_canonical : checkpointState.Canonical := by
+  apply State.canonical_ofList
+  intro e he
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at he
+  rcases he with rfl | rfl | rfl | rfl | rfl | rfl
+  · exact Stor.canonical_empty
+  · exact Stor.canonical_empty
+  · exact Stor.canonical_ofList _
+  · exact Stor.canonical_empty
+  · exact Stor.canonical_empty
+  · exact Stor.canonical_empty
+
+theorem systemCodeInstalled_consolidation {w : State} (h : SystemCodeInstalled w) :
+    w.getCode consolidationRequestPredeployAddress = Blanc.consolidationRequestCode :=
+  h (consolidationRequestPredeployAddress, Blanc.consolidationRequestCode)
+    (by simp only [systemContracts, List.mem_cons, List.not_mem_nil, or_false, or_true])
+
+theorem checkpoint_installed : SystemCodeInstalled checkpointState := by
+  intro p hp
+  simp only [systemContracts, List.mem_cons, List.not_mem_nil, or_false] at hp
+  rcases hp with rfl | rfl | rfl | rfl
+  · rw [show checkpointState.getCode beaconRootsAddress =
+      (checkpointState.get beaconRootsAddress).code from rfl]
+    rw [checkpoint_get_beaconRoots]
+  · rw [show checkpointState.getCode historyStorageAddress =
+      (checkpointState.get historyStorageAddress).code from rfl]
+    rw [checkpoint_get_historyStorage]
+  · rw [show checkpointState.getCode withdrawalRequestPredeployAddress =
+      (checkpointState.get withdrawalRequestPredeployAddress).code from rfl]
+    rw [checkpoint_get_7002]
+  · rw [show checkpointState.getCode consolidationRequestPredeployAddress =
+      (checkpointState.get consolidationRequestPredeployAddress).code from rfl]
+    rw [checkpoint_get_7251]
+
+/-- The 7002 storage map at the checkpoint. -/
+theorem checkpoint_7002_stor :
+    checkpointState.getStor withdrawalRequestPredeployAddress = checkpoint7002Stor := by
+  have h := checkpoint_get_7002
+  exact congrArg (·.stor) h
+
+/-- Singleton storage lookup, symbolically. -/
+theorem checkpoint7002_get_self :
+    (checkpoint7002Stor).get 0 = Blanc.WithdrawalRequest.excessInhibitor.toB256 := by
+  have h : checkpoint7002Stor =
+      (Stor.empty).set 0 Blanc.WithdrawalRequest.excessInhibitor.toB256 := rfl
+  rw [h, Stor.get_set_self]
+
+/-- Empty storage reads zero, symbolically. -/
+theorem Stor_empty_get (k : B256) : (Stor.empty).get k = 0 := by
+  rw [Stor.get_eq_getD_find?, Stor.find?_empty]
+  rfl
+
+/-- A non-slot-0 read of the checkpoint 7002 map is zero. -/
+theorem checkpoint7002_get_ne (k : B256) (hne : k ≠ 0) :
+    (checkpoint7002Stor).get k = 0 := by
+  have h : checkpoint7002Stor =
+      (Stor.empty).set 0 Blanc.WithdrawalRequest.excessInhibitor.toB256 := rfl
+  rw [h, Stor.get_set_ne _ (Ne.symm hne)]
+  exact Stor_empty_get k
+
+/-- The checkpoint 7002 storage represents the initial model. -/
+theorem checkpoint_7002_rep : Blanc.WithdrawalRequest.RepresentsStorage
+    (checkpointState.getStor withdrawalRequestPredeployAddress).get
+    Blanc.WithdrawalRequest.initial := by
+  refine ⟨Blanc.WithdrawalRequest.initial_coherent, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · refine ⟨?_, ?_, ?_, ?_, ?_⟩
+    · show (2 ^ 256 - 1) < 2 ^ 256
+      omega
+    · show (0 : Nat) < 2 ^ 256
+      omega
+    · show (0 : Nat) < 2 ^ 256
+      omega
+    · show (0 : Nat) < 2 ^ 256
+      omega
+    · intro i hi
+      have hz : Blanc.WithdrawalRequest.initial.queue.length = 0 := rfl
+      rw [hz] at hi
+      exact absurd hi (Nat.not_lt_zero i)
+  · rw [checkpoint_7002_stor]
+    exact checkpoint7002_get_self
+  · rw [checkpoint_7002_stor]
+    have h := checkpoint7002_get_ne 1 (by decide)
+    exact h
+  · rw [checkpoint_7002_stor]
+    have h := checkpoint7002_get_ne 2 (by decide)
+    exact h
+  · rw [checkpoint_7002_stor]
+    have h := checkpoint7002_get_ne 3 (by decide)
+    exact h
+  · intro i hi
+    have hz : Blanc.WithdrawalRequest.initial.queue.length = 0 := rfl
+    rw [hz] at hi
+    exact absurd hi (Nat.not_lt_zero i)
+
+/-- The 7251 storage map is empty at the checkpoint, so every slot reads zero. -/
+theorem checkpoint_7251_slots (k : B256) :
+    (checkpointState.getStor consolidationRequestPredeployAddress).get k = 0 := by
+  have hget : checkpointState.getStor consolidationRequestPredeployAddress = Stor.empty := by
+    have h := checkpoint_get_7251
+    exact congrArg (·.stor) h
+  rw [hget]
+  exact Stor_empty_get k
+
+/-- Bounded queue-region reads are zero at the checkpoint: every queue slot key
+is nonzero, missing from the singleton 7002 map. -/
+theorem checkpoint_7002_queue_zero (n o : Nat)
+    (hbound : Blanc.WithdrawalRequest.queueBase n + o < 2 ^ 256) :
+    (checkpointState.getStor withdrawalRequestPredeployAddress).get
+      (Blanc.WithdrawalRequest.queueSlot n o) = 0 := by
+  rw [checkpoint_7002_stor]
+  apply checkpoint7002_get_ne
+  intro hz
+  have hlt : (Blanc.WithdrawalRequest.queueBase n + o).toB256.toNat =
+      Blanc.WithdrawalRequest.queueBase n + o :=
+    B256.toNat_toB256_of_lt hbound
+  have hge : 4 ≤ Blanc.WithdrawalRequest.queueBase n + o := by
+    unfold Blanc.WithdrawalRequest.queueBase
+    omega
+  have hslot : Blanc.WithdrawalRequest.queueSlot n o =
+      (Blanc.WithdrawalRequest.queueBase n + o).toB256 := rfl
+  rw [hslot] at hz
+  have hzN := congrArg B256.toNat hz
+  rw [hlt] at hzN
+  have h0 : (0 : B256).toNat = 0 := B256.toNat_toB256_of_lt (by decide)
+  rw [h0] at hzN
+  omega
+
+/-! ## The genesis chain -/
+
+/-- Block gas limit for the whole witness: twice block B's `2 ^ 28`, so no block
+uses more than its target and the base fee stays `1` throughout; it sits inside the
+Prague adjustment window around itself. -/
+def witnessGasLimit : Nat := 2 ^ 29
+
+/-- Hand-built genesis header (number 0, hence not via `commitHeader`): commits
+to the checkpoint state root, empty tries, no requests. -/
+def genesisHeader : Header :=
+  { parentHash := 0
+    ommersHash := emptyOmmerHash
+    coinbase := senderE
+    stateRoot := checkpointState.root
+    txsRoot := getTransactionsRoot BlockOutput.init
+    receiptRoot := getReceiptRoot BlockOutput.init
+    bloom := List.replicate 256 0
+    difficulty := 0
+    number := 0
+    gasLimit := witnessGasLimit
+    gasUsed := 0
+    timestamp := 0
+    extraData := []
+    prevRandao := 0
+    nonce := 0
+    baseFeePerGas := 1
+    withdrawalsRoot := getWithdrawalsRoot BlockOutput.init
+    blobGasUsed := 0
+    excessBlobGas := 0
+    parentBeaconBlockRoot := 0
+    requestsHash := none
+    blockAccessListHash := none
+    slotNumber := none }
+
+def genesisBlock : Block :=
+  { header := genesisHeader, txs := [], wds := [], ommers := [] }
+
+def checkpointChain : BlockChain :=
+  { blocks := [genesisBlock], state := checkpointState, chainId := 1 }
+
+theorem checkpoint_validContext : checkpointChain.ValidContext := by
+  refine ⟨by decide +kernel, checkpoint_canonical, ?_, ?_⟩
+  · decide +kernel
+  · intro tip htip
+    have ht : tip = genesisBlock := by
+      simpa only [checkpointChain, List.getLast?_singleton, Option.mem_def,
+        Option.some.injEq] using htip.symm
+    subst tip
+    rfl
+
+theorem systemCodeInstalled_withdrawal {w : State} (h : SystemCodeInstalled w) :
+    w.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode :=
+  h (withdrawalRequestPredeployAddress, Blanc.withdrawalRequestCode)
+    (by simp only [systemContracts, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true])
+
+/-! ## From a body to a configured block trace -/
+
+/-- A block without ommers or withdrawals whose header validates and commits to its
+body's results is a configured block trace. -/
+theorem blockTrace_of_body {cfg : ChainConfig} {pre : BlockChain} {block : Block}
+    {fork : Fork} {st : State} {bout : BlockOutput}
+    (hbound : sum pre.state.bal < 2 ^ 256) (hwds : block.wds = [])
+    (hid : cfg.chainId = pre.chainId)
+    (hforkAt : cfg.forkAt block.header.timestamp = .ok fork)
+    (hcovered : CoveredFork fork)
+    (hheader : validateHeader fork.ruleSet pre block.header = .ok ())
+    (hommers : block.ommers = [])
+    (hbody : applyBody (initBenv fork pre block.header) block.txs block.wds = .ok (st, bout))
+    (hgasUsed : block.header.gasUsed = bout.blockGasUsed)
+    (htxsRoot : block.header.txsRoot = getTransactionsRoot bout)
+    (hstateRoot : block.header.stateRoot = st.root)
+    (hreceiptRoot : block.header.receiptRoot = getReceiptRoot bout)
+    (hbloom : block.header.bloom = logsBloom bout.blockLogs)
+    (hwithdrawalsRoot : block.header.withdrawalsRoot = getWithdrawalsRoot bout)
+    (hblobGasUsed : block.header.blobGasUsed = bout.blobGasUsed)
+    (hrequestsHash : block.header.requestsHash = some (computeRequestsHash bout.requests)) :
+    Nonempty (ConfiguredBlockTrace cfg pre ⟨appendBlock pre.blocks block, st, pre.chainId⟩) :=
+  configuredBlockTrace_forward hbound hwds hforkAt hcovered
+    (stateTransitionUsing_forward hid hforkAt hcovered hheader hommers hbody hgasUsed htxsRoot
+      hstateRoot hreceiptRoot hbloom hwithdrawalsRoot hblobGasUsed hrequestsHash)
+
+/-! ## The three-block history -/
+
+/-- Three configured block traces from a valid checkpoint chain into a configured
+history trace. -/
+def history_of_three {cfg : ChainConfig} {checkpoint chainA chainB chainC : BlockChain}
+    (hcfg : cfg.Valid) (hctx : checkpoint.ValidContext) (hid : cfg.chainId = checkpoint.chainId)
+    (traceA : ConfiguredBlockTrace cfg checkpoint chainA)
+    (traceB : ConfiguredBlockTrace cfg chainA chainB)
+    (traceC : ConfiguredBlockTrace cfg chainB chainC) :
+    ConfiguredHistoryTrace cfg checkpoint chainC :=
+  .step (.step (.step (.refl hcfg hctx hid) traceA) traceB) traceC
+
+/-! ## The statement -/
+
+/-- **B, the mathematical-fee guarantee**, in the vocabulary of the retained word-fee
+theorem: on every configured history under the original hypotheses, every committed
+submission frame whose word fee loop ran to `output` and was paid at least `output / 17`
+also paid at least the Nat reference fee `fakeExp 1 excess 17` of the model at its incoming
+excess. -/
+def NatFeeGuarantee : Prop :=
+  ∀ (cfg : ChainConfig) (checkpoint future : BlockChain)
+    (trace : ConfiguredHistoryTrace cfg checkpoint future),
+    SystemCodeInstalled checkpoint.state →
+    trace.NoSenderAt systemAddress → trace.NoAuthorityAt systemAddress →
+    (∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ systemAddress) →
+    checkpoint.state.getCode systemAddress = ByteArray.empty →
+    Blanc.WithdrawalRequest.RepresentsStorage
+      (checkpoint.state.getStor withdrawalRequestPredeployAddress).get
+      Blanc.WithdrawalRequest.initial →
+    ∀ frame ∈ trace.settledFrames.flatMap balanceFrameObservation,
+      ∀ (model : Blanc.WithdrawalRequest.State) (iterations : Nat) (output : B256),
+        submissionPaymentFrame frame →
+        model.excess = ((frame.pre.getStor withdrawalRequestPredeployAddress).get 0).toNat →
+        WordFakeExponential.Run ((frame.pre.getStor withdrawalRequestPredeployAddress).get 0)
+          17 1 17 0 iterations output →
+        (output / 17).toNat ≤ frame.sevm.value.toNat →
+        Blanc.WithdrawalRequest.fee model ≤ frame.sevm.value.toNat
+
+/-- **The refutation of B**: a configured history under the original hypotheses with a
+committed submission frame that paid its executed word fee but less than the Nat fee. -/
+def NatFeeGuaranteeRefuted : Prop :=
+  ∃ (cfg : ChainConfig) (checkpoint future : BlockChain)
+    (trace : ConfiguredHistoryTrace cfg checkpoint future),
+    SystemCodeInstalled checkpoint.state ∧
+    trace.NoSenderAt systemAddress ∧ trace.NoAuthorityAt systemAddress ∧
+    (∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ systemAddress) ∧
+    checkpoint.state.getCode systemAddress = ByteArray.empty ∧
+    Blanc.WithdrawalRequest.RepresentsStorage
+      (checkpoint.state.getStor withdrawalRequestPredeployAddress).get
+      Blanc.WithdrawalRequest.initial ∧
+    ∃ frame ∈ trace.settledFrames.flatMap balanceFrameObservation,
+      ∃ (model : Blanc.WithdrawalRequest.State) (iterations : Nat) (output : B256),
+        submissionPaymentFrame frame ∧
+        model.excess = ((frame.pre.getStor withdrawalRequestPredeployAddress).get 0).toNat ∧
+        WordFakeExponential.Run ((frame.pre.getStor withdrawalRequestPredeployAddress).get 0)
+          17 1 17 0 iterations output ∧
+        (output / 17).toNat ≤ frame.sevm.value.toNat ∧
+        frame.sevm.value.toNat < Blanc.WithdrawalRequest.fee model
+
+theorem not_natFeeGuarantee_of_refuted (h : NatFeeGuaranteeRefuted) : ¬ NatFeeGuarantee := by
+  intro guarantee
+  obtain ⟨cfg, checkpoint, future, trace, installed, senders, authorities, avoid, systemEmpty,
+    init, frame, member, model, iterations, output, payment, excess, run, paid, below⟩ := h
+  exact Nat.lt_irrefl _ (Nat.lt_of_lt_of_le below
+    (guarantee cfg checkpoint future trace installed senders authorities avoid systemEmpty init
+      frame member model iterations output payment excess run paid))
+
+/-- The witness history's remaining inputs: the three-block configured history with the
+original hypotheses, and block C's submission frame among its settled frames at excess
+`2893` and value `2 ^ 245`. -/
+structure RefutationWitness where
+  cfg : ChainConfig
+  checkpoint : BlockChain
+  future : BlockChain
+  trace : ConfiguredHistoryTrace cfg checkpoint future
+  installed : SystemCodeInstalled checkpoint.state
+  senders : trace.NoSenderAt systemAddress
+  authorities : trace.NoAuthorityAt systemAddress
+  avoid : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+    root.sevm.currentTarget ≠ systemAddress
+  systemEmpty : checkpoint.state.getCode systemAddress = ByteArray.empty
+  init : Blanc.WithdrawalRequest.RepresentsStorage
+    (checkpoint.state.getStor withdrawalRequestPredeployAddress).get
+    Blanc.WithdrawalRequest.initial
+  frame : Exec.Frame
+  member : frame ∈ trace.settledFrames.flatMap balanceFrameObservation
+  payment : submissionPaymentFrame frame
+  excess : (frame.pre.getStor withdrawalRequestPredeployAddress).get 0 = (2893 : Nat).toB256
+  value : frame.sevm.value = (2 ^ 245 : Nat).toB256
+
+/-- The Nat fee at excess `2893` (U2a's `fee_2893`). -/
+def natFee2893 : Nat :=
+  80668064690921409049190791237320678716946849613533250306370202067869504081
+
+/-- The word fee loop's output at excess `2893` (U2a's `word_run_2893_existing`). -/
+def wordOutput2893 : Nat :=
+  545485220060489857066268109499810576327418688227975047986437738206577926843
+
+/-- The executed word fee at excess `2893` (U2a's `word_run_2893_fee`). -/
+def wordFee2893 : Nat :=
+  32087365885911168062721653499988857431024628719292649881555161070975172167
+
+/-- **B is refuted by the witness.**  The numeric inputs are stated in the shapes of
+U2a's `NumericFacts` (`word_run_2893_existing`, `word_run_2893_fee`,
+`word_fee_2893_le_two_pow_245`, `fee_2893`, `two_pow_245_lt_nat_fee_2893`), which
+discharge them by citation in `nat_fee_guarantee_refuted`. -/
+theorem natFeeGuaranteeRefuted_of_witness (w : RefutationWitness)
+    (word_run_2893_existing : WordFakeExponential.Run (2893 : Nat).toB256 (17 : Nat).toB256
+      (1 : Nat).toB256 (17 : Nat).toB256 (0 : Nat).toB256 457 wordOutput2893.toB256)
+    (word_run_2893_fee : (wordOutput2893.toB256 / (17 : Nat).toB256).toNat = wordFee2893)
+    (word_fee_2893_le_two_pow_245 : wordFee2893 ≤ 2 ^ 245)
+    (fee_2893 : ∀ {state : Blanc.WithdrawalRequest.State}, state.excess = 2893 →
+      Blanc.WithdrawalRequest.fee state = natFee2893)
+    (two_pow_245_lt_nat_fee_2893 : 2 ^ 245 < natFee2893) :
+    NatFeeGuaranteeRefuted := by
+  have h17 : (17 : Nat).toB256 = (17 : B256) := by decide
+  have h1 : (1 : Nat).toB256 = (1 : B256) := by decide
+  have h0 : (0 : Nat).toB256 = (0 : B256) := by decide
+  have h2893 : ((2893 : Nat).toB256).toNat = 2893 := B256.toNat_toB256_of_lt (by decide)
+  have h245 : ((2 ^ 245 : Nat).toB256).toNat = 2 ^ 245 := B256.toNat_toB256_of_lt (by decide)
+  rw [h17, h1, h0] at word_run_2893_existing
+  rw [h17] at word_run_2893_fee
+  refine ⟨w.cfg, w.checkpoint, w.future, w.trace, w.installed, w.senders, w.authorities, w.avoid,
+    w.systemEmpty, w.init, w.frame, w.member, ⟨2893, 0, 0, 0, []⟩, 457, wordOutput2893.toB256,
+    w.payment, ?_, ?_, ?_, ?_⟩
+  · rw [w.excess, h2893]
+  · rw [w.excess]; exact word_run_2893_existing
+  · rw [w.value, h245, word_run_2893_fee]; exact word_fee_2893_le_two_pow_245
+  · rw [w.value, h245, fee_2893 rfl]; exact two_pow_245_lt_nat_fee_2893
+
+/-- The witness from three configured block traces: per-block sender, authority and
+creation-frame facts, and block C's submission frame. -/
+def RefutationWitness.ofBlocks {cfg : ChainConfig} {checkpoint chainA chainB chainC : BlockChain}
+    (hcfg : cfg.Valid) (hctx : checkpoint.ValidContext) (hid : cfg.chainId = checkpoint.chainId)
+    (traceA : ConfiguredBlockTrace cfg checkpoint chainA)
+    (traceB : ConfiguredBlockTrace cfg chainA chainB)
+    (traceC : ConfiguredBlockTrace cfg chainB chainC)
+    (installed : SystemCodeInstalled checkpoint.state)
+    (sendersA : traceA.bodyTrace.transactions.NoSenderAt systemAddress)
+    (sendersB : traceB.bodyTrace.transactions.NoSenderAt systemAddress)
+    (sendersC : traceC.bodyTrace.transactions.NoSenderAt systemAddress)
+    (authoritiesA : ∀ p ∈ traceA.bodyTrace.decodedTxs.putIndex, ∀ auth ∈ p.2.auths,
+      ∀ authority, recoverAuthority auth = .ok authority → authority ≠ systemAddress)
+    (authoritiesB : ∀ p ∈ traceB.bodyTrace.decodedTxs.putIndex, ∀ auth ∈ p.2.auths,
+      ∀ authority, recoverAuthority auth = .ok authority → authority ≠ systemAddress)
+    (authoritiesC : ∀ p ∈ traceC.bodyTrace.decodedTxs.putIndex, ∀ auth ∈ p.2.auths,
+      ∀ authority, recoverAuthority auth = .ok authority → authority ≠ systemAddress)
+    (avoidA : ∀ root ∈ traceA.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ systemAddress)
+    (avoidB : ∀ root ∈ traceB.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ systemAddress)
+    (avoidC : ∀ root ∈ traceC.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ systemAddress)
+    (systemEmpty : checkpoint.state.getCode systemAddress = ByteArray.empty)
+    (init : Blanc.WithdrawalRequest.RepresentsStorage
+      (checkpoint.state.getStor withdrawalRequestPredeployAddress).get
+      Blanc.WithdrawalRequest.initial)
+    (frame : Exec.Frame)
+    (memberC : frame ∈ traceC.settledFrames.flatMap balanceFrameObservation)
+    (payment : submissionPaymentFrame frame)
+    (excess : (frame.pre.getStor withdrawalRequestPredeployAddress).get 0 = (2893 : Nat).toB256)
+    (value : frame.sevm.value = (2 ^ 245 : Nat).toB256) : RefutationWitness :=
+  { cfg := cfg, checkpoint := checkpoint, future := chainC
+    trace := history_of_three hcfg hctx hid traceA traceB traceC
+    installed := installed
+    senders := ⟨⟨⟨trivial, sendersA⟩, sendersB⟩, sendersC⟩
+    authorities := ⟨⟨⟨trivial, authoritiesA⟩, authoritiesB⟩, authoritiesC⟩
+    avoid := by
+      intro root member
+      simp only [history_of_three, ConfiguredHistoryTrace.rawFrames, List.nil_append,
+        List.mem_append] at member
+      rcases member with (hA | hB) | hC
+      · exact avoidA root hA
+      · exact avoidB root hB
+      · exact avoidC root hC
+    systemEmpty := systemEmpty
+    init := init
+    frame := frame
+    member := by
+      simp only [history_of_three, ConfiguredHistoryTrace.settledFrames, List.nil_append,
+        List.flatMap_append]
+      exact List.mem_append_right _ memberC
+    payment := payment
+    excess := excess
+    value := value }
+
+end Blanc.Lift.WithdrawalRequest.FeeCounterexample

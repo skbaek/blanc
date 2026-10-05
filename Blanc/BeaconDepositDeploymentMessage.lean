@@ -38,7 +38,7 @@ private theorem chargeCodeGas_code
   obtain ⟨tail, hcons⟩ := code_cons_jumpdest
   have hlen := constructorAppendedRuntime_length_exact
   rw [processCreateMessage.chargeCodeGas_legacy_eq_ok hstateGas
-    (by rw [houtput, hcons]; simp <;> decide) (by rw [houtput, hlen]; exact hgas)
+    (by rw [houtput, hcons]; simp only [List.head?_cons, ne_eq, Option.some.injEq] <;> decide) (by rw [houtput, hlen]; exact hgas)
     (by rw [houtput, hlen]; exact hmax), houtput, hlen]
   rfl
 
@@ -390,13 +390,14 @@ theorem processMessageCall_establishes_artifact
   have hrun :
       processMessageCall msg = .ok (createPost.state, out) := by
     unfold processMessageCall
-    rw [show msg.target.isNone = true by simp [htargetNone]]
+    rw [show msg.target.isNone = true by simp only [htargetNone, Option.isNone_none]]
     unfold processMessageCall.create
     simp only [if_true]
     rw [htarget]
-    simp [hnoCodeOrNonce, hnoStorage, Except.bimap, hcreate'.run,
-      hcreate'.error, htoNat, out, messageOutputOf,
-      directCreateMessageOutputOf, hfork.rules_stateGas_none]
+    simp only [hfork.rules_stateGas_none, hnoCodeOrNonce, hnoStorage, Bool.or_self,
+      Bool.false_eq_true, ↓reduceIte, Except.bimap, hcreate'.run, id_eq, Option.isNone_iff_eq_none,
+      Except.bind_ok, Nat.cast_zero, hcreate'.error, htoNat, messageOutputOf,
+      directCreateMessageOutputOf, out]
     rfl
   refine ⟨createPost.state, out, {
     target_eq := htarget
@@ -413,10 +414,8 @@ theorem processMessageCall_establishes_artifact
     refundCounter := by rfl
     error := ?_
     accountsToDelete := ?_ }⟩
-  · simpa [Devm.getStor, Devm.getAcct, State.getStor] using
-      hcreate'.storage
-  · simpa [Devm.getStor, Devm.getAcct, State.getStor] using
-      hcreate'.artifact
+  · simpa only [State.getStor, Devm.getStor, Devm.getAcct] using hcreate'.storage
+  · simpa only [State.getStor, Devm.getStor, Devm.getAcct] using hcreate'.artifact
   · simpa only [out, messageOutputOf, directCreateMessageOutputOf] using
       hcreate'.logs
   · simpa only [out, messageOutputOf, directCreateMessageOutputOf] using

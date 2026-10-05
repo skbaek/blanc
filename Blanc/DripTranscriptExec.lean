@@ -59,7 +59,7 @@ theorem callKinds_cons (op : RealizedStep) (rest : List RealizedStep) :
     callKinds (op :: rest) =
       (if op.kind.isCall = true then [op.kind] else []) ++ callKinds rest := by
   unfold callKinds
-  cases h : op.kind.isCall <;> simp [h]
+  cases h : op.kind.isCall <;> simp only [List.map_cons, h, Bool.false_eq_true, not_false_eq_true, List.filter_cons_of_neg, ↓reduceIte, List.nil_append, List.filter_cons_of_pos, List.cons_append]
 
 /-- A frame not executing `ca` contributes no transcript entry. -/
 theorem frameCall_of_target_ne {coalition : Finset Adr} {ca : Adr}
@@ -180,7 +180,7 @@ theorem Exec.CoreDripTranscript.error
     {error : EvmError × Devm} :
     Exec.CoreDripTranscript coalition ca pc sevm pre (.error error) := by
   intro _ committed
-  simp [Execution.commits] at committed
+  simp only [Execution.commits, Bool.false_eq_true] at committed
 
 /-- The compiled DRIP frame handler.  The head step's kind is the frame's
 computed tag, so the frame's own transcript entry is the head step's call
@@ -292,7 +292,7 @@ theorem Exec.CoreDripTranscript.last
   intro run committed hfork _ precondition _ _ _
   cases out with
   | error error =>
-      simp [Execution.commits] at committed
+      simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have sumNof : sum pre.state.bal < 2 ^ 256 := precondition.side
       rcases (carrier coalition ca).ofStorageEqBalanceMono_observed
@@ -352,9 +352,11 @@ theorem Exec.CoreDripTranscript.nextSome
     Exec.CoreDripTranscript coalition ca pc sevm pre out := by
   cases n with
   | reg r =>
-      simp [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at step
+      simp only [Ninst.StepRun, Ninst.step_reg, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
+        false_and] at step
   | push xs length =>
-      simp [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at step
+      simp only [Ninst.StepRun, Ninst.step_push, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
+        false_and] at step
   | dupn imm =>
       cases (Step.run_ofExecution.mp step).1
   | swapn imm =>

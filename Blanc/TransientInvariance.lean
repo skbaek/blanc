@@ -176,8 +176,8 @@ instance {x} : Ninst.Hinv Devm.transientStorage (Ninst.pushB256 x) := ⟨by
   have run := Ninst.run_push_eq h
   rcases hc : chargeGas
       (if (x.toBytes.sig) = [] then gBase else gVerylow) s with _ | s_gas
-  · rw [hc] at run; dsimp [bind, Except.bind] at run; contradiction
-  · rw [hc] at run; dsimp [bind, Except.bind] at run
+  · rw [hc] at run; dsimp only [Except.bind_error] at run; contradiction
+  · rw [hc] at run; dsimp only [Except.bind_ok] at run
     rcases hp : Devm.push x.toBytes.sig.toB256 s_gas with _ | s''
     · rw [hp] at run; contradiction
     · rw [hp] at run

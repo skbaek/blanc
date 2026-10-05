@@ -313,7 +313,8 @@ theorem pauseCall_targetWord_survives {sevm : Sevm} {target : Adr}
   have hmem : callPost.memory =
       (callPre.memory.extends [(284, 36), (0, 0)]).write 0
         (child.output.take 0) := by rw [hcmem, hpmem]
-  exact MemWordAt.extendsWrite hmem (Or.inr (by simp)) window
+  exact MemWordAt.extendsWrite hmem (Or.inr (by simp only [List.take_zero, List.length_nil,
+    add_zero, zero_le])) window
 
 /-- The EIP-7702 disjunct, read off a delegation resolution rather than
 excluded by a premise: either the account carries no designator and the code
@@ -1276,7 +1277,7 @@ private lemma sliceD_split {ξ : Type} (xs : List ξ) (d : ξ) :
       xs.sliceD m (a + b) d = xs.sliceD m a d ++ xs.sliceD (m + a) b d := by
   intro a
   induction a with
-  | zero => intro m b; simp [List.sliceD, List.takeD]
+  | zero => intro m b; simp only [List.sliceD, zero_add, List.takeD, add_zero, List.nil_append]
   | succ a ih =>
     intro m b
     rw [show a + 1 + b = (a + b) + 1 from by omega, List.sliceD_succ,

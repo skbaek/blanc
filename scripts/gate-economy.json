@@ -58,6 +58,15 @@
    ]
   },
   {
+   "id": "explicit-simp",
+   "work": [
+    "static-corpus"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
+  },
+  {
    "id": "proof-recipes",
    "work": [
     "static-corpus",
@@ -626,7 +635,10 @@
    "prerequisites": [
     "lake-build"
    ],
-   "historical_catches": []
+   "historical_catches": [
+    "pruning removed three instances required by unchanged claim/access scripts; native collection refused before yielding a census"
+   ],
+   "material_identity": "conservative: fresh native script elaboration identifies type-directed methods, selected instances and private owners that library-only terms or textual mentions miss; source/setup identities and census ownership must reconcile"
   },
   {
    "id": "leaf-audit-self-test",

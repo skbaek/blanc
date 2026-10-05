@@ -72,18 +72,6 @@ theorem weth9Spec_preservesAdmitted (ca : Adr) :
     weth9Spec.PreservesAdmitted ca weth9Entry :=
   weth9Spec.preserves_inv_admitted ca weth9Entry (weth9Spec_soundAdmitted ca)
 
-/-- Counterpart of `weth_preserves_solvent`: every successful execution whose
-entered WETH9 frames are admitted takes the frame precondition to the frame
-postcondition. -/
-theorem weth9_preserves_solvent (ca : Adr) (sevm : Sevm) (pre post : Devm)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (execution : Exec 0 sevm pre (.ok post))
-    (admitted : Exec.FrameAdmitted ca weth9Entry execution)
-    (hcode : sevm.currentTarget = ca → some sevm.code.toList = weth9Sem.image)
-    (hwf : sevm.currentTarget = ca → Mem.Wf pre.memory)
-    (hpre : weth9Spec.Pre ca sevm pre) : weth9Spec.Post ca sevm post :=
-  weth9Spec_preservesAdmitted ca sevm pre post hfork execution admitted hcode hwf hpre
-
 /-- History rung, counterpart of `chain_preserves_solvent`: a configured
 history of blocks whose entered WETH9 frames are admitted preserves the WETH9
 state invariant.

@@ -64,7 +64,7 @@ theorem sig_site1 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
   have hw1 : img3.sliceD 384 32 0 = (cdWord sevm sP.toNat).toBytes := by
     rw [himg3, sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg2,
       sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg1]
-    simpa using sliceD_cd_word img sevm 384 sP.toNat 64 0 (by omega)
+    simpa only [add_zero] using sliceD_cd_word img sevm 384 sP.toNat 64 0 (by omega)
   have hw2 : img3.sliceD (384 + 32) 32 0 = (cdWord sevm (sP.toNat + 32)).toBytes := by
     rw [himg3, sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg2,
       sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg1]
@@ -74,8 +74,8 @@ theorem sig_site1 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
       (R := 2 :: 0 :: pkR :: 0x80 :: a :: rt :: 96 :: sP :: R)
       (X := t_08f8_c12) (img := img3) (n := 832) (s := 384) (d := 448)
       (x1 := Nat.toB256 384) (x3 := Nat.toB256 448) (x4 := Nat.toB256 352)
-      prog_14 (by simp) hwf3 hr3 hs3 (by decide) (by decide) (by decide) (by decide) (by decide)
-      (by omega) hfp3 hw1 hw2 (by simp; omega) hsha.nodeleg hsha.warm hsha.pre hsha.fork
+      prog_14 (by simp only [List.not_mem_nil, not_false_eq_true]) hwf3 hr3 hs3 (by decide) (by decide) (by decide) (by decide) (by decide)
+      (by omega) hfp3 hw1 hw2 (by simp only [List.length_cons]; omega) hsha.nodeleg hsha.warm hsha.pre hsha.fork
       hdepth (by omega)
   rw [cdWord_pair] at hpost
   refine ⟨b', M', hpost, hwf', hr', by rw [hs']; rfl, fun r kont => ?_⟩
@@ -87,44 +87,44 @@ theorem sig_site1 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
   refine rxc_dest ?_
   refine rxc_pop ?_
   refine rxc_mload (c := 3) (v := pkR) ?_ (by rw [h352]; exact read_word hr 352 hpk) ?_
-    (by simp; omega) ?_
+    (by simp only [List.length_cons]; omega) ?_
   · rw [h352]; exact charge_covered hs (by decide) (by decide)
   · rw [h352]; exact read_covered hs (by decide) (by decide)
   refine rxc_swap (n := 0) rfl ?_
   refine rxc_pop ?_
-  refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_dup (n := 0) rfl (by simp; omega) ?_
-  refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_dup (n := 4) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 10) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 12) rfl (by simp; omega) ?_
-  refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_callRet prog_13 (slice13 (dv := Nat.toB256 64) (av := sP) (by simp; omega)
+  refine rxc_push rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_push rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 0) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_push rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_push rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 4) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 10) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 12) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_push rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_callRet prog_13 (slice13 (dv := Nat.toB256 64) (av := sP) (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons, Nat.reduceLeDiff]; omega)
     (by decide) (by decide) (by decide) (push0_add sP)) ?_
   unfold t_0884_c12
   refine rxc_dest ?_
-  refine rxc_push rfl (by simp; omega) ?_
+  refine rxc_push rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
   refine rxc_mload (c := 3) (v := Nat.toB256 352) ?_ (by rw [h40]; exact read_word hr 64 hfp) ?_
-    (by simp; omega) ?_
+    (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
   · rw [h40]; exact charge_covered hs (by decide) (by decide)
   · rw [h40]; exact read_covered hs (by decide) (by decide)
-  refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_add' (v := Nat.toB256 384) (by decide) (by simp; omega) ?_
-  refine rxc_dup (n := 0) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 3) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 3) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 0) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 2) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 4) rfl (by simp; omega) ?_
+  refine rxc_push rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_add' (v := Nat.toB256 384) (by decide) (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 0) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 3) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 3) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 0) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 2) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 4) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
   refine rxc_calldatacopy (c := 9) ?_ (by rw [toNat_toB256' (by decide)]) ?_
   · rw [St.extCost_eq hs, toNat_toB256' (by decide), toNat_toB256' (by decide),
       memExtSize_of_le (by decide) (by decide), Nat.sub_self]
     rfl
-  refine rxc_dup (n := 0) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 3) rfl (by simp; omega) ?_
-  refine rxc_add' (v := Nat.toB256 448) (by decide) (by simp; omega) ?_
+  refine rxc_dup (n := 0) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 3) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_add' (v := Nat.toB256 448) (by decide) (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
   refine rxc_swap (n := 2) rfl ?_
   refine rxc_pop ?_
   refine rxc_pop ?_
@@ -133,42 +133,42 @@ theorem sig_site1 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
   refine rxc_pop ?_
   refine rxc_pop ?_
   refine rxc_pop ?_
-  refine rxc_push rfl (by simp; omega) ?_
+  refine rxc_push rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
   refine rxc_mload (c := 3) (v := Nat.toB256 352) ?_ (by rw [h40]; exact read_word hr1 64 hfp1) ?_
-    (by simp; omega) ?_
+    (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
   · rw [h40]; exact charge_covered hs1 (by decide) (by decide)
   · rw [h40]; exact read_covered hs1 (by decide) (by decide)
-  refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_dup (n := 1) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 3) rfl (by simp; omega) ?_
-  refine rxc_sub' (v := Nat.toB256 96) (by decide) (by simp; omega) ?_
-  refine rxc_sub' (v := Nat.toB256 64) (by decide) (by simp; omega) ?_
-  refine rxc_dup (n := 1) rfl (by simp; omega) ?_
+  refine rxc_push rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 1) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 3) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_sub' (v := Nat.toB256 96) (by decide) (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_sub' (v := Nat.toB256 64) (by decide) (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 1) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
   refine rxc_mstore (c := 3) (M' := M2) ?_ (by rw [toNat_toB256' (by decide)]; rfl) ?_
   · rw [toNat_toB256' (by decide)]; exact charge_covered hs1 (by decide) (by decide)
   refine rxc_swap (n := 0) rfl ?_
-  refine rxc_push rfl (by simp; omega) ?_
+  refine rxc_push rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
   refine rxc_mstore (c := 3) (M' := M3) ?_ (by rw [h40]) ?_
   · rw [h40]; exact charge_covered hs2 (by decide) (by decide)
-  refine rxc_push rfl (by simp; omega) ?_
+  refine rxc_push rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
   refine rxc_mload (c := 3) (v := Nat.toB256 448) ?_ (by rw [h40]; exact read_word hr3 64 hfp3) ?_
-    (by simp; omega) ?_
+    (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
   · rw [h40]; exact charge_covered hs3 (by decide) (by decide)
   · rw [h40]; exact read_covered hs3 (by decide) (by decide)
-  refine rxc_dup (n := 0) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 2) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 0) rfl (by simp; omega) ?_
+  refine rxc_dup (n := 0) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 2) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 0) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
   refine rxc_mload (c := 3) (v := Nat.toB256 64) ?_
-    (by rw [toNat_toB256' (by decide)]; exact read_word hr3 352 hlen3) ?_ (by simp; omega) ?_
+    (by rw [toNat_toB256' (by decide)]; exact read_word hr3 352 hlen3) ?_ (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
   · rw [toNat_toB256' (by decide)]; exact charge_covered hs3 (by decide) (by decide)
   · rw [toNat_toB256' (by decide)]; exact read_covered hs3 (by decide) (by decide)
   refine rxc_swap (n := 0) rfl ?_
-  refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_add' (v := Nat.toB256 384) (by decide) (by simp; omega) ?_
+  refine rxc_push rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_add' (v := Nat.toB256 384) (by decide) (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
   refine rxc_swap (n := 0) rfl ?_
-  refine rxc_dup (n := 0) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 3) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 3) rfl (by simp; omega) ?_
+  refine rxc_dup (n := 0) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 3) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 3) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
   rw [t_08bb_c12_eq]
   exact hc
 
@@ -245,7 +245,7 @@ theorem sig_site2 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
     rw [himg4, sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg3,
       sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg2,
       sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg1]
-    simpa using sliceD_cd_word img sevm 480 p 32 0 (by omega)
+    simpa only [add_zero] using sliceD_cd_word img sevm 480 p 32 0 (by omega)
   have hw2 : img4.sliceD (480 + 32) 32 0 = (0 : B256).toBytes := by
     rw [himg4, sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg3,
       sliceD_writeAt_out (by rw [B256.length_toBytes]; omega), himg2]
@@ -256,8 +256,8 @@ theorem sig_site2 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
       (R := h1 :: 2 :: 0 :: pkR :: 0x80 :: a :: rt :: 96 :: sP :: R)
       (X := t_09f4_c14) (img := img4) (n := 832) (s := 480) (d := 544)
       (x1 := Nat.toB256 480) (x3 := Nat.toB256 544) (x4 := Nat.toB256 448)
-      prog_15 (by simp) hwf4 hr4 hs4 (by decide) (by decide) (by decide) (by decide) (by decide)
-      (by omega) hfp4 hw1 hw2 (by simp; omega) hsha.nodeleg hsha.warm hsha.pre hsha.fork
+      prog_15 (by simp only [List.not_mem_nil, not_false_eq_true]) hwf4 hr4 hs4 (by decide) (by decide) (by decide) (by decide) (by decide)
+      (by omega) hfp4 hw1 hw2 (by simp only [List.length_cons]; omega) hsha.nodeleg hsha.warm hsha.pre hsha.fork
       hdepth (by omega)
   rw [cdWord_toBytes] at hpost
   refine ⟨b', M', hpost, hwf', hr', by rw [hs']; rfl, fun r kont => ?_⟩
@@ -269,35 +269,35 @@ theorem sig_site2 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
   refine rxc_dest ?_
   refine rxc_pop ?_
   refine rxc_mload (c := 3) (v := h1) ?_ (by rw [h448]; exact read_word hr 448 hh1) ?_
-    (by simp; omega) ?_
+    (by simp only [List.length_cons]; omega) ?_
   · rw [h448]; exact charge_covered hs (by decide) (by decide)
   · rw [h448]; exact read_covered hs (by decide) (by decide)
-  refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_dup (n := 9) rfl (by simp; omega) ?_
-  refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_dup (n := 1) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 13) rfl (by simp; omega) ?_
-  refine rxc_push rfl (by simp; omega) ?_
+  refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_dup (n := 9) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_dup (n := 1) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_dup (n := 13) rfl (by simp only [List.length_cons]; omega) ?_
+  refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rxc_callRet prog_13 (slice13 (dv := Nat.toB256 32) (av := Nat.toB256 p)
-    (by simp; omega) (by decide) (by decide) (by decide) (push40_add (by omega))) ?_
+    (by simp only [List.length_cons, Nat.reduceLeDiff]; omega) (by decide) (by decide) (by decide) (push40_add (by omega))) ?_
   unfold t_097b_c14
   refine rxc_dest ?_
-  refine rxc_push rfl (by simp; omega) ?_
+  refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rxc_mload (c := 3) (v := Nat.toB256 448) ?_ (by rw [h40]; exact read_word hr 64 hfp) ?_
-    (by simp; omega) ?_
+    (by simp only [List.length_cons]; omega) ?_
   · rw [h40]; exact charge_covered hs (by decide) (by decide)
   · rw [h40]; exact read_covered hs (by decide) (by decide)
-  refine rxc_push rfl (by simp; omega) ?_
+  refine rxc_push rfl (by simp only [List.length_cons]; omega) ?_
   refine rxc_swap (n := 0) rfl ?_
-  refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_add' (v := Nat.toB256 480) (by decide) (by simp; omega) ?_
-  refine rxc_dup (n := 0) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 4) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 4) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 0) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 2) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 4) rfl (by simp; omega) ?_
+  refine rxc_push rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_add' (v := Nat.toB256 480) (by decide) (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 0) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 4) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 4) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 0) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 2) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 4) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
   refine rxc_calldatacopy (c := 6) ?_ (by rw [toNat_toB256' (by decide), toNat_toB256' (by omega),
     toNat_toB256' (by decide)]) ?_
   · rw [St.extCost_eq hs, toNat_toB256' (by decide), toNat_toB256' (by decide),
@@ -306,37 +306,37 @@ theorem sig_site2 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
   refine rxc_swap (n := 1) rfl ?_
   refine rxc_swap (n := 0) rfl ?_
   refine rxc_swap (n := 1) rfl ?_
-  refine rxc_add' (v := Nat.toB256 512) (by decide) (by simp; omega) ?_
+  refine rxc_add' (v := Nat.toB256 512) (by decide) (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
   refine rxc_swap (n := 2) rfl ?_
-  refine rxc_dup (n := 3) rfl (by simp; omega) ?_
+  refine rxc_dup (n := 3) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, Nat.reduceMod, List.set_cons_succ, List.length_cons]; omega) ?_
   refine rxc_mstore (c := 3) (M' := M2) ?_ (by rw [toNat_toB256' (by decide)]; rfl) ?_
   · rw [toNat_toB256' (by decide)]; exact charge_covered hs1 (by decide) (by decide)
   refine rxc_pop ?_
   refine rxc_pop ?_
-  refine rxc_push rfl (by simp; omega) ?_
-  refine rxc_dup (n := 0) rfl (by simp; omega) ?_
+  refine rxc_push rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 0) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
   refine rxc_mload (c := 3) (v := Nat.toB256 448) ?_ (by rw [h40]; exact read_word hr2 64 hfp2) ?_
-    (by simp; omega) ?_
+    (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
   · rw [h40]; exact charge_covered hs2 (by decide) (by decide)
   · rw [h40]; exact read_covered hs2 (by decide) (by decide)
-  refine rxc_dup (n := 0) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 3) rfl (by simp; omega) ?_
-  refine rxc_sub' (v := Nat.toB256 64) (by decide) (by simp; omega) ?_
-  refine rxc_dup (n := 1) rfl (by simp; omega) ?_
+  refine rxc_dup (n := 0) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 3) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_sub' (v := Nat.toB256 64) (by decide) (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 1) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
   refine rxc_mstore (c := 3) (M' := M3) ?_ (by rw [toNat_toB256' (by decide)]) ?_
   · rw [toNat_toB256' (by decide)]; exact charge_covered hs2 (by decide) (by decide)
-  refine rxc_push rfl (by simp; omega) ?_
+  refine rxc_push rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.length_cons]; omega) ?_
   refine rxc_swap (n := 2) rfl ?_
-  refine rxc_dup (n := 3) rfl (by simp; omega) ?_
-  refine rxc_add' (v := Nat.toB256 544) (by decide) (by simp; omega) ?_
+  refine rxc_dup (n := 3) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, Nat.reduceMod, List.set_cons_succ, List.length_cons]; omega) ?_
+  refine rxc_add' (v := Nat.toB256 544) (by decide) (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, Nat.reduceMod, List.set_cons_succ, List.length_cons]; omega) ?_
   refine rxc_swap (n := 1) rfl ?_
-  refine rxc_dup (n := 2) rfl (by simp; omega) ?_
+  refine rxc_dup (n := 2) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, Nat.reduceMod, List.set_cons_succ, Nat.one_mod, List.length_cons]; omega) ?_
   refine rxc_swap (n := 0) rfl ?_
   refine rxc_mstore (c := 3) (M' := M4) ?_ (by rw [h40]) ?_
   · rw [h40]; exact charge_covered hs3 (by decide) (by decide)
-  refine rxc_dup (n := 0) rfl (by simp; omega) ?_
+  refine rxc_dup (n := 0) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, Nat.reduceMod, List.set_cons_succ, Nat.one_mod, List.length_cons]; omega) ?_
   refine rxc_mload (c := 3) (v := Nat.toB256 64) ?_
-    (by rw [toNat_toB256' (by decide)]; exact read_word hr4 448 hlen4) ?_ (by simp; omega) ?_
+    (by rw [toNat_toB256' (by decide)]; exact read_word hr4 448 hlen4) ?_ (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, Nat.reduceMod, List.set_cons_succ, Nat.one_mod, List.length_cons]; omega) ?_
   · rw [toNat_toB256' (by decide)]; exact charge_covered hs4 (by decide) (by decide)
   · rw [toNat_toB256' (by decide)]; exact read_covered hs4 (by decide) (by decide)
   refine rxc_swap (n := 0) rfl ?_
@@ -345,14 +345,14 @@ theorem sig_site2 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
   refine rxc_swap (n := 0) rfl ?_
   refine rxc_swap (n := 2) rfl ?_
   refine rxc_pop ?_
-  refine rxc_dup (n := 2) rfl (by simp; omega) ?_
+  refine rxc_dup (n := 2) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.set_cons_succ, Nat.reduceMod, List.length_cons]; omega) ?_
   refine rxc_swap (n := 1) rfl ?_
-  refine rxc_dup (n := 4) rfl (by simp; omega) ?_
-  refine rxc_add' (v := Nat.toB256 480) (by decide) (by simp; omega) ?_
+  refine rxc_dup (n := 4) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.set_cons_succ, Nat.reduceMod, Nat.one_mod, List.length_cons]; omega) ?_
+  refine rxc_add' (v := Nat.toB256 480) (by decide) (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.set_cons_succ, Nat.reduceMod, Nat.one_mod, List.length_cons]; omega) ?_
   refine rxc_swap (n := 0) rfl ?_
-  refine rxc_dup (n := 0) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 3) rfl (by simp; omega) ?_
-  refine rxc_dup (n := 3) rfl (by simp; omega) ?_
+  refine rxc_dup (n := 0) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.set_cons_succ, Nat.reduceMod, Nat.one_mod, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 3) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.set_cons_succ, Nat.reduceMod, Nat.one_mod, List.length_cons]; omega) ?_
+  refine rxc_dup (n := 3) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, List.set_cons_succ, Nat.reduceMod, Nat.one_mod, List.length_cons]; omega) ?_
   rw [t_09b7_c14_eq]
   exact hc
 
@@ -379,7 +379,7 @@ theorem sig_site3 {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
           (St b (Nat.toB256 32 :: Nat.toB256 544 :: h1 :: 2 :: R) M (G + 751)) t_0a66_c15 r := by
   obtain ⟨b', M', hpost, hwf', hr', hs', hrun⟩ :=
     pair_mem_sha (fs := prog) (sevm := sevm) (C := []) (b := b) (M := M) (G := G) (R := R)
-      (X := t_0ada_c15) (img := img) (n := 832) (f := 544) prog_16 (by simp) hwf hr hs (by decide)
+      (X := t_0ada_c15) (img := img) (n := 832) (f := 544) prog_16 (by simp only [List.not_mem_nil, not_false_eq_true]) hwf hr hs (by decide)
       (by decide) (by decide) (by decide) (by decide) hfp hh2 (by omega) hsha.nodeleg hsha.warm
       hsha.pre hsha.fork hdepth (by omega)
   refine ⟨b', M', hpost, hwf', hr', by rw [hs']; rfl, fun r kont => ?_⟩
@@ -444,18 +444,22 @@ theorem body_signatureRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR : B25
   have hfp0 : img.sliceD 64 32 0 = (Nat.toB256 352).toBytes := by
     rw [hfp]; rfl
   have hpk : img.sliceD 352 32 0 = pkR.toBytes := by
-    have := hf (0x160, pkR.toBytes) (by simp)
+    have := hf (0x160, pkR.toBytes) (by simp only [List.mem_cons, Prod.mk.injEq, Nat.reduceEqDiff,
+      false_and, List.not_mem_nil, or_false, or_true])
     rwa [B256.length_toBytes] at this
   have h80 : img.sliceD 128 32 0 = (8 : B256).toBytes := by
-    have := hf (0x80, (8 : B256).toBytes) (by simp)
+    have := hf (0x80, (8 : B256).toBytes) (by simp only [List.mem_cons, Prod.mk.injEq,
+      Nat.reduceEqDiff, false_and, List.not_mem_nil, or_self, or_false])
     rwa [B256.length_toBytes] at this
   have ha0 : img.sliceD 160 8 0 = BeaconDeposit.le64 a.toNat :=
-    hf (0xa0, BeaconDeposit.le64 a.toNat) (by simp)
+    hf (0xa0, BeaconDeposit.le64 a.toNat) (by simp only [List.mem_cons, Prod.mk.injEq,
+      Nat.reduceEqDiff, false_and, List.not_mem_nil, or_self, or_false, or_true])
   set R := [(32 : B256), wP, 48, pP, 0x01b8, sel] with hR
   -- site 1
   obtain ⟨b1, M1, hp1, hwf1, hr1, hs1, r1⟩ := sig_site1 (sevm := sevm) (b := b) (M := M)
     (img := img) (G := G + 751 + 892) (a := a) (rt := rt) (sP := sP) (pkR := pkR) (R := R)
-    hsha hdepth (by simp [hR]) (by omega) hwf hr hs hfp0 hpk
+    hsha hdepth (by simp only [hR, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
+      Nat.reduceLeDiff]) (by omega) hwf hr hs hfp0 hpk
   set I1 := sig1Img img sevm sP.toNat
   set h1 := Bytes.sha256 (sevm.data.sliceD sP.toNat 64 0)
   have hK1 := Keep.of_sha hp1
@@ -471,7 +475,8 @@ theorem body_signatureRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR : B25
   -- site 2
   obtain ⟨b2, M2, hp2, hwf2, hr2, hs2, r2⟩ := sig_site2 (sevm := sevm) (b := b1) (M := M1)
     (img := I1) (G := G + 751) (a := a) (rt := rt) (sP := sP) (pkR := pkR) (h1 := h1) (R := R)
-    (hsha.keep hK1) hdepth (by simp [hR]) (by omega) hsP hwf1 hr1 hs1 hI1fp hI1h
+    (hsha.keep hK1) hdepth (by simp only [hR, List.length_cons, List.length_nil, zero_add,
+      Nat.reduceAdd, Nat.reduceLeDiff]) (by omega) hsP hwf1 hr1 hs1 hI1fp hI1h
   set I2 := sig2Img I1 sevm (sP.toNat + 64)
   set h2 := Bytes.sha256 (sevm.data.sliceD (sP.toNat + 64) 32 0 ++ (0 : B256).toBytes)
   have hK2 := Keep.of_sha hp2
@@ -489,7 +494,8 @@ theorem body_signatureRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR : B25
   obtain ⟨b3, M3, hp3, hwf3, hr3, hs3, r3⟩ := sig_site3 (sevm := sevm) (b := b2) (M := M2)
     (img := I2) (G := G) (h1 := h1) (h2 := h2)
     (R := 0 :: pkR :: 0x80 :: a :: rt :: 96 :: sP :: R)
-    ((hsha.keep hK1).keep hK2) hdepth (by simp [hR]) (by omega) hwf2 hr2 hs2 hI2fp hI2h
+    ((hsha.keep hK1).keep hK2) hdepth (by simp only [hR, List.length_cons, List.length_nil,
+      zero_add, Nat.reduceAdd, Nat.reduceLeDiff]) (by omega) hwf2 hr2 hs2 hI2fp hI2h
   have hK3 := Keep.of_sha hp3
   set I3 := sig3Img I2 h1 h2
   have hout : ∀ st len, 96 ≤ st → st + len ≤ 352 → I3.sliceD st len 0 = img.sliceD st len 0 := by

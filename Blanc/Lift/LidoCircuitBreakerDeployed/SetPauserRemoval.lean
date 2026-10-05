@@ -118,7 +118,10 @@ theorem t0ada_inv {oldP newP target R : B256} {base : List B256} {post : Devm}
   obtain ⟨G37, rfl⟩ := ri_sload hfork s1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G38, rfl⟩ := ri_dup (w := b.getStorVal sevm.currentTarget 5 - Bytes.toB256 [1])
-    (by simp [getStorVal_afterSload]) s1
+    (by simp only [getStorVal_afterSload, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
+      List.set_cons_zero, List.set_cons_succ, Nat.one_mod, List.length_cons, lt_add_iff_pos_left,
+      add_pos_iff, Nat.ofNat_pos, or_true, getElem?_pos, List.getElem_cons_succ,
+      List.getElem_cons_zero]) s1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G39, rfl⟩ := ri_lt s1
   obtain ⟨d1, s1, run⟩ := ric_next run
@@ -553,7 +556,7 @@ theorem removalArm_inv {oldP target R : B256} {base : List B256} {post : Devm}
   have hzero : canonicalAddress (0 : B256) := by
     unfold canonicalAddress
     change (0 : Nat) < 2 ^ 160
-    norm_num
+    norm_num only
   obtain ⟨-, -, hwf1, hal1⟩ := scratch_mapSlot hmem halign target 4
   obtain ⟨b3, G3, h3, run⟩ := t0ada_inv hfork htarget hmem halign run
   obtain ⟨-, -, hwf2, hal2⟩ := scratch_word hwf1 hal1 5
@@ -634,9 +637,9 @@ theorem arrayEntrySlot_ne_arrayLengthSlot {i : Nat} (hi : i + 1 < 2 ^ 252) :
     exact hi
   have hzero : (0 : B256).toNat < 2 ^ 252 := by
     rw [B256.toNat_zero]
-    norm_num
+    norm_num only
   have hpayload : Nat.toB256 (i + 1) = 0 :=
-    slot_injective_payload (region := arrayRegion) (by norm_num [arrayRegion]) hb hzero heq
+    slot_injective_payload (region := arrayRegion) (by norm_num only [arrayRegion]) hb hzero heq
   have hn := congrArg B256.toNat hpayload
   rw [B256.toNat_toB256_of_lt hb256] at hn
   simp only [B256.toNat_zero] at hn
@@ -673,7 +676,7 @@ theorem removalTailStor_eq_rawRemovalPost
   have hlastValid : nonzeroCanonicalAddress lastE.1 :=
     hw.targetsValid lastE (last_mem_of_last entries hlastE)
   have hsrc : sourceLastTarget entries = lastE.1 := by
-    simp [sourceLastTarget, hlastE]
+    simp only [sourceLastTarget, hlastE]
   have hm : nonzeroCanonicalAddress (sourceLastTarget entries) := hsrc ▸ hlastValid
   -- Witness reads of the pre-state.
   have hidx : raw.get (mapSlot target 4) = Nat.toB256 (index + 1) := by
@@ -698,12 +701,12 @@ theorem removalTailStor_eq_rawRemovalPost
     rw [B256.toNat_toB256_of_lt (by omega)]
     exact hlenLt
   have hmemLen : arrayLengthSlot ∈ removalWriteKeys entries target oldPauser index := by
-    simp [removalWriteKeys]
+    simp only [removalWriteKeys, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
   have hmemIdx : indexSlot target ∈ removalWriteKeys entries target oldPauser index := by
-    simp [removalWriteKeys]
+    simp only [removalWriteKeys, List.mem_cons, List.not_mem_nil, or_false, or_true]
   have hmemTail : arrayEntrySlot (Nat.toB256 entries.length) ∈
       removalWriteKeys entries target oldPauser index := by
-    simp [removalWriteKeys]
+    simp only [removalWriteKeys, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
   have hobsA : RegistryObservable entries.length (assignmentSlot target) :=
     Or.inl ⟨target, htarget.2, rfl⟩
   have hobsC : RegistryObservable entries.length (countSlot oldPauser) :=
@@ -747,7 +750,8 @@ theorem removalTailStor_eq_rawRemovalPost
   have hpredLen : Nat.toB256 entries.length - 1 = Nat.toB256 (entries.length - 1) :=
     (natToB256_pred_eq_sub_one _ (by omega) (by omega)).symm
   have hpredIdx : Nat.toB256 (index + 1) - 1 = Nat.toB256 index := by
-    simpa using (natToB256_pred_eq_sub_one (index + 1) (by omega) (by omega)).symm
+    simpa only [add_tsub_cancel_right] using
+      (natToB256_pred_eq_sub_one (index + 1) (by omega) (by omega)).symm
   have hnewLen : Nat.toB256 entries.length + ffWord = Nat.toB256 (entries.length - 1) := by
     rw [B256.add_comm, ffWord_add_natToB256 (by omega) (by omega)]
   have hRA : ∀ i, registryArraySlot i = registryArrayBase + Nat.toB256 i := fun _ => rfl
@@ -795,7 +799,7 @@ theorem setPauser_removal_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
   have hzero : canonicalAddress (0 : B256) := by
     unfold canonicalAddress
     change (0 : Nat) < 2 ^ 160
-    norm_num
+    norm_num only
   have hold : nonzeroCanonicalAddress oldPauser :=
     hw.pausersValid (target, oldPauser) (mem_of_findEntry hfind)
   have hassign : addressSlotReadWord
@@ -810,7 +814,8 @@ theorem setPauser_removal_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     exact h
   have hk3c6 : mapSlot target 3 ≠ mapSlot oldPauser 6 := by
     rw [← solKey_assignmentSlot htarget.2, ← solKey_countSlot hold.2]
-    exact solKey_ne_of_faithful hfaithful (by simp [removalWriteKeys])
+    exact solKey_ne_of_faithful hfaithful (by simp only [removalWriteKeys, List.mem_cons,
+      List.not_mem_nil, or_false, true_or, or_true])
       (Or.inl ⟨target, htarget.2, rfl⟩)
       (registryAddressFamilies_pairwise htarget.2 htarget.2 hold.2).2.1
   have hdec : ffWord + ((Devm.getStor b sevm.currentTarget).set (mapSlot target 3)
@@ -832,7 +837,7 @@ theorem setPauser_removal_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     have hv : nonzeroCanonicalAddress lastE.1 :=
       hw.targetsValid lastE (last_mem_of_last entries hlastE)
     have hc : canonicalAddress (sourceLastTarget entries) := by
-      simpa [sourceLastTarget, hlastE] using hv.2
+      simpa only [sourceLastTarget, hlastE] using hv.2
     exact (congrArg canonicalAddress hlastEq).mpr hc
   obtain ⟨b', data, M', G', rfl, h6⟩ :=
     removalArm_inv hfork htarget.2 hold.2 hlast hwf2 hal2 run

@@ -138,9 +138,9 @@ theorem obsD_chain {P : Res → Prop} {fs : List SFunc} {sta : Sevm} {n k : Nat}
   · rw [cfg_of_obsD h1]
     exact h2 _ _
   · rcases x with ⟨_, _, _, _, _, _, _, _, _, _, _⟩
-    simp [obsD, obsDOk] at h1
+    simp only [obsD, obsDOk, reduceCtorEq] at h1
   · rcases x with ⟨_, _, _, _, _, _, _, _, _, _, _⟩
-    simp [obsD, obsDOk] at h1
+    simp only [obsD, obsDOk, reduceCtorEq] at h1
 
 /-- Three chunks from a configuration that is `cfgOf x0` at its own world and bookkeeping,
 decided at `x1`, `x2` and `x3` over any world and bookkeeping, are one chunk decided at
@@ -165,9 +165,9 @@ theorem obsB_of_obsD {fs : List SFunc} {sta : Sevm} {n : Nat} {c : Cfg} {x : Bnd
   · rw [cfg_of_obsD h]
     exact ⟨obsB_cfgOf hx _ _, atdClean_cont.mpr rfl⟩
   · rcases x with ⟨_, _, _, _, _, _, _, _, _, _, _⟩
-    simp [obsD, obsDOk] at h
+    simp only [obsD, obsDOk, reduceCtorEq] at h
   · rcases x with ⟨_, _, _, _, _, _, _, _, _, _, _⟩
-    simp [obsD, obsDOk] at h
+    simp only [obsD, obsDOk, reduceCtorEq] at h
 
 /-- A run observed as boundary `x` (which records no error) with the empty set of accounts to
 delete, followed by `k` steps decided from `x` over any world and bookkeeping. -/
@@ -180,8 +180,8 @@ theorem run_of_obsB {P : Res → Prop} {fs : List SFunc} {sta : Sevm} {n k : Nat
   rcases r with c' | _ | _
   · rw [cfg_of_obsB hA hx (atdClean_cont.mp hat)]
     exact hB _ _
-  · simp [obsB] at hA
-  · simp [obsB] at hA
+  · simp only [obsB, reduceCtorEq] at hA
+  · simp only [obsB, reduceCtorEq] at hA
 
 /-! ### Boundaries with an optional refund counter -/
 
@@ -234,8 +234,8 @@ theorem restsOf_eq : ∀ l : AcctShadow, restsOf l = l.map acctRest
 theorem acs_eq_of_views : ∀ {l l' : AcctShadow}, l.map acctKey = l'.map acctKey →
     l.map acctRest = l'.map acctRest → l = l'
   | [], [], _, _ => rfl
-  | [], _ :: _, h, _ => by simp at h
-  | _ :: _, [], h, _ => by simp at h
+  | [], _ :: _, h, _ => by simp only [List.map_nil, List.map_cons, List.nil_eq, reduceCtorEq] at h
+  | _ :: _, [], h, _ => by simp only [List.map_cons, List.map_nil, reduceCtorEq] at h
   | (_, ⟨_, _, _, _⟩) :: _, (_, ⟨_, _, _, _⟩) :: _, h1, h2 => by
     simp only [List.map_cons, List.cons.injEq, acctKey, acctRest, Prod.mk.injEq] at h1 h2
     obtain ⟨⟨rfl, rfl, rfl⟩, h1⟩ := h1
@@ -298,8 +298,10 @@ theorem obsD1_cont {x : Bnd1} {r : Res} (h : obsD1 x r = obsDOk1 x) :
     ∃ m w, r = .cont (cfgOf1 x m w) := by
   rcases r with c | _ | _
   · exact ⟨_, _, congrArg Res.cont (cfg_of_obsD1 h)⟩
-  · rcases x with ⟨_, _, _, _, _, _, _, _, _, _, _⟩; simp [obsD1, obsDOk1] at h
-  · rcases x with ⟨_, _, _, _, _, _, _, _, _, _, _⟩; simp [obsD1, obsDOk1] at h
+  · rcases x with ⟨_, _, _, _, _, _, _, _, _, _, _⟩; simp only [obsD1, obsDOk1,
+    reduceCtorEq] at h
+  · rcases x with ⟨_, _, _, _, _, _, _, _, _, _, _⟩; simp only [obsD1, obsDOk1,
+    reduceCtorEq] at h
 
 /-! ### A frame with two code-child calls -/
 

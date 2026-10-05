@@ -21,13 +21,6 @@ open Jaune
 
 namespace LidoTriggerableWithdrawalsGateway
 
-/-! ## Source projections -/
-
-def pauseUntilProjection (expiry : B256) : B256 :=
-  if expiry = pauseInfinitely then pauseInfinitely else expiry + 1
-
-def isPausedProjection (timestamp resumeSince : B256) : B256 :=
-  timestamp <? resumeSince
 
 /-! ## Exact public selector routes -/
 

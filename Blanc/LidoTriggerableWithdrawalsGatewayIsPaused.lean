@@ -50,9 +50,10 @@ theorem isPaused_exact_of_prog_run
     apply selector_eq_of_data_eq_abiSelectorBytes_append
         (selected := selIsPaused) (tail := [])
     · rfl
-    · simpa [isPausedCalldata] using calldata
+    · simpa only [List.append_nil, isPausedCalldata] using calldata
   have member : (selIsPaused, isPaused) ∈ sharedNonpayableFuncs := by
-    simp [sharedNonpayableFuncs]
+    simp only [sharedNonpayableFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
+      true_or, or_true]
   have notTrigger : selIsPaused ≠ selTriggerFullWithdrawals := by decide
   have valueZero := runtime_value_zero_of_prog_run_ok_of_nontrigger
     run entryStack guard selected notTrigger
@@ -145,7 +146,7 @@ theorem isPaused_exact_of_prog_run
   have beforeReturnReads :
       Mem.Reads beforeReturn.memory beforeReturn.memory.data.toList := by
     intro index
-    simp
+    simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
 
   unfold returnWord returnMemoryRange at returnRun
   rcases of_run_prepend (mstoreAt 0) _ returnRun with

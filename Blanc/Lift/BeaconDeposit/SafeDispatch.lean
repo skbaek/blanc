@@ -74,9 +74,10 @@ theorem safe_dispatch {sevm : Sevm} {b post : Devm} {G : Nat}
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_eq s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_push s1
   obtain ⟨g31, hg31⟩ : ∃ g, prog[31]? = some g := ⟨_, rfl⟩
-  rcases ric_branchTo (by simp) hg31 run with ⟨hw, G17, run⟩ | ⟨hw, G17, run⟩
+  rcases ric_branchTo (by simp only [List.not_mem_nil, not_false_eq_true]) hg31 run with ⟨hw, G17, run⟩ | ⟨hw, G17, run⟩
   swap
-  · refine ⟨31, G17, g31, by simp, ⟨fun h => absurd h (by decide), fun h => ?_⟩, hg31, run.uncut⟩
+  · refine ⟨31, G17, g31, by simp only [List.mem_cons, Nat.reduceEqDiff, List.not_mem_nil,
+    or_self, or_false], ⟨fun h => absurd h (by decide), fun h => ?_⟩, hg31, run.uncut⟩
     rw [hdep, ← eq_of_ne hw] at h
     exact absurd h (by decide)
   have h31 := ne_of_eq hw
@@ -88,9 +89,10 @@ theorem safe_dispatch {sevm : Sevm} {b post : Devm} {G : Nat}
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_eq s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_push s1
   obtain ⟨g32, hg32⟩ : ∃ g, prog[32]? = some g := ⟨_, rfl⟩
-  rcases ric_branchTo (by simp) hg32 run with ⟨hw, G22, run⟩ | ⟨hw, G22, run⟩
+  rcases ric_branchTo (by simp only [List.not_mem_nil, not_false_eq_true]) hg32 run with ⟨hw, G22, run⟩ | ⟨hw, G22, run⟩
   swap
-  · refine ⟨32, G22, g32, by simp, ⟨fun _ => ?_, fun _ => rfl⟩, hg32, run.uncut⟩
+  · refine ⟨32, G22, g32, by simp only [List.mem_cons, Nat.succ_ne_self, Nat.reduceEqDiff,
+    List.not_mem_nil, or_self, or_false, or_true], ⟨fun _ => ?_, fun _ => rfl⟩, hg32, run.uncut⟩
     rw [hdep, ← eq_of_ne hw]
   have h32 := ne_of_eq hw
   -- t_0029_c0: `get_deposit_count`
@@ -101,9 +103,10 @@ theorem safe_dispatch {sevm : Sevm} {b post : Devm} {G : Nat}
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_eq s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G26, rfl⟩ := ri_push s1
   obtain ⟨g33, hg33⟩ : ∃ g, prog[33]? = some g := ⟨_, rfl⟩
-  rcases ric_branchTo (by simp) hg33 run with ⟨hw, G27, run⟩ | ⟨hw, G27, run⟩
+  rcases ric_branchTo (by simp only [List.not_mem_nil, not_false_eq_true]) hg33 run with ⟨hw, G27, run⟩ | ⟨hw, G27, run⟩
   swap
-  · refine ⟨33, G27, g33, by simp, ⟨fun h => absurd h (by decide), fun h => ?_⟩, hg33, run.uncut⟩
+  · refine ⟨33, G27, g33, by simp only [List.mem_cons, Nat.reduceEqDiff, Nat.succ_ne_self,
+    List.not_mem_nil, or_self, or_false, or_true], ⟨fun h => absurd h (by decide), fun h => ?_⟩, hg33, run.uncut⟩
     rw [hdep] at h
     exact absurd h.symm h32
   -- t_0034_c0: `get_deposit_root`, and the miss
@@ -114,9 +117,10 @@ theorem safe_dispatch {sevm : Sevm} {b post : Devm} {G : Nat}
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G30, rfl⟩ := ri_eq s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G31, rfl⟩ := ri_push s1
   obtain ⟨g34, hg34⟩ : ∃ g, prog[34]? = some g := ⟨_, rfl⟩
-  rcases ric_branchTo (by simp) hg34 run with ⟨-, G32, run⟩ | ⟨hw, G32, run⟩
+  rcases ric_branchTo (by simp only [List.not_mem_nil, not_false_eq_true]) hg34 run with ⟨-, G32, run⟩ | ⟨hw, G32, run⟩
   · exact (run.false_of_noOk (by decide)).elim
-  · refine ⟨34, G32, g34, by simp, ⟨fun h => absurd h (by decide), fun h => ?_⟩, hg34, run.uncut⟩
+  · refine ⟨34, G32, g34, by simp only [List.mem_cons, Nat.reduceEqDiff, Nat.succ_ne_self,
+    List.not_mem_nil, or_false, or_true], ⟨fun h => absurd h (by decide), fun h => ?_⟩, hg34, run.uncut⟩
     rw [hdep] at h
     exact absurd h.symm h32
 

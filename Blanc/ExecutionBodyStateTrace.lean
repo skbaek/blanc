@@ -97,7 +97,7 @@ theorem ApplyTransactionsTrace.exists_stateChronology
   | nil benv bout => exact ⟨.nil benv bout⟩
   | cons head tail ih =>
       rcases head.exists_stateChronology hfork with ⟨headChronology⟩
-      rcases ih (by simpa [Benv.withState] using hfork) with ⟨tailChronology⟩
+      rcases ih (by simpa only [Benv.withState] using hfork) with ⟨tailChronology⟩
       exact ⟨.cons headChronology tailChronology⟩
 
 theorem ApplyTransactionsStateChronology.stateReplay
@@ -300,7 +300,7 @@ theorem AppliedBodyTrace.exists_stateChronology
     (hfork : CoveredFork benv.stat.fork) :
     Nonempty (AppliedBodyStateChronology trace) := by
   rcases trace.transactions.exists_stateChronology
-    (by simpa [Benv.withState] using hfork) with
+    (by simpa only [Benv.withState] using hfork) with
     ⟨transactions⟩
   exact ⟨⟨transactions⟩⟩
 

@@ -61,7 +61,7 @@ private theorem deposit_pubkeyLength_error_spec
   split at herror <;> try split at herror <;> try split at herror <;>
     try split at herror <;> try split at herror <;> try split at herror <;>
     try split at herror <;> try split at herror <;> try split at herror
-  all_goals simp_all [DepositFailureSpec]
+  all_goals simp_all only [ne_eq, DepositFailureSpec, not_false_eq_true, Decidable.not_not, Except.error.injEq, reduceCtorEq, not_lt, Nat.reducePow, Nat.add_one_sub_one, not_le]
 
 private theorem deposit_withdrawalCredentialsLength_error_spec
     {H : Bytes → B256} {state : Acc}
@@ -75,7 +75,7 @@ private theorem deposit_withdrawalCredentialsLength_error_spec
   split at herror <;> try split at herror <;> try split at herror <;>
     try split at herror <;> try split at herror <;> try split at herror <;>
     try split at herror <;> try split at herror <;> try split at herror
-  all_goals simp_all [DepositFailureSpec]
+  all_goals simp_all only [ne_eq, Except.error.injEq, reduceCtorEq, Decidable.not_not, DepositFailureSpec, not_false_eq_true, and_self, not_lt, Nat.reducePow, Nat.add_one_sub_one, not_le]
 
 private theorem deposit_signatureLength_error_spec
     {H : Bytes → B256} {state : Acc}
@@ -89,7 +89,7 @@ private theorem deposit_signatureLength_error_spec
   split at herror <;> try split at herror <;> try split at herror <;>
     try split at herror <;> try split at herror <;> try split at herror <;>
     try split at herror <;> try split at herror <;> try split at herror
-  all_goals simp_all [DepositFailureSpec]
+  all_goals simp_all only [ne_eq, Except.error.injEq, reduceCtorEq, Decidable.not_not, DepositFailureSpec, not_false_eq_true, and_self, not_lt, Nat.reducePow, Nat.add_one_sub_one, not_le]
 
 private theorem deposit_valueTooLow_error_spec
     {H : Bytes → B256} {state : Acc}
@@ -103,7 +103,7 @@ private theorem deposit_valueTooLow_error_spec
   split at herror <;> try split at herror <;> try split at herror <;>
     try split at herror <;> try split at herror <;> try split at herror <;>
     try split at herror <;> try split at herror <;> try split at herror
-  all_goals simp_all [DepositFailureSpec]
+  all_goals simp_all only [ne_eq, Except.error.injEq, reduceCtorEq, Decidable.not_not, DepositFailureSpec, and_self, not_lt, Nat.reducePow, Nat.add_one_sub_one, not_le]
 
 private theorem deposit_valueNotGweiMultiple_error_spec
     {H : Bytes → B256} {state : Acc}
@@ -117,7 +117,7 @@ private theorem deposit_valueNotGweiMultiple_error_spec
   split at herror <;> try split at herror <;> try split at herror <;>
     try split at herror <;> try split at herror <;> try split at herror <;>
     try split at herror <;> try split at herror <;> try split at herror
-  all_goals simp_all [DepositFailureSpec]
+  all_goals simp_all only [ne_eq, Except.error.injEq, reduceCtorEq, Decidable.not_not, not_lt, DepositFailureSpec, not_false_eq_true, and_self, Nat.reducePow, Nat.add_one_sub_one, not_le]
 
 private theorem deposit_valueTooHigh_error_spec
     {H : Bytes → B256} {state : Acc}
@@ -131,7 +131,7 @@ private theorem deposit_valueTooHigh_error_spec
   split at herror <;> try split at herror <;> try split at herror <;>
     try split at herror <;> try split at herror <;> try split at herror <;>
     try split at herror <;> try split at herror <;> try split at herror
-  all_goals simp_all [DepositFailureSpec]
+  all_goals simp_all only [ne_eq, Except.error.injEq, reduceCtorEq, Decidable.not_not, not_lt, Nat.reducePow, Nat.add_one_sub_one, DepositFailureSpec, and_self, not_le]
 
 private theorem deposit_depositDataRootMismatch_error_spec
     {H : Bytes → B256} {state : Acc}
@@ -145,7 +145,7 @@ private theorem deposit_depositDataRootMismatch_error_spec
   split at herror <;> try split at herror <;> try split at herror <;>
     try split at herror <;> try split at herror <;> try split at herror <;>
     try split at herror <;> try split at herror <;> try split at herror
-  all_goals simp_all [DepositFailureSpec]
+  all_goals simp_all only [ne_eq, Except.error.injEq, reduceCtorEq, Decidable.not_not, not_lt, Nat.reducePow, Nat.add_one_sub_one, DepositFailureSpec, not_false_eq_true, and_self, not_le]
 
 private theorem deposit_merkleTreeFull_error_spec
     {H : Bytes → B256} {state : Acc}
@@ -159,7 +159,7 @@ private theorem deposit_merkleTreeFull_error_spec
   split at herror <;> try split at herror <;> try split at herror <;>
     try split at herror <;> try split at herror <;> try split at herror <;>
     try split at herror <;> try split at herror <;> try split at herror
-  all_goals simp_all [DepositFailureSpec]
+  all_goals simp_all only [ne_eq, Except.error.injEq, reduceCtorEq, Decidable.not_not, not_lt, Nat.reducePow, Nat.add_one_sub_one, DepositFailureSpec, and_self, not_le]
 
 /-- A model error at a catalogued reason exposes exactly the first-failing
 guard premises for that row. -/

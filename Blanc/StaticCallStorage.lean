@@ -105,7 +105,7 @@ private theorem staticHalt_getStor
     Devm.getStor (Execution.committedPost out committed) =
       Devm.getStor pre := by
   cases out with
-  | error error => simp [Execution.commits] at committed
+  | error error => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       cases decoded : Evm.getInst ⟨pc, sevm, pre⟩ with
       | none =>
@@ -164,7 +164,7 @@ private theorem processMessage_getStor_of_body
         unfold Frame.settlementCommits
         rw [← settledEq]
         exact clean
-      cases errorEq : post.error <;> simp_all
+      cases errorEq : post.error <;> simp_all only [ExceptT.stM_eq, Bool.not_eq_true, Option.isNone_none, ne_eq, not_true_eq_false, Option.isNone_some, Bool.false_eq_true, not_false_eq_true, Option.isSome_some]
     have rollback := (ProcessMessage.rollback_of_error process postError).1
     funext owner
     change post.state.getStor owner = parent.state.getStor owner
@@ -195,8 +195,8 @@ private theorem xinstSome_getStor
     rw [shape] at spawn
   · cases spawn
   · rcases genericCreate_step_spawn_exact spawn with ⟨rfl, -⟩
-    simp [Jaune.Frame.ofCreate, createMsg, processCreateMessage.msg,
-      Msg.withBenv] at childStatic
+    simp only [Frame.ofCreate, createMsg, processCreateMessage.msg, Msg.withBenv,
+      Bool.false_eq_true] at childStatic
   · rcases genericCall_step_spawn_exact spawn with ⟨rfl, rfl⟩
     have run : GenericCall sevm d gas value caller target codeAddress stv
         isStatic ii isz oi osz code disablePrecompiles
@@ -236,7 +236,7 @@ theorem Exec.getStor_committedPost_eq_of_static
   | halt step => exact staticHalt_getStor step committed
   | cont step _ ih =>
       exact (ih static committed hfork).trans (staticStep_cont_getStor step static)
-  | doneErr _ _ _ => simp [Execution.commits] at committed
+  | doneErr _ _ _ => simp only [Execution.commits, Bool.false_eq_true] at committed
   | @doneOk _ nodeSevm nodePre _ _ _ _ nodePost _ step enter resumeRun _ ih =>
       rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
       have xrun : Xinst.Run nodeSevm nodePre x .none (.ok nodePost) := by
@@ -244,7 +244,7 @@ theorem Exec.getStor_committedPost_eq_of_static
         rw [spawn]
         exact ⟨_, RunFrame.of_done enter, resumeRun.symm⟩
       exact (ih static committed hfork).trans (Xinst.none_getStor_eq xrun)
-  | runErr _ _ _ _ _ => simp [Execution.commits] at committed
+  | runErr _ _ _ _ _ => simp only [Execution.commits, Bool.false_eq_true] at committed
   | runOk step enter _ resumeRun _ childIH nextIH =>
       rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
       have childStatic := Evm.step_run_isStatic step enter static

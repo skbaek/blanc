@@ -55,7 +55,7 @@ instance decidableSlotsDisjoint (w w' : B256) :
 theorem SlotsDisjoint.symm {w w' : B256} (h : SlotsDisjoint w w') :
     SlotsDisjoint w' w := Or.symm h
 
-@[simp] theorem scratch_setScratch_self (image : Bytes) (w v : B256) :
+theorem scratch_setScratch_self (image : Bytes) (w v : B256) :
     scratch (setScratch image w v) w = v :=
   Bytes.readWord_writeAt_self image (w * 32).toNat v
 
@@ -472,25 +472,6 @@ theorem of_run_guardedRoundedMul_prefix {fs : List Func} {e : Sevm}
         (Func.RunPrefix.trans hpre11 (Func.RunPrefix.trans hpre12
           (Func.RunPrefix.trans hpre14 hpre15)))))),
     run⟩
-
-theorem of_run_guardedRoundedMul {fs : List Func} {e : Sevm}
-    {entry s r : Devm} {image : Bytes} {tail : Stack}
-    {leftWord rightWord outputWord : B256} {next : Func}
-    (frame : Frame image entry s) (hp : tail <<+ s.stack)
-    (run : Func.Run fs e s
-      (guardedRoundedMul leftWord rightWord outputWord next) r) :
-    ∃ t,
-      B256.Nofm (scratch image leftWord) (scratch image rightWord) ∧
-      B256.Nof (scratch image rightWord * scratch image leftWord) half ∧
-      (tail <<+ t.stack) ∧
-      Frame
-        (setScratch image outputWord
-          ((half + scratch image rightWord * scratch image leftWord) / scale))
-        entry t ∧
-      Func.Run fs e t next r := by
-  obtain ⟨t, _, hnofm, hnof, hpt, frt, _, run⟩ :=
-    of_run_guardedRoundedMul_prefix (path := ⟨0, []⟩) frame hp run
-  exact ⟨t, hnofm, hnof, hpt, frt, run⟩
 
 /-! ## The auxiliary table and its slots
 
@@ -951,27 +932,6 @@ theorem of_run_rpowLoop_prefix {fs : List Func} (hlookup : AuxLookup fs)
       exact hacc3
     · exact ((LoopOnly.base image _).trans hloop12).trans hloop23
 
-theorem of_run_rpowLoop {fs : List Func} (hlookup : AuxLookup fs) {e : Sevm}
-    {entry r : Devm} :
-    ∀ (n : Nat) {s : Devm} {image : Bytes} {tail : Stack},
-      (scratch image exponentWord).toNat = n →
-      Frame image entry s → (tail <<+ s.stack) →
-      Func.Run fs e s (.call rpowLoopSlot) r →
-      ∃ t image',
-        B256.RPowLoopGuards scale half (scratch image accumulatorWord)
-          (scratch image baseWord) n ∧
-        scratch image' accumulatorWord =
-          B256.rpowLoop scale half (scratch image accumulatorWord)
-            (scratch image baseWord) n ∧
-        LoopOnly image image' ∧
-        Frame image' entry t ∧ (tail <<+ t.stack) ∧
-        Func.Run fs e t (.call composeFreshSlot) r := by
-  intro n s image tail hexp frame hp run
-  obtain ⟨t, image', _, hguards, hacc, hloop, frt, hpt, _, run⟩ :=
-    of_run_rpowLoop_prefix hlookup n (path := ⟨rpowLoopSlot, []⟩) hexp frame hp
-      run
-  exact ⟨t, image', hguards, hacc, hloop, frt, hpt, run⟩
-
 /-! ## Floor composition onto the stored index
 
 `composeFresh` multiplies the stored index by the realized factor under the
@@ -1279,7 +1239,7 @@ theorem of_run_freshStart_prefix {fs : List Func} (hlookup : AuxLookup fs)
     rw [hyval,
       Devm.getStorVal_of_state
         (frame0.state.trans (of_run_pushB256 hpush).state).symm] at hy
-    simpa using hy
+    simpa only [List.append_eq, List.nil_append] using hy
   rcases run_prefix_prepend (l := (mstoreAt storedChiWord)) (path := mid1)
     (gasFree_mstoreAt storedChiWord) run with
     ⟨s2, mid2, hline2, run, hpre2⟩
@@ -1354,7 +1314,7 @@ theorem of_run_freshStart_prefix {fs : List Func} (hlookup : AuxLookup fs)
     rw [hyval,
       Devm.getStorVal_of_state
         (frame11.state.trans (of_run_pushB256 hpush).state).symm] at hy
-    simpa using hy
+    simpa only [List.append_eq, List.nil_append] using hy
   -- retain rho across the comparison for the subsequent subtraction
   rcases run_prefix_prepend (l := [dup 0]) (path := mid12)
     (by decide : Line.gasFree [dup 0] = true) run with

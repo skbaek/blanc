@@ -251,7 +251,8 @@ private theorem updateAllowance_exact
         ← (of_run_caller hd).memory, mc,
         ← Ninst.Hinv.inv (f := Devm.memory) hswap]
       exact Mem.read_two_word_writes bWf (image := b.memory.data.toList)
-        (by intro i; simp) _ _
+        (by intro i; simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD,
+          Array.getElem?_toList]) _ _
     have storage := storage.trans (Line.of_inv Devm.getStor (by line_inv) hf)
     rcases of_run_next run with ⟨g, hg, run⟩
     have pg := (prefix_of_keccak256_val hg pf).1
@@ -439,7 +440,8 @@ private theorem prepApprove_exact {sevm : Sevm} {pre post : Devm}
       (sevm.data.sliceD 4 32 0)).read 0 64).1 = _
     rw [copiedWord]
     exact Mem.read_two_word_writes wf (image := pre.memory.data.toList)
-      (by intro i; simp) _ _
+      (by intro i; simp only [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD,
+        Array.getElem?_toList]) _ _
   change (c9.memory.read 0 64).1.keccak :: [Sevm.argWord sevm 1] <<+
     c10.stack at hashPrefix
   rw [window] at hashPrefix
@@ -465,7 +467,8 @@ theorem weth_approve_compiled_raw_effect {sevm : Sevm} {pre post : Devm}
           (Sevm.argWord sevm 1) := by
   obtain ⟨bodyPre, -, entryState, entryMemory, -, -, bodyRun⟩ :=
     runCompiled_enters_wethNonpayable (body := Blanc.approve) run selected
-      (by simp [wethFuncs])
+      (by simp only [wethFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+        or_true])
   rcases of_run_prepend (arg 0 ++ checkNonAddress) _ bodyRun with
     ⟨a, ha, run⟩
   rcases of_run_branch_revert run with ⟨b, hb, run⟩
@@ -546,13 +549,6 @@ def WethAllowanceEvent.classify? (frame : Exec.Frame) : Option WethAllowanceEven
     else none
   else none
 
-/-- The allowance-event projection of committed frames.  `filterMap` retains
-the order supplied by `Exec.committedFrames`, which is an invocation order
-only; use retained nodes and parent-prefix boundaries for storage replay. -/
-def retainedWethAllowanceEvents
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out) : List WethAllowanceEvent :=
-  (Exec.committedFrames run).filterMap WethAllowanceEvent.classify?
 
 /-- A classified WETH allowance invocation together with its stable retained
 path.  `located` is intentionally retained as data rather than recovered by
@@ -592,42 +588,14 @@ theorem WethAllowanceEvent.classification_sound
     split at classified
     · rename_i approve
       cases classified
-      exact ⟨rfl, identity, by simpa using approve⟩
+      exact ⟨rfl, identity, by simpa only [↓reduceIte] using approve⟩
     · rename_i notApprove
       split at classified
       · rename_i transferFrom
         cases classified
-        exact ⟨rfl, identity, by simpa [notApprove] using transferFrom⟩
-      · simp at classified
-  · simp at classified
-
-/-- Every committed exact approve or transferFrom frame is retained by the
-classifier.  Together with `classification_sound`, this is frame-level coverage;
-it still says nothing about the frame's intervening child chronology. -/
-theorem WethAllowanceEvent.classification_complete
-    {frame : Exec.Frame} {approval : Bool}
-    (classified : (⟨frame, approval⟩ : WethAllowanceEvent).Classified) :
-    WethAllowanceEvent.classify? frame = some ⟨frame, approval⟩ := by
-  change (Blanc.Exec.Frame.exactInvocation Blanc.weth wethAccount wethAccount frame) ∧
-    Sevm.selector frame.sevm =
-      if approval then selector "approve" [.address, .uint256]
-      else selector "transferFrom" [.address, .address, .uint256] at classified
-  rcases classified with ⟨identity, selected⟩
-  cases approval with
-  | false =>
-      have distinct : selector "transferFrom" [.address, .address, .uint256] ≠
-          selector "approve" [.address, .uint256] := by decide +kernel
-      simp only [Bool.false_eq_true, ↓reduceIte] at selected
-      have notApprove : Sevm.selector frame.sevm ≠
-          selector "approve" [.address, .uint256] := by
-        intro equal
-        exact distinct (selected.symm.trans equal)
-      unfold WethAllowanceEvent.classify?
-      rw [if_pos identity, if_neg notApprove, if_pos selected]
-  | true =>
-      simp only [↓reduceIte] at selected
-      unfold WethAllowanceEvent.classify?
-      rw [if_pos identity, if_pos selected]
+        exact ⟨rfl, identity, by simpa only [Bool.false_eq_true, ↓reduceIte] using transferFrom⟩
+      · simp only [reduceCtorEq] at classified
+  · simp only [reduceCtorEq] at classified
 
 /-- Classifying a path-retained frame preserves that exact path and produces
 the existing frame-level WETH allowance classification. -/
@@ -638,13 +606,13 @@ theorem WethAllowanceLocatedEvent.classification_sound
       event.toEvent.Classified := by
   unfold WethAllowanceLocatedEvent.classify? at classified
   cases source : WethAllowanceEvent.classify? located.frame with
-  | none => simp [source] at classified
+  | none => simp only [source, Option.map_none, reduceCtorEq] at classified
   | some selected =>
-      simp [source] at classified
+      simp only [source, Option.map_some, Option.some.injEq] at classified
       cases classified
       rcases WethAllowanceEvent.classification_sound source with
         ⟨frame_eq, exact⟩
-      exact ⟨rfl, by simpa [WethAllowanceLocatedEvent.toEvent] using frame_eq,
+      exact ⟨rfl, by simpa only [toEvent] using frame_eq,
         exact⟩
 
 /-- A path-preserving projected event retains its exact original path member,
@@ -668,91 +636,7 @@ raw entered roots.  The common `ExecutionFrames` membership bridge carries a
 committed invocation root back to that all-outcome traversal; it deliberately
 does not claim same-frame prefix or resumed-parent storage chronology. -/
 
-/-- Every extracted event has well-formed entry memory when its concrete
-execution is admitted as freshly entered.  This derives the side condition
-from retained-frame provenance rather than leaving it as an allowance-history
-premise. -/
-theorem retainedWethAllowanceEvent_memoryWf
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out)
-    (fresh : Exec.FrameAdmitted wethAccount Exec.FreshEntry run)
-    {event : WethAllowanceEvent}
-    (member : event ∈ retainedWethAllowanceEvents run) :
-    Mem.Wf event.frame.pre.memory := by
-  rcases List.mem_filterMap.mp member with ⟨frame, frameMember, classified⟩
-  have source := WethAllowanceEvent.classification_sound classified
-  have committed : event.frame ∈ Exec.committedFrames run := by
-    simpa only [source.1] using frameMember
-  have raw : (Blanc.Exec.Frame.rootDeriv event.frame) ∈ Exec.rawFrameRoots run :=
-    Exec.mem_rawFrameRoots_of_mem_committedFrames run event.frame committed
-  have entry : Exec.FreshEntry event.frame.sevm event.frame.pre :=
-    fresh (Blanc.Exec.Frame.rootDeriv event.frame) raw source.2.1.2.1
-  rw [entry.2]
-  exact Mem.wf_empty
 
-/-- A classified committed frame packages the existing exact WETH invocation
-record once its actual entry supplies well-formed memory.  The only endpoint
-used is the frame's own committed post, so a callback remains represented by
-its separately retained child event. -/
-theorem WethAllowanceEvent.toInvocation
-    (event : WethAllowanceEvent) (classified : event.Classified)
-    (memoryWf : Mem.Wf event.frame.pre.memory) :
-    ∃ call : WethAllowanceInvocation,
-      call.approval = event.approval ∧ call.sevm = event.frame.sevm ∧
-        call.pre = event.frame.pre ∧ call.post = event.frame.post := by
-  rcases event with ⟨frame, approval⟩
-  rcases frame with ⟨pc, sevm, pre, out, run, committed⟩
-  rcases classified with ⟨identity, selected⟩
-  cases out with
-  | error err => simp [Execution.commits] at committed
-  | ok post =>
-      have hpc : pc = 0 := identity.1
-      subst pc
-      refine ⟨⟨sevm, pre, post, approval, identity.2.1, memoryWf, ?_, selected⟩,
-        rfl, rfl, rfl, rfl⟩
-      exact Prog.runCompiled_of_exec sevm pre Blanc.weth post weth_pcFree run
-        identity.2.2.2
-
-/-- An event extracted from a fresh retained execution yields the existing
-allowance-invocation record with no caller-supplied memory condition. -/
-theorem retainedWethAllowanceEvent_toInvocation
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out)
-    (fresh : Exec.FrameAdmitted wethAccount Exec.FreshEntry run)
-    {event : WethAllowanceEvent}
-    (member : event ∈ retainedWethAllowanceEvents run) :
-    ∃ call : WethAllowanceInvocation,
-      call.approval = event.approval ∧ call.sevm = event.frame.sevm ∧
-        call.pre = event.frame.pre ∧ call.post = event.frame.post := by
-  rcases List.mem_filterMap.mp member with ⟨frame, _, classified⟩
-  exact event.toInvocation (WethAllowanceEvent.classification_sound classified).2
-    (retainedWethAllowanceEvent_memoryWf run fresh member)
-
-/-- The event-to-invocation projection attached to a retained raw slot. -/
-def RetainedWethAllowanceEventInvocations
-    {slot : Xlot} (retained : _root_.Blanc.ExecutionTrace.RetainedXlot slot) : Prop :=
-  match retained with
-  | .none => True
-  | .some run => ∀ event : WethAllowanceEvent,
-      event ∈ retainedWethAllowanceEvents run →
-        ∃ call : WethAllowanceInvocation,
-          call.approval = event.approval ∧ call.sevm = event.frame.sevm ∧
-            call.pre = event.frame.pre ∧ call.post = event.frame.post
-
-/-- A retained slot whose actual frame entries are fresh supplies the
-memory condition needed by every projected allowance event. -/
-theorem retainedXlot_wethAllowanceEvents_toInvocations
-    {slot : Xlot} (retained : _root_.Blanc.ExecutionTrace.RetainedXlot slot)
-    (fresh : _root_.Blanc.ExecutionTrace.RetainedXlot.FrameAdmitted retained
-      wethAccount Exec.FreshEntry) :
-    RetainedWethAllowanceEventInvocations retained := by
-  cases retained with
-  | none => trivial
-  | some run =>
-      intro event member
-      have fresh : Exec.FrameAdmitted wethAccount Exec.FreshEntry run := by
-        simpa only [_root_.Blanc.ExecutionTrace.RetainedXlot.FrameAdmitted] using fresh
-      exact retainedWethAllowanceEvent_toInvocation run fresh member
 
 /-- Raw words, without address normalization. A self `transferFrom` bypasses
 allowance hashing; all other successful allowance invocations visit one pair.
@@ -791,11 +675,6 @@ def NoVaultAllowanceKeyCollision (history : List WethAllowanceInvocation)
   ∀ p ∈ touchedWethAllowancePairs history, p.1 = vault.toB256 →
     ∀ q ∈ writtenWethAllowancePairs history, p ≠ q →
       wethAllowanceKey p.1 p.2 ≠ wethAllowanceKey q.1 q.2
-
-instance (history : List WethAllowanceInvocation) (vault : Adr) :
-    Decidable (NoVaultAllowanceKeyCollision history vault) := by
-  unfold NoVaultAllowanceKeyCollision
-  infer_instance
 
 /-- A foreign approval in the recorded exact executions cannot forge any
 vault-owned allowance pair touched by that record, under D9. The raw write is
@@ -1601,7 +1480,8 @@ theorem transferFromBody_exactEffect
   · intro wf
     have wf20 : Mem.Wf a20.memory := memory20 ▸ wf
     have wf21 := (transferFromLog_effect_frame hs20 wf20
-      (img := a20.memory.data.toList) (by intro i; simp) h21).2.2.2.2.2.2.1
+      (img := a20.memory.data.toList) (by intro i; simp only [Array.getD_eq_getD_getElem?,
+        List.getD_eq_getElem?_getD, Array.getElem?_toList]) h21).2.2.2.2.2.2.1
     refine ⟨a21, ?_, updateAllowance_exact wf21 hs21 run⟩
     exact (Stor.AgreeOffAdr.of_eq (congrFun storage12 sevm.currentTarget)).trans
       (off13.trans ((Stor.AgreeOffAdr.of_eq
@@ -1641,7 +1521,8 @@ theorem weth_transferFrom_compiled_allowance_effect
           Devm.getStor post = Devm.getStor writePost)) := by
   obtain ⟨bodyPre, -, entryState, entryMemory, -, -, bodyRun⟩ :=
     runCompiled_enters_wethNonpayable (body := transferFrom) run selected
-      (by simp [wethFuncs])
+      (by simp only [wethFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+        or_true])
   obtain ⟨allowancePre, off, effect⟩ :=
     (transferFromBody_exactEffect bodyRun).2.2.2.2 (entryMemory ▸ wf)
   have off := (Stor.AgreeOffAdr.of_eq
@@ -1702,12 +1583,15 @@ theorem WethAllowanceInvocation.allowance_effect (call : WethAllowanceInvocation
     dsimp only at effect
     rw [call.target] at effect
     by_cases same : Sevm.argWord call.sevm 0 = call.sevm.caller.toB256
-    · simpa [writtenPair?, pair?, approval, same] using effect
+    · simpa only [writtenPair?, approval, Bool.false_eq_true, ↓reduceIte, pair?, same,
+      Option.filter_none] using effect
     · simp only [if_neg same] at effect
       obtain ⟨valid, result⟩ := effect
       rcases result with ⟨maximum, silent⟩ | ⟨finite, covered, stored, witness⟩
-      · simpa [writtenPair?, pair?, approval, same, Option.filter, maximum] using silent
-      · simpa [writtenPair?, pair?, approval, same, Option.filter, finite] using And.intro valid stored
+      · simpa only [writtenPair?, approval, Bool.false_eq_true, ↓reduceIte, Option.filter, pair?,
+        same, maximum, bne_self_eq_false] using silent
+      · simpa only [writtenPair?, approval, Bool.false_eq_true, ↓reduceIte, Option.filter, pair?,
+        same, bne_iff_ne, ne_eq, finite, not_false_eq_true] using And.intro valid stored
 
 /-- A retained transferFrom writer is backed by the executed SSTORE, even
 when a zero amount leaves its value unchanged. -/
@@ -1732,12 +1616,15 @@ theorem WethAllowanceInvocation.transferFrom_writer_has_sstore
   dsimp only at effect
   rw [call.target] at effect
   by_cases same : Sevm.argWord call.sevm 0 = call.sevm.caller.toB256
-  · simp [writtenPair?, pair?, approval, same] at writer
+  · simp only [writtenPair?, approval, Bool.false_eq_true, ↓reduceIte, pair?, same,
+    Option.filter_none, reduceCtorEq] at writer
   · simp only [if_neg same] at effect
     rcases effect.2 with ⟨maximum, silent⟩ | ⟨finite, covered, stored, witness⟩
-    · simp [writtenPair?, pair?, approval, same, Option.filter, maximum] at writer
+    · simp only [writtenPair?, approval, Bool.false_eq_true, ↓reduceIte, Option.filter, pair?,
+      same, maximum, bne_self_eq_false, reduceCtorEq] at writer
     · have pairEq : (Sevm.argWord call.sevm 0, call.sevm.caller.toB256) = p := by
-        simpa [writtenPair?, pair?, approval, same, Option.filter, finite] using writer
+        simpa only [writtenPair?, approval, Bool.false_eq_true, ↓reduceIte, Option.filter, pair?,
+          same, bne_iff_ne, ne_eq, finite, not_false_eq_true, Option.some.injEq] using writer
       subst p
       exact ⟨finite, covered, witness⟩
 
@@ -1761,7 +1648,7 @@ theorem ExactWethChildSuccess.worldProgramRun
   rcases executes with ⟨uses, childEvm, raw, slotEq, childExec⟩
   subst xl
   obtain ⟨errorNone, childOutput⟩ := childClean
-  have clean : child.error.isSome = false := by simp [errorNone]
+  have clean : child.error.isSome = false := by simp only [errorNone, Option.isSome_none]
   obtain ⟨rawPost, rawEq, rawError, settledState, settledOutput⟩ :=
     Blanc.MessageExecution.processMessage_clean_rawPost process clean
   subst raw
@@ -1770,10 +1657,12 @@ theorem ExactWethChildSuccess.worldProgramRun
     exact hfork.rules_stateGas_none
   have settleEq := (RunFrame.some_inv process).2
   have settledLogs : child.logs = rawPost.logs := by
-    simp [Frame.ofCall, Frame.settle, Frame.settleMsg,
-      executeCode.handleErrorWith_ok, processMessage.settle, stateGasNone] at settleEq
+    simp only [Frame.settle, Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
+      processMessage.settle, stateGasNone, executeCode.handleErrorWith_ok,
+      Except.bind_ok] at settleEq
     have childEq : child = rawPost := by
-      simpa [rawError] using settleEq
+      simpa only [rawError, Option.isSome_none, Bool.false_eq_true, ↓reduceIte,
+        Except.ok.injEq] using settleEq
     exact congrArg Devm.logs childEq
   obtain ⟨pcZero, codeEq, currentTarget, codeAddress, dataEq, -, storageEq,
     -⟩ := Blanc.MessageExecution.processMessage_entry_facts
@@ -1789,9 +1678,8 @@ theorem ExactWethChildSuccess.worldProgramRun
   have callerEq := congrArg (fun evm : Evm => evm.sta.caller) evmEq
   have valueEq := congrArg (fun evm : Evm => evm.sta.value) evmEq
   have logsEq := congrArg (fun evm : Evm => evm.dyna.logs) evmEq
-  dsimp [Jaune.Frame.ofCall, initEvm, initSevm, initDevm, Msg.withBenv]
-    at callerEq valueEq logsEq
-  simp [benvStateGasNone] at logsEq
+  dsimp only [Frame.ofCall, Msg.withBenv, initEvm, initSevm, initDevm] at callerEq valueEq logsEq
+  simp only [benvStateGasNone] at logsEq
   have storageWorld : Devm.getStor childEvm.dyna =
       Devm.getStor parentPre := by
     funext owner
@@ -1811,7 +1699,7 @@ theorem ExactWethChildSuccess.worldProgramRun
   have finalStorage : Devm.getStor parentPost = Devm.getStor rawPost := by
     exact funext (getStor_eq_of_state_eq (postState.trans settledState))
   have childNotError : ¬ child.error.isSome := by
-    simpa using clean
+    simpa only [Bool.not_eq_true, Option.isSome_eq_false_iff, Option.isNone_iff_eq_none] using clean
   have finalLogs : parentPost.logs = parentPre.logs ++ rawPost.logs := by
     rw [if_neg childNotError, settledLogs] at postLogs
     exact postLogs
@@ -1865,7 +1753,8 @@ theorem SuccessfulWethWorldProgramRun.balanceOf_effect
   have member :
       (selector "balanceOf" [.address], nonpayable balanceOf) ∈
         Blanc.wethFuncs := by
-    simp [Blanc.wethFuncs]
+    simp only [wethFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   obtain ⟨bodyPre, -, entryState, entryMemory, entryLogs,
       entryOutput, bodyRun⟩ :=
     runCompiled_enters_wethNonpayable compiled selectorEq member
@@ -1910,7 +1799,8 @@ theorem SuccessfulWethProgramRun.balanceOf_effect
   have member :
       (selector "balanceOf" [.address], nonpayable balanceOf) ∈
         Blanc.wethFuncs := by
-    simp [Blanc.wethFuncs]
+    simp only [wethFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   obtain ⟨bodyPre, -, entryState, entryMemory, entryLogs,
       entryOutput, bodyRun⟩ :=
     runCompiled_enters_wethNonpayable compiled selectorEq member
@@ -1965,7 +1855,8 @@ theorem SuccessfulWethProgramRun.transfer_effect
   have member :
       (selector "transfer" [.address, .uint256], nonpayable transfer) ∈
         Blanc.wethFuncs := by
-    simp [Blanc.wethFuncs]
+    simp only [wethFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   obtain ⟨bodyPre, -, entryState, entryMemory, entryLogs,
       entryOutput, bodyRun⟩ :=
     runCompiled_enters_wethNonpayable compiled selectorEq member
@@ -2023,7 +1914,8 @@ theorem SuccessfulWethWorldProgramRun.transfer_effect
   have member :
       (selector "transfer" [.address, .uint256], nonpayable transfer) ∈
         Blanc.wethFuncs := by
-    simp [Blanc.wethFuncs]
+    simp only [wethFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   obtain ⟨bodyPre, -, entryState, entryMemory, entryLogs,
       entryOutput, bodyRun⟩ :=
     runCompiled_enters_wethNonpayable compiled selectorEq member
@@ -2095,7 +1987,8 @@ theorem SuccessfulWethWorldProgramRun.transferFrom_effect
   have member :
       (selector "transferFrom" [.address, .address, .uint256],
         nonpayable transferFrom) ∈ Blanc.wethFuncs := by
-    simp [Blanc.wethFuncs]
+    simp only [wethFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   obtain ⟨bodyPre, -, entryState, entryMemory, entryLogs,
       entryOutput, bodyRun⟩ :=
     runCompiled_enters_wethNonpayable compiled selectorEq member
@@ -2159,7 +2052,8 @@ theorem SuccessfulWethProgramRun.transferFrom_effect
   have member :
       (selector "transferFrom" [.address, .address, .uint256],
         nonpayable transferFrom) ∈ Blanc.wethFuncs := by
-    simp [Blanc.wethFuncs]
+    simp only [wethFuncs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
+      or_true]
   obtain ⟨bodyPre, -, entryState, entryMemory, entryLogs,
       entryOutput, bodyRun⟩ :=
     runCompiled_enters_wethNonpayable compiled selectorEq member

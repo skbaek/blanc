@@ -80,9 +80,9 @@ def run (l : Ledger) : List Call → Option Ledger
   | [] => some l
   | c :: cs => (l.step c).bind fun l' => l'.run cs
 
-@[simp] theorem run_nil (l : Ledger) : l.run [] = some l := rfl
+theorem run_nil (l : Ledger) : l.run [] = some l := rfl
 
-@[simp] theorem run_cons (l : Ledger) (c : Call) (cs : List Call) :
+theorem run_cons (l : Ledger) (c : Call) (cs : List Call) :
     l.run (c :: cs) = (l.step c).bind fun l' => l'.run cs := rfl
 
 theorem run_append (l : Ledger) (xs ys : List Call) :
@@ -98,9 +98,8 @@ theorem run_append (l : Ledger) (xs ys : List Call) :
 /-- The total booked balance, as a natural number. -/
 def total (l : Ledger) : Nat := sum l.bal
 
-@[simp] theorem setBal_bal (l : Ledger) (a : Adr) (w : B256) : (l.setBal a w).bal = Function.update l.bal a w := rfl
-@[simp] theorem setBal_allow (l : Ledger) (a : Adr) (w : B256) : (l.setBal a w).allow = l.allow := rfl
-@[simp] theorem setAllow_bal (l : Ledger) (o p : Adr) (w : B256) : (l.setAllow o p w).bal = l.bal := rfl
+theorem setBal_bal (l : Ledger) (a : Adr) (w : B256) : (l.setBal a w).bal = Function.update l.bal a w := rfl
+theorem setAllow_bal (l : Ledger) (o p : Adr) (w : B256) : (l.setAllow o p w).bal = l.bal := rfl
 
 theorem increase_setBal (l : Ledger) (a : Adr) (v : B256) :
     Increase a v l.bal (l.setBal a (l.bal a + v)).bal := by
@@ -108,9 +107,9 @@ theorem increase_setBal (l : Ledger) (a : Adr) (v : B256) :
   by_cases h : a = b
   · subst h
     refine ⟨fun _ => ?_, fun h' => absurd rfl h'⟩
-    simp
+    simp only [setBal_bal, Function.update_self]
   · refine ⟨fun h' => absurd h' h, fun _ => ?_⟩
-    simp [Function.update_of_ne (Ne.symm h)]
+    simp only [setBal_bal, Function.update_of_ne (Ne.symm h)]
 
 theorem decrease_setBal (l : Ledger) (a : Adr) (v : B256) :
     Decrease a v l.bal (l.setBal a (l.bal a - v)).bal := by
@@ -118,9 +117,9 @@ theorem decrease_setBal (l : Ledger) (a : Adr) (v : B256) :
   by_cases h : a = b
   · subst h
     refine ⟨fun _ => ?_, fun h' => absurd rfl h'⟩
-    simp
+    simp only [setBal_bal, Function.update_self]
   · refine ⟨fun h' => absurd h' h, fun _ => ?_⟩
-    simp [Function.update_of_ne (Ne.symm h)]
+    simp only [setBal_bal, Function.update_of_ne (Ne.symm h)]
 
 /-- A credit raises the total by at most the credit. -/
 theorem sum_deposit_le (l : Ledger) (a : Adr) (v : B256) :
@@ -157,8 +156,8 @@ theorem transferFrom_total_le {l l' : Ledger} {who src dst : Adr} {wad : B256}
     · cases h
     · cases h
       have := sum_xfer_le (l.setAllow src who (l.allow src who - wad)) src dst
-        (wad := wad) (by simpa using hle)
-      simpa [total] using this
+        (wad := wad) (by simpa only [setAllow_bal] using hle)
+      simpa only [total, ge_iff_le, setAllow_bal] using this
   · cases h
     exact sum_xfer_le l src dst hle
 
@@ -218,7 +217,7 @@ theorem step_total_le {l l' : Ledger} {c : Call} (h : l.step c = some l') :
   | approve who g w =>
       rw [step_approve] at h
       cases h
-      simp [total, Call.inflow]
+      simp only [total, setAllow_bal, Call.inflow, add_zero, Std.le_refl]
 
 end Ledger
 
@@ -297,7 +296,7 @@ theorem run_ledger (s : State) (cs : List Call) :
       simp only [run, Ledger.run_cons, step]
       cases hl : s.ledger.step c with
       | none => rfl
-      | some l' => simpa [Option.bind] using ih ⟨l', s.eth + c.inflow - c.outflow⟩
+      | some l' => simpa only [Option.bind, Option.map_some] using ih ⟨l', s.eth + c.inflow - c.outflow⟩
 
 end State
 

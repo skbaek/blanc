@@ -41,10 +41,10 @@ theorem registryOn_deployedStor {probes : List B256}
     registryOn_empty_raw hp
   have h1 : RegistryOn
       (solRegistryStorage (Stor.empty.set 0 1814400)) [] probes :=
-    h0.set_foreign (hsingle 0 (by simp))
+    h0.set_foreign (hsingle 0 (by simp only [List.mem_cons, List.not_mem_nil, or_false, true_or]))
   have h2 : RegistryOn
       (solRegistryStorage ((Stor.empty.set 0 1814400).set 1 31536000)) [] probes :=
-    h1.set_foreign (hsingle 1 (by simp))
+    h1.set_foreign (hsingle 1 (by simp only [List.mem_cons, List.not_mem_nil, or_false, or_true]))
   have hdep : Creation.deployedStor =
       (Stor.empty.set 0 1814400).set 1 31536000 := rfl
   rw [hdep]

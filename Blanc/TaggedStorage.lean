@@ -21,16 +21,16 @@ private theorem payload_and_low252Mask {payload : B256}
     payload &&& low252Mask = payload := by
   apply B256.toNat_inj
   rw [B256.toNat_and, low252Mask,
-    B256.toNat_toB256_of_lt (by norm_num : 2 ^ 252 - 1 < 2 ^ 256)]
+    B256.toNat_toB256_of_lt (by norm_num only : 2 ^ 252 - 1 < 2 ^ 256)]
   apply Nat.eq_of_testBit_eq
   intro i
   rw [Nat.testBit_and, Nat.testBit_two_pow_sub_one]
   by_cases hi : i < 252
-  · simp [hi]
+  · simp only [hi, decide_true, Bool.and_true]
   · rw [Nat.testBit_lt_two_pow
       (Nat.lt_of_lt_of_le hpayload
         (Nat.pow_le_pow_right (by omega) (by omega)))]
-    simp [hi]
+    simp only [hi, decide_false, Bool.and_self]
 
 /-- A payload already below the 252-bit boundary is unchanged by masking. -/
 theorem encode_eq_of_payload_lt {region : Nat} {payload : B256}
@@ -67,7 +67,7 @@ theorem encode_toNat_of_bounds
         Nat.mul_le_mul_right (2 ^ 252) (Nat.succ_le_iff.mpr hregion)
       _ = 2 ^ 256 := by
         rw [show 256 = 4 + 252 by omega, pow_add]
-        norm_num
+        norm_num only
   have horlt :
       region * 2 ^ 252 ||| payload.toNat < 2 ^ 256 := by
     rwa [hor]
@@ -90,7 +90,7 @@ theorem encode_region_payload_of_bounds
     (encode region payload).toNat / 2 ^ 252 = region ∧
     Nat.toB256 ((encode region payload).toNat % 2 ^ 252) = payload := by
   rw [encode_toNat_of_bounds hregion hpayload]
-  have hpositive : 0 < 2 ^ 252 := by norm_num
+  have hpositive : 0 < 2 ^ 252 := by norm_num only
   constructor
   · omega
   · have hmod : (region * 2 ^ 252 + payload.toNat) % 2 ^ 252 =

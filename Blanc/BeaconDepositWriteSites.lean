@@ -22,17 +22,6 @@ open Jaune
 
 /-! ## Exact effect vocabularies -/
 
-/-- The successful deposit's complete retained write chronology: count first,
-then the unique first-live branch cell. -/
-def depositStorageEffectTriples
-    (owner : Adr) (stor : Stor) (height : Nat)
-    (depositDataRoot : B256) : List (Adr × B256 × B256) :=
-  [(owner, depositCountSlot,
-      Nat.toB256 (accOfStor stor).count + 1),
-    (owner, branchSlot height,
-      accumulatedNode Bytes.sha256 (accOfStor stor).branch
-        0 height depositDataRoot)]
-
 /-- The constructor's complete retained write chronology: zero-hash slots one
 through thirty-one in increasing order, with the matching model digest. -/
 def constructorStorageEffectTriples
@@ -52,12 +41,12 @@ def constructorStorageEffectTriplesFrom
           zeroHash Bytes.sha256 (height + 1)) ::
         constructorStorageEffectTriplesFrom owner (height + 1) remaining
 
-@[simp] theorem constructorStorageEffectTriplesFrom_zero
+theorem constructorStorageEffectTriplesFrom_zero
     (owner : Adr) (height : Nat) :
     constructorStorageEffectTriplesFrom owner height 0 = [] :=
   rfl
 
-@[simp] theorem constructorStorageEffectTriplesFrom_succ
+theorem constructorStorageEffectTriplesFrom_succ
     (owner : Adr) (height remaining : Nat) :
     constructorStorageEffectTriplesFrom owner height (remaining + 1) =
       (owner, zeroHashSlot (height + 1),
@@ -144,23 +133,6 @@ theorem Exec.NinstOccurrence.beaconRuntime_sstore_pc_of_rawFrameRoot
   · right
     rw [← sitePc]
     exact branchPc
-
-/-- Every same-frame raw constructor SSTORE belongs to the unique recursive
-zero-hash write site in the compiled creation prefix. -/
-theorem Exec.Deriv.beaconConstructor_sstore_pc
-    {root target : Exec.Deriv}
-    (identity : (Blanc.Exec.Deriv.exactProgramPrefix
-      constructorProgram constructorInitPrefix code root))
-    (sameFrame : Exec.Deriv.ParentPrefix root target)
-    (storeAt : Ninst.At target.sevm.code target.pc (.reg .sstore)) :
-    target.pc = 137 := by
-  rcases (Blanc.Exec.Deriv.sstore_sourceSite_appended (root := root)) identity sameFrame storeAt with
-    ⟨site, sourceMember, sitePc, siteInstruction⟩
-  have inventoryMember : site ∈ constructorSstoreSourceSites :=
-    mem_constructorSstoreSourceSites_iff.mpr
-      ⟨sourceMember, siteInstruction⟩
-  rw [← sitePc]
-  exact constructorSstoreSourceSite_pc inventoryMember
 
 /-- The constructor write role is uniquely the zero-hash continuation at
 function-table entry four and prefix PC 137. -/

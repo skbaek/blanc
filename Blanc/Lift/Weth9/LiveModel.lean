@@ -161,10 +161,11 @@ theorem weth9_withdraw_model_live {sevm : Sevm} {pre : Devm} {G : Nat} {K : Key 
   have hnlt : ¬ (Devm.getStor pre sevm.currentTarget).get (balSlot sevm.caller) <
       Sevm.dataWord sevm 4 := by
     intro hlt
-    simp [wdCall, Call.stor, hlt] at hs'
+    simp only [Call.stor, wdCall, hlt, ↓reduceIte, reduceCtorEq] at hs'
   have hle : Sevm.dataWord sevm 4 ≤ pre.getStorVal sevm.currentTarget (balSlot sevm.caller) :=
     B256.not_lt.mp hnlt
-  have hbk : (Key.extend K (wdCall sevm).keys) (.bal sevm.caller) := Or.inr (by simp [wdCall, Call.keys])
+  have hbk : (Key.extend K (wdCall sevm).keys) (.bal sevm.caller) := Or.inr (by simp only [Call.keys,
+    wdCall, List.mem_cons, List.not_mem_nil, or_false])
   have hb := (hinv.extend hfresh).balance_le hbk
   have h_eth : ¬ (pre.getAcct sevm.currentTarget).bal < Sevm.dataWord sevm 4 := by
     intro hlt

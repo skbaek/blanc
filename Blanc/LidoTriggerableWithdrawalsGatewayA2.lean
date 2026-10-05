@@ -17,11 +17,6 @@ open Jaune
 
 namespace LidoTriggerableWithdrawalsGateway
 
-/-! ## Source projections used by the pause/query rows -/
-
-def isPausedSourceProjection (resumeSince timestamp : B256) : B256 :=
-  timestamp <? resumeSince
-
 /-! ## Exact auxiliary reverter consumers
 
 `runtime` stores the base auxiliary table after the main entry.  The index
@@ -37,10 +32,11 @@ theorem missingRole_call_reverts_exact
         post.output = customErrorData "AccessControlUnauthorizedAccount") := by
   have hget : ((runtime dp).main :: (runtime dp).aux)[missingRoleSlot]? =
       some (runtimeError "AccessControlUnauthorizedAccount") := by
-    simp [runtime, aux, baseAux, missingRoleSlot]
+    simp only [runtime, aux, baseAux, List.cons_append, List.nil_append, List.append_assoc,
+      missingRoleSlot, List.length_cons, lt_add_iff_pos_left, add_pos_iff, Nat.ofNat_pos, or_true,
+      getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   obtain ⟨_, _, hbody⟩ := runCompiledTo_call_inv hget hcall
-  simpa [runtimeError, customErrorData] using
-    (runCompiledTo_revertSelector_inv hbody)
+  simpa only [ExceptT.stM_eq, customErrorData] using (runCompiledTo_revertSelector_inv hbody)
 
 theorem pausedExpected_call_reverts_exact
     {dp : DeployParams} {sevm : Sevm} {entry : Devm} {out : Execution}
@@ -51,10 +47,11 @@ theorem pausedExpected_call_reverts_exact
         post.output = customErrorData "PausedExpected") := by
   have hget : ((runtime dp).main :: (runtime dp).aux)[pausedExpectedSlot]? =
       some (runtimeError "PausedExpected") := by
-    simp [runtime, aux, baseAux, pausedExpectedSlot]
+    simp only [runtime, aux, baseAux, List.cons_append, List.nil_append, List.append_assoc,
+      pausedExpectedSlot, List.length_cons, lt_add_iff_pos_left, add_pos_iff, Nat.ofNat_pos,
+      or_true, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
   obtain ⟨_, _, hbody⟩ := runCompiledTo_call_inv hget hcall
-  simpa [runtimeError, customErrorData] using
-    (runCompiledTo_revertSelector_inv hbody)
+  simpa only [ExceptT.stM_eq, customErrorData] using (runCompiledTo_revertSelector_inv hbody)
 
 /-! The A2 route consumer for the public dispatcher.  It exposes the exact
     selected body after the program entry guard and selector load. -/

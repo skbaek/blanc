@@ -196,10 +196,10 @@ macro_rules
                 (Func.of_inv Devm.storageView Devm.storageView (by func_inv) run)
                 sevm.currentTarget) key))
 
-@[simp] theorem ContractSpec.ofStorageOnly_prog {p : Prog} {P : Stor → Prop} :
+theorem ContractSpec.ofStorageOnly_prog {p : Prog} {P : Stor → Prop} :
     (ContractSpec.ofStorageOnly p P).prog = p := rfl
 
-@[simp] theorem ContractSpec.ofStorageOnly_inv {p : Prog} {P : Stor → Prop}
+theorem ContractSpec.ofStorageOnly_inv {p : Prog} {P : Stor → Prop}
     {s : Stor} {v b : B256} :
     (ContractSpec.ofStorageOnly p P).Inv s v b = P s := rfl
 
@@ -307,12 +307,12 @@ theorem ContractSpec.ofStorageOnly_of_call_sameBenv {p : Prog} {P : Stor → Pro
     rw [hp11]
   have h_st9 : devm9.state = devm7.state := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).state) hp11
-    dsimp at h
+    dsimp only at h
     rw [← h, GasSchedule.accessDelegation_state]
     rfl
   have h_stk9 : devm9.stack = devm7.stack := by
     have h := congrArg (fun q => (q.2.2.2.2 : Devm).stack) hp11
-    dsimp at h
+    dsimp only at h
     rw [← h, GasSchedule.accessDelegation_stack]
     rfl
   -- charge the call gas

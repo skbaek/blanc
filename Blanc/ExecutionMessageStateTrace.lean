@@ -25,7 +25,6 @@ inductive MessageStateBoundaryKind where
   | entry
   | settlement
   | rollback
-  deriving DecidableEq
 
 /-- Exact provenance for one retained message-level state boundary. -/
 inductive MessageStateBoundaryOrigin where

@@ -1636,7 +1636,6 @@ def render_lean(registry: Registry) -> str:
         "  preferredPath : String",
         "  symbols : List String",
         "  boundary : String",
-        "  deriving Repr, Inhabited",
         "",
         "/-- Recipes generated from `scripts/proof-recipes.toml`, in registry order. -/",
         "def recipes : List Recipe := [",

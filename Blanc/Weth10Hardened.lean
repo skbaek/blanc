@@ -52,17 +52,17 @@ theorem CountedFrame.permanentOutflow_eq (record : CountedFrame) (u : Adr) :
       | some action => action.atom.outflow u
       | none => 0 := rfl
 
-@[simp] theorem FlowAtom.outflow_ordinaryMint (raw : B256) (recipient : Adr)
+theorem FlowAtom.outflow_ordinaryMint (raw : B256) (recipient : Adr)
     (amount : Nat) (u : Adr) :
     (FlowAtom.ordinaryMint raw recipient amount).outflow u = 0 := by
   by_cases hrec : recipient = u <;>
-    simp [FlowAtom.outflow, FlowAtom.holderFlow, HolderFlow.zero, hrec]
+    simp only [outflow, holderFlow, hrec, ↓reduceIte, HolderFlow.zero, add_zero]
 
-@[simp] theorem FlowAtom.outflow_flashPair (raw : B256) (receiver : Adr)
+theorem FlowAtom.outflow_flashPair (raw : B256) (receiver : Adr)
     (amount : Nat) (u : Adr) :
     (FlowAtom.flashPair raw receiver amount).outflow u = 0 := by
   by_cases hrec : receiver = u <;>
-    simp [FlowAtom.outflow, FlowAtom.holderFlow, HolderFlow.zero, hrec]
+    simp only [outflow, holderFlow, hrec, ↓reduceIte, HolderFlow.zero, add_zero]
 
 /-- A redemption carries permanent outflow for `u` only when `u` is its
 normalized source. -/
@@ -72,7 +72,8 @@ theorem FlowAtom.source_of_outflow_redemption {raw : B256}
     source = u := by
   by_cases hsource : source = u
   · exact hsource
-  · simp [FlowAtom.outflow, FlowAtom.holderFlow, HolderFlow.zero, hsource] at h
+  · simp only [outflow, holderFlow, hsource, ↓reduceIte, HolderFlow.zero, add_zero, ne_eq,
+    not_true_eq_false] at h
 
 /-- A transfer carries permanent outflow for `u` only when `u` is its
 normalized source. -/
@@ -84,8 +85,8 @@ theorem FlowAtom.source_of_outflow_transfer {rawSource rawRecipient : B256}
   by_cases hsource : source = u
   · exact hsource
   · by_cases hrecipient : recipient = u <;>
-      simp [FlowAtom.outflow, FlowAtom.holderFlow, HolderFlow.zero, hsource,
-        hrecipient] at h
+      simp only [outflow, holderFlow, hsource, ↓reduceIte, hrecipient, HolderFlow.zero, add_zero,
+        ne_eq, not_true_eq_false] at h
 
 /-- Total permanent outflow of holder `u` recorded by a counted ledger. -/
 def ledgerOutflow (u : Adr) : List CountedFrame → Nat
@@ -100,23 +101,23 @@ def actionOutflow (u : Adr) : List FlowAction → Nat
           (action.atom.holderFlow u).externalTransferredOut) +
         actionOutflow u rest
 
-@[simp] theorem ledgerOutflow_nil (u : Adr) : ledgerOutflow u [] = 0 := rfl
+theorem ledgerOutflow_nil (u : Adr) : ledgerOutflow u [] = 0 := rfl
 
-@[simp] theorem actionOutflow_nil (u : Adr) : actionOutflow u [] = 0 := rfl
+theorem actionOutflow_nil (u : Adr) : actionOutflow u [] = 0 := rfl
 
 theorem ledgerOutflow_append (u : Adr) (left right : List CountedFrame) :
     ledgerOutflow u (left ++ right) =
       ledgerOutflow u left + ledgerOutflow u right := by
   induction left with
-  | nil => simp [ledgerOutflow]
-  | cons frame rest ih => simp [ledgerOutflow, ih, Nat.add_assoc]
+  | nil => simp only [List.nil_append, ledgerOutflow, zero_add]
+  | cons frame rest ih => simp only [List.cons_append, ledgerOutflow, ih, Nat.add_assoc]
 
 theorem actionOutflow_append (u : Adr) (left right : List FlowAction) :
     actionOutflow u (left ++ right) =
       actionOutflow u left + actionOutflow u right := by
   induction left with
-  | nil => simp [actionOutflow]
-  | cons action rest ih => simp [actionOutflow, ih, Nat.add_assoc]
+  | nil => simp only [List.nil_append, actionOutflow, zero_add]
+  | cons action rest ih => simp only [List.cons_append, actionOutflow, ih, Nat.add_assoc]
 
 /-! ## Selector separations
 
@@ -148,7 +149,7 @@ structure LedgerMirrors (dp : DeployParams) (ca : Adr)
 
 theorem LedgerMirrors.nil (dp : DeployParams) (ca : Adr) :
     LedgerMirrors dp ca [] [] :=
-  ⟨by simp, by simp⟩
+  ⟨by simp only [List.not_mem_nil, IsEmpty.forall_iff, implies_true], by simp only [ledgerOutflow_nil, actionOutflow_nil, implies_true]⟩
 
 theorem LedgerMirrors.append {dp : DeployParams} {ca : Adr}
     {leftLedger rightLedger : List CountedFrame}
@@ -187,11 +188,11 @@ theorem LedgerMirrors.ofFrame (dp : DeployParams) (ca : Adr)
     exact ⟨frame, rfl⟩
   · cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
     | none =>
-        simp [ledgerOutflow, CountedFrame.permanentOutflow,
-          CountedFrame.ofFrame, haction]
+        simp only [ledgerOutflow, CountedFrame.permanentOutflow, CountedFrame.ofFrame, haction,
+          add_zero, Option.toList_none, actionOutflow_nil]
     | some action =>
-        simp [ledgerOutflow, actionOutflow, CountedFrame.permanentOutflow,
-          CountedFrame.ofFrame, haction]
+        simp only [ledgerOutflow, CountedFrame.permanentOutflow, CountedFrame.ofFrame, haction,
+          add_zero, Option.toList_some, actionOutflow]
 
 /-- One committed frame's own record placed around its descendant stream
 mirrors that frame's action prefixed to the descendant actions. -/
@@ -206,7 +207,7 @@ theorem LedgerMirrors.frameContribution {dp : DeployParams} {ca : Adr}
     · rw [Exec.frameContribution_eq_append dp ca frame inner hexact hlast]
       exact h.append_comm (LedgerMirrors.ofFrame dp ca frame)
     · rw [Exec.frameContribution_eq_cons dp ca frame inner hexact
-        (by simpa using hlast)]
+        (by simpa only [Bool.not_eq_true] using hlast)]
       exact (LedgerMirrors.ofFrame dp ca frame).append h
   · rw [Exec.frameContribution_eq_inner dp ca frame inner hexact]
     have hnone : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none := by
@@ -215,7 +216,7 @@ theorem LedgerMirrors.frameContribution {dp : DeployParams} {ca : Adr}
       | some action =>
           exact absurd (Blanc.Weth10.Exec.Frame.exactInvocation_of_flowAction?_eq_some haction)
             hexact
-    simpa [hnone] using h
+    simpa only [hnone, Option.toList_none, List.nil_append] using h
 
 /-- The counted stream of a derivation's committed descendants mirrors their
 classified actions. -/
@@ -522,7 +523,7 @@ theorem ProcessMessageTrace.allFramesCovered
     RetainedXlot.AllFramesCovered trace.retained := by
   rcases trace with ⟨slot, retained, hrun⟩
   cases retained with
-  | none => simp [RetainedXlot.AllFramesCovered]
+  | none => simp only [RetainedXlot.AllFramesCovered]
   | @some pc sevm pre execution run =>
       have henter : (Frame.ofCall msg).enter =
           .run ⟨pc, sevm, pre⟩ :=
@@ -537,7 +538,7 @@ theorem ProcessCreateMessageTrace.allFramesCovered
     RetainedXlot.AllFramesCovered trace.retained := by
   rcases trace with ⟨slot, retained, hrun⟩
   cases retained with
-  | none => simp [RetainedXlot.AllFramesCovered]
+  | none => simp only [RetainedXlot.AllFramesCovered]
   | @some pc sevm pre execution run =>
       have henter : (Frame.ofCreate msg).enter =
           .run ⟨pc, sevm, pre⟩ :=
@@ -601,7 +602,7 @@ theorem ApplyTransactionsTrace.rootedLedger (dp : DeployParams) (ca : Adr) :
   | _, _, _, _, _, .cons head tail, hfork =>
       (TransactionTrace.rootedLedger dp ca head hfork).append
         (ApplyTransactionsTrace.rootedLedger dp ca tail
-          (by simpa [Benv.withState] using hfork))
+          (by simpa only [Benv.withState] using hfork))
 
 theorem SystemMessageTrace.rootedLedger (dp : DeployParams) (ca : Adr)
     {benv : Benv} {target : Adr} {data : Bytes}
@@ -618,7 +619,7 @@ theorem RequestsTrace.rootedLedger (dp : DeployParams) (ca : Adr)
     RootedLedger dp ca (trace.attributionStream dp ca) :=
   (SystemMessageTrace.rootedLedger dp ca trace.withdrawal hfork).append
     (SystemMessageTrace.rootedLedger dp ca trace.consolidation
-      (by simpa [Benv.withState] using hfork))
+      (by simpa only [Benv.withState] using hfork))
 
 theorem AppliedBodyTrace.rootedLedger (dp : DeployParams) (ca : Adr)
     {benv : Benv} {txs : List (Bytes ⊕ Tx)} {wds : List Withdrawal}
@@ -682,7 +683,8 @@ theorem actionOutflow_eq_holderFlow (u : Adr) (actions : List FlowAction) :
       have hsplit : holderFlowOfActions (action :: rest) u =
           (action.atom.holderFlow u).add (holderFlowOfActions rest u) := by
         have h := holderFlowOfActions_append [action] rest u
-        simpa [holderFlowOfActions] using h
+        simpa only [holderFlowOfActions, List.foldl_cons, HolderFlow.zero_add, List.cons_append,
+          List.nil_append, List.foldl_nil] using h
       rw [actionOutflow, ih, hsplit]
       simp only [HolderFlow.add]
       omega
@@ -758,14 +760,14 @@ private theorem delegated_witness {e : Sevm} {pre post : Devm} {u : Adr}
   unfold DebitWitness
   by_cases hself : Sevm.argWord e 0 = e.caller.toB256
   · refine Or.inl ⟨Or.inr ?_, ?_⟩
-    · simp [delegatedDebitOf, callerAllowanceBranch, hself]
+    · simp only [delegatedDebitOf, hself, callerAllowanceBranch, ↓reduceIte]
     · show e.caller = u
       rw [← hsource, hself, toAdr_toB256]
   · refine Or.inr ⟨spendEventOf e pre, hevent hself, hsource, ?_⟩
     simp only [delegatedDebitOf, callerAllowanceBranch, if_neg hself]
     split <;>
-      simp [delegatedKey?, spendEventOf, AllowanceEvent.key,
-        callerAllowanceRuntimeKey_eq_projected]
+      simp only [delegatedKey?, callerAllowanceRuntimeKey_eq_projected, AllowanceEvent.key,
+        spendEventOf]
 
 /-- Frame-local reconciliation of the three if-chains.  The classified atom,
 the debit provenance and the allowance visit of one exact invocation are
@@ -779,79 +781,79 @@ theorem primaryDebit_witness {e : Sevm} {pre post : Devm} {u : Adr}
   simp only [primaryFlowAtom] at hatom
   split_ifs at hatom with h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 h11
   · cases hatom
-    simp at hout
+    simp only [FlowAtom.outflow_ordinaryMint, ne_eq, not_true_eq_false] at hout
   · cases hatom
-    simp at hout
+    simp only [FlowAtom.outflow_ordinaryMint, ne_eq, not_true_eq_false] at hout
   · cases hatom
-    simp at hout
+    simp only [FlowAtom.outflow_ordinaryMint, ne_eq, not_true_eq_false] at hout
   · cases hatom
     have hcaller : e.caller = u :=
       FlowAtom.source_of_outflow_redemption hout
     refine ⟨directDebitOf e, ?_, Or.inl ⟨Or.inl rfl, hcaller⟩⟩
-    rcases (by simpa using h4 :
+    rcases (by simpa only [Bool.or_eq_true, decide_eq_true_eq] using h4 :
         Sevm.selector e = transferSelector ∨
           Sevm.selector e = transferAndCallSelector) with h | h <;>
-      simp [primaryDebitProvenance, directDebitOf, h1, h]
+      simp only [primaryDebitProvenance, h1, ↓reduceIte, h, decide_true, Bool.true_or, directDebitOf, Bool.or_true]
   · cases hatom
     have hcaller : e.caller = u :=
       FlowAtom.source_of_outflow_transfer hout
     refine ⟨directDebitOf e, ?_, Or.inl ⟨Or.inl rfl, hcaller⟩⟩
-    rcases (by simpa using h4 :
+    rcases (by simpa only [Bool.or_eq_true, decide_eq_true_eq] using h4 :
         Sevm.selector e = transferSelector ∨
           Sevm.selector e = transferAndCallSelector) with h | h <;>
-      simp [primaryDebitProvenance, directDebitOf, h1, h]
+      simp only [primaryDebitProvenance, h1, ↓reduceIte, h, decide_true, Bool.true_or, directDebitOf, Bool.or_true]
   · cases hatom
     refine ⟨delegatedDebitOf e pre, ?_,
       delegated_witness ?_ (FlowAtom.source_of_outflow_redemption hout)⟩
-    · simp [primaryDebitProvenance, delegatedDebitOf, h1, h6,
-        transferFromSelector_ne_transferSelector,
-        transferFromSelector_ne_transferAndCallSelector,
-        transferFromSelector_ne_withdrawSelector,
-        transferFromSelector_ne_withdrawToSelector]
+    · simp only [primaryDebitProvenance, h1, ↓reduceIte, h6,
+      transferFromSelector_ne_transferSelector, decide_false,
+      transferFromSelector_ne_transferAndCallSelector, Bool.or_self,
+      transferFromSelector_ne_withdrawSelector, transferFromSelector_ne_withdrawToSelector,
+      Bool.false_eq_true, delegatedDebitOf]
     · intro hself
-      simp [frameAllowanceEvent, spendEventOf, h1, h6, hself,
-        transferFromSelector_ne_approveSelector,
-        transferFromSelector_ne_approveAndCallSelector,
-        transferFromSelector_ne_permitSelector]
+      simp only [frameAllowanceEvent, h1, ↓reduceIte, h6, transferFromSelector_ne_approveSelector,
+        decide_false, transferFromSelector_ne_approveAndCallSelector, Bool.or_self,
+        Bool.false_eq_true, transferFromSelector_ne_permitSelector, decide_true, Bool.true_or,
+        hself, spendEventOf]
   · cases hatom
     refine ⟨delegatedDebitOf e pre, ?_,
       delegated_witness ?_ (FlowAtom.source_of_outflow_transfer hout)⟩
-    · simp [primaryDebitProvenance, delegatedDebitOf, h1, h6,
-        transferFromSelector_ne_transferSelector,
-        transferFromSelector_ne_transferAndCallSelector,
-        transferFromSelector_ne_withdrawSelector,
-        transferFromSelector_ne_withdrawToSelector]
+    · simp only [primaryDebitProvenance, h1, ↓reduceIte, h6,
+      transferFromSelector_ne_transferSelector, decide_false,
+      transferFromSelector_ne_transferAndCallSelector, Bool.or_self,
+      transferFromSelector_ne_withdrawSelector, transferFromSelector_ne_withdrawToSelector,
+      Bool.false_eq_true, delegatedDebitOf]
     · intro hself
-      simp [frameAllowanceEvent, spendEventOf, h1, h6, hself,
-        transferFromSelector_ne_approveSelector,
-        transferFromSelector_ne_approveAndCallSelector,
-        transferFromSelector_ne_permitSelector]
+      simp only [frameAllowanceEvent, h1, ↓reduceIte, h6, transferFromSelector_ne_approveSelector,
+        decide_false, transferFromSelector_ne_approveAndCallSelector, Bool.or_self,
+        Bool.false_eq_true, transferFromSelector_ne_permitSelector, decide_true, Bool.true_or,
+        hself, spendEventOf]
   · cases hatom
     have hcaller : e.caller = u :=
       FlowAtom.source_of_outflow_redemption hout
     refine ⟨directDebitOf e, ?_, Or.inl ⟨Or.inl rfl, hcaller⟩⟩
-    simp [primaryDebitProvenance, directDebitOf, h1, h8]
+    simp only [primaryDebitProvenance, h1, ↓reduceIte, h8, decide_true, Bool.or_true, Bool.true_or,
+      directDebitOf]
   · cases hatom
     have hcaller : e.caller = u :=
       FlowAtom.source_of_outflow_redemption hout
     refine ⟨directDebitOf e, ?_, Or.inl ⟨Or.inl rfl, hcaller⟩⟩
-    simp [primaryDebitProvenance, directDebitOf, h1, h9]
+    simp only [primaryDebitProvenance, h1, ↓reduceIte, h9, decide_true, Bool.or_true, directDebitOf]
   · cases hatom
     refine ⟨delegatedDebitOf e pre, ?_,
       delegated_witness ?_ (FlowAtom.source_of_outflow_redemption hout)⟩
-    · simp [primaryDebitProvenance, delegatedDebitOf, h1, h10,
-        withdrawFromSelector_ne_transferSelector,
-        withdrawFromSelector_ne_transferAndCallSelector,
-        withdrawFromSelector_ne_withdrawSelector,
-        withdrawFromSelector_ne_withdrawToSelector,
-        withdrawFromSelector_ne_transferFromSelector]
+    · simp only [primaryDebitProvenance, h1, ↓reduceIte, h10,
+      withdrawFromSelector_ne_transferSelector, decide_false,
+      withdrawFromSelector_ne_transferAndCallSelector, Bool.or_self,
+      withdrawFromSelector_ne_withdrawSelector, withdrawFromSelector_ne_withdrawToSelector,
+      Bool.false_eq_true, withdrawFromSelector_ne_transferFromSelector, delegatedDebitOf]
     · intro hself
-      simp [frameAllowanceEvent, spendEventOf, h1, h10, hself,
-        withdrawFromSelector_ne_approveSelector,
-        withdrawFromSelector_ne_approveAndCallSelector,
-        withdrawFromSelector_ne_permitSelector]
+      simp only [frameAllowanceEvent, h1, ↓reduceIte, h10, withdrawFromSelector_ne_approveSelector,
+        decide_false, withdrawFromSelector_ne_approveAndCallSelector, Bool.or_self,
+        Bool.false_eq_true, withdrawFromSelector_ne_permitSelector, decide_true, Bool.or_true,
+        hself, spendEventOf]
   · cases hatom
-    simp at hout
+    simp only [FlowAtom.outflow_flashPair, ne_eq, not_true_eq_false] at hout
 
 /-- The classified action of a frame carries exactly the deterministic atom
 and debit computed from that frame's entry context. -/
@@ -864,12 +866,13 @@ theorem Exec.Frame.flowAction?_inv {dp : DeployParams} {ca : Adr}
   unfold Exec.Frame.flowAction? at haction
   split at haction
   · cases hatom : primaryFlowAtom frame.sevm with
-    | none => rw [hatom] at haction; exact absurd haction (by simp)
+    | none => rw [hatom] at haction; exact absurd haction (by simp only [Option.map_none,
+      reduceCtorEq, not_false_eq_true])
     | some atom =>
         rw [hatom] at haction
         cases haction
         exact ⟨rfl, rfl⟩
-  · exact absurd haction (by simp)
+  · exact absurd haction (by simp only [reduceCtorEq, not_false_eq_true])
 
 /-- Only the `approve` arm records an `approveStore` visit, and that arm's
 owner word is the clean `CALLER` word of the visiting frame. -/
@@ -882,7 +885,7 @@ theorem frameAllowanceEvent_approveStore_owner {e : Sevm} {pre post : Devm}
   split_ifs at hevent <;> cases hevent <;>
     first
       | rfl
-      | simp at hvisit
+      | simp only [reduceCtorEq] at hvisit
 
 /-- A delegated debit is hardened as soon as its inspected allowance key is
 attributed to the holder. -/
@@ -894,17 +897,17 @@ theorem hardenedFor_of_delegatedKey {debit : DebitProvenance}
   revert hkey
   unfold DebitProvenance.hardenedFor delegatedKey?
   cases debit.branch with
-  | direct => simp
+  | direct => simp only [reduceCtorEq, decide_eq_true_eq, IsEmpty.forall_iff]
   | delegated allowance =>
       cases allowance with
-      | selfBypass => simp
+      | selfBypass => simp only [reduceCtorEq, decide_eq_true_eq, IsEmpty.forall_iff]
       | finite k before after => intro hkey; cases hkey; exact hroot
       | maximum k => intro hkey; cases hkey; exact hroot
   | flash allowance =>
       cases allowance with
-      | selfBypass => simp
-      | finite k before after => simp
-      | maximum k => simp
+      | selfBypass => simp only [reduceCtorEq, Bool.false_eq_true, imp_self]
+      | finite k before after => simp only [reduceCtorEq, IsEmpty.forall_iff]
+      | maximum k => simp only [reduceCtorEq, IsEmpty.forall_iff]
 
 /-! ## The trace-local collision step -/
 
@@ -1038,7 +1041,7 @@ theorem CountedFrame.hardenedContribution_eq_permanentOutflow
       rcases hwitness with ⟨hbranch, hcaller⟩ |
         ⟨event, hevent, howner, hkey⟩
       · unfold DebitProvenance.hardenedFor
-        rcases hbranch with hb | hb <;> rw [hb] <;> simpa using hcaller
+        rcases hbranch with hb | hb <;> rw [hb] <;> simpa only [decide_eq_true_eq] using hcaller
       · refine hardenedFor_of_delegatedKey hkey ?_
         rcases attributionRootAt_cases recent event.key with
           hroot | ⟨other, hother, ev, hev, hevkey, hcase⟩
@@ -1063,9 +1066,9 @@ theorem CountedFrame.hardenedContribution_eq_permanentOutflow
             have hcaller : ev.caller = u := by
               rw [← toAdr_toB256 ev.caller, ← hclean, hownerEq, howner]
             rw [hroot]
-            simpa [AttributionRoot.attributedTo] using hcaller
+            simpa only [AttributionRoot.attributedTo, decide_eq_true_eq] using hcaller
           · rw [hroot]
-            simpa [AttributionRoot.attributedTo] using
+            simpa only [AttributionRoot.attributedTo, decide_eq_true_eq] using
               (hownerEq ▸ howner : ev.owner.toAdr = u)
     simp only [CountedFrame.hardenedContribution, haction, hactiondebit,
       hhard, if_true]
@@ -1130,10 +1133,10 @@ theorem permanentOutflow_eq_hardenedOutflow_of_noCollision
   generalize hnil : ([] : List CountedFrame) = recent
   have hrecentOrigins :
       ∀ record ∈ recent, record.HasFrameOrigin dp ca := by
-    rw [← hnil]; simp
+    rw [← hnil]; simp only [List.not_mem_nil, IsEmpty.forall_iff, implies_true]
   have hall :
       (touchedPairs (recent.reverse ++ ledger)).Pairwise NoCollisionRel := by
-    rw [← hnil]; simpa using hpairs
+    rw [← hnil]; simpa only [List.reverse_nil, List.nil_append] using hpairs
   clear hnil hpairs
   revert horigins hrecentOrigins hall
   induction ledger generalizing recent with
@@ -1148,23 +1151,24 @@ theorem permanentOutflow_eq_hardenedOutflow_of_noCollision
       have hhead :
           record.hardenedContribution recent u = record.permanentOutflow u := by
         refine CountedFrame.hardenedContribution_eq_permanentOutflow u
-          (horigins record (by simp)) hrecentOrigins ?_
+          (horigins record (by simp only [List.mem_cons, true_or])) hrecentOrigins ?_
         intro p hp q hq
         refine hcross p (mem_touchedPairs_reverse.mpr hp) q ?_
         rcases mem_touchedPairs.mp hq with
           ⟨other, hother, event, hevent, hq⟩
         rw [List.mem_singleton] at hother
         exact mem_touchedPairs.mpr
-          ⟨other, by simp [hother], event, hevent, hq⟩
+          ⟨other, by simp only [hother, List.mem_cons, true_or], event, hevent, hq⟩
       have hlist : (record :: recent).reverse ++ rest =
-          recent.reverse ++ (record :: rest) := by simp
+          recent.reverse ++ (record :: rest) := by simp only [List.reverse_cons, List.append_assoc,
+            List.cons_append, List.nil_append]
       rw [show ledgerOutflow u (record :: rest) =
         record.permanentOutflow u + ledgerOutflow u rest from rfl, ← hhead,
         ih (recent := record :: recent)
           (fun other hother => horigins other (List.mem_cons_of_mem _ hother))
           (fun other hother => by
             rcases List.mem_cons.mp hother with rfl | h
-            · exact horigins other (by simp)
+            · exact horigins other (by simp only [List.mem_cons, true_or])
             · exact hrecentOrigins other h)
           (by rw [hlist]; exact hall)]
       rfl

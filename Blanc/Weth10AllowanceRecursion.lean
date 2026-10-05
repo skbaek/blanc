@@ -161,7 +161,7 @@ theorem ProcessMessage.allowanceRegionEffect_of_bodyEffect
         unfold Jaune.Frame.settlementCommits
         rw [← hset]
         exact hnone
-      cases he : post.error <;> simp_all
+      cases he : post.error <;> simp_all only [ExceptT.stM_eq, Bool.not_eq_true, Option.isNone_none, ne_eq, not_true_eq_false, Option.isNone_some, Bool.false_eq_true, not_false_eq_true, Option.isSome_some]
     have hpostState : post.state = msg.benv.state :=
       (ProcessMessage.rollback_of_error hprocess herr).1
     have hstorage : Devm.getStor parent ca = Devm.getStor post ca :=
@@ -203,7 +203,7 @@ theorem ProcessCreateMessage.allowanceRegionEffect_of_bodyEffect
       rw [← hset] at hsettle
       exact hsettle
     have herr : post.error.isSome = false := by
-      cases he : post.error <;> simp_all
+      cases he : post.error <;> simp_all only [ExceptT.stM_eq, ne_eq, imp_self, Option.isNone_none, Option.isSome_none, Option.isNone_some, Bool.false_eq_true]
     rcases ProcessCreateMessage.ok_getStorCode_eq_inner_of_clean
       hprocess herr htargetNe with
         ⟨inner, hinner, hpostStorage, hpostCode⟩
@@ -261,7 +261,7 @@ theorem ProcessCreateMessage.allowanceRegionEffect_of_bodyEffect
         unfold Jaune.Frame.settlementCommits
         rw [← hset]
         exact hnone
-      cases he : post.error <;> simp_all
+      cases he : post.error <;> simp_all only [ExceptT.stM_eq, ne_eq, Bool.not_eq_true, Option.isNone_none, not_true_eq_false, Option.isNone_some, Bool.false_eq_true, not_false_eq_true, Option.isSome_some]
     have hpostState : post.state = msg.benv.state :=
       ProcessCreateMessage.rollback_of_error hprocess herr
     have hstorage : Devm.getStor parent ca = Devm.getStor post ca :=
@@ -341,7 +341,7 @@ theorem GenericCall.allowanceRegionEffect_some_of_bodyEffect
           (callMsg sevm (pre.withReturnData []) gas value caller target
             codeAddress stv isStatic ((pre.memory.read ii is).1) code
             disablePrecompiles)) childOut = true <;>
-      simp [hretain]
+      simp only [hretain, ↓reduceIte, List.append_nil, List.nil_append, Bool.false_eq_true]
 
 /-- A CALL-family opcode which completes without an interpreter child is
 storage- and code-silent at every address. -/
@@ -379,7 +379,8 @@ theorem GenericCall.allowanceRegionEffect_none
   · obtain ⟨result, hprocess, hresume⟩ := hrun
     cases result with
     | error error =>
-        simp [Resume.run, liftToExecution] at hresume
+        simp only [ExceptT.stM_eq, Resume.run, liftToExecution, Except.bind_error,
+          reduceCtorEq] at hresume
     | ok child =>
         have effect := ProcessMessage.allowanceRegionEffect_none
           (ca := ca) hprocess (parent := pre.withReturnData []) rfl
@@ -436,7 +437,8 @@ theorem GenericCreate.allowanceRegionEffect_some_of_bodyEffect
   obtain ⟨result, hframe, hresume⟩ := hrun
   cases result with
   | error error =>
-      simp [Resume.run, liftToExecution] at hresume
+      simp only [ExceptT.stM_eq, Resume.run, liftToExecution, Except.bind_error,
+        reduceCtorEq] at hresume
   | ok settled =>
       let createPre :=
         addAccessedAddress
@@ -487,7 +489,7 @@ theorem GenericCreate.allowanceRegionEffect_some_of_bodyEffect
                   []).incrNonce sevm.currentTarget) newAddress)
               (except64th pre.gasLeft) endowment newAddress
               ((pre.memory.read mi ms).1))) raw = true <;>
-        simp [hretain]
+        simp only [hretain, ↓reduceIte, List.append_nil, List.nil_append, Bool.false_eq_true]
 
 /-- A CREATE-family opcode with no interpreter child performs only instruction
 preparation (and possibly a caller nonce increment). -/
@@ -722,7 +724,7 @@ theorem Exec.CoreAllowanceSound.error
     {error : EvmError × Devm} :
     Exec.CoreAllowanceSound dp ca pc sevm pre (.error error) := by
   intro run committed
-  simp [Execution.commits] at committed
+  simp only [Execution.commits, Bool.false_eq_true] at committed
 
 /-- Foreign nonrecursive handler for `lift_core`. -/
 theorem Exec.CoreAllowanceSound.nextNone
@@ -825,28 +827,34 @@ theorem Exec.CoreAllowanceSound.nextSome
     Exec.CoreAllowanceSound dp ca pc sevm pre out := by
   cases n with
   | reg r =>
-      simp [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at hstep
+      simp only [StepRun, step_reg, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
+        false_and] at hstep
   | push xs hxs =>
-      simp [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hstep
+      simp only [StepRun, step_push, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
+        false_and] at hstep
   | dupn imm =>
-      simp [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at hstep
+      simp only [StepRun, step_dupn, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
+        false_and] at hstep
   | swapn imm =>
-      simp [Ninst.StepRun, Ninst.step_swapn, Step.run_ofExecution] at hstep
+      simp only [StepRun, step_swapn, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
+        false_and] at hstep
   | exchange imm =>
-      simp [Ninst.StepRun, Ninst.step_exchange, Step.run_ofExecution] at hstep
+      simp only [StepRun, step_exchange, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
+        false_and] at hstep
   | exec x =>
       intro run committed hatp _ hcov
       have hxrun := XStep.run_toStep.mp hstep
       cases hs : Xinst.step sevm pre x with
       | done execution =>
-          simp [hs, XStep.Run] at hxrun
+          simp only [XStep.Run, hs, ExceptT.stM_eq, reduceCtorEq, false_and] at hxrun
       | spawn frame resume =>
           simp only [hs, XStep.Run] at hxrun
           obtain ⟨result, hframe, hresume⟩ := hxrun
           cases result with
           | error error =>
               cases resume <;>
-                simp [Resume.run, liftToExecution] at hresume
+                simp only [ExceptT.stM_eq, Resume.run, liftToExecution, Except.bind_error,
+                  reduceCtorEq] at hresume
           | ok settled =>
               have henter := (RunFrame.some_inv hframe).1
               have hsettle := (RunFrame.some_inv hframe).2
@@ -907,7 +915,7 @@ theorem Exec.CoreAllowanceSound.nextSome
                         rw [if_neg (not_delegation_of_compile hatp.1)])
                 have hcodeAddressInit :=
                   congrArg (fun evm : Evm => evm.sta.codeAddress) hinit
-                dsimp [initEvm, initSevm, Msg.withBenv] at hcodeAddressInit
+                dsimp only [Msg.withBenv, initEvm, initSevm] at hcodeAddressInit
                 rw [hcodeAddressInit, hcodeAddress, hinnerTarget]
               have hbody : ∀
                   (rawCommitted : Execution.commits raw = true),
@@ -991,7 +999,7 @@ theorem Exec.CoreAllowanceSound.last
   subst run
   cases out with
   | error error =>
-      simp [Execution.commits] at committed
+      simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have effect := Linst.foreignAllowanceRegionEffect (ca := ca)
         hstep hforeign
@@ -1163,7 +1171,7 @@ theorem ProcessMessage.allowanceRegionEffectSound_of_bodyEffect
         unfold Jaune.Frame.settlementCommits
         rw [← hset]
         exact hnone
-      cases he : post.error <;> simp_all
+      cases he : post.error <;> simp_all only [ExceptT.stM_eq, Bool.not_eq_true, Option.isNone_none, ne_eq, not_true_eq_false, Option.isNone_some, Bool.false_eq_true, not_false_eq_true, Option.isSome_some]
     have hpostState : post.state = msg.benv.state :=
       (ProcessMessage.rollback_of_error hprocess herr).1
     have hstorage : Devm.getStor parent ca = Devm.getStor post ca :=
@@ -1205,7 +1213,7 @@ theorem ProcessCreateMessage.allowanceRegionEffectSound_of_bodyEffect
       rw [← hset] at hsettle
       exact hsettle
     have herr : post.error.isSome = false := by
-      cases he : post.error <;> simp_all
+      cases he : post.error <;> simp_all only [ExceptT.stM_eq, ne_eq, imp_self, Option.isNone_none, Option.isSome_none, Option.isNone_some, Bool.false_eq_true]
     rcases ProcessCreateMessage.ok_getStorCode_eq_inner_of_clean
       hprocess herr htargetNe with
         ⟨inner, hinner, hpostStorage, hpostCode⟩
@@ -1263,7 +1271,7 @@ theorem ProcessCreateMessage.allowanceRegionEffectSound_of_bodyEffect
         unfold Jaune.Frame.settlementCommits
         rw [← hset]
         exact hnone
-      cases he : post.error <;> simp_all
+      cases he : post.error <;> simp_all only [ExceptT.stM_eq, ne_eq, Bool.not_eq_true, Option.isNone_none, not_true_eq_false, Option.isNone_some, Bool.false_eq_true, not_false_eq_true, Option.isSome_some]
     have hpostState : post.state = msg.benv.state :=
       ProcessCreateMessage.rollback_of_error hprocess herr
     have hstorage : Devm.getStor parent ca = Devm.getStor post ca :=
@@ -1341,7 +1349,7 @@ theorem GenericCall.allowanceRegionEffectSound_some_of_bodyEffect
           (callMsg sevm (pre.withReturnData []) gas value caller target
             codeAddress stv isStatic ((pre.memory.read ii is).1) code
             disablePrecompiles)) childOut = true <;>
-      simp [hretain]
+      simp only [hretain, ↓reduceIte, List.append_nil, List.nil_append, Bool.false_eq_true]
 
 /-- Proof-indexed CREATE transport through full code-deposit settlement. -/
 theorem GenericCreate.allowanceRegionEffectSound_some_of_bodyEffect
@@ -1382,7 +1390,8 @@ theorem GenericCreate.allowanceRegionEffectSound_some_of_bodyEffect
   obtain ⟨result, hframe, hresume⟩ := hrun
   cases result with
   | error error =>
-      simp [Resume.run, liftToExecution] at hresume
+      simp only [ExceptT.stM_eq, Resume.run, liftToExecution, Except.bind_error,
+        reduceCtorEq] at hresume
   | ok settled =>
       let createPre :=
         addAccessedAddress
@@ -1433,7 +1442,7 @@ theorem GenericCreate.allowanceRegionEffectSound_some_of_bodyEffect
                   []).incrNonce sevm.currentTarget) newAddress)
               (except64th pre.gasLeft) endowment newAddress
               ((pre.memory.read mi ms).1))) raw = true <;>
-        simp [hretain]
+        simp only [hretain, ↓reduceIte, List.append_nil, List.nil_append, Bool.false_eq_true]
 
 /-- Proof-indexed contract-neutral recursive transport.  The exact child
 allowance effect is threaded through the concrete filled interpreter slot. -/
@@ -1502,7 +1511,7 @@ theorem Exec.CoreAllowanceReadSound.error
     {error : EvmError × Devm} :
     Exec.CoreAllowanceReadSound dp ca pc sevm pre (.error error) := by
   intro run committed
-  simp [Execution.commits] at committed
+  simp only [Execution.commits, Bool.false_eq_true] at committed
 
 /-- Foreign nonrecursive handler for `lift_core`. -/
 theorem Exec.CoreAllowanceReadSound.nextNone
@@ -1605,28 +1614,34 @@ theorem Exec.CoreAllowanceReadSound.nextSome
     Exec.CoreAllowanceReadSound dp ca pc sevm pre out := by
   cases n with
   | reg r =>
-      simp [Ninst.StepRun, Ninst.step_reg, Step.run_ofExecution] at hstep
+      simp only [StepRun, step_reg, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
+        false_and] at hstep
   | push xs hxs =>
-      simp [Ninst.StepRun, Ninst.step_push, Step.run_ofExecution] at hstep
+      simp only [StepRun, step_push, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
+        false_and] at hstep
   | dupn imm =>
-      simp [Ninst.StepRun, Ninst.step_dupn, Step.run_ofExecution] at hstep
+      simp only [StepRun, step_dupn, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
+        false_and] at hstep
   | swapn imm =>
-      simp [Ninst.StepRun, Ninst.step_swapn, Step.run_ofExecution] at hstep
+      simp only [StepRun, step_swapn, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
+        false_and] at hstep
   | exchange imm =>
-      simp [Ninst.StepRun, Ninst.step_exchange, Step.run_ofExecution] at hstep
+      simp only [StepRun, step_exchange, ExceptT.stM_eq, Step.run_ofExecution, reduceCtorEq,
+        false_and] at hstep
   | exec x =>
       intro run committed hatp _ hcov
       have hxrun := XStep.run_toStep.mp hstep
       cases hs : Xinst.step sevm pre x with
       | done execution =>
-          simp [hs, XStep.Run] at hxrun
+          simp only [XStep.Run, hs, ExceptT.stM_eq, reduceCtorEq, false_and] at hxrun
       | spawn frame resume =>
           simp only [hs, XStep.Run] at hxrun
           obtain ⟨result, hframe, hresume⟩ := hxrun
           cases result with
           | error error =>
               cases resume <;>
-                simp [Resume.run, liftToExecution] at hresume
+                simp only [ExceptT.stM_eq, Resume.run, liftToExecution, Except.bind_error,
+                  reduceCtorEq] at hresume
           | ok settled =>
               have henter := (RunFrame.some_inv hframe).1
               have hsettle := (RunFrame.some_inv hframe).2
@@ -1687,7 +1702,7 @@ theorem Exec.CoreAllowanceReadSound.nextSome
                         rw [if_neg (not_delegation_of_compile hatp.1)])
                 have hcodeAddressInit :=
                   congrArg (fun evm : Evm => evm.sta.codeAddress) hinit
-                dsimp [initEvm, initSevm, Msg.withBenv] at hcodeAddressInit
+                dsimp only [Msg.withBenv, initEvm, initSevm] at hcodeAddressInit
                 rw [hcodeAddressInit, hcodeAddress, hinnerTarget]
               have hbody : ∀
                   (rawCommitted : Execution.commits raw = true),
@@ -1771,7 +1786,7 @@ theorem Exec.CoreAllowanceReadSound.last
   subst run
   cases out with
   | error error =>
-      simp [Execution.commits] at committed
+      simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have effect := Linst.foreignAllowanceRegionEffectSound (ca := ca)
         hstep hforeign

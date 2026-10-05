@@ -55,31 +55,30 @@ theorem systemTransactionMessage_msgInv_sem
     c.MsgInv ca (systemTransactionMessage benv target data) := by
   have state : c.StateInv ca
       (systemTransactionMessage benv target data).benv.state := by
-    simpa [systemTransactionMessage, processSystemTransactionMsg,
-      Benv.beginTransaction] using inv
+    simpa only [systemTransactionMessage, processSystemTransactionMsg, Benv.beginTransaction] using
+      inv
   refine ⟨state, ?_, ?_, ?_, ?_, ?_⟩
   · refine ⟨?_, ?_⟩
-    · simpa [systemTransactionMessage, processSystemTransactionMsg,
-        Benv.beginTransaction] using notCreated
+    · simpa only [systemTransactionMessage, processSystemTransactionMsg,
+      Benv.beginTransaction] using notCreated
     · exact fun empty => c.sem.ne_nil
         (state.code.symm.trans (congrArg some empty)) rfl
   · intro _ current
     have htarget : target = ca := by
-      simpa [systemTransactionMessage, processSystemTransactionMsg] using
-        current
+      simpa only [systemTransactionMessage, processSystemTransactionMsg] using current
     subst target
-    simpa [systemTransactionMessage, processSystemTransactionMsg,
-      Benv.beginTransaction] using state.code
+    simpa only [systemTransactionMessage, processSystemTransactionMsg, Benv.beginTransaction] using
+      state.code
   · intro _ current
     have htarget : target = ca := by
-      simpa [systemTransactionMessage, processSystemTransactionMsg] using
-        current
+      simpa only [systemTransactionMessage, processSystemTransactionMsg] using current
     subst target
-    simp [systemTransactionMessage, processSystemTransactionMsg]
+    simp only [systemTransactionMessage, processSystemTransactionMsg]
   · intro transfer
-    simp [systemTransactionMessage, processSystemTransactionMsg] at transfer
+    simp only [systemTransactionMessage, processSystemTransactionMsg,
+      Bool.false_eq_true] at transfer
   · intro _ _
-    simp [systemTransactionMessage, processSystemTransactionMsg]
+    simp only [systemTransactionMessage, processSystemTransactionMsg]
 
 theorem benvInv_processWithdrawalsState_sem
     {ca : Adr} {benv : Benv} {wds : List Withdrawal}
@@ -88,7 +87,7 @@ theorem benvInv_processWithdrawalsState_sem
     c.BenvInv ca (benv.withState (processWithdrawalsState benv.state wds)) :=
   ⟨ContractSpecSem.processWithdrawalsState_preserves_inv ca benv.state wds bound
       inv.state,
-    by simpa [Benv.withState] using inv.ca⟩
+    by simpa only [Benv.withState] using inv.ca⟩
 
 theorem SystemMessageTrace.stateInv_and_sum_le_admitted_sem
     {ca : Adr} {entry : Sevm → Devm → Prop}
@@ -103,16 +102,17 @@ theorem SystemMessageTrace.stateInv_and_sum_le_admitted_sem
   have msgInv : c.MsgInv ca (systemTransactionMessage benv target data) :=
     systemTransactionMessage_msgInv_sem inv.state inv.ca
   have msgFork : CoveredFork (systemTransactionMessage benv target data).benv.stat.fork := by
-    simpa [systemTransactionMessage, processSystemTransactionMsg, Benv.beginTransaction] using hfork
+    simpa only [systemTransactionMessage, processSystemTransactionMsg, Benv.beginTransaction] using
+      hfork
   have stateInv :=
     trace.message.stateInv_admitted_sem preserves msgFork admitted msgInv
   have sumLe := processMessageCall_sum_le
-    (by simpa [systemTransactionMessage, processSystemTransactionMsg,
-      Benv.beginTransaction, BenvStat.rules] using hfork.rules_stateGas_none)
+    (by simpa only [BenvStat.rules, systemTransactionMessage, processSystemTransactionMsg,
+      Benv.beginTransaction] using hfork.rules_stateGas_none)
     trace.message.result
   refine ⟨stateInv.1, ?_⟩
-  simpa [systemTransactionMessage, processSystemTransactionMsg,
-    Benv.beginTransaction] using sumLe
+  simpa only [systemTransactionMessage, processSystemTransactionMsg, Benv.beginTransaction] using
+    sumLe
 
 theorem SystemMessageTrace.benvInv_admitted_sem
     {ca : Adr} {entry : Sevm → Devm → Prop}
@@ -125,7 +125,7 @@ theorem SystemMessageTrace.benvInv_admitted_sem
     (inv : c.BenvInv ca benv) :
     c.BenvInv ca (benv.withState state) :=
   ⟨(trace.stateInv_and_sum_le_admitted_sem preserves hfork admitted inv).1,
-    by simpa [Benv.withState] using inv.ca⟩
+    by simpa only [Benv.withState] using inv.ca⟩
 
 theorem RequestsTrace.stateInv_and_sum_le_admitted_sem
     {ca : Adr} {entry : Sevm → Devm → Prop}
@@ -140,9 +140,9 @@ theorem RequestsTrace.stateInv_and_sum_le_admitted_sem
   have withdrawal := trace.withdrawal.stateInv_and_sum_le_admitted_sem
     preserves hfork admitted.withdrawal inv
   have withdrawalInv : c.BenvInv ca (benv.withState trace.withdrawalState) :=
-    ⟨withdrawal.1, by simpa [Benv.withState] using inv.ca⟩
+    ⟨withdrawal.1, by simpa only [Benv.withState] using inv.ca⟩
   have consolidationFork : CoveredFork (benv.withState trace.withdrawalState).stat.fork := by
-    simpa [Benv.withState] using hfork
+    simpa only [Benv.withState] using hfork
   have consolidation := trace.consolidation.stateInv_and_sum_le_admitted_sem
     preserves consolidationFork admitted.consolidation withdrawalInv
   refine ⟨?_, ?_⟩
@@ -165,27 +165,27 @@ theorem AppliedBodyTrace.stateInv_admitted_sem
   have beacon := trace.beacon.stateInv_and_sum_le_admitted_sem
     preserves hfork admitted.beacon inv
   have beaconInv : c.BenvInv ca (benv.withState trace.beaconState) :=
-    ⟨beacon.1, by simpa [Benv.withState] using inv.ca⟩
+    ⟨beacon.1, by simpa only [Benv.withState] using inv.ca⟩
   have history := trace.history.stateInv_and_sum_le_admitted_sem
-    preserves (by simpa [Benv.withState] using hfork) admitted.history beaconInv
+    preserves (by simpa only [Benv.withState] using hfork) admitted.history beaconInv
   have historyInv : c.BenvInv ca
       ((benv.withState trace.beaconState).withState trace.historyState) :=
-    ⟨history.1, by simpa [Benv.withState] using beaconInv.ca⟩
+    ⟨history.1, by simpa only [Benv.withState] using beaconInv.ca⟩
   have historySum : sum trace.historyState.bal < 2 ^ 256 := by
     have : sum trace.historyState.bal ≤ sum benv.state.bal :=
-      le_trans (by simpa [Benv.withState] using history.2) beacon.2
+      le_trans (by simpa only [Benv.withState] using history.2) beacon.2
     omega
   have hforkTransactions : CoveredFork trace.transactionBenv.stat.fork := by
     rw [trace.transactions.stat_eq]
     exact hfork
   have transactionsInv : c.BenvInv ca trace.transactionBenv :=
     trace.transactions.benvInv_admitted_sem preserves (by
-      simpa [Benv.withState] using hfork) admitted.transactions
+      simpa only [Benv.withState] using hfork) admitted.transactions
       historySum historyInv
   have transactionSum : sum trace.transactionBenv.state.bal ≤
       sum benv.state.bal := by
-    exact le_trans (trace.transactions.sum_le (by simpa [Benv.withState] using hfork))
-      (le_trans (by simpa [Benv.withState] using history.2) beacon.2)
+    exact le_trans (trace.transactions.sum_le (by simpa only [Benv.withState] using hfork))
+      (le_trans (by simpa only [Benv.withState] using history.2) beacon.2)
   have withdrawalBound :
       sum trace.transactionBenv.state.bal + wdsum wds < 2 ^ 256 := by
     omega
@@ -195,7 +195,7 @@ theorem AppliedBodyTrace.stateInv_admitted_sem
     benvInv_processWithdrawalsState_sem transactionsInv withdrawalBound
   rw [← trace.requestState_eq]
   exact (trace.requests.stateInv_and_sum_le_admitted_sem preserves
-    (by simpa [Benv.withState] using hforkTransactions)
+    (by simpa only [Benv.withState] using hforkTransactions)
     admitted.requests withdrawalsInv).1
 
 open ContractSpec

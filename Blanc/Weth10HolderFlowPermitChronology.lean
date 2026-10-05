@@ -385,7 +385,7 @@ private theorem Msg.benvAfterTransfer_bal_eq_zero_permit
   cases htransfer : msg.shouldTransferValue with
   | false =>
       have hnot : ¬ msg.shouldTransferValue = true := by
-        simp [htransfer]
+        simp only [htransfer, Bool.false_eq_true, not_false_eq_true]
       have h := of_benvAfterTransfer_no hnot hrun
       subst post
       rfl
@@ -425,7 +425,7 @@ private theorem Msg.benvAfterTransfer_stor_code_permit
   cases htransfer : msg.shouldTransferValue with
   | false =>
       have hnot : ¬ msg.shouldTransferValue = true := by
-        simp [htransfer]
+        simp only [htransfer, Bool.false_eq_true, not_false_eq_true]
       have h := of_benvAfterTransfer_no hnot hrun
       subst post
       exact ⟨fun _ => rfl, fun _ => rfl⟩
@@ -617,7 +617,8 @@ theorem Exec.Deriv.ParentStepActions.permitStaticcallOutcome
         RunFrame.of_run (raw := raw) henter
       cases hsettled : (Frame.ofCall msg).settle raw with
       | error err =>
-          simp [hsettled, Resume.run, liftToExecution] at hresume
+          simp only [ExceptT.stM_eq, Resume.run, liftToExecution, hsettled, Except.bind_error,
+            reduceCtorEq] at hresume
       | ok childPost =>
           rw [hsettled] at hprocess0 hresume
           have hprocess : ProcessMessage msg
@@ -639,7 +640,7 @@ theorem Exec.Deriv.ParentStepActions.permitStaticcallOutcome
                 (Frame.ofCall msg) raw ≠ true := by
               intro hsettles
               exact hcommits (Frame.raw_commits_of_settlementCommits hsettles)
-            simpa [hnotSettles] using
+            simpa only [ExceptT.stM_eq, hnotSettles, Bool.false_eq_true, ↓reduceIte] using
               (PermitStaticcallOutcome.rolledBack child trace hcommits
                 (trace.own_of_not_commits hcommits))
 
@@ -973,32 +974,36 @@ private theorem Exec.Frame.CompiledCursor.finishPermitAfterStaticcall
       Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = cursor.actions := by
   unfold permitAfterStaticcall at cursor
   rcases cursor.peelChildlessLine (line := permitFirstSignerGuardLine)
-      (by simp [permitFirstSignerGuardLine, NinstIsChildless,
-        Ninst.pushB256]) with
+      (by simp only [permitFirstSignerGuardLine, Ninst.pushB256, Fin.isValue, List.mem_cons,
+        List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨firstBranchCursor, hfirstLine, hfirstActions⟩
   rcases firstBranchCursor.selectBranchLeftWithBurn
       (not_run_call_revertWith (reason := "WETH: invalid permit") (by
-        simp [weth10, weth10Aux, invalidPermitErrorSlot,
-          invalidPermitError])) with
+        simp only [weth10, weth10Aux, invalidPermitError, invalidPermitErrorSlot, List.length_cons,
+          List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos,
+          List.getElem_cons_succ, List.getElem_cons_zero])) with
     ⟨secondGuardCursor, hfirstPop, hfirstBranchActions⟩
   rcases secondGuardCursor.peelChildlessLine
       (line := permitSecondSignerGuardLine) (by
-        simp [permitSecondSignerGuardLine, arg, cdl,
-          NinstIsChildless, Ninst.pushB256]) with
+        simp only [permitSecondSignerGuardLine, arg, cdl, Ninst.pushB256, List.cons_append,
+          List.nil_append, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+          forall_eq_or_imp, forall_eq, and_self]) with
     ⟨secondBranchCursor, hsecondLine, hsecondActions⟩
   rcases secondBranchCursor.selectBranchLeftWithBurn
       (not_run_call_revertWith (reason := "WETH: invalid permit") (by
-        simp [weth10, weth10Aux, invalidPermitErrorSlot,
-          invalidPermitError])) with
+        simp only [weth10, weth10Aux, invalidPermitError, invalidPermitErrorSlot, List.length_cons,
+          List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos,
+          List.getElem_cons_succ, List.getElem_cons_zero])) with
     ⟨approveCursor, hsecondPop, hsecondBranchActions⟩
   rcases approveCursor.castSourceFrame_permit approvePermit_shape with
     ⟨terminalCursor, _hterminalPre, hterminalActions⟩
   have hdesc : Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
       approveCursor.actions :=
     (terminalCursor.finishTerminalChildlessLine (by
-      simp [approvePermitLine, argCopy, cdc, allowanceKeyFromMemory,
-        pushList, Blanc.arg, cdl, mstoreAt, logWith, NinstIsChildless,
-        Ninst.pushB256])).trans hterminalActions
+      simp only [approvePermitLine, argCopy, cdc, Ninst.pushB256, allowanceKeyFromMemory, pushList,
+        List.map_cons, List.map_nil, List.cons_append, List.nil_append, arg, cdl, Fin.isValue,
+        mstoreAt, logWith, Fin.reduceSucc, List.mem_cons, List.not_mem_nil, or_false,
+        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])).trans hterminalActions
   have happroveObs := approvePermit_observations dp
     (Func.Run.of_runCompiled approveCursor.run)
   have hfirstObs : PermitOwnObservations frame.sevm cursor.pre
@@ -1046,7 +1051,8 @@ private theorem Exec.Frame.CompiledCursor.enterPermitDomainDispatch
   rcases cursor.castSourceFrame_permit (permitDomainDispatch_shape dp) with
     ⟨domainCursor, hdomainPre, hdomainActions⟩
   rcases domainCursor.peelChildlessLine (line := permitDomainTestLine dp) (by
-      simp [permitDomainTestLine, pushDeployWord, NinstIsChildless]) with
+      simp only [permitDomainTestLine, Fin.isValue, pushDeployWord, List.mem_cons, List.not_mem_nil,
+        or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨branchCursor, htest, htestActions⟩
   have htestObs : PermitOwnObservations frame.sevm domainCursor.pre
       branchCursor.pre :=
@@ -1062,8 +1068,10 @@ private theorem Exec.Frame.CompiledCursor.enterPermitDomainDispatch
       ⟨calculatedCursor, hcalculatedActions, hbranchObs⟩
     rcases calculatedCursor.peelChildlessLine
         (line := permitCalculatedDomainPrefix) (by
-          simp [permitCalculatedDomainPrefix, calculateDomainSeparator,
-            pushList, mstoreAt, NinstIsChildless, Ninst.pushB256]) with
+          simp only [permitCalculatedDomainPrefix, Fin.isValue, calculateDomainSeparator, mstoreAt,
+            Ninst.pushB256, List.cons_append, List.nil_append, pushList, List.map_cons,
+            List.map_nil, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
+            forall_eq_or_imp, forall_eq, and_self]) with
       ⟨callCursor, hcalculatedLine, hlineActions⟩
     have hlineObs : PermitOwnObservations frame.sevm calculatedCursor.pre
         callCursor.pre :=
@@ -1080,7 +1088,9 @@ private theorem Exec.Frame.CompiledCursor.enterPermitDomainDispatch
     rcases callCursor.enterCallObserved hcode with
       ⟨body, hget, bodyCursor, hbodyActions, hcallObs⟩
     have hbody : body = permitRecover := by
-      simpa [weth10, weth10Aux, permitRecoverSlot] using hget.symm
+      simpa only [weth10, weth10Aux, permitRecoverSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.lt_add_one, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using hget.symm
     subst body
     exact ⟨bodyCursor,
       (hbodyActions.trans (hlineActions.trans
@@ -1090,8 +1100,8 @@ private theorem Exec.Frame.CompiledCursor.enterPermitDomainDispatch
   · rcases hcached with ⟨cachedCursor, hcachedActions, hbranchObs⟩
     rcases cachedCursor.peelChildlessLine
         (line := permitCachedDomainPrefix dp) (by
-          simp [permitCachedDomainPrefix, pushDeployWord,
-            NinstIsChildless]) with
+          simp only [permitCachedDomainPrefix, Fin.isValue, pushDeployWord, List.mem_cons,
+            List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
       ⟨callCursor, hcachedLine, hlineActions⟩
     have hlineObs : PermitOwnObservations frame.sevm cachedCursor.pre
         callCursor.pre :=
@@ -1105,7 +1115,9 @@ private theorem Exec.Frame.CompiledCursor.enterPermitDomainDispatch
     rcases callCursor.enterCallObserved hcode with
       ⟨body, hget, bodyCursor, hbodyActions, hcallObs⟩
     have hbody : body = permitRecover := by
-      simpa [weth10, weth10Aux, permitRecoverSlot] using hget.symm
+      simpa only [weth10, weth10Aux, permitRecoverSlot, List.length_cons, List.length_nil, zero_add,
+        Nat.reduceAdd, Nat.lt_add_one, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero,
+        Option.some.injEq] using hget.symm
     subst body
     exact ⟨bodyCursor,
       (hbodyActions.trans (hlineActions.trans
@@ -1128,13 +1140,15 @@ private theorem Exec.Frame.CompiledCursor.enterPermitAfterDeadline
       PermitOwnObservations frame.sevm cursor.pre recoverCursor.pre := by
   unfold permitAfterDeadline at cursor
   rcases cursor.peelChildlessLine (line := permitNoncePrepare) (by
-      simp [permitNoncePrepare, addressArg, normalizeAddress,
-        pushAddressMask, tagNonceKey, mstoreAt, Blanc.arg, cdl,
-        NinstIsChildless, Ninst.pushB256]) with
+      simp only [permitNoncePrepare, addressArg, arg, cdl, Ninst.pushB256, normalizeAddress,
+        pushAddressMask, List.cons_append, List.nil_append, Fin.isValue, tagNonceKey, mstoreAt,
+        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
+        and_self]) with
     ⟨structCursor, hnonce, hnonceActions⟩
   rcases structCursor.peelChildlessLine (line := permitStructPrepare) (by
-      simp [permitStructPrepare, argCopy, cdc, arg, cdl, mstoreAt,
-        pushList, NinstIsChildless, Ninst.pushB256]) with
+      simp only [permitStructPrepare, Ninst.pushB256, mstoreAt, List.cons_append, List.nil_append,
+        argCopy, cdc, arg, cdl, pushList, List.map_cons, List.map_nil, List.mem_cons,
+        List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨domainCursor, hstruct, hstructActions⟩
   rcases domainCursor.enterPermitDomainDispatch hcode with
     ⟨recoverCursor, hrecoverActions, hdomainObs⟩
@@ -1184,13 +1198,15 @@ private theorem Exec.Frame.reachCompiledPermitRecover
       (.branch (permitAfterDeadline dp) (.call expiredPermitErrorSlot)))
     frame.post at permitCursor
   rcases permitCursor.peelChildlessLine (line := permitDeadlineLine) (by
-      simp [permitDeadlineLine, arg, cdl, NinstIsChildless,
-        Ninst.pushB256]) with
+      simp only [permitDeadlineLine, arg, cdl, Ninst.pushB256, List.cons_append, List.nil_append,
+        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
+        and_self]) with
     ⟨deadlineBranchCursor, hdeadline, hdeadlineActions⟩
   rcases deadlineBranchCursor.selectBranchLeftWithBurn
       (not_run_call_revertWith (reason := "WETH: Expired permit") (by
-        simp [weth10, weth10Aux, expiredPermitErrorSlot,
-          expiredPermitError])) with
+        simp only [weth10, weth10Aux, expiredPermitError, expiredPermitErrorSlot, List.length_cons,
+          List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos,
+          List.getElem_cons_succ, List.getElem_cons_zero])) with
     ⟨liveCursor, hdeadlinePop, hliveActions⟩
   rcases liveCursor.enterPermitAfterDeadline context.invocation.2.2.2 with
     ⟨recoverCursor, hrecoverActions, hliveObs⟩
@@ -1271,9 +1287,10 @@ theorem Exec.Frame.compiledPermitChronology
     simpa only [hrecoverPre] using hrecoverObs
   rcases recoverCursor.peelChildlessLine
       (line := permitDigest ++ permitRecoverPrepare) (by
-        simp [permitDigest, permitRecoverPrepare, permitRecoverWrites,
-          pushList, mstoreAt, arg, cdl, NinstIsChildless,
-          Ninst.pushB256]) with
+        simp only [permitDigest, Fin.isValue, Ninst.pushB256, mstoreAt, List.cons_append,
+          List.nil_append, pushList, List.map_cons, List.map_nil, permitRecoverPrepare,
+          permitRecoverWrites, arg, cdl, List.mem_cons, List.not_mem_nil, or_false, or_self_left,
+          NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
     ⟨callCursor, hrecoverPrefix, hrecoverPrefixActions⟩
   rcases of_run_append permitDigest hrecoverPrefix with
     ⟨preparePre, hdigest, hprepare⟩
@@ -1311,7 +1328,7 @@ theorem Exec.Frame.compiledPermitChronology
       Ninst.staticcall rawSlot (.ok tailCursor.pre) := by
     have transported :=
       Ninst.stepRun_pc_irrel (pc' := callCursor.pc)
-        (by simp [Ninst.pcFree]) rawStep
+        (by simp only [Ninst.pcFree]) rawStep
     simpa only [htailPre] using transported
   have outcome := edge.permitStaticcallOutcome
     gasWord tail hoperands hat rawFilled exactStep context.covered

@@ -77,7 +77,7 @@ theorem applyUnary_transfer_safe (operation : B256 → B256) (cost : Nat)
     SafeResult (fun post => Matches output post.stack)
       (applyUnary operation cost pre) := by
   cases input with
-  | nil => simp [unaryTransfer] at checked
+  | nil => simp only [unaryTransfer, reduceCtorEq] at checked
   | cons word words =>
       simp only [unaryTransfer, Option.some.injEq] at checked
       subst output
@@ -94,10 +94,10 @@ theorem applyBinary_transfer_safe
     SafeResult (fun post => Matches output post.stack)
       (applyBinary operation cost pre) := by
   cases input with
-  | nil => simp [binaryTransfer] at checked
+  | nil => simp only [binaryTransfer, reduceCtorEq] at checked
   | cons first rest =>
       cases rest with
-      | nil => simp [binaryTransfer] at checked
+      | nil => simp only [binaryTransfer, reduceCtorEq] at checked
       | cons second words =>
           simp only [binaryTransfer, Option.some.injEq] at checked
           subst output
@@ -124,6 +124,7 @@ def regularTransfer : Rinst → Pattern → Option Pattern
   | .calldataload, words => unaryTransfer words
   | .calldatasize, words => some (none :: words)
   | .timestamp, words => some (none :: words)
+  | .number, words => some (none :: words)
   | .pop, words => dropOneTransfer words
   | .mload, words => unaryTransfer words
   | .mstore, words => dropTwoTransfer words
@@ -210,15 +211,15 @@ theorem chargeStateGas_safe (amount : Nat) {pre : Devm} {words : Pattern}
   · by_cases spill : amount - stateGas.left ≤ gasLeft
     · simp only [enough, spill, if_true, if_false, SafeResult, Devm.setMach]
       exact matched.of_stack_eq rfl
-    · simp [enough, spill, SafeResult, StackFault]
+    · simp only [SafeResult, enough, ↓reduceIte, spill, StackFault, not_false_eq_true]
 
 theorem noStackFault_outOfGas :
     ¬ StackFault (.halt (.outOfGas .none)) := by
-  simp [StackFault]
+  simp only [StackFault, not_false_eq_true]
 
 theorem noStackFault_writeInStaticContext :
     ¬ StackFault (.halt (.writeInStaticContext .none)) := by
-  simp [StackFault]
+  simp only [StackFault, not_false_eq_true]
 
 /-- A raw `Except.assert` on any decidable proposition can only fail with the
 supplied error, so it never generates a stack fault. -/
@@ -227,7 +228,7 @@ theorem assert_safe (condition : Prop) [Decidable condition]
     SafeResult (fun _ : Unit => True)
       (Except.assert condition (error, pre)) := by
   unfold Except.assert
-  split <;> simp [SafeResult, notFault]
+  split <;> simp only [SafeResult, notFault, not_false_eq_true]
 
 /-- A successful assertion exposes the proposition it checked, while its
 supplied failure remains a permitted non-stack error. -/
@@ -236,7 +237,7 @@ theorem assert_true_safe (condition : Prop) [Decidable condition]
     SafeResult (fun _ : Unit => condition)
       (Except.assert condition (error, pre)) := by
   unfold Except.assert
-  split <;> simp_all [SafeResult]
+  split <;> simp_all only [SafeResult, not_false_eq_true]
 
 theorem assertDynamic_safe (sevm : Sevm) (pre : Devm) :
     SafeResult (fun _ : Unit => True) (assertDynamic sevm pre) := by
@@ -410,7 +411,7 @@ theorem regularTransfer_safe {evm : Evm} {instruction : Rinst}
   case iszero =>
     simp only [Rinst.run, Rinst.runCore]
     exact applyUnary_transfer_safe _ _ matched bound checked
-  case caller | callvalue | calldatasize | timestamp =>
+  case caller | callvalue | calldatasize | timestamp | number =>
     cases checked
     exact pushUnknown_safe _ _ matched room
   case gas =>
@@ -418,7 +419,7 @@ theorem regularTransfer_safe {evm : Evm} {instruction : Rinst}
     exact gas_safe evm.pc evm.sta matched room
   case calldataload =>
     cases input with
-    | nil => simp [unaryTransfer] at checked
+    | nil => simp only [unaryTransfer, reduceCtorEq] at checked
     | cons word words =>
       simp only [unaryTransfer, Option.some.injEq] at checked
       subst output
@@ -427,7 +428,7 @@ theorem regularTransfer_safe {evm : Evm} {instruction : Rinst}
         omega)
   case mload =>
     cases input with
-    | nil => simp [unaryTransfer] at checked
+    | nil => simp only [unaryTransfer, reduceCtorEq] at checked
     | cons word words =>
       simp only [unaryTransfer, Option.some.injEq] at checked
       subst output
@@ -436,7 +437,7 @@ theorem regularTransfer_safe {evm : Evm} {instruction : Rinst}
         omega)
   case sload =>
     cases input with
-    | nil => simp [unaryTransfer] at checked
+    | nil => simp only [unaryTransfer, reduceCtorEq] at checked
     | cons word words =>
       simp only [unaryTransfer, Option.some.injEq] at checked
       subst output
@@ -445,7 +446,7 @@ theorem regularTransfer_safe {evm : Evm} {instruction : Rinst}
         omega)
   case pop =>
     cases input with
-    | nil => simp [dropOneTransfer] at checked
+    | nil => simp only [dropOneTransfer, reduceCtorEq] at checked
     | cons word words =>
       simp only [dropOneTransfer, Option.some.injEq] at checked
       subst output
@@ -457,27 +458,27 @@ theorem regularTransfer_safe {evm : Evm} {instruction : Rinst}
       exact chargeGas_safe gBase popped
   case mstore =>
     cases input with
-    | nil => simp [dropTwoTransfer] at checked
+    | nil => simp only [dropTwoTransfer, reduceCtorEq] at checked
     | cons index words =>
       cases words with
-      | nil => simp [dropTwoTransfer] at checked
+      | nil => simp only [dropTwoTransfer, reduceCtorEq] at checked
       | cons value words =>
         simp only [dropTwoTransfer, Option.some.injEq] at checked
         subst output
         exact mstore_safe evm.pc evm.sta matched
   case sstore =>
     cases input with
-    | nil => simp [dropTwoTransfer] at checked
+    | nil => simp only [dropTwoTransfer, reduceCtorEq] at checked
     | cons key words =>
       cases words with
-      | nil => simp [dropTwoTransfer] at checked
+      | nil => simp only [dropTwoTransfer, reduceCtorEq] at checked
       | cons value words =>
         simp only [dropTwoTransfer, Option.some.injEq] at checked
         subst output
         exact sstore_safe evm.pc evm.sta matched
   case dup index =>
     cases lookup : input[index]? with
-    | none => simp [lookup] at checked
+    | none => simp only [lookup, reduceCtorEq] at checked
     | some word =>
       simp only [lookup, Option.some.injEq] at checked
       subst output
@@ -519,7 +520,7 @@ def jumpdestTransfer (input : Pattern) : Option Pattern := some input
 
 theorem noStackFault_invalidJumpDest :
     ¬ StackFault (.halt (.invalidJumpDest .none)) := by
-  simp [StackFault]
+  simp only [StackFault, not_false_eq_true]
 
 /-- Universal `JUMP` transfer soundness against the actual `Jinst.run`.
 An accepted transfer excludes stack underflow. On success it exposes both the
@@ -535,10 +536,10 @@ theorem jumpTransfer_safe {evm : Evm} {input output : Pattern}
       Matches output result.2.stack)
       (Jinst.run evm .jump) := by
   cases input with
-  | nil => simp [jumpTransfer] at checked
+  | nil => simp only [jumpTransfer, reduceCtorEq] at checked
   | cons abstractDestination words =>
       cases abstractDestination with
-      | none => simp [jumpTransfer] at checked
+      | none => simp only [jumpTransfer, reduceCtorEq] at checked
       | some expected =>
           simp only [jumpTransfer, Option.some.injEq, Prod.mk.injEq] at checked
           rcases checked with ⟨rfl, rfl⟩
@@ -573,13 +574,13 @@ theorem jumpiTransfer_safe {evm : Evm} {input output : Pattern}
         Matches output result.2.stack)
       (Jinst.run evm .jumpi) := by
   cases input with
-  | nil => simp [jumpiTransfer] at checked
+  | nil => simp only [jumpiTransfer, reduceCtorEq] at checked
   | cons abstractDestination rest =>
       cases rest with
-      | nil => simp [jumpiTransfer] at checked
+      | nil => simp only [jumpiTransfer, reduceCtorEq] at checked
       | cons abstractCondition words =>
           cases abstractDestination with
-          | none => simp [jumpiTransfer] at checked
+          | none => simp only [jumpiTransfer, reduceCtorEq] at checked
           | some expected =>
               simp only [jumpiTransfer, Option.some.injEq, Prod.mk.injEq]
                 at checked
@@ -757,10 +758,10 @@ theorem terminalTransfer_safe
       exact matched
   | return_ =>
       cases input with
-      | nil => simp [terminalTransfer, dropTwoTransfer] at checked
+      | nil => simp only [terminalTransfer, dropTwoTransfer, reduceCtorEq] at checked
       | cons index rest =>
           cases rest with
-          | nil => simp [terminalTransfer, dropTwoTransfer] at checked
+          | nil => simp only [terminalTransfer, dropTwoTransfer, reduceCtorEq] at checked
           | cons size words =>
               simp only [terminalTransfer, dropTwoTransfer,
                 Option.some.injEq] at checked
@@ -777,10 +778,10 @@ theorem terminalTransfer_safe
               exact (chargedMatch.memRead indexResult.1 sizeResult.1).withOutput _
   | revert =>
       cases input with
-      | nil => simp [terminalTransfer, dropTwoTransfer] at checked
+      | nil => simp only [terminalTransfer, dropTwoTransfer, reduceCtorEq] at checked
       | cons index rest =>
           cases rest with
-          | nil => simp [terminalTransfer, dropTwoTransfer] at checked
+          | nil => simp only [terminalTransfer, dropTwoTransfer, reduceCtorEq] at checked
           | cons size words =>
               simp only [terminalTransfer, dropTwoTransfer,
                 Option.some.injEq] at checked
@@ -794,9 +795,9 @@ theorem terminalTransfer_safe
                 (sizeResult.2.extCost [(indexResult.1, sizeResult.1)])
                 sizePopped).bind
               intro charged chargedMatch
-              simp [SafeResult, StackFault]
+              simp only [SafeResult, StackFault, not_false_eq_true]
   | selfdestruct =>
-      simp [terminalTransfer] at checked
+      simp only [terminalTransfer, reduceCtorEq] at checked
 
 /-- The actual terminal dispatcher path has no operand-stack fault. Its halted
 success or revert does not continue the same-frame invariant. -/
@@ -846,7 +847,8 @@ theorem resume_callAmsterdam_safe
       rcases error with ⟨err, st, addresses, transient⟩
       constructor
       · intro post run
-        simp [Resume.run, liftToExecution] at run
+        simp only [ExceptT.stM_eq, Resume.run, liftToExecution, Except.bind_error,
+          reduceCtorEq] at run
       · intro otherErr post run fault
         simp only [Resume.run, liftToExecution, bind, Except.bind] at run
         cases run
@@ -873,12 +875,13 @@ theorem resume_callAmsterdam_safe
             · simp only [failed, settledChild, if_true] at run
               cases run
               exact continuation _ 0 (Or.inl rfl) rfl
-            · simp [failed, settledChild] at run
+            · simp only [ExceptT.stM_eq, failed, ↓reduceIte, settledChild, reduceCtorEq] at run
           · by_cases uncommitted : child.AmsterdamChildUncommitted
             · simp only [failed, uncommitted, if_true, if_false, Bool.false_eq_true] at run
               cases run
               exact continuation _ 1 (Or.inr rfl) rfl
-            · simp [failed, uncommitted] at run
+            · simp only [ExceptT.stM_eq, failed, Bool.false_eq_true, ↓reduceIte, uncommitted,
+              reduceCtorEq] at run
       · intro err post run fault
         cases charged <;>
           simp only [Resume.run, liftToExecution, bind, Except.bind, Devm.push_def,
@@ -887,15 +890,16 @@ theorem resume_callAmsterdam_safe
         all_goals
           by_cases failed : child.error.isSome = true
           · by_cases settledChild : child.AmsterdamFailedChildSettled
-            · simp [failed, settledChild] at run
+            · simp only [ExceptT.stM_eq, failed, ↓reduceIte, settledChild, reduceCtorEq] at run
             · simp only [failed, settledChild, if_true, if_false] at run
               cases run
-              simp [StackFault] at fault
+              simp only [StackFault] at fault
           · by_cases uncommitted : child.AmsterdamChildUncommitted
-            · simp [failed, uncommitted] at run
+            · simp only [ExceptT.stM_eq, failed, Bool.false_eq_true, ↓reduceIte, uncommitted,
+              reduceCtorEq] at run
             · simp only [failed, uncommitted, if_true, if_false, Bool.false_eq_true] at run
               cases run
-              simp [StackFault] at fault
+              simp only [StackFault] at fault
 
 /-- Amsterdam CALL lifecycle: a low-depth or unaffordable call restores both
 grants and answers zero; otherwise the child spawns and the parent resumes
@@ -995,25 +999,25 @@ theorem callTransfer_safe (pc : Nat)
       actualPc = pc ∧ Matches output post.stack)
       (XStep.toStep pc (Xinst.step evm.sta evm.dyna .call)) := by
   cases input with
-  | nil => simp [callTransfer] at checked
+  | nil => simp only [callTransfer, reduceCtorEq] at checked
   | cons gasWord rest =>
       cases rest with
-      | nil => simp [callTransfer] at checked
+      | nil => simp only [callTransfer, reduceCtorEq] at checked
       | cons calleeWord rest =>
           cases rest with
-          | nil => simp [callTransfer] at checked
+          | nil => simp only [callTransfer, reduceCtorEq] at checked
           | cons valueWord rest =>
               cases rest with
-              | nil => simp [callTransfer] at checked
+              | nil => simp only [callTransfer, reduceCtorEq] at checked
               | cons inputIndexWord rest =>
                   cases rest with
-                  | nil => simp [callTransfer] at checked
+                  | nil => simp only [callTransfer, reduceCtorEq] at checked
                   | cons inputSizeWord rest =>
                       cases rest with
-                      | nil => simp [callTransfer] at checked
+                      | nil => simp only [callTransfer, reduceCtorEq] at checked
                       | cons outputIndexWord rest =>
                           cases rest with
-                          | nil => simp [callTransfer] at checked
+                          | nil => simp only [callTransfer, reduceCtorEq] at checked
                           | cons outputSizeWord words =>
                               simp only [callTransfer, Option.some.injEq]
                                 at checked

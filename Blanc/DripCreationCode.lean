@@ -188,7 +188,4 @@ two-pass compiler-derived creation artifact. -/
 theorem creationCode_eq_literal : creationCode = creationCodeLiteral := by
   decide +kernel
 
-theorem creationCodeLiteral_length : creationCodeLiteral.length = 2001 := by
-  decide +kernel
-
 end Blanc.Drip

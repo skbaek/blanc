@@ -358,20 +358,19 @@ def flashFeeDispatch (dp : DeployParams) : Func :=
 
 theorem flashFeeDispatch_eq (dp : DeployParams) :
     dispatchWith fallbackSlot (weth10Tree dp) = flashFeeDispatch dp := by
-  simp [weth10Tree, DispatchTree.ofSorted, weth10Funcs, DispatchTree.build,
-    treeSlice, dispatch26_0_14, dispatch25_14_7, dispatch24_21_3,
-    dispatch23_26_1, dispatch22_24_1, flashFeeDispatch, dispatchCae9,
-    dispatchD505, dispatchDd, dispatchD9, flashFeeLeaf, dispatchNode,
-    dispatchWith,
-    leftmostFsig, noncesSel_eq, approveAndCallSel_eq, permitSel_eq,
-    flashFeeSel_eq, allowanceSel_eq]
+  simp only [weth10Tree, DispatchTree.ofSorted, weth10Funcs, noncesSel_eq, approveAndCallSel_eq,
+    permitSel_eq, flashFeeSel_eq, allowanceSel_eq, List.length_cons, List.length_nil, zero_add,
+    Nat.reduceAdd, DispatchTree.build, Nat.reduceDiv, List.take_succ_cons, List.take_zero,
+    List.drop_succ_cons, List.drop_zero, dispatchWith, Fin.isValue, leftmostFsig, flashFeeDispatch,
+    dispatchNode, dispatchCae9, dispatchD505, dispatchDd, dispatch23_26_1, treeSlice, List.take_nil,
+    dispatchD9, flashFeeLeaf, dispatch22_24_1, dispatch24_21_3, dispatch25_14_7, dispatch26_0_14]
 
 theorem dispatch22_24_1_eq_permit (dp : DeployParams) :
     dispatch22_24_1 dp =
       Ninst.pushB256 (0xd505accf : B256) ::: Ninst.eq :::
         ((nonpayable (permit dp)) <?> .call fallbackSlot) := by
-  simp [dispatch22_24_1, treeSlice, weth10Funcs, DispatchTree.build,
-    dispatchWith, permitSel_eq]
+  simp only [dispatch22_24_1, treeSlice, weth10Funcs, permitSel_eq, List.drop_succ_cons,
+    List.drop_zero, List.take_succ_cons, List.take_zero, DispatchTree.build, dispatchWith]
 
 private def permitLeafPrefix : Line :=
   [Ninst.pushB256 (0xd505accf : B256), Ninst.eq]
@@ -1060,10 +1059,10 @@ private def dispatch24Factored (dp : DeployParams) : Func :=
 
 private theorem dispatch24_21_3_eq_factored (dp : DeployParams) :
     dispatch24_21_3 dp = dispatch24Factored dp := by
-  simp [dispatch24_21_3, treeSlice, weth10Funcs, DispatchTree.build,
-    dispatchWith, dispatch24Factored, dispatchNode, dispatchLeaf,
-    leftmostFsig, approveAndCallSel_eq, deploymentChainIdSel_eq,
-    depositSel_eq]
+  simp only [dispatch24_21_3, treeSlice, weth10Funcs, approveAndCallSel_eq, deploymentChainIdSel_eq,
+    depositSel_eq, List.drop_succ_cons, List.drop_zero, List.take_succ_cons, List.take_zero,
+    DispatchTree.build, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceDiv,
+    dispatchWith, Fin.isValue, leftmostFsig, dispatch24Factored, dispatchNode, dispatchLeaf]
 
 private def dispatchLeafPrefix (selector : B256) : Line :=
   [Ninst.pushB256 selector, Ninst.eq]
@@ -1078,10 +1077,6 @@ private theorem depositDispatchLeaf_size :
     (dispatchLeaf 0xd0e30db0 deposit).compileShape.byteSize = 64 := by
   decide +kernel
 
-private theorem deploymentChainIdDispatchLeaf_size :
-    (dispatchLeaf 0xcd0d0096 (nonpayable (deploymentChainId
-      (⟨0, 0⟩ : DeployParams)))).compileShape.byteSize = 64 := by
-  decide +kernel
 
 private theorem dispatchLeafByteAt_eq_before_body
     (locations : List Nat) (n : Nat) (selector : B256)
@@ -1094,7 +1089,7 @@ private theorem dispatchLeafByteAt_eq_before_body
   rw [dispatchLeaf_eq selector body, dispatchLeaf_eq selector body0]
   have heq : Ninst.eq.size = 1 := by decide +kernel
   have hprefix : prefixByteSize (dispatchLeafPrefix selector) = 6 := by
-    simp [dispatchLeafPrefix, prefixByteSize, hpush, heq]
+    simp only [dispatchLeafPrefix, prefixByteSize, hpush, heq, add_zero, Nat.reduceAdd]
   by_cases hpre : i < 6
   · apply byteAt_prepend_eq_prefix
     simpa only [hprefix] using hpre
@@ -1129,7 +1124,7 @@ private theorem dispatchLeafByteAt_to_body
   rw [dispatchLeaf_eq selector body, dispatchLeaf_eq selector body0]
   have heq : Ninst.eq.size = 1 := by decide +kernel
   have hprefix : prefixByteSize (dispatchLeafPrefix selector) = 6 := by
-    simp [dispatchLeafPrefix, prefixByteSize, hpush, heq]
+    simp only [dispatchLeafPrefix, prefixByteSize, hpush, heq, add_zero, Nat.reduceAdd]
   conv_lhs => rw [byteAt_prepend_to_tail
       (locations := locations) (n := n)
       (l := dispatchLeafPrefix selector)
@@ -1222,16 +1217,6 @@ private theorem deploymentChainIdByteAt_eq_zero_opcode
   unfold deploymentChainId returnDeployWord
   exact pushFullWord_opcode_eq _ _ _ _ _
 
-private theorem deploymentChainIdByteAt_chainWord
-    (locations : List Nat) (n : Nat) (dp : DeployParams)
-    (j : Nat) (hj : j < 32) :
-    Func.byteAtByShape locations n
-        (deploymentChainId (⟨0, 0⟩ : DeployParams)).compileShape
-        (deploymentChainId dp) (j + 1) 0 =
-      dp.deploymentChainId.toBytes.getD j 0 := by
-  unfold deploymentChainId returnDeployWord
-  exact byteAt_pushFullWord_data
-    locations n _ _ dp.deploymentChainId j hj
 
 private theorem deploymentLeafByteAt_eq_zero_0_26
     (locations : List Nat) (n : Nat) (dp : DeployParams)
@@ -1285,32 +1270,6 @@ private theorem deploymentLeafByteAt_eq_zero_0_26
       exact deploymentChainIdByteAt_eq_zero_opcode
         locations (n + 15 + 10) dp
 
-private theorem deploymentLeafByteAt_chainWord
-    (locations : List Nat) (n : Nat) (dp : DeployParams)
-    (j : Nat) (hj : j < 32) :
-    Func.byteAtByShape locations n
-        (dispatchLeaf 0xcd0d0096
-          (nonpayable
-            (deploymentChainId
-              (⟨0, 0⟩ : DeployParams)))).compileShape
-        (dispatchLeaf 0xcd0d0096
-          (nonpayable (deploymentChainId dp))) (26 + j) 0 =
-      dp.deploymentChainId.toBytes.getD j 0 := by
-  have hpush : (Ninst.pushB256 (0xcd0d0096 : B256)).size = 5 := by
-    decide +kernel
-  rw [dispatchLeafByteAt_to_body locations n 0xcd0d0096
-      (nonpayable
-        (deploymentChainId (⟨0, 0⟩ : DeployParams)))
-      (nonpayable (deploymentChainId dp)) (26 + j) 0 hpush (by omega)]
-  have hiLeaf : 26 + j - 15 = 11 + j := by omega
-  rw [hiLeaf]
-  rw [nonpayableByteAt_to_body locations (n + 15)
-      (deploymentChainId (⟨0, 0⟩ : DeployParams))
-      (deploymentChainId dp) (11 + j) 0 (by omega)]
-  have hiBody : 11 + j - 10 = j + 1 := by omega
-  rw [hiBody]
-  exact deploymentChainIdByteAt_chainWord
-    locations (n + 15 + 10) dp j hj
 
 private theorem dispatch24_21_3ByteAt_eq_zero_0_113
     (locations : List Nat) (n : Nat) (dp : DeployParams)
@@ -1490,65 +1449,6 @@ private theorem dispatch24_21_3ByteAt_eq_zero_0_113
                 (by rw [hdeploymentLeaf]; omega)]
           apply deploymentLeafByteAt_eq_zero_0_26
           omega
-
-private theorem dispatch24_21_3ByteAt_chainWord
-    (locations : List Nat) (n : Nat) (dp : DeployParams)
-    (j : Nat) (hj : j < 32) :
-    Func.byteAtByShape locations n
-        (dispatch24_21_3 (⟨0, 0⟩ : DeployParams)).compileShape
-        (dispatch24_21_3 dp) (113 + j) 0 =
-      dp.deploymentChainId.toBytes.getD j 0 := by
-  rw [dispatch24_21_3_eq_factored dp,
-    dispatch24_21_3_eq_factored (⟨0, 0⟩ : DeployParams)]
-  unfold dispatch24Factored
-  have hdepositPush :
-      (Ninst.pushB256 (0xd0e30db0 : B256)).size = 5 := by
-    decide +kernel
-  have hdeploymentPush :
-      (Ninst.pushB256 (0xcd0d0096 : B256)).size = 5 := by
-    decide +kernel
-  have hdepositLeaf :
-      (dispatchLeaf 0xd0e30db0 deposit).compileShape.byteSize = 64 :=
-        depositDispatchLeaf_size
-  rw [dispatchNodeByteAt_to_offPath
-      (locations := locations) (n := n) (selector := 0xd0e30db0)
-      (off0 := dispatchNode 0xcd0d0096
-        (dispatchLeaf 0xcae9ca51 (nonpayable approveAndCall))
-        (dispatchLeaf 0xcd0d0096
-          (nonpayable
-            (deploymentChainId (⟨0, 0⟩ : DeployParams)))))
-      (on0 := dispatchLeaf 0xd0e30db0 deposit)
-      (off := dispatchNode 0xcd0d0096
-        (dispatchLeaf 0xcae9ca51 (nonpayable approveAndCall))
-        (dispatchLeaf 0xcd0d0096
-          (nonpayable (deploymentChainId dp))))
-      (on := dispatchLeaf 0xd0e30db0 deposit)
-      (i := 113 + j) (d := 0) hdepositPush (by
-        rw [hdepositLeaf]
-        omega)]
-  simp only [hdepositLeaf, Nat.reduceAdd]
-  have hdeploymentLeaf :
-      (dispatchLeaf 0xcd0d0096
-        (nonpayable
-          (deploymentChainId
-            (⟨0, 0⟩ : DeployParams)))).compileShape.byteSize = 64 :=
-        deploymentChainIdDispatchLeaf_size
-  rw [dispatchNodeByteAt_to_onPath
-      (locations := locations) (n := n + 76)
-      (selector := 0xcd0d0096)
-      (off0 := dispatchLeaf 0xcae9ca51 (nonpayable approveAndCall))
-      (on0 := dispatchLeaf 0xcd0d0096
-        (nonpayable
-          (deploymentChainId (⟨0, 0⟩ : DeployParams))))
-      (off := dispatchLeaf 0xcae9ca51 (nonpayable approveAndCall))
-      (on := dispatchLeaf 0xcd0d0096
-        (nonpayable (deploymentChainId dp)))
-      (i := 113 + j - 76) (d := 0) hdeploymentPush (by omega)
-      (by rw [hdeploymentLeaf]; omega)]
-  have hi : 113 + j - 76 - 11 = 26 + j := by omega
-  rw [hi]
-  exact deploymentLeafByteAt_chainWord
-    locations (n + 76 + 11) dp j hj
 
 private theorem flashFeeDispatchByteAt_to_dispatch24_21_3
     (locations : List Nat) (n : Nat) (dp : DeployParams)
