@@ -1,6 +1,7 @@
 import Blanc.Lift.UniswapV2Pair.BurnDispatchWalk
 import Blanc.Lift.UniswapV2Pair.BurnPrefixWalk
 import Blanc.Lift.UniswapV2Pair.GetterStringWalk
+import Blanc.Lift.UniswapV2Pair.SwapForwardPrefix
 
 /-! Forward liveness construction for the Uniswap V2 Pair `burn` entry.
 
@@ -282,5 +283,176 @@ theorem burnInitialBalanceRead_exact {sevm : Sevm} {b d : Devm} {R : List B256}
       (successTree := t_15ad_c37) [0x15, 0xad] (by decide) (by decide) rfl fork room
       call success (by simpa only [Nat.add_assoc, show (42 + 22 : Nat) = 64 from rfl] using returnedGas) guarded
     simpa only [balanceReplyMemory, BurnInitialBalanceSite.callTree] using composed
+
+/-- Burn's first initial request: both token slots are loaded, the `balanceOf(pair)` request is
+staged at `128`, and token0's code guard passes into the `STATICCALL` site (the mirror of
+`burnInitialFirstRequest_inv`). -/
+theorem burnInitialFirstRequest_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {timestamp r1 r0 toWord extρ : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M) (room : R.length ≤ 990)
+    (code : ((burnTokensWorld sevm b).getCode
+      ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
+        b.getStorVal sevm.currentTarget 6).toAdr).size.toB256 ≠ 0)
+    (body : SFunc.RunExact cert.prog sevm
+      (St (temporalAccountAccessBase (burnTokensWorld sevm b)
+          ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
+            b.getStorVal sevm.currentTarget 6).toAdr)
+        (0 :: ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
+            b.getStorVal sevm.currentTarget 6) :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
+          ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
+            b.getStorVal sevm.currentTarget 6) :: 0 ::
+          ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
+            (afterSload sevm b 6).getStorVal sevm.currentTarget 7) ::
+          ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
+            b.getStorVal sevm.currentTarget 6) ::
+          r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R)
+        (balanceRequestMemory M sevm.currentTarget) G) t_14fb_c37 o) :
+    SFunc.RunExact cert.prog sevm
+      (St b (timestamp :: r1 :: r0 :: 0 :: 0 :: 0 :: 0 :: toWord :: extρ :: R) M
+        (G + sloadCost sevm b 6 + sloadCost sevm (afterSload sevm b 6) 7 +
+          temporalAccountAccessCost (burnTokensWorld sevm b)
+            ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
+              b.getStorVal sevm.currentTarget 6).toAdr + 184))
+      t_1479_c37 o := by
+  let access := temporalAccountAccessCost (burnTokensWorld sevm b)
+    ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& b.getStorVal sevm.currentTarget 6).toAdr
+  have mem1 : PtrMem 128 160 (M.write 128 balanceOfSelectorWord.toBytes) :=
+    mem.write 128 balanceOfSelectorWord (Or.inr (by decide))
+  have mem2 : PtrMem 128 192 (balanceRequestMemory M sevm.currentTarget) :=
+    balanceRequestMemory_ptr mem sevm.currentTarget
+  rw [show G + sloadCost sevm b 6 + sloadCost sevm (afterSload sevm b 6) 7 + access + 184 =
+    (((G + access + 175) + sloadCost sevm (afterSload sevm b 6) 7) + 3) + sloadCost sevm b 6 + 6
+    by omega]
+  unfold t_1479_c37
+  apply rx_dest
+  apply rx_pop
+  apply rx_push (w := 6) rfl (by simp only [List.length_cons]; omega)
+  apply rx_sload_selC fork rfl (by simp only [List.length_cons]; omega)
+  apply rx_push (w := 7) rfl (by simp only [List.length_cons]; omega)
+  apply rx_sload_selC fork rfl (by simp only [List.length_cons]; omega)
+  apply rx_push (w := 64) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  apply rx_mload (i := 64) (v := 128) (c := 3)
+    (by rw [St.extCost_eq mem.size]; decide) mem.word (mem.read_self (by decide))
+    (by simp only [List.length_cons]; omega)
+  apply rx_push (w := balanceOfSelectorWord) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  apply rx_mstore (i := 128) (v := balanceOfSelectorWord) (c := 9)
+    (by rw [St.extCost_eq mem.size]; decide) rfl
+  refine .next (Ninst.runCompiled_pushItem (G := G + access + 149) (cost := gBase)
+    (by rintro ⟨⟩) rfl rfl (by simp only [St.stack, List.length_cons]; omega)) ?_
+  change SFunc.RunExact cert.prog sevm
+    (St (burnTokensWorld sevm b)
+      (sevm.currentTarget.toB256 :: 128 :: 64 ::
+        (afterSload sevm b 6).getStorVal sevm.currentTarget 7 ::
+        b.getStorVal sevm.currentTarget 6 ::
+        r1 :: r0 :: 0 :: 0 :: 0 :: 0 :: toWord :: extρ :: R)
+      (M.write 128 balanceOfSelectorWord.toBytes) (G + access + 149)) _ o
+  apply rx_push (w := 4) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  apply rx_add' (v := 132) (by decide) (by simp only [List.length_cons]; omega)
+  apply rx_mstore (i := 132) (v := sevm.currentTarget.toB256) (c := 6)
+    (by rw [St.extCost_eq mem1.size]; decide) rfl
+  apply rx_swap1
+  apply rx_mload (i := 64) (v := 128) (c := 3)
+    (by rw [St.extCost_eq mem2.size]; decide) mem2.word (mem2.read_self (by decide))
+    (by simp only [List.length_cons]; omega)
+  repeat sfw_rx
+  apply rx_add' rfl (by simp only [List.length_cons]; omega)
+  repeat sfw_rx
+  apply rx_sub' rfl (by simp only [List.length_cons]; omega)
+  apply rx_add' rfl (by simp only [List.length_cons]; omega)
+  repeat sfw_rx
+  rw [show G + access + 22 = (G + 22) + access by omega]
+  rw [show Bytes.toB256 [255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+      255, 255, 255, 255, 255, 255, 255, 255, 255, 255] =
+      (0xffffffffffffffffffffffffffffffffffffffff : B256) from rfl]
+  apply rx_extcodesize fork (by simp only [List.length_cons]; omega)
+  apply rx_iszero (v := 0)
+    (by simp only [B256.eqCheck, code, ite_false])
+    (by simp only [List.length_cons]; omega)
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  apply rx_iszero (v := 1) (by decide) (by simp only [List.length_cons]; omega)
+  apply rx_push rfl (by simp only [List.length_cons]; omega)
+  apply rx_branch_succ (by decide : (1 : B256) ≠ 0)
+  simpa only [show Bytes.toB256 [0] = (0 : B256) from rfl,
+    show Bytes.toB256 [32] = (32 : B256) from rfl,
+    show Bytes.toB256 [112, 160, 130, 49] = (0x70a08231 : B256) from rfl,
+    show (128 : B256) - 128 + Bytes.toB256 [36] = 36 from by decide,
+    show (128 : B256) + Bytes.toB256 [36] = 164 from by decide] using body
+
+/-- Burn's second initial request: the first answer is kept, the cached token1 word is masked,
+the `balanceOf(pair)` request is restaged at `128`, and token1's code guard passes (the mirror of
+`burnInitialSecondRequest_inv`). -/
+theorem burnInitialSecondRequest_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G : Nat} {b0 token1 token0 r1 r0 toWord extρ : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M) (room : R.length ≤ 990)
+    (code : (b.getCode (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr).size.toB256 ≠ 0)
+    (body : SFunc.RunExact cert.prog sevm
+      (St (temporalAccountAccessBase b (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr)
+        (0 :: (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff) :: 128 :: 36 :: 128 :: 32 ::
+          164 :: 0x70a08231 :: (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+          0 :: b0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R)
+        (balanceRequestMemory M sevm.currentTarget) G) t_1599_c37 o) :
+    SFunc.RunExact cert.prog sevm
+      (St b (b0 :: 0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R) M
+        (G + temporalAccountAccessCost b
+          (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr + 140))
+      BurnInitialBalanceSite.first.afterDecodeTree o := by
+  let access := temporalAccountAccessCost b
+    (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr
+  have mem1 : PtrMem 128 192 (M.write 128 balanceOfSelectorWord.toBytes) :=
+    mem.write 128 balanceOfSelectorWord (Or.inr (by decide))
+  have mem2 : PtrMem 128 192 (balanceRequestMemory M sevm.currentTarget) :=
+    balanceRequestMemory_ptr mem sevm.currentTarget
+  unfold BurnInitialBalanceSite.afterDecodeTree BurnInitialBalanceSite.decodeTree t_1525_c37
+  dsimp only
+  apply rx_push (w := 64) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  apply rx_mload (i := 64) (v := 128) (c := 3)
+    (by rw [St.extCost_eq mem.size]; decide) mem.word (mem.read_self (by decide))
+    (by simp only [List.length_cons]; omega)
+  apply rx_push (w := balanceOfSelectorWord) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  apply rx_mstore (i := 128) (v := balanceOfSelectorWord) (c := 3)
+    (by rw [St.extCost_eq mem.size]; decide) rfl
+  refine .next (Ninst.runCompiled_pushItem (G := G + access + 120) (cost := gBase)
+    (by rintro ⟨⟩) rfl rfl (by simp only [St.stack, List.length_cons]; omega)) ?_
+  change SFunc.RunExact cert.prog sevm
+    (St b (sevm.currentTarget.toB256 :: 128 :: 64 ::
+        b0 :: 0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R)
+      (M.write 128 balanceOfSelectorWord.toBytes) (G + access + 120)) _ o
+  apply rx_push (w := 4) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  apply rx_add' (v := 132) (by decide) (by simp only [List.length_cons]; omega)
+  apply rx_mstore (i := 132) (v := sevm.currentTarget.toB256) (c := 3)
+    (by rw [St.extCost_eq mem1.size]; decide) rfl
+  apply rx_swap1
+  apply rx_mload (i := 64) (v := 128) (c := 3)
+    (by rw [St.extCost_eq mem2.size]; decide) mem2.word (mem2.read_self (by decide))
+    (by simp only [List.length_cons]; omega)
+  repeat sfw_rx
+  apply rx_add' rfl (by simp only [List.length_cons]; omega)
+  repeat sfw_rx
+  apply rx_sub' rfl (by simp only [List.length_cons]; omega)
+  apply rx_add' rfl (by simp only [List.length_cons]; omega)
+  repeat sfw_rx
+  rw [show G + access + 22 = (G + 22) + access by omega]
+  rw [show Bytes.toB256 [255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+      255, 255, 255, 255, 255, 255, 255, 255, 255, 255] =
+      (0xffffffffffffffffffffffffffffffffffffffff : B256) from rfl]
+  apply rx_extcodesize fork (by simp only [List.length_cons]; omega)
+  apply rx_iszero (v := 0)
+    (by simp only [B256.eqCheck, code, ite_false])
+    (by simp only [List.length_cons]; omega)
+  apply rx_dup rfl (by simp only [List.length_cons]; omega)
+  apply rx_iszero (v := 1) (by decide) (by simp only [List.length_cons]; omega)
+  apply rx_push rfl (by simp only [List.length_cons]; omega)
+  apply rx_branch_succ (by decide : (1 : B256) ≠ 0)
+  simpa only [show Bytes.toB256 [0] = (0 : B256) from rfl,
+    show Bytes.toB256 [32] = (32 : B256) from rfl,
+    show Bytes.toB256 [112, 160, 130, 49] = (0x70a08231 : B256) from rfl,
+    show (128 : B256) - 128 + Bytes.toB256 [36] = 36 from by decide,
+    show (128 : B256) + Bytes.toB256 [36] = 164 from by decide] using body
 
 end Blanc.Lift.UniswapV2Pair
