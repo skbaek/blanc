@@ -267,4 +267,82 @@ private theorem burnFee_finished_prepend {U : WriterKey → Prop}
     sub, calls, prov0, prov1, reaches _ _ consumed, returned, rep, checkpoint, context, unlocked,
     mem, covered, bound0, bound1, raw, images0, images1, logs⟩
 
+/-- The actual factory fee reply and its authenticated static turns prepend the
+complete pricing, transfer and final-return consumer. The source starts at the
+factory suspension; initial entry correspondence and finite raw-root admission
+remain explicit producer premises. -/
+theorem burnFee_source_finished {U K : WriterKey → Prop} {st : State}
+    {D : Exec.Deriv} {sevm : Sevm} {b feePost : Devm} {R : List B256} {M : Mem}
+    {L b1 b0 token1 token0 r1 r0 toWord extρ : B256} {o : Outcome}
+    (observation : FeeMintSourceObservation K st D sevm b
+      (burnFeeLocals L b1 b0 token1 token0 r1 r0 toWord extρ R)
+      M r1 r0 0x15e2 (.returned feePost))
+    (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112) (prior : Frame)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (initialMem : PtrMem 128 192 M) (initialSentinel : memWord M 96 = 0)
+    (tracked : K (.balance sevm.currentTarget))
+    (suffix : SFunc.RunCutP (StepIn D) cert.prog sevm [] feePost t_15e2_c37 (.done o))
+    (state : prior.current.state = st) (locked : st.unlocked = 0)
+    (nonstatic : prior.context.isStatic = false)
+    (time : prior.context.timestamp = sevm.benvStat.time)
+    (pair : prior.context.pair = sevm.currentTarget)
+    (sender : prior.context.sender = sevm.caller)
+    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
+    (feeTracked : U (.balance (Bytes.toB256 (observation.out.take 32)).toAdr))
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
+    (fork : CoveredFork sevm.benvStat.fork)
+    (good : ∀ F ∈ Exec.rawFrameRoots D.exc,
+      F.sevm.currentTarget = sevm.currentTarget → LockedGood U F)
+    (staticGood : ∀ F ∈ Exec.rawFrameRoots D.exc, F.sevm.currentTarget = prior.context.pair →
+      ∀ k ∈ staticViewDecodedKeys F.sevm, U k) :
+    let observed := feeBurnObserved toWord token1 token0 L b1 b0 r1 r0 bound0 bound1
+    let fee := feeBranchSourceFee st sevm (feeKLastWorld sevm observation.d)
+      (Bytes.toB256 (observation.out.take 32)) r0 r1
+    let keys := feeBranchSourceKeys K st sevm (feeKLastWorld sevm observation.d)
+      (Bytes.toB256 (observation.out.take 32)) r0 r1
+    let supply := feePost.getStorVal sevm.currentTarget 0
+    let a0 := (L * b0) / supply
+    let a1 := (L * b1) / supply
+    let w : BurnFinalWords := ⟨supply, feeOnWord (Bytes.toB256 (observation.out.take 32)),
+      L, b1, b0, token1, token0, r1, r0, a1, a0, toWord⟩
+    let frame := burnPricedFrame
+      (prior.beginResume (requestFor .burnFeeTo (feeFactoryWord sevm b).toAdr .feeTo)) observed fee
+    let priced := burnPricedSource observed fee a0 a1
+    ∃ residual, ∃ views : List StaticViewTurn,
+      let post := lpBurnPost sevm (afterSload sevm feePost 0) (burnFinalStack w extρ R)
+        feePost.memory sevm.currentTarget.toB256 L residual
+      PairViewProvenance D sevm prior (feeFactoryWord sevm b) views ∧
+      BurnTransferCut (WriterExtend keys (lpMintTouched sevm.currentTarget))
+        frame priced sevm post w post.memory ∧
+      BurnTransferFinished U frame priced D sevm post w post.memory extρ R o
+        (.suspended prior (requestFor .burnFeeTo (feeFactoryWord sevm b).toAdr .feeTo)
+          (.burnFee observed))
+        (fun tail => .next (feeObservedResult observation.out)
+          (staticViewTranscript views .done) tail)
+        (staticViewChildReturns prior
+          (requestFor .burnFeeTo (feeFactoryWord sevm b).toAdr .feeTo) 0 views) ∧
+      resumeSegment prior (requestFor .burnFeeTo (feeFactoryWord sevm b).toAdr .feeTo)
+        (.burnFee observed) (feeObservedResult observation.out) =
+          .suspended frame (burnTransferRequest0 priced) (.burnTransfer0 priced) := by
+  dsimp only
+  obtain ⟨residual, cut, finished, typed⟩ :=
+    burnFee_pricing_source_finished observation bound0 bound1 prior initialMem initialSentinel
+      tracked suffix state locked nonstatic time pair sender inj apart sub feeTracked
+      sem image installed fork good staticGood
+  obtain ⟨views, turns, provenance⟩ :=
+    burnFee_factory_turns observation prior rep state pair time inj apart sub
+      sem image installed fork staticGood
+  refine ⟨residual, views, provenance, cut, burnFee_finished_prepend finished ?_, typed⟩
+  intro tail out consumed
+  refine ExactConsumes.nextCall (result := feeObservedResult observation.out)
+    (by simp only [feeObservedResult, Bool.not_true, Bool.and_false])
+    (by intro absent; cases absent) turns ?_
+  change ExactConsumes (resumeSegment prior
+    (requestFor .burnFeeTo (feeFactoryWord sevm b).toAdr .feeTo)
+    (.burnFee (feeBurnObserved toWord token1 token0 L b1 b0 r1 r0 bound0 bound1))
+    (feeObservedResult observation.out)) tail out
+  rw [typed]
+  exact consumed
+
 end Blanc.Lift.UniswapV2Pair
