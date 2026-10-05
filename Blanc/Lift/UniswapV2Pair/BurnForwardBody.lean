@@ -10,7 +10,7 @@ import Blanc.Lift.UniswapV2Pair.MintForwardAccept
 
 The forward (gas-exact) Burn callee from its entry `t_13f5_c37` to its return: lock and reserve
 prefix, both initial `balanceOf(pair)` requests and reads, the factory `feeTo` call and `_mintFee`
-(`burnFeeForward_exact`), pricing and the LP burn (`burnPricing_exact`), and the suffix
+(`feeBurn_source_caller_exact`), pricing and the LP burn (`burnPricing_exact`), and the suffix
 (`burnBack_exact`); then the ABI wrapper, the pc-zero guards, `lift_exact`, and the source frame
 (`burnRaw_source_authentic`).  Every callee is a forward-environment premise (ENV class).
 -/
@@ -216,9 +216,6 @@ def feeBranchGasAt (sevm : Sevm) (b : Devm) (K w r0 r1 : B256) (G : Nat) : Nat :
       (feeGrowthLiquidity sevm b (feeLastRoot K) (feeReserveRoot r0 r1)))
     (lpMintCreditCharge sevm (afterSload sevm b 0) w
       (feeGrowthLiquidity sevm b (feeLastRoot K) (feeReserveRoot r0 r1)))
-
-theorem feeMintBranchGas_at {st : State} {sevm : Sevm} {b : Devm} {w r0 r1 : B256} {G : Nat} :
-    feeMintBranchGas st sevm b w r0 r1 G = feeBranchGasAt sevm b st.kLast w r0 r1 G := rfl
 
 /-- The fee branch's residual sentries over a kLast word `K` (`FeeMintStoreConditions` without
 its mutability part, which follows from the frame). -/

@@ -166,48 +166,6 @@ theorem burnReservePrefix_exact {sevm : Sevm} {b : Devm} {R : List B256}
     (reserves_callee_exact fork reserveEq (by simp only [List.length_cons]; omega))
   exact body
 
-/-- Burn's fee boundary packages the shared `_mintFee` forward environment.
-The factory call, fee answer, source freshness, and store conditions remain
-hypotheses of the environment; the theorem only supplies the literal caller
-and its continuation. -/
-structure BurnFeeForwardEnv (K : WriterKey → Prop) (st : State) (sevm : Sevm)
-    (b d : Devm) (R : List B256) (M : Mem) (G callGas : Nat)
-    (len discarded b0 token1 token0 r1 r0 toWord extρ : B256)
-    (fee : FeeResult) (o : Outcome) : Prop where
-  mem : PtrMem 128 192 M
-  tracked : K (.balance sevm.currentTarget)
-  input : FeeMintForwardInput K st sevm (feeBurnWorld sevm b) d
-    (burnFeeLocals (feeBurnLiquidity sevm b) (feeBurnBalance1 M) b0 token1 token0
-      r1 r0 toWord extρ R) (feeBurnMemory M sevm.currentTarget) r1 r0 0x15e2 G callGas fee
-  continuation : SFunc.RunExact cert.prog sevm
-    (feeMintSourcePost st sevm d
-      (burnFeeLocals (feeBurnLiquidity sevm b) (feeBurnBalance1 M) b0 token1 token0
-        r1 r0 toWord extρ R) (feeBurnMemory M sevm.currentTarget) r0 r1 G)
-    t_15e2_c37 o
-
-theorem burnFeeForward_exact {K : WriterKey → Prop} {st : State} {sevm : Sevm}
-    {b d : Devm} {R : List B256} {M : Mem} {G callGas : Nat}
-    {len discarded b0 token1 token0 r1 r0 toWord extρ : B256} {fee : FeeResult}
-    {o : Outcome}
-    (env : BurnFeeForwardEnv K st sevm b d R M G callGas
-      len discarded b0 token1 token0 r1 r0 toWord extρ fee o) :
-    feeBurnLiquidity sevm b = st.balanceOf sevm.currentTarget ∧
-    SFunc.RunExact cert.prog sevm
-      (St b (len :: 128 :: discarded :: b0 :: token1 :: token0 :: r1 :: r0 ::
-        0 :: 0 :: toWord :: extρ :: R) M
-        (feeMintEntryGas sevm (feeBurnWorld sevm b) callGas +
-          sloadCost sevm b (transferBalanceSlot sevm.currentTarget) + 105))
-      t_15c3_c37 o ∧
-      FeeMintSourceResult K st sevm (feeKLastWorld sevm d)
-        (burnFeeLocals (feeBurnLiquidity sevm b) (feeBurnBalance1 M) b0 token1 token0
-          r1 r0 toWord extρ R) (feeReplyMemory (feeBurnMemory M sevm.currentTarget) d.returnData)
-        (Bytes.toB256 (d.returnData.take 32)) r0 r1 G ∧
-      feeBranchSourceFee st sevm (feeKLastWorld sevm d)
-        (Bytes.toB256 (d.returnData.take 32)) r0 r1 = fee := by
-  obtain ⟨cached, run, source, feeEq⟩ :=
-    feeBurn_source_caller_exact env.mem env.tracked env.input env.continuation
-  exact ⟨cached, run, source, feeEq⟩
-
 /-! The two initial balance observations use the shared STATICCALL and width
 guards.  The callee run remains an explicit premise; no pair-local state is
 assumed between the call and its decoder. -/
