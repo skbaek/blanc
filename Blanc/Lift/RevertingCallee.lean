@@ -15,6 +15,10 @@ message to an account holding that code answers (`not_staticAnswered_of_revertin
 second fact is the one a caller's `STATICCALL` inversion (`ri_staticcall`) consumes: a set
 success flag there is exactly a `StaticAnswered` witness.
 
+Two step-level facts serve later queries and calls: any successful instruction step keeps
+`revertingCode` installed (`revertingCode_kept`, since no step rewrites nonempty code), and a
+`CALL` to it never leaves the success flag (`call_flag_ne_one_of_reverting`).
+
 These are adverse-callee facts at EVM altitude: universal over the child's derivation, with a
 concrete callee code. Nothing here mentions a contract.
 -/
@@ -113,5 +117,42 @@ theorem not_staticAnswered_of_reverting {sevm : Sevm} {b : Devm} {t : Adr} {inpu
     exact processMessage_not_clean_of_reverting rfl codeEq notPrecompile filled process clean
   · rw [codeEq] at designated
     cases designated
+
+/-- Any successful instruction step keeps `revertingCode` where it is installed: the code is
+nonempty, and no step ever rewrites nonempty code (`Ninst.codePreserve_effectRec`). -/
+theorem revertingCode_kept {sevm : Sevm} {pre post : Devm} {n : Ninst} {t : Adr}
+    (run : Ninst.Run sevm pre n post) (codeEq : pre.getCode t = revertingCode) :
+    post.getCode t = revertingCode := by
+  have kept := Ninst.effect_of_effectRec codePreserve_refl_trans.1 codePreserve_refl_trans.2
+    Ninst.codePreserve_effectRec Jinst.codePreserve_effect Linst.codePreserve_effect n run t
+    (by rw [codeEq, ByteArray.toList_eq_toList_data]; decide)
+  rw [kept, codeEq]
+
+/-- A `CALL` to an account holding `revertingCode`, outside the precompile range, never leaves
+the success flag `1`: either no child is entered, or the entered child runs the code and
+cannot settle cleanly. -/
+theorem call_flag_ne_one_of_reverting {sevm : Sevm} {b d : Devm} {S T : List B256} {M : Mem}
+    {G : Nat} {g c v ii is oi os : B256}
+    (codeEq : b.getCode c.toAdr = revertingCode)
+    (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp c.toAdr)
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (h : Ninst.Run sevm (St b (g :: c :: v :: ii :: is :: oi :: os :: S) M G) (.exec .call) d) :
+    d.stack ≠ 1 :: T := by
+  intro stack
+  have operands : (g :: c :: v :: ii :: is :: oi :: os :: S) <<+
+      (St b (g :: c :: v :: ii :: is :: oi :: os :: S) M G).stack := by
+    simpa only [List.append_nil, St.stack] using
+      (pref_append (g :: c :: v :: ii :: is :: oi :: os :: S) [])
+  rcases of_run_call_val_with_depth_frame operands h hfork with failed | entered
+  · rw [stack] at failed
+    exact absurd (pref_head_unique failed.1 (pref_append [1] T)) (by decide)
+  · obtain ⟨_, child, xl, dp, na, code, _, _, _, _, _, _, _, _, _, delegation, filled, process,
+      clean, _⟩ := entered
+    rcases delegation with ⟨_, naEq, codeIs, dpEq⟩ | ⟨e, designated, _, _, _⟩
+    · subst naEq codeIs dpEq
+      exact processMessage_not_clean_of_reverting rfl codeEq notPrecompile filled process clean
+    · change getDelegatedCodeAddress (b.getCode c.toAdr) = some e at designated
+      rw [codeEq] at designated
+      cases designated
 
 end Blanc.Lift

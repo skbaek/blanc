@@ -15,7 +15,9 @@ calldata or remaining state.
 Each entry's first external observation is the `STATICCALL balanceOf(pair)` to `token0`. The
 existing raw inverses (`sync_raw_inv`/`syncCallee_inv`, `skim_raw_inv`, the mint pc-zero
 chain into `mintBalancePrefix_inv`) retain, for every successful run, the authentic
-`StaticAnswered` witness of that child; `not_staticAnswered_of_reverting` refutes it.
+`StaticAnswered` witness of that child; `not_staticAnswered_of_reverting` refutes it. The
+`token1` controls for `sync` and `mint` refute the second query, to `token1`, after the
+first: `revertingCode` survives the `token0` child (`revertingCode_kept`).
 
 Hence a liveness theorem with no callee premise — "every model-accepted `sync`/`skim`/`mint`
 at a reachable state has a successful raw run" — is false at any reachable state whose
@@ -62,6 +64,39 @@ theorem sync_no_success_of_reverting_token0 {sevm : Sevm} {b post : Devm} {G : N
   unfold syncFirstWorld syncLockedWorld
   rw [warm_getCode, afterSload_getCode, afterSstore_getCode, afterSload_getCode]
   exact tokenCode
+
+/-- **U6 control (sync, token1).** With a reverting, non-precompile `token1`, no raw pc-zero
+`sync` run succeeds: the code survives the `token0` query, and the `token1` query cannot
+answer. -/
+theorem sync_no_success_of_reverting_token1 {sevm : Sevm} {b post : Devm} {G : Nat} {tok : Adr}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
+    (token1 : (b.getStorVal sevm.currentTarget 7).toAdr = tok)
+    (tokenCode : b.getCode tok = revertingCode)
+    (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp tok)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) : False := by
+  obtain ⟨_, _, _, _, _, callee, _⟩ := sync_raw_inv codeEq fork selector run
+  obtain ⟨_, _, _, _, d0, _, _, _, _, _, _, _, _, _, call0, _, _, _, _, _, _, _, _, _, _,
+    answered, stor0, _⟩ := syncCallee_inv fork getterInitMemory_ptr callee
+  have slot : (d0.getStorVal sevm.currentTarget 7).toAdr.toB256.toAdr = tok := by
+    rw [toAdr_toB256]
+    change ((Devm.getStor d0 sevm.currentTarget).get 7).toAdr = tok
+    rw [stor0]
+    unfold syncFirstWorld syncLockedWorld
+    rw [afterSload_getStor, afterSstore_getStor_self,
+      Stor.get_set_ne _ (by decide : (12 : B256) ≠ 7), afterSload_getStor]
+    exact token1
+  rw [slot] at answered
+  refine not_staticAnswered_of_reverting ?_ notPrecompile answered
+  have before : (temporalAccountAccessBase (syncFirstWorld sevm b)
+      (syncFirstToken sevm b).toAdr).getCode tok = revertingCode := by
+    unfold syncFirstWorld syncLockedWorld
+    rw [warm_getCode, afterSload_getCode, afterSstore_getCode, afterSload_getCode]
+    exact tokenCode
+  have after : d0.getCode tok = revertingCode := revertingCode_kept (StepIn.toRun call0)
+    (by unfold St; rw [Devm.getCode_setMach]; exact before)
+  rw [warm_getCode, afterSload_getCode]
+  exact after
 
 /-- **U6 control (skim).** With a reverting, non-precompile `token0`, no raw pc-zero `skim`
 run succeeds: its `balanceOf` query to `token0`, ahead of the transfer CALL, cannot answer. -/
@@ -114,5 +149,47 @@ theorem mint_no_success_of_reverting_token0 {sevm : Sevm} {b post : Devm} {G : N
   rw [warm_getCode, afterSload_getCode, afterSload_getCode, afterSstore_getCode,
     afterSload_getCode]
   exact tokenCode
+
+/-- **U6 control (mint, token1).** With a reverting, non-precompile `token1`, no raw pc-zero
+`mint` run succeeds: the code survives the `token0` query, and the `token1` query cannot
+answer. -/
+theorem mint_no_success_of_reverting_token1 {sevm : Sevm} {b post : Devm} {G : Nat} {tok : Adr}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0x6a627842)
+    (token1 : (b.getStorVal sevm.currentTarget 7).toAdr = tok)
+    (tokenCode : b.getCode tok = revertingCode)
+    (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp tok)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) : False := by
+  obtain ⟨f, entry, run'⟩ := lift_sound_in cert_check codeEq fork run
+  rw [show cert.prog[0]? = some t_0000_c0 from rfl] at entry
+  cases entry
+  obtain ⟨_, _, _, guarded⟩ := syncGuards_inv run'
+  obtain ⟨_, h⟩ := mintSelector_inv selector (SFunc.runP_iff_runCutP_nil.mp guarded)
+  obtain ⟨_, _, _, callee, _⟩ := mintAbi_inv h
+  obtain ⟨_, _, _, _, d0, _, _, _, _, _, _, _, _, call0, _, _, _, _, _, _, _, _, _, _,
+    answered, stor0, _⟩ :=
+    mintBalancePrefix_inv fork getterInitMemory_ptr (SFunc.runP_iff_runCutP_nil.mp callee)
+  have slot : (d0.getStorVal sevm.currentTarget 7).toAdr.toB256.toAdr = tok := by
+    rw [toAdr_toB256]
+    change ((Devm.getStor d0 sevm.currentTarget).get 7).toAdr = tok
+    rw [stor0]
+    unfold mintLockedWorld
+    rw [afterSstore_getStor_self, Stor.get_set_ne _ (by decide : (12 : B256) ≠ 7),
+      afterSload_getStor]
+    exact token1
+  rw [slot] at answered
+  refine not_staticAnswered_of_reverting ?_ notPrecompile answered
+  have before : (temporalAccountAccessBase
+      (afterSload sevm (afterSload sevm (mintLockedWorld sevm b) 8) 6)
+      ((afterSload sevm (mintLockedWorld sevm b) 8).getStorVal sevm.currentTarget
+        6).toAdr.toB256.toAdr).getCode tok = revertingCode := by
+    unfold mintLockedWorld
+    rw [warm_getCode, afterSload_getCode, afterSload_getCode, afterSstore_getCode,
+      afterSload_getCode]
+    exact tokenCode
+  have after : d0.getCode tok = revertingCode := revertingCode_kept (StepIn.toRun call0)
+    (by unfold St; rw [Devm.getCode_setMach]; exact before)
+  rw [warm_getCode, afterSload_getCode]
+  exact after
 
 end Blanc.Lift.UniswapV2Pair
