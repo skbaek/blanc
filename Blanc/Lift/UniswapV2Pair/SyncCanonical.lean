@@ -265,18 +265,4 @@ theorem sync_canonical_source_frame_result {K : WriterKey → Prop}
     outputPreserved := originalOutput
   }⟩
 
-/-- Empty output follows from the SAME genuine frame entry, not callee ENV. -/
-theorem SyncCanonicalResult.output_empty_of_enter
-    {K : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat}
-    {sevm : Sevm} {b post : Devm} {G : Nat}
-    {run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)}
-    (result : SyncCanonicalResult K current invocation
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ b post)
-    {entryFrame : Jaune.Frame}
-    (entered : entryFrame.enter = .run ⟨0, sevm, St b [] Mem.empty G⟩) :
-    post.output = [] := by
-  have empty := Blanc.Frame.enter_run_output_empty entered
-  change b.output = [] at empty
-  exact result.outputPreserved.trans empty
-
 end Blanc.Lift.UniswapV2Pair

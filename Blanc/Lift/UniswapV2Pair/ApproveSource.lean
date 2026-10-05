@@ -57,12 +57,6 @@ theorem approve_drive_done {current : Checkpoint} {ctx : Context}
   rw [startTyped, approve_startImmediate_done value nonstatic]
   rfl
 
-theorem approve_runTyped_done {st : State} {ctx : Context} {spender : Adr} {amount : B256}
-    (value : ctx.value = 0) (nonstatic : ctx.isStatic = false) :
-    runTyped st ctx (.approve spender amount) .done =
-      approveSourceDone { state := st, logs := [], updates := [] } ctx spender amount := by
-  exact approve_drive_done value nonstatic
-
 theorem approveSourceFrame_prefix (current : Checkpoint) (ctx : Context)
     (spender : Adr) (amount : B256) :
     (approveSourceFrame current ctx spender amount).context = ctx ∧

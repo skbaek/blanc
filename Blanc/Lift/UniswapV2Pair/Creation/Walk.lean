@@ -93,7 +93,6 @@ def m16 (c a : B256) : Mem := (m15 c a).write 0 runtimeWindow
 
 theorem runtimeWindow_length : runtimeWindow.length = 0x2c1d := ByteArray.length_sliceD _ _ _ _
 
-theorem m0_size : m0.size = 0 := rfl
 theorem m1_size : m1.size = 96 := by decide +kernel
 theorem m2_size : m2.size = 224 := by decide +kernel
 theorem m3_size : m3.size = 224 := by decide +kernel
@@ -182,8 +181,6 @@ theorem m13_reads (c a : B256) : Mem.Reads (m13 c a) (img13 c a) := by
   have w12 := w11.write 384 c.toBytes
   have r12 := r11.write w11 384 c.toBytes
   exact r12.write w12 416 a.toBytes
-
-theorem img11_length : img11.length = 384 := by decide +kernel
 
 /-- The free-pointer read after the chain id and address are laid out. -/
 theorem mload_40_13 (c a : B256) :

@@ -463,18 +463,6 @@ theorem transfer_source_bytecode_exact {K : WriterKey → Prop} {current : Check
     transfer_bytecode_live_raw codeEq fork value size selector guard debitSentry creditSentry nonstatic cover nowrap,
     frameEq, dataEq, transfer_public_source_result rep fresh value nonstatic cover nowrap⟩
 
-/-- Finite coalition accounting consumes the logical movement, with sum boundedness kept external. -/
-theorem TransferSourceResult.ledger_coalition {K : WriterKey → Prop} {current : Checkpoint}
-    {invocation : List Nat} {sevm : Sevm} {b post : Devm} {residual : Nat}
-    (result : TransferSourceResult K current invocation sevm b post residual)
-    (sumNof : Blanc.SumNof current.state.balanceOf) (coalition : Finset Adr) :
-    Blanc.ledgerSumOn coalition
-        (transferSourceState current.state sevm.caller (transferRecipient sevm) (transferAmount sevm)).balanceOf +
-        (if sevm.caller ∈ coalition then (transferAmount sevm).toNat else 0) =
-      Blanc.ledgerSumOn coalition current.state.balanceOf +
-        (if transferRecipient sevm ∈ coalition then (transferAmount sevm).toNat else 0) := by
-  exact Blanc.ledgerSumOn_transfer sumNof result.movement
-
 /-- Successful raw pc0 execution derives exact consumption for the typed transfer entry. -/
 theorem transfer_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpoint}
     {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}

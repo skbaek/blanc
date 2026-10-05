@@ -407,24 +407,4 @@ theorem initializePublicStorage_packed {sevm : Sevm} {b : Devm} :
     addressMask_and_write_of_clean _ _ (validAdr_iff.mp (validAdr_toB256 _)),
     addressMask_and_write_of_clean _ _ (validAdr_iff.mp (validAdr_toB256 _))⟩
 
-/-- A successful fresh frame has empty output, unchanged logs and foreign storage,
-    and both assigned addresses retain the old upper ninety-six bits. -/
-theorem initialize_bytecode_effects_raw {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x485cc955) (freshOutput : b.output = [])
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    StorStep sevm b post (initializePublicStorage sevm b) ∧ post.output = [] ∧
-    (post.getStorVal sevm.currentTarget 6).toAdr = initializeToken0 sevm ∧
-    (post.getStorVal sevm.currentTarget 7).toAdr = initializeToken1 sevm ∧
-    addressMask &&& post.getStorVal sevm.currentTarget 6 = addressMask &&& b.getStorVal sevm.currentTarget 6 ∧
-    addressMask &&& post.getStorVal sevm.currentTarget 7 = addressMask &&& b.getStorVal sevm.currentTarget 7 := by
-  obtain ⟨_, _, _, _, _, residual, result⟩ := initialize_bytecode_refines_raw codeEq fork selector run
-  have step : StorStep sevm b post (initializePublicStorage sevm b) :=
-    result.symm ▸ initializePublicPost_storstep
-  have output : post.output = [] := by
-    rw [result, initializePublicPost_output, freshOutput]
-  refine ⟨step, output, ?_⟩
-  rw [step.getStorVal 6, step.getStorVal 7]
-  exact initializePublicStorage_packed
-
 end Blanc.Lift.UniswapV2Pair

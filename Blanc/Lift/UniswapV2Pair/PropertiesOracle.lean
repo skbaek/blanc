@@ -53,56 +53,6 @@ theorem State.update_oracle_law {st post : State} {ctx : Context}
   · rw [dite_eq_right bound0] at accepted
     cases accepted
 
-/-- If elapsed time or either old reserve is zero, both oracle increments vanish. -/
-theorem State.update_oracle_unchanged {st post : State} {ctx : Context}
-    {balance0 balance1 : B256} {oldReserve0 oldReserve1 : Nat}
-    {event : Event} {update : OracleUpdate}
-    (accepted : st.update ctx balance0 balance1 oldReserve0 oldReserve1 =
-      .ok (post, event, update))
-    (inactive : oracleElapsed st ctx = 0 ∨ oldReserve0 = 0 ∨ oldReserve1 = 0) :
-    post.price0CumulativeLast = st.price0CumulativeLast ∧
-      post.price1CumulativeLast = st.price1CumulativeLast := by
-  have law := State.update_oracle_law accepted
-  rcases inactive with elapsed | reserve0 | reserve1
-  · change (ctx.timestamp.toNat % 2 ^ 32 + 2 ^ 32 - st.blockTimestampLast.toNat) % 2 ^ 32 = 0 at elapsed
-    have hfalse : ¬ (0 > 0 ∧ oldReserve0 ≠ 0 ∧ oldReserve1 ≠ 0) := by
-      omega
-    constructor
-    · apply B256.toNat_inj
-      rw [law.1, oracleIncrement0, oracleElapsed, oracleTimestamp, elapsed,
-        ite_eq_right hfalse, Nat.add_zero,
-        Nat.mod_eq_of_lt (B256.toNat_lt _)]
-    · apply B256.toNat_inj
-      rw [law.2.1, oracleIncrement1, oracleElapsed, oracleTimestamp, elapsed,
-        ite_eq_right hfalse, Nat.add_zero,
-        Nat.mod_eq_of_lt (B256.toNat_lt _)]
-  · rw [reserve0] at law
-    have hfalse : ¬ ((ctx.timestamp.toNat % 2 ^ 32 + 2 ^ 32 - st.blockTimestampLast.toNat) % 2 ^ 32 > 0 ∧
-        0 ≠ 0 ∧ oldReserve1 ≠ 0) := by
-      omega
-    constructor
-    · apply B256.toNat_inj
-      rw [law.1, oracleIncrement0, oracleElapsed, oracleTimestamp,
-        ite_eq_right hfalse, Nat.add_zero,
-        Nat.mod_eq_of_lt (B256.toNat_lt _)]
-    · apply B256.toNat_inj
-      rw [law.2.1, oracleIncrement1, oracleElapsed, oracleTimestamp,
-        ite_eq_right hfalse, Nat.add_zero,
-        Nat.mod_eq_of_lt (B256.toNat_lt _)]
-  · rw [reserve1] at law
-    have hfalse : ¬ ((ctx.timestamp.toNat % 2 ^ 32 + 2 ^ 32 - st.blockTimestampLast.toNat) % 2 ^ 32 > 0 ∧
-        oldReserve0 ≠ 0 ∧ 0 ≠ 0) := by
-      omega
-    constructor
-    · apply B256.toNat_inj
-      rw [law.1, oracleIncrement0, oracleElapsed, oracleTimestamp,
-        ite_eq_right hfalse, Nat.add_zero,
-        Nat.mod_eq_of_lt (B256.toNat_lt _)]
-    · apply B256.toNat_inj
-      rw [law.2.1, oracleIncrement1, oracleElapsed, oracleTimestamp,
-        ite_eq_right hfalse, Nat.add_zero,
-        Nat.mod_eq_of_lt (B256.toNat_lt _)]
-
 def oracleFold0 (initial : B256) : List TaggedOracleUpdate → B256
   | [] => initial
   | tagged :: updates => oracleFold0 (initial + Nat.toB256 tagged.update.increment0) updates
@@ -582,11 +532,6 @@ theorem resumeSegment_accumulates {base0 base1 : B256} {prior : Frame}
         | change (prior.beginResume request).Accumulates base0 base1
           exact hframe
 
-theorem Frame.withEvents_updates {f : Frame} {post : State} {events : List Event} :
-    (f.withEvents post events).checkpoint = f.checkpoint ∧
-      (f.withEvents post events).current.updates = f.current.updates := by
-  constructor <;> rfl
-
 theorem Frame.finish_updates {f : Frame} {returndata : Bytes} :
     (f.finish returndata).frame.checkpoint = f.checkpoint ∧
       (f.finish returndata).frame.current.updates = f.current.updates := by
@@ -693,11 +638,6 @@ theorem Frame.lock_accumulates {base0 base1 : B256} {current : Checkpoint} {lock
       cases opened
   · rw [ite_eq_right unlocked] at opened
     cases opened
-
-theorem Frame.suspend_accumulates {base0 base1 : B256} {f : Frame}
-    (hf : f.Accumulates base0 base1) {site : CallSite} {target : Adr}
-    {operation : ExternalOperation} {continuation : Continuation} :
-    (f.suspend site target operation continuation).Accumulates base0 base1 := hf
 
 theorem startTyped_accumulates {base0 base1 : B256} {current : Checkpoint}
     {ctx : Context} {entry : Entry} (hc : current.Accumulates base0 base1) :

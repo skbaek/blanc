@@ -470,20 +470,6 @@ theorem skimSecondHalf_flag_inv {D : Exec.Deriv} {sevm : Sevm} {b post : Devm}
             forwarded, callGas', V, d2, call2, flagged, calldata, output, width2, accepted2, M'', g,
             final⟩
 
-/-- The same second half without the success flag. -/
-theorem skimSecondHalf_inv {D : Exec.Deriv} {sevm : Sevm} {b post : Devm}
-    {R0 : List B256} {M : Mem} {G : Nat} {p t1 t0 toWord tag : B256}
-    {n : Nat} (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem p n M)
-    (low : 128 ≤ p.toNat) (high : p.toNat + 1024 < 2 ^ 256)
-    (run : SFunc.RunCutP (StepIn D) cert.prog sevm []
-      (St b (t1 :: t0 :: toWord :: tag :: R0) M G) t_1a2b_c34 (.done (.halted post))) :
-    SkimSecondFacts D sevm b M p t1 t0 toWord tag R0 post := by
-  obtain ⟨codeNonzero, gw, callGas, d1, out1, call, post1, width, bound, answered, cover,
-    forwarded, callGas', V, d2, call2, _, calldata, output, width2, accepted2, M', g, final⟩ :=
-    skimSecondHalf_flag_inv fork mem low high run
-  exact ⟨codeNonzero, gw, callGas, d1, out1, call, post1, width, bound, answered, cover,
-    forwarded, callGas', V, d2, call2, calldata, output, width2, accepted2, M', g, final⟩
-
 /-- The free pointer left by transfer0's helper: 292 for an empty reply, else the modular bump. -/
 def skimFirstPointer (reply : Bytes) : B256 :=
   if reply = [] then 292 else 292 + ((reply.length.toB256 + 63) &&& ~~~31)

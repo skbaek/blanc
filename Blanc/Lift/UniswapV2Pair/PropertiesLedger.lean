@@ -13,8 +13,7 @@ invariant is transported as the footprint-free `State.Ledger` (`sum balanceOf = 
 read back over any covering footprint (`State.Ledger.on`), in particular over the entry footprint
 extended by the keys a step touches (`State.LedgerOn.extend`).
 
-* `State.empty_ledgerOn`, `State.initialized_ledgerOn`: the empty footprint at deployment and after
-  `initialize`;
+* `State.initialized_ledgerOn`: the empty footprint after `initialize`;
 * `startTyped_ledger`, `resumeSegment_ledger`: every owned segment of all 27 entries, including
   mint's `MINIMUM_LIQUIDITY` lock at address 0 and the protocol-fee mint to `feeTo`, keeps the
   invariant on both its checkpoint and its current state;
@@ -66,11 +65,6 @@ theorem State.LedgerOn.extend {keys touched : List Adr} {pre post : State}
     (frame : ∀ account, account ∉ touched → post.balanceOf account = pre.balanceOf account) :
     post.LedgerOn (keys ++ touched).dedup :=
   ledger.on (List.nodup_dedup _) (on.covers.extend frame)
-
-/-- The model's deployment state holds the invariant over the empty footprint. -/
-theorem State.empty_ledgerOn (factory : Adr) (domain : B256) :
-    (State.empty factory domain).LedgerOn [] :=
-  ⟨List.nodup_nil, fun _ nonzero => absurd rfl nonzero, B256.toNat_zero.symm⟩
 
 /-- After `initialize` (`initializedState`, `Creation/DeployInit.lean`, unfolds to this state). -/
 theorem State.initialized_ledgerOn (factory : Adr) (domain : B256) (token0 token1 : Adr) :

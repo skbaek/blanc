@@ -64,7 +64,6 @@ inductive ExternalOperation
   | transfer (recipient : Adr) (value : B256)
   | callback (sender : Adr) (amount0Out amount1Out : B256) (data : Bytes)
   | recover (digest : B256) (v : UInt8) (r s : B256)
-  deriving DecidableEq
 
 /-- The payload is retained rather than replaced by a numeric oracle answer. -/
 structure Request where

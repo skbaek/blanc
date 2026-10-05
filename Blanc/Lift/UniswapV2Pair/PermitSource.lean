@@ -483,35 +483,4 @@ theorem permit_recovery_canonical {sevm : Sevm} {b : Devm} {owner : Adr} {input 
   · rw [world, noDelegation] at delegated
     cases delegated
 
-/-- The canonical-native specialization: without a delegation designator at address 1 the
-observed reply is the precompile's output on the model request, so the typed resume consumes
-exactly the native ECRECOVER answer and its copied word is the nonzero owner. -/
-theorem permit_bytecode_refines_source_canonical {K : WriterKey → Prop} {current : Checkpoint}
-    {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (fresh : WriterFreshKeys K (permitTouched (permitOwner sevm) (permitSpender sevm)))
-    (representable : sevm.data.length < 2 ^ 256)
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0xd505accf) (freshOutput : b.output = [])
-    (noDelegation : getDelegatedCodeAddress (b.getCode 1) = none)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    sevm.value = 0 ∧ 228 ≤ sevm.data.length ∧ sevm.isStatic = false ∧
-      sevm.benvStat.time ≤ permitDeadline sevm ∧
-      ∃ (gw : B256) (callGas : Nat) (d : Devm) (residual : Nat),
-        PermitRawCall sevm b 0xd505accf gw callGas d (ecrecoverOutput
-          (permitRequest current.state (permitOwner sevm) (permitSpender sevm) (permitValue sevm)
-            (permitDeadline sevm) (permitV sevm) (permitR sevm) (permitS sevm)).calldata) ∧
-        ∀ codeExists, PermitSourceResult K current invocation sevm b post d
-          (ecrecoverOutput (permitRequest current.state (permitOwner sevm) (permitSpender sevm)
-            (permitValue sevm) (permitDeadline sevm) (permitV sevm) (permitR sevm)
-            (permitS sevm)).calldata) codeExists residual := by
-  obtain ⟨paid, length, nonstatic, timely, gw, callGas, d, out, residual, call, result⟩ :=
-    permit_bytecode_refines_source (invocation := invocation) rep fresh representable codeEq fork
-      selector freshOutput run
-  have native := permit_recovery_canonical fork noDelegation call.2.2.2.1
-  have request := (result false).2.2.2.1
-  rw [← request] at native
-  subst native
-  exact ⟨paid, length, nonstatic, timely, gw, callGas, d, residual, call, result⟩
-
 end Blanc.Lift.UniswapV2Pair

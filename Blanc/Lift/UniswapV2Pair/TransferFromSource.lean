@@ -586,19 +586,6 @@ theorem transferFrom_source_bytecode_exact {K : WriterKey → Prop} {current : C
     transferFrom_bytecode_live_raw codeEq fork value size selector guard allowed allowanceSentry debitSentry creditSentry nonstatic cover nowrap,
     frameEq, dataEq, transferFrom_public_source_result rep fresh value allowed nonstatic cover nowrap⟩
 
-/-- Sum boundedness is needed only by this finite coalition accounting consumer. -/
-theorem TransferFromSourceResult.ledger_coalition {K : WriterKey → Prop} {current : Checkpoint}
-    {invocation : List Nat} {sevm : Sevm} {b post : Devm} {residual : Nat}
-    (result : TransferFromSourceResult K current invocation sevm b post residual)
-    (sumNof : Blanc.SumNof current.state.balanceOf) (coalition : Finset Adr) :
-    Blanc.ledgerSumOn coalition
-        (transferFromSourceState current.state (transferFromOwner sevm) sevm.caller
-          (transferFromRecipient sevm) (transferFromAmount sevm)).balanceOf +
-        (if transferFromOwner sevm ∈ coalition then (transferFromAmount sevm).toNat else 0) =
-      Blanc.ledgerSumOn coalition current.state.balanceOf +
-        (if transferFromRecipient sevm ∈ coalition then (transferFromAmount sevm).toNat else 0) := by
-  exact Blanc.ledgerSumOn_transfer sumNof result.movement
-
 /-- Successful raw pc0 execution derives exact consumption for the typed transferFrom entry. -/
 theorem transferFrom_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpoint}
     {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}

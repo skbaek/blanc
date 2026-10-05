@@ -91,40 +91,4 @@ theorem source_live (writer : LedgerWriter) {K : WriterKey → Prop} {current : 
 
 end LedgerWriter
 
-/-- LP writer liveness at the final state of the connected replay. The final
-representation is derived from the initial one, and actual future decoded rows
-are admitted to the same separated universe. No later state witness is an input. -/
-theorem PairStorageReplay.writer_live {U K : WriterKey → Prop} {initial : State}
-    {pre : Stor} {invs : List SourceInvocation} {sevm : Sevm} {b : Devm}
-    (replay : PairStorageReplay U pre invs (b.getStor sevm.currentTarget))
-    (sub : ∀ k, K k → U k) (rep : WriterRep K pre initial)
-    (inj : WriterInj U) (apart : WriterApart U)
-    (writer : LedgerWriter) (good : ∀ k ∈ writer.keys sevm, U k)
-    (representable : sevm.data.length < 2 ^ 256)
-    (length : writer.calldataSize ≤ sevm.data.length)
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selectorEq : Blanc.Sevm.selector sevm = writer.selector) :
-    ∃ finish K', runSourceInvocations initial invs = some finish ∧
-      (∀ k, K k → K' k) ∧ (∀ k, K' k → U k) ∧
-      WriterRep K' (b.getStor sevm.currentTarget) finish ∧
-      ∀ (current : Checkpoint) (invocation : List Nat) (G : Nat)
-        (sourceFrame : Frame) (returndata : Bytes),
-        current.state = finish → gCallStipend < G →
-        startImmediate current (writerContext sevm invocation) (writer.entry sevm) =
-          some (.finished sourceFrame returndata) →
-        SProg.RunExact cert.prog sevm (St b [] Mem.empty (G + writer.cost sevm b))
-            (writer.post sevm b G) ∧
-          Nonempty (Exec 0 sevm (St b [] Mem.empty (G + writer.cost sevm b))
-            (.ok (writer.post sevm b G))) ∧
-          writer.Result K' current invocation sevm b (writer.post sevm b G) G := by
-  obtain ⟨finish, K', source, grows, included, finalRep⟩ := replay initial K sub rep
-  refine ⟨finish, K', source.realizes, grows, included, finalRep, ?_⟩
-  intro current invocation G sourceFrame returndata stateEq residual accepted
-  have incoming : WriterRep K' (b.getStor sevm.currentTarget) current.state := by
-    rw [stateEq]
-    exact finalRep
-  exact writer.source_live incoming
-    (Blanc.SlotFootprint.FreshKeys.of_universe inj apart included good)
-    representable length codeEq fork selectorEq residual accepted
-
 end Blanc.Lift.UniswapV2Pair

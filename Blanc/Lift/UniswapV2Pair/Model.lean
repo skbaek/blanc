@@ -57,7 +57,6 @@ inductive Entry
   | totalSupply | balanceOf (owner : Adr) | allowance (owner spender : Adr)
   | domainSeparator | nonces (owner : Adr) | factory | token0 | token1
   | getReserves | price0CumulativeLast | price1CumulativeLast | kLast
-  deriving DecidableEq
 
 /-- Failure categories retain source guards separately source compiler faults. -/
 inductive Failure
@@ -77,7 +76,6 @@ inductive Event
   | mint (sender : Adr) (amount0 amount1 : B256)
   | burn (sender : Adr) (amount0 amount1 : B256) (recipient : Adr)
   | swap (sender : Adr) (amount0In amount1In amount0Out amount1Out : B256) (recipient : Adr)
-  deriving DecidableEq
 
 /-- One `_update` records its actual old reserves, header observation and increment. -/
 structure OracleUpdate where

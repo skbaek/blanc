@@ -105,24 +105,6 @@ theorem staticView_target_turns_inv {K : WriterKey → Prop} {frame : Frame}
       (ExactTurns.done frame request (turn + 1))
 
 
-/-- A halted foreign static frame emits no selected Pair invocation. The
-source queue is derived from this actual retained projection. -/
-theorem staticView_foreign_halt_turns_inv {frame : Frame} {request : Request}
-    {turn : Nat} {path : List Nat} {pc : Nat} {sevm : Sevm} {pre : Devm}
-    {out : Execution}
-    (step : Evm.step ⟨pc, sevm, pre⟩ = .halt out)
-    (foreign : sevm.currentTarget ≠ frame.context.pair) :
-    (Exec.retainedTargetTurnsAt frame.context.pair path (.halt step)).filterMap
-      Sum.getRight? = [] ∧
-    ExactTurns frame request turn .done
-      { complete := true, frame := frame, childReturns := [] } := by
-  refine ⟨?_, ExactTurns.done frame request turn⟩
-  by_cases committed : Execution.commits out = true
-  · rw [Exec.retainedTargetTurnsAt_filterMap_eq _ _ _ committed,
-      Exec.retainedTargetFramesFromAt_halt _ _ _ step committed foreign]
-  · simp only [Exec.retainedTargetTurnsAt, dite_eq_right committed, List.filterMap_nil]
-
-
 /-- One actual retained frame paired with its derived static getter. -/
 abbrev StaticViewTurn := Exec.LocatedFrame × StaticView
 

@@ -177,14 +177,6 @@ theorem sourceCount_of_large {y : Nat} (h : 3 < y) :
 theorem sourceCount_of_small {y : Nat} (h : y ≤ 3) : sourceCount y = 0 := by
   simp only [sourceCount, ite_eq_right (by omega : ¬3 < y)]
 
-/-- Source bodies occur precisely on the large branch. -/
-theorem sourceCount_pos_iff (y : Nat) : 0 < sourceCount y ↔ 3 < y := by
-  by_cases h : 3 < y
-  · rw [sourceCount_of_large h]
-    omega
-  · rw [sourceCount_of_small (by omega : y ≤ 3)]
-    omega
-
 /-- Bounds used by every large-source body, for an arbitrary bounded input. -/
 theorem body_bounds {y x limit : Nat} (hy : 3 < y) (hlimit : y < limit)
     (hroot : Nat.sqrt y ≤ x) (hupper : x ≤ initialGuess y) :

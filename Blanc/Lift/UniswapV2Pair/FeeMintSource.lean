@@ -952,38 +952,6 @@ theorem FeeMintForwardInput.exact {K : WriterKey → Prop} {st : State} {sevm : 
   exact fee68_source_exact input.fork input.mem input.rep input.bound0 input.bound1 input.room
     input.code input.call input.success input.width input.accepted input.fresh input.stores input.returnedGas
 
-/-- Mint's29gas literal prefix constructs fee68 from source/ENV inputs and consumes its true continuation. -/
-theorem feeMint_source_caller_exact {K : WriterKey → Prop} {st : State} {sevm : Sevm} {b d : Devm}
-    {R : List B256} {M : Mem} {G callGas : Nat} {fee : FeeResult} {o : Outcome}
-    {amount1 discarded amount0 b1 b0 r1 r0 toWord extρ : B256}
-    (input : FeeMintForwardInput K st sevm b d
-      (mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord extρ R) M r1 r0 0x1233 G callGas fee)
-    (continuation : SFunc.RunExact cert.prog sevm
-      (feeMintSourcePost st sevm d (mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord extρ R) M r0 r1 G)
-      t_1233_c41 o) :
-    SFunc.RunExact cert.prog sevm
-      (St b (amount1 :: discarded :: amount0 :: b1 :: b0 :: r1 :: r0 :: 0 :: toWord :: extρ :: R)
-        M (feeMintEntryGas sevm b callGas + 29)) t_1225_c41 o ∧
-    FeeMintSourceResult K st sevm (feeKLastWorld sevm d)
-      (mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord extρ R) (feeReplyMemory M d.returnData)
-      (Bytes.toB256 (d.returnData.take 32)) r0 r1 G ∧
-    feeBranchSourceFee st sevm (feeKLastWorld sevm d) (Bytes.toB256 (d.returnData.take 32)) r0 r1 = fee := by
-  obtain ⟨callee, source, feeEq⟩ := input.exact
-  have room := input.room
-  simp only [mintFeeLocals, List.length_cons] at room
-  refine ⟨?_, source, feeEq⟩
-  unfold t_1225_c41
-  apply rx_dest
-  apply rx_swap rfl
-  dsimp only [List.set]
-  apply rx_pop
-  apply rx_push (w := 0) rfl (by simp only [List.length_cons]; omega)
-  apply rx_push (w := 0x1233) rfl (by simp only [List.length_cons]; omega)
-  apply rx_dup (w := r0) rfl (by simp only [List.length_cons]; omega)
-  apply rx_dup (w := r1) rfl (by simp only [List.length_cons]; omega)
-  apply rx_push (w := 0x26ec) rfl (by simp only [List.length_cons]; omega)
-  exact rx_callRet (g := t_26ec_c68) rfl callee continuation
-
 /-- Burn's105gas prefix and actual pair SLOAD construct fee68 without refreshing cached liquidity. -/
 theorem feeBurn_source_caller_exact {K : WriterKey → Prop} {st : State} {sevm : Sevm} {b d : Devm}
     {R : List B256} {M : Mem} {G callGas : Nat} {fee : FeeResult} {o : Outcome}
@@ -1134,42 +1102,6 @@ def feeBurnObserved (toWord token1 token0 L b1 b0 r1 r0 : B256)
   { locals := ⟨toWord.toAdr, ⟨⟨r0.toNat, bound0⟩, ⟨r1.toNat, bound1⟩⟩,
       token0.toAdr, token1.toAdr⟩,
     balance0 := b0, balance1 := b1, liquidity := L }
-
-/-- A literal mint caller supplies every cached typed local, not an arbitrary
-source endpoint or an independently chosen factory observation. -/
-theorem feeMint_typed_caller_inv {K : WriterKey → Prop} {st : State} {D : Exec.Deriv}
-    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
-    {amount1 discarded amount0 b1 b0 r1 r0 toWord extρ : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
-    (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112)
-    (fresh : FeeMintSourceFresh K st D sevm b
-      (mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord extρ R) M r1 r0 0x1233)
-    (prior : Frame) (state : prior.current.state = st)
-    (run : SFunc.RunCutP (StepIn D) cert.prog sevm C
-      (St b (amount1 :: discarded :: amount0 :: b1 :: b0 :: r1 :: r0 :: 0 :: toWord :: extρ :: R) M G)
-      t_1225_c41 r) :
-    ∃ feeGas feePost, ∃ observation : FeeMintSourceObservation K st D sevm b
-      (mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord extρ R) M r1 r0 0x1233 (.returned feePost),
-      SFunc.RunP (StepIn D) cert.prog sevm
-        (St b (r1 :: r0 :: 0x1233 :: mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord extρ R) M feeGas)
-        t_26ec_c68 (.returned feePost) ∧
-      SFunc.RunCutP (StepIn D) cert.prog sevm C feePost t_1233_c41 r ∧
-      StaticAnswered sevm (feeFactoryCallWorld sevm b) st.factory
-        (requestFor .mintFeeTo st.factory .feeTo).calldata observation.out ∧
-      resumeSegment prior (requestFor .mintFeeTo st.factory .feeTo)
-        (.mintFee (feeMintObserved toWord amount1 amount0 b1 b0 r1 r0 bound0 bound1))
-        (feeObservedResult observation.out) =
-        (prior.beginResume (requestFor .mintFeeTo st.factory .feeTo)).mintAfterFee
-          (feeMintObserved toWord amount1 amount0 b1 b0 r1 r0 bound0 bound1)
-          (feeBranchSourceFee st sevm (feeKLastWorld sevm observation.d)
-            (Bytes.toB256 (observation.out.take 32)) r0 r1) := by
-  obtain ⟨feeGas, feePost, callee, ⟨observation⟩, continuation⟩ :=
-    feeMint_source_caller_inv fork mem rep bound0 bound1 fresh run
-  have typed := observation.resume_mint prior
-    (feeMintObserved toWord amount1 amount0 b1 b0 r1 r0 bound0 bound1) state rfl rfl
-  rw [rep.feeFactory_target] at typed
-  exact ⟨feeGas, feePost, observation, callee, continuation, typed⟩
 
 /-- Burn's typed observation is built from the actual MLOAD and selected LP
 SLOAD.  The later fee recipient can equal the Pair without changing this cache. -/

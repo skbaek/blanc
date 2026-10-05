@@ -40,11 +40,6 @@ theorem transferScratch_ptr {M : Mem} (mem : PtrMem 128 96 M) (owner : B256) :
   rw [show memExtSize 96 32 32 = 96 from by decide] at b
   exact b
 
-/-- The three public boolean writer continuations share precisely this literal tree. -/
-theorem writerBool_transfer_tail : t_034e_c85 = t_034e_c96 := rfl
-
-theorem writerBool_transferFrom_tail : t_034e_c93 = t_034e_c96 := rfl
-
 /-- The event has already allocated 160 bytes; the bool store does not expand memory. -/
 theorem writerBool_tail_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
     {R : List B256} {M : Mem} {G : Nat} (mem : PtrMem 128 160 M)

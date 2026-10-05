@@ -2635,57 +2635,6 @@ theorem safeTransfer_first_exact {sevm : Sevm} {b d : Devm}
     exact decoded
   exact safeTransfer_firstPrepare_exact mem room (.next call suffix)
 
-/-- The actual first public burn caller consumes the complete helper construction and
-retains every cached pricing local at its literal1698 continuation. -/
-theorem burnFirstTransfer_caller_exact {sevm : Sevm} {b d : Devm}
-    {R : List B256} {M : Mem} {callGas G : Nat} {o : Outcome}
-    {supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (sentinel : memWord M 96 = 0) (room : R.length ≤ 991)
-    (call : Ninst.RunCompiled sevm
-      (St b (callGas.toB256 :: (token0 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        0 :: 292 :: 68 :: 292 :: 0 :: 360 ::
-        (token0 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount0 :: toWord :: token0 :: 0x1698 ::
-        burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R)
-        (safeTransfer_call128Memory M amount0 toWord) callGas) (.exec .call) d)
-    (success : d.stack = 1 :: 360 :: (token0 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-      96 :: 0 :: amount0 :: toWord :: token0 :: 0x1698 ::
-      burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R)
-    (accepted : d.returnData = [] ∨ (32 ≤ d.returnData.length ∧
-      Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0))
-    (returnedGas :
-      let V := safeTransfer_call128Memory M amount0 toWord
-      let len := d.returnData.length.toB256
-      let N1 := V.write 64 (292 + ((len + 63) &&& ~~~31)).toBytes
-      let N2 := N1.write 292 len.toBytes
-      let copyCharge := gVerylow + gReturnDataCopy * ceilDiv d.returnData.length 32 +
-        (St d [] N2 0).extCost [⟨324, d.returnData.length⟩]
-      d.gasLeft = G + if d.returnData = [] then 138 else 253 + copyCharge)
-    (continuation : SFunc.RunExact cert.prog sevm
-      (St d (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R)
-        (if d.returnData = [] then safeTransfer_call128Memory M amount0 toWord else
-          safeTransfer_reply292Memory (safeTransfer_call128Memory M amount0 toWord) d.returnData) G)
-      t_1698_c13 o) :
-    SFunc.RunExact cert.prog sevm
-      (St b (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R)
-        M (callGas + 644)) t_168d_c13 o := by
-  have helper := safeTransfer_first_exact (sevm := sevm) (b := b) (d := d)
-    (R := burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R)
-    (M := M) (callGas := callGas) (G := G) (amount := amount0) (toWord := toWord)
-    (tokenWord := token0) (rho := 0x1698) fork mem sentinel
-    (by simp only [burnPricedLocals, List.length_cons]; omega) call success accepted returnedGas
-  have gas : callGas + 644 = callGas + 620 + 8 + 3 + 3 + 3 + 3 + 3 + 1 := by omega
-  rw [gas]
-  unfold t_168d_c13
-  apply rx_dest
-  apply rx_push (w := 0x1698) rfl (by simp only [burnPricedLocals, List.length_cons]; omega)
-  apply rx_dup (w := token0) rfl (by simp only [burnPricedLocals, List.length_cons]; omega)
-  apply rx_dup (w := toWord) rfl (by simp only [burnPricedLocals, List.length_cons]; omega)
-  apply rx_dup (w := amount0) rfl (by simp only [burnPricedLocals, List.length_cons]; omega)
-  apply rx_push (w := 0x1fdb) rfl (by simp only [burnPricedLocals, List.length_cons]; omega)
-  exact rx_callRet rfl helper continuation
-
 /-- The helper's ordered payload writes at the moving pointer left by an
 earlier transfer. Every offset remains the literal modular word expression. -/
 def safeTransfer_dynamicPayloadMemory (M : Mem) (p amount toWord : B256) : Mem :=
@@ -3329,49 +3278,6 @@ theorem burnSecondTransfer_caller_inv {P : Sevm → Devm → Ninst → Devm → 
   rw [returned] at callee continuation
   exact ⟨helperGas, forwarded, callGas, d, residual, callee, step, stack, calldata,
     memory, output, replyWidth, accepted, continuation⟩
-
-/-- An actual CALL observation supplies the first Burn reply's pointer and
-staging bounds directly; reply width is proved by Jaune rather than assumed. -/
-theorem burnFirstTransfer_callLayout
-    {pc : Nat} {sevm : Sevm} {pre post : Devm} {xl : Xlot}
-    (filled : xl.Filled)
-    (call : Ninst.StepRun pc sevm pre (.exec .call) xl (.ok post))
-    (fork : CoveredFork sevm.benvStat.fork)
-    (potential : pre.gasMeasure + calculateMemoryGasCost pre.memory.size < 2 ^ 256) :
-    (burnFirstTransferPointer post.returnData).toNat =
-      (if post.returnData = [] then 292 else 292 + 32 * ((post.returnData.length + 63) / 32)) ∧
-    292 ≤ (burnFirstTransferPointer post.returnData).toNat ∧
-    (post.returnData ≠ [] →
-      324 + post.returnData.length ≤ (burnFirstTransferPointer post.returnData).toNat) ∧
-    (burnFirstTransferPointer post.returnData).toNat + 260 < 2 ^ 256 := by
-  exact burnFirstTransferPointer_layout
-    (Jaune.call_step_returnData_length_lt_two_pow_160 filled call
-      fork.rules_stateGas_none potential)
-
-/-- Two actual CALL observations supply the independent physical reply bounds
-for the second allocation; each uses its own caller paid-memory potential. -/
-theorem burnSecondTransfer_callLayout
-    {pc1 pc2 : Nat} {sevm : Sevm} {pre1 post1 pre2 post2 : Devm} {xl1 xl2 : Xlot}
-    (filled1 : xl1.Filled) (filled2 : xl2.Filled)
-    (call1 : Ninst.StepRun pc1 sevm pre1 (.exec .call) xl1 (.ok post1))
-    (call2 : Ninst.StepRun pc2 sevm pre2 (.exec .call) xl2 (.ok post2))
-    (fork : CoveredFork sevm.benvStat.fork)
-    (potential1 : pre1.gasMeasure + calculateMemoryGasCost pre1.memory.size < 2 ^ 256)
-    (potential2 : pre2.gasMeasure + calculateMemoryGasCost pre2.memory.size < 2 ^ 256) :
-    (burnSecondTransferPointer post1.returnData post2.returnData).toNat =
-      (burnFirstTransferPointer post1.returnData).toNat + 164 +
-        (if post2.returnData = [] then 0 else 32 * ((post2.returnData.length + 63) / 32)) ∧
-    (burnFirstTransferPointer post1.returnData).toNat + 164 ≤
-      (burnSecondTransferPointer post1.returnData post2.returnData).toNat ∧
-    (post2.returnData ≠ [] →
-      (burnFirstTransferPointer post1.returnData).toNat + 196 + post2.returnData.length ≤
-        (burnSecondTransferPointer post1.returnData post2.returnData).toNat) ∧
-    (burnSecondTransferPointer post1.returnData post2.returnData).toNat + 64 < 2 ^ 256 := by
-  exact burnSecondTransferPointer_layout
-    (Jaune.call_step_returnData_length_lt_two_pow_160 filled1 call1
-      fork.rules_stateGas_none potential1)
-    (Jaune.call_step_returnData_length_lt_two_pow_160 filled2 call2
-      fork.rules_stateGas_none potential2)
 
 /-- Both literal Burn transfers come from one retained source continuation.
 Their actual 68-byte CALL operands bound the full replies independently; the

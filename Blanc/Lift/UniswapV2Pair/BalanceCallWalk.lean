@@ -94,7 +94,6 @@ theorem balanceReplyMemory_ptr {M : Mem} {pair : Adr} (out : Bytes)
 
 inductive SyncBalanceSite where
   | first | second
-  deriving DecidableEq
 
 def SyncBalanceSite.returnTree : SyncBalanceSite → SFunc
   | .first => t_1ef1_c31

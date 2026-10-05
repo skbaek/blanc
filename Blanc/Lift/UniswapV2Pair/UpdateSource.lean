@@ -424,36 +424,6 @@ theorem update_source_inv_at {st : State} {ctx : Context} {sevm : Sevm} {b : Dev
     sync, logs, fun _ _ frame => updateWorld_storage_frame frame,
     fun _ foreign => updateWorld_account_frame foreign, updateWorld_output _ _ _ _ _ _⟩
 
-/-- Successful actual shared bytecode derives source acceptance, exact selected
-poststate, Sync log, caller tail, complete memory, mutability and frame facts. -/
-theorem update_source_inv {st : State} {ctx : Context} {sevm : Sevm} {b : Devm}
-    {R : List B256} {M : Mem} {G n : Nat} {old0 old1 balance0 balance1 tag : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 n M)
-    (slots : ReserveSlotMatches st sevm b)
-    (cum0 : b.getStorVal sevm.currentTarget 9 = st.price0CumulativeLast)
-    (cum1 : b.getStorVal sevm.currentTarget 10 = st.price1CumulativeLast)
-    (time : ctx.timestamp = sevm.benvStat.time) (pair : ctx.pair = sevm.currentTarget)
-    (oldBound0 : old0.toNat < 2 ^ 112) (oldBound1 : old1.toNat < 2 ^ 112)
-    (run : SFunc.Run cert.prog sevm
-      (St b (old1 :: old0 :: balance1 :: balance0 :: tag :: R) M G) t_22e0_c60 o) :
-    sevm.isStatic = false ∧ ∃ gas post event oracle,
-      o = .returned (St (updateWorld sevm b old0 old1 balance0 balance1) R
-        (updateMemory sevm b M old0 old1 balance0 balance1) gas) ∧
-      st.update ctx balance0 balance1 old0.toNat old1.toNat = .ok (post, event, oracle) ∧
-      ReserveSlotMatches post sevm (updateWorld sevm b old0 old1 balance0 balance1) ∧
-      (updateWorld sevm b old0 old1 balance0 balance1).getStorVal sevm.currentTarget 9 = post.price0CumulativeLast ∧
-      (updateWorld sevm b old0 old1 balance0 balance1).getStorVal sevm.currentTarget 10 = post.price1CumulativeLast ∧
-      event = .sync balance0.toNat balance1.toNat ∧
-      (updateWorld sevm b old0 old1 balance0 balance1).logs =
-        b.logs ++ [⟨ctx.pair, [updateSyncTopic], encodeWords [balance0, balance1]⟩] ∧
-      (∀ a k, a ≠ sevm.currentTarget ∨ (k ≠ 8 ∧ k ≠ 9 ∧ k ≠ 10) →
-        (updateWorld sevm b old0 old1 balance0 balance1).getStorVal a k = b.getStorVal a k) ∧
-      (∀ a, a ≠ sevm.currentTarget →
-        (updateWorld sevm b old0 old1 balance0 balance1).getAcct a = b.getAcct a) ∧
-      (updateWorld sevm b old0 old1 balance0 balance1).output = b.output := by
-  exact update_source_inv_at fork mem (by decide) (by decide) slots cum0 cum1
-    time pair oldBound0 oldBound1 run
-
 /-- Source acceptance and the actual primitive affordability conditions construct
 the exact shared bytecode run, with precise selected state, Sync event and frame.
 No callee endpoint or total-gas-only store-safety premise is assumed. -/
@@ -528,81 +498,5 @@ theorem update_source_exact_at {st post : State} {ctx : Context} {event : Event}
     reserves, price0, price1, sync, logs, fun _ _ frame => updateWorld_storage_frame frame,
     fun _ foreign => updateWorld_account_frame foreign, updateWorld_output _ _ _ _ _ _⟩
 
-
-/-- Source acceptance and the actual primitive affordability conditions construct
-the exact shared bytecode run, with precise selected state, Sync event and frame.
-No callee endpoint or total-gas-only store-safety premise is assumed. -/
-theorem update_source_exact {st post : State} {ctx : Context} {event : Event}
-    {oracle : OracleUpdate} {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
-    {G n headerLoad load9 store9 load10 store10 load8 store8 : Nat}
-    {old0 old1 balance0 balance1 tag : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 n M)
-    (slots : ReserveSlotMatches st sevm b)
-    (cum0 : b.getStorVal sevm.currentTarget 9 = st.price0CumulativeLast)
-    (cum1 : b.getStorVal sevm.currentTarget 10 = st.price1CumulativeLast)
-    (time : ctx.timestamp = sevm.benvStat.time) (pair : ctx.pair = sevm.currentTarget)
-    (oldBound0 : old0.toNat < 2 ^ 112) (oldBound1 : old1.toNat < 2 ^ 112)
-    (accepted : st.update ctx balance0 balance1 old0.toNat old1.toNat = .ok (post, event, oracle))
-    (static : sevm.isStatic = false) (room : R.length ≤ 1008)
-    (headerCharge : headerLoad = sloadCost sevm b 8)
-    (packedLoadCharge : load8 = sloadCost sevm (updateOracleWorld sevm b old0 old1) 8)
-    (packedStoreCharge : store8 = sstoreCost sevm
-      (afterSload sevm (updateOracleWorld sevm b old0 old1) 8) 8
-      (updateFinalPackedWord sevm b old0 old1 balance0 balance1))
-    (oracleCharges : updateOracleActive sevm b old0 old1 →
-      load9 = sloadCost sevm (afterSload sevm b 8) 9 ∧
-      store9 = sstoreCost sevm (afterSload sevm (afterSload sevm b 8) 9) 9
-        (updateAccumulatorWord ((afterSload sevm b 8).getStorVal sevm.currentTarget 9)
-          (updatePriceWord old0 old1)
-          (updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time)) ∧
-      load10 = sloadCost sevm
-        (updateAccumulatorPost sevm (afterSload sevm b 8) 9 (updatePriceWord old0 old1)
-          (updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time)) 10 ∧
-      store10 = sstoreCost sevm (afterSload sevm
-        (updateAccumulatorPost sevm (afterSload sevm b 8) 9 (updatePriceWord old0 old1)
-          (updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time)) 10) 10
-        (updateAccumulatorWord
-          ((updateAccumulatorPost sevm (afterSload sevm b 8) 9 (updatePriceWord old0 old1)
-            (updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time)).getStorVal
-            sevm.currentTarget 10) (updatePriceWord old1 old0)
-          (updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time)))
-    (sentry8 : gCallStipend < G + updateSyncGas n + store8)
-    (sentry10 : updateOracleActive sevm b old0 old1 →
-      gCallStipend < G + updateSyncGas n + load8 + store8 + 110 + store10)
-    (sentry9 : updateOracleActive sevm b old0 old1 →
-      gCallStipend < G + updateSyncGas n + load8 + store8 + 110 +
-        load10 + store10 + 42 + 149 + store9) :
-    SFunc.RunExact cert.prog sevm
-      (St b (old1 :: old0 :: balance1 :: balance0 :: tag :: R) M
-        (G + updateSyncGas n + load8 + store8 + 110 +
-          (if updateOracleActive sevm b old0 old1 then load9 + store9 + load10 + store10 + 382 else 0) +
-          17 + 20 +
-          (if updateOraclePrefixWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time old0 = 0
-            then 0 else 17) + headerLoad + 75 +
-          (if updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time &&& reserveMask32 = 0
-            then 0 else 17) + 60)) t_22e0_c60
-      (.returned (St (updateWorld sevm b old0 old1 balance0 balance1) R
-        (updateMemory sevm b M old0 old1 balance0 balance1) G)) ∧
-    ReserveSlotMatches post sevm (updateWorld sevm b old0 old1 balance0 balance1) ∧
-    (updateWorld sevm b old0 old1 balance0 balance1).getStorVal sevm.currentTarget 9 = post.price0CumulativeLast ∧
-    (updateWorld sevm b old0 old1 balance0 balance1).getStorVal sevm.currentTarget 10 = post.price1CumulativeLast ∧
-    event = .sync balance0.toNat balance1.toNat ∧
-    (updateWorld sevm b old0 old1 balance0 balance1).logs =
-      b.logs ++ [⟨ctx.pair, [updateSyncTopic], encodeWords [balance0, balance1]⟩] ∧
-    (∀ a k, a ≠ sevm.currentTarget ∨ (k ≠ 8 ∧ k ≠ 9 ∧ k ≠ 10) →
-      (updateWorld sevm b old0 old1 balance0 balance1).getStorVal a k = b.getStorVal a k) ∧
-    (∀ a, a ≠ sevm.currentTarget →
-      (updateWorld sevm b old0 old1 balance0 balance1).getAcct a = b.getAcct a) ∧
-    (updateWorld sevm b old0 old1 balance0 balance1).output = b.output := by
-  rw [← updateSyncGasAt_128] at sentry8 sentry10 sentry9
-  have h := update_source_exact_at (st := st) (post := post) (ctx := ctx)
-    (event := event) (oracle := oracle) (sevm := sevm) (b := b) (R := R) (M := M)
-    (G := G) (n := n) (headerLoad := headerLoad) (load9 := load9) (store9 := store9)
-    (load10 := load10) (store10 := store10) (load8 := load8) (store8 := store8)
-    (old0 := old0) (old1 := old1) (balance0 := balance0) (balance1 := balance1) (tag := tag)
-    fork mem (by decide) (by decide) slots cum0 cum1 time pair oldBound0 oldBound1
-    accepted static room headerCharge packedLoadCharge packedStoreCharge oracleCharges
-    sentry8 sentry10 sentry9
-  simpa only [updateSyncGasAt_128, updateMemoryAt_128] using h
 
 end Blanc.Lift.UniswapV2Pair

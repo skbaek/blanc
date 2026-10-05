@@ -2833,25 +2833,4 @@ theorem mintBytecode_public_source_inv {K : WriterKey → Prop} {current : Check
   have eq := Outcome.halted.inj halted
   exact ⟨source,liquidity,eq.symm ▸ output⟩
 
-/-- Primitive callee ENV constructs the original PC0 execution and its complete finite source result. -/
-theorem mintBytecode_public_source_exact {K : WriterKey → Prop} {current : Checkpoint}
-    {sevm : Sevm} {b : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (invocation : List Nat) (value : sevm.value = 0)
-    (size : (4 : B256) ≤ sevm.data.length.toB256)
-    (guard : (32 : B256) ≤ sevm.data.length.toB256 - 4)
-    (selector : Blanc.Sevm.selector sevm = 0x6a627842)
-    (env : MintPrefixForwardEnv sevm b [0x6a627842] getterInitMemory
-      (Sevm.dataWord sevm 4).toAdr.toB256 0x039b (G + 43)) :
-    ∃ liquidity : B256, ∃ run : Exec 0 sevm (St b [] Mem.empty (env.gas + 228))
-      (.ok (getterWordPost env.fee.post [0x6a627842] env.fee.post.memory liquidity G)),
-      let post := getterWordPost env.fee.post [0x6a627842] env.fee.post.memory liquidity G
-      let D : Exec.Deriv := ⟨0,sevm,St b [] Mem.empty (env.gas + 228),.ok post,run⟩
-      post.output = liquidity.toBytes ∧
-        MintPublicSourceResult K current D sevm b invocation (.halted post) := by
-  obtain ⟨liquidity,⟨run⟩,output⟩ := mintBytecode_exact codeEq fork value size guard selector env
-  have source := mintBytecode_public_source_inv codeEq fork rep invocation selector run
-  exact ⟨liquidity,run,output,source.1⟩
-
 end Blanc.Lift.UniswapV2Pair

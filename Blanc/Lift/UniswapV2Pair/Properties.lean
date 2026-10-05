@@ -1257,40 +1257,6 @@ theorem Frame.mintAfterFee_driver_product {fuel : Nat} {frame : Frame} {observed
   rw [frameEq]
   exact Frame.mintAfterFee_product feeAccepted positiveSupply amount0 amount1 finished
 
-/-- Fee-off burn checkpoints satisfy the original supply-scaled product inequality. -/
-theorem Frame.burnAfterFee_feeOff_product {fuel : Nat} {frame : Frame} {observed : BurnObserved}
-    {fee : FeeResult} {transcript : Transcript} {returndata : Bytes}
-    (locked : frame.current.state.unlocked = 0)
-    (feeAccepted : mintFee frame.current.state 0 observed.locals.reserves.reserve0.val
-      observed.locals.reserves.reserve1.val = .ok fee)
-    (noShrink : BurnNoShrink observed fee.state.totalSupply transcript)
-    (successful : (drive fuel (frame.burnAfterFee observed fee) transcript).status = .success returndata) :
-    observed.locals.reserves.reserve0.val * observed.locals.reserves.reserve1.val *
-        (drive fuel (frame.burnAfterFee observed fee) transcript).frame.current.state.totalSupply.toNat ^ 2 ≤
-      (drive fuel (frame.burnAfterFee observed fee) transcript).frame.current.state.reserve0.val *
-        (drive fuel (frame.burnAfterFee observed fee) transcript).frame.current.state.reserve1.val *
-        frame.current.state.totalSupply.toNat ^ 2 := by
-  simpa only [feeAmount, eq_self, true_or, ite_true, Nat.add_zero] using
-    Frame.burnAfterFee_driver_product locked feeAccepted noShrink successful
-
-/-- Fee-off later-mint checkpoints satisfy the original supply-scaled product inequality. -/
-theorem Frame.mintAfterFee_feeOff_product {fuel : Nat} {frame : Frame} {observed : MintObserved}
-    {fee : FeeResult} {transcript : Transcript} {returndata : Bytes}
-    (feeAccepted : mintFee frame.current.state 0 observed.reserves.reserve0.val
-      observed.reserves.reserve1.val = .ok fee)
-    (positiveSupply : fee.state.totalSupply ≠ 0)
-    (amount0 : observed.reserves.reserve0.val + observed.amount0.toNat = observed.balance0.toNat)
-    (amount1 : observed.reserves.reserve1.val + observed.amount1.toNat = observed.balance1.toNat)
-    (successful : (drive fuel (frame.mintAfterFee observed fee) transcript).status = .success returndata) :
-    observed.reserves.reserve0.val * observed.reserves.reserve1.val *
-        (drive fuel (frame.mintAfterFee observed fee) transcript).frame.current.state.totalSupply.toNat ^ 2 ≤
-      (drive fuel (frame.mintAfterFee observed fee) transcript).frame.current.state.reserve0.val *
-        (drive fuel (frame.mintAfterFee observed fee) transcript).frame.current.state.reserve1.val *
-        frame.current.state.totalSupply.toNat ^ 2 := by
-  simpa only [feeAmount, eq_self, true_or, ite_true, Nat.add_zero] using
-    Frame.mintAfterFee_driver_product feeAccepted positiveSupply amount0 amount1 successful
-
-
 /-- Static external settlement keeps the exact pre-query Frame, even on call failure. -/
 theorem Frame.settleExternal_static_frame (frame : Frame) (fuel : Nat) (request : Request)
     (result : ExternalResult) (turns : Transcript)
@@ -1612,21 +1578,6 @@ theorem runTyped_burn_product {st : State} {ctx : Context} {recipient : Adr}
           st.reserve0.val st.reserve1.val) ^ 2 := by
   exact drive_startTyped_burn_product noShrink successful
 
-/-- Successful fee-off typed burns satisfy the original supply-scaled product bound. -/
-theorem runTyped_burn_feeOff_product {st : State} {ctx : Context} {recipient : Adr}
-    {transcript : Transcript} {returndata : Bytes}
-    (feeOff : transcript.ownTail.ownTail.firstWord.toAdr = 0)
-    (noShrink : BurnEntryNoShrink st ctx.pair recipient transcript)
-    (successful : (runTyped st ctx (.burn recipient) transcript).status = .success returndata) :
-    st.reserve0.val * st.reserve1.val *
-        (runTyped st ctx (.burn recipient) transcript).frame.current.state.totalSupply.toNat ^ 2 ≤
-      (runTyped st ctx (.burn recipient) transcript).frame.current.state.reserve0.val *
-        (runTyped st ctx (.burn recipient) transcript).frame.current.state.reserve1.val *
-        st.totalSupply.toNat ^ 2 := by
-  simpa only [feeOff, feeAmount, eq_self, true_or, ite_true, Nat.add_zero] using
-    runTyped_burn_product noShrink successful
-
-
 /-- A successful later-mint fee query preserves the positive-supply branch and exact fee bound. -/
 theorem drive_mintFee_product {fuel : Nat} {frame : Frame} {request : Request}
     {observed : MintObserved} {transcript : Transcript} {returndata : Bytes}
@@ -1894,22 +1845,6 @@ theorem runTyped_mint_product {st : State} {ctx : Context} {recipient : Adr}
     (current := { state := st, logs := [], updates := [] }) (ctx := ctx) (recipient := recipient)
     (fuel := transcript.work + 2) (transcript := transcript) (returndata := returndata)
     positiveSupply successful
-
-/-- Successful fee-off later mints satisfy the original supply-scaled product bound. -/
-theorem runTyped_mint_feeOff_product {st : State} {ctx : Context} {recipient : Adr}
-    {transcript : Transcript} {returndata : Bytes}
-    (positiveSupply : 0 < st.totalSupply.toNat)
-    (feeOff : transcript.ownTail.ownTail.firstWord.toAdr = 0)
-    (successful : (runTyped st ctx (.mint recipient) transcript).status = .success returndata) :
-    st.reserve0.val * st.reserve1.val *
-        (runTyped st ctx (.mint recipient) transcript).frame.current.state.totalSupply.toNat ^ 2 ≤
-      (runTyped st ctx (.mint recipient) transcript).frame.current.state.reserve0.val *
-        (runTyped st ctx (.mint recipient) transcript).frame.current.state.reserve1.val *
-        st.totalSupply.toNat ^ 2 := by
-  simpa only [feeOff, feeAmount, eq_self, true_or, ite_true, Nat.add_zero] using
-    runTyped_mint_product (st := st) (ctx := ctx) (recipient := recipient)
-      (transcript := transcript) (returndata := returndata) positiveSupply successful
-
 
 /-- Sync stores its final returned balance word and preserves the pre-query supply. -/
 theorem drive_syncBalance1_values {fuel : Nat} {frame : Frame} {request : Request}
@@ -3281,18 +3216,5 @@ theorem runTyped_mint_initial_floor {st : State} {ctx : Context} {recipient : Ad
       product < ((runTyped st ctx (.mint recipient) transcript).frame.current.state.totalSupply.toNat + 1) ^ 2 := by
   dsimp only []
   exact Nat.eq_sqrt'.mp (runTyped_mint_initial zeroSupply successful).2.2.1
-
-/-- When the user recipient is zero, both source credits accumulate in that same LP row. -/
-theorem runTyped_mint_initial_zero_recipient {st : State} {ctx : Context}
-    {transcript : Transcript} {returndata : Bytes} (zeroSupply : st.totalSupply = 0)
-    (successful : (runTyped st ctx (.mint 0) transcript).status = .success returndata) :
-    let observed := mintObservation 0 st.cachedReserves
-      transcript.firstWord transcript.ownTail.firstWord
-    (runTyped st ctx (.mint 0) transcript).frame.current.state.balanceOf 0 =
-      st.balanceOf 0 + 1000 +
-        Nat.toB256 (Nat.sqrt (observed.amount0.toNat * observed.amount1.toNat) - 1000) := by
-  dsimp only []
-  have credited := congrFun (runTyped_mint_initial zeroSupply successful).2.2.2.1 0
-  simpa only [mintObservation, Blanc.ledgerCredit_self] using credited
 
 end Blanc.Lift.UniswapV2Pair

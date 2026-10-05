@@ -1236,46 +1236,4 @@ theorem burnRaw_frameAuth {sevm : Sevm} {b publicPost : Devm} {G : Nat}
     BurnFrameAuth ⟨0, sevm, St b [] Mem.empty G, .ok publicPost, run⟩ a.transcript :=
   ⟨a, amount0, amount1, rfl, provenance⟩
 
-/-- The actual pc-zero source consumer also preserves every incoming key. -/
-theorem burnPc0_source_tracked_finished {U K : WriterKey → Prop} {current : Checkpoint}
-    {D : Exec.Deriv} {b : Devm} {G : Nat} {o : Outcome}
-    (invocation : List Nat) (fork : CoveredFork D.sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector D.sevm = 0x89afcb44)
-    (rep : WriterRep K (b.getStor D.sevm.currentTarget) current.state)
-    (tracked : K (.balance D.sevm.currentTarget))
-    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
-    (trace : ∀ k ∈ mintTraceKeys D, U k)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (b.getCode D.sevm.currentTarget).toList = sem.image)
-    (good : ∀ F ∈ Exec.rawFrameRoots D.exc,
-      F.sevm.currentTarget = D.sevm.currentTarget → LockedGood U F)
-    (staticGood : ∀ F ∈ Exec.rawFrameRoots D.exc, F.sevm.currentTarget = D.sevm.currentTarget →
-      ∀ k ∈ staticViewDecodedKeys F.sevm, U k)
-    (run : SFunc.RunP (StepIn D) cert.prog D.sevm (St b [] Mem.empty G) t_0000_c0 o) :
-    BurnEntryTrackedFinished U K current D b o invocation := by
-  exact (burnPc0_source_finished invocation fork selector rep tracked inj apart sub trace
-    sem image installed good staticGood run).track rep inj apart sub
-
-/-- The same supplied raw root, full entry result and incoming footprint growth. -/
-theorem burnRaw_source_tracked_finished {U K : WriterKey → Prop} {current : Checkpoint}
-    {sevm : Sevm} {b publicPost : Devm} {G : Nat}
-    (invocation : List Nat) (codeEq : sevm.code = code)
-    (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x89afcb44)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (tracked : K (.balance sevm.currentTarget))
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok publicPost))
-    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
-    (trace : ∀ k ∈ mintTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok publicPost, run⟩, U k)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
-    (good : ∀ F ∈ Exec.rawFrameRoots run,
-      F.sevm.currentTarget = sevm.currentTarget → LockedGood U F)
-    (staticGood : ∀ F ∈ Exec.rawFrameRoots run, F.sevm.currentTarget = sevm.currentTarget →
-      ∀ k ∈ staticViewDecodedKeys F.sevm, U k) :
-    BurnEntryTrackedFinished U K current ⟨0, sevm, St b [] Mem.empty G, .ok publicPost, run⟩
-      b (.halted publicPost) invocation := by
-  exact (burnRaw_source_finished invocation codeEq fork selector rep tracked run inj apart sub
-    trace sem image installed good staticGood).track rep inj apart sub
-
 end Blanc.Lift.UniswapV2Pair

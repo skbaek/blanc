@@ -96,11 +96,6 @@ theorem WriterRep.extend {K : WriterKey → Prop} {s : Stor} {st : State}
   · intro k outside
     exact rep.logicalZero k (fun tracked => outside (.inl tracked))
 
-theorem WriterRep.balance_zero_outside {K : WriterKey → Prop} {s : Stor} {st : State}
-    (rep : WriterRep K s st) {a : Adr} (outside : ¬ K (.balance a)) :
-    st.balanceOf a = 0 := rep.logicalZero (.balance a) outside
-
-
 theorem approveSourceState_value (st : State) (owner spender : Adr) (amount : B256)
     (k : WriterKey) :
     k.value (approveSourceState st owner spender amount) =

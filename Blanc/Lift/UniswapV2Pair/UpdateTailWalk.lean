@@ -312,24 +312,6 @@ theorem update_sync_event_exact_at {sevm : Sevm} {b : Devm} {R : List B256} {M :
   exact rx_ret
 
 
-/-- Actual Sync suffix, with symbolic incoming allocation, exact memory image,
-emitter/topic/two ABI words and exact gas including both expansion charges. -/
-theorem update_sync_event_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
-    {G n : Nat} {packed dt ts r0 r1 b0 b1 tag : B256}
-    (static : sevm.isStatic = false) (mem : PtrMem 128 n M) (room : R.length ≤ 1010) :
-    SFunc.RunExact cert.prog sevm
-      (St b (reserveDiv112 :: reserveMask112 :: packed :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R)
-        M (G + updateSyncStoreCost0 n + updateSyncStoreCost1 n + 1371)) updateSyncTree
-      (.returned (St (updateSyncPost sevm b packed) R (updateSyncMemory M packed) G)) := by
-  have h := update_sync_event_exact_at (sevm := sevm) (b := b) (R := R) (G := G)
-    (packed := packed) (dt := dt) (ts := ts) (r0 := r0) (r1 := r1)
-    (b0 := b0) (b1 := b1) (tag := tag) static mem (by decide) (by decide) room
-  simpa only [updateSyncStoreCost0At, updateSyncStoreCost1At, updateSyncStoreCost0,
-    updateSyncStoreCost1, updateSyncMemoryAt, updateSyncMemory,
-    show (128 : B256).toNat = 128 from rfl,
-    show ((128 : B256) + 32).toNat = 160 from rfl] using h
-
-
 /-- Successful actual Sync logging/return yields the exact emitter, topic, data,
 whole memory image and caller tail. -/
 theorem update_sync_event_inv_at {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
@@ -424,17 +406,5 @@ theorem update_sync_event_inv_at {sevm : Sevm} {b : Devm} {R : List B256} {M : M
   obtain ⟨g, hg⟩ := ric_ret h
   exact ⟨g, Seg.done.inj hg⟩
 
-
-/-- Successful actual Sync logging/return yields the exact emitter, topic, data,
-whole memory image and caller tail. -/
-theorem update_sync_event_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
-    {G n : Nat} {packed dt ts r0 r1 b0 b1 tag : B256} {o : Outcome}
-    (mem : PtrMem 128 n M)
-    (run : SFunc.Run cert.prog sevm
-      (St b (reserveDiv112 :: reserveMask112 :: packed :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R)
-        M G) updateSyncTree o) :
-    ∃ G', o = .returned (St (updateSyncPost sevm b packed) R (updateSyncMemory M packed) G') := by
-  obtain ⟨g, hg⟩ := update_sync_event_inv_at mem (by decide) (by decide) run
-  exact ⟨g, hg⟩
 
 end Blanc.Lift.UniswapV2Pair
