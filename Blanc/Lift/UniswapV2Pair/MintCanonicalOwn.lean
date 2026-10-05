@@ -49,8 +49,10 @@ theorem mint_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Che
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (selector : Blanc.Sevm.selector sevm = 0x6a627842)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
-    (inj : WriterInj (mintTraceUniverse K ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩))
-    (apart : WriterApart (mintTraceUniverse K ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)) :
+    (inj : WriterInj
+      (WriterExtend K (mintTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)))
+    (apart : WriterApart
+      (WriterExtend K (mintTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩))) :
     (∀ a, a ≠ sevm.currentTarget → post.getStor a = b.getStor a) ∧
       MintCanonicalResult K current invocation run := by
   exact ⟨mint_bytecode_foreign_storage codeEq fork selector run,
@@ -82,8 +84,10 @@ theorem mint_bytecode_forward_consumes {K : WriterKey → Prop} {current : Check
       (∀ a, a ≠ sevm.currentTarget →
         (getterWordPost env.fee.post [0x6a627842] env.fee.post.memory liquidity G).getStor a =
           b.getStor a) ∧
-      (WriterInj (mintTraceUniverse K ⟨0, sevm, St b [] Mem.empty (env.gas + 228), _, run⟩) →
-        WriterApart (mintTraceUniverse K ⟨0, sevm, St b [] Mem.empty (env.gas + 228), _, run⟩) →
+      (WriterInj (WriterExtend K
+          (mintTraceKeys ⟨0, sevm, St b [] Mem.empty (env.gas + 228), _, run⟩)) →
+        WriterApart (WriterExtend K
+          (mintTraceKeys ⟨0, sevm, St b [] Mem.empty (env.gas + 228), _, run⟩)) →
         MintCanonicalResult K current invocation run) := by
   obtain ⟨liquidity, ⟨run⟩, output⟩ := mintBytecode_exact codeEq fork value size guard selector env
   exact ⟨liquidity, run, output, mint_bytecode_foreign_storage codeEq fork selector run,

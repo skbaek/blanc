@@ -1,6 +1,7 @@
 import Blanc.Lift.UniswapV2Pair.MintPrefixWalk
 import Blanc.Lift.UniswapV2Pair.StaticViewTurns
 import Blanc.Lift.UniswapV2Pair.MutableTurns
+import Blanc.Lift.PrecompileAnswer
 
 /-!
 # Canonical mint frame
@@ -10,48 +11,53 @@ external observations (both token `balanceOf` replies and the factory `feeTo` re
 turn queues DERIVED from the actual child executions of the same pc-zero derivation. The
 finite-storage freshness obligations of the protocol-fee recipient, the address-zero minimum
 liquidity holder and the LP recipient are discharged from one trace-local (HASH-T) key
-universe; no freshness premise is exported.
+universe `WriterExtend K (mintTraceKeys root)`, a finite list of rows fixed by the root
+execution (the fee recipient's row is drawn from the run's actual raw frames or a precompile's
+answer to the fixed `feeTo()` request); no freshness premise is exported.
 -/
 
 namespace Blanc.Lift.UniswapV2Pair
 
 open Jaune
 
+/-- The LP row of a reply's first word (the fee recipient's row when the reply answers
+`feeTo()`). -/
+def mintReplyRow (out : Bytes) : WriterKey := .balance (Bytes.toB256 (out.take 32)).toAdr
+
+/-- Every possible `feeTo()` reply row of a mint run, as a finite list fixed by the root alone:
+the reply row of every successful actually entered raw frame of the run, and the answer row of
+every precompile to the fixed 4-byte `feeTo()` request under the root's `MODEXP` pricing. -/
+noncomputable def mintFeeReplyKeys (root : Exec.Deriv) : List WriterKey :=
+  (Exec.rawFrameRoots root.exc).filterMap (fun F =>
+    match F.exn with
+    | .ok d => some (mintReplyRow d.output)
+    | .error _ => none) ++
+  precompileRunAddresses.filterMap (fun adr =>
+    (precompileAnswer (ExternalOperation.encode .feeTo) root.sevm.benvStat.rules.modexp
+      adr).map mintReplyRow)
+
 /-- Trace rows of a mint run fixed by the root alone: the decoded rows of every actually entered
-Pair frame and the two LP rows the entry may write (address zero, the decoded recipient). -/
-def mintTraceKeys (root : Exec.Deriv) : List WriterKey :=
+Pair frame, the two LP rows the entry may write (address zero, the decoded recipient) and every
+possible fee-recipient row (`mintFeeReplyKeys`). -/
+noncomputable def mintTraceKeys (root : Exec.Deriv) : List WriterKey :=
   ((Exec.rawFrameRoots root.exc).flatMap fun F =>
     if F.sevm.currentTarget = root.sevm.currentTarget then staticViewDecodedKeys F.sevm else []) ++
-  (lpMintTouched (0 : B256).toAdr ++ lpMintTouched (Sevm.dataWord root.sevm 4).toAdr)
+  (lpMintTouched (0 : B256).toAdr ++ lpMintTouched (Sevm.dataWord root.sevm 4).toAdr) ++
+  mintFeeReplyKeys root
 
-/-- The LP row of the first reply word of a `STATICCALL` step of the root frame's environment
-issuing the 4-byte `feeTo()` request (`feeRequestMemory`, input window `128, 4`). A child of a
-`StepIn root` step is a raw frame root of `root`, and a codeless or precompile callee answers the
-fixed request without a frame, so these rows are fixed by the root execution alone. -/
-def MintFeeReplyRow (root : Exec.Deriv) (k : WriterKey) : Prop :=
-  ∃ (w d : Devm) (g t oi os : B256) (S : List B256) (M : Mem) (c : Nat),
-    Blanc.Lift.StepIn root root.sevm (St w (g :: t :: 128 :: 4 :: oi :: os :: S) (feeRequestMemory M) c)
-      (.exec .staticcall) d ∧
-    k = .balance (Bytes.toB256 (d.returnData.take 32)).toAdr
-
-/-- HASH-T universe of a mint run: the tracked rows, the root's trace rows and the fee-recipient
-rows of the root's `feeTo()` replies. It is a function of `K` and the root execution only. -/
-def mintTraceUniverse (K : WriterKey → Prop) (root : Exec.Deriv) (k : WriterKey) : Prop :=
-  WriterExtend K (mintTraceKeys root) k ∨ MintFeeReplyRow root k
-
-theorem mintTraceUniverse_frame {K : WriterKey → Prop} {root : Exec.Deriv} {F : Exec.Deriv}
+theorem mintTraceKeys_frame {root : Exec.Deriv} {F : Exec.Deriv}
     (member : F ∈ Exec.rawFrameRoots root.exc)
     (target : F.sevm.currentTarget = root.sevm.currentTarget) :
-    ∀ k ∈ staticViewDecodedKeys F.sevm, mintTraceUniverse K root k := by
+    ∀ k ∈ staticViewDecodedKeys F.sevm, k ∈ mintTraceKeys root := by
   intro k touched
-  refine Or.inl (Or.inr (List.mem_append_left _ (List.mem_flatMap.mpr ⟨F, member, ?_⟩)))
+  refine List.mem_append_left _ (List.mem_append_left _ (List.mem_flatMap.mpr ⟨F, member, ?_⟩))
   rw [ite_eq_left target]
   exact touched
 
-theorem mintTraceUniverse_rows (K : WriterKey → Prop) (root : Exec.Deriv) :
-    mintTraceUniverse K root (.balance (0 : B256).toAdr) ∧
-    mintTraceUniverse K root (.balance (Sevm.dataWord root.sevm 4).toAdr) := by
-  refine ⟨Or.inl (Or.inr ?_), Or.inl (Or.inr ?_)⟩ <;>
+theorem mintTraceKeys_rows (root : Exec.Deriv) :
+    .balance (0 : B256).toAdr ∈ mintTraceKeys root ∧
+    .balance (Sevm.dataWord root.sevm 4).toAdr ∈ mintTraceKeys root := by
+  refine ⟨?_, ?_⟩ <;>
     simp only [mintTraceKeys, lpMintTouched, List.mem_append, List.mem_cons, List.not_mem_nil,
       or_false, true_or, or_true]
 
@@ -343,6 +349,57 @@ private theorem mint_tAAB_getCode (base : Devm) (a x : Adr) :
   unfold temporalAccountAccessBase
   split <;> rfl
 
+/-- The actual `feeTo()` STATICCALL of the root frame returns a reply whose row is in
+`mintFeeReplyKeys root`: a framed callee's child is a raw frame root of the run, and a frameless
+successful callee is a precompile answering the fixed request. -/
+theorem mint_feeReply_mem {root : Exec.Deriv} {w d : Devm} {g t oi os : B256} {S : List B256}
+    {M : Mem} {c : Nat} (fork : CoveredFork root.sevm.benvStat.fork) (wf : Mem.Wf M)
+    (call : Blanc.Lift.StepIn root root.sevm
+      (St w (g :: t :: 128 :: 4 :: oi :: os :: S) (feeRequestMemory M) c) (.exec .staticcall) d)
+    (flag : ∃ f rest, d.stack = f :: rest ∧ f ≠ 0) :
+    mintReplyRow d.returnData ∈ mintTraceKeys root := by
+  refine List.mem_append_right _ ?_
+  obtain ⟨xl, inRoots, pc, stepRun⟩ := call
+  have filled : Xlot.Filled xl := by
+    cases xl with
+    | none => trivial
+    | some p =>
+      obtain ⟨evm, exn⟩ := p
+      obtain ⟨e, _⟩ := inRoots
+      exact ⟨e⟩
+  rcases of_step_staticcall_val_with_depth_frame_cause (g := g) (t := t) (ii := 128) (is := 4)
+      (oi := oi) (os := os) (xs := S) (mint_operands _ _ _ _) filled stepRun fork with
+      ⟨failed, _⟩ | ⟨parent, child, dp, na, code, avail, _, _, _, _, _, _, _, _,
+        process, clean, _, _, returned, _, _, _⟩
+  · obtain ⟨f, rest, flagStack, nonzero⟩ := flag
+    rw [flagStack] at failed
+    exact (nonzero (pref_head_unique failed (pref_append [f] rest)).symm).elim
+  · rw [returned]
+    rcases Blanc.Lift.ProcessMessage.ok_output process clean with
+      ⟨_, adr, listed, answer⟩ | ⟨evm, raw, slot, rawEq⟩
+    · refine List.mem_append_right _ (List.mem_filterMap.mpr ⟨adr, listed, ?_⟩)
+      have request :
+          ((St w (g :: t :: 128 :: 4 :: oi :: os :: S) (feeRequestMemory M) c).memory.read
+          (128 : B256).toNat (4 : B256).toNat).1 = ExternalOperation.encode .feeTo :=
+        feeRequestMemory_read wf
+      change precompileAnswer ((St w (g :: t :: 128 :: 4 :: oi :: os :: S) (feeRequestMemory M)
+        c).memory.read (128 : B256).toNat (4 : B256).toNat).1 root.sevm.benvStat.rules.modexp adr =
+        some child.output at answer
+      rw [request] at answer
+      rw [answer]
+      rfl
+    · subst slot
+      subst rawEq
+      obtain ⟨childRun, roots⟩ := inRoots
+      refine List.mem_append_left _ (List.mem_filterMap.mpr
+        ⟨⟨evm.pc, evm.sta, evm.dyna, .ok child, childRun⟩, roots _ List.mem_cons_self, rfl⟩)
+
+private theorem mint_feeMemory_wf (sevm : Sevm) (out0 out1 : Bytes) :
+    Mem.Wf (balanceReplyMemory (balanceReplyMemory getterInitMemory sevm.currentTarget out0)
+      sevm.currentTarget out1) :=
+  (balanceReplyMemory_ptr out1 (balanceRequestMemory_ptr
+    (balanceReplyMemory_ptr out0 (balanceRequestMemory_ptr getterInitMemory_ptr _)) _)).wf
+
 private theorem mint_size_ne {c : ByteArray} (bit : c.size.toB256 ≠ 0) : c.size ≠ 0 := by
   intro empty
   rw [empty] at bit
@@ -404,7 +461,7 @@ def MintCanonicalResult (K : WriterKey → Prop) (current : Checkpoint) (invocat
             remaining := .done, childReturns := rets } ∧
         final.checkpoint = current ∧ final.context = ctx ∧
         final.current.state.unlocked = 1 ∧
-        (∀ k, K' k → mintTraceUniverse K root k) ∧
+        (∀ k, K' k → WriterExtend K (mintTraceKeys root) k) ∧
         WriterRep K' (post.getStor sevm.currentTarget) final.current.state ∧
         mintFee { current.state with unlocked := 0 } feeTo current.state.reserve0.val
           current.state.reserve1.val = .ok fee ∧
@@ -434,8 +491,8 @@ def MintCanonicalResult (K : WriterKey → Prop) (current : Checkpoint) (invocat
 /-- **Canonical mint frame.** Every successful raw mint run at the Pair code consumes the typed
 source mint over its three actual observations (token0 and token1 `balanceOf`, factory `feeTo`)
 with static-view turn queues derived from the actual children of the same derivation. Under
-trace-local HASH-T over the run's key universe `mintTraceUniverse K root` (a function of the
-tracked rows and the root execution alone), it yields the exact Pair storage, the exact raw log
+trace-local HASH-T over the run's key universe `WriterExtend K (mintTraceKeys root)` (the
+tracked rows plus a finite list of rows fixed by the root execution alone), it yields the exact Pair storage, the exact raw log
 list (fee mint, first-mint minimum to address zero, recipient mint, Sync, Mint) together with
 the typed pending logs that map onto it, the return word, the final unlock and the original
 checkpoint. -/
@@ -448,8 +505,10 @@ theorem mint_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (selector : Blanc.Sevm.selector sevm = 0x6a627842)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
-    (inj : WriterInj (mintTraceUniverse K ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩))
-    (apart : WriterApart (mintTraceUniverse K ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)) :
+    (inj : WriterInj
+      (WriterExtend K (mintTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)))
+    (apart : WriterApart
+      (WriterExtend K (mintTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩))) :
     MintCanonicalResult K current invocation run := by
   unfold MintCanonicalResult
   intro root ctx recipient
@@ -467,10 +526,17 @@ theorem mint_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
   obtain ⟨gwF, callGasF, dF, outF, callF, postF, widthF, boundF, answerF, feeImplication⟩ :=
     typedFinished
   -- the trace universe: tracked rows, root rows and the actual fee recipient's row
-  have sub : ∀ k, K k → mintTraceUniverse K root k := fun _ tracked => Or.inl (Or.inl tracked)
-  have rows := mintTraceUniverse_rows K root
-  have feeRow : mintTraceUniverse K root (.balance (Bytes.toB256 (outF.take 32)).toAdr) :=
-    Or.inr ⟨_, _, _, _, _, _, _, _, _, callF, by rw [postF.returnData]⟩
+  have sub : ∀ k, K k → WriterExtend K (mintTraceKeys root) k := fun _ tracked => Or.inl tracked
+  have rows : WriterExtend K (mintTraceKeys root) (.balance (0 : B256).toAdr) ∧
+      WriterExtend K (mintTraceKeys root) (.balance (Sevm.dataWord sevm 4).toAdr) :=
+    ⟨Or.inr (mintTraceKeys_rows root).1, Or.inr (mintTraceKeys_rows root).2⟩
+  have feeRow :
+      WriterExtend K (mintTraceKeys root) (.balance (Bytes.toB256 (outF.take 32)).toAdr) := by
+    refine Or.inr ?_
+    have member := mint_feeReply_mem fork (mint_feeMemory_wf sevm out0 out1) callF
+      ⟨1, _, postF.stack, by decide⟩
+    rw [postF.returnData] at member
+    exact member
   -- raw worlds and code
   have nonemptyList : (b.getCode sevm.currentTarget).toList ≠ [] := by
     intro empty
@@ -514,8 +580,8 @@ theorem mint_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
   -- the three static-view turn queues
   let ctxM := mintSourceContext sevm invocation
   have good : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = sevm.currentTarget →
-      ∀ k ∈ staticViewDecodedKeys F.sevm, mintTraceUniverse K root k :=
-    fun F member target k touched => mintTraceUniverse_frame member target k touched
+      ∀ k ∈ staticViewDecodedKeys F.sevm, WriterExtend K (mintTraceKeys root) k :=
+    fun F member target k touched => Or.inr (mintTraceKeys_frame member target k touched)
   obtain ⟨views0, turns0, auth0, prov0⟩ :=
     pair_static_call_turns (frame := mintSourceLockedFrame current ctxM recipient)
       (request := requestFor .mintBalance0 current.state.token0 (.balanceOf ctxM.pair))
@@ -597,7 +663,7 @@ theorem mint_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
   obtain ⟨feeLogs, feePostLogs, feeLogsShape⟩ := feeLogsFact
   rw [natCache0, natCache1] at accept
   rw [cache0, cache1] at accept feeLogsShape logsTyped
-  have keysSub : ∀ k, keys k → mintTraceUniverse K root k := by
+  have keysSub : ∀ k, keys k → WriterExtend K (mintTraceKeys root) k := by
     rw [keysEq]
     intro k tracked
     split at tracked
