@@ -548,6 +548,51 @@ This is construction-direction evidence. A late revert may already have
 executed an SSTORE, so neither rollback nor an empty retained-write list can
 replace the selected-path certificate.
 
+To show that every committed frame that runs at `ca` with caller `p` has a
+property, fold over its parents with
+[`Blanc/Lift/CallerProvenance.lean`](../Blanc/Lift/CallerProvenance.lean).
+`Exec.childFrames run` lists a frame's direct settlement-committed children;
+`Evm.step_spawn_child_caller` says each child either receives the parent's
+current target as caller or keeps the parent's target. Then
+`Exec.committedFrames_callerTarget` (one derivation) and
+`ConfiguredHistoryTrace.settledFrames_callerTarget` (a whole history) conclude
+`CallerTarget p ca Q` for every committed frame from the root's property and
+the parent obligations `CallerIssuers`: the direct children of every frame at
+`p` satisfy the target property, and the direct children of every frame at
+`ca` that stay at `ca` are not called by `p`. `settledRoots` is defined on
+every trace layer with `settledFrames_eq : settledFrames = rootFrames
+settledRoots`. The first consumer is
+`Blanc/Composition/UniswapV2PairWeth9Calls.lean` (the pair's WETH9 calls).
+
+To show that every direct child of a frame is called by the frame's own current
+target, use
+[`Blanc/Lift/CallChildren.lean`](../Blanc/Lift/CallChildren.lean):
+`Exec.childFrames_caller_of_callKinds` concludes it from the frame's
+CALL/STATICCALL-only restriction along its chain (a checked certificate's
+`SpawnKinds`, e.g. `weth9_spawnKinds`), via `Xinst.step_call_spawn_caller` and
+`Xinst.step_staticcall_spawn_caller`. `Exec.childFrames_isStatic` says a static
+frame has only static children. For the caller fold of
+`Blanc/Lift/CallerProvenance.lean` with the weaker obligation that every direct
+child of a frame at `p` or `ca` satisfies the target property (`CallerChildren`),
+use `ConfiguredHistoryTrace.settledFrames_callerTarget_of_children`. The first
+consumer is `Blanc/Composition/Weth9SettledCallers.lean`.
+
+To show that every direct child of a certified frame comes from one of a few
+call sites, use [`Blanc/Lift/CallSiteChildren.lean`](../Blanc/Lift/CallSiteChildren.lean)
+with the vocabulary of [`Blanc/Lift/CallSite.lean`](../Blanc/Lift/CallSite.lean).
+`Exec.childFrames_spawnedAt` places every direct child at a spawning step of a
+node of the frame's own chain, where `reach_of_parentPrefix` gives a cursor.
+`SFunc.nodesSatisfy ok` checks `ok n f` at every `.next n f` node of a tree;
+check it over the certificate with one kernel `decide` per entry, in a module of
+its own. `Reach.nodesSatisfy` keeps it along the stateful reach, and
+`CursorOK.nodesSatisfy_exec` turns it into a fact about the cursor's tree at a
+node that decodes an external instruction. Name a site inside a generated
+tree's straight prefix with `SFunc.lineDrop n t` (`SFunc.lineSuffix_lineDrop`).
+`Xinst.step_call_spawn_selector` equates a CALL child's selector with
+`CallInputSelector`'s reading of the parent's input window;
+`ChainMemoryBelow R bound` is the memory bound such content facts take. The
+first consumer is `Blanc/Lift/UniswapV2Pair/PairCallShape.lean`.
+
 ### E4. I need a common terminal walk
 
 Use [`Blanc/ExecutionTerminal.lean`](../Blanc/ExecutionTerminal.lean):
