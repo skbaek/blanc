@@ -15,13 +15,13 @@ locked-Pair instance. Kept explicit: the transfer0 reply-pointer fit (see Remain
 
 | Theorem | File:line | Statement | U |
 |---|---|---|---|
-| `skim_bytecode_exact_consumes` | SkimCanonical.lean:196 | Successful raw skim run (code, covered fork, selector 0xbc25cf77, rep, installed image, b.output=[], trace-local HASH-T over `skimTraceKeys`) ⇒ value 0, nonstatic, the actual first query/transfer0 steps (`SkimFirstSteps`), and, for a fitting transfer0 reply pointer, the second steps, `ExactConsumes (startTyped current ctx (.skim recipient))` over replies out0, transfer0 reply, out1, transfer1 reply with turn queues derived from the actual children (views via retained static frames; transfers via `targetLogEventsFrom`), final checkpoint/context, `WriterRep K'` (K' ⊆ HASH-T universe) of post Pair storage vs final state, unlocked=1, liquidityCore preserved, model logs = current ++ added, `post.logs = b.logs ++ L` with the raw image of added = L, selector/target authenticity of views, `LockedAuth` of every invoked frame, `post.output = []` | U2(a) frame |
-| `mutable_retained_fold_inv` | MutableTurns.lean:169 | Entry-parametric (`PairFrameSupply`) fold over any committed run: derived `MutableTurn` list whose events = `targetLogEventsFrom`, ExactTurns continuation, Rep transport, raw-log image | U2(a) producer |
-| `mutable_call_turns` | MutableTurns.lean:402 | One lifted CALL/STATICCALL step of a Pair frame ⇒ exact turn queue derived from the actual child (or empty when not entered / rolled back), Rep at the parent's post world, parent raw logs = pre ++ L with image | U2(a) producer |
-| `lockedPairSupply` | LockedSupply.lean:209 | While locked, every committed Pair root frame is an exact invocation of transfer/approve/transferFrom/permit/initialize/view at the current checkpoint; rep grows only by decoded rows in the universe; lock-guarded entries cannot commit | U2(a) nested |
+| `skim_bytecode_exact_consumes` | SkimCanonical.lean:380 | Successful raw skim run (code, covered fork, selector 0xbc25cf77, rep, installed image, b.output=[], trace-local HASH-T over `skimTraceKeys`) ⇒ value 0, nonstatic, the actual first query/transfer0 steps (`SkimFirstSteps`), and, for a fitting transfer0 reply pointer, the second steps, `ExactConsumes (startTyped current ctx (.skim recipient))` over replies out0, transfer0 reply, out1, transfer1 reply with turn queues derived from the actual children (views via retained static frames; transfers via `targetLogEventsFrom`), final checkpoint/context, `WriterRep K'` (K' ⊆ HASH-T universe) of post Pair storage vs final state, unlocked=1, liquidityCore preserved, model logs = current ++ added, `post.logs = b.logs ++ L` with the raw image of added = L, selector/target authenticity of views, `LockedAuth` of every invoked frame, `post.output = []` | U2(a) frame |
+| `mutable_retained_fold_inv` | MutableTurns.lean:184 | Entry-parametric (`PairFrameSupply`) fold over any committed run: derived `MutableTurn` list whose events = `targetLogEventsFrom`, ExactTurns continuation, Rep transport, raw-log image | U2(a) producer |
+| `mutable_call_turns` | MutableTurns.lean:417 | One lifted CALL/STATICCALL step of a Pair frame ⇒ exact turn queue derived from the actual child (or empty when not entered / rolled back), Rep at the parent's post world, parent raw logs = pre ++ L with image | U2(a) producer |
+| `lockedPairSupply` | LockedSupply.lean:234 | While locked, every committed Pair root frame is an exact invocation of transfer/approve/transferFrom/permit/initialize/view at the current checkpoint; rep grows only by decoded rows in the universe; lock-guarded entries cannot commit | U2(a) nested |
 | `pair_bytecode_selector_inv` | PairSelectors.lean:320 | Any successful raw run carries one of the 27 published selectors (fallback reverts), any context | U2(a) J1 inverse |
 | `pair_lockGuarded_unlocked` | PairLockedEntries.lean:303 | mint/burn/swap/sync/skim succeed only from slot12 = 1 (new burn/swap dispatch+decoder+lock walks; mint/sync/skim reuse) | U2(a) J1 inverse |
-| `skim_static_call_turns` | SkimCanonical.lean:43 | One lifted STATICCALL step ⇒ retained static views of its actual child at the incoming frame | U2(a) producer |
+| `pair_static_call_turns` (was `skim_static_call_turns`) | StaticViewTurns.lean:532 | One lifted STATICCALL step ⇒ retained static views of its actual child at the incoming frame | U2(a) producer |
 | `Exec.targetLogEventsFrom_frames` | TargetLogEvents.lean:107 | Frame projection of the new log-interleaved traversal = existing `retainedTargetFramesFromAt` | generic headline |
 | `Xinst.call_run_logs` | TargetLogEvents.lean:547 | CALL/STATICCALL appends exactly its committed child's logs, nothing otherwise | generic headline |
 
@@ -128,14 +128,14 @@ full entry text.)
 
 ## Remaining obligations / judgments
 
-1. Fit: the second half is stated under `96 ≤ p ∧ p+1024 < 2^256` for p = `skimFirstPointer`
+1. Fit: the second half is stated under `128 ≤ p ∧ p+1024 < 2^256` for p = `skimFirstPointer`
    of transfer0's reply; `skimFirstPointer_fit` discharges it for replies below 2^128 bytes. A
    gas-based discharge is not available: gas is an unbounded Nat, so no memory/returndata bound
    follows without a transaction gas-limit premise (shared with Burn).
 2. Transfer flag: the existing skim walk facts do not expose the CALL success flag, so
    `mutable_call_turns` also covers the impossible branches (child not entered or rolled back):
    empty queue, storage/logs unchanged. Exposing the flag (additive strengthening of
-   `skimTransferTail_inv`/`SkimFirstFacts`) would let the canonical theorem assert the entered
+   `skimTransferTail_flag_inv`/`SkimFirstFacts`; done, see the flag section below) would let the canonical theorem assert the entered
    child.
 3. Permit nested turns: P3's permit frame uses `.next (permitExternalResult out false) .done .done`;
    a Pair view reached under a DELEGATED address-1 account at depth 2 is not lifted (storage
@@ -152,9 +152,8 @@ full entry text.)
   (all run while locked). Give it the StepIn CALL fact from the walk, the model frame/request,
   `LockedRep` at the pre world; it returns the derived turn queue, the post-world `LockedRep`
   and the raw log image. Reserve transport follows as in skim (fixed slots of `WriterRep`).
-- `skim_static_call_turns` is generic (any STATICCALL step of a Pair frame): reuse it for Burn's
-  four and swap's two balance queries; recommend hoisting it beside `StaticViewTurns` under a
-  neutral name.
+- `pair_static_call_turns` (renamed from `skim_static_call_turns`, now in `StaticViewTurns.lean`) is
+  generic (any STATICCALL step of a Pair frame): reuse it for Burn's four and swap's two balance queries.
 - `pair_bytecode_selector_inv` and `pair_lockGuarded_unlocked` (incl. burn/swap dispatch,
   decoder and lock walks) are the J1 classification any nested-frame producer needs.
 - Generic `Blanc/Lift/TargetLogEvents.lean` holds the contract-neutral traversal and per-step
@@ -217,12 +216,12 @@ stepped slot, the STATICCALL analogue of the `Ninst.StepRun pc … xl` component
 over verbatim.
 
 New, additive: `Xinst.call_run_flag_commits` (TargetLogEvents.lean:651), `Xinst.call_none_precompile`
-(:706), `executeCode.enter_inr`, `skimTransferTail_flag_inv`, `skimTransfer_flag_inv`
-(SkimTransferWalk.lean:1176), `SkimSecondFlagFacts`, `skimSecondHalf_flag_inv`, and `skim_raw_flag_inv`
-(SkimSecondWalk.lean:513). Existing statements are unchanged; `skimTransferTail_inv`,
-`skimTransfer_inv`, `skimSecondHalf_inv` and `skim_raw_inv` are now projections. The
+(:746), `executeCode.enter_inr`, `skimTransferTail_flag_inv`, `skimTransfer_flag_inv`
+(SkimTransferWalk.lean:623), `SkimSecondFlagFacts`, `skimSecondHalf_flag_inv`, and `skim_raw_flag_inv`
+(SkimSecondWalk.lean:518). Existing statements were unchanged; `skimSecondHalf_inv` and `skim_raw_inv` are projections
+(`skimTransferTail_inv` and `skimTransfer_inv` were later deleted by the second-host lane). The
 packet-internal `mutable_call_turns` empty disjunct gained its raw reason (no code frame, or an
-uncommitted child), and `skim_static_call_turns` gained a flag premise.
+uncommitted child), and `skim_static_call_turns` (now `pair_static_call_turns`) gained a flag premise.
 
 Gates at d5e1c67b:
 - Narrow build of the nine affected modules: `Build completed successfully (1185 jobs)`, status OK.
