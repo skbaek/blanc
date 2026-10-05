@@ -238,44 +238,4 @@ theorem swap_bytecode_forward_consumes {K : WriterKey → Prop} {current : Check
     swap_bytecode_exact_consumes_own invocation rep sem image installed freshOutput codeEq fork
       selector run inj apart short⟩
 
-/-- **The forward front lands in `SwapCut`.** Under the front environment, the join state the
-forward run reaches (world `swapFrontCutWorld`, memory `swapFrontCutMem`, pointer
-`swapFrontPtr`, the cut words of the entry state) satisfies the back half's cut predicate for
-the locked source frame and the source swap locals, provided the callee frames left the Pair's
-storage as the lock prefix left it (`pairKeep`, an ENV-class premise on the actual transfer and
-callback callees; under the lock the Pair's own mutating entries revert, which the inverse side
-proves by `LockedAuth`).
-CROSS-HOST: conditional on `SwapSafeTransferForward`, `SwapForwardReplyShort`. -/
-theorem swapBody_front_cut {K : WriterKey → Prop} {current : Checkpoint}
-    {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b d0 d1 dC : Devm} {cg0 cg1 cgC Gc : Nat} (invocation : List Nat)
-    (helper : SwapSafeTransferForward pre post)
-    (fork : CoveredFork sevm.benvStat.fork)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (freshOutput : b.output = [])
-    (unlocked : current.state.unlocked = 1) (nonstatic : sevm.isStatic = false)
-    (output : swapAmount0Out sevm ≠ 0 ∨ swapAmount1Out sevm ≠ 0)
-    (liquidity0 : (swapAmount0Out sevm).toNat < current.state.reserve0.val)
-    (liquidity1 : (swapAmount1Out sevm).toNat < current.state.reserve1.val)
-    (to0 : swapRecipient sevm ≠ current.state.token0)
-    (to1 : swapRecipient sevm ≠ current.state.token1)
-    (guards : SwapAbiGuards sevm)
-    (front : SwapFrontForwardEnv pre post sevm b current.state d0 d1 dC cg0 cg1 cgC Gc)
-    (pairKeep : (swapFrontCutWorld sevm b d0 d1 dC).getStor sevm.currentTarget =
-      (swapPrefixWorld sevm b).getStor sevm.currentTarget) :
-    SwapCut K (swapLockedFrame current (writerContext sevm invocation) (swapDecodedEntry sevm))
-      (swapFrontLocals sevm current.state) sevm (swapFrontCutWorld sevm b d0 d1 dC)
-      (swapCutWords sevm current.state) (swapFrontPtr sevm d0 d1)
-      (swapFrontCutMem sevm d0 d1 dC).size (swapFrontCutMem sevm d0 d1 dC) := by
-  obtain ⟨mem, lower, width, out, _⟩ := swapBody_front_exact (Gc := Gc) helper fork rep unlocked
-    nonstatic output liquidity0 liquidity1 to0 to1 guards front
-  have lockedRep := rep.mint_locked_world (sevm := sevm) (b := b)
-  refine ⟨mem, lower, width, ?_, ?_, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl,
-    swapRecipientWord_eq sevm, rfl, rfl, liquidity0, liquidity1⟩
-  · rw [out, freshOutput]
-  · rw [pairKeep]
-    unfold swapPrefixWorld
-    rw [afterSload_getStor, afterSload_getStor, afterSload_getStor]
-    exact lockedRep
-
 end Blanc.Lift.UniswapV2Pair

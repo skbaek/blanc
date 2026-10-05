@@ -160,8 +160,9 @@ theorem pairCalls_holderCalls {ca p : Adr} {cfg : ChainConfig} {checkpoint futur
 /-- **`weth9_history_holder_noShrink` with the pair-side `HolderCalls` discharged.**  As
 `weth9_history_holder_noShrink`, with `pairCalls` replaced by what the Pair code calls; the WETH9 side
 (`Weth9SelfTargetChildren`) is proved from the same history premises.
-CROSS-HOST: conditional on PairFramesRunPairCode, PairSendsNoRootMessage, CallSiteMemoryBound.
-LANE-OPEN: conditional on TransferSiteShape, CallbackSiteShape. -/
+CROSS-HOST: conditional on PairFramesRunPairCode, PairSendsNoRootMessage, CallSiteMemoryBound,
+and the `holderTracked`, `allowZero` hypotheses of `weth9_history_holder_noShrink`.
+LANE-OPEN: conditional on TransferSiteShape, CallbackSiteShape, EthFits. -/
 theorem weth9_history_holder_noShrink_pairCalls {ca p : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {K₀ : Key → Prop}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
