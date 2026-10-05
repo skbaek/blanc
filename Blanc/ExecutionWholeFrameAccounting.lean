@@ -17,8 +17,8 @@ storage only through its words:
 
 * `Exec.CoreAccounting.WholeFrameReplay` — the contract's obligation: every successful non-static target
   frame replays, as a whole, with the observation of all of its committed frames;
-* `Exec.CoreAccounting.staticObservedNil` — below a static frame no committed frame is observed (the
-  ladder's lower-depth hypothesis, at any code);
+* `Exec.CoreAccounting.staticObservedNil` (`Blanc/ExecutionModelAccounting.lean`) — below a static frame
+  no committed frame is observed (the ladder's lower-depth hypothesis, at any code);
 * `Exec.CoreAccounting.wholeFrameTarget` — the obligation and the static case give the target handler of
   `Exec.coreAccounting`;
 * `ExecutionAccountingReplay.wholeFrameLadder` — the handler, the frame preservation theorem and the
@@ -64,44 +64,6 @@ namespace Exec.CoreAccounting
 
 variable {ca : Adr} {sem : CodeSem} {entry : Sevm → Devm → Prop} {C : ReplayCarrier ca}
   {V : ReplayObservation C}
-
-/-- **Below a static frame no committed frame is observed.**  At any node of the chain of a successful
-target frame that is static, the frames entered from that node on contribute no observation: every child
-of a static frame is static, and the lower-depth hypothesis says a static committed run observes nothing. -/
-theorem staticObservedNil (kinds : SpawnKinds ca sem)
-    {sevm₀ : Sevm} {pre₀ post₀ : Devm} (root : Exec 0 sevm₀ pre₀ (.ok post₀))
-    (hrun : sem.Run sevm₀ pre₀ post₀) (target : sevm₀.currentTarget = ca)
-    (fork : CoveredFork sevm₀.benvStat.fork) (installed : sem.At ca 0 sevm₀ pre₀)
-    (admitted : Exec.FrameAdmitted ca entry root)
-    (deeper : ForallDeeperAtSem sevm₀.depth ca sem
-      (fun pc s d e _ => Exec.CoreAccounting ca sem entry C V pc s d e)) :
-    ∀ {pc : Nat} {sevm : Sevm} {d : Devm} {out : Execution} (run : Exec pc sevm d out),
-      Exec.Deriv.ParentPrefix ⟨0, sevm₀, pre₀, .ok post₀, root⟩ ⟨pc, sevm, d, out, run⟩ →
-      sevm.isStatic = true → (Exec.descendantFrames run).flatMap V.frameObs = [] := by
-  intro pc sevm d out run
-  induction run with
-  | halt step => intro _ _; simp only [descendantFrames, List.flatMap_nil]
-  | cont step next ih =>
-      intro chain hs
-      simpa only [Exec.descendantFrames] using ih (chain.snoc (.cont step next)) hs
-  | doneErr step enter resume => intro _ _; simp only [descendantFrames, List.flatMap_nil]
-  | doneOk step enter resume next ih =>
-      intro chain hs
-      simpa only [Exec.descendantFrames] using
-        ih (chain.snoc (.doneOk step enter resume next)) hs
-  | runErr step enter child resume ih => intro _ _; simp only [descendantFrames, List.flatMap_nil]
-  | runOk step enter child resume next childIH nextIH =>
-      rename_i nodePc nodeSevm nodePre frame rsm nextPc cevm raw inter final
-      intro chain hs
-      obtain ⟨x, instruction, nodeFork, nodeCodeNe, balLe, childFork, childStaticOf, childCore⟩ :=
-        spawnChild kinds root hrun target fork installed admitted deeper step enter child resume
-          next chain
-      rw [Exec.descendantFrames_flatMap_runOk,
-        nextIH (chain.snoc (.runOk step enter child resume next)) hs, List.append_nil]
-      split
-      · rename_i settles
-        exact (childCore (Frame.raw_commits_of_settlementCommits settles)).1 (childStaticOf hs)
-      · rfl
 
 /-- **The contract's whole-frame obligation.**  Every committed non-static target frame replays, from
 its entry boundary to its post boundary, with exactly the observation of its committed frames (itself and

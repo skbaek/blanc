@@ -202,8 +202,10 @@ namespace Exec.CoreAccounting
 variable {ca : Adr} {sem : CodeSem} {entry : Sevm → Devm → Prop} {C : ReplayCarrier ca}
   {V : ReplayObservation C}
 
-/-- Below a static frame, at any of its chain nodes, no committed frame is observed. -/
-private theorem staticChain (kinds : SpawnKinds ca sem)
+/-- **Below a static frame no committed frame is observed.**  At any node of the chain of a successful
+target frame that is static, the frames entered from that node on contribute no observation: every child
+of a static frame is static, and the lower-depth hypothesis says a static committed run observes nothing. -/
+theorem staticObservedNil (kinds : SpawnKinds ca sem)
     {sevm₀ : Sevm} {pre₀ post₀ : Devm} (root : Exec 0 sevm₀ pre₀ (.ok post₀))
     (hrun : sem.Run sevm₀ pre₀ post₀) (target : sevm₀.currentTarget = ca)
     (fork : CoveredFork sevm₀.benvStat.fork) (installed : sem.At ca 0 sevm₀ pre₀)
@@ -285,7 +287,7 @@ theorem spawnReplayTarget
         (Exec.descendantFrames run).flatMap V.frameObs := by
     rw [Exec.committedFrames, dite_eq_left committed, List.flatMap_cons]
   by_cases hs : sevm.isStatic = true
-  · have hdf := staticChain kinds run hrun target fork installed admitted deeper run (.refl _) hs
+  · have hdf := staticObservedNil kinds run hrun target fork installed admitted deeper run (.refl _) hs
     have hself : V.frameObs (Exec.Frame.ofRun run committed) = [] := obsStatic _ hs
     have hobs : (Exec.committedFrames run).flatMap V.frameObs = [] := by
       rw [self, hdf, hself]
