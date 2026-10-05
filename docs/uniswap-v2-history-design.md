@@ -344,11 +344,15 @@ Proved in `Blanc/Lift/UniswapV2Pair/PairSupply.lean` and `PairHistory.lean` (gen
   entered below each raw Pair root), selector-independent; `pairFrameKeys` adds `.balance pair` (burn).
 * **U3** is `pair_history_feeOff_product`, with `sourceReplayAnswers st₀ (steps.map source)` inside the
   existential (correction to §3); U5 `pair_history_oracle`, U7 `pair_history_ledger`.
-* **Not done (W9):** the superseded `HistoryReplay`/`HistoryWriters`/`HistoryWriterCheck`/
-  `HistoryWriterWalk` family still builds (its `pairFrameObservation` is distinct from the new
-  `pairFrameObs`); deleting it orphans `Lift/ReachDispatch` (proof-recipe registered). The private
-  `locked_*_outcome` of `LockedSupply` are concept duplicates of `free_*_outcome`; `staticObservedNil`
-  and `mintSourceContext` folds as in §2/§4.
+* **W9 cleanup (done):** the `HistoryReplay`/`HistoryWriters`/`HistoryWriterCheck`/`HistoryWriterWalk`
+  family and `pairReplayCarrier` are deleted (`Lift/ReachDispatch` stays: it is a registered proof-recipe
+  member, now without an in-tree consumer); `staticChain` and `staticObservedNil` are one public lemma in
+  `ExecutionModelAccounting`; `mintSourceContext` is `writerContext`; `PairViewOrigin`,
+  `MintViewProvenance` and `PairViewProvenance` share `ViewQueueOrigin`. Not folded: the private
+  `locked_*_outcome` of `LockedSupply` are not instances of `free_*_outcome`: they conclude
+  `PairFrameOutcome` (raw-log images, `unlocked = 0` carried through each frame theorem's own post
+  state) while the free outcomes conclude `PairStepOutcome` (authenticated step, incoming-row growth);
+  a fold would change both statements.
 
 ## 9. History liveness (U6) and fee-on (U3) — status
 
