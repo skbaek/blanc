@@ -642,6 +642,7 @@ import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControl
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControlRun
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControlRun
 import Blanc.Composition.Weth9WethGas
+import Blanc.Composition.UniswapV2PairWeth9Frame
 import Blanc.Curve3Crv.Model
 import Blanc.Curve3Crv.Properties
 import Blanc.Lift.Curve3Crv.Ladder
@@ -662,6 +663,14 @@ import Blanc.Lift.UniswapV2Pair.PropertiesLedger
 import Blanc.Lift.UniswapV2Pair.PropertiesOracleLaw
 import Blanc.Lift.UniswapV2Pair.PropertiesMintBurn
 import Blanc.Lift.UniswapV2Pair.Creation.DeployInit
+-- The Uniswap V2 Pair second host (uv2sh-*): mint and swap canonical walks, controls.
+import Blanc.Lift.UniswapV2Pair.MintCanonicalOwn
+import Blanc.Lift.UniswapV2Pair.SwapControls
+import Blanc.Lift.UniswapV2Pair.ModelControls
+import Blanc.Lift.UniswapV2Pair.UpdateOverflowWalk
+import Blanc.Lift.UniswapV2Pair.LedgerKeyControl
+import Blanc.Lift.UniswapV2Pair.OracleControls
+import Blanc.Lift.UniswapV2Pair.CalleeControls
 
 namespace Blanc
 
