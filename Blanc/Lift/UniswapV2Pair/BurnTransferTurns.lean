@@ -267,12 +267,7 @@ def PairViewOrigin (D : Exec.Deriv) (sevm : Sevm) (t : B256) (views : List Stati
   (∀ picked ∈ views, Blanc.Sevm.selector picked.1.frame.sevm = picked.2.selector ∧
     picked.1.frame.sevm.currentTarget = sevm.currentTarget ∧
     picked.1.frame.sevm.isStatic = true) ∧
-  (views = [] ∧ sevm.benvStat.rules.isPrecomp t.toAdr ∨ ∃ (child : Evm) (raw : Execution)
-    (childRun : Exec child.pc child.sta child.dyna raw),
-    Execution.commits raw = true ∧
-    (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots D.exc) ∧
-    views.map Prod.fst =
-      (Exec.retainedTargetTurnsAt sevm.currentTarget [] childRun).filterMap Sum.getRight?)
+  ViewQueueOrigin D sevm sevm.currentTarget t.toAdr views
 
 /-- A model-frame view provenance at the Pair forgets its frame. -/
 theorem PairViewProvenance.origin {D : Exec.Deriv} {sevm : Sevm} {frame : Frame} {t : B256}

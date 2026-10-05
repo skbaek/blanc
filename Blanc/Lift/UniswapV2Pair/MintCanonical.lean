@@ -423,11 +423,7 @@ def MintObservedSteps (D : Exec.Deriv) (current : Checkpoint) (sevm : Sevm)
 retained static Pair turns of the actually committed child. -/
 def MintViewProvenance (root : Exec.Deriv) (pair target : Adr) (views : List StaticViewTurn) :
     Prop :=
-  views = [] ∧ root.sevm.benvStat.rules.isPrecomp target ∨
-    ∃ (child : Evm) (raw : Execution) (childRun : Exec child.pc child.sta child.dyna raw),
-      Execution.commits raw = true ∧
-      (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots root.exc) ∧
-      views.map Prod.fst = (Exec.retainedTargetTurnsAt pair [] childRun).filterMap Sum.getRight?
+  ViewQueueOrigin root root.sevm pair target views
 
 private theorem mint_encodeWord_inj {x y : B256} (same : encodeWords [x] = encodeWords [y]) :
     x = y := by

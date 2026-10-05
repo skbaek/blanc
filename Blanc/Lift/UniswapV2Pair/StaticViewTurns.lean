@@ -668,15 +668,21 @@ theorem pair_static_call_turns {U K : WriterKey → Prop} (inj : WriterInj U)
   · exact Or.inl ⟨empty, native⟩
   · exact Or.inr ⟨child, raw, childRun, committed, roots, mapped⟩
 
+/-- The static-view turn queue of one actual STATICCALL at `target`: empty at an enabled precompile,
+or exactly the retained static turns of `pair` of the actually committed child, whose raw frame roots
+are among those of `D`. -/
+def ViewQueueOrigin (D : Exec.Deriv) (sevm : Sevm) (pair target : Adr)
+    (views : List StaticViewTurn) : Prop :=
+  views = [] ∧ sevm.benvStat.rules.isPrecomp target ∨ ∃ (child : Evm) (raw : Execution)
+    (childRun : Exec child.pc child.sta child.dyna raw),
+    Execution.commits raw = true ∧
+    (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots D.exc) ∧
+    views.map Prod.fst = (Exec.retainedTargetTurnsAt pair [] childRun).filterMap Sum.getRight?
+
 /-- The provenance a static-view turn queue carries for one actual STATICCALL. -/
 def PairViewProvenance (D : Exec.Deriv) (sevm : Sevm) (frame : Frame) (t : B256)
     (views : List StaticViewTurn) : Prop :=
   (∀ picked ∈ views, picked.Authentic frame) ∧
-  (views = [] ∧ sevm.benvStat.rules.isPrecomp t.toAdr ∨ ∃ (child : Evm) (raw : Execution)
-    (childRun : Exec child.pc child.sta child.dyna raw),
-    Execution.commits raw = true ∧
-    (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots D.exc) ∧
-    views.map Prod.fst =
-      (Exec.retainedTargetTurnsAt frame.context.pair [] childRun).filterMap Sum.getRight?)
+  ViewQueueOrigin D sevm frame.context.pair t.toAdr views
 
 end Blanc.Lift.UniswapV2Pair
