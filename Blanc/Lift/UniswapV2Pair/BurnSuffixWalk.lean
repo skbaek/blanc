@@ -416,4 +416,80 @@ theorem burnFinalBalances_suffix_inv {P : Sevm → Devm → Ninst → Devm → P
     call0, call1, post0, post1, long0, width0, long1, width1, answered0, answered1,
     bound0, bound1, mutable, callee, returned⟩
 
+/-- The actual public Burn wrapper encodes amount0 then amount1 at the retained
+pointer and returns all64bytes. Its exact terminal occurrence remains available
+for complete frame projections; storage and logs match its incoming world. -/
+theorem burnAbi_return_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+    {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat} {M : Mem} {G n : Nat}
+    {p amount1 amount0 : B256} {seg : Seg}
+    (project : ∀ {e d i d'}, P e d i d' → Ninst.Run e d i d')
+    (mem : PtrMem p n M) (low : 96 ≤ p.toNat) (high : p.toNat + 64 < 2 ^ 256)
+    (run : SFunc.RunCutP P cert.prog sevm C
+      (St b (amount1 :: amount0 :: R) M G) t_053d_c83 seg) :
+    ∃ gas d, seg = .done (.halted d) ∧
+      Linst.Run sevm (St b (p :: 64 :: R) (burnEventMemory M p amount0 amount1) gas)
+        .return_ (.ok d) ∧
+      d.output = amount0.toBytes ++ amount1.toBytes ∧
+      (∀ a, Devm.getStor d a = Devm.getStor b a) ∧ d.logs = b.logs := by
+  have p32Nat : (p + 32).toNat = p.toNat + 32 := by
+    rw [B256.toNat_add_eq_of_nof p 32 (by change p.toNat + 32 < 2 ^ 256; omega)]
+    rfl
+  have m1 := mem.write p.toNat amount0 (Or.inr low)
+  have m2 := m1.write (p + 32).toNat amount1 (Or.inr (by omega))
+  have covered : p.toNat + 64 ≤
+      memExtSize (memExtSize n p.toNat 32) (p + 32).toNat 32 := by
+    have h := (Mem.memWord_write_word (M.write p.toNat amount0.toBytes) (p + 32).toNat amount1).2
+    rw [m2.size] at h
+    omega
+  have h := run
+  unfold t_053d_c83 at h
+  obtain ⟨_, h⟩ := ric_destP h
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, eq⟩ := ri_mload (project hd)
+  simp only [show Bytes.toB256 [0x40] = (64 : B256) from rfl,
+    show (64 : B256).toNat = 64 from rfl,
+    mem.read_self (i := 64) (sz := 32) (by have := mem.ge; omega),
+    show Bytes.toB256 (M.read 64 32).1 = p from mem.word] at eq
+  subst d
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (project hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_mstore (project hd)
+  clear * - h m2 covered p32Nat project
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, eq⟩ := ri_add (project hd)
+  simp only [show Bytes.toB256 [0x20] = (32 : B256) from rfl] at eq
+  subst d
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (project hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (project hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (project hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_mstore (project hd)
+  clear * - h m2 covered p32Nat project
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, eq⟩ := ri_mload (project hd)
+  simp only [show (64 : B256).toNat = 64 from rfl,
+    m2.read_self (i := 64) (sz := 32) (by have := m2.ge; omega),
+    show Bytes.toB256 (((M.write p.toNat amount0.toBytes).write (p + 32).toNat amount1.toBytes).read
+      64 32).1 = p from m2.word] at eq
+  subst d
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (project hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (project hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, eq⟩ := ri_sub (project hd)
+  simp only [B256.sub_self] at eq
+  subst d
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, eq⟩ := ri_add (project hd)
+  simp only [show (0 : B256) + 64 = 64 from by decide] at eq
+  subst d
+  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (project hd)
+  cases h with
+  | last terminal =>
+    change Linst.Run sevm (St b (p :: 64 :: R)
+      (burnEventMemory M p amount0 amount1) _) .return_ (.ok _) at terminal
+    obtain ⟨out, stor, logs⟩ := ri_return terminal
+    simp only [burnEventMemory, show (64 : B256).toNat = 64 from rfl,
+      p32Nat, Mem.read_two_word_writes_at_raw] at out
+    exact ⟨_, _, rfl, terminal, out, stor, logs⟩
+
 end Blanc.Lift.UniswapV2Pair
