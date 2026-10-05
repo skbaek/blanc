@@ -268,13 +268,15 @@ theorem swapFwdCallback_call {sevm : Sevm} {b d : Devm} {R : List B256} {M : Mem
 
 /-- The callback skipped (`data.length = 0`): 20 gas, straight to the join. -/
 theorem swapFwdCallback_skip {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat}
-    {t1 t0 r1 r0 start toWord a1 a0 ρ : B256} {o : Outcome} (room : R.length ≤ 980)
+    {t1 t0 r1 r0 len start toWord a1 a0 ρ : B256} {o : Outcome} (room : R.length ≤ 980)
+    (zero : len = 0)
     (cont : SFunc.RunExact cert.prog sevm
-      (St b (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: 0 :: start :: toWord :: a1 :: a0 :: ρ :: R) M G)
+      (St b (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: ρ :: R) M G)
       t_09c3_c5 o) :
     SFunc.RunExact cert.prog sevm
-      (St b (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: 0 :: start :: toWord :: a1 :: a0 :: ρ :: R) M
+      (St b (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: ρ :: R) M
         (G + 20)) t_08e1_c4 o := by
+  subst zero
   unfold t_08e1_c4
   sfc_rx; sfc_rx; sfc_rx; sfc_rx
   exact rx_branchTo_succ (by decide) (show cert.prog[5]? = some t_09c3_c5 from rfl) cont
