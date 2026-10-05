@@ -11,7 +11,8 @@ tree `f` with straight-line heads stripped, so a CALL inside the straight prefix
 
 `CallInputSelector N sel` is the fact a backward walk to a CALL node establishes: the CALL's input
 window, as the node's memory holds it, carries the selector `sel`, read exactly as the spawned
-child's `Blanc.Sevm.selector` reads its calldata (`Bytes.selector`).
+child's `Blanc.Sevm.selector` reads its calldata (`Bytes.selector`).  `ChainMemoryBelow R bound` is the
+memory bound such content facts are conditional on.
 -/
 
 namespace Blanc.Lift
@@ -34,5 +35,11 @@ def CallInputSelector (N : Exec.Deriv) (sel : B256) : Prop :=
   ∃ (g c v ii is : B256) (rest : List B256),
     N.devm.stack = g :: c :: v :: ii :: is :: rest ∧
       Bytes.selector (N.devm.memory.read ii.toNat is.toNat).1 = sel
+
+/-- Every node of the same-frame chain of `R` has logical memory size below `bound`.  For a bound far
+below `2 ^ 256` this rules out every wrap of a memory offset computed modulo `2 ^ 256` from a pointer
+the frame has written at. -/
+def ChainMemoryBelow (R : Exec.Deriv) (bound : Nat) : Prop :=
+  ∀ N : Exec.Deriv, Exec.Deriv.ParentPrefix R N → N.devm.memory.size < bound
 
 end Blanc.Lift
