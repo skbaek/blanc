@@ -180,6 +180,29 @@ def updateSyncTopic : B256 :=
 def updateSyncMemory (M : Mem) (packed : B256) : Mem :=
   (M.write 128 (reserve0Read packed).toBytes).write 160 (reserve1Read packed).toBytes
 
+/-- Sync's actual memory image at the incoming free-memory pointer. -/
+def updateSyncMemoryAt (M : Mem) (p : B256) (packed : B256) : Mem :=
+  (M.write p.toNat (reserve0Read packed).toBytes).write
+    (p + 32).toNat (reserve1Read packed).toBytes
+
+/-- The actual Sync word stores preserve the incoming pointer and cover the
+complete64-byte event window in the resulting allocation. -/
+theorem updateSyncMemoryAt_layout {M : Mem} {p packed : B256} {n : Nat}
+    (mem : PtrMem p n M) (low : 96 ≤ p.toNat) (high : p.toNat + 64 < 2 ^ 256) :
+    PtrMem p (memExtSize (memExtSize n p.toNat 32) (p + 32).toNat 32)
+      (updateSyncMemoryAt M p packed) ∧
+    p.toNat + 64 ≤ memExtSize (memExtSize n p.toNat 32) (p + 32).toNat 32 := by
+  have p32Nat : (p + 32).toNat = p.toNat + 32 := by
+    rw [B256.toNat_add_eq_of_nof p 32 (by change p.toNat + 32 < 2 ^ 256; omega)]
+    rfl
+  have m1 := mem.write p.toNat (reserve0Read packed) (Or.inr low)
+  have m2 := m1.write (p + 32).toNat (reserve1Read packed) (Or.inr (by omega))
+  refine ⟨m2, ?_⟩
+  have h := (Mem.memWord_write_word (M.write p.toNat (reserve0Read packed).toBytes)
+    (p + 32).toNat (reserve1Read packed)).2
+  rw [m2.size] at h
+  omega
+
 def updateSyncPost (sevm : Sevm) (b : Devm) (packed : B256) : Devm :=
   b.addLog ⟨sevm.currentTarget, [updateSyncTopic],
     (reserve0Read packed).toBytes ++ (reserve1Read packed).toBytes⟩
@@ -191,22 +214,41 @@ def updateSyncStoreCost1 (n : Nat) : Nat :=
   3 + (calculateMemoryGasCost (memExtSize (memExtSize n 128 32) 160 32) -
     calculateMemoryGasCost (memExtSize n 128 32))
 
+/-- Actual first event-word store charge at the incoming pointer. -/
+def updateSyncStoreCost0At (n : Nat) (p : B256) : Nat :=
+  3 + (calculateMemoryGasCost (memExtSize n p.toNat 32) - calculateMemoryGasCost n)
+
+/-- Actual second event-word store charge after the first expansion. -/
+def updateSyncStoreCost1At (n : Nat) (p : B256) : Nat :=
+  3 + (calculateMemoryGasCost (memExtSize (memExtSize n p.toNat 32) (p + 32).toNat 32) -
+    calculateMemoryGasCost (memExtSize n p.toNat 32))
+
 /-- Actual Sync suffix, with symbolic incoming allocation, exact memory image,
 emitter/topic/two ABI words and exact gas including both expansion charges. -/
-theorem update_sync_event_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
-    {G n : Nat} {packed dt ts r0 r1 b0 b1 tag : B256}
-    (static : sevm.isStatic = false) (mem : PtrMem 128 n M) (room : R.length ≤ 1010) :
+theorem update_sync_event_exact_at {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G n : Nat} {p packed dt ts r0 r1 b0 b1 tag : B256}
+    (static : sevm.isStatic = false) (mem : PtrMem p n M)
+    (low : 96 ≤ p.toNat) (high : p.toNat + 64 < 2 ^ 256) (room : R.length ≤ 1010) :
     SFunc.RunExact cert.prog sevm
       (St b (reserveDiv112 :: reserveMask112 :: packed :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R)
-        M (G + updateSyncStoreCost0 n + updateSyncStoreCost1 n + 1371)) updateSyncTree
-      (.returned (St (updateSyncPost sevm b packed) R (updateSyncMemory M packed) G)) := by
-  have m1 := mem.write 128 (reserve0Read packed) (by omega)
-  have m2 := m1.write 160 (reserve1Read packed) (by omega)
-  have covered : 128 + 64 ≤ memExtSize (memExtSize n 128 32) 160 32 := by
-    have h := (Mem.memWord_write_word (M.write 128 (reserve0Read packed).toBytes)
-      160 (reserve1Read packed)).2
+        M (G + updateSyncStoreCost0At n p + updateSyncStoreCost1At n p + 1371)) updateSyncTree
+      (.returned (St (updateSyncPost sevm b packed) R (updateSyncMemoryAt M p packed) G)) := by
+  have p32Nat : (p + 32).toNat = p.toNat + 32 := by
+    rw [B256.toNat_add_eq_of_nof p 32 (by change p.toNat + 32 < 2 ^ 256; omega)]
+    rfl
+  have m1 := mem.write p.toNat (reserve0Read packed) (Or.inr low)
+  have m2 := m1.write (p + 32).toNat (reserve1Read packed) (Or.inr (by omega))
+  have covered : p.toNat + 64 ≤
+      memExtSize (memExtSize n p.toNat 32) (p + 32).toNat 32 := by
+    have h := (Mem.memWord_write_word (M.write p.toNat (reserve0Read packed).toBytes)
+      (p + 32).toNat (reserve1Read packed)).2
     rw [m2.size] at h
-    exact h
+    omega
+  have payload : ((updateSyncMemoryAt M p packed).read p.toNat 64).1 =
+      (reserve0Read packed).toBytes ++ (reserve1Read packed).toBytes := by
+    unfold updateSyncMemoryAt
+    rw [p32Nat]
+    exact Mem.read_two_word_writes_at_raw M p.toNat _ _
   unfold updateSyncTree
   apply rx_push (w := 64) rfl (by simp only [List.length_cons]; omega)
   apply rx_dup1 (by simp only [List.length_cons]; omega)
@@ -219,10 +261,10 @@ theorem update_sync_event_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Me
   apply rx_and (v := reserve0Read packed) (B256.and_comm _ _)
     (by simp only [List.length_cons]; omega)
   apply rx_dup2 (by simp only [List.length_cons]; omega)
-  have gas0 : G + updateSyncStoreCost0 n + updateSyncStoreCost1 n + 1350 =
-      (G + updateSyncStoreCost1 n + 1350) + updateSyncStoreCost0 n := by omega
+  have gas0 : G + updateSyncStoreCost0At n p + updateSyncStoreCost1At n p + 1350 =
+      (G + updateSyncStoreCost1At n p + 1350) + updateSyncStoreCost0At n p := by omega
   rw [gas0]
-  refine rx_mstore (M' := M.write 128 (reserve0Read packed).toBytes) (c := updateSyncStoreCost0 n) ?_ rfl ?_
+  refine rx_mstore (M' := M.write p.toNat (reserve0Read packed).toBytes) (c := updateSyncStoreCost0At n p) ?_ rfl ?_
   · rw [St.extCost_eq mem.size]
     rfl
   apply rx_swap2
@@ -235,15 +277,15 @@ theorem update_sync_event_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Me
     (by simp only [List.length_cons]; omega)
   apply rx_push (w := 32) rfl (by simp only [List.length_cons]; omega)
   apply rx_dup3 (by simp only [List.length_cons]; omega)
-  apply rx_add' (v := 160) (by decide) (by simp only [List.length_cons]; omega)
-  have gas1 : G + updateSyncStoreCost1 n + 1318 = (G + 1318) + updateSyncStoreCost1 n := by omega
+  apply rx_add' (v := p + 32) rfl (by simp only [List.length_cons]; omega)
+  have gas1 : G + updateSyncStoreCost1At n p + 1318 = (G + 1318) + updateSyncStoreCost1At n p := by omega
   rw [gas1]
-  refine rx_mstore (M' := (M.write 128 (reserve0Read packed).toBytes).write 160 (reserve1Read packed).toBytes)
-    (c := updateSyncStoreCost1 n) ?_ rfl ?_
+  refine rx_mstore (M' := (M.write p.toNat (reserve0Read packed).toBytes).write (p + 32).toNat (reserve1Read packed).toBytes)
+    (c := updateSyncStoreCost1At n p) ?_ rfl ?_
   · rw [St.extCost_eq m1.size]
     rfl
   apply rx_dup2 (by simp only [List.length_cons]; omega)
-  refine rx_mload (c := 3) ?_ m2.word (m2.read_self (by change 64 + 32 ≤ memExtSize (memExtSize n 128 32) 160 32; have := m2.ge; omega))
+  refine rx_mload (c := 3) ?_ m2.word (m2.read_self (by change 64 + 32 ≤ memExtSize (memExtSize n p.toNat 32) (p + 32).toNat 32; have := m2.ge; omega))
     (by simp only [List.length_cons]; omega) ?_
   · rw [St.extCost_eq m2.size, show (64 : B256).toNat = 64 from rfl,
       memExtSize_of_le m2.n32 (by have := m2.ge; omega), Nat.sub_self]
@@ -253,15 +295,13 @@ theorem update_sync_event_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Me
   apply rx_swap2
   apply rx_dup2 (by simp only [List.length_cons]; omega)
   apply rx_swap1
-  apply rx_sub' (v := 0) (by decide) (by simp only [List.length_cons]; omega)
+  apply rx_sub' (v := 0) (B256.sub_self p) (by simp only [List.length_cons]; omega)
   apply rx_swap1
   apply rx_swap2
   apply rx_add' (v := 64) (by decide) (by simp only [List.length_cons]; omega)
   apply rx_swap1
-  refine rx_log1 (c := 1262) static ?_ (Mem.read_two_word_writes_at_raw M 128
-    (reserve0Read packed) (reserve1Read packed)) (m2.read_self covered) ?_
-  · rw [St.extCost_eq m2.size, show (128 : B256).toNat = 128 from rfl,
-      show (64 : B256).toNat = 64 from rfl, memExtSize_of_le m2.n32 covered, Nat.sub_self]
+  refine rx_log1 (c := 1262) static ?_ payload (m2.read_self covered) ?_
+  · rw [St.extCost_eq m2.size, show (64 : B256).toNat = 64 from rfl, memExtSize_of_le m2.n32 covered, Nat.sub_self]
     rfl
   apply rx_pop
   apply rx_pop
@@ -272,22 +312,45 @@ theorem update_sync_event_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Me
   exact rx_ret
 
 
+/-- Actual Sync suffix, with symbolic incoming allocation, exact memory image,
+emitter/topic/two ABI words and exact gas including both expansion charges. -/
+theorem update_sync_event_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G n : Nat} {packed dt ts r0 r1 b0 b1 tag : B256}
+    (static : sevm.isStatic = false) (mem : PtrMem 128 n M) (room : R.length ≤ 1010) :
+    SFunc.RunExact cert.prog sevm
+      (St b (reserveDiv112 :: reserveMask112 :: packed :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R)
+        M (G + updateSyncStoreCost0 n + updateSyncStoreCost1 n + 1371)) updateSyncTree
+      (.returned (St (updateSyncPost sevm b packed) R (updateSyncMemory M packed) G)) := by
+  have h := update_sync_event_exact_at (sevm := sevm) (b := b) (R := R) (G := G)
+    (packed := packed) (dt := dt) (ts := ts) (r0 := r0) (r1 := r1)
+    (b0 := b0) (b1 := b1) (tag := tag) static mem (by decide) (by decide) room
+  simpa only [updateSyncStoreCost0At, updateSyncStoreCost1At, updateSyncStoreCost0,
+    updateSyncStoreCost1, updateSyncMemoryAt, updateSyncMemory,
+    show (128 : B256).toNat = 128 from rfl,
+    show ((128 : B256) + 32).toNat = 160 from rfl] using h
+
+
 /-- Successful actual Sync logging/return yields the exact emitter, topic, data,
 whole memory image and caller tail. -/
-theorem update_sync_event_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
-    {G n : Nat} {packed dt ts r0 r1 b0 b1 tag : B256} {o : Outcome}
-    (mem : PtrMem 128 n M)
+theorem update_sync_event_inv_at {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G n : Nat} {p packed dt ts r0 r1 b0 b1 tag : B256} {o : Outcome}
+    (mem : PtrMem p n M) (low : 96 ≤ p.toNat)
+    (high : p.toNat + 64 < 2 ^ 256)
     (run : SFunc.Run cert.prog sevm
       (St b (reserveDiv112 :: reserveMask112 :: packed :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R)
         M G) updateSyncTree o) :
-    ∃ G', o = .returned (St (updateSyncPost sevm b packed) R (updateSyncMemory M packed) G') := by
-  have m1 := mem.write 128 (reserve0Read packed) (by omega)
-  have m2 := m1.write 160 (reserve1Read packed) (by omega)
-  have covered : 128 + 64 ≤ memExtSize (memExtSize n 128 32) 160 32 := by
-    have h := (Mem.memWord_write_word (M.write 128 (reserve0Read packed).toBytes)
-      160 (reserve1Read packed)).2
+    ∃ G', o = .returned (St (updateSyncPost sevm b packed) R (updateSyncMemoryAt M p packed) G') := by
+  have p32Nat : (p + 32).toNat = p.toNat + 32 := by
+    rw [B256.toNat_add_eq_of_nof p 32 (by change p.toNat + 32 < 2 ^ 256; omega)]
+    rfl
+  have m1 := mem.write p.toNat (reserve0Read packed) (Or.inr low)
+  have m2 := m1.write (p + 32).toNat (reserve1Read packed) (Or.inr (by omega))
+  have covered : p.toNat + 64 ≤
+      memExtSize (memExtSize n p.toNat 32) (p + 32).toNat 32 := by
+    have h := (Mem.memWord_write_word (M.write p.toNat (reserve0Read packed).toBytes)
+      (p + 32).toNat (reserve1Read packed)).2
     rw [m2.size] at h
-    exact h
+    omega
   simp only [reserve0Read, reserve1Read] at m2
   have h := run.cut
   unfold updateSyncTree at h
@@ -297,7 +360,7 @@ theorem update_sync_event_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   simp only [show Bytes.toB256 [0x40] = (64 : B256) from rfl,
     show (64 : B256).toNat = 64 from rfl,
     mem.read_self (i := 64) (sz := 32) (by have := mem.ge; omega),
-    show Bytes.toB256 (M.read 64 32).1 = (128 : B256) from mem.word] at hd
+    show Bytes.toB256 (M.read 64 32).1 = p from mem.word] at hd
   subst d
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
@@ -306,9 +369,8 @@ theorem update_sync_event_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   subst d
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_mstore hd
-  simp only [show (128 : B256).toNat = 128 from rfl] at hd
   subst d
-  clear * - h m2 covered
+  clear * - h m2 covered p32Nat
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
@@ -321,18 +383,17 @@ theorem update_sync_event_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_add hd
-  simp only [show (128 : B256) + Bytes.toB256 [0x20] = 160 from by decide] at hd
+  simp only [show Bytes.toB256 [0x20] = (32 : B256) from rfl] at hd
   subst d
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_mstore hd
-  simp only [show (160 : B256).toNat = 160 from rfl] at hd
   subst d
-  clear * - h m2 covered
+  clear * - h m2 covered p32Nat
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_mload hd
   simp only [show (64 : B256).toNat = 64 from rfl,
     m2.read_self (i := 64) (sz := 32) (by have := m2.ge; omega),
-    show Bytes.toB256 (((M.write 128 (packed &&& reserveMask112).toBytes).write 160
-      (packed / reserveDiv112 &&& reserveMask112).toBytes).read 64 32).1 = (128 : B256) from m2.word] at hd
+    show Bytes.toB256 (((M.write p.toNat (packed &&& reserveMask112).toBytes).write (p + 32).toNat
+      (packed / reserveDiv112 &&& reserveMask112).toBytes).read 64 32).1 = p from m2.word] at hd
   subst d
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
@@ -340,7 +401,7 @@ theorem update_sync_event_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_sub hd
-  simp only [show (128 : B256) - 128 = 0 from by decide] at hd
+  simp only [B256.sub_self] at hd
   subst d
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
@@ -349,9 +410,9 @@ theorem update_sync_event_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   subst d
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_log1 hd
-  simp only [show (128 : B256).toNat = 128 from rfl,
-    show (64 : B256).toNat = 64 from rfl, m2.read_self covered,
-    Mem.read_two_word_writes_at_raw] at hd
+  simp only [show (64 : B256).toNat = 64 from rfl, m2.read_self covered] at hd
+  simp only [p32Nat, Mem.read_two_word_writes_at_raw] at hd
+  rw [← p32Nat] at hd
   subst d
   clear * - h
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
@@ -362,5 +423,18 @@ theorem update_sync_event_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
   obtain ⟨g, hg⟩ := ric_ret h
   exact ⟨g, Seg.done.inj hg⟩
+
+
+/-- Successful actual Sync logging/return yields the exact emitter, topic, data,
+whole memory image and caller tail. -/
+theorem update_sync_event_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G n : Nat} {packed dt ts r0 r1 b0 b1 tag : B256} {o : Outcome}
+    (mem : PtrMem 128 n M)
+    (run : SFunc.Run cert.prog sevm
+      (St b (reserveDiv112 :: reserveMask112 :: packed :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R)
+        M G) updateSyncTree o) :
+    ∃ G', o = .returned (St (updateSyncPost sevm b packed) R (updateSyncMemory M packed) G') := by
+  obtain ⟨g, hg⟩ := update_sync_event_inv_at mem (by decide) (by decide) run
+  exact ⟨g, hg⟩
 
 end Blanc.Lift.UniswapV2Pair

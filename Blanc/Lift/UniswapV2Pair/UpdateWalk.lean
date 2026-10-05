@@ -794,22 +794,28 @@ def updateWorld (sevm : Sevm) (b : Devm) (old0 old1 balance0 balance1 : B256) : 
 def updateMemory (sevm : Sevm) (b : Devm) (M : Mem) (old0 old1 balance0 balance1 : B256) : Mem :=
   updateSyncMemory M (updateFinalPackedWord sevm b old0 old1 balance0 balance1)
 
+/-- Shared update memory at its actual incoming free-memory pointer. -/
+def updateMemoryAt (sevm : Sevm) (b : Devm) (M : Mem) (p : B256)
+    (old0 old1 balance0 balance1 : B256) : Mem :=
+  updateSyncMemoryAt M p (updateFinalPackedWord sevm b old0 old1 balance0 balance1)
+
 /-- One actual shared update inverse, deriving acceptance and mutability from
 successful bytes, with the complete metadata, log, memory and caller tail. -/
-theorem update_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
-    {G n : Nat} {old0 old1 balance0 balance1 tag : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 n M)
+theorem update_inv_at {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G n : Nat} {p old0 old1 balance0 balance1 tag : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem p n M)
+    (low : 96 ≤ p.toNat) (high : p.toNat + 64 < 2 ^ 256)
     (run : SFunc.Run cert.prog sevm
       (St b (old1 :: old0 :: balance1 :: balance0 :: tag :: R) M G) t_22e0_c60 o) :
     balance0.toNat < 2 ^ 112 ∧ balance1.toNat < 2 ^ 112 ∧ sevm.isStatic = false ∧
       ∃ G', o = .returned (St (updateWorld sevm b old0 old1 balance0 balance1)
-        R (updateMemory sevm b M old0 old1 balance0 balance1) G') := by
+        R (updateMemoryAt sevm b M p old0 old1 balance0 balance1) G') := by
   obtain ⟨bound0, bound1, _, h⟩ := update_guards_inv run
   obtain ⟨_, h⟩ := update_header_inv fork h
   obtain ⟨_, h⟩ := update_oracle_reserve_inv h
   obtain ⟨_, h⟩ := update_oracle_route_inv h
   rw [update_oracle_flag_source] at h
-  clear * - h fork mem bound0 bound1
+  clear * - h fork mem low high bound0 bound1
   by_cases active : updateOracleActive sevm b old0 old1
   · change updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time &&& reserveMask32 ≠ 0 ∧
       old0 &&& reserveMask112 ≠ 0 ∧ old1 &&& reserveMask112 ≠ 0 at active
@@ -818,7 +824,7 @@ theorem update_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     obtain ⟨_, _, _, h⟩ := update_accumulator0_inv fork h
     obtain ⟨_, _, h⟩ := update_accumulator1_inv fork h
     obtain ⟨nonstatic, _, h⟩ := update_packed_store_inv fork h
-    obtain ⟨g, eq⟩ := update_sync_event_inv mem h
+    obtain ⟨g, eq⟩ := update_sync_event_inv_at mem low high h
     refine ⟨bound0, bound1, nonstatic, g, ?_⟩
     have oracleEq : updateOracleWorld sevm b old0 old1 =
         updateAccumulatorPost sevm
@@ -833,7 +839,7 @@ theorem update_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
         (updateTimestampWord sevm.benvStat.time))
       (updatePackedWord ((updateOracleWorld sevm b old0 old1).getStorVal sevm.currentTarget 8)
         balance0 balance1 (updateTimestampWord sevm.benvStat.time))) R
-      (updateSyncMemory M
+      (updateSyncMemoryAt M p
         (updatePackedWord ((updateOracleWorld sevm b old0 old1).getStorVal sevm.currentTarget 8)
           balance0 balance1 (updateTimestampWord sevm.benvStat.time))) g)
     rw [oracleEq]
@@ -842,14 +848,158 @@ theorem update_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
       old0 &&& reserveMask112 ≠ 0 ∧ old1 &&& reserveMask112 ≠ 0) at active
     simp only [active, ite_false, ite_true] at h
     obtain ⟨nonstatic, _, h⟩ := update_packed_store_inv fork h
-    obtain ⟨g, eq⟩ := update_sync_event_inv mem h
+    obtain ⟨g, eq⟩ := update_sync_event_inv_at mem low high h
     refine ⟨bound0, bound1, nonstatic, g, ?_⟩
-    simpa only [updateWorld, updateMemory, updateFinalPackedWord, updateOracleWorld,
+    simpa only [updateWorld, updateMemoryAt, updateFinalPackedWord, updateOracleWorld,
       updateOracleActive, active, ite_false] using eq
+
+
+/-- One actual shared update inverse, deriving acceptance and mutability from
+successful bytes, with the complete metadata, log, memory and caller tail. -/
+theorem update_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G n : Nat} {old0 old1 balance0 balance1 tag : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 n M)
+    (run : SFunc.Run cert.prog sevm
+      (St b (old1 :: old0 :: balance1 :: balance0 :: tag :: R) M G) t_22e0_c60 o) :
+    balance0.toNat < 2 ^ 112 ∧ balance1.toNat < 2 ^ 112 ∧ sevm.isStatic = false ∧
+      ∃ G', o = .returned (St (updateWorld sevm b old0 old1 balance0 balance1)
+        R (updateMemory sevm b M old0 old1 balance0 balance1) G') := by
+  exact update_inv_at fork mem (by decide) (by decide) run
 
 
 /-- Exact actual Sync suffix gas, including its two symbolic memory charges. -/
 def updateSyncGas (n : Nat) : Nat := updateSyncStoreCost0 n + updateSyncStoreCost1 n + 1371
+
+/-- Exact Sync gas at the incoming pointer, including both actual expansions. -/
+def updateSyncGasAt (n : Nat) (p : B256) : Nat :=
+  updateSyncStoreCost0At n p + updateSyncStoreCost1At n p + 1371
+
+/-- The original fixed-pointer gas contract is the128 specialization. -/
+theorem updateSyncGasAt_128 (n : Nat) : updateSyncGasAt n 128 = updateSyncGas n := by
+  simp only [updateSyncGasAt, updateSyncGas, updateSyncStoreCost0At, updateSyncStoreCost1At,
+    updateSyncStoreCost0, updateSyncStoreCost1, show (128 : B256).toNat = 128 from rfl,
+    show ((128 : B256) + 32).toNat = 160 from rfl]
+
+/-- The original complete memory image is the128 specialization. -/
+theorem updateMemoryAt_128 (sevm : Sevm) (b : Devm) (M : Mem)
+    (old0 old1 balance0 balance1 : B256) :
+    updateMemoryAt sevm b M 128 old0 old1 balance0 balance1 =
+      updateMemory sevm b M old0 old1 balance0 balance1 := rfl
+
+/-- One actual shared update forward theorem. Charges name the executed
+primitives; conditional oracle charges and all three SSTORE sentries remain explicit. -/
+theorem update_exact_at {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {G n headerLoad load9 store9 load10 store10 load8 store8 : Nat}
+    {p old0 old1 balance0 balance1 tag : B256}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem p n M)
+    (low : 96 ≤ p.toNat) (high : p.toNat + 64 < 2 ^ 256)
+    (static : sevm.isStatic = false) (bound0 : balance0.toNat < 2 ^ 112)
+    (bound1 : balance1.toNat < 2 ^ 112) (room : R.length ≤ 1008)
+    (headerCharge : headerLoad = sloadCost sevm b 8)
+    (packedLoadCharge : load8 = sloadCost sevm (updateOracleWorld sevm b old0 old1) 8)
+    (packedStoreCharge : store8 = sstoreCost sevm
+      (afterSload sevm (updateOracleWorld sevm b old0 old1) 8) 8
+      (updateFinalPackedWord sevm b old0 old1 balance0 balance1))
+    (oracleCharges : updateOracleActive sevm b old0 old1 →
+      load9 = sloadCost sevm (afterSload sevm b 8) 9 ∧
+      store9 = sstoreCost sevm (afterSload sevm (afterSload sevm b 8) 9) 9
+        (updateAccumulatorWord ((afterSload sevm b 8).getStorVal sevm.currentTarget 9)
+          (updatePriceWord old0 old1)
+          (updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time)) ∧
+      load10 = sloadCost sevm
+        (updateAccumulatorPost sevm (afterSload sevm b 8) 9 (updatePriceWord old0 old1)
+          (updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time)) 10 ∧
+      store10 = sstoreCost sevm (afterSload sevm
+        (updateAccumulatorPost sevm (afterSload sevm b 8) 9 (updatePriceWord old0 old1)
+          (updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time)) 10) 10
+        (updateAccumulatorWord
+          ((updateAccumulatorPost sevm (afterSload sevm b 8) 9 (updatePriceWord old0 old1)
+            (updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time)).getStorVal
+            sevm.currentTarget 10) (updatePriceWord old1 old0)
+          (updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time)))
+    (sentry8 : gCallStipend < G + updateSyncGasAt n p + store8)
+    (sentry10 : updateOracleActive sevm b old0 old1 →
+      gCallStipend < G + updateSyncGasAt n p + load8 + store8 + 110 + store10)
+    (sentry9 : updateOracleActive sevm b old0 old1 →
+      gCallStipend < G + updateSyncGasAt n p + load8 + store8 + 110 +
+        load10 + store10 + 42 + 149 + store9) :
+    SFunc.RunExact cert.prog sevm
+      (St b (old1 :: old0 :: balance1 :: balance0 :: tag :: R) M
+        (G + updateSyncGasAt n p + load8 + store8 + 110 +
+          (if updateOracleActive sevm b old0 old1 then load9 + store9 + load10 + store10 + 382 else 0) +
+          17 + 20 +
+          (if updateOraclePrefixWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time old0 = 0
+            then 0 else 17) + headerLoad + 75 +
+          (if updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time &&& reserveMask32 = 0
+            then 0 else 17) + 60)) t_22e0_c60
+      (.returned (St (updateWorld sevm b old0 old1 balance0 balance1) R
+        (updateMemoryAt sevm b M p old0 old1 balance0 balance1) G)) := by
+  let dt := updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time
+  let ts := updateTimestampWord sevm.benvStat.time
+  let prefixFlag := updateOraclePrefixWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time old0
+  let flag := updateOracleReserveFlagWord prefixFlag old1
+  let tailGas := G + updateSyncGasAt n p + load8 + store8 + 110
+  let oracleGas := if updateOracleActive sevm b old0 old1 then load9 + store9 + load10 + store10 + 382 else 0
+  let result := Outcome.returned (St (updateWorld sevm b old0 old1 balance0 balance1) R
+    (updateMemoryAt sevm b M p old0 old1 balance0 balance1) G)
+  have eventRun : SFunc.RunExact cert.prog sevm
+      (St (updatePackedPost sevm (updateOracleWorld sevm b old0 old1) balance0 balance1 ts)
+        (reserveDiv112 :: reserveMask112 :: updateFinalPackedWord sevm b old0 old1 balance0 balance1 ::
+          dt :: ts :: old1 :: old0 :: balance1 :: balance0 :: tag :: R) M (G + updateSyncGasAt n p))
+      updateSyncTree result := by
+    have eventGas : G + updateSyncGasAt n p = G + updateSyncStoreCost0At n p + updateSyncStoreCost1At n p + 1371 := by
+      unfold updateSyncGasAt
+      omega
+    rw [eventGas]
+    exact update_sync_event_exact_at static mem low high (by omega)
+  have packedRun := update_packed_store_exact fork static packedLoadCharge packedStoreCharge sentry8
+    (by omega : R.length ≤ 1010) eventRun
+  have packedGas : G + updateSyncGasAt n p + load8 + store8 + 110 = tailGas := rfl
+  change SFunc.RunExact cert.prog sevm
+    (St (updateOracleWorld sevm b old0 old1) (dt :: ts :: old1 :: old0 :: balance1 :: balance0 :: tag :: R)
+      M ((G + updateSyncGasAt n p) + load8 + store8 + 110)) t_2492_c22 result at packedRun
+  rw [packedGas] at packedRun
+  have oracleRun : SFunc.RunExact cert.prog sevm
+      (St (afterSload sevm b 8) (dt :: ts :: old1 :: old0 :: balance1 :: balance0 :: tag :: R)
+        M (tailGas + oracleGas)) (if flag = 0 then t_2492_c22 else t_23e8_c21) result := by
+    have flagSource : flag = if updateOracleActive sevm b old0 old1 then 1 else 0 :=
+      update_oracle_flag_source
+    by_cases active : updateOracleActive sevm b old0 old1
+    · obtain ⟨charge9, write9, charge10, write10⟩ := oracleCharges active
+      rw [flagSource, ite_eq_left active, ite_eq_right (by decide : (1 : B256) ≠ 0)]
+      have oracleEq : updateOracleWorld sevm b old0 old1 =
+          updateAccumulatorPost sevm
+            (updateAccumulatorPost sevm (afterSload sevm b 8) 9 (updatePriceWord old0 old1) dt)
+            10 (updatePriceWord old1 old0) dt := by
+        unfold updateOracleWorld
+        exact ite_eq_left active
+      rw [oracleEq] at packedRun
+      have h10 := update_accumulator1_exact fork static charge10 write10 (sentry10 active)
+        (by omega : R.length ≤ 1012) packedRun
+      have h9 := update_accumulator0_exact fork static charge9 write9 (sentry9 active)
+        active.2.2 room h10
+      have h0 := update_price0_exact
+        active.2.1 room h9
+      have gas : tailGas + oracleGas = tailGas + load10 + store10 + 42 + load9 + store9 + 191 + 149 := by
+        dsimp only [oracleGas]
+        rw [ite_eq_left active]
+        omega
+      rw [gas]
+      exact h0
+    · rw [flagSource, ite_eq_right active, ite_eq_left (rfl : (0 : B256) = 0)]
+      have oracleEq : updateOracleWorld sevm b old0 old1 = afterSload sevm b 8 := by
+        unfold updateOracleWorld
+        exact ite_eq_right active
+      dsimp only [oracleGas]
+      rw [ite_eq_right active, Nat.add_zero]
+      rw [oracleEq] at packedRun
+      exact packedRun
+  have routeRun := update_oracle_route_exact (by omega : R.length ≤ 1015) oracleRun
+  have reserveRun := update_oracle_reserve_exact (by omega : R.length ≤ 1014) routeRun
+  have headerRun := update_header_exact fork headerCharge (by omega : R.length ≤ 1014) reserveRun
+  have guardsRun := update_guards_exact bound0 bound1 (by omega : R.length ≤ 1016) headerRun
+  exact guardsRun
+
 
 /-- One actual shared update forward theorem. Charges name the executed
 primitives; conditional oracle charges and all three SSTORE sentries remain explicit. -/
@@ -898,70 +1048,13 @@ theorem update_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
             then 0 else 17) + 60)) t_22e0_c60
       (.returned (St (updateWorld sevm b old0 old1 balance0 balance1) R
         (updateMemory sevm b M old0 old1 balance0 balance1) G)) := by
-  let dt := updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time
-  let ts := updateTimestampWord sevm.benvStat.time
-  let prefixFlag := updateOraclePrefixWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time old0
-  let flag := updateOracleReserveFlagWord prefixFlag old1
-  let tailGas := G + updateSyncGas n + load8 + store8 + 110
-  let oracleGas := if updateOracleActive sevm b old0 old1 then load9 + store9 + load10 + store10 + 382 else 0
-  let result := Outcome.returned (St (updateWorld sevm b old0 old1 balance0 balance1) R
-    (updateMemory sevm b M old0 old1 balance0 balance1) G)
-  have eventRun : SFunc.RunExact cert.prog sevm
-      (St (updatePackedPost sevm (updateOracleWorld sevm b old0 old1) balance0 balance1 ts)
-        (reserveDiv112 :: reserveMask112 :: updateFinalPackedWord sevm b old0 old1 balance0 balance1 ::
-          dt :: ts :: old1 :: old0 :: balance1 :: balance0 :: tag :: R) M (G + updateSyncGas n))
-      updateSyncTree result := by
-    have eventGas : G + updateSyncGas n = G + updateSyncStoreCost0 n + updateSyncStoreCost1 n + 1371 := by
-      unfold updateSyncGas
-      omega
-    rw [eventGas]
-    exact update_sync_event_exact static mem (by omega)
-  have packedRun := update_packed_store_exact fork static packedLoadCharge packedStoreCharge sentry8
-    (by omega : R.length ≤ 1010) eventRun
-  have packedGas : G + updateSyncGas n + load8 + store8 + 110 = tailGas := rfl
-  change SFunc.RunExact cert.prog sevm
-    (St (updateOracleWorld sevm b old0 old1) (dt :: ts :: old1 :: old0 :: balance1 :: balance0 :: tag :: R)
-      M ((G + updateSyncGas n) + load8 + store8 + 110)) t_2492_c22 result at packedRun
-  rw [packedGas] at packedRun
-  have oracleRun : SFunc.RunExact cert.prog sevm
-      (St (afterSload sevm b 8) (dt :: ts :: old1 :: old0 :: balance1 :: balance0 :: tag :: R)
-        M (tailGas + oracleGas)) (if flag = 0 then t_2492_c22 else t_23e8_c21) result := by
-    have flagSource : flag = if updateOracleActive sevm b old0 old1 then 1 else 0 :=
-      update_oracle_flag_source
-    by_cases active : updateOracleActive sevm b old0 old1
-    · obtain ⟨charge9, write9, charge10, write10⟩ := oracleCharges active
-      rw [flagSource, ite_eq_left active, ite_eq_right (by decide : (1 : B256) ≠ 0)]
-      have oracleEq : updateOracleWorld sevm b old0 old1 =
-          updateAccumulatorPost sevm
-            (updateAccumulatorPost sevm (afterSload sevm b 8) 9 (updatePriceWord old0 old1) dt)
-            10 (updatePriceWord old1 old0) dt := by
-        unfold updateOracleWorld
-        exact ite_eq_left active
-      rw [oracleEq] at packedRun
-      have h10 := update_accumulator1_exact fork static charge10 write10 (sentry10 active)
-        (by omega : R.length ≤ 1012) packedRun
-      have h9 := update_accumulator0_exact fork static charge9 write9 (sentry9 active)
-        active.2.2 room h10
-      have h0 := update_price0_exact
-        active.2.1 room h9
-      have gas : tailGas + oracleGas = tailGas + load10 + store10 + 42 + load9 + store9 + 191 + 149 := by
-        dsimp only [oracleGas]
-        rw [ite_eq_left active]
-        omega
-      rw [gas]
-      exact h0
-    · rw [flagSource, ite_eq_right active, ite_eq_left (rfl : (0 : B256) = 0)]
-      have oracleEq : updateOracleWorld sevm b old0 old1 = afterSload sevm b 8 := by
-        unfold updateOracleWorld
-        exact ite_eq_right active
-      dsimp only [oracleGas]
-      rw [ite_eq_right active, Nat.add_zero]
-      rw [oracleEq] at packedRun
-      exact packedRun
-  have routeRun := update_oracle_route_exact (by omega : R.length ≤ 1015) oracleRun
-  have reserveRun := update_oracle_reserve_exact (by omega : R.length ≤ 1014) routeRun
-  have headerRun := update_header_exact fork headerCharge (by omega : R.length ≤ 1014) reserveRun
-  have guardsRun := update_guards_exact bound0 bound1 (by omega : R.length ≤ 1016) headerRun
-  exact guardsRun
+  rw [← updateSyncGasAt_128] at sentry8 sentry10 sentry9
+  have h := update_exact_at (sevm := sevm) (b := b) (R := R) (M := M) (G := G)
+    (n := n) (headerLoad := headerLoad) (load9 := load9) (store9 := store9)
+    (load10 := load10) (store10 := store10) (load8 := load8) (store8 := store8)
+    (old0 := old0) (old1 := old1) (balance0 := balance0) (balance1 := balance1) (tag := tag)
+    fork mem (by decide) (by decide) static bound0 bound1 room headerCharge
+    packedLoadCharge packedStoreCharge oracleCharges sentry8 sentry10 sentry9
+  simpa only [updateSyncGasAt_128, updateMemoryAt_128] using h
 
 end Blanc.Lift.UniswapV2Pair
