@@ -4,44 +4,12 @@ import Blanc.Lift.MutableCallPost
 
 /-! Forward (gas-exact) optimistic transfers of the swap body (`t_08bf_c4..t_08e1_c4`), the
 mirror of `swapTransfers_inv`. Each nonzero output amount calls the shared `_safeTransfer`
-helper `t_1fdb_c57` at the current free pointer. The helper's own forward walk at a moved
-pointer is original-host work (`SafeTransferWalk` exports only the pointer-128 forward
-`safeTransfer_first_exact`; its dynamic stages are private), so it enters here as the named
-cross-host hypothesis `SwapSafeTransferForward`. -/
+helper `t_1fdb_c57` at the current free pointer. The helper's dynamic-pointer forward walk
+`safeTransfer_dynamic_forward` (the moved-pointer sibling of `safeTransfer_first_exact`)
+lives in `SafeTransferWalk` with the predicate `SwapSafeTransferForward`, seen here via
+`SwapTransfer`. -/
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
-
-/-- CROSS-HOST HYPOTHESIS (delete at consolidation): discharged by a public dynamic-pointer
-forward theorem in SafeTransferWalk (the moved-pointer sibling of `safeTransfer_first_exact`,
-owned by the original host).
-
-The `_safeTransfer` helper `t_1fdb_c57`, entered at free pointer `p` over memory of size `n`
-(with the zero slot `0x60` clear), reaches its actual token `CALL` after a pre-call charge
-`pre n p` with the canonical stack and staged memory; given that `CALL`'s primitive result
-(success flag on the caller's stack, an accepted optional-bool reply) and its residual gas
-`G + post n p reply`, the helper returns exactly to its caller with the transfer memory
-`swapTransferMemory` and gas `G`. The charge functions are parameters: for `p = 128` and
-`n = 192` the existing `safeTransfer_first_exact` fixes `pre = 620`. -/
-def SwapSafeTransferForward (pre : Nat → B256 → Nat) (post : Nat → B256 → Bytes → Nat) :
-    Prop :=
-  ∀ (sevm : Sevm) (b d : Devm) (L : List B256) (M : Mem) (n callGas G : Nat)
-    (p amount toWord token rho : B256),
-    CoveredFork sevm.benvStat.fork → PtrMem p n M → memWord M 96 = 0 →
-    128 ≤ p.toNat → p.toNat + 260 < 2 ^ 256 → L.length ≤ 1000 →
-    Ninst.RunCompiled sevm
-      (St b (callGas.toB256 :: (token &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        0 :: (p + 164) :: 68 :: (p + 164) :: 0 :: (68 + (p + 164)) ::
-        (token &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount :: toWord :: token :: rho :: L)
-        (safeTransfer_dynamicCallMemory M p amount toWord) callGas) (.exec .call) d →
-    d.stack = 1 :: (68 + (p + 164)) :: (token &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-      96 :: 0 :: amount :: toWord :: token :: rho :: L →
-    (d.returnData = [] ∨ (32 ≤ d.returnData.length ∧
-      Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0)) →
-    d.gasLeft = G + post n p d.returnData →
-    SFunc.RunExact cert.prog sevm
-      (St b (amount :: toWord :: token :: rho :: L) M (callGas + pre n p)) t_1fdb_c57
-      (.returned (St d L (swapTransferMemory M p amount toWord d.returnData) G))
 
 /-- The primitive data of one actual optimistic transfer `CALL` at pointer `p`: the call
 step from the staged state, its success flag, the accepted reply and its residual gas. -/

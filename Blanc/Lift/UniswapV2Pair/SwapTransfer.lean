@@ -13,12 +13,8 @@ helper's optional reply array. -/
 def swapMovedPointer (p : B256) (reply : Bytes) : B256 :=
   if reply = [] then p + 164 else p + 164 + ((reply.length.toB256 + 63) &&& ~~~31)
 
-/-- The memory an actual `_safeTransfer` leaves at its return. -/
-def swapTransferMemory (M : Mem) (p amount toWord : B256) (reply : Bytes) : Mem :=
-  if reply = [] then safeTransfer_dynamicCallMemory M p amount toWord
-  else Blanc.Lift.bytesArrayMemory (safeTransfer_dynamicCallMemory M p amount toWord) (p + 164) reply
-
-/-- Under the CALL reply bound the moved pointer is the natural allocation. -/
+/-- Under the CALL reply bound the moved pointer is the natural allocation.
+(`swapTransferMemory` now lives in `SafeTransferWalk`, seen via import.) -/
 theorem swapMovedPointer_layout {p : B256} {reply : Bytes}
     (short : reply.length < 2 ^ 160) (room : p.toNat + 2 ^ 161 < 2 ^ 256) :
     (swapMovedPointer p reply).toNat =

@@ -2725,6 +2725,43 @@ theorem safeTransfer_dynamicCall_data {M : Mem} {p amount toWord : B256}
   rw [Blanc.Lift.copy68Memory_read (by rw [nat96, nat164])]
   exact safeTransfer_dynamicPayload_data wf lower width
 
+/-- The memory an actual `_safeTransfer` leaves at its return. (Moved down from
+`SwapTransfer` so the dynamic forward theorem sits with the stage lemmas.) -/
+def swapTransferMemory (M : Mem) (p amount toWord : B256) (reply : Bytes) : Mem :=
+  if reply = [] then safeTransfer_dynamicCallMemory M p amount toWord
+  else Blanc.Lift.bytesArrayMemory (safeTransfer_dynamicCallMemory M p amount toWord) (p + 164) reply
+
+/-- Forward `_safeTransfer` hypothesis (moved down from `SwapForwardTransfer`;
+statement unchanged): the `_safeTransfer` helper `t_1fdb_c57`, entered at free
+pointer `p` over memory of size `n` (with the zero slot `0x60` clear), reaches
+its actual token `CALL` after a pre-call charge `pre n p` with the canonical
+stack and staged memory; given that `CALL`'s primitive result (success flag on
+the caller's stack, an accepted optional-bool reply) and its residual gas
+`G + post n p reply`, the helper returns exactly to its caller with the
+transfer memory `swapTransferMemory` and gas `G`. The charge functions are
+parameters: for `p = 128` and `n = 192` the existing `safeTransfer_first_exact`
+fixes `pre = 620`. -/
+def SwapSafeTransferForward (pre : Nat → B256 → Nat) (post : Nat → B256 → Bytes → Nat) :
+    Prop :=
+  ∀ (sevm : Sevm) (b d : Devm) (L : List B256) (M : Mem) (n callGas G : Nat)
+    (p amount toWord token rho : B256),
+    CoveredFork sevm.benvStat.fork → PtrMem p n M → memWord M 96 = 0 →
+    128 ≤ p.toNat → p.toNat + 260 < 2 ^ 256 → L.length ≤ 1000 →
+    Ninst.RunCompiled sevm
+      (St b (callGas.toB256 :: (token &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        0 :: (p + 164) :: 68 :: (p + 164) :: 0 :: (68 + (p + 164)) ::
+        (token &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount :: toWord :: token :: rho :: L)
+        (safeTransfer_dynamicCallMemory M p amount toWord) callGas) (.exec .call) d →
+    d.stack = 1 :: (68 + (p + 164)) :: (token &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+      96 :: 0 :: amount :: toWord :: token :: rho :: L →
+    (d.returnData = [] ∨ (32 ≤ d.returnData.length ∧
+      Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0)) →
+    d.gasLeft = G + post n p d.returnData →
+    SFunc.RunExact cert.prog sevm
+      (St b (amount :: toWord :: token :: rho :: L) M (callGas + pre n p)) t_1fdb_c57
+      (.returned (St d L (swapTransferMemory M p amount toWord d.returnData) G))
+
 /-- The actual arbitrary-pointer initializer normalizes to the moving payload
 image, with its real allocation and all copy operands. The pointer bounds
 are intermediate obligations supplied by the first reply's producer. -/
@@ -3439,5 +3476,1451 @@ theorem safeTransfer_preCharge_128_192 : safeTransferPreCharge 192 128 = 620 := 
 theorem safeTransfer_postCharge_empty (n : Nat) (p : B256) :
     safeTransferPostCharge n p [] = 138 :=
   rfl
+
+/-- Word-level offset equations for the moving `_safeTransfer` staging area:
+every payload/copy offset stays below `2 ^ 256` under the predicate's width,
+so each B256 offset word reads back as the natural sum. -/
+private theorem safeTransfer_stageOffset {p : B256}
+    (width : p.toNat + 260 < 2 ^ 256) :
+    (32 : B256) + p = p + 32 ∧ (64 : B256) + p = p + 64 ∧
+      p + 64 + 36 = p + 100 ∧ p + 64 + 68 = p + 132 ∧ p + 64 + 100 = p + 164 ∧
+      (p + 96).toNat = p.toNat + 96 ∧ (p + 164).toNat = p.toNat + 164 ∧
+      (p + 228).toNat = p.toNat + 228 ∧
+      (p + 32).toNat = p.toNat + 32 ∧ (p + 64).toNat = p.toNat + 64 ∧
+      (p + 100).toNat = p.toNat + 100 ∧ (p + 132).toNat = p.toNat + 132 ∧
+      (p + 196).toNat = p.toNat + 196 := by
+  have addNat (k : Nat) (hk : k ≤ 260) : (p + k.toB256).toNat = p.toNat + k := by
+    rw [B256.toNat_add, B256.toNat_toB256_of_lt (by omega),
+      Nat.lo_eq_of_lt (by omega)]
+  have nat96 : (p + 96).toNat = p.toNat + 96 := by
+    simpa only [show (96 : Nat).toB256 = (96 : B256) from rfl] using addNat 96 (by decide)
+  have nat164 : (p + 164).toNat = p.toNat + 164 := by
+    simpa only [show (164 : Nat).toB256 = (164 : B256) from rfl] using addNat 164 (by decide)
+  have nat228 : (p + 228).toNat = p.toNat + 228 := by
+    simpa only [show (228 : Nat).toB256 = (228 : B256) from rfl] using addNat 228 (by decide)
+  have nat100 : (p + 100).toNat = p.toNat + 100 := by
+    simpa only [show (100 : Nat).toB256 = (100 : B256) from rfl] using addNat 100 (by decide)
+  have nat132 : (p + 132).toNat = p.toNat + 132 := by
+    simpa only [show (132 : Nat).toB256 = (132 : B256) from rfl] using addNat 132 (by decide)
+  have nat64 : (p + 64).toNat = p.toNat + 64 := by
+    simpa only [show (64 : Nat).toB256 = (64 : B256) from rfl] using addNat 64 (by decide)
+  have nat32 : (p + 32).toNat = p.toNat + 32 := by
+    simpa only [show (32 : Nat).toB256 = (32 : B256) from rfl] using addNat 32 (by decide)
+  have nat196 : (p + 196).toNat = p.toNat + 196 := by
+    simpa only [show (196 : Nat).toB256 = (196 : B256) from rfl] using addNat 196 (by decide)
+  refine ⟨B256.add_comm, B256.add_comm, ?_, ?_, ?_, nat96, nat164, nat228,
+    nat32, nat64, nat100, nat132, nat196⟩
+  · apply B256.toNat_inj
+    rw [B256.toNat_add, nat64, nat100,
+      show (36 : B256).toNat = 36 from rfl, Nat.lo_eq_of_lt (by omega)]
+  · apply B256.toNat_inj
+    rw [B256.toNat_add, nat64, nat132,
+      show (68 : B256).toNat = 68 from rfl, Nat.lo_eq_of_lt (by omega)]
+  · apply B256.toNat_inj
+    rw [B256.toNat_add, nat64, nat164,
+      show (100 : B256).toNat = 100 from rfl, Nat.lo_eq_of_lt (by omega)]
+
+/-- The moving helper's staged image already covers its CALL window: the final
+merge write at `p + 228` reaches `p.toNat + 260`. -/
+theorem safeTransfer_dynamicCall_fit {M : Mem} {p amount toWord : B256} {n : Nat}
+    (_mem : PtrMem p n M) (_lower : 128 ≤ p.toNat)
+    (width : p.toNat + 260 < 2 ^ 256) :
+    p.toNat + 260 ≤ (safeTransfer_dynamicCallMemory M p amount toWord).size := by
+  obtain ⟨c32, c64, e100, e132, e164, nat96, nat164, nat228,
+    nat32, nat64, nat100, nat132, nat196⟩ := safeTransfer_stageOffset width
+  have grow : ∀ (W : Mem) (w : B256), p.toNat + 260 ≤
+      (((W.read ((p + 164).toNat + 64) 32).2.write ((p + 164).toNat + 64)
+        w.toBytes).size) := by
+    intro W w
+    have hne : w.toBytes ≠ [] := by
+      intro h
+      have hl := B256.length_toBytes w
+      rw [h, List.length_nil] at hl
+      exact absurd hl (by decide)
+    obtain ⟨A, _, hfit, _, _, _⟩ := Mem.write_base (W.read ((p + 164).toNat + 64) 32).2
+      ((p + 164).toNat + 64) hne
+    have hlen : w.toBytes.length = 32 := B256.length_toBytes w
+    rw [nat164] at hfit
+    omega
+  unfold safeTransfer_dynamicCallMemory Blanc.Lift.copy68Memory
+  dsimp only
+  exact grow _ _
+
+/-- Payload staging sizes for the moving `_safeTransfer` initializer: the eight
+ordered writes of `safeTransfer_dynamicPayloadMemory`, each with its size,
+alignment and absolute coverage. -/
+private theorem safeTransfer_payloadSizes {M : Mem} {p amount toWord : B256} {n : Nat}
+    (mem : PtrMem p n M) (_lower : 128 ≤ p.toNat)
+    (width : p.toNat + 260 < 2 ^ 256) :
+    let N1 := M.write 64 (p + 64).toBytes
+    let N2 := N1.write p.toNat (25 : B256).toBytes
+    let N3 := N2.write (p + 32).toNat
+      (0x7472616e7366657228616464726573732c75696e743235362900000000000000 : B256).toBytes
+    let N4 := N3.write (p + 100).toNat
+      ((0xffffffffffffffffffffffffffffffffffffffff &&& toWord) : B256).toBytes
+    let N5 := N4.write (p + 132).toNat amount.toBytes
+    let N6 := N5.write (p + 64).toNat (68 : B256).toBytes
+    let N7 := N6.write 64 (p + 164).toBytes
+    let N8 := N7.write (p + 96).toNat
+      ((0xa9059cbb00000000000000000000000000000000000000000000000000000000 |||
+        ((0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256) &&&
+          Bytes.toB256 (N7.read (p + 96).toNat 32).1)) : B256).toBytes
+    N1.size = memExtSize n 64 32 ∧
+    N2.size = memExtSize N1.size p.toNat 32 ∧
+    N3.size = memExtSize N2.size (p + 32).toNat 32 ∧
+    N4.size = memExtSize N3.size (p + 100).toNat 32 ∧
+    N5.size = memExtSize N4.size (p + 132).toNat 32 ∧
+    N6.size = memExtSize N5.size (p + 64).toNat 32 ∧
+    N7.size = memExtSize N6.size 64 32 ∧
+    N8.size = memExtSize N7.size (p + 96).toNat 32 ∧
+    N1.size % 32 = 0 ∧ N2.size % 32 = 0 ∧ N3.size % 32 = 0 ∧
+    N4.size % 32 = 0 ∧ N5.size % 32 = 0 ∧ N6.size % 32 = 0 ∧
+    N7.size % 32 = 0 ∧ N8.size % 32 = 0 ∧
+    64 + 32 ≤ N1.size ∧ p.toNat + 32 ≤ N2.size ∧
+    (p + 32).toNat + 32 ≤ N3.size ∧ (p + 100).toNat + 32 ≤ N4.size ∧
+    (p + 132).toNat + 32 ≤ N5.size ∧ (p + 64).toNat + 32 ≤ N6.size ∧
+    64 + 32 ≤ N7.size ∧ (p + 96).toNat + 32 ≤ N8.size ∧
+    (safeTransfer_dynamicPayloadMemory M p amount toWord).size =
+      memExtSize (memExtSize (memExtSize (memExtSize
+        (memExtSize (memExtSize (memExtSize (memExtSize (memExtSize (memExtSize
+        (memExtSize (memExtSize (memExtSize (memExtSize n 64 32) 64 32)
+        p.toNat 32) (p.toNat + 32) 32) 64 32) (p.toNat + 100) 32)
+        (p.toNat + 132) 32) 64 32) (p.toNat + 64) 32) 64 32)
+        (p.toNat + 96) 32) (p.toNat + 96) 32) 64 32) (p.toNat + 64) 32 ∧
+    (safeTransfer_dynamicPayloadMemory M p amount toWord).size % 32 = 0 ∧
+    p.toNat + 164 ≤
+      (safeTransfer_dynamicPayloadMemory M p amount toWord).size := by
+  let N1 := M.write 64 (p + 64).toBytes
+  let N2 := N1.write p.toNat (25 : B256).toBytes
+  let N3 := N2.write (p + 32).toNat
+    (0x7472616e7366657228616464726573732c75696e743235362900000000000000 : B256).toBytes
+  let N4 := N3.write (p + 100).toNat
+    ((0xffffffffffffffffffffffffffffffffffffffff &&& toWord) : B256).toBytes
+  let N5 := N4.write (p + 132).toNat amount.toBytes
+  let N6 := N5.write (p + 64).toNat (68 : B256).toBytes
+  let N7 := N6.write 64 (p + 164).toBytes
+  let N8 := N7.write (p + 96).toNat
+    ((0xa9059cbb00000000000000000000000000000000000000000000000000000000 |||
+      ((0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256) &&&
+        Bytes.toB256 (N7.read (p + 96).toNat 32).1)) : B256).toBytes
+  have z1 : N1.size = memExtSize n 64 32 :=
+    Mem.size_write_of_size mem.size mem.n32 (B256.length_toBytes _)
+  have a1 : N1.size % 32 = 0 := by
+    rw [z1]; exact memExtSize_mod_32 mem.n32
+  have c1 : 64 + 32 ≤ N1.size :=
+    (Mem.memWord_write_word M 64 (p + 64)).2
+  have z2 : N2.size = memExtSize N1.size p.toNat 32 :=
+    Mem.size_write_of_size rfl a1 (B256.length_toBytes _)
+  have a2 : N2.size % 32 = 0 := by
+    rw [z2]; exact memExtSize_mod_32 a1
+  have c2 : p.toNat + 32 ≤ N2.size :=
+    (Mem.memWord_write_word _ _ _).2
+  have z3 : N3.size = memExtSize N2.size (p + 32).toNat 32 :=
+    Mem.size_write_of_size rfl a2 (B256.length_toBytes _)
+  have a3 : N3.size % 32 = 0 := by
+    rw [z3]; exact memExtSize_mod_32 a2
+  have c3 : (p + 32).toNat + 32 ≤ N3.size :=
+    (Mem.memWord_write_word _ _ _).2
+  have z4 : N4.size = memExtSize N3.size (p + 100).toNat 32 :=
+    Mem.size_write_of_size rfl a3 (B256.length_toBytes _)
+  have a4 : N4.size % 32 = 0 := by
+    rw [z4]; exact memExtSize_mod_32 a3
+  have c4 : (p + 100).toNat + 32 ≤ N4.size :=
+    (Mem.memWord_write_word _ _ _).2
+  have z5 : N5.size = memExtSize N4.size (p + 132).toNat 32 :=
+    Mem.size_write_of_size rfl a4 (B256.length_toBytes _)
+  have a5 : N5.size % 32 = 0 := by
+    rw [z5]; exact memExtSize_mod_32 a4
+  have c5 : (p + 132).toNat + 32 ≤ N5.size :=
+    (Mem.memWord_write_word _ _ _).2
+  have z6 : N6.size = memExtSize N5.size (p + 64).toNat 32 :=
+    Mem.size_write_of_size rfl a5 (B256.length_toBytes _)
+  have a6 : N6.size % 32 = 0 := by
+    rw [z6]; exact memExtSize_mod_32 a5
+  have c6 : (p + 64).toNat + 32 ≤ N6.size :=
+    (Mem.memWord_write_word _ _ _).2
+  have z7 : N7.size = memExtSize N6.size 64 32 :=
+    Mem.size_write_of_size rfl a6 (B256.length_toBytes _)
+  have a7 : N7.size % 32 = 0 := by
+    rw [z7]; exact memExtSize_mod_32 a6
+  have c7 : 64 + 32 ≤ N7.size :=
+    (Mem.memWord_write_word _ _ _).2
+  have z8 : N8.size = memExtSize N7.size (p + 96).toNat 32 :=
+    Mem.size_write_of_size rfl a7 (B256.length_toBytes _)
+  have a8 : N8.size % 32 = 0 := by
+    rw [z8]; exact memExtSize_mod_32 a7
+  have c8 : (p + 96).toNat + 32 ≤ N8.size :=
+    (Mem.memWord_write_word _ _ _).2
+  obtain ⟨c32, c64, e100, e132, e164, nat96, nat164, nat228,
+    nat32, nat64, nat100, nat132, nat196⟩ := safeTransfer_stageOffset width
+  have g56 : N5.size ≤ N6.size := by
+    rw [z6]; exact memExtSize_ge _ _ _
+  have m7 : N7.size = N6.size := by
+    rw [z7]; exact memExtSize_of_le a6 (by omega)
+  have hfold14 : memExtSize (memExtSize (memExtSize (memExtSize
+      (memExtSize (memExtSize (memExtSize (memExtSize (memExtSize (memExtSize
+      (memExtSize (memExtSize (memExtSize (memExtSize n 64 32) 64 32)
+      p.toNat 32) (p.toNat + 32) 32) 64 32) (p.toNat + 100) 32)
+      (p.toNat + 132) 32) 64 32) (p.toNat + 64) 32) 64 32)
+      (p.toNat + 96) 32) (p.toNat + 96) 32) 64 32) (p.toNat + 64) 32 = N8.size := by
+    rw [←z1]
+    rw [show memExtSize N1.size 64 32 = N1.size from
+      memExtSize_of_le a1 (by omega)]
+    rw [←z2]
+    rw [←nat32, ←z3]
+    rw [show memExtSize N3.size 64 32 = N3.size from
+      memExtSize_of_le a3 (by omega)]
+    rw [←nat100, ←z4]
+    rw [←nat132, ←z5]
+    rw [show memExtSize N5.size 64 32 = N5.size from
+      memExtSize_of_le a5 (by omega)]
+    rw [←nat64, ←z6]
+    rw [show memExtSize N6.size 64 32 = N6.size from
+      memExtSize_of_le a6 (by omega)]
+    rw [show memExtSize N6.size (p.toNat + 96) 32 = N6.size from
+      memExtSize_of_le a6 (by omega)]
+    rw [←nat96, ←m7, ←z8]
+    rw [show memExtSize N8.size 64 32 = N8.size from
+      memExtSize_of_le a8 (by omega)]
+    rw [show memExtSize N8.size (p + 64).toNat 32 = N8.size from
+      memExtSize_of_le a8 (by omega)]
+  have payEq : N8 =
+      safeTransfer_dynamicPayloadMemory M p amount toWord := by
+    unfold safeTransfer_dynamicPayloadMemory
+    simp only [N8, N7, N6, N5, N4, N3, N2, N1]
+  have payFold : (safeTransfer_dynamicPayloadMemory M p amount toWord).size =
+      memExtSize (memExtSize (memExtSize (memExtSize
+        (memExtSize (memExtSize (memExtSize (memExtSize (memExtSize (memExtSize
+        (memExtSize (memExtSize (memExtSize (memExtSize n 64 32) 64 32)
+        p.toNat 32) (p.toNat + 32) 32) 64 32) (p.toNat + 100) 32)
+        (p.toNat + 132) 32) 64 32) (p.toNat + 64) 32) 64 32)
+        (p.toNat + 96) 32) (p.toNat + 96) 32) 64 32) (p.toNat + 64) 32 := by
+    rw [←payEq]; exact hfold14.symm
+  have payMod : (safeTransfer_dynamicPayloadMemory M p amount toWord).size % 32 = 0 := by
+    rw [←payEq]; exact a8
+  have payBound : p.toNat + 164 ≤
+      (safeTransfer_dynamicPayloadMemory M p amount toWord).size := by
+    rw [←payEq]
+    have g56 : N5.size ≤ N6.size := by
+      rw [z6]; exact memExtSize_ge _ _ _
+    have g67 : N6.size ≤ N7.size := by
+      rw [z7]; exact memExtSize_ge _ _ _
+    have g78 : N7.size ≤ N8.size := by
+      rw [z8]; exact memExtSize_ge _ _ _
+    omega
+  exact ⟨z1, z2, z3, z4, z5, z6, z7, z8, a1, a2, a3, a4, a5, a6, a7, a8,
+    c1, c2, c3, c4, c5, c6, c7, c8, payFold, payMod, payBound⟩
+
+/-- Copy staging sizes for the moving `_safeTransfer` 68-byte copy and merge:
+extending the payload fold to the full `safeTransferPreSize`. -/
+theorem safeTransfer_copySizes {M : Mem} {p amount toWord : B256} {n : Nat}
+    (mem : PtrMem p n M) (lower : 128 ≤ p.toNat)
+    (width : p.toNat + 260 < 2 ^ 256) :
+    (safeTransfer_dynamicCallMemory M p amount toWord).size =
+      safeTransferPreSize n p ∧
+    (safeTransfer_dynamicCallMemory M p amount toWord).size % 32 = 0 := by
+  obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
+    payFold, payMod, payBound⟩ :=
+    safeTransfer_payloadSizes (amount := amount) (toWord := toWord) mem lower width
+  obtain ⟨c32, c64, e100, e132, e164, nat96, nat164, nat228,
+    nat32, nat64, nat100, nat132, nat196⟩ := safeTransfer_stageOffset width
+  have o196 : (p + 164).toNat + 32 = p.toNat + 196 := by rw [nat164]
+  have o228 : (p + 164).toNat + 64 = p.toNat + 228 := by rw [nat164]
+  let P := safeTransfer_dynamicPayloadMemory M p amount toWord
+  let C1 := P.write (p + 164).toNat
+    (Bytes.toB256 (P.read (p + 96).toNat 32).1).toBytes
+  let C2 := C1.write ((p + 164).toNat + 32)
+    (Bytes.toB256 (C1.read ((p + 96).toNat + 32) 32).1).toBytes
+  let mask := B256.bexp 256 (32 - 4) - 1
+  let word := ((Bytes.toB256 (C2.read ((p + 96).toNat + 64) 32).1) &&& ~~~mask) |||
+    ((Bytes.toB256 (C2.read ((p + 164).toNat + 64) 32).1) &&& mask)
+  let W := (C2.read ((p + 164).toNat + 64) 32).2
+  let C3 := W.write ((p + 164).toNat + 64) word.toBytes
+  have nEq : C3 = safeTransfer_dynamicCallMemory M p amount toWord := by
+    unfold safeTransfer_dynamicCallMemory Blanc.Lift.copy68Memory
+    simp only [C3, W, word, mask, C2, C1, P]
+  have d1 : C1.size = memExtSize P.size (p + 164).toNat 32 :=
+    Mem.size_write_of_size rfl payMod (B256.length_toBytes _)
+  have b1 : C1.size % 32 = 0 := by
+    rw [d1]; exact memExtSize_mod_32 payMod
+  have e1c : (p + 164).toNat + 32 ≤ C1.size :=
+    (Mem.memWord_write_word _ _ _).2
+  have d2 : C2.size = memExtSize C1.size ((p + 164).toNat + 32) 32 :=
+    Mem.size_write_of_size rfl b1 (B256.length_toBytes _)
+  have b2 : C2.size % 32 = 0 := by
+    rw [d2]; exact memExtSize_mod_32 b1
+  have e2c : ((p + 164).toNat + 32) + 32 ≤ C2.size :=
+    (Mem.memWord_write_word _ _ _).2
+  have dW : W.size = memExtSize C2.size ((p + 164).toNat + 64) 32 := rfl
+  have bW : W.size % 32 = 0 := by
+    rw [dW]; exact memExtSize_mod_32 b2
+  have d3 : C3.size = memExtSize W.size ((p + 164).toNat + 64) 32 :=
+    Mem.size_write_of_size rfl bW (B256.length_toBytes _)
+  have b3 : C3.size % 32 = 0 := by
+    rw [d3]; exact memExtSize_mod_32 bW
+  have e3c : ((p + 164).toNat + 64) + 32 ≤ C3.size :=
+    (Mem.memWord_write_word _ _ _).2
+  have hPre : safeTransferPreSize n p =
+      memExtSize (memExtSize (memExtSize (memExtSize (memExtSize (memExtSize
+        (memExtSize (memExtSize (memExtSize (memExtSize (memExtSize (memExtSize
+        (memExtSize (memExtSize (memExtSize (memExtSize (memExtSize (memExtSize
+        (memExtSize (memExtSize (memExtSize (memExtSize n 64 32) 64 32)
+        p.toNat 32) (p.toNat + 32) 32) 64 32) (p.toNat + 100) 32)
+        (p.toNat + 132) 32) 64 32) (p.toNat + 64) 32) 64 32)
+        (p.toNat + 96) 32) (p.toNat + 96) 32) 64 32) (p.toNat + 64) 32)
+        (p.toNat + 96) 32) (p.toNat + 164) 32) (p.toNat + 128) 32)
+        (p.toNat + 196) 32) (p.toNat + 160) 32) (p.toNat + 228) 32)
+        (p.toNat + 228) 32) 64 32 := rfl
+  have hfold : memExtSize (memExtSize (memExtSize (memExtSize (memExtSize (memExtSize
+      (memExtSize (memExtSize (memExtSize (memExtSize (memExtSize (memExtSize
+      (memExtSize (memExtSize (memExtSize (memExtSize (memExtSize (memExtSize
+      (memExtSize (memExtSize (memExtSize (memExtSize n 64 32) 64 32)
+      p.toNat 32) (p.toNat + 32) 32) 64 32) (p.toNat + 100) 32)
+      (p.toNat + 132) 32) 64 32) (p.toNat + 64) 32) 64 32)
+      (p.toNat + 96) 32) (p.toNat + 96) 32) 64 32) (p.toNat + 64) 32)
+      (p.toNat + 96) 32) (p.toNat + 164) 32) (p.toNat + 128) 32)
+      (p.toNat + 196) 32) (p.toNat + 160) 32) (p.toNat + 228) 32)
+      (p.toNat + 228) 32) 64 32 = C3.size := by
+    rw [←payFold]
+    have fit15 : p.toNat + 96 + 32 ≤ P.size := by
+      have h1 : p.toNat + (96 + 32) ≤ p.toNat + 164 :=
+        Nat.add_le_add_left (by decide) _
+      have e : p.toNat + 96 + 32 = p.toNat + (96 + 32) := by ac_rfl
+      rw [e]
+      exact Nat.le_trans h1 payBound
+    rw [show memExtSize P.size (p.toNat + 96) 32 = P.size from
+      memExtSize_of_le payMod fit15]
+    rw [←nat164, ←d1]
+    have e1c' : p.toNat + 196 ≤ C1.size := by rw [←o196]; exact e1c
+    have fit17 : p.toNat + 128 + 32 ≤ C1.size := by
+      have h1 : p.toNat + (128 + 32) ≤ p.toNat + 196 :=
+        Nat.add_le_add_left (by decide) _
+      have e : p.toNat + 128 + 32 = p.toNat + (128 + 32) := by ac_rfl
+      rw [e]
+      exact Nat.le_trans h1 e1c'
+    rw [show memExtSize C1.size (p.toNat + 128) 32 = C1.size from
+      memExtSize_of_le b1 fit17]
+    rw [←o196, ←d2]
+    have e228' : ((p + 164).toNat + 32) + 32 = p.toNat + 228 := by rw [o196]
+    have e2c' : p.toNat + 228 ≤ C2.size := by rw [←e228']; exact e2c
+    have fit19 : p.toNat + 160 + 32 ≤ C2.size := by
+      have h1 : p.toNat + (160 + 32) ≤ p.toNat + 228 :=
+        Nat.add_le_add_left (by decide) _
+      have e : p.toNat + 160 + 32 = p.toNat + (160 + 32) := by ac_rfl
+      rw [e]
+      exact Nat.le_trans h1 e2c'
+    rw [show memExtSize C2.size (p.toNat + 160) 32 = C2.size from
+      memExtSize_of_le b2 fit19]
+    rw [←o228, ←dW]
+    rw [←d3]
+    have e260' : ((p + 164).toNat + 64) + 32 = p.toNat + 260 := by rw [o228]
+    have e3c' : p.toNat + 260 ≤ C3.size := by rw [←e260']; exact e3c
+    have fit22 : 64 + 32 ≤ C3.size :=
+      Nat.le_trans (Nat.le_trans (by decide) lower)
+        (Nat.le_trans (Nat.le_add_right (p.toNat) 260) e3c')
+    rw [show memExtSize C3.size 64 32 = C3.size from
+      memExtSize_of_le b3 fit22]
+  have hsize : (safeTransfer_dynamicCallMemory M p amount toWord).size =
+      safeTransferPreSize n p := by
+    rw [hPre, hfold, nEq]
+  have hmod : (safeTransfer_dynamicCallMemory M p amount toWord).size % 32 = 0 := by
+    rw [←nEq]; exact b3
+  exact ⟨hsize, hmod⟩
+
+/-- A write outside the zero slot preserves the zero word. Placed locally
+while proving the dynamic forward walk; hoist if a second consumer appears. -/
+private theorem safeTransfer_zeroWord_write {μ : Mem} {off : Nat} {v : B256}
+    (hwf : Mem.Wf μ) (miss : off + 32 ≤ 96 ∨ 128 ≤ off) :
+    memWord (μ.write off v.toBytes) 96 = memWord μ 96 := by
+  refine memWord_congr (fun j hj => ?_)
+  rw [Mem.Reads.write hwf (Mem.reads_data μ) off v.toBytes (96 + j),
+    Bytes.getD_writeAt]
+  split
+  · exfalso
+    rw [B256.length_toBytes] at *
+    omega
+  · exact (Mem.reads_data μ (96 + j)).symm
+
+/-- The moving helper's staged memory keeps the zero slot clear. -/
+theorem safeTransfer_dynamicCall_sentinel {M : Mem} {p amount toWord : B256} {n : Nat}
+    (mem : PtrMem p n M) (lower : 128 ≤ p.toNat)
+    (width : p.toNat + 260 < 2 ^ 256) (sentinel : memWord M 96 = 0) :
+    memWord (safeTransfer_dynamicCallMemory M p amount toWord) 96 = 0 := by
+  obtain ⟨c32, c64, e100, e132, e164, nat96, nat164, nat228,
+    nat32, nat64, nat100, nat132, nat196⟩ := safeTransfer_stageOffset width
+  let P := safeTransfer_dynamicPayloadMemory M p amount toWord
+  let C1 := P.write (p + 164).toNat
+    (Bytes.toB256 (P.read (p + 96).toNat 32).1).toBytes
+  let C2 := C1.write ((p + 164).toNat + 32)
+    (Bytes.toB256 (C1.read ((p + 96).toNat + 32) 32).1).toBytes
+  let mask := B256.bexp 256 (32 - 4) - 1
+  let word := ((Bytes.toB256 (C2.read ((p + 96).toNat + 64) 32).1) &&& ~~~mask) |||
+    ((Bytes.toB256 (C2.read ((p + 164).toNat + 64) 32).1) &&& mask)
+  let W := (C2.read ((p + 164).toNat + 64) 32).2
+  let C3 := W.write ((p + 164).toNat + 64) word.toBytes
+  have nEq : C3 = safeTransfer_dynamicCallMemory M p amount toWord := by
+    unfold safeTransfer_dynamicCallMemory Blanc.Lift.copy68Memory
+    simp only [C3, W, word, mask, C2, C1, P]
+  let A1 := M.write 64 (p + 64).toBytes
+  let A2 := A1.write p.toNat (25 : B256).toBytes
+  let A3 := A2.write (p + 32).toNat
+    (0x7472616e7366657228616464726573732c75696e743235362900000000000000 : B256).toBytes
+  let A4 := A3.write (p + 100).toNat
+    ((0xffffffffffffffffffffffffffffffffffffffff &&& toWord) : B256).toBytes
+  let A5 := A4.write (p + 132).toNat amount.toBytes
+  let A6 := A5.write (p + 64).toNat (68 : B256).toBytes
+  let A7 := A6.write 64 (p + 164).toBytes
+  have payEq : A7.write (p + 96).toNat
+      ((0xa9059cbb00000000000000000000000000000000000000000000000000000000 |||
+        ((0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256) &&&
+          Bytes.toB256 (A7.read (p + 96).toNat 32).1)) : B256).toBytes = P := by
+    simp only [P]
+    unfold safeTransfer_dynamicPayloadMemory
+    simp only [A7, A6, A5, A4, A3, A2, A1]
+  have wA1 : Mem.Wf A1 := Mem.Wf.write mem.wf _ _
+  have sA1 : memWord A1 96 = memWord M 96 :=
+    safeTransfer_zeroWord_write mem.wf (Or.inl (by decide))
+  have wA2 : Mem.Wf A2 := Mem.Wf.write wA1 _ _
+  have sA2 : memWord A2 96 = memWord A1 96 :=
+    safeTransfer_zeroWord_write wA1 (Or.inr lower)
+  have wA3 : Mem.Wf A3 := Mem.Wf.write wA2 _ _
+  have sA3 : memWord A3 96 = memWord A2 96 :=
+    safeTransfer_zeroWord_write wA2
+      (Or.inr (by rw [nat32]; exact Nat.le_trans lower (Nat.le_add_right _ _)))
+  have wA4 : Mem.Wf A4 := Mem.Wf.write wA3 _ _
+  have sA4 : memWord A4 96 = memWord A3 96 :=
+    safeTransfer_zeroWord_write wA3
+      (Or.inr (by rw [nat100]; exact Nat.le_trans lower (Nat.le_add_right _ _)))
+  have wA5 : Mem.Wf A5 := Mem.Wf.write wA4 _ _
+  have sA5 : memWord A5 96 = memWord A4 96 :=
+    safeTransfer_zeroWord_write wA4
+      (Or.inr (by rw [nat132]; exact Nat.le_trans lower (Nat.le_add_right _ _)))
+  have wA6 : Mem.Wf A6 := Mem.Wf.write wA5 _ _
+  have sA6 : memWord A6 96 = memWord A5 96 :=
+    safeTransfer_zeroWord_write wA5
+      (Or.inr (by rw [nat64]; exact Nat.le_trans lower (Nat.le_add_right _ _)))
+  have wA7 : Mem.Wf A7 := Mem.Wf.write wA6 _ _
+  have sA7 : memWord A7 96 = memWord A6 96 :=
+    safeTransfer_zeroWord_write wA6 (Or.inl (by decide))
+  have sA8 : memWord (A7.write (p + 96).toNat
+      ((0xa9059cbb00000000000000000000000000000000000000000000000000000000 |||
+        ((0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256) &&&
+          Bytes.toB256 (A7.read (p + 96).toNat 32).1)) : B256).toBytes) 96 =
+      memWord A7 96 :=
+    safeTransfer_zeroWord_write wA7
+      (Or.inr (by rw [nat96]; exact Nat.le_trans lower (Nat.le_add_right _ _)))
+  have sP : memWord P 96 = memWord A7 96 := by
+    rw [←payEq]; exact sA8
+  have wP : Mem.Wf P := by
+    rw [←payEq]
+    exact Mem.Wf.write wA7 _ _
+  have wC1 : Mem.Wf C1 := Mem.Wf.write wP _ _
+  have sC1 : memWord C1 96 = memWord P 96 :=
+    safeTransfer_zeroWord_write wP
+      (Or.inr (by rw [nat164]; exact Nat.le_trans lower (Nat.le_add_right _ _)))
+  have wC2 : Mem.Wf C2 := Mem.Wf.write wC1 _ _
+  have sC2 : memWord C2 96 = memWord C1 96 :=
+    safeTransfer_zeroWord_write wC1
+      (Or.inr (by
+        have h : (p + 164).toNat + 32 = p.toNat + 196 := by rw [nat164]
+        rw [h]; exact Nat.le_trans lower (Nat.le_add_right _ _)))
+  have rC2 := Mem.reads_data C2
+  have rW : Mem.Reads W C2.data.toList := rC2.extend _ _
+  have wW : Mem.Wf W := Mem.Wf.extend wC2 _ _
+  have sW : memWord W 96 = memWord C2 96 := by
+    show Bytes.toB256 (W.read 96 32).1 = Bytes.toB256 (C2.read 96 32).1
+    rw [Mem.Reads.read rW, Mem.Reads.read rC2]
+  have wC3 : Mem.Wf C3 := Mem.Wf.write wW _ _
+  have sC3 : memWord C3 96 = memWord W 96 :=
+    safeTransfer_zeroWord_write wW
+      (Or.inr (by
+        have h : (p + 164).toNat + 64 = p.toNat + 228 := by rw [nat164]
+        rw [h]; exact Nat.le_trans lower (Nat.le_add_right _ _)))
+  rw [←nEq, sC3, sW, sC2, sC1, sP, sA7, sA6, sA5, sA4, sA3, sA2, sA1]
+  exact sentinel
+
+/-- Pure pointer arithmetic for the moving `_safeTransfer` copy/merge/call
+windows: advancing by a full word, and the CALL input-size identity. -/
+private theorem safeTransfer_stageAdvance {p : B256}
+    (width : p.toNat + 260 < 2 ^ 256) :
+    32 + (p + 96) = p + 128 ∧ 32 + (p + 128) = p + 160 ∧
+      32 + (p + 164) = p + 196 ∧ 32 + (p + 196) = p + 228 ∧
+      (68 + (p + 164)) - (p + 164) = 68 := by
+  obtain ⟨c32, c64, e100, e132, e164, nat96, nat164, nat228,
+    nat32, nat64, nat100, nat132, nat196⟩ := safeTransfer_stageOffset width
+  have nat128 : (p + 128).toNat = p.toNat + 128 := by
+    have addNat (k : Nat) (hk : k ≤ 260) : (p + k.toB256).toNat = p.toNat + k := by
+      rw [B256.toNat_add, B256.toNat_toB256_of_lt (by omega),
+        Nat.lo_eq_of_lt (by omega)]
+    simpa only [show (128 : Nat).toB256 = (128 : B256) from rfl] using addNat 128 (by decide)
+  have nat160 : (p + 160).toNat = p.toNat + 160 := by
+    have addNat (k : Nat) (hk : k ≤ 260) : (p + k.toB256).toNat = p.toNat + k := by
+      rw [B256.toNat_add, B256.toNat_toB256_of_lt (by omega),
+        Nat.lo_eq_of_lt (by omega)]
+    simpa only [show (160 : Nat).toB256 = (160 : B256) from rfl] using addNat 160 (by decide)
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩
+  · apply B256.toNat_inj
+    rw [B256.toNat_add, nat96, nat128, show (32 : B256).toNat = 32 from rfl,
+      Nat.lo_eq_of_lt (by omega)]
+    omega
+  · apply B256.toNat_inj
+    rw [B256.toNat_add, nat128, nat160, show (32 : B256).toNat = 32 from rfl,
+      Nat.lo_eq_of_lt (by omega)]
+    omega
+  · apply B256.toNat_inj
+    rw [B256.toNat_add, nat164, nat196, show (32 : B256).toNat = 32 from rfl,
+      Nat.lo_eq_of_lt (by omega)]
+    omega
+  · apply B256.toNat_inj
+    rw [B256.toNat_add, nat196, nat228, show (32 : B256).toNat = 32 from rfl,
+      Nat.lo_eq_of_lt (by omega)]
+    omega
+  · apply B256.toNat_inj
+    rw [B256.toNat_sub, B256.toNat_add, nat164,
+      show (68 : B256).toNat = 68 from rfl,
+      @Nat.lo_eq_of_lt (68 + (p.toNat + 164)) 256 (by omega)]
+    rw [show 2 ^ 256 + (68 + (p.toNat + 164)) - (p.toNat + 164) = 2 ^ 256 + 68 by omega,
+      Nat.two_pow_add_lo, Nat.lo_eq_of_lt (by decide)]
+
+/-- A write outside an arbitrary word preserves that word. Generalizes
+`safeTransfer_zeroWord_write` (kept as is to avoid churning its call sites). -/
+private theorem memWord_write_miss {μ : Mem} {off o : Nat} {v : B256}
+    (hwf : Mem.Wf μ)
+    (hsize : ∀ j, j < 32 → o + j < μ.size)
+    (hmiss : ∀ j, j < 32 → o + j < off ∨ off + 32 ≤ o + j) :
+    memWord (μ.write off v.toBytes) o = memWord μ o := by
+  refine memWord_congr (fun j hj => ?_)
+  rw [Mem.Reads.write hwf (Mem.reads_data μ) off v.toBytes (o + j),
+    Bytes.getD_writeAt]
+  split
+  · exfalso
+    rw [B256.length_toBytes] at *
+    have hj' := hmiss j hj
+    have hs := hsize j hj
+    omega
+  · exact (Mem.reads_data μ (o + j)).symm
+
+/-- Pure payload image for the moving `_safeTransfer` initializer: the pointer
+words, free-pointer carrier reads, length word and B256 offset equations used
+by both the inverse and the exact specialization. -/
+theorem safeTransfer_dynamicPayload_facts {M : Mem} {p amount toWord : B256} {n : Nat}
+    (mem : PtrMem p n M) (lower : 128 ≤ p.toNat)
+    (width : p.toNat + 260 < 2 ^ 256) :
+    let N1 := M.write 64 (p + 64).toBytes
+    let N2 := N1.write p.toNat (25 : B256).toBytes
+    let N3 := N2.write (p + 32).toNat
+      (0x7472616e7366657228616464726573732c75696e743235362900000000000000 : B256).toBytes
+    let N4 := N3.write (p + 100).toNat
+      ((0xffffffffffffffffffffffffffffffffffffffff &&& toWord) : B256).toBytes
+    let N5 := N4.write (p + 132).toNat amount.toBytes
+    let N6 := N5.write (p + 64).toNat (68 : B256).toBytes
+    let N7 := N6.write 64 (p + 164).toBytes
+    let N8 := N7.write (p + 96).toNat
+      ((0xa9059cbb00000000000000000000000000000000000000000000000000000000 |||
+        ((0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256) &&&
+          Bytes.toB256 (N7.read (p + 96).toNat 32).1)) : B256).toBytes
+    PtrMem (p + 64) N3.size N3 ∧ PtrMem (p + 64) N5.size N5 ∧
+    PtrMem (p + 164) N7.size N7 ∧ PtrMem (p + 164) N8.size N8 ∧
+    p.toNat + 164 ≤ N7.size ∧ p.toNat + 164 ≤ N8.size ∧
+    Bytes.toB256 (M.read 64 32).1 = p ∧
+    Bytes.toB256 (N3.read 64 32).1 = p + 64 ∧
+    Bytes.toB256 (N5.read 64 32).1 = p + 64 ∧
+    Bytes.toB256 (N8.read 64 32).1 = p + 164 ∧
+    Bytes.toB256 (N8.read (p + 64).toNat 32).1 = 68 ∧
+    p + 64 + 36 = p + 100 ∧ p + 64 + 68 = p + 132 ∧
+    p + 64 + 100 = p + 164 ∧ p + 64 + 32 = p + 96 := by
+  obtain ⟨c32, c64, e100, e132, e164, nat96, nat164, nat228,
+    nat32, nat64, nat100, nat132, nat196⟩ := safeTransfer_stageOffset width
+  have addNat (k : Nat) (hk : k ≤ 164) : (p + k.toB256).toNat = p.toNat + k := by
+    rw [B256.toNat_add, B256.toNat_toB256_of_lt (by omega),
+      Nat.lo_eq_of_lt (by omega)]
+  let N1 := M.write 64 (p + 64).toBytes
+  let N2 := N1.write p.toNat (25 : B256).toBytes
+  let N3 := N2.write (p + 32).toNat
+    (0x7472616e7366657228616464726573732c75696e743235362900000000000000 : B256).toBytes
+  let N4 := N3.write (p + 100).toNat
+    ((0xffffffffffffffffffffffffffffffffffffffff &&& toWord) : B256).toBytes
+  let N5 := N4.write (p + 132).toNat amount.toBytes
+  let N6 := N5.write (p + 64).toNat (68 : B256).toBytes
+  let N7 := N6.write 64 (p + 164).toBytes
+  let N8 := N7.write (p + 96).toNat
+    ((0xa9059cbb00000000000000000000000000000000000000000000000000000000 |||
+      ((0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256) &&&
+        Bytes.toB256 (N7.read (p + 96).toNat 32).1)) : B256).toBytes
+  have h1 : PtrMem (p + 64) N1.size N1 := by
+    have hc : PtrMem (p + 64) n N1 := mem.set
+    rw [hc.size]; exact hc
+  have h2 : PtrMem (p + 64) N2.size N2 := by
+    have hc := h1.write p.toNat 25 (Or.inr (by omega))
+    rw [hc.size]; exact hc
+  have h3 : PtrMem (p + 64) N3.size N3 := by
+    have hc := h2.write (p + 32).toNat
+      (0x7472616e7366657228616464726573732c75696e743235362900000000000000 : B256)
+      (Or.inr (by rw [nat32]; omega))
+    rw [hc.size]; exact hc
+  have h4 : PtrMem (p + 64) N4.size N4 := by
+    have hc := h3.write (p + 100).toNat
+      ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord)
+      (Or.inr (by rw [nat100]; omega))
+    rw [hc.size]; exact hc
+  have h5 : PtrMem (p + 64) N5.size N5 := by
+    have hc := h4.write (p + 132).toNat amount (Or.inr (by rw [nat132]; omega))
+    rw [hc.size]; exact hc
+  have fit5 : p.toNat + 164 ≤ N5.size := by
+    calc
+      p.toNat + 164 = (p + 132).toNat + 32 := by rw [nat132]
+      _ ≤ N5.size := (Mem.memWord_write_word N4 (p + 132).toNat amount).2
+  have h6 : PtrMem (p + 64) N6.size N6 := by
+    have hc := h5.write (p + 64).toNat 68 (Or.inr (by rw [nat64]; omega))
+    rw [hc.size]; exact hc
+  have fit6 : p.toNat + 164 ≤ N6.size :=
+    le_trans fit5 (Mem.write_agree N5 (p + 64).toNat (68 : B256).toBytes).1
+  have h7 : PtrMem (p + 164) N7.size N7 := by
+    have hc : PtrMem (p + 164) N6.size N7 := h6.set
+    rw [hc.size]; exact hc
+  have fit7 : p.toNat + 164 ≤ N7.size :=
+    le_trans fit6 (Mem.write_agree N6 64 (p + 164).toBytes).1
+  have h8 : PtrMem (p + 164) N8.size N8 := by
+    have hc := h7.write (p + 96).toNat
+      ((0xa9059cbb00000000000000000000000000000000000000000000000000000000 : B256) |||
+        ((0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256) &&& Bytes.toB256 (N7.read (p + 96).toNat 32).1))
+      (Or.inr (by rw [nat96]; omega))
+    rw [hc.size]; exact hc
+  have fit8 : p.toNat + 164 ≤ N8.size :=
+    le_trans fit7 (Mem.write_agree N7 (p + 96).toNat
+      ((0xa9059cbb00000000000000000000000000000000000000000000000000000000 : B256) |||
+        ((0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256) &&& Bytes.toB256 (N7.read (p + 96).toNat 32).1)).toBytes).1
+  have length6 := (Mem.memWord_write_word N5 (p + 64).toNat 68).1
+  have length7 : memWord N7 (p + 64).toNat = 68 := by
+    rw [memWord_congr (μ := N6) (fun k hk =>
+      (Mem.write_agree N6 64 (p + 164).toBytes).2 ((p + 64).toNat + k)
+        (by rw [nat64]; omega) (by rw [nat64, B256.length_toBytes]; right; omega))]
+    exact length6
+  have length8 : memWord N8 (p + 64).toNat = 68 := by
+    rw [memWord_congr (μ := N7) (fun k hk =>
+      (Mem.write_agree N7 (p + 96).toNat
+        ((0xa9059cbb00000000000000000000000000000000000000000000000000000000 : B256) |||
+          ((0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256) &&& Bytes.toB256 (N7.read (p + 96).toNat 32).1)).toBytes).2 ((p + 64).toNat + k)
+        (by rw [nat64]; omega) (by rw [nat64, nat96]; left; omega))]
+    exact length7
+  have read0 : Bytes.toB256 (M.read 64 32).1 = p := mem.word
+  have read3 : Bytes.toB256 (N3.read 64 32).1 = p + 64 := h3.word
+  have read5 : Bytes.toB256 (N5.read 64 32).1 = p + 64 := h5.word
+  have read8 : Bytes.toB256 (N8.read 64 32).1 = p + 164 := h8.word
+  have length8r : Bytes.toB256 (N8.read (p + 64).toNat 32).1 = 68 := length8
+  have combine36 : p + 64 + 36 = p + 100 := by
+    apply B256.toNat_inj
+    rw [B256.toNat_add, nat64, nat100, show (36 : B256).toNat = 36 from rfl,
+      Nat.lo_eq_of_lt (by omega)]
+  have combine68 : p + 64 + 68 = p + 132 := by
+    apply B256.toNat_inj
+    rw [B256.toNat_add, nat64, nat132, show (68 : B256).toNat = 68 from rfl,
+      Nat.lo_eq_of_lt (by omega)]
+  have combine100 : p + 64 + 100 = p + 164 := by
+    have nat164' : (p + 164).toNat = p.toNat + 164 := nat164
+    apply B256.toNat_inj
+    rw [B256.toNat_add, nat64, nat164', show (100 : B256).toNat = 100 from rfl,
+      Nat.lo_eq_of_lt (by omega)]
+  have combine32 : p + 64 + 32 = p + 96 := by
+    apply B256.toNat_inj
+    rw [B256.toNat_add, nat64, nat96, show (32 : B256).toNat = 32 from rfl,
+      Nat.lo_eq_of_lt (by omega)]
+  exact ⟨h3, h5, h7, h8, fit7, fit8, read0, read3, read5, read8, length8r,
+    combine36, combine68, combine100, combine32⟩
+
+/-- Exact moving initializer: specializes `safeTransfer_initialize_exact` to the
+free pointer `p`, with the fourteen memory charges over the dynamic staging
+memories. -/
+private theorem safeTransfer_initialize_dynamic_exact {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {G : Nat} {o : Outcome}
+    {p amount toWord tokenWord rho : B256} {n : Nat}
+    (mem : PtrMem p n M) (lower : 128 ≤ p.toNat)
+    (width : p.toNat + 260 < 2 ^ 256) (room : R.length ≤ 1008) :
+    let N1 := M.write 64 (p + 64).toBytes
+    let N2 := N1.write p.toNat (25 : B256).toBytes
+    let N3 := N2.write (p + 32).toNat
+      (0x7472616e7366657228616464726573732c75696e743235362900000000000000 : B256).toBytes
+    let N4 := N3.write (p + 100).toNat
+      ((0xffffffffffffffffffffffffffffffffffffffff &&& toWord) : B256).toBytes
+    let N5 := N4.write (p + 132).toNat amount.toBytes
+    let N6 := N5.write (p + 64).toNat (68 : B256).toBytes
+    let N7 := N6.write 64 (p + 164).toBytes
+    let N8 := N7.write (p + 96).toNat
+      ((0xa9059cbb00000000000000000000000000000000000000000000000000000000 |||
+        ((0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256) &&&
+          Bytes.toB256 (N7.read (p + 96).toNat 32).1)) : B256).toBytes
+    let d1 := gVerylow + (St b [] M 0).extCost [⟨64, 32⟩]
+    let d2 := gVerylow + (St b [] M 0).extCost [⟨64, 32⟩]
+    let d3 := gVerylow + (St b [] N1 0).extCost [⟨p.toNat, 32⟩]
+    let d4 := gVerylow + (St b [] N2 0).extCost [⟨(p + 32).toNat, 32⟩]
+    let d5 := gVerylow + (St b [] N3 0).extCost [⟨64, 32⟩]
+    let d6 := gVerylow + (St b [] N3 0).extCost [⟨(p + 100).toNat, 32⟩]
+    let d7 := gVerylow + (St b [] N4 0).extCost [⟨(p + 132).toNat, 32⟩]
+    let d8 := gVerylow + (St b [] N5 0).extCost [⟨64, 32⟩]
+    let d9 := gVerylow + (St b [] N5 0).extCost [⟨(p + 64).toNat, 32⟩]
+    let d10 := gVerylow + (St b [] N6 0).extCost [⟨64, 32⟩]
+    let d11 := gVerylow + (St b [] N7 0).extCost [⟨(p + 96).toNat, 32⟩]
+    let d12 := gVerylow + (St b [] N7 0).extCost [⟨(p + 96).toNat, 32⟩]
+    let d13 := gVerylow + (St b [] N8 0).extCost [⟨64, 32⟩]
+    let d14 := gVerylow + (St b [] N8 0).extCost [⟨(p + 64).toNat, 32⟩]
+    SFunc.RunExact cert.prog sevm
+      (St b ((p + 96) :: (p + 164) :: 68 :: 68 :: (p + 96) :: (p + 164) ::
+        (p + 164) :: (p + 64) :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) N8 G) t_20a4_c57 o →
+    SFunc.RunExact cert.prog sevm
+      (St b (amount :: toWord :: tokenWord :: rho :: R) M
+        (G + 199 + d1 + d2 + d3 + d4 + d5 + d6 + d7 + d8 + d9 + d10 + d11 + d12 + d13 + d14))
+      t_1fdb_c57 o := by
+  dsimp only
+  intro continuation
+  have raw := safeTransfer_initialize_exact (sevm := sevm) (b := b) (M := M)
+    (R := R) (G := G) (o := o) (amount := amount) (toWord := toWord)
+    (tokenWord := tokenWord) (rho := rho) room
+  dsimp only at raw
+  simp only [show (64 : B256).toNat = 64 from rfl] at raw
+  obtain ⟨h3, h5, h7, h8, fit7, fit8, read0, read3, read5, read8, length8r,
+    combine36, combine68, combine100, combine32⟩ :=
+    safeTransfer_dynamicPayload_facts (amount := amount) (toWord := toWord) mem lower width
+  obtain ⟨_, _, _, _, _, nat96, _, _,
+    _, nat64, _, _, _⟩ :=
+    safeTransfer_stageOffset width
+  rw [read0, mem.read_self mem.ge,
+    show (64 : B256) + p = p + 64 from B256.add_comm,
+    show (32 : B256) + p = p + 32 from B256.add_comm] at raw
+  rw [read3, h3.read_self h3.ge, combine36, combine68] at raw
+  rw [read5, h5.read_self h5.ge,
+    show (68 : B256) + ((p + 64) - (p + 64)) = 68 from by rw [B256.sub_self, B256.add_zero],
+    combine100, combine32] at raw
+  rw [h7.read_self (by rw [nat96]; omega)] at raw
+  rw [read8, h8.read_self h8.ge, length8r,
+    h8.read_self (by
+      have hle : (p + 64).toNat + 32 ≤ p.toNat + 164 := by rw [nat64]; omega
+      exact Nat.le_trans hle fit8)] at raw
+  exact raw continuation
+
+/-- The payload read at `p + 96` covers itself: standalone rewrite for the
+copy specialization. -/
+private theorem safeTransfer_copyRead96 {M : Mem} {p amount toWord : B256} {n : Nat}
+    (mem : PtrMem p n M) (lower : 128 ≤ p.toNat)
+    (width : p.toNat + 260 < 2 ^ 256) :
+    ((safeTransfer_dynamicPayloadMemory M p amount toWord).read
+      (p + 96).toNat 32).2 = safeTransfer_dynamicPayloadMemory M p amount toWord := by
+  obtain ⟨_, _, _, h8, _, fit8, _, _, _, _, _, _, _, _, _⟩ :=
+    safeTransfer_dynamicPayload_facts (amount := amount) (toWord := toWord) mem lower width
+  obtain ⟨_, _, _, _, _, nat96, _, _,
+    _, _, _, _, _⟩ := safeTransfer_stageOffset width
+  exact h8.read_self (by
+    have hle : (p + 96).toNat + 32 ≤ p.toNat + 164 := by rw [nat96]; omega
+    exact Nat.le_trans hle fit8)
+
+/-- Nat offset bridges for the copy window, standalone rewrites. -/
+private theorem safeTransfer_copyOffsets {p : B256}
+    (width : p.toNat + 260 < 2 ^ 256) :
+    (p + 128).toNat = (p + 96).toNat + 32 ∧
+    (p + 196).toNat = (p + 164).toNat + 32 := by
+  obtain ⟨_, _, _, _, _, nat96, nat164, _,
+    _, _, _, _, nat196⟩ := safeTransfer_stageOffset width
+  have nat128 : (p + 128).toNat = p.toNat + 128 := by
+    have addNat128 (k : Nat) (hk : k ≤ 260) : (p + k.toB256).toNat = p.toNat + k := by
+      rw [B256.toNat_add, B256.toNat_toB256_of_lt (by omega),
+        Nat.lo_eq_of_lt (by omega)]
+    simpa only [show (128 : Nat).toB256 = (128 : B256) from rfl] using addNat128 128 (by decide)
+  exact ⟨by rw [nat128, nat96], by rw [nat196, nat164]⟩
+
+/-- Pointer carrier for the first copy word: standalone `PtrMem` for the
+`C1` staging memory (split out so each command fits its heartbeat budget). -/
+private theorem safeTransfer_copyPtr128 {M : Mem} {p amount toWord : B256} {n : Nat}
+    (mem : PtrMem p n M) (lower : 128 ≤ p.toNat)
+    (width : p.toNat + 260 < 2 ^ 256) :
+    PtrMem (p + 164)
+      (((safeTransfer_dynamicPayloadMemory M p amount toWord).write (p + 164).toNat
+        (Bytes.toB256 ((safeTransfer_dynamicPayloadMemory M p amount toWord).read
+          (p + 96).toNat 32).1).toBytes).size)
+      (((safeTransfer_dynamicPayloadMemory M p amount toWord).write (p + 164).toNat
+        (Bytes.toB256 ((safeTransfer_dynamicPayloadMemory M p amount toWord).read
+          (p + 96).toNat 32).1).toBytes)) := by
+  obtain ⟨_, _, _, h8, _, _, _, _, _, _, _, _, _, _, _⟩ :=
+    safeTransfer_dynamicPayload_facts (amount := amount) (toWord := toWord) mem lower width
+  obtain ⟨_, _, _, _, _, _, nat164, _, _, _, _, _, _⟩ :=
+    safeTransfer_stageOffset width
+  have hP : PtrMem (p + 164) (safeTransfer_dynamicPayloadMemory M p amount toWord).size
+      (safeTransfer_dynamicPayloadMemory M p amount toWord) := h8
+  have hc1raw := hP.write (p + 164).toNat
+    (Bytes.toB256 ((safeTransfer_dynamicPayloadMemory M p amount toWord).read
+      (p + 96).toNat 32).1) (Or.inr (by omega))
+  rw [hc1raw.size]; exact hc1raw
+
+/-- Size fit for the second copy read: the `(p + 128)` window lies inside `C1`. -/
+private theorem safeTransfer_copyFit128 {M : Mem} {p amount toWord : B256} {n : Nat}
+    (mem : PtrMem p n M) (lower : 128 ≤ p.toNat)
+    (width : p.toNat + 260 < 2 ^ 256) :
+    (p + 128).toNat + 32 ≤
+      (((safeTransfer_dynamicPayloadMemory M p amount toWord).write (p + 164).toNat
+        (Bytes.toB256 ((safeTransfer_dynamicPayloadMemory M p amount toWord).read
+          (p + 96).toNat 32).1).toBytes).size) := by
+  obtain ⟨_, _, _, h8, _, fit8, _, _, _, _, _, _, _, _, _⟩ :=
+    safeTransfer_dynamicPayload_facts (amount := amount) (toWord := toWord) mem lower width
+  obtain ⟨_, _, _, _, _, nat96, _, _,
+    _, _, _, _, _⟩ := safeTransfer_stageOffset width
+  obtain ⟨o128, _⟩ := safeTransfer_copyOffsets width
+  have hP : PtrMem (p + 164) (safeTransfer_dynamicPayloadMemory M p amount toWord).size
+      (safeTransfer_dynamicPayloadMemory M p amount toWord) := h8
+  have hle : (p + 128).toNat + 32 ≤ p.toNat + 164 := by
+    rw [o128, nat96]; omega
+  have hle2 : p.toNat + 164 ≤
+      (safeTransfer_dynamicPayloadMemory M p amount toWord).size := fit8
+  have s : (((safeTransfer_dynamicPayloadMemory M p amount toWord).write (p + 164).toNat
+        (Bytes.toB256 ((safeTransfer_dynamicPayloadMemory M p amount toWord).read
+          (p + 96).toNat 32).1).toBytes).size) =
+      memExtSize (safeTransfer_dynamicPayloadMemory M p amount toWord).size
+        (p + 164).toNat 32 :=
+    Mem.size_write_of_size rfl hP.n32 (B256.length_toBytes _)
+  have ge1 : (safeTransfer_dynamicPayloadMemory M p amount toWord).size ≤
+      (((safeTransfer_dynamicPayloadMemory M p amount toWord).write (p + 164).toNat
+        (Bytes.toB256 ((safeTransfer_dynamicPayloadMemory M p amount toWord).read
+          (p + 96).toNat 32).1).toBytes).size) := by
+    rw [s]; exact memExtSize_ge _ _ _
+  exact Nat.le_trans (Nat.le_trans hle hle2) ge1
+
+/-- The second copy read covers itself: the rewrite the `convert` residue
+exposed (`(C1.read (p + 128).toNat 32).2 = C1`). -/
+private theorem safeTransfer_copyRead128 {M : Mem} {p amount toWord : B256} {n : Nat}
+    (mem : PtrMem p n M) (lower : 128 ≤ p.toNat)
+    (width : p.toNat + 260 < 2 ^ 256) :
+    (((safeTransfer_dynamicPayloadMemory M p amount toWord).write (p + 164).toNat
+      (Bytes.toB256 ((safeTransfer_dynamicPayloadMemory M p amount toWord).read
+        (p + 96).toNat 32).1).toBytes).read (p + 128).toNat 32).2 =
+    ((safeTransfer_dynamicPayloadMemory M p amount toWord).write (p + 164).toNat
+      (Bytes.toB256 ((safeTransfer_dynamicPayloadMemory M p amount toWord).read
+        (p + 96).toNat 32).1).toBytes) := by
+  have hC1 := safeTransfer_copyPtr128 (amount := amount) (toWord := toWord) mem lower width
+  have fit := safeTransfer_copyFit128 (amount := amount) (toWord := toWord) mem lower width
+  exact hC1.read_self fit
+
+/-- Exact moving 68-byte copy: specializes `safeTransfer_copy68_exact` to the
+staging window `p + 96 → p + 164`, with the four memory charges over the copy
+memories. -/
+private theorem safeTransfer_copy_dynamic_exact {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {G : Nat} {o : Outcome}
+    {p amount toWord tokenWord rho : B256} {n : Nat}
+    (mem : PtrMem p n M) (lower : 128 ≤ p.toNat)
+    (width : p.toNat + 260 < 2 ^ 256) (room : R.length ≤ 1004) :
+    let P := safeTransfer_dynamicPayloadMemory M p amount toWord
+    let C1 := P.write (p + 164).toNat
+      (Bytes.toB256 (P.read (p + 96).toNat 32).1).toBytes
+    let C2 := C1.write (p + 196).toNat
+      (Bytes.toB256 (C1.read (p + 128).toNat 32).1).toBytes
+    let eR0 := gVerylow + (St b [] P 0).extCost [⟨(p + 96).toNat, 32⟩]
+    let eS0 := gVerylow + (St b [] P 0).extCost [⟨(p + 164).toNat, 32⟩]
+    let eR1 := gVerylow + (St b [] C1 0).extCost [⟨(p + 128).toNat, 32⟩]
+    let eS1 := gVerylow + (St b [] C1 0).extCost [⟨(p + 196).toNat, 32⟩]
+    SFunc.RunExact cert.prog sevm
+      (St b ((p + 160) :: (p + 228) :: 4 :: 68 :: (p + 96) :: (p + 164) ::
+        (p + 164) :: (p + 64) :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) C2 G) t_20e1_c57 o →
+    SFunc.RunExact cert.prog sevm
+      (St b ((p + 96) :: (p + 164) :: 68 :: 68 :: (p + 96) :: (p + 164) ::
+        (p + 164) :: (p + 64) :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) P
+        (G + 169 + eR0 + eS0 + eR1 + eS1)) t_20a4_c57 o := by
+  dsimp only
+  intro continuation
+  obtain ⟨adv96, adv128, adv164, adv196, _⟩ := safeTransfer_stageAdvance width
+  have r96 := safeTransfer_copyRead96 (amount := amount) (toWord := toWord) mem lower width
+  have r128 := safeTransfer_copyRead128 (amount := amount) (toWord := toWord) mem lower width
+  have raw := safeTransfer_copy68_exact (sevm := sevm) (b := b)
+    (R := 68 :: (p + 96) :: (p + 164) :: (p + 164) :: (p + 64) ::
+      (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+      96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
+    (M := safeTransfer_dynamicPayloadMemory M p amount toWord)
+    (G := G) (o := o) (src := p + 96) (dst := p + 164)
+    (by simp only [List.length_cons]; omega)
+  dsimp only at raw
+  rw [r96, adv96, adv128, adv164, adv196, r128] at raw
+  exact raw continuation
+
+
+/-! ## The moving `_safeTransfer`: merge, CALL operands, reply and return -/
+
+/-- A 32-byte access charge over a memory of known size, as a cost difference. -/
+private theorem safeTransfer_wordCharge {b : Devm} {X : Mem} {s i : Nat} (hs : X.size = s) :
+    gVerylow + (St b [] X 0).extCost [⟨i, 32⟩] =
+      3 + (calculateMemoryGasCost (memExtSize s i 32) - calculateMemoryGasCost s) := by
+  rw [St.extCost_eq hs]
+  rfl
+
+/-- Exact moving merge and CALL preparation (`safeTransfer_partialCall_exact` at the staging
+window `p + 160 → p + 228`), over any staged memory `C` carrying the free pointer `p + 164`: the
+177 literal gas plus the growth of the destination read. -/
+private theorem safeTransfer_partial_dynamic_exact {sevm : Sevm} {b : Devm}
+    {R : List B256} {C : Mem} {G s : Nat} {o : Outcome} {p token : B256}
+    (hC : PtrMem (p + 164) s C) (fit : (p + 160).toNat + 32 ≤ s)
+    (width : p.toNat + 260 < 2 ^ 256) (room : R.length ≤ 1010) :
+    let mask := B256.bexp 256 (32 - 4) - 1
+    let D := (C.read (p + 228).toNat 32).2
+    let C3 := D.write (p + 228).toNat
+      (((Bytes.toB256 (C.read (p + 160).toNat 32).1) &&& ~~~mask) |||
+        ((Bytes.toB256 (C.read (p + 228).toNat 32).1) &&& mask)).toBytes
+    SFunc.RunExact cert.prog sevm
+      (St b (G.toB256 :: token :: 0 :: (p + 164) :: 68 :: (p + 164) :: 0 :: (68 + (p + 164)) ::
+        token :: R) C3 G) (.next (.exec .call) safeTransfer_afterCall) o →
+    SFunc.RunExact cert.prog sevm
+      (St b ((p + 160) :: (p + 228) :: 4 :: 68 :: (p + 96) :: (p + 164) :: (p + 164) ::
+        (p + 64) :: token :: R) C
+        (G + 177 + (calculateMemoryGasCost (memExtSize s (p + 228).toNat 32) -
+          calculateMemoryGasCost s))) t_20e1_c57 o := by
+  dsimp only
+  intro continuation
+  obtain ⟨_, _, _, _, _, _, nat164, nat228, _, _, _, _, _⟩ := safeTransfer_stageOffset width
+  obtain ⟨_, _, _, _, inputSize⟩ := safeTransfer_stageAdvance width
+  have rSrc : (C.read (p + 160).toNat 32).2 = C := hC.read_self fit
+  let D := (C.read (p + 228).toNat 32).2
+  have hD : PtrMem (p + 164) (memExtSize s (p + 228).toNat 32) D := by
+    refine ⟨?_, memExtSize_mod_32 hC.n32, hC.wf.extend _ 32, ?_⟩
+    · change memExtSize C.size (p + 228).toNat 32 = _
+      rw [hC.size]
+    · exact MemMatches.of_data_eq (μ := C) (μ' := D) rfl (memExtSize_ge C.size _ 32) hC.map
+  have coverD : (p + 228).toNat + 32 ≤ memExtSize s (p + 228).toNat 32 :=
+    memExtSize_access_le _ _ _ (by decide)
+  let mask := B256.bexp 256 (32 - 4) - 1
+  let word := ((Bytes.toB256 (C.read (p + 160).toNat 32).1) &&& ~~~mask) |||
+    ((Bytes.toB256 (C.read (p + 228).toNat 32).1) &&& mask)
+  have hC3 := hD.write (p + 228).toNat word (Or.inr (by omega))
+  rw [memExtSize_of_le hD.n32 coverD] at hC3
+  have raw := safeTransfer_partialCall_exact (sevm := sevm) (b := b) (R := R) (M := C) (G := G)
+    (o := o) (src := p + 160) (dst := p + 228) (a := 68) (x := p + 96) (y := p + 164)
+    (z := p + 164) (w := p + 64) (token := token) room
+  dsimp only at raw
+  rw [rSrc] at raw
+  change SFunc.RunExact cert.prog sevm
+    (St b (G.toB256 :: token :: 0 :: Bytes.toB256 ((D.write (p + 228).toNat word.toBytes).read 64 32).1 ::
+      ((68 + (p + 164)) - Bytes.toB256 ((D.write (p + 228).toNat word.toBytes).read 64 32).1) ::
+      Bytes.toB256 ((D.write (p + 228).toNat word.toBytes).read 64 32).1 :: 0 ::
+      (68 + (p + 164)) :: token :: R)
+      ((D.write (p + 228).toNat word.toBytes).read 64 32).2 G)
+      (.next (.exec .call) safeTransfer_afterCall) o →
+    SFunc.RunExact cert.prog sevm
+      (St b ((p + 160) :: (p + 228) :: 4 :: 68 :: (p + 96) :: (p + 164) :: (p + 164) ::
+        (p + 64) :: token :: R) C
+        (G + 165 + (gVerylow + (St b [] C 0).extCost [⟨(p + 160).toNat, 32⟩]) +
+          (gVerylow + (St b [] C 0).extCost [⟨(p + 228).toNat, 32⟩]) +
+          (gVerylow + (St b [] D 0).extCost [⟨(p + 228).toNat, 32⟩]) +
+          (gVerylow + (St b [] (D.write (p + 228).toNat word.toBytes) 0).extCost [⟨64, 32⟩])))
+      t_20e1_c57 o at raw
+  have fit64 : 64 + 32 ≤ memExtSize s (p + 228).toNat 32 := by
+    have := hC3.ge
+    omega
+  have w64 : Bytes.toB256 ((D.write (p + 228).toNat word.toBytes).read 64 32).1 = p + 164 :=
+    hC3.word
+  rw [w64, hC3.read_self fit64, inputSize,
+    safeTransfer_wordCharge hC.size, memExtSize_of_le hC.n32 fit, Nat.sub_self,
+    safeTransfer_wordCharge hC.size,
+    safeTransfer_wordCharge hD.size, memExtSize_of_le hD.n32 coverD, Nat.sub_self,
+    safeTransfer_wordCharge hC3.size, memExtSize_of_le hC3.n32 fit64, Nat.sub_self] at raw
+  have gas : G + 165 + (3 + 0) +
+      (3 + (calculateMemoryGasCost (memExtSize s (p + 228).toNat 32) - calculateMemoryGasCost s)) +
+      (3 + 0) + (3 + 0) =
+      G + 177 + (calculateMemoryGasCost (memExtSize s (p + 228).toNat 32) -
+        calculateMemoryGasCost s) := by omega
+  rw [gas] at raw
+  exact raw continuation
+
+/-- Forward moving reply handling (the dual of `safeTransfer_firstAfterCall_exact` at an arbitrary
+pointer `q`): the actual returndata, accepted as an optional `bool`, is allocated at `q` as a bytes
+array, decoded and the helper returns. -/
+private theorem safeTransfer_afterCall_dynamic_exact {sevm : Sevm} {d : Devm}
+    {R : List B256} {V : Mem} {G n : Nat} {q endWord token amount toWord tokenWord rho : B256}
+    (mem : PtrMem q n V) (lower : 128 ≤ q.toNat) (cover : q.toNat + 32 ≤ n)
+    (qwidth : q.toNat + 64 < 2 ^ 256) (sentinel : memWord V 96 = 0)
+    (short : d.returnData.length < 2 ^ 256)
+    (accepted : d.returnData = [] ∨ (32 ≤ d.returnData.length ∧
+      Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0))
+    (room : R.length ≤ 1011) :
+    let len := d.returnData.length.toB256
+    let N1 := V.write 64 (q + ((len + 63) &&& ~~~31)).toBytes
+    let N2 := N1.write q.toNat len.toBytes
+    let copyCharge := gVerylow + gReturnDataCopy * ceilDiv d.returnData.length 32 +
+      (St d [] N2 0).extCost [⟨(q + 32).toNat, d.returnData.length⟩]
+    SFunc.RunExact cert.prog sevm
+      (St d (1 :: endWord :: token :: 96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
+        V (G + if d.returnData = [] then 138 else 253 + copyCharge))
+      safeTransfer_afterCall
+      (.returned (St d R (if d.returnData = [] then V else
+        Blanc.Lift.bytesArrayMemory V q d.returnData) G)) := by
+  dsimp only
+  have q32 : (q + 32).toNat = q.toNat + 32 := by
+    rw [B256.toNat_add, show (32 : B256).toNat = 32 from rfl, Nat.lo_eq_of_lt (by omega)]
+  have q32' : ((32 : B256) + q).toNat = q.toNat + 32 := by rw [B256.add_comm]; exact q32
+  let len := d.returnData.length.toB256
+  have freeRead : Bytes.toB256 (V.read 64 32).1 = q := mem.word
+  have freeMemory : (V.read 64 32).2 = V := mem.read_self (by have := mem.ge; omega)
+  have cRead : gVerylow + (St d [] V 0).extCost [⟨64, 32⟩] = 3 := by
+    rw [St.extCost_eq mem.size, memExtSize_of_le mem.n32 (by have := mem.ge; omega), Nat.sub_self]
+    rfl
+  by_cases empty : d.returnData = []
+  · have zeroLen : len = 0 := by dsimp only [len]; rw [empty]; rfl
+    have decoded := safeTransfer_success_exact (R := R) (sevm := sevm) (b := d) (M := V)
+      (G := G) (x := len) (ptr := 96) (success := 1) (y := 96) (z := 0)
+      (value := amount) (toWord := toWord) (tokenWord := tokenWord) (ρ := rho)
+      (by decide) (Or.inl sentinel) (by omega)
+    have read96 : (V.read (96 : B256).toNat 32).2 = V := mem.read_self (by
+      change 96 + 32 ≤ n; omega)
+    have c96 : gVerylow + (St d [] V 0).extCost [⟨(96 : B256).toNat, 32⟩] = 3 := by
+      rw [St.extCost_eq mem.size, memExtSize_of_le mem.n32 (by change 96 + 32 ≤ n; omega),
+        Nat.sub_self]
+      rfl
+    change Bytes.toB256 (V.read (96 : B256).toNat 32).1 = 0 at sentinel
+    dsimp only at decoded
+    simp only [read96, sentinel, ite_true, c96] at decoded
+    have post := safeTransfer_afterCall_exact (R := R) (sevm := sevm) (b := d) (M := V)
+      (G := G + 95) (o := .returned (St d R V G)) (success := 1) (endWord := endWord)
+      (token := token) (y := 96) (z := 0) (value := amount) (toWord := toWord)
+      (tokenWord := tokenWord) (ρ := rho) room
+    dsimp only at post
+    rw [show d.returnData.length.toB256 = 0 from zeroLen, ite_eq_left rfl] at post
+    simp only [ite_true] at post
+    rw [zeroLen, show G + 24 + 3 + 33 + 35 = G + 95 by omega] at decoded
+    have result := post decoded
+    simpa only [ite_eq_left empty, show G + 95 + 34 + 9 = G + 138 by omega] using result
+  · obtain ⟨enough, head⟩ := accepted.resolve_left empty
+    have nonzero : len ≠ 0 := by
+      intro eq
+      have lengthWord := B256.toNat_toB256_of_lt short
+      change len.toNat = d.returnData.length at lengthWord
+      rw [eq] at lengthWord
+      change 0 = d.returnData.length at lengthWord
+      omega
+    let A := Blanc.Lift.bytesArrayMemory V q d.returnData
+    have images := Blanc.Lift.bytesArrayMemory_image (bytes := d.returnData) mem (by omega) cover
+      (by omega)
+    have carrier : PtrMem (q + ((len + 63) &&& ~~~31))
+        (memExtSize n (q + 32).toNat d.returnData.length) A := images.1
+    have big : q.toNat + 64 ≤ memExtSize n (q + 32).toNat d.returnData.length := by
+      have h := memExtSize_access_le n (q + 32).toNat d.returnData.length (by omega)
+      omega
+    have readQ : (A.read q.toNat 32).2 = A := carrier.read_self (by omega)
+    have readQ32 : (A.read ((32 : B256) + q).toNat 32).2 = A :=
+      carrier.read_self (by rw [q32']; omega)
+    have lengthWord : Bytes.toB256 (A.read q.toNat 32).1 = len := images.2.1
+    have headWord : Bytes.toB256 (A.read ((32 : B256) + q).toNat 32).1 ≠ 0 := by
+      rw [show ((32 : B256) + q) = q + 32 from B256.add_comm, images.2.2 enough]
+      exact head
+    have decoderAccepted : Bytes.toB256 (A.read q.toNat 32).1 = 0 ∨
+        (32 ≤ (Bytes.toB256 ((A.read q.toNat 32).2.read q.toNat 32).1).toNat ∧
+          Bytes.toB256 (((A.read q.toNat 32).2.read q.toNat 32).2.read
+            ((32 : B256) + q).toNat 32).1 ≠ 0) := by
+      rw [readQ, readQ, lengthWord, B256.toNat_toB256_of_lt short]
+      exact Or.inr ⟨enough, headWord⟩
+    have cQ : gVerylow + (St d [] A 0).extCost [⟨q.toNat, 32⟩] = 3 := by
+      rw [St.extCost_eq carrier.size, memExtSize_of_le carrier.n32 (by omega), Nat.sub_self]
+      rfl
+    have cQ32 : gVerylow + (St d [] A 0).extCost [⟨((32 : B256) + q).toNat, 32⟩] = 3 := by
+      rw [St.extCost_eq carrier.size, memExtSize_of_le carrier.n32 (by rw [q32']; omega),
+        Nat.sub_self]
+      rfl
+    have decoded := safeTransfer_success_exact (R := R) (sevm := sevm) (b := d) (M := A)
+      (G := G) (x := len) (ptr := q) (success := 1) (y := 96) (z := 0)
+      (value := amount) (toWord := toWord) (tokenWord := tokenWord) (ρ := rho)
+      (by decide) decoderAccepted (by omega)
+    dsimp only at decoded
+    simp only [readQ, lengthWord, ite_eq_right nonzero, readQ32, cQ, cQ32] at decoded
+    have N1mem : PtrMem (q + ((len + 63) &&& ~~~31)) n
+        (V.write 64 (q + ((len + 63) &&& ~~~31)).toBytes) := mem.set
+    have post := safeTransfer_afterCall_exact (R := R) (sevm := sevm) (b := d) (M := V)
+      (G := G + 146) (o := .returned (St d R A G)) (success := 1) (endWord := endWord)
+      (token := token) (y := 96) (z := 0) (value := amount) (toWord := toWord)
+      (tokenWord := tokenWord) (ρ := rho) room
+    dsimp only at post
+    have cLen : gVerylow + (St d [] (V.write 64 (q + ((len + 63) &&& ~~~31)).toBytes) 0).extCost
+        [⟨q.toNat, 32⟩] = 3 := by
+      rw [St.extCost_eq N1mem.size, memExtSize_of_le N1mem.n32 (by omega), Nat.sub_self]
+      rfl
+    dsimp only [len] at nonzero cLen
+    simp only [ite_eq_right nonzero, freeRead, freeMemory, cRead,
+      cLen, Bytes.sliceD_zero_length rfl, B256.toNat_toB256_of_lt short] at post
+    rw [show G + 24 + 3 + (78 + 3 + 3) + 35 = G + 146 by omega] at decoded
+    have result := post decoded
+    let copyCharge := gVerylow + gReturnDataCopy * ceilDiv d.returnData.length 32 +
+      (St d [] ((V.write 64 (q + ((len + 63) &&& ~~~31)).toBytes).write q.toNat len.toBytes) 0).extCost
+        [⟨(q + 32).toNat, d.returnData.length⟩]
+    change SFunc.RunExact cert.prog sevm
+      (St d (1 :: endWord :: token :: 96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
+        V (G + 146 + 34 + (64 + 3 + 3 + 3 + copyCharge))) safeTransfer_afterCall
+      (.returned (St d R A G)) at result
+    rw [show G + 146 + 34 + (64 + 3 + 3 + 3 + copyCharge) = G + (253 + copyCharge) by omega] at result
+    simpa only [ite_eq_right empty] using result
+
+/-! ## Closed charges of the moving pre-CALL stages -/
+
+/-- A 32-byte access charge as a cost difference over the memory's own size. -/
+private theorem safeTransfer_wordCharge' {b : Devm} {X : Mem} {i : Nat} :
+    gVerylow + (St b [] X 0).extCost [⟨i, 32⟩] =
+      3 + (calculateMemoryGasCost (memExtSize X.size i 32) - calculateMemoryGasCost X.size) :=
+  safeTransfer_wordCharge rfl
+
+/-- The fourteen initializer charges telescope to the payload image's growth. -/
+private theorem safeTransfer_initGas {b : Devm} {M N1 N2 N3 N4 N5 N6 N7 N8 Q : Mem} {G : Nat}
+    {p : B256} (aM : M.size % 32 = 0) (geM : 96 ≤ M.size)
+    (z1 : N1.size = memExtSize M.size 64 32)
+    (z2 : N2.size = memExtSize N1.size p.toNat 32)
+    (z3 : N3.size = memExtSize N2.size (p + 32).toNat 32) (a3 : N3.size % 32 = 0)
+    (z4 : N4.size = memExtSize N3.size (p + 100).toNat 32)
+    (z5 : N5.size = memExtSize N4.size (p + 132).toNat 32) (a5 : N5.size % 32 = 0)
+    (c5 : (p + 132).toNat + 32 ≤ N5.size)
+    (z6 : N6.size = memExtSize N5.size (p + 64).toNat 32)
+    (c6 : (p + 64).toNat + 32 ≤ N6.size)
+    (z7 : N7.size = memExtSize N6.size 64 32) (a7 : N7.size % 32 = 0)
+    (z8 : N8.size = memExtSize N7.size (p + 96).toNat 32) (a8 : N8.size % 32 = 0)
+    (nat96 : (p + 96).toNat = p.toNat + 96) (nat132 : (p + 132).toNat = p.toNat + 132)
+    (hQ : N8 = Q) :
+    G + 199 + (gVerylow + (St b [] M 0).extCost [⟨64, 32⟩]) +
+      (gVerylow + (St b [] M 0).extCost [⟨64, 32⟩]) +
+      (gVerylow + (St b [] N1 0).extCost [⟨p.toNat, 32⟩]) +
+      (gVerylow + (St b [] N2 0).extCost [⟨(p + 32).toNat, 32⟩]) +
+      (gVerylow + (St b [] N3 0).extCost [⟨64, 32⟩]) +
+      (gVerylow + (St b [] N3 0).extCost [⟨(p + 100).toNat, 32⟩]) +
+      (gVerylow + (St b [] N4 0).extCost [⟨(p + 132).toNat, 32⟩]) +
+      (gVerylow + (St b [] N5 0).extCost [⟨64, 32⟩]) +
+      (gVerylow + (St b [] N5 0).extCost [⟨(p + 64).toNat, 32⟩]) +
+      (gVerylow + (St b [] N6 0).extCost [⟨64, 32⟩]) +
+      (gVerylow + (St b [] N7 0).extCost [⟨(p + 96).toNat, 32⟩]) +
+      (gVerylow + (St b [] N7 0).extCost [⟨(p + 96).toNat, 32⟩]) +
+      (gVerylow + (St b [] N8 0).extCost [⟨64, 32⟩]) +
+      (gVerylow + (St b [] N8 0).extCost [⟨(p + 64).toNat, 32⟩]) =
+    G + 241 + (calculateMemoryGasCost Q.size - calculateMemoryGasCost M.size) := by
+  subst hQ
+  have g2 : N1.size ≤ N2.size := by rw [z2]; exact memExtSize_ge _ _ _
+  have g3 : N2.size ≤ N3.size := by rw [z3]; exact memExtSize_ge _ _ _
+  have g4 : N3.size ≤ N4.size := by rw [z4]; exact memExtSize_ge _ _ _
+  have g5 : N4.size ≤ N5.size := by rw [z5]; exact memExtSize_ge _ _ _
+  have g6 : N5.size ≤ N6.size := by rw [z6]; exact memExtSize_ge _ _ _
+  have g7 : N6.size ≤ N7.size := by rw [z7]; exact memExtSize_ge _ _ _
+  have g8 : N7.size ≤ N8.size := by rw [z8]; exact memExtSize_ge _ _ _
+  have r7 : (p + 96).toNat + 32 ≤ N7.size := by omega
+  have r8 : (p + 64).toNat + 32 ≤ N8.size := by omega
+  have e1 : memExtSize M.size 64 32 = M.size := memExtSize_of_le aM (by omega)
+  have g1 : N1.size = M.size := by rw [z1, e1]
+  have e5 : memExtSize N3.size 64 32 = N3.size := memExtSize_of_le a3 (by omega)
+  have e8 : memExtSize N5.size 64 32 = N5.size := memExtSize_of_le a5 (by omega)
+  have e11 : memExtSize N7.size (p + 96).toNat 32 = N7.size := memExtSize_of_le a7 r7
+  have e13 : memExtSize N8.size 64 32 = N8.size := memExtSize_of_le a8 (by omega)
+  have e14 : memExtSize N8.size (p + 64).toNat 32 = N8.size := memExtSize_of_le a8 r8
+  simp only [safeTransfer_wordCharge']
+  rw [e1, ← z2, ← z3, e5, ← z4, ← z5, e8, ← z6, ← z7, e11, e13, e14]
+  rw [e11] at z8
+  rw [z8]
+  have m2 := calculateMemoryGasCost_mono g2
+  have m3 := calculateMemoryGasCost_mono g3
+  have m4 := calculateMemoryGasCost_mono g4
+  have m5 := calculateMemoryGasCost_mono g5
+  have m6 := calculateMemoryGasCost_mono g6
+  have m7 := calculateMemoryGasCost_mono g7
+  rw [g1] at m2 ⊢
+  generalize calculateMemoryGasCost M.size = cM at *
+  generalize calculateMemoryGasCost N2.size = c2 at *
+  generalize calculateMemoryGasCost N3.size = c3 at *
+  generalize calculateMemoryGasCost N4.size = c4 at *
+  generalize calculateMemoryGasCost N5.size = c5 at *
+  generalize calculateMemoryGasCost N6.size = c6 at *
+  generalize calculateMemoryGasCost N7.size = c7 at *
+  omega
+
+/-- The four copy charges telescope to the copy's growth. -/
+private theorem safeTransfer_copyGas {b : Devm} {P C1 C2 : Mem} {G : Nat} {p : B256}
+    (aP : P.size % 32 = 0) (rP : (p + 96).toNat + 32 ≤ P.size)
+    (z1 : C1.size = memExtSize P.size (p + 164).toNat 32) (a1 : C1.size % 32 = 0)
+    (r1 : (p + 128).toNat + 32 ≤ C1.size)
+    (z2 : C2.size = memExtSize C1.size (p + 196).toNat 32) :
+    G + 169 + (gVerylow + (St b [] P 0).extCost [⟨(p + 96).toNat, 32⟩]) +
+      (gVerylow + (St b [] P 0).extCost [⟨(p + 164).toNat, 32⟩]) +
+      (gVerylow + (St b [] C1 0).extCost [⟨(p + 128).toNat, 32⟩]) +
+      (gVerylow + (St b [] C1 0).extCost [⟨(p + 196).toNat, 32⟩]) =
+    G + 181 + (calculateMemoryGasCost C2.size - calculateMemoryGasCost P.size) := by
+  have g1 : P.size ≤ C1.size := by rw [z1]; exact memExtSize_ge _ _ _
+  have g2 : C1.size ≤ C2.size := by rw [z2]; exact memExtSize_ge _ _ _
+  have eR0 : memExtSize P.size (p + 96).toNat 32 = P.size := memExtSize_of_le aP rP
+  have eR1 : memExtSize C1.size (p + 128).toNat 32 = C1.size := memExtSize_of_le a1 r1
+  simp only [safeTransfer_wordCharge']
+  rw [eR0, ← z1, eR1, ← z2]
+  have m1 := calculateMemoryGasCost_mono g1
+  have m2 := calculateMemoryGasCost_mono g2
+  generalize calculateMemoryGasCost P.size = c0 at *
+  generalize calculateMemoryGasCost C1.size = c1 at *
+  generalize calculateMemoryGasCost C2.size = c2 at *
+  omega
+
+/-- The merged CALL image keeps the moved free pointer over the read-extended allocation. -/
+private theorem safeTransfer_mergePtr {C : Mem} {s : Nat} {p : B256}
+    (hC : PtrMem (p + 164) s C) (width : p.toNat + 260 < 2 ^ 256) :
+    let mask := B256.bexp 256 (32 - 4) - 1
+    PtrMem (p + 164) (memExtSize s (p + 228).toNat 32)
+      ((C.read (p + 228).toNat 32).2.write (p + 228).toNat
+        (((Bytes.toB256 (C.read (p + 160).toNat 32).1) &&& ~~~mask) |||
+          ((Bytes.toB256 (C.read (p + 228).toNat 32).1) &&& mask)).toBytes) := by
+  dsimp only
+  obtain ⟨_, _, _, _, _, _, nat164, nat228, _, _, _, _, _⟩ := safeTransfer_stageOffset width
+  let D := (C.read (p + 228).toNat 32).2
+  have hD : PtrMem (p + 164) (memExtSize s (p + 228).toNat 32) D := by
+    refine ⟨?_, memExtSize_mod_32 hC.n32, hC.wf.extend _ 32, ?_⟩
+    · change memExtSize C.size (p + 228).toNat 32 = _
+      rw [hC.size]
+    · exact MemMatches.of_data_eq (μ := C) (μ' := D) rfl (memExtSize_ge C.size _ 32) hC.map
+  have coverD : (p + 228).toNat + 32 ≤ memExtSize s (p + 228).toNat 32 :=
+    memExtSize_access_le _ _ _ (by decide)
+  have h := hD.write (p + 228).toNat
+    (((Bytes.toB256 (C.read (p + 160).toNat 32).1) &&& ~~~(B256.bexp 256 (32 - 4) - 1)) |||
+      ((Bytes.toB256 (C.read (p + 228).toNat 32).1) &&& (B256.bexp 256 (32 - 4) - 1)))
+    (Or.inr (by omega))
+  rw [memExtSize_of_le hD.n32 coverD] at h
+  exact h
+
+/-- The staged copy and merge images are the moving CALL memory. -/
+private theorem safeTransfer_callMemory_eq {M : Mem} {p amount toWord : B256}
+    (width : p.toNat + 260 < 2 ^ 256) :
+    let P := safeTransfer_dynamicPayloadMemory M p amount toWord
+    let C1 := P.write (p + 164).toNat (Bytes.toB256 (P.read (p + 96).toNat 32).1).toBytes
+    let C2 := C1.write (p + 196).toNat (Bytes.toB256 (C1.read (p + 128).toNat 32).1).toBytes
+    let mask := B256.bexp 256 (32 - 4) - 1
+    (C2.read (p + 228).toNat 32).2.write (p + 228).toNat
+        (((Bytes.toB256 (C2.read (p + 160).toNat 32).1) &&& ~~~mask) |||
+          ((Bytes.toB256 (C2.read (p + 228).toNat 32).1) &&& mask)).toBytes =
+      safeTransfer_dynamicCallMemory M p amount toWord := by
+  obtain ⟨_, _, _, _, _, nat96, nat164, nat228, _, _, _, _, nat196⟩ := safeTransfer_stageOffset width
+  obtain ⟨o128, _⟩ := safeTransfer_copyOffsets width
+  have o196 : (p + 196).toNat = (p + 164).toNat + 32 := by rw [nat196, nat164]
+  have o228 : (p + 228).toNat = (p + 164).toNat + 64 := by rw [nat228, nat164]
+  have o160 : (p + 160).toNat = (p + 96).toNat + 64 := by
+    rw [nat96, B256.toNat_add, show (160 : B256).toNat = 160 from rfl, Nat.lo_eq_of_lt (by omega)]
+  dsimp only
+  rw [o128, o196, o228, o160]
+  rfl
+
+/-- **Moving pre-CALL forward construction**: initializer, 68-byte copy and merge, ending at the
+primitive `CALL` over the staged CALL memory, with the closed charge `safeTransferPreCharge`. -/
+private theorem safeTransfer_dynamicPrepare_closed {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {G : Nat} {o : Outcome}
+    {p amount toWord tokenWord rho : B256} {n : Nat}
+    (mem : PtrMem p n M) (lower : 128 ≤ p.toNat)
+    (width : p.toNat + 260 < 2 ^ 256) (room : R.length ≤ 1000)
+    (continuation : SFunc.RunExact cert.prog sevm
+      (St b (G.toB256 :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        0 :: (p + 164) :: 68 :: (p + 164) :: 0 :: (68 + (p + 164)) ::
+        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
+        (safeTransfer_dynamicCallMemory M p amount toWord) G)
+      (.next (.exec .call) safeTransfer_afterCall) o) :
+    SFunc.RunExact cert.prog sevm
+      (St b (amount :: toWord :: tokenWord :: rho :: R) M (G + safeTransferPreCharge n p))
+      t_1fdb_c57 o := by
+  obtain ⟨_, _, _, _, _, nat96, nat164, nat228, _, nat64, _, nat132, nat196⟩ :=
+    safeTransfer_stageOffset width
+  obtain ⟨o128, _⟩ := safeTransfer_copyOffsets width
+  obtain ⟨z1, z2, z3, z4, z5, z6, z7, z8, a1, a2, a3, a4, a5, a6, a7, a8,
+    c1, c2, c3, c4, c5, c6, c7, c8, payFold, payMod, payBound⟩ :=
+    safeTransfer_payloadSizes (amount := amount) (toWord := toWord) mem lower width
+  obtain ⟨preEq, _⟩ := safeTransfer_copySizes (amount := amount) (toWord := toWord) mem lower width
+  let P := safeTransfer_dynamicPayloadMemory M p amount toWord
+  let C1 := P.write (p + 164).toNat (Bytes.toB256 (P.read (p + 96).toNat 32).1).toBytes
+  let C2 := C1.write (p + 196).toNat (Bytes.toB256 (C1.read (p + 128).toNat 32).1).toBytes
+  have hC1 : PtrMem (p + 164) C1.size C1 :=
+    safeTransfer_copyPtr128 (amount := amount) (toWord := toWord) mem lower width
+  have fit128 : (p + 128).toNat + 32 ≤ C1.size :=
+    safeTransfer_copyFit128 (amount := amount) (toWord := toWord) mem lower width
+  have hC2 := hC1.write (p + 196).toNat (Bytes.toB256 (C1.read (p + 128).toNat 32).1)
+    (Or.inr (by omega))
+  have cover2 : (p + 196).toNat + 32 ≤ memExtSize C1.size (p + 196).toNat 32 :=
+    memExtSize_access_le _ _ _ (by decide)
+  have fit2 : (p + 160).toNat + 32 ≤ memExtSize C1.size (p + 196).toNat 32 := by
+    have h160 : (p + 160).toNat = p.toNat + 160 := by
+      rw [B256.toNat_add, show (160 : B256).toNat = 160 from rfl, Nat.lo_eq_of_lt (by omega)]
+    omega
+  have part := safeTransfer_partial_dynamic_exact (sevm := sevm) (b := b)
+    (R := 96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) (G := G) (o := o)
+    (token := tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) hC2 fit2 width
+    (by simp only [List.length_cons]; omega)
+  have ceq := safeTransfer_callMemory_eq (M := M) (amount := amount) (toWord := toWord) width
+  dsimp only at part ceq
+  rw [ceq] at part
+  have run1 := part continuation
+  have copy := safeTransfer_copy_dynamic_exact (sevm := sevm) (b := b) (R := R)
+    (G := G + 177 + (calculateMemoryGasCost (memExtSize (memExtSize C1.size (p + 196).toNat 32)
+      (p + 228).toNat 32) - calculateMemoryGasCost (memExtSize C1.size (p + 196).toNat 32)))
+    (o := o) (amount := amount) (toWord := toWord) (tokenWord := tokenWord) (rho := rho)
+    mem lower width (by omega)
+  dsimp only at copy
+  have run2 := copy run1
+  have run3 := safeTransfer_initialize_dynamic_exact (sevm := sevm) (b := b) (R := R)
+    (o := o) (amount := amount) (toWord := toWord) (tokenWord := tokenWord) (rho := rho)
+    mem lower width (by omega) run2
+  rw [← mem.size] at z1
+  have aM : M.size % 32 = 0 := by rw [mem.size]; exact mem.n32
+  have geM : 96 ≤ M.size := by rw [mem.size]; exact mem.ge
+  have finish : ∀ {k : Nat}, SFunc.RunExact cert.prog sevm
+      (St b (amount :: toWord :: tokenWord :: rho :: R) M k) t_1fdb_c57 o →
+      k = G + safeTransferPreCharge n p →
+      SFunc.RunExact cert.prog sevm
+        (St b (amount :: toWord :: tokenWord :: rho :: R) M (G + safeTransferPreCharge n p))
+        t_1fdb_c57 o := fun r e => e ▸ r
+  refine finish run3 ?_
+  rw [safeTransfer_initGas (Q := safeTransfer_dynamicPayloadMemory M p amount toWord) aM geM z1 z2 z3 a3 z4 z5 a5 c5 z6 c6 z7 a7 z8 a8 nat96 nat132 rfl]
+  have zC1 : C1.size = memExtSize P.size (p + 164).toNat 32 :=
+    Mem.size_write_of_size rfl payMod (B256.length_toBytes _)
+  rw [safeTransfer_copyGas payMod (by omega) zC1 hC1.n32 fit128 hC2.size]
+  have hC3 := safeTransfer_mergePtr hC2 width
+  dsimp only at hC3
+  rw [ceq] at hC3
+  have gP : P.size ≤ C1.size := by rw [zC1]; exact memExtSize_ge _ _ _
+  have gC2 : C1.size ≤ memExtSize C1.size (p + 196).toNat 32 := memExtSize_ge _ _ _
+  have gE : memExtSize C1.size (p + 196).toNat 32 ≤
+      memExtSize (memExtSize C1.size (p + 196).toNat 32) (p + 228).toNat 32 := memExtSize_ge _ _ _
+  have gM : M.size ≤ P.size := by
+    rw [mem.size]
+    change n ≤ (safeTransfer_dynamicPayloadMemory M p amount toWord).size
+    rw [payFold]
+    iterate 14 refine Nat.le_trans ?_ (memExtSize_ge _ _ _)
+    exact Nat.le_refl n
+  unfold safeTransferPreCharge
+  rw [← preEq, hC3.size, ← mem.size, hC2.size]
+  have m1 := calculateMemoryGasCost_mono gM
+  have m2 := calculateMemoryGasCost_mono gP
+  have m3 := calculateMemoryGasCost_mono gC2
+  have m4 := calculateMemoryGasCost_mono gE
+  generalize calculateMemoryGasCost M.size = cM at *
+  generalize calculateMemoryGasCost P.size = cP at *
+  generalize calculateMemoryGasCost C1.size = c1 at *
+  generalize calculateMemoryGasCost (memExtSize C1.size (p + 196).toNat 32) = c2 at *
+  generalize calculateMemoryGasCost (memExtSize (memExtSize C1.size (p + 196).toNat 32)
+    (p + 228).toNat 32) = c3 at *
+  omega
+
+/-- The moving CALL memory carries the moved free pointer `p + 164` over its whole staged size. -/
+private theorem safeTransfer_callMemory_ptr {M : Mem} {p amount toWord : B256} {n : Nat}
+    (mem : PtrMem p n M) (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256) :
+    PtrMem (p + 164) (safeTransfer_dynamicCallMemory M p amount toWord).size
+      (safeTransfer_dynamicCallMemory M p amount toWord) := by
+  have hC1 := safeTransfer_copyPtr128 (amount := amount) (toWord := toWord) mem lower width
+  have fit128 := safeTransfer_copyFit128 (amount := amount) (toWord := toWord) mem lower width
+  obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, nat196⟩ := safeTransfer_stageOffset width
+  have hC2 := hC1.write (p + 196).toNat
+    (Bytes.toB256 ((((safeTransfer_dynamicPayloadMemory M p amount toWord).write (p + 164).toNat
+      (Bytes.toB256 ((safeTransfer_dynamicPayloadMemory M p amount toWord).read
+        (p + 96).toNat 32).1).toBytes)).read (p + 128).toNat 32).1) (Or.inr (by omega))
+  have hC3 := safeTransfer_mergePtr hC2 width
+  have ceq := safeTransfer_callMemory_eq (M := M) (amount := amount) (toWord := toWord) width
+  dsimp only at hC3 ceq
+  rw [ceq] at hC3
+  rw [hC3.size]
+  exact hC3
+
+/-- The post-CALL charge is the after-CALL allocation's charge over the staged CALL memory. -/
+private theorem safeTransfer_postCharge_eq {M : Mem} {p amount toWord : B256} {n : Nat}
+    {b : Devm} {reply : Bytes}
+    (mem : PtrMem p n M) (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256) :
+    let V := safeTransfer_dynamicCallMemory M p amount toWord
+    let len := reply.length.toB256
+    let N2 := (V.write 64 ((p + 164) + ((len + 63) &&& ~~~31)).toBytes).write (p + 164).toNat
+      len.toBytes
+    safeTransferPostCharge n p reply = if reply = [] then 138 else
+      253 + (gVerylow + gReturnDataCopy * ceilDiv reply.length 32 +
+        (St b [] N2 0).extCost [⟨((p + 164) + 32).toNat, reply.length⟩]) := by
+  dsimp only
+  obtain ⟨_, _, _, _, _, _, nat164, _, _, _, _, _, nat196⟩ := safeTransfer_stageOffset width
+  obtain ⟨_, _, adv164, _, _⟩ := safeTransfer_stageAdvance width
+  obtain ⟨preEq, _⟩ := safeTransfer_copySizes (amount := amount) (toWord := toWord) mem lower width
+  have hV := safeTransfer_callMemory_ptr (amount := amount) (toWord := toWord) mem lower width
+  have fitV := safeTransfer_dynamicCall_fit (amount := amount) (toWord := toWord) mem lower width
+  by_cases empty : reply = []
+  · rw [ite_eq_left empty]
+    subst empty
+    rfl
+  · rw [ite_eq_right empty]
+    unfold safeTransferPostCharge
+    rw [ite_eq_right empty]
+    have h1 := hV.set (q := (p + 164) + ((reply.length.toB256 + 63) &&& ~~~31))
+    have h2 := h1.write (p + 164).toNat reply.length.toB256 (Or.inr (by omega))
+    have e2 : memExtSize (safeTransfer_dynamicCallMemory M p amount toWord).size (p + 164).toNat 32 =
+        (safeTransfer_dynamicCallMemory M p amount toWord).size :=
+      memExtSize_of_le hV.n32 (by omega)
+    rw [e2] at h2
+    rw [St.extCost_eq h2.size]
+    unfold safeTransferPostSize
+    rw [← preEq]
+    dsimp only
+    have e64 : memExtSize (safeTransfer_dynamicCallMemory M p amount toWord).size 64 32 =
+        (safeTransfer_dynamicCallMemory M p amount toWord).size :=
+      memExtSize_of_le hV.n32 (by have := hV.ge; omega)
+    have e164 : memExtSize (safeTransfer_dynamicCallMemory M p amount toWord).size
+        (p.toNat + 164) 32 = (safeTransfer_dynamicCallMemory M p amount toWord).size :=
+      memExtSize_of_le hV.n32 (by omega)
+    have q196 : ((p + 164) + 32).toNat = p.toNat + 196 := by
+      rw [show (p + 164) + 32 = (32 : B256) + (p + 164) from B256.add_comm, adv164, nat196]
+    rw [e64, e164, q196]
+
+/-- **The moving `_safeTransfer` forward theorem.**  At any free pointer `p` (with the zero slot
+clear and the staging area representable), the helper reaches its token `CALL` after exactly
+`safeTransferPreCharge n p` gas with the canonical operands and staged memory, and from that
+`CALL`'s successful, accepted reply with residual `G + safeTransferPostCharge n p reply` returns to its
+caller with the transfer memory and gas `G`.  This discharges the cross-host hypothesis
+`SwapSafeTransferForward` for the actual charge functions. -/
+theorem safeTransfer_dynamic_forward :
+    SwapSafeTransferForward safeTransferPreCharge safeTransferPostCharge := by
+  intro sevm b d L M n callGas G p amount toWord token rho fork mem sentinel lower width room
+    call success accepted returnedGas
+  obtain ⟨_, _, _, _, _, _, nat164, _, _, _, _, _, _⟩ := safeTransfer_stageOffset width
+  let V := safeTransfer_dynamicCallMemory M p amount toWord
+  have hV : PtrMem (p + 164) V.size V :=
+    safeTransfer_callMemory_ptr (amount := amount) (toWord := toWord) mem lower width
+  have fitV : p.toNat + 260 ≤ V.size :=
+    safeTransfer_dynamicCall_fit (amount := amount) (toWord := toWord) mem lower width
+  have sentV : memWord V 96 = 0 :=
+    safeTransfer_dynamicCall_sentinel (amount := amount) (toWord := toWord) mem lower width sentinel
+  let S := callGas.toB256 :: (token &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+    0 :: (p + 164) :: 68 :: (p + 164) :: 0 :: (68 + (p + 164)) ::
+    (token &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+    96 :: 0 :: amount :: toWord :: token :: rho :: L
+  have raw : Ninst.Run sevm (St b S V callGas) (.exec .call) d := by
+    obtain ⟨xl, filled, step⟩ := call
+    exact ⟨xl, filled, 0, step 0⟩
+  have operands : S <<+ (St b S V callGas).stack := by
+    simpa only [St.stack, List.append_nil] using (pref_append S [])
+  have memory : d.memory = V := by
+    rcases of_run_call_val_with_depth_frame operands raw fork with failed | entered
+    · rw [success] at failed
+      have zero : (1 : B256) = 0 := (pref_head_unique failed.1
+        (pref_append [1] ((68 + (p + 164)) ::
+          (token &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+          96 :: 0 :: amount :: toWord :: token :: rho :: L))).symm
+      exact ((by decide : (1 : B256) ≠ 0) zero).elim
+    · obtain ⟨parent, child, xl, dp, na, code, avail, pc, step, depth, parentStack,
+        parentState, parentMemory, parentLogs, parentOutput, delegation, filled, process,
+        clean, resume, childState, returned, image, resultStack⟩ := entered
+      rw [image, parentMemory]
+      simp only [St.memory, show (68 : B256).toNat = 68 from rfl,
+        show (0 : B256).toNat = 0 from rfl, List.take_zero]
+      generalize V = W at hV fitV ⊢
+      change W.extends [((p + 164).toNat, 68), ((p + 164).toNat, 0)] = W
+      change (⟨W.data, memExtsSize W.size [((p + 164).toNat, 68), ((p + 164).toNat, 0)]⟩ : Mem) = W
+      have size : memExtsSize W.size [((p + 164).toNat, 68), ((p + 164).toNat, 0)] = W.size := by
+        change memExtSize (memExtSize W.size (p + 164).toNat 68) (p + 164).toNat 0 = W.size
+        rw [memExtSize_of_le hV.n32 (by omega)]
+        rfl
+      rw [size]
+  have short := ReturnDataBound.call_returnData_length_lt raw fork
+  have after := safeTransfer_afterCall_dynamic_exact (sevm := sevm) (d := d) (R := L) (V := V)
+    (G := G) (q := p + 164) (endWord := 68 + (p + 164))
+    (token := token &&& 0xffffffffffffffffffffffffffffffffffffffff) (amount := amount)
+    (toWord := toWord) (tokenWord := token) (rho := rho) hV (by omega) (by omega) (by omega)
+    sentV short accepted (by omega)
+  have postEq := safeTransfer_postCharge_eq (b := d) (reply := d.returnData) (amount := amount)
+    (toWord := toWord) mem lower width
+  dsimp only at after postEq
+  rw [← postEq, ← returnedGas] at after
+  have image : d = St d (1 :: (68 + (p + 164)) ::
+      (token &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+      96 :: 0 :: amount :: toWord :: token :: rho :: L) V d.gasLeft := St.self success memory
+  rw [← image] at after
+  exact safeTransfer_dynamicPrepare_closed (sevm := sevm) (b := b) (R := L) (G := callGas)
+    (amount := amount) (toWord := toWord) (tokenWord := token) (rho := rho) mem lower width room
+    (.next call after)
 
 end Blanc.Lift.UniswapV2Pair
