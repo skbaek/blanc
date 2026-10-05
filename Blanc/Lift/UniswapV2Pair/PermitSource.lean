@@ -463,24 +463,4 @@ theorem permit_source_bytecode_exact {K : WriterKey → Prop} {current : Checkpo
       success returnedGas recovered signer sentry,
     permit_public_source_result rep fresh freshOutput paid nonstatic timely post recovered signer⟩
 
-/-- With no delegation designator at address 1, the observed reply of the actual recovery
-call is the executed ECRECOVER precompile's output on the actual request; every covered fork
-activates address 1. This identifies the answer, it does not assert recovery succeeds. -/
-theorem permit_recovery_canonical {sevm : Sevm} {b : Devm} {owner : Adr} {input out : Bytes}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (noDelegation : getDelegatedCodeAddress (b.getCode 1) = none)
-    (answered : StaticAnswered sevm (permitNonceWorld sevm b owner) (1 : B256).toAdr input out) :
-    out = ecrecoverOutput input := by
-  obtain ⟨parent, child, xl, dp, na, code, gas, _, routing, _, run, clean, output⟩ := answered
-  have one : (1 : B256).toAdr = (1 : Adr) := by decide
-  have world : (permitNonceWorld sevm b owner).getCode 1 = b.getCode 1 := by
-    unfold permitNonceWorld
-    rw [afterSstore_getCode, afterSload_getCode, afterSload_getCode]
-  rw [one] at routing run
-  rcases routing with ⟨_, rfl, rfl, rfl⟩ | ⟨delegate, delegated, _, _, _⟩
-  · rw [← output]
-    exact (ecrecover_output_of_processMessage_clean (ecrecover_active fork) run clean fork).2
-  · rw [world, noDelegation] at delegated
-    cases delegated
-
 end Blanc.Lift.UniswapV2Pair

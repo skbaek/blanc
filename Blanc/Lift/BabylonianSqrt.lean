@@ -173,10 +173,6 @@ theorem sourceCount_of_large {y : Nat} (h : 3 < y) :
     sourceCount y = 1 + iterCount y (initialGuess y) := by
   simp only [sourceCount, ite_eq_left h]
 
-/-- Small source branches execute no Babylonian body. -/
-theorem sourceCount_of_small {y : Nat} (h : y ≤ 3) : sourceCount y = 0 := by
-  simp only [sourceCount, ite_eq_right (by omega : ¬3 < y)]
-
 /-- Bounds used by every large-source body, for an arbitrary bounded input. -/
 theorem body_bounds {y x limit : Nat} (hy : 3 < y) (hlimit : y < limit)
     (hroot : Nat.sqrt y ≤ x) (hupper : x ≤ initialGuess y) :

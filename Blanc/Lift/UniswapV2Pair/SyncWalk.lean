@@ -1179,89 +1179,6 @@ def SyncPrimitiveCallPair (D : Exec.Deriv) (sevm : Sevm) (b : Devm)
       SyncBalanceSite.second.afterDecodeTree (.done o)
 
 
-/-- The actual successful callee supplies the arbitrary ordered observations
-used by the source update. Entry-field correspondence is transported through
-the concrete lock and both primitive static posts; no endpoint is assumed. -/
-theorem syncCalleeSourceCalls_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {R : List B256} {M : Mem} {G : Nat} {tag : B256} {o : Outcome}
-    {st : State} {ctx : Context}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
-    (slots : ReserveSlotMatches st sevm b)
-    (cum0 : b.getStorVal sevm.currentTarget 9 = st.price0CumulativeLast)
-    (cum1 : b.getStorVal sevm.currentTarget 10 = st.price1CumulativeLast)
-    (token0 : (b.getStorVal sevm.currentTarget 6).toAdr = st.token0)
-    (token1 : (b.getStorVal sevm.currentTarget 7).toAdr = st.token1)
-    (time : ctx.timestamp = sevm.benvStat.time) (pair : ctx.pair = sevm.currentTarget)
-    (run : SFunc.RunP (StepIn D) cert.prog sevm (St b (tag :: R) M G) t_1df5_c31 o) :
-    ∃ (d0 d1 : Devm) (out0 out1 : Bytes) (gas : Nat) (post : State)
-      (event : Event) (oracle : OracleUpdate),
-      let balance0 := Bytes.toB256 (out0.take 32)
-      let balance1 := Bytes.toB256 (out1.take 32)
-      let result := syncResultWorld sevm d1 balance0 balance1
-      StaticAnswered sevm (temporalAccountAccessBase (syncFirstWorld sevm b) st.token0)
-        st.token0 (ExternalOperation.encode (.balanceOf ctx.pair)) out0 ∧
-      StaticAnswered sevm (temporalAccountAccessBase (afterSload sevm d0 7) st.token1)
-        st.token1 (ExternalOperation.encode (.balanceOf ctx.pair)) out1 ∧
-      32 ≤ out0.length ∧ out0.length < 2 ^ 256 ∧
-      32 ≤ out1.length ∧ out1.length < 2 ^ 256 ∧
-      st.update ctx balance0 balance1 st.reserve0.val st.reserve1.val = .ok (post, event, oracle) ∧
-      ReserveSlotMatches { post with unlocked := 1 } sevm result ∧
-      result.getStorVal sevm.currentTarget 9 = post.price0CumulativeLast ∧
-      result.getStorVal sevm.currentTarget 10 = post.price1CumulativeLast ∧
-      result.getStorVal sevm.currentTarget 12 = 1 ∧
-      event = .sync balance0.toNat balance1.toNat ∧
-      result.logs = b.logs ++ [⟨ctx.pair, [updateSyncTopic], encodeWords [balance0, balance1]⟩] ∧
-      (∀ a k, a ≠ sevm.currentTarget ∨ (k ≠ 8 ∧ k ≠ 9 ∧ k ≠ 10 ∧ k ≠ 12) →
-        result.getStorVal a k = b.getStorVal a k) ∧
-      result.output = b.output ∧
-      o = .returned (St result R
-        (syncResultMemory sevm d1
-          (balanceReplyMemory (balanceReplyMemory M sevm.currentTarget out0) sevm.currentTarget out1)
-          balance0 balance1) gas) ∧
-      SyncPrimitiveCallPair D sevm b M R tag d0 d1 out0 out1 o := by
-  obtain ⟨_, _, gw0, callGas0, d0, out0, decodedGas0, gw1, callGas1, d1, out1,
-    decodedGas1, gas, code0, call0, post0, long0, bound0, answered0, decoded0,
-    code1, call1, post1, long1, bound1, answered1, stor0, stor1, logs1, output1,
-    decoded1, balanceBound0, balanceBound1, result⟩ := syncCallee_inv fork mem run
-  have selected (k : B256) (key : k ≠ 12) :
-      d1.getStorVal sevm.currentTarget k = b.getStorVal sevm.currentTarget k := by
-    change (Devm.getStor _ _).get k = _
-    rw [stor1 sevm.currentTarget]
-    exact syncFirstWorld_storage_frame (Or.inr key)
-  have slots1 : ReserveSlotMatches st sevm d1 := by
-    simpa only [ReserveSlotMatches, selected 8 (by decide)] using slots
-  obtain ⟨post, event, oracle, source, reserves, price0, price1, lock, sync, logs⟩ :=
-    syncUpdateSource_result slots1 (by rw [selected 9 (by decide)]; exact cum0)
-      (by rw [selected 10 (by decide)]; exact cum1) time pair balanceBound0 balanceBound1
-  have firstToken : (syncFirstToken sevm b).toAdr = st.token0 := by
-    unfold syncFirstToken
-    rw [toAdr_toB256]
-    unfold syncLockedWorld
-    rw [getStorVal_afterStore, Stor.get_set_ne _ (by decide : (12 : B256) ≠ 6)]
-    exact token0
-  have secondToken : (d0.getStorVal sevm.currentTarget 7).toAdr.toB256.toAdr = st.token1 := by
-    rw [toAdr_toB256]
-    have slot0 := congrArg (fun storage : Stor => storage.get (7 : B256)) (stor0 sevm.currentTarget)
-    change d0.getStorVal sevm.currentTarget 7 = (syncFirstWorld sevm b).getStorVal sevm.currentTarget 7 at slot0
-    rw [slot0, syncFirstWorld_storage_frame (Or.inr (by decide : (7 : B256) ≠ 12))]
-    exact token1
-  have output : (syncResultWorld sevm d1 (Bytes.toB256 (out0.take 32))
-      (Bytes.toB256 (out1.take 32))).output = b.output := by
-    unfold syncResultWorld syncUpdatedWorld
-    rw [afterSstore_output, updateWorld_output, afterSload_output, output1]
-  refine ⟨d0, d1, out0, out1, gas, post, event, oracle, ?_, ?_, long0, bound0,
-    long1, bound1, source, reserves, price0, price1, lock, sync, ?_, ?_, output, result, ?_⟩
-  · simpa only [firstToken, pair] using answered0
-  · simpa only [secondToken, pair] using answered1
-  · rw [logs, logs1]
-  · intro a k frame
-    rw [syncResultWorld_storage_frame frame]
-    change (Devm.getStor d1 a).get k = _
-    rw [stor1 a]
-    exact syncFirstWorld_storage_frame (frame.imp_right (fun h => h.2.2.2))
-  · exact ⟨gw0, callGas0, decodedGas0, gw1, callGas1, decodedGas1,
-      code0, call0, post0, decoded0, code1, call1, post1, decoded1⟩
-
 /-- The public sync wrapper enters the actual callee with its return tag and
 then executes the literal STOP suffix. The same derivation predicate remains
 on the callee, including both nested static calls. -/
@@ -1984,23 +1901,6 @@ theorem sync_source_exact_consumption {current : Checkpoint} {ctx : Context}
     (by simpa only [success0, ite_true, kept0] using second)
   rw [sync_startTyped_suspended value nonstatic unlocked]
   simpa only [List.append_nil] using first
-
-
-
-/-- The lock changes only the lock field of the accepted update result; it
-does not change its cached reserves, modular oracle calculation or event. -/
-theorem sync_source_update_locked {st : State} {ctx : Context}
-    {balance0 balance1 : B256} {old0 old1 : Nat}
-    {post : State} {event : Event} {oracle : OracleUpdate}
-    (bound0 : balance0.toNat < 2 ^ 112) (bound1 : balance1.toNat < 2 ^ 112)
-    (updated : st.update ctx balance0 balance1 old0 old1 = .ok (post, event, oracle)) :
-    ({ st with unlocked := 0 } : State).update ctx balance0 balance1 old0 old1 =
-      .ok ({ post with unlocked := 0 }, event, oracle) := by
-  simp only [State.update, dite_eq_left bound0, dite_eq_left bound1] at updated ⊢
-  have fields := Except.ok.inj updated
-  simp only [Prod.mk.injEq] at fields
-  obtain ⟨rfl, rfl, rfl⟩ := fields
-  rfl
 
 
 

@@ -709,60 +709,6 @@ theorem fee68_source_exact {K : WriterKey → Prop} {st : State} {sevm : Sevm} {
 def mintFeeLocals (amount1 amount0 b1 b0 r1 r0 toWord extρ : B256) (R : List B256) : List B256 :=
   0 :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: 0 :: toWord :: extρ :: R
 
-/-- The actual mint1225 callNext68 consumes the finite fee producer and original1233 continuation. -/
-theorem feeMint_source_caller_inv {K : WriterKey → Prop} {st : State} {D : Exec.Deriv}
-    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
-    {amount1 discarded amount0 b1 b0 r1 r0 toWord extρ : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
-    (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112)
-    (fresh : FeeMintSourceFresh K st D sevm b
-      (mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord extρ R) M r1 r0 0x1233)
-    (run : SFunc.RunCutP (StepIn D) cert.prog sevm C
-      (St b (amount1 :: discarded :: amount0 :: b1 :: b0 :: r1 :: r0 :: 0 :: toWord :: extρ :: R) M G)
-      t_1225_c41 r) :
-    ∃ feeGas feePost,
-      SFunc.RunP (StepIn D) cert.prog sevm
-        (St b (r1 :: r0 :: 0x1233 :: mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord extρ R) M feeGas)
-        t_26ec_c68 (.returned feePost) ∧
-      Nonempty (FeeMintSourceObservation K st D sevm b
-        (mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord extρ R) M r1 r0 0x1233 (.returned feePost)) ∧
-      SFunc.RunCutP (StepIn D) cert.prog sevm C feePost t_1233_c41 r := by
-  unfold t_1225_c41 at run
-  obtain ⟨_, run⟩ := ric_destP run
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  dsimp only [List.set] at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  rw [show Bytes.toB256 [0] = (0 : B256) from rfl] at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  rw [show Bytes.toB256 [0x12, 0x33] = (0x1233 : B256) from by decide] at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_dup (w := r0) rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_dup (w := r1) rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  rw [show Bytes.toB256 [0x26, 0xec] = (0x26ec : B256) from by decide] at run
-  cases run with
-  | callRet d lookup pop callee continuation =>
-    change some t_26ec_c68 = _ at lookup
-    cases lookup
-    obtain ⟨_, eq⟩ := St.of_pop1 pop
-    rw [eq] at callee
-    exact ⟨_, _, callee, fee68_source_inv fork mem rep bound0 bound1 fresh callee, continuation⟩
-  | callHalt d lookup pop callee =>
-    change some t_26ec_c68 = _ at lookup
-    cases lookup
-    obtain ⟨_, eq⟩ := St.of_pop1 pop
-    rw [eq] at callee
-    obtain ⟨observed⟩ := fee68_source_inv fork mem rep bound0 bound1 fresh callee
-    cases observed.returned
-
 def feeBurnMemory (M : Mem) (pair : Adr) : Mem := transferScratch M pair.toB256
 
 def feeBurnBalance1 (M : Mem) : B256 := Bytes.toB256 (M.read 128 32).1

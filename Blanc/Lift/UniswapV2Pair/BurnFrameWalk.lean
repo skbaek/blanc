@@ -364,24 +364,6 @@ def BurnPrefixFresh (K : WriterKey → Prop) (st : State) (D : Exec.Deriv)
             (Bytes.toB256 (out0.take 32)) t1 t0 r1 r0 toWord extρ R)
           (feeBurnMemory M1 sevm.currentTarget) r1 r0 0x15e2
 
-/-- Burn's actual factory reply chooses a row from the root-fixed finite universe.
-No hypothetical-answer freshness callback is needed at the frame boundary. -/
-theorem burnPrefixFresh_of_trace {K : WriterKey → Prop} {st : State} {D : Exec.Deriv}
-    {b : Devm} {R : List B256} {M : Mem} {toWord extρ : B256} {seg : Seg}
-    (fork : CoveredFork D.sevm.benvStat.fork) (mem : PtrMem 128 96 M)
-    (inj : WriterInj (WriterExtend K (mintTraceKeys D)))
-    (apart : WriterApart (WriterExtend K (mintTraceKeys D))) :
-    BurnPrefixFresh K st D D.sevm b R M toWord extρ seg := by
-  unfold BurnPrefixFresh
-  dsimp only
-  intro out0 d1 out1 gas _ _ gw callGas d out call post
-  have reply0 := balanceReplyMemory_ptr out0 (balanceRequestMemory_ptr mem D.sevm.currentTarget)
-  have reply1 := balanceReplyMemory_ptr out1 (balanceRequestMemory_ptr reply0 D.sevm.currentTarget)
-  have scratch := feeBurnMemory_ptr reply1 D.sevm.currentTarget
-  have member := mint_feeReply_mem fork scratch.wf call ⟨1, _, post.stack, by decide⟩
-  rw [post.returnData] at member
-  exact mint_feeFresh_of_universe inj apart (fun _ old => Or.inl old) (Or.inr member) _ _ _ _ _
-
 /-- Literal Burn entry derives a positive two-word return, its actual pointer
 and six token calls plus the retained fee callee from the same derivation. -/
 theorem burnPrefix_return_inv {K : WriterKey → Prop} {st : State} {D : Exec.Deriv}
@@ -430,56 +412,5 @@ theorem burnPrefix_return_inv {K : WriterKey → Prop} {st : State} {D : Exec.De
   exact ⟨unlocked, mutable, _, _, _, _, finalSize, returned, rfl,
     finalMem, low, high, positive0, positive1, _, feePost, d0, d1, tx0, tx1, final0, final1,
     feeRun, call0, call1, txCall0, txCall1, finalCall0, finalCall1⟩
-
-/-- Successful actual pc-zero Burn returns its real two payout words and keeps
-the same-D callee, token occurrences and terminal RETURN available to frame adapters. -/
-theorem burnPc0_return_inv {K : WriterKey → Prop} {st : State} {D : Exec.Deriv}
-    {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (selector : Blanc.Sevm.selector sevm = 0x89afcb44)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
-    (tracked : K (.balance sevm.currentTarget))
-    (fresh : ∀ gas calleeOutcome,
-      SFunc.RunP (StepIn D) cert.prog sevm
-        (St b [(0xffffffffffffffffffffffffffffffffffffffff : B256) &&& Sevm.dataWord sevm 4,
-          0x053d, 0x89afcb44] getterInitMemory gas) t_13f5_c37 calleeOutcome →
-      BurnPrefixFresh K st D sevm b [0x89afcb44] getterInitMemory
-        ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& Sevm.dataWord sevm 4)
-        0x053d (.done calleeOutcome))
-    (run : SFunc.RunP (StepIn D) cert.prog sevm (St b [] Mem.empty G) t_0000_c0 o) :
-    b.getStorVal sevm.currentTarget 12 = 1 ∧ sevm.isStatic = false ∧
-    ∃ (calleeGas : Nat) (calleePost publicPost : Devm) (amount0 amount1 p : B256) (n abiGas : Nat),
-      SFunc.RunP (StepIn D) cert.prog sevm
-        (St b [(0xffffffffffffffffffffffffffffffffffffffff : B256) &&& Sevm.dataWord sevm 4,
-          0x053d, 0x89afcb44] getterInitMemory calleeGas) t_13f5_c37 (.returned calleePost) ∧
-      calleePost.stack = [amount1, amount0, 0x89afcb44] ∧ PtrMem p n calleePost.memory ∧
-      96 ≤ p.toNat ∧ p.toNat + 64 < 2 ^ 256 ∧ 0 < amount0.toNat ∧ 0 < amount1.toNat ∧
-      o = .halted publicPost ∧ publicPost.output = amount0.toBytes ++ amount1.toBytes ∧
-      (∀ a, publicPost.getStor a = calleePost.getStor a) ∧ publicPost.logs = calleePost.logs ∧
-      Linst.Run sevm
-        (St calleePost [p, 64, 0x89afcb44] (burnEventMemory calleePost.memory p amount0 amount1) abiGas)
-        .return_ (.ok publicPost) ∧
-      ∃ (feeBefore feePost d0 d1 tx0 tx1 final0 final1 : Devm),
-        SFunc.RunP (StepIn D) cert.prog sevm feeBefore t_26ec_c68 (.returned feePost) ∧
-        (∃ before0, StepIn D sevm before0 (.exec .staticcall) d0) ∧
-        (∃ before1, StepIn D sevm before1 (.exec .staticcall) d1) ∧
-        (∃ before0, StepIn D sevm before0 (.exec .call) tx0) ∧
-        (∃ before1, StepIn D sevm before1 (.exec .call) tx1) ∧
-        (∃ before0, StepIn D sevm before0 (.exec .staticcall) final0) ∧
-        (∃ before1, StepIn D sevm before1 (.exec .staticcall) final1) := by
-  obtain ⟨value, size, calleeGas, calleeOutcome, callee, tail⟩ := burnPc0_caller_inv selector run
-  obtain ⟨unlocked, mutable, amount0, amount1, calleePost, p, n,
-    returned, stack, ptr, low, high, positive0, positive1, occurrences⟩ :=
-    burnPrefix_return_inv fork getterInitMemory_ptr burnEntryMemory_sentinel rep tracked
-      (fresh calleeGas calleeOutcome callee) (SFunc.runP_iff_runCutP_nil.mp callee)
-  have outcomeEq := Seg.done.inj returned
-  rw [outcomeEq] at callee tail
-  have self := St.self (d := calleePost) stack rfl
-  have canonical := (congrArg (fun start : Devm =>
-    SFunc.RunCutP (StepIn D) cert.prog sevm [] start t_053d_c83 (.done o)) self).mp tail
-  obtain ⟨abiGas, publicPost, halted, terminal, output, stor, logs⟩ :=
-    burnAbi_return_inv (fun h => StepIn.toRun h) ptr low high canonical
-  exact ⟨unlocked, mutable, calleeGas, calleePost, publicPost, amount0, amount1, p, n, abiGas,
-    callee, stack, ptr, low, high, positive0, positive1, Seg.done.inj halted,
-    output, stor, logs, terminal, occurrences⟩
 
 end Blanc.Lift.UniswapV2Pair

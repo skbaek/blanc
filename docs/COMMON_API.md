@@ -1437,8 +1437,7 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   `of_addLog`, `of_popList`, `of_popBurnList`, and gas-independence of the
   forward cost helpers (`sloadCost_congr`, `sstoreCost_congr`, `afterSload`,
   `afterSstore`). A dispatcher that reaches a non-gas-free entry needs a
-  two-run walk to the selected entry first (see
-  `Blanc/Composition/UniswapV2PairWeth9GasFree.lean` for WETH9).
+  two-run walk to the selected entry first.
 
 ### I2. The property concerns a complete execution or child frames
 

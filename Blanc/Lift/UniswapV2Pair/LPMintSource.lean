@@ -235,33 +235,4 @@ def lpMintSupplySentry (sevm : Sevm) (b : Devm) (toWord value : B256) (G : Nat) 
 def lpMintCreditSentry (sevm : Sevm) (b : Devm) (toWord value : B256) (G : Nat) : Prop :=
   gCallStipend < G + lpMintCreditCharge sevm b toWord value + 1828
 
-/-- Accepted actual State.mintLP yields the exact raw entry and finite complete post. -/
-theorem lpMint62_source_exact {K : WriterKey → Prop} {st post : State} {events : List Event}
-    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {toWord value ρ : B256} {G : Nat}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
-    (fresh : WriterFreshKeys K (lpMintTouched toWord.toAdr))
-    (accepted : st.mintLP toWord.toAdr value = .ok (post, events))
-    (nonstatic : sevm.isStatic = false)
-    (supplySentry : lpMintSupplySentry sevm b toWord value G)
-    (creditSentry : lpMintCreditSentry sevm b toWord value G)
-    (room : R.length ≤ 1014) :
-    SFunc.RunExact cert.prog sevm (St b (value :: toWord :: ρ :: R)
-      M (lpMintGas sevm b toWord value G)) t_28ca_c62
-      (.returned (lpMintPost sevm b R M toWord value G)) ∧
-    LPMintSourceResult K st sevm b R M toWord value G ∧
-    post = lpMintSourceState st toWord.toAdr value ∧ events = [.transfer 0 toWord.toAdr value] := by
-  obtain ⟨supply, balance, postEq, eventsEq⟩ := lpMintLP_inv accepted
-  have reads := lpMint_source_reads (value := value) rep fresh
-  have supplyRaw : (lpMintSupplyWord sevm b).toNat + value.toNat < 2 ^ 256 := by
-    rw [reads.1]
-    exact supply
-  have balanceRaw : (lpMintRecipientWord sevm (afterSload sevm b 0) toWord
-      (lpMintSupplyWord sevm b + value)).toNat + value.toNat < 2 ^ 256 := by
-    rw [reads.2]
-    exact balance
-  exact ⟨lpMint62_exact fork mem rfl rfl rfl rfl supplySentry creditSentry nonstatic
-      supplyRaw balanceRaw room,
-    lpMint_source_result rep fresh ⟨supplyRaw, nonstatic, balanceRaw⟩, postEq, eventsEq⟩
-
 end Blanc.Lift.UniswapV2Pair

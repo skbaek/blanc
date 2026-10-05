@@ -228,28 +228,4 @@ theorem PairStorageReplay.append {U : WriterKey → Prop} {a b c : Stor}
   obtain ⟨finish, K2, replay2, grows2, sub2, rep2⟩ := second middle K1 sub1 rep1
   exact ⟨finish, K2, replay1.append replay2, fun k h => grows2 k (grows1 k h), sub2, rep2⟩
 
-/-- A storage replay realizes the exact model fold and carries ledger,
-modular oracle and fee-off share-value laws from the one initial checkpoint.
-The actual configured-history producer must supply this replay and identify
-its invocations; this theorem does not assume that identification. -/
-theorem PairStorageReplay.model_laws {U K : WriterKey → Prop} {pre post : Stor}
-    {st : State} {invs : List SourceInvocation}
-    (replay : PairStorageReplay U pre invs post) (sub : ∀ k, K k → U k)
-    (represented : WriterRep K pre st) (ledger : st.Ledger)
-    (answers : sourceReplayAnswers st invs) :
-    ∃ finish K', runSourceInvocations st invs = some finish ∧
-      (∀ k, K k → K' k) ∧ (∀ k, K' k → U k) ∧ WriterRep K' post finish ∧
-      finish.Ledger ∧
-      finish.price0CumulativeLast.toNat =
-        (st.price0CumulativeLast.toNat + oracleSum0 (sourceReplayUpdates st invs)) % 2 ^ 256 ∧
-      finish.price1CumulativeLast.toNat =
-        (st.price1CumulativeLast.toNat + oracleSum1 (sourceReplayUpdates st invs)) % 2 ^ 256 ∧
-      ∀ before after, (before, after) ∈ sourceReplayEdges st invs →
-        0 < before.totalSupply.toNat →
-        before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
-          after.reserve0.val * after.reserve1.val * before.totalSupply.toNat ^ 2 := by
-  obtain ⟨finish, K', source, grows, included, rep⟩ := replay st K sub represented
-  exact ⟨finish, K', source.realizes, grows, included, rep, source.ledger ledger,
-    source.oracle_mod.1, source.oracle_mod.2, source.feeOff_product answers⟩
-
 end Blanc.Lift.UniswapV2Pair

@@ -720,7 +720,6 @@ import Blanc.Lift.UniswapV2Pair.BurnForwardBody
 import Blanc.Lift.UniswapV2Pair.BurnForwardAccept
 import Blanc.Lift.UniswapV2Pair.SourceReplay
 import Blanc.Lift.UniswapV2Pair.ReplayWriterGas
-import Blanc.Lift.UniswapV2Pair.InitializedReplay
 import Blanc.Lift.UniswapV2Pair.PairSupply
 import Blanc.Lift.UniswapV2Pair.PairHistory
 import Blanc.Lift.UniswapV2Pair.SwapForwardAccept
@@ -736,7 +735,6 @@ import Blanc.Lift.UniswapV2Pair.Creation.DeployInit
 -- Exact final second-host return and previously omitted control owners.
 import Blanc.Composition.UniswapV2PairWeth9
 import Blanc.Composition.UniswapV2PairWeth9Frame
-import Blanc.Composition.UniswapV2PairWeth9GasFree
 import Blanc.Lift.GasErasureRun
 import Blanc.Lift.InvWalkBranchToP
 import Blanc.Lift.LedgerFootprintOrder

@@ -897,31 +897,6 @@ theorem BurnEntryTrackedFinished.toFinished {U K : WriterKey → Prop}
     sub, _, facts⟩ := finished
   exact ⟨K', final, nested, rets, post, a0, a1, added, raw, sub, facts⟩
 
-/-- Restore the finite incoming rows at the same final storage/state, using
-freshness inside the original fixed universe. No fold-growth premise is added. -/
-theorem BurnEntryFinished.track {U K : WriterKey → Prop}
-    {current : Checkpoint} {D : Exec.Deriv} {b : Devm} {o : Outcome} {invocation : List Nat}
-    (incoming : WriterRep K (b.getStor D.sevm.currentTarget) current.state)
-    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
-    (finished : BurnEntryFinished U current D b o invocation) :
-    BurnEntryTrackedFinished U K current D b o invocation := by
-  obtain ⟨K', final, nested, rets, post, a0, a1, added, raw,
-    finalSub, consumed, halted, output, represented, checkpoint, context,
-    unlocked, pending, logs, images⟩ := finished
-  obtain ⟨rows, finite⟩ := incoming.finite
-  have rowInU : ∀ k ∈ rows, U k := fun k member => sub k ((finite k).mpr member)
-  have fresh : WriterFreshKeys K' rows :=
-    Blanc.SlotFootprint.FreshKeys.of_universe inj apart finalSub rowInU
-  refine ⟨WriterExtend K' rows, final, nested, rets, post, a0, a1, added, raw,
-    ?_, ?_, consumed, halted, output, represented.extend fresh,
-    checkpoint, context, unlocked, pending, logs, images⟩
-  · intro k member
-    rcases member with old | row
-    · exact finalSub k old
-    · exact rowInU k row
-  · intro k old
-    exact Or.inr ((finite k).mp old)
-
 /-- Every reply the Burn source consumes, in call order: the two initial
 `balanceOf(pair)` replies, the factory `feeTo` reply, the two token `transfer`
 replies with their frame-entry bits, and the two final `balanceOf(pair)` replies,
@@ -1169,33 +1144,6 @@ theorem burnPc0_source_finished {U K : WriterKey → Prop} {current : Checkpoint
     BurnEntryFinished U current D b o invocation :=
   (burnPc0_source_authentic invocation fork selector rep tracked inj apart sub trace
     sem image installed good staticGood run).toTracked.toFinished
-
-/-- The supplied raw invocation is the root used by the lift and every source
-producer. U remains the caller's fixed HASH-T universe, including this root's
-actual fee trace and all admitted descendants; no phase-local universe is made. -/
-theorem burnRaw_source_finished {U K : WriterKey → Prop} {current : Checkpoint}
-    {sevm : Sevm} {b publicPost : Devm} {G : Nat}
-    (invocation : List Nat) (codeEq : sevm.code = code)
-    (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x89afcb44)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (tracked : K (.balance sevm.currentTarget))
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok publicPost))
-    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
-    (trace : ∀ k ∈ mintTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok publicPost, run⟩, U k)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
-    (good : ∀ F ∈ Exec.rawFrameRoots run,
-      F.sevm.currentTarget = sevm.currentTarget → LockedGood U F)
-    (staticGood : ∀ F ∈ Exec.rawFrameRoots run, F.sevm.currentTarget = sevm.currentTarget →
-      ∀ k ∈ staticViewDecodedKeys F.sevm, U k) :
-    BurnEntryFinished U current ⟨0, sevm, St b [] Mem.empty G, .ok publicPost, run⟩
-      b (.halted publicPost) invocation := by
-  obtain ⟨f, entry, lifted⟩ := lift_sound_in cert_check codeEq fork run
-  rw [show cert.prog[0]? = some t_0000_c0 from rfl] at entry
-  cases entry
-  exact burnPc0_source_finished invocation fork selector rep tracked inj apart sub trace
-    sem image installed good staticGood lifted
 
 /-- **Authenticated raw Burn frame.** The supplied raw root consumes the typed
 Burn source over a transcript fixed by its actual call answers, each tied to its

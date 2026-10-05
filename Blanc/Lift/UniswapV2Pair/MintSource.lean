@@ -474,27 +474,6 @@ theorem mintAfterFee_frame_accept {frame : Frame} {observed : MintObserved} {fee
   rw [last]
   rfl
 
-/-- Genuine primitive affordability constructs the raw run, then derives its finite source result. -/
-theorem mintAfterFee_source_exact {K : WriterKey → Prop} {st : State} {ctx : Context}
-    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
-    {G : Nat} {f amount1 amount0 b1 b0 r1 r0 oldLiquidity toWord ρ : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
-    (fresh : MintAfterFeeFresh K st toWord)
-    (time : ctx.timestamp = sevm.benvStat.time) (pair : ctx.pair = sevm.currentTarget)
-    (oldBound0 : r0.toNat < 2 ^ 112) (oldBound1 : r1.toNat < 2 ^ 112)
-    (bound0 : b0.toNat < 2 ^ 112) (bound1 : b1.toNat < 2 ^ 112) (room : R.length ≤ 997)
-    (env : MintAfterFeeEnv sevm b f toWord amount0 amount1 b0 b1 r0 r1 G) :
-    SFunc.RunExact cert.prog sevm
-      (St b (f :: 0 :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: oldLiquidity :: toWord :: ρ :: R)
-        M (env.armGas + sloadCost sevm b 0 + 28)) t_1233_c41 (.returned (env.post M R ρ)) ∧
-    MintAfterFeeSourceResult K st ctx sevm b R f amount1 amount0 b1 b0 r1 r0 toWord (.returned (env.post M R ρ)) := by
-  have raw := mintAfterFee_exact (oldLiquidity := oldLiquidity) (ρ := ρ) fork mem
-    oldBound0 oldBound1 bound0 bound1 room env
-  exact ⟨raw,mintAfterFee_source_inv fork mem rep fresh time pair oldBound0 oldBound1 raw.toRun⟩
-
-
-
 /-- Internal typed cache bindings; the public prefix must derive them from its actual observations. -/
 structure MintAfterFeeCache (observed : MintObserved) (fee : FeeResult)
     (f amount1 amount0 b1 b0 r1 r0 toWord : B256) : Prop where
