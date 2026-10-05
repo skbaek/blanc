@@ -3061,6 +3061,20 @@ turns it into an `AccountingLadderAdmitted`. `Exec.Deriv.FirstExec` and
 instruction. Worked use: WETH9,
 `Blanc/Lift/Weth9/CommittedSpawn.lean`, `CommittedHistory.lean`.
 
+When the contract's own frame theorem already consumes the frame's *whole subtree* —
+re-entered frames of the same contract run inside the frame's own model transcript, so
+its own carrier effect is not complete at the first external instruction and the
+children must not be replayed a second time — use
+[`Blanc/ExecutionWholeFrameAccounting.lean`](../Blanc/ExecutionWholeFrameAccounting.lean).
+The contract supplies `Exec.CoreAccounting.WholeFrameReplay` (every successful
+non-static target frame replays from its entry to its post boundary with exactly the
+observation of its committed frames) plus `SpawnKinds`;
+`Exec.CoreAccounting.wholeFrameTarget` adds the static case
+(`Exec.CoreAccounting.staticObservedNil`: below a static frame nothing is observed, by
+the lower-depth hypothesis) and `ExecutionAccountingReplay.wholeFrameLadder` turns it
+into an `AccountingLadderAdmitted`. Intended use: the Uniswap V2 pair, whose calling
+entries consume re-entered ERC-20 frames as nested transcript turns.
+
 ### T3. The wrapper is a transaction and the fact is about an installed contract
 
 Use

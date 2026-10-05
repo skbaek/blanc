@@ -50,6 +50,7 @@ import Blanc.ExecutionAccountingAdmission
 import Blanc.ExecutionAccountingCore
 import Blanc.ExecutionEntryAccounting
 import Blanc.ExecutionModelAccounting
+import Blanc.ExecutionWholeFrameAccounting
 import Blanc.ExecutionDirectCode
 import Blanc.CallSpawnExact
 import Blanc.StaticCallStorage
