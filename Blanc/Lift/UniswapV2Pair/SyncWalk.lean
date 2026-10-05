@@ -256,6 +256,29 @@ private theorem syncCodeGuard_shape (site : SyncBalanceSite) :
           (.branch site.codeFailureTree site.callTree))))) := by
   cases site <;> rfl
 
+/-- The four literal code-size/flag operations shared by both Sync call sites. -/
+def syncCodeGuardLine : List Ninst :=
+  [.reg .extcodesize, .reg .iszero, .reg (.dup 0), .reg .iszero]
+
+theorem syncCodeGuardLine_inv {sevm : Sevm} {b d : Devm}
+    {S : List B256} {M : Mem} {G : Nat} {token : B256}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (run : Line.Run sevm (St b (token :: S) M G) syncCodeGuardLine d) :
+    ∃ gas, d = St (temporalAccountAccessBase b token.toAdr)
+      (B256.eqCheck (B256.eqCheck (b.getCode token.toAdr).size.toB256 0) 0 ::
+        B256.eqCheck (b.getCode token.toAdr).size.toB256 0 :: S) M gas := by
+  dsimp only [syncCodeGuardLine] at run
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_extcodesize fork hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_iszero hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_iszero hs
+  cases run
+  exact ⟨_, rfl⟩
+
 /-- Successful passage through either actual code guard derives a nonzero
 code-size word and preserves the same derivation predicate into the call. -/
 theorem syncCodeGuard_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
@@ -268,14 +291,19 @@ theorem syncCodeGuard_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
         (St (temporalAccountAccessBase b token.toAdr) (0 :: S) M gas)
         site.callTree seg := by
   rw [syncCodeGuard_shape] at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_extcodesize fork (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
+  have destinationLength : site.codeDestination.length ≤ 32 := by cases site <;> decide
+  change SFunc.RunCutP (StepIn D) cert.prog sevm C (St b (token :: S) M G)
+    (syncCodeGuardLine.foldr SFunc.next
+      (.next (.push site.codeDestination destinationLength)
+        (.branch site.codeFailureTree site.callTree))) seg at run
+  obtain ⟨after, line, run⟩ := SFunc.RunCutP.split_nexts
+    (P := StepIn D) (fs := cert.prog) (sevm := sevm) (C := C)
+    (pre := St b (token :: S) M G)
+    (tail := .next (.push site.codeDestination destinationLength)
+      (.branch site.codeFailureTree site.callTree)) (seg := seg)
+    (fun step => StepIn.toRun step) syncCodeGuardLine run
+  obtain ⟨_, state⟩ := syncCodeGuardLine_inv fork line
+  rw [state] at run
   obtain ⟨_, hs, run⟩ := ric_nextP run
   obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
   rcases ric_branchP run with ⟨-, _, failed⟩ | ⟨accepted, gas, tailRun⟩
@@ -316,6 +344,122 @@ theorem syncCodeGuard_exact {sevm : Sevm} {b : Devm} {S : List B256}
 
 /-- The actual first decoder is followed by the slot-7 load and the second
 balanceOf request. The token is read from the first call's resulting world. -/
+def syncSecondRequestLine : List Ninst := [
+  .push [0x07] (by decide),
+  .reg .sload,
+  .push [0x40] (by decide),
+  .reg (.dup 0),
+  .reg .mload,
+  .push [0x70, 0xa0, 0x82, 0x31, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00] (by decide),
+  .reg (.dup 1),
+  .reg .mstore,
+  .reg .address,
+  .push [0x04] (by decide),
+  .reg (.dup 2),
+  .reg .add,
+  .reg .mstore,
+  .reg (.swap 0),
+  .reg .mload,
+  .push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide),
+  .reg (.swap 0),
+  .reg (.swap 2),
+  .reg .and,
+  .reg (.swap 1),
+  .push [0x70, 0xa0, 0x82, 0x31] (by decide),
+  .reg (.swap 1),
+  .push [0x24] (by decide),
+  .reg (.dup 0),
+  .reg (.dup 2),
+  .reg .add,
+  .reg (.swap 2),
+  .push [0x20] (by decide),
+  .reg (.swap 2),
+  .reg (.swap 0),
+  .reg (.swap 1),
+  .reg (.swap 0),
+  .reg (.dup 2),
+  .reg (.swap 0),
+  .reg .sub,
+  .reg .add,
+  .reg (.dup 1),
+  .reg (.dup 6),
+  .reg (.dup 0)]
+
+theorem syncSecondRequestLine_inv {sevm : Sevm} {b d : Devm}
+    {S : List B256} {M : Mem} {G : Nat}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (run : Line.Run sevm (St b S M G) syncSecondRequestLine d) :
+    ∃ gas, d = St (afterSload sevm b 7)
+      ((b.getStorVal sevm.currentTarget 7).toAdr.toB256 ::
+       (b.getStorVal sevm.currentTarget 7).toAdr.toB256 ::
+       128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
+       (b.getStorVal sevm.currentTarget 7).toAdr.toB256 :: S)
+      (balanceRequestMemory M sevm.currentTarget) gas := by
+  have read0 : Bytes.toB256 (M.read 64 32).1 = 128 := mem.word
+  have same0 : (M.read 64 32).2 = M := mem.read_self (by decide)
+  have mem2 : PtrMem 128 192 (balanceRequestMemory M sevm.currentTarget) :=
+    balanceRequestMemory_ptr mem sevm.currentTarget
+  have read2 : Bytes.toB256 ((balanceRequestMemory M sevm.currentTarget).read 64 32).1 = 128 :=
+    mem2.word
+  have same2 : ((balanceRequestMemory M sevm.currentTarget).read 64 32).2 =
+      balanceRequestMemory M sevm.currentTarget := mem2.read_self (by decide)
+  simp only [balanceRequestMemory, balanceOfSelectorWord] at read2 same2
+  dsimp only [syncSecondRequestLine] at run
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_sload fork hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨d, hs, run⟩ := Line.of_run_cons run
+  obtain ⟨_, hd⟩ := ri_mload hs
+  rw [show (Bytes.toB256 [64]).toNat = 64 from by decide, read0, same0] at hd; subst d
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_mstore_nat 128 rfl hs
+  obtain ⟨d, hs, run⟩ := Line.of_run_cons run
+  have hp := of_run_address hs
+  have stack := hp.stack
+  simp only [Stack.Push, Split, St.stack] at stack
+  have hd := St.of_stackRel hp
+  rw [stack] at hd
+  rw [hd] at run
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_mstore_nat 132 rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  obtain ⟨d, hs, run⟩ := Line.of_run_cons run
+  obtain ⟨_, hd⟩ := ri_mload hs
+  rw [show (Bytes.toB256 [64]).toNat = 64 from by decide, read2, same2] at hd; subst d
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_and hs
+  rw [ff20_eq, and_mask_word] at run
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_sub hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨gas, rfl⟩ := ri_dup rfl hs
+  cases run
+  exact ⟨gas, rfl⟩
+
 theorem syncSecondRequest_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     {R : List B256} {C : List Nat} {M : Mem} {G : Nat}
     {balance0 tag : B256} {seg : Seg}
@@ -332,69 +476,14 @@ theorem syncSecondRequest_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
          balance0 :: 0x1fd4 :: tag :: R)
         (balanceRequestMemory M sevm.currentTarget) gas)
       SyncBalanceSite.second.codeGuardTree seg := by
-  have read0 : Bytes.toB256 (M.read 64 32).1 = 128 := mem.word
-  have same0 : (M.read 64 32).2 = M := mem.read_self (by decide)
-  have mem2 : PtrMem 128 192 (balanceRequestMemory M sevm.currentTarget) :=
-    balanceRequestMemory_ptr mem sevm.currentTarget
-  have read2 : Bytes.toB256 ((balanceRequestMemory M sevm.currentTarget).read 64 32).1 = 128 :=
-    mem2.word
-  have same2 : ((balanceRequestMemory M sevm.currentTarget).read 64 32).2 =
-      balanceRequestMemory M sevm.currentTarget := mem2.read_self (by decide)
-  simp only [balanceRequestMemory, balanceOfSelectorWord] at read2 same2
-  change SFunc.RunCutP _ _ _ _ _ (.next (.push [7] _) _) _ at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_sload fork (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨d, hs, run⟩ := ric_nextP run
-  obtain ⟨_, hd⟩ := ri_mload (StepIn.toRun hs)
-  rw [show (Bytes.toB256 [64]).toNat = 64 from by decide, read0, same0] at hd; subst d
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_mstore_nat 128 rfl (StepIn.toRun hs)
-  obtain ⟨d, hs, run⟩ := ric_nextP run
-  have hp := of_run_address (StepIn.toRun hs)
-  have stack := hp.stack
-  simp only [Stack.Push, Split, St.stack] at stack
-  have hd := St.of_stackRel hp
-  rw [stack] at hd
-  rw [hd] at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_mstore_nat 132 rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨d, hs, run⟩ := ric_nextP run
-  obtain ⟨_, hd⟩ := ri_mload (StepIn.toRun hs)
-  rw [show (Bytes.toB256 [64]).toNat = 64 from by decide, read2, same2] at hd; subst d
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_and (StepIn.toRun hs)
-  rw [ff20_eq, and_mask_word] at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_sub (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨gas, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  exact ⟨gas, run⟩
+  change SFunc.RunCutP (StepIn D) cert.prog sevm C
+    (St b (balance0 :: 0x1fd4 :: tag :: R) M G)
+    (syncSecondRequestLine.foldr SFunc.next SyncBalanceSite.second.codeGuardTree) seg at run
+  obtain ⟨after, line, tail⟩ := SFunc.RunCutP.split_nexts
+    (fun step => StepIn.toRun step) syncSecondRequestLine run
+  obtain ⟨gas, state⟩ := syncSecondRequestLine_inv fork mem line
+  rw [state] at tail
+  exact ⟨gas, tail⟩
 
 
 /-- Thirty-eight fixed-charge instructions cost113 gas, in addition to the
@@ -641,6 +730,130 @@ theorem syncBalancePair_exact {sevm : Sevm} {b d0 d1 : Devm}
     (by simp only [List.length_cons]; omega) call1 success1 returnedGas1 long1 body
 
 
+/-- The literal request prefix shared by the cursor and cut inversions. -/
+def syncFirstRequestLine : List Ninst := [.push [0x00] (by decide),
+  .push [0x0c] (by decide),
+  .reg .sstore,
+  .push [0x06] (by decide),
+  .reg .sload,
+  .push [0x40] (by decide),
+  .reg (.dup 0),
+  .reg .mload,
+  .push [0x70, 0xa0, 0x82, 0x31, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00] (by decide),
+  .reg (.dup 1),
+  .reg .mstore,
+  .reg .address,
+  .push [0x04] (by decide),
+  .reg (.dup 2),
+  .reg .add,
+  .reg .mstore,
+  .reg (.swap 0),
+  .reg .mload,
+  .push [0x1f, 0xd4] (by decide),
+  .reg (.swap 2),
+  .push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide),
+  .reg .and,
+  .reg (.swap 1),
+  .push [0x70, 0xa0, 0x82, 0x31] (by decide),
+  .reg (.swap 1),
+  .push [0x24] (by decide),
+  .reg (.dup 0),
+  .reg (.dup 3),
+  .reg .add,
+  .reg (.swap 2),
+  .push [0x20] (by decide),
+  .reg (.swap 2),
+  .reg (.swap 1),
+  .reg (.swap 0),
+  .reg (.dup 2),
+  .reg (.swap 0),
+  .reg .sub,
+  .reg .add,
+  .reg (.dup 1),
+  .reg (.dup 6),
+  .reg (.dup 0)]
+
+theorem syncFirstRequestLine_inv {sevm : Sevm} {b final : Devm}
+    {R : List B256} {M : Mem} {G : Nat} {tag : B256}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (run : Line.Run sevm (St b (tag :: R) M G) syncFirstRequestLine final) :
+    sevm.isStatic = false ∧ ∃ gas,
+      final = St (afterSload sevm (afterSstore sevm b 12 0) 6)
+        (((afterSstore sevm b 12 0).getStorVal sevm.currentTarget 6).toAdr.toB256 ::
+         ((afterSstore sevm b 12 0).getStorVal sevm.currentTarget 6).toAdr.toB256 ::
+         128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
+         ((afterSstore sevm b 12 0).getStorVal sevm.currentTarget 6).toAdr.toB256 ::
+         0x1fd4 :: tag :: R)
+        (balanceRequestMemory M sevm.currentTarget) gas := by
+  have read0 : Bytes.toB256 (M.read 64 32).1 = 128 := mem.word
+  have same0 : (M.read 64 32).2 = M := mem.read_self (by decide)
+  have mem2 : PtrMem 128 192 (balanceRequestMemory M sevm.currentTarget) :=
+    balanceRequestMemory_ptr mem sevm.currentTarget
+  have read2 : Bytes.toB256 ((balanceRequestMemory M sevm.currentTarget).read 64 32).1 = 128 :=
+    mem2.word
+  have same2 : ((balanceRequestMemory M sevm.currentTarget).read 64 32).2 =
+      balanceRequestMemory M sevm.currentTarget := mem2.read_self (by decide)
+  simp only [balanceRequestMemory, balanceOfSelectorWord] at read2 same2
+  dsimp only [syncFirstRequestLine] at run
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run
+  have mutable := ri_sstore_nonstatic fork hs
+  obtain ⟨_, rfl⟩ := ri_sstore fork hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_sload fork hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨d, hs, run⟩ := Line.of_run_cons run
+  obtain ⟨_, hd⟩ := ri_mload hs
+  rw [show (Bytes.toB256 [64]).toNat = 64 from by decide, read0, same0] at hd; subst d
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_mstore_nat 128 rfl hs
+  obtain ⟨d, hs, run⟩ := Line.of_run_cons run
+  have hp := of_run_address hs
+  have stack := hp.stack
+  simp only [Stack.Push, Split, St.stack] at stack
+  have hd := St.of_stackRel hp
+  rw [stack] at hd
+  rw [hd] at run
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run
+  obtain ⟨_, rfl⟩ := ri_mstore_nat 132 rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  obtain ⟨d, hs, run⟩ := Line.of_run_cons run
+  obtain ⟨_, hd⟩ := ri_mload hs
+  rw [show (Bytes.toB256 [64]).toNat = 64 from by decide, read2, same2] at hd; subst d
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_and hs
+  rw [ff20_and_word] at run
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_sub hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨gas, rfl⟩ := ri_dup rfl hs
+  cases run
+  exact ⟨mutable, gas, rfl⟩
+
 /-- The literal first request locks slot12, loads token0, and installs the
 actual overlapping request before its code guard. The same derivation and
 continuation are retained through every primitive step. -/
@@ -659,74 +872,16 @@ theorem syncFirstRequest_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
            0x1fd4 :: tag :: R)
           (balanceRequestMemory M sevm.currentTarget) gas)
         SyncBalanceSite.first.codeGuardTree seg := by
-  have read0 : Bytes.toB256 (M.read 64 32).1 = 128 := mem.word
-  have same0 : (M.read 64 32).2 = M := mem.read_self (by decide)
-  have mem2 : PtrMem 128 192 (balanceRequestMemory M sevm.currentTarget) :=
-    balanceRequestMemory_ptr mem sevm.currentTarget
-  have read2 : Bytes.toB256 ((balanceRequestMemory M sevm.currentTarget).read 64 32).1 = 128 :=
-    mem2.word
-  have same2 : ((balanceRequestMemory M sevm.currentTarget).read 64 32).2 =
-      balanceRequestMemory M sevm.currentTarget := mem2.read_self (by decide)
-  simp only [balanceRequestMemory, balanceOfSelectorWord] at read2 same2
   unfold t_1e66_c31 at run
-  obtain ⟨_, run⟩ := ric_destP run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  have mutable := ri_sstore_nonstatic fork (StepIn.toRun hs)
-  obtain ⟨_, rfl⟩ := ri_sstore fork (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_sload fork (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨d, hs, run⟩ := ric_nextP run
-  obtain ⟨_, hd⟩ := ri_mload (StepIn.toRun hs)
-  rw [show (Bytes.toB256 [64]).toNat = 64 from by decide, read0, same0] at hd; subst d
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_mstore_nat 128 rfl (StepIn.toRun hs)
-  obtain ⟨d, hs, run⟩ := ric_nextP run
-  have hp := of_run_address (StepIn.toRun hs)
-  have stack := hp.stack
-  simp only [Stack.Push, Split, St.stack] at stack
-  have hd := St.of_stackRel hp
-  rw [stack] at hd
-  rw [hd] at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_mstore_nat 132 rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨d, hs, run⟩ := ric_nextP run
-  obtain ⟨_, hd⟩ := ri_mload (StepIn.toRun hs)
-  rw [show (Bytes.toB256 [64]).toNat = 64 from by decide, read2, same2] at hd; subst d
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_and (StepIn.toRun hs)
-  rw [ff20_and_word] at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_sub (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨gas, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  exact ⟨mutable, gas, run⟩
+  obtain ⟨entryGas, cut⟩ := ric_destP run
+  change SFunc.RunCutP (StepIn D) cert.prog sevm C (St b (tag :: R) M entryGas)
+    (syncFirstRequestLine.foldr SFunc.next SyncBalanceSite.first.codeGuardTree) seg at cut
+  obtain ⟨after, line, tail⟩ := SFunc.RunCutP.split_nexts
+    (fun step => StepIn.toRun step) syncFirstRequestLine cut
+  obtain ⟨mutable, gas, state⟩ := syncFirstRequestLine_inv fork mem line
+  rw [state] at tail
+  exact ⟨mutable, gas, tail⟩
+
 
 
 /-- The first literal prefix costs126 local gas, including both scratch
