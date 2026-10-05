@@ -855,6 +855,60 @@ def BurnEntryFinished (U : WriterKey → Prop) (current : Checkpoint) (D : Exec.
     final.current.logs = current.logs ++ added ∧ publicPost.logs = b.logs ++ rawLogs ∧
     added.map (PendingLog.rawWith (burnOwnedRaw D.sevm.currentTarget)) = rawLogs.map some
 
+/-- The full observable Burn result with incoming footprint growth. Queue
+occurrence attachment is a separate canonical obligation. -/
+def BurnEntryTrackedFinished (U K : WriterKey → Prop) (current : Checkpoint) (D : Exec.Deriv)
+    (b : Devm) (o : Outcome) (invocation : List Nat) : Prop :=
+  let ctx := mintSourceContext D.sevm invocation
+  let recipient := ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
+    Sevm.dataWord D.sevm 4).toAdr
+  ∃ (K' : WriterKey → Prop) (final : Frame) (nested : Transcript)
+    (rets : List ChildReturn) (publicPost : Devm) (amount0 amount1 : B256)
+    (added : List PendingLog) (rawLogs : List Log),
+    (∀ k, K' k → U k) ∧ (∀ k, K k → K' k) ∧
+    ExactConsumes (startTyped current ctx (.burn recipient)) nested
+      { status := .success (encodeWords [amount0, amount1]), frame := final,
+        remaining := .done, childReturns := rets } ∧
+    o = .halted publicPost ∧ publicPost.output = encodeWords [amount0, amount1] ∧
+    WriterRep K' (publicPost.getStor D.sevm.currentTarget) final.current.state ∧
+    final.checkpoint = current ∧ final.context = ctx ∧ final.current.state.unlocked = 1 ∧
+    final.current.logs = current.logs ++ added ∧ publicPost.logs = b.logs ++ rawLogs ∧
+    added.map (PendingLog.rawWith (burnOwnedRaw D.sevm.currentTarget)) = rawLogs.map some
+
+/-- Forget footprint growth without weakening any observable Burn effect. -/
+theorem BurnEntryTrackedFinished.toFinished {U K : WriterKey → Prop}
+    {current : Checkpoint} {D : Exec.Deriv} {b : Devm} {o : Outcome} {invocation : List Nat}
+    (finished : BurnEntryTrackedFinished U K current D b o invocation) :
+    BurnEntryFinished U current D b o invocation := by
+  obtain ⟨K', final, nested, rets, post, a0, a1, added, raw,
+    sub, _, facts⟩ := finished
+  exact ⟨K', final, nested, rets, post, a0, a1, added, raw, sub, facts⟩
+
+/-- Restore the finite incoming rows at the same final storage/state, using
+freshness inside the original fixed universe. No fold-growth premise is added. -/
+theorem BurnEntryFinished.track {U K : WriterKey → Prop}
+    {current : Checkpoint} {D : Exec.Deriv} {b : Devm} {o : Outcome} {invocation : List Nat}
+    (incoming : WriterRep K (b.getStor D.sevm.currentTarget) current.state)
+    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
+    (finished : BurnEntryFinished U current D b o invocation) :
+    BurnEntryTrackedFinished U K current D b o invocation := by
+  obtain ⟨K', final, nested, rets, post, a0, a1, added, raw,
+    finalSub, consumed, halted, output, represented, checkpoint, context,
+    unlocked, pending, logs, images⟩ := finished
+  obtain ⟨rows, finite⟩ := incoming.finite
+  have rowInU : ∀ k ∈ rows, U k := fun k member => sub k ((finite k).mpr member)
+  have fresh : WriterFreshKeys K' rows :=
+    Blanc.SlotFootprint.FreshKeys.of_universe inj apart finalSub rowInU
+  refine ⟨WriterExtend K' rows, final, nested, rets, post, a0, a1, added, raw,
+    ?_, ?_, consumed, halted, output, represented.extend fresh,
+    checkpoint, context, unlocked, pending, logs, images⟩
+  · intro k member
+    rcases member with old | row
+    · exact finalSub k old
+    · exact rowInU k row
+  · intro k old
+    exact Or.inr ((finite k).mp old)
+
 /-- The real pc-zero route supplies entry guards, all external queues, the ABI
 return, and the fee/LP/child/Sync/Burn log image in the unchanged derivation D. -/
 theorem burnPc0_source_finished {U K : WriterKey → Prop} {current : Checkpoint}
@@ -968,5 +1022,47 @@ theorem burnRaw_source_finished {U K : WriterKey → Prop} {current : Checkpoint
   cases entry
   exact burnPc0_source_finished invocation fork selector rep tracked inj apart sub trace
     sem image installed good staticGood lifted
+
+/-- The actual pc-zero source consumer also preserves every incoming key. -/
+theorem burnPc0_source_tracked_finished {U K : WriterKey → Prop} {current : Checkpoint}
+    {D : Exec.Deriv} {b : Devm} {G : Nat} {o : Outcome}
+    (invocation : List Nat) (fork : CoveredFork D.sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector D.sevm = 0x89afcb44)
+    (rep : WriterRep K (b.getStor D.sevm.currentTarget) current.state)
+    (tracked : K (.balance D.sevm.currentTarget))
+    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
+    (trace : ∀ k ∈ mintTraceKeys D, U k)
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    (installed : some (b.getCode D.sevm.currentTarget).toList = sem.image)
+    (good : ∀ F ∈ Exec.rawFrameRoots D.exc,
+      F.sevm.currentTarget = D.sevm.currentTarget → LockedGood U F)
+    (staticGood : ∀ F ∈ Exec.rawFrameRoots D.exc, F.sevm.currentTarget = D.sevm.currentTarget →
+      ∀ k ∈ staticViewDecodedKeys F.sevm, U k)
+    (run : SFunc.RunP (StepIn D) cert.prog D.sevm (St b [] Mem.empty G) t_0000_c0 o) :
+    BurnEntryTrackedFinished U K current D b o invocation := by
+  exact (burnPc0_source_finished invocation fork selector rep tracked inj apart sub trace
+    sem image installed good staticGood run).track rep inj apart sub
+
+/-- The same supplied raw root, full entry result and incoming footprint growth. -/
+theorem burnRaw_source_tracked_finished {U K : WriterKey → Prop} {current : Checkpoint}
+    {sevm : Sevm} {b publicPost : Devm} {G : Nat}
+    (invocation : List Nat) (codeEq : sevm.code = code)
+    (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0x89afcb44)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (tracked : K (.balance sevm.currentTarget))
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok publicPost))
+    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
+    (trace : ∀ k ∈ mintTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok publicPost, run⟩, U k)
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
+    (good : ∀ F ∈ Exec.rawFrameRoots run,
+      F.sevm.currentTarget = sevm.currentTarget → LockedGood U F)
+    (staticGood : ∀ F ∈ Exec.rawFrameRoots run, F.sevm.currentTarget = sevm.currentTarget →
+      ∀ k ∈ staticViewDecodedKeys F.sevm, U k) :
+    BurnEntryTrackedFinished U K current ⟨0, sevm, St b [] Mem.empty G, .ok publicPost, run⟩
+      b (.halted publicPost) invocation := by
+  exact (burnRaw_source_finished invocation codeEq fork selector rep tracked run inj apart sub
+    trace sem image installed good staticGood).track rep inj apart sub
 
 end Blanc.Lift.UniswapV2Pair
