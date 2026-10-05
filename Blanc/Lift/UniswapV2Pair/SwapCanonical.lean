@@ -98,11 +98,14 @@ def SwapCanonicalBody (Own : Devm → Prop) (K : WriterKey → Prop) (current : 
     SwapCallbackOpt root sevm b2 S M2 p (swapRecipientWord sevm) (swapAmount0Out sevm)
       (swapAmount1Out sevm) (swapDataLength sevm) (swapDataStart sevm) d M ∧
     ((swapAmount0Out sevm = 0 ∧ T0 = id) ∨ (swapAmount0Out sevm ≠ 0 ∧
-      T0 = fun tail => .next (swapTransferReply b1.returnData) (mutableTranscript turns0 .done) tail)) ∧
+      T0 = (fun tail => .next (swapTransferReply b1.returnData) (mutableTranscript turns0 .done) tail) ∧
+      SwapCallProvenance sevm.currentTarget root sevm (swapPrefixWorld sevm b) b1 turns0)) ∧
     ((swapAmount1Out sevm = 0 ∧ T1 = id) ∨ (swapAmount1Out sevm ≠ 0 ∧
-      T1 = fun tail => .next (swapTransferReply b2.returnData) (mutableTranscript turns1 .done) tail)) ∧
+      T1 = (fun tail => .next (swapTransferReply b2.returnData) (mutableTranscript turns1 .done) tail) ∧
+      SwapCallProvenance sevm.currentTarget root sevm b1 b2 turns1)) ∧
     ((swapDataLength sevm = 0 ∧ TC = id) ∨ (swapDataLength sevm ≠ 0 ∧
-      TC = fun tail => .next (swapCallbackReply d.returnData) (mutableTranscript turnsC .done) tail)) ∧
+      TC = (fun tail => .next (swapCallbackReply d.returnData) (mutableTranscript turnsC .done) tail) ∧
+      SwapCallProvenance sevm.currentTarget root sevm b2 d turnsC)) ∧
     SwapBalanceCall root sevm d M p w.token0
       (w.token1 :: w.token0 :: 0 :: 0 :: w.reserve1 :: w.reserve0 :: w.dataLength ::
         w.dataOffset :: w.recipient :: w.amount1Out :: w.amount0Out :: 0x257 :: [0x022c0d9f]) d0 out0 ∧
@@ -180,7 +183,8 @@ CALL reply bound `short`, satisfies `SwapCanonicalBody` with the foreign-storage
 post-callback tail: every account other than the Pair keeps, at the end, the storage the
 callback (or the last taken transfer) left; and the lock prefix before the first external call
 touches no foreign account. Between those points foreign storage changes only inside the
-actual transfer/callback CALL steps the body names. -/
+actual transfer/callback CALL steps the body names.
+CROSS-HOST: conditional on `SwapCallReplyShort`. -/
 theorem swap_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Checkpoint}
     {sevm : Sevm} {b post : Devm} {G : Nat}
     (invocation : List Nat)
@@ -195,8 +199,7 @@ theorem swap_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Che
       (swapTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)))
     (hashTApart : WriterApart (WriterExtend K
       (swapTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)))
-    (short : ∀ pre d, StepIn ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm pre (.exec .call) d →
-      d.returnData.length < 2 ^ 160) :
+    (short : SwapCallReplyShort ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm) :
     (∀ a, a ≠ sevm.currentTarget → (swapPrefixWorld sevm b).getStor a = b.getStor a) ∧
     SwapCanonicalBody (fun d => ∀ a, a ≠ sevm.currentTarget → post.getStor a = d.getStor a)
       K current invocation run := by
@@ -263,7 +266,8 @@ theorem swap_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Che
 typed source swap over the actual transcript, in all six successful shapes (each optimistic
 transfer present iff its amount is nonzero, the callback present iff the data is nonempty),
 under trace-local HASH-T over `WriterExtend K (swapTraceKeys root)` and the explicit CALL reply
-bound `short` (every actual CALL step of this derivation returns fewer than `2^160` bytes). -/
+bound `short` (every actual CALL step of this derivation returns fewer than `2^160` bytes).
+CROSS-HOST: conditional on `SwapCallReplyShort`. -/
 theorem swap_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpoint}
     {sevm : Sevm} {b post : Devm} {G : Nat}
     (invocation : List Nat)
@@ -278,8 +282,7 @@ theorem swap_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
       (swapTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)))
     (hashTApart : WriterApart (WriterExtend K
       (swapTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)))
-    (short : ∀ pre d, StepIn ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm pre (.exec .call) d →
-      d.returnData.length < 2 ^ 160) :
+    (short : SwapCallReplyShort ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm) :
     SwapCanonicalBody (fun _ => True) K current invocation run := by
   obtain ⟨_, value, nonstatic, frame, T0, T1, TC, turns0, turns1, turnsC, b1, b2, d, d0, d1, M1, M2,
     M, p1, p, out0, out1, views0, views1, final, rets, K', added, c1, c2, c3, c4, c5, c6, c7, c8, c9,
