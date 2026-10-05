@@ -204,6 +204,11 @@ SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachChain", "Lift.Cursor", "Li
            "Lift.LockCheck", "Lift.LockCheckSound", "Lift.LockCheckFlow"]
 # Gas erasure over whole lifted runs (uniswap-v2 second host, N5-2): contract-neutral.
 SHARED += ["Lift.GasErasureRun"]
+# Caller provenance of committed frames (the direct-children fold and settled roots), callers
+# of the direct children of CALL/STATICCALL-only frames, and certificate call sites: line
+# suffixes of generated trees, the CALL input selector, children spawned on the frame's own
+# chain (uniswap-v2 second host, N5-4 and U10): contract-neutral.
+SHARED += ["Lift.CallerProvenance", "Lift.CallChildren", "Lift.CallSite", "Lift.CallSiteChildren"]
 # The constant memory map and its checker, code tries as data, and the executable-witness
 # engine with its child runs and spawn facts (deployed-lido-vyper-v1, V-): contract-neutral.
 SHARED += ["Lift.MemMap", "Lift.CheckMem", "Lift.CodeTriesData", "Lift.WitnessArms", "Lift.Witness",
@@ -341,6 +346,23 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.LedgerKeyControl",
         "Lift.UniswapV2Pair.OracleControls",
         "Lift.UniswapV2Pair.CalleeControls",
+        "Lift.UniswapV2Pair.PairCallShape",
+        "Lift.UniswapV2Pair.PairCallSiteShape",
+        "Lift.UniswapV2Pair.PairCallSitesCheck",
+        "Lift.UniswapV2Pair.PairCallSites",
+        "Lift.UniswapV2Pair.SwapCallWorld",
+        "Lift.UniswapV2Pair.SwapForwardPrefix",
+        "Lift.UniswapV2Pair.SwapForwardFront",
+        "Lift.UniswapV2Pair.SwapForwardBalance",
+        "Lift.UniswapV2Pair.SwapForwardCheck",
+        "Lift.UniswapV2Pair.SwapForwardUpdate",
+        "Lift.UniswapV2Pair.SwapForwardTransfer",
+        "Lift.UniswapV2Pair.SwapForwardCallback",
+        "Lift.UniswapV2Pair.SwapForwardBack",
+        "Lift.UniswapV2Pair.SwapForward",
+        "Lift.UniswapV2Pair.CalleeControlsReach",
+        "Lift.UniswapV2Pair.CalleeControlsSwap",
+        "Lift.UniswapV2Pair.RefinementControls",
     ],
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness",
                        # the deployed runtime, lifted (decision beacon-lift-layering-family-20260926)
@@ -670,6 +692,8 @@ COMPOSITION = [
     "Composition.UniswapV2PairWeth9",
     "Composition.UniswapV2PairWeth9GasFree",
     "Composition.UniswapV2PairWeth9Frame",
+    "Composition.Weth9SettledCallers",
+    "Composition.UniswapV2PairWeth9Calls",
     # Every joint owner is explicit; no family or shared module may import back.
 ]
 
