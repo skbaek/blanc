@@ -1176,6 +1176,12 @@ logs), the installed image (`CodeSem.At.parentStep`, `CodeSem.At.spawnChild`,
 `CodeSem.At.callChild`, self-calls included), child entry (`Xinst.spawn_child_world`,
 `Xinst.spawn_child_logs`, `Xinst.call_spawn_ofCall`, `Frame.ofCall_settle_clean`),
 `Exec.retainedTargetFramesFromAt_rawFrameRoot` and `Lift.StepIn.codePreserve`.
+For code-free message entry, `Blanc.executeCode.enter_inr_routing` derives the
+actual code address, enabled-precompile flag and fork's precompile predicate.
+The module's `callMsg_none_precompile` consumes these routing facts for the
+CALL/STATICCALL producers below. Pinned `Jaune.executeCode.enter_inr` instead
+identifies the raw result as `executePrecomp (initEvm msg) adr`; these are
+distinct projections.
 For a successful nonzero-flag call with the actual recursive slot `.none`, use
 `Xinst.call_none_precompile` (seven operands) or `Xinst.staticcall_none_precompile`
 (six operands). They identify an enabled precompile at the original target;

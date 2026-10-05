@@ -683,7 +683,7 @@ theorem Xinst.call_run_flag_commits {sevm : Sevm} {pre post : Devm} {x : Xinst}
         (ProcessMessage.settlementCommits_of_some_ok_clean frameRun clean)
 
 /-- Code-free entry routes the message's code address to an enabled precompile. -/
-theorem executeCode.enter_inr {m : Msg} {raw : Execution}
+theorem executeCode.enter_inr_routing {m : Msg} {raw : Execution}
     (entry : executeCode.enter m = .inr raw) :
     ∃ adr, m.codeAddress = some adr ∧ m.disablePrecompiles = false ∧
       m.benv.stat.rules.isPrecomp adr := by
@@ -730,7 +730,7 @@ private theorem callMsg_none_precompile {sevm : Sevm} {parent child : Devm}
       split at entered
       · cases entered
       · rename_i raw entry
-        obtain ⟨adr, codeAddress, enabled, precomp⟩ := executeCode.enter_inr entry
+        obtain ⟨adr, codeAddress, enabled, precomp⟩ := Blanc.executeCode.enter_inr_routing entry
         have stat : benv.stat = sevm.benvStat := benvAfterTransfer_stat transfer
         simp only [Msg.withBenv, Frame.ofCall, callMsg] at codeAddress enabled precomp
         rw [stat] at precomp
