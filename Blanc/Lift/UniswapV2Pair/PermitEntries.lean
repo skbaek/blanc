@@ -305,34 +305,6 @@ theorem permitBody_invP {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : 
   rw [request] at answer
   exact answer
 
-/-- Successful internal permit: deadline and static guards, the actual recovery call with
-its observed reply, the signer guard on the copied word, and the exact approval post. -/
-theorem permitBody_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {img : Bytes}
-    {G : Nat} {s r deadline value ρ : B256} {v : UInt8} {owner spender : Adr} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M) (reads : Mem.Reads M img)
-    (run : SFunc.Run cert.prog sevm (St b (s :: r :: v.toB256 :: deadline :: value ::
-      spender.toB256 :: owner.toB256 :: ρ :: R) M G) t_1b0c_c29 o) :
-    sevm.isStatic = false ∧ sevm.benvStat.time ≤ deadline ∧
-      ∃ (gw : B256) (callGas : Nat) (d : Devm) (out : Bytes) (G' : Nat),
-        Ninst.Run sevm (St (permitNonceWorld sevm b owner)
-          (gw :: 1 :: 482 :: 128 :: 450 :: 32 ::
-            permitCallStack sevm b owner spender value deadline v r s ρ R)
-          (permitCallMemory sevm b M owner spender value deadline v r s) callGas)
-          (.exec .staticcall) d ∧
-        StaticCallPost (permitNonceWorld sevm b owner) d
-          (permitCallStack sevm b owner spender value deadline v r s ρ R)
-          (permitCallMemory sevm b M owner spender value deadline v r s) 482 128 450 32 1 out ∧
-        out.length < 2 ^ 256 ∧
-        StaticAnswered sevm (permitNonceWorld sevm b owner) (1 : B256).toAdr
-          (ExternalOperation.encode
-            (.recover (permitCallDigest sevm b owner spender value deadline) v r s)) out ∧
-        (permitRecoveredWord out).toAdr ≠ 0 ∧ (permitRecoveredWord out).toAdr = owner ∧
-        o = .returned (St (approveCoreBase sevm d owner spender value) R
-          (permitFinalMemory (permitReplyMemory
-            (permitCallMemory sevm b M owner spender value deadline v r s) out)
-            owner spender value) G') :=
-  permitBody_invP (fun step => step) fork mem reads run
-
 def permitOwner (sevm : Sevm) : Adr := (Sevm.dataWord sevm 4).toAdr
 def permitSpender (sevm : Sevm) : Adr := (Sevm.dataWord sevm 36).toAdr
 def permitValue (sevm : Sevm) : B256 := Sevm.dataWord sevm 68
@@ -387,14 +359,6 @@ def PermitRawCallP (P : Sevm → Devm → Ninst → Devm → Prop) (sevm : Sevm)
       (ExternalOperation.encode
         (.recover (permitPublicDigest sevm b) (permitV sevm) (permitR sevm) (permitS sevm))) out ∧
     (permitRecoveredWord out).toAdr ≠ 0 ∧ (permitRecoveredWord out).toAdr = permitOwner sevm
-
-theorem PermitRawCallP.erase {P : Sevm → Devm → Ninst → Devm → Prop}
-    (project : ∀ {s : Sevm} {before : Devm} {n : Ninst} {after : Devm},
-      P s before n after → Ninst.Run s before n after)
-    {sevm : Sevm} {b : Devm} {sel gw : B256} {callGas : Nat} {d : Devm} {out : Bytes}
-    (raw : PermitRawCallP P sevm b sel gw callGas d out) :
-    PermitRawCall sevm b sel gw callGas d out :=
-  ⟨project raw.1, raw.2⟩
 
 theorem permitEntry_invP {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm} {b : Devm}
     {G : Nat} {sel : B256} {o : Outcome}
