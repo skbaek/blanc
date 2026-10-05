@@ -849,45 +849,6 @@ theorem burn_startTyped_suspended {current : Checkpoint} {ctx : Context} {recipi
     getterResult, opened, Frame.suspend]
   rfl
 
-/-- Full entry consumption, represented public return, and chronological raw log image. -/
-def BurnEntryFinished (U : WriterKey → Prop) (current : Checkpoint) (D : Exec.Deriv)
-    (b : Devm) (o : Outcome) (invocation : List Nat) : Prop :=
-  let ctx := writerContext D.sevm invocation
-  let recipient := ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
-    Sevm.dataWord D.sevm 4).toAdr
-  ∃ (K' : WriterKey → Prop) (final : Frame) (nested : Transcript)
-    (rets : List ChildReturn) (publicPost : Devm) (amount0 amount1 : B256)
-    (added : List PendingLog) (rawLogs : List Log),
-    (∀ k, K' k → U k) ∧
-    ExactConsumes (startTyped current ctx (.burn recipient)) nested
-      { status := .success (encodeWords [amount0, amount1]), frame := final,
-        remaining := .done, childReturns := rets } ∧
-    o = .halted publicPost ∧ publicPost.output = encodeWords [amount0, amount1] ∧
-    WriterRep K' (publicPost.getStor D.sevm.currentTarget) final.current.state ∧
-    final.checkpoint = current ∧ final.context = ctx ∧ final.current.state.unlocked = 1 ∧
-    final.current.logs = current.logs ++ added ∧ publicPost.logs = b.logs ++ rawLogs ∧
-    added.map (PendingLog.rawWith (burnOwnedRaw D.sevm.currentTarget)) = rawLogs.map some
-
-/-- The full observable Burn result with incoming footprint growth. Queue
-occurrence attachment is a separate canonical obligation. -/
-def BurnEntryTrackedFinished (U K : WriterKey → Prop) (current : Checkpoint) (D : Exec.Deriv)
-    (b : Devm) (o : Outcome) (invocation : List Nat) : Prop :=
-  let ctx := writerContext D.sevm invocation
-  let recipient := ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
-    Sevm.dataWord D.sevm 4).toAdr
-  ∃ (K' : WriterKey → Prop) (final : Frame) (nested : Transcript)
-    (rets : List ChildReturn) (publicPost : Devm) (amount0 amount1 : B256)
-    (added : List PendingLog) (rawLogs : List Log),
-    (∀ k, K' k → U k) ∧ (∀ k, K k → K' k) ∧
-    ExactConsumes (startTyped current ctx (.burn recipient)) nested
-      { status := .success (encodeWords [amount0, amount1]), frame := final,
-        remaining := .done, childReturns := rets } ∧
-    o = .halted publicPost ∧ publicPost.output = encodeWords [amount0, amount1] ∧
-    WriterRep K' (publicPost.getStor D.sevm.currentTarget) final.current.state ∧
-    final.checkpoint = current ∧ final.context = ctx ∧ final.current.state.unlocked = 1 ∧
-    final.current.logs = current.logs ++ added ∧ publicPost.logs = b.logs ++ rawLogs ∧
-    added.map (PendingLog.rawWith (burnOwnedRaw D.sevm.currentTarget)) = rawLogs.map some
-
 /-- Every reply the Burn source consumes, in call order: the two initial
 `balanceOf(pair)` replies, the factory `feeTo` reply, the two token `transfer`
 replies with their frame-entry bits, and the two final `balanceOf(pair)` replies,
