@@ -10,7 +10,6 @@ import Blanc.LedgerConservation
 import Blanc.LedgerUpdate
 import Blanc.StorageOnlySpec
 import Blanc.SlotFootprint
-import Blanc.StaticStores
 import Blanc.WordArithmetic
 import Blanc.FakeExponentialEval
 import Blanc.WordFakeExponentialEval
@@ -500,6 +499,9 @@ import Blanc.Lift.NodeWalkFrames
 import Blanc.Lift.NodeWalkFork
 -- A gas-exact lifted run as a node-walk leaf child (vyper-reachable-reentrancy-v1): shared.
 import Blanc.Lift.ExactLeaf
+import Blanc.Lift.NodeWalkPrecomp
+import Blanc.Lift.ShadowCanon
+import Blanc.Lift.CreateEntry
 import Blanc.Lift.WitnessFork
 -- One kernel check for a conjunction of closed equalities (vplus-witness-v2): shared.
 import Blanc.Lift.KernelBatch
@@ -589,7 +591,6 @@ import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach.World
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach.Deploy
 import Blanc.Lift.CheckAssemblyPair
 import Blanc.Lift.WitnessShadow
-import Blanc.Lift.CreateEntry
 import Blanc.Lift.Clone1167
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Creation.Input
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Creation.Cert
@@ -622,6 +623,11 @@ import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.Creation.Input
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.Creation.Cert
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.Creation.Check
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.Creation.Deploy
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach.Exact
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.World
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.Proxy
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.Run
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.Top
 
 -- The vulnerable Vyper comparator 0x6326, its token and attacker, and the witnessed
 -- reentry vminus_witness (deployed-lido-vyper-v1, V-).

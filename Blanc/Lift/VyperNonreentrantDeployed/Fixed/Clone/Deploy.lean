@@ -1,6 +1,7 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Clone.Check
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Clone.Walk
 import Blanc.TransactionForward
+import Blanc.Lift.CreateEntry
 
 /-! # Synthetic CREATE of an EIP-1167 clone of `0x847e`
 
@@ -24,14 +25,19 @@ def cloneAcct (W : State) (P : Adr) : Acct where
 theorem forwarder_code :
     (⟨⟨forwarder⟩⟩ : ByteArray) = Blanc.forwarderCode Blanc.curvePlainImpl847e := rfl
 
-/-- **Synthetic clone CREATE**: 28 gas of copier and 9000 of code deposit. -/
-theorem create_clone (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
+/-- **Synthetic clone CREATE, with its settled world as a term** (for a value-transferring
+message): `create_clone`'s facts and the settled world `CreateEntry.entryState` of the input
+world with the forwarder installed. -/
+theorem create_clone_exact (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
     (haddress : msg.codeAddress = none) (hcode : msg.code = cloneCreationCode)
     (hvalue : msg.value = 0) (hgas : 9028 ≤ msg.gas) :
     ∃ post, processCreateMessage msg = .ok post ∧ post.error = none ∧
       post.gasLeft = msg.gas - 28 - 9000 ∧
       post.state.get msg.currentTarget = cloneAcct msg.benv.state msg.currentTarget ∧
-      ∀ a, a ≠ msg.currentTarget → post.state.get a = msg.benv.state.get a := by
+      (∀ a, a ≠ msg.currentTarget → post.state.get a = msg.benv.state.get a) ∧
+      (msg.shouldTransferValue = true → post.state =
+        (CreateEntry.entryState msg.benv.state msg.caller msg.currentTarget).setCode
+          msg.currentTarget (Blanc.forwarderCode Blanc.curvePlainImpl847e)) := by
   obtain ⟨benv, htransfer⟩ :=
     benvAfterTransfer_exists_zero (msg := processCreateMessage.msg msg) hvalue
   let sevm := initSevm (createSeed msg benv)
@@ -56,7 +62,7 @@ theorem create_clone (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
   have hpost := liftCreate_post cert_check jumps_ok msg haddress hcode hfork htransfer hrun
     (facts.2.1.trans rfl) hprefix hdeposit hmax
   have pf := liftCreatePost_facts msg.currentTarget (clonePost b G)
-  refine ⟨_, hpost, pf.1.trans (facts.2.1.trans rfl), ?_, ?_, ?_⟩
+  refine ⟨_, hpost, pf.1.trans (facts.2.1.trans rfl), ?_, ?_, ?_, ?_⟩
   · rw [pf.2.1, facts.2.2.2, facts.1, forwarder_length]
     rfl
   · rw [pf.2.2.1, facts.2.2.1, facts.1, forwarder_code]
@@ -67,5 +73,20 @@ theorem create_clone (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
   · intro a ha
     rw [pf.2.2.2 a ha, facts.2.2.1]
     exact (processCreateMessage_msg_afterTransfer_get hvalue htransfer a).trans (if_neg ha)
+  · intro hstv
+    rw [CreateEntry.liftCreatePost_state, facts.2.2.1, facts.1, forwarder_code]
+    show benv.state.setCode _ _ = _
+    rw [CreateEntry.entry_state hvalue hstv htransfer]
+
+/-- **Synthetic clone CREATE**: 28 gas of copier and 9000 of code deposit. -/
+theorem create_clone (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
+    (haddress : msg.codeAddress = none) (hcode : msg.code = cloneCreationCode)
+    (hvalue : msg.value = 0) (hgas : 9028 ≤ msg.gas) :
+    ∃ post, processCreateMessage msg = .ok post ∧ post.error = none ∧
+      post.gasLeft = msg.gas - 28 - 9000 ∧
+      post.state.get msg.currentTarget = cloneAcct msg.benv.state msg.currentTarget ∧
+      ∀ a, a ≠ msg.currentTarget → post.state.get a = msg.benv.state.get a := by
+  obtain ⟨post, h1, h2, h3, h4, h5, -⟩ := create_clone_exact msg hfork haddress hcode hvalue hgas
+  exact ⟨post, h1, h2, h3, h4, h5⟩
 
 end Blanc.Lift.VyperNonreentrantDeployed.Fixed.Clone
