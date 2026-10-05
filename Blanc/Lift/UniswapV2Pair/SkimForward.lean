@@ -691,4 +691,635 @@ theorem skimUnlock_exact {sevm : Sevm} {d : Devm} {R0 : List B256} {M : Mem}
   exact rx_jump (show cert.prog[73]? = some t_0257_c73 from rfl)
     (by unfold t_0257_c73; exact rx_dest rx_stop)
 
+/-- Zero-slot bytes agree with the base across a write missing `[96, 128)`.
+Generic; mirrors the private `swapZeroSlot_write` in `SwapForwardTransfer`. -/
+private theorem skimSlot_write {B μ : Mem} (n : Nat) (ys : Bytes)
+    (wf : Mem.Wf μ) (miss : n + ys.length ≤ 96 ∨ 128 ≤ n)
+    (h : ∀ j, j < 32 → μ.data.getD (96 + j) 0 = B.data.getD (96 + j) 0) :
+    ∀ j, j < 32 → (μ.write n ys).data.getD (96 + j) 0 = B.data.getD (96 + j) 0 := by
+  intro j hj
+  rw [Mem.Reads.write wf (Mem.reads_data μ) n ys (96 + j), Bytes.getD_writeAt]
+  split
+  · exfalso
+    omega
+  · rw [← Mem.reads_data μ (96 + j)]
+    exact h j hj
+
+/-- The PC0 memory has a zero slot. Generic; the same fact the swap front
+proves inline. -/
+private theorem skimGetterSentinel : memWord getterInitMemory 96 = 0 := by
+  have zero : memWord Mem.empty 96 = 0 := by decide
+  rw [← zero]
+  refine memWord_congr (fun j hj => ?_)
+  rw [getterInitMemory, Mem.Reads.write Mem.wf_empty (Mem.reads_data Mem.empty) 64 _ (96 + j),
+    Bytes.getD_writeAt]
+  split
+  · exfalso
+    rw [B256.length_toBytes] at *
+    omega
+  · rw [← Mem.reads_data Mem.empty (96 + j)]
+
+/-- The first reply memory keeps the zero slot: two request stores and the
+reply store are all at or above 128. -/
+theorem skimReply0_sentinel {pair : Adr} {out0 : Bytes} :
+    memWord (balanceReplyMemory getterInitMemory pair out0) 96 = 0 := by
+  have wf0 : Mem.Wf getterInitMemory := getterInitMemory_ptr.wf
+  have s0 : ∀ j, j < 32 → getterInitMemory.data.getD (96 + j) 0 =
+      getterInitMemory.data.getD (96 + j) 0 := fun _ _ => rfl
+  have s1 := skimSlot_write 128 balanceOfSelectorWord.toBytes wf0
+    (Or.inr (by decide)) s0
+  have w1 : Mem.Wf (getterInitMemory.write 128 balanceOfSelectorWord.toBytes) :=
+    wf0.write _ _
+  have s2 := skimSlot_write 132 pair.toB256.toBytes w1 (Or.inr (by decide)) s1
+  have w2 : Mem.Wf ((getterInitMemory.write 128 balanceOfSelectorWord.toBytes).write
+      132 pair.toB256.toBytes) := w1.write _ _
+  have se : ∀ j, j < 32 → (((getterInitMemory.write 128 balanceOfSelectorWord.toBytes).write
+      132 pair.toB256.toBytes).extends [(128, 36), (128, 32)]).data.getD (96 + j) 0 =
+      getterInitMemory.data.getD (96 + j) 0 := by
+    intro j hj
+    rw [Mem.Reads.extends [(128, 36), (128, 32)]
+      (Mem.reads_data ((getterInitMemory.write 128 balanceOfSelectorWord.toBytes).write
+        132 pair.toB256.toBytes)) (96 + j),
+      ← Mem.reads_data ((getterInitMemory.write 128 balanceOfSelectorWord.toBytes).write
+        132 pair.toB256.toBytes) (96 + j)]
+    exact s2 j hj
+  have we : Mem.Wf (((getterInitMemory.write 128 balanceOfSelectorWord.toBytes).write
+      132 pair.toB256.toBytes).extends [(128, 36), (128, 32)]) :=
+    w2.extends _
+  have s3 := skimSlot_write 128 (out0.take 32) we (Or.inr (by decide)) se
+  rw [← skimGetterSentinel]
+  refine memWord_congr (fun j hj => ?_)
+  unfold balanceReplyMemory balanceRequestMemory
+  exact s3 j hj
+
+/-- The second reply memory keeps the zero slot: the moved request stores and
+the reply store are all at or above 128. -/
+theorem skimReply1_sentinel {tmem : Mem} {p1 : B256} {nT : Nat} {pair : Adr} {out1 : Bytes}
+    (memT : PtrMem p1 nT tmem) (low : 128 ≤ p1.toNat) (high : p1.toNat + 1024 < 2 ^ 256)
+    (sent : memWord tmem 96 = 0) :
+    memWord (((skimRequestMemory tmem p1 pair).extends [(p1.toNat, 36), (p1.toNat, 32)]).write
+      p1.toNat (out1.take 32)) 96 = 0 := by
+  have p4 : (p1 + 4).toNat = p1.toNat + 4 :=
+    B256.toNat_add_eq_of_nof _ _ (by show p1.toNat + 4 < 2 ^ 256; omega)
+  have s0 : ∀ j, j < 32 → tmem.data.getD (96 + j) 0 = tmem.data.getD (96 + j) 0 :=
+    fun _ _ => rfl
+  have s1 := skimSlot_write p1.toNat balanceOfSelectorWord.toBytes memT.wf
+    (Or.inr low) s0
+  have w1 : Mem.Wf (tmem.write p1.toNat balanceOfSelectorWord.toBytes) :=
+    memT.wf.write _ _
+  have s2 := skimSlot_write (p1 + 4).toNat pair.toB256.toBytes w1
+    (Or.inr (by rw [p4]; omega)) s1
+  have w2 : Mem.Wf ((tmem.write p1.toNat balanceOfSelectorWord.toBytes).write
+      (p1 + 4).toNat pair.toB256.toBytes) := w1.write _ _
+  have se : ∀ j, j < 32 → ((((tmem.write p1.toNat balanceOfSelectorWord.toBytes).write
+      (p1 + 4).toNat pair.toB256.toBytes).extends [(p1.toNat, 36), (p1.toNat, 32)]).data.getD
+      (96 + j) 0) = tmem.data.getD (96 + j) 0 := by
+    intro j hj
+    rw [Mem.Reads.extends [(p1.toNat, 36), (p1.toNat, 32)]
+      (Mem.reads_data ((tmem.write p1.toNat balanceOfSelectorWord.toBytes).write
+        (p1 + 4).toNat pair.toB256.toBytes)) (96 + j),
+      ← Mem.reads_data ((tmem.write p1.toNat balanceOfSelectorWord.toBytes).write
+        (p1 + 4).toNat pair.toB256.toBytes) (96 + j)]
+    exact s2 j hj
+  have we : Mem.Wf ((((tmem.write p1.toNat balanceOfSelectorWord.toBytes).write
+      (p1 + 4).toNat pair.toB256.toBytes).extends [(p1.toNat, 36), (p1.toNat, 32)])) :=
+    w2.extends _
+  have s3 := skimSlot_write p1.toNat (out1.take 32) we (Or.inr low) se
+  rw [skimRequestMem_eq memT low p4, ← sent]
+  exact memWord_congr (fun j hj => s3 j hj)
+
+/-- PC0 to entry34: the nonpayable/size guards, the skim selector dispatch and
+the wrapper80 ABI guard around an exact body run. -/
+theorem skimPc0_exact {sevm : Sevm} {b : Devm} {G : Nat} {post : Devm}
+    (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
+    (selector : Blanc.Sevm.selector sevm = 0xbc25cf77)
+    (abi : (32 : B256) ≤ sevm.data.length.toB256 - 4)
+    (body : SFunc.RunExact cert.prog sevm
+      (St b [skimToWord sevm, 0x0257, 0xbc25cf77] getterInitMemory G) t_18de_c34
+      (.halted post)) :
+    SFunc.RunExact cert.prog sevm (St b [] Mem.empty ((G + 63 + 123) + 63)) t_0000_c0
+      (.halted post) :=
+  getterString_guards_exact value size
+    (skimDispatch_exact selector (skimWrapper_exact abi body))
+
+/-- Every positive window fits in the allocation it opens over an aligned
+image. Generic; the two halves of `memExtSize_of_le` /
+`memExtSize_eq_ceil32_of_le` joined. -/
+private theorem skimMemExtSize_window {n i sz : Nat} (h32 : n % 32 = 0) (hsz : 0 < sz) :
+    i + sz ≤ memExtSize n i sz := by
+  by_cases hfit : i + sz ≤ n
+  · rw [memExtSize_of_le h32 hfit]
+    exact hfit
+  · rw [memExtSize_eq_ceil32_of_le hsz (by omega)]
+    exact Nat.le_ceil32 _
+
+/-- Forward second half: reserve1 reload through the second query, decode,
+helper transfer and unlock to `STOP`. The two callees are environment
+premises; `cover1` is the checked-subtraction guard. -/
+theorem skimSecondHalf_exact {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
+    {sevm : Sevm} {b : Devm} {M' : Mem} {n1 : Nat} {p1 t1 t0 toWord tag : B256} {R0 : List B256}
+    {g s8' c1' c2' sunlock callGasQ1 callGasT1 : Nat} {qd1 dt1 : Devm}
+    (helper : SwapSafeTransferForward pre post)
+    (fork : CoveredFork sevm.benvStat.fork)
+    (nonstatic : sevm.isStatic = false)
+    (mem' : PtrMem p1 n1 M')
+    (lower1 : 128 ≤ p1.toNat)
+    (width1 : p1.toNat + 1024 < 2 ^ 256)
+    (sentT : memWord M' 96 = 0)
+    (code1 : ((((afterSload sevm b 8).getCode
+      ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& t1)).toAdr)).size.toB256) ≠ 0)
+    (es8' : s8' = sloadCost sevm b 8)
+    (ec1' : c1' = swapStoreCost n1 p1.toNat)
+    (ec2' : c2' = swapStoreCost (memExtSize n1 p1.toNat 32) (p1 + 4).toNat)
+    (esunlock : sunlock = sstoreCost sevm dt1 12 1)
+    (sentryU : gCallStipend < (g + 11) + sunlock)
+    (room1 : R0.length ≤ 970)
+    (roomD : (t1 :: t0 :: toWord :: tag :: R0).length ≤ 990)
+    (roomH : (t1 :: t0 :: toWord :: tag :: R0).length ≤ 1000)
+    (roomU : R0.length ≤ 1000)
+    (qenv1 : SkimQueryEnv sevm
+      (temporalAccountAccessBase (afterSload sevm b 8)
+        ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+          0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& t1)).toAdr)
+      (skimRequestMemory M' p1 sevm.currentTarget) p1
+      (Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& t1)
+      ((p1 + 36) :: 0x70a08231 ::
+        (Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+          0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& t1) ::
+        skimReserve1Word (b.getStorVal sevm.currentTarget 8) :: 0x1a26 :: toWord :: t1 ::
+        0x1aca :: t1 :: t0 :: toWord :: tag :: R0)
+      qd1 callGasQ1 (((callGasT1 +
+        pre (((skimRequestMemory M' p1 sevm.currentTarget).extends
+          [(p1.toNat, 36), (p1.toNat, 32)]).write p1.toNat
+          (qd1.returnData.take 32)).size p1 + 12)) + 80))
+    (tenv1 : SwapTransferCallForward post sevm qd1
+      (t1 :: t0 :: toWord :: tag :: R0)
+      (((skimRequestMemory M' p1 sevm.currentTarget).extends
+        [(p1.toNat, 36), (p1.toNat, 32)]).write p1.toNat (qd1.returnData.take 32))
+      ((((skimRequestMemory M' p1 sevm.currentTarget).extends
+        [(p1.toNat, 36), (p1.toNat, 32)]).write p1.toNat (qd1.returnData.take 32)).size)
+      p1 (Bytes.toB256 (qd1.returnData.take 32) -
+        skimReserve1Word (b.getStorVal sevm.currentTarget 8)) toWord t1 0x1aca
+      callGasT1 (g + sunlock + 22) dt1)
+    (cover1 : skimReserve1Word (b.getStorVal sevm.currentTarget 8) ≤
+      Bytes.toB256 (qd1.returnData.take 32)) :
+    SFunc.RunExact cert.prog sevm
+      (St b (t1 :: t0 :: toWord :: tag :: R0) M'
+        ((callGasQ1 + 5) + s8' + c1' + c2' +
+          temporalAccountAccessCost (afterSload sevm b 8)
+            ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+              0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& t1)).toAdr + 171))
+      t_1a2b_c34
+      (.halted (St (afterSstore sevm dt1 12 1) R0
+        (swapTransferMemory
+          (((skimRequestMemory M' p1 sevm.currentTarget).extends
+            [(p1.toNat, 36), (p1.toNat, 32)]).write p1.toNat (qd1.returnData.take 32))
+          p1 (Bytes.toB256 (qd1.returnData.take 32) -
+            skimReserve1Word (b.getStorVal sevm.currentTarget 8)) toWord
+          dt1.returnData) g)) := by
+  obtain ⟨nR, memR⟩ := skimRequestMemory_mem mem' (by omega) width1
+  have extEq : ((((skimRequestMemory M' p1 sevm.currentTarget).read p1.toNat 36).2.read
+      p1.toNat 32).2) =
+      (((skimRequestMemory M' p1 sevm.currentTarget).extends
+        [(p1.toNat, 36), (p1.toNat, 32)])) := rfl
+  have mE1 := memR.extend p1.toNat 36
+  have mE2 := mE1.extend p1.toNat 32
+  have mR1 := mE2.write_bytes p1.toNat (qd1.returnData.take 32) (Or.inr (by omega))
+  rw [extEq] at mR1
+  have hle : p1.toNat + 32 ≤
+      memExtSize (memExtSize (memExtSize nR p1.toNat 36) p1.toNat 32) p1.toNat
+        (qd1.returnData.take 32).length := by
+    have w1 : p1.toNat + 36 ≤ memExtSize nR p1.toNat 36 :=
+      skimMemExtSize_window memR.n32 (by decide)
+    have w2 : memExtSize nR p1.toNat 36 ≤ memExtSize (memExtSize nR p1.toNat 36)
+        p1.toNat 32 := memExtSize_ge _ _ _
+    have w3 : memExtSize (memExtSize nR p1.toNat 36) p1.toNat 32 ≤
+        memExtSize (memExtSize (memExtSize nR p1.toNat 36) p1.toNat 32) p1.toNat
+          (qd1.returnData.take 32).length := memExtSize_ge _ _ _
+    omega
+  have wordEq : Bytes.toB256
+      (((((skimRequestMemory M' p1 sevm.currentTarget).extends
+        [(p1.toNat, 36), (p1.toNat, 32)]).write p1.toNat
+        (qd1.returnData.take 32)).read p1.toNat 32).1) =
+      Bytes.toB256 (qd1.returnData.take 32) := by
+    have w := skimReplyWord (Q := skimRequestMemory M' p1 sevm.currentTarget) (p := p1)
+      (pairs := [(p1.toNat, 36), (p1.toNat, 32)]) memR.wf qenv1.long
+    rw [show (32 : B256).toNat = 32 from rfl] at w
+    have rs64 : (((((skimRequestMemory M' p1 sevm.currentTarget).extends
+        [(p1.toNat, 36), (p1.toNat, 32)]).write p1.toNat
+        (qd1.returnData.take 32)).read 64 32).2) =
+        (((skimRequestMemory M' p1 sevm.currentTarget).extends
+          [(p1.toNat, 36), (p1.toNat, 32)]).write p1.toNat
+          (qd1.returnData.take 32)) := mR1.read_self (by have := mR1.ge; omega)
+    rw [rs64] at w
+    exact w
+  have memRN : PtrMem p1 (((((skimRequestMemory M' p1 sevm.currentTarget).extends
+      [(p1.toNat, 36), (p1.toNat, 32)]).write p1.toNat
+      (qd1.returnData.take 32)).size))
+      ((((skimRequestMemory M' p1 sevm.currentTarget).extends
+        [(p1.toNat, 36), (p1.toNat, 32)]).write p1.toNat
+        (qd1.returnData.take 32))) := by
+    rw [mR1.size]
+    exact mR1
+  have sent1 : memWord ((((skimRequestMemory M' p1 sevm.currentTarget).extends
+      [(p1.toNat, 36), (p1.toNat, 32)]).write p1.toNat
+      (qd1.returnData.take 32))) 96 = 0 :=
+    skimReply1_sentinel mem' lower1 width1 sentT
+  refine skimSecondLine_exact fork mem' lower1 width1 code1 _ _ _ es8' ec1' ec2' room1 ?_
+  refine skimQuery1Call_exact fork memR (by omega) room1 qenv1 ?_
+  refine skimDecode_exact mR1 hle wordEq cover1 roomD ?_
+  refine skimHelperSite_exact helper fork roomH memRN sent1 lower1
+    (by omega) tenv1 ?_
+  exact skimUnlock_exact fork esunlock sentryU nonstatic roomU
+
+/-- Forward first half: entry34 lock, first line, first query, decode and
+helper transfer, into an arbitrary `t_1a2b` continuation. The query and the
+transfer are environment premises; `cover0` is the checked-subtraction
+guard. -/
+theorem skimFirstHalf_exact {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
+    {sevm : Sevm} {b : Devm} {toWord : B256} {R : List B256} {o : Outcome}
+    {s12 sst s6 s7 s8 c1 c2 callGasQ0 callGasT0 Gc : Nat} {qd0 dt0 : Devm}
+    (helper : SwapSafeTransferForward pre post)
+    (fork : CoveredFork sevm.benvStat.fork)
+    (nonstatic : sevm.isStatic = false)
+    (unlockedSlot : b.getStorVal sevm.currentTarget 12 = 1)
+    (code0 : (((skimCachedWorld sevm b).getCode (skimToken0 sevm b).toAdr).size.toB256) ≠ 0)
+    (c12 : s12 = sloadCost sevm b 12)
+    (esst : sst = sstoreCost sevm (afterSload sevm b 12) 12 0)
+    (es6 : s6 = sloadCost sevm (syncLockedWorld sevm b) 6)
+    (es7 : s7 = sloadCost sevm (afterSload sevm (syncLockedWorld sevm b) 6) 7)
+    (es8 : s8 = sloadCost sevm
+      (afterSload sevm (afterSload sevm (syncLockedWorld sevm b) 6) 7) 8)
+    (ec1 : c1 = swapStoreCost 96 128)
+    (ec2 : c2 = swapStoreCost 160 132)
+    (sentry : gCallStipend < ((((callGasQ0 + 5) + s6 + s7 + s8 + c1 + c2 +
+      temporalAccountAccessCost (skimCachedWorld sevm b) (skimToken0 sevm b).toAdr + 186)) +
+      sst))
+    (roomL : R.length ≤ 1000)
+    (roomF : R.length ≤ 980)
+    (roomQ : R.length ≤ 970)
+    (roomD : (skimToken1 sevm b :: skimToken0 sevm b :: toWord :: R).length ≤ 990)
+    (roomH : (skimToken1 sevm b :: skimToken0 sevm b :: toWord :: R).length ≤ 1000)
+    (qenv0 : SkimQueryEnv sevm
+      (temporalAccountAccessBase (skimCachedWorld sevm b) (skimToken0 sevm b).toAdr)
+      (balanceRequestMemory getterInitMemory sevm.currentTarget) 128
+      (skimToken0 sevm b)
+      (164 :: 0x70a08231 :: skimToken0 sevm b :: skimReserve0 sevm b :: 0x1a26 :: toWord ::
+        skimToken0 sevm b :: 0x1a2b :: skimToken1 sevm b :: skimToken0 sevm b :: toWord :: R)
+      qd0 callGasQ0 (((callGasT0 +
+        pre (balanceReplyMemory getterInitMemory sevm.currentTarget
+          qd0.returnData).size 128 + 12)) + 80))
+    (tenv0 : SwapTransferCallForward post sevm qd0
+      (skimToken1 sevm b :: skimToken0 sevm b :: toWord :: R)
+      (balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData)
+      ((balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData).size)
+      128 (Bytes.toB256 (qd0.returnData.take 32) - skimReserve0 sevm b) toWord
+      (skimToken0 sevm b) 0x1a2b callGasT0 Gc dt0)
+    (cover0 : skimReserve0 sevm b ≤ Bytes.toB256 (qd0.returnData.take 32))
+    (cont : SFunc.RunExact cert.prog sevm
+      (St dt0 (skimToken1 sevm b :: skimToken0 sevm b :: toWord :: R)
+        (swapTransferMemory
+          (balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData)
+          128 (Bytes.toB256 (qd0.returnData.take 32) - skimReserve0 sevm b) toWord
+          dt0.returnData) Gc) t_1a2b_c34 o) :
+    SFunc.RunExact cert.prog sevm
+      (St b (toWord :: R) getterInitMemory
+        ((((callGasQ0 + 5) + sst + s6 + s7 + s8 + c1 + c2 +
+          temporalAccountAccessCost (skimCachedWorld sevm b)
+            (skimToken0 sevm b).toAdr + 193)) + s12 + 23))
+      t_18de_c34 o := by
+  have req0 := balanceRequestMemory_ptr getterInitMemory_ptr sevm.currentTarget
+  have hs1 : memExtSize 96 128 32 = 160 := by decide
+  have hs2 : memExtSize 160 132 32 = 192 := by decide
+  rw [hs1, hs2] at req0
+  have reply0 := balanceReplyMemory_ptr qd0.returnData req0
+  have wordEq0 : Bytes.toB256
+      (((balanceReplyMemory getterInitMemory sevm.currentTarget
+        qd0.returnData).read 128 32).1) =
+      Bytes.toB256 (qd0.returnData.take 32) :=
+    balanceReplyMemory_word getterInitMemory_ptr.wf sevm.currentTarget
+      qd0.returnData qenv0.long
+  have memN0 : PtrMem 128
+      ((balanceReplyMemory getterInitMemory sevm.currentTarget
+        qd0.returnData).size)
+      (balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData) := by
+    rw [reply0.size]
+    exact reply0
+  have sent0 : memWord (balanceReplyMemory getterInitMemory sevm.currentTarget
+      qd0.returnData) 96 = 0 := skimReply0_sentinel
+  refine skimLock_exact fork unlockedSlot c12 roomL ?_
+  refine skimFirstLine_exact fork getterInitMemory_ptr nonstatic code0 _ _ _ _ _ _
+    esst es6 es7 es8 ec1 ec2 sentry roomF ?_
+  refine skimQuery0Call_exact fork req0 roomQ qenv0 ?_
+  refine skimDecode_exact reply0 (by decide) wordEq0 cover0 roomD ?_
+  refine skimHelperSite_exact helper fork roomH memN0 sent0 (by decide) (by decide)
+    tenv0 cont
+
+/-- **Forward skim schedule from pc zero.** From the nonpayable, size and
+selector guards, the ABI head guard, the finite entry storage with the
+unlocked source state, and the forward environments of both halves (the two
+token transfers through the shared helper and the two `balanceOf` queries),
+a successful pc-zero run of the original bytes exists with a closed initial
+gas, ending with the caller's residual `g`. That same run satisfies the
+canonical skim frame (`skim_bytecode_exact_consumes_own`) under trace-local
+HASH-T over its own trace universe. The callee frames are forward-environment
+premises (ENV class): this is a conditional universal construction, not an
+existential execution for arbitrary callees.
+CROSS-HOST: conditional on `SwapSafeTransferForward`. -/
+theorem skim_bytecode_forward_consumes {K : WriterKey → Prop} {current : Checkpoint}
+    {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
+    {sevm : Sevm} {b : Devm}
+    {callGasQ0 callGasT0 callGasQ1 callGasT1 g : Nat} {qd0 dt0 qd1 dt1 : Devm}
+    (invocation : List Nat)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
+    (freshOutput : b.output = [])
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
+    (selector : Blanc.Sevm.selector sevm = 0xbc25cf77)
+    (abi : (32 : B256) ≤ sevm.data.length.toB256 - 4)
+    (unlocked : current.state.unlocked = 1) (nonstatic : sevm.isStatic = false)
+    (helper : SwapSafeTransferForward pre post)
+    (code0 : (((skimCachedWorld sevm b).getCode
+      (skimToken0 sevm b).toAdr).size.toB256) ≠ 0)
+    (sentry : gCallStipend < ((((callGasQ0 + 5) +
+      sloadCost sevm (syncLockedWorld sevm b) 6 +
+      sloadCost sevm (afterSload sevm (syncLockedWorld sevm b) 6) 7 +
+      sloadCost sevm (afterSload sevm (afterSload sevm (syncLockedWorld sevm b) 6) 7) 8 +
+      swapStoreCost 96 128 + swapStoreCost 160 132 +
+      temporalAccountAccessCost (skimCachedWorld sevm b) (skimToken0 sevm b).toAdr + 186)) +
+      sstoreCost sevm (afterSload sevm b 12) 12 0))
+    (sentryU : gCallStipend < (g + 11) + sstoreCost sevm dt1 12 1)
+    (qenv0 : SkimQueryEnv sevm
+      (temporalAccountAccessBase (skimCachedWorld sevm b) (skimToken0 sevm b).toAdr)
+      (balanceRequestMemory getterInitMemory sevm.currentTarget) 128
+      (skimToken0 sevm b)
+      (164 :: 0x70a08231 :: skimToken0 sevm b :: skimReserve0 sevm b :: 0x1a26 ::
+        skimToWord sevm :: skimToken0 sevm b :: 0x1a2b :: skimToken1 sevm b ::
+        skimToken0 sevm b :: skimToWord sevm :: [0x0257, 0xbc25cf77])
+      qd0 callGasQ0 (((callGasT0 +
+        pre (balanceReplyMemory getterInitMemory sevm.currentTarget
+          qd0.returnData).size 128 + 12)) + 80))
+    (tenv0 : SwapTransferCallForward post sevm qd0
+      (skimToken1 sevm b :: skimToken0 sevm b :: skimToWord sevm :: [0x0257, 0xbc25cf77])
+      (balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData)
+      ((balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData).size)
+      128 (Bytes.toB256 (qd0.returnData.take 32) - skimReserve0 sevm b)
+      (skimToWord sevm) (skimToken0 sevm b) 0x1a2b callGasT0
+      (((callGasQ1 + 5) +
+        sloadCost sevm dt0 8 +
+        swapStoreCost
+          (swapTransferMemory
+            (balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData)
+            128 (Bytes.toB256 (qd0.returnData.take 32) - skimReserve0 sevm b)
+            (skimToWord sevm) dt0.returnData).size
+          (swapMovedPointer 128 dt0.returnData).toNat +
+        swapStoreCost
+          (memExtSize
+            (swapTransferMemory
+              (balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData)
+              128 (Bytes.toB256 (qd0.returnData.take 32) - skimReserve0 sevm b)
+              (skimToWord sevm) dt0.returnData).size
+            (swapMovedPointer 128 dt0.returnData).toNat 32)
+          ((swapMovedPointer 128 dt0.returnData) + 4).toNat +
+        temporalAccountAccessCost (afterSload sevm dt0 8)
+          ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+            0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&&
+            skimToken1 sevm b)).toAdr + 171)) dt0)
+    (cover0 : skimReserve0 sevm b ≤ Bytes.toB256 (qd0.returnData.take 32))
+    (code1 : ((((afterSload sevm dt0 8).getCode
+      ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&&
+        skimToken1 sevm b)).toAdr)).size.toB256) ≠ 0)
+    (qenv1 : SkimQueryEnv sevm
+      (temporalAccountAccessBase (afterSload sevm dt0 8)
+        ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+          0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&&
+          skimToken1 sevm b)).toAdr)
+      (skimRequestMemory
+        (swapTransferMemory
+          (balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData)
+          128 (Bytes.toB256 (qd0.returnData.take 32) - skimReserve0 sevm b)
+          (skimToWord sevm) dt0.returnData)
+        (swapMovedPointer 128 dt0.returnData) sevm.currentTarget)
+      (swapMovedPointer 128 dt0.returnData)
+      (Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&&
+        skimToken1 sevm b)
+      (((swapMovedPointer 128 dt0.returnData) + 36) :: 0x70a08231 ::
+        (Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+          0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&&
+          skimToken1 sevm b) ::
+        skimReserve1Word (dt0.getStorVal sevm.currentTarget 8) :: 0x1a26 ::
+        skimToWord sevm :: skimToken1 sevm b :: 0x1aca :: skimToken1 sevm b ::
+        skimToken0 sevm b :: skimToWord sevm :: [0x0257, 0xbc25cf77])
+      qd1 callGasQ1 (((callGasT1 +
+        pre (((skimRequestMemory
+          (swapTransferMemory
+            (balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData)
+            128 (Bytes.toB256 (qd0.returnData.take 32) - skimReserve0 sevm b)
+            (skimToWord sevm) dt0.returnData)
+          (swapMovedPointer 128 dt0.returnData) sevm.currentTarget).extends
+          [((swapMovedPointer 128 dt0.returnData).toNat, 36),
+            ((swapMovedPointer 128 dt0.returnData).toNat, 32)]).write
+          (swapMovedPointer 128 dt0.returnData).toNat
+          (qd1.returnData.take 32)).size
+          (swapMovedPointer 128 dt0.returnData) + 12)) + 80))
+    (tenv1 : SwapTransferCallForward post sevm qd1
+      (skimToken1 sevm b :: skimToken0 sevm b :: skimToWord sevm :: [0x0257, 0xbc25cf77])
+      (((skimRequestMemory
+        (swapTransferMemory
+          (balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData)
+          128 (Bytes.toB256 (qd0.returnData.take 32) - skimReserve0 sevm b)
+          (skimToWord sevm) dt0.returnData)
+        (swapMovedPointer 128 dt0.returnData) sevm.currentTarget).extends
+        [((swapMovedPointer 128 dt0.returnData).toNat, 36),
+          ((swapMovedPointer 128 dt0.returnData).toNat, 32)]).write
+        (swapMovedPointer 128 dt0.returnData).toNat (qd1.returnData.take 32))
+      ((((skimRequestMemory
+        (swapTransferMemory
+          (balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData)
+          128 (Bytes.toB256 (qd0.returnData.take 32) - skimReserve0 sevm b)
+          (skimToWord sevm) dt0.returnData)
+        (swapMovedPointer 128 dt0.returnData) sevm.currentTarget).extends
+        [((swapMovedPointer 128 dt0.returnData).toNat, 36),
+          ((swapMovedPointer 128 dt0.returnData).toNat, 32)]).write
+        (swapMovedPointer 128 dt0.returnData).toNat (qd1.returnData.take 32)).size)
+      (swapMovedPointer 128 dt0.returnData)
+      (Bytes.toB256 (qd1.returnData.take 32) -
+        skimReserve1Word (dt0.getStorVal sevm.currentTarget 8))
+      (skimToWord sevm) (skimToken1 sevm b) 0x1aca callGasT1 (g +
+        sstoreCost sevm dt1 12 1 + 22) dt1)
+    (cover1 : skimReserve1Word (dt0.getStorVal sevm.currentTarget 8) ≤
+      Bytes.toB256 (qd1.returnData.take 32)) :
+    let COST := (callGasQ0 + 5) +
+      sstoreCost sevm (afterSload sevm b 12) 12 0 +
+      sloadCost sevm (syncLockedWorld sevm b) 6 +
+      sloadCost sevm (afterSload sevm (syncLockedWorld sevm b) 6) 7 +
+      sloadCost sevm (afterSload sevm (afterSload sevm (syncLockedWorld sevm b) 6) 7) 8 +
+      swapStoreCost 96 128 + swapStoreCost 160 132 +
+      temporalAccountAccessCost (skimCachedWorld sevm b) (skimToken0 sevm b).toAdr + 193 +
+      sloadCost sevm b 12 + 23 + 63 + 123 + 63
+    let POST : Devm := St (afterSstore sevm dt1 12 1) [0xbc25cf77]
+      (swapTransferMemory
+        (((skimRequestMemory
+          (swapTransferMemory
+            (balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData)
+            128 (Bytes.toB256 (qd0.returnData.take 32) - skimReserve0 sevm b)
+            (skimToWord sevm) dt0.returnData)
+          (swapMovedPointer 128 dt0.returnData) sevm.currentTarget).extends
+          [((swapMovedPointer 128 dt0.returnData).toNat, 36),
+            ((swapMovedPointer 128 dt0.returnData).toNat, 32)]).write
+          (swapMovedPointer 128 dt0.returnData).toNat (qd1.returnData.take 32))
+        (swapMovedPointer 128 dt0.returnData)
+        (Bytes.toB256 (qd1.returnData.take 32) -
+          skimReserve1Word (dt0.getStorVal sevm.currentTarget 8))
+        (skimToWord sevm) dt1.returnData) g
+    ∃ run : Exec 0 sevm (St b [] Mem.empty COST) (.ok POST),
+      (WriterInj (WriterExtend K
+          (skimTraceKeys ⟨0, sevm, St b [] Mem.empty COST, .ok POST, run⟩)) →
+        WriterApart (WriterExtend K
+          (skimTraceKeys ⟨0, sevm, St b [] Mem.empty COST, .ok POST, run⟩)) →
+        let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty COST, .ok POST, run⟩
+        let ctx := writerContext sevm invocation
+        let recipient := skimRecipient sevm
+        sevm.value = 0 ∧ sevm.isStatic = false ∧
+        ∃ (out0 : Bytes) (d : Devm), SkimFirstSteps root sevm b out0 d ∧
+          (∀ a, a ≠ sevm.currentTarget →
+            Devm.getStor (temporalAccountAccessBase (skimCachedWorld sevm b)
+              (skimToken0 sevm b).toAdr) a = Devm.getStor b a) ∧
+          (∀ a, Devm.getStor (temporalAccountAccessBase (afterSload sevm d 8)
+            (skimToken1 sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr) a =
+              Devm.getStor d a) ∧
+          ∃ (out1 : Bytes) (d2 : Devm) (views0 views1 : List StaticViewTurn)
+            (turns1 turns3 : List MutableTurn) (final : Frame) (rets : List ChildReturn)
+            (K' : WriterKey → Prop) (added : List PendingLog),
+            SkimSecondSteps root sevm d (skimToken1 sevm b) out1 d2 ∧
+            (∀ a, a ≠ sevm.currentTarget → POST.getStor a = d2.getStor a) ∧
+            ExactConsumes (startTyped current ctx (.skim recipient))
+              (.next (skimBalanceReply out0) (staticViewTranscript views0 .done)
+                (.next (skimTransferReply d.returnData true) (mutableTranscript turns1 .done)
+                  (.next (skimBalanceReply out1) (staticViewTranscript views1 .done)
+                    (.next (skimTransferReply d2.returnData true)
+                      (mutableTranscript turns3 .done) .done))))
+              { status := .success [], frame := final, remaining := .done,
+                childReturns := rets } ∧
+            final.checkpoint = current ∧ final.context = ctx ∧
+            (∀ k, K' k → WriterExtend K (skimTraceKeys root) k) ∧
+            WriterRep K' (POST.getStor sevm.currentTarget) final.current.state ∧
+            final.current.state.unlocked = 1 ∧
+            final.current.state.liquidityCore = current.state.liquidityCore ∧
+            final.current.logs = current.logs ++ added ∧
+            (∃ L : List Log, POST.logs = b.logs ++ L ∧
+              added.map (PendingLog.rawWith (lockedOwnedRaw sevm.currentTarget)) =
+                L.map some) ∧
+            (∀ picked ∈ views0 ++ views1,
+              Blanc.Sevm.selector picked.1.frame.sevm = picked.2.selector ∧
+              picked.1.frame.sevm.currentTarget = sevm.currentTarget) ∧
+            (∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns1 ++ turns3 →
+              LockedAuth (Exec.Frame.rootDeriv located.frame) entry nested) ∧
+            (views0 = [] ∧ sevm.benvStat.rules.isPrecomp (skimToken0 sevm b).toAdr ∨
+              ∃ (child : Evm) (raw : Execution)
+              (childRun : Exec child.pc child.sta child.dyna raw),
+              Execution.commits raw = true ∧
+              (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots root.exc) ∧
+              views0.map Prod.fst =
+                (Exec.retainedTargetTurnsAt sevm.currentTarget [] childRun).filterMap
+                  Sum.getRight?) ∧
+            (views1 = [] ∧ sevm.benvStat.rules.isPrecomp
+                (skimToken1 sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr ∨
+              ∃ (child : Evm) (raw : Execution)
+              (childRun : Exec child.pc child.sta child.dyna raw),
+              Execution.commits raw = true ∧
+              (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots root.exc) ∧
+              views1.map Prod.fst =
+                (Exec.retainedTargetTurnsAt sevm.currentTarget [] childRun).filterMap
+                  Sum.getRight?) ∧
+            ((turns1 = [] ∧ sevm.benvStat.rules.isPrecomp
+                (skimToken0 sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr) ∨
+              ∃ (child : Evm) (raw : Execution)
+              (childRun : Exec child.pc child.sta child.dyna raw)
+              (committed : Execution.commits raw = true),
+              (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots root.exc) ∧
+              turns1.map MutableTurn.event =
+                Exec.targetLogEventsFrom sevm.currentTarget [] 0 childRun committed) ∧
+            ((turns3 = [] ∧ sevm.benvStat.rules.isPrecomp
+                (skimToken1 sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr) ∨
+              ∃ (child : Evm) (raw : Execution)
+              (childRun : Exec child.pc child.sta child.dyna raw)
+              (committed : Execution.commits raw = true),
+              (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots root.exc) ∧
+              turns3.map MutableTurn.event =
+                Exec.targetLogEventsFrom sevm.currentTarget [] 0 childRun committed) ∧
+            POST.output = []) := by
+  intro COST POST
+  have unlockedRaw : b.getStorVal sevm.currentTarget 12 = 1 := by
+    rcases rep.fixed with ⟨_, _, _, _, _, _, _, _, _, _, _, fixed⟩
+    exact fixed.trans unlocked
+  have req0 := balanceRequestMemory_ptr getterInitMemory_ptr sevm.currentTarget
+  have hs1 : memExtSize 96 128 32 = 160 := by decide
+  have hs2 : memExtSize 160 132 32 = 192 := by decide
+  rw [hs1, hs2] at req0
+  have reply0 := balanceReplyMemory_ptr qd0.returnData req0
+  have memN0 : PtrMem 128
+      ((balanceReplyMemory getterInitMemory sevm.currentTarget
+        qd0.returnData).size)
+      (balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData) := by
+    rw [reply0.size]
+    exact reply0
+  obtain ⟨⟨n', memT⟩, sentT, lowerT, widthT, _⟩ :=
+    skimTransferLayout (k := 161) helper fork
+      (by simp only [List.length_cons, List.length_nil]; omega :
+        (skimToken1 sevm b :: skimToken0 sevm b :: skimToWord sevm ::
+          [0x0257, 0xbc25cf77]).length ≤ 1000)
+      memN0 skimReply0_sentinel (by decide) (by decide) (by decide) tenv0
+  have memT' : PtrMem (swapMovedPointer 128 dt0.returnData)
+      ((swapTransferMemory
+        (balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData)
+        128 (Bytes.toB256 (qd0.returnData.take 32) - skimReserve0 sevm b)
+        (skimToWord sevm) dt0.returnData).size)
+      (swapTransferMemory
+        (balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData)
+        128 (Bytes.toB256 (qd0.returnData.take 32) - skimReserve0 sevm b)
+        (skimToWord sevm) dt0.returnData) := by
+    rw [memT.size]
+    exact memT
+  have secondHalfRun := skimSecondHalf_exact helper fork nonstatic memT' lowerT widthT sentT
+    code1 rfl rfl rfl rfl sentryU
+    (by simp only [List.length_cons, List.length_nil]; omega :
+      ([0xbc25cf77] : List B256).length ≤ 970)
+    (by simp only [List.length_cons, List.length_nil]; omega :
+      (skimToken1 sevm b :: skimToken0 sevm b :: skimToWord sevm ::
+        [0x0257, 0xbc25cf77]).length ≤ 990)
+    (by simp only [List.length_cons, List.length_nil]; omega :
+      (skimToken1 sevm b :: skimToken0 sevm b :: skimToWord sevm ::
+        [0x0257, 0xbc25cf77]).length ≤ 1000)
+    (by simp only [List.length_cons, List.length_nil]; omega :
+      ([0xbc25cf77] : List B256).length ≤ 1000)
+    qenv1 tenv1 cover1
+  have firstHalfRun := skimFirstHalf_exact helper fork nonstatic unlockedRaw code0
+    rfl rfl rfl rfl rfl rfl rfl sentry
+    (by simp only [List.length_cons, List.length_nil]; omega :
+      ([0x0257, 0xbc25cf77] : List B256).length ≤ 1000)
+    (by simp only [List.length_cons, List.length_nil]; omega :
+      ([0x0257, 0xbc25cf77] : List B256).length ≤ 980)
+    (by simp only [List.length_cons, List.length_nil]; omega :
+      ([0x0257, 0xbc25cf77] : List B256).length ≤ 970)
+    (by simp only [List.length_cons, List.length_nil]; omega :
+      (skimToken1 sevm b :: skimToken0 sevm b :: skimToWord sevm ::
+        [0x0257, 0xbc25cf77]).length ≤ 990)
+    (by simp only [List.length_cons, List.length_nil]; omega :
+      (skimToken1 sevm b :: skimToken0 sevm b :: skimToWord sevm ::
+        [0x0257, 0xbc25cf77]).length ≤ 1000)
+    qenv0 tenv0 cover0 secondHalfRun
+  have pc0Run := skimPc0_exact value size selector abi firstHalfRun
+  obtain ⟨run⟩ := lift_exact cert_check jumps_ok codeEq fork
+    ⟨t_0000_c0, rfl, pc0Run⟩
+  exact ⟨run, fun inj apart =>
+    skim_bytecode_exact_consumes_own invocation rep sem image installed freshOutput codeEq fork
+      selector run inj apart⟩
+
 end Blanc.Lift.UniswapV2Pair
