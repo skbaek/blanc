@@ -9,7 +9,8 @@ import Blanc.Lift.UniswapV2Pair.SwapForwardBack
 the body's own forward run (`swapBody_exact`: the front half to the join, `SwapForwardFront`,
 and the back half to the return, `SwapForwardBack`). The callee frames (token transfers,
 callback, balance queries) are forward-environment premises; the moved-pointer `_safeTransfer`
-helper and the CALL reply bound are cross-host hypotheses. The original bytes run from pc zero
+helper is the remaining cross-host hypothesis (the CALL reply bound is derived from the
+actual 68-byte `CALL`). The original bytes run from pc zero
 with an exact gas charge, and that run satisfies the canonical swap frame. -/
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
@@ -155,7 +156,7 @@ from its entry with the decoded stack and the PC0 memory to its return, with the
 charge `swapPrefixGas` over the front environment's transfer-branch gas, ending at the back
 environment's world and memory with residual exactly `G`. The join gas is the back half's
 entry gas `back.gas`.
-CROSS-HOST: conditional on `SwapSafeTransferForward`, `SwapForwardReplyShort`. -/
+CROSS-HOST: conditional on `SwapSafeTransferForward`. -/
 theorem swapBody_exact {K : WriterKey → Prop} {st : State}
     {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
     {sevm : Sevm} {b d0 d1 dC : Devm} {cg0 cg1 cgC G : Nat}
@@ -191,7 +192,7 @@ and memory with the residual `g`. That same run satisfies the canonical swap fra
 storage (`swap_bytecode_exact_consumes_own`) under trace-local HASH-T over its own trace
 universe. The callee frames are forward-environment premises (ENV class): this is a
 conditional universal construction, not an existential execution for arbitrary callees.
-CROSS-HOST: conditional on `SwapSafeTransferForward`, `SwapForwardReplyShort`. -/
+CROSS-HOST: conditional on `SwapSafeTransferForward`. -/
 theorem swap_bytecode_forward_consumes {K : WriterKey → Prop} {current : Checkpoint}
     {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
     {sevm : Sevm} {b d0 d1 dC : Devm} {cg0 cg1 cgC g : Nat}
