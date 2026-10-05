@@ -852,7 +852,7 @@ theorem burn_startTyped_suspended {current : Checkpoint} {ctx : Context} {recipi
 /-- Full entry consumption, represented public return, and chronological raw log image. -/
 def BurnEntryFinished (U : WriterKey → Prop) (current : Checkpoint) (D : Exec.Deriv)
     (b : Devm) (o : Outcome) (invocation : List Nat) : Prop :=
-  let ctx := mintSourceContext D.sevm invocation
+  let ctx := writerContext D.sevm invocation
   let recipient := ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
     Sevm.dataWord D.sevm 4).toAdr
   ∃ (K' : WriterKey → Prop) (final : Frame) (nested : Transcript)
@@ -872,7 +872,7 @@ def BurnEntryFinished (U : WriterKey → Prop) (current : Checkpoint) (D : Exec.
 occurrence attachment is a separate canonical obligation. -/
 def BurnEntryTrackedFinished (U K : WriterKey → Prop) (current : Checkpoint) (D : Exec.Deriv)
     (b : Devm) (o : Outcome) (invocation : List Nat) : Prop :=
-  let ctx := mintSourceContext D.sevm invocation
+  let ctx := writerContext D.sevm invocation
   let recipient := ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
     Sevm.dataWord D.sevm 4).toAdr
   ∃ (K' : WriterKey → Prop) (final : Frame) (nested : Transcript)
@@ -995,7 +995,7 @@ actual call answers before any model state is chosen, with incoming footprint
 growth. -/
 def BurnEntryAuthenticFinished (U K : WriterKey → Prop) (current : Checkpoint) (D : Exec.Deriv)
     (b : Devm) (o : Outcome) (invocation : List Nat) : Prop :=
-  let ctx := mintSourceContext D.sevm invocation
+  let ctx := writerContext D.sevm invocation
   let recipient := ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& Sevm.dataWord D.sevm 4).toAdr
   ∃ (a : BurnAnswers) (amount0 amount1 : B256),
     BurnCallProvenance D (b.getStor D.sevm.currentTarget) amount0 amount1 a ∧
@@ -1049,7 +1049,7 @@ theorem burnPc0_source_authentic {U K : WriterKey → Prop} {current : Checkpoin
     BurnEntryAuthenticFinished U K current D b o invocation := by
   obtain ⟨value, _, calleeGas, calleeOutcome, callee, tail⟩ := burnPc0_caller_inv selector run
   let toWord := (0xffffffffffffffffffffffffffffffffffffffff : B256) &&& Sevm.dataWord D.sevm 4
-  let ctx := mintSourceContext D.sevm invocation
+  let ctx := writerContext D.sevm invocation
   let prior := burnSourceLockedFrame current ctx toWord.toAdr
   have calleeCut := SFunc.runP_iff_runCutP_nil.mp callee
   obtain ⟨unlocked, mutable, _⟩ :=

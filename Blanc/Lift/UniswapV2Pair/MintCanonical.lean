@@ -578,7 +578,7 @@ theorem mint_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
   have callF' := callF
   rw [wordF] at callF'
   -- the three static-view turn queues
-  let ctxM := mintSourceContext sevm invocation
+  let ctxM := writerContext sevm invocation
   have good : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = sevm.currentTarget →
       ∀ k ∈ staticViewDecodedKeys F.sevm, WriterExtend K (mintTraceKeys root) k :=
     fun F member target k touched => Or.inr (mintTraceKeys_frame member target k touched)
