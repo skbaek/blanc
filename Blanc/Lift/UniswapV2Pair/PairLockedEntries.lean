@@ -1,5 +1,6 @@
 import Blanc.Lift.UniswapV2Pair.MintPrefixWalk
 import Blanc.Lift.UniswapV2Pair.SkimSecondWalk
+import Blanc.Lift.UniswapV2Pair.BurnDispatchWalk
 
 /-! The five lock-guarded Pair entries (mint, burn, swap, sync, skim) succeed only from an
 unlocked entry state: every successful raw run with their selector read slot 12 as 1 before
@@ -15,40 +16,7 @@ private theorem burnSelector_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
       (St b [] M G) t_001a_c0 (.done o)) :
     ∃ gas, SFunc.RunCutP (StepIn D) cert.prog sevm []
       (St b [0x89afcb44] M gas) t_050a_c83 (.done o) := by
-  unfold t_001a_c0 at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_calldataload (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨d, hs, run⟩ := ric_nextP run
-  obtain ⟨_, eq⟩ := ri_shr (StepIn.toRun hs)
-  simp only [show Bytes.toB256 [0] = (0 : B256) from rfl,
-    show Bytes.toB256 [0xe0] = (224 : B256) from rfl,
-    show (224 : B256).toNat = 224 from rfl,
-    show Sevm.dataWord sevm 0 >>> 224 = (0x89afcb44 : B256) from selector] at eq
-  subst d
-  obtain ⟨_, run⟩ := ric_cmp_gtP (fun h => StepIn.toRun h) run
-  simp only [show B256.gtCheck (Bytes.toB256 [0x6a,0x62,0x78,0x42]) (0x89afcb44 : B256) = 0
-    from by decide, ite_true] at run
-  unfold t_002b_c0 at run
-  obtain ⟨_, run⟩ := ric_cmp_gtP (fun h => StepIn.toRun h) run
-  simp only [show B256.gtCheck (Bytes.toB256 [0xba,0x9a,0x7a,0x56]) (0x89afcb44 : B256) = 1
-    from by decide, show ¬ ((1 : B256) = 0) from by decide, ite_false] at run
-  unfold t_0097_c0 at run
-  obtain ⟨_, run⟩ := ric_destP run
-  obtain ⟨_, run⟩ := ric_cmp_gtP (fun h => StepIn.toRun h) run
-  simp only [show B256.gtCheck (Bytes.toB256 [0x7e,0xce,0xbe,0x00]) (0x89afcb44 : B256) = 0
-    from by decide, ite_true] at run
-  unfold t_00a3_c0 at run
-  obtain ⟨_, run⟩ := ric_cmp_eqP (fun h => StepIn.toRun h)
-    (g := t_04d7_c82) (by intro bad; cases bad) rfl run
-  simp only [show B256.eqCheck (Bytes.toB256 [0x7e,0xce,0xbe,0x00]) (0x89afcb44 : B256) = 0
-    from by decide, ite_true] at run
-  unfold t_00ae_c0 at run
-  obtain ⟨gas, run⟩ := ric_cmp_eqP (fun h => StepIn.toRun h)
-    (g := t_050a_c83) (by intro bad; cases bad) rfl run
-  simp only [show B256.eqCheck (Bytes.toB256 [0x89,0xaf,0xcb,0x44]) (0x89afcb44 : B256) = 1
-    from by decide, show ¬ ((1 : B256) = 0) from by decide, ite_false] at run
-  exact ⟨gas, run⟩
+  exact burnSelector_dispatch_inv selector run
 
 /-- A successful burn entry passes its lock test on the entry world. -/
 theorem burn_raw_unlocked {sevm : Sevm} {b post : Devm} {G : Nat}
