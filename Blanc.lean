@@ -658,6 +658,8 @@ import Blanc.Lift.UniswapV2Pair.PermitSource
 import Blanc.Lift.UniswapV2Pair.SkimCanonical
 import Blanc.Lift.UniswapV2Pair.BurnBalanceWalk
 import Blanc.Lift.UniswapV2Pair.BurnSuffixWalk
+import Blanc.Lift.UniswapV2Pair.BurnSource
+import Blanc.Lift.UniswapV2Pair.BurnFinalTurns
 import Blanc.Lift.UniswapV2Pair.BurnPrefixWalk
 import Blanc.Lift.UniswapV2Pair.BurnFrameWalk
 import Blanc.Lift.UniswapV2Pair.BurnDispatchWalk

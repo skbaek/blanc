@@ -636,4 +636,15 @@ theorem pair_static_call_turns {U K : WriterKey → Prop} (inj : WriterInj U)
         exact ⟨views, consumed, authentic,
           Or.inr ⟨child, raw, childRun, rawCommitted, childRoots, mapped⟩⟩
 
+/-- The provenance a static-view turn queue carries for one actual STATICCALL. -/
+def PairViewProvenance (D : Exec.Deriv) (sevm : Sevm) (frame : Frame) (t : B256)
+    (views : List StaticViewTurn) : Prop :=
+  (∀ picked ∈ views, picked.Authentic frame) ∧
+  (views = [] ∧ sevm.benvStat.rules.isPrecomp t.toAdr ∨ ∃ (child : Evm) (raw : Execution)
+    (childRun : Exec child.pc child.sta child.dyna raw),
+    Execution.commits raw = true ∧
+    (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots D.exc) ∧
+    views.map Prod.fst =
+      (Exec.retainedTargetTurnsAt frame.context.pair [] childRun).filterMap Sum.getRight?)
+
 end Blanc.Lift.UniswapV2Pair

@@ -140,8 +140,8 @@ def SwapCanonicalBody (Own : Devm → Prop) (K : WriterKey → Prop) (current : 
     post.output = [] ∧
     (∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns0 ++ turns1 ++ turnsC →
       LockedAuth (Exec.Frame.rootDeriv located.frame) entry nested) ∧
-    SwapViewProvenance root sevm frame (swapTokenWord w.token0) views0 ∧
-    SwapViewProvenance root sevm (frame.beginResume (swapRequest0 frame locals))
+    PairViewProvenance root sevm frame (swapTokenWord w.token0) views0 ∧
+    PairViewProvenance root sevm (frame.beginResume (swapRequest0 frame locals))
       (swapTokenWord w.token1) views1 ∧
     Own d
 

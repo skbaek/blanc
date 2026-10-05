@@ -412,7 +412,7 @@ theorem burnFinalBalances_suffix_inv {P : Sevm → Devm → Ninst → Devm → P
           (Bytes.toB256 (out0.take 32)) (Bytes.toB256 (out1.take 32)) amount0 amount1) ∧
         p.toNat + 64 ≤ finalSize := by
   obtain ⟨gw0, callGas0, d0, out0, gw1, callGas1, d1, out1, tailGas,
-      call0, call1, post0, post1, long0, width0, long1, width1, answered0, answered1, mem1, tail⟩ :=
+      _, _, call0, call1, post0, post1, long0, width0, long1, width1, answered0, answered1, mem1, tail⟩ :=
     burnFinalBalances_inv project fork mem low high run
   obtain ⟨bound0, bound1, mutable, callGas, updateGas, gas, callee, returned, finalMem, covered⟩ :=
     burnSuffix_inv project fork mem1 low (by omega) notCut tail

@@ -37,17 +37,6 @@ theorem swapTokenWord_adr (a : Adr) : swapTokenWord a.toB256 = a.toB256 := by
   change addressSlotReadWord a.toB256 = _
   rw [addressSlotReadWord_eq_toAdr_toB256, toAdr_toB256]
 
-/-- The provenance a static-view turn queue carries for one actual STATICCALL. -/
-def SwapViewProvenance (D : Exec.Deriv) (sevm : Sevm) (frame : Frame) (t : B256)
-    (views : List StaticViewTurn) : Prop :=
-  (∀ picked ∈ views, picked.Authentic frame) ∧
-  (views = [] ∧ sevm.benvStat.rules.isPrecomp t.toAdr ∨ ∃ (child : Evm) (raw : Execution)
-    (childRun : Exec child.pc child.sta child.dyna raw),
-    Execution.commits raw = true ∧
-    (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots D.exc) ∧
-    views.map Prod.fst =
-      (Exec.retainedTargetTurnsAt frame.context.pair [] childRun).filterMap Sum.getRight?)
-
 /-- The raw Sync log of the shared update. -/
 def swapSyncLog (pair : Adr) (bal0 bal1 : B256) : Jaune.Log :=
   ⟨pair, [updateSyncTopic], encodeWords [bal0, bal1]⟩
@@ -88,8 +77,8 @@ theorem swapBack_exact_consumes_bounds {U K : WriterKey → Prop} {frame : Frame
         (.next (feeObservedResult out0) (staticViewTranscript views0 .done)
           (.next (feeObservedResult out1) (staticViewTranscript views1 .done) .done))
         { status := .success [], frame := final, remaining := .done, childReturns := rets } ∧
-      SwapViewProvenance D sevm frame (swapTokenWord w.token0) views0 ∧
-      SwapViewProvenance D sevm (frame.beginResume (swapRequest0 frame locals))
+      PairViewProvenance D sevm frame (swapTokenWord w.token0) views0 ∧
+      PairViewProvenance D sevm (frame.beginResume (swapRequest0 frame locals))
         (swapTokenWord w.token1) views1 ∧
       o = .returned (St post R M' G') ∧
       final.checkpoint = frame.checkpoint ∧ final.context = frame.context ∧

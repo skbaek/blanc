@@ -224,6 +224,7 @@ theorem burnFinalFirstRequest_inv {P : Sevm → Devm → Ninst → Devm → Prop
     (run : SFunc.RunCutP P cert.prog sevm C
       (St b (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R) M G)
       t_16a3_c13 seg) :
+    (b.getCode (token0 &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr).size.toB256 ≠ 0 ∧
     ∃ gas, SFunc.RunCutP P cert.prog sevm C
       (St (temporalAccountAccessBase b (token0 &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr)
         (0 :: (token0 &&& 0xffffffffffffffffffffffffffffffffffffffff) :: p :: 36 :: p :: 32 ::
@@ -246,8 +247,13 @@ theorem burnFinalFirstRequest_inv {P : Sevm → Devm → Ninst → Devm → Prop
   rcases ric_branchP run with ⟨_, _, failed⟩ | ⟨accepted, gas, run⟩
   · exact (failed.false_of_noOk (by decide : t_170b_c13.noOk = true)).elim
   · have zero := eq_zero_of_iszero_ne_zero accepted
+    have code : (b.getCode (token0 &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr).size.toB256 ≠ 0 := by
+      intro empty
+      change B256.eqCheck ((b.getCode (token0 &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr).size.toB256) 0 = 0 at zero
+      rw [empty, show B256.eqCheck (0 : B256) 0 = 1 from by decide] at zero
+      exact (by decide : (1 : B256) ≠ 0) zero
     rw [zero] at run
-    exact ⟨gas, run⟩
+    exact ⟨code, gas, run⟩
 
 /-- The two physical reply bounds leave room for the complete following
 balance-query staging area, beyond the final64-byte ABI area. -/
@@ -317,6 +323,7 @@ theorem burnFinalFirstBalance_inv {P : Sevm → Devm → Ninst → Devm → Prop
       let access := temporalAccountAccessBase b token.toAdr
       let Q := skimRequestMemory M p sevm.currentTarget
       let locals := burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R
+      (b.getCode token.toAdr).size.toB256 ≠ 0 ∧
       P sevm (St access (gw :: token :: p :: 36 :: p :: 32 ::
         (p + 36) :: 0x70a08231 :: token :: locals) Q callGas) (.exec .staticcall) d ∧
       StaticCallPost access d ((p + 36) :: 0x70a08231 :: token :: locals) Q p 36 p 32 1 out ∧
@@ -326,12 +333,12 @@ theorem burnFinalFirstBalance_inv {P : Sevm → Devm → Ninst → Devm → Prop
       SFunc.RunCutP P cert.prog sevm C
         (St d (Bytes.toB256 (out.take 32) :: locals)
           (burnBalanceReplyMemory Q p out) tailGas) BurnFinalBalanceSite.first.afterDecodeTree seg := by
-  obtain ⟨_, prepared⟩ := burnFinalFirstRequest_inv project fork (PtrWord.of_ptrMem mem) low high run
+  obtain ⟨code, _, prepared⟩ := burnFinalFirstRequest_inv project fork (PtrWord.of_ptrMem mem) low high run
   obtain ⟨requestMem, fit⟩ := burnBalanceRequest_memoryLayout (pair := sevm.currentTarget) mem low high
   obtain ⟨gw, callGas, d, out, tailGas, call, post, long, bound, answered, replyMem, tail⟩ :=
     burnFinalBalanceRead_inv .first project fork requestMem low fit prepared
   rw [skimRequestMemory_read mem.wf high] at answered
-  exact ⟨gw, callGas, d, out, tailGas, call, post, long, bound, answered, replyMem, tail⟩
+  exact ⟨gw, callGas, d, out, tailGas, code, call, post, long, bound, answered, replyMem, tail⟩
 
 private def burnFinalSecondRequestLine : List Ninst := [
   .push [0x40] (by decide),
@@ -463,6 +470,7 @@ theorem burnFinalSecondRequest_inv {P : Sevm → Devm → Ninst → Devm → Pro
     (run : SFunc.RunCutP P cert.prog sevm C
       (St b (balance0 :: burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R) M G)
       BurnFinalBalanceSite.first.afterDecodeTree seg) :
+    (b.getCode (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr).size.toB256 ≠ 0 ∧
     ∃ gas, SFunc.RunCutP P cert.prog sevm C
       (St (temporalAccountAccessBase b (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr)
         (0 :: (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff) :: p :: 36 :: p :: 32 ::
@@ -483,8 +491,13 @@ theorem burnFinalSecondRequest_inv {P : Sevm → Devm → Ninst → Devm → Pro
   rcases ric_branchP run with ⟨_, _, failed⟩ | ⟨accepted, gas, run⟩
   · exact (failed.false_of_noOk (by decide : t_17a7_c13.noOk = true)).elim
   · have zero := eq_zero_of_iszero_ne_zero accepted
+    have code : (b.getCode (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr).size.toB256 ≠ 0 := by
+      intro empty
+      change B256.eqCheck ((b.getCode (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr).size.toB256) 0 = 0 at zero
+      rw [empty, show B256.eqCheck (0 : B256) 0 = 1 from by decide] at zero
+      exact (by decide : (1 : B256) ≠ 0) zero
     rw [zero] at run
-    exact ⟨gas, run⟩
+    exact ⟨code, gas, run⟩
 
 /-- Both post-transfer balance answers come from the same Burn source run.
 Canonical requests, full reply guards and actual call provenance are retained
@@ -510,6 +523,8 @@ theorem burnFinalBalances_inv {P : Sevm → Devm → Ninst → Devm → Prop}
         token1 token0 r1 r0 amount1 amount0 toWord extρ R
       let access0 := temporalAccountAccessBase b t0.toAdr
       let access1 := temporalAccountAccessBase d0 t1.toAdr
+      (b.getCode t0.toAdr).size.toB256 ≠ 0 ∧
+      (d0.getCode t1.toAdr).size.toB256 ≠ 0 ∧
       P sevm (St access0 (gw0 :: t0 :: p :: 36 :: p :: 32 ::
         (p + 36) :: 0x70a08231 :: t0 :: locals0) Q0 callGas0) (.exec .staticcall) d0 ∧
       P sevm (St access1 (gw1 :: t1 :: p :: 36 :: p :: 32 ::
@@ -524,16 +539,16 @@ theorem burnFinalBalances_inv {P : Sevm → Devm → Ninst → Devm → Prop}
       SFunc.RunCutP P cert.prog sevm C
         (St d1 (Bytes.toB256 (out1.take 32) :: locals1)
           (burnBalanceReplyMemory Q1 p out1) tailGas) BurnFinalBalanceSite.second.afterDecodeTree seg := by
-  obtain ⟨gw0, callGas0, d0, out0, _, call0, post0, long0, bound0, answered0, mem0, tail0⟩ :=
+  obtain ⟨gw0, callGas0, d0, out0, _, code0, call0, post0, long0, bound0, answered0, mem0, tail0⟩ :=
     burnFinalFirstBalance_inv project fork mem low high run
-  obtain ⟨_, prepared1⟩ :=
+  obtain ⟨code1, _, prepared1⟩ :=
     burnFinalSecondRequest_inv project fork (PtrWord.of_ptrMem mem0) low high tail0
   obtain ⟨requestMem1, fit1⟩ := burnBalanceRequest_memoryLayout (pair := sevm.currentTarget) mem0 low high
   obtain ⟨gw1, callGas1, d1, out1, tailGas, call1, post1, long1, bound1, answered1, mem1, tail1⟩ :=
     burnFinalBalanceRead_inv .second project fork requestMem1 low fit1 prepared1
   rw [skimRequestMemory_read mem0.wf high] at answered1
   exact ⟨gw0, callGas0, d0, out0, gw1, callGas1, d1, out1, tailGas,
-    call0, call1, post0, post1, long0, bound0, long1, bound1,
+    code0, code1, call0, call1, post0, post1, long0, bound0, long1, bound1,
     answered0, answered1, mem1, tail1⟩
 
 end Blanc.Lift.UniswapV2Pair
