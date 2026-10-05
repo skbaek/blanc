@@ -888,15 +888,6 @@ def BurnEntryTrackedFinished (U K : WriterKey → Prop) (current : Checkpoint) (
     final.current.logs = current.logs ++ added ∧ publicPost.logs = b.logs ++ rawLogs ∧
     added.map (PendingLog.rawWith (burnOwnedRaw D.sevm.currentTarget)) = rawLogs.map some
 
-/-- Forget footprint growth without weakening any observable Burn effect. -/
-theorem BurnEntryTrackedFinished.toFinished {U K : WriterKey → Prop}
-    {current : Checkpoint} {D : Exec.Deriv} {b : Devm} {o : Outcome} {invocation : List Nat}
-    (finished : BurnEntryTrackedFinished U K current D b o invocation) :
-    BurnEntryFinished U current D b o invocation := by
-  obtain ⟨K', final, nested, rets, post, a0, a1, added, raw,
-    sub, _, facts⟩ := finished
-  exact ⟨K', final, nested, rets, post, a0, a1, added, raw, sub, facts⟩
-
 /-- Every reply the Burn source consumes, in call order: the two initial
 `balanceOf(pair)` replies, the factory `feeTo` reply, the two token `transfer`
 replies with their frame-entry bits, and the two final `balanceOf(pair)` replies,
@@ -985,14 +976,6 @@ def BurnEntryAuthenticFinished (U K : WriterKey → Prop) (current : Checkpoint)
       final.checkpoint = current ∧ final.context = ctx ∧ final.current.state.unlocked = 1 ∧
       final.current.logs = current.logs ++ added ∧ publicPost.logs = b.logs ++ rawLogs ∧
       added.map (PendingLog.rawWith (burnOwnedRaw D.sevm.currentTarget)) = rawLogs.map some
-
-/-- Forget the call provenance. -/
-theorem BurnEntryAuthenticFinished.toTracked {U K : WriterKey → Prop}
-    {current : Checkpoint} {D : Exec.Deriv} {b : Devm} {o : Outcome} {invocation : List Nat}
-    (finished : BurnEntryAuthenticFinished U K current D b o invocation) :
-    BurnEntryTrackedFinished U K current D b o invocation := by
-  obtain ⟨a, amount0, amount1, _, K', final, rets, post, added, raw, facts⟩ := finished
-  exact ⟨K', final, a.transcript, rets, post, amount0, amount1, added, raw, facts⟩
 
 private theorem burn_adr_word_mask (a : Adr) :
     a.toB256 &&& (0xffffffffffffffffffffffffffffffffffffffff : B256) = a.toB256 := by

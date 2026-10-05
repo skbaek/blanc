@@ -1767,28 +1767,6 @@ theorem sync_root_first_static_occurrence_request_parent {sevm : Sevm} {b post :
   refine ⟨occurrence, cursor, ?_, ?_, ?_, ?_, instruction, tree, continuation, ?_, ?_, ?_, ?_, ?_⟩
   all_goals rw [sameNode]; assumption
 
-theorem sync_root_first_static_occurrence_request {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-    ∃ (occurrence : Exec.NinstOccurrence root) (cursor : Cursor),
-      Exec.Deriv.ExecFreeUntil root occurrence.node ∧ occurrence.node.pc = 0x1ee0 ∧
-      occurrence.node.sevm = sevm ∧ occurrence.node.exn = .ok post ∧
-      occurrence.instruction = .exec .staticcall ∧
-      cursor.f = .next (.exec .staticcall) syncFirstAfterCall ∧
-      (∃ k K, cursor.K = k :: K ∧ k.f = t_0257_c78) ∧
-      CursorOK code cert occurrence.node cursor ∧
-      (∃ (g t ii is oi os : B256) (S : List B256),
-        occurrence.node.devm.stack = g :: t :: ii :: is :: oi :: os :: S) ∧
-      occurrence.node.devm.getStor sevm.currentTarget = (b.getStor sevm.currentTarget).set 12 0 ∧
-      occurrence.node.devm.memory = balanceRequestMemory getterInitMemory sevm.currentTarget ∧
-      ∃ (g : B256) (T : List B256), occurrence.node.devm.stack = g :: (b.getStorVal sevm.currentTarget 6).toAdr.toB256 ::
-        128 :: 36 :: 128 :: 32 :: T := by
-  obtain ⟨occurrence, cursor, free, pc, sameSevm, success, instruction, tree, continuation, ok, operands, storage, memory, g, T, stack, _⟩ :=
-    sync_root_first_static_occurrence_request_parent codeEq fork selector run
-  exact ⟨occurrence, cursor, free, pc, sameSevm, success, instruction, tree, continuation, ok, operands, storage, memory, g, T, stack⟩
-
 /-- Crossing the authenticated first occurrence fixes its actual primitive
 result and recursive slot to the real parent continuation. -/
 theorem sync_root_first_static_step_request_parent {sevm : Sevm} {b post : Devm} {G : Nat}
@@ -3112,38 +3090,6 @@ theorem sync_second_static_occurrence_from_guard {sevm : Sevm} {post : Devm}
     nodeOutcome.trans entryOutcome, sameInstruction, tree, nodeContinuation, placed, ordered, operands⟩,
     destFree, sameK.trans entryShape.2, entry, destEdge, destJump, ?_⟩
   simpa only [entrySevm, destSevm, ns] using line
-
-theorem sync_root_second_static_occurrence {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-    ∃ (first second : Exec.NinstOccurrence root) (returned : Exec.Deriv) (cursor : Cursor),
-      Exec.Deriv.ExecFreeUntil root first.node ∧ first.node.pc = 0x1ee0 ∧
-      Exec.Deriv.ParentStep returned first.node ∧
-      returned.pc = first.node.pc + 1 ∧ first.stepResult = .ok returned.devm ∧
-      (∃ (frame : Jaune.Frame) (resume : Resume),
-        Evm.step ⟨first.node.pc, first.node.sevm, first.node.devm⟩ =
-          .spawn frame resume (first.node.pc + 1)) ∧
-      Exec.Deriv.ExecFreeUntil returned second.node ∧ second.node.pc = 0x1f7d ∧
-      second.node.sevm = sevm ∧ second.node.exn = .ok post ∧
-      second.instruction = .exec .staticcall ∧
-      cursor.f = .next (.exec .staticcall) syncSecondAfterCall ∧
-      (∃ k K, cursor.K = k :: K ∧ k.f = t_0257_c78) ∧
-      CursorOK code cert second.node cursor ∧
-      (∃ firstChildFrames : List Exec.LocatedFrame,
-        Exec.descendantFramePaths [] 0 run =
-          firstChildFrames ++ Exec.descendantFramePaths [] 1 second.node.exc) ∧
-      (∃ (g t ii is oi os : B256) (S : List B256),
-        second.node.devm.stack = g :: t :: ii :: is :: oi :: os :: S) := by
-  obtain ⟨first, returned, dest, atDest, rootFree, firstPc, callEdge,
-    returnedPc, result, callSpawn, returnedFree, destPc, destSevm, destOutcome,
-    destTree, continuation, destOk⟩ := sync_root_second_guard_open codeEq fork selector run
-  obtain ⟨second, cursor, facts, retained⟩ :=
-    sync_second_static_occurrence_from_guard first returned dest atDest codeEq fork
-      rootFree firstPc callEdge returnedPc result callSpawn returnedFree destPc
-      destSevm destOutcome destTree continuation destOk
-  exact ⟨first, second, returned, cursor, facts⟩
 
 /-- Crossing the second real occurrence preserves its supplied recursive
 slot and binds the result to the actual pending parent successor. -/
