@@ -631,4 +631,64 @@ theorem skimSecondLine_exact {sevm : Sevm} {b : Devm} {R0 : List B256} {M' : Mem
   rw [← skimRequestMem_eq mem' lower1 p14]
   exact body
 
+/-- Forward second query (dual of the query part of `skimSecondHalf_flag_inv`):
+the `STATICCALL` guard tree and the width guard to the decoder, at the moved
+pointer over the transfer0 memory. -/
+theorem skimQuery1Call_exact {sevm : Sevm} {b d1 : Devm} {M : Mem}
+    {callGas tailGas : Nat} {z tm p1 r1 toWord t1 t0 tag : B256} {R0 : List B256}
+    {o : Outcome} {nR : Nat}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (memR : PtrMem p1 nR M) (low96 : 96 ≤ p1.toNat)
+    (room : R0.length ≤ 970)
+    (env : SkimQueryEnv sevm b M p1 tm
+      ((p1 + 36) :: 0x70a08231 :: tm :: r1 :: 0x1a26 :: toWord :: t1 :: 0x1aca ::
+        t1 :: t0 :: toWord :: tag :: R0) d1 callGas tailGas)
+    (body : SFunc.RunExact cert.prog sevm
+      (St d1 (d1.returnData.length.toB256 :: p1 ::
+        (r1 :: 0x1a26 :: toWord :: t1 :: 0x1aca :: t1 :: t0 :: toWord :: tag :: R0))
+        (((M.extends [(p1.toNat, 36), (p1.toNat, 32)]).write p1.toNat
+          (d1.returnData.take 32))) tailGas) t_1a18_c67 o) :
+    SFunc.RunExact cert.prog sevm
+      (St b (z :: tm :: p1 :: 36 :: p1 :: 32 ::
+        ((p1 + 36) :: 0x70a08231 :: tm :: r1 :: 0x1a26 :: toWord :: t1 :: 0x1aca ::
+          t1 :: t0 :: toWord :: tag :: R0)) M (callGas + 5))
+      t_19ee_c67 o := by
+  have mR1 := ((memR.extend p1.toNat 36).extend p1.toNat 32).write_bytes p1.toNat
+    (d1.returnData.take 32) (Or.inr low96)
+  have bound := ReturnDataBound.staticcall_returnData_length_lt
+    (by obtain ⟨xl, filled, step⟩ := env.call; exact ⟨xl, filled, 0, step 0⟩) fork
+  have decoded := returnWidthGuard_exact (returnTree := t_1a02_c67)
+    (shortTree := t_1a14_c67) (decodeTree := t_1a18_c67)
+    (a := 0) (x := p1 + 36) (y := 0x70a08231) (z := tm)
+    [0x1a, 0x18] (by decide) (by decide) rfl mR1
+    (by simp only [List.length_cons]; omega) bound env.long body
+  exact staticCallGuard_exact (callTree := t_19ee_c67) (failureTree := t_19f9_c67)
+    (successTree := t_1a02_c67) [0x1a, 0x02] (by decide) (by decide) rfl fork
+    (by simp only [List.length_cons]; omega) env.call env.success
+    (by rw [env.returnedGas]) decoded
+
+/-- Forward unlock tail (dual of `skimUnlockTail_inv`): two cache pops, the
+lock store, tag pop and the jump to `STOP`. -/
+theorem skimUnlock_exact {sevm : Sevm} {d : Devm} {R0 : List B256} {M : Mem}
+    {G sunlock : Nat} {t1 t0 toWord tag : B256}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (esunlock : sunlock = sstoreCost sevm d 12 1)
+    (sentryU : gCallStipend < (G + 11) + sunlock) (nonstatic : sevm.isStatic = false)
+    (room : R0.length ≤ 1000) :
+    SFunc.RunExact cert.prog sevm
+      (St d (t1 :: t0 :: toWord :: tag :: R0) M (G + sunlock + 22)) t_1aca_c67
+      (.halted (St (afterSstore sevm d 12 1) R0 M G)) := by
+  unfold t_1aca_c67
+  apply skimFwd_gas (G' := ((G + 11) + sunlock) + 11) (by omega)
+  apply rx_dest
+  apply rx_pop
+  apply rx_pop
+  apply rx_push (w := 1) rfl (by simp only [List.length_cons]; omega)
+  apply rx_push (w := 12) rfl (by simp only [List.length_cons]; omega)
+  apply rx_sstoreC fork esunlock sentryU nonstatic
+  apply skimFwd_gas (G' := (G + 9) + 2) (by omega)
+  apply rx_pop
+  exact rx_jump (show cert.prog[73]? = some t_0257_c73 from rfl)
+    (by unfold t_0257_c73; exact rx_dest rx_stop)
+
 end Blanc.Lift.UniswapV2Pair
