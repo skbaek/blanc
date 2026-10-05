@@ -97,4 +97,13 @@ theorem lookupA_eq_of_keys {l l' : AcctShadow}
   · rw [List.mem_append, not_or] at hm
     rw [lookupA_of_not_mem hm.1, lookupA_of_not_mem hm.2]
 
+/-- **Two account logs read the same everywhere**, from one closed list equation a kernel
+check decides (`Acct` has no decidable equality): their reads agree along the addresses either
+names. -/
+theorem lookupA_eq_of_map {l l' : AcctShadow}
+    (h : (l.map Prod.fst ++ l'.map Prod.fst).map (lookupA l) =
+      (l.map Prod.fst ++ l'.map Prod.fst).map (lookupA l')) (a : Adr) :
+    lookupA l a = lookupA l' a :=
+  lookupA_eq_of_keys (fun b hb => List.map_inj_left.mp h b hb) a
+
 end Blanc.Lift.Witness

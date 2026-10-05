@@ -501,6 +501,7 @@ import Blanc.Lift.NodeWalkFork
 import Blanc.Lift.NodeWalkPrecomp
 import Blanc.Lift.ShadowCanon
 import Blanc.Lift.CreateEntry
+import Blanc.Lift.NodeWalkOrig
 -- A gas-exact lifted run as a node-walk leaf child (vyper-reachable-reentrancy-v1): shared.
 import Blanc.Lift.ExactLeaf
 import Blanc.Lift.WitnessFork
@@ -598,6 +599,19 @@ import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.Top
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.OracleRun
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.OracleTop
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach.Init
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.ReceiverR.Cert
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.ReceiverR.Check
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.ReceiverR.Creation.Input
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.ReceiverR.Creation.Cert
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.ReceiverR.Creation.Check
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.ReceiverR.Creation.Deploy
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Fund.World
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Fund.Root
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Fund.Create
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Fund.Approve
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Fund.AddRun
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Fund.Add
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Fund.Checkpoint
 import Blanc.Lift.CheckAssemblyPair
 import Blanc.Lift.WitnessShadow
 import Blanc.Lift.Clone1167
