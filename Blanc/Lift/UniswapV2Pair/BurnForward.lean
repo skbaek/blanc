@@ -106,6 +106,33 @@ theorem burnAbi_exact {sevm : Sevm} {b post : Devm} {M : Mem}
   have entry := burnAbiGuard_exact guard body
   simpa only [Nat.add_assoc, show (23 + 40 : Nat) = 63 from rfl] using entry
 
+/-- Burn's lock check forwards the unlocked slot and its two output temporaries. -/
+theorem burnLockGuard_exact {sevm : Sevm} {b : Devm} {R : List B256}
+    {M : Mem} {G load : Nat} {toWord extρ : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork) (room : R.length ≤ 1008)
+    (unlocked : b.getStorVal sevm.currentTarget 12 = 1)
+    (charge : load = sloadCost sevm b 12)
+    (body : SFunc.RunExact cert.prog sevm
+      (St (afterSload sevm b 12) (0 :: 0 :: toWord :: extρ :: R) M G)
+      t_1469_c37 o) :
+    SFunc.RunExact cert.prog sevm
+      (St b (toWord :: extρ :: R) M (G + load + 29)) t_13f5_c37 o := by
+  unfold t_13f5_c37
+  apply rx_dest
+  apply rx_push (w := 0) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup1 (by simp only [List.length_cons]; omega)
+  apply rx_push (w := 12) rfl (by simp only [List.length_cons]; omega)
+  rw [show G + load + 19 = (G + 19) + load by omega]
+  apply rx_sload_selC fork charge (by simp only [List.length_cons]; omega)
+  apply rx_push (w := 1) rfl (by simp only [List.length_cons]; omega)
+  apply rx_eq (v := 1) (by rw [unlocked]; decide) (by simp only [List.length_cons]; omega)
+  apply rx_push (w := 0x1469) rfl (by simp only [List.length_cons]; omega)
+  change SFunc.RunExact cert.prog sevm
+    (St (afterSload sevm b 12) (0x1469 :: 1 :: 0 :: 0 :: toWord :: extρ :: R) M (G + 10))
+    (.branch t_1403_c37 t_1469_c37) o
+  exact rx_branch_succ (d := 0x1469) (w := 1)
+    (by decide : (1 : B256) ≠ 0) body
+
 /-! The two initial balance observations use the shared STATICCALL and width
 guards.  The callee run remains an explicit premise; no pair-local state is
 assumed between the call and its decoder. -/
