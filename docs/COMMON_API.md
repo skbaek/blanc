@@ -1300,6 +1300,26 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   at any such bump. Existing suggestion facilities were checked and no
   registered trigger matches the two-run congruence goal shape, so discovery
   remains in this registry.
+- For equality modulo `gasLeft` across two successful runs of a whole lifted
+  tree (`SFunc.RunP`), use
+  [`Blanc/Lift/GasErasureRun.lean`](../Blanc/Lift/GasErasureRun.lean).
+  `SFunc.RunP.eqModGas` takes two runs of the same tree from `Devm.EqModGas`
+  states (the first under any step relation `P` that implies `Ninst.Run`, e.g.
+  an actual frame's `StepIn`; the second e.g. a `SFunc.RunExact.toRun`) and
+  returns `Outcome.EqModGas`: both halt or both return, in states equal modulo
+  gas. The tree is certified by `SFunc.gasFree` and the entry closure
+  `GasFreeSet fs S` (decide them by `decide +kernel`); the whitelist is
+  `Ninst.gasFreeRun` (`Ninst.gasFree` plus `KECCAK256` and `LOG n`, with
+  `Ninst.run_eqModGasRun`) and `Linst.gasFree` (`STOP`, `RETURN`, vacuous
+  `REVERT`; `Linst.run_eqModGas`). The consumer pattern removes a gas premise
+  from an output fact: run the gas-exact forward walk from
+  `pre.withGasLeft N` (`Devm.EqModGas.withGasLeft`) and transfer its output
+  (`Devm.EqModGas.output_eq`). The same module adds `of_withOutput`,
+  `of_addLog`, `of_popList`, `of_popBurnList`, and gas-independence of the
+  forward cost helpers (`sloadCost_congr`, `sstoreCost_congr`, `afterSload`,
+  `afterSstore`). A dispatcher that reaches a non-gas-free entry needs a
+  two-run walk to the selected entry first (see
+  `Blanc/Composition/UniswapV2PairWeth9GasFree.lean` for WETH9).
 
 ### I2. The property concerns a complete execution or child frames
 
@@ -1563,6 +1583,13 @@ laws live in [`Blanc/LadderBase.lean`](../Blanc/LadderBase.lean):
   `FootprintCovers.extend` extends a footprint by the keys a step touches, and
   `footprintSum_dup_ne_sum` is the statement control: a repeated nonzero key
   breaks the equation.
+  To compare two footprint sums row by row, import
+  [`Blanc/Lift/LedgerFootprintOrder.lean`](../Blanc/Lift/LedgerFootprintOrder.lean):
+  `footprintSum_le_footprintSum` (pointwise growth on the footprint) and
+  `footprintSum_lt_footprintSum` (plus one strictly grown footprint row) order
+  the sums without a `Nodup` premise; `footprintSum_cons` peels one key.  A
+  statement control uses the strict form to show one moved row breaks an
+  equation with an unmoved supply.
 
 ### S6. I need a basic EVM-word identity
 
@@ -2451,6 +2478,20 @@ channels when actual input and incoming output seed are short. Errors preserve
 the seed. Derive those premises from the real frame entry; this API does not
 supply a separate environmental assumption about precompile output.
 The immediate consumer is actual-entry composition in `Lift.ReturnDataBound`.
+
+#### I need a finite, root-fixed set containing a call's actual reply
+
+Use [`Blanc/Lift/PrecompileAnswer.lean`](../Blanc/Lift/PrecompileAnswer.lean).
+`precompileRun_gas_mono` shows remaining gas only gates a precompile's success,
+so `precompileRun_ok_output_unique` makes the successful output a function of
+calldata and `MODEXP` pricing alone, named by `precompileAnswer` (and
+`precompileAnswer_of_ok`); `precompileRun_ok_mem` bounds the succeeding
+addresses by `precompileRunAddresses`. `ProcessMessage.ok_output` splits an
+error-free successful call message into that precompile answer (empty slot) or
+its entered frame's raw success (`callFrame_settle_ok`). Together with
+`Exec.rawFrameRoots` this gives a finite list, fixed by the root execution, that
+contains any STATICCALL reply to a fixed request (consumer:
+`UniswapV2Pair.mintFeeReplyKeys`).
 
 ### T2b. I need a contract's own ledger replay across retained settlement
 
@@ -3464,6 +3505,10 @@ contract-neutral.
   [`Blanc/Lift/InvWalkProvenance.lean`](../Blanc/Lift/InvWalkProvenance.lean)
   retain that relation in the exposed instruction and the continuation. Use these
   projections when a walk must preserve execution-derivation provenance.
+  A conditional goto to an entry outside the cut list, `ric_branchToP` in
+  [`Blanc/Lift/InvWalkBranchToP.lean`](../Blanc/Lift/InvWalkBranchToP.lean), is the
+  relation-preserving form of `ric_branchTo`; the Pair swap front consumes it with
+  `StepIn D` at its output, liquidity, recipient and callback gotos.
   For a complete linear prefix, `SFunc.RunCutP.split_nexts` exposes its actual
   intermediate state and `Line.Run`, using an explicit projection to `Ninst.Run`.
   The residual cut keeps the original instruction relation, program, cut set and
@@ -3484,6 +3529,14 @@ contract-neutral.
   unfolding the nested world update; the Pair mint prefix consumes all three.
   The existing Lido temporal access names are compatibility declarations over
   this common owner.
+- A callee that fails on every input: `revertingCode` (`PUSH0 PUSH0 REVERT`); every pc-zero
+  frame over it ends in an error (`revertingCode_exec_error`, via the generic non-spawning
+  step inversion `Exec.ofExecution_inv`); an ordinary non-precompile message over it never
+  settles cleanly (`processMessage_not_clean_of_reverting`); and no static child message to
+  an account holding it answers (`not_staticAnswered_of_reverting`), which refutes the
+  `StaticAnswered` witness a successful-flag `STATICCALL` inversion retains. Use it for
+  failing-callee (callee-premise) controls, in
+  [`Blanc/Lift/RevertingCallee.lean`](../Blanc/Lift/RevertingCallee.lean).
 - A `STATICCALL` to an arbitrary callee, whose code is unknown: its abstract outcome
   (`StaticCallPost`: flag, returned bytes as output window and return data, every storage
   map and the log list kept) and, for a set flag, the successful static child message
@@ -3495,6 +3548,12 @@ contract-neutral.
   `ri_staticcall_bounded` additionally derives `out.length < 2^256` from the
   actual static-call producer, for the same outcome and full return data. This
   bound is independent of the caller's output window and needs no callee premise.
+- A mutable `CALL` to an arbitrary callee: `MutableCallPost` (flag on top of the
+  rest; for a set flag, the output window written with a prefix of the full
+  return data and the caller's own output kept) and its inverse `ri_call_post`, in
+  [`Blanc/Lift/MutableCallPost.lean`](../Blanc/Lift/MutableCallPost.lean). Callee
+  storage effects are deliberately unstated; consume them through a turn fold over
+  the child derivation. The Pair swap callback consumes it.
   For literal call-success and return-width guards around that primitive, use
   [`Blanc/Lift/StaticCallGuard.lean`](../Blanc/Lift/StaticCallGuard.lean):
   `staticCallGuard_invP` keeps the original instruction predicate and witness,
@@ -3657,6 +3716,11 @@ contract-neutral.
   and `set` (pointer replacement) preserve it; `memRead_extend_fst` reads through
   a read's extension. The Pair's skim walk consumes it for its second query and
   transfer after transfer0's allocation.
+- Four consecutive word stores read back as one window: `Mem.read_four_word_writes` in
+  [`Blanc/Lift/WordWindowMemory.lean`](../Blanc/Lift/WordWindowMemory.lean) reads the
+  128 bytes at `s` after word stores at `s`, `s+32`, `s+64`, `s+96` (over a well-formed
+  memory) as the four words' concatenation, the payload of a four-word ABI event staged at
+  the free pointer. The Pair's swap tail consumes it for the `Swap` log.
 - Gas-exact writer walks for solc-0.4-style runtimes: the scratch-memory invariant `FpMem n M` (word-aligned,
   free pointer `0x60`, kept for an arbitrary `M`; `FpMem.init`, `FpMem.write`, `FpMem.write_out`,
   `FpMem.readback`, `scratchW`), its steps (`rx_mstoreF`, `rx_mstoreOut`, `rx_mloadFp`, `rx_keccakF`,
@@ -3684,6 +3748,10 @@ contract-neutral.
   [`Blanc/Lift/Quiet.lean`](../Blanc/Lift/Quiet.lean), which also proves that a static
   frame on a covered fork keeps its log list on every successful outcome, committing or
   not (`Exec.logs_eq_of_static_ok`; committed form `Exec.logs_committedPost_eq_of_static`),
+  a storage-local entry set that may store and log but whose only call is `STATICCALL`
+  (`StorLocalSet`, `SFunc.Run.foreignStor_of_storLocal`: every account other than the
+  executing one keeps its storage) in
+  [`Blanc/Lift/LocalStorage.lean`](../Blanc/Lift/LocalStorage.lean),
   and Hoare-style
   composition across one internal call or an ABI wrapper
   (`SFunc.RunP.hoare_single_call`, `hoare_single_call_with_gotos`,
