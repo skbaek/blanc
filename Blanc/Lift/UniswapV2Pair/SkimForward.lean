@@ -446,4 +446,189 @@ theorem skimTransferLayout {pre : Nat → B256 → Nat} {post : Nat → B256 →
   · rw [swapTransferMemory_zeroSlot mem lower width]
     exact sentinel
 
+/-- The moved request memory is two plain stores (the `read`s are no-ops over
+a covered allocation). -/
+theorem skimRequestMem_eq {M : Mem} {p : B256} {pair : Adr} {n : Nat}
+    (mem : PtrMem p n M) (lower : 128 ≤ p.toNat)
+    (p4 : (p + 4).toNat = p.toNat + 4) :
+    skimRequestMemory M p pair =
+      (M.write p.toNat balanceOfSelectorWord.toBytes).write (p + 4).toNat
+        pair.toB256.toBytes := by
+  unfold skimRequestMemory
+  have r0 : (M.read 64 32).2 = M := mem.read_self (by have := mem.ge; omega)
+  rw [r0]
+  have m1 := mem.write p.toNat balanceOfSelectorWord (Or.inr (by omega))
+  have m2 := m1.write (p + 4).toNat pair.toB256 (Or.inr (by rw [p4]; have := m1.ge; omega))
+  exact m2.read_self (by have := m2.ge; omega)
+
+/-- Forward second line (mirror of `skimSecondLine_inv` plus the code guard):
+reserve1 reload, second balance request staging, `extcodesize` guard to the
+second `STATICCALL` tree. -/
+theorem skimSecondLine_exact {sevm : Sevm} {b : Devm} {R0 : List B256} {M' : Mem}
+    {G : Nat} {n1 : Nat} {p1 t1 t0 toWord tag : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (mem' : PtrMem p1 n1 M') (lower1 : 128 ≤ p1.toNat)
+    (width1 : p1.toNat + 1024 < 2 ^ 256)
+    (code1 : ((((afterSload sevm b 8).getCode
+      ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& t1)).toAdr)).size.toB256) ≠ 0)
+    (s8' c1' c2' : Nat)
+    (es8' : s8' = sloadCost sevm b 8)
+    (ec1' : c1' = swapStoreCost n1 p1.toNat)
+    (ec2' : c2' = swapStoreCost (memExtSize n1 p1.toNat 32) (p1 + 4).toNat)
+    (room1 : R0.length ≤ 970)
+    (body : SFunc.RunExact cert.prog sevm
+      (St (temporalAccountAccessBase (afterSload sevm b 8)
+          ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+            0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& t1)).toAdr)
+        (B256.eqCheck ((((afterSload sevm b 8).getCode
+          ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+            0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& t1)).toAdr)).size.toB256) 0 ::
+        (Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+          0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& t1) ::
+        p1 :: 36 :: p1 :: 32 :: (p1 + 36) :: 0x70a08231 ::
+        (Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+          0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& t1) ::
+        skimReserve1Word (b.getStorVal sevm.currentTarget 8) :: 0x1a26 :: toWord :: t1 ::
+        0x1aca :: t1 :: t0 :: toWord :: tag :: R0)
+        (skimRequestMemory M' p1 sevm.currentTarget) G) t_19ee_c67 o) :
+    SFunc.RunExact cert.prog sevm
+      (St b (t1 :: t0 :: toWord :: tag :: R0) M'
+        (G + s8' + c1' + c2' +
+          temporalAccountAccessCost (afterSload sevm b 8)
+            ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+              0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& t1)).toAdr + 171))
+      t_1a2b_c34 o := by
+  have fit64 : (64 : B256).toNat + 32 ≤ n1 := by
+    rw [show (64 : B256).toNat = 64 from rfl]
+    have g := mem'.ge
+    omega
+  have p14 : (p1 + 4).toNat = p1.toNat + 4 :=
+    B256.toNat_add_eq_of_nof _ _ (by show p1.toNat + 4 < 2 ^ 256; have w := width1; omega)
+  unfold t_1a2b_c34
+  apply skimFwd_gas (G' := ((G + c1' + c2' +
+    temporalAccountAccessCost (afterSload sevm b 8)
+      ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& t1)).toAdr + 167) +
+    s8') + 4) (by omega)
+  apply rx_dest
+  apply rx_push (w := 8) rfl (by simp only [List.length_cons]; omega)
+  apply rx_sload_selC fork es8' (by simp only [List.length_cons]; omega)
+  apply skimFwd_gas (G' := ((G + c2' +
+    temporalAccountAccessCost (afterSload sevm b 8)
+      ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& t1)).toAdr + 152) +
+    c1') + 15) (by omega)
+  apply rx_push (w := 64) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup1 (by simp only [List.length_cons]; omega)
+  refine rx_mload (c := 3) ?_ mem'.word (mem'.read_self fit64)
+    (by simp only [List.length_cons]; omega) ?_
+  · rw [St.extCost_eq mem'.size, memExtSize_of_le mem'.n32 fit64, Nat.sub_self]
+    rfl
+  apply rx_push (w := balanceOfSelectorWord) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup2 (by simp only [List.length_cons]; omega)
+  refine rx_mstore (c := c1') ?_ rfl ?_
+  · rw [St.extCost_eq mem'.size, ec1']
+    rfl
+  have m1w := mem'.write p1.toNat balanceOfSelectorWord (Or.inr (by omega))
+  apply skim_rx_address (by simp only [List.length_cons]; omega)
+  apply rx_push (w := 4) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup3 (by simp only [List.length_cons]; omega)
+  apply rx_add' (v := p1 + 4) rfl (by simp only [List.length_cons]; omega)
+  apply skimFwd_gas (G' := ((G +
+    temporalAccountAccessCost (afterSload sevm b 8)
+      ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& t1)).toAdr + 141) +
+    c2')) (by omega)
+  refine rx_mstore (c := c2') ?_ rfl ?_
+  · rw [St.extCost_eq m1w.size, ec2']
+    rfl
+  have m2w := m1w.write (p1 + 4).toNat sevm.currentTarget.toB256
+    (Or.inr (by rw [p14]; have := m1w.ge; omega))
+  apply skimFwd_gas (G' := ((G + 22) +
+    temporalAccountAccessCost (afterSload sevm b 8)
+      ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& t1)).toAdr) + 119)
+    (by omega)
+  apply rx_swap1
+  refine rx_mload (c := 3) ?_ m2w.word (m2w.read_self (by
+    rw [show (64 : B256).toNat = 64 from rfl]; have g := m2w.ge; omega))
+    (by simp only [List.length_cons]; omega) ?_
+  · have fitM : (64 : B256).toNat + 32 ≤
+        memExtSize (memExtSize n1 p1.toNat 32) (p1 + 4).toNat 32 := by
+      rw [show (64 : B256).toNat = 64 from rfl]
+      have g := m2w.ge
+      omega
+    rw [St.extCost_eq m2w.size, memExtSize_of_le m2w.n32 fitM, Nat.sub_self]
+    rfl
+  apply rx_push (w := 0x1aca) rfl (by simp only [List.length_cons]; omega)
+  apply rx_swap (n := ⟨2, by decide⟩) rfl
+  dsimp only [List.set]
+  apply rx_dup (n := ⟨4, by decide⟩) rfl (by simp only [List.length_cons]; omega)
+  apply rx_swap (n := ⟨2, by decide⟩) rfl
+  dsimp only [List.set]
+  apply rx_dup (n := ⟨7, by decide⟩) rfl (by simp only [List.length_cons]; omega)
+  apply rx_swap (n := ⟨2, by decide⟩) rfl
+  dsimp only [List.set]
+  apply rx_push (w := 0x1a26) rfl (by simp only [List.length_cons]; omega)
+  apply rx_swap (n := ⟨2, by decide⟩) rfl
+  dsimp only [List.set]
+  apply rx_push (w := Bytes.toB256 [0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]) rfl
+    (by simp only [List.length_cons]; omega)
+  apply rx_swap1
+  apply rx_div rfl (by simp only [List.length_cons]; omega)
+  apply rx_push (w := Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff]) rfl
+    (by simp only [List.length_cons]; omega)
+  apply rx_and rfl (by simp only [List.length_cons]; omega)
+  apply rx_swap2
+  apply rx_push (w := Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]) rfl
+    (by simp only [List.length_cons]; omega)
+  apply rx_dup (n := ⟨6, by decide⟩) rfl (by simp only [List.length_cons]; omega)
+  apply rx_and rfl (by simp only [List.length_cons]; omega)
+  apply rx_swap2
+  apply rx_push (w := 0x70a08231) rfl (by simp only [List.length_cons]; omega)
+  apply rx_swap2
+  apply rx_push (w := 36) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup1 (by simp only [List.length_cons]; omega)
+  apply rx_dup3 (by simp only [List.length_cons]; omega)
+  apply rx_add (by simp only [List.length_cons]; omega)
+  apply rx_swap (n := ⟨2, by decide⟩) rfl
+  dsimp only [List.set]
+  apply rx_push (w := 32) rfl (by simp only [List.length_cons]; omega)
+  apply rx_swap (n := ⟨2, by decide⟩) rfl
+  dsimp only [List.set]
+  apply rx_swap1
+  apply rx_swap2
+  apply rx_swap1
+  apply rx_dup3 (by simp only [List.length_cons]; omega)
+  apply rx_swap1
+  apply rx_sub (by simp only [List.length_cons]; omega)
+  apply rx_add (by simp only [List.length_cons]; omega)
+  apply rx_dup2 (by simp only [List.length_cons]; omega)
+  apply rx_dup (n := ⟨6, by decide⟩) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup1 (by simp only [List.length_cons]; omega)
+  have hflip : ∀ x : B256, (t1 &&& x) = (x &&& t1) := fun x => B256.and_comm _ _
+  have h36 : p1 - p1 + 36 = (36 : B256) := by rw [B256.sub_self, B256.add_comm, B256.add_zero]
+  rw [hflip, h36]
+  apply rx_extcodesize fork (by simp only [List.length_cons]; omega)
+  apply rx_iszero rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup1 (by simp only [List.length_cons]; omega)
+  apply rx_iszero rfl (by simp only [List.length_cons]; omega)
+  apply rx_push (w := 0x19ee) rfl (by simp only [List.length_cons]; omega)
+  have codeRaw1 : B256.eqCheck (B256.eqCheck (((afterSload sevm b 8).getCode
+      ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& t1)).toAdr).size.toB256) 0) 0 ≠ 0 := by
+    have e0 : B256.eqCheck ((((afterSload sevm b 8).getCode
+        ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+          0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& t1)).toAdr)).size.toB256) 0 = 0 := by
+      simp only [B256.eqCheck, code1, ite_false]
+    rw [e0]
+    decide
+  refine rx_branchTo_succ codeRaw1 rfl ?_
+  rw [← skimRequestMem_eq mem' lower1 p14]
+  exact body
+
 end Blanc.Lift.UniswapV2Pair
