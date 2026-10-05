@@ -17,7 +17,7 @@ success flag there is exactly a `StaticAnswered` witness.
 
 Two step-level facts serve later queries and calls: any successful instruction step keeps
 `revertingCode` installed (`revertingCode_kept`, since no step rewrites nonempty code), and a
-`CALL` to it never leaves the success flag (`call_flag_ne_one_of_reverting`).
+`CALL` to it leaves the failure flag `0` (`call_flag_zero_of_reverting`).
 
 These are adverse-callee facts at EVM altitude: universal over the child's derivation, with a
 concrete callee code. Nothing here mentions a contract.
@@ -128,29 +128,29 @@ theorem revertingCode_kept {sevm : Sevm} {pre post : Devm} {n : Ninst} {t : Adr}
     (by rw [codeEq, ByteArray.toList_eq_toList_data]; decide)
   rw [kept, codeEq]
 
-/-- A `CALL` to an account holding `revertingCode`, outside the precompile range, never leaves
-the success flag `1`: either no child is entered, or the entered child runs the code and
-cannot settle cleanly. -/
-theorem call_flag_ne_one_of_reverting {sevm : Sevm} {b d : Devm} {S T : List B256} {M : Mem}
-    {G : Nat} {g c v ii is oi os : B256}
+/-- A `CALL` to an account holding `revertingCode`, outside the precompile range, leaves the
+failure flag `0`: either no child is entered, or the entered child runs the code and cannot
+settle cleanly. -/
+theorem call_flag_zero_of_reverting {sevm : Sevm} {b d : Devm} {S T : List B256} {M : Mem}
+    {G : Nat} {g c v ii is oi os flag : B256}
     (codeEq : b.getCode c.toAdr = revertingCode)
     (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp c.toAdr)
     (hfork : CoveredFork sevm.benvStat.fork)
-    (h : Ninst.Run sevm (St b (g :: c :: v :: ii :: is :: oi :: os :: S) M G) (.exec .call) d) :
-    d.stack ≠ 1 :: T := by
-  intro stack
+    (h : Ninst.Run sevm (St b (g :: c :: v :: ii :: is :: oi :: os :: S) M G) (.exec .call) d)
+    (stack : d.stack = flag :: T) : flag = 0 := by
   have operands : (g :: c :: v :: ii :: is :: oi :: os :: S) <<+
       (St b (g :: c :: v :: ii :: is :: oi :: os :: S) M G).stack := by
     simpa only [List.append_nil, St.stack] using
       (pref_append (g :: c :: v :: ii :: is :: oi :: os :: S) [])
   rcases of_run_call_val_with_depth_frame operands h hfork with failed | entered
   · rw [stack] at failed
-    exact absurd (pref_head_unique failed.1 (pref_append [1] T)) (by decide)
+    exact (pref_head_unique failed.1 (pref_append [flag] T)).symm
   · obtain ⟨_, child, xl, dp, na, code, _, _, _, _, _, _, _, _, _, delegation, filled, process,
       clean, _⟩ := entered
     rcases delegation with ⟨_, naEq, codeIs, dpEq⟩ | ⟨e, designated, _, _, _⟩
     · subst naEq codeIs dpEq
-      exact processMessage_not_clean_of_reverting rfl codeEq notPrecompile filled process clean
+      exact (processMessage_not_clean_of_reverting rfl codeEq notPrecompile filled process
+        clean).elim
     · change getDelegatedCodeAddress (b.getCode c.toAdr) = some e at designated
       rw [codeEq] at designated
       cases designated

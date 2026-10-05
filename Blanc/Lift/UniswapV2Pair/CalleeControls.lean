@@ -41,7 +41,7 @@ private theorem lockedToken0 {sevm : Sevm} {b : Devm} {tok : Adr}
   exact token0
 
 /-- Account warming keeps every installed code. -/
-private theorem warm_getCode (base : Devm) (a t : Adr) :
+theorem warm_getCode (base : Devm) (a t : Adr) :
     (temporalAccountAccessBase base a).getCode t = base.getCode t := by
   unfold Devm.getCode Devm.getAcct
   rw [temporalAccountAccessBase_state]
