@@ -844,7 +844,7 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   `canonS l = l'` then gives a canonical storage table, `lookupS_eq_of_canonS`), and
   `lookupA_eq_of_keys` makes two account logs agree everywhere once they agree at the addresses
   either names, in [`Blanc/Lift/ShadowCanon.lean`](../Blanc/Lift/ShadowCanon.lean) (worked use:
-  `init_run` in `.../Fixed/Init/Top.lean`).
+  `init_run`/`oracle_run` in `.../Fixed/Init/{Top,OracleTop}.lean`).
 - To state a closed *frame-level* witness (the certificate interpreter `wrun`, code children by
   `childStart`/`callResume`/`callPairFrom`, proxy frames by `stepN`) under every covered fork,
   rewrite its kernel facts with `wrun_withFork`

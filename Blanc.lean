@@ -593,6 +593,9 @@ import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.World
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.Proxy
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.Run
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.Top
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.OracleRun
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.OracleTop
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach.Init
 
 -- The vulnerable Vyper comparator 0x6326, its token and attacker, and the witnessed
 -- reentry vminus_witness (deployed-lido-vyper-v1, V-).
