@@ -1,4 +1,5 @@
 import Blanc.Lift.UniswapV2Pair.BurnDispatchWalk
+import Blanc.Lift.UniswapV2Pair.BurnPrefixWalk
 import Blanc.Lift.UniswapV2Pair.GetterStringWalk
 
 /-! Forward liveness construction for the Uniswap V2 Pair `burn` entry.
@@ -104,5 +105,81 @@ theorem burnAbi_exact {sevm : Sevm} {b post : Devm} {M : Mem}
   have body := burnAbiCall_exact (avail := sevm.data.length.toB256 - 4) callee tail
   have entry := burnAbiGuard_exact guard body
   simpa only [Nat.add_assoc, show (23 + 40 : Nat) = 63 from rfl] using entry
+
+/-! The two initial balance observations use the shared STATICCALL and width
+guards.  The callee run remains an explicit premise; no pair-local state is
+assumed between the call and its decoder. -/
+theorem burnInitialBalanceRead_exact {sevm : Sevm} {b d : Devm} {R : List B256}
+    {M : Mem} {G callGas tailGas : Nat} {z token a x y : B256} {o : Outcome}
+    (site : BurnInitialBalanceSite)
+    (fork : CoveredFork sevm.benvStat.fork)
+    (mem : PtrMem 128 192 (balanceRequestMemory M sevm.currentTarget))
+    (room : (a :: x :: y :: R).length ≤ 1018)
+    (call : Ninst.RunCompiled sevm
+      (St b (callGas.toB256 :: token :: 128 :: 36 :: 128 :: 32 :: a :: x :: y :: R)
+        (balanceRequestMemory M sevm.currentTarget) callGas) (.exec .staticcall) d)
+    (success : d.stack = 1 :: a :: x :: y :: R)
+    (returnedGas : d.gasLeft = tailGas + 64)
+    (bound : d.returnData.length < 2 ^ 256)
+    (width : 32 ≤ d.returnData.length)
+    (body : SFunc.RunExact cert.prog sevm
+      (St d (d.returnData.length.toB256 :: 128 :: R)
+        (balanceReplyMemory M sevm.currentTarget d.returnData) tailGas)
+      site.decodeTree o) :
+    SFunc.RunExact cert.prog sevm
+      (St b (z :: token :: 128 :: 36 :: 128 :: 32 :: a :: x :: y :: R)
+        (balanceRequestMemory M sevm.currentTarget) (callGas + 5))
+      site.callTree o := by
+  cases site with
+  | first =>
+    have tailRoom : R.length ≤ 1020 := by
+      have h := room
+      simp only [List.length_cons] at h ⊢
+      omega
+    have replyMem := balanceReplyMemory_ptr d.returnData mem
+    have decoded := returnWidthGuard_exact (fs := cert.prog)
+      (b := d) (R := R) (M := balanceReplyMemory M sevm.currentTarget d.returnData)
+      (G := tailGas) (a := 0) (x := a) (y := x) (z := y) (p := 128) (n := 192)
+      (returnTree := t_150f_c37) (shortTree := t_1521_c37) (decodeTree := t_1525_c37)
+      [0x15, 0x25] (by decide) (by decide) rfl replyMem tailRoom bound width body
+    have guarded : SFunc.RunExact cert.prog sevm
+        (St d (0 :: a :: x :: y :: R)
+          (balanceReplyMemory M sevm.currentTarget d.returnData) (tailGas + 42))
+        t_150f_c37 o := by
+      simpa only [balanceReplyMemory] using decoded
+    have composed := staticCallGuard_exact (fs := cert.prog)
+      (b := b) (d := d) (S := a :: x :: y :: R)
+      (M := balanceRequestMemory M sevm.currentTarget)
+      (callGas := callGas) (tailGas := tailGas + 42) (z := z) (t := token)
+      (ii := 128) (is := 36) (oi := 128) (os := 32) (o := o)
+      (callTree := t_14fb_c37) (failureTree := t_1506_c37)
+      (successTree := t_150f_c37) [0x15, 0x0f] (by decide) (by decide) rfl fork room
+      call success (by simpa only [Nat.add_assoc, show (42 + 22 : Nat) = 64 from rfl] using returnedGas) guarded
+    simpa only [balanceReplyMemory, BurnInitialBalanceSite.callTree] using composed
+  | second =>
+    have tailRoom : R.length ≤ 1020 := by
+      have h := room
+      simp only [List.length_cons] at h ⊢
+      omega
+    have replyMem := balanceReplyMemory_ptr d.returnData mem
+    have decoded := returnWidthGuard_exact (fs := cert.prog)
+      (b := d) (R := R) (M := balanceReplyMemory M sevm.currentTarget d.returnData)
+      (G := tailGas) (a := 0) (x := a) (y := x) (z := y) (p := 128) (n := 192)
+      (returnTree := t_15ad_c37) (shortTree := t_15bf_c37) (decodeTree := t_15c3_c37)
+      [0x15, 0xc3] (by decide) (by decide) rfl replyMem tailRoom bound width body
+    have guarded : SFunc.RunExact cert.prog sevm
+        (St d (0 :: a :: x :: y :: R)
+          (balanceReplyMemory M sevm.currentTarget d.returnData) (tailGas + 42))
+        t_15ad_c37 o := by
+      simpa only [balanceReplyMemory] using decoded
+    have composed := staticCallGuard_exact (fs := cert.prog)
+      (b := b) (d := d) (S := a :: x :: y :: R)
+      (M := balanceRequestMemory M sevm.currentTarget)
+      (callGas := callGas) (tailGas := tailGas + 42) (z := z) (t := token)
+      (ii := 128) (is := 36) (oi := 128) (os := 32) (o := o)
+      (callTree := t_1599_c37) (failureTree := t_15a4_c37)
+      (successTree := t_15ad_c37) [0x15, 0xad] (by decide) (by decide) rfl fork room
+      call success (by simpa only [Nat.add_assoc, show (42 + 22 : Nat) = 64 from rfl] using returnedGas) guarded
+    simpa only [balanceReplyMemory, BurnInitialBalanceSite.callTree] using composed
 
 end Blanc.Lift.UniswapV2Pair
