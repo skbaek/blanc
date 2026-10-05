@@ -253,7 +253,9 @@ theorem burnTransfers_source_cut {U K : WriterKey → Prop} {frame : Frame} {pri
 /-- Complete observable result of the actual transfer/final-balance source suffix. -/
 def BurnTransferFinished (U : WriterKey → Prop) (frame : Frame) (priced : BurnPriced)
     (D : Exec.Deriv) (sevm : Sevm) (b : Devm) (w : BurnFinalWords)
-    (M : Mem) (ρ : B256) (R : List B256) (o : Outcome) : Prop :=
+    (M : Mem) (ρ : B256) (R : List B256) (o : Outcome)
+    (start : SegmentResult := .suspended frame (burnTransferRequest0 priced) (.burnTransfer0 priced))
+    (wrap : Transcript → Transcript := id) (childPrefix : List ChildReturn := []) : Prop :=
     ∃ (K' : WriterKey → Prop) (d0 d1 : Devm) (entered0 entered1 : Bool)
       (turns0 turns1 : List MutableTurn) (final : Frame) (rets : List ChildReturn)
       (transcript : Transcript) (post : Devm) (finalM : Mem) (gas n : Nat)
@@ -263,10 +265,9 @@ def BurnTransferFinished (U : WriterKey → Prop) (frame : Frame) (priced : Burn
         entered0 turns0 ∧
       PairMutableProvenance D sevm (w.token1 &&& 0xffffffffffffffffffffffffffffffffffffffff)
         entered1 turns1 ∧
-      ExactConsumes (.suspended frame (burnTransferRequest0 priced) (.burnTransfer0 priced))
-        transcript
+      ExactConsumes start (wrap transcript)
         { status := .success (encodeWords [priced.amount0, priced.amount1]),
-          frame := final, remaining := .done, childReturns := rets } ∧
+          frame := final, remaining := .done, childReturns := childPrefix ++ rets } ∧
       o = .returned (St post (w.amount1 :: w.amount0 :: R) finalM gas) ∧
       WriterRep K' (post.getStor sevm.currentTarget) final.current.state ∧
       final.checkpoint = frame.checkpoint ∧ final.context = frame.context ∧

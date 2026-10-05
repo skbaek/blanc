@@ -209,4 +209,62 @@ theorem burnFee_pricing_source_finished {U K : WriterKey → Prop} {st : State}
       (fun F member target k touched => staticGood F member target k touched) transfer,
     typed⟩
 
+private theorem burnFee_factory_turns {U K : WriterKey → Prop} {st : State}
+    {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {r1 r0 ρ : B256} {o : Outcome}
+    (observation : FeeMintSourceObservation K st D sevm b R M r1 r0 ρ o)
+    (prior : Frame) (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (state : prior.current.state = st) (pair : prior.context.pair = sevm.currentTarget)
+    (time : prior.context.timestamp = sevm.benvStat.time)
+    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
+    (fork : CoveredFork sevm.benvStat.fork)
+    (good : ∀ F ∈ Exec.rawFrameRoots D.exc, F.sevm.currentTarget = prior.context.pair →
+      ∀ k ∈ staticViewDecodedKeys F.sevm, U k) :
+    ∃ views : List StaticViewTurn,
+      ExactTurns prior (requestFor .burnFeeTo (feeFactoryWord sevm b).toAdr .feeTo) 0
+        (staticViewTranscript views .done)
+        { complete := true, frame := prior,
+          childReturns := staticViewChildReturns prior
+            (requestFor .burnFeeTo (feeFactoryWord sevm b).toAdr .feeTo) 0 views } ∧
+      PairViewProvenance D sevm prior (feeFactoryWord sevm b) views := by
+  obtain ⟨views, turns, authentic, derived⟩ :=
+    pair_static_call_turns (frame := prior)
+      (request := requestFor .burnFeeTo (feeFactoryWord sevm b).toAdr .feeTo)
+      inj apart sub sem image observation.step
+      (by simpa only [List.append_nil, St.stack] using pref_append _ ([] : List B256))
+      (by change some ((feeFactoryCallWorld sevm b).getCode prior.context.pair).toList = _
+          rw [pair]
+          unfold feeFactoryCallWorld temporalAccountAccessBase
+          split <;> change some ((feeFactoryLoadWorld sevm b).getCode sevm.currentTarget).toList = _
+          all_goals rw [feeFactoryLoadWorld, afterSload_getCode]; exact installed)
+      (by change WriterRep K ((feeFactoryCallWorld sevm b).state.getStor prior.context.pair) _
+          unfold feeFactoryCallWorld
+          rw [temporalAccountAccessBase_state, pair]
+          change WriterRep K ((feeFactoryLoadWorld sevm b).getStor sevm.currentTarget) _
+          rw [feeFactoryLoadWorld, afterSload_getStor, state]
+          exact rep)
+      time fork ⟨1, _, observation.post.stack, by decide⟩ good
+  exact ⟨views, turns, authentic, derived⟩
+
+private theorem burnFee_finished_prepend {U : WriterKey → Prop}
+    {frame : Frame} {priced : BurnPriced} {D : Exec.Deriv} {sevm : Sevm}
+    {b : Devm} {w : BurnFinalWords} {M : Mem} {ρ : B256} {R : List B256} {o : Outcome}
+    {start : SegmentResult} {wrap : Transcript → Transcript} {childPrefix : List ChildReturn}
+    (finished : BurnTransferFinished U frame priced D sevm b w M ρ R o)
+    (reaches : ∀ tail out,
+      ExactConsumes (.suspended frame (burnTransferRequest0 priced) (.burnTransfer0 priced))
+        tail out → ExactConsumes start (wrap tail)
+          { out with childReturns := childPrefix ++ out.childReturns }) :
+    BurnTransferFinished U frame priced D sevm b w M ρ R o start wrap childPrefix := by
+  obtain ⟨K', d0, d1, entered0, entered1, turns0, turns1, final, rets, transcript,
+      post, finalM, gas, n, balance0, balance1, added0, added1, L0, L1,
+      sub, calls, prov0, prov1, consumed, returned, rep, checkpoint, context, unlocked,
+      mem, covered, bound0, bound1, raw, images0, images1, logs⟩ := finished
+  exact ⟨K', d0, d1, entered0, entered1, turns0, turns1, final, rets, transcript,
+    post, finalM, gas, n, balance0, balance1, added0, added1, L0, L1,
+    sub, calls, prov0, prov1, reaches _ _ consumed, returned, rep, checkpoint, context, unlocked,
+    mem, covered, bound0, bound1, raw, images0, images1, logs⟩
+
 end Blanc.Lift.UniswapV2Pair
