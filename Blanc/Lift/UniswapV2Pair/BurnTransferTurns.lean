@@ -282,7 +282,13 @@ def BurnTransferFinished (U : WriterKey → Prop) (frame : Frame) (priced : Burn
         [⟨frame.context.pair, [updateSyncTopic], encodeWords [balance0, balance1]⟩,
          ⟨frame.context.pair,
            [burnEventTopic, frame.context.sender.toB256, priced.observed.locals.recipient.toB256],
-           encodeWords [priced.amount0, priced.amount1]⟩]
+           encodeWords [priced.amount0, priced.amount1]⟩] ∧
+      96 ≤ (burnSecondTransferPointer d0.returnData d1.returnData).toNat ∧
+      (burnSecondTransferPointer d0.returnData d1.returnData).toNat + 64 < 2 ^ 256 ∧
+      final.current.logs = frame.current.logs ++ added0 ++ added1 ++
+        [PendingLog.owned final.origin (.sync balance0.toNat balance1.toNat),
+         PendingLog.owned final.origin (.burn frame.context.sender priced.amount0
+          priced.amount1 priced.observed.locals.recipient)]
 
 /-- **Burn transfers through the final source return.** Starting at the produced
 post-pricing cut, the actual mutable queues and final balance views consume the
@@ -304,12 +310,12 @@ theorem burnTransfers_source_finished {U K : WriterKey → Prop} {frame : Frame}
     BurnTransferFinished U frame priced D sevm b w M ρ R o := by
   obtain ⟨K2, d0, d1, entered0, entered1, turns0, turns1, rets0, rets1, frame2, N, n, gas,
       sub2, calls, provenance0, provenance1, checkpoint2, context2, finalCut,
-      installed2, tail, ⟨added0, added1, L0, L1, _, raw, images0, images1⟩, lift⟩ :=
+      installed2, tail, ⟨added0, added1, L0, L1, pending, raw, images0, images1⟩, lift⟩ :=
     burnTransfers_source_cut inj apart sub sem image installed fork cut good run
   obtain ⟨gw0, cg0, q0, out0, gw1, cg1, q1, out1, views0, views1, final, rets,
       finalGas, finalSize, _, _, _, _, _, _, _, _, _, _, _, _,
       consumed, _, _, returned, finalMem, covered, checkpoint, context, unlocked,
-      finalRep, finalLogs, _, bound0, bound1⟩ :=
+      finalRep, finalLogs, _, bound0, bound1, finalPending⟩ :=
     burnFinal_exact_consumes inj apart sub2 sem image installed2 fork finalCut
       (fun F member target k touched => staticGood F member (target.trans (congrArg Context.pair context2)) k touched)
       tail
@@ -319,7 +325,9 @@ theorem burnTransfers_source_finished {U K : WriterKey → Prop} {frame : Frame}
     Bytes.toB256 (out0.take 32), Bytes.toB256 (out1.take 32), added0, added1, L0, L1,
     sub2, calls, provenance0, provenance1, finished, returned, finalRep,
     checkpoint.trans checkpoint2, context.trans context2, unlocked,
-    finalMem, covered, bound0, bound1, raw, images0, images1, ?_⟩
-  rw [finalLogs, raw, context2]
+    finalMem, covered, bound0, bound1, raw, images0, images1, ?_,
+    finalCut.lower, (by have width := finalCut.width; omega), ?_⟩
+  · rw [finalLogs, raw, context2]
+  · rw [finalPending, pending, context2]
 
 end Blanc.Lift.UniswapV2Pair

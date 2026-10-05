@@ -161,7 +161,12 @@ theorem burnFinal_exact_consumes {U K : WriterKey → Prop} {frame : Frame} {pri
         (Bytes.toB256 (out0.take 32)) (Bytes.toB256 (out1.take 32)) w.fee w.recipient
         w.amount0 w.amount1).output = b.output ∧
       (Bytes.toB256 (out0.take 32)).toNat < 2 ^ 112 ∧
-      (Bytes.toB256 (out1.take 32)).toNat < 2 ^ 112 := by
+      (Bytes.toB256 (out1.take 32)).toNat < 2 ^ 112 ∧
+      final.current.logs = frame.current.logs ++
+        [PendingLog.owned final.origin (.sync (Bytes.toB256 (out0.take 32)).toNat
+          (Bytes.toB256 (out1.take 32)).toNat),
+         PendingLog.owned final.origin (.burn frame.context.sender priced.amount0
+          priced.amount1 priced.observed.locals.recipient)] := by
   obtain ⟨gw0, cg0, d0, out0, gw1, cg1, d1, out1, tailGas,
       code0, code1, call0, call1, post0, post1, long0, width0, long1, width1,
       answered0, answered1, mem1, tail⟩ :=
@@ -238,7 +243,7 @@ theorem burnFinal_exact_consumes {U K : WriterKey → Prop} {frame : Frame} {pri
       (staticViewChildReturns frame1 request1 0 views1 ++ []),
     gas, _, code0, code1, call0, call1, post0, post1, long0, width0, long1, width1,
     answered0, answered1, ?_, ⟨auth0, derived0⟩, ⟨auth1, derived1⟩,
-    Seg.done.inj returned, finalMem, covered, rfl, rfl, rfl, ?_, ?_, ?_, bound0, bound1⟩
+    Seg.done.inj returned, finalMem, covered, rfl, rfl, rfl, ?_, ?_, ?_, bound0, bound1, ?_⟩
   · refine ExactConsumes.nextCall (result := feeObservedResult out0)
       (out := ⟨.success (encodeWords [priced.amount0, priced.amount1]), final, Transcript.done,
         staticViewChildReturns frame1 request1 0 views1 ++ []⟩) rfl
@@ -257,5 +262,15 @@ theorem burnFinal_exact_consumes {U K : WriterKey → Prop} {frame : Frame} {pri
   · simpa only [frame2, frame1, Frame.beginResume, logs1, cut.recipient,
       cut.amount0, cut.amount1] using finishedLogs
   · exact finishedOutput.trans output1
+  · have eventEq : event = .sync (Bytes.toB256 (out0.take 32)).toNat
+        (Bytes.toB256 (out1.take 32)).toNat := by
+      have accepted := updated
+      simp only [State.update, bound0, bound1, dite_true, Except.ok.injEq,
+        Prod.mk.injEq] at accepted
+      exact accepted.2.1.symm
+    simp only [final, burnFinishedFrame, Frame.withEvents, Frame.withUpdate,
+      Frame.origin, frame2, frame1, Frame.beginResume, eventEq, cut.recipient,
+      List.map_cons, List.map_nil, List.append_nil, List.append_assoc,
+      List.cons_append, List.nil_append]
 
 end Blanc.Lift.UniswapV2Pair
