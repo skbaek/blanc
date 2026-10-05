@@ -809,6 +809,21 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   Worked examples: `Blanc/Lift/VyperNonreentrantDeployed/Fixed/Witness/Top.lean` (a read-only
   spawn) and `.../Fixed/Witness2/{Run,Frames,Top}.lean` (an ETH-paying body, a nested reentry
   through an EIP-1167 forwarder, a committing run).
+- To consume a call-family child whose code is a lifted certificate *without* walking it by the
+  kernel — the child's inputs symbolic, its run built forward as `SProg.RunExact` with
+  `Blanc/Lift/ExactWalk.lean` — use [`Blanc/Lift/ExactLeaf.lean`](../Blanc/Lift/ExactLeaf.lean).
+  `exact_leaf` turns the run (and `SpawnFreeReach` of the code) into the outcome and the empty raw
+  descendants of every derivation node at the child's start configuration, the premise
+  `spawn_resume_ok` asks for. `ChildAgree.afterSload`/`afterSstore`/`ret` move the witness
+  engine's shadows across the selected-access bases `afterSload`/`afterSstore` and a `RETURN`
+  over an `St`, so an explicit post state has explicit shadows; `ChildAgree.getStorVal`,
+  `sloadCost_shadow`/`sstoreCost_shadow` (`sloadCostS`/`sstoreCostS`) and
+  `afterSload_shadow`/`afterSstore_shadow` (`afterSloadS`/`afterSstoreS`) restate values, charges
+  and bases on the shadows, which the kernel evaluates without inspecting a hash set.
+  `gtCheck_zero_of_le` and `nof_of_le_add`/`le_add_of_nof` are the word facts a checked
+  token's guards need (a covered `GT` is `0`; a credit passing `v ≤ v + w` did not wrap). Worked
+  example: the synthetic token's `transfer_child`, `transferFrom_child`, `approve_child`,
+  `balanceOf_child` in `Blanc/Lift/VyperNonreentrantDeployed/Token20/Frame.lean`.
 - To state a closed walk witness under every covered fork rather than the one its machine
   fixes, transport its kernel facts with
   [`Blanc/Lift/NodeWalkFork.lean`](../Blanc/Lift/NodeWalkFork.lean): `pwalk_withFork`
@@ -3397,6 +3412,10 @@ contract-neutral.
   `seven` assembly mode (`check.assembly`), so sibling seven-entry
   certificates share the assembly instead of repeating the generic
   conjunction; hand-written `Jumps` modules call `jumpsOk_seven` directly.
+- Assemble a two-entry non-memory certificate with `Cert.check_two` (the two node checks plus
+  the startup Boolean) in [`Blanc/Lift/CheckAssemblyPair.lean`](../Blanc/Lift/CheckAssemblyPair.lean),
+  emitted by the registered producer in its opt-in `two` assembly mode (`check.assembly`); its own
+  module, so adding it rebuilt no existing certificate.
 - Execution to lifted run (safety): `lift_sound`, and `lift_sound_in`, which
   keeps each step's derivation (`StepIn`) for arguments about re-entrant child
   frames, in [`Blanc/Lift/Sound.lean`](../Blanc/Lift/Sound.lean).
@@ -3562,7 +3581,13 @@ contract-neutral.
   [`Blanc/Lift/WitnessChild.lean`](../Blanc/Lift/WitnessChild.lean); the frame-level spawn
   fact `SpawnedBy sevm devm x child` (`Xinst.step` spawns a frame entering as `child`) and
   `spawnedBy_of_callPrep`, `spawnedBy_of_childStart`, `spawnedBy_of_dcallPrep` in
-  [`Blanc/Lift/WitnessSpawn.lean`](../Blanc/Lift/WitnessSpawn.lean); the literal-free
+  [`Blanc/Lift/WitnessSpawn.lean`](../Blanc/Lift/WitnessSpawn.lean); reading a run's final
+  shadow (start shadow with the run's entries prepended) without enumerating addresses or keys:
+  `lookupA_append_of_restate` (a prefix restating the start's views changes no account),
+  `lookupS_append_of_ne` (writes elsewhere leave an address's storage),
+  `lookupS_append_of_absent` (a start with nothing at the address leaves the prefix's values)
+  and `lookupS_eq_zero_of` (only zero entries at a key) in
+  [`Blanc/Lift/WitnessShadow.lean`](../Blanc/Lift/WitnessShadow.lean); the literal-free
   scaffolding for deciding a long `wrun` as kernel chunks between literal boundaries
   (`Boundary.Bnd`/`obsB`/`cfgOf`/`obsD`/`obsDOk`, their composition `obsD_chain`,
   `obsD_chain3`, `obsB_of_obsD`, `run_of_obsB` (every boundary also records that the frame's
@@ -3629,6 +3654,13 @@ contract-neutral.
   `entry_state` (storage cleared, nonce incremented, the zero debit and credit, in Jaune's own
   order), and `liftCreatePost_state` (the constructor's world with its output installed) in
   [`Blanc/Lift/CreateEntry.lean`](../Blanc/Lift/CreateEntry.lean).
+- Creating an EIP-1167 clone of any implementation `I` by the 9-byte copier `602d3d8160093d39f3`:
+  `creationCode I` (copier ++ `forwarderCode I`), its certificate `copierCert`, the 28-gas walk
+  `run`, and `create` — a zero-value CREATE on every covered fork leaves `msg.gas - 28 - 9000`,
+  installs `forwarderCode I` with empty storage (`cloneAcct`), keeps every other account, and states
+  the settled world exactly — given the consumer's registered `Cert.check` of its input, in
+  [`Blanc/Lift/Clone1167.lean`](../Blanc/Lift/Clone1167.lean). A modeled harness: a consumer labels
+  its registered input synthetic (worked use: `Lift/VyperNonreentrantDeployed/Vulnerable/Reach/Deploy.lean`).
 - Gas-exact writer walks for solc-0.4-style runtimes: the scratch-memory invariant `FpMem n M` (word-aligned,
   free pointer `0x60`, kept for an arbitrary `M`; `FpMem.init`, `FpMem.write`, `FpMem.write_out`,
   `FpMem.readback`, `scratchW`), its steps (`rx_mstoreF`, `rx_mstoreOut`, `rx_mloadFp`, `rx_keccakF`,

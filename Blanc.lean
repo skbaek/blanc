@@ -501,6 +501,8 @@ import Blanc.Lift.NodeWalkFork
 import Blanc.Lift.NodeWalkPrecomp
 import Blanc.Lift.ShadowCanon
 import Blanc.Lift.CreateEntry
+-- A gas-exact lifted run as a node-walk leaf child (vyper-reachable-reentrancy-v1): shared.
+import Blanc.Lift.ExactLeaf
 import Blanc.Lift.WitnessFork
 -- One kernel check for a conjunction of closed equalities (vplus-witness-v2): shared.
 import Blanc.Lift.KernelBatch
@@ -596,6 +598,40 @@ import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.Top
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.OracleRun
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.OracleTop
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach.Init
+import Blanc.Lift.CheckAssemblyPair
+import Blanc.Lift.WitnessShadow
+import Blanc.Lift.Clone1167
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Creation.Input
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Creation.Cert
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Creation.Check
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Creation.State
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Creation.Walk
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Creation.Deploy
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Clone.Input
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Clone.Cert
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Clone.Check
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.World
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Deploy
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.InitSetup
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.InitRun
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.InitTop
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Init
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Fund
+import Blanc.Lift.VyperNonreentrantDeployed.Token20.Cert
+import Blanc.Lift.VyperNonreentrantDeployed.Token20.Check
+import Blanc.Lift.VyperNonreentrantDeployed.Token20.Run
+import Blanc.Lift.VyperNonreentrantDeployed.Token20.Frame
+import Blanc.Lift.VyperNonreentrantDeployed.Token20.Ledger
+import Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.Input
+import Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.Cert
+import Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.Check
+import Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.Deploy
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.Cert
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.Check
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.Creation.Input
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.Creation.Cert
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.Creation.Check
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.Creation.Deploy
 
 -- The vulnerable Vyper comparator 0x6326, its token and attacker, and the witnessed
 -- reentry vminus_witness (deployed-lido-vyper-v1, V-).
