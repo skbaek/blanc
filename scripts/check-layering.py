@@ -287,6 +287,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.BurnTransferTurns",
         "Lift.UniswapV2Pair.BurnFeeTransfers",
         "Lift.UniswapV2Pair.BurnDispatchWalk",
+        "Lift.UniswapV2Pair.BurnForward",
         "Lift.UniswapV2Pair.SourceReplay",
         "Lift.UniswapV2Pair.HistoryReplay",
         "Lift.UniswapV2Pair.HistoryWriters",
