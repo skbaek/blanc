@@ -321,3 +321,30 @@ the nested-turn machinery). Cost of waiting: none for W1–W3/G5; W4 shape depen
 (`PairStepNoShrink`: final `balanceOf(pair)` answers ≥ reserve stored at the frame's entry), as in §3.
 Alternative: a trace-level predicate over the actual `STATICCALL` child frames' outputs, bridged to
 the step form (+0.3M tokens, same strength).
+
+## 8. Implementation status (W1–W8, burn arm open)
+
+Proved in `Blanc/Lift/UniswapV2Pair/PairSupply.lean` and `PairHistory.lean` (generic:
+`Blanc/ExecutionTraceEntered.lean`). Deviations from §3–§4, all within the accepted D1/D2:
+
+* **Carrier.** `Snap` is the storage *view* `(getStor pair).get`, not `Stor`: raw `Stor` equality is not
+  a function of the words, so `ofStateGet` fails for `Stor`. Representations move along views by
+  `WriterRep.congr`.
+* **Steps are frames; invocations are produced per incoming state.** The carrier's `Step` is
+  `Exec.Frame` and `PairReplay` says: from every incoming representation, there are authenticated
+  `PairStep`s over exactly these frames that `SourceReplay` from that state. The supply's transcript
+  existentials sit under the model state (`∀ st, ∃ transcript`), so a `PairStep` list cannot be fixed
+  before the state; the headline fixes `st₀` first, so its statement is unchanged.
+* **`WholeFrameReplay` takes the frame's commit proof**, so the step names the committed frame.
+* **`PairStep.Authentic`** adds `pc = 0` and an explicit commit conjunct (correction 1).
+* **Burn arm.** `PairFrameAuth burnAuth` with `BurnFrameSupply burnAuth` as an explicit premise of
+  `pairSupply` and of every history theorem; G4 instantiates `burnAuth` and discharges it.
+* **HASH-T rows.** `pairHistoryTouchedKeys` collects `pairDerivKeys D` (the rows of every Pair frame
+  entered below each raw Pair root), selector-independent; `pairFrameKeys` adds `.balance pair` (burn).
+* **U3** is `pair_history_feeOff_product`, with `sourceReplayAnswers st₀ (steps.map source)` inside the
+  existential (correction to §3); U5 `pair_history_oracle`, U7 `pair_history_ledger`.
+* **Not done (W9):** the superseded `HistoryReplay`/`HistoryWriters`/`HistoryWriterCheck`/
+  `HistoryWriterWalk` family still builds (its `pairFrameObservation` is distinct from the new
+  `pairFrameObs`); deleting it orphans `Lift/ReachDispatch` (proof-recipe registered). The private
+  `locked_*_outcome` of `LockedSupply` are concept duplicates of `free_*_outcome`; `staticObservedNil`
+  and `mintSourceContext` folds as in §2/§4.

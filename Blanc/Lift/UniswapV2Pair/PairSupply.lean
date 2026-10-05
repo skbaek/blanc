@@ -540,14 +540,13 @@ theorem pairSupply {burnAuth : Exec.Deriv → Entry → Transcript → Prop}
     exact image.symm
   have decoded : ∀ k ∈ pairDecodedKeys sevm, U k := fun k member =>
     good.self k (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ member)))
-  have views : ∀ {view : StaticView}, Blanc.Sevm.selector sevm = view.selector →
-      ∀ k ∈ staticViewDecodedKeys sevm, U k := fun _ k member =>
+  have views : ∀ k ∈ staticViewDecodedKeys sevm, U k := fun k member =>
     good.self k (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _ member)))
   have member := pair_bytecode_selector_inv codeEq fork run
   simp only [pairSelectors, List.mem_cons, List.not_mem_nil, or_false] at member
   rcases member with h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h
   · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.scalar (.address .token1))
-      (h.trans (by decide)) (views (view := .scalar (.address .token1)) (h.trans (by decide)))).mono fun _ _ a => Or.inl a
+      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
   · have touched : ∀ k ∈ permitTouched (permitOwner sevm) (permitSpender sevm), U k := by
       intro k touched
       apply decoded k
@@ -557,58 +556,58 @@ theorem pairSupply {burnAuth : Exec.Deriv → Entry → Transcript → Prop}
     exact (free_permit_outcome inj apart run codeEq fork representable sub wrep sem image
       installedCode freshOutput h touched good.views).mono fun _ _ a => Or.inl a
   · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.allowance)
-      (h.trans (by decide)) (views (view := .allowance) (h.trans (by decide)))).mono fun _ _ a => Or.inl a
+      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
   · exact (pair_sync_outcome inj apart run codeEq fork sub wrep sem image installed good
       freshOutput h).mono fun _ _ a => Or.inr (Or.inr (Or.inr (Or.inl a)))
   · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.scalar (.constant .minimumLiquidity))
-      (h.trans (by decide)) (views (view := .scalar (.constant .minimumLiquidity)) (h.trans (by decide)))).mono fun _ _ a => Or.inl a
+      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
   · exact (pair_skim_outcome inj apart run codeEq fork sub wrep sem image installed good
       freshOutput h).mono fun _ _ a => Or.inr (Or.inr (Or.inr (Or.inr (Or.inl a))))
   · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.scalar (.address .factory))
-      (h.trans (by decide)) (views (view := .scalar (.address .factory)) (h.trans (by decide)))).mono fun _ _ a => Or.inl a
+      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
   · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.singleMapping .nonces)
-      (h.trans (by decide)) (views (view := .singleMapping .nonces) (h.trans (by decide)))).mono fun _ _ a => Or.inl a
+      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
   · exact (burn U inj apart current invocation run codeEq installedCode fork freshOutput
       representable h good sub wrep).mono fun _ _ a => Or.inr (Or.inr (Or.inr (Or.inr (Or.inr ⟨h, a⟩))))
   · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.string .symbol)
-      (h.trans (by decide)) (views (view := .string .symbol) (h.trans (by decide)))).mono fun _ _ a => Or.inl a
+      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
   · exact (free_transfer_outcome inj apart run codeEq fork representable sub wrep h
       (by rw [pairDecodedKeys, ite_eq_left h] at decoded; exact decoded)).mono
       fun _ _ a => Or.inl a
   · exact (pair_mint_outcome inj apart run codeEq fork sub wrep sem image installed good
       h).mono fun _ _ a => Or.inr (Or.inr (Or.inl a))
   · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.singleMapping .balanceOf)
-      (h.trans (by decide)) (views (view := .singleMapping .balanceOf) (h.trans (by decide)))).mono fun _ _ a => Or.inl a
+      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
   · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.scalar (.stored .kLast))
-      (h.trans (by decide)) (views (view := .scalar (.stored .kLast)) (h.trans (by decide)))).mono fun _ _ a => Or.inl a
+      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
   · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.scalar (.stored .domainSeparator))
-      (h.trans (by decide)) (views (view := .scalar (.stored .domainSeparator)) (h.trans (by decide)))).mono fun _ _ a => Or.inl a
+      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
   · exact (free_initialize_outcome run codeEq fork representable sub wrep inj apart freshOutput
       h).mono fun _ _ a => Or.inl a
   · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.scalar (.stored .price0CumulativeLast))
-      (h.trans (by decide)) (views (view := .scalar (.stored .price0CumulativeLast)) (h.trans (by decide)))).mono fun _ _ a => Or.inl a
+      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
   · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.scalar (.stored .price1CumulativeLast))
-      (h.trans (by decide)) (views (view := .scalar (.stored .price1CumulativeLast)) (h.trans (by decide)))).mono fun _ _ a => Or.inl a
+      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
   · exact (free_transferFrom_outcome inj apart run codeEq fork representable sub wrep h
       (by rw [pairDecodedKeys, ite_eq_right (by rw [h]; decide), ite_eq_right (by rw [h]; decide),
             ite_eq_left h] at decoded
           exact decoded)).mono fun _ _ a => Or.inl a
   · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.scalar (.constant .permitTypehash))
-      (h.trans (by decide)) (views (view := .scalar (.constant .permitTypehash)) (h.trans (by decide)))).mono fun _ _ a => Or.inl a
+      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
   · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.scalar (.constant .decimals))
-      (h.trans (by decide)) (views (view := .scalar (.constant .decimals)) (h.trans (by decide)))).mono fun _ _ a => Or.inl a
+      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
   · exact (free_approve_outcome inj apart run codeEq fork representable sub wrep h
       (by rw [pairDecodedKeys, ite_eq_right (by rw [h]; decide), ite_eq_left h] at decoded
           exact decoded)).mono fun _ _ a => Or.inl a
   · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.scalar (.address .token0))
-      (h.trans (by decide)) (views (view := .scalar (.address .token0)) (h.trans (by decide)))).mono fun _ _ a => Or.inl a
+      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
   · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.totalSupply)
-      (h.trans (by decide)) (views (view := .totalSupply) (h.trans (by decide)))).mono fun _ _ a => Or.inl a
+      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
   · exact (pair_swap_outcome inj apart run codeEq fork sub wrep sem image installed good
       freshOutput h).mono fun _ _ a => Or.inr (Or.inl a)
   · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.string .name)
-      (h.trans (by decide)) (views (view := .string .name) (h.trans (by decide)))).mono fun _ _ a => Or.inl a
+      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
   · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.getReserves)
-      (h.trans (by decide)) (views (view := .getReserves) (h.trans (by decide)))).mono fun _ _ a => Or.inl a
+      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
 
 end Blanc.Lift.UniswapV2Pair
