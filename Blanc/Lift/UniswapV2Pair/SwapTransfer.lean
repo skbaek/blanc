@@ -141,13 +141,22 @@ def SwapTransferOpt (D : Exec.Deriv) (sevm : Sevm) (b : Devm) (L : List B256) (M
     M' = swapTransferMemory M p amount toWord b'.returnData ∧
     p' = swapMovedPointer p b'.returnData)
 
+/-- CROSS-HOST HYPOTHESIS (delete at consolidation): discharged by the caller gas-potential
+reply-length bound (Jaune `call_step_returnData_length_lt_two_pow_160`, from
+`gasMeasure + memcost < 2^256` at the CALL), to be supplied by the original host or the
+pending Jaune dependency work. Every actual CALL step of derivation `D` returns fewer than
+`2^160` bytes. -/
+def SwapCallReplyShort (D : Exec.Deriv) (sevm : Sevm) : Prop :=
+  ∀ pre d, StepIn D sevm pre (.exec .call) d → d.returnData.length < 2 ^ 160
+
 /-- Both optimistic transfers, from the transfer branch to the callback branch `t_08e1_c4`.
 The second transfer runs at the pointer the first one moved; `short` is the CALL reply bound
-(below `2^160` bytes) that Jaune proves for a real CALL with a bounded gas potential. -/
+(below `2^160` bytes) that Jaune proves for a real CALL with a bounded gas potential.
+CROSS-HOST: conditional on `SwapCallReplyShort`. -/
 theorem swapTransfers_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {R : List B256}
     {M : Mem} {G : Nat} {n : Nat} {t1 t0 r1 r0 len start toWord a1 a0 ρ : B256} {seg : Seg}
     (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 n M)
-    (short : ∀ pre d, StepIn D sevm pre (.exec .call) d → d.returnData.length < 2 ^ 160)
+    (short : SwapCallReplyShort D sevm)
     (run : SFunc.RunCutP (StepIn D) cert.prog sevm []
       (St b (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: ρ :: R) M G)
       t_08bf_c4 seg) :
