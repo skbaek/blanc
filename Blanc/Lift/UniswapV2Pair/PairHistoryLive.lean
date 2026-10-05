@@ -1,7 +1,6 @@
 import Blanc.Lift.UniswapV2Pair.PairHistory
 import Blanc.Lift.UniswapV2Pair.ReplayWriterGas
-import Blanc.Lift.UniswapV2Pair.SwapForward
-import Blanc.Lift.UniswapV2Pair.PropertiesSwap
+import Blanc.Lift.UniswapV2Pair.SwapForwardAccept
 import Blanc.SlotFootprintRestrict
 
 /-!
@@ -340,14 +339,17 @@ theorem pair_history_mint_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
       representable newFresh⟩
 
 /-- **`swap` after any configured history, with or without the flash callback.**  When the model
-accepts the decoded swap at the history's state `finish` for some answers (so the lock is open, some
-output is positive, both outputs are below the reserves and `to` is neither token:
-`runTyped_swap_success_reserves`), then given the forward environments of both halves at the future
-world (`front`: the optional transfer `CALL`s and the callback `CALL`, present iff their amount or the
-data is nonzero; `back`: the two `balanceOf(pair)` calls with the input, `K` and `uint112` facts of
-their actual answers) and the transfer helper `SwapSafeTransferForward` (a named premise until it is
+accepts the decoded swap at the history's state `finish` with the frame's actual post-callback
+`balanceOf(pair)` answers (`SwapContextConditions` and `SwapModelConditions`: the lock is open, some
+output is positive, both outputs are below the reserves, `to` is neither token, the answers fit
+`uint112`, some input is positive and the fee-adjusted `K` check holds; by
+`runTyped_swap_canonical_success` this is the model run succeeding on those answers, and
+`runTyped_swap_success_reserves` gives it back from any successful run), then given the callee-only
+environments at the future world (`front`: the optional transfer `CALL`s and the callback `CALL`,
+present iff their amount or the data is nonzero; `callee`: the two `balanceOf(pair)` `STATICCALL`s with
+their returned gas) and the transfer helper `SwapSafeTransferForward` (a named premise until it is
 proved), a pc-zero run exists at gas
-`swapFrontTransferGas … back.gas + swapPrefixGas sevm pre (swapAmount0Out sevm) + 279 + 166` ending at
+`swapFrontTransferGas … callee.gas + swapPrefixGas sevm pre (swapAmount0Out sevm) + 279 + 166` ending at
 gas `g`; under HASH-T freshness of its own rows its post storage represents the model's next state. -/
 theorem pair_history_swap_live {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     {K₀ : WriterKey → Prop} {st₀ : State}
@@ -364,40 +366,40 @@ theorem pair_history_swap_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
     (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
     (selector : Blanc.Sevm.selector sevm = 0x022c0d9f) (guards : SwapAbiGuards sevm) :
     ∃ (finish : State) (K' : WriterKey → Prop), PairHistoryReplayed pair trace K₀ st₀ finish K' ∧
-      ∀ (transcript : Transcript) (returndata : Bytes),
-        (runTyped finish (writerContext sevm []) (swapDecodedEntry sevm) transcript).status =
-          .success returndata →
-        ∀ {d0 d1 dC : Devm} {cg0 cg1 cgC g : Nat}
-          (back : SwapBackForwardEnv sevm (swapFrontCutWorld sevm pre d0 d1 dC)
-            (swapFrontCutMem sevm d0 d1 dC) (swapFrontCutMem sevm d0 d1 dC).size
-            (swapFrontPtr sevm d0 d1) (swapCutWords sevm finish) 0x257 [0x022c0d9f] (g + 1))
-          (_front : SwapFrontForwardEnv transferPre transferPost sevm pre finish d0 d1 dC cg0 cg1 cgC
-            back.gas),
+      ∀ {d0 d1 dC : Devm} {cg0 cg1 cgC g : Nat}
+        (callee : SwapBackCalleeEnv sevm (swapFrontCutWorld sevm pre d0 d1 dC)
+          (swapFrontCutMem sevm d0 d1 dC) (swapFrontCutMem sevm d0 d1 dC).size
+          (swapFrontPtr sevm d0 d1) (swapCutWords sevm finish) 0x257 [0x022c0d9f] (g + 1))
+        (_front : SwapFrontForwardEnv transferPre transferPost sevm pre finish d0 d1 dC cg0 cg1 cgC
+          callee.gas),
+        SwapContextConditions (writerContext sevm []) →
+        SwapModelConditions finish (swapAmount0Out sevm) (swapAmount1Out sevm) (swapRecipient sevm)
+          (swapBalanceWord callee.d0.returnData) (swapBalanceWord callee.d1.returnData) →
         ∃ run : Exec 0 sevm (St pre [] Mem.empty
-            (swapFrontTransferGas transferPre sevm pre d0 d1 cg0 cg1 cgC back.gas +
+            (swapFrontTransferGas transferPre sevm pre d0 d1 cg0 cg1 cgC callee.gas +
               swapPrefixGas sevm pre (swapAmount0Out sevm) + 279 + 166))
-            (.ok (St back.post [0x022c0d9f] back.memory g)),
-          (St back.post [0x022c0d9f] back.memory g).gasLeft = g ∧
+            (.ok (St callee.post [0x022c0d9f] callee.memory g)),
+          (St callee.post [0x022c0d9f] callee.memory g).gasLeft = g ∧
           (WriterFreshKeys (pairHistoryUniverse pair trace K₀)
               (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
-                (swapFrontTransferGas transferPre sevm pre d0 d1 cg0 cg1 cgC back.gas +
+                (swapFrontTransferGas transferPre sevm pre d0 d1 cg0 cg1 cgC callee.gas +
                   swapPrefixGas sevm pre (swapAmount0Out sevm) + 279 + 166), .ok _, run⟩) →
             PairStepOutcome PairFrameAuth
               (WriterExtend (pairHistoryUniverse pair trace K₀)
                 (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
-                  (swapFrontTransferGas transferPre sevm pre d0 d1 cg0 cg1 cgC back.gas +
+                  (swapFrontTransferGas transferPre sevm pre d0 d1 cg0 cg1 cgC callee.gas +
                     swapPrefixGas sevm pre (swapAmount0Out sevm) + 279 + 166), .ok _, run⟩))
               { state := finish, logs := [], updates := [] } [] K'
               ⟨0, sevm, St pre [] Mem.empty
-                (swapFrontTransferGas transferPre sevm pre d0 d1 cg0 cg1 cgC back.gas +
+                (swapFrontTransferGas transferPre sevm pre d0 d1 cg0 cg1 cgC callee.gas +
                   swapPrefixGas sevm pre (swapAmount0Out sevm) + 279 + 166), .ok _, run⟩
-              (St back.post [0x022c0d9f] back.memory g)) := by
+              (St callee.post [0x022c0d9f] callee.memory g)) := by
   obtain ⟨futureCode, finish, K', replayed⟩ := pair_history_replayed trace installed initial fresh
-  refine ⟨finish, K', replayed, fun transcript returndata accepted d0 d1 dC cg0 cg1 cgC g back
-    front => ?_⟩
+  refine ⟨finish, K', replayed, fun {d0 d1 dC cg0 cg1 cgC g} callee front context conditions => ?_⟩
   obtain ⟨rep, _⟩ := replayed.at_frame target state
-  obtain ⟨⟨_, nonstatic⟩, _, _, ⟨unlocked, positive, liquidity0, liquidity1, to0, to1, _⟩, _⟩ :=
-    runTyped_swap_success_reserves accepted
+  have nonstatic : sevm.isStatic = false := context.2
+  obtain ⟨back, backGas, backPost, backMemory⟩ := callee.accepted conditions nonstatic
+  obtain ⟨unlocked, positive, liquidity0, liquidity1, to0, to1, _⟩ := conditions
   have installedPre : some (pre.getCode sevm.currentTarget).toList = pairSem.image := by
     rw [target]
     change some (pre.state.getCode pair).toList = pairSem.image
@@ -407,6 +409,8 @@ theorem pair_history_swap_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
     rcases positive with h | h
     · exact Or.inl (ne_of_gt h)
     · exact Or.inr (ne_of_gt h)
+  rw [← backGas] at front ⊢
+  rw [← backPost, ← backMemory]
   obtain ⟨run, _⟩ := swap_bytecode_forward_consumes
     (current := { state := finish, logs := [], updates := [] }) [] rep pairSem pairSem_image
     installedPre output codeEq fork value size selector guards unlocked nonstatic nonzero

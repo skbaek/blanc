@@ -721,6 +721,7 @@ import Blanc.Lift.UniswapV2Pair.ReplayWriterGas
 import Blanc.Lift.UniswapV2Pair.InitializedReplay
 import Blanc.Lift.UniswapV2Pair.PairSupply
 import Blanc.Lift.UniswapV2Pair.PairHistory
+import Blanc.Lift.UniswapV2Pair.SwapForwardAccept
 import Blanc.Lift.UniswapV2Pair.PairHistoryLive
 import Blanc.Lift.UniswapV2Pair.PropertiesOracle
 import Blanc.Lift.UniswapV2Pair.PropertiesSwap
