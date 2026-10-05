@@ -406,15 +406,19 @@ theorem burnFinalBalances_suffix_inv {P : Sevm → Devm → Ninst → Devm → P
         (burnSuffixPost sevm d1 r0 r1 (Bytes.toB256 (out0.take 32)) (Bytes.toB256 (out1.take 32))
           f toWord amount0 amount1) (amount1 :: amount0 :: R)
         (burnSuffixMemory sevm d1 (burnBalanceReplyMemory Q1 p out1) p r0 r1
-          (Bytes.toB256 (out0.take 32)) (Bytes.toB256 (out1.take 32)) amount0 amount1) gas)) := by
+          (Bytes.toB256 (out0.take 32)) (Bytes.toB256 (out1.take 32)) amount0 amount1) gas)) ∧
+      ∃ finalSize, PtrMem p finalSize
+        (burnSuffixMemory sevm d1 (burnBalanceReplyMemory Q1 p out1) p r0 r1
+          (Bytes.toB256 (out0.take 32)) (Bytes.toB256 (out1.take 32)) amount0 amount1) ∧
+        p.toNat + 64 ≤ finalSize := by
   obtain ⟨gw0, callGas0, d0, out0, gw1, callGas1, d1, out1, tailGas,
       call0, call1, post0, post1, long0, width0, long1, width1, answered0, answered1, mem1, tail⟩ :=
     burnFinalBalances_inv project fork mem low high run
-  obtain ⟨bound0, bound1, mutable, callGas, updateGas, gas, callee, returned, _, _⟩ :=
+  obtain ⟨bound0, bound1, mutable, callGas, updateGas, gas, callee, returned, finalMem, covered⟩ :=
     burnSuffix_inv project fork mem1 low (by omega) notCut tail
   exact ⟨gw0, callGas0, d0, out0, gw1, callGas1, d1, out1, callGas, updateGas, gas,
     call0, call1, post0, post1, long0, width0, long1, width1, answered0, answered1,
-    bound0, bound1, mutable, callee, returned⟩
+    bound0, bound1, mutable, callee, returned, ⟨_, finalMem, covered⟩⟩
 
 /-- The actual public Burn wrapper encodes amount0 then amount1 at the retained
 pointer and returns all64bytes. Its exact terminal occurrence remains available

@@ -659,6 +659,7 @@ import Blanc.Lift.UniswapV2Pair.SkimCanonical
 import Blanc.Lift.UniswapV2Pair.BurnBalanceWalk
 import Blanc.Lift.UniswapV2Pair.BurnSuffixWalk
 import Blanc.Lift.UniswapV2Pair.BurnPrefixWalk
+import Blanc.Lift.UniswapV2Pair.BurnFrameWalk
 import Blanc.Lift.UniswapV2Pair.PropertiesOracle
 import Blanc.Lift.UniswapV2Pair.PropertiesSwap
 import Blanc.Lift.UniswapV2Pair.PropertiesLedger

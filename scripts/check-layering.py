@@ -267,6 +267,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.BurnBalanceWalk",
         "Lift.UniswapV2Pair.BurnSuffixWalk",
         "Lift.UniswapV2Pair.BurnPrefixWalk",
+        "Lift.UniswapV2Pair.BurnFrameWalk",
         "Lift.UniswapV2Pair.SafeTransferWalk",
         "Lift.UniswapV2Pair.LPMintSource",
         "Lift.UniswapV2Pair.FeeMintArithmetic",
