@@ -363,6 +363,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.SkimSource",
         "Lift.UniswapV2Pair.SkimHandler",
         "Lift.UniswapV2Pair.SkimCanonical",
+        "Lift.UniswapV2Pair.SkimForward",
         "Lift.UniswapV2Pair.MutableTurns",
         "Lift.UniswapV2Pair.PairSelectors",
         "Lift.UniswapV2Pair.PairLockedEntries",
