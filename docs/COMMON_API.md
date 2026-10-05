@@ -1063,6 +1063,12 @@ logs), the installed image (`CodeSem.At.parentStep`, `CodeSem.At.spawnChild`,
 `CodeSem.At.callChild`, self-calls included), child entry (`Xinst.spawn_child_world`,
 `Xinst.spawn_child_logs`, `Xinst.call_spawn_ofCall`, `Frame.ofCall_settle_clean`),
 `Exec.retainedTargetFramesFromAt_rawFrameRoot` and `Lift.StepIn.codePreserve`.
+For a successful nonzero-flag call with the actual recursive slot `.none`, use
+`Xinst.call_none_precompile` (seven operands) or `Xinst.staticcall_none_precompile`
+(six operands). They identify an enabled precompile at the original target;
+the STATICCALL form preserves the supplied slot through
+`of_step_staticcall_val_with_depth_frame_cause`. An empty retained view queue
+alone does not identify this route, since interpreted code can also retain no views.
 The existing `goal-head:StateReplay` recipe selects chronology continuity;
 the joint chunk/Link/observation premises are discovered through this registry.
 

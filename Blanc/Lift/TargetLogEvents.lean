@@ -701,6 +701,46 @@ theorem executeCode.enter_inr {m : Msg} {raw : Execution}
     · rw [ite_eq_right routed] at entry
       cases entry
 
+/-- A childless processed call message with resolved, enabled routing reaches a
+precompile at the original target. CALL and STATICCALL share this entry argument. -/
+private theorem callMsg_none_precompile {sevm : Sevm} {parent child : Devm}
+    {gas : Nat} {value : B256} {caller target actual : Adr} {static : Bool}
+    {input : Bytes} {code : ByteArray} {dp : Bool}
+    (routing : (actual = target ∧ dp = false) ∨ dp = true)
+    (process : ProcessMessage
+      (callMsg sevm parent gas value caller target actual true static input code dp)
+      .none (.ok child)) :
+    sevm.benvStat.rules.isPrecomp target := by
+  unfold ProcessMessage RunFrame at process
+  cases entered : (Frame.ofCall
+      (callMsg sevm parent gas value caller target actual true static input code dp)).enter with
+  | run evm =>
+    rw [entered] at process
+    obtain ⟨_, slot, _⟩ := process
+    cases slot
+  | done result =>
+    rw [entered] at process
+    obtain ⟨_, resultEq⟩ := process
+    unfold Jaune.Frame.enter at entered
+    split at entered
+    · cases entered
+      simp only [Frame.settleMsg, Frame.ofCall, processMessage.settle, bind, Except.bind,
+        Bool.false_eq_true, ite_false, reduceCtorEq] at resultEq
+    · rename_i benv transfer
+      split at entered
+      · cases entered
+      · rename_i raw entry
+        obtain ⟨adr, codeAddress, enabled, precomp⟩ := executeCode.enter_inr entry
+        have stat : benv.stat = sevm.benvStat := benvAfterTransfer_stat transfer
+        simp only [Msg.withBenv, Frame.ofCall, callMsg] at codeAddress enabled precomp
+        rw [stat] at precomp
+        rcases routing with ⟨nameEq, _⟩ | dpEq
+        · subst nameEq
+          cases codeAddress
+          exact precomp
+        · subst dpEq
+          cases enabled
+
 /-- A successful CALL step with a nonzero flag that enters no code frame ran the precompile
 at its target: the target is a precompile of the fork and carries no delegation. -/
 theorem Xinst.call_none_precompile {sevm : Sevm} {s sf : Devm}
@@ -722,37 +762,33 @@ theorem Xinst.call_none_precompile {sevm : Sevm} {s sf : Devm}
     exact (nonzero (pref_head_unique failed (pref_append [f] rest)).symm).elim
   · obtain ⟨slotEq, _⟩ := Step.Run.unique_of_filled (show Xlot.Filled .none from trivial) filled (stepRun pc) step
     subst slotEq
-    unfold ProcessMessage RunFrame at process
-    cases entered : (Frame.ofCall (callMsg sevm parent
-        (min g.toNat (except64th avail) + (if v.toNat = 0 then 0 else gCallStipend))
-        v sevm.currentTarget c.toAdr na true false ((s.memory.read ii.toNat is.toNat).1)
-        code dp)).enter with
-    | run evm =>
-      rw [entered] at process
-      obtain ⟨_, slot, _⟩ := process
-      cases slot
-    | done result =>
-      rw [entered] at process
-      obtain ⟨_, resultEq⟩ := process
-      unfold Jaune.Frame.enter at entered
-      split at entered
-      · rename_i failure _
-        cases entered
-        simp only [Frame.settleMsg, Frame.ofCall, processMessage.settle, bind, Except.bind,
-          Bool.false_eq_true, ite_false, reduceCtorEq] at resultEq
-      · rename_i benv transfer
-        split at entered
-        · cases entered
-        · rename_i raw entry
-          obtain ⟨adr, codeAddress, enabled, precomp⟩ := executeCode.enter_inr entry
-          have stat : benv.stat = sevm.benvStat := benvAfterTransfer_stat transfer
-          simp only [Msg.withBenv, Frame.ofCall, callMsg] at codeAddress enabled precomp
-          rw [stat] at precomp
-          rcases routing with ⟨_, nameEq, _, _⟩ | ⟨_, _, _, _, dpEq⟩
-          · subst nameEq
-            cases codeAddress
-            exact precomp
-          · subst dpEq
-            cases enabled
+    apply callMsg_none_precompile (process := process)
+    rcases routing with ⟨_, nameEq, _, dpEq⟩ | ⟨_, _, _, _, dpEq⟩
+    · exact Or.inl ⟨nameEq, dpEq⟩
+    · exact Or.inr dpEq
+
+/-- A successful STATICCALL with a nonzero flag and no interpreted child ran
+an enabled precompile at its target. The inversion preserves the supplied empty slot. -/
+theorem Xinst.staticcall_none_precompile {sevm : Sevm} {s sf : Devm}
+    {g t ii is oi os : B256} {xs : List B256}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (operands : (g :: t :: ii :: is :: oi :: os :: xs) <<+ s.stack)
+    (run : Xinst.Run sevm s .staticcall .none (.ok sf))
+    (flag : ∃ f rest, sf.stack = f :: rest ∧ f ≠ 0) :
+    sevm.benvStat.rules.isPrecomp t.toAdr := by
+  have stepRun : Ninst.StepRun 0 sevm s Ninst.staticcall .none (.ok sf) := by
+    rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep]
+    exact run
+  rcases of_step_staticcall_val_with_depth_frame_cause operands
+      (show Xlot.Filled .none from trivial) stepRun fork with
+    ⟨failed, _⟩ | ⟨parent, child, dp, na, code, avail, _, _, _, _, _, _, routing,
+      _, process, _⟩
+  · obtain ⟨f, rest, flagStack, nonzero⟩ := flag
+    rw [flagStack] at failed
+    exact (nonzero (pref_head_unique failed (pref_append [f] rest)).symm).elim
+  · apply callMsg_none_precompile (process := process)
+    rcases routing with ⟨_, nameEq, _, dpEq⟩ | ⟨_, _, _, _, dpEq⟩
+    · exact Or.inl ⟨nameEq, dpEq⟩
+    · exact Or.inr dpEq
 
 end Blanc
