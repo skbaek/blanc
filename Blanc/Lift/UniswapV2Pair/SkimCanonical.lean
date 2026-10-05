@@ -146,7 +146,7 @@ theorem skim_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Che
         (∀ picked ∈ views0 ++ views1, Blanc.Sevm.selector picked.1.frame.sevm = picked.2.selector ∧
           picked.1.frame.sevm.currentTarget = sevm.currentTarget) ∧
         (∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns1 ++ turns3 →
-          LockedAuth located.frame.sevm located.frame.post entry nested) ∧
+          LockedAuth (Exec.Frame.rootDeriv located.frame) entry nested) ∧
         (views0 = [] ∧ sevm.benvStat.rules.isPrecomp (skimToken0 sevm b).toAdr ∨
           ∃ (child : Evm) (raw : Execution)
           (childRun : Exec child.pc child.sta child.dyna raw),
@@ -188,9 +188,13 @@ theorem skim_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Che
       F.sevm.currentTarget = sevm.currentTarget → ∀ k ∈ staticViewDecodedKeys F.sevm, U k :=
     fun F member target k touched => Or.inr ((skimTraceKeys_contains member target).2 k touched)
   have lockedGood : ∀ F ∈ Exec.rawFrameRoots root.exc,
-      F.sevm.currentTarget = sevm.currentTarget → LockedGood U F.sevm :=
-    fun F member target k touched => Or.inr ((skimTraceKeys_contains member target).1 k touched)
-  have supply := lockedPairSupply hashTInj hashTApart sevm.currentTarget
+      F.sevm.currentTarget = sevm.currentTarget → LockedGood U F := by
+    intro F member target F' inner same k touched
+    have deep := Exec.rawFrameRoots_trans member inner
+    rcases List.mem_append.mp touched with pairKey | viewKey
+    · exact Or.inr ((skimTraceKeys_contains deep (same.trans target)).1 k pairKey)
+    · exact Or.inr ((skimTraceKeys_contains deep (same.trans target)).2 k viewKey)
+  have supply := lockedPairSupply hashTInj hashTApart sem image sevm.currentTarget
   have repCongr : ∀ st (s s' : Stor), (∀ k, s'.get k = s.get k) →
       LockedRep U st s → LockedRep U st s' := fun _ _ _ same rep => LockedRep.congr same rep
   obtain ⟨value, _, _, unlockedRaw, first⟩ := skim_raw_flag_inv codeEq fork selector run
@@ -417,7 +421,7 @@ theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
         (∀ picked ∈ views0 ++ views1, Blanc.Sevm.selector picked.1.frame.sevm = picked.2.selector ∧
           picked.1.frame.sevm.currentTarget = sevm.currentTarget) ∧
         (∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns1 ++ turns3 →
-          LockedAuth located.frame.sevm located.frame.post entry nested) ∧
+          LockedAuth (Exec.Frame.rootDeriv located.frame) entry nested) ∧
         (views0 = [] ∧ sevm.benvStat.rules.isPrecomp (skimToken0 sevm b).toAdr ∨
           ∃ (child : Evm) (raw : Execution)
           (childRun : Exec child.pc child.sta child.dyna raw),
