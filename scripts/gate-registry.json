@@ -3348,7 +3348,10 @@
      "Blanc/Lift/UniswapV2Pair/CheckPart1.lean",
      "Blanc/Lift/UniswapV2Pair/CheckPart2.lean",
      "Blanc/Lift/UniswapV2Pair/CheckPart3.lean",
-     "Blanc/Lift/UniswapV2Pair/Jumps.lean"
+     "Blanc/Lift/UniswapV2Pair/Jumps.lean",
+     "Blanc/Lift/UniswapV2Pair/Creation/Cert.lean",
+     "Blanc/Lift/UniswapV2Pair/Creation/Check.lean",
+     "Blanc/Lift/UniswapV2Pair/Creation/Jumps.lean"
     ],
     "populations": [
      {
