@@ -662,6 +662,7 @@ import Blanc.Lift.UniswapV2Pair.BurnSource
 import Blanc.Lift.UniswapV2Pair.BurnFinalTurns
 import Blanc.Lift.UniswapV2Pair.BurnPrefixWalk
 import Blanc.Lift.UniswapV2Pair.BurnFrameWalk
+import Blanc.Lift.UniswapV2Pair.BurnPricingTurns
 import Blanc.Lift.UniswapV2Pair.BurnDispatchWalk
 import Blanc.Lift.UniswapV2Pair.SourceReplay
 import Blanc.Lift.UniswapV2Pair.ReplayWriterGas
