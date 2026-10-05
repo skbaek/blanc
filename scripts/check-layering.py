@@ -290,6 +290,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.BurnForward",
         "Lift.UniswapV2Pair.BurnForwardSuffix",
         "Lift.UniswapV2Pair.BurnForwardBody",
+        "Lift.UniswapV2Pair.BurnForwardAccept",
         "Lift.UniswapV2Pair.SourceReplay",
         "Lift.UniswapV2Pair.HistoryReplay",
         "Lift.UniswapV2Pair.HistoryWriters",

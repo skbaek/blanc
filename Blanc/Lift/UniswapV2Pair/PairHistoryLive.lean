@@ -2,6 +2,7 @@ import Blanc.Lift.UniswapV2Pair.PairHistory
 import Blanc.Lift.UniswapV2Pair.ReplayWriterGas
 import Blanc.Lift.UniswapV2Pair.SwapForwardAccept
 import Blanc.Lift.UniswapV2Pair.MintForwardAccept
+import Blanc.Lift.UniswapV2Pair.BurnForwardAccept
 import Blanc.SlotFootprintRestrict
 
 /-!
@@ -425,6 +426,95 @@ theorem pair_history_swap_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
     (current := { state := finish, logs := [], updates := [] }) [] rep pairSem pairSem_image
     installedPre output codeEq fork value size selector guards unlocked nonstatic nonzero
     liquidity0 liquidity1 to0 to1 helper back front
+  exact ⟨run, rfl, fun newFresh => pair_live_outcome initial fresh futureCode replayed run target
+    state codeEq fork output representable newFresh⟩
+
+/-- **`burn` after any configured history.**  Given the callee-only Burn environment at the future
+world (`BurnForwardEnv`: both initial `balanceOf(pair)` `STATICCALL`s, the factory `feeTo`
+`STATICCALL`, both transfer `CALL`s and both final `balanceOf(pair)` `STATICCALL`s with their replies
+and returned gas, and the charge equations and sentries), the transfer helper
+`SwapSafeTransferForward` (a named premise until it is proved), and HASH-T freshness of the Pair's
+own LP row and the `feeTo` answer's LP row against the history universe: whenever the model accepts
+the decoded Burn at the history's state `finish` over a transcript whose answers are the callees'
+actual ones, a pc-zero run exists at gas `callee.gas` halting with both amounts returned at residual
+`g`; under HASH-T freshness of its own rows its post storage represents the model's next state.
+Model acceptance enters through `runTyped_burn_conditions`. -/
+theorem pair_history_burn_live {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
+    {transferPre : Nat → B256 → Nat} {transferPost : Nat → B256 → Bytes → Nat}
+    (helper : SwapSafeTransferForward transferPre transferPost)
+    {sevm : Sevm} {pre : Devm} {g : Nat}
+    (target : sevm.currentTarget = pair) (state : pre.state = future.state)
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (output : pre.output = []) (representable : sevm.data.length < 2 ^ 256)
+    (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
+    (guard : (32 : B256) ≤ sevm.data.length.toB256 - 4)
+    (selector : Blanc.Sevm.selector sevm = 0x89afcb44)
+    (callee : BurnForwardEnv transferPre transferPost sevm pre g)
+    (rowsFresh : WriterFreshKeys (pairHistoryUniverse pair trace K₀)
+      (lpMintTouched sevm.currentTarget ++ lpMintTouched callee.feeTo)) :
+    ∃ (finish : State) (K' : WriterKey → Prop), PairHistoryReplayed pair trace K₀ st₀ finish K' ∧
+      ∀ (transcript : Transcript) (returndata : Bytes),
+        transcript.firstWord = callee.balance0 → transcript.ownTail.firstWord = callee.balance1 →
+        transcript.ownTail.ownTail.firstWord.toAdr = callee.feeTo →
+        transcript.ownTail.ownTail.ownTail.ownTail.ownTail.firstWord = callee.final0 →
+        transcript.ownTail.ownTail.ownTail.ownTail.ownTail.ownTail.firstWord = callee.final1 →
+        (runTyped finish (writerContext sevm []) (.burn (Sevm.dataWord sevm 4).toAdr)
+          transcript).status = .success returndata →
+        ∃ run : Exec 0 sevm (St pre [] Mem.empty callee.gas) (.ok callee.post),
+          callee.post.gasLeft = g ∧
+          (WriterFreshKeys (pairHistoryUniverse pair trace K₀)
+              (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩) →
+            PairStepOutcome PairFrameAuth
+              (WriterExtend (pairHistoryUniverse pair trace K₀)
+                (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩))
+              { state := finish, logs := [], updates := [] } [] K'
+              ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩ callee.post) := by
+  obtain ⟨futureCode, finish, K', replayed⟩ := pair_history_replayed trace installed initial fresh
+  refine ⟨finish, K', replayed,
+    fun transcript returndata answer0 answer1 answerFee final0 final1 accepted => ?_⟩
+  have conditions := runTyped_burn_conditions accepted
+  rw [answer0, answer1, answerFee, final0, final1] at conditions
+  have hist : WriterRep (pairHistoryUniverse pair trace K₀) (checkpoint.state.getStor pair) st₀ :=
+    initial.extend fresh
+  obtain ⟨rep, inside⟩ := replayed.at_frame target state
+  let rows := lpMintTouched sevm.currentTarget ++ lpMintTouched callee.feeTo
+  have inj := hist.inj.extend rowsFresh
+  have apart := hist.apart.extend rowsFresh
+  have rowIn : ∀ k ∈ rows, WriterExtend (pairHistoryUniverse pair trace K₀) rows k :=
+    fun k member => Or.inr member
+  have ownRow : WriterExtend (pairHistoryUniverse pair trace K₀) rows
+      (.balance sevm.currentTarget) :=
+    rowIn _ (by simp only [rows, lpMintTouched, List.mem_append, List.mem_singleton, true_or])
+  have feeRow : WriterExtend (pairHistoryUniverse pair trace K₀) rows (.balance callee.feeTo) :=
+    rowIn _ (by simp only [rows, lpMintTouched, List.mem_append, List.mem_singleton, or_true])
+  have subK : ∀ k, K' k → WriterExtend (pairHistoryUniverse pair trace K₀) rows k :=
+    fun k tracked => Or.inl (inside k tracked)
+  have ownFresh : WriterFreshKeys K' (lpMintTouched sevm.currentTarget) :=
+    Blanc.SlotFootprint.FreshKeys.of_universe inj apart subK
+      (fun k member => by rw [List.mem_singleton.mp member]; exact ownRow)
+  have repOwn := rep.extend ownFresh
+  have subOwn : ∀ k, WriterExtend K' (lpMintTouched sevm.currentTarget) k →
+      WriterExtend (pairHistoryUniverse pair trace K₀) rows k := by
+    intro k member
+    rcases member with old | row
+    · exact subK k old
+    · rw [List.mem_singleton.mp row]; exact ownRow
+  have tracked : WriterExtend K' (lpMintTouched sevm.currentTarget) (.balance sevm.currentTarget) :=
+    Or.inr (List.mem_singleton_self _)
+  have guards := callee.guards_of_model repOwn inj apart subOwn feeRow conditions
+  have installedPre : some (pre.getCode sevm.currentTarget).toList = pairSem.image := by
+    rw [target]
+    change some (pre.state.getCode pair).toList = pairSem.image
+    rw [state, futureCode]
+    rfl
+  obtain ⟨run, _⟩ := burn_bytecode_forward_consumes
+    (current := { state := finish, logs := [], updates := [] }) [] helper codeEq fork value size
+    guard selector repOwn tracked pairSem pairSem_image installedPre callee guards
   exact ⟨run, rfl, fun newFresh => pair_live_outcome initial fresh futureCode replayed run target
     state codeEq fork output representable newFresh⟩
 
