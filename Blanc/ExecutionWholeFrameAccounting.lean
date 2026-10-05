@@ -103,13 +103,14 @@ theorem staticObservedNil (kinds : SpawnKinds ca sem)
         exact (childCore (Frame.raw_commits_of_settlementCommits settles)).1 (childStaticOf hs)
       · rfl
 
-/-- **The contract's whole-frame obligation.**  Every successful non-static target frame replays, from
+/-- **The contract's whole-frame obligation.**  Every committed non-static target frame replays, from
 its entry boundary to its post boundary, with exactly the observation of its committed frames (itself and
 every committed frame below it, at any address).  The contract's frame theorem supplies it when it already
 consumes the frame's whole subtree, re-entered frames of the contract included. -/
 def WholeFrameReplay (ca : Adr) (sem : CodeSem) (entry : Sevm → Devm → Prop) (C : ReplayCarrier ca)
     (V : ReplayObservation C) : Prop :=
   ∀ {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post)),
+    Execution.commits (.ok post) = true →
     sem.Run sevm pre post → sevm.currentTarget = ca → CoveredFork sevm.benvStat.fork →
     sem.At ca 0 sevm pre → Exec.FrameAdmitted ca entry run → sum pre.state.bal < 2 ^ 256 →
     sevm.isStatic = false →
@@ -154,7 +155,7 @@ theorem wholeFrameTarget
       exact V.obs_nil
   · have hs' : sevm.isStatic = false := by simpa only [Bool.not_eq_true] using hs
     exact ⟨fun h => absurd h hs, fun bound =>
-      whole run hrun target fork installed admitted bound hs'⟩
+      whole run committed hrun target fork installed admitted bound hs'⟩
 
 end Exec.CoreAccounting
 

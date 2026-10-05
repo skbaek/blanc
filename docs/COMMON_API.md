@@ -2570,6 +2570,17 @@ consumer needs canonical interpreter ingress as one conjunct:
   `ConfiguredHistoryTrace.pairVisits` in
   `Blanc/Composition/ProrataWethVaultLedgerVisits.lean`. Membership goals over
   these lists have no distinguishing head, so there is no recipe.
+- When every raw root of a trace must satisfy a fact that `Frame.enter` establishes
+  (empty stack and memory, an empty output buffer), import
+  [`Blanc/ExecutionTraceEntered.lean`](../Blanc/ExecutionTraceEntered.lean):
+  `EnteredCondition E` says every entered child's initial machine satisfies `E`;
+  `enteredCondition_fresh` and `enteredCondition_output` are instances;
+  `Exec.rawFrameDescendants_entered` and the carrier rungs up to
+  `ExecutionTrace.ConfiguredHistoryTrace.rawFrames_entered` carry it to every raw root;
+  `ConfiguredHistoryTrace.frameAdmitted_entered` / `frameAdmitted_output` give the
+  admission. Pass `(E := …)` explicitly: `EnteredCondition`'s binders are implicit.
+  Worked use: the Uniswap V2 pair's `pair_trace_admitted`
+  (`Blanc/Lift/UniswapV2Pair/PairHistory.lean`).
 - When a retained trace consumer needs only frames whose message roots and
   descendants survive settlement, import
   [`Blanc/ExecutionTraceSettledFrames.lean`](../Blanc/ExecutionTraceSettledFrames.lean)
@@ -3066,14 +3077,18 @@ re-entered frames of the same contract run inside the frame's own model transcri
 its own carrier effect is not complete at the first external instruction and the
 children must not be replayed a second time — use
 [`Blanc/ExecutionWholeFrameAccounting.lean`](../Blanc/ExecutionWholeFrameAccounting.lean).
-The contract supplies `Exec.CoreAccounting.WholeFrameReplay` (every successful
+The contract supplies `Exec.CoreAccounting.WholeFrameReplay` (every committed
 non-static target frame replays from its entry to its post boundary with exactly the
 observation of its committed frames) plus `SpawnKinds`;
 `Exec.CoreAccounting.wholeFrameTarget` adds the static case
 (`Exec.CoreAccounting.staticObservedNil`: below a static frame nothing is observed, by
 the lower-depth hypothesis) and `ExecutionAccountingReplay.wholeFrameLadder` turns it
-into an `AccountingLadderAdmitted`. Intended use: the Uniswap V2 pair, whose calling
-entries consume re-entered ERC-20 frames as nested transcript turns.
+into an `AccountingLadderAdmitted`. The obligation receives the frame's commit proof, so
+its step can name the committed frame. Worked use: the Uniswap V2 pair
+(`Blanc/Lift/UniswapV2Pair/PairHistory.lean`: `pair_wholeFrameReplay`, `pairLadder`,
+`pair_history_committed`), whose calling entries consume re-entered ERC-20 frames as nested
+transcript turns; its carrier's boundary is the storage view `(getStor ca).get` (raw `Stor`
+equality is not a function of the words), with representations transported by `WriterRep.congr`.
 
 ### T3. The wrapper is a transaction and the fact is about an installed contract
 

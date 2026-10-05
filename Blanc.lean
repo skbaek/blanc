@@ -42,6 +42,7 @@ import Blanc.ExecutionTransactionAdmission
 import Blanc.ExecutionBodyAdmission
 import Blanc.ExecutionHistoryAdmission
 import Blanc.ExecutionTraceFresh
+import Blanc.ExecutionTraceEntered
 import Blanc.ExecutionOccurrence
 import Blanc.ExecutionAccountingReplay
 import Blanc.ExecutionAccountingStoragePrefix
@@ -717,6 +718,8 @@ import Blanc.Lift.UniswapV2Pair.HistoryWriterCheck
 import Blanc.Lift.UniswapV2Pair.HistoryWriterWalk
 import Blanc.Lift.UniswapV2Pair.ReplayWriterGas
 import Blanc.Lift.UniswapV2Pair.InitializedReplay
+import Blanc.Lift.UniswapV2Pair.PairSupply
+import Blanc.Lift.UniswapV2Pair.PairHistory
 import Blanc.Lift.UniswapV2Pair.PropertiesOracle
 import Blanc.Lift.UniswapV2Pair.PropertiesSwap
 import Blanc.Lift.UniswapV2Pair.PropertiesLedger
