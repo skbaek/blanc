@@ -14,7 +14,9 @@ configuration the arguments ask for, and an empty LP footprint — every nonzero
 one of the eleven configuration slots `configSlots`, so no `balanceOf`/`allowance` entry was
 written. (This is a statement about slots: that no mapping key of an arbitrary address hashes
 to a configuration slot is a hash fact outside the finite observation.) The implementation's
-storage stays `{10 ↦ 31337}`, separate from the pool's. -/
+storage stays `{10 ↦ 31337}`, separate from the pool's. With the chosen `_fee = 0` the
+initializer's `fee == 0` guard can pass again on the proxy, so `CleanPool` is the state reached
+by this run, not a stability claim. -/
 
 namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach
 

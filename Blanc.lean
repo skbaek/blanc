@@ -611,6 +611,16 @@ import Blanc.Lift.VyperNonreentrantDeployed.Token20.Check
 import Blanc.Lift.VyperNonreentrantDeployed.Token20.Run
 import Blanc.Lift.VyperNonreentrantDeployed.Token20.Frame
 import Blanc.Lift.VyperNonreentrantDeployed.Token20.Ledger
+import Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.Input
+import Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.Cert
+import Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.Check
+import Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.Deploy
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.Cert
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.Check
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.Creation.Input
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.Creation.Cert
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.Creation.Check
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.Creation.Deploy
 
 -- The vulnerable Vyper comparator 0x6326, its token and attacker, and the witnessed
 -- reentry vminus_witness (deployed-lido-vyper-v1, V-).
