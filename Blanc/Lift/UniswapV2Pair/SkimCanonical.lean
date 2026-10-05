@@ -38,116 +38,6 @@ theorem skimTraceKeys_contains {root : Exec.Deriv} {F : Exec.Deriv}
   exact ⟨fun k touched => inside k (List.mem_append_left _ touched),
     fun k touched => inside k (List.mem_append_right _ touched)⟩
 
-/-- One lifted STATICCALL step of a Pair frame contributes the retained static Pair views of
-its actual child, at the incoming frame, or an empty queue justified by an enabled
-precompile at the actual STATICCALL target when no code frame is entered. -/
-theorem skim_static_call_turns {U K : WriterKey → Prop} (inj : WriterInj U)
-    (apart : WriterApart U) (sub : ∀ k, K k → U k)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    {D : Exec.Deriv} {frame : Frame} {request : Request} {sevm : Sevm} {pre d : Devm}
-    (call : Blanc.Lift.StepIn D sevm pre (.exec .staticcall) d)
-    {g t ii is oi os : B256} {S : List B256}
-    (operands : (g :: t :: ii :: is :: oi :: os :: S) <<+ pre.stack)
-    (installed : some (pre.getCode frame.context.pair).toList = sem.image)
-    (rep : WriterRep K (pre.getStor frame.context.pair) frame.current.state)
-    (time : frame.context.timestamp = sevm.benvStat.time)
-    (fork : CoveredFork sevm.benvStat.fork)
-    (flag : ∃ f rest, d.stack = f :: rest ∧ f ≠ 0)
-    (good : ∀ F ∈ Exec.rawFrameRoots D.exc, F.sevm.currentTarget = frame.context.pair →
-      ∀ k ∈ staticViewDecodedKeys F.sevm, U k) :
-    ∃ views : List StaticViewTurn,
-      ExactTurns frame request 0 (staticViewTranscript views .done)
-        { complete := true, frame := frame,
-          childReturns := staticViewChildReturns frame request 0 views } ∧
-      (∀ picked ∈ views, picked.Authentic frame) ∧
-      (views = [] ∧ sevm.benvStat.rules.isPrecomp t.toAdr ∨ ∃ (child : Evm) (raw : Execution)
-        (childRun : Exec child.pc child.sta child.dyna raw),
-        Execution.commits raw = true ∧
-        (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots D.exc) ∧
-        views.map Prod.fst =
-          (Exec.retainedTargetTurnsAt frame.context.pair [] childRun).filterMap
-            Sum.getRight?) := by
-  have nothing (native : sevm.benvStat.rules.isPrecomp t.toAdr) :
-      ∃ views : List StaticViewTurn,
-      ExactTurns frame request 0 (staticViewTranscript views .done)
-        { complete := true, frame := frame,
-          childReturns := staticViewChildReturns frame request 0 views } ∧
-      (∀ picked ∈ views, picked.Authentic frame) ∧
-      (views = [] ∧ sevm.benvStat.rules.isPrecomp t.toAdr ∨ ∃ (child : Evm) (raw : Execution)
-        (childRun : Exec child.pc child.sta child.dyna raw),
-        Execution.commits raw = true ∧
-        (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots D.exc) ∧
-        views.map Prod.fst =
-          (Exec.retainedTargetTurnsAt frame.context.pair [] childRun).filterMap
-            Sum.getRight?) := by
-    refine ⟨[], ExactTurns.done frame request 0, ?_, Or.inl ⟨rfl, native⟩⟩
-    intro picked member
-    simp only [List.not_mem_nil] at member
-  obtain ⟨xl, inRoots, pc, stepRun⟩ := call
-  have xrun : Xinst.Run sevm pre .staticcall xl (.ok d) := by
-    rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at stepRun
-    exact stepRun
-  cases xl with
-  | none => exact nothing (Xinst.staticcall_none_precompile fork operands xrun flag)
-  | some slot =>
-    obtain ⟨child, raw⟩ := slot
-    obtain ⟨childRun, childRoots⟩ := inRoots
-    have rawCommitted := Xinst.call_run_flag_commits fork (Or.inr rfl) xrun flag
-    unfold Xinst.Run XStep.Run at xrun
-    cases spawned : Xinst.step sevm pre .staticcall with
-    | done result =>
-      rw [spawned] at xrun
-      cases xrun.1
-    | spawn callee resume =>
-      rw [spawned] at xrun
-      obtain ⟨_, runFrame, _⟩ := xrun
-      unfold RunFrame at runFrame
-      cases entered : callee.enter with
-      | done result =>
-        rw [entered] at runFrame
-        cases runFrame.1
-      | run evm =>
-        rw [entered] at runFrame
-        obtain ⟨raw', slotEq, _⟩ := runFrame
-        cases slotEq
-        have nonempty : pre.getCode frame.context.pair ≠ .empty := by
-          intro empty
-          have imageEmpty : sem.image = some [] := by
-            rw [← installed, empty, ByteArray.toList_empty]
-          exact sem.ne_nil imageEmpty rfl
-        obtain ⟨world, _, entry, stat, childFork, short⟩ :=
-          Xinst.spawn_child_world fork spawned entered
-        have childInstalled := CodeSem.At.callChild spawned entered (Or.inr rfl) installed
-        have childRep : WriterRep K (child.dyna.getStor frame.context.pair)
-            frame.current.state := by
-          rw [world frame.context.pair nonempty]
-          exact rep
-        have childStatic : child.sta.isStatic = true :=
-          (Blanc.Frame.enter_run_isStatic entered).trans
-            (Xinst.step_staticcall_spawn_isStatic spawned)
-        have fresh : ∀ located ∈ (Exec.retainedTargetTurnsAt frame.context.pair [] childRun).filterMap
-            Sum.getRight?, WriterFreshKeys K (staticViewDecodedKeys located.frame.sevm) := by
-          intro located member
-          by_cases committed : Execution.commits raw = true
-          · rw [Exec.retainedTargetTurnsAt_filterMap_eq _ _ _ committed] at member
-            obtain ⟨root, target⟩ :=
-              Exec.retainedTargetFramesFromAt_rawFrameRoot _ childRun committed member
-            have same : (Exec.Frame.rootDeriv located.frame).sevm = located.frame.sevm := rfl
-            have keys := good (Exec.Frame.rootDeriv located.frame) (childRoots _ root)
-              (same.symm ▸ target)
-            rw [same] at keys
-            exact Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub keys
-          · have empty : Exec.retainedTargetTurnsAt frame.context.pair [] childRun = [] := by
-              rw [Exec.retainedTargetTurnsAt, dite_eq_right committed]
-            rw [empty, List.filterMap_nil] at member
-            exact (List.not_mem_nil member).elim
-        obtain ⟨views, mapped, authentic, consumed⟩ :=
-          staticView_raw_retained_turns_inv (request := request) (turn := 0) (path := [])
-            sem image childRun childInstalled childRep fresh (fun _ => ⟨entry.1, entry.2.1⟩)
-            short (by rw [stat]; exact time) childStatic childFork
-        exact ⟨views, consumed, authentic,
-          Or.inr ⟨child, raw, childRun, rawCommitted, childRoots, mapped⟩⟩
-
 private theorem skim_St_getStor (x : Devm) (S : List B256) (M : Mem) (g : Nat) (a : Adr) :
     Devm.getStor (St x S M g) a = Devm.getStor x a := rfl
 
@@ -231,7 +121,7 @@ theorem skim_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Che
       (∀ a, Devm.getStor (temporalAccountAccessBase (afterSload sevm d 8)
         (skimToken1 sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr) a =
           Devm.getStor d a) ∧
-      (96 ≤ (skimFirstPointer d.returnData).toNat →
+      (128 ≤ (skimFirstPointer d.returnData).toNat →
         (skimFirstPointer d.returnData).toNat + 1024 < 2 ^ 256 →
       ∃ (out1 : Bytes) (d2 : Devm) (views0 views1 : List StaticViewTurn)
         (turns1 turns3 : List MutableTurn) (final : Frame) (rets : List ChildReturn)
@@ -256,7 +146,7 @@ theorem skim_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Che
         (∀ picked ∈ views0 ++ views1, Blanc.Sevm.selector picked.1.frame.sevm = picked.2.selector ∧
           picked.1.frame.sevm.currentTarget = sevm.currentTarget) ∧
         (∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns1 ++ turns3 →
-          LockedAuth located.frame.sevm located.frame.post entry nested) ∧
+          LockedAuth (Exec.Frame.rootDeriv located.frame) entry nested) ∧
         (views0 = [] ∧ sevm.benvStat.rules.isPrecomp (skimToken0 sevm b).toAdr ∨
           ∃ (child : Evm) (raw : Execution)
           (childRun : Exec child.pc child.sta child.dyna raw),
@@ -298,9 +188,13 @@ theorem skim_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Che
       F.sevm.currentTarget = sevm.currentTarget → ∀ k ∈ staticViewDecodedKeys F.sevm, U k :=
     fun F member target k touched => Or.inr ((skimTraceKeys_contains member target).2 k touched)
   have lockedGood : ∀ F ∈ Exec.rawFrameRoots root.exc,
-      F.sevm.currentTarget = sevm.currentTarget → LockedGood U F.sevm :=
-    fun F member target k touched => Or.inr ((skimTraceKeys_contains member target).1 k touched)
-  have supply := lockedPairSupply hashTInj hashTApart sevm.currentTarget
+      F.sevm.currentTarget = sevm.currentTarget → LockedGood U F := by
+    intro F member target F' inner same k touched
+    have deep := Exec.rawFrameRoots_trans member inner
+    rcases List.mem_append.mp touched with pairKey | viewKey
+    · exact Or.inr ((skimTraceKeys_contains deep (same.trans target)).1 k pairKey)
+    · exact Or.inr ((skimTraceKeys_contains deep (same.trans target)).2 k viewKey)
+  have supply := lockedPairSupply hashTInj hashTApart sem image sevm.currentTarget
   have repCongr : ∀ st (s s' : Stor), (∀ k, s'.get k = s.get k) →
       LockedRep U st s → LockedRep U st s' := fun _ _ _ same rep => LockedRep.congr same rep
   obtain ⟨value, _, _, unlockedRaw, first⟩ := skim_raw_flag_inv codeEq fork selector run
@@ -349,7 +243,7 @@ theorem skim_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Che
   have pair0 : frame0.context.pair = sevm.currentTarget := rfl
   -- query 0
   obtain ⟨views0, turns0Exact, authentic0, derived0⟩ :=
-    skim_static_call_turns (frame := frame0) (request := request0) hashTInj hashTApart sub sem
+    pair_static_call_turns (frame := frame0) (request := request0) hashTInj hashTApart sub sem
       image call0 (skim_operands _ _ _ _) (by rw [pair0, skim_St_getCode, code0]; exact installed)
       (by rw [pair0, skim_St_getStor, skim_tAAB_getStor, cachedStor]; exact lockRep0)
       rfl fork ⟨1, _, post0.stack, by decide⟩ staticGood
@@ -361,11 +255,10 @@ theorem skim_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Che
     unfold externalStatic
     rw [show frame1.context.isStatic = sevm.isStatic from rfl, nonstatic]
     rfl
-  have ptr0 := PtrWord.of_ptrMem (balanceReplyMemory_ptr out0
-    (balanceRequestMemory_ptr getterInitMemory_ptr sevm.currentTarget))
+  have mem0 := balanceReplyMemory_ptr out0
+    (balanceRequestMemory_ptr getterInitMemory_ptr sevm.currentTarget)
   obtain ⟨_, _, _, d', call1', _, flag1, _, _, _, _, _, helperEq⟩ :=
-    skimTransfer_flag_inv Blanc.Lift.StepIn.toRun fork ptr0.1 ptr0.2 (by decide) (by decide)
-      helper
+    skimTransfer_flag_inv Blanc.Lift.StepIn.toRun fork mem0 (by decide) (by decide) helper
   have storEq : ∀ a, Devm.getStor d' a = Devm.getStor d a := fun a =>
     (congrArg (fun z => Devm.getStor z a) helperEq).symm
   have logsEq : d'.logs = d.logs := (congrArg Devm.logs helperEq).symm
@@ -393,7 +286,7 @@ theorem skim_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Che
       (by rw [skim_St_getCode, codeD0]; exact nonemptyList), skim_St_getCode, codeD0]
   have pair2 : frame2.context.pair = sevm.currentTarget := rfl
   obtain ⟨views1, turns2Exact, authentic1, derived2⟩ :=
-    skim_static_call_turns (frame := frame2) (request := request2) hashTInj hashTApart sub1 sem
+    pair_static_call_turns (frame := frame2) (request := request2) hashTInj hashTApart sub1 sem
       image call2 (skim_operands _ _ _ _)
       (by rw [pair2, skim_St_getCode, skim_tAAB_getCode, afterSload_getCode, codeD]
           exact installed)
@@ -503,7 +396,7 @@ theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
     let recipient := skimRecipient sevm
     sevm.value = 0 ∧ sevm.isStatic = false ∧
     ∃ (out0 : Bytes) (d : Devm), SkimFirstSteps root sevm b out0 d ∧
-      (96 ≤ (skimFirstPointer d.returnData).toNat →
+      (128 ≤ (skimFirstPointer d.returnData).toNat →
         (skimFirstPointer d.returnData).toNat + 1024 < 2 ^ 256 →
       ∃ (out1 : Bytes) (d2 : Devm) (views0 views1 : List StaticViewTurn)
         (turns1 turns3 : List MutableTurn) (final : Frame) (rets : List ChildReturn)
@@ -527,7 +420,7 @@ theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
         (∀ picked ∈ views0 ++ views1, Blanc.Sevm.selector picked.1.frame.sevm = picked.2.selector ∧
           picked.1.frame.sevm.currentTarget = sevm.currentTarget) ∧
         (∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns1 ++ turns3 →
-          LockedAuth located.frame.sevm located.frame.post entry nested) ∧
+          LockedAuth (Exec.Frame.rootDeriv located.frame) entry nested) ∧
         (views0 = [] ∧ sevm.benvStat.rules.isPrecomp (skimToken0 sevm b).toAdr ∨
           ∃ (child : Evm) (raw : Execution)
           (childRun : Exec child.pc child.sta child.dyna raw),

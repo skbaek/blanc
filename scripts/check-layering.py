@@ -211,6 +211,10 @@ SHARED += ["ExecutionReachable", "SystemContracts", "ExecutionTraceCodeKeep", "E
 # Generic per-frame calldata-length bound of a configured history (calldata-bound-v1): contract-neutral.
 SHARED += ["ExecutionTraceCalldata", "ForkUniform", "Lift.NodeWalkFork", "Lift.WitnessFork", "TransactionFork"]
 
+SHARED += ["Lift.GasErasureRun", "Lift.InvWalkBranchToP", "Lift.LedgerFootprintOrder", "Lift.LocalStorage", "Lift.MutableCallPost", "Lift.PrecompileAnswer", "Lift.RevertingCallee", "Lift.WordWindowMemory"]
+
+SHARED += ["Lift.CallChildren", "Lift.CallSite", "Lift.CallSiteChildren", "Lift.CallerProvenance"]
+
 CONTRACTS = {
     "uniswap-v2-pair": [
         "Lift.UniswapV2Pair.Cert",
@@ -272,6 +276,45 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.SourceReplay",
         "Lift.UniswapV2Pair.ReplayWriterGas",
         "Lift.UniswapV2Pair.InitializedReplay",
+        "Lift.UniswapV2Pair.PairCallShape",
+        "Lift.UniswapV2Pair.PairCallSiteShape",
+        "Lift.UniswapV2Pair.PairCallSites",
+        "Lift.UniswapV2Pair.PairCallSitesCheck",
+        "Lift.UniswapV2Pair.SwapForwardBack",
+        "Lift.UniswapV2Pair.SwapForwardBalance",
+        "Lift.UniswapV2Pair.SwapForwardCallback",
+        "Lift.UniswapV2Pair.SwapForwardCheck",
+        "Lift.UniswapV2Pair.SwapForwardFront",
+        "Lift.UniswapV2Pair.SwapForwardPrefix",
+        "Lift.UniswapV2Pair.SwapForwardTransfer",
+        "Lift.UniswapV2Pair.SwapForwardUpdate",
+        "Lift.UniswapV2Pair.CalleeControls",
+        "Lift.UniswapV2Pair.CalleeControlsReach",
+        "Lift.UniswapV2Pair.CalleeControlsSwap",
+        "Lift.UniswapV2Pair.LedgerKeyControl",
+        "Lift.UniswapV2Pair.MintCanonical",
+        "Lift.UniswapV2Pair.MintCanonicalOwn",
+        "Lift.UniswapV2Pair.ModelMutants",
+        "Lift.UniswapV2Pair.OracleControls",
+        "Lift.UniswapV2Pair.PermitTurns",
+        "Lift.UniswapV2Pair.RefinementControls",
+        "Lift.UniswapV2Pair.SwapAbi",
+        "Lift.UniswapV2Pair.SwapBack",
+        "Lift.UniswapV2Pair.SwapBackTurns",
+        "Lift.UniswapV2Pair.SwapBalanceWalk",
+        "Lift.UniswapV2Pair.SwapCallWorld",
+        "Lift.UniswapV2Pair.SwapCallback",
+        "Lift.UniswapV2Pair.SwapCanonical",
+        "Lift.UniswapV2Pair.SwapCheckWalk",
+        "Lift.UniswapV2Pair.SwapControls",
+        "Lift.UniswapV2Pair.SwapCut",
+        "Lift.UniswapV2Pair.SwapForward",
+        "Lift.UniswapV2Pair.SwapFront",
+        "Lift.UniswapV2Pair.SwapFrontCanonical",
+        "Lift.UniswapV2Pair.SwapFrontTurns",
+        "Lift.UniswapV2Pair.SwapFrontTyped",
+        "Lift.UniswapV2Pair.SwapTransfer",
+        "Lift.UniswapV2Pair.SwapUpdateWalk",
         "Lift.UniswapV2Pair.SafeTransferWalk",
         "Lift.UniswapV2Pair.LPMintSource",
         "Lift.UniswapV2Pair.FeeMintArithmetic",
@@ -604,6 +647,11 @@ CONTRACTS = {
 # to name more than one contract family, and adding a module here is the moment
 # check 4 starts binding it. Nothing may import back into this list.
 COMPOSITION = [
+    "Composition.UniswapV2PairWeth9Calls",
+    "Composition.Weth9SettledCallers",
+    "Composition.UniswapV2PairWeth9",
+    "Composition.UniswapV2PairWeth9Frame",
+    "Composition.UniswapV2PairWeth9GasFree",
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGateway",
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControl",
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayCrossing",

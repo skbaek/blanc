@@ -206,16 +206,19 @@ theorem permitCallMemory_facts {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes}
   unfold permitCallMemory
   rw [rD.read, permitRequestImage_window]
 
-/-- Successful internal permit: deadline and static guards, the actual recovery call with
-its observed reply, the signer guard on the copied word, and the exact approval post. -/
-theorem permitBody_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {img : Bytes}
+/-- Successful internal permit, over any instruction relation projecting to steps: deadline
+and static guards, the actual recovery call (a `P` step of the same run) with its observed reply, the signer guard on the copied word, and the exact approval post. -/
+theorem permitBody_invP {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm} {b : Devm}
+    {R : List B256} {M : Mem} {img : Bytes}
     {G : Nat} {s r deadline value ρ : B256} {v : UInt8} {owner spender : Adr} {o : Outcome}
+    (project : ∀ {s : Sevm} {before : Devm} {n : Ninst} {after : Devm},
+      P s before n after → Ninst.Run s before n after)
     (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M) (reads : Mem.Reads M img)
-    (run : SFunc.Run cert.prog sevm (St b (s :: r :: v.toB256 :: deadline :: value ::
+    (run : SFunc.RunP P cert.prog sevm (St b (s :: r :: v.toB256 :: deadline :: value ::
       spender.toB256 :: owner.toB256 :: ρ :: R) M G) t_1b0c_c29 o) :
     sevm.isStatic = false ∧ sevm.benvStat.time ≤ deadline ∧
       ∃ (gw : B256) (callGas : Nat) (d : Devm) (out : Bytes) (G' : Nat),
-        Ninst.Run sevm (St (permitNonceWorld sevm b owner)
+        P sevm (St (permitNonceWorld sevm b owner)
           (gw :: 1 :: 482 :: 128 :: 450 :: 32 ::
             permitCallStack sevm b owner spender value deadline v r s ρ R)
           (permitCallMemory sevm b M owner spender value deadline v r s) callGas)
@@ -242,15 +245,15 @@ theorem permitBody_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {img :
   have rB := permitStructMemory_reads wA rA owner spender value (permitNonceRead sevm b owner) deadline
   have mC := permitDigestMemory_ptr mB (b.getStorVal sevm.currentTarget 3)
     (permitInner owner spender value (permitNonceRead sevm b owner) deadline)
-  have h := run.cut
+  have h := SFunc.runP_iff_runCutP_nil.mp run
   unfold t_1b0c_c29 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_timestamp hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_lt hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  rcases ric_branch h with ⟨_, _, bad⟩ | ⟨timely, _, h⟩
+  obtain ⟨_, h⟩ := ric_destP h
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_timestamp (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_lt (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_iszero (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
+  rcases ric_branchP h with ⟨_, _, bad⟩ | ⟨timely, _, h⟩
   · exact (bad.false_of_noOk (by decide)).elim
   have timely : sevm.benvStat.time ≤ deadline := by
     have flag := eq_zero_of_iszero_ne_zero timely
@@ -260,29 +263,29 @@ theorem permitBody_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {img :
     rw [one] at flag
     exact (by decide : (1 : B256) ≠ 0) flag
   unfold t_1b7b_c29 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, line, h⟩ := SFunc.RunCutP.split_nexts (fun step => step) permitNonceLine h
+  obtain ⟨_, h⟩ := ric_destP h
+  obtain ⟨_, line, h⟩ := SFunc.RunCutP.split_nexts (fun step => project step) permitNonceLine h
   obtain ⟨nonstatic, _, state⟩ := permitNonceLine_inv fork mem line
   rw [state] at h
-  obtain ⟨_, line, h⟩ := SFunc.RunCutP.split_nexts (fun step => step) permitStructLine h
+  obtain ⟨_, line, h⟩ := SFunc.RunCutP.split_nexts (fun step => project step) permitStructLine h
   obtain ⟨_, state⟩ := permitStructLine_inv mA rA line
   rw [state] at h
-  obtain ⟨_, line, h⟩ := SFunc.RunCutP.split_nexts (fun step => step) permitDigestLine h
+  obtain ⟨_, line, h⟩ := SFunc.RunCutP.split_nexts (fun step => project step) permitDigestLine h
   obtain ⟨_, state⟩ := permitDigestLine_inv mB rB line
   rw [state] at h
-  obtain ⟨_, line, h⟩ := SFunc.RunCutP.split_nexts (fun step => step) permitRequestLine h
+  obtain ⟨_, line, h⟩ := SFunc.RunCutP.split_nexts (fun step => project step) permitRequestLine h
   obtain ⟨_, state⟩ := permitRequestLine_inv mC line
   rw [state] at h
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨gw, callGas, rfl⟩ := ri_gas hd
-  obtain ⟨d, hcall, h⟩ := ric_next h
-  obtain ⟨flag, out, post, bound, answered⟩ := ri_staticcall_bounded fork hcall
+  obtain ⟨d', hd, h⟩ := ric_nextP h
+  obtain ⟨gw, callGas, rfl⟩ := ri_gas (project hd)
+  obtain ⟨d, hcall, h⟩ := ric_nextP h
+  obtain ⟨flag, out, post, bound, answered⟩ := ri_staticcall_bounded fork (project hcall)
   rw [post.eq_St] at h
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  rcases ric_branch h with ⟨_, _, bad⟩ | ⟨accepted, _, h⟩
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_iszero (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_iszero (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
+  rcases ric_branchP h with ⟨_, _, bad⟩ | ⟨accepted, _, h⟩
   · exact (bad.false_of_noOk (by decide)).elim
   have one : flag = 1 := by
     rcases post.flag with zero | one
@@ -293,7 +296,7 @@ theorem permitBody_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {img :
   rw [show B256.eqCheck (1 : B256) 0 = 0 from by decide] at h
   obtain ⟨recovered, signer, _, G', eq⟩ := permitSigner_inv fork
     (F := permitReplyMemory (permitCallMemory sevm b M owner spender value deadline v r s) out)
-    (permitReplyMemory_ptr memD out) h.uncut
+    (permitReplyMemory_ptr memD out) ((SFunc.runP_iff_runCutP_nil.mpr h).mono project)
   rw [reply out] at recovered signer
   refine ⟨nonstatic, timely, gw, callGas, d, out, G', hcall, post, bound, ?_, recovered, signer, eq⟩
   have answer := answered rfl
@@ -343,28 +346,45 @@ def PermitRawCall (sevm : Sevm) (b : Devm) (sel : B256) (gw : B256) (callGas : N
         (.recover (permitPublicDigest sevm b) (permitV sevm) (permitR sevm) (permitS sevm))) out ∧
     (permitRecoveredWord out).toAdr ≠ 0 ∧ (permitRecoveredWord out).toAdr = permitOwner sevm
 
-theorem permitEntry_inv {sevm : Sevm} {b : Devm} {G : Nat} {sel : B256} {o : Outcome}
+/-- `PermitRawCall` with the recovery STATICCALL as a step of the instruction relation `P`. -/
+def PermitRawCallP (P : Sevm → Devm → Ninst → Devm → Prop) (sevm : Sevm) (b : Devm) (sel : B256)
+    (gw : B256) (callGas : Nat) (d : Devm) (out : Bytes) : Prop :=
+  P sevm (St (permitNonceWorld sevm b (permitOwner sevm))
+      (gw :: 1 :: 482 :: 128 :: 450 :: 32 :: permitPublicCallStack sevm b sel)
+      (permitPublicCallMemory sevm b) callGas) (.exec .staticcall) d ∧
+    StaticCallPost (permitNonceWorld sevm b (permitOwner sevm)) d
+      (permitPublicCallStack sevm b sel) (permitPublicCallMemory sevm b) 482 128 450 32 1 out ∧
+    out.length < 2 ^ 256 ∧
+    StaticAnswered sevm (permitNonceWorld sevm b (permitOwner sevm)) (1 : B256).toAdr
+      (ExternalOperation.encode
+        (.recover (permitPublicDigest sevm b) (permitV sevm) (permitR sevm) (permitS sevm))) out ∧
+    (permitRecoveredWord out).toAdr ≠ 0 ∧ (permitRecoveredWord out).toAdr = permitOwner sevm
+
+theorem permitEntry_invP {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm} {b : Devm}
+    {G : Nat} {sel : B256} {o : Outcome}
+    (project : ∀ {s : Sevm} {before : Devm} {n : Ninst} {after : Devm},
+      P s before n after → Ninst.Run s before n after)
     (fork : CoveredFork sevm.benvStat.fork)
-    (run : SFunc.Run cert.prog sevm (St b [sel] getterInitMemory G) t_05e2_c76 o) :
+    (run : SFunc.RunP P cert.prog sevm (St b [sel] getterInitMemory G) t_05e2_c76 o) :
     (224 : B256) ≤ sevm.data.length.toB256 - 4 ∧ sevm.isStatic = false ∧
       sevm.benvStat.time ≤ permitDeadline sevm ∧
       ∃ (gw : B256) (callGas : Nat) (d : Devm) (out : Bytes) (G' : Nat),
-        PermitRawCall sevm b sel gw callGas d out ∧
+        PermitRawCallP P sevm b sel gw callGas d out ∧
         o = .halted (permitPublicPost sevm b d out sel G') := by
-  have h := run.cut
+  have h := SFunc.runP_iff_runCutP_nil.mp run
   unfold t_05e2_c76 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_calldatasize hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sub hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_lt hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  rcases ric_branch h with ⟨_, _, bad⟩ | ⟨long, _, h⟩
+  obtain ⟨_, h⟩ := ric_destP h
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_calldatasize (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_sub (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_lt (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_iszero (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
+  rcases ric_branchP h with ⟨_, _, bad⟩ | ⟨long, _, h⟩
   · exact (bad.false_of_noOk (by decide)).elim
   have guard : (224 : B256) ≤ sevm.data.length.toB256 - 4 := by
     have flag := eq_zero_of_iszero_ne_zero long
@@ -375,107 +395,131 @@ theorem permitEntry_inv {sevm : Sevm} {b : Devm} {G : Nat} {sel : B256} {o : Out
     rw [one] at flag
     exact (by decide : (1 : B256) ≠ 0) flag
   unfold t_05f8_c76 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_calldataload hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_val (w := (permitOwner sevm).toB256) (ff20_and_word _) (ri_and hd)
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_val (w := 36) (by decide) (ri_add hd)
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_calldataload hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_val (w := (permitSpender sevm).toB256) (ff20_and_word _) (ri_and hd)
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_val (w := 68) (by decide) (ri_add hd)
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_calldataload hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_val (w := 100) (by decide) (ri_add hd)
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_calldataload hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_val (w := 132) (by decide) (ri_add hd)
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_calldataload hd
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_val (w := (permitV sevm).toB256) (B256.and_ff_eq_toUInt8 _) (ri_and hd)
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_val (w := 164) (by decide) (ri_add hd)
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_calldataload hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_val (w := 196) (by decide) (ri_add hd)
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_calldataload hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨_, h⟩ := ric_call (g := t_1b0c_c29) (by rfl) h
-  rcases h with ⟨D, hc, h⟩ | ⟨D, hc, _⟩
-  · obtain ⟨nonstatic, timely, gw, callGas, d, out, G', call, post, bound, answered,
-      recovered, signer, eq⟩ := permitBody_inv (R := [sel]) fork getterInitMemory_ptr
-        (Mem.reads_data getterInitMemory) hc
+  obtain ⟨_, h⟩ := ric_destP h
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_pop (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_calldataload (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h
+  obtain ⟨_, rfl⟩ := ri_val (w := (permitOwner sevm).toB256) (ff20_and_word _) (ri_and (project hd))
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_val (w := 36) (by decide) (ri_add (project hd))
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_calldataload (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h
+  obtain ⟨_, rfl⟩ := ri_val (w := (permitSpender sevm).toB256) (ff20_and_word _) (ri_and (project hd))
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_val (w := 68) (by decide) (ri_add (project hd))
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_calldataload (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_val (w := 100) (by decide) (ri_add (project hd))
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_calldataload (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_val (w := 132) (by decide) (ri_add (project hd))
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_calldataload (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h
+  obtain ⟨_, rfl⟩ := ri_val (w := (permitV sevm).toB256) (B256.and_ff_eq_toUInt8 _) (ri_and (project hd))
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_val (w := 164) (by decide) (ri_add (project hd))
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_calldataload (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_val (w := 196) (by decide) (ri_add (project hd))
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_calldataload (project hd)
+  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
+  cases h with
+  | callHalt _ lookup pop hc =>
+    rw [show cert.prog[29]? = some t_1b0c_c29 from rfl] at lookup
+    cases lookup
+    obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, eq⟩ := permitBody_invP project (R := [sel])
+      fork getterInitMemory_ptr (Mem.reads_data getterInitMemory) ((St.of_pop1 pop).2 ▸ hc)
+    cases eq
+  | callRet _ lookup pop hc h =>
+    rw [show cert.prog[29]? = some t_1b0c_c29 from rfl] at lookup
+    cases lookup
+    obtain ⟨nonstatic, timely, gw, callGas, d, out, G', call, post, bound, answered,
+      recovered, signer, eq⟩ := permitBody_invP project (R := [sel]) fork getterInitMemory_ptr
+        (Mem.reads_data getterInitMemory) ((St.of_pop1 pop).2 ▸ hc)
     cases eq
     unfold t_0257_c76 at h
-    obtain ⟨residual, h⟩ := ric_dest h
+    obtain ⟨residual, h⟩ := ric_destP h
     cases h with
     | last hr =>
       exact ⟨guard, nonstatic, timely, gw, callGas, d, out, residual,
         ⟨call, post, bound, answered, recovered, signer⟩,
         congrArg Outcome.halted (Except.ok.inj hr).symm⟩
-  · obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, eq⟩ := permitBody_inv (R := [sel]) fork
-      getterInitMemory_ptr (Mem.reads_data getterInitMemory) hc
-    cases eq
 
-theorem permit_selector_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
+theorem permitEntry_inv {sevm : Sevm} {b : Devm} {G : Nat} {sel : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (run : SFunc.Run cert.prog sevm (St b [sel] getterInitMemory G) t_05e2_c76 o) :
+    (224 : B256) ≤ sevm.data.length.toB256 - 4 ∧ sevm.isStatic = false ∧
+      sevm.benvStat.time ≤ permitDeadline sevm ∧
+      ∃ (gw : B256) (callGas : Nat) (d : Devm) (out : Bytes) (G' : Nat),
+        PermitRawCall sevm b sel gw callGas d out ∧
+        o = .halted (permitPublicPost sevm b d out sel G') :=
+  permitEntry_invP (fun step => step) fork run
+
+theorem permit_selector_invP {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm} {b : Devm}
+    {M : Mem} {G : Nat} {o : Outcome}
+    (project : ∀ {s : Sevm} {before : Devm} {n : Ninst} {after : Devm},
+      P s before n after → Ninst.Run s before n after)
     (selector : Blanc.Sevm.selector sevm = 0xd505accf)
-    (run : SFunc.Run cert.prog sevm (St b [] M G) t_001a_c0 o) :
-    ∃ G', SFunc.Run cert.prog sevm (St b [0xd505accf] M G') t_05e2_c76 o := by
-  have h := run.cut
+    (run : SFunc.RunP P cert.prog sevm (St b [] M G) t_001a_c0 o) :
+    ∃ G', SFunc.RunP P cert.prog sevm (St b [0xd505accf] M G') t_05e2_c76 o := by
+  have h := SFunc.runP_iff_runCutP_nil.mp run
   unfold t_001a_c0 at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_calldataload hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, hd⟩ := ri_shr hd
+  obtain ⟨d, hd, h⟩ := ric_nextP h
+  obtain ⟨_, rfl⟩ := ri_push (project hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h
+  obtain ⟨_, rfl⟩ := ri_calldataload (project hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h
+  obtain ⟨_, rfl⟩ := ri_push (project hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h
+  obtain ⟨_, hd⟩ := ri_shr (project hd)
   simp only [show Bytes.toB256 [0] = (0 : B256) from rfl,
     show Bytes.toB256 [0xe0] = (224 : B256) from rfl,
     show (224 : B256).toNat = 224 from rfl,
     show Sevm.dataWord sevm 0 >>> 224 = (0xd505accf : B256) from selector] at hd
   subst d
-  obtain ⟨_, h⟩ := ric_cmp_gt h
+  obtain ⟨_, h⟩ := ric_cmp_gtP (fun step => project step) h
   simp only [show B256.gtCheck (Bytes.toB256 [0x6a, 0x62, 0x78, 0x42]) (0xd505accf : B256)
     = (0 : B256) from by decide, ite_true] at h
   unfold t_002b_c0 at h
-  obtain ⟨_, h⟩ := ric_cmp_gt h
+  obtain ⟨_, h⟩ := ric_cmp_gtP (fun step => project step) h
   simp only [show B256.gtCheck (Bytes.toB256 [0xba, 0x9a, 0x7a, 0x56]) (0xd505accf : B256)
     = (0 : B256) from by decide, ite_true] at h
   unfold t_0036_c0 at h
-  obtain ⟨_, h⟩ := ric_cmp_gt h
+  obtain ⟨_, h⟩ := ric_cmp_gtP (fun step => project step) h
   simp only [show B256.gtCheck (Bytes.toB256 [0xd2, 0x12, 0x20, 0xa7]) (0xd505accf : B256)
     = (0 : B256) from by decide, ite_true] at h
   unfold t_0041_c0 at h
-  obtain ⟨_, h⟩ := ric_cmp_eq (g := t_05da_c75) (by intro bad; cases bad) (by rfl) h
+  obtain ⟨_, h⟩ := ric_cmp_eqP (fun step => project step) (g := t_05da_c75) (by intro bad; cases bad) rfl h
   simp only [show B256.eqCheck (Bytes.toB256 [0xd2, 0x12, 0x20, 0xa7]) (0xd505accf : B256)
     = (0 : B256) from by decide, ite_true] at h
   unfold t_004c_c0 at h
-  obtain ⟨_, h⟩ := ric_cmp_eq (g := t_05e2_c76) (by intro bad; cases bad) (by rfl) h
+  obtain ⟨_, h⟩ := ric_cmp_eqP (fun step => project step) (g := t_05e2_c76) (by intro bad; cases bad) rfl h
   simp only [show B256.eqCheck (Bytes.toB256 [0xd5, 0x05, 0xac, 0xcf]) (0xd505accf : B256)
     = (1 : B256) from by decide, show (1 : B256) ≠ 0 from by decide, ite_false] at h
-  exact ⟨_, h.uncut⟩
+  exact ⟨_, SFunc.runP_iff_runCutP_nil.mpr h⟩
+
+theorem permit_selector_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
+    (selector : Blanc.Sevm.selector sevm = 0xd505accf)
+    (run : SFunc.Run cert.prog sevm (St b [] M G) t_001a_c0 o) :
+    ∃ G', SFunc.Run cert.prog sevm (St b [0xd505accf] M G') t_05e2_c76 o :=
+  permit_selector_invP (fun step => step) selector run
 
 /-- Every successful pc-zero run with the permit selector takes the success path:
 nonpayable, at least 228 calldata bytes, nonstatic, timely, a successful recovery call

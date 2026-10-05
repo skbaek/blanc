@@ -671,6 +671,66 @@ import Blanc.Lift.UniswapV2Pair.PropertiesOracleLaw
 import Blanc.Lift.UniswapV2Pair.PropertiesMintBurn
 import Blanc.Lift.UniswapV2Pair.Creation.DeployInit
 
+-- Exact final second-host return and previously omitted control owners.
+import Blanc.Composition.UniswapV2PairWeth9
+import Blanc.Composition.UniswapV2PairWeth9Frame
+import Blanc.Composition.UniswapV2PairWeth9GasFree
+import Blanc.Lift.GasErasureRun
+import Blanc.Lift.InvWalkBranchToP
+import Blanc.Lift.LedgerFootprintOrder
+import Blanc.Lift.LocalStorage
+import Blanc.Lift.MutableCallPost
+import Blanc.Lift.PrecompileAnswer
+import Blanc.Lift.RevertingCallee
+import Blanc.Lift.UniswapV2Pair.CalleeControls
+import Blanc.Lift.UniswapV2Pair.CalleeControlsReach
+import Blanc.Lift.UniswapV2Pair.CalleeControlsSwap
+import Blanc.Lift.UniswapV2Pair.LedgerKeyControl
+import Blanc.Lift.UniswapV2Pair.MintCanonical
+import Blanc.Lift.UniswapV2Pair.MintCanonicalOwn
+import Blanc.Lift.UniswapV2Pair.ModelMutants
+import Blanc.Lift.UniswapV2Pair.OracleControls
+import Blanc.Lift.UniswapV2Pair.PermitTurns
+import Blanc.Lift.UniswapV2Pair.RefinementControls
+import Blanc.Lift.UniswapV2Pair.SwapAbi
+import Blanc.Lift.UniswapV2Pair.SwapBack
+import Blanc.Lift.UniswapV2Pair.SwapBackTurns
+import Blanc.Lift.UniswapV2Pair.SwapBalanceWalk
+import Blanc.Lift.UniswapV2Pair.SwapCallWorld
+import Blanc.Lift.UniswapV2Pair.SwapCallback
+import Blanc.Lift.UniswapV2Pair.SwapCanonical
+import Blanc.Lift.UniswapV2Pair.SwapCheckWalk
+import Blanc.Lift.UniswapV2Pair.SwapControls
+import Blanc.Lift.UniswapV2Pair.SwapCut
+import Blanc.Lift.UniswapV2Pair.SwapForward
+import Blanc.Lift.UniswapV2Pair.SwapFront
+import Blanc.Lift.UniswapV2Pair.SwapFrontCanonical
+import Blanc.Lift.UniswapV2Pair.SwapFrontTurns
+import Blanc.Lift.UniswapV2Pair.SwapFrontTyped
+import Blanc.Lift.UniswapV2Pair.SwapTransfer
+import Blanc.Lift.UniswapV2Pair.SwapUpdateWalk
+import Blanc.Lift.WordWindowMemory
+import Blanc.Composition.UniswapV2PairWeth9Calls
+import Blanc.Composition.Weth9SettledCallers
+import Blanc.Lift.CallChildren
+import Blanc.Lift.CallSite
+import Blanc.Lift.CallSiteChildren
+import Blanc.Lift.CallerProvenance
+import Blanc.Lift.UniswapV2Pair.PairCallShape
+import Blanc.Lift.UniswapV2Pair.PairCallSiteShape
+import Blanc.Lift.UniswapV2Pair.PairCallSites
+import Blanc.Lift.UniswapV2Pair.PairCallSitesCheck
+import Blanc.Lift.UniswapV2Pair.SwapForwardBack
+import Blanc.Lift.UniswapV2Pair.SwapForwardBalance
+import Blanc.Lift.UniswapV2Pair.SwapForwardCallback
+import Blanc.Lift.UniswapV2Pair.SwapForwardCheck
+import Blanc.Lift.UniswapV2Pair.SwapForwardFront
+import Blanc.Lift.UniswapV2Pair.SwapForwardPrefix
+import Blanc.Lift.UniswapV2Pair.SwapForwardTransfer
+import Blanc.Lift.UniswapV2Pair.SwapForwardUpdate
+import Blanc.Lift.UniswapV2Pair.ModelControls
+import Blanc.Lift.UniswapV2Pair.UpdateOverflowWalk
+
 namespace Blanc
 
 def main : List String → IO Unit

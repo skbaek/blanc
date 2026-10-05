@@ -154,7 +154,7 @@ private theorem burnFinalFirstRequestLine_inv {sevm : Sevm} {b final : Devm}
       (skimRequestMemory M p sevm.currentTarget) gas := by
   have word0 := ptr.2
   have p4 : (p + Bytes.toB256 [4]).toNat = p.toNat + 4 :=
-    skimOffset (by change p.toNat + 4 < 2 ^ 256; omega)
+    B256.toNat_add_eq_of_nof _ _ (by change p.toNat + 4 < 2 ^ 256; omega)
   have word1 : Bytes.toB256 ((((M.read 64 32).2.write p.toNat balanceOfSelectorWord.toBytes).write
       (p + Bytes.toB256 [4]).toNat sevm.currentTarget.toB256.toBytes).read 64 32).1 = p :=
     (((ptr.extend 64 32).write p.toNat _ low).write (p + Bytes.toB256 [4]).toNat _
@@ -278,7 +278,7 @@ theorem burnBalanceRequest_memoryLayout {M : Mem} {p : B256} {n : Nat} {pair : A
     PtrMem p (skimRequestMemory M p pair).size (skimRequestMemory M p pair) ∧
       p.toNat + 36 ≤ (skimRequestMemory M p pair).size := by
   have p4 : (p + 4).toNat = p.toNat + 4 :=
-    skimOffset (by change p.toNat + 4 < 2 ^ 256; omega)
+    B256.toNat_add_eq_of_nof _ _ (by change p.toNat + 4 < 2 ^ 256; omega)
   have first := (mem.extend 64 32).write p.toNat balanceOfSelectorWord (Or.inr low)
   have second := first.write (p + 4).toNat pair.toB256 (Or.inr (by rw [p4]; omega))
   have image := second.extend 64 32
@@ -389,7 +389,7 @@ private theorem burnFinalSecondRequestLine_inv {sevm : Sevm} {b final : Devm}
       (skimRequestMemory M p sevm.currentTarget) gas := by
   have word0 := ptr.2
   have p4 : (p + Bytes.toB256 [4]).toNat = p.toNat + 4 :=
-    skimOffset (by change p.toNat + 4 < 2 ^ 256; omega)
+    B256.toNat_add_eq_of_nof _ _ (by change p.toNat + 4 < 2 ^ 256; omega)
   have word1 : Bytes.toB256 ((((M.read 64 32).2.write p.toNat balanceOfSelectorWord.toBytes).write
       (p + Bytes.toB256 [4]).toNat sevm.currentTarget.toB256.toBytes).read 64 32).1 = p :=
     (((ptr.extend 64 32).write p.toNat _ low).write (p + Bytes.toB256 [4]).toNat _

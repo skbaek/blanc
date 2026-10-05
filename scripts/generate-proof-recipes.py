@@ -653,7 +653,7 @@ STRUCTURAL_DISPATCH_ARMS = frozenset({"goal-shape:shared-subject-kernel-decision
 # When ``.lake/packages/jaune`` is materialized at that exact rev, every name is
 # additionally resolved against the pinned source. See ``validate_jaune_dispatch``
 # for what that verification does and does not establish.
-JAUNE_DISPATCH_PIN = "780ad71a07787527cc074e06696d0e6a742ba104"
+JAUNE_DISPATCH_PIN = "2737c8ebcaec2f3a9a7014156403300bc664daab"
 JAUNE_DISPATCH_SURFACE = frozenset({
     "Jaune.Devm",
     "Jaune.Devm.accessedAddresses",
