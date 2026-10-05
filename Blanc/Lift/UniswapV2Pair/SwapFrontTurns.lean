@@ -20,12 +20,13 @@ structure SwapFrontState (U : WriterKey → Prop) (pair : Adr) (ctx : Context)
   output : w.output = b.output
   logs : ∃ (added : List PendingLog) (L : List Log), F.current.logs = current.logs ++ added ∧
     w.logs = b.logs ++ L ∧ added.map (PendingLog.rawWith (lockedOwnedRaw pair)) = L.map some
+  checkpoint : F.checkpoint = current
 
 theorem SwapFrontState.beginResume {U : WriterKey → Prop} {pair : Adr} {ctx : Context}
     {current : Checkpoint} {b : Devm} {F : Frame} {w : Devm}
     (h : SwapFrontState U pair ctx current b F w) (request : Request) :
     SwapFrontState U pair ctx current b (F.beginResume request) w :=
-  ⟨h.context, h.rep, h.code, h.output, h.logs⟩
+  ⟨h.context, h.rep, h.code, h.output, h.logs, h.checkpoint⟩
 
 /-- What every external call of the swap frame consumes: the lock-free supply under a
 trace-local universe `U` and admission of every raw Pair frame of the derivation. -/
@@ -69,14 +70,15 @@ theorem swapMutableCall_step {U : WriterKey → Prop} {D : Exec.Deriv} {sevm : S
       (by rw [inv.context, time]) env.fork env.good
   obtain ⟨added0, L0, logs0, raw0, images0⟩ := inv.logs
   refine ⟨turns, c, rets, exact, auth, ⟨inv.context, rep', ?_, postOutput.trans inv.output,
-    added0 ++ added, L0 ++ L, ?_, ?_, ?_⟩⟩
+    ⟨added0 ++ added, L0 ++ L, ?_, ?_, ?_⟩, inv.checkpoint⟩⟩
   · rw [Lift.StepIn.codePreserve call sevm.currentTarget
       (by rw [preCode, inv.code]; exact nonemptyList), preCode, inv.code]
   · rw [logs', logs0, List.append_assoc]
   · rw [raw, preLogs, raw0, List.append_assoc]
   · rw [List.map_append, List.map_append, images0, images]
 
-private theorem swap_pos_of_ne {a : B256} (h : a ≠ 0) : a > 0 := by
+/-- A nonzero word is positive. -/
+theorem swap_pos_of_ne {a : B256} (h : a ≠ 0) : a > 0 := by
   apply B256.lt_of_toNat_lt_toNat
   have ne : a.toNat ≠ 0 := fun e => h (B256.toNat_inj _ _ (e.trans rfl))
   change 0 < a.toNat
