@@ -103,18 +103,6 @@ theorem balanceOfPost_getStor (sevm : Sevm) (pre : Devm) (G : Nat) (a : Adr) :
 
 /-! ## The finite-footprint ledger -/
 
-/-- A checked credit (`v ≤ v + w`, what the token tests) does not wrap. -/
-theorem nof_of_le_add {v w : B256} (h : v ≤ v + w) : B256.Nof v w := by
-  rw [B256.le_iff_toNat_le_toNat, B256.toNat_add] at h
-  unfold B256.Nof
-  have hv := B256.toNat_lt v
-  have hw := B256.toNat_lt w
-  by_contra hc
-  rw [Nat.lo] at h
-  have : (v.toNat + w.toNat) % 2 ^ 256 = v.toNat + w.toNat - 2 ^ 256 := by
-    rw [Nat.mod_eq_sub_mod (by omega), Nat.mod_eq_of_lt (by omega)]
-  omega
-
 /-- **A move keeps the ledger of a footprint holding both ends.**  The movement equation holds for
 any footprint; with `src, dst ∈ F` the sum is unchanged. -/
 theorem ledger_move_eq {F : Finset Adr} {s : Stor} {src dst : Adr} {v : B256}

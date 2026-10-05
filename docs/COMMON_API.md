@@ -819,7 +819,9 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   over an `St`, so an explicit post state has explicit shadows; `ChildAgree.getStorVal`,
   `sloadCost_shadow`/`sstoreCost_shadow` (`sloadCostS`/`sstoreCostS`) and
   `afterSload_shadow`/`afterSstore_shadow` (`afterSloadS`/`afterSstoreS`) restate values, charges
-  and bases on the shadows, which the kernel evaluates without inspecting a hash set. Worked
+  and bases on the shadows, which the kernel evaluates without inspecting a hash set.
+  `gtCheck_zero_of_le` and `nof_of_le_add`/`le_add_of_nof` are the word facts a checked
+  token's guards need (a covered `GT` is `0`; a credit passing `v ≤ v + w` did not wrap). Worked
   example: the synthetic token's `transfer_child`, `transferFrom_child`, `approve_child`,
   `balanceOf_child` in `Blanc/Lift/VyperNonreentrantDeployed/Token20/Frame.lean`.
 - To state a closed walk witness under every covered fork rather than the one its machine

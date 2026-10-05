@@ -19,12 +19,44 @@ certificate need not be walked by the kernel when a symbolic `SProg.RunExact` of
   of `Blanc/ForwardCall.lean` (`afterSload`, `afterSstore`) and a `RETURN` over an `St` move the
   witness engine's shadows by one entry each, so a run's explicit post state is described by
   explicit shadows;
+* `gtCheck_zero_of_le`, `nof_of_le_add`, `le_add_of_nof`: the checked-arithmetic word facts a
+  token's guards need;
 * `ChildAgree.getStorVal`, `sloadCost_shadow`, `sstoreCost_shadow`: the values and the selected
   charges read from the shadows (`sloadCostS`, `sstoreCostS`), which the kernel can evaluate
   where the world's hash sets cannot be inspected.
 
 Nothing here mentions a contract.
 -/
+
+/-! ## Checked-arithmetic words
+
+What a checked token's comparisons decide: `GT` of a covered value is `0`, and a credit that
+passes the `v ≤ v + w` test did not wrap (`nof_of_le_add`; `le_add_of_nof` the converse). -/
+
+namespace Blanc.Lift
+
+open Jaune
+
+theorem gtCheck_zero_of_le {x y : B256} (h : x ≤ y) : B256.gtCheck x y = 0 := by
+  simp only [B256.gtCheck, GT.gt, B256.not_lt.mpr h, ↓reduceIte]
+
+theorem le_add_of_nof {v w : B256} (h : B256.Nof v w) : v ≤ v + w := by
+  rw [B256.le_iff_toNat_le_toNat, B256.toNat_add_eq_of_nof _ _ h]
+  omega
+
+/-- A checked credit (`v ≤ v + w`, what the token tests) does not wrap. -/
+theorem nof_of_le_add {v w : B256} (h : v ≤ v + w) : B256.Nof v w := by
+  rw [B256.le_iff_toNat_le_toNat, B256.toNat_add] at h
+  unfold B256.Nof
+  have hv := B256.toNat_lt v
+  have hw := B256.toNat_lt w
+  by_contra hc
+  rw [Nat.lo] at h
+  have : (v.toNat + w.toNat) % 2 ^ 256 = v.toNat + w.toNat - 2 ^ 256 := by
+    rw [Nat.mod_eq_sub_mod (by omega), Nat.mod_eq_of_lt (by omega)]
+  omega
+
+end Blanc.Lift
 
 namespace Blanc.Lift.NodeWalk
 

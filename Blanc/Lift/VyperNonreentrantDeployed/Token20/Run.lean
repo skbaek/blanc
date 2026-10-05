@@ -1,6 +1,7 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Token20.Check
 import Blanc.Lift.ExactWalkSolc
 import Blanc.Lift.WalkSteps
+import Blanc.Lift.ExactLeaf
 
 /-!
 # The synthetic token `T`: gas-exact runs of its four selectors
@@ -24,13 +25,6 @@ namespace Blanc.Lift.VyperNonreentrantDeployed.Token20
 open Jaune Blanc.Lift
 
 /-! ## Words and memory -/
-
-theorem gtCheck_zero_of_le {x y : B256} (h : x ≤ y) : B256.gtCheck x y = 0 := by
-  simp only [B256.gtCheck, GT.gt, B256.not_lt.mpr h, ↓reduceIte]
-
-theorem le_add_of_nof {v w : B256} (h : B256.Nof v w) : v ≤ v + w := by
-  rw [B256.le_iff_toNat_le_toNat, B256.toNat_add_eq_of_nof _ _ h]
-  omega
 
 /-- The memory after the `RETURN` word `1` is written into an image. -/
 def okMem (M : Mem) : Mem := M.write 0 (1 : B256).toBytes
