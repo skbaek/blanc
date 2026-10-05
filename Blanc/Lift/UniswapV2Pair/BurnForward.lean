@@ -133,6 +133,41 @@ theorem burnLockGuard_exact {sevm : Sevm} {b : Devm} {R : List B256}
   exact rx_branch_succ (d := 0x1469) (w := 1)
     (by decide : (1 : B256) ≠ 0) body
 
+/-- The lock write and reserve getter retain Burn's four zero temporaries. -/
+theorem burnReservePrefix_exact {sevm : Sevm} {b : Devm} {R : List B256}
+    {M : Mem} {G load lock reserve : Nat} {toWord extρ : B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork) (room : R.length ≤ 1008)
+    (unlocked : b.getStorVal sevm.currentTarget 12 = 1)
+    (nonstatic : sevm.isStatic = false)
+    (loadEq : load = sloadCost sevm b 12)
+    (lockEq : lock = sstoreCost sevm (afterSload sevm b 12) 12 0)
+    (reserveEq : reserve = sloadCost sevm (burnLockedWorld sevm b) 8)
+    (sentry : gCallStipend < G + reserve + 87 + lock)
+    (body : SFunc.RunExact cert.prog sevm
+      (St (afterSload sevm (burnLockedWorld sevm b) 8)
+        (reserveTimestampRead ((burnLockedWorld sevm b).getStorVal sevm.currentTarget 8) ::
+         reserve1Read ((burnLockedWorld sevm b).getStorVal sevm.currentTarget 8) ::
+         reserve0Read ((burnLockedWorld sevm b).getStorVal sevm.currentTarget 8) ::
+         0 :: 0 :: 0 :: 0 :: toWord :: extρ :: R) M G) t_1479_c37 o) :
+    SFunc.RunExact cert.prog sevm
+      (St b (toWord :: extρ :: R) M
+        (G + reserve + 100 + lock + load + 29)) t_13f5_c37 o := by
+  apply burnLockGuard_exact fork room unlocked loadEq
+  unfold t_1469_c37
+  rw [show G + reserve + 100 + lock = (G + reserve + 87 + lock) + 13 by omega]
+  apply rx_dest
+  apply rx_push (w := 0) rfl (by simp only [List.length_cons]; omega)
+  apply rx_push (w := 12) rfl (by simp only [List.length_cons]; omega)
+  apply rx_dup (w := 0) rfl (by simp only [List.length_cons]; omega)
+  apply rx_swap rfl
+  apply rx_sstoreC fork lockEq sentry nonstatic
+  apply rx_dup (w := 0) rfl (by simp only [List.length_cons]; omega)
+  apply rx_push (w := 0x1479) rfl (by simp only [List.length_cons]; omega)
+  apply rx_push (w := 0x0d90) rfl (by simp only [List.length_cons]; omega)
+  apply rx_callRet (show cert.prog[56]? = some t_0d90_c56 from rfl)
+    (reserves_callee_exact fork reserveEq (by simp only [List.length_cons]; omega))
+  exact body
+
 /-! The two initial balance observations use the shared STATICCALL and width
 guards.  The callee run remains an explicit premise; no pair-local state is
 assumed between the call and its decoder. -/
