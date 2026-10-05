@@ -362,9 +362,9 @@ plus HASH-T freshness of its own `pairDerivKeys` gives `PairStepOutcome` from `f
 `pair_history_writer_live` (transfer/approve/transferFrom, cost `writer.cost`),
 `pair_history_sync_live` (cost `syncCalleePrefixGas … + 244`), `pair_history_mint_live`
 (`env.gas + 228`), `pair_history_swap_live` (both callback shapes; `swapFrontTransferGas … +
-swapPrefixGas … + 445`, `SwapSafeTransferForward` a named premise), `pair_history_burn_live`
-(`BurnForwardEnv.gas = initial.gas + 249`, `SwapSafeTransferForward` a named premise for both
-transfers), `pair_history_skim_live` (`SkimForwardEnv.gas`; `SkimModelConditions` — lock, mutability
+swapPrefixGas … + 445`), `pair_history_burn_live` (`BurnForwardEnv.gas = initial.gas + 249`),
+`pair_history_skim_live` (`SkimForwardEnv.gas`; every `_safeTransfer` call in the three is discharged by
+`safeTransfer_dynamic_forward` at the concrete `safeTransferPreCharge`/`safeTransferPostCharge`; `SkimModelConditions` — lock, mutability
 and both covers — from `runTyped_skim_conditions`, the reserve1 cover carried across the first transfer
 by `Frame.settleExternal_locked_core`; the bytes' post-transfer slot-8 read is tied to the entry
 slot by the goal's U6 token-call clause `NoPairWriteOutsideLock` (lock-guarded slots 0, 8–12 unwritten by

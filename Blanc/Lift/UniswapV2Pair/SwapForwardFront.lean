@@ -6,7 +6,7 @@ the post-callback join `t_09c3_c5` with the cut stack: the lock prefix
 (`swapBody_prefix_exact`), both optional transfers (`swapFwdTransfers_exact`) and the
 conditional callback (`swapFwdCallback_call`/`_skip`). The callee frames (both token
 transfers and the callback) are forward-environment premises; the moved-pointer `_safeTransfer`
-helper and the reply-length bound are cross-host hypotheses. -/
+helper is `safeTransfer_dynamic_forward` and the reply bound is derived from the actual `CALL`. -/
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
@@ -40,10 +40,10 @@ def swapFrontCallbackGas (sevm : Sevm) (b d0 d1 : Devm) (cgC Gc : Nat) : Nat :=
       (swapDataLength sevm).toNat
 
 /-- The gas at the optimistic-transfer branch. -/
-def swapFrontTransferGas (pre : Nat → B256 → Nat) (sevm : Sevm) (b d0 d1 : Devm)
+def swapFrontTransferGas (sevm : Sevm) (b d0 d1 : Devm)
     (cg0 cg1 cgC Gc : Nat) : Nat :=
-  swapOptGas pre getterInitMemory 128 (swapAmount0Out sevm) cg0
-    (swapOptGas pre (swapOptMem getterInitMemory 128 (swapAmount0Out sevm) (swapRecipientWord sevm) d0)
+  swapOptGas getterInitMemory 128 (swapAmount0Out sevm) cg0
+    (swapOptGas (swapOptMem getterInitMemory 128 (swapAmount0Out sevm) (swapRecipientWord sevm) d0)
       (swapOptPtr 128 (swapAmount0Out sevm) d0) (swapAmount1Out sevm) cg1
       (swapFrontCallbackGas sevm b d0 d1 cgC Gc))
 
@@ -53,15 +53,14 @@ data (`SwapTransferCallForward`; the reply bound is derived from the actual 68-b
 the callback's primitive `CALL` data (`SwapCallbackCallForward`), and the lock-store
 stipend check. Each call's residual gas is tied to the next segment's need, ending at the
 join gas `Gc`. No successful suffix run is assumed. -/
-structure SwapFrontForwardEnv (pre : Nat → B256 → Nat) (post : Nat → B256 → Bytes → Nat)
-    (sevm : Sevm) (b : Devm) (st : State) (d0 d1 dC : Devm) (cg0 cg1 cgC Gc : Nat) : Prop where
-  transfer0 : swapAmount0Out sevm ≠ 0 → SwapTransferCallForward post sevm (swapPrefixWorld sevm b)
+structure SwapFrontForwardEnv (sevm : Sevm) (b : Devm) (st : State) (d0 d1 dC : Devm) (cg0 cg1 cgC Gc : Nat) : Prop where
+  transfer0 : swapAmount0Out sevm ≠ 0 → SwapTransferCallForward sevm (swapPrefixWorld sevm b)
     (swapLocalsStack sevm st) getterInitMemory getterInitMemory.size 128 (swapAmount0Out sevm)
     (swapRecipientWord sevm) st.token0.toB256 0x8d0 cg0
-    (swapOptGas pre (swapOptMem getterInitMemory 128 (swapAmount0Out sevm) (swapRecipientWord sevm) d0)
+    (swapOptGas (swapOptMem getterInitMemory 128 (swapAmount0Out sevm) (swapRecipientWord sevm) d0)
       (swapOptPtr 128 (swapAmount0Out sevm) d0) (swapAmount1Out sevm) cg1
       (swapFrontCallbackGas sevm b d0 d1 cgC Gc)) d0
-  transfer1 : swapAmount1Out sevm ≠ 0 → SwapTransferCallForward post sevm
+  transfer1 : swapAmount1Out sevm ≠ 0 → SwapTransferCallForward sevm
     (swapOptWorld (swapAmount0Out sevm) (swapPrefixWorld sevm b) d0) (swapLocalsStack sevm st)
     (swapOptMem getterInitMemory 128 (swapAmount0Out sevm) (swapRecipientWord sevm) d0)
     (swapOptMem getterInitMemory 128 (swapAmount0Out sevm) (swapRecipientWord sevm) d0).size
@@ -71,7 +70,7 @@ structure SwapFrontForwardEnv (pre : Nat → B256 → Nat) (post : Nat → B256 
     (swapFrontTransferWorld sevm b d0 d1) (swapLocalsStack sevm st)
     (swapFrontTransferMem sevm d0 d1) (swapFrontPtr sevm d0 d1) (swapRecipientWord sevm)
     (swapAmount0Out sevm) (swapAmount1Out sevm) (swapDataLength sevm) (swapDataStart sevm) cgC Gc dC
-  sentry : gCallStipend < swapFrontTransferGas pre sevm b d0 d1 cg0 cg1 cgC Gc +
+  sentry : gCallStipend < swapFrontTransferGas sevm b d0 d1 cg0 cg1 cgC Gc +
     sstoreCost sevm (afterSload sevm b 12) 12 0
 
 /-- **Forward swap front half.** Under the finite entry storage, the source guards of
@@ -81,11 +80,9 @@ join, with the source-named locals (`swapLocalsStack`, the cut stack
 `swapCutStack (swapCutWords sevm st) 0x257 [0x022c0d9f]`). At the join
 the free-pointer carrier holds at `swapFrontPtr` with `128 ≤ p` and `p + 260 < 2^256`, and the
 output buffer is the entry one.
-CROSS-HOST: conditional on `SwapSafeTransferForward`. -/
+The `_safeTransfer` helper is `safeTransfer_dynamic_forward`. -/
 theorem swapBody_front_exact {K : WriterKey → Prop} {st : State}
-    {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
     {sevm : Sevm} {b d0 d1 dC : Devm} {cg0 cg1 cgC Gc : Nat}
-    (helper : SwapSafeTransferForward pre post)
     (fork : CoveredFork sevm.benvStat.fork)
     (rep : WriterRep K (b.getStor sevm.currentTarget) st)
     (unlocked : st.unlocked = 1) (nonstatic : sevm.isStatic = false)
@@ -94,7 +91,7 @@ theorem swapBody_front_exact {K : WriterKey → Prop} {st : State}
     (liquidity1 : (swapAmount1Out sevm).toNat < st.reserve1.val)
     (to0 : swapRecipient sevm ≠ st.token0) (to1 : swapRecipient sevm ≠ st.token1)
     (guards : SwapAbiGuards sevm)
-    (env : SwapFrontForwardEnv pre post sevm b st d0 d1 dC cg0 cg1 cgC Gc) :
+    (env : SwapFrontForwardEnv sevm b st d0 d1 dC cg0 cg1 cgC Gc) :
     let cutMem := swapFrontCutMem sevm d0 d1 dC
     let p := swapFrontPtr sevm d0 d1
     PtrMem p cutMem.size cutMem ∧ 128 ≤ p.toNat ∧ p.toNat + 260 < 2 ^ 256 ∧
@@ -104,7 +101,7 @@ theorem swapBody_front_exact {K : WriterKey → Prop} {st : State}
           cutMem Gc) t_09c3_c5 o →
       SFunc.RunExact cert.prog sevm
         (St b (swapBodyStack sevm) getterInitMemory
-          (swapFrontTransferGas pre sevm b d0 d1 cg0 cg1 cgC Gc + swapPrefixGas sevm b (swapAmount0Out sevm)))
+          (swapFrontTransferGas sevm b d0 d1 cg0 cg1 cgC Gc + swapPrefixGas sevm b (swapAmount0Out sevm)))
         t_0683_c54 o := by
   intro cutMem p
   have sentinel : memWord getterInitMemory 96 = 0 := by
@@ -125,7 +122,7 @@ theorem swapBody_front_exact {K : WriterKey → Prop} {st : State}
       (t0 := st.token0.toB256) (r1 := Nat.toB256 st.reserve1.val) (r0 := Nat.toB256 st.reserve0.val)
       (len := swapDataLength sevm) (start := swapDataStart sevm) (toWord := swapRecipientWord sevm)
       (a1 := swapAmount1Out sevm) (a0 := swapAmount0Out sevm) (ρ := 0x257)
-      helper fork (by decide) getterInitMemory_ptr sentinel (by decide) (by decide)
+      fork (by decide) getterInitMemory_ptr sentinel (by decide) (by decide)
       env.transfer0 env.transfer1
   have width2 : p.toNat + 260 < 2 ^ 256 := by
     have : 2 ^ 163 + 260 < 2 ^ 256 := by decide

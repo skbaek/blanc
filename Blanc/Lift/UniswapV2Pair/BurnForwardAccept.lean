@@ -413,8 +413,7 @@ inside a separated universe holding the LP row of the factory's actual `feeTo` a
 Burn guards at the callee environment's actual answers (`BurnModelConditions`) give
 `BurnForwardGuards`. -/
 theorem BurnForwardEnv.guards_of_model {U K : WriterKey → Prop} {st : State}
-    {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b : Devm} {g : Nat} (env : BurnForwardEnv pre post sevm b g)
+    {sevm : Sevm} {b : Devm} {g : Nat} (env : BurnForwardEnv sevm b g)
     (rep : WriterRep K (b.getStor sevm.currentTarget) st)
     (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
     (rowFee : U (.balance env.feeTo))

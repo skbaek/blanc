@@ -476,48 +476,40 @@ factory `feeTo` `STATICCALL`, both transfer `CALL`s and both final `balanceOf(pa
 each from its actual staged state with its success, reply and returned gas, with the lock, reserve,
 fee-branch, LP-burn, update, checkpoint and unlock charges and sentries, ending at residual `g`. No
 model acceptance fact and no successful run is part of it. -/
-structure BurnForwardEnv (pre : Nat → B256 → Nat) (post : Nat → B256 → Bytes → Nat)
-    (sevm : Sevm) (b : Devm) (g : Nat) where
+structure BurnForwardEnv (sevm : Sevm) (b : Devm) (g : Nat) where
   d0 : Devm
   d1 : Devm
   dF : Devm
-  back : BurnBackForwardEnv pre post sevm (burnBodyWorld sevm b d0 d1 dF)
+  back : BurnBackForwardEnv sevm (burnBodyWorld sevm b d0 d1 dF)
     (burnBodyWorld sevm b d0 d1 dF).memory 128 (burnBodyWords sevm b d0 d1 dF) [0x89afcb44] (g + 64)
   fee : BurnFeeCallee sevm d1 dF (burnMem2 sevm d0 d1) (burnB0 d0) (burnT1 sevm b) (burnT0 sevm b)
     (burnR1 sevm b) (burnR0 sevm b) (burnRecipientWord sevm) 0x053d [0x89afcb44] back.gas
   initial : BurnInitialCallee sevm b d0 d1 [0x89afcb44] fee.gas
 
 /-- The pc-zero gas. -/
-def BurnForwardEnv.gas {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b : Devm} {g : Nat} (env : BurnForwardEnv pre post sevm b g) : Nat :=
+def BurnForwardEnv.gas {sevm : Sevm} {b : Devm} {g : Nat} (env : BurnForwardEnv sevm b g) : Nat :=
   env.initial.gas + 249
 
 /-- The halted world: the suffix's world with both amounts returned at the moved pointer. -/
-def BurnForwardEnv.post {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b : Devm} {g : Nat} (env : BurnForwardEnv pre post sevm b g) : Devm :=
+def BurnForwardEnv.post {sevm : Sevm} {b : Devm} {g : Nat} (env : BurnForwardEnv sevm b g) : Devm :=
   burnReturnPost env.back.post [0x89afcb44] env.back.memory
     (burnSuffixPtr 128 env.back.d0 env.back.d1) (burnBodyWords sevm b env.d0 env.d1 env.dF).amount0
     (burnBodyWords sevm b env.d0 env.d1 env.dF).amount1 g
 
 /-- The factory's answer, both initial answers and both final answers. -/
-def BurnForwardEnv.feeTo {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b : Devm} {g : Nat} (env : BurnForwardEnv pre post sevm b g) : Adr :=
+def BurnForwardEnv.feeTo {sevm : Sevm} {b : Devm} {g : Nat} (env : BurnForwardEnv sevm b g) : Adr :=
   (Bytes.toB256 (env.dF.returnData.take 32)).toAdr
 
-def BurnForwardEnv.balance0 {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b : Devm} {g : Nat} (env : BurnForwardEnv pre post sevm b g) : B256 :=
+def BurnForwardEnv.balance0 {sevm : Sevm} {b : Devm} {g : Nat} (env : BurnForwardEnv sevm b g) : B256 :=
   Bytes.toB256 (env.d0.returnData.take 32)
 
-def BurnForwardEnv.balance1 {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b : Devm} {g : Nat} (env : BurnForwardEnv pre post sevm b g) : B256 :=
+def BurnForwardEnv.balance1 {sevm : Sevm} {b : Devm} {g : Nat} (env : BurnForwardEnv sevm b g) : B256 :=
   Bytes.toB256 (env.d1.returnData.take 32)
 
-def BurnForwardEnv.final0 {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b : Devm} {g : Nat} (env : BurnForwardEnv pre post sevm b g) : B256 :=
+def BurnForwardEnv.final0 {sevm : Sevm} {b : Devm} {g : Nat} (env : BurnForwardEnv sevm b g) : B256 :=
   Bytes.toB256 (env.back.e0.returnData.take 32)
 
-def BurnForwardEnv.final1 {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b : Devm} {g : Nat} (env : BurnForwardEnv pre post sevm b g) : B256 :=
+def BurnForwardEnv.final1 {sevm : Sevm} {b : Devm} {g : Nat} (env : BurnForwardEnv sevm b g) : B256 :=
   Bytes.toB256 (env.back.e1.returnData.take 32)
 
 /-- The primitive guards of a successful Burn at the callees' actual answers, over the entry
@@ -558,18 +550,16 @@ theorem burnR_bounds (sevm : Sevm) (b : Devm) :
 entry storage representing `st` with the Pair's LP row tracked, the callee-only environment and the
 primitive guards at its actual answers, the original bytes run from pc zero with exact initial gas
 `env.gas` and halt with both amounts returned and residual `g`.
-CROSS-HOST: conditional on `SwapSafeTransferForward`. -/
+The `_safeTransfer` helper is `safeTransfer_dynamic_forward`. -/
 theorem burnPc0_exact {K : WriterKey → Prop} {st : State}
-    {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
     {sevm : Sevm} {b : Devm} {g : Nat}
-    (helper : SwapSafeTransferForward pre post)
     (fork : CoveredFork sevm.benvStat.fork) (value : sevm.value = 0)
     (size : (4 : B256) ≤ sevm.data.length.toB256)
     (guard : (32 : B256) ≤ sevm.data.length.toB256 - 4)
     (selector : Blanc.Sevm.selector sevm = 0x89afcb44)
     (rep : WriterRep K (b.getStor sevm.currentTarget) st)
     (tracked : K (.balance sevm.currentTarget))
-    (env : BurnForwardEnv pre post sevm b g)
+    (env : BurnForwardEnv sevm b g)
     (guards : BurnForwardGuards K st sevm b env.d0 env.d1 env.dF env.back.e0 env.back.e1) :
     SFunc.RunExact cert.prog sevm (St b [] Mem.empty env.gas) t_0000_c0 (.halted env.post) := by
   obtain ⟨unlocked, nonstatic, ⟨fee, feeAccepted, amount0, amount1, burnPost, events, priced,
@@ -624,7 +614,7 @@ theorem burnPc0_exact {K : WriterKey → Prop} {st : State}
       ((burnBalanceReply_sentinel reply0.wf sevm.currentTarget _).trans
       ((burnBalanceReply_sentinel getterInitMemory_ptr.wf sevm.currentTarget _).trans
         burnEntryMemory_sentinel)))))
-  obtain ⟨⟨n, memE, covered⟩, lower2, upper2, backRun⟩ := burnBack_exact helper fork pricedMem
+  obtain ⟨⟨n, memE, covered⟩, lower2, upper2, backRun⟩ := burnBack_exact fork pricedMem
     pricedSentinel (by decide) (by decide) nonzero0 nonzero1 (by decide) nonstatic env.back
     final0 final1
   have callee := burnInitial_exact fork (by decide) unlockedRaw nonstatic env.initial
@@ -645,12 +635,10 @@ callee-only environment and the primitive guards at its actual answers, a succes
 the original bytes EXISTS with exact initial gas `env.gas`, halting with both amounts returned and
 residual `g`.  That same run is the authenticated raw Burn frame (`burnRaw_source_authentic`) under
 HASH-T over any universe holding its own trace and frames.
-CROSS-HOST: conditional on `SwapSafeTransferForward`. -/
+The `_safeTransfer` helper is `safeTransfer_dynamic_forward`. -/
 theorem burn_bytecode_forward_consumes {K : WriterKey → Prop} {current : Checkpoint}
-    {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
     {sevm : Sevm} {b : Devm} {g : Nat}
-    (invocation : List Nat) (helper : SwapSafeTransferForward pre post)
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (invocation : List Nat) (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
     (guard : (32 : B256) ≤ sevm.data.length.toB256 - 4)
     (selector : Blanc.Sevm.selector sevm = 0x89afcb44)
@@ -658,7 +646,7 @@ theorem burn_bytecode_forward_consumes {K : WriterKey → Prop} {current : Check
     (tracked : K (.balance sevm.currentTarget))
     (sem : CodeSem) (image : sem.image = some code.toList)
     (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
-    (env : BurnForwardEnv pre post sevm b g)
+    (env : BurnForwardEnv sevm b g)
     (guards : BurnForwardGuards K current.state sevm b env.d0 env.d1 env.dF env.back.e0
       env.back.e1) :
     ∃ run : Exec 0 sevm (St b [] Mem.empty env.gas) (.ok env.post),
@@ -672,7 +660,7 @@ theorem burn_bytecode_forward_consumes {K : WriterKey → Prop} {current : Check
           ⟨0, sevm, St b [] Mem.empty env.gas, .ok env.post, run⟩ b (.halted env.post)
           invocation := by
   obtain ⟨run⟩ := lift_exact cert_check jumps_ok codeEq fork
-    ⟨t_0000_c0, rfl, burnPc0_exact helper fork value size guard selector rep tracked env guards⟩
+    ⟨t_0000_c0, rfl, burnPc0_exact fork value size guard selector rep tracked env guards⟩
   exact ⟨run, fun inj apart sub trace good staticGood =>
     burnRaw_source_authentic invocation codeEq fork selector rep tracked run inj apart sub trace
       sem image installed good staticGood⟩

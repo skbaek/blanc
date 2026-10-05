@@ -359,8 +359,7 @@ output is positive, both outputs are below the reserves, `to` is neither token, 
 `runTyped_swap_success_reserves` gives it back from any successful run), then given the callee-only
 environments at the future world (`front`: the optional transfer `CALL`s and the callback `CALL`,
 present iff their amount or the data is nonzero; `callee`: the two `balanceOf(pair)` `STATICCALL`s with
-their returned gas) and the transfer helper `SwapSafeTransferForward` (a named premise until it is
-proved), a pc-zero run exists at gas
+their returned gas), with the `_safeTransfer` helper discharged by `safeTransfer_dynamic_forward`, a pc-zero run exists at gas
 `swapFrontTransferGas … callee.gas + swapPrefixGas sevm pre (swapAmount0Out sevm) + 279 + 166` ending at
 gas `g`; under HASH-T freshness of its own rows its post storage represents the model's next state. -/
 theorem pair_history_swap_live {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
@@ -369,8 +368,6 @@ theorem pair_history_swap_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
     (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
     (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
     (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
-    {transferPre : Nat → B256 → Nat} {transferPost : Nat → B256 → Bytes → Nat}
-    (helper : SwapSafeTransferForward transferPre transferPost)
     {sevm : Sevm} {pre : Devm}
     (target : sevm.currentTarget = pair) (state : pre.state = future.state)
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
@@ -382,28 +379,28 @@ theorem pair_history_swap_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
         (callee : SwapBackCalleeEnv sevm (swapFrontCutWorld sevm pre d0 d1 dC)
           (swapFrontCutMem sevm d0 d1 dC) (swapFrontCutMem sevm d0 d1 dC).size
           (swapFrontPtr sevm d0 d1) (swapCutWords sevm finish) 0x257 [0x022c0d9f] (g + 1))
-        (_front : SwapFrontForwardEnv transferPre transferPost sevm pre finish d0 d1 dC cg0 cg1 cgC
+        (_front : SwapFrontForwardEnv sevm pre finish d0 d1 dC cg0 cg1 cgC
           callee.gas),
         SwapContextConditions (writerContext sevm []) →
         SwapModelConditions finish (swapAmount0Out sevm) (swapAmount1Out sevm) (swapRecipient sevm)
           (swapBalanceWord callee.d0.returnData) (swapBalanceWord callee.d1.returnData) →
         ∃ run : Exec 0 sevm (St pre [] Mem.empty
-            (swapFrontTransferGas transferPre sevm pre d0 d1 cg0 cg1 cgC callee.gas +
+            (swapFrontTransferGas sevm pre d0 d1 cg0 cg1 cgC callee.gas +
               swapPrefixGas sevm pre (swapAmount0Out sevm) + 279 + 166))
             (.ok (St callee.post [0x022c0d9f] callee.memory g)),
           (St callee.post [0x022c0d9f] callee.memory g).gasLeft = g ∧
           (WriterFreshKeys (pairHistoryUniverse pair trace K₀)
               (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
-                (swapFrontTransferGas transferPre sevm pre d0 d1 cg0 cg1 cgC callee.gas +
+                (swapFrontTransferGas sevm pre d0 d1 cg0 cg1 cgC callee.gas +
                   swapPrefixGas sevm pre (swapAmount0Out sevm) + 279 + 166), .ok _, run⟩) →
             PairStepOutcome PairFrameAuth
               (WriterExtend (pairHistoryUniverse pair trace K₀)
                 (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
-                  (swapFrontTransferGas transferPre sevm pre d0 d1 cg0 cg1 cgC callee.gas +
+                  (swapFrontTransferGas sevm pre d0 d1 cg0 cg1 cgC callee.gas +
                     swapPrefixGas sevm pre (swapAmount0Out sevm) + 279 + 166), .ok _, run⟩))
               { state := finish, logs := [], updates := [] } [] K'
               ⟨0, sevm, St pre [] Mem.empty
-                (swapFrontTransferGas transferPre sevm pre d0 d1 cg0 cg1 cgC callee.gas +
+                (swapFrontTransferGas sevm pre d0 d1 cg0 cg1 cgC callee.gas +
                   swapPrefixGas sevm pre (swapAmount0Out sevm) + 279 + 166), .ok _, run⟩
               (St callee.post [0x022c0d9f] callee.memory g)) := by
   obtain ⟨futureCode, finish, K', replayed⟩ := pair_history_replayed trace installed initial fresh
@@ -426,15 +423,15 @@ theorem pair_history_swap_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
   obtain ⟨run, _⟩ := swap_bytecode_forward_consumes
     (current := { state := finish, logs := [], updates := [] }) [] rep pairSem pairSem_image
     installedPre output codeEq fork value size selector guards unlocked nonstatic nonzero
-    liquidity0 liquidity1 to0 to1 helper back front
+    liquidity0 liquidity1 to0 to1 back front
   exact ⟨run, rfl, fun newFresh => pair_live_outcome initial fresh futureCode replayed run target
     state codeEq fork output representable newFresh⟩
 
 /-- **`burn` after any configured history.**  Given the callee-only Burn environment at the future
 world (`BurnForwardEnv`: both initial `balanceOf(pair)` `STATICCALL`s, the factory `feeTo`
 `STATICCALL`, both transfer `CALL`s and both final `balanceOf(pair)` `STATICCALL`s with their replies
-and returned gas, and the charge equations and sentries), the transfer helper
-`SwapSafeTransferForward` (a named premise until it is proved), and HASH-T freshness of the Pair's
+and returned gas, and the charge equations and sentries; the `_safeTransfer` helper is
+`safeTransfer_dynamic_forward`), and HASH-T freshness of the Pair's
 own LP row and the `feeTo` answer's LP row against the history universe: whenever the model accepts
 the decoded Burn at the history's state `finish` over a transcript whose answers are the callees'
 actual ones, a pc-zero run exists at gas `callee.gas` halting with both amounts returned at residual
@@ -446,8 +443,6 @@ theorem pair_history_burn_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
     (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
     (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
     (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
-    {transferPre : Nat → B256 → Nat} {transferPost : Nat → B256 → Bytes → Nat}
-    (helper : SwapSafeTransferForward transferPre transferPost)
     {sevm : Sevm} {pre : Devm} {g : Nat}
     (target : sevm.currentTarget = pair) (state : pre.state = future.state)
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
@@ -455,7 +450,7 @@ theorem pair_history_burn_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
     (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
     (guard : (32 : B256) ≤ sevm.data.length.toB256 - 4)
     (selector : Blanc.Sevm.selector sevm = 0x89afcb44)
-    (callee : BurnForwardEnv transferPre transferPost sevm pre g)
+    (callee : BurnForwardEnv sevm pre g)
     (rowsFresh : WriterFreshKeys (pairHistoryUniverse pair trace K₀)
       (lpMintTouched sevm.currentTarget ++ lpMintTouched callee.feeTo)) :
     ∃ (finish : State) (K' : WriterKey → Prop), PairHistoryReplayed pair trace K₀ st₀ finish K' ∧
@@ -514,7 +509,7 @@ theorem pair_history_burn_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
     rw [state, futureCode]
     rfl
   obtain ⟨run, _⟩ := burn_bytecode_forward_consumes
-    (current := { state := finish, logs := [], updates := [] }) [] helper codeEq fork value size
+    (current := { state := finish, logs := [], updates := [] }) [] codeEq fork value size
     guard selector repOwn tracked pairSem pairSem_image installedPre callee guards
   exact ⟨run, rfl, fun newFresh => pair_live_outcome initial fresh futureCode replayed run target
     state codeEq fork output representable newFresh⟩
@@ -522,8 +517,7 @@ theorem pair_history_burn_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
 /-- **`skim` after any configured history.**  Given the callee-only skim environment at the future
 world (`SkimForwardEnv`: both `balanceOf(pair)` `STATICCALL`s and both transfer `CALL`s with their
 replies and returned gas, the code checks, the lock and unlock sentries, and the goal's token-call
-clause `NoPairWriteOutsideLock` for the first transfer) and the transfer helper `SwapSafeTransferForward` (a
-named premise until it is proved): whenever the model accepts the decoded skim at the history's
+clause `NoPairWriteOutsideLock` for the first transfer; the `_safeTransfer` helper is `safeTransfer_dynamic_forward`): whenever the model accepts the decoded skim at the history's
 state `finish` over a transcript whose balance answers are the callees' actual ones, a pc-zero run
 exists at gas `callee.gas` halting at residual `g`; under HASH-T freshness of its own rows its post
 storage represents the model's next state.  Model acceptance enters through
@@ -534,8 +528,6 @@ theorem pair_history_skim_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
     (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
     (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
     (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
-    {transferPre : Nat → B256 → Nat} {transferPost : Nat → B256 → Bytes → Nat}
-    (helper : SwapSafeTransferForward transferPre transferPost)
     {sevm : Sevm} {pre : Devm} {g : Nat}
     (target : sevm.currentTarget = pair) (state : pre.state = future.state)
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
@@ -543,7 +535,7 @@ theorem pair_history_skim_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
     (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
     (abi : (32 : B256) ≤ sevm.data.length.toB256 - 4)
     (selector : Blanc.Sevm.selector sevm = 0xbc25cf77)
-    (callee : SkimForwardEnv transferPre transferPost sevm pre g) :
+    (callee : SkimForwardEnv sevm pre g) :
     ∃ (finish : State) (K' : WriterKey → Prop), PairHistoryReplayed pair trace K₀ st₀ finish K' ∧
       ∀ (transcript : Transcript) (returndata : Bytes),
         transcript.firstWord = callee.balance0 →
@@ -570,7 +562,7 @@ theorem pair_history_skim_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
     rw [state, futureCode]
     rfl
   obtain ⟨run⟩ := callee.run_of_model (current := { state := finish, logs := [], updates := [] })
-    helper [] rep pairSem pairSem_image installedPre output codeEq fork value size selector abi
+    [] rep pairSem pairSem_image installedPre output codeEq fork value size selector abi
     conditions
   exact ⟨run, rfl, fun newFresh => pair_live_outcome initial fresh futureCode replayed run target
     state codeEq fork output representable newFresh⟩

@@ -8,8 +8,8 @@ import Blanc.Lift.ExactWalkSolc
 /-! Forward (gas-exact) prefix of the skim entry: the PC0 guards, the selector
 dispatch to `t_059f_c80`, the ABI head guard of wrapper80 and the lock read of
 entry34. The mirror of `skimSelector_inv`, `skimWrapper_inv` and `skimLock_inv`;
-the two transfers reuse the shared `_safeTransfer` hypothesis
-(`SwapSafeTransferForward`, owned by the parallel worker) and the two
+the two transfers reuse the shared `_safeTransfer` helper
+(`safeTransfer_dynamic_forward`) and the two
 `balanceOf` queries reuse `SwapBalanceEnv`, so nothing generic is proved here. -/
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
@@ -385,37 +385,33 @@ theorem skimDecode_exact {sevm : Sevm} {b : Devm} {L3 : List B256} {M : Mem}
   exact rx_callRet rfl (sub59_exact cover (by simp only [List.length_cons]; omega)) tail
 
 /-- Forward helper-call site (dual of the `t_1a26` inversion): push the helper
-index and enter `t_1fdb_c57` through the cross-host hypothesis. -/
-theorem skimHelperSite_exact {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b d : Devm} {L : List B256} {M : Mem} {callGas G : Nat}
+index and enter `t_1fdb_c57` through `safeTransfer_dynamic_forward`. -/
+theorem skimHelperSite_exact {sevm : Sevm} {b d : Devm} {L : List B256} {M : Mem} {callGas G : Nat}
     {p amount toWord token rho : B256} {k : SFunc} {o : Outcome}
-    (helper : SwapSafeTransferForward pre post)
     (fork : CoveredFork sevm.benvStat.fork) (room : L.length ≤ 1000)
     (mem : PtrMem p M.size M) (sentinel : memWord M 96 = 0)
     (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256)
-    (env : SwapTransferCallForward post sevm b L M M.size p amount toWord token rho
+    (env : SwapTransferCallForward sevm b L M M.size p amount toWord token rho
       callGas G d)
     (cont : SFunc.RunExact cert.prog sevm
       (St d L (swapTransferMemory M p amount toWord d.returnData) G) k o) :
     SFunc.RunExact cert.prog sevm
-      (St b (amount :: toWord :: token :: rho :: L) M (callGas + pre M.size p + 12))
+      (St b (amount :: toWord :: token :: rho :: L) M (callGas + safeTransferPreCharge M.size p + 12))
       (.dest (.next (.push [0x1f, 0xdb] (by decide)) (.callNext 57 k))) o := by
   apply rx_dest
   apply rx_push (w := 0x1fdb) rfl (by simp only [List.length_cons]; omega)
   exact rx_callRet (show cert.prog[57]? = some t_1fdb_c57 from rfl)
-    (helper sevm b d L M M.size callGas G p amount toWord token rho fork mem sentinel
+    (safeTransfer_dynamic_forward sevm b d L M M.size callGas G p amount toWord token rho fork mem sentinel
       lower width room env.call env.success env.accepted env.gas) cont
 
 /-- Pointer, zero slot and output threading through one unconditional helper
 call (the taken branch of `swapFwdOpt_layout`, which skim always takes). -/
-theorem skimTransferLayout {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b d : Devm} {L : List B256} {M : Mem} {n callGas G k : Nat}
+theorem skimTransferLayout {sevm : Sevm} {b d : Devm} {L : List B256} {M : Mem} {n callGas G k : Nat}
     {p a toWord token rho : B256}
-    (helper : SwapSafeTransferForward pre post)
     (fork : CoveredFork sevm.benvStat.fork) (room : L.length ≤ 1000)
     (mem : PtrMem p n M) (sentinel : memWord M 96 = 0)
     (lower : 128 ≤ p.toNat) (upper : p.toNat < 2 ^ k) (wide : 2 ^ k + 2 ^ 161 ≤ 2 ^ 256)
-    (env : SwapTransferCallForward post sevm b L M M.size p a toWord token rho
+    (env : SwapTransferCallForward sevm b L M M.size p a toWord token rho
       callGas G d) :
     (∃ n', PtrMem (swapMovedPointer p d.returnData) n'
       (swapTransferMemory M p a toWord d.returnData)) ∧
@@ -428,7 +424,7 @@ theorem skimTransferLayout {pre : Nat → B256 → Nat} {post : Nat → B256 →
     omega
   have sh := env.reply_short fork
   have memN : PtrMem p M.size M := by rw [mem.size]; exact mem
-  have run := helper sevm b d L M M.size callGas G p a toWord token rho fork memN
+  have run := safeTransfer_dynamic_forward sevm b d L M M.size callGas G p a toWord token rho fork memN
     sentinel lower width room env.call env.success env.accepted env.gas
   obtain ⟨_, _, _, _, _, ptrN, _fit⟩ := safeTransfer_dynamicCall_inv
     (P := fun e d n d' => Ninst.Run e d n d') (fun h => h) mem lower width
@@ -816,10 +812,8 @@ private theorem skimMemExtSize_window {n i sz : Nat} (h32 : n % 32 = 0) (hsz : 0
 /-- Forward second half: reserve1 reload through the second query, decode,
 helper transfer and unlock to `STOP`. The two callees are environment
 premises; `cover1` is the checked-subtraction guard. -/
-theorem skimSecondHalf_exact {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b : Devm} {M' : Mem} {n1 : Nat} {p1 t1 t0 toWord tag : B256} {R0 : List B256}
+theorem skimSecondHalf_exact {sevm : Sevm} {b : Devm} {M' : Mem} {n1 : Nat} {p1 t1 t0 toWord tag : B256} {R0 : List B256}
     {g s8' c1' c2' sunlock callGasQ1 callGasT1 : Nat} {qd1 dt1 : Devm}
-    (helper : SwapSafeTransferForward pre post)
     (fork : CoveredFork sevm.benvStat.fork)
     (nonstatic : sevm.isStatic = false)
     (mem' : PtrMem p1 n1 M')
@@ -851,10 +845,10 @@ theorem skimSecondHalf_exact {pre : Nat → B256 → Nat} {post : Nat → B256 �
         skimReserve1Word (b.getStorVal sevm.currentTarget 8) :: 0x1a26 :: toWord :: t1 ::
         0x1aca :: t1 :: t0 :: toWord :: tag :: R0)
       qd1 callGasQ1 (((callGasT1 +
-        pre (((skimRequestMemory M' p1 sevm.currentTarget).extends
+        safeTransferPreCharge (((skimRequestMemory M' p1 sevm.currentTarget).extends
           [(p1.toNat, 36), (p1.toNat, 32)]).write p1.toNat
           (qd1.returnData.take 32)).size p1 + 12)) + 80))
-    (tenv1 : SwapTransferCallForward post sevm qd1
+    (tenv1 : SwapTransferCallForward sevm qd1
       (t1 :: t0 :: toWord :: tag :: R0)
       (((skimRequestMemory M' p1 sevm.currentTarget).extends
         [(p1.toNat, 36), (p1.toNat, 32)]).write p1.toNat (qd1.returnData.take 32))
@@ -930,7 +924,7 @@ theorem skimSecondHalf_exact {pre : Nat → B256 → Nat} {post : Nat → B256 �
   refine skimSecondLine_exact fork mem' lower1 width1 code1 _ _ _ es8' ec1' ec2' room1 ?_
   refine skimQuery1Call_exact fork memR (by omega) room1 qenv1 ?_
   refine skimDecode_exact mR1 hle wordEq cover1 roomD ?_
-  refine skimHelperSite_exact helper fork roomH memRN sent1 lower1
+  refine skimHelperSite_exact fork roomH memRN sent1 lower1
     (by omega) tenv1 ?_
   exact skimUnlock_exact fork esunlock sentryU nonstatic roomU
 
@@ -938,10 +932,8 @@ theorem skimSecondHalf_exact {pre : Nat → B256 → Nat} {post : Nat → B256 �
 helper transfer, into an arbitrary `t_1a2b` continuation. The query and the
 transfer are environment premises; `cover0` is the checked-subtraction
 guard. -/
-theorem skimFirstHalf_exact {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b : Devm} {toWord : B256} {R : List B256} {o : Outcome}
+theorem skimFirstHalf_exact {sevm : Sevm} {b : Devm} {toWord : B256} {R : List B256} {o : Outcome}
     {s12 sst s6 s7 s8 c1 c2 callGasQ0 callGasT0 Gc : Nat} {qd0 dt0 : Devm}
-    (helper : SwapSafeTransferForward pre post)
     (fork : CoveredFork sevm.benvStat.fork)
     (nonstatic : sevm.isStatic = false)
     (unlockedSlot : b.getStorVal sevm.currentTarget 12 = 1)
@@ -969,9 +961,9 @@ theorem skimFirstHalf_exact {pre : Nat → B256 → Nat} {post : Nat → B256 �
       (164 :: 0x70a08231 :: skimToken0 sevm b :: skimReserve0 sevm b :: 0x1a26 :: toWord ::
         skimToken0 sevm b :: 0x1a2b :: skimToken1 sevm b :: skimToken0 sevm b :: toWord :: R)
       qd0 callGasQ0 (((callGasT0 +
-        pre (balanceReplyMemory getterInitMemory sevm.currentTarget
+        safeTransferPreCharge (balanceReplyMemory getterInitMemory sevm.currentTarget
           qd0.returnData).size 128 + 12)) + 80))
-    (tenv0 : SwapTransferCallForward post sevm qd0
+    (tenv0 : SwapTransferCallForward sevm qd0
       (skimToken1 sevm b :: skimToken0 sevm b :: toWord :: R)
       (balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData)
       ((balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData).size)
@@ -1014,7 +1006,7 @@ theorem skimFirstHalf_exact {pre : Nat → B256 → Nat} {post : Nat → B256 �
     esst es6 es7 es8 ec1 ec2 sentry roomF ?_
   refine skimQuery0Call_exact fork req0 roomQ qenv0 ?_
   refine skimDecode_exact reply0 (by decide) wordEq0 cover0 roomD ?_
-  refine skimHelperSite_exact helper fork roomH memN0 sent0 (by decide) (by decide)
+  refine skimHelperSite_exact fork roomH memN0 sent0 (by decide) (by decide)
     tenv0 cont
 
 /-- **Forward skim schedule from pc zero.** From the nonpayable, size and
@@ -1027,9 +1019,8 @@ canonical skim frame (`skim_bytecode_exact_consumes_own`) under trace-local
 HASH-T over its own trace universe. The callee frames are forward-environment
 premises (ENV class): this is a conditional universal construction, not an
 existential execution for arbitrary callees.
-CROSS-HOST: conditional on `SwapSafeTransferForward`. -/
+The `_safeTransfer` helper is `safeTransfer_dynamic_forward`. -/
 theorem skim_bytecode_forward_consumes {K : WriterKey → Prop} {current : Checkpoint}
-    {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
     {sevm : Sevm} {b : Devm}
     {callGasQ0 callGasT0 callGasQ1 callGasT1 g : Nat} {qd0 dt0 qd1 dt1 : Devm}
     (invocation : List Nat)
@@ -1042,7 +1033,6 @@ theorem skim_bytecode_forward_consumes {K : WriterKey → Prop} {current : Check
     (selector : Blanc.Sevm.selector sevm = 0xbc25cf77)
     (abi : (32 : B256) ≤ sevm.data.length.toB256 - 4)
     (unlocked : current.state.unlocked = 1) (nonstatic : sevm.isStatic = false)
-    (helper : SwapSafeTransferForward pre post)
     (code0 : (((skimCachedWorld sevm b).getCode
       (skimToken0 sevm b).toAdr).size.toB256) ≠ 0)
     (sentry : gCallStipend < ((((callGasQ0 + 5) +
@@ -1061,9 +1051,9 @@ theorem skim_bytecode_forward_consumes {K : WriterKey → Prop} {current : Check
         skimToWord sevm :: skimToken0 sevm b :: 0x1a2b :: skimToken1 sevm b ::
         skimToken0 sevm b :: skimToWord sevm :: [0x0257, 0xbc25cf77])
       qd0 callGasQ0 (((callGasT0 +
-        pre (balanceReplyMemory getterInitMemory sevm.currentTarget
+        safeTransferPreCharge (balanceReplyMemory getterInitMemory sevm.currentTarget
           qd0.returnData).size 128 + 12)) + 80))
-    (tenv0 : SwapTransferCallForward post sevm qd0
+    (tenv0 : SwapTransferCallForward sevm qd0
       (skimToken1 sevm b :: skimToken0 sevm b :: skimToWord sevm :: [0x0257, 0xbc25cf77])
       (balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData)
       ((balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData).size)
@@ -1117,7 +1107,7 @@ theorem skim_bytecode_forward_consumes {K : WriterKey → Prop} {current : Check
         skimToWord sevm :: skimToken1 sevm b :: 0x1aca :: skimToken1 sevm b ::
         skimToken0 sevm b :: skimToWord sevm :: [0x0257, 0xbc25cf77])
       qd1 callGasQ1 (((callGasT1 +
-        pre (((skimRequestMemory
+        safeTransferPreCharge (((skimRequestMemory
           (swapTransferMemory
             (balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData)
             128 (Bytes.toB256 (qd0.returnData.take 32) - skimReserve0 sevm b)
@@ -1128,7 +1118,7 @@ theorem skim_bytecode_forward_consumes {K : WriterKey → Prop} {current : Check
           (swapMovedPointer 128 dt0.returnData).toNat
           (qd1.returnData.take 32)).size
           (swapMovedPointer 128 dt0.returnData) + 12)) + 80))
-    (tenv1 : SwapTransferCallForward post sevm qd1
+    (tenv1 : SwapTransferCallForward sevm qd1
       (skimToken1 sevm b :: skimToken0 sevm b :: skimToWord sevm :: [0x0257, 0xbc25cf77])
       (((skimRequestMemory
         (swapTransferMemory
@@ -1271,7 +1261,7 @@ theorem skim_bytecode_forward_consumes {K : WriterKey → Prop} {current : Check
     rw [reply0.size]
     exact reply0
   obtain ⟨⟨n', memT⟩, sentT, lowerT, widthT, _⟩ :=
-    skimTransferLayout (k := 161) helper fork
+    skimTransferLayout (k := 161) fork
       (by simp only [List.length_cons, List.length_nil]; omega :
         (skimToken1 sevm b :: skimToken0 sevm b :: skimToWord sevm ::
           [0x0257, 0xbc25cf77]).length ≤ 1000)
@@ -1287,7 +1277,7 @@ theorem skim_bytecode_forward_consumes {K : WriterKey → Prop} {current : Check
         (skimToWord sevm) dt0.returnData) := by
     rw [memT.size]
     exact memT
-  have secondHalfRun := skimSecondHalf_exact helper fork nonstatic memT' lowerT widthT sentT
+  have secondHalfRun := skimSecondHalf_exact fork nonstatic memT' lowerT widthT sentT
     code1 rfl rfl rfl rfl sentryU
     (by simp only [List.length_cons, List.length_nil]; omega :
       ([0xbc25cf77] : List B256).length ≤ 970)
@@ -1300,7 +1290,7 @@ theorem skim_bytecode_forward_consumes {K : WriterKey → Prop} {current : Check
     (by simp only [List.length_cons, List.length_nil]; omega :
       ([0xbc25cf77] : List B256).length ≤ 1000)
     qenv1 tenv1 cover1
-  have firstHalfRun := skimFirstHalf_exact helper fork nonstatic unlockedRaw code0
+  have firstHalfRun := skimFirstHalf_exact fork nonstatic unlockedRaw code0
     rfl rfl rfl rfl rfl rfl rfl sentry
     (by simp only [List.length_cons, List.length_nil]; omega :
       ([0x0257, 0xbc25cf77] : List B256).length ≤ 1000)

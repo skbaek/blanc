@@ -36,8 +36,7 @@ staged state with its success, reply and returned gas, the code checks of both t
 unlock sentries, and the goal's token-call clause (`NoPairWriteOutsideLock`) for the first transfer
 `CALL`, the only one whose child the Pair's own later reads depend on. No model acceptance fact and no
 successful run is part of it. -/
-structure SkimForwardEnv (pre : Nat → B256 → Nat) (post : Nat → B256 → Bytes → Nat)
-    (sevm : Sevm) (b : Devm) (g : Nat) where
+structure SkimForwardEnv (sevm : Sevm) (b : Devm) (g : Nat) where
   qd0 : Devm
   dt0 : Devm
   qd1 : Devm
@@ -64,9 +63,9 @@ structure SkimForwardEnv (pre : Nat → B256 → Nat) (post : Nat → B256 → B
         skimToWord sevm :: skimToken0 sevm b :: 0x1a2b :: skimToken1 sevm b ::
         skimToken0 sevm b :: skimToWord sevm :: [0x0257, 0xbc25cf77])
       qd0 callGasQ0 (((callGasT0 +
-        pre (balanceReplyMemory getterInitMemory sevm.currentTarget
+        safeTransferPreCharge (balanceReplyMemory getterInitMemory sevm.currentTarget
           qd0.returnData).size 128 + 12)) + 80)
-  tenv0 : SwapTransferCallForward post sevm qd0
+  tenv0 : SwapTransferCallForward sevm qd0
       (skimToken1 sevm b :: skimToken0 sevm b :: skimToWord sevm :: [0x0257, 0xbc25cf77])
       (balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData)
       ((balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData).size)
@@ -119,7 +118,7 @@ structure SkimForwardEnv (pre : Nat → B256 → Nat) (post : Nat → B256 → B
         skimToWord sevm :: skimToken1 sevm b :: 0x1aca :: skimToken1 sevm b ::
         skimToken0 sevm b :: skimToWord sevm :: [0x0257, 0xbc25cf77])
       qd1 callGasQ1 (((callGasT1 +
-        pre (((skimRequestMemory
+        safeTransferPreCharge (((skimRequestMemory
           (swapTransferMemory
             (balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData)
             128 (Bytes.toB256 (qd0.returnData.take 32) - skimReserve0 sevm b)
@@ -130,7 +129,7 @@ structure SkimForwardEnv (pre : Nat → B256 → Nat) (post : Nat → B256 → B
           (swapMovedPointer 128 dt0.returnData).toNat
           (qd1.returnData.take 32)).size
           (swapMovedPointer 128 dt0.returnData) + 12)) + 80)
-  tenv1 : SwapTransferCallForward post sevm qd1
+  tenv1 : SwapTransferCallForward sevm qd1
       (skimToken1 sevm b :: skimToken0 sevm b :: skimToWord sevm :: [0x0257, 0xbc25cf77])
       (((skimRequestMemory
         (swapTransferMemory
@@ -158,8 +157,7 @@ structure SkimForwardEnv (pre : Nat → B256 → Nat) (post : Nat → B256 → B
   keeps0 : NoPairWriteOutsideLock sevm qd0 dt0
 
 /-- The pc-zero gas. -/
-def SkimForwardEnv.gas {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b : Devm} {g : Nat} (env : SkimForwardEnv pre post sevm b g) : Nat :=
+def SkimForwardEnv.gas {sevm : Sevm} {b : Devm} {g : Nat} (env : SkimForwardEnv sevm b g) : Nat :=
   (env.callGasQ0 + 5) +
       sstoreCost sevm (afterSload sevm b 12) 12 0 +
       sloadCost sevm (syncLockedWorld sevm b) 6 +
@@ -170,8 +168,7 @@ def SkimForwardEnv.gas {pre : Nat → B256 → Nat} {post : Nat → B256 → Byt
       sloadCost sevm b 12 + 23 + 63 + 123 + 63
 
 /-- The halted world. -/
-def SkimForwardEnv.post {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b : Devm} {g : Nat} (env : SkimForwardEnv pre post sevm b g) : Devm :=
+def SkimForwardEnv.post {sevm : Sevm} {b : Devm} {g : Nat} (env : SkimForwardEnv sevm b g) : Devm :=
   St (afterSstore sevm env.dt1 12 1) [0xbc25cf77]
       (swapTransferMemory
         (((skimRequestMemory
@@ -189,12 +186,10 @@ def SkimForwardEnv.post {pre : Nat → B256 → Nat} {post : Nat → B256 → By
         (skimToWord sevm) env.dt1.returnData) g
 
 /-- The two answers of the skim queries. -/
-def SkimForwardEnv.balance0 {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b : Devm} {g : Nat} (env : SkimForwardEnv pre post sevm b g) : B256 :=
+def SkimForwardEnv.balance0 {sevm : Sevm} {b : Devm} {g : Nat} (env : SkimForwardEnv sevm b g) : B256 :=
   Bytes.toB256 (env.qd0.returnData.take 32)
 
-def SkimForwardEnv.balance1 {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b : Devm} {g : Nat} (env : SkimForwardEnv pre post sevm b g) : B256 :=
+def SkimForwardEnv.balance1 {sevm : Sevm} {b : Devm} {g : Nat} (env : SkimForwardEnv sevm b g) : B256 :=
   Bytes.toB256 (env.qd1.returnData.take 32)
 
 /-! ## The model's skim guards -/
@@ -392,11 +387,10 @@ theorem runTyped_skim_conditions {st : State} {ctx : Context} {recipient : Adr}
 /-- **The skim forward run from the model.**  At a frame whose storage represents `current.state`,
 the model's skim guards at the callee environment's actual answers give the pc-zero run of the
 original bytes from `skim_bytecode_forward_consumes`, at gas `env.gas` and halting in `env.post`.
-CROSS-HOST: conditional on `SwapSafeTransferForward`. -/
+The `_safeTransfer` helper is `safeTransfer_dynamic_forward`. -/
 theorem SkimForwardEnv.run_of_model {K : WriterKey → Prop} {current : Checkpoint}
-    {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b : Devm} {g : Nat} (env : SkimForwardEnv pre post sevm b g)
-    (helper : SwapSafeTransferForward pre post) (invocation : List Nat)
+    {sevm : Sevm} {b : Devm} {g : Nat} (env : SkimForwardEnv sevm b g)
+    (invocation : List Nat)
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
     (sem : CodeSem) (image : sem.image = some code.toList)
     (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
@@ -438,7 +432,7 @@ theorem SkimForwardEnv.run_of_model {K : WriterKey → Prop} {current : Checkpoi
     rw [kept, skimReserve1Word_eq, slots.2.1, B256.le_iff_toNat_le_toNat, nat1]
     exact cover1
   obtain ⟨run, _⟩ := skim_bytecode_forward_consumes invocation rep sem image installed
-    freshOutput codeEq fork value size selector abi unlocked nonstatic helper env.code0
+    freshOutput codeEq fork value size selector abi unlocked nonstatic env.code0
     env.sentry env.sentryU env.qenv0 env.tenv0 wordCover0 env.code1 env.qenv1 env.tenv1
     wordCover1
   exact ⟨run⟩

@@ -6,14 +6,14 @@ import Blanc.Lift.MutableCallPost
 mirror of `swapTransfers_inv`. Each nonzero output amount calls the shared `_safeTransfer`
 helper `t_1fdb_c57` at the current free pointer. The helper's dynamic-pointer forward walk
 `safeTransfer_dynamic_forward` (the moved-pointer sibling of `safeTransfer_first_exact`)
-lives in `SafeTransferWalk` with the predicate `SwapSafeTransferForward`, seen here via
-`SwapTransfer`. -/
+lives in `SafeTransferWalk` (predicate `SwapSafeTransferForward`); every lemma here uses it
+at the concrete charges `safeTransferPreCharge`/`safeTransferPostCharge`. -/
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
 /-- The primitive data of one actual optimistic transfer `CALL` at pointer `p`: the call
 step from the staged state, its success flag, the accepted reply and its residual gas. -/
-structure SwapTransferCallForward (post : Nat → B256 → Bytes → Nat) (sevm : Sevm) (b : Devm)
+structure SwapTransferCallForward (sevm : Sevm) (b : Devm)
     (L : List B256) (M : Mem) (n : Nat) (p amount toWord token rho : B256) (callGas G : Nat)
     (d : Devm) : Prop where
   call : Ninst.RunCompiled sevm
@@ -27,18 +27,16 @@ structure SwapTransferCallForward (post : Nat → B256 → Bytes → Nat) (sevm 
     96 :: 0 :: amount :: toWord :: token :: rho :: L
   accepted : d.returnData = [] ∨ (32 ≤ d.returnData.length ∧
     Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0)
-  gas : d.gasLeft = G + post n p d.returnData
+  gas : d.gasLeft = G + safeTransferPostCharge n p d.returnData
 
 /-- The first transfer site taken (`amount0Out ≠ 0`): 43 gas around the helper.
-CROSS-HOST: conditional on `SwapSafeTransferForward`. -/
-theorem swapFwdTransfer0_call {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b d : Devm} {R : List B256} {M : Mem} {n callGas G : Nat}
+The `_safeTransfer` helper is `safeTransfer_dynamic_forward`. -/
+theorem swapFwdTransfer0_call {sevm : Sevm} {b d : Devm} {R : List B256} {M : Mem} {n callGas G : Nat}
     {p t1 t0 r1 r0 len start toWord a1 a0 ρ : B256} {o : Outcome}
-    (helper : SwapSafeTransferForward pre post)
     (fork : CoveredFork sevm.benvStat.fork) (room : R.length ≤ 988)
     (mem : PtrMem p n M) (sentinel : memWord M 96 = 0)
     (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256) (nonzero : a0 ≠ 0)
-    (env : SwapTransferCallForward post sevm b
+    (env : SwapTransferCallForward sevm b
       (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: ρ :: R) M n
       p a0 toWord t0 0x8d0 callGas G d)
     (cont : SFunc.RunExact cert.prog sevm
@@ -46,7 +44,7 @@ theorem swapFwdTransfer0_call {pre : Nat → B256 → Nat} {post : Nat → B256 
         (swapTransferMemory M p a0 toWord d.returnData) G) t_08d0_c4 o) :
     SFunc.RunExact cert.prog sevm
       (St b (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: ρ :: R) M
-        (callGas + pre n p + 43)) t_08bf_c4 o := by
+        (callGas + safeTransferPreCharge n p + 43)) t_08bf_c4 o := by
   unfold t_08bf_c4
   sfw_rx; sfw_rx; sfw_rx; sfw_rx
   rw [show B256.eqCheck a0 0 = 0 by simp only [B256.eqCheck, nonzero, ite_false]]
@@ -54,7 +52,7 @@ theorem swapFwdTransfer0_call {pre : Nat → B256 → Nat} {post : Nat → B256 
   unfold t_08c6_c4
   sfw_rx; sfw_rx; sfw_rx; sfw_rx; sfw_rx
   exact rx_callRet (show cert.prog[57]? = some t_1fdb_c57 from rfl)
-    (helper sevm b d _ M n callGas G p a0 toWord t0 0x8d0 fork mem sentinel lower width
+    (safeTransfer_dynamic_forward sevm b d _ M n callGas G p a0 toWord t0 0x8d0 fork mem sentinel lower width
       (by simp only [List.length_cons]; omega) env.call env.success env.accepted env.gas) cont
 
 /-- The first transfer site skipped (`amount0Out = 0`): 20 gas. -/
@@ -71,15 +69,13 @@ theorem swapFwdTransfer0_skip {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   exact rx_branch_succ (by decide) cont
 
 /-- The second transfer site taken (`amount1Out ≠ 0`): 43 gas around the helper.
-CROSS-HOST: conditional on `SwapSafeTransferForward`. -/
-theorem swapFwdTransfer1_call {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b d : Devm} {R : List B256} {M : Mem} {n callGas G : Nat}
+The `_safeTransfer` helper is `safeTransfer_dynamic_forward`. -/
+theorem swapFwdTransfer1_call {sevm : Sevm} {b d : Devm} {R : List B256} {M : Mem} {n callGas G : Nat}
     {p t1 t0 r1 r0 len start toWord a1 a0 ρ : B256} {o : Outcome}
-    (helper : SwapSafeTransferForward pre post)
     (fork : CoveredFork sevm.benvStat.fork) (room : R.length ≤ 988)
     (mem : PtrMem p n M) (sentinel : memWord M 96 = 0)
     (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256) (nonzero : a1 ≠ 0)
-    (env : SwapTransferCallForward post sevm b
+    (env : SwapTransferCallForward sevm b
       (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: ρ :: R) M n
       p a1 toWord t1 0x8e1 callGas G d)
     (cont : SFunc.RunExact cert.prog sevm
@@ -87,7 +83,7 @@ theorem swapFwdTransfer1_call {pre : Nat → B256 → Nat} {post : Nat → B256 
         (swapTransferMemory M p a1 toWord d.returnData) G) t_08e1_c4 o) :
     SFunc.RunExact cert.prog sevm
       (St b (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: ρ :: R) M
-        (callGas + pre n p + 43)) t_08d0_c4 o := by
+        (callGas + safeTransferPreCharge n p + 43)) t_08d0_c4 o := by
   unfold t_08d0_c4
   sfw_rx; sfw_rx; sfw_rx; sfw_rx
   rw [show B256.eqCheck a1 0 = 0 by simp only [B256.eqCheck, nonzero, ite_false]]
@@ -95,7 +91,7 @@ theorem swapFwdTransfer1_call {pre : Nat → B256 → Nat} {post : Nat → B256 
   unfold t_08d7_c4
   sfw_rx; sfw_rx; sfw_rx; sfw_rx; sfw_rx
   exact rx_callRet (show cert.prog[57]? = some t_1fdb_c57 from rfl)
-    (helper sevm b d _ M n callGas G p a1 toWord t1 0x8e1 fork mem sentinel lower width
+    (safeTransfer_dynamic_forward sevm b d _ M n callGas G p a1 toWord t1 0x8e1 fork mem sentinel lower width
       (by simp only [List.length_cons]; omega) env.call env.success env.accepted env.gas) cont
 
 /-- The second transfer site skipped (`amount1Out = 0`): 20 gas. -/
@@ -178,10 +174,10 @@ theorem swapTransferMemory_zeroSlot {M : Mem} {n : Nat} {p amount toWord : B256}
 supplied `CALL` result `d` contains fewer than `2^160` bytes. Uses the pinned Jaune
 input-size lemma with the literal `inputSize = 68`, exactly as
 `SwapTransferCallForward.output` unwraps the filled `CALL`. -/
-theorem SwapTransferCallForward.reply_short {post : Nat → B256 → Bytes → Nat} {sevm : Sevm}
+theorem SwapTransferCallForward.reply_short {sevm : Sevm}
     {b d : Devm} {L : List B256} {M : Mem} {n : Nat} {p amount toWord token rho : B256}
     {callGas G : Nat} (fork : CoveredFork sevm.benvStat.fork)
-    (env : SwapTransferCallForward post sevm b L M n p amount toWord token rho callGas G d) :
+    (env : SwapTransferCallForward sevm b L M n p amount toWord token rho callGas G d) :
     d.returnData.length < 2 ^ 160 := by
   obtain ⟨xl, filled, step⟩ := env.call
   exact Jaune.call_returnData_length_lt_two_pow_160_of_input_size ⟨xl, filled, 0, step 0⟩ rfl
@@ -200,14 +196,14 @@ def swapOptPtr (p a : B256) (d : Devm) : B256 :=
 
 /-- The charge of an optional transfer site, given the gas `next` its continuation needs:
 20 when skipped; the helper's pre-call charge, the `CALL` state's gas and 43 when taken. -/
-def swapOptGas (pre : Nat → B256 → Nat) (M : Mem) (p a : B256) (callGas next : Nat) : Nat :=
-  if a = 0 then next + 20 else callGas + pre M.size p + 43
+def swapOptGas (M : Mem) (p a : B256) (callGas next : Nat) : Nat :=
+  if a = 0 then next + 20 else callGas + safeTransferPreCharge M.size p + 43
 
 /-- A taken transfer's `CALL` keeps the caller's output buffer. -/
-theorem SwapTransferCallForward.output {post : Nat → B256 → Bytes → Nat} {sevm : Sevm}
+theorem SwapTransferCallForward.output {sevm : Sevm}
     {b d : Devm} {L : List B256} {M : Mem} {n : Nat} {p amount toWord token rho : B256}
     {callGas G : Nat} (fork : CoveredFork sevm.benvStat.fork)
-    (env : SwapTransferCallForward post sevm b L M n p amount toWord token rho callGas G d) :
+    (env : SwapTransferCallForward sevm b L M n p amount toWord token rho callGas G d) :
     d.output = b.output := by
   have raw : Ninst.Run sevm
       (St b (callGas.toB256 :: (token &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
@@ -225,15 +221,13 @@ theorem SwapTransferCallForward.output {post : Nat → B256 → Bytes → Nat} {
 
 /-- One optional transfer keeps the free-pointer carrier, the zero slot and the output buffer,
 and moves the pointer by at most the staging area plus a short reply.
-CROSS-HOST: conditional on `SwapSafeTransferForward`. -/
-theorem swapFwdOpt_layout {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b d : Devm} {L : List B256} {M : Mem} {n callGas G k : Nat}
+The `_safeTransfer` helper is `safeTransfer_dynamic_forward`. -/
+theorem swapFwdOpt_layout {sevm : Sevm} {b d : Devm} {L : List B256} {M : Mem} {n callGas G k : Nat}
     {p a toWord token rho : B256}
-    (helper : SwapSafeTransferForward pre post)
     (fork : CoveredFork sevm.benvStat.fork) (room : L.length ≤ 1000)
     (mem : PtrMem p n M) (sentinel : memWord M 96 = 0)
     (lower : 128 ≤ p.toNat) (upper : p.toNat < 2 ^ k) (wide : 2 ^ k + 2 ^ 161 ≤ 2 ^ 256)
-    (env : a ≠ 0 → SwapTransferCallForward post sevm b L M M.size p a toWord token rho
+    (env : a ≠ 0 → SwapTransferCallForward sevm b L M M.size p a toWord token rho
       callGas G d) :
     (∃ n', PtrMem (swapOptPtr p a d) n' (swapOptMem M p a toWord d)) ∧
     memWord (swapOptMem M p a toWord d) 96 = 0 ∧
@@ -249,7 +243,7 @@ theorem swapFwdOpt_layout {pre : Nat → B256 → Nat} {post : Nat → B256 → 
     have e := env zero
     have sh : d.returnData.length < 2 ^ 160 := e.reply_short fork
     have memN : PtrMem p M.size M := by rw [mem.size]; exact mem
-    have run := helper sevm b d L M M.size callGas G p a toWord token rho fork memN sentinel
+    have run := safeTransfer_dynamic_forward sevm b d L M M.size callGas G p a toWord token rho fork memN sentinel
       lower width room e.call e.success e.accepted e.gas
     obtain ⟨_, _, _, _, _, ptrN, fit⟩ := safeTransfer_dynamicCall_inv
       (P := fun e d n d' => Ninst.Run e d n d') (fun h => h) mem lower width
@@ -272,19 +266,17 @@ branch to the callback branch `t_08e1_c4`: each site is skipped (20 gas) when it
 zero and otherwise is the actual helper call at the current pointer, the second at the pointer
 the first moved. The run lands at the callback branch with the free-pointer carrier, the zero
 slot, the pointer bounds and the output buffer.
-CROSS-HOST: conditional on `SwapSafeTransferForward`. -/
-theorem swapFwdTransfers_exact {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b0 d0 d1 : Devm} {R : List B256} {M0 : Mem} {n0 cg0 cg1 G : Nat}
+The `_safeTransfer` helper is `safeTransfer_dynamic_forward`. -/
+theorem swapFwdTransfers_exact {sevm : Sevm} {b0 d0 d1 : Devm} {R : List B256} {M0 : Mem} {n0 cg0 cg1 G : Nat}
     {p0 t1 t0 r1 r0 len start toWord a1 a0 ρ : B256}
-    (helper : SwapSafeTransferForward pre post)
     (fork : CoveredFork sevm.benvStat.fork) (room : R.length ≤ 988)
     (mem : PtrMem p0 n0 M0) (sentinel : memWord M0 96 = 0)
     (lower : 128 ≤ p0.toNat) (upper : p0.toNat < 2 ^ 161)
-    (env0 : a0 ≠ 0 → SwapTransferCallForward post sevm b0
+    (env0 : a0 ≠ 0 → SwapTransferCallForward sevm b0
       (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: ρ :: R) M0 M0.size
       p0 a0 toWord t0 0x8d0 cg0
-      (swapOptGas pre (swapOptMem M0 p0 a0 toWord d0) (swapOptPtr p0 a0 d0) a1 cg1 G) d0)
-    (env1 : a1 ≠ 0 → SwapTransferCallForward post sevm (swapOptWorld a0 b0 d0)
+      (swapOptGas (swapOptMem M0 p0 a0 toWord d0) (swapOptPtr p0 a0 d0) a1 cg1 G) d0)
+    (env1 : a1 ≠ 0 → SwapTransferCallForward sevm (swapOptWorld a0 b0 d0)
       (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: ρ :: R)
       (swapOptMem M0 p0 a0 toWord d0) (swapOptMem M0 p0 a0 toWord d0).size
       (swapOptPtr p0 a0 d0) a1 toWord t1 0x8e1 cg1 G d1) :
@@ -297,15 +289,15 @@ theorem swapFwdTransfers_exact {pre : Nat → B256 → Nat} {post : Nat → B256
     ((∃ n2, PtrMem p2 n2 M2) ∧ 128 ≤ p2.toNat ∧ p2.toNat < 2 ^ 163 ∧ b2.output = b0.output) ∧
     ∀ o, SFunc.RunExact cert.prog sevm (St b2 L M2 G) t_08e1_c4 o →
       SFunc.RunExact cert.prog sevm
-        (St b0 L M0 (swapOptGas pre M0 p0 a0 cg0 (swapOptGas pre M1 p1 a1 cg1 G))) t_08bf_c4 o := by
+        (St b0 L M0 (swapOptGas M0 p0 a0 cg0 (swapOptGas M1 p1 a1 cg1 G))) t_08bf_c4 o := by
   dsimp only
   have roomL : List.length (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: ρ :: R) ≤ 1000 := by
     simp only [List.length_cons]
     omega
   obtain ⟨⟨n1, mem1⟩, sentinel1, lower1, upper1, out1⟩ :=
-    swapFwdOpt_layout (k := 161) helper fork roomL mem sentinel lower upper (by decide) env0
+    swapFwdOpt_layout (k := 161) fork roomL mem sentinel lower upper (by decide) env0
   obtain ⟨⟨n2, mem2⟩, _, lower2, upper2, out2⟩ :=
-    swapFwdOpt_layout (k := 162) helper fork roomL mem1 sentinel1 lower1
+    swapFwdOpt_layout (k := 162) fork roomL mem1 sentinel1 lower1
       (by have : 2 ^ 161 + 2 ^ 161 = 2 ^ 162 := by decide
           omega) (by decide) env1
   refine ⟨⟨⟨n2, mem2⟩, lower2, by
@@ -321,7 +313,7 @@ theorem swapFwdTransfers_exact {pre : Nat → B256 → Nat} {post : Nat → B256
   have mem1' : PtrMem (swapOptPtr p0 a0 d0) (swapOptMem M0 p0 a0 toWord d0).size (swapOptMem M0 p0 a0 toWord d0) := by rw [mem1.size]; exact mem1
   -- the second site
   have second : SFunc.RunExact cert.prog sevm
-      (St (swapOptWorld a0 b0 d0) (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: ρ :: R) (swapOptMem M0 p0 a0 toWord d0) (swapOptGas pre (swapOptMem M0 p0 a0 toWord d0) (swapOptPtr p0 a0 d0) a1 cg1 G)) t_08d0_c4 o := by
+      (St (swapOptWorld a0 b0 d0) (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: ρ :: R) (swapOptMem M0 p0 a0 toWord d0) (swapOptGas (swapOptMem M0 p0 a0 toWord d0) (swapOptPtr p0 a0 d0) a1 cg1 G)) t_08d0_c4 o := by
     by_cases zero1 : a1 = 0
     · simp only [swapOptGas, zero1, ↓reduceIte]
       simp only [swapOptWorld, swapOptMem, zero1, ↓reduceIte] at cont
@@ -329,7 +321,7 @@ theorem swapFwdTransfers_exact {pre : Nat → B256 → Nat} {post : Nat → B256
       exact swapFwdTransfer1_skip room cont
     · simp only [swapOptGas, zero1, ↓reduceIte]
       simp only [swapOptWorld, swapOptMem, zero1, ↓reduceIte] at cont
-      exact swapFwdTransfer1_call helper fork room mem1' sentinel1 lower1 width1 zero1
+      exact swapFwdTransfer1_call fork room mem1' sentinel1 lower1 width1 zero1
         (env1 zero1) cont
   by_cases zero0 : a0 = 0
   · simp only [swapOptGas, zero0, ↓reduceIte]
@@ -341,6 +333,6 @@ theorem swapFwdTransfers_exact {pre : Nat → B256 → Nat} {post : Nat → B256
     have second' := second
     have e0 := env0 zero0
     simp only [swapOptWorld, swapOptMem, swapOptPtr, zero0, ↓reduceIte] at second' e0
-    exact swapFwdTransfer0_call helper fork room mem0 sentinel lower width0 zero0 e0 second'
+    exact swapFwdTransfer0_call fork room mem0 sentinel lower width0 zero0 e0 second'
 
 end Blanc.Lift.UniswapV2Pair

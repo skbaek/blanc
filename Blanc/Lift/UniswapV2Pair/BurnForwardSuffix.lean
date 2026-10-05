@@ -9,7 +9,7 @@ import Blanc.Lift.UniswapV2Pair.SwapForwardUpdate
 
 The mirrors of `burnTransfers_caller_inv`, `burnFinalBalances_inv`, `burnUpdate_caller_inv`,
 `burnKLast_caller_inv`, `burnEvent_unlock_inv` and `burnAbi_return_inv`.  Both transfers go through the
-named cross-host helper `SwapSafeTransferForward` (as in the swap body), the first at pointer
+proved `_safeTransfer` helper `safeTransfer_dynamic_forward` (as in the swap body), the first at pointer
 `128` and the second at the pointer the first moved.  The final `balanceOf(pair)` callees are
 `SwapBalanceEnv` premises (ENV), exactly as in the swap back half.
 -/
@@ -21,15 +21,13 @@ open Jaune
 /-! ## Transfers -/
 
 /-- Burn's first transfer site, at the free pointer `p` (`128` in the frame).
-CROSS-HOST: conditional on `SwapSafeTransferForward`. -/
-theorem burnFwdTransfer0_call {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b d : Devm} {R : List B256} {M : Mem} {n callGas G : Nat}
+The `_safeTransfer` helper is `safeTransfer_dynamic_forward`. -/
+theorem burnFwdTransfer0_call {sevm : Sevm} {b d : Devm} {R : List B256} {M : Mem} {n callGas G : Nat}
     {p supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ : B256} {o : Outcome}
-    (helper : SwapSafeTransferForward pre post)
     (fork : CoveredFork sevm.benvStat.fork) (room : R.length ≤ 980)
     (mem : PtrMem p n M) (sentinel : memWord M 96 = 0)
     (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256)
-    (env : SwapTransferCallForward post sevm b
+    (env : SwapTransferCallForward sevm b
       (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R) M n
       p amount0 toWord token0 0x1698 callGas G d)
     (cont : SFunc.RunExact cert.prog sevm
@@ -37,26 +35,24 @@ theorem burnFwdTransfer0_call {pre : Nat → B256 → Nat} {post : Nat → B256 
         (swapTransferMemory M p amount0 toWord d.returnData) G) t_1698_c13 o) :
     SFunc.RunExact cert.prog sevm
       (St b (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R) M
-        (callGas + pre n p + 24)) t_168d_c13 o := by
+        (callGas + safeTransferPreCharge n p + 24)) t_168d_c13 o := by
   unfold t_168d_c13
   have call := env.call
   have success := env.success
   unfold burnPricedLocals at call success cont ⊢
   repeat sfw_rx
   exact rx_callRet (show cert.prog[57]? = some t_1fdb_c57 from rfl)
-    (helper sevm b d _ M n callGas G p amount0 toWord token0 0x1698 fork mem sentinel lower width
+    (safeTransfer_dynamic_forward sevm b d _ M n callGas G p amount0 toWord token0 0x1698 fork mem sentinel lower width
       (by simp only [List.length_cons]; omega) call success env.accepted env.gas) cont
 
 /-- Burn's second transfer site, at the moved pointer `p`.
-CROSS-HOST: conditional on `SwapSafeTransferForward`. -/
-theorem burnFwdTransfer1_call {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b d : Devm} {R : List B256} {M : Mem} {n callGas G : Nat}
+The `_safeTransfer` helper is `safeTransfer_dynamic_forward`. -/
+theorem burnFwdTransfer1_call {sevm : Sevm} {b d : Devm} {R : List B256} {M : Mem} {n callGas G : Nat}
     {p supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ : B256} {o : Outcome}
-    (helper : SwapSafeTransferForward pre post)
     (fork : CoveredFork sevm.benvStat.fork) (room : R.length ≤ 980)
     (mem : PtrMem p n M) (sentinel : memWord M 96 = 0)
     (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256)
-    (env : SwapTransferCallForward post sevm b
+    (env : SwapTransferCallForward sevm b
       (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R) M n
       p amount1 toWord token1 0x16a3 callGas G d)
     (cont : SFunc.RunExact cert.prog sevm
@@ -64,14 +60,14 @@ theorem burnFwdTransfer1_call {pre : Nat → B256 → Nat} {post : Nat → B256 
         (swapTransferMemory M p amount1 toWord d.returnData) G) t_16a3_c13 o) :
     SFunc.RunExact cert.prog sevm
       (St b (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R) M
-        (callGas + pre n p + 24)) t_1698_c13 o := by
+        (callGas + safeTransferPreCharge n p + 24)) t_1698_c13 o := by
   unfold t_1698_c13
   have call := env.call
   have success := env.success
   unfold burnPricedLocals at call success cont ⊢
   repeat sfw_rx
   exact rx_callRet (show cert.prog[57]? = some t_1fdb_c57 from rfl)
-    (helper sevm b d _ M n callGas G p amount1 toWord token1 0x16a3 fork mem sentinel lower width
+    (safeTransfer_dynamic_forward sevm b d _ M n callGas G p amount1 toWord token1 0x16a3 fork mem sentinel lower width
       (by simp only [List.length_cons]; omega) call success env.accepted env.gas) cont
 
 /-! ## Final balances -/
@@ -560,8 +556,7 @@ return: both transfer `CALL`s (`SwapTransferCallForward`), both final `balanceOf
 (`SwapBalanceEnv`), each returning exactly the gas the next segment needs, and the update,
 checkpoint and unlock sentries. The answers' uint112 bounds and the frame's mutability are the
 model's guards, premises of `burnBack_exact`. No successful suffix run is assumed. -/
-structure BurnBackForwardEnv (pre : Nat → B256 → Nat) (post : Nat → B256 → Bytes → Nat)
-    (sevm : Sevm) (b : Devm) (M : Mem) (p0 : B256) (w : BurnSuffixWords) (R : List B256)
+structure BurnBackForwardEnv (sevm : Sevm) (b : Devm) (M : Mem) (p0 : B256) (w : BurnSuffixWords) (R : List B256)
     (G : Nat) where
   d0 : Devm
   d1 : Devm
@@ -571,10 +566,10 @@ structure BurnBackForwardEnv (pre : Nat → B256 → Nat) (post : Nat → B256 �
   callGas1 : Nat
   balanceGas0 : Nat
   balanceGas1 : Nat
-  transfer0 : SwapTransferCallForward post sevm b (w.locals w.balance1 w.balance0 R) M M.size p0
+  transfer0 : SwapTransferCallForward sevm b (w.locals w.balance1 w.balance0 R) M M.size p0
     w.amount0 w.recipient w.token0 0x1698 callGas0
-    (callGas1 + pre (burnSuffixMem1 M p0 w d0).size (swapMovedPointer p0 d0.returnData) + 24) d0
-  transfer1 : SwapTransferCallForward post sevm d0 (w.locals w.balance1 w.balance0 R)
+    (callGas1 + safeTransferPreCharge (burnSuffixMem1 M p0 w d0).size (swapMovedPointer p0 d0.returnData) + 24) d0
+  transfer1 : SwapTransferCallForward sevm d0 (w.locals w.balance1 w.balance0 R)
     (burnSuffixMem1 M p0 w d0) (burnSuffixMem1 M p0 w d0).size (swapMovedPointer p0 d0.returnData)
     w.amount1 w.recipient w.token1 0x16a3 callGas1
     (balanceGas0 + 5 + swapRequestCharge d1 (burnSuffixMem2 M p0 w d0 d1).size
@@ -604,22 +599,19 @@ structure BurnBackForwardEnv (pre : Nat → B256 → Nat) (post : Nat → B256 �
   unlock : gCallStipend < G + 18 + burnSuffixUnlockCost sevm w e0 e1
 
 /-- The gas the suffix is entered with. -/
-def BurnBackForwardEnv.gas {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b : Devm} {M : Mem} {p0 : B256} {w : BurnSuffixWords} {R : List B256} {G : Nat}
-    (env : BurnBackForwardEnv pre post sevm b M p0 w R G) : Nat :=
-  env.callGas0 + pre M.size p0 + 24
+def BurnBackForwardEnv.gas {sevm : Sevm} {b : Devm} {M : Mem} {p0 : B256} {w : BurnSuffixWords} {R : List B256} {G : Nat}
+    (env : BurnBackForwardEnv sevm b M p0 w R G) : Nat :=
+  env.callGas0 + safeTransferPreCharge M.size p0 + 24
 
 /-- The world the suffix returns. -/
-def BurnBackForwardEnv.post {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b : Devm} {M : Mem} {p0 : B256} {w : BurnSuffixWords} {R : List B256} {G : Nat}
-    (env : BurnBackForwardEnv pre post sevm b M p0 w R G) : Devm :=
+def BurnBackForwardEnv.post {sevm : Sevm} {b : Devm} {M : Mem} {p0 : B256} {w : BurnSuffixWords} {R : List B256} {G : Nat}
+    (env : BurnBackForwardEnv sevm b M p0 w R G) : Devm :=
   burnUnlockPost sevm (burnKLastPost sevm (burnSuffixUpdated sevm w env.e0 env.e1) w.feeFlag)
     w.recipient w.amount0 w.amount1
 
 /-- The memory the suffix returns. -/
-def BurnBackForwardEnv.memory {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b : Devm} {M : Mem} {p0 : B256} {w : BurnSuffixWords} {R : List B256} {G : Nat}
-    (env : BurnBackForwardEnv pre post sevm b M p0 w R G) : Mem :=
+def BurnBackForwardEnv.memory {sevm : Sevm} {b : Devm} {M : Mem} {p0 : B256} {w : BurnSuffixWords} {R : List B256} {G : Nat}
+    (env : BurnBackForwardEnv sevm b M p0 w R G) : Mem :=
   burnEventMemory (swapSyncMemory (swapBalanceReply (swapBalanceReply (burnSuffixMem2 M p0 w env.d0 env.d1)
       (burnSuffixPtr p0 env.d0 env.d1) sevm.currentTarget env.e0.returnData)
       (burnSuffixPtr p0 env.d0 env.d1) sevm.currentTarget env.e1.returnData)
@@ -633,15 +625,13 @@ site with the priced locals, both transfers, both final `balanceOf(pair)` querie
 moved pointer, the fee checkpoint, the `Burn` log and the unlock, returning both amounts with
 residual exactly `G`. The returned memory keeps a free-pointer carrier at the moved pointer,
 which stays below `2^163`.
-CROSS-HOST: conditional on `SwapSafeTransferForward`. -/
-theorem burnBack_exact {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
-    {sevm : Sevm} {b : Devm} {M : Mem} {n0 : Nat} {p0 : B256} {w : BurnSuffixWords}
+The `_safeTransfer` helper is `safeTransfer_dynamic_forward`. -/
+theorem burnBack_exact {sevm : Sevm} {b : Devm} {M : Mem} {n0 : Nat} {p0 : B256} {w : BurnSuffixWords}
     {R : List B256} {G : Nat}
-    (helper : SwapSafeTransferForward pre post)
     (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem p0 n0 M) (sentinel : memWord M 96 = 0)
     (lower : 128 ≤ p0.toNat) (upper : p0.toNat < 2 ^ 161)
     (nonzero0 : w.amount0 ≠ 0) (nonzero1 : w.amount1 ≠ 0) (room : R.length ≤ 980)
-    (static : sevm.isStatic = false) (env : BurnBackForwardEnv pre post sevm b M p0 w R G)
+    (static : sevm.isStatic = false) (env : BurnBackForwardEnv sevm b M p0 w R G)
     (bound0 : (Bytes.toB256 (env.e0.returnData.take 32)).toNat < 2 ^ 112)
     (bound1 : (Bytes.toB256 (env.e1.returnData.take 32)).toNat < 2 ^ 112) :
     (∃ n, PtrMem (burnSuffixPtr p0 env.d0 env.d1) n env.memory ∧
@@ -655,7 +645,7 @@ theorem burnBack_exact {pre : Nat → B256 → Nat} {post : Nat → B256 → Byt
     omega
   have mem0 : PtrMem p0 M.size M := by rw [mem.size]; exact mem
   obtain ⟨⟨n1, mem1⟩, sentinel1, lower1, upper1, _⟩ :=
-    swapFwdOpt_layout (k := 161) (a := w.amount0) (d := env.d0) helper fork roomL mem sentinel
+    swapFwdOpt_layout (k := 161) (a := w.amount0) (d := env.d0) fork roomL mem sentinel
       lower upper (by decide) (fun _ => env.transfer0)
   simp only [swapOptPtr, swapOptMem, nonzero0, ↓reduceIte] at mem1 sentinel1 lower1 upper1
   have mem1' : PtrMem (swapMovedPointer p0 env.d0.returnData) (burnSuffixMem1 M p0 w env.d0).size
@@ -664,7 +654,7 @@ theorem burnBack_exact {pre : Nat → B256 → Nat} {post : Nat → B256 → Byt
     rw [mem1.size]
     exact mem1
   obtain ⟨⟨n2, mem2⟩, _, lower2, upper2, _⟩ :=
-    swapFwdOpt_layout (k := 162) (a := w.amount1) (d := env.d1) helper fork roomL mem1' sentinel1
+    swapFwdOpt_layout (k := 162) (a := w.amount1) (d := env.d1) fork roomL mem1' sentinel1
       lower1 (by have : 2 ^ 161 + 2 ^ 161 = 2 ^ 162 := by decide
                  omega) (by decide) (fun _ => env.transfer1)
   simp only [swapOptPtr, swapOptMem, nonzero1, ↓reduceIte] at mem2 lower2 upper2
@@ -697,8 +687,8 @@ theorem burnBack_exact {pre : Nat → B256 → Nat} {post : Nat → B256 → Byt
   refine ⟨event, lower2, upper2', ?_⟩
   unfold BurnBackForwardEnv.gas BurnBackForwardEnv.post BurnBackForwardEnv.memory
   unfold BurnSuffixWords.locals at *
-  refine burnFwdTransfer0_call helper fork room mem0 sentinel lower width0 env.transfer0 ?_
-  refine burnFwdTransfer1_call helper fork room mem1' sentinel1 lower1 width1 env.transfer1 ?_
+  refine burnFwdTransfer0_call fork room mem0 sentinel lower width0 env.transfer0 ?_
+  refine burnFwdTransfer1_call fork room mem1' sentinel1 lower1 width1 env.transfer1 ?_
   refine burnFinalFirstBalance_exact fork mem2' lower2 width2 room env.first ?_
   refine burnFinalSecondBalance_exact fork mem2' lower2 width2 env.first.long room env.second ?_
   refine burnUpdate_exact fork reply0 lower2 width2 env.second.long static bound0
