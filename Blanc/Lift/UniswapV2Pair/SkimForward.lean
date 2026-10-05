@@ -37,8 +37,7 @@ structure SkimQueryEnv (sevm : Sevm) (b : Devm) (M : Mem) (p t : B256) (S : List
     (d : Devm) (callGas tailGas : Nat) : Prop where
   code : (b.getCode t.toAdr).size.toB256 ≠ 0
   call : Ninst.RunCompiled sevm
-    (St (temporalAccountAccessBase b t.toAdr)
-      (callGas.toB256 :: t :: p :: 36 :: p :: 32 :: S) M callGas)
+    (St b (callGas.toB256 :: t :: p :: 36 :: p :: 32 :: S) M callGas)
     (.exec .staticcall) d
   success : d.stack = 1 :: S
   long : 32 ≤ d.returnData.length
@@ -321,5 +320,130 @@ theorem skimFirstLine_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     decide
   refine rx_branch_succ codeRaw ?_
   exact body
+
+/-- Forward first query (dual of the query part of `skimFirstHalf_inv`): the
+`STATICCALL` guard tree and the width guard to the decoder. -/
+theorem skimQuery0Call_exact {sevm : Sevm} {b d : Devm} {M : Mem}
+    {callGas tailGas : Nat} {z t0 r0 toWord t1 : B256} {R : List B256} {o : Outcome}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (mem : PtrMem 128 192 (balanceRequestMemory M sevm.currentTarget))
+    (room : R.length ≤ 970)
+    (env : SkimQueryEnv sevm b (balanceRequestMemory M sevm.currentTarget) 128 t0
+      (164 :: 0x70a08231 :: t0 :: r0 :: 0x1a26 :: toWord :: t0 :: 0x1a2b :: t1 :: t0 ::
+        toWord :: R) d callGas tailGas)
+    (body : SFunc.RunExact cert.prog sevm
+      (St d (d.returnData.length.toB256 :: 128 ::
+        (r0 :: 0x1a26 :: toWord :: t0 :: 0x1a2b :: t1 :: t0 :: toWord :: R))
+        (((balanceRequestMemory M sevm.currentTarget).extends [(128, 36), (128, 32)]).write
+          128 (d.returnData.take 32)) tailGas) t_1a18_c34 o) :
+    SFunc.RunExact cert.prog sevm
+      (St b (z :: t0 :: 128 :: 36 :: 128 :: 32 ::
+        (164 :: 0x70a08231 :: t0 :: r0 :: 0x1a26 :: toWord :: t0 :: 0x1a2b :: t1 :: t0 ::
+          toWord :: R)) (balanceRequestMemory M sevm.currentTarget) (callGas + 5))
+      t_19ee_c34 o := by
+  have reply := balanceReplyMemory_ptr (M := M) (pair := sevm.currentTarget) d.returnData mem
+  have bound := ReturnDataBound.staticcall_returnData_length_lt
+    (by obtain ⟨xl, filled, step⟩ := env.call; exact ⟨xl, filled, 0, step 0⟩) fork
+  have decoded := returnWidthGuard_exact (returnTree := t_1a02_c34)
+    (shortTree := t_1a14_c34) (decodeTree := t_1a18_c34)
+    (a := 0) (x := 164) (y := 0x70a08231) (z := t0)
+    [0x1a, 0x18] (by decide) (by decide) rfl reply
+    (by simp only [List.length_cons]; omega) bound env.long body
+  exact staticCallGuard_exact (callTree := t_19ee_c34) (failureTree := t_19f9_c34)
+    (successTree := t_1a02_c34) [0x1a, 0x02] (by decide) (by decide) rfl fork
+    (by simp only [List.length_cons]; omega) env.call env.success
+    (by rw [env.returnedGas]) decoded
+
+/-- Forward decoder with checked subtraction (dual of the `t_1a18` tail plus
+`sub59_inv`): pop, word load, swap, the `0x226e` waypoint, the checked
+`sub59` call, into the helper-site continuation. -/
+theorem skimDecode_exact {sevm : Sevm} {b : Devm} {L3 : List B256} {M : Mem}
+    {G SZ : Nat} {len p r rhoS tokA tokB rhoH : B256} {out : Bytes} {nextK : SFunc}
+    {o : Outcome}
+    (pm : PtrMem p SZ M) (hle : p.toNat + 32 ≤ SZ)
+    (wordEq : Bytes.toB256 (M.read p.toNat 32).1 = Bytes.toB256 (out.take 32))
+    (cover : r ≤ Bytes.toB256 (out.take 32)) (room : L3.length ≤ 990)
+    (tail : SFunc.RunExact cert.prog sevm
+      (St b ((Bytes.toB256 (out.take 32) - r) :: tokA :: tokB :: rhoH :: L3) M G)
+      nextK o) :
+    SFunc.RunExact cert.prog sevm
+      (St b (len :: p :: r :: rhoS :: tokA :: tokB :: rhoH :: L3) M (G + 80))
+      (.dest (.next (.reg .pop) (.next (.reg .mload) (.next (.reg (.swap 0))
+        (.next (.push [0xff, 0xff, 0xff, 0xff] (by decide))
+          (.next (.push [0x22, 0x6e] (by decide)) (.next (.reg .and)
+            (.callNext 59 nextK)))))))) o := by
+  apply rx_dest
+  apply rx_pop
+  refine rx_mload (c := 3) ?_ wordEq (pm.read_self hle)
+    (by simp only [List.length_cons]; omega) ?_
+  · rw [St.extCost_eq pm.size, memExtSize_of_le pm.n32 hle, Nat.sub_self]
+    rfl
+  apply rx_swap1
+  apply rx_push (w := 0xffffffff) rfl (by simp only [List.length_cons]; omega)
+  apply rx_push (w := 0x226e) rfl (by simp only [List.length_cons]; omega)
+  apply rx_and rfl (by simp only [List.length_cons]; omega)
+  exact rx_callRet rfl (sub59_exact cover (by simp only [List.length_cons]; omega)) tail
+
+/-- Forward helper-call site (dual of the `t_1a26` inversion): push the helper
+index and enter `t_1fdb_c57` through the cross-host hypothesis. -/
+theorem skimHelperSite_exact {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
+    {sevm : Sevm} {b d : Devm} {L : List B256} {M : Mem} {callGas G : Nat}
+    {p amount toWord token rho : B256} {k : SFunc} {o : Outcome}
+    (helper : SwapSafeTransferForward pre post)
+    (fork : CoveredFork sevm.benvStat.fork) (room : L.length ≤ 1000)
+    (mem : PtrMem p M.size M) (sentinel : memWord M 96 = 0)
+    (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256)
+    (env : SwapTransferCallForward post sevm b L M M.size p amount toWord token rho
+      callGas G d)
+    (cont : SFunc.RunExact cert.prog sevm
+      (St d L (swapTransferMemory M p amount toWord d.returnData) G) k o) :
+    SFunc.RunExact cert.prog sevm
+      (St b (amount :: toWord :: token :: rho :: L) M (callGas + pre M.size p + 12))
+      (.dest (.next (.push [0x1f, 0xdb] (by decide)) (.callNext 57 k))) o := by
+  apply rx_dest
+  apply rx_push (w := 0x1fdb) rfl (by simp only [List.length_cons]; omega)
+  exact rx_callRet (show cert.prog[57]? = some t_1fdb_c57 from rfl)
+    (helper sevm b d L M M.size callGas G p amount toWord token rho fork mem sentinel
+      lower width room env.call env.success env.accepted env.gas) cont
+
+/-- Pointer, zero slot and output threading through one unconditional helper
+call (the taken branch of `swapFwdOpt_layout`, which skim always takes). -/
+theorem skimTransferLayout {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
+    {sevm : Sevm} {b d : Devm} {L : List B256} {M : Mem} {n callGas G k : Nat}
+    {p a toWord token rho : B256}
+    (helper : SwapSafeTransferForward pre post)
+    (fork : CoveredFork sevm.benvStat.fork) (room : L.length ≤ 1000)
+    (mem : PtrMem p n M) (sentinel : memWord M 96 = 0)
+    (lower : 128 ≤ p.toNat) (upper : p.toNat < 2 ^ k) (wide : 2 ^ k + 2 ^ 161 ≤ 2 ^ 256)
+    (env : SwapTransferCallForward post sevm b L M M.size p a toWord token rho
+      callGas G d) :
+    (∃ n', PtrMem (swapMovedPointer p d.returnData) n'
+      (swapTransferMemory M p a toWord d.returnData)) ∧
+    memWord (swapTransferMemory M p a toWord d.returnData) 96 = 0 ∧
+    128 ≤ (swapMovedPointer p d.returnData).toNat ∧
+    (swapMovedPointer p d.returnData).toNat + 1024 < 2 ^ 256 ∧
+    d.output = b.output := by
+  have width : p.toNat + 260 < 2 ^ 256 := by
+    have h161 : (2 : Nat) ^ 160 ≤ 2 ^ 161 := Nat.pow_le_pow_right (by decide) (by decide)
+    omega
+  have sh := env.reply_short fork
+  have memN : PtrMem p M.size M := by rw [mem.size]; exact mem
+  have run := helper sevm b d L M M.size callGas G p a toWord token rho fork memN
+    sentinel lower width room env.call env.success env.accepted env.gas
+  obtain ⟨_, _, _, _, _, ptrN, _fit⟩ := safeTransfer_dynamicCall_inv
+    (P := fun e d n d' => Ninst.Run e d n d') (fun h => h) mem lower width
+    (by decide : 71 ∉ []) (SFunc.runP_iff_runCutP_nil.mp run.toRun)
+  have layout := swapMovedPointer_layout sh (by omega : p.toNat + 2 ^ 161 < 2 ^ 256)
+  have nat164 : (p + 164).toNat = p.toNat + 164 := by
+    rw [B256.toNat_add, show (164 : B256).toNat = 164 from rfl, Nat.lo_eq_of_lt (by omega)]
+  refine ⟨?_, ?_, by omega, by omega, env.output fork⟩
+  · by_cases empty : d.returnData = []
+    · simp only [swapMovedPointer, swapTransferMemory, empty, ↓reduceIte]
+      exact ⟨_, ptrN⟩
+    · simp only [swapMovedPointer, swapTransferMemory, empty, ↓reduceIte]
+      exact ⟨_, (Blanc.Lift.bytesArrayMemory_image (bytes := d.returnData) ptrN
+        (by rw [nat164]; omega) (by rw [nat164]; omega) (by rw [nat164]; omega)).1⟩
+  · rw [swapTransferMemory_zeroSlot mem lower width]
+    exact sentinel
 
 end Blanc.Lift.UniswapV2Pair
