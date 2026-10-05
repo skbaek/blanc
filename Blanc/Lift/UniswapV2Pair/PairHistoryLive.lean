@@ -275,16 +275,15 @@ theorem pair_history_sync_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
     target state codeEq fork output representable newFresh⟩
 
 /-- **`mint` after any configured history.**  When the model accepts the mint at the history's state
-`finish` with the frame's actual answers (`MintModelConditions`: non-payable and non-static, the lock
-open, both token `balanceOf(pair)` answers covering the reserves, the protocol-fee mint at the
-factory's `feeTo` answer, the pricing, the minimum and recipient LP credits, positive liquidity and the
-reserve update all accepted), then given the callee-only environment at the future world
-(`MintPrefixCallee`: the three `STATICCALL`s with their replies and returned gas, and the charge
-equations and residual sentries) and HASH-T freshness of the LP rows of address zero, the recipient and
-the `feeTo` answer against the history universe, a pc-zero run exists at gas `callee.gas + 228`
-(`callee.gas`: the gas `callGas0` forwarded to token0 plus the closed lock, cache and request charges)
-ending at gas `G` and returning the liquidity word; under HASH-T freshness of its own rows its post
-storage represents the model's next state from `finish`. -/
+`finish` on a transcript whose three answers are the frame's actual answers (the two token
+`balanceOf(pair)` replies and the factory's `feeTo` reply), then given the callee-only environment at
+the future world (`MintPrefixCallee`: the three `STATICCALL`s with their replies and returned gas, and
+the charge equations and residual sentries) and HASH-T freshness of the LP rows of address zero, the
+recipient and the `feeTo` answer against the history universe, a pc-zero run exists at gas
+`callee.gas + 228` (`callee.gas`: the gas `callGas0` forwarded to token0 plus the closed lock, cache and
+request charges) ending at gas `G` and returning the liquidity word; under HASH-T freshness of its own
+rows its post storage represents the model's next state from `finish`.  Model acceptance enters through
+`runTyped_mint_conditions` (every accepted mint passes `MintModelConditions` at its answers). -/
 theorem pair_history_mint_live {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     {K₀ : WriterKey → Prop} {st₀ : State}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
@@ -304,8 +303,11 @@ theorem pair_history_mint_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
       (lpMintTouched (0 : B256).toAdr ++ lpMintTouched (Sevm.dataWord sevm 4).toAdr ++
         lpMintTouched callee.feeTo)) :
     ∃ (finish : State) (K' : WriterKey → Prop), PairHistoryReplayed pair trace K₀ st₀ finish K' ∧
-      (MintModelConditions finish (writerContext sevm []) (Sevm.dataWord sevm 4).toAdr
-          callee.balance0 callee.balance1 callee.feeTo →
+      ∀ (transcript : Transcript) (returndata : Bytes),
+        transcript.firstWord = callee.balance0 → transcript.ownTail.firstWord = callee.balance1 →
+        transcript.ownTail.ownTail.firstWord.toAdr = callee.feeTo →
+        (runTyped finish (writerContext sevm []) (.mint (Sevm.dataWord sevm 4).toAdr)
+          transcript).status = .success returndata →
         ∃ (liquidity : B256)
           (run : Exec 0 sevm (St pre [] Mem.empty (callee.gas + 228))
             (.ok (getterWordPost callee.fee.post [0x6a627842] callee.fee.post.memory liquidity G))),
@@ -319,9 +321,11 @@ theorem pair_history_mint_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
                 (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty (callee.gas + 228), .ok _, run⟩))
               { state := finish, logs := [], updates := [] } [] K'
               ⟨0, sevm, St pre [] Mem.empty (callee.gas + 228), .ok _, run⟩
-              (getterWordPost callee.fee.post [0x6a627842] callee.fee.post.memory liquidity G))) := by
+              (getterWordPost callee.fee.post [0x6a627842] callee.fee.post.memory liquidity G)) := by
   obtain ⟨futureCode, finish, K', replayed⟩ := pair_history_replayed trace installed initial fresh
-  refine ⟨finish, K', replayed, fun conditions => ?_⟩
+  refine ⟨finish, K', replayed, fun transcript returndata answer0 answer1 answerFee accepted => ?_⟩
+  have conditions := runTyped_mint_conditions accepted
+  rw [answer0, answer1, answerFee] at conditions
   have hist : WriterRep (pairHistoryUniverse pair trace K₀) (checkpoint.state.getStor pair) st₀ :=
     initial.extend fresh
   obtain ⟨rep, inside⟩ := replayed.at_frame target state
