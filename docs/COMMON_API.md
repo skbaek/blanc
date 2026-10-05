@@ -3550,7 +3550,13 @@ contract-neutral.
   [`Blanc/Lift/WitnessChild.lean`](../Blanc/Lift/WitnessChild.lean); the frame-level spawn
   fact `SpawnedBy sevm devm x child` (`Xinst.step` spawns a frame entering as `child`) and
   `spawnedBy_of_callPrep`, `spawnedBy_of_childStart`, `spawnedBy_of_dcallPrep` in
-  [`Blanc/Lift/WitnessSpawn.lean`](../Blanc/Lift/WitnessSpawn.lean); the literal-free
+  [`Blanc/Lift/WitnessSpawn.lean`](../Blanc/Lift/WitnessSpawn.lean); reading a run's final
+  shadow (start shadow with the run's entries prepended) without enumerating addresses or keys:
+  `lookupA_append_of_restate` (a prefix restating the start's views changes no account),
+  `lookupS_append_of_ne` (writes elsewhere leave an address's storage),
+  `lookupS_append_of_absent` (a start with nothing at the address leaves the prefix's values)
+  and `lookupS_eq_zero_of` (only zero entries at a key) in
+  [`Blanc/Lift/WitnessShadow.lean`](../Blanc/Lift/WitnessShadow.lean); the literal-free
   scaffolding for deciding a long `wrun` as kernel chunks between literal boundaries
   (`Boundary.Bnd`/`obsB`/`cfgOf`/`obsD`/`obsDOk`, their composition `obsD_chain`,
   `obsD_chain3`, `obsB_of_obsD`, `run_of_obsB` (every boundary also records that the frame's
