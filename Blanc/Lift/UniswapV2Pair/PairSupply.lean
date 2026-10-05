@@ -1,6 +1,7 @@
 import Blanc.Lift.UniswapV2Pair.SwapCanonical
 import Blanc.Lift.UniswapV2Pair.MintCanonical
 import Blanc.Lift.UniswapV2Pair.SyncGasCanonical
+import Blanc.Lift.UniswapV2Pair.BurnFeeTransfers
 
 /-!
 # The unlocked Pair-frame supply
@@ -17,11 +18,8 @@ frame's own derivation (`PairFrameAuth`).
 * `PairGood U D` — every raw Pair frame root of `D` has its rows in `U`; it gives each family's own
   trace-key obligation (`swapTraceKeys`, `mintTraceKeys`, `syncTraceKeys`, `LockedGood`);
 * `PairStepOutcome` — the consumed invocation with model success and footprint growth;
-* `SwapAuth`, `MintAuth`, `SyncAuth`, `SkimAuth` — the per-family provenance the frame theorems state,
-  with the transcript named; the lock-free entries use `LockedAuth`;
-* `BurnFrameSupply burnAuth` — **the open burn arm**: every successful burn frame is consumed with an
-  entry and transcript authenticated by `burnAuth`.  It is an explicit premise of `pairSupply`, to be
-  discharged by the Burn transcript provenance (`burnRaw_source_finished` plus its call provenance);
+* `SwapAuth`, `MintAuth`, `SyncAuth`, `SkimAuth`, `BurnAuth` — the per-family provenance the frame
+  theorems state, with the transcript named; the lock-free entries use `LockedAuth`;
 * `pairSupply` — the 27-way dispatcher.
 -/
 
@@ -425,6 +423,14 @@ def SwapAuth (D : Exec.Deriv) (entry : Entry) (T : Transcript) : Prop :=
     PairViewProvenance D sevm (frame.beginResume (swapRequest0 frame locals))
       (swapTokenWord w.token1) views1
 
+/-- **Burn provenance.** The entry is the decoded burn; the transcript is the one the frame's actual
+call answers fix (`BurnFrameAuth`: the initial balances, `feeTo`, the two transfer `CALL`s with their
+retained turns and the two final balances, `BurnCallProvenance`). -/
+def BurnAuth (D : Exec.Deriv) (entry : Entry) (T : Transcript) : Prop :=
+  Blanc.Sevm.selector D.sevm = 0x89afcb44 ∧
+  entry = .burn ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& Sevm.dataWord D.sevm 4).toAdr ∧
+  BurnFrameAuth D T
+
 section Guarded
 
 variable {U : WriterKey → Prop} (inj : WriterInj U) (apart : WriterApart U)
@@ -494,17 +500,34 @@ theorem pair_swap_outcome (freshOutput : b.output = [])
       views1, opt0, opt1, optC, shape0, shape1, shapeC, call0, call1, rfl, auth, prov0, prov1⟩
     consumed rfl grown rep
 
+theorem pair_burn_outcome (selector : Blanc.Sevm.selector sevm = 0x89afcb44) :
+    PairStepOutcome BurnAuth U current invocation K
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ post := by
+  have row : ∀ k ∈ [WriterKey.balance sevm.currentTarget], U k := by
+    intro k member
+    rw [List.mem_singleton] at member
+    rw [member]
+    exact good.pairRow
+  have fresh := Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub row
+  have sub₁ := writerExtend_universe sub row
+  obtain ⟨a, amount0, amount1, provenance, K', final, rets, _, _, _, inside, grows, consumed, halted,
+      _, rep, _⟩ :=
+    burnRaw_source_authentic invocation codeEq fork selector (wrep.extend fresh)
+      (Or.inr (List.mem_singleton_self _)) run inj apart sub₁ good.mint sem image installed
+      good.locked good.views
+  cases halted
+  exact ⟨_, a.transcript, _, _, K', ⟨selector, rfl, burnRaw_frameAuth provenance⟩, consumed, rfl,
+    fun k h => grows k (Or.inl h), inside, rep⟩
+
 end Guarded
 
 /-! ## The dispatcher -/
 
 /-- **Authenticated entry and transcript of one Pair frame**, by family: the lock-free entries
-(`LockedAuth`), swap, mint, sync, skim, and the burn arm `burnAuth` (open until the Burn transcript
-provenance lands). -/
-def PairFrameAuth (burnAuth : Exec.Deriv → Entry → Transcript → Prop) (D : Exec.Deriv)
-    (entry : Entry) (T : Transcript) : Prop :=
+(`LockedAuth`), swap, mint, sync, skim and burn. -/
+def PairFrameAuth (D : Exec.Deriv) (entry : Entry) (T : Transcript) : Prop :=
   LockedAuth D entry T ∨ SwapAuth D entry T ∨ MintAuth D entry T ∨ SyncAuth D entry T ∨
-    SkimAuth D entry T ∨ (Blanc.Sevm.selector D.sevm = 0x89afcb44 ∧ burnAuth D entry T)
+    SkimAuth D entry T ∨ BurnAuth D entry T
 
 /-- The supply of one successful pc-zero Pair frame at the current checkpoint: from every incoming
 finite representation inside the separated universe `U`, the frame is one authenticated source
@@ -519,20 +542,11 @@ def PairStepSupply (Auth : Exec.Deriv → Entry → Transcript → Prop) (U : Wr
     (∀ k, K k → U k) → WriterRep K (b.getStor sevm.currentTarget) current.state →
     PairStepOutcome Auth U current invocation K ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ post
 
-/-- **The open burn arm.**  Every successful burn frame is consumed, from every incoming
-representation inside every separated universe, as one source invocation authenticated by
-`burnAuth`.  Discharged by the Burn transcript provenance (G4: `burnRaw_source_finished` with the
-call provenance of its fee, transfer and balance children). -/
-def BurnFrameSupply (burnAuth : Exec.Deriv → Entry → Transcript → Prop) : Prop :=
-  ∀ U : WriterKey → Prop, WriterInj U → WriterApart U →
-    PairStepSupply burnAuth U (fun sevm => Blanc.Sevm.selector sevm = 0x89afcb44)
-
 /-- **The unlocked Pair-frame supply.**  Every successful pc-zero Pair frame, at any of its 27
-selectors, is one authenticated source invocation that succeeds in the model, given the burn arm. -/
-theorem pairSupply {burnAuth : Exec.Deriv → Entry → Transcript → Prop}
-    (burn : BurnFrameSupply burnAuth) {U : WriterKey → Prop} (inj : WriterInj U)
+selectors, is one authenticated source invocation that succeeds in the model. -/
+theorem pairSupply {U : WriterKey → Prop} (inj : WriterInj U)
     (apart : WriterApart U) (sem : CodeSem) (image : sem.image = some code.toList) :
-    PairStepSupply (PairFrameAuth burnAuth) U (fun _ => True) := by
+    PairStepSupply PairFrameAuth U (fun _ => True) := by
   intro current invocation sevm b post G run K codeEq installedCode fork freshOutput representable
     _ good sub wrep
   have installed : some (b.getCode sevm.currentTarget).toList = sem.image := by
@@ -567,8 +581,8 @@ theorem pairSupply {burnAuth : Exec.Deriv → Entry → Transcript → Prop}
       (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
   · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.singleMapping .nonces)
       (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
-  · exact (burn U inj apart current invocation run codeEq installedCode fork freshOutput
-      representable h good sub wrep).mono fun _ _ a => Or.inr (Or.inr (Or.inr (Or.inr (Or.inr ⟨h, a⟩))))
+  · exact (pair_burn_outcome inj apart run codeEq fork sub wrep sem image installed good
+      h).mono fun _ _ a => Or.inr (Or.inr (Or.inr (Or.inr (Or.inr a))))
   · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.string .symbol)
       (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
   · exact (free_transfer_outcome inj apart run codeEq fork representable sub wrep h

@@ -27,9 +27,6 @@ Pair frame, in trace order; a re-entered Pair frame is consumed inside its paren
   `pairSupply`;
 * `pair_history_committed` — the headline; `pair_history_initialized` — from the deployment
   checkpoint.
-
-The burn arm of the supply is the explicit premise `BurnFrameSupply burnAuth` until the Burn transcript
-provenance is merged.
 -/
 
 namespace Blanc.Lift.UniswapV2Pair
@@ -124,8 +121,7 @@ theorem WriterRep.congr {K : WriterKey → Prop} {s s' : Stor} {st : State}
 
 /-- **Pair frame soundness, trace-admitted**: a successful Pair frame keeps the storage a finite
 representation over rows of a separated universe. -/
-theorem pairSpec_soundAdmitted (pair : Adr) {burnAuth : Exec.Deriv → Entry → Transcript → Prop}
-    (burn : BurnFrameSupply burnAuth) {U : WriterKey → Prop} (inj : WriterInj U)
+theorem pairSpec_soundAdmitted (pair : Adr) {U : WriterKey → Prop} (inj : WriterInj U)
     (apart : WriterApart U) : (pairSpec U).SoundAdmitted pair (pairEntry U) := by
   intro sevm pre post fork run codeEq target admitted _ _ hpre
   subst target
@@ -135,16 +131,15 @@ theorem pairSpec_soundAdmitted (pair : Adr) {burnAuth : Exec.Deriv → Entry →
   obtain ⟨st, K, sub, wrep⟩ :=
     (ContractSpecSem.ofStorageOnly_preInv_iff (sem := pairSem)).mp hpre.inv
   obtain ⟨_, _, _, _, K', _, _, _, _, inside, rep⟩ :=
-    pairSupply burn inj apart pairSem pairSem_image { state := st, logs := [], updates := [] } []
+    pairSupply inj apart pairSem pairSem_image { state := st, logs := [], updates := [] } []
       raw codeEq (code_eq_of_toList hpre.code) fork output representable trivial good sub wrep
   exact ⟨trivial, ⟨_, K', inside, rep⟩⟩
 
 /-- **Pair frame preservation, trace-admitted**: the form the trace rungs consume. -/
-theorem pairSpec_preservesAdmitted (pair : Adr) {burnAuth : Exec.Deriv → Entry → Transcript → Prop}
-    (burn : BurnFrameSupply burnAuth) {U : WriterKey → Prop} (inj : WriterInj U)
+theorem pairSpec_preservesAdmitted (pair : Adr) {U : WriterKey → Prop} (inj : WriterInj U)
     (apart : WriterApart U) : (pairSpec U).PreservesAdmitted pair (pairEntry U) :=
   (pairSpec U).preserves_inv_admitted pair (pairEntry U)
-    (pairSpec_soundAdmitted pair burn inj apart)
+    (pairSpec_soundAdmitted pair inj apart)
 
 /-! ## Steps, carrier and observation -/
 
@@ -164,11 +159,11 @@ commit proof; it is restated here), non-static frame at the Pair, and its entry 
 ones its actual run decodes and answered (`PairFrameAuth`).  A committed non-static Pair frame always
 observes itself (`pairSubtreeFrames`), so a step can never be a phantom: the observation equality of
 the headline places every step's frame among the trace's settled frames. -/
-def PairStep.Authentic (burnAuth : Exec.Deriv → Entry → Transcript → Prop) (pair : Adr)
+def PairStep.Authentic (pair : Adr)
     (s : PairStep) : Prop :=
   s.frame.pc = 0 ∧ Execution.commits s.frame.out = true ∧ s.frame.sevm.currentTarget = pair ∧
     s.frame.sevm.isStatic = false ∧
-    PairFrameAuth burnAuth (Blanc.Exec.Frame.rootDeriv s.frame) s.entry s.transcript
+    PairFrameAuth (Blanc.Exec.Frame.rootDeriv s.frame) s.entry s.transcript
 
 /-- A frame's own observation: itself when it is a non-static Pair frame. -/
 def pairFrameObs (pair : Adr) (frame : Exec.Frame) : List Exec.Frame :=
@@ -185,25 +180,25 @@ def PairViewRep (K : WriterKey → Prop) (view : B256 → B256) (st : State) : P
 /-- The replay of a list of frames between two storage views: from every incoming representation
 inside `U`, authenticated steps over exactly these frames whose source invocations replay to a model
 state represented by the outgoing view. -/
-def PairReplay (burnAuth : Exec.Deriv → Entry → Transcript → Prop) (pair : Adr)
+def PairReplay (pair : Adr)
     (U : WriterKey → Prop) (a : B256 → B256) (frames : List Exec.Frame) (b : B256 → B256) : Prop :=
   ∀ (st : State) (K : WriterKey → Prop), (∀ k, K k → U k) → PairViewRep K a st →
     ∃ steps : List PairStep, steps.map PairStep.frame = frames ∧
-      (∀ s ∈ steps, s.Authentic burnAuth pair) ∧
+      (∀ s ∈ steps, s.Authentic pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop), SourceReplay st (steps.map PairStep.source) finish ∧
         (∀ k, K k → K' k) ∧ (∀ k, K' k → U k) ∧ PairViewRep K' b finish
 
 section Replay
 
-variable {burnAuth : Exec.Deriv → Entry → Transcript → Prop} {pair : Adr} {U : WriterKey → Prop}
+variable {pair : Adr} {U : WriterKey → Prop}
 
-theorem PairReplay.nil (view : B256 → B256) : PairReplay burnAuth pair U view [] view := by
+theorem PairReplay.nil (view : B256 → B256) : PairReplay pair U view [] view := by
   intro st K sub rep
   exact ⟨[], rfl, fun _ h => absurd h List.not_mem_nil, st, K, .nil st, fun _ h => h, sub, rep⟩
 
 theorem PairReplay.append {a b c : B256 → B256} {left right : List Exec.Frame}
-    (first : PairReplay burnAuth pair U a left b) (second : PairReplay burnAuth pair U b right c) :
-    PairReplay burnAuth pair U a (left ++ right) c := by
+    (first : PairReplay pair U a left b) (second : PairReplay pair U b right c) :
+    PairReplay pair U a (left ++ right) c := by
   intro st K sub rep
   obtain ⟨steps₁, frames₁, auth₁, middle, K₁, replay₁, grows₁, sub₁, rep₁⟩ := first st K sub rep
   obtain ⟨steps₂, frames₂, auth₂, finish, K₂, replay₂, grows₂, sub₂, rep₂⟩ :=
@@ -220,12 +215,12 @@ theorem PairReplay.append {a b c : B256 → B256} {left right : List Exec.Frame}
 end Replay
 
 /-- The Pair's replay carrier over its storage view. -/
-def pairCarrier (burnAuth : Exec.Deriv → Entry → Transcript → Prop) (pair : Adr)
+def pairCarrier (pair : Adr)
     (U : WriterKey → Prop) : ReplayCarrier pair where
   Snap := B256 → B256
   Step := Exec.Frame
   Tag := Unit
-  Replay := PairReplay burnAuth pair U
+  Replay := PairReplay pair U
   ofState world := (world.getStor pair).get
   frameEntry _ world := (world.getStor pair).get
   nil := PairReplay.nil
@@ -238,8 +233,8 @@ def pairCarrier (burnAuth : Exec.Deriv → Entry → Transcript → Prop) (pair 
     exact congrArg Stor.get (congrFun (benvAfterTransfer_getStor_eq transfer) pair)
 
 /-- The Pair's observation: every committed non-static Pair frame of each step's subtree. -/
-def pairObservation (burnAuth : Exec.Deriv → Entry → Transcript → Prop) (pair : Adr)
-    (U : WriterKey → Prop) : ReplayObservation (pairCarrier burnAuth pair U) where
+def pairObservation (pair : Adr)
+    (U : WriterKey → Prop) : ReplayObservation (pairCarrier pair U) where
   O := Exec.Frame
   obs frames := frames.flatMap (pairSubtreeFrames pair)
   obs_nil := rfl
@@ -248,17 +243,16 @@ def pairObservation (burnAuth : Exec.Deriv → Entry → Transcript → Prop) (p
   credit := by
     intro _ pre post _ storage _ _
     refine ⟨[], ?_, rfl⟩
-    change PairReplay burnAuth pair U (pre.getStor pair).get [] (post.getStor pair).get
+    change PairReplay pair U (pre.getStor pair).get [] (post.getStor pair).get
     rw [storage]
     exact PairReplay.nil _
 
 /-- **The whole-frame obligation of the Pair**: a committed non-static Pair frame replays as one
 authenticated step whose observation is its committed subtree. -/
-theorem pair_wholeFrameReplay (pair : Adr) {burnAuth : Exec.Deriv → Entry → Transcript → Prop}
-    (burn : BurnFrameSupply burnAuth) {U : WriterKey → Prop} (inj : WriterInj U)
+theorem pair_wholeFrameReplay (pair : Adr) {U : WriterKey → Prop} (inj : WriterInj U)
     (apart : WriterApart U) :
-    Exec.CoreAccounting.WholeFrameReplay pair pairSem (pairEntry U) (pairCarrier burnAuth pair U)
-      (pairObservation burnAuth pair U) := by
+    Exec.CoreAccounting.WholeFrameReplay pair pairSem (pairEntry U) (pairCarrier pair U)
+      (pairObservation pair U) := by
   intro sevm pre post run committed codeEq target fork installed admitted _ nonstatic
   subst target
   have entry := admitted.root rfl
@@ -270,7 +264,7 @@ theorem pair_wholeFrameReplay (pair : Adr) {burnAuth : Exec.Deriv → Entry → 
     have wrep' : WriterRep K (pre.getStor sevm.currentTarget) st :=
       WriterRep.congr (fun k => (congrFun view k).symm) wrep
     obtain ⟨entryE, nested, child, bytes, K', auth, consumed, success, grows, inside, rep⟩ :=
-      pairSupply burn inj apart pairSem pairSem_image { state := st, logs := [], updates := [] } []
+      pairSupply inj apart pairSem pairSem_image { state := st, logs := [], updates := [] } []
         raw codeEq (code_eq_of_toList installed.1) fork output representable trivial good sub wrep'
     rw [rawEq] at auth
     refine ⟨[⟨Exec.Frame.ofRun run committed, entryE, nested⟩], rfl, ?_, child.frame.current.state,
@@ -294,14 +288,13 @@ theorem pairFrameObs_foreign {pair : Adr} {f : Exec.Frame}
   simp only [h, false_and, ↓reduceIte]
 
 /-- **The accounting ladder of the Pair** over a separated universe `U`. -/
-def pairLadder (pair : Adr) {burnAuth : Exec.Deriv → Entry → Transcript → Prop}
-    (burn : BurnFrameSupply burnAuth) {U : WriterKey → Prop} (inj : WriterInj U)
+def pairLadder (pair : Adr) {U : WriterKey → Prop} (inj : WriterInj U)
     (apart : WriterApart U) : AccountingLadderAdmitted (pairSpec U) pair (pairEntry U) :=
-  wholeFrameLadder (c := pairSpec U) (pairCarrier burnAuth pair U) (pairObservation burnAuth pair U)
+  wholeFrameLadder (c := pairSpec U) (pairCarrier pair U) (pairObservation pair U)
     PairReplay.append (fun _ _ => ()) (fun _ _ => ()) (fun _ _ => rfl)
     (fun h => funext h) (fun _ h => pairFrameObs_static h)
     (fun _ h => pairFrameObs_foreign h) (pair_spawnKinds pair)
-    (pair_wholeFrameReplay pair burn inj apart) (pairSpec_preservesAdmitted pair burn inj apart)
+    (pair_wholeFrameReplay pair inj apart) (pairSpec_preservesAdmitted pair inj apart)
 
 /-! ## The configured history -/
 
@@ -344,16 +337,12 @@ runtime is still installed, and there is a list of steps such that
   frames of the trace, in trace order (rolled-back frames are absent, static frames observe nothing):
   each step is an outermost committed Pair frame, and every re-entered Pair frame lies in exactly one
   step's subtree, consumed inside that step's transcript;
-* every step is authenticated against its frame's actual run (`PairStep.Authentic`; the burn arm
-  through `burnAuth`);
+* every step is authenticated against its frame's actual run (`PairStep.Authentic`);
 * the step's source invocations replay from `st₀` (`SourceReplay`, hence the deterministic fold
   `runSourceInvocations`) to a model state that the future Pair storage represents, over tracked rows
-  growing from `K₀` within `K₀ ∪ touched`.
-
-The burn arm is the explicit premise `burn : BurnFrameSupply burnAuth` (open). -/
+  growing from `K₀` within `K₀ ∪ touched`. -/
 theorem pair_history_committed {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
-    {K₀ : WriterKey → Prop} {st₀ : State} {burnAuth : Exec.Deriv → Entry → Transcript → Prop}
-    (burn : BurnFrameSupply burnAuth)
+    {K₀ : WriterKey → Prop} {st₀ : State}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
     (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
@@ -361,7 +350,7 @@ theorem pair_history_committed {pair : Adr} {cfg : ChainConfig} {checkpoint futu
     some (future.state.getCode pair).toList = pairSem.image ∧
     ∃ steps : List PairStep,
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.Authentic burnAuth pair) ∧
+      (∀ s ∈ steps, s.Authentic pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
         SourceReplay st₀ (steps.map PairStep.source) finish ∧
         runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
@@ -375,10 +364,10 @@ theorem pair_history_committed {pair : Adr} {cfg : ChainConfig} {checkpoint futu
   have start : (pairSpec U).StateInv pair checkpoint.state :=
     ⟨installed, trivial, ⟨st₀, K₀, fun _ h => Or.inl h, initial⟩⟩
   have finishInv := trace.stateInv_admitted_sem
-    (pairSpec_preservesAdmitted pair burn extended.inj extended.apart) admitted start
+    (pairSpec_preservesAdmitted pair extended.inj extended.apart) admitted start
   obtain ⟨frames, replay, observed⟩ :=
-    (pairLadder pair burn extended.inj extended.apart).configuredHistory trace admitted start
-  change PairReplay burnAuth pair U (checkpoint.state.getStor pair).get frames
+    (pairLadder pair extended.inj extended.apart).configuredHistory trace admitted start
+  change PairReplay pair U (checkpoint.state.getStor pair).get frames
     (future.state.getStor pair).get at replay
   change frames.flatMap (pairSubtreeFrames pair) =
     trace.settledFrames.flatMap (pairFrameObs pair) at observed
@@ -394,7 +383,6 @@ establishes (deployment by `factory`, then `initialize`), the same conclusion wi
 `st₀ = initializedState factory domain token0 token1` and no initially tracked row. -/
 theorem pair_history_initialized {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     {factory token0 token1 : Adr} {domain : B256}
-    {burnAuth : Exec.Deriv → Entry → Transcript → Prop} (burn : BurnFrameSupply burnAuth)
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
     (initial : InitializedCheckpoint (checkpoint.state.getStor pair) factory domain token0 token1)
@@ -402,7 +390,7 @@ theorem pair_history_initialized {pair : Adr} {cfg : ChainConfig} {checkpoint fu
     some (future.state.getCode pair).toList = pairSem.image ∧
     ∃ steps : List PairStep,
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.Authentic burnAuth pair) ∧
+      (∀ s ∈ steps, s.Authentic pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
         SourceReplay (initializedState factory domain token0 token1)
           (steps.map PairStep.source) finish ∧
@@ -411,7 +399,7 @@ theorem pair_history_initialized {pair : Adr} {cfg : ChainConfig} {checkpoint fu
         (∀ k, K' k → k ∈ pairHistoryTouchedKeys pair trace) ∧
         WriterRep K' (future.state.getStor pair) finish := by
   obtain ⟨code, steps, observed, auth, finish, K', source, realized, _, inside, rep⟩ :=
-    pair_history_committed burn trace installed initial fresh
+    pair_history_committed trace installed initial fresh
   refine ⟨code, steps, observed, auth, finish, K', source, realized, ?_, rep⟩
   intro k tracked
   rcases inside k tracked with none | row
@@ -425,20 +413,19 @@ a model state whose LP balances sum to its total supply, `MINIMUM_LIQUIDITY` at 
 fee-to mints included; the ledger at the deployment checkpoint is proved, not assumed. -/
 theorem pair_history_ledger {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     {factory token0 token1 : Adr} {domain : B256}
-    {burnAuth : Exec.Deriv → Entry → Transcript → Prop} (burn : BurnFrameSupply burnAuth)
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
     (initial : InitializedCheckpoint (checkpoint.state.getStor pair) factory domain token0 token1)
     (fresh : WriterFreshKeys (fun _ => False) (pairHistoryTouchedKeys pair trace)) :
     ∃ steps : List PairStep,
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.Authentic burnAuth pair) ∧
+      (∀ s ∈ steps, s.Authentic pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
         runSourceInvocations (initializedState factory domain token0 token1) (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
         finish.Ledger := by
   obtain ⟨_, steps, observed, auth, finish, K', source, realized, _, _, rep⟩ :=
-    pair_history_committed burn trace installed initial fresh
+    pair_history_committed trace installed initial fresh
   exact ⟨steps, observed, auth, finish, K', realized, rep,
     source.ledger (State.initialized_ledgerOn factory domain token0 token1).ledger⟩
 
@@ -447,15 +434,14 @@ the sum of every committed update receipt of the replay (nested committed update
 `2 ^ 256`; each receipt carries `Δt = (ts mod 2^32 − last) mod 2^32` with `ts` the block timestamp of
 its frame (`writerContext`), so both wraparounds are part of the statement. -/
 theorem pair_history_oracle {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
-    {K₀ : WriterKey → Prop} {st₀ : State} {burnAuth : Exec.Deriv → Entry → Transcript → Prop}
-    (burn : BurnFrameSupply burnAuth)
+    {K₀ : WriterKey → Prop} {st₀ : State}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
     (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
     (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
     ∃ steps : List PairStep,
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.Authentic burnAuth pair) ∧
+      (∀ s ∈ steps, s.Authentic pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
         runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
@@ -466,7 +452,7 @@ theorem pair_history_oracle {pair : Adr} {cfg : ChainConfig} {checkpoint future 
           (st₀.price1CumulativeLast.toNat +
             oracleSum1 (sourceReplayUpdates st₀ (steps.map PairStep.source))) % 2 ^ 256 := by
   obtain ⟨_, steps, observed, auth, finish, K', source, realized, _, _, rep⟩ :=
-    pair_history_committed burn trace installed initial fresh
+    pair_history_committed trace installed initial fresh
   exact ⟨steps, observed, auth, finish, K', realized, rep, source.oracle_mod.1,
     source.oracle_mod.2⟩
 
@@ -477,17 +463,16 @@ final `balanceOf(pair)` answers are at least the reserves stored at the step's e
 of exactly these steps — then every committed state change with positive incoming supply keeps
 `r0·r1·T'² ≤ r0'·r1'·T²`.  Nonvacuity: the premise ranges over the history's own steps only, and holds
 of any history whose tokens report at least the stored reserves and whose factory answers
-`feeTo = 0`.  The burn steps' answers are authenticated by the burn arm `burnAuth`. -/
+`feeTo = 0`. -/
 theorem pair_history_feeOff_product {pair : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : State}
-    {burnAuth : Exec.Deriv → Entry → Transcript → Prop} (burn : BurnFrameSupply burnAuth)
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
     (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
     (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
     ∃ steps : List PairStep,
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.Authentic burnAuth pair) ∧
+      (∀ s ∈ steps, s.Authentic pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
         runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
@@ -497,7 +482,7 @@ theorem pair_history_feeOff_product {pair : Adr} {cfg : ChainConfig}
             before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
               after.reserve0.val * after.reserve1.val * before.totalSupply.toNat ^ 2) := by
   obtain ⟨_, steps, observed, auth, finish, K', source, realized, _, _, rep⟩ :=
-    pair_history_committed burn trace installed initial fresh
+    pair_history_committed trace installed initial fresh
   exact ⟨steps, observed, auth, finish, K', realized, rep, source.feeOff_product⟩
 
 end Blanc.Lift.UniswapV2Pair

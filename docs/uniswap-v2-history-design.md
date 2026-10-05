@@ -322,7 +322,7 @@ the nested-turn machinery). Cost of waiting: none for W1–W3/G5; W4 shape depen
 Alternative: a trace-level predicate over the actual `STATICCALL` child frames' outputs, bridged to
 the step form (+0.3M tokens, same strength).
 
-## 8. Implementation status (W1–W8, burn arm open)
+## 8. Implementation status (W1–W8; G4 merged, burn arm wired)
 
 Proved in `Blanc/Lift/UniswapV2Pair/PairSupply.lean` and `PairHistory.lean` (generic:
 `Blanc/ExecutionTraceEntered.lean`). Deviations from §3–§4, all within the accepted D1/D2:
@@ -337,8 +337,9 @@ Proved in `Blanc/Lift/UniswapV2Pair/PairSupply.lean` and `PairHistory.lean` (gen
   before the state; the headline fixes `st₀` first, so its statement is unchanged.
 * **`WholeFrameReplay` takes the frame's commit proof**, so the step names the committed frame.
 * **`PairStep.Authentic`** adds `pc = 0` and an explicit commit conjunct (correction 1).
-* **Burn arm.** `PairFrameAuth burnAuth` with `BurnFrameSupply burnAuth` as an explicit premise of
-  `pairSupply` and of every history theorem; G4 instantiates `burnAuth` and discharges it.
+* **Burn arm.** `BurnAuth` (decoded `.burn recipient` and G4's `BurnFrameAuth`), produced by
+  `pair_burn_outcome` from `burnRaw_source_authentic` (G4, merged from `claude/uv2-burn-provenance`
+  0e4e7257); `K` is extended by the Pair's own LP row first. No history theorem has a burn premise.
 * **HASH-T rows.** `pairHistoryTouchedKeys` collects `pairDerivKeys D` (the rows of every Pair frame
   entered below each raw Pair root), selector-independent; `pairFrameKeys` adds `.balance pair` (burn).
 * **U3** is `pair_history_feeOff_product`, with `sourceReplayAnswers st₀ (steps.map source)` inside the
