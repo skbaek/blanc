@@ -120,7 +120,7 @@ import tomllib
 
 SHARED = ["Basic", "Semantics", "CommonCore", "MachineDataFacts", "CreationArtifact", "RlpConcrete",
           "ProofRecipesGenerated", "ProofRecipeTactic", "Tactics", "CommonProofs", "Ladder", "Upgrade",
-          "BalanceAlgebra", "LedgerConservation", "StorageOnlySpec", "SlotFootprint", "OffsetPricing", "ProrataAccounting",
+          "BalanceAlgebra", "LedgerConservation", "StorageOnlySpec", "SlotFootprint", "SlotFootprintRestrict", "OffsetPricing", "ProrataAccounting",
           "ProrataAttackModel", "ProrataAttackPath", "FakeExponential", "FakeExponentialGrowth", "FakeExponentialEval", "WordFakeExponential", "WordFakeExponentialBound", "WordFakeExponentialEval", "FakeExponentialWordCorrespondence", "FakeExponentialWordDomain", "WordArithmetic", "WordByteCodecs", "WordByteRoundtrip", "MemoryImage", "BytesWrite", "MemoryLayout", "MemoryStageGas",
           "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward",
           "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "StorageAccessGas", "StorageRefund", "ForwardSha256",
@@ -296,6 +296,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.InitializedReplay",
         "Lift.UniswapV2Pair.PairSupply",
         "Lift.UniswapV2Pair.PairHistory",
+        "Lift.UniswapV2Pair.PairHistoryLive",
         "Lift.UniswapV2Pair.PairCallShape",
         "Lift.UniswapV2Pair.PairCallSiteShape",
         "Lift.UniswapV2Pair.PairCallSites",

@@ -1919,6 +1919,10 @@ slot or a tracked key's slot), `Inj`/`Apart` (tracked slots pairwise distinct an
 extend the footprint), `Support.get_eq_zero`/`Support.set`/`Inj.extend`/`Apart.extend`, and
 `FreshKeys.of_universe`, which turns injectivity and apartness of one *trace-fixed universe* into the
 freshness of every touched key.  The key type, its slot function and the fixed slots are parameters.
+When a later frame's keys are stated fresh against the universe itself (not held by it),
+[`Blanc/SlotFootprintRestrict.lean`](../Blanc/SlotFootprintRestrict.lean)'s `FreshKeys.restrict`
+carries that freshness to every tracked subset of the universe (worked use: the Uniswap V2 pair's
+`pair_history_writer_live` in `Blanc/Lift/UniswapV2Pair/PairHistoryLive.lean`).
 For an explicit query list and write list, `checkFaithfulOn slot observed written`
 checks that a written key shares its raw slot only with itself among the requested
 observations; `checkFaithfulOn_eq_true` gives its exact finite soundness statement.

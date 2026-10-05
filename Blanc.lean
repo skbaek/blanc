@@ -10,6 +10,7 @@ import Blanc.LedgerConservation
 import Blanc.LedgerUpdate
 import Blanc.StorageOnlySpec
 import Blanc.SlotFootprint
+import Blanc.SlotFootprintRestrict
 import Blanc.StaticStores
 import Blanc.WordArithmetic
 import Blanc.FakeExponentialEval
@@ -720,6 +721,7 @@ import Blanc.Lift.UniswapV2Pair.ReplayWriterGas
 import Blanc.Lift.UniswapV2Pair.InitializedReplay
 import Blanc.Lift.UniswapV2Pair.PairSupply
 import Blanc.Lift.UniswapV2Pair.PairHistory
+import Blanc.Lift.UniswapV2Pair.PairHistoryLive
 import Blanc.Lift.UniswapV2Pair.PropertiesOracle
 import Blanc.Lift.UniswapV2Pair.PropertiesSwap
 import Blanc.Lift.UniswapV2Pair.PropertiesLedger

@@ -349,3 +349,19 @@ Proved in `Blanc/Lift/UniswapV2Pair/PairSupply.lean` and `PairHistory.lean` (gen
   `pairFrameObs`); deleting it orphans `Lift/ReachDispatch` (proof-recipe registered). The private
   `locked_*_outcome` of `LockedSupply` are concept duplicates of `free_*_outcome`; `staticObservedNil`
   and `mintSourceContext` folds as in §2/§4.
+
+## 9. History liveness (U6) and fee-on (U3) — status
+
+`Blanc/Lift/UniswapV2Pair/PairHistoryLive.lean`: `PairHistoryReplayed`/`pair_history_replayed` package
+the headline's existential; `pair_live_outcome` is the shared glue (a pc-zero run at the future world
+plus HASH-T freshness of its own `pairDerivKeys` gives `PairStepOutcome` from `finish`). Instances:
+`pair_history_writer_live` (transfer/approve/transferFrom, cost `writer.cost`),
+`pair_history_sync_live` (cost `syncCalleePrefixGas … + 244`), `pair_history_mint_live`
+(`env.gas + 228`), `pair_history_swap_live` (both callback shapes; `swapFrontTransferGas … +
+swapPrefixGas … + 445`, `SwapSafeTransferForward` a named premise). Skim and burn instances are one
+`pair_live_outcome` call each once their forward theorems land. Model-acceptance bridges: writers
+(`startImmediate` at `finish`), sync (`finish.unlocked = 1` and `State.update` accepting the answers,
+`State.update_bounds`), swap (`runTyped_swap_success_reserves`). Mint's acceptance conditions stay inside
+`MintPrefixForwardEnv` (lock word, bounds, cover, pricing), as do swap's answer-level facts inside
+`SwapBackForwardEnv` (input, `K`, bounds). U3 fee-on: `SourceReplay.feeOn_product`,
+`pair_history_feeOn_product`.
