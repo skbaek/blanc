@@ -38,6 +38,7 @@ theorem rx_number (hroom : S.length < 1024)
     (x := sevm.benvStat.number.toB256) (G := G) (cost := gBase)
     (by rintro ⟨⟩) rfl rfl hroom) k
 
+/-- The actual header timestamp, with its fixed base charge. -/
 theorem rx_timestamp (hroom : S.length < 1024)
     (k : SFunc.RunExact fs sevm
       (St b (sevm.benvStat.time :: S) M G) f o) :
@@ -174,13 +175,6 @@ theorem ri_slt {x y : B256} {d : Devm}
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   exact ⟨_, St.of_diff (Devm.diffBurn_of_applyBinary run)⟩
-
-/-- The actual header timestamp, with its fixed base charge. -/
-theorem rx_timestamp (hroom : S.length < 1024)
-    (k : SFunc.RunExact fs sevm (St b (sevm.benvStat.time :: S) M G) f o) :
-    SFunc.RunExact fs sevm (St b S M (G + 2)) (.next (.reg .timestamp) f) o :=
-  .next (Ninst.runCompiled_pushItem (devm := St b S M (G + 2)) (G := G) (cost := gBase)
-    (by rintro ⟨⟩) rfl rfl hroom) k
 
 /-- `TIMESTAMP`, inverted. -/
 theorem ri_timestamp {d : Devm}
