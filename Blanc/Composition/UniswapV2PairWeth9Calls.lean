@@ -19,7 +19,8 @@ derives it from what the Pair code calls:
 * `weth9_history_holder_noShrink_pairCalls`: the adapter's history theorem with `HolderCalls`
   discharged.
 
-The cross-host inputs are named hypotheses marked `CROSS-HOST`.
+The inputs the original host discharges are named hypotheses marked `CROSS-HOST`; this lane's own
+open obligations are marked `LANE-OPEN`.
 -/
 
 namespace Blanc.Composition.UniswapV2PairWeth9
@@ -93,7 +94,7 @@ def PairSendsNoRootMessage (p : Adr) {cfg : ChainConfig} {checkpoint future : Bl
     (trace : ConfiguredHistoryTrace cfg checkpoint future) : Prop :=
   ∀ R ∈ trace.settledRoots, R.sevm.caller ≠ p
 
-/-- CROSS-HOST HYPOTHESIS (delete at consolidation): discharged by new-host (this lane's) WETH9-side
+/-- LANE-OPEN OBLIGATION (second host): discharged by this lane's WETH9-side
 work: a direct child of a settled WETH9 frame that stays at `ca` is called by `ca` itself.  Expected
 source: the WETH9 certificate executes no external instruction but the `withdraw` CALL
 (`SFunc.execsSatisfy`, as in `Blanc/Lift/StaticOnlyFrames.lean`), a CALL spawn hands the current
@@ -105,8 +106,8 @@ def Weth9SelfTargetChildren (ca : Adr) {cfg : ChainConfig} {checkpoint future : 
     ∀ c ∈ Exec.childFrames G.run, c.sevm.currentTarget = ca → c.sevm.caller = ca
 
 /-- **The pair's WETH9 calls are transfers or deposits, over a configured history.**
-CROSS-HOST: conditional on QuietEntriesCallShape, SkimCallShape, SwapCallShape, BurnCallShape,
-PairFramesRunPairCode, PairSendsNoRootMessage, Weth9SelfTargetChildren. -/
+CROSS-HOST: conditional on BurnCallShape, PairFramesRunPairCode, PairSendsNoRootMessage.
+LANE-OPEN: conditional on QuietEntriesCallShape, SkimCallShape, SwapCallShape, Weth9SelfTargetChildren. -/
 theorem pairCalls_holderCalls {ca p : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (trace : ConfiguredHistoryTrace cfg checkpoint future) (apart : p ≠ ca)
     (quiet : UniswapV2Pair.QuietEntriesCallShape) (skim : UniswapV2Pair.SkimCallShape)
@@ -141,8 +142,8 @@ theorem pairCalls_holderCalls {ca p : Adr} {cfg : ChainConfig} {checkpoint futur
 
 /-- **`weth9_history_holder_noShrink` with the pair-side `HolderCalls` discharged.**  As
 `weth9_history_holder_noShrink`, with `pairCalls` replaced by what the Pair code calls.
-CROSS-HOST: conditional on QuietEntriesCallShape, SkimCallShape, SwapCallShape, BurnCallShape,
-PairFramesRunPairCode, PairSendsNoRootMessage, Weth9SelfTargetChildren. -/
+CROSS-HOST: conditional on BurnCallShape, PairFramesRunPairCode, PairSendsNoRootMessage.
+LANE-OPEN: conditional on QuietEntriesCallShape, SkimCallShape, SwapCallShape, Weth9SelfTargetChildren. -/
 theorem weth9_history_holder_noShrink_pairCalls {ca p : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {K₀ : Key → Prop}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)

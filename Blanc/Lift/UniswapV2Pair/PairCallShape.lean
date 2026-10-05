@@ -36,7 +36,7 @@ def EntryCallShape (sel : B256 → Prop) : Prop :=
 def QuietSelector (s : B256) : Prop :=
   s ∈ pairSelectors ∧ s ≠ 0xbc25cf77 ∧ s ≠ 0x022c0d9f ∧ s ≠ 0x89afcb44
 
-/-- CROSS-HOST HYPOTHESIS (delete at consolidation): discharged by new-host (this lane's) entry walks,
+/-- LANE-OPEN OBLIGATION (second host): discharged by this lane's entry walks,
 one per quiet entry: every successful frame of a view, `sync`, `mint`, `permit`, `transfer`, `approve`,
 `transferFrom` or `initialize` has no non-static committed child (each issues only STATICCALLs or no
 call), which implies this shape.  Statement shape of the expected discharge, per entry `e`:
@@ -46,14 +46,14 @@ c.sevm.isStatic = true`.  Not derived here: the existing walks (`StaticViewTurns
 state that these are all of the frame's children. -/
 def QuietEntriesCallShape : Prop := EntryCallShape QuietSelector
 
-/-- CROSS-HOST HYPOTHESIS (delete at consolidation): discharged by a new-host (this lane's) exhaustive
+/-- LANE-OPEN OBLIGATION (second host): discharged by this lane's exhaustive
 form of the skim walk (`skim_bytecode_exact_consumes`, SkimCanonical.lean): the only non-static
 children of a successful `skim` frame are its two `_safeTransfer` CALLs, whose calldata starts with
 `transfer`'s selector.  The current walk exposes both CALL steps (`SkimFirstSteps`/`SkimSecondSteps`)
 but not that they are all of the frame's children. -/
 def SkimCallShape : Prop := EntryCallShape (· = 0xbc25cf77)
 
-/-- CROSS-HOST HYPOTHESIS (delete at consolidation): discharged by a new-host (this lane's) exhaustive
+/-- LANE-OPEN OBLIGATION (second host): discharged by this lane's exhaustive
 form of the swap walk (`swap_bytecode_exact_consumes`, SwapCanonical.lean): the only non-static
 children of a successful `swap` frame are its optimistic `transfer` CALLs (`SwapTransferOpt`) and the
 `uniswapV2Call` callback (`SwapCallbackOpt`).  The current walk exposes these steps but not that they
@@ -69,7 +69,8 @@ def BurnCallShape : Prop := EntryCallShape (· = 0x89afcb44)
 
 /-- **Pair call shape.**  Every successful frame of the Pair code calls non-statically only with the
 `transfer` or the `uniswapV2Call` selector, by the dispatcher's selector partition.
-CROSS-HOST: conditional on QuietEntriesCallShape, SkimCallShape, SwapCallShape, BurnCallShape. -/
+CROSS-HOST: conditional on BurnCallShape.
+LANE-OPEN: conditional on QuietEntriesCallShape, SkimCallShape, SwapCallShape. -/
 theorem pair_callsTransferOrCallback (quiet : QuietEntriesCallShape) (skim : SkimCallShape)
     (swap : SwapCallShape) (burn : BurnCallShape)
     {sevm : Sevm} {b post : Devm} {G : Nat} (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
