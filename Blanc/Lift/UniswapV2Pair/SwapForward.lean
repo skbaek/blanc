@@ -1,14 +1,16 @@
 import Blanc.Lift.UniswapV2Pair.SwapCanonical
 import Blanc.Lift.UniswapV2Pair.GetterStringWalk
 import Blanc.Lift.ExactWalkSolc
+import Blanc.Lift.UniswapV2Pair.SwapForwardFront
+import Blanc.Lift.UniswapV2Pair.SwapForwardBack
 
-/-! Forward (gas-exact) component schedule of the swap entry: the PC0 guards, the selector
-dispatch to `t_01be_c99` and the ABI wrapper up to the body's internal call, and the wrapper's
-`STOP`. Given an exact run of the body `t_0683_c54` from the decoded entry stack (the forward
-environment), the original bytes run from pc zero with an exact gas charge, and that run
-satisfies the canonical swap frame. The body's own forward walk (lock, reserves, transfers,
-callback, balance queries, pricing check, update, logs, unlock) is not constructed here: it
-is the premise. -/
+/-! Forward (gas-exact) schedule of the swap entry: the PC0 guards, the selector dispatch to
+`t_01be_c99`, the ABI wrapper up to the body's internal call and the wrapper's `STOP`, around
+the body's own forward run (`swapBody_exact`: the front half to the join, `SwapForwardFront`,
+and the back half to the return, `SwapForwardBack`). The callee frames (token transfers,
+callback, balance queries) are forward-environment premises; the moved-pointer `_safeTransfer`
+helper and the CALL reply bound are cross-host hypotheses. The original bytes run from pc zero
+with an exact gas charge, and that run satisfies the canonical swap frame. -/
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
@@ -146,18 +148,54 @@ theorem swapPc0_exact {sevm : Sevm} {b x : Devm} {R : List B256} {M : Mem} {G g 
   unfold t_0257_c99
   exact rx_dest rx_stop
 
-/-- **Swap forward component schedule.** Given the forward environment of the swap body (an
-exact run of `t_0683_c54` from the decoded entry stack, returning with at least the wrapper's
-`STOP` gas), together with the nonpayable, size and selector guards and the four literal ABI
-guards, a successful pc-zero run of the original bytes exists with the exact initial gas
-`G + 445`, ending in the body's returned world with its residual gas. That same run satisfies
-the canonical swap frame with foreign storage (`swap_bytecode_exact_consumes_own`) under
-trace-local HASH-T over its own trace universe. This is a component schedule: it constructs
-the dispatch and wrapper and consumes the body run as a premise; it does not construct the
-body (the reachable-state gas theorem stays original-host work).
-CROSS-HOST: conditional on `SwapCallReplyShort`. -/
+/-- **Forward swap body.** The front half (`swapBody_front_exact`: lock prefix, both optional
+transfers, conditional callback) joined at `t_09c3_c5` to the back half (`swapBack_exact`:
+both balance queries, inputs, `K` check, `_update`, `Swap` log, unlock): the actual body runs
+from its entry with the decoded stack and the PC0 memory to its return, with the closed
+charge `swapPrefixGas` over the front environment's transfer-branch gas, ending at the back
+environment's world and memory with residual exactly `G`. The join gas is the back half's
+entry gas `back.gas`.
+CROSS-HOST: conditional on `SwapSafeTransferForward`, `SwapForwardReplyShort`. -/
+theorem swapBody_exact {K : WriterKey → Prop} {st : State}
+    {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
+    {sevm : Sevm} {b d0 d1 dC : Devm} {cg0 cg1 cgC G : Nat}
+    (helper : SwapSafeTransferForward pre post)
+    (fork : CoveredFork sevm.benvStat.fork)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
+    (unlocked : st.unlocked = 1) (nonstatic : sevm.isStatic = false)
+    (output : swapAmount0Out sevm ≠ 0 ∨ swapAmount1Out sevm ≠ 0)
+    (liquidity0 : (swapAmount0Out sevm).toNat < st.reserve0.val)
+    (liquidity1 : (swapAmount1Out sevm).toNat < st.reserve1.val)
+    (to0 : swapRecipient sevm ≠ st.token0) (to1 : swapRecipient sevm ≠ st.token1)
+    (guards : SwapAbiGuards sevm)
+    (back : SwapBackForwardEnv sevm (swapFrontCutWorld sevm b d0 d1 dC)
+      (swapFrontCutMem sevm d0 d1 dC) (swapFrontCutMem sevm d0 d1 dC).size
+      (swapFrontPtr sevm d0 d1) (swapCutWords sevm st) 0x257 [0x022c0d9f] G)
+    (front : SwapFrontForwardEnv pre post sevm b st d0 d1 dC cg0 cg1 cgC back.gas) :
+    SFunc.RunExact cert.prog sevm
+      (St b (swapBodyStack sevm) getterInitMemory
+        (swapFrontTransferGas pre sevm b d0 d1 cg0 cg1 cgC back.gas +
+          swapPrefixGas sevm b (swapAmount0Out sevm)))
+      t_0683_c54 (.returned (St back.post [0x022c0d9f] back.memory G)) := by
+  obtain ⟨mem, lower, width, _, run⟩ := swapBody_front_exact helper fork rep unlocked nonstatic
+    output liquidity0 liquidity1 to0 to1 guards front
+  exact run _ (swapBack_exact fork mem lower width (by decide) back)
+
+/-- **Swap forward schedule from pc zero.** From the nonpayable, size and selector guards, the
+four literal ABI guards, the finite entry storage with the source guards of `startTyped`, and
+the forward environments of both halves of the body (the token transfers and callback for the
+front, the two `balanceOf` queries and the primitive guards for the back), a successful
+pc-zero run of the original bytes exists with the exact initial gas
+`swapFrontTransferGas … back.gas + swapPrefixGas … + 445`, ending in the back half's world
+and memory with the residual `g`. That same run satisfies the canonical swap frame with foreign
+storage (`swap_bytecode_exact_consumes_own`) under trace-local HASH-T over its own trace
+universe. The callee frames are forward-environment premises (ENV class): this is a
+conditional universal construction, not an existential execution for arbitrary callees.
+CROSS-HOST: conditional on `SwapCallReplyShort`, `SwapSafeTransferForward`,
+`SwapForwardReplyShort`. -/
 theorem swap_bytecode_forward_consumes {K : WriterKey → Prop} {current : Checkpoint}
-    {sevm : Sevm} {b x : Devm} {R : List B256} {M : Mem} {G g : Nat}
+    {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
+    {sevm : Sevm} {b d0 d1 dC : Devm} {cg0 cg1 cgC g : Nat}
     (invocation : List Nat)
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
     (sem : CodeSem) (image : sem.image = some code.toList)
@@ -166,9 +204,21 @@ theorem swap_bytecode_forward_consumes {K : WriterKey → Prop} {current : Check
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
     (selector : Blanc.Sevm.selector sevm = 0x022c0d9f) (guards : SwapAbiGuards sevm)
-    (body : SFunc.RunExact cert.prog sevm (St b (swapBodyStack sevm) getterInitMemory G)
-      t_0683_c54 (.returned (St x R M (g + 1)))) :
-    ∃ run : Exec 0 sevm (St b [] Mem.empty (G + 279 + 166)) (.ok (St x R M g)),
+    (unlocked : current.state.unlocked = 1) (nonstatic : sevm.isStatic = false)
+    (output : swapAmount0Out sevm ≠ 0 ∨ swapAmount1Out sevm ≠ 0)
+    (liquidity0 : (swapAmount0Out sevm).toNat < current.state.reserve0.val)
+    (liquidity1 : (swapAmount1Out sevm).toNat < current.state.reserve1.val)
+    (to0 : swapRecipient sevm ≠ current.state.token0)
+    (to1 : swapRecipient sevm ≠ current.state.token1)
+    (helper : SwapSafeTransferForward pre post)
+    (back : SwapBackForwardEnv sevm (swapFrontCutWorld sevm b d0 d1 dC)
+      (swapFrontCutMem sevm d0 d1 dC) (swapFrontCutMem sevm d0 d1 dC).size
+      (swapFrontPtr sevm d0 d1) (swapCutWords sevm current.state) 0x257 [0x022c0d9f] (g + 1))
+    (front : SwapFrontForwardEnv pre post sevm b current.state d0 d1 dC cg0 cg1 cgC back.gas) :
+    let G := swapFrontTransferGas pre sevm b d0 d1 cg0 cg1 cgC back.gas +
+      swapPrefixGas sevm b (swapAmount0Out sevm)
+    ∃ run : Exec 0 sevm (St b [] Mem.empty (G + 279 + 166))
+        (.ok (St back.post [0x022c0d9f] back.memory g)),
       (WriterInj (WriterExtend K
           (swapTraceKeys ⟨0, sevm, St b [] Mem.empty (G + 279 + 166), _, run⟩)) →
         WriterApart (WriterExtend K
@@ -176,12 +226,56 @@ theorem swap_bytecode_forward_consumes {K : WriterKey → Prop} {current : Check
         SwapCallReplyShort ⟨0, sevm, St b [] Mem.empty (G + 279 + 166), _, run⟩ sevm →
         (∀ a, a ≠ sevm.currentTarget → (swapPrefixWorld sevm b).getStor a = b.getStor a) ∧
         SwapCanonicalBody
-          (fun d => ∀ a, a ≠ sevm.currentTarget → (St x R M g).getStor a = d.getStor a)
+          (fun d => ∀ a, a ≠ sevm.currentTarget →
+            (St back.post [0x022c0d9f] back.memory g).getStor a = d.getStor a)
           K current invocation run) := by
+  intro G
+  have body := swapBody_exact helper fork rep unlocked nonstatic output liquidity0 liquidity1
+    to0 to1 guards back front
   obtain ⟨run⟩ := lift_exact cert_check jumps_ok codeEq fork
     ⟨t_0000_c0, rfl, swapPc0_exact value size selector guards body⟩
   exact ⟨run, fun inj apart short =>
     swap_bytecode_exact_consumes_own invocation rep sem image installed freshOutput codeEq fork
       selector run inj apart short⟩
+
+/-- **The forward front lands in `SwapCut`.** Under the front environment, the join state the
+forward run reaches (world `swapFrontCutWorld`, memory `swapFrontCutMem`, pointer
+`swapFrontPtr`, the cut words of the entry state) satisfies the back half's cut predicate for
+the locked source frame and the source swap locals, provided the callee frames left the Pair's
+storage as the lock prefix left it (`pairKeep`, an ENV-class premise on the actual transfer and
+callback callees; under the lock the Pair's own mutating entries revert, which the inverse side
+proves by `LockedAuth`).
+CROSS-HOST: conditional on `SwapSafeTransferForward`, `SwapForwardReplyShort`. -/
+theorem swapBody_front_cut {K : WriterKey → Prop} {current : Checkpoint}
+    {pre : Nat → B256 → Nat} {post : Nat → B256 → Bytes → Nat}
+    {sevm : Sevm} {b d0 d1 dC : Devm} {cg0 cg1 cgC Gc : Nat} (invocation : List Nat)
+    (helper : SwapSafeTransferForward pre post)
+    (fork : CoveredFork sevm.benvStat.fork)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (freshOutput : b.output = [])
+    (unlocked : current.state.unlocked = 1) (nonstatic : sevm.isStatic = false)
+    (output : swapAmount0Out sevm ≠ 0 ∨ swapAmount1Out sevm ≠ 0)
+    (liquidity0 : (swapAmount0Out sevm).toNat < current.state.reserve0.val)
+    (liquidity1 : (swapAmount1Out sevm).toNat < current.state.reserve1.val)
+    (to0 : swapRecipient sevm ≠ current.state.token0)
+    (to1 : swapRecipient sevm ≠ current.state.token1)
+    (guards : SwapAbiGuards sevm)
+    (front : SwapFrontForwardEnv pre post sevm b current.state d0 d1 dC cg0 cg1 cgC Gc)
+    (pairKeep : (swapFrontCutWorld sevm b d0 d1 dC).getStor sevm.currentTarget =
+      (swapPrefixWorld sevm b).getStor sevm.currentTarget) :
+    SwapCut K (swapLockedFrame current (writerContext sevm invocation) (swapDecodedEntry sevm))
+      (swapFrontLocals sevm current.state) sevm (swapFrontCutWorld sevm b d0 d1 dC)
+      (swapCutWords sevm current.state) (swapFrontPtr sevm d0 d1)
+      (swapFrontCutMem sevm d0 d1 dC).size (swapFrontCutMem sevm d0 d1 dC) := by
+  obtain ⟨mem, lower, width, out, _⟩ := swapBody_front_exact (Gc := Gc) helper fork rep unlocked
+    nonstatic output liquidity0 liquidity1 to0 to1 guards front
+  have lockedRep := rep.mint_locked_world (sevm := sevm) (b := b)
+  refine ⟨mem, lower, width, ?_, ?_, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl,
+    swapRecipientWord_eq sevm, rfl, rfl, liquidity0, liquidity1⟩
+  · rw [out, freshOutput]
+  · rw [pairKeep]
+    unfold swapPrefixWorld
+    rw [afterSload_getStor, afterSload_getStor, afterSload_getStor]
+    exact lockedRep
 
 end Blanc.Lift.UniswapV2Pair
