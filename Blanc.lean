@@ -572,6 +572,19 @@ import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness2.Setup
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness2.Run
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness2.Frames
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness2.Top
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Creation.Input
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Creation.Cert
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Creation.Check
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Creation.State
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Creation.Walk
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Creation.Deploy
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Clone.Input
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Clone.Cert
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Clone.Check
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Clone.Walk
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Clone.Deploy
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach.World
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach.Deploy
 
 -- The vulnerable Vyper comparator 0x6326, its token and attacker, and the witnessed
 -- reentry vminus_witness (deployed-lido-vyper-v1, V-).

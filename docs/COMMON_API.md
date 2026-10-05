@@ -2746,7 +2746,8 @@ The shared parts are `checkTransactionGasFee_two`, `checkTransactionChainId_two`
 `calculateIntrinsicCost_two_call` (with `calldataTokens` and the covered-fork constants
 `CoveredFork.rules_txBase`, `rules_floorTokenCost`, `rules_storageClearRefund`,
 `CoveredFork.checkTransactionGasCap_ok`), `prepareMessage_call`/`callMessage`,
-`benvAfterTransfer_get_of_value_zero`, `processMessage_call_of_exec`, `debit_get_ne`/`debit_get_self`,
+`benvAfterTransfer_get_of_value_zero`, `processCreateMessage_msg_afterTransfer_get` (a zero-value
+CREATE frame's entry world, account by account), `processMessage_call_of_exec`, `debit_get_ne`/`debit_get_self`,
 `addBal_get_self`/`addBal_get_ne`, `sender_net_toNat`, `txGasUsed_le` (bounds `txGasUsed ≤ gas` from `floor ≤ gas`),
 `applyTransactions_two` (folds two sequential successful transactions into `applyTransactions`),
 `processTransaction_receiptsTrie` (identifies the inserted receipt key), `receiptKey_zero`/`receiptKey_one`/`receiptKey_ne`
@@ -3598,7 +3599,9 @@ contract-neutral.
 - Deploying lifted creation code: a gas-exact run of a checked creation certificate's
   constructor from the creation frame's start state settles through Jaune's
   `processCreateMessage`, installing the constructor's output and keeping its storage
-  (`liftCreate_ok`, with the creation frame `createSeed`), and the constructor walk steps
+  (`liftCreate_ok`, with the creation frame `createSeed`; `liftCreate_post` names the exact settled
+  world `liftCreatePost` — deposit-charged gas, installed code, every other account unchanged
+  from the constructor's final state, `liftCreatePost_facts`), and the constructor walk steps
   the shared kits lack (`rx_codecopy`, `rxc_sstore`, `rxc_callvalue`, `rx_return_any` and
   `rxc_return_any`, with the halting state `returnPost` named over a variable state) in
   [`Blanc/Lift/Deploy.lean`](../Blanc/Lift/Deploy.lean); and the further steps solc 0.8

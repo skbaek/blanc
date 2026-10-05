@@ -106,6 +106,56 @@ end Steps
 /-- The creation frame of `msg` over the post-transfer environment `benv`. -/
 abbrev createSeed (msg : Msg) (benv : Benv) : Msg := (processCreateMessage.msg msg).withBenv benv
 
+/-- The settled world of a successful lifted CREATE: the constructor's final state charged
+the code deposit, with its output installed at the new address. -/
+def liftCreatePost (target : Adr) (raw : Devm) : Devm :=
+  (raw.setMach ⟨raw.stack, raw.memory, raw.gasLeft - raw.output.length * gasCodeDeposit,
+    raw.stateGas⟩).setCode target ⟨⟨raw.output⟩⟩
+
+/-- **Deploying lifted creation code, exactly.**  If the checked creation certificate's
+constructor runs, gas-exactly, from the creation frame's start state to `raw` without error,
+and `raw`'s output is admissible code (no `0xEF` prefix, affordable, within the size limit),
+then `processCreateMessage msg` succeeds with exactly `liftCreatePost msg.currentTarget raw`. -/
+theorem liftCreate_post {code : ByteArray} {c : Cert}
+    (hc : Cert.check code c = true) (hj : Cert.jumpsOk code c = true)
+    (msg : Msg) (hcodeAddress : msg.codeAddress = .none) (hcode : msg.code = code)
+    (hfork : CoveredFork msg.benv.stat.fork) {benv : Benv} {raw : Devm}
+    (htransfer : (processCreateMessage.msg msg).benvAfterTransfer = .ok benv)
+    (hrun : SProg.RunExact c.prog (initSevm (createSeed msg benv))
+      (initDevm (createSeed msg benv)) raw)
+    (herror : raw.error = .none) (hprefix : raw.output.head? ≠ some 0xEF)
+    (hgas : raw.output.length * gasCodeDeposit ≤ raw.gasLeft)
+    (hmax : raw.output.length ≤ msg.benv.stat.rules.code.maxCodeSize) :
+    processCreateMessage msg = .ok (liftCreatePost msg.currentTarget raw) := by
+  have hstat : (initSevm (createSeed msg benv)).benvStat = msg.benv.stat := by
+    show benv.stat = (processCreateMessage.msg msg).benv.stat
+    exact benvAfterTransfer_stat htransfer
+  obtain ⟨exc⟩ := lift_exact hc hj (sevm := initSevm (createSeed msg benv)) hcode
+    (by rw [hstat]; exact hfork) hrun
+  have hexec : exec (initEvm (createSeed msg benv)) = .ok raw :=
+    (exec_iff_exec_eq _ _ _ _).mp ⟨exc⟩
+  have hprocess : processMessage (processCreateMessage.msg msg) = .ok raw :=
+    processMessage_ok_of_exec htransfer hcodeAddress hexec herror
+  have hcharge := processCreateMessage.chargeCodeGas_legacy_eq_ok
+    (rules := msg.benv.stat.rules) (d := raw) hfork.rules_stateGas_none hprefix hgas hmax
+  exact processCreateMessage_ok_of_processMessage_and_charge msg hprocess herror hcharge
+
+/-- The settled world's projections: error, remaining gas, code and storage at the new
+address, and every other account unchanged from the constructor's final state. -/
+theorem liftCreatePost_facts (target : Adr) (raw : Devm) :
+    (liftCreatePost target raw).error = raw.error ∧
+    (liftCreatePost target raw).gasLeft = raw.gasLeft - raw.output.length * gasCodeDeposit ∧
+    (liftCreatePost target raw).state.get target =
+      { raw.state.get target with code := ⟨⟨raw.output⟩⟩ } ∧
+    (∀ a, a ≠ target → (liftCreatePost target raw).state.get a = raw.state.get a) := by
+  refine ⟨Devm.setCode_error _ _ _, rfl, ?_, fun a ha => ?_⟩
+  · show (raw.state.setCode target _).get target = _
+    unfold State.setCode
+    rw [State.get_set_self]
+  · show (raw.state.setCode target _).get a = _
+    unfold State.setCode
+    rw [State.get_set_ne _ (Ne.symm ha)]
+
 /-- **Deploying lifted creation code.**  If the checked creation certificate's constructor
 runs, gas-exactly, from the creation frame's start state to `raw` without error, and `raw`'s
 output is admissible code (no `0xEF` prefix, affordable, within the size limit), then
@@ -125,28 +175,14 @@ theorem liftCreate_ok {code : ByteArray} {c : Cert}
       (post.getCode msg.currentTarget).toList = raw.output ∧
       Devm.getStor post msg.currentTarget = Devm.getStor raw msg.currentTarget ∧
       post.error = .none := by
-  have hstat : (initSevm (createSeed msg benv)).benvStat = msg.benv.stat := by
-    show benv.stat = (processCreateMessage.msg msg).benv.stat
-    exact benvAfterTransfer_stat htransfer
-  obtain ⟨exc⟩ := lift_exact hc hj (sevm := initSevm (createSeed msg benv)) hcode
-    (by rw [hstat]; exact hfork) hrun
-  have hexec : exec (initEvm (createSeed msg benv)) = .ok raw :=
-    (exec_iff_exec_eq _ _ _ _).mp ⟨exc⟩
-  have hprocess : processMessage (processCreateMessage.msg msg) = .ok raw :=
-    processMessage_ok_of_exec htransfer hcodeAddress hexec herror
-  have hcharge := processCreateMessage.chargeCodeGas_legacy_eq_ok
-    (rules := msg.benv.stat.rules) (d := raw) hfork.rules_stateGas_none hprefix hgas hmax
-  refine ⟨_, processCreateMessage_ok_of_processMessage_and_charge msg hprocess herror hcharge,
-    ?_, ?_, ?_⟩
+  refine ⟨_, liftCreate_post hc hj msg hcodeAddress hcode hfork htransfer hrun herror hprefix
+    hgas hmax, ?_, ?_, ?_⟩
   · unfold Devm.getCode Devm.getAcct
-    rw [Devm.setCode_state]
-    unfold State.setCode
-    rw [State.get_set_self]
+    rw [(liftCreatePost_facts _ raw).2.2.1]
     simp only [ByteArray.toList_eq_toList_data]
-    rfl
-  · rw [congrFun (Devm.setCode_getStor _ msg.currentTarget _) msg.currentTarget]
-    rfl
-  · rw [Devm.setCode_error]
+  · unfold Devm.getStor Devm.getAcct
+    rw [(liftCreatePost_facts _ raw).2.2.1]
+  · rw [(liftCreatePost_facts _ raw).1]
     exact herror
 
 end Blanc.Lift

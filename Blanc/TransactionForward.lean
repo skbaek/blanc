@@ -228,6 +228,25 @@ theorem benvAfterTransfer_get_of_value_zero {msg : Msg} {benv : Benv}
     exact hself _ _ _ (B256.sub_zero _)
   · rw [of_benvAfterTransfer_no hstv h]
 
+/-- **A zero-value CREATE frame's entry world, account by account**: the new account keeps its
+balance and code, has its nonce incremented and its storage cleared; every other account is as
+the outer message left it. -/
+theorem processCreateMessage_msg_afterTransfer_get {msg : Msg} {benv : Benv}
+    (hzero : msg.value = 0) (h : (processCreateMessage.msg msg).benvAfterTransfer = .ok benv)
+    (a : Adr) :
+    benv.state.get a = if a = msg.currentTarget then
+      { msg.benv.state.get a with nonce := (msg.benv.state.get a).nonce + 1, stor := .empty }
+    else msg.benv.state.get a := by
+  rw [benvAfterTransfer_get_of_value_zero (msg := processCreateMessage.msg msg) hzero h a]
+  change ((msg.benv.state.setStor msg.currentTarget .empty).incrNonce msg.currentTarget).get a = _
+  unfold State.incrNonce State.setStor
+  split
+  · next ha =>
+    subst ha
+    rw [State.get_set_self, State.get_set_self]
+  · next ha =>
+    rw [State.get_set_ne _ (Ne.symm ha), State.get_set_ne _ (Ne.symm ha)]
+
 /-- **A call message with a code address that is no precompile settles as its raw execution**: when the
 value moved at entry is zero and the interpreter run from the entry environment succeeds with no frame
 error, `processMessage` returns that machine. -/
