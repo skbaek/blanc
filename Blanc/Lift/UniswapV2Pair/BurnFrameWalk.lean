@@ -2,6 +2,7 @@ import Blanc.Lift.UniswapV2Pair.BurnPrefixWalk
 import Blanc.Lift.UniswapV2Pair.BurnDispatchWalk
 import Blanc.Lift.UniswapV2Pair.BurnSuffixWalk
 import Blanc.Lift.UniswapV2Pair.MintPrefixWalk
+import Blanc.Lift.UniswapV2Pair.MintCanonical
 
 /-! Same-derivation Burn fee, pricing and physical suffix joins. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -363,6 +364,24 @@ def BurnPrefixFresh (K : WriterKey → Prop) (st : State) (D : Exec.Deriv)
             (Bytes.toB256 (out0.take 32)) t1 t0 r1 r0 toWord extρ R)
           (feeBurnMemory M1 sevm.currentTarget) r1 r0 0x15e2
 
+/-- Burn's actual factory reply chooses a row from the root-fixed finite universe.
+No hypothetical-answer freshness callback is needed at the frame boundary. -/
+theorem burnPrefixFresh_of_trace {K : WriterKey → Prop} {st : State} {D : Exec.Deriv}
+    {b : Devm} {R : List B256} {M : Mem} {toWord extρ : B256} {seg : Seg}
+    (fork : CoveredFork D.sevm.benvStat.fork) (mem : PtrMem 128 96 M)
+    (inj : WriterInj (WriterExtend K (mintTraceKeys D)))
+    (apart : WriterApart (WriterExtend K (mintTraceKeys D))) :
+    BurnPrefixFresh K st D D.sevm b R M toWord extρ seg := by
+  unfold BurnPrefixFresh
+  dsimp only
+  intro out0 d1 out1 gas _ _ gw callGas d out call post
+  have reply0 := balanceReplyMemory_ptr out0 (balanceRequestMemory_ptr mem D.sevm.currentTarget)
+  have reply1 := balanceReplyMemory_ptr out1 (balanceRequestMemory_ptr reply0 D.sevm.currentTarget)
+  have scratch := feeBurnMemory_ptr reply1 D.sevm.currentTarget
+  have member := mint_feeReply_mem fork scratch.wf call ⟨1, _, post.stack, by decide⟩
+  rw [post.returnData] at member
+  exact mint_feeFresh_of_universe inj apart (fun _ old => Or.inl old) (Or.inr member) _ _ _ _ _
+
 /-- Literal Burn entry derives a positive two-word return, its actual pointer
 and six token calls plus the retained fee callee from the same derivation. -/
 theorem burnPrefix_return_inv {K : WriterKey → Prop} {st : State} {D : Exec.Deriv}
@@ -463,8 +482,8 @@ theorem burnPc0_return_inv {K : WriterKey → Prop} {st : State} {D : Exec.Deriv
     callee, stack, ptr, low, high, positive0, positive1, Seg.done.inj halted,
     output, stor, logs, terminal, occurrences⟩
 
-/-- The derivation is exactly the supplied successful raw Exec; the64-byte
-return and retained Burn callee therefore concern that invocation. -/
+/-- The supplied raw Exec returns the64-byte payout of that invocation. Its fee-row
+freshness is derived from root-fixed HASH-T, with no exported freshness callback. -/
 theorem burnRaw_return_inv {K : WriterKey → Prop} {st : State}
     {sevm : Sevm} {b publicPost : Devm} {G : Nat}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
@@ -472,14 +491,10 @@ theorem burnRaw_return_inv {K : WriterKey → Prop} {st : State}
     (rep : WriterRep K (b.getStor sevm.currentTarget) st)
     (tracked : K (.balance sevm.currentTarget))
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok publicPost))
-    (fresh : ∀ gas calleeOutcome,
-      SFunc.RunP (StepIn ⟨0, sevm, St b [] Mem.empty G, .ok publicPost, run⟩) cert.prog sevm
-        (St b [(0xffffffffffffffffffffffffffffffffffffffff : B256) &&& Sevm.dataWord sevm 4,
-          0x053d, 0x89afcb44] getterInitMemory gas) t_13f5_c37 calleeOutcome →
-      BurnPrefixFresh K st ⟨0, sevm, St b [] Mem.empty G, .ok publicPost, run⟩ sevm b
-        [0x89afcb44] getterInitMemory
-        ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& Sevm.dataWord sevm 4)
-        0x053d (.done calleeOutcome)) :
+    (inj : WriterInj (WriterExtend K
+      (mintTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok publicPost, run⟩)))
+    (apart : WriterApart (WriterExtend K
+      (mintTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok publicPost, run⟩))) :
     b.getStorVal sevm.currentTarget 12 = 1 ∧ sevm.isStatic = false ∧
     ∃ (calleeGas : Nat) (calleePost : Devm) (amount0 amount1 p : B256) (n : Nat),
       SFunc.RunP (StepIn ⟨0, sevm, St b [] Mem.empty G, .ok publicPost, run⟩) cert.prog sevm
@@ -489,6 +504,16 @@ theorem burnRaw_return_inv {K : WriterKey → Prop} {st : State}
       0 < amount0.toNat ∧ 0 < amount1.toNat ∧
       publicPost.output = amount0.toBytes ++ amount1.toBytes ∧
       (∀ a, publicPost.getStor a = calleePost.getStor a) ∧ publicPost.logs = calleePost.logs := by
+  have fresh : ∀ gas calleeOutcome,
+      SFunc.RunP (StepIn ⟨0, sevm, St b [] Mem.empty G, .ok publicPost, run⟩) cert.prog sevm
+        (St b [(0xffffffffffffffffffffffffffffffffffffffff : B256) &&& Sevm.dataWord sevm 4,
+          0x053d, 0x89afcb44] getterInitMemory gas) t_13f5_c37 calleeOutcome →
+      BurnPrefixFresh K st ⟨0, sevm, St b [] Mem.empty G, .ok publicPost, run⟩ sevm b
+        [0x89afcb44] getterInitMemory
+        ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& Sevm.dataWord sevm 4)
+        0x053d (.done calleeOutcome) := by
+    intro gas calleeOutcome _
+    exact burnPrefixFresh_of_trace fork getterInitMemory_ptr inj apart
   obtain ⟨f, entry, lifted⟩ := lift_sound_in cert_check codeEq fork run
   rw [show cert.prog[0]? = some t_0000_c0 from rfl] at entry
   cases entry
