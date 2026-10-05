@@ -250,6 +250,70 @@ theorem burnTransfers_source_cut {U K : WriterKey → Prop} {frame : Frame} {pri
     rw [burn_resumeTransfer1 accepted1']
     exact rest
 
+/-- One actual STATICCALL of a Burn frame: a call step of the same derivation
+staged at `target`, its returned bytes, and the callee's answer to `input` in the
+step's own world. -/
+def BurnStaticAnswer (D : Exec.Deriv) (sevm : Sevm) (target : B256) (input out : Bytes) : Prop :=
+  ∃ (w d : Devm) (gw : B256) (S : List B256) (M : Mem) (g : Nat),
+    StepIn D sevm (St w (gw :: target :: S) M g) (.exec .staticcall) d ∧
+    d.returnData = out ∧ StaticAnswered sevm w target.toAdr input out
+
+/-- The static Pair turns of one actual STATICCALL, stated without the model
+frame: each is a static Pair frame running the selector it decodes, and the queue
+is empty at an enabled precompile or exactly the retained static Pair turns of the
+committed child. -/
+def PairViewOrigin (D : Exec.Deriv) (sevm : Sevm) (t : B256) (views : List StaticViewTurn) :
+    Prop :=
+  (∀ picked ∈ views, Blanc.Sevm.selector picked.1.frame.sevm = picked.2.selector ∧
+    picked.1.frame.sevm.currentTarget = sevm.currentTarget ∧
+    picked.1.frame.sevm.isStatic = true) ∧
+  ViewQueueOrigin D sevm sevm.currentTarget t.toAdr views
+
+/-- A model-frame view provenance at the Pair forgets its frame. -/
+theorem PairViewProvenance.origin {D : Exec.Deriv} {sevm : Sevm} {frame : Frame} {t : B256}
+    {views : List StaticViewTurn} (provenance : PairViewProvenance D sevm frame t views)
+    (pair : frame.context.pair = sevm.currentTarget) : PairViewOrigin D sevm t views := by
+  obtain ⟨authentic, derived⟩ := provenance
+  refine ⟨fun picked member => ?_, ?_⟩
+  · obtain ⟨target, _, _, static, _, selector, _⟩ := authentic picked member
+    exact ⟨selector, target.trans pair, static⟩
+  · rw [← pair]
+    exact derived
+
+/-- One actual mutable `transfer` CALL of a Burn frame: a call step of the same
+derivation staged at `token` with zero value, its exact 68-byte ABI input, and its
+returned bytes. -/
+def BurnTransferAnswer (D : Exec.Deriv) (sevm : Sevm) (token payee amount : B256) (reply : Bytes) :
+    Prop :=
+  ∃ (w d : Devm) (gw ii oi os : B256) (S : List B256) (M : Mem) (g : Nat),
+    StepIn D sevm (St w (gw :: token :: 0 :: ii :: 68 :: oi :: os :: S) M g) (.exec .call) d ∧
+    (M.read ii.toNat 68).1 = abiSelectorBytes 0xa9059cbb ++ payee.toBytes ++ amount.toBytes ∧
+    d.returnData = reply
+
+/-- The two literal transfer CALLs, as transfer answers. -/
+theorem BurnTransferCalls.answers {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {w : BurnFinalWords}
+    {M : Mem} {ρ : B256} {R : List B256} {d0 d1 : Devm}
+    (calls : BurnTransferCalls D sevm b w M ρ R d0 d1) :
+    BurnTransferAnswer D sevm (w.token0 &&& 0xffffffffffffffffffffffffffffffffffffffff)
+      ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& w.recipient) w.amount0
+      d0.returnData ∧
+    BurnTransferAnswer D sevm (w.token1 &&& 0xffffffffffffffffffffffffffffffffffffffff)
+      ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& w.recipient) w.amount1
+      d1.returnData := by
+  obtain ⟨gw0, gw1, cg0, cg1, call0, call1, _, _, data0, data1, _⟩ := calls
+  exact ⟨⟨_, d0, gw0, 292, 292, 0, _, _, cg0, call0, data0, rfl⟩,
+    ⟨_, d1, gw1, _, _, 0, _, _, cg1, call1, data1, rfl⟩⟩
+
+/-- The source transcript of the two transfers and the two final balance queries. -/
+def burnTransferTranscript (reply0 : Bytes) (entered0 : Bool) (turns0 : List MutableTurn)
+    (reply1 : Bytes) (entered1 : Bool) (turns1 : List MutableTurn)
+    (final0 : Bytes) (views0 : List StaticViewTurn) (final1 : Bytes)
+    (views1 : List StaticViewTurn) : Transcript :=
+  .next (burnTransferResult reply0 entered0) (mutableTranscript turns0 .done)
+    (.next (burnTransferResult reply1 entered1) (mutableTranscript turns1 .done)
+      (.next (feeObservedResult final0) (staticViewTranscript views0 .done)
+        (.next (feeObservedResult final1) (staticViewTranscript views1 .done) .done)))
+
 /-- Complete observable result of the actual transfer/final-balance source suffix. -/
 def BurnTransferFinished (U : WriterKey → Prop) (frame : Frame) (priced : BurnPriced)
     (D : Exec.Deriv) (sevm : Sevm) (b : Devm) (w : BurnFinalWords)
@@ -259,7 +323,8 @@ def BurnTransferFinished (U : WriterKey → Prop) (frame : Frame) (priced : Burn
     ∃ (K' : WriterKey → Prop) (d0 d1 : Devm) (entered0 entered1 : Bool)
       (turns0 turns1 : List MutableTurn) (final : Frame) (rets : List ChildReturn)
       (transcript : Transcript) (post : Devm) (finalM : Mem) (gas n : Nat)
-      (balance0 balance1 : B256) (added0 added1 : List PendingLog) (L0 L1 : List Log),
+      (balance0 balance1 : B256) (added0 added1 : List PendingLog) (L0 L1 : List Log)
+      (final0 final1 : Bytes) (views0 views1 : List StaticViewTurn),
       (∀ k, K' k → U k) ∧ BurnTransferCalls D sevm b w M ρ R d0 d1 ∧
       PairMutableProvenance D sevm (w.token0 &&& 0xffffffffffffffffffffffffffffffffffffffff)
         entered0 turns0 ∧
@@ -288,7 +353,15 @@ def BurnTransferFinished (U : WriterKey → Prop) (frame : Frame) (priced : Burn
       final.current.logs = frame.current.logs ++ added0 ++ added1 ++
         [PendingLog.owned final.origin (.sync balance0.toNat balance1.toNat),
          PendingLog.owned final.origin (.burn frame.context.sender priced.amount0
-          priced.amount1 priced.observed.locals.recipient)]
+          priced.amount1 priced.observed.locals.recipient)] ∧
+      transcript = burnTransferTranscript d0.returnData entered0 turns0 d1.returnData entered1
+        turns1 final0 views0 final1 views1 ∧
+      BurnStaticAnswer D sevm (w.token0 &&& 0xffffffffffffffffffffffffffffffffffffffff)
+        (ExternalOperation.encode (.balanceOf sevm.currentTarget)) final0 ∧
+      PairViewOrigin D sevm (w.token0 &&& 0xffffffffffffffffffffffffffffffffffffffff) views0 ∧
+      BurnStaticAnswer D sevm (w.token1 &&& 0xffffffffffffffffffffffffffffffffffffffff)
+        (ExternalOperation.encode (.balanceOf sevm.currentTarget)) final1 ∧
+      PairViewOrigin D sevm (w.token1 &&& 0xffffffffffffffffffffffffffffffffffffffff) views1
 
 /-- **Burn transfers through the final source return.** Starting at the produced
 post-pricing cut, the actual mutable queues and final balance views consume the
@@ -313,8 +386,8 @@ theorem burnTransfers_source_finished {U K : WriterKey → Prop} {frame : Frame}
       installed2, tail, ⟨added0, added1, L0, L1, pending, raw, images0, images1⟩, lift⟩ :=
     burnTransfers_source_cut inj apart sub sem image installed fork cut good run
   obtain ⟨gw0, cg0, q0, out0, gw1, cg1, q1, out1, views0, views1, final, rets,
-      finalGas, finalSize, _, _, _, _, _, _, _, _, _, _, _, _,
-      consumed, _, _, returned, finalMem, covered, checkpoint, context, unlocked,
+      finalGas, finalSize, _, _, call0, call1, post0, post1, _, _, _, _, answered0, answered1,
+      consumed, prov0, prov1, returned, finalMem, covered, checkpoint, context, unlocked,
       finalRep, finalLogs, _, bound0, bound1, finalPending⟩ :=
     burnFinal_exact_consumes inj apart sub2 sem image installed2 fork finalCut
       (fun F member target k touched => staticGood F member (target.trans (congrArg Context.pair context2)) k touched)
@@ -323,10 +396,15 @@ theorem burnTransfers_source_finished {U K : WriterKey → Prop} {frame : Frame}
   refine ⟨K2, d0, d1, entered0, entered1, turns0, turns1, final,
     rets0 ++ (rets1 ++ rets), _, _, _, finalGas, finalSize,
     Bytes.toB256 (out0.take 32), Bytes.toB256 (out1.take 32), added0, added1, L0, L1,
+    out0, out1, views0, views1,
     sub2, calls, provenance0, provenance1, finished, returned, finalRep,
     checkpoint.trans checkpoint2, context.trans context2, unlocked,
     finalMem, covered, bound0, bound1, raw, images0, images1, ?_,
-    finalCut.lower, (by have width := finalCut.width; omega), ?_⟩
+    finalCut.lower, (by have width := finalCut.width; omega), ?_, rfl,
+    ⟨_, q0, gw0, _, _, cg0, call0, post0.returnData, answered0⟩,
+    prov0.origin finalCut.pair,
+    ⟨_, q1, gw1, _, _, cg1, call1, post1.returnData, answered1⟩,
+    prov1.origin finalCut.pair⟩
   · rw [finalLogs, raw, context2]
   · rw [finalPending, pending, context2]
 

@@ -10,6 +10,7 @@ import Blanc.LedgerConservation
 import Blanc.LedgerUpdate
 import Blanc.StorageOnlySpec
 import Blanc.SlotFootprint
+import Blanc.SlotFootprintRestrict
 import Blanc.StaticStores
 import Blanc.WordArithmetic
 import Blanc.FakeExponentialEval
@@ -42,6 +43,7 @@ import Blanc.ExecutionTransactionAdmission
 import Blanc.ExecutionBodyAdmission
 import Blanc.ExecutionHistoryAdmission
 import Blanc.ExecutionTraceFresh
+import Blanc.ExecutionTraceEntered
 import Blanc.ExecutionOccurrence
 import Blanc.ExecutionAccountingReplay
 import Blanc.ExecutionAccountingStoragePrefix
@@ -50,6 +52,7 @@ import Blanc.ExecutionAccountingAdmission
 import Blanc.ExecutionAccountingCore
 import Blanc.ExecutionEntryAccounting
 import Blanc.ExecutionModelAccounting
+import Blanc.ExecutionWholeFrameAccounting
 import Blanc.ExecutionDirectCode
 import Blanc.CallSpawnExact
 import Blanc.StaticCallStorage
@@ -699,6 +702,8 @@ import Blanc.Lift.Curve3Crv.Liveness
 import Blanc.Lift.UniswapV2Pair.SyncGasCanonical
 import Blanc.Lift.UniswapV2Pair.PermitSource
 import Blanc.Lift.UniswapV2Pair.SkimCanonical
+import Blanc.Lift.UniswapV2Pair.SkimForward
+import Blanc.Lift.UniswapV2Pair.SkimForwardAccept
 import Blanc.Lift.UniswapV2Pair.BurnBalanceWalk
 import Blanc.Lift.UniswapV2Pair.BurnSuffixWalk
 import Blanc.Lift.UniswapV2Pair.BurnSource
@@ -709,13 +714,18 @@ import Blanc.Lift.UniswapV2Pair.BurnPricingTurns
 import Blanc.Lift.UniswapV2Pair.BurnTransferTurns
 import Blanc.Lift.UniswapV2Pair.BurnFeeTransfers
 import Blanc.Lift.UniswapV2Pair.BurnDispatchWalk
+import Blanc.Lift.UniswapV2Pair.BurnForward
+import Blanc.Lift.UniswapV2Pair.BurnForwardSuffix
+import Blanc.Lift.UniswapV2Pair.BurnForwardBody
+import Blanc.Lift.UniswapV2Pair.BurnForwardAccept
 import Blanc.Lift.UniswapV2Pair.SourceReplay
-import Blanc.Lift.UniswapV2Pair.HistoryReplay
-import Blanc.Lift.UniswapV2Pair.HistoryWriters
-import Blanc.Lift.UniswapV2Pair.HistoryWriterCheck
-import Blanc.Lift.UniswapV2Pair.HistoryWriterWalk
 import Blanc.Lift.UniswapV2Pair.ReplayWriterGas
 import Blanc.Lift.UniswapV2Pair.InitializedReplay
+import Blanc.Lift.UniswapV2Pair.PairSupply
+import Blanc.Lift.UniswapV2Pair.PairHistory
+import Blanc.Lift.UniswapV2Pair.SwapForwardAccept
+import Blanc.Lift.UniswapV2Pair.MintForwardAccept
+import Blanc.Lift.UniswapV2Pair.PairHistoryLive
 import Blanc.Lift.UniswapV2Pair.PropertiesOracle
 import Blanc.Lift.UniswapV2Pair.PropertiesSwap
 import Blanc.Lift.UniswapV2Pair.PropertiesLedger

@@ -423,11 +423,7 @@ def MintObservedSteps (D : Exec.Deriv) (current : Checkpoint) (sevm : Sevm)
 retained static Pair turns of the actually committed child. -/
 def MintViewProvenance (root : Exec.Deriv) (pair target : Adr) (views : List StaticViewTurn) :
     Prop :=
-  views = [] ∧ root.sevm.benvStat.rules.isPrecomp target ∨
-    ∃ (child : Evm) (raw : Execution) (childRun : Exec child.pc child.sta child.dyna raw),
-      Execution.commits raw = true ∧
-      (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots root.exc) ∧
-      views.map Prod.fst = (Exec.retainedTargetTurnsAt pair [] childRun).filterMap Sum.getRight?
+  ViewQueueOrigin root root.sevm pair target views
 
 private theorem mint_encodeWord_inj {x y : B256} (same : encodeWords [x] = encodeWords [y]) :
     x = y := by
@@ -578,7 +574,7 @@ theorem mint_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
   have callF' := callF
   rw [wordF] at callF'
   -- the three static-view turn queues
-  let ctxM := mintSourceContext sevm invocation
+  let ctxM := writerContext sevm invocation
   have good : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = sevm.currentTarget →
       ∀ k ∈ staticViewDecodedKeys F.sevm, WriterExtend K (mintTraceKeys root) k :=
     fun F member target k touched => Or.inr (mintTraceKeys_frame member target k touched)

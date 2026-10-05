@@ -2371,11 +2371,6 @@ theorem mintFrameResult_public_return_inv {K : WriterKey → Prop} {frame : Fram
   · simpa only [encodeWords,List.flatMap_cons,List.flatMap_nil,List.append_nil] using output
   · exact publicLogs.trans logs
 
-/-- Public entry context is read from the actual EVM frame; only its history path is supplied. -/
-def mintSourceContext (sevm : Sevm) (invocation : List Nat) : Context :=
-  { pair := sevm.currentTarget, sender := sevm.caller, value := sevm.value,
-    timestamp := sevm.benvStat.time, isStatic := sevm.isStatic, invocation := invocation }
-
 def mintSourceLockedFrame (current : Checkpoint) (ctx : Context) (recipient : Adr) : Frame :=
   { Frame.enter current ctx (.mint recipient) with
     current := { current with state := { current.state with unlocked := 0 } } }
@@ -2661,7 +2656,7 @@ def MintBalanceHandlerResult (current : Checkpoint) (ctx : Context) (recipient :
 def MintPublicSourceResult (K : WriterKey → Prop) (current : Checkpoint) (D : Exec.Deriv)
     (sevm : Sevm) (b : Devm) (invocation : List Nat) (o : Outcome) : Prop :=
   let st := current.state
-  let ctx := mintSourceContext sevm invocation
+  let ctx := writerContext sevm invocation
   let toWord := (Sevm.dataWord sevm 4).toAdr.toB256
   let R := [0x6a627842]
   let M := getterInitMemory
@@ -2748,7 +2743,7 @@ theorem mintPc0_public_source_inv {K : WriterKey → Prop} {current : Checkpoint
     (invocation : List Nat) (selector : Blanc.Sevm.selector sevm = 0x6a627842)
     (run : SFunc.RunP (StepIn D) cert.prog sevm (St b [] Mem.empty G) t_0000_c0 o) :
     MintPublicSourceResult K current D sevm b invocation o := by
-  let ctx := mintSourceContext sevm invocation
+  let ctx := writerContext sevm invocation
   let recipient := (Sevm.dataWord sevm 4).toAdr
   let prior := mintSourceFeeFrame current ctx recipient
   let frame := mintSourceAfterFeeFrame current ctx recipient

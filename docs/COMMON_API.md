@@ -1919,6 +1919,10 @@ slot or a tracked key's slot), `Inj`/`Apart` (tracked slots pairwise distinct an
 extend the footprint), `Support.get_eq_zero`/`Support.set`/`Inj.extend`/`Apart.extend`, and
 `FreshKeys.of_universe`, which turns injectivity and apartness of one *trace-fixed universe* into the
 freshness of every touched key.  The key type, its slot function and the fixed slots are parameters.
+When a later frame's keys are stated fresh against the universe itself (not held by it),
+[`Blanc/SlotFootprintRestrict.lean`](../Blanc/SlotFootprintRestrict.lean)'s `FreshKeys.restrict`
+carries that freshness to every tracked subset of the universe (worked use: the Uniswap V2 pair's
+`pair_history_writer_live` in `Blanc/Lift/UniswapV2Pair/PairHistoryLive.lean`).
 For an explicit query list and write list, `checkFaithfulOn slot observed written`
 checks that a written key shares its raw slot only with itself among the requested
 observations; `checkFaithfulOn_eq_true` gives its exact finite soundness statement.
@@ -2570,6 +2574,17 @@ consumer needs canonical interpreter ingress as one conjunct:
   `ConfiguredHistoryTrace.pairVisits` in
   `Blanc/Composition/ProrataWethVaultLedgerVisits.lean`. Membership goals over
   these lists have no distinguishing head, so there is no recipe.
+- When every raw root of a trace must satisfy a fact that `Frame.enter` establishes
+  (empty stack and memory, an empty output buffer), import
+  [`Blanc/ExecutionTraceEntered.lean`](../Blanc/ExecutionTraceEntered.lean):
+  `EnteredCondition E` says every entered child's initial machine satisfies `E`;
+  `enteredCondition_fresh` and `enteredCondition_output` are instances;
+  `Exec.rawFrameDescendants_entered` and the carrier rungs up to
+  `ExecutionTrace.ConfiguredHistoryTrace.rawFrames_entered` carry it to every raw root;
+  `ConfiguredHistoryTrace.frameAdmitted_entered` / `frameAdmitted_output` give the
+  admission. Pass `(E := …)` explicitly: `EnteredCondition`'s binders are implicit.
+  Worked use: the Uniswap V2 pair's `pair_trace_admitted`
+  (`Blanc/Lift/UniswapV2Pair/PairHistory.lean`).
 - When a retained trace consumer needs only frames whose message roots and
   descendants survive settlement, import
   [`Blanc/ExecutionTraceSettledFrames.lean`](../Blanc/ExecutionTraceSettledFrames.lean)
@@ -3060,6 +3075,24 @@ turns it into an `AccountingLadderAdmitted`. `Exec.Deriv.FirstExec` and
 `Exec.Deriv.exists_firstExec_or_none` split a chain at its first external
 instruction. Worked use: WETH9,
 `Blanc/Lift/Weth9/CommittedSpawn.lean`, `CommittedHistory.lean`.
+
+When the contract's own frame theorem already consumes the frame's *whole subtree* —
+re-entered frames of the same contract run inside the frame's own model transcript, so
+its own carrier effect is not complete at the first external instruction and the
+children must not be replayed a second time — use
+[`Blanc/ExecutionWholeFrameAccounting.lean`](../Blanc/ExecutionWholeFrameAccounting.lean).
+The contract supplies `Exec.CoreAccounting.WholeFrameReplay` (every committed
+non-static target frame replays from its entry to its post boundary with exactly the
+observation of its committed frames) plus `SpawnKinds`;
+`Exec.CoreAccounting.wholeFrameTarget` adds the static case
+(`Exec.CoreAccounting.staticObservedNil`: below a static frame nothing is observed, by
+the lower-depth hypothesis) and `ExecutionAccountingReplay.wholeFrameLadder` turns it
+into an `AccountingLadderAdmitted`. The obligation receives the frame's commit proof, so
+its step can name the committed frame. Worked use: the Uniswap V2 pair
+(`Blanc/Lift/UniswapV2Pair/PairHistory.lean`: `pair_wholeFrameReplay`, `pairLadder`,
+`pair_history_committed`), whose calling entries consume re-entered ERC-20 frames as nested
+transcript turns; its carrier's boundary is the storage view `(getStor ca).get` (raw `Stor`
+equality is not a function of the words), with representations transported by `WriterRep.congr`.
 
 ### T3. The wrapper is a transaction and the fact is about an installed contract
 
@@ -3873,9 +3906,9 @@ contract-neutral.
   provides `rr_cmp_gt` and `rr_cmp_eq` for `DUP`/`PUSH4`/comparison/`PUSH2`
   branches. They preserve arbitrary instruction relation `P`, its soundness
   projection, the original `AtExec` target and continuation stack; the equality
-  variant consumes the actual function lookup. Worked use:
-  `noncalling_no_exec` in `Blanc/Lift/UniswapV2Pair/HistoryWriterWalk.lean`
-  routes original same-frame prefixes into checked exec-free regions. These
+  variant consumes the actual function lookup; the proof recipe for
+  `Exec.NoRetainedWriteTo` registers them. They have no in-tree consumer
+  since the single-frame Uniswap V2 history walk was superseded. These
   projections alone do not identify a retained occurrence or child outcome.
 - From a cursor-placed node to *later* nodes of the same frame:
   [`Blanc/Lift/ReachChain.lean`](../Blanc/Lift/ReachChain.lean).

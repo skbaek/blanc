@@ -2187,7 +2187,7 @@ private theorem safeTransfer_firstAfterCall_exact {sevm : Sevm} {d : Devm}
     simpa only [ite_eq_right empty] using result
 
 /-- Every first-call payload/copy write misses the caller's actual empty-array word96. -/
-private theorem safeTransfer_call128_sentinel {M : Mem} {amount toWord : B256}
+theorem safeTransfer_call128_sentinel {M : Mem} {amount toWord : B256}
     (mem : PtrMem 128 192 M) (sentinel : memWord M 96 = 0) :
     memWord (safeTransfer_call128Memory M amount toWord) 96 = 0 := by
   have original : MemMatches 0 [(96, .const 0)] M := by
@@ -2527,7 +2527,7 @@ private theorem safeTransfer_firstPrepare_exact {sevm : Sevm} {b : Devm}
   exact initialized
 
 /-- The named first transfer's CALL carrier after its two full stores and partial store. -/
-private theorem safeTransfer_call128_ptr {M : Mem} {amount toWord : B256}
+theorem safeTransfer_call128_ptr {M : Mem} {amount toWord : B256}
     (mem : PtrMem 128 192 M) : PtrMem 292 416 (safeTransfer_call128Memory M amount toWord) := by
   let N0 := safeTransfer_payload128Memory M amount toWord
   let N1 := N0.write 292 (Bytes.toB256 (N0.read 224 32).1).toBytes

@@ -6,6 +6,7 @@ import Blanc.Lift.UniswapV2Pair.Consumption
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
+/-- Public entry context is read from the actual EVM frame; only its history path is supplied. -/
 def writerContext (sevm : Sevm) (invocation : List Nat) : Context :=
   { pair := sevm.currentTarget, sender := sevm.caller, value := sevm.value,
     timestamp := sevm.benvStat.time, isStatic := sevm.isStatic, invocation := invocation }
