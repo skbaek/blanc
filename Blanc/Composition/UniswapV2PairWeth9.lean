@@ -10,12 +10,13 @@ why no other actor can lower the pair's WETH9 balance:
 * `Ledger.step_holder` / `Ledger.run_holder` (model): for a holder `p` whose allowances are all zero,
   every call keeps them zero, and `p`'s balance falls by at most the amounts `p` itself transfers
   away (`holderOut`), provided the calls `p` makes are `transfer`s or deposits (`HolderCalls`, the
-  pair-side input) and the booked total plus the ether deposited stays a word (`l.total + inflowSum`).
+  pair-side input) and the booked total is backed by ETH whose running value stays a word at every
+  deposit (`EthFits`; the cumulative bound `l.total + inflowSum` implies it, `ethFits_of_budget`).
 * `weth9_history_holder_noShrink` (history): the same over the settlement-committed WETH9 writer
   invocations of a configured history (`weth9_history_committed`), read back at the storage words of
   the checkpoint and the future state.  The pair-side input is the named hypothesis `HolderCalls`
-  over the committed invocations; the wrap budget is the WETH9 ether at the checkpoint plus the ether
-  the committed deposits bring in.
+  over the committed invocations; the wrap budget is that the WETH9 ether, run from the checkpoint
+  along the committed deposits and withdrawals, stays a word at every deposit.
 
 The Pair-side half (that the pair's balance is at least `reserve1` after each committed Pair state
 change) needs the Pair's history replay and is not stated here.
@@ -261,32 +262,53 @@ theorem Ledger.step_holder {l l' : Ledger} {p : Adr} {c : Call} (hz : AllowZero 
     refine ⟨setAllow_allowZero hz (fun h' => absurd h' hwho), ?_⟩
     simp only [holderDebit, Nat.add_zero, Ledger.setAllow_bal, Nat.le_refl]
 
-/-- **A run keeps `p`'s allowances zero and lowers `p`'s balance by at most `p`'s own transfers.** -/
+/-- **The model's ETH stays a word at every deposit**: running the calls from ETH `e` (each call adds
+its deposit and subtracts its withdrawal, as `State.step` does), the ETH plus the next deposit is below
+`2^256`.  This is the wrap budget the holder argument needs, step by step. -/
+def EthFits : Nat → List Call → Prop
+  | _, [] => True
+  | e, c :: cs => e + c.inflow < 2 ^ 256 ∧ EthFits (e + c.inflow - c.outflow) cs
+
+/-- **The cumulative budget implies the running one**: if the starting ETH plus every deposit of the
+list fits a word, the running ETH fits at every deposit.  (`EthFits` is the weaker premise: it allows
+any number of deposits that are withdrawn again.) -/
+theorem ethFits_of_budget : ∀ {e : Nat} {cs : List Call}, e + inflowSum cs < 2 ^ 256 → EthFits e cs
+  | _, [], _ => trivial
+  | e, c :: cs, h => by
+    have hs : inflowSum (c :: cs) = c.inflow + inflowSum cs := by
+      simp only [inflowSum, List.map_cons, List.sum_cons]
+    rw [hs] at h
+    exact ⟨by omega, ethFits_of_budget (by omega)⟩
+
+/-- **A run keeps `p`'s allowances zero and lowers `p`'s balance by at most `p`'s own transfers**, when
+the booked total is backed by ETH `e` whose running value fits a word at every deposit. -/
 theorem Ledger.run_holder {p : Adr} {cs : List Call} :
-    ∀ {l l' : Ledger}, AllowZero p l → HolderCalls p cs →
-      l.total + inflowSum cs < 2 ^ 256 → l.run cs = some l' →
+    ∀ {l l' : Ledger} {e : Nat}, AllowZero p l → HolderCalls p cs → l.total ≤ e → EthFits e cs →
+      l.run cs = some l' →
       AllowZero p l' ∧ (l.bal p).toNat ≤ (l'.bal p).toNat + holderOut p cs := by
   induction cs with
   | nil =>
-    intro l l' hz _ _ h
+    intro l l' e hz _ _ _ h
     rw [Ledger.run_nil, Option.some.injEq] at h
     subst h
     exact ⟨hz, by simp only [holderOut, List.map_nil, List.sum_nil, Nat.add_zero, Nat.le_refl]⟩
   | cons c cs ih =>
-    intro l l' hz hcs fit h
+    intro l l' e hz hcs hback fits h
     rw [Ledger.run_cons] at h
     cases hs : l.step c with
     | none => rw [hs] at h; cases h
     | some m =>
       rw [hs, Option.bind_some] at h
-      have hsum : inflowSum (c :: cs) = c.inflow + inflowSum cs := by
-        simp only [inflowSum, List.map_cons, List.sum_cons]
       have hout : holderOut p (c :: cs) = holderDebit p c + holderOut p cs := by
         simp only [holderOut, List.map_cons, List.sum_cons]
-      rw [hsum] at fit
+      obtain ⟨fit, fits'⟩ := fits
       obtain ⟨hzm, hm⟩ := Ledger.step_holder hz (hcs c List.mem_cons_self) (by omega) hs
-      have htot : m.total ≤ l.total + c.inflow := Ledger.step_total_le hs
-      obtain ⟨hz', h'⟩ := ih hzm (fun c' hc' => hcs c' (List.mem_cons_of_mem c hc')) (by omega) h
+      have hstep : State.step ⟨l, e⟩ c = some ⟨m, e + c.inflow - c.outflow⟩ := by
+        simp only [State.step, hs, Option.map_some]
+      have hback' : (State.mk m (e + c.inflow - c.outflow)).Backed :=
+        State.step_backed (s := ⟨l, e⟩) hback hstep
+      dsimp only [State.Backed] at hback'
+      obtain ⟨hz', h'⟩ := ih hzm (fun c' hc' => hcs c' (List.mem_cons_of_mem c hc')) hback' fits' h
       rw [hout]
       exact ⟨hz', by omega⟩
 
@@ -305,8 +327,8 @@ theorem ledger_allowZero {K : Key → Prop} {s : Stor} {p : Adr}
 configured history from a checkpoint with the footprint `K₀` (the WETH9 code installed, keys fresh, as
 in `weth9_history_committed`), let `p` be a holder whose balance row is tracked and whose tracked
 allowances are zero at the checkpoint.  If every committed WETH9 writer invocation that `p` makes is a
-`transfer` or a deposit (`pairCalls`, the pair-side input) and the WETH9 ether at the checkpoint plus
-the ether the committed deposits bring in fits a word (`budget`), then at the future state `p`'s
+`transfer` or a deposit (`pairCalls`, the pair-side input) and the WETH9 ether, run from the checkpoint
+along the committed deposits and withdrawals, stays a word at every deposit (`budget`), then at the future state `p`'s
 allowances are still zero and its balance word is at least the checkpoint's minus exactly what `p`'s
 own committed `transfer`s sent to other holders. -/
 theorem weth9_history_holder_noShrink {ca p : Adr} {cfg : ChainConfig}
@@ -319,20 +341,16 @@ theorem weth9_history_holder_noShrink {ca p : Adr} {cfg : ChainConfig}
     (holderTracked : K₀ (.bal p))
     (allowZero : ∀ g, K₀ (.allow p g) → (checkpoint.state.getStor ca).get (allowSlot p g) = 0)
     (pairCalls : HolderCalls p (replayCalls (committedInvocations ca trace)))
-    (budget : (checkpoint.state.bal ca).toNat +
-      inflowSum (replayCalls (committedInvocations ca trace)) < 2 ^ 256) :
+    (budget : EthFits (checkpoint.state.bal ca).toNat
+      (replayCalls (committedInvocations ca trace))) :
     ((checkpoint.state.getStor ca).get (balSlot p)).toNat ≤
         ((future.state.getStor ca).get (balSlot p)).toNat +
           holderOut p (replayCalls (committedInvocations ca trace)) ∧
       ∀ g, historyKeyUniverse ca trace K₀ (.allow p g) →
         (future.state.getStor ca).get (allowSlot p g) = 0 := by
   obtain ⟨-, -, -, hrun, -⟩ := weth9_history_committed trace installed sumNof initial fresh
-  have hfit : (ledger K₀ (checkpoint.state.getStor ca)).total +
-      inflowSum (replayCalls (committedInvocations ca trace)) < 2 ^ 256 := by
-    have hb : (ledger K₀ (checkpoint.state.getStor ca)).total ≤ (checkpoint.state.bal ca).toNat :=
-      initial.backed
-    omega
-  obtain ⟨hz, hbal⟩ := Ledger.run_holder (ledger_allowZero allowZero) pairCalls hfit hrun
+  obtain ⟨hz, hbal⟩ :=
+    Ledger.run_holder (ledger_allowZero allowZero) pairCalls initial.backed budget hrun
   have hU : historyKeyUniverse ca trace K₀ (.bal p) := Or.inl holderTracked
   have h0 : (ledger K₀ (checkpoint.state.getStor ca)).bal p =
       (checkpoint.state.getStor ca).get (balSlot p) := tracked_self holderTracked
@@ -367,6 +385,19 @@ theorem control_holderCall_needed :
     ∃ l', controlLedgerZero.step (.withdraw 0 1) = some l' ∧ AllowZero 0 controlLedgerZero ∧
       holderDebit 0 (.withdraw 0 1) = 0 ∧ (l'.bal 0).toNat < (controlLedgerZero.bal 0).toNat := by
   refine ⟨_, rfl, fun _ => rfl, rfl, ?_⟩
+  decide
+
+/-- The ledger in which every balance is the maximal word and every allowance is zero. -/
+def controlLedgerMax : Ledger := ⟨fun _ => B256.max, fun _ _ => 0⟩
+
+/-- **Control: the wrap budget is needed.**  With every allowance zero, a deposit of one wei by `p`
+itself (a call `HolderCall` admits) wraps `p`'s maximal balance to zero with no `transfer` debit to
+account for it: the running ETH plus that deposit does not fit a word. -/
+theorem control_ethFits_needed :
+    ∃ l', controlLedgerMax.step (.deposit 0 1) = some l' ∧ HolderCall 0 (.deposit 0 1) ∧
+      AllowZero 0 controlLedgerMax ∧ holderDebit 0 (.deposit 0 1) = 0 ∧
+      (l'.bal 0).toNat < (controlLedgerMax.bal 0).toNat := by
+  refine ⟨_, rfl, fun _ => .inr ⟨1, rfl⟩, fun _ => rfl, rfl, ?_⟩
   decide
 
 end Blanc.Composition.UniswapV2PairWeth9
