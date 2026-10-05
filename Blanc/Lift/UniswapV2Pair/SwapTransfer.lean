@@ -85,7 +85,7 @@ theorem swapTransfer_returned_inv {D : Exec.Deriv} {sevm : Sevm} {b out : Devm}
       (by decide : 71 ∉ []) (by decide : 16 ∉ []) (by decide : 17 ∉ [])
       ((SFunc.runP_iff_runCutP_nil (P := StepIn D)).mp run)
   rw [memory'] at ptr'
-  obtain ⟨forwarded, callGas, d, residual, step, memory, output, replyWidth, accepted, returned⟩ :=
+  obtain ⟨forwarded, callGas, d, residual, step, _, memory, output, replyWidth, accepted, returned⟩ :=
     safeTransfer_dynamicReturned_inv StepIn.toRun fork mem lower width run
   have calldata := safeTransfer_dynamicCall_data
     (amount := amount) (toWord := toWord) mem.wf lower (by omega : p.toNat + 164 < 2 ^ 256)

@@ -400,7 +400,7 @@ theorem skimFirstHalf_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
           change some t_1fdb_c57 = _ at lookup
           cases lookup
           have helper := (St.of_pop1 pop).2 ▸ callee
-          obtain ⟨forwarded, callGas', d, residual, step, calldata, memory, output, width,
+          obtain ⟨forwarded, callGas', d, residual, step, _, calldata, memory, output, width,
             accepted, returned⟩ := safeTransfer_first_inv StepIn.toRun fork reply helper
           rw [returned] at helper tail
           exact ⟨mutable, nonzero, gw, callGas, d0, out0, call, post, long, bound, answered,

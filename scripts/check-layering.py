@@ -275,6 +275,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.BurnPrefixWalk",
         "Lift.UniswapV2Pair.BurnFrameWalk",
         "Lift.UniswapV2Pair.BurnPricingTurns",
+        "Lift.UniswapV2Pair.BurnTransferTurns",
         "Lift.UniswapV2Pair.BurnDispatchWalk",
         "Lift.UniswapV2Pair.SourceReplay",
         "Lift.UniswapV2Pair.ReplayWriterGas",

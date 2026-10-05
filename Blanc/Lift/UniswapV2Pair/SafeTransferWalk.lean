@@ -1884,6 +1884,8 @@ private theorem safeTransfer_firstReply_inv {P : Sevm → Devm → Ninst → Dev
         (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
         96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
         (safeTransfer_call128Memory M amount toWord) callGas) (.exec .call) d ∧
+      d.stack = 1 :: 360 :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R ∧
       d.memory = safeTransfer_call128Memory M amount toWord ∧
       d.output = b.output ∧ d.returnData.length < 2^256 ∧ PtrMem 292 416 d.memory ∧
       SFunc.RunCutP P cert.prog sevm C
@@ -1911,7 +1913,7 @@ private theorem safeTransfer_firstReply_inv {P : Sevm → Devm → Ninst → Dev
     rw [B256.toNat_toB256_of_lt width]
     exact Bytes.sliceD_zero_length rfl
   rw [copied] at decoded
-  exact ⟨forwarded, callGas, d, decoderGas, step, memory, output, width, postMem, decoded⟩
+  exact ⟨forwarded, callGas, d, decoderGas, step, stack, memory, output, width, postMem, decoded⟩
 
 /-- Full first helper57 inverse derives its optional-return acceptance and raw returned world.
 Its whole-run input discharges internal cuts; arbitrary child storage/log effects are retained. -/
@@ -1928,13 +1930,15 @@ private theorem safeTransfer_firstReturned_inv {P : Sevm → Devm → Ninst → 
         (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
         96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
         (safeTransfer_call128Memory M amount toWord) callGas) (.exec .call) d ∧
+      d.stack = 1 :: 360 :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R ∧
       d.memory = safeTransfer_call128Memory M amount toWord ∧ d.output = b.output ∧
       d.returnData.length < 2^256 ∧
       (d.returnData = [] ∨ (32 ≤ d.returnData.length ∧
         Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0)) ∧
       out = St d R (if d.returnData = [] then d.memory else
         safeTransfer_reply292Memory d.memory d.returnData) residual := by
-  obtain ⟨forwarded, callGas, d, decoderGas, step, memory, output, width, postMem, decoded⟩ :=
+  obtain ⟨forwarded, callGas, d, decoderGas, step, stack, memory, output, width, postMem, decoded⟩ :=
     safeTransfer_firstReply_inv project fork mem (by decide : 71 ∉ [])
       (by decide : 16 ∉ []) (by decide : 17 ∉ [])
       ((SFunc.runP_iff_runCutP_nil (P := P)).mp run)
@@ -1946,7 +1950,7 @@ private theorem safeTransfer_firstReturned_inv {P : Sevm → Devm → Ninst → 
     · simp only [show (96 : B256).toNat = 96 from rfl] at returned
       rw [postMem.read_self (by decide : 96 + 32 ≤ 416)] at returned
       have outEq : out = St d R d.memory residual := Seg.done.inj returned |> Outcome.returned.inj
-      refine ⟨forwarded, callGas, d, residual, step, memory, output, width, Or.inl empty, ?_⟩
+      refine ⟨forwarded, callGas, d, residual, step, stack, memory, output, width, Or.inl empty, ?_⟩
       rw [ite_eq_left empty]
       exact outEq
     · simp only [show (96 : B256).toNat = 96 from rfl,
@@ -1955,7 +1959,7 @@ private theorem safeTransfer_firstReturned_inv {P : Sevm → Devm → Ninst → 
         postMem.read_self (by decide : 96 + 32 ≤ 416),
         postMem.read_self (by decide : 128 + 32 ≤ 416)] at returned
       have outEq : out = St d R d.memory residual := Seg.done.inj returned |> Outcome.returned.inj
-      refine ⟨forwarded, callGas, d, residual, step, memory, output, width, Or.inl empty, ?_⟩
+      refine ⟨forwarded, callGas, d, residual, step, stack, memory, output, width, Or.inl empty, ?_⟩
       rw [ite_eq_left empty]
       exact outEq
   · have positive : 0 < d.returnData.length := List.length_pos_iff.mpr empty
@@ -1988,7 +1992,7 @@ private theorem safeTransfer_firstReturned_inv {P : Sevm → Devm → Ninst → 
     · rw [images.2.2 enough] at head
       rw [carrier.read_self (by omega)] at returned
       have outEq : out = St d R A residual := Seg.done.inj returned |> Outcome.returned.inj
-      refine ⟨forwarded, callGas, d, residual, step, memory, output, width,
+      refine ⟨forwarded, callGas, d, residual, step, stack, memory, output, width,
         Or.inr ⟨enough, head⟩, ?_⟩
       rw [ite_eq_right empty]
       exact outEq
@@ -2269,6 +2273,8 @@ theorem safeTransfer_first_inv {P : Sevm → Devm → Ninst → Devm → Prop}
         (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
         96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
         (safeTransfer_call128Memory M amount toWord) callGas) (.exec .call) d ∧
+      d.stack = 1 :: 360 :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R ∧
       ((safeTransfer_call128Memory M amount toWord).read 292 68).1 =
         abiSelectorBytes 0xa9059cbb ++
           ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes ++ amount.toBytes ∧
@@ -2278,9 +2284,9 @@ theorem safeTransfer_first_inv {P : Sevm → Devm → Ninst → Devm → Prop}
         Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0)) ∧
       out = St d R (if d.returnData = [] then d.memory else
         safeTransfer_reply292Memory d.memory d.returnData) residual := by
-  obtain ⟨forwarded, callGas, d, residual, step, memory, output, width, accepted, returned⟩ :=
+  obtain ⟨forwarded, callGas, d, residual, step, stack, memory, output, width, accepted, returned⟩ :=
     safeTransfer_firstReturned_inv project fork mem run
-  exact ⟨forwarded, callGas, d, residual, step, safeTransfer_call128_data mem.wf,
+  exact ⟨forwarded, callGas, d, residual, step, stack, safeTransfer_call128_data mem.wf,
     memory, output, width, accepted, returned⟩
 
 /-- The literal first burn caller derives a returned helper; its halted alternative is impossible. -/
@@ -2347,6 +2353,9 @@ theorem burnFirstTransfer_caller_inv {P : Sevm → Devm → Ninst → Devm → P
         (token0 &&& 0xffffffffffffffffffffffffffffffffffffffff) :: 96 :: 0 :: amount0 :: toWord :: token0 :: 0x1698 ::
         burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R)
         (safeTransfer_call128Memory M amount0 toWord) callGas) (.exec .call) d ∧
+      d.stack = 1 :: 360 :: (token0 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount0 :: toWord :: token0 :: 0x1698 ::
+        burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R ∧
       ((safeTransfer_call128Memory M amount0 toWord).read 292 68).1 =
         abiSelectorBytes 0xa9059cbb ++
           ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes ++ amount0.toBytes ∧
@@ -2359,10 +2368,10 @@ theorem burnFirstTransfer_caller_inv {P : Sevm → Devm → Ninst → Devm → P
           (if d.returnData = [] then d.memory else safeTransfer_reply292Memory d.memory d.returnData) residual)
         t_1698_c13 r := by
   obtain ⟨helperGas, out, callee, continuation⟩ := burnFirstTransfer_call_inv project run
-  obtain ⟨forwarded, callGas, d, residual, step, calldata, memory, output, width, accepted, returned⟩ :=
+  obtain ⟨forwarded, callGas, d, residual, step, stack, calldata, memory, output, width, accepted, returned⟩ :=
     safeTransfer_first_inv project fork mem callee
   rw [returned] at callee continuation
-  exact ⟨helperGas, forwarded, callGas, d, residual, callee, step, calldata,
+  exact ⟨helperGas, forwarded, callGas, d, residual, callee, step, stack, calldata,
     memory, output, width, accepted, continuation⟩
 
 /-- The named first caller's memory image specializes the single initializer implementation
@@ -3094,6 +3103,9 @@ theorem safeTransfer_dynamicReply_inv {P : Sevm → Devm → Ninst → Devm → 
         0 :: (p + 164) :: 68 :: (p + 164) :: 0 :: (68 + (p + 164)) ::
         (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
         96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) N callGas) (.exec .call) d ∧
+      d.stack = 1 :: (68 + (p + 164)) ::
+        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R ∧
       d.memory = N ∧ d.output = b.output ∧ d.returnData.length < 2 ^ 256 ∧
       PtrMem (p + 164) N.size d.memory ∧ p.toNat + 260 ≤ N.size ∧
       SFunc.RunCutP P cert.prog sevm C
@@ -3125,7 +3137,7 @@ theorem safeTransfer_dynamicReply_inv {P : Sevm → Devm → Ninst → Devm → 
     rw [B256.toNat_toB256_of_lt replyWidth]
     exact Bytes.sliceD_zero_length rfl
   rw [copied] at decoded
-  exact ⟨forwarded, callGas, d, decoderGas, step, memory, output, replyWidth, postMem, fit, decoded⟩
+  exact ⟨forwarded, callGas, d, decoderGas, step, stack, memory, output, replyWidth, postMem, fit, decoded⟩
 
 /-- A complete moving helper returns exactly its own full optional reply
 allocation and derives the token's optional-bool acceptance from the bytecode. -/
@@ -3143,13 +3155,16 @@ theorem safeTransfer_dynamicReturned_inv {P : Sevm → Devm → Ninst → Devm �
         (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
         96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
         (safeTransfer_dynamicCallMemory M p amount toWord) callGas) (.exec .call) d ∧
+      d.stack = 1 :: (68 + (p + 164)) ::
+        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R ∧
       d.memory = safeTransfer_dynamicCallMemory M p amount toWord ∧ d.output = b.output ∧
       d.returnData.length < 2 ^ 256 ∧
       (d.returnData = [] ∨ (32 ≤ d.returnData.length ∧
         Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0)) ∧
       out = St d R (if d.returnData = [] then d.memory else
         Blanc.Lift.bytesArrayMemory d.memory (p + 164) d.returnData) residual := by
-  obtain ⟨forwarded, callGas, d, decoderGas, step, memory, output, replyWidth, postMem, fit, decoded⟩ :=
+  obtain ⟨forwarded, callGas, d, decoderGas, step, stack, memory, output, replyWidth, postMem, fit, decoded⟩ :=
     safeTransfer_dynamicReply_inv project fork mem lower width (by decide : 71 ∉ [])
       (by decide : 16 ∉ []) (by decide : 17 ∉ [])
       ((SFunc.runP_iff_runCutP_nil (P := P)).mp run)
@@ -3163,7 +3178,7 @@ theorem safeTransfer_dynamicReturned_inv {P : Sevm → Devm → Ninst → Devm �
     · simp only [show (96 : B256).toNat = 96 from rfl] at returned
       rw [postMem.read_self (by omega)] at returned
       have outEq : out = St d R d.memory residual := Seg.done.inj returned |> Outcome.returned.inj
-      refine ⟨forwarded, callGas, d, residual, step, memory, output, replyWidth, Or.inl empty, ?_⟩
+      refine ⟨forwarded, callGas, d, residual, step, stack, memory, output, replyWidth, Or.inl empty, ?_⟩
       rw [ite_eq_left empty]
       exact outEq
     · simp only [show (96 : B256).toNat = 96 from rfl,
@@ -3171,7 +3186,7 @@ theorem safeTransfer_dynamicReturned_inv {P : Sevm → Devm → Ninst → Devm �
       rw [postMem.read_self (by omega), postMem.read_self (by omega),
         postMem.read_self (by omega)] at returned
       have outEq : out = St d R d.memory residual := Seg.done.inj returned |> Outcome.returned.inj
-      refine ⟨forwarded, callGas, d, residual, step, memory, output, replyWidth, Or.inl empty, ?_⟩
+      refine ⟨forwarded, callGas, d, residual, step, stack, memory, output, replyWidth, Or.inl empty, ?_⟩
       rw [ite_eq_left empty]
       exact outEq
   · have positive : 0 < d.returnData.length := List.length_pos_iff.mpr empty
@@ -3216,7 +3231,7 @@ theorem safeTransfer_dynamicReturned_inv {P : Sevm → Devm → Ninst → Devm �
       rw [show (32 : B256) + (p + 164) = (p + 164) + 32 from B256.add_comm,
         carrier.read_self (by omega)] at returned
       have outEq : out = St d R A residual := Seg.done.inj returned |> Outcome.returned.inj
-      refine ⟨forwarded, callGas, d, residual, step, memory, output, replyWidth,
+      refine ⟨forwarded, callGas, d, residual, step, stack, memory, output, replyWidth,
         Or.inr ⟨enough, head⟩, ?_⟩
       rw [ite_eq_right empty]
       exact outEq
@@ -3289,6 +3304,10 @@ theorem burnSecondTransfer_caller_inv {P : Sevm → Devm → Ninst → Devm → 
         96 :: 0 :: amount1 :: toWord :: token1 :: 0x16a3 ::
         burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R)
         (safeTransfer_dynamicCallMemory M p amount1 toWord) callGas) (.exec .call) d ∧
+      d.stack = 1 :: (68 + (p + 164)) ::
+        (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount1 :: toWord :: token1 :: 0x16a3 ::
+        burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R ∧
       ((safeTransfer_dynamicCallMemory M p amount1 toWord).read (p + 164).toNat 68).1 =
         abiSelectorBytes 0xa9059cbb ++
           ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes ++ amount1.toBytes ∧
@@ -3302,13 +3321,13 @@ theorem burnSecondTransfer_caller_inv {P : Sevm → Devm → Ninst → Devm → 
             Blanc.Lift.bytesArrayMemory d.memory (p + 164) d.returnData) residual)
         t_16a3_c13 r := by
   obtain ⟨helperGas, out, callee, continuation⟩ := burnSecondTransfer_call_inv project run
-  obtain ⟨forwarded, callGas, d, residual, step, memory, output, replyWidth, accepted, returned⟩ :=
+  obtain ⟨forwarded, callGas, d, residual, step, stack, memory, output, replyWidth, accepted, returned⟩ :=
     safeTransfer_dynamicReturned_inv project fork mem lower width callee
   have calldata := safeTransfer_dynamicCall_data
     (amount := amount1) (toWord := toWord) mem.wf lower
     (by omega : p.toNat + 164 < 2 ^ 256)
   rw [returned] at callee continuation
-  exact ⟨helperGas, forwarded, callGas, d, residual, callee, step, calldata,
+  exact ⟨helperGas, forwarded, callGas, d, residual, callee, step, stack, calldata,
     memory, output, replyWidth, accepted, continuation⟩
 
 /-- An actual CALL observation supplies the first Burn reply's pointer and
@@ -3383,6 +3402,11 @@ theorem burnTransfers_caller_inv {P : Sevm → Devm → Ninst → Devm → Prop}
         (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
         96 :: 0 :: amount1 :: toWord :: token1 :: 0x16a3 :: locals)
         N callGas1) (.exec .call) d1 ∧
+      d0.stack = 1 :: 360 :: (token0 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount0 :: toWord :: token0 :: 0x1698 :: locals ∧
+      d1.stack = 1 :: (68 + (p + 164)) ::
+        (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount1 :: toWord :: token1 :: 0x16a3 :: locals ∧
       ((safeTransfer_call128Memory M amount0 toWord).read 292 68).1 =
         abiSelectorBytes 0xa9059cbb ++
           ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes ++ amount0.toBytes ∧
@@ -3409,7 +3433,7 @@ theorem burnTransfers_caller_inv {P : Sevm → Devm → Ninst → Devm → Prop}
         (St d1 locals (if d1.returnData = [] then d1.memory else
           Blanc.Lift.bytesArrayMemory d1.memory (p + 164) d1.returnData) residual1)
         t_16a3_c13 r := by
-  obtain ⟨helperGas0, forwarded0, callGas0, d0, residual0, callee0, call0,
+  obtain ⟨helperGas0, forwarded0, callGas0, d0, residual0, callee0, call0, flag0,
       calldata0, memory0, output0, _, accepted0, continuation0⟩ :=
     burnFirstTransfer_caller_inv project fork mem run
   have width0 : d0.returnData.length < 2 ^ 160 :=
@@ -3432,7 +3456,7 @@ theorem burnTransfers_caller_inv {P : Sevm → Devm → Ninst → Devm → Prop}
     have bound : 292 ≤ p.toNat := midLayout.2.2.1
     omega
   have room : p.toNat + 260 < 2 ^ 256 := midLayout.2.2.2.2
-  obtain ⟨helperGas1, forwarded1, callGas1, d1, residual1, callee1, call1,
+  obtain ⟨helperGas1, forwarded1, callGas1, d1, residual1, callee1, call1, flag1,
       calldata1, memory1, output1, _, accepted1, continuation1⟩ :=
     burnSecondTransfer_caller_inv project fork midLayout.1 lower room continuation0
   have width1 : d1.returnData.length < 2 ^ 160 :=
@@ -3461,7 +3485,7 @@ theorem burnTransfers_caller_inv {P : Sevm → Devm → Ninst → Devm → Prop}
         (by rw [nat164]; omega) (by rw [nat164]; omega) (by rw [nat164]; omega)
       simpa only [burnSecondTransferPointer, ite_eq_right empty] using image.1
   exact ⟨forwarded0, callGas0, d0, residual0, forwarded1, callGas1, d1, residual1,
-    call0, call1, calldata0, calldata1, memory0, memory1, output0, output1.trans output0,
+    call0, call1, flag0, flag1, calldata0, calldata1, memory0, memory1, output0, output1.trans output0,
     width0, width1, accepted0, accepted1, midLayout.1, midLayout.2.1,
     (burnSecondTransferPointer_layout width0 width1).2.2.2, finalMem,
     continuation0, continuation1⟩

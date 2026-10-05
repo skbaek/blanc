@@ -74,7 +74,7 @@ theorem burnTransfers_suffix_inv {P : Sevm → Devm → Ninst → Devm → Prop}
       PtrMem p finalSize finalM ∧ 96 ≤ p.toNat ∧ p.toNat + 64 < 2 ^ 256 ∧
       p.toNat + 64 ≤ finalSize := by
   obtain ⟨gw0, cg0, tx0, residual0, gw1, cg1, tx1, residual1,
-    call0, call1, calldata0, calldata1, memory0, memory1, output0, output1,
+    call0, call1, _, _, calldata0, calldata1, memory0, memory1, output0, output1,
     width0, width1, accepted0, accepted1, midMem, midSentinel, fit64, finalMem,
     firstTail, secondTail⟩ := burnTransfers_caller_inv project fork mem sentinel run
   obtain ⟨low, high⟩ := burnFinalPointer_bounds width0 width1
