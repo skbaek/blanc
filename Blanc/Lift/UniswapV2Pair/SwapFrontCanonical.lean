@@ -32,8 +32,8 @@ the typed swap exactly consumes the actual transfer/callback turns up to it. In 
 successful shapes each optional call is either skipped with its source guard false, or is one
 actual CALL step of this derivation with its actual reply and retained turns. The front also
 leaves the installed Pair code unchanged, so the back half's code premise holds at the cut
-world.
-CROSS-HOST: conditional on `SwapCallReplyShort`. -/
+world. Each taken transfer's reply bound is derived from its own actual 68-byte CALL
+(`swapTransferCall_replyShort`). -/
 theorem swap_bytecode_front_cut_code {K U : WriterKey → Prop} {current : Checkpoint}
     {sevm : Sevm} {b post : Devm} {G : Nat}
     (invocation : List Nat)
@@ -46,8 +46,7 @@ theorem swap_bytecode_front_cut_code {K U : WriterKey → Prop} {current : Check
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
     (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
     (good : ∀ F ∈ Exec.rawFrameRoots (⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ : Exec.Deriv).exc,
-      F.sevm.currentTarget = sevm.currentTarget → LockedGood U F)
-    (short : SwapCallReplyShort ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm) :
+      F.sevm.currentTarget = sevm.currentTarget → LockedGood U F) :
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
     let ctx := writerContext sevm invocation
     let locals := swapFrontLocals sevm current.state
@@ -96,7 +95,7 @@ theorem swap_bytecode_front_cut_code {K U : WriterKey → Prop} {current : Check
     swapBody_prefix_inv fork rep (SFunc.runP_iff_runCutP_nil.mp body)
   unfold swapLocalsStack swapBodyStack at run1
   obtain ⟨b1, M1, p1, b2, M2, p2, n2, g2, opt0, opt1, ptr2, lower2, upper2, run2⟩ :=
-    swapTransfers_inv fork getterInitMemory_ptr short run1
+    swapTransfers_inv fork getterInitMemory_ptr run1
   have shortLen : (swapDataLength sevm).toNat ≤ 2 ^ 32 := guards.length
   obtain ⟨b3, M3, m3, g3, optC, ptr3, run3⟩ := swapCallback_inv fork ptr2 lower2 upper2 shortLen run2
   -- the typed front

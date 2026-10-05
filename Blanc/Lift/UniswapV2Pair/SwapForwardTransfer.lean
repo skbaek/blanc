@@ -206,11 +206,9 @@ theorem swapTransferMemory_zeroSlot {M : Mem} {n : Nat} {p amount toWord : B256}
     exact swapZeroSlot_write _ _ (Or.inr (by rw [n196]; omega))
       (swapZeroSlot_write _ _ (Or.inr (by rw [n164]; omega)) (swapZeroSlot_word64 _ call))
 
-/-- CROSS-HOST HYPOTHESIS (delete at consolidation): discharged by the caller gas-potential
-reply-length bound (Jaune `call_step_returnData_length_lt_two_pow_160`, from
-`gasMeasure + memcost < 2^256` at the CALL), applied to the environment's actual `CALL`
-step, to be supplied by the original host or the pending Jaune dependency work. The forward
-twin of `SwapCallReplyShort`: the `CALL` result `d` returned fewer than `2^160` bytes. -/
+/-- Forward-interface reply bound: the supplied `CALL` result `d` contains fewer than
+`2^160` bytes. Actual 68-byte `CALL` executions imply this bound; the current forward
+schedule still takes it as an explicit premise. -/
 def SwapForwardReplyShort (d : Devm) : Prop := d.returnData.length < 2 ^ 160
 
 /-- The world after an optional transfer: kept when skipped, the call's result when taken. -/

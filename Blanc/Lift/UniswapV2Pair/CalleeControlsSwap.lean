@@ -152,9 +152,9 @@ theorem swap_no_success_of_reverting_token0 {sevm : Sevm} {b post : Devm} {G : N
 
 /-- **U6 control (swap, token1 transfer).** With `amount1Out ≠ 0` and a reverting,
 non-precompile `token1`, no raw pc-zero `swap` run succeeds: the code survives the optional
-`token0` transfer, and the optimistic `token1` transfer's `CALL` cannot succeed. `short` is the
-swap front's CALL reply bound, which places the moved pointer.
-CROSS-HOST: conditional on `SwapCallReplyShort`. -/
+`token0` transfer, and the optimistic `token1` transfer's `CALL` cannot succeed. The moved
+pointer is placed by the transfer's own actual 68-byte CALL reply bound
+(`swapTransferCall_replyShort`). -/
 theorem swap_no_success_of_reverting_token1 {sevm : Sevm} {b post : Devm} {G : Nat} {tok : Adr}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
@@ -162,8 +162,7 @@ theorem swap_no_success_of_reverting_token1 {sevm : Sevm} {b post : Devm} {G : N
     (token1 : (b.getStorVal sevm.currentTarget 7).toAdr = tok)
     (tokenCode : b.getCode tok = revertingCode)
     (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp tok)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
-    (short : SwapCallReplyShort ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm) : False := by
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) : False := by
   obtain ⟨f, entry, derived⟩ := lift_sound_in cert_check codeEq fork run
   rw [show cert.prog[0]? = some t_0000_c0 from rfl] at entry
   cases entry
@@ -189,7 +188,7 @@ theorem swap_no_success_of_reverting_token1 {sevm : Sevm} {b post : Devm} {G : N
     obtain ⟨d, _, call, ⟨_, ptr⟩, cont⟩ :=
       swapTransferSite_inv fork getterInitMemory_ptr (by decide) (by decide) run
     obtain ⟨_, _, step⟩ := call.1
-    have sh := short _ _ step
+    have sh := swapTransferCall_replyShort fork call
     have layout := swapMovedPointer_layout sh
       (by decide : (128 : B256).toNat + 2 ^ 161 < 2 ^ 256)
     have n128 : (128 : B256).toNat = 128 := rfl
@@ -202,17 +201,16 @@ theorem swap_no_success_of_reverting_token1 {sevm : Sevm} {b post : Devm} {G : N
 
 /-- **U6 control (swap, callback).** With non-empty `data` and a reverting, non-precompile
 recipient `to`, no raw pc-zero `swap` run succeeds: the code survives both optional transfers,
-and the `uniswapV2Call` `CALL` cannot leave the nonzero flag the body requires. `short` is the
-swap front's CALL reply bound.
-CROSS-HOST: conditional on `SwapCallReplyShort`. -/
+and the `uniswapV2Call` `CALL` cannot leave the nonzero flag the body requires. Both
+transfers' reply bounds are derived from their own actual 68-byte CALLs
+(`swapTransferCall_replyShort`). -/
 theorem swap_no_success_of_reverting_callback {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
     (data : swapDataLength sevm ≠ 0)
     (recipientCode : b.getCode (swapRecipient sevm) = revertingCode)
     (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp (swapRecipient sevm))
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
-    (short : SwapCallReplyShort ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm) : False := by
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) : False := by
   obtain ⟨f, entry, derived⟩ := lift_sound_in cert_check codeEq fork run
   rw [show cert.prog[0]? = some t_0000_c0 from rfl] at entry
   cases entry
@@ -220,7 +218,7 @@ theorem swap_no_success_of_reverting_callback {sevm : Sevm} {b post : Devm} {G :
   obtain ⟨_, _, _, _, run0⟩ := swapLockOutput_inv fork (SFunc.runP_iff_runCutP_nil.mp body)
   obtain ⟨_, _, _, _, _, run1⟩ := swapGuards_inv fork run0
   obtain ⟨_, _, _, b2, _, _, _, _, opt0, opt1, ptr2, lower2, upper2, run2⟩ :=
-    swapTransfers_inv fork getterInitMemory_ptr short run1
+    swapTransfers_inv fork getterInitMemory_ptr run1
   obtain ⟨_, _, _, _, optC, _, _⟩ := swapCallback_inv fork ptr2 lower2 upper2 guards.length run2
   rcases optC with ⟨zero, _, _⟩ | ⟨_, call, _⟩
   · exact data zero

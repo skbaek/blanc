@@ -23,13 +23,12 @@ every successful raw swap run's two actual post-callback balance STATICCALL step
 the callback left, to the masked cached token words in the Pair's storage slots 6 and 7) reply
 with balance words below `2^112`. The bytecode half is a pure raw inversion of the pc-zero run:
 it needs no storage representation, no HASH-T premise and no typed checkpoint, only the CALL
-reply bound `short`.
-CROSS-HOST: conditional on `SwapCallReplyShort`. -/
+reply bound, derived per taken transfer from its own actual 68-byte CALL
+(`swapTransferCall_replyShort`). -/
 theorem swap_bytecode_uint112_control {sevm : Sevm} {b post : Devm} {G : Nat}
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
-    (short : SwapCallReplyShort ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm) :
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     (swapCheck (Nat.toB256 (2 ^ 112)) 10
         (swapInputs (Nat.toB256 (2 ^ 112)) 10 1 0 10 10).1
         (swapInputs (Nat.toB256 (2 ^ 112)) 10 1 0 10 10).2 10 10 = .ok () ∧
@@ -51,7 +50,7 @@ theorem swap_bytecode_uint112_control {sevm : Sevm} {b post : Devm} {G : Nat}
   obtain ⟨_, _, _, gas0, run0⟩ := swapLockOutput_inv fork (SFunc.runP_iff_runCutP_nil.mp body)
   obtain ⟨_, _, _, _, gas1, run1⟩ := swapGuards_inv fork run0
   obtain ⟨b1, M1, p1, b2, M2, p2, n2, g2, _, _, ptr2, lower2, upper2, run2⟩ :=
-    swapTransfers_inv fork getterInitMemory_ptr short run1
+    swapTransfers_inv fork getterInitMemory_ptr run1
   obtain ⟨b3, M3, m3, g3, _, ptr3, run3⟩ :=
     swapCallback_inv fork ptr2 lower2 upper2 guards.length run2
   obtain ⟨d0, d1, out0, out1, call0, call1, _, _, bound0, bound1, _⟩ :=
