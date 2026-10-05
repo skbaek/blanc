@@ -52,53 +52,43 @@ theorem mint_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Che
     (inj : WriterInj (mintTraceUniverse K ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩))
     (apart : WriterApart (mintTraceUniverse K ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)) :
     (∀ a, a ≠ sevm.currentTarget → post.getStor a = b.getStor a) ∧
-    (let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-      let ctx := writerContext sevm invocation
-      let recipient := (Sevm.dataWord sevm 4).toAdr
-      sevm.value = 0 ∧ sevm.isStatic = false ∧
-      ∃ (out0 out1 outF : Bytes), MintObservedSteps root current sevm out0 out1 outF ∧
-        let balance0 := Bytes.toB256 (out0.take 32)
-        let balance1 := Bytes.toB256 (out1.take 32)
-        let feeTo := (Bytes.toB256 (outF.take 32)).toAdr
-        ∃ (views0 views1 viewsF : List StaticViewTurn) (final : Frame) (rets : List ChildReturn)
-          (K' : WriterKey → Prop) (liquidity : Nat) (fee : FeeResult) (feeLogs : List Log)
-          (added : List PendingLog),
-          ExactConsumes (startTyped current ctx (.mint recipient))
-            (.next (feeObservedResult out0) (staticViewTranscript views0 .done)
-              (.next (feeObservedResult out1) (staticViewTranscript views1 .done)
-                (.next (feeObservedResult outF) (staticViewTranscript viewsF .done) .done)))
-            { status := .success (encodeWords [liquidity.toB256]), frame := final,
-              remaining := .done, childReturns := rets } ∧
-          final.checkpoint = current ∧ final.context = ctx ∧
-          final.current.state.unlocked = 1 ∧
-          (∀ k, K' k → mintTraceUniverse K root k) ∧
-          WriterRep K' (post.getStor sevm.currentTarget) final.current.state ∧
-          mintFee { current.state with unlocked := 0 } feeTo current.state.reserve0.val
-            current.state.reserve1.val = .ok fee ∧
-          ((fee.events = [] ∧ feeLogs = []) ∨ ∃ L : B256, L ≠ 0 ∧
-            fee.events = [.transfer 0 feeTo L] ∧
-            feeLogs = [lpMintRawLog sevm.currentTarget feeTo L]) ∧
-          post.logs = b.logs ++ feeLogs ++
-            (if fee.state.totalSupply = 0 then
-              [lpMintRawLog sevm.currentTarget (0 : B256).toAdr 1000] else []) ++
-            [lpMintRawLog sevm.currentTarget recipient liquidity.toB256,
-              ⟨sevm.currentTarget, [updateSyncTopic], encodeWords [balance0, balance1]⟩,
-              ⟨sevm.currentTarget, [mintEventTopic, sevm.caller.toB256],
-                (balance0 - current.state.reserve0.val.toB256).toBytes ++
-                  (balance1 - current.state.reserve1.val.toB256).toBytes⟩] ∧
-          final.current.logs = current.logs ++ added ∧
-          (∃ L : List Log, post.logs = b.logs ++ L ∧
-            added.map (PendingLog.rawWith (mintOwnedRaw sevm.currentTarget)) = L.map some) ∧
-          post.output = encodeWords [liquidity.toB256] ∧
-          (∀ picked ∈ views0 ++ views1 ++ viewsF,
-            Blanc.Sevm.selector picked.1.frame.sevm = picked.2.selector ∧
-            picked.1.frame.sevm.currentTarget = sevm.currentTarget ∧
-            picked.1.frame.sevm.isStatic = true) ∧
-          MintViewProvenance root sevm.currentTarget current.state.token0 views0 ∧
-          MintViewProvenance root sevm.currentTarget current.state.token1 views1 ∧
-          MintViewProvenance root sevm.currentTarget current.state.factory viewsF) := by
+      MintCanonicalResult K current invocation run := by
   exact ⟨mint_bytecode_foreign_storage codeEq fork selector run,
     mint_bytecode_exact_consumes invocation rep sem image installed codeEq fork selector run
       inj apart⟩
+
+/-- **Forward mint schedule.** From the positive component schedule `MintPrefixForwardEnv`
+(both balance calls, the factory call, fee pricing and the mint pricing tail, with their gas
+components), a successful raw mint run EXISTS from initial gas `env.gas + 228`, halting with the
+liquidity word as output and residual gas `G` in the getter return post. That same run keeps
+every foreign account's storage and, under HASH-T over its own trace universe, satisfies the
+canonical mint frame. -/
+theorem mint_bytecode_forward_consumes {K : WriterKey → Prop} {current : Checkpoint}
+    {sevm : Sevm} {b : Devm} {G : Nat}
+    (invocation : List Nat)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
+    (guard : (32 : B256) ≤ sevm.data.length.toB256 - 4)
+    (selector : Blanc.Sevm.selector sevm = 0x6a627842)
+    (env : MintPrefixForwardEnv sevm b [0x6a627842] getterInitMemory
+      (Sevm.dataWord sevm 4).toAdr.toB256 0x039b (G + 43)) :
+    ∃ (liquidity : B256) (run : Exec 0 sevm (St b [] Mem.empty (env.gas + 228))
+        (.ok (getterWordPost env.fee.post [0x6a627842] env.fee.post.memory liquidity G))),
+      (getterWordPost env.fee.post [0x6a627842] env.fee.post.memory liquidity G).output =
+        liquidity.toBytes ∧
+      (∀ a, a ≠ sevm.currentTarget →
+        (getterWordPost env.fee.post [0x6a627842] env.fee.post.memory liquidity G).getStor a =
+          b.getStor a) ∧
+      (WriterInj (mintTraceUniverse K ⟨0, sevm, St b [] Mem.empty (env.gas + 228), _, run⟩) →
+        WriterApart (mintTraceUniverse K ⟨0, sevm, St b [] Mem.empty (env.gas + 228), _, run⟩) →
+        MintCanonicalResult K current invocation run) := by
+  obtain ⟨liquidity, ⟨run⟩, output⟩ := mintBytecode_exact codeEq fork value size guard selector env
+  exact ⟨liquidity, run, output, mint_bytecode_foreign_storage codeEq fork selector run,
+    fun inj apart =>
+      mint_bytecode_exact_consumes invocation rep sem image installed codeEq fork selector run
+        inj apart⟩
 
 end Blanc.Lift.UniswapV2Pair

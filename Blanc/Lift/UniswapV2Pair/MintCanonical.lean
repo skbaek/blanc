@@ -378,25 +378,13 @@ private theorem mint_encodeWord_inj {x y : B256} (same : encodeWords [x] = encod
   simpa only [encodeWords, List.flatMap_cons, List.flatMap_nil, List.append_nil,
     B256.toB256_toBytes] using words
 
-/-- **Canonical mint frame.** Every successful raw mint run at the Pair code consumes the typed
-source mint over its three actual observations (token0 and token1 `balanceOf`, factory `feeTo`)
-with static-view turn queues derived from the actual children of the same derivation. Under
-trace-local HASH-T over the run's key universe `mintTraceUniverse K root` (a function of the
-tracked rows and the root execution alone), it yields the exact Pair storage, the exact raw log
-list (fee mint, first-mint minimum to address zero, recipient mint, Sync, Mint) together with
-the typed pending logs that map onto it, the return word, the final unlock and the original
-checkpoint. -/
-theorem mint_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpoint}
-    {sevm : Sevm} {b post : Devm} {G : Nat}
-    (invocation : List Nat)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x6a627842)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
-    (inj : WriterInj (mintTraceUniverse K ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩))
-    (apart : WriterApart (mintTraceUniverse K ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)) :
+/-- What the canonical mint frame derives from one successful raw mint run `run` (see
+`mint_bytecode_exact_consumes`): the actual observation steps, the exact typed consumption, the
+final frame shape, the storage transport, the fee result and its log, the exact raw log list and
+its typed pending logs, the return word, view authenticity and per-call provenance. -/
+def MintCanonicalResult (K : WriterKey → Prop) (current : Checkpoint) (invocation : List Nat)
+    {sevm : Sevm} {b post : Devm} {G : Nat} (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    Prop :=
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
     let ctx := writerContext sevm invocation
     let recipient := (Sevm.dataWord sevm 4).toAdr
@@ -441,7 +429,29 @@ theorem mint_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
           picked.1.frame.sevm.isStatic = true) ∧
         MintViewProvenance root sevm.currentTarget current.state.token0 views0 ∧
         MintViewProvenance root sevm.currentTarget current.state.token1 views1 ∧
-        MintViewProvenance root sevm.currentTarget current.state.factory viewsF := by
+        MintViewProvenance root sevm.currentTarget current.state.factory viewsF
+
+/-- **Canonical mint frame.** Every successful raw mint run at the Pair code consumes the typed
+source mint over its three actual observations (token0 and token1 `balanceOf`, factory `feeTo`)
+with static-view turn queues derived from the actual children of the same derivation. Under
+trace-local HASH-T over the run's key universe `mintTraceUniverse K root` (a function of the
+tracked rows and the root execution alone), it yields the exact Pair storage, the exact raw log
+list (fee mint, first-mint minimum to address zero, recipient mint, Sync, Mint) together with
+the typed pending logs that map onto it, the return word, the final unlock and the original
+checkpoint. -/
+theorem mint_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpoint}
+    {sevm : Sevm} {b post : Devm} {G : Nat}
+    (invocation : List Nat)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0x6a627842)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
+    (inj : WriterInj (mintTraceUniverse K ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩))
+    (apart : WriterApart (mintTraceUniverse K ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)) :
+    MintCanonicalResult K current invocation run := by
+  unfold MintCanonicalResult
   intro root ctx recipient
   have source := (mintBytecode_public_source_inv (K := K) (current := current) codeEq fork rep
     invocation selector run).1
