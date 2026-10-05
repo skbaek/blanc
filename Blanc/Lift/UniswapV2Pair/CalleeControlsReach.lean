@@ -60,7 +60,11 @@ def SyncLive (w : Devm) (pair : Adr) : Prop :=
 
 /-- **Deployment and initialization reach the family.** A successful pc-zero `initialize` run
 (the run `pair_initialized` consumes) at a pair holding the certified runtime and the
-constructor's storage ends in a configured world. -/
+constructor's storage ends in a configured world.
+
+Headline (named, not consumed): this substantiates that `ConfiguredWorld` is the family the
+Pair's actual initialization produces, so `sync_liveness_refuted`, which uses only the concrete
+member `reachWorld_configured`, refutes liveness over a family that real runs land in. -/
 theorem initialize_reaches_configured {chainWord : B256} {factory : Adr}
     {sevm : Sevm} {b post : Devm} {G : Nat}
     (hstor : Devm.getStor b sevm.currentTarget =
