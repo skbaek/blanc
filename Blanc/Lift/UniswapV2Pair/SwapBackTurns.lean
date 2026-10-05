@@ -52,13 +52,9 @@ def SwapViewProvenance (D : Exec.Deriv) (sevm : Sevm) (frame : Frame) (t : B256)
 def swapSyncLog (pair : Adr) (bal0 bal1 : B256) : Jaune.Log :=
   ⟨pair, [updateSyncTopic], encodeWords [bal0, bal1]⟩
 
-/-- **Swap back half, typed consumption.** From the post-callback cut, a
-successful run of the actual body returns, and the suspended source frame
-consumes exactly two `balanceOf(pair)` replies, each with the static-view turn
-queue of the same actual STATICCALL, finishing with no return bytes. The Pair
-storage represents the finished state (unlocked), foreign storage is untouched,
-the raw logs are the `Sync` and `Swap` images, and the output stays empty. -/
-theorem swapBack_exact_consumes {U K : WriterKey → Prop} {frame : Frame} {locals : SwapLocals}
+/-- `swapBack_exact_consumes` together with the uint112 guard of the same run: both observed
+post-callback balances are below `2^112`. -/
+theorem swapBack_exact_consumes_bounds {U K : WriterKey → Prop} {frame : Frame} {locals : SwapLocals}
     {D : Exec.Deriv} {sevm : Sevm} {d : Devm} {w : SwapCutWords} {p ρ : B256} {n G : Nat}
     {M : Mem} {R : List B256} {o : Outcome}
     (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
@@ -103,7 +99,8 @@ theorem swapBack_exact_consumes {U K : WriterKey → Prop} {frame : Frame} {loca
           (swapInWord (swapBalanceWord out0) w.reserve0 w.amount0Out)
           (swapInWord (swapBalanceWord out1) w.reserve1 w.amount1Out)
           w.amount0Out w.amount1Out w.recipient] ∧
-      post.output = [] := by
+      post.output = [] ∧
+      (swapBalanceWord out0).toNat < 2 ^ 112 ∧ (swapBalanceWord out1).toNat < 2 ^ 112 := by
   obtain ⟨d0, d1, out0, out1, call0, call1, guard, k, bound0, bound1, static, M', G', returned⟩ :=
     swapBack_raw_inv fork cut.mem cut.lower cut.width run
   have call0' := call0
@@ -180,7 +177,7 @@ theorem swapBack_exact_consumes {U K : WriterKey → Prop} {frame : Frame} {loca
     by rw [cut.token0, swapTokenWord_adr, toAdr_toB256],
     by rw [cut.token1, swapTokenWord_adr, toAdr_toB256],
     by rw [cut.recipient, swapTokenWord_adr], ?_, ⟨auth0, derived0⟩, ⟨auth1, derived1⟩, returned, rfl, rfl, rfl, ?_, ?_,
-    ⟨(frame1.beginResume request1).origin, ?_⟩, ?_, ?_⟩
+    ⟨(frame1.beginResume request1).origin, ?_⟩, ?_, ?_, bound0, bound1⟩
   · refine ExactConsumes.nextCall (result := feeObservedResult out0)
       (out := ⟨.success [], final, Transcript.done,
         staticViewChildReturns frame1 request1 0 views1 ++ []⟩) rfl
@@ -208,5 +205,65 @@ theorem swapBack_exact_consumes {U K : WriterKey → Prop} {frame : Frame} {loca
   · rw [afterSstore_logs, swap_addLog_logs, updLogs, logs1, pairEq, List.append_assoc]
     rfl
   · rw [afterSstore_output, swap_addLog_output, updateWorld_output, output1, cut.output]
+
+/-- **Swap back half, typed consumption.** From the post-callback cut, a
+successful run of the actual body returns, and the suspended source frame
+consumes exactly two `balanceOf(pair)` replies, each with the static-view turn
+queue of the same actual STATICCALL, finishing with no return bytes. The Pair
+storage represents the finished state (unlocked), foreign storage is untouched,
+the raw logs are the `Sync` and `Swap` images, and the output stays empty. -/
+theorem swapBack_exact_consumes {U K : WriterKey → Prop} {frame : Frame} {locals : SwapLocals}
+    {D : Exec.Deriv} {sevm : Sevm} {d : Devm} {w : SwapCutWords} {p ρ : B256} {n G : Nat}
+    {M : Mem} {R : List B256} {o : Outcome}
+    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    (installed : some (d.getCode sevm.currentTarget).toList = sem.image)
+    (fork : CoveredFork sevm.benvStat.fork)
+    (cut : SwapCut K frame locals sevm d w p n M)
+    (good : ∀ F ∈ Exec.rawFrameRoots D.exc, F.sevm.currentTarget = frame.context.pair →
+      ∀ k ∈ staticViewDecodedKeys F.sevm, U k)
+    (run : SFunc.RunCutP (StepIn D) cert.prog sevm []
+      (St d (swapCutStack w ρ R) M G) t_09c3_c5 (.done o)) :
+    ∃ (out0 out1 : Bytes) (views0 views1 : List StaticViewTurn) (final : Frame)
+      (rets : List ChildReturn) (post : Devm) (M' : Mem) (G' : Nat) (d0 d1 : Devm),
+      SwapBalanceCall D sevm d M p w.token0
+        (w.token1 :: w.token0 :: 0 :: 0 :: w.reserve1 :: w.reserve0 :: w.dataLength ::
+          w.dataOffset :: w.recipient :: w.amount1Out :: w.amount0Out :: ρ :: R) d0 out0 ∧
+      SwapBalanceCall D sevm d0 (swapBalanceReply M p sevm.currentTarget out0) p w.token1
+        (w.token1 :: w.token0 :: 0 :: swapBalanceWord out0 :: w.reserve1 :: w.reserve0 ::
+          w.dataLength :: w.dataOffset :: w.recipient :: w.amount1Out :: w.amount0Out :: ρ :: R)
+        d1 out1 ∧
+      (swapTokenWord w.token0).toAdr = locals.token0 ∧
+      (swapTokenWord w.token1).toAdr = locals.token1 ∧
+      swapTokenWord w.recipient = locals.recipient.toB256 ∧
+      ExactConsumes (.suspended frame (swapRequest0 frame locals) (.swapBalance0 locals))
+        (.next (feeObservedResult out0) (staticViewTranscript views0 .done)
+          (.next (feeObservedResult out1) (staticViewTranscript views1 .done) .done))
+        { status := .success [], frame := final, remaining := .done, childReturns := rets } ∧
+      SwapViewProvenance D sevm frame (swapTokenWord w.token0) views0 ∧
+      SwapViewProvenance D sevm (frame.beginResume (swapRequest0 frame locals))
+        (swapTokenWord w.token1) views1 ∧
+      o = .returned (St post R M' G') ∧
+      final.checkpoint = frame.checkpoint ∧ final.context = frame.context ∧
+      final.current.state.unlocked = 1 ∧
+      WriterRep K (post.getStor sevm.currentTarget) final.current.state ∧
+      (∀ a, a ≠ sevm.currentTarget → post.getStor a = d.getStor a) ∧
+      (∃ origin, final.current.logs = frame.current.logs ++
+        [.owned origin (.sync (swapBalanceWord out0).toNat (swapBalanceWord out1).toNat),
+         .owned origin (swapSourceEvent frame locals (swapBalanceWord out0) (swapBalanceWord out1))]) ∧
+      post.logs = d.logs ++
+        [swapSyncLog sevm.currentTarget (swapBalanceWord out0) (swapBalanceWord out1),
+         swapEventLog sevm
+          (swapInWord (swapBalanceWord out0) w.reserve0 w.amount0Out)
+          (swapInWord (swapBalanceWord out1) w.reserve1 w.amount1Out)
+          w.amount0Out w.amount1Out w.recipient] ∧
+      post.output = [] := by
+  obtain ⟨out0, out1, views0, views1, final, rets, post, M', G', d0, d1, call0, call1, token0,
+    token1, recipient, consumed, prov0, prov1, returned, checkpoint, context, unlocked, rep, foreign,
+    logs, rawLogs, output, _, _⟩ :=
+    swapBack_exact_consumes_bounds inj apart sub sem image installed fork cut good run
+  exact ⟨out0, out1, views0, views1, final, rets, post, M', G', d0, d1, call0, call1, token0, token1,
+    recipient, consumed, prov0, prov1, returned, checkpoint, context, unlocked, rep, foreign, logs,
+    rawLogs, output⟩
 
 end Blanc.Lift.UniswapV2Pair
