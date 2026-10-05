@@ -3227,6 +3227,15 @@ contract-neutral.
   [`Blanc/Lift/InvWalkProvenance.lean`](../Blanc/Lift/InvWalkProvenance.lean)
   retain that relation in the exposed instruction and the continuation. Use these
   projections when a walk must preserve execution-derivation provenance.
+- An `EXTCODESIZE` step with the actual warm/cold account access is in
+  [`Blanc/Lift/CodeSizeWalk.lean`](../Blanc/Lift/CodeSizeWalk.lean).
+  `temporalAccountAccessBase` and `temporalAccountAccessCost` name the selected
+  successor world and charge; `temporal_extcodesize_runCompiled` supplies the
+  compiled step from the code-size word, stack-room and covered-fork facts.
+  `ri_extcodesize` inverts the actual instruction into that world, exact word,
+  unchanged memory and residual gas. `rx_extcodesize` consumes an exact
+  continuation at the selected warm/cold charge. The existing Lido temporal
+  access names are compatibility declarations over this common owner.
 - A `STATICCALL` to an arbitrary callee, whose code is unknown: its abstract outcome
   (`StaticCallPost`: flag, returned bytes as output window and return data, every storage
   map and the log list kept) and, for a set flag, the successful static child message
