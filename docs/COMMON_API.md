@@ -3906,9 +3906,9 @@ contract-neutral.
   provides `rr_cmp_gt` and `rr_cmp_eq` for `DUP`/`PUSH4`/comparison/`PUSH2`
   branches. They preserve arbitrary instruction relation `P`, its soundness
   projection, the original `AtExec` target and continuation stack; the equality
-  variant consumes the actual function lookup. Worked use:
-  `noncalling_no_exec` in `Blanc/Lift/UniswapV2Pair/HistoryWriterWalk.lean`
-  routes original same-frame prefixes into checked exec-free regions. These
+  variant consumes the actual function lookup; the proof recipe for
+  `Exec.NoRetainedWriteTo` registers them. They have no in-tree consumer
+  since the single-frame Uniswap V2 history walk was superseded. These
   projections alone do not identify a retained occurrence or child outcome.
 - From a cursor-placed node to *later* nodes of the same frame:
   [`Blanc/Lift/ReachChain.lean`](../Blanc/Lift/ReachChain.lean).

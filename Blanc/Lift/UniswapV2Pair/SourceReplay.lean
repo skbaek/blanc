@@ -228,26 +228,6 @@ theorem PairStorageReplay.append {U : WriterKey → Prop} {a b c : Stor}
   obtain ⟨finish, K2, replay2, grows2, sub2, rep2⟩ := second middle K1 sub1 rep1
   exact ⟨finish, K2, replay1.append replay2, fun k h => grows2 k (grows1 k h), sub2, rep2⟩
 
-/-- The storage-only carrier uses the common settlement and accounting ladder.
-Value credits and foreign balance movements have no source invocation. The
-actual-frame observation and target handler remain separate producer obligations. -/
-def pairReplayCarrier (pair : Adr) (U : WriterKey → Prop) :
-    Blanc.ExecutionAccountingReplay.ReplayCarrier pair where
-  Snap := Stor
-  Step := SourceInvocation
-  Tag := Unit
-  Replay := PairStorageReplay U
-  ofState world := world.getStor pair
-  frameEntry _ world := world.getStor pair
-  nil := PairStorageReplay.nil U
-  silent := fun storage _ => storage
-  credit := by
-    intro _ pre post _ storage _ _
-    exact ⟨[], by rw [storage]; exact PairStorageReplay.nil U _⟩
-  entry_eq_ofState := by
-    intro _ _ _ _ transfer _
-    exact congrFun (benvAfterTransfer_getStor_eq transfer) pair
-
 /-- A storage replay realizes the exact model fold and carries ledger,
 modular oracle and fee-off share-value laws from the one initial checkpoint.
 The actual configured-history producer must supply this replay and identify
