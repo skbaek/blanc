@@ -2775,38 +2775,6 @@ theorem sync_balance_return_cursor (site : SyncBalanceSite)
   obtain ⟨N, κ', facts, _⟩ := sync_balance_return_cursor_trace site ok tree success fork
   exact ⟨N, κ', facts⟩
 
-/-- The actual first call's pending parent continues through the real width
-guard to the second-request prelude, preserving the suffix's original counter. -/
-theorem sync_root_second_request_cursor {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-    ∃ (occurrence : Exec.NinstOccurrence root) (returned N : Exec.Deriv) (κ' : Cursor),
-      Exec.Deriv.ExecFreeUntil root occurrence.node ∧ occurrence.node.pc = 0x1ee0 ∧
-      Exec.Deriv.ParentStep returned occurrence.node ∧
-      returned.pc = occurrence.node.pc + 1 ∧ occurrence.stepResult = .ok returned.devm ∧
-      (∃ (frame : Jaune.Frame) (resume : Resume),
-        Evm.step ⟨occurrence.node.pc, occurrence.node.sevm, occurrence.node.devm⟩ =
-          .spawn frame resume (occurrence.node.pc + 1)) ∧
-      Exec.Deriv.ExecFreeUntil returned N ∧ N.pc = 0x1f07 ∧
-      N.sevm = sevm ∧ N.exn = .ok post ∧ κ'.f = t_1f07_c31 ∧
-      (∃ k K, κ'.K = k :: K ∧ k.f = t_0257_c78) ∧ CursorOK code cert N κ' := by
-  obtain ⟨occurrence, returned, node, cursor, g, t, ii, is, oi, os, S, out,
-    path, pc, sameSevm, instruction, edge, result, primitive, returnedFree, returnedPc,
-    nodePath, nodePc, nodeSevm, outcome, tree, continuation, placed,
-    stack, hpost, bound, answered, callSpawn⟩ :=
-    sync_root_first_static_answered codeEq fork selector run
-  obtain ⟨N, κ', suffix, nextSevm, nextOutcome, nextPc, nextTree, nextK, nextOk⟩ :=
-    sync_balance_return_cursor .first placed tree outcome (by rw [nodeSevm]; exact fork)
-  have retained : ∃ k K, κ'.K = k :: K ∧ k.f = t_0257_c78 := by
-    rw [nextK]
-    exact continuation
-  have actualPc : N.pc = 0x1f07 := nextPc.trans (by decide +kernel)
-  exact ⟨occurrence, returned, N, κ', path, pc, edge, returnedPc, result, callSpawn,
-    returnedFree.trans suffix, actualPc, nextSevm.trans nodeSevm,
-    nextOutcome.trans outcome, nextTree, retained, nextOk⟩
-
 /-- The second actual request and code guard are reached through the pending
 parent suffix, with no intervening child-producing instruction. -/
 theorem sync_second_guard_from_decoded {sevm : Sevm} {post : Devm}

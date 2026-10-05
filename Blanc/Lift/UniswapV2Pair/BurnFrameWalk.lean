@@ -27,66 +27,6 @@ theorem burnLP_sentinel {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     Mem.read_write_disjoint wf 0 fromWord.toAdr.toB256.toBytes
       (Or.inl (by rw [B256.length_toBytes]; decide : 0 + fromWord.toAdr.toB256.toBytes.length ≤ 96))]
 
-/-- Both physical transfers and both final balance calls belong to one source
-run; producer reply bounds supply the pointer needed by the complete suffix. -/
-theorem burnTransfers_suffix_inv {P : Sevm → Devm → Ninst → Devm → Prop}
-    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {seg : Seg}
-    {supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ : B256}
-    (project : ∀ {e d i d'}, P e d i d' → Ninst.Run e d i d')
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (sentinel : memWord M 96 = 0) (notCut : 14 ∉ C)
-    (run : SFunc.RunCutP P cert.prog sevm C
-      (St b (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R) M G)
-      t_168d_c13 seg) :
-    ∃ (tx0 tx1 : Devm) (out0 out1 : Bytes) (d0 d1 : Devm) (gas finalSize : Nat),
-      let p := burnSecondTransferPointer tx0.returnData tx1.returnData
-      let p0 := burnFirstTransferPointer tx0.returnData
-      let N := if tx1.returnData = [] then tx1.memory else
-        Blanc.Lift.bytesArrayMemory tx1.memory (p0 + 164) tx1.returnData
-      let Q0 := skimRequestMemory N p sevm.currentTarget
-      let Q1 := skimRequestMemory (burnBalanceReplyMemory Q0 p out0) p sevm.currentTarget
-      let finalM := burnSuffixMemory sevm d1 (burnBalanceReplyMemory Q1 p out1) p r0 r1
-        (Bytes.toB256 (out0.take 32)) (Bytes.toB256 (out1.take 32)) amount0 amount1
-      (∃ before0, P sevm before0 (.exec .call) tx0) ∧
-      (∃ before1, P sevm before1 (.exec .call) tx1) ∧
-      tx0.returnData.length < 2 ^ 160 ∧ tx1.returnData.length < 2 ^ 160 ∧
-      (tx0.returnData = [] ∨ (32 ≤ tx0.returnData.length ∧
-        Bytes.toB256 (tx0.returnData.sliceD 0 32 0) ≠ 0)) ∧
-      (tx1.returnData = [] ∨ (32 ≤ tx1.returnData.length ∧
-        Bytes.toB256 (tx1.returnData.sliceD 0 32 0) ≠ 0)) ∧
-      (∃ before0, P sevm before0 (.exec .staticcall) d0) ∧
-      (∃ before1, P sevm before1 (.exec .staticcall) d1) ∧
-      StaticAnswered sevm (temporalAccountAccessBase tx1
-        (token0 &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr)
-        (token0 &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr
-        (ExternalOperation.encode (.balanceOf sevm.currentTarget)) out0 ∧
-      StaticAnswered sevm (temporalAccountAccessBase d0
-        (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr)
-        (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr
-        (ExternalOperation.encode (.balanceOf sevm.currentTarget)) out1 ∧
-      32 ≤ out0.length ∧ out0.length < 2 ^ 256 ∧
-      32 ≤ out1.length ∧ out1.length < 2 ^ 256 ∧
-      (Bytes.toB256 (out0.take 32)).toNat < 2 ^ 112 ∧
-      (Bytes.toB256 (out1.take 32)).toNat < 2 ^ 112 ∧
-      seg = .done (.returned (St
-        (burnSuffixPost sevm d1 r0 r1 (Bytes.toB256 (out0.take 32)) (Bytes.toB256 (out1.take 32))
-          f toWord amount0 amount1) (amount1 :: amount0 :: R) finalM gas)) ∧
-      PtrMem p finalSize finalM ∧ 96 ≤ p.toNat ∧ p.toNat + 64 < 2 ^ 256 ∧
-      p.toNat + 64 ≤ finalSize := by
-  obtain ⟨gw0, cg0, tx0, residual0, gw1, cg1, tx1, residual1,
-    call0, call1, _, _, calldata0, calldata1, memory0, memory1, output0, output1,
-    width0, width1, accepted0, accepted1, midMem, midSentinel, fit64, finalMem,
-    firstTail, secondTail⟩ := burnTransfers_caller_inv project fork mem sentinel run
-  obtain ⟨low, high⟩ := burnFinalPointer_bounds width0 width1
-  obtain ⟨bgw0, bcg0, d0, out0, bgw1, bcg1, d1, out1, updateCallGas, updateGas, gas,
-    bcall0, bcall1, post0, post1, long0, full0, long1, full1, answer0, answer1,
-    bound0, bound1, mutable, updateRun, returned, ⟨finalSize, finalPtr, covered⟩⟩ :=
-    burnFinalBalances_suffix_inv project fork finalMem low high notCut secondTail
-  exact ⟨tx0, tx1, out0, out1, d0, d1, gas, finalSize,
-    ⟨_, call0⟩, ⟨_, call1⟩, width0, width1, accepted0, accepted1,
-    ⟨_, bcall0⟩, ⟨_, bcall1⟩, answer0, answer1, long0, full0, long1, full1,
-    bound0, bound1, returned, finalPtr, low, fit64, covered⟩
-
 /-- Every actual fee branch preserves Burn's helper sentinel. On positive LP
 minting, the scratch/event memory is identical to the checked LP burn layout. -/
 theorem burnFeePost_sentinel {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
