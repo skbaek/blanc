@@ -38,7 +38,10 @@ def callCaller : Call → Adr
 def HolderCall (p : Adr) (c : Call) : Prop :=
   callCaller c = p → (∃ dst w, c = .transfer p dst w) ∨ ∃ v, c = .deposit p v
 
-/-- Every call of the list made by `p` is a `transfer` or a deposit. -/
+/-- Every call of the list made by `p` is a `transfer` or a deposit.
+
+Discharged by `pairCalls_holderCalls` (`Blanc/Composition/UniswapV2PairWeth9Calls.lean`) over a
+configured history, under the hypotheses listed there. -/
 def HolderCalls (p : Adr) (cs : List Call) : Prop := ∀ c ∈ cs, HolderCall p c
 
 /-- The amount `p` sends away by one of its own `transfer`s (zero for every other call). -/
@@ -261,13 +264,20 @@ theorem Ledger.step_holder {l l' : Ledger} {p : Adr} {c : Call} (hz : AllowZero 
 
 /-- **The model's ETH stays a word at every deposit**: running the calls from ETH `e` (each call adds
 its deposit and subtracts its withdrawal, as `State.step` does), the ETH plus the next deposit is below
-`2^256`.  This is the wrap budget the holder argument needs, step by step. -/
+`2^256`.  This is the wrap budget the holder argument needs, step by step.
+
+LANE-OPEN OBLIGATION (second host): discharged by an EntryGood/ladder generalisation exposing the
+contract's frame precondition (a per-frame WETH9 entry-invariant export, `(footSpec U).Pre` at every
+committed frame entry, plus the model-to-real ledger link, from a generalized
+`ConfiguredHistoryTrace.entryGood_settled`), or a `Lift/Weth9` export; not derivable in the
+Composition stratum today (see uv2sh-weth9c report). -/
 def EthFits : Nat → List Call → Prop
   | _, [] => True
   | e, c :: cs => e + c.inflow < 2 ^ 256 ∧ EthFits (e + c.inflow - c.outflow) cs
 
 /-- **A run keeps `p`'s allowances zero and lowers `p`'s balance by at most `p`'s own transfers**, when
-the booked total is backed by ETH `e` whose running value fits a word at every deposit. -/
+the booked total is backed by ETH `e` whose running value fits a word at every deposit.
+LANE-OPEN: conditional on `EthFits`. -/
 theorem Ledger.run_holder {p : Adr} {cs : List Call} :
     ∀ {l l' : Ledger} {e : Nat}, AllowZero p l → HolderCalls p cs → l.total ≤ e → EthFits e cs →
       l.run cs = some l' →
@@ -316,7 +326,17 @@ allowances are zero at the checkpoint.  If every committed WETH9 writer invocati
 `transfer` or a deposit (`pairCalls`, the pair-side input) and the WETH9 ether, run from the checkpoint
 along the committed deposits and withdrawals, stays a word at every deposit (`budget`), then at the future state `p`'s
 allowances are still zero and its balance word is at least the checkpoint's minus exactly what `p`'s
-own committed `transfer`s sent to other holders. -/
+own committed `transfer`s sent to other holders.
+
+CROSS-HOST: conditional on `allowZero`, `holderTracked`.
+LANE-OPEN: conditional on `EthFits` (`budget`).
+
+* `pairCalls` — a plain premise (`HolderCalls`), discharged by `pairCalls_holderCalls`.
+* `holderTracked` — CROSS-HOST HYPOTHESIS (delete at consolidation): discharged by the original host's
+  choice of the checkpoint footprint `K₀` (the exhibit pair's balance row is tracked).
+* `allowZero` — CROSS-HOST HYPOTHESIS (delete at consolidation): discharged by the original host's
+  deployment-checkpoint fact that the Pair never grants a WETH9 allowance (it never calls `approve`).
+* `budget` — see `EthFits`. -/
 theorem weth9_history_holder_noShrink {ca p : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {K₀ : Key → Prop}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)

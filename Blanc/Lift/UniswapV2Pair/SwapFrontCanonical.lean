@@ -32,7 +32,8 @@ the typed swap exactly consumes the actual transfer/callback turns up to it. In 
 successful shapes each optional call is either skipped with its source guard false, or is one
 actual CALL step of this derivation with its actual reply and retained turns. The front also
 leaves the installed Pair code unchanged, so the back half's code premise holds at the cut
-world. -/
+world.
+CROSS-HOST: conditional on `SwapCallReplyShort`. -/
 theorem swap_bytecode_front_cut_code {K U : WriterKey → Prop} {current : Checkpoint}
     {sevm : Sevm} {b post : Devm} {G : Nat}
     (invocation : List Nat)
@@ -46,8 +47,7 @@ theorem swap_bytecode_front_cut_code {K U : WriterKey → Prop} {current : Check
     (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
     (good : ∀ F ∈ Exec.rawFrameRoots (⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ : Exec.Deriv).exc,
       F.sevm.currentTarget = sevm.currentTarget → LockedGood U F)
-    (short : ∀ pre d, StepIn ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm pre (.exec .call) d →
-      d.returnData.length < 2 ^ 160) :
+    (short : SwapCallReplyShort ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm) :
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
     let ctx := writerContext sevm invocation
     let locals := swapFrontLocals sevm current.state
@@ -65,11 +65,14 @@ theorem swap_bytecode_front_cut_code {K U : WriterKey → Prop} {current : Check
       SwapCallbackOpt root sevm b2 S M2 p (swapRecipientWord sevm) (swapAmount0Out sevm)
         (swapAmount1Out sevm) (swapDataLength sevm) (swapDataStart sevm) d M ∧
       ((swapAmount0Out sevm = 0 ∧ T0 = id) ∨ (swapAmount0Out sevm ≠ 0 ∧
-        T0 = fun tail => .next (swapTransferReply b1.returnData) (mutableTranscript turns0 .done) tail)) ∧
+        T0 = (fun tail => .next (swapTransferReply b1.returnData) (mutableTranscript turns0 .done) tail) ∧
+        SwapCallProvenance sevm.currentTarget root sevm (swapPrefixWorld sevm b) b1 turns0)) ∧
       ((swapAmount1Out sevm = 0 ∧ T1 = id) ∨ (swapAmount1Out sevm ≠ 0 ∧
-        T1 = fun tail => .next (swapTransferReply b2.returnData) (mutableTranscript turns1 .done) tail)) ∧
+        T1 = (fun tail => .next (swapTransferReply b2.returnData) (mutableTranscript turns1 .done) tail) ∧
+        SwapCallProvenance sevm.currentTarget root sevm b1 b2 turns1)) ∧
       ((swapDataLength sevm = 0 ∧ TC = id) ∨ (swapDataLength sevm ≠ 0 ∧
-        TC = fun tail => .next (swapCallbackReply d.returnData) (mutableTranscript turnsC .done) tail)) ∧
+        TC = (fun tail => .next (swapCallbackReply d.returnData) (mutableTranscript turnsC .done) tail) ∧
+        SwapCallProvenance sevm.currentTarget root sevm b2 d turnsC)) ∧
       SwapFrontReaches (startTyped current ctx (swapDecodedEntry sevm)) ((T0 ∘ T1) ∘ TC) R
         (.suspended frame (requestFor .swapBalance0 locals.token0 (.balanceOf ctx.pair))
           (.swapBalance0 locals)) ∧
