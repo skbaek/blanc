@@ -663,6 +663,7 @@ import Blanc.Lift.UniswapV2Pair.BurnFrameWalk
 import Blanc.Lift.UniswapV2Pair.BurnDispatchWalk
 import Blanc.Lift.UniswapV2Pair.SourceReplay
 import Blanc.Lift.UniswapV2Pair.ReplayWriterGas
+import Blanc.Lift.UniswapV2Pair.InitializedReplay
 import Blanc.Lift.UniswapV2Pair.PropertiesOracle
 import Blanc.Lift.UniswapV2Pair.PropertiesSwap
 import Blanc.Lift.UniswapV2Pair.PropertiesLedger
