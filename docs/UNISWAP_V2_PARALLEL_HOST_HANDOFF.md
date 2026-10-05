@@ -1,5 +1,9 @@
 # Uniswap V2 Pair: parallel host handoff
 
+**Historical first split.** The current allocation and branching point are in
+[`UNISWAP_V2_SECOND_HOST_HANDOFF.md`](UNISWAP_V2_SECOND_HOST_HANDOFF.md).
+This document remains the record of the completed first lane.
+
 The commit containing this document is the shared Blanc branching point. Its
 parent is the accepted Blanc goal candidate
 `f6ee3fc55265012ec47914d02bb5e30ab49973d7`. Both hosts start their Blanc
