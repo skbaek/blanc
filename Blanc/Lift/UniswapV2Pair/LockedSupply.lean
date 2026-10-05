@@ -1,7 +1,7 @@
 import Blanc.Lift.UniswapV2Pair.MutableTurns
 import Blanc.Lift.UniswapV2Pair.PairSelectors
 import Blanc.Lift.UniswapV2Pair.PairLockedEntries
-import Blanc.Lift.UniswapV2Pair.PermitSource
+import Blanc.Lift.UniswapV2Pair.PermitTurns
 import Blanc.Lift.UniswapV2Pair.TransferFromSource
 import Blanc.Lift.UniswapV2Pair.InitializeSource
 import Blanc.Lift.UniswapV2Pair.StaticViewSource
