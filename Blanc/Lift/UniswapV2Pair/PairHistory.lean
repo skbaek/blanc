@@ -485,4 +485,34 @@ theorem pair_history_feeOff_product {pair : Adr} {cfg : ChainConfig}
     pair_history_committed trace installed initial fresh
   exact ⟨steps, observed, auth, finish, K', realized, rep, source.feeOff_product⟩
 
+/-- **Share value with the protocol fee on (U3, fee-on).**  For the history's own steps: if each
+burn/sync step's final `balanceOf(pair)` answers are at least the stored reserves (`EntryNoShrink`,
+over exactly these steps), every committed state change with positive incoming supply keeps
+`r0·r1·T'² ≤ r0'·r1'·(T + F)²`, where `F = entryFeeAmount` is the exact protocol-fee mint of that step:
+for mint and burn, `feeAmount` at the step's authenticated `feeTo` answer, i.e.
+`⌊T·(√k − √kLast)/(5·√k + √kLast)⌋` when `feeTo ≠ 0`, `kLast ≠ 0` and `√kLast < √k` (floored
+roots), else `0`; zero for every other entry.  Dilution is bounded by the fee mint alone.
+Nonvacuity: as `pair_history_feeOff_product`, without the fee-off condition. -/
+theorem pair_history_feeOn_product {pair : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
+    ∃ steps : List PairStep,
+      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      (∀ s ∈ steps, s.Authentic pair) ∧
+      ∃ (finish : State) (K' : WriterKey → Prop),
+        runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
+        WriterRep K' (future.state.getStor pair) finish ∧
+        (sourceReplayNoShrink st₀ (steps.map PairStep.source) →
+          ∀ before inv after, (before, inv, after) ∈ sourceReplaySteps st₀ (steps.map PairStep.source) →
+            0 < before.totalSupply.toNat →
+            before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
+              after.reserve0.val * after.reserve1.val *
+                (before.totalSupply.toNat + entryFeeAmount before inv.entry inv.transcript) ^ 2) := by
+  obtain ⟨_, steps, observed, auth, finish, K', source, realized, _, _, rep⟩ :=
+    pair_history_committed trace installed initial fresh
+  exact ⟨steps, observed, auth, finish, K', realized, rep, source.feeOn_product⟩
+
 end Blanc.Lift.UniswapV2Pair

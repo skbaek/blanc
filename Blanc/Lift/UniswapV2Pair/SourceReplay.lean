@@ -146,6 +146,52 @@ theorem SourceReplay.feeOff_product {st finish : State} {invs : List SourceInvoc
       exact bound
     · exact ih restAnswers pre post later positive
 
+/-- The backing answer condition alone at each carried state (no fee-recipient condition). -/
+def sourceReplayNoShrink : State → List SourceInvocation → Prop
+  | _, [] => True
+  | st, inv :: rest =>
+    EntryNoShrink st inv.context inv.entry inv.transcript ∧
+      sourceReplayNoShrink (inv.run st).frame.current.state rest
+
+/-- The consecutive source-state boundaries of the ordered replay with the invocation between them. -/
+def sourceReplaySteps : State → List SourceInvocation → List (State × SourceInvocation × State)
+  | _, [] => []
+  | st, inv :: rest =>
+    (st, inv, (inv.run st).frame.current.state) ::
+      sourceReplaySteps (inv.run st).frame.current.state rest
+
+/-- **Fee-on share value.**  Every committed source change with positive incoming supply keeps
+`r0·r1·T'² ≤ r0'·r1'·(T + F)²`, where `F` is the exact protocol-fee mint of that invocation
+(`entryFeeAmount`: `feeAmount` at the actual `feeTo` answer for mint and burn, zero otherwise), using only
+the backing answer condition: dilution is bounded by the fee mint alone. -/
+theorem SourceReplay.feeOn_product {st finish : State} {invs : List SourceInvocation}
+    (replay : SourceReplay st invs finish) (noShrink : sourceReplayNoShrink st invs) :
+    ∀ before inv after, (before, inv, after) ∈ sourceReplaySteps st invs →
+      0 < before.totalSupply.toNat →
+      before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
+        after.reserve0.val * after.reserve1.val *
+          (before.totalSupply.toNat + entryFeeAmount before inv.entry inv.transcript) ^ 2 := by
+  induction replay with
+  | nil st =>
+    intro before inv after member
+    cases member
+  | @cons st finish inv rest out bytes consumed successful tail ih =>
+    have runEq : inv.run st = out := (runTyped_of_exact consumed).1
+    change EntryNoShrink st inv.context inv.entry inv.transcript ∧
+      sourceReplayNoShrink (inv.run st).frame.current.state rest at noShrink
+    obtain ⟨here, later⟩ := noShrink
+    rw [runEq] at later
+    intro before inv' after member positive
+    rw [sourceReplaySteps, runEq, List.mem_cons] at member
+    rcases member with same | member
+    · cases same
+      have accepted : (runTyped st inv.context inv.entry inv.transcript).status =
+          .success bytes := by rw [(runTyped_of_exact consumed).1]; exact successful
+      have bound := runTyped_product positive here accepted
+      rw [(runTyped_of_exact consumed).1] at bound
+      exact bound
+    · exact ih later before inv' after member positive
+
 /-- The oracle law over all replayed receipts includes both timestamp and
 accumulator modular arithmetic already present in the exact per-update law. -/
 theorem SourceReplay.oracle_mod {st finish : State} {invs : List SourceInvocation}
