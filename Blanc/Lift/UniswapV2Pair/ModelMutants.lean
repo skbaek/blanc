@@ -78,9 +78,6 @@ def swapCheckFee (fee : Nat) (balance0 balance1 : B256) (amount0In amount1In res
     else .error (.sourceGuard "ds-math-mul-overflow")
   else .error (.sourceGuard "UniswapV2: INSUFFICIENT_INPUT_AMOUNT")
 
-/-- The source's swap check is the fee-parameterised check at 3 (the 997 constant). -/
-theorem swapCheckFee_three : swapCheckFee 3 = swapCheck := rfl
-
 /-- Goal mutant U3(ii): successful later-mint quotients round up. -/
 def mintRoundUp : Arithmetic := { production with mintAmount := mintAmountUp }
 

@@ -25,8 +25,14 @@ theorem swapRecipientWord_eq (sevm : Sevm) :
   rw [swapRecipientWord, B256.and_comm]
   exact ff20_and_word _
 
-/-- `swap_bytecode_front_cut` together with the Pair code at the join: the front leaves the
-installed Pair code unchanged, so the back half's code premise holds at the cut world. -/
+/-- **Swap front half.** A successful raw swap run of the original bytes, under trace-local
+HASH-T (a separated universe `U ⊇ K` admitting every raw Pair frame) and the CALL reply bound,
+reaches the post-callback join with `SwapCut` for the source swap's `balance0` suspension, and
+the typed swap exactly consumes the actual transfer/callback turns up to it. In all six
+successful shapes each optional call is either skipped with its source guard false, or is one
+actual CALL step of this derivation with its actual reply and retained turns. The front also
+leaves the installed Pair code unchanged, so the back half's code premise holds at the cut
+world. -/
 theorem swap_bytecode_front_cut_code {K U : WriterKey → Prop} {current : Checkpoint}
     {sevm : Sevm} {b post : Devm} {G : Nat}
     (invocation : List Nat)
@@ -142,71 +148,5 @@ theorem swap_bytecode_front_cut_code {K U : WriterKey → Prop} {current : Check
       · exact auth0 located entry nested l0
       · exact auth1 located entry nested l1
     · exact authC located entry nested right
-
-/-- **Swap front half.** A successful raw swap run of the original bytes, under trace-local
-HASH-T (a separated universe `U ⊇ K` admitting every raw Pair frame) and the CALL reply bound,
-reaches the post-callback join with `SwapCut` for the source swap's `balance0` suspension, and
-the typed swap exactly consumes the actual transfer/callback turns up to it. In all six
-successful shapes each optional call is either skipped with its source guard false, or is one
-actual CALL step of this derivation with its actual reply and retained turns. -/
-theorem swap_bytecode_front_cut {K U : WriterKey → Prop} {current : Checkpoint}
-    {sevm : Sevm} {b post : Devm} {G : Nat}
-    (invocation : List Nat)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
-    (freshOutput : b.output = [])
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
-    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
-    (good : ∀ F ∈ Exec.rawFrameRoots (⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ : Exec.Deriv).exc,
-      F.sevm.currentTarget = sevm.currentTarget → LockedGood U F)
-    (short : ∀ pre d, StepIn ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm pre (.exec .call) d →
-      d.returnData.length < 2 ^ 160) :
-    let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-    let ctx := writerContext sevm invocation
-    let locals := swapFrontLocals sevm current.state
-    let w := swapCutWords sevm current.state
-    let S := swapCutStack w 0x257 [0x022c0d9f]
-    sevm.value = 0 ∧ sevm.isStatic = false ∧
-    ∃ (frame : Frame) (T0 T1 TC : Transcript → Transcript) (R : List ChildReturn)
-      (turns0 turns1 turnsC : List MutableTurn) (K' : WriterKey → Prop)
-      (b1 b2 d : Devm) (M1 M2 : Mem) (p1 p : B256)
-      (n : Nat) (M : Mem) (gas : Nat) (calleePost : Devm),
-      SwapTransferOpt root sevm (swapPrefixWorld sevm b) S getterInitMemory 128
-        (swapAmount0Out sevm) (swapRecipientWord sevm) current.state.token0.toB256 0x8d0 b1 M1 p1 ∧
-      SwapTransferOpt root sevm b1 S M1 p1
-        (swapAmount1Out sevm) (swapRecipientWord sevm) current.state.token1.toB256 0x8e1 b2 M2 p ∧
-      SwapCallbackOpt root sevm b2 S M2 p (swapRecipientWord sevm) (swapAmount0Out sevm)
-        (swapAmount1Out sevm) (swapDataLength sevm) (swapDataStart sevm) d M ∧
-      ((swapAmount0Out sevm = 0 ∧ T0 = id) ∨ (swapAmount0Out sevm ≠ 0 ∧
-        T0 = fun tail => .next (swapTransferReply b1.returnData) (mutableTranscript turns0 .done) tail)) ∧
-      ((swapAmount1Out sevm = 0 ∧ T1 = id) ∨ (swapAmount1Out sevm ≠ 0 ∧
-        T1 = fun tail => .next (swapTransferReply b2.returnData) (mutableTranscript turns1 .done) tail)) ∧
-      ((swapDataLength sevm = 0 ∧ TC = id) ∨ (swapDataLength sevm ≠ 0 ∧
-        TC = fun tail => .next (swapCallbackReply d.returnData) (mutableTranscript turnsC .done) tail)) ∧
-      SwapFrontReaches (startTyped current ctx (swapDecodedEntry sevm)) ((T0 ∘ T1) ∘ TC) R
-        (.suspended frame (requestFor .swapBalance0 locals.token0 (.balanceOf ctx.pair))
-          (.swapBalance0 locals)) ∧
-      frame.checkpoint = current ∧ frame.context = ctx ∧
-      (∀ k, K' k → U k) ∧ SwapCut K' frame locals sevm d w p n M ∧
-      (∃ (added : List PendingLog) (L : List Log), frame.current.logs = current.logs ++ added ∧
-        d.logs = b.logs ++ L ∧
-        added.map (PendingLog.rawWith (lockedOwnedRaw sevm.currentTarget)) = L.map some) ∧
-      (∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns0 ++ turns1 ++ turnsC →
-        LockedAuth (Exec.Frame.rootDeriv located.frame) entry nested) ∧
-      SFunc.RunP (StepIn root) cert.prog sevm (St d S M gas)
-        t_09c3_c5 (.returned calleePost) ∧
-      SFunc.RunCutP (StepIn root) cert.prog sevm [] calleePost t_0257_c99 (.done (.halted post)) := by
-  intro root ctx locals w S
-  obtain ⟨value, nonstatic, frame, T0, T1, TC, R, turns0, turns1, turnsC, K', b1, b2, d, M1, M2, p1,
-    p, n, M, gas, calleePost, opt0, opt1, optC, shape0, shape1, shapeC, reach, checkpoint, context,
-    sub', cut, logs, auth, body, tail, _⟩ :=
-    swap_bytecode_front_cut_code invocation rep sem image installed freshOutput codeEq fork selector
-      run inj apart sub good short
-  exact ⟨value, nonstatic, frame, T0, T1, TC, R, turns0, turns1, turnsC, K', b1, b2, d, M1, M2, p1,
-    p, n, M, gas, calleePost, opt0, opt1, optC, shape0, shape1, shapeC, reach, checkpoint, context,
-    sub', cut, logs, auth, body, tail⟩
 
 end Blanc.Lift.UniswapV2Pair
