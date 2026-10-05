@@ -498,6 +498,9 @@ import Blanc.Lift.WitnessSpawn
 import Blanc.Lift.NodeWalk
 import Blanc.Lift.NodeWalkFrames
 import Blanc.Lift.NodeWalkFork
+import Blanc.Lift.NodeWalkPrecomp
+import Blanc.Lift.ShadowCanon
+import Blanc.Lift.CreateEntry
 import Blanc.Lift.WitnessFork
 -- One kernel check for a conjunction of closed equalities (vplus-witness-v2): shared.
 import Blanc.Lift.KernelBatch
@@ -585,6 +588,11 @@ import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Clone.Walk
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Clone.Deploy
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach.World
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach.Deploy
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach.Exact
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.World
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.Proxy
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.Run
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.Top
 
 -- The vulnerable Vyper comparator 0x6326, its token and attacker, and the witnessed
 -- reentry vminus_witness (deployed-lido-vyper-v1, V-).

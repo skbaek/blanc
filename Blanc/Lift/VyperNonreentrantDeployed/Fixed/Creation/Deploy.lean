@@ -1,6 +1,7 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Creation.Check
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Creation.Walk
 import Blanc.SystemCallForward
+import Blanc.Lift.CreateEntry
 
 /-! # Exact CREATE of the 0x847e implementation
 
@@ -41,14 +42,20 @@ theorem runtime_deposit : runtime.length * gasCodeDeposit = 3664000 := by
   rw [runtime_length]
   rfl
 
-/-- **Exact implementation CREATE.** -/
-theorem create_impl (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
+/-- **Exact implementation CREATE, with its settled world as a term** (for a
+value-transferring message, as root CREATEs are): `create_impl`'s facts and the settled world
+`CreateEntry.entryState` of the input world with `factory := 1` and the runtime installed. -/
+theorem create_impl_exact (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
     (haddress : msg.codeAddress = none) (hcode : msg.code = creationCode)
     (hstatic : msg.isStatic = false) (hvalue : msg.value = 0) (hgas : 3690218 ≤ msg.gas) :
     ∃ post, processCreateMessage msg = .ok post ∧ post.error = none ∧
       post.gasLeft = msg.gas - (4118 + implSstoreGas msg) - 3664000 ∧
       post.state.get msg.currentTarget = implAcct msg.benv.state msg.currentTarget ∧
-      ∀ a, a ≠ msg.currentTarget → post.state.get a = msg.benv.state.get a := by
+      (∀ a, a ≠ msg.currentTarget → post.state.get a = msg.benv.state.get a) ∧
+      (msg.shouldTransferValue = true → post.state =
+        ((CreateEntry.entryState msg.benv.state msg.caller msg.currentTarget).setStorVal
+          msg.currentTarget 1 1).setCode msg.currentTarget
+          Blanc.Lift.VyperNonreentrantDeployed.Fixed.code) := by
   obtain ⟨benv, htransfer⟩ :=
     benvAfterTransfer_exists_zero (msg := processCreateMessage.msg msg) hvalue
   let sevm := initSevm (createSeed msg benv)
@@ -103,7 +110,7 @@ theorem create_impl (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
   have hraw : (constructorPost sevm b G).state = benv.state.setStorVal msg.currentTarget 1 1 := by
     rw [facts.2.2.1, afterSstore_state]
     rfl
-  refine ⟨_, hpost, pf.1.trans herror, ?_, ?_, ?_⟩
+  refine ⟨_, hpost, pf.1.trans herror, ?_, ?_, ?_, ?_⟩
   · rw [pf.2.1, facts.2.2.2.2, facts.1, runtime_deposit]
     show msg.gas - constructorGas sevm b - 3664000 = _
     rw [hcg]
@@ -116,5 +123,20 @@ theorem create_impl (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
   · intro a ha
     rw [pf.2.2.2 a ha, hraw, State.get_setStorVal_ne _ _ _ (Ne.symm ha),
       processCreateMessage_msg_afterTransfer_get hvalue htransfer, if_neg ha]
+  · intro hstv
+    rw [CreateEntry.liftCreatePost_state, hraw, facts.1, runtime_code,
+      CreateEntry.entry_state hvalue hstv htransfer]
+
+/-- **Exact implementation CREATE.** -/
+theorem create_impl (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
+    (haddress : msg.codeAddress = none) (hcode : msg.code = creationCode)
+    (hstatic : msg.isStatic = false) (hvalue : msg.value = 0) (hgas : 3690218 ≤ msg.gas) :
+    ∃ post, processCreateMessage msg = .ok post ∧ post.error = none ∧
+      post.gasLeft = msg.gas - (4118 + implSstoreGas msg) - 3664000 ∧
+      post.state.get msg.currentTarget = implAcct msg.benv.state msg.currentTarget ∧
+      ∀ a, a ≠ msg.currentTarget → post.state.get a = msg.benv.state.get a := by
+  obtain ⟨post, h1, h2, h3, h4, h5, -⟩ :=
+    create_impl_exact msg hfork haddress hcode hstatic hvalue hgas
+  exact ⟨post, h1, h2, h3, h4, h5⟩
 
 end Blanc.Lift.VyperNonreentrantDeployed.Fixed.Creation

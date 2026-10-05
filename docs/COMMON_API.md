@@ -829,6 +829,22 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   frame lemmas take the fork, six spawns of all three call kinds). The message-level layer
   underneath is [`Blanc/ForkUniform.lean`](../Blanc/ForkUniform.lean) (see the root's
   *Fork coverage* entry).
+- A `STATICCALL` into a precompile is no raw frame (its entry answers at once, `Exec.doneOk`),
+  so a node walk crosses it with
+  [`Blanc/Lift/NodeWalkPrecomp.lean`](../Blanc/Lift/NodeWalkPrecomp.lean):
+  `Exec.Deriv.step_done` (a synchronous spawn pins the node's same-frame successor, outcome and
+  raw descendants unchanged), `staticcall_done_node` (at an agreeing configuration, a prepared
+  call whose shadow entry answers successfully resumes at the configuration the shadows
+  describe, with its agreement), and `scallDone_withFork` (the preparation and the synchronous
+  entry under any covered fork, for a frame avoiding `MODEXP`/`P256VERIFY`). Worked example: the
+  identity-precompile copy of `initialize` in
+  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/Init/{Run,Top}.lean`.
+- To read a walk's final shadows back as finite maps: `canonS` drops shadowed and zero writes
+  from a storage log and `lookupS_canonS` says it reads the same everywhere (a kernel equation
+  `canonS l = l'` then gives a canonical storage table, `lookupS_eq_of_canonS`), and
+  `lookupA_eq_of_keys` makes two account logs agree everywhere once they agree at the addresses
+  either names, in [`Blanc/Lift/ShadowCanon.lean`](../Blanc/Lift/ShadowCanon.lean) (worked use:
+  `init_run` in `.../Fixed/Init/Top.lean`).
 - To state a closed *frame-level* witness (the certificate interpreter `wrun`, code children by
   `childStart`/`callResume`/`callPairFrom`, proxy frames by `stepN`) under every covered fork,
   rewrite its kernel facts with `wrun_withFork`
@@ -3608,6 +3624,11 @@ contract-neutral.
   constructors need (`rx_push0`, `rx_slt`, `rx_codesize`, `rx_log2`, and `read_covered_len`, a
   window of any length inside an aligned image) in
   [`Blanc/Lift/CreationOps.lean`](../Blanc/Lift/CreationOps.lean).
+- The settled world of a zero-value CREATE as a closed term of its input world (so a later
+  message that takes it as `origState` can evaluate it): the entry world `entryState` and
+  `entry_state` (storage cleared, nonce incremented, the zero debit and credit, in Jaune's own
+  order), and `liftCreatePost_state` (the constructor's world with its output installed) in
+  [`Blanc/Lift/CreateEntry.lean`](../Blanc/Lift/CreateEntry.lean).
 - Gas-exact writer walks for solc-0.4-style runtimes: the scratch-memory invariant `FpMem n M` (word-aligned,
   free pointer `0x60`, kept for an arbitrary `M`; `FpMem.init`, `FpMem.write`, `FpMem.write_out`,
   `FpMem.readback`, `scratchW`), its steps (`rx_mstoreF`, `rx_mstoreOut`, `rx_mloadFp`, `rx_keccakF`,
