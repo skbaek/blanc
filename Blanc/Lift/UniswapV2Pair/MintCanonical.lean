@@ -1,5 +1,6 @@
 import Blanc.Lift.UniswapV2Pair.MintPrefixWalk
 import Blanc.Lift.UniswapV2Pair.StaticViewTurns
+import Blanc.Lift.UniswapV2Pair.MutableTurns
 
 /-!
 # Canonical mint frame
@@ -16,32 +17,43 @@ namespace Blanc.Lift.UniswapV2Pair
 
 open Jaune
 
-/-- HASH-T universe rows of a mint run: the decoded rows of every actually entered Pair frame,
-the two LP rows the entry may write (address zero, the decoded recipient) and the LP row of the
-fee recipient observed in the actual factory reply `feeReply`. -/
-def mintTraceKeys (root : Exec.Deriv) (feeReply : Bytes) : List WriterKey :=
+/-- Trace rows of a mint run fixed by the root alone: the decoded rows of every actually entered
+Pair frame and the two LP rows the entry may write (address zero, the decoded recipient). -/
+def mintTraceKeys (root : Exec.Deriv) : List WriterKey :=
   ((Exec.rawFrameRoots root.exc).flatMap fun F =>
     if F.sevm.currentTarget = root.sevm.currentTarget then staticViewDecodedKeys F.sevm else []) ++
-  (lpMintTouched (0 : B256).toAdr ++ lpMintTouched (Sevm.dataWord root.sevm 4).toAdr ++
-    lpMintTouched (Bytes.toB256 (feeReply.take 32)).toAdr)
+  (lpMintTouched (0 : B256).toAdr ++ lpMintTouched (Sevm.dataWord root.sevm 4).toAdr)
 
-theorem mintTraceKeys_frame {root : Exec.Deriv} {feeReply : Bytes} {F : Exec.Deriv}
+/-- The LP row of the first reply word of a `STATICCALL` step of the root frame's environment
+issuing the 4-byte `feeTo()` request (`feeRequestMemory`, input window `128, 4`). A child of a
+`StepIn root` step is a raw frame root of `root`, and a codeless or precompile callee answers the
+fixed request without a frame, so these rows are fixed by the root execution alone. -/
+def MintFeeReplyRow (root : Exec.Deriv) (k : WriterKey) : Prop :=
+  ∃ (w d : Devm) (g t oi os : B256) (S : List B256) (M : Mem) (c : Nat),
+    Blanc.Lift.StepIn root root.sevm (St w (g :: t :: 128 :: 4 :: oi :: os :: S) (feeRequestMemory M) c)
+      (.exec .staticcall) d ∧
+    k = .balance (Bytes.toB256 (d.returnData.take 32)).toAdr
+
+/-- HASH-T universe of a mint run: the tracked rows, the root's trace rows and the fee-recipient
+rows of the root's `feeTo()` replies. It is a function of `K` and the root execution only. -/
+def mintTraceUniverse (K : WriterKey → Prop) (root : Exec.Deriv) (k : WriterKey) : Prop :=
+  WriterExtend K (mintTraceKeys root) k ∨ MintFeeReplyRow root k
+
+theorem mintTraceUniverse_frame {K : WriterKey → Prop} {root : Exec.Deriv} {F : Exec.Deriv}
     (member : F ∈ Exec.rawFrameRoots root.exc)
     (target : F.sevm.currentTarget = root.sevm.currentTarget) :
-    ∀ k ∈ staticViewDecodedKeys F.sevm, k ∈ mintTraceKeys root feeReply := by
+    ∀ k ∈ staticViewDecodedKeys F.sevm, mintTraceUniverse K root k := by
   intro k touched
-  apply List.mem_append_left
-  apply List.mem_flatMap.mpr
-  refine ⟨F, member, ?_⟩
+  refine Or.inl (Or.inr (List.mem_append_left _ (List.mem_flatMap.mpr ⟨F, member, ?_⟩)))
   rw [ite_eq_left target]
   exact touched
 
-theorem mintTraceKeys_rows (root : Exec.Deriv) (feeReply : Bytes) :
-    WriterKey.balance (0 : B256).toAdr ∈ mintTraceKeys root feeReply ∧
-    WriterKey.balance (Sevm.dataWord root.sevm 4).toAdr ∈ mintTraceKeys root feeReply ∧
-    WriterKey.balance (Bytes.toB256 (feeReply.take 32)).toAdr ∈ mintTraceKeys root feeReply := by
-  simp only [mintTraceKeys, lpMintTouched, List.mem_append, List.mem_cons, List.not_mem_nil,
-    or_false, true_or, or_true, and_self]
+theorem mintTraceUniverse_rows (K : WriterKey → Prop) (root : Exec.Deriv) :
+    mintTraceUniverse K root (.balance (0 : B256).toAdr) ∧
+    mintTraceUniverse K root (.balance (Sevm.dataWord root.sevm 4).toAdr) := by
+  refine ⟨Or.inl (Or.inr ?_), Or.inl (Or.inr ?_)⟩ <;>
+    simp only [mintTraceKeys, lpMintTouched, List.mem_append, List.mem_cons, List.not_mem_nil,
+      or_false, true_or, or_true]
 
 /-- Every list of universe rows is fresh against every tracked subset of the universe. -/
 private theorem mint_fresh_of_universe {U K : WriterKey → Prop} {ks : List WriterKey}
@@ -56,63 +68,55 @@ private theorem mint_single_row {U : WriterKey → Prop} {a : Adr}
   rw [member]
   exact row
 
-/-- The fee recipient's touched-row obligation holds in the trace universe. -/
-theorem mint_feeFresh_of_trace {K : WriterKey → Prop} {root : Exec.Deriv} {feeReply : Bytes}
-    (inj : WriterInj (WriterExtend K (mintTraceKeys root feeReply)))
-    (apart : WriterApart (WriterExtend K (mintTraceKeys root feeReply)))
-    (st : State) (sevm : Sevm) (b : Devm) (r0 r1 : B256) :
-    FeeMintFresh K st sevm b (Bytes.toB256 (feeReply.take 32)) r0 r1 := by
+/-- The fee recipient's touched-row obligation holds in any separated universe holding its row. -/
+theorem mint_feeFresh_of_universe {K U : WriterKey → Prop} {feeTo : B256}
+    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
+    (row : U (.balance feeTo.toAdr)) (st : State) (sevm : Sevm) (b : Devm) (r0 r1 : B256) :
+    FeeMintFresh K st sevm b feeTo r0 r1 := by
   intro _ _ _ _
-  exact mint_fresh_of_universe inj apart (fun _ tracked => Or.inl tracked)
-    (mint_single_row (Or.inr (mintTraceKeys_rows root feeReply).2.2))
+  exact mint_fresh_of_universe inj apart sub (mint_single_row row)
 
-/-- The fee branch's tracked rows stay inside the trace universe. -/
-theorem mint_feeKeys_sub {K : WriterKey → Prop} {root : Exec.Deriv} {feeReply : Bytes}
+/-- The fee branch's tracked rows stay inside any universe holding the tracked rows and the
+fee recipient's row. -/
+theorem mint_feeKeys_sub {K U : WriterKey → Prop} {feeTo : B256}
+    (sub : ∀ k, K k → U k) (row : U (.balance feeTo.toAdr))
     (st : State) (sevm : Sevm) (b : Devm) (r0 r1 : B256) :
-    ∀ k, feeBranchSourceKeys K st sevm b (Bytes.toB256 (feeReply.take 32)) r0 r1 k →
-      WriterExtend K (mintTraceKeys root feeReply) k := by
+    ∀ k, feeBranchSourceKeys K st sevm b feeTo r0 r1 k → U k := by
   intro k tracked
-  have extended : WriterExtend K (lpMintTouched (Bytes.toB256 (feeReply.take 32)).toAdr) k →
-      WriterExtend K (mintTraceKeys root feeReply) k := by
+  have extended : WriterExtend K (lpMintTouched feeTo.toAdr) k → U k := by
     intro member
     rcases member with old | new
-    · exact Or.inl old
-    · exact mint_single_row (U := WriterExtend K (mintTraceKeys root feeReply))
-        (Or.inr (mintTraceKeys_rows root feeReply).2.2) k new
+    · exact sub k old
+    · exact mint_single_row row k new
   unfold feeBranchSourceKeys at tracked
   split at tracked
-  · exact Or.inl tracked
+  · exact sub k tracked
   · split at tracked
-    · exact Or.inl tracked
+    · exact sub k tracked
     · split at tracked
       · split at tracked
-        · exact Or.inl tracked
+        · exact sub k tracked
         · exact extended tracked
-      · exact Or.inl tracked
+      · exact sub k tracked
 
-/-- Both supply arms' LP-row obligations hold for every tracked subset of the trace universe. -/
-theorem mint_afterFeeFresh_of_trace {K K' : WriterKey → Prop} {root : Exec.Deriv}
-    {feeReply : Bytes}
-    (inj : WriterInj (WriterExtend K (mintTraceKeys root feeReply)))
-    (apart : WriterApart (WriterExtend K (mintTraceKeys root feeReply)))
-    (sub : ∀ k, K' k → WriterExtend K (mintTraceKeys root feeReply) k) (st : State) :
-    MintAfterFeeFresh K' st (Sevm.dataWord root.sevm 4).toAdr.toB256 := by
-  have rows := mintTraceKeys_rows root feeReply
-  have zero : ∀ k ∈ lpMintTouched (0 : B256).toAdr,
-      WriterExtend K (mintTraceKeys root feeReply) k := mint_single_row (Or.inr rows.1)
-  have recipient : ∀ k ∈ lpMintTouched (Sevm.dataWord root.sevm 4).toAdr.toB256.toAdr,
-      WriterExtend K (mintTraceKeys root feeReply) k := by
+/-- Both supply arms' LP-row obligations hold for every tracked subset of a separated universe
+holding the address-zero and recipient rows. -/
+theorem mint_afterFeeFresh_of_universe {K' U : WriterKey → Prop} {recipient : Adr}
+    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K' k → U k)
+    (zero : U (.balance (0 : B256).toAdr)) (row : U (.balance recipient)) (st : State) :
+    MintAfterFeeFresh K' st recipient.toB256 := by
+  have zeroRows : ∀ k ∈ lpMintTouched (0 : B256).toAdr, U k := mint_single_row zero
+  have recipientRows : ∀ k ∈ lpMintTouched recipient.toB256.toAdr, U k := by
     rw [toAdr_toB256]
-    exact mint_single_row (Or.inr rows.2.1)
-  have subZero : ∀ k, WriterExtend K' (lpMintTouched (0 : B256).toAdr) k →
-      WriterExtend K (mintTraceKeys root feeReply) k := by
+    exact mint_single_row row
+  have subZero : ∀ k, WriterExtend K' (lpMintTouched (0 : B256).toAdr) k → U k := by
     intro k member
     rcases member with old | new
     · exact sub k old
-    · exact zero k new
-  refine ⟨fun _ => ⟨mint_fresh_of_universe inj apart sub zero,
-    mint_fresh_of_universe inj apart subZero recipient⟩,
-    fun _ => mint_fresh_of_universe inj apart sub recipient⟩
+    · exact zeroRows k new
+  refine ⟨fun _ => ⟨mint_fresh_of_universe inj apart sub zeroRows,
+    mint_fresh_of_universe inj apart subZero recipientRows⟩,
+    fun _ => mint_fresh_of_universe inj apart sub recipientRows⟩
 
 /-- A successful mint pricing segment keeps the frame's checkpoint and context and unlocks. -/
 theorem mintAfterFee_finished_shape {frame : Frame} {observed : MintObserved} {fee : FeeResult}
@@ -138,6 +142,121 @@ theorem mintAfterFee_finished_shape {frame : Frame} {observed : MintObserved} {f
             subst frameEq
             exact ⟨rfl, rfl, rfl⟩
       · simp only [Frame.fail, reduceCtorEq] at result
+
+/-- Raw image of the Pair's own events in a mint frame, as the bytecode encodes them: LP
+`Transfer` and `Approval` (as `lockedOwnedRaw`), `Sync` and `Mint`. Burn and swap events have no
+image here. -/
+def mintOwnedRaw (pair : Adr) : Event → Option Log
+  | .transfer source recipient value => some (transferRawLog pair source recipient value)
+  | .approval owner spender value => some (approvalRawLog pair owner spender value)
+  | .sync reserve0 reserve1 =>
+      some ⟨pair, [updateSyncTopic], encodeWords [reserve0.toB256, reserve1.toB256]⟩
+  | .mint sender amount0 amount1 =>
+      some ⟨pair, [mintEventTopic, sender.toB256], amount0.toBytes ++ amount1.toBytes⟩
+  | _ => none
+
+private theorem mint_mintLP_events {st post : State} {recipient : Adr} {value : B256}
+    {events : List Event} (minted : st.mintLP recipient value = .ok (post, events)) :
+    events = [.transfer 0 recipient value] := by
+  unfold State.mintLP at minted
+  split at minted
+  · split at minted
+    · simp only [Except.ok.injEq, Prod.mk.injEq] at minted
+      exact minted.2.symm
+    · simp only [reduceCtorEq] at minted
+  · simp only [reduceCtorEq] at minted
+
+private theorem mint_update_event {st post : State} {ctx : Context} {b0 b1 : B256} {r0 r1 : Nat}
+    {event : Event} {oracle : OracleUpdate}
+    (updated : st.update ctx b0 b1 r0 r1 = .ok (post, event, oracle)) :
+    event = .sync b0.toNat b1.toNat := by
+  unfold State.update at updated
+  split at updated
+  · split at updated
+    · simp only [Except.ok.injEq, Prod.mk.injEq] at updated
+      exact updated.2.1.symm
+    · simp only [reduceCtorEq] at updated
+  · simp only [reduceCtorEq] at updated
+
+/-- A finished mint pricing segment appends, at the frame's own origin, exactly the fee events,
+the first-mint minimum, the recipient mint, `Sync` and `Mint`. -/
+theorem mintAfterFee_finished_logs {frame : Frame} {observed : MintObserved} {fee : FeeResult}
+    {finished : Frame} {bytes : Bytes}
+    (result : frame.mintAfterFee observed fee = .finished finished bytes) :
+    ∃ liquidity : Nat, bytes = encodeWords [liquidity.toB256] ∧
+      finished.current.logs = frame.current.logs ++
+        (fee.events ++ (if fee.state.totalSupply = 0 then [Event.transfer 0 0 1000] else []) ++
+          [Event.transfer 0 observed.recipient liquidity.toB256,
+            Event.sync observed.balance0.toNat observed.balance1.toNat,
+            Event.mint frame.context.sender observed.amount0 observed.amount1]).map
+          (PendingLog.owned frame.origin) := by
+  unfold Frame.mintAfterFee at result
+  dsimp only at result
+  split at result
+  · simp only [Frame.fail, reduceCtorEq] at result
+  · rename_i liquidity _
+    split at result
+    · simp only [Frame.fail, reduceCtorEq] at result
+    · rename_i postMinimum minimumEvents initial
+      split at result
+      · split at result
+        · simp only [Frame.fail, reduceCtorEq] at result
+        · rename_i post events minted
+          unfold Frame.finishUpdated at result
+          split at result
+          · simp only [Frame.fail, reduceCtorEq] at result
+          · rename_i updatedPost event oracle updated
+            simp only [Frame.finishLocked, Frame.finish, Frame.withEvents, Frame.withUpdate,
+              SegmentResult.finished.injEq] at result
+            obtain ⟨frameEq, bytesEq⟩ := result
+            subst frameEq
+            have minimum : minimumEvents =
+                if fee.state.totalSupply = 0 then [.transfer 0 0 1000] else [] := by
+              by_cases zero : fee.state.totalSupply = 0
+              · rw [ite_eq_left zero] at initial ⊢
+                exact mint_mintLP_events initial
+              · rw [ite_eq_right zero] at initial ⊢
+                simp only [Except.ok.injEq, Prod.mk.injEq] at initial
+                exact initial.2.symm
+            refine ⟨liquidity, bytesEq.symm, ?_⟩
+            rw [mint_mintLP_events minted, mint_update_event updated, minimum]
+            simp only [Frame.origin, List.map_append, List.map_cons, List.map_nil,
+              List.append_assoc, List.cons_append, List.nil_append, List.append_nil]
+      · simp only [Frame.fail, reduceCtorEq] at result
+
+/-- The typed mint events map, under `mintOwnedRaw`, onto the exact raw mint log list. -/
+theorem mint_logs_raw {pair recipient sender feeTo : Adr} {origin : ReceiptOrigin}
+    {fee : FeeResult} {feeLogs : List Log} {liquidity b0 b1 a0 a1 : B256}
+    (feeShape : (fee.events = [] ∧ feeLogs = []) ∨ ∃ L : B256, L ≠ 0 ∧
+      fee.events = [.transfer 0 feeTo L] ∧ feeLogs = [lpMintRawLog pair feeTo L]) :
+    ((fee.events ++ (if fee.state.totalSupply = 0 then [Event.transfer 0 0 1000] else []) ++
+        [Event.transfer 0 recipient liquidity, Event.sync b0.toNat b1.toNat,
+          Event.mint sender a0 a1]).map
+        (PendingLog.owned origin)).map (PendingLog.rawWith (mintOwnedRaw pair)) =
+      (feeLogs ++ (if fee.state.totalSupply = 0 then
+          [lpMintRawLog pair (0 : B256).toAdr 1000] else []) ++
+        [lpMintRawLog pair recipient liquidity, ⟨pair, [updateSyncTopic], encodeWords [b0, b1]⟩,
+          ⟨pair, [mintEventTopic, sender.toB256], a0.toBytes ++ a1.toBytes⟩]).map some := by
+  have zeroAdr : (0 : B256).toAdr = (0 : Adr) := rfl
+  have zeroWord : (0 : Adr).toB256 = (0 : B256) := rfl
+  have feePart : (fee.events.map (PendingLog.owned origin)).map
+      (PendingLog.rawWith (mintOwnedRaw pair)) = feeLogs.map some := by
+    rcases feeShape with ⟨events, logs⟩ | ⟨L, _, events, logs⟩
+    · rw [events, logs]
+      rfl
+    · rw [events, logs]
+      simp only [List.map_cons, List.map_nil, PendingLog.rawWith, mintOwnedRaw, transferRawLog,
+        lpMintRawLog, zeroWord]
+  have minimumPart : (((if fee.state.totalSupply = 0 then [Event.transfer 0 0 1000] else []).map
+      (PendingLog.owned origin)).map (PendingLog.rawWith (mintOwnedRaw pair))) =
+      (if fee.state.totalSupply = 0 then [lpMintRawLog pair (0 : B256).toAdr 1000] else []).map
+        some := by
+    split
+    · simp only [List.map_cons, List.map_nil, PendingLog.rawWith, mintOwnedRaw, transferRawLog,
+        lpMintRawLog, zeroAdr, zeroWord]
+    · rfl
+  simp only [List.map_append, feePart, minimumPart, List.map_cons, List.map_nil,
+    PendingLog.rawWith, mintOwnedRaw, transferRawLog, lpMintRawLog, zeroWord, toB256_toNat]
 
 /-- The three observed replies, each preceded by a turn queue that leaves its frame unchanged,
 consume the typed source mint exactly up to its finished pricing segment. -/
@@ -230,8 +349,8 @@ private theorem mint_size_ne {c : ByteArray} (bit : c.size.toB256 ≠ 0) : c.siz
   exact bit rfl
 
 /-- The three actual STATICCALL steps of a mint run, at the typed targets, with their reply
-buffers and the actual extcodesize bits of the two tokens (the factory bit is in
-`MintFactoryStep`). -/
+buffers and the actual extcodesize bits the bytecode checks before each call (token0, token1,
+factory), each bit read from the world of the same step. -/
 def MintObservedSteps (D : Exec.Deriv) (current : Checkpoint) (sevm : Sevm)
     (out0 out1 outF : Bytes) : Prop :=
   ∃ (g0 g1 gF : B256) (S0 S1 SF : List B256) (M0 M1 MF : Mem) (c0 c1 cF : Nat)
@@ -240,13 +359,6 @@ def MintObservedSteps (D : Exec.Deriv) (current : Checkpoint) (sevm : Sevm)
       (.exec .staticcall) d0 ∧ d0.returnData = out0 ∧ (w0.getCode current.state.token0).size ≠ 0 ∧
     Blanc.Lift.StepIn D sevm (St w1 (g1 :: current.state.token1.toB256 :: S1) M1 c1)
       (.exec .staticcall) d1 ∧ d1.returnData = out1 ∧ (w1.getCode current.state.token1).size ≠ 0 ∧
-    Blanc.Lift.StepIn D sevm (St wF (gF :: current.state.factory.toB256 :: SF) MF cF)
-      (.exec .staticcall) dF ∧ dF.returnData = outF
-
-/-- The actual factory STATICCALL step with its reply buffer and the actual extcodesize bit
-checked by the bytecode before the call. -/
-def MintFactoryStep (D : Exec.Deriv) (current : Checkpoint) (sevm : Sevm) (outF : Bytes) : Prop :=
-  ∃ (gF : B256) (SF : List B256) (MF : Mem) (cF : Nat) (wF dF : Devm),
     Blanc.Lift.StepIn D sevm (St wF (gF :: current.state.factory.toB256 :: SF) MF cF)
       (.exec .staticcall) dF ∧ dF.returnData = outF ∧ (wF.getCode current.state.factory).size ≠ 0
 
@@ -260,34 +372,30 @@ def MintViewProvenance (root : Exec.Deriv) (pair target : Adr) (views : List Sta
       (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots root.exc) ∧
       views.map Prod.fst = (Exec.retainedTargetTurnsAt pair [] childRun).filterMap Sum.getRight?
 
-/-- **Canonical mint frame.** Every successful raw mint run at the Pair code consumes the typed
-source mint over its three actual observations (token0 and token1 `balanceOf`, factory `feeTo`)
-with static-view turn queues derived from the actual children of the same derivation. Under
-trace-local HASH-T over the run's key universe (which includes the fee recipient row observed in
-the actual factory reply), it yields the exact Pair storage, the exact raw log list (fee mint,
-first-mint minimum to address zero, recipient mint, Sync, Mint), the return word, the final
-unlock and the original checkpoint. -/
-theorem mint_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpoint}
-    {sevm : Sevm} {b post : Devm} {G : Nat}
-    (invocation : List Nat)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x6a627842)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+private theorem mint_encodeWord_inj {x y : B256} (same : encodeWords [x] = encodeWords [y]) :
+    x = y := by
+  have words := congrArg Bytes.toB256 same
+  simpa only [encodeWords, List.flatMap_cons, List.flatMap_nil, List.append_nil,
+    B256.toB256_toBytes] using words
+
+/-- What the canonical mint frame derives from one successful raw mint run `run` (see
+`mint_bytecode_exact_consumes`): the actual observation steps, the exact typed consumption, the
+final frame shape, the storage transport, the fee result and its log, the exact raw log list and
+its typed pending logs, the return word, view authenticity and per-call provenance. -/
+def MintCanonicalResult (K : WriterKey → Prop) (current : Checkpoint) (invocation : List Nat)
+    {sevm : Sevm} {b post : Devm} {G : Nat} (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    Prop :=
     let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
     let ctx := writerContext sevm invocation
     let recipient := (Sevm.dataWord sevm 4).toAdr
     sevm.value = 0 ∧ sevm.isStatic = false ∧
     ∃ (out0 out1 outF : Bytes), MintObservedSteps root current sevm out0 out1 outF ∧
-      (WriterInj (WriterExtend K (mintTraceKeys root outF)) →
-        WriterApart (WriterExtend K (mintTraceKeys root outF)) →
       let balance0 := Bytes.toB256 (out0.take 32)
       let balance1 := Bytes.toB256 (out1.take 32)
       let feeTo := (Bytes.toB256 (outF.take 32)).toAdr
       ∃ (views0 views1 viewsF : List StaticViewTurn) (final : Frame) (rets : List ChildReturn)
-        (K' : WriterKey → Prop) (liquidity : Nat) (fee : FeeResult) (feeLogs : List Log),
+        (K' : WriterKey → Prop) (liquidity : Nat) (fee : FeeResult) (feeLogs : List Log)
+        (added : List PendingLog),
         ExactConsumes (startTyped current ctx (.mint recipient))
           (.next (feeObservedResult out0) (staticViewTranscript views0 .done)
             (.next (feeObservedResult out1) (staticViewTranscript views1 .done)
@@ -296,7 +404,7 @@ theorem mint_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
             remaining := .done, childReturns := rets } ∧
         final.checkpoint = current ∧ final.context = ctx ∧
         final.current.state.unlocked = 1 ∧
-        (∀ k, K' k → WriterExtend K (mintTraceKeys root outF) k) ∧
+        (∀ k, K' k → mintTraceUniverse K root k) ∧
         WriterRep K' (post.getStor sevm.currentTarget) final.current.state ∧
         mintFee { current.state with unlocked := 0 } feeTo current.state.reserve0.val
           current.state.reserve1.val = .ok fee ∧
@@ -311,15 +419,39 @@ theorem mint_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
             ⟨sevm.currentTarget, [mintEventTopic, sevm.caller.toB256],
               (balance0 - current.state.reserve0.val.toB256).toBytes ++
                 (balance1 - current.state.reserve1.val.toB256).toBytes⟩] ∧
+        final.current.logs = current.logs ++ added ∧
+        (∃ L : List Log, post.logs = b.logs ++ L ∧
+          added.map (PendingLog.rawWith (mintOwnedRaw sevm.currentTarget)) = L.map some) ∧
         post.output = encodeWords [liquidity.toB256] ∧
-        MintFactoryStep root current sevm outF ∧
         (∀ picked ∈ views0 ++ views1 ++ viewsF,
           Blanc.Sevm.selector picked.1.frame.sevm = picked.2.selector ∧
           picked.1.frame.sevm.currentTarget = sevm.currentTarget ∧
           picked.1.frame.sevm.isStatic = true) ∧
         MintViewProvenance root sevm.currentTarget current.state.token0 views0 ∧
         MintViewProvenance root sevm.currentTarget current.state.token1 views1 ∧
-        MintViewProvenance root sevm.currentTarget current.state.factory viewsF) := by
+        MintViewProvenance root sevm.currentTarget current.state.factory viewsF
+
+/-- **Canonical mint frame.** Every successful raw mint run at the Pair code consumes the typed
+source mint over its three actual observations (token0 and token1 `balanceOf`, factory `feeTo`)
+with static-view turn queues derived from the actual children of the same derivation. Under
+trace-local HASH-T over the run's key universe `mintTraceUniverse K root` (a function of the
+tracked rows and the root execution alone), it yields the exact Pair storage, the exact raw log
+list (fee mint, first-mint minimum to address zero, recipient mint, Sync, Mint) together with
+the typed pending logs that map onto it, the return word, the final unlock and the original
+checkpoint. -/
+theorem mint_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpoint}
+    {sevm : Sevm} {b post : Devm} {G : Nat}
+    (invocation : List Nat)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0x6a627842)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
+    (inj : WriterInj (mintTraceUniverse K ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩))
+    (apart : WriterApart (mintTraceUniverse K ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)) :
+    MintCanonicalResult K current invocation run := by
+  unfold MintCanonicalResult
   intro root ctx recipient
   have source := (mintBytecode_public_source_inv (K := K) (current := current) codeEq fork rep
     invocation selector run).1
@@ -334,6 +466,11 @@ theorem mint_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
   unfold MintPublicTypedFeeFinished at typedFinished
   obtain ⟨gwF, callGasF, dF, outF, callF, postF, widthF, boundF, answerF, feeImplication⟩ :=
     typedFinished
+  -- the trace universe: tracked rows, root rows and the actual fee recipient's row
+  have sub : ∀ k, K k → mintTraceUniverse K root k := fun _ tracked => Or.inl (Or.inl tracked)
+  have rows := mintTraceUniverse_rows K root
+  have feeRow : mintTraceUniverse K root (.balance (Bytes.toB256 (outF.take 32)).toAdr) :=
+    Or.inr ⟨_, _, _, _, _, _, _, _, _, callF, by rw [postF.returnData]⟩
   -- raw worlds and code
   have nonemptyList : (b.getCode sevm.currentTarget).toList ≠ [] := by
     intro empty
@@ -374,19 +511,11 @@ theorem mint_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
   rw [word1] at call1'
   have callF' := callF
   rw [wordF] at callF'
-  refine ⟨value, nonstatic, out0, out1, outF,
-    ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, call0', post0.returnData,
-      by rw [mint_tAAB_getCode, ← token0Target]; exact mint_size_ne code0,
-      call1', post1.returnData,
-      by rw [mint_tAAB_getCode, ← token1Target]; exact mint_size_ne code1,
-      callF', postF.returnData⟩, ?_⟩
-  intro inj apart
   -- the three static-view turn queues
   let ctxM := mintSourceContext sevm invocation
   have good : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = sevm.currentTarget →
-      ∀ k ∈ staticViewDecodedKeys F.sevm, WriterExtend K (mintTraceKeys root outF) k :=
-    fun F member target k touched => Or.inr (mintTraceKeys_frame member target k touched)
-  have sub : ∀ k, K k → WriterExtend K (mintTraceKeys root outF) k := fun _ tracked => Or.inl tracked
+      ∀ k ∈ staticViewDecodedKeys F.sevm, mintTraceUniverse K root k :=
+    fun F member target k touched => mintTraceUniverse_frame member target k touched
   obtain ⟨views0, turns0, auth0, prov0⟩ :=
     pair_static_call_turns (frame := mintSourceLockedFrame current ctxM recipient)
       (request := requestFor .mintBalance0 current.state.token0 (.balanceOf ctxM.pair))
@@ -419,19 +548,24 @@ theorem mint_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
       rfl fork ⟨1, _, postF.stack, by decide⟩ good
   -- discharge both freshness obligations in the trace universe
   obtain ⟨observation, dEq, outEq, rest⟩ :=
-    feeImplication (mint_feeFresh_of_trace inj apart _ _ _ _ _)
+    feeImplication (mint_feeFresh_of_universe inj apart sub feeRow _ _ _ _ _)
   obtain ⟨frameResult, liquidity, finished, feeEq⟩ :=
-    rest (mint_afterFeeFresh_of_trace inj apart (mint_feeKeys_sub _ _ _ _ _) _)
+    rest (mint_afterFeeFresh_of_universe inj apart (mint_feeKeys_sub sub feeRow _ _ _ _ _)
+      rows.1 rows.2 _)
   have consumed := mint_source_exact_consumption handlers feeEq turns0 rfl turns1 rfl turnsF rfl
   obtain ⟨liq', keys, fin', d, keysEq, typedEq, wrep, halted, output, logs⟩ := frameResult
   have resume := observation.resume_mint (mintSourceFeeFrame current ctxM recipient)
     (mintBalanceObserved current.state recipient (Bytes.toB256 (out0.take 32))
       (Bytes.toB256 (out1.take 32))) rfl natCache0.symm natCache1.symm
   rw [factoryTarget, dEq, outEq] at resume
+  obtain ⟨liqTyped, bytesTyped, logsTyped⟩ :=
+    mintAfterFee_finished_logs (resume.2.symm.trans feeEq)
   have same := feeEq.symm.trans (resume.2.trans typedEq)
   injection same with finEq bytesEq
   subst finEq
   rw [bytesEq] at consumed
+  have liqEq : liqTyped.toB256 = liq'.toB256 :=
+    mint_encodeWord_inj (bytesTyped.symm.trans bytesEq)
   have shape := mintAfterFee_finished_shape typedEq
   have dPost : post = d := Outcome.halted.inj halted
   subst dPost
@@ -462,22 +596,31 @@ theorem mint_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
     · exact ⟨_, by rw [feeLogsEq, baseLogs], Or.inr ⟨L, nonzero, events, rfl⟩⟩
   obtain ⟨feeLogs, feePostLogs, feeLogsShape⟩ := feeLogsFact
   rw [natCache0, natCache1] at accept
-  rw [cache0, cache1] at accept feeLogsShape
-  have rows := mintTraceKeys_rows root outF
-  have keysSub : ∀ k, keys k → WriterExtend K (mintTraceKeys root outF) k := by
+  rw [cache0, cache1] at accept feeLogsShape logsTyped
+  have keysSub : ∀ k, keys k → mintTraceUniverse K root k := by
     rw [keysEq]
     intro k tracked
     split at tracked
     · rcases tracked with (old | zeroRow) | toRow
-      · exact mint_feeKeys_sub _ _ _ _ _ k old
-      · exact mint_single_row (Or.inr rows.1) k zeroRow
+      · exact mint_feeKeys_sub sub feeRow _ _ _ _ _ k old
+      · exact mint_single_row rows.1 k zeroRow
       · rw [toAdr_toB256] at toRow
-        exact mint_single_row (Or.inr rows.2.1) k toRow
+        exact mint_single_row rows.2 k toRow
     · rcases tracked with old | toRow
-      · exact mint_feeKeys_sub _ _ _ _ _ k old
+      · exact mint_feeKeys_sub sub feeRow _ _ _ _ _ k old
       · rw [toAdr_toB256] at toRow
-        exact mint_single_row (Or.inr rows.2.1) k toRow
+        exact mint_single_row rows.2 k toRow
   rw [cache0, cache1, toAdr_toB256, feePostLogs] at logs
+  rw [liqEq] at logsTyped
+  have codeF : ((feeFactoryCallWorld sevm d1).getCode current.state.factory).size ≠ 0 := by
+    rw [feeFactoryCallWorld, mint_tAAB_getCode, ← factoryTarget]
+    exact mint_size_ne observation.code
+  refine ⟨value, nonstatic, out0, out1, outF,
+    ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, call0', post0.returnData,
+      by rw [mint_tAAB_getCode, ← token0Target]; exact mint_size_ne code0,
+      call1', post1.returnData,
+      by rw [mint_tAAB_getCode, ← token1Target]; exact mint_size_ne code1,
+      callF', postF.returnData, codeF⟩, ?_⟩
   intro balance0 balance1 feeTo
   refine ⟨views0, views1, viewsF, finished,
     staticViewChildReturns (mintSourceLockedFrame current ctxM recipient)
@@ -487,20 +630,10 @@ theorem mint_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
           (requestFor .mintBalance1 current.state.token1 (.balanceOf ctxM.pair)) 0 views1 ++
         (staticViewChildReturns (mintSourceFeeFrame current ctxM recipient)
           (requestFor .mintFeeTo current.state.factory .feeTo) 0 viewsF ++ [])),
-    keys, liq', _, feeLogs, ?_,
-    ?_, ?_, ?_, ?_, ?_, accept, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · exact consumed
-  · exact shape.1
-  · exact shape.2.1
-  · exact shape.2.2
-  · exact keysSub
-  · exact wrep
-  · exact feeLogsShape
-  · exact logs
-  · exact output
-  · refine ⟨gwF, _, _, callGasF, _, dF, callF', postF.returnData, ?_⟩
-    rw [feeFactoryCallWorld, mint_tAAB_getCode, ← factoryTarget]
-    exact mint_size_ne observation.code
+    keys, liq', _, feeLogs, _, consumed,
+    shape.1, shape.2.1, shape.2.2, keysSub, wrep, accept, feeLogsShape, logs, logsTyped,
+    ⟨_, by rw [logs]; simp only [List.append_assoc]; rfl, mint_logs_raw feeLogsShape⟩,
+    output, ?_, ?_, ?_, ?_⟩
   · intro picked member
     rcases List.mem_append.mp member with left | right
     · rcases List.mem_append.mp left with first | second
