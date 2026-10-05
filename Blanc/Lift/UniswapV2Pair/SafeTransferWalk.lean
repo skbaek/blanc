@@ -3354,4 +3354,116 @@ theorem burnSecondTransfer_callLayout
     (Jaune.call_step_returnData_length_lt_two_pow_160 filled2 call2
       fork.rules_stateGas_none potential2)
 
+/-- Both literal Burn transfers come from one retained source continuation.
+Their actual 68-byte CALL operands bound the full replies independently; the
+first allocation supplies the second pointer without a caller-potential premise. -/
+theorem burnTransfers_caller_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
+    {supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ : B256}
+    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
+    (sentinel : memWord M 96 = 0)
+    (run : SFunc.RunCutP P cert.prog sevm C
+      (St b (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R) M G)
+      t_168d_c13 r) :
+    ∃ (forwarded0 : B256) (callGas0 : Nat) (d0 : Devm) (residual0 : Nat)
+        (forwarded1 : B256) (callGas1 : Nat) (d1 : Devm) (residual1 : Nat),
+      let locals := burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R
+      let mid := if d0.returnData = [] then d0.memory else
+        safeTransfer_reply292Memory d0.memory d0.returnData
+      let p := burnFirstTransferPointer d0.returnData
+      let N := safeTransfer_dynamicCallMemory mid p amount1 toWord
+      P sevm (St b (forwarded0 :: (token0 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        0 :: 292 :: 68 :: 292 :: 0 :: 360 ::
+        (token0 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount0 :: toWord :: token0 :: 0x1698 :: locals)
+        (safeTransfer_call128Memory M amount0 toWord) callGas0) (.exec .call) d0 ∧
+      P sevm (St d0 (forwarded1 :: (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        0 :: (p + 164) :: 68 :: (p + 164) :: 0 :: (68 + (p + 164)) ::
+        (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+        96 :: 0 :: amount1 :: toWord :: token1 :: 0x16a3 :: locals)
+        N callGas1) (.exec .call) d1 ∧
+      ((safeTransfer_call128Memory M amount0 toWord).read 292 68).1 =
+        abiSelectorBytes 0xa9059cbb ++
+          ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes ++ amount0.toBytes ∧
+      (N.read (p + 164).toNat 68).1 =
+        abiSelectorBytes 0xa9059cbb ++
+          ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes ++ amount1.toBytes ∧
+      d0.memory = safeTransfer_call128Memory M amount0 toWord ∧ d1.memory = N ∧
+      d0.output = b.output ∧ d1.output = b.output ∧
+      d0.returnData.length < 2 ^ 160 ∧ d1.returnData.length < 2 ^ 160 ∧
+      (d0.returnData = [] ∨ (32 ≤ d0.returnData.length ∧
+        Bytes.toB256 (d0.returnData.sliceD 0 32 0) ≠ 0)) ∧
+      (d1.returnData = [] ∨ (32 ≤ d1.returnData.length ∧
+        Bytes.toB256 (d1.returnData.sliceD 0 32 0) ≠ 0)) ∧
+      PtrMem p (if d0.returnData = [] then 416 else memExtSize 416 324 d0.returnData.length) mid ∧
+      memWord mid 96 = 0 ∧
+      (burnSecondTransferPointer d0.returnData d1.returnData).toNat + 64 < 2 ^ 256 ∧
+      PtrMem (burnSecondTransferPointer d0.returnData d1.returnData)
+        (if d1.returnData = [] then N.size else
+          memExtSize N.size (p + 164 + 32).toNat d1.returnData.length)
+        (if d1.returnData = [] then d1.memory else
+          Blanc.Lift.bytesArrayMemory d1.memory (p + 164) d1.returnData) ∧
+      SFunc.RunCutP P cert.prog sevm C (St d0 locals mid residual0) t_1698_c13 r ∧
+      SFunc.RunCutP P cert.prog sevm C
+        (St d1 locals (if d1.returnData = [] then d1.memory else
+          Blanc.Lift.bytesArrayMemory d1.memory (p + 164) d1.returnData) residual1)
+        t_16a3_c13 r := by
+  obtain ⟨helperGas0, forwarded0, callGas0, d0, residual0, callee0, call0,
+      calldata0, memory0, output0, _, accepted0, continuation0⟩ :=
+    burnFirstTransfer_caller_inv project fork mem run
+  have width0 : d0.returnData.length < 2 ^ 160 :=
+    Jaune.call_returnData_length_lt_two_pow_160_of_input_size (project call0) rfl
+      fork.rules_stateGas_none (by decide : (68 : B256).toNat < 2 ^ 160)
+  obtain ⟨_, _, _, _, _, callMem0⟩ := safeTransfer_firstCall_inv project mem
+    (by decide : 71 ∉ []) ((SFunc.runP_iff_runCutP_nil (P := P)).mp callee0)
+  have postMem0 : PtrMem 292 416 d0.memory := by
+    rw [memory0]
+    exact callMem0
+  have postSentinel0 : memWord d0.memory 96 = 0 := by
+    rw [memory0]
+    exact safeTransfer_call128_sentinel mem sentinel
+  have midLayout := burnFirstTransfer_memoryLayout postMem0 postSentinel0 width0
+  let p := burnFirstTransferPointer d0.returnData
+  let mid := if d0.returnData = [] then d0.memory else
+    safeTransfer_reply292Memory d0.memory d0.returnData
+  let N := safeTransfer_dynamicCallMemory mid p amount1 toWord
+  have lower : 128 ≤ p.toNat := by
+    have bound : 292 ≤ p.toNat := midLayout.2.2.1
+    omega
+  have room : p.toNat + 260 < 2 ^ 256 := midLayout.2.2.2.2
+  obtain ⟨helperGas1, forwarded1, callGas1, d1, residual1, callee1, call1,
+      calldata1, memory1, output1, _, accepted1, continuation1⟩ :=
+    burnSecondTransfer_caller_inv project fork midLayout.1 lower room continuation0
+  have width1 : d1.returnData.length < 2 ^ 160 :=
+    Jaune.call_returnData_length_lt_two_pow_160_of_input_size (project call1) rfl
+      fork.rules_stateGas_none (by decide : (68 : B256).toNat < 2 ^ 160)
+  obtain ⟨_, _, _, _, _, callMem1, callFit1⟩ :=
+    safeTransfer_dynamicCall_inv project midLayout.1 lower room (by decide : 71 ∉ [])
+      ((SFunc.runP_iff_runCutP_nil (P := P)).mp callee1)
+  have callFit : p.toNat + 260 ≤ N.size := callFit1
+  have nat164 : (p + 164).toNat = p.toNat + 164 := by
+    rw [B256.toNat_add, show (164 : B256).toNat = 164 from rfl,
+      Nat.lo_eq_of_lt (by omega)]
+  have postMem1 : PtrMem (p + 164)
+      N.size d1.memory := by
+    rw [memory1]
+    exact callMem1
+  have finalMem : PtrMem (burnSecondTransferPointer d0.returnData d1.returnData)
+      (if d1.returnData = [] then N.size else
+        memExtSize N.size
+          (p + 164 + 32).toNat d1.returnData.length)
+      (if d1.returnData = [] then d1.memory else
+        Blanc.Lift.bytesArrayMemory d1.memory (p + 164) d1.returnData) := by
+    by_cases empty : d1.returnData = []
+    · simpa only [burnSecondTransferPointer, empty, ite_true] using postMem1
+    · have image := Blanc.Lift.bytesArrayMemory_image (bytes := d1.returnData) postMem1
+        (by rw [nat164]; omega) (by rw [nat164]; omega) (by rw [nat164]; omega)
+      simpa only [burnSecondTransferPointer, ite_eq_right empty] using image.1
+  exact ⟨forwarded0, callGas0, d0, residual0, forwarded1, callGas1, d1, residual1,
+    call0, call1, calldata0, calldata1, memory0, memory1, output0, output1.trans output0,
+    width0, width1, accepted0, accepted1, midLayout.1, midLayout.2.1,
+    (burnSecondTransferPointer_layout width0 width1).2.2.2, finalMem,
+    continuation0, continuation1⟩
+
 end Blanc.Lift.UniswapV2Pair
