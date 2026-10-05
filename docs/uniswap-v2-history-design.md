@@ -364,7 +364,10 @@ plus HASH-T freshness of its own `pairDerivKeys` gives `PairStepOutcome` from `f
 (`env.gas + 228`), `pair_history_swap_live` (both callback shapes; `swapFrontTransferGas … +
 swapPrefixGas … + 445`, `SwapSafeTransferForward` a named premise), `pair_history_burn_live`
 (`BurnForwardEnv.gas = initial.gas + 249`, `SwapSafeTransferForward` a named premise for both
-transfers). The skim instance is one `pair_live_outcome` call once its forward theorem lands.
+transfers), `pair_history_skim_live` (`SkimForwardEnv.gas`; `SkimModelConditions` — lock, mutability
+and both covers — from `runTyped_skim_conditions`, the reserve1 cover carried across the first transfer
+by `Frame.settleExternal_locked_core`; the callee env's `reserveKept` ties the bytes' post-transfer
+slot-8 read to the entry slot; `SkimForwardEnv.run_of_model` in `SkimForwardAccept.lean`).
 Model-acceptance bridges: writers
 (`startImmediate` at `finish`), sync (`finish.unlocked = 1` and `State.update` accepting the answers,
 `State.update_bounds`), swap (`SwapModelConditions` at the actual post-callback answers; the back half's

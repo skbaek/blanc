@@ -3,6 +3,7 @@ import Blanc.Lift.UniswapV2Pair.ReplayWriterGas
 import Blanc.Lift.UniswapV2Pair.SwapForwardAccept
 import Blanc.Lift.UniswapV2Pair.MintForwardAccept
 import Blanc.Lift.UniswapV2Pair.BurnForwardAccept
+import Blanc.Lift.UniswapV2Pair.SkimForwardAccept
 import Blanc.SlotFootprintRestrict
 
 /-!
@@ -515,6 +516,62 @@ theorem pair_history_burn_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
   obtain ⟨run, _⟩ := burn_bytecode_forward_consumes
     (current := { state := finish, logs := [], updates := [] }) [] helper codeEq fork value size
     guard selector repOwn tracked pairSem pairSem_image installedPre callee guards
+  exact ⟨run, rfl, fun newFresh => pair_live_outcome initial fresh futureCode replayed run target
+    state codeEq fork output representable newFresh⟩
+
+/-- **`skim` after any configured history.**  Given the callee-only skim environment at the future
+world (`SkimForwardEnv`: both `balanceOf(pair)` `STATICCALL`s and both transfer `CALL`s with their
+replies and returned gas, the code checks, the lock and unlock sentries, and the first transfer's
+callee keeping the Pair's packed reserve slot) and the transfer helper `SwapSafeTransferForward` (a
+named premise until it is proved): whenever the model accepts the decoded skim at the history's
+state `finish` over a transcript whose balance answers are the callees' actual ones, a pc-zero run
+exists at gas `callee.gas` halting at residual `g`; under HASH-T freshness of its own rows its post
+storage represents the model's next state.  Model acceptance enters through
+`runTyped_skim_conditions`. -/
+theorem pair_history_skim_live {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
+    {transferPre : Nat → B256 → Nat} {transferPost : Nat → B256 → Bytes → Nat}
+    (helper : SwapSafeTransferForward transferPre transferPost)
+    {sevm : Sevm} {pre : Devm} {g : Nat}
+    (target : sevm.currentTarget = pair) (state : pre.state = future.state)
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (output : pre.output = []) (representable : sevm.data.length < 2 ^ 256)
+    (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
+    (abi : (32 : B256) ≤ sevm.data.length.toB256 - 4)
+    (selector : Blanc.Sevm.selector sevm = 0xbc25cf77)
+    (callee : SkimForwardEnv transferPre transferPost sevm pre g) :
+    ∃ (finish : State) (K' : WriterKey → Prop), PairHistoryReplayed pair trace K₀ st₀ finish K' ∧
+      ∀ (transcript : Transcript) (returndata : Bytes),
+        transcript.firstWord = callee.balance0 →
+        transcript.ownTail.ownTail.firstWord = callee.balance1 →
+        (runTyped finish (writerContext sevm []) (.skim (Sevm.dataWord sevm 4).toAdr)
+          transcript).status = .success returndata →
+        ∃ run : Exec 0 sevm (St pre [] Mem.empty callee.gas) (.ok callee.post),
+          callee.post.gasLeft = g ∧
+          (WriterFreshKeys (pairHistoryUniverse pair trace K₀)
+              (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩) →
+            PairStepOutcome PairFrameAuth
+              (WriterExtend (pairHistoryUniverse pair trace K₀)
+                (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩))
+              { state := finish, logs := [], updates := [] } [] K'
+              ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩ callee.post) := by
+  obtain ⟨futureCode, finish, K', replayed⟩ := pair_history_replayed trace installed initial fresh
+  refine ⟨finish, K', replayed, fun transcript returndata answer0 answer1 accepted => ?_⟩
+  have conditions := runTyped_skim_conditions accepted
+  rw [answer0, answer1] at conditions
+  obtain ⟨rep, _⟩ := replayed.at_frame target state
+  have installedPre : some (pre.getCode sevm.currentTarget).toList = pairSem.image := by
+    rw [target]
+    change some (pre.state.getCode pair).toList = pairSem.image
+    rw [state, futureCode]
+    rfl
+  obtain ⟨run⟩ := callee.run_of_model (current := { state := finish, logs := [], updates := [] })
+    helper [] rep pairSem pairSem_image installedPre output codeEq fork value size selector abi
+    conditions
   exact ⟨run, rfl, fun newFresh => pair_live_outcome initial fresh futureCode replayed run target
     state codeEq fork output representable newFresh⟩
 
