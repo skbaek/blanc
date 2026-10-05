@@ -95,6 +95,18 @@ def PairSendsNoRootMessage (p : Adr) {cfg : ChainConfig} {checkpoint future : Bl
     (trace : ConfiguredHistoryTrace cfg checkpoint future) : Prop :=
   ∀ R ∈ trace.settledRoots, R.sevm.caller ≠ p
 
+/-- CROSS-HOST HYPOTHESIS (delete at consolidation): discharged by the Jaune reply/memory accounting
+export (candidate 2737c8eb) plus a gas bound: along the chain of every settled frame running at `p`,
+memory stays below `2 ^ 160` bytes.  Expected source: Jaune's per-step potential argument
+(`gasMeasure + memcost(memory.size)` never grows along a chain, including over CALL/STATICCALL
+spawns; public in 2737c8eb, private at the current pin) with entry gas below `2 ^ 256` (a frame's
+entry gas is bounded by its transaction's 256-bit gas limit).  Needed because with unbounded gas the
+free-memory pointer can wrap modulo `2 ^ 256` (see `TransferSiteShape`). -/
+def CallSiteMemoryBound (p : Adr) {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future) : Prop :=
+  ∀ G ∈ trace.settledFrames, G.sevm.currentTarget = p →
+    ChainMemoryBelow ⟨G.pc, G.sevm, G.pre, G.out, G.run⟩ (2 ^ 160)
+
 /-- A direct child of a settled non-static WETH9 frame is called by `ca` itself.  Discharged over the
 WETH9 history premises by `weth9_history_settled_children_caller`
 (`Blanc/Composition/Weth9SettledCallers.lean`). -/
@@ -105,13 +117,13 @@ def Weth9SelfTargetChildren (ca : Adr) {cfg : ChainConfig} {checkpoint future : 
 
 /-- **The pair's WETH9 calls are transfers or deposits, over a configured history.**  The WETH9 side
 enters as `Weth9SelfTargetChildren` (proved from the history premises in the headline below).
-CROSS-HOST: conditional on BurnCallShape, PairFramesRunPairCode, PairSendsNoRootMessage.
-LANE-OPEN: conditional on QuietEntriesCallShape, SkimCallShape, SwapCallShape. -/
+CROSS-HOST: conditional on PairFramesRunPairCode, PairSendsNoRootMessage, CallSiteMemoryBound.
+LANE-OPEN: conditional on TransferSiteShape, CallbackSiteShape. -/
 theorem pairCalls_holderCalls {ca p : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (trace : ConfiguredHistoryTrace cfg checkpoint future) (apart : p ≠ ca)
-    (quiet : UniswapV2Pair.QuietEntriesCallShape) (skim : UniswapV2Pair.SkimCallShape)
-    (swap : UniswapV2Pair.SwapCallShape) (burn : UniswapV2Pair.BurnCallShape)
+    (transfer : UniswapV2Pair.TransferSiteShape) (callback : UniswapV2Pair.CallbackSiteShape)
     (pairCode : PairFramesRunPairCode p trace) (noRoot : PairSendsNoRootMessage p trace)
+    (memBound : CallSiteMemoryBound p trace)
     (wethSelf : Weth9SelfTargetChildren ca trace) :
     HolderCalls p (replayCalls (committedInvocations ca trace)) := by
   apply holderCalls_of_settled
@@ -123,16 +135,17 @@ theorem pairCalls_holderCalls {ca p : Adr} {cfg : ChainConfig} {checkpoint futur
     intro G member which
     rcases which with target | target
     · obtain ⟨codeEq, pcZero, entry, fork⟩ := pairCode G member target
+      have bound := memBound G member target
       obtain ⟨pc, sevm, pre, out, run, committed⟩ := G
-      dsimp only at codeEq pcZero entry fork ⊢
+      dsimp only at codeEq pcZero entry fork bound ⊢
       subst pcZero
       cases out with
       | error e => simp only [Execution.commits, Bool.false_eq_true] at committed
       | ok post =>
           obtain ⟨b, gas, rfl⟩ : ∃ b gas, pre = St b [] Mem.empty gas :=
             ⟨pre, pre.gasLeft, St.self entry.1 entry.2⟩
-          have shape := UniswapV2Pair.pair_callsTransferOrCallback quiet skim swap burn run
-            codeEq fork
+          have shape := UniswapV2Pair.pair_callsTransferOrCallback transfer callback run
+            codeEq fork bound
           intro c hc _ _ static
           exact wethHolderSafe_of_selector (shape c hc static)
     · intro c hc _ caller
@@ -147,8 +160,8 @@ theorem pairCalls_holderCalls {ca p : Adr} {cfg : ChainConfig} {checkpoint futur
 /-- **`weth9_history_holder_noShrink` with the pair-side `HolderCalls` discharged.**  As
 `weth9_history_holder_noShrink`, with `pairCalls` replaced by what the Pair code calls; the WETH9 side
 (`Weth9SelfTargetChildren`) is proved from the same history premises.
-CROSS-HOST: conditional on BurnCallShape, PairFramesRunPairCode, PairSendsNoRootMessage.
-LANE-OPEN: conditional on QuietEntriesCallShape, SkimCallShape, SwapCallShape. -/
+CROSS-HOST: conditional on PairFramesRunPairCode, PairSendsNoRootMessage, CallSiteMemoryBound.
+LANE-OPEN: conditional on TransferSiteShape, CallbackSiteShape. -/
 theorem weth9_history_holder_noShrink_pairCalls {ca p : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {K₀ : Key → Prop}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
@@ -161,16 +174,16 @@ theorem weth9_history_holder_noShrink_pairCalls {ca p : Adr} {cfg : ChainConfig}
     (budget : EthFits (checkpoint.state.bal ca).toNat
       (replayCalls (committedInvocations ca trace)))
     (apart : p ≠ ca)
-    (quiet : UniswapV2Pair.QuietEntriesCallShape) (skim : UniswapV2Pair.SkimCallShape)
-    (swap : UniswapV2Pair.SwapCallShape) (burn : UniswapV2Pair.BurnCallShape)
-    (pairCode : PairFramesRunPairCode p trace) (noRoot : PairSendsNoRootMessage p trace) :
+    (transfer : UniswapV2Pair.TransferSiteShape) (callback : UniswapV2Pair.CallbackSiteShape)
+    (pairCode : PairFramesRunPairCode p trace) (noRoot : PairSendsNoRootMessage p trace)
+    (memBound : CallSiteMemoryBound p trace) :
     ((checkpoint.state.getStor ca).get (balSlot p)).toNat ≤
         ((future.state.getStor ca).get (balSlot p)).toNat +
           holderOut p (replayCalls (committedInvocations ca trace)) ∧
       ∀ g, historyKeyUniverse ca trace K₀ (.allow p g) →
         (future.state.getStor ca).get (allowSlot p g) = 0 :=
   weth9_history_holder_noShrink trace installed sumNof initial fresh holderTracked allowZero
-    (pairCalls_holderCalls trace apart quiet skim swap burn pairCode noRoot
+    (pairCalls_holderCalls trace apart transfer callback pairCode noRoot memBound
       (Weth9SettledCallers.weth9_history_settled_children_caller trace installed sumNof initial fresh))
     budget
 

@@ -1,17 +1,22 @@
 import Blanc.Lift.CallerProvenance
-import Blanc.Lift.UniswapV2Pair.PairSelectors
+import Blanc.Lift.CallSiteChildren
+import Blanc.Lift.ExactWalk
+import Blanc.Lift.UniswapV2Pair.PairCallSites
 
 /-!
-# What the Pair runtime calls: the per-entry call shape
+# What the Pair runtime calls
 
 The Pair issues non-static CALLs only from `_safeTransfer` (selector `transfer`, `0xa9059cbb`; reached
 from `skim`, `swap` and `burn`) and from `swap`'s flash callback (selector `uniswapV2Call`,
 `0x10d1e85c`).  Every other child it spawns is a STATICCALL (`balanceOf`, `feeTo`, ECRECOVER), hence
 static.  `CallsTransferOrCallback run` states this for the direct committed children of one run.
 
-The per-entry facts are named hypotheses, keyed on the actual selector (`EntryCallShape`), so that each
-is discharged by its own entry walk; `pair_callsTransferOrCallback` assembles them over the dispatcher's
-selector partition (`pair_bytecode_selector_inv`).
+`pair_callsTransferOrCallback` proves it for every successful Pair frame, whatever its selector, by
+the certificate call-site argument: every direct child is spawned at a node of the frame's chain
+(`Exec.childFrames_spawnedAt`); that node decodes CALL or STATICCALL (`CursorOK.exec_call_or_staticcall`);
+a STATICCALL child is static; a CALL node sits at one of the three CALL sites (`pair_call_site`), whose
+input selector the site facts `TransferSiteShape` and `CallbackSiteShape` give; and the child reads
+exactly that selector (`Xinst.step_call_spawn_selector`).
 -/
 
 namespace Blanc.Lift.UniswapV2Pair
@@ -25,63 +30,39 @@ def CallsTransferOrCallback {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Executi
   ∀ c ∈ Exec.childFrames run, c.sevm.isStatic = false →
     Blanc.Sevm.selector c.sevm = 0xa9059cbb ∨ Blanc.Sevm.selector c.sevm = 0x10d1e85c
 
-/-- The call shape of every successful Pair frame whose actual selector satisfies `sel`. -/
-def EntryCallShape (sel : B256 → Prop) : Prop :=
-  ∀ {sevm : Sevm} {b post : Devm} {G : Nat} (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)),
-    sevm.code = code → CoveredFork sevm.benvStat.fork → sel (Blanc.Sevm.selector sevm) →
-    CallsTransferOrCallback run
-
-/-- The published selectors other than `skim`, `swap` and `burn`: the views, `sync`, `mint`, `permit`,
-`transfer`, `approve`, `transferFrom` and `initialize`. -/
-def QuietSelector (s : B256) : Prop :=
-  s ∈ pairSelectors ∧ s ≠ 0xbc25cf77 ∧ s ≠ 0x022c0d9f ∧ s ≠ 0x89afcb44
-
-/-- LANE-OPEN OBLIGATION (second host): discharged by this lane's entry walks,
-one per quiet entry: every successful frame of a view, `sync`, `mint`, `permit`, `transfer`, `approve`,
-`transferFrom` or `initialize` has no non-static committed child (each issues only STATICCALLs or no
-call), which implies this shape.  Statement shape of the expected discharge, per entry `e`:
-`∀ run, sevm.code = code → CoveredFork … → selector sevm = e → ∀ c ∈ Exec.childFrames run,
-c.sevm.isStatic = true`.  Not derived here: the existing walks (`StaticViewTurns`, `SyncCanonical`,
-`MintCanonical`, `PermitTurns`, the writer entries) expose the STATICCALL steps they take but do not
-state that these are all of the frame's children. -/
-def QuietEntriesCallShape : Prop := EntryCallShape QuietSelector
-
-/-- LANE-OPEN OBLIGATION (second host): discharged by this lane's exhaustive
-form of the skim walk (`skim_bytecode_exact_consumes`, SkimCanonical.lean): the only non-static
-children of a successful `skim` frame are its two `_safeTransfer` CALLs, whose calldata starts with
-`transfer`'s selector.  The current walk exposes both CALL steps (`SkimFirstSteps`/`SkimSecondSteps`)
-but not that they are all of the frame's children. -/
-def SkimCallShape : Prop := EntryCallShape (· = 0xbc25cf77)
-
-/-- LANE-OPEN OBLIGATION (second host): discharged by this lane's exhaustive
-form of the swap walk (`swap_bytecode_exact_consumes`, SwapCanonical.lean): the only non-static
-children of a successful `swap` frame are its optimistic `transfer` CALLs (`SwapTransferOpt`) and the
-`uniswapV2Call` callback (`SwapCallbackOpt`).  The current walk exposes these steps but not that they
-are all of the frame's children. -/
-def SwapCallShape : Prop := EntryCallShape (· = 0x022c0d9f)
-
-/-- CROSS-HOST HYPOTHESIS (delete at consolidation): discharged by the original host's burn walk
-(`Burn*`, its actual two-transfer execution, handoff "Original-host deliverables" 1): the only
-non-static children of a successful `burn` frame are its two `_safeTransfer` CALLs, whose calldata
-starts with `transfer`'s selector.  Expected statement: exactly this `EntryCallShape (· = 0x89afcb44)`,
-or the stronger "children = the two transfer CALL frames plus static `balanceOf`/`feeTo` queries". -/
-def BurnCallShape : Prop := EntryCallShape (· = 0x89afcb44)
-
-/-- **Pair call shape.**  Every successful frame of the Pair code calls non-statically only with the
-`transfer` or the `uniswapV2Call` selector, by the dispatcher's selector partition.
-CROSS-HOST: conditional on BurnCallShape.
-LANE-OPEN: conditional on QuietEntriesCallShape, SkimCallShape, SwapCallShape. -/
-theorem pair_callsTransferOrCallback (quiet : QuietEntriesCallShape) (skim : SkimCallShape)
-    (swap : SwapCallShape) (burn : BurnCallShape)
+/-- **Pair call shape.**  Every successful frame of the Pair code, entered at pc `0` with an empty
+stack and empty memory, whose chain keeps memory below `2 ^ 160`, calls non-statically only with the `transfer` or
+the `uniswapV2Call` selector.
+LANE-OPEN: conditional on TransferSiteShape, CallbackSiteShape. -/
+theorem pair_callsTransferOrCallback (transfer : TransferSiteShape) (callback : CallbackSiteShape)
     {sevm : Sevm} {b post : Devm} {G : Nat} (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork) :
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (bound : ChainMemoryBelow ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ (2 ^ 160)) :
     CallsTransferOrCallback run := by
-  by_cases hSkim : Blanc.Sevm.selector sevm = 0xbc25cf77
-  · exact skim run codeEq fork hSkim
-  by_cases hSwap : Blanc.Sevm.selector sevm = 0x022c0d9f
-  · exact swap run codeEq fork hSwap
-  by_cases hBurn : Blanc.Sevm.selector sevm = 0x89afcb44
-  · exact burn run codeEq fork hBurn
-  exact quiet run codeEq fork ⟨pair_bytecode_selector_inv codeEq fork run, hSkim, hSwap, hBurn⟩
+  intro c member nonStatic
+  obtain ⟨N, f, rsm, pc', cevm, chain, step, enter, childEq⟩ :=
+    Exec.childFrames_spawnedAt run (.refl _) c member
+  obtain ⟨x, hat, hx, -⟩ := Evm.step_spawn_inv step
+  have sevmEq : N.sevm = sevm := Blanc.Exec.Deriv.ParentPrefix.sevm_eq chain
+  have nodeFork : CoveredFork N.sevm.benvStat.fork := by rw [sevmEq]; exact fork
+  obtain ⟨κ₀, -, ok₀⟩ := reach_of_parentPrefix cert_check rfl codeEq fork chain
+  rcases ok₀.exec_call_or_staticcall hat with rfl | rfl
+  · obtain ⟨κ, g, reach, ok, tree, site⟩ := pair_call_site rfl codeEq fork chain hat
+    have stackNil : (St b [] Mem.empty G).stack = [] := rfl
+    have memEmpty : (St b [] Mem.empty G).memory = Mem.empty := rfl
+    have read : ∀ {sel : B256}, CallInputSelector N sel → Blanc.Sevm.selector c.sevm = sel := by
+      intro sel ⟨g', c', v', ii, is, rest, hstack, hsel⟩
+      rw [childEq, Xinst.step_call_spawn_selector nodeFork hx enter hstack, hsel]
+    rcases site with here | here | here
+    · exact Or.inr (read (callback rfl codeEq fork stackNil memEmpty bound rfl chain reach ok
+        tree here))
+    · exact Or.inl (read (transfer rfl codeEq fork stackNil memEmpty bound rfl chain reach ok
+        tree (Or.inl here)))
+    · exact Or.inl (read (transfer rfl codeEq fork stackNil memEmpty bound rfl chain reach ok
+        tree (Or.inr here)))
+  · have static : cevm.sta.isStatic = true :=
+      (Frame.enter_run_isStatic enter).trans (Xinst.step_staticcall_spawn_isStatic hx)
+    rw [childEq, static] at nonStatic
+    cases nonStatic
 
 end Blanc.Lift.UniswapV2Pair
