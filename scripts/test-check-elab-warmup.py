@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Mocked controls for check-elab.sh's full-measurement warm-up branch and its
-calibration admission routing.
+"""Mocked controls for check-elab.sh's warm-up of the first measured file (on
+every measuring run: full, incremental and --calibrate) and its calibration
+admission routing.
 
 The test copies the production shell script unchanged into a temporary miniature
 repository. Its Lake, selector, locks, and admission are local stubs, so it
@@ -275,6 +276,11 @@ def calibration_routing_controls(root: Path) -> None:
 
     green, events = run_calibration(root, "0", "0")
     assert green.returncode == 0, green.stdout
+    assert "discarded one unrecorded warm-up elaboration of Blanc/A.lean" in green.stdout, green.stdout
+    assert lean_calls(events) == [
+        "env lean Blanc/A.lean", "env lean Blanc/A.lean", "env lean Blanc/B.lean",
+        "env lean Blanc/C.lean",
+    ], events
     lines = green.stdout.strip().splitlines()
     assert lines[-1].startswith("OK — elab calibration:"), green.stdout
     assert "admitted to the local cache and baseline" in lines[-1], green.stdout
@@ -321,8 +327,9 @@ def main() -> int:
 
         partial, calls = run_case(root, "Blanc/A.lean", "3.000", full=False)
         assert partial.returncode == 1
-        assert "discarded one unrecorded warm-up elaboration" not in partial.stdout
-        assert lean_calls(calls) == ["env lean Blanc/A.lean"]
+        assert "discarded one unrecorded warm-up elaboration of Blanc/A.lean" in partial.stdout
+        assert "ELAB — Blanc/A.lean: 3.000s vs baseline 1.000s" in partial.stdout
+        assert lean_calls(calls) == ["env lean Blanc/A.lean", "env lean Blanc/A.lean"]
 
         plan_before_hold_controls(root)
 
@@ -330,7 +337,7 @@ def main() -> int:
         calibration_routing_controls(make_cal_root(Path(directory)))
 
     print("OK — elab warm-up and plan-before-hold controls: full slowdown/refusal, restored green, "
-          "partial unchanged, no-op plan takes no heavy boundary, measuring plan takes it "
+          "incremental and calibration runs warm up too, no-op plan takes no heavy boundary, measuring plan takes it "
           "before elaborating and re-plans inside it; calibration refusal writes nothing and "
           "never reaches admit/commit/publish, green calibration admits through admit-calibration "
           "with the gate thresholds and initializes exactly one baseline row (mocked)")
