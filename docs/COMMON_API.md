@@ -4265,6 +4265,16 @@ contract-neutral.
 - Hashed storage slots: `mapSlot key base = keccak256(pad32 key ‖ pad32 base)`, solc's mapping
   slot and, with the arguments swapped (slot first), Vyper's, in
   [`Blanc/Lift/MapSlot.lean`](../Blanc/Lift/MapSlot.lean).
+- For the witness interpreter's symbolic Vyper mapping scratch sequence, use
+  [`Blanc/Lift/WitnessMapping.lean`](../Blanc/Lift/WitnessMapping.lean).
+  `WitnessMapping.slot_run` derives the seven-instruction `wrun` from an
+  aligned memory covering the scratch window, retaining arbitrary recipient
+  words, stack suffix, continuations, shadows, metadata and world. The hash is
+  `mapSlot slot key`, proved by the shared two-word readback, and the charge
+  is exactly 60. This constructs only the scratch/hash segment; storage reads,
+  writes, finite separation and entry agreement remain separate obligations.
+  Existing recipe triggers do not distinguish this selected interpreter
+  equality from arbitrary equalities, so discovery stays in this branch.
 - Vyper 0.2.x runtimes: the frame prologue (`vyPrologue`, `ric_vyPrologue`, `rx_vyPrologue`,
   memory `vyMem`/`vyImg`), the clamp constants as an image invariant (`VyClamps`,
   `vyImg_clamps`, `VyClamps.clamp`), the non-payable guard and address-argument clamp every body starts with

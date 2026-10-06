@@ -228,6 +228,7 @@ SHARED += ["Lift.GasErasureRun", "Lift.InvWalkBranchToP", "Lift.LedgerFootprintO
 
 SHARED += ["Lift.CallChildren", "Lift.CallSite", "Lift.CallSiteChildren", "Lift.CallerProvenance"]
 SHARED += ["Lift.GasSuccessCut", "Lift.GasSuccessEffects"]
+SHARED += ["Lift.WitnessMapping"]
 
 CONTRACTS = {
     "uniswap-v2-pair": [
