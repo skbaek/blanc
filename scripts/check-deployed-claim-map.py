@@ -2,7 +2,8 @@
 """Fail-closed checker for docs/DEPLOYED_BYTECODE_CLAIM_MAP.md.
 
 The map is a claim index over Blanc's results about deployed EVM bytecode (WETH9, the Beacon
-deposit contract, Curve 3Crv, the Lido CircuitBreaker, the Vyper nonreentrancy pair), not an
+deposit contract, Curve 3Crv, the Lido CircuitBreaker, the Vyper nonreentrancy pair, the EIP-7002
+predeploy, the Uniswap V2 Pair), not an
 independent theorem authority.  This checker therefore holds it to the repository:
 
 * every fully qualified declaration it writes (``Blanc.…``) resolves, spelled in full, to a public
@@ -73,6 +74,7 @@ H3 = [
     "5.5 Vyper V+",
     "5.6 Vyper V−",
     "5.7 EIP-7002 withdrawal requests",
+    "5.8 Uniswap V2 Pair",
 ]
 
 # The headline results the map exists to carry.  A row deleted from the document fails here.
@@ -106,6 +108,23 @@ REQUIRED_HEADLINES = [
     "Blanc.Lift.WithdrawalRequest.FeeCounterexample.nat_fee_guarantee_refuted",
     "Blanc.Lift.WithdrawalRequest.history_submission_nat_live",
     "Blanc.Lift.WithdrawalRequest.Creation.deploy_initial",
+    "Blanc.Lift.UniswapV2Pair.pair_history_committed",
+    "Blanc.Lift.UniswapV2Pair.pair_history_initialized",
+    "Blanc.Lift.UniswapV2Pair.pair_history_ledger",
+    "Blanc.Lift.UniswapV2Pair.pair_history_oracle",
+    "Blanc.Lift.UniswapV2Pair.pair_history_feeOff_product",
+    "Blanc.Lift.UniswapV2Pair.pair_history_feeOn_product",
+    "Blanc.Lift.UniswapV2Pair.permit_bytecode_refines_source",
+    "Blanc.Lift.UniswapV2Pair.burnRaw_source_authentic",
+    "Blanc.Lift.UniswapV2Pair.staticView_bytecode_inv",
+    "Blanc.Lift.UniswapV2Pair.pair_history_writer_live",
+    "Blanc.Lift.UniswapV2Pair.pair_history_sync_live",
+    "Blanc.Lift.UniswapV2Pair.pair_history_mint_live",
+    "Blanc.Lift.UniswapV2Pair.pair_history_swap_live",
+    "Blanc.Lift.UniswapV2Pair.pair_history_burn_live",
+    "Blanc.Lift.UniswapV2Pair.pair_history_skim_live",
+    "Blanc.Lift.UniswapV2Pair.Creation.pair_create2_initialized",
+    "Blanc.Lift.UniswapV2Pair.Creation.exhibit_create2",
 ]
 
 # Load-bearing disclosures; a rewording that drops one fails.
@@ -135,6 +154,16 @@ NONCLAIM_PHRASES = [
     "validator authorization",
     "not a practical attack",
     "not that one fits mainnet's gas limits",
+    "tokens with transfer fees or rebasing fail",
+    "nopairwriteoutsidelock",
+    "not a flat per-frame replay",
+    "composition with weth9 is not claimed",
+    "permit signature unforgeability is not claimed",
+    "the factory's bytecode is not lifted",
+    "no transaction-level uniswap liveness",
+    "states the modular sum of the recorded increments",
+    "not an existential cost",
+    "conditional on two named hypotheses",
 ]
 
 # Process and internal-bookkeeping vocabulary the public map must not carry.
@@ -151,6 +180,7 @@ NON_LEAN_IDENTIFIERS = {
     "set_name", "get_deposit_count", "get_deposit_root", "get_virtual_price", "remove_liquidity",
     "add_liquidity", "eth_getCode", "AxiomAudit", "collectAxioms", "sorryAx", "native_decide",
     "bv_decide", "processTransaction", "prepareMessage", "accountsToDelete", "TxC", "hP", "hI",
+    "MINIMUM_LIQUIDITY", "kLast", "returnedGas",
 }
 
 # The artifacts the map states: address -> (label, lifted input file or None for a proxy,
@@ -164,7 +194,12 @@ ARTIFACTS = {
     "0x21e27a5e5513d6e65c4f830167390997aa84843a": ("V+ proxy", None, [], "0x847ee1227a9900b73aeeb3a47fac92c52fd54ed9"),
     "0x6326debbaa15bcfe603d831e7d75f4fc10d9b43e": ("V- implementation", "vyper-6326-runtime.hex", ["vyper-6326"], None),
     "0x9848482da3ee3076165ce6497eda906e66bb85c5": ("V- proxy", None, [], "0x6326debbaa15bcfe603d831e7d75f4fc10d9b43e"),
+    "0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc": ("Uniswap V2 Pair", "uniswap-v2-pair-runtime.hex", ["uniswap-v2-pair"], None),
 }
+# The Uniswap V2 Pair runtime is one runtime for every pair: its row records the block at which the
+# exhibit instance's code was read, not a creation transaction, and its creation code is a separate
+# input whose hash is the factory's init-code hash.
+UNISWAP_CREATION_INPUT = "uniswap-v2-pair-creation.hex"
 SYSTEM_ARTIFACTS = {
     "0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02": "beaconRootsCode",
     "0x0000F90827F1C53a10cb7A02335B175320002935": "historyStorageCode",
@@ -368,6 +403,7 @@ class Authority:
         for _label, filename, _ids, _impl in ARTIFACTS.values():
             if filename is not None:
                 self.runtime[filename] = self._runtime(filename)
+        self.uniswap_creation = self._runtime(UNISWAP_CREATION_INPUT)
 
     def _text(self, relative: str) -> str:
         try:
@@ -655,6 +691,41 @@ def check_trust_base(auth: Authority, text: str, errors: list[str]) -> None:
         errors.append("the covered forks are not stated as Prague, Osaka, BPO1 and BPO2")
 
 
+def check_uniswap_record(auth: Authority, body: str, errors: list[str]) -> None:
+    """The Uniswap V2 Pair row's code-read record and creation code, recomputed from the repository."""
+
+    flat = " ".join(body.split())
+    runtime = auth.runtime.get("uniswap-v2-pair-runtime.hex", b"")
+    creation = auth.uniswap_creation
+    provenance = auth.provenance(["uniswap-v2-pair"]).lower()
+    read = re.search(
+        r"finalized block (\d[\d,]*) \(block hash (0x[0-9a-fA-F]{64})\)", flat
+    )
+    if read is None:
+        errors.append("Uniswap V2 Pair: the code-read block and block hash are not stated")
+    else:
+        if not re.search(r"\bblock\s+" + str(to_int(read.group(1))) + r"\b", provenance):
+            errors.append(f"Uniswap V2 Pair: code-read block {read.group(1)} is not in the certificate provenance")
+        if read.group(2).lower() not in provenance:
+            errors.append("Uniswap V2 Pair: the code-read block hash is not in the certificate provenance")
+    init = re.search(r"init-code hash (0x[0-9a-fA-F]{64})", flat)
+    window = re.search(r"bytes (\d[\d,]*) to (\d[\d,]*) of it are the lifted runtime", flat)
+    stated = re.search(r"(\d[\d,]*)-byte input `scripts/lift/inputs/" + re.escape(UNISWAP_CREATION_INPUT), flat)
+    if not creation or not runtime:
+        errors.append("Uniswap V2 Pair: the creation code or the runtime input is missing")
+        return
+    if init is None or init.group(1).lower() != "0x" + keccak.keccak256(creation).hex():
+        errors.append("Uniswap V2 Pair: the creation code does not hash to the stated init-code hash")
+    if stated is None or to_int(stated.group(1)) != len(creation):
+        errors.append(f"Uniswap V2 Pair: the creation code is not the stated size ({len(creation)})")
+    if window is None:
+        errors.append("Uniswap V2 Pair: the embedded runtime window is not stated")
+    else:
+        start, end = to_int(window.group(1)), to_int(window.group(2))
+        if creation[start:end + 1] != runtime:
+            errors.append("Uniswap V2 Pair: the stated window of the creation code is not the lifted runtime")
+
+
 def check_artifacts(auth: Authority, text: str, errors: list[str]) -> int:
     body = section(text, "2. Artifacts")
     tables = [t for t in re.split(r"\n\s*\n", body) if t.lstrip().startswith("| Contract")]
@@ -681,6 +752,8 @@ def check_artifacts(auth: Authority, text: str, errors: list[str]) -> int:
         expected_hash = "0x" + keccak.keccak256(code).hex()
         if codehash != expected_hash:
             errors.append(f"{label}: codehash {codehash} differs from the recomputed {expected_hash}")
+        if ids and creation.startswith("not recorded"):
+            continue
         if ids:
             provenance = auth.provenance(ids).lower()
             tx = re.search(r"0x[0-9a-fA-F]{64}", creation)
@@ -700,6 +773,7 @@ def check_artifacts(auth: Authority, text: str, errors: list[str]) -> int:
             errors.append(f"{label}: no certificate ids")
     if seen != set(ARTIFACTS):
         errors.append(f"artifact population drifted: missing {sorted(set(ARTIFACTS) - seen)!r}")
+    check_uniswap_record(auth, body, errors)
 
     system_seen = set()
     for row in table_rows(tables[1])[1:]:
@@ -823,8 +897,8 @@ def remove_all(text: str, phrase: str) -> str:
     return re.sub(pattern, "X", text, flags=re.I)
 
 
-def drop_headline(text: str) -> str:
-    name = REQUIRED_HEADLINES[0]
+def drop_headline(text: str, name: str | None = None) -> str:
+    name = name or REQUIRED_HEADLINES[0]
     return re.sub(re.escape(f"`{name}`") + r" \(`[^`]*`\)", "the headline", text)
 
 
@@ -882,6 +956,18 @@ def falsifiers(auth: Authority, text: str) -> list[tuple[str, str, object]]:
         ("deleted headline", "required headline", lambda a, t: (a, drop_headline(t))),
         ("dropped disclosure", "load-bearing disclosure vanished",
          lambda a, t: (a, remove_all(t, "not a deployment audit"))),
+        ("wrong Uniswap codehash", "codehash",
+         lambda a, t: (a, replace_once(t, "0x5b83bdbcc56b2e63", "0x5b83bdbcc56b2e64"))),
+        ("wrong Uniswap code-read block", "code-read block",
+         lambda a, t: (a, replace_once(t, "finalized block 26,098,569", "finalized block 26,098,570"))),
+        ("wrong Uniswap init-code hash", "init-code hash",
+         lambda a, t: (a, replace_once(t, "0x96e8ac4277198ff8", "0x96e8ac4277198ff9"))),
+        ("wrong Uniswap runtime window", "window of the creation code",
+         lambda a, t: (a, replace_once(t, "261 to 11,553 of it are the lifted runtime", "262 to 11,554 of it are the lifted runtime"))),
+        ("deleted Uniswap headline", "required headline",
+         lambda a, t: (a, drop_headline(t, "Blanc.Lift.UniswapV2Pair.pair_history_committed"))),
+        ("dropped Uniswap disclosure", "load-bearing disclosure vanished",
+         lambda a, t: (a, remove_all(t, "composition with WETH9 is not claimed"))),
     ]
 
 

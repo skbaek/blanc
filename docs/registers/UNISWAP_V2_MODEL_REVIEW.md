@@ -9,6 +9,32 @@
 
 Paths: `M` = Blanc/Lift/UniswapV2Pair/Model.lean, `X` = Execution.lean, `P` = UniswapV2Pair.sol, `E` = UniswapV2ERC20.sol.
 
+## Status at the integrated checkpoint
+
+This register keeps the review as it was written: the cross-family source-versus-model
+correspondence review that the goal requires. Its model and `file:line` citations are those of
+the snapshot it reviewed, not of this checkpoint, and its table and notes were not re-verified
+here. What changed since, checked against this tree:
+
+- **S1 (oracle law at run level): closed.** `OracleUpdate.Lawful`, `State.update_oracle_lawful`
+  and `runTyped_oracle_law` (`Blanc/Lift/UniswapV2Pair/PropertiesOracleLaw.lean`) state the
+  wrapped `Δt`, the increments and the timestamp chain through the driver;
+  `OracleControls.oracle_law_requires_timestamp_wrap` is the control.
+- **S2 (swap balances not identified): closed in the form the review proposed.**
+  `runTyped_swap_success_reserves` concludes that the final reserves equal the answers.
+- **S3 (later mint, burn payout, callback at run level): closed.** `runTyped_mint_later`,
+  `runTyped_burn_payout` and `runTyped_swap_callback_request`.
+- **S4 (burn's NoShrink is not the literal NoShrink): disclosed.** The exact per-entry forms are in
+  `docs/DEPLOYED_BYTECODE_CLAIM_MAP.md` section 5.8 and section 7 item 17.
+- **S5 (the U7 model control is not the storage-key control): a storage-level control now
+  exists,** `LedgerKeyControl.approve_storage_alias_breaks_ledger`, conditional on the alias
+  hypothesis; `footprintSum_dup_breaks_ledger` remains the model control.
+- **S6 (the rounding control is a seam witness): replaced by mutated drivers.**
+  `ModelMutants` clones only the driver pieces that call the changed arithmetic;
+  `ModelControls.mintRoundUp_breaks_feeOff_product` fails the product inequality on a state the
+  mutant reaches. The frame-level burn-rounding control
+  (`RefinementControls.burn_refinement_control`) is still conditional on two named hypotheses.
+
 ## 1. Correspondence table
 
 | Source (file:line) | Model (file:line) | Verdict |

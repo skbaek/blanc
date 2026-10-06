@@ -2737,8 +2737,10 @@ consumer needs canonical interpreter ingress as one conjunct:
   and `stateGas = none`; it needs no entered-child witness or bounded-output
   premise. The entered-child theorem consumes this same opcode proof.
   `Exec.rawFrameRoots_data_bound` is the execution-level form. Worked
-  consumers: `Lift.BeaconDeposit.configuredHistory_solInv_env` (and
-  `_count_env`/`_root_env`) and `Lift.Curve3Crv.c3crv_history_committed_derived`.
+  consumers: `Lift.BeaconDeposit.configuredHistory_solInv_sys` (and
+  `configuredHistory_count_sys`/`configuredHistory_root_sys`),
+  `Lift.Curve3Crv.c3crv_history_committed_derived` and
+  `Lift.UniswapV2Pair.pair_trace_admitted`.
 - Every retained carrier from `ProcessMessageTrace` through
   `ConfiguredHistoryTrace` has `freshFrameAdmitted`; its matching
   `FrameAdmitted.and` combines that trace-derived fact with another admission
