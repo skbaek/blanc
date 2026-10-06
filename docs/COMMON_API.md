@@ -1524,6 +1524,24 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   forward cost helpers (`sloadCost_congr`, `sstoreCost_congr`, `afterSload`,
   `afterSstore`). A dispatcher that reaches a non-gas-free entry needs a
   two-run walk to the selected entry first.
+- For successful execution with **additional** gas from one checked selected
+  witness path, use
+  [`Blanc/Lift/GasSuccessCut.lean`](../Blanc/Lift/GasSuccessCut.lean).
+  `GasSuccess.selected fs s n c` checks only the visited nodes of the reference
+  `wrun`, stopping at exactly `n`; it does not evaluate an alternate run or
+  require unused branches or the complete referenced tree to be gas-free.
+  `GasSuccess.selected_success` derives reference success and success with any
+  nonnegative gas offset. `GasSuccess.wrun_addGas` transports to a named
+  endpoint from that certificate and its checked reference equation. Every
+  configuration column is preserved except `gasLeft`, which increases by the
+  same offset at the endpoint. The supported subset includes arithmetic,
+  push/pop/dup/swap, calldata size/copy, memory loads/stores with expansion, fixed `PC`, branches,
+  jumps, destinations, and internal call/return continuations. Cuts stop before
+  `GAS`, external instructions, storage instructions, or a terminal outcome.
+  This is gas-only transport and supplies no address/hash, shadow agreement,
+  or root-execution bridge. The certificate and named endpoint are explicit
+  inputs; discovery remains here because the existing suggestion triggers do
+  not distinguish this selected-witness equality from arbitrary equalities.
 
 ### I2. The property concerns a complete execution or child frames
 
