@@ -898,6 +898,13 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   reading only prefix keys, never consults the free tail; `Boundary.cfgOfT`/`obsDT`/
   `cfg_of_obsDT`/`obsDT_cont` are the boundary kit with such a tail (prefixes decided, tails
   compared as terms).
+- To transport such a run's `SSTORE` charges to an original state that agrees with the kernel's
+  closed one **only on the keys the run touches** (a finite checkpoint agreement, where
+  `OrigAgree`'s everywhere-agreement is unavailable): `wrun_withOrig_keys` and
+  `childRun_withOrig_keys` in [`Blanc/Lift/OrigKeys.lean`](../Blanc/Lift/OrigKeys.lean) need
+  only `OrigAgreeOn O O' (resKeys …)`, the agreement on the keys the run's final configuration
+  records (`wrun_keys`: keys are only added; `sstoreStep_key_mem`: every `SSTORE` records its
+  key) (worked use: `origAgreeOn_O0` in `.../Vulnerable/Reach/ViolBoundary.lean`).
 - To state a closed *frame-level* witness (the certificate interpreter `wrun`, code children by
   `childStart`/`callResume`/`callPairFrom`, proxy frames by `stepN`) under every covered fork,
   rewrite its kernel facts with `wrun_withFork`

@@ -501,6 +501,7 @@ import Blanc.Lift.NodeWalkPrecomp
 import Blanc.Lift.ShadowCanon
 import Blanc.Lift.CreateEntry
 import Blanc.Lift.NodeWalkOrig
+import Blanc.Lift.OrigKeys
 -- A gas-exact lifted run as a node-walk leaf child (vyper-reachable-reentrancy-v1): shared.
 import Blanc.Lift.ExactLeaf
 import Blanc.Lift.WitnessFork
@@ -643,6 +644,7 @@ import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.AddTop
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Approve
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Checkpoint
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Violation
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolBoundary
 import Blanc.Lift.VyperNonreentrantDeployed.Token20.Cert
 import Blanc.Lift.VyperNonreentrantDeployed.Token20.Check
 import Blanc.Lift.VyperNonreentrantDeployed.Token20.Run

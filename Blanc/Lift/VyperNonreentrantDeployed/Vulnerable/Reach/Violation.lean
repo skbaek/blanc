@@ -6,7 +6,8 @@ import Blanc.Lift.ShadowTail
 `SoundCheckpoint` (in `Reach/Checkpoint.lean`) is the sound funded ledger that the V3 setup
 *reaches*.  `Checkpoint W` below is what the **violation** needs of its pre-state `W`, and no
 more: a finite agreement with the concrete reached shadow on exactly the keys the violating
-execution reads, plus the four codes it runs, plus the code-free root caller.  It is a genuine
+execution reads, plus the accounts it reads (the four codes it runs, the code-free root caller
+and the identity precompile's account), plus the code-free root caller.  It is a genuine
 finite read-set agreement (a prefix of entries), not `WorldIs` with the whole checkpoint tables;
 every world agreeing on these entries — and differing arbitrarily elsewhere — satisfies it.
 
@@ -55,18 +56,27 @@ def readStor : StorShadow :=
    ((tokenAddr, Token20.balSlot attackerAddr), 0),
    ((tokenAddr, Token20.balSlot proxyAddr), 1000)]
 
-/-- The accounts the violation runs or moves value through: the four codes, and the pool's
-1000 wei. (`AcctShadow` entries drop storage; the storage is `readStor`.) -/
+/-- The accounts the violation reads (`AcctShadow` entries drop storage; the storage is
+`readStor`): the four codes it runs, with the pool's 1000 wei; the root caller `creator`, whose
+balance the root message's value transfer reads (`benvAfterTransferS`) and restates into the
+shadow; and the identity precompile `0x04`, whose code every `CALL` preparation reads (the
+EIP-7702 delegation check, `callPrep`) and whose view the four zero-value identity calls of
+`remove_liquidity` restate.  The last two were measured by running the violation with a
+poisoned tail after this prefix (V4 freeze probe): they are the only accounts read outside the
+four codes, and with them in the prefix no lookup reaches the tail. -/
 def readAcct : AcctShadow :=
   [(implAddr, ⟨1, 0, .empty, Vulnerable.code⟩),
    (proxyAddr, ⟨1, 1000, .empty, fwdCode⟩),
    (tokenAddr, ⟨1, 0, .empty, Token20.code⟩),
-   (attackerAddr, ⟨1, 0, .empty, AttackerR.code⟩)]
+   (attackerAddr, ⟨1, 0, .empty, AttackerR.code⟩),
+   (creator, ⟨0, creatorFunds - 1000, .empty, .empty⟩),
+   ((4 : Adr), ⟨0, 0, .empty, .empty⟩)]
 
 /-- **The checkpoint predicate the V4 violation depends on.** `W` agrees with the reached
 world on exactly the fourteen storage slots the violation reads (`readStor`) and carries the
-four codes it runs, with the pool holding 1000 wei (`readAcct`); the root caller `creator` is
-code-free.  Everything else about `W` is free. -/
+accounts it reads (`readAcct`: the four codes it runs, with the pool holding 1000 wei, the
+code-free root caller with its balance, and the empty identity-precompile account); the root
+caller `creator` is code-free.  Everything else about `W` is free. -/
 def Checkpoint (W : State) : Prop :=
   (∀ e ∈ readStor, storOf W e.1.1 e.1.2 = e.2) ∧
     (∀ e ∈ readAcct, acctView (W.get e.1) = e.2) ∧
@@ -85,7 +95,7 @@ theorem readStor_storAdd : ∀ e ∈ readStor, lookupS storAdd e.1.1 e.1.2 = e.2
 theorem readAcct_acsB : ∀ e ∈ readAcct, lookupA acsB e.1 = e.2 := by
   intro e he
   simp only [readAcct, List.mem_cons, List.not_mem_nil, or_false] at he
-  rcases he with rfl | rfl | rfl | rfl <;> kernel_rfl
+  rcases he with rfl | rfl | rfl | rfl | rfl | rfl <;> kernel_rfl
 
 /-- **The reached checkpoint world satisfies `Checkpoint`.** Discharged from the reached
 world's description (`storAdd`/`acsB`), specialized to the finite read set. -/
