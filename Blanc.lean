@@ -642,6 +642,7 @@ import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.AddRun
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.AddTop
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Approve
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Checkpoint
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Violation
 import Blanc.Lift.VyperNonreentrantDeployed.Token20.Cert
 import Blanc.Lift.VyperNonreentrantDeployed.Token20.Check
 import Blanc.Lift.VyperNonreentrantDeployed.Token20.Run
