@@ -747,6 +747,7 @@ CONTRACTS["vyper-nonreentrant-deployed"].extend([
     "Lift.VyperNonreentrantDeployed.Vulnerable.GeneralizedPrototype",
     "Lift.VyperNonreentrantDeployed.Vulnerable.GeneralizedGasCut",
     "Lift.VyperNonreentrantDeployed.Vulnerable.GeneralizedAddGas",
+    "Lift.VyperNonreentrantDeployed.Vulnerable.GeneralizedAddInputs",
     "Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolTopRun",
     "Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolTop",
     "Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolRemoveRun4",
