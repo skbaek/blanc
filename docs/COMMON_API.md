@@ -860,6 +860,18 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   `lookupA_eq_of_keys` makes two account logs agree everywhere once they agree at the addresses
   either names, in [`Blanc/Lift/ShadowCanon.lean`](../Blanc/Lift/ShadowCanon.lean) (worked use:
   `init_run` in `.../Fixed/Init/Top.lean`).
+- To run a walk (`pwalkH`) or a certificate run (`wrun`, `childRun`, `callResume`) whose
+  `SSTORE` charges read a transaction-original state that is not a closed term (a root
+  message's own input world): evaluate the kernel facts with the original state replaced by a
+  closed world holding the same storage (`Sevm.withOrig`, `OrigAgree`), and transport them back
+  with `pwalkH_withOrig`, `wrun_withOrig`, `childRun_withOrig`, `callResume_withOrig` (spawns and
+  entries: `dcallPrep_withOrig`, `callPrep_withOrig`, `frameEnterS_withOrig`,
+  `frame_enter_withOrig`), in [`Blanc/Lift/NodeWalkOrig.lean`](../Blanc/Lift/NodeWalkOrig.lean)
+  (worked use: `frameB_at` in `.../Vulnerable/Reach/AddTop.lean`). `kernel_forall_rfl_and`
+  ([`Blanc/Lift/KernelBatchForall.lean`](../Blanc/Lift/KernelBatchForall.lean)) decides a
+  universally quantified conjunction of equalities in one kernel check; over a free world,
+  compare computed values by `decide` (or against literal boundaries, `Boundary.obsD1`), never
+  as terms.
 - To state a closed *frame-level* witness (the certificate interpreter `wrun`, code children by
   `childStart`/`callResume`/`callPairFrom`, proxy frames by `stepN`) under every covered fork,
   rewrite its kernel facts with `wrun_withFork`

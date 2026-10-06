@@ -608,6 +608,14 @@ import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.InitRun
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.InitTop
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Init
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Fund
+-- Node walks under a changed transaction-original state (vyper-minus-reachable-reentrancy-v1): shared.
+import Blanc.Lift.NodeWalkOrig
+import Blanc.Lift.KernelBatchForall
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.AddSetup
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.AddRun
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.AddTop
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Approve
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Checkpoint
 import Blanc.Lift.VyperNonreentrantDeployed.Token20.Cert
 import Blanc.Lift.VyperNonreentrantDeployed.Token20.Check
 import Blanc.Lift.VyperNonreentrantDeployed.Token20.Run
