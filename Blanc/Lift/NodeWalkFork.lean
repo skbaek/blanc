@@ -310,6 +310,49 @@ theorem callPrepP_stat {c : PCfg} {cp : CallPrep} (h : callPrepP s c = some cp) 
     cp.f.outer.benv.stat = s.benvStat ∧ cp.f.inner.benv.stat = s.benvStat :=
   callPrep_stat h
 
+/-- A `DELEGATECALL` preparation's frame carries the caller's transaction environment. -/
+theorem dcallPrep_tenvStat {d : Devm} {adrs : List Adr} {acs : AcctShadow} {cp : CallPrep}
+    (h : dcallPrep s d adrs acs = some cp) :
+    cp.f.outer.tenv.stat = s.tenvStat ∧ cp.f.inner.tenv.stat = s.tenvStat := by
+  unfold dcallPrep at h
+  generalize d.stack = st at h
+  match st, h with
+  | _ :: _ :: _ :: _ :: _ :: _ :: _, h =>
+    simp only at h
+    split at h
+    · split at h
+      · simp only [reduceCtorEq] at h
+      · split at h
+        · simp only [Option.some.injEq] at h
+          subst h
+          exact ⟨rfl, rfl⟩
+        · simp only [reduceCtorEq] at h
+    · simp only [reduceCtorEq] at h
+
+/-- A `CALL` preparation's frame carries the caller's transaction environment. -/
+theorem callPrep_tenvStat {c : Cfg} {cp : CallPrep} (h : callPrep s c = some cp) :
+    cp.f.outer.tenv.stat = s.tenvStat ∧ cp.f.inner.tenv.stat = s.tenvStat := by
+  unfold callPrep at h
+  generalize c.devm.stack = st at h
+  match st, h with
+  | _ :: _ :: _ :: _ :: _ :: _ :: _ :: _, h =>
+    simp only at h
+    split at h
+    · split at h
+      · simp only [reduceCtorEq] at h
+      · split at h
+        · split at h
+          · simp only [Option.some.injEq] at h
+            subst h
+            exact ⟨rfl, rfl⟩
+          · simp only [reduceCtorEq] at h
+        · split at h
+          · simp only [Option.some.injEq] at h
+            subst h
+            exact ⟨rfl, rfl⟩
+          · simp only [reduceCtorEq] at h
+    · simp only [reduceCtorEq] at h
+
 theorem executeCode_enter_stat {m : Msg} {e : Evm} (h : executeCode.enter m = .inl e) :
     e.sta.benvStat = m.benv.stat := by
   unfold executeCode.enter at h
@@ -331,6 +374,13 @@ theorem frameEnterS_stat {f : Frame} {acs : AcctShadow} {e : Evm}
       cases h
       exact (executeCode_enter_stat he).trans (benvAfterTransferS_stat hb)
     · cases h
+
+/-- An entered machine carries its frame's transaction environment. -/
+theorem frameEnterS_tenvStat {f : Frame} {acs : AcctShadow} {e : Evm}
+    (h : frameEnterS f acs = .run e) : e.sta.tenvStat = f.inner.tenv.stat := by
+  obtain ⟨benv, hb, he⟩ := frameEnterS_run h
+  rw [he]
+  rfl
 
 /-! ## A spawn under any covered fork -/
 

@@ -1,4 +1,5 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolBoundary
+import Blanc.Lift.NodeWalkFork
 
 /-!
 # V− P2, F0/F1 kernel run: the root frame and its forwarder child
@@ -157,56 +158,6 @@ theorem e2_sta_fork : ∀ (g : Fork) (O : State) (tS : StorShadow) (tA : AcctSha
     ((((e2 O tS tA m w).withFork g).sta)) =
       (((e2 O tS tA m w).sta.withFork g)) := by
   kernel_forall_rfl
-
-/-- A `DELEGATECALL` preparation's frame carries the caller's transaction environment. -/
-theorem dcallPrep_tenvStat {s : Sevm} {d : Devm} {adrs : List Adr} {acs : AcctShadow} {cp : CallPrep}
-    (h : dcallPrep s d adrs acs = some cp) :
-    cp.f.outer.tenv.stat = s.tenvStat ∧ cp.f.inner.tenv.stat = s.tenvStat := by
-  unfold dcallPrep at h
-  generalize d.stack = st at h
-  match st, h with
-  | _ :: _ :: _ :: _ :: _ :: _ :: _, h =>
-    simp only at h
-    split at h
-    · split at h
-      · simp only [reduceCtorEq] at h
-      · split at h
-        · simp only [Option.some.injEq] at h
-          subst h
-          exact ⟨rfl, rfl⟩
-        · simp only [reduceCtorEq] at h
-    · simp only [reduceCtorEq] at h
-
-/-- A `CALL` preparation's frame carries the caller's transaction environment. -/
-theorem callPrep_tenvStat {s : Sevm} {c : Cfg} {cp : CallPrep} (h : callPrep s c = some cp) :
-    cp.f.outer.tenv.stat = s.tenvStat ∧ cp.f.inner.tenv.stat = s.tenvStat := by
-  unfold callPrep at h
-  generalize c.devm.stack = st at h
-  match st, h with
-  | _ :: _ :: _ :: _ :: _ :: _ :: _ :: _, h =>
-    simp only at h
-    split at h
-    · split at h
-      · simp only [reduceCtorEq] at h
-      · split at h
-        · split at h
-          · simp only [Option.some.injEq] at h
-            subst h
-            exact ⟨rfl, rfl⟩
-          · simp only [reduceCtorEq] at h
-        · split at h
-          · simp only [Option.some.injEq] at h
-            subst h
-            exact ⟨rfl, rfl⟩
-          · simp only [reduceCtorEq] at h
-    · simp only [reduceCtorEq] at h
-
-/-- An entered machine carries its frame's transaction environment. -/
-theorem frameEnterS_tenvStat {f : Frame} {acs : AcctShadow} {e : Evm}
-    (h : frameEnterS f acs = .run e) : e.sta.tenvStat = f.inner.tenv.stat := by
-  obtain ⟨benv, hb, he⟩ := frameEnterS_run h
-  rw [he]
-  rfl
 
 /-- F2's entered static machine is the frozen one, at the actual original state. -/
 theorem e2_sta_caller : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)

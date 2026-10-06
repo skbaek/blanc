@@ -891,7 +891,14 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   frame with its fork changed, `frameEnterS_withFork` commutes with the change for a
   `Frame.PrecompNeutral` frame (`Frame.precompNeutral_of_codeAddress` from a kernel fact on the
   frame's `codeAddress`), and `scallPrep_stat`/`callPrepP_stat`/`dcallPrep_stat`/
-  `frameEnterS_stat` carry the block environment into children. The bundles
+  `frameEnterS_stat` carry the block environment into children.
+  For transaction-environment inheritance, use `callPrep_tenvStat` or
+  `dcallPrep_tenvStat` on the successful preparation equation (both outer and
+  inner frames), then `frameEnterS_tenvStat` on the entry equation for the
+  child's `Sevm.tenvStat`. These equalities use the named inheritance lemmas;
+  the ordinary projection recipes do not select a call-preparation or frame-entry
+  hypothesis, so no specialized goal matcher is registered for this chain.
+  The bundles
   `scallSpawn_withFork`/`callSpawn_withFork`/`dcallSpawn_withFork` give a whole spawn (the
   preparation and the entry) under any covered fork from the Prague facts, and
   `settle_withFork_of_stat` a child's settle. Generalize the run lemma over

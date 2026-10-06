@@ -95,28 +95,8 @@ theorem e3LateObs : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : Worl
 
 /-- The prepared callback inherits the remove frame's transaction environment. -/
 theorem cpRm_tenvStat (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World) :
-    (cpRm tS tA m w).f.inner.tenv.stat = sRm.tenvStat := by
-  have h := cpRm_eq tS tA m w
-  unfold callPrep at h
-  generalize (cRm339 tS tA m w).devm.stack = st at h
-  match st, h with
-  | _ :: _ :: _ :: _ :: _ :: _ :: _ :: _, h =>
-    simp only at h
-    split at h
-    · split at h
-      · simp only [reduceCtorEq] at h
-      · split at h
-        · split at h
-          · simp only [Option.some.injEq] at h
-            rw [← h]
-            rfl
-          · simp only [reduceCtorEq] at h
-        · split at h
-          · simp only [Option.some.injEq] at h
-            rw [← h]
-            rfl
-          · simp only [reduceCtorEq] at h
-    · simp only [reduceCtorEq] at h
+    (cpRm tS tA m w).f.inner.tenv.stat = sRm.tenvStat :=
+  (callPrep_tenvStat (cpRm_eq tS tA m w)).2
 
 /-- Entering the callback preserves the prepared transaction environment. -/
 theorem e3Rm_tenvStat (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World) :

@@ -73,8 +73,8 @@ theorem csRm_start : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : Wor
     childStart sRm (cRm339 tS tA m w) AttackerR.t_0000_c0 =
       some ((e3Rm tS tA m w), cc3Rm tS tA m w) := by
   intro tS tA m w
-  simp [childStart, cpRm_eq tS tA m w, e3Rm_eq tS tA m w,
-    cpRm_forkfree tS tA m w, cc3Rm]
+  simp only [childStart, cpRm_eq tS tA m w, e3Rm_eq tS tA m w,
+    cpRm_forkfree tS tA m w, cc3Rm, ↓reduceIte]
 
 /-- The entered callback configuration is the entry boundary `bCb0` with the
 same tails. -/

@@ -661,6 +661,9 @@ import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolTop
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolRemoveRun1
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolRemoveRun2
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolRemoveRun3
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolRemoveRun4
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolRemove
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolFinal
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolRootRun
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolRoot
 import Blanc.Lift.VyperNonreentrantDeployed.Token20.Cert
