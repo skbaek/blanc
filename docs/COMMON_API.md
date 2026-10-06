@@ -1543,6 +1543,24 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   inputs; discovery remains here because the existing suggestion triggers do
   not distinguish this selected-witness equality from arbitrary equalities.
 
+
+- For selected paths containing storage, hash, log or successful RETURN
+  effects, use [`Blanc/Lift/GasSuccessEffects.lean`](../Blanc/Lift/GasSuccessEffects.lean).
+  `GasSuccess.selectedEffects` checks only the single reference path;
+  `wrun_effect_addGas` derives success with any additional gas and preserves
+  the entire interpreter result through `addResGas`, including terminal
+  metadata/world and the producing configuration. `sload_addGas`,
+  `sstore_addGas`, `keccak_addGas`, `log_addGas`, `environment_stable` and
+  `return_stable` supply the effectful arms; storage guards and affordability
+  come from reference success. GAS and external instructions remain excluded.
+  `selected_to_effects` reuses pure-cut certificates, `selectedEffects_add_cont`
+  composes checked endpoints, and `selectedEffects_prefix` reuses earlier cuts.
+  `agree_addCfgGas` preserves the existing witness agreement for semantic
+  lifting. This relation varies execution gas only; address/hash variation,
+  message entry and child-boundary adapters need separate proofs. The precise
+  certificate equality is the reliable API; existing recipe triggers do not
+  distinguish it from arbitrary interpreter equalities, so discovery is here.
+
 ### I2. The property concerns a complete execution or child frames
 
 - Message-entry projections: `processMessage_entry_facts` carries the code,

@@ -227,7 +227,7 @@ SHARED += ["Lift.KernelBatchForall", "Lift.ShadowTail", "Lift.OrigKeys"]
 SHARED += ["Lift.GasErasureRun", "Lift.InvWalkBranchToP", "Lift.LedgerFootprintOrder", "Lift.LocalStorage", "Lift.MutableCallPost", "Lift.PrecompileAnswer", "Lift.RevertingCallee", "Lift.WordWindowMemory"]
 
 SHARED += ["Lift.CallChildren", "Lift.CallSite", "Lift.CallSiteChildren", "Lift.CallerProvenance"]
-SHARED += ["Lift.GasSuccessCut"]
+SHARED += ["Lift.GasSuccessCut", "Lift.GasSuccessEffects"]
 
 CONTRACTS = {
     "uniswap-v2-pair": [
@@ -745,6 +745,7 @@ CONTRACTS = {
 CONTRACTS["vyper-nonreentrant-deployed"].extend([
     "Lift.VyperNonreentrantDeployed.Vulnerable.GeneralizedPrototype",
     "Lift.VyperNonreentrantDeployed.Vulnerable.GeneralizedGasCut",
+    "Lift.VyperNonreentrantDeployed.Vulnerable.GeneralizedAddGas",
     "Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolTopRun",
     "Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolTop",
     "Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolRemoveRun4",
