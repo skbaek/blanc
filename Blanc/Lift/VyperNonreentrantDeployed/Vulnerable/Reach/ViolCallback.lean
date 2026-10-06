@@ -252,4 +252,132 @@ theorem c5Cb_agree : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Me
   · rw [dst8, e4Cb31_state O tS tA m w, he4]
     exact hC4
 
+/-! ## F3-close shadow literals (kernel batch 2 for `callback_frame`) -/
+
+/-- F3's `CALL` needs no fork check. -/
+theorem cpCb_forkfree : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
+    (w : World), frameEntryForkFree (cpCb O tS tA m w).f = true := by
+  kernel_forall_rfl
+
+/-- F3's keys at its `CALL`. -/
+theorem cACb_keys : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
+    (w : World),
+    (cACb O tS tA m w).keys =
+      [(proxyAddr, (8 : Nat).toB256), (proxyAddr, (26 : Nat).toB256),
+        (proxyAddr, (2 : Nat).toB256)] := by
+  kernel_forall_rfl
+
+/-- F3's `CALL` prep addresses. -/
+theorem cpCb_adrs : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
+    (w : World),
+    (cpCb O tS tA m w).adrs =
+      [proxyAddr, attackerAddr, (4 : Adr), implAddr, proxyAddr] := by
+  kernel_forall_rfl
+
+/-- F4's `DELEGATECALL` prep addresses. -/
+theorem cpCb5_adrs' : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
+    (w : World),
+    decide ((cpCb5 O tS tA m w).adrs =
+      [implAddr, proxyAddr, attackerAddr, (4 : Adr), implAddr, proxyAddr]) = true := by
+  kernel_forall_rfl
+
+theorem cpCb5_adrs : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
+    (w : World),
+    (cpCb5 O tS tA m w).adrs =
+      [implAddr, proxyAddr, attackerAddr, (4 : Adr), implAddr, proxyAddr] :=
+  fun O tS tA m w => of_decide_eq_true (cpCb5_adrs' O tS tA m w)
+
+/-- F5's halt account prefix is F3's halt account prefix. -/
+theorem acsRe_eq_acsCb : acsRe = acsCb := by
+  rfl
+
+/-- F5's halt storage prefix is F3's halt storage prefix. -/
+theorem storRe_eq_storCb : storRe = storCb := by
+  rfl
+
+/-- Whether a node is a `CALL` step (kernel-decided on use). -/
+def isCallNode : SFunc → Bool
+  | .next (.exec .call) _ => true
+  | _ => false
+
+/-- F3's `CALL` node shape, as a kernel fact. -/
+theorem cACb_fshape : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
+    (w : World), isCallNode (cACb O tS tA m w).f = true := by
+  kernel_forall_rfl
+
+/-- F4's post-resume output is the re-entrant output. -/
+theorem post4Cb_out : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
+    (w : World) (d : Devm), (post4Cb O tS tA m w d).output = outRe := by
+  kernel_forall_rfl
+
+/-- The callback's continuation after its `CALL` (kernel-normalized on use). -/
+def cAg0 (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
+    (w : World) : SFunc :=
+  match (cACb O tS tA m w).f with
+  | .next _ g => g
+  | f => f
+
+/-- The callback's halt node after its `CALL` (kernel-normalized on use). -/
+def cAh (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
+    (w : World) : SFunc :=
+  match cAg0 O tS tA m w with
+  | .next _ g => g
+  | f => f
+
+/-! ## The resumed configuration, as data -/
+
+/-- The callback frame after its `CALL` settles the forwarder `post`: the resume
+result with the forwarder shadows. -/
+def C1 (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World)
+    (post : Devm) : Cfg :=
+  ⟨(resumeCallB (cpCb O tS tA m w).p (cpCb O tS tA m w).oi (cpCb O tS tA m w).os
+      (.ok (obsChild4Cb (post4Cb O tS tA m w post)))).getD
+      (post4Cb O tS tA m w post),
+    cAg0 O tS tA m w, (cACb O tS tA m w).K,
+    (cACb O tS tA m w).keys ++ ((cACb O tS tA m w).keys ++ keysRe),
+    (cpCb O tS tA m w).adrs ++ ((cpCb5 O tS tA m w).adrs ++ adrsRe),
+    storRe ++ tS, acsRe ++ tA⟩
+
+/-- Two more steps halt with the pinned gas, no output, no error, and the pinned
+shadows followed by the tails. -/
+theorem halt2_shadows : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
+    (w : World) (post : Devm),
+    (match wrun fsA (sCb.withOrig O) 2 (C1 O tS tA m w post) with
+      | .done (.halted p) cl =>
+        (p.gasLeft, p.output, p.error.isSome, cl.keys, cl.adrs, cl.stor, cl.acs)
+      | _ => (0, [], true, [], [], [], [])) =
+      (gasCb, [], false, keysCb, adrsCb, storCb ++ tS, acsCb ++ tA) := by
+  simp only [C1, cACb_keys, cpCb_adrs, cpCb5_adrs]
+  kernel_forall_rfl
+
+/-! ## The halt decoder -/
+
+/-- `obsCb` at its ok value is a halt with the pinned gas, no output, no error, the
+pinned storage prefix followed by its tail, and the pinned shadow drops. Keys, addresses,
+and the full account shadow come from the resume shape in `callback_frame`. -/
+theorem obsCb_decode : ∀ (tS : StorShadow) (tA : AcctShadow) (r : Res),
+    obsCb r = some (gasCb, [], true, tS, tA) →
+    ∃ post cl, r = .done (.halted post) cl ∧ post.gasLeft = gasCb ∧ post.output = [] ∧
+      post.error = none ∧ cl.stor = storCb ++ tS ∧
+      cl.stor.drop storCb.length = tS ∧ cl.acs.drop acsCb.length = tA := by
+  intro tS tA r h
+  unfold obsCb at h
+  split at h
+  · rename_i d cl
+    simp only [Option.some.injEq, Prod.mk.injEq, Bool.and_eq_true, decide_eq_true_eq] at h
+    have hgas := h.1
+    have hmap := h.2.1
+    have herrC := h.2.2.1
+    have hstorD := h.2.2.2.1
+    have hacsD := h.2.2.2.2
+    have hstorT := herrC.2
+    have hisNone : d.error.isNone = true := herrC.1.1.1
+    refine ⟨d, cl, rfl, hgas, ?hout, Option.isNone_iff_eq_none.mp hisNone, ?hs, hstorD,
+      hacsD⟩
+    · match hm : d.output with
+      | [] => rfl
+      | _ :: _ => simp only [hm, List.map_cons, reduceCtorEq] at hmap
+    · rw [← List.take_append_drop storCb.length cl.stor, hstorT, hstorD]
+  · simp only [reduceCtorEq] at h
+
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol
