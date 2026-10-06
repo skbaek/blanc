@@ -61,31 +61,4 @@ theorem e3Rm_eq : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World)
       .run (e3Rm tS tA m w) := by
   kernel_forall_rfl
 
-/-- F3's entry facts, as kernel decisions (the `Eq`/conjunction form exceeds the
-kernel's depth budget past the 339-step `wrun` + `callPrep` + `frameEnterS`; cf.
-`e5Cb_gasLeft'`). -/
-theorem e3Rm_target' : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    decide ((e3Rm tS tA m w).sta.currentTarget = attackerAddr) = true := by
-  kernel_forall_rfl
-
-theorem e3Rm_target : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    (e3Rm tS tA m w).sta.currentTarget = attackerAddr :=
-  fun tS tA m w => of_decide_eq_true (e3Rm_target' tS tA m w)
-
-theorem e3Rm_code' : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    decide ((e3Rm tS tA m w).sta.code = AttackerR.code) = true := by
-  kernel_forall_rfl
-
-theorem e3Rm_code : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    (e3Rm tS tA m w).sta.code = AttackerR.code :=
-  fun tS tA m w => of_decide_eq_true (e3Rm_code' tS tA m w)
-
-theorem e3Rm_value' : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    decide ((e3Rm tS tA m w).sta.value = 100) = true := by
-  kernel_forall_rfl
-
-theorem e3Rm_value : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    (e3Rm tS tA m w).sta.value = 100 :=
-  fun tS tA m w => of_decide_eq_true (e3Rm_value' tS tA m w)
-
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol
