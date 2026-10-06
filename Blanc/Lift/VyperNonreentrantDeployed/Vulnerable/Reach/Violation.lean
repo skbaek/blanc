@@ -17,8 +17,7 @@ collecting the certificate interpreter's accessed storage keys at the settled ro
 proxy slots and two token slots in `readStor` are exactly that set; the values are the reached
 world's (`lookupS storAdd`, proved by `readStor_storAdd`).  `ShadowTail.storOf_prefix_tail` turns
 the agreement into a full engine shadow `readStor ++ storTailOf W`, so the universal violation
-walk can run over any `W` with `Checkpoint W` (future work; see the module's end and
-`STATE-BRIEF.md`).
+walk runs over any `W` with `Checkpoint W` (`ViolFinal.vminus_reach_violation`).
 
 The keys, and why each is read:
 * proxy slot `0` — `add_liquidity`'s reentrancy lock (read free, taken during the reentry);
@@ -124,18 +123,21 @@ covered fork) satisfies `Checkpoint`.  This is the pre-state of the standalone v
 instance and the point at which the reachable capstone hands off to the violating call. -/
 theorem setup_reaches_checkpoint (fork : Fork) (hfork : CoveredFork fork) :
     ∃ postI postP postC tokenPost attackerPost approvePost addPost : Devm,
-      processCreateMessage (implCreateMsg fork initialWorld) = .ok postI ∧
-      processCreateMessage (cloneCreateMsg fork postI.state) = .ok postP ∧
-      processMessage (initMsg fork postP.state) = .ok postC ∧
+      processCreateMessage (implCreateMsg fork initialWorld) = .ok postI ∧ postI.error = none ∧
+      processCreateMessage (cloneCreateMsg fork postI.state) = .ok postP ∧ postP.error = none ∧
+      processMessage (initMsg fork postP.state) = .ok postC ∧ postC.error = none ∧
       processCreateMessage (tokenCreateMsg fork postC.state) = .ok tokenPost ∧
+      tokenPost.error = none ∧
       processCreateMessage (attackerCreateMsg fork tokenPost.state) = .ok attackerPost ∧
+      attackerPost.error = none ∧
       processMessage (approveMsg fork attackerPost.state) = .ok approvePost ∧
-      processMessage (addMsg fork approvePost.state) = .ok addPost ∧
+      approvePost.error = none ∧
+      processMessage (addMsg fork approvePost.state) = .ok addPost ∧ addPost.error = none ∧
       SoundCheckpoint addPost.state ∧ Checkpoint addPost.state := by
   obtain ⟨postI, postP, postC, tokenPost, attackerPost, approvePost, addPost,
-    h1, h2, h3, -, h4, h5, -, h6, -, -, -, h7, -, -, -, hsound, hstor, hacs⟩ :=
-    setup_checkpoint fork hfork
-  exact ⟨postI, postP, postC, tokenPost, attackerPost, approvePost, addPost, h1, h2, h3, h4, h5,
-    h6, h7, hsound, checkpoint_of_reached hstor hacs⟩
+    h1, e1, h2, e2, h3, e3, -, h4, e4, h5, e5, -, h6, e6, -, -, h7, e7, -, -, hsound, hstor,
+    hacs⟩ := setup_checkpoint fork hfork
+  exact ⟨postI, postP, postC, tokenPost, attackerPost, approvePost, addPost, h1, e1, h2, e2, h3,
+    e3, h4, e4, h5, e5, h6, e6, h7, e7, hsound, checkpoint_of_reached hstor hacs⟩
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach

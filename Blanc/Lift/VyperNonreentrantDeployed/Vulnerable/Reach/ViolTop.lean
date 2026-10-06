@@ -14,15 +14,11 @@ open Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init
 theorem capstone_of_violation (hV : ViolationStmt) : CapstoneStmt := by
   intro fork hfork
   obtain ⟨postI, postP, postC, tokenPost, attackerPost, approvePost, addPost,
-    h1, h2, h3, h4, h5, h6, h7, hsound, hcheckpoint⟩ :=
+    h1, e1, h2, e2, h3, e3, h4, e4, h5, e5, h6, e6, h7, e7, hsound, hcheckpoint⟩ :=
     setup_reaches_checkpoint fork hfork
   obtain ⟨post, hpost⟩ := hV fork hfork addPost.state hcheckpoint
   exact ⟨postI, postP, postC, tokenPost, attackerPost, approvePost, addPost, post,
-    h1, h2, h3, h4, h5, h6, h7, hsound, hcheckpoint, hpost⟩
-
-theorem instance_of_violation (hV : ViolationStmt) : InstanceStmt := by
-  intro g hg
-  exact hV g hg worldR checkpoint_worldR
+    h1, e1, h2, e2, h3, e3, h4, e4, h5, e5, h6, e6, h7, e7, hsound, hcheckpoint, hpost⟩
 
 theorem root_child_agree (W : State) (m : Meta) (w : World) (post2 : Devm)
     (hAgreeR : Agree (cR W (storTailOf W) (acctTailOf W) m w))

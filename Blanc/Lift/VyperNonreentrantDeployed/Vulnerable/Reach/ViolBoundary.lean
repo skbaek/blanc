@@ -48,10 +48,10 @@ transported to the actual original state `W` by `wrun_withOrig_keys`
 
 **Statements.** The final part freezes, as propositions, the interface between the two proof
 packages and the final theorems: `ReAddFrame` (package P1: the re-entrant frame F5),
-`ViolationAt`/`ViolationStmt` (the universal violation), `CapstoneStmt` and `InstanceStmt`
-(package P2).  This module proves none of them; it proves only cheap sanity facts about the
-literals (`root_entry`, `shadows_extend_checkpoint`, `keys_sub_readKeys`, `boundary_values`,
-`checkpoint_worldR`).  The frozen statement document (Plans evidence
+`ViolationAt`/`ViolationStmt` (the universal violation) and `CapstoneStmt` (package P2).  This
+module proves none of them (`ViolFinal` does); it proves only cheap sanity facts about the
+literals (`root_entry`, `shadows_extend_checkpoint`, `keys_sub_readKeys`, `boundary_values`).
+The frozen statement document (Plans evidence
 `vyper-minus-reachable-reentrancy-v1/v4/frozen-statements.md`) gives each frame's statement.
 -/
 
@@ -319,36 +319,10 @@ theorem origAgreeOn_O0 {O : State} (h : ∀ e ∈ readStor, storOf O e.1.1 e.1.2
   show storOf O0 e.1.1 e.1.2 = storOf O e.1.1 e.1.2
   rw [O0, storOf_origOf, readStor_lookup e he, h e he]
 
-/-! ## A closed world with `Checkpoint`: the standalone instance's pre-state -/
-
-/-- The reached checkpoint's accounts, storage dropped. -/
-def acctsR : List (Adr × Acct) :=
-  [(creator, ⟨0, creatorFunds - 1000, .empty, .empty⟩),
-   (implAddr, ⟨1, 0, .empty, Vulnerable.code⟩),
-   (proxyAddr, ⟨1, 1000, .empty, fwdCode⟩),
-   (tokenAddr, ⟨1, 0, .empty, Token20.code⟩),
-   (attackerAddr, ⟨1, 0, .empty, AttackerR.code⟩)]
-
-/-- A closed world with exactly the reached checkpoint's accounts and storage (`storAdd`). -/
-def worldR : State := stateFoldStor (stateFoldAcct default acctsR) storAdd.reverse
-
-/-- The closed world satisfies `Checkpoint`. -/
-theorem checkpoint_worldR : Checkpoint worldR := by
-  have hs : ∀ a k, storOf worldR a k = lookupS storAdd a k := fun a k => by
-    rw [worldR, storOf_stateFoldStor _ (storOf_stateFoldAcct acctsR), storShadowOf_reverse]
-  have ha : AcctAgree worldR (acctShadowOf acctsR) :=
-    acctAgree_stateFoldStor _ (acctAgree_stateFoldAcct acctsR)
-  refine ⟨fun e he => (hs e.1.1 e.1.2).trans (readStor_storAdd e he), fun e he => ?_, ?_⟩
-  · refine (ha e.1).trans ?_
-    simp only [readAcct, List.mem_cons, List.not_mem_nil, or_false] at he
-    rcases he with rfl | rfl | rfl | rfl | rfl | rfl <;> kernel_rfl
-  · have h := congrArg Acct.code (ha creator)
-    exact h.trans (by kernel_rfl)
-
 /-! ## The frozen statements
 
 Package **P1** proves `ReAddFrame`; package **P2** proves everything else (frames F0–F4, the
-composition, the fork transport, `ViolationStmt`, `CapstoneStmt`, `InstanceStmt`), consuming
+composition, the fork transport, `ViolationStmt`, `CapstoneStmt`), consuming
 `ReAddFrame` by name.  Neither package edits this module. -/
 
 /-- **P1: the re-entrant `add_liquidity` frame (F5), the package interface.**  For every
@@ -446,25 +420,24 @@ def ViolationStmt : Prop :=
   ∀ g : Fork, CoveredFork g → ∀ W : State, Checkpoint W → ∃ post : Devm, ViolationAt g W post
 
 /-- **The reachable V− capstone (P2).**  For every covered fork, eight root messages compose from
-the disclosed initial world, each from the previous settled world: the seven setup messages
-(`setup_reaches_checkpoint`), reaching a world with the sound LP ledger (`SoundCheckpoint`)
-and `Checkpoint`, then the violating message, on whose settled machine `ViolationAt` holds. -/
+the disclosed initial world, each from the previous settled world and each settling without
+error: the seven setup messages (`setup_reaches_checkpoint`), reaching a world with the sound LP
+ledger (`SoundCheckpoint`) and `Checkpoint`, then the violating message, on whose settled machine
+`ViolationAt` holds. -/
 def CapstoneStmt : Prop :=
   ∀ fork : Fork, CoveredFork fork →
     ∃ postI postP postC tokenPost attackerPost approvePost addPost post : Devm,
-      processCreateMessage (implCreateMsg fork initialWorld) = .ok postI ∧
-      processCreateMessage (cloneCreateMsg fork postI.state) = .ok postP ∧
-      processMessage (initMsg fork postP.state) = .ok postC ∧
+      processCreateMessage (implCreateMsg fork initialWorld) = .ok postI ∧ postI.error = none ∧
+      processCreateMessage (cloneCreateMsg fork postI.state) = .ok postP ∧ postP.error = none ∧
+      processMessage (initMsg fork postP.state) = .ok postC ∧ postC.error = none ∧
       processCreateMessage (tokenCreateMsg fork postC.state) = .ok tokenPost ∧
+      tokenPost.error = none ∧
       processCreateMessage (attackerCreateMsg fork tokenPost.state) = .ok attackerPost ∧
+      attackerPost.error = none ∧
       processMessage (approveMsg fork attackerPost.state) = .ok approvePost ∧
-      processMessage (addMsg fork approvePost.state) = .ok addPost ∧
+      approvePost.error = none ∧
+      processMessage (addMsg fork approvePost.state) = .ok addPost ∧ addPost.error = none ∧
       SoundCheckpoint addPost.state ∧ Checkpoint addPost.state ∧
       ViolationAt fork addPost.state post
-
-/-- **The standalone instance (P2)**: the violation at the closed checkpoint world `worldR`
-(`checkpoint_worldR`), under every covered fork. -/
-def InstanceStmt : Prop :=
-  ∀ g : Fork, CoveredFork g → ∃ post : Devm, ViolationAt g worldR post
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol

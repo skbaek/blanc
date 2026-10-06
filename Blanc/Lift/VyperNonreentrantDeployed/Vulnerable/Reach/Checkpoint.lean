@@ -163,11 +163,14 @@ reached world satisfies `SoundCheckpoint`; it is also fully described by the sha
 `acsB`/`storAdd` (every account and every storage slot). -/
 theorem setup_checkpoint (fork : Fork) (hfork : CoveredFork fork) :
     ∃ postI postP postC tokenPost attackerPost approvePost addPost : Devm,
-      processCreateMessage (implCreateMsg fork initialWorld) = .ok postI ∧
-      processCreateMessage (cloneCreateMsg fork postI.state) = .ok postP ∧
-      processMessage (initMsg fork postP.state) = .ok postC ∧ CleanPool postC.state ∧
+      processCreateMessage (implCreateMsg fork initialWorld) = .ok postI ∧ postI.error = none ∧
+      processCreateMessage (cloneCreateMsg fork postI.state) = .ok postP ∧ postP.error = none ∧
+      processMessage (initMsg fork postP.state) = .ok postC ∧ postC.error = none ∧
+      CleanPool postC.state ∧
       processCreateMessage (tokenCreateMsg fork postC.state) = .ok tokenPost ∧
+      tokenPost.error = none ∧
       processCreateMessage (attackerCreateMsg fork tokenPost.state) = .ok attackerPost ∧
+      attackerPost.error = none ∧
       WorldIs attackerPost.state acs6 stor5 ∧
       processMessage (approveMsg fork attackerPost.state) = .ok approvePost ∧
       approvePost.error = none ∧ approvePost.gasLeft = 77697 ∧
@@ -177,15 +180,15 @@ theorem setup_checkpoint (fork : Fork) (hfork : CoveredFork fork) :
       SoundCheckpoint addPost.state ∧
       (∀ a k, storOf addPost.state a k = lookupS storAdd a k) ∧ AcctAgree addPost.state acsB := by
   -- messages 1–3
-  obtain ⟨postI, postP, h1, -, -, -, -, -, h2, -, -, -, -, -, hS⟩ :=
+  obtain ⟨postI, postP, h1, e1, -, -, -, -, h2, e2, -, -, -, -, hS⟩ :=
     setup_creations fork hfork initialWorld initialWorld_absent.1 initialWorld_absent.2
   have hw : postP.state = world2 := hS
-  obtain ⟨postC, h3, -, -, -, hs, ha⟩ := init_message_at (g := fork) hfork
+  obtain ⟨postC, h3, e3, -, -, hs, ha⟩ := init_message_at (g := fork) hfork
   obtain ⟨hpool, -, hview⟩ := init_world_facts hs ha
   have hWC : WorldIs postC.state acs2 (initWrites ++ stor2) :=
     ⟨fun a => (hview a).trans (acctAgree2 a), hs⟩
   -- message 4: the token
-  obtain ⟨tokenPost, hT, -, -, hTtok, hTrest, -⟩ :=
+  obtain ⟨tokenPost, hT, eT, -, hTtok, hTrest, -⟩ :=
     Token20.Creation.create_token (tokenCreateMsg fork postC.state) hfork rfl rfl rfl rfl rfl
       (by show (82000 : Nat) ≤ 200000; decide)
   have hTtok' : tokenPost.state.get tokenAddr = Token20.Creation.tokenAcct postC.state tokenAddr
@@ -205,7 +208,7 @@ theorem setup_checkpoint (fork : Fork) (hfork : CoveredFork fork) :
     simp only [acctView, Token20.Creation.tokenAcct, hTn, hTb]; rfl
   rw [hvT] at hWT
   -- message 5: the attacker
-  obtain ⟨attackerPost, hA, -, -, hAatk, hArest, -⟩ :=
+  obtain ⟨attackerPost, hA, eA, -, hAatk, hArest, -⟩ :=
     AttackerR.Creation.create_attacker (attackerCreateMsg fork tokenPost.state) hfork rfl rfl rfl
       rfl (by show (37252 : Nat) ≤ 200000; decide)
   have hAatk' : attackerPost.state.get attackerAddr =
@@ -228,8 +231,8 @@ theorem setup_checkpoint (fork : Fork) (hfork : CoveredFork fork) :
   obtain ⟨apPost, hAp, hApe, hApg, hW6⟩ := approve_message_at hfork hW5
   -- message 7: add_liquidity
   obtain ⟨addPost, hAdd, hAe, hAg, hAo, hstor, hacs⟩ := add_message_at hfork hW6
-  exact ⟨postI, postP, postC, tokenPost, attackerPost, apPost, addPost, h1, h2,
-    by rw [hw]; exact h3, cleanPool_of hpool, hT, hA, hW5, hAp, hApe, hApg, hW6, hAdd, hAe, hAg,
-    hAo, checkpoint_of hstor hacs, hstor, hacs⟩
+  exact ⟨postI, postP, postC, tokenPost, attackerPost, apPost, addPost, h1, e1, h2, e2,
+    by rw [hw]; exact h3, e3, cleanPool_of hpool, hT, eT, hA, eA, hW5, hAp, hApe, hApg, hW6, hAdd,
+    hAe, hAg, hAo, checkpoint_of hstor hacs, hstor, hacs⟩
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach
