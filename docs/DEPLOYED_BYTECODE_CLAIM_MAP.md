@@ -916,7 +916,9 @@ toolchain is installed. It requires that:
 The required headline theorems are also pinned by exact statement in
 `scripts/ClaimCheck.lean` (gate `scripts/check-claims.sh`), together with the
 definitions those statements are stated through, so a weakened headline fails
-there although this checker elaborates no Lean.
+there although this checker elaborates no Lean. The Uniswap V2 Pair headlines of
+Section 5.8 are held here by name and line only: their exact statements are not
+yet pinned in `scripts/ClaimCheck.lean`.
 
 Every run also executes in-memory falsifiers, each of which must be rejected: a
 misspelled declaration, a stale line, a wrong file, an orphan line reference, a
