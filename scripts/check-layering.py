@@ -743,6 +743,7 @@ CONTRACTS = {
 # The new root-frame modules extend the deployed contract classification.
 CONTRACTS["vyper-nonreentrant-deployed"].extend([
     "Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolTopRun",
+    "Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolTop",
 ])
 
 # The composition stratum: `Blanc/Composition/*.lean`, spelled here exactly as

@@ -15,6 +15,10 @@ theorem c2_cfg : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
   intro O tS tA m w
   exact (Boundary.cfg_of_obsDT (c2_obs O tS tA m w)).symm
 
+theorem c2_stor2 : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
+    (w : World), lookupS (c2 O tS tA m w).stor proxyAddr 2 = 0 := by
+  kernel_forall_rfl
+
 theorem obsChildF1_acc : ∀ d : Devm,
     (obsChildF1 d).accessedAddresses = d.accessedAddresses := by
   intro d
@@ -110,6 +114,21 @@ tail and halt are restated here with `gasRm`. -/
 /-- F2's settled machine as F1's resume input, with F2's own gas left. -/
 abbrev obsChildF1raw (d : Devm) : Devm := childObs gasRm outRm d
 
+theorem obsChildF1raw_acc : ∀ d : Devm,
+    (obsChildF1raw d).accessedAddresses = d.accessedAddresses := by
+  intro d
+  rfl
+
+theorem obsChildF1raw_keys : ∀ d : Devm,
+    (obsChildF1raw d).accessedStorageKeys = d.accessedStorageKeys := by
+  intro d
+  rfl
+
+theorem obsChildF1raw_state : ∀ d : Devm,
+    (obsChildF1raw d).state = d.state := by
+  intro d
+  rfl
+
 /-- The forwarder resumed from a settled F2 `post2`, with F2's own gas. -/
 def d1Rraw (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World)
     (post2 : Devm) : Devm :=
@@ -151,6 +170,11 @@ theorem postF1raw_obs : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m :
     ((postF1raw O tS tA m w post2).output.map UInt8.toNat,
       (postF1raw O tS tA m w post2).error.isNone) =
     (outRm.map UInt8.toNat, true) := by
+  kernel_forall_rfl
+
+theorem postF1raw_gas : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
+    (w : World) (post2 : Devm),
+    (postF1raw O tS tA m w post2).gasLeft = gasFwd := by
   kernel_forall_rfl
 
 theorem postF1raw_keep : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
