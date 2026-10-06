@@ -725,6 +725,7 @@ import Blanc.Lift.UniswapV2Pair.PairHistory
 import Blanc.Lift.UniswapV2Pair.SwapForwardAccept
 import Blanc.Lift.UniswapV2Pair.MintForwardAccept
 import Blanc.Lift.UniswapV2Pair.PairHistoryLive
+import Blanc.Lift.UniswapV2Pair.PairHistoryLiveAdmin
 import Blanc.Lift.UniswapV2Pair.PropertiesOracle
 import Blanc.Lift.UniswapV2Pair.PropertiesSwap
 import Blanc.Lift.UniswapV2Pair.PropertiesLedger

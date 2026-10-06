@@ -298,6 +298,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.SwapForwardAccept",
         "Lift.UniswapV2Pair.MintForwardAccept",
         "Lift.UniswapV2Pair.PairHistoryLive",
+        "Lift.UniswapV2Pair.PairHistoryLiveAdmin",
         "Lift.UniswapV2Pair.PairCallShape",
         "Lift.UniswapV2Pair.PairCallSiteShape",
         "Lift.UniswapV2Pair.PairCallSites",
