@@ -2058,134 +2058,6 @@ private theorem safeTransfer_call128_data {M : Mem} {amount toWord : B256}
   rw [safeTransfer_copy128_image]
   exact safeTransfer_payload128_data wf
 
-/-- Forward first-transfer reply handling consumes actual returndata acceptance and the
-caller's empty-array word. Allocation retains the actual modular pointer and full tail. -/
-private theorem safeTransfer_firstAfterCall_exact {sevm : Sevm} {d : Devm}
-    {R : List B256} {M : Mem} {G : Nat} {amount toWord tokenWord rho : B256}
-    (mem : PtrMem 292 416 M) (sentinel : memWord M 96 = 0)
-    (width : d.returnData.length < 2^256)
-    (accepted : d.returnData = [] ∨ (32 ≤ d.returnData.length ∧
-      Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0))
-    (room : R.length ≤ 1011) :
-    let len := d.returnData.length.toB256
-    let N1 := M.write 64 (292 + ((len + 63) &&& ~~~31)).toBytes
-    let N2 := N1.write 292 len.toBytes
-    let copyCharge := gVerylow + gReturnDataCopy * ceilDiv d.returnData.length 32 +
-      (St d [] N2 0).extCost [⟨324, d.returnData.length⟩]
-    SFunc.RunExact cert.prog sevm
-      (St d (1 :: 360 :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
-        M (G + if d.returnData = [] then 138 else 253 + copyCharge))
-      safeTransfer_afterCall
-      (.returned (St d R (if d.returnData = [] then M else
-        safeTransfer_reply292Memory M d.returnData) G)) := by
-  dsimp only
-  let len := d.returnData.length.toB256
-  have copied : d.returnData.sliceD 0 len.toNat 0 = d.returnData := by
-    rw [B256.toNat_toB256_of_lt width]
-    exact Bytes.sliceD_zero_length rfl
-  have freeRead : Bytes.toB256 (M.read 64 32).1 = 292 := mem.word
-  have freeMemory : (M.read 64 32).2 = M := mem.read_self (by decide)
-  have cRead : gVerylow + (St d [] M 0).extCost [⟨64, 32⟩] = 3 := by
-    rw [St.extCost_eq mem.size]
-    rfl
-  by_cases empty : d.returnData = []
-  · have zeroLen : len = 0 := by dsimp only [len]; rw [empty]; rfl
-    have decoded := safeTransfer_success_exact (R := R) (sevm := sevm) (b := d) (M := M)
-      (G := G) (x := len) (ptr := 96) (success := 1) (y := 96) (z := 0)
-      (value := amount) (toWord := toWord) (tokenWord := tokenWord) (ρ := rho)
-      (by decide) (Or.inl sentinel) (by omega)
-    have read96 : (M.read (96 : B256).toNat 32).2 = M := mem.read_self (by decide)
-    have c96 : gVerylow + (St d [] M 0).extCost [⟨(96 : B256).toNat, 32⟩] = 3 := by
-      rw [St.extCost_eq mem.size]
-      rfl
-    change Bytes.toB256 (M.read (96 : B256).toNat 32).1 = 0 at sentinel
-    dsimp only at decoded
-    simp only [read96, sentinel, ite_true, c96] at decoded
-    have post := safeTransfer_afterCall_exact (R := R) (sevm := sevm) (b := d) (M := M)
-      (G := G + 95) (o := .returned (St d R M G)) (success := 1) (endWord := 360)
-      (token := tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff)
-      (y := 96) (z := 0) (value := amount) (toWord := toWord)
-      (tokenWord := tokenWord) (ρ := rho) room
-    dsimp only at post
-    rw [show d.returnData.length.toB256 = 0 from zeroLen,
-      ite_eq_left rfl] at post
-    simp only [ite_true] at post
-    rw [zeroLen, show G + 24 + 3 + 33 + 35 = G + 95 by omega] at decoded
-    have result := post decoded
-    simpa only [ite_eq_left empty, show G + 95 + 34 + 9 = G + 138 by omega] using result
-  · obtain ⟨enough, head⟩ := accepted.resolve_left empty
-    have nonzero : len ≠ 0 := by
-      intro eq
-      have lengthWord := B256.toNat_toB256_of_lt width
-      change len.toNat = d.returnData.length at lengthWord
-      rw [eq] at lengthWord
-      change 0 = d.returnData.length at lengthWord
-      omega
-    let A := safeTransfer_reply292Memory M d.returnData
-    have images := safeTransfer_reply292_image (reply := d.returnData) mem
-    have carrier : PtrMem (292 + ((len + 63) &&& ~~~31))
-        (memExtSize 416 324 d.returnData.length) A := images.1
-    have allocatedRoom : 416 ≤ memExtSize 416 324 d.returnData.length := memExtSize_ge _ _ _
-    have read292 : (A.read (292 : B256).toNat 32).2 = A := carrier.read_self (by change 292 + 32 ≤ memExtSize 416 324 d.returnData.length; omega)
-    have read324 : (A.read ((32 : B256) + 292).toNat 32).2 = A := carrier.read_self (by change 324 + 32 ≤ memExtSize 416 324 d.returnData.length; omega)
-    have lengthWord : Bytes.toB256 (A.read (292 : B256).toNat 32).1 = len := images.2.1
-    have headWord : Bytes.toB256 (A.read ((32 : B256) + 292).toNat 32).1 ≠ 0 := by
-      change Bytes.toB256 (A.read 324 32).1 ≠ 0
-      rw [images.2.2 enough]
-      exact head
-    have decoderAccepted : Bytes.toB256 (A.read (292 : B256).toNat 32).1 = 0 ∨
-        (32 ≤ (Bytes.toB256 ((A.read (292 : B256).toNat 32).2.read (292 : B256).toNat 32).1).toNat ∧
-          Bytes.toB256 (((A.read (292 : B256).toNat 32).2.read (292 : B256).toNat 32).2.read
-            ((32 : B256) + 292).toNat 32).1 ≠ 0) := by
-      rw [read292, read292, lengthWord, B256.toNat_toB256_of_lt width]
-      exact Or.inr ⟨enough, headWord⟩
-    have c292 : gVerylow + (St d [] A 0).extCost [⟨(292 : B256).toNat, 32⟩] = 3 := by
-      rw [St.extCost_eq carrier.size, memExtSize_of_le carrier.n32
-        (by change 292 + 32 ≤ memExtSize 416 324 d.returnData.length; omega), Nat.sub_self]
-      rfl
-    have c324 : gVerylow + (St d [] A 0).extCost [⟨((32 : B256) + 292).toNat, 32⟩] = 3 := by
-      rw [St.extCost_eq carrier.size, memExtSize_of_le carrier.n32
-        (by change 324 + 32 ≤ memExtSize 416 324 d.returnData.length; omega), Nat.sub_self]
-      rfl
-    have decoded := safeTransfer_success_exact (R := R) (sevm := sevm) (b := d) (M := A)
-      (G := G) (x := len) (ptr := 292) (success := 1) (y := 96) (z := 0)
-      (value := amount) (toWord := toWord) (tokenWord := tokenWord) (ρ := rho)
-      (by decide) decoderAccepted (by omega)
-    dsimp only at decoded
-    simp only [read292, lengthWord, ite_eq_right nonzero, read324, c292, c324] at decoded
-    have N1mem : PtrMem (292 + ((len + 63) &&& ~~~31)) 416
-        (M.write 64 (292 + ((len + 63) &&& ~~~31)).toBytes) := mem.set
-    have N2mem : PtrMem (292 + ((len + 63) &&& ~~~31)) 416
-        ((M.write 64 (292 + ((len + 63) &&& ~~~31)).toBytes).write 292 len.toBytes) :=
-      N1mem.write 292 len (Or.inr (by decide))
-    have post := safeTransfer_afterCall_exact (R := R) (sevm := sevm) (b := d) (M := M)
-      (G := G + 146) (o := .returned (St d R A G)) (success := 1) (endWord := 360)
-      (token := tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff)
-      (y := 96) (z := 0) (value := amount) (toWord := toWord)
-      (tokenWord := tokenWord) (ρ := rho) room
-    dsimp only at post
-    have cLen : gVerylow + (St d [] (M.write 64 (292 + ((len + 63) &&& ~~~31)).toBytes) 0).extCost [⟨292, 32⟩] = 3 := by
-      rw [St.extCost_eq N1mem.size]
-      rfl
-    dsimp only [len] at nonzero cLen
-    simp only [ite_eq_right nonzero, freeRead, freeMemory, cRead,
-      cLen, Bytes.sliceD_zero_length rfl, show (292 : B256).toNat = 292 from rfl,
-      show ((292 : B256) + 32).toNat = 324 from rfl,
-      B256.toNat_toB256_of_lt width] at post
-    rw [show G + 24 + 3 + (78 + 3 + 3) + 35 = G + 146 by omega] at decoded
-    have result := post decoded
-    let copyCharge := gVerylow + gReturnDataCopy * ceilDiv d.returnData.length 32 +
-      (St d [] ((M.write 64 (292 + ((len + 63) &&& ~~~31)).toBytes).write 292 len.toBytes) 0).extCost
-        [⟨324, d.returnData.length⟩]
-    change SFunc.RunExact cert.prog sevm
-      (St d (1 :: 360 :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
-        M (G + 146 + 34 + (64 + 3 + 3 + 3 + copyCharge))) safeTransfer_afterCall
-      (.returned (St d R A G)) at result
-    rw [show G + 146 + 34 + (64 + 3 + 3 + 3 + copyCharge) = G + (253 + copyCharge) by omega] at result
-    simpa only [ite_eq_right empty] using result
-
 /-- Every first-call payload/copy write misses the caller's actual empty-array word96. -/
 theorem safeTransfer_call128_sentinel {M : Mem} {amount toWord : B256}
     (mem : PtrMem 128 192 M) (sentinel : memWord M 96 = 0) :
@@ -2374,267 +2246,6 @@ theorem burnFirstTransfer_caller_inv {P : Sevm → Devm → Ninst → Devm → P
   exact ⟨helperGas, forwarded, callGas, d, residual, callee, step, stack, calldata,
     memory, output, width, accepted, continuation⟩
 
-/-- The named first caller's memory image specializes the single initializer implementation
-and its fourteen selected charges:199fixed+42base+12expansion=253. -/
-private theorem safeTransfer_initialize128_exact {sevm : Sevm} {b : Devm}
-    {R : List B256} {M : Mem} {G : Nat} {o : Outcome} {amount toWord tokenWord rho : B256}
-    (mem : PtrMem 128 192 M) (room : R.length ≤ 1008)
-    (continuation : SFunc.RunExact cert.prog sevm
-      (St b (224 :: 292 :: 68 :: 68 :: 224 :: 292 :: 292 :: 192 ::
-        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
-        (safeTransfer_payload128Memory M amount toWord) G) t_20a4_c57 o) :
-    SFunc.RunExact cert.prog sevm
-      (St b (amount :: toWord :: tokenWord :: rho :: R) M (G + 253)) t_1fdb_c57 o := by
-  let N1 := M.write 64 (192 : B256).toBytes
-  let N2 := N1.write 128 (25 : B256).toBytes
-  let N3 := N2.write 160 (0x7472616e7366657228616464726573732c75696e743235362900000000000000 : B256).toBytes
-  let N4 := N3.write 228 ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes
-  let N5 := N4.write 260 amount.toBytes
-  let N6 := N5.write 192 (68 : B256).toBytes
-  let N7 := N6.write 64 (292 : B256).toBytes
-  let N8 := safeTransfer_payload128Memory M amount toWord
-  have h1 : PtrMem 192 192 N1 := mem.set
-  have h2 : PtrMem 192 192 N2 := h1.write 128 25 (Or.inr (by decide))
-  have h3 : PtrMem 192 192 N3 := h2.write 160 _ (Or.inr (by decide))
-  have h4 : PtrMem 192 288 N4 := h3.write 228 _ (Or.inr (by decide))
-  have h5 : PtrMem 192 320 N5 := h4.write 260 amount (Or.inr (by decide))
-  have h6 : PtrMem 192 320 N6 := h5.write 192 68 (Or.inr (by decide))
-  have h7 : PtrMem 292 320 N7 := h6.set
-  have h8 : PtrMem 292 320 N8 := (safeTransfer_initialize128_image mem).2.2.2.2.2.2
-  have read0 : Bytes.toB256 (M.read 64 32).1 = 128 := mem.word
-  have read3 : Bytes.toB256 (N3.read 64 32).1 = 192 := h3.word
-  have read5 : Bytes.toB256 (N5.read 64 32).1 = 192 := h5.word
-  have read8 : Bytes.toB256 (N8.read 64 32).1 = 292 := h8.word
-  have length6 := Mem.memWord_write_word N5 192 (68 : B256)
-  have length7 : memWord N7 192 = 68 := by
-    rw [memWord_congr (μ := N6) (fun k hk =>
-      (Mem.write_agree N6 64 (292 : B256).toBytes).2 (192 + k)
-        (by rw [h6.size]; omega) (by right; rw [B256.length_toBytes]; omega))]
-    exact length6.1
-  have length8 : Bytes.toB256 (N8.read 192 32).1 = 68 := by
-    change memWord (N7.write 224 ((0xa9059cbb00000000000000000000000000000000000000000000000000000000 : B256) |||
-      ((0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256) &&& Bytes.toB256 (N7.read 224 32).1)).toBytes) 192 = 68
-    rw [memWord_congr (μ := N7) (fun k hk =>
-      (Mem.write_agree N7 224 _).2 (192 + k)
-        (by rw [h7.size]; omega) (by left; omega))]
-    exact length7
-  dsimp only [N1, N2, N3, N4, N5, N6, N7, N8, safeTransfer_payload128Memory] at read3 read5 read8 length8 h1 h2 h3 h4 h5 h6 h7 h8
-  have raw := safeTransfer_initialize_exact (sevm := sevm) (b := b) (M := M)
-    (R := R) (G := G) (o := o) (amount := amount) (toWord := toWord)
-    (tokenWord := tokenWord) (rho := rho) room
-  dsimp only at raw
-  simp only [show (64 : B256).toNat = 64 from rfl, read0, mem.read_self (i := 64) (sz := 32) (by decide),
-    show (64 : B256) + 128 = 192 from rfl, show (32 : B256) + 128 = 160 from rfl,
-    show (128 : B256).toNat = 128 from rfl, show (160 : B256).toNat = 160 from rfl,
-    read3, h3.read_self (i := 64) (sz := 32) (by decide),
-    show (192 : B256) + 36 = 228 from rfl, show (192 : B256) + 68 = 260 from rfl,
-    show (228 : B256).toNat = 228 from rfl, show (260 : B256).toNat = 260 from rfl,
-    read5, h5.read_self (i := 64) (sz := 32) (by decide), show (68 : B256) + (192 - 192) = 68 from rfl,
-    show (192 : B256) + 100 = 292 from rfl, show (192 : B256).toNat = 192 from rfl,
-    show (192 : B256) + 32 = 224 from rfl, show (224 : B256).toNat = 224 from rfl,
-    h7.read_self (i := 224) (sz := 32) (by decide), read8, h8.read_self (i := 64) (sz := 32) (by decide), h8.read_self (i := 192) (sz := 32) (by decide), length8,
-    St.extCost_eq mem.size, St.extCost_eq h1.size, St.extCost_eq h2.size,
-    St.extCost_eq h3.size, St.extCost_eq h4.size, St.extCost_eq h5.size,
-    St.extCost_eq h6.size, St.extCost_eq h7.size, St.extCost_eq h8.size] at raw
-  exact raw continuation
-
-/-- The actual first caller's initializer and copy construct canonical CALL operands;
-all selected memory costs are derived, and the primitive CALL is the only continuation. -/
-private theorem safeTransfer_firstPrepare_exact {sevm : Sevm} {b : Devm}
-    {R : List B256} {M : Mem} {G : Nat} {o : Outcome} {amount toWord tokenWord rho : B256}
-    (mem : PtrMem 128 192 M) (room : R.length ≤ 1004)
-    (continuation : SFunc.RunExact cert.prog sevm
-      (St b (G.toB256 :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        0 :: 292 :: 68 :: 292 :: 0 :: 360 ::
-        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
-        (safeTransfer_call128Memory M amount toWord) G)
-      (.next (.exec .call) safeTransfer_afterCall) o) :
-    SFunc.RunExact cert.prog sevm
-      (St b (amount :: toWord :: tokenWord :: rho :: R) M (G + 620)) t_1fdb_c57 o := by
-  let N0 := safeTransfer_payload128Memory M amount toWord
-  let N1 := N0.write 292 (Bytes.toB256 (N0.read 224 32).1).toBytes
-  let N2 := N1.write 324 (Bytes.toB256 (N1.read 256 32).1).toBytes
-  let mask := B256.bexp 256 (32 - 4) - 1
-  let N3 := (N2.read 356 32).2.write 356
-    (((Bytes.toB256 (N2.read 288 32).1) &&& ~~~mask) |||
-      ((Bytes.toB256 (N2.read 356 32).1) &&& mask)).toBytes
-  have h0 : PtrMem 292 320 N0 := (safeTransfer_initialize128_image mem).2.2.2.2.2.2
-  have h1 : PtrMem 292 352 N1 := h0.write 292 _ (Or.inr (by decide))
-  have h2 : PtrMem 292 384 N2 := h1.write 324 _ (Or.inr (by decide))
-  have hDest : PtrMem 292 416 (N2.read 356 32).2 := by
-    refine ⟨?_, by decide, h2.wf.extend 356 32, ?_⟩
-    · change memExtSize N2.size 356 32 = 416
-      rw [h2.size]
-      rfl
-    · generalize N2 = V at h2 ⊢
-      exact MemMatches.of_data_eq (μ := V) (μ' := (V.read 356 32).2) rfl
-        (memExtSize_ge V.size 356 32) h2.map
-  have h3 : PtrMem 292 416 N3 := hDest.write 356 _ (Or.inr (by decide))
-  dsimp only [N3, mask] at h3
-  have part := safeTransfer_partialCall_exact (sevm := sevm) (b := b) (R :=
-    96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) (M := N2) (G := G)
-    (src := 288) (dst := 356) (a := 68) (x := 224) (y := 292) (z := 292) (w := 192)
-    (token := tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) (o := o) (by simp only [List.length_cons]; omega)
-  dsimp only at part
-  simp only [show (288 : B256).toNat = 288 from rfl,
-    show (356 : B256).toNat = 356 from rfl,
-    h2.read_self (i := 288) (sz := 32) (by decide)] at part
-  simp only [St.extCost_eq h2.size, St.extCost_eq hDest.size, St.extCost_eq h3.size] at part
-  change SFunc.RunExact cert.prog sevm
-    (St b (G.toB256 :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-      0 :: Bytes.toB256 (N3.read 64 32).1 ::
-      ((68 + 292) - Bytes.toB256 (N3.read 64 32).1) ::
-      Bytes.toB256 (N3.read 64 32).1 :: 0 :: 360 ::
-      (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-      96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
-      (N3.read 64 32).2 G) (.next (.exec .call) safeTransfer_afterCall) o →
-    SFunc.RunExact cert.prog sevm
-      (St b (288 :: 356 :: 4 :: 68 :: 224 :: 292 :: 292 :: 192 ::
-        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) N2 (G + 180)) t_20e1_c57 o at part
-  rw [show Bytes.toB256 (N3.read 64 32).1 = 292 from h3.word,
-    h3.read_self (i := 64) (sz := 32) (by decide)] at part
-  have merged := part continuation
-  have copied := safeTransfer_copy68_exact (sevm := sevm) (b := b)
-    (R := 68 :: 224 :: 292 :: 292 :: 192 ::
-      (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-      96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
-    (M := N0) (G := G + 180) (o := o) (src := 224) (dst := 292)
-    (by simp only [List.length_cons]; omega)
-  dsimp only at copied
-  simp only [show (224 : B256).toNat = 224 from rfl,
-    h0.read_self (i := 224) (sz := 32) (by decide),
-    show (292 : B256).toNat = 292 from rfl,
-    show (32 : B256) + 224 = 256 from rfl, show (32 : B256) + 292 = 324 from rfl,
-    show (256 : B256).toNat = 256 from rfl, show (324 : B256).toNat = 324 from rfl] at copied
-  dsimp only [N1] at h1
-  rw [h1.read_self (i := 256) (sz := 32) (by decide)] at copied
-  simp only [St.extCost_eq h0.size, St.extCost_eq h1.size] at copied
-  change SFunc.RunExact cert.prog sevm
-    (St b (288 :: 356 :: 4 :: 68 :: 224 :: 292 :: 292 :: 192 ::
-      (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-      96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
-      N2 (G + 180)) t_20e1_c57 o →
-    SFunc.RunExact cert.prog sevm
-      (St b (224 :: 292 :: 68 :: 68 :: 224 :: 292 :: 292 :: 192 ::
-        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
-        N0 (G + 367)) t_20a4_c57 o at copied
-  have payload := copied merged
-  have initialized := safeTransfer_initialize128_exact mem (by omega) payload
-  exact initialized
-
-/-- The named first transfer's CALL carrier after its two full stores and partial store. -/
-theorem safeTransfer_call128_ptr {M : Mem} {amount toWord : B256}
-    (mem : PtrMem 128 192 M) : PtrMem 292 416 (safeTransfer_call128Memory M amount toWord) := by
-  let N0 := safeTransfer_payload128Memory M amount toWord
-  let N1 := N0.write 292 (Bytes.toB256 (N0.read 224 32).1).toBytes
-  let N2 := N1.write 324 (Bytes.toB256 (N1.read 256 32).1).toBytes
-  have h0 : PtrMem 292 320 N0 := (safeTransfer_initialize128_image mem).2.2.2.2.2.2
-  have h1 : PtrMem 292 352 N1 := h0.write 292 _ (Or.inr (by decide))
-  have h2 : PtrMem 292 384 N2 := h1.write 324 _ (Or.inr (by decide))
-  have extended : PtrMem 292 416 (N2.read 356 32).2 := by
-    refine ⟨?_, by decide, h2.wf.extend 356 32, ?_⟩
-    · change memExtSize N2.size 356 32 = 416
-      rw [h2.size]
-      rfl
-    · generalize N2 = V at h2 ⊢
-      exact MemMatches.of_data_eq (μ := V) (μ' := (V.read 356 32).2) rfl
-        (memExtSize_ge V.size 356 32) h2.map
-  let word := ((Bytes.toB256 (N2.read 288 32).1) &&& ~~~(B256.bexp 256 (32 - 4) - 1)) |||
-    ((Bytes.toB256 (N2.read 356 32).1) &&& (B256.bexp 256 (32 - 4) - 1))
-  change PtrMem 292 416 ((N2.read 356 32).2.write 356 word.toBytes)
-  exact extended.write 356 word (Or.inr (by decide))
-
-/-- Complete first helper57 forward construction takes only the primitive settled CALL,
-its success/affordability and actual reply acceptance. It constructs every helper instruction
-and preserves the opaque child world and the full physical reply. -/
-theorem safeTransfer_first_exact {sevm : Sevm} {b d : Devm}
-    {R : List B256} {M : Mem} {callGas G : Nat} {amount toWord tokenWord rho : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (sentinel : memWord M 96 = 0) (room : R.length ≤ 1004)
-    (call : Ninst.RunCompiled sevm
-      (St b (callGas.toB256 :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        0 :: 292 :: 68 :: 292 :: 0 :: 360 ::
-        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
-        (safeTransfer_call128Memory M amount toWord) callGas) (.exec .call) d)
-    (success : d.stack = 1 :: 360 :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-      96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
-    (accepted : d.returnData = [] ∨ (32 ≤ d.returnData.length ∧
-      Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0))
-    (returnedGas :
-      let V := safeTransfer_call128Memory M amount toWord
-      let len := d.returnData.length.toB256
-      let N1 := V.write 64 (292 + ((len + 63) &&& ~~~31)).toBytes
-      let N2 := N1.write 292 len.toBytes
-      let copyCharge := gVerylow + gReturnDataCopy * ceilDiv d.returnData.length 32 +
-        (St d [] N2 0).extCost [⟨324, d.returnData.length⟩]
-      d.gasLeft = G + if d.returnData = [] then 138 else 253 + copyCharge) :
-    SFunc.RunExact cert.prog sevm
-      (St b (amount :: toWord :: tokenWord :: rho :: R) M (callGas + 620)) t_1fdb_c57
-      (.returned (St d R (if d.returnData = [] then safeTransfer_call128Memory M amount toWord else
-        safeTransfer_reply292Memory (safeTransfer_call128Memory M amount toWord) d.returnData) G)) := by
-  let V := safeTransfer_call128Memory M amount toWord
-  have raw : Ninst.Run sevm
-      (St b (callGas.toB256 :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        0 :: 292 :: 68 :: 292 :: 0 :: 360 ::
-        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) V callGas) (.exec .call) d := by
-    obtain ⟨xl, filled, step⟩ := call
-    exact ⟨xl, filled, 0, step 0⟩
-  have preMem : PtrMem 292 416 V := safeTransfer_call128_ptr mem
-  have operands : (callGas.toB256 :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        0 :: 292 :: 68 :: 292 :: 0 :: 360 ::
-        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) <<+
-      (St b (callGas.toB256 :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        0 :: 292 :: 68 :: 292 :: 0 :: 360 ::
-        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) V callGas).stack := by
-    simpa only [St.stack, List.append_nil] using
-      (pref_append (callGas.toB256 :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        0 :: 292 :: 68 :: 292 :: 0 :: 360 ::
-        (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) [])
-  have memory : d.memory = V := by
-    rcases of_run_call_val_with_depth_frame operands raw fork with failed | entered
-    · rw [success] at failed
-      have zero : (1 : B256) = 0 := (pref_head_unique failed.1
-        (pref_append [1] (360 :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-          96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R))).symm
-      exact ((by decide : (1 : B256) ≠ 0) zero).elim
-    · obtain ⟨parent, child, xl, dp, na, code, avail, pc, step, depth, parentStack,
-        parentState, parentMemory, parentLogs, parentOutput, delegation, filled, process,
-        clean, resume, childState, returned, image, resultStack⟩ := entered
-      rw [image, parentMemory]
-      simp only [St.memory, show (292 : B256).toNat = 292 from rfl,
-        show (68 : B256).toNat = 68 from rfl, show (0 : B256).toNat = 0 from rfl, List.take_zero]
-      generalize V = W at preMem ⊢
-      change W.extends [(292, 68), (292, 0)] = W
-      change (⟨W.data, memExtsSize W.size [(292, 68), (292, 0)]⟩ : Mem) = W
-      have size : memExtsSize W.size [(292, 68), (292, 0)] = W.size := by
-        rw [preMem.size]
-        rfl
-      rw [size]
-  have width := ReturnDataBound.call_returnData_length_lt raw fork
-  have decoded := safeTransfer_firstAfterCall_exact (sevm := sevm) (d := d)
-    (M := V) (R := R) (G := G) (amount := amount) (toWord := toWord)
-    (tokenWord := tokenWord) (rho := rho) preMem (safeTransfer_call128_sentinel mem sentinel)
-    width accepted (by omega)
-  have image : d = St d
-      (1 :: 360 :: (tokenWord &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R) V d.gasLeft := St.self success memory
-  dsimp only at returnedGas decoded
-  rw [← returnedGas] at decoded
-  have suffix : SFunc.RunExact cert.prog sevm d safeTransfer_afterCall
-      (.returned (St d R (if d.returnData = [] then V else safeTransfer_reply292Memory V d.returnData) G)) := by
-    rw [← image] at decoded
-    exact decoded
-  exact safeTransfer_firstPrepare_exact mem room (.next call suffix)
-
 /-- The helper's ordered payload writes at the moving pointer left by an
 earlier transfer. Every offset remains the literal modular word expression. -/
 def safeTransfer_dynamicPayloadMemory (M : Mem) (p amount toWord : B256) : Mem :=
@@ -2731,16 +2342,14 @@ def swapTransferMemory (M : Mem) (p amount toWord : B256) (reply : Bytes) : Mem 
   if reply = [] then safeTransfer_dynamicCallMemory M p amount toWord
   else Blanc.Lift.bytesArrayMemory (safeTransfer_dynamicCallMemory M p amount toWord) (p + 164) reply
 
-/-- Forward `_safeTransfer` hypothesis (moved down from `SwapForwardTransfer`;
-statement unchanged): the `_safeTransfer` helper `t_1fdb_c57`, entered at free
+/-- The forward `_safeTransfer` contract, proved by `safeTransfer_dynamic_forward` at the charges
+`safeTransferPreCharge`/`safeTransferPostCharge`: the `_safeTransfer` helper `t_1fdb_c57`, entered at free
 pointer `p` over memory of size `n` (with the zero slot `0x60` clear), reaches
 its actual token `CALL` after a pre-call charge `pre n p` with the canonical
 stack and staged memory; given that `CALL`'s primitive result (success flag on
 the caller's stack, an accepted optional-bool reply) and its residual gas
 `G + post n p reply`, the helper returns exactly to its caller with the
-transfer memory `swapTransferMemory` and gas `G`. The charge functions are
-parameters: for `p = 128` and `n = 192` the existing `safeTransfer_first_exact`
-fixes `pre = 620`. -/
+transfer memory `swapTransferMemory` and gas `G`. -/
 def SwapSafeTransferForward (pre : Nat → B256 → Nat) (post : Nat → B256 → Bytes → Nat) :
     Prop :=
   ∀ (sevm : Sevm) (b d : Devm) (L : List B256) (M : Mem) (n callGas G : Nat)
@@ -3466,17 +3075,6 @@ def safeTransferPostCharge (n : Nat) (p : B256) (reply : Bytes) : Nat :=
     (calculateMemoryGasCost (safeTransferPostSize n p reply) -
       calculateMemoryGasCost (safeTransferPreSize n p)))
 
-/-- The fixed first-transfer pre charge is the dynamic charge at `128`/`192`. -/
-theorem safeTransfer_preCharge_128_192 : safeTransferPreCharge 192 128 = 620 := by
-  have h : (128 : B256).toNat = 128 := rfl
-  simp only [safeTransferPreCharge, safeTransferPreSize, h]
-  decide +kernel
-
-/-- The empty-reply post charge is unconditionally 138. -/
-theorem safeTransfer_postCharge_empty (n : Nat) (p : B256) :
-    safeTransferPostCharge n p [] = 138 :=
-  rfl
-
 /-- Word-level offset equations for the moving `_safeTransfer` staging area:
 every payload/copy offset stays below `2 ^ 256` under the predicate's width,
 so each B256 offset word reads back as the natural sum. -/
@@ -3982,24 +3580,6 @@ private theorem safeTransfer_stageAdvance {p : B256}
     rw [show 2 ^ 256 + (68 + (p.toNat + 164)) - (p.toNat + 164) = 2 ^ 256 + 68 by omega,
       Nat.two_pow_add_lo, Nat.lo_eq_of_lt (by decide)]
 
-/-- A write outside an arbitrary word preserves that word. Generalizes
-`safeTransfer_zeroWord_write` (kept as is to avoid churning its call sites). -/
-private theorem memWord_write_miss {μ : Mem} {off o : Nat} {v : B256}
-    (hwf : Mem.Wf μ)
-    (hsize : ∀ j, j < 32 → o + j < μ.size)
-    (hmiss : ∀ j, j < 32 → o + j < off ∨ off + 32 ≤ o + j) :
-    memWord (μ.write off v.toBytes) o = memWord μ o := by
-  refine memWord_congr (fun j hj => ?_)
-  rw [Mem.Reads.write hwf (Mem.reads_data μ) off v.toBytes (o + j),
-    Bytes.getD_writeAt]
-  split
-  · exfalso
-    rw [B256.length_toBytes] at *
-    have hj' := hmiss j hj
-    have hs := hsize j hj
-    omega
-  · exact (Mem.reads_data μ (o + j)).symm
-
 /-- Pure payload image for the moving `_safeTransfer` initializer: the pointer
 words, free-pointer carrier reads, length word and B256 offset equations used
 by both the inverse and the exact specialization. -/
@@ -4425,8 +4005,8 @@ private theorem safeTransfer_partial_dynamic_exact {sevm : Sevm} {b : Devm}
   rw [gas] at raw
   exact raw continuation
 
-/-- Forward moving reply handling (the dual of `safeTransfer_firstAfterCall_exact` at an arbitrary
-pointer `q`): the actual returndata, accepted as an optional `bool`, is allocated at `q` as a bytes
+/-- Forward moving reply handling at an arbitrary pointer `q` (the forward dual of
+`safeTransfer_afterCall_inv`): the actual returndata, accepted as an optional `bool`, is allocated at `q` as a bytes
 array, decoded and the helper returns. -/
 private theorem safeTransfer_afterCall_dynamic_exact {sevm : Sevm} {d : Devm}
     {R : List B256} {V : Mem} {G n : Nat} {q endWord token amount toWord tokenWord rho : B256}

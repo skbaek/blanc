@@ -5,7 +5,7 @@ import Blanc.Lift.MutableCallPost
 /-! Forward (gas-exact) optimistic transfers of the swap body (`t_08bf_c4..t_08e1_c4`), the
 mirror of `swapTransfers_inv`. Each nonzero output amount calls the shared `_safeTransfer`
 helper `t_1fdb_c57` at the current free pointer. The helper's dynamic-pointer forward walk
-`safeTransfer_dynamic_forward` (the moved-pointer sibling of `safeTransfer_first_exact`)
+`safeTransfer_dynamic_forward` (at any free pointer, including the first transfer's `128`)
 lives in `SafeTransferWalk` (predicate `SwapSafeTransferForward`); every lemma here uses it
 at the concrete charges `safeTransferPreCharge`/`safeTransferPostCharge`. -/
 namespace Blanc.Lift.UniswapV2Pair
