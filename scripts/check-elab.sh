@@ -557,17 +557,20 @@ RCFILE="$(mktemp)"
 # until the module has been re-elaborated alone on the now-warm host). The
 # import-only library root is the extreme case — its measurement is dominated
 # by loading the whole artifact closure, which is I/O, while every later file
-# is CPU-bound elaboration measured after the cache warmed. So a run that
-# measures EVERY represented file elaborates its first affected file once
-# unrecorded before the loop below; the recorded pass then re-elaborates that
-# same file on the now-warm host, which is exactly the catalogue-prescribed
-# handling, mechanised. Incremental runs (NSKIP > 0) keep the old behavior
-# bit-for-bit. A warm-up failure is discarded, never a verdict: the recorded
+# is CPU-bound elaboration measured after the cache warmed. So every run that
+# measures at least one file -- full, incremental or --calibrate -- elaborates
+# its first affected file once unrecorded before the loop below; the recorded
+# pass then re-elaborates that same file on the now-warm host, which is exactly
+# the catalogue-prescribed handling, mechanised. Incremental and calibration
+# runs were once excluded; on 2026-10-07 a --calibrate run measured the import-
+# only root first and cold (4.2 s against a 1.6 s baseline, 1.75 s warm) and
+# refused on that row alone. The cost is one extra elaboration of the first
+# measured file. A warm-up failure is discarded, never a verdict: the recorded
 # pass below still measures (and still ERRORs on) the same file.
-if [ "$NSKIP" -eq 0 ] && [ "$NMEASURE" -gt 0 ]; then
+if [ "$NMEASURE" -gt 0 ]; then
   WARM_FIRST="$(printf "%s\n" "$AFFECTED" | grep -m1 .)"
   lake env lean "$WARM_FIRST" >/dev/null 2>&1 || true
-  echo "NOTE — elab: discarded one unrecorded warm-up elaboration of $WARM_FIRST before measuring all $NMEASURE file(s)"
+  echo "NOTE — elab: discarded one unrecorded warm-up elaboration of $WARM_FIRST before measuring $NMEASURE file(s)"
 fi
 
 for f in $AFFECTED; do
