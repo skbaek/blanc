@@ -998,9 +998,9 @@ and proof falls. It is not duplicated here. Blanc adds exactly:
 2. **the axiom audit** below, which is stricter than Jaune's own gates: one
    from-scratch walk over every constant of the library fails on any axiom
    outside `propext`, `Classical.choice` and `Quot.sound`, and the leaf search
-   finds the 973 leaf results — the independently valuable theorems no other
+   finds the 1058 leaf results — the independently valuable theorems no other
    theorem uses — that this one walk covers.
-   Run `scripts/check.sh --no-build`; its `973 leaf results` summary belongs to
+   Run `scripts/check.sh --no-build`; its `1058 leaf results` summary belongs to
    the source identity printed by `git rev-parse HEAD`;
 3. **Blanc's own source**, guarded by
    [`scripts/check-trust-surface.sh`](scripts/check-trust-surface.sh). The gate
@@ -1029,7 +1029,7 @@ without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 CI builds the library and runs an
 **axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)): one
 union walk over every constant of the library, then a leaf search that finds
-the **973** leaf results — the independently valuable theorems no other theorem
+the **1058** leaf results — the independently valuable theorems no other theorem
 uses, each covered by that walk. The leaf search is the authority on
 membership and its number is the generated
 [`scripts/leaf-count.json`](scripts/leaf-count.json), never edited by hand; run
