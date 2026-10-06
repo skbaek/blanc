@@ -37,21 +37,8 @@ def Frame.Stamped (ts : B256) (f : Frame) : Prop :=
 def SegmentResult.Stamped (ts : B256) (s : SegmentResult) : Prop :=
   s.frame.Stamped ts
 
-theorem Frame.withEvents_stamped {ts : B256} {f : Frame} {post : State} {events : List Event}
-    (hf : f.Stamped ts) : (f.withEvents post events).Stamped ts := hf
-
 theorem Frame.fail_stamped {ts : B256} {f : Frame} {failure : Failure}
     (hf : f.Stamped ts) : (f.fail failure).Stamped ts := ⟨hf.1, hf.2.1, hf.2.1⟩
-
-theorem Frame.finish_stamped {ts : B256} {f : Frame} {returndata : Bytes}
-    (hf : f.Stamped ts) : (f.finish returndata).Stamped ts := hf
-
-theorem Frame.suspend_stamped {ts : B256} {f : Frame} {site : CallSite} {target : Adr}
-    {operation : ExternalOperation} {continuation : Continuation}
-    (hf : f.Stamped ts) : (f.suspend site target operation continuation).Stamped ts := hf
-
-theorem Frame.finishLocked_stamped {ts : B256} {f : Frame} {returndata : Bytes}
-    (hf : f.Stamped ts) : (f.finishLocked returndata).Stamped ts := hf
 
 theorem Frame.finishLP_stamped {ts : B256} {f : Frame}
     {result : Except Failure (State × List Event)} {returndata : Bytes}
@@ -258,86 +245,86 @@ theorem startTyped_stamped {current : Checkpoint} {ctx : Context} {entry : Entry
           | exact lockedStamped
           | exact Frame.fail_stamped lockedStamped
 
-mutual
-
-theorem drive_stamped (fuel : Nat) {ts : B256} {segment : SegmentResult}
-    {transcript : Transcript} (hs : segment.Stamped ts) :
-    (drive fuel segment transcript).frame.Stamped ts := by
-  cases fuel with
-  | zero => exact hs
-  | succ fuel =>
-    cases segment with
-    | finished frame returndata => exact hs
-    | failed frame failure => cases failure <;> exact hs
-    | suspended frame request continuation =>
-      cases transcript with
-      | done => exact hs
-      | foreignLog emitter topics data tail => exact hs
-      | invoke sender value isStatic entry child tail => exact hs
-      | next result turns tail =>
-        rw [drive]
-        cases missing : request.requiresCode && !result.codeExists with
-        | true => exact drive_stamped fuel (resumeSegment_stamped hs)
-        | false =>
-          have turnsStamped := driveTurns_stamped fuel frame request 0 turns hs
-          cases complete : (driveTurns fuel frame request 0 turns).complete with
+/-- The drive and turn invariants together, by induction on the fuel both consume. -/
+theorem drive_driveTurns_stamped (fuel : Nat) {ts : B256} :
+    (∀ (segment : SegmentResult) (transcript : Transcript), segment.Stamped ts →
+      (drive fuel segment transcript).frame.Stamped ts) ∧
+    (∀ (frame : Frame) (request : Request) (turn : Nat) (turns : Transcript), frame.Stamped ts →
+      (driveTurns fuel frame request turn turns).frame.Stamped ts) := by
+  induction fuel with
+  | zero =>
+    refine ⟨fun segment transcript hs => ?_, fun frame request turn turns hf => ?_⟩
+    · rw [drive]
+      exact hs
+    · rw [driveTurns]
+      exact hf
+  | succ fuel ih =>
+    obtain ⟨driveIh, turnsIh⟩ := ih
+    refine ⟨fun segment transcript hs => ?_, fun frame request turn turns hf => ?_⟩
+    · cases segment with
+      | finished frame returndata => exact hs
+      | failed frame failure => cases failure <;> exact hs
+      | suspended frame request continuation =>
+        cases transcript with
+        | done => exact hs
+        | foreignLog emitter topics data tail => exact hs
+        | invoke sender value isStatic entry child tail => exact hs
+        | next result turns tail =>
+          rw [drive]
+          cases missing : request.requiresCode && !result.codeExists with
+          | true => exact driveIh _ tail (resumeSegment_stamped hs)
           | false =>
-            simp only [Bool.false_eq_true, complete, ite_false]
-            exact turnsStamped
-          | true =>
-            have settled :
-                (if result.success then (driveTurns fuel frame request 0 turns).frame
-                  else { (driveTurns fuel frame request 0 turns).frame with
-                    current := frame.current }).Stamped ts := by
-              cases result.success with
-              | true => exact turnsStamped
-              | false => exact ⟨turnsStamped.1, turnsStamped.2.1, hs.2.2⟩
-            have resumed := drive_stamped fuel (transcript := tail)
-              (resumeSegment_stamped (request := request) (continuation := continuation)
-                (result := result) settled)
-            simpa only [missing, Bool.false_eq_true, complete, ite_true, ite_false] using resumed
-
-theorem driveTurns_stamped (fuel : Nat) {ts : B256} (frame : Frame) (request : Request)
-    (turn : Nat) (turns : Transcript) (hf : frame.Stamped ts) :
-    (driveTurns fuel frame request turn turns).frame.Stamped ts := by
-  cases fuel with
-  | zero => exact hf
-  | succ fuel =>
-    cases turns with
-    | done => exact hf
-    | next result children tail => exact hf
-    | foreignLog emitter topics data tail =>
-      rw [driveTurns]
-      cases externalStatic frame request with
-      | true => exact hf
-      | false =>
-        exact driveTurns_stamped fuel _ request (turn + 1) tail ⟨hf.1, hf.2.1, hf.2.2⟩
-    | invoke sender value isStatic entry transcript tail =>
-      let context := childContext frame request turn sender value isStatic
-      have contextTs : context.timestamp = ts := hf.1
-      have started : (startTyped frame.current context entry).Stamped context.timestamp :=
-        startTyped_stamped (fun u member => (hf.2.2 u member).trans contextTs.symm)
-      have childStamped := drive_stamped fuel (transcript := transcript) started
-      let child := drive fuel (startTyped frame.current context entry) transcript
-      let settled : Frame := { frame with current := child.frame.current }
-      have settledStamped : settled.Stamped ts :=
-        ⟨hf.1, hf.2.1, fun u member => (childStamped.2.2 u member).trans contextTs⟩
-      have tailStamped := driveTurns_stamped fuel settled request (turn + 1) tail settledStamped
-      rw [driveTurns]
-      cases childStatus : (drive fuel (startTyped frame.current context entry) transcript).status with
-      | incomplete => exact hf
-      | success returndata =>
-        simpa only [childStatus, settled, child, context] using tailStamped
-      | failed failure =>
-        simpa only [childStatus, settled, child, context] using tailStamped
-
-end
+            have turnsStamped := turnsIh frame request 0 turns hs
+            cases complete : (driveTurns fuel frame request 0 turns).complete with
+            | false =>
+              simp only [Bool.false_eq_true, complete, ite_false]
+              exact turnsStamped
+            | true =>
+              have settled :
+                  (if result.success then (driveTurns fuel frame request 0 turns).frame
+                    else { (driveTurns fuel frame request 0 turns).frame with
+                      current := frame.current }).Stamped ts := by
+                cases result.success with
+                | true => exact turnsStamped
+                | false => exact ⟨turnsStamped.1, turnsStamped.2.1, hs.2.2⟩
+              have resumed := driveIh _ tail
+                (resumeSegment_stamped (request := request) (continuation := continuation)
+                  (result := result) settled)
+              simpa only [missing, Bool.false_eq_true, complete, ite_true, ite_false] using resumed
+    · cases turns with
+      | done => exact hf
+      | next result children tail => exact hf
+      | foreignLog emitter topics data tail =>
+        rw [driveTurns]
+        cases externalStatic frame request with
+        | true => exact hf
+        | false => exact turnsIh _ request (turn + 1) tail ⟨hf.1, hf.2.1, hf.2.2⟩
+      | invoke sender value isStatic entry transcript tail =>
+        let context := childContext frame request turn sender value isStatic
+        have contextTs : context.timestamp = ts := hf.1
+        have started : (startTyped frame.current context entry).Stamped context.timestamp :=
+          startTyped_stamped (fun u member => (hf.2.2 u member).trans contextTs.symm)
+        rw [contextTs] at started
+        have childStamped := driveIh _ transcript started
+        let child := drive fuel (startTyped frame.current context entry) transcript
+        let settled : Frame := { frame with current := child.frame.current }
+        have settledStamped : settled.Stamped ts :=
+          ⟨hf.1, hf.2.1, childStamped.2.2⟩
+        have tailStamped := turnsIh settled request (turn + 1) tail settledStamped
+        rw [driveTurns]
+        cases childStatus :
+            (drive fuel (startTyped frame.current context entry) transcript).status with
+        | incomplete => exact hf
+        | success returndata =>
+          simpa only [childStatus, settled, child, context] using tailStamped
+        | failed failure =>
+          simpa only [childStatus, settled, child, context] using tailStamped
 
 /-- Every receipt of one typed run carries the run's context timestamp, re-entered frames included. -/
 theorem runTyped_stamped {st : State} {ctx : Context} {entry : Entry} {transcript : Transcript} :
     ∀ u ∈ (runTyped st ctx entry transcript).frame.current.updates,
       u.update.timestamp = ctx.timestamp :=
-  (drive_stamped (transcript.work + 2) (transcript := transcript)
+  ((drive_driveTurns_stamped (transcript.work + 2)).1 _ transcript
     (startTyped_stamped (current := { state := st, logs := [], updates := [] })
       (entry := entry) (fun _ member => (nomatch member)))).2.2
 

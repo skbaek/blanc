@@ -328,13 +328,13 @@ along the committed deposits and withdrawals, stays a word at every deposit (`bu
 allowances are still zero and its balance word is at least the checkpoint's minus exactly what `p`'s
 own committed `transfer`s sent to other holders.
 
-CROSS-HOST: conditional on `allowZero`, `holderTracked`.
+Conditional on `allowZero`, `holderTracked`.
 LANE-OPEN: conditional on `EthFits` (`budget`).
 
 * `pairCalls` — a plain premise (`HolderCalls`), discharged by `pairCalls_holderCalls`.
-* `holderTracked` — CROSS-HOST HYPOTHESIS (delete at consolidation): discharged by the original host's
+* `holderTracked` — named hypothesis, not discharged in this tree: a fact about the
   choice of the checkpoint footprint `K₀` (the exhibit pair's balance row is tracked).
-* `allowZero` — CROSS-HOST HYPOTHESIS (delete at consolidation): discharged by the original host's
+* `allowZero` — named hypothesis, not discharged in this tree: the
   deployment-checkpoint fact that the Pair never grants a WETH9 allowance (it never calls `approve`).
 * `budget` — see `EthFits`. -/
 theorem weth9_history_holder_noShrink {ca p : Adr} {cfg : ChainConfig}

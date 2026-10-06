@@ -20,8 +20,8 @@ derives it from what the Pair code calls:
 * `weth9_history_holder_noShrink_pairCalls`: the adapter's history theorem with `HolderCalls`
   discharged.
 
-The inputs the original host discharges are named hypotheses marked `CROSS-HOST`; this lane's own
-open obligations are marked `LANE-OPEN`.
+Inputs this tree states but does not discharge are named hypotheses listed after "Conditional on";
+this lane's own open obligations are marked `LANE-OPEN`.
 -/
 
 namespace Blanc.Composition.UniswapV2PairWeth9
@@ -75,9 +75,9 @@ theorem holderCalls_of_settled {ca p : Adr} {cfg : ChainConfig} {checkpoint futu
   have hcall : frame.sevm.caller = p := (callCaller_decodeCall hdec).symm.trans hcaller
   exact settled frame member target hcall static c hdec hcaller
 
-/-- CROSS-HOST HYPOTHESIS (delete at consolidation): discharged by the original host's Pair history
-replay (handoff "Original-host deliverables" 2): the deployed Pair code stays installed at `p` over the
-history, and every settled frame running at `p` runs it from a fresh pc-zero entry.  Expected source:
+/-- Named hypothesis, stated but not discharged in this tree: the deployed Pair code stays
+installed at `p` over the history, and every settled frame running at `p` runs it from a fresh
+pc-zero entry.  Expected source:
 the Pair analogue of `weth9_history_committed`'s first conjunct (code intact) together with the raw
 frame entry facts (`Exec.rawFrameDescendants_entry`, `Exec.rawFrameDescendants_fresh`), and the Pair
 certificate's restriction to CALL/STATICCALL (no DELEGATECALL/CALLCODE puts other code at `p`). -/
@@ -87,20 +87,21 @@ def PairFramesRunPairCode (p : Adr) {cfg : ChainConfig} {checkpoint future : Blo
     G.sevm.code = UniswapV2Pair.code ∧ G.pc = 0 ∧ Exec.FreshEntry G.sevm G.pre ∧
       CoveredFork G.sevm.benvStat.fork
 
-/-- CROSS-HOST HYPOTHESIS (delete at consolidation): discharged by the original host's Pair history
-replay: the pair never originates a settled message.  Expected source: `TransactionTrace.sender_ne`
+/-- Named hypothesis, stated but not discharged in this tree: the pair never originates a settled
+message.  Expected source: `TransactionTrace.sender_ne`
 (EIP-3607: a checked sender is never an installed contract), given the Pair code installed at `p` at
 each transaction's begin state, and `systemAddress ≠ p` for system messages. -/
 def PairSendsNoRootMessage (p : Adr) {cfg : ChainConfig} {checkpoint future : BlockChain}
     (trace : ConfiguredHistoryTrace cfg checkpoint future) : Prop :=
   ∀ R ∈ trace.settledRoots, R.sevm.caller ≠ p
 
-/-- CROSS-HOST HYPOTHESIS (delete at consolidation): discharged by the Jaune reply/memory accounting
-export (candidate 2737c8eb) plus a gas bound: along the chain of every settled frame running at `p`,
+/-- Named hypothesis, stated but not discharged in this tree: along the chain of every settled
+frame running at `p`,
 memory stays below `2 ^ 160` bytes.  Expected source: Jaune's per-step potential argument
 (`gasMeasure + memcost(memory.size)` never grows along a chain, including over CALL/STATICCALL
 spawns; public in 2737c8eb, private at the current pin) with entry gas below `2 ^ 256` (a frame's
-entry gas is bounded by its transaction's 256-bit gas limit).  Needed because with unbounded gas the
+entry gas is bounded by its transaction's 256-bit gas limit), via the Jaune reply/memory accounting
+export (candidate 2737c8eb) plus a gas bound.  Needed because with unbounded gas the
 free-memory pointer can wrap modulo `2 ^ 256` (see `TransferSiteShape`). -/
 def CallSiteMemoryBound (p : Adr) {cfg : ChainConfig} {checkpoint future : BlockChain}
     (trace : ConfiguredHistoryTrace cfg checkpoint future) : Prop :=
@@ -117,7 +118,7 @@ def Weth9SelfTargetChildren (ca : Adr) {cfg : ChainConfig} {checkpoint future : 
 
 /-- **The pair's WETH9 calls are transfers or deposits, over a configured history.**  The WETH9 side
 enters as `Weth9SelfTargetChildren` (proved from the history premises in the headline below).
-CROSS-HOST: conditional on PairFramesRunPairCode, PairSendsNoRootMessage, CallSiteMemoryBound.
+Conditional on PairFramesRunPairCode, PairSendsNoRootMessage, CallSiteMemoryBound.
 LANE-OPEN: conditional on TransferSiteShape, CallbackSiteShape. -/
 theorem pairCalls_holderCalls {ca p : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (trace : ConfiguredHistoryTrace cfg checkpoint future) (apart : p ≠ ca)
@@ -160,7 +161,7 @@ theorem pairCalls_holderCalls {ca p : Adr} {cfg : ChainConfig} {checkpoint futur
 /-- **`weth9_history_holder_noShrink` with the pair-side `HolderCalls` discharged.**  As
 `weth9_history_holder_noShrink`, with `pairCalls` replaced by what the Pair code calls; the WETH9 side
 (`Weth9SelfTargetChildren`) is proved from the same history premises.
-CROSS-HOST: conditional on PairFramesRunPairCode, PairSendsNoRootMessage, CallSiteMemoryBound,
+Conditional on PairFramesRunPairCode, PairSendsNoRootMessage, CallSiteMemoryBound,
 and the `holderTracked`, `allowZero` hypotheses of `weth9_history_holder_noShrink`.
 LANE-OPEN: conditional on TransferSiteShape, CallbackSiteShape, EthFits. -/
 theorem weth9_history_holder_noShrink_pairCalls {ca p : Adr} {cfg : ChainConfig}

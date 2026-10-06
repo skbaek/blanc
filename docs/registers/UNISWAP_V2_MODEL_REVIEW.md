@@ -33,7 +33,8 @@ here. What changed since, checked against this tree:
   `ModelMutants` clones only the driver pieces that call the changed arithmetic;
   `ModelControls.mintRoundUp_breaks_feeOff_product` fails the product inequality on a state the
   mutant reaches. The frame-level burn-rounding control
-  (`RefinementControls.burn_refinement_control`) is still conditional on two named hypotheses.
+  (`RefinementControls.burn_refinement_control`) is conditional on one named hypothesis
+  (`BurnWitnessExists`); the production burn frame refinement is proved (`burnFrameRefinement_holds`).
 
 ## 1. Correspondence table
 

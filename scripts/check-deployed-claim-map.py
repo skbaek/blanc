@@ -123,6 +123,8 @@ REQUIRED_HEADLINES = [
     "Blanc.Lift.UniswapV2Pair.pair_history_swap_live",
     "Blanc.Lift.UniswapV2Pair.pair_history_burn_live",
     "Blanc.Lift.UniswapV2Pair.pair_history_skim_live",
+    "Blanc.Lift.UniswapV2Pair.pair_history_permit_live",
+    "Blanc.Lift.UniswapV2Pair.pair_history_initialize_live",
     "Blanc.Lift.UniswapV2Pair.Creation.pair_create2_initialized",
     "Blanc.Lift.UniswapV2Pair.Creation.exhibit_create2",
 ]
@@ -163,7 +165,7 @@ NONCLAIM_PHRASES = [
     "no transaction-level uniswap liveness",
     "states the modular sum of the recorded increments",
     "not an existential cost",
-    "conditional on two named hypotheses",
+    "conditional on one named hypothesis",
 ]
 
 # Process and internal-bookkeeping vocabulary the public map must not carry.
