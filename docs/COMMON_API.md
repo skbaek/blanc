@@ -955,7 +955,10 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   describing `W` everywhere, where `storTailOf`/`acctTailOf` list the rest of `W` and the walk,
   reading only prefix keys, never consults the free tail; `Boundary.cfgOfT`/`obsDT`/
   `cfg_of_obsDT`/`obsDT_cont` are the boundary kit with such a tail (prefixes decided, tails
-  compared as terms).
+  compared as terms). Read the unextended prefixes with `Boundary.cfgOf1_stor`/
+  `cfgOf1_acs`, and read the complete prefix-plus-tail shadows with
+  `Boundary.cfgOfT_stor`/`cfgOfT_acs`; use these projection lemmas over symbolic
+  boundaries before substituting a concrete machine image.
 - To transport such a run's `SSTORE` charges to an original state that agrees with the kernel's
   closed one **only on the keys the run touches** (a finite checkpoint agreement, where
   `OrigAgree`'s everywhere-agreement is unavailable): `wrun_withOrig_keys` and

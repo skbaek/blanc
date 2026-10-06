@@ -58,11 +58,6 @@ theorem reBody_locks : ∀ tS : StorShadow,
       lookupS (Boundary.storOf1 bReBody ++ tS) proxyAddr 2 = 1 := by
   kernel_forall_rfl_and
 
-/-- A boundary configuration's storage shadow: the boundary's prefix, then the tail. -/
-theorem cfgOfT_stor (x : Boundary.Bnd1) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
-    (w : World) : (Boundary.cfgOfT x tS tA m w).stor = Boundary.storOf1 x ++ tS := by
-  rw [← Boundary.cfgOf1_stor x m w]; rfl
-
 /-- The kernel's machine is the actual one with its original state changed back to `O0`. -/
 theorem sRe_withOrig_O0 (O : State) : (sRe.withOrig O).withOrig O0 = sRe := rfl
 
@@ -127,7 +122,7 @@ theorem reAdd_frame : ReAddFrame := by
   have hagB := (wrun_cont hBat).1 hag
   refine ⟨d, hx, hgas, hout, herr, hca, ⟨_, hBat, hagB, rfl, ?_, ?_⟩,
     fun f h1 h2 => frame_settle_ok h1 h2 herr⟩
-  · rw [hagB.2.2.1, cfgOfT_stor]; exact (reBody_locks tS).1
-  · rw [hagB.2.2.1, cfgOfT_stor]; exact (reBody_locks tS).2
+  · rw [hagB.2.2.1, Boundary.cfgOfT_stor]; exact (reBody_locks tS).1
+  · rw [hagB.2.2.1, Boundary.cfgOfT_stor]; exact (reBody_locks tS).2
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol

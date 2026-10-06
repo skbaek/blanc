@@ -204,6 +204,16 @@ theorem cfgOf1_stor (x : Bnd1) (m : Meta) (w : World) : (cfgOf1 x m w).stor = st
 theorem cfgOf1_acs (x : Bnd1) (m : Meta) (w : World) : (cfgOf1 x m w).acs = acsOf1 x := by
   rcases x with ⟨_, _, _, _, _, _, _, _, _, _, _⟩; rfl
 
+/-- A boundary configuration's storage shadow is its prefix followed by the free tail. -/
+theorem cfgOfT_stor (x : Bnd1) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
+    (w : World) : (cfgOfT x tS tA m w).stor = storOf1 x ++ tS := by
+  rw [← cfgOf1_stor x m w]; rfl
+
+/-- A boundary configuration's account shadow is its prefix followed by the free tail. -/
+theorem cfgOfT_acs (x : Bnd1) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
+    (w : World) : (cfgOfT x tS tA m w).acs = acsOf1 x ++ tA := by
+  rw [← cfgOf1_acs x m w]; rfl
+
 /-- A configuration decided at boundary `x` with tails is `cfgOfT x` at its own world and
 bookkeeping. -/
 theorem cfg_of_obsDT {c : Cfg} {x : Bnd1} {tS : StorShadow} {tA : AcctShadow}
