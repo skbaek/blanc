@@ -1,0 +1,129 @@
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolRemoveRun1
+
+/-!
+# V− P2, F2 post-`CALL` stages: the callback resume to the first chunk boundary
+
+F2 (`remove_liquidity(200, [0, 0], A)`, static machine `sRm`) makes the ETH `CALL`
+of the attacker at step 339 (value 100; `Reach/ViolRemoveRun1.lean`). The
+callback child is supplied as data (its settled machine `d`, observed gas
+`gasCb`, empty output); the resume plus 3 steps reaches the first own chunk
+boundary `bRmX1` (node `t_1c73_c23`, the same code point as Frame 1's step 343).
+Later stages (234-step run, token child, 188-step run to the halt) live in
+`Reach/ViolRemoveRun3.lean`. Four identity-precompile (`0x04`) calls run inline
+by `callStep`.
+
+`runRmA` stages the resume with `callPairA` (cf. `Frame1Kernel.run1a`): the
+prefix result `r` is an argument, so a proof about the rest cases on it without
+the kernel evaluating the prefix. Each kernel fact below evaluates at most the
+prefix plus a few steps. Do not open this file in the language server.
+-/
+
+namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol
+
+open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.NodeWalk Blanc.ConcreteRun
+open Blanc.Lift.VyperNonreentrantDeployed
+
+/-- What F2's halt shows: gas, return data, and `totalSupply` (slot 26),
+`balanceOf[attacker]` (`lpSlotA`) and the remove-lock (slot 2) in the halting
+configuration's storage shadow, and success (no error). -/
+def obsRm : Res → Option (Nat × List Nat × Nat × Nat × Nat × Bool)
+  | .done (.halted d) cl => some (d.gasLeft, d.output.map UInt8.toNat,
+      (lookupS cl.stor proxyAddr (26 : Nat).toB256).toNat,
+      (lookupS cl.stor proxyAddr lpSlotA).toNat,
+      (lookupS cl.stor proxyAddr (2 : Nat).toB256).toNat, d.error.isNone)
+  | _ => none
+
+/-- The frozen observation at F2's `RETURN`: gas `gasRm`, return data `outRm`
+(`word 100 ++ word 100`), `totalSupply = 1800 < 1906 = balanceOf[A]`, lock
+released, success. -/
+def obsRmEELS : Option (Nat × List Nat × Nat × Nat × Nat × Bool) :=
+  some (gasRm, outRm.map UInt8.toNat, 1800, 1906, 0, true)
+
+/-! ## CALL-point small facts (each probe-checked in scratch before committing) -/
+
+/-- F2's keys at its `CALL`: slot reads 8, 26 and the lock 2. -/
+theorem cRm339_keys : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
+    (cRm339 tS tA m w).keys = [(proxyAddr, (8 : Nat).toB256),
+      (proxyAddr, (26 : Nat).toB256), (proxyAddr, (2 : Nat).toB256)] := by
+  kernel_forall_rfl
+
+/-- F2's `CALL` needs no fork check. -/
+theorem cpRm_forkfree : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
+    frameEntryForkFree (cpRm tS tA m w).f = true := by
+  kernel_forall_rfl
+
+/-- At F2's `CALL` the lock slot 2 is held. -/
+theorem rm339_stor2 : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
+    lookupS (cRm339 tS tA m w).stor proxyAddr 2 = 1 := by
+  kernel_forall_rfl
+
+/-- At F2's `CALL` the cached supply is 2000. -/
+theorem rm339_stor26 : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
+    lookupS (cRm339 tS tA m w).stor proxyAddr 26 = 2000 := by
+  kernel_forall_rfl
+
+/-- F2's `CALL` entered configuration (the `childStart` shape). -/
+def cc3Rm (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World) : Cfg :=
+  ⟨(e3Rm tS tA m w).dyna, AttackerR.t_0000_c0, [], (cRm339 tS tA m w).keys,
+    (cpRm tS tA m w).adrs, (cRm339 tS tA m w).stor,
+    acsTransfer (cpRm tS tA m w).f.inner (cRm339 tS tA m w).acs⟩
+
+/-- F2's `CALL` starts the callback child at the entered configuration. -/
+theorem csRm_start : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
+    childStart sRm (cRm339 tS tA m w) AttackerR.t_0000_c0 =
+      some ((e3Rm tS tA m w), cc3Rm tS tA m w) := by
+  intro tS tA m w
+  simp [childStart, cpRm_eq tS tA m w, e3Rm_eq tS tA m w,
+    cpRm_forkfree tS tA m w, cc3Rm]
+
+/-- The entered callback configuration is the entry boundary `bCb0` with the
+same tails. -/
+theorem cc3Rm_obs : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
+    Boundary.obsDT bCb0 (.cont (cc3Rm tS tA m w)) =
+      Boundary.obsDOkT bCb0 tS tA := by
+  kernel_forall_rfl
+
+/-! ## First chunk boundary and its run -/
+
+/-- F2's machine right after the callback resume plus 3 steps: stack, 640-byte
+memory, gas 851668. -/
+def memRmX1 : List UInt8 :=
+  List.replicate 28 0 ++ List.replicate 1 0x3e ++ List.replicate 1 0xb1 ++
+    List.replicate 1 0x71 ++ List.replicate 1 0x9f ++ List.replicate 300 0 ++
+    List.replicate 20 0x44 ++ List.replicate 30 0 ++ List.replicate 1 0x07 ++
+    List.replicate 1 0xd0 ++ List.replicate 31 0 ++ List.replicate 1 0x64 ++
+    List.replicate 94 0 ++ List.replicate 1 0x03 ++ List.replicate 1 0xe8 ++
+    List.replicate 31 0 ++ List.replicate 1 0x64 ++ List.replicate 96 0
+
+def machRmX1 : Mach :=
+  ⟨[(2 : Nat).toB256, (448 : Nat).toB256, (1051816351 : Nat).toB256],
+    ⟨memRmX1.toArray, 640⟩, 851668, .zero⟩
+
+/-- F2 at step 342 (3 steps after the callback resume; node `t_1c73_c23`): the
+first own chunk boundary. Storage and accounts are the callback's halt shadows
+(`storCb`/`acsCb`); keys and addresses the resume's. -/
+def bRmX1 : Boundary.Bnd1 :=
+  (machRmX1, Vulnerable.t_1c73_c23, [],
+    [(proxyAddr, (8 : Nat).toB256), (proxyAddr, (26 : Nat).toB256),
+      (proxyAddr, (2 : Nat).toB256)] ++ keysCb,
+    [attackerAddr, (4 : Adr), implAddr, proxyAddr] ++ adrsCb,
+    storCb, acsCb, [], [], none, false)
+
+/-- F2 from its 339-step prefix result (with result `r`), resumed with the
+callback child `d` and run 3 more steps. Taking the prefix's result as an
+argument lets a proof about the rest case on it without the kernel evaluating
+the prefix. -/
+def runRmA (tS : StorShadow) (tA : AcctShadow) (r : Res) (d : Devm) : Res :=
+  Boundary.callPairA fsI sRm keysCb adrsCb (storCb ++ tS) (acsCb ++ tA) 3 r d
+
+/-- Prefix (339 steps), callback resume, and 3 steps reach `bRmX1`, over any
+tails, world and bookkeeping, for any callback child at the observed gas and
+output. -/
+theorem rmChunkX1 : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World)
+    (d : Devm),
+    Boundary.obsDT bRmX1 (runRmA tS tA
+      (wrun fsI sRm 339 (Boundary.cfgOfT bRm0 tS tA m w)) (childObs gasCb [] d)) =
+      Boundary.obsDOkT bRmX1 tS tA := by
+  kernel_forall_rfl
+
+end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol
