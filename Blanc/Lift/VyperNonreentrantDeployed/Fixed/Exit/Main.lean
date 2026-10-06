@@ -55,8 +55,8 @@ theorem exit_world_facts {W : State} (h : WorldIs W acsExit storExit) :
 callback's guarded reentry through the proxy is blocked at the lock**, on every covered fork.
 See the module docstring.  `vplus_exclusion` is instantiated for the execution `R` with its
 premises (fork, the clone's forwarder and the comparator in the pre-state, the root, the
-trace-local hash condition) discharged, and its conclusion `¬ lockL.Enters P G` is stated for the
-reentrant frame `G` the receiver actually opened. -/
+trace-local hash condition) discharged, and its conclusion holds for every frame rooted in the
+callback's execution, the witnessed reentry being one instance. -/
 theorem vplus_reach_exit (g : Fork) (hg : CoveredFork g) (hW : Checkpoint world8) :
     processMessage (removeMsg g world8) = .ok dTop ∧ dTop.error = none ∧
     dTop.gasLeft = 920078 ∧ dTop.refundCounter = 2800 ∧ WorldIs dTop.state acsExit storExit ∧
@@ -84,7 +84,7 @@ theorem vplus_reach_exit (g : Fork) (hg : CoveredFork g) (hW : Checkpoint world8
       (∀ x, ParentPrefix G x → x.pc ∉ lockBodies) ∧
       (∃ y y', ParentPrefix G y ∧ y.pc = 0x53 ∧ ParentPrefix y y' ∧ y'.pc = 0x477e) ∧
       -- `vplus_exclusion`, instantiated
-      ¬ lockL.Enters proxyAddr G ∧
+      (∀ G' ∈ Exec.rawFrameRoots c.exc, ¬ lockL.Enters proxyAddr G') ∧
       -- the outer call commits
       out = .ok dTop := by
   obtain ⟨he, hstT, w1, p1, d1, hp, heB, -, hca, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, hdB, hr, w3, w4, hdT, hgas, hrc, hcanon, hkeys⟩ := exitFacts
@@ -111,7 +111,7 @@ theorem vplus_reach_exit (g : Fork) (hg : CoveredFork g) (hW : Checkpoint world8
   refine ⟨hmsg, hdT, hgas, hrc, ⟨fun a => ?_, fun a k => ?_⟩, hent,
     fun _ R' => (exit_run_at hg hO hag0 R').1, _, R, F, h, c, q, G, hfork', hP, hI, hroot, hash,
     hF, act, sp, hpc, hat, hct, hcc, hcv, hq, hqt, hqc, hGq, hGc, cpG, hdG, exG, nb, chk,
-    vplus_exclusion R hfork' (Or.inl hP) hI hroot hash hF act sp hGc, hout⟩
+    fun G' hG' => vplus_exclusion R hfork' (Or.inl hP) hI hroot hash hF act sp hG', hout⟩
   · rw [hca3.2.2.2 a]; exact lookupA_eq_of_map hkeys a
   · rw [hca3.2.2.1 a k]; exact lookupS_eq_of_canonS hcanon a k
 

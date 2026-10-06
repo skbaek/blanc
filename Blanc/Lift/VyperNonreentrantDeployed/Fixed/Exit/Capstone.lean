@@ -15,7 +15,8 @@ Immediately before message 9 the reached world is the `Checkpoint`, with the sou
 `totalSupply = Σ_{h ∈ {creator}} balanceOf[h]` (2000).  Message 9 succeeds; in its execution the
 pool frame holds the lock (`ActiveRel`) when it pays `R`, `R` really attempts the guarded
 `add_liquidity` through the clone, that frame is refused at the lock check and reverts, and
-`vplus_exclusion` (instantiated, premises discharged) gives `¬ lockL.Enters P G`; the outer
+`vplus_exclusion` (instantiated, premises discharged) holds for every frame rooted in the callback's
+execution, the witnessed reentry being one instance; the outer
 call commits: `R` receives 100 wei and 100 `T`, the supply and the creator's LP balance fall to
 1800 (the ledger stays sound: 1800 = 1800).  Message-level only; synthetic fixtures disclosed in
 `Fund/World.lean`. -/
@@ -66,7 +67,9 @@ theorem vplus_reachable_capstone (fork : Fork) (hfork : CoveredFork fork) :
         G.exn = .error (.revert, dRe) ∧ (∀ x, ParentPrefix G x → x.pc ∉ lockBodies) ∧
         (∃ y y', ParentPrefix G y ∧ y.pc = 0x53 ∧ ParentPrefix y y' ∧ y'.pc = 0x477e) ∧
         -- `vplus_exclusion`, instantiated for `R`
-        lockL.HashAvoidIn proxyAddr R ∧ ¬ lockL.Enters proxyAddr G ∧
+        lockL.HashAvoidIn proxyAddr R ∧
+        (∀ G' ∈ Exec.rawFrameRoots c.exc, ¬ lockL.Enters proxyAddr G') ∧
+        ¬ lockL.Enters proxyAddr G ∧
         -- settlement of the outer call
         out = .ok postX ∧
         (storOf postX.state proxyAddr 0x16).toNat =
@@ -81,14 +84,14 @@ theorem vplus_reachable_capstone (fork : Fork) (hfork : CoveredFork fork) :
   have hw8 : postD.state = world8 := by rw [hD, world8_eq]
   have hck8 : Checkpoint world8 := hw8 ▸ hck
   obtain ⟨hm, hdT, hgas, -, hWX, hent, -, out, R, F, h, c, q, G, -, -, -, -, hash, hF, act, sp,
-    hpc, -, hct, -, hcv, hq, hqt, -, hGq, -, cpG, hdG, exG, nb, chk, excl, hout⟩ :=
+    hpc, -, hct, -, hcv, hq, hqt, -, hGq, hGc, cpG, hdG, exG, nb, chk, excl, hout⟩ :=
     vplus_reach_exit fork hfork hck8
   obtain ⟨led, sup, -⟩ := checkpoint_facts hck
   obtain ⟨ledX, supX, -, lockX, balP, balR, tR, -, -⟩ := exit_world_facts hWX
   refine ⟨postI, postP, postInit, postOracle, postT, postR, postA, postD, dTop, h1, e1, h2, e2,
     h3, e3, h4, e4, hclean, h5, e5, h6, e6, h7, e7, h8, e8, hck, led, sup,
     by rw [hw8]; exact hm, hdT, hgas, by rw [hw8]; exact hent, hw8, rfl, out, R, F, h, c, q, G,
-    hF, act, sp, hpc, hct, hcv, hq, hqt, hGq, cpG, hdG, exG, nb, chk, hash, excl, hout, ledX, supX,
-    balR, tR, balP, lockX⟩
+    hF, act, sp, hpc, hct, hcv, hq, hqt, hGq, cpG, hdG, exG, nb, chk, hash, excl, excl G hGc,
+    hout, ledX, supX, balR, tR, balP, lockX⟩
 
 end Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit
