@@ -1132,7 +1132,7 @@ theorem herrN_of (p : Devm) (herrB : p.error.isSome = false) :
   | none => rfl
   | some _ =>
     simp only [he, Option.isSome_some] at herrB
-    exact absurd herrB (by simp)
+    exact Bool.noConfusion herrB
 
 /-- The callback frame's closing existential from its halted 2-step run. -/
 theorem closeCb_of (g : Fork) (O : State) (tS : StorShadow) (tA : AcctShadow)

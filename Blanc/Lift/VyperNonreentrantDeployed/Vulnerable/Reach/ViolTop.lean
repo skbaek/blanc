@@ -50,7 +50,7 @@ theorem root_child_agree (W : State) (m : Meta) (w : World) (post2 : Devm)
       callPrep_spec (cpR_eq W (storTailOf W) (acctTailOf W) m w)
         hAgreeR.2.1 hAgreeR.2.2.2
     rw [cik, cpk, hAgreeR.1, cR_keys]
-    simp
+    simp only [List.not_mem_nil]
   have hchild1 : ChildAgree (obsChildF1 (postF1raw W (storTailOf W) (acctTailOf W) m w post2))
       keysRm ([implAddr, proxyAddr] ++ adrsRm) (storRm ++ storTailOf W)
       (acsRm ++ acctTailOf W) := by
@@ -497,7 +497,7 @@ theorem root_f1_facts (hRm : RemoveFrame) (g : Fork) (W : State) (m : Meta) (w :
     obtain ⟨-, -, cpk, -, -, cik, -, -⟩ :=
       callPrep_spec (cpR_eq W _ _ _ _) hAgreeR.2.1 hAgreeR.2.2.2
     rw [cik, cpk, hAgreeR.1, cR_keys]
-    simp
+    simp only [List.not_mem_nil]
   /-
   have hchild1 : ChildAgree (obsChildF1 (postF1 W (storTailOf W) (acctTailOf W) m w post2))
       keysRm ([implAddr, proxyAddr] ++ adrsRm) (storRm ++ storTailOf W)
@@ -605,7 +605,7 @@ theorem root_frame (hRm : RemoveFrame) : RootFrame := by
   have hcfg : Boundary.cfgOfT bR0 (storTailOf W) (acctTailOf W)
       m0 w0 = rootCfg W := by
     symm
-    simpa [hm0, hw0] using Boundary.cfg_of_obsDT hroot.2.2.2
+    simpa only [hm0, hw0] using Boundary.cfg_of_obsDT hroot.2.2.2
   have hAgree0 : Agree (Boundary.cfgOfT bR0 (storTailOf W) (acctTailOf W)
       m0 w0) := by
     rw [hcfg]
@@ -845,14 +845,14 @@ theorem root_frame (hRm : RemoveFrame) : RootFrame := by
     cases hr : wrun fsA (sR.withOrig W) 2 c1 with
     | stuck =>
       rw [hr] at hv
-      simp [obsV] at hv
+      simp only [obsV, reduceCtorEq] at hv
     | cont c =>
       rw [hr] at hv
-      simp [obsV] at hv
+      simp only [obsV, reduceCtorEq] at hv
     | done o cl =>
       rw [hr] at hv
       cases o with
-      | returned d => simp [obsV] at hv
+      | returned d => simp only [obsV, reduceCtorEq] at hv
       | halted d =>
         simp only [obsV, Option.some.injEq, Prod.mk.injEq,
           Bool.and_eq_true, decide_eq_true_eq] at hv
@@ -863,7 +863,7 @@ theorem root_frame (hRm : RemoveFrame) : RootFrame := by
         · exact Option.isNone_iff_eq_none.mp herr
         · exact htake
         · rw [← List.take_append_drop storV.length cl.stor, htake, hdropS]
-          simp
+          exact List.drop_left
         · exact hkeys
   obtain ⟨p, cl, hwrBase, hgasV, houtV, herrV, htakeV, hdropV, hkeys⟩ := hdecode
   have hstepRootOrig : StepOk fsA ((sR.withOrig W).withFork g)
