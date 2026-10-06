@@ -719,6 +719,7 @@ import Blanc.Lift.UniswapV2Pair.BurnForwardSuffix
 import Blanc.Lift.UniswapV2Pair.BurnForwardBody
 import Blanc.Lift.UniswapV2Pair.BurnForwardAccept
 import Blanc.Lift.UniswapV2Pair.SourceReplay
+import Blanc.Lift.UniswapV2Pair.SourceReplayOracle
 import Blanc.Lift.UniswapV2Pair.ReplayWriterGas
 import Blanc.Lift.UniswapV2Pair.PairSupply
 import Blanc.Lift.UniswapV2Pair.PairHistory

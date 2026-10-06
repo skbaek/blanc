@@ -292,6 +292,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.BurnForwardBody",
         "Lift.UniswapV2Pair.BurnForwardAccept",
         "Lift.UniswapV2Pair.SourceReplay",
+        "Lift.UniswapV2Pair.SourceReplayOracle",
         "Lift.UniswapV2Pair.ReplayWriterGas",
         "Lift.UniswapV2Pair.PairSupply",
         "Lift.UniswapV2Pair.PairHistory",

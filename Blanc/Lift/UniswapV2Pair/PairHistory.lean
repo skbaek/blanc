@@ -1,5 +1,6 @@
 import Blanc.Lift.UniswapV2Pair.PairSupply
 import Blanc.Lift.UniswapV2Pair.SourceReplay
+import Blanc.Lift.UniswapV2Pair.SourceReplayOracle
 import Blanc.Lift.UniswapV2Pair.Creation.DeployInit
 import Blanc.ExecutionWholeFrameAccounting
 import Blanc.ExecutionTraceEntered
@@ -429,10 +430,16 @@ theorem pair_history_ledger {pair : Adr} {cfg : ChainConfig} {checkpoint future 
   exact ⟨steps, observed, auth, finish, K', realized, rep,
     source.ledger (State.initialized_ledgerOn factory domain token0 token1).ledger⟩
 
-/-- **Oracle accumulators after a history (U5).**  Each future accumulator is the checkpoint's plus
-the sum of every committed update receipt of the replay (nested committed updates included), modulo
-`2 ^ 256`; each receipt carries `Δt = (ts mod 2^32 − last) mod 2^32` with `ts` the block timestamp of
-its frame (`writerContext`), so both wraparounds are part of the statement. -/
+/-- **Oracle after a history (U5).**  Each future accumulator is the checkpoint's plus the sum of
+every committed update receipt of the replay (nested committed updates included), modulo `2 ^ 256`.
+Every receipt is `OracleUpdate.Lawful`: `Δt = (ts mod 2^32 − last) mod 2^32`, and the increments are
+`⌊r1·2^112/r0⌋·Δt` and `⌊r0·2^112/r1⌋·Δt` when `Δt` and both old reserves are nonzero (zero
+otherwise).  The receipts chain `last`: the first receipt's `last` is the checkpoint state's
+`blockTimestampLast`, each next one's is the previous receipt's `ts mod 2^32`, and the final
+`blockTimestampLast` is the last receipt's `ts mod 2^32` (the checkpoint's if there is none).  Each
+receipt belongs to one step, and its `ts` is that step frame's block timestamp
+(`sevm.benvStat.time`, the frame's `writerContext`), re-entered frames' receipts included.  Both
+wraparounds, of the `uint32` timestamp and of the accumulator, are part of the statement. -/
 theorem pair_history_oracle {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     {K₀ : WriterKey → Prop} {st₀ : State}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
@@ -450,11 +457,27 @@ theorem pair_history_oracle {pair : Adr} {cfg : ChainConfig} {checkpoint future 
             oracleSum0 (sourceReplayUpdates st₀ (steps.map PairStep.source))) % 2 ^ 256 ∧
         finish.price1CumulativeLast.toNat =
           (st₀.price1CumulativeLast.toNat +
-            oracleSum1 (sourceReplayUpdates st₀ (steps.map PairStep.source))) % 2 ^ 256 := by
+            oracleSum1 (sourceReplayUpdates st₀ (steps.map PairStep.source))) % 2 ^ 256 ∧
+        (∀ u ∈ sourceReplayUpdates st₀ (steps.map PairStep.source), u.update.Lawful) ∧
+        OracleTimestampChain st₀.blockTimestampLast finish.blockTimestampLast
+          (sourceReplayUpdates st₀ (steps.map PairStep.source)) ∧
+        sourceReplayUpdates st₀ (steps.map PairStep.source) =
+          (sourceReplayReceipts st₀ (steps.map PairStep.source)).flatMap Prod.snd ∧
+        ∀ inv receipts, (inv, receipts) ∈ sourceReplayReceipts st₀ (steps.map PairStep.source) →
+          ∃ s ∈ steps, inv = s.source ∧
+            ∀ u ∈ receipts, u.update.timestamp = s.frame.sevm.benvStat.time := by
   obtain ⟨_, steps, observed, auth, finish, K', source, realized, _, _, rep⟩ :=
     pair_history_committed trace installed initial fresh
-  exact ⟨steps, observed, auth, finish, K', realized, rep, source.oracle_mod.1,
-    source.oracle_mod.2⟩
+  obtain ⟨lawful, chain, stamped⟩ := source.oracle_receipts
+  refine ⟨steps, observed, auth, finish, K', realized, rep, source.oracle_mod.1,
+    source.oracle_mod.2, lawful, chain, sourceReplayUpdates_eq_receipts _ _, ?_⟩
+  intro inv receipts member
+  obtain ⟨mem, hts⟩ := stamped inv receipts member
+  obtain ⟨s, sMem, sEq⟩ := List.mem_map.mp mem
+  refine ⟨s, sMem, sEq.symm, ?_⟩
+  intro u uMem
+  rw [hts u uMem, ← sEq]
+  rfl
 
 /-- **Share value never decreases with the protocol fee off (U3).**  For the history's own steps: if
 each step's factory `feeTo` answer is zero (`EntryFeeOff`, mint and burn) and each burn/sync step's
