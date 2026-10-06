@@ -497,11 +497,12 @@ import Blanc.Lift.WitnessSpawn
 import Blanc.Lift.NodeWalk
 import Blanc.Lift.NodeWalkFrames
 import Blanc.Lift.NodeWalkFork
--- A gas-exact lifted run as a node-walk leaf child (vyper-reachable-reentrancy-v1): shared.
-import Blanc.Lift.ExactLeaf
 import Blanc.Lift.NodeWalkPrecomp
 import Blanc.Lift.ShadowCanon
 import Blanc.Lift.CreateEntry
+import Blanc.Lift.NodeWalkOrig
+-- A gas-exact lifted run as a node-walk leaf child (vyper-reachable-reentrancy-v1): shared.
+import Blanc.Lift.ExactLeaf
 import Blanc.Lift.WitnessFork
 -- One kernel check for a conjunction of closed equalities (vplus-witness-v2): shared.
 import Blanc.Lift.KernelBatch
@@ -589,6 +590,32 @@ import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Clone.Walk
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Clone.Deploy
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach.World
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach.Deploy
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach.Exact
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.World
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.Proxy
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.Run
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.Top
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.OracleRun
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.OracleTop
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach.Init
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.ReceiverR.Cert
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.ReceiverR.Check
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.ReceiverR.Creation.Input
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.ReceiverR.Creation.Cert
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.ReceiverR.Creation.Check
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.ReceiverR.Creation.Deploy
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Fund.World
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Fund.Root
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Fund.Create
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Fund.Approve
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Fund.AddRun
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Fund.Add
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Fund.Checkpoint
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit.Run
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit.Frames
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit.Top
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit.Main
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit.Capstone
 import Blanc.Lift.CheckAssemblyPair
 import Blanc.Lift.WitnessShadow
 import Blanc.Lift.Clone1167
@@ -608,8 +635,7 @@ import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.InitRun
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.InitTop
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Init
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Fund
--- Node walks under a changed transaction-original state (vyper-minus-reachable-reentrancy-v1): shared.
-import Blanc.Lift.NodeWalkOrig
+-- A forall kernel batch (vyper-minus-reachable-reentrancy-v1): shared.
 import Blanc.Lift.KernelBatchForall
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.AddSetup
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.AddRun
@@ -631,11 +657,6 @@ import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.Creation.Input
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.Creation.Cert
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.Creation.Check
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.Creation.Deploy
-import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach.Exact
-import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.World
-import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.Proxy
-import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.Run
-import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.Top
 
 -- The vulnerable Vyper comparator 0x6326, its token and attacker, and the witnessed
 -- reentry vminus_witness (deployed-lido-vyper-v1, V-).

@@ -859,7 +859,24 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   `canonS l = l'` then gives a canonical storage table, `lookupS_eq_of_canonS`), and
   `lookupA_eq_of_keys` makes two account logs agree everywhere once they agree at the addresses
   either names, in [`Blanc/Lift/ShadowCanon.lean`](../Blanc/Lift/ShadowCanon.lean) (worked use:
-  `init_run` in `.../Fixed/Init/Top.lean`).
+  `init_run`/`oracle_run` in `.../Fixed/Init/{Top,OracleTop}.lean`). `lookupA_eq_of_map` takes
+  that agreement from one closed list equation a kernel check decides (`Acct` has no decidable
+  equality); worked use: `approve_run`/`add_run` in `.../Fixed/Fund/{Approve,Add}.lean`.
+- When a closed walk's message runs over a world whose evaluation is expensive (a settled world
+  of earlier messages: every `SSTORE` charge reads the transaction-original storage), evaluate
+  the kernel facts under a cheap original state and transport them with
+  [`Blanc/Lift/NodeWalkOrig.lean`](../Blanc/Lift/NodeWalkOrig.lean): `origOf l` is the closed
+  world holding exactly the storage the shadow `l` reads (`storOf_origOf`), `origAgree_origOf`
+  turns a world's storage agreement with `l` into `OrigAgree`, and `walk_re`,
+  `scallSpawn_re`/`callSpawn_re`/`dcallSpawn_re`, `settle_re` and `frame_enter_re` move walks,
+  spawns, settles and the root entry to `(s.withFork g).withOrig W` (any covered fork, the real
+  original state) under `ReOK W s`; the `*_withOrig` lemmas are the original-state layer alone.
+  Hand a transported spawn's agreement and child nodes to lemmas stated over the kernel
+  configuration through `pagree_re`/`nodeAt_re` (`childCfg_re`): left to definitional
+  unfolding, the kernel compares a concrete machine with its transported form by evaluating both
+  (measured: a frame module went from a 16.4 GiB retraction to a 5.1 GiB build).
+  Worked use: `forwarder_root_re`/`leaf_root_re` and the frames of
+  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/Fund/{Root,Add}.lean` and `.../Fixed/Exit/`.
 - To run a walk (`pwalkH`) or a certificate run (`wrun`, `childRun`, `callResume`) whose
   `SSTORE` charges read a transaction-original state that is not a closed term (a root
   message's own input world): evaluate the kernel facts with the original state replaced by a
@@ -872,6 +889,15 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   universally quantified conjunction of equalities in one kernel check; over a free world,
   compare computed values by `decide` (or against literal boundaries, `Boundary.obsD1`), never
   as terms.
+- To make a kernel-checked witness quantify over **every world that agrees on finitely many
+  entries** (a checkpoint predicate as a genuine finite read-set agreement, not a world pinned
+  everywhere): [`Blanc/Lift/ShadowTail.lean`](../Blanc/Lift/ShadowTail.lean). `storOf_prefix_tail`
+  and `acctAgree_prefix_tail` turn an agreement with a finite storage prefix (resp. account
+  prefix) into a full engine shadow `prefix ++ storTailOf W` (resp. `prefix ++ acctTailOf W`)
+  describing `W` everywhere, where `storTailOf`/`acctTailOf` list the rest of `W` and the walk,
+  reading only prefix keys, never consults the free tail; `Boundary.cfgOfT`/`obsDT`/
+  `cfg_of_obsDT`/`obsDT_cont` are the boundary kit with such a tail (prefixes decided, tails
+  compared as terms).
 - To state a closed *frame-level* witness (the certificate interpreter `wrun`, code children by
   `childStart`/`callResume`/`callPairFrom`, proxy frames by `stepN`) under every covered fork,
   rewrite its kernel facts with `wrun_withFork`
