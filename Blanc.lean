@@ -612,6 +612,11 @@ import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Fund.Approve
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Fund.AddRun
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Fund.Add
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Fund.Checkpoint
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit.Run
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit.Frames
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit.Top
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit.Main
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit.Capstone
 import Blanc.Lift.CheckAssemblyPair
 import Blanc.Lift.WitnessShadow
 import Blanc.Lift.Clone1167

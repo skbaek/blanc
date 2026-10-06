@@ -144,7 +144,7 @@ theorem setup_funded (fork : Fork) (hfork : CoveredFork fork) :
       postA.gasLeft = 77697 ∧
       processMessage (addMsg fork postA.state) = .ok postD ∧ postD.error = none ∧
       postD.gasLeft = 871140 ∧ postD.refundCounter = 4800 ∧
-      Checkpoint postD.state := by
+      Checkpoint postD.state ∧ postD = dD := by
   obtain ⟨postI, postP, postInit, postOracle, h1, e1, h2, e2, hWP, -, -, -, h3, e3, g3, -, hWI, -,
     h4, e4, g4, -, hclean⟩ := setup_init fork hfork
   -- the setup's settled machines are the closed ones
@@ -169,6 +169,6 @@ theorem setup_funded (fork : Fork) (hfork : CoveredFork fork) :
   obtain ⟨h8, e8, g8, r8, hW8⟩ := add_run fork hfork hW7'
   refine ⟨postI, postP, postInit, postOracle, postT, postR, dA, dD, h1, e1, h2, e2, h3, e3, g3,
     h4, e4, g4, hclean, by rw [hw4]; exact h5, e5, g5, by rw [hw5]; exact h6, e6, g6,
-    by rw [hw6]; exact h7, e7, g7, by rw [← world7_eq]; exact h8, e8, g8, r8, hW8⟩
+    by rw [hw6]; exact h7, e7, g7, by rw [← world7_eq]; exact h8, e8, g8, r8, hW8, rfl⟩
 
 end Blanc.Lift.VyperNonreentrantDeployed.Fixed.Fund

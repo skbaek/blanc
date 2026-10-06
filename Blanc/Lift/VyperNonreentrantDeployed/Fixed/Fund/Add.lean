@@ -86,7 +86,7 @@ theorem frameDB {g : Fork} (hg : CoveredFork g) (hs : ReOK world7 eDB.sta) (hag 
   have hF1 := (scallPrep_node_facts hag1 sBal).2
   obtain ⟨t1, x2, -, -, e2, hx2, ex2, -, hag2⟩ :=
     spawn_resume_ok hx1 hag1 hF1 step1 ent1 balErr resB2
-      (fun t ht => let r := frameBalD hg hsBal hagBal t ht; ⟨r.1, r.2.2⟩)
+      (fun t ht => let r := frameBalD hg hsBal (pagree_re hagBal) t (nodeAt_re ht); ⟨r.1, r.2.2⟩)
   -- the `CALL` of `transferFrom`
   obtain ⟨hag3, h3⟩ := pwalkH_cont (.avoid 0) codeTries hcode okAny 1269 cDB2 cDB3 hag2 w3
   obtain ⟨x3, hx3, -, ex3, -, -⟩ := h3 x2 hx2
@@ -95,7 +95,7 @@ theorem frameDB {g : Fork} (hg : CoveredFork g) (hs : ReOK world7 eDB.sta) (hag 
   obtain ⟨step3, ent3, -, hagTf, hF3⟩ := call_node hag3 hat3 sTf nTf
   obtain ⟨t2, x4, -, -, e4, hx4, ex4, -, hag4⟩ :=
     spawn_resume_ok hx3 hag3 hF3 step3 ent3 tfErr resB4
-      (fun t ht => let r := frameTfD hg hsTf hagTf t ht; ⟨r.1, r.2.2⟩)
+      (fun t ht => let r := frameTfD hg hsTf (pagree_re hagTf) t (nodeAt_re ht); ⟨r.1, r.2.2⟩)
   -- the mint, and `RETURN`
   obtain ⟨hag5, h5⟩ := pwalkH_cont (.avoid 0) codeTries hcode okAny 122 cDB4 cDB5 hag4 w5
   obtain ⟨x5, hx5, -, ex5, -, -⟩ := h5 x4 hx4
