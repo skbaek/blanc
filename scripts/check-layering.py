@@ -120,7 +120,7 @@ import tomllib
 
 SHARED = ["Basic", "Semantics", "CommonCore", "MachineDataFacts", "CreationArtifact", "RlpConcrete",
           "ProofRecipesGenerated", "ProofRecipeTactic", "Tactics", "CommonProofs", "Ladder", "Upgrade",
-          "BalanceAlgebra", "LedgerConservation", "StorageOnlySpec", "SlotFootprint", "OffsetPricing", "ProrataAccounting",
+          "BalanceAlgebra", "LedgerConservation", "StorageOnlySpec", "SlotFootprint", "SlotFootprintRestrict", "OffsetPricing", "ProrataAccounting",
           "ProrataAttackModel", "ProrataAttackPath", "FakeExponential", "FakeExponentialGrowth", "FakeExponentialEval", "WordFakeExponential", "WordFakeExponentialBound", "WordFakeExponentialEval", "FakeExponentialWordCorrespondence", "FakeExponentialWordDomain", "WordArithmetic", "WordByteCodecs", "WordByteRoundtrip", "MemoryImage", "BytesWrite", "MemoryLayout", "MemoryStageGas",
           "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "Forward",
           "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "StorageAccessGas", "StorageRefund", "ForwardSha256",
@@ -144,7 +144,7 @@ SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "ExecutionFrames", "ExecutionCommittedGas", "ExecutionMessageGas", "ExecutionFrameEntry", "ExecutionCallerExclusion", "ExecutionTraceCallerExclusion", "ExecutionFrameTime", "ExecutionAdmission", "ContractAdmission",
            "ExecutionMessageAdmission", "ExecutionTransactionAdmission",
            "ExecutionBodyAdmission", "ExecutionBodyPrefixAdmission", "ExecutionHistoryAdmission",
-           "ExecutionTraceFresh", "ExecutionImmutableCode",
+           "ExecutionTraceFresh", "ExecutionTraceEntered", "ExecutionImmutableCode",
            "ExecutionMessageEffects", "ExecutionTransactionEffects",
            "ExecutionBodyEffects", "ExecutionHistoryEffects",
            "ExecutionAccountingReplay", "ExecutionAccountingSignedBalance", "ExecutionAccountingStorageFold",
@@ -153,7 +153,7 @@ SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "ChargeGas", "CallOutOfGas", "SourceSiteCount", "CompiledShape",
            "SymbolicProgram",
            "ExecutionTraceFrames", "ExecutionTraceAdmission", "ExecutionTraceSettledFrames", "ExecutionTraceSettledOrigin", "ExecutionTraceRootFrame", "ExecutionRequestSegments", "ExecutionTraceEntry",
-           "ExecutionAccountingObserved", "ExecutionAccountingAdmission", "ExecutionAccountingCore", "ExecutionEntryAccounting", "ExecutionModelAccounting", "ExecutionDirectCode", "FuncMainPrefix",
+           "ExecutionAccountingObserved", "ExecutionAccountingAdmission", "ExecutionAccountingCore", "ExecutionEntryAccounting", "ExecutionModelAccounting", "ExecutionWholeFrameAccounting", "ExecutionDirectCode", "FuncMainPrefix",
            "ChunkedDecide"]
 # The ladder over arbitrary code images and the generic bytecode lift
 # (solc-bytecode-v1): contract-neutral, no WETH9 name in any of them.
@@ -166,24 +166,39 @@ SHARED += ["LadderBase", "LadderSem", "ContractAdmissionSem", "ExecutionAdmissio
 SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.CheckAssembly", "Lift.ExactWalkOps",
            "Lift.ExactWalkCut", "Lift.ExactWalkCutOps", "Lift.CopyLoop", "Lift.PackedSha",
            "Lift.PackedShaCovered", "Lift.Quiet", "Lift.InvWalk", "Lift.InvWalkOps",
-           "Lift.InvWalkWorld", "Lift.InvWalkSha"]
+           "Lift.InvWalkWorld", "Lift.InvWalkSha", "Lift.InvWalkDispatch", "Lift.InvWalkProvenance", "Lift.CodeSizeWalk"]
 # Creation code (deploy-init-v1): the size-optimised packed-hash site and the CREATE bridge
 # for lifted creation code; contract-neutral.
-SHARED += ["Lift.PackedShaSize", "Lift.Deploy", "Lift.CreationOps", "Lift.CreateEntry", "Lift.Clone1167", "Lift.CheckAssemblyPair", "Lift.WitnessShadow"]
+SHARED += ["Lift.PackedShaSize", "Lift.Deploy", "Lift.CreationOps", "Lift.Create2Deploy", "Lift.CreateEntry", "Lift.Clone1167", "Lift.CheckAssemblyPair", "Lift.WitnessShadow"]
 # Solc-0.4 scratch-memory walk kit and the value-bearing CALL to a code-free recipient
 # (weth9-liveness-v1): contract-neutral.
 SHARED += ["Lift.ExactWalkSolc", "Lift.ExactWalkCall"]
+# Parameterized free-pointer memory for lifted walks.
+SHARED += ["Lift.ExactWalkMemory", "Lift.ByteWindowMemory", "Lift.WordImage", "Lift.Ecrecover"]
+# Size-free free-pointer word carrier for moved-pointer walks (uv2nh-skim)
+SHARED += ["Lift.PtrWordMemory"]
+# Retained target frames interleaved with actual foreign LOGs, and per-step storage/log
+# transport across arbitrary callee code (uv2nh-skim2): contract-neutral.
+SHARED += ["Lift.TargetLogEvents"]
 # Forward construction of one configured block from proof-produced body evidence
 # (eip7002-withdrawal-predeploy-v1): contract-neutral.
 SHARED += ["BlockForward", "Lift.ExactWalkCallChild"]
 # Pure-model ledger updates (vyper-3crv-bytecode-v1): contract-neutral.
 SHARED += ["LedgerUpdate"]
+# Floor share bounds for two-reserve AMMs: contract-neutral.
+SHARED += ["Lift.AMMArithmetic", "Lift.BabylonianSqrt"]
+# Token-ledger sums read over a finite covering key footprint: contract-neutral.
+SHARED += ["Lift.LedgerFootprint"]
+# Ordinary interpreter output provenance for actual-call returndata bounds.
+SHARED += ["Lift.ReturnDataBound", "Lift.PrecompileOutputBound"]
+# Exact chunks and local simulation over existing configured state chronology.
+SHARED += ["Lift.CommittedLogs", "Lift.SegmentedReplay", "Lift.SegmentedHistory"]
 # Walk steps for arbitrary static calls, CALLER/KECCAK256/LOG3/SSTORE, hashed slots and the
 # Vyper 0.2.x front end (vyper-3crv-bytecode-v1): contract-neutral.
-SHARED += ["Lift.StaticCall", "Lift.WalkSteps", "Lift.MapSlot", "Lift.Vyper"]
+SHARED += ["Lift.CalldataGuards", "Lift.StaticCall", "Lift.StaticCallGuard", "Lift.WalkSteps", "Lift.MapSlot", "Lift.Vyper", "Lift.PackedWord"]
 # The frame cursor, the reentrancy-lock exclusion kit and its bytecode checker, owner
 # discipline, and concrete-run evaluation (deployed-lido-vyper-v1): contract-neutral.
-SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachChain", "Lift.Cursor", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
+SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachChain", "Lift.ReachDispatch", "Lift.Cursor", "Lift.CursorCuts", "Lift.CursorExact", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
            "Lift.LockCheck", "Lift.LockCheckSound", "Lift.LockCheckFlow"]
 # The constant memory map and its checker, code tries as data, and the executable-witness
 # engine with its child runs and spawn facts (deployed-lido-vyper-v1, V-): contract-neutral.
@@ -209,7 +224,175 @@ SHARED += ["Lift.ExactLeaf"]
 # A forall kernel batch (vyper-minus-reachable-reentrancy-v1).
 SHARED += ["Lift.KernelBatchForall", "Lift.ShadowTail", "Lift.OrigKeys"]
 
+SHARED += ["Lift.GasErasureRun", "Lift.InvWalkBranchToP", "Lift.LedgerFootprintOrder", "Lift.LocalStorage", "Lift.MutableCallPost", "Lift.PrecompileAnswer", "Lift.RevertingCallee", "Lift.WordWindowMemory"]
+
+SHARED += ["Lift.CallChildren", "Lift.CallSite", "Lift.CallSiteChildren", "Lift.CallerProvenance"]
+
 CONTRACTS = {
+    "uniswap-v2-pair": [
+        "Lift.UniswapV2Pair.Cert",
+        "Lift.UniswapV2Pair.Check",
+        "Lift.UniswapV2Pair.CheckPart0",
+        "Lift.UniswapV2Pair.CheckPart1",
+        "Lift.UniswapV2Pair.CheckPart2",
+        "Lift.UniswapV2Pair.CheckPart3",
+        "Lift.UniswapV2Pair.CheckTries",
+        "Lift.UniswapV2Pair.Jumps",
+        "Lift.UniswapV2Pair.Creation.Cert",
+        "Lift.UniswapV2Pair.Creation.Check",
+        "Lift.UniswapV2Pair.Creation.Jumps",
+        "Lift.UniswapV2Pair.Creation.Walk",
+        "Lift.UniswapV2Pair.Creation.Deploy",
+        "Lift.UniswapV2Pair.Creation.DeployInit",
+        "Lift.UniswapV2Pair.Creation.Facts",
+        "Lift.UniswapV2Pair.Model",
+        "Lift.UniswapV2Pair.Execution",
+        "Lift.UniswapV2Pair.Properties",
+        "Lift.UniswapV2Pair.PropertiesOracle",
+        "Lift.UniswapV2Pair.PropertiesSwap",
+        "Lift.UniswapV2Pair.PropertiesLedger",
+        "Lift.UniswapV2Pair.PropertiesOracleLaw",
+        "Lift.UniswapV2Pair.PropertiesMintBurn",
+        "Lift.UniswapV2Pair.ModelControls",
+        "Lift.UniswapV2Pair.SqrtWalk",
+        "Lift.UniswapV2Pair.GetterMemory",
+        "Lift.UniswapV2Pair.GetterWalk",
+        "Lift.UniswapV2Pair.GetterStringMemory",
+        "Lift.UniswapV2Pair.GetterStringWalk",
+        "Lift.UniswapV2Pair.GetterScalarCore",
+        "Lift.UniswapV2Pair.GetterScalarWrapper",
+        "Lift.UniswapV2Pair.GetterScalarDispatch",
+        "Lift.UniswapV2Pair.GetterScalarWalk",
+        "Lift.UniswapV2Pair.GetterStorageMappingCore",
+        "Lift.UniswapV2Pair.GetterStorageMappingDecoder",
+        "Lift.UniswapV2Pair.GetterStorageDispatch",
+        "Lift.UniswapV2Pair.GetterStorageMappingWalk",
+        "Lift.UniswapV2Pair.Consumption",
+        "Lift.UniswapV2Pair.Layout",
+        "Lift.UniswapV2Pair.WriterArithmetic",
+        "Lift.UniswapV2Pair.WriterMemory",
+        "Lift.UniswapV2Pair.ApproveCore",
+        "Lift.UniswapV2Pair.WriterEntries",
+        "Lift.UniswapV2Pair.WriterStorage",
+        "Lift.UniswapV2Pair.WriterLockStorage",
+        "Lift.UniswapV2Pair.ApproveSource",
+        "Lift.UniswapV2Pair.TransferCore",
+        "Lift.UniswapV2Pair.LPMintCore",
+        "Lift.UniswapV2Pair.LPBurnCore",
+        "Lift.UniswapV2Pair.LPBurnSource",
+        "Lift.UniswapV2Pair.BurnPricingWalk",
+        "Lift.UniswapV2Pair.BurnBalanceWalk",
+        "Lift.UniswapV2Pair.BurnSuffixWalk",
+        "Lift.UniswapV2Pair.BurnSource",
+        "Lift.UniswapV2Pair.BurnFinalTurns",
+        "Lift.UniswapV2Pair.BurnPrefixWalk",
+        "Lift.UniswapV2Pair.BurnFrameWalk",
+        "Lift.UniswapV2Pair.BurnPricingTurns",
+        "Lift.UniswapV2Pair.BurnTransferTurns",
+        "Lift.UniswapV2Pair.BurnFeeTransfers",
+        "Lift.UniswapV2Pair.BurnDispatchWalk",
+        "Lift.UniswapV2Pair.BurnForward",
+        "Lift.UniswapV2Pair.BurnForwardSuffix",
+        "Lift.UniswapV2Pair.BurnForwardBody",
+        "Lift.UniswapV2Pair.BurnForwardAccept",
+        "Lift.UniswapV2Pair.SourceReplay",
+        "Lift.UniswapV2Pair.SourceReplayOracle",
+        "Lift.UniswapV2Pair.ReplayWriterGas",
+        "Lift.UniswapV2Pair.PairSupply",
+        "Lift.UniswapV2Pair.PairHistory",
+        "Lift.UniswapV2Pair.SwapForwardAccept",
+        "Lift.UniswapV2Pair.MintForwardAccept",
+        "Lift.UniswapV2Pair.PairHistoryLive",
+        "Lift.UniswapV2Pair.PairHistoryLiveAdmin",
+        "Lift.UniswapV2Pair.PairCallShape",
+        "Lift.UniswapV2Pair.PairCallSiteShape",
+        "Lift.UniswapV2Pair.PairCallSites",
+        "Lift.UniswapV2Pair.PairCallSitesCheck",
+        "Lift.UniswapV2Pair.SwapForwardBack",
+        "Lift.UniswapV2Pair.SwapForwardBalance",
+        "Lift.UniswapV2Pair.SwapForwardCallback",
+        "Lift.UniswapV2Pair.SwapForwardCheck",
+        "Lift.UniswapV2Pair.SwapForwardFront",
+        "Lift.UniswapV2Pair.SwapForwardPrefix",
+        "Lift.UniswapV2Pair.SwapForwardTransfer",
+        "Lift.UniswapV2Pair.SwapForwardUpdate",
+        "Lift.UniswapV2Pair.CalleeControls",
+        "Lift.UniswapV2Pair.CalleeControlsReach",
+        "Lift.UniswapV2Pair.CalleeControlsSwap",
+        "Lift.UniswapV2Pair.LedgerKeyControl",
+        "Lift.UniswapV2Pair.MintCanonical",
+        "Lift.UniswapV2Pair.MintCanonicalOwn",
+        "Lift.UniswapV2Pair.ModelMutants",
+        "Lift.UniswapV2Pair.OracleControls",
+        "Lift.UniswapV2Pair.PermitTurns",
+        "Lift.UniswapV2Pair.RefinementControls",
+        "Lift.UniswapV2Pair.SwapAbi",
+        "Lift.UniswapV2Pair.SwapBack",
+        "Lift.UniswapV2Pair.SwapBackTurns",
+        "Lift.UniswapV2Pair.SwapBalanceWalk",
+        "Lift.UniswapV2Pair.SwapCallWorld",
+        "Lift.UniswapV2Pair.SwapCallback",
+        "Lift.UniswapV2Pair.SwapCanonical",
+        "Lift.UniswapV2Pair.SwapCheckWalk",
+        "Lift.UniswapV2Pair.SwapControls",
+        "Lift.UniswapV2Pair.SwapCut",
+        "Lift.UniswapV2Pair.SwapForward",
+        "Lift.UniswapV2Pair.SwapFront",
+        "Lift.UniswapV2Pair.SwapFrontCanonical",
+        "Lift.UniswapV2Pair.SwapFrontTurns",
+        "Lift.UniswapV2Pair.SwapFrontTyped",
+        "Lift.UniswapV2Pair.SwapTransfer",
+        "Lift.UniswapV2Pair.SwapUpdateWalk",
+        "Lift.UniswapV2Pair.SafeTransferWalk",
+        "Lift.UniswapV2Pair.LPMintSource",
+        "Lift.UniswapV2Pair.FeeMintArithmetic",
+        "Lift.UniswapV2Pair.FeeMintCall",
+        "Lift.UniswapV2Pair.FeeMintWalk",
+        "Lift.UniswapV2Pair.FeeMintSource",
+        "Lift.UniswapV2Pair.MintAfterFeeWalk",
+        "Lift.UniswapV2Pair.MintSource",
+        "Lift.UniswapV2Pair.MintPrefixWalk",
+        "Lift.UniswapV2Pair.TransferFromCore",
+        "Lift.UniswapV2Pair.TransferFromEntries",
+        "Lift.UniswapV2Pair.TransferFromSource",
+        "Lift.UniswapV2Pair.InitializeCore",
+        "Lift.UniswapV2Pair.InitializeEntries",
+        "Lift.UniswapV2Pair.InitializeSource",
+        "Lift.UniswapV2Pair.TransferEntries",
+        "Lift.UniswapV2Pair.TransferSource",
+        "Lift.UniswapV2Pair.UpdateArithmetic",
+        "Lift.UniswapV2Pair.UpdateSource",
+        "Lift.UniswapV2Pair.BalanceCallWalk",
+        "Lift.UniswapV2Pair.SyncWalk",
+        "Lift.UniswapV2Pair.SyncTurns",
+        "Lift.UniswapV2Pair.SyncCanonical",
+        "Lift.UniswapV2Pair.SyncGasCanonical",
+        "Lift.UniswapV2Pair.SkimWalk",
+        "Lift.UniswapV2Pair.SkimTransferWalk",
+        "Lift.UniswapV2Pair.SkimSecondWalk",
+        "Lift.UniswapV2Pair.SkimSource",
+        "Lift.UniswapV2Pair.SkimHandler",
+        "Lift.UniswapV2Pair.SkimCanonical",
+        "Lift.UniswapV2Pair.SkimForward",
+        "Lift.UniswapV2Pair.SkimForwardAccept",
+        "Lift.UniswapV2Pair.MutableTurns",
+        "Lift.UniswapV2Pair.PairSelectors",
+        "Lift.UniswapV2Pair.PairLockedEntries",
+        "Lift.UniswapV2Pair.LockedSupply",
+        "Lift.UniswapV2Pair.StaticViewClassify",
+        "Lift.UniswapV2Pair.StaticViewSource",
+        "Lift.UniswapV2Pair.StaticViewTurns",
+        "Lift.UniswapV2Pair.UpdateWalk",
+        "Lift.UniswapV2Pair.UpdateOverflowWalk",
+        "Lift.UniswapV2Pair.UpdateTailWalk",
+        "Lift.UniswapV2Pair.GetterStorageReservesCore",
+        "Lift.UniswapV2Pair.GetterStorageReservesMemory",
+        "Lift.UniswapV2Pair.GetterStorageReservesWrapper",
+        "Lift.UniswapV2Pair.GetterStorageReservesWalk",
+        "Lift.UniswapV2Pair.PermitWalk",
+        "Lift.UniswapV2Pair.PermitEntries",
+        "Lift.UniswapV2Pair.PermitSource",
+    ],
     "withdrawal-request": ["Lift.WithdrawalRequest.Cert", "Lift.WithdrawalRequest.Check",
                            "Lift.WithdrawalRequest.Jumps", "Lift.WithdrawalRequest.Model",
                            "Lift.WithdrawalRequest.Layout", "Lift.WithdrawalRequest.Prog",
@@ -562,6 +745,10 @@ CONTRACTS = {
 # to name more than one contract family, and adding a module here is the moment
 # check 4 starts binding it. Nothing may import back into this list.
 COMPOSITION = [
+    "Composition.UniswapV2PairWeth9Calls",
+    "Composition.Weth9SettledCallers",
+    "Composition.UniswapV2PairWeth9",
+    "Composition.UniswapV2PairWeth9Frame",
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGateway",
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControl",
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayCrossing",

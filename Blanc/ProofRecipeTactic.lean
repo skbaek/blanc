@@ -22,6 +22,21 @@ downstream arms below are leaf-only. -/
 def proofRecipeLeafTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM Bool := do
   let head := proofRecipeHeadName? target
   match trigger with
+  | "goal-shape:extcodesize-compiled-step" =>
+      -- One exact compiled-instruction shape and one named definition lookup.
+      -- Do not normalize the goal or inspect unrelated operands.
+      match target.consumeMData with
+      | .app (.app (.app (.app (.const name _) _) _) instruction) _ =>
+          if name != `Blanc.Ninst.RunCompiled then
+            return false
+          let instruction := instruction.consumeMData
+          if instruction.isConstOf `Blanc.Ninst.extcodesize then
+            return true
+          let info ← Lean.getConstInfo `Blanc.Ninst.extcodesize
+          match info.value? with
+          | some value => return instruction == value.consumeMData
+          | none => return false
+      | _ => pure false
   | "goal-head:CompiledStackSafety.ResumeSafe" =>
       return head == some `Blanc.CompiledStackSafety.ResumeSafe
   | "goal-shape:finite-coalition-ledger" =>

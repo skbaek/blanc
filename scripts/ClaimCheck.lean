@@ -80,6 +80,13 @@ import Blanc.Lift.WithdrawalRequest.ExactFeeDomain
 import Blanc.Composition.WithdrawalRequestFeeRefutation
 import Blanc.Lift.WithdrawalRequest.NatLiveness
 import Blanc.Lift.WithdrawalRequest.Creation.Deploy
+import Blanc.Lift.UniswapV2Pair.PairHistory
+import Blanc.Lift.UniswapV2Pair.PairHistoryLive
+import Blanc.Lift.UniswapV2Pair.PairHistoryLiveAdmin
+import Blanc.Lift.UniswapV2Pair.PermitSource
+import Blanc.Lift.UniswapV2Pair.BurnFeeTransfers
+import Blanc.Lift.UniswapV2Pair.StaticViewClassify
+import Blanc.Lift.UniswapV2Pair.Creation.DeployInit
 
 /-!
 Lean-checked statement pins for the WETH10 flagship declarations and the Lido
@@ -7570,3 +7577,2046 @@ example {cfg : ChainConfig} {checkpoint current middle future : BlockChain}
   .step prior block
 
 end Blanc.ExecutionTrace
+
+/-!
+Uniswap V2 Pair claim-map headlines (section 5.8): one exact statement pin per required headline of
+`scripts/check-deployed-claim-map.py`, each written in the namespace and with the `open`s of the
+module that states it, so every name resolves as it does there.  A change to any headline statement
+breaks this file; a proof-only change does not.
+-/
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+-- Uniswap V2 Pair: pair_history_committed
+example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
+    some (future.state.getCode pair).toList = pairSem.image ∧
+    ∃ steps : List PairStep,
+      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      (∀ s ∈ steps, s.Authentic pair) ∧
+      ∃ (finish : State) (K' : WriterKey → Prop),
+        SourceReplay st₀ (steps.map PairStep.source) finish ∧
+        runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
+        (∀ k, K₀ k → K' k) ∧
+        (∀ k, K' k → WriterExtend K₀ (pairHistoryTouchedKeys pair trace) k) ∧
+        WriterRep K' (future.state.getStor pair) finish :=
+  pair_history_committed trace installed initial fresh
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+-- Uniswap V2 Pair: pair_history_initialized
+example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {factory token0 token1 : Adr} {domain : B256}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : InitializedCheckpoint (checkpoint.state.getStor pair) factory domain token0 token1)
+    (fresh : WriterFreshKeys (fun _ => False) (pairHistoryTouchedKeys pair trace)) :
+    some (future.state.getCode pair).toList = pairSem.image ∧
+    ∃ steps : List PairStep,
+      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      (∀ s ∈ steps, s.Authentic pair) ∧
+      ∃ (finish : State) (K' : WriterKey → Prop),
+        SourceReplay (initializedState factory domain token0 token1)
+          (steps.map PairStep.source) finish ∧
+        runSourceInvocations (initializedState factory domain token0 token1)
+          (steps.map PairStep.source) = some finish ∧
+        (∀ k, K' k → k ∈ pairHistoryTouchedKeys pair trace) ∧
+        WriterRep K' (future.state.getStor pair) finish :=
+  pair_history_initialized trace installed initial fresh
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+-- Uniswap V2 Pair: pair_history_ledger
+example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {factory token0 token1 : Adr} {domain : B256}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : InitializedCheckpoint (checkpoint.state.getStor pair) factory domain token0 token1)
+    (fresh : WriterFreshKeys (fun _ => False) (pairHistoryTouchedKeys pair trace)) :
+    ∃ steps : List PairStep,
+      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      (∀ s ∈ steps, s.Authentic pair) ∧
+      ∃ (finish : State) (K' : WriterKey → Prop),
+        runSourceInvocations (initializedState factory domain token0 token1) (steps.map PairStep.source) = some finish ∧
+        WriterRep K' (future.state.getStor pair) finish ∧
+        finish.Ledger :=
+  pair_history_ledger trace installed initial fresh
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+-- Uniswap V2 Pair: pair_history_oracle
+example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
+    ∃ steps : List PairStep,
+      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      (∀ s ∈ steps, s.Authentic pair) ∧
+      ∃ (finish : State) (K' : WriterKey → Prop),
+        runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
+        WriterRep K' (future.state.getStor pair) finish ∧
+        finish.price0CumulativeLast.toNat =
+          (st₀.price0CumulativeLast.toNat +
+            oracleSum0 (sourceReplayUpdates st₀ (steps.map PairStep.source))) % 2 ^ 256 ∧
+        finish.price1CumulativeLast.toNat =
+          (st₀.price1CumulativeLast.toNat +
+            oracleSum1 (sourceReplayUpdates st₀ (steps.map PairStep.source))) % 2 ^ 256 ∧
+        (∀ u ∈ sourceReplayUpdates st₀ (steps.map PairStep.source), u.update.Lawful) ∧
+        OracleTimestampChain st₀.blockTimestampLast finish.blockTimestampLast
+          (sourceReplayUpdates st₀ (steps.map PairStep.source)) ∧
+        sourceReplayUpdates st₀ (steps.map PairStep.source) =
+          (sourceReplayReceipts st₀ (steps.map PairStep.source)).flatMap Prod.snd ∧
+        ∀ inv receipts, (inv, receipts) ∈ sourceReplayReceipts st₀ (steps.map PairStep.source) →
+          ∃ s ∈ steps, inv = s.source ∧
+            ∀ u ∈ receipts, u.update.timestamp = s.frame.sevm.benvStat.time :=
+  pair_history_oracle trace installed initial fresh
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+-- Uniswap V2 Pair: pair_history_feeOff_product
+example {pair : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
+    ∃ steps : List PairStep,
+      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      (∀ s ∈ steps, s.Authentic pair) ∧
+      ∃ (finish : State) (K' : WriterKey → Prop),
+        runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
+        WriterRep K' (future.state.getStor pair) finish ∧
+        (sourceReplayAnswers st₀ (steps.map PairStep.source) →
+          ∀ before after, (before, after) ∈ sourceReplayEdges st₀ (steps.map PairStep.source) →
+            0 < before.totalSupply.toNat →
+            before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
+              after.reserve0.val * after.reserve1.val * before.totalSupply.toNat ^ 2) :=
+  pair_history_feeOff_product trace installed initial fresh
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+-- Uniswap V2 Pair: pair_history_feeOn_product
+example {pair : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
+    ∃ steps : List PairStep,
+      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      (∀ s ∈ steps, s.Authentic pair) ∧
+      ∃ (finish : State) (K' : WriterKey → Prop),
+        runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
+        WriterRep K' (future.state.getStor pair) finish ∧
+        (sourceReplayNoShrink st₀ (steps.map PairStep.source) →
+          ∀ before inv after, (before, inv, after) ∈ sourceReplaySteps st₀ (steps.map PairStep.source) →
+            0 < before.totalSupply.toNat →
+            before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
+              after.reserve0.val * after.reserve1.val *
+                (before.totalSupply.toNat + entryFeeAmount before inv.entry inv.transcript) ^ 2) :=
+  pair_history_feeOn_product trace installed initial fresh
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair: permit_bytecode_refines_source
+example {K : WriterKey → Prop} {current : Checkpoint}
+    {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (fresh : WriterFreshKeys K (permitTouched (permitOwner sevm) (permitSpender sevm)))
+    (representable : sevm.data.length < 2 ^ 256)
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0xd505accf) (freshOutput : b.output = [])
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧ 228 ≤ sevm.data.length ∧ sevm.isStatic = false ∧
+      sevm.benvStat.time ≤ permitDeadline sevm ∧
+      ∃ (gw : B256) (callGas : Nat) (d : Devm) (out : Bytes) (residual : Nat),
+        PermitRawCall sevm b 0xd505accf gw callGas d out ∧
+        ∀ codeExists, PermitSourceResult K current invocation sevm b post d out codeExists residual :=
+  permit_bytecode_refines_source rep fresh representable codeEq fork selector freshOutput run
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair: burnRaw_source_authentic
+example {U K : WriterKey → Prop} {current : Checkpoint}
+    {sevm : Sevm} {b publicPost : Devm} {G : Nat}
+    (invocation : List Nat) (codeEq : sevm.code = code)
+    (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0x89afcb44)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (tracked : K (.balance sevm.currentTarget))
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok publicPost))
+    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
+    (trace : ∀ k ∈ mintTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok publicPost, run⟩, U k)
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
+    (good : ∀ F ∈ Exec.rawFrameRoots run,
+      F.sevm.currentTarget = sevm.currentTarget → LockedGood U F)
+    (staticGood : ∀ F ∈ Exec.rawFrameRoots run, F.sevm.currentTarget = sevm.currentTarget →
+      ∀ k ∈ staticViewDecodedKeys F.sevm, U k) :
+    BurnEntryAuthenticFinished U K current ⟨0, sevm, St b [] Mem.empty G, .ok publicPost, run⟩
+      b (.halted publicPost) invocation :=
+  burnRaw_source_authentic invocation codeEq fork selector rep tracked run inj apart sub trace sem image installed good staticGood
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair: staticView_bytecode_inv
+example {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (static : sevm.isStatic = true)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
+      ∃ view : StaticView, Blanc.Sevm.selector sevm = view.selector :=
+  staticView_bytecode_inv codeEq fork static run
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace
+
+-- Uniswap V2 Pair: pair_history_writer_live
+example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
+    (writer : LedgerWriter) {sevm : Sevm} {pre : Devm}
+    (target : sevm.currentTarget = pair) (state : pre.state = future.state)
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (representable : sevm.data.length < 2 ^ 256)
+    (length : writer.calldataSize ≤ sevm.data.length)
+    (selector : Blanc.Sevm.selector sevm = writer.selector)
+    (callFresh : WriterFreshKeys (pairHistoryUniverse pair trace K₀) (writer.keys sevm)) :
+    ∃ (finish : State) (K' : WriterKey → Prop), PairHistoryReplayed pair trace K₀ st₀ finish K' ∧
+      ∀ (G : Nat) (sourceFrame : Frame) (returndata : Bytes),
+        startImmediate { state := finish, logs := [], updates := [] } (writerContext sevm [])
+          (writer.entry sevm) = some (.finished sourceFrame returndata) →
+        gCallStipend < G →
+        Nonempty (Exec 0 sevm (St pre [] Mem.empty (G + writer.cost sevm pre))
+          (.ok (writer.post sevm pre G))) ∧
+        (writer.post sevm pre G).gasLeft = G ∧
+        writer.Result K' { state := finish, logs := [], updates := [] } [] sevm pre
+          (writer.post sevm pre G) G :=
+  pair_history_writer_live trace installed initial fresh writer target state codeEq fork representable length selector callFresh
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace
+
+-- Uniswap V2 Pair: pair_history_sync_live
+example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
+    {sevm : Sevm} {pre d0 d1 : Devm} {callGas0 callGas1 G : Nat}
+    (target : sevm.currentTarget = pair) (state : pre.state = future.state)
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (output : pre.output = []) (representable : sevm.data.length < 2 ^ 256)
+    (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
+    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9) (static : sevm.isStatic = false)
+    (sentry : gCallStipend <
+      (callGas0 + 5 + 22 + temporalAccountAccessCost (syncFirstWorld sevm pre)
+        (syncFirstToken sevm pre).toAdr) + sloadCost sevm (syncLockedWorld sevm pre) 6 + 119 +
+      sstoreCost sevm (afterSload sevm pre 12) 12 0)
+    (nonzero0 : ((syncFirstWorld sevm pre).getCode (syncFirstToken sevm pre).toAdr).size.toB256 ≠ 0)
+    (call0 : Ninst.RunCompiled sevm
+      (St (temporalAccountAccessBase (syncFirstWorld sevm pre) (syncFirstToken sevm pre).toAdr)
+        (callGas0.toB256 :: (syncFirstToken sevm pre) :: 128 :: 36 :: 128 :: 32 :: 164 ::
+          0x70a08231 :: (syncFirstToken sevm pre) :: 0x1fd4 :: 0x0257 :: [0xfff6cae9])
+        (balanceRequestMemory getterInitMemory sevm.currentTarget) callGas0) (.exec .staticcall) d0)
+    (success0 : d0.stack = 1 :: 164 :: 0x70a08231 :: (syncFirstToken sevm pre) :: 0x1fd4 :: 0x0257 ::
+      [0xfff6cae9])
+    (returnedGas0 : d0.gasLeft = callGas1 + 5 + 22 +
+      temporalAccountAccessCost (afterSload sevm d0 7)
+        (d0.getStorVal sevm.currentTarget 7).toAdr.toB256.toAdr +
+      sloadCost sevm d0 7 + 113 + 70)
+    (long0 : 32 ≤ d0.returnData.length)
+    (nonzero1 : ((afterSload sevm d0 7).getCode
+      (d0.getStorVal sevm.currentTarget 7).toAdr.toB256.toAdr).size.toB256 ≠ 0)
+    (call1 : Ninst.RunCompiled sevm
+      (St (temporalAccountAccessBase (afterSload sevm d0 7)
+          (d0.getStorVal sevm.currentTarget 7).toAdr.toB256.toAdr)
+        (callGas1.toB256 :: (d0.getStorVal sevm.currentTarget 7).toAdr.toB256 ::
+          128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
+          (d0.getStorVal sevm.currentTarget 7).toAdr.toB256 ::
+          Bytes.toB256 (d0.returnData.take 32) :: 0x1fd4 :: 0x0257 :: [0xfff6cae9])
+        (balanceRequestMemory (balanceReplyMemory getterInitMemory sevm.currentTarget d0.returnData)
+          sevm.currentTarget) callGas1) (.exec .staticcall) d1)
+    (success1 : d1.stack = 1 :: 164 :: 0x70a08231 ::
+      (d0.getStorVal sevm.currentTarget 7).toAdr.toB256 ::
+      Bytes.toB256 (d0.returnData.take 32) :: 0x1fd4 :: 0x0257 :: [0xfff6cae9])
+    (returnedGas1 : d1.gasLeft = (syncUpdateUnlockClosedGas sevm d1
+      (Bytes.toB256 (d0.returnData.take 32)) (Bytes.toB256 (d1.returnData.take 32)) 192 (G + 1)) + 70)
+    (long1 : 32 ≤ d1.returnData.length) :
+    ∃ (finish : State) (K' : WriterKey → Prop), PairHistoryReplayed pair trace K₀ st₀ finish K' ∧
+      (finish.unlocked = 1 →
+        (∃ result, finish.update (writerContext sevm []) (Bytes.toB256 (d0.returnData.take 32))
+          (Bytes.toB256 (d1.returnData.take 32)) finish.reserve0.val finish.reserve1.val =
+            .ok result) →
+        let balance0 := (Bytes.toB256 (d0.returnData.take 32))
+        let balance1 := (Bytes.toB256 (d1.returnData.take 32))
+        let u := afterSload sevm d1 8
+        let old0 := reserve0Read (d1.getStorVal sevm.currentTarget 8)
+        let old1 := reserve1Read (d1.getStorVal sevm.currentTarget 8)
+        let finalGas := (G + 1) + 8 + sstoreCost sevm (syncUpdatedWorld sevm d1 balance0 balance1) 12 1 + 7
+        let h := afterSload sevm u 8
+        let delta := updateElapsedWord (u.getStorVal sevm.currentTarget 8) sevm.benvStat.time
+        let w9 := updateAccumulatorPost sevm h 9 (updatePriceWord old0 old1) delta
+        let v := updateOracleWorld sevm u old0 old1
+        let store9 := sstoreCost sevm (afterSload sevm h 9) 9
+          (updateAccumulatorWord (h.getStorVal sevm.currentTarget 9)
+            (updatePriceWord old0 old1) delta)
+        let load10 := sloadCost sevm w9 10
+        let store10 := sstoreCost sevm (afterSload sevm w9 10) 10
+          (updateAccumulatorWord (w9.getStorVal sevm.currentTarget 10)
+            (updatePriceWord old1 old0) delta)
+        let load8 := sloadCost sevm v 8
+        let store8 := sstoreCost sevm (afterSload sevm v 8) 8
+          (updateFinalPackedWord sevm u old0 old1 balance0 balance1)
+        gCallStipend < finalGas + updateSyncGas 192 + store8 →
+        (updateOracleActive sevm u old0 old1 →
+          gCallStipend < finalGas + updateSyncGas 192 + load8 + store8 + 110 + store10) →
+        (updateOracleActive sevm u old0 old1 →
+          gCallStipend < finalGas + updateSyncGas 192 + load8 + store8 + 110 +
+            load10 + store10 + 42 + 149 + store9) →
+        gCallStipend < (G + 1) + 8 + sstoreCost sevm (syncUpdatedWorld sevm d1 balance0 balance1) 12 1 →
+        ∃ (post : Devm)
+          (run : Exec 0 sevm (St pre [] Mem.empty (syncCalleePrefixGas sevm pre callGas0 + 15 + 229))
+            (.ok post)),
+          post.gasLeft = G ∧
+          (WriterFreshKeys (pairHistoryUniverse pair trace K₀)
+              (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
+                (syncCalleePrefixGas sevm pre callGas0 + 15 + 229), .ok post, run⟩) →
+            PairStepOutcome PairFrameAuth
+              (WriterExtend (pairHistoryUniverse pair trace K₀)
+                (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
+                  (syncCalleePrefixGas sevm pre callGas0 + 15 + 229), .ok post, run⟩))
+              { state := finish, logs := [], updates := [] } [] K'
+              ⟨0, sevm, St pre [] Mem.empty (syncCalleePrefixGas sevm pre callGas0 + 15 + 229),
+                .ok post, run⟩ post)) :=
+  pair_history_sync_live trace installed initial fresh target state codeEq fork output representable value size selector static sentry nonzero0 call0 success0 returnedGas0 long0 nonzero1 call1 success1 returnedGas1 long1
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace
+
+-- Uniswap V2 Pair: pair_history_mint_live
+example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
+    {sevm : Sevm} {pre : Devm} {G : Nat}
+    (target : sevm.currentTarget = pair) (state : pre.state = future.state)
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (output : pre.output = []) (representable : sevm.data.length < 2 ^ 256)
+    (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
+    (guard : (32 : B256) ≤ sevm.data.length.toB256 - 4)
+    (selector : Blanc.Sevm.selector sevm = 0x6a627842)
+    (callee : MintPrefixCallee sevm pre [0x6a627842] getterInitMemory
+      (Sevm.dataWord sevm 4).toAdr.toB256 0x039b (G + 43))
+    (rowsFresh : WriterFreshKeys (pairHistoryUniverse pair trace K₀)
+      (lpMintTouched (0 : B256).toAdr ++ lpMintTouched (Sevm.dataWord sevm 4).toAdr ++
+        lpMintTouched callee.feeTo)) :
+    ∃ (finish : State) (K' : WriterKey → Prop), PairHistoryReplayed pair trace K₀ st₀ finish K' ∧
+      ∀ (transcript : Transcript) (returndata : Bytes),
+        transcript.firstWord = callee.balance0 → transcript.ownTail.firstWord = callee.balance1 →
+        transcript.ownTail.ownTail.firstWord.toAdr = callee.feeTo →
+        (runTyped finish (writerContext sevm []) (.mint (Sevm.dataWord sevm 4).toAdr)
+          transcript).status = .success returndata →
+        ∃ (liquidity : B256)
+          (run : Exec 0 sevm (St pre [] Mem.empty (callee.gas + 228))
+            (.ok (getterWordPost callee.fee.post [0x6a627842] callee.fee.post.memory liquidity G))),
+          (getterWordPost callee.fee.post [0x6a627842] callee.fee.post.memory liquidity G).gasLeft = G ∧
+          (getterWordPost callee.fee.post [0x6a627842] callee.fee.post.memory liquidity G).output =
+            liquidity.toBytes ∧
+          (WriterFreshKeys (pairHistoryUniverse pair trace K₀)
+              (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty (callee.gas + 228), .ok _, run⟩) →
+            PairStepOutcome PairFrameAuth
+              (WriterExtend (pairHistoryUniverse pair trace K₀)
+                (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty (callee.gas + 228), .ok _, run⟩))
+              { state := finish, logs := [], updates := [] } [] K'
+              ⟨0, sevm, St pre [] Mem.empty (callee.gas + 228), .ok _, run⟩
+              (getterWordPost callee.fee.post [0x6a627842] callee.fee.post.memory liquidity G)) :=
+  pair_history_mint_live trace installed initial fresh target state codeEq fork output representable value size guard selector callee rowsFresh
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace
+
+-- Uniswap V2 Pair: pair_history_swap_live
+example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
+    {sevm : Sevm} {pre : Devm}
+    (target : sevm.currentTarget = pair) (state : pre.state = future.state)
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (output : pre.output = []) (representable : sevm.data.length < 2 ^ 256)
+    (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
+    (selector : Blanc.Sevm.selector sevm = 0x022c0d9f) (guards : SwapAbiGuards sevm) :
+    ∃ (finish : State) (K' : WriterKey → Prop), PairHistoryReplayed pair trace K₀ st₀ finish K' ∧
+      ∀ {d0 d1 dC : Devm} {cg0 cg1 cgC g : Nat}
+        (callee : SwapBackCalleeEnv sevm (swapFrontCutWorld sevm pre d0 d1 dC)
+          (swapFrontCutMem sevm d0 d1 dC) (swapFrontCutMem sevm d0 d1 dC).size
+          (swapFrontPtr sevm d0 d1) (swapCutWords sevm finish) 0x257 [0x022c0d9f] (g + 1))
+        (_front : SwapFrontForwardEnv sevm pre finish d0 d1 dC cg0 cg1 cgC
+          callee.gas),
+        SwapContextConditions (writerContext sevm []) →
+        SwapModelConditions finish (swapAmount0Out sevm) (swapAmount1Out sevm) (swapRecipient sevm)
+          (swapBalanceWord callee.d0.returnData) (swapBalanceWord callee.d1.returnData) →
+        ∃ run : Exec 0 sevm (St pre [] Mem.empty
+            (swapFrontTransferGas sevm pre d0 d1 cg0 cg1 cgC callee.gas +
+              swapPrefixGas sevm pre (swapAmount0Out sevm) + 279 + 166))
+            (.ok (St callee.post [0x022c0d9f] callee.memory g)),
+          (St callee.post [0x022c0d9f] callee.memory g).gasLeft = g ∧
+          (WriterFreshKeys (pairHistoryUniverse pair trace K₀)
+              (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
+                (swapFrontTransferGas sevm pre d0 d1 cg0 cg1 cgC callee.gas +
+                  swapPrefixGas sevm pre (swapAmount0Out sevm) + 279 + 166), .ok _, run⟩) →
+            PairStepOutcome PairFrameAuth
+              (WriterExtend (pairHistoryUniverse pair trace K₀)
+                (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
+                  (swapFrontTransferGas sevm pre d0 d1 cg0 cg1 cgC callee.gas +
+                    swapPrefixGas sevm pre (swapAmount0Out sevm) + 279 + 166), .ok _, run⟩))
+              { state := finish, logs := [], updates := [] } [] K'
+              ⟨0, sevm, St pre [] Mem.empty
+                (swapFrontTransferGas sevm pre d0 d1 cg0 cg1 cgC callee.gas +
+                  swapPrefixGas sevm pre (swapAmount0Out sevm) + 279 + 166), .ok _, run⟩
+              (St callee.post [0x022c0d9f] callee.memory g)) :=
+  pair_history_swap_live trace installed initial fresh target state codeEq fork output representable value size selector guards
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace
+
+-- Uniswap V2 Pair: pair_history_burn_live
+example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
+    {sevm : Sevm} {pre : Devm} {g : Nat}
+    (target : sevm.currentTarget = pair) (state : pre.state = future.state)
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (output : pre.output = []) (representable : sevm.data.length < 2 ^ 256)
+    (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
+    (guard : (32 : B256) ≤ sevm.data.length.toB256 - 4)
+    (selector : Blanc.Sevm.selector sevm = 0x89afcb44)
+    (callee : BurnForwardEnv sevm pre g)
+    (rowsFresh : WriterFreshKeys (pairHistoryUniverse pair trace K₀)
+      (lpMintTouched sevm.currentTarget ++ lpMintTouched callee.feeTo)) :
+    ∃ (finish : State) (K' : WriterKey → Prop), PairHistoryReplayed pair trace K₀ st₀ finish K' ∧
+      ∀ (transcript : Transcript) (returndata : Bytes),
+        transcript.firstWord = callee.balance0 → transcript.ownTail.firstWord = callee.balance1 →
+        transcript.ownTail.ownTail.firstWord.toAdr = callee.feeTo →
+        transcript.ownTail.ownTail.ownTail.ownTail.ownTail.firstWord = callee.final0 →
+        transcript.ownTail.ownTail.ownTail.ownTail.ownTail.ownTail.firstWord = callee.final1 →
+        (runTyped finish (writerContext sevm []) (.burn (Sevm.dataWord sevm 4).toAdr)
+          transcript).status = .success returndata →
+        ∃ run : Exec 0 sevm (St pre [] Mem.empty callee.gas) (.ok callee.post),
+          callee.post.gasLeft = g ∧
+          (WriterFreshKeys (pairHistoryUniverse pair trace K₀)
+              (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩) →
+            PairStepOutcome PairFrameAuth
+              (WriterExtend (pairHistoryUniverse pair trace K₀)
+                (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩))
+              { state := finish, logs := [], updates := [] } [] K'
+              ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩ callee.post) :=
+  pair_history_burn_live trace installed initial fresh target state codeEq fork output representable value size guard selector callee rowsFresh
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace
+
+-- Uniswap V2 Pair: pair_history_skim_live
+example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
+    {sevm : Sevm} {pre : Devm} {g : Nat}
+    (target : sevm.currentTarget = pair) (state : pre.state = future.state)
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (output : pre.output = []) (representable : sevm.data.length < 2 ^ 256)
+    (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
+    (abi : (32 : B256) ≤ sevm.data.length.toB256 - 4)
+    (selector : Blanc.Sevm.selector sevm = 0xbc25cf77)
+    (callee : SkimForwardEnv sevm pre g) :
+    ∃ (finish : State) (K' : WriterKey → Prop), PairHistoryReplayed pair trace K₀ st₀ finish K' ∧
+      ∀ (transcript : Transcript) (returndata : Bytes),
+        transcript.firstWord = callee.balance0 →
+        transcript.ownTail.ownTail.firstWord = callee.balance1 →
+        (runTyped finish (writerContext sevm []) (.skim (Sevm.dataWord sevm 4).toAdr)
+          transcript).status = .success returndata →
+        ∃ run : Exec 0 sevm (St pre [] Mem.empty callee.gas) (.ok callee.post),
+          callee.post.gasLeft = g ∧
+          (WriterFreshKeys (pairHistoryUniverse pair trace K₀)
+              (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩) →
+            PairStepOutcome PairFrameAuth
+              (WriterExtend (pairHistoryUniverse pair trace K₀)
+                (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩))
+              { state := finish, logs := [], updates := [] } [] K'
+              ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩ callee.post) :=
+  pair_history_skim_live trace installed initial fresh target state codeEq fork output representable value size abi selector callee
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace
+
+-- Uniswap V2 Pair: pair_history_permit_live
+example {pair : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
+    {sevm : Sevm} {pre d : Devm} {G callGas : Nat}
+    (target : sevm.currentTarget = pair) (state : pre.state = future.state)
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (output : pre.output = []) (representable : sevm.data.length < 2 ^ 256)
+    (size : (4 : B256) ≤ sevm.data.length.toB256)
+    (selector : Blanc.Sevm.selector sevm = 0xd505accf)
+    (guard : (224 : B256) ≤ sevm.data.length.toB256 - 4)
+    (sentry3 : gCallStipend < callGas + 641 + permitNonceStoreCharge sevm pre)
+    (call : Ninst.RunCompiled sevm (St (permitNonceWorld sevm pre (permitOwner sevm))
+      (callGas.toB256 :: 1 :: 482 :: 128 :: 450 :: 32 :: permitPublicCallStack sevm pre 0xd505accf)
+      (permitPublicCallMemory sevm pre) callGas) (.exec .staticcall) d)
+    (success : d.stack = 1 :: permitPublicCallStack sevm pre 0xd505accf)
+    (returnedGas : d.gasLeft = G + permitApproveCharge sevm d + 2165)
+    (sentry : gCallStipend < G + permitApproveCharge sevm d + 1846) :
+    ∃ (finish : State) (K' : WriterKey → Prop), PairHistoryReplayed pair trace K₀ st₀ finish K' ∧
+      ∀ (transcript : Transcript) (returndata : Bytes),
+        transcript.firstRecovered = (permitRecoveredWord d.returnData).toAdr →
+        (runTyped finish (writerContext sevm []) (permitDecodedEntry sevm) transcript).status =
+          .success returndata →
+        ∃ run : Exec 0 sevm (St pre [] Mem.empty
+            (callGas + permitNonceStoreCharge sevm pre + permitNonceCharge sevm pre + 1137))
+            (.ok (permitPublicPost sevm pre d d.returnData 0xd505accf G)),
+          (permitPublicPost sevm pre d d.returnData 0xd505accf G).gasLeft = G ∧
+          (WriterFreshKeys (pairHistoryUniverse pair trace K₀)
+              (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
+                (callGas + permitNonceStoreCharge sevm pre + permitNonceCharge sevm pre + 1137),
+                .ok _, run⟩) →
+            PairStepOutcome PairFrameAuth
+              (WriterExtend (pairHistoryUniverse pair trace K₀)
+                (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
+                  (callGas + permitNonceStoreCharge sevm pre + permitNonceCharge sevm pre + 1137),
+                  .ok _, run⟩))
+              { state := finish, logs := [], updates := [] } [] K'
+              ⟨0, sevm, St pre [] Mem.empty
+                (callGas + permitNonceStoreCharge sevm pre + permitNonceCharge sevm pre + 1137),
+                .ok _, run⟩
+              (permitPublicPost sevm pre d d.returnData 0xd505accf G)) :=
+  pair_history_permit_live trace installed initial fresh target state codeEq fork output representable size selector guard sentry3 call success returnedGas sentry
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace
+
+-- Uniswap V2 Pair: pair_history_initialize_live
+example {pair : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
+    {sevm : Sevm} {pre : Devm} {G : Nat}
+    (target : sevm.currentTarget = pair) (state : pre.state = future.state)
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (output : pre.output = []) (representable : sevm.data.length < 2 ^ 256)
+    (size : (4 : B256) ≤ sevm.data.length.toB256)
+    (selector : Blanc.Sevm.selector sevm = 0x485cc955)
+    (guard : (64 : B256) ≤ sevm.data.length.toB256 - 4)
+    (sentry0 : gCallStipend < G + initializeStore0Charge sevm pre + initializeLoad1Charge sevm pre +
+      initializeStore1Charge sevm pre + 39)
+    (sentry1 : gCallStipend < G + initializeStore1Charge sevm pre + 9) :
+    ∃ (finish : State) (K' : WriterKey → Prop), PairHistoryReplayed pair trace K₀ st₀ finish K' ∧
+      ∀ (transcript : Transcript) (returndata : Bytes),
+        (runTyped finish (writerContext sevm [])
+          (.initialize (initializeToken0 sevm) (initializeToken1 sevm)) transcript).status =
+            .success returndata →
+        ∃ run : Exec 0 sevm (St pre [] Mem.empty (G + initializeStorageCharge sevm pre + 377))
+            (.ok (initializePublicPost sevm pre [0x485cc955] getterInitMemory G)),
+          (initializePublicPost sevm pre [0x485cc955] getterInitMemory G).gasLeft = G ∧
+          (WriterFreshKeys (pairHistoryUniverse pair trace K₀)
+              (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty (G + initializeStorageCharge sevm pre + 377),
+                .ok _, run⟩) →
+            PairStepOutcome PairFrameAuth
+              (WriterExtend (pairHistoryUniverse pair trace K₀)
+                (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
+                  (G + initializeStorageCharge sevm pre + 377), .ok _, run⟩))
+              { state := finish, logs := [], updates := [] } [] K'
+              ⟨0, sevm, St pre [] Mem.empty (G + initializeStorageCharge sevm pre + 377), .ok _, run⟩
+              (initializePublicPost sevm pre [0x485cc955] getterInitMemory G)) :=
+  pair_history_initialize_live trace installed initial fresh target state codeEq fork output representable size selector guard sentry0 sentry1
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair.Creation
+open Jaune Blanc.Lift
+
+-- Uniswap V2 Pair: pair_create2_initialized
+example {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
+    {i sz salt : B256}
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hinit : create2InitCode M i sz = code.toList)
+    (hnonce : (b.state.get sevm.currentTarget).nonce ≠ UInt64.max)
+    (hdepth : sevm.depth ≠ 0)
+    (hfresh : Create2TargetEmpty (create2Prepared sevm b S M G i sz
+        (create2NewAddress sevm.currentTarget salt code.toList))
+        (create2NewAddress sevm.currentTarget salt code.toList))
+    (hgas : 2400000 ≤ except64th G) (hroom : S.length < 1024) :
+    ∃ post, Ninst.RunCompiled sevm (St b (0 :: i :: sz :: salt :: S) M
+        (G + create2Charge sevm M i sz)) (.exec .create2) post ∧
+      post.stack = (create2NewAddress sevm.currentTarget salt code.toList).toB256 :: S ∧
+      (post.getCode (create2NewAddress sevm.currentTarget salt code.toList)).toList =
+        Blanc.Lift.UniswapV2Pair.code.toList ∧
+      ∀ {isevm : Sevm} {ib ipost : Devm} {iG : Nat},
+        isevm.currentTarget = create2NewAddress sevm.currentTarget salt code.toList →
+        Devm.getStor ib isevm.currentTarget =
+          Devm.getStor post (create2NewAddress sevm.currentTarget salt code.toList) →
+        isevm.caller = sevm.currentTarget →
+        isevm.data.length < 2 ^ 256 → ib.output = [] →
+        isevm.code = Blanc.Lift.UniswapV2Pair.code → CoveredFork isevm.benvStat.fork →
+        Blanc.Sevm.selector isevm = 0x485cc955 →
+        Exec 0 isevm (St ib [] Mem.empty iG) (.ok ipost) →
+        InitializedCheckpoint (ipost.getStor isevm.currentTarget) sevm.currentTarget
+          (domainSeparator sevm.benvStat.chainId.toB256
+            (create2NewAddress sevm.currentTarget salt code.toList))
+          (initializeToken0 isevm) (initializeToken1 isevm) :=
+  pair_create2_initialized hfork hstatic hinit hnonce hdepth hfresh hgas hroom
+
+end Blanc.Lift.UniswapV2Pair.Creation
+
+namespace Blanc.Lift.UniswapV2Pair.Creation
+open Jaune Blanc.Lift
+
+-- Uniswap V2 Pair: exhibit_create2
+example {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
+    {i sz : B256}
+    (hfactory : sevm.currentTarget = factory)
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hinit : create2InitCode M i sz = code.toList)
+    (hnonce : (b.state.get sevm.currentTarget).nonce ≠ UInt64.max)
+    (hdepth : sevm.depth ≠ 0)
+    (hfresh : Create2TargetEmpty (create2Prepared sevm b S M G i sz pairAddress) pairAddress)
+    (hgas : 2400000 ≤ except64th G) (hroom : S.length < 1024) :
+    ∃ post, Ninst.RunCompiled sevm (St b (0 :: i :: sz :: salt :: S) M
+        (G + create2Charge sevm M i sz)) (.exec .create2) post ∧
+      post.stack = pairAddress.toB256 :: S ∧
+      (post.getCode pairAddress).toList = Blanc.Lift.UniswapV2Pair.code.toList ∧
+      Devm.getStor post pairAddress =
+        ctorStor sevm.benvStat.chainId.toB256 pairAddress factory Stor.empty :=
+  exhibit_create2 hfactory hfork hstatic hinit hnonce hdepth hfresh hgas hroom
+
+end Blanc.Lift.UniswapV2Pair.Creation
+
+
+/-! The Uniswap V2 Pair definitions those headline statements are stated through and the claim map
+cites (the authentication and replay vocabulary, the answer premises, the oracle and ledger laws, the
+storage representation, the gas expressions and the premise records), where the definition body is
+itself the claim.  They are pinned by unfolding (`Iff.rfl`, `rfl`), recursive ones case by case, and
+records by their exact constructor, so a weakened body or an added, removed or retyped field fails
+here.  A premise record's own sub-records (for example the per-call environments a forward
+environment is built from) are not unfolded here. -/
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+-- Uniswap V2 Pair definition: pairFrameObs
+example (pair : Adr) (frame : Exec.Frame)  :
+    pairFrameObs pair frame =
+      (if frame.sevm.currentTarget = pair ∧ frame.sevm.isStatic = false then [frame] else []) :=
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+-- Uniswap V2 Pair definition: pairSubtreeFrames
+example (pair : Adr) (f : Exec.Frame)  :
+    pairSubtreeFrames pair f =
+      ((Exec.committedFrames f.run).flatMap (pairFrameObs pair)) :=
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+-- Uniswap V2 Pair definition: pairHistoryTouchedKeys
+example {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (pair : Adr) (trace : ConfiguredHistoryTrace cfg checkpoint future)  :
+    pairHistoryTouchedKeys pair trace =
+      (trace.rawFrames.flatMap fun D => if D.sevm.currentTarget = pair then pairDerivKeys D else []) :=
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+-- Uniswap V2 Pair definition: committedPairFrames
+example {cfg : ChainConfig} {checkpoint future : BlockChain} (pair : Adr)
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)  :
+    committedPairFrames pair trace =
+      (trace.settledFrames.flatMap (pairFrameObs pair)) :=
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+-- Uniswap V2 Pair record: PairStep
+example 
+    (frame : Exec.Frame)
+    (entry : Entry)
+    (transcript : Transcript) :
+    PairStep  :=
+  { frame := frame
+    entry := entry
+    transcript := transcript }
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+-- Uniswap V2 Pair definition: PairStep.source
+example (s : PairStep)  :
+    PairStep.source s =
+      ({ context := writerContext s.frame.sevm [], entry := s.entry, transcript := s.transcript }) :=
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+-- Uniswap V2 Pair definition: PairStep.Authentic
+example (pair : Adr)
+    (s : PairStep)  :
+    PairStep.Authentic pair s ↔
+      (s.frame.pc = 0 ∧ Execution.commits s.frame.out = true ∧ s.frame.sevm.currentTarget = pair ∧
+    s.frame.sevm.isStatic = false ∧
+    PairFrameAuth (Blanc.Exec.Frame.rootDeriv s.frame) s.entry s.transcript) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: PairFrameAuth
+example (D : Exec.Deriv) (entry : Entry) (T : Transcript)  :
+    PairFrameAuth D entry T ↔
+      (LockedAuth D entry T ∨ SwapAuth D entry T ∨ MintAuth D entry T ∨ SyncAuth D entry T ∨
+    SkimAuth D entry T ∨ BurnAuth D entry T) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: LockedAuth
+example (D : Exec.Deriv) (entry : Entry) (nested : Transcript)  :
+    LockedAuth D entry nested ↔
+      ((Blanc.Sevm.selector D.sevm = 0xa9059cbb ∧ entry = transferDecodedEntry D.sevm ∧
+    nested = .done) ∨
+  (Blanc.Sevm.selector D.sevm = 0x095ea7b3 ∧ entry = approveDecodedEntry D.sevm ∧
+    nested = .done) ∨
+  (Blanc.Sevm.selector D.sevm = 0x23b872dd ∧ entry = transferFromDecodedEntry D.sevm ∧
+    nested = .done) ∨
+  (Blanc.Sevm.selector D.sevm = 0x485cc955 ∧ entry = initializeDecodedEntry D.sevm ∧
+    nested = .done) ∨
+  (Blanc.Sevm.selector D.sevm = 0xd505accf ∧ entry = permitDecodedEntry D.sevm ∧
+    ∃ (out : Bytes) (entered : Bool) (views : List StaticViewTurn),
+      nested = .next (permitExternalResult out entered) (staticViewTranscript views .done) .done ∧
+      PermitRecoveryAuth D out entered views) ∨
+  (∃ view : StaticView, Blanc.Sevm.selector D.sevm = view.selector ∧
+    entry = view.entry D.sevm ∧ nested = .done)) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: MintAuth
+example (D : Exec.Deriv) (entry : Entry) (T : Transcript)  :
+    MintAuth D entry T ↔
+      (Blanc.Sevm.selector D.sevm = 0x6a627842 ∧ entry = .mint (Sevm.dataWord D.sevm 4).toAdr ∧
+  ∃ (current : Checkpoint) (out0 out1 outF : Bytes) (views0 views1 viewsF : List StaticViewTurn),
+    MintObservedSteps D current D.sevm out0 out1 outF ∧
+    T = .next (feeObservedResult out0) (staticViewTranscript views0 .done)
+      (.next (feeObservedResult out1) (staticViewTranscript views1 .done)
+        (.next (feeObservedResult outF) (staticViewTranscript viewsF .done) .done)) ∧
+    (∀ picked ∈ views0 ++ views1 ++ viewsF,
+      Blanc.Sevm.selector picked.1.frame.sevm = picked.2.selector ∧
+      picked.1.frame.sevm.currentTarget = D.sevm.currentTarget ∧
+      picked.1.frame.sevm.isStatic = true) ∧
+    MintViewProvenance D D.sevm.currentTarget current.state.token0 views0 ∧
+    MintViewProvenance D D.sevm.currentTarget current.state.token1 views1 ∧
+    MintViewProvenance D D.sevm.currentTarget current.state.factory viewsF) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: SyncAuth
+example (D : Exec.Deriv) (entry : Entry) (T : Transcript)  :
+    SyncAuth D entry T ↔
+      (Blanc.Sevm.selector D.sevm = 0xfff6cae9 ∧ entry = .sync ∧
+  ∃ (K : WriterKey → Prop) (current : Checkpoint) (invocation : List Nat) (b post : Devm)
+    (result : SyncCanonicalResult K current invocation D b post),
+    T = .next (syncExternalReply result.out0) (staticViewTranscript result.views0 .done)
+      (.next (syncExternalReply result.out1) (staticViewTranscript result.views1 .done) .done)) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: SkimAuth
+example (D : Exec.Deriv) (entry : Entry) (T : Transcript)  :
+    SkimAuth D entry T ↔
+      (Blanc.Sevm.selector D.sevm = 0xbc25cf77 ∧ entry = .skim (skimRecipient D.sevm) ∧
+  ∃ (b : Devm) (G : Nat), D.pc = 0 ∧ D.devm = St b [] Mem.empty G ∧
+  ∃ (out0 : Bytes) (d : Devm), SkimFirstSteps D D.sevm b out0 d ∧
+  ∃ (out1 : Bytes) (d2 : Devm) (views0 views1 : List StaticViewTurn)
+    (turns1 turns3 : List MutableTurn),
+    SkimSecondSteps D D.sevm d (skimToken1 D.sevm b) out1 d2 ∧
+    T = .next (skimBalanceReply out0) (staticViewTranscript views0 .done)
+      (.next (skimTransferReply d.returnData true) (mutableTranscript turns1 .done)
+        (.next (skimBalanceReply out1) (staticViewTranscript views1 .done)
+          (.next (skimTransferReply d2.returnData true) (mutableTranscript turns3 .done) .done))) ∧
+    (∀ picked ∈ views0 ++ views1, Blanc.Sevm.selector picked.1.frame.sevm = picked.2.selector ∧
+      picked.1.frame.sevm.currentTarget = D.sevm.currentTarget) ∧
+    (∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns1 ++ turns3 →
+      LockedAuth (Exec.Frame.rootDeriv located.frame) entry nested) ∧
+    (views0 = [] ∧ D.sevm.benvStat.rules.isPrecomp (skimToken0 D.sevm b).toAdr ∨
+      ∃ (child : Evm) (raw : Execution) (childRun : Exec child.pc child.sta child.dyna raw),
+        Execution.commits raw = true ∧
+        (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots D.exc) ∧
+        views0.map Prod.fst =
+          (Exec.retainedTargetTurnsAt D.sevm.currentTarget [] childRun).filterMap Sum.getRight?) ∧
+    (views1 = [] ∧ D.sevm.benvStat.rules.isPrecomp
+        (skimToken1 D.sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr ∨
+      ∃ (child : Evm) (raw : Execution) (childRun : Exec child.pc child.sta child.dyna raw),
+        Execution.commits raw = true ∧
+        (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots D.exc) ∧
+        views1.map Prod.fst =
+          (Exec.retainedTargetTurnsAt D.sevm.currentTarget [] childRun).filterMap Sum.getRight?) ∧
+    ((turns1 = [] ∧ D.sevm.benvStat.rules.isPrecomp
+        (skimToken0 D.sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr) ∨
+      ∃ (child : Evm) (raw : Execution) (childRun : Exec child.pc child.sta child.dyna raw)
+        (committed : Execution.commits raw = true),
+        (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots D.exc) ∧
+        turns1.map MutableTurn.event =
+          Exec.targetLogEventsFrom D.sevm.currentTarget [] 0 childRun committed) ∧
+    ((turns3 = [] ∧ D.sevm.benvStat.rules.isPrecomp
+        (skimToken1 D.sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr) ∨
+      ∃ (child : Evm) (raw : Execution) (childRun : Exec child.pc child.sta child.dyna raw)
+        (committed : Execution.commits raw = true),
+        (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots D.exc) ∧
+        turns3.map MutableTurn.event =
+          Exec.targetLogEventsFrom D.sevm.currentTarget [] 0 childRun committed)) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: SwapAuth
+example (D : Exec.Deriv) (entry : Entry) (T : Transcript)  :
+    SwapAuth D entry T ↔
+      (Blanc.Sevm.selector D.sevm = 0x022c0d9f ∧ entry = swapDecodedEntry D.sevm ∧
+  ∃ (b : Devm) (G : Nat) (current : Checkpoint) (invocation : List Nat) (frame : Frame),
+    D.pc = 0 ∧ D.devm = St b [] Mem.empty G ∧ frame.checkpoint = current ∧
+    frame.context = writerContext D.sevm invocation ∧
+  let sevm := D.sevm
+  let locals := swapFrontLocals sevm current.state
+  let w := swapCutWords sevm current.state
+  let S := swapCutStack w 0x257 [0x022c0d9f]
+  ∃ (T0 T1 TC : Transcript → Transcript) (turns0 turns1 turnsC : List MutableTurn)
+    (b1 b2 d d0 d1 : Devm) (M1 M2 M : Mem) (p1 p : B256) (out0 out1 : Bytes)
+    (views0 views1 : List StaticViewTurn),
+    SwapTransferOpt D sevm (swapPrefixWorld sevm b) S getterInitMemory 128
+      (swapAmount0Out sevm) (swapRecipientWord sevm) current.state.token0.toB256 0x8d0 b1 M1 p1 ∧
+    SwapTransferOpt D sevm b1 S M1 p1
+      (swapAmount1Out sevm) (swapRecipientWord sevm) current.state.token1.toB256 0x8e1 b2 M2 p ∧
+    SwapCallbackOpt D sevm b2 S M2 p (swapRecipientWord sevm) (swapAmount0Out sevm)
+      (swapAmount1Out sevm) (swapDataLength sevm) (swapDataStart sevm) d M ∧
+    ((swapAmount0Out sevm = 0 ∧ T0 = id) ∨ (swapAmount0Out sevm ≠ 0 ∧
+      T0 = (fun tail => .next (swapTransferReply b1.returnData) (mutableTranscript turns0 .done) tail) ∧
+      SwapCallProvenance sevm.currentTarget D sevm (swapPrefixWorld sevm b) b1 turns0)) ∧
+    ((swapAmount1Out sevm = 0 ∧ T1 = id) ∨ (swapAmount1Out sevm ≠ 0 ∧
+      T1 = (fun tail => .next (swapTransferReply b2.returnData) (mutableTranscript turns1 .done) tail) ∧
+      SwapCallProvenance sevm.currentTarget D sevm b1 b2 turns1)) ∧
+    ((swapDataLength sevm = 0 ∧ TC = id) ∨ (swapDataLength sevm ≠ 0 ∧
+      TC = (fun tail => .next (swapCallbackReply d.returnData) (mutableTranscript turnsC .done) tail) ∧
+      SwapCallProvenance sevm.currentTarget D sevm b2 d turnsC)) ∧
+    SwapBalanceCall D sevm d M p w.token0
+      (w.token1 :: w.token0 :: 0 :: 0 :: w.reserve1 :: w.reserve0 :: w.dataLength ::
+        w.dataOffset :: w.recipient :: w.amount1Out :: w.amount0Out :: 0x257 :: [0x022c0d9f]) d0 out0 ∧
+    SwapBalanceCall D sevm d0 (swapBalanceReply M p sevm.currentTarget out0) p w.token1
+      (w.token1 :: w.token0 :: 0 :: swapBalanceWord out0 :: w.reserve1 :: w.reserve0 ::
+        w.dataLength :: w.dataOffset :: w.recipient :: w.amount1Out :: w.amount0Out :: 0x257 ::
+        [0x022c0d9f]) d1 out1 ∧
+    T = ((T0 ∘ T1) ∘ TC)
+      (.next (feeObservedResult out0) (staticViewTranscript views0 .done)
+        (.next (feeObservedResult out1) (staticViewTranscript views1 .done) .done)) ∧
+    (∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns0 ++ turns1 ++ turnsC →
+      LockedAuth (Exec.Frame.rootDeriv located.frame) entry nested) ∧
+    PairViewProvenance D sevm frame (swapTokenWord w.token0) views0 ∧
+    PairViewProvenance D sevm (frame.beginResume (swapRequest0 frame locals))
+      (swapTokenWord w.token1) views1) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: BurnAuth
+example (D : Exec.Deriv) (entry : Entry) (T : Transcript)  :
+    BurnAuth D entry T ↔
+      (Blanc.Sevm.selector D.sevm = 0x89afcb44 ∧
+  entry = .burn ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& Sevm.dataWord D.sevm 4).toAdr ∧
+  BurnFrameAuth D T) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: PairStepOutcome
+example (Auth : Exec.Deriv → Entry → Transcript → Prop) (U : WriterKey → Prop)
+    (current : Checkpoint) (invocation : List Nat) (K : WriterKey → Prop) (D : Exec.Deriv)
+    (post : Devm)  :
+    PairStepOutcome Auth U current invocation K D post ↔
+      (∃ (entry : Entry) (nested : Transcript) (child : RunResult) (bytes : Bytes)
+    (K' : WriterKey → Prop),
+    Auth D entry nested ∧
+    ExactConsumes (startTyped current (writerContext D.sevm invocation) entry) nested child ∧
+    child.status = .success bytes ∧ (∀ k, K k → K' k) ∧ (∀ k, K' k → U k) ∧
+    WriterRep K' (post.getStor D.sevm.currentTarget) child.frame.current.state) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace
+
+-- Uniswap V2 Pair definition: pairHistoryUniverse
+example {cfg : ChainConfig} {checkpoint future : BlockChain} (pair : Adr)
+    (trace : ConfiguredHistoryTrace cfg checkpoint future) (K₀ : WriterKey → Prop)  :
+    pairHistoryUniverse pair trace K₀ =
+      (WriterExtend K₀ (pairHistoryTouchedKeys pair trace)) :=
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace
+
+-- Uniswap V2 Pair definition: PairHistoryReplayed
+example {cfg : ChainConfig} {checkpoint future : BlockChain} (pair : Adr)
+    (trace : ConfiguredHistoryTrace cfg checkpoint future) (K₀ : WriterKey → Prop) (st₀ : State)
+    (finish : State) (K' : WriterKey → Prop)  :
+    PairHistoryReplayed pair trace K₀ st₀ finish K' ↔
+      (∃ steps : List PairStep,
+    steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+    (∀ s ∈ steps, s.Authentic pair) ∧
+    runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
+    (∀ k, K₀ k → K' k) ∧ (∀ k, K' k → pairHistoryUniverse pair trace K₀ k) ∧
+    WriterRep K' (future.state.getStor pair) finish) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: SourceInvocation.run
+example (inv : SourceInvocation) (st : State)  :
+    SourceInvocation.run inv st =
+      (runTyped st inv.context inv.entry inv.transcript) :=
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: OracleUpdate.Lawful
+example (u : OracleUpdate)  :
+    OracleUpdate.Lawful u ↔
+      (u.elapsed = (u.timestamp.toNat % 2 ^ 32 + 2 ^ 32 - u.oldTimestamp.toNat) % 2 ^ 32 ∧
+  u.increment0 =
+    (if u.elapsed > 0 ∧ u.oldReserve0 ≠ 0 ∧ u.oldReserve1 ≠ 0 then
+      (u.oldReserve1 * 2 ^ 112 / u.oldReserve0) * u.elapsed
+    else 0) ∧
+  u.increment1 =
+    (if u.elapsed > 0 ∧ u.oldReserve0 ≠ 0 ∧ u.oldReserve1 ≠ 0 then
+      (u.oldReserve0 * 2 ^ 112 / u.oldReserve1) * u.elapsed
+    else 0)) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: State.Ledger
+example (st : State)  :
+    State.Ledger st ↔
+      (Blanc.SumBacked st.balanceOf st.totalSupply) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: EntryNoShrink
+example (st : State) (ctx : Context) (entry : Entry) (transcript : Transcript)  :
+    EntryNoShrink st ctx entry transcript ↔
+      (match entry with
+  | .burn recipient => BurnEntryNoShrink st ctx.pair recipient transcript
+  | .sync => SyncEntryNoShrink st transcript
+  | _ => True) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: SyncEntryNoShrink
+example (st : State) (transcript : Transcript)  :
+    SyncEntryNoShrink st transcript ↔
+      (st.reserve0.val ≤ transcript.firstWord.toNat ∧
+    st.reserve1.val ≤ transcript.ownTail.firstWord.toNat) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: BurnEntryNoShrink
+example (st : State) (pair recipient : Adr) (transcript : Transcript)  :
+    BurnEntryNoShrink st pair recipient transcript ↔
+      (BurnFeeNoShrink st
+    { locals := { recipient := recipient, reserves := st.cachedReserves, token0 := st.token0, token1 := st.token1 },
+      balance0 := transcript.firstWord, balance1 := transcript.ownTail.firstWord,
+      liquidity := st.balanceOf pair } transcript.ownTail.ownTail) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: EntryFeeOff
+example (entry : Entry) (transcript : Transcript)  :
+    EntryFeeOff entry transcript ↔
+      (match entry with
+  | .mint _ | .burn _ => transcript.ownTail.ownTail.firstWord.toAdr = 0
+  | _ => True) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: entryFeeAmount
+example (st : State) (entry : Entry) (transcript : Transcript)  :
+    entryFeeAmount st entry transcript =
+      (match entry with
+  | .mint _ | .burn _ =>
+    feeAmount st transcript.ownTail.ownTail.firstWord.toAdr st.reserve0.val st.reserve1.val
+  | _ => 0) :=
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: initializedState
+example (factory : Adr) (domain : B256) (token0 token1 : Adr)  :
+    initializedState factory domain token0 token1 =
+      (initializeSourceState (State.empty factory domain) token0 token1) :=
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: InitializedCheckpoint
+example (s : Stor) (factory : Adr) (domain : B256) (token0 token1 : Adr)  :
+    InitializedCheckpoint s factory domain token0 token1 ↔
+      (WriterRep (fun _ => False) s (initializedState factory domain token0 token1)) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: WriterKeysFinite
+example (K : WriterKey → Prop)  :
+    WriterKeysFinite K ↔
+      (∃ keys : List WriterKey, ∀ k, K k ↔ k ∈ keys) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: WriterSupport
+example (K : WriterKey → Prop) (s : Stor)  :
+    WriterSupport K s ↔
+      (Blanc.SlotFootprint.Support WriterKey.slot writerFixedSlots K s) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: WriterInj
+example (K : WriterKey → Prop)  :
+    WriterInj K ↔
+      (Blanc.SlotFootprint.Inj WriterKey.slot K) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: WriterApart
+example (K : WriterKey → Prop)  :
+    WriterApart K ↔
+      (Blanc.SlotFootprint.Apart WriterKey.slot writerFixedSlots K) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: WriterFreshKeys
+example (K : WriterKey → Prop) (keys : List WriterKey)  :
+    WriterFreshKeys K keys ↔
+      (Blanc.SlotFootprint.FreshKeys WriterKey.slot writerFixedSlots K keys) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: WriterExtend
+example (K : WriterKey → Prop) (keys : List WriterKey)  :
+    WriterExtend K keys =
+      (Blanc.SlotFootprint.extendBy K keys) :=
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: WriterSelectedValues
+example (K : WriterKey → Prop) (s : Stor) (st : State)  :
+    WriterSelectedValues K s st ↔
+      (∀ k, K k → s.get k.slot = k.value st) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: WriterLogicalZero
+example (K : WriterKey → Prop) (st : State)  :
+    WriterLogicalZero K st ↔
+      (∀ k, ¬ K k → k.value st = 0) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: WriterFixedMatches
+example (s : Stor) (st : State)  :
+    WriterFixedMatches s st ↔
+      (s.get 0 = st.totalSupply ∧ s.get 3 = st.domainSeparator ∧
+  (s.get 5).toAdr = st.factory ∧ (s.get 6).toAdr = st.token0 ∧
+  (s.get 7).toAdr = st.token1 ∧
+  reserve0Read (s.get 8) = Nat.toB256 st.reserve0.val ∧
+  reserve1Read (s.get 8) = Nat.toB256 st.reserve1.val ∧
+  reserveTimestampRead (s.get 8) = st.blockTimestampLast.toB256 ∧
+  s.get 9 = st.price0CumulativeLast ∧ s.get 10 = st.price1CumulativeLast ∧
+  s.get 11 = st.kLast ∧ s.get 12 = st.unlocked) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair record: WriterRep
+example {K : WriterKey → Prop} {s : Stor} {st : State}
+    (finite : WriterKeysFinite K)
+    (fixed : WriterFixedMatches s st)
+    (support : WriterSupport K s)
+    (inj : WriterInj K)
+    (apart : WriterApart K)
+    (selected : WriterSelectedValues K s st)
+    (logicalZero : WriterLogicalZero K st) :
+    WriterRep K s st :=
+  { finite := finite
+    fixed := fixed
+    support := support
+    inj := inj
+    apart := apart
+    selected := selected
+    logicalZero := logicalZero }
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: NoPairWriteOutsideLock
+example (sevm : Sevm) (pre post : Devm)  :
+    NoPairWriteOutsideLock sevm pre post ↔
+      (∀ k ∈ pairLockedSlots, post.getStorVal sevm.currentTarget k = pre.getStorVal sevm.currentTarget k) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair record: SkimForwardEnv
+example {sevm : Sevm} {b : Devm} {g : Nat}
+    (qd0 : Devm)
+    (dt0 : Devm)
+    (qd1 : Devm)
+    (dt1 : Devm)
+    (callGasQ0 : Nat)
+    (callGasT0 : Nat)
+    (callGasQ1 : Nat)
+    (callGasT1 : Nat)
+    (code0 : (((skimCachedWorld sevm b).getCode
+      (skimToken0 sevm b).toAdr).size.toB256) ≠ 0)
+    (sentry : gCallStipend < ((((callGasQ0 + 5) +
+      sloadCost sevm (syncLockedWorld sevm b) 6 +
+      sloadCost sevm (afterSload sevm (syncLockedWorld sevm b) 6) 7 +
+      sloadCost sevm (afterSload sevm (afterSload sevm (syncLockedWorld sevm b) 6) 7) 8 +
+      swapStoreCost 96 128 + swapStoreCost 160 132 +
+      temporalAccountAccessCost (skimCachedWorld sevm b) (skimToken0 sevm b).toAdr + 186)) +
+      sstoreCost sevm (afterSload sevm b 12) 12 0))
+    (sentryU : gCallStipend < (g + 11) + sstoreCost sevm dt1 12 1)
+    (qenv0 : SkimQueryEnv sevm
+      (temporalAccountAccessBase (skimCachedWorld sevm b) (skimToken0 sevm b).toAdr)
+      (balanceRequestMemory getterInitMemory sevm.currentTarget) 128
+      (skimToken0 sevm b)
+      (164 :: 0x70a08231 :: skimToken0 sevm b :: skimReserve0 sevm b :: 0x1a26 ::
+        skimToWord sevm :: skimToken0 sevm b :: 0x1a2b :: skimToken1 sevm b ::
+        skimToken0 sevm b :: skimToWord sevm :: [0x0257, 0xbc25cf77])
+      qd0 callGasQ0 (((callGasT0 +
+        safeTransferPreCharge (balanceReplyMemory getterInitMemory sevm.currentTarget
+          qd0.returnData).size 128 + 12)) + 80))
+    (tenv0 : SwapTransferCallForward sevm qd0
+      (skimToken1 sevm b :: skimToken0 sevm b :: skimToWord sevm :: [0x0257, 0xbc25cf77])
+      (balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData)
+      ((balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData).size)
+      128 (Bytes.toB256 (qd0.returnData.take 32) - skimReserve0 sevm b)
+      (skimToWord sevm) (skimToken0 sevm b) 0x1a2b callGasT0
+      (((callGasQ1 + 5) +
+        sloadCost sevm dt0 8 +
+        swapStoreCost
+          (swapTransferMemory
+            (balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData)
+            128 (Bytes.toB256 (qd0.returnData.take 32) - skimReserve0 sevm b)
+            (skimToWord sevm) dt0.returnData).size
+          (swapMovedPointer 128 dt0.returnData).toNat +
+        swapStoreCost
+          (memExtSize
+            (swapTransferMemory
+              (balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData)
+              128 (Bytes.toB256 (qd0.returnData.take 32) - skimReserve0 sevm b)
+              (skimToWord sevm) dt0.returnData).size
+            (swapMovedPointer 128 dt0.returnData).toNat 32)
+          ((swapMovedPointer 128 dt0.returnData) + 4).toNat +
+        temporalAccountAccessCost (afterSload sevm dt0 8)
+          ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+            0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&&
+            skimToken1 sevm b)).toAdr + 171)) dt0)
+    (code1 : ((((afterSload sevm dt0 8).getCode
+      ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&&
+        skimToken1 sevm b)).toAdr)).size.toB256) ≠ 0)
+    (qenv1 : SkimQueryEnv sevm
+      (temporalAccountAccessBase (afterSload sevm dt0 8)
+        ((Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+          0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&&
+          skimToken1 sevm b)).toAdr)
+      (skimRequestMemory
+        (swapTransferMemory
+          (balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData)
+          128 (Bytes.toB256 (qd0.returnData.take 32) - skimReserve0 sevm b)
+          (skimToWord sevm) dt0.returnData)
+        (swapMovedPointer 128 dt0.returnData) sevm.currentTarget)
+      (swapMovedPointer 128 dt0.returnData)
+      (Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&&
+        skimToken1 sevm b)
+      (((swapMovedPointer 128 dt0.returnData) + 36) :: 0x70a08231 ::
+        (Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+          0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&&
+          skimToken1 sevm b) ::
+        skimReserve1Word (dt0.getStorVal sevm.currentTarget 8) :: 0x1a26 ::
+        skimToWord sevm :: skimToken1 sevm b :: 0x1aca :: skimToken1 sevm b ::
+        skimToken0 sevm b :: skimToWord sevm :: [0x0257, 0xbc25cf77])
+      qd1 callGasQ1 (((callGasT1 +
+        safeTransferPreCharge (((skimRequestMemory
+          (swapTransferMemory
+            (balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData)
+            128 (Bytes.toB256 (qd0.returnData.take 32) - skimReserve0 sevm b)
+            (skimToWord sevm) dt0.returnData)
+          (swapMovedPointer 128 dt0.returnData) sevm.currentTarget).extends
+          [((swapMovedPointer 128 dt0.returnData).toNat, 36),
+            ((swapMovedPointer 128 dt0.returnData).toNat, 32)]).write
+          (swapMovedPointer 128 dt0.returnData).toNat
+          (qd1.returnData.take 32)).size
+          (swapMovedPointer 128 dt0.returnData) + 12)) + 80))
+    (tenv1 : SwapTransferCallForward sevm qd1
+      (skimToken1 sevm b :: skimToken0 sevm b :: skimToWord sevm :: [0x0257, 0xbc25cf77])
+      (((skimRequestMemory
+        (swapTransferMemory
+          (balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData)
+          128 (Bytes.toB256 (qd0.returnData.take 32) - skimReserve0 sevm b)
+          (skimToWord sevm) dt0.returnData)
+        (swapMovedPointer 128 dt0.returnData) sevm.currentTarget).extends
+        [((swapMovedPointer 128 dt0.returnData).toNat, 36),
+          ((swapMovedPointer 128 dt0.returnData).toNat, 32)]).write
+        (swapMovedPointer 128 dt0.returnData).toNat (qd1.returnData.take 32))
+      ((((skimRequestMemory
+        (swapTransferMemory
+          (balanceReplyMemory getterInitMemory sevm.currentTarget qd0.returnData)
+          128 (Bytes.toB256 (qd0.returnData.take 32) - skimReserve0 sevm b)
+          (skimToWord sevm) dt0.returnData)
+        (swapMovedPointer 128 dt0.returnData) sevm.currentTarget).extends
+        [((swapMovedPointer 128 dt0.returnData).toNat, 36),
+          ((swapMovedPointer 128 dt0.returnData).toNat, 32)]).write
+        (swapMovedPointer 128 dt0.returnData).toNat (qd1.returnData.take 32)).size)
+      (swapMovedPointer 128 dt0.returnData)
+      (Bytes.toB256 (qd1.returnData.take 32) -
+        skimReserve1Word (dt0.getStorVal sevm.currentTarget 8))
+      (skimToWord sevm) (skimToken1 sevm b) 0x1aca callGasT1 (g +
+        sstoreCost sevm dt1 12 1 + 22) dt1)
+    (keeps0 : NoPairWriteOutsideLock sevm qd0 dt0) :
+    SkimForwardEnv sevm b g :=
+  { qd0 := qd0
+    dt0 := dt0
+    qd1 := qd1
+    dt1 := dt1
+    callGasQ0 := callGasQ0
+    callGasT0 := callGasT0
+    callGasQ1 := callGasQ1
+    callGasT1 := callGasT1
+    code0 := code0
+    sentry := sentry
+    sentryU := sentryU
+    qenv0 := qenv0
+    tenv0 := tenv0
+    code1 := code1
+    qenv1 := qenv1
+    tenv1 := tenv1
+    keeps0 := keeps0 }
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: SkimForwardEnv.gas
+example {sevm : Sevm} {b : Devm} {g : Nat} (env : SkimForwardEnv sevm b g)  :
+    SkimForwardEnv.gas env =
+      ((env.callGasQ0 + 5) +
+      sstoreCost sevm (afterSload sevm b 12) 12 0 +
+      sloadCost sevm (syncLockedWorld sevm b) 6 +
+      sloadCost sevm (afterSload sevm (syncLockedWorld sevm b) 6) 7 +
+      sloadCost sevm (afterSload sevm (afterSload sevm (syncLockedWorld sevm b) 6) 7) 8 +
+      swapStoreCost 96 128 + swapStoreCost 160 132 +
+      temporalAccountAccessCost (skimCachedWorld sevm b) (skimToken0 sevm b).toAdr + 193 +
+      sloadCost sevm b 12 + 23 + 63 + 123 + 63) :=
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair record: MintPrefixCallee
+example {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {toWord ρ : B256} {finalGas : Nat}
+    (d0 : Devm)
+    (d1 : Devm)
+    (factoryPost : Devm)
+    (callGas0 : Nat)
+    (callGas1 : Nat)
+    (factoryGas : Nat)
+    (feeResidual : Nat)
+    (sourceCost : Nat)
+    (supplyCost : Nat)
+    (recipientLoad : Nat)
+    (creditCost : Nat)
+    (lockLoad : Nat)
+    (lockStore : Nat)
+    (reserveLoad : Nat)
+    (loadEq : lockLoad = sloadCost sevm b 12)
+    (storeEq : lockStore = sstoreCost sevm (afterSload sevm b 12) 12 0)
+    (reserveEq : reserveLoad = sloadCost sevm (mintLockedWorld sevm b) 8)
+    (fee : MintFeePricingCallee sevm d1 factoryPost R
+    (balanceReplyMemory (balanceReplyMemory M sevm.currentTarget d0.returnData)
+      sevm.currentTarget d1.returnData)
+    feeResidual finalGas factoryGas sourceCost supplyCost recipientLoad creditCost
+    (Bytes.toB256 (d1.returnData.take 32)) (Bytes.toB256 (d0.returnData.take 32))
+    (reserve1Read ((mintLockedWorld sevm b).getStorVal sevm.currentTarget 8))
+    (reserve0Read ((mintLockedWorld sevm b).getStorVal sevm.currentTarget 8)) toWord ρ)
+    (tokens : MintBalanceForward sevm (afterSload sevm (mintLockedWorld sevm b) 8) d0 d1 R M
+    callGas0 callGas1
+    (factoryGas + sloadCost sevm d1 5 +
+      temporalAccountAccessCost (feeFactoryLoadWorld sevm d1) (feeFactoryWord sevm d1).toAdr + 360)
+    (reserve1Read ((mintLockedWorld sevm b).getStorVal sevm.currentTarget 8))
+    (reserve0Read ((mintLockedWorld sevm b).getStorVal sevm.currentTarget 8)) toWord ρ)
+    (sentry : gCallStipend < callGas0 + 5 +
+    sloadCost sevm (afterSload sevm (mintLockedWorld sevm b) 8) 6 +
+    temporalAccountAccessCost (afterSload sevm (afterSload sevm (mintLockedWorld sevm b) 8) 6)
+      ((afterSload sevm (mintLockedWorld sevm b) 8).getStorVal sevm.currentTarget 6).toAdr +
+    166 + reserveLoad + 87 + lockStore) :
+    MintPrefixCallee sevm b R M toWord ρ finalGas :=
+  { d0 := d0
+    d1 := d1
+    factoryPost := factoryPost
+    callGas0 := callGas0
+    callGas1 := callGas1
+    factoryGas := factoryGas
+    feeResidual := feeResidual
+    sourceCost := sourceCost
+    supplyCost := supplyCost
+    recipientLoad := recipientLoad
+    creditCost := creditCost
+    lockLoad := lockLoad
+    lockStore := lockStore
+    reserveLoad := reserveLoad
+    loadEq := loadEq
+    storeEq := storeEq
+    reserveEq := reserveEq
+    fee := fee
+    tokens := tokens
+    sentry := sentry }
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: MintPrefixCallee.gas
+example {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {toWord ρ : B256} {finalGas : Nat} (c : MintPrefixCallee sevm b R M toWord ρ finalGas)  :
+    MintPrefixCallee.gas c =
+      (c.callGas0 + 5 + sloadCost sevm (afterSload sevm (mintLockedWorld sevm b) 8) 6 +
+    temporalAccountAccessCost (afterSload sevm (afterSload sevm (mintLockedWorld sevm b) 8) 6)
+      ((afterSload sevm (mintLockedWorld sevm b) 8).getStorVal sevm.currentTarget 6).toAdr + 166 +
+    c.reserveLoad + 100 + c.lockStore + c.lockLoad + 26) :=
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair record: BurnForwardEnv
+example {sevm : Sevm} {b : Devm} {g : Nat}
+    (d0 : Devm)
+    (d1 : Devm)
+    (dF : Devm)
+    (back : BurnBackForwardEnv sevm (burnBodyWorld sevm b d0 d1 dF)
+    (burnBodyWorld sevm b d0 d1 dF).memory 128 (burnBodyWords sevm b d0 d1 dF) [0x89afcb44] (g + 64))
+    (fee : BurnFeeCallee sevm d1 dF (burnMem2 sevm d0 d1) (burnB0 d0) (burnT1 sevm b) (burnT0 sevm b)
+    (burnR1 sevm b) (burnR0 sevm b) (burnRecipientWord sevm) 0x053d [0x89afcb44] back.gas)
+    (initial : BurnInitialCallee sevm b d0 d1 [0x89afcb44] fee.gas) :
+    BurnForwardEnv sevm b g :=
+  { d0 := d0
+    d1 := d1
+    dF := dF
+    back := back
+    fee := fee
+    initial := initial }
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: BurnForwardEnv.gas
+example {sevm : Sevm} {b : Devm} {g : Nat} (env : BurnForwardEnv sevm b g)  :
+    BurnForwardEnv.gas env =
+      (env.initial.gas + 249) :=
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair record: SwapFrontForwardEnv
+example {sevm : Sevm} {b : Devm} {st : State} {d0 d1 dC : Devm} {cg0 cg1 cgC Gc : Nat}
+    (transfer0 : swapAmount0Out sevm ≠ 0 → SwapTransferCallForward sevm (swapPrefixWorld sevm b)
+    (swapLocalsStack sevm st) getterInitMemory getterInitMemory.size 128 (swapAmount0Out sevm)
+    (swapRecipientWord sevm) st.token0.toB256 0x8d0 cg0
+    (swapOptGas (swapOptMem getterInitMemory 128 (swapAmount0Out sevm) (swapRecipientWord sevm) d0)
+      (swapOptPtr 128 (swapAmount0Out sevm) d0) (swapAmount1Out sevm) cg1
+      (swapFrontCallbackGas sevm b d0 d1 cgC Gc)) d0)
+    (transfer1 : swapAmount1Out sevm ≠ 0 → SwapTransferCallForward sevm
+    (swapOptWorld (swapAmount0Out sevm) (swapPrefixWorld sevm b) d0) (swapLocalsStack sevm st)
+    (swapOptMem getterInitMemory 128 (swapAmount0Out sevm) (swapRecipientWord sevm) d0)
+    (swapOptMem getterInitMemory 128 (swapAmount0Out sevm) (swapRecipientWord sevm) d0).size
+    (swapOptPtr 128 (swapAmount0Out sevm) d0) (swapAmount1Out sevm) (swapRecipientWord sevm)
+    st.token1.toB256 0x8e1 cg1 (swapFrontCallbackGas sevm b d0 d1 cgC Gc) d1)
+    (callback : swapDataLength sevm ≠ 0 → SwapCallbackCallForward sevm
+    (swapFrontTransferWorld sevm b d0 d1) (swapLocalsStack sevm st)
+    (swapFrontTransferMem sevm d0 d1) (swapFrontPtr sevm d0 d1) (swapRecipientWord sevm)
+    (swapAmount0Out sevm) (swapAmount1Out sevm) (swapDataLength sevm) (swapDataStart sevm) cgC Gc dC)
+    (sentry : gCallStipend < swapFrontTransferGas sevm b d0 d1 cg0 cg1 cgC Gc +
+    sstoreCost sevm (afterSload sevm b 12) 12 0) :
+    SwapFrontForwardEnv sevm b st d0 d1 dC cg0 cg1 cgC Gc :=
+  { transfer0 := transfer0
+    transfer1 := transfer1
+    callback := callback
+    sentry := sentry }
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: swapFrontTransferGas
+example (sevm : Sevm) (b d0 d1 : Devm)
+    (cg0 cg1 cgC Gc : Nat)  :
+    swapFrontTransferGas sevm b d0 d1 cg0 cg1 cgC Gc =
+      (swapOptGas getterInitMemory 128 (swapAmount0Out sevm) cg0
+    (swapOptGas (swapOptMem getterInitMemory 128 (swapAmount0Out sevm) (swapRecipientWord sevm) d0)
+      (swapOptPtr 128 (swapAmount0Out sevm) d0) (swapAmount1Out sevm) cg1
+      (swapFrontCallbackGas sevm b d0 d1 cgC Gc))) :=
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair record: SwapBackCalleeEnv
+example {sevm : Sevm} {d : Devm} {M : Mem} {n : Nat} {p : B256} {w : SwapCutWords} {ρ : B256} {R : List B256} {G : Nat}
+    (d0 : Devm)
+    (d1 : Devm)
+    (callGas0 : Nat)
+    (callGas1 : Nat)
+    (first : SwapBalanceEnv sevm d M p w.token0 (w.token1 :: w.token0 :: 0 :: 0 :: swapCutTail w ρ R)
+    d0 callGas0 (callGas1 + 5 + swapRequestCharge d0 (swapRequestSize n p) p w.token1 83 + 21))
+    (second : SwapBalanceEnv sevm d0 (swapBalanceReply M p sevm.currentTarget d0.returnData) p
+    w.token1 (w.token1 :: w.token0 :: 0 :: swapBalanceWord d0.returnData :: swapCutTail w ρ R) d1
+    callGas1 (swapBackPostGas sevm d1 (swapRequestSize (swapRequestSize n p) p) p w
+      (swapBalanceWord d0.returnData) (swapBalanceWord d1.returnData) G))
+    (sentries : SwapUpdateSentries sevm d1 (swapRequestSize (swapRequestSize n p) p) p w.reserve0
+    w.reserve1 (swapBalanceWord d0.returnData) (swapBalanceWord d1.returnData)
+    (swapEventRunGas G (swapSyncSize (swapRequestSize (swapRequestSize n p) p) p) p
+      (swapUnlockCost sevm d1 w.reserve0 w.reserve1 (swapBalanceWord d0.returnData)
+        (swapBalanceWord d1.returnData)
+        (swapInWord (swapBalanceWord d0.returnData) w.reserve0 w.amount0Out)
+        (swapInWord (swapBalanceWord d1.returnData) w.reserve1 w.amount1Out)
+        w.amount0Out w.amount1Out w.recipient)))
+    (unlock : gCallStipend < G + 26 + swapUnlockCost sevm d1 w.reserve0 w.reserve1
+    (swapBalanceWord d0.returnData) (swapBalanceWord d1.returnData)
+    (swapInWord (swapBalanceWord d0.returnData) w.reserve0 w.amount0Out)
+    (swapInWord (swapBalanceWord d1.returnData) w.reserve1 w.amount1Out)
+    w.amount0Out w.amount1Out w.recipient) :
+    SwapBackCalleeEnv sevm d M n p w ρ R G :=
+  { d0 := d0
+    d1 := d1
+    callGas0 := callGas0
+    callGas1 := callGas1
+    first := first
+    second := second
+    sentries := sentries
+    unlock := unlock }
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: SwapBackCalleeEnv.gas
+example {sevm : Sevm} {d : Devm} {M : Mem} {n : Nat} {p : B256}
+    {w : SwapCutWords} {ρ : B256} {R : List B256} {G : Nat}
+    (env : SwapBackCalleeEnv sevm d M n p w ρ R G)  :
+    SwapBackCalleeEnv.gas env =
+      (env.callGas0 + 5 + swapRequestCharge d n p w.token0 72 + 16) :=
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: swapPrefixGas
+example (sevm : Sevm) (b : Devm) (a0 : B256)  :
+    swapPrefixGas sevm b a0 =
+      (let locked := mintLockedWorld sevm b
+  sloadCost sevm b 12 + sstoreCost sevm (afterSload sevm b 12) 12 0 + sloadCost sevm locked 8 +
+    sloadCost sevm (afterSload sevm locked 8) 6 +
+    sloadCost sevm (afterSload sevm (afterSload sevm locked 8) 6) 7 +
+    (if a0 = 0 then 11 else 0) + 358) :=
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: syncCalleePrefixGas
+example (sevm : Sevm) (b : Devm) (callGas0 : Nat)  :
+    syncCalleePrefixGas sevm b callGas0 =
+      ((callGas0 + 5 + 22 + temporalAccountAccessCost (syncFirstWorld sevm b)
+      (syncFirstToken sevm b).toAdr + sstoreCost sevm (afterSload sevm b 12) 12 0 +
+      sloadCost sevm (syncLockedWorld sevm b) 6 + 126) + sloadCost sevm b 12 + 23) :=
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair record: SwapAbiGuards
+example {sevm : Sevm}
+    (args : (128 : B256).toNat ≤ (sevm.data.length.toB256 - 4).toNat)
+    (offset : (swapDataOffset sevm).toNat ≤ (0x100000000 : B256).toNat)
+    (head : (4 + swapDataOffset sevm + 32).toNat ≤ (4 + (sevm.data.length.toB256 - 4)).toNat)
+    (length : (swapDataLength sevm).toNat ≤ (0x100000000 : B256).toNat)
+    (tail : (swapDataStart sevm + swapDataLength sevm).toNat ≤
+    (4 + (sevm.data.length.toB256 - 4)).toNat) :
+    SwapAbiGuards sevm :=
+  { args := args
+    offset := offset
+    head := head
+    length := length
+    tail := tail }
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: SwapContextConditions
+example (ctx : Context)  :
+    SwapContextConditions ctx ↔
+      (ctx.value = 0 ∧ ctx.isStatic = false) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: SwapModelConditions
+example (st : State) (amount0Out amount1Out : B256)
+    (recipient : Adr) (balance0 balance1 : B256)  :
+    SwapModelConditions st amount0Out amount1Out recipient balance0 balance1 ↔
+      (st.unlocked = 1 ∧
+    (amount0Out > 0 ∨ amount1Out > 0) ∧
+    amount0Out.toNat < st.reserve0.val ∧ amount1Out.toNat < st.reserve1.val ∧
+    recipient ≠ st.token0 ∧ recipient ≠ st.token1 ∧
+    balance0.toNat < 2 ^ 112 ∧ balance1.toNat < 2 ^ 112 ∧
+    let inputs := swapInputs balance0 balance1 amount0Out amount1Out
+      st.reserve0.val st.reserve1.val
+    (inputs.1 > 0 ∨ inputs.2 > 0) ∧
+      swapCheck balance0 balance1 inputs.1 inputs.2 st.reserve0.val st.reserve1.val = .ok ()) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: PermitRawCall
+example (sevm : Sevm) (b : Devm) (sel : B256) (gw : B256) (callGas : Nat) (d : Devm)
+    (out : Bytes)  :
+    PermitRawCall sevm b sel gw callGas d out ↔
+      (Ninst.Run sevm (St (permitNonceWorld sevm b (permitOwner sevm))
+      (gw :: 1 :: 482 :: 128 :: 450 :: 32 :: permitPublicCallStack sevm b sel)
+      (permitPublicCallMemory sevm b) callGas) (.exec .staticcall) d ∧
+    StaticCallPost (permitNonceWorld sevm b (permitOwner sevm)) d
+      (permitPublicCallStack sevm b sel) (permitPublicCallMemory sevm b) 482 128 450 32 1 out ∧
+    out.length < 2 ^ 256 ∧
+    StaticAnswered sevm (permitNonceWorld sevm b (permitOwner sevm)) (1 : B256).toAdr
+      (ExternalOperation.encode
+        (.recover (permitPublicDigest sevm b) (permitV sevm) (permitR sevm) (permitS sevm))) out ∧
+    (permitRecoveredWord out).toAdr ≠ 0 ∧ (permitRecoveredWord out).toAdr = permitOwner sevm) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: PermitSourceResult
+example (K : WriterKey → Prop) (current : Checkpoint) (invocation : List Nat)
+    (sevm : Sevm) (b post d : Devm) (out : Bytes) (codeExists : Bool) (residual : Nat)  :
+    PermitSourceResult K current invocation sevm b post d out codeExists residual ↔
+      (post = permitPublicPost sevm b d out 0xd505accf residual ∧
+  WriterRep (WriterExtend K (permitTouched (permitOwner sevm) (permitSpender sevm)))
+    (post.getStor sevm.currentTarget)
+    (permitSourceState current.state (permitOwner sevm) (permitSpender sevm) (permitValue sevm)) ∧
+  startTyped current (writerContext sevm invocation) (permitDecodedEntry sevm) =
+    .suspended (permitSuspendedFrame current (writerContext sevm invocation) (permitOwner sevm)
+      (permitSpender sevm) (permitValue sevm) (permitDeadline sevm) (permitV sevm) (permitR sevm)
+      (permitS sevm))
+      (permitRequest current.state (permitOwner sevm) (permitSpender sevm) (permitValue sevm)
+        (permitDeadline sevm) (permitV sevm) (permitR sevm) (permitS sevm))
+      (.permitRecovery (permitOwner sevm) (permitSpender sevm) (permitValue sevm)) ∧
+  (permitRequest current.state (permitOwner sevm) (permitSpender sevm) (permitValue sevm)
+    (permitDeadline sevm) (permitV sevm) (permitR sevm) (permitS sevm)).calldata =
+    ExternalOperation.encode
+      (.recover (permitPublicDigest sevm b) (permitV sevm) (permitR sevm) (permitS sevm)) ∧
+  (permitRequest current.state (permitOwner sevm) (permitSpender sevm) (permitValue sevm)
+    (permitDeadline sevm) (permitV sevm) (permitR sevm) (permitS sevm)).target = (1 : B256).toAdr ∧
+  ExactConsumes (startTyped current (writerContext sevm invocation) (permitDecodedEntry sevm))
+    (.next (permitExternalResult out codeExists) .done .done)
+    (permitSourceDone current (writerContext sevm invocation) (permitOwner sevm)
+      (permitSpender sevm) (permitValue sevm) (permitDeadline sevm) (permitV sevm) (permitR sevm)
+      (permitS sevm)) ∧
+  drive 3 (startTyped current (writerContext sevm invocation) (permitDecodedEntry sevm))
+    (.next (permitExternalResult out codeExists) .done .done) =
+    permitSourceDone current (writerContext sevm invocation) (permitOwner sevm)
+      (permitSpender sevm) (permitValue sevm) (permitDeadline sevm) (permitV sevm) (permitR sevm)
+      (permitS sevm) ∧
+  (permitSourceFrame current (writerContext sevm invocation) (permitOwner sevm) (permitSpender sevm)
+    (permitValue sevm) (permitDeadline sevm) (permitV sevm) (permitR sevm) (permitS sevm)).checkpoint =
+    current ∧
+  (permitSourceFrame current (writerContext sevm invocation) (permitOwner sevm) (permitSpender sevm)
+    (permitValue sevm) (permitDeadline sevm) (permitV sevm) (permitR sevm) (permitS sevm)).current.logs =
+    current.logs ++ [.owned (permitSourceOrigin (writerContext sevm invocation))
+      (.approval (permitOwner sevm) (permitSpender sevm) (permitValue sevm))] ∧
+  (permitSourceFrame current (writerContext sevm invocation) (permitOwner sevm) (permitSpender sevm)
+    (permitValue sevm) (permitDeadline sevm) (permitV sevm) (permitR sevm) (permitS sevm)).current.updates =
+    current.updates ∧
+  post.output = [] ∧
+  post.logs = b.logs ++
+    [approvalRawLog sevm.currentTarget (permitOwner sevm) (permitSpender sevm) (permitValue sevm)] ∧
+  post.getStor sevm.currentTarget =
+    (((b.getStor sevm.currentTarget).set (permitNonceSlot (permitOwner sevm))
+      (current.state.nonces (permitOwner sevm) + 1)).set
+      (mapSlot (permitSpender sevm).toB256 (mapSlot (permitOwner sevm).toB256 2))
+      (permitValue sevm)) ∧
+  (∀ a, a ≠ sevm.currentTarget → post.getStor a = b.getStor a) ∧
+  post.gasLeft = residual) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: BurnEntryAuthenticFinished
+example (U K : WriterKey → Prop) (current : Checkpoint) (D : Exec.Deriv)
+    (b : Devm) (o : Outcome) (invocation : List Nat)  :
+    BurnEntryAuthenticFinished U K current D b o invocation ↔
+      (let ctx := writerContext D.sevm invocation
+  let recipient := ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& Sevm.dataWord D.sevm 4).toAdr
+  ∃ (a : BurnAnswers) (amount0 amount1 : B256),
+    BurnCallProvenance D (b.getStor D.sevm.currentTarget) amount0 amount1 a ∧
+    ∃ (K' : WriterKey → Prop) (final : Frame) (rets : List ChildReturn) (publicPost : Devm)
+      (added : List PendingLog) (rawLogs : List Log),
+      (∀ k, K' k → U k) ∧ (∀ k, K k → K' k) ∧
+      ExactConsumes (startTyped current ctx (.burn recipient)) a.transcript
+        { status := .success (encodeWords [amount0, amount1]), frame := final,
+          remaining := .done, childReturns := rets } ∧
+      o = .halted publicPost ∧ publicPost.output = encodeWords [amount0, amount1] ∧
+      WriterRep K' (publicPost.getStor D.sevm.currentTarget) final.current.state ∧
+      final.checkpoint = current ∧ final.context = ctx ∧ final.current.state.unlocked = 1 ∧
+      final.current.logs = current.logs ++ added ∧ publicPost.logs = b.logs ++ rawLogs ∧
+      added.map (PendingLog.rawWith (burnOwnedRaw D.sevm.currentTarget)) = rawLogs.map some) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: runSourceInvocations
+example (st : State) :
+    runSourceInvocations st [] = some st :=
+  rfl
+
+example (st : State) (inv : SourceInvocation) (rest : List SourceInvocation) :
+    runSourceInvocations st (inv :: rest) =
+      (let out := inv.run st
+      match out.status with
+      | .success _ => runSourceInvocations out.frame.current.state rest
+      | _ => none) :=
+  rfl
+
+-- Uniswap V2 Pair definition: SourceReplay
+example (st : State) : SourceReplay st [] st :=
+  SourceReplay.nil st
+
+example {st finish : State} {inv : SourceInvocation} {rest : List SourceInvocation}
+    {out : RunResult} {bytes : Bytes}
+    (consumed : ExactConsumes
+      (startTyped { state := st, logs := [], updates := [] } inv.context inv.entry)
+      inv.transcript out)
+    (successful : out.status = .success bytes)
+    (tail : SourceReplay out.frame.current.state rest finish) :
+    SourceReplay st (inv :: rest) finish :=
+  SourceReplay.cons consumed successful tail
+
+-- Uniswap V2 Pair definition: sourceReplayUpdates
+example (st : State) : sourceReplayUpdates st [] = [] :=
+  rfl
+
+example (st : State) (inv : SourceInvocation) (rest : List SourceInvocation) :
+    sourceReplayUpdates st (inv :: rest) =
+      (inv.run st).frame.current.updates ++
+        sourceReplayUpdates (inv.run st).frame.current.state rest :=
+  rfl
+
+-- Uniswap V2 Pair definition: sourceReplayAnswers
+example (st : State) : sourceReplayAnswers st [] ↔ True :=
+  Iff.rfl
+
+example (st : State) (inv : SourceInvocation) (rest : List SourceInvocation) :
+    sourceReplayAnswers st (inv :: rest) ↔
+      (EntryFeeOff inv.entry inv.transcript ∧
+        EntryNoShrink st inv.context inv.entry inv.transcript ∧
+        sourceReplayAnswers (inv.run st).frame.current.state rest) :=
+  Iff.rfl
+
+-- Uniswap V2 Pair definition: sourceReplayNoShrink
+example (st : State) : sourceReplayNoShrink st [] ↔ True :=
+  Iff.rfl
+
+example (st : State) (inv : SourceInvocation) (rest : List SourceInvocation) :
+    sourceReplayNoShrink st (inv :: rest) ↔
+      (EntryNoShrink st inv.context inv.entry inv.transcript ∧
+        sourceReplayNoShrink (inv.run st).frame.current.state rest) :=
+  Iff.rfl
+
+-- Uniswap V2 Pair definition: sourceReplayEdges
+example (st : State) : sourceReplayEdges st [] = [] :=
+  rfl
+
+example (st : State) (inv : SourceInvocation) (rest : List SourceInvocation) :
+    sourceReplayEdges st (inv :: rest) =
+      (st, (inv.run st).frame.current.state) ::
+        sourceReplayEdges (inv.run st).frame.current.state rest :=
+  rfl
+
+-- Uniswap V2 Pair definition: sourceReplaySteps
+example (st : State) : sourceReplaySteps st [] = [] :=
+  rfl
+
+example (st : State) (inv : SourceInvocation) (rest : List SourceInvocation) :
+    sourceReplaySteps st (inv :: rest) =
+      (st, inv, (inv.run st).frame.current.state) ::
+        sourceReplaySteps (inv.run st).frame.current.state rest :=
+  rfl
+
+-- Uniswap V2 Pair definition: sourceReplayReceipts
+example (st : State) : sourceReplayReceipts st [] = [] :=
+  rfl
+
+example (st : State) (inv : SourceInvocation) (rest : List SourceInvocation) :
+    sourceReplayReceipts st (inv :: rest) =
+      (inv, (inv.run st).frame.current.updates) ::
+        sourceReplayReceipts (inv.run st).frame.current.state rest :=
+  rfl
+
+-- Uniswap V2 Pair definition: oracleSum0
+example : oracleSum0 [] = 0 :=
+  rfl
+
+example (tagged : TaggedOracleUpdate) (updates : List TaggedOracleUpdate) :
+    oracleSum0 (tagged :: updates) = tagged.update.increment0 + oracleSum0 updates :=
+  rfl
+
+-- Uniswap V2 Pair definition: oracleSum1
+example : oracleSum1 [] = 0 :=
+  rfl
+
+example (tagged : TaggedOracleUpdate) (updates : List TaggedOracleUpdate) :
+    oracleSum1 (tagged :: updates) = tagged.update.increment1 + oracleSum1 updates :=
+  rfl
+
+-- Uniswap V2 Pair definition: OracleTimestampChain
+example (start finish : UInt32) : OracleTimestampChain start finish [] ↔ finish = start :=
+  Iff.rfl
+
+example (start finish : UInt32) (tagged : TaggedOracleUpdate)
+    (updates : List TaggedOracleUpdate) :
+    OracleTimestampChain start finish (tagged :: updates) ↔
+      (tagged.update.oldTimestamp = start ∧
+        OracleTimestampChain (UInt32.ofNat (tagged.update.timestamp.toNat % 2 ^ 32)) finish
+          updates) :=
+  Iff.rfl
+
+-- Uniswap V2 Pair definition: LedgerWriter
+example : LedgerWriter.approve.selector = 0x095ea7b3 := rfl
+example : LedgerWriter.transfer.selector = 0xa9059cbb := rfl
+example : LedgerWriter.transferFrom.selector = 0x23b872dd := rfl
+
+example : LedgerWriter.approve.entry = approveDecodedEntry := rfl
+example : LedgerWriter.transfer.entry = transferDecodedEntry := rfl
+example : LedgerWriter.transferFrom.entry = transferFromDecodedEntry := rfl
+
+example (sevm : Sevm) :
+    LedgerWriter.approve.keys sevm = approveTouched sevm.caller (approveSpender sevm) :=
+  rfl
+
+example (sevm : Sevm) :
+    LedgerWriter.transfer.keys sevm = transferTouched sevm.caller (transferRecipient sevm) :=
+  rfl
+
+example (sevm : Sevm) :
+    LedgerWriter.transferFrom.keys sevm =
+      transferFromTouched (transferFromOwner sevm) sevm.caller (transferFromRecipient sevm) :=
+  rfl
+
+example : LedgerWriter.approve.calldataSize = 68 := rfl
+example : LedgerWriter.transfer.calldataSize = 68 := rfl
+example : LedgerWriter.transferFrom.calldataSize = 100 := rfl
+
+example (sevm : Sevm) (b : Devm) :
+    LedgerWriter.approve.cost sevm b =
+      sstoreCost sevm b (approveSlot sevm) (approveAmount sevm) + 2342 :=
+  rfl
+
+example (sevm : Sevm) (b : Devm) :
+    LedgerWriter.transfer.cost sevm b =
+      transferSourceCharge sevm b + transferDebitCharge sevm b +
+        transferRecipientCharge sevm b + transferCreditCharge sevm b + 2740 :=
+  rfl
+
+example (sevm : Sevm) (b : Devm) :
+    LedgerWriter.transferFrom.cost sevm b = transferFromPublicGas sevm b :=
+  rfl
+
+example (sevm : Sevm) (b : Devm) (G : Nat) :
+    LedgerWriter.approve.post sevm b G =
+      approvePublicPost sevm b [0x095ea7b3] getterInitMemory G :=
+  rfl
+
+example (sevm : Sevm) (b : Devm) (G : Nat) :
+    LedgerWriter.transfer.post sevm b G =
+      transferPublicPost sevm b [0xa9059cbb] getterInitMemory G :=
+  rfl
+
+example (sevm : Sevm) (b : Devm) (G : Nat) :
+    LedgerWriter.transferFrom.post sevm b G =
+      transferFromPublicPost sevm b [0x23b872dd] getterInitMemory G :=
+  rfl
+
+example (K : WriterKey → Prop) (current : Checkpoint) (invocation : List Nat) (sevm : Sevm)
+    (b d : Devm) (G : Nat) :
+    LedgerWriter.approve.Result K current invocation sevm b d G ↔
+      ApproveSourceResult K current invocation sevm b d G :=
+  Iff.rfl
+
+example (K : WriterKey → Prop) (current : Checkpoint) (invocation : List Nat) (sevm : Sevm)
+    (b d : Devm) (G : Nat) :
+    LedgerWriter.transfer.Result K current invocation sevm b d G ↔
+      TransferSourceResult K current invocation sevm b d G :=
+  Iff.rfl
+
+example (K : WriterKey → Prop) (current : Checkpoint) (invocation : List Nat) (sevm : Sevm)
+    (b d : Devm) (G : Nat) :
+    LedgerWriter.transferFrom.Result K current invocation sevm b d G ↔
+      TransferFromSourceResult K current invocation sevm b d G :=
+  Iff.rfl
+
+-- Uniswap V2 Pair definition: StaticView.selector
+example (s : ScalarGetter) : (StaticView.scalar s).selector = s.selector := rfl
+example (s : StringGetter) : (StaticView.string s).selector = s.selector := rfl
+example : StaticView.totalSupply.selector = 0x18160ddd := rfl
+example : (StaticView.singleMapping .balanceOf).selector = 0x70a08231 := rfl
+example : (StaticView.singleMapping .nonces).selector = 0x7ecebe00 := rfl
+example : StaticView.allowance.selector = 0xdd62ed3e := rfl
+example : StaticView.getReserves.selector = 0x0902f1ac := rfl
+
+end Blanc.Lift.UniswapV2Pair

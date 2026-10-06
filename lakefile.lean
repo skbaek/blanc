@@ -12,7 +12,7 @@ require mathlib from git
   "https://github.com/leanprover-community/mathlib4.git" @ "v4.34.0"
 
 require jaune from git
-  "https://github.com/skbaek/jaune.git" @ "b019bbf54eedb4f29398a80ba7b49daa664bb52a"
+  "https://github.com/skbaek/jaune.git" @ "2737c8ebcaec2f3a9a7014156403300bc664daab"
 
 /-- Blanc's library. `needs` builds the pinned Jaune's `Assurance` library first:
 its `ExecutionAxioms` module pins the exact axiom sets of the canonical

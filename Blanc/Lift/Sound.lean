@@ -600,11 +600,14 @@ lemma foldConst_run {sevm : Sevm} {pre inter : Devm} {n : Ninst} {a : List AVal}
     simp only [AVal.Matches] at h0 h1
     subst h0; subst h1
     exact ⟨_, applyBinary_top r (by simpa only [List.cons_append] using hstack)⟩
+  · rcases hframe with _ | ⟨h0, _ | ⟨h1, _⟩⟩
+    simp only [AVal.Matches] at h0 h1
+    subst h0; subst h1
+    exact ⟨_, applyBinary_top r (by simpa only [List.cons_append] using hstack)⟩
   · rcases hframe with _ | ⟨h0, _⟩
     simp only [AVal.Matches] at h0
     subst h0
-    exact ⟨_, applyUnary_top (f := fun x => B256.eqCheck x 0) r (by simpa only [List.cons_append] using
-      hstack)⟩
+    exact ⟨_, applyUnary_top (f := fun x => B256.eqCheck x 0) r (by simpa only [List.cons_append] using hstack)⟩
 
 /-- The folded frame still describes the successor stack. -/
 lemma frameMatches_foldTop {sevm : Sevm} {pre inter : Devm} {n : Ninst}

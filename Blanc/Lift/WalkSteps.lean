@@ -38,6 +38,7 @@ theorem rx_number (hroom : S.length < 1024)
     (x := sevm.benvStat.number.toB256) (G := G) (cost := gBase)
     (by rintro ⟨⟩) rfl rfl hroom) k
 
+/-- The actual header timestamp, with its fixed base charge. -/
 theorem rx_timestamp (hroom : S.length < 1024)
     (k : SFunc.RunExact fs sevm
       (St b (sevm.benvStat.time :: S) M G) f o) :
@@ -188,10 +189,12 @@ theorem ri_timestamp {d : Devm}
   rw [hs] at e
   exact ⟨_, e⟩
 
-/-- `LOG2`, inverted, the base's new log forgotten. -/
-theorem ri_log2 {i sz t1 t2 : B256} {d : Devm}
+/-- `LOG2` exposes its exact added log and actual read-expanded memory. -/
+theorem ri_log2_post {i sz t1 t2 : B256} {d : Devm}
     (h : Ninst.Run sevm (St b (i :: sz :: t1 :: t2 :: S) M G) (.reg (.log 2)) d) :
-    ∃ b' M' G', d = St b' S M' G' := by
+    ∃ G', d = St
+      (b.addLog ⟨sevm.currentTarget, [t1, t2], (M.read i.toNat sz.toNat).1⟩) S
+      (M.read i.toNat sz.toNat).2 G' := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   rw [show (St b (i :: sz :: t1 :: t2 :: S) M G).popToNat =
@@ -207,10 +210,16 @@ theorem ri_log2 {i sz t1 t2 : B256} {d : Devm}
   rcases Except.bind_eq_ok h2 with ⟨_, -, h3⟩
   cases h3
   have e1 := Devm.eq_setGas_of_burn (Devm.burn_of_chargeGas h1)
-  refine ⟨b.addLog ⟨sevm.currentTarget, [t1, t2], (M.read i.toNat sz.toNat).1⟩,
-    (M.read i.toNat sz.toNat).2, s1.gasLeft, ?_⟩
+  refine ⟨s1.gasLeft, ?_⟩
   rw [e1]
   rfl
+
+/-- Compatibility projection that forgets the new log and memory image. -/
+theorem ri_log2 {i sz t1 t2 : B256} {d : Devm}
+    (h : Ninst.Run sevm (St b (i :: sz :: t1 :: t2 :: S) M G) (.reg (.log 2)) d) :
+    ∃ b' M' G', d = St b' S M' G' := by
+  obtain ⟨gas, post⟩ := ri_log2_post h
+  exact ⟨_, _, gas, post⟩
 
 /-- `TLOAD`, inverted. -/
 theorem ri_tload {k : B256} {d : Devm}
@@ -304,6 +313,14 @@ theorem logs_St_return (b : Devm) (S : List B256) (M : Mem) (G i n : Nat) (out :
 
 theorem output_St_return (b : Devm) (S : List B256) (M : Mem) (G i n : Nat) (out : Bytes) :
     (((St b S M G).memRead i n).2.withOutput out).output = out := rfl
+
+/-- A log leaves every account unchanged. -/
+theorem getAcct_addLog (d : Devm) (L : Log) (a : Adr) :
+    (d.addLog L).getAcct a = d.getAcct a := rfl
+
+/-- A log leaves the enclosing output field unchanged. -/
+theorem output_addLog (d : Devm) (L : Log) :
+    (d.addLog L).output = d.output := rfl
 
 theorem logs_addLog (d : Devm) (L : Log) : (d.addLog L).logs = d.logs ++ [L] := rfl
 

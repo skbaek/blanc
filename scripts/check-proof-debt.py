@@ -348,8 +348,9 @@ def _namespace_by_line(tokens: Sequence[Token], rel: str) -> Dict[int, Tuple[str
             parts = tuple(part for part in name.split(".") if part)
             frames.append(("namespace", len(parts)))
             current.extend(parts)
-        elif first == "section":
-            frames.append(("section", 0))
+        elif first in {"section", "mutual"}:
+            # Both commands close with end without changing the namespace.
+            frames.append((first, 0))
         elif first == "end":
             if not frames:
                 raise GateError(f"{rel}:{line}: unmatched end while indexing namespaces")
@@ -1020,6 +1021,66 @@ end Fixture
         "Fixture.localScoped"
     )
 
+    mutual_fixture = """
+namespace Fixture
+section
+namespace Inner
+mutual
+def drive : Nat :=
+  set_option maxRecDepth 4096 in
+    0
+def driveTurns : Nat :=
+  set_option maxHeartbeats 1000 in
+    0
+end
+set_option maxRecDepth 2048 in
+def afterMutual : Nat := 0
+end Inner
+set_option maxRecDepth 1024 in
+def afterInner : Nat := 0
+end
+end Fixture
+set_option maxRecDepth 512 in
+def afterNamespace : Nat := 0
+"""
+    mutual_rel = "Blanc/MutualFixture.lean"
+    mutual_scopes = scan_source(mutual_fixture, mutual_rel)
+    assert [(scope.declaration, scope.scope_kind, scope.option, scope.value)
+            for scope in mutual_scopes] == [
+        ("Fixture.Inner.drive", "local_scoped", "maxRecDepth", 4096),
+        ("Fixture.Inner.driveTurns", "local_scoped", "maxHeartbeats", 1000),
+        ("Fixture.Inner.afterMutual", "command_scoped", "maxRecDepth", 2048),
+        ("Fixture.afterInner", "command_scoped", "maxRecDepth", 1024),
+        ("afterNamespace", "command_scoped", "maxRecDepth", 512),
+    ]
+    mutual_base = load_baseline_text(json.dumps(
+        baseline_document(mutual_scopes, None, bootstrap=True)
+    ), "mutual fixture baseline")
+    findings, regressions = compare(mutual_scopes, mutual_base)
+    assert not findings and not regressions
+
+    mutual_increased = scan_source(mutual_fixture.replace("4096", "8192"), mutual_rel)
+    findings, regressions = compare(mutual_increased, mutual_base)
+    assert not regressions and len(findings) == 1
+    assert findings[0].kind == "increase"
+    assert findings[0].scope.scope_id == mutual_scopes[0].scope_id
+    assert findings[0].ceiling == 4096 and findings[0].scope.value == 8192
+
+    mutual_added = scan_source(mutual_fixture.replace(
+        "def driveTurns : Nat :=", "set_option maxRecDepth 8192 in\ndef driveTurns : Nat :="
+    ), mutual_rel)
+    findings, regressions = compare(mutual_added, mutual_base)
+    assert not regressions and len(findings) == 1 and findings[0].kind == "new"
+    assert findings[0].scope.declaration == "Fixture.Inner.driveTurns"
+    assert findings[0].scope.scope_kind == "command_scoped"
+
+    try:
+        scan_source(mutual_fixture + "end\n", mutual_rel)
+    except GateError as error:
+        assert "unmatched end while indexing namespaces" in str(error)
+    else:
+        raise AssertionError("extra end after mutual accepted")
+
     base_source = "set_option maxRecDepth 4096 in\ntheorem base : True := by trivial\n"
     base_scopes = scan_source(base_source, "Blanc/Fixture.lean")
     base_doc = baseline_document(base_scopes, None, bootstrap=True)
@@ -1115,7 +1176,7 @@ end Fixture
         else:
             raise AssertionError("ambient exception accepted")
 
-    controls = 12
+    controls = 16
     with tempfile.TemporaryDirectory(prefix="proof-debt-e2e-") as temp:
         root = pathlib.Path(temp)
         (root / "Blanc").mkdir()

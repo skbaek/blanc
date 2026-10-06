@@ -1,4 +1,5 @@
 import Blanc.ExecutionPath
+import Blanc.PrefixTransport
 
 /-!
 Forward location of an entered, settlement-retained child from a supplied
@@ -8,6 +9,62 @@ instruction occurrence in the committed root frame's own continuation.
 namespace Blanc
 
 open Jaune
+
+/-- A frame-entry-free parent span preserves descendant paths and the original
+child counter exactly, including the ordered traversal of its remaining suffix. -/
+theorem Exec.Deriv.ExecFreeUntil.descendantFramePaths_eq {start stop : Exec.Deriv}
+    (free : Exec.Deriv.ExecFreeUntil start stop) (path : List Nat) (index : Nat) :
+    Exec.descendantFramePaths path index start.exc =
+      Exec.descendantFramePaths path index stop.exc := by
+  rcases free with ⟨reached, clean⟩
+  induction reached with
+  | refl => rfl
+  | @step root next tail edge rest ih =>
+      have rootClean : ∀ x : Xinst,
+          ¬ Ninst.At root.sevm.code root.pc (.exec x) := by
+        rcases clean root (.refl _) with back | rootClean
+        · exact ((Blanc.Exec.Deriv.ParentStep.not_parentPrefix_back edge) rest back).elim
+        · exact rootClean
+      have nextClean : ∀ node, Exec.Deriv.ParentPrefix next node →
+          Exec.Deriv.ParentPrefix tail node ∨
+            ∀ x : Xinst, ¬ Ninst.At node.sevm.code node.pc (.exec x) :=
+        fun node reached => clean node (.step edge reached)
+      rw [← ih nextClean]
+      cases edge with
+      | cont hstep next => simp only [Exec.descendantFramePaths]
+      | doneOk hstep henter hresume next =>
+          rcases Evm.step_spawn_inv hstep with ⟨x, decoded, -, -⟩
+          exact (rootClean x decoded).elim
+      | runOk hstep henter child hresume next =>
+          rcases Evm.step_spawn_inv hstep with ⟨x, decoded, -, -⟩
+          exact (rootClean x decoded).elim
+
+/-- A real spawning parent edge retains its complete settlement-filtered child
+prefix and advances the original parent counter, including childless entries. -/
+theorem Exec.Deriv.ParentStep.descendantFramePaths_spawn_suffix {F N : Exec.Deriv}
+    (edge : Exec.Deriv.ParentStep N F) {frame : Jaune.Frame} {resume : Resume} {pc : Nat}
+    (spawned : Evm.step ⟨F.pc, F.sevm, F.devm⟩ = .spawn frame resume pc)
+    (path : List Nat) (index : Nat) :
+    ∃ childFrames : List Exec.LocatedFrame,
+      Exec.descendantFramePaths path index F.exc =
+        childFrames ++ Exec.descendantFramePaths path (index + 1) N.exc := by
+  cases edge with
+  | cont hstep next =>
+    have impossible := hstep.symm.trans spawned
+    cases impossible
+  | doneOk hstep henter hresume next =>
+    refine ⟨[], ?_⟩
+    simp only [Exec.descendantFramePaths, List.nil_append]
+  | @runOk startPc nextPc sevm pre post actualFrame actualResume childEvm raw out
+      hstep henter child hresume next =>
+    let childPath := path ++ [index]
+    let childFrames : List Exec.LocatedFrame :=
+      if h : Jaune.Frame.settlementCommits actualFrame raw = true then
+        ⟨childPath, Exec.Frame.ofRun child
+          (Jaune.Frame.raw_commits_of_settlementCommits h)⟩ ::
+          Exec.descendantFramePaths childPath 0 child
+      else []
+    exact ⟨childFrames, by rw [Exec.descendantFramePaths]⟩
 
 private theorem Exec.Deriv.ParentPrefix.descendants {root node : Exec.Deriv} (hprefix : Exec.Deriv.ParentPrefix root node) :
     ∀ (path : List Nat) (n : Nat), ∃ k, ∀ child,

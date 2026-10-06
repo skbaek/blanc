@@ -2193,10 +2193,11 @@ The successful-child arm includes synchronous precompiles (`xl = .none`) as
 well as interpreted code.  In particular it does not assume that the target
 has code, that a precompile succeeds, or that the child returns any fixed
 number of bytes. -/
-lemma of_run_staticcall_val_with_depth_cause
-    {sevm : Sevm} {s sf : Devm} {g t ii is oi os : B256} {xs : Stack}
+lemma of_step_staticcall_val_with_depth_frame_cause
+    {pc : Nat} {xl : Xlot} {sevm : Sevm} {s sf : Devm} {g t ii is oi os : B256} {xs : Stack}
     (hp : (g :: t :: ii :: is :: oi :: os :: xs) <<+ s.stack)
-    (h_run : Ninst.Run sevm s Ninst.staticcall sf)
+    (h_fill : Xlot.Filled xl)
+    (h_run : Ninst.StepRun pc sevm s Ninst.staticcall xl (.ok sf))
     (hfork : CoveredFork sevm.benvStat.fork) :
     (((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf ∧
       ∃ out : Bytes,
@@ -2205,7 +2206,7 @@ lemma of_run_staticcall_val_with_depth_cause
           [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write
             oi.toNat (out.take os.toNat) ∧
         StatcallFailureCause sevm s g t ii is oi os out) ∨
-    ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (na : Adr)
+    ∃ (parent child : Devm) (dp : Bool) (na : Adr)
       (code : ByteArray) (avail : Nat),
       0 < sevm.depth ∧
       s.stack = g :: t :: ii :: is :: oi :: os :: parent.stack ∧
@@ -2229,8 +2230,13 @@ lemma of_run_staticcall_val_with_depth_cause
       sf.state = child.state ∧
       sf.returnData = child.output ∧
       sf.memory = parent.memory.write oi.toNat (child.output.take os.toNat) ∧
-      sf.stack = (1 : B256) :: parent.stack := by
-  rcases h_run with ⟨xl, h_fill, pc, h_run⟩
+      sf.stack = (1 : B256) :: parent.stack ∧
+      Ninst.step ⟨pc, sevm, s⟩ Ninst.staticcall =
+        .spawn (Frame.ofCall
+          (callMsg sevm parent (min g.toNat (except64th avail)) 0
+            sevm.currentTarget t.toAdr na true true
+            (s.memory.read ii.toNat is.toNat).1 code dp))
+          (Resume.call parent oi.toNat os.toNat) (pc + 1) := by
   simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
     Bind.bind, Except.bind] at h_run
   -- pop gas
@@ -2320,7 +2326,7 @@ lemma of_run_staticcall_val_with_depth_cause
     (f1.output).trans ((f2.output).trans ((f3.output).trans
       ((f4.output).trans ((f5.output).trans f6.output))))
   clear e1 e2 e3 e4 e5 e6 f1 f2 f3 f4 f5 f6
-  clear eq1 eq2 eq3 eq4 eq5 eq6 h_pop2
+  clear h_pop2
   -- delegation resolution
   rcases hp10 : sevm.benvStat.rules.gas.accessDelegation (addAccessedAddress devm6 t.toAdr) t.toAdr with
     ⟨dp, na, code0, dagc, devm8⟩
@@ -2509,7 +2515,7 @@ lemma of_run_staticcall_val_with_depth_cause
         ProcessMessage.rollback_of_error run_pm₀ herr
       refine ⟨?_, ⟨?_, ?_⟩, ?_⟩
       · have hsf := Resume.call_stack_flag h_split.symm
-        rw [if_pos herr] at hsf
+        rw [ite_eq_left herr] at hsf
         rw [hsf, h_stk_par]
         exact pref_cons hp
       · rw [Resume.call_state h_split.symm, h_roll.1, h_st_par]
@@ -2522,20 +2528,82 @@ lemma of_run_staticcall_val_with_depth_cause
               [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData [],
             child, xl, dp, na, code0, avail,
             by omega, by rw [e_stack, h_stk_par], h_st_par, h_mem_par,
-            h_del, h_fill, ?_, by simpa only using herr, rfl⟩
-          simpa only [ProcessMessage, ↓reduceIte, add_zero] using run_pm₀
+            h_del, h_fill, ?_, herr, rfl⟩
+          simpa only [ProcessMessage, ite_true, Nat.add_zero] using run_pm₀
     · right
+      have spawned : Ninst.step ⟨pc, sevm, s⟩ Ninst.staticcall =
+          .spawn (Frame.ofCall
+            (callMsg sevm
+              ((devm9.memExtends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData [])
+              (min g.toNat (except64th avail)) 0 sevm.currentTarget t.toAdr na true true
+              (s.memory.read ii.toNat is.toNat).1 code0 dp))
+            (Resume.call
+              ((devm9.memExtends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData [])
+              oi.toNat os.toNat) (pc + 1) := by
+        simp only [Ninst.staticcall, Ninst.step_exec, Xinst.step, hsg,
+          Bind.bind, Except.bind, eq1, eq2, eq3, eq4, eq5, eq6, hp10, eq14,
+          Except.pure, Pure.pure, XStep.ofExcept, genericCall.step,
+          ite_eq_right h_depth_ne, XStep.toStep]
+        rw [hstip, h_cd]
+        simp only [ite_true, Nat.add_zero]
       refine ⟨(devm9.memExtends
           [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData [],
-        child, xl, dp, na, code0, avail,
+        child, dp, na, code0, avail,
         by omega, by rw [e_stack, h_stk_par], h_st_par, h_mem_par,
         h_logs_par, h_output_par, h_del,
-        h_fill, ?_, by simpa only [Option.isSome_eq_false_iff, Option.isNone_iff_eq_none,
-          Bool.not_eq_true] using herr, h_split.symm,
+        h_fill, ?_, by cases h : child.error.isSome <;> first | rfl | exact (herr h).elim, h_split.symm,
         Resume.call_state h_split.symm, Resume.call_returnData h_split.symm,
         Resume.call_memory h_split.symm,
-        by rw [Resume.call_stack_flag h_split.symm, if_neg herr]⟩
-      simpa only [ProcessMessage, ↓reduceIte, add_zero] using run_pm₀
+        by rw [Resume.call_stack_flag h_split.symm, ite_eq_right herr], spawned⟩
+      simpa only [ProcessMessage, ite_true, Nat.add_zero] using run_pm₀
+
+/-! The public run-based interface keeps its original statement. -/
+lemma of_run_staticcall_val_with_depth_cause
+    {sevm : Sevm} {s sf : Devm} {g t ii is oi os : B256} {xs : Stack}
+    (hp : (g :: t :: ii :: is :: oi :: os :: xs) <<+ s.stack)
+    (h_run : Ninst.Run sevm s Ninst.staticcall sf)
+    (hfork : CoveredFork sevm.benvStat.fork) :
+    (((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf ∧
+      ∃ out : Bytes,
+        sf.returnData = out ∧
+        sf.memory = (s.memory.extends
+          [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write
+            oi.toNat (out.take os.toNat) ∧
+        StatcallFailureCause sevm s g t ii is oi os out) ∨
+    ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (na : Adr)
+      (code : ByteArray) (avail : Nat),
+      0 < sevm.depth ∧
+      s.stack = g :: t :: ii :: is :: oi :: os :: parent.stack ∧
+      parent.state = s.state ∧
+      parent.memory
+        = s.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] ∧
+      parent.logs = s.logs ∧
+      parent.output = s.output ∧
+      ((getDelegatedCodeAddress (s.getCode t.toAdr) = none ∧
+          na = t.toAdr ∧ code = s.getCode t.toAdr ∧ dp = false) ∨
+        (∃ d, getDelegatedCodeAddress (s.getCode t.toAdr) = some d ∧
+          na = d ∧ code = s.getCode d ∧ dp = true)) ∧
+      Xlot.Filled xl ∧
+      ProcessMessage
+        (callMsg sevm parent (min g.toNat (except64th avail)) 0
+          sevm.currentTarget t.toAdr na true true
+          ((s.memory.read ii.toNat is.toNat).1) code dp)
+        xl (.ok child) ∧
+      child.error.isSome = false ∧
+      (Resume.call parent oi.toNat os.toNat).run (.ok child) = .ok sf ∧
+      sf.state = child.state ∧
+      sf.returnData = child.output ∧
+      sf.memory = parent.memory.write oi.toNat (child.output.take os.toNat) ∧
+      sf.stack = (1 : B256) :: parent.stack := by
+  rcases h_run with ⟨xl, filled, pc, primitive⟩
+  rcases of_step_staticcall_val_with_depth_frame_cause hp filled primitive hfork with failed | success
+  · exact Or.inl failed
+  · obtain ⟨parent, child, dp, na, code, avail, depth, stack, state, memory, logs, output,
+      delegated, filled, process, clean, resumed, childState, childOutput, childMemory,
+      childStack, spawned⟩ := success
+    exact Or.inr ⟨parent, child, xl, dp, na, code, avail, depth, stack, state, memory,
+      logs, output, delegated, filled, process, clean, resumed, childState, childOutput,
+      childMemory, childStack⟩
 
 /-- The compatibility projection of `of_run_staticcall_val_with_depth_cause`.
 Consumers that only need the flag/world/returndata dichotomy do not have to

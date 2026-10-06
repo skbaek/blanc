@@ -114,6 +114,7 @@ WRAPPED_NAME_RE = re.compile(
     rf"^(?P<indent>[ \t]+)(?P<name>{QUALIFIED})(?=\s|:|\{{|\(|$)"
 )
 NAMESPACE_RE = re.compile(rf"^\s*namespace\s+({QUALIFIED})\s*$")
+MUTUAL_RE = re.compile(r"^\s*mutual\s*$")
 SECTION_RE = re.compile(rf"^\s*(?:noncomputable\s+)?section(?:\s+{QUALIFIED})?\s*$")
 END_RE = re.compile(rf"^\s*end(?:\s+{QUALIFIED})?\s*$")
 IMPORT_RE = re.compile(rf"^\s*import\s+({QUALIFIED})\s*$")
@@ -555,7 +556,7 @@ def parse_lean_file(text: str, rel: str) -> ParsedFile:
             scopes.append(("namespace", match.group(1).split(".")))
             boundaries.add(index)
             continue
-        if SECTION_RE.fullmatch(without_newline):
+        if SECTION_RE.fullmatch(without_newline) or MUTUAL_RE.fullmatch(without_newline):
             scopes.append(("section", []))
             boundaries.add(index)
             continue
@@ -621,7 +622,7 @@ def parse_lean_file(text: str, rel: str) -> ParsedFile:
         if first in DECL_KINDS or first in {"private", "protected", "noncomputable", "unsafe", "partial"}:
             raise GateError(f"{rel}:{index + 1}: cannot parse top-level declaration header")
     if scopes:
-        raise GateError(f"{rel}: unclosed namespace or section")
+        raise GateError(f"{rel}: unclosed namespace, section or mutual block")
 
     sorted_boundaries = sorted(boundaries)
     counts: Dict[str, int] = {}
@@ -2281,6 +2282,50 @@ def duplication_self_test(today: Optional[dt.date] = None) -> int:
     return controls
 
 
+def mutual_scope_self_test() -> None:
+    """A mutual end delimits bytes without consuming namespace qualification."""
+    bodies = (
+        "def first : Nat :=\n  17\n",
+        "def second : Nat :=\n  23\n",
+        "def after : Nat :=\n  31\n",
+    )
+    source = (
+        "namespace Blanc.Fixture\nsection Outer\nnamespace Nested\nmutual\n"
+        + bodies[0] + bodies[1] + "end\n" + bodies[2]
+        + "end Nested\nend Outer\nend Blanc.Fixture\n"
+    )
+    declarations = parse_lean_file(source, "Blanc/MutualScope.lean").declarations
+    expected_names = tuple(f"Blanc.Fixture.Nested.{name}" for name in ("first", "second", "after"))
+    if tuple(decl.name for decl in declarations) != expected_names:
+        raise GateError("self-test mutual: exact declaration names changed")
+    for declaration, body, bounds in zip(declarations, bodies, ((5, 6), (7, 8), (10, 11))):
+        local_name = declaration.name.rsplit(".", 1)[1]
+        expected = body.replace(local_name, "$DECL", 1).rstrip().encode("utf-8")
+        if (
+            declaration.raw != body
+            or (declaration.start_line, declaration.end_line) != bounds
+            or source[declaration.name_start_offset:declaration.name_end_offset] != local_name
+            or declaration.name_line != bounds[0]
+            or declaration.normalized != expected
+            or declaration.imported_copy_normalized != expected
+            or hashlib.sha256(declaration.normalized).digest() != hashlib.sha256(expected).digest()
+        ):
+            raise GateError("self-test mutual: source span, boundary or digest changed")
+    for label, malformed in (
+        ("extra-end", source + "end\n"),
+        ("unclosed-mutual", source.replace("end\n", "", 1)),
+    ):
+        try:
+            parse_lean_file(malformed, "Blanc/MutualScope.lean")
+        except GateError as error:
+            expected = "unmatched end" if label == "extra-end" else "unclosed namespace"
+            if expected not in str(error):
+                raise
+        else:
+            raise GateError(f"self-test mutual {label}: malformed scope passed")
+    print("OK — proof recipe mutual parser: 3 exact-name/span/digest and 2 malformed-scope controls passed")
+
+
 def self_test(root: pathlib.Path, registry: RegistryInfo) -> None:
     # The generator owns the byte-drift fixture. Invoking its self-test here
     # proves this gate's blocking dependency remains live without mutating the
@@ -2319,6 +2364,7 @@ def self_test(root: pathlib.Path, registry: RegistryInfo) -> None:
     if _discovery_declared("/-\n" + discovery_fixture + "-/\n", "List.sliceD_add"):
         raise GateError("self-test: block-comment discovery declaration was accepted")
     print("OK — proof recipe discovery parser: 2/2 live/comment controls passed")
+    mutual_scope_self_test()
     parser_controls = parser_header_self_test()
     detector_self_test(sorted(registry.active_ids)[0])
     visibility_controls = visibility_detector_self_test()

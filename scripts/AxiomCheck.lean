@@ -1,6 +1,14 @@
 import Blanc
 import Blanc.ProofRecipeTactic
 import Blanc.ProofRecipesGenerated
+import Blanc.Lift.UniswapV2Pair.Creation.Jumps
+import Blanc.Lift.UniswapV2Pair.InitializeSource
+import Blanc.Lift.UniswapV2Pair.MintPrefixWalk
+import Blanc.Lift.UniswapV2Pair.ModelControls
+import Blanc.Lift.UniswapV2Pair.SafeTransferWalk
+import Blanc.Lift.UniswapV2Pair.SyncCanonical
+import Blanc.Lift.UniswapV2Pair.TransferFromSource
+import Blanc.Lift.UniswapV2Pair.UpdateOverflowWalk
 import AxiomAudit
 
 #union_axioms_of_modules Blanc
@@ -16,7 +24,7 @@ if a reached constant is absent from the environment. A failure names the offend
 each, up to twenty roots that reach it with the chain of constants. Lean's own axiom report is not
 used as a verdict source (lean4#15226, see that file's header).
 
-The population is what this file imports: the three imports above reach every `Blanc/**/*.lean`
+The population is what this file imports: the Blanc imports above reach every `Blanc/**/*.lean`
 module (`Blanc.ProofRecipeTactic` and `Blanc.ProofRecipesGenerated` are deliberately unreachable
 from `Blanc.lean`), and `scripts/axiom_audit.py` refuses the audit unless that is still true, so a
 new module that nothing imports cannot escape the walk.

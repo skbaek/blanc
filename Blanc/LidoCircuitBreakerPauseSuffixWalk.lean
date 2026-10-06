@@ -1,5 +1,6 @@
 import Blanc.LidoCircuitBreakerPauseWalk
 import Blanc.LidoCircuitBreakerPauseWorld
+import Blanc.Lift.CodeSizeWalk
 
 /-!
 The `.ok`-flavour walk legs of `pauseAfterSet`, through both external calls.
@@ -52,11 +53,6 @@ private lemma ltCheck_checkedSum_eq_zero {time interval : B256}
   rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_add_eq_of_nof _ _ hnof'] at hlt
   omega
 
-private theorem addAccessedAddress_setMach_setMach
-    {base : Devm} {a : Adr} {m m' : Mach} :
-    (addAccessedAddress (base.setMach m) a).setMach m' =
-      (addAccessedAddress base a).setMach m' := rfl
-
 /-! ## Temporal account access
 
 `EXTCODESIZE`'s charge is warmth-dependent, and warmth is a fact about the
@@ -64,18 +60,17 @@ frame.  Mirror the `temporalSloadBase`/`temporalSloadCost` convention: the
 caller supplies the charge as an equation about the entry world, and the walk
 threads the possibly-warmed successor world. -/
 
-/-- The world after an account access: unchanged when the address was warm,
-warmed otherwise. -/
-def temporalAccountAccessBase (base : Devm) (a : Adr) : Devm :=
-  if a ∈ base.accessedAddresses then base else addAccessedAddress base a
+/-- Compatibility definition for the shared account-warming image. -/
+abbrev temporalAccountAccessBase (base : Devm) (a : Adr) : Devm :=
+  Blanc.Lift.temporalAccountAccessBase base a
 
-/-- The warmth-dependent account-access charge. -/
-def temporalAccountAccessCost (base : Devm) (a : Adr) : Nat :=
-  if a ∈ base.accessedAddresses then gasWarmAccess else gasColdAccountAccess
+/-- Compatibility definition for the shared warmth-dependent charge. -/
+abbrev temporalAccountAccessCost (base : Devm) (a : Adr) : Nat :=
+  Blanc.Lift.temporalAccountAccessCost base a
 
 theorem temporalAccountAccessBase_warm (base : Devm) (a : Adr) :
     a ∈ (temporalAccountAccessBase base a).accessedAddresses := by
-  unfold temporalAccountAccessBase
+  unfold temporalAccountAccessBase Blanc.Lift.temporalAccountAccessBase
   split <;> rename_i h
   · exact h
   · exact Std.HashSet.mem_insert_self
@@ -83,7 +78,7 @@ theorem temporalAccountAccessBase_warm (base : Devm) (a : Adr) :
 theorem temporalAccountAccessBase_mem (base : Devm) (a x : Adr) :
     x ∈ (temporalAccountAccessBase base a).accessedAddresses ↔
       (x = a ∨ x ∈ base.accessedAddresses) := by
-  unfold temporalAccountAccessBase
+  unfold temporalAccountAccessBase Blanc.Lift.temporalAccountAccessBase
   split <;> rename_i h
   · exact ⟨Or.inr, fun hx => hx.elim (fun he => he ▸ h) id⟩
   · constructor
@@ -98,50 +93,47 @@ theorem temporalAccountAccessBase_mem (base : Devm) (a x : Adr) :
 
 theorem temporalAccountAccessBase_state (base : Devm) (a : Adr) :
     (temporalAccountAccessBase base a).state = base.state := by
-  unfold temporalAccountAccessBase
-  split <;> rfl
+  exact Blanc.Lift.temporalAccountAccessBase_state base a
 
 theorem temporalAccountAccessBase_getCode (base : Devm) (a x : Adr) :
     (temporalAccountAccessBase base a).getCode x = base.getCode x := by
-  unfold temporalAccountAccessBase
+  unfold temporalAccountAccessBase Blanc.Lift.temporalAccountAccessBase
   split <;> rfl
 
 theorem temporalAccountAccessBase_error (base : Devm) (a : Adr) :
     (temporalAccountAccessBase base a).error = base.error := by
-  unfold temporalAccountAccessBase
+  unfold temporalAccountAccessBase Blanc.Lift.temporalAccountAccessBase
   split <;> rfl
 
 theorem temporalAccountAccessBase_output (base : Devm) (a : Adr) :
     (temporalAccountAccessBase base a).output = base.output := by
-  unfold temporalAccountAccessBase
-  split <;> rfl
+  exact Blanc.Lift.temporalAccountAccessBase_output base a
 
 theorem temporalAccountAccessBase_logs (base : Devm) (a : Adr) :
     (temporalAccountAccessBase base a).logs = base.logs := by
-  unfold temporalAccountAccessBase
-  split <;> rfl
+  exact Blanc.Lift.temporalAccountAccessBase_logs base a
 
 theorem temporalAccountAccessBase_refundCounter (base : Devm) (a : Adr) :
     (temporalAccountAccessBase base a).refundCounter = base.refundCounter := by
-  unfold temporalAccountAccessBase
+  unfold temporalAccountAccessBase Blanc.Lift.temporalAccountAccessBase
   split <;> rfl
 
 theorem temporalAccountAccessBase_accountsToDelete (base : Devm) (a : Adr) :
     (temporalAccountAccessBase base a).accountsToDelete =
       base.accountsToDelete := by
-  unfold temporalAccountAccessBase
+  unfold temporalAccountAccessBase Blanc.Lift.temporalAccountAccessBase
   split <;> rfl
 
 theorem temporalAccountAccessBase_transientStorage (base : Devm) (a : Adr) :
     (temporalAccountAccessBase base a).transientStorage =
       base.transientStorage := by
-  unfold temporalAccountAccessBase
+  unfold temporalAccountAccessBase Blanc.Lift.temporalAccountAccessBase
   split <;> rfl
 
 theorem temporalAccountAccessBase_accessedStorageKeys (base : Devm) (a : Adr) :
     (temporalAccountAccessBase base a).accessedStorageKeys =
       base.accessedStorageKeys := by
-  unfold temporalAccountAccessBase
+  unfold temporalAccountAccessBase Blanc.Lift.temporalAccountAccessBase
   split <;> rfl
 
 /-- Exact `EXTCODESIZE` step in the temporal convention: the charge is the
@@ -158,21 +150,7 @@ theorem temporal_extcodesize_runCompiled
         G + temporalAccountAccessCost base x.toAdr, base.stateGas⟩)
       Ninst.extcodesize
       ((temporalAccountAccessBase base x.toAdr).setMach ⟨v :: stack, M, G, (temporalAccountAccessBase base x.toAdr).stateGas⟩) := by
-  by_cases hwarm : x.toAdr ∈ base.accessedAddresses
-  · simp only [temporalAccountAccessBase, temporalAccountAccessCost,
-      if_pos hwarm]
-    simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach] using
-      Ninst.runCompiled_extcodesize_warm
-        (devm := base.setMach ⟨x :: stack, M, G + gasWarmAccess, base.stateGas⟩)
-        hfork.rules_stateGas_none rfl hwarm hval (by simp only [Devm.gasLeft_setMach]) hroom
-  · simp only [temporalAccountAccessBase, temporalAccountAccessCost,
-      if_neg hwarm]
-    have hsg : (addAccessedAddress base x.toAdr).stateGas = base.stateGas := rfl
-    simpa only [addAccessedAddress_setMach_setMach, Devm.memory_setMach,
-      Devm.stateGas_setMach, hsg] using
-      Ninst.runCompiled_extcodesize_cold
-        (devm := base.setMach ⟨x :: stack, M, G + gasColdAccountAccess, base.stateGas⟩)
-        hfork.rules_stateGas_none rfl hwarm hval (by simp only [Devm.gasLeft_setMach]) hroom
+  exact Blanc.Lift.temporal_extcodesize_runCompiled hfork hval hroom
 
 /-! ## The two crossings, resolved at a warm code-carrying callee
 

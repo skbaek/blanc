@@ -2,7 +2,7 @@
 """Canonical lift-certificate producer for deployed EVM bytecode (untrusted).
 
 This is Blanc's one registered generator of `Blanc/Lift/**/Cert.lean` (and, where
-registered, the matching per-entry `Check.lean`).  It recovers a certificate of
+registered, the matching per-entry `Check.lean` and `Jumps.lean`).  It recovers a certificate of
 frame-relative control structure from raw runtime bytes; it proves nothing.  The
 only trust boundary is Lean: `Cert.check code cert = true`, decided by the kernel
 in the generated or hand-written `Check.lean`, is what a lift theorem consumes.
@@ -21,7 +21,7 @@ Plans evidence (`solc-bytecode-v1/w3/lift.py`, `beacon-deposit-bytecode-v1/w0/li
 EXTCODESIZE, compatible-join repair, join-aware call continuations).  The two
 exploration differences of the solc-w3 fork are options (`--no-join-entries`,
 `--wrapper-order fall-first`), not code paths per contract.  `--fold` (registry
-option `"fold": true`) folds ADD, MUL, SUB, LT, GT, EQ and ISZERO over constant
+option `"fold": true`) folds ADD, MUL, SUB, LT, GT, EQ, AND and ISZERO over constant
 operands exactly as `foldConst` in `Blanc/Lift/Check.lean`; off by default, so
 every certificate registered without it regenerates byte-identically.  `--pc`
 (registry option `"pc": true`) lifts `PC` as `SFunc.pcAt pc`, pushing the node's
@@ -31,7 +31,7 @@ which `checkNode` does not check (`AVal.jumps?`); off by default.
 `--memret callnext --const-mem --entry-cap K --widen agree` (registry option
 `"memret": "callnext", "const_mem": true, "entry_cap": K`) is the memory-tracking
 mode ported from Plans evidence/deployed-lido-vyper-v1/memret-probe/lift_memret.py:
-PC, the seven folds and decided JUMPIs, a constant memory map whose transfer is
+PC, the eight folds and decided JUMPIs, a constant memory map whose transfer is
 exactly `absMem`/`memTop` (`Blanc/Lift/CheckMem.lean`), entries keyed by constant
 state with at most K per control context (then widened to the constants all agree
 on), a `mems` list beside `cert`, and a generated Check proving `Cert.checkM` and
@@ -354,6 +354,9 @@ def run_registry(args: argparse.Namespace) -> int:
                     argv.append("--check-literal-tries")
                 if check.get("assembly") in ("seven", "two"):
                     argv += ["--check-assembly", check["assembly"]]
+            jumps = row.get("jumps")
+            if jumps:
+                argv += ["--jumps-out", str(out / "Jumps.lean"), "--jumps-header", jumps["header"]]
             lock = row.get("lock")
             if lock:
                 argv += ["--lock-spec", json.dumps(lock["spec"]), "--lock-spec-module", lock["spec_module"],
@@ -379,6 +382,8 @@ def run_registry(args: argparse.Namespace) -> int:
                         if extra.name not in names:
                             print(f"FAIL {ident}: {extra.relative_to(root)} is not produced by the registered generator")
                             failures += 1
+            if jumps:
+                pairs.append((out / "Jumps.lean", root / jumps["path"]))
             if lock:
                 pairs.append((out / "LockAnn.lean", root / lock["ann"]))
                 pairs.append((out / "LockCheck.lean", root / lock["check"]))
@@ -427,6 +432,9 @@ parser.add_argument("--cert-out", type=Path, default=None, help="Cert.lean to wr
 parser.add_argument("--check-out", type=Path, default=None, help="per-entry Check.lean to write (optional)")
 parser.add_argument("--header", type=str, default=DEFAULT_HEADER, help="Cert.lean generator comment")
 parser.add_argument("--check-header", type=str, default=DEFAULT_HEADER, help="Check.lean generator comment")
+parser.add_argument("--jumps-out", type=Path, default=None,
+                    help="optional regular Cert.jumpsOk per-entry proof module (requires --check-out)")
+parser.add_argument("--jumps-header", type=str, default=DEFAULT_HEADER, help="Jumps.lean generator comment")
 parser.add_argument("--check-split-nodes", type=int, default=0,
                     help="Check.lean: decide an entry above this many nodes block by block (0: never)")
 parser.add_argument("--check-parts", type=int, default=0,
@@ -444,7 +452,7 @@ parser.add_argument("--decide-jumpi", action="store_true",
 parser.add_argument("--pc", action="store_true",
                     help="lift PC as SFunc.pcAt (pushes the node's own pc)")
 parser.add_argument("--fold", action="store_true",
-                    help="fold ADD/MUL/SUB/LT/GT/EQ/ISZERO over constant operands (mirror of foldConst)")
+                    help="fold ADD/MUL/SUB/LT/GT/EQ/AND/ISZERO over constant operands (mirror of foldConst)")
 parser.add_argument("--lock-spec", type=str, default=None,
                     help="reentrancy-lock spec as JSON {slot, locked, bodies, mutBodies, setPcs, releasePcs}")
 parser.add_argument("--lock-spec-module", type=str, default=None, help="Lean module defining `lockSpec` (hand-written)")
@@ -471,7 +479,7 @@ CONST_MEM = MEMRET and args.const_mem
 if MEMRET:
     args.pc = True     # PC as SFunc.pcAt (the node's own pc)
 if CONST_MEM:
-    args.fold = True   # exactly foldConst's seven ops (Blanc/Lift/Check.lean)
+    args.fold = True   # exactly foldConst's eight ops (Blanc/Lift/Check.lean)
 ENTRY_CAP = args.entry_cap
 JOIN_EXEMPT = args.memret == "inline" and not args.no_callee_join_exempt
 
@@ -484,6 +492,9 @@ if args.registry is not None:
 
 if args.hex is None or args.sha256 is None or args.namespace is None or args.cert_out is None:
     parser.error("lift mode needs --hex, --sha256, --namespace and --cert-out")
+
+if args.jumps_out is not None and (args.check_out is None or MEMRET):
+    parser.error("regular jumps mode needs --check-out and --memret off")
 
 # 1. Load bytecode
 code_hex = args.hex.read_text().strip()
@@ -551,6 +562,7 @@ FOLD2 = {
     0x10: lambda x, y: 1 if x < y else 0,   # LT
     0x11: lambda x, y: 1 if x > y else 0,   # GT
     0x14: lambda x, y: 1 if x == y else 0,  # EQ
+    0x16: lambda x, y: x & y,               # AND
 }
 def step_inst(op: int, data: bytes, stack: List[Tuple[Any, ...]], cur_pc: Optional[int] = None) -> Optional[List[Tuple[Any, ...]]]:
     if op == 0x58 and args.pc:  # PC: the node's own pc (SFunc.pcAt)
@@ -2592,6 +2604,54 @@ if args.check_out is not None:
             (args.check_out if _name == "Check" else args.check_out.with_name(_name + ".lean")).write_text(_text)
     else:
         args.check_out.write_text(_check)
+
+def jumps_source() -> str:
+    """Regular jump acceptance against the same exact code tries as the registered Check.
+    This optional surface preserves all existing generated outputs. Per-entry kernel
+    decisions rewrite through the shared jumpsOkNodeT_eq; assembly has an explicit simp set.
+    """
+    ns = args.namespace
+    owner = "CheckTries" if args.check_parts >= 2 else "Check"
+    lines = [
+        f"import {ns}.{owner}",
+        "",
+        f"/-! {args.jumps_header}",
+        "Jump destinations are checked against the exact runtime, one kernel decision per entry. -/",
+        "",
+        f"namespace {ns}",
+        "",
+        "open Jaune",
+        "",
+    ]
+    for i, line in enumerate(cert_entries_lines):
+        m = re.match(r"^  \(⟨(0x[0-9a-f]+), (\[[^\]]*\]), (\d+)⟩, (t_\w+)\)$", line)
+        if m is None:
+            raise RuntimeError(f"cannot read certificate entry {i}: {line}")
+        _pc, frame, _rets, tree = m.groups()
+        lines.extend([
+            f"theorem jumps_{i} :",
+            f"    jumpsOkNode code (Cert.entries cert) {tree} {frame} = true := by",
+            "  rw [← jumpsOkNodeT_eq codeTries]",
+            "  decide +kernel",
+            "",
+        ])
+    n = len(cert_entries_lines)
+    lines.extend([
+        "theorem jumps_ok : Cert.jumpsOk code cert = true := by",
+        "  unfold Cert.jumpsOk",
+        "  rw [List.all_eq_true]",
+        "  intro p hp",
+        "  simp only [cert, List.mem_cons, List.not_mem_nil, or_false] at hp",
+        "  rcases hp with " + " | ".join(["rfl"] * n),
+    ])
+    lines.extend(f"  · exact jumps_{i}" for i in range(n))
+    lines.extend(["", f"end {ns}", ""])
+    return "\n".join(lines)
+
+
+if args.jumps_out is not None:
+    args.jumps_out.parent.mkdir(parents=True, exist_ok=True)
+    args.jumps_out.write_text(jumps_source())
 
 # 11. Reentrancy-lock annotations (`scripts/lift/lockann.py`) and their per-entry decisions.
 lock_opts = (args.lock_spec, args.lock_spec_module, args.lock_ann_out, args.lock_check_out)

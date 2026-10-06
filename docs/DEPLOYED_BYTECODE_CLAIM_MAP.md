@@ -1,9 +1,10 @@
 # Deployed-bytecode claim map
 
 What Blanc proves about bytecode that is already on Ethereum mainnet: WETH9, the
-Beacon deposit contract, the Curve 3Crv LP token, Lido's CircuitBreaker, and the
+Beacon deposit contract, the Curve 3Crv LP token, Lido's CircuitBreaker, the
 Vyper nonreentrancy pair (the fixed pool implementation "V+" and the vulnerable
-one "V−"). Every headline below names the theorem that carries it, the
+one "V−"), the EIP-7002 withdrawal-request predeploy, and the Uniswap V2 Pair.
+Every headline below names the theorem that carries it, the
 premises it needs, and what it does not say. The companion page for Blanc's own
 ports is [`PORTING.md`](../PORTING.md); this page is about the exogenous
 bytes themselves.
@@ -54,9 +55,23 @@ forwarder to the implementation above it.
 | ETH/stETH pool proxy to the V+ implementation | 0x21e27a5e5513d6e65c4f830167390997aa84843a | 45 | 0x9e28a09452d2354fc4e15e3244dde27cbc4d52f12a10b91f2ca755b672bfa9be | not recorded | not recorded |
 | Vyper pool implementation, vulnerable (V−) | 0x6326debbaa15bcfe603d831e7d75f4fc10d9b43e | 17,535 | 0xba0284a6a8a86734c1c777e3c6b5b56f2c8ba95dc0f7eba481c6d09da7885ebc | 0xd27491757b3a4bc9287ed44ce5c43de9f32131264548ce139f0a702c3d5f389e | 12,904,329 |
 | Pool proxy to the V− implementation | 0x9848482da3ee3076165ce6497eda906e66bb85c5 | 45 | 0xbed04db3507e08e5220f6eadf98d5df05bdbc74df129c73fcbab7c441e86b124 | not recorded | not recorded |
+| Uniswap V2 Pair (exhibit: the USDC/WETH pair) | 0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc | 11,293 | 0x5b83bdbcc56b2e630f2807bbadd2b0c21619108066b92a58de081261089e9ce5 | not recorded (runtime read at a finalized block, below) | not recorded |
 
 Compilers, from the certificate provenance: 3Crv Vyper 0.2.4; the
-CircuitBreaker solc 0.8.34; V− Vyper 0.2.15; V+ Vyper 0.3.7.
+CircuitBreaker solc 0.8.34; V− Vyper 0.2.15; V+ Vyper 0.3.7; the Uniswap V2 Pair
+solc 0.5.16.
+
+**The Uniswap V2 Pair row.** One runtime serves every V2 pair, so the row is the
+exhibit instance's code. It was read by `eth_getCode` at finalized block 26,098,569
+(block hash 0x296870f7b828ab4cc996959e744f0a8178889f39cc5e497610420536ec5703cd)
+and is equal across three separately operated providers; no creation transaction
+of this instance is recorded, and the lifted input is
+`scripts/lift/inputs/uniswap-v2-pair-runtime.hex`. The creation code behind the
+deployment theorems is the 11,636-byte input `scripts/lift/inputs/uniswap-v2-pair-creation.hex`:
+its Keccak-256 is the factory's init-code hash
+0x96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f, and bytes
+261 to 11,553 of it are the lifted runtime. Nothing was recompiled: the
+refinement of Section 5.8 is what ties the bytes to the v1.0.1 source.
 
 **Canonical system contracts.** The Beacon `_sys` headlines assume the four
 canonical system contracts are installed at their protocol addresses. Their
@@ -84,9 +99,9 @@ reader (41 bytes) and a receiver (86 bytes).
 | Component | What is trusted | Evidence |
 |---|---|---|
 | Lean toolchain `v4.34.0` | Kernel soundness | For every constant of every Blanc module, and therefore for every theorem this map cites, the reachable axioms are within `propext`, `Classical.choice`, `Quot.sound`; one from-scratch union walk (Section 8), not `#print axioms` or `collectAxioms` |
-| Jaune revision `b019bbf` | That its EVM and transaction definitions match Ethereum | Not a theorem. Conformance, as reported by that Jaune revision's own README and not re-run here: **5,006/5,006** supported fixture files and **34,205/34,205** cases of the execution-specs mainnet corpus (`tests@v20.0.2`), Prague through BPO2 including configured fork transitions |
+| Jaune revision `2737c8eb` | That its EVM and transaction definitions match Ethereum | Not a theorem. Conformance, as reported by that Jaune revision's own README and not re-run here: **5,006/5,006** supported fixture files and **34,205/34,205** cases of the execution-specs mainnet corpus (`tests@v20.0.2`), Prague through BPO2 including configured fork transitions |
 | Lift certificates | Nothing | The Python producers are untrusted. Each certificate is accepted only by its Lean `cert_check`, a kernel decision, against the literal bytes |
-| Runtime identity | That the lifted bytes are the mainnet bytes | Recorded in each certificate's `provenance`: `eth_getCode` agreement across independent public providers (two for WETH9, five for 3Crv); the creation inputs of WETH9, the Beacon deposit contract and 3Crv fetched from two providers and equal byte for byte; the Lido creation input equal to the frozen reference template plus its constructor arguments; the two pool implementations taken from Sourcify v2 records. The codehashes in Section 2 are recomputed from the lifted files by the checker |
+| Runtime identity | That the lifted bytes are the mainnet bytes | Recorded in each certificate's `provenance`: `eth_getCode` agreement across independent public providers (two for WETH9, five for 3Crv, three for the Uniswap V2 Pair, at one finalized block); the creation inputs of WETH9, the Beacon deposit contract and 3Crv fetched from two providers and equal byte for byte; the Lido creation input equal to the frozen reference template plus its constructor arguments; the two pool implementations taken from Sourcify v2 records; the Uniswap V2 Pair creation code taken from the publisher artifact of `@uniswap/v2-core` 1.0.1, its Keccak-256 equal to the factory's init-code hash and its embedded runtime equal to the lifted runtime. The codehashes in Section 2 are recomputed from the lifted files by the checker |
 | Fork scope | — | `CoveredFork` is Prague, Osaka, BPO1, BPO2. Amsterdam is not covered |
 | Chain arithmetic | Model bound | Configured traces carry total ETH plus withdrawals below 2^256 (`SumNof` at the checkpoint) |
 | Signature recovery | Premise of the signature-generic transaction theorems | `recoverSender … = .ok E` is a premise of every theorem that quantifies over all signed transactions, since there is then no single signature to evaluate. For a concrete transaction the kernel evaluates recovery: `Blanc.Drip.concreteCreateRecoveredSender` (`Blanc/DripConcreteHistory/Deployment.lean:196`), `Blanc.Drip.concreteExitRecoveredSender` (`Blanc/DripConcreteHistory/AccrualExit.lean:1215`), `Blanc.Lift.WithdrawalRequest.FloodTx.txB_recoveredSender` (`Blanc/Lift/WithdrawalRequest/FloodTxRecover.lean:149`) and, for V−, `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.txC_recoveredSender` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/TxCRecover.lean:99`) |
@@ -100,7 +115,7 @@ whether a class is acceptable and whether deployment establishes INIT.
 | Class | Meaning | Acceptable in a headline? | INIT established by a deployment theorem? |
 |---|---|---|---|
 | CODE | Installed code and fork identity | Yes | — |
-| INIT | Stated once, at the checkpoint | Yes, if shown inhabited, ideally by deployment | **WETH9** footprint `FootInv ∅`: yes, no hash premise [`Blanc.Lift.Weth9.Creation.weth9_deploy_init_covered` (`Blanc/Lift/Weth9/Creation/DeployInit.lean:22`)]. **Beacon** `SolInv []`: yes, no hash premise [`Blanc.Lift.BeaconDeposit.Creation.beacon_deploy_covered` (`Blanc/Lift/BeaconDeposit/Creation/Deploy.lean:144`)]. **Curve** `VyInv … ∅`: yes, no hash premise [`Blanc.Lift.Curve3Crv.Creation.curve_deploy_covered` (`Blanc/Lift/Curve3Crv/Creation/Deploy.lean:297`)]. **Lido** `RegistryZeroRaw` and `StateInv`: only under two hash premises `ForeignApart 0 0` and `ForeignApart 0 1` (bound zero still quantifies address mapping keys) [`Blanc.Lift.LidoCircuitBreakerDeployed.Creation.lido_deploy_init_covered` (`Blanc/Lift/LidoCircuitBreakerDeployed/Creation/Deploy.lean:203`)]. **V±**: synthetic prestates, none |
+| INIT | Stated once, at the checkpoint | Yes, if shown inhabited, ideally by deployment | **WETH9** footprint `FootInv ∅`: yes, no hash premise [`Blanc.Lift.Weth9.Creation.weth9_deploy_init_covered` (`Blanc/Lift/Weth9/Creation/DeployInit.lean:22`)]. **Beacon** `SolInv []`: yes, no hash premise [`Blanc.Lift.BeaconDeposit.Creation.beacon_deploy_covered` (`Blanc/Lift/BeaconDeposit/Creation/Deploy.lean:144`)]. **Curve** `VyInv … ∅`: yes, no hash premise [`Blanc.Lift.Curve3Crv.Creation.curve_deploy_covered` (`Blanc/Lift/Curve3Crv/Creation/Deploy.lean:297`)]. **Lido** `RegistryZeroRaw` and `StateInv`: only under two hash premises `ForeignApart 0 0` and `ForeignApart 0 1` (bound zero still quantifies address mapping keys) [`Blanc.Lift.LidoCircuitBreakerDeployed.Creation.lido_deploy_init_covered` (`Blanc/Lift/LidoCircuitBreakerDeployed/Creation/Deploy.lean:203`)]. **Uniswap V2 Pair** `InitializedCheckpoint`: yes, no hash premise, by a `CREATE2` deployment followed by the factory's `initialize` [`Blanc.Lift.UniswapV2Pair.Creation.pair_create2_initialized` (`Blanc/Lift/UniswapV2Pair/Creation/DeployInit.lean:126`)]. **V±**: synthetic prestates, none |
 | ENTRY | Required at every entered frame | Only if environmental, never invariant-shaped | — |
 | HASH-T | Exact separation of the hashes and keys actually computed or touched in the trace, including avoidance of fixed slots where stated | Yes when stated; narrower and amenable to finite checking with a concrete initial footprint. Computational collision resistance does not entail this exact fact; fixed-slot avoidance also concerns target/preimage behavior. No cryptographic reduction is proved. The Lido finite tier (Section 5.4) states its instances as decidable checks on explicit key lists, so a concrete instance is closed by kernel evaluation | — |
 | HASH-U | Exact separation quantified over all 2^160 addresses or indices | Needs justification; not established here. The finite domain does not make proof impossible. Under a random-function model of Keccak the estimated failure probability is about q·2^-94 per frame (q = written slots): **heuristic only, with no reduction or bound proved** | — |
@@ -109,8 +124,8 @@ whether a class is acceptable and whether deployment establishes INIT.
 
 The per-frame calldata bound (below 2^256) is not a premise of any history
 theorem: it holds for every raw frame of every configured history on all
-covered forks [`Blanc.ExecutionTrace.ConfiguredHistoryTrace.calldata_bound` (`Blanc/ExecutionTraceCalldata.lean:773`);
-`Blanc.ExecutionTrace.ConfiguredHistoryTrace.frameAdmitted_calldata` (`Blanc/ExecutionTraceCalldata.lean:790`)], because
+covered forks [`Blanc.ExecutionTrace.ConfiguredHistoryTrace.calldata_bound` (`Blanc/ExecutionTraceCalldata.lean:780`);
+`Blanc.ExecutionTrace.ConfiguredHistoryTrace.frameAdmitted_calldata` (`Blanc/ExecutionTraceCalldata.lean:797`)], because
 `tx.gas ≤ blockGasLimit < 2^63`. Frame-level (non-history) theorems still take
 it as a hypothesis about their own `sevm`.
 
@@ -427,6 +442,110 @@ representation ignores them); historical inclusion of the deployment; anything b
 Rolled-back frames are not ignored: the replay, FIFO and balance theorems range over settled frames, and a frame
 rolled back by its own or an ancestor's failure is not among them.
 
+### 5.8 Uniswap V2 Pair: exact committed replay, share-value monotonicity and gas-exact liveness
+
+The lifted runtime is the one Uniswap V2 Pair runtime (solc 0.5.16, `Uniswap/v2-core`
+v1.0.1, 11,293 bytes) that every V2 pair runs; the USDC/WETH pair of Section 2 is its
+exhibit instance. The theorems quantify over the pair address, the two token
+addresses and the factory, so they hold of every pair that runs these bytes. The
+pair can observe only what `balanceOf` and the factory's `feeTo` answer: those
+answers are **inputs** of the statements, never assumptions folded into a
+definition. Results about the bytes and about replay, the LP ledger and the oracle
+need no token or factory premise. The share-value statements take a named premise
+about the callee answers of the history's own steps. The factory's bytecode is not
+lifted. The functional model is transcribed from the v1.0.1 sources and carries a
+line-by-line correspondence table with an independent source-versus-model review
+([`docs/registers/UNISWAP_V2_MODEL_REVIEW.md`](registers/UNISWAP_V2_MODEL_REVIEW.md),
+which reviewed an earlier snapshot of the model and states what has changed since).
+
+**Safety, refinement and history**
+
+| Claim | Theorem | Level / kind | Premises | Notes |
+|---|---|---|---|---|
+| After any configured history: the certified runtime is still installed, and there is a list of steps, one per **outermost** settlement-committed non-static pair frame in trace order, such that the committed pair frames of the steps' subtrees are exactly the settlement-committed non-static pair frames of the trace (rolled-back frames absent, static frames observe nothing); every step is authenticated against its own run (its decoded entry and the token and factory answers its run actually observed, nested turns included); and replaying the steps' source invocations from the checkpoint model state with the source model's driver gives a model state that the future pair storage represents | `Blanc.Lift.UniswapV2Pair.pair_history_committed` (`Blanc/Lift/UniswapV2Pair/PairHistory.lean:344`); steps `Blanc.Lift.UniswapV2Pair.PairStep` (`Blanc/Lift/UniswapV2Pair/PairHistory.lean:148`) with `Blanc.Lift.UniswapV2Pair.PairStep.Authentic` (`Blanc/Lift/UniswapV2Pair/PairHistory.lean:162`); the observed list `Blanc.Lift.UniswapV2Pair.committedPairFrames` (`Blanc/Lift/UniswapV2Pair/PairHistory.lean:308`) over `Blanc.Lift.UniswapV2Pair.pairSubtreeFrames` (`Blanc/Lift/UniswapV2Pair/PairHistory.lean:173`) | History / safety, exact extraction | CODE (the certified runtime at the pair at the checkpoint); INIT `WriterRep K₀ (pair storage) st₀`; **HASH-T** `WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)` (finite, trace-local, includes rolled-back frames). **No per-frame ENTRY premise, no universal hash premise, no token or factory premise** | The headline. The list is pinned by an equality, not a free witness: the observation equality places every step's frame among the trace's settled frames, and a committed non-static pair frame always observes itself, so a step cannot be a phantom. The replay is **nested, not flat**: a pair frame re-entered from inside a token call, the flash-swap callback or a factory call is consumed inside its parent step's transcript (Section 7 item 19). The calldata bound is derived [`Blanc.Lift.UniswapV2Pair.pair_trace_admitted` (`Blanc/Lift/UniswapV2Pair/PairHistory.lean:314`)]. The source driver `Blanc.Lift.UniswapV2Pair.runSourceInvocations` (`Blanc/Lift/UniswapV2Pair/SourceReplay.lean:25`) accepts only successful invocations |
+| The same statement from the deployment checkpoint: with `st₀ = initializedState factory domain token0 token1` and no initially tracked row, every tracked row at the end is a row the trace touched | `Blanc.Lift.UniswapV2Pair.pair_history_initialized` (`Blanc/Lift/UniswapV2Pair/PairHistory.lean:384`) | History / safety | CODE; INIT `InitializedCheckpoint` (the checkpoint storage is the deploy-then-`initialize` storage); HASH-T with no initial row | The INIT premise is the conclusion of the deployment theorem below |
+| **LP-token ledger (U7):** the replayed model state satisfies `Ledger`: the LP balances of **all** addresses sum to `totalSupply`, `MINIMUM_LIQUIDITY` at address 0 and every protocol-fee mint included | `Blanc.Lift.UniswapV2Pair.pair_history_ledger` (`Blanc/Lift/UniswapV2Pair/PairHistory.lean:414`); the invariant `Blanc.Lift.UniswapV2Pair.State.Ledger` (`Blanc/Lift/UniswapV2Pair/PropertiesLedger.lean:35`); model level `Blanc.Lift.UniswapV2Pair.runTyped_ledgerOn` (`Blanc/Lift/UniswapV2Pair/PropertiesLedger.lean:550`) | History / safety | as `pair_history_initialized`: CODE, INIT `InitializedCheckpoint`, HASH-T | Callbacks may re-enter the unlocked ERC-20 entry points; the replay admits that. The ledger at the checkpoint is proved, not assumed [`Blanc.Lift.UniswapV2Pair.State.initialized_ledgerOn` (`Blanc/Lift/UniswapV2Pair/PropertiesLedger.lean:70`)] |
+| **Oracle (U5):** the two price accumulators after the history are the checkpoint's plus the sum of the increments of every committed update receipt of the replay (nested committed updates included), modulo 2^256; every receipt satisfies the per-update law, the receipts chain `last` from the checkpoint's stored timestamp to the future one, and each receipt's `ts` is the block timestamp of its step's frame | `Blanc.Lift.UniswapV2Pair.pair_history_oracle` (`Blanc/Lift/UniswapV2Pair/PairHistory.lean:443`), through the replay lemma `Blanc.Lift.UniswapV2Pair.SourceReplay.oracle_receipts` (`Blanc/Lift/UniswapV2Pair/SourceReplayOracle.lean:351`) and the timestamp provenance `Blanc.Lift.UniswapV2Pair.runTyped_stamped` (`Blanc/Lift/UniswapV2Pair/SourceReplayOracle.lean:324`); the per-update law `Blanc.Lift.UniswapV2Pair.OracleUpdate.Lawful` (`Blanc/Lift/UniswapV2Pair/PropertiesOracleLaw.lean:8`): `Δt = (ts mod 2^32 − last) mod 2^32` and an increment of `⌊r1·2^112/r0⌋·Δt` (symmetrically for price 1) when `Δt` and both reserves are nonzero, established for every update `Blanc.Lift.UniswapV2Pair.State.update_oracle_lawful` (`Blanc/Lift/UniswapV2Pair/PropertiesOracleLaw.lean:20`) and carried through the typed driver by `runTyped_oracle_law` (`Blanc/Lift/UniswapV2Pair/PropertiesOracleLaw.lean`) | History (sum) and model (law) / safety | as `pair_history_committed` | Both wraparounds, of the `uint32` timestamp and of the accumulator, are part of the statements. The history theorem states the modular sum of the recorded increments and, for each recorded increment, the floor formula over the wrapped `Δt` with `ts` the step frame's block timestamp (re-entered frames inherit it) (Section 7 item 22) |
+| **Share value never decreases, protocol fee off (U3):** for every committed state change of the replay with positive incoming supply `T`, `r0·r1·T'² ≤ r0'·r1'·T²`, equivalently `√(r0·r1)/T` does not decrease, across mint (minimum of two floors), burn (floors), swap (fee-adjusted check), sync and skim | `Blanc.Lift.UniswapV2Pair.pair_history_feeOff_product` (`Blanc/Lift/UniswapV2Pair/PairHistory.lean:490`); consumed `Blanc.Lift.UniswapV2Pair.SourceReplay` (`Blanc/Lift/UniswapV2Pair/SourceReplay.lean:35`); frame-level `Blanc.Lift.UniswapV2Pair.runTyped_product` (`Blanc/Lift/UniswapV2Pair/Properties.lean:2680`) | History / safety | as `pair_history_committed`, and for the history's own steps `sourceReplayAnswers`: at each step `EntryFeeOff` (the factory's `feeTo` answer of a mint or burn is zero) and `EntryNoShrink` (the token-answer premise **NoShrink**, below) | **Token and factory premises, stated over the history's own steps only**, not over all tokens. Nonvacuous: any history whose tokens answer at least the stored reserves where the premise says so, and whose factory answers `feeTo = 0`, satisfies it. Mint and swap need no token premise: the bytecode's own checks (the checked balance subtractions, the fee-adjusted check) give the inequality |
+| **Share value with the protocol fee on:** every committed state change with positive incoming supply keeps `r0·r1·T'² ≤ r0'·r1'·(T + F)²`, where `F = entryFeeAmount` is the exact fee mint of that step, `⌊T·(√k − √kLast)/(5·√k + √kLast)⌋` at the step's actual `feeTo` answer (floored roots, `feeTo ≠ 0`, `kLast ≠ 0`, `√kLast < √k`), else 0; dilution is bounded by the fee mint alone | `Blanc.Lift.UniswapV2Pair.pair_history_feeOn_product` (`Blanc/Lift/UniswapV2Pair/PairHistory.lean:519`) | History / safety | as `pair_history_committed`, and `sourceReplayNoShrink` over the history's own steps | As above without the fee-off condition |
+| **NoShrink, exactly.** For `sync`: both answers of `balanceOf(pair)` are at least the stored reserves. For `burn`: both first answers are at least the stored reserves, and each first answer is at most its final answer plus that token's payout (a transfer debits at most its payout). For every other entry: none | `Blanc.Lift.UniswapV2Pair.EntryNoShrink` (`Blanc/Lift/UniswapV2Pair/Properties.lean:2643`) with `Blanc.Lift.UniswapV2Pair.SyncEntryNoShrink` (`Blanc/Lift/UniswapV2Pair/Properties.lean:1994`) and `Blanc.Lift.UniswapV2Pair.BurnEntryNoShrink` (`Blanc/Lift/UniswapV2Pair/Properties.lean:1490`); fee-off `Blanc.Lift.UniswapV2Pair.EntryFeeOff` (`Blanc/Lift/UniswapV2Pair/Properties.lean:2657`); over a replay `Blanc.Lift.UniswapV2Pair.sourceReplayAnswers` (`Blanc/Lift/UniswapV2Pair/SourceReplay.lean:105`), `Blanc.Lift.UniswapV2Pair.sourceReplayNoShrink` (`Blanc/Lift/UniswapV2Pair/SourceReplay.lean:150`) | Premise definitions (ENV: callee behaviour) | — | The burn form is weaker than "every answer is at least the stored reserve", which would exclude every ordinary burn (an honest token answers below the reserve after paying out). Tokens with transfer fees or rebasing fail NoShrink (Section 7 item 17) |
+| Frame refinement of every selector: a successful pc-0 run of the certified runtime consumes the typed source entry exactly over the observations of its own derivation (the token and factory answers; nested turns derived from the run's actual children), with exact storage, logs and return bytes. Writers: sync, mint, swap (in all six successful shapes: each optimistic transfer present iff its amount is nonzero, the callback present iff `data` is nonempty), skim, burn, transfer, approve, transferFrom, initialize (the factory is the caller) and permit; **views**: every successful static frame is one of the views, with value zero | `Blanc.Lift.UniswapV2Pair.sync_bytecode_exact_consumes` (`Blanc/Lift/UniswapV2Pair/SyncGasCanonical.lean:749`), `Blanc.Lift.UniswapV2Pair.mint_bytecode_exact_consumes` (`Blanc/Lift/UniswapV2Pair/MintCanonical.lean:495`), `Blanc.Lift.UniswapV2Pair.swap_bytecode_exact_consumes` (`Blanc/Lift/UniswapV2Pair/SwapCanonical.lean:270`), `Blanc.Lift.UniswapV2Pair.skim_bytecode_exact_consumes` (`Blanc/Lift/UniswapV2Pair/SkimCanonical.lean:378`), `Blanc.Lift.UniswapV2Pair.burnRaw_source_authentic` (`Blanc/Lift/UniswapV2Pair/BurnFeeTransfers.lean:1076`), `Blanc.Lift.UniswapV2Pair.transfer_bytecode_exact_consumes` (`Blanc/Lift/UniswapV2Pair/TransferSource.lean:467`), `Blanc.Lift.UniswapV2Pair.approve_bytecode_exact_consumes` (`Blanc/Lift/UniswapV2Pair/ApproveSource.lean:254`), `Blanc.Lift.UniswapV2Pair.transferFrom_bytecode_exact_consumes` (`Blanc/Lift/UniswapV2Pair/TransferFromSource.lean:590`), `Blanc.Lift.UniswapV2Pair.initialize_bytecode_exact_consumes` (`Blanc/Lift/UniswapV2Pair/InitializeSource.lean:247`), `Blanc.Lift.UniswapV2Pair.permit_bytecode_refines_source` (`Blanc/Lift/UniswapV2Pair/PermitSource.lean:350`), `Blanc.Lift.UniswapV2Pair.staticView_bytecode_inv` (`Blanc/Lift/UniswapV2Pair/StaticViewClassify.lean:1256`) | Frame / refinement | CODE; covered fork; fresh pc-0 entry; INIT-shaped `WriterRep` of the entry storage; HASH-T over the run's own key universe (transfer, approve, transferFrom and permit: freshness of their own touched rows) | The frame theorems are the ground the history rows are built on. `permit` uses the **result** of the modeled ECRECOVER precompile as an input: value zero, at least 228 calldata bytes, non-static, before the deadline, and a successful recovery call whose copied word is the nonzero owner; unforgeability of signatures is not claimed |
+| Model laws of the typed source model (the functional model the replay folds over): the first mint prices `⌊√(a0·a1)⌋ − 1000`, locks 1000 at address 0 and credits the recipient the rest, with the Babylonian loop equal to `Nat.sqrt` over the full domain; a later mint issues `min(⌊a0·T/r0⌋, ⌊a1·T/r1⌋)` (with `T` the supply after the fee mint); a burn pays and returns `⌊L·b_i/T⌋` of each token by exactly the two transfer requests; a swap succeeds only if (and, on the canonical transcript, whenever) some output is positive, the outputs are below the reserves, `to` is neither token, the post-callback balances fit `uint112`, some input is positive and the fee-adjusted check holds, and then stores exactly those balances as reserves; the callback request is present iff `data` is nonempty, with exact calldata | `Blanc.Lift.UniswapV2Pair.runTyped_mint_initial` (`Blanc/Lift/UniswapV2Pair/Properties.lean:3196`), `Blanc.Lift.UniswapV2Pair.runTyped_mint_initial_floor` (`Blanc/Lift/UniswapV2Pair/Properties.lean:3209`), `Blanc.Lift.UniswapV2Pair.mintAmount_initial_spec` (`Blanc/Lift/UniswapV2Pair/Properties.lean:2762`), `Blanc.BabylonianSqrt.sourceResult_eq_sqrt` (`Blanc/Lift/BabylonianSqrt.lean:106`), `Blanc.Lift.UniswapV2Pair.runTyped_mint_later` (`Blanc/Lift/UniswapV2Pair/PropertiesMintBurn.lean:310`), `Blanc.Lift.UniswapV2Pair.runTyped_burn_payout` (`Blanc/Lift/UniswapV2Pair/PropertiesMintBurn.lean:924`), `Blanc.Lift.UniswapV2Pair.runTyped_swap_success_reserves` (`Blanc/Lift/UniswapV2Pair/PropertiesSwap.lean:561`), `Blanc.Lift.UniswapV2Pair.runTyped_swap_canonical_success` (`Blanc/Lift/UniswapV2Pair/PropertiesSwap.lean:1042`), `Blanc.Lift.UniswapV2Pair.runTyped_swap_callback_request` (`Blanc/Lift/UniswapV2Pair/PropertiesSwap.lean:1664`) | Model / safety | the model only (the swap and burn statements are conditioned on the successful run's own answers) | Bridged to the bytes by the frame refinement and history rows above. The bytecode's own Babylonian loop is walked exactly [`Blanc.Lift.UniswapV2Pair.sqrt_of_run` (`Blanc/Lift/UniswapV2Pair/SqrtWalk.lean:589`)]. These are model facts: that real tokens give the answers a premise names is not proved |
+
+**Statement controls.** Each is a single kernel fact or a mutation that must make
+a statement fail; they say the statements above are not vacuous or insensitive.
+
+| What it shows | Control | Altitude |
+|---|---|---|
+| NoShrink is needed: on a reachable sync, a token answer below the stored reserve is accepted by the model and the share-value inequality then fails | `Blanc.Lift.UniswapV2Pair.ModelControls.noShrink_required` (`Blanc/Lift/UniswapV2Pair/ModelControls.lean:115`) | typed model, kernel evaluation of the production driver |
+| The model is sensitive to its arithmetic: a mint that rounds up breaks the fee-off share-value inequality on a state it reaches; a fee constant other than 997 and a burn that rounds toward the user each give a different accepted run | `Blanc.Lift.UniswapV2Pair.ModelControls.mintRoundUp_breaks_feeOff_product` (`Blanc/Lift/UniswapV2Pair/ModelControls.lean:216`), `Blanc.Lift.UniswapV2Pair.ModelControls.feeMutant_disagrees` (`Blanc/Lift/UniswapV2Pair/ModelControls.lean:269`), `Blanc.Lift.UniswapV2Pair.ModelControls.burnRoundUp_disagrees` (`Blanc/Lift/UniswapV2Pair/ModelControls.lean:291`) | typed model; mutated drivers compose the unchanged transitions with one changed arithmetic function |
+| The burn-rounding mutant disagrees with production on a state reached from the deployment image; **the frame-level form `Blanc.Lift.UniswapV2Pair.RefinementControls.burn_refinement_control` (`Blanc/Lift/UniswapV2Pair/RefinementControls.lean:156`) is conditional on one named hypothesis** (one successful raw burn run at that state) that this tree states but does not discharge | `Blanc.Lift.UniswapV2Pair.RefinementControls.burn_witness_disagrees` (`Blanc/Lift/UniswapV2Pair/RefinementControls.lean:64`); the production burn frame refinement the frame form consumes is proved, `Blanc.Lift.UniswapV2Pair.RefinementControls.burnFrameRefinement_holds` (`Blanc/Lift/UniswapV2Pair/RefinementControls.lean:127`) | typed model (closed); frame form EVM-conditional |
+| The oracle law needs the `uint32` wrap: a reached update at a block timestamp past `2^32` satisfies the exact law and refutes the law with the wrap removed | `Blanc.Lift.UniswapV2Pair.OracleControls.oracle_law_requires_timestamp_wrap` (`Blanc/Lift/UniswapV2Pair/OracleControls.lean:50`); the bytecode's own wrap `Blanc.Lift.UniswapV2Pair.update_timestamp_wrap_control` (`Blanc/Lift/UniswapV2Pair/UpdateArithmetic.lean:166`) | typed model; the second is a raw walk |
+| The `uint112` guard is load-bearing: a balance of `2^112` passes the fee-adjusted check and the typed swap still fails; every successful raw swap run observes balances below `2^112` | `Blanc.Lift.UniswapV2Pair.swap_uint112_control` (`Blanc/Lift/UniswapV2Pair/PropertiesSwap.lean:1151`), `Blanc.Lift.UniswapV2Pair.swap_bytecode_uint112_control` (`Blanc/Lift/UniswapV2Pair/SwapControls.lean:28`); the update walks `Blanc.Lift.UniswapV2Pair.update_uint112_overflow_control` (`Blanc/Lift/UniswapV2Pair/UpdateWalk.lean:108`), `Blanc.Lift.UniswapV2Pair.update_overflow_uint112_kernel_control` (`Blanc/Lift/UniswapV2Pair/UpdateOverflowWalk.lean:390`) | typed model, and universal over successful raw runs (no concrete reverting run is exhibited) |
+| HASH-T is load-bearing for the ledger: a duplicated key breaks the footprint sum, and a successful raw `approve` whose allowance slot aliases a tracked balance slot (a hypothesis; no Keccak collision is asserted) ends outside raw ledger conservation | `Blanc.Lift.UniswapV2Pair.footprintSum_dup_breaks_ledger` (`Blanc/Lift/UniswapV2Pair/PropertiesLedger.lean:76`), `Blanc.Lift.UniswapV2Pair.LedgerKeyControl.approve_storage_alias_breaks_ledger` (`Blanc/Lift/UniswapV2Pair/LedgerKeyControl.lean:38`) | model; EVM-conditional on the alias |
+| The callee premises are needed: if a token or the callback recipient holds code that reverts, no raw `sync`, `skim`, `mint` or `swap` run succeeds, whatever the gas; premise-free `sync` liveness is refuted on the family of worlds that deployment and `initialize` produce | `Blanc.Lift.UniswapV2Pair.sync_no_success_of_reverting_token0` (`Blanc/Lift/UniswapV2Pair/CalleeControls.lean:51`), `Blanc.Lift.UniswapV2Pair.skim_no_success_of_reverting_token0` (`Blanc/Lift/UniswapV2Pair/CalleeControls.lean:103`), `Blanc.Lift.UniswapV2Pair.mint_no_success_of_reverting_token0` (`Blanc/Lift/UniswapV2Pair/CalleeControls.lean:123`), `Blanc.Lift.UniswapV2Pair.swap_no_success_of_reverting_token0` (`Blanc/Lift/UniswapV2Pair/CalleeControlsSwap.lean:122`), `Blanc.Lift.UniswapV2Pair.swap_no_success_of_reverting_callback` (`Blanc/Lift/UniswapV2Pair/CalleeControlsSwap.lean:207`), `Blanc.Lift.UniswapV2Pair.sync_liveness_refuted` (`Blanc/Lift/UniswapV2Pair/CalleeControlsReach.lean:154`) | EVM, universal over raw runs for one concrete callee code |
+| The deployment address is pinned: a salt or an init-code digest one bit off gives a different address | `Blanc.Lift.UniswapV2Pair.Creation.pairAddress_wrong_salt` (`Blanc/Lift/UniswapV2Pair/Creation/Facts.lean:108`), `Blanc.Lift.UniswapV2Pair.Creation.pairAddress_wrong_initHash` (`Blanc/Lift/UniswapV2Pair/Creation/Facts.lean:113`) | kernel evaluation |
+
+**Liveness.** After any configured history, a call the model accepts at the
+replayed state executes from pc 0 at a **closed** gas expression and ends at
+exactly the residual gas `G`. The expression is a sum of fixed per-instruction
+charges, `sloadCost`, `sstoreCost` and `temporalAccountAccessCost` of the actual
+slots and accounts, and the gas forwarded to each callee; the callees' own
+consumption enters only through their `returnedGas` equations, which are part of
+the callee premise. It is not an existential cost. "Fresh frame" means the
+history's future state as the frame's pre-state, the pair as target, the
+certified code, a covered fork, empty output, calldata below 2^256, value 0 and
+the selector. After the run, its post storage represents the model's next state
+under HASH-T freshness of the call's own rows against the history's rows
+(`PairStepOutcome`).
+
+| Level | Claim | Theorem | Cost / gas formula | Premises beyond a fresh frame |
+|---|---|---|---|---|
+| Reachable state | `transfer`, `approve`, `transferFrom` | `Blanc.Lift.UniswapV2Pair.pair_history_writer_live` (`Blanc/Lift/UniswapV2Pair/PairHistoryLive.lean:125`) | `LedgerWriter.cost`: `approve` `sstoreCost + 2342`; `transfer` the source, debit, recipient and credit slot charges `+ 2740`; `transferFrom` `transferFromPublicGas` [`Blanc.Lift.UniswapV2Pair.LedgerWriter.cost` (`Blanc/Lift/UniswapV2Pair/ReplayWriterGas.lean:35`)] | the history's CODE, INIT, HASH-T; HASH-T freshness of the call's rows against the history's; model acceptance at the replayed state; a residual above the 2,300-gas stipend. **No callee** |
+| Reachable state | `sync`, whenever the lock is open and the reserve update accepts the two actual `balanceOf(pair)` answers | `Blanc.Lift.UniswapV2Pair.pair_history_sync_live` (`Blanc/Lift/UniswapV2Pair/PairHistoryLive.lean:167`) | `syncCalleePrefixGas sevm pre callGas0 + 15 + 229` [`Blanc.Lift.UniswapV2Pair.syncCalleePrefixGas` (`Blanc/Lift/UniswapV2Pair/SyncWalk.lean:1150`)] | the two token `STATICCALL`s with their replies and returned gas (ENV); residual sentries |
+| Reachable state | `mint`, on a transcript whose three answers (both `balanceOf(pair)` replies and the factory's `feeTo`) are the frame's actual answers | `Blanc.Lift.UniswapV2Pair.pair_history_mint_live` (`Blanc/Lift/UniswapV2Pair/PairHistoryLive.lean:289`) | `callee.gas + 228` [`Blanc.Lift.UniswapV2Pair.MintPrefixCallee.gas` (`Blanc/Lift/UniswapV2Pair/MintForwardAccept.lean:510`)]; returns the liquidity word | the three `STATICCALL`s (`Blanc.Lift.UniswapV2Pair.MintPrefixCallee` (`Blanc/Lift/UniswapV2Pair/MintForwardAccept.lean:471`)); HASH-T freshness of the LP rows of address 0, the recipient and the `feeTo` answer |
+| Reachable state | `swap`, with or without the flash callback | `Blanc.Lift.UniswapV2Pair.pair_history_swap_live` (`Blanc/Lift/UniswapV2Pair/PairHistoryLive.lean:365`) | `swapFrontTransferGas … + swapPrefixGas … + 279 + 166` [`Blanc.Lift.UniswapV2Pair.swapFrontTransferGas` (`Blanc/Lift/UniswapV2Pair/SwapForwardFront.lean:43`), `Blanc.Lift.UniswapV2Pair.swapPrefixGas` (`Blanc/Lift/UniswapV2Pair/SwapForwardPrefix.lean:179`)] | the optional transfer `CALL`s and the callback `CALL` (present iff their amount or the data is nonzero) and the two post-callback `balanceOf(pair)` `STATICCALL`s (`Blanc.Lift.UniswapV2Pair.SwapFrontForwardEnv` (`Blanc/Lift/UniswapV2Pair/SwapForwardFront.lean:56`), `Blanc.Lift.UniswapV2Pair.SwapBackCalleeEnv` (`Blanc/Lift/UniswapV2Pair/SwapForwardAccept.lean:107`)); the decoded swap accepted by the model on those answers (`SwapContextConditions`, `SwapModelConditions`) |
+| Reachable state | `burn` | `Blanc.Lift.UniswapV2Pair.pair_history_burn_live` (`Blanc/Lift/UniswapV2Pair/PairHistoryLive.lean:440`) | `BurnForwardEnv.gas` = the initial callees' charge `+ 249` [`Blanc.Lift.UniswapV2Pair.BurnForwardEnv.gas` (`Blanc/Lift/UniswapV2Pair/BurnForwardBody.lean:490`)]; returns both amounts | the two initial `balanceOf(pair)` `STATICCALL`s, the `feeTo` `STATICCALL`, both transfer `CALL`s and both final `balanceOf(pair)` `STATICCALL`s (`Blanc.Lift.UniswapV2Pair.BurnForwardEnv` (`Blanc/Lift/UniswapV2Pair/BurnForwardBody.lean:479`)); HASH-T freshness of the pair's own LP row and the `feeTo` answer's |
+| Reachable state | `skim` | `Blanc.Lift.UniswapV2Pair.pair_history_skim_live` (`Blanc/Lift/UniswapV2Pair/PairHistoryLive.lean:525`) | `SkimForwardEnv.gas`, a closed sum of the lock, cache and request charges and the gas forwarded to the first token [`Blanc.Lift.UniswapV2Pair.SkimForwardEnv.gas` (`Blanc/Lift/UniswapV2Pair/SkimForwardAccept.lean:160`)] | both `balanceOf(pair)` `STATICCALL`s and both transfer `CALL`s (`Blanc.Lift.UniswapV2Pair.SkimForwardEnv` (`Blanc/Lift/UniswapV2Pair/SkimForwardAccept.lean:39`)); **the first transfer's `CALL` leaves the lock-guarded slots 0 and 8–12 unchanged** (`NoPairWriteOutsideLock`: the `SendOk`-shaped clause) |
+| Reachable state | `permit`, on a transcript whose recovered address is the frame's actual `ECRECOVER` answer, whenever the model accepts it | `Blanc.Lift.UniswapV2Pair.pair_history_permit_live` (`Blanc/Lift/UniswapV2Pair/PairHistoryLiveAdmin.lean:187`), from the frame theorem `Blanc.Lift.UniswapV2Pair.permit_bytecode_live_raw` (`Blanc/Lift/UniswapV2Pair/PermitEntries.lean:876`) | `callGas + permitNonceStoreCharge + permitNonceCharge + 1137` | the recovery precompile `STATICCALL` with its reply and returned gas (ENV); residual sentries; HASH-T freshness of the call's rows |
+| Reachable state | `initialize`, whenever the model accepts it (the caller is the stored factory) | `Blanc.Lift.UniswapV2Pair.pair_history_initialize_live` (`Blanc/Lift/UniswapV2Pair/PairHistoryLiveAdmin.lean:134`), from the frame theorem `Blanc.Lift.UniswapV2Pair.initialize_bytecode_live_raw` (`Blanc/Lift/UniswapV2Pair/InitializeEntries.lean:321`) | `G + initializeStorageCharge + 377` | residual sentries; HASH-T freshness of the call's rows. **No callee** |
+
+The views have frame-level exact and live theorems
+(`Blanc.Lift.UniswapV2Pair.getterScalar_bytecode_live` (`Blanc/Lift/UniswapV2Pair/GetterScalarWalk.lean:59`),
+`Blanc.Lift.UniswapV2Pair.getReserves_bytecode_live` (`Blanc/Lift/UniswapV2Pair/GetterStorageReservesWalk.lean:54`),
+`Blanc.Lift.UniswapV2Pair.getterString_bytecode_live` (`Blanc/Lift/UniswapV2Pair/GetterStringWalk.lean:915`)).
+**No transaction-level Uniswap liveness**: sender funding, intrinsic gas, block
+room and call forwarding are not covered.
+
+**Deployment / INIT.** `Blanc.Lift.UniswapV2Pair.Creation.pair_create2_initialized` (`Blanc/Lift/UniswapV2Pair/Creation/DeployInit.lean:126`),
+for every covered fork: a `CREATE2` step of a non-static factory frame whose
+memory window holds the pair creation code, with the creator's nonce below the
+maximum, positive depth, an empty target and at least 2,400,000 gas forwarded,
+pushes the `CREATE2` address of the creator, the salt and the creation code, and installs the certified runtime there with the
+constructor storage (`unlocked = 1`, the creator as `factory`, the EIP-712 domain
+separator over the creating frame's chain id and the new address
+[`Blanc.Lift.UniswapV2Pair.Creation.domainSeparator_eip712` (`Blanc/Lift/UniswapV2Pair/Creation/Walk.lean:60`)]); and every successful `initialize` by the creator on that
+storage leaves storage satisfying `InitializedCheckpoint`, which is the INIT
+premise of `pair_history_initialized`. No hash premise. The exhibit instance
+`Blanc.Lift.UniswapV2Pair.Creation.exhibit_create2` (`Blanc/Lift/UniswapV2Pair/Creation/DeployInit.lean:171`) deploys from the factory
+with salt `keccak(USDC ‖ WETH)`, and the exhibit pair's address is the `CREATE2`
+address of the factory, that salt and the creation code
+[`Blanc.Lift.UniswapV2Pair.Creation.pairAddress_eq` (`Blanc/Lift/UniswapV2Pair/Creation/Facts.lean:104`)], by kernel evaluation. General form
+`Blanc.Lift.UniswapV2Pair.Creation.pair_create2` (`Blanc/Lift/UniswapV2Pair/Creation/Deploy.lean:105`).
+
+**Fork coverage.** The history, replay and liveness theorems assume or derive
+`CoveredFork`; the deployment theorems quantify over covered forks.
+
+**Non-claims.** That real tokens satisfy NoShrink or that a factory answers
+`feeTo = 0`; that any price, the TWAP or the economics of the pool are fair or
+safe; the factory's bytecode (it is a premise-level message source, and the
+factory's `initialize` call is a hypothesis of the deployment theorem, not a
+consequence of lifted factory code); historical inclusion of the deployment;
+unforgeability of `permit` signatures; the composition of the pair with WETH9
+(the WETH9 token of the exhibit pair is not discharged from Blanc's WETH9
+results); transaction-level liveness; frames that were rolled back; the real
+transaction history of the exhibit pair.
+
 ## 6. Summary matrix
 
 Columns: **M1** pc-0 entry; **M2** history with the invariant carried from one
@@ -445,6 +564,7 @@ applicable.
 | V+ | ✓ | ~ [j] | ~ [j] | ✓ HASH-T (per execution) | — | ✓ nonvacuity (witnesses) | ~ [k] | ✓ |
 | V− | ✓ | — | — | — | — synthetic | — | ✓ [l] | ✓ |
 | EIP-7002 | ✓ | ✓ [m] | ✓ | ✓ none | ✓ [b] | ✓ | ✗ | ✓ |
+| Uniswap V2 Pair | ✓ | ✓ | ✓ [n] | ✓ HASH-T | ✓ [b] [o] | ✓ [p] | ✗ | ✓ |
 
 [a] Freshness is over the uniform five-key set per raw target frame (Section
 5.1). [b] A modeled deployment message under every covered fork (the
@@ -469,6 +589,23 @@ trace (the transaction form derives `hroot`). [k] A transaction form exists
 for the exclusion; no admitted transaction *witness* reaches an active guarded
 body. [l] A fixed signed transaction; its signature recovery is a kernel theorem (`txC_recoveredSender`). [m] Up to 2^254 committed submission-payment occurrences since the checkpoint (user-approved scope); the fee is
 the bytecode's executed word fee, and the EIP's unbounded-integer fee guarantee is refuted (§7 item 16).
+
+[n] Callee premises only, and only where a statement needs them. The replay,
+ledger and oracle history rows take none. The share-value rows take the
+token-answer premises NoShrink and fee-off over the history's own steps. The
+liveness rows take the token, factory and callback `STATICCALL` and `CALL`
+environments (replies and returned gas), and `skim`'s first transfer carries the
+`SendOk`-shaped clause `NoPairWriteOutsideLock` (§7 items 17 and 18). [o] The
+deployment theorem's conclusion `InitializedCheckpoint` is literally the INIT
+premise of `pair_history_initialized`, with the same factory, domain separator
+and token arguments, so INIT is established by deployment followed by the
+factory's `initialize`. As in [b] it is not chained into a configured history,
+and the factory's `initialize` call is a hypothesis, since the factory's
+bytecode is not lifted. [p] Every state-changing entry point has history-level liveness with a closed
+cost (`transfer`, `approve`, `transferFrom`, `sync`, `mint`, `swap`, `burn`,
+`skim`, `permit`, `initialize`). Every cost is closed over the gas
+forwarded to the callees, whose consumption enters through the callee premise
+(§7 item 21).
 
 ## 7. Disclosures and limits
 
@@ -568,6 +705,67 @@ the bytecode's executed word fee, and the EIP's unbounded-integer fee guarantee 
     not that one fits mainnet's gas limits. Below the
     divergence the two fees agree exactly (`Blanc.Lift.WithdrawalRequest.word_fee_eq_iff_natFeeDomain` (`Blanc/Lift/WithdrawalRequest/ExactFeeDomain.lean:27`)). The FIFO headline is therefore stated
     for the executed word fee.
+17. **Uniswap V2 Pair: token and factory behaviour is a premise.** The pair observes
+    only what `balanceOf` and the factory's `feeTo` answer. The replay, ledger,
+    oracle and refinement rows take no such premise. The share-value rows take, over
+    the history's own steps only, `EntryNoShrink` (for `sync`, both answers at
+    least the stored reserves; for `burn`, both first answers at least the stored
+    reserves and each first answer at most its final answer plus its payout) and,
+    for the fee-off row, `EntryFeeOff` (the `feeTo` answer of a mint or burn is
+    zero). Tokens with transfer fees or rebasing fail NoShrink, and no theorem
+    claims that a real token satisfies it. The burn form is deliberately weaker
+    than "every answer is at least the stored reserve", which no ordinary burn
+    satisfies.
+18. **`skim` carries a `SendOk`-shaped callee clause.** The liveness theorem for
+    `skim` assumes of its first transfer `CALL` that it leaves the lock-guarded
+    slots 0 and 8 to 12 unchanged (`NoPairWriteOutsideLock`): a re-entry into the
+    pair either meets the lock or is an unlocked entry that writes only its own
+    rows. The other liveness rows state their callee environments (replies and
+    returned gas) and no such clause.
+19. **The Uniswap V2 Pair replay is nested, not a flat per-frame replay.** The
+    steps are the **outermost** settlement-committed non-static pair frames. A pair
+    frame re-entered from inside a token call, the flash-swap callback or a factory
+    call is consumed inside its parent step's transcript, so the list of steps can
+    be shorter than the list of committed pair frames; the observation equality of
+    `pair_history_committed` places every committed pair frame in exactly one
+    step's subtree. Rolled-back frames are not in the replay, and static frames
+    observe nothing.
+20. **Not claimed for the Uniswap V2 Pair:** composition with WETH9 is not claimed
+    (the exhibit pair's WETH9 token is not discharged from Blanc's WETH9 results,
+    and USDC is a premise-level callee); transaction-level liveness; permit
+    signature unforgeability is not claimed (only the result of the modeled
+    ECRECOVER precompile is an input); the factory's bytecode is not lifted (its
+    `feeTo` answers and its `initialize` call are premise-level messages); the real
+    transaction history of the exhibit pair; and any statement that a price, the
+    TWAP or the economics of the pool are fair or safe.
+21. **Uniswap liveness scope.** The history-level liveness rows cover `transfer`,
+    `approve`, `transferFrom`, `sync`, `mint`, `swap`, `burn`, `skim`, `permit`
+    and `initialize`; for `permit` the `ECRECOVER` precompile's answer is a callee
+    input, and signature unforgeability is not claimed. Each cost is a closed
+    expression, not an existential cost, but it is closed over the gas forwarded to
+    each callee: the callees' consumption is fixed by the `returnedGas` equations of
+    the callee premise. Premise-free liveness is false: a token or callback
+    recipient whose code reverts defeats every raw run of `sync`, `skim`, `mint` and
+    `swap` (the controls of Section 5.8).
+22. **The Uniswap oracle history row states the modular sum of the recorded
+    increments** and, for each recorded increment, the floor formula over the
+    wrapped `Δt` (`OracleUpdate.Lawful`), the chained timestamps, and `ts` equal to
+    the block timestamp of the step frame that produced it. It does not state which
+    block a step's frame belongs to beyond that frame's own block environment.
+23. **Altitude of the Uniswap controls.** The model controls run the typed
+    functional model, not EVM execution. The bytecode controls are universal over
+    successful raw runs and exhibit no concrete reverting run. The frame-level
+    burn-rounding control is conditional on one named hypothesis (one successful
+    raw burn run at the witness state, with a concrete callee environment) that the
+    tree states but does not discharge; the production burn frame refinement it
+    consumes is proved.
+24. **The Uniswap deployment is modeled.** `pair_create2_initialized` is the
+    `CREATE2` step of a non-static factory frame, with the constructor run inside
+    the step, followed by a successful `initialize` from the creator. It is not
+    historical inclusion, it is not chained into a history, and the creation
+    transaction of the exhibit pair is not recorded. The exhibit address is the
+    `CREATE2` address of the factory, the salt and the creation code by kernel
+    evaluation, not a statement about the chain.
 
 ## 8. Axiom guarantee
 
@@ -624,7 +822,7 @@ leaf theorems: theorems of a `Blanc.*` module that no other Blanc declaration
 uses (`scripts/leaf_audit.py`, `scripts/GATES.md` "Leaf audit"), the
 independently valuable results, each covered by the union walk. It is generated
 into `scripts/leaf-count.json` (never hand-edited) and quoted by the README and
-the sites. At this commit it is 973 leaf results (970 public, 3 private).
+the sites. At this commit it is 1058 leaf results (1055 public, 3 private).
 The count is a property of the library at a commit, not of any cited theorem;
 a cited theorem that another theorem uses is simply not a leaf. Bind any
 quoted figure to `git rev-parse HEAD`, as the README does.
@@ -676,6 +874,17 @@ Names that the tables above write unqualified.
 | `findEntry` | `Blanc.LidoCircuitBreaker.findEntry` (`Blanc/LidoCircuitBreakerRegistryModel.lean:12`) | the index and pauser of a target in an entry list |
 | `HashAvoidIn` | `Blanc.LockExclusion.LockSpec.HashAvoidIn` (`Blanc/LockExclusion.lean:316`) | every frame of the pool running the lock code avoids the lock slot with its executed hashes (HASH-T) |
 | `VplusExcludes` | `Blanc.Lift.VyperNonreentrantDeployed.Fixed.VplusExcludes` (`Blanc/Lift/VyperNonreentrantDeployed/Fixed/ExclusionTrace.lean:44`) | the statement form of the V+ exclusion |
+| `InitializedCheckpoint` | `Blanc.Lift.UniswapV2Pair.InitializedCheckpoint` (`Blanc/Lift/UniswapV2Pair/Creation/DeployInit.lean:34`) | the Pair's INIT after deployment and `initialize`: the pair storage represents `initializedState` over the empty tracked footprint |
+| `initializedState` | `Blanc.Lift.UniswapV2Pair.initializedState` (`Blanc/Lift/UniswapV2Pair/Creation/DeployInit.lean:29`) | the model state after a factory deploys a pair with a given domain separator and initializes it with two tokens: zero supply, reserves, accumulators and `kLast`, `unlocked = 1`, no ledger row |
+| `WriterRep` | `Blanc.Lift.UniswapV2Pair.WriterRep` (`Blanc/Lift/UniswapV2Pair/WriterStorage.lean:58`) | the Pair's storage abstraction over a finite tracked set of balance, allowance and nonce rows: slots 0 to 12 match the model, each tracked row matches, every other nonzero word is at a tracked row, and untracked rows are zero in the model |
+| `WriterFreshKeys` | `Blanc.Lift.UniswapV2Pair.WriterFreshKeys` (`Blanc/Lift/UniswapV2Pair/WriterStorage.lean:36`) | HASH-T for the Pair: each touched row is tracked or on a slot that is neither fixed nor a tracked row's, and rows sharing a slot are one row |
+| `pairHistoryTouchedKeys` | `Blanc.Lift.UniswapV2Pair.pairHistoryTouchedKeys` (`Blanc/Lift/UniswapV2Pair/PairHistory.lean:303`) | the rows the Pair's frames select, over every raw Pair frame root of a history, rolled-back frames included |
+| `PairStep.Authentic` | `Blanc.Lift.UniswapV2Pair.PairStep.Authentic` (`Blanc/Lift/UniswapV2Pair/PairHistory.lean:162`) | a step's frame is a pc-0, committed, non-static frame at the pair, and its entry and transcript are the ones its own run decodes and observed |
+| `EntryNoShrink` | `Blanc.Lift.UniswapV2Pair.EntryNoShrink` (`Blanc/Lift/UniswapV2Pair/Properties.lean:2643`) | the token-answer premise of the share-value rows, per entry (ENV: callee behaviour; exact forms in Section 7 item 17) |
+| `EntryFeeOff` | `Blanc.Lift.UniswapV2Pair.EntryFeeOff` (`Blanc/Lift/UniswapV2Pair/Properties.lean:2657`) | the factory's `feeTo` answer of a mint or burn is zero (ENV: callee behaviour) |
+| `sourceReplayAnswers` | `Blanc.Lift.UniswapV2Pair.sourceReplayAnswers` (`Blanc/Lift/UniswapV2Pair/SourceReplay.lean:105`) | at every step of a replay, `EntryFeeOff` and `EntryNoShrink` at the carried model state |
+| `sourceReplayNoShrink` | `Blanc.Lift.UniswapV2Pair.sourceReplayNoShrink` (`Blanc/Lift/UniswapV2Pair/SourceReplay.lean:150`) | at every step of a replay, `EntryNoShrink` at the carried model state |
+| `NoPairWriteOutsideLock` | `Blanc.Lift.UniswapV2Pair.NoPairWriteOutsideLock` (`Blanc/Lift/UniswapV2Pair/SkimForwardAccept.lean:30`) | the callee premise of `skim`'s first transfer: the `CALL` leaves the lock-guarded slots 0 and 8 to 12 unchanged |
 
 ## 10. Checking this document
 
@@ -699,14 +908,19 @@ toolchain is installed. It requires that:
   input files, its creation transactions and blocks appear in the certificate
   provenance, the Lido creation timestamp equals the reference input and
   follows the BPO2 activation, and the system-contract sizes and SHA-256
-  digests equal the bytes written in `Blanc/SystemContracts.lean`;
+  digests equal the bytes written in `Blanc/SystemContracts.lean`; the Uniswap V2 Pair
+  row's code-read block and block hash appear in its certificate provenance, its
+  creation code hashes to the factory's init-code hash, and the lifted runtime is
+  embedded in that creation code at bytes 261 to 11,553;
 - the page keeps its section structure, its required headline theorems and its
   load-bearing disclosures, and carries no process vocabulary.
 
 The required headline theorems are also pinned by exact statement in
 `scripts/ClaimCheck.lean` (gate `scripts/check-claims.sh`), together with the
 definitions those statements are stated through, so a weakened headline fails
-there although this checker elaborates no Lean.
+there although this checker elaborates no Lean. The Uniswap V2 Pair headlines of
+Section 5.8 are held here by name and line only: their exact statements are not
+yet pinned in `scripts/ClaimCheck.lean`.
 
 Every run also executes in-memory falsifiers, each of which must be rejected: a
 misspelled declaration, a stale line, a wrong file, an orphan line reference, a
