@@ -125,7 +125,7 @@ whether a class is acceptable and whether deployment establishes INIT.
 | Class | Meaning | Acceptable in a headline? | INIT established by a deployment theorem? |
 |---|---|---|---|
 | CODE | Installed code and fork identity | Yes | — |
-| INIT | Stated once, at the checkpoint | Yes, if shown inhabited, ideally by deployment | **WETH9** footprint `FootInv ∅`: yes, no hash premise [`Blanc.Lift.Weth9.Creation.weth9_deploy_init_covered` (`Blanc/Lift/Weth9/Creation/DeployInit.lean:22`)]. **Beacon** `SolInv []`: yes, no hash premise [`Blanc.Lift.BeaconDeposit.Creation.beacon_deploy_covered` (`Blanc/Lift/BeaconDeposit/Creation/Deploy.lean:144`)]. **Curve** `VyInv … ∅`: yes, no hash premise [`Blanc.Lift.Curve3Crv.Creation.curve_deploy_covered` (`Blanc/Lift/Curve3Crv/Creation/Deploy.lean:297`)]. **Lido** `RegistryZeroRaw` and `StateInv`: only under two hash premises `ForeignApart 0 0` and `ForeignApart 0 1` (bound zero still quantifies address mapping keys) [`Blanc.Lift.LidoCircuitBreakerDeployed.Creation.lido_deploy_init_covered` (`Blanc/Lift/LidoCircuitBreakerDeployed/Creation/Deploy.lean:203`)]. **Uniswap V2 Pair** `InitializedCheckpoint`: yes, no hash premise, by a `CREATE2` deployment followed by the factory's `initialize` [`Blanc.Lift.UniswapV2Pair.Creation.pair_create2_initialized` (`Blanc/Lift/UniswapV2Pair/Creation/DeployInit.lean:126`)]. **V±**: the exclusion (V+) and violation (V−) statements take no INIT premise; the reachable witnesses execute deployment, initialization and liquidity as messages from a creator-only world [`Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit.vplus_reachable_capstone` (`Blanc/Lift/VyperNonreentrantDeployed/Fixed/Exit/Capstone.lean:35`), `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol.vminus_reachable_capstone` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Reach/ViolFinal.lean:30`)], message level only (Section 7 item 25); the older witnesses and the V− transaction row start from synthetic prestates |
+| INIT | Stated once, at the checkpoint | Yes, if shown inhabited, ideally by deployment | **WETH9** footprint `FootInv ∅`: yes, no hash premise [`Blanc.Lift.Weth9.Creation.weth9_deploy_init_covered` (`Blanc/Lift/Weth9/Creation/DeployInit.lean:22`)]. **Beacon** `SolInv []`: yes, no hash premise [`Blanc.Lift.BeaconDeposit.Creation.beacon_deploy_covered` (`Blanc/Lift/BeaconDeposit/Creation/Deploy.lean:144`)]. **Curve** `VyInv … ∅`: yes, no hash premise [`Blanc.Lift.Curve3Crv.Creation.curve_deploy_covered` (`Blanc/Lift/Curve3Crv/Creation/Deploy.lean:297`)]. **Lido** `RegistryZeroRaw` and `StateInv`: only under two hash premises `ForeignApart 0 0` and `ForeignApart 0 1` (bound zero still quantifies address mapping keys) [`Blanc.Lift.LidoCircuitBreakerDeployed.Creation.lido_deploy_init_covered` (`Blanc/Lift/LidoCircuitBreakerDeployed/Creation/Deploy.lean:203`)]. **Uniswap V2 Pair** `InitializedCheckpoint`: yes, no hash premise, by a `CREATE2` deployment followed by the factory's `initialize`, whose successful run is constructed [`Blanc.Lift.UniswapV2Pair.Creation.pair_create2_initialized` (`Blanc/Lift/UniswapV2Pair/Creation/DeployInit.lean:126`), `Blanc.Lift.UniswapV2Pair.Creation.pair_create2_initialize_live` (`Blanc/Lift/UniswapV2Pair/Creation/DeployInit.lean:246`)]. **V±**: the exclusion (V+) and violation (V−) statements take no INIT premise; the reachable witnesses execute deployment, initialization and liquidity as messages from a creator-only world [`Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit.vplus_reachable_capstone` (`Blanc/Lift/VyperNonreentrantDeployed/Fixed/Exit/Capstone.lean:35`), `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol.vminus_reachable_capstone` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Reach/ViolFinal.lean:30`)], message level only (Section 7 item 25); the older witnesses and the V− transaction row start from synthetic prestates |
 | ENTRY | Required at every entered frame | Only if environmental, never invariant-shaped | — |
 | HASH-T | Exact separation of the hashes and keys actually computed or touched in the trace, including avoidance of fixed slots where stated | Yes when stated; narrower and amenable to finite checking with a concrete initial footprint. Computational collision resistance does not entail this exact fact; fixed-slot avoidance also concerns target/preimage behavior. No cryptographic reduction is proved. The Lido finite tier (Section 5.4) states its instances as decidable checks on explicit key lists, so a concrete instance is closed by kernel evaluation | — |
 | HASH-U | Exact separation quantified over all 2^160 addresses or indices | Needs justification; not established here. The finite domain does not make proof impossible. Under a random-function model of Keccak the estimated failure probability is about q·2^-94 per frame (q = written slots): **heuristic only, with no reduction or bound proved** | — |
@@ -546,7 +546,11 @@ constructor storage (`unlocked = 1`, the creator as `factory`, the EIP-712 domai
 separator over the creating frame's chain id and the new address
 [`Blanc.Lift.UniswapV2Pair.Creation.domainSeparator_eip712` (`Blanc/Lift/UniswapV2Pair/Creation/Walk.lean:60`)]); and every successful `initialize` by the creator on that
 storage leaves storage satisfying `InitializedCheckpoint`, which is the INIT
-premise of `pair_history_initialized`. No hash premise. The exhibit instance
+premise of `pair_history_initialized`. `Blanc.Lift.UniswapV2Pair.Creation.pair_create2_initialize_live` (`Blanc/Lift/UniswapV2Pair/Creation/DeployInit.lean:246`)
+also constructs that run: for an `initialize` frame called by the creator on that
+storage (value 0, non-static, two calldata words, residual gas meeting the two
+store sentries, which any 2,292 gas does), a successful run exists at its closed
+gas, so the checkpoint is reached, not assumed. No hash premise. The exhibit instance
 `Blanc.Lift.UniswapV2Pair.Creation.exhibit_create2` (`Blanc/Lift/UniswapV2Pair/Creation/DeployInit.lean:171`) deploys from the factory
 with salt `keccak(USDC ‖ WETH)`, and the exhibit pair's address is the `CREATE2`
 address of the factory, that salt and the creation code
@@ -559,8 +563,9 @@ address of the factory, that salt and the creation code
 **Non-claims.** That real tokens satisfy NoShrink or that a factory answers
 `feeTo = 0`; that any price, the TWAP or the economics of the pool are fair or
 safe; the factory's bytecode (it is a premise-level message source, and the
-factory's `initialize` call is a hypothesis of the deployment theorem, not a
-consequence of lifted factory code); historical inclusion of the deployment;
+fact that the factory issues the `initialize` call is a premise of the
+deployment theorems, its frame environment, not a consequence of lifted factory
+code); historical inclusion of the deployment;
 unforgeability of `permit` signatures; the composition of the pair with WETH9
 (the WETH9 token of the exhibit pair is not discharged from Blanc's WETH9
 results); transaction-level liveness; frames that were rolled back; the real
@@ -620,8 +625,8 @@ deployment theorem's conclusion `InitializedCheckpoint` is literally the INIT
 premise of `pair_history_initialized`, with the same factory, domain separator
 and token arguments, so INIT is established by deployment followed by the
 factory's `initialize`. As in [b] it is not chained into a configured history,
-and the factory's `initialize` call is a hypothesis, since the factory's
-bytecode is not lifted. [p] Every state-changing entry point has history-level liveness with a closed
+and that the factory issues the `initialize` call is a premise (the run is
+then constructed), since the factory's bytecode is not lifted. [p] Every state-changing entry point has history-level liveness with a closed
 cost (`transfer`, `approve`, `transferFrom`, `sync`, `mint`, `swap`, `burn`,
 `skim`, `permit`, `initialize`). Every cost is closed over the gas
 forwarded to the callees, whose consumption enters through the callee premise
@@ -794,7 +799,9 @@ V− transaction row (M7) starts from a different, synthetic prestate. For both 
     burn-rounding control is claimed (item 26).
 24. **The Uniswap deployment is modeled.** `pair_create2_initialized` is the
     `CREATE2` step of a non-static factory frame, with the constructor run inside
-    the step, followed by a successful `initialize` from the creator. It is not
+    the step, followed by a successful `initialize` from the creator;
+    `pair_create2_initialize_live` constructs that `initialize` run for a frame
+    the creator calls. It is not
     historical inclusion, it is not chained into a history, and the creation
     transaction of the exhibit pair is not recorded. The exhibit address is the
     `CREATE2` address of the factory, the salt and the creation code by kernel

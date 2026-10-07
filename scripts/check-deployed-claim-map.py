@@ -126,6 +126,7 @@ REQUIRED_HEADLINES = [
     "Blanc.Lift.UniswapV2Pair.pair_history_permit_live",
     "Blanc.Lift.UniswapV2Pair.pair_history_initialize_live",
     "Blanc.Lift.UniswapV2Pair.Creation.pair_create2_initialized",
+    "Blanc.Lift.UniswapV2Pair.Creation.pair_create2_initialize_live",
     "Blanc.Lift.UniswapV2Pair.Creation.exhibit_create2",
 ]
 

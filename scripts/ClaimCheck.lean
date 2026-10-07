@@ -8237,6 +8237,47 @@ end Blanc.Lift.UniswapV2Pair.Creation
 namespace Blanc.Lift.UniswapV2Pair.Creation
 open Jaune Blanc.Lift
 
+-- Uniswap V2 Pair: pair_create2_initialize_live
+example {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
+    {G : Nat} {i sz salt : B256}
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hinit : create2InitCode M i sz = code.toList)
+    (hnonce : (b.state.get sevm.currentTarget).nonce ≠ UInt64.max)
+    (hdepth : sevm.depth ≠ 0)
+    (hfresh : Create2TargetEmpty (create2Prepared sevm b S M G i sz
+        (create2NewAddress sevm.currentTarget salt code.toList))
+        (create2NewAddress sevm.currentTarget salt code.toList))
+    (hgas : 2400000 ≤ except64th G) (hroom : S.length < 1024) :
+    ∃ post, Ninst.RunCompiled sevm (St b (0 :: i :: sz :: salt :: S) M
+        (G + create2Charge sevm M i sz)) (.exec .create2) post ∧
+      post.stack = (create2NewAddress sevm.currentTarget salt code.toList).toB256 :: S ∧
+      (post.getCode (create2NewAddress sevm.currentTarget salt code.toList)).toList =
+        Blanc.Lift.UniswapV2Pair.code.toList ∧
+      ∀ {isevm : Sevm} {ib : Devm} {iG : Nat},
+        isevm.currentTarget = create2NewAddress sevm.currentTarget salt code.toList →
+        Devm.getStor ib isevm.currentTarget =
+          Devm.getStor post (create2NewAddress sevm.currentTarget salt code.toList) →
+        isevm.caller = sevm.currentTarget → isevm.value = 0 → isevm.isStatic = false →
+        isevm.code = Blanc.Lift.UniswapV2Pair.code → CoveredFork isevm.benvStat.fork →
+        Blanc.Sevm.selector isevm = 0x485cc955 →
+        (4 : B256) ≤ isevm.data.length.toB256 → (64 : B256) ≤ isevm.data.length.toB256 - 4 →
+        isevm.data.length < 2 ^ 256 → ib.output = [] →
+        gCallStipend < iG + initializeStore0Charge isevm ib +
+          initializeLoad1Charge isevm ib + initializeStore1Charge isevm ib + 39 →
+        gCallStipend < iG + initializeStore1Charge isevm ib + 9 →
+        ∃ ipost, Nonempty (Exec 0 isevm
+            (St ib [] Mem.empty (iG + initializeStorageCharge isevm ib + 377)) (.ok ipost)) ∧
+          InitializedCheckpoint (ipost.getStor isevm.currentTarget) sevm.currentTarget
+            (domainSeparator sevm.benvStat.chainId.toB256
+              (create2NewAddress sevm.currentTarget salt code.toList))
+            (initializeToken0 isevm) (initializeToken1 isevm) :=
+  pair_create2_initialize_live hfork hstatic hinit hnonce hdepth hfresh hgas hroom
+
+end Blanc.Lift.UniswapV2Pair.Creation
+
+namespace Blanc.Lift.UniswapV2Pair.Creation
+open Jaune Blanc.Lift
+
 -- Uniswap V2 Pair: exhibit_create2
 example {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
     {i sz : B256}
