@@ -1669,8 +1669,11 @@ def self_test(root: Path) -> int:
                    exposed_by({"top_sole", "top_shared"}), ["helper_sole"])
     expect_cascade("cascade: an implicitly selected instance stays used while its user stays",
                    exposed_by({"top_sole"}), ["helper_sole"])
+    # The class itself stays used: the census attributes its constructor's generated lemmas
+    # (`CascadeC.mk.injEq`, ...) to the constructor, which mentions the class. The cascade inherits
+    # the census's notion of use exactly, so the class is not exposed.
     expect_cascade("cascade: the instance is exposed once its only user goes",
-                   exposed_by({"cascadeUser"}), ["CascadeC", "cascadeInst"])
+                   exposed_by({"cascadeUser"}), ["cascadeInst"])
     expect_cascade("cascade: an rfl lemma named only in a deleted simp-only list is exposed",
                    exposed_by({"simp_user"}), ["f", "rfl_lemma"])
     checks += 1
