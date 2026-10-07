@@ -111,99 +111,10 @@ def wrapperEntries : List Nat :=
 
 theorem entry0_lookup : prog[0]? = some t_0000_c0 := rfl
 
-theorem entry0_gotos :
-    t_0000_c0.silentCallsWith [] wrapperEntries 1 = true := by
-  decide +kernel
-
-theorem entry0_noCalls : t_0000_c0.callRefs.all (· ∈ ([] : List Nat)) = true := by
-  decide +kernel
-
-
 section Frame
 
 variable {A : List LidoCircuitBreaker.Entry → Sevm → Prop} {sevm : Sevm}
 
-private theorem stable0 {d d' : Devm} (hs : d.state = d'.state)
-    (h : lidoSpec.Pre sevm.currentTarget sevm d ∧ EntryAt A sevm d) :
-    lidoSpec.Pre sevm.currentTarget sevm d' ∧ EntryAt A sevm d' := by
-  refine ⟨h.1.state_eq hs.symm, ?_⟩
-  unfold EntryAt
-  rw [getStor_eq_of_state_eq hs.symm]
-  exact h.2
-
-private theorem stable1 {d d' : Devm} (hs : d.state = d'.state)
-    (h : lidoSpec.Post sevm.currentTarget sevm d) :
-    lidoSpec.Post sevm.currentTarget sevm d' :=
-  ContractSpecSem.Post.of_state_eq h hs.symm
-
-private theorem post_of_regInv {d : Devm}
-    (h : RegInv (Devm.getStor d sevm.currentTarget)) :
-    lidoSpec.Post sevm.currentTarget sevm d :=
-  ⟨trivial, h⟩
-
-/-- **The Lido CircuitBreaker frame postcondition inside a root derivation.**
-Every lifted run of the deployed runtime from the frame precondition ends in the
-frame postcondition, given the two Registry writers' specs, the frame's own
-`LocalApart` and `A` premises, `R`'s frame admission, and the admitted
-deeper-frame hypothesis. -/
-theorem lido_frame_post_in {R : Exec.Deriv} (W : LidoWriterSpecs A) {pre post : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork) (hcode : sevm.code = code)
-    (hrun : SProg.RunP (StepIn R) prog sevm pre post)
-    (hloc : LocalApart sevm) (hA : EntryAt A sevm pre)
-    (hadmR : Exec.FrameAdmitted sevm.currentTarget (lidoFrameEntry A) R.exc)
-    (ih : LidoDeeper (lidoFrameEntry A) sevm)
-    (hpre : lidoSpec.Pre sevm.currentTarget sevm pre) :
-    lidoSpec.Post sevm.currentTarget sevm post := by
-  obtain ⟨f, hf, run⟩ := hrun
-  rw [entry0_lookup] at hf
-  cases hf
-  refine SFunc.RunP.hoare_single_call_with_gotos StepIn.toRun (S := []) (K := [])
-    (W := wrapperEntries)
-    (Φ₀ := fun d => lidoSpec.Pre sevm.currentTarget sevm d ∧ EntryAt A sevm d)
-    (Φ₁ := lidoSpec.Post sevm.currentTarget sevm)
-    rfl (fun hk _ => absurd hk (List.not_mem_nil))
-    (fun _ h => ContractSpecSem.post_of_pre h.1)
-    stable0 stable1 (fun hk _ => absurd hk (List.not_mem_nil)) ?_ entry0_gotos entry0_noCalls
-    run ⟨hpre, hA⟩
-  intro k g hk hg d o hd r
-  have hinv : RegInv (Devm.getStor d sevm.currentTarget) := hd.1.inv.left rfl
-  have silentCase : k ∈ silentEntries → lidoSpec.Post sevm.currentTarget sevm (Outcome.devm o) :=
-    fun hs => post_of_regInv (silentCallee_regInv hs hg hinv (r.mono StepIn.toRun))
-  simp only [wrapperEntries, List.mem_cons, List.not_mem_nil, or_false] at hk
-  rcases hk with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl |
-    rfl | rfl | rfl | rfl
-  · exact silentCase (by decide)
-  · exact post_of_regInv
-      (setPauseDuration_wrapper_regInv hg hloc.2.1 hinv (r.mono StepIn.toRun))
-  · exact silentCase (by decide)
-  · exact silentCase (by decide)
-  · exact silentCase (by decide)
-  · exact post_of_regInv
-      (setHeartbeatInterval_wrapper_regInv hg hloc.2.2 hinv (r.mono StepIn.toRun))
-  · exact W.pause hfork hcode hadmR ih hg hloc hd.2 hd.1 r
-  · exact silentCase (by decide)
-  · exact silentCase (by decide)
-  · exact post_of_regInv (heartbeat_wrapper_regInv hg hloc.1 hinv (r.mono StepIn.toRun))
-  · exact silentCase (by decide)
-  · exact silentCase (by decide)
-  · exact silentCase (by decide)
-  · exact silentCase (by decide)
-  · exact silentCase (by decide)
-  · exact silentCase (by decide)
-  · exact W.registerPauser hfork hg hloc hd.2 hd.1 (r.mono StepIn.toRun)
-
 end Frame
-
-/-- **Lido CircuitBreaker frame soundness, trace-admitted**, given the two
-Registry writers' specs. -/
-theorem lidoSpec_soundAdmitted {A : List LidoCircuitBreaker.Entry → Sevm → Prop} (W : LidoWriterSpecs A)
-    (ca : Adr) : lidoSpec.SoundAdmitted ca (lidoFrameEntry A) := by
-  intro sevm pre post hfork execution hrun hca admitted ih _ hpre
-  subst hca
-  have hin := lift_sound_in cert_check hrun.1 hfork execution
-  obtain ⟨_, hloc, hA⟩ := admitted.root rfl
-  exact lido_frame_post_in (R := ⟨0, sevm, pre, .ok post, execution⟩) W hfork hrun.1 hin
-    hloc hA admitted ih hpre
-
 
 end Blanc.Lift.LidoCircuitBreakerDeployed

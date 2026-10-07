@@ -70,9 +70,6 @@ def AtExec (T : Conf) : Prop := ∃ x f', T.f = .next (.exec x) f'
 /-- Append `L` below a configuration's pending continuations. -/
 def Conf.below (c : Conf) (L : List SFunc) : Conf := ⟨c.d, c.f, c.K ++ L⟩
 
-theorem Conf.below_d (c : Conf) (L : List SFunc) : (c.below L).d = c.d := rfl
-theorem Conf.below_f (c : Conf) (L : List SFunc) : (c.below L).f = c.f := rfl
-
 theorem AtExec.below {T : Conf} {L : List SFunc} : AtExec (T.below L) ↔ AtExec T :=
   Iff.rfl
 

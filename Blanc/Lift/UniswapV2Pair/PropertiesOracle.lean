@@ -789,20 +789,4 @@ theorem runTyped_oracle_accumulates {st : State} {ctx : Context} {entry : Entry}
     (transcript := transcript) started
   simpa only [Checkpoint.Accumulates, runTyped] using driven.2
 
-/-! Kernel-checked statement control: omitting the uint32 wrap changes elapsed time. -/
-theorem oracle_timestamp_mod_control :
-    let st : State :=
-      { State.empty 0 0 with blockTimestampLast := UInt32.ofNat (2 ^ 32 - 1) }
-    let ctx : Context :=
-      { pair := 0, sender := 0, value := 0, timestamp := 0,
-        isStatic := false, invocation := [] }
-    ∃ post event update,
-      st.update ctx 1 1 1 1 = .ok (post, event, update) ∧
-      update.elapsed = 1 ∧
-      ¬ update.elapsed = ctx.timestamp.toNat - st.blockTimestampLast.toNat := by
-  dsimp only
-  refine ⟨_, _, _, rfl, ?_, ?_⟩
-  · decide
-  · decide
-
 end Blanc.Lift.UniswapV2Pair

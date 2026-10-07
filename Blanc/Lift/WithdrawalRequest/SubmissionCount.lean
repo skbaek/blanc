@@ -20,13 +20,4 @@ theorem submissionFramePayments_length_le (frames : List Exec.Frame) :
     · simp only [submissionFramePayments, ite_eq_right submission, List.length_nil]
       omega
 
-/-- Submission-payment occurrences in the entire actual block fit in 64 bits.
-All four system-message subtrees are included; no code or domain premise
-is needed for this count. It is a per-block bound, not a reset-interval bound. -/
-theorem block_submission_count_lt {cfg : ChainConfig} {pre post : BlockChain}
-    (trace : ConfiguredBlockTrace cfg pre post) :
-    (trace.settledFrames.flatMap submissionFramePayments).length < 2 ^ 64 := by
-  exact Nat.lt_of_le_of_lt (submissionFramePayments_length_le trace.settledFrames)
-    trace.settledFrames_length_lt
-
 end Blanc.Lift.WithdrawalRequest

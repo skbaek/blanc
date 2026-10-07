@@ -935,7 +935,7 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   spawns, settles and the root entry to `(s.withFork g).withOrig W` (any covered fork, the real
   original state) under `ReOK W s`; the `*_withOrig` lemmas are the original-state layer alone.
   Hand a transported spawn's agreement and child nodes to lemmas stated over the kernel
-  configuration through `pagree_re`/`nodeAt_re` (`childCfg_re`): left to definitional
+  configuration through `pagree_re`/`nodeAt_re`: left to definitional
   unfolding, the kernel compares a concrete machine with its transported form by evaluating both
   (measured: a frame module went from a 16.4 GiB retraction to a 5.1 GiB build).
   Worked use: `forwarder_root_re`/`leaf_root_re` and the frames of

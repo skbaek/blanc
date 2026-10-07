@@ -83,23 +83,4 @@ theorem requestsTrace_withdrawal_omitted_iff {benv : Benv} {bout bout' : BlockOu
     Blanc.WithdrawalRequest.outputRecords_length, ← List.length_eq_zero_iff]
   omega
 
-/-- A retained request pass on the future state's environment inherits CODE
-from the configured history, rather than assuming current canonical code. -/
-theorem history_requestsTrace_result {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (history : ConfiguredHistoryTrace cfg checkpoint future)
-    (code : checkpoint.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode)
-    {benv : Benv} (stateEq : benv.state = future.state) (fork : CoveredFork benv.stat.fork)
-    {bout bout' : BlockOutput} {state : State} (trace : RequestsTrace benv bout state bout') :
-    trace.withdrawalState = (systemProtocolPost benv).state ∧
-    trace.withdrawalOut = systemProtocolOutput benv ∧
-    bout'.requests = bout.requests ++ optionalRequestEntry 0 trace.depositRequests ++
-      optionalRequestEntry 1 (systemProtocolOutput benv).returnData ++
-      optionalRequestEntry 2 trace.consolidationOut.returnData := by
-  have installed : benv.state.getCode withdrawalRequestPredeployAddress =
-      Blanc.withdrawalRequestCode := by
-    rw [stateEq]
-    exact history_canonical_code history code
-  have result := requestsTrace_withdrawal_result trace fork installed
-  exact ⟨result.1, result.2, requestsTrace_system_requests trace fork installed⟩
-
 end Blanc.Lift.WithdrawalRequest

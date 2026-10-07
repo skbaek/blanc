@@ -13,10 +13,6 @@ namespace Blanc.Lift
 
 open Jaune Weth9
 
-theorem Weth9.views_silent :
-    SilentSet Weth9.prog [2, 4, 6, 7, 10, 12, 14, 15, 16, 17] = true := by
-  decide +kernel
-
 private instance : Inhabited SFunc := ⟨.undefined⟩
 
 def Weth9.silentSet : List Nat := [2, 4, 5, 6, 7, 10, 12, 13, 14, 15, 16, 17]

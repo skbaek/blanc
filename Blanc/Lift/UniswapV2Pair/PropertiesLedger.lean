@@ -554,36 +554,4 @@ theorem runTyped_ledgerOn {keys touched : List Adr} {st : State} (on : st.Ledger
     (runTyped st ctx entry transcript).frame.current.state.LedgerOn (keys ++ touched).dedup :=
   on.extend (runTyped_ledger on.ledger ctx entry transcript).2 frame
 
-/-- **The relational driver keeps the invariant**: an exact consumption (`ExactConsumes`,
-`Consumption.lean`) from a frame holding the ledger ends in one, through every nested committed
-child of its turn queues (`ExactTurns.invoke`) and every failed-call rollback. -/
-theorem ExactConsumes.ledger {segment : SegmentResult} {transcript : Transcript} {out : RunResult}
-    (consumed : ExactConsumes segment transcript out) (ledger : segment.frame.Ledger) :
-    out.frame.Ledger := by
-  refine ExactConsumes.rec
-    (motive_1 := fun segment _ out _ => segment.frame.Ledger → out.frame.Ledger)
-    (motive_2 := fun frame _ _ _ out _ => frame.Ledger → out.frame.Ledger)
-    ?_ ?_ ?_ ?_ ?_ ?_ ?_ consumed ledger
-  · intro frame bytes ledger
-    exact ledger
-  · intro frame failure genuine ledger
-    exact ledger
-  · intro frame request continuation result tail out missing rest ih ledger
-    exact ih (resumeSegment_ledger ledger request continuation result)
-  · intro frame request continuation result turns tail executed out present noCodeTurns during rest
-      ihTurns ihRest ledger
-    have executedLedger := ihTurns ledger
-    apply ihRest
-    apply resumeSegment_ledger
-    split
-    · exact executedLedger
-    · exact ⟨executedLedger.1, ledger.2⟩
-  · intro frame request turn ledger
-    exact ledger
-  · intro frame request turn emitter topics data tail out mutable rest ih ledger
-    exact ih ledger
-  · intro frame request turn sender value isStatic entry transcript tail child out selected rest
-      ihSelected ihRest ledger
-    exact ihRest ⟨ledger.1, (ihSelected (startTyped_ledger ledger.2 _ entry)).2⟩
-
 end Blanc.Lift.UniswapV2Pair

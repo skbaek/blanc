@@ -69,13 +69,6 @@ inductive WriterReplay (ca : Adr) (initial : Blanc.Curve3Crv.State) (initialKeys
       WriterReplay ca initial initialKeys (frames ++ [frame]) out.1
         (Key.extend K (callKeys frame.sevm.caller (decodeCall frame.sevm)))
 
-/-- Carried state, reachable from one fixed initial checkpoint. The incoming
-invariant supplies the witness at each later frame; admission supplies none. -/
-def CarriedInvariant (ca : Adr) (initial : Blanc.Curve3Crv.State) (initialKeys U : Key → Prop)
-    (stor : Stor) : Prop :=
-  ∃ frames s K, WriterReplay ca initial initialKeys frames s K ∧
-    (∀ k, K k → U k) ∧ VyInv stor s K
-
 /-- A frame's independent conditions: bounded calldata and touched membership
 in the collision universe. It contains no storage or conservation assertion. -/
 def carriedEntry (U : Key → Prop) : Sevm → Devm → Prop := fun sevm _ =>
@@ -94,44 +87,5 @@ theorem touchedKeys_mem {cfg : ChainConfig} {checkpoint future : BlockChain}
     k ∈ historyTouchedKeys ca trace := by
   apply List.mem_flatMap.mpr
   exact ⟨root, member, by simpa only [target, ite_true] using touched⟩
-
-/-- The history invariant supplies each later frame's model and live keys. -/
-def c3crvCarriedSpec (ca : Adr) (initial : Blanc.Curve3Crv.State)
-    (initialKeys U : Key → Prop) : ContractSpecSem :=
-  ContractSpecSem.ofStorageOnly c3crvSem (CarriedInvariant ca initial initialKeys U)
-
-/-- Frame soundness consumes the incoming carried witness. Admission asserts
-only fresh interpreter ingress, calldata bound and universe membership. -/
-theorem c3crvCarriedSpec_soundAdmitted (ca : Adr) (initial : Blanc.Curve3Crv.State)
-    (initialKeys U : Key → Prop)
-    (injective : ∀ k k', U k → U k' → k.slot = k'.slot → k = k')
-    (apart : ∀ k, U k → k.slot ∉ vyFixedSlots) :
-    (c3crvCarriedSpec ca initial initialKeys U).SoundAdmitted ca (carriedFrameEntry U) := by
-  intro sevm pre post hfork execution deployed target admitted _ _ incoming
-  subst target
-  obtain ⟨⟨hstack, hmem⟩, hcd, touched⟩ := admitted.root rfl
-  have carried : CarriedInvariant sevm.currentTarget initial initialKeys U
-      (Devm.getStor pre sevm.currentTarget) :=
-    ContractSpecSem.ofStorageOnly_preInv_iff.mp incoming.inv
-  obtain ⟨frames, s, K, replay, included, invariant⟩ := carried
-  have fresh := FreshKeys.of_universe injective apart included touched
-  have refinement := c3crv_frame_refines_raw deployed hfork hcd hstack hmem
-    invariant fresh execution
-  refine ⟨trivial, ?_⟩
-  show CarriedInvariant sevm.currentTarget initial initialKeys U
-    (Devm.getStor post sevm.currentTarget)
-  by_cases writer : IsWriter (decodeCall sevm)
-  · obtain ⟨ow, owner, out, accepted, invariant', _⟩ := refinement.1 writer
-    refine ⟨frames ++ [⟨sevm, pre, post, ow⟩], out.1,
-      Key.extend K (callKeys sevm.caller (decodeCall sevm)), ?_, ?_, invariant'⟩
-    · exact WriterReplay.snoc replay execution rfl deployed hfork writer owner
-        invariant invariant' accepted
-    · intro k hk
-      rcases hk with hk | hk
-      · exact included k hk
-      · exact touched k hk
-  · refine ⟨frames, s, K, replay, included, ?_⟩
-    rw [(refinement.2 writer).1 sevm.currentTarget]
-    exact invariant
 
 end Blanc.Lift.Curve3Crv

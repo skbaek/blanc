@@ -429,15 +429,6 @@ theorem dcallSpawn_re {g : Fork} (hs : ReOK O s) (hg : CoveredFork g) {d : Devm}
   obtain ⟨h1, h2⟩ := dcallSpawn_withFork hs.1 hg hp hN he
   exact dcallSpawn_withOrig h1 h2
 
-/-- A spawned child's start configuration does not see the fork or the original state.  Rewrite
-a transported spawn's agreement and nodes with `pagree_re`/`nodeAt_re` before handing them to
-lemmas stated over the kernel configuration: otherwise the kernel compares a concrete machine
-with its transported form by evaluating both. -/
-theorem childCfg_re (e : Evm) (cp : CallPrep) (g : Fork) (O : State) (keys : List (Adr × B256))
-    (stor : StorShadow) (acs : AcctShadow) :
-    childCfg (e.re g O) (cp.re g O).f keys (cp.re g O).adrs stor acs =
-      childCfg e cp.f keys cp.adrs stor acs := rfl
-
 theorem pagree_re {e : Evm} {cp : CallPrep} {g : Fork} {keys : List (Adr × B256)}
     {stor : StorShadow} {acs : AcctShadow}
     (h : PAgree (childCfg (e.re g O) (cp.re g O).f keys (cp.re g O).adrs stor acs)) :

@@ -157,17 +157,4 @@ theorem beaconSpec_preservesAdmitted (ca : Adr) :
     beaconSpec.PreservesAdmitted ca beaconFrameEntry :=
   beaconSpec.preserves_inv_admitted ca beaconFrameEntry (beaconSpec_soundAdmitted ca)
 
-/-- History rung: a configured history whose entered beacon frames satisfy `beaconEntry`
-preserves the beacon state invariant.
-
-Superseded as a headline by `configuredHistory_solInv`: it concludes `SolInv` for the exact history `initialHistory ++ committedNodes ca trace`, whereas this theorem only concludes that some history exists. -/
-theorem beacon_history_preserves_solInv {ca : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (admitted : trace.FrameAdmitted ca beaconEntry)
-    (inv : beaconSpec.StateInv ca checkpoint.state) :
-    beaconSpec.StateInv ca future.state :=
-  trace.stateInv_admitted_sem (beaconSpec_preservesAdmitted ca)
-    ((trace.freshFrameAdmitted ca).and admitted) inv
-
 end Blanc.Lift.BeaconDeposit

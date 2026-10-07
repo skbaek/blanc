@@ -95,33 +95,6 @@ theorem initializeSourceFrame_prefix (current : Checkpoint) (ctx : Context) (tok
   refine ⟨rfl, rfl, rfl, ?_, rfl, rfl⟩
   simp only [initializeSourceFrame, Frame.withEvents, Frame.enter, List.map_nil, List.append_nil]
 
-theorem initialize_startImmediate_inv {current : Checkpoint} {ctx : Context}
-    {token0 token1 : Adr} {sourceFrame : Frame} {returndata : Bytes}
-    (accepted : startImmediate current ctx (.initialize token0 token1) =
-      some (.finished sourceFrame returndata)) :
-    ctx.value = 0 ∧ ctx.sender = current.state.factory ∧ ctx.isStatic = false ∧
-      sourceFrame = initializeSourceFrame current ctx token0 token1 ∧ returndata = [] := by
-  have value : ctx.value = 0 := by
-    by_contra paid
-    simp only [startImmediate, ite_eq_left paid, Frame.fail, Option.some.injEq] at accepted
-    cases accepted
-  have authorized : ctx.sender = current.state.factory := by
-    by_contra forbidden
-    simp only [startImmediate, ite_eq_right (fun (bad : ctx.value ≠ 0) => bad value),
-      getterResult, ite_eq_right forbidden, Frame.fail, Option.some.injEq] at accepted
-    cases accepted
-  have nonstatic : ctx.isStatic = false := by
-    cases static : ctx.isStatic with
-    | false => rfl
-    | true =>
-      simp only [startImmediate, ite_eq_right (fun (bad : ctx.value ≠ 0) => bad value),
-        getterResult, ite_eq_left authorized, static, ite_true,
-        Frame.fail, Option.some.injEq] at accepted
-      cases accepted
-  rw [initialize_startImmediate_done value authorized nonstatic] at accepted
-  have fields := SegmentResult.finished.inj (Option.some.inj accepted)
-  exact ⟨value, authorized, nonstatic, fields.1.symm, fields.2.symm⟩
-
 /-- No hashed row is touched by the two fixed writes. -/
 theorem initializePublicStorage_unchanged {sevm : Sevm} {b : Devm} {n : B256}
     (off6 : n ≠ 6) (off7 : n ≠ 7) :
@@ -212,36 +185,6 @@ theorem initialize_bytecode_refines_source {K : WriterKey → Prop} {current : C
   refine ⟨value, length, authorized, nonstatic, residual, ?_⟩
   rw [result]
   exact initialize_public_source_result rep freshOutput value authorized nonstatic
-
-/-- Existing handler acceptance gives an actual raw witness at the selected sequential gas,
-    retaining both incoming SSTORE sentries even for unchanged packed words. -/
-theorem initialize_source_bytecode_exact {K : WriterKey → Prop} {current : Checkpoint}
-    {invocation : List Nat} {sevm : Sevm} {b : Devm} {G : Nat}
-    {sourceFrame : Frame} {returndata : Bytes}
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (representable : sevm.data.length < 2 ^ 256) (length : 68 ≤ sevm.data.length)
-    (freshOutput : b.output = []) (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x485cc955)
-    (sentry0 : gCallStipend < G + initializeStore0Charge sevm b + initializeLoad1Charge sevm b +
-      initializeStore1Charge sevm b + 39)
-    (sentry1 : gCallStipend < G + initializeStore1Charge sevm b + 9)
-    (accepted : startImmediate current (writerContext sevm invocation) (initializeDecodedEntry sevm) =
-      some (.finished sourceFrame returndata)) :
-    SProg.RunExact cert.prog sevm (St b [] Mem.empty (G + initializeStorageCharge sevm b + 377))
-      (initializePublicPost sevm b [0x485cc955] getterInitMemory G) ∧
-    Nonempty (Exec 0 sevm (St b [] Mem.empty (G + initializeStorageCharge sevm b + 377))
-      (.ok (initializePublicPost sevm b [0x485cc955] getterInitMemory G))) ∧
-    sourceFrame = initializeSourceFrame current (writerContext sevm invocation)
-      (initializeToken0 sevm) (initializeToken1 sevm) ∧ returndata = [] ∧
-    InitializeSourceResult K current invocation sevm b
-      (initializePublicPost sevm b [0x485cc955] getterInitMemory G) G := by
-  obtain ⟨value, authorized, nonstatic, frameEq, dataEq⟩ := initialize_startImmediate_inv accepted
-  have rawAuthorized : sevm.caller = (b.getStorVal sevm.currentTarget 5).toAdr :=
-    authorized.trans rep.fixed.2.2.1.symm
-  obtain ⟨size, guard⟩ := (word_calldata_guards_iff (n := 64) representable (by decide)).mpr length
-  exact ⟨initialize_pc0_exact fork value size selector guard rawAuthorized sentry0 sentry1 nonstatic,
-    initialize_bytecode_live_raw codeEq fork value size selector guard rawAuthorized sentry0 sentry1 nonstatic,
-    frameEq, dataEq, initialize_public_source_result rep freshOutput value authorized nonstatic⟩
 
 /-- Successful raw pc0 execution derives exact consumption for the typed initialize entry. -/
 theorem initialize_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpoint}

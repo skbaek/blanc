@@ -203,29 +203,4 @@ theorem SourceReplay.oracle_mod {st finish : State} {invs : List SourceInvocatio
   rw [replay.oracle.1, replay.oracle.2]
   exact ⟨oracleFold0_law _ _, oracleFold1_law _ _⟩
 
-/-- Storage replay transports every incoming finite representation in the
-trace-local universe. Later states and key sets come from the connected replay;
-there is no fresh per-frame state witness among the entry conditions. -/
-def PairStorageReplay (U : WriterKey → Prop) (pre : Stor)
-    (invs : List SourceInvocation) (post : Stor) : Prop :=
-  ∀ st K, (∀ k, K k → U k) → WriterRep K pre st →
-    ∃ finish K', SourceReplay st invs finish ∧
-      (∀ k, K k → K' k) ∧ (∀ k, K' k → U k) ∧ WriterRep K' post finish
-
-theorem PairStorageReplay.nil (U : WriterKey → Prop) (stor : Stor) :
-    PairStorageReplay U stor [] stor := by
-  intro st K sub rep
-  exact ⟨st, K, .nil st, fun _ h => h, sub, rep⟩
-
-/-- Adjacent storage boundaries share exactly the intermediate model state
-and grow the tracked set monotonically within the same trace-local universe. -/
-theorem PairStorageReplay.append {U : WriterKey → Prop} {a b c : Stor}
-    {left right : List SourceInvocation}
-    (first : PairStorageReplay U a left b) (second : PairStorageReplay U b right c) :
-    PairStorageReplay U a (left ++ right) c := by
-  intro st K sub rep
-  obtain ⟨middle, K1, replay1, grows1, sub1, rep1⟩ := first st K sub rep
-  obtain ⟨finish, K2, replay2, grows2, sub2, rep2⟩ := second middle K1 sub1 rep1
-  exact ⟨finish, K2, replay1.append replay2, fun k h => grows2 k (grows1 k h), sub2, rep2⟩
-
 end Blanc.Lift.UniswapV2Pair
