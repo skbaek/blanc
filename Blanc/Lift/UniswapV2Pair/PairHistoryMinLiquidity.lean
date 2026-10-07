@@ -67,9 +67,9 @@ theorem pair_history_minimum_liquidity {pair : Adr} {cfg : ChainConfig}
       exact callers s sMem)
 
 /-- **Share value as a ratio, fee off, from the deployment checkpoint (U3).**  For a configured history
-from the deployment checkpoint of a Pair not at address zero: if each step's factory `feeTo` answer is
-zero and each burn/sync step's final balance answers are at least the stored reserves
-(`sourceReplayAnswers`, as in `pair_history_feeOff_product`), and no step or re-entered child has
+from the deployment checkpoint of a Pair not at address zero: if the authenticated answers of the
+history's own steps satisfy `sourceReplayAnswers` (`EntryFeeOff` and `EntryNoShrink`, exactly as in
+`pair_history_feeOff_product`), and no step or re-entered child has
 caller zero, then every outermost replay boundary entered with positive supply leaves positive supply
 (at least `MINIMUM_LIQUIDITY`), and `r0·r1/T² ≤ r0'·r1'/T'²` over `ℚ`: the squared share value
 `√(r0·r1)/T` does not decrease across it. -/
