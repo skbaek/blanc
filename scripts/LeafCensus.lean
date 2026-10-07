@@ -47,7 +47,9 @@ fingerprint of its statement, the hash of its TYPE (never its proof), so that a 
 tell a new or changed leaf from one already reviewed.
 
 Input (environment, so the file is byte-identical in every mode): `BLANC_LEAF_OUT`, the JSON file
-written.
+written; and, only for `leaf_audit.py cascade`, `BLANC_LEAF_EDGES=1`, which adds each population
+declaration's term users (`term_users`, looked through parentless auxiliaries exactly as the leaf
+test does) and its source line range (`ranges`). Without it the output is unchanged.
 -/
 
 open Lean Elab Command Meta
@@ -192,6 +194,22 @@ run_cmd do
         else if u != t then
           return true
     return false
+  -- The same walk, collecting the users rather than stopping at the first (cascade mode only).
+  let termUsers (t : Name) : NameSet := Id.run do
+    let mut seen : NameSet := {}
+    let mut out : NameSet := {}
+    let mut stack : Array Name := #[t]
+    while h : stack.size > 0 do
+      let x := stack.back
+      stack := stack.pop
+      for u in (rev.getD x {}).toList do
+        if orphanOwners.contains u then
+          if !seen.contains u then
+            seen := seen.insert u
+            stack := stack.push u
+        else if u != t then
+          out := out.insert u
+    return out
   -- Attribute state is recorded on every row, but never changes liveness.
   let simpMap ← simpExtensionMapRef.get
   let simpSets : Array (Name × SimpTheorems) := simpMap.toArray.map fun (k, ext) =>
@@ -239,8 +257,21 @@ run_cmd do
         ("attributes", toJson ks), ("fp", toJson (fingerprint ci))]
       if kind == "theorem" then leaves := leaves.push row
       else definitionLeaves := definitionLeaves.push row
+  let edges := (← IO.getEnv "BLANC_LEAF_EDGES") == some "1"
+  let mut usersJson : Array (String × Json) := #[]
+  let mut rangesJson : Array (String × Json) := #[]
+  if edges then
+    for (t, _, _) in pop do
+      let key := showName ((privateToUserName? t).getD t)
+      let us := (termUsers t).toList.map fun u => showName ((privateToUserName? u).getD u)
+      usersJson := usersJson.push (key, toJson us)
+      if let some r ← findDeclarationRanges? t then
+        rangesJson := rangesJson.push (key, toJson [r.range.pos.line, r.range.endPos.line])
+  let edgeFields : List (String × Json) := if edges then
+      [("term_users", Json.mkObj usersJson.toList), ("ranges", Json.mkObj rangesJson.toList)]
+    else []
   IO.FS.writeFile outPath
-    ((Json.mkObj [
+    ((Json.mkObj ([
       ("schema", toJson (3 : Nat)),
       ("population", toJson pop.size),
       ("theorem_population", toJson theoremPopulation),
@@ -252,5 +283,5 @@ run_cmd do
       ("external_constants", toJson externalConstants),
       ("population_declarations", toJson populationDeclarations),
       ("leaves", Json.arr leaves),
-      ("definition_leaves", Json.arr definitionLeaves)]).compress ++ "\n")
+      ("definition_leaves", Json.arr definitionLeaves)] ++ edgeFields)).compress ++ "\n")
   logInfo m!"LEAF-CENSUS population {pop.size}; theorem leaves {leaves.size}; definition leaves {definitionLeaves.size}"

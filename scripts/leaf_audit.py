@@ -21,6 +21,13 @@ and the published claims need:
   ``--ledger``, of ``scripts/leaf-review.json`` (the review ledger a sweep writes at its close).
   Neither file is ever edited by hand and the ledger is not an input of any gate verdict.
 * ``review``: list theorem and definition leaves that are new or whose statement changed since the ledger.
+* ``cascade --delete FILE [--keep FILE]``: read-only sweep planning. From ONE census over the current
+  build it reports every declaration that would become a leaf if the names in FILE were deleted,
+  iterated to a fixed point (round by round, with the users that made each one a leaf), so a sweep
+  judges the whole cascade and rebuilds once instead of once per round. Names in the keep file are
+  reported when exposed but not propagated through. A deletion that still has a live user is
+  refused. Script mentions count as permanent users (conservative: it can only under-report). The
+  post-deletion ``check`` stays the authority.
 * ``self-test``: bite controls on small fixture environments elaborated by the byte-identical
   driver body, plus the pure-Python controls of the source scan, the count comparison and the ledger.
 
@@ -37,6 +44,7 @@ Command line (from the repository root)::
     python3 scripts/leaf_audit.py check
     python3 scripts/leaf_audit.py generate [--ledger [--unreviewed FILE]]
     python3 scripts/leaf_audit.py review
+    python3 scripts/leaf_audit.py cascade --delete FILE [--keep FILE]
     python3 scripts/leaf_audit.py self-test
 """
 
@@ -359,7 +367,9 @@ def _candidates(token: str, ns: Tuple[str, ...], opens: Tuple[str, ...]) -> List
     return result
 
 
-def scan_uses(sources: Dict[str, str], population: Set[str]) -> Dict[str, Tuple[str, int, str]]:
+def scan_uses(sources: Dict[str, str], population: Set[str],
+              hits: Optional[Dict[str, List[Tuple[str, int, str]]]] = None
+              ) -> Dict[str, Tuple[str, int, str]]:
     """Theorems of ``population`` named where the environment records no trace.
 
     ``sources`` maps a module name to its text. A name is used when it occurs (a) as the head of an
@@ -372,7 +382,7 @@ def scan_uses(sources: Dict[str, str], population: Set[str]) -> Dict[str, Tuple[
     innermost enclosing namespace first, then the active ``open``s, and it counts only if the
     resolved name is a Blanc theorem, so a short name that happens to match a theorem of another
     namespace is never credited to it. Returns ``{theorem: (module, line, how)}``, the first
-    occurrence of each.
+    occurrence of each; ``hits``, when given, also receives every occurrence (``cascade``).
     """
 
     used: Dict[str, Tuple[str, int, str]] = {}
@@ -400,6 +410,8 @@ def scan_uses(sources: Dict[str, str], population: Set[str]) -> Dict[str, Tuple[
                     if cand in population:
                         if cand not in used:
                             used[cand] = (module, line_of(off), how)
+                        if hits is not None:
+                            hits.setdefault(cand, []).append((module, line_of(off), how))
                         return
 
         # (a) lemma lists of rewriting tactic calls
@@ -649,7 +661,7 @@ def _elaborate(root: Path, args: Sequence[str], stdin: Optional[str], env_extra:
     return done.returncode, done.stdout or ""
 
 
-def run_census(root: Path, source: Optional[str] = None) -> dict:
+def run_census(root: Path, source: Optional[str] = None, edges: bool = False) -> dict:
     """Elaborate the driver (production, or ``source`` for a fixture) and return its census.
 
     ``source`` replaces the driver's three-line header and adds a fixture before the shared body.
@@ -658,6 +670,8 @@ def run_census(root: Path, source: Optional[str] = None) -> dict:
     with tempfile.TemporaryDirectory(prefix="blanc-leaf-") as tmp:
         out_file = Path(tmp) / "census.json"
         env = {"BLANC_LEAF_OUT": str(out_file)}
+        if edges:
+            env["BLANC_LEAF_EDGES"] = "1"
         if source is None:
             code, output = _elaborate(root, [DRIVER_RELATIVE], None, env)
         else:
@@ -1033,6 +1047,121 @@ def cmd_review(root: Path) -> int:
     for key in diff["removed"]:
         print(f"gone: {key}")
     print(review_lines(diff, len(all_leaves), limit=0)[0])
+    return 0
+
+
+# --------------------------------------------------------------------------------------------
+# Cascade planning
+# --------------------------------------------------------------------------------------------
+
+def source_users(census: dict, hits: Dict[str, List[Tuple[str, int, str]]]
+                 ) -> Tuple[Dict[str, Set[str]], Set[str]]:
+    """Attribute each source-scan occurrence to the population declaration whose source range
+    contains it. An occurrence inside no declaration (a macro, an ``attribute`` command) makes its
+    target permanently used."""
+
+    module_of = {row["name"]: row["module"] for row in census["population_declarations"]}
+    spans: Dict[str, List[Tuple[int, int, str]]] = {}
+    for name, (start, end) in census["ranges"].items():
+        spans.setdefault(module_of.get(name, ""), []).append((start, end, name))
+    for module in spans:
+        spans[module].sort()
+    users: Dict[str, Set[str]] = {}
+    permanent: Set[str] = set()
+    for target, occurrences in hits.items():
+        for module, line, _how in occurrences:
+            owner = None
+            for start, end, name in spans.get(module, []):
+                if start > line:
+                    break
+                if end >= line and (owner is None or start >= owner[0]):
+                    owner = (start, name)
+            if owner is None:
+                permanent.add(target)
+            elif owner[1] != target:
+                users.setdefault(target, set()).add(owner[1])
+    return users, permanent
+
+
+def cascade_closure(population: Set[str], users: Dict[str, Set[str]], permanent: Set[str],
+                    delete: Set[str], keep: Set[str], require_all: bool = True) -> dict:
+    """Rounds of declarations a deletion exposes as leaves. A declaration is exposed when every
+    user it has is deleted (``require_all=False`` is the mutant the self-test must reject)."""
+
+    live = {d: sorted(users.get(d, set()) - delete) for d in sorted(delete)}
+    blocked = {d: u for d, u in live.items() if u or d in permanent}
+    removed = set(delete)
+    rounds: List[List[Tuple[str, List[str]]]] = []
+    kept: List[str] = []
+    while True:
+        exposed = []
+        for t in sorted(population - removed - set(kept)):
+            us = users.get(t, set())
+            if not us or t in permanent:
+                continue
+            hit = us <= removed if require_all else bool(us & removed)
+            if hit:
+                exposed.append((t, sorted(us)))
+        if not exposed:
+            break
+        rounds.append(exposed)
+        for t, _ in exposed:
+            if t in keep:
+                kept.append(t)
+            else:
+                removed.add(t)
+    return {"rounds": rounds, "kept": kept, "blocked": blocked}
+
+
+def cascade_inputs(census: dict, sources: Dict[str, str], external_names: Set[str]
+                   ) -> Tuple[Set[str], Dict[str, Set[str]], Set[str]]:
+    validate_census(census)
+    if "term_users" not in census or "ranges" not in census:
+        raise LeafAuditError("the census carries no edges (BLANC_LEAF_EDGES was not honoured)")
+    population = set(census["population_names"])
+    hits: Dict[str, List[Tuple[str, int, str]]] = {}
+    scan_uses(sources, population, hits)
+    from_source, permanent = source_users(census, hits)
+    users: Dict[str, Set[str]] = {n: set(u) for n, u in census["term_users"].items()}
+    for n, us in from_source.items():
+        users.setdefault(n, set()).update(us)
+    return population, users, permanent | (external_names & population)
+
+
+def cmd_cascade(root: Path, delete_path: Path, keep_path: Optional[Path]) -> int:
+    def names(path: Path) -> Set[str]:
+        return {l.strip() for l in path.read_text().splitlines() if l.strip() and not l.startswith("#")}
+
+    delete = names(delete_path)
+    keep = names(keep_path) if keep_path else set()
+    sources = blanc_sources(root)
+    with gate_semaphore.admitted("the leaf census", memory_gib=8):
+        census = run_census(root, edges=True)
+    external_sources = tracked_external_sources(root)
+    external, _ = scan_external_sources(external_sources, set(census.get("population_names", [])))
+    traceless = scan_uses({p: s for p, s in external_sources.items() if p.endswith(".lean")},
+                          set(census.get("population_names", [])))
+    population, users, permanent = cascade_inputs(census, sources, set(external) | set(traceless))
+    unknown = sorted(delete - population)
+    if unknown:
+        print(f"REFUSED — leaf cascade: not population names: {unknown}")
+        return 1
+    result = cascade_closure(population, users, permanent, delete, keep)
+    if result["blocked"]:
+        for d, us in result["blocked"].items():
+            print(f"blocked: {d} is still used by {us or ['a script or command outside any declaration']}")
+        print(f"REFUSED — leaf cascade: {len(result['blocked'])} requested deletion(s) still have a live user")
+        return 1
+    kinds = {r["name"]: (r["kind"], r["module"]) for r in census["population_declarations"]}
+    total = 0
+    for i, exposed in enumerate(result["rounds"], 1):
+        for t, us in exposed:
+            kind, module = kinds.get(t, ("?", "?"))
+            mark = "  [keep]" if t in keep else ""
+            print(f"round {i}: {t}  ({kind}, {module}){mark} — every user deleted: {', '.join(us)}")
+            total += 1
+    print(f"OK — leaf cascade: deleting {len(delete)} exposes {total} declaration(s) over "
+          f"{len(result['rounds'])} round(s); {len(result['kept'])} kept by --keep")
     return 0
 
 
@@ -1518,6 +1647,45 @@ def self_test(root: Path) -> int:
         print("OK — attribute guard: an unclassified attribute and an unexported use attribute are "
               "refused, classified ones and comments pass")
 
+    # Cascade planning: one edged census of a small fixture decides every round.
+    cascade_source = fixture_source(root, CASCADE_FIXTURE)
+    cascade_census = run_census(root, source=cascade_source, edges=True)
+    cns = "LeafCascadeFixture."
+    population, users, permanent = cascade_inputs(cascade_census, {"_current": cascade_source}, set())
+
+    def exposed_by(delete: Set[str], **kw) -> List[str]:
+        result = cascade_closure(population, users, permanent, {cns + d for d in delete}, set(), **kw)
+        return sorted(t[len(cns):] for r in result["rounds"] for t, _ in r)
+
+    def expect_cascade(label: str, got: List[str], want: List[str]) -> None:
+        nonlocal checks
+        checks += 1
+        if got != want:
+            failures.append(f"{label}: expected {want}, got {got}")
+        else:
+            print(f"OK — {label}: {got}")
+
+    expect_cascade("cascade: a sole helper is exposed, a shared helper is not",
+                   exposed_by({"top_sole", "top_shared"}), ["helper_sole"])
+    expect_cascade("cascade: an implicitly selected instance stays used while its user stays",
+                   exposed_by({"top_sole"}), ["helper_sole"])
+    expect_cascade("cascade: the instance is exposed once its only user goes",
+                   exposed_by({"cascadeUser"}), ["CascadeC", "cascadeInst"])
+    expect_cascade("cascade: an rfl lemma named only in a deleted simp-only list is exposed",
+                   exposed_by({"simp_user"}), ["f", "rfl_lemma"])
+    checks += 1
+    if exposed_by({"top_shared"}, require_all=False) == []:
+        failures.append("cascade mutant (any deleted user suffices) went unnoticed")
+    else:
+        print("OK — cascade mutant: exposing on any deleted user is detected (helper_shared would go)")
+    checks += 1
+    bare = cascade_closure(population, {n: set(u) for n, u in cascade_census["term_users"].items()},
+                           set(), {cns + "simp_user"}, set())
+    if any(t == cns + "rfl_lemma" for r in bare["rounds"] for t, _ in r):
+        failures.append("cascade mutant (no source attribution) still exposed rfl_lemma")
+    else:
+        print("OK — cascade mutant: without source attribution the simp-only use is invisible")
+
     if failures:
         for failure in failures:
             print(f"REGRESSION — leaf audit self-test: {failure}")
@@ -1526,11 +1694,14 @@ def self_test(root: Path) -> int:
     return 0
 
 
+CASCADE_FIXTURE = 'namespace LeafCascadeFixture\n\ntheorem helper_sole : True := trivial\ntheorem top_sole : True := helper_sole\ntheorem helper_shared : True := trivial\ntheorem top_shared : True := helper_shared\ntheorem other_shared : True := helper_shared\n\nclass CascadeC where\n  x : Nat\ninstance cascadeInst : CascadeC := ⟨0⟩\ndef cascadeUser : Nat := CascadeC.x\n\ndef f (n : Nat) : Nat := n\ntheorem rfl_lemma : f 0 = 0 := rfl\ntheorem simp_user : f 0 = 0 := by simp only [rfl_lemma]\n\nend LeafCascadeFixture'
+
+
 # --------------------------------------------------------------------------------------------
 
 def main(argv: List[str]) -> int:
     root = Path(__file__).resolve().parent.parent
-    if not argv or argv[0] not in ("check", "generate", "review", "self-test"):
+    if not argv or argv[0] not in ("check", "generate", "review", "cascade", "self-test"):
         print(__doc__)
         return 2
     try:
@@ -1544,6 +1715,9 @@ def main(argv: List[str]) -> int:
             return cmd_review(root)
         if argv[0] == "self-test" and len(argv) == 1:
             return self_test(root)
+        if argv[0] == "cascade" and argv[1:2] == ["--delete"] and len(argv) in (3, 5) \
+                and (len(argv) == 3 or argv[3] == "--keep"):
+            return cmd_cascade(root, Path(argv[2]), Path(argv[4]) if len(argv) == 5 else None)
     except LeafAuditError as exc:
         print(f"REGRESSION — leaf audit: {exc}")
         return 1
