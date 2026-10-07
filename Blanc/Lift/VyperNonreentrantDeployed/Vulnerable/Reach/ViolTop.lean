@@ -4,6 +4,8 @@ import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Locks
 
 namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol
 
+open Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach (creator creatorFunds initialWorld rootBenv rootTenv)
+
 open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.NodeWalk Blanc.ConcreteRun
 open Blanc.ForkUniform
 open Blanc.Lift.VyperNonreentrantDeployed
@@ -70,53 +72,6 @@ theorem root_child_agree (W : State) (m : Meta) (w : World) (post2 : Devm)
     · rw [obsChildF1_state, hkeep.2.2, resumeCallB_state hres, obsChildF1raw_state]
       exact hchildRm.2.2.2
   exact hchild1
-
-theorem root_f1_halt (g : Fork) (W : State) (m : Meta) (w : World)
-    (hg : CoveredFork g)
-    (hA4 : ∀ a, a ∈ (e1'11 W (storTailOf W) (acctTailOf W) m w).dyna.accessedAddresses ↔
-      a ∈ (cpR W (storTailOf W) (acctTailOf W) m w).adrs)
-    (hC4' : AcctAgree (e1'11 W (storTailOf W) (acctTailOf W) m w).dyna.state
-      (acs1R W (storTailOf W) (acctTailOf W) m w)) (post2 : Devm) :
-    (((cpF2 W (storTailOf W) (acctTailOf W) m w).withFork g).f).settle
-        (.ok (obsChildF1 post2)) = .ok (obsChildF1 post2) ∧
-    Evm.step ((e1tail W (storTailOf W) (acctTailOf W) m w post2).withFork g) =
-      .halt (.ok (postF1 W (storTailOf W) (acctTailOf W) m w post2)) := by
-  obtain ⟨-, -, -, hcrF2, -, -, hsgF2, -, -⟩ :=
-    dcallPrep_spec (cpF2_eq W (storTailOf W) (acctTailOf W) m w) hA4 hC4'
-  have hsettleF2 : (((cpF2 W (storTailOf W) (acctTailOf W) m w).withFork g).f).settle
-      (.ok (obsChildF1 post2)) = .ok (obsChildF1 post2) := by
-    have hfstat : CoveredFork (e1'11 W (storTailOf W) (acctTailOf W) m w).sta.benvStat.fork := by
-      rw [stepN_sta (e1'11_eq W (storTailOf W) (acctTailOf W) m w),
-        (e1_fork W (storTailOf W) (acctTailOf W) m w).1]
-      exact CoveredFork.prague
-    change ((cpF2 W (storTailOf W) (acctTailOf W) m w).f.withFork g).settle
-      (.ok (obsChildF1 post2)) = _
-    rw [settle_withFork_of_stat hfstat hg
-      (dcallPrep_stat (cpF2_eq W (storTailOf W) (acctTailOf W) m w))]
-    exact frame_settle_ok hcrF2 hsgF2 (show (obsChildF1 post2).error = none from rfl)
-  have htailF1Fork : stepN 10
-      ((⟨32, (e1 W (storTailOf W) (acctTailOf W) m w).sta,
-        d1R W (storTailOf W) (acctTailOf W) m w post2⟩ : Evm).withFork g) =
-      some ((e1tail W (storTailOf W) (acctTailOf W) m w post2).withFork g) :=
-    tailF1_fork g W (storTailOf W) (acctTailOf W) m w post2 hg
-  have htailSta : (e1tail W (storTailOf W) (acctTailOf W) m w post2).sta.benvStat.fork = .prague := by
-    rw [stepN_sta (tailF1_eq W (storTailOf W) (acctTailOf W) m w post2)]
-    exact (e1_fork W (storTailOf W) (acctTailOf W) m w).1
-  have hne : ∀ ee, Evm.step (e1tail W (storTailOf W) (acctTailOf W) m w post2) ≠ .halt (.error ee) := by
-    intro ee he
-    rw [returnF1_eq W (storTailOf W) (acctTailOf W) m w post2] at he
-    cases he
-  have htailHx : (e1tail W (storTailOf W) (acctTailOf W) m w post2).sta.benvStat.excessBlobGas = 0 := by
-    rw [stepN_sta (tailF1_eq W (storTailOf W) (acctTailOf W) m w post2)]
-    exact (e1_fork W (storTailOf W) (acctTailOf W) m w).2
-  have hhalt : Evm.step ((e1tail W (storTailOf W) (acctTailOf W) m w post2).withFork g) =
-      .halt (.ok (postF1 W (storTailOf W) (acctTailOf W) m w post2)) := by
-    rw [show Evm.step ((e1tail W (storTailOf W) (acctTailOf W) m w post2).withFork g) =
-        (Evm.step (e1tail W (storTailOf W) (acctTailOf W) m w post2)).withFork g from
-      evm_step_withFork_prague htailSta htailHx hg hne]
-    rw [returnF1_eq]
-    rfl
-  exact ⟨hsettleF2, hhalt⟩
 
 theorem root_exec_call_core (g : Fork) (W : State) (m : Meta) (w : World)
     (post2 : Devm)

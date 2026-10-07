@@ -22,6 +22,8 @@ writes of `initWrites` (newest first) over the start shadow `stor2`.
 
 namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach
 
+open Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach (creator creatorFunds initialWorld rootBenv rootTenv)
+
 open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.ConcreteRun
 open Blanc.Lift.VyperNonreentrantDeployed.Vulnerable (cert t_0000_c0)
 

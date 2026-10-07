@@ -13,19 +13,6 @@ namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol
 open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.NodeWalk Blanc.ConcreteRun
 open Blanc.Lift.VyperNonreentrantDeployed
 
-/-- The root entry as seen from the message's start configuration `cR0` (static machine
-`S0`): the root's `CALL` (33 steps), the outer forwarder, its `DELEGATECALL` into F2,
-and F2's entered start configuration `c2`. -/
-def RootEntryFacts (S0 : Sevm) (cR0 : Cfg) : Prop :=
-  ∃ (cA : Cfg) (e1 e1' e2 : Evm) (c2 : Cfg),
-    wrun fsA S0 33 cR0 = .cont cA ∧ Agree cA ∧
-    SpawnedBy S0 cA.devm .call e1 ∧
-    e1.sta.caller = attackerAddr ∧ e1.sta.currentTarget = proxyAddr ∧
-    e1.sta.code = fwdCode ∧ e1.pc = 0 ∧
-    stepN 11 e1 = some e1' ∧ SpawnedBy e1'.sta e1'.dyna .delegatecall e2 ∧
-    e2.sta.currentTarget = proxyAddr ∧ e2.sta.code = Vulnerable.code ∧
-    e2.sta.data = removeCallR ∧ e2.pc = 0 ∧ Agree c2 ∧ c2.devm = e2.dyna
-
 /-- F0's `CALL` prep under any covered fork. -/
 theorem cpR_at : ∀ (g : Fork) (O : State) (tS : StorShadow) (tA : AcctShadow)
     (m : Meta) (w : World), CoveredFork g →
@@ -142,58 +129,5 @@ theorem c2R_agree : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Met
     exact hA.2.2.1 a k
   · rw [dst8, e1'11_state O tS tA m w, he1]
     exact hC1
-
-/-- The root entry facts: F0 to its `CALL`, F1 to F2, and F2's agreeing start. -/
-theorem root_entry_facts (g : Fork) (O : State) (tS : StorShadow) (tA : AcctShadow)
-    (m : Meta) (w : World) (hg : CoveredFork g)
-    (hAgree : Agree (Boundary.cfgOfT bR0 tS tA m w)) :
-    RootEntryFacts ((sR.withOrig O).withFork g)
-      (Boundary.cfgOfT bR0 tS tA m w) := by
-  have hF : CoveredFork (sR.withOrig O).benvStat.fork := by
-    rw [sR_orig_fork O]
-    exact CoveredFork.prague
-  have hS : ∀ n c, wrun fsA ((sR.withOrig O).withFork g) n c =
-      wrun fsA (sR.withOrig O) n c :=
-    fun n c => wrun_withFork hF hg (sR_orig_hx O) fsA n c
-  have run33 : wrun fsA ((sR.withOrig O).withFork g) 33
-      (Boundary.cfgOfT bR0 tS tA m w) = .cont (cR O tS tA m w) := by
-    rw [hS]
-    exact cR_eq O tS tA m w
-  have s33 := wrun_cont run33
-  have hAgreeR : Agree (cR O tS tA m w) := s33.1 hAgree
-  -- F0's `CALL` spawns the outer forwarder.
-  have spawnR : SpawnedBy ((sR.withOrig O).withFork g) (cR O tS tA m w).devm
-      .call ((e1 O tS tA m w).withFork g) :=
-    spawnedBy_of_callPrep hAgreeR (cpR_at g O tS tA m w hg)
-      (e1R_at g O tS tA m w hg)
-  have hAgree2 := c2R_agree O tS tA m w hAgreeR
-  obtain ⟨hA4, hC4'⟩ := chain1_of O tS tA m w hAgreeR
-  have step11 := e1'11_at g O tS tA m w hg
-  -- F1's `DELEGATECALL` spawns the `remove_liquidity` frame.
-  have spawnF2 : SpawnedBy (((e1'11 O tS tA m w).withFork g).sta)
-      (((e1'11 O tS tA m w).withFork g).dyna) .delegatecall
-      ((e2 O tS tA m w).withFork g) := by
-    have e1g_sta : ((((e1'11 O tS tA m w).withFork g).sta)) =
-        (((e1'11 O tS tA m w).sta.withFork g)) :=
-      e1'11_sta_fork g O tS tA m w
-    have e1g_dyna : ((((e1'11 O tS tA m w).withFork g).dyna)) =
-        ((e1'11 O tS tA m w).dyna) :=
-      e1'11_dyna_fork g O tS tA m w
-    rw [e1g_sta, e1g_dyna]
-    exact spawnedBy_of_dcallPrep (cpF2_e2_at g O tS tA m w hg).1 hA4 hC4'
-      (cpF2_e2_at g O tS tA m w hg).2
-  refine ⟨cR O tS tA m w, (e1 O tS tA m w).withFork g,
-    (e1'11 O tS tA m w).withFork g, (e2 O tS tA m w).withFork g,
-    c2 O tS tA m w, run33, hAgreeR, spawnR, ?_, ?_, ?_, ?_, step11, spawnF2,
-    ?_, ?_, ?_, ?_, hAgree2, ?_⟩
-  · exact e1_caller_fork g O tS tA m w
-  · exact e1_target_fork g O tS tA m w
-  · exact e1_code_fork g O tS tA m w
-  · exact e1_pc_fork g O tS tA m w
-  · exact e2_target_fork g O tS tA m w
-  · exact e2_code_fork g O tS tA m w
-  · exact e2_data_fork g O tS tA m w
-  · exact e2_pc_fork g O tS tA m w
-  · rw [e2_dyna_fork g O tS tA m w, ← e2_dyna_c2 O tS tA m w]
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol

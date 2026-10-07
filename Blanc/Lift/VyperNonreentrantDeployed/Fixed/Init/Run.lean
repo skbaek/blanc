@@ -172,21 +172,4 @@ theorem initFactsC :
     lookupA (cI3 world2).acs implAddr = lookupA acs0 implAddr := by
   kernel_rfl_and
 
-/-- The domain separator the run stores is the definition's keccak, and the named words are
-the encodings the source prescribes (independent kernel evaluations). -/
-theorem domainSeparator_value :
-    domainSeparator =
-      (6469391015181328002969202441792387011151242385007317893888394829330827258041 : Nat).toB256 ∧
-    eip712Typehash =
-      (0x8b73c3c69bb8fe3d512ecc4cf759cc79239f7b179b0ffacaa9a75d522b39400f : Nat).toB256 ∧
-    Bytes.keccak nameBytes =
-      (0xc5f86d8d9c15d6b2d3f51171e4dd446adb5d62ae334b172a9089a0ea11b2ee1f : Nat).toB256 ∧
-    Bytes.keccak versionBytes =
-      (0x0b9d98da55727756af85ff51e956250f080813d8ad137f20852fe4ea074e6420 : Nat).toB256 ∧
-    leftWord nameBytes =
-      (0x43757276652e666920466163746f727920506f6f6c3a20000000000000000000 : Nat).toB256 ∧
-    leftWord symbolBytes =
-      (0x2d66000000000000000000000000000000000000000000000000000000000000 : Nat).toB256 := by
-  kernel_rfl_and
-
 end Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init

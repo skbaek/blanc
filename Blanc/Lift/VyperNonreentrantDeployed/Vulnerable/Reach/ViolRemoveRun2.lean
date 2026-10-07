@@ -23,22 +23,6 @@ namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol
 open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.NodeWalk Blanc.ConcreteRun
 open Blanc.Lift.VyperNonreentrantDeployed
 
-/-- What F2's halt shows: gas, return data, and `totalSupply` (slot 26),
-`balanceOf[attacker]` (`lpSlotA`) and the remove-lock (slot 2) in the halting
-configuration's storage shadow, and success (no error). -/
-def obsRm : Res → Option (Nat × List Nat × Nat × Nat × Nat × Bool)
-  | .done (.halted d) cl => some (d.gasLeft, d.output.map UInt8.toNat,
-      (lookupS cl.stor proxyAddr (26 : Nat).toB256).toNat,
-      (lookupS cl.stor proxyAddr lpSlotA).toNat,
-      (lookupS cl.stor proxyAddr (2 : Nat).toB256).toNat, d.error.isNone)
-  | _ => none
-
-/-- The frozen observation at F2's `RETURN`: gas `gasRm`, return data `outRm`
-(`word 100 ++ word 100`), `totalSupply = 1800 < 1906 = balanceOf[A]`, lock
-released, success. -/
-def obsRmEELS : Option (Nat × List Nat × Nat × Nat × Nat × Bool) :=
-  some (gasRm, outRm.map UInt8.toNat, 1800, 1906, 0, true)
-
 /-! ## CALL-point small facts (each probe-checked in scratch before committing) -/
 
 /-- F2's keys at its `CALL`: slot reads 8, 26 and the lock 2. -/

@@ -20,9 +20,6 @@ namespace Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation
 def ctorPrefix : List UInt8 :=
   [0x62, 0x0f, 0x42, 0x40, 0x33, 0x55, 0x61, 0x01, 0x2b, 0x3d, 0x81, 0x60, 0x10, 0x3d, 0x39, 0xf3]
 
-/-- The token's supply, minted to its creator. -/
-def supply : Nat := 1000000
-
 /-- The synthetic token creation input. -/
 def creationCode : ByteArray :=
   ⟨(ctorPrefix ++ Blanc.Lift.VyperNonreentrantDeployed.Token20.code.data.toList).toArray⟩

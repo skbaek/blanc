@@ -70,7 +70,7 @@ private def runChain (fork : Fork) (side : String) (start : State) (steps : List
 
 def observe (name : String) (fork : Fork) : IO J := do
   let minus ← runChain fork "Vminus"
-    Lift.VyperNonreentrantDeployed.Vulnerable.Reach.initialWorld minusSteps
+    Lift.VyperNonreentrantDeployed.Fixed.Reach.initialWorld minusSteps
   let plus ← runChain fork "Vplus"
     Lift.VyperNonreentrantDeployed.Fixed.Reach.initialWorld plusSteps
   return .mkObj [

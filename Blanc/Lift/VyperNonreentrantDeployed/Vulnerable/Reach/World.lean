@@ -28,8 +28,7 @@ namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach
 
 open Jaune
 
-export Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach (creator creatorFunds initialWorld rootBenv
-  rootTenv)
+open Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach (creator creatorFunds initialWorld rootBenv rootTenv)
 
 /-- The implementation's modeled address: the address its runtime is registered under. -/
 abbrev implAddr : Adr := Blanc.curvePlainImpl6326

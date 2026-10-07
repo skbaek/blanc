@@ -21,10 +21,9 @@ back), so they hold for every input world `W` the shadows describe. -/
 
 namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach
 
-open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.NodeWalk Blanc.ConcreteRun
+open Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach (creator creatorFunds initialWorld rootBenv rootTenv)
 
-/-- The forwarder's code tries (depth 6 covers its 45 bytes). -/
-def fwdTriesM : CodeTries fwdCode 6 := CodeTries.ofCode fwdCode 6 (by decide) (by decide)
+open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.NodeWalk Blanc.ConcreteRun
 
 /-- `allowance[creator][proxyAddr]`'s slot at the token. -/
 def allowCPSlot : B256 := Token20.allowSlot creator proxyAddr
@@ -62,9 +61,6 @@ theorem storShadowOf_reverse (l : StorShadow) : storShadowOf l.reverse = l := by
 theorem world6_stor : ∀ a k, storOf world6 a k = lookupS stor6 a k := by
   intro a k
   rw [world6, storOf_stateFoldStor _ (storOf_stateFoldAcct accts6), storShadowOf_reverse]
-
-theorem world6_acct : AcctAgree world6 acs6 :=
-  acctAgree_stateFoldStor _ (acctAgree_stateFoldAcct accts6)
 
 /-- Any world whose storage the shadow `stor6` describes has `world6`'s original storage. -/
 theorem origAgree6 {W : State} (h : ∀ a k, storOf W a k = lookupS stor6 a k) :

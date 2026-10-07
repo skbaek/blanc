@@ -24,8 +24,6 @@ variable {g : Fork}
 
 /-! ### The forwarder frame's entry -/
 
-theorem frame3_inner : frame3.inner = msg3 := rfl
-
 /-- The forwarder frame's start: no accessed key or address, the world's storage and the
 transferred accounts. -/
 theorem e3_agree : Agree ⟨e3.dyna, .undefined, [], [], [], stor2, acs3⟩ := by

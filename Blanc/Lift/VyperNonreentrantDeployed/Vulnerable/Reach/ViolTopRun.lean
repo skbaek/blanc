@@ -5,10 +5,6 @@ namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol
 open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.NodeWalk Blanc.ConcreteRun
 open Blanc.Lift.VyperNonreentrantDeployed
 
-theorem cpR_adrs_shape : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
-    (w : World), (cpR O tS tA m w).adrs = [proxyAddr] := by
-  kernel_forall_rfl
-
 theorem c2_cfg : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
     (w : World), Boundary.cfgOfT bRm0 tS tA (c2 O tS tA m w).devm.meta
       (c2 O tS tA m w).devm.world = c2 O tS tA m w := by
@@ -39,14 +35,6 @@ theorem e1_sta_fork : ∀ (g : Fork) (O : State) (tS : StorShadow) (tA : AcctSha
     (((e1 O tS tA m w).withFork g).sta) = ((e1 O tS tA m w).sta.withFork g) := by
   kernel_forall_rfl
 
-theorem e1'11_code : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    (e1'11 O tS tA m w).sta.code = fwdCode := by
-  kernel_forall_rfl
-
-theorem e1'11_pc : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    (e1'11 O tS tA m w).pc = 31 := by
-  kernel_forall_rfl
-
 theorem e1'11_fork_shape : ∀ (g : Fork) (O : State) (tS : StorShadow) (tA : AcctShadow)
     (m : Meta) (w : World),
     (e1'11 O tS tA m w).withFork g =
@@ -74,15 +62,6 @@ theorem c2_K : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w
     (c2 O tS tA m w).K = [] := by
   kernel_forall_rfl
 
-theorem tailF1_fork : ∀ (g : Fork) (O : State) (tS : StorShadow) (tA : AcctShadow)
-    (m : Meta) (w : World) (post2 : Devm), CoveredFork g →
-    stepN 10 (((⟨32, (e1 O tS tA m w).sta,
-      d1R O tS tA m w post2⟩ : Evm).withFork g)) =
-      some ((e1tail O tS tA m w post2).withFork g) := by
-  intro g O tS tA m w post2 hg
-  exact stepN_withFork hg (e1_fork O tS tA m w).1 (e1_fork O tS tA m w).2
-    (tailF1_eq O tS tA m w post2)
-
 def runV (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World)
     (post2 : Devm) : Res :=
   match callResume (sR.withOrig O) (cR O tS tA m w)
@@ -98,11 +77,6 @@ def obsV : Res → Option (Nat × List Nat × Bool × StorShadow × AcctShadow)
       decide (cl.stor.take storV.length = storV),
       cl.stor.drop storV.length, cl.acs.drop acsV.length)
   | _ => none
-
-theorem v_kernel : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
-    (w : World) (post2 : Devm),
-    obsV (runV O tS tA m w post2) = some (gasV, [], true, tS, tA) := by
-  kernel_forall_rfl
 
 /-! ## F1 resumed from F2 with F2's own gas (raw observation)
 

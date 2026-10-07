@@ -47,11 +47,4 @@ def allowSlot (owner spender : Adr) : B256 := mapSlot owner.toB256 spender.toB25
 /-- No `CALL`- or `CREATE`-family instruction starts at a position an execution reaches. -/
 theorem spawnFreeReach : SpawnFreeReach code := spawnFreeReach_of_check (by decide +kernel)
 
-/-- A run of the token from its entry enters no child frame. -/
-theorem rawFrameDescendants_nil {sevm : Sevm} {pre : Devm} {out : Execution}
-    (hcode : sevm.code = code) (run : Exec 0 sevm pre out) :
-    Exec.rawFrameDescendants run = [] :=
-  Exec.rawFrameDescendants_eq_nil_of_reach run (noPushBefore_zero _ _)
-    (by rw [hcode]; exact spawnFreeReach)
-
 end Blanc.Lift.VyperNonreentrantDeployed.Token20

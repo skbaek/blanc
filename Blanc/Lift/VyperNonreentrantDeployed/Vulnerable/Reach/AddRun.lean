@@ -27,6 +27,8 @@ The final storage shadow, canonicalized (`canonS`: shadowed and zero writes drop
 
 namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach
 
+open Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach (creator creatorFunds initialWorld rootBenv rootTenv)
+
 open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.NodeWalk Blanc.ConcreteRun
 open Blanc.Lift.VyperNonreentrantDeployed.Vulnerable (cert t_0000_c0 t_0185_c2 t_056f_c4)
 

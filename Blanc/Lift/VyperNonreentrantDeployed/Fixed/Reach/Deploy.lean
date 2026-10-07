@@ -87,17 +87,4 @@ theorem initialWorld_absent :
     initialWorld.get implAddr = .nil ∧ initialWorld.get proxyAddr = .nil := by
   constructor <;> decide +kernel
 
-/-- **Nonvacuity at the disclosed world**, every covered fork: both creations succeed and the
-funded creator is untouched. -/
-theorem setup_creations_initial (fork : Fork) (hfork : CoveredFork fork) :
-    ∃ postI postP : Devm,
-      processCreateMessage (implCreateMsg fork initialWorld) = .ok postI ∧
-      processCreateMessage (cloneCreateMsg fork postI.state) = .ok postP ∧
-      postP.error = none ∧
-      postP.state.get implAddr = implAccount ∧ postP.state.get proxyAddr = proxyAccount ∧
-      postP.state.get creator = initialWorld.get creator := by
-  obtain ⟨postI, postP, h1, -, -, -, -, h2, e2, -, hi, hp, hf⟩ :=
-    setup_creations fork hfork initialWorld initialWorld_absent.1 initialWorld_absent.2
-  exact ⟨postI, postP, h1, h2, e2, hi, hp, hf creator (by decide) (by decide)⟩
-
 end Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach

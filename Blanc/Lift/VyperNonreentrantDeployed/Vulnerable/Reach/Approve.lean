@@ -16,6 +16,8 @@ succeeds with 77,697 gas left and settles to a world `acs6`/`stor6` describe. -/
 
 namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach
 
+open Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach (creator creatorFunds initialWorld rootBenv rootTenv)
+
 open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.NodeWalk Blanc.ConcreteRun Blanc.ForkUniform
 open Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init (WorldIs mem_emptyWithCapacity_keys
   mem_emptyWithCapacity_adrs)
@@ -61,9 +63,6 @@ theorem acsP_lookup (a : Adr) : lookupA acsP a = lookupA acs6 a := by
   rw [hk] at hb
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hb
   rcases hb with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rfl
-
-/-- The allowance slot is not the creator's balance slot (one hash evaluated). -/
-theorem allowCPSlot_ne : allowCPSlot ≠ creator.toB256 := by decide +kernel
 
 theorem lookup_stor5_allow : lookupS stor5 tokenAddr allowCPSlot = 0 := by decide +kernel
 

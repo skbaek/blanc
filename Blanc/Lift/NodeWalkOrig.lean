@@ -547,10 +547,6 @@ theorem callStep_withOrig (c : Cfg) (k : SFunc) : callStep (s.withOrig O) c k = 
     | run e => rfl
     | done r => rfl
 
-theorem sstoreStep_withOrig' (hO : OrigAgree O s.benvStat.origState) (c : Cfg) (k : SFunc) :
-    sstoreStep (s.withOrig O) c k = sstoreStep s c k :=
-  sstoreStep_withOrig hO c k
-
 /-- **One interpreter step is unchanged** under an original state with the same storage. -/
 theorem wstep_withOrig (hO : OrigAgree O s.benvStat.origState) (fs : List SFunc) (c : Cfg) :
     wstep fs (s.withOrig O) c = wstep fs s c := by

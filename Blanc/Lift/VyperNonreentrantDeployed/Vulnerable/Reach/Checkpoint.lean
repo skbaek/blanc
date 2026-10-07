@@ -25,6 +25,8 @@ is a hash fact outside the finite observation. -/
 
 namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach
 
+open Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach (creator creatorFunds initialWorld rootBenv rootTenv)
+
 open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.ConcreteRun
 open Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init (WorldIs)
 

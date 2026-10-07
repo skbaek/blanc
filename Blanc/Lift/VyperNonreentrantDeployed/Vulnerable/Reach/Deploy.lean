@@ -13,6 +13,8 @@ explicit term `setupState W`, which a following message evaluates as its block-o
 
 namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach
 
+open Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach (creator creatorFunds initialWorld rootBenv rootTenv)
+
 open Jaune Blanc.Lift
 
 /-- The implementation account once created from absence. -/
@@ -104,19 +106,5 @@ theorem setup_creations (fork : Fork) (hfork : CoveredFork fork) (W : State)
 theorem initialWorld_absent :
     initialWorld.get implAddr = .nil ∧ initialWorld.get proxyAddr = .nil := by
   constructor <;> decide +kernel
-
-/-- **Nonvacuity at the disclosed world**, every covered fork: both creations succeed and the
-funded creator is untouched. -/
-theorem setup_creations_initial (fork : Fork) (hfork : CoveredFork fork) :
-    ∃ postI postP : Devm,
-      processCreateMessage (implCreateMsg fork initialWorld) = .ok postI ∧
-      processCreateMessage (cloneCreateMsg fork postI.state) = .ok postP ∧
-      postP.error = none ∧
-      postP.state.get implAddr = implAccount ∧ postP.state.get proxyAddr = proxyAccount ∧
-      postP.state.get creator = initialWorld.get creator ∧
-      postP.state = setupState initialWorld := by
-  obtain ⟨postI, postP, h1, -, -, -, -, -, h2, e2, -, hi, hp, hf, hs⟩ :=
-    setup_creations fork hfork initialWorld initialWorld_absent.1 initialWorld_absent.2
-  exact ⟨postI, postP, h1, h2, e2, hi, hp, hf creator (by decide) (by decide), hs⟩
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach

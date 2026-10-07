@@ -18,6 +18,8 @@ and to every covered fork. -/
 
 namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach
 
+open Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach (creator creatorFunds initialWorld rootBenv rootTenv)
+
 open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.ConcreteRun Blanc.ForkUniform Blanc.Lift.NodeWalk
 open Blanc.Lift.VyperNonreentrantDeployed.Vulnerable (cert t_0000_c0 cert_checkM cert_jumpsOkM)
 open Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init (WorldIs mem_emptyWithCapacity_keys
@@ -65,8 +67,6 @@ theorem eB_kok (W : State) : CoveredFork (eB W).sta.benvStat.fork ∧
   rw [eB_stat]; exact ⟨CoveredFork.prague, rfl, rfl⟩
 
 /-! ### The forwarder frame's entry -/
-
-theorem frameA_inner_state (W : State) : (frameA W).inner.benv.state = W := rfl
 
 theorem acsTransfer_frameA (W : State) : acsTransfer (frameA W).inner acs6 = acsA := rfl
 

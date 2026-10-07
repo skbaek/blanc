@@ -105,16 +105,6 @@ theorem e5Cb_facts : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Me
       (e5Cb O tS tA m w).sta.data = reAddCall) := by
   kernel_forall_rfl_and
 
-/-- The entered F5 machine's gas, as a kernel decision (the `Eq` form exceeds the
-kernel's depth budget past `dcallPrep` + `frameEnterS`; cf. `e4Cb31_stack'`). -/
-theorem e5Cb_gasLeft' : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
-    (w : World), decide ((e5Cb O tS tA m w).dyna.gasLeft = 872071) = true := by
-  kernel_forall_rfl
-
-theorem e5Cb_gasLeft : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
-    (w : World), (e5Cb O tS tA m w).dyna.gasLeft = 872071 :=
-  fun O tS tA m w => of_decide_eq_true (e5Cb_gasLeft' O tS tA m w)
-
 /-- F5's start configuration (the probe's convention). -/
 def c5Cb (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World) : Cfg :=
   ⟨(e5Cb O tS tA m w).dyna, Vulnerable.t_0000_c0, [], (cACb O tS tA m w).keys,
@@ -249,35 +239,6 @@ theorem e4Cb31_keys : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : M
 theorem e4Cb31_state : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
     (e4Cb31 O tS tA m w).dyna.state = (e4Cb O tS tA m w).dyna.state := by
   kernel_forall_rfl
-
-/-- The forwarder's stack at its `DELEGATECALL` (`#eval`-printed as `Nat`s:
-`[886013, implAddr, 0, 132, 0, 0, 0]`). -/
-def stackCb31 : List B256 :=
-  [⟨⟨0, 0⟩, ⟨0, 886013⟩⟩, ⟨⟨0, 1663491771⟩, ⟨12255909761681031966, 9040401190467777598⟩⟩,
-    ⟨⟨0, 0⟩, ⟨0, 0⟩⟩, ⟨⟨0, 0⟩, ⟨0, 132⟩⟩, ⟨⟨0, 0⟩, ⟨0, 0⟩⟩, ⟨⟨0, 0⟩, ⟨0, 0⟩⟩,
-    ⟨⟨0, 0⟩, ⟨0, 0⟩⟩]
-
-/-- The forwarder's stack at its `DELEGATECALL`, as a kernel decision (the `Eq` form
-exceeds the kernel's depth budget over the `wrun`-32 + `stepN`-11 chain; the house
-pattern `addStatic7'` decides instead). -/
-theorem e4Cb31_stack' : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
-    (w : World), decide ((e4Cb31 O tS tA m w).dyna.stack = stackCb31) = true := by
-  kernel_forall_rfl
-
-theorem e4Cb31_stack : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
-    (w : World), (e4Cb31 O tS tA m w).dyna.stack = stackCb31 :=
-  fun O tS tA m w => of_decide_eq_true (e4Cb31_stack' O tS tA m w)
-
-theorem e4Cb31_gasLeft : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
-    (w : World), (e4Cb31 O tS tA m w).dyna.gasLeft = 886013 := by
-  kernel_forall_rfl
-
-theorem e4Cb_depth : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
-    (w : World), (e4Cb O tS tA m w).sta.depth = 1020 := by
-  kernel_forall_rfl
-
-
-
 
 theorem e5Cb_pc : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
     (e5Cb O tS tA m w).pc = 0 := by

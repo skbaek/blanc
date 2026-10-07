@@ -25,6 +25,8 @@ covered fork, and the composition into `RootFrame`, live in
 
 namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol
 
+open Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach (creator creatorFunds initialWorld rootBenv rootTenv)
+
 open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.NodeWalk Blanc.ConcreteRun
 open Blanc.Lift.VyperNonreentrantDeployed
 
@@ -46,10 +48,6 @@ theorem cR_keys : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
     (cR O tS tA m w).keys = [] := by
   kernel_forall_rfl
 
-theorem cR_adrs : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    (cR O tS tA m w).adrs = [] := by
-  kernel_forall_rfl
-
 /-- F0's `CALL` up to its spawn. -/
 def cpR (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World) : CallPrep :=
   (callPrep (sR.withOrig O) (cR O tS tA m w)).getD noPrepI
@@ -62,19 +60,6 @@ theorem cpR_eq : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) 
 def acs1R (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World) : AcctShadow :=
   acsTransfer (cpR O tS tA m w).f.inner (cR O tS tA m w).acs
 
-/-- F0's `CALL` prep enters no fork-sensitive precompile. -/
-theorem cpR_forkfree : ∀ (g : Fork) (O : State) (tS : StorShadow) (tA : AcctShadow)
-    (m : Meta) (w : World),
-    frameEntryForkFree ((((cpR O tS tA m w).withFork g).f)) = true := by
-  kernel_forall_rfl
-
-/-- Pushing a fork through F0's `CALL` preparation preserves its addresses. -/
-theorem cpR_adrs_fork : ∀ (g : Fork) (O : State) (tS : StorShadow) (tA : AcctShadow)
-    (m : Meta) (w : World),
-    ((((cpR O tS tA m w).withFork g).adrs)) =
-      (((cpR O tS tA m w).adrs)) := by
-  kernel_forall_rfl
-
 /-! ## F1 to its `DELEGATECALL`, and F2's entry -/
 
 /-- The forwarder frame F1 as spawned by F0's `CALL`. -/
@@ -86,13 +71,6 @@ def e1 (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World) : 
 theorem e1_eq : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
     frameEnterS (cpR O tS tA m w).f (cR O tS tA m w).acs = .run (e1 O tS tA m w) := by
   kernel_forall_rfl
-
-theorem e1_facts : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    ((e1 O tS tA m w).sta.caller = attackerAddr ∧
-      (e1 O tS tA m w).sta.currentTarget = proxyAddr ∧
-      (e1 O tS tA m w).sta.code = fwdCode ∧
-      (e1 O tS tA m w).pc = 0) := by
-  kernel_forall_rfl_and
 
 /-- The forwarder at its `DELEGATECALL` (pc 31). -/
 def e1'11 (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World) : Evm :=
@@ -269,22 +247,10 @@ def d1R (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World)
   (resumeCallB (cpF2 O tS tA m w).p (cpF2 O tS tA m w).oi (cpF2 O tS tA m w).os
     (.ok (obsChildF1 post2))).getD default
 
-theorem resumeF1_eq : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
-    (w : World) (post2 : Devm),
-    resumeCallB (cpF2 O tS tA m w).p (cpF2 O tS tA m w).oi (cpF2 O tS tA m w).os
-      (.ok (obsChildF1 post2)) = some (d1R O tS tA m w post2) := by
-  kernel_forall_rfl
-
 /-- The forwarder ten steps past F2's return. -/
 def e1tail (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World)
     (post2 : Devm) : Evm :=
   (stepN 10 ⟨32, (e1 O tS tA m w).sta, d1R O tS tA m w post2⟩).getD default
-
-theorem tailF1_eq : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
-    (w : World) (post2 : Devm),
-    stepN 10 ⟨32, (e1 O tS tA m w).sta, d1R O tS tA m w post2⟩ =
-      some (e1tail O tS tA m w post2) := by
-  kernel_forall_rfl
 
 /-- The forwarder's halted machine. -/
 def postF1 (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World)
@@ -293,42 +259,7 @@ def postF1 (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World
   | .halt (.ok d') => d'
   | _ => default
 
-theorem returnF1_eq : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
-    (w : World) (post2 : Devm),
-    Evm.step (e1tail O tS tA m w post2) =
-      .halt (.ok (postF1 O tS tA m w post2)) := by
-  kernel_forall_rfl
-
-theorem postF1_obs : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
-    (w : World) (post2 : Devm),
-    ((postF1 O tS tA m w post2).output.map UInt8.toNat,
-      (postF1 O tS tA m w post2).error.isNone) =
-    (outRm.map UInt8.toNat, true) := by
-  kernel_forall_rfl
-
-theorem postF1_keep : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
-    (w : World) (post2 : Devm),
-    ((postF1 O tS tA m w post2).accessedAddresses,
-      (postF1 O tS tA m w post2).accessedStorageKeys,
-      (postF1 O tS tA m w post2).state) =
-    ((d1R O tS tA m w post2).accessedAddresses,
-      (d1R O tS tA m w post2).accessedStorageKeys,
-      (d1R O tS tA m w post2).state) := by
-  kernel_forall_rfl
-
 /-! ## F0's resume devm, as data -/
-
-/-- The root devm resumed from F1's settled machine `post2`. -/
-def dResumeR (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World)
-    (post2 : Devm) : Devm :=
-  (resumeCallB (cpR O tS tA m w).p (cpR O tS tA m w).oi (cpR O tS tA m w).os
-    (.ok (obsChildF1 post2))).getD (postF1 O tS tA m w post2)
-
-theorem resumeVR_eq : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
-    (w : World) (post2 : Devm),
-    resumeCallB (cpR O tS tA m w).p (cpR O tS tA m w).oi (cpR O tS tA m w).os
-      (.ok (obsChildF1 post2)) = some (dResumeR O tS tA m w post2) := by
-  kernel_forall_rfl
 
 /-! ## Root entry statics -/
 
@@ -347,13 +278,6 @@ theorem sRw_target : ∀ (W : State) (g : Fork),
 theorem sRw_code : ∀ (W : State) (g : Fork),
     (((sR.withOrig W).withFork g).code) = AttackerR.code := by
   kernel_forall_rfl
-
-/-- The violating message at any fork is the Prague message pushed through. -/
-theorem violMsg_withFork : ∀ (g : Fork) (W : State),
-    violMsg g W = (violMsg .prague W).withFork g := by
-  intro g W
-  simp only [violMsg, callMsg, rootBenv, Msg.withFork, Benv.withFork,
-    BenvStat.withFork]
 
 /-! ## F0/F1 block facts, from the prep specs -/
 
@@ -469,12 +393,6 @@ theorem e2_dyna_fork : ∀ (g : Fork) (O : State) (tS : StorShadow) (tA : AcctSh
 
 /-! ## Forked entry literals (avoid `withFork` defeq unfolds in assembly) -/
 
-/-- F1's entry caller, under any covered fork. -/
-theorem e1_caller_fork : ∀ (g : Fork) (O : State) (tS : StorShadow) (tA : AcctShadow)
-    (m : Meta) (w : World), (((e1 O tS tA m w).withFork g).sta.caller) =
-      attackerAddr := by
-  kernel_forall_rfl
-
 /-- F1's entry target, under any covered fork. -/
 theorem e1_target_fork : ∀ (g : Fork) (O : State) (tS : StorShadow) (tA : AcctShadow)
     (m : Meta) (w : World), (((e1 O tS tA m w).withFork g).sta.currentTarget) =
@@ -485,11 +403,6 @@ theorem e1_target_fork : ∀ (g : Fork) (O : State) (tS : StorShadow) (tA : Acct
 theorem e1_code_fork : ∀ (g : Fork) (O : State) (tS : StorShadow) (tA : AcctShadow)
     (m : Meta) (w : World), (((e1 O tS tA m w).withFork g).sta.code) =
       fwdCode := by
-  kernel_forall_rfl
-
-/-- F1's entry pc, under any covered fork. -/
-theorem e1_pc_fork : ∀ (g : Fork) (O : State) (tS : StorShadow) (tA : AcctShadow)
-    (m : Meta) (w : World), (((e1 O tS tA m w).withFork g).pc) = 0 := by
   kernel_forall_rfl
 
 /-- F2's entry target, under any covered fork. -/

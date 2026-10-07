@@ -57,6 +57,8 @@ The frozen statement document (Plans evidence
 
 namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol
 
+open Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach (creator creatorFunds initialWorld rootBenv rootTenv)
+
 open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.NodeWalk Blanc.ConcreteRun
 open Blanc.Lift.VyperNonreentrantDeployed
 
@@ -270,18 +272,6 @@ theorem root_entry : ∀ W : State,
     Boundary.obsDT bR0 (.cont (rootCfg W)) =
       Boundary.obsDOkT bR0 (storTailOf W) (acctTailOf W) := by
   kernel_forall_rfl_and
-
-/-- Every boundary's shadows are fresh entries followed by `Checkpoint`'s read prefixes. -/
-theorem shadows_extend_checkpoint :
-    (∀ b ∈ [bR0, bRm0, bRm161, bCb0, bRe0, bRe1112, bRe1159, bRe2527, bReBody, bRe3088, bRe4048,
-        bRe4377],
-      (Boundary.storOf1 b).drop ((Boundary.storOf1 b).length - readStor.length) = readStor ∧
-      ((Boundary.acsOf1 b).drop ((Boundary.acsOf1 b).length - readAcct.length)).map
-        Boundary.acctKey = readAcct.map Boundary.acctKey) ∧
-    (∀ s ∈ [storRe, storCb, storRm, storV], s.drop (s.length - readStor.length) = readStor) ∧
-    (∀ a ∈ [acsRe, acsCb, acsRm, acsV],
-      (a.drop (a.length - readAcct.length)).map Boundary.acctKey = readAcct.map Boundary.acctKey) := by
-  decide +kernel
 
 /-- Every frame's accessed storage keys are `Checkpoint`'s read keys (what
 `origAgreeOn_O0` needs to transport a run to the actual original state). -/

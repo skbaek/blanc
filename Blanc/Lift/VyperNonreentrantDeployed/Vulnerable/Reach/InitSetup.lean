@@ -21,6 +21,8 @@ term `setupState initialWorld`, which the walk evaluates only at `SSTORE` (the o
 
 namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach
 
+open Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach (creator creatorFunds initialWorld rootBenv rootTenv)
+
 open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.NodeWalk Blanc.ConcreteRun
 
 /-- A big-endian 32-byte ABI word. -/

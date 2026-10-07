@@ -84,55 +84,6 @@ theorem worldIs_creations {W : State} (hI : W.get implAddr = implAccount)
 the storage `storOracle`. -/
 def CleanPool (W : State) : Prop := WorldIs W acs0 storOracle
 
-/-- What the clean pool holds at the clone: the lock is released (slot 0 is 0), `totalSupply`
-(slot `0x16`) is 0, `factory = creator`, `coins = [ETH, T]`, `initial_A = future_A = 100`,
-`fee = 0`, `oracle_method = 0`, `originator = 0`, the moving-average fields, the name and
-symbol words, `DOMAIN_SEPARATOR`; every nonzero slot of the clone is one of these; the
-implementation's storage is `{1 ↦ 1}`. -/
-theorem cleanPool_facts {W : State} (h : CleanPool W) :
-    storOf W proxyAddr 0 = 0 ∧ storOf W proxyAddr 0x16 = 0 ∧
-    storOf W proxyAddr 1 = creator.toNat.toB256 ∧
-    storOf W proxyAddr 2 = ethSentinel.toB256 ∧ storOf W proxyAddr 3 = tokenAddr.toNat.toB256 ∧
-    storOf W proxyAddr 6 = 0 ∧ storOf W proxyAddr 9 = (100 : Nat).toB256 ∧
-    storOf W proxyAddr 0x0a = (100 : Nat).toB256 ∧ storOf W proxyAddr 0x0d = 0 ∧
-    storOf W proxyAddr 0x0e = 0 ∧ storOf W proxyAddr 0x0f = (23 : Nat).toB256 ∧
-    storOf W proxyAddr 0x10 = leftWord nameBytes ∧ storOf W proxyAddr 0x12 = (2 : Nat).toB256 ∧
-    storOf W proxyAddr 0x13 = leftWord symbolBytes ∧ storOf W proxyAddr 0x17 = domainSeparator ∧
-    storOf W proxyAddr 0x19 = packedPrices ∧ storOf W proxyAddr 0x1a = (866 : Nat).toB256 ∧
-    storOf W proxyAddr 0x1b = timeV2 ∧
-    (∀ k, storOf W proxyAddr k ≠ 0 →
-      k ∈ ([0x17, 0x13, 0x12, 0x10, 0x0f, 0x1b, 0x19, 0x1a, 0x01, 0x0a, 0x09, 0x03, 0x02] :
-        List B256)) ∧
-    (∀ k, storOf W implAddr k = if k = 1 then 1 else 0) ∧
-    (∀ a, a ≠ proxyAddr → a ≠ implAddr → ∀ k, storOf W a k = 0) := by
-  have hs := h.2
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, fun k hk => ?_,
-    fun k => ?_, fun a haP haI k => ?_⟩
-  all_goals first
-    | (rw [hs]; decide +kernel)
-    | skip
-  · rw [hs] at hk
-    have hm := lookupS_ne_zero_mem hk
-    have hPI : (proxyAddr = implAddr) = False := by decide
-    simp only [storOracle, List.map_cons, List.map_nil, List.mem_cons, Prod.mk.injEq,
-      List.not_mem_nil, or_false, true_and, hPI, false_and] at hm
-    simp only [List.mem_cons, List.not_mem_nil, or_false]
-    exact hm
-  · rw [hs]
-    by_cases hk : k = 1
-    · subst hk; decide +kernel
-    · have hPI : (proxyAddr = implAddr) = False := by decide
-      have hk' : ((1 : B256) = k) = False := eq_false (Ne.symm hk)
-      simp only [storOracle, lookupS, hPI, false_and, ↓reduceIte, hk', and_false, hk]
-  · rw [hs]
-    by_contra hne
-    have hm := lookupS_ne_zero_mem hne
-    simp only [storOracle, List.map_cons, List.map_nil, List.mem_cons, Prod.mk.injEq,
-      List.not_mem_nil, or_false] at hm
-    rcases hm with ⟨h, -⟩ | ⟨h, -⟩ | ⟨h, -⟩ | ⟨h, -⟩ | ⟨h, -⟩ | ⟨h, -⟩ | ⟨h, -⟩ | ⟨h, -⟩ |
-      ⟨h, -⟩ | ⟨h, -⟩ | ⟨h, -⟩ | ⟨h, -⟩ | ⟨h, -⟩ | ⟨h, -⟩
-    all_goals first | exact haP h | exact haI h
-
 /-- **The V+ setup through `set_oracle`**, on every covered fork: from the disclosed
 `initialWorld`, the implementation creation, the synthetic clone creation, the actual
 `initialize` through the clone and the mandatory `set_oracle(0, 0)` through the clone each

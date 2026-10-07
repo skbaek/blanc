@@ -20,6 +20,8 @@ by this run, not a stability claim. -/
 
 namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach
 
+open Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach (creator creatorFunds initialWorld rootBenv rootTenv)
+
 open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.ConcreteRun
 
 /-- The proxy slots `initialize` leaves nonzero: `factory` (5), `coins` (6, 7), `initial_A`
@@ -91,45 +93,5 @@ theorem cleanPool_of {W : State} (h : ∀ k, storOf W proxyAddr k = lookupS init
   refine ⟨hz _ (by decide), hz _ (by decide), hz _ (by decide), fun i hi => hz _ (hl i hi),
     fun k hk => Classical.byContradiction fun hn => hk (hz k hn), ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   all_goals rw [h]; decide
-
-/-- **V− setup, messages 1–3, every covered fork.** From the disclosed initial world, the
-preserved implementation creation, the synthetic clone creation from exactly its settled
-world, and the root call of `initialize` through the clone from exactly the clone's settled
-world all succeed with exact gas. The call runs the clone's installed code, and it consumes
-the initializer's guard `fee == 0` against the clone's own (empty) storage while the
-implementation holds the sentinel `fee = 31337`. The settled pool storage is exactly
-`initWrites` (a clean pool), the implementation keeps `{10 ↦ 31337}`, every other address keeps
-its storage, and no account's nonce, balance or code changes. -/
-theorem setup_initialize (fork : Fork) (hfork : CoveredFork fork) :
-    ∃ postI postP postC : Devm,
-      processCreateMessage (implCreateMsg fork initialWorld) = .ok postI ∧ postI.error = none ∧
-      postI.gasLeft = 466978 ∧
-      processCreateMessage (cloneCreateMsg fork postI.state) = .ok postP ∧
-      postP.error = none ∧ postP.gasLeft = 90972 ∧
-      postP.state.get implAddr = implAccount ∧ postP.state.get proxyAddr = proxyAccount ∧
-      (∀ a, a ≠ implAddr → a ≠ proxyAddr → postP.state.get a = initialWorld.get a) ∧
-      (initMsg fork postP.state).code = postP.state.getCode proxyAddr ∧
-      storOf postP.state proxyAddr 10 = 0 ∧ storOf postP.state implAddr 10 = 31337 ∧
-      processMessage (initMsg fork postP.state) = .ok postC ∧ postC.error = none ∧
-      postC.gasLeft = 744993 ∧ postC.output = [] ∧
-      (∀ k, storOf postC.state proxyAddr k = lookupS initWrites proxyAddr k) ∧
-      (∀ a, a ≠ proxyAddr → ∀ k, storOf postC.state a k = storOf postP.state a k) ∧
-      (∀ a, acctView (postC.state.get a) = acctView (postP.state.get a)) ∧
-      storOf postC.state implAddr 10 = 31337 ∧
-      CleanPool postC.state := by
-  obtain ⟨postI, postP, h1, e1, g1, -, -, -, h2, e2, g2, hI, hP, hF, hS⟩ :=
-    setup_creations fork hfork initialWorld initialWorld_absent.1 initialWorld_absent.2
-  have hw : postP.state = world2 := hS
-  obtain ⟨postC, h3, e3', g3, o3, hs, ha⟩ := init_message_at (g := fork) hfork
-  obtain ⟨hpool, hrest, hview⟩ := init_world_facts hs ha
-  have himpl : storOf postC.state implAddr 10 = 31337 := by
-    rw [hrest implAddr (by decide), ← hw, storOf, hI]; rfl
-  refine ⟨postI, postP, postC, h1, e1, g1, h2, e2, g2, hI, hP, hF, ?_, ?_, ?_, by rw [hw]; exact h3,
-    e3', g3, o3, hpool, fun a ha' k => by rw [hw]; exact hrest a ha' k,
-    fun a => by rw [hw]; exact hview a, himpl, cleanPool_of hpool⟩
-  · show fwdCode = (postP.state.get proxyAddr).code
-    rw [hP]; rfl
-  · rw [storOf, hP]; rfl
-  · rw [storOf, hI]; rfl
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach

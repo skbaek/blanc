@@ -251,18 +251,6 @@ theorem rmChunkX3 : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : Worl
 
 /-! ## The run to the halt -/
 
-/-- F2's settled machine: the halted machine 188 steps after `bRmX3`. -/
-def postRm (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World) : Devm :=
-  match wrun fsI sRm 188 (Boundary.cfgOfT bRmX3 tS tA m w) with
-  | .done (.halted d) _ => d
-  | _ => default
-
-/-- F2's halting configuration. -/
-def clRm (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World) : Cfg :=
-  match wrun fsI sRm 188 (Boundary.cfgOfT bRmX3 tS tA m w) with
-  | .done (.halted _) cl => cl
-  | _ => Boundary.cfgOfT bRm0 tS tA m w
-
 /-- F2's halt observations, checked once. -/
 def rmEndHaltObs : Res → Bool
   | .done (.halted d) cl =>
@@ -301,65 +289,5 @@ theorem rmEndHalt_spec {r : Res} {tS : StorShadow} {tA : AcctShadow} (h : rmEndH
         Boundary.acs_eq_of_views hc (hcr.trans (Boundary.restsOf_eq acsRm))]
   · simp only [rmEndHaltObs, Bool.false_eq_true] at h
   · simp only [rmEndHaltObs, Bool.false_eq_true] at h
-
-/-- The concrete remove halt and all its views share one ordinary conversion check. -/
-private theorem rmEnd_facts (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World) :
-    wrun fsI sRm 188 (Boundary.cfgOfT bRmX3 tS tA m w) =
-      .done (.halted (postRm tS tA m w)) (clRm tS tA m w) ∧
-    (postRm tS tA m w).gasLeft = gasRm ∧
-    (postRm tS tA m w).output = outRm ∧
-    (postRm tS tA m w).error = none ∧
-    (clRm tS tA m w).keys = keysRm ∧
-    (clRm tS tA m w).adrs = adrsRm ∧
-    (clRm tS tA m w).stor = storRm ++ tS ∧
-    (clRm tS tA m w).acs = acsRm ++ tA := by
-  obtain ⟨d, cl, hr, hg, ho, he, hk, ha, hs, hc⟩ :=
-    rmEndHalt_spec (rmEndHalt tS tA m w).1 (rmEndHalt tS tA m w).2
-  unfold postRm clRm
-  rw [hr]
-  exact ⟨rfl, hg, ho, he, hk, ha, hs, hc⟩
-
-theorem rmEnd_eq : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    wrun fsI sRm 188 (Boundary.cfgOfT bRmX3 tS tA m w) =
-      .done (.halted (postRm tS tA m w)) (clRm tS tA m w) := by
-  intro tS tA m w
-  exact (rmEnd_facts tS tA m w).1
-
-/-- F2's halt gas, output and error. -/
-theorem rmEnd_gas : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    (postRm tS tA m w).gasLeft = gasRm := by
-  intro tS tA m w
-  exact (rmEnd_facts tS tA m w).2.1
-
-theorem rmEnd_out : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    (postRm tS tA m w).output = outRm := by
-  intro tS tA m w
-  exact (rmEnd_facts tS tA m w).2.2.1
-
-theorem rmEnd_err : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    (postRm tS tA m w).error = none := by
-  intro tS tA m w
-  exact (rmEnd_facts tS tA m w).2.2.2.1
-
-/-- F2's halt shadows are the frozen prefixes over any tails. -/
-theorem rmEnd_keys : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    (clRm tS tA m w).keys = keysRm := by
-  intro tS tA m w
-  exact (rmEnd_facts tS tA m w).2.2.2.2.1
-
-theorem rmEnd_adrs : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    (clRm tS tA m w).adrs = adrsRm := by
-  intro tS tA m w
-  exact (rmEnd_facts tS tA m w).2.2.2.2.2.1
-
-theorem rmEnd_stor : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    (clRm tS tA m w).stor = storRm ++ tS := by
-  intro tS tA m w
-  exact (rmEnd_facts tS tA m w).2.2.2.2.2.2.1
-
-theorem rmEnd_acs : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    (clRm tS tA m w).acs = acsRm ++ tA := by
-  intro tS tA m w
-  exact (rmEnd_facts tS tA m w).2.2.2.2.2.2.2
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol

@@ -51,8 +51,6 @@ def CallbackFrame : Prop :=
 theorem sCb_fork : sCb.benvStat.fork = .prague ∧ sCb.benvStat.excessBlobGas = 0 := by
   decide +kernel
 
-theorem fsCb_zero : fsA[0]? = some AttackerR.t_0000_c0 := by kernel_rfl
-
 /-! ## F3/F4 entry-agreement probes (kernel batch 1 for `callback_frame`) -/
 
 /-- F4's entered accessed addresses come from F3's `CALL` prep frame. -/
@@ -220,17 +218,6 @@ theorem mkEvm_dyna_fork : ∀ (g : Fork) (pc : Nat) (s : Sevm) (d : Devm),
 
 /-- The forwarder issues `DELEGATECALL` at pc 31 (mirrors `proxy_at_delegatecall`). -/
 theorem fwd_at_delegatecall : Xinst.At fwdCode 31 .delegatecall := by rfl
-
-/-- F3's 32-step run never touches the account shadow. -/
-theorem cACb_acs : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
-    (w : World),
-    (cACb O tS tA m w).acs = Boundary.acsOf1 bCb0 ++ tA := by
-  kernel_forall_rfl
-
-/-- The forwarder enters at pc 0. -/
-theorem e4Cb_pc : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
-    (w : World), (e4Cb O tS tA m w).pc = 0 := by
-  kernel_forall_rfl
 
 /-- F5's entered static gas is the frozen machine's (whatever literal it is). -/
 theorem e5Cb_sta_gas' : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
@@ -400,11 +387,6 @@ theorem c5Cb_agree : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Me
 
 /-! ## F3-close shadow literals (kernel batch 2 for `callback_frame`) -/
 
-/-- F3's `CALL` needs no fork check. -/
-theorem cpCb_forkfree : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
-    (w : World), frameEntryForkFree (cpCb O tS tA m w).f = true := by
-  kernel_forall_rfl
-
 /-- F3's `CALL` needs no fork check, under any covered fork. -/
 theorem cpCb_forkfree_at : ∀ (g : Fork) (O : State) (tS : StorShadow)
     (tA : AcctShadow) (m : Meta) (w : World),
@@ -455,14 +437,6 @@ theorem cpCb5_adrs : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Me
       [implAddr, proxyAddr, attackerAddr, (4 : Adr), implAddr, proxyAddr] :=
   fun O tS tA m w => of_decide_eq_true (cpCb5_adrs' O tS tA m w)
 
-/-- F5's halt account prefix is F3's halt account prefix. -/
-theorem acsRe_eq_acsCb : acsRe = acsCb := by
-  rfl
-
-/-- F5's halt storage prefix is F3's halt storage prefix. -/
-theorem storRe_eq_storCb : storRe = storCb := by
-  rfl
-
 /-- Whether a node is a `CALL` step (kernel-decided on use). -/
 def isCallNode : SFunc → Bool
   | .next (.exec .call) _ => true
@@ -482,13 +456,6 @@ theorem post4Cb_out : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : M
 def cAg0 (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
     (w : World) : SFunc :=
   match (cACb O tS tA m w).f with
-  | .next _ g => g
-  | f => f
-
-/-- The callback's halt node after its `CALL` (kernel-normalized on use). -/
-def cAh (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
-    (w : World) : SFunc :=
-  match cAg0 O tS tA m w with
   | .next _ g => g
   | f => f
 
@@ -519,34 +486,6 @@ theorem halt2_shadows : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m :
   kernel_forall_rfl
 
 /-! ## The halt decoder -/
-
-/-- `obsCb` at its ok value is a halt with the pinned gas, no output, no error, the
-pinned storage prefix followed by its tail, and the pinned shadow drops. Keys, addresses,
-and the full account shadow come from the resume shape in `callback_frame`. -/
-theorem obsCb_decode : ∀ (tS : StorShadow) (tA : AcctShadow) (r : Res),
-    obsCb r = some (gasCb, [], true, tS, tA) →
-    ∃ post cl, r = .done (.halted post) cl ∧ post.gasLeft = gasCb ∧ post.output = [] ∧
-      post.error = none ∧ cl.stor = storCb ++ tS ∧
-      cl.stor.drop storCb.length = tS ∧ cl.acs.drop acsCb.length = tA := by
-  intro tS tA r h
-  unfold obsCb at h
-  split at h
-  · rename_i d cl
-    simp only [Option.some.injEq, Prod.mk.injEq, Bool.and_eq_true, decide_eq_true_eq] at h
-    have hgas := h.1
-    have hmap := h.2.1
-    have herrC := h.2.2.1
-    have hstorD := h.2.2.2.1
-    have hacsD := h.2.2.2.2
-    have hstorT := herrC.2
-    have hisNone : d.error.isNone = true := herrC.1.1.1
-    refine ⟨d, cl, rfl, hgas, ?hout, Option.isNone_iff_eq_none.mp hisNone, ?hs, hstorD,
-      hacsD⟩
-    · match hm : d.output with
-      | [] => rfl
-      | _ :: _ => simp only [hm, List.map_cons, reduceCtorEq] at hmap
-    · rw [← List.take_append_drop storCb.length cl.stor, hstorT, hstorD]
-  · simp only [reduceCtorEq] at h
 
 /-! ## Callback-frame helpers (split for heartbeat budget) -/
 
