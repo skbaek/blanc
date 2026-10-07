@@ -25,7 +25,9 @@ but that independence is not proved here). The later mint, donation sync and LP 
 typed-model steps.
 
 Evidence altitude: production refinement EVM-level (closed); control EVM-conditional on
-`BurnWitnessExists`. -/
+`BurnWitnessExists`, which `burnWitnessExists_false` refutes over every separated universe (the
+burn authentication is not positional: the initial balance answer may be read from the final
+balance call), so the conditional control is vacuous. -/
 
 namespace Blanc.Lift.UniswapV2Pair.RefinementControls
 
@@ -98,7 +100,7 @@ def BurnFrameRefinement (Rep : Stor → State → Prop) (Good : Exec.Deriv → P
     (Auth : Exec.Deriv → Entry → Transcript → Prop) : Prop :=
   BurnReturnRefines production Rep Good Auth
 
-/-- Named hypothesis, stated but not discharged in this tree (burn liveness at a concrete state):
+/-- Named hypothesis (burn liveness at a concrete state), unsatisfiable by `burnWitnessExists_false`:
 a concrete successful raw burn run of the certified
 runtime, on a covered fork, at pair `pair` called by `holder` at timestamp `1700000000`, from
 storage that `Rep` relates to `burnReady`, admitted by `Good`, whose
@@ -152,7 +154,8 @@ theorem burnFrameRefinement_holds {U : WriterKey → Prop} (inj : WriterInj U)
 refinement holds (`burnFrameRefinement_holds`); given one successful raw burn run at the reached
 witness, the burn frame refinement against the round-up mutant `burnRoundUp` is false: the
 witness run's output is production's `(1, 1)`, not the mutant's `(2, 2)`.
-Conditional on the named hypothesis `BurnWitnessExists`. -/
+Conditional on the named hypothesis `BurnWitnessExists`, which `burnWitnessExists_false` refutes:
+vacuous as stated. -/
 theorem burn_refinement_control {U : WriterKey → Prop} (inj : WriterInj U)
     (apart : WriterApart U) (live : BurnWitnessExists (UniverseRep U) (PairGood U) BurnAuth) :
     ¬ BurnReturnRefines burnRoundUp (UniverseRep U) (PairGood U) BurnAuth := by
@@ -170,5 +173,38 @@ theorem burn_refinement_control {U : WriterKey → Prop} (inj : WriterInj U)
   rw [ctx, burn_witness_disagrees.2.2.2.2] at mutRun
   exact absurd ((RunStatus.success.inj prod).trans (RunStatus.success.inj mutRun).symm)
     (by decide)
+
+/-- **The named burn witness hypothesis is unsatisfiable** over every separated universe: the burn
+authentication `BurnAuth` is not positional. `BurnCallProvenance` asks only that each answer be
+returned by SOME `STATICCALL` of the derivation to the right target with the right input, so in any
+successful raw burn run the initial `balanceOf(pair)` answer of token0 may be read from the final
+`balanceOf(pair)` call as well. A run whose authenticated readings were all `burnTranscript` (initial
+balance 1002, final balance 1001) would then also authenticate the transcript whose first answer is
+1001, which is not `burnTranscript`. Hence `burn_refinement_control` is vacuous as stated. -/
+theorem burnWitnessExists_false {U : WriterKey → Prop} (inj : WriterInj U)
+    (apart : WriterApart U) : ¬ BurnWitnessExists (UniverseRep U) (PairGood U) BurnAuth := by
+  rintro ⟨invocation, sevm, b, post, G, run, codeEq, installed, fork, selector, fresh,
+    representable, good, rep, _, unique⟩
+  obtain ⟨entry, nested, ⟨sel, entryEq, a, amount0, amount1, nestedEq, prov⟩, _⟩ :=
+    burnFrameRefinement_holds inj apart _ invocation run codeEq installed fork selector fresh
+      representable good rep
+  obtain ⟨s0, v0, s1, v1, sF, vF, t0, m0, t1, m1, f0, fv0, f1, fv1⟩ := prov
+  have original := (unique entry nested
+    ⟨sel, entryEq, a, amount0, amount1, nestedEq,
+      s0, v0, s1, v1, sF, vF, t0, m0, t1, m1, f0, fv0, f1, fv1⟩).2
+  have swapped := (unique entry { a with balance0 := a.final0, views0 := a.finalViews0 }.transcript
+    ⟨sel, entryEq, { a with balance0 := a.final0, views0 := a.finalViews0 }, amount0, amount1, rfl,
+      f0, fv0, s1, v1, sF, vF, t0, m0, t1, m1, f0, fv0, f1, fv1⟩).2
+  rw [nestedEq] at original
+  simp only [BurnAnswers.transcript, burnTransferTranscript, ModelControls.burnTranscript,
+    Transcript.next.injEq] at original swapped
+  have words := congrArg (fun r : ExternalResult => Bytes.toB256 (r.returndata.take 32))
+    (original.2.2.2.2.2.2.2.2.2.2.1.symm.trans swapped.1)
+  simp only [ModelControls.answer, encodeWords, List.flatMap_cons, List.flatMap_nil,
+    List.append_nil] at words
+  rw [List.take_of_length_le (Nat.le_of_eq (B256.length_toBytes _)),
+    List.take_of_length_le (Nat.le_of_eq (B256.length_toBytes _)), B256.toB256_toBytes,
+    B256.toB256_toBytes] at words
+  exact absurd words (by decide)
 
 end Blanc.Lift.UniswapV2Pair.RefinementControls
