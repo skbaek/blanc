@@ -8085,7 +8085,8 @@ example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
     (abi : (32 : B256) ≤ sevm.data.length.toB256 - 4)
     (selector : Blanc.Sevm.selector sevm = 0xbc25cf77)
-    (callee : SkimForwardEnv sevm pre g) :
+    (callee : SkimForwardEnv sevm pre g)
+    (firstFresh : callee.FirstCallFresh (pairHistoryUniverse pair trace K₀)) :
     ∃ (finish : State) (K' : WriterKey → Prop), PairHistoryReplayed pair trace K₀ st₀ finish K' ∧
       ∀ (transcript : Transcript) (returndata : Bytes),
         transcript.firstWord = callee.balance0 →
@@ -8101,7 +8102,7 @@ example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
                 (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩))
               { state := finish, logs := [], updates := [] } [] K'
               ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩ callee.post) :=
-  pair_history_skim_live trace installed initial fresh target state codeEq fork output representable value size abi selector callee
+  pair_history_skim_live trace installed initial fresh target state codeEq fork output representable value size abi selector callee firstFresh
 
 end Blanc.Lift.UniswapV2Pair
 
@@ -8892,10 +8893,26 @@ end Blanc.Lift.UniswapV2Pair
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
--- Uniswap V2 Pair definition: NoPairWriteOutsideLock
-example (sevm : Sevm) (pre post : Devm)  :
-    NoPairWriteOutsideLock sevm pre post ↔
-      (∀ k ∈ pairLockedSlots, post.getStorVal sevm.currentTarget k = pre.getStorVal sevm.currentTarget k) :=
+-- Uniswap V2 Pair definition: SkimForwardEnv.FirstCallFresh
+example {sevm : Sevm} {b : Devm} {g : Nat} (env : SkimForwardEnv sevm b g)
+    (U : WriterKey → Prop) :
+    env.FirstCallFresh U ↔
+      ∃ R : Exec.Deriv, Blanc.Lift.StepIn R sevm
+        (St env.qd0 (env.callGasT0.toB256 ::
+          (skimToken0 sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+          0 :: (128 + 164) :: 68 :: (128 + 164) :: 0 :: (68 + (128 + 164)) ::
+          (skimToken0 sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
+          96 :: 0 :: (Bytes.toB256 (env.qd0.returnData.take 32) - skimReserve0 sevm b) ::
+          skimToWord sevm :: skimToken0 sevm b :: 0x1a2b ::
+          skimToken1 sevm b :: skimToken0 sevm b :: skimToWord sevm :: [0x0257, 0xbc25cf77])
+          (safeTransfer_dynamicCallMemory
+            (balanceReplyMemory getterInitMemory sevm.currentTarget env.qd0.returnData) 128
+            (Bytes.toB256 (env.qd0.returnData.take 32) - skimReserve0 sevm b) (skimToWord sevm))
+          env.callGasT0)
+        (.exec .call) env.dt0 ∧
+      WriterFreshKeys U ((Exec.rawFrameRoots R.exc).flatMap fun F =>
+        if F.sevm.currentTarget = sevm.currentTarget
+        then pairDecodedKeys F.sevm ++ staticViewDecodedKeys F.sevm else []) :=
   Iff.rfl
 
 end Blanc.Lift.UniswapV2Pair
@@ -9021,8 +9038,7 @@ example {sevm : Sevm} {b : Devm} {g : Nat}
       (Bytes.toB256 (qd1.returnData.take 32) -
         skimReserve1Word (dt0.getStorVal sevm.currentTarget 8))
       (skimToWord sevm) (skimToken1 sevm b) 0x1aca callGasT1 (g +
-        sstoreCost sevm dt1 12 1 + 22) dt1)
-    (keeps0 : NoPairWriteOutsideLock sevm qd0 dt0) :
+        sstoreCost sevm dt1 12 1 + 22) dt1) :
     SkimForwardEnv sevm b g :=
   { qd0 := qd0
     dt0 := dt0
@@ -9039,8 +9055,7 @@ example {sevm : Sevm} {b : Devm} {g : Nat}
     tenv0 := tenv0
     code1 := code1
     qenv1 := qenv1
-    tenv1 := tenv1
-    keeps0 := keeps0 }
+    tenv1 := tenv1 }
 
 end Blanc.Lift.UniswapV2Pair
 

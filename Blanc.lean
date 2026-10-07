@@ -809,6 +809,7 @@ import Blanc.Lift.UniswapV2Pair.PermitSource
 import Blanc.Lift.UniswapV2Pair.SkimCanonical
 import Blanc.Lift.UniswapV2Pair.SkimForward
 import Blanc.Lift.UniswapV2Pair.SkimForwardAccept
+import Blanc.Lift.UniswapV2Pair.SkimForwardKeep
 import Blanc.Lift.UniswapV2Pair.BurnBalanceWalk
 import Blanc.Lift.UniswapV2Pair.BurnSuffixWalk
 import Blanc.Lift.UniswapV2Pair.BurnSource
