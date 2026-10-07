@@ -101,10 +101,13 @@ theorem deposit_body_framed {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {
       rw [Blanc.afterSstore_state, Blanc.Lift.NodeWalk.afterSload_state]
       rfl
     · rw [Devm.addLog_error, afterSstore_error, afterSload_error]
-    · change (afterSstore sevm (afterSload sevm b (balSlot sevm.caller))
-        (balSlot sevm.caller) (b.getStorVal sevm.currentTarget (balSlot sevm.caller) +
+    · -- Reduce the log projection before converting the stored machine view.
+      dsimp only [Devm.addLog, Devm.refundCounter, liftMachMetaPure, Meta.addLog]
+      change (afterSstore sevm (afterSload sevm b (mapSlot sevm.caller.toB256 3))
+        (mapSlot sevm.caller.toB256 3) (b.getStorVal sevm.currentTarget (mapSlot sevm.caller.toB256 3) +
           sevm.value)).refundCounter = _
       rw [afterSstore_refundCounter, getStorVal_afterSload, afterSload_refundCounter]
+      rfl
     · exact (Devm.addLog_instructionFrame _ _).accountsToDelete.symm.trans
         ((afterSstore_accountsToDelete _ _ _ _).trans afterSload_accountsToDelete)
     · refine ⟨{ address := sevm.currentTarget, topics := [Bytes.toB256
