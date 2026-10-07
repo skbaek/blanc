@@ -3,7 +3,7 @@ import Blanc.Lift.UniswapV2Pair.ReplayWriterGas
 import Blanc.Lift.UniswapV2Pair.SwapForwardAccept
 import Blanc.Lift.UniswapV2Pair.MintForwardAccept
 import Blanc.Lift.UniswapV2Pair.BurnForwardAccept
-import Blanc.Lift.UniswapV2Pair.SkimForwardAccept
+import Blanc.Lift.UniswapV2Pair.SkimForwardKeep
 import Blanc.SlotFootprintRestrict
 
 /-!
@@ -516,12 +516,12 @@ theorem pair_history_burn_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
 
 /-- **`skim` after any configured history.**  Given the callee-only skim environment at the future
 world (`SkimForwardEnv`: both `balanceOf(pair)` `STATICCALL`s and both transfer `CALL`s with their
-replies and returned gas, the code checks, the lock and unlock sentries, and the goal's token-call
-clause `NoPairWriteOutsideLock` for the first transfer; the `_safeTransfer` helper is `safeTransfer_dynamic_forward`): whenever the model accepts the decoded skim at the history's
+replies and returned gas, the code checks, the lock and unlock sentries) and trace-local HASH-T for
+the first transfer's Pair frames (`FirstCallFresh`; that `CALL` keeps reserve1 by the derived
+`firstCall_keeps`, no callee clause): whenever the model accepts the decoded skim at the history's
 state `finish` over a transcript whose balance answers are the callees' actual ones, a pc-zero run
 exists at gas `callee.gas` halting at residual `g`; under HASH-T freshness of its own rows its post
-storage represents the model's next state.  Model acceptance enters through
-`runTyped_skim_conditions`. -/
+storage represents the model's next state.  Model acceptance enters via `runTyped_skim_conditions`. -/
 theorem pair_history_skim_live {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     {K₀ : WriterKey → Prop} {st₀ : State}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
@@ -535,7 +535,8 @@ theorem pair_history_skim_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
     (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
     (abi : (32 : B256) ≤ sevm.data.length.toB256 - 4)
     (selector : Blanc.Sevm.selector sevm = 0xbc25cf77)
-    (callee : SkimForwardEnv sevm pre g) :
+    (callee : SkimForwardEnv sevm pre g)
+    (firstFresh : callee.FirstCallFresh (pairHistoryUniverse pair trace K₀)) :
     ∃ (finish : State) (K' : WriterKey → Prop), PairHistoryReplayed pair trace K₀ st₀ finish K' ∧
       ∀ (transcript : Transcript) (returndata : Bytes),
         transcript.firstWord = callee.balance0 →
@@ -555,15 +556,17 @@ theorem pair_history_skim_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
   refine ⟨finish, K', replayed, fun transcript returndata answer0 answer1 accepted => ?_⟩
   have conditions := runTyped_skim_conditions accepted
   rw [answer0, answer1] at conditions
-  obtain ⟨rep, _⟩ := replayed.at_frame target state
+  have hist : WriterRep (pairHistoryUniverse pair trace K₀) (checkpoint.state.getStor pair) st₀ :=
+    initial.extend fresh
+  obtain ⟨rep, inside⟩ := replayed.at_frame target state
   have installedPre : some (pre.getCode sevm.currentTarget).toList = pairSem.image := by
     rw [target]
     change some (pre.state.getCode pair).toList = pairSem.image
     rw [state, futureCode]
     rfl
   obtain ⟨run⟩ := callee.run_of_model (current := { state := finish, logs := [], updates := [] })
-    [] rep pairSem pairSem_image installedPre output codeEq fork value size selector abi
-    conditions
+    [] rep hist.inj hist.apart inside pairSem pairSem_image installedPre output codeEq fork value
+    size selector abi firstFresh conditions
   exact ⟨run, rfl, fun newFresh => pair_live_outcome initial fresh futureCode replayed run target
     state codeEq fork output representable newFresh⟩
 
