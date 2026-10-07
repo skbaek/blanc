@@ -837,6 +837,8 @@ import Blanc.Lift.UniswapV2Pair.PropertiesSwap
 import Blanc.Lift.UniswapV2Pair.PropertiesLedger
 import Blanc.Lift.UniswapV2Pair.PropertiesOracleLaw
 import Blanc.Lift.UniswapV2Pair.PropertiesMintBurn
+import Blanc.Lift.UniswapV2Pair.PropertiesMinLiquidity
+import Blanc.Lift.UniswapV2Pair.PairHistoryMinLiquidity
 import Blanc.Lift.UniswapV2Pair.Creation.DeployInit
 
 -- Exact final second-host return and previously omitted control owners.
