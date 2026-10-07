@@ -2690,6 +2690,10 @@ consumer needs canonical interpreter ingress as one conjunct:
   `SystemMessageTrace.mem_rawFrames_of_mem_settledFrames` supplies the same
   membership transport for a protocol system invocation.
 - To place the entered top-level root frame of a committed message or call transaction among settled frames, import [`Blanc/ExecutionTraceRootFrame.lean`](../Blanc/ExecutionTraceRootFrame.lean).
+  `TransactionTrace.root_frame_of_call_value_with_message` additionally preserves
+  the exact identity `msg = trace.msg`, so execution facts carried by its relation
+  can be applied to the retained transaction message. The original helper keeps
+  its exact interface as a projection of that variant.
 - To preserve fixed nonempty, nondelegating code across a configured history
   and the next block's protocol boundaries, import
   [`Blanc/ExecutionImmutableCode.lean`](../Blanc/ExecutionImmutableCode.lean).

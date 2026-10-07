@@ -11,6 +11,8 @@ top-level frame a successful message call runs — the frame Jaune's
 when its settlement commits.  `ProcessMessageTrace.root_mem_settledFrames` is the
 message-level statement; `TransactionTrace.root_frame_of_call_value` lifts it to
 a type-2 call transaction in the vocabulary of `processTransaction_call_value_of_exec`.
+The `root_frame_of_call_value_with_message` variant also identifies its message
+with the actual retained transaction message `trace.msg`.
 -/
 
 namespace Blanc.ExecutionTrace
@@ -59,7 +61,7 @@ theorem ProcessMessageTrace.root_mem_settledFrames {msg : Msg}
 Under the hypotheses of `processTransaction_call_value_of_exec`, the trace contains
 a settled root frame running the message entered after value transfer with outcome
 `.ok post`, satisfying the caller's relation `R`. -/
-theorem TransactionTrace.root_frame_of_call_value
+theorem TransactionTrace.root_frame_of_call_value_with_message
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat} {state : State} {bout' : BlockOutput}
     {E t : Adr} {chainId : UInt64}
     {maxPriorityFee maxFee intrinsicGas calldataFloorGas : Nat}
@@ -91,7 +93,7 @@ theorem TransactionTrace.root_frame_of_call_value
       msg.benvAfterTransfer = .ok after →
       ∃ post, exec (initEvm (msg.withBenv after)) = .ok post ∧ post.error = none ∧
         0 ≤ post.refundCounter ∧ R debit msg after post) :
-    ∃ debit msg after post, R debit msg after post ∧ ∃ frame ∈ trace.settledFrames,
+    ∃ debit msg after post, msg = trace.msg ∧ R debit msg after post ∧ ∃ frame ∈ trace.settledFrames,
       frame.pc = 0 ∧ frame.sevm = initSevm (msg.withBenv after) ∧
       frame.pre = initDevm (msg.withBenv after) ∧ frame.out = .ok post := by
   have hsg : benv.stat.rules.stateGas = none := CoveredFork.rules_stateGas_none hfork
@@ -232,6 +234,47 @@ theorem TransactionTrace.root_frame_of_call_value
     obtain ⟨frame, hframe_mem, hpc, hsevm, hpre, hout⟩ :=
       ProcessMessageTrace.root_mem_settledFrames coreTrace henter hex herr
     rw [← hsettledEq] at hframe_mem
-    exact ⟨trace.debitState, trace.msg, after, post, hR, frame, hframe_mem, hpc, hsevm, hpre, hout⟩
+    exact ⟨trace.debitState, trace.msg, after, post, rfl, hR, frame, hframe_mem, hpc, hsevm, hpre, hout⟩
+
+/-- The original root-frame interface, preserving its exact hypotheses and result. -/
+theorem TransactionTrace.root_frame_of_call_value
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat} {state : State} {bout' : BlockOutput}
+    {E t : Adr} {chainId : UInt64}
+    {maxPriorityFee maxFee intrinsicGas calldataFloorGas : Nat}
+    {R : State → Msg → Benv → Devm → Prop}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (hfork : CoveredFork benv.stat.fork)
+    (htype : tx.type = .two chainId maxPriorityFee maxFee (some t) [])
+    (hchain : chainId = benv.stat.chainId)
+    (hprio : maxPriorityFee ≤ maxFee) (hbase : benv.stat.baseFeePerGas ≤ maxFee)
+    (hcost : calculateIntrinsicCost benv.stat.rules tx E = (intrinsicGas, calldataFloorGas))
+    (hgas : max intrinsicGas calldataFloorGas ≤ tx.gas)
+    (hcap : checkTransactionGasCap benv.stat.rules.tx tx.gas = .ok ())
+    (hnonceMax : tx.nonce ≠ UInt64.max)
+    (hroom : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed)
+    (hrecover : recoverSender benv.stat.chainId tx = .ok E)
+    (hnonce : (benv.state.get E).nonce = tx.nonce)
+    (hnocode : (benv.state.get E).code.isEmpty = true)
+    (hfunds : tx.gas * maxFee + tx.value ≤ (benv.state.get E).bal.toNat)
+    (hnodeleg : getDelegatedCodeAddress (benv.state.getCode t) = none)
+    (hprec : benv.stat.rules.isPrecomp t = false)
+    (hexec : ∀ (debit : State) (msg : Msg) (after : Benv),
+      (benv.state.incrNonce E).subBal E
+        (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+          benv.stat.baseFeePerGas)).toB256 = some debit →
+      prepareMessage { benv.beginTransaction with state := debit }
+        (transactionTenv benv.beginTransaction tx index E
+          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)
+          intrinsicGas []) tx = .ok msg →
+      msg.benvAfterTransfer = .ok after →
+      ∃ post, exec (initEvm (msg.withBenv after)) = .ok post ∧ post.error = none ∧
+        0 ≤ post.refundCounter ∧ R debit msg after post) :
+    ∃ debit msg after post, R debit msg after post ∧ ∃ frame ∈ trace.settledFrames,
+      frame.pc = 0 ∧ frame.sevm = initSevm (msg.withBenv after) ∧
+      frame.pre = initDevm (msg.withBenv after) ∧ frame.out = .ok post := by
+  obtain ⟨debit, msg, after, post, _, relation, root⟩ :=
+    trace.root_frame_of_call_value_with_message hfork htype hchain hprio hbase hcost
+      hgas hcap hnonceMax hroom hrecover hnonce hnocode hfunds hnodeleg hprec hexec
+  exact ⟨debit, msg, after, post, relation, root⟩
 
 end Blanc.ExecutionTrace
