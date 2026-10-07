@@ -480,13 +480,15 @@ theorem pair_history_oracle {pair : Adr} {cfg : ChainConfig} {checkpoint future 
   rfl
 
 /-- **Share value never decreases with the protocol fee off (U3).**  For the history's own steps: if
-each step's factory `feeTo` answer is zero (`EntryFeeOff`, mint and burn) and each burn/sync step's
-final `balanceOf(pair)` answers are at least the reserves stored at the step's entry
-(`EntryNoShrink`) — together `sourceReplayAnswers`, a condition on the authenticated callee answers
-of exactly these steps — then every committed state change with positive incoming supply keeps
-`r0·r1·T'² ≤ r0'·r1'·T²`.  Nonvacuity: the premise ranges over the history's own steps only, and holds
-of any history whose tokens report at least the stored reserves and whose factory answers
-`feeTo = 0`. -/
+each step's factory `feeTo` answer is zero (`EntryFeeOff`, mint and burn) and the token answers
+satisfy `EntryNoShrink` — for a sync step both `balanceOf(pair)` answers are at least the reserves stored
+at the step's entry; for a burn step both first answers are at least those reserves and each first answer
+is at most its final answer plus that token's payout (the transfer debits the pair at most the payout) —
+together `sourceReplayAnswers`, a condition on the authenticated callee answers of exactly these steps,
+then every committed state change with positive incoming supply keeps `r0·r1·T'² ≤ r0'·r1'·T²` (a ratio
+statement additionally needs `0 < T'`).  Nonvacuity: the premise ranges over the history's own steps
+only, and holds of any history whose tokens' first answers are at least the stored reserves, whose
+transfers debit the pair at most the payout, and whose factory answers `feeTo = 0`. -/
 theorem pair_history_feeOff_product {pair : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : State}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
@@ -508,9 +510,10 @@ theorem pair_history_feeOff_product {pair : Adr} {cfg : ChainConfig}
     pair_history_committed trace installed initial fresh
   exact ⟨steps, observed, auth, finish, K', realized, rep, source.feeOff_product⟩
 
-/-- **Share value with the protocol fee on (U3, fee-on).**  For the history's own steps: if each
-burn/sync step's final `balanceOf(pair)` answers are at least the stored reserves (`EntryNoShrink`,
-over exactly these steps), every committed state change with positive incoming supply keeps
+/-- **Share value with the protocol fee on (U3, fee-on).**  For the history's own steps: if the token
+answers satisfy `EntryNoShrink` over exactly these steps (sync: both answers at least the stored
+reserves; burn: both first answers at least the stored reserves and each first answer at most its final
+answer plus its payout), every committed state change with positive incoming supply keeps
 `r0·r1·T'² ≤ r0'·r1'·(T + F)²`, where `F = entryFeeAmount` is the exact protocol-fee mint of that step:
 for mint and burn, `feeAmount` at the step's authenticated `feeTo` answer, i.e.
 `⌊T·(√k − √kLast)/(5·√k + √kLast)⌋` when `feeTo ≠ 0`, `kLast ≠ 0` and `√kLast < √k` (floored

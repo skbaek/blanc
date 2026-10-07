@@ -156,7 +156,7 @@ NONCLAIM_PHRASES = [
     "validator authorization",
     "not a practical attack",
     "not that one fits mainnet's gas limits",
-    "tokens with transfer fees or rebasing fail",
+    "noshrink constrains only the pair's own balance answers",
     "nopairwriteoutsidelock",
     "not a flat per-frame replay",
     "composition with weth9 is not claimed",
