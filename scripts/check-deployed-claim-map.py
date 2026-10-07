@@ -158,7 +158,7 @@ NONCLAIM_PHRASES = [
     "not a practical attack",
     "not that one fits mainnet's gas limits",
     "noshrink constrains only the pair's own balance answers",
-    "nopairwriteoutsidelock",
+    "first transfer carries a trace-local hash premise",
     "not a flat per-frame replay",
     "composition with weth9 is not claimed",
     "permit signature unforgeability is not claimed",

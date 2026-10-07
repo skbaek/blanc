@@ -16,20 +16,6 @@ namespace Blanc.Lift.UniswapV2Pair
 
 open Jaune
 
-/-- The Pair's storage slots only lock-guarded entries write: `totalSupply` (0), the packed reserves
-(8), both price accumulators (9, 10), `kLast` (11) and the lock (12). The unlocked entries
-(`transfer`, `approve`, `transferFrom`, `permit`, `initialize`) write only balance, allowance and
-nonce rows and the token slots. -/
-def pairLockedSlots : List B256 := [0, 8, 9, 10, 11, 12]
-
-/-- The U6 `SendOk`-shaped token-call clause: from the staged world `pre` to the settled world
-`post`, a token `CALL` writes none of the Pair's lock-guarded slots.
-
-It is no longer a premise of skim liveness, which derives the lock-guarded fields it reads instead
-(`SkimForwardEnv.firstCall_keeps`, `SkimForwardKeep.lean`). -/
-def NoPairWriteOutsideLock (sevm : Sevm) (pre post : Devm) : Prop :=
-  ∀ k ∈ pairLockedSlots, post.getStorVal sevm.currentTarget k = pre.getStorVal sevm.currentTarget k
-
 /-- **The callee-only skim environment**: both `balanceOf(pair)` `STATICCALL`s (`SkimQueryEnv`) and
 both transfer `CALL`s through the shared helper (`SwapTransferCallForward`), each from its actual
 staged state with its success, reply and returned gas, the code checks of both tokens, and the lock

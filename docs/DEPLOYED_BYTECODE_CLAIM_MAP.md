@@ -525,7 +525,7 @@ under HASH-T freshness of the call's own rows against the history's rows
 | Reachable state | `mint`, on a transcript whose three answers (both `balanceOf(pair)` replies and the factory's `feeTo`) are the frame's actual answers | `Blanc.Lift.UniswapV2Pair.pair_history_mint_live` (`Blanc/Lift/UniswapV2Pair/PairHistoryLive.lean:289`) | `callee.gas + 228` [`Blanc.Lift.UniswapV2Pair.MintPrefixCallee.gas` (`Blanc/Lift/UniswapV2Pair/MintForwardAccept.lean:510`)]; returns the liquidity word | the three `STATICCALL`s (`Blanc.Lift.UniswapV2Pair.MintPrefixCallee` (`Blanc/Lift/UniswapV2Pair/MintForwardAccept.lean:471`)); HASH-T freshness of the LP rows of address 0, the recipient and the `feeTo` answer |
 | Reachable state | `swap`, with or without the flash callback | `Blanc.Lift.UniswapV2Pair.pair_history_swap_live` (`Blanc/Lift/UniswapV2Pair/PairHistoryLive.lean:365`) | `swapFrontTransferGas … + swapPrefixGas … + 279 + 166` [`Blanc.Lift.UniswapV2Pair.swapFrontTransferGas` (`Blanc/Lift/UniswapV2Pair/SwapForwardFront.lean:43`), `Blanc.Lift.UniswapV2Pair.swapPrefixGas` (`Blanc/Lift/UniswapV2Pair/SwapForwardPrefix.lean:179`)] | the optional transfer `CALL`s and the callback `CALL` (present iff their amount or the data is nonzero) and the two post-callback `balanceOf(pair)` `STATICCALL`s (`Blanc.Lift.UniswapV2Pair.SwapFrontForwardEnv` (`Blanc/Lift/UniswapV2Pair/SwapForwardFront.lean:56`), `Blanc.Lift.UniswapV2Pair.SwapBackCalleeEnv` (`Blanc/Lift/UniswapV2Pair/SwapForwardAccept.lean:107`)); the decoded swap accepted by the model on those answers (`SwapContextConditions`, `SwapModelConditions`) |
 | Reachable state | `burn` | `Blanc.Lift.UniswapV2Pair.pair_history_burn_live` (`Blanc/Lift/UniswapV2Pair/PairHistoryLive.lean:440`) | `BurnForwardEnv.gas` = the initial callees' charge `+ 249` [`Blanc.Lift.UniswapV2Pair.BurnForwardEnv.gas` (`Blanc/Lift/UniswapV2Pair/BurnForwardBody.lean:490`)]; returns both amounts | the two initial `balanceOf(pair)` `STATICCALL`s, the `feeTo` `STATICCALL`, both transfer `CALL`s and both final `balanceOf(pair)` `STATICCALL`s (`Blanc.Lift.UniswapV2Pair.BurnForwardEnv` (`Blanc/Lift/UniswapV2Pair/BurnForwardBody.lean:479`)); HASH-T freshness of the pair's own LP row and the `feeTo` answer's |
-| Reachable state | `skim` | `Blanc.Lift.UniswapV2Pair.pair_history_skim_live` (`Blanc/Lift/UniswapV2Pair/PairHistoryLive.lean:525`) | `SkimForwardEnv.gas`, a closed sum of the lock, cache and request charges and the gas forwarded to the first token [`Blanc.Lift.UniswapV2Pair.SkimForwardEnv.gas` (`Blanc/Lift/UniswapV2Pair/SkimForwardAccept.lean:160`)] | both `balanceOf(pair)` `STATICCALL`s and both transfer `CALL`s (`Blanc.Lift.UniswapV2Pair.SkimForwardEnv` (`Blanc/Lift/UniswapV2Pair/SkimForwardAccept.lean:39`)); **the first transfer's `CALL` leaves the lock-guarded slots 0 and 8–12 unchanged** (`NoPairWriteOutsideLock`: the `SendOk`-shaped clause) |
+| Reachable state | `skim` | `Blanc.Lift.UniswapV2Pair.pair_history_skim_live` (`Blanc/Lift/UniswapV2Pair/PairHistoryLive.lean:525`) | `SkimForwardEnv.gas`, a closed sum of the lock, cache and request charges and the gas forwarded to the first token [`Blanc.Lift.UniswapV2Pair.SkimForwardEnv.gas` (`Blanc/Lift/UniswapV2Pair/SkimForwardAccept.lean:146`)] | both `balanceOf(pair)` `STATICCALL`s and both transfer `CALL`s (`Blanc.Lift.UniswapV2Pair.SkimForwardEnv` (`Blanc/Lift/UniswapV2Pair/SkimForwardAccept.lean:25`)); HASH-T over the first transfer `CALL`: the mapping rows the pair's own frames decode inside it are fresh (`Blanc.Lift.UniswapV2Pair.SkimForwardEnv.FirstCallFresh` (`Blanc/Lift/UniswapV2Pair/SkimForwardKeep.lean:65`)). That this `CALL` leaves the lock-guarded fields unchanged is **derived, not assumed** (`Blanc.Lift.UniswapV2Pair.SkimForwardEnv.firstCall_keeps` (`Blanc/Lift/UniswapV2Pair/SkimForwardKeep.lean:89`)) |
 | Reachable state | `permit`, on a transcript whose recovered address is the frame's actual `ECRECOVER` answer, whenever the model accepts it | `Blanc.Lift.UniswapV2Pair.pair_history_permit_live` (`Blanc/Lift/UniswapV2Pair/PairHistoryLiveAdmin.lean:187`), from the frame theorem `Blanc.Lift.UniswapV2Pair.permit_bytecode_live_raw` (`Blanc/Lift/UniswapV2Pair/PermitEntries.lean:876`) | `callGas + permitNonceStoreCharge + permitNonceCharge + 1137` | the recovery precompile `STATICCALL` with its reply and returned gas (ENV); residual sentries; HASH-T freshness of the call's rows |
 | Reachable state | `initialize`, whenever the model accepts it (the caller is the stored factory) | `Blanc.Lift.UniswapV2Pair.pair_history_initialize_live` (`Blanc/Lift/UniswapV2Pair/PairHistoryLiveAdmin.lean:134`), from the frame theorem `Blanc.Lift.UniswapV2Pair.initialize_bytecode_live_raw` (`Blanc/Lift/UniswapV2Pair/InitializeEntries.lean:321`) | `G + initializeStorageCharge + 377` | residual sentries; HASH-T freshness of the call's rows. **No callee** |
 
@@ -620,8 +620,9 @@ the bytecode's executed word fee, and the EIP's unbounded-integer fee guarantee 
 ledger and oracle history rows take none. The share-value rows take the
 token-answer premises NoShrink and fee-off over the history's own steps. The
 liveness rows take the token, factory and callback `STATICCALL` and `CALL`
-environments (replies and returned gas), and `skim`'s first transfer carries the
-`SendOk`-shaped clause `NoPairWriteOutsideLock` (§7 items 17 and 18). [o] The
+environments (replies and returned gas), and `skim`'s first transfer adds a
+trace-local hash premise over the rows the pair's own frames decode inside that
+`CALL` (§7 items 17 and 18). [o] The
 deployment theorem's conclusion `InitializedCheckpoint` is literally the INIT
 premise of `pair_history_initialized`, with the same factory, domain separator
 and token arguments, so INIT is established by deployment followed by the
@@ -758,12 +759,15 @@ V− transaction row (M7) starts from a different, synthetic prestate. For both 
     credited. The burn form is deliberately weaker
     than "every answer is at least the stored reserve", which no ordinary burn
     satisfies.
-18. **`skim` carries a `SendOk`-shaped callee clause.** The liveness theorem for
-    `skim` assumes of its first transfer `CALL` that it leaves the lock-guarded
-    slots 0 and 8 to 12 unchanged (`NoPairWriteOutsideLock`): a re-entry into the
-    pair either meets the lock or is an unlocked entry that writes only its own
-    rows. The other liveness rows state their callee environments (replies and
-    returned gas) and no such clause.
+18. **`skim`'s first transfer carries a trace-local hash premise.** That the
+    first transfer `CALL` leaves the pair's lock-guarded fields unchanged (the
+    supply, the three packed reserve fields, both price accumulators, `kLast` and
+    the lock) is derived, not assumed: the pair is locked during the `CALL`, so a
+    re-entry either meets the lock or is an unlocked entry that writes only its
+    own rows. The derivation needs exact freshness of the mapping rows that those
+    re-entered pair frames decode, a HASH-T premise over that one `CALL`'s trace,
+    and nothing about what the callee does. The other liveness rows state their
+    callee environments (replies and returned gas) and no such premise.
 19. **The Uniswap V2 Pair replay is nested, not a flat per-frame replay.** The
     steps are the **outermost** settlement-committed non-static pair frames. A pair
     frame re-entered from inside a token call, the flash-swap callback or a factory
@@ -951,7 +955,7 @@ Names that the tables above write unqualified.
 | `EntryFeeOff` | `Blanc.Lift.UniswapV2Pair.EntryFeeOff` (`Blanc/Lift/UniswapV2Pair/Properties.lean:2657`) | the factory's `feeTo` answer of a mint or burn is zero (ENV: callee behaviour) |
 | `sourceReplayAnswers` | `Blanc.Lift.UniswapV2Pair.sourceReplayAnswers` (`Blanc/Lift/UniswapV2Pair/SourceReplay.lean:105`) | at every step of a replay, `EntryFeeOff` and `EntryNoShrink` at the carried model state |
 | `sourceReplayNoShrink` | `Blanc.Lift.UniswapV2Pair.sourceReplayNoShrink` (`Blanc/Lift/UniswapV2Pair/SourceReplay.lean:150`) | at every step of a replay, `EntryNoShrink` at the carried model state |
-| `NoPairWriteOutsideLock` | `Blanc.Lift.UniswapV2Pair.NoPairWriteOutsideLock` (`Blanc/Lift/UniswapV2Pair/SkimForwardAccept.lean:30`) | the callee premise of `skim`'s first transfer: the `CALL` leaves the lock-guarded slots 0 and 8 to 12 unchanged |
+| `FirstCallFresh` | `Blanc.Lift.UniswapV2Pair.SkimForwardEnv.FirstCallFresh` (`Blanc/Lift/UniswapV2Pair/SkimForwardKeep.lean:65`) | the hash premise of `skim`'s first transfer: the mapping rows decoded by the pair's own frames inside that `CALL` are fresh against the history's universe (HASH-T, trace-local) |
 
 ## 10. Checking this document
 
