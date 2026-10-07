@@ -92,7 +92,17 @@ contains call-type bytes at all (offsets 67, 123, 128, 141, all PUSH data).
 
 **Synthetic fixtures** (not deployed artifacts): for V−, an attacker (85
 bytes), a dispatcher attacker (186 bytes) and a coin (30 bytes); for V+, a
-reader (41 bytes) and a receiver (86 bytes).
+reader (41 bytes) and a receiver (86 bytes). The reachable witnesses of Sections
+5.5 and 5.6 use their own fixtures, each installed by an executed CREATE of its
+registered creation input: a shared address-keyed token Token20 (299-byte
+runtime, 315-byte creation input), the V− attacker AttackerR (186-byte runtime,
+different code from the dispatcher attacker; 195-byte creation input), the V+
+receiver ReceiverR (89-byte runtime; 98-byte creation input), and one 54-byte
+synthetic EIP-1167 clone-creation input per side. The two implementations are
+created there from their preserved creation inputs,
+`scripts/lift/inputs/vyper-847e-creation.hex` (18,353 bytes) and
+`scripts/lift/inputs/vyper-6326-creation.hex` (17,569 bytes), whose origin is
+recorded in the certificate provenance; that is not historical inclusion.
 
 ## 3. Trust base
 
@@ -375,7 +385,8 @@ proxy.
 stated for every fork in Prague, Osaka, BPO1 and BPO2 (the Prague kernel facts
 are transported by `Blanc/ForkUniform.lean`, `Blanc/Lift/NodeWalkFork.lean` and
 `Blanc/Lift/WitnessFork.lean`; the runs execute no CLZ, read no blob price, and
-enter no MODEXP or P256VERIFY).
+enter no MODEXP or P256VERIFY). The reachable witness
+`vplus_reachable_capstone` is likewise stated for every covered fork.
 
 **Non-claims.** Unguarded functions; reentry after release; mutation while
 only a view is running; pricing, LP economics, liveness; EIP-7702-delegated
@@ -399,7 +410,8 @@ The vulnerable implementation 0x6326, called through its proxy.
 `vminus_txC_process` quantify `g` with `CoveredFork g`. A Prague-only message
 form, `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.vminus_tx_message` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Tx/Closed.lean:26`), carries 30,021,064 gas, which is above
 the EIP-7825 cap from Osaka on and so is not a valid transaction there; cite
-the `TxC` forms.
+the `TxC` forms. The reachable forms `vminus_reachable_capstone` and
+`vminus_reach_violation` also quantify over every covered fork.
 
 **Non-claims.** For the closed message witness and the transaction rows: a
 reachable or historical prestate. For every row: a historical prestate, and a
@@ -639,7 +651,12 @@ V− transaction row (M7) starts from a different, synthetic prestate.
    deployment ran under **BPO2 rules, a covered fork**, so `lido_deploy_covered`
    includes the historical fork. It is still a modeled deployment (empty world,
    `deployMsg`), not historical inclusion. The deployment results are messages,
-   not validated transactions.
+   not validated transactions. The reachable V± chains (Sections 5.5 and 5.6)
+   are modeled messages too but have a different shape: they start from a world
+   holding a funded, code-free creator, place each implementation at its
+   registered address by a supplied CREATE target, and continue through
+   initialization, funding and the experiment, each message from the previous
+   settled world (item 25).
 4. **The Beacon `_env` forms were vacuous on mainnet and have been removed.**
    The former configuredHistory_solInv_env, configuredHistory_count_env and
    configuredHistory_root_env required an offset-blind `SpawnFree`
@@ -656,9 +673,11 @@ V− transaction row (M7) starts from a different, synthetic prestate.
 6. **The following witness and deployment forms cover Prague, Osaka,
    BPO1 and BPO2:** the listed V± message witnesses are closed;
    `vminus_txC_message` is closed, while `vminus_txC_process` requires
-   block room. The forms are
+   block room; the reachable capstones are closed, while
+   `vminus_reach_violation` takes `Checkpoint W`. The forms are
    `vplus_witness_covered`, `vplus_witness2_covered`, `vminus_witness_covered`,
-   `vminus_txC_{message,process}`, `weth9_deploy_covered`,
+   `vminus_txC_{message,process}`, `vplus_reachable_capstone`,
+   `vminus_reachable_capstone`, `vminus_reach_violation`, `weth9_deploy_covered`,
    `weth9_deploy_init_covered`, `beacon_deploy_covered`,
    `curve_deploy_covered`, `lido_deploy_covered`, `lido_deploy_init_covered`.
 7. **Synthetic prestates and fixtures (V±).** For the closed witnesses: pool
