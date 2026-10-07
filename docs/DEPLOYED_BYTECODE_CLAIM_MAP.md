@@ -369,6 +369,7 @@ proxy.
 | The same for every raw frame root of a configured history; pc 0 and the covered fork are derived | `Blanc.ExecutionTrace.ConfiguredHistoryTrace.vplus` (`Blanc/Lift/VyperNonreentrantDeployed/Fixed/ExclusionTrace.lean:281`) [roots by `Blanc.ExecutionTrace.MessageCallTrace.rootEntry` (`Blanc/ExecutionTraceEntry.lean:58`)] | History / temporal exclusion | per retained execution `R`: `hP`, `hI`, `hroot`, `HashAvoidIn` (not derivable from the trace) | statement form `VplusExcludes` [`Blanc.Lift.VyperNonreentrantDeployed.Fixed.VplusExcludes` (`Blanc/Lift/VyperNonreentrantDeployed/Fixed/ExclusionTrace.lean:44`); `Blanc.Lift.VyperNonreentrantDeployed.Fixed.vplus_excludes` (`Blanc/Lift/VyperNonreentrantDeployed/Fixed/ExclusionTrace.lean:50`)] |
 | **Nonvacuity (proxy-free):** an actual Jaune execution of the deployed 0x847e runtime in which a mutating guarded body (`remove_liquidity`, body start 0x1bae) is active and spawns a STATICCALL (pc 0x337a) to a coin, whose read-only reentry into the guarded view `get_virtual_price()` **reverts at the lock check** and never reaches a guarded body. It carries the full antecedent of `vplus_exclusion_impl` and its conclusion | `Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness.vplus_witness_covered` (`Blanc/Lift/VyperNonreentrantDeployed/Fixed/Witness/Top.lean:251`) (quantified over `g` with `CoveredFork g`, Prague included); every derivation of the entered machine, under any covered fork: `Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness.vplus_run_at` (`Blanc/Lift/VyperNonreentrantDeployed/Fixed/Witness/Top.lean:82`) | Message / closed witness | none (closed) | Kernel-checked; every walk boundary matches an EELS Prague trace (the printer is untrusted). No KECCAK executes, so `HashAvoidIn` holds by "no hash executed" |
 | **Nonvacuity (proxy instance, mutating reentry):** an execution entered through the 45-byte forwarder 0x21e2… (DELEGATECALL to 0x847e). `remove_liquidity` holds the lock and CALLs a synthetic receiver with 100 wei; the receiver calls back through the forwarder with `add_liquidity`'s selector (mutating, guarded); the comparator frame reverts at the lock check (pc 0x53 → 0x477e, no guarded body start); the receiver stops; the outer call **succeeds** and the pool balance goes from 1000 to 900 wei. This is a witness of `vplus_exclusion_stethPool` (the covered form carries that theorem's premises and antecedent, and the reentry conclusion `¬ lockL.Enters`) | `Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness2.vplus_witness2_covered` (`Blanc/Lift/VyperNonreentrantDeployed/Fixed/Witness2/Top.lean:227`) (every covered fork); every derivation: `Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness2.vplus_run2_at` (`Blanc/Lift/VyperNonreentrantDeployed/Fixed/Witness2/Top.lean:104`) | Message / closed witness | none (closed) | `HashAvoidIn` by digests: the one KECCAK256 leaves a digest different from slot 0 (control `Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness2.hashControl_bites` (`Blanc/Lift/VyperNonreentrantDeployed/Fixed/Witness2/Run.lean:308`); engine control `Blanc.Lift.NodeWalk.hashPol_bites` (`Blanc/Lift/NodeWalk.lean:1075`)) |
+| **Nonvacuity reachable from deployment and initialization (message level):** on every covered fork, nine messages run in sequence from a world holding only a funded, code-free creator, each from the previous settled world and each settling without error: the preserved 0x847e implementation creation input (placed at its registered address by a supplied CREATE target), a labelled synthetic EIP-1167 clone creation, `initialize` and `set_oracle(0, 0)` through the clone, synthetic token and receiver creations, `approve`, `add_liquidity([1000, 1000], 0)` with 1000 wei, then `remove_liquidity(200, [0, 0], receiver)`. Before the last message the LP ledger is sound over its single holder (`totalSupply = balanceOf[creator] = 2000`). While the pool frame holds the shared lock it sends the receiver 100 wei; the receiver calls the guarded, mutating `add_liquidity` through the clone; that pool frame reads the held lock and reverts without reaching a guarded body, and the receiver returns normally. The outer call commits: the receiver holds 100 wei and 100 tokens; supply and the creator's LP balance are 1800 | `Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit.vplus_reachable_capstone` (`Blanc/Lift/VyperNonreentrantDeployed/Fixed/Exit/Capstone.lean:35`); the instantiation, with the receiver and forwarder code facts, `Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit.vplus_reach_exit` (`Blanc/Lift/VyperNonreentrantDeployed/Fixed/Exit/Main.lean:60`) | Message / closed witness | none (closed) | `vplus_exclusion` instantiated for this execution with its fork, code, root and trace-local `HashAvoidIn` premises proved. Synthetic token, receiver and clone code; supplied CREATE targets; calls use chain id 1 and block time 1,700,000,000; no historical inclusion; no transaction admission |
 
 **Fork coverage.** The exclusion assumes `CoveredFork`; both witnesses are
 stated for every fork in Prague, Osaka, BPO1 and BPO2 (the Prague kernel facts
@@ -379,8 +380,10 @@ enter no MODEXP or P256VERIFY).
 **Non-claims.** Unguarded functions; reentry after release; mutation while
 only a view is running; pricing, LP economics, liveness; EIP-7702-delegated
 roots (excluded from the transaction and message carriers); a validated
-transaction reaching the witness state; historical prestates (all witness
-prestates, and the reader and receiver, are synthetic).
+transaction reaching the witness state; historical prestates (the closed
+witnesses' prestates are synthetic; the reachable witness's prestate is reached
+by executed messages from a synthetic creator-only world; the reader and
+receiver are synthetic).
 
 ### 5.6 Vyper V−: cross-function reentrancy corrupts the LP ledger
 
@@ -388,8 +391,9 @@ The vulnerable implementation 0x6326, called through its proxy.
 
 | Claim | Theorem | Level / kind | Premises | Notes |
 |---|---|---|---|---|
+| **Violation reachable from deployment and initialization (message level):** on every covered fork, eight messages run in sequence from a world holding only a funded, code-free creator, each from the previous settled world and each settling without error: the preserved 0x6326 implementation creation input (placed at its registered address by a supplied CREATE target), a labelled synthetic clone creation, `initialize` through the clone (`A = 100`, fee 0), synthetic token and attacker creations, `approve`, `add_liquidity([1000, 1000], 0, attacker)` with 1000 wei, then the violating call. After the seventh message the LP ledger is sound over its single holder (`totalSupply = balanceOf[attacker] = 2000`) and all nonzero pool storage lies in a listed slot set. In the eighth, the creator calls the attacker contract, which calls `remove_liquidity(200, [0, 0], attacker)`; holding lock slot 2, the pool sends the attacker 100 wei; the callback calls `add_liquidity([100, 0], 0, attacker)` through the same clone, which takes lock slot 0 and succeeds. The message settles with `totalSupply = 1800 < 1906 = balanceOf[attacker]`, compared as natural numbers. The universal form states the same message and conclusions for every world agreeing with the reached world on the 14 storage slots and 6 accounts the violation reads (`Checkpoint`) | `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol.vminus_reachable_capstone` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Reach/ViolFinal.lean:30`); universal form `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol.vminus_reach_violation` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Reach/ViolFinal.lean:26`) | Message / closed witness (capstone); message / universal over `Checkpoint` worlds | none for the capstone; `Checkpoint W` for the universal form | Synthetic token, attacker and clone code; supplied CREATE targets; default block environment. **This row and the transaction row below concern different worlds (different proxy, attacker, sender and token addresses); neither implies or extends the other. The equal figures come from the same scenario amounts, not a shared state** |
 | Message level: a successful message execution in which `remove_liquidity` holds lock slot 2, its ETH callback reenters `add_liquidity` (lock slot 0) through the proxy, and the final ledger has `totalSupply = 1800 < 1906 = balanceOf[attacker]`. The two guards are on different slots (bytes 6900-6911 versus 88-99) | `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top.vminus_witness` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Top.lean:155`); all covered forks `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top.vminus_witness_covered` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/ForkTop.lean:159`) | Message / closed witness | none (closed) | synthetic prestate (Section 7); stated for Prague, other covered forks by transport |
-| **Transaction level, all covered forks:** conditional on block room, Jaune's `processTransaction` accepts a fixed signed type-2 transaction (zero fee and value, 16,043,200 gas, below 2^24, an access list of 19 addresses), and the returned world has `totalSupply = 1800 < 1906` in the pool | `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.vminus_txC_process` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/TxC/Envelope.lean:136`); closed message part `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.vminus_txC_message` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/TxC/Closed.lean:49`) (gas 15,822,837 left, refund 42,600, `accountsToDelete` empty) | Transaction / conditional witness | block room `hroom` | every other admission check, including signature recovery (`Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.txC_recoveredSender` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/TxCRecover.lean:99`)), is kernel-evaluated on the concrete transaction and block |
+| **Transaction level, all covered forks:** conditional on block room, Jaune's `processTransaction` accepts a fixed signed type-2 transaction (zero fee and value, 16,043,200 gas, below 2^24, an access list of 19 addresses), and the returned world has `totalSupply = 1800 < 1906` in the pool | `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.vminus_txC_process` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/TxC/Envelope.lean:136`); closed message part `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.vminus_txC_message` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/TxC/Closed.lean:49`) (gas 15,822,837 left, refund 42,600, `accountsToDelete` empty) | Transaction / conditional witness | block room `hroom` | every other admission check, including signature recovery (`Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.txC_recoveredSender` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/TxCRecover.lean:99`)), is kernel-evaluated on the concrete transaction and block. From the synthetic prestate of Section 7 (proxy 0x9848…85c5 with seeded storage, attacker 0xaaaa…a2a2); not the deployment-reached world of the first row, and `vminus_reach_violation` does not cover it |
 
 **Fork coverage.** `vminus_witness_covered`, `vminus_txC_message` and
 `vminus_txC_process` quantify `g` with `CoveredFork g`. A Prague-only message
@@ -397,7 +401,9 @@ form, `Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.vminus_tx_message` (`B
 the EIP-7825 cap from Osaka on and so is not a valid transaction there; cite
 the `TxC` forms.
 
-**Non-claims.** A reachable or historical prestate; a real historical
+**Non-claims.** For the closed message witness and the transaction rows: a
+reachable or historical prestate. For every row: a historical prestate, and a
+transaction reaching the reachable row's checkpoint; a real historical
 attack; a signature-generic transaction (the signature, transaction hash,
 index 0 and coinbase are fixed); the attacker model is synthetic (Section 7).
 
@@ -561,8 +567,8 @@ applicable.
 | Beacon (`_sys`) | ✓ | ✓ | ~ [e] | ✓ none | ✓ [b] | ~ [f] | ✗ | ✓ |
 | Curve | ✓ | ✓ | ✓ | ✓ HASH-T | ✓ [b] | ~ [g] | ✗ | ✓ |
 | Lido | ✓ | ✓ (L1/L3) | ~ [h] | ~ [h] | ~ [i] | ✗ | ✗ | ✓ |
-| V+ | ✓ | ~ [j] | ~ [j] | ✓ HASH-T (per execution) | — | ✓ nonvacuity (witnesses) | ~ [k] | ✓ |
-| V− | ✓ | — | — | — | — synthetic | — | ✓ [l] | ✓ |
+| V+ | ✓ | ~ [j] | ~ [j] | ✓ HASH-T (per execution) | — | ✓ nonvacuity (witnesses), and a reachable witness [q] | ~ [k] | ✓ |
+| V− | ✓ | — | — | — | ✓ [q] (message level) | ✓ [q] violation at a reachable state | ✓ [l] | ✓ |
 | EIP-7002 | ✓ | ✓ [m] | ✓ | ✓ none | ✓ [b] | ✓ | ✗ | ✓ |
 | Uniswap V2 Pair | ✓ | ✓ | ✓ [n] | ✓ HASH-T | ✓ [b] [o] | ✓ [p] | ✗ | ✓ |
 
@@ -605,7 +611,9 @@ bytecode is not lifted. [p] Every state-changing entry point has history-level l
 cost (`transfer`, `approve`, `transferFrom`, `sync`, `mint`, `swap`, `burn`,
 `skim`, `permit`, `initialize`). Every cost is closed over the gas
 forwarded to the callees, whose consumption enters through the callee premise
-(§7 item 21).
+(§7 item 21). [q] Deployment, initialization and liquidity are executed messages
+from a creator-only world, not admitted transactions (§7 item 3 applies); the
+V− transaction row (M7) starts from a different, synthetic prestate.
 
 ## 7. Disclosures and limits
 
@@ -653,9 +661,12 @@ forwarded to the callees, whose consumption enters through the callee premise
    `vminus_txC_{message,process}`, `weth9_deploy_covered`,
    `weth9_deploy_init_covered`, `beacon_deploy_covered`,
    `curve_deploy_covered`, `lido_deploy_covered`, `lido_deploy_init_covered`.
-7. **Synthetic prestates and fixtures (V±).** Pool storage (lock slots,
-   balances, `totalSupply`), ETH balances, and the reader, receiver, attacker,
-   dispatcher-attacker and coin contracts are synthetic. The coin-1 contract in
+7. **Synthetic prestates and fixtures (V±).** For the closed witnesses: pool
+   storage (lock slots, balances, `totalSupply`), ETH balances, and the reader,
+   receiver, attacker, dispatcher-attacker and coin contracts are synthetic. The
+   reachable V± witnesses instead reach their pool storage by executed messages
+   from a creator-only world (§5.5, §5.6); their token, receiver/attacker and
+   clone code remain synthetic. The coin-1 contract in
    V+ witness 2 is the receiver itself. The synthetic attacker and coin bytes
    are registered certificates, not deployed artifacts.
 8. **Fixed signed transactions.** `vminus_txC_process` (and the Prague-only
@@ -766,6 +777,13 @@ forwarded to the callees, whose consumption enters through the callee premise
     transaction of the exhibit pair is not recorded. The exhibit address is the
     `CREATE2` address of the factory, the salt and the creation code by kernel
     evaluation, not a statement about the chain.
+25. **The reachable V± witnesses are message level.** Transaction and block
+    effects outside a message (nonce, fees, refunds, coinbase payment, warm sets,
+    system calls, withdrawals, EIP-7702 delegations) never write a contract's
+    storage, so they cannot alter the LP ledger or the locks these results
+    concern. That the chosen messages are producible by admitted transactions
+    (sender keys, nonce-derived addresses, gas and warm sets) is argued, not
+    proved.
 
 ## 8. Axiom guarantee
 
