@@ -190,4 +190,104 @@ theorem exhibit_create2 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : 
   rw [haddr, hfactory] at h
   exact h
 
+/-! ## The `initialize` run, constructed
+
+`pair_create2_initialized` says every successful `initialize` reaches the checkpoint; the two
+results below construct that run.
+
+* `pair_initialize_live`: at constructor storage, a factory-called `initialize` frame (zero value,
+  non-static, two calldata words, gas meeting the two store sentries) has a successful run at its
+  closed gas, reaching the checkpoint;
+* `pair_create2_initialize_live`: `pair_create2` composed with it.
+-/
+
+/-- **Initializing a freshly deployed pair, constructed.**  At a pair whose storage is the
+constructor's storage for `factory`, an `initialize` frame called by `factory` with zero value,
+non-static, carrying the selector and two calldata words, whose gas meets the two store sentries,
+has a successful pc-zero run of the certified runtime at its closed gas
+`iG + initializeStorageCharge isevm ib + 377`, and that run leaves storage satisfying the
+initialized checkpoint with the decoded `token0`, `token1`.  The authorization
+`caller = slot 5` comes from the constructor storage, which holds `factory` there. -/
+theorem pair_initialize_live {chainWord : B256} {factory : Adr} {isevm : Sevm} {ib : Devm}
+    {iG : Nat}
+    (hstor : Devm.getStor ib isevm.currentTarget =
+      ctorStor chainWord isevm.currentTarget factory Stor.empty)
+    (caller : isevm.caller = factory) (value : isevm.value = 0)
+    (nonstatic : isevm.isStatic = false)
+    (codeEq : isevm.code = Blanc.Lift.UniswapV2Pair.code)
+    (fork : CoveredFork isevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector isevm = 0x485cc955)
+    (size : (4 : B256) ≤ isevm.data.length.toB256)
+    (guard : (64 : B256) ≤ isevm.data.length.toB256 - 4)
+    (representable : isevm.data.length < 2 ^ 256) (freshOutput : ib.output = [])
+    (sentry0 : gCallStipend < iG + initializeStore0Charge isevm ib +
+      initializeLoad1Charge isevm ib + initializeStore1Charge isevm ib + 39)
+    (sentry1 : gCallStipend < iG + initializeStore1Charge isevm ib + 9) :
+    ∃ ipost, Nonempty (Exec 0 isevm
+        (St ib [] Mem.empty (iG + initializeStorageCharge isevm ib + 377)) (.ok ipost)) ∧
+      InitializedCheckpoint (ipost.getStor isevm.currentTarget) factory
+        (domainSeparator chainWord isevm.currentTarget) (initializeToken0 isevm)
+        (initializeToken1 isevm) := by
+  have authorized : isevm.caller = (ib.getStorVal isevm.currentTarget 5).toAdr := by
+    show _ = ((Devm.getStor ib isevm.currentTarget).get 5).toAdr
+    rw [hstor, ctorStor, Stor.get_set_self, toAdr_toB256]
+    exact caller
+  obtain ⟨run⟩ := initialize_bytecode_live_raw codeEq fork value size selector guard
+    authorized sentry0 sentry1 nonstatic
+  exact ⟨_, ⟨run⟩, (pair_initialized hstor representable freshOutput codeEq fork selector run).2⟩
+
+/-- **Deploy by `CREATE2`, then initialize, both constructed**, under any covered fork: the
+`CREATE2` step of `pair_create2` from the factory frame `sevm` leaves at the new address the
+certified runtime and storage such that every `initialize` frame at that address over that
+storage, called by the factory with zero value, non-static, carrying the selector and two calldata
+words and gas meeting the two store sentries, has a successful run at its closed gas reaching the
+initialized checkpoint over the creating frame's chain id, that address and the decoded tokens.
+`pair_create2_initialized` is the universal half: every successful run reaches it. -/
+theorem pair_create2_initialize_live {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
+    {G : Nat} {i sz salt : B256}
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hinit : create2InitCode M i sz = code.toList)
+    (hnonce : (b.state.get sevm.currentTarget).nonce ≠ UInt64.max)
+    (hdepth : sevm.depth ≠ 0)
+    (hfresh : Create2TargetEmpty (create2Prepared sevm b S M G i sz
+        (create2NewAddress sevm.currentTarget salt code.toList))
+        (create2NewAddress sevm.currentTarget salt code.toList))
+    (hgas : 2400000 ≤ except64th G) (hroom : S.length < 1024) :
+    ∃ post, Ninst.RunCompiled sevm (St b (0 :: i :: sz :: salt :: S) M
+        (G + create2Charge sevm M i sz)) (.exec .create2) post ∧
+      post.stack = (create2NewAddress sevm.currentTarget salt code.toList).toB256 :: S ∧
+      (post.getCode (create2NewAddress sevm.currentTarget salt code.toList)).toList =
+        Blanc.Lift.UniswapV2Pair.code.toList ∧
+      ∀ {isevm : Sevm} {ib : Devm} {iG : Nat},
+        isevm.currentTarget = create2NewAddress sevm.currentTarget salt code.toList →
+        Devm.getStor ib isevm.currentTarget =
+          Devm.getStor post (create2NewAddress sevm.currentTarget salt code.toList) →
+        isevm.caller = sevm.currentTarget → isevm.value = 0 → isevm.isStatic = false →
+        isevm.code = Blanc.Lift.UniswapV2Pair.code → CoveredFork isevm.benvStat.fork →
+        Blanc.Sevm.selector isevm = 0x485cc955 →
+        (4 : B256) ≤ isevm.data.length.toB256 → (64 : B256) ≤ isevm.data.length.toB256 - 4 →
+        isevm.data.length < 2 ^ 256 → ib.output = [] →
+        gCallStipend < iG + initializeStore0Charge isevm ib +
+          initializeLoad1Charge isevm ib + initializeStore1Charge isevm ib + 39 →
+        gCallStipend < iG + initializeStore1Charge isevm ib + 9 →
+        ∃ ipost, Nonempty (Exec 0 isevm
+            (St ib [] Mem.empty (iG + initializeStorageCharge isevm ib + 377)) (.ok ipost)) ∧
+          InitializedCheckpoint (ipost.getStor isevm.currentTarget) sevm.currentTarget
+            (domainSeparator sevm.benvStat.chainId.toB256
+              (create2NewAddress sevm.currentTarget salt code.toList))
+            (initializeToken0 isevm) (initializeToken1 isevm) := by
+  obtain ⟨post, hrun, hstack, hcode, hstor⟩ :=
+    pair_create2 hfork hstatic hinit hnonce hdepth hfresh hgas hroom
+  refine ⟨post, hrun, hstack, hcode, ?_⟩
+  intro isevm ib iG htarget hpre caller value nonstatic codeEq fork selector size guard
+    representable freshOutput sentry0 sentry1
+  have hib : Devm.getStor ib isevm.currentTarget =
+      ctorStor sevm.benvStat.chainId.toB256 isevm.currentTarget sevm.currentTarget
+        Stor.empty := by
+    rw [hpre, hstor, htarget]
+  have h := pair_initialize_live hib caller value nonstatic codeEq fork selector size guard
+    representable freshOutput sentry0 sentry1
+  rw [htarget] at h ⊢
+  exact h
+
 end Blanc.Lift.UniswapV2Pair.Creation
