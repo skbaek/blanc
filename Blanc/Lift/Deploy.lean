@@ -60,11 +60,21 @@ theorem St_error (b : Devm) (S : List B256) (M : Mem) (G : Nat) : (St b S M G).e
 theorem St_getStor (b : Devm) (S : List B256) (M : Mem) (G : Nat) (a : Adr) :
     Devm.getStor (St b S M G) a = Devm.getStor b a := rfl
 
+/-- A synthetic machine replacement preserves the persistent world state. -/
+theorem St_state (b : Devm) (S : List B256) (M : Mem) (G : Nat) :
+    (St b S M G).state = b.state := rfl
+
 /-- The state `RETURN` leaves (stated over a variable state, so nothing reduces a concrete
 memory image). -/
 def returnPost (d : Devm) (i sz : B256) (S : List B256) : Devm :=
   ((d.setMach ⟨S, d.memory, d.gasLeft, d.stateGas⟩).memRead i.toNat sz.toNat).2.withOutput
     (d.memory.read i.toNat sz.toNat).1
+
+/-- Project through the RETURN post before substituting its concrete memory. -/
+theorem returnPost_state (d : Devm) (i sz : B256) (S : List B256) :
+    (returnPost d i sz S).state = d.state :=
+  congrArg World.state (Devm.returnPost_world d S d.gasLeft i.toNat sz.toNat
+    (d.memory.read i.toNat sz.toNat).1)
 
 theorem returnPost_facts (d : Devm) (i sz : B256) (S : List B256) :
     (returnPost d i sz S).output = (d.memory.read i.toNat sz.toNat).1 ∧

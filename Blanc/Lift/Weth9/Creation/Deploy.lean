@@ -53,14 +53,17 @@ theorem deployedStor_metadata :
 /-- **Deploying WETH9.**  The recorded creation input, executed as a zero-value CREATE message
 with enough gas under a covered fork, succeeds; the new account's code is the certified deployed
 runtime and its storage is exactly the constructor's `name`/`symbol`/`decimals` words. -/
-theorem weth9_create (msg : Msg) (hvalue : msg.value = 0)
+theorem weth9_create_framed (msg : Msg) (hvalue : msg.value = 0)
     (hcodeAddress : msg.codeAddress = .none) (hcode : msg.code = Blanc.Lift.Weth9.Creation.code)
     (hgas : 720000 ≤ msg.gas) (hgasb : msg.gas < 2 ^ 64)
     (hfork : CoveredFork msg.benv.stat.fork) (hstatic : msg.isStatic = false)
     (hmax : 3124 ≤ msg.benv.stat.rules.code.maxCodeSize) :
     ∃ post, processCreateMessage msg = .ok post ∧
       (post.getCode msg.currentTarget).toList = Blanc.Lift.Weth9.code.toList ∧
-      Devm.getStor post msg.currentTarget = deployedStor := by
+      Devm.getStor post msg.currentTarget = deployedStor ∧
+      (∀ a, post.state.get a = if a = msg.currentTarget then
+        { msg.benv.state.get a with nonce := (msg.benv.state.get a).nonce + 1, stor := deployedStor, code := Blanc.Lift.Weth9.code }
+        else msg.benv.state.get a) := by
   obtain ⟨benv, htransfer⟩ :=
     benvAfterTransfer_exists_zero (msg := processCreateMessage.msg msg) hvalue
   set sevm := initSevm (createSeed msg benv) with hsevm
@@ -76,8 +79,8 @@ theorem weth9_create (msg : Msg) (hvalue : msg.value = 0)
     rw [hempty]; simp only [Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc,
       Std.TreeMap.getD_emptyc]
   have hle := ctorCost_le sevm b
-  obtain ⟨raw, hrun, hout, herr, hst, hgasLeft⟩ :=
-    ctor_run fr hcode hvalue hstor (G := msg.gas - ctorCost sevm b) (by omega)
+  obtain ⟨raw, hrun, hout, herr, hst, hgasLeft, hworld⟩ :=
+    ctor_run_framed fr hcode hvalue hstor (G := msg.gas - ctorCost sevm b) (by omega)
   have hpre0 : St b [] Mem.empty (msg.gas - ctorCost sevm b + ctorCost sevm b) = b :=
     pre_eq_St rfl rfl (by show _ = msg.gas; omega)
   rw [hpre0] at hrun
@@ -85,16 +88,53 @@ theorem weth9_create (msg : Msg) (hvalue : msg.value = 0)
     rw [hout, runtimeWindow, ByteArray.sliceD_eq]
     exact runtime_window
   have hlen : raw.output.length = 3124 := by rw [hout]; exact runtimeWindow_length
-  obtain ⟨post, hpost, hcodePost, hstorPost, -⟩ := liftCreate_ok Blanc.Lift.Weth9.Creation.cert_check
+  have hpost := liftCreate_post Blanc.Lift.Weth9.Creation.cert_check
     Blanc.Lift.Weth9.Creation.jumps_ok msg
     hcodeAddress hcode hfork htransfer hrun (by rw [herr]; rfl)
     (by rw [hwin]; exact runtime_head)
     (by rw [hlen, hgasLeft]; unfold gasCodeDeposit; omega) (by rw [hlen]; exact hmax)
-  refine ⟨post, hpost, hcodePost.trans hwin, ?_⟩
-  rw [hstorPost]
-  show Devm.getStor raw sevm.currentTarget = _
-  rw [hst, hempty]
-  rfl
+  let post := liftCreatePost msg.currentTarget raw
+  have hcodeEq : (⟨⟨raw.output⟩⟩ : ByteArray) = Blanc.Lift.Weth9.code := by
+    rw [hwin]
+    rw [ByteArray.toList_eq_toList_data]
+  refine ⟨post, hpost, ?_, ?_, ?_⟩
+  · show (post.state.get msg.currentTarget).code.toList = _
+    rw [(liftCreatePost_facts _ raw).2.2.1, hcodeEq]
+  · show (post.state.get msg.currentTarget).stor = _
+    rw [(liftCreatePost_facts _ raw).2.2.1]
+    change Devm.getStor raw sevm.currentTarget = _
+    rw [hst, hempty]
+    rfl
+  · intro a
+    by_cases ha : a = msg.currentTarget
+    · subst ha
+      rw [ite_eq_left rfl, (liftCreatePost_facts _ raw).2.2.1, hcodeEq, hworld]
+      change { ((((benv.state.setStorVal msg.currentTarget 0 nameSlotWord).setStorVal
+        msg.currentTarget 1 symbolSlotWord).setStorVal msg.currentTarget 2 18).get
+        msg.currentTarget) with code := Blanc.Lift.Weth9.code } = _
+      simp only [State.setStorVal, State.get_set_self]
+      rw [processCreateMessage_msg_afterTransfer_get hvalue htransfer, ite_eq_left rfl]
+      rfl
+    · rw [ite_eq_right ha, (liftCreatePost_facts _ raw).2.2.2 a ha, hworld]
+      change (((benv.state.setStorVal msg.currentTarget 0 nameSlotWord).setStorVal
+        msg.currentTarget 1 symbolSlotWord).setStorVal msg.currentTarget 2 18).get a = _
+      rw [State.get_setStorVal_ne _ _ _ (Ne.symm ha),
+        State.get_setStorVal_ne _ _ _ (Ne.symm ha),
+        State.get_setStorVal_ne _ _ _ (Ne.symm ha),
+        processCreateMessage_msg_afterTransfer_get hvalue htransfer, ite_eq_right ha]
+
+/-- The deployment code/storage interface, retained for existing consumers. -/
+theorem weth9_create (msg : Msg) (hvalue : msg.value = 0)
+    (hcodeAddress : msg.codeAddress = .none) (hcode : msg.code = Blanc.Lift.Weth9.Creation.code)
+    (hgas : 720000 ≤ msg.gas) (hgasb : msg.gas < 2 ^ 64)
+    (hfork : CoveredFork msg.benv.stat.fork) (hstatic : msg.isStatic = false)
+    (hmax : 3124 ≤ msg.benv.stat.rules.code.maxCodeSize) :
+    ∃ post, processCreateMessage msg = .ok post ∧
+      (post.getCode msg.currentTarget).toList = Blanc.Lift.Weth9.code.toList ∧
+      Devm.getStor post msg.currentTarget = deployedStor := by
+  obtain ⟨post, hrun, hcodePost, hstorPost, -⟩ :=
+    weth9_create_framed msg hvalue hcodeAddress hcode hgas hgasb hfork hstatic hmax
+  exact ⟨post, hrun, hcodePost, hstorPost⟩
 
 /-! ## The recorded deployment, closed -/
 

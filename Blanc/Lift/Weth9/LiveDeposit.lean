@@ -1,4 +1,6 @@
 import Blanc.Lift.Weth9.LiveApprove
+import Blanc.SystemCallForward
+import Blanc.Lift.ExactLeaf
 
 namespace Blanc.Lift.Weth9
 
@@ -8,10 +10,22 @@ open Jaune Blanc.Lift
 def depMem (M : Mem) (C v : B256) : Mem :=
   ((M.write 0 C.toBytes).write 32 (3 : B256).toBytes).write 96 v.toBytes
 
+/-- The deposit frame's persistent write and settlement observations. -/
+structure DepositFramePost (sevm : Sevm) (pre post : Devm) : Prop where
+  state : post.state = pre.state.setStorVal sevm.currentTarget (balSlot sevm.caller)
+    (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) + sevm.value)
+  error : post.error = pre.error
+  refund : post.refundCounter = sstoreNewRefundCounter sevm.benvStat.rules.gas
+    (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) + sevm.value)
+    (getOrigStorVal sevm sevm.currentTarget (balSlot sevm.caller))
+    (pre.getStorVal sevm.currentTarget (balSlot sevm.caller)) pre.refundCounter
+  accountsToDelete : post.accountsToDelete = pre.accountsToDelete
+  logs : ∃ event : Log, event.address = sevm.currentTarget ∧ post.logs = pre.logs ++ [event]
+
 /-- The `deposit` body (entry 1, `0x0440`), from the stack `return, …`: `balanceOf[caller] += callvalue`
 (the slot's `SLOAD` and `SSTORE`) and the `Deposit` event.  `104` gas before the `SLOAD`, `16` between it
 and the `SSTORE`, `1456` after it (`1381` for the `LOG2`, one word of expansion included). -/
-theorem deposit_body {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {M : Mem} {ret : B256}
+theorem deposit_body_framed {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {M : Mem} {ret : B256}
     (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hM : FpMem 96 M) (hroom : S.length < 1000)
     (hsentry : gCallStipend < G + 1456 +
@@ -21,8 +35,9 @@ theorem deposit_body {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {M : Mem
       (G + 1456 + sstoreCost sevm (afterSload sevm b (balSlot sevm.caller)) (balSlot sevm.caller)
         (b.getStorVal sevm.currentTarget (balSlot sevm.caller) + sevm.value) + 16 +
         sloadCost sevm b (balSlot sevm.caller) + 104)) t_0440_c1
-      (.returned (St b' S (depMem M sevm.caller.toB256 sevm.value) G)) ∧ b'.output = b.output := by
-  refine ⟨?b', ?run, ?out⟩
+      (.returned (St b' S (depMem M sevm.caller.toB256 sevm.value) G)) ∧
+      b'.output = b.output ∧ DepositFramePost sevm b b' := by
+  refine ⟨?b', ?run, ?out, ?post⟩
   case run =>
     rdest
     refine rx_callvalue (by rroom) ?_
@@ -80,9 +95,74 @@ theorem deposit_body {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {M : Mem
   case out =>
     have h : ∀ (d : Devm) (L : Log), (d.addLog L).output = d.output := fun _ _ => rfl
     rw [h]; simp only [afterSstore_output, afterSload_output]
+  case post =>
+    constructor
+    · rw [(Devm.addLog_instructionFrame _ _).state.symm]
+      rw [Blanc.afterSstore_state, Blanc.Lift.NodeWalk.afterSload_state]
+      rfl
+    · rw [Devm.addLog_error, afterSstore_error, afterSload_error]
+    · change (afterSstore sevm (afterSload sevm b (balSlot sevm.caller))
+        (balSlot sevm.caller) (b.getStorVal sevm.currentTarget (balSlot sevm.caller) +
+          sevm.value)).refundCounter = _
+      rw [afterSstore_refundCounter, getStorVal_afterSload, afterSload_refundCounter]
+    · exact (Devm.addLog_instructionFrame _ _).accountsToDelete.symm.trans
+        ((afterSstore_accountsToDelete _ _ _ _).trans afterSload_accountsToDelete)
+    · refine ⟨{ address := sevm.currentTarget, topics := [Bytes.toB256
+        [225, 255, 252, 196, 146, 61, 4, 181, 89, 244, 210, 154, 139, 252, 108, 218,
+          4, 235, 91, 13, 60, 70, 7, 81, 194, 64, 44, 92, 92, 201, 16, 156],
+        sevm.caller.toB256], data := sevm.value.toBytes }, rfl, ?_⟩
+      change (afterSstore sevm (afterSload sevm b (balSlot sevm.caller))
+        (balSlot sevm.caller) (b.getStorVal sevm.currentTarget (balSlot sevm.caller) +
+          sevm.value)).logs ++ [_] = _
+      rw [afterSstore_logs, afterSload_logs]
+
+/-- The original body interface is a projection of the framed witness. -/
+theorem deposit_body {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {M : Mem} {ret : B256}
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hM : FpMem 96 M) (hroom : S.length < 1000)
+    (hsentry : gCallStipend < G + 1456 +
+      sstoreCost sevm (afterSload sevm b (balSlot sevm.caller)) (balSlot sevm.caller)
+        (b.getStorVal sevm.currentTarget (balSlot sevm.caller) + sevm.value)) :
+    ∃ b', SFunc.RunExact prog sevm (St b (ret :: S) M
+      (G + 1456 + sstoreCost sevm (afterSload sevm b (balSlot sevm.caller)) (balSlot sevm.caller)
+        (b.getStorVal sevm.currentTarget (balSlot sevm.caller) + sevm.value) + 16 +
+        sloadCost sevm b (balSlot sevm.caller) + 104)) t_0440_c1
+      (.returned (St b' S (depMem M sevm.caller.toB256 sevm.value) G)) ∧ b'.output = b.output := by
+  obtain ⟨b', hrun, hout, -⟩ := deposit_body_framed hfork hstatic hM hroom hsentry
+  exact ⟨b', hrun, hout⟩
 
 /-- A payable entry (the `deposit()` wrapper and the fallback): two pushes, the call into the body,
 a `STOP`.  `15` gas before the body, `1` after it. -/
+theorem deposit_wrap_framed {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {T : SFunc}
+    {c0 c1 : UInt8} {le1 : [c0, c1].length ≤ 32} {le2 : [0x04, 0x40].length ≤ 32}
+    (hT : T = .dest (.next (.push [c0, c1] le1) (.next (.push [0x04, 0x40] le2)
+      (.callNext 1 (.dest (.last .stop))))))
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hroom : S.length < 1000)
+    (hsentry : gCallStipend < G + 1 + 1456 +
+      sstoreCost sevm (afterSload sevm b (balSlot sevm.caller)) (balSlot sevm.caller)
+        (b.getStorVal sevm.currentTarget (balSlot sevm.caller) + sevm.value)) :
+    ∃ post, SFunc.RunExact prog sevm (St b S memFp
+      (G + 1 + 1456 + sstoreCost sevm (afterSload sevm b (balSlot sevm.caller))
+        (balSlot sevm.caller) (b.getStorVal sevm.currentTarget (balSlot sevm.caller) + sevm.value)
+        + 16 + sloadCost sevm b (balSlot sevm.caller) + 104 + 15)) T (.halted post) ∧
+      post.gasLeft = G ∧ post.output = b.output ∧ DepositFramePost sevm b post := by
+  subst hT
+  obtain ⟨b', hbody, hout, hpost⟩ := deposit_body_framed (S := S) (ret := Bytes.toB256 [c0, c1]) (G := G + 1)
+    hfork hstatic fp_memFp hroom hsentry
+  refine ⟨?post, ?run, ?gas, ?out, ?frame⟩
+  case run =>
+    rdest
+    rpush
+    rpush
+    refine rx_callRet (j := 1) rfl hbody ?_
+    rdest
+    exact rx_stop
+  case gas => rfl
+  case out => exact hout
+  case frame => exact ⟨hpost.state, hpost.error, hpost.refund, hpost.accountsToDelete, hpost.logs⟩
+
+/-- The original wrapper interface is a projection of the framed witness. -/
 theorem deposit_wrap {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {T : SFunc}
     {c0 c1 : UInt8} {le1 : [c0, c1].length ≤ 32} {le2 : [0x04, 0x40].length ≤ 32}
     (hT : T = .dest (.next (.push [c0, c1] le1) (.next (.push [0x04, 0x40] le2)
@@ -97,19 +177,8 @@ theorem deposit_wrap {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {T : SFu
         (balSlot sevm.caller) (b.getStorVal sevm.currentTarget (balSlot sevm.caller) + sevm.value)
         + 16 + sloadCost sevm b (balSlot sevm.caller) + 104 + 15)) T (.halted post) ∧
       post.gasLeft = G ∧ post.output = b.output := by
-  subst hT
-  obtain ⟨b', hbody, hout⟩ := deposit_body (S := S) (ret := Bytes.toB256 [c0, c1]) (G := G + 1)
-    hfork hstatic fp_memFp hroom hsentry
-  refine ⟨?post, ?run, ?gas, ?out⟩
-  case run =>
-    rdest
-    rpush
-    rpush
-    refine rx_callRet (j := 1) rfl hbody ?_
-    rdest
-    exact rx_stop
-  case gas => rfl
-  case out => exact hout
+  obtain ⟨post, hrun, hgas, hout, -⟩ := deposit_wrap_framed hT hfork hstatic hroom hsentry
+  exact ⟨post, hrun, hgas, hout⟩
 
 /-- The eleven selectors of the deployed WETH9's dispatcher. -/
 def weth9Sels : List B256 :=
@@ -208,14 +277,15 @@ def fallbackGas (sevm : Sevm) (pre : Devm) : Nat :=
   1896 + depositLoad sevm pre + depositStore sevm pre
 
 /-- A frame entering `deposit()` (any callvalue) succeeds at exactly `depositGas`. -/
-theorem weth9_deposit_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
+theorem weth9_deposit_runExact_framed {sevm : Sevm} {pre : Devm} {G : Nat}
     (hfork : CoveredFork sevm.benvStat.fork) (h_static : sevm.isStatic = false)
     (h_sel : Sevm.selector sevm = dpSel)
     (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
     (h_stack : pre.stack = []) (h_mem : pre.memory = Mem.empty)
     (h_gas : pre.gasLeft = G + depositGas sevm pre)
     (h_sentry : gCallStipend < G + 1457 + depositStore sevm pre) :
-    ∃ post, SProg.RunExact prog sevm pre post ∧ post.gasLeft = G ∧ post.output = pre.output := by
+    ∃ post, SProg.RunExact prog sevm pre post ∧ post.gasLeft = G ∧ post.output = pre.output ∧
+      DepositFramePost sevm pre post := by
   have hsel : Sevm.selector sevm = 0xd0e30db0 := h_sel.trans dpSel_eq
   have hg : G + 1 + 1456 + sstoreCost sevm (afterSload sevm pre (balSlot sevm.caller))
       (balSlot sevm.caller) (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) + sevm.value)
@@ -235,13 +305,26 @@ theorem weth9_deposit_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
     generalize sstoreCost sevm (afterSload sevm pre (balSlot sevm.caller)) (balSlot sevm.caller)
       (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) + sevm.value) = s at this ⊢
     omega
-  obtain ⟨post, hrun, hpg, hpo⟩ := deposit_wrap (T := t_03ca_c19) (S := [Sevm.selector sevm])
+  obtain ⟨post, hrun, hpg, hpo, hframe⟩ := deposit_wrap_framed (T := t_03ca_c19) (S := [Sevm.selector sevm])
     (G := G) (b := pre) rfl hfork h_static (by simp only [List.length_cons, List.length_nil,
       zero_add, Nat.one_lt_ofNat]) hs
-  refine ⟨post, ⟨_, rfl, ?_⟩, hpg, hpo⟩
+  refine ⟨post, ⟨_, rfl, ?_⟩, hpg, hpo, hframe⟩
   have h0 := dispatch_deposit (b := pre) h_len h_len' hsel hrun
   rw [pre_eq_St h_stack h_mem hg] at h0
   exact h0
+
+/-- The original entry interface is a projection of the framed witness. -/
+theorem weth9_deposit_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork) (h_static : sevm.isStatic = false)
+    (h_sel : Sevm.selector sevm = dpSel)
+    (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
+    (h_stack : pre.stack = []) (h_mem : pre.memory = Mem.empty)
+    (h_gas : pre.gasLeft = G + depositGas sevm pre)
+    (h_sentry : gCallStipend < G + 1457 + depositStore sevm pre) :
+    ∃ post, SProg.RunExact prog sevm pre post ∧ post.gasLeft = G ∧ post.output = pre.output := by
+  obtain ⟨post, hrun, hgas, hout, -⟩ := weth9_deposit_runExact_framed hfork h_static h_sel
+    h_len h_len' h_stack h_mem h_gas h_sentry
+  exact ⟨post, hrun, hgas, hout⟩
 
 /-- A frame with calldata shorter than four bytes enters the payable fallback and succeeds at exactly
 `fallbackShortGas`. -/

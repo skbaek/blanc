@@ -2,6 +2,8 @@ import Blanc.Lift.Weth9.Creation.Cert
 import Blanc.Lift.PackedSha
 import Blanc.Lift.WalkSteps
 import Blanc.Lift.Deploy
+import Blanc.SystemCallForward
+import Blanc.Lift.ExactLeaf
 
 /-!
 # The WETH9 constructor, walked
@@ -426,17 +428,30 @@ theorem segDecimals {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = cod
   decide
 
 
+/-- The constructor's final world, projected before substituting a memory image. -/
+theorem ctor_return_state (sevm : Sevm) (b : Devm) (M : Mem) (G : Nat) :
+    (returnPost (St (afterSstore sevm (wDecimals sevm b) 2 18)
+      [Nat.toB256 0, Nat.toB256 3124] M G) (Nat.toB256 0) (Nat.toB256 3124) []).state =
+      ((b.state.setStorVal sevm.currentTarget 0 nameSlotWord).setStorVal
+        sevm.currentTarget 1 symbolSlotWord).setStorVal sevm.currentTarget 2 18 := by
+  rw [returnPost_state, St_state]
+  rw [Blanc.afterSstore_state]
+  unfold wDecimals wSymbol wName
+  simp only [Blanc.Lift.NodeWalk.afterSload_state, Blanc.afterSstore_state]
+
 /-- **The WETH9 constructor, gas-exact**: from a fresh account (empty storage, zero call value)
 with an empty stack and memory and `G + ctorCost` gas, the lifted constructor halts with `G`
 gas left, returning the runtime window, with the world's error unchanged and the name, symbol
 and decimals written. -/
-theorem ctor_run {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
+theorem ctor_run_framed {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
     (hvalue : sevm.value = 0) {b : Devm}
     (hstor : ∀ x, (Devm.getStor b sevm.currentTarget).get x = 0) {G : Nat} (hG : 2300 ≤ G) :
     ∃ post, SProg.RunExact prog sevm (St b [] Mem.empty (G + ctorCost sevm b)) post ∧
       post.output = runtimeWindow ∧ post.error = b.error ∧
       Devm.getStor post sevm.currentTarget = ctorStor (Devm.getStor b sevm.currentTarget) ∧
-      post.gasLeft = G := by
+      post.gasLeft = G ∧
+      post.state = ((b.state.setStorVal sevm.currentTarget 0 nameSlotWord).setStorVal
+        sevm.currentTarget 1 symbolSlotWord).setStorVal sevm.currentTarget 2 18 := by
   set ca := sevm.currentTarget with hca
   set m10 := m10w with hm10
   have hs10 : m10.size = 3136 := by
@@ -467,7 +482,7 @@ theorem ctor_run {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
   swap
   · obtain ⟨p1, p2, p3, p4⟩ := returnPost_facts (St (afterSstore sevm (wDecimals sevm b) 2 18)
       [Nat.toB256 0, Nat.toB256 3124] m10 G) (Nat.toB256 0) (Nat.toB256 3124) []
-    refine ⟨?_, ?_, ?_, p4⟩
+    refine ⟨?_, ?_, ?_, p4, ?_⟩
     · rw [p1]
       simp only [St.memory, toNat_toB256' (show 3124 < 2 ^ 256 by decide),
         toNat_toB256' (show 0 < 2 ^ 256 by decide)]
@@ -477,11 +492,24 @@ theorem ctor_run {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
     · rw [p3, St_getStor, hca]
       simp only [afterSstore_getStor_self, wDecimals, wSymbol, wName, afterSload_getStor,
         ctorStor]
+    · exact ctor_return_state sevm b m10 G
   rw [show G + ctorCost sevm b = G + 3 + copyCost + 45 +
       sstoreCost sevm (wDecimals sevm b) 2 18 + 40 + sloadCost sevm (wSymbol sevm b) 2 + 28 +
       helperCost sevm (wName sevm b) 1 symbolSlotWord + 8 + 101 +
       helperCost sevm b 0 nameSlotWord + 8 + 116 by unfold ctorCost; omega]
   exact segName fr hold0 (by omega) (segSymbol fr hold1 (by omega)
     (segDecimals fr hcode hvalue hold2 hG))
+
+/-- The storage-only constructor interface, retained for existing consumers. -/
+theorem ctor_run {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
+    (hvalue : sevm.value = 0) {b : Devm}
+    (hstor : ∀ x, (Devm.getStor b sevm.currentTarget).get x = 0) {G : Nat} (hG : 2300 ≤ G) :
+    ∃ post, SProg.RunExact prog sevm (St b [] Mem.empty (G + ctorCost sevm b)) post ∧
+      post.output = runtimeWindow ∧ post.error = b.error ∧
+      Devm.getStor post sevm.currentTarget = ctorStor (Devm.getStor b sevm.currentTarget) ∧
+      post.gasLeft = G := by
+  obtain ⟨post, hrun, hout, herr, hstor, hgas, -⟩ :=
+    ctor_run_framed fr hcode hvalue hstor hG
+  exact ⟨post, hrun, hout, herr, hstor, hgas⟩
 
 end Blanc.Lift.Weth9.Creation
