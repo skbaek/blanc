@@ -67,7 +67,7 @@
       <div>
         <div class="term" id="heroterm"><span class="p">$</span> lake build
 <span class="p">$</span> scripts/check.sh --no-build
-<span class="ok">OK — axiom audit: one union walk over Blanc reaches only the standard axioms; 1066 leaf results</span>
+<span class="ok">OK — axiom audit: one union walk over Blanc reaches only the standard axioms; 1051 leaf results</span>
 <span class="p">$</span> scripts/check-weth10-differential.sh
 <span class="ok">OK — WETH10 differential: 147/147 rows agree; 28 runtime entries (27 selectors + receive), 2 identity worlds …</span></div>
         <p class="cap"><b>Fig. 1</b> — two of the repository’s gates: the axiom-audit line is that
@@ -79,7 +79,7 @@
         <div class="pills">
           <span class="pill"><span class="d"></span>0 sorry — CI-enforced</span>
           <span class="pill"><span class="d"></span>axioms: propext · choice · quot</span>
-          <span class="pill"><span class="d"></span>1066 leaf results, one axiom walk in CI</span>
+          <span class="pill"><span class="d"></span>1051 leaf results, one axiom walk in CI</span>
           <span class="pill">Jaune pinned by commit</span>
         </div>
       </div>
@@ -109,7 +109,7 @@
     <div class="factbar">
       <div class="fact"><span class="n">4</span>
         <span class="l">constructors in the whole language — branch, last, next, call. The name is the syntax</span></div>
-      <div class="fact"><span class="n">1066</span>
+      <div class="fact"><span class="n">1051</span>
         <span class="l">leaf results — independently valuable theorems, all axiom-checked by one walk of the whole library, in CI on every commit</span></div>
       <div class="fact"><span class="n">10</span>
         <span class="l">contracts in — seven ports, three études, from a WETH to the eth2 deposit contract — each with a page of receipts</span></div>
@@ -1490,7 +1490,7 @@
 <span class="p">$</span> scripts/check-claims.sh</div>
         <p class="dim" style="font-size:.88rem;margin:14px 0 0">
           <span class="mono">check.sh</span> walks every constant of the library once for axioms,
-          and finds the 1066 leaf results — failing on any axiom beyond the three, on <span class="mono">sorryAx</span>,
+          and finds the 1051 leaf results — failing on any axiom beyond the three, on <span class="mono">sorryAx</span>,
           and on any <span class="mono">native_decide</span>-style escape.
           <span class="mono">check-claims.sh</span> then Lean-checks the exact <em>statements</em> of
           the protected WETH10 redeemability set, the Lido Registry mutation,

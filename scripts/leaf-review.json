@@ -1261,6 +1261,10 @@
    "fp": "0000000078f507a9",
    "kind": "theorem"
   },
+  "Blanc.ExecutionTrace.consecutive_withdrawal_segments": {
+   "fp": "000000002e906f1c",
+   "kind": "theorem"
+  },
   "Blanc.ExecutionTrace.systemTransactionMessage_benv_createdAccounts": {
    "fp": "00000000db491057",
    "kind": "theorem"
@@ -2073,10 +2077,6 @@
    "fp": "000000008578dade",
    "kind": "theorem"
   },
-  "Blanc.Lift.BeaconDeposit.beacon_history_preserves_solInv": {
-   "fp": "000000008649ccd6",
-   "kind": "theorem"
-  },
   "Blanc.Lift.BeaconDeposit.beacon_zero_init": {
    "fp": "00000000ce33fe93",
    "kind": "theorem"
@@ -2113,32 +2113,8 @@
    "fp": "0000000067e42697",
    "kind": "theorem"
   },
-  "Blanc.Lift.Cert.checkEntriesM_of_indexedFrom": {
-   "fp": "000000008b821396",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.Cert.jumpsOkM_of_indexed": {
-   "fp": "000000002b402ab7",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.Conf.below_d": {
-   "fp": "00000000ece24621",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.Conf.below_f": {
-   "fp": "000000009cc3d3f2",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.Curve3Crv.c3crvCarriedSpec_soundAdmitted": {
-   "fp": "000000008bf2f23b",
-   "kind": "theorem"
-  },
   "Blanc.Lift.Curve3Crv.c3crv_history_live": {
    "fp": "000000000a02859d",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.Curve3Crv.c3crv_history_preserves_inv": {
-   "fp": "00000000590d49d6",
    "kind": "theorem"
   },
   "Blanc.Lift.Curve3Crv.c3crv_history_setName_live": {
@@ -2159,10 +2135,6 @@
   },
   "Blanc.Lift.LidoCircuitBreakerDeployed.exampleApplicable": {
    "fp": "000000008acf2754",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.LidoCircuitBreakerDeployed.lidoSpec_soundAdmitted": {
-   "fp": "000000004d7be976",
    "kind": "theorem"
   },
   "Blanc.Lift.LidoCircuitBreakerDeployed.lido_create_finite_init": {
@@ -2187,10 +2159,6 @@
   },
   "Blanc.Lift.NodeWalk.afterSload_shadow": {
    "fp": "0000000090bc89f8",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.NodeWalk.childCfg_re": {
-   "fp": "0000000072ef02ad",
    "kind": "theorem"
   },
   "Blanc.Lift.NodeWalk.childCfg_withFork": {
@@ -2245,10 +2213,6 @@
    "fp": "00000000d6c12671",
    "kind": "theorem"
   },
-  "Blanc.Lift.UniswapV2Pair.ExactConsumes.ledger": {
-   "fp": "000000009713cd24",
-   "kind": "theorem"
-  },
   "Blanc.Lift.UniswapV2Pair.LedgerKeyControl.approve_storage_alias_breaks_ledger": {
    "fp": "00000000080e22fa",
    "kind": "theorem"
@@ -2269,20 +2233,16 @@
    "fp": "00000000091b68d1",
    "kind": "theorem"
   },
+  "Blanc.Lift.UniswapV2Pair.ModelMutants.runTypedWith_production": {
+   "fp": "0000000074ae9103",
+   "kind": "theorem"
+  },
   "Blanc.Lift.UniswapV2Pair.OracleControls.oracle_law_requires_timestamp_wrap": {
    "fp": "00000000393dcfb8",
    "kind": "theorem"
   },
-  "Blanc.Lift.UniswapV2Pair.PairStorageReplay.append": {
-   "fp": "00000000682f6ecb",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.UniswapV2Pair.PairStorageReplay.nil": {
-   "fp": "00000000957f34c6",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.UniswapV2Pair.RefinementControls.burn_refinement_control": {
-   "fp": "000000002607bed2",
+  "Blanc.Lift.UniswapV2Pair.RefinementControls.burn_witness_disagrees": {
+   "fp": "000000005ca6e980",
    "kind": "theorem"
   },
   "Blanc.Lift.UniswapV2Pair.allowance_bytecode_live": {
@@ -2337,10 +2297,6 @@
    "fp": "0000000059b419a9",
    "kind": "theorem"
   },
-  "Blanc.Lift.UniswapV2Pair.initialize_source_bytecode_exact": {
-   "fp": "000000002cdcc112",
-   "kind": "theorem"
-  },
   "Blanc.Lift.UniswapV2Pair.kLast_bytecode_live": {
    "fp": "0000000058a5d422",
    "kind": "theorem"
@@ -2361,10 +2317,6 @@
    "fp": "0000000037f113c8",
    "kind": "theorem"
   },
-  "Blanc.Lift.UniswapV2Pair.mint_bytecode_forward_consumes": {
-   "fp": "000000003db247ce",
-   "kind": "theorem"
-  },
   "Blanc.Lift.UniswapV2Pair.mint_no_success_of_reverting_token0": {
    "fp": "00000000ad69d8cb",
    "kind": "theorem"
@@ -2381,8 +2333,12 @@
    "fp": "000000002dfdc8b5",
    "kind": "theorem"
   },
-  "Blanc.Lift.UniswapV2Pair.oracle_timestamp_mod_control": {
-   "fp": "000000006c61b120",
+  "Blanc.Lift.UniswapV2Pair.pair_history_feeOff_ratio": {
+   "fp": "000000000a07b2eb",
+   "kind": "theorem"
+  },
+  "Blanc.Lift.UniswapV2Pair.pair_history_minimum_liquidity": {
+   "fp": "00000000d841e0c8",
    "kind": "theorem"
   },
   "Blanc.Lift.UniswapV2Pair.permitTypehash_bytecode_live": {
@@ -2391,10 +2347,6 @@
   },
   "Blanc.Lift.UniswapV2Pair.permitTypehash_bytecode_refines": {
    "fp": "00000000c252aa5a",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.UniswapV2Pair.permit_source_bytecode_exact": {
-   "fp": "000000009f773166",
    "kind": "theorem"
   },
   "Blanc.Lift.UniswapV2Pair.price0CumulativeLast_bytecode_live": {
@@ -2561,10 +2513,6 @@
    "fp": "0000000062a8743e",
    "kind": "theorem"
   },
-  "Blanc.Lift.Weth9.views_silent": {
-   "fp": "0000000043508f20",
-   "kind": "theorem"
-  },
   "Blanc.Lift.Weth9.weth9Gas_le_max": {
    "fp": "000000003733b3fd",
    "kind": "theorem"
@@ -2653,10 +2601,6 @@
    "fp": "00000000f958c0b0",
    "kind": "theorem"
   },
-  "Blanc.Lift.WithdrawalRequest.consecutive_withdrawal_submission_count_lt": {
-   "fp": "000000005781cc05",
-   "kind": "theorem"
-  },
   "Blanc.Lift.WithdrawalRequest.exec_static_frame": {
    "fp": "000000002a4cbecd",
    "kind": "theorem"
@@ -2691,10 +2635,6 @@
   },
   "Blanc.Lift.WithdrawalRequest.history_fee_getter_word_live": {
    "fp": "00000000f78d52a8",
-   "kind": "theorem"
-  },
-  "Blanc.Lift.WithdrawalRequest.history_requestsTrace_result": {
-   "fp": "00000000a0d087a4",
    "kind": "theorem"
   },
   "Blanc.Lift.WithdrawalRequest.history_submission_payments": {
