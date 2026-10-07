@@ -164,6 +164,34 @@ theorem deposit_fold_terminal {txs : List (Nat × Tx)} {benv finalBenv : Benv}
       obtain ⟨rfl, rfl⟩ := same
       exact ⟨rfl, rfl⟩
 
+/-- The two retained STOP protocol roots preserve the exact transaction-entry world. -/
+theorem deposit_body_prefix {st post : Jaune.State} {bodyBout : BlockOutput}
+    (trace : AppliedBodyTrace (input st) [.inr depositTx] [] post bodyBout)
+    (beforeCodes : SystemCodes st) :
+    trace.beaconState = st ∧ trace.historyState = st ∧
+      ((input st).withState trace.beaconState).withState trace.historyState = input st := by
+  have codeBefore (a : Adr) (ha : a ∈ systemAddresses) :
+      some (st.getCode a).toList = Prog.compile deploymentSystemProgram := by
+    rw [beforeCodes a ha]
+    exact systemCode_compile
+  obtain ⟨outBeacon, runBeacon, -⟩ := processUncheckedSystemTransaction_deploymentSystemProgram
+    (input st) beaconRootsAddress (input st).stat.parentBeaconBlockRoot.toBytes
+    (codeBefore _ (by decide +kernel))
+    (by change ¬ Fork.bpo2.ruleSet.isPrecomp beaconRootsAddress; decide +kernel) CoveredFork.bpo2
+  have beaconEq : trace.beaconState = st :=
+    (Prod.mk.inj (Except.ok.inj (trace.beacon.run.symm.trans runBeacon))).1
+  obtain ⟨outHistory, runHistory, -⟩ := processUncheckedSystemTransaction_deploymentSystemProgram
+    (input st) historyStorageAddress trace.lastHash.toBytes
+    (codeBefore _ (by decide +kernel))
+    (by change ¬ Fork.bpo2.ruleSet.isPrecomp historyStorageAddress; decide +kernel) CoveredFork.bpo2
+  have historyRun := trace.history.run
+  rw [beaconEq] at historyRun
+  have historyEq : trace.historyState = st :=
+    (Prod.mk.inj (Except.ok.inj (historyRun.symm.trans runHistory))).1
+  refine ⟨beaconEq, historyEq, ?_⟩
+  rw [beaconEq, historyEq]
+  rfl
+
 /-- Actual system-call entry code follows from the retained body and the two settled worlds. -/
 theorem deposit_body_system_codes {st post : Jaune.State} {txBout bodyBout : BlockOutput}
     (trace : AppliedBodyTrace (input st) [.inr depositTx] [] post bodyBout)
@@ -185,20 +213,7 @@ theorem deposit_body_system_codes {st post : Jaune.State} {txBout bodyBout : Blo
       some (post.getCode a).toList = Prog.compile deploymentSystemProgram := by
     rw [afterCodes a ha]
     exact systemCode_compile
-  obtain ⟨outBeacon, runBeacon, -⟩ := processUncheckedSystemTransaction_deploymentSystemProgram
-    (input st) beaconRootsAddress (input st).stat.parentBeaconBlockRoot.toBytes
-    (codeBefore _ (by decide +kernel))
-    (by change ¬ Fork.bpo2.ruleSet.isPrecomp beaconRootsAddress; decide +kernel) CoveredFork.bpo2
-  have beaconEq : trace.beaconState = st :=
-    (Prod.mk.inj (Except.ok.inj (trace.beacon.run.symm.trans runBeacon))).1
-  obtain ⟨outHistory, runHistory, -⟩ := processUncheckedSystemTransaction_deploymentSystemProgram
-    (input st) historyStorageAddress trace.lastHash.toBytes
-    (codeBefore _ (by decide +kernel))
-    (by change ¬ Fork.bpo2.ruleSet.isPrecomp historyStorageAddress; decide +kernel) CoveredFork.bpo2
-  have historyRun := trace.history.run
-  rw [beaconEq] at historyRun
-  have historyEq : trace.historyState = st :=
-    (Prod.mk.inj (Except.ok.inj (historyRun.symm.trans runHistory))).1
+  obtain ⟨beaconEq, historyEq, -⟩ := deposit_body_prefix trace beforeCodes
   have headRun : processTransaction
       (((input st).withState trace.beaconState).withState trace.historyState)
       .init depositTx 0 = .ok (post, txBout) := by
