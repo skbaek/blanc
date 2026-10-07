@@ -32,9 +32,10 @@ here. What changed since, checked against this tree:
 - **S6 (the rounding control is a seam witness): replaced by mutated drivers.**
   `ModelMutants` clones only the driver pieces that call the changed arithmetic;
   `ModelControls.mintRoundUp_breaks_feeOff_product` fails the product inequality on a state the
-  mutant reaches. The frame-level burn-rounding control
-  (`RefinementControls.burn_refinement_control`) is conditional on one named hypothesis
-  (`BurnWitnessExists`); the production burn frame refinement is proved (`burnFrameRefinement_holds`).
+  mutant reaches. The burn-rounding control `RefinementControls.burn_witness_disagrees` is closed in
+  the typed model. Its former frame-level form was removed: its named hypothesis was refutable, because
+  the burn authentication names each `balanceOf(pair)` answer by call target and input, not by position
+  (claim map Section 7 item 26).
 
 ## 1. Correspondence table
 

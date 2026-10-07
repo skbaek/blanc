@@ -497,7 +497,7 @@ a statement fail; they say the statements above are not vacuous or insensitive.
 |---|---|---|
 | NoShrink is needed: on a reachable sync, a token answer below the stored reserve is accepted by the model and the share-value inequality then fails | `Blanc.Lift.UniswapV2Pair.ModelControls.noShrink_required` (`Blanc/Lift/UniswapV2Pair/ModelControls.lean:115`) | typed model, kernel evaluation of the production driver |
 | The model is sensitive to its arithmetic: a mint that rounds up breaks the fee-off share-value inequality on a state it reaches; a fee constant other than 997 and a burn that rounds toward the user each give a different accepted run | `Blanc.Lift.UniswapV2Pair.ModelControls.mintRoundUp_breaks_feeOff_product` (`Blanc/Lift/UniswapV2Pair/ModelControls.lean:216`), `Blanc.Lift.UniswapV2Pair.ModelControls.feeMutant_disagrees` (`Blanc/Lift/UniswapV2Pair/ModelControls.lean:269`), `Blanc.Lift.UniswapV2Pair.ModelControls.burnRoundUp_disagrees` (`Blanc/Lift/UniswapV2Pair/ModelControls.lean:291`) | typed model; mutated drivers compose the unchanged transitions with one changed arithmetic function |
-| The burn-rounding mutant disagrees with production on a state reached from the deployment image; **the frame-level form `Blanc.Lift.UniswapV2Pair.RefinementControls.burn_refinement_control` (`Blanc/Lift/UniswapV2Pair/RefinementControls.lean:156`) is conditional on one named hypothesis** (one successful raw burn run at that state) that this tree states but does not discharge | `Blanc.Lift.UniswapV2Pair.RefinementControls.burn_witness_disagrees` (`Blanc/Lift/UniswapV2Pair/RefinementControls.lean:64`); the production burn frame refinement the frame form consumes is proved, `Blanc.Lift.UniswapV2Pair.RefinementControls.burnFrameRefinement_holds` (`Blanc/Lift/UniswapV2Pair/RefinementControls.lean:127`) | typed model (closed); frame form EVM-conditional |
+| The burn-rounding mutant disagrees with production on a state reached from the deployment image, in the typed model. No frame-level form is claimed: the burn frame's authentication names each callee answer by call target and input, not by position (Section 7 item 26), so no raw run pins which reading the model consumed | `Blanc.Lift.UniswapV2Pair.RefinementControls.burn_witness_disagrees` (`Blanc/Lift/UniswapV2Pair/RefinementControls.lean:62`) | typed model (closed) |
 | The oracle law needs the `uint32` wrap: a reached update at a block timestamp past `2^32` satisfies the exact law and refutes the law with the wrap removed | `Blanc.Lift.UniswapV2Pair.OracleControls.oracle_law_requires_timestamp_wrap` (`Blanc/Lift/UniswapV2Pair/OracleControls.lean:50`); the bytecode's own wrap `Blanc.Lift.UniswapV2Pair.update_timestamp_wrap_control` (`Blanc/Lift/UniswapV2Pair/UpdateArithmetic.lean:166`) | typed model; the second is a raw walk |
 | The `uint112` guard is load-bearing: a balance of `2^112` passes the fee-adjusted check and the typed swap still fails; every successful raw swap run observes balances below `2^112` | `Blanc.Lift.UniswapV2Pair.swap_uint112_control` (`Blanc/Lift/UniswapV2Pair/PropertiesSwap.lean:1151`), `Blanc.Lift.UniswapV2Pair.swap_bytecode_uint112_control` (`Blanc/Lift/UniswapV2Pair/SwapControls.lean:28`); the update walks `Blanc.Lift.UniswapV2Pair.update_uint112_overflow_control` (`Blanc/Lift/UniswapV2Pair/UpdateWalk.lean:108`), `Blanc.Lift.UniswapV2Pair.update_overflow_uint112_kernel_control` (`Blanc/Lift/UniswapV2Pair/UpdateOverflowWalk.lean:390`) | typed model, and universal over successful raw runs (no concrete reverting run is exhibited) |
 | HASH-T is load-bearing for the ledger: a duplicated key breaks the footprint sum, and a successful raw `approve` whose allowance slot aliases a tracked balance slot (a hypothesis; no Keccak collision is asserted) ends outside raw ledger conservation | `Blanc.Lift.UniswapV2Pair.footprintSum_dup_breaks_ledger` (`Blanc/Lift/UniswapV2Pair/PropertiesLedger.lean:76`), `Blanc.Lift.UniswapV2Pair.LedgerKeyControl.approve_storage_alias_breaks_ledger` (`Blanc/Lift/UniswapV2Pair/LedgerKeyControl.lean:38`) | model; EVM-conditional on the alias |
@@ -790,11 +790,8 @@ V− transaction row (M7) starts from a different, synthetic prestate. For both 
     block a step's frame belongs to beyond that frame's own block environment.
 23. **Altitude of the Uniswap controls.** The model controls run the typed
     functional model, not EVM execution. The bytecode controls are universal over
-    successful raw runs and exhibit no concrete reverting run. The frame-level
-    burn-rounding control is conditional on one named hypothesis (one successful
-    raw burn run at the witness state, with a concrete callee environment) that the
-    tree states but does not discharge; the production burn frame refinement it
-    consumes is proved.
+    successful raw runs and exhibit no concrete reverting run. No frame-level
+    burn-rounding control is claimed (item 26).
 24. **The Uniswap deployment is modeled.** `pair_create2_initialized` is the
     `CREATE2` step of a non-static factory frame, with the constructor run inside
     the step, followed by a successful `initialize` from the creator. It is not
@@ -817,6 +814,17 @@ V− transaction row (M7) starts from a different, synthetic prestate. For both 
     the creator, whose nonce stays zero. That equivalent messages are producible
     by admitted transactions (sender keys, nonce-derived addresses, gas and warm
     sets) is argued, not proved.
+26. **The Uniswap burn authentication is not positional.** The burn frame's
+    authentication accepts each `balanceOf(pair)` answer as the reply of some
+    `STATICCALL` of that frame with the right target and input, not of the call
+    at a given position. `burn` reads each token's balance twice, before and after
+    its transfers, so the authentication alone does not say which of the two
+    replies the model consumed. The exact storage, log and return-byte equalities
+    of the refinement still constrain the choice: the two readings are
+    interchangeable only when both give the same model result. A premise over a
+    history's authenticated burn answers (NoShrink) must therefore hold for every
+    admissible reading. The mint, sync, skim and swap authentications name their
+    calls in order.
 
 ## 8. Axiom guarantee
 
