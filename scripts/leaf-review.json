@@ -1389,10 +1389,6 @@
    "fp": "00000000b515a268",
    "kind": "theorem"
   },
-  "Blanc.ForkUniform.Sevm.withFork_code": {
-   "fp": "00000000c3e8c330",
-   "kind": "theorem"
-  },
   "Blanc.ForkUniform.Sevm.withFork_codeAddress": {
    "fp": "000000001ade0628",
    "kind": "theorem"
@@ -2181,12 +2177,36 @@
    "fp": "000000000e52d514",
    "kind": "theorem"
   },
+  "Blanc.Lift.NodeWalk.ChildAgree.afterSload": {
+   "fp": "00000000bdfa7cf6",
+   "kind": "theorem"
+  },
+  "Blanc.Lift.NodeWalk.Frame.ofCall_withOrig": {
+   "fp": "00000000dc470a2f",
+   "kind": "theorem"
+  },
+  "Blanc.Lift.NodeWalk.afterSload_shadow": {
+   "fp": "0000000090bc89f8",
+   "kind": "theorem"
+  },
+  "Blanc.Lift.NodeWalk.childCfg_re": {
+   "fp": "0000000072ef02ad",
+   "kind": "theorem"
+  },
   "Blanc.Lift.NodeWalk.childCfg_withFork": {
    "fp": "00000000f8b9bca4",
    "kind": "theorem"
   },
+  "Blanc.Lift.NodeWalk.childCfg_withOrig": {
+   "fp": "0000000015b005e1",
+   "kind": "theorem"
+  },
   "Blanc.Lift.NodeWalk.hashPol_bites": {
    "fp": "00000000bf1f32ea",
+   "kind": "theorem"
+  },
+  "Blanc.Lift.NodeWalk.sloadCost_shadow": {
+   "fp": "000000007fa1b6bb",
    "kind": "theorem"
   },
   "Blanc.Lift.PtrWord.set": {
@@ -2481,6 +2501,14 @@
    "fp": "00000000fc086856",
    "kind": "theorem"
   },
+  "Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit.vplus_reachable_capstone": {
+   "fp": "00000000ca6ee793",
+   "kind": "theorem"
+  },
+  "Blanc.Lift.VyperNonreentrantDeployed.Fixed.ReceiverR.cert_check": {
+   "fp": "000000008ee9e46e",
+   "kind": "theorem"
+  },
   "Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness.Reader.cert_check": {
    "fp": "00000000a3a9ab1e",
    "kind": "theorem"
@@ -2495,6 +2523,10 @@
   },
   "Blanc.Lift.VyperNonreentrantDeployed.Fixed.lock_no_forbidden": {
    "fp": "000000002a626726",
+   "kind": "theorem"
+  },
+  "Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol.vminus_reachable_capstone": {
+   "fp": "000000001168e087",
    "kind": "theorem"
   },
   "Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top.vminus_witness": {
@@ -2681,8 +2713,8 @@
    "fp": "000000006278f9bb",
    "kind": "theorem"
   },
-  "Blanc.Lift.Witness.wrun_add_cont": {
-   "fp": "00000000f71765a6",
+  "Blanc.Lift.Witness.Boundary.cfgOfT_acs": {
+   "fp": "00000000a689a35c",
    "kind": "theorem"
   },
   "Blanc.Lift.Witness.wrun_exact": {
