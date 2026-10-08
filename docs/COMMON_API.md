@@ -4683,6 +4683,13 @@ queue. `swapObservedTransferReply` retains that slot's entered bit, and
 `swap_resume_observed_transfer` transports both accepted optional-bool replies
 through the same typed continuation without changing the entered bit.
 
+[`SwapPositionalMutableTransfer.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalMutableTransfer.lean)
+retains each transfer's same complete event queue, mapped selected turns,
+recursively admitted children, checkpoint, finite locked representation and log
+images. `swap_optional_transfer_admitted` shares both optional-transfer source
+phases and composes only `nextMutableCall` with the same selected queue; its
+source index increases exactly when that external instruction executes.
+
 The Pair mutable fold's `mutable_selected_root_with` in
 [`MutableTurns.lean`](../Blanc/Lift/UniswapV2Pair/MutableTurns.lean)
 parameterizes child consumption and turn introductions while the existing
