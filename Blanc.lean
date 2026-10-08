@@ -919,6 +919,8 @@ import Blanc.Lift.UniswapV2Pair.BurnPositional
 import Blanc.Lift.UniswapV2Pair.BurnPositionalReply
 import Blanc.Lift.UniswapV2Pair.BurnPositionalSecond
 import Blanc.Lift.UniswapV2Pair.BurnPositionalBalances
+import Blanc.Lift.UniswapV2Pair.BurnPositionalFee
+import Blanc.Lift.UniswapV2Pair.BurnPositionalThree
 import Blanc.Lift.UniswapV2Pair.SyncOccurrence
 import Blanc.Lift.UniswapV2Pair.SourceOccurrence
 import Blanc.Lift.UniswapV2Pair.SyncSourceOccurrence
@@ -928,6 +930,7 @@ import Blanc.Lift.UniswapV2Pair.PermitPositional
 import Blanc.Lift.UniswapV2Pair.PermitRecoverySettlement
 import Blanc.Lift.UniswapV2Pair.PairCheckedSubCursor
 import Blanc.Lift.UniswapV2Pair.PairFeeCursor
+import Blanc.Lift.UniswapV2Pair.PairFeeObservation
 import Blanc.Lift.UniswapV2Pair.MintPositionalInv
 import Blanc.Lift.UniswapV2Pair.MintPositionalRequest
 import Blanc.Lift.UniswapV2Pair.MintPositionalSecond
