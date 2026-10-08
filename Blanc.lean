@@ -927,6 +927,7 @@ import Blanc.Lift.UniswapV2Pair.BurnPositionalPricing
 import Blanc.Lift.UniswapV2Pair.BurnPositionalPayment
 import Blanc.Lift.UniswapV2Pair.BurnPositionalPayout
 import Blanc.Lift.UniswapV2Pair.BurnPositionalLPBurn
+import Blanc.Lift.UniswapV2Pair.BurnPositionalPostFee
 import Blanc.Lift.UniswapV2Pair.SyncOccurrence
 import Blanc.Lift.UniswapV2Pair.SourceOccurrence
 import Blanc.Lift.UniswapV2Pair.SyncSourceOccurrence
@@ -940,6 +941,7 @@ import Blanc.Lift.UniswapV2Pair.PairCheckedMulCursor
 import Blanc.Lift.UniswapV2Pair.PairLPBurnCursor
 import Blanc.Lift.UniswapV2Pair.PairTransferInitialize
 import Blanc.Lift.UniswapV2Pair.PairTransferCursor
+import Blanc.Lift.UniswapV2Pair.PairTransferPreparation
 import Blanc.Lift.UniswapV2Pair.PairFeeCursor
 import Blanc.Lift.UniswapV2Pair.PairFeeObservation
 import Blanc.Lift.UniswapV2Pair.PairFeeReturn
