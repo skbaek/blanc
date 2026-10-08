@@ -185,6 +185,20 @@ inductive PairObservedReplayWith
 /-- Legacy observed replay is the exact-consumption instance. -/
 abbrev PairObservedReplay := PairObservedReplayWith (fun _ => ExactConsumes)
 
+/-- Retain the qualified legacy introduction names. -/
+theorem PairObservedReplay.nil (st : State) : PairObservedReplay st [] st :=
+  PairObservedReplayWith.nil st
+
+theorem PairObservedReplay.cons {st finish : State} {s : PairStep} {rest : List PairStep}
+    {out : RunResult}
+    (consumed : ExactConsumes
+      (startTyped {state := st, logs := [], updates := []} s.source.context s.source.entry)
+      s.transcript out)
+    (successful : out.status = .success s.frame.post.output)
+    (tail : PairObservedReplay out.frame.current.state rest finish) :
+    PairObservedReplay st (s :: rest) finish :=
+  PairObservedReplayWith.cons consumed successful tail
+
 /-- Change only the per-frame proof; every selected frame/result/output is preserved. -/
 theorem PairObservedReplayWith.mono
     {Consumes Consumes' : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
