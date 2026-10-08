@@ -76,7 +76,7 @@ def burnTransferRequest1 (priced : BurnPriced) : Request :=
   requestFor .burnTransfer1 priced.observed.locals.token1
     (.transfer priced.observed.locals.recipient priced.amount1)
 
-private theorem burn_resumeTransfer0 {frame : Frame} {priced : BurnPriced}
+theorem burn_resumeTransfer0 {frame : Frame} {priced : BurnPriced}
     {out : Bytes} {entered : Bool} (accepted : SkimTransferAccepted out) :
     resumeSegment frame (burnTransferRequest0 priced) (.burnTransfer0 priced)
         (burnTransferResult out entered) =
@@ -86,7 +86,7 @@ private theorem burn_resumeTransfer0 {frame : Frame} {priced : BurnPriced}
       .ok .unit := skim_decodeTransfer rfl rfl rfl accepted
   simp only [resumeSegment, decoded, Frame.suspend, burnTransferRequest1]
 
-private theorem burn_resumeTransfer1 {frame : Frame} {priced : BurnPriced}
+theorem burn_resumeTransfer1 {frame : Frame} {priced : BurnPriced}
     {out : Bytes} {entered : Bool} (accepted : SkimTransferAccepted out) :
     resumeSegment frame (burnTransferRequest1 priced) (.burnTransfer1 priced)
         (burnTransferResult out entered) =
