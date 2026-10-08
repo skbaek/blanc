@@ -78,4 +78,13 @@ theorem skim_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Che
       at projected
     exact projected.trans (afterSstore_getStor_ne _ _ _ _ _ (Ne.symm foreign))
 
+/-- The same admitted Skim result preserves the original source liquidity core.
+This projects the existing source invariant without selecting another result. -/
+theorem SkimPositionalCanonicalResult.liquidityCore {K : WriterKey → Prop}
+    {current : Checkpoint} {invocation : List Nat} {root : Exec.Deriv} {b post : Devm}
+    (result : SkimPositionalCanonicalResult K current invocation root b post) :
+    (skimPositionalResult result.balance0 result.transfer0 result.balance1 result.transfer1).frame.current.state.liquidityCore =
+      current.state.liquidityCore :=
+  skim_source_liquidity result.admitted.positional.forget rfl
+
 end Blanc.Lift.UniswapV2Pair
