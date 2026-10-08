@@ -167,7 +167,7 @@ SHARED += ["LadderBase", "LadderSem", "ContractAdmissionSem", "ExecutionAdmissio
 SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.CheckAssembly", "Lift.ExactWalkOps",
            "Lift.ExactWalkCut", "Lift.ExactWalkCutOps", "Lift.CopyLoop", "Lift.PackedSha",
            "Lift.PackedShaCovered", "Lift.Quiet", "Lift.InvWalk", "Lift.InvWalkOps",
-           "Lift.InvWalkWorld", "Lift.InvWalkGas", "Lift.InvWalkSha", "Lift.InvWalkDispatch", "Lift.InvWalkProvenance", "Lift.CodeSizeWalk"]
+           "Lift.InvWalkWorld", "Lift.InvWalkGas", "Lift.InvWalkSha", "Lift.InvWalkDispatch", "Lift.InvWalkProvenance", "Lift.CodeSizeWalk", "Lift.AccountAccessState"]
 # Creation code (deploy-init-v1): the size-optimised packed-hash site and the CREATE bridge
 # for lifted creation code; contract-neutral.
 SHARED += ["Lift.PackedShaSize", "Lift.Deploy", "Lift.CreationOps", "Lift.Create2Deploy", "Lift.CreateEntry", "Lift.Clone1167", "Lift.CheckAssemblyPair", "Lift.WitnessShadow"]
@@ -382,6 +382,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.SyncOccurrence",
         "Lift.UniswapV2Pair.SourceOccurrence",
         "Lift.UniswapV2Pair.SourceSlotQueueExistence",
+        "Lift.UniswapV2Pair.SourceSlotEventsEmpty",
         "Lift.UniswapV2Pair.SyncSourceOccurrence",
         "Lift.UniswapV2Pair.PermitPositionalCuts",
         "Lift.UniswapV2Pair.PermitPositionalRequest",
@@ -420,6 +421,8 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.PairCodeGuardCursor",
         "Lift.UniswapV2Pair.PairFeeObservation",
         "Lift.UniswapV2Pair.PairFeeSourceCall",
+        "Lift.UniswapV2Pair.PairFeeSourceKeys",
+        "Lift.UniswapV2Pair.PairTraceKeys",
         "Lift.UniswapV2Pair.PairFeeReturn",
         "Lift.UniswapV2Pair.MintPositionalInv",
         "Lift.UniswapV2Pair.MintPositionalRequest",
@@ -459,8 +462,16 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.BurnPositionalSeven",
         "Lift.UniswapV2Pair.BurnPositionalFacts",
         "Lift.UniswapV2Pair.BurnPositionalPricingFacts",
+        "Lift.UniswapV2Pair.BurnPositionalLPFacts",
+        "Lift.UniswapV2Pair.BurnPositionalFeeFacts",
+        "Lift.UniswapV2Pair.BurnPositionalUniverse",
+        "Lift.UniswapV2Pair.BurnPositionalPayoutSource",
         "Lift.UniswapV2Pair.BurnPositionalSource",
+        "Lift.UniswapV2Pair.BurnPositionalInitialQueues",
         "Lift.UniswapV2Pair.BurnPositionalTransferSource",
+        "Lift.UniswapV2Pair.BurnPositionalFinish",
+        "Lift.UniswapV2Pair.BurnPositionalFinishSource",
+        "Lift.UniswapV2Pair.BurnEntrySource",
         "Lift.UniswapV2Pair.SyncGasCanonical",
         "Lift.UniswapV2Pair.SkimWalk",
         "Lift.UniswapV2Pair.SkimPositionalPrefix",
@@ -471,6 +482,10 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.SkimPositionalFour",
         "Lift.UniswapV2Pair.SkimRawFacts",
         "Lift.UniswapV2Pair.SkimPositionalSuffix",
+        "Lift.UniswapV2Pair.SkimSourceOccurrence",
+        "Lift.UniswapV2Pair.SkimPositionalFacts",
+        "Lift.UniswapV2Pair.SkimPositionalCanonical",
+        "Lift.UniswapV2Pair.SkimPositionalRefinement",
         "Lift.UniswapV2Pair.SkimTransferWalk",
         "Lift.UniswapV2Pair.SkimSecondWalk",
         "Lift.UniswapV2Pair.SkimSource",

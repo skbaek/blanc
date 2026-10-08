@@ -3205,7 +3205,13 @@ the lower-depth hypothesis) and `ExecutionAccountingReplay.wholeFrameLadder` tur
 into an `AccountingLadderAdmitted`. The obligation receives the frame's commit proof, so
 its step can name the committed frame. Worked use: the Uniswap V2 pair
 (`Blanc/Lift/UniswapV2Pair/PairHistory.lean`: `pair_wholeFrameReplay`, `pairLadder`,
-`pair_history_committed`), whose calling entries consume re-entered ERC-20 frames as nested
+`pair_history_committed`), whose parameterized `PairObservedReplayWith` (`mono`, `sourceReplay`, `append`),
+`PairStep.AuthenticWith`, `PairReplayWith`, `pairCarrierWith`/`pairObservationWith`,
+`pairSpec_soundAdmittedWith`/`pairSpec_preservesAdmittedWith`,
+`pair_wholeFrameReplayWith`/`pairLadderWith` and `pair_history_committed_with`
+retain one supplied source/admission relation through the existing traversal.
+The generic parameter does not supply an all-family admitted instance.
+Its calling entries consume re-entered ERC-20 frames as nested
 transcript turns; its carrier's boundary is the storage view `(getStor ca).get` (raw `Stor`
 equality is not a function of the words), with representations transported by `WriterRep.congr`.
 
@@ -4247,7 +4253,10 @@ contract-neutral.
   continuation at the selected warm/cold charge.
   `temporalAccountAccessBase_state`, `temporalAccountAccessBase_output` and
   `temporalAccountAccessBase_logs` project the unchanged state, output and logs
-  through account warming. Use these facts to compose an observed call without
+  through account warming. `temporalAccountAccessBase_getStor` and
+  `temporalAccountAccessBase_getCode` in
+  [`Blanc/Lift/AccountAccessState.lean`](../Blanc/Lift/AccountAccessState.lean)
+  preserve storage and code at every address. Use these facts to compose an observed call without
   unfolding the nested world update; the Pair mint prefix consumes all three.
   The existing Lido temporal access names are compatibility declarations over
   this common owner.
@@ -4552,6 +4561,32 @@ derives a complete selected queue from the supplied actual call and parent index
 including the synchronous `.none` case and settlement pruning. Its proof uses
 that call's original slot and spawning derivation; no guessed queue, code or
 commit premise is required.
+
+`feeBranchSourceKeys_contains` in
+[`PairFeeSourceKeys.lean`](../Blanc/Lift/UniswapV2Pair/PairFeeSourceKeys.lean)
+preserves every incoming tracked key through the fee branch's conditional
+recipient extension. `lpMintTouched_rows`, `feeMintFresh_of_universe` and
+`feeBranchSourceKeys_sub` derive recipient freshness and key containment in a
+supplied separated universe; `feeBranchSourceFee_unlocked` preserves the lock
+word. The old Mint helpers and Burn lock helper delegate to these same proofs.
+The existing Burn pricing source proof consumes the inclusion when deriving
+LP-row freshness.
+
+[`PairTraceKeys.lean`](../Blanc/Lift/UniswapV2Pair/PairTraceKeys.lean) owns the
+unchanged `mintReplyRow`, `mintFeeReplyKeys`, `mintTraceKeys`,
+`mintTraceKeys_frame` and `mintTraceKeys_rows` definitions and laws.
+`mint_feeReply_mem` places the supplied actual fee primitive's own reply row
+in that trace, covering entered child roots and synchronous precompile answers.
+The original names remain available through Mint's imports. The actual Burn
+consumer applies this only to the primitive projected from its retained slot;
+it does not use trace membership to select an occurrence. These compound
+trace/universe obligations have no reliable single recipe trigger.
+
+`SourceCallAt.noCodeMutableTranscript` in
+[`SourceSlotEventsEmpty.lean`](../Blanc/Lift/UniswapV2Pair/SourceSlotEventsEmpty.lean)
+derives the empty mutable transcript for an ordinary missing-entry reply from
+the same original absent slot and its complete events mapped to selected turns.
+It preserves synchronous call positions and does not assume an empty queue.
 
 [`PairPositionalEntry.lean`](../Blanc/Lift/UniswapV2Pair/PairPositionalEntry.lean)
 provides `PairEntryAt` for the actual selector and decoded entry, and

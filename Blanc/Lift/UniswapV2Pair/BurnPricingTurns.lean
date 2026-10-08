@@ -1,3 +1,4 @@
+import Blanc.Lift.UniswapV2Pair.PairFeeSourceKeys
 import Blanc.Lift.UniswapV2Pair.BurnFrameWalk
 
 /-! Actual fee and LP-burn observations produce Burn's first transfer frame. -/
@@ -125,16 +126,7 @@ theorem burnFee_pricing_source_inv {K : WriterKey → Prop} {st : State} {D : Ex
   obtain ⟨rep, ptr, raw, same⟩ := burnFee_pricing_input_inv mem observation suffix
   have trackedAfter : (feeBranchSourceKeys K st sevm (feeKLastWorld sevm observation.d)
       (Bytes.toB256 (observation.out.take 32)) r0 r1) (.balance sevm.currentTarget) := by
-    unfold feeBranchSourceKeys
-    split
-    · exact tracked
-    · split
-      · exact tracked
-      · split
-        · split
-          · exact tracked
-          · exact Or.inl tracked
-        · exact tracked
+    exact feeBranchSourceKeys_contains tracked
   have fresh : WriterFreshKeys
       (feeBranchSourceKeys K st sevm (feeKLastWorld sevm observation.d)
         (Bytes.toB256 (observation.out.take 32)) r0 r1) (lpMintTouched sevm.currentTarget) := by

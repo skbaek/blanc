@@ -2,6 +2,8 @@ import Blanc.Lift.UniswapV2Pair.MintPrefixWalk
 import Blanc.Lift.UniswapV2Pair.StaticViewTurns
 import Blanc.Lift.UniswapV2Pair.MutableTurns
 import Blanc.Lift.PrecompileAnswer
+import Blanc.Lift.UniswapV2Pair.PairTraceKeys
+import Blanc.Lift.UniswapV2Pair.PairFeeSourceKeys
 
 /-!
 # Canonical mint frame
@@ -20,47 +22,6 @@ namespace Blanc.Lift.UniswapV2Pair
 
 open Jaune
 
-/-- The LP row of a reply's first word (the fee recipient's row when the reply answers
-`feeTo()`). -/
-def mintReplyRow (out : Bytes) : WriterKey := .balance (Bytes.toB256 (out.take 32)).toAdr
-
-/-- Every possible `feeTo()` reply row of a mint run, as a finite list fixed by the root alone:
-the reply row of every successful actually entered raw frame of the run, and the answer row of
-every precompile to the fixed 4-byte `feeTo()` request under the root's `MODEXP` pricing. -/
-noncomputable def mintFeeReplyKeys (root : Exec.Deriv) : List WriterKey :=
-  (Exec.rawFrameRoots root.exc).filterMap (fun F =>
-    match F.exn with
-    | .ok d => some (mintReplyRow d.output)
-    | .error _ => none) ++
-  precompileRunAddresses.filterMap (fun adr =>
-    (precompileAnswer (ExternalOperation.encode .feeTo) root.sevm.benvStat.rules.modexp
-      adr).map mintReplyRow)
-
-/-- Trace rows of a mint run fixed by the root alone: the decoded rows of every actually entered
-Pair frame, the two LP rows the entry may write (address zero, the decoded recipient) and every
-possible fee-recipient row (`mintFeeReplyKeys`). -/
-noncomputable def mintTraceKeys (root : Exec.Deriv) : List WriterKey :=
-  ((Exec.rawFrameRoots root.exc).flatMap fun F =>
-    if F.sevm.currentTarget = root.sevm.currentTarget then staticViewDecodedKeys F.sevm else []) ++
-  (lpMintTouched (0 : B256).toAdr ++ lpMintTouched (Sevm.dataWord root.sevm 4).toAdr) ++
-  mintFeeReplyKeys root
-
-theorem mintTraceKeys_frame {root : Exec.Deriv} {F : Exec.Deriv}
-    (member : F ∈ Exec.rawFrameRoots root.exc)
-    (target : F.sevm.currentTarget = root.sevm.currentTarget) :
-    ∀ k ∈ staticViewDecodedKeys F.sevm, k ∈ mintTraceKeys root := by
-  intro k touched
-  refine List.mem_append_left _ (List.mem_append_left _ (List.mem_flatMap.mpr ⟨F, member, ?_⟩))
-  rw [ite_eq_left target]
-  exact touched
-
-theorem mintTraceKeys_rows (root : Exec.Deriv) :
-    .balance (0 : B256).toAdr ∈ mintTraceKeys root ∧
-    .balance (Sevm.dataWord root.sevm 4).toAdr ∈ mintTraceKeys root := by
-  refine ⟨?_, ?_⟩ <;>
-    simp only [mintTraceKeys, lpMintTouched, List.mem_append, List.mem_cons, List.not_mem_nil,
-      or_false, true_or, or_true]
-
 /-- Every list of universe rows is fresh against every tracked subset of the universe. -/
 private theorem mint_fresh_of_universe {U K : WriterKey → Prop} {ks : List WriterKey}
     (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
@@ -69,18 +30,14 @@ private theorem mint_fresh_of_universe {U K : WriterKey → Prop} {ks : List Wri
 
 private theorem mint_single_row {U : WriterKey → Prop} {a : Adr}
     (row : U (.balance a)) : ∀ k ∈ lpMintTouched a, U k := by
-  intro k member
-  simp only [lpMintTouched, List.mem_cons, List.not_mem_nil, or_false] at member
-  rw [member]
-  exact row
+  exact lpMintTouched_rows row
 
 /-- The fee recipient's touched-row obligation holds in any separated universe holding its row. -/
 theorem mint_feeFresh_of_universe {K U : WriterKey → Prop} {feeTo : B256}
     (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
     (row : U (.balance feeTo.toAdr)) (st : State) (sevm : Sevm) (b : Devm) (r0 r1 : B256) :
     FeeMintFresh K st sevm b feeTo r0 r1 := by
-  intro _ _ _ _
-  exact mint_fresh_of_universe inj apart sub (mint_single_row row)
+  exact feeMintFresh_of_universe inj apart sub row st sevm b r0 r1
 
 /-- The fee branch's tracked rows stay inside any universe holding the tracked rows and the
 fee recipient's row. -/
@@ -88,22 +45,7 @@ theorem mint_feeKeys_sub {K U : WriterKey → Prop} {feeTo : B256}
     (sub : ∀ k, K k → U k) (row : U (.balance feeTo.toAdr))
     (st : State) (sevm : Sevm) (b : Devm) (r0 r1 : B256) :
     ∀ k, feeBranchSourceKeys K st sevm b feeTo r0 r1 k → U k := by
-  intro k tracked
-  have extended : WriterExtend K (lpMintTouched feeTo.toAdr) k → U k := by
-    intro member
-    rcases member with old | new
-    · exact sub k old
-    · exact mint_single_row row k new
-  unfold feeBranchSourceKeys at tracked
-  split at tracked
-  · exact sub k tracked
-  · split at tracked
-    · exact sub k tracked
-    · split at tracked
-      · split at tracked
-        · exact sub k tracked
-        · exact extended tracked
-      · exact sub k tracked
+  exact feeBranchSourceKeys_sub sub row st sevm b r0 r1
 
 /-- Both supply arms' LP-row obligations hold for every tracked subset of a separated universe
 holding the address-zero and recipient rows. -/
@@ -348,51 +290,6 @@ private theorem mint_tAAB_getCode (base : Devm) (a x : Adr) :
     (temporalAccountAccessBase base a).getCode x = base.getCode x := by
   unfold temporalAccountAccessBase
   split <;> rfl
-
-/-- The actual `feeTo()` STATICCALL of the root frame returns a reply whose row is in
-`mintFeeReplyKeys root`: a framed callee's child is a raw frame root of the run, and a frameless
-successful callee is a precompile answering the fixed request. -/
-theorem mint_feeReply_mem {root : Exec.Deriv} {w d : Devm} {g t oi os : B256} {S : List B256}
-    {M : Mem} {c : Nat} (fork : CoveredFork root.sevm.benvStat.fork) (wf : Mem.Wf M)
-    (call : Blanc.Lift.StepIn root root.sevm
-      (St w (g :: t :: 128 :: 4 :: oi :: os :: S) (feeRequestMemory M) c) (.exec .staticcall) d)
-    (flag : ∃ f rest, d.stack = f :: rest ∧ f ≠ 0) :
-    mintReplyRow d.returnData ∈ mintTraceKeys root := by
-  refine List.mem_append_right _ ?_
-  obtain ⟨xl, inRoots, pc, stepRun⟩ := call
-  have filled : Xlot.Filled xl := by
-    cases xl with
-    | none => trivial
-    | some p =>
-      obtain ⟨evm, exn⟩ := p
-      obtain ⟨e, _⟩ := inRoots
-      exact ⟨e⟩
-  rcases of_step_staticcall_val_with_depth_frame_cause (g := g) (t := t) (ii := 128) (is := 4)
-      (oi := oi) (os := os) (xs := S) (mint_operands _ _ _ _) filled stepRun fork with
-      ⟨failed, _⟩ | ⟨parent, child, dp, na, code, avail, _, _, _, _, _, _, _, _,
-        process, clean, _, _, returned, _, _, _⟩
-  · obtain ⟨f, rest, flagStack, nonzero⟩ := flag
-    rw [flagStack] at failed
-    exact (nonzero (pref_head_unique failed (pref_append [f] rest)).symm).elim
-  · rw [returned]
-    rcases Blanc.Lift.ProcessMessage.ok_output process clean with
-      ⟨_, adr, listed, answer⟩ | ⟨evm, raw, slot, rawEq⟩
-    · refine List.mem_append_right _ (List.mem_filterMap.mpr ⟨adr, listed, ?_⟩)
-      have request :
-          ((St w (g :: t :: 128 :: 4 :: oi :: os :: S) (feeRequestMemory M) c).memory.read
-          (128 : B256).toNat (4 : B256).toNat).1 = ExternalOperation.encode .feeTo :=
-        feeRequestMemory_read wf
-      change precompileAnswer ((St w (g :: t :: 128 :: 4 :: oi :: os :: S) (feeRequestMemory M)
-        c).memory.read (128 : B256).toNat (4 : B256).toNat).1 root.sevm.benvStat.rules.modexp adr =
-        some child.output at answer
-      rw [request] at answer
-      rw [answer]
-      rfl
-    · subst slot
-      subst rawEq
-      obtain ⟨childRun, roots⟩ := inRoots
-      refine List.mem_append_left _ (List.mem_filterMap.mpr
-        ⟨⟨evm.pc, evm.sta, evm.dyna, .ok child, childRun⟩, roots _ List.mem_cons_self, rfl⟩)
 
 private theorem mint_feeMemory_wf (sevm : Sevm) (out0 out1 : Bytes) :
     Mem.Wf (balanceReplyMemory (balanceReplyMemory getterInitMemory sevm.currentTarget out0)

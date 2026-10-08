@@ -78,7 +78,7 @@ def SkimSecondSteps (D : Exec.Deriv) (sevm : Sevm) (d : Devm) (t1 : B256) (out1 
 /-- The canonical skim frame with the Pair's own-code foreign-storage silence: the lock
 store and cache reads before the first query touch no other account, the reserve1 read before
 the second query touches none, and after transfer1 returns only the Pair's lock slot is written. -/
-theorem skim_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Checkpoint}
+theorem skim_bytecode_exact_consumes_own_legacy {K : WriterKey → Prop} {current : Checkpoint}
     {sevm : Sevm} {b post : Devm} {G : Nat}
     (invocation : List Nat)
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
@@ -357,7 +357,7 @@ theorem skim_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Che
 over turn queues derived from its actual children, under trace-local HASH-T. The second
 half is unconditional: transfer0's actual CALL bounds its reply below `2^160` bytes, and
 `skimFirstPointer_fit` turns that into the moved-pointer fit. -/
-theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpoint}
+theorem skim_bytecode_exact_consumes_legacy {K : WriterKey → Prop} {current : Checkpoint}
     {sevm : Sevm} {b post : Devm} {G : Nat}
     (invocation : List Nat)
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
@@ -435,7 +435,7 @@ theorem skim_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
         post.output = [] := by
   intro root ctx recipient
   obtain ⟨value, nonstatic, out0, d, first, _, _, rest⟩ :=
-    skim_bytecode_exact_consumes_own invocation rep sem image installed freshOutput codeEq fork
+    skim_bytecode_exact_consumes_own_legacy invocation rep sem image installed freshOutput codeEq fork
       selector run hashTInj hashTApart
   refine ⟨value, nonstatic, out0, d, first, ?_⟩
   obtain ⟨out1, d2, views0, views1, turns1, turns3, final, rets, K', added, second, _, result⟩ :=

@@ -189,6 +189,7 @@ theorem SyncCanonicalResult.admittedConsumes {Auth : Exec.Deriv → Entry → Tr
     (continuation := .syncBalance1 current.state.cachedReserves
       (Bytes.toB256 (r.out0.take 32))) observed1
     (by rw [call1]; exact r.occurrenceSteps_ordered.2)
+    (by simp only [externalStatic, requestFor, BEq.rfl, Bool.or_true])
     (by rfl)
     (by intro absent; cases absent)
     during1 (by simpa only [call1, SyncCanonicalResult.secondOccurrenceStep, syncExternalReply, ite_true] using terminal)
@@ -196,6 +197,7 @@ theorem SyncCanonicalResult.admittedConsumes {Auth : Exec.Deriv → Entry → Tr
   have first := AdmittedSourceConsumes.nextCall (start := root)
     (continuation := .syncBalance0 current.state.cachedReserves) observed0
     (by rw [call0]; exact r.occurrenceSteps_ordered.1)
+    (by simp only [externalStatic, requestFor, BEq.rfl, Bool.or_true])
     (by rfl)
     (by intro absent; cases absent)
     during0 (by simpa only [call0, SyncCanonicalResult.firstOccurrenceStep, syncExternalReply, ite_true] using second)

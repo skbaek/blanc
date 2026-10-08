@@ -87,7 +87,8 @@ theorem MintPositionalQueues.admittedConsumes {Auth : Exec.Deriv → Entry → T
   have last := AdmittedSourceConsumes.nextCall (start := r.second.call.returned)
     (continuation := .mintFee (mintBalanceObserved current.state (Sevm.dataWord root.sevm 4).toAdr
       (Bytes.toB256 (r.out0.take 32)) (Bytes.toB256 (r.out1.take 32)))) q.callF
-    (by rw [q.sameF]; exact r.fee.occurrence.free) rfl
+    (by rw [q.sameF]; exact r.fee.occurrence.free)
+    (by simp only [externalStatic, requestFor, BEq.rfl, Bool.or_true]) rfl
     (by intro absent; cases absent) q.duringF
     (by simpa only [q.sameF, feeObservedResult, ite_true] using terminal)
   simp only [mintBalanceObserved] at last
@@ -95,13 +96,15 @@ theorem MintPositionalQueues.admittedConsumes {Auth : Exec.Deriv → Entry → T
   have middle := AdmittedSourceConsumes.nextCall (start := r.first.call.returned)
     (continuation := .mintBalance1 (Sevm.dataWord root.sevm 4).toAdr current.state.cachedReserves
       (Bytes.toB256 (r.out0.take 32))) q.call1
-    (by rw [q.same1]; exact r.second.free) rfl
+    (by rw [q.same1]; exact r.second.free)
+    (by simp only [externalStatic, requestFor, BEq.rfl, Bool.or_true]) rfl
     (by intro absent; cases absent) q.during1
     (by simpa only [q.same1, feeObservedResult, ite_true] using last)
   rw [← resume0] at middle
   have first := AdmittedSourceConsumes.nextCall (start := root)
     (continuation := .mintBalance0 (Sevm.dataWord root.sevm 4).toAdr current.state.cachedReserves) q.call0
-    (by rw [q.same0]; exact r.first.free) rfl
+    (by rw [q.same0]; exact r.first.free)
+    (by simp only [externalStatic, requestFor, BEq.rfl, Bool.or_true]) rfl
     (by intro absent; cases absent) q.during0
     (by simpa only [q.same0, feeObservedResult, ite_true] using middle)
   rw [start]

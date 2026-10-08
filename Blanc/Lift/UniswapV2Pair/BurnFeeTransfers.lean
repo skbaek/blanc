@@ -1,3 +1,4 @@
+import Blanc.Lift.UniswapV2Pair.BurnEntrySource
 import Blanc.Lift.UniswapV2Pair.BurnPricingTurns
 import Blanc.Lift.UniswapV2Pair.BurnTransferTurns
 
@@ -39,15 +40,7 @@ private theorem burn_pending_logs_preserves {pair : Adr} {added : List PendingLo
 private theorem burnFee_lock_preserved (st : State) (sevm : Sevm) (b : Devm)
     (w r0 r1 : B256) :
     (feeBranchSourceFee st sevm b w r0 r1).state.unlocked = st.unlocked := by
-  unfold feeBranchSourceFee
-  split
-  · rfl
-  · split
-    · rfl
-    · split
-      · unfold feeGrowthSourceFee
-        split <;> rfl
-      · rfl
+  exact feeBranchSourceFee_unlocked st sevm b w r0 r1
 
 private theorem burnFee_lpMint_code (sevm : Sevm) (b : Devm) (R : List B256)
     (M : Mem) (w value : B256) (G : Nat) (a : Adr) :
@@ -494,33 +487,6 @@ theorem burnFeeCaller_source_finished {U K : WriterKey → Prop} {st : State}
     (trace _ member) sem image beforeInstalled fork good staticGood
   exact ⟨cached, feeGas, feePost, observation, callee, answered, suffix, finished⟩
 
-/-- The first actual balance reply advances only the source segment and cache. -/
-theorem burn_resumeInitialBalance0 {frame : Frame} {locals : BurnLocals} {out : Bytes}
-    (long : 32 ≤ out.length) :
-    resumeSegment frame (requestFor .burnInitialBalance0 locals.token0 (.balanceOf frame.context.pair))
-        (.burnInitialBalance0 locals) (feeObservedResult out) =
-      .suspended
-        (frame.beginResume (requestFor .burnInitialBalance0 locals.token0 (.balanceOf frame.context.pair)))
-        (requestFor .burnInitialBalance1 locals.token1 (.balanceOf frame.context.pair))
-        (.burnInitialBalance1 locals (Bytes.toB256 (out.take 32))) := by
-  simp only [resumeSegment, decodeExternal, requestFor, feeObservedResult,
-    Bool.not_true, Bool.and_false, Bool.false_eq_true, ite_false, ite_true, long]
-  rfl
-
-/-- The second actual balance reply samples the old LP balance before fee minting. -/
-theorem burn_resumeInitialBalance1 {frame : Frame} {locals : BurnLocals} {out : Bytes}
-    {balance0 : B256} (long : 32 ≤ out.length) :
-    resumeSegment frame (requestFor .burnInitialBalance1 locals.token1 (.balanceOf frame.context.pair))
-        (.burnInitialBalance1 locals balance0) (feeObservedResult out) =
-      .suspended
-        (frame.beginResume (requestFor .burnInitialBalance1 locals.token1 (.balanceOf frame.context.pair)))
-        (requestFor .burnFeeTo frame.current.state.factory .feeTo)
-        (.burnFee ⟨locals, balance0, Bytes.toB256 (out.take 32),
-          frame.current.state.balanceOf frame.context.pair⟩) := by
-  simp only [resumeSegment, decodeExternal, requestFor, feeObservedResult,
-    Bool.not_true, Bool.and_false, Bool.false_eq_true, ite_false, ite_true, long]
-  rfl
-
 /-- Actual initial token replies and their authentic static queues feed the
 accepted fee/caller consumer in the original derivation. Cached token/reserve
 locals come from the entry representation; no source endpoint is assumed. -/
@@ -826,28 +792,6 @@ theorem burnInitialBalances_source_finished {U K : WriterKey → Prop} {st : Sta
       burnFee_finished_prepend (childPrefix := staticViewChildReturns prior request0 0 views0 ++
         staticViewChildReturns prior1 request1 0 views1) finished
         (fun tail out consumed => by simpa only [List.append_assoc] using reaches tail out consumed)
-
-/-- The entry checkpoint is retained while the first Burn segment holds the lock. -/
-def burnSourceLockedFrame (current : Checkpoint) (ctx : Context) (recipient : Adr) : Frame :=
-  { Frame.enter current ctx (.burn recipient) with
-    current := { current with state := { current.state with unlocked := 0 } } }
-
-/-- Actual successful entry guards select the first balance suspension. -/
-theorem burn_startTyped_suspended {current : Checkpoint} {ctx : Context} {recipient : Adr}
-    (value : ctx.value = 0) (nonstatic : ctx.isStatic = false)
-    (unlocked : current.state.unlocked = 1) :
-    startTyped current ctx (.burn recipient) =
-      .suspended (burnSourceLockedFrame current ctx recipient)
-        (requestFor .burnInitialBalance0 current.state.token0 (.balanceOf ctx.pair))
-        (.burnInitialBalance0 ⟨recipient, current.state.cachedReserves,
-          current.state.token0, current.state.token1⟩) := by
-  have opened : (Frame.enter current ctx (.burn recipient)).lock =
-      .ok (burnSourceLockedFrame current ctx recipient) := by
-    simp only [Frame.lock, Frame.enter, unlocked, nonstatic, ite_true,
-      Bool.false_eq_true, ite_false, burnSourceLockedFrame]
-  simp only [startTyped, startImmediate, ite_eq_right (fun (bad : ctx.value ≠ 0) => bad value),
-    getterResult, opened, Frame.suspend]
-  rfl
 
 /-- Every reply the Burn source consumes, in call order: the two initial
 `balanceOf(pair)` replies, the factory `feeTo` reply, the two token `transfer`

@@ -111,7 +111,9 @@ theorem PermitCallOccurrence.admittedConsumes {Auth : Exec.Deriv → Entry → T
   have consumed := AdmittedSourceConsumes.nextCall (start := root)
     (continuation := .permitRecovery (permitOwner root.sevm) (permitSpender root.sevm)
       (permitValue root.sevm)) observed
-    (by rw [sameCall]; exact actual.gap) (by rfl)
+    (by rw [sameCall]; exact actual.gap)
+    (by simp only [externalStatic, permitPublicRequest, permitRequest, requestFor, BEq.rfl, Bool.or_true])
+    (by rfl)
     (by intro missing; rw [noCode missing]; rfl) annotated (by
       simpa only [sameCall, permitExternalResult, ite_true, permitPublicSuspended,
         permitPublicRequest] using terminal)
