@@ -4781,3 +4781,11 @@ holds the shrink-only textual-duplication baseline. A red row from any of them
 usually means a step above was skipped. Bytecode-segment sharing between call
 sites is a separate, opt-in mechanism with its own guide outside this
 repository; nothing in this workflow requires it.
+
+### Swap original source prefix and admitted transfers
+
+[`SwapPositionalSourcePrefix.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalSourcePrefix.lean)
+derives the initial source guards, cached words and starting segment from the
+original successful execution. `swap_source_transfers` composes both optional
+transfers from that same physical chain and the same admitted queue witnesses;
+only executed calls advance the source index.
