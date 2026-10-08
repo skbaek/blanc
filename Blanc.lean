@@ -916,6 +916,8 @@ import Blanc.Lift.CursorJump
 import Blanc.Lift.CursorOccurrenceRoots
 import Blanc.Lift.InvWalkGas
 import Blanc.Lift.UniswapV2Pair.PairDispatchCursor
+import Blanc.Lift.UniswapV2Pair.PairNoCallEntries
+import Blanc.Lift.UniswapV2Pair.PairNoCallSource
 import Blanc.Lift.UniswapV2Pair.PairReservesCursor
 import Blanc.Lift.UniswapV2Pair.BurnPositionalCuts
 import Blanc.Lift.UniswapV2Pair.BurnPositionalInv

@@ -378,6 +378,8 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.PermitRecoverySettlement",
         "Lift.UniswapV2Pair.PermitRecoveryPost",
         "Lift.UniswapV2Pair.PairDispatchCursor",
+        "Lift.UniswapV2Pair.PairNoCallEntries",
+        "Lift.UniswapV2Pair.PairNoCallSource",
         "Lift.UniswapV2Pair.PairReservesCursor",
         "Lift.UniswapV2Pair.PairCheckedSubCursor",
         "Lift.UniswapV2Pair.PairCheckedMulCursor",

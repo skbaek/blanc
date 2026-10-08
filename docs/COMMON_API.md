@@ -4540,6 +4540,17 @@ partition through its actual slot queue. These are registry entries: their
 compound occurrence and cursor obligations have no reliable single goal-head
 trigger.
 
+The shared dispatcher entry `pair_dispatch_selector_cursor_state` in
+[`PairDispatchCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairDispatchCursor.lean)
+retains the actual root state before either selector comparison route; the
+existing upper-comparison wrapper projects it. The parameterized quiet-entry
+cuts and checked closed regions in
+[`PairNoCallEntries.lean`](../Blanc/Lift/UniswapV2Pair/PairNoCallEntries.lean)
+derive `PairNoCallEntry.root_noExec` from that same supplied successful root.
+[`PairNoCallSource.lean`](../Blanc/Lift/UniswapV2Pair/PairNoCallSource.lean)
+consumes this raw certificate to couple the selected source frame to the
+empty actual child queue; it does not assume a caller-provided no-call suffix.
+
 For the Pair's shared internal callees, use
 [`PairReservesCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairReservesCursor.lean),
 [`PairCheckedSubCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairCheckedSubCursor.lean),
