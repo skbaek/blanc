@@ -466,6 +466,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.BurnPositionalFeeSource",
         "Lift.UniswapV2Pair.BurnPositionalMutable",
         "Lift.UniswapV2Pair.BurnPositionalFinalSource",
+        "Lift.UniswapV2Pair.BurnPositionalCanonical",
         "Lift.UniswapV2Pair.BurnLogImage",
         "Lift.UniswapV2Pair.PairWriterAbsorb",
         "Lift.UniswapV2Pair.BurnPositionalTransferSource",
