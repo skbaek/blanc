@@ -864,7 +864,7 @@ private theorem burn_mask_mask (x : B256) :
 /-- **Authenticated Burn frame.** The real pc-zero route supplies entry guards,
 every external answer with its call provenance, the ABI return, and the
 fee/LP/child/Sync/Burn log image in the unchanged derivation D. -/
-theorem burnPc0_source_authentic {U K : WriterKey → Prop} {current : Checkpoint}
+theorem burnPc0_source_authentic_legacy {U K : WriterKey → Prop} {current : Checkpoint}
     {D : Exec.Deriv} {b : Devm} {G : Nat} {o : Outcome}
     (invocation : List Nat) (fork : CoveredFork D.sevm.benvStat.fork)
     (selector : Blanc.Sevm.selector D.sevm = 0x89afcb44)
@@ -987,7 +987,7 @@ Burn source over a transcript fixed by its actual call answers, each tied to its
 call step in this root (`BurnCallProvenance`), with the full observable result
 and incoming footprint growth. Premises are the code, fork, selector, the entry
 representation and the fixed HASH-T universe only. -/
-theorem burnRaw_source_authentic {U K : WriterKey → Prop} {current : Checkpoint}
+theorem burnRaw_source_authentic_legacy {U K : WriterKey → Prop} {current : Checkpoint}
     {sevm : Sevm} {b publicPost : Devm} {G : Nat}
     (invocation : List Nat) (codeEq : sevm.code = code)
     (fork : CoveredFork sevm.benvStat.fork)
@@ -1008,7 +1008,7 @@ theorem burnRaw_source_authentic {U K : WriterKey → Prop} {current : Checkpoin
   obtain ⟨f, entry, lifted⟩ := lift_sound_in cert_check codeEq fork run
   rw [show cert.prog[0]? = some t_0000_c0 from rfl] at entry
   cases entry
-  exact burnPc0_source_authentic invocation fork selector rep tracked inj apart sub trace
+  exact burnPc0_source_authentic_legacy invocation fork selector rep tracked inj apart sub trace
     sem image installed good staticGood lifted
 
 /-- At a raw root, call provenance against the entry world's Pair storage is the
