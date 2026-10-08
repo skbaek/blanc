@@ -4718,6 +4718,11 @@ queue. `swapObservedTransferReply` retains that slot's entered bit, and
 `swap_resume_observed_transfer` transports both accepted optional-bool replies
 through the same typed continuation without changing the entered bit.
 
+[`SwapSourceOccurrenceCallback.lean`](../Blanc/Lift/UniswapV2Pair/SwapSourceOccurrenceCallback.lean)
+binds the guarded callback request and successful full-byte reply to its same
+physical CALL, message, process, partition and complete queue. The code bit is
+justified by the actual guard rather than by the entered slot bit.
+
 [`SwapPositionalMutableTransfer.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalMutableTransfer.lean)
 retains each transfer's same complete event queue, mapped selected turns,
 recursively admitted children, checkpoint, finite locked representation and log
