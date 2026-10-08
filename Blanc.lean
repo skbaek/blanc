@@ -959,12 +959,14 @@ import Blanc.Lift.UniswapV2Pair.BurnPositionalPricingFacts
 import Blanc.Lift.UniswapV2Pair.BurnPositionalLPFacts
 import Blanc.Lift.UniswapV2Pair.BurnPositionalSource
 import Blanc.Lift.UniswapV2Pair.BurnPositionalTransferSource
+import Blanc.Lift.UniswapV2Pair.BurnPositionalFinish
 import Blanc.Lift.UniswapV2Pair.SyncOccurrence
 import Blanc.Lift.UniswapV2Pair.SourceOccurrence
 import Blanc.Lift.UniswapV2Pair.SourceAdmission
 import Blanc.Lift.UniswapV2Pair.AdmittedMutableFold
 import Blanc.Lift.UniswapV2Pair.PairPositionalAdmission
 import Blanc.Lift.UniswapV2Pair.SourceSlotQueueExistence
+import Blanc.Lift.UniswapV2Pair.SourceSlotEventsEmpty
 import Blanc.Lift.UniswapV2Pair.SyncSourceOccurrence
 import Blanc.Lift.UniswapV2Pair.PermitPositionalCuts
 import Blanc.Lift.UniswapV2Pair.PermitPositionalRequest

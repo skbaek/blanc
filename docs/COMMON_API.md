@@ -4553,6 +4553,12 @@ including the synchronous `.none` case and settlement pruning. Its proof uses
 that call's original slot and spawning derivation; no guessed queue, code or
 commit premise is required.
 
+`SourceCallAt.noCodeMutableTranscript` in
+[`SourceSlotEventsEmpty.lean`](../Blanc/Lift/UniswapV2Pair/SourceSlotEventsEmpty.lean)
+derives the empty mutable transcript for an ordinary missing-entry reply from
+the same original absent slot and its complete events mapped to selected turns.
+It preserves synchronous call positions and does not assume an empty queue.
+
 [`PairPositionalEntry.lean`](../Blanc/Lift/UniswapV2Pair/PairPositionalEntry.lean)
 provides `PairEntryAt` for the actual selector and decoded entry, and
 `PairRootedConsumes`/`PairPositionalOutcome` bind the same original root,
