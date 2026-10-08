@@ -348,6 +348,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.SwapFrontTyped",
         "Lift.UniswapV2Pair.SwapPositionalPrefix",
         "Lift.UniswapV2Pair.SwapPositionalTransfer",
+        "Lift.UniswapV2Pair.SwapPositionalCallback",
         "Lift.UniswapV2Pair.SwapTransfer",
         "Lift.UniswapV2Pair.SwapUpdateWalk",
         "Lift.UniswapV2Pair.SafeTransferWalk",

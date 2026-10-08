@@ -4648,6 +4648,15 @@ amount retains an actual call-free gap; an executed CALL with an absent child
 slot still has its physical occurrence. The shared transfer request/call/reply
 cursors supply each occurrence rather than searching by an equal payload.
 
+`swap_callback_cursor_state` in
+[`SwapPositionalCallback.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalCallback.lean)
+adds the optional callback to that same original-root chain. `SwapCallbacks`
+starts its callback at transfer1's actual result; the executed branch retains
+its own derived code guard, warmed CALL, exact variable calldata, full physical
+reply and checked caller join. The empty-data branch selects no CALL. Pointer
+and ABI length bounds are derived internally. Callback preparation and join
+lines are shared with the unchanged legacy callback inverses.
+
 The Pair mutable fold's `mutable_selected_root_with` in
 [`MutableTurns.lean`](../Blanc/Lift/UniswapV2Pair/MutableTurns.lean)
 parameterizes child consumption and turn introductions while the existing
