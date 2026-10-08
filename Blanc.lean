@@ -811,6 +811,9 @@ import Blanc.Lift.UniswapV2Pair.SyncGasCanonical
 import Blanc.Lift.UniswapV2Pair.PermitSource
 import Blanc.Lift.UniswapV2Pair.SkimCanonical
 import Blanc.Lift.UniswapV2Pair.SkimPositionalPrefix
+import Blanc.Lift.UniswapV2Pair.SkimPositionalFirst
+import Blanc.Lift.UniswapV2Pair.SkimPositionalReply
+import Blanc.Lift.UniswapV2Pair.SkimPositionalTransfer
 import Blanc.Lift.UniswapV2Pair.SkimForward
 import Blanc.Lift.UniswapV2Pair.SkimForwardAccept
 import Blanc.Lift.UniswapV2Pair.SkimForwardKeep
@@ -832,6 +835,8 @@ import Blanc.Lift.UniswapV2Pair.SourceReplay
 import Blanc.Lift.UniswapV2Pair.SourceReplayOracle
 import Blanc.Lift.UniswapV2Pair.ReplayWriterGas
 import Blanc.Lift.UniswapV2Pair.PairSupply
+import Blanc.Lift.UniswapV2Pair.PairPositionalEntry
+import Blanc.Lift.UniswapV2Pair.PairPositionalReady
 import Blanc.Lift.UniswapV2Pair.PairHistory
 import Blanc.Lift.UniswapV2Pair.SwapForwardAccept
 import Blanc.Lift.UniswapV2Pair.MintForwardAccept
@@ -944,8 +949,11 @@ import Blanc.Lift.UniswapV2Pair.BurnPositionalTransfers
 import Blanc.Lift.UniswapV2Pair.BurnPositionalFinalRequest
 import Blanc.Lift.UniswapV2Pair.BurnPositionalFinalCall
 import Blanc.Lift.UniswapV2Pair.BurnPositionalFinalReply
+import Blanc.Lift.UniswapV2Pair.BurnPositionalFinalObservation
+import Blanc.Lift.UniswapV2Pair.BurnPositionalSeven
 import Blanc.Lift.UniswapV2Pair.SyncOccurrence
 import Blanc.Lift.UniswapV2Pair.SourceOccurrence
+import Blanc.Lift.UniswapV2Pair.SourceSlotQueueExistence
 import Blanc.Lift.UniswapV2Pair.SyncSourceOccurrence
 import Blanc.Lift.UniswapV2Pair.PermitPositionalCuts
 import Blanc.Lift.UniswapV2Pair.PermitPositionalRequest

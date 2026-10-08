@@ -16,8 +16,8 @@ theorem BurnFourCalls.transferMem {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
   have size := (safeTransfer_copySizes (amount := r.three.amount0 r.pricing)
     (toWord := (Sevm.dataWord sevm 4).toAdr.toB256) lpMem (by decide) (by decide)).1
   have fixedSize : safeTransferPreSize 192 128 = 416 := by
-    norm_num [safeTransferPreSize, List.foldl, memExtSize, ceilDiv,
-      show (128 : B256).toNat = 128 from rfl]
+    norm_num only [safeTransferPreSize, List.foldl, memExtSize, ceilDiv,
+      ite_true, ite_false, Nat.max_def, show (128 : B256).toNat = 128 from rfl]
   simpa only [BurnThreeCalls.transferMemory, size,
     show (128 + 164 : B256) = 292 from by decide,
     fixedSize] using pointer

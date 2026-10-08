@@ -4532,17 +4532,36 @@ world rather than selecting a call through a source run. The reusable fee
 request/reply carrier in
 [`PairFeeObservation.lean`](../Blanc/Lift/UniswapV2Pair/PairFeeObservation.lean)
 keeps the original-root occurrence, raw slot, complete physical reply and decoded
-word. Its `returnCursor`, `returnState` and `returnCutExact` in
+word. Its `returnCursor`, `returnState`, `returnCutData` and `returnCutExact` in
 [`PairFeeReturn.lean`](../Blanc/Lift/UniswapV2Pair/PairFeeReturn.lean)
 transport that same reply through the actual internal return with arbitrary
 caller and outer continuations; `returnCutExact` retains `cut.node = N` for
-consumers which sample storage from the returned world. `returnCut` projects
-the same witness. The ordinary guarded static-call adapter `static_source_call_at`
+consumers which sample storage from the returned world. `returnCutData` also
+retains the fee guards and full physical `feeBranchPost` at that exact node;
+`returnCutExact` and `returnCut` project the same witness. The ordinary guarded
+static-call adapter `static_source_call_at`
 in [`StaticSourceCall.lean`](../Blanc/Lift/UniswapV2Pair/StaticSourceCall.lean)
 binds the supplied occurrence to the request, reply and original per-spawn
 partition through its actual slot queue. These are registry entries: their
 compound occurrence and cursor obligations have no reliable single goal-head
 trigger.
+
+`CallOccurrenceStep.sourceSlotQueue` in
+[`SourceSlotQueueExistence.lean`](../Blanc/Lift/UniswapV2Pair/SourceSlotQueueExistence.lean)
+derives a complete selected queue from the supplied actual call and parent index,
+including the synchronous `.none` case and settlement pruning. Its proof uses
+that call's original slot and spawning derivation; no guessed queue, code or
+commit premise is required.
+
+[`PairPositionalEntry.lean`](../Blanc/Lift/UniswapV2Pair/PairPositionalEntry.lean)
+provides `PairEntryAt` for the actual selector and decoded entry, and
+`PairRootedConsumes`/`PairPositionalOutcome` bind the same original root,
+transcript, result and output. Entry decoding alone does not establish nested
+admission. The compiled ready family projections in
+[`PairPositionalReady.lean`](../Blanc/Lift/UniswapV2Pair/PairPositionalReady.lean)
+consume the supplied incoming checkpoint and those same positional results;
+`PairPositionalReadySupply` excludes Swap, Skim and Burn pending their own
+canonical producers.
 
 `transfer_source_call_at` in
 [`TransferSourceCall.lean`](../Blanc/Lift/UniswapV2Pair/TransferSourceCall.lean)
@@ -4610,6 +4629,14 @@ original stop continuation and call-free root gap. The five ABI and eight body
 literal line inverses are shared with the unchanged legacy source inverses in
 `SwapAbi.lean` and `SwapFront.lean`; no desired endpoint or residual gas is a
 public premise.
+
+The moved final balance output uses the original memory image facts
+`burnBalanceReplyMemory_extended`, `burnBalanceReplyMemory_ptr` and
+`burnBalanceReplyMemory_word` in
+[`BurnBalanceWalk.lean`](../Blanc/Lift/UniswapV2Pair/BurnBalanceWalk.lean).
+They preserve the supplied physical free pointer and identify the decoded
+word; the original whole-read inverse and actual final reply cursor share
+these facts.
 
 The Pair mutable fold's `mutable_selected_root_with` in
 [`MutableTurns.lean`](../Blanc/Lift/UniswapV2Pair/MutableTurns.lean)
