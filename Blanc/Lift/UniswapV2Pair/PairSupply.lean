@@ -575,7 +575,7 @@ theorem pair_burn_outcome (selector : Blanc.Sevm.selector sevm = 0x89afcb44) :
   have sub₁ := writerExtend_universe sub row
   obtain ⟨a, amount0, amount1, provenance, K', final, rets, _, _, _, inside, grows, consumed, halted,
       outputEq, rep, _⟩ :=
-    burnRaw_source_authentic invocation codeEq fork selector (wrep.extend fresh)
+    burnRaw_source_authentic_legacy invocation codeEq fork selector (wrep.extend fresh)
       (Or.inr (List.mem_singleton_self _)) run inj apart sub₁ good.mint sem image installed
       good.locked good.views
   cases halted
