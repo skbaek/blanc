@@ -957,6 +957,7 @@ import Blanc.Lift.UniswapV2Pair.BurnPositionalSeven
 import Blanc.Lift.UniswapV2Pair.BurnPositionalFacts
 import Blanc.Lift.UniswapV2Pair.BurnPositionalPricingFacts
 import Blanc.Lift.UniswapV2Pair.BurnPositionalLPFacts
+import Blanc.Lift.UniswapV2Pair.BurnPositionalFeeFacts
 import Blanc.Lift.UniswapV2Pair.BurnPositionalSource
 import Blanc.Lift.UniswapV2Pair.BurnPositionalTransferSource
 import Blanc.Lift.UniswapV2Pair.BurnPositionalFinish
