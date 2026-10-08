@@ -376,7 +376,7 @@ private theorem burnFirstSupply_inv {P : Sevm → Devm → Ninst → Devm → Pr
   · exact burnFirstPayment_inv project notCut body
 
 /-- Post-fee slot0 is read once; both products use the unchanged cached pre-fee L. -/
-private theorem burnPricingWords_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+theorem burnPricingWords_inv {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
     {f L b1 b0 token1 token0 r1 r0 toWord extρ : B256}
     (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')

@@ -200,7 +200,7 @@ SHARED += ["Lift.CalldataGuards", "Lift.StaticCall", "Lift.StaticCallGuard", "Li
 # The frame cursor, the reentrancy-lock exclusion kit and its bytecode checker, owner
 # discipline, and concrete-run evaluation (deployed-lido-vyper-v1): contract-neutral.
 SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachChain", "Lift.ReachDispatch", "Lift.Cursor", "Lift.CursorCuts", "Lift.CursorOccurrence", "Lift.CursorExact", "Lift.CursorExactLine", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
-           "Lift.LockCheck", "Lift.LockCheckSound", "Lift.LockCheckFlow", "Lift.CursorStateCuts", "Lift.CursorNoExecSuffix", "Lift.CursorSourceRun", "Lift.CursorBalanceReply", "Lift.CursorGasCall"]
+           "Lift.LockCheck", "Lift.LockCheckSound", "Lift.LockCheckFlow", "Lift.CursorStateCuts", "Lift.CursorNoExecSuffix", "Lift.CursorSourceRun", "Lift.CursorSourceRunReturn", "Lift.CursorBalanceReply", "Lift.CursorGasCall", "Lift.CursorQuietReturn"]
 # The constant memory map and its checker, code tries as data, and the executable-witness
 # engine with its child runs and spawn facts (deployed-lido-vyper-v1, V-): contract-neutral.
 SHARED += ["Lift.MemMap", "Lift.CheckMem", "Lift.CodeTriesData", "Lift.WitnessArms", "Lift.Witness",
@@ -379,6 +379,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.PairDispatchCursor",
         "Lift.UniswapV2Pair.PairReservesCursor",
         "Lift.UniswapV2Pair.PairCheckedSubCursor",
+        "Lift.UniswapV2Pair.PairCheckedMulCursor",
         "Lift.UniswapV2Pair.PairFeeCursor",
         "Lift.UniswapV2Pair.PairFeeObservation",
         "Lift.UniswapV2Pair.MintPositionalInv",
@@ -387,6 +388,11 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.MintPositionalAmounts",
         "Lift.UniswapV2Pair.MintPositional",
         "Lift.UniswapV2Pair.MintPositionalReply",
+        "Lift.UniswapV2Pair.MintPositionalPair",
+        "Lift.UniswapV2Pair.MintPositionalFee",
+        "Lift.UniswapV2Pair.MintPositionalThree",
+        "Lift.UniswapV2Pair.MintPositionalSuffix",
+        "Lift.UniswapV2Pair.MintPositionalRoot",
         "Lift.UniswapV2Pair.BurnPositionalCuts",
         "Lift.UniswapV2Pair.BurnPositionalInv",
         "Lift.UniswapV2Pair.BurnPositional",

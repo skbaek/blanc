@@ -4001,6 +4001,14 @@ contract-neutral.
   top-level halt. The resulting `StepIn` source run can establish guards and
   widths, while actual cursor cuts still own external occurrence and slot
   identities.
+- To preserve an internal return's actual continuation execution and checked
+  frame, use `CursorOK.sourceRunReturn` in
+  [`Blanc/Lift/CursorSourceRunReturn.lean`](../Blanc/Lift/CursorSourceRunReturn.lean).
+  It keeps the supplied actual successful node and either its halted source
+  outcome or the actual internal continuation `Exec`, complete returned state,
+  checked caller cursor and structural subderivation relation. That relation
+  alone does not assert a call-free predecessor gap; use `quietReturn` for a
+  body whose checked region excludes external instructions.
 - To cross a checked reply flag and decode a physical memory word, use
   [`Blanc/Lift/CursorBalanceReply.lean`](../Blanc/Lift/CursorBalanceReply.lean).
   `CursorStateAt.callFlag` derives success from the same actual suffix and
@@ -4018,6 +4026,15 @@ contract-neutral.
   root. It keeps the relative call-free gap, full request state, actual filled
   slot, returned cursor, and mapped continuation. Its same-frame prefix may
   start at an earlier returned parent; no gas schedule is assumed.
+- To return through a supplied checked call-free internal body, use
+  [`Blanc/Lift/CursorQuietReturn.lean`](../Blanc/Lift/CursorQuietReturn.lean).
+  `CursorOK.quietReturn` walks the actual parent derivation and stops at the
+  first return through its supplied mapped continuation. It returns a relative
+  `ExecFreeUntil`, the checked actual caller cursor and remaining continuation,
+  and a source run whose complete returned state is that actual parent node.
+  Only the body and locally pushed continuations must lie in the checked
+  exec-free, nonhalting region; the caller may make further external calls.
+  The direct actual trace needs no source-selected endpoint or gas schedule.
 - To connect a checked original-bytecode external next node to its actual
   occurrence and returned parent, use
   [`Blanc/Lift/CursorOccurrence.lean`](../Blanc/Lift/CursorOccurrence.lean).

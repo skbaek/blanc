@@ -908,8 +908,10 @@ import Blanc.Lift.CursorExactLine
 import Blanc.Lift.CursorStateCuts
 import Blanc.Lift.CursorNoExecSuffix
 import Blanc.Lift.CursorSourceRun
+import Blanc.Lift.CursorSourceRunReturn
 import Blanc.Lift.CursorBalanceReply
 import Blanc.Lift.CursorGasCall
+import Blanc.Lift.CursorQuietReturn
 import Blanc.Lift.InvWalkGas
 import Blanc.Lift.UniswapV2Pair.PairDispatchCursor
 import Blanc.Lift.UniswapV2Pair.PairReservesCursor
@@ -929,6 +931,7 @@ import Blanc.Lift.UniswapV2Pair.PermitPositionalRequest
 import Blanc.Lift.UniswapV2Pair.PermitPositional
 import Blanc.Lift.UniswapV2Pair.PermitRecoverySettlement
 import Blanc.Lift.UniswapV2Pair.PairCheckedSubCursor
+import Blanc.Lift.UniswapV2Pair.PairCheckedMulCursor
 import Blanc.Lift.UniswapV2Pair.PairFeeCursor
 import Blanc.Lift.UniswapV2Pair.PairFeeObservation
 import Blanc.Lift.UniswapV2Pair.MintPositionalInv
@@ -937,3 +940,8 @@ import Blanc.Lift.UniswapV2Pair.MintPositionalSecond
 import Blanc.Lift.UniswapV2Pair.MintPositionalAmounts
 import Blanc.Lift.UniswapV2Pair.MintPositional
 import Blanc.Lift.UniswapV2Pair.MintPositionalReply
+import Blanc.Lift.UniswapV2Pair.MintPositionalPair
+import Blanc.Lift.UniswapV2Pair.MintPositionalFee
+import Blanc.Lift.UniswapV2Pair.MintPositionalThree
+import Blanc.Lift.UniswapV2Pair.MintPositionalSuffix
+import Blanc.Lift.UniswapV2Pair.MintPositionalRoot
