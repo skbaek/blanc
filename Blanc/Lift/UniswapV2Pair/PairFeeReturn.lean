@@ -118,15 +118,15 @@ theorem PairFeeObservation.returnState {root start : Exec.Deriv} {b post : Devm}
 
 /-- Normalize this actual return as a full cursor state, preserving its physical
 memory and residual gas even when fee minting changed scratch memory. -/
-theorem PairFeeObservation.returnCut {root start : Exec.Deriv} {b post : Devm}
+theorem PairFeeObservation.returnCutExact {root start : Exec.Deriv} {b post : Devm}
     {M : Mem} {r1 r0 ρ : B256} {R : List B256} {K : List SFunc} {caller : SFunc}
     (r : PairFeeObservation root start b M r1 r0 ρ R (caller :: K))
     (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
     (mem : PtrMem 128 192 M) (bound0 : r0.toNat < 2 ^ 112)
     (bound1 : r1.toNat < 2 ^ 112) :
     ∃ N : Exec.Deriv, PtrMem 128 192 N.devm.memory ∧
-      Nonempty (CursorStateAt code cert r.occurrence.call.returned caller N.devm
-        (feeOnWord (Bytes.toB256 (r.out.take 32)) :: R) N.devm.memory K) := by
+      ∃ cut : CursorStateAt code cert r.occurrence.call.returned caller N.devm
+        (feeOnWord (Bytes.toB256 (r.out.take 32)) :: R) N.devm.memory K, cut.node = N := by
   obtain ⟨N, next, span, env, outcome, placed, tree, conts, guards, gas, state⟩ :=
     r.returnState success fork mem bound0 bound1
   have machine := pairFeePost_machine (sevm := start.sevm)
@@ -136,9 +136,22 @@ theorem PairFeeObservation.returnCut {root start : Exec.Deriv} {b post : Devm}
     (w := Bytes.toB256 (r.out.take 32)) (r0 := r0) (r1 := r1) (G := gas)
     (feeReplyMemory_ptr r.out (feeRequestMemory_ptr mem))
   rw [← state] at machine
-  exact ⟨N, machine.2, ⟨⟨N, next, span,
+  exact ⟨N, machine.2, ⟨N, next, span,
     Blanc.Exec.Deriv.ParentPrefix.sevm_eq span.1,
     Blanc.Exec.Deriv.ParentPrefix.exn_eq span.1, placed, tree,
-    ⟨N.devm.gasLeft, St.self machine.1 rfl⟩, conts⟩⟩⟩
+    ⟨N.devm.gasLeft, St.self machine.1 rfl⟩, conts⟩, rfl⟩
+
+/-- Compatibility projection of the same actual returned cursor. -/
+theorem PairFeeObservation.returnCut {root start : Exec.Deriv} {b post : Devm}
+    {M : Mem} {r1 r0 ρ : B256} {R : List B256} {K : List SFunc} {caller : SFunc}
+    (r : PairFeeObservation root start b M r1 r0 ρ R (caller :: K))
+    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
+    (mem : PtrMem 128 192 M) (bound0 : r0.toNat < 2 ^ 112)
+    (bound1 : r1.toNat < 2 ^ 112) :
+    ∃ N : Exec.Deriv, PtrMem 128 192 N.devm.memory ∧
+      Nonempty (CursorStateAt code cert r.occurrence.call.returned caller N.devm
+        (feeOnWord (Bytes.toB256 (r.out.take 32)) :: R) N.devm.memory K) := by
+  obtain ⟨N, memory, cut, _⟩ := r.returnCutExact success fork mem bound0 bound1
+  exact ⟨N, memory, ⟨cut⟩⟩
 
 end Blanc.Lift.UniswapV2Pair
