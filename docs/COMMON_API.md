@@ -3205,7 +3205,13 @@ the lower-depth hypothesis) and `ExecutionAccountingReplay.wholeFrameLadder` tur
 into an `AccountingLadderAdmitted`. The obligation receives the frame's commit proof, so
 its step can name the committed frame. Worked use: the Uniswap V2 pair
 (`Blanc/Lift/UniswapV2Pair/PairHistory.lean`: `pair_wholeFrameReplay`, `pairLadder`,
-`pair_history_committed`), whose calling entries consume re-entered ERC-20 frames as nested
+`pair_history_committed`), whose parameterized `PairObservedReplayWith` (`mono`, `sourceReplay`, `append`),
+`PairStep.AuthenticWith`, `PairReplayWith`, `pairCarrierWith`/`pairObservationWith`,
+`pairSpec_soundAdmittedWith`/`pairSpec_preservesAdmittedWith`,
+`pair_wholeFrameReplayWith`/`pairLadderWith` and `pair_history_committed_with`
+retain one supplied source/admission relation through the existing traversal.
+The generic parameter does not supply an all-family admitted instance.
+Its calling entries consume re-entered ERC-20 frames as nested
 transcript turns; its carrier's boundary is the storage view `(getStor ca).get` (raw `Stor`
 equality is not a function of the words), with representations transported by `WriterRep.congr`.
 
