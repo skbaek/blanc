@@ -918,6 +918,7 @@ import Blanc.Lift.UniswapV2Pair.BurnPositionalInv
 import Blanc.Lift.UniswapV2Pair.BurnPositional
 import Blanc.Lift.UniswapV2Pair.BurnPositionalReply
 import Blanc.Lift.UniswapV2Pair.BurnPositionalSecond
+import Blanc.Lift.UniswapV2Pair.BurnPositionalBalances
 import Blanc.Lift.UniswapV2Pair.SyncOccurrence
 import Blanc.Lift.UniswapV2Pair.SourceOccurrence
 import Blanc.Lift.UniswapV2Pair.SyncSourceOccurrence
