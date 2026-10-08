@@ -905,4 +905,6 @@ import Blanc.Lift.UniswapV2Pair.SwapForwardUpdate
 import Blanc.Lift.UniswapV2Pair.ModelControls
 import Blanc.Lift.UniswapV2Pair.UpdateOverflowWalk
 import Blanc.Lift.CursorOccurrence
+import Blanc.Lift.CursorExactLine
+import Blanc.Lift.CursorStateCuts
 import Blanc.Lift.UniswapV2Pair.SyncOccurrence

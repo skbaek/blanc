@@ -3967,6 +3967,21 @@ contract-neutral.
   covered fork; they do not establish child context, settlement or ordered
   history. The joint node/tree premises are discovered here because the
   existential result alone is not a reliable recipe trigger.
+- To pin a complete state while retaining the internal return continuation,
+  use [`Blanc/Lift/CursorExactLine.lean`](../Blanc/Lift/CursorExactLine.lean).
+  `cursor_line_exact_cont` and `cursor_dest_line_exact_cont` cross literal
+  non-external lines with an exact synthetic walk and preserve `cursor.K`.
+  `cursor_callNext_exact_cont` retains the actual prepended `Cont`, and
+  `cursor_ret_exact_cont` returns through that same continuation with an exact
+  popped state. These strengthen the exact cut interfaces when a consumer
+  must carry an internal return stack; their conclusions do not assert
+  settlement or successful external replies.
+- To classify actual successful states without imposing a gas schedule, use
+  [`Blanc/Lift/CursorStateCuts.lean`](../Blanc/Lift/CursorStateCuts.lean).
+  `CursorStateAt` carries a checked actual cursor, a call-free span, a complete
+  `St` state with existential residual gas, and the mapped return continuation.
+  Its `line` and `jump` methods apply source inverses to the actual primitive
+  line or `ConfStep`, deriving the successor state and tree.
 - To connect a checked original-bytecode external next node to its actual
   occurrence and returned parent, use
   [`Blanc/Lift/CursorOccurrence.lean`](../Blanc/Lift/CursorOccurrence.lean).
