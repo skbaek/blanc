@@ -36,37 +36,47 @@ abbrev pairHistoryUniverse {cfg : ChainConfig} {checkpoint future : BlockChain} 
     WriterKey → Prop :=
   WriterExtend K₀ (pairHistoryTouchedKeys pair trace)
 
-/-- The history's facts at its replayed model state `finish` over the tracked rows `K'`
-(`pair_history_committed`'s existential). -/
-def PairHistoryReplayed {cfg : ChainConfig} {checkpoint future : BlockChain} (pair : Adr)
+def PairHistoryReplayedWith
+    (Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop)
+    (Auth : Exec.Deriv → Entry → Transcript → Prop)
+    {cfg : ChainConfig} {checkpoint future : BlockChain} (pair : Adr)
     (trace : ConfiguredHistoryTrace cfg checkpoint future) (K₀ : WriterKey → Prop) (st₀ : State)
     (finish : State) (K' : WriterKey → Prop) : Prop :=
   ∃ steps : List PairStep,
     steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-    (∀ s ∈ steps, s.Authentic pair) ∧
-    PairObservedReplay st₀ steps finish ∧
+    (∀ s ∈ steps, s.AuthenticWith Auth pair) ∧
+    PairObservedReplayWith Consumes st₀ steps finish ∧
     runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
     (∀ k, K₀ k → K' k) ∧ (∀ k, K' k → pairHistoryUniverse pair trace K₀ k) ∧
     WriterRep K' (future.state.getStor pair) finish
 
-theorem pair_history_replayed {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+theorem pair_history_replayed_with
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop}
+    (supplies : ∀ (U : WriterKey → Prop), WriterInj U → WriterApart U →
+      PairStepSupplyWith Consumes Auth U (fun _ => True))
+    (weaken : ∀ root segment transcript out,
+      Consumes root segment transcript out → ExactConsumes segment transcript out)
+    {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     {K₀ : WriterKey → Prop} {st₀ : State}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
     (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
     (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
     future.state.getCode pair = code ∧
-      ∃ (finish : State) (K' : WriterKey → Prop), PairHistoryReplayed pair trace K₀ st₀ finish K' := by
+      ∃ (finish : State) (K' : WriterKey → Prop), PairHistoryReplayedWith Consumes Auth pair trace K₀ st₀ finish K' := by
   obtain ⟨installedFuture, steps, observed, auth, finish, K', matched, _, realized, grows, inside, rep⟩ :=
-    pair_history_committed trace installed initial fresh
+    pair_history_committed_with supplies weaken trace installed initial fresh
   exact ⟨code_eq_of_toList installedFuture, finish, K',
     steps, observed, auth, matched, realized, grows, inside, rep⟩
 
-/-- The history's facts at a new frame whose world is the history's future world. -/
-theorem PairHistoryReplayed.at_frame {pair : Adr} {cfg : ChainConfig}
+theorem PairHistoryReplayedWith.at_frame
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop}
+    {pair : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ finish : State}
     {K' : WriterKey → Prop} {trace : ConfiguredHistoryTrace cfg checkpoint future}
-    (replayed : PairHistoryReplayed pair trace K₀ st₀ finish K') {sevm : Sevm} {pre : Devm}
+    (replayed : PairHistoryReplayedWith Consumes Auth pair trace K₀ st₀ finish K') {sevm : Sevm} {pre : Devm}
     (target : sevm.currentTarget = pair) (state : pre.state = future.state) :
     WriterRep K' (pre.getStor sevm.currentTarget) finish ∧
       (∀ k, K' k → pairHistoryUniverse pair trace K₀ k) := by
@@ -77,6 +87,70 @@ theorem PairHistoryReplayed.at_frame {pair : Adr} {cfg : ChainConfig}
     exact congrArg (fun world : Jaune.State => world.getStor pair) state
   rw [same]
   exact rep
+
+theorem pair_live_outcome_with
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop}
+    (supplies : ∀ (U : WriterKey → Prop), WriterInj U → WriterApart U →
+      PairStepSupplyWith Consumes Auth U (fun _ => True))
+    {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {K₀ : WriterKey → Prop} {st₀ finish : State} {K' : WriterKey → Prop}
+    {trace : ConfiguredHistoryTrace cfg checkpoint future}
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
+    (futureCode : future.state.getCode pair = code)
+    (replayed : PairHistoryReplayedWith Consumes Auth pair trace K₀ st₀ finish K')
+    {sevm : Sevm} {pre post : Devm} {g : Nat}
+    (run : Exec 0 sevm (St pre [] Mem.empty g) (.ok post))
+    (target : sevm.currentTarget = pair) (state : pre.state = future.state)
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (output : pre.output = []) (representable : sevm.data.length < 2 ^ 256)
+    (newFresh : WriterFreshKeys (pairHistoryUniverse pair trace K₀)
+      (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty g, .ok post, run⟩)) :
+    PairStepOutcomeWith Consumes Auth
+      (WriterExtend (pairHistoryUniverse pair trace K₀)
+        (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty g, .ok post, run⟩))
+      { state := finish, logs := [], updates := [] } [] K'
+      ⟨0, sevm, St pre [] Mem.empty g, .ok post, run⟩ post := by
+  have hist : WriterRep (pairHistoryUniverse pair trace K₀) (checkpoint.state.getStor pair) st₀ :=
+    initial.extend fresh
+  obtain ⟨rep, inside⟩ := replayed.at_frame target state
+  have installedCode : pre.getCode sevm.currentTarget = code := by
+    rw [target]
+    change pre.state.getCode pair = code
+    rw [state]
+    exact futureCode
+  exact supplies _ (hist.inj.extend newFresh) (hist.apart.extend newFresh) { state := finish, logs := [], updates := [] } [] run codeEq installedCode fork
+    output representable trivial (pairGood_of_keys fun _ row => Or.inr row)
+    (fun k tracked => Or.inl (inside k tracked)) rep
+
+/-- The history's facts at its replayed model state `finish` over the tracked rows `K'`
+(`pair_history_committed`'s existential). -/
+def PairHistoryReplayed {cfg : ChainConfig} {checkpoint future : BlockChain} (pair : Adr)
+    (trace : ConfiguredHistoryTrace cfg checkpoint future) (K₀ : WriterKey → Prop) (st₀ : State)
+    (finish : State) (K' : WriterKey → Prop) : Prop :=
+  PairHistoryReplayedWith (fun _ => ExactConsumes) PairFrameAuth pair trace K₀ st₀ finish K'
+
+theorem pair_history_replayed {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
+    future.state.getCode pair = code ∧
+      ∃ (finish : State) (K' : WriterKey → Prop), PairHistoryReplayed pair trace K₀ st₀ finish K' :=
+  pair_history_replayed_with (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed) trace installed initial fresh
+
+/-- The history's facts at a new frame whose world is the history's future world. -/
+theorem PairHistoryReplayed.at_frame {pair : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ finish : State}
+    {K' : WriterKey → Prop} {trace : ConfiguredHistoryTrace cfg checkpoint future}
+    (replayed : PairHistoryReplayed pair trace K₀ st₀ finish K') {sevm : Sevm} {pre : Devm}
+    (target : sevm.currentTarget = pair) (state : pre.state = future.state) :
+    WriterRep K' (pre.getStor sevm.currentTarget) finish ∧
+      (∀ k, K' k → pairHistoryUniverse pair trace K₀ k) :=
+  PairHistoryReplayedWith.at_frame replayed target state
 
 /-- **The shared liveness glue.**  A successful pc-zero run of a new Pair frame at the history's future
 world, under HASH-T freshness of the rows its own derivation selects against the history universe, is
@@ -100,19 +174,9 @@ theorem pair_live_outcome {pair : Adr} {cfg : ChainConfig} {checkpoint future : 
       (WriterExtend (pairHistoryUniverse pair trace K₀)
         (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty g, .ok post, run⟩))
       { state := finish, logs := [], updates := [] } [] K'
-      ⟨0, sevm, St pre [] Mem.empty g, .ok post, run⟩ post := by
-  have hist : WriterRep (pairHistoryUniverse pair trace K₀) (checkpoint.state.getStor pair) st₀ :=
-    initial.extend fresh
-  obtain ⟨rep, inside⟩ := replayed.at_frame target state
-  have installedCode : pre.getCode sevm.currentTarget = code := by
-    rw [target]
-    change pre.state.getCode pair = code
-    rw [state]
-    exact futureCode
-  exact pairSupply (hist.inj.extend newFresh) (hist.apart.extend newFresh) pairSem
-    pairSem_image { state := finish, logs := [], updates := [] } [] run codeEq installedCode fork
-    output representable trivial (pairGood_of_keys fun _ row => Or.inr row)
-    (fun k tracked => Or.inl (inside k tracked)) rep
+      ⟨0, sevm, St pre [] Mem.empty g, .ok post, run⟩ post :=
+  pair_live_outcome_with (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
+    initial fresh futureCode replayed run target state codeEq fork output representable newFresh
 
 /-! ## Instances -/
 
