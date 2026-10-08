@@ -11,6 +11,7 @@ import Blanc.LedgerUpdate
 import Blanc.StorageOnlySpec
 import Blanc.SlotFootprint
 import Blanc.SlotFootprintRestrict
+import Blanc.SlotFootprintSubset
 import Blanc.StaticStores
 import Blanc.WordArithmetic
 import Blanc.FakeExponentialEval
