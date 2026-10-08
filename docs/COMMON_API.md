@@ -4544,6 +4544,16 @@ partition through its actual slot queue. These are registry entries: their
 compound occurrence and cursor obligations have no reliable single goal-head
 trigger.
 
+[`PairPositionalEntry.lean`](../Blanc/Lift/UniswapV2Pair/PairPositionalEntry.lean)
+provides `PairEntryAt` for the actual selector and decoded entry, and
+`PairRootedConsumes`/`PairPositionalOutcome` bind the same original root,
+transcript, result and output. Entry decoding alone does not establish nested
+admission. The compiled ready family projections in
+[`PairPositionalReady.lean`](../Blanc/Lift/UniswapV2Pair/PairPositionalReady.lean)
+consume the supplied incoming checkpoint and those same positional results;
+`PairPositionalReadySupply` excludes Swap, Skim and Burn pending their own
+canonical producers.
+
 `transfer_source_call_at` in
 [`TransferSourceCall.lean`](../Blanc/Lift/UniswapV2Pair/TransferSourceCall.lean)
 binds an ordinary transfer request to the supplied actual CALL, its complete
