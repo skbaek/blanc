@@ -1,6 +1,7 @@
 import Blanc.Lift.CursorStateCuts
 import Blanc.Lift.UniswapV2Pair.PairDispatchCursor
 import Blanc.Lift.UniswapV2Pair.BurnForward
+import Blanc.Lift.UniswapV2Pair.BurnPositionalCuts
 
 /-! Residual-gas source inverses for actual successful Burn cursor prefixes. -/
 
@@ -298,5 +299,273 @@ theorem burn_lock_cursor_state {root : Exec.Deriv} {b post : Devm}
       cases line
       exact ⟨g', state⟩)
   exact caller.call cert_check success fork (by rfl)
+
+/-- The actual reserve helper returns the three cached reserve words through
+its supplied parent continuation, preserving the full world and memory. -/
+theorem burn_reserves_cursor_state {root : Exec.Deriv} {b post : Devm}
+    {R : List B256} {M : Mem} {ρ : B256} {K : List SFunc}
+    (cut : CursorStateAt code cert root t_0d90_c56 b (ρ :: R) M (t_1479_c37 :: K))
+    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork) :
+    Nonempty (CursorStateAt code cert root t_1479_c37 (afterSload root.sevm b 8)
+      (reserveTimestampRead (b.getStorVal root.sevm.currentTarget 8) ::
+       reserve1Read (b.getStorVal root.sevm.currentTarget 8) ::
+       reserve0Read (b.getStorVal root.sevm.currentTarget 8) :: R) M K) := by
+  obtain ⟨opened⟩ := cut.dest cert_check success fork
+  obtain ⟨returned⟩ := opened.line cert_check success fork burnReserveLine (by rfl)
+    (by
+      intro n member x equal; subst n
+      simp only [burnReserveLine, List.mem_cons, List.not_mem_nil,
+        reduceCtorEq, or_self] at member)
+    (b' := afterSload root.sevm b 8)
+    (S' := ρ :: reserveTimestampRead (b.getStorVal root.sevm.currentTarget 8) ::
+      reserve1Read (b.getStorVal root.sevm.currentTarget 8) ::
+      reserve0Read (b.getStorVal root.sevm.currentTarget 8) :: R) (M' := M) (by
+      intro g d line
+      dsimp only [burnReserveLine] at line
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_sload fork step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_and step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_div step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_and step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_div step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_and step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨g', state⟩ := ri_swap rfl step
+      cases line
+      refine ⟨g', ?_⟩
+      dsimp only [List.set] at state
+      simpa only [reserveTimestampRead, reserve1Read, reserve0Read,
+        show Bytes.toB256 [8] = (8 : B256) from rfl,
+        show Bytes.toB256 [255,255,255,255,255,255,255,255,255,255,255,255,255,255] = reserveMask112 from rfl,
+        show Bytes.toB256 [255,255,255,255] = reserveMask32 from rfl,
+        show Bytes.toB256 [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0] = reserveDiv112 from rfl,
+        show Bytes.toB256 [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0] = reserveDiv224 from rfl,
+        B256.and_comm] using state)
+  exact returned.ret cert_check success fork
+
+def burnFirstGuardLine : List Ninst := [
+  .reg .pop,
+  .push [0x06] (by decide),
+  .reg .sload,
+  .push [0x07] (by decide),
+  .reg .sload,
+  .push [0x40] (by decide),
+  .reg (.dup 0),
+  .reg .mload,
+  .push [0x70, 0xa0, 0x82, 0x31, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00] (by decide),
+  .reg (.dup 1),
+  .reg .mstore,
+  .reg .address,
+  .push [0x04] (by decide),
+  .reg (.dup 2),
+  .reg .add,
+  .reg .mstore,
+  .reg (.swap 0),
+  .reg .mload,
+  .reg (.swap 4),
+  .reg (.swap 6),
+  .reg .pop,
+  .reg (.swap 2),
+  .reg (.swap 4),
+  .reg .pop,
+  .push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide),
+  .reg (.swap 1),
+  .reg (.dup 2),
+  .reg .and,
+  .reg (.swap 3),
+  .reg (.swap 1),
+  .reg .and,
+  .reg (.swap 1),
+  .push [0x00] (by decide),
+  .reg (.swap 1),
+  .reg (.dup 4),
+  .reg (.swap 1),
+  .push [0x70, 0xa0, 0x82, 0x31] (by decide),
+  .reg (.swap 1),
+  .push [0x24] (by decide),
+  .reg (.dup 0),
+  .reg (.dup 3),
+  .reg .add,
+  .reg (.swap 2),
+  .push [0x20] (by decide),
+  .reg (.swap 2),
+  .reg (.swap 1),
+  .reg (.swap 0),
+  .reg (.dup 2),
+  .reg (.swap 0),
+  .reg .sub,
+  .reg .add,
+  .reg (.dup 1),
+  .reg (.dup 6),
+  .reg (.dup 0),
+  .reg .extcodesize,
+  .reg .iszero,
+  .reg (.dup 0),
+  .reg .iszero,
+  .push [0x14, 0xfb] (by decide)]
+
+/-- Burn's first request staging follows the actual cursor and retains the
+physical request memory, token worlds and cached reserve words. -/
+theorem burn_first_guard_cursor_state {root : Exec.Deriv} {b post : Devm}
+    {R : List B256} {M : Mem} {timestamp r1 r0 toWord extρ : B256} {K : List SFunc}
+    (cut : CursorStateAt code cert root t_1479_c37 b
+      (timestamp :: r1 :: r0 :: 0 :: 0 :: 0 :: 0 :: toWord :: extρ :: R) M K)
+    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
+    (mem : PtrMem 128 96 M)
+    (nonzero : ((burnTokensWorld root.sevm b).getCode
+      ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
+        b.getStorVal root.sevm.currentTarget 6).toAdr).size.toB256 ≠ 0) :
+    let t0 := (0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
+      b.getStorVal root.sevm.currentTarget 6
+    let t1 := (0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
+      (afterSload root.sevm b 6).getStorVal root.sevm.currentTarget 7
+    Nonempty (CursorStateAt code cert root t_14fb_c37
+      (temporalAccountAccessBase (burnTokensWorld root.sevm b) t0.toAdr)
+      (0 :: t0 :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 :: t0 ::
+        0 :: t1 :: t0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R)
+      (balanceRequestMemory M root.sevm.currentTarget) K) := by
+  let sevm := root.sevm
+  have mem2 : PtrMem 128 192 (balanceRequestMemory M sevm.currentTarget) :=
+    balanceRequestMemory_ptr mem sevm.currentTarget
+  have read0 : Bytes.toB256 (M.read 64 32).1 = 128 := mem.word
+  have read2 : Bytes.toB256 ((balanceRequestMemory M sevm.currentTarget).read 64 32).1 = 128 := mem2.word
+  have same2 := mem2.read_self (by decide : 64 + 32 ≤ 192)
+  simp only [balanceRequestMemory, balanceOfSelectorWord] at read2 same2
+  obtain ⟨opened⟩ := cut.dest cert_check success fork
+  obtain ⟨guard⟩ := opened.line cert_check success fork burnFirstGuardLine (by rfl)
+    (by
+      intro n member x equal; subst n
+      simp only [burnFirstGuardLine, List.mem_cons, List.not_mem_nil,
+        reduceCtorEq, or_self] at member)
+    (b' := temporalAccountAccessBase (burnTokensWorld root.sevm b)
+      ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
+        b.getStorVal root.sevm.currentTarget 6).toAdr)
+    (S' := 0x14fb :: 1 :: 0 ::
+      ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& b.getStorVal root.sevm.currentTarget 6) ::
+      128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
+      ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& b.getStorVal root.sevm.currentTarget 6) :: 0 ::
+      ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& (afterSload root.sevm b 6).getStorVal root.sevm.currentTarget 7) ::
+      ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& b.getStorVal root.sevm.currentTarget 6) ::
+      r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R)
+    (M' := balanceRequestMemory M root.sevm.currentTarget) (by
+      intro g d line
+      dsimp only [burnFirstGuardLine] at line
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_pop hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_sload fork hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_sload fork hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, eq⟩ := ri_mload hd
+      rw [show (Bytes.toB256 [64]).toNat = 64 from rfl, read0, mem.read_self (by decide)] at eq
+      subst next
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_mstore_nat 128 rfl hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line
+      have address := of_run_address hd
+      have stack := address.stack
+      simp only [Stack.Push, Split, St.stack] at stack
+      have eq := St.of_stackRel address
+      rw [stack] at eq
+      rw [eq] at line
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_add hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_mstore_nat 132 rfl hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+      dsimp only [List.set] at line
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, eq⟩ := ri_mload hd
+      rw [show (Bytes.toB256 [64]).toNat = 64 from rfl, read2, same2] at eq
+      subst next
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+      dsimp only [List.set] at line
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+      dsimp only [List.set] at line
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_pop hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+      dsimp only [List.set] at line
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+      dsimp only [List.set] at line
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_pop hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+      dsimp only [List.set] at line
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_and hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+      dsimp only [List.set] at line
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+      dsimp only [List.set] at line
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_and hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+      dsimp only [List.set] at line
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+      dsimp only [List.set] at line
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+      dsimp only [List.set] at line
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+      dsimp only [List.set] at line
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_add hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+      dsimp only [List.set] at line
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+      dsimp only [List.set] at line
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+      dsimp only [List.set] at line
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+      dsimp only [List.set] at line
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+      dsimp only [List.set] at line
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_sub hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_add hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_extcodesize fork hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line
+      have computation := ri_iszero hd
+      obtain ⟨_, rfl⟩ := ri_val (w := 0) (by
+        change B256.eqCheck ((burnTokensWorld root.sevm b).getCode
+          ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
+            b.getStorVal root.sevm.currentTarget 6).toAdr).size.toB256 0 = 0
+        simp only [B256.eqCheck, nonzero, ite_false]) computation
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_iszero hd
+      obtain ⟨next, hd, line⟩ := Line.of_run_cons line; obtain ⟨g', state⟩ := ri_push hd
+      cases line
+      refine ⟨g', ?_⟩
+      simpa only [sevm, burnTokensWorld, balanceRequestMemory, balanceOfSelectorWord,
+        show B256.eqCheck 0 0 = 1 from by decide,
+        show Bytes.toB256 [0x14,0xfb] = (0x14fb : B256) from rfl,
+        show Bytes.toB256 [255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255] = (0xffffffffffffffffffffffffffffffffffffffff : B256) from rfl,
+        show Bytes.toB256 [6] = (6 : B256) from rfl,
+        show Bytes.toB256 [7] = (7 : B256) from rfl,
+        show Bytes.toB256 [0] = (0 : B256) from rfl,
+        show Bytes.toB256 [32] = (32 : B256) from rfl,
+        show Bytes.toB256 [112,160,130,49] = (0x70a08231 : B256) from rfl,
+        show (128 : B256) - 128 + Bytes.toB256 [36] = 36 from by decide,
+        show (128 : B256) + Bytes.toB256 [36] = 164 from by decide] using state)
+  exact guard.branchSucc cert_check success fork (by decide)
 
 end Blanc.Lift.UniswapV2Pair
