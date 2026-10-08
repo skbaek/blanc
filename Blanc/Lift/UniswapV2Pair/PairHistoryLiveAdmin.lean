@@ -124,6 +124,58 @@ theorem runTyped_permit_conditions {st : State} {ctx : Context} {owner spender :
 
 /-! ## The liveness instances -/
 
+theorem pair_history_initialize_live_with
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop}
+    (supplies : ∀ (U : WriterKey → Prop), WriterInj U → WriterApart U →
+      PairStepSupplyWith Consumes Auth U (fun _ => True))
+    (weaken : ∀ root segment transcript out,
+      Consumes root segment transcript out → ExactConsumes segment transcript out)
+    {pair : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
+    {sevm : Sevm} {pre : Devm} {G : Nat}
+    (target : sevm.currentTarget = pair) (state : pre.state = future.state)
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (output : pre.output = []) (representable : sevm.data.length < 2 ^ 256)
+    (size : (4 : B256) ≤ sevm.data.length.toB256)
+    (selector : Blanc.Sevm.selector sevm = 0x485cc955)
+    (guard : (64 : B256) ≤ sevm.data.length.toB256 - 4)
+    (sentry0 : gCallStipend < G + initializeStore0Charge sevm pre + initializeLoad1Charge sevm pre +
+      initializeStore1Charge sevm pre + 39)
+    (sentry1 : gCallStipend < G + initializeStore1Charge sevm pre + 9) :
+    ∃ (finish : State) (K' : WriterKey → Prop), PairHistoryReplayedWith Consumes Auth pair trace K₀ st₀ finish K' ∧
+      ∀ (transcript : Transcript) (returndata : Bytes),
+        (runTyped finish (writerContext sevm [])
+          (.initialize (initializeToken0 sevm) (initializeToken1 sevm)) transcript).status =
+            .success returndata →
+        ∃ run : Exec 0 sevm (St pre [] Mem.empty (G + initializeStorageCharge sevm pre + 377))
+            (.ok (initializePublicPost sevm pre [0x485cc955] getterInitMemory G)),
+          (initializePublicPost sevm pre [0x485cc955] getterInitMemory G).gasLeft = G ∧
+          (WriterFreshKeys (pairHistoryUniverse pair trace K₀)
+              (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty (G + initializeStorageCharge sevm pre + 377),
+                .ok _, run⟩) →
+            PairStepOutcomeWith Consumes Auth
+              (WriterExtend (pairHistoryUniverse pair trace K₀)
+                (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
+                  (G + initializeStorageCharge sevm pre + 377), .ok _, run⟩))
+              { state := finish, logs := [], updates := [] } [] K'
+              ⟨0, sevm, St pre [] Mem.empty (G + initializeStorageCharge sevm pre + 377), .ok _, run⟩
+              (initializePublicPost sevm pre [0x485cc955] getterInitMemory G)) := by
+  obtain ⟨futureCode, finish, K', replayed⟩ := pair_history_replayed_with supplies weaken trace installed initial fresh
+  refine ⟨finish, K', replayed, fun transcript returndata accepted => ?_⟩
+  obtain ⟨value, sender, nonstatic⟩ := runTyped_initialize_conditions accepted
+  obtain ⟨rep, _⟩ := replayed.at_frame target state
+  have authorized : sevm.caller = (pre.getStorVal sevm.currentTarget 5).toAdr :=
+    sender.trans rep.fixed.2.2.1.symm
+  obtain ⟨run⟩ := initialize_bytecode_live_raw codeEq fork value size selector guard authorized
+    sentry0 sentry1 nonstatic
+  exact ⟨run, rfl, fun newFresh => pair_live_outcome_with supplies initial fresh futureCode replayed run target
+    state codeEq fork output representable newFresh⟩
+
 /-- **`initialize` after any configured history.**  When the model accepts the decoded
 `initialize(token0, token1)` at the history's state `finish` (the call is non-payable and non-static
 and comes from the factory), a pc-zero run exists at the closed gas
@@ -164,16 +216,69 @@ theorem pair_history_initialize_live {pair : Adr} {cfg : ChainConfig}
                   (G + initializeStorageCharge sevm pre + 377), .ok _, run⟩))
               { state := finish, logs := [], updates := [] } [] K'
               ⟨0, sevm, St pre [] Mem.empty (G + initializeStorageCharge sevm pre + 377), .ok _, run⟩
-              (initializePublicPost sevm pre [0x485cc955] getterInitMemory G)) := by
-  obtain ⟨futureCode, finish, K', replayed⟩ := pair_history_replayed trace installed initial fresh
-  refine ⟨finish, K', replayed, fun transcript returndata accepted => ?_⟩
-  obtain ⟨value, sender, nonstatic⟩ := runTyped_initialize_conditions accepted
-  obtain ⟨rep, _⟩ := replayed.at_frame target state
-  have authorized : sevm.caller = (pre.getStorVal sevm.currentTarget 5).toAdr :=
-    sender.trans rep.fixed.2.2.1.symm
-  obtain ⟨run⟩ := initialize_bytecode_live_raw codeEq fork value size selector guard authorized
-    sentry0 sentry1 nonstatic
-  exact ⟨run, rfl, fun newFresh => pair_live_outcome initial fresh futureCode replayed run target
+              (initializePublicPost sevm pre [0x485cc955] getterInitMemory G)) :=
+  pair_history_initialize_live_with (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed)
+    trace installed initial fresh target state codeEq fork output representable size selector
+    guard sentry0 sentry1
+
+theorem pair_history_permit_live_with
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop}
+    (supplies : ∀ (U : WriterKey → Prop), WriterInj U → WriterApart U →
+      PairStepSupplyWith Consumes Auth U (fun _ => True))
+    (weaken : ∀ root segment transcript out,
+      Consumes root segment transcript out → ExactConsumes segment transcript out)
+    {pair : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
+    {sevm : Sevm} {pre d : Devm} {G callGas : Nat}
+    (target : sevm.currentTarget = pair) (state : pre.state = future.state)
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (output : pre.output = []) (representable : sevm.data.length < 2 ^ 256)
+    (size : (4 : B256) ≤ sevm.data.length.toB256)
+    (selector : Blanc.Sevm.selector sevm = 0xd505accf)
+    (guard : (224 : B256) ≤ sevm.data.length.toB256 - 4)
+    (sentry3 : gCallStipend < callGas + 641 + permitNonceStoreCharge sevm pre)
+    (call : Ninst.RunCompiled sevm (St (permitNonceWorld sevm pre (permitOwner sevm))
+      (callGas.toB256 :: 1 :: 482 :: 128 :: 450 :: 32 :: permitPublicCallStack sevm pre 0xd505accf)
+      (permitPublicCallMemory sevm pre) callGas) (.exec .staticcall) d)
+    (success : d.stack = 1 :: permitPublicCallStack sevm pre 0xd505accf)
+    (returnedGas : d.gasLeft = G + permitApproveCharge sevm d + 2165)
+    (sentry : gCallStipend < G + permitApproveCharge sevm d + 1846) :
+    ∃ (finish : State) (K' : WriterKey → Prop), PairHistoryReplayedWith Consumes Auth pair trace K₀ st₀ finish K' ∧
+      ∀ (transcript : Transcript) (returndata : Bytes),
+        transcript.firstRecovered = (permitRecoveredWord d.returnData).toAdr →
+        (runTyped finish (writerContext sevm []) (permitDecodedEntry sevm) transcript).status =
+          .success returndata →
+        ∃ run : Exec 0 sevm (St pre [] Mem.empty
+            (callGas + permitNonceStoreCharge sevm pre + permitNonceCharge sevm pre + 1137))
+            (.ok (permitPublicPost sevm pre d d.returnData 0xd505accf G)),
+          (permitPublicPost sevm pre d d.returnData 0xd505accf G).gasLeft = G ∧
+          (WriterFreshKeys (pairHistoryUniverse pair trace K₀)
+              (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
+                (callGas + permitNonceStoreCharge sevm pre + permitNonceCharge sevm pre + 1137),
+                .ok _, run⟩) →
+            PairStepOutcomeWith Consumes Auth
+              (WriterExtend (pairHistoryUniverse pair trace K₀)
+                (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
+                  (callGas + permitNonceStoreCharge sevm pre + permitNonceCharge sevm pre + 1137),
+                  .ok _, run⟩))
+              { state := finish, logs := [], updates := [] } [] K'
+              ⟨0, sevm, St pre [] Mem.empty
+                (callGas + permitNonceStoreCharge sevm pre + permitNonceCharge sevm pre + 1137),
+                .ok _, run⟩
+              (permitPublicPost sevm pre d d.returnData 0xd505accf G)) := by
+  obtain ⟨futureCode, finish, K', replayed⟩ := pair_history_replayed_with supplies weaken trace installed initial fresh
+  refine ⟨finish, K', replayed, fun transcript returndata answer accepted => ?_⟩
+  obtain ⟨value, nonstatic, timely, recovered, signer⟩ := runTyped_permit_conditions accepted
+  rw [answer] at recovered signer
+  obtain ⟨run⟩ := permit_bytecode_live_raw codeEq fork value size selector guard nonstatic timely
+    sentry3 call success returnedGas recovered signer sentry
+  exact ⟨run, rfl, fun newFresh => pair_live_outcome_with supplies initial fresh futureCode replayed run target
     state codeEq fork output representable newFresh⟩
 
 /-- **`permit` after any configured history.**  Given the frame's actual `ECRECOVER` precompile result
@@ -226,14 +331,10 @@ theorem pair_history_permit_live {pair : Adr} {cfg : ChainConfig}
               ⟨0, sevm, St pre [] Mem.empty
                 (callGas + permitNonceStoreCharge sevm pre + permitNonceCharge sevm pre + 1137),
                 .ok _, run⟩
-              (permitPublicPost sevm pre d d.returnData 0xd505accf G)) := by
-  obtain ⟨futureCode, finish, K', replayed⟩ := pair_history_replayed trace installed initial fresh
-  refine ⟨finish, K', replayed, fun transcript returndata answer accepted => ?_⟩
-  obtain ⟨value, nonstatic, timely, recovered, signer⟩ := runTyped_permit_conditions accepted
-  rw [answer] at recovered signer
-  obtain ⟨run⟩ := permit_bytecode_live_raw codeEq fork value size selector guard nonstatic timely
-    sentry3 call success returnedGas recovered signer sentry
-  exact ⟨run, rfl, fun newFresh => pair_live_outcome initial fresh futureCode replayed run target
-    state codeEq fork output representable newFresh⟩
+              (permitPublicPost sevm pre d d.returnData 0xd505accf G)) :=
+  pair_history_permit_live_with (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed)
+    trace installed initial fresh target state codeEq fork output representable size selector
+    guard sentry3 call success returnedGas sentry
 
 end Blanc.Lift.UniswapV2Pair
