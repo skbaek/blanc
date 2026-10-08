@@ -22,6 +22,13 @@ structure CursorStateAt (code : ByteArray) (c : Cert) (start : Exec.Deriv)
   state : ∃ G, node.devm = St b S M G
   continuations : cursor.K.map Cont.f = K
 
+/-- Project a reached memory symbolically, without unfolding its concrete image. -/
+theorem CursorStateAt.memory_eq {code : ByteArray} {c : Cert} {start : Exec.Deriv}
+    {f : SFunc} {b : Devm} {S : List B256} {M : Mem} {K : List SFunc}
+    (cut : CursorStateAt code c start f b S M K) : cut.node.devm.memory = M := by
+  obtain ⟨G, state⟩ := cut.state
+  rw [state, St.memory]
+
 /-- A literal non-exec line uses its existing inverse at the actual state.
 The inverse classifies a primitive line, not a supplied reached endpoint. -/
 theorem CursorStateAt.line {code : ByteArray} {c : Cert} {start : Exec.Deriv}

@@ -3984,6 +3984,7 @@ contract-neutral.
   line or `ConfStep`, deriving the successor state and tree. Its `call` and
   `ret` methods retain and consume the actual mapped internal continuation,
   preserving the complete non-gas state without requiring a gas schedule.
+  `memory_eq` projects the symbolic memory without unfolding a concrete state.
 - To exclude later external instructions from an actual returned parent, use
   [`Blanc/Lift/CursorNoExecSuffix.lean`](../Blanc/Lift/CursorNoExecSuffix.lean).
   `cursor_reach_of_parentPrefix` transports its checked cursor along the supplied
