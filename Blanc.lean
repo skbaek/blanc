@@ -448,7 +448,6 @@ import Blanc.Lift.Weth9.CommittedSpawn
 import Blanc.Lift.Weth9.CommittedHistory
 import Blanc.Lift.Weth9.Live
 import Blanc.Lift.ExactWalkSolc
-import Blanc.Lift.ExactWalkAddress
 import Blanc.Lift.ExactWalkCall
 import Blanc.Lift.BeaconRoots.SystemWalk
 import Blanc.Lift.HistoryStorage.SystemWalk
@@ -908,9 +907,15 @@ import Blanc.Lift.CursorOccurrence
 import Blanc.Lift.CursorExactLine
 import Blanc.Lift.CursorStateCuts
 import Blanc.Lift.CursorNoExecSuffix
+import Blanc.Lift.CursorSourceRun
 import Blanc.Lift.InvWalkGas
 import Blanc.Lift.UniswapV2Pair.PairDispatchCursor
 import Blanc.Lift.UniswapV2Pair.BurnPositionalCuts
 import Blanc.Lift.UniswapV2Pair.BurnPositionalInv
 import Blanc.Lift.UniswapV2Pair.BurnPositional
+import Blanc.Lift.UniswapV2Pair.BurnPositionalReply
 import Blanc.Lift.UniswapV2Pair.SyncOccurrence
+import Blanc.Lift.UniswapV2Pair.SourceOccurrence
+import Blanc.Lift.UniswapV2Pair.SyncSourceOccurrence
+import Blanc.Lift.UniswapV2Pair.PermitPositionalCuts
+import Blanc.Lift.UniswapV2Pair.PermitPositionalRequest

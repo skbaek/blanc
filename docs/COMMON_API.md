@@ -3993,6 +3993,14 @@ contract-neutral.
   `CursorOK.revertLineNoOk` rules out a literal reverting suffix under actual
   success. These APIs preserve the supplied execution and do not select a
   different root or call occurrence.
+- To obtain successful source suffix facts at a supplied actual checked node,
+  use `CursorOK.sourceRun` in
+  [`Blanc/Lift/CursorSourceRun.lean`](../Blanc/Lift/CursorSourceRun.lean).
+  It applies `node_soundM` to that same node, its matched frame and pending
+  return tag. Its outcome may return internally; it does not fabricate a
+  top-level halt. The resulting `StepIn` source run can establish guards and
+  widths, while actual cursor cuts still own external occurrence and slot
+  identities.
 - To connect a checked original-bytecode external next node to its actual
   occurrence and returned parent, use
   [`Blanc/Lift/CursorOccurrence.lean`](../Blanc/Lift/CursorOccurrence.lean).
@@ -4111,9 +4119,7 @@ contract-neutral.
   comparison (`cmp_miss`, `cmp_hit`) are in
   [`Blanc/Lift/ExactWalk.lean`](../Blanc/Lift/ExactWalk.lean), with more steps
   (`rx_shl`, `rx_xor`, `rx_byte`, `rx_mstore8`, `rx_calldatacopy`, `rx_log1`, …) in
-  [`Blanc/Lift/ExactWalkOps.lean`](../Blanc/Lift/ExactWalkOps.lean) and the
-  current-target `ADDRESS` step (`rx_address`) in
-  [`Blanc/Lift/ExactWalkAddress.lean`](../Blanc/Lift/ExactWalkAddress.lean), and the
+  [`Blanc/Lift/ExactWalkOps.lean`](../Blanc/Lift/ExactWalkOps.lean), and the
   cut-run forms (`rxc_*`, `SFunc.RunExact.toCut`) in
   [`Blanc/Lift/ExactWalkCut.lean`](../Blanc/Lift/ExactWalkCut.lean) and
   [`Blanc/Lift/ExactWalkCutOps.lean`](../Blanc/Lift/ExactWalkCutOps.lean), which

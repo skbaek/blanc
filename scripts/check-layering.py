@@ -173,7 +173,7 @@ SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.CheckAssembly", "Lift.ExactWalkO
 SHARED += ["Lift.PackedShaSize", "Lift.Deploy", "Lift.CreationOps", "Lift.Create2Deploy", "Lift.CreateEntry", "Lift.Clone1167", "Lift.CheckAssemblyPair", "Lift.WitnessShadow"]
 # Solc-0.4 scratch-memory walk kit and the value-bearing CALL to a code-free recipient
 # (weth9-liveness-v1): contract-neutral.
-SHARED += ["Lift.ExactWalkSolc", "Lift.ExactWalkCall", "Lift.ExactWalkAddress"]
+SHARED += ["Lift.ExactWalkSolc", "Lift.ExactWalkCall"]
 # Parameterized free-pointer memory for lifted walks.
 SHARED += ["Lift.ExactWalkMemory", "Lift.ByteWindowMemory", "Lift.WordImage", "Lift.Ecrecover"]
 # Size-free free-pointer word carrier for moved-pointer walks (uv2nh-skim)
@@ -200,7 +200,7 @@ SHARED += ["Lift.CalldataGuards", "Lift.StaticCall", "Lift.StaticCallGuard", "Li
 # The frame cursor, the reentrancy-lock exclusion kit and its bytecode checker, owner
 # discipline, and concrete-run evaluation (deployed-lido-vyper-v1): contract-neutral.
 SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachChain", "Lift.ReachDispatch", "Lift.Cursor", "Lift.CursorCuts", "Lift.CursorOccurrence", "Lift.CursorExact", "Lift.CursorExactLine", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
-           "Lift.LockCheck", "Lift.LockCheckSound", "Lift.LockCheckFlow", "Lift.CursorStateCuts", "Lift.CursorNoExecSuffix"]
+           "Lift.LockCheck", "Lift.LockCheckSound", "Lift.LockCheckFlow", "Lift.CursorStateCuts", "Lift.CursorNoExecSuffix", "Lift.CursorSourceRun"]
 # The constant memory map and its checker, code tries as data, and the executable-witness
 # engine with its child runs and spawn facts (deployed-lido-vyper-v1, V-): contract-neutral.
 SHARED += ["Lift.MemMap", "Lift.CheckMem", "Lift.CodeTriesData", "Lift.WitnessArms", "Lift.Witness",
@@ -370,10 +370,15 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.SyncTurns",
         "Lift.UniswapV2Pair.SyncCanonical",
         "Lift.UniswapV2Pair.SyncOccurrence",
+        "Lift.UniswapV2Pair.SourceOccurrence",
+        "Lift.UniswapV2Pair.SyncSourceOccurrence",
+        "Lift.UniswapV2Pair.PermitPositionalCuts",
+        "Lift.UniswapV2Pair.PermitPositionalRequest",
         "Lift.UniswapV2Pair.PairDispatchCursor",
         "Lift.UniswapV2Pair.BurnPositionalCuts",
         "Lift.UniswapV2Pair.BurnPositionalInv",
         "Lift.UniswapV2Pair.BurnPositional",
+        "Lift.UniswapV2Pair.BurnPositionalReply",
         "Lift.UniswapV2Pair.SyncGasCanonical",
         "Lift.UniswapV2Pair.SkimWalk",
         "Lift.UniswapV2Pair.SkimTransferWalk",
