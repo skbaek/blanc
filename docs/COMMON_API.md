@@ -4677,6 +4677,12 @@ and actual output under only code equality, covered fork, Swap selector and
 successful original `Exec 0`. Empty output follows only with a fresh input output
 buffer in the canonical integration.
 
+[`SwapSourceOccurrenceTransfer.lean`](../Blanc/Lift/UniswapV2Pair/SwapSourceOccurrenceTransfer.lean)
+binds each supplied Swap transfer to its typed request and complete actual slot
+queue. `swapObservedTransferReply` retains that slot's entered bit, and
+`swap_resume_observed_transfer` transports both accepted optional-bool replies
+through the same typed continuation without changing the entered bit.
+
 The Pair mutable fold's `mutable_selected_root_with` in
 [`MutableTurns.lean`](../Blanc/Lift/UniswapV2Pair/MutableTurns.lean)
 parameterizes child consumption and turn introductions while the existing

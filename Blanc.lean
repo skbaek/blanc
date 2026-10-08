@@ -897,6 +897,7 @@ import Blanc.Lift.UniswapV2Pair.SwapPositionalTransfer
 import Blanc.Lift.UniswapV2Pair.SwapPositionalCallback
 import Blanc.Lift.UniswapV2Pair.SwapPositionalBalance
 import Blanc.Lift.UniswapV2Pair.SwapPositionalSuffix
+import Blanc.Lift.UniswapV2Pair.SwapSourceOccurrenceTransfer
 import Blanc.Lift.UniswapV2Pair.SwapTransfer
 import Blanc.Lift.UniswapV2Pair.SwapUpdateWalk
 import Blanc.Lift.WordWindowMemory
