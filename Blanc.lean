@@ -811,6 +811,9 @@ import Blanc.Lift.UniswapV2Pair.SyncGasCanonical
 import Blanc.Lift.UniswapV2Pair.PermitSource
 import Blanc.Lift.UniswapV2Pair.SkimCanonical
 import Blanc.Lift.UniswapV2Pair.SkimPositionalPrefix
+import Blanc.Lift.UniswapV2Pair.SkimPositionalFirst
+import Blanc.Lift.UniswapV2Pair.SkimPositionalReply
+import Blanc.Lift.UniswapV2Pair.SkimPositionalTransfer
 import Blanc.Lift.UniswapV2Pair.SkimForward
 import Blanc.Lift.UniswapV2Pair.SkimForwardAccept
 import Blanc.Lift.UniswapV2Pair.SkimForwardKeep
