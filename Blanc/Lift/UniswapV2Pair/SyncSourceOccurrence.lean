@@ -36,7 +36,7 @@ theorem SyncCanonicalResult.firstSourceCall {K : WriterKey → Prop}
     caller := rfl
     value := rfl
     calldata := rfl
-    static := by simp [msg, callMsg, externalStatic, request, requestFor]
+    static := by simp only [msg, callMsg, externalStatic, request, requestFor, BEq.rfl, Bool.or_true, Bool.true_or]
     response := process
     resumeEq := rfl
     resumed := resumed
@@ -94,7 +94,7 @@ theorem SyncCanonicalResult.secondSourceCall {K : WriterKey → Prop}
     caller := rfl
     value := rfl
     calldata := rfl
-    static := by simp [msg, callMsg, externalStatic, request, requestFor]
+    static := by simp only [msg, callMsg, externalStatic, request, requestFor, BEq.rfl, Bool.or_true, Bool.true_or]
     response := process
     resumeEq := rfl
     resumed := resumed

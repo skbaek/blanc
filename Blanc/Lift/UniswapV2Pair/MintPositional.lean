@@ -43,7 +43,7 @@ theorem mint_balance_occurrence_of_request_cursor {root start : Exec.Deriv}
   rw [shape] at cut
   obtain ⟨opened⟩ := cut.dest cert_check success fork
   obtain ⟨beforeGas⟩ := opened.line cert_check success fork [.reg .pop] rfl
-    (by intro n member xi equal; subst n; simp at member)
+    (by intro n member xi equal; subst n; simp only [List.mem_cons, List.not_mem_nil, or_false, reduceCtorEq] at member)
     (by
       intro gas d line
       obtain ⟨_, step, line⟩ := Line.of_run_cons line

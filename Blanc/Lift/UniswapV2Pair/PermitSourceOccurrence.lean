@@ -31,7 +31,8 @@ theorem PermitCallOccurrence.sourceCall {K : WriterKey → Prop}
     calldata := by rw [settled.messageEq]; exact calldata.symm
     static := by
       rw [settled.messageEq]
-      simp [callMsg, externalStatic, permitPublicRequest, permitRequest, requestFor]
+      simp only [callMsg, externalStatic, permitPublicRequest, permitRequest, requestFor,
+        BEq.rfl, Bool.or_true, Bool.true_or]
     response := settled.process
     resumeEq := rfl
     resumed := settled.resumed
