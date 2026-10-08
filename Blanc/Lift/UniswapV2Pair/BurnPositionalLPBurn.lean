@@ -1,5 +1,7 @@
 import Blanc.Lift.UniswapV2Pair.PairLPBurnCursor
 import Blanc.Lift.UniswapV2Pair.BurnPositionalPayout
+import Blanc.Lift.UniswapV2Pair.BurnPositionalPricing
+import Blanc.Lift.UniswapV2Pair.BurnPositionalPayment
 
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
@@ -79,5 +81,29 @@ theorem burn_lp_first_transfer_cursor_state {root : Exec.Deriv} {b post : Devm}
       cases line
       exact ⟨gas, result⟩)
   exact ⟨residual, caller.call cert_check success fork rfl⟩
+
+/-- Successful original pricing derives all guards consumed by the actual
+product/division/LP transports, without adding those guards to its callers. -/
+theorem burn_pricing_first_transfer_cursor_state {root : Exec.Deriv} {b post : Devm}
+    {R : List B256} {M : Mem} {K : List SFunc}
+    {f L b1 b0 token1 token0 r1 r0 toWord extρ : B256}
+    (cut : CursorStateAt code cert root t_15e2_c37 b
+      (f :: 0 :: L :: b1 :: b0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R) M K)
+    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
+    (mem : PtrMem 128 192 M) :
+    let supply := b.getStorVal root.sevm.currentTarget 0
+    let locals := burnPricedLocals supply f L b1 b0 token1 token0 r1 r0
+      ((L * b1) / supply) ((L * b0) / supply) toWord extρ R
+    ∃ residual, Nonempty (CursorStateAt code cert root t_1fdb_c57
+      (lpBurnPost root.sevm (afterSload root.sevm b 0) locals M
+        root.sevm.currentTarget.toB256 L residual)
+      (((L * b0) / supply) :: toWord :: token0 :: 0x1698 :: locals)
+      (lpBurnPost root.sevm (afterSload root.sevm b 0) locals M
+        root.sevm.currentTarget.toB256 L residual).memory (t_1698_c13 :: K)) := by
+  obtain ⟨_, _, nonzero, positive0, positive1⟩ := burn_pricing_guards_of_cursor cut success fork
+  obtain ⟨_, ⟨first⟩⟩ := burn_pricing_first_product_cursor_state cut success fork
+  obtain ⟨_, ⟨second⟩⟩ := burn_second_product_cursor_state first success fork nonzero
+  obtain ⟨priced⟩ := burn_payout_cursor_state second success fork nonzero positive0 positive1
+  exact burn_lp_first_transfer_cursor_state priced success fork mem
 
 end Blanc.Lift.UniswapV2Pair

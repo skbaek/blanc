@@ -938,6 +938,8 @@ import Blanc.Lift.UniswapV2Pair.PermitRecoveryPost
 import Blanc.Lift.UniswapV2Pair.PairCheckedSubCursor
 import Blanc.Lift.UniswapV2Pair.PairCheckedMulCursor
 import Blanc.Lift.UniswapV2Pair.PairLPBurnCursor
+import Blanc.Lift.UniswapV2Pair.PairTransferInitialize
+import Blanc.Lift.UniswapV2Pair.PairTransferCursor
 import Blanc.Lift.UniswapV2Pair.PairFeeCursor
 import Blanc.Lift.UniswapV2Pair.PairFeeObservation
 import Blanc.Lift.UniswapV2Pair.PairFeeReturn

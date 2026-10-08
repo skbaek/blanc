@@ -382,6 +382,8 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.PairCheckedSubCursor",
         "Lift.UniswapV2Pair.PairCheckedMulCursor",
         "Lift.UniswapV2Pair.PairLPBurnCursor",
+        "Lift.UniswapV2Pair.PairTransferInitialize",
+        "Lift.UniswapV2Pair.PairTransferCursor",
         "Lift.UniswapV2Pair.PairFeeCursor",
         "Lift.UniswapV2Pair.PairFeeObservation",
         "Lift.UniswapV2Pair.PairFeeReturn",
