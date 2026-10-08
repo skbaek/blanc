@@ -5,18 +5,6 @@ import Blanc.Lift.UniswapV2Pair.BurnForward
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- Literal original-bytecode reserve-helper line before its return. -/
-def burnReserveLine : List Ninst := [
-  .push [8] (by decide), .reg .sload,
-  .push [255,255,255,255,255,255,255,255,255,255,255,255,255,255] (by decide),
-  .reg (.dup 0), .reg (.dup 2), .reg .and, .reg (.swap 2),
-  .push [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0] (by decide),
-  .reg (.dup 3), .reg .div, .reg (.swap 0), .reg (.swap 1), .reg .and,
-  .reg (.swap 1),
-  .push [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0] (by decide),
-  .reg (.swap 0), .reg .div, .push [255,255,255,255] (by decide),
-  .reg .and, .reg (.swap 0)]
-
 /-- The continuation immediately after the first initial STATICCALL. -/
 def burnFirstAfterCallTree : SFunc :=
   match t_14fb_c37 with

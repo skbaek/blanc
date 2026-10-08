@@ -1,4 +1,5 @@
 import Blanc.Lift.CursorSourceRun
+import Blanc.Lift.CursorBalanceReply
 import Blanc.Lift.CursorStateCuts
 import Blanc.Lift.UniswapV2Pair.BurnPrefixWalk
 
@@ -77,5 +78,60 @@ theorem burn_initial_actual_reply_guards {F : Exec.Deriv} {κ : Cursor}
     reply.flag mem (by rw [reply.returnData]; exact bound) source'
   rw [reply.returnData] at classified
   exact classified
+
+
+/-- Classify and decode the supplied actual returned parent, preserving its
+complete world, physical reply memory, and original mapped continuation. -/
+theorem burn_initial_actual_reply_cursor {F : Exec.Deriv} {κ : Cursor}
+    {b post : Devm} {R : List B256} {M : Mem} {flag a x y : B256} {out : Bytes}
+    (site : BurnInitialBalanceSite) (placed : CursorOK code cert F κ)
+    (tree : κ.f = site.afterCallTree) (success : F.exn = .ok post)
+    (fork : CoveredFork F.sevm.benvStat.fork)
+    (reply : StaticCallPost b F.devm (a :: x :: y :: R)
+      (balanceRequestMemory M F.sevm.currentTarget) 128 36 128 32 flag out)
+    (mem : PtrMem 128 192 (balanceReplyMemory M F.sevm.currentTarget out))
+    (bound : out.length < 2 ^ 256) :
+    flag = 1 ∧ 32 ≤ out.length ∧
+      Nonempty (CursorStateAt code cert F site.afterDecodeTree F.devm
+        (Bytes.toB256 ((balanceReplyMemory M F.sevm.currentTarget out).read 128 32).1 :: R)
+        (balanceReplyMemory M F.sevm.currentTarget out) (κ.K.map Cont.f)) := by
+  let cut : CursorStateAt code cert F site.afterCallTree F.devm
+      (flag :: a :: x :: y :: R) (balanceReplyMemory M F.sevm.currentTarget out)
+      (κ.K.map Cont.f) :=
+    ⟨F, κ, .refl F, rfl, rfl, placed, tree, ⟨F.devm.gasLeft, reply.eq_St⟩, rfl⟩
+  have guarded : flag = 1 ∧ Nonempty (CursorStateAt code cert F site.returnTree
+      F.devm (0 :: a :: x :: y :: R) (balanceReplyMemory M F.sevm.currentTarget out)
+      (κ.K.map Cont.f)) := by
+    cases site with
+    | first =>
+      exact cut.callFlag (failedTree := t_1506_c37) (returnTree := t_150f_c37)
+        cert_check success fork [0x15,0x0f] (by decide)
+        rfl reply.flag (by decide)
+    | second =>
+      exact cut.callFlag (failedTree := t_15a4_c37) (returnTree := t_15ad_c37)
+        cert_check success fork [0x15,0xad] (by decide)
+        rfl reply.flag (by decide)
+  obtain ⟨one, returned⟩ := guarded
+  obtain ⟨returned⟩ := returned
+  have full : F.devm.returnData.length < 2 ^ 256 := by rw [reply.returnData]; exact bound
+  have decoded : 32 ≤ F.devm.returnData.length ∧
+      Nonempty (CursorStateAt code cert F site.afterDecodeTree F.devm
+        (Bytes.toB256 ((balanceReplyMemory M F.sevm.currentTarget out).read 128 32).1 :: R)
+        (balanceReplyMemory M F.sevm.currentTarget out) (κ.K.map Cont.f)) := by
+    cases site with
+    | first =>
+      exact returned.returnWord (p := 128) (n := 192)
+        (shortTree := t_1521_c37) (decodeTree := t_1525_c37)
+        (tail := BurnInitialBalanceSite.first.afterDecodeTree)
+        cert_check success fork [0x15,0x25] (by decide)
+        rfl rfl mem (by decide) full (by decide)
+    | second =>
+      exact returned.returnWord (p := 128) (n := 192)
+        (shortTree := t_15bf_c37) (decodeTree := t_15c3_c37)
+        (tail := BurnInitialBalanceSite.second.afterDecodeTree)
+        cert_check success fork [0x15,0xc3] (by decide)
+        rfl rfl mem (by decide) full (by decide)
+  rw [reply.returnData] at decoded
+  exact ⟨one, decoded⟩
 
 end Blanc.Lift.UniswapV2Pair

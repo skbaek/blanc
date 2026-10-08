@@ -4001,6 +4001,23 @@ contract-neutral.
   top-level halt. The resulting `StepIn` source run can establish guards and
   widths, while actual cursor cuts still own external occurrence and slot
   identities.
+- To cross a checked reply flag and decode a physical memory word, use
+  [`Blanc/Lift/CursorBalanceReply.lean`](../Blanc/Lift/CursorBalanceReply.lean).
+  `CursorStateAt.callFlag` derives success from the same actual suffix and
+  crosses the literal flag guard. `CursorStateAt.returnWord` derives the
+  complete returndata width from that same checked node, then crosses the
+  width guard and memory decoder. Both retain the complete world, symbolic
+  memory, and mapped continuation. Consumers supply their literal source
+  shapes and closed reverting arms; call identity remains with the actual
+  occurrence carrier. Instantiate the pointer and allocated size explicitly
+  when the physical memory is a nested image.
+- To bind a GAS word and external call to an actual parent execution, use
+  [`Blanc/Lift/CursorGasCall.lean`](../Blanc/Lift/CursorGasCall.lean).
+  `CursorStateAt.gasCall` derives the actual remaining gas from the supplied
+  cursor and returns a `CallOccurrenceStep` owned by the supplied original
+  root. It keeps the relative call-free gap, full request state, actual filled
+  slot, returned cursor, and mapped continuation. Its same-frame prefix may
+  start at an earlier returned parent; no gas schedule is assumed.
 - To connect a checked original-bytecode external next node to its actual
   occurrence and returned parent, use
   [`Blanc/Lift/CursorOccurrence.lean`](../Blanc/Lift/CursorOccurrence.lean).

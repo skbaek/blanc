@@ -1,3 +1,4 @@
+import Blanc.Lift.UniswapV2Pair.PairReservesCursor
 import Blanc.Lift.CursorStateCuts
 import Blanc.Lift.UniswapV2Pair.PairDispatchCursor
 import Blanc.Lift.UniswapV2Pair.BurnForward
@@ -310,49 +311,7 @@ theorem burn_reserves_cursor_state {root : Exec.Deriv} {b post : Devm}
       (reserveTimestampRead (b.getStorVal root.sevm.currentTarget 8) ::
        reserve1Read (b.getStorVal root.sevm.currentTarget 8) ::
        reserve0Read (b.getStorVal root.sevm.currentTarget 8) :: R) M K) := by
-  obtain ⟨opened⟩ := cut.dest cert_check success fork
-  obtain ⟨returned⟩ := opened.line cert_check success fork burnReserveLine (by rfl)
-    (by
-      intro n member x equal; subst n
-      simp only [burnReserveLine, List.mem_cons, List.not_mem_nil,
-        reduceCtorEq, or_self] at member)
-    (b' := afterSload root.sevm b 8)
-    (S' := ρ :: reserveTimestampRead (b.getStorVal root.sevm.currentTarget 8) ::
-      reserve1Read (b.getStorVal root.sevm.currentTarget 8) ::
-      reserve0Read (b.getStorVal root.sevm.currentTarget 8) :: R) (M' := M) (by
-      intro g d line
-      dsimp only [burnReserveLine] at line
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_sload fork step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_and step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_div step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_and step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_div step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_and step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨g', state⟩ := ri_swap rfl step
-      cases line
-      refine ⟨g', ?_⟩
-      dsimp only [List.set] at state
-      simpa only [reserveTimestampRead, reserve1Read, reserve0Read,
-        show Bytes.toB256 [8] = (8 : B256) from rfl,
-        show Bytes.toB256 [255,255,255,255,255,255,255,255,255,255,255,255,255,255] = reserveMask112 from rfl,
-        show Bytes.toB256 [255,255,255,255] = reserveMask32 from rfl,
-        show Bytes.toB256 [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0] = reserveDiv112 from rfl,
-        show Bytes.toB256 [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0] = reserveDiv224 from rfl,
-        B256.and_comm] using state)
-  exact returned.ret cert_check success fork
+  exact pair_reserves_cursor_state cut success fork
 
 def burnFirstGuardLine : List Ninst := [
   .reg .pop,

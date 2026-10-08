@@ -1,7 +1,7 @@
 import Blanc.Lift.UniswapV2Pair.BurnPositionalCuts
 import Blanc.Lift.CursorStateCuts
 import Blanc.Lift.CursorOccurrence
-import Blanc.Lift.InvWalkGas
+import Blanc.Lift.CursorGasCall
 import Blanc.Lift.UniswapV2Pair.BurnPositionalInv
 
 /-! Actual Burn call positions in the checked original-bytecode execution. -/
@@ -46,38 +46,9 @@ theorem burn_first_call_of_request_cursor {root : Exec.Deriv} {b post : Devm}
       obtain ⟨g', state⟩ := ri_pop pop
       cases tail
       exact ⟨g', state⟩)
-  obtain ⟨call, κ, _, _, sameSevm, sameExn, placed, tree, line, sameK, free⟩ :=
-    cursor_nexts_line_cont_free_forward cert_check beforeGas.placed [.reg .gas]
-      (.next (.exec .staticcall) burnFirstAfterCallTree)
-      (beforeGas.tree.trans (by rfl)) (beforeGas.exn_eq.trans success)
-      (by rw [beforeGas.sevm_eq]; exact fork)
-  obtain ⟨g, state⟩ := beforeGas.state
-  rw [beforeGas.sevm_eq, state] at line
-  obtain ⟨_, primitive, tail⟩ := Line.of_run_cons line
-  cases tail
-  obtain ⟨gas, callState⟩ := ri_gas_remaining primitive
-  have gap := beforeGas.free.trans (free (by
-    intro n member x equal
-    simp only [List.mem_singleton, equal, reduceCtorEq] at member))
-  have env := sameSevm.trans beforeGas.sevm_eq
-  have outcome := sameExn.trans beforeGas.exn_eq
-  obtain ⟨step, cursor, nodeEq, _, primitiveCall, synthetic, _, returned⟩ :=
-    cursor_next_call_occurrence_forward cert_check gap.1 placed tree
-      (outcome.trans success) (by rw [env]; exact fork)
-  have nextShape : cursor.f = burnFirstAfterCallTree ∧ cursor.K = κ.K := by
-    rcases κ with ⟨f, pc, a, m, pending⟩
-    dsimp only at tree
-    subst f
-    cases synthetic
-    exact ⟨rfl, rfl⟩
-  refine ⟨step, cursor, gas, ?_, ?_, ?_, ?_, ?_, returned, nextShape.1, ?_⟩
-  · rw [nodeEq]; exact gap
-  · rw [nodeEq]; exact env
-  · rw [nodeEq]; exact outcome
-  · rw [nodeEq]
-    exact callState
-  · simpa only [nodeEq, env] using primitiveCall
-  · rw [nextShape.2, sameK]; exact beforeGas.continuations
+  simpa only [burnFirstCallInput] using
+    beforeGas.gasCall (x := .staticcall) (tail := burnFirstAfterCallTree)
+      cert_check (.refl root) success fork
 
 /-- A successful public Burn execution produces its first original-bytecode
 balance STATICCALL, exact request, filled actual slot and returned cursor.
