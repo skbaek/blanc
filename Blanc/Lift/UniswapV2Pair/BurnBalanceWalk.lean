@@ -28,6 +28,34 @@ def BurnFinalBalanceSite.afterDecodeTree (site : BurnFinalBalanceSite) : SFunc :
 def burnBalanceReplyMemory (M : Mem) (p : B256) (out : Bytes) : Mem :=
   (M.extends [(p.toNat, 36), (p.toNat, 32)]).write p.toNat (out.take 32)
 
+theorem burnBalanceReplyMemory_extended {M : Mem} {p : B256} {n : Nat}
+    (mem : PtrMem p n M) (fit : p.toNat + 36 ≤ n) :
+    M.extends [(p.toNat, 36), (p.toNat, 32)] = M := by
+  unfold Mem.extends
+  rw [mem.size]
+  simp only [memExtsSize]
+  rw [memExtSize_of_le mem.n32 fit,
+    memExtSize_of_le mem.n32 (by omega : p.toNat + 32 ≤ n), ← mem.size]
+
+theorem burnBalanceReplyMemory_ptr {M : Mem} {p : B256} {n : Nat} (out : Bytes)
+    (mem : PtrMem p n M) (low : 96 ≤ p.toNat) (fit : p.toNat + 36 ≤ n) :
+    PtrMem p n (burnBalanceReplyMemory M p out) := by
+  unfold burnBalanceReplyMemory
+  rw [burnBalanceReplyMemory_extended mem fit]
+  exact mem.write_bytes_of_le p.toNat (out.take 32)
+    (by have := List.length_take_le 32 out; omega) (Or.inr low)
+
+theorem burnBalanceReplyMemory_word {M : Mem} {p : B256} {n : Nat} {out : Bytes}
+    (mem : PtrMem p n M) (fit : p.toNat + 36 ≤ n) (long : 32 ≤ out.length) :
+    Bytes.toB256 ((burnBalanceReplyMemory M p out).read p.toNat 32).1 =
+      Bytes.toB256 (out.take 32) := by
+  have length : (out.take 32).length = 32 := by rw [List.length_take, Nat.min_eq_left long]
+  have image := Bytes.sliceD_writeAt M.data.toList (out.take 32) p.toNat
+  rw [length] at image
+  unfold burnBalanceReplyMemory
+  rw [burnBalanceReplyMemory_extended mem fit,
+    (Mem.reads_data M |>.write mem.wf p.toNat (out.take 32)).read, image]
+
 /-- Both actual post-transfer balance sites retain the original call witness,
 derive full reply width from the guards, and decode the moved output window. -/
 theorem burnFinalBalanceRead_inv {P : Sevm → Devm → Ninst → Devm → Prop}
@@ -62,17 +90,8 @@ theorem burnFinalBalanceRead_inv {P : Sevm → Devm → Ninst → Devm → Prop}
     · exact staticCallGuard_invP [0x17, 0x23] (by decide) rfl project fork (by decide) run
     · exact staticCallGuard_invP [0x17, 0xbf] (by decide) rfl project fork (by decide) run
   obtain ⟨gw, callGas, d, out, _, call, post, bound, answered, tail⟩ := callObservation
-  have extended : M.extends [(p.toNat, 36), (p.toNat, 32)] = M := by
-    unfold Mem.extends
-    rw [mem.size]
-    simp only [memExtsSize]
-    rw [memExtSize_of_le mem.n32 fit,
-      memExtSize_of_le mem.n32 (by omega : p.toNat + 32 ≤ n), ← mem.size]
-  have replyMem : PtrMem p n (burnBalanceReplyMemory M p out) := by
-    unfold burnBalanceReplyMemory
-    rw [extended]
-    exact mem.write_bytes_of_le p.toNat (out.take 32)
-      (by have := List.length_take_le 32 out; omega) (Or.inr low)
+  have replyMem : PtrMem p n (burnBalanceReplyMemory M p out) :=
+    burnBalanceReplyMemory_ptr out mem low fit
   have full : d.returnData.length < 2 ^ 256 := by rw [post.returnData]; exact bound
   have guarded : 32 ≤ d.returnData.length ∧ ∃ G',
       SFunc.RunCutP P cert.prog sevm C
@@ -91,13 +110,7 @@ theorem burnFinalBalanceRead_inv {P : Sevm → Devm → Ninst → Devm → Prop}
   obtain ⟨_, rfl⟩ := ri_pop (project step)
   obtain ⟨loaded, step, decoded⟩ := ric_nextP decoded
   obtain ⟨tailGas, state⟩ := ri_mload (project step)
-  have word : Bytes.toB256 ((burnBalanceReplyMemory M p out).read p.toNat 32).1 =
-      Bytes.toB256 (out.take 32) := by
-    have length : (out.take 32).length = 32 := by rw [List.length_take, Nat.min_eq_left long]
-    have image := Bytes.sliceD_writeAt M.data.toList (out.take 32) p.toNat
-    rw [length] at image
-    unfold burnBalanceReplyMemory
-    rw [extended, (Mem.reads_data M |>.write mem.wf p.toNat (out.take 32)).read, image]
+  have word := burnBalanceReplyMemory_word mem fit long
   rw [word, replyMem.read_self (by omega : p.toNat + 32 ≤ n)] at state
   subst loaded
   exact ⟨gw, callGas, d, out, tailGas, call, post, long, bound, answered, replyMem, decoded⟩
