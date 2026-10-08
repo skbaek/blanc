@@ -810,6 +810,7 @@ import Blanc.Lift.Curve3Crv.Liveness
 import Blanc.Lift.UniswapV2Pair.SyncGasCanonical
 import Blanc.Lift.UniswapV2Pair.PermitSource
 import Blanc.Lift.UniswapV2Pair.SkimCanonical
+import Blanc.Lift.UniswapV2Pair.SkimPositionalPrefix
 import Blanc.Lift.UniswapV2Pair.SkimForward
 import Blanc.Lift.UniswapV2Pair.SkimForwardAccept
 import Blanc.Lift.UniswapV2Pair.SkimForwardKeep
@@ -939,6 +940,8 @@ import Blanc.Lift.UniswapV2Pair.BurnPositionalTransferCaller
 import Blanc.Lift.UniswapV2Pair.BurnPositionalTransferReply
 import Blanc.Lift.UniswapV2Pair.BurnPositionalFive
 import Blanc.Lift.UniswapV2Pair.BurnPositionalTransfers
+import Blanc.Lift.UniswapV2Pair.BurnPositionalFinalRequest
+import Blanc.Lift.UniswapV2Pair.BurnPositionalFinalCall
 import Blanc.Lift.UniswapV2Pair.SyncOccurrence
 import Blanc.Lift.UniswapV2Pair.SourceOccurrence
 import Blanc.Lift.UniswapV2Pair.SyncSourceOccurrence
