@@ -373,6 +373,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.SyncCanonical",
         "Lift.UniswapV2Pair.SyncOccurrence",
         "Lift.UniswapV2Pair.SourceOccurrence",
+        "Lift.UniswapV2Pair.SourceSlotQueueExistence",
         "Lift.UniswapV2Pair.SyncSourceOccurrence",
         "Lift.UniswapV2Pair.PermitPositionalCuts",
         "Lift.UniswapV2Pair.PermitPositionalRequest",

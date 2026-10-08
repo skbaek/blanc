@@ -4546,6 +4546,13 @@ partition through its actual slot queue. These are registry entries: their
 compound occurrence and cursor obligations have no reliable single goal-head
 trigger.
 
+`CallOccurrenceStep.sourceSlotQueue` in
+[`SourceSlotQueueExistence.lean`](../Blanc/Lift/UniswapV2Pair/SourceSlotQueueExistence.lean)
+derives a complete selected queue from the supplied actual call and parent index,
+including the synchronous `.none` case and settlement pruning. Its proof uses
+that call's original slot and spawning derivation; no guessed queue, code or
+commit premise is required.
+
 [`PairPositionalEntry.lean`](../Blanc/Lift/UniswapV2Pair/PairPositionalEntry.lean)
 provides `PairEntryAt` for the actual selector and decoded entry, and
 `PairRootedConsumes`/`PairPositionalOutcome` bind the same original root,
