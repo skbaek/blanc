@@ -33,7 +33,7 @@ theorem feeMintFresh_of_universe {K U : WriterKey → Prop} {feeTo : B256}
   intro _ _ _ _
   exact Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub (lpMintTouched_rows row)
 
-theorem feeBranchSourceKeys_sub {K U : WriterKey → Prop} {feeTo : B256}
+theorem pairFeeSourceKeys_sub {K U : WriterKey → Prop} {feeTo : B256}
     (sub : ∀ k, K k → U k) (row : U (.balance feeTo.toAdr))
     (st : State) (sevm : Sevm) (b : Devm) (r0 r1 : B256) :
     ∀ k, feeBranchSourceKeys K st sevm b feeTo r0 r1 k → U k := by

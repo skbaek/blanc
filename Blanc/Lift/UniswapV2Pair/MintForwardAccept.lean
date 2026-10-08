@@ -1,5 +1,6 @@
 import Blanc.Lift.UniswapV2Pair.MintSource
 import Blanc.Lift.UniswapV2Pair.FeeMintSource
+import Blanc.Lift.UniswapV2Pair.PairFeeSourceKeys
 import Blanc.Lift.UniswapV2Pair.MintPrefixWalk
 import Blanc.Lift.UniswapV2Pair.PropertiesMintBurn
 
@@ -373,23 +374,8 @@ structure MintFeePricingCallee (sevm : Sevm) (b d : Devm) (R : List B256) (M : M
 /-- The fee branch's tracked rows stay inside a universe holding the fee recipient's row. -/
 theorem feeBranchSourceKeys_sub {U K : WriterKey → Prop} {st : State} {sevm : Sevm} {b : Devm}
     {w r0 r1 : B256} (sub : ∀ k, K k → U k) (row : U (.balance w.toAdr)) :
-    ∀ k, feeBranchSourceKeys K st sevm b w r0 r1 k → U k := by
-  have extended : ∀ k, WriterExtend K (lpMintTouched w.toAdr) k → U k := by
-    intro k member
-    rcases member with old | touched
-    · exact sub k old
-    · rw [List.mem_singleton.mp touched]; exact row
-  intro k member
-  unfold feeBranchSourceKeys at member
-  split at member
-  · exact sub k member
-  · split at member
-    · exact sub k member
-    · split at member
-      · split at member
-        · exact sub k member
-        · exact extended k member
-      · exact sub k member
+    ∀ k, feeBranchSourceKeys K st sevm b w r0 r1 k → U k :=
+  pairFeeSourceKeys_sub sub row st sevm b r0 r1
 
 def MintFeePricingCallee.post {sevm : Sevm} {b d : Devm} {R : List B256} {M : Mem}
     {feeResidual finalGas callGas sourceCost supplyCost loadCost creditCost : Nat}
