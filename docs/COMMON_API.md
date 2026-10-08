@@ -4569,7 +4569,7 @@ commit premise is required.
 [`PairFeeSourceKeys.lean`](../Blanc/Lift/UniswapV2Pair/PairFeeSourceKeys.lean)
 preserves every incoming tracked key through the fee branch's conditional
 recipient extension. `lpMintTouched_rows`, `feeMintFresh_of_universe` and
-`feeBranchSourceKeys_sub` derive recipient freshness and key containment in a
+`pairFeeSourceKeys_sub` derive recipient freshness and key containment in a
 supplied separated universe; `feeBranchSourceFee_unlocked` preserves the lock
 word. The old Mint helpers and Burn lock helper delegate to these same proofs.
 The existing Burn pricing source proof consumes the inclusion when deriving
@@ -4764,3 +4764,16 @@ holds the shrink-only textual-duplication baseline. A red row from any of them
 usually means a step above was skipped. Bytecode-segment sharing between call
 sites is a separate, opt-in mechanism with its own guide outside this
 repository; nothing in this workflow requires it.
+
+`writerRep_absorb` in
+[`PairWriterAbsorb.lean`](../Blanc/Lift/UniswapV2Pair/PairWriterAbsorb.lean)
+extends a represented finite footprint inside the same separated universe to
+include every incoming tracked row. The existing Pair supply outcome builder
+imports this same proof. An actual-call consumer can apply it at a selected
+returned checkpoint before consuming later static queries. Its quantified footprint
+conclusion has no reliable registered single goal-head trigger.
+
+[`BurnLogImage.lean`](../Blanc/Lift/UniswapV2Pair/BurnLogImage.lean) owns the
+shared `burnOwnedRaw` image and `burn_pending_logs_preserves`, which transports
+the existing locked-child pending log image into the Burn/Sync image without
+changing foreign logs. The original Burn source donor imports the same proofs.

@@ -973,6 +973,9 @@ import Blanc.Lift.UniswapV2Pair.BurnPositionalInitialSource
 import Blanc.Lift.UniswapV2Pair.BurnPositionalEntry
 import Blanc.Lift.UniswapV2Pair.BurnPositionalFeeSource
 import Blanc.Lift.UniswapV2Pair.BurnPositionalMutable
+import Blanc.Lift.UniswapV2Pair.BurnPositionalFinalSource
+import Blanc.Lift.UniswapV2Pair.BurnLogImage
+import Blanc.Lift.UniswapV2Pair.PairWriterAbsorb
 import Blanc.Lift.UniswapV2Pair.BurnPositionalTransferSource
 import Blanc.Lift.UniswapV2Pair.BurnPositionalFinish
 import Blanc.Lift.UniswapV2Pair.BurnPositionalFinishSource
