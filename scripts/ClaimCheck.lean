@@ -1,3 +1,26 @@
+import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit.Capstone
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolFinal
+import Blanc.Lift.LidoCircuitBreakerDeployed.FiniteFrame
+import Blanc.Lift.LidoCircuitBreakerDeployed.FiniteInit
+import Blanc.Lift.LidoCircuitBreakerDeployed.FiniteExample
+import Blanc.Lift.LidoCircuitBreakerDeployed.FiniteRegistry
+import Blanc.Lift.UniswapV2Pair.PairHistoryMinLiquidity
+import Blanc.Lift.UniswapV2Pair.Properties
+import Blanc.Lift.UniswapV2Pair.PropertiesMintBurn
+import Blanc.Lift.UniswapV2Pair.PropertiesSwap
+import Blanc.Lift.UniswapV2Pair.SqrtWalk
+import Blanc.Lift.UniswapV2Pair.SwapCanonical
+import Blanc.Lift.UniswapV2Pair.Creation.Facts
+import Blanc.Lift.UniswapV2Pair.ModelControls
+import Blanc.Lift.UniswapV2Pair.OracleControls
+import Blanc.Lift.UniswapV2Pair.SwapControls
+import Blanc.Lift.UniswapV2Pair.LedgerKeyControl
+import Blanc.Lift.UniswapV2Pair.CalleeControls
+import Blanc.Lift.UniswapV2Pair.CalleeControlsSwap
+import Blanc.Lift.UniswapV2Pair.CalleeControlsReach
+import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolBoundary
+import Blanc.Lift.UniswapV2Pair.PropertiesMinLiquidity
+import Blanc.Lift.UniswapV2Pair.ModelMutants
 import Blanc.Weth10Redeemable
 import Blanc.Weth10MainnetCodeEq
 import Blanc.Weth10DeploymentRoot
@@ -9674,5 +9697,2090 @@ example : (StaticView.singleMapping .balanceOf).selector = 0x70a08231 := rfl
 example : (StaticView.singleMapping .nonces).selector = 0x7ecebe00 := rfl
 example : StaticView.allowance.selector = 0xdd62ed3e := rfl
 example : StaticView.getReserves.selector = 0x0902f1ac := rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+/-! ## Paper review 2 approved statement coverage -/
+
+-- Paper review 2 statement: weth9_history_tx_withdraw
+namespace Blanc.Lift.Weth9
+open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace
+
+example : ∀ {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {K₀ : Key → Prop}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode ca).toList = weth9Sem.image)
+    (sumNof : SumNof checkpoint.state.bal)
+    (initial : FootInv K₀ (checkpoint.state.getStor ca) (checkpoint.state.bal ca))
+    (fresh : KeysFresh K₀ (historyTouchedKeys ca trace))
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat} {E : Adr} {wad : B256}
+    {chainId : UInt64} {maxPriorityFee maxFee : Nat}
+    (hstate : benv.state = future.state)
+    (hfork : CoveredFork benv.stat.fork)
+    (htype : tx.type = .two chainId maxPriorityFee maxFee (some ca) [])
+    (hvalue : tx.value = 0) (hdata : tx.data = withdrawCalldata wad)
+    (hchain : chainId = benv.stat.chainId)
+    (hprio : maxPriorityFee ≤ maxFee) (hbase : benv.stat.baseFeePerGas ≤ maxFee)
+    (hgas : withdrawIntrinsicGas wad + withdrawFrameGas wad + 811 ≤ tx.gas)
+    (hcap : tx.gas ≤ 16777216)
+    (hroom : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed)
+    (hrecover : recoverSender benv.stat.chainId tx = .ok E)
+    (hnonce : (benv.state.get E).nonce = tx.nonce) (hnonceMax : tx.nonce ≠ UInt64.max)
+    (hnocode : (benv.state.getCode E).size = 0)
+    (hfunds : tx.gas * maxFee ≤ (benv.state.get E).bal.toNat)
+    (hprecE : benv.stat.rules.isPrecomp E = false) (hprecCa : benv.stat.rules.isPrecomp ca = false)
+    (hholder : historyKeyUniverse ca trace K₀ (.bal E))
+    (hbal : wad ≤ (future.state.getStor ca).get (balSlot E))
+    (hcbE : benv.stat.coinbase ≠ E) (hcbCa : benv.stat.coinbase ≠ ca),
+    ∃ (st : Jaune.State) (bout' : BlockOutput), processTransaction benv bout tx index = .ok (st, bout') ∧
+      bout'.cumulativeGasUsed = bout.cumulativeGasUsed +
+        withdrawGasUsed ((future.state.getStor ca).get (balSlot E)) wad ∧
+      bout'.blockGasUsed = bout.blockGasUsed +
+        withdrawGasUsed ((future.state.getStor ca).get (balSlot E)) wad ∧
+      st.getStor ca = (future.state.getStor ca).set (balSlot E)
+        ((future.state.getStor ca).get (balSlot E) - wad) ∧
+      (∀ a, a ≠ ca → st.getStor a = future.state.getStor a) ∧
+      (st.get E).nonce = tx.nonce + 1 ∧
+      (st.get E).bal = future.state.bal E -
+          (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+            benv.stat.baseFeePerGas)).toB256 + wad +
+        ((tx.gas - withdrawGasUsed ((future.state.getStor ca).get (balSlot E)) wad) *
+          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+            benv.stat.baseFeePerGas)).toB256 ∧
+      (st.get ca).bal = future.state.bal ca - wad ∧
+      ((future.state.bal E).toNat + wad.toNat < 2 ^ 256 →
+        (st.get E).bal.toNat + withdrawGasUsed ((future.state.getStor ca).get (balSlot E)) wad *
+          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas) =
+          (future.state.bal E).toNat + wad.toNat) :=
+  @weth9_history_tx_withdraw
+
+end Blanc.Lift.Weth9
+
+-- Paper review 2 statement: vplus_reachable_capstone
+namespace Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit
+open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.NodeWalk Blanc.LockExclusion
+open Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init
+open Blanc.Lift.VyperNonreentrantDeployed.Fixed.Fund
+open Jaune.Exec.Deriv (ParentPrefix)
+open Blanc.Lift.VyperNonreentrantDeployed.Fixed (ActiveRel lockBodies lockL)
+
+example : ∀ (fork : Fork) (hfork : CoveredFork fork),
+    ∃ postI postP postInit postOracle postT postR postA postD postX : Devm,
+
+      processCreateMessage (implCreateMsg fork initialWorld) = .ok postI ∧ postI.error = none ∧
+      processCreateMessage (cloneCreateMsg fork postI.state) = .ok postP ∧ postP.error = none ∧
+      processMessage (initMsg fork postP.state) = .ok postInit ∧ postInit.error = none ∧
+      processMessage (oracleMsg fork postInit.state) = .ok postOracle ∧
+      postOracle.error = none ∧ CleanPool postOracle.state ∧
+      processCreateMessage (tokenCreateMsg fork postOracle.state) = .ok postT ∧
+      postT.error = none ∧
+      processCreateMessage (receiverCreateMsg fork postT.state) = .ok postR ∧
+      postR.error = none ∧
+      processMessage (approveMsg fork postR.state) = .ok postA ∧ postA.error = none ∧
+      processMessage (addMsg fork postA.state) = .ok postD ∧ postD.error = none ∧
+
+      Checkpoint postD.state ∧
+      (storOf postD.state proxyAddr 0x16).toNat =
+        Blanc.ledgerSumOn {creator} (fun holder => storOf postD.state proxyAddr (lpSlot holder)) ∧
+      storOf postD.state proxyAddr 0x16 = 2000 ∧
+
+      processMessage (removeMsg fork postD.state) = .ok postX ∧ postX.error = none ∧
+      postX.gasLeft = 920078 ∧
+      (Frame.ofCall (removeMsg fork postD.state)).enter = .run (eTop.re fork world8) ∧
+      postD.state = world8 ∧ postX = dTop ∧
+      ∃ (out : Execution) (R : Exec 0 (reS eTop.sta fork) eTop.dyna out)
+        (F h c q G : Exec.Deriv),
+
+        F ∈ Exec.rawFrameRoots R ∧ ActiveRel proxyAddr F h ∧ Spawns h c ∧ h.pc = 7427 ∧
+        c.sevm.currentTarget = receiverAddr ∧ c.sevm.value.toNat = 100 ∧
+
+        q ∈ Exec.rawFrameRoots c.exc ∧ q.sevm.currentTarget = proxyAddr ∧
+        G ∈ Exec.rawFrameRoots q.exc ∧ CPFrame proxyAddr code G ∧ G.sevm.data = reentryData ∧
+        G.exn = .error (.revert, dRe) ∧ (∀ x, ParentPrefix G x → x.pc ∉ lockBodies) ∧
+        (∃ y y', ParentPrefix G y ∧ y.pc = 0x53 ∧ ParentPrefix y y' ∧ y'.pc = 0x477e) ∧
+
+        lockL.HashAvoidIn proxyAddr R ∧
+        (∀ G' ∈ Exec.rawFrameRoots c.exc, ¬ lockL.Enters proxyAddr G') ∧
+        ¬ lockL.Enters proxyAddr G ∧
+
+        out = .ok postX ∧
+        (storOf postX.state proxyAddr 0x16).toNat =
+          Blanc.ledgerSumOn {creator} (fun holder => storOf postX.state proxyAddr (lpSlot holder)) ∧
+        storOf postX.state proxyAddr 0x16 = 1800 ∧
+        (postX.state.get receiverAddr).bal = 100 ∧
+        storOf postX.state tokenAddr receiverAddr.toB256 = 100 ∧
+        (postX.state.get proxyAddr).bal = 900 ∧ storOf postX.state proxyAddr 0 = 3 :=
+  @vplus_reachable_capstone
+
+end Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit
+
+-- Paper review 2 statement: vminus_reachable_capstone
+namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol
+
+
+example : CapstoneStmt :=
+  @vminus_reachable_capstone
+
+end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol
+
+-- Paper review 2 statement: vminus_reach_violation
+namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol
+
+
+example : ViolationStmt :=
+  @vminus_reach_violation
+
+end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol
+
+-- Paper review 2 statement: registerPauser_nonzero_finite
+namespace Blanc.Lift.LidoCircuitBreakerDeployed
+open Jaune Blanc Blanc.Lift Blanc.LidoCircuitBreaker
+
+example : ∀ {sevm : Sevm} {pre post : Devm}
+    {entries : List LidoCircuitBreaker.Entry} {probes : List B256}
+    {index : Nat} {oldPauser : B256}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (hinstalled : Devm.getCode pre sevm.currentTarget = code)
+    (hcode : sevm.code = Devm.getCode pre sevm.currentTarget)
+    (hfresh : Exec.FreshEntry sevm pre)
+    (hsig : Sevm.dataWord sevm 0 >>> 224 = selector "registerPauser" [.address, .address])
+    (hpre : checkRegistryOn (solRegistryStorage (Devm.getStor pre sevm.currentTarget))
+      entries probes = true)
+    (hcover : checkLiveCovered entries probes = true)
+    (hclosure : Sevm.dataWord sevm 4 ∈ probes ∧ oldPauser ∈ probes ∧
+      Sevm.dataWord sevm 36 ∈ probes)
+    (hnew : Sevm.dataWord sevm 36 ≠ 0)
+    (hfind : findEntry entries (Sevm.dataWord sevm 4) = some (index, oldPauser))
+    (hfaithful : SlotFootprint.checkFaithfulOn solKey (registryQueries probes entries.length)
+      ((nonzeroWrites entries (Sevm.dataWord sevm 4) (Sevm.dataWord sevm 36) oldPauser).map
+        Prod.fst) = true)
+    (hapart : SlotFootprint.checkApartOn solKey (registryQueries probes entries.length)
+      [mapSlot oldPauser 2, mapSlot (Sevm.dataWord sevm 36) 2] = true)
+    (execution : Exec 0 sevm pre (.ok post)),
+    checkRegistryOn (solRegistryStorage (Devm.getStor post sevm.currentTarget))
+      (setEntryAt index (Sevm.dataWord sevm 4, Sevm.dataWord sevm 36) entries) probes = true ∧
+    checkLiveCovered
+      (setEntryAt index (Sevm.dataWord sevm 4, Sevm.dataWord sevm 36) entries) probes = true :=
+  @registerPauser_nonzero_finite
+
+end Blanc.Lift.LidoCircuitBreakerDeployed
+
+-- Paper review 2 statement: lido_create_finite_init
+namespace Blanc.Lift.LidoCircuitBreakerDeployed
+open Jaune Blanc Blanc.Lift Blanc.LidoCircuitBreaker Blanc.ForkUniform
+
+example : ∀ (msg : Msg) (hvalue : msg.value = 0)
+    (hcodeAddress : msg.codeAddress = .none) (hcode : msg.code = Creation.code)
+    (hgas : 1000000 ≤ msg.gas) (hfork : CoveredFork msg.benv.stat.fork)
+    (hstatic : msg.isStatic = false)
+    (hmax : 4584 ≤ msg.benv.stat.rules.code.maxCodeSize)
+    {probes : List B256} (hp : ∀ p ∈ probes, canonicalAddress p)
+    (hapart : Blanc.SlotFootprint.checkApartOn solKey
+      (registryQueries probes 0) [0, 1] = true),
+    ∃ post, processCreateMessage msg = .ok post ∧
+      (post.getCode msg.currentTarget).toList =
+        Blanc.Lift.LidoCircuitBreakerDeployed.code.toList ∧
+      RegistryOn (solRegistryStorage (Devm.getStor post msg.currentTarget)) [] probes :=
+  @lido_create_finite_init
+
+end Blanc.Lift.LidoCircuitBreakerDeployed
+
+-- Paper review 2 statement: exampleApplicable
+namespace Blanc.Lift.LidoCircuitBreakerDeployed
+open Jaune Blanc Blanc.LidoCircuitBreaker
+
+example : checkRegistryOn (solRegistryStorage exampleStorage) exampleEntries exampleProbes = true ∧
+    checkLiveCovered exampleEntries exampleProbes = true ∧
+    findEntry exampleEntries 1 = some (0, 2) ∧
+    ((1 : B256) ∈ exampleProbes ∧ (2 : B256) ∈ exampleProbes ∧ (3 : B256) ∈ exampleProbes) ∧
+    (3 : B256) ≠ 0 ∧
+    SlotFootprint.checkFaithfulOn solKey (registryQueries exampleProbes exampleEntries.length)
+      ((nonzeroWrites exampleEntries 1 3 2).map Prod.fst) = true ∧
+    SlotFootprint.checkApartOn solKey (registryQueries exampleProbes exampleEntries.length)
+      [mapSlot 2 2, mapSlot 3 2] = true :=
+  @exampleApplicable
+
+end Blanc.Lift.LidoCircuitBreakerDeployed
+
+-- Paper review 2 statement: checkRegistryOn_eq_true
+namespace Blanc.Lift.LidoCircuitBreakerDeployed
+open Jaune Blanc.LidoCircuitBreaker
+
+example : ∀ {storage : LogicalStorage} {entries : List Entry}
+    {probes : List B256},
+    checkRegistryOn storage entries probes = true ↔ RegistryOn storage entries probes :=
+  @checkRegistryOn_eq_true
+
+end Blanc.Lift.LidoCircuitBreakerDeployed
+
+-- Paper review 2 statement: checkLiveCovered_eq_true
+namespace Blanc.Lift.LidoCircuitBreakerDeployed
+open Jaune Blanc.LidoCircuitBreaker
+
+example : ∀ {entries : List Entry} {probes : List B256},
+    checkLiveCovered entries probes = true ↔ ∀ e ∈ entries, e.1 ∈ probes ∧ e.2 ∈ probes :=
+  @checkLiveCovered_eq_true
+
+end Blanc.Lift.LidoCircuitBreakerDeployed
+
+-- Paper review 2 statement: pair_history_minimum_liquidity
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+example : ∀ {pair : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {factory token0 token1 : Adr} {domain : B256}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : InitializedCheckpoint (checkpoint.state.getStor pair) factory domain token0 token1)
+    (fresh : WriterFreshKeys (fun _ => False) (pairHistoryTouchedKeys pair trace))
+    (nonzero : pair ≠ 0),
+    ∃ steps : List PairStep,
+      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      (∀ s ∈ steps, s.Authentic pair) ∧
+      ∃ (finish : State) (K' : WriterKey → Prop),
+        runSourceInvocations (initializedState factory domain token0 token1)
+          (steps.map PairStep.source) = some finish ∧
+        WriterRep K' (future.state.getStor pair) finish ∧
+        ((∀ s ∈ steps, s.source.CallersNonzero) →
+          finish.SupplyFloor ∧
+          ∀ before after, (before, after) ∈ sourceReplayEdges
+              (initializedState factory domain token0 token1) (steps.map PairStep.source) →
+            before.SupplyFloor ∧ after.SupplyFloor ∧
+              (0 < before.totalSupply.toNat → 1000 ≤ after.totalSupply.toNat)) :=
+  @pair_history_minimum_liquidity
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 statement: pair_history_feeOff_ratio
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+example : ∀ {pair : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {factory token0 token1 : Adr} {domain : B256}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : InitializedCheckpoint (checkpoint.state.getStor pair) factory domain token0 token1)
+    (fresh : WriterFreshKeys (fun _ => False) (pairHistoryTouchedKeys pair trace))
+    (nonzero : pair ≠ 0),
+    ∃ steps : List PairStep,
+      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      (∀ s ∈ steps, s.Authentic pair) ∧
+      ∃ (finish : State) (K' : WriterKey → Prop),
+        runSourceInvocations (initializedState factory domain token0 token1)
+          (steps.map PairStep.source) = some finish ∧
+        WriterRep K' (future.state.getStor pair) finish ∧
+        (sourceReplayAnswers (initializedState factory domain token0 token1)
+            (steps.map PairStep.source) →
+          (∀ s ∈ steps, s.source.CallersNonzero) →
+          ∀ before after, (before, after) ∈ sourceReplayEdges
+              (initializedState factory domain token0 token1) (steps.map PairStep.source) →
+            0 < before.totalSupply.toNat →
+            1000 ≤ after.totalSupply.toNat ∧
+              ((before.reserve0.val * before.reserve1.val : ℚ) / (before.totalSupply.toNat : ℚ) ^ 2 ≤
+                (after.reserve0.val * after.reserve1.val : ℚ) / (after.totalSupply.toNat : ℚ) ^ 2)) :=
+  @pair_history_feeOff_ratio
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 statement: runTyped_mint_initial
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example : ∀ {st : State} {ctx : Context} {recipient : Adr}
+    {transcript : Transcript} {returndata : Bytes} (zeroSupply : st.totalSupply = 0)
+    (successful : (runTyped st ctx (.mint recipient) transcript).status = .success returndata),
+    InitialMintResult st
+      (mintObservation recipient st.cachedReserves transcript.firstWord transcript.ownTail.firstWord)
+      (runTyped st ctx (.mint recipient) transcript).frame.current.state returndata :=
+  @runTyped_mint_initial
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 statement: runTyped_mint_later
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example : ∀ {st : State} {ctx : Context} {recipient : Adr}
+    {transcript : Transcript} {returndata : Bytes}
+    {fee : FeeResult}
+    (feeAccepted : mintFee { st with unlocked := 0 }
+      transcript.ownTail.ownTail.firstWord.toAdr
+      st.reserve0.val st.reserve1.val = .ok fee)
+    (positiveSupply : fee.state.totalSupply ≠ 0)
+    (successful : (runTyped st ctx (.mint recipient) transcript).status = .success returndata),
+    LaterMintResult st
+      (mintObservation recipient st.cachedReserves transcript.firstWord transcript.ownTail.firstWord)
+      fee (runTyped st ctx (.mint recipient) transcript).frame.current.state returndata :=
+  @runTyped_mint_later
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 statement: runTyped_burn_payout
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example : ∀ {st : State} {ctx : Context} {recipient : Adr}
+    {transcript : Transcript} {returndata : Bytes}
+    {fee : FeeResult}
+    (feeAccepted : mintFee { st with unlocked := 0 }
+      transcript.ownTail.ownTail.firstWord.toAdr
+      st.reserve0.val st.reserve1.val = .ok fee)
+    (successful : (runTyped st ctx (.burn recipient) transcript).status = .success returndata),
+    BurnPayoutResult st ctx recipient
+      (burnObservation recipient st ctx.pair transcript.firstWord transcript.ownTail.firstWord)
+      fee returndata (runTypedRequests st ctx (.burn recipient) transcript) :=
+  @runTyped_burn_payout
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 statement: runTyped_swap_canonical_success
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example : ∀ {st : State} {ctx : Context}
+    {amount0Out amount1Out : B256} {recipient : Adr} {data : Bytes}
+    {balance0 balance1 : B256}
+    (context : SwapContextConditions ctx)
+    (conditions : SwapModelConditions st amount0Out amount1Out recipient balance0 balance1),
+    (runTyped st ctx (.swap amount0Out amount1Out recipient data)
+      (swapCanonicalTranscript amount0Out amount1Out balance0 balance1 data)).status = .success [] :=
+  @runTyped_swap_canonical_success
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 statement: swap_uint112_control
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example : SwapContextConditions swapControlContext ∧
+      swapControlState.unlocked = 1 ∧
+      ((1 : B256) > 0 ∨ (0 : B256) > 0) ∧
+        (1 : B256).toNat < 10 ∧ (0 : B256).toNat < 10 ∧
+        (300 : Adr) ≠ 100 ∧ (300 : Adr) ≠ 200 ∧
+        (10 : B256).toNat < 2 ^ 112 ∧
+        (let inputs := swapInputs (Nat.toB256 (2 ^ 112)) 10 1 0 10 10
+         inputs.1 > 0 ∨ inputs.2 > 0) ∧
+        swapCheck (Nat.toB256 (2 ^ 112)) 10
+          (swapInputs (Nat.toB256 (2 ^ 112)) 10 1 0 10 10).1
+          (swapInputs (Nat.toB256 (2 ^ 112)) 10 1 0 10 10).2 10 10 = .ok () ∧
+        (Nat.toB256 (2 ^ 112)).toNat = 2 ^ 112 ∧
+        ¬((Nat.toB256 (2 ^ 112)).toNat < 2 ^ 112) ∧
+        ¬((runTyped swapControlState swapControlContext
+          (.swap 1 0 300 [])
+          (swapCanonicalTranscript 1 0 (Nat.toB256 (2 ^ 112)) 10 [])).status = .success []) :=
+  @swap_uint112_control
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 statement: sqrt_of_run
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+open Blanc.BabylonianSqrt
+
+example : ∀ {sevm : Sevm} {b : Devm} {T : List B256} {M : Mem}
+    {G : Nat} {Y R : B256} {o : Outcome}
+    (run : SFunc.Run cert.prog sevm (St b (Y :: R :: T) M G) t_2878_c69 o),
+    ∃ G', o = .returned (St b ((Nat.sqrt Y.toNat).toB256 :: T) M G') :=
+  @sqrt_of_run
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 statement: sqrt_exact
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+open Blanc.BabylonianSqrt
+
+example : ∀ {sevm : Sevm} {b : Devm} {T : List B256} {M : Mem}
+    {G : Nat} {Y R : B256} (hroom : T.length ≤ 1014),
+    SFunc.RunExact cert.prog sevm (St b (Y :: R :: T) M (G + sqrtCharge Y.toNat))
+      t_2878_c69 (.returned (St b ((Nat.sqrt Y.toNat).toB256 :: T) M G)) :=
+  @sqrt_exact
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 statement: swap_bytecode_exact_consumes
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example : ∀ {K : WriterKey → Prop} {current : Checkpoint}
+    {sevm : Sevm} {b post : Devm} {G : Nat}
+    (invocation : List Nat)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
+    (freshOutput : b.output = [])
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
+    (hashTInj : WriterInj (WriterExtend K
+      (swapTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)))
+    (hashTApart : WriterApart (WriterExtend K
+      (swapTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩))),
+    SwapCanonicalBody (fun _ => True) K current invocation run :=
+  @swap_bytecode_exact_consumes
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 statement: pairAddress_eq
+namespace Blanc.Lift.UniswapV2Pair.Creation
+open Jaune Blanc.Lift
+
+example : pairAddress = create2NewAddress factory salt code.toList :=
+  @pairAddress_eq
+
+end Blanc.Lift.UniswapV2Pair.Creation
+
+-- Paper review 2 statement: pairAddress_wrong_salt
+namespace Blanc.Lift.UniswapV2Pair.Creation
+open Jaune Blanc.Lift
+
+example : create2AddressOfHash factory (saltWord ^^^ 1) initHash ≠ pairAddress :=
+  @pairAddress_wrong_salt
+
+end Blanc.Lift.UniswapV2Pair.Creation
+
+-- Paper review 2 statement: pairAddress_wrong_initHash
+namespace Blanc.Lift.UniswapV2Pair.Creation
+open Jaune Blanc.Lift
+
+example : create2AddressOfHash factory saltWord (initHash ^^^ 1) ≠ pairAddress :=
+  @pairAddress_wrong_initHash
+
+end Blanc.Lift.UniswapV2Pair.Creation
+
+-- Paper review 2 statement: noShrink_required
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example : (runTyped (State.empty 16 0) { context with sender := 16 } (.initialize 18 19)
+      .done).status = .success [] ∧
+    mintRun.status = .success (encodeWords [1]) ∧ donationRun.status = .success [] ∧
+    0 < checkpoint.totalSupply.toNat ∧ shrinkingRun.status = .success [] ∧
+    ¬ SyncEntryNoShrink checkpoint shrinkingTranscript ∧
+    ¬ (checkpoint.reserve0.val * checkpoint.reserve1.val * shrunk.totalSupply.toNat ^ 2 ≤
+      shrunk.reserve0.val * shrunk.reserve1.val * checkpoint.totalSupply.toNat ^ 2) :=
+  @noShrink_required
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 statement: mintRoundUp_breaks_feeOff_product
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example : (runTypedWith mintRoundUp (State.empty 16 0) { context with sender := 16 } (.initialize 18 19)
+      .done).status = .success [] ∧
+    (runTypedWith mintRoundUp (State.empty 16 0) { context with sender := 16 } (.initialize 18 19)
+      .done).frame.current.state = initialized ∧
+    upMintRun.status = .success (encodeWords [1]) ∧
+    upDonationRun.status = .success [] ∧ upDonationRun.frame.current.state = checkpoint ∧
+    0 < checkpoint.totalSupply.toNat ∧ EntryFeeOff (.mint 20) laterTranscript ∧
+    EntryNoShrink checkpoint context (.mint 20) laterTranscript ∧
+    (runTyped checkpoint context (.mint 20) laterTranscript).status = .success (encodeWords [1]) ∧
+    checkpoint.reserve0.val * checkpoint.reserve1.val *
+        (runTyped checkpoint context (.mint 20) laterTranscript).frame.current.state.totalSupply.toNat ^ 2 ≤
+      (runTyped checkpoint context (.mint 20) laterTranscript).frame.current.state.reserve0.val *
+        (runTyped checkpoint context (.mint 20) laterTranscript).frame.current.state.reserve1.val *
+        checkpoint.totalSupply.toNat ^ 2 ∧
+    upLaterRun.status = .success (encodeWords [2]) ∧
+    ¬ (checkpoint.reserve0.val * checkpoint.reserve1.val *
+        upLaterRun.frame.current.state.totalSupply.toNat ^ 2 ≤
+      upLaterRun.frame.current.state.reserve0.val * upLaterRun.frame.current.state.reserve1.val *
+        checkpoint.totalSupply.toNat ^ 2) :=
+  @mintRoundUp_breaks_feeOff_product
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 statement: feeMutant_disagrees
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example : (runTyped checkpoint context (.swap 0 1001 20 []) feeSwapTranscript).status =
+      .failed (.sourceGuard "UniswapV2: K") ∧
+    feeMutantRun.status = .success [] ∧
+    feeMutantRun.frame.current.state.reserve0.val = 1006015 ∧
+    feeMutantRun.frame.current.state.reserve1.val = 1 :=
+  @feeMutant_disagrees
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 statement: burnRoundUp_disagrees
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example : (runTyped checkpoint { context with sender := 20 } (.transfer 17 1) .done).status =
+      .success (encodeWords [1]) ∧
+    (runTyped burnReady context (.burn 20) burnTranscript).status =
+      .success (encodeWords [1, 1]) ∧
+    (runTypedWith burnRoundUp burnReady context (.burn 20) burnTranscript).status =
+      .success (encodeWords [2, 2]) :=
+  @burnRoundUp_disagrees
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 statement: oracle_law_requires_timestamp_wrap
+namespace Blanc.Lift.UniswapV2Pair.OracleControls
+open Jaune
+
+example : wrapRun.status = .success [] ∧
+    ∃ u ∈ wrapRun.frame.current.updates, u.update.Lawful ∧ ¬ u.update.LawfulNoWrap :=
+  @oracle_law_requires_timestamp_wrap
+
+end Blanc.Lift.UniswapV2Pair.OracleControls
+
+-- Paper review 2 statement: swap_bytecode_uint112_control
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example : ∀ {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)),
+    (swapCheck (Nat.toB256 (2 ^ 112)) 10
+        (swapInputs (Nat.toB256 (2 ^ 112)) 10 1 0 10 10).1
+        (swapInputs (Nat.toB256 (2 ^ 112)) 10 1 0 10 10).2 10 10 = .ok () ∧
+      (Nat.toB256 (2 ^ 112)).toNat = 2 ^ 112 ∧
+      ¬((runTyped swapControlState swapControlContext (.swap 1 0 300 [])
+        (swapCanonicalTranscript 1 0 (Nat.toB256 (2 ^ 112)) 10 [])).status = .success [])) ∧
+    ∃ (d d0 d1 : Devm) (M M0 : Mem) (p t0 t1 : B256) (S0 S1 : List B256) (out0 out1 : Bytes),
+      t0 = (0xffffffffffffffffffffffffffffffffffffffff &&& b.getStorVal sevm.currentTarget 6) ∧
+      t1 = (0xffffffffffffffffffffffffffffffffffffffff &&& b.getStorVal sevm.currentTarget 7) ∧
+      SwapBalanceCall ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm d M p t0 S0 d0 out0 ∧
+      SwapBalanceCall ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ sevm d0 M0 p t1 S1 d1 out1 ∧
+      ¬(2 ^ 112 ≤ (swapBalanceWord out0).toNat) ∧ ¬(2 ^ 112 ≤ (swapBalanceWord out1).toNat) :=
+  @swap_bytecode_uint112_control
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 statement: approve_storage_alias_breaks_ledger
+namespace Blanc.Lift.UniswapV2Pair.LedgerKeyControl
+open Jaune
+
+example : ∀ {K : WriterKey → Prop} {sevm : Sevm}
+    {b post : Devm} {G : Nat} {keys : List Adr} {a : Adr}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0x095ea7b3)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
+    (tracked : K (.balance a)) (inj : WriterInj K) (apart : WriterApart K)
+    (member : a ∈ keys)
+    (aliasing : approveSlot sevm = (WriterKey.balance a).slot)
+    (differs : approveAmount sevm ≠ rawBalance (b.getStor sevm.currentTarget) a)
+    (ledger : RawLedgerOn keys (b.getStor sevm.currentTarget)),
+    ¬ WriterFreshKeys K (approveTouched sevm.caller (approveSpender sevm)) ∧
+    ¬ RawLedgerOn keys (post.getStor sevm.currentTarget) :=
+  @approve_storage_alias_breaks_ledger
+
+end Blanc.Lift.UniswapV2Pair.LedgerKeyControl
+
+-- Paper review 2 statement: sync_no_success_of_reverting_token0
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example : ∀ {sevm : Sevm} {b post : Devm} {G : Nat} {tok : Adr}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
+    (token0 : (b.getStorVal sevm.currentTarget 6).toAdr = tok)
+    (tokenCode : b.getCode tok = revertingCode)
+    (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp tok)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)),
+    False :=
+  @sync_no_success_of_reverting_token0
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 statement: sync_no_success_of_reverting_token1
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example : ∀ {sevm : Sevm} {b post : Devm} {G : Nat} {tok : Adr}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
+    (token1 : (b.getStorVal sevm.currentTarget 7).toAdr = tok)
+    (tokenCode : b.getCode tok = revertingCode)
+    (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp tok)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)),
+    False :=
+  @sync_no_success_of_reverting_token1
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 statement: skim_no_success_of_reverting_token0
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example : ∀ {sevm : Sevm} {b post : Devm} {G : Nat} {tok : Adr}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0xbc25cf77)
+    (token0 : (b.getStorVal sevm.currentTarget 6).toAdr = tok)
+    (tokenCode : b.getCode tok = revertingCode)
+    (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp tok)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)),
+    False :=
+  @skim_no_success_of_reverting_token0
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 statement: mint_no_success_of_reverting_token0
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example : ∀ {sevm : Sevm} {b post : Devm} {G : Nat} {tok : Adr}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0x6a627842)
+    (token0 : (b.getStorVal sevm.currentTarget 6).toAdr = tok)
+    (tokenCode : b.getCode tok = revertingCode)
+    (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp tok)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)),
+    False :=
+  @mint_no_success_of_reverting_token0
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 statement: mint_no_success_of_reverting_token1
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example : ∀ {sevm : Sevm} {b post : Devm} {G : Nat} {tok : Adr}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0x6a627842)
+    (token1 : (b.getStorVal sevm.currentTarget 7).toAdr = tok)
+    (tokenCode : b.getCode tok = revertingCode)
+    (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp tok)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)),
+    False :=
+  @mint_no_success_of_reverting_token1
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 statement: swap_no_success_of_reverting_token0
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example : ∀ {sevm : Sevm} {b post : Devm} {G : Nat} {tok : Adr}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
+    (amount0 : swapAmount0Out sevm ≠ 0)
+    (token0 : (b.getStorVal sevm.currentTarget 6).toAdr = tok)
+    (tokenCode : b.getCode tok = revertingCode)
+    (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp tok)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)),
+    False :=
+  @swap_no_success_of_reverting_token0
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 statement: swap_no_success_of_reverting_token1
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example : ∀ {sevm : Sevm} {b post : Devm} {G : Nat} {tok : Adr}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
+    (amount1 : swapAmount1Out sevm ≠ 0)
+    (token1 : (b.getStorVal sevm.currentTarget 7).toAdr = tok)
+    (tokenCode : b.getCode tok = revertingCode)
+    (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp tok)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)),
+    False :=
+  @swap_no_success_of_reverting_token1
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 statement: swap_no_success_of_reverting_callback
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example : ∀ {sevm : Sevm} {b post : Devm} {G : Nat}
+    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
+    (data : swapDataLength sevm ≠ 0)
+    (recipientCode : b.getCode (swapRecipient sevm) = revertingCode)
+    (notPrecompile : ¬ sevm.benvStat.rules.isPrecomp (swapRecipient sevm))
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)),
+    False :=
+  @swap_no_success_of_reverting_callback
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 statement: sync_liveness_refuted
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.Lift.UniswapV2Pair.Creation
+
+example : ¬ ∀ w pair, ConfiguredWorld w pair → SyncLive w pair :=
+  @sync_liveness_refuted
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 definition: ViolationAt
+namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol
+open Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach (creator creatorFunds initialWorld rootBenv rootTenv)
+open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.NodeWalk Blanc.ConcreteRun
+open Blanc.Lift.VyperNonreentrantDeployed
+
+example (g : Fork) (W : State) (post : Devm) :
+    ViolationAt g W post = (
+      processMessage (violMsg g W) = .ok post ∧ post.error = none ∧ post.gasLeft = gasV ∧
+      storOf post.state proxyAddr 26 = 1800 ∧ storOf post.state proxyAddr lpSlotA = 1906 ∧
+      (storOf post.state proxyAddr 26).toNat < (storOf post.state proxyAddr lpSlotA).toNat ∧
+      storOf post.state proxyAddr 2 = 0 ∧
+      ∃ (e0 e1 e1' e2 e3 e4 e4' e5 : Evm) (c0 cR c2 c339 c3 cA c5 cB : Cfg) (post2 post5 : Devm),
+
+        (Frame.ofCall (violMsg g W)).enter = .run e0 ∧ Nonempty (Exec e0.pc e0.sta e0.dyna (.ok post)) ∧
+        e0.sta.caller = creator ∧ e0.sta.currentTarget = attackerAddr ∧ e0.sta.code = AttackerR.code ∧
+        c0.devm = e0.dyna ∧ c0.f = AttackerR.t_0000_c0 ∧ c0.K = [] ∧ Agree c0 ∧
+        wrun fsA e0.sta 33 c0 = .cont cR ∧ Agree cR ∧ SpawnedBy e0.sta cR.devm .call e1 ∧
+        e1.sta.currentTarget = proxyAddr ∧ e1.sta.code = fwdCode ∧
+        stepN 11 e1 = some e1' ∧ SpawnedBy e1'.sta e1'.dyna .delegatecall e2 ∧
+
+        e2.sta.currentTarget = proxyAddr ∧ e2.sta.code = Vulnerable.code ∧ e2.sta.data = removeCallR ∧
+        Nonempty (Exec e2.pc e2.sta e2.dyna (.ok post2)) ∧ post2.error = none ∧
+        storOf e2.dyna.state proxyAddr 2 = 0 ∧
+        c2.devm = e2.dyna ∧ c2.f = Vulnerable.t_0000_c0 ∧ c2.K = [] ∧ Agree c2 ∧
+        wrun fsI e2.sta 339 c2 = .cont c339 ∧ Agree c339 ∧
+        storOf c339.devm.state proxyAddr 2 = 1 ∧ storOf c339.devm.state proxyAddr 26 = 2000 ∧
+        SpawnedBy e2.sta c339.devm .call e3 ∧
+        e3.sta.currentTarget = attackerAddr ∧ e3.sta.code = AttackerR.code ∧ e3.sta.value = 100 ∧
+
+        c3.devm = e3.dyna ∧ c3.f = AttackerR.t_0000_c0 ∧ c3.K = [] ∧ Agree c3 ∧
+        wrun fsA e3.sta 32 c3 = .cont cA ∧ Agree cA ∧ SpawnedBy e3.sta cA.devm .call e4 ∧
+        e4.sta.currentTarget = proxyAddr ∧ e4.sta.code = fwdCode ∧ e4.sta.value = 100 ∧
+        stepN 11 e4 = some e4' ∧ SpawnedBy e4'.sta e4'.dyna .delegatecall e5 ∧
+        e5.sta.currentTarget = proxyAddr ∧ e5.sta.code = Vulnerable.code ∧ e5.sta.data = reAddCall ∧
+        storOf e5.dyna.state proxyAddr 2 = 1 ∧ storOf e5.dyna.state proxyAddr 0 = 0 ∧
+        Nonempty (Exec e5.pc e5.sta e5.dyna (.ok post5)) ∧ post5.error = none ∧
+        c5.devm = e5.dyna ∧ c5.f = Vulnerable.t_0000_c0 ∧ c5.K = [] ∧ Agree c5 ∧
+        wrun fsI e5.sta 2625 c5 = .cont cB ∧ Agree cB ∧ cB.f = Vulnerable.t_0370_c63 ∧
+        storOf cB.devm.state proxyAddr 0 = 1 ∧ storOf cB.devm.state proxyAddr 2 = 1 ∧
+        storOf post5.state proxyAddr 26 = 2106 ∧ storOf post5.state proxyAddr lpSlotA = 2106 ∧
+        storOf post5.state proxyAddr 0 = 0 ∧ storOf post5.state proxyAddr 2 = 1 ∧
+
+        (Vulnerable.code.getInst 6900 = some (.next (.push [0x02] (by decide))) ∧
+          Vulnerable.code.getInst 6902 = some (.next (.reg .sload)) ∧
+          Vulnerable.code.getInst 6911 = some (.next (.reg .sstore))) ∧
+        (Vulnerable.code.getInst 88 = some (.next (.push [0x00] (by decide))) ∧
+          Vulnerable.code.getInst 90 = some (.next (.reg .sload)) ∧
+          Vulnerable.code.getInst 99 = some (.next (.reg .sstore))) ∧
+
+        storOf post2.state proxyAddr 26 = 1800 ∧ storOf post2.state proxyAddr lpSlotA = 1906 ∧
+        storOf post2.state proxyAddr 2 = 0
+    ) := by
+  unfold ViolationAt
+  rfl
+
+end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol
+
+-- Paper review 2 definition: ViolationStmt
+namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol
+open Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach (creator creatorFunds initialWorld rootBenv rootTenv)
+open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.NodeWalk Blanc.ConcreteRun
+open Blanc.Lift.VyperNonreentrantDeployed
+
+example :
+    ViolationStmt = (
+      ∀ g : Fork, CoveredFork g → ∀ W : State, Checkpoint W → ∃ post : Devm, ViolationAt g W post
+    ) := by
+  unfold ViolationStmt
+  rfl
+
+end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol
+
+-- Paper review 2 definition: CapstoneStmt
+namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol
+open Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach (creator creatorFunds initialWorld rootBenv rootTenv)
+open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.NodeWalk Blanc.ConcreteRun
+open Blanc.Lift.VyperNonreentrantDeployed
+
+example :
+    CapstoneStmt = (
+      ∀ fork : Fork, CoveredFork fork →
+        ∃ postI postP postC tokenPost attackerPost approvePost addPost post : Devm,
+          processCreateMessage (implCreateMsg fork initialWorld) = .ok postI ∧ postI.error = none ∧
+          processCreateMessage (cloneCreateMsg fork postI.state) = .ok postP ∧ postP.error = none ∧
+          processMessage (initMsg fork postP.state) = .ok postC ∧ postC.error = none ∧
+          processCreateMessage (tokenCreateMsg fork postC.state) = .ok tokenPost ∧
+          tokenPost.error = none ∧
+          processCreateMessage (attackerCreateMsg fork tokenPost.state) = .ok attackerPost ∧
+          attackerPost.error = none ∧
+          processMessage (approveMsg fork attackerPost.state) = .ok approvePost ∧
+          approvePost.error = none ∧
+          processMessage (addMsg fork approvePost.state) = .ok addPost ∧ addPost.error = none ∧
+          SoundCheckpoint addPost.state ∧ Checkpoint addPost.state ∧
+          ViolationAt fork addPost.state post
+    ) := by
+  unfold CapstoneStmt
+  rfl
+
+end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol
+
+-- Paper review 2 definition: registryQueries
+namespace Blanc.Lift.LidoCircuitBreakerDeployed
+open Jaune Blanc.LidoCircuitBreaker
+
+example (probes : List B256) (length : Nat) :
+    registryQueries probes length = (
+      arrayLengthSlot ::
+        ((List.range length).map fun i => arrayEntrySlot (Nat.toB256 (i + 1))) ++
+        probes.flatMap (fun p => [assignmentSlot p, indexSlot p, countSlot p])
+    ) := by
+  unfold registryQueries
+  rfl
+
+end Blanc.Lift.LidoCircuitBreakerDeployed
+
+-- Paper review 2 definition: checkRegistryOn
+namespace Blanc.Lift.LidoCircuitBreakerDeployed
+open Jaune Blanc.LidoCircuitBreaker
+
+example (storage : LogicalStorage) (entries : List Entry)
+    (probes : List B256) :
+    checkRegistryOn storage entries probes = (
+      decide (entries.length < 2 ^ 252) &&
+      decide ((entries.map Prod.fst).Nodup) &&
+      entries.all (fun e => decide (e.1 ≠ 0 ∧ e.1.toNat < 2 ^ 160) &&
+        decide (e.2 ≠ 0 ∧ e.2.toNat < 2 ^ 160)) &&
+      probes.all (fun p => decide (p.toNat < 2 ^ 160)) &&
+      decide (storage.read arrayLengthSlot = Nat.toB256 entries.length) &&
+      (List.range entries.length).all (fun i =>
+        decide (storage.read (arrayEntrySlot (Nat.toB256 (i + 1))) = targetAt entries i)) &&
+      probes.all (fun p =>
+        decide (storage.read (assignmentSlot p) = assignmentAt entries p) &&
+        decide (storage.read (indexSlot p) = Nat.toB256 (oneBasedIndexAt entries p)) &&
+        decide (storage.read (countSlot p) = Nat.toB256 (assignmentCount entries p)))
+    ) := by
+  unfold checkRegistryOn
+  rfl
+
+end Blanc.Lift.LidoCircuitBreakerDeployed
+
+-- Paper review 2 definition: checkLiveCovered
+namespace Blanc.Lift.LidoCircuitBreakerDeployed
+open Jaune Blanc.LidoCircuitBreaker
+
+example (entries : List Entry) (probes : List B256) :
+    checkLiveCovered entries probes = (
+      entries.all fun e => decide (e.1 ∈ probes ∧ e.2 ∈ probes)
+    ) := by
+  unfold checkLiveCovered
+  rfl
+
+end Blanc.Lift.LidoCircuitBreakerDeployed
+
+-- Paper review 2 definition: State.MinimumLocked
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example (st : State) :
+    State.MinimumLocked st = (
+      1000 ≤ (st.balanceOf 0).toNat
+    ) := by
+  unfold State.MinimumLocked
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 definition: State.ZeroAllowances
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example (st : State) :
+    State.ZeroAllowances st = (
+      ∀ spender, st.allowance 0 spender = 0
+    ) := by
+  unfold State.ZeroAllowances
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 definition: State.SupplyFloor
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example (st : State) :
+    State.SupplyFloor st = (
+      (st.totalSupply.toNat = 0 ∨ st.MinimumLocked) ∧ st.ZeroAllowances
+    ) := by
+  unfold State.SupplyFloor
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 definition: SourceInvocation.CallersNonzero
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example (inv : SourceInvocation) :
+    SourceInvocation.CallersNonzero inv = (
+      inv.context.sender ≠ 0 ∧ inv.transcript.CallersNonzero
+    ) := by
+  unfold SourceInvocation.CallersNonzero
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 definition: sqrtCharge
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+open Blanc.BabylonianSqrt
+
+example (y : Nat) :
+    sqrtCharge y = (
+      if 3 < y then 108 + 109 * sourceCount y else if y = 0 then 66 else 71
+    ) := by
+  unfold sqrtCharge
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 definition: factory
+namespace Blanc.Lift.UniswapV2Pair.Creation
+open Jaune Blanc.Lift
+
+example :
+    factory = (
+      0x5c69bee701ef814a2b6a3edd4b1652cb9cc5aa6f
+    ) := by
+  unfold factory
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.Creation
+
+-- Paper review 2 definition: token0
+namespace Blanc.Lift.UniswapV2Pair.Creation
+open Jaune Blanc.Lift
+
+example :
+    token0 = (
+      0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+    ) := by
+  unfold token0
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.Creation
+
+-- Paper review 2 definition: token1
+namespace Blanc.Lift.UniswapV2Pair.Creation
+open Jaune Blanc.Lift
+
+example :
+    token1 = (
+      0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2
+    ) := by
+  unfold token1
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.Creation
+
+-- Paper review 2 definition: pairAddress
+namespace Blanc.Lift.UniswapV2Pair.Creation
+open Jaune Blanc.Lift
+
+example :
+    pairAddress = (
+      0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc
+    ) := by
+  unfold pairAddress
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.Creation
+
+-- Paper review 2 definition: salt
+namespace Blanc.Lift.UniswapV2Pair.Creation
+open Jaune Blanc.Lift
+
+example :
+    salt = (
+      Bytes.keccak (token0.toBytes ++ token1.toBytes)
+    ) := by
+  unfold salt
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.Creation
+
+-- Paper review 2 definition: saltWord
+namespace Blanc.Lift.UniswapV2Pair.Creation
+open Jaune Blanc.Lift
+
+example :
+    saltWord = (
+      0x85053f65cd1ece2bb37b70c13d66eadebf2779df5ddd68cf12f3ccfdc6bfe760
+    ) := by
+  unfold saltWord
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.Creation
+
+-- Paper review 2 definition: initHash
+namespace Blanc.Lift.UniswapV2Pair.Creation
+open Jaune Blanc.Lift
+
+example :
+    initHash = (
+      0x96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f
+    ) := by
+  unfold initHash
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.Creation
+
+-- Paper review 2 definition: initializedStor
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.Lift.UniswapV2Pair.Creation
+
+example (chainWord : B256) (self factory token0 token1 : Adr) :
+    initializedStor chainWord self factory token0 token1 = (
+      let s := ctorStor chainWord self factory Stor.empty
+      (s.set 6 (addressSlotWriteWord (s.get 6) token0.toB256)).set 7
+        (addressSlotWriteWord (s.get 7) token1.toB256)
+    ) := by
+  unfold initializedStor
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 definition: ConfiguredWorld
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.Lift.UniswapV2Pair.Creation
+
+example (w : Devm) (pair : Adr) :
+    ConfiguredWorld w pair = (
+      w.getCode pair = code ∧
+        ∃ chainWord factory token0 token1, w.getStor pair = initializedStor chainWord pair factory token0 token1
+    ) := by
+  unfold ConfiguredWorld
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 definition: SyncLive
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.Lift.UniswapV2Pair.Creation
+
+example (w : Devm) (pair : Adr) :
+    SyncLive w pair = (
+      ∃ (sevm : Sevm) (G : Nat) (post : Devm), sevm.currentTarget = pair ∧ sevm.code = code ∧
+        CoveredFork sevm.benvStat.fork ∧ Blanc.Sevm.selector sevm = 0xfff6cae9 ∧
+        Nonempty (Exec 0 sevm (St w [] Mem.empty G) (.ok post))
+    ) := by
+  unfold SyncLive
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 definition: rawBalance
+namespace Blanc.Lift.UniswapV2Pair.LedgerKeyControl
+open Jaune
+
+example (s : Stor) (a : Adr) :
+    rawBalance s a = (
+      s.get (WriterKey.balance a).slot
+    ) := by
+  unfold rawBalance
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.LedgerKeyControl
+
+-- Paper review 2 definition: RawLedgerOn
+namespace Blanc.Lift.UniswapV2Pair.LedgerKeyControl
+open Jaune
+
+example (keys : List Adr) (s : Stor) :
+    RawLedgerOn keys s = (
+      Blanc.footprintSum keys (rawBalance s) = (s.get 0).toNat
+    ) := by
+  unfold RawLedgerOn
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.LedgerKeyControl
+
+-- Paper review 2 definition: _root_.Blanc.Lift.UniswapV2Pair.OracleUpdate.LawfulNoWrap
+namespace Blanc.Lift.UniswapV2Pair.OracleControls
+open Jaune
+
+example (u : OracleUpdate) :
+    _root_.Blanc.Lift.UniswapV2Pair.OracleUpdate.LawfulNoWrap u = (
+      u.elapsed = u.timestamp.toNat - u.oldTimestamp.toNat ∧
+      u.increment0 =
+        (if u.elapsed > 0 ∧ u.oldReserve0 ≠ 0 ∧ u.oldReserve1 ≠ 0 then
+          (u.oldReserve1 * 2 ^ 112 / u.oldReserve0) * u.elapsed
+        else 0) ∧
+      u.increment1 =
+        (if u.elapsed > 0 ∧ u.oldReserve0 ≠ 0 ∧ u.oldReserve1 ≠ 0 then
+          (u.oldReserve0 * 2 ^ 112 / u.oldReserve1) * u.elapsed
+        else 0)
+    ) := by
+  unfold _root_.Blanc.Lift.UniswapV2Pair.OracleUpdate.LawfulNoWrap
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.OracleControls
+
+-- Paper review 2 definition: answer
+namespace Blanc.Lift.UniswapV2Pair.OracleControls
+open Jaune
+
+example (value : B256) :
+    answer value = (
+      { success := true, returndata := encodeWords [value], codeExists := true,
+        recoveryOutput := 0 }
+    ) := by
+  unfold answer
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.OracleControls
+
+-- Paper review 2 definition: initialized
+namespace Blanc.Lift.UniswapV2Pair.OracleControls
+open Jaune
+
+example :
+    initialized = (
+      { State.empty 16 0 with token0 := 18, token1 := 19 }
+    ) := by
+  unfold initialized
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.OracleControls
+
+-- Paper review 2 definition: wrapContext
+namespace Blanc.Lift.UniswapV2Pair.OracleControls
+open Jaune
+
+example :
+    wrapContext = (
+      { pair := 17, sender := 20, value := 0, timestamp := 4294967297,
+        isStatic := false, invocation := [] }
+    ) := by
+  unfold wrapContext
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.OracleControls
+
+-- Paper review 2 definition: syncTranscript
+namespace Blanc.Lift.UniswapV2Pair.OracleControls
+open Jaune
+
+example :
+    syncTranscript = (
+      .next (answer 1) .done (.next (answer 1) .done .done)
+    ) := by
+  unfold syncTranscript
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.OracleControls
+
+-- Paper review 2 definition: wrapRun
+namespace Blanc.Lift.UniswapV2Pair.OracleControls
+open Jaune
+
+example :
+    wrapRun = (
+      runTyped initialized wrapContext .sync syncTranscript
+    ) := by
+  unfold wrapRun
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.OracleControls
+
+-- Paper review 2 definition: production
+namespace Blanc.Lift.UniswapV2Pair.ModelMutants
+open Jaune
+
+example :
+    production = (
+      { mintAmount := mintAmount, burnAmounts := burnAmounts, swapCheck := swapCheck }
+    ) := by
+  unfold production
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelMutants
+
+-- Paper review 2 definition: ceilDiv
+namespace Blanc.Lift.UniswapV2Pair.ModelMutants
+open Jaune
+
+example (numerator denominator : Nat) :
+    ceilDiv numerator denominator = (
+      (numerator + denominator - 1) / denominator
+    ) := by
+  unfold ceilDiv
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelMutants
+
+-- Paper review 2 definition: mintLiquidityUp
+namespace Blanc.Lift.UniswapV2Pair.ModelMutants
+open Jaune
+
+example (amount0 amount1 supply reserve0 reserve1 : Nat) :
+    mintLiquidityUp amount0 amount1 supply reserve0 reserve1 = (
+      min (ceilDiv (amount0 * supply) reserve0) (ceilDiv (amount1 * supply) reserve1)
+    ) := by
+  unfold mintLiquidityUp
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelMutants
+
+-- Paper review 2 definition: mintAmountUp
+namespace Blanc.Lift.UniswapV2Pair.ModelMutants
+open Jaune
+
+example (amount0 amount1 supply : B256) (reserve0 reserve1 : Nat) :
+    mintAmountUp amount0 amount1 supply reserve0 reserve1 = (
+      match mintAmount amount0 amount1 supply reserve0 reserve1 with
+      | .error failure => .error failure
+      | .ok liquidity =>
+        .ok (if supply = 0 then liquidity
+          else mintLiquidityUp amount0.toNat amount1.toNat supply.toNat reserve0 reserve1)
+    ) := by
+  unfold mintAmountUp
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelMutants
+
+-- Paper review 2 definition: burnAmountsUp
+namespace Blanc.Lift.UniswapV2Pair.ModelMutants
+open Jaune
+
+example (liquidity balance0 balance1 supply : B256) :
+    burnAmountsUp liquidity balance0 balance1 supply = (
+      match burnAmounts liquidity balance0 balance1 supply with
+      | .error failure => .error failure
+      | .ok _ =>
+        .ok (ceilDiv (liquidity.toNat * balance0.toNat) supply.toNat,
+          ceilDiv (liquidity.toNat * balance1.toNat) supply.toNat)
+    ) := by
+  unfold burnAmountsUp
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelMutants
+
+-- Paper review 2 definition: swapCheckFee
+namespace Blanc.Lift.UniswapV2Pair.ModelMutants
+open Jaune
+
+example (fee : Nat) (balance0 balance1 : B256) (amount0In amount1In reserve0 reserve1 : Nat) :
+    swapCheckFee fee balance0 balance1 amount0In amount1In reserve0 reserve1 = (
+      if amount0In > 0 ∨ amount1In > 0 then
+        if balance0.toNat * 1000 < 2 ^ 256 ∧ amount0In * fee < 2 ^ 256 then
+          if amount0In * fee ≤ balance0.toNat * 1000 then
+            if balance1.toNat * 1000 < 2 ^ 256 ∧ amount1In * fee < 2 ^ 256 then
+              if amount1In * fee ≤ balance1.toNat * 1000 then
+                let adjusted0 := balance0.toNat * 1000 - amount0In * fee
+                let adjusted1 := balance1.toNat * 1000 - amount1In * fee
+                if adjusted0 * adjusted1 < 2 ^ 256 then
+                  if reserve0 * reserve1 * 1000 ^ 2 ≤ adjusted0 * adjusted1 then .ok ()
+                  else .error (.sourceGuard "UniswapV2: K")
+                else .error (.sourceGuard "ds-math-mul-overflow")
+              else .error (.sourceGuard "ds-math-sub-underflow")
+            else .error (.sourceGuard "ds-math-mul-overflow")
+          else .error (.sourceGuard "ds-math-sub-underflow")
+        else .error (.sourceGuard "ds-math-mul-overflow")
+      else .error (.sourceGuard "UniswapV2: INSUFFICIENT_INPUT_AMOUNT")
+    ) := by
+  unfold swapCheckFee
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelMutants
+
+-- Paper review 2 definition: mintRoundUp
+namespace Blanc.Lift.UniswapV2Pair.ModelMutants
+open Jaune
+
+example :
+    mintRoundUp = (
+      { production with mintAmount := mintAmountUp }
+    ) := by
+  unfold mintRoundUp
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelMutants
+
+-- Paper review 2 definition: burnRoundUp
+namespace Blanc.Lift.UniswapV2Pair.ModelMutants
+open Jaune
+
+example :
+    burnRoundUp = (
+      { production with burnAmounts := burnAmountsUp }
+    ) := by
+  unfold burnRoundUp
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelMutants
+
+-- Paper review 2 definition: feeMutant
+namespace Blanc.Lift.UniswapV2Pair.ModelMutants
+open Jaune
+
+example (fee : Nat) :
+    feeMutant fee = (
+      { production with swapCheck := swapCheckFee fee }
+    ) := by
+  unfold feeMutant
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelMutants
+
+-- Paper review 2 definition: context
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example :
+    context = (
+      { pair := 17, sender := 20, value := 0, timestamp := 0,
+        isStatic := false, invocation := [] }
+    ) := by
+  unfold context
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 definition: answer
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example (value : B256) :
+    answer value = (
+      { success := true, returndata := encodeWords [value], codeExists := true,
+        recoveryOutput := 0 }
+    ) := by
+  unfold answer
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 definition: initialized
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example :
+    initialized = (
+      (runTyped (State.empty 16 0) { context with sender := 16 } (.initialize 18 19)
+        .done).frame.current.state
+    ) := by
+  unfold initialized
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 definition: mintTranscript
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example :
+    mintTranscript = (
+      .next (answer 1001) .done (.next (answer 1001) .done (.next (answer 0) .done .done))
+    ) := by
+  unfold mintTranscript
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 definition: mintRun
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example :
+    mintRun = (
+      runTyped initialized context (.mint 20) mintTranscript
+    ) := by
+  unfold mintRun
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 definition: minted
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example :
+    minted = (
+      mintRun.frame.current.state
+    ) := by
+  unfold minted
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 definition: donationTranscript
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example :
+    donationTranscript = (
+      .next (answer 1002) .done (.next (answer 1002) .done .done)
+    ) := by
+  unfold donationTranscript
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 definition: donationRun
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example :
+    donationRun = (
+      runTyped minted context .sync donationTranscript
+    ) := by
+  unfold donationRun
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 definition: checkpoint
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example :
+    checkpoint = (
+      donationRun.frame.current.state
+    ) := by
+  unfold checkpoint
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 definition: mintExpected
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example :
+    mintExpected = (
+      { State.empty 16 0 with
+        token0 := 18, token1 := 19, totalSupply := 1001,
+        balanceOf := Blanc.ledgerCredit (Blanc.ledgerCredit (fun _ => 0) 0 1000) 20 1,
+        reserve0 := ⟨1001, by decide⟩, reserve1 := ⟨1001, by decide⟩ }
+    ) := by
+  unfold mintExpected
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 definition: checkpointExpected
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example :
+    checkpointExpected = (
+      { mintExpected with reserve0 := ⟨1002, by decide⟩, reserve1 := ⟨1002, by decide⟩ }
+    ) := by
+  unfold checkpointExpected
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 definition: shrinkingTranscript
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example :
+    shrinkingTranscript = (
+      .next (answer 0) .done (.next (answer 1002) .done .done)
+    ) := by
+  unfold shrinkingTranscript
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 definition: shrinkingRun
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example :
+    shrinkingRun = (
+      runTyped checkpoint context .sync shrinkingTranscript
+    ) := by
+  unfold shrinkingRun
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 definition: shrunk
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example :
+    shrunk = (
+      shrinkingRun.frame.current.state
+    ) := by
+  unfold shrunk
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 definition: laterTranscript
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example :
+    laterTranscript = (
+      .next (answer 1004) .done (.next (answer 1004) .done (.next (answer 0) .done .done))
+    ) := by
+  unfold laterTranscript
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 definition: upMintRun
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example :
+    upMintRun = (
+      runTypedWith mintRoundUp initialized context (.mint 20) mintTranscript
+    ) := by
+  unfold upMintRun
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 definition: upDonationRun
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example :
+    upDonationRun = (
+      runTypedWith mintRoundUp upMintRun.frame.current.state context .sync donationTranscript
+    ) := by
+  unfold upDonationRun
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 definition: upLaterRun
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example :
+    upLaterRun = (
+      runTypedWith mintRoundUp checkpoint context (.mint 20) laterTranscript
+    ) := by
+  unfold upLaterRun
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 definition: transferOk
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example :
+    transferOk = (
+      { success := true, returndata := [], codeExists := true, recoveryOutput := 0 }
+    ) := by
+  unfold transferOk
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 definition: feeSwapTranscript
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example :
+    feeSwapTranscript = (
+      .next transferOk .done (.next (answer 1006015) .done (.next (answer 1) .done .done))
+    ) := by
+  unfold feeSwapTranscript
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 definition: feeMutantRun
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example :
+    feeMutantRun = (
+      runTypedWith (feeMutant 2) checkpoint context (.swap 0 1001 20 []) feeSwapTranscript
+    ) := by
+  unfold feeMutantRun
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 definition: burnReady
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example :
+    burnReady = (
+      (runTyped checkpoint
+        (have c := context;
+          { pair := c.pair, sender := 20, value := c.value, timestamp := c.timestamp,
+            isStatic := c.isStatic, invocation := c.invocation })
+        (.transfer 17 1) .done).frame.current.state
+    ) := rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 definition: burnTranscript
+namespace Blanc.Lift.UniswapV2Pair.ModelControls
+open Jaune
+open ModelMutants
+
+example :
+    burnTranscript = (
+      .next (answer 1002) .done (.next (answer 1002) .done (.next (answer 0) .done
+        (.next transferOk .done (.next transferOk .done
+          (.next (answer 1001) .done (.next (answer 1001) .done .done))))))
+    ) := by
+  unfold burnTranscript
+  rfl
+
+end Blanc.Lift.UniswapV2Pair.ModelControls
+
+-- Paper review 2 constructor: RegistryOn.mk
+namespace Blanc.Lift.LidoCircuitBreakerDeployed
+open Jaune Blanc.LidoCircuitBreaker
+
+example : ∀ {storage : LogicalStorage} {entries : List Entry} {probes : List B256},
+    entries.length < 2 ^ 252 →
+    (entries.map Prod.fst).Nodup →
+    (∀ e ∈ entries, nonzeroCanonicalAddress e.1) →
+    (∀ e ∈ entries, nonzeroCanonicalAddress e.2) →
+    (∀ p ∈ probes, canonicalAddress p) →
+    storage.read arrayLengthSlot = Nat.toB256 entries.length →
+    (∀ i ∈ List.range entries.length,
+      storage.read (arrayEntrySlot (Nat.toB256 (i + 1))) = targetAt entries i) →
+    (∀ p ∈ probes, storage.read (assignmentSlot p) = assignmentAt entries p) →
+    (∀ p ∈ probes, storage.read (indexSlot p) = Nat.toB256 (oneBasedIndexAt entries p)) →
+    (∀ p ∈ probes, storage.read (countSlot p) = Nat.toB256 (assignmentCount entries p)) →
+    RegistryOn storage entries probes :=
+  @RegistryOn.mk
+
+end Blanc.Lift.LidoCircuitBreakerDeployed
+
+-- Paper review 2 definition: Transcript.CallersNonzero (every constructor)
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example : Transcript.done.CallersNonzero = True := rfl
+
+example (result : ExternalResult) (turns tail : Transcript) :
+    (Transcript.next result turns tail).CallersNonzero =
+      (turns.CallersNonzero ∧ tail.CallersNonzero) := rfl
+
+example (emitter : Adr) (topics : List B256) (data : Bytes) (tail : Transcript) :
+    (Transcript.foreignLog emitter topics data tail).CallersNonzero = tail.CallersNonzero := rfl
+
+example (sender : Adr) (value : B256) (isStatic : Bool) (entry : Entry)
+    (transcript tail : Transcript) :
+    (Transcript.invoke sender value isStatic entry transcript tail).CallersNonzero =
+      (sender ≠ 0 ∧ transcript.CallersNonzero ∧ tail.CallersNonzero) := rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 definition: InitialMintResult
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example (prior : State) (observed : MintObserved) (post : State)
+    (returndata : Bytes) :
+    @InitialMintResult prior observed post returndata = (
+      let root := Nat.sqrt (observed.amount0.toNat * observed.amount1.toNat)
+      1000 < root ∧ observed.amount0.toNat * observed.amount1.toNat < 2 ^ 256 ∧
+        post.totalSupply.toNat = root ∧
+        post.balanceOf = Blanc.ledgerCredit (Blanc.ledgerCredit prior.balanceOf 0 1000)
+          observed.recipient (Nat.toB256 (root - 1000)) ∧
+        post.reserve0.val = observed.balance0.toNat ∧ post.reserve1.val = observed.balance1.toNat ∧
+        returndata = encodeWords [Nat.toB256 (root - 1000)]
+    ) := by
+  unfold InitialMintResult
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 definition: mintObservation
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example (recipient : Adr) (reserves : CachedReserves)
+    (balance0 balance1 : B256) :
+    @mintObservation recipient reserves balance0 balance1 = (
+      { recipient := recipient, reserves := reserves, balance0 := balance0, balance1 := balance1,
+        amount0 := balance0 - Nat.toB256 reserves.reserve0.val,
+        amount1 := balance1 - Nat.toB256 reserves.reserve1.val }
+    ) := by
+  unfold mintObservation
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 definition: LaterMintResult
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example (_prior : State) (observed : MintObserved) (fee : FeeResult) (post : State)
+    (returndata : Bytes) :
+    @LaterMintResult _prior observed fee post returndata = (
+      let liquidity := AMMArithmetic.mintLiquidity observed.amount0.toNat observed.amount1.toNat
+        fee.state.totalSupply.toNat observed.reserves.reserve0.val observed.reserves.reserve1.val
+      liquidity > 0 ∧
+        liquidity < 2 ^ 256 ∧
+        post.totalSupply.toNat = fee.state.totalSupply.toNat + liquidity ∧
+        post.balanceOf = Blanc.ledgerCredit fee.state.balanceOf observed.recipient (Nat.toB256 liquidity) ∧
+        post.reserve0.val = observed.balance0.toNat ∧
+        post.reserve1.val = observed.balance1.toNat ∧
+        returndata = encodeWords [Nat.toB256 liquidity]
+    ) := by
+  unfold LaterMintResult
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 definition: burnObservation
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example (recipient : Adr) (st : State) (pair : Adr)
+    (balance0 balance1 : B256) :
+    @burnObservation recipient st pair balance0 balance1 = (
+      { locals := { recipient := recipient, reserves := st.cachedReserves, token0 := st.token0, token1 := st.token1 },
+        balance0 := balance0,
+        balance1 := balance1,
+        liquidity := st.balanceOf pair }
+    ) := by
+  unfold burnObservation
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 definition: BurnPayoutResult
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example (prior : State) (ctx : Context) (recipient : Adr) (observed : BurnObserved)
+    (fee : FeeResult) (returndata : Bytes) (requests : List Request) :
+    @BurnPayoutResult prior ctx recipient observed fee returndata requests = (
+      let supply := fee.state.totalSupply
+      let amount0 := AMMArithmetic.burnPayment observed.liquidity.toNat observed.balance0.toNat supply.toNat
+      let amount1 := AMMArithmetic.burnPayment observed.liquidity.toNat observed.balance1.toNat supply.toNat
+      amount0 > 0 ∧ amount1 > 0 ∧
+        amount0 < 2 ^ 256 ∧ amount1 < 2 ^ 256 ∧
+        observed.liquidity = prior.balanceOf ctx.pair ∧
+        requests.filter (fun r => r.site == .burnTransfer0) =
+          [requestFor .burnTransfer0 prior.token0 (.transfer recipient (Nat.toB256 amount0))] ∧
+        requests.filter (fun r => r.site == .burnTransfer1) =
+          [requestFor .burnTransfer1 prior.token1 (.transfer recipient (Nat.toB256 amount1))] ∧
+        returndata = encodeWords [Nat.toB256 amount0, Nat.toB256 amount1]
+    ) := by
+  unfold BurnPayoutResult
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 definition: SwapCanonicalBody
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example (Own : Devm → Prop) (K : WriterKey → Prop) (current : Checkpoint)
+    (invocation : List Nat) {sevm : Sevm} {b post : Devm} {G : Nat}
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    @SwapCanonicalBody Own K current invocation sevm b post G run = (
+      let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+      let ctx := writerContext sevm invocation
+      let locals := swapFrontLocals sevm current.state
+      let w := swapCutWords sevm current.state
+      let S := swapCutStack w 0x257 [0x022c0d9f]
+      sevm.value = 0 ∧ sevm.isStatic = false ∧
+      ∃ (frame : Frame) (T0 T1 TC : Transcript → Transcript) (turns0 turns1 turnsC : List MutableTurn)
+        (b1 b2 d d0 d1 : Devm) (M1 M2 M : Mem) (p1 p : B256) (out0 out1 : Bytes)
+        (views0 views1 : List StaticViewTurn) (final : Frame) (rets : List ChildReturn)
+        (K' : WriterKey → Prop) (added : List PendingLog),
+        SwapTransferOpt root sevm (swapPrefixWorld sevm b) S getterInitMemory 128
+          (swapAmount0Out sevm) (swapRecipientWord sevm) current.state.token0.toB256 0x8d0 b1 M1 p1 ∧
+        SwapTransferOpt root sevm b1 S M1 p1
+          (swapAmount1Out sevm) (swapRecipientWord sevm) current.state.token1.toB256 0x8e1 b2 M2 p ∧
+        SwapCallbackOpt root sevm b2 S M2 p (swapRecipientWord sevm) (swapAmount0Out sevm)
+          (swapAmount1Out sevm) (swapDataLength sevm) (swapDataStart sevm) d M ∧
+        ((swapAmount0Out sevm = 0 ∧ T0 = id) ∨ (swapAmount0Out sevm ≠ 0 ∧
+          T0 = (fun tail => .next (swapTransferReply b1.returnData) (mutableTranscript turns0 .done) tail) ∧
+          SwapCallProvenance sevm.currentTarget root sevm (swapPrefixWorld sevm b) b1 turns0)) ∧
+        ((swapAmount1Out sevm = 0 ∧ T1 = id) ∨ (swapAmount1Out sevm ≠ 0 ∧
+          T1 = (fun tail => .next (swapTransferReply b2.returnData) (mutableTranscript turns1 .done) tail) ∧
+          SwapCallProvenance sevm.currentTarget root sevm b1 b2 turns1)) ∧
+        ((swapDataLength sevm = 0 ∧ TC = id) ∨ (swapDataLength sevm ≠ 0 ∧
+          TC = (fun tail => .next (swapCallbackReply d.returnData) (mutableTranscript turnsC .done) tail) ∧
+          SwapCallProvenance sevm.currentTarget root sevm b2 d turnsC)) ∧
+        SwapBalanceCall root sevm d M p w.token0
+          (w.token1 :: w.token0 :: 0 :: 0 :: w.reserve1 :: w.reserve0 :: w.dataLength ::
+            w.dataOffset :: w.recipient :: w.amount1Out :: w.amount0Out :: 0x257 :: [0x022c0d9f]) d0 out0 ∧
+        SwapBalanceCall root sevm d0 (swapBalanceReply M p sevm.currentTarget out0) p w.token1
+          (w.token1 :: w.token0 :: 0 :: swapBalanceWord out0 :: w.reserve1 :: w.reserve0 ::
+            w.dataLength :: w.dataOffset :: w.recipient :: w.amount1Out :: w.amount0Out :: 0x257 ::
+            [0x022c0d9f]) d1 out1 ∧
+        ExactConsumes (startTyped current ctx (swapDecodedEntry sevm))
+          (((T0 ∘ T1) ∘ TC)
+            (.next (feeObservedResult out0) (staticViewTranscript views0 .done)
+              (.next (feeObservedResult out1) (staticViewTranscript views1 .done) .done)))
+          { status := .success [], frame := final, remaining := .done, childReturns := rets } ∧
+        frame.checkpoint = current ∧ frame.context = ctx ∧
+        final.checkpoint = current ∧ final.context = ctx ∧ final.current.state.unlocked = 1 ∧
+        (∀ k, K' k → WriterExtend K (swapTraceKeys root) k) ∧
+        WriterRep K' (post.getStor sevm.currentTarget) final.current.state ∧
+        (swapBalanceWord out0).toNat < 2 ^ 112 ∧ (swapBalanceWord out1).toNat < 2 ^ 112 ∧
+        final.current.logs = current.logs ++ added ∧
+        (∃ L : List Log, d.logs = b.logs ++ L ∧
+          post.logs = b.logs ++ L ++
+            [swapSyncLog sevm.currentTarget (swapBalanceWord out0) (swapBalanceWord out1),
+             swapEventLog sevm
+              (swapInWord (swapBalanceWord out0) w.reserve0 w.amount0Out)
+              (swapInWord (swapBalanceWord out1) w.reserve1 w.amount1Out)
+              w.amount0Out w.amount1Out w.recipient] ∧
+          added.map (PendingLog.rawWith (swapOwnedRaw sevm.currentTarget)) =
+            (L ++ [swapSyncLog sevm.currentTarget (swapBalanceWord out0) (swapBalanceWord out1),
+             swapEventLog sevm
+              (swapInWord (swapBalanceWord out0) w.reserve0 w.amount0Out)
+              (swapInWord (swapBalanceWord out1) w.reserve1 w.amount1Out)
+              w.amount0Out w.amount1Out w.recipient]).map some) ∧
+        post.output = [] ∧
+        (∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns0 ++ turns1 ++ turnsC →
+          LockedAuth (Exec.Frame.rootDeriv located.frame) entry nested) ∧
+        PairViewProvenance root sevm frame (swapTokenWord w.token0) views0 ∧
+        PairViewProvenance root sevm (frame.beginResume (swapRequest0 frame locals))
+          (swapTokenWord w.token1) views1 ∧
+        Own d
+    ) := by
+  unfold SwapCanonicalBody
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 definition: swapTraceKeys
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example (root : Exec.Deriv) :
+    @swapTraceKeys root = (
+      skimTraceKeys root
+    ) := by
+  unfold swapTraceKeys
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 definition: swapCanonicalTranscript
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example (amount0Out amount1Out : B256) (balance0 balance1 : B256)
+    (data : Bytes) :
+    @swapCanonicalTranscript amount0Out amount1Out balance0 balance1 data = (
+      if amount0Out > 0 then
+        .next swapOk .done (swapCanonicalTail amount1Out balance0 balance1 data)
+      else if amount1Out > 0 then
+        .next swapOk .done (swapCanonicalPostTransfers balance0 balance1 data)
+      else swapCanonicalPostTransfers balance0 balance1 data
+    ) := by
+  unfold swapCanonicalTranscript
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 definition: swapControlState
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example :
+    @swapControlState = (
+      { State.empty 0 0 with
+        token0 := 100, token1 := 200, unlocked := 1,
+        reserve0 := ⟨10, by decide⟩, reserve1 := ⟨10, by decide⟩ }
+    ) := by
+  unfold swapControlState
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 definition: swapControlContext
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example :
+    @swapControlContext = (
+      { pair := 0, sender := 400, value := 0, timestamp := 0,
+        isStatic := false, invocation := [] }
+    ) := by
+  unfold swapControlContext
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 definition: swapOk
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example :
+    @swapOk = (
+      { success := true, returndata := [], codeExists := true, recoveryOutput := 0 }
+    ) := by
+  unfold swapOk
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 definition: swapAnswer
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example (balance : B256) :
+    @swapAnswer balance = (
+      { success := true, returndata := encodeWords [balance], codeExists := true, recoveryOutput := 0 }
+    ) := by
+  unfold swapAnswer
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 definition: swapCanonicalPostTransfers
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example (balance0 balance1 : B256) (data : Bytes) :
+    @swapCanonicalPostTransfers balance0 balance1 data = (
+      if data.length > 0 then
+        .next swapOk .done
+          (.next (swapAnswer balance0) .done (.next (swapAnswer balance1) .done .done))
+      else
+        .next (swapAnswer balance0) .done (.next (swapAnswer balance1) .done .done)
+    ) := by
+  unfold swapCanonicalPostTransfers
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 definition: swapCanonicalTail
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example (amount1Out : B256) (balance0 balance1 : B256) (data : Bytes) :
+    @swapCanonicalTail amount1Out balance0 balance1 data = (
+      if amount1Out > 0 then
+        .next swapOk .done (swapCanonicalPostTransfers balance0 balance1 data)
+      else swapCanonicalPostTransfers balance0 balance1 data
+    ) := by
+  unfold swapCanonicalTail
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+-- Paper review 2 definition: mintLiquidity
+namespace Blanc.Lift.AMMArithmetic
+
+
+example (amount0 amount1 supply reserve0 reserve1 : Nat) :
+    @mintLiquidity amount0 amount1 supply reserve0 reserve1 = (
+      min (amount0 * supply / reserve0) (amount1 * supply / reserve1)
+    ) := by
+  unfold mintLiquidity
+  rfl
+
+end Blanc.Lift.AMMArithmetic
+
+-- Paper review 2 definition: burnPayment
+namespace Blanc.Lift.AMMArithmetic
+
+
+example (liquidity balance supply : Nat) :
+    @burnPayment liquidity balance supply = (
+      liquidity * balance / supply
+    ) := by
+  unfold burnPayment
+  rfl
+
+end Blanc.Lift.AMMArithmetic
+
+-- Paper review 2 definition: exampleEntries
+namespace Blanc.Lift.LidoCircuitBreakerDeployed
+open Jaune Blanc Blanc.LidoCircuitBreaker
+
+example :
+    @exampleEntries = (
+      [(1, 2)]
+    ) := by
+  unfold exampleEntries
+  rfl
+
+end Blanc.Lift.LidoCircuitBreakerDeployed
+
+-- Paper review 2 definition: exampleProbes
+namespace Blanc.Lift.LidoCircuitBreakerDeployed
+open Jaune Blanc Blanc.LidoCircuitBreaker
+
+example :
+    @exampleProbes = (
+      [0, 1, 2, 3]
+    ) := by
+  unfold exampleProbes
+  rfl
+
+end Blanc.Lift.LidoCircuitBreakerDeployed
+
+-- Paper review 2 definition: exampleInitialWrites
+namespace Blanc.Lift.LidoCircuitBreakerDeployed
+open Jaune Blanc Blanc.LidoCircuitBreaker
+
+example :
+    @exampleInitialWrites = (
+      [(assignmentSlot 1, 2), (arrayEntrySlot 1, 1), (indexSlot 1, 1),
+        (arrayLengthSlot, 1), (countSlot 2, 1)]
+    ) := by
+  unfold exampleInitialWrites
+  rfl
+
+end Blanc.Lift.LidoCircuitBreakerDeployed
+
+-- Paper review 2 definition: exampleStorage
+namespace Blanc.Lift.LidoCircuitBreakerDeployed
+open Jaune Blanc Blanc.LidoCircuitBreaker
+
+example :
+    @exampleStorage = (
+      applyRegistryRawWrites Stor.empty exampleInitialWrites
+    ) := by
+  unfold exampleStorage
+  rfl
+
+end Blanc.Lift.LidoCircuitBreakerDeployed
+
+-- Paper review 2 definition: swapOwnedRaw
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+example (pair : Adr) (event : Event) :
+    swapOwnedRaw pair event = (match event with
+      | .transfer source recipient value => some (transferRawLog pair source recipient value)
+      | .approval owner spender value => some (approvalRawLog pair owner spender value)
+      | .sync reserve0 reserve1 => some (swapSyncLog pair reserve0.toB256 reserve1.toB256)
+      | .swap sender in0 in1 out0 out1 recipient =>
+          some ⟨pair, [swapEventTopic, sender.toB256, recipient.toB256],
+            in0.toBytes ++ in1.toBytes ++ out0.toBytes ++ out1.toBytes⟩
+      | _ => none) := by
+  cases event <;> rfl
 
 end Blanc.Lift.UniswapV2Pair
