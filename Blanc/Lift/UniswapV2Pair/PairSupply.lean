@@ -71,6 +71,38 @@ theorem PairGood.viewsOwn (good : PairGood U D) : ∀ k ∈ staticViewDecodedKey
   fun k member => good.self k
     (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _ member)))
 
+theorem PairGood.transferOwn (good : PairGood U D)
+    (selector : Blanc.Sevm.selector D.sevm = 0xa9059cbb) :
+    ∀ k ∈ transferTouched D.sevm.caller (transferRecipient D.sevm), U k := by
+  have decoded := good.decodedOwn
+  rw [pairDecodedKeys, ite_eq_left selector] at decoded
+  exact decoded
+
+theorem PairGood.approveOwn (good : PairGood U D)
+    (selector : Blanc.Sevm.selector D.sevm = 0x095ea7b3) :
+    ∀ k ∈ approveTouched D.sevm.caller (approveSpender D.sevm), U k := by
+  have decoded := good.decodedOwn
+  rw [pairDecodedKeys, ite_eq_right (by rw [selector]; decide), ite_eq_left selector] at decoded
+  exact decoded
+
+theorem PairGood.transferFromOwn (good : PairGood U D)
+    (selector : Blanc.Sevm.selector D.sevm = 0x23b872dd) :
+    ∀ k ∈ transferFromTouched (transferFromOwner D.sevm) D.sevm.caller
+      (transferFromRecipient D.sevm), U k := by
+  have decoded := good.decodedOwn
+  rw [pairDecodedKeys, ite_eq_right (by rw [selector]; decide),
+    ite_eq_right (by rw [selector]; decide), ite_eq_left selector] at decoded
+  exact decoded
+
+theorem PairGood.permitOwn (good : PairGood U D)
+    (selector : Blanc.Sevm.selector D.sevm = 0xd505accf) :
+    ∀ k ∈ permitTouched (permitOwner D.sevm) (permitSpender D.sevm), U k := by
+  have decoded := good.decodedOwn
+  rw [pairDecodedKeys, ite_eq_right (by rw [selector]; decide),
+    ite_eq_right (by rw [selector]; decide), ite_eq_right (by rw [selector]; decide),
+    ite_eq_left selector] at decoded
+  exact decoded
+
 theorem PairGood.decoded (good : PairGood U D) {F : Exec.Deriv}
     (member : F ∈ Exec.rawFrameRoots D.exc) (target : F.sevm.currentTarget = D.sevm.currentTarget) :
     ∀ k ∈ pairDecodedKeys F.sevm ++ staticViewDecodedKeys F.sevm, U k := by
@@ -689,22 +721,19 @@ theorem pairSupplyRules_legacy {U : WriterKey → Prop} (inj : WriterInj U)
   transfer := by
     intro current invocation sevm b post G run K codeEq installedCode fork freshOutput
       representable selector good sub wrep
-    have decoded := good.decodedOwn
-    rw [pairDecodedKeys, ite_eq_left selector] at decoded
+    have decoded := good.transferOwn selector
     exact (free_transfer_outcome inj apart run codeEq fork representable sub wrep
       selector decoded).mono (fun _ _ a => Or.inl a)
   approve := by
     intro current invocation sevm b post G run K codeEq installedCode fork freshOutput
       representable selector good sub wrep
-    have decoded := good.decodedOwn
-    rw [pairDecodedKeys, ite_eq_right (by rw [selector]; decide), ite_eq_left selector] at decoded
+    have decoded := good.approveOwn selector
     exact (free_approve_outcome inj apart run codeEq fork representable sub wrep
       selector decoded).mono (fun _ _ a => Or.inl a)
   transferFrom := by
     intro current invocation sevm b post G run K codeEq installedCode fork freshOutput
       representable selector good sub wrep
-    have decoded := good.decodedOwn
-    rw [pairDecodedKeys, ite_eq_right (by rw [selector]; decide), ite_eq_right (by rw [selector]; decide), ite_eq_left selector] at decoded
+    have decoded := good.transferFromOwn selector
     exact (free_transferFrom_outcome inj apart run codeEq fork representable sub wrep
       selector decoded).mono (fun _ _ a => Or.inl a)
   initializeEntry := by
@@ -715,8 +744,7 @@ theorem pairSupplyRules_legacy {U : WriterKey → Prop} (inj : WriterInj U)
   permit := by
     intro current invocation sevm b post G run K codeEq installedCode fork freshOutput
       representable selector good sub wrep
-    have decoded := good.decodedOwn
-    rw [pairDecodedKeys, ite_eq_right (by rw [selector]; decide), ite_eq_right (by rw [selector]; decide), ite_eq_right (by rw [selector]; decide), ite_eq_left selector] at decoded
+    have decoded := good.permitOwn selector
     exact (free_permit_outcome inj apart run codeEq fork representable sub wrep sem image
       installedCode freshOutput selector decoded good.views).mono (fun _ _ a => Or.inl a)
   mint := by
