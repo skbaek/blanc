@@ -199,7 +199,7 @@ SHARED += ["Lift.CommittedLogs", "Lift.SegmentedReplay", "Lift.SegmentedHistory"
 SHARED += ["Lift.CalldataGuards", "Lift.StaticCall", "Lift.StaticCallGuard", "Lift.WalkSteps", "Lift.MapSlot", "Lift.Vyper", "Lift.PackedWord"]
 # The frame cursor, the reentrancy-lock exclusion kit and its bytecode checker, owner
 # discipline, and concrete-run evaluation (deployed-lido-vyper-v1): contract-neutral.
-SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachChain", "Lift.ReachDispatch", "Lift.Cursor", "Lift.CursorCuts", "Lift.CursorExact", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
+SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachChain", "Lift.ReachDispatch", "Lift.Cursor", "Lift.CursorCuts", "Lift.CursorOccurrence", "Lift.CursorExact", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
            "Lift.LockCheck", "Lift.LockCheckSound", "Lift.LockCheckFlow"]
 # The constant memory map and its checker, code tries as data, and the executable-witness
 # engine with its child runs and spawn facts (deployed-lido-vyper-v1, V-): contract-neutral.
@@ -369,6 +369,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.SyncWalk",
         "Lift.UniswapV2Pair.SyncTurns",
         "Lift.UniswapV2Pair.SyncCanonical",
+        "Lift.UniswapV2Pair.SyncOccurrence",
         "Lift.UniswapV2Pair.SyncGasCanonical",
         "Lift.UniswapV2Pair.SkimWalk",
         "Lift.UniswapV2Pair.SkimTransferWalk",

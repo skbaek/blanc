@@ -903,3 +903,5 @@ import Blanc.Lift.UniswapV2Pair.SwapForwardTransfer
 import Blanc.Lift.UniswapV2Pair.SwapForwardUpdate
 import Blanc.Lift.UniswapV2Pair.ModelControls
 import Blanc.Lift.UniswapV2Pair.UpdateOverflowWalk
+import Blanc.Lift.CursorOccurrence
+import Blanc.Lift.UniswapV2Pair.SyncOccurrence

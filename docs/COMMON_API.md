@@ -3967,6 +3967,22 @@ contract-neutral.
   covered fork; they do not establish child context, settlement or ordered
   history. The joint node/tree premises are discovered here because the
   existential result alone is not a reliable recipe trigger.
+- To connect a checked original-bytecode external next node to its actual
+  occurrence and returned parent, use
+  [`Blanc/Lift/CursorOccurrence.lean`](../Blanc/Lift/CursorOccurrence.lean).
+  `cursor_next_call_occurrence_forward` derives a `CallOccurrenceStep root x`
+  from the supplied same-frame prefix, checked cursor and successful suffix.
+  The carrier keeps the exact `NinstOccurrence`, decoded external instruction,
+  same-frame `ParentStep` and complete returned `Devm`; its
+  `occurrence_stepRun_unique` comparison preserves both recursive slot and
+  step result. `CallOccurrenceStep.retained` additionally requires root
+  commitment. Raw occurrence identity alone does not establish settlement,
+  call-free predecessor gaps or a child's queue/path origin. The
+  `SyncCanonicalResult.firstOccurrenceStep`/`secondOccurrenceStep` projections
+  in [`SyncOccurrence.lean`](../Blanc/Lift/UniswapV2Pair/SyncOccurrence.lean)
+  reuse the canonical witnesses definitionally and retain their ordered
+  `ExecFreeUntil` gaps. This joint path/cursor/tree seam is discovered here;
+  its existential result does not provide a reliable recipe trigger.
 - To pin the *complete* actual state (gas and world metadata included) at a
   later cursor of a successful raw suffix, use
   [`Blanc/Lift/CursorExact.lean`](../Blanc/Lift/CursorExact.lean). Build
