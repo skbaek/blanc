@@ -4730,6 +4730,16 @@ binds the guarded callback request and successful full-byte reply to its same
 physical CALL, message, process, partition and complete queue. The code bit is
 justified by the actual guard rather than by the entered slot bit.
 
+[`SwapPositionalCanonical.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalCanonical.lean)
+exports `swap_positional_canonical` under the original canonical public premises.
+Its one result carries the original physical chain, same recursively admitted
+source transcript/result, actual output, finite storage/key growth, full logs
+and child returns, bounds, unlocked/checkpoint/context and foreign storage.
+`positional`, `admission` and `forget` project that same admitted proof;
+`terminal_logs` exposes actual post-callback Sync-then-Swap order. Actual
+unguarded transfer entry bits are retained; compatibility does not force them
+into the old hardcoded-true legacy transcript.
+
 [`SwapPositionalSourceSuffix.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalSourceSuffix.lean)
 uses the same two balance replies and carried finite frame for pricing, update
 acceptance and admitted static continuations. Its actual no-call suffix finishes
