@@ -1,3 +1,4 @@
+import Blanc.Lift.UniswapV2Pair.BurnPositionalRefinement
 import Blanc.Lift.UniswapV2Pair.BurnForwardSuffix
 import Blanc.Lift.UniswapV2Pair.BurnPricingWalk
 import Blanc.Lift.UniswapV2Pair.BurnFrameWalk
@@ -656,9 +657,8 @@ theorem burn_bytecode_forward_consumes {K : WriterKey → Prop} {current : Check
           F.sevm.currentTarget = sevm.currentTarget → LockedGood U F) →
         (∀ F ∈ Exec.rawFrameRoots run, F.sevm.currentTarget = sevm.currentTarget →
           ∀ k ∈ staticViewDecodedKeys F.sevm, U k) →
-        BurnEntryAuthenticFinished U K current
-          ⟨0, sevm, St b [] Mem.empty env.gas, .ok env.post, run⟩ b (.halted env.post)
-          invocation := by
+        Nonempty (BurnPositionalCanonicalResult U K current invocation
+          ⟨0, sevm, St b [] Mem.empty env.gas, .ok env.post, run⟩ b env.post) := by
   obtain ⟨run⟩ := lift_exact cert_check jumps_ok codeEq fork
     ⟨t_0000_c0, rfl, burnPc0_exact fork value size guard selector rep tracked env guards⟩
   exact ⟨run, fun inj apart sub trace good staticGood =>
