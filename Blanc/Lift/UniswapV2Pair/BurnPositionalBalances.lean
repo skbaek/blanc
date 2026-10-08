@@ -145,7 +145,12 @@ theorem burn_initial_occurrences_of_success {sevm : Sevm} {b post : Devm} {G : N
       Nonempty (CursorStateAt code cert second.returned BurnInitialBalanceSite.second.afterDecodeTree
         second.returned.devm (Bytes.toB256 (out1.take 32) :: burnInitialTail1 sevm b out0)
         (balanceReplyMemory (balanceReplyMemory getterInitMemory sevm.currentTarget out0)
-          sevm.currentTarget out1) [t_053d_c83]) := by
+          sevm.currentTarget out1) [t_053d_c83]) ∧
+      Nonempty (CursorStateAt code cert first.returned BurnInitialBalanceSite.first.afterDecodeTree
+        first.returned.devm (Bytes.toB256 (out0.take 32) :: burnInitialTail0 sevm b)
+        (balanceReplyMemory getterInitMemory sevm.currentTarget out0) [t_053d_c83]) ∧
+      ((burnInitialWorld0 sevm b).getCode (burnInitialToken0 sevm b).toAdr).size.toB256 ≠ 0 ∧
+      (first.returned.devm.getCode (burnInitialTarget1 sevm b).toAdr).size.toB256 ≠ 0 := by
   let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
   obtain ⟨first, cursor0, gas0, out0, gap0, env0, outcome0, input0, primitive0,
     placed0, tree0, cont0, reply0, long0, bound0, answered0, ⟨decoded0⟩⟩ :=
@@ -160,7 +165,7 @@ theorem burn_initial_occurrences_of_success {sevm : Sevm} {b post : Devm} {G : N
       (balanceReplyMemory getterInitMemory first.returned.sevm.currentTarget out0) [t_053d_c83] := by
     rw [envRet0]
     exact decoded0
-  obtain ⟨request1⟩ := burn_second_guard_cursor_state
+  obtain ⟨code1, ⟨request1⟩⟩ := burn_second_guard_cursor_data
     (R := [0x89afcb44]) (b0 := Bytes.toB256 (out0.take 32))
     (token1 := burnInitialToken1 sevm b) (token0 := burnInitialToken0 sevm b)
     (r1 := reserve1Read ((burnLockedWorld sevm b).getStorVal sevm.currentTarget 8))
@@ -201,9 +206,13 @@ theorem burn_initial_occurrences_of_success {sevm : Sevm} {b post : Devm} {G : N
     (by rw [envRet1]; exact mem1) bound1
   rw [envRet1, cont1, balanceReplyMemory_word mem0.wf sevm.currentTarget out1 long1] at decoded1
   rw [one1] at reply1
+  obtain ⟨_, _, _, _, _, code0⟩ := burn_prefix_guards_of_success codeEq fork selector run
+  have code0' : ((burnInitialWorld0 sevm b).getCode (burnInitialToken0 sevm b).toAdr).size.toB256 ≠ 0 := by
+    simpa only [burnInitialWorld0, burnInitialToken0, burnInitialReserveWorld,
+      Devm.getCode, Devm.getAcct, temporalAccountAccessBase_state] using code0
   refine ⟨first, second, cursor1, gas0, gas1, out0, out1, gap0, input0, reply0,
     long0, bound0, gap1, env1', outcome1', input1', ?_, placed1, tree1, cont1,
-    reply1, long1, bound1, decoded1⟩
+    reply1, long1, bound1, decoded1, ⟨decoded0⟩, code0', code1⟩
   exact primitive1
 
 end Blanc.Lift.UniswapV2Pair

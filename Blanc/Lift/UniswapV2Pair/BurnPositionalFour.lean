@@ -29,6 +29,7 @@ structure BurnFourCalls (root : Exec.Deriv) (sevm : Sevm) (b : Devm) where
   three : BurnThreeCalls root sevm b
   pricing : Exec.Deriv
   residual : Nat
+  pricing_data : BurnFeeReturnData three pricing
   pricing_gap : Exec.Deriv.ExecFreeUntil three.fee.occurrence.call.returned pricing
   pricing_memory : PtrMem 128 192 pricing.devm.memory
   transfer : CallOccurrenceStep root .call
@@ -64,7 +65,9 @@ theorem burn_four_occurrences_of_success {sevm : Sevm} {b post : Devm} {G : Nat}
     Nonempty (BurnFourCalls root sevm b) := by
   let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
   obtain ⟨r⟩ := burn_three_occurrences_of_success codeEq fork selector run
-  obtain ⟨N, residual, mem, pricingGap, ⟨callee⟩⟩ := r.firstTransferCallee rfl fork
+  obtain ⟨N, residual, ⟨pricingData⟩, ⟨callee⟩⟩ := r.firstTransferCalleeData rfl fork
+  have mem := pricingData.memory
+  have pricingGap := pricingData.node_eq ▸ pricingData.cut.free
   have reached := r.fee.occurrence.call.sameFrame.snoc r.fee.occurrence.call.edge
   have success : r.fee.occurrence.call.returned.exn = .ok post :=
     Blanc.Exec.Deriv.ParentPrefix.exn_eq reached
@@ -89,6 +92,7 @@ theorem burn_four_occurrences_of_success {sevm : Sevm} {b post : Devm} {G : Nat}
     three := r
     pricing := N
     residual := residual
+    pricing_data := pricingData
     pricing_gap := pricingGap
     pricing_memory := mem
     transfer := step
