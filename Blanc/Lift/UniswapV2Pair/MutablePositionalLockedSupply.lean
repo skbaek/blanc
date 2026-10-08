@@ -3,6 +3,7 @@ import Blanc.Lift.UniswapV2Pair.MutablePositionalFold
 import Blanc.Lift.UniswapV2Pair.LockedSupply
 import Blanc.Lift.UniswapV2Pair.PairNoCallSource
 import Blanc.Lift.UniswapV2Pair.PermitSourceOccurrence
+import Blanc.SlotFootprintSubset
 
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
@@ -10,10 +11,7 @@ open Jaune
 private theorem positional_locked_extend {U K : WriterKey → Prop} {keys : List WriterKey}
     (sub : ∀ k, K k → U k) (good : ∀ k ∈ keys, U k) :
     ∀ k, WriterExtend K keys k → U k := by
-  intro k tracked
-  rcases tracked with old | touched
-  · exact sub k old
-  · exact good k touched
+  exact Blanc.SlotFootprint.extendBy_subset sub good
 
 section Outcomes
 

@@ -2,6 +2,7 @@ import Blanc.Lift.UniswapV2Pair.SwapCanonical
 import Blanc.Lift.UniswapV2Pair.MintCanonical
 import Blanc.Lift.UniswapV2Pair.SyncGasCanonical
 import Blanc.Lift.UniswapV2Pair.BurnFeeTransfers
+import Blanc.SlotFootprintSubset
 
 /-!
 # The unlocked Pair-frame supply
@@ -367,10 +368,7 @@ end Free
 /-- Universe rows extended by universe rows stay in the universe; injectivity and apartness restrict. -/
 theorem writerExtend_universe {U K : WriterKey → Prop} {keys : List WriterKey}
     (sub : ∀ k, K k → U k) (good : ∀ k ∈ keys, U k) : ∀ k, WriterExtend K keys k → U k := by
-  intro k member
-  rcases member with old | row
-  · exact sub k old
-  · exact good k row
+  exact Blanc.SlotFootprint.extendBy_subset sub good
 
 theorem writerInj_restrict {U V : WriterKey → Prop} (inj : WriterInj U) (inside : ∀ k, V k → U k) :
     WriterInj V :=
