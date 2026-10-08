@@ -130,4 +130,100 @@ theorem BurnThreeCalls.feeSourceCall {root : Exec.Deriv} {sevm : Sevm} {b : Devm
   exact r.fee.sourceCall .burnFeeTo 2 word (by rw [env]; exact pair)
     (by rw [env]; exact scratch.wf) (by rw [env]; exact fork) queue
 
+/-- The first final balance source request names the retained sixth original slot. -/
+theorem BurnSevenCalls.final0SourceCall {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {K : WriterKey → Prop} {current : Checkpoint} {frame : Frame}
+    {paths : List Exec.LocatedFrame} (r : BurnSevenCalls root sevm b)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (pair : frame.context.pair = sevm.currentTarget)
+    (fork : CoveredFork sevm.benvStat.fork)
+    (queue : SourceSlotQueue r.final0.call frame.context.pair 5 paths) :
+    ∃ observed : SourceCallAt root frame
+        (requestFor .burnFinalBalance0 current.state.token0 (.balanceOf frame.context.pair))
+        (feeObservedResult r.final0.out) 5,
+      observed.call = r.final0.call ∧ observed.paths = paths := by
+  let request := requestFor .burnFinalBalance0 current.state.token0 (.balanceOf frame.context.pair)
+  have env : r.five.second.returned.sevm = sevm :=
+    (Cursor.parentStep_sevm r.five.second.edge).trans r.five.sevm_eq
+  obtain ⟨_, _, token, _, _⟩ := r.five.four.three.initial.cache_targets rep
+  have target : (burnInitialToken0 sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr =
+      current.state.token0 := by
+    rw [show (0xffffffffffffffffffffffffffffffffffffffff : B256) = ~~~ addressMask from by decide,
+      and_mask_word, toAdr_toB256]
+    exact token
+  have word : burnInitialToken0 sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff =
+      current.state.token0.toB256 := by
+    rw [show (0xffffffffffffffffffffffffffffffffffffffff : B256) = ~~~ addressMask from by decide,
+      and_mask_word, token]
+  have operands : (r.final0.gas.toB256 :: current.state.token0.toB256 :: r.five.finalPointer :: 36 ::
+      r.five.finalPointer :: 32 :: []) <<+ r.final0.call.occurrence.node.devm.stack := by
+    rw [r.final0.input]
+    simp only [St.stack, word]
+    exact pref_append _ _
+  have data : (r.final0.call.occurrence.node.devm.memory.read r.five.finalPointer.toNat 36).1 =
+      request.calldata := by
+    rw [r.final0.input]
+    simpa only [St.memory, env, request, requestFor, pair] using r.final0.calldata
+  have flag : [1] <<+ r.final0.call.returned.devm.stack := by
+    rw [r.final0.reply.stack]
+    exact pref_append _ _
+  have guard : (r.final0.call.occurrence.node.devm.getCode current.state.token0).size.toB256 ≠ 0 := by
+    rw [r.final0.input]
+    simp only [St, Devm.getCode_setMach]
+    rw [← target]
+    exact r.final0.code_exists
+  exact static_source_call_at (request := request) r.final0.call rfl rfl
+    (by intro digest v rr ss impossible; cases impossible) rfl
+    (by rw [r.final0.sevm_eq, env]; exact pair) operands data flag rfl r.final0.reply.returnData.symm rfl
+    guard (by rw [r.final0.sevm_eq, env]; exact fork) queue
+
+/-- The second final balance source request names the retained seventh original slot. -/
+theorem BurnSevenCalls.final1SourceCall {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {K : WriterKey → Prop} {current : Checkpoint} {frame : Frame}
+    {paths : List Exec.LocatedFrame} (r : BurnSevenCalls root sevm b)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (pair : frame.context.pair = sevm.currentTarget)
+    (fork : CoveredFork sevm.benvStat.fork)
+    (queue : SourceSlotQueue r.final1.call frame.context.pair 6 paths) :
+    ∃ observed : SourceCallAt root frame
+        (requestFor .burnFinalBalance1 current.state.token1 (.balanceOf frame.context.pair))
+        (feeObservedResult r.final1.out) 6,
+      observed.call = r.final1.call ∧ observed.paths = paths := by
+  let request := requestFor .burnFinalBalance1 current.state.token1 (.balanceOf frame.context.pair)
+  have env5 : r.five.second.returned.sevm = sevm :=
+    (Cursor.parentStep_sevm r.five.second.edge).trans r.five.sevm_eq
+  have env : r.final0.call.returned.sevm = sevm :=
+    (Cursor.parentStep_sevm r.final0.call.edge).trans (r.final0.sevm_eq.trans env5)
+  obtain ⟨_, _, _, token, _⟩ := r.five.four.three.initial.cache_targets rep
+  have target : (burnInitialToken1 sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff).toAdr =
+      current.state.token1 := by
+    rw [show (0xffffffffffffffffffffffffffffffffffffffff : B256) = ~~~ addressMask from by decide,
+      and_mask_word, toAdr_toB256]
+    exact token
+  have word : burnInitialToken1 sevm b &&& 0xffffffffffffffffffffffffffffffffffffffff =
+      current.state.token1.toB256 := by
+    rw [show (0xffffffffffffffffffffffffffffffffffffffff : B256) = ~~~ addressMask from by decide,
+      and_mask_word, token]
+  have operands : (r.final1.gas.toB256 :: current.state.token1.toB256 :: r.five.finalPointer :: 36 ::
+      r.five.finalPointer :: 32 :: []) <<+ r.final1.call.occurrence.node.devm.stack := by
+    rw [r.final1.input]
+    simp only [St.stack, word]
+    exact pref_append _ _
+  have data : (r.final1.call.occurrence.node.devm.memory.read r.five.finalPointer.toNat 36).1 =
+      request.calldata := by
+    rw [r.final1.input]
+    simpa only [St.memory, env, request, requestFor, pair] using r.final1.calldata
+  have flag : [1] <<+ r.final1.call.returned.devm.stack := by
+    rw [r.final1.reply.stack]
+    exact pref_append _ _
+  have guard : (r.final1.call.occurrence.node.devm.getCode current.state.token1).size.toB256 ≠ 0 := by
+    rw [r.final1.input]
+    simp only [St, Devm.getCode_setMach]
+    rw [← target]
+    exact r.final1.code_exists
+  exact static_source_call_at (request := request) r.final1.call rfl rfl
+    (by intro digest v rr ss impossible; cases impossible) rfl
+    (by rw [r.final1.sevm_eq, env]; exact pair) operands data flag rfl r.final1.reply.returnData.symm rfl
+    guard (by rw [r.final1.sevm_eq, env]; exact fork) queue
+
 end Blanc.Lift.UniswapV2Pair
