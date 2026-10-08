@@ -452,6 +452,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.BurnPositionalFacts",
         "Lift.UniswapV2Pair.BurnPositionalPricingFacts",
         "Lift.UniswapV2Pair.BurnPositionalSource",
+        "Lift.UniswapV2Pair.BurnPositionalTransferSource",
         "Lift.UniswapV2Pair.SyncGasCanonical",
         "Lift.UniswapV2Pair.SkimWalk",
         "Lift.UniswapV2Pair.SkimPositionalPrefix",
