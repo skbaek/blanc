@@ -63,6 +63,14 @@ variable {U : WriterKey → Prop} {D : Exec.Deriv}
 theorem PairGood.self (good : PairGood U D) : ∀ k ∈ pairFrameKeys D, U k :=
   good D (by cases D; exact Exec.mem_rawFrameRoots_self _) rfl
 
+theorem PairGood.decodedOwn (good : PairGood U D) : ∀ k ∈ pairDecodedKeys D.sevm, U k :=
+  fun k member => good.self k
+    (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ member)))
+
+theorem PairGood.viewsOwn (good : PairGood U D) : ∀ k ∈ staticViewDecodedKeys D.sevm, U k :=
+  fun k member => good.self k
+    (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _ member)))
+
 theorem PairGood.decoded (good : PairGood U D) {F : Exec.Deriv}
     (member : F ∈ Exec.rawFrameRoots D.exc) (target : F.sevm.currentTarget = D.sevm.currentTarget) :
     ∀ k ∈ pairDecodedKeys F.sevm ++ staticViewDecodedKeys F.sevm, U k := by
@@ -132,16 +140,37 @@ end Good
 /-- One successful Pair frame `D` consumed as one source invocation at `current`: an authenticated entry
 and transcript, exact consumption ending in model success, and the finite representation of the frame's
 post storage growing from the incoming tracked rows `K` inside the universe `U`. -/
-def PairStepOutcome (Auth : Exec.Deriv → Entry → Transcript → Prop) (U : WriterKey → Prop)
+def PairStepOutcomeWith
+    (Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop)
+    (Auth : Exec.Deriv → Entry → Transcript → Prop) (U : WriterKey → Prop)
     (current : Checkpoint) (invocation : List Nat) (K : WriterKey → Prop) (D : Exec.Deriv)
     (post : Devm) : Prop :=
   ∃ (entry : Entry) (nested : Transcript) (child : RunResult) (bytes : Bytes)
     (K' : WriterKey → Prop),
     Auth D entry nested ∧
-    ExactConsumes (startTyped current (writerContext D.sevm invocation) entry) nested child ∧
+    Consumes D (startTyped current (writerContext D.sevm invocation) entry) nested child ∧
     child.status = .success bytes ∧ bytes = post.output ∧
     (∀ k, K k → K' k) ∧ (∀ k, K' k → U k) ∧
     WriterRep K' (post.getStor D.sevm.currentTarget) child.frame.current.state
+
+/-- The exact-consumption compatibility instance of the shared outcome. -/
+def PairStepOutcome (Auth : Exec.Deriv → Entry → Transcript → Prop) (U : WriterKey → Prop)
+    (current : Checkpoint) (invocation : List Nat) (K : WriterKey → Prop) (D : Exec.Deriv)
+    (post : Devm) : Prop :=
+  PairStepOutcomeWith (fun _ => ExactConsumes) Auth U current invocation K D post
+
+theorem PairStepOutcomeWith.mono
+    {Consumes Consumes' : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {Auth Auth' : Exec.Deriv → Entry → Transcript → Prop}
+    {U : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat} {K : WriterKey → Prop}
+    {D : Exec.Deriv} {post : Devm}
+    (consume : ∀ segment T child, Consumes D segment T child → Consumes' D segment T child)
+    (authenticate : ∀ entry T, Auth D entry T → Auth' D entry T)
+    (outcome : PairStepOutcomeWith Consumes Auth U current invocation K D post) :
+    PairStepOutcomeWith Consumes' Auth' U current invocation K D post := by
+  obtain ⟨entry, nested, child, bytes, K', auth, consumed, rest⟩ := outcome
+  exact ⟨entry, nested, child, bytes, K', authenticate entry nested auth,
+    consume _ nested child consumed, rest⟩
 
 theorem PairStepOutcome.mono {Auth Auth' : Exec.Deriv → Entry → Transcript → Prop}
     {U : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat} {K : WriterKey → Prop}
@@ -168,6 +197,28 @@ theorem writerRep_absorb {U K K' : WriterKey → Prop} {s s' : Stor} {st st' : S
 
 /-- The step outcome from a consumed successful invocation whose final rows lie in `K` extended by
 universe rows. -/
+theorem pairStepOutcome_with
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop} {U K K' : WriterKey → Prop}
+    {current : Checkpoint} {invocation : List Nat} {D : Exec.Deriv} {post : Devm}
+    {entry : Entry} {nested : Transcript} {child : RunResult} {bytes : Bytes}
+    {keys : List WriterKey}
+    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
+    {s : Stor} (incoming : WriterRep K s current.state)
+    (good : ∀ k ∈ keys, U k) (auth : Auth D entry nested)
+    (consumed : Consumes D (startTyped current (writerContext D.sevm invocation) entry) nested child)
+    (success : child.status = .success bytes) (outputEq : bytes = post.output)
+    (grown : ∀ k, K' k → WriterExtend K keys k)
+    (rep : WriterRep K' (post.getStor D.sevm.currentTarget) child.frame.current.state) :
+    PairStepOutcomeWith Consumes Auth U current invocation K D post := by
+  have sub' : ∀ k, K' k → U k := by
+    intro k member
+    rcases grown k member with old | row
+    · exact sub k old
+    · exact good k row
+  obtain ⟨K'', grows, inside, rep'⟩ := writerRep_absorb inj apart sub incoming sub' rep
+  exact ⟨entry, nested, child, bytes, K'', auth, consumed, success, outputEq, grows, inside, rep'⟩
+
 theorem pairStepOutcome_of {Auth : Exec.Deriv → Entry → Transcript → Prop} {U K K' : WriterKey → Prop}
     {current : Checkpoint} {invocation : List Nat} {D : Exec.Deriv} {post : Devm}
     {entry : Entry} {nested : Transcript} {child : RunResult} {bytes : Bytes}
@@ -179,14 +230,8 @@ theorem pairStepOutcome_of {Auth : Exec.Deriv → Entry → Transcript → Prop}
     (success : child.status = .success bytes) (outputEq : bytes = post.output)
     (grown : ∀ k, K' k → WriterExtend K keys k)
     (rep : WriterRep K' (post.getStor D.sevm.currentTarget) child.frame.current.state) :
-    PairStepOutcome Auth U current invocation K D post := by
-  have sub' : ∀ k, K' k → U k := by
-    intro k member
-    rcases grown k member with old | row
-    · exact sub k old
-    · exact good k row
-  obtain ⟨K'', grows, inside, rep'⟩ := writerRep_absorb inj apart sub incoming sub' rep
-  exact ⟨entry, nested, child, bytes, K'', auth, consumed, success, outputEq, grows, inside, rep'⟩
+    PairStepOutcome Auth U current invocation K D post :=
+  pairStepOutcome_with inj apart sub incoming good auth consumed success outputEq grown rep
 
 /-! ## Lock-free entries, at any lock state -/
 
@@ -535,7 +580,9 @@ def PairFrameAuth (D : Exec.Deriv) (entry : Entry) (T : Transcript) : Prop :=
 /-- The supply of one successful pc-zero Pair frame at the current checkpoint: from every incoming
 finite representation inside the separated universe `U`, the frame is one authenticated source
 invocation that succeeds in the model (`PairStepOutcome`). -/
-def PairStepSupply (Auth : Exec.Deriv → Entry → Transcript → Prop) (U : WriterKey → Prop)
+def PairStepSupplyWith
+    (Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop)
+    (Auth : Exec.Deriv → Entry → Transcript → Prop) (U : WriterKey → Prop)
     (selected : Sevm → Prop) : Prop :=
   ∀ (current : Checkpoint) (invocation : List Nat) {sevm : Sevm} {b post : Devm} {G : Nat}
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) {K : WriterKey → Prop},
@@ -543,88 +590,186 @@ def PairStepSupply (Auth : Exec.Deriv → Entry → Transcript → Prop) (U : Wr
     b.output = [] → sevm.data.length < 2 ^ 256 → selected sevm →
     PairGood U ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ →
     (∀ k, K k → U k) → WriterRep K (b.getStor sevm.currentTarget) current.state →
-    PairStepOutcome Auth U current invocation K ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ post
+    PairStepOutcomeWith Consumes Auth U current invocation K
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ post
+
+/-- The legacy supply is the exact-consumption instance with unchanged premises. -/
+def PairStepSupply (Auth : Exec.Deriv → Entry → Transcript → Prop) (U : WriterKey → Prop)
+    (selected : Sevm → Prop) : Prop :=
+  PairStepSupplyWith (fun _ => ExactConsumes) Auth U selected
+
+/-- One operation producer per family, all selecting the same outcome relation.
+The dispatcher below owns the selector inversion; this record supplies no alternative witness. -/
+structure PairSupplyRules
+    (Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop)
+    (Auth : Exec.Deriv → Entry → Transcript → Prop) (U : WriterKey → Prop) : Prop where
+  transfer : PairStepSupplyWith Consumes Auth U (fun sevm => Blanc.Sevm.selector sevm = 0xa9059cbb)
+  approve : PairStepSupplyWith Consumes Auth U (fun sevm => Blanc.Sevm.selector sevm = 0x095ea7b3)
+  transferFrom : PairStepSupplyWith Consumes Auth U (fun sevm => Blanc.Sevm.selector sevm = 0x23b872dd)
+  initializeEntry : PairStepSupplyWith Consumes Auth U (fun sevm => Blanc.Sevm.selector sevm = 0x485cc955)
+  permit : PairStepSupplyWith Consumes Auth U (fun sevm => Blanc.Sevm.selector sevm = 0xd505accf)
+  mint : PairStepSupplyWith Consumes Auth U (fun sevm => Blanc.Sevm.selector sevm = 0x6a627842)
+  sync : PairStepSupplyWith Consumes Auth U (fun sevm => Blanc.Sevm.selector sevm = 0xfff6cae9)
+  skim : PairStepSupplyWith Consumes Auth U (fun sevm => Blanc.Sevm.selector sevm = 0xbc25cf77)
+  swap : PairStepSupplyWith Consumes Auth U (fun sevm => Blanc.Sevm.selector sevm = 0x022c0d9f)
+  burn : PairStepSupplyWith Consumes Auth U (fun sevm => Blanc.Sevm.selector sevm = 0x89afcb44)
+  views : ∀ view : StaticView, PairStepSupplyWith Consumes Auth U
+    (fun sevm => Blanc.Sevm.selector sevm = view.selector)
+
+/-- The single Pair selector dispatch, parameterized by the operation producers. -/
+theorem pairSupplyWith
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop} {U : WriterKey → Prop}
+    (rules : PairSupplyRules Consumes Auth U) :
+    PairStepSupplyWith Consumes Auth U (fun _ => True) := by
+  intro current invocation sevm b post G run K codeEq installedCode fork freshOutput representable
+    _ good sub wrep
+  have member := pair_bytecode_selector_inv codeEq fork run
+  simp only [pairSelectors, List.mem_cons, List.not_mem_nil, or_false] at member
+  rcases member with h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h
+  · exact rules.views (.scalar (.address .token1)) current invocation run codeEq installedCode fork freshOutput
+      representable (h.trans (by decide)) good sub wrep
+  · exact rules.permit current invocation run codeEq installedCode fork freshOutput
+      representable h good sub wrep
+  · exact rules.views (.allowance) current invocation run codeEq installedCode fork freshOutput
+      representable (h.trans (by decide)) good sub wrep
+  · exact rules.sync current invocation run codeEq installedCode fork freshOutput
+      representable h good sub wrep
+  · exact rules.views (.scalar (.constant .minimumLiquidity)) current invocation run codeEq installedCode fork freshOutput
+      representable (h.trans (by decide)) good sub wrep
+  · exact rules.skim current invocation run codeEq installedCode fork freshOutput
+      representable h good sub wrep
+  · exact rules.views (.scalar (.address .factory)) current invocation run codeEq installedCode fork freshOutput
+      representable (h.trans (by decide)) good sub wrep
+  · exact rules.views (.singleMapping .nonces) current invocation run codeEq installedCode fork freshOutput
+      representable (h.trans (by decide)) good sub wrep
+  · exact rules.burn current invocation run codeEq installedCode fork freshOutput
+      representable h good sub wrep
+  · exact rules.views (.string .symbol) current invocation run codeEq installedCode fork freshOutput
+      representable (h.trans (by decide)) good sub wrep
+  · exact rules.transfer current invocation run codeEq installedCode fork freshOutput
+      representable h good sub wrep
+  · exact rules.mint current invocation run codeEq installedCode fork freshOutput
+      representable h good sub wrep
+  · exact rules.views (.singleMapping .balanceOf) current invocation run codeEq installedCode fork freshOutput
+      representable (h.trans (by decide)) good sub wrep
+  · exact rules.views (.scalar (.stored .kLast)) current invocation run codeEq installedCode fork freshOutput
+      representable (h.trans (by decide)) good sub wrep
+  · exact rules.views (.scalar (.stored .domainSeparator)) current invocation run codeEq installedCode fork freshOutput
+      representable (h.trans (by decide)) good sub wrep
+  · exact rules.initializeEntry current invocation run codeEq installedCode fork freshOutput
+      representable h good sub wrep
+  · exact rules.views (.scalar (.stored .price0CumulativeLast)) current invocation run codeEq installedCode fork freshOutput
+      representable (h.trans (by decide)) good sub wrep
+  · exact rules.views (.scalar (.stored .price1CumulativeLast)) current invocation run codeEq installedCode fork freshOutput
+      representable (h.trans (by decide)) good sub wrep
+  · exact rules.transferFrom current invocation run codeEq installedCode fork freshOutput
+      representable h good sub wrep
+  · exact rules.views (.scalar (.constant .permitTypehash)) current invocation run codeEq installedCode fork freshOutput
+      representable (h.trans (by decide)) good sub wrep
+  · exact rules.views (.scalar (.constant .decimals)) current invocation run codeEq installedCode fork freshOutput
+      representable (h.trans (by decide)) good sub wrep
+  · exact rules.approve current invocation run codeEq installedCode fork freshOutput
+      representable h good sub wrep
+  · exact rules.views (.scalar (.address .token0)) current invocation run codeEq installedCode fork freshOutput
+      representable (h.trans (by decide)) good sub wrep
+  · exact rules.views (.totalSupply) current invocation run codeEq installedCode fork freshOutput
+      representable (h.trans (by decide)) good sub wrep
+  · exact rules.swap current invocation run codeEq installedCode fork freshOutput
+      representable h good sub wrep
+  · exact rules.views (.string .name) current invocation run codeEq installedCode fork freshOutput
+      representable (h.trans (by decide)) good sub wrep
+  · exact rules.views (.getReserves) current invocation run codeEq installedCode fork freshOutput
+      representable (h.trans (by decide)) good sub wrep
+
+/-- Compatibility producers for the original authentication and exact-consumption APIs. -/
+theorem pairSupplyRules_legacy {U : WriterKey → Prop} (inj : WriterInj U)
+    (apart : WriterApart U) (sem : CodeSem) (image : sem.image = some code.toList) :
+    PairSupplyRules (fun _ => ExactConsumes) PairFrameAuth U where
+  transfer := by
+    intro current invocation sevm b post G run K codeEq installedCode fork freshOutput
+      representable selector good sub wrep
+    have decoded := good.decodedOwn
+    rw [pairDecodedKeys, ite_eq_left selector] at decoded
+    exact (free_transfer_outcome inj apart run codeEq fork representable sub wrep
+      selector decoded).mono (fun _ _ a => Or.inl a)
+  approve := by
+    intro current invocation sevm b post G run K codeEq installedCode fork freshOutput
+      representable selector good sub wrep
+    have decoded := good.decodedOwn
+    rw [pairDecodedKeys, ite_eq_right (by rw [selector]; decide), ite_eq_left selector] at decoded
+    exact (free_approve_outcome inj apart run codeEq fork representable sub wrep
+      selector decoded).mono (fun _ _ a => Or.inl a)
+  transferFrom := by
+    intro current invocation sevm b post G run K codeEq installedCode fork freshOutput
+      representable selector good sub wrep
+    have decoded := good.decodedOwn
+    rw [pairDecodedKeys, ite_eq_right (by rw [selector]; decide), ite_eq_right (by rw [selector]; decide), ite_eq_left selector] at decoded
+    exact (free_transferFrom_outcome inj apart run codeEq fork representable sub wrep
+      selector decoded).mono (fun _ _ a => Or.inl a)
+  initializeEntry := by
+    intro current invocation sevm b post G run K codeEq installedCode fork freshOutput
+      representable selector good sub wrep
+    exact (free_initialize_outcome run codeEq fork representable sub wrep inj apart
+      freshOutput selector).mono (fun _ _ a => Or.inl a)
+  permit := by
+    intro current invocation sevm b post G run K codeEq installedCode fork freshOutput
+      representable selector good sub wrep
+    have decoded := good.decodedOwn
+    rw [pairDecodedKeys, ite_eq_right (by rw [selector]; decide), ite_eq_right (by rw [selector]; decide), ite_eq_right (by rw [selector]; decide), ite_eq_left selector] at decoded
+    exact (free_permit_outcome inj apart run codeEq fork representable sub wrep sem image
+      installedCode freshOutput selector decoded good.views).mono (fun _ _ a => Or.inl a)
+  mint := by
+    intro current invocation sevm b post G run K codeEq installedCode fork freshOutput
+      representable selector good sub wrep
+    have installed : some (b.getCode sevm.currentTarget).toList = sem.image := by
+      rw [installedCode]
+      exact image.symm
+    exact (pair_mint_outcome inj apart run codeEq fork sub wrep sem image installed good
+      selector).mono (fun _ _ a => Or.inr (Or.inr (Or.inl a)))
+  sync := by
+    intro current invocation sevm b post G run K codeEq installedCode fork freshOutput
+      representable selector good sub wrep
+    have installed : some (b.getCode sevm.currentTarget).toList = sem.image := by
+      rw [installedCode]
+      exact image.symm
+    exact (pair_sync_outcome inj apart run codeEq fork sub wrep sem image installed good
+      freshOutput selector).mono (fun _ _ a => Or.inr (Or.inr (Or.inr (Or.inl a))))
+  skim := by
+    intro current invocation sevm b post G run K codeEq installedCode fork freshOutput
+      representable selector good sub wrep
+    have installed : some (b.getCode sevm.currentTarget).toList = sem.image := by
+      rw [installedCode]
+      exact image.symm
+    exact (pair_skim_outcome inj apart run codeEq fork sub wrep sem image installed good
+      freshOutput selector).mono (fun _ _ a => Or.inr (Or.inr (Or.inr (Or.inr (Or.inl a)))))
+  swap := by
+    intro current invocation sevm b post G run K codeEq installedCode fork freshOutput
+      representable selector good sub wrep
+    have installed : some (b.getCode sevm.currentTarget).toList = sem.image := by
+      rw [installedCode]
+      exact image.symm
+    exact (pair_swap_outcome inj apart run codeEq fork sub wrep sem image installed good
+      freshOutput selector).mono (fun _ _ a => Or.inr (Or.inl a))
+  burn := by
+    intro current invocation sevm b post G run K codeEq installedCode fork freshOutput
+      representable selector good sub wrep
+    have installed : some (b.getCode sevm.currentTarget).toList = sem.image := by
+      rw [installedCode]
+      exact image.symm
+    exact (pair_burn_outcome inj apart run codeEq fork sub wrep sem image installed good
+      selector).mono (fun _ _ a => Or.inr (Or.inr (Or.inr (Or.inr (Or.inr a)))))
+  views := by
+    intro view current invocation sevm b post G run K codeEq installedCode fork freshOutput
+      representable selector good sub wrep
+    exact (free_view_outcome inj apart run codeEq fork representable sub wrep view
+      selector good.viewsOwn).mono (fun _ _ a => Or.inl a)
 
 /-- **The unlocked Pair-frame supply.**  Every successful pc-zero Pair frame, at any of its 27
 selectors, is one authenticated source invocation that succeeds in the model. -/
 theorem pairSupply {U : WriterKey → Prop} (inj : WriterInj U)
     (apart : WriterApart U) (sem : CodeSem) (image : sem.image = some code.toList) :
-    PairStepSupply PairFrameAuth U (fun _ => True) := by
-  intro current invocation sevm b post G run K codeEq installedCode fork freshOutput representable
-    _ good sub wrep
-  have installed : some (b.getCode sevm.currentTarget).toList = sem.image := by
-    rw [installedCode]
-    exact image.symm
-  have decoded : ∀ k ∈ pairDecodedKeys sevm, U k := fun k member =>
-    good.self k (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ member)))
-  have views : ∀ k ∈ staticViewDecodedKeys sevm, U k := fun k member =>
-    good.self k (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _ member)))
-  have member := pair_bytecode_selector_inv codeEq fork run
-  simp only [pairSelectors, List.mem_cons, List.not_mem_nil, or_false] at member
-  rcases member with h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h
-  · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.scalar (.address .token1))
-      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
-  · have touched : ∀ k ∈ permitTouched (permitOwner sevm) (permitSpender sevm), U k := by
-      intro k touched
-      apply decoded k
-      rw [pairDecodedKeys, ite_eq_right (by rw [h]; decide), ite_eq_right (by rw [h]; decide),
-        ite_eq_right (by rw [h]; decide), ite_eq_left h]
-      exact touched
-    exact (free_permit_outcome inj apart run codeEq fork representable sub wrep sem image
-      installedCode freshOutput h touched good.views).mono fun _ _ a => Or.inl a
-  · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.allowance)
-      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
-  · exact (pair_sync_outcome inj apart run codeEq fork sub wrep sem image installed good
-      freshOutput h).mono fun _ _ a => Or.inr (Or.inr (Or.inr (Or.inl a)))
-  · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.scalar (.constant .minimumLiquidity))
-      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
-  · exact (pair_skim_outcome inj apart run codeEq fork sub wrep sem image installed good
-      freshOutput h).mono fun _ _ a => Or.inr (Or.inr (Or.inr (Or.inr (Or.inl a))))
-  · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.scalar (.address .factory))
-      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
-  · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.singleMapping .nonces)
-      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
-  · exact (pair_burn_outcome inj apart run codeEq fork sub wrep sem image installed good
-      h).mono fun _ _ a => Or.inr (Or.inr (Or.inr (Or.inr (Or.inr a))))
-  · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.string .symbol)
-      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
-  · exact (free_transfer_outcome inj apart run codeEq fork representable sub wrep h
-      (by rw [pairDecodedKeys, ite_eq_left h] at decoded; exact decoded)).mono
-      fun _ _ a => Or.inl a
-  · exact (pair_mint_outcome inj apart run codeEq fork sub wrep sem image installed good
-      h).mono fun _ _ a => Or.inr (Or.inr (Or.inl a))
-  · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.singleMapping .balanceOf)
-      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
-  · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.scalar (.stored .kLast))
-      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
-  · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.scalar (.stored .domainSeparator))
-      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
-  · exact (free_initialize_outcome run codeEq fork representable sub wrep inj apart freshOutput
-      h).mono fun _ _ a => Or.inl a
-  · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.scalar (.stored .price0CumulativeLast))
-      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
-  · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.scalar (.stored .price1CumulativeLast))
-      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
-  · exact (free_transferFrom_outcome inj apart run codeEq fork representable sub wrep h
-      (by rw [pairDecodedKeys, ite_eq_right (by rw [h]; decide), ite_eq_right (by rw [h]; decide),
-            ite_eq_left h] at decoded
-          exact decoded)).mono fun _ _ a => Or.inl a
-  · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.scalar (.constant .permitTypehash))
-      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
-  · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.scalar (.constant .decimals))
-      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
-  · exact (free_approve_outcome inj apart run codeEq fork representable sub wrep h
-      (by rw [pairDecodedKeys, ite_eq_right (by rw [h]; decide), ite_eq_left h] at decoded
-          exact decoded)).mono fun _ _ a => Or.inl a
-  · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.scalar (.address .token0))
-      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
-  · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.totalSupply)
-      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
-  · exact (pair_swap_outcome inj apart run codeEq fork sub wrep sem image installed good
-      freshOutput h).mono fun _ _ a => Or.inr (Or.inl a)
-  · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.string .name)
-      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
-  · exact (free_view_outcome inj apart run codeEq fork representable sub wrep (.getReserves)
-      (h.trans (by decide)) views).mono fun _ _ a => Or.inl a
+    PairStepSupply PairFrameAuth U (fun _ => True) :=
+  pairSupplyWith (pairSupplyRules_legacy inj apart sem image)
 
 end Blanc.Lift.UniswapV2Pair
