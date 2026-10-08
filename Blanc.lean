@@ -11,6 +11,7 @@ import Blanc.LedgerUpdate
 import Blanc.StorageOnlySpec
 import Blanc.SlotFootprint
 import Blanc.SlotFootprintRestrict
+import Blanc.SlotFootprintSubset
 import Blanc.StaticStores
 import Blanc.WordArithmetic
 import Blanc.FakeExponentialEval
@@ -845,6 +846,7 @@ import Blanc.Lift.UniswapV2Pair.ReplayWriterGas
 import Blanc.Lift.UniswapV2Pair.PairSupply
 import Blanc.Lift.UniswapV2Pair.PairPositionalEntry
 import Blanc.Lift.UniswapV2Pair.PairPositionalReady
+import Blanc.Lift.UniswapV2Pair.PairPositionalSkim
 import Blanc.Lift.UniswapV2Pair.PairHistory
 import Blanc.Lift.UniswapV2Pair.SwapForwardAccept
 import Blanc.Lift.UniswapV2Pair.MintForwardAccept
@@ -979,6 +981,8 @@ import Blanc.Lift.UniswapV2Pair.BurnPositionalUniverse
 import Blanc.Lift.UniswapV2Pair.BurnPositionalPayoutSource
 import Blanc.Lift.UniswapV2Pair.BurnPositionalSource
 import Blanc.Lift.UniswapV2Pair.BurnPositionalInitialQueues
+import Blanc.Lift.UniswapV2Pair.BurnPositionalInitialSource
+import Blanc.Lift.UniswapV2Pair.BurnPositionalFeeSource
 import Blanc.Lift.UniswapV2Pair.BurnPositionalTransferSource
 import Blanc.Lift.UniswapV2Pair.BurnPositionalFinish
 import Blanc.Lift.UniswapV2Pair.BurnPositionalFinishSource

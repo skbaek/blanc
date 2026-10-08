@@ -5,6 +5,7 @@ import Blanc.Lift.UniswapV2Pair.PermitTurns
 import Blanc.Lift.UniswapV2Pair.TransferFromSource
 import Blanc.Lift.UniswapV2Pair.InitializeSource
 import Blanc.Lift.UniswapV2Pair.StaticViewSource
+import Blanc.SlotFootprintSubset
 
 /-!
 # The Pair-frame supply while the Pair is locked
@@ -87,10 +88,7 @@ theorem LockedRep.congr {U : WriterKey → Prop} {st : State} {s s' : Stor}
 private theorem locked_extend {U K : WriterKey → Prop} {keys : List WriterKey}
     (sub : ∀ k, K k → U k) (good : ∀ k ∈ keys, U k) :
     ∀ k, WriterExtend K keys k → U k := by
-  intro k tracked
-  rcases tracked with old | touched
-  · exact sub k old
-  · exact good k touched
+  exact Blanc.SlotFootprint.extendBy_subset sub good
 
 section Outcomes
 
