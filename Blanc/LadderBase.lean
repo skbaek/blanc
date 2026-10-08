@@ -1698,16 +1698,16 @@ The statement is a disjunction rather than a postcondition because a `CALL`
 that never entered a frame also returns `.ok`: Blanc's compiled callers branch
 on the pushed flag, so a caller holding the success guard dismisses the first
 disjunct with it. -/
-lemma of_run_call_val_with_depth_frame
-    {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
+lemma of_step_call_val_with_depth_frame
+    {pc : Nat} {xl : Xlot} {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
     {xs : Stack}
     (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
-    (h_run : Ninst.Run sevm s Ninst.call sf)
+    (h_fill : xl.Filled)
+    (h_run : Ninst.StepRun pc sevm s Ninst.call xl (.ok sf))
     (hfork : CoveredFork sevm.benvStat.fork) :
     (((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf) ∨
-    ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (na : Adr)
-      (code : ByteArray) (avail pc : Nat),
-      Ninst.StepRun pc sevm s Ninst.call xl (.ok sf) ∧
+    ∃ (parent child : Devm) (dp : Bool) (na : Adr)
+      (code : ByteArray) (avail : Nat),
       0 < sevm.depth ∧
       s.stack = g :: c :: v :: ii :: is :: oi :: os :: parent.stack ∧
       parent.state = s.state ∧
@@ -1732,9 +1732,15 @@ lemma of_run_call_val_with_depth_frame
       sf.state = child.state ∧
       sf.returnData = child.output ∧
       sf.memory = parent.memory.write oi.toNat (child.output.take os.toNat) ∧
-      sf.stack = (1 : B256) :: parent.stack := by
-  rcases h_run with ⟨xl, h_fill, pc, h_run⟩
-  have h_step : Ninst.StepRun pc sevm s Ninst.call xl (.ok sf) := h_run
+      sf.stack = (1 : B256) :: parent.stack ∧
+      Ninst.step ⟨pc, sevm, s⟩ Ninst.call =
+        .spawn (Frame.ofCall
+          (callMsg sevm parent
+            (min g.toNat (except64th avail)
+              + (if v.toNat = 0 then 0 else gCallStipend))
+            v sevm.currentTarget c.toAdr na true false
+            ((s.memory.read ii.toNat is.toNat).1) code dp))
+          (Resume.call parent oi.toNat os.toNat) (pc + 1) := by
   simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
     Bind.bind, Except.bind, Except.assert] at h_run
   -- pop gas
@@ -1837,7 +1843,7 @@ lemma of_run_call_val_with_depth_frame
     (f1.output).trans ((f2.output).trans ((f3.output).trans
       ((f4.output).trans ((f5.output).trans ((f6.output).trans f7.output)))))
   clear e1 e2 e3 e4 e5 e6 e7 f1 f2 f3 f4 f5 f6 f7
-  clear eq1 eq2 eq3 eq4 eq5 eq6 eq7 h_pop2
+  clear h_pop2
   -- delegation resolution
   rcases hp11 : sevm.benvStat.rules.gas.accessDelegation (addAccessedAddress devm7 c.toAdr) c.toAdr with
     ⟨dp, na, code0, dagc, devm9⟩
@@ -1918,6 +1924,7 @@ lemma of_run_call_val_with_depth_frame
   split at h_run
   case h_1 => cases XStep.run_ofExcept_error h_run
   case h_2 =>
+  rename_i staticUnit staticPassed
   split at h_run
   · -- insufficient balance : the failure flag is pushed, no frame opens
     split at h_run
@@ -1956,6 +1963,7 @@ lemma of_run_call_val_with_depth_frame
       show s.transientStorage = devm10.transientStorage
       rw [← h_tra10, h_tra9, ← h_tra7]
   · -- balance is sufficient : the call goes through
+    rename_i balanceOK
     simp only [genericCall.step] at h_run
     split at h_run
     · -- depth limit reached : the failure flag is pushed, no frame opens
@@ -2066,16 +2074,78 @@ lemma of_run_call_val_with_depth_frame
           rw [h_mem_par]
           rfl
         rw [h_cd] at run_pm₀
+        have spawned : Ninst.step ⟨pc, sevm, s⟩ Ninst.call =
+            .spawn (Frame.ofCall
+              (callMsg sevm
+                ((devm10.memExtends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData [])
+                (min g.toNat (except64th avail)
+                  + (if v.toNat = 0 then 0 else gCallStipend))
+                v sevm.currentTarget c.toAdr na true false
+                (s.memory.read ii.toNat is.toNat).1 code0 dp))
+              (Resume.call
+                ((devm10.memExtends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData [])
+                oi.toNat os.toNat) (pc + 1) := by
+          simp only [Ninst.call, Ninst.step_exec, Xinst.step, hsg,
+            Bind.bind, Except.bind, Except.assert, eq1, eq2, eq3, eq4, eq5, eq6, eq7,
+            hp11, eq16, staticPassed, ite_eq_right balanceOK, Except.pure, Pure.pure, XStep.ofExcept, genericCall.step,
+            ite_eq_right h_depth_ne, XStep.toStep]
+          rw [hstip, h_cd]
         refine ⟨(devm10.memExtends
             [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData [],
-          child, xl, dp, na, code0, avail, pc, h_step,
+          child, dp, na, code0, avail,
           by omega, by rw [e_stack, h_stk_par], h_st_par, h_mem_par,
           h_logs_par, h_output_par, h_del, h_fill,
           run_pm₀, by simpa only [Option.isSome_eq_false_iff, Option.isNone_iff_eq_none,
             Bool.not_eq_true] using herr, h_split.symm,
           Resume.call_state h_split.symm, Resume.call_returnData h_split.symm,
           Resume.call_memory h_split.symm,
-          by rw [Resume.call_stack_flag h_split.symm, if_neg herr]⟩
+          by rw [Resume.call_stack_flag h_split.symm, if_neg herr], spawned⟩
+
+/-- Run-based compatibility interface retains its original statement. -/
+lemma of_run_call_val_with_depth_frame
+    {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
+    {xs : Stack}
+    (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
+    (h_run : Ninst.Run sevm s Ninst.call sf)
+    (hfork : CoveredFork sevm.benvStat.fork) :
+    (((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf) ∨
+    ∃ (parent child : Devm) (xl : Xlot) (dp : Bool) (na : Adr)
+      (code : ByteArray) (avail pc : Nat),
+      Ninst.StepRun pc sevm s Ninst.call xl (.ok sf) ∧
+      0 < sevm.depth ∧
+      s.stack = g :: c :: v :: ii :: is :: oi :: os :: parent.stack ∧
+      parent.state = s.state ∧
+      parent.memory
+        = s.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] ∧
+      parent.logs = s.logs ∧
+      parent.output = s.output ∧
+      ((getDelegatedCodeAddress (s.getCode c.toAdr) = none ∧
+          na = c.toAdr ∧ code = s.getCode c.toAdr ∧ dp = false) ∨
+        (∃ d, getDelegatedCodeAddress (s.getCode c.toAdr) = some d ∧
+          na = d ∧ code = s.getCode d ∧ dp = true)) ∧
+      Xlot.Filled xl ∧
+      ProcessMessage
+        (callMsg sevm parent
+          (min g.toNat (except64th avail)
+            + (if v.toNat = 0 then 0 else gCallStipend))
+          v sevm.currentTarget c.toAdr na true false
+          ((s.memory.read ii.toNat is.toNat).1) code dp)
+        xl (.ok child) ∧
+      child.error.isSome = false ∧
+      (Resume.call parent oi.toNat os.toNat).run (.ok child) = .ok sf ∧
+      sf.state = child.state ∧
+      sf.returnData = child.output ∧
+      sf.memory = parent.memory.write oi.toNat (child.output.take os.toNat) ∧
+      sf.stack = (1 : B256) :: parent.stack := by
+  obtain ⟨xl, filled, pc, primitive⟩ := h_run
+  rcases of_step_call_val_with_depth_frame hp filled primitive hfork with failed | entered
+  · exact Or.inl failed
+  · obtain ⟨parent, child, dp, na, code, avail, depth, stack, state, memory, logs,
+      output, delegation, filled, process, clean, resumed, returnedState, returnedData,
+      returnedMemory, returnedStack, _⟩ := entered
+    exact Or.inr ⟨parent, child, xl, dp, na, code, avail, pc, primitive, depth,
+      stack, state, memory, logs, output, delegation, filled, process, clean, resumed,
+      returnedState, returnedData, returnedMemory, returnedStack⟩
 
 /-- Compatibility projection of `of_run_call_val_with_depth_frame`.  Existing
 consumers retain the original CALL inversion while log/output-aware consumers
