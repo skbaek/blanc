@@ -1,7 +1,7 @@
 import Blanc.Lift.CursorStateCuts
 import Blanc.Lift.UniswapV2Pair.SyncWalk
 
-/-! Actual shared Pair dispatcher prefixes to the upper selector comparisons. -/
+/-! Actual shared Pair dispatcher prefixes to the upper and lower selector comparisons. -/
 
 namespace Blanc.Lift.UniswapV2Pair
 
@@ -33,16 +33,16 @@ def pairSelectorLine : List Ninst := [
   (.reg .gt),
   (.push [0x00, 0xf9] (by decide))]
 
-/-- The upper selector route is reached by an actual frame-free prefix.
+/-- The selected upper or lower comparison is reached by an actual frame-free prefix.
 Its full world and initialized memory are retained; residual gas is derived. -/
-theorem pair_dispatch_comparison_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
+theorem pair_dispatch_selector_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
     {sel : B256} (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (selector : Blanc.Sevm.selector sevm = sel)
-    (high : B256.gtCheck (Bytes.toB256 [0x6a, 0x62, 0x78, 0x42]) sel = 0)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     Nonempty (CursorStateAt code cert
       ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
-      t_002b_c0 b [sel] getterInitMemory []) := by
+      (if B256.gtCheck (Bytes.toB256 [0x6a, 0x62, 0x78, 0x42]) sel = 0
+        then t_002b_c0 else t_00f9_c0) b [sel] getterInitMemory []) := by
   obtain ⟨f, entry, lifted⟩ := lift_sound_in cert_check codeEq fork run
   rw [show cert.prog[0]? = some t_0000_c0 from rfl] at entry
   cases entry
@@ -79,7 +79,7 @@ theorem pair_dispatch_comparison_cursor_state {sevm : Sevm} {b post : Devm} {G :
       exact ⟨g', state⟩)
   obtain ⟨lead⟩ := sizeGuard.branchZero cert_check rfl fork
   obtain ⟨comparison⟩ := lead.line cert_check rfl fork pairSelectorLine (by rfl)
-    (by intro n member x equal; subst n; simp only [pairSelectorLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member) (b' := b) (S' := [0xf9, 0, sel]) (M' := getterInitMemory) (by
+    (by intro n member x equal; subst n; simp only [pairSelectorLine, List.mem_cons, List.not_mem_nil, reduceCtorEq, or_self] at member) (b' := b) (S' := [0xf9, B256.gtCheck (Bytes.toB256 [0x6a, 0x62, 0x78, 0x42]) sel, sel]) (M' := getterInitMemory) (by
       intro g d line
       dsimp only [pairSelectorLine] at line
       obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
@@ -90,11 +90,27 @@ theorem pair_dispatch_comparison_cursor_state {sevm : Sevm} {b post : Devm} {G :
       obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
       obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
       obtain ⟨_, step, line⟩ := Line.of_run_cons line
-      obtain ⟨_, rfl⟩ := ri_val (w := 0) high (ri_gt step)
+      obtain ⟨_, rfl⟩ := ri_gt step
       obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨g', state⟩ := ri_push step
       cases line
       exact ⟨g', state⟩)
-  obtain ⟨compareA⟩ := comparison.branchZero cert_check rfl fork
-  exact ⟨compareA⟩
+  by_cases high : B256.gtCheck (Bytes.toB256 [0x6a, 0x62, 0x78, 0x42]) sel = 0
+  · rw [high] at comparison
+    obtain ⟨compareA⟩ := comparison.branchZero cert_check rfl fork
+    exact ⟨by simpa only [high, ite_true] using compareA⟩
+  · obtain ⟨compareA⟩ := comparison.branchSucc cert_check rfl fork high
+    exact ⟨by simpa only [high, ite_false] using compareA⟩
+
+/-- Compatibility projection of the actual upper comparison prefix. -/
+theorem pair_dispatch_comparison_cursor_state {sevm : Sevm} {b post : Devm} {G : Nat}
+    {sel : B256} (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (selector : Blanc.Sevm.selector sevm = sel)
+    (high : B256.gtCheck (Bytes.toB256 [0x6a, 0x62, 0x78, 0x42]) sel = 0)
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    Nonempty (CursorStateAt code cert
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+      t_002b_c0 b [sel] getterInitMemory []) := by
+  simpa only [high, ite_true] using
+    pair_dispatch_selector_cursor_state codeEq fork selector run
 
 end Blanc.Lift.UniswapV2Pair
