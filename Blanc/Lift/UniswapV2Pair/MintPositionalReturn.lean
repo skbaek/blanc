@@ -17,6 +17,10 @@ theorem MintRootCallPositions.suffixes {root : Exec.Deriv} {b post : Devm}
       feeN.sevm = root.sevm ∧ feeN.exn = .ok post ∧
       CursorOK code cert feeN feeCursor ∧ feeCursor.f = t_1233_c41 ∧
       feeCursor.K.map Cont.f = [t_039b_c86] ∧
+      feeBranchAccepts root.sevm
+        (feeKLastWorld root.sevm r.fee.occurrence.call.returned.devm)
+        (feeKLastWord root.sevm r.fee.occurrence.call.returned.devm)
+        (Bytes.toB256 (r.fee.out.take 32)) (mintRootReserve0 root b) (mintRootReserve1 root b) ∧
       feeN.devm = feeBranchPost root.sevm
         (feeKLastWorld root.sevm r.fee.occurrence.call.returned.devm)
         (mintFeeLocals (Bytes.toB256 (r.out1.take 32) - mintRootReserve1 root b)
@@ -62,10 +66,11 @@ theorem MintRootCallPositions.suffixes {root : Exec.Deriv} {b post : Devm}
   · rw [treeMint, actualMintEnv] at halted
     rw [treeFee, actualFeeEnv] at sourceMint
     refine ⟨feeN, mintN, feeCursor, mintCursor, feeGas,
-      spanFee, actualFeeEnv, outcomeFee, placedFee, treeFee, contsFee, ?_,
+      spanFee, actualFeeEnv, outcomeFee, placedFee, treeFee, contsFee, ?_, ?_,
       spanMint, actualMintEnv, actualMintOutcome, placedMint, treeMint, contsMint,
       sourceMint, halted.mono StepIn.toRun⟩
-    simpa only [env1] using stateFee
+    · simpa only [env1] using guards
+    · simpa only [env1] using stateFee
   · obtain ⟨k, K, state, run, sameK, _, _, _, _⟩ := returned
     have empty : mintCursor.K = [] := List.map_eq_nil_iff.mp contsMint
     rw [empty] at sameK
