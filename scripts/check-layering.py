@@ -442,6 +442,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.BurnPositionalTransfers",
         "Lift.UniswapV2Pair.BurnPositionalFinalRequest",
         "Lift.UniswapV2Pair.BurnPositionalFinalCall",
+        "Lift.UniswapV2Pair.BurnPositionalFinalReply",
         "Lift.UniswapV2Pair.SyncGasCanonical",
         "Lift.UniswapV2Pair.SkimWalk",
         "Lift.UniswapV2Pair.SkimPositionalPrefix",
