@@ -4553,6 +4553,12 @@ including the synchronous `.none` case and settlement pruning. Its proof uses
 that call's original slot and spawning derivation; no guessed queue, code or
 commit premise is required.
 
+`feeBranchSourceKeys_contains` in
+[`PairFeeSourceKeys.lean`](../Blanc/Lift/UniswapV2Pair/PairFeeSourceKeys.lean)
+preserves every incoming tracked key through the fee branch's conditional
+recipient extension. The existing Burn pricing source proof consumes this
+shared inclusion when deriving LP-row freshness.
+
 `SourceCallAt.noCodeMutableTranscript` in
 [`SourceSlotEventsEmpty.lean`](../Blanc/Lift/UniswapV2Pair/SourceSlotEventsEmpty.lean)
 derives the empty mutable transcript for an ordinary missing-entry reply from
