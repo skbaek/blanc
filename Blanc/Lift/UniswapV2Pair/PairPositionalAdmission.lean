@@ -23,6 +23,13 @@ def PairAdmittedConsumes (root : Exec.Deriv) (segment : SegmentResult)
   ∃ selected : PositionalConsumes root root 0 segment transcript out,
     PairSourceAdmission selected
 
+def PairAdmittedOutcome (U : WriterKey → Prop) (current : Checkpoint)
+    (invocation : List Nat) (K : WriterKey → Prop) (root : Exec.Deriv) (post : Devm) : Prop :=
+  PairStepOutcomeWith PairAdmittedConsumes PairEntryAuth U current invocation K root post
+
+def PairAdmittedSupply (U : WriterKey → Prop) (selected : Sevm → Prop) : Prop :=
+  PairStepSupplyWith PairAdmittedConsumes PairEntryAuth U selected
+
 abbrev PairAdmittedChildConsumes := AdmittedChildConsumes LockedAuth
 
 abbrev PairAdmittedMutableTurns := AdmittedMutableTurns LockedAuth
@@ -31,6 +38,21 @@ theorem PairAdmittedConsumes.positional {root : Exec.Deriv} {segment : SegmentRe
     {transcript : Transcript} {out : RunResult}
     (admitted : PairAdmittedConsumes root segment transcript out) :
     PairRootedConsumes root segment transcript out := admitted.choose
+
+theorem PairAdmittedOutcome.positional {U : WriterKey → Prop} {current : Checkpoint}
+    {invocation : List Nat} {K : WriterKey → Prop} {root : Exec.Deriv} {post : Devm}
+    (outcome : PairAdmittedOutcome U current invocation K root post) :
+    PairPositionalOutcome U current invocation K root post :=
+  PairStepOutcomeWith.mono (fun _ _ _ consumed => consumed.positional)
+    (fun _ _ authentic => authentic) outcome
+
+theorem PairAdmittedSupply.positional {U : WriterKey → Prop} {selected : Sevm → Prop}
+    (supply : PairAdmittedSupply U selected) : PairPositionalSupply U selected := by
+  intro current invocation sevm b post G run K codeEq installed fork freshOutput
+    representable selector good sub rep
+  exact PairAdmittedOutcome.positional
+    (supply current invocation run (K := K) codeEq installed fork freshOutput
+      representable selector good sub rep)
 
 theorem admittedMutableTurnRules :
     MutableTurnRules PairAdmittedChildConsumes PairAdmittedMutableTurns :=
