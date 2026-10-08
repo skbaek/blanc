@@ -446,7 +446,8 @@ theorem SkimFourCalls.admittedConsumes {root : Exec.Deriv} {b : Devm}
     .suspended frame3 request3 (.skimTransfer1 locals) at resumed2
   rw [← resumed2] at last
   have query1 := AdmittedSourceConsumes.nextCall (continuation := .skimBalance1 locals)
-    balance1.observed (by rw [balance1.same]; exact r.third.gap) rfl
+    balance1.observed (by rw [balance1.same]; exact r.third.gap)
+    (by simp only [externalStatic, skimRequest2, requestFor, BEq.rfl, Bool.or_true]) rfl
     (by intro impossible; cases impossible)
     (PositionalTurns.staticViews balance1.views balance1.mapped balance1.authentic balance1.during)
     (by simpa only [balance1.same, result2, frame2, request2, skimBalanceReply, ite_true] using last)
@@ -468,7 +469,8 @@ theorem SkimFourCalls.admittedConsumes {root : Exec.Deriv} {b : Devm}
     .suspended frame1 request1 (.skimTransfer0 locals) at resumed0
   rw [← resumed0] at first
   have initial := AdmittedSourceConsumes.nextCall (start := root) (continuation := .skimBalance0 locals)
-    balance0.observed (by rw [balance0.same]; exact r.two.first.gap) rfl
+    balance0.observed (by rw [balance0.same]; exact r.two.first.gap)
+    (by simp only [externalStatic, skimRequest0, requestFor, BEq.rfl, Bool.or_true]) rfl
     (by intro impossible; cases impossible)
     (PositionalTurns.staticViews balance0.views balance0.mapped balance0.authentic balance0.during)
     (by simpa only [balance0.same, result0, frame0, request0, skimBalanceReply, ite_true] using first)
