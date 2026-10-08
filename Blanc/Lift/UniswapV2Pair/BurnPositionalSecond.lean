@@ -54,7 +54,7 @@ def burnSecondGuardLine : List Ninst := [
   .reg .iszero,
   .push [0x15, 0x99] (by decide)]
 
-theorem burn_second_guard_cursor_state {root : Exec.Deriv} {b post : Devm}
+theorem burn_second_guard_cursor_data {root : Exec.Deriv} {b post : Devm}
     {R : List B256} {M : Mem} {K : List SFunc}
     {b0 token1 token0 r1 r0 toWord extρ : B256}
     (cut : CursorStateAt code cert root BurnInitialBalanceSite.first.afterDecodeTree b
@@ -62,6 +62,7 @@ theorem burn_second_guard_cursor_state {root : Exec.Deriv} {b post : Devm}
     (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
     (mem : PtrMem 128 192 M) :
     let t1 := token1 &&& 0xffffffffffffffffffffffffffffffffffffffff
+    (b.getCode t1.toAdr).size.toB256 ≠ 0 ∧
     Nonempty (CursorStateAt code cert root t_1599_c37
       (temporalAccountAccessBase b t1.toAdr)
       (0 :: t1 :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 :: t1 ::
@@ -175,7 +176,23 @@ theorem burn_second_guard_cursor_state {root : Exec.Deriv} {b post : Devm}
         show Bytes.toB256 [112,160,130,49] = (0x70a08231 : B256) from rfl,
         show (128 : B256) - 128 + Bytes.toB256 [36] = 36 from by decide,
         show (128 : B256) + Bytes.toB256 [36] = 164 from by decide] using state)
-  exact guard.branchSucc cert_check success fork (by decide)
+  exact ⟨nonzero, guard.branchSucc cert_check success fork (by decide)⟩
+
+/-- Compatibility projection of the same actual guarded request cursor. -/
+theorem burn_second_guard_cursor_state {root : Exec.Deriv} {b post : Devm}
+    {R : List B256} {M : Mem} {K : List SFunc}
+    {b0 token1 token0 r1 r0 toWord extρ : B256}
+    (cut : CursorStateAt code cert root BurnInitialBalanceSite.first.afterDecodeTree b
+      (b0 :: 0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R) M K)
+    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
+    (mem : PtrMem 128 192 M) :
+    let t1 := token1 &&& 0xffffffffffffffffffffffffffffffffffffffff
+    Nonempty (CursorStateAt code cert root t_1599_c37
+      (temporalAccountAccessBase b t1.toAdr)
+      (0 :: t1 :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 :: t1 ::
+        0 :: b0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R)
+      (balanceRequestMemory M root.sevm.currentTarget) K) :=
+  (burn_second_guard_cursor_data cut success fork mem).2
 
 
 def burnSecondAfterCallTree : SFunc :=

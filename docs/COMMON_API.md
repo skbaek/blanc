@@ -4532,12 +4532,14 @@ world rather than selecting a call through a source run. The reusable fee
 request/reply carrier in
 [`PairFeeObservation.lean`](../Blanc/Lift/UniswapV2Pair/PairFeeObservation.lean)
 keeps the original-root occurrence, raw slot, complete physical reply and decoded
-word. Its `returnCursor`, `returnState` and `returnCutExact` in
+word. Its `returnCursor`, `returnState`, `returnCutData` and `returnCutExact` in
 [`PairFeeReturn.lean`](../Blanc/Lift/UniswapV2Pair/PairFeeReturn.lean)
 transport that same reply through the actual internal return with arbitrary
 caller and outer continuations; `returnCutExact` retains `cut.node = N` for
-consumers which sample storage from the returned world. `returnCut` projects
-the same witness. The ordinary guarded static-call adapter `static_source_call_at`
+consumers which sample storage from the returned world. `returnCutData` also
+retains the fee guards and full physical `feeBranchPost` at that exact node;
+`returnCutExact` and `returnCut` project the same witness. The ordinary guarded
+static-call adapter `static_source_call_at`
 in [`StaticSourceCall.lean`](../Blanc/Lift/UniswapV2Pair/StaticSourceCall.lean)
 binds the supplied occurrence to the request, reply and original per-spawn
 partition through its actual slot queue. These are registry entries: their
