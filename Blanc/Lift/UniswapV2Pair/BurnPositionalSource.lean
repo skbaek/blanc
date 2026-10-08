@@ -1,5 +1,6 @@
 import Blanc.Lift.UniswapV2Pair.BurnPositionalFacts
 import Blanc.Lift.UniswapV2Pair.StaticSourceCall
+import Blanc.Lift.UniswapV2Pair.PairFeeSourceCall
 import Blanc.Lift.UniswapV2Pair.TransferSourceCall
 import Blanc.Lift.UniswapV2Pair.SourceSlotQueueExistence
 
@@ -101,5 +102,32 @@ theorem BurnInitialPair.secondSourceCall {root : Exec.Deriv} {sevm : Sevm} {b : 
     (by intro digest v rr ss impossible; cases impossible) rfl
     (by rw [r.second_sevm]; exact pair) operands data flag rfl r.second_reply.returnData.symm rfl
     guard (by rw [r.second_sevm]; exact fork) queue
+
+/-- The factory source request consumes this same third call and its own reply. -/
+theorem BurnThreeCalls.feeSourceCall {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
+    {K : WriterKey → Prop} {current : Checkpoint} {frame : Frame}
+    {paths : List Exec.LocatedFrame} (r : BurnThreeCalls root sevm b)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (pair : frame.context.pair = sevm.currentTarget)
+    (fork : CoveredFork sevm.benvStat.fork)
+    (queue : SourceSlotQueue r.fee.occurrence.call frame.context.pair 2 paths) :
+    ∃ observed : SourceCallAt root frame
+        (requestFor .burnFeeTo current.state.factory .feeTo) (feeObservedResult r.fee.out) 2,
+      observed.call = r.fee.occurrence.call ∧ observed.paths = paths := by
+  have env : r.initial.second.returned.sevm = sevm :=
+    (Cursor.parentStep_sevm r.initial.second.edge).trans r.initial.second_sevm
+  obtain ⟨_, _, _, _, target⟩ := r.initial.cache_targets rep
+  have word : feeFactoryWord r.initial.second.returned.sevm
+      (feeBurnWorld r.initial.second.returned.sevm r.initial.second.returned.devm) =
+      current.state.factory.toB256 := by
+    rw [env]
+    simpa only [feeFactoryWord, toAdr_toB256] using congrArg Adr.toB256 target
+  have mem := balanceReplyMemory_ptr r.initial.out1
+    (balanceRequestMemory_ptr
+      (balanceReplyMemory_ptr r.initial.out0
+        (balanceRequestMemory_ptr getterInitMemory_ptr sevm.currentTarget)) sevm.currentTarget)
+  have scratch := feeBurnMemory_ptr mem sevm.currentTarget
+  exact r.fee.sourceCall .burnFeeTo 2 word (by rw [env]; exact pair)
+    (by rw [env]; exact scratch.wf) (by rw [env]; exact fork) queue
 
 end Blanc.Lift.UniswapV2Pair

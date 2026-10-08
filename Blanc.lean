@@ -995,6 +995,7 @@ import Blanc.Lift.UniswapV2Pair.PairTransferReplyCursor
 import Blanc.Lift.UniswapV2Pair.PairFeeCursor
 import Blanc.Lift.UniswapV2Pair.PairCodeGuardCursor
 import Blanc.Lift.UniswapV2Pair.PairFeeObservation
+import Blanc.Lift.UniswapV2Pair.PairFeeSourceCall
 import Blanc.Lift.UniswapV2Pair.PairFeeReturn
 import Blanc.Lift.UniswapV2Pair.MintPositionalInv
 import Blanc.Lift.UniswapV2Pair.MintPositionalRequest

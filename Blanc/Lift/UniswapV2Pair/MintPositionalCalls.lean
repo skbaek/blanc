@@ -1,5 +1,6 @@
 import Blanc.Lift.UniswapV2Pair.MintPositionalFacts
 import Blanc.Lift.UniswapV2Pair.StaticSourceCall
+import Blanc.Lift.UniswapV2Pair.PairFeeSourceCall
 
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
@@ -102,36 +103,17 @@ theorem MintRootCallPositions.feeSourceCall {root : Exec.Deriv} {b : Devm}
         (feeObservedResult r.fee.out) 2,
       observed.call = r.fee.occurrence.call ∧ observed.paths = paths := by
   dsimp only
-  let request := requestFor .mintFeeTo current.state.factory .feeTo
   obtain ⟨_, _, _, _, target⟩ := r.cache_targets rep
   have env1 := r.second.returned_sevm.trans r.first.returned_sevm
   have word : feeFactoryWord r.second.call.returned.sevm r.second.call.returned.devm =
       current.state.factory.toB256 := by
     have same := congrArg Adr.toB256 target
     simpa only [env1, feeFactoryWord, toAdr_toB256] using same
-  have operands : (r.fee.occurrence.gas.toB256 :: current.state.factory.toB256 :: 128 :: 4 ::
-      128 :: 32 :: []) <<+ r.fee.occurrence.call.occurrence.node.devm.stack := by
-    rw [r.fee.occurrence.input]
-    simp only [St.stack, word]
-    exact pref_append _ _
   have mem0 := balanceRequestMemory_ptr getterInitMemory_ptr root.sevm.currentTarget
   have mem1 := balanceReplyMemory_ptr r.out0 mem0
   have mem2 := balanceRequestMemory_ptr mem1 r.first.call.returned.sevm.currentTarget
   have mem3 := balanceReplyMemory_ptr r.out1 mem2
-  have data : (r.fee.occurrence.call.occurrence.node.devm.memory.read 128 4).1 = request.calldata := by
-    rw [r.fee.occurrence.input]
-    exact feeRequestMemory_read mem3.wf
-  have flag : [1] <<+ r.fee.occurrence.call.returned.devm.stack := by
-    rw [r.fee.reply.stack]
-    exact pref_append _ _
-  have guard : (r.fee.occurrence.call.occurrence.node.devm.getCode current.state.factory).size.toB256 ≠ 0 := by
-    rw [r.fee.occurrence.input]
-    simp only [St, Devm.getCode_setMach]
-    have actual := r.fee.occurrence.code_exists
-    simpa only [env1, target] using actual
-  exact static_source_call_at (request := request) r.fee.occurrence.call rfl rfl
-    (by intro digest v rr ss impossible; cases impossible) rfl
-    (by rw [r.fee.occurrence.sevm_eq, env1]; rfl) operands data flag rfl r.fee.reply.returnData.symm rfl
-    guard (by rw [r.fee.occurrence.sevm_eq, env1]; exact fork) queue
+  exact r.fee.sourceCall .mintFeeTo 2 word (by rw [env1]; rfl) mem3.wf
+    (by rw [env1]; exact fork) queue
 
 end Blanc.Lift.UniswapV2Pair

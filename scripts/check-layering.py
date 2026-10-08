@@ -411,6 +411,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.PairFeeCursor",
         "Lift.UniswapV2Pair.PairCodeGuardCursor",
         "Lift.UniswapV2Pair.PairFeeObservation",
+        "Lift.UniswapV2Pair.PairFeeSourceCall",
         "Lift.UniswapV2Pair.PairFeeReturn",
         "Lift.UniswapV2Pair.MintPositionalInv",
         "Lift.UniswapV2Pair.MintPositionalRequest",

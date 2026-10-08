@@ -4655,6 +4655,13 @@ admission by the same child consumption proof. The Pair endpoint aliases
 [`PairPositionalAdmission.lean`](../Blanc/Lift/UniswapV2Pair/PairPositionalAdmission.lean).
 The concrete strong locked-child supplier is a separate consumer obligation.
 
+For a retained factory fee observation, `PairFeeObservation.sourceCall` in
+[`PairFeeSourceCall.lean`](../Blanc/Lift/UniswapV2Pair/PairFeeSourceCall.lean)
+binds the supplied original slot, complete physical reply, literal feeTo
+request and code guard to the supplied model frame and full path queue.
+Burn and Mint supply their own finite factory-word and frame bindings;
+the adapter preserves the observation's actual call and paths.
+
 ## Common-library-first workflow
 
 A needed definition, lemma, tactic, or instance has a **generic shape** when
