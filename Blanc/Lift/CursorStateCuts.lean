@@ -1,4 +1,5 @@
 import Blanc.Lift.CursorExact
+import Blanc.Lift.CursorExactLine
 import Blanc.Lift.InvWalk
 
 /-! Actual frame-free cursor cuts carrying complete machine states. -/
@@ -151,6 +152,18 @@ theorem CursorStateAt.call {f g : SFunc} {k : Nat} {target : B256}
   cases step with
   | call _ entry pop =>
       exact ⟨Option.some.inj (entry.symm.trans lookup), rfl, _, (St.of_pop1 pop).2⟩
+
+/-- An actual internal return uses its real pending continuation and preserves
+all machine fields except the residual gas charged by the return. -/
+theorem CursorStateAt.ret {f : SFunc} {target : B256}
+    (cut : CursorStateAt code c start .ret b (target :: S) M (f :: K))
+    (checked : Cert.check code c = true) (success : start.exn = .ok post)
+    (fork : CoveredFork start.sevm.benvStat.fork) :
+    Nonempty (CursorStateAt code c start f b S M K) := by
+  apply cut.jump checked success fork (cut.placed.jumpAt_of_ret cut.tree)
+  intro G d f' K' step
+  cases step with
+  | ret _ pop => exact ⟨rfl, rfl, _, (St.of_pop1 pop).2⟩
 
 end ControlCuts
 

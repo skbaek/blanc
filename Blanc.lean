@@ -907,4 +907,10 @@ import Blanc.Lift.UniswapV2Pair.UpdateOverflowWalk
 import Blanc.Lift.CursorOccurrence
 import Blanc.Lift.CursorExactLine
 import Blanc.Lift.CursorStateCuts
+import Blanc.Lift.CursorNoExecSuffix
+import Blanc.Lift.InvWalkGas
+import Blanc.Lift.UniswapV2Pair.PairDispatchCursor
+import Blanc.Lift.UniswapV2Pair.BurnPositionalCuts
+import Blanc.Lift.UniswapV2Pair.BurnPositionalInv
+import Blanc.Lift.UniswapV2Pair.BurnPositional
 import Blanc.Lift.UniswapV2Pair.SyncOccurrence

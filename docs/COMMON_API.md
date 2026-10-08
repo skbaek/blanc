@@ -3981,7 +3981,17 @@ contract-neutral.
   `CursorStateAt` carries a checked actual cursor, a call-free span, a complete
   `St` state with existential residual gas, and the mapped return continuation.
   Its `line` and `jump` methods apply source inverses to the actual primitive
-  line or `ConfStep`, deriving the successor state and tree.
+  line or `ConfStep`, deriving the successor state and tree. Its `call` and
+  `ret` methods retain and consume the actual mapped internal continuation,
+  preserving the complete non-gas state without requiring a gas schedule.
+- To exclude later external instructions from an actual returned parent, use
+  [`Blanc/Lift/CursorNoExecSuffix.lean`](../Blanc/Lift/CursorNoExecSuffix.lean).
+  `cursor_reach_of_parentPrefix` transports its checked cursor along the supplied
+  relative same-frame prefix. `CursorOK.noExecSuffix` uses a checked closed
+  region and the actual pending continuations to exclude later external nodes.
+  `CursorOK.revertLineNoOk` rules out a literal reverting suffix under actual
+  success. These APIs preserve the supplied execution and do not select a
+  different root or call occurrence.
 - To connect a checked original-bytecode external next node to its actual
   occurrence and returned parent, use
   [`Blanc/Lift/CursorOccurrence.lean`](../Blanc/Lift/CursorOccurrence.lean).
@@ -4131,6 +4141,10 @@ contract-neutral.
   the SHA-256 precompile call (`ri_staticcall_sha`) and the solc packed-SHA
   site (`ric_copy_sha`, the converse of `copy_sha_gen`) in
   [`Blanc/Lift/InvWalkSha.lean`](../Blanc/Lift/InvWalkSha.lean).
+  When the GAS word must equal the complete successor state's residual gas,
+  use `ri_gas_remaining` in
+  [`Blanc/Lift/InvWalkGas.lean`](../Blanc/Lift/InvWalkGas.lean). Its existential
+  gas comes from the actual charged state, rather than a supplied gas schedule.
   Actual dispatcher comparison segments (`DUP1/PUSH4/GT/PUSH2/branch` and
   `DUP1/PUSH4/EQ/PUSH2/branchTo`) are inverted by `ric_cmp_gt` and
   `ric_cmp_eq` in

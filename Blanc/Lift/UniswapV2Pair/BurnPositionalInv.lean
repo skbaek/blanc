@@ -192,7 +192,7 @@ theorem burn_abi_cursor_state {root : Exec.Deriv} {b post : Devm}
     (by
       intro n member x equal; subst n
       simp only [burnAbiGuardLine, List.mem_cons, List.not_mem_nil,
-        reduceCtorEq, or_self, or_false, false_or] at member)
+        reduceCtorEq, or_self] at member)
     (b' := b)
     (S' := [0x0520, 1, root.sevm.data.length.toB256 - 4, 4, 0x053d, 0x89afcb44])
     (M' := getterInitMemory) (by
@@ -218,7 +218,7 @@ theorem burn_abi_cursor_state {root : Exec.Deriv} {b post : Devm}
     (by
       intro n member x equal; subst n
       simp only [burnAbiDecodeLine, List.mem_cons, List.not_mem_nil,
-        reduceCtorEq, or_self, or_false, false_or] at member)
+        reduceCtorEq, or_self] at member)
     (b' := b) (S' := [0x13f5, (Sevm.dataWord root.sevm 4).toAdr.toB256, 0x053d, 0x89afcb44])
     (M' := getterInitMemory) (by
       intro g d line
@@ -230,6 +230,70 @@ theorem burn_abi_cursor_state {root : Exec.Deriv} {b post : Devm}
       have computation := ri_and step
       obtain ⟨_, rfl⟩ := ri_val (w := (Sevm.dataWord root.sevm 4).toAdr.toB256)
         (ff20_and_word _) computation
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨g', state⟩ := ri_push step
+      cases line
+      exact ⟨g', state⟩)
+  exact caller.call cert_check success fork (by rfl)
+
+def burnLockGuardLine : List Ninst := [
+  .push [0] (by decide), .reg (.dup 0), .push [12] (by decide), .reg .sload,
+  .push [1] (by decide), .reg .eq, .push [0x14,0x69] (by decide)]
+
+def burnLockStoreLine : List Ninst := [
+  .push [0] (by decide), .push [12] (by decide), .reg (.dup 1), .reg (.swap 0),
+  .reg .sstore, .reg (.dup 0), .push [0x14,0x79] (by decide),
+  .push [0x0d,0x90] (by decide)]
+
+/-- Actual successful Burn execution performs the lock write and calls the
+reserve helper without a prescribed residual gas or a caller sentry premise. -/
+theorem burn_lock_cursor_state {root : Exec.Deriv} {b post : Devm}
+    {R : List B256} {M : Mem} {toWord extρ : B256} {K : List SFunc}
+    (cut : CursorStateAt code cert root t_13f5_c37 b (toWord :: extρ :: R) M K)
+    (success : root.exn = .ok post) (fork : CoveredFork root.sevm.benvStat.fork)
+    (unlocked : b.getStorVal root.sevm.currentTarget 12 = 1) :
+    Nonempty (CursorStateAt code cert root t_0d90_c56 (burnLockedWorld root.sevm b)
+      (0x1479 :: 0 :: 0 :: 0 :: 0 :: toWord :: extρ :: R) M (t_1479_c37 :: K)) := by
+  obtain ⟨opened⟩ := cut.dest cert_check success fork
+  obtain ⟨guard⟩ := opened.line cert_check success fork burnLockGuardLine (by rfl)
+    (by
+      intro n member x equal; subst n
+      simp only [burnLockGuardLine, List.mem_cons, List.not_mem_nil,
+        reduceCtorEq, or_self] at member)
+    (b' := afterSload root.sevm b 12)
+    (S' := 0x1469 :: 1 :: 0 :: 0 :: toWord :: extρ :: R) (M' := M) (by
+      intro g d line
+      dsimp only [burnLockGuardLine] at line
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_sload fork step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line
+      have computation := ri_eq step
+      obtain ⟨_, rfl⟩ := ri_val (w := 1) (by
+        change B256.eqCheck 1 (b.getStorVal root.sevm.currentTarget 12) = 1
+        rw [unlocked]; decide) computation
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨g', state⟩ := ri_push step
+      cases line
+      exact ⟨g', state⟩)
+  obtain ⟨store⟩ := guard.branchSucc cert_check success fork (by decide)
+  obtain ⟨store⟩ := store.dest cert_check success fork
+  obtain ⟨caller⟩ := store.line cert_check success fork burnLockStoreLine (by rfl)
+    (by
+      intro n member x equal; subst n
+      simp only [burnLockStoreLine, List.mem_cons, List.not_mem_nil,
+        reduceCtorEq, or_self] at member)
+    (b' := burnLockedWorld root.sevm b)
+    (S' := 0x0d90 :: 0x1479 :: 0 :: 0 :: 0 :: 0 :: toWord :: extρ :: R) (M' := M) (by
+      intro g d line
+      dsimp only [burnLockStoreLine] at line
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_sstore fork step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
       obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨g', state⟩ := ri_push step
       cases line
       exact ⟨g', state⟩)
