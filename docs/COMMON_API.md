@@ -4603,7 +4603,11 @@ canonical producers. The separate `pair_admitted_skim_supply` in
 [`PairPositionalSkim.lean`](../Blanc/Lift/UniswapV2Pair/PairPositionalSkim.lean)
 retains the same four-slot canonical result, recursively admitted mutable
 queues, actual output and represented state. It is below the final all-family
-instance; Swap and Burn remain pending.
+instance. The separate `pair_admitted_burn_supply` in
+[`PairPositionalBurn.lean`](../Blanc/Lift/UniswapV2Pair/PairPositionalBurn.lean)
+retains the same seven-call canonical result, both recursively admitted mutable
+queues, actual payout bytes and represented state under the original separated
+universe. The final all-family instance still awaits Swap.
 
 `transfer_source_call_at` in
 [`TransferSourceCall.lean`](../Blanc/Lift/UniswapV2Pair/TransferSourceCall.lean)
