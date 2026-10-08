@@ -448,6 +448,7 @@ import Blanc.Lift.Weth9.CommittedSpawn
 import Blanc.Lift.Weth9.CommittedHistory
 import Blanc.Lift.Weth9.Live
 import Blanc.Lift.ExactWalkSolc
+import Blanc.Lift.ExactWalkAddress
 import Blanc.Lift.ExactWalkCall
 import Blanc.Lift.BeaconRoots.SystemWalk
 import Blanc.Lift.HistoryStorage.SystemWalk

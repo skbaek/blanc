@@ -173,7 +173,7 @@ SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.CheckAssembly", "Lift.ExactWalkO
 SHARED += ["Lift.PackedShaSize", "Lift.Deploy", "Lift.CreationOps", "Lift.Create2Deploy", "Lift.CreateEntry", "Lift.Clone1167", "Lift.CheckAssemblyPair", "Lift.WitnessShadow"]
 # Solc-0.4 scratch-memory walk kit and the value-bearing CALL to a code-free recipient
 # (weth9-liveness-v1): contract-neutral.
-SHARED += ["Lift.ExactWalkSolc", "Lift.ExactWalkCall"]
+SHARED += ["Lift.ExactWalkSolc", "Lift.ExactWalkCall", "Lift.ExactWalkAddress"]
 # Parameterized free-pointer memory for lifted walks.
 SHARED += ["Lift.ExactWalkMemory", "Lift.ByteWindowMemory", "Lift.WordImage", "Lift.Ecrecover"]
 # Size-free free-pointer word carrier for moved-pointer walks (uv2nh-skim)
