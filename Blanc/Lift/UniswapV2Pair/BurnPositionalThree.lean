@@ -34,6 +34,10 @@ structure BurnInitialPair (root : Exec.Deriv) (sevm : Sevm) (b : Devm) where
     (balanceRequestMemory getterInitMemory sevm.currentTarget) 128 36 128 32 1 out0
   first_width : 32 ≤ out0.length
   first_bound : out0.length < 2 ^ 256
+  first_decoded : CursorStateAt code cert first.returned BurnInitialBalanceSite.first.afterDecodeTree
+    first.returned.devm (Bytes.toB256 (out0.take 32) :: burnInitialTail0 sevm b)
+    (balanceReplyMemory getterInitMemory sevm.currentTarget out0) [t_053d_c83]
+  first_guard : ((burnInitialWorld0 sevm b).getCode (burnInitialToken0 sevm b).toAdr).size.toB256 ≠ 0
   second_gap : Exec.Deriv.ExecFreeUntil first.returned second.occurrence.node
   second_sevm : second.occurrence.node.sevm = sevm
   second_input : second.occurrence.node.devm =
@@ -46,6 +50,7 @@ structure BurnInitialPair (root : Exec.Deriv) (sevm : Sevm) (b : Devm) where
       sevm.currentTarget) 128 36 128 32 1 out1
   second_width : 32 ≤ out1.length
   second_bound : out1.length < 2 ^ 256
+  second_guard : (first.returned.devm.getCode (burnInitialTarget1 sevm b).toAdr).size.toB256 ≠ 0
   decoded : CursorStateAt code cert second.returned BurnInitialBalanceSite.second.afterDecodeTree
     second.returned.devm (Bytes.toB256 (out1.take 32) :: burnInitialTail1 sevm b out0)
     (burnInitialReplyMemory sevm out0 out1) [t_053d_c83]
@@ -78,11 +83,12 @@ theorem burn_three_occurrences_of_success {sevm : Sevm} {b post : Devm} {G : Nat
   let root : Exec.Deriv := ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
   obtain ⟨first, second, cursor1, gas0, gas1, out0, out1,
     gap0, input0, reply0, width0, bound0, gap1, env1, outcome1, input1,
-    primitive1, placed1, tree1, cont1, reply1, width1, bound1, ⟨decoded⟩⟩ :=
+    primitive1, placed1, tree1, cont1, reply1, width1, bound1, ⟨decoded⟩,
+    ⟨decoded0⟩, guard0, guard1⟩ :=
     burn_initial_occurrences_of_success codeEq fork selector run
   let initial : BurnInitialPair root sevm b :=
     ⟨first, second, gas0, gas1, out0, out1, gap0, input0, reply0, width0, bound0,
-      gap1, env1, input1, reply1, width1, bound1, decoded⟩
+      decoded0, guard0, gap1, env1, input1, reply1, width1, bound1, guard1, decoded⟩
   have envRet : second.returned.sevm = sevm :=
     (Cursor.parentStep_sevm second.edge).trans env1
   have successRet : second.returned.exn = .ok post :=

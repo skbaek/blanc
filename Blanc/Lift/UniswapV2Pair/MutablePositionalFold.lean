@@ -20,10 +20,16 @@ theorem positionalMutableTurnRules :
   exact .invoke selected.1 (selected.2 located.frame.committed) rest
 
 /-- Fold the complete events of this original call slot at its full parent index. -/
-theorem mutable_source_slot_turns
+theorem mutable_source_slot_turns_with
     {pair : Adr} {Rep : State → Stor → Prop} {Good : Exec.Deriv → Prop}
     {Auth : Exec.Deriv → Entry → Transcript → Prop} {owned : Event → Option Log}
-    (supply : PairFrameSupplyWith PositionalChildConsumes pair Rep Good Auth owned)
+    {ChildProof : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {TurnProof : Frame → Request → Nat → List (Log ⊕ Exec.LocatedFrame) →
+      Transcript → TurnsResult → Prop}
+    (supply : PairFrameSupplyWith ChildProof pair Rep Good Auth owned)
+    (rules : MutableTurnRules ChildProof TurnProof)
+    (done : ∀ frame request turn, TurnProof frame request turn [] .done
+      {complete := true, frame := frame, childReturns := []})
     (repCongr : ∀ st (s s' : Stor), (∀ k, s'.get k = s.get k) → Rep st s → Rep st s')
     (sem : CodeSem) (image : sem.image = some code.toList)
     {root : Exec.Deriv} {frame : Frame} {request : Request} {reply : ExternalResult} {index : Nat}
@@ -39,7 +45,7 @@ theorem mutable_source_slot_turns
       SourceSlotEvents observed.call frame.context.pair index events ∧
       events.filterMap Sum.getRight? = observed.paths ∧
       turns.map MutableTurn.event = events ∧
-      PositionalMutableTurns frame request 0 events (mutableTranscript turns .done)
+      TurnProof frame request 0 events (mutableTranscript turns .done)
         {complete := true, frame := {frame with current := c}, childReturns := rets} ∧
       (∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns →
         Auth (Exec.Frame.rootDeriv located.frame) entry nested) ∧
@@ -78,7 +84,7 @@ theorem mutable_source_slot_turns
         (rets : List ChildReturn),
         events.filterMap Sum.getRight? = observed.paths ∧
         turns.map MutableTurn.event = events ∧
-        PositionalMutableTurns frame request 0 events (mutableTranscript turns .done)
+        TurnProof frame request 0 events (mutableTranscript turns .done)
           {complete := true, frame := {frame with current := c}, childReturns := rets} ∧
         (∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns →
           Auth (Exec.Frame.rootDeriv located.frame) entry nested) ∧
@@ -88,7 +94,7 @@ theorem mutable_source_slot_turns
     intro events actual empty same logs
     subst events
     refine ⟨[], frame.current, [], [], actual.queue.paths_unique observed.queue, rfl,
-      PositionalMutableTurns.done frame request 0, ?_, repCongr _ _ _ same rep,
+      done frame request 0, ?_, repCongr _ _ _ same rep,
       (List.append_nil _).symm, [], ?_, rfl⟩
     · intro located entry nested member
       simp only [List.not_mem_nil] at member
@@ -126,7 +132,7 @@ theorem mutable_source_slot_turns
         exact rep
       obtain ⟨turns, c, added, L, rets, mapped, auth, finalRep, sourceLogs, rawLogs,
         images, consume⟩ :=
-        mutable_retained_fold_inv_with supply positionalMutableTurnRules repCongr sem image child
+        mutable_retained_fold_inv_with supply rules repCongr sem image child
           committed frame 0 0 [index] pairEq mutable childInstalled childRep (fun _ => entry)
           short (by rw [stat]; exact time) childFork
           (fun located member => by
@@ -135,7 +141,7 @@ theorem mutable_source_slot_turns
             exact good _ (roots _ root) target)
       have finished := consume [] .done
         {complete := true, frame := {frame with current := c}, childReturns := []}
-        (PositionalMutableTurns.done _ request _)
+        (done _ request _)
       have callLogs := ((Xinst.call_run_logs fork family primitive).2 evm raw slot).1 committed
       have childLogs := Xinst.spawn_child_logs fork spawned enter
       refine ⟨events, turns, c, added, rets, actual, actual.queue.paths_unique observed.queue,
@@ -156,5 +162,38 @@ theorem mutable_source_slot_turns
       obtain ⟨turns, c, added, rets, rest⟩ := unchanged events actual empty (rolledStorage settles)
         (((Xinst.call_run_logs fork family primitive).2 evm raw slot).2 notCommitted)
       exact ⟨events, turns, c, added, rets, actual, rest⟩
+
+
+/-- The original positional interface preserves exactly its full slot witness. -/
+theorem mutable_source_slot_turns
+    {pair : Adr} {Rep : State → Stor → Prop} {Good : Exec.Deriv → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop} {owned : Event → Option Log}
+    (supply : PairFrameSupplyWith PositionalChildConsumes pair Rep Good Auth owned)
+    (repCongr : ∀ st (s s' : Stor), (∀ k, s'.get k = s.get k) → Rep st s → Rep st s')
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    {root : Exec.Deriv} {frame : Frame} {request : Request} {reply : ExternalResult} {index : Nat}
+    (observed : SourceCallAt root frame request reply index)
+    (pairEq : frame.context.pair = pair) (mutable : externalStatic frame request = false)
+    (installed : some (observed.call.occurrence.node.devm.getCode pair).toList = sem.image)
+    (rep : Rep frame.current.state (observed.call.occurrence.node.devm.getStor pair))
+    (time : frame.context.timestamp = observed.call.occurrence.node.sevm.benvStat.time)
+    (fork : CoveredFork observed.call.occurrence.node.sevm.benvStat.fork)
+    (good : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = pair → Good F) :
+    ∃ (events : List (Log ⊕ Exec.LocatedFrame)) (turns : List MutableTurn)
+      (c : Checkpoint) (added : List PendingLog) (rets : List ChildReturn),
+      SourceSlotEvents observed.call frame.context.pair index events ∧
+      events.filterMap Sum.getRight? = observed.paths ∧
+      turns.map MutableTurn.event = events ∧
+      PositionalMutableTurns frame request 0 events (mutableTranscript turns .done)
+        {complete := true, frame := {frame with current := c}, childReturns := rets} ∧
+      (∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns →
+        Auth (Exec.Frame.rootDeriv located.frame) entry nested) ∧
+      Rep c.state (observed.call.returned.devm.getStor pair) ∧
+      c.logs = frame.current.logs ++ added ∧
+      ∃ L : List Log,
+        observed.call.returned.devm.logs = observed.call.occurrence.node.devm.logs ++ L ∧
+        added.map (PendingLog.rawWith owned) = L.map some := by
+  exact mutable_source_slot_turns_with supply positionalMutableTurnRules
+    PositionalMutableTurns.done repCongr sem image observed pairEq mutable installed rep time fork good
 
 end Blanc.Lift.UniswapV2Pair

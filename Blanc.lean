@@ -814,6 +814,10 @@ import Blanc.Lift.UniswapV2Pair.SkimPositionalPrefix
 import Blanc.Lift.UniswapV2Pair.SkimPositionalFirst
 import Blanc.Lift.UniswapV2Pair.SkimPositionalReply
 import Blanc.Lift.UniswapV2Pair.SkimPositionalTransfer
+import Blanc.Lift.UniswapV2Pair.SkimPositionalSecond
+import Blanc.Lift.UniswapV2Pair.SkimPositionalFour
+import Blanc.Lift.UniswapV2Pair.SkimRawFacts
+import Blanc.Lift.UniswapV2Pair.SkimPositionalSuffix
 import Blanc.Lift.UniswapV2Pair.SkimForward
 import Blanc.Lift.UniswapV2Pair.SkimForwardAccept
 import Blanc.Lift.UniswapV2Pair.SkimForwardKeep
@@ -953,8 +957,13 @@ import Blanc.Lift.UniswapV2Pair.BurnPositionalFinalCall
 import Blanc.Lift.UniswapV2Pair.BurnPositionalFinalReply
 import Blanc.Lift.UniswapV2Pair.BurnPositionalFinalObservation
 import Blanc.Lift.UniswapV2Pair.BurnPositionalSeven
+import Blanc.Lift.UniswapV2Pair.BurnPositionalFacts
+import Blanc.Lift.UniswapV2Pair.BurnPositionalSource
 import Blanc.Lift.UniswapV2Pair.SyncOccurrence
 import Blanc.Lift.UniswapV2Pair.SourceOccurrence
+import Blanc.Lift.UniswapV2Pair.SourceAdmission
+import Blanc.Lift.UniswapV2Pair.AdmittedMutableFold
+import Blanc.Lift.UniswapV2Pair.PairPositionalAdmission
 import Blanc.Lift.UniswapV2Pair.SourceSlotQueueExistence
 import Blanc.Lift.UniswapV2Pair.SyncSourceOccurrence
 import Blanc.Lift.UniswapV2Pair.PermitPositionalCuts
@@ -989,6 +998,7 @@ import Blanc.Lift.UniswapV2Pair.PairTransferReplyCursor
 import Blanc.Lift.UniswapV2Pair.PairFeeCursor
 import Blanc.Lift.UniswapV2Pair.PairCodeGuardCursor
 import Blanc.Lift.UniswapV2Pair.PairFeeObservation
+import Blanc.Lift.UniswapV2Pair.PairFeeSourceCall
 import Blanc.Lift.UniswapV2Pair.PairFeeReturn
 import Blanc.Lift.UniswapV2Pair.MintPositionalInv
 import Blanc.Lift.UniswapV2Pair.MintPositionalRequest

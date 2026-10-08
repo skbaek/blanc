@@ -1,3 +1,4 @@
+import Blanc.Lift.UniswapV2Pair.SourceAdmission
 import Blanc.Lift.UniswapV2Pair.SourceOccurrence
 import Blanc.Lift.UniswapV2Pair.SyncOccurrence
 
@@ -124,7 +125,7 @@ theorem SyncCanonicalResult.secondSourceCall {K : WriterKey → Prop}
 
 /-- The exact canonical source run, annotated at both actual calls and the final
 call-free parent suffix. Erasure preserves this same transcript and result. -/
-theorem SyncCanonicalResult.positionalConsumes {K : WriterKey → Prop}
+theorem SyncCanonicalResult.admittedConsumes {Auth : Exec.Deriv → Entry → Transcript → Prop} {K : WriterKey → Prop}
     {current : Checkpoint} {invocation : List Nat} {root : Exec.Deriv} {b post : Devm}
     (r : SyncCanonicalResult K current invocation root b post) :
     let ctx := writerContext root.sevm invocation
@@ -134,7 +135,7 @@ theorem SyncCanonicalResult.positionalConsumes {K : WriterKey → Prop}
     let request1 := requestFor .syncBalance1 current.state.token1 (.balanceOf ctx.pair)
     let sourceFrame := syncSourceUpdatedFrame (frame1.beginResume request1)
       r.sourcePost r.event r.oracle
-    PositionalConsumes root root 0 (startTyped current ctx .sync)
+    AdmittedSourceConsumes Auth root root 0 (startTyped current ctx .sync)
       (.next (syncExternalReply r.out0) (staticViewTranscript r.views0 .done)
         (.next (syncExternalReply r.out1) (staticViewTranscript r.views1 .done) .done))
       {status := .success [], frame := sourceFrame, remaining := .done,
@@ -175,7 +176,7 @@ theorem SyncCanonicalResult.positionalConsumes {K : WriterKey → Prop}
         .finished (syncSourceUpdatedFrame (frame1.beginResume request1)
           r.sourcePost r.event r.oracle) [] :=
     sync_resumeBalance1 rfl rfl r.widths.2.2.1 updated
-  have terminal : PositionalConsumes root r.returned1 2
+  have terminal : AdmittedSourceConsumes Auth root r.returned1 2
       (.finished (syncSourceUpdatedFrame (frame1.beginResume request1)
         r.sourcePost r.event r.oracle) []) .done
       {status := .success [],
@@ -184,7 +185,7 @@ theorem SyncCanonicalResult.positionalConsumes {K : WriterKey → Prop}
         remaining := .done, childReturns := []} :=
     .finished _ [] r.finalNoExec
   rw [← resumed1] at terminal
-  have second := PositionalConsumes.nextCall (start := r.returned0)
+  have second := AdmittedSourceConsumes.nextCall (start := r.returned0)
     (continuation := .syncBalance1 current.state.cachedReserves
       (Bytes.toB256 (r.out0.take 32))) observed1
     (by rw [call1]; exact r.occurrenceSteps_ordered.2)
@@ -192,7 +193,7 @@ theorem SyncCanonicalResult.positionalConsumes {K : WriterKey → Prop}
     (by intro absent; cases absent)
     during1 (by simpa only [call1, SyncCanonicalResult.secondOccurrenceStep, syncExternalReply, ite_true] using terminal)
   rw [← resumed0] at second
-  have first := PositionalConsumes.nextCall (start := root)
+  have first := AdmittedSourceConsumes.nextCall (start := root)
     (continuation := .syncBalance0 current.state.cachedReserves) observed0
     (by rw [call0]; exact r.occurrenceSteps_ordered.1)
     (by rfl)
@@ -200,5 +201,25 @@ theorem SyncCanonicalResult.positionalConsumes {K : WriterKey → Prop}
     during0 (by simpa only [call0, SyncCanonicalResult.firstOccurrenceStep, syncExternalReply, ite_true] using second)
   rw [sync_startTyped_suspended value nonstatic unlocked]
   simpa only [List.append_nil, syncExternalReply, frame0, frame1, request0, request1, ctx] using first
+
+
+/-- Compatibility projects the same admitted source composition. -/
+theorem SyncCanonicalResult.positionalConsumes {K : WriterKey → Prop}
+    {current : Checkpoint} {invocation : List Nat} {root : Exec.Deriv} {b post : Devm}
+    (r : SyncCanonicalResult K current invocation root b post) :
+    let ctx := writerContext root.sevm invocation
+    let frame0 := syncSourceLockedFrame current ctx
+    let frame1 := syncSourceSecondFrame current ctx
+    let request0 := requestFor .syncBalance0 current.state.token0 (.balanceOf ctx.pair)
+    let request1 := requestFor .syncBalance1 current.state.token1 (.balanceOf ctx.pair)
+    let sourceFrame := syncSourceUpdatedFrame (frame1.beginResume request1)
+      r.sourcePost r.event r.oracle
+    PositionalConsumes root root 0 (startTyped current ctx .sync)
+      (.next (syncExternalReply r.out0) (staticViewTranscript r.views0 .done)
+        (.next (syncExternalReply r.out1) (staticViewTranscript r.views1 .done) .done))
+      {status := .success [], frame := sourceFrame, remaining := .done,
+        childReturns := staticViewChildReturns frame0 request0 0 r.views0 ++
+          staticViewChildReturns frame1 request1 0 r.views1} := by
+  exact (r.admittedConsumes (Auth := fun _ _ _ => True)).positional
 
 end Blanc.Lift.UniswapV2Pair
