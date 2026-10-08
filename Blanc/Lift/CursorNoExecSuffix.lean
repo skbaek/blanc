@@ -1,5 +1,6 @@
 import Blanc.Lift.CursorCuts
 import Blanc.Lift.ReachWalk
+import Blanc.Lift.Quiet
 
 namespace Blanc.Lift
 
@@ -36,5 +37,22 @@ theorem CursorOK.noExecSuffix {code : ByteArray} {c : Cert}
   obtain ⟨next, reach, nextPlaced⟩ := cursor_reach_of_parentPrefix checked path placed fork
   obtain ⟨tail, shape, _⟩ := nextPlaced.tree_of_exec decoded
   exact Reach.false_of_execFree closed reach ⟨x, tail, shape⟩ tree continuations
+
+/-- A literal checked line ending in REVERT cannot be an actual successful suffix. -/
+theorem CursorOK.revertLineNoOk {code : ByteArray} {c : Cert}
+    (checked : Cert.check code c = true) {F : Exec.Deriv} {κ : Cursor}
+    (placed : CursorOK code c F κ) (fork : CoveredFork F.sevm.benvStat.fork)
+    (ns : List Ninst) (tree : κ.f = ns.foldr SFunc.next (.last .revert))
+    {post : Devm} (success : F.exn = .ok post) : False := by
+  obtain ⟨N, lastCursor, _, _, _, sameExn, lastPlaced, lastTree⟩ :=
+    cursor_nexts_forward checked placed ns (.last .revert) tree success fork
+  have opcode : byteAt code lastCursor.pc = some (Linst.toUInt8 .revert) := by
+    have check := lastPlaced.check
+    rw [lastTree] at check
+    simpa only [checkNode, beq_iff_eq] using check
+  have instruction : Linst.At N.sevm.code N.pc .revert := by
+    rw [lastPlaced.code_eq, lastPlaced.pc_eq]
+    exact byteAt_linst_at opcode
+  exact Linst.revert_not_ok ((N.exc.last_inv instruction).symm.trans (sameExn.trans success))
 
 end Blanc.Lift
