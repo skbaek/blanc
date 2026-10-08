@@ -28,6 +28,7 @@ inductive SourceAdmission (Auth : Exec.Deriv → Entry → Transcript → Prop) 
       {reply : ExternalResult} {turns tail : Transcript} {executed : TurnsResult} {out : RunResult}
       (observed : SourceCallAt root frame request reply index)
       (gap : Exec.Deriv.ExecFreeUntil start observed.call.occurrence.node)
+      (staticExternal : externalStatic frame request = true)
       (present : (request.requiresCode && !reply.codeExists) = false)
       (noCodeTurns : reply.codeExists = false → turns = .done)
       (during : PositionalTurns frame request observed.paths turns executed)
@@ -133,6 +134,7 @@ theorem AdmittedSourceConsumes.nextCall {Auth : Exec.Deriv → Entry → Transcr
     {reply : ExternalResult} {turns tail : Transcript} {executed : TurnsResult} {out : RunResult}
     (observed : SourceCallAt root frame request reply index)
     (gap : Exec.Deriv.ExecFreeUntil start observed.call.occurrence.node)
+    (staticExternal : externalStatic frame request = true)
     (present : (request.requiresCode && !reply.codeExists) = false)
     (noCodeTurns : reply.codeExists = false → turns = .done)
     (during : PositionalTurns frame request observed.paths turns executed)
@@ -144,7 +146,7 @@ theorem AdmittedSourceConsumes.nextCall {Auth : Exec.Deriv → Entry → Transcr
       (.next reply turns tail) {out with childReturns := executed.childReturns ++ out.childReturns} := by
   obtain ⟨selected, admitted⟩ := rest
   exact ⟨.nextCall observed gap present noCodeTurns during selected,
-    .nextCall observed gap present noCodeTurns during selected admitted⟩
+    .nextCall observed gap staticExternal present noCodeTurns during selected admitted⟩
 
 /-- A completed existing source witness needs only the same actual no-call suffix. -/
 theorem AdmittedSourceConsumes.of_done {Auth : Exec.Deriv → Entry → Transcript → Prop}
