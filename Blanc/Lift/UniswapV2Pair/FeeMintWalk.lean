@@ -1124,6 +1124,24 @@ def feeBranchPost (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem)
   if w.toAdr.toB256 = 0 then St (feeOffWorld sevm b K) (feeOnWord w :: R) M G
   else feeOnPost sevm b R M K w (feeOnWord w) r0 r1 G
 
+/-- All actual fee branches retain the caller locals and the allocated pointer, including LP scratch writes. -/
+theorem pairFeePost_machine {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {K w r0 r1 : B256} {G : Nat} (mem : PtrMem 128 192 M) :
+    (feeBranchPost sevm b R M K w r0 r1 G).stack = feeOnWord w :: R ∧
+    PtrMem 128 192 (feeBranchPost sevm b R M K w r0 r1 G).memory := by
+  unfold feeBranchPost
+  split
+  · exact ⟨rfl, mem⟩
+  · unfold feeOnPost
+    split
+    · exact ⟨rfl, mem⟩
+    · split
+      · unfold feeGrowthPost feeLiquidityPost
+        split
+        · exact ⟨rfl, mem⟩
+        · exact ⟨rfl, lpMintMemory_ptr (lpMintScratch_ptr mem w) w _⟩
+      · exact ⟨rfl, mem⟩
+
 /-- All six decoded fee arms derive conditional guards and the full raw return state. -/
 theorem feeBranch_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {G : Nat} {K w r1 r0 ρ : B256} {o : Outcome}

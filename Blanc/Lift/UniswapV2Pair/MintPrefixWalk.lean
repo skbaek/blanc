@@ -1135,18 +1135,7 @@ theorem mintFeePost_machine {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     {K w r0 r1 : B256} {G : Nat} (mem : PtrMem 128 192 M) :
     (feeBranchPost sevm b R M K w r0 r1 G).stack = feeOnWord w :: R ∧
     PtrMem 128 192 (feeBranchPost sevm b R M K w r0 r1 G).memory := by
-  unfold feeBranchPost
-  split
-  · exact ⟨rfl, mem⟩
-  · unfold feeOnPost
-    split
-    · exact ⟨rfl, mem⟩
-    · split
-      · unfold feeGrowthPost feeLiquidityPost
-        split
-        · exact ⟨rfl, mem⟩
-        · exact ⟨rfl, lpMintMemory_ptr (lpMintScratch_ptr mem w) w _⟩
-      · exact ⟨rfl, mem⟩
+  exact pairFeePost_machine mem
 
 /-- The fee return flag agrees with the actual source fee result in all six branches. -/
 theorem mintFeePost_flag {st : State} {sevm : Sevm} {b : Devm} {w r0 r1 : B256} :
