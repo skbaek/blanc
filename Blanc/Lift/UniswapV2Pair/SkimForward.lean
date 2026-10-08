@@ -1015,7 +1015,7 @@ unlocked source state, and the forward environments of both halves (the two
 token transfers through the shared helper and the two `balanceOf` queries),
 a successful pc-zero run of the original bytes exists with a closed initial
 gas, ending with the caller's residual `g`. That same run satisfies the
-canonical skim frame (`skim_bytecode_exact_consumes_own`) under trace-local
+canonical skim frame (`skim_bytecode_exact_consumes_own_legacy`) under trace-local
 HASH-T over its own trace universe. The callee frames are forward-environment
 premises (ENV class): this is a conditional universal construction, not an
 existential execution for arbitrary callees.
@@ -1309,7 +1309,7 @@ theorem skim_bytecode_forward_consumes {K : WriterKey → Prop} {current : Check
   obtain ⟨run⟩ := lift_exact cert_check jumps_ok codeEq fork
     ⟨t_0000_c0, rfl, pc0Run⟩
   exact ⟨run, fun inj apart =>
-    skim_bytecode_exact_consumes_own invocation rep sem image installed freshOutput codeEq fork
+    skim_bytecode_exact_consumes_own_legacy invocation rep sem image installed freshOutput codeEq fork
       selector run inj apart⟩
 
 end Blanc.Lift.UniswapV2Pair

@@ -410,7 +410,7 @@ def SyncAuth (D : Exec.Deriv) (entry : Entry) (T : Transcript) : Prop :=
 /-- **Skim provenance.** The entry is the decoded skim; the transcript is the frame's actual
 `balanceOf(pair)` replies and transfer `CALL` replies, in order, with the retained static Pair views and
 the retained mutable turns (foreign logs and re-entered Pair frames, each `LockedAuth`) of the actual
-children (`skim_bytecode_exact_consumes`). -/
+children (`skim_bytecode_exact_consumes_legacy`). -/
 def SkimAuth (D : Exec.Deriv) (entry : Entry) (T : Transcript) : Prop :=
   Blanc.Sevm.selector D.sevm = 0xbc25cf77 ∧ entry = .skim (skimRecipient D.sevm) ∧
   ∃ (b : Devm) (G : Nat), D.pc = 0 ∧ D.devm = St b [] Mem.empty G ∧
@@ -556,7 +556,7 @@ theorem pair_skim_outcome (freshOutput : b.output = [])
   have inside := writerExtend_universe sub good.skim
   obtain ⟨_, _, out0, d, first, out1, d2, views0, views1, turns1, turns3, final, rets, K', added,
       second, consumed, _, _, grown, rep, _, _, _, _, picked, auth, prov0, prov1, prov2, prov3, outputEq⟩ :=
-    skim_bytecode_exact_consumes invocation wrep sem image installed freshOutput codeEq fork
+    skim_bytecode_exact_consumes_legacy invocation wrep sem image installed freshOutput codeEq fork
       selector run (writerInj_restrict inj inside) (writerApart_restrict apart inside)
   exact pairStepOutcome_of inj apart sub wrep good.skim
     ⟨selector, rfl, b, G, rfl, rfl, out0, d, first, out1, d2, views0, views1, turns1, turns3, second,
