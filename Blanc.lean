@@ -436,6 +436,7 @@ import Blanc.DripStackSafetyCertificate
 -- The deployed solc WETH9, lifted from its runtime bytes (solc-bytecode-v1).
 import Blanc.Lift.Weth9.Solvency
 import Blanc.Lift.Weth9.FootHistory
+import Blanc.Lift.Weth9.FootPrefix
 import Blanc.Lift.Weth9.Model
 import Blanc.Lift.Weth9.Ledger
 import Blanc.Lift.Weth9.Route
@@ -459,6 +460,7 @@ import Blanc.Lift.Weth9.LiveWriters
 import Blanc.Lift.Weth9.LiveModel
 import Blanc.Lift.Weth9.LiveHistory
 import Blanc.Lift.Weth9.LiveTx
+import Blanc.Lift.Weth9.PrefixTx
 import Blanc.Lift.Weth9.ClosedExit
 import Blanc.Lift.Weth9.Init
 import Blanc.Lift.Weth9.Creation.Deploy
