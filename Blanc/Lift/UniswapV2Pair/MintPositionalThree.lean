@@ -7,7 +7,7 @@ open Jaune
 
 /-- The third call begins after the supplied second actual reply. Both checked
 subtractions and fee preparation belong to that same original parent path. -/
-theorem mint_fee_occurrence_of_second {root start : Exec.Deriv} {b post : Devm}
+theorem mint_fee_observation_of_second {root start : Exec.Deriv} {b post : Devm}
     {R : List B256} {M : Mem} {K : List SFunc} {token b0 r1 r0 toWord extρ : B256}
     (second : MintBalanceOccurrence root start .second b token
       (164 :: 0x70a08231 :: token :: 0 :: b0 :: r1 :: r0 :: 0 :: toWord :: extρ :: R)
@@ -23,14 +23,10 @@ theorem mint_fee_occurrence_of_second {root start : Exec.Deriv} {b post : Devm}
       StaticAnswered start.sevm b token.toAdr
         (ExternalOperation.encode (.balanceOf start.sevm.currentTarget)) out ∧
       r0 ≤ b0 ∧ r1 ≤ Bytes.toB256 (out.take 32) ∧
-      let returned := second.call.returned
-      let factory := feeFactoryWord returned.sevm returned.devm
-      Nonempty (MintFeeOccurrence root returned
-        (feeFactoryCallWorld returned.sevm returned.devm) factory
-        (132 :: 0x017e7e58 :: factory :: 0 :: 0 :: r1 :: r0 :: 0x1233 ::
-          mintFeeLocals (Bytes.toB256 (out.take 32) - r1) (b0 - r0)
-            (Bytes.toB256 (out.take 32)) b0 r1 r0 toWord extρ R)
-        (feeRequestMemory (balanceReplyMemory M start.sevm.currentTarget out))
+      Nonempty (PairFeeObservation root second.call.returned second.call.returned.devm
+        (balanceReplyMemory M start.sevm.currentTarget out) r1 r0 0x1233
+        (mintFeeLocals (Bytes.toB256 (out.take 32) - r1) (b0 - r0)
+          (Bytes.toB256 (out.take 32)) b0 r1 r0 toWord extρ R)
         (t_1233_c41 :: K)) := by
   obtain ⟨out, reply, bound, width, answer, decoded⟩ :=
     mint_balance_occurrence_decode .second second success fork wf mem
@@ -42,7 +38,7 @@ theorem mint_fee_occurrence_of_second {root start : Exec.Deriv} {b post : Devm}
   obtain ⟨cover0, cover1, callee⟩ := mint_amounts_fee_cursor_state decoded
     returnedSuccess returnedFork bound0 bound1
   obtain ⟨callee⟩ := callee
-  obtain ⟨fee⟩ := mint_fee_occurrence_of_callee callee
+  obtain ⟨fee⟩ := pair_fee_observation_of_callee callee
     (second.call.sameFrame.snoc second.call.edge) returnedSuccess returnedFork
     (balanceReplyMemory_ptr out mem)
   exact ⟨out, reply, bound, width, answer, cover0, cover1, ⟨fee⟩⟩

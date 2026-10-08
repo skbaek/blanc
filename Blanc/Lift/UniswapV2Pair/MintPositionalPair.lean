@@ -106,6 +106,8 @@ theorem mint_second_occurrence_of_first {root start : Exec.Deriv} {b post : Devm
         (ExternalOperation.encode (.balanceOf start.sevm.currentTarget)) out ∧
       let returned := first.call.returned
       let token1 := (returned.devm.getStorVal returned.sevm.currentTarget 7).toAdr.toB256
+      ((temporalAccountAccessBase (afterSload returned.sevm returned.devm 7)
+        token1.toAdr).getCode token1.toAdr).size.toB256 ≠ 0 ∧
       Nonempty (MintBalanceOccurrence root returned .second
         (temporalAccountAccessBase (afterSload returned.sevm returned.devm 7) token1.toAdr)
         token1
@@ -125,11 +127,14 @@ theorem mint_second_occurrence_of_first {root start : Exec.Deriv} {b post : Devm
   have returnedSuccess := first.returned_exn.trans success
   have returnedFork : CoveredFork first.call.returned.sevm.benvStat.fork := by
     rw [returnedEnv]; exact fork
+  have nonzero := mint_second_code_guard decoded' returnedSuccess returnedFork
+    (balanceReplyMemory_ptr out (by rw [returnedEnv]; exact mem))
   obtain ⟨request⟩ := mint_second_guard_cursor_state decoded' returnedSuccess returnedFork
     (balanceReplyMemory_ptr out (by rw [returnedEnv]; exact mem))
   obtain ⟨second⟩ := mint_balance_occurrence_of_request_cursor .second request
     (first.call.sameFrame.snoc first.call.edge) returnedSuccess returnedFork
-  refine ⟨out, reply, bound, width, answer, ?_⟩
-  simpa only [returnedEnv] using (Nonempty.intro second)
+  refine ⟨out, reply, bound, width, answer, ?_, ?_⟩
+  · simpa only [Devm.getCode, Devm.getAcct, temporalAccountAccessBase_state] using nonzero
+  · simpa only [returnedEnv] using (Nonempty.intro second)
 
 end Blanc.Lift.UniswapV2Pair
