@@ -4723,6 +4723,12 @@ binds the guarded callback request and successful full-byte reply to its same
 physical CALL, message, process, partition and complete queue. The code bit is
 justified by the actual guard rather than by the entered slot bit.
 
+[`SwapPositionalSourceSuffix.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalSourceSuffix.lean)
+uses the same two balance replies and carried finite frame for pricing, update
+acceptance and admitted static continuations. Its actual no-call suffix finishes
+that same frame, with unlocked storage, checkpoint/context, full source/raw log
+images and foreign storage transported through the same physical post image.
+
 [`SwapSourceOccurrenceBalance.lean`](../Blanc/Lift/UniswapV2Pair/SwapSourceOccurrenceBalance.lean)
 binds both actual guarded STATICCALLs to their full replies and complete static
 view queues. `SwapBalancePairSource` retains their same authentic paths and the
