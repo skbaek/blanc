@@ -131,7 +131,7 @@ theorem pairSpec_soundAdmitted (pair : Adr) {U : WriterKey → Prop} (inj : Writ
   obtain ⟨_, output, representable, _⟩ := entry
   obtain ⟨st, K, sub, wrep⟩ :=
     (ContractSpecSem.ofStorageOnly_preInv_iff (sem := pairSem)).mp hpre.inv
-  obtain ⟨_, _, _, _, K', _, _, _, _, inside, rep⟩ :=
+  obtain ⟨_, _, _, _, K', _, _, _, _, _, inside, rep⟩ :=
     pairSupply inj apart pairSem pairSem_image { state := st, logs := [], updates := [] } []
       raw codeEq (code_eq_of_toList hpre.code) fork output representable trivial good sub wrep
   exact ⟨trivial, ⟨_, K', inside, rep⟩⟩
@@ -154,6 +154,34 @@ structure PairStep where
 /-- The source invocation of a step, at the frame's own writer context. -/
 def PairStep.source (s : PairStep) : SourceInvocation :=
   { context := writerContext s.frame.sevm [], entry := s.entry, transcript := s.transcript }
+
+/-- Connected source consumption retains each selected frame's actual output. -/
+inductive PairObservedReplay : State → List PairStep → State → Prop
+  | nil (st : State) : PairObservedReplay st [] st
+  | cons {st finish : State} {s : PairStep} {rest : List PairStep} {out : RunResult}
+      (consumed : ExactConsumes
+        (startTyped {state := st, logs := [], updates := []} s.source.context s.source.entry)
+        s.transcript out)
+      (successful : out.status = .success s.frame.post.output)
+      (tail : PairObservedReplay out.frame.current.state rest finish) :
+      PairObservedReplay st (s :: rest) finish
+
+/-- Erasing the actual-frame observations preserves the original model replay. -/
+theorem PairObservedReplay.forget {st finish : State} {steps : List PairStep}
+    (replay : PairObservedReplay st steps finish) :
+    SourceReplay st (steps.map PairStep.source) finish := by
+  induction replay with
+  | nil st => exact .nil st
+  | cons consumed successful tail ih => exact .cons consumed successful ih
+
+/-- Observed replay composes at the same carried model state. -/
+theorem PairObservedReplay.append {st middle finish : State} {left right : List PairStep}
+    (first : PairObservedReplay st left middle)
+    (second : PairObservedReplay middle right finish) :
+    PairObservedReplay st (left ++ right) finish := by
+  induction first with
+  | nil st => exact second
+  | cons consumed successful tail ih => exact .cons consumed successful (ih second)
 
 /-- **An authenticated step.**  The step's frame is a pc-zero, *committed* (`Exec.Frame` carries its
 commit proof; it is restated here), non-static frame at the Pair, and its entry and transcript are the
@@ -186,7 +214,7 @@ def PairReplay (pair : Adr)
   ∀ (st : State) (K : WriterKey → Prop), (∀ k, K k → U k) → PairViewRep K a st →
     ∃ steps : List PairStep, steps.map PairStep.frame = frames ∧
       (∀ s ∈ steps, s.Authentic pair) ∧
-      ∃ (finish : State) (K' : WriterKey → Prop), SourceReplay st (steps.map PairStep.source) finish ∧
+      ∃ (finish : State) (K' : WriterKey → Prop), PairObservedReplay st steps finish ∧
         (∀ k, K k → K' k) ∧ (∀ k, K' k → U k) ∧ PairViewRep K' b finish
 
 section Replay
@@ -210,8 +238,7 @@ theorem PairReplay.append {a b c : B256 → B256} {left right : List Exec.Frame}
     rcases List.mem_append.mp member with h | h
     · exact auth₁ s h
     · exact auth₂ s h
-  · rw [List.map_append]
-    exact replay₁.append replay₂
+  · exact replay₁.append replay₂
 
 end Replay
 
@@ -264,12 +291,15 @@ theorem pair_wholeFrameReplay (pair : Adr) {U : WriterKey → Prop} (inj : Write
     obtain ⟨s, view, wrep⟩ := incoming
     have wrep' : WriterRep K (pre.getStor sevm.currentTarget) st :=
       WriterRep.congr (fun k => (congrFun view k).symm) wrep
-    obtain ⟨entryE, nested, child, bytes, K', auth, consumed, success, grows, inside, rep⟩ :=
+    obtain ⟨entryE, nested, child, bytes, K', auth, consumed, success, outputEq, grows, inside, rep⟩ :=
       pairSupply inj apart pairSem pairSem_image { state := st, logs := [], updates := [] } []
         raw codeEq (code_eq_of_toList installed.1) fork output representable trivial good sub wrep'
     rw [rawEq] at auth
     refine ⟨[⟨Exec.Frame.ofRun run committed, entryE, nested⟩], rfl, ?_, child.frame.current.state,
-      K', .cons consumed success (.nil _), grows, inside, ⟨_, rfl, rep⟩⟩
+      K', .cons consumed (by
+        simpa only [outputEq, Exec.Frame.post, Exec.Frame.ofRun, Execution.committedPost]
+          using success) (.nil _), grows, inside,
+      ⟨_, rfl, rep⟩⟩
     intro s member
     rw [List.mem_singleton] at member
     subst member
@@ -353,6 +383,7 @@ theorem pair_history_committed {pair : Adr} {cfg : ChainConfig} {checkpoint futu
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.Authentic pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplay st₀ steps finish ∧
         SourceReplay st₀ (steps.map PairStep.source) finish ∧
         runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
         (∀ k, K₀ k → K' k) ∧
@@ -374,7 +405,8 @@ theorem pair_history_committed {pair : Adr} {cfg : ChainConfig} {checkpoint futu
     trace.settledFrames.flatMap (pairFrameObs pair) at observed
   obtain ⟨steps, framesEq, auth, finish, K', source, grows, inside, s, view, rep⟩ :=
     replay st₀ K₀ (fun _ h => Or.inl h) ⟨_, rfl, initial⟩
-  refine ⟨finishInv.code, steps, ?_, auth, finish, K', source, source.realizes, grows, inside,
+  refine ⟨finishInv.code, steps, ?_, auth, finish, K', source, source.forget,
+    source.forget.realizes, grows, inside,
     WriterRep.congr (fun k => (congrFun view k).symm) rep⟩
   rw [← framesEq, List.flatMap_map] at observed
   exact observed
@@ -393,15 +425,16 @@ theorem pair_history_initialized {pair : Adr} {cfg : ChainConfig} {checkpoint fu
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.Authentic pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplay (initializedState factory domain token0 token1) steps finish ∧
         SourceReplay (initializedState factory domain token0 token1)
           (steps.map PairStep.source) finish ∧
         runSourceInvocations (initializedState factory domain token0 token1)
           (steps.map PairStep.source) = some finish ∧
         (∀ k, K' k → k ∈ pairHistoryTouchedKeys pair trace) ∧
         WriterRep K' (future.state.getStor pair) finish := by
-  obtain ⟨code, steps, observed, auth, finish, K', source, realized, _, inside, rep⟩ :=
+  obtain ⟨code, steps, observed, auth, finish, K', matched, source, realized, _, inside, rep⟩ :=
     pair_history_committed trace installed initial fresh
-  refine ⟨code, steps, observed, auth, finish, K', source, realized, ?_, rep⟩
+  refine ⟨code, steps, observed, auth, finish, K', matched, source, realized, ?_, rep⟩
   intro k tracked
   rcases inside k tracked with none | row
   · exact none.elim
@@ -422,12 +455,13 @@ theorem pair_history_ledger {pair : Adr} {cfg : ChainConfig} {checkpoint future 
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.Authentic pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplay (initializedState factory domain token0 token1) steps finish ∧
         runSourceInvocations (initializedState factory domain token0 token1) (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
         finish.Ledger := by
-  obtain ⟨_, steps, observed, auth, finish, K', source, realized, _, _, rep⟩ :=
+  obtain ⟨_, steps, observed, auth, finish, K', matched, source, realized, _, _, rep⟩ :=
     pair_history_committed trace installed initial fresh
-  exact ⟨steps, observed, auth, finish, K', realized, rep,
+  exact ⟨steps, observed, auth, finish, K', matched, realized, rep,
     source.ledger (State.initialized_ledgerOn factory domain token0 token1).ledger⟩
 
 /-- **Oracle after a history (U5).**  Each future accumulator is the checkpoint's plus the sum of
@@ -450,6 +484,7 @@ theorem pair_history_oracle {pair : Adr} {cfg : ChainConfig} {checkpoint future 
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.Authentic pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplay st₀ steps finish ∧
         runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
         finish.price0CumulativeLast.toNat =
@@ -466,10 +501,10 @@ theorem pair_history_oracle {pair : Adr} {cfg : ChainConfig} {checkpoint future 
         ∀ inv receipts, (inv, receipts) ∈ sourceReplayReceipts st₀ (steps.map PairStep.source) →
           ∃ s ∈ steps, inv = s.source ∧
             ∀ u ∈ receipts, u.update.timestamp = s.frame.sevm.benvStat.time := by
-  obtain ⟨_, steps, observed, auth, finish, K', source, realized, _, _, rep⟩ :=
+  obtain ⟨_, steps, observed, auth, finish, K', matched, source, realized, _, _, rep⟩ :=
     pair_history_committed trace installed initial fresh
   obtain ⟨lawful, chain, stamped⟩ := source.oracle_receipts
-  refine ⟨steps, observed, auth, finish, K', realized, rep, source.oracle_mod.1,
+  refine ⟨steps, observed, auth, finish, K', matched, realized, rep, source.oracle_mod.1,
     source.oracle_mod.2, lawful, chain, sourceReplayUpdates_eq_receipts _ _, ?_⟩
   intro inv receipts member
   obtain ⟨mem, hts⟩ := stamped inv receipts member
@@ -499,6 +534,7 @@ theorem pair_history_feeOff_product {pair : Adr} {cfg : ChainConfig}
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.Authentic pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplay st₀ steps finish ∧
         runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
         (sourceReplayAnswers st₀ (steps.map PairStep.source) →
@@ -506,9 +542,9 @@ theorem pair_history_feeOff_product {pair : Adr} {cfg : ChainConfig}
             0 < before.totalSupply.toNat →
             before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
               after.reserve0.val * after.reserve1.val * before.totalSupply.toNat ^ 2) := by
-  obtain ⟨_, steps, observed, auth, finish, K', source, realized, _, _, rep⟩ :=
+  obtain ⟨_, steps, observed, auth, finish, K', matched, source, realized, _, _, rep⟩ :=
     pair_history_committed trace installed initial fresh
-  exact ⟨steps, observed, auth, finish, K', realized, rep, source.feeOff_product⟩
+  exact ⟨steps, observed, auth, finish, K', matched, realized, rep, source.feeOff_product⟩
 
 /-- **Share value with the protocol fee on (U3, fee-on).**  For the history's own steps: if the token
 answers satisfy `EntryNoShrink` over exactly these steps (sync: both answers at least the stored
@@ -529,6 +565,7 @@ theorem pair_history_feeOn_product {pair : Adr} {cfg : ChainConfig}
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.Authentic pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplay st₀ steps finish ∧
         runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
         (sourceReplayNoShrink st₀ (steps.map PairStep.source) →
@@ -537,8 +574,8 @@ theorem pair_history_feeOn_product {pair : Adr} {cfg : ChainConfig}
             before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
               after.reserve0.val * after.reserve1.val *
                 (before.totalSupply.toNat + entryFeeAmount before inv.entry inv.transcript) ^ 2) := by
-  obtain ⟨_, steps, observed, auth, finish, K', source, realized, _, _, rep⟩ :=
+  obtain ⟨_, steps, observed, auth, finish, K', matched, source, realized, _, _, rep⟩ :=
     pair_history_committed trace installed initial fresh
-  exact ⟨steps, observed, auth, finish, K', realized, rep, source.feeOn_product⟩
+  exact ⟨steps, observed, auth, finish, K', matched, realized, rep, source.feeOn_product⟩
 
 end Blanc.Lift.UniswapV2Pair

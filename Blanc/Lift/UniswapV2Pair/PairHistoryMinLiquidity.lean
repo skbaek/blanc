@@ -47,6 +47,7 @@ theorem pair_history_minimum_liquidity {pair : Adr} {cfg : ChainConfig}
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.Authentic pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplay (initializedState factory domain token0 token1) steps finish ∧
         runSourceInvocations (initializedState factory domain token0 token1)
           (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
@@ -56,9 +57,9 @@ theorem pair_history_minimum_liquidity {pair : Adr} {cfg : ChainConfig}
               (initializedState factory domain token0 token1) (steps.map PairStep.source) →
             before.SupplyFloor ∧ after.SupplyFloor ∧
               (0 < before.totalSupply.toNat → 1000 ≤ after.totalSupply.toNat)) := by
-  obtain ⟨_, steps, observed, auth, finish, K', source, realized, _, _, rep⟩ :=
+  obtain ⟨_, steps, observed, auth, finish, K', matched, source, realized, _, _, rep⟩ :=
     pair_history_committed trace installed initial fresh
-  refine ⟨steps, observed, auth, finish, K', realized, rep, fun callers => ?_⟩
+  refine ⟨steps, observed, auth, finish, K', matched, realized, rep, fun callers => ?_⟩
   exact source.supplyFloor (initialized_supplyFloor factory domain token0 token1)
     (State.initialized_ledgerOn factory domain token0 token1).ledger
     (steps_pair_nonzero auth nonzero)
@@ -84,6 +85,7 @@ theorem pair_history_feeOff_ratio {pair : Adr} {cfg : ChainConfig}
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.Authentic pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplay (initializedState factory domain token0 token1) steps finish ∧
         runSourceInvocations (initializedState factory domain token0 token1)
           (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
@@ -96,9 +98,9 @@ theorem pair_history_feeOff_ratio {pair : Adr} {cfg : ChainConfig}
             1000 ≤ after.totalSupply.toNat ∧
               ((before.reserve0.val * before.reserve1.val : ℚ) / (before.totalSupply.toNat : ℚ) ^ 2 ≤
                 (after.reserve0.val * after.reserve1.val : ℚ) / (after.totalSupply.toNat : ℚ) ^ 2)) := by
-  obtain ⟨_, steps, observed, auth, finish, K', source, realized, _, _, rep⟩ :=
+  obtain ⟨_, steps, observed, auth, finish, K', matched, source, realized, _, _, rep⟩ :=
     pair_history_committed trace installed initial fresh
-  refine ⟨steps, observed, auth, finish, K', realized, rep, fun answers callers => ?_⟩
+  refine ⟨steps, observed, auth, finish, K', matched, realized, rep, fun answers callers => ?_⟩
   have floors := (source.supplyFloor (initialized_supplyFloor factory domain token0 token1)
     (State.initialized_ledgerOn factory domain token0 token1).ledger
     (steps_pair_nonzero auth nonzero)

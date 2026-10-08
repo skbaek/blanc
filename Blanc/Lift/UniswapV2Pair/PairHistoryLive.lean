@@ -44,6 +44,7 @@ def PairHistoryReplayed {cfg : ChainConfig} {checkpoint future : BlockChain} (pa
   ∃ steps : List PairStep,
     steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
     (∀ s ∈ steps, s.Authentic pair) ∧
+    PairObservedReplay st₀ steps finish ∧
     runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
     (∀ k, K₀ k → K' k) ∧ (∀ k, K' k → pairHistoryUniverse pair trace K₀ k) ∧
     WriterRep K' (future.state.getStor pair) finish
@@ -56,10 +57,10 @@ theorem pair_history_replayed {pair : Adr} {cfg : ChainConfig} {checkpoint futur
     (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
     future.state.getCode pair = code ∧
       ∃ (finish : State) (K' : WriterKey → Prop), PairHistoryReplayed pair trace K₀ st₀ finish K' := by
-  obtain ⟨installedFuture, steps, observed, auth, finish, K', _, realized, grows, inside, rep⟩ :=
+  obtain ⟨installedFuture, steps, observed, auth, finish, K', matched, _, realized, grows, inside, rep⟩ :=
     pair_history_committed trace installed initial fresh
   exact ⟨code_eq_of_toList installedFuture, finish, K',
-    steps, observed, auth, realized, grows, inside, rep⟩
+    steps, observed, auth, matched, realized, grows, inside, rep⟩
 
 /-- The history's facts at a new frame whose world is the history's future world. -/
 theorem PairHistoryReplayed.at_frame {pair : Adr} {cfg : ChainConfig}
@@ -69,7 +70,7 @@ theorem PairHistoryReplayed.at_frame {pair : Adr} {cfg : ChainConfig}
     (target : sevm.currentTarget = pair) (state : pre.state = future.state) :
     WriterRep K' (pre.getStor sevm.currentTarget) finish ∧
       (∀ k, K' k → pairHistoryUniverse pair trace K₀ k) := by
-  obtain ⟨_, _, _, _, _, inside, rep⟩ := replayed
+  obtain ⟨_, _, _, _, _, _, inside, rep⟩ := replayed
   refine ⟨?_, inside⟩
   have same : pre.getStor sevm.currentTarget = future.state.getStor pair := by
     rw [target]

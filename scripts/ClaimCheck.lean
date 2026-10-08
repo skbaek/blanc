@@ -7623,6 +7623,7 @@ example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.Authentic pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplay st₀ steps finish ∧
         SourceReplay st₀ (steps.map PairStep.source) finish ∧
         runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
         (∀ k, K₀ k → K' k) ∧
@@ -7647,6 +7648,7 @@ example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.Authentic pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplay (initializedState factory domain token0 token1) steps finish ∧
         SourceReplay (initializedState factory domain token0 token1)
           (steps.map PairStep.source) finish ∧
         runSourceInvocations (initializedState factory domain token0 token1)
@@ -7671,6 +7673,7 @@ example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.Authentic pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplay (initializedState factory domain token0 token1) steps finish ∧
         runSourceInvocations (initializedState factory domain token0 token1) (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
         finish.Ledger :=
@@ -7692,6 +7695,7 @@ example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.Authentic pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplay st₀ steps finish ∧
         runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
         finish.price0CumulativeLast.toNat =
@@ -7726,6 +7730,7 @@ example {pair : Adr} {cfg : ChainConfig}
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.Authentic pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplay st₀ steps finish ∧
         runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
         (sourceReplayAnswers st₀ (steps.map PairStep.source) →
@@ -7751,6 +7756,7 @@ example {pair : Adr} {cfg : ChainConfig}
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.Authentic pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplay st₀ steps finish ∧
         runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
         (sourceReplayNoShrink st₀ (steps.map PairStep.source) →
@@ -8618,7 +8624,7 @@ example (Auth : Exec.Deriv → Entry → Transcript → Prop) (U : WriterKey →
     (K' : WriterKey → Prop),
     Auth D entry nested ∧
     ExactConsumes (startTyped current (writerContext D.sevm invocation) entry) nested child ∧
-    child.status = .success bytes ∧ (∀ k, K k → K' k) ∧ (∀ k, K' k → U k) ∧
+    child.status = .success bytes ∧ bytes = post.output ∧ (∀ k, K k → K' k) ∧ (∀ k, K' k → U k) ∧
     WriterRep K' (post.getStor D.sevm.currentTarget) child.frame.current.state) :=
   Iff.rfl
 
@@ -8647,6 +8653,7 @@ example {cfg : ChainConfig} {checkpoint future : BlockChain} (pair : Adr)
       (∃ steps : List PairStep,
     steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
     (∀ s ∈ steps, s.Authentic pair) ∧
+    PairObservedReplay st₀ steps finish ∧
     runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
     (∀ k, K₀ k → K' k) ∧ (∀ k, K' k → pairHistoryUniverse pair trace K₀ k) ∧
     WriterRep K' (future.state.getStor pair) finish) :=
@@ -9937,6 +9944,7 @@ example : ∀ {pair : Adr} {cfg : ChainConfig}
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.Authentic pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplay (initializedState factory domain token0 token1) steps finish ∧
         runSourceInvocations (initializedState factory domain token0 token1)
           (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
@@ -9965,6 +9973,7 @@ example : ∀ {pair : Adr} {cfg : ChainConfig}
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.Authentic pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplay (initializedState factory domain token0 token1) steps finish ∧
         runSourceInvocations (initializedState factory domain token0 token1)
           (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
