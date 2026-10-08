@@ -4653,7 +4653,13 @@ actual slot event queue and its selected turns, and index each recursive
 admission by the same child consumption proof. The Pair endpoint aliases
 `PairAdmittedConsumes` and `PairMutableAdmission` live in
 [`PairPositionalAdmission.lean`](../Blanc/Lift/UniswapV2Pair/PairPositionalAdmission.lean).
-The concrete strong locked-child supplier is a separate consumer obligation.
+For actual locked children, `lockedPairAdmittedSupply` and
+`locked_admitted_mutable_source_slot_turns` in
+[`MutablePositionalLockedSupply.lean`](../Blanc/Lift/UniswapV2Pair/MutablePositionalLockedSupply.lean)
+retain the same child selector admission, positional proof, committed output,
+incoming representation and complete mutable event/turn queues.
+`AdmittedSourceConsumes.nextMutableCall` in `AdmittedMutableFold.lean`
+composes that same selected turn proof and its recursive admission.
 
 For a retained factory fee observation, `PairFeeObservation.sourceCall` in
 [`PairFeeSourceCall.lean`](../Blanc/Lift/UniswapV2Pair/PairFeeSourceCall.lean)
