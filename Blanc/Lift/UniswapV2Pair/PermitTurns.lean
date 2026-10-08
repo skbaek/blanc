@@ -133,49 +133,6 @@ theorem PermitCallOccurrence.recovery_turns {U K : WriterKey → Prop}
       exact Blanc.SlotFootprint.FreshKeys.of_universe inj apart extended (good F member target))
   exact ⟨views, mapped.trans (queue.paths_unique settled.queue), authentic, during⟩
 
-/-- The recovery STATICCALL of a permit run, recovered as a step of the derivation `D`,
-contributes the retained static Pair views of its actual child at the nonce-incremented
-frame, or nothing when an enabled precompile answers without entering a code frame. -/
-theorem permit_recovery_turns {U K : WriterKey → Prop} (inj : WriterInj U)
-    (apart : WriterApart U) (sub : ∀ k, K k → U k)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    {current : Checkpoint} {invocation : List Nat} {sevm : Sevm} {b : Devm}
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (touched : ∀ k ∈ permitTouched (permitOwner sevm) (permitSpender sevm), U k)
-    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
-    (fork : CoveredFork sevm.benvStat.fork)
-    {D : Exec.Deriv} {gw : B256} {callGas : Nat} {d : Devm} {out : Bytes}
-    (raw : PermitRawCallP (Blanc.Lift.StepIn D) sevm b 0xd505accf gw callGas d out)
-    (good : ∀ F ∈ Exec.rawFrameRoots D.exc, F.sevm.currentTarget = sevm.currentTarget →
-      ∀ k ∈ staticViewDecodedKeys F.sevm, U k) :
-    ∃ views : List StaticViewTurn,
-      ExactTurns (permitPublicSuspended current invocation sevm)
-        (permitPublicRequest current sevm) 0 (staticViewTranscript views .done)
-        { complete := true, frame := permitPublicSuspended current invocation sevm,
-          childReturns := staticViewChildReturns (permitPublicSuspended current invocation sevm)
-            (permitPublicRequest current sevm) 0 views } ∧
-      (∀ picked ∈ views, picked.Authentic (permitPublicSuspended current invocation sevm)) ∧
-      (views = [] ∧ sevm.benvStat.rules.isPrecomp (1 : B256).toAdr ∨
-        ∃ (child : Evm) (raw : Execution) (childRun : Exec child.pc child.sta child.dyna raw),
-          Execution.commits raw = true ∧
-          (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots D.exc) ∧
-          views.map Prod.fst =
-            (Exec.retainedTargetTurnsAt sevm.currentTarget [] childRun).filterMap
-              Sum.getRight?) := by
-  have fresh := Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub touched
-  have extended : ∀ k, WriterExtend K (permitTouched (permitOwner sevm) (permitSpender sevm)) k →
-      U k := by
-    intro k tracked
-    rcases tracked with old | new
-    · exact sub k old
-    · exact touched k new
-  exact pair_static_call_turns (frame := permitPublicSuspended current invocation sevm)
-    (request := permitPublicRequest current sevm) inj apart extended sem image raw.1
-    (permit_operands _ _ _ _)
-    (by rw [permit_St_getCode, permitNonceWorld_getCode]; exact installed)
-    (by rw [permit_St_getStor]; exact permit_suspended_rep rep fresh) rfl fork
-    ⟨1, _, raw.2.1.stack, by decide⟩ good
-
 /-- Typed consumption of the public permit with its recovery turns: the turns run at the
 suspended frame, which they leave unchanged, and the resume is the existing one. -/
 theorem permit_exact_consumes_turns {current : Checkpoint} {invocation : List Nat}
