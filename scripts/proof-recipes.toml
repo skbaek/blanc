@@ -785,7 +785,7 @@ review_date = "2026-08-30"
 id = "trace-local-frame-admission"
 status = "active"
 triggers = ["goal-shape:trace-local-frame-admission"]
-preferred_path = "State the contract's entry condition as `Exec.FrameAdmitted ca entry` on the exact retained execution. Prove the frame obligation as `ContractSpec.SoundAdmitted ca entry`, close it with `ContractSpec.preserves_inv_admitted`, and use the matching `FrameAdmitted` plus `stateInv_admitted`/`benvInv_admitted` theorem on `MessageCallTrace`, `TransactionTrace`, `AppliedBodyTrace`, or `ConfiguredHistoryTrace` to transport it through only the interpreter frames actually entered. If the proof also needs canonical interpreter ingress, obtain `Exec.FreshEntry` from the carrier's `freshFrameAdmitted` theorem and combine it with the independent admission through the carrier's `FrameAdmitted.and`."
+preferred_path = "State the contract's entry condition as `Exec.FrameAdmitted ca entry` on the exact retained execution. Prove the frame obligation as `ContractSpec.SoundAdmitted ca entry`, close it with `ContractSpec.preserves_inv_admitted`, and use the matching `FrameAdmitted` plus `stateInv_admitted`/`benvInv_admitted` theorem on `MessageCallTrace`, `TransactionTrace`, `AppliedBodyTrace`, or `ConfiguredHistoryTrace` to transport it through only the interpreter frames actually entered. For an arbitrary normal-transaction cut after the actual opening system calls, extract `ApplyTransactionsTrace.splitPrefix`, derive admission on `AppliedBodyTrace.transactionPrefixFrames`, and apply `AppliedBodyTrace.transactionPrefix_benvInv_admitted_sem`; `PrefixSplit.next_result` exposes the actual next transaction. If the proof also needs canonical interpreter ingress, obtain `Exec.FreshEntry` from the carrier's `freshFrameAdmitted` theorem and combine it with the independent admission through the carrier's `FrameAdmitted.and`."
 boundary = "Admission is evidence about concrete target-frame roots, not an execution constructor, settlement filter, or global environment restriction. Fresh-entry transport contributes only empty stack and memory and cannot discharge independent routing or world-state premises. The consumer must derive those premises from the retained trace; rollback and direct envelope effects remain governed by the ordinary wrapper transports."
 owner_module = "Blanc/ExecutionAdmission.lean"
 canonical_example = "Blanc/ExecutionHistoryAdmission.lean:ExecutionTrace.ConfiguredHistoryTrace.stateInv_admitted"
@@ -799,6 +799,18 @@ symbols = [
   "module:Blanc/ExecutionBodyAdmission.lean",
   "module:Blanc/ExecutionHistoryAdmission.lean",
   "module:Blanc/ExecutionTraceFresh.lean",
+  "module:Blanc/ExecutionTransactionPrefix.lean",
+  "module:Blanc/ExecutionTransactionPrefixAdmission.lean",
+  "declaration:Blanc.ExecutionTrace.ApplyTransactionsTrace.PrefixSplit",
+  "declaration:Blanc.ExecutionTrace.ApplyTransactionsTrace.splitPrefix",
+  "declaration:Blanc.ExecutionTrace.ApplyTransactionsTrace.PrefixSplit.zero_boundary",
+  "declaration:Blanc.ExecutionTrace.ApplyTransactionsTrace.PrefixSplit.full_boundary",
+  "declaration:Blanc.ExecutionTrace.ApplyTransactionsTrace.PrefixSplit.next_result",
+  "declaration:Blanc.ExecutionTrace.indexedTransactions_length",
+  "declaration:Blanc.ExecutionTrace.AppliedBodyTrace.transactionPrefix_full_boundary",
+  "declaration:Blanc.ExecutionTrace.AppliedBodyTrace.transactionPrefixFrames",
+  "declaration:Blanc.ExecutionTrace.AppliedBodyTrace.transactionPrefix_covered",
+  "declaration:Blanc.ExecutionTrace.AppliedBodyTrace.transactionPrefix_benvInv_admitted_sem",
   "declaration:Exec.FrameAdmitted",
   "declaration:Exec.FreshEntry",
   "declaration:Exec.FrameAdmitted.and",

@@ -2625,7 +2625,24 @@ invariant proofs. For the exact boundary before request processing, use
 `AppliedBodyTrace.requestBenv` names the transaction-plus-withdrawals environment;
 `requestBenv_covered` transports the fork and `requestBenvInv_admitted_sem`
 transports the invariant using the existing admission and opening balance bound.
-Neither request-call outcome is consumed by this prefix proof.  Import
+Neither request-call outcome is consumed by this prefix proof. For an arbitrary
+normal-transaction position after the two actual opening system calls, use
+[`Blanc/ExecutionTransactionPrefix.lean`](../Blanc/ExecutionTransactionPrefix.lean):
+`ApplyTransactionsTrace.splitPrefix` returns `PrefixSplit n`, whose `before`
+and `suffix` are the original indexed list's take/drop traces, with the exact
+intermediate `benv` and `bout` and `rawFrames_eq`. `zero_boundary` and
+`full_boundary` identify both edge cases; `next_result` recovers the actual
+remaining head's `processTransaction` result and continuation trace.
+[`Blanc/ExecutionTransactionPrefixAdmission.lean`](../Blanc/ExecutionTransactionPrefixAdmission.lean)
+proves `indexedTransactions_length` and the exact full decoded-list boundary
+with `transactionPrefix_full_boundary`, names opening-plus-prefix raw roots
+with `transactionPrefixFrames`, preserves
+the fork with `transactionPrefix_covered`, and transports an arbitrary
+`ContractSpecSem.BenvInv` with `transactionPrefix_benvInv_admitted_sem` from
+body entry. Admission ranges over exactly those raw roots, including rollback;
+no withdrawal or request outcome is consumed. The take/drop structure is a
+reliable named carrier; a bare `BenvInv` goal does not identify this boundary,
+so discovery uses this branch and the existing trace-admission recipe. Import
 [`Blanc/ExecutionTraceFresh.lean`](../Blanc/ExecutionTraceFresh.lean) when the
 consumer needs canonical interpreter ingress as one conjunct:
 
