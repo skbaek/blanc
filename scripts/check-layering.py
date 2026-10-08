@@ -435,6 +435,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.BurnPositionalPostFee",
         "Lift.UniswapV2Pair.BurnPositionalFour",
         "Lift.UniswapV2Pair.BurnPositionalTransferCaller",
+        "Lift.UniswapV2Pair.BurnPositionalTransferReply",
         "Lift.UniswapV2Pair.SyncGasCanonical",
         "Lift.UniswapV2Pair.SkimWalk",
         "Lift.UniswapV2Pair.SkimTransferWalk",

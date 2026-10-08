@@ -30,6 +30,7 @@ structure BurnFourCalls (root : Exec.Deriv) (sevm : Sevm) (b : Devm) where
   pricing : Exec.Deriv
   residual : Nat
   pricing_gap : Exec.Deriv.ExecFreeUntil three.fee.occurrence.call.returned pricing
+  pricing_memory : PtrMem 128 192 pricing.devm.memory
   transfer : CallOccurrenceStep root .call
   gas : Nat
   transfer_gap : Exec.Deriv.ExecFreeUntil three.fee.occurrence.call.returned transfer.occurrence.node
@@ -89,6 +90,7 @@ theorem burn_four_occurrences_of_success {sevm : Sevm} {b post : Devm} {G : Nat}
     pricing := N
     residual := residual
     pricing_gap := pricingGap
+    pricing_memory := mem
     transfer := step
     gas := gas
     transfer_gap := gap

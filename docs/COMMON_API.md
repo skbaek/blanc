@@ -4572,6 +4572,13 @@ normalizes the physical transfer payload at a moving free pointer;
 binds it to the supplied root's actual call slot and returned cursor. Use the
 literal line inverses through `CursorStateAt.line`, and retain the occurrence
 carrier when subsequent consumers need raw child identity.
+`pair_transfer_reply_cursor_state` in
+[`PairTransferReplyCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairTransferReplyCursor.lean)
+uses that supplied actual slot and returned cursor to derive the success flag,
+unchanged parent memory/output, the operand-derived full-reply bound, optional
+bool acceptance and the complete actual internal return allocation. Its quiet
+span stops at the original caller, which may make further calls; it does not
+replace the raw slot entry bit with a code-existence assumption.
 The already reached optional-bool decoder is inverted by
 `safeTransfer_decodedReturned_inv` in
 [`SafeTransferWalk.lean`](../Blanc/Lift/UniswapV2Pair/SafeTransferWalk.lean).
