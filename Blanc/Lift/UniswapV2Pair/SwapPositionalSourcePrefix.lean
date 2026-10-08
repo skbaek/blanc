@@ -9,6 +9,8 @@ structure SwapSourcePrefix (U : WriterKey → Prop) (current : Checkpoint)
     (invocation : List Nat) (sevm : Sevm) (b : Devm) : Prop where
   value : sevm.value = 0
   nonstatic : sevm.isStatic = false
+  liquidity0 : (swapAmount0Out sevm).toNat < current.state.reserve0.val
+  liquidity1 : (swapAmount1Out sevm).toNat < current.state.reserve1.val
   token0 : swapInitialToken0 sevm b = current.state.token0.toB256
   token1 : swapInitialToken1 sevm b = current.state.token1.toB256
   reserve0 : swapRawReserve0 sevm b = Nat.toB256 current.state.reserve0.val
@@ -53,6 +55,8 @@ theorem swap_source_start_of_success {K : WriterKey → Prop} {current : Checkpo
     (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     sevm.value = 0 ∧ sevm.isStatic = false ∧
+    (swapAmount0Out sevm).toNat < current.state.reserve0.val ∧
+    (swapAmount1Out sevm).toNat < current.state.reserve1.val ∧
     startTyped current (writerContext sevm invocation) (swapDecodedEntry sevm) =
       swapTransferPhaseStart false
         (swapLockedFrame current (writerContext sevm invocation) (swapDecodedEntry sevm))
@@ -66,7 +70,7 @@ theorem swap_source_start_of_success {K : WriterKey → Prop} {current : Checkpo
   have started := swap_startTyped (current := current) (ctx := writerContext sevm invocation)
     (data := swapData sevm) value nonstatic unlocked (output.imp swap_pos_of_ne swap_pos_of_ne)
     lt0 lt1 ne0 ne1
-  refine ⟨value, nonstatic, ?_⟩
+  refine ⟨value, nonstatic, lt0, lt1, ?_⟩
   simpa only [swapTransferPhaseStart, swapTransferPhaseRequest, swapFrontLocals,
     swapSourceLocals, swapDecodedEntry, Frame.suspend, Bool.false_eq_true, ite_false]
     using started
@@ -81,8 +85,8 @@ theorem swap_source_prefix_of_success {K U : WriterKey → Prop} {current : Chec
     (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
     SwapSourcePrefix U current invocation sevm b := by
   obtain ⟨token0, token1, reserve0, reserve1⟩ := swap_source_cached_words rep
-  obtain ⟨value, nonstatic, started⟩ := swap_source_start_of_success invocation rep codeEq fork selector run
-  exact ⟨value, nonstatic, token0, token1, reserve0, reserve1, started,
+  obtain ⟨value, nonstatic, liquidity0, liquidity1, started⟩ := swap_source_start_of_success invocation rep codeEq fork selector run
+  exact ⟨value, nonstatic, liquidity0, liquidity1, token0, token1, reserve0, reserve1, started,
     swap_prefix_source_invariant rep sub⟩
 
 /-- Both admitted transfer phases start at the original decoded Swap entry,
