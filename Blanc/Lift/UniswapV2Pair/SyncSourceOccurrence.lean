@@ -50,8 +50,8 @@ theorem SyncCanonicalResult.firstSourceCall {K : WriterKey → Prop}
     guarded := by
       intro _
       exact ⟨fun _ => r.guarded0, fun _ => rfl⟩
-    recoveryEntry := by
-      intro digest v rr ss impossible
+    unguardedEntry := by
+      intro impossible
       cases impossible
     paths := r.paths0
     queue := by
@@ -108,8 +108,8 @@ theorem SyncCanonicalResult.secondSourceCall {K : WriterKey → Prop}
     guarded := by
       intro _
       exact ⟨fun _ => r.guarded1, fun _ => rfl⟩
-    recoveryEntry := by
-      intro digest v rr ss impossible
+    unguardedEntry := by
+      intro impossible
       cases impossible
     paths := r.paths1
     queue := by
