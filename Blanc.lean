@@ -936,6 +936,7 @@ import Blanc.Lift.UniswapV2Pair.BurnPositionalFour
 import Blanc.Lift.UniswapV2Pair.BurnPositionalTransferCaller
 import Blanc.Lift.UniswapV2Pair.BurnPositionalTransferReply
 import Blanc.Lift.UniswapV2Pair.BurnPositionalFive
+import Blanc.Lift.UniswapV2Pair.BurnPositionalTransfers
 import Blanc.Lift.UniswapV2Pair.SyncOccurrence
 import Blanc.Lift.UniswapV2Pair.SourceOccurrence
 import Blanc.Lift.UniswapV2Pair.SyncSourceOccurrence
