@@ -4660,6 +4660,15 @@ reply and checked caller join. The empty-data branch selects no CALL. Pointer
 and ABI length bounds are derived internally. Callback preparation and join
 lines are shared with the unchanged legacy callback inverses.
 
+`swap_balances_cursor_state` in
+[`SwapPositionalBalance.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalBalance.lean)
+adds both required observations to the same optional-call carrier, from the
+same four original premises. Each `SwapBalanceOccurrence` keeps its own guarded
+STATICCALL, full reply and actual word decoder at the moving pointer. The
+second starts from the first returned node, memory and decoded local.
+`SwapBalances.noExecTail` excludes all further external instructions after the
+actual final reply, including the original pending wrapper STOP.
+
 The Pair mutable fold's `mutable_selected_root_with` in
 [`MutableTurns.lean`](../Blanc/Lift/UniswapV2Pair/MutableTurns.lean)
 parameterizes child consumption and turn introductions while the existing

@@ -33,23 +33,16 @@ def swapInWord (balance reserve amountOut : B256) : B256 :=
 
 /-- Both ternaries and the input guard: the successful path reaches the checked
 arithmetic with both inferred inputs, and at least one of them is nonzero. -/
-theorem swapInputs_inv {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
-    {rds p t1 t0 bal0 bal1 r1 r0 len off toW a1 a0 : B256} {seg : Seg}
-    (word : Bytes.toB256 (M.read p.toNat 32).1 = bal1) (self : (M.read p.toNat 32).2 = M)
+theorem swapInputsDecoded_inv {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
+    {t1 t0 bal0 bal1 r1 r0 len off toW a1 a0 : B256} {seg : Seg}
     (run : SFunc.RunCut cert.prog sevm []
-      (St b (rds :: p :: t1 :: t0 :: 0 :: bal0 :: r1 :: r0 :: len :: off :: toW :: a1 :: a0 :: S) M G)
-      t_0af5_c5 seg) :
+      (St b (bal1 :: t1 :: t0 :: 0 :: bal0 :: r1 :: r0 :: len :: off :: toW :: a1 :: a0 :: S) M G)
+      (swapBalanceDecodedTail true) seg) :
     (0 < swapInWord bal0 r0 a0 ∨ 0 < swapInWord bal1 r1 a1) ∧ ∃ G',
       SFunc.RunCut cert.prog sevm []
         (St b (swapInWord bal1 r1 a1 :: swapInWord bal0 r0 a0 :: bal1 :: bal0 :: r1 :: r0 ::
           len :: off :: toW :: a1 :: a0 :: S) M G') t_0bd5_c8 seg := by
-  unfold t_0af5_c5 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨d, hs, run⟩ := ric_next run
-  obtain ⟨_, hd⟩ := ri_mload hs
-  rw [word, self] at hd
-  subst d
+  dsimp only [swapBalanceDecodedTail, t_0af5_c5, ite_true] at run
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
@@ -161,6 +154,26 @@ theorem swapInputs_inv {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : N
     rcases ric_branch run with ⟨_, _, failed⟩ | ⟨_, G', run⟩
     · exact (failed.false_of_noOk (by decide : t_0b85_c8.noOk = true)).elim
     · exact ⟨Or.inl (swap_gt_of_gtCheck_ne nonzero), G', run⟩
+
+/-- Both actual decoders, input ternaries and the successful input guard. -/
+theorem swapInputs_inv {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
+    {rds p t1 t0 bal0 bal1 r1 r0 len off toW a1 a0 : B256} {seg : Seg}
+    (word : Bytes.toB256 (M.read p.toNat 32).1 = bal1) (self : (M.read p.toNat 32).2 = M)
+    (run : SFunc.RunCut cert.prog sevm []
+      (St b (rds :: p :: t1 :: t0 :: 0 :: bal0 :: r1 :: r0 :: len :: off :: toW :: a1 :: a0 :: S) M G)
+      t_0af5_c5 seg) :
+    (0 < swapInWord bal0 r0 a0 ∨ 0 < swapInWord bal1 r1 a1) ∧ ∃ G',
+      SFunc.RunCut cert.prog sevm []
+        (St b (swapInWord bal1 r1 a1 :: swapInWord bal0 r0 a0 :: bal1 :: bal0 :: r1 :: r0 ::
+          len :: off :: toW :: a1 :: a0 :: S) M G') t_0bd5_c8 seg := by
+  unfold t_0af5_c5 at run
+  obtain ⟨_, run⟩ := ric_dest run
+  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
+  obtain ⟨d, hs, run⟩ := ric_next run
+  obtain ⟨_, hd⟩ := ri_mload hs
+  rw [word, self] at hd
+  subst d
+  exact swapInputsDecoded_inv run
 
 /-- A successful internal SafeMath `mul` call (entry 58) inside a cut walk. -/
 theorem swapMulCall_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat}
