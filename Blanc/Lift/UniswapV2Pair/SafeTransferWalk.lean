@@ -2589,6 +2589,96 @@ theorem safeTransfer_dynamicReply_inv {P : Sevm → Devm → Ninst → Devm → 
   rw [copied] at decoded
   exact ⟨forwarded, callGas, d, decoderGas, step, stack, memory, output, replyWidth, postMem, fit, decoded⟩
 
+/-- The already reached physical optional-bool decoder returns its own full
+reply image. This inverse does not select or rerun an external call. -/
+theorem safeTransfer_decodedReturned_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+    {sevm : Sevm} {d out : Devm} {R : List B256} {G : Nat}
+    {p amount toWord tokenWord rho : B256} {n : Nat}
+    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
+    (postMem : PtrMem (p + 164) n d.memory) (lower : 128 ≤ p.toNat)
+    (width : p.toNat + 260 < 2 ^ 256) (fit : p.toNat + 260 ≤ n)
+    (replyWidth : d.returnData.length < 2 ^ 256)
+    (decoded : SFunc.RunCutP P cert.prog sevm []
+      (St d (d.returnData.length.toB256 ::
+        (if d.returnData.length.toB256 = 0 then 96 else p + 164) ::
+        1 :: 96 :: 0 :: amount :: toWord :: tokenWord :: rho :: R)
+        (if d.returnData.length.toB256 = 0 then d.memory else
+          ((d.memory.write 64
+              (p + 164 + ((d.returnData.length.toB256 + 63) &&& ~~~31)).toBytes).write
+            (p + 164).toNat d.returnData.length.toB256.toBytes).write
+              (p + 164 + 32).toNat d.returnData) G) t_2148_c16 (.done (.returned out))) :
+    ∃ residual,
+      (d.returnData = [] ∨ (32 ≤ d.returnData.length ∧
+        Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0)) ∧
+      out = St d R (if d.returnData = [] then d.memory else
+        Blanc.Lift.bytesArrayMemory d.memory (p + 164) d.returnData) residual := by
+  have nat164 : (p + 164).toNat = p.toNat + 164 := by
+    rw [B256.toNat_add, show (164 : B256).toNat = 164 from rfl, Nat.lo_eq_of_lt (by omega)]
+  by_cases empty : d.returnData = []
+  · rw [empty, show Nat.toB256 (List.length ([] : Bytes)) = (0 : B256) from rfl,
+      ite_eq_left rfl, ite_eq_left rfl] at decoded
+    have accepted := (safeTransfer_success_inv project (by decide : 17 ∉ []) decoded).2
+    rcases accepted with ⟨_, residual, returned⟩ | ⟨_, _, _, residual, returned⟩
+    · simp only [show (96 : B256).toNat = 96 from rfl] at returned
+      rw [postMem.read_self (by omega)] at returned
+      have outEq : out = St d R d.memory residual := Seg.done.inj returned |> Outcome.returned.inj
+      refine ⟨residual, Or.inl empty, ?_⟩
+      rw [ite_eq_left empty]
+      exact outEq
+    · simp only [show (96 : B256).toNat = 96 from rfl,
+        show ((32 : B256) + 96).toNat = 128 from rfl] at returned
+      rw [postMem.read_self (by omega), postMem.read_self (by omega),
+        postMem.read_self (by omega)] at returned
+      have outEq : out = St d R d.memory residual := Seg.done.inj returned |> Outcome.returned.inj
+      refine ⟨residual, Or.inl empty, ?_⟩
+      rw [ite_eq_left empty]
+      exact outEq
+  · have positive : 0 < d.returnData.length := List.length_pos_iff.mpr empty
+    have lenNat : d.returnData.length.toB256.toNat = d.returnData.length :=
+      B256.toNat_toB256_of_lt replyWidth
+    have lenNonzero : d.returnData.length.toB256 ≠ 0 := by
+      intro zero
+      rw [zero] at lenNat
+      change 0 = d.returnData.length at lenNat
+      omega
+    rw [ite_eq_right lenNonzero, ite_eq_right lenNonzero] at decoded
+    let A := Blanc.Lift.bytesArrayMemory d.memory (p + 164) d.returnData
+    have images := Blanc.Lift.bytesArrayMemory_image (bytes := d.returnData) postMem
+      (by rw [nat164]; omega) (by rw [nat164]; omega) (by rw [nat164]; omega)
+    have carrier : PtrMem (p + 164 + ((d.returnData.length.toB256 + 63) &&& ~~~31))
+        (memExtSize n
+          (p + 164 + 32).toNat d.returnData.length) A := images.1
+    have room : n ≤
+        memExtSize n
+          (p + 164 + 32).toNat d.returnData.length := memExtSize_ge _ _ _
+    have lengthWord : Bytes.toB256 (A.read (p + 164).toNat 32).1 = d.returnData.length.toB256 := images.2.1
+    have accepted := (safeTransfer_success_inv project (by decide : 17 ∉ []) decoded).2
+    change (Bytes.toB256 (A.read (p + 164).toNat 32).1 = 0 ∧
+        ∃ residual, Seg.done (.returned out) = .done (.returned
+          (St d R (A.read (p + 164).toNat 32).2 residual))) ∨
+      (Bytes.toB256 (A.read (p + 164).toNat 32).1 ≠ 0 ∧
+        32 ≤ (Bytes.toB256 ((A.read (p + 164).toNat 32).2.read (p + 164).toNat 32).1).toNat ∧
+        Bytes.toB256 (((A.read (p + 164).toNat 32).2.read (p + 164).toNat 32).2.read
+          (32 + (p + 164)).toNat 32).1 ≠ 0 ∧
+        ∃ residual, Seg.done (.returned out) = .done (.returned
+          (St d R (((A.read (p + 164).toNat 32).2.read (p + 164).toNat 32).2.read
+            (32 + (p + 164)).toNat 32).2 residual))) at accepted
+    rw [carrier.read_self (by rw [nat164]; omega), carrier.read_self (by rw [nat164]; omega),
+      lengthWord, lenNat] at accepted
+    rcases accepted with ⟨zero, _⟩ | ⟨_, enough, head, residual, returned⟩
+    · exact (lenNonzero zero).elim
+    · rw [show (32 : B256) + (p + 164) = (p + 164) + 32 from B256.add_comm,
+        images.2.2 enough] at head
+      have copyRoom := Jaune.memExtSize_access_le
+        n (p + 164 + 32).toNat
+        d.returnData.length (by omega)
+      rw [show (32 : B256) + (p + 164) = (p + 164) + 32 from B256.add_comm,
+        carrier.read_self (by omega)] at returned
+      have outEq : out = St d R A residual := Seg.done.inj returned |> Outcome.returned.inj
+      refine ⟨residual, Or.inr ⟨enough, head⟩, ?_⟩
+      rw [ite_eq_right empty]
+      exact outEq
+
 /-- A complete moving helper returns exactly its own full optional reply
 allocation and derives the token's optional-bool acceptance from the bytecode. -/
 theorem safeTransfer_dynamicReturned_inv {P : Sevm → Devm → Ninst → Devm → Prop}
@@ -2618,73 +2708,10 @@ theorem safeTransfer_dynamicReturned_inv {P : Sevm → Devm → Ninst → Devm �
     safeTransfer_dynamicReply_inv project fork mem lower width (by decide : 71 ∉ [])
       (by decide : 16 ∉ []) (by decide : 17 ∉ [])
       ((SFunc.runP_iff_runCutP_nil (P := P)).mp run)
-  have nat164 : (p + 164).toNat = p.toNat + 164 := by
-    rw [B256.toNat_add, show (164 : B256).toNat = 164 from rfl, Nat.lo_eq_of_lt (by omega)]
-  by_cases empty : d.returnData = []
-  · rw [empty, show Nat.toB256 (List.length ([] : Bytes)) = (0 : B256) from rfl,
-      ite_eq_left rfl, ite_eq_left rfl] at decoded
-    have accepted := (safeTransfer_success_inv project (by decide : 17 ∉ []) decoded).2
-    rcases accepted with ⟨_, residual, returned⟩ | ⟨_, _, _, residual, returned⟩
-    · simp only [show (96 : B256).toNat = 96 from rfl] at returned
-      rw [postMem.read_self (by omega)] at returned
-      have outEq : out = St d R d.memory residual := Seg.done.inj returned |> Outcome.returned.inj
-      refine ⟨forwarded, callGas, d, residual, step, stack, memory, output, replyWidth, Or.inl empty, ?_⟩
-      rw [ite_eq_left empty]
-      exact outEq
-    · simp only [show (96 : B256).toNat = 96 from rfl,
-        show ((32 : B256) + 96).toNat = 128 from rfl] at returned
-      rw [postMem.read_self (by omega), postMem.read_self (by omega),
-        postMem.read_self (by omega)] at returned
-      have outEq : out = St d R d.memory residual := Seg.done.inj returned |> Outcome.returned.inj
-      refine ⟨forwarded, callGas, d, residual, step, stack, memory, output, replyWidth, Or.inl empty, ?_⟩
-      rw [ite_eq_left empty]
-      exact outEq
-  · have positive : 0 < d.returnData.length := List.length_pos_iff.mpr empty
-    have lenNat : d.returnData.length.toB256.toNat = d.returnData.length :=
-      B256.toNat_toB256_of_lt replyWidth
-    have lenNonzero : d.returnData.length.toB256 ≠ 0 := by
-      intro zero
-      rw [zero] at lenNat
-      change 0 = d.returnData.length at lenNat
-      omega
-    rw [ite_eq_right lenNonzero, ite_eq_right lenNonzero] at decoded
-    let A := Blanc.Lift.bytesArrayMemory d.memory (p + 164) d.returnData
-    have images := Blanc.Lift.bytesArrayMemory_image (bytes := d.returnData) postMem
-      (by rw [nat164]; omega) (by rw [nat164]; omega) (by rw [nat164]; omega)
-    have carrier : PtrMem (p + 164 + ((d.returnData.length.toB256 + 63) &&& ~~~31))
-        (memExtSize (safeTransfer_dynamicCallMemory M p amount toWord).size
-          (p + 164 + 32).toNat d.returnData.length) A := images.1
-    have room : (safeTransfer_dynamicCallMemory M p amount toWord).size ≤
-        memExtSize (safeTransfer_dynamicCallMemory M p amount toWord).size
-          (p + 164 + 32).toNat d.returnData.length := memExtSize_ge _ _ _
-    have lengthWord : Bytes.toB256 (A.read (p + 164).toNat 32).1 = d.returnData.length.toB256 := images.2.1
-    have accepted := (safeTransfer_success_inv project (by decide : 17 ∉ []) decoded).2
-    change (Bytes.toB256 (A.read (p + 164).toNat 32).1 = 0 ∧
-        ∃ residual, Seg.done (.returned out) = .done (.returned
-          (St d R (A.read (p + 164).toNat 32).2 residual))) ∨
-      (Bytes.toB256 (A.read (p + 164).toNat 32).1 ≠ 0 ∧
-        32 ≤ (Bytes.toB256 ((A.read (p + 164).toNat 32).2.read (p + 164).toNat 32).1).toNat ∧
-        Bytes.toB256 (((A.read (p + 164).toNat 32).2.read (p + 164).toNat 32).2.read
-          (32 + (p + 164)).toNat 32).1 ≠ 0 ∧
-        ∃ residual, Seg.done (.returned out) = .done (.returned
-          (St d R (((A.read (p + 164).toNat 32).2.read (p + 164).toNat 32).2.read
-            (32 + (p + 164)).toNat 32).2 residual))) at accepted
-    rw [carrier.read_self (by rw [nat164]; omega), carrier.read_self (by rw [nat164]; omega),
-      lengthWord, lenNat] at accepted
-    rcases accepted with ⟨zero, _⟩ | ⟨_, enough, head, residual, returned⟩
-    · exact (lenNonzero zero).elim
-    · rw [show (32 : B256) + (p + 164) = (p + 164) + 32 from B256.add_comm,
-        images.2.2 enough] at head
-      have copyRoom := Jaune.memExtSize_access_le
-        (safeTransfer_dynamicCallMemory M p amount toWord).size (p + 164 + 32).toNat
-        d.returnData.length (by omega)
-      rw [show (32 : B256) + (p + 164) = (p + 164) + 32 from B256.add_comm,
-        carrier.read_self (by omega)] at returned
-      have outEq : out = St d R A residual := Seg.done.inj returned |> Outcome.returned.inj
-      refine ⟨forwarded, callGas, d, residual, step, stack, memory, output, replyWidth,
-        Or.inr ⟨enough, head⟩, ?_⟩
-      rw [ite_eq_right empty]
-      exact outEq
+  obtain ⟨residual, accepted, returned⟩ := safeTransfer_decodedReturned_inv project
+    postMem lower width fit replyWidth decoded
+  exact ⟨forwarded, callGas, d, residual, step, stack, memory, output, replyWidth,
+    accepted, returned⟩
 
 /-- The literal second burn caller derives a returned helper; its halted alternative is impossible. -/
 theorem burnSecondTransfer_call_inv {P : Sevm → Devm → Ninst → Devm → Prop}

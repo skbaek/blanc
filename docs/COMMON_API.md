@@ -4540,6 +4540,33 @@ partition through its actual slot queue. These are registry entries: their
 compound occurrence and cursor obligations have no reliable single goal-head
 trigger.
 
+For the Pair's shared internal callees, use
+[`PairReservesCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairReservesCursor.lean),
+[`PairCheckedSubCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairCheckedSubCursor.lean),
+[`PairCheckedMulCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairCheckedMulCursor.lean)
+and [`PairLPBurnCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairLPBurnCursor.lean).
+They retain arbitrary original caller/outer continuations and derive residual
+gas and complete return state from the supplied actual execution. The transfer
+initializer and copy/partial-merge inverses live in
+[`PairTransferInitialize.lean`](../Blanc/Lift/UniswapV2Pair/PairTransferInitialize.lean)
+and [`PairTransferPreparation.lean`](../Blanc/Lift/UniswapV2Pair/PairTransferPreparation.lean);
+their actual cursor consumers are
+[`PairTransferCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairTransferCursor.lean)
+and [`PairTransferCopyCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairTransferCopyCursor.lean).
+`pair_transfer_request_cursor_state` in
+[`PairTransferRequestCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairTransferRequestCursor.lean)
+normalizes the physical transfer payload at a moving free pointer;
+`pair_transfer_call_of_gas_cursor` in
+[`PairTransferCallCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairTransferCallCursor.lean)
+binds it to the supplied root's actual call slot and returned cursor. Use the
+literal line inverses through `CursorStateAt.line`, and retain the occurrence
+carrier when subsequent consumers need raw child identity.
+The already reached optional-bool decoder is inverted by
+`safeTransfer_decodedReturned_inv` in
+[`SafeTransferWalk.lean`](../Blanc/Lift/UniswapV2Pair/SafeTransferWalk.lean).
+It derives acceptance and the complete physical return allocation without
+selecting an external call; the original whole-helper inverse delegates to it.
+
 ## Common-library-first workflow
 
 A needed definition, lemma, tactic, or instance has a **generic shape** when
