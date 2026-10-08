@@ -16,6 +16,7 @@ structure PermitCallOccurrence (root : Exec.Deriv) (b : Devm) where
     St (permitNonceWorld root.sevm b (permitOwner root.sevm))
       (gasWord :: 1 :: 482 :: 128 :: 450 :: 32 :: permitPublicCallStack root.sevm b 0xd505accf)
       (permitPublicCallMemory root.sevm b) gas
+  beforeMemory : call.occurrence.node.devm.memory = permitPublicCallMemory root.sevm b
   gap : Exec.Deriv.ExecFreeUntil root call.occurrence.node
   returnedCursor : Cursor
   placed : CursorOK code cert call.returned returnedCursor
@@ -125,10 +126,12 @@ theorem permit_call_occurrence {sevm : Sevm} {b post : Devm} {G : Nat}
     generalize returned : call.returned = N at edge ⊢
     cases edge <;> rfl
   have beforeSevm := sameNode ▸ cut.sevm_eq
-  refine ⟨⟨call, gw, gas, beforeSevm, ?_, ?_, κ', placed, treeK.1, ?_,
+  refine ⟨⟨call, gw, gas, beforeSevm, ?_, ?_, ?_, κ', placed, treeK.1, ?_,
     (Cursor.parentStep_sevm call.edge).trans beforeSevm, ?_, flag, out, post, bound, ?_⟩⟩
   · rw [sameNode]
     exact state
+  · rw [sameNode]
+    exact cut.memory_eq
   · rw [sameNode]
     exact cut.free
   · rw [treeK.2]
