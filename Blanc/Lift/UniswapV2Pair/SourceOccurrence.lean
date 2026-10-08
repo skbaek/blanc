@@ -42,6 +42,47 @@ def SourceSlotQueue {root : Exec.Deriv} {x : Xinst}
         (Exec.retainedTargetTurnsAt pair [index] childRun).filterMap Sum.getRight?
       else [])
 
+/-- Complete chronological events belong to the original slot and settlement.
+The parent index counts every spawn, and every retained child keeps its full path. -/
+def SourceSlotEvents {root : Exec.Deriv} {x : Xinst}
+    (call : CallOccurrenceStep root x) (pair : Adr) (index : Nat)
+    (events : List (Log ⊕ Exec.LocatedFrame)) : Prop :=
+  (call.occurrence.slot = .none ∧ events = []) ∨
+    ∃ (childEvm : Evm) (raw : Execution) (callee : Jaune.Frame)
+      (resume : Resume) (pc' : Nat)
+      (childRun : Exec childEvm.pc childEvm.sta childEvm.dyna raw)
+      (next : Exec pc' call.occurrence.node.sevm call.returned.devm call.occurrence.node.exn)
+      (spawn : Evm.step ⟨call.occurrence.node.pc, call.occurrence.node.sevm,
+        call.occurrence.node.devm⟩ = .spawn callee resume pc')
+      (enter : callee.enter = .run childEvm)
+      (resumed : resume.run (callee.settle raw) = .ok call.returned.devm),
+      call.occurrence.slot = .some ⟨childEvm, raw⟩ ∧
+      call.occurrence.node.exc = .runOk spawn enter childRun resumed next ∧
+      events = (if settles : Jaune.Frame.settlementCommits callee raw = true then
+        Exec.targetLogEventsFrom pair [index] 0 childRun
+          (Jaune.Frame.raw_commits_of_settlementCommits settles)
+      else [])
+
+/-- The full event queue projects to exactly the original selected-frame queue. -/
+theorem SourceSlotEvents.queue {root : Exec.Deriv} {x : Xinst}
+    {call : CallOccurrenceStep root x} {pair : Adr} {index : Nat}
+    {events : List (Log ⊕ Exec.LocatedFrame)}
+    (observed : SourceSlotEvents call pair index events) :
+    SourceSlotQueue call pair index (events.filterMap Sum.getRight?) := by
+  rcases observed with ⟨none, empty⟩ |
+    ⟨evm, raw, callee, resume, pc, child, next, spawn, enter, resumed, slot, run, eventsEq⟩
+  · exact Or.inl ⟨none, by rw [empty]; rfl⟩
+  · refine Or.inr ⟨evm, raw, callee, resume, pc, child, next, spawn, enter, resumed,
+      slot, run, ?_⟩
+    rw [eventsEq]
+    by_cases settles : Jaune.Frame.settlementCommits callee raw = true
+    · rw [dite_eq_left settles, ite_eq_left settles,
+        Exec.targetLogEventsFrom_frames,
+        Exec.retainedTargetTurnsAt_filterMap_eq _ _ _
+          (Jaune.Frame.raw_commits_of_settlementCommits settles)]
+    · rw [dite_eq_right settles, ite_eq_right settles]
+      rfl
+
 /-- A suspended source request and reply observed one actual external instruction. -/
 structure SourceCallAt (root : Exec.Deriv) (frame : Frame) (request : Request)
     (reply : ExternalResult) (index : Nat) where
@@ -94,22 +135,23 @@ theorem PositionalTurns.forget {frame : Frame} {request : Request}
   cases annotated with
   | staticViews views mapped authentic consumed => exact consumed
 
+mutual
 /-- Source consumption advances along the actual returned parent node and the
 source continuation's carried state. Terminal cases exclude further calls. -/
-inductive PositionalConsumes (root : Exec.Deriv) :
-    Exec.Deriv → Nat → SegmentResult → Transcript → RunResult → Prop
-  | finished {start : Exec.Deriv} {index : Nat} (frame : Frame) (bytes : Bytes)
+inductive PositionalConsumes :
+    Exec.Deriv → Exec.Deriv → Nat → SegmentResult → Transcript → RunResult → Prop
+  | finished {root start : Exec.Deriv} {index : Nat} (frame : Frame) (bytes : Bytes)
       (free : ∀ node, Exec.Deriv.ParentPrefix start node →
         ∀ x, ¬ Ninst.At node.sevm.code node.pc (.exec x)) :
       PositionalConsumes root start index (.finished frame bytes) .done
         {status := .success bytes, frame := frame, remaining := .done, childReturns := []}
-  | failed {start : Exec.Deriv} {index : Nat} (frame : Frame) (failure : Failure)
+  | failed {root start : Exec.Deriv} {index : Nat} (frame : Frame) (failure : Failure)
       (genuine : failure ≠ .incompleteTranscript)
       (free : ∀ node, Exec.Deriv.ParentPrefix start node →
         ∀ x, ¬ Ninst.At node.sevm.code node.pc (.exec x)) :
       PositionalConsumes root start index (.failed frame failure) .done
         {status := .failed failure, frame := frame, remaining := .done, childReturns := []}
-  | nextCall {start : Exec.Deriv} {index : Nat}
+  | nextCall {root start : Exec.Deriv} {index : Nat}
       {frame : Frame} {request : Request} {continuation : Continuation}
       {reply : ExternalResult} {turns tail : Transcript} {executed : TurnsResult} {out : RunResult}
       (observed : SourceCallAt root frame request reply index)
@@ -124,16 +166,115 @@ inductive PositionalConsumes (root : Exec.Deriv) :
       PositionalConsumes root start index (.suspended frame request continuation)
         (.next reply turns tail) {out with childReturns := executed.childReturns ++ out.childReturns}
 
-/-- Annotation erasure recovers the existing exact consumption, without
-reselecting a model state, request, transcript or successful result. -/
+  | nextMutableCall {root start : Exec.Deriv} {index : Nat}
+      {frame : Frame} {request : Request} {continuation : Continuation}
+      {reply : ExternalResult} {turns tail : Transcript} {executed : TurnsResult} {out : RunResult}
+      {events : List (Log ⊕ Exec.LocatedFrame)}
+      (observed : SourceCallAt root frame request reply index)
+      (gap : Exec.Deriv.ExecFreeUntil start observed.call.occurrence.node)
+      (queue : SourceSlotEvents observed.call frame.context.pair index events)
+      (present : (request.requiresCode && !reply.codeExists) = false)
+      (noCodeTurns : reply.codeExists = false → turns = .done)
+      (during : PositionalMutableTurns frame request 0 events turns executed)
+      (rest : PositionalConsumes root observed.call.returned (index + 1)
+        (resumeSegment
+          (if reply.success then executed.frame else {executed.frame with current := frame.current})
+          request continuation reply) tail out) :
+      PositionalConsumes root start index (.suspended frame request continuation)
+        (.next reply turns tail) {out with childReturns := executed.childReturns ++ out.childReturns}
+
+/-- Mutable invocations consume the actual located child at the current checkpoint.
+The same child result carries the actual output and advances the following turn. -/
+inductive PositionalMutableTurns :
+    Frame → Request → Nat → List (Log ⊕ Exec.LocatedFrame) → Transcript → TurnsResult → Prop
+  | done (frame : Frame) (request : Request) (turn : Nat) :
+      PositionalMutableTurns frame request turn [] .done
+        {complete := true, frame := frame, childReturns := []}
+  | foreignLog {frame : Frame} {request : Request} {turn : Nat}
+      {log : Log} {events : List (Log ⊕ Exec.LocatedFrame)} {tail : Transcript} {out : TurnsResult}
+      (mutable : externalStatic frame request = false)
+      (rest : PositionalMutableTurns
+        {frame with current :=
+          {frame.current with logs := frame.current.logs ++
+            [.foreign {invocation := frame.context.invocation, site := request.site, turn := turn}
+              log.address log.topics log.data]}}
+        request (turn + 1) events tail out) :
+      PositionalMutableTurns frame request turn (.inl log :: events)
+        (.foreignLog log.address log.topics log.data tail) out
+  | invoke {frame : Frame} {request : Request} {turn : Nat}
+      {located : Exec.LocatedFrame} {entry : Entry}
+      {events : List (Log ⊕ Exec.LocatedFrame)} {transcript tail : Transcript}
+      {child : RunResult} {out : TurnsResult}
+      (selected : PositionalConsumes (Exec.Frame.rootDeriv located.frame)
+        (Exec.Frame.rootDeriv located.frame) 0
+        (startTyped frame.current
+          (childContext frame request turn located.frame.sevm.caller
+            located.frame.sevm.value located.frame.sevm.isStatic) entry) transcript child)
+      (output : child.status = .success
+        (Execution.committedPost located.frame.out located.frame.committed).output)
+      (rest : PositionalMutableTurns {frame with current := child.frame.current}
+        request (turn + 1) events tail out) :
+      PositionalMutableTurns frame request turn (.inr located :: events)
+        (.invoke located.frame.sevm.caller located.frame.sevm.value located.frame.sevm.isStatic
+          entry transcript tail)
+        {out with childReturns := child.childReturns ++
+          [{context := childContext frame request turn located.frame.sevm.caller
+              located.frame.sevm.value located.frame.sevm.isStatic,
+            entry := entry, status := child.status}] ++ out.childReturns}
+end
+
+/-- Erasure keeps the identical source segment, transcript and result. -/
 theorem PositionalConsumes.forget {root start : Exec.Deriv} {index : Nat}
     {segment : SegmentResult} {transcript : Transcript} {out : RunResult}
     (annotated : PositionalConsumes root start index segment transcript out) :
     ExactConsumes segment transcript out := by
-  induction annotated with
-  | finished frame bytes free => exact .finished frame bytes
-  | failed frame failure genuine free => exact .failed frame failure genuine
-  | nextCall observed gap present noCodeTurns during rest ih =>
-      exact .nextCall present noCodeTurns during.forget ih
+  refine PositionalConsumes.rec
+    (motive_1 := fun _ _ _ segment transcript out _ => ExactConsumes segment transcript out)
+    (motive_2 := fun frame request turn _ transcript out _ =>
+      ExactTurns frame request turn transcript out) ?_ ?_ ?_ ?_ ?_ ?_ ?_ annotated
+  · intro root start index frame bytes free
+    exact .finished frame bytes
+  · intro root start index frame failure genuine free
+    exact .failed frame failure genuine
+  · intro root start index frame request continuation reply turns tail executed out
+      observed gap present noCodeTurns during rest ih
+    exact .nextCall present noCodeTurns during.forget ih
+  · intro root start index frame request continuation reply turns tail executed out events
+      observed gap queue present noCodeTurns during rest ihDuring ihRest
+    exact .nextCall present noCodeTurns ihDuring ihRest
+  · intro frame request turn
+    exact .done frame request turn
+  · intro frame request turn log events tail out mutable rest ih
+    exact .foreignLog mutable ih
+  · intro frame request turn located entry events transcript tail child out
+      selected output rest ihSelected ihRest
+    exact .invoke ihSelected ihRest
+
+/-- Erasure keeps the identical mutable turn queue and recursively selected results. -/
+theorem PositionalMutableTurns.forget {frame : Frame} {request : Request} {turn : Nat}
+    {events : List (Log ⊕ Exec.LocatedFrame)} {transcript : Transcript} {out : TurnsResult}
+    (annotated : PositionalMutableTurns frame request turn events transcript out) :
+    ExactTurns frame request turn transcript out := by
+  refine PositionalMutableTurns.rec
+    (motive_1 := fun _ _ _ _ _ _ _ => True)
+    (motive_2 := fun frame request turn _ transcript out _ =>
+      ExactTurns frame request turn transcript out) ?_ ?_ ?_ ?_ ?_ ?_ ?_ annotated
+  · intro root start index frame bytes free
+    exact True.intro
+  · intro root start index frame failure genuine free
+    exact True.intro
+  · intro root start index frame request continuation reply turns tail executed out
+      observed gap present noCodeTurns during rest ih
+    exact True.intro
+  · intro root start index frame request continuation reply turns tail executed out events
+      observed gap queue present noCodeTurns during rest ihDuring ihRest
+    exact True.intro
+  · intro frame request turn
+    exact .done frame request turn
+  · intro frame request turn log events tail out mutable rest ih
+    exact .foreignLog mutable ih
+  · intro frame request turn located entry events transcript tail child out
+      selected output rest ihSelected ihRest
+    exact .invoke selected.forget ihRest
 
 end Blanc.Lift.UniswapV2Pair
