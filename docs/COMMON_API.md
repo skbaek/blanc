@@ -4574,6 +4574,9 @@ spawn and resume. It does not select a different model call.
 advances the supplied actual code-size guard, derives code presence from its
 successful branch and retains the full warmed world and K. The existing fee
 cursor theorem delegates to this same proof.
+For a checked referenced branch, `pair_code_guard_to_cursor_state` retains
+the same guard data and advances to the certificate-selected successor;
+the original literal-branch interface is preserved.
 
 The shared dispatcher entry `pair_dispatch_selector_cursor_state` in
 [`PairDispatchCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairDispatchCursor.lean)
@@ -4639,6 +4642,18 @@ and `locked_mutable_source_slot_turns` in
 They bind the actual selected slot, its full queue, and each same-witness
 child's positional consumption and committed output; the locked supplier
 uses the actual child authorization and representation.
+
+For recursive entry admission on that same selected proof, use
+`AdmittedSourceConsumes` and `SourceAdmission` in
+[`SourceAdmission.lean`](../Blanc/Lift/UniswapV2Pair/SourceAdmission.lean),
+then `admitted_source_slot_turns` and `AdmittedMutableTurns` in
+[`AdmittedMutableFold.lean`](../Blanc/Lift/UniswapV2Pair/AdmittedMutableFold.lean).
+These acyclic adapters parameterize child authentication, retain the complete
+actual slot event queue and its selected turns, and index each recursive
+admission by the same child consumption proof. The Pair endpoint aliases
+`PairAdmittedConsumes` and `PairMutableAdmission` live in
+[`PairPositionalAdmission.lean`](../Blanc/Lift/UniswapV2Pair/PairPositionalAdmission.lean).
+The concrete strong locked-child supplier is a separate consumer obligation.
 
 ## Common-library-first workflow
 
