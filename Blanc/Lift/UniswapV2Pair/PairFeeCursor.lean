@@ -157,7 +157,8 @@ theorem pair_fee_code_cursor_state {root : Exec.Deriv} {b post : Devm}
   obtain ⟨guard⟩ := cut.line cert_check success fork
     [.reg .extcodesize, .reg .iszero, .reg (.dup 0), .reg .iszero,
       .push [0x27,0x57] (by decide)] rfl
-    (by intro n member x equal; subst n; simp at member)
+    (by intro n member x equal; subst n; simp only [List.mem_cons,
+      List.not_mem_nil, reduceCtorEq, or_self] at member)
     (b' := temporalAccountAccessBase b factory.toAdr) (S' := 0x2757 :: 1 :: 0 :: S) (M' := M) (by
       intro gas d line
       obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_extcodesize fork step

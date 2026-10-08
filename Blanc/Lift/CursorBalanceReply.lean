@@ -74,7 +74,8 @@ theorem CursorStateAt.returnWord {code : ByteArray} {c : Cert} {start : Exec.Der
   rw [decode] at decoder
   obtain ⟨entry⟩ := decoder.dest checked success fork
   obtain ⟨loaded⟩ := entry.line checked success fork [.reg .pop, .reg .mload] rfl
-    (by intro ni member xi equal; subst ni; simp at member)
+    (by intro ni member xi equal; subst ni; simp only [List.mem_cons,
+      List.not_mem_nil, reduceCtorEq, or_self] at member)
     (b' := b) (S' := Bytes.toB256 (M.read p.toNat 32).1 :: R) (M' := M) (by
       intro gas d line
       obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_pop step

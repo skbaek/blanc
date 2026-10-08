@@ -47,7 +47,8 @@ theorem pair_fee_occurrence_of_callee {root start : Exec.Deriv} {b post : Devm}
   obtain ⟨guarded⟩ := guarded
   obtain ⟨opened⟩ := guarded.dest cert_check success fork
   obtain ⟨beforeGas⟩ := opened.line cert_check success fork [.reg .pop] rfl
-    (by intro n member x equal; subst n; simp at member)
+    (by intro n member x equal; subst n; simp only [List.mem_cons,
+      List.not_mem_nil, reduceCtorEq, or_self] at member)
     (by
       intro gas d line
       obtain ⟨_, step, line⟩ := Line.of_run_cons line
