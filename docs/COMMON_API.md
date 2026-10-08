@@ -4669,6 +4669,14 @@ second starts from the first returned node, memory and decoded local.
 `SwapBalances.noExecTail` excludes all further external instructions after the
 actual final reply, including the original pending wrapper STOP.
 
+[`SwapPositionalSuffix.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalSuffix.lean)
+finishes the same two decoded balance replies through the actual body return and
+pending wrapper STOP. `swap_physical_result` retains the complete original-root
+optional-call chain, the same acceptance and range facts, final machine image
+and actual output under only code equality, covered fork, Swap selector and
+successful original `Exec 0`. Empty output follows only with a fresh input output
+buffer in the canonical integration.
+
 The Pair mutable fold's `mutable_selected_root_with` in
 [`MutableTurns.lean`](../Blanc/Lift/UniswapV2Pair/MutableTurns.lean)
 parameterizes child consumption and turn introductions while the existing
