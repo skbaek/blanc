@@ -102,7 +102,7 @@ theorem burnFinalBalanceRead_inv {P : Sevm → Devm → Ninst → Devm → Prop}
   subst loaded
   exact ⟨gw, callGas, d, out, tailGas, call, post, long, bound, answered, replyMem, decoded⟩
 
-private def burnFinalFirstRequestLine : List Ninst := [
+def burnFinalFirstRequestLine : List Ninst := [
   .push [0x40] (by decide),
   .reg (.dup 0),
   .reg .mload,
@@ -139,7 +139,7 @@ private def burnFinalFirstRequestLine : List Ninst := [
   .reg (.dup 6),
   .reg (.dup 0)]
 
-private theorem burnFinalFirstRequestLine_inv {sevm : Sevm} {b final : Devm}
+theorem burnFinalFirstRequestLine_inv {sevm : Sevm} {b final : Devm}
     {R : List B256} {M : Mem} {G : Nat} {p : B256}
     {supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ : B256}
     (ptr : PtrWord p M) (low : 96 ≤ p.toNat) (high : p.toNat + 1024 < 2 ^ 256)
@@ -340,7 +340,7 @@ theorem burnFinalFirstBalance_inv {P : Sevm → Devm → Ninst → Devm → Prop
   rw [skimRequestMemory_read mem.wf high] at answered
   exact ⟨gw, callGas, d, out, tailGas, code, call, post, long, bound, answered, replyMem, tail⟩
 
-private def burnFinalSecondRequestLine : List Ninst := [
+def burnFinalSecondRequestLine : List Ninst := [
   .push [0x40] (by decide),
   .reg (.dup 0),
   .reg .mload,
@@ -381,7 +381,7 @@ private def burnFinalSecondRequestLine : List Ninst := [
   .reg (.dup 6),
   .reg (.dup 0)]
 
-private theorem burnFinalSecondRequestLine_inv {sevm : Sevm} {b final : Devm}
+theorem burnFinalSecondRequestLine_inv {sevm : Sevm} {b final : Devm}
     {R : List B256} {M : Mem} {G : Nat} {p : B256}
     {supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ balance0 : B256}
     (ptr : PtrWord p M) (low : 96 ≤ p.toNat) (high : p.toNat + 1024 < 2 ^ 256)
