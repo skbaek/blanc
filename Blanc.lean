@@ -930,6 +930,7 @@ import Blanc.Lift.UniswapV2Pair.BurnPositionalPayment
 import Blanc.Lift.UniswapV2Pair.BurnPositionalPayout
 import Blanc.Lift.UniswapV2Pair.BurnPositionalLPBurn
 import Blanc.Lift.UniswapV2Pair.BurnPositionalPostFee
+import Blanc.Lift.UniswapV2Pair.BurnPositionalFour
 import Blanc.Lift.UniswapV2Pair.SyncOccurrence
 import Blanc.Lift.UniswapV2Pair.SourceOccurrence
 import Blanc.Lift.UniswapV2Pair.SyncSourceOccurrence

@@ -24,6 +24,7 @@ theorem BurnThreeCalls.firstTransferCallee {root : Exec.Deriv} {sevm : Sevm} {b 
     (r : BurnThreeCalls root sevm b) (success : root.exn = .ok post)
     (fork : CoveredFork sevm.benvStat.fork) :
     ∃ (N : Exec.Deriv) (residual : Nat), PtrMem 128 192 N.devm.memory ∧
+      Exec.Deriv.ExecFreeUntil r.fee.occurrence.call.returned N ∧
       Nonempty (CursorStateAt code cert r.fee.occurrence.call.returned t_1fdb_c57
         (lpBurnPost r.fee.occurrence.call.returned.sevm
           (afterSload r.fee.occurrence.call.returned.sevm N.devm 0)
@@ -60,7 +61,7 @@ theorem BurnThreeCalls.firstTransferCallee {root : Exec.Deriv} {sevm : Sevm} {b 
     (balanceRequestMemory_ptr
       (balanceReplyMemory_ptr r.initial.out0
         (balanceRequestMemory_ptr getterInitMemory_ptr sevm.currentTarget)) sevm.currentTarget)
-  obtain ⟨N, memory, ⟨pricing⟩⟩ := r.fee.returnCut startSuccess
+  obtain ⟨N, memory, pricing, pricingNode⟩ := r.fee.returnCutExact startSuccess
     (by rw [startEnv]; exact fork) (feeBurnMemory_ptr mem _) bound0 bound1
   have returnedSuccess : r.fee.occurrence.call.returned.exn = .ok post :=
     (Blanc.Exec.Deriv.ParentPrefix.exn_eq
@@ -72,6 +73,7 @@ theorem BurnThreeCalls.firstTransferCallee {root : Exec.Deriv} {sevm : Sevm} {b 
     (by simpa only [burnFeeLocals] using pricing) returnedSuccess
     (by rw [returnedEnv]; exact fork) memory
   obtain ⟨residual, callee⟩ := pricingCut
-  exact ⟨N, residual, memory, by simpa only [BurnThreeCalls.pricedLocals] using callee⟩
+  exact ⟨N, residual, memory, pricingNode ▸ pricing.free,
+    by simpa only [BurnThreeCalls.pricedLocals] using callee⟩
 
 end Blanc.Lift.UniswapV2Pair

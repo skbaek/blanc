@@ -4523,6 +4523,23 @@ contract-neutral.
 There is no recipe: the entry points are whole-contract theorems, not goal
 shapes a trigger could match.
 
+Shared Pair adapters retain their supplied original-bytecode cursor and actual
+world rather than selecting a call through a source run. The reusable fee
+request/reply carrier in
+[`PairFeeObservation.lean`](../Blanc/Lift/UniswapV2Pair/PairFeeObservation.lean)
+keeps the original-root occurrence, raw slot, complete physical reply and decoded
+word. Its `returnCursor`, `returnState` and `returnCutExact` in
+[`PairFeeReturn.lean`](../Blanc/Lift/UniswapV2Pair/PairFeeReturn.lean)
+transport that same reply through the actual internal return with arbitrary
+caller and outer continuations; `returnCutExact` retains `cut.node = N` for
+consumers which sample storage from the returned world. `returnCut` projects
+the same witness. The ordinary guarded static-call adapter `static_source_call_at`
+in [`StaticSourceCall.lean`](../Blanc/Lift/UniswapV2Pair/StaticSourceCall.lean)
+binds the supplied occurrence to the request, reply and original per-spawn
+partition through its actual slot queue. These are registry entries: their
+compound occurrence and cursor obligations have no reliable single goal-head
+trigger.
+
 ## Common-library-first workflow
 
 A needed definition, lemma, tactic, or instance has a **generic shape** when
