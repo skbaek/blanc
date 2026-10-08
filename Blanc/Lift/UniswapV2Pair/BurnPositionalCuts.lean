@@ -1,4 +1,5 @@
 import Blanc.Lift.CursorExact
+import Blanc.Lift.CursorExactLine
 import Blanc.Lift.ExactWalkAddress
 import Blanc.Lift.CursorOccurrence
 import Blanc.Lift.UniswapV2Pair.BurnForward
@@ -193,6 +194,18 @@ theorem burn_reserve_positional_cut {F : Exec.Deriv} {κ : Cursor}
       refine rx_push (w := 0x0d90) rfl (by simp only [List.length_cons]; omega) ?_
       exact rx_stop)
 
+/-- Literal original-bytecode reserve-helper line before its return. -/
+def burnReserveLine : List Ninst := [
+  .push [8] (by decide), .reg .sload,
+  .push [255,255,255,255,255,255,255,255,255,255,255,255,255,255] (by decide),
+  .reg (.dup 0), .reg (.dup 2), .reg .and, .reg (.swap 2),
+  .push [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0] (by decide),
+  .reg (.dup 3), .reg .div, .reg (.swap 0), .reg (.swap 1), .reg .and,
+  .reg (.swap 1),
+  .push [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0] (by decide),
+  .reg (.swap 0), .reg .div, .push [255,255,255,255] (by decide),
+  .reg .and, .reg (.swap 0)]
+
 /-- The reserve helper stops at its actual return instruction, with all three
 cache words and its real return tag still on the stack. -/
 theorem burn_reserve_return_positional_cut {F : Exec.Deriv} {κ : Cursor}
@@ -207,17 +220,15 @@ theorem burn_reserve_return_positional_cut {F : Exec.Deriv} {κ : Cursor}
       node.devm = St (afterSload F.sevm b 8)
         (ρ :: reserveTimestampRead (b.getStorVal F.sevm.currentTarget 8) ::
           reserve1Read (b.getStorVal F.sevm.currentTarget 8) ::
-          reserve0Read (b.getStorVal F.sevm.currentTarget 8) :: R) M (G + 8) := by
-  exact cursor_cut_exact (fs' := []) cert_check (f := t_0d90_c56) (tgt := .ret)
-    (s := St (afterSload F.sevm b 8)
-      (ρ :: reserveTimestampRead (b.getStorVal F.sevm.currentTarget 8) ::
-        reserve1Read (b.getStorVal F.sevm.currentTarget 8) ::
-        reserve0Read (b.getStorVal F.sevm.currentTarget 8) :: R) M (G + 8))
+          reserve0Read (b.getStorVal F.sevm.currentTarget 8) :: R) M (G + 8) ∧ cursor.K = κ.K := by
+  exact cursor_dest_line_exact_cont (fs := []) cert_check ok burnReserveLine .ret
+    (tree.trans (by rfl))
     (by
-      unfold t_0d90_c56
-      apply SFunc.CutAt.dest
-      burn_cut_nexts
-      exact .here) ok tree success fork (by
+      intro n member x equal
+      subst n
+      simp only [burnReserveLine, List.mem_cons, List.not_mem_nil,
+        reduceCtorEq, or_self] at member)
+    success fork (by
       rw [state]
       let sevm := F.sevm
       let c := sloadCost sevm b 8
