@@ -150,6 +150,144 @@ theorem swapTransferCall_replyShort {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     (StepIn.toRun step) rfl fork.rules_stateGas_none
     (by decide : (68 : B256).toNat < 2 ^ 160)
 
+/-- Literal Swap transfer0 guard line shared by the inverse and original cursor. -/
+def swapTransfer0GuardLine : List Ninst := [
+  .reg (.dup 10),
+  .reg .iszero,
+  .push [0x08, 0xd0] (by decide)]
+
+theorem swapTransfer0GuardLine_inv {sevm : Sevm} {b d : Devm} {S : List B256}
+    {t1 t0 r1 r0 len start toWord a1 a0 rho : B256} {M : Mem} {G : Nat}
+    (line : Line.Run sevm (St b (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: rho :: S) M G) swapTransfer0GuardLine d) :
+    ∃ G', d = St b
+      ((Bytes.toB256 [0x08, 0xd0]) ::
+       (B256.eqCheck a0 0) ::
+       t1 ::
+       t0 ::
+       0 ::
+       0 ::
+       r1 ::
+       r0 ::
+       len ::
+       start ::
+       toWord ::
+       a1 ::
+       a0 ::
+       rho :: S) M G' := by
+  dsimp only [swapTransfer0GuardLine] at line
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_iszero step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨gas, state⟩ := ri_push step
+  cases line
+  exact ⟨gas, state⟩
+
+/-- Literal Swap transfer1 guard line shared by the inverse and original cursor. -/
+def swapTransfer1GuardLine : List Ninst := [
+  .reg (.dup 9),
+  .reg .iszero,
+  .push [0x08, 0xe1] (by decide)]
+
+theorem swapTransfer1GuardLine_inv {sevm : Sevm} {b d : Devm} {S : List B256}
+    {t1 t0 r1 r0 len start toWord a1 a0 rho : B256} {M : Mem} {G : Nat}
+    (line : Line.Run sevm (St b (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: rho :: S) M G) swapTransfer1GuardLine d) :
+    ∃ G', d = St b
+      ((Bytes.toB256 [0x08, 0xe1]) ::
+       (B256.eqCheck a1 0) ::
+       t1 ::
+       t0 ::
+       0 ::
+       0 ::
+       r1 ::
+       r0 ::
+       len ::
+       start ::
+       toWord ::
+       a1 ::
+       a0 ::
+       rho :: S) M G' := by
+  dsimp only [swapTransfer1GuardLine] at line
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_iszero step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨gas, state⟩ := ri_push step
+  cases line
+  exact ⟨gas, state⟩
+
+/-- Literal Swap transfer0 setup line shared by the inverse and original cursor. -/
+def swapTransfer0SetupLine : List Ninst := [
+  .push [0x08, 0xd0] (by decide),
+  .reg (.dup 2),
+  .reg (.dup 10),
+  .reg (.dup 13),
+  .push [0x1f, 0xdb] (by decide)]
+
+theorem swapTransfer0SetupLine_inv {sevm : Sevm} {b d : Devm} {S : List B256}
+    {t1 t0 r1 r0 len start toWord a1 a0 rho : B256} {M : Mem} {G : Nat}
+    (line : Line.Run sevm (St b (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: rho :: S) M G) swapTransfer0SetupLine d) :
+    ∃ G', d = St b
+      ((Bytes.toB256 [0x1f, 0xdb]) ::
+       a0 ::
+       toWord ::
+       t0 ::
+       (Bytes.toB256 [0x08, 0xd0]) ::
+       t1 ::
+       t0 ::
+       0 ::
+       0 ::
+       r1 ::
+       r0 ::
+       len ::
+       start ::
+       toWord ::
+       a1 ::
+       a0 ::
+       rho :: S) M G' := by
+  dsimp only [swapTransfer0SetupLine] at line
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨gas, state⟩ := ri_push step
+  cases line
+  exact ⟨gas, state⟩
+
+/-- Literal Swap transfer1 setup line shared by the inverse and original cursor. -/
+def swapTransfer1SetupLine : List Ninst := [
+  .push [0x08, 0xe1] (by decide),
+  .reg (.dup 1),
+  .reg (.dup 10),
+  .reg (.dup 12),
+  .push [0x1f, 0xdb] (by decide)]
+
+theorem swapTransfer1SetupLine_inv {sevm : Sevm} {b d : Devm} {S : List B256}
+    {t1 t0 r1 r0 len start toWord a1 a0 rho : B256} {M : Mem} {G : Nat}
+    (line : Line.Run sevm (St b (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: rho :: S) M G) swapTransfer1SetupLine d) :
+    ∃ G', d = St b
+      ((Bytes.toB256 [0x1f, 0xdb]) ::
+       a1 ::
+       toWord ::
+       t1 ::
+       (Bytes.toB256 [0x08, 0xe1]) ::
+       t1 ::
+       t0 ::
+       0 ::
+       0 ::
+       r1 ::
+       r0 ::
+       len ::
+       start ::
+       toWord ::
+       a1 ::
+       a0 ::
+       rho :: S) M G' := by
+  dsimp only [swapTransfer1SetupLine] at line
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨gas, state⟩ := ri_push step
+  cases line
+  exact ⟨gas, state⟩
+
 /-- Both optimistic transfers, from the transfer branch to the callback branch `t_08e1_c4`.
 The second transfer runs at the pointer the first one moved; each taken transfer's reply
 bound (below `2^160` bytes) is derived from its own actual 68-byte CALL. -/
@@ -181,20 +319,16 @@ theorem swapTransfers_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {R : List B2
     intro b1 M1 p1 n1 G1 mem1 lower1 upper1 run
     unfold t_08d0_c4 at run
     obtain ⟨_, run⟩ := ric_destP run
-    obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-    obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
-    obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+    obtain ⟨d, line, run⟩ := SFunc.RunCutP.split_nexts StepIn.toRun swapTransfer1GuardLine run
+    obtain ⟨_, rfl⟩ := swapTransfer1GuardLine_inv line
     rcases ric_branchP run with ⟨zero, _, run⟩ | ⟨skip, gas, run⟩
     · have nonzero : a1 ≠ 0 := by
         intro h
         rw [h] at zero
         exact absurd zero (by decide)
       unfold t_08d7_c4 at run
-      obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-      obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-      obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-      obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-      obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+      obtain ⟨d, line, run⟩ := SFunc.RunCutP.split_nexts StepIn.toRun swapTransfer1SetupLine run
+      obtain ⟨_, rfl⟩ := swapTransfer1SetupLine_inv line
       simp only [show Bytes.toB256 [0x08, 0xe1] = (0x8e1 : B256) from rfl] at run
       obtain ⟨d, residual, call, ⟨n2, ptr⟩, cont⟩ :=
         swapTransferSite_inv fork mem1 lower1 (by omega) run
@@ -206,20 +340,16 @@ theorem swapTransfers_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {R : List B2
       exact ⟨b1, M1, p1, n1, gas, Or.inl ⟨zero, rfl, rfl, rfl⟩, mem1, lower1, by omega, run⟩
   unfold t_08bf_c4 at run
   obtain ⟨_, run⟩ := ric_destP run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  obtain ⟨d, line, run⟩ := SFunc.RunCutP.split_nexts StepIn.toRun swapTransfer0GuardLine run
+  obtain ⟨_, rfl⟩ := swapTransfer0GuardLine_inv line
   rcases ric_branchP run with ⟨zero, _, run⟩ | ⟨skip, gas, run⟩
   · have nonzero : a0 ≠ 0 := by
       intro h
       rw [h] at zero
       exact absurd zero (by decide)
     unfold t_08c6_c4 at run
-    obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-    obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-    obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-    obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-    obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+    obtain ⟨d, line, run⟩ := SFunc.RunCutP.split_nexts StepIn.toRun swapTransfer0SetupLine run
+    obtain ⟨_, rfl⟩ := swapTransfer0SetupLine_inv line
     simp only [show Bytes.toB256 [0x08, 0xd0] = (0x8d0 : B256) from rfl] at run
     obtain ⟨d, residual, call, ⟨n1, ptr⟩, cont⟩ :=
       swapTransferSite_inv fork mem (by decide) (by decide) run
