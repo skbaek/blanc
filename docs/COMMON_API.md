@@ -4723,6 +4723,11 @@ binds the guarded callback request and successful full-byte reply to its same
 physical CALL, message, process, partition and complete queue. The code bit is
 justified by the actual guard rather than by the entered slot bit.
 
+[`SwapPositionalMutableCallback.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalMutableCallback.lean)
+retains the same guarded callback's complete events and recursively admitted
+children. `swap_source_callbacks` composes all optional mutable calls from the
+original decoded source entry to the same actual post-callback node and frame.
+
 [`SwapPositionalMutableTransfer.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalMutableTransfer.lean)
 retains each transfer's same complete event queue, mapped selected turns,
 recursively admitted children, checkpoint, finite locked representation and log

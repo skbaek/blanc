@@ -355,6 +355,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.SwapSourceOccurrenceCallback",
         "Lift.UniswapV2Pair.SwapPositionalMutableTransfer",
         "Lift.UniswapV2Pair.SwapPositionalSourcePrefix",
+        "Lift.UniswapV2Pair.SwapPositionalMutableCallback",
         "Lift.UniswapV2Pair.SwapTransfer",
         "Lift.UniswapV2Pair.SwapUpdateWalk",
         "Lift.UniswapV2Pair.SafeTransferWalk",
