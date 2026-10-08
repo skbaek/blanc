@@ -67,6 +67,8 @@ structure SourceCallAt (root : Exec.Deriv) (frame : Frame) (request : Request)
   guarded : request.requiresCode = true →
     (reply.codeExists = true ↔
       (call.occurrence.node.devm.getCode request.target).size.toB256 ≠ 0)
+  recoveryEntry : ∀ digest v r s, request.operation = .recover digest v r s →
+    reply.codeExists = call.occurrence.slot.isSome
   paths : List Exec.LocatedFrame
   queue : SourceSlotQueue call frame.context.pair index paths
   childFrames : List Exec.LocatedFrame

@@ -1,6 +1,6 @@
 import Blanc.Lift.CursorStateCuts
 import Blanc.Lift.CursorOccurrence
-import Blanc.Lift.UniswapV2Pair.PermitTurns
+import Blanc.Lift.UniswapV2Pair.PermitRawFacts
 import Blanc.Lift.UniswapV2Pair.PairDispatchCursor
 
 /-! Actual successful permit prefixes to the recovery instruction. -/
