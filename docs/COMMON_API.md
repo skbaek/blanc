@@ -4601,6 +4601,16 @@ The already reached optional-bool decoder is inverted by
 It derives acceptance and the complete physical return allocation without
 selecting an external call; the original whole-helper inverse delegates to it.
 
+For the original Swap prefix, `swap_prefix_cursor_state` in
+[`SwapPositionalPrefix.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalPrefix.lean)
+derives the selector, ABI, lock/write, packed-reserve return, liquidity and
+recipient route from original code, fork, selector and successful PC-zero
+execution. It retains the full world, raw cached locals, initialized memory,
+original stop continuation and call-free root gap. The five ABI and eight body
+literal line inverses are shared with the unchanged legacy source inverses in
+`SwapAbi.lean` and `SwapFront.lean`; no desired endpoint or residual gas is a
+public premise.
+
 The Pair mutable fold's `mutable_selected_root_with` in
 [`MutableTurns.lean`](../Blanc/Lift/UniswapV2Pair/MutableTurns.lean)
 parameterizes child consumption and turn introductions while the existing

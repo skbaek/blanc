@@ -883,6 +883,7 @@ import Blanc.Lift.UniswapV2Pair.SwapFront
 import Blanc.Lift.UniswapV2Pair.SwapFrontCanonical
 import Blanc.Lift.UniswapV2Pair.SwapFrontTurns
 import Blanc.Lift.UniswapV2Pair.SwapFrontTyped
+import Blanc.Lift.UniswapV2Pair.SwapPositionalPrefix
 import Blanc.Lift.UniswapV2Pair.SwapTransfer
 import Blanc.Lift.UniswapV2Pair.SwapUpdateWalk
 import Blanc.Lift.WordWindowMemory

@@ -344,6 +344,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.SwapFrontCanonical",
         "Lift.UniswapV2Pair.SwapFrontTurns",
         "Lift.UniswapV2Pair.SwapFrontTyped",
+        "Lift.UniswapV2Pair.SwapPositionalPrefix",
         "Lift.UniswapV2Pair.SwapTransfer",
         "Lift.UniswapV2Pair.SwapUpdateWalk",
         "Lift.UniswapV2Pair.SafeTransferWalk",
