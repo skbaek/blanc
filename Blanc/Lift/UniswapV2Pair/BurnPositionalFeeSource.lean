@@ -60,4 +60,42 @@ theorem BurnFourCalls.feeResume {root : Exec.Deriv} {sevm : Sevm} {b post : Devm
   exact (r.payoutSource rep fresh tracked (resumed := burnPositionalAfterFeeFrame current invocation sevm)
     rfl success fork).1
 
+/-- The actual third slot's complete static-view queue resumes into the same
+retained payout suspension and same admitted transfer continuation. -/
+theorem BurnFourCalls.feeSource
+    {Auth : Exec.Deriv → Entry → Transcript → Prop}
+    {root : Exec.Deriv} {sevm : Sevm} {b post : Devm}
+    {K : WriterKey → Prop} {current : Checkpoint} (r : BurnFourCalls root sevm b)
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (fresh : r.three.feeFresh K current) (tracked : K (.balance sevm.currentTarget))
+    (invocation : List Nat) (sem : CodeSem) (image : sem.image = some code.toList)
+    (installed : some (root.devm.getCode sevm.currentTarget).toList = sem.image)
+    (success : root.exn = .ok post) (fork : CoveredFork sevm.benvStat.fork)
+    (staticFresh : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = sevm.currentTarget →
+      WriterFreshKeys K (staticViewDecodedKeys F.sevm))
+    {tail : Transcript} {out : RunResult}
+    (rest : AdmittedSourceConsumes Auth root r.three.fee.occurrence.call.returned 3
+      (.suspended (r.sourceTransferFrame current invocation)
+        (requestFor .burnTransfer0 current.state.token0
+          (.transfer (Sevm.dataWord sevm 4).toAdr (r.three.amount0 r.pricing)))
+        (.burnTransfer0 (r.sourcePriced current))) tail out) :
+    ∃ views : List StaticViewTurn,
+      AdmittedSourceConsumes Auth root r.three.initial.second.returned 2
+        (.suspended (burnPositionalFeeFrame current invocation sevm)
+          (requestFor .burnFeeTo current.state.factory .feeTo) (.burnFee (r.three.sourceObserved current)))
+        (.next (feeObservedResult r.three.fee.out) (staticViewTranscript views .done) tail)
+        {out with childReturns :=
+          (staticViewChildReturns (burnPositionalFeeFrame current invocation sevm)
+            (requestFor .burnFeeTo current.state.factory .feeTo) 0 views ++ out.childReturns)} := by
+  obtain ⟨observed, views, same, during⟩ :=
+    r.three.feeViews rep invocation sem image installed fork staticFresh
+  rw [← r.feeResume rep fresh tracked invocation success fork] at rest
+  have result := AdmittedSourceConsumes.nextCall (start := r.three.initial.second.returned)
+    (continuation := .burnFee (r.three.sourceObserved current)) observed
+    (by rw [same]; exact r.three.fee.occurrence.free)
+    (by simp only [externalStatic, requestFor, BEq.rfl, Bool.or_true]) rfl
+    (by intro absent; cases absent) during
+    (by simpa only [same, feeObservedResult, ite_true, burnPositionalFeeFrame] using rest)
+  exact ⟨views, result⟩
+
 end Blanc.Lift.UniswapV2Pair
