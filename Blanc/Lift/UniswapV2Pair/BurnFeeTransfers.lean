@@ -40,15 +40,7 @@ private theorem burn_pending_logs_preserves {pair : Adr} {added : List PendingLo
 private theorem burnFee_lock_preserved (st : State) (sevm : Sevm) (b : Devm)
     (w r0 r1 : B256) :
     (feeBranchSourceFee st sevm b w r0 r1).state.unlocked = st.unlocked := by
-  unfold feeBranchSourceFee
-  split
-  · rfl
-  · split
-    · rfl
-    · split
-      · unfold feeGrowthSourceFee
-        split <;> rfl
-      · rfl
+  exact feeBranchSourceFee_unlocked st sevm b w r0 r1
 
 private theorem burnFee_lpMint_code (sevm : Sevm) (b : Devm) (R : List B256)
     (M : Mem) (w value : B256) (G : Nat) (a : Adr) :
@@ -494,33 +486,6 @@ theorem burnFeeCaller_source_finished {U K : WriterKey → Prop} {st : State}
     scratch same tracked suffix state locked nonstatic time pair sender inj apart sub
     (trace _ member) sem image beforeInstalled fork good staticGood
   exact ⟨cached, feeGas, feePost, observation, callee, answered, suffix, finished⟩
-
-/-- The first actual balance reply advances only the source segment and cache. -/
-theorem burn_resumeInitialBalance0 {frame : Frame} {locals : BurnLocals} {out : Bytes}
-    (long : 32 ≤ out.length) :
-    resumeSegment frame (requestFor .burnInitialBalance0 locals.token0 (.balanceOf frame.context.pair))
-        (.burnInitialBalance0 locals) (feeObservedResult out) =
-      .suspended
-        (frame.beginResume (requestFor .burnInitialBalance0 locals.token0 (.balanceOf frame.context.pair)))
-        (requestFor .burnInitialBalance1 locals.token1 (.balanceOf frame.context.pair))
-        (.burnInitialBalance1 locals (Bytes.toB256 (out.take 32))) := by
-  simp only [resumeSegment, decodeExternal, requestFor, feeObservedResult,
-    Bool.not_true, Bool.and_false, Bool.false_eq_true, ite_false, ite_true, long]
-  rfl
-
-/-- The second actual balance reply samples the old LP balance before fee minting. -/
-theorem burn_resumeInitialBalance1 {frame : Frame} {locals : BurnLocals} {out : Bytes}
-    {balance0 : B256} (long : 32 ≤ out.length) :
-    resumeSegment frame (requestFor .burnInitialBalance1 locals.token1 (.balanceOf frame.context.pair))
-        (.burnInitialBalance1 locals balance0) (feeObservedResult out) =
-      .suspended
-        (frame.beginResume (requestFor .burnInitialBalance1 locals.token1 (.balanceOf frame.context.pair)))
-        (requestFor .burnFeeTo frame.current.state.factory .feeTo)
-        (.burnFee ⟨locals, balance0, Bytes.toB256 (out.take 32),
-          frame.current.state.balanceOf frame.context.pair⟩) := by
-  simp only [resumeSegment, decodeExternal, requestFor, feeObservedResult,
-    Bool.not_true, Bool.and_false, Bool.false_eq_true, ite_false, ite_true, long]
-  rfl
 
 /-- Actual initial token replies and their authentic static queues feed the
 accepted fee/caller consumer in the original derivation. Cached token/reserve

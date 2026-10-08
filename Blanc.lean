@@ -962,6 +962,7 @@ import Blanc.Lift.UniswapV2Pair.BurnPositionalFacts
 import Blanc.Lift.UniswapV2Pair.BurnPositionalPricingFacts
 import Blanc.Lift.UniswapV2Pair.BurnPositionalLPFacts
 import Blanc.Lift.UniswapV2Pair.BurnPositionalFeeFacts
+import Blanc.Lift.UniswapV2Pair.BurnPositionalUniverse
 import Blanc.Lift.UniswapV2Pair.BurnPositionalPayoutSource
 import Blanc.Lift.UniswapV2Pair.BurnPositionalSource
 import Blanc.Lift.UniswapV2Pair.BurnPositionalInitialQueues
@@ -1011,6 +1012,7 @@ import Blanc.Lift.UniswapV2Pair.PairCodeGuardCursor
 import Blanc.Lift.UniswapV2Pair.PairFeeObservation
 import Blanc.Lift.UniswapV2Pair.PairFeeSourceCall
 import Blanc.Lift.UniswapV2Pair.PairFeeSourceKeys
+import Blanc.Lift.UniswapV2Pair.PairTraceKeys
 import Blanc.Lift.UniswapV2Pair.PairFeeReturn
 import Blanc.Lift.UniswapV2Pair.MintPositionalInv
 import Blanc.Lift.UniswapV2Pair.MintPositionalRequest

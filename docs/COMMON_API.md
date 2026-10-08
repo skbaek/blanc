@@ -4562,8 +4562,22 @@ commit premise is required.
 `feeBranchSourceKeys_contains` in
 [`PairFeeSourceKeys.lean`](../Blanc/Lift/UniswapV2Pair/PairFeeSourceKeys.lean)
 preserves every incoming tracked key through the fee branch's conditional
-recipient extension. The existing Burn pricing source proof consumes this
-shared inclusion when deriving LP-row freshness.
+recipient extension. `lpMintTouched_rows`, `feeMintFresh_of_universe` and
+`feeBranchSourceKeys_sub` derive recipient freshness and key containment in a
+supplied separated universe; `feeBranchSourceFee_unlocked` preserves the lock
+word. The old Mint helpers and Burn lock helper delegate to these same proofs.
+The existing Burn pricing source proof consumes the inclusion when deriving
+LP-row freshness.
+
+[`PairTraceKeys.lean`](../Blanc/Lift/UniswapV2Pair/PairTraceKeys.lean) owns the
+unchanged `mintReplyRow`, `mintFeeReplyKeys`, `mintTraceKeys`,
+`mintTraceKeys_frame` and `mintTraceKeys_rows` definitions and laws.
+`mint_feeReply_mem` places the supplied actual fee primitive's own reply row
+in that trace, covering entered child roots and synchronous precompile answers.
+The original names remain available through Mint's imports. The actual Burn
+consumer applies this only to the primitive projected from its retained slot;
+it does not use trace membership to select an occurrence. These compound
+trace/universe obligations have no reliable single recipe trigger.
 
 `SourceCallAt.noCodeMutableTranscript` in
 [`SourceSlotEventsEmpty.lean`](../Blanc/Lift/UniswapV2Pair/SourceSlotEventsEmpty.lean)
