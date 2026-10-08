@@ -122,8 +122,11 @@ theorem WriterRep.congr {K : WriterKey → Prop} {s s' : Stor} {st : State}
 
 /-- **Pair frame soundness, trace-admitted**: a successful Pair frame keeps the storage a finite
 representation over rows of a separated universe. -/
-theorem pairSpec_soundAdmitted (pair : Adr) {U : WriterKey → Prop} (inj : WriterInj U)
-    (apart : WriterApart U) : (pairSpec U).SoundAdmitted pair (pairEntry U) := by
+theorem pairSpec_soundAdmittedWith
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop} (pair : Adr) {U : WriterKey → Prop}
+    (supply : PairStepSupplyWith Consumes Auth U (fun _ => True)) :
+    (pairSpec U).SoundAdmitted pair (pairEntry U) := by
   intro sevm pre post fork run codeEq target admitted _ _ hpre
   subst target
   have entry := admitted.root rfl
@@ -132,11 +135,22 @@ theorem pairSpec_soundAdmitted (pair : Adr) {U : WriterKey → Prop} (inj : Writ
   obtain ⟨st, K, sub, wrep⟩ :=
     (ContractSpecSem.ofStorageOnly_preInv_iff (sem := pairSem)).mp hpre.inv
   obtain ⟨_, _, _, _, K', _, _, _, _, _, inside, rep⟩ :=
-    pairSupply inj apart pairSem pairSem_image { state := st, logs := [], updates := [] } []
+    supply { state := st, logs := [], updates := [] } []
       raw codeEq (code_eq_of_toList hpre.code) fork output representable trivial good sub wrep
   exact ⟨trivial, ⟨_, K', inside, rep⟩⟩
 
-/-- **Pair frame preservation, trace-admitted**: the form the trace rungs consume. -/
+theorem pairSpec_soundAdmitted (pair : Adr) {U : WriterKey → Prop} (inj : WriterInj U)
+    (apart : WriterApart U) : (pairSpec U).SoundAdmitted pair (pairEntry U) :=
+  pairSpec_soundAdmittedWith pair (pairSupply inj apart pairSem pairSem_image)
+
+theorem pairSpec_preservesAdmittedWith
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop} (pair : Adr) {U : WriterKey → Prop}
+    (supply : PairStepSupplyWith Consumes Auth U (fun _ => True)) :
+    (pairSpec U).PreservesAdmitted pair (pairEntry U) :=
+  (pairSpec U).preserves_inv_admitted pair (pairEntry U)
+    (pairSpec_soundAdmittedWith pair supply)
+
 theorem pairSpec_preservesAdmitted (pair : Adr) {U : WriterKey → Prop} (inj : WriterInj U)
     (apart : WriterApart U) : (pairSpec U).PreservesAdmitted pair (pairEntry U) :=
   (pairSpec U).preserves_inv_admitted pair (pairEntry U)
@@ -155,44 +169,84 @@ structure PairStep where
 def PairStep.source (s : PairStep) : SourceInvocation :=
   { context := writerContext s.frame.sevm [], entry := s.entry, transcript := s.transcript }
 
-/-- Connected source consumption retains each selected frame's actual output. -/
-inductive PairObservedReplay : State → List PairStep → State → Prop
-  | nil (st : State) : PairObservedReplay st [] st
+/-- Connected consumption retains the same original frame, incoming state, result and output. -/
+inductive PairObservedReplayWith
+    (Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop) :
+    State → List PairStep → State → Prop
+  | nil (st : State) : PairObservedReplayWith Consumes st [] st
   | cons {st finish : State} {s : PairStep} {rest : List PairStep} {out : RunResult}
-      (consumed : ExactConsumes
+      (consumed : Consumes (Blanc.Exec.Frame.rootDeriv s.frame)
         (startTyped {state := st, logs := [], updates := []} s.source.context s.source.entry)
         s.transcript out)
       (successful : out.status = .success s.frame.post.output)
-      (tail : PairObservedReplay out.frame.current.state rest finish) :
-      PairObservedReplay st (s :: rest) finish
+      (tail : PairObservedReplayWith Consumes out.frame.current.state rest finish) :
+      PairObservedReplayWith Consumes st (s :: rest) finish
+
+/-- Legacy observed replay is the exact-consumption instance. -/
+abbrev PairObservedReplay := PairObservedReplayWith (fun _ => ExactConsumes)
+
+/-- Change only the per-frame proof; every selected frame/result/output is preserved. -/
+theorem PairObservedReplayWith.mono
+    {Consumes Consumes' : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    (weaken : ∀ root segment transcript out,
+      Consumes root segment transcript out → Consumes' root segment transcript out)
+    {st finish : State} {steps : List PairStep}
+    (replay : PairObservedReplayWith Consumes st steps finish) :
+    PairObservedReplayWith Consumes' st steps finish := by
+  induction replay with
+  | nil st => exact .nil st
+  | cons consumed successful tail ih =>
+    exact .cons (weaken _ _ _ _ consumed) successful ih
+
+/-- Erase only consumption evidence, keeping the same connected source replay. -/
+theorem PairObservedReplayWith.sourceReplay
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    (weaken : ∀ root segment transcript out,
+      Consumes root segment transcript out → ExactConsumes segment transcript out)
+    {st finish : State} {steps : List PairStep}
+    (replay : PairObservedReplayWith Consumes st steps finish) :
+    SourceReplay st (steps.map PairStep.source) finish := by
+  induction replay with
+  | nil st => exact .nil st
+  | cons consumed successful tail ih =>
+    exact .cons (weaken _ _ _ _ consumed) successful ih
 
 /-- Erasing the actual-frame observations preserves the original model replay. -/
 theorem PairObservedReplay.forget {st finish : State} {steps : List PairStep}
     (replay : PairObservedReplay st steps finish) :
-    SourceReplay st (steps.map PairStep.source) finish := by
-  induction replay with
-  | nil st => exact .nil st
-  | cons consumed successful tail ih => exact .cons consumed successful ih
+    SourceReplay st (steps.map PairStep.source) finish :=
+  replay.sourceReplay (fun _ _ _ _ consumed => consumed)
 
 /-- Observed replay composes at the same carried model state. -/
-theorem PairObservedReplay.append {st middle finish : State} {left right : List PairStep}
-    (first : PairObservedReplay st left middle)
-    (second : PairObservedReplay middle right finish) :
-    PairObservedReplay st (left ++ right) finish := by
+theorem PairObservedReplayWith.append
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {st middle finish : State} {left right : List PairStep}
+    (first : PairObservedReplayWith Consumes st left middle)
+    (second : PairObservedReplayWith Consumes middle right finish) :
+    PairObservedReplayWith Consumes st (left ++ right) finish := by
   induction first with
   | nil st => exact second
   | cons consumed successful tail ih => exact .cons consumed successful (ih second)
+
+theorem PairObservedReplay.append {st middle finish : State} {left right : List PairStep}
+    (first : PairObservedReplay st left middle)
+    (second : PairObservedReplay middle right finish) :
+    PairObservedReplay st (left ++ right) finish :=
+  PairObservedReplayWith.append first second
 
 /-- **An authenticated step.**  The step's frame is a pc-zero, *committed* (`Exec.Frame` carries its
 commit proof; it is restated here), non-static frame at the Pair, and its entry and transcript are the
 ones its actual run decodes and answered (`PairFrameAuth`).  A committed non-static Pair frame always
 observes itself (`pairSubtreeFrames`), so a step can never be a phantom: the observation equality of
 the headline places every step's frame among the trace's settled frames. -/
-def PairStep.Authentic (pair : Adr)
+def PairStep.AuthenticWith (Auth : Exec.Deriv → Entry → Transcript → Prop) (pair : Adr)
     (s : PairStep) : Prop :=
   s.frame.pc = 0 ∧ Execution.commits s.frame.out = true ∧ s.frame.sevm.currentTarget = pair ∧
     s.frame.sevm.isStatic = false ∧
-    PairFrameAuth (Blanc.Exec.Frame.rootDeriv s.frame) s.entry s.transcript
+    Auth (Blanc.Exec.Frame.rootDeriv s.frame) s.entry s.transcript
+
+def PairStep.Authentic (pair : Adr)
+    (s : PairStep) : Prop := PairStep.AuthenticWith PairFrameAuth pair s
 
 /-- A frame's own observation: itself when it is a non-static Pair frame. -/
 def pairFrameObs (pair : Adr) (frame : Exec.Frame) : List Exec.Frame :=
@@ -209,25 +263,32 @@ def PairViewRep (K : WriterKey → Prop) (view : B256 → B256) (st : State) : P
 /-- The replay of a list of frames between two storage views: from every incoming representation
 inside `U`, authenticated steps over exactly these frames whose source invocations replay to a model
 state represented by the outgoing view. -/
-def PairReplay (pair : Adr)
+def PairReplayWith
+    (Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop)
+    (Auth : Exec.Deriv → Entry → Transcript → Prop) (pair : Adr)
     (U : WriterKey → Prop) (a : B256 → B256) (frames : List Exec.Frame) (b : B256 → B256) : Prop :=
   ∀ (st : State) (K : WriterKey → Prop), (∀ k, K k → U k) → PairViewRep K a st →
     ∃ steps : List PairStep, steps.map PairStep.frame = frames ∧
-      (∀ s ∈ steps, s.Authentic pair) ∧
-      ∃ (finish : State) (K' : WriterKey → Prop), PairObservedReplay st steps finish ∧
+      (∀ s ∈ steps, s.AuthenticWith Auth pair) ∧
+      ∃ (finish : State) (K' : WriterKey → Prop), PairObservedReplayWith Consumes st steps finish ∧
         (∀ k, K k → K' k) ∧ (∀ k, K' k → U k) ∧ PairViewRep K' b finish
+
+def PairReplay (pair : Adr)
+    (U : WriterKey → Prop) (a : B256 → B256) (frames : List Exec.Frame) (b : B256 → B256) : Prop :=
+  PairReplayWith (fun _ => ExactConsumes) PairFrameAuth pair U a frames b
 
 section Replay
 
-variable {pair : Adr} {U : WriterKey → Prop}
+variable {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+  {Auth : Exec.Deriv → Entry → Transcript → Prop} {pair : Adr} {U : WriterKey → Prop}
 
-theorem PairReplay.nil (view : B256 → B256) : PairReplay pair U view [] view := by
+theorem PairReplayWith.nil (view : B256 → B256) : PairReplayWith Consumes Auth pair U view [] view := by
   intro st K sub rep
   exact ⟨[], rfl, fun _ h => absurd h List.not_mem_nil, st, K, .nil st, fun _ h => h, sub, rep⟩
 
-theorem PairReplay.append {a b c : B256 → B256} {left right : List Exec.Frame}
-    (first : PairReplay pair U a left b) (second : PairReplay pair U b right c) :
-    PairReplay pair U a (left ++ right) c := by
+theorem PairReplayWith.append {a b c : B256 → B256} {left right : List Exec.Frame}
+    (first : PairReplayWith Consumes Auth pair U a left b) (second : PairReplayWith Consumes Auth pair U b right c) :
+    PairReplayWith Consumes Auth pair U a (left ++ right) c := by
   intro st K sub rep
   obtain ⟨steps₁, frames₁, auth₁, middle, K₁, replay₁, grows₁, sub₁, rep₁⟩ := first st K sub rep
   obtain ⟨steps₂, frames₂, auth₂, finish, K₂, replay₂, grows₂, sub₂, rep₂⟩ :=
@@ -240,29 +301,40 @@ theorem PairReplay.append {a b c : B256 → B256} {left right : List Exec.Frame}
     · exact auth₂ s h
   · exact replay₁.append replay₂
 
+theorem PairReplay.nil (view : B256 → B256) : PairReplay pair U view [] view :=
+  PairReplayWith.nil view
+
+theorem PairReplay.append {a b c : B256 → B256} {left right : List Exec.Frame}
+    (first : PairReplay pair U a left b) (second : PairReplay pair U b right c) :
+    PairReplay pair U a (left ++ right) c := PairReplayWith.append first second
+
 end Replay
 
 /-- The Pair's replay carrier over its storage view. -/
-def pairCarrier (pair : Adr)
+def pairCarrierWith
+    (Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop)
+    (Auth : Exec.Deriv → Entry → Transcript → Prop) (pair : Adr)
     (U : WriterKey → Prop) : ReplayCarrier pair where
   Snap := B256 → B256
   Step := Exec.Frame
   Tag := Unit
-  Replay := PairReplay pair U
+  Replay := PairReplayWith Consumes Auth pair U
   ofState world := (world.getStor pair).get
   frameEntry _ world := (world.getStor pair).get
-  nil := PairReplay.nil
+  nil := PairReplayWith.nil
   silent := fun storage _ => by rw [storage]
   credit := by
     intro _ pre post _ storage _ _
-    exact ⟨[], by rw [storage]; exact PairReplay.nil _⟩
+    exact ⟨[], by rw [storage]; exact PairReplayWith.nil _⟩
   entry_eq_ofState := by
     intro _ _ _ _ transfer _
     exact congrArg Stor.get (congrFun (benvAfterTransfer_getStor_eq transfer) pair)
 
 /-- The Pair's observation: every committed non-static Pair frame of each step's subtree. -/
-def pairObservation (pair : Adr)
-    (U : WriterKey → Prop) : ReplayObservation (pairCarrier pair U) where
+def pairObservationWith
+    (Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop)
+    (Auth : Exec.Deriv → Entry → Transcript → Prop) (pair : Adr)
+    (U : WriterKey → Prop) : ReplayObservation (pairCarrierWith Consumes Auth pair U) where
   O := Exec.Frame
   obs frames := frames.flatMap (pairSubtreeFrames pair)
   obs_nil := rfl
@@ -271,16 +343,26 @@ def pairObservation (pair : Adr)
   credit := by
     intro _ pre post _ storage _ _
     refine ⟨[], ?_, rfl⟩
-    change PairReplay pair U (pre.getStor pair).get [] (post.getStor pair).get
+    change PairReplayWith Consumes Auth pair U (pre.getStor pair).get [] (post.getStor pair).get
     rw [storage]
-    exact PairReplay.nil _
+    exact PairReplayWith.nil _
+
+def pairCarrier (pair : Adr)
+    (U : WriterKey → Prop) : ReplayCarrier pair :=
+  pairCarrierWith (fun _ => ExactConsumes) PairFrameAuth pair U
+
+def pairObservation (pair : Adr)
+    (U : WriterKey → Prop) : ReplayObservation (pairCarrier pair U) :=
+  pairObservationWith (fun _ => ExactConsumes) PairFrameAuth pair U
 
 /-- **The whole-frame obligation of the Pair**: a committed non-static Pair frame replays as one
 authenticated step whose observation is its committed subtree. -/
-theorem pair_wholeFrameReplay (pair : Adr) {U : WriterKey → Prop} (inj : WriterInj U)
-    (apart : WriterApart U) :
-    Exec.CoreAccounting.WholeFrameReplay pair pairSem (pairEntry U) (pairCarrier pair U)
-      (pairObservation pair U) := by
+theorem pair_wholeFrameReplayWith
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop} (pair : Adr) {U : WriterKey → Prop}
+    (supply : PairStepSupplyWith Consumes Auth U (fun _ => True)) :
+    Exec.CoreAccounting.WholeFrameReplay pair pairSem (pairEntry U)
+      (pairCarrierWith Consumes Auth pair U) (pairObservationWith Consumes Auth pair U) := by
   intro sevm pre post run committed codeEq target fork installed admitted _ nonstatic
   subst target
   have entry := admitted.root rfl
@@ -292,9 +374,9 @@ theorem pair_wholeFrameReplay (pair : Adr) {U : WriterKey → Prop} (inj : Write
     have wrep' : WriterRep K (pre.getStor sevm.currentTarget) st :=
       WriterRep.congr (fun k => (congrFun view k).symm) wrep
     obtain ⟨entryE, nested, child, bytes, K', auth, consumed, success, outputEq, grows, inside, rep⟩ :=
-      pairSupply inj apart pairSem pairSem_image { state := st, logs := [], updates := [] } []
+      supply { state := st, logs := [], updates := [] } []
         raw codeEq (code_eq_of_toList installed.1) fork output representable trivial good sub wrep'
-    rw [rawEq] at auth
+    rw [rawEq] at auth consumed
     refine ⟨[⟨Exec.Frame.ofRun run committed, entryE, nested⟩], rfl, ?_, child.frame.current.state,
       K', .cons consumed (by
         simpa only [outputEq, Exec.Frame.post, Exec.Frame.ofRun, Execution.committedPost]
@@ -308,6 +390,12 @@ theorem pair_wholeFrameReplay (pair : Adr) {U : WriterKey → Prop} (inj : Write
     rw [List.flatMap_cons, List.flatMap_nil, List.append_nil]
     rfl
 
+theorem pair_wholeFrameReplay (pair : Adr) {U : WriterKey → Prop} (inj : WriterInj U)
+    (apart : WriterApart U) :
+    Exec.CoreAccounting.WholeFrameReplay pair pairSem (pairEntry U) (pairCarrier pair U)
+      (pairObservation pair U) :=
+  pair_wholeFrameReplayWith pair (pairSupply inj apart pairSem pairSem_image)
+
 theorem pairFrameObs_static {pair : Adr} {f : Exec.Frame} (h : f.sevm.isStatic = true) :
     pairFrameObs pair f = [] := by
   unfold pairFrameObs
@@ -319,13 +407,20 @@ theorem pairFrameObs_foreign {pair : Adr} {f : Exec.Frame}
   simp only [h, false_and, ↓reduceIte]
 
 /-- **The accounting ladder of the Pair** over a separated universe `U`. -/
-def pairLadder (pair : Adr) {U : WriterKey → Prop} (inj : WriterInj U)
-    (apart : WriterApart U) : AccountingLadderAdmitted (pairSpec U) pair (pairEntry U) :=
-  wholeFrameLadder (c := pairSpec U) (pairCarrier pair U) (pairObservation pair U)
-    PairReplay.append (fun _ _ => ()) (fun _ _ => ()) (fun _ _ => rfl)
+def pairLadderWith
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop} (pair : Adr) {U : WriterKey → Prop}
+    (supply : PairStepSupplyWith Consumes Auth U (fun _ => True)) :
+    AccountingLadderAdmitted (pairSpec U) pair (pairEntry U) :=
+  wholeFrameLadder (c := pairSpec U) (pairCarrierWith Consumes Auth pair U) (pairObservationWith Consumes Auth pair U)
+    PairReplayWith.append (fun _ _ => ()) (fun _ _ => ()) (fun _ _ => rfl)
     (fun h => funext h) (fun _ h => pairFrameObs_static h)
     (fun _ h => pairFrameObs_foreign h) (pair_spawnKinds pair)
-    (pair_wholeFrameReplay pair inj apart) (pairSpec_preservesAdmitted pair inj apart)
+    (pair_wholeFrameReplayWith pair supply) (pairSpec_preservesAdmittedWith pair supply)
+
+def pairLadder (pair : Adr) {U : WriterKey → Prop} (inj : WriterInj U)
+    (apart : WriterApart U) : AccountingLadderAdmitted (pairSpec U) pair (pairEntry U) :=
+  pairLadderWith pair (pairSupply inj apart pairSem pairSem_image)
 
 /-! ## The configured history -/
 
@@ -372,6 +467,52 @@ runtime is still installed, and there is a list of steps such that
 * the step's source invocations replay from `st₀` (`SourceReplay`, hence the deterministic fold
   `runSourceInvocations`) to a model state that the future Pair storage represents, over tracked rows
   growing from `K₀` within `K₀ ∪ touched`. -/
+theorem pair_history_committed_with
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop}
+    (supplies : ∀ (U : WriterKey → Prop), WriterInj U → WriterApart U →
+      PairStepSupplyWith Consumes Auth U (fun _ => True))
+    (weaken : ∀ root segment transcript out,
+      Consumes root segment transcript out → ExactConsumes segment transcript out)
+    {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
+    some (future.state.getCode pair).toList = pairSem.image ∧
+    ∃ steps : List PairStep,
+      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      (∀ s ∈ steps, s.AuthenticWith Auth pair) ∧
+      ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplayWith Consumes st₀ steps finish ∧
+        SourceReplay st₀ (steps.map PairStep.source) finish ∧
+        runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
+        (∀ k, K₀ k → K' k) ∧
+        (∀ k, K' k → WriterExtend K₀ (pairHistoryTouchedKeys pair trace) k) ∧
+        WriterRep K' (future.state.getStor pair) finish := by
+  let U := WriterExtend K₀ (pairHistoryTouchedKeys pair trace)
+  have extended : WriterRep U (checkpoint.state.getStor pair) st₀ := initial.extend fresh
+  have admitted : trace.FrameAdmitted pair (pairEntry U) :=
+    pair_trace_admitted trace (fun k row => Or.inr row)
+  have start : (pairSpec U).StateInv pair checkpoint.state :=
+    ⟨installed, trivial, ⟨st₀, K₀, fun _ h => Or.inl h, initial⟩⟩
+  have finishInv := trace.stateInv_admitted_sem
+    (pairSpec_preservesAdmittedWith pair (supplies U extended.inj extended.apart)) admitted start
+  obtain ⟨frames, replay, observed⟩ :=
+    (pairLadderWith pair (supplies U extended.inj extended.apart)).configuredHistory trace admitted start
+  change PairReplayWith Consumes Auth pair U (checkpoint.state.getStor pair).get frames
+    (future.state.getStor pair).get at replay
+  change frames.flatMap (pairSubtreeFrames pair) =
+    trace.settledFrames.flatMap (pairFrameObs pair) at observed
+  obtain ⟨steps, framesEq, auth, finish, K', source, grows, inside, s, view, rep⟩ :=
+    replay st₀ K₀ (fun _ h => Or.inl h) ⟨_, rfl, initial⟩
+  refine ⟨finishInv.code, steps, ?_, auth, finish, K', source, source.sourceReplay weaken,
+    (source.sourceReplay weaken).realizes, grows, inside,
+    WriterRep.congr (fun k => (congrFun view k).symm) rep⟩
+  rw [← framesEq, List.flatMap_map] at observed
+  exact observed
+
 theorem pair_history_committed {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     {K₀ : WriterKey → Prop} {st₀ : State}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
@@ -388,28 +529,9 @@ theorem pair_history_committed {pair : Adr} {cfg : ChainConfig} {checkpoint futu
         runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
         (∀ k, K₀ k → K' k) ∧
         (∀ k, K' k → WriterExtend K₀ (pairHistoryTouchedKeys pair trace) k) ∧
-        WriterRep K' (future.state.getStor pair) finish := by
-  let U := WriterExtend K₀ (pairHistoryTouchedKeys pair trace)
-  have extended : WriterRep U (checkpoint.state.getStor pair) st₀ := initial.extend fresh
-  have admitted : trace.FrameAdmitted pair (pairEntry U) :=
-    pair_trace_admitted trace (fun k row => Or.inr row)
-  have start : (pairSpec U).StateInv pair checkpoint.state :=
-    ⟨installed, trivial, ⟨st₀, K₀, fun _ h => Or.inl h, initial⟩⟩
-  have finishInv := trace.stateInv_admitted_sem
-    (pairSpec_preservesAdmitted pair extended.inj extended.apart) admitted start
-  obtain ⟨frames, replay, observed⟩ :=
-    (pairLadder pair extended.inj extended.apart).configuredHistory trace admitted start
-  change PairReplay pair U (checkpoint.state.getStor pair).get frames
-    (future.state.getStor pair).get at replay
-  change frames.flatMap (pairSubtreeFrames pair) =
-    trace.settledFrames.flatMap (pairFrameObs pair) at observed
-  obtain ⟨steps, framesEq, auth, finish, K', source, grows, inside, s, view, rep⟩ :=
-    replay st₀ K₀ (fun _ h => Or.inl h) ⟨_, rfl, initial⟩
-  refine ⟨finishInv.code, steps, ?_, auth, finish, K', source, source.forget,
-    source.forget.realizes, grows, inside,
-    WriterRep.congr (fun k => (congrFun view k).symm) rep⟩
-  rw [← framesEq, List.flatMap_map] at observed
-  exact observed
+        WriterRep K' (future.state.getStor pair) finish :=
+  pair_history_committed_with (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed) trace installed initial fresh
 
 /-- **The Pair history from its deployment checkpoint.**  From the storage `pair_create2_initialized`
 establishes (deployment by `factory`, then `initialize`), the same conclusion with
