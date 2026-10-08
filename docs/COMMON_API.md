@@ -4596,7 +4596,11 @@ admission. The compiled ready family projections in
 [`PairPositionalReady.lean`](../Blanc/Lift/UniswapV2Pair/PairPositionalReady.lean)
 consume the supplied incoming checkpoint and those same positional results;
 `PairPositionalReadySupply` excludes Swap, Skim and Burn pending their own
-canonical producers.
+canonical producers. The separate `pair_admitted_skim_supply` in
+[`PairPositionalSkim.lean`](../Blanc/Lift/UniswapV2Pair/PairPositionalSkim.lean)
+retains the same four-slot canonical result, recursively admitted mutable
+queues, actual output and represented state. It is below the final all-family
+instance; Swap and Burn remain pending.
 
 `transfer_source_call_at` in
 [`TransferSourceCall.lean`](../Blanc/Lift/UniswapV2Pair/TransferSourceCall.lean)

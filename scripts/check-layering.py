@@ -303,6 +303,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.PairSupply",
         "Lift.UniswapV2Pair.PairPositionalEntry",
         "Lift.UniswapV2Pair.PairPositionalReady",
+        "Lift.UniswapV2Pair.PairPositionalSkim",
         "Lift.UniswapV2Pair.PairHistory",
         "Lift.UniswapV2Pair.SwapForwardAccept",
         "Lift.UniswapV2Pair.MintForwardAccept",
