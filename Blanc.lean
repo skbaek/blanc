@@ -870,6 +870,8 @@ import Blanc.Lift.UniswapV2Pair.SwapBack
 import Blanc.Lift.UniswapV2Pair.SwapBackTurns
 import Blanc.Lift.UniswapV2Pair.SwapBalanceWalk
 import Blanc.Lift.UniswapV2Pair.SwapCallWorld
+import Blanc.Lift.UniswapV2Pair.MutablePositionalFold
+import Blanc.Lift.UniswapV2Pair.MutablePositionalLockedSupply
 import Blanc.Lift.UniswapV2Pair.SwapCallback
 import Blanc.Lift.UniswapV2Pair.SwapCanonical
 import Blanc.Lift.UniswapV2Pair.SwapCheckWalk

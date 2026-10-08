@@ -449,6 +449,8 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.SkimForwardAccept",
         "Lift.UniswapV2Pair.SkimForwardKeep",
         "Lift.UniswapV2Pair.MutableTurns",
+        "Lift.UniswapV2Pair.MutablePositionalFold",
+        "Lift.UniswapV2Pair.MutablePositionalLockedSupply",
         "Lift.UniswapV2Pair.PairSelectors",
         "Lift.UniswapV2Pair.PairLockedEntries",
         "Lift.UniswapV2Pair.LockedSupply",

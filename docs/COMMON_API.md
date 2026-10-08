@@ -4585,6 +4585,18 @@ The already reached optional-bool decoder is inverted by
 It derives acceptance and the complete physical return allocation without
 selecting an external call; the original whole-helper inverse delegates to it.
 
+The Pair mutable fold's `mutable_selected_root_with` in
+[`MutableTurns.lean`](../Blanc/Lift/UniswapV2Pair/MutableTurns.lean)
+parameterizes child consumption and turn introductions while the existing
+`mutable_selected_root` projects the original interface. For same-occurrence
+nested consumption, use `mutable_source_slot_turns` in
+[`MutablePositionalFold.lean`](../Blanc/Lift/UniswapV2Pair/MutablePositionalFold.lean)
+and `locked_mutable_source_slot_turns` in
+[`MutablePositionalLockedSupply.lean`](../Blanc/Lift/UniswapV2Pair/MutablePositionalLockedSupply.lean).
+They bind the actual selected slot, its full queue, and each same-witness
+child's positional consumption and committed output; the locked supplier
+uses the actual child authorization and representation.
+
 ## Common-library-first workflow
 
 A needed definition, lemma, tactic, or instance has a **generic shape** when
