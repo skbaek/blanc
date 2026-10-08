@@ -1,3 +1,4 @@
+import Blanc.Lift.CursorExact
 import Blanc.Lift.UniswapV2Pair.SyncTurns
 
 /-! Canonical same-witness Sync source-frame consumer. -/
@@ -52,6 +53,12 @@ structure SyncCanonicalResult (K : WriterKey → Prop) (current : Checkpoint)
   sourcePost : State
   event : Event
   oracle : OracleUpdate
+  /-- The accepted code guards refer to the actual original target code at each call. -/
+  guarded0 : (first.node.devm.getCode current.state.token0).size.toB256 ≠ 0
+  guarded1 : (second.node.devm.getCode current.state.token1).size.toB256 ≠ 0
+  /-- The actual returned parent has no further external instruction. -/
+  finalNoExec : ∀ N, Exec.Deriv.ParentPrefix returned1 N →
+    ∀ x, ¬Ninst.At N.sevm.code N.pc (.exec x)
   order :
     Exec.Deriv.ExecFreeUntil root first.node ∧
     first.node.pc = 0x1ee0 ∧ first.node.sevm = root.sevm ∧
@@ -216,12 +223,12 @@ theorem sync_canonical_source_frame_result {K : WriterKey → Prop}
   obtain ⟨_, _, parent1, child1, dp1, na1, childCode1, avail1, out1, _, _, _, _, _, _, _, _, _,
     outBound1, _, secondReturnedData, childOutput1, clean1, _, _, _, _, _, _, _, authentication1,
     actualProcess1, resumed1, _, _, _, actualSpawn1, _, _, _, _, _, _, finalDecoded⟩ := secondReply
-  obtain ⟨_, _, _, _, _, _, _, _, _, _, long1, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, finished⟩ := finalDecoded
+  obtain ⟨_, _, _, _, _, _, _, _, _, _, long1, _, _, _, _, _, _, _, _, _, _, _, _, _, secondGuarded, _, _, _, finished⟩ := finalDecoded
   obtain ⟨_, _, _, sourcePost, event, oracle, childFrames0, childFrames1, actualViews0, actualViews1, _,
     contextValue, contextStatic, unlocked, source, lockedSource, _, finalRep, eventEq, _, _, _,
     allFrames, cut0, cut1, noRemainder, authentic0, authentic1, turns0, turns1, checkpoint,
     context, sourceState, consumed, originalLogs, originalOutput, paths0, paths1, mapped0,
-    mapped1, branch0, branch1⟩ := finished
+    mapped1, branch0, branch1, finalNoExec⟩ := finished
   have firstCore := original.1
   obtain ⟨⟨firstFree, firstPc, firstSevm, firstInstruction, firstEdge, firstResult,
     firstPrimitive, firstReturnedFree, firstReturnedPc, firstNodePath, firstNodePc,
@@ -229,6 +236,18 @@ theorem sync_canonical_source_frame_result {K : WriterKey → Prop}
     firstStack, firstCalldata, hpost0, outBound0, firstReturnedData, childOutput0, childClean0,
     firstFilled, firstProcess, firstResume, firstAuthentication, firstSpawn⟩,
     firstInstalled, rootPaths, firstFold⟩ := firstCore
+  obtain ⟨guardedOccurrence, _, guardedFree, _, _, _, guardedInstruction,
+    _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, firstGuarded⟩ :=
+    sync_root_first_static_occurrence_request_parent codeEq fork selector run
+  have sameFirst : guardedOccurrence.node = occurrence.node :=
+    Blanc.Exec.Deriv.ExecFreeUntil.eq_of_execAt guardedFree firstFree
+      (guardedInstruction ▸ guardedOccurrence.decoded) (firstInstruction ▸ occurrence.decoded)
+  have initialRep : WriterRep K (b.getStor sevm.currentTarget) current.state := rep
+  have token0 : (b.getStorVal sevm.currentTarget 6).toAdr = current.state.token0 :=
+    initialRep.fixed.2.2.2.1
+  have guarded0 : (occurrence.node.devm.getCode current.state.token0).size.toB256 ≠ 0 := by
+    rw [← sameFirst, ← token0]
+    exact firstGuarded
   exact ⟨{
     first := occurrence
     returned0 := returned
@@ -245,6 +264,9 @@ theorem sync_canonical_source_frame_result {K : WriterKey → Prop}
     sourcePost := sourcePost
     event := event
     oracle := oracle
+    guarded0 := guarded0
+    guarded1 := secondGuarded
+    finalNoExec := finalNoExec
     order := ⟨firstFree, firstPc, firstSevm, firstInstruction, firstEdge, firstResult,
       returnedSecondFree, secondPath, secondPc, secondSevm, secondOutcome,
       secondInstruction, secondEdge, secondResult, secondReturnedPc,
