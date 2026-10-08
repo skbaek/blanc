@@ -456,6 +456,10 @@ spawn/resume equations at the consumer:
   memory/stack projections). The compat projections `of_run_call_val_with_depth`
   and `of_run_call_val` drop the step/logs/output and then the depth fact for
   consumers that do not need them.
+- `of_step_call_val_with_depth_frame`: when the actual pc, recursive slot,
+  `Xlot.Filled` and `Ninst.StepRun` are supplied, preserve that same CALL
+  boundary, including its exact spawn, message/process and resume equations.
+  The original run-based theorem projects this selected-step interface.
 - `Ninst.step_call_spawn_exact` in
   [`Blanc/CallSpawnExact.lean`](../Blanc/CallSpawnExact.lean): the same exact
   CALL frame one level lower, when the proof holds only the step equation
@@ -4539,6 +4543,18 @@ binds the supplied occurrence to the request, reply and original per-spawn
 partition through its actual slot queue. These are registry entries: their
 compound occurrence and cursor obligations have no reliable single goal-head
 trigger.
+
+`transfer_source_call_at` in
+[`TransferSourceCall.lean`](../Blanc/Lift/UniswapV2Pair/TransferSourceCall.lean)
+binds an ordinary transfer request to the supplied actual CALL, its complete
+slot queue and per-spawn partition. Its entered bit is the actual slot's
+`isSome`; the selected-step CALL inverse derives the same message, process,
+spawn and resume. It does not select a different model call.
+`pair_code_guard_cursor_state` in
+[`PairCodeGuardCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairCodeGuardCursor.lean)
+advances the supplied actual code-size guard, derives code presence from its
+successful branch and retains the full warmed world and K. The existing fee
+cursor theorem delegates to this same proof.
 
 The shared dispatcher entry `pair_dispatch_selector_cursor_state` in
 [`PairDispatchCursor.lean`](../Blanc/Lift/UniswapV2Pair/PairDispatchCursor.lean)

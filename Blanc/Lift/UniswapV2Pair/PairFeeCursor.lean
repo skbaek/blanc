@@ -2,6 +2,7 @@ import Blanc.Lift.CursorStateCuts
 import Blanc.Lift.CursorSourceRun
 import Blanc.Lift.UniswapV2Pair.Check
 import Blanc.Lift.UniswapV2Pair.FeeMintCall
+import Blanc.Lift.UniswapV2Pair.PairCodeGuardCursor
 
 /-! Actual shared Pair factory fee request staging. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -147,27 +148,6 @@ theorem pair_fee_code_cursor_state {root : Exec.Deriv} {b post : Devm}
     (b.getCode factory.toAdr).size.toB256 ≠ 0 ∧
       Nonempty (CursorStateAt code cert root t_2757_c68
         (temporalAccountAccessBase b factory.toAdr) (0 :: S) M K) := by
-  obtain ⟨outcome, source⟩ := cut.placed.sourceRun cert_check
-    (cut.exn_eq.trans success) (cut.sevm_eq ▸ fork)
-  obtain ⟨G, state⟩ := cut.state
-  rw [cut.tree, state, cut.sevm_eq] at source
-  have nonzero := (feeCodeGuard_inv fork (SFunc.runP_iff_runCutP_nil.mp source)).1
-  have zero : B256.eqCheck (b.getCode factory.toAdr).size.toB256 0 = 0 := by
-    simp only [B256.eqCheck, nonzero, ite_false]
-  obtain ⟨guard⟩ := cut.line cert_check success fork
-    [.reg .extcodesize, .reg .iszero, .reg (.dup 0), .reg .iszero,
-      .push [0x27,0x57] (by decide)] rfl
-    (by intro n member x equal; subst n; simp only [List.mem_cons,
-      List.not_mem_nil, reduceCtorEq, or_self] at member)
-    (b' := temporalAccountAccessBase b factory.toAdr) (S' := 0x2757 :: 1 :: 0 :: S) (M' := M) (by
-      intro gas d line
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_extcodesize fork step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_iszero step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_iszero step
-      obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨gas', state⟩ := ri_push step
-      cases line
-      exact ⟨gas', by simpa only [zero, show Bytes.toB256 [39,87] = (0x2757 : B256) from rfl, show B256.eqCheck (0 : B256) 0 = 1 from by decide] using state⟩)
-  exact ⟨nonzero, guard.branchSucc cert_check success fork (by decide)⟩
+  exact pair_code_guard_cursor_state cut success fork [0x27,0x57] (by decide) rfl (by decide)
 
 end Blanc.Lift.UniswapV2Pair

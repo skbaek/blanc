@@ -960,6 +960,7 @@ import Blanc.Lift.UniswapV2Pair.StaticSlotTurns
 import Blanc.Lift.UniswapV2Pair.SourceStaticSlotViews
 import Blanc.Lift.UniswapV2Pair.SourceSlotQueueEquality
 import Blanc.Lift.UniswapV2Pair.StaticSourceCall
+import Blanc.Lift.UniswapV2Pair.TransferSourceCall
 import Blanc.Lift.UniswapV2Pair.MintPositionalCalls
 import Blanc.Lift.UniswapV2Pair.MintPositionalFinish
 import Blanc.Lift.UniswapV2Pair.MintPositionalFinite
@@ -974,6 +975,7 @@ import Blanc.Lift.UniswapV2Pair.MintPositionalCanonical
 import Blanc.Lift.UniswapV2Pair.PairTransferRequestCursor
 import Blanc.Lift.UniswapV2Pair.PairTransferReplyCursor
 import Blanc.Lift.UniswapV2Pair.PairFeeCursor
+import Blanc.Lift.UniswapV2Pair.PairCodeGuardCursor
 import Blanc.Lift.UniswapV2Pair.PairFeeObservation
 import Blanc.Lift.UniswapV2Pair.PairFeeReturn
 import Blanc.Lift.UniswapV2Pair.MintPositionalInv
