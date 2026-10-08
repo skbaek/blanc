@@ -960,6 +960,8 @@ import Blanc.Lift.UniswapV2Pair.BurnPositionalLPFacts
 import Blanc.Lift.UniswapV2Pair.BurnPositionalSource
 import Blanc.Lift.UniswapV2Pair.BurnPositionalTransferSource
 import Blanc.Lift.UniswapV2Pair.BurnPositionalFinish
+import Blanc.Lift.UniswapV2Pair.BurnPositionalFinishSource
+import Blanc.Lift.UniswapV2Pair.BurnEntrySource
 import Blanc.Lift.UniswapV2Pair.SyncOccurrence
 import Blanc.Lift.UniswapV2Pair.SourceOccurrence
 import Blanc.Lift.UniswapV2Pair.SourceAdmission
