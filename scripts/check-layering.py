@@ -200,7 +200,7 @@ SHARED += ["Lift.CalldataGuards", "Lift.StaticCall", "Lift.StaticCallGuard", "Li
 # The frame cursor, the reentrancy-lock exclusion kit and its bytecode checker, owner
 # discipline, and concrete-run evaluation (deployed-lido-vyper-v1): contract-neutral.
 SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachChain", "Lift.ReachDispatch", "Lift.Cursor", "Lift.CursorCuts", "Lift.CursorOccurrence", "Lift.CursorExact", "Lift.CursorExactLine", "Lift.CallRestriction", "Lift.StaticOnlyFrames", "LockExclusion", "OwnerDiscipline", "ConcreteRun",
-           "Lift.LockCheck", "Lift.LockCheckSound", "Lift.LockCheckFlow", "Lift.CursorStateCuts", "Lift.CursorNoExecSuffix", "Lift.CursorSourceRun", "Lift.CursorSourceRunReturn", "Lift.CursorBalanceReply", "Lift.CursorGasCall", "Lift.CursorQuietReturn"]
+           "Lift.LockCheck", "Lift.LockCheckSound", "Lift.LockCheckFlow", "Lift.CursorStateCuts", "Lift.CursorNoExecSuffix", "Lift.CursorSourceRun", "Lift.CursorSourceRunReturn", "Lift.CursorBalanceReply", "Lift.CursorGasCall", "Lift.CursorQuietReturn", "Lift.CursorJump", "Lift.CursorOccurrenceRoots"]
 # The constant memory map and its checker, code tries as data, and the executable-witness
 # engine with its child runs and spawn facts (deployed-lido-vyper-v1, V-): contract-neutral.
 SHARED += ["Lift.MemMap", "Lift.CheckMem", "Lift.CodeTriesData", "Lift.WitnessArms", "Lift.Witness",
@@ -385,6 +385,19 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.PairTransferInitialize",
         "Lift.UniswapV2Pair.PairTransferCursor",
         "Lift.UniswapV2Pair.PairTransferPreparation",
+        "Lift.UniswapV2Pair.StaticSlotTurns",
+        "Lift.UniswapV2Pair.SourceStaticSlotViews",
+        "Lift.UniswapV2Pair.SourceSlotQueueEquality",
+        "Lift.UniswapV2Pair.StaticSourceCall",
+        "Lift.UniswapV2Pair.MintPositionalCalls",
+        "Lift.UniswapV2Pair.MintPositionalFinish",
+        "Lift.UniswapV2Pair.MintPositionalFinite",
+        "Lift.UniswapV2Pair.MintPositionalFresh",
+        "Lift.UniswapV2Pair.MintPositionalQueues",
+        "Lift.UniswapV2Pair.MintPositionalConsume",
+        "Lift.UniswapV2Pair.PermitSourceOccurrence",
+        "Lift.UniswapV2Pair.PairTransferCopyCursor",
+        "Lift.UniswapV2Pair.PairTransferCallCursor",
         "Lift.UniswapV2Pair.PairFeeCursor",
         "Lift.UniswapV2Pair.PairFeeObservation",
         "Lift.UniswapV2Pair.PairFeeReturn",

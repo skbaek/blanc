@@ -3394,7 +3394,7 @@ theorem safeTransfer_dynamicCall_sentinel {M : Mem} {p amount toWord : B256} {n 
 
 /-- Pure pointer arithmetic for the moving `_safeTransfer` copy/merge/call
 windows: advancing by a full word, and the CALL input-size identity. -/
-private theorem safeTransfer_stageAdvance {p : B256}
+theorem safeTransfer_stageAdvance {p : B256}
     (width : p.toNat + 260 < 2 ^ 256) :
     32 + (p + 96) = p + 128 ∧ 32 + (p + 128) = p + 160 ∧
       32 + (p + 164) = p + 196 ∧ 32 + (p + 196) = p + 228 ∧
@@ -3635,7 +3635,7 @@ private theorem safeTransfer_initialize_dynamic_exact {sevm : Sevm} {b : Devm}
 
 /-- The payload read at `p + 96` covers itself: standalone rewrite for the
 copy specialization. -/
-private theorem safeTransfer_copyRead96 {M : Mem} {p amount toWord : B256} {n : Nat}
+theorem safeTransfer_copyRead96 {M : Mem} {p amount toWord : B256} {n : Nat}
     (mem : PtrMem p n M) (lower : 128 ≤ p.toNat)
     (width : p.toNat + 260 < 2 ^ 256) :
     ((safeTransfer_dynamicPayloadMemory M p amount toWord).read
@@ -3719,7 +3719,7 @@ private theorem safeTransfer_copyFit128 {M : Mem} {p amount toWord : B256} {n : 
 
 /-- The second copy read covers itself: the rewrite the `convert` residue
 exposed (`(C1.read (p + 128).toNat 32).2 = C1`). -/
-private theorem safeTransfer_copyRead128 {M : Mem} {p amount toWord : B256} {n : Nat}
+theorem safeTransfer_copyRead128 {M : Mem} {p amount toWord : B256} {n : Nat}
     (mem : PtrMem p n M) (lower : 128 ≤ p.toNat)
     (width : p.toNat + 260 < 2 ^ 256) :
     (((safeTransfer_dynamicPayloadMemory M p amount toWord).write (p + 164).toNat
@@ -4110,7 +4110,7 @@ private theorem safeTransfer_mergePtr {C : Mem} {s : Nat} {p : B256}
   exact h
 
 /-- The staged copy and merge images are the moving CALL memory. -/
-private theorem safeTransfer_callMemory_eq {M : Mem} {p amount toWord : B256}
+theorem safeTransfer_callMemory_eq {M : Mem} {p amount toWord : B256}
     (width : p.toNat + 260 < 2 ^ 256) :
     let P := safeTransfer_dynamicPayloadMemory M p amount toWord
     let C1 := P.write (p + 164).toNat (Bytes.toB256 (P.read (p + 96).toNat 32).1).toBytes
@@ -4229,7 +4229,7 @@ private theorem safeTransfer_dynamicPrepare_closed {sevm : Sevm} {b : Devm}
   omega
 
 /-- The moving CALL memory carries the moved free pointer `p + 164` over its whole staged size. -/
-private theorem safeTransfer_callMemory_ptr {M : Mem} {p amount toWord : B256} {n : Nat}
+theorem safeTransfer_callMemory_ptr {M : Mem} {p amount toWord : B256} {n : Nat}
     (mem : PtrMem p n M) (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256) :
     PtrMem (p + 164) (safeTransfer_dynamicCallMemory M p amount toWord).size
       (safeTransfer_dynamicCallMemory M p amount toWord) := by

@@ -1093,7 +1093,8 @@ Use [`Blanc/ExecutionPath.lean`](../Blanc/ExecutionPath.lean):
 - `Exec.descendantFramePaths` and `Exec.committedFramePaths` enumerate retained
   descendants and the root-inclusive committed path list.
 - `Exec.committedFramePaths_map_frame` forgets paths back to the ordinary
-  committed-frame list.
+  committed-frame list. `Exec.descendantFramePaths_map_frame` gives the same
+  projection for a supplied original entering path and child counter.
 - `Exec.LocatedFrame.EnteringOccurrence` is indexed by the original execution
   and preserves the exact immediate retained parent as an original
   `committedFramePaths` member, the actual child counter, its same-frame
@@ -1232,6 +1233,8 @@ entering path. `Exec.RetainedTargetTurn.rebase` changes only original paths, and
 unprefixed traversal. It preserves child counters, duplicates, state boundaries
 and complete failed-settlement pruning; it supplies no new entering occurrence
 or contract-specific source queue.
+`Exec.retainedTargetTurnsFrom_targets_spec` exposes the selected target-frame
+projection for arbitrary entering paths and child counters.
 For a structural fold over only the selected frames, use
 `Exec.retainedTargetFramesFromAt`: it projects the existing traversal with
 `filterMap Sum.getRight?` at the original parent path and child counter.
@@ -1260,6 +1263,8 @@ logs), the installed image (`CodeSem.At.parentStep`, `CodeSem.At.spawnChild`,
 `CodeSem.At.callChild`, self-calls included), child entry (`Xinst.spawn_child_world`,
 `Xinst.spawn_child_logs`, `Xinst.call_spawn_ofCall`, `Frame.ofCall_settle_clean`),
 `Exec.retainedTargetFramesFromAt_rawFrameRoot` and `Lift.StepIn.codePreserve`.
+The raw-frame-root theorem accepts an arbitrary original entering path and
+child counter and retains their actual located-frame projection.
 For code-free message entry, `Blanc.executeCode.enter_inr_routing` derives the
 actual code address, enabled-precompile flag and fork's precompile predicate.
 The module's `callMsg_none_precompile` consumes these routing facts for the
@@ -3985,6 +3990,14 @@ contract-neutral.
   `ret` methods retain and consume the actual mapped internal continuation,
   preserving the complete non-gas state without requiring a gas schedule.
   `memory_eq` projects the symbolic memory without unfolding a concrete state.
+- To cross a checked referenced goto while preserving the complete actual
+  state and return continuation, use
+  [`Blanc/Lift/CursorJump.lean`](../Blanc/Lift/CursorJump.lean).
+  `CursorOK.jumpAt_of_jump` derives the actual JUMP byte from the checked node;
+  `CursorStateAt.goto` consumes its actual `ConfStep` and checked lookup,
+  retaining the full non-gas state and original K. The joint node/tree/lookup
+  premises are discovered here; the existential result is not a reliable
+  recipe trigger.
 - To exclude later external instructions from an actual returned parent, use
   [`Blanc/Lift/CursorNoExecSuffix.lean`](../Blanc/Lift/CursorNoExecSuffix.lean).
   `cursor_reach_of_parentPrefix` transports its checked cursor along the supplied
@@ -4051,6 +4064,12 @@ contract-neutral.
   reuse the canonical witnesses definitionally and retain their ordered
   `ExecFreeUntil` gaps. This joint path/cursor/tree seam is discovered here;
   its existential result does not provide a reliable recipe trigger.
+- To preserve the original child-root predicate on a supplied actual call
+  slot, use
+  [`Blanc/Lift/CursorOccurrenceRoots.lean`](../Blanc/Lift/CursorOccurrenceRoots.lean).
+  `CallOccurrenceStep.slotFilledWith` proves that exact occurrence slot is
+  filled with `InRoots root`; `toStepIn` is its compatibility projection and
+  keeps the same slot. Neither selects another call or filters the raw queue.
 - To pin the *complete* actual state (gas and world metadata included) at a
   later cursor of a successful raw suffix, use
   [`Blanc/Lift/CursorExact.lean`](../Blanc/Lift/CursorExact.lean). Build

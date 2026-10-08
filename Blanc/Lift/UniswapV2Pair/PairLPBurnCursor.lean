@@ -2,9 +2,17 @@ import Blanc.Lift.CursorQuietReturn
 import Blanc.Lift.CursorStateCuts
 import Blanc.Lift.UniswapV2Pair.Check
 import Blanc.Lift.UniswapV2Pair.LPBurnCore
+import Blanc.Lift.UniswapV2Pair.LPMintCore
 
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
+
+/-- The sequential LP burn scratch writes preserve the original free pointer. -/
+theorem pairLPBurnPost_ptr {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
+    {fromWord value : B256} {G : Nat} (mem : PtrMem 128 192 M) :
+    PtrMem 128 192 (lpBurnPost sevm b R M fromWord value G).memory := by
+  simpa only [lpBurnPost, lpBurnBalancePost, lpBurnSupplyPost, St.memory, lpMintMemory] using
+    lpMintMemory_ptr (lpMintScratch_ptr mem fromWord) fromWord value
 
 /-- The actual LP burn returns through its original caller with the sequential
 storage/log world derived by entry63, without a storage-representation premise. -/
