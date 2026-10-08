@@ -547,6 +547,39 @@ theorem pair_history_committed {pair : Adr} {cfg : ChainConfig} {checkpoint futu
   pair_history_committed_with (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
     (fun _ _ _ _ consumed => consumed) trace installed initial fresh
 
+theorem pair_history_initialized_with
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop}
+    (supplies : ∀ (U : WriterKey → Prop), WriterInj U → WriterApart U →
+      PairStepSupplyWith Consumes Auth U (fun _ => True))
+    (weaken : ∀ root segment transcript out,
+      Consumes root segment transcript out → ExactConsumes segment transcript out)
+    {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {factory token0 token1 : Adr} {domain : B256}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : InitializedCheckpoint (checkpoint.state.getStor pair) factory domain token0 token1)
+    (fresh : WriterFreshKeys (fun _ => False) (pairHistoryTouchedKeys pair trace)) :
+    some (future.state.getCode pair).toList = pairSem.image ∧
+    ∃ steps : List PairStep,
+      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      (∀ s ∈ steps, s.AuthenticWith Auth pair) ∧
+      ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplayWith Consumes (initializedState factory domain token0 token1) steps finish ∧
+        SourceReplay (initializedState factory domain token0 token1)
+          (steps.map PairStep.source) finish ∧
+        runSourceInvocations (initializedState factory domain token0 token1)
+          (steps.map PairStep.source) = some finish ∧
+        (∀ k, K' k → k ∈ pairHistoryTouchedKeys pair trace) ∧
+        WriterRep K' (future.state.getStor pair) finish := by
+  obtain ⟨code, steps, observed, auth, finish, K', matched, source, realized, _, inside, rep⟩ :=
+    pair_history_committed_with supplies weaken trace installed initial fresh
+  refine ⟨code, steps, observed, auth, finish, K', matched, source, realized, ?_, rep⟩
+  intro k tracked
+  rcases inside k tracked with none | row
+  · exact none.elim
+  · exact row
+
 /-- **The Pair history from its deployment checkpoint.**  From the storage `pair_create2_initialized`
 establishes (deployment by `factory`, then `initialize`), the same conclusion with
 `st₀ = initializedState factory domain token0 token1` and no initially tracked row. -/
@@ -567,16 +600,144 @@ theorem pair_history_initialized {pair : Adr} {cfg : ChainConfig} {checkpoint fu
         runSourceInvocations (initializedState factory domain token0 token1)
           (steps.map PairStep.source) = some finish ∧
         (∀ k, K' k → k ∈ pairHistoryTouchedKeys pair trace) ∧
-        WriterRep K' (future.state.getStor pair) finish := by
-  obtain ⟨code, steps, observed, auth, finish, K', matched, source, realized, _, inside, rep⟩ :=
-    pair_history_committed trace installed initial fresh
-  refine ⟨code, steps, observed, auth, finish, K', matched, source, realized, ?_, rep⟩
-  intro k tracked
-  rcases inside k tracked with none | row
-  · exact none.elim
-  · exact row
+        WriterRep K' (future.state.getStor pair) finish :=
+  pair_history_initialized_with
+    (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed) trace installed initial fresh
 
 /-! ## Model laws carried to the history -/
+
+theorem pair_history_ledger_with
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop}
+    (supplies : ∀ (U : WriterKey → Prop), WriterInj U → WriterApart U →
+      PairStepSupplyWith Consumes Auth U (fun _ => True))
+    (weaken : ∀ root segment transcript out,
+      Consumes root segment transcript out → ExactConsumes segment transcript out)
+    {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {factory token0 token1 : Adr} {domain : B256}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : InitializedCheckpoint (checkpoint.state.getStor pair) factory domain token0 token1)
+    (fresh : WriterFreshKeys (fun _ => False) (pairHistoryTouchedKeys pair trace)) :
+    ∃ steps : List PairStep,
+      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      (∀ s ∈ steps, s.AuthenticWith Auth pair) ∧
+      ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplayWith Consumes (initializedState factory domain token0 token1) steps finish ∧
+        runSourceInvocations (initializedState factory domain token0 token1) (steps.map PairStep.source) = some finish ∧
+        WriterRep K' (future.state.getStor pair) finish ∧
+        finish.Ledger := by
+  obtain ⟨_, steps, observed, auth, finish, K', matched, source, realized, _, _, rep⟩ :=
+    pair_history_committed_with supplies weaken trace installed initial fresh
+  exact ⟨steps, observed, auth, finish, K', matched, realized, rep,
+    source.ledger (State.initialized_ledgerOn factory domain token0 token1).ledger⟩
+
+theorem pair_history_oracle_with
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop}
+    (supplies : ∀ (U : WriterKey → Prop), WriterInj U → WriterApart U →
+      PairStepSupplyWith Consumes Auth U (fun _ => True))
+    (weaken : ∀ root segment transcript out,
+      Consumes root segment transcript out → ExactConsumes segment transcript out)
+    {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
+    ∃ steps : List PairStep,
+      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      (∀ s ∈ steps, s.AuthenticWith Auth pair) ∧
+      ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplayWith Consumes st₀ steps finish ∧
+        runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
+        WriterRep K' (future.state.getStor pair) finish ∧
+        finish.price0CumulativeLast.toNat =
+          (st₀.price0CumulativeLast.toNat +
+            oracleSum0 (sourceReplayUpdates st₀ (steps.map PairStep.source))) % 2 ^ 256 ∧
+        finish.price1CumulativeLast.toNat =
+          (st₀.price1CumulativeLast.toNat +
+            oracleSum1 (sourceReplayUpdates st₀ (steps.map PairStep.source))) % 2 ^ 256 ∧
+        (∀ u ∈ sourceReplayUpdates st₀ (steps.map PairStep.source), u.update.Lawful) ∧
+        OracleTimestampChain st₀.blockTimestampLast finish.blockTimestampLast
+          (sourceReplayUpdates st₀ (steps.map PairStep.source)) ∧
+        sourceReplayUpdates st₀ (steps.map PairStep.source) =
+          (sourceReplayReceipts st₀ (steps.map PairStep.source)).flatMap Prod.snd ∧
+        ∀ inv receipts, (inv, receipts) ∈ sourceReplayReceipts st₀ (steps.map PairStep.source) →
+          ∃ s ∈ steps, inv = s.source ∧
+            ∀ u ∈ receipts, u.update.timestamp = s.frame.sevm.benvStat.time := by
+  obtain ⟨_, steps, observed, auth, finish, K', matched, source, realized, _, _, rep⟩ :=
+    pair_history_committed_with supplies weaken trace installed initial fresh
+  obtain ⟨lawful, chain, stamped⟩ := source.oracle_receipts
+  refine ⟨steps, observed, auth, finish, K', matched, realized, rep, source.oracle_mod.1,
+    source.oracle_mod.2, lawful, chain, sourceReplayUpdates_eq_receipts _ _, ?_⟩
+  intro inv receipts member
+  obtain ⟨mem, hts⟩ := stamped inv receipts member
+  obtain ⟨s, sMem, sEq⟩ := List.mem_map.mp mem
+  refine ⟨s, sMem, sEq.symm, ?_⟩
+  intro u uMem
+  rw [hts u uMem, ← sEq]
+  rfl
+
+theorem pair_history_feeOff_product_with
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop}
+    (supplies : ∀ (U : WriterKey → Prop), WriterInj U → WriterApart U →
+      PairStepSupplyWith Consumes Auth U (fun _ => True))
+    (weaken : ∀ root segment transcript out,
+      Consumes root segment transcript out → ExactConsumes segment transcript out)
+    {pair : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
+    ∃ steps : List PairStep,
+      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      (∀ s ∈ steps, s.AuthenticWith Auth pair) ∧
+      ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplayWith Consumes st₀ steps finish ∧
+        runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
+        WriterRep K' (future.state.getStor pair) finish ∧
+        (sourceReplayAnswers st₀ (steps.map PairStep.source) →
+          ∀ before after, (before, after) ∈ sourceReplayEdges st₀ (steps.map PairStep.source) →
+            0 < before.totalSupply.toNat →
+            before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
+              after.reserve0.val * after.reserve1.val * before.totalSupply.toNat ^ 2) := by
+  obtain ⟨_, steps, observed, auth, finish, K', matched, source, realized, _, _, rep⟩ :=
+    pair_history_committed_with supplies weaken trace installed initial fresh
+  exact ⟨steps, observed, auth, finish, K', matched, realized, rep, source.feeOff_product⟩
+
+theorem pair_history_feeOn_product_with
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    {Auth : Exec.Deriv → Entry → Transcript → Prop}
+    (supplies : ∀ (U : WriterKey → Prop), WriterInj U → WriterApart U →
+      PairStepSupplyWith Consumes Auth U (fun _ => True))
+    (weaken : ∀ root segment transcript out,
+      Consumes root segment transcript out → ExactConsumes segment transcript out)
+    {pair : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
+    ∃ steps : List PairStep,
+      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      (∀ s ∈ steps, s.AuthenticWith Auth pair) ∧
+      ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplayWith Consumes st₀ steps finish ∧
+        runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
+        WriterRep K' (future.state.getStor pair) finish ∧
+        (sourceReplayNoShrink st₀ (steps.map PairStep.source) →
+          ∀ before inv after, (before, inv, after) ∈ sourceReplaySteps st₀ (steps.map PairStep.source) →
+            0 < before.totalSupply.toNat →
+            before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
+              after.reserve0.val * after.reserve1.val *
+                (before.totalSupply.toNat + entryFeeAmount before inv.entry inv.transcript) ^ 2) := by
+  obtain ⟨_, steps, observed, auth, finish, K', matched, source, realized, _, _, rep⟩ :=
+    pair_history_committed_with supplies weaken trace installed initial fresh
+  exact ⟨steps, observed, auth, finish, K', matched, realized, rep, source.feeOn_product⟩
 
 /-- **LP ledger after a history from the deployment checkpoint (U7).**  The future storage represents
 a model state whose LP balances sum to its total supply, `MINIMUM_LIQUIDITY` at address zero and
@@ -594,11 +755,10 @@ theorem pair_history_ledger {pair : Adr} {cfg : ChainConfig} {checkpoint future 
         PairObservedReplay (initializedState factory domain token0 token1) steps finish ∧
         runSourceInvocations (initializedState factory domain token0 token1) (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
-        finish.Ledger := by
-  obtain ⟨_, steps, observed, auth, finish, K', matched, source, realized, _, _, rep⟩ :=
-    pair_history_committed trace installed initial fresh
-  exact ⟨steps, observed, auth, finish, K', matched, realized, rep,
-    source.ledger (State.initialized_ledgerOn factory domain token0 token1).ledger⟩
+        finish.Ledger :=
+  pair_history_ledger_with
+    (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed) trace installed initial fresh
 
 /-- **Oracle after a history (U5).**  Each future accumulator is the checkpoint's plus the sum of
 every committed update receipt of the replay (nested committed updates included), modulo `2 ^ 256`.
@@ -636,19 +796,10 @@ theorem pair_history_oracle {pair : Adr} {cfg : ChainConfig} {checkpoint future 
           (sourceReplayReceipts st₀ (steps.map PairStep.source)).flatMap Prod.snd ∧
         ∀ inv receipts, (inv, receipts) ∈ sourceReplayReceipts st₀ (steps.map PairStep.source) →
           ∃ s ∈ steps, inv = s.source ∧
-            ∀ u ∈ receipts, u.update.timestamp = s.frame.sevm.benvStat.time := by
-  obtain ⟨_, steps, observed, auth, finish, K', matched, source, realized, _, _, rep⟩ :=
-    pair_history_committed trace installed initial fresh
-  obtain ⟨lawful, chain, stamped⟩ := source.oracle_receipts
-  refine ⟨steps, observed, auth, finish, K', matched, realized, rep, source.oracle_mod.1,
-    source.oracle_mod.2, lawful, chain, sourceReplayUpdates_eq_receipts _ _, ?_⟩
-  intro inv receipts member
-  obtain ⟨mem, hts⟩ := stamped inv receipts member
-  obtain ⟨s, sMem, sEq⟩ := List.mem_map.mp mem
-  refine ⟨s, sMem, sEq.symm, ?_⟩
-  intro u uMem
-  rw [hts u uMem, ← sEq]
-  rfl
+            ∀ u ∈ receipts, u.update.timestamp = s.frame.sevm.benvStat.time :=
+  pair_history_oracle_with
+    (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed) trace installed initial fresh
 
 /-- **Share value never decreases with the protocol fee off (U3).**  For the history's own steps: if
 each step's factory `feeTo` answer is zero (`EntryFeeOff`, mint and burn) and the token answers
@@ -677,10 +828,10 @@ theorem pair_history_feeOff_product {pair : Adr} {cfg : ChainConfig}
           ∀ before after, (before, after) ∈ sourceReplayEdges st₀ (steps.map PairStep.source) →
             0 < before.totalSupply.toNat →
             before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
-              after.reserve0.val * after.reserve1.val * before.totalSupply.toNat ^ 2) := by
-  obtain ⟨_, steps, observed, auth, finish, K', matched, source, realized, _, _, rep⟩ :=
-    pair_history_committed trace installed initial fresh
-  exact ⟨steps, observed, auth, finish, K', matched, realized, rep, source.feeOff_product⟩
+              after.reserve0.val * after.reserve1.val * before.totalSupply.toNat ^ 2) :=
+  pair_history_feeOff_product_with
+    (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed) trace installed initial fresh
 
 /-- **Share value with the protocol fee on (U3, fee-on).**  For the history's own steps: if the token
 answers satisfy `EntryNoShrink` over exactly these steps (sync: both answers at least the stored
@@ -709,9 +860,9 @@ theorem pair_history_feeOn_product {pair : Adr} {cfg : ChainConfig}
             0 < before.totalSupply.toNat →
             before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
               after.reserve0.val * after.reserve1.val *
-                (before.totalSupply.toNat + entryFeeAmount before inv.entry inv.transcript) ^ 2) := by
-  obtain ⟨_, steps, observed, auth, finish, K', matched, source, realized, _, _, rep⟩ :=
-    pair_history_committed trace installed initial fresh
-  exact ⟨steps, observed, auth, finish, K', matched, realized, rep, source.feeOn_product⟩
+                (before.totalSupply.toNat + entryFeeAmount before inv.entry inv.transcript) ^ 2) :=
+  pair_history_feeOn_product_with
+    (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed) trace installed initial fresh
 
 end Blanc.Lift.UniswapV2Pair
