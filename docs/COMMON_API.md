@@ -4253,7 +4253,10 @@ contract-neutral.
   continuation at the selected warm/cold charge.
   `temporalAccountAccessBase_state`, `temporalAccountAccessBase_output` and
   `temporalAccountAccessBase_logs` project the unchanged state, output and logs
-  through account warming. Use these facts to compose an observed call without
+  through account warming. `temporalAccountAccessBase_getStor` and
+  `temporalAccountAccessBase_getCode` in
+  [`Blanc/Lift/AccountAccessState.lean`](../Blanc/Lift/AccountAccessState.lean)
+  preserve storage and code at every address. Use these facts to compose an observed call without
   unfolding the nested world update; the Pair mint prefix consumes all three.
   The existing Lido temporal access names are compatibility declarations over
   this common owner.
