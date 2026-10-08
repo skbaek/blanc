@@ -139,7 +139,8 @@ def PairStepOutcome (Auth : Exec.Deriv → Entry → Transcript → Prop) (U : W
     (K' : WriterKey → Prop),
     Auth D entry nested ∧
     ExactConsumes (startTyped current (writerContext D.sevm invocation) entry) nested child ∧
-    child.status = .success bytes ∧ (∀ k, K k → K' k) ∧ (∀ k, K' k → U k) ∧
+    child.status = .success bytes ∧ bytes = post.output ∧
+    (∀ k, K k → K' k) ∧ (∀ k, K' k → U k) ∧
     WriterRep K' (post.getStor D.sevm.currentTarget) child.frame.current.state
 
 theorem PairStepOutcome.mono {Auth Auth' : Exec.Deriv → Entry → Transcript → Prop}
@@ -175,7 +176,8 @@ theorem pairStepOutcome_of {Auth : Exec.Deriv → Entry → Transcript → Prop}
     {s : Stor} (incoming : WriterRep K s current.state)
     (good : ∀ k ∈ keys, U k) (auth : Auth D entry nested)
     (consumed : ExactConsumes (startTyped current (writerContext D.sevm invocation) entry) nested child)
-    (success : child.status = .success bytes) (grown : ∀ k, K' k → WriterExtend K keys k)
+    (success : child.status = .success bytes) (outputEq : bytes = post.output)
+    (grown : ∀ k, K' k → WriterExtend K keys k)
     (rep : WriterRep K' (post.getStor D.sevm.currentTarget) child.frame.current.state) :
     PairStepOutcome Auth U current invocation K D post := by
   have sub' : ∀ k, K' k → U k := by
@@ -184,7 +186,7 @@ theorem pairStepOutcome_of {Auth : Exec.Deriv → Entry → Transcript → Prop}
     · exact sub k old
     · exact good k row
   obtain ⟨K'', grows, inside, rep'⟩ := writerRep_absorb inj apart sub incoming sub' rep
-  exact ⟨entry, nested, child, bytes, K'', auth, consumed, success, grows, inside, rep'⟩
+  exact ⟨entry, nested, child, bytes, K'', auth, consumed, success, outputEq, grows, inside, rep'⟩
 
 /-! ## Lock-free entries, at any lock state -/
 
@@ -207,7 +209,7 @@ theorem free_transfer_outcome (selector : Blanc.Sevm.selector sevm = 0xa9059cbb)
     (invocation := invocation) wrep
     (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good) representable codeEq fork
     selector run
-  refine pairStepOutcome_of inj apart sub wrep good (Or.inl ⟨selector, rfl, rfl⟩) consumed rfl
+  refine pairStepOutcome_of inj apart sub wrep good (Or.inl ⟨selector, rfl, rfl⟩) consumed rfl rfl
     (fun _ h => h) ?_
   rw [result.sourceState]
   exact result.representation
@@ -221,7 +223,7 @@ theorem free_approve_outcome (selector : Blanc.Sevm.selector sevm = 0x095ea7b3)
     (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good) representable codeEq fork
     selector run
   exact pairStepOutcome_of inj apart sub wrep good (Or.inr (Or.inl ⟨selector, rfl, rfl⟩))
-    consumed rfl (fun _ h => h) representation
+    consumed rfl rfl (fun _ h => h) representation
 
 theorem free_transferFrom_outcome (selector : Blanc.Sevm.selector sevm = 0x23b872dd)
     (good : ∀ k ∈ transferFromTouched (transferFromOwner sevm) sevm.caller
@@ -233,7 +235,7 @@ theorem free_transferFrom_outcome (selector : Blanc.Sevm.selector sevm = 0x23b87
     (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good) representable codeEq fork
     selector run
   refine pairStepOutcome_of inj apart sub wrep good
-    (Or.inr (Or.inr (Or.inl ⟨selector, rfl, rfl⟩))) consumed rfl (fun _ h => h) ?_
+    (Or.inr (Or.inr (Or.inl ⟨selector, rfl, rfl⟩))) consumed rfl rfl (fun _ h => h) ?_
   rw [result.sourceState]
   exact result.representation
 
@@ -245,7 +247,7 @@ theorem free_initialize_outcome (inj : WriterInj U) (apart : WriterApart U)
   obtain ⟨_, _, _, _, _, result, consumed⟩ := initialize_bytecode_exact_consumes
     (invocation := invocation) wrep representable freshOutput codeEq fork selector run
   refine pairStepOutcome_of (keys := []) inj apart sub wrep (fun _ h => absurd h List.not_mem_nil)
-    (Or.inr (Or.inr (Or.inr (Or.inl ⟨selector, rfl, rfl⟩)))) consumed rfl
+    (Or.inr (Or.inr (Or.inr (Or.inl ⟨selector, rfl, rfl⟩)))) consumed rfl rfl
     (fun _ h => Or.inl h) ?_
   rw [result.sourceCurrent]
   exact result.representation
@@ -261,10 +263,10 @@ theorem free_permit_outcome (sem : CodeSem) (image : sem.image = some code.toLis
   obtain ⟨_, _, _, _, _, out, _, entered, views, auth, result, consumed, _⟩ :=
     permit_bytecode_exact_turns (invocation := invocation) inj apart sub sem image wrep touched
       (by rw [installed]; exact image.symm) representable codeEq fork selector freshOutput run good
-  obtain ⟨_, representation, _⟩ := result
+  obtain ⟨_, representation, _, _, _, _, _, _, _, _, outputEq, _⟩ := result
   exact pairStepOutcome_of inj apart sub wrep touched
     (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl ⟨selector, rfl, out, entered, views, rfl, auth⟩)))))
-    consumed rfl (fun _ h => h) representation
+    consumed rfl outputEq.symm (fun _ h => h) representation
 
 theorem free_view_outcome (view : StaticView)
     (selector : Blanc.Sevm.selector sevm = view.selector)
@@ -276,7 +278,7 @@ theorem free_view_outcome (view : StaticView)
     staticView_source_handler_selected (ctx := writerContext sevm invocation) wrep fresh
       representable rfl codeEq fork view selector run
   refine pairStepOutcome_of inj apart sub wrep good
-    (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr ⟨view, selector, rfl, rfl⟩))))) consumed rfl
+    (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr ⟨view, selector, rfl, rfl⟩))))) consumed rfl rfl
     (fun _ h => h) ?_
   rw [frameCurrent, storage sevm.currentTarget]
   exact wrep.extend fresh
@@ -450,24 +452,24 @@ theorem pair_mint_outcome (selector : Blanc.Sevm.selector sevm = 0x6a627842) :
       ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ post := by
   have inside := writerExtend_universe sub good.mint
   obtain ⟨_, _, out0, out1, outF, steps, views0, views1, viewsF, final, rets, K', liquidity, fee,
-      feeLogs, added, consumed, _, _, _, grown, rep, _, _, _, _, _, _, picked, prov0, prov1,
+      feeLogs, added, consumed, _, _, _, grown, rep, _, _, _, _, _, outputEq, picked, prov0, prov1,
       provF⟩ :=
     mint_bytecode_exact_consumes invocation wrep sem image installed codeEq fork selector run
       (writerInj_restrict inj inside) (writerApart_restrict apart inside)
   exact pairStepOutcome_of inj apart sub wrep good.mint
     ⟨selector, rfl, current, out0, out1, outF, views0, views1, viewsF, steps, rfl, picked, prov0,
-      prov1, provF⟩ consumed rfl grown rep
+      prov1, provF⟩ consumed rfl outputEq.symm grown rep
 
 theorem pair_sync_outcome (freshOutput : b.output = [])
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9) :
     PairStepOutcome SyncAuth U current invocation K
       ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ post := by
   have inside := writerExtend_universe sub good.sync
-  obtain ⟨_, _, result, consumed, rep, _⟩ :=
+  obtain ⟨_, _, result, consumed, rep, _, _, outputEq⟩ :=
     sync_bytecode_exact_consumes invocation wrep sem image installed freshOutput codeEq fork
       selector run (writerInj_restrict inj inside) (writerApart_restrict apart inside)
   exact pairStepOutcome_of (keys := []) inj apart sub wrep (fun _ h => absurd h List.not_mem_nil)
-    ⟨selector, rfl, K, current, invocation, b, post, result, rfl⟩ consumed rfl
+    ⟨selector, rfl, K, current, invocation, b, post, result, rfl⟩ consumed rfl outputEq.symm
     (fun _ h => Or.inl h) rep
 
 theorem pair_skim_outcome (freshOutput : b.output = [])
@@ -476,12 +478,12 @@ theorem pair_skim_outcome (freshOutput : b.output = [])
       ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ post := by
   have inside := writerExtend_universe sub good.skim
   obtain ⟨_, _, out0, d, first, out1, d2, views0, views1, turns1, turns3, final, rets, K', added,
-      second, consumed, _, _, grown, rep, _, _, _, _, picked, auth, prov0, prov1, prov2, prov3, _⟩ :=
+      second, consumed, _, _, grown, rep, _, _, _, _, picked, auth, prov0, prov1, prov2, prov3, outputEq⟩ :=
     skim_bytecode_exact_consumes invocation wrep sem image installed freshOutput codeEq fork
       selector run (writerInj_restrict inj inside) (writerApart_restrict apart inside)
   exact pairStepOutcome_of inj apart sub wrep good.skim
     ⟨selector, rfl, b, G, rfl, rfl, out0, d, first, out1, d2, views0, views1, turns1, turns3, second,
-      rfl, picked, auth, prov0, prov1, prov2, prov3⟩ consumed rfl grown rep
+      rfl, picked, auth, prov0, prov1, prov2, prov3⟩ consumed rfl outputEq.symm grown rep
 
 theorem pair_swap_outcome (freshOutput : b.output = [])
     (selector : Blanc.Sevm.selector sevm = 0x022c0d9f) :
@@ -490,7 +492,7 @@ theorem pair_swap_outcome (freshOutput : b.output = [])
   have inside := writerExtend_universe sub good.skim
   obtain ⟨_, _, frame, T0, T1, TC, turns0, turns1, turnsC, b1, b2, d, d0, d1, M1, M2, M, p1, p,
       out0, out1, views0, views1, final, rets, K', added, opt0, opt1, optC, shape0, shape1, shapeC,
-      call0, call1, consumed, frameCheckpoint, frameContext, _, _, _, grown, rep, _, _, _, _, _,
+      call0, call1, consumed, frameCheckpoint, frameContext, _, _, _, grown, rep, _, _, _, _, outputEq,
       auth, prov0, prov1, _⟩ :=
     swap_bytecode_exact_consumes invocation wrep sem image installed freshOutput codeEq fork
       selector run (writerInj_restrict inj inside) (writerApart_restrict apart inside)
@@ -498,7 +500,7 @@ theorem pair_swap_outcome (freshOutput : b.output = [])
     ⟨selector, rfl, b, G, current, invocation, frame, rfl, rfl, frameCheckpoint, frameContext,
       T0, T1, TC, turns0, turns1, turnsC, b1, b2, d, d0, d1, M1, M2, M, p1, p, out0, out1, views0,
       views1, opt0, opt1, optC, shape0, shape1, shapeC, call0, call1, rfl, auth, prov0, prov1⟩
-    consumed rfl grown rep
+    consumed rfl outputEq.symm grown rep
 
 theorem pair_burn_outcome (selector : Blanc.Sevm.selector sevm = 0x89afcb44) :
     PairStepOutcome BurnAuth U current invocation K
@@ -511,12 +513,13 @@ theorem pair_burn_outcome (selector : Blanc.Sevm.selector sevm = 0x89afcb44) :
   have fresh := Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub row
   have sub₁ := writerExtend_universe sub row
   obtain ⟨a, amount0, amount1, provenance, K', final, rets, _, _, _, inside, grows, consumed, halted,
-      _, rep, _⟩ :=
+      outputEq, rep, _⟩ :=
     burnRaw_source_authentic invocation codeEq fork selector (wrep.extend fresh)
       (Or.inr (List.mem_singleton_self _)) run inj apart sub₁ good.mint sem image installed
       good.locked good.views
   cases halted
   exact ⟨_, a.transcript, _, _, K', ⟨selector, rfl, burnRaw_frameAuth provenance⟩, consumed, rfl,
+    outputEq.symm,
     fun k h => grows k (Or.inl h), inside, rep⟩
 
 end Guarded
