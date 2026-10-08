@@ -4601,6 +4601,14 @@ The already reached optional-bool decoder is inverted by
 It derives acceptance and the complete physical return allocation without
 selecting an external call; the original whole-helper inverse delegates to it.
 
+The moved final balance output uses the original memory image facts
+`burnBalanceReplyMemory_extended`, `burnBalanceReplyMemory_ptr` and
+`burnBalanceReplyMemory_word` in
+[`BurnBalanceWalk.lean`](../Blanc/Lift/UniswapV2Pair/BurnBalanceWalk.lean).
+They preserve the supplied physical free pointer and identify the decoded
+word; the original whole-read inverse and actual final reply cursor share
+these facts.
+
 The Pair mutable fold's `mutable_selected_root_with` in
 [`MutableTurns.lean`](../Blanc/Lift/UniswapV2Pair/MutableTurns.lean)
 parameterizes child consumption and turn introductions while the existing
