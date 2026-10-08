@@ -45,7 +45,7 @@ theorem mint_feeKeys_sub {K U : WriterKey → Prop} {feeTo : B256}
     (sub : ∀ k, K k → U k) (row : U (.balance feeTo.toAdr))
     (st : State) (sevm : Sevm) (b : Devm) (r0 r1 : B256) :
     ∀ k, feeBranchSourceKeys K st sevm b feeTo r0 r1 k → U k := by
-  exact feeBranchSourceKeys_sub sub row st sevm b r0 r1
+  exact pairFeeSourceKeys_sub sub row st sevm b r0 r1
 
 /-- Both supply arms' LP-row obligations hold for every tracked subset of a separated universe
 holding the address-zero and recipient rows. -/

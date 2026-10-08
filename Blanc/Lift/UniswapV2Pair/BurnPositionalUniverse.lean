@@ -36,6 +36,6 @@ theorem BurnThreeCalls.feeUniverse {root : Exec.Deriv} {sevm : Sevm} {b : Devm}
     r.feeFresh K current ∧ ∀ k, r.sourceFeeKeys K current k → U k := by
   have row := trace _ (r.feeTraceRow fork)
   exact ⟨feeMintFresh_of_universe inj apart sub row _ _ _ _ _,
-    feeBranchSourceKeys_sub sub row _ _ _ _ _⟩
+    pairFeeSourceKeys_sub sub row _ _ _ _ _⟩
 
 end Blanc.Lift.UniswapV2Pair
