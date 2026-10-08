@@ -951,6 +951,7 @@ import Blanc.Lift.UniswapV2Pair.BurnPositionalFinalReply
 import Blanc.Lift.UniswapV2Pair.BurnPositionalFinalObservation
 import Blanc.Lift.UniswapV2Pair.BurnPositionalSeven
 import Blanc.Lift.UniswapV2Pair.BurnPositionalFacts
+import Blanc.Lift.UniswapV2Pair.BurnPositionalSource
 import Blanc.Lift.UniswapV2Pair.SyncOccurrence
 import Blanc.Lift.UniswapV2Pair.SourceOccurrence
 import Blanc.Lift.UniswapV2Pair.SourceSlotQueueExistence
