@@ -314,7 +314,7 @@ private theorem safeTransfer_optional_exact {sevm : Sevm} {b : Devm} {R : List B
     exact safeTransfer_decodeWords_exact width positive room
 
 /-- Actual CALL cleanup derives success before entering the optional-return decoder. -/
-private theorem safeTransfer_success_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+theorem safeTransfer_success_inv {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
     {x ptr success y z value toWord tokenWord ρ : B256}
     (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
@@ -762,7 +762,7 @@ private theorem safeTransfer_copy68_exact {sevm : Sevm} {b : Devm} {R : List B25
 
 
 /-- The literal post-CALL tree retains full returndata before choosing allocation or empty data. -/
-private def safeTransfer_afterCall : SFunc :=
+def safeTransfer_afterCall : SFunc :=
   .next (.reg (.swap 1)) (.next (.reg .pop) (.next (.reg .pop)
     (.next (.reg .returndatasize) (.next (.reg (.dup 0)) (.next (.push [0] (by decide))
       (.next (.reg (.dup 1)) (.next (.reg .eq) (.next (.push [0x21, 0x43] (by decide))
@@ -803,7 +803,7 @@ private theorem safeTransfer_partialCall_inv {P : Sevm → Devm → Ninst → De
   exact ⟨forwarded, callGas, d, hd, tail⟩
 
 /-- The actual post-CALL branch derives the empty sentinel or full physical allocation. -/
-private theorem safeTransfer_afterCall_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+theorem safeTransfer_afterCall_inv {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
     {success endWord token y z value toWord tokenWord ρ : B256}
     (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
@@ -923,7 +923,7 @@ private theorem safeTransfer_afterCall_exact {sevm : Sevm} {b : Devm} {R : List 
 
 /-- The real CALL plus its successful helper continuation derives the entered flag,
 full width and physical parent-memory image without forbidding child effects. -/
-private theorem safeTransfer_call_inv {P : Sevm → Devm → Ninst → Devm → Prop}
+theorem safeTransfer_call_inv {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b d : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
     {forwarded token ptr inputSize endWord y z value toWord tokenWord ρ : B256}
     (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')

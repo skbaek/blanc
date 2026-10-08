@@ -957,6 +957,9 @@ import Blanc.Lift.UniswapV2Pair.MintPositionalConsume
 import Blanc.Lift.UniswapV2Pair.PermitSourceOccurrence
 import Blanc.Lift.UniswapV2Pair.PairTransferCopyCursor
 import Blanc.Lift.UniswapV2Pair.PairTransferCallCursor
+import Blanc.Lift.UniswapV2Pair.PermitRawFacts
+import Blanc.Lift.UniswapV2Pair.MintPositionalCanonical
+import Blanc.Lift.UniswapV2Pair.PairTransferRequestCursor
 import Blanc.Lift.UniswapV2Pair.PairFeeCursor
 import Blanc.Lift.UniswapV2Pair.PairFeeObservation
 import Blanc.Lift.UniswapV2Pair.PairFeeReturn
