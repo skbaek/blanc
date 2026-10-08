@@ -37,6 +37,37 @@ theorem sourceAdmittedMutableTurns_done (Auth : Exec.Deriv → Entry → Transcr
       {complete := true, frame := frame, childReturns := []} :=
   ⟨.done frame request turn, .done frame request turn⟩
 
+/-- Compose the same admitted during/rest proofs with the same actual full
+event queue and its exact located-entry transcript authentication. -/
+theorem AdmittedSourceConsumes.nextMutableCall
+    {Auth : Exec.Deriv → Entry → Transcript → Prop}
+    {root start : Exec.Deriv} {index : Nat}
+    {frame : Frame} {request : Request} {continuation : Continuation}
+    {reply : ExternalResult} {tail : Transcript} {executed : TurnsResult} {out : RunResult}
+    {events : List (Log ⊕ Exec.LocatedFrame)} {selectedTurns : List MutableTurn}
+    (observed : SourceCallAt root frame request reply index)
+    (gap : Exec.Deriv.ExecFreeUntil start observed.call.occurrence.node)
+    (queue : SourceSlotEvents observed.call frame.context.pair index events)
+    (present : (request.requiresCode && !reply.codeExists) = false)
+    (noCodeTurns : reply.codeExists = false → mutableTranscript selectedTurns .done = .done)
+    (mapped : selectedTurns.map MutableTurn.event = events)
+    (authentic : ∀ located entry nested, Sum.inr (located, entry, nested) ∈ selectedTurns →
+      Auth (Exec.Frame.rootDeriv located.frame) entry nested)
+    (during : AdmittedMutableTurns Auth frame request 0 events
+      (mutableTranscript selectedTurns .done) executed)
+    (rest : AdmittedSourceConsumes Auth root observed.call.returned (index + 1)
+      (resumeSegment
+        (if reply.success then executed.frame else {executed.frame with current := frame.current})
+        request continuation reply) tail out) :
+    AdmittedSourceConsumes Auth root start index (.suspended frame request continuation)
+      (.next reply (mutableTranscript selectedTurns .done) tail)
+      {out with childReturns := executed.childReturns ++ out.childReturns} := by
+  obtain ⟨duringProof, admittedDuring⟩ := during
+  obtain ⟨restProof, admittedRest⟩ := rest
+  exact ⟨.nextMutableCall observed gap queue present noCodeTurns duringProof restProof,
+    .nextMutableCall observed gap queue present noCodeTurns duringProof restProof
+      selectedTurns mapped rfl authentic admittedDuring admittedRest⟩
+
 /-- The original slot walk constructs recursive admission and same-queue entry
 authentication together, at the same incoming checkpoint and actual returned state. -/
 theorem admitted_source_slot_turns
