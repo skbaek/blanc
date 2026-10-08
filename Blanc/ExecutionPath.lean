@@ -95,7 +95,7 @@ structure Exec.LocatedFrame.EnteringOccurrence
 
 /-- Path annotation is conservative: erasing paths yields the established
 settlement-retained frame traversal exactly, with identical order and pruning. -/
-private theorem Exec.descendantFramePaths_map_frame
+theorem Exec.descendantFramePaths_map_frame
     (parentPath : List Nat) (nextChild : Nat)
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) :

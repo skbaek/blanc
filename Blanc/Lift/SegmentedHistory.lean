@@ -346,7 +346,7 @@ private theorem Exec.retainedTargetTurnsFrom_target_spec
     have eq := List.mem_singleton.mp member
     cases eq
 
-private theorem Exec.retainedTargetTurnsFrom_targets_spec
+theorem Exec.retainedTargetTurnsFrom_targets_spec
     (ca : Adr) (framePath : List Nat) (nextChild : Nat)
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) (committed : Execution.commits out = true) :

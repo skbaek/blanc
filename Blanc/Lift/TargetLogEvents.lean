@@ -324,20 +324,16 @@ theorem CodeSem.At.callChild {sem : CodeSem} {ca : Adr} {sevm : Sevm} {pre : Dev
 theorem Exec.retainedTargetFramesFromAt_rawFrameRoot (ca : Adr)
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) (committed : Execution.commits out = true)
-    {located : Exec.LocatedFrame}
-    (member : located ∈ Exec.retainedTargetFramesFromAt ca [] 0 run committed) :
+    {located : Exec.LocatedFrame} {path : List Nat} {counter : Nat}
+    (member : located ∈ Exec.retainedTargetFramesFromAt ca path counter run committed) :
     Exec.Frame.rootDeriv located.frame ∈ Exec.rawFrameRoots run ∧
       located.frame.sevm.currentTarget = ca := by
-  have same : Exec.retainedTargetFramesFromAt ca [] 0 run committed =
-      (Exec.retainedTargetTurns ca run).filterMap Sum.getRight? := by
-    rw [← Exec.retainedTargetTurnsAt_filterMap_eq ca [] run committed]
-    rfl
-  rw [same] at member
-  obtain ⟨ordered, owned, _⟩ := Exec.retainedTargetTurns_spec ca run
+  have selected := Exec.retainedTargetTurnsFrom_targets_spec ca path counter run committed
   refine ⟨Exec.mem_rawFrameRoots_of_mem_committedFrames run located.frame ?_,
-    owned located member⟩
-  rw [← Exec.committedFramePaths_map_frame]
-  exact List.mem_map_of_mem (ordered.subset member)
+    selected.2.2.1 located member⟩
+  rw [Exec.committedFrames, dite_eq_left committed]
+  have mapped := List.mem_map_of_mem (f := Exec.LocatedFrame.frame) (selected.1.subset member)
+  simpa only [List.map_cons, Exec.descendantFramePaths_map_frame] using mapped
 
 /-! ## Logs across one step, from the public committed-log chronology -/
 

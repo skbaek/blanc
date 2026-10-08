@@ -511,7 +511,8 @@ theorem staticView_raw_retained_turns_inv {K : WriterKey → Prop} {frame : Fram
 /-- A static queue and its source consumption, indexed by the same primitive
 call. This local packet does not assert an original parent-prefix occurrence. -/
 structure PairStaticCallTrace (D : Exec.Deriv) (sevm : Sevm) (frame : Frame)
-    (request : Request) (pre d : Devm) (target : B256) (views : List StaticViewTurn) where
+    (request : Request) (pre d : Devm) (target : B256) (views : List StaticViewTurn)
+    (path : List Nat := []) where
   slot : Xlot
   run : Xinst.Run sevm pre .staticcall slot (.ok d)
   origin :
@@ -520,7 +521,7 @@ structure PairStaticCallTrace (D : Exec.Deriv) (sevm : Sevm) (frame : Frame)
         slot = .some ⟨child, raw⟩ ∧ Execution.commits raw = true ∧
         (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots D.exc) ∧
         views.map Prod.fst =
-          (Exec.retainedTargetTurnsAt frame.context.pair [] childRun).filterMap Sum.getRight?
+          (Exec.retainedTargetTurnsAt frame.context.pair path childRun).filterMap Sum.getRight?
   authentic : ∀ picked ∈ views, picked.Authentic frame
   during : ExactTurns frame request 0 (staticViewTranscript views .done)
     { complete := true, frame := frame,
@@ -540,9 +541,9 @@ theorem pair_static_call_turns_trace {U K : WriterKey → Prop} (inj : WriterInj
     (fork : CoveredFork sevm.benvStat.fork)
     (flag : ∃ f rest, d.stack = f :: rest ∧ f ≠ 0)
     (good : ∀ F ∈ Exec.rawFrameRoots D.exc, F.sevm.currentTarget = frame.context.pair →
-      ∀ k ∈ staticViewDecodedKeys F.sevm, U k) :
+      ∀ k ∈ staticViewDecodedKeys F.sevm, U k) (path : List Nat := []) :
     ∃ views : List StaticViewTurn,
-      Nonempty (PairStaticCallTrace D sevm frame request pre d t views) := by
+      Nonempty (PairStaticCallTrace D sevm frame request pre d t views (path := path)) := by
   obtain ⟨xl, inRoots, pc, stepRun⟩ := call
   have xrun : Xinst.Run sevm pre .staticcall xl (.ok d) := by
     rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at stepRun
@@ -591,7 +592,7 @@ theorem pair_static_call_turns_trace {U K : WriterKey → Prop} (inj : WriterInj
         have childStatic : child.sta.isStatic = true :=
           (Blanc.Frame.enter_run_isStatic entered).trans
             (Xinst.step_staticcall_spawn_isStatic spawned)
-        have fresh : ∀ located ∈ (Exec.retainedTargetTurnsAt frame.context.pair [] childRun).filterMap
+        have fresh : ∀ located ∈ (Exec.retainedTargetTurnsAt frame.context.pair path childRun).filterMap
             Sum.getRight?, WriterFreshKeys K (staticViewDecodedKeys located.frame.sevm) := by
           intro located member
           by_cases committed : Execution.commits raw = true
@@ -603,12 +604,12 @@ theorem pair_static_call_turns_trace {U K : WriterKey → Prop} (inj : WriterInj
               (same.symm ▸ target)
             rw [same] at keys
             exact Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub keys
-          · have empty : Exec.retainedTargetTurnsAt frame.context.pair [] childRun = [] := by
+          · have empty : Exec.retainedTargetTurnsAt frame.context.pair path childRun = [] := by
               rw [Exec.retainedTargetTurnsAt, dite_eq_right committed]
             rw [empty, List.filterMap_nil] at member
             exact (List.not_mem_nil member).elim
         obtain ⟨views, mapped, authentic, consumed⟩ :=
-          staticView_raw_retained_turns_inv (request := request) (turn := 0) (path := [])
+          staticView_raw_retained_turns_inv (request := request) (turn := 0) (path := path)
             sem image childRun childInstalled childRep fresh (fun _ => ⟨entry.1, entry.2.1⟩)
             short (by rw [stat]; exact time) childStatic childFork
         exact ⟨views, ⟨⟨.some ⟨child, raw⟩, sameCall,
