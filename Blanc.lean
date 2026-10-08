@@ -923,6 +923,8 @@ import Blanc.Lift.UniswapV2Pair.BurnPositionalSecond
 import Blanc.Lift.UniswapV2Pair.BurnPositionalBalances
 import Blanc.Lift.UniswapV2Pair.BurnPositionalFee
 import Blanc.Lift.UniswapV2Pair.BurnPositionalThree
+import Blanc.Lift.UniswapV2Pair.BurnPositionalPricing
+import Blanc.Lift.UniswapV2Pair.BurnPositionalPayment
 import Blanc.Lift.UniswapV2Pair.SyncOccurrence
 import Blanc.Lift.UniswapV2Pair.SourceOccurrence
 import Blanc.Lift.UniswapV2Pair.SyncSourceOccurrence

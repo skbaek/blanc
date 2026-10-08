@@ -401,6 +401,8 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.BurnPositionalBalances",
         "Lift.UniswapV2Pair.BurnPositionalFee",
         "Lift.UniswapV2Pair.BurnPositionalThree",
+        "Lift.UniswapV2Pair.BurnPositionalPricing",
+        "Lift.UniswapV2Pair.BurnPositionalPayment",
         "Lift.UniswapV2Pair.SyncGasCanonical",
         "Lift.UniswapV2Pair.SkimWalk",
         "Lift.UniswapV2Pair.SkimTransferWalk",
