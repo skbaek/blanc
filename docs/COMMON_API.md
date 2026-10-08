@@ -4723,6 +4723,12 @@ binds the guarded callback request and successful full-byte reply to its same
 physical CALL, message, process, partition and complete queue. The code bit is
 justified by the actual guard rather than by the entered slot bit.
 
+[`SwapSourceOccurrenceBalance.lean`](../Blanc/Lift/UniswapV2Pair/SwapSourceOccurrenceBalance.lean)
+binds both actual guarded STATICCALLs to their full replies and complete static
+view queues. `SwapBalancePairSource` retains their same authentic paths and the
+second source frame resumed from the first exact request; finite key freshness
+is projected from the carried representation and original root universe.
+
 [`SwapPositionalMutableCallback.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalMutableCallback.lean)
 retains the same guarded callback's complete events and recursively admitted
 children. `swap_source_callbacks` composes all optional mutable calls from the
