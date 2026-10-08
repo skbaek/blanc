@@ -4638,6 +4638,16 @@ They preserve the supplied physical free pointer and identify the decoded
 word; the original whole-read inverse and actual final reply cursor share
 these facts.
 
+`swap_transfers_cursor_state` in
+[`SwapPositionalTransfer.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalTransfer.lean)
+composes both optional optimistic transfers from those same original public
+premises. `SwapTransfers` retains each real amount branch, original-root CALL
+slot, complete payload/reply, caller cursor and moving memory/pointer bounds;
+transfer1 starts from transfer0's own world, memory and returned node. A skipped
+amount retains an actual call-free gap; an executed CALL with an absent child
+slot still has its physical occurrence. The shared transfer request/call/reply
+cursors supply each occurrence rather than searching by an equal payload.
+
 The Pair mutable fold's `mutable_selected_root_with` in
 [`MutableTurns.lean`](../Blanc/Lift/UniswapV2Pair/MutableTurns.lean)
 parameterizes child consumption and turn introductions while the existing
