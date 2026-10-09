@@ -167,6 +167,7 @@ NONCLAIM_PHRASES = [
     "states the modular sum of the recorded increments",
     "not an existential cost",
     "not every exported theorem is admitted",
+    "retained as compatibility surfaces",
 ]
 
 # Process and internal-bookkeeping vocabulary the public map must not carry.
