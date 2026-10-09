@@ -23,12 +23,6 @@ theorem pair_admitted_transfer_supply {U : WriterKey → Prop}
   exact result.representation
 
 
-/-- Compatibility projects the same admitted entry/result/output. -/
-theorem pair_positional_transfer_supply {U : WriterKey → Prop}
-    (inj : WriterInj U) (apart : WriterApart U) :
-    PairPositionalSupply U (fun sevm => Blanc.Sevm.selector sevm = 0xa9059cbb) := by
-  exact PairAdmittedSupply.positional (pair_admitted_transfer_supply inj apart)
-
 theorem pair_admitted_approve_supply {U : WriterKey → Prop}
     (inj : WriterInj U) (apart : WriterApart U) :
     PairAdmittedSupply U (fun sevm => Blanc.Sevm.selector sevm = 0x095ea7b3) := by
@@ -42,12 +36,6 @@ theorem pair_admitted_approve_supply {U : WriterKey → Prop}
   exact pairStepOutcome_with (Consumes := PairAdmittedConsumes) inj apart sub rep touched
     (PairEntryAt.approve selector) (AdmittedSourceConsumes.of_done consumed (PairNoCallEntry.approve.root_noExec codeEq fork selector run)) rfl rfl (fun _ h => h) representation
 
-
-/-- Compatibility projects the same admitted entry/result/output. -/
-theorem pair_positional_approve_supply {U : WriterKey → Prop}
-    (inj : WriterInj U) (apart : WriterApart U) :
-    PairPositionalSupply U (fun sevm => Blanc.Sevm.selector sevm = 0x095ea7b3) := by
-  exact PairAdmittedSupply.positional (pair_admitted_approve_supply inj apart)
 
 theorem pair_admitted_transferFrom_supply {U : WriterKey → Prop}
     (inj : WriterInj U) (apart : WriterApart U) :
@@ -65,12 +53,6 @@ theorem pair_admitted_transferFrom_supply {U : WriterKey → Prop}
   exact result.representation
 
 
-/-- Compatibility projects the same admitted entry/result/output. -/
-theorem pair_positional_transferFrom_supply {U : WriterKey → Prop}
-    (inj : WriterInj U) (apart : WriterApart U) :
-    PairPositionalSupply U (fun sevm => Blanc.Sevm.selector sevm = 0x23b872dd) := by
-  exact PairAdmittedSupply.positional (pair_admitted_transferFrom_supply inj apart)
-
 theorem pair_admitted_initialize_supply {U : WriterKey → Prop}
     (inj : WriterInj U) (apart : WriterApart U) :
     PairAdmittedSupply U (fun sevm => Blanc.Sevm.selector sevm = 0x485cc955) := by
@@ -84,12 +66,6 @@ theorem pair_admitted_initialize_supply {U : WriterKey → Prop}
   rw [result.sourceCurrent]
   exact result.representation
 
-
-/-- Compatibility projects the same admitted entry/result/output. -/
-theorem pair_positional_initialize_supply {U : WriterKey → Prop}
-    (inj : WriterInj U) (apart : WriterApart U) :
-    PairPositionalSupply U (fun sevm => Blanc.Sevm.selector sevm = 0x485cc955) := by
-  exact PairAdmittedSupply.positional (pair_admitted_initialize_supply inj apart)
 
 theorem pair_admitted_permit_supply {U : WriterKey → Prop}
     (inj : WriterInj U) (apart : WriterApart U) (sem : CodeSem)
@@ -106,13 +82,6 @@ theorem pair_admitted_permit_supply {U : WriterKey → Prop}
     (PairEntryAt.permit selector) positional rfl output.symm (fun _ h => h) representation
 
 
-/-- Compatibility projects the same admitted entry/result/output. -/
-theorem pair_positional_permit_supply {U : WriterKey → Prop}
-    (inj : WriterInj U) (apart : WriterApart U) (sem : CodeSem)
-    (image : sem.image = some code.toList) :
-    PairPositionalSupply U (fun sevm => Blanc.Sevm.selector sevm = 0xd505accf) := by
-  exact PairAdmittedSupply.positional (pair_admitted_permit_supply inj apart sem image)
-
 theorem pair_admitted_view_supply {U : WriterKey → Prop}
     (inj : WriterInj U) (apart : WriterApart U) (view : StaticView) :
     PairAdmittedSupply U (fun sevm => Blanc.Sevm.selector sevm = view.selector) := by
@@ -127,12 +96,6 @@ theorem pair_admitted_view_supply {U : WriterKey → Prop}
   rw [frameCurrent, storage sevm.currentTarget]
   exact rep.extend fresh
 
-
-/-- Compatibility projects the same admitted entry/result/output. -/
-theorem pair_positional_view_supply {U : WriterKey → Prop}
-    (inj : WriterInj U) (apart : WriterApart U) (view : StaticView) :
-    PairPositionalSupply U (fun sevm => Blanc.Sevm.selector sevm = view.selector) := by
-  exact PairAdmittedSupply.positional (pair_admitted_view_supply inj apart view)
 
 theorem pair_admitted_mint_supply {U : WriterKey → Prop}
     (inj : WriterInj U) (apart : WriterApart U) (sem : CodeSem)
@@ -149,13 +112,6 @@ theorem pair_admitted_mint_supply {U : WriterKey → Prop}
     rfl result.output.symm result.grown result.storage
 
 
-/-- Compatibility projects the same admitted entry/result/output. -/
-theorem pair_positional_mint_supply {U : WriterKey → Prop}
-    (inj : WriterInj U) (apart : WriterApart U) (sem : CodeSem)
-    (image : sem.image = some code.toList) :
-    PairPositionalSupply U (fun sevm => Blanc.Sevm.selector sevm = 0x6a627842) := by
-  exact PairAdmittedSupply.positional (pair_admitted_mint_supply inj apart sem image)
-
 theorem pair_admitted_sync_supply {U : WriterKey → Prop}
     (inj : WriterInj U) (apart : WriterApart U) (sem : CodeSem)
     (image : sem.image = some code.toList) :
@@ -169,39 +125,6 @@ theorem pair_admitted_sync_supply {U : WriterKey → Prop}
   exact pairStepOutcome_with (Consumes := PairAdmittedConsumes) (keys := []) inj apart sub rep
     (fun _ h => absurd h List.not_mem_nil) (PairEntryAt.sync selector)
     (result.admittedConsumes (Auth := LockedAuth)) rfl output.symm (fun _ h => Or.inl h) representation
-
-
-/-- Compatibility projects the same admitted entry/result/output. -/
-theorem pair_positional_sync_supply {U : WriterKey → Prop}
-    (inj : WriterInj U) (apart : WriterApart U) (sem : CodeSem)
-    (image : sem.image = some code.toList) :
-    PairPositionalSupply U (fun sevm => Blanc.Sevm.selector sevm = 0xfff6cae9) := by
-  exact PairAdmittedSupply.positional (pair_admitted_sync_supply inj apart sem image)
-
-/-- Concrete ready producers. The three mutable guarded families are absent;
-this is not an all-selector supply or a completed strong history instance. -/
-structure PairPositionalReadySupply (U : WriterKey → Prop) : Prop where
-  transfer : PairPositionalSupply U (fun sevm => Blanc.Sevm.selector sevm = 0xa9059cbb)
-  approve : PairPositionalSupply U (fun sevm => Blanc.Sevm.selector sevm = 0x095ea7b3)
-  transferFrom : PairPositionalSupply U (fun sevm => Blanc.Sevm.selector sevm = 0x23b872dd)
-  initializeEntry : PairPositionalSupply U (fun sevm => Blanc.Sevm.selector sevm = 0x485cc955)
-  permit : PairPositionalSupply U (fun sevm => Blanc.Sevm.selector sevm = 0xd505accf)
-  mint : PairPositionalSupply U (fun sevm => Blanc.Sevm.selector sevm = 0x6a627842)
-  sync : PairPositionalSupply U (fun sevm => Blanc.Sevm.selector sevm = 0xfff6cae9)
-  views : ∀ view : StaticView, PairPositionalSupply U
-    (fun sevm => Blanc.Sevm.selector sevm = view.selector)
-
-theorem pair_positional_ready_supply {U : WriterKey → Prop}
-    (inj : WriterInj U) (apart : WriterApart U) (sem : CodeSem)
-    (image : sem.image = some code.toList) : PairPositionalReadySupply U where
-  transfer := pair_positional_transfer_supply inj apart
-  approve := pair_positional_approve_supply inj apart
-  transferFrom := pair_positional_transferFrom_supply inj apart
-  initializeEntry := pair_positional_initialize_supply inj apart
-  permit := pair_positional_permit_supply inj apart sem image
-  mint := pair_positional_mint_supply inj apart sem image
-  sync := pair_positional_sync_supply inj apart sem image
-  views := pair_positional_view_supply inj apart
 
 
 /-- Ready rules retain recursive admission on the same selected source result. -/

@@ -189,51 +189,6 @@ theorem lockedPairAdmittedSupply {U : WriterKey → Prop}
       view selector viewGood
 
 
-/-- Compatibility retains the same admitted child result and actual output. -/
-theorem lockedPairPositionalSupply {U : WriterKey → Prop}
-    (inj : WriterInj U) (apart : WriterApart U)
-    (sem : CodeSem) (image : sem.image = some code.toList) (pair : Adr) :
-    PairFrameSupplyWith PositionalChildConsumes pair (LockedRep U) (LockedGood U)
-      LockedAuth (lockedOwnedRaw pair) := by
-  intro current invocation sevm b post G run target codeEq installedCode fork freshOutput
-    representable roots rep
-  obtain ⟨entry, nested, child, added, logs, authentic, selected, rest⟩ :=
-    lockedPairAdmittedSupply inj apart sem image pair current invocation run target codeEq installedCode
-      fork freshOutput representable roots rep
-  exact ⟨entry, nested, child, added, logs, authentic,
-    ⟨selected.1.positional, selected.2⟩, rest⟩
-
-/-- The complete same-slot fold with a real positional producer for every locked Pair child. -/
-theorem locked_mutable_source_slot_turns
-    {U : WriterKey → Prop} {pair : Adr}
-    (inj : WriterInj U) (apart : WriterApart U)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    {root : Exec.Deriv} {frame : Frame} {request : Request} {reply : ExternalResult} {index : Nat}
-    (observed : SourceCallAt root frame request reply index)
-    (pairEq : frame.context.pair = pair) (mutable : externalStatic frame request = false)
-    (installed : some (observed.call.occurrence.node.devm.getCode pair).toList = sem.image)
-    (rep : LockedRep U frame.current.state (observed.call.occurrence.node.devm.getStor pair))
-    (time : frame.context.timestamp = observed.call.occurrence.node.sevm.benvStat.time)
-    (fork : CoveredFork observed.call.occurrence.node.sevm.benvStat.fork)
-    (good : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = pair → LockedGood U F) :
-    ∃ (events : List (Log ⊕ Exec.LocatedFrame)) (turns : List MutableTurn)
-      (c : Checkpoint) (added : List PendingLog) (rets : List ChildReturn),
-      SourceSlotEvents observed.call frame.context.pair index events ∧
-      events.filterMap Sum.getRight? = observed.paths ∧
-      turns.map MutableTurn.event = events ∧
-      PositionalMutableTurns frame request 0 events (mutableTranscript turns .done)
-        {complete := true, frame := {frame with current := c}, childReturns := rets} ∧
-      (∀ located entry nested, Sum.inr (located, entry, nested) ∈ turns →
-        LockedAuth (Exec.Frame.rootDeriv located.frame) entry nested) ∧
-      LockedRep U c.state (observed.call.returned.devm.getStor pair) ∧
-      c.logs = frame.current.logs ++ added ∧
-      ∃ L : List Log,
-        observed.call.returned.devm.logs = observed.call.occurrence.node.devm.logs ++ L ∧
-        added.map (PendingLog.rawWith (lockedOwnedRaw pair)) = L.map some := by
-  exact mutable_source_slot_turns (lockedPairPositionalSupply inj apart sem image pair)
-    (fun _ _ _ same rep => LockedRep.congr same rep) sem image observed pairEq mutable
-    installed rep time fork good
-
 
 /-- The same original full slot supplies recursive admission for all locked children. -/
 theorem locked_admitted_mutable_source_slot_turns

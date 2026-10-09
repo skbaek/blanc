@@ -117,9 +117,9 @@ or an explicit owner request.
 
 ## Current resource-limit population
 
-Blanc has 94 live scopes in 27 files: 4 heartbeat and 90 recursion-depth.
-There are no ambient scopes. All 94 current stable IDs join to the generated
-first-census disposition ledger:
+Blanc has 91 live scopes in 27 files: 4 heartbeat and 87 recursion-depth.
+There are no ambient scopes. The generated first-census disposition ledger
+retains its 94 recorded stable IDs:
 
 - 16 surviving launch scopes are `exact-boundary` right-sized entries;
 - 40 command-local replacements for nine removed ambient scopes are also
@@ -231,7 +231,7 @@ pass when the new census requires one-run comparability.
   resource option discovered before freezing the population.
 - Record counts separately: modules, timing transcripts, override attempts,
   scopes, and files. Do not conflate the 38 retained launch dispositions with
-  38 current offenders, or the 94 live scopes with 94 modules.
+  38 current offenders, or the 91 live scopes with 91 modules.
 - Compare the new population with this catalogue as `{new, still present,
   improved below line, removed, identity-changed}`. A rename is not a deletion.
 

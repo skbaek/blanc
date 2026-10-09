@@ -103,7 +103,6 @@ theorem mintReservePrefix_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
       cases returned
       exact ⟨unlocked, nonstatic, gas, body⟩
 
-
 /-- Selected lock-store and reserve-read costs compose with the real getter56. -/
 theorem mintReservePrefix_exact {sevm : Sevm} {b : Devm} {R : List B256}
     {M : Mem} {G load lock reserve : Nat} {toWord ρ : B256} {o : Outcome}
@@ -262,7 +261,6 @@ theorem mintFirstRequest_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
       show (128 : B256) + Bytes.toB256 [36] = 164 from by decide,
       balanceRequestMemory, balanceOfSelectorWord] using body
 
-
 /-- The two literal balanceOf call sites in public mint. -/
 inductive MintBalanceSite
   | first | second
@@ -387,7 +385,6 @@ theorem mintBalanceObservation_exact {sevm : Sevm} {b d : Devm} {R : List B256}
       fork stackRoom call success (by omega) decoded
   · exact staticCallGuard_exact [0x11, 0xc5] (by decide) (by decide) rfl
       fork stackRoom call success (by omega) decoded
-
 
 /-- The actual suffix after the balance word is loaded at each mint call site. -/
 def MintBalanceSite.afterDecodeTree (site : MintBalanceSite) : SFunc :=
@@ -537,9 +534,6 @@ theorem mintSecondRequest_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
       show (128 : B256) - 128 + Bytes.toB256 [36] = 36 from by decide,
       show (128 : B256) + Bytes.toB256 [36] = 164 from by decide,
       balanceRequestMemory, balanceOfSelectorWord] using body
-
-
-
 
 /-- From the real locked mint entry, extract both token answers before checked amounts. -/
 theorem mintBalancePrefix_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
@@ -983,152 +977,12 @@ theorem mintCheckedFeePrefix_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     answered0, decoded0, code1, call1, post1, long1, width1, answered1,
     stor0, stor1, logs1, output1, decoded1, cover0, cover1, feeRun, suffix⟩
 
-/-- The actual selected factory observation and its finite-recipient source obligation. -/
-def MintActualFeeSource (K : WriterKey → Prop) (st : State)
-    (D : Exec.Deriv) (sevm : Sevm) (b : Devm) (R : List B256)
-    (M : Mem) (r1 r0 ρ : B256) (o : Outcome) : Prop :=
-    ∃ (gw : B256) (callGas : Nat) (d : Devm) (out : Bytes),
-      StepIn D sevm
-        (St (feeFactoryCallWorld sevm b)
-          (gw :: feeFactoryWord sevm b :: 128 :: 4 :: 128 :: 32 ::
-            132 :: 0x017e7e58 :: feeFactoryWord sevm b :: 0 :: 0 :: r1 :: r0 :: ρ :: R)
-          (feeRequestMemory M) callGas) (.exec .staticcall) d ∧
-      StaticCallPost (feeFactoryCallWorld sevm b) d
-        (132 :: 0x017e7e58 :: feeFactoryWord sevm b :: 0 :: 0 :: r1 :: r0 :: ρ :: R)
-        (feeRequestMemory M) 128 4 128 32 1 out ∧
-      32 ≤ out.length ∧ out.length < 2 ^ 256 ∧
-      StaticAnswered sevm (feeFactoryCallWorld sevm b) (feeFactoryWord sevm b).toAdr
-        (ExternalOperation.encode .feeTo) out ∧
-      (FeeMintFresh K st sevm (feeKLastWorld sevm d) (Bytes.toB256 (out.take 32)) r0 r1 →
-        ∃ observed : FeeMintSourceObservation K st D sevm b R M r1 r0 ρ o,
-          observed.d = d ∧ observed.out = out)
-
-/-- First extract the actual factory reply; only that reply's recipient needs finite freshness. -/
-theorem mintFee_observed_source_inv {K : WriterKey → Prop} {st : State}
-    {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {R : List B256}
-    {M : Mem} {G : Nat} {r1 r0 ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
-    (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112)
-    (run : SFunc.RunP (StepIn D) cert.prog sevm
-      (St b (r1 :: r0 :: ρ :: R) M G) t_26ec_c68 o) :
-    MintActualFeeSource K st D sevm b R M r1 r0 ρ o := by
-  obtain ⟨code, gw, callGas, d, out, decodeGas, branchGas, gas,
-    step, post, width, bound, answer, decoder, branch, guards, result⟩ :=
-    fee68_inv fork mem bound0 bound1 run
-  refine ⟨gw, callGas, d, out, step, post, width, bound, answer, ?_⟩
-  intro fresh
-  have postRep := rep.fee_factory_post post
-  have last : feeKLastWord sevm d = st.kLast := by
-    rcases postRep.fixed with ⟨_,_,_,_,_,_,_,_,_,_,last,_⟩
-    change (d.getStor sevm.currentTarget).get 11 = st.kLast
-    simpa only [feeKLastWorld, afterSload_getStor] using last
-  have sourceGuards : feeBranchAccepts sevm (feeKLastWorld sevm d) st.kLast
-      (Bytes.toB256 (out.take 32)) r0 r1 := by rw [← last]; exact guards
-  exact ⟨⟨code, gw, callGas, d, out, decodeGas, branchGas, gas,
-    step, post, width, bound, answer, decoder, branch, guards, last, result,
-    feeBranch_source_result postRep bound0 bound1 sourceGuards fresh⟩, rfl, rfl⟩
-
 /-- The same lock effects used by the bytecode give the incoming fee's actual finite storage. -/
 theorem WriterRep.mint_locked_world {K : WriterKey → Prop} {st : State} {sevm : Sevm} {b : Devm}
     (rep : WriterRep K (b.getStor sevm.currentTarget) st) :
     WriterRep K ((mintLockedWorld sevm b).getStor sevm.currentTarget) { st with unlocked := 0 } := by
   rw [mintLockedWorld, afterSstore_getStor_self, afterSload_getStor]
   exact rep.mint_lock_store
-
-/-- Actual1011 observations supply finite locked storage before any actual-recipient freshness premise. -/
-theorem mintObservedFeePrefix_inv {K : WriterKey → Prop} {st : State} {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {R : List B256} {C : List Nat} {M : Mem} {G : Nat} {toWord ρ : B256} {seg : Seg}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
-    (run : SFunc.RunCutP (StepIn D) cert.prog sevm C
-      (St b (toWord :: ρ :: R) M G) t_1011_c41 seg) :
-    b.getStorVal sevm.currentTarget 12 = 1 ∧ sevm.isStatic = false ∧
-    ∃ (gw0 : B256) (callGas0 : Nat) (d0 : Devm) (out0 : Bytes) (decodedGas0 : Nat)
-      (gw1 : B256) (callGas1 : Nat) (d1 : Devm) (out1 : Bytes) (decodedGas1 : Nat)
-      (feeGas : Nat) (feePost : Devm),
-      let locked := mintLockedWorld sevm b
-      let reserveWorld := afterSload sevm locked 8
-      let r0 := reserve0Read (locked.getStorVal sevm.currentTarget 8)
-      let r1 := reserve1Read (locked.getStorVal sevm.currentTarget 8)
-      let token0 := (reserveWorld.getStorVal sevm.currentTarget 6).toAdr.toB256
-      let u0 := afterSload sevm reserveWorld 6
-      let w0 := temporalAccountAccessBase u0 token0.toAdr
-      let M0 := balanceReplyMemory M sevm.currentTarget out0
-      let balance0 := Bytes.toB256 (out0.take 32)
-      let token1 := (d0.getStorVal sevm.currentTarget 7).toAdr.toB256
-      let u1 := afterSload sevm d0 7
-      let w1 := temporalAccountAccessBase u1 token1.toAdr
-      (u0.getCode token0.toAdr).size.toB256 ≠ 0 ∧
-      StepIn D sevm
-        (St w0 (gw0 :: token0 :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
-          token0 :: 0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
-          (balanceRequestMemory M sevm.currentTarget) callGas0) (.exec .staticcall) d0 ∧
-      StaticCallPost w0 d0 (164 :: 0x70a08231 :: token0 :: 0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
-        (balanceRequestMemory M sevm.currentTarget) 128 36 128 32 1 out0 ∧
-      32 ≤ out0.length ∧ out0.length < 2^256 ∧
-      StaticAnswered sevm w0 token0.toAdr
-        (ExternalOperation.encode (.balanceOf sevm.currentTarget)) out0 ∧
-      SFunc.RunCutP (StepIn D) cert.prog sevm C
-        (St d0 (balance0 :: 0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R) M0 decodedGas0)
-        MintBalanceSite.first.afterDecodeTree seg ∧
-      (u1.getCode token1.toAdr).size.toB256 ≠ 0 ∧
-      StepIn D sevm
-        (St w1 (gw1 :: token1 :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
-          token1 :: 0 :: balance0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
-          (balanceRequestMemory M0 sevm.currentTarget) callGas1) (.exec .staticcall) d1 ∧
-      StaticCallPost w1 d1
-        (164 :: 0x70a08231 :: token1 :: 0 :: balance0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
-        (balanceRequestMemory M0 sevm.currentTarget) 128 36 128 32 1 out1 ∧
-      32 ≤ out1.length ∧ out1.length < 2^256 ∧
-      StaticAnswered sevm w1 token1.toAdr
-        (ExternalOperation.encode (.balanceOf sevm.currentTarget)) out1 ∧
-      (∀ a, Devm.getStor d0 a = Devm.getStor locked a) ∧
-      (∀ a, Devm.getStor d1 a = Devm.getStor locked a) ∧
-      d1.logs = b.logs ∧ d1.output = b.output ∧
-      SFunc.RunCutP (StepIn D) cert.prog sevm C
-        (St d1 (Bytes.toB256 (out1.take 32) :: 0 :: balance0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
-          (balanceReplyMemory M0 sevm.currentTarget out1) decodedGas1)
-        MintBalanceSite.second.afterDecodeTree seg ∧
-      r0 ≤ balance0 ∧ r1 ≤ Bytes.toB256 (out1.take 32) ∧
-      SFunc.RunP (StepIn D) cert.prog sevm
-        (St d1 (r1 :: r0 :: 0x1233 ::
-          mintFeeLocals (Bytes.toB256 (out1.take 32) - r1) (balance0 - r0)
-            (Bytes.toB256 (out1.take 32)) balance0 r1 r0 toWord ρ R)
-          (balanceReplyMemory M0 sevm.currentTarget out1) feeGas)
-        t_26ec_c68 (.returned feePost) ∧
-      SFunc.RunCutP (StepIn D) cert.prog sevm C feePost t_1233_c41 seg ∧
-      MintActualFeeSource K { st with unlocked := 0 } D sevm d1
-        (mintFeeLocals (Bytes.toB256 (out1.take 32) - r1) (balance0 - r0)
-          (Bytes.toB256 (out1.take 32)) balance0 r1 r0 toWord ρ R)
-        (balanceReplyMemory M0 sevm.currentTarget out1) r1 r0 0x1233 (.returned feePost) := by
-  obtain ⟨unlocked, nonstatic, gw0, callGas0, d0, out0, decodedGas0,
-    gw1, callGas1, d1, out1, decodedGas1, feeGas, feePost, code0, call0, post0, long0, width0,
-    answered0, decoded0, code1, call1, post1, long1, width1, answered1,
-    stor0, stor1, logs1, output1, decoded1, cover0, cover1, feeRun, suffix⟩ :=
-    mintCheckedFeePrefix_inv fork mem run
-  have feeRep : WriterRep K (d1.getStor sevm.currentTarget) { st with unlocked := 0 } := by
-    rw [stor1]
-    exact rep.mint_locked_world
-  have reply0 := balanceReplyMemory_ptr out0 (balanceRequestMemory_ptr mem sevm.currentTarget)
-  have reply1 := balanceReplyMemory_ptr out1 (balanceRequestMemory_ptr reply0 sevm.currentTarget)
-  have bound0 : (reserve0Read ((mintLockedWorld sevm b).getStorVal sevm.currentTarget 8)).toNat
-      < 2 ^ 112 := by
-    unfold reserve0Read
-    rw [show reserveMask112 = (2 ^ 112 - 1 : Nat).toB256 from rfl,
-      PackedWord.lowMask_toNat _ (by decide : 112 ≤ 256)]
-    exact Nat.mod_lt _ (by decide)
-  have bound1 : (reserve1Read ((mintLockedWorld sevm b).getStorVal sevm.currentTarget 8)).toNat
-      < 2 ^ 112 := by
-    unfold reserve1Read
-    rw [show reserveMask112 = (2 ^ 112 - 1 : Nat).toB256 from rfl,
-      PackedWord.lowMask_toNat _ (by decide : 112 ≤ 256)]
-    exact Nat.mod_lt _ (by decide)
-  have source := mintFee_observed_source_inv fork reply1 feeRep bound0 bound1 feeRun
-  exact ⟨unlocked, nonstatic, gw0, callGas0, d0, out0, decodedGas0,
-    gw1, callGas1, d1, out1, decodedGas1, feeGas, feePost, code0, call0, post0, long0, width0,
-    answered0, decoded0, code1, call1, post1, long1, width1, answered1,
-    stor0, stor1, logs1, output1, decoded1, cover0, cover1, feeRun, suffix, source⟩
 
 /-- All actual fee branches retain the caller locals and the allocated pointer, including LP scratch writes. -/
 theorem mintFeePost_machine {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
@@ -1155,221 +1009,6 @@ theorem mintFeePost_flag {st : State} {sevm : Sevm} {b : Devm} {w r0 r1 : B256} 
       · unfold feeGrowthSourceFee
         split <;> rfl
       · rfl
-
-/-- Consume the actual fee observation and suffix; cache, flag and memory bindings are derived. -/
-theorem mintFee_source_suffix_frame_inv {K : WriterKey → Prop} {st : State}
-    {D : Exec.Deriv} {sevm : Sevm} {b feePost : Devm} {R : List B256} {M : Mem}
-    {amount1 amount0 b1 b0 r1 r0 toWord ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112)
-    (observation : FeeMintSourceObservation K st D sevm b
-      (mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord ρ R) M r1 r0 0x1233 (.returned feePost))
-    (fresh : MintAfterFeeFresh
-      (feeBranchSourceKeys K st sevm (feeKLastWorld sevm observation.d)
-        (Bytes.toB256 (observation.out.take 32)) r0 r1)
-      (feeBranchSourceFee st sevm (feeKLastWorld sevm observation.d)
-        (Bytes.toB256 (observation.out.take 32)) r0 r1).state toWord)
-    (frame : Frame) (time : frame.context.timestamp = sevm.benvStat.time)
-    (pair : frame.context.pair = sevm.currentTarget) (sender : frame.context.sender = sevm.caller)
-    (suffix : SFunc.RunCutP (StepIn D) cert.prog sevm [] feePost t_1233_c41 (.done o)) :
-    MintAfterFeeFrameResult
-      (feeBranchSourceKeys K st sevm (feeKLastWorld sevm observation.d)
-        (Bytes.toB256 (observation.out.take 32)) r0 r1)
-      frame (feeMintObserved toWord amount1 amount0 b1 b0 r1 r0 bound0 bound1)
-      (feeBranchSourceFee st sevm (feeKLastWorld sevm observation.d)
-        (Bytes.toB256 (observation.out.take 32)) r0 r1)
-      sevm feePost R amount1 amount0 b1 b0 toWord o := by
-  have returned := observation.returned
-  rw [observation.last] at returned
-  have postEq := Outcome.returned.inj returned
-  have rep : WriterRep
-      (feeBranchSourceKeys K st sevm (feeKLastWorld sevm observation.d)
-        (Bytes.toB256 (observation.out.take 32)) r0 r1)
-      (feePost.getStor sevm.currentTarget)
-      (feeBranchSourceFee st sevm (feeKLastWorld sevm observation.d)
-        (Bytes.toB256 (observation.out.take 32)) r0 r1).state := by
-    have storageEq := congrArg (fun world : Devm => world.getStor sevm.currentTarget) postEq
-    exact storageEq.symm ▸ observation.sourceResult.2.1
-  have machine := mintFeePost_machine (sevm := sevm) (b := feeKLastWorld sevm observation.d)
-    (R := mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord ρ R)
-    (K := st.kLast) (w := Bytes.toB256 (observation.out.take 32))
-    (r0 := r0) (r1 := r1) (G := observation.residual)
-    (feeReplyMemory_ptr observation.out (feeRequestMemory_ptr mem))
-  rw [← postEq] at machine
-  have cache : MintAfterFeeCache
-      (feeMintObserved toWord amount1 amount0 b1 b0 r1 r0 bound0 bound1)
-      (feeBranchSourceFee st sevm (feeKLastWorld sevm observation.d)
-        (Bytes.toB256 (observation.out.take 32)) r0 r1)
-      (feeOnWord (Bytes.toB256 (observation.out.take 32))) amount1 amount0 b1 b0 r1 r0 toWord :=
-    ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, mintFeePost_flag⟩
-  have self := St.self (d := feePost) machine.1 rfl
-  have raw : SFunc.Run cert.prog sevm
-      (St feePost
-        (feeOnWord (Bytes.toB256 (observation.out.take 32)) ::
-          0 :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
-        feePost.memory feePost.gasLeft) t_1233_c41 o := by
-    have original := (SFunc.runP_iff_runCutP_nil.mpr suffix).mono StepIn.toRun
-    have transported := (congrArg (fun world : Devm => SFunc.Run cert.prog sevm world t_1233_c41 o) self).mp original
-    simpa only [mintFeeLocals] using transported
-  exact mintAfterFee_frame_inv fork machine.2 rep fresh cache time pair sender bound0 bound1 raw
-
-/-- Two-stage actual recipient obligations retain the factory observation and complete suffix result. -/
-def MintActualFeeFinished (K : WriterKey → Prop) (st : State)
-    (D : Exec.Deriv) (sevm : Sevm) (b feePost : Devm) (R : List B256)
-    (M : Mem) (amount1 amount0 b1 b0 r1 r0 toWord ρ : B256)
-    (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112)
-    (frame : Frame) (o : Outcome) : Prop :=
-    ∃ (gw : B256) (callGas : Nat) (d : Devm) (out : Bytes),
-      StepIn D sevm
-        (St (feeFactoryCallWorld sevm b)
-          (gw :: feeFactoryWord sevm b :: 128 :: 4 :: 128 :: 32 ::
-            132 :: 0x017e7e58 :: feeFactoryWord sevm b :: 0 :: 0 :: r1 :: r0 :: 0x1233 :: (mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord ρ R))
-          (feeRequestMemory M) callGas) (.exec .staticcall) d ∧
-      StaticCallPost (feeFactoryCallWorld sevm b) d
-        (132 :: 0x017e7e58 :: feeFactoryWord sevm b :: 0 :: 0 :: r1 :: r0 :: 0x1233 :: (mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord ρ R))
-        (feeRequestMemory M) 128 4 128 32 1 out ∧
-      32 ≤ out.length ∧ out.length < 2 ^ 256 ∧
-      StaticAnswered sevm (feeFactoryCallWorld sevm b) (feeFactoryWord sevm b).toAdr
-        (ExternalOperation.encode .feeTo) out ∧
-      (FeeMintFresh K st sevm (feeKLastWorld sevm d) (Bytes.toB256 (out.take 32)) r0 r1 →
-        ∃ observed : FeeMintSourceObservation K st D sevm b (mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord ρ R) M r1 r0 0x1233 (.returned feePost),
-          observed.d = d ∧ observed.out = out ∧
-          (MintAfterFeeFresh
-            (feeBranchSourceKeys K st sevm (feeKLastWorld sevm d) (Bytes.toB256 (out.take 32)) r0 r1)
-            (feeBranchSourceFee st sevm (feeKLastWorld sevm d) (Bytes.toB256 (out.take 32)) r0 r1).state toWord →
-            MintAfterFeeFrameResult
-              (feeBranchSourceKeys K st sevm (feeKLastWorld sevm d) (Bytes.toB256 (out.take 32)) r0 r1)
-              frame (feeMintObserved toWord amount1 amount0 b1 b0 r1 r0 bound0 bound1)
-              (feeBranchSourceFee st sevm (feeKLastWorld sevm d) (Bytes.toB256 (out.take 32)) r0 r1)
-              sevm feePost R amount1 amount0 b1 b0 toWord o))
-
-theorem mintActualFeeFinished_inv {K : WriterKey → Prop} {st : State}
-    {D : Exec.Deriv} {sevm : Sevm} {b feePost : Devm} {R : List B256} {M : Mem}
-    {amount1 amount0 b1 b0 r1 r0 toWord ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112)
-    (source : MintActualFeeSource K st D sevm b
-      (mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord ρ R) M r1 r0 0x1233 (.returned feePost))
-    (frame : Frame) (time : frame.context.timestamp = sevm.benvStat.time)
-    (pair : frame.context.pair = sevm.currentTarget) (sender : frame.context.sender = sevm.caller)
-    (suffix : SFunc.RunCutP (StepIn D) cert.prog sevm [] feePost t_1233_c41 (.done o)) :
-    MintActualFeeFinished K st D sevm b feePost R M amount1 amount0 b1 b0 r1 r0 toWord ρ
-      bound0 bound1 frame o := by
-  obtain ⟨gw, callGas, d, out, step, post, width, bound, answer, source⟩ := source
-  refine ⟨gw, callGas, d, out, step, post, width, bound, answer, ?_⟩
-  intro fresh
-  obtain ⟨observed, dEq, outEq⟩ := source fresh
-  refine ⟨observed, dEq, outEq, ?_⟩
-  intro recipientFresh
-  have fresh' : MintAfterFeeFresh
-      (feeBranchSourceKeys K st sevm (feeKLastWorld sevm observed.d)
-        (Bytes.toB256 (observed.out.take 32)) r0 r1)
-      (feeBranchSourceFee st sevm (feeKLastWorld sevm observed.d)
-        (Bytes.toB256 (observed.out.take 32)) r0 r1).state toWord := by
-    simpa only [dEq, outEq] using recipientFresh
-  have finished := mintFee_source_suffix_frame_inv fork mem bound0 bound1 observed fresh'
-    frame time pair sender suffix
-  simpa only [dEq, outEq] using finished
-
-/-- Finite observations and conditional touched-recipient source result of the actual1011 run. -/
-def MintSourcePrefixResult (K : WriterKey → Prop) (st : State) (D : Exec.Deriv)
-    (sevm : Sevm) (b : Devm) (R : List B256) (M : Mem) (toWord ρ : B256)
-    (frame : Frame) (o : Outcome) : Prop :=
-    b.getStorVal sevm.currentTarget 12 = 1 ∧ sevm.isStatic = false ∧
-    ∃ (gw0 : B256) (callGas0 : Nat) (d0 : Devm) (out0 : Bytes) (decodedGas0 : Nat)
-      (gw1 : B256) (callGas1 : Nat) (d1 : Devm) (out1 : Bytes) (decodedGas1 : Nat)
-      (feeGas : Nat) (feePost : Devm),
-      let locked := mintLockedWorld sevm b
-      let reserveWorld := afterSload sevm locked 8
-      let r0 := reserve0Read (locked.getStorVal sevm.currentTarget 8)
-      let r1 := reserve1Read (locked.getStorVal sevm.currentTarget 8)
-      let token0 := (reserveWorld.getStorVal sevm.currentTarget 6).toAdr.toB256
-      let u0 := afterSload sevm reserveWorld 6
-      let w0 := temporalAccountAccessBase u0 token0.toAdr
-      let M0 := balanceReplyMemory M sevm.currentTarget out0
-      let balance0 := Bytes.toB256 (out0.take 32)
-      let token1 := (d0.getStorVal sevm.currentTarget 7).toAdr.toB256
-      let u1 := afterSload sevm d0 7
-      let w1 := temporalAccountAccessBase u1 token1.toAdr
-      (u0.getCode token0.toAdr).size.toB256 ≠ 0 ∧
-      StepIn D sevm
-        (St w0 (gw0 :: token0 :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
-          token0 :: 0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
-          (balanceRequestMemory M sevm.currentTarget) callGas0) (.exec .staticcall) d0 ∧
-      StaticCallPost w0 d0 (164 :: 0x70a08231 :: token0 :: 0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
-        (balanceRequestMemory M sevm.currentTarget) 128 36 128 32 1 out0 ∧
-      32 ≤ out0.length ∧ out0.length < 2^256 ∧
-      StaticAnswered sevm w0 token0.toAdr
-        (ExternalOperation.encode (.balanceOf sevm.currentTarget)) out0 ∧
-      SFunc.RunCutP (StepIn D) cert.prog sevm []
-        (St d0 (balance0 :: 0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R) M0 decodedGas0)
-        MintBalanceSite.first.afterDecodeTree (.done o) ∧
-      (u1.getCode token1.toAdr).size.toB256 ≠ 0 ∧
-      StepIn D sevm
-        (St w1 (gw1 :: token1 :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
-          token1 :: 0 :: balance0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
-          (balanceRequestMemory M0 sevm.currentTarget) callGas1) (.exec .staticcall) d1 ∧
-      StaticCallPost w1 d1
-        (164 :: 0x70a08231 :: token1 :: 0 :: balance0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
-        (balanceRequestMemory M0 sevm.currentTarget) 128 36 128 32 1 out1 ∧
-      32 ≤ out1.length ∧ out1.length < 2^256 ∧
-      StaticAnswered sevm w1 token1.toAdr
-        (ExternalOperation.encode (.balanceOf sevm.currentTarget)) out1 ∧
-      (∀ a, Devm.getStor d0 a = Devm.getStor locked a) ∧
-      (∀ a, Devm.getStor d1 a = Devm.getStor locked a) ∧
-      d1.logs = b.logs ∧ d1.output = b.output ∧
-      SFunc.RunCutP (StepIn D) cert.prog sevm []
-        (St d1 (Bytes.toB256 (out1.take 32) :: 0 :: balance0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
-          (balanceReplyMemory M0 sevm.currentTarget out1) decodedGas1)
-        MintBalanceSite.second.afterDecodeTree (.done o) ∧
-      r0 ≤ balance0 ∧ r1 ≤ Bytes.toB256 (out1.take 32) ∧
-      SFunc.RunP (StepIn D) cert.prog sevm
-        (St d1 (r1 :: r0 :: 0x1233 ::
-          mintFeeLocals (Bytes.toB256 (out1.take 32) - r1) (balance0 - r0)
-            (Bytes.toB256 (out1.take 32)) balance0 r1 r0 toWord ρ R)
-          (balanceReplyMemory M0 sevm.currentTarget out1) feeGas)
-        t_26ec_c68 (.returned feePost) ∧
-      SFunc.RunCutP (StepIn D) cert.prog sevm [] feePost t_1233_c41 (.done o) ∧
-      ∃ bound0 : r0.toNat < 2 ^ 112, ∃ bound1 : r1.toNat < 2 ^ 112,
-        MintActualFeeFinished K { st with unlocked := 0 } D sevm d1 feePost R
-          (balanceReplyMemory M0 sevm.currentTarget out1)
-          (Bytes.toB256 (out1.take 32) - r1) (balance0 - r0)
-          (Bytes.toB256 (out1.take 32)) balance0 r1 r0 toWord ρ bound0 bound1 frame o
-
-/-- Complete actual1011 inverse to the finite mint suffix, with only actual touched-recipient obligations. -/
-theorem mintSourcePrefix_inv {K : WriterKey → Prop} {st : State} {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
-    {R : List B256} {M : Mem} {G : Nat} {toWord ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 96 M)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
-    (frame : Frame) (time : frame.context.timestamp = sevm.benvStat.time)
-    (pair : frame.context.pair = sevm.currentTarget) (sender : frame.context.sender = sevm.caller)
-    (run : SFunc.RunCutP (StepIn D) cert.prog sevm []
-      (St b (toWord :: ρ :: R) M G) t_1011_c41 (.done o)) :
-    MintSourcePrefixResult K st D sevm b R M toWord ρ frame o := by
-  obtain ⟨unlocked, nonstatic, gw0, callGas0, d0, out0, decodedGas0,
-    gw1, callGas1, d1, out1, decodedGas1, feeGas, feePost, code0, call0, post0, long0, width0,
-    answered0, decoded0, code1, call1, post1, long1, width1, answered1,
-    stor0, stor1, logs1, output1, decoded1, cover0, cover1, feeRun, suffix, source⟩ :=
-    mintObservedFeePrefix_inv fork mem rep run
-  have reply0 := balanceReplyMemory_ptr out0 (balanceRequestMemory_ptr mem sevm.currentTarget)
-  have reply1 := balanceReplyMemory_ptr out1 (balanceRequestMemory_ptr reply0 sevm.currentTarget)
-  have bound0 : (reserve0Read ((mintLockedWorld sevm b).getStorVal sevm.currentTarget 8)).toNat
-      < 2 ^ 112 := by
-    unfold reserve0Read
-    rw [show reserveMask112 = (2 ^ 112 - 1 : Nat).toB256 from rfl,
-      PackedWord.lowMask_toNat _ (by decide : 112 ≤ 256)]
-    exact Nat.mod_lt _ (by decide)
-  have bound1 : (reserve1Read ((mintLockedWorld sevm b).getStorVal sevm.currentTarget 8)).toNat
-      < 2 ^ 112 := by
-    unfold reserve1Read
-    rw [show reserveMask112 = (2 ^ 112 - 1 : Nat).toB256 from rfl,
-      PackedWord.lowMask_toNat _ (by decide : 112 ≤ 256)]
-    exact Nat.mod_lt _ (by decide)
-  have finished := mintActualFeeFinished_inv fork reply1 bound0 bound1 source frame time pair sender suffix
-  exact ⟨unlocked, nonstatic, gw0, callGas0, d0, out0, decodedGas0,
-    gw1, callGas1, d1, out1, decodedGas1, feeGas, feePost, code0, call0, post0, long0, width0,
-    answered0, decoded0, code1, call1, post1, long1, width1, answered1,
-    stor0, stor1, logs1, output1, decoded1, cover0, cover1, feeRun, suffix, bound0, bound1, finished⟩
 
 /-- Mint's literal uint ABI return starts after the fully allocated mint suffix. -/
 theorem mintUintReturn_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
@@ -2321,7 +1960,6 @@ theorem mintPc0_return_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {G : Nat} {
   obtain ⟨publicPost,result,output,stor,logs⟩ := mintUintReturn_inv mem canonical
   exact ⟨calleeGas,calleePost,publicPost,liquidity,callee,stack,mem,result,output,stor,logs⟩
 
-
 /-- Finite source storage and the complete event order at the actual public ABI halt. -/
 def MintPublicFrameResult (K : WriterKey → Prop) (frame : Frame) (observed : MintObserved)
     (fee : FeeResult) (sevm : Sevm) (b : Devm)
@@ -2412,7 +2050,6 @@ theorem mint_resumeBalance1 {frame : Frame} {recipient : Adr} {reserves : Cached
     Bool.not_true,Bool.and_false,Bool.false_eq_true,ite_false,ite_true,
     ite_eq_left long,cover0,cover1,and_self,Frame.suspend,Frame.beginResume]
 
-
 /-- The canonical source frame before feeTo has consumed exactly the two balance replies. -/
 def mintSourceFeeFrame (current : Checkpoint) (ctx : Context) (recipient : Adr) : Frame :=
   ((mintSourceLockedFrame current ctx recipient).beginResume
@@ -2453,104 +2090,6 @@ theorem mint_source_balance_handlers {current : Checkpoint} {ctx : Context} {rec
   · exact mint_resumeBalance0 rfl rfl long0
   · exact mint_resumeBalance1 rfl rfl long1 cover0 cover1
 
-/-- An actual fee observation feeds the original handler and the public storage/log/return result. -/
-theorem mint_fee_public_handler {K : WriterKey → Prop} {st : State} {D : Exec.Deriv}
-    {sevm : Sevm} {b feePost calleePost : Devm} {R : List B256} {M : Mem}
-    {r1 r0 toWord ρ amount1 amount0 b1 b0 : B256} {o : Outcome}
-    {bound0 : r0.toNat < 2 ^ 112} {bound1 : r1.toNat < 2 ^ 112}
-    (observation : FeeMintSourceObservation K st D sevm b
-      (mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord ρ R) M r1 r0 0x1233 (.returned feePost))
-    (prior : Frame) (state : prior.current.state = st)
-    (mem : PtrMem 128 192 calleePost.memory)
-    (source : MintAfterFeeFrameResult
-      (feeBranchSourceKeys K st sevm (feeKLastWorld sevm observation.d)
-        (Bytes.toB256 (observation.out.take 32)) r0 r1)
-      (prior.beginResume (requestFor .mintFeeTo (feeFactoryWord sevm b).toAdr .feeTo))
-      (feeMintObserved toWord amount1 amount0 b1 b0 r1 r0 bound0 bound1)
-      (feeBranchSourceFee st sevm (feeKLastWorld sevm observation.d)
-        (Bytes.toB256 (observation.out.take 32)) r0 r1)
-      sevm feePost R amount1 amount0 b1 b0 toWord (.returned calleePost))
-    (tail : SFunc.Run cert.prog sevm calleePost t_039b_c86 o) :
-    MintPublicFrameResult
-      (feeBranchSourceKeys K st sevm (feeKLastWorld sevm observation.d)
-        (Bytes.toB256 (observation.out.take 32)) r0 r1)
-      (prior.beginResume (requestFor .mintFeeTo (feeFactoryWord sevm b).toAdr .feeTo))
-      (feeMintObserved toWord amount1 amount0 b1 b0 r1 r0 bound0 bound1)
-      (feeBranchSourceFee st sevm (feeKLastWorld sevm observation.d)
-        (Bytes.toB256 (observation.out.take 32)) r0 r1)
-      sevm feePost amount1 amount0 b1 b0 toWord o ∧
-    ∃ liquidity : Nat, ∃ finished : Frame,
-      resumeSegment prior (requestFor .mintFeeTo (feeFactoryWord sevm b).toAdr .feeTo)
-        (.mintFee (feeMintObserved toWord amount1 amount0 b1 b0 r1 r0 bound0 bound1))
-        (feeObservedResult observation.out) = .finished finished (encodeWords [liquidity.toB256]) := by
-  have publicResult := mintFrameResult_public_return_inv mem source tail
-  have handler := observation.resume_mint prior
-    (feeMintObserved toWord amount1 amount0 b1 b0 r1 r0 bound0 bound1) state rfl rfl
-  obtain ⟨liquidity,keys,finished,d,footprint,typed,rep,result,stack,logs⟩ := source
-  exact ⟨publicResult,liquidity,finished,handler.2.trans typed⟩
-
-
-/-- Actual factory data is extracted before either finite touched-key obligation is requested. -/
-def MintPublicActualFeeFinished (K : WriterKey → Prop) (st : State)
-    (D : Exec.Deriv) (sevm : Sevm) (b feePost : Devm) (R : List B256)
-    (M : Mem) (amount1 amount0 b1 b0 r1 r0 toWord ρ : B256)
-    (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112)
-    (prior : Frame) (o : Outcome) : Prop :=
-    ∃ (gw : B256) (callGas : Nat) (d : Devm) (out : Bytes),
-      StepIn D sevm
-        (St (feeFactoryCallWorld sevm b)
-          (gw :: feeFactoryWord sevm b :: 128 :: 4 :: 128 :: 32 ::
-            132 :: 0x017e7e58 :: feeFactoryWord sevm b :: 0 :: 0 :: r1 :: r0 :: 0x1233 :: (mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord ρ R))
-          (feeRequestMemory M) callGas) (.exec .staticcall) d ∧
-      StaticCallPost (feeFactoryCallWorld sevm b) d
-        (132 :: 0x017e7e58 :: feeFactoryWord sevm b :: 0 :: 0 :: r1 :: r0 :: 0x1233 :: (mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord ρ R))
-        (feeRequestMemory M) 128 4 128 32 1 out ∧
-      32 ≤ out.length ∧ out.length < 2 ^ 256 ∧
-      StaticAnswered sevm (feeFactoryCallWorld sevm b) (feeFactoryWord sevm b).toAdr
-        (ExternalOperation.encode .feeTo) out ∧
-      (FeeMintFresh K st sevm (feeKLastWorld sevm d) (Bytes.toB256 (out.take 32)) r0 r1 →
-        ∃ observed : FeeMintSourceObservation K st D sevm b (mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord ρ R) M r1 r0 0x1233 (.returned feePost),
-          observed.d = d ∧ observed.out = out ∧
-          (MintAfterFeeFresh
-            (feeBranchSourceKeys K st sevm (feeKLastWorld sevm d) (Bytes.toB256 (out.take 32)) r0 r1)
-            (feeBranchSourceFee st sevm (feeKLastWorld sevm d) (Bytes.toB256 (out.take 32)) r0 r1).state toWord →
-            MintPublicFrameResult
-              (feeBranchSourceKeys K st sevm (feeKLastWorld sevm d) (Bytes.toB256 (out.take 32)) r0 r1)
-              (prior.beginResume (requestFor .mintFeeTo (feeFactoryWord sevm b).toAdr .feeTo))
-              (feeMintObserved toWord amount1 amount0 b1 b0 r1 r0 bound0 bound1)
-              (feeBranchSourceFee st sevm (feeKLastWorld sevm d) (Bytes.toB256 (out.take 32)) r0 r1)
-              sevm feePost amount1 amount0 b1 b0 toWord o ∧
-            ∃ liquidity : Nat, ∃ finished : Frame,
-              resumeSegment prior (requestFor .mintFeeTo (feeFactoryWord sevm b).toAdr .feeTo)
-                (.mintFee (feeMintObserved toWord amount1 amount0 b1 b0 r1 r0 bound0 bound1))
-                (feeObservedResult out) = .finished finished (encodeWords [liquidity.toB256])))
-
-/-- The actual recipient callback now reaches the public ABI halt and original typed fee handler. -/
-theorem mintActualFeeFinished_public_inv {K : WriterKey → Prop} {st : State}
-    {D : Exec.Deriv} {sevm : Sevm} {b feePost calleePost : Devm} {R : List B256} {M : Mem}
-    {amount1 amount0 b1 b0 r1 r0 toWord ρ : B256} {o : Outcome}
-    {bound0 : r0.toNat < 2 ^ 112} {bound1 : r1.toNat < 2 ^ 112}
-    (prior : Frame) (state : prior.current.state = st)
-    (mem : PtrMem 128 192 calleePost.memory)
-    (source : MintActualFeeFinished K st D sevm b feePost R M
-      amount1 amount0 b1 b0 r1 r0 toWord ρ bound0 bound1
-      (prior.beginResume (requestFor .mintFeeTo (feeFactoryWord sevm b).toAdr .feeTo))
-      (.returned calleePost))
-    (tail : SFunc.Run cert.prog sevm calleePost t_039b_c86 o) :
-    MintPublicActualFeeFinished K st D sevm b feePost R M
-      amount1 amount0 b1 b0 r1 r0 toWord ρ bound0 bound1 prior o := by
-  obtain ⟨gw,callGas,d,out,step,post,width,bound,answer,source⟩ := source
-  refine ⟨gw,callGas,d,out,step,post,width,bound,answer,?_⟩
-  intro fresh
-  obtain ⟨observed,dEq,outEq,source⟩ := source fresh
-  refine ⟨observed,dEq,outEq,?_⟩
-  intro recipientFresh
-  have sourceResult := source recipientFresh
-  rw [← dEq,← outEq] at sourceResult
-  have result := mint_fee_public_handler observed prior state mem sourceResult tail
-  simpa only [dEq,outEq] using result
-
-
 /-- Balance replies create one source payload from the genuine entry reserve cache. -/
 def mintBalanceObserved (st : State) (recipient : Adr) (balance0 balance1 : B256) : MintObserved :=
   { recipient := recipient, reserves := st.cachedReserves,
@@ -2568,55 +2107,6 @@ theorem mint_balance_observed_eq {st : State} {recipient : Adr} {b0 b1 r0 r1 : B
   have cache1 : (⟨r1.toNat,bound1⟩ : Fin (2 ^ 112)) = st.reserve1 := Fin.ext nat1
   dsimp only [feeMintObserved,mintBalanceObserved,State.cachedReserves]
   rw [toAdr_toB256,cache0,cache1,word0,word1]
-
-/-- The final callback uses the very payload and target emitted by the typed balance handler. -/
-def MintPublicTypedFeeFinished (K : WriterKey → Prop) (st : State)
-    (D : Exec.Deriv) (sevm : Sevm) (b feePost : Devm) (R : List B256)
-    (M : Mem) (amount1 amount0 b1 b0 r1 r0 toWord ρ : B256)
-    (_bound0 : r0.toNat < 2 ^ 112) (_bound1 : r1.toNat < 2 ^ 112)
-    (prior : Frame) (observedPayload : MintObserved) (target : Adr) (o : Outcome) : Prop :=
-    ∃ (gw : B256) (callGas : Nat) (d : Devm) (out : Bytes),
-      StepIn D sevm
-        (St (feeFactoryCallWorld sevm b)
-          (gw :: feeFactoryWord sevm b :: 128 :: 4 :: 128 :: 32 ::
-            132 :: 0x017e7e58 :: feeFactoryWord sevm b :: 0 :: 0 :: r1 :: r0 :: 0x1233 :: (mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord ρ R))
-          (feeRequestMemory M) callGas) (.exec .staticcall) d ∧
-      StaticCallPost (feeFactoryCallWorld sevm b) d
-        (132 :: 0x017e7e58 :: feeFactoryWord sevm b :: 0 :: 0 :: r1 :: r0 :: 0x1233 :: (mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord ρ R))
-        (feeRequestMemory M) 128 4 128 32 1 out ∧
-      32 ≤ out.length ∧ out.length < 2 ^ 256 ∧
-      StaticAnswered sevm (feeFactoryCallWorld sevm b) (feeFactoryWord sevm b).toAdr
-        (ExternalOperation.encode .feeTo) out ∧
-      (FeeMintFresh K st sevm (feeKLastWorld sevm d) (Bytes.toB256 (out.take 32)) r0 r1 →
-        ∃ observed : FeeMintSourceObservation K st D sevm b (mintFeeLocals amount1 amount0 b1 b0 r1 r0 toWord ρ R) M r1 r0 0x1233 (.returned feePost),
-          observed.d = d ∧ observed.out = out ∧
-          (MintAfterFeeFresh
-            (feeBranchSourceKeys K st sevm (feeKLastWorld sevm d) (Bytes.toB256 (out.take 32)) r0 r1)
-            (feeBranchSourceFee st sevm (feeKLastWorld sevm d) (Bytes.toB256 (out.take 32)) r0 r1).state toWord →
-            MintPublicFrameResult
-              (feeBranchSourceKeys K st sevm (feeKLastWorld sevm d) (Bytes.toB256 (out.take 32)) r0 r1)
-              (prior.beginResume (requestFor .mintFeeTo target .feeTo))
-              observedPayload
-              (feeBranchSourceFee st sevm (feeKLastWorld sevm d) (Bytes.toB256 (out.take 32)) r0 r1)
-              sevm feePost amount1 amount0 b1 b0 toWord o ∧
-            ∃ liquidity : Nat, ∃ finished : Frame,
-              resumeSegment prior (requestFor .mintFeeTo target .feeTo)
-                (.mintFee observedPayload)
-                (feeObservedResult out) = .finished finished (encodeWords [liquidity.toB256])))
-
-/-- Only actual cache/target equality transports the earned raw callback to the typed handler. -/
-theorem mintPublicActualFeeFinished_typed {K : WriterKey → Prop} {st : State}
-    {D : Exec.Deriv} {sevm : Sevm} {b feePost : Devm} {R : List B256} {M : Mem}
-    {amount1 amount0 b1 b0 r1 r0 toWord ρ : B256} {prior : Frame} {o : Outcome}
-    {bound0 : r0.toNat < 2 ^ 112} {bound1 : r1.toNat < 2 ^ 112}
-    {observedPayload : MintObserved} {target : Adr}
-    (payload : feeMintObserved toWord amount1 amount0 b1 b0 r1 r0 bound0 bound1 = observedPayload)
-    (targetEq : (feeFactoryWord sevm b).toAdr = target)
-    (source : MintPublicActualFeeFinished K st D sevm b feePost R M
-      amount1 amount0 b1 b0 r1 r0 toWord ρ bound0 bound1 prior o) :
-    MintPublicTypedFeeFinished K st D sevm b feePost R M
-      amount1 amount0 b1 b0 r1 r0 toWord ρ bound0 bound1 prior observedPayload target o := by
-  simpa only [MintPublicActualFeeFinished,MintPublicTypedFeeFinished,payload,targetEq] using source
 
 def MintBalanceHandlerResult (current : Checkpoint) (ctx : Context) (recipient : Adr)
     (out0 out1 : Bytes) : Prop :=
@@ -2640,186 +2130,5 @@ def MintBalanceHandlerResult (current : Checkpoint) (ctx : Context) (recipient :
       (feeObservedResult out1) =
       .suspended (mintSourceFeeFrame current ctx recipient)
         (requestFor .mintFeeTo current.state.factory .feeTo) (.mintFee observed)
-
-/-- Complete actualPC0 observations with canonical source frames and conditional finite public result. -/
-def MintPublicSourceResult (K : WriterKey → Prop) (current : Checkpoint) (D : Exec.Deriv)
-    (sevm : Sevm) (b : Devm) (invocation : List Nat) (o : Outcome) : Prop :=
-  let st := current.state
-  let ctx := writerContext sevm invocation
-  let toWord := (Sevm.dataWord sevm 4).toAdr.toB256
-  let R := [0x6a627842]
-  let M := getterInitMemory
-  let ρ := 0x039b
-  sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
-    (32 : B256) ≤ sevm.data.length.toB256 - 4 ∧
-    ∃ calleeGas : Nat, ∃ calleePost : Devm,
-      SFunc.RunP (StepIn D) cert.prog sevm
-        (St b [toWord,ρ,0x6a627842] M calleeGas) t_1011_c41 (.returned calleePost) ∧
-      PtrMem 128 192 calleePost.memory ∧
-    b.getStorVal sevm.currentTarget 12 = 1 ∧ sevm.isStatic = false ∧
-    ∃ (gw0 : B256) (callGas0 : Nat) (d0 : Devm) (out0 : Bytes) (decodedGas0 : Nat)
-      (gw1 : B256) (callGas1 : Nat) (d1 : Devm) (out1 : Bytes) (decodedGas1 : Nat)
-      (feeGas : Nat) (feePost : Devm),
-      let locked := mintLockedWorld sevm b
-      let reserveWorld := afterSload sevm locked 8
-      let r0 := reserve0Read (locked.getStorVal sevm.currentTarget 8)
-      let r1 := reserve1Read (locked.getStorVal sevm.currentTarget 8)
-      let token0 := (reserveWorld.getStorVal sevm.currentTarget 6).toAdr.toB256
-      let u0 := afterSload sevm reserveWorld 6
-      let w0 := temporalAccountAccessBase u0 token0.toAdr
-      let M0 := balanceReplyMemory M sevm.currentTarget out0
-      let balance0 := Bytes.toB256 (out0.take 32)
-      let token1 := (d0.getStorVal sevm.currentTarget 7).toAdr.toB256
-      let u1 := afterSload sevm d0 7
-      let w1 := temporalAccountAccessBase u1 token1.toAdr
-      (u0.getCode token0.toAdr).size.toB256 ≠ 0 ∧
-      StepIn D sevm
-        (St w0 (gw0 :: token0 :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
-          token0 :: 0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
-          (balanceRequestMemory M sevm.currentTarget) callGas0) (.exec .staticcall) d0 ∧
-      StaticCallPost w0 d0 (164 :: 0x70a08231 :: token0 :: 0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
-        (balanceRequestMemory M sevm.currentTarget) 128 36 128 32 1 out0 ∧
-      32 ≤ out0.length ∧ out0.length < 2^256 ∧
-      StaticAnswered sevm w0 token0.toAdr
-        (ExternalOperation.encode (.balanceOf sevm.currentTarget)) out0 ∧
-      SFunc.RunCutP (StepIn D) cert.prog sevm []
-        (St d0 (balance0 :: 0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R) M0 decodedGas0)
-        MintBalanceSite.first.afterDecodeTree (.done (.returned calleePost)) ∧
-      (u1.getCode token1.toAdr).size.toB256 ≠ 0 ∧
-      StepIn D sevm
-        (St w1 (gw1 :: token1 :: 128 :: 36 :: 128 :: 32 :: 164 :: 0x70a08231 ::
-          token1 :: 0 :: balance0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
-          (balanceRequestMemory M0 sevm.currentTarget) callGas1) (.exec .staticcall) d1 ∧
-      StaticCallPost w1 d1
-        (164 :: 0x70a08231 :: token1 :: 0 :: balance0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
-        (balanceRequestMemory M0 sevm.currentTarget) 128 36 128 32 1 out1 ∧
-      32 ≤ out1.length ∧ out1.length < 2^256 ∧
-      StaticAnswered sevm w1 token1.toAdr
-        (ExternalOperation.encode (.balanceOf sevm.currentTarget)) out1 ∧
-      (∀ a, Devm.getStor d0 a = Devm.getStor locked a) ∧
-      (∀ a, Devm.getStor d1 a = Devm.getStor locked a) ∧
-      d1.logs = b.logs ∧ d1.output = b.output ∧
-      SFunc.RunCutP (StepIn D) cert.prog sevm []
-        (St d1 (Bytes.toB256 (out1.take 32) :: 0 :: balance0 :: r1 :: r0 :: 0 :: toWord :: ρ :: R)
-          (balanceReplyMemory M0 sevm.currentTarget out1) decodedGas1)
-        MintBalanceSite.second.afterDecodeTree (.done (.returned calleePost)) ∧
-      r0 ≤ balance0 ∧ r1 ≤ Bytes.toB256 (out1.take 32) ∧
-      SFunc.RunP (StepIn D) cert.prog sevm
-        (St d1 (r1 :: r0 :: 0x1233 ::
-          mintFeeLocals (Bytes.toB256 (out1.take 32) - r1) (balance0 - r0)
-            (Bytes.toB256 (out1.take 32)) balance0 r1 r0 toWord ρ R)
-          (balanceReplyMemory M0 sevm.currentTarget out1) feeGas)
-        t_26ec_c68 (.returned feePost) ∧
-      SFunc.RunCutP (StepIn D) cert.prog sevm [] feePost t_1233_c41 (.done (.returned calleePost)) ∧
-      ∃ bound0 : r0.toNat < 2 ^ 112, ∃ bound1 : r1.toNat < 2 ^ 112,
-        MintPublicTypedFeeFinished K { st with unlocked := 0 } D sevm d1 feePost R
-          (balanceReplyMemory M0 sevm.currentTarget out1)
-          (Bytes.toB256 (out1.take 32) - r1) (balance0 - r0)
-          (Bytes.toB256 (out1.take 32)) balance0 r1 r0 toWord ρ bound0 bound1
-          (mintSourceFeeFrame current ctx (Sevm.dataWord sevm 4).toAdr)
-          (mintBalanceObserved st (Sevm.dataWord sevm 4).toAdr balance0 (Bytes.toB256 (out1.take 32)))
-          st.factory o ∧
-        MintBalanceHandlerResult current ctx (Sevm.dataWord sevm 4).toAdr out0 out1 ∧
-        r0 = st.reserve0.val.toB256 ∧ r1 = st.reserve1.val.toB256 ∧
-        token0.toAdr = st.token0 ∧ token1.toAdr = st.token1 ∧
-        (feeFactoryWord sevm d1).toAdr = st.factory
-
-/-- Every canonical cache, context and handler binding is derived from actualPC0 and finite entry storage. -/
-theorem mintPc0_public_source_inv {K : WriterKey → Prop} {current : Checkpoint}
-    {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (invocation : List Nat) (selector : Blanc.Sevm.selector sevm = 0x6a627842)
-    (run : SFunc.RunP (StepIn D) cert.prog sevm (St b [] Mem.empty G) t_0000_c0 o) :
-    MintPublicSourceResult K current D sevm b invocation o := by
-  let ctx := writerContext sevm invocation
-  let recipient := (Sevm.dataWord sevm 4).toAdr
-  let prior := mintSourceFeeFrame current ctx recipient
-  let frame := mintSourceAfterFeeFrame current ctx recipient
-  obtain ⟨value,size,guard,calleeGas,calleePost,callee,tail⟩ := mintPc0_inv selector run
-  obtain ⟨liquidity,post,returned,stack,mem⟩ := mintPrefix_return_inv fork getterInitMemory_ptr callee
-  have postEq := Outcome.returned.inj returned
-  subst post
-  have source := mintSourcePrefix_inv fork getterInitMemory_ptr rep frame rfl rfl rfl
-    (SFunc.runP_iff_runCutP_nil.mp callee)
-  obtain ⟨unlocked,nonstatic,gw0,callGas0,d0,out0,decodedGas0,gw1,callGas1,d1,out1,decodedGas1,
-    feeGas,feePost,code0,call0,post0,long0,width0,answered0,decoded0,code1,call1,post1,long1,width1,
-    answered1,stor0,stor1,logs1,output1,decoded1,cover0,cover1,feeRun,suffix,bound0,bound1,finished⟩ := source
-  have feeRep : WriterRep K (d1.getStor sevm.currentTarget) { current.state with unlocked := 0 } := by
-    rw [stor1]
-    exact rep.mint_locked_world
-  have target : (feeFactoryWord sevm d1).toAdr = current.state.factory := feeRep.feeFactory_target
-  have canonicalFrame : frame = prior.beginResume
-      (requestFor .mintFeeTo (feeFactoryWord sevm d1).toAdr .feeTo) := by
-    rw [target]
-    rfl
-  rw [canonicalFrame] at finished
-  have rawTail := (SFunc.runP_iff_runCutP_nil.mpr tail).mono StepIn.toRun
-  have publicFinished := mintActualFeeFinished_public_inv
-    (st := { current.state with unlocked := 0 }) prior rfl mem finished rawTail
-  have lockedRep := rep.mint_locked_world (sevm := sevm) (b := b)
-  rcases lockedRep.fixed with ⟨_,_,_,token0Fixed,token1Fixed,cache0,cache1,_,_,_,_,_⟩
-  change reserve0Read ((mintLockedWorld sevm b).getStorVal sevm.currentTarget 8) =
-    current.state.reserve0.val.toB256 at cache0
-  change reserve1Read ((mintLockedWorld sevm b).getStorVal sevm.currentTarget 8) =
-    current.state.reserve1.val.toB256 at cache1
-  have natCache0 : (reserve0Read ((mintLockedWorld sevm b).getStorVal sevm.currentTarget 8)).toNat =
-      current.state.reserve0.val := by
-    rw [cache0,B256.toNat_toB256_of_lt
-      (lt_trans current.state.reserve0.isLt (by decide : 2 ^ 112 < 2 ^ 256))]
-  have natCache1 : (reserve1Read ((mintLockedWorld sevm b).getStorVal sevm.currentTarget 8)).toNat =
-      current.state.reserve1.val := by
-    rw [cache1,B256.toNat_toB256_of_lt
-      (lt_trans current.state.reserve1.isLt (by decide : 2 ^ 112 < 2 ^ 256))]
-  have sourceUnlocked : current.state.unlocked = 1 := by
-    rcases rep.fixed with ⟨_,_,_,_,_,_,_,_,_,_,_,fixed⟩
-    exact fixed.symm.trans unlocked
-  have covers0 : current.state.reserve0.val ≤ (Bytes.toB256 (out0.take 32)).toNat := by
-    rw [← natCache0]
-    exact B256.toNat_le_toNat cover0
-  have covers1 : current.state.reserve1.val ≤ (Bytes.toB256 (out1.take 32)).toNat := by
-    rw [← natCache1]
-    exact B256.toNat_le_toNat cover1
-  have token0Target : ((afterSload sevm (mintLockedWorld sevm b) 8).getStorVal
-      sevm.currentTarget 6).toAdr.toB256.toAdr = current.state.token0 := by
-    rw [toAdr_toB256]
-    change (((afterSload sevm (mintLockedWorld sevm b) 8).getStor sevm.currentTarget).get 6).toAdr = _
-    rw [afterSload_getStor]
-    exact token0Fixed
-  have token1Target : (d0.getStorVal sevm.currentTarget 7).toAdr.toB256.toAdr = current.state.token1 := by
-    rw [toAdr_toB256]
-    change ((d0.getStor sevm.currentTarget).get 7).toAdr = _
-    rw [stor0]
-    exact token1Fixed
-  have payload := mint_balance_observed_eq (st := current.state) (recipient := recipient)
-    (b0 := Bytes.toB256 (out0.take 32)) (b1 := Bytes.toB256 (out1.take 32))
-    bound0 bound1 cache0 cache1 natCache0 natCache1
-  have typedFinished := mintPublicActualFeeFinished_typed payload target publicFinished
-  have handlers : MintBalanceHandlerResult current ctx recipient out0 out1 :=
-    mint_source_balance_handlers value nonstatic sourceUnlocked long0 long1 covers0 covers1
-  exact ⟨value,size,guard,calleeGas,calleePost,callee,mem,unlocked,nonstatic,
-    gw0,callGas0,d0,out0,decodedGas0,gw1,callGas1,d1,out1,decodedGas1,feeGas,feePost,
-    code0,call0,post0,long0,width0,answered0,decoded0,code1,call1,post1,long1,width1,answered1,
-    stor0,stor1,logs1,output1,decoded1,cover0,cover1,feeRun,suffix,bound0,bound1,typedFinished,handlers,cache0,cache1,token0Target,token1Target,target⟩
-
-
-/-- Successful execution of the original bytes derives the complete canonical finite mint result. -/
-theorem mintBytecode_public_source_inv {K : WriterKey → Prop} {current : Checkpoint}
-    {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (invocation : List Nat) (selector : Blanc.Sevm.selector sevm = 0x6a627842)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    let D : Exec.Deriv := ⟨0,sevm,St b [] Mem.empty G,.ok post,run⟩
-    MintPublicSourceResult K current D sevm b invocation (.halted post) ∧
-      ∃ liquidity : B256, post.output = liquidity.toBytes := by
-  obtain ⟨f,entry,derived⟩ := lift_sound_in cert_check codeEq fork run
-  rw [show cert.prog[0]? = some t_0000_c0 from rfl] at entry
-  cases entry
-  have source := mintPc0_public_source_inv fork rep invocation selector derived
-  obtain ⟨calleeGas,calleePost,publicPost,liquidity,callee,stack,mem,halted,output,stor,logs⟩ :=
-    mintPc0_return_inv fork selector derived
-  have eq := Outcome.halted.inj halted
-  exact ⟨source,liquidity,eq.symm ▸ output⟩
 
 end Blanc.Lift.UniswapV2Pair

@@ -2911,9 +2911,10 @@ For bounded actual CALL input, the same pinned module provides
 Both require the seven actual CALL operands, `stateGas = none`, and
 `inputSize.toNat < 2^160`, and bound the complete reply below `2^160` on either
 child outcome. They require no parent gas/memory potential or output-copy-window
-bound. `burnTransfers_caller_inv` in
-`Blanc/Lift/UniswapV2Pair/SafeTransferWalk.lean` consumes the actual 68-byte
-input operands at both transfer calls with `CoveredFork.rules_stateGas_none`.
+bound. `pair_transfer_reply_cursor_state` in
+`Blanc/Lift/UniswapV2Pair/PairTransferReplyCursor.lean` consumes the actual 68-byte
+input operands with `CoveredFork.rules_stateGas_none`; `BurnFourCalls.actualReply`
+and `BurnFiveCalls.actualReply` use it for the two actual Burn transfer replies.
 The accepted `swapTransferCall_replyShort` in
 `Blanc/Lift/UniswapV2Pair/SwapTransfer.lean` and `skim_raw_flag_inv` in
 `Blanc/Lift/UniswapV2Pair/SkimSecondWalk.lean` use the same literal 68-byte
@@ -3207,7 +3208,7 @@ observation of its committed frames) plus `SpawnKinds`;
 the lower-depth hypothesis) and `ExecutionAccountingReplay.wholeFrameLadder` turns it
 into an `AccountingLadderAdmitted`. The obligation receives the frame's commit proof, so
 its step can name the committed frame. Worked use: the Uniswap V2 pair
-(`Blanc/Lift/UniswapV2Pair/PairHistory.lean`: `pair_wholeFrameReplay`, `pairLadder`,
+(`Blanc/Lift/UniswapV2Pair/PairHistory.lean`: `pair_wholeFrameReplayWith`, `pairLadderWith`,
 `pair_history_committed`), whose parameterized `PairObservedReplayWith` (`mono`, `sourceReplay`, `append`),
 `PairStep.AuthenticWith`, `PairReplayWith`, `pairCarrierWith`/`pairObservationWith`,
 `pairSpec_soundAdmittedWith`/`pairSpec_preservesAdmittedWith`,
@@ -4600,11 +4601,12 @@ It preserves synchronous call positions and does not assume an empty queue.
 provides `PairEntryAt` for the actual selector and decoded entry, and
 `PairRootedConsumes`/`PairPositionalOutcome` bind the same original root,
 transcript, result and output. Entry decoding alone does not establish nested
-admission. The compiled ready family projections in
+admission. The ready family producers in
 [`PairPositionalReady.lean`](../Blanc/Lift/UniswapV2Pair/PairPositionalReady.lean)
-consume the supplied incoming checkpoint and those same positional results;
-`PairPositionalReadySupply` excludes Swap, Skim and Burn pending their own
-canonical producers. The separate `pair_admitted_skim_supply` in
+consume the supplied incoming checkpoint and the same recursively admitted positional results.
+`pair_admitted_ready_supply` assembles `PairAdmittedReadySupply` for the lock-free families,
+Mint, Sync and views; Swap, Skim and Burn have separate canonical producers.
+The separate `pair_admitted_skim_supply` in
 [`PairPositionalSkim.lean`](../Blanc/Lift/UniswapV2Pair/PairPositionalSkim.lean)
 retains the same four-slot canonical result, recursively admitted mutable
 queues, actual output and represented state. It is below the final all-family
@@ -4740,8 +4742,7 @@ exports the original `swap_bytecode_exact_consumes` and `_own` names under
 unchanged caller premises. Both retain one `SwapPositionalCanonicalResult`,
 including its actual optional slots, full recursively admitted queues, output,
 storage and foreign-storage fields. `swap_bytecode_forward_consumes` returns
-that same carrier for its original constructed raw execution. Lower compatibility
-proofs are explicitly named `swap_bytecode_exact_consumes_legacy` and `_own_legacy`.
+that same carrier for its original constructed raw execution.
 The Mint positional carrier also retains `SourceAdmission` on its own selected
 positional proof; the concrete Mint supplier projects that field directly.
 [`MintPositionalLogs.lean`](../Blanc/Lift/UniswapV2Pair/MintPositionalLogs.lean)
@@ -4749,8 +4750,7 @@ derives the fee-prefix and complete raw/source log image from that same Mint
 canonical result. The original `mint_bytecode_exact_consumes` and `_own` names
 in [`MintPositionalRefinement.lean`](../Blanc/Lift/UniswapV2Pair/MintPositionalRefinement.lean)
 retain the admitted result with these log images and, for `_own`, foreign-storage
-silence, under unchanged caller premises. Lower compatibility proofs have
-explicit `_legacy` names.
+silence, under unchanged caller premises.
 
 [`SwapSourceOccurrenceTransfer.lean`](../Blanc/Lift/UniswapV2Pair/SwapSourceOccurrenceTransfer.lean)
 binds each supplied Swap transfer to its typed request and complete actual slot
@@ -4802,12 +4802,9 @@ The Pair mutable fold's `mutable_selected_root_with` in
 parameterizes child consumption and turn introductions while the existing
 `mutable_selected_root` projects the original interface. For same-occurrence
 nested consumption, use `mutable_source_slot_turns` in
-[`MutablePositionalFold.lean`](../Blanc/Lift/UniswapV2Pair/MutablePositionalFold.lean)
-and `locked_mutable_source_slot_turns` in
-[`MutablePositionalLockedSupply.lean`](../Blanc/Lift/UniswapV2Pair/MutablePositionalLockedSupply.lean).
-They bind the actual selected slot, its full queue, and each same-witness
-child's positional consumption and committed output; the locked supplier
-uses the actual child authorization and representation.
+[`MutablePositionalFold.lean`](../Blanc/Lift/UniswapV2Pair/MutablePositionalFold.lean).
+It binds the actual selected slot, its full queue, and each same-witness
+child's positional consumption and committed output.
 
 For recursive entry admission on that same selected proof, use
 `AdmittedSourceConsumes` and `SourceAdmission` in
@@ -4816,8 +4813,8 @@ then `admitted_source_slot_turns` and `AdmittedMutableTurns` in
 [`AdmittedMutableFold.lean`](../Blanc/Lift/UniswapV2Pair/AdmittedMutableFold.lean).
 These acyclic adapters parameterize child authentication, retain the complete
 actual slot event queue and its selected turns, and index each recursive
-admission by the same child consumption proof. The Pair endpoint aliases
-`PairAdmittedConsumes` and `PairMutableAdmission` live in
+admission by the same child consumption proof. The Pair endpoint
+`PairAdmittedConsumes` uses `PairSourceAdmission` in
 [`PairPositionalAdmission.lean`](../Blanc/Lift/UniswapV2Pair/PairPositionalAdmission.lean).
 For actual locked children, `lockedPairAdmittedSupply` and
 `locked_admitted_mutable_source_slot_turns` in

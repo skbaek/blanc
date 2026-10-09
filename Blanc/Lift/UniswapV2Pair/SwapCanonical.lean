@@ -3,16 +3,12 @@ import Blanc.Lift.UniswapV2Pair.SwapBackTurns
 import Blanc.Lift.UniswapV2Pair.SkimCanonical
 
 /-!
-# Canonical swap frame
+# Canonical swap frame interfaces
 
-Every successful raw swap run at the Pair code (selector `0x022c0d9f`) consumes the typed
-source swap over the actual optional transfers, the optional callback and the two
-post-callback `balanceOf(pair)` observations, in all six successful transcript shapes. The
-front half (`swap_bytecode_front_cut_code`) reaches the post-callback join with `SwapCut`; the
-back half (`swapBack_exact_consumes_bounds`) consumes the cut. The trace-local HASH-T universe
-is `WriterExtend K (swapTraceKeys root)`, a function of the tracked rows and the root execution
-alone; the front's universe parameter, the lock-free supply admission and the back's static-view
-admission are discharged from it here.
+Trace-local writer rows, event images and per-call source authorization used by the positional
+canonical swap route. The root-determined HASH-T universe extends the incoming tracked rows by
+`swapTraceKeys root`; mutable children and static views are admitted on their actual call positions
+by the positional front and back modules.
 -/
 
 namespace Blanc.Lift.UniswapV2Pair
@@ -163,132 +159,5 @@ theorem swap_input_word {bal amountOut : B256} {r : Nat} (bound : r < 2 ^ 112)
   apply B256.toNat_inj
   have small := B256.toNat_lt bal
   rw [swapInWord_source bound out, B256.toNat_toB256_of_lt (by omega)]
-
-/-- The swap image of the typed `Swap` event at the cut. -/
-theorem swap_event_image {K : WriterKey → Prop} {frame : Frame} {locals : SwapLocals}
-    {sevm : Sevm} {d : Devm} {w : SwapCutWords} {p : B256} {n : Nat} {M : Mem} {bal0 bal1 : B256}
-    (cut : SwapCut K frame locals sevm d w p n M)
-    (recipient : swapTokenWord w.recipient = locals.recipient.toB256) :
-    swapOwnedRaw sevm.currentTarget (swapSourceEvent frame locals bal0 bal1) =
-      some (swapEventLog sevm (swapInWord bal0 w.reserve0 w.amount0Out)
-        (swapInWord bal1 w.reserve1 w.amount1Out) w.amount0Out w.amount1Out w.recipient) := by
-  simp only [swapSourceEvent, swapOwnedRaw, swapEventLog, swapInputs]
-  rw [cut.reserve0, cut.reserve1, cut.amount0Out, cut.amount1Out,
-    ← swap_input_word locals.reserves.reserve0.isLt cut.out0,
-    ← swap_input_word locals.reserves.reserve1.isLt cut.out1, cut.sender, recipient]
-
-/-- **Canonical swap frame, with foreign storage.** Every successful raw swap run of the
-original bytes, under trace-local HASH-T over `WriterExtend K (swapTraceKeys root)`,
-satisfies `SwapCanonicalBody` with the foreign-storage silence of the
-post-callback tail: every account other than the Pair keeps, at the end, the storage the
-callback (or the last taken transfer) left; and the lock prefix before the first external call
-touches no foreign account. Between those points foreign storage changes only inside the
-actual transfer/callback CALL steps the body names. Each taken transfer's reply bound is
-derived from its own actual 68-byte CALL (`swapTransferCall_replyShort`). -/
-theorem swap_bytecode_exact_consumes_own_legacy {K : WriterKey → Prop} {current : Checkpoint}
-    {sevm : Sevm} {b post : Devm} {G : Nat}
-    (invocation : List Nat)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
-    (freshOutput : b.output = [])
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
-    (hashTInj : WriterInj (WriterExtend K
-      (swapTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)))
-    (hashTApart : WriterApart (WriterExtend K
-      (swapTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩))) :
-    (∀ a, a ≠ sevm.currentTarget → (swapPrefixWorld sevm b).getStor a = b.getStor a) ∧
-    SwapCanonicalBody (fun d => ∀ a, a ≠ sevm.currentTarget → post.getStor a = d.getStor a)
-      K current invocation run := by
-  refine ⟨fun a foreign => ?_, ?_⟩
-  · unfold swapPrefixWorld mintLockedWorld
-    rw [afterSload_getStor, afterSload_getStor, afterSload_getStor,
-      afterSstore_getStor_ne _ _ _ _ _ (Ne.symm foreign), afterSload_getStor]
-  unfold SwapCanonicalBody
-  intro root ctx locals w S
-  let U := WriterExtend K (swapTraceKeys root)
-  have sub : ∀ k, K k → U k := fun k tracked => Or.inl tracked
-  have staticGood : ∀ F ∈ Exec.rawFrameRoots root.exc,
-      F.sevm.currentTarget = sevm.currentTarget → ∀ k ∈ staticViewDecodedKeys F.sevm, U k :=
-    fun F member target k touched => Or.inr ((skimTraceKeys_contains member target).2 k touched)
-  have lockedGood : ∀ F ∈ Exec.rawFrameRoots root.exc,
-      F.sevm.currentTarget = sevm.currentTarget → LockedGood U F := by
-    intro F member target F' inner same k touched
-    have deep := Exec.rawFrameRoots_trans member inner
-    rcases List.mem_append.mp touched with pairKey | viewKey
-    · exact Or.inr ((skimTraceKeys_contains deep (same.trans target)).1 k pairKey)
-    · exact Or.inr ((skimTraceKeys_contains deep (same.trans target)).2 k viewKey)
-  obtain ⟨value, nonstatic, frame, T0, T1, TC, R, turns0, turns1, turnsC, K', b1, b2, d, M1, M2, p1,
-    p, n, M, gas, calleePost, opt0, opt1, optC, shape0, shape1, shapeC, reach, checkpoint, context,
-    sub', cut, ⟨added, L, frameLogs, cutLogs, images⟩, auth, body, tail, codeD⟩ :=
-    swap_bytecode_front_cut_code invocation rep sem image installed freshOutput codeEq fork selector
-      run hashTInj hashTApart sub lockedGood
-  have installedD : some (d.getCode sevm.currentTarget).toList = sem.image := by
-    rw [codeD]
-    exact installed
-  have pairEq : frame.context.pair = sevm.currentTarget := by
-    rw [context]
-    rfl
-  obtain ⟨out0, out1, views0, views1, final, rets, post', M', G', d0, d1, call0, call1, _, _,
-      recipient, consumed, prov0, prov1, returned, finalCheckpoint, finalContext, unlocked, wrep,
-      foreign, ⟨origin, finalLogs⟩, postLogs, postOutput, bound0, bound1⟩ :=
-    swapBack_exact_consumes_bounds hashTInj hashTApart sub' sem image installedD fork cut
-      (fun F member target => staticGood F member (target.trans pairEq))
-      (SFunc.runP_iff_runCutP_nil.mp body)
-  obtain rfl := Outcome.returned.inj returned
-  obtain ⟨G'', postEq⟩ := swap_stop_inv tail
-  subst postEq
-  have request0 : swapRequest0 frame locals =
-      requestFor .swapBalance0 locals.token0 (.balanceOf ctx.pair) := by
-    unfold swapRequest0
-    rw [context]
-  rw [request0] at consumed
-  refine ⟨value, nonstatic, frame, T0, T1, TC, turns0, turns1, turnsC, b1, b2, d, d0, d1, M1, M2, M,
-    p1, p, out0, out1, views0, views1, final, R ++ rets, K',
-    added ++ [.owned origin (.sync (swapBalanceWord out0).toNat (swapBalanceWord out1).toNat),
-      .owned origin (swapSourceEvent frame locals (swapBalanceWord out0) (swapBalanceWord out1))],
-    opt0, opt1, optC, shape0, shape1, shapeC, call0, call1, reach _ _ consumed, checkpoint, context,
-    finalCheckpoint.trans checkpoint, finalContext.trans context, unlocked, sub', wrep, bound0,
-    bound1, ?_, ⟨L, cutLogs, ?_, ?_⟩, postOutput, auth, prov0, ?_, foreign⟩
-  · rw [finalLogs, frameLogs, List.append_assoc]
-  · change post'.logs = _
-    rw [postLogs, cutLogs]
-  · rw [List.map_append, List.map_append, swap_rawWith_images images]
-    simp only [List.map_cons, List.map_nil, PendingLog.rawWith, swap_sync_image bound0 bound1]
-    exact congrArg (fun x => List.map some L ++ [some _, x])
-      (swap_event_image (bal0 := swapBalanceWord out0) (bal1 := swapBalanceWord out1) cut recipient)
-  · exact prov1
-
-/-- **Canonical swap frame.** Every successful raw swap run of the original bytes consumes the
-typed source swap over the actual transcript, in all six successful shapes (each optimistic
-transfer present iff its amount is nonzero, the callback present iff the data is nonempty),
-under trace-local HASH-T over `WriterExtend K (swapTraceKeys root)`. Each taken transfer's
-reply bound (below `2^160` bytes) is derived from its own actual 68-byte CALL
-(`swapTransferCall_replyShort`). -/
-theorem swap_bytecode_exact_consumes_legacy {K : WriterKey → Prop} {current : Checkpoint}
-    {sevm : Sevm} {b post : Devm} {G : Nat}
-    (invocation : List Nat)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
-    (freshOutput : b.output = [])
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0x022c0d9f)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
-    (hashTInj : WriterInj (WriterExtend K
-      (swapTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)))
-    (hashTApart : WriterApart (WriterExtend K
-      (swapTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩))) :
-    SwapCanonicalBody (fun _ => True) K current invocation run := by
-  obtain ⟨_, value, nonstatic, frame, T0, T1, TC, turns0, turns1, turnsC, b1, b2, d, d0, d1, M1, M2,
-    M, p1, p, out0, out1, views0, views1, final, rets, K', added, c1, c2, c3, c4, c5, c6, c7, c8, c9,
-    c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, _⟩ :=
-    swap_bytecode_exact_consumes_own_legacy invocation rep sem image installed freshOutput codeEq fork
-      selector run hashTInj hashTApart
-  exact ⟨value, nonstatic, frame, T0, T1, TC, turns0, turns1, turnsC, b1, b2, d, d0, d1, M1, M2,
-    M, p1, p, out0, out1, views0, views1, final, rets, K', added, c1, c2, c3, c4, c5, c6, c7, c8, c9,
-    c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, trivial⟩
 
 end Blanc.Lift.UniswapV2Pair

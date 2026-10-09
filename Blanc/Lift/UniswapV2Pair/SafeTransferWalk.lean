@@ -657,7 +657,6 @@ private theorem safeTransfer_copyPass_exact {sevm : Sevm} {b : Devm} {R : List B
   apply rx_branch_zero
   exact safeTransfer_copyBody_exact room continuation
 
-
 /-- The final copy guard preserves the actual remaining partial word and memory. -/
 private theorem safeTransfer_copyExit_inv {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
@@ -759,7 +758,6 @@ private theorem safeTransfer_copy68_exact {sevm : Sevm} {b : Devm} {R : List B25
     G + 169 + cR0 + cS0 + cR1 + cS1 := by omega
   rw [gas] at first
   exact first
-
 
 /-- The literal post-CALL tree retains full returndata before choosing allocation or empty data. -/
 def safeTransfer_afterCall : SFunc :=
@@ -920,7 +918,6 @@ private theorem safeTransfer_afterCall_exact {sevm : Sevm} {b : Devm} {R : List 
     apply safeTransfer_allocate_exact room
     simpa only [empty, ite_false] using continuation
 
-
 /-- The real CALL plus its successful helper continuation derives the entered flag,
 full width and physical parent-memory image without forbidding child effects. -/
 theorem safeTransfer_call_inv {P : Sevm → Devm → Ninst → Devm → Prop}
@@ -977,7 +974,6 @@ theorem safeTransfer_call_inv {P : Sevm → Devm → Ninst → Devm → Prop}
     · rw [memory, parentMemory, returned]
       rfl
     · exact (Resume.call_output resume).trans parentOutput
-
 
 /-- Exact four-byte merge and CALL preparation use the actual post-GAS word and four
 selected memory charges; the primitive CALL continuation is internal to helper57. -/
@@ -1679,51 +1675,6 @@ private theorem safeTransfer_reply292_image {M : Mem} {reply : Bytes}
       (32 ≤ reply.length → (allocated.read 324 32).1 = reply.sliceD 0 32 0) := by
   exact Blanc.Lift.bytesArrayMemory_image mem (by decide) (by decide) (by decide)
 
-/-- The first helper's actual returned memory supplies the second helper's
-pointer carrier, untouched empty-array sentinel, and allocation separation. -/
-theorem burnFirstTransfer_memoryLayout {M : Mem} {reply : Bytes}
-    (mem : PtrMem 292 416 M) (sentinel : memWord M 96 = 0)
-    (width : reply.length < 2 ^ 160) :
-    let post := if reply = [] then M else safeTransfer_reply292Memory M reply
-    PtrMem (burnFirstTransferPointer reply)
-      (if reply = [] then 416 else memExtSize 416 324 reply.length) post ∧
-    memWord post 96 = 0 ∧
-    292 ≤ (burnFirstTransferPointer reply).toNat ∧
-    (reply ≠ [] → 324 + reply.length ≤ (burnFirstTransferPointer reply).toNat) ∧
-    (burnFirstTransferPointer reply).toNat + 260 < 2 ^ 256 := by
-  have layout := burnFirstTransferPointer_layout width
-  by_cases empty : reply = []
-  · simp only [empty, ite_true, burnFirstTransferPointer]
-    exact ⟨mem, sentinel, by decide,
-      fun nonempty => False.elim (nonempty rfl), by decide⟩
-  · simp only [ite_eq_right empty, burnFirstTransferPointer]
-    let len := reply.length.toB256
-    let q := 292 + ((len + 63) &&& ~~~31)
-    let N1 := M.write 64 q.toBytes
-    let N2 := N1.write 292 len.toBytes
-    have h1 : PtrMem q 416 N1 := mem.set
-    have h2 : PtrMem q 416 N2 := h1.write 292 len (Or.inr (by decide))
-    have sentinel1 : memWord N1 96 = 0 := by
-      rw [memWord_congr (μ := M) (fun k hk =>
-        (Mem.write_agree M 64 q.toBytes).2 (96 + k)
-          (by rw [mem.size]; omega)
-          (by rw [B256.length_toBytes]; right; omega))]
-      exact sentinel
-    have sentinel2 : memWord N2 96 = 0 := by
-      rw [memWord_congr (μ := N1) (fun k hk =>
-        (Mem.write_agree N1 292 len.toBytes).2 (96 + k)
-          (by rw [h1.size]; omega) (by left; omega))]
-      exact sentinel1
-    have sentinel3 : memWord (safeTransfer_reply292Memory M reply) 96 = 0 := by
-      change memWord (N2.write 324 reply) 96 = 0
-      rw [memWord_congr (μ := N2) (fun k hk =>
-        (Mem.write_agree N2 324 reply).2 (96 + k)
-          (by rw [h2.size]; omega) (by left; omega))]
-      exact sentinel2
-    have carrier := (safeTransfer_reply292_image mem (reply := reply)).1
-    simp only [burnFirstTransferPointer, ite_eq_right empty] at layout
-    exact ⟨carrier, sentinel3, layout.2.1, layout.2.2.1, layout.2.2.2⟩
-
 /-- The first actual callback-to-decoder composition retains the full reply and SAME P child step. -/
 private theorem safeTransfer_firstReply_inv {P : Sevm → Devm → Ninst → Devm → Prop}
     {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
@@ -1852,7 +1803,6 @@ private theorem safeTransfer_firstReturned_inv {P : Sevm → Devm → Ninst → 
       rw [ite_eq_right empty]
       exact outEq
 
-
 /-- The actual first helper's overlapping copy exposes precisely its 68-byte source window. -/
 private theorem safeTransfer_copy128_image {M : Mem} {amount toWord : B256} :
     ((safeTransfer_call128Memory M amount toWord).read 292 68).1 =
@@ -1860,7 +1810,6 @@ private theorem safeTransfer_copy128_image {M : Mem} {amount toWord : B256} :
   change ((Blanc.Lift.copy68Memory (safeTransfer_payload128Memory M amount toWord) 224 292).read 292 68).1 =
     ((safeTransfer_payload128Memory M amount toWord).read 224 68).1
   exact Blanc.Lift.copy68Memory_read (by decide)
-
 
 /-- The actual first initializer emits canonical transfer calldata for arbitrary well-formed memory. -/
 private theorem safeTransfer_payload128_data {M : Mem} {amount toWord : B256}
@@ -1913,78 +1862,6 @@ private theorem safeTransfer_call128_data {M : Mem} {amount toWord : B256}
   rw [safeTransfer_copy128_image]
   exact safeTransfer_payload128_data wf
 
-/-- Every first-call payload/copy write misses the caller's actual empty-array word96. -/
-theorem safeTransfer_call128_sentinel {M : Mem} {amount toWord : B256}
-    (mem : PtrMem 128 192 M) (sentinel : memWord M 96 = 0) :
-    memWord (safeTransfer_call128Memory M amount toWord) 96 = 0 := by
-  have original : MemMatches 0 [(96, .const 0)] M := by
-    intro o v hv
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hv
-    cases hv
-    exact ⟨by rw [mem.size]; decide, sentinel⟩
-  let N1 := M.write 64 (192 : B256).toBytes
-  let N2 := N1.write 128 (25 : B256).toBytes
-  let N3 := N2.write 160 (0x7472616e7366657228616464726573732c75696e743235362900000000000000 : B256).toBytes
-  let N4 := N3.write 228 ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes
-  let N5 := N4.write 260 amount.toBytes
-  let N6 := N5.write 192 (68 : B256).toBytes
-  let N7 := N6.write 64 (292 : B256).toBytes
-  let N8 := N7.write 224 ((0xa9059cbb00000000000000000000000000000000000000000000000000000000 : B256) |||
-    ((0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256) &&& Bytes.toB256 (N7.read 224 32).1)).toBytes
-  have a1 : MemMatches 0 [(96, .const 0)] N1 := by
-    have h := original.write 64 (192 : B256).toBytes
-    rw [B256.length_toBytes] at h
-    exact h
-  have a2 : MemMatches 0 [(96, .const 0)] N2 := by
-    have h := a1.write 128 (25 : B256).toBytes
-    rw [B256.length_toBytes] at h
-    exact h
-  have a3 : MemMatches 0 [(96, .const 0)] N3 := by
-    have h := a2.write 160 (0x7472616e7366657228616464726573732c75696e743235362900000000000000 : B256).toBytes
-    rw [B256.length_toBytes] at h
-    exact h
-  have a4 : MemMatches 0 [(96, .const 0)] N4 := by
-    have h := a3.write 228 ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes
-    rw [B256.length_toBytes] at h
-    exact h
-  have a5 : MemMatches 0 [(96, .const 0)] N5 := by
-    have h := a4.write 260 amount.toBytes
-    rw [B256.length_toBytes] at h
-    exact h
-  have a6 : MemMatches 0 [(96, .const 0)] N6 := by
-    have h := a5.write 192 (68 : B256).toBytes
-    rw [B256.length_toBytes] at h
-    exact h
-  have a7 : MemMatches 0 [(96, .const 0)] N7 := by
-    have h := a6.write 64 (292 : B256).toBytes
-    rw [B256.length_toBytes] at h
-    exact h
-  have a8 : MemMatches 0 [(96, .const 0)] (safeTransfer_payload128Memory M amount toWord) := by
-    have h := a7.write 224 ((0xa9059cbb00000000000000000000000000000000000000000000000000000000 : B256) |||
-      ((0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff : B256) &&& Bytes.toB256 (N7.read 224 32).1)).toBytes
-    rw [B256.length_toBytes] at h
-    exact h
-  unfold safeTransfer_call128Memory
-  generalize safeTransfer_payload128Memory M amount toWord = V at a8 ⊢
-  let C1 := V.write 292 (Bytes.toB256 (V.read 224 32).1).toBytes
-  let C2 := C1.write 324 (Bytes.toB256 (C1.read 256 32).1).toBytes
-  have b1 : MemMatches 0 [(96, .const 0)] C1 := by
-    have h := a8.write 292 (Bytes.toB256 (V.read 224 32).1).toBytes
-    rw [B256.length_toBytes] at h
-    exact h
-  have b2 : MemMatches 0 [(96, .const 0)] C2 := by
-    have h := b1.write 324 (Bytes.toB256 (C1.read 256 32).1).toBytes
-    rw [B256.length_toBytes] at h
-    exact h
-  have extended : MemMatches 0 [(96, .const 0)] (C2.read 356 32).2 :=
-    MemMatches.of_data_eq (μ := C2) (μ' := (C2.read 356 32).2) rfl
-      (by change C2.size ≤ memExtSize C2.size 356 32; exact memExtSize_ge _ _ _) b2
-  have b3 := extended.write 356
-    (((Bytes.toB256 (C2.read 288 32).1) &&& ~~~(B256.bexp 256 (32 - 4) - 1)) |||
-      ((Bytes.toB256 (C2.read 356 32).1) &&& (B256.bexp 256 (32 - 4) - 1))).toBytes
-  rw [B256.length_toBytes] at b3
-  exact (b3 96 (.const 0) (List.mem_cons_self)).2
-
 /-- The actual returned first helper exposes canonical calldata at its SAME P primitive CALL,
 full optional-return acceptance and the raw child world. No child storage/log effect is erased. -/
 theorem safeTransfer_first_inv {P : Sevm → Devm → Ninst → Devm → Prop}
@@ -2015,91 +1892,6 @@ theorem safeTransfer_first_inv {P : Sevm → Devm → Ninst → Devm → Prop}
     safeTransfer_firstReturned_inv project fork mem run
   exact ⟨forwarded, callGas, d, residual, step, stack, safeTransfer_call128_data mem.wf,
     memory, output, width, accepted, returned⟩
-
-/-- The literal first burn caller derives a returned helper; its halted alternative is impossible. -/
-private theorem burnFirstTransfer_call_inv {P : Sevm → Devm → Ninst → Devm → Prop}
-    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
-    {supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ : B256}
-    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
-    (run : SFunc.RunCutP P cert.prog sevm C
-      (St b (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R) M G)
-      t_168d_c13 r) :
-    ∃ helperGas out,
-      SFunc.RunP P cert.prog sevm
-        (St b (amount0 :: toWord :: token0 :: 0x1698 ::
-          burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R) M helperGas)
-        t_1fdb_c57 (.returned out) ∧
-      SFunc.RunCutP P cert.prog sevm C out t_1698_c13 r := by
-  have h := run
-  unfold t_168d_c13 at h
-  obtain ⟨_, h⟩ := ric_destP h
-  obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, eq⟩ := ri_push (project hd)
-  rw [show Bytes.toB256 [0x16, 0x98] = (0x1698 : B256) from rfl] at eq
-  subst d
-  obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_dup (w := token0) rfl (project hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_dup (w := toWord) rfl (project hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_dup (w := amount0) rfl (project hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, eq⟩ := ri_push (project hd)
-  rw [show Bytes.toB256 [0x1f, 0xdb] = (0x1fdb : B256) from rfl] at eq
-  subst d
-  cases h with
-  | callHalt d lookup pop callee =>
-    change some t_1fdb_c57 = _ at lookup
-    cases lookup
-    exact False.elim (callee.not_halted_entry (S := [16,17,57,71])
-      (by decide) (by decide : 57 ∈ [16,17,57,71]) (by rfl : cert.prog[57]? = some t_1fdb_c57) rfl)
-  | callRet d lookup pop callee continuation =>
-    change some t_1fdb_c57 = _ at lookup
-    cases lookup
-    exact ⟨_, _, (St.of_pop1 pop).2 ▸ callee, continuation⟩
-
-/-- The named first burn caller consumes the complete returned-helper observation and
-retains the original cached locals, child effects, full reply and literal second-transfer tail. -/
-theorem burnFirstTransfer_caller_inv {P : Sevm → Devm → Ninst → Devm → Prop}
-    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
-    {supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ : B256}
-    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (run : SFunc.RunCutP P cert.prog sevm C
-      (St b (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R) M G)
-      t_168d_c13 r) :
-    ∃ helperGas forwarded callGas d residual,
-      SFunc.RunP P cert.prog sevm
-        (St b (amount0 :: toWord :: token0 :: 0x1698 ::
-          burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R) M helperGas)
-        t_1fdb_c57 (.returned (St d
-          (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R)
-          (if d.returnData = [] then d.memory else safeTransfer_reply292Memory d.memory d.returnData) residual)) ∧
-      P sevm (St b (forwarded :: (token0 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        0 :: 292 :: 68 :: 292 :: 0 :: 360 ::
-        (token0 &&& 0xffffffffffffffffffffffffffffffffffffffff) :: 96 :: 0 :: amount0 :: toWord :: token0 :: 0x1698 ::
-        burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R)
-        (safeTransfer_call128Memory M amount0 toWord) callGas) (.exec .call) d ∧
-      d.stack = 1 :: 360 :: (token0 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount0 :: toWord :: token0 :: 0x1698 ::
-        burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R ∧
-      ((safeTransfer_call128Memory M amount0 toWord).read 292 68).1 =
-        abiSelectorBytes 0xa9059cbb ++
-          ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes ++ amount0.toBytes ∧
-      d.memory = safeTransfer_call128Memory M amount0 toWord ∧ d.output = b.output ∧
-      d.returnData.length < 2^256 ∧
-      (d.returnData = [] ∨ (32 ≤ d.returnData.length ∧
-        Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0)) ∧
-      SFunc.RunCutP P cert.prog sevm C
-        (St d (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R)
-          (if d.returnData = [] then d.memory else safeTransfer_reply292Memory d.memory d.returnData) residual)
-        t_1698_c13 r := by
-  obtain ⟨helperGas, out, callee, continuation⟩ := burnFirstTransfer_call_inv project run
-  obtain ⟨forwarded, callGas, d, residual, step, stack, calldata, memory, output, width, accepted, returned⟩ :=
-    safeTransfer_first_inv project fork mem callee
-  rw [returned] at callee continuation
-  exact ⟨helperGas, forwarded, callGas, d, residual, callee, step, stack, calldata,
-    memory, output, width, accepted, continuation⟩
 
 /-- The helper's ordered payload writes at the moving pointer left by an
 earlier transfer. Every offset remains the literal modular word expression. -/
@@ -2712,217 +2504,6 @@ theorem safeTransfer_dynamicReturned_inv {P : Sevm → Devm → Ninst → Devm �
     postMem lower width fit replyWidth decoded
   exact ⟨forwarded, callGas, d, residual, step, stack, memory, output, replyWidth,
     accepted, returned⟩
-
-/-- The literal second burn caller derives a returned helper; its halted alternative is impossible. -/
-theorem burnSecondTransfer_call_inv {P : Sevm → Devm → Ninst → Devm → Prop}
-    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
-    {supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ : B256}
-    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
-    (run : SFunc.RunCutP P cert.prog sevm C
-      (St b (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R) M G)
-      t_1698_c13 r) :
-    ∃ helperGas out,
-      SFunc.RunP P cert.prog sevm
-        (St b (amount1 :: toWord :: token1 :: 0x16a3 ::
-          burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R) M helperGas)
-        t_1fdb_c57 (.returned out) ∧
-      SFunc.RunCutP P cert.prog sevm C out t_16a3_c13 r := by
-  have h := run
-  unfold t_1698_c13 at h
-  obtain ⟨_, h⟩ := ric_destP h
-  obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, eq⟩ := ri_push (project hd)
-  rw [show Bytes.toB256 [0x16, 0xa3] = (0x16a3 : B256) from rfl] at eq
-  subst d
-  obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_dup (w := token1) rfl (project hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_dup (w := toWord) rfl (project hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_dup (w := amount1) rfl (project hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, eq⟩ := ri_push (project hd)
-  rw [show Bytes.toB256 [0x1f, 0xdb] = (0x1fdb : B256) from rfl] at eq
-  subst d
-  cases h with
-  | callHalt d lookup pop callee =>
-    change some t_1fdb_c57 = _ at lookup
-    cases lookup
-    exact False.elim (callee.not_halted_entry (S := [16,17,57,71])
-      (by decide) (by decide : 57 ∈ [16,17,57,71]) (by rfl : cert.prog[57]? = some t_1fdb_c57) rfl)
-  | callRet d lookup pop callee continuation =>
-    change some t_1fdb_c57 = _ at lookup
-    cases lookup
-    exact ⟨_, _, (St.of_pop1 pop).2 ▸ callee, continuation⟩
-
-/-- The actual second Burn caller consumes the moving helper's full return
-proof and canonical calldata, retaining cached locals and its literal suffix. -/
-theorem burnSecondTransfer_caller_inv {P : Sevm → Devm → Ninst → Devm → Prop}
-    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
-    {p : B256} {n : Nat}
-    {supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ : B256}
-    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem p n M)
-    (lower : 128 ≤ p.toNat) (width : p.toNat + 260 < 2 ^ 256)
-    (run : SFunc.RunCutP P cert.prog sevm C
-      (St b (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R) M G)
-      t_1698_c13 r) :
-    ∃ helperGas forwarded callGas d residual,
-      SFunc.RunP P cert.prog sevm
-        (St b (amount1 :: toWord :: token1 :: 0x16a3 ::
-          burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R) M helperGas)
-        t_1fdb_c57 (.returned (St d
-          (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R)
-          (if d.returnData = [] then d.memory else
-            Blanc.Lift.bytesArrayMemory d.memory (p + 164) d.returnData) residual)) ∧
-      P sevm (St b (forwarded :: (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        0 :: (p + 164) :: 68 :: (p + 164) :: 0 :: (68 + (p + 164)) ::
-        (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount1 :: toWord :: token1 :: 0x16a3 ::
-        burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R)
-        (safeTransfer_dynamicCallMemory M p amount1 toWord) callGas) (.exec .call) d ∧
-      d.stack = 1 :: (68 + (p + 164)) ::
-        (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount1 :: toWord :: token1 :: 0x16a3 ::
-        burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R ∧
-      ((safeTransfer_dynamicCallMemory M p amount1 toWord).read (p + 164).toNat 68).1 =
-        abiSelectorBytes 0xa9059cbb ++
-          ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes ++ amount1.toBytes ∧
-      d.memory = safeTransfer_dynamicCallMemory M p amount1 toWord ∧ d.output = b.output ∧
-      d.returnData.length < 2 ^ 256 ∧
-      (d.returnData = [] ∨ (32 ≤ d.returnData.length ∧
-        Bytes.toB256 (d.returnData.sliceD 0 32 0) ≠ 0)) ∧
-      SFunc.RunCutP P cert.prog sevm C
-        (St d (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R)
-          (if d.returnData = [] then d.memory else
-            Blanc.Lift.bytesArrayMemory d.memory (p + 164) d.returnData) residual)
-        t_16a3_c13 r := by
-  obtain ⟨helperGas, out, callee, continuation⟩ := burnSecondTransfer_call_inv project run
-  obtain ⟨forwarded, callGas, d, residual, step, stack, memory, output, replyWidth, accepted, returned⟩ :=
-    safeTransfer_dynamicReturned_inv project fork mem lower width callee
-  have calldata := safeTransfer_dynamicCall_data
-    (amount := amount1) (toWord := toWord) mem.wf lower
-    (by omega : p.toNat + 164 < 2 ^ 256)
-  rw [returned] at callee continuation
-  exact ⟨helperGas, forwarded, callGas, d, residual, callee, step, stack, calldata,
-    memory, output, replyWidth, accepted, continuation⟩
-
-/-- Both literal Burn transfers come from one retained source continuation.
-Their actual 68-byte CALL operands bound the full replies independently; the
-first allocation supplies the second pointer without a caller-potential premise. -/
-theorem burnTransfers_caller_inv {P : Sevm → Devm → Ninst → Devm → Prop}
-    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
-    {supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ : B256}
-    (project : ∀ {e d n d'}, P e d n d' → Ninst.Run e d n d')
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (sentinel : memWord M 96 = 0)
-    (run : SFunc.RunCutP P cert.prog sevm C
-      (St b (burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R) M G)
-      t_168d_c13 r) :
-    ∃ (forwarded0 : B256) (callGas0 : Nat) (d0 : Devm) (residual0 : Nat)
-        (forwarded1 : B256) (callGas1 : Nat) (d1 : Devm) (residual1 : Nat),
-      let locals := burnPricedLocals supply f L b1 b0 token1 token0 r1 r0 amount1 amount0 toWord extρ R
-      let mid := if d0.returnData = [] then d0.memory else
-        safeTransfer_reply292Memory d0.memory d0.returnData
-      let p := burnFirstTransferPointer d0.returnData
-      let N := safeTransfer_dynamicCallMemory mid p amount1 toWord
-      P sevm (St b (forwarded0 :: (token0 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        0 :: 292 :: 68 :: 292 :: 0 :: 360 ::
-        (token0 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount0 :: toWord :: token0 :: 0x1698 :: locals)
-        (safeTransfer_call128Memory M amount0 toWord) callGas0) (.exec .call) d0 ∧
-      P sevm (St d0 (forwarded1 :: (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        0 :: (p + 164) :: 68 :: (p + 164) :: 0 :: (68 + (p + 164)) ::
-        (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount1 :: toWord :: token1 :: 0x16a3 :: locals)
-        N callGas1) (.exec .call) d1 ∧
-      d0.stack = 1 :: 360 :: (token0 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount0 :: toWord :: token0 :: 0x1698 :: locals ∧
-      d1.stack = 1 :: (68 + (p + 164)) ::
-        (token1 &&& 0xffffffffffffffffffffffffffffffffffffffff) ::
-        96 :: 0 :: amount1 :: toWord :: token1 :: 0x16a3 :: locals ∧
-      ((safeTransfer_call128Memory M amount0 toWord).read 292 68).1 =
-        abiSelectorBytes 0xa9059cbb ++
-          ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes ++ amount0.toBytes ∧
-      (N.read (p + 164).toNat 68).1 =
-        abiSelectorBytes 0xa9059cbb ++
-          ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& toWord).toBytes ++ amount1.toBytes ∧
-      d0.memory = safeTransfer_call128Memory M amount0 toWord ∧ d1.memory = N ∧
-      d0.output = b.output ∧ d1.output = b.output ∧
-      d0.returnData.length < 2 ^ 160 ∧ d1.returnData.length < 2 ^ 160 ∧
-      (d0.returnData = [] ∨ (32 ≤ d0.returnData.length ∧
-        Bytes.toB256 (d0.returnData.sliceD 0 32 0) ≠ 0)) ∧
-      (d1.returnData = [] ∨ (32 ≤ d1.returnData.length ∧
-        Bytes.toB256 (d1.returnData.sliceD 0 32 0) ≠ 0)) ∧
-      PtrMem p (if d0.returnData = [] then 416 else memExtSize 416 324 d0.returnData.length) mid ∧
-      memWord mid 96 = 0 ∧
-      (burnSecondTransferPointer d0.returnData d1.returnData).toNat + 64 < 2 ^ 256 ∧
-      PtrMem (burnSecondTransferPointer d0.returnData d1.returnData)
-        (if d1.returnData = [] then N.size else
-          memExtSize N.size (p + 164 + 32).toNat d1.returnData.length)
-        (if d1.returnData = [] then d1.memory else
-          Blanc.Lift.bytesArrayMemory d1.memory (p + 164) d1.returnData) ∧
-      SFunc.RunCutP P cert.prog sevm C (St d0 locals mid residual0) t_1698_c13 r ∧
-      SFunc.RunCutP P cert.prog sevm C
-        (St d1 locals (if d1.returnData = [] then d1.memory else
-          Blanc.Lift.bytesArrayMemory d1.memory (p + 164) d1.returnData) residual1)
-        t_16a3_c13 r := by
-  obtain ⟨helperGas0, forwarded0, callGas0, d0, residual0, callee0, call0, flag0,
-      calldata0, memory0, output0, _, accepted0, continuation0⟩ :=
-    burnFirstTransfer_caller_inv project fork mem run
-  have width0 : d0.returnData.length < 2 ^ 160 :=
-    Jaune.call_returnData_length_lt_two_pow_160_of_input_size (project call0) rfl
-      fork.rules_stateGas_none (by decide : (68 : B256).toNat < 2 ^ 160)
-  obtain ⟨_, _, _, _, _, callMem0⟩ := safeTransfer_firstCall_inv project mem
-    (by decide : 71 ∉ []) ((SFunc.runP_iff_runCutP_nil (P := P)).mp callee0)
-  have postMem0 : PtrMem 292 416 d0.memory := by
-    rw [memory0]
-    exact callMem0
-  have postSentinel0 : memWord d0.memory 96 = 0 := by
-    rw [memory0]
-    exact safeTransfer_call128_sentinel mem sentinel
-  have midLayout := burnFirstTransfer_memoryLayout postMem0 postSentinel0 width0
-  let p := burnFirstTransferPointer d0.returnData
-  let mid := if d0.returnData = [] then d0.memory else
-    safeTransfer_reply292Memory d0.memory d0.returnData
-  let N := safeTransfer_dynamicCallMemory mid p amount1 toWord
-  have lower : 128 ≤ p.toNat := by
-    have bound : 292 ≤ p.toNat := midLayout.2.2.1
-    omega
-  have room : p.toNat + 260 < 2 ^ 256 := midLayout.2.2.2.2
-  obtain ⟨helperGas1, forwarded1, callGas1, d1, residual1, callee1, call1, flag1,
-      calldata1, memory1, output1, _, accepted1, continuation1⟩ :=
-    burnSecondTransfer_caller_inv project fork midLayout.1 lower room continuation0
-  have width1 : d1.returnData.length < 2 ^ 160 :=
-    Jaune.call_returnData_length_lt_two_pow_160_of_input_size (project call1) rfl
-      fork.rules_stateGas_none (by decide : (68 : B256).toNat < 2 ^ 160)
-  obtain ⟨_, _, _, _, _, callMem1, callFit1⟩ :=
-    safeTransfer_dynamicCall_inv project midLayout.1 lower room (by decide : 71 ∉ [])
-      ((SFunc.runP_iff_runCutP_nil (P := P)).mp callee1)
-  have callFit : p.toNat + 260 ≤ N.size := callFit1
-  have nat164 : (p + 164).toNat = p.toNat + 164 := by
-    rw [B256.toNat_add, show (164 : B256).toNat = 164 from rfl,
-      Nat.lo_eq_of_lt (by omega)]
-  have postMem1 : PtrMem (p + 164)
-      N.size d1.memory := by
-    rw [memory1]
-    exact callMem1
-  have finalMem : PtrMem (burnSecondTransferPointer d0.returnData d1.returnData)
-      (if d1.returnData = [] then N.size else
-        memExtSize N.size
-          (p + 164 + 32).toNat d1.returnData.length)
-      (if d1.returnData = [] then d1.memory else
-        Blanc.Lift.bytesArrayMemory d1.memory (p + 164) d1.returnData) := by
-    by_cases empty : d1.returnData = []
-    · simpa only [burnSecondTransferPointer, empty, ite_true] using postMem1
-    · have image := Blanc.Lift.bytesArrayMemory_image (bytes := d1.returnData) postMem1
-        (by rw [nat164]; omega) (by rw [nat164]; omega) (by rw [nat164]; omega)
-      simpa only [burnSecondTransferPointer, ite_eq_right empty] using image.1
-  exact ⟨forwarded0, callGas0, d0, residual0, forwarded1, callGas1, d1, residual1,
-    call0, call1, flag0, flag1, calldata0, calldata1, memory0, memory1, output0, output1.trans output0,
-    width0, width1, accepted0, accepted1, midLayout.1, midLayout.2.1,
-    (burnSecondTransferPointer_layout width0 width1).2.2.2, finalMem,
-    continuation0, continuation1⟩
 
 /-- Ordered staging size of the dynamic `_safeTransfer` pre-CALL segment: the
 exact read/write access order of `safeTransfer_initialize_exact` (14 accesses),
@@ -3800,7 +3381,6 @@ private theorem safeTransfer_copy_dynamic_exact {sevm : Sevm} {b : Devm}
   dsimp only at raw
   rw [r96, adv96, adv128, adv164, adv196, r128] at raw
   exact raw continuation
-
 
 /-! ## The moving `_safeTransfer`: merge, CALL operands, reply and return -/
 

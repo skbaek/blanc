@@ -5,47 +5,6 @@ import Blanc.Lift.UniswapV2Pair.Consumption
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-/-- `S` exactly consumes the front transcript `T rest` whenever the later segment `S'` exactly
-consumes `rest`, adding the child returns `R` in front. -/
-def SwapFrontReaches (S : SegmentResult) (T : Transcript → Transcript) (R : List ChildReturn)
-    (S' : SegmentResult) : Prop :=
-  ∀ rest out, ExactConsumes S' rest out →
-    ExactConsumes S (T rest) { out with childReturns := R ++ out.childReturns }
-
-theorem SwapFrontReaches.refl (S : SegmentResult) : SwapFrontReaches S id [] S := by
-  intro rest out consumed
-  cases out
-  exact consumed
-
-theorem SwapFrontReaches.trans {S S' S'' : SegmentResult} {T T' : Transcript → Transcript}
-    {R R' : List ChildReturn} (first : SwapFrontReaches S T R S')
-    (second : SwapFrontReaches S' T' R' S'') :
-    SwapFrontReaches S (T ∘ T') (R ++ R') S'' := by
-  intro rest out consumed
-  have h := first _ _ (second rest out consumed)
-  rw [List.append_assoc]
-  exact h
-
-/-- One consumed successful external call: its turns run the frame to checkpoint `c`, and the
-resumed segment then reaches `S'`. -/
-theorem SwapFrontReaches.call {frame : Frame} {request : Request} {continuation : Continuation}
-    {result : ExternalResult} {turns : Transcript} {c : Checkpoint} {rets : List ChildReturn}
-    {T : Transcript → Transcript} {R : List ChildReturn} {S' : SegmentResult}
-    (during : ExactTurns frame request 0 turns
-      { complete := true, frame := { frame with current := c }, childReturns := rets })
-    (success : result.success = true)
-    (present : (request.requiresCode && !result.codeExists) = false)
-    (noCodeTurns : result.codeExists = false → turns = .done)
-    (rest : SwapFrontReaches (resumeSegment { frame with current := c } request continuation result)
-      T R S') :
-    SwapFrontReaches (.suspended frame request continuation) (fun tail => .next result turns (T tail))
-      (rets ++ R) S' := by
-  intro tail out consumed
-  have h := ExactConsumes.nextCall present noCodeTurns during
-    (by simp only [success, ↓reduceIte]; exact rest tail out consumed)
-  rw [List.append_assoc]
-  exact h
-
 /-- The swap frame after the lock, before any suspension. -/
 def swapLockedFrame (current : Checkpoint) (ctx : Context) (entry : Entry) : Frame :=
   { Frame.enter current ctx entry with current :=
@@ -115,22 +74,6 @@ theorem swap_transfer_decoded {site : CallSite} {token recipient : Adr} {amount 
     rw [take long] at head
     simp only [decodeExternal, requestFor, swapTransferReply, Bool.false_and, Bool.false_eq_true,
       ite_false, ite_true, nonempty, long, head, ne_eq, not_false_eq_true]
-
-theorem swap_resume_transfer0 {frame : Frame} {locals : SwapLocals} {out : Bytes}
-    (accepted : out = [] ∨ (32 ≤ out.length ∧ Bytes.toB256 (out.sliceD 0 32 0) ≠ 0)) :
-    let request := requestFor .swapTransfer0 locals.token0 (.transfer locals.recipient locals.amount0Out)
-    resumeSegment frame request (.swapTransfer0 locals) (swapTransferReply out) =
-      (frame.beginResume request).afterSwapTransfer0 locals := by
-  intro request
-  simp only [resumeSegment, request, swap_transfer_decoded accepted]
-
-theorem swap_resume_transfer1 {frame : Frame} {locals : SwapLocals} {out : Bytes}
-    (accepted : out = [] ∨ (32 ≤ out.length ∧ Bytes.toB256 (out.sliceD 0 32 0) ≠ 0)) :
-    let request := requestFor .swapTransfer1 locals.token1 (.transfer locals.recipient locals.amount1Out)
-    resumeSegment frame request (.swapTransfer1 locals) (swapTransferReply out) =
-      (frame.beginResume request).afterSwapTransfer1 locals := by
-  intro request
-  simp only [resumeSegment, request, swap_transfer_decoded accepted]
 
 theorem swap_resume_callback {frame : Frame} {locals : SwapLocals} {out : Bytes} :
     let request := requestFor .swapCallback locals.recipient

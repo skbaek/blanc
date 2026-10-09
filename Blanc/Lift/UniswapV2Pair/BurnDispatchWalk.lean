@@ -107,24 +107,6 @@ theorem burnAbi_caller_inv {P : Sevm → Devm → Ninst → Devm → Prop}
         (0xffffffffffffffffffffffffffffffffffffffff : B256) from rfl] at callee
     exact ⟨_, _, callee, rfl⟩
 
-/-- Actual pc-zero guards and selector route retain the Burn callee from the
-same D, with the public wrapper attached to every normal return. -/
-theorem burnPc0_caller_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
-    (selector : Blanc.Sevm.selector sevm = 0x89afcb44)
-    (run : SFunc.RunP (StepIn D) cert.prog sevm (St b [] Mem.empty G) t_0000_c0 o) :
-    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
-    ∃ gas calleeOutcome,
-      SFunc.RunP (StepIn D) cert.prog sevm
-        (St b [(0xffffffffffffffffffffffffffffffffffffffff : B256) &&& Sevm.dataWord sevm 4,
-          0x053d, 0x89afcb44] getterInitMemory gas) t_13f5_c37 calleeOutcome ∧
-      (match calleeOutcome with
-       | .returned post => SFunc.RunCutP (StepIn D) cert.prog sevm [] post t_053d_c83 (.done o)
-       | .halted post => o = .halted post) := by
-  obtain ⟨value, size, _, routed⟩ := syncGuards_inv run
-  obtain ⟨_, dispatched⟩ := burnSelector_dispatch_inv selector (SFunc.runP_iff_runCutP_nil.mp routed)
-  obtain ⟨gas, outcome, callee, continuation⟩ := burnAbi_caller_inv (fun h => StepIn.toRun h) dispatched
-  exact ⟨value, size, gas, outcome, callee, continuation⟩
-
 /-- The real pc-zero memory initialization leaves Burn's helper sentinel zero. -/
 theorem burnEntryMemory_sentinel : memWord getterInitMemory 96 = 0 := by
   simp only [getterInitMemory, memWord]

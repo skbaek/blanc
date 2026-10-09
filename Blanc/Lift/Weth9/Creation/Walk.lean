@@ -500,16 +500,4 @@ theorem ctor_run_framed {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code =
   exact segName fr hold0 (by omega) (segSymbol fr hold1 (by omega)
     (segDecimals fr hcode hvalue hold2 hG))
 
-/-- The storage-only constructor interface, retained for existing consumers. -/
-theorem ctor_run {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code)
-    (hvalue : sevm.value = 0) {b : Devm}
-    (hstor : ∀ x, (Devm.getStor b sevm.currentTarget).get x = 0) {G : Nat} (hG : 2300 ≤ G) :
-    ∃ post, SProg.RunExact prog sevm (St b [] Mem.empty (G + ctorCost sevm b)) post ∧
-      post.output = runtimeWindow ∧ post.error = b.error ∧
-      Devm.getStor post sevm.currentTarget = ctorStor (Devm.getStor b sevm.currentTarget) ∧
-      post.gasLeft = G := by
-  obtain ⟨post, hrun, hout, herr, hstor, hgas, -⟩ :=
-    ctor_run_framed fr hcode hvalue hstor hG
-  exact ⟨post, hrun, hout, herr, hstor, hgas⟩
-
 end Blanc.Lift.Weth9.Creation

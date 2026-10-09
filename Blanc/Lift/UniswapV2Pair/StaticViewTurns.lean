@@ -49,7 +49,6 @@ theorem staticView_turn_inv {K : WriterKey → Prop} {frame : Frame}
     (turn := turn) consumed rest
   exact invoked
 
-
 /-- A committing target-root view supplies the entire selected queue at its
 original entering path. The source tail is constructed from the actual
 singleton projection, and the physical context fields match this raw frame. -/
@@ -103,7 +102,6 @@ theorem staticView_target_turns_inv {K : WriterKey → Prop} {frame : Frame}
   · simp only [childContext, pair, time, static, Bool.or_true]
   · exact consume .done { complete := true, frame := frame, childReturns := [] }
       (ExactTurns.done frame request (turn + 1))
-
 
 /-- One actual retained frame paired with its derived static getter. -/
 abbrev StaticViewTurn := Exec.LocatedFrame × StaticView
@@ -195,7 +193,6 @@ theorem staticView_target_fold_inv {K : WriterKey → Prop} {frame : Frame}
         List.cons_append, List.nil_append, located, Exec.Frame.ofRun] using
         consume tail result rest
 
-
 theorem staticViewTranscript_append (left right : List StaticViewTurn) (tail : Transcript) :
     staticViewTranscript (left ++ right) tail =
       staticViewTranscript left (staticViewTranscript right tail) := by
@@ -245,7 +242,6 @@ theorem staticView_parent_rep {K : WriterKey → Prop} {frame : Frame}
     exact installed.1
   · rw [congrFun storageEq frame.context.pair]
     exact rep
-
 
 /-- The supplied interpreted spawn opens on the same finite Pair representation
 and authentic installed image. All entry and environment facts are raw equations. -/
@@ -302,8 +298,6 @@ theorem staticView_child_environment {K : WriterKey → Prop} {frame : Frame}
     exact ⟨rfl, rfl⟩
   · rw [statEq]
     exact time
-
-
 
 /-- The actual selected root supplies the same list-shaped continuation used
 by the foreign structural cases; its finite footprint is the actual decoder. -/
@@ -465,8 +459,6 @@ theorem staticView_retained_fold_inv {K : WriterKey → Prop} {frame : Frame}
           (fun same => (target same).elim) representable time static fork
         exact ⟨views, mapped.trans suffix.symm, authentic, consume⟩
 
-
-
 /-- The supplied raw run determines its entire selected static queue and an
 internally finished source consumption. A noncommitting root retains no subtree. -/
 theorem staticView_raw_retained_turns_inv {K : WriterKey → Prop} {frame : Frame}
@@ -525,130 +517,6 @@ structure PairStaticCallTrace (D : Exec.Deriv) (sevm : Sevm) (frame : Frame)
   during : ExactTurns frame request 0 (staticViewTranscript views .done)
     { complete := true, frame := frame,
       childReturns := staticViewChildReturns frame request 0 views }
-
-/-- Retain the same child slot that generated the static queue. -/
-theorem pair_static_call_turns_trace {U K : WriterKey → Prop} (inj : WriterInj U)
-    (apart : WriterApart U) (sub : ∀ k, K k → U k)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    {D : Exec.Deriv} {frame : Frame} {request : Request} {sevm : Sevm} {pre d : Devm}
-    (call : Blanc.Lift.StepIn D sevm pre (.exec .staticcall) d)
-    {g t ii is oi os : B256} {S : List B256}
-    (operands : (g :: t :: ii :: is :: oi :: os :: S) <<+ pre.stack)
-    (installed : some (pre.getCode frame.context.pair).toList = sem.image)
-    (rep : WriterRep K (pre.getStor frame.context.pair) frame.current.state)
-    (time : frame.context.timestamp = sevm.benvStat.time)
-    (fork : CoveredFork sevm.benvStat.fork)
-    (flag : ∃ f rest, d.stack = f :: rest ∧ f ≠ 0)
-    (good : ∀ F ∈ Exec.rawFrameRoots D.exc, F.sevm.currentTarget = frame.context.pair →
-      ∀ k ∈ staticViewDecodedKeys F.sevm, U k) :
-    ∃ views : List StaticViewTurn,
-      Nonempty (PairStaticCallTrace D sevm frame request pre d t views) := by
-  obtain ⟨xl, inRoots, pc, stepRun⟩ := call
-  have xrun : Xinst.Run sevm pre .staticcall xl (.ok d) := by
-    rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep] at stepRun
-    exact stepRun
-  cases xl with
-  | none =>
-    refine ⟨[], ⟨⟨.none, xrun,
-      Or.inl ⟨rfl, rfl, Xinst.staticcall_none_precompile fork operands xrun flag⟩,
-      ?_, ExactTurns.done frame request 0⟩⟩⟩
-    intro picked member
-    simp only [List.not_mem_nil] at member
-  | some slot =>
-    obtain ⟨child, raw⟩ := slot
-    obtain ⟨childRun, childRoots⟩ := inRoots
-    have rawCommitted := Xinst.call_run_flag_commits fork (Or.inr rfl) xrun flag
-    have sameCall := xrun
-    unfold Xinst.Run XStep.Run at xrun
-    cases spawned : Xinst.step sevm pre .staticcall with
-    | done result =>
-      rw [spawned] at xrun
-      cases xrun.1
-    | spawn callee resume =>
-      rw [spawned] at xrun
-      obtain ⟨_, runFrame, _⟩ := xrun
-      unfold RunFrame at runFrame
-      cases entered : callee.enter with
-      | done result =>
-        rw [entered] at runFrame
-        cases runFrame.1
-      | run evm =>
-        rw [entered] at runFrame
-        obtain ⟨raw', slotEq, _⟩ := runFrame
-        cases slotEq
-        have nonempty : pre.getCode frame.context.pair ≠ .empty := by
-          intro empty
-          have imageEmpty : sem.image = some [] := by
-            rw [← installed, empty, ByteArray.toList_empty]
-          exact sem.ne_nil imageEmpty rfl
-        obtain ⟨world, _, entry, stat, childFork, short⟩ :=
-          Xinst.spawn_child_world fork spawned entered
-        have childInstalled := CodeSem.At.callChild spawned entered (Or.inr rfl) installed
-        have childRep : WriterRep K (child.dyna.getStor frame.context.pair)
-            frame.current.state := by
-          rw [world frame.context.pair nonempty]
-          exact rep
-        have childStatic : child.sta.isStatic = true :=
-          (Blanc.Frame.enter_run_isStatic entered).trans
-            (Xinst.step_staticcall_spawn_isStatic spawned)
-        have fresh : ∀ located ∈ (Exec.retainedTargetTurnsAt frame.context.pair [] childRun).filterMap
-            Sum.getRight?, WriterFreshKeys K (staticViewDecodedKeys located.frame.sevm) := by
-          intro located member
-          by_cases committed : Execution.commits raw = true
-          · rw [Exec.retainedTargetTurnsAt_filterMap_eq _ _ _ committed] at member
-            obtain ⟨root, target⟩ :=
-              Exec.retainedTargetFramesFromAt_rawFrameRoot _ childRun committed member
-            have same : (Exec.Frame.rootDeriv located.frame).sevm = located.frame.sevm := rfl
-            have keys := good (Exec.Frame.rootDeriv located.frame) (childRoots _ root)
-              (same.symm ▸ target)
-            rw [same] at keys
-            exact Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub keys
-          · have empty : Exec.retainedTargetTurnsAt frame.context.pair [] childRun = [] := by
-              rw [Exec.retainedTargetTurnsAt, dite_eq_right committed]
-            rw [empty, List.filterMap_nil] at member
-            exact (List.not_mem_nil member).elim
-        obtain ⟨views, mapped, authentic, consumed⟩ :=
-          staticView_raw_retained_turns_inv (request := request) (turn := 0) (path := [])
-            sem image childRun childInstalled childRep fresh (fun _ => ⟨entry.1, entry.2.1⟩)
-            short (by rw [stat]; exact time) childStatic childFork
-        exact ⟨views, ⟨⟨.some ⟨child, raw⟩, sameCall,
-          Or.inr ⟨child, raw, childRun, rfl, rawCommitted, childRoots, mapped⟩,
-          authentic, consumed⟩⟩⟩
-
-/-- Compatibility projection of the same-call static queue producer. -/
-theorem pair_static_call_turns {U K : WriterKey → Prop} (inj : WriterInj U)
-    (apart : WriterApart U) (sub : ∀ k, K k → U k)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    {D : Exec.Deriv} {frame : Frame} {request : Request} {sevm : Sevm} {pre d : Devm}
-    (call : Blanc.Lift.StepIn D sevm pre (.exec .staticcall) d)
-    {g t ii is oi os : B256} {S : List B256}
-    (operands : (g :: t :: ii :: is :: oi :: os :: S) <<+ pre.stack)
-    (installed : some (pre.getCode frame.context.pair).toList = sem.image)
-    (rep : WriterRep K (pre.getStor frame.context.pair) frame.current.state)
-    (time : frame.context.timestamp = sevm.benvStat.time)
-    (fork : CoveredFork sevm.benvStat.fork)
-    (flag : ∃ f rest, d.stack = f :: rest ∧ f ≠ 0)
-    (good : ∀ F ∈ Exec.rawFrameRoots D.exc, F.sevm.currentTarget = frame.context.pair →
-      ∀ k ∈ staticViewDecodedKeys F.sevm, U k) :
-    ∃ views : List StaticViewTurn,
-      ExactTurns frame request 0 (staticViewTranscript views .done)
-        { complete := true, frame := frame,
-          childReturns := staticViewChildReturns frame request 0 views } ∧
-      (∀ picked ∈ views, picked.Authentic frame) ∧
-      (views = [] ∧ sevm.benvStat.rules.isPrecomp t.toAdr ∨ ∃ (child : Evm) (raw : Execution)
-        (childRun : Exec child.pc child.sta child.dyna raw),
-        Execution.commits raw = true ∧
-        (∀ r ∈ Exec.rawFrameRoots childRun, r ∈ Exec.rawFrameRoots D.exc) ∧
-        views.map Prod.fst =
-          (Exec.retainedTargetTurnsAt frame.context.pair [] childRun).filterMap
-            Sum.getRight?) := by
-  obtain ⟨views, ⟨trace⟩⟩ :=
-    pair_static_call_turns_trace inj apart sub sem image call operands installed rep time fork flag good
-  refine ⟨views, trace.during, trace.authentic, ?_⟩
-  rcases trace.origin with ⟨_, empty, native⟩ |
-    ⟨child, raw, childRun, _, committed, roots, mapped⟩
-  · exact Or.inl ⟨empty, native⟩
-  · exact Or.inr ⟨child, raw, childRun, committed, roots, mapped⟩
 
 /-- The static-view turn queue of one actual STATICCALL at `target`: empty at an enabled precompile,
 or exactly the retained static turns of `pair` of the actually committed child, whose raw frame roots

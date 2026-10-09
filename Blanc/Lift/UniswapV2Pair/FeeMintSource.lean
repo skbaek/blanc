@@ -393,43 +393,6 @@ structure FeeMintSourceObservation (K : WriterKey → Prop) (st : State) (D : Ex
   sourceResult : FeeMintSourceResult K st sevm (feeKLastWorld sevm d) R (feeReplyMemory M out)
     (Bytes.toB256 (out.take 32)) r0 r1 residual
 
-/-- Only actual same-D factory steps request touched recipient freshness; hypothetical replies do not. -/
-def FeeMintSourceFresh (K : WriterKey → Prop) (st : State) (D : Exec.Deriv) (sevm : Sevm) (b : Devm)
-    (R : List B256) (M : Mem) (r1 r0 ρ : B256) : Prop :=
-  ∀ gw callGas d out, StepIn D sevm
-    (St (feeFactoryCallWorld sevm b)
-      (gw :: feeFactoryWord sevm b :: 128 :: 4 :: 128 :: 32 ::
-        132 :: 0x017e7e58 :: feeFactoryWord sevm b :: 0 :: 0 :: r1 :: r0 :: ρ :: R)
-      (feeRequestMemory M) callGas) (.exec .staticcall) d →
-    StaticCallPost (feeFactoryCallWorld sevm b) d
-    (132 :: 0x017e7e58 :: feeFactoryWord sevm b :: 0 :: 0 :: r1 :: r0 :: ρ :: R)
-    (feeRequestMemory M) 128 4 128 32 1 out →
-      FeeMintFresh K st sevm (feeKLastWorld sevm d) (Bytes.toB256 (out.take 32)) r0 r1
-
-/-- Real fee68 success derives source acceptance and the complete finite post through the same D. -/
-theorem fee68_source_inv {K : WriterKey → Prop} {st : State} {D : Exec.Deriv} {sevm : Sevm}
-    {b : Devm} {R : List B256} {M : Mem} {G : Nat} {r1 r0 ρ : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
-    (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112)
-    (fresh : FeeMintSourceFresh K st D sevm b R M r1 r0 ρ)
-    (run : SFunc.RunP (StepIn D) cert.prog sevm
-      (St b (r1 :: r0 :: ρ :: R) M G) t_26ec_c68 o) :
-    Nonempty (FeeMintSourceObservation K st D sevm b R M r1 r0 ρ o) := by
-  obtain ⟨code, gw, callGas, d, out, decodeGas, branchGas, gas,
-    step, post, width, bound, answer, decoder, branch, guards, result⟩ :=
-    fee68_inv fork mem bound0 bound1 run
-  have postRep := rep.fee_factory_post post
-  have last : feeKLastWord sevm d = st.kLast := by
-    rcases postRep.fixed with ⟨_,_,_,_,_,_,_,_,_,_,last,_⟩
-    change (d.getStor sevm.currentTarget).get 11 = st.kLast
-    simpa only [feeKLastWorld, afterSload_getStor] using last
-  have sourceGuards : feeBranchAccepts sevm (feeKLastWorld sevm d) st.kLast
-      (Bytes.toB256 (out.take 32)) r0 r1 := by rw [← last]; exact guards
-  exact ⟨⟨code, gw, callGas, d, out, decodeGas, branchGas, gas,
-    step, post, width, bound, answer, decoder, branch, guards, last, result,
-    feeBranch_source_result postRep bound0 bound1 sourceGuards (fresh gw callGas d out step post)⟩⟩
-
 def feeSourceNumerator (st : State) (r0 r1 : B256) : Nat :=
   st.totalSupply.toNat * (Nat.sqrt (r0.toNat * r1.toNat) - Nat.sqrt st.kLast.toNat)
 
@@ -733,127 +696,6 @@ theorem feeBurnMemory_hash (M : Mem) (pair : Adr) :
   rw [Mem.read_two_word_writes_at_raw M 0 pair.toB256 1]
   rfl
 
-/-- Burn15c3 physically samples the pair LP balance before invoking fee68.
-That cached word survives even when the fee recipient is the pair itself. -/
-theorem feeBurn_source_caller_inv {K : WriterKey → Prop} {st : State} {D : Exec.Deriv}
-    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
-    {len discarded b0 token1 token0 r1 r0 toWord extρ : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
-    (tracked : K (.balance sevm.currentTarget))
-    (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112)
-    (fresh : FeeMintSourceFresh K st D sevm (feeBurnWorld sevm b)
-      (burnFeeLocals (feeBurnLiquidity sevm b) (feeBurnBalance1 M) b0 token1 token0 r1 r0 toWord extρ R)
-      (feeBurnMemory M sevm.currentTarget) r1 r0 0x15e2)
-    (run : SFunc.RunCutP (StepIn D) cert.prog sevm C
-      (St b (len :: 128 :: discarded :: b0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R) M G)
-      t_15c3_c37 r) :
-    feeBurnLiquidity sevm b = st.balanceOf sevm.currentTarget ∧ ∃ feeGas feePost,
-      SFunc.RunP (StepIn D) cert.prog sevm
-        (St (feeBurnWorld sevm b)
-          (r1 :: r0 :: 0x15e2 :: burnFeeLocals (feeBurnLiquidity sevm b) (feeBurnBalance1 M)
-            b0 token1 token0 r1 r0 toWord extρ R) (feeBurnMemory M sevm.currentTarget) feeGas)
-        t_26ec_c68 (.returned feePost) ∧
-      Nonempty (FeeMintSourceObservation K st D sevm (feeBurnWorld sevm b)
-        (burnFeeLocals (feeBurnLiquidity sevm b) (feeBurnBalance1 M) b0 token1 token0 r1 r0 toWord extρ R)
-        (feeBurnMemory M sevm.currentTarget) r1 r0 0x15e2 (.returned feePost)) ∧
-      SFunc.RunCutP (StepIn D) cert.prog sevm C feePost t_15e2_c37 r := by
-  have cached : feeBurnLiquidity sevm b = st.balanceOf sevm.currentTarget :=
-    rep.selected (.balance sevm.currentTarget) tracked
-  refine ⟨cached, ?_⟩
-  have postRep : WriterRep K ((feeBurnWorld sevm b).getStor sevm.currentTarget) st := by
-    rw [feeBurnWorld, afterSload_getStor]
-    exact rep
-  have scratch := feeBurnMemory_ptr mem sevm.currentTarget
-  unfold t_15c3_c37 at run
-  obtain ⟨_, run⟩ := ric_destP run
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨d, hs, run⟩ := ric_nextP run
-  obtain ⟨_, eq⟩ := ri_mload (StepIn.toRun hs)
-  rw [show (128 : B256).toNat = 128 from rfl, mem.read_self (by decide : 128 + 32 ≤ 192)] at eq
-  subst d
-  obtain ⟨d, hs, run⟩ := ric_nextP run
-  have address := of_run_address (StepIn.toRun hs)
-  have stack : d.stack = sevm.currentTarget.toB256 :: feeBurnBalance1 M :: discarded ::
-      b0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R := by
-    have h := address.stack
-    change d.stack = sevm.currentTarget.toB256 :: feeBurnBalance1 M :: discarded ::
-      b0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R at h
-    exact h
-  have eq := St.of_stackRel address
-  rw [stack] at eq
-  rw [eq] at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  rw [show Bytes.toB256 [0] = (0 : B256) from rfl] at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  dsimp only [List.set] at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨d, hs, run⟩ := ric_nextP run
-  obtain ⟨_, eq⟩ := ri_mstore (StepIn.toRun hs)
-  rw [show (0 : B256).toNat = 0 from rfl] at eq
-  subst d
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  rw [show Bytes.toB256 [1] = (1 : B256) from rfl] at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  rw [show Bytes.toB256 [0x20] = (32 : B256) from rfl] at run
-  obtain ⟨d, hs, run⟩ := ric_nextP run
-  obtain ⟨_, eq⟩ := ri_mstore (StepIn.toRun hs)
-  rw [show (32 : B256).toNat = 32 from rfl] at eq
-  subst d
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  rw [show Bytes.toB256 [0x40] = (64 : B256) from rfl] at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨d, hs, run⟩ := ric_nextP run
-  obtain ⟨_, eq⟩ := ri_keccak (StepIn.toRun hs)
-  change d = St b
-    (((feeBurnMemory M sevm.currentTarget).read 0 64).1.keccak :: 0 :: feeBurnBalance1 M :: discarded ::
-      b0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R)
-    ((feeBurnMemory M sevm.currentTarget).read 0 64).2 _ at eq
-  rw [feeBurnMemory_hash, scratch.read_self (by decide : 0 + 64 ≤ 192)] at eq
-  subst d
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_sload fork (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  dsimp only [List.set] at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  dsimp only [List.set] at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  rw [show Bytes.toB256 [0x15, 0xe2] = (0x15e2 : B256) from by decide] at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_dup (w := r0) rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_dup (w := r1) rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  rw [show Bytes.toB256 [0x26, 0xec] = (0x26ec : B256) from by decide] at run
-  cases run with
-  | callRet d lookup pop callee continuation =>
-    change some t_26ec_c68 = _ at lookup
-    cases lookup
-    obtain ⟨_, eq⟩ := St.of_pop1 pop
-    rw [eq] at callee
-    exact ⟨_, _, callee, fee68_source_inv fork scratch postRep bound0 bound1 fresh callee, continuation⟩
-  | callHalt d lookup pop callee =>
-    change some t_26ec_c68 = _ at lookup
-    cases lookup
-    obtain ⟨_, eq⟩ := St.of_pop1 pop
-    rw [eq] at callee
-    obtain ⟨observed⟩ := fee68_source_inv fork scratch postRep bound0 bound1 fresh callee
-    cases observed.returned
-
 def feeMintEntryGas (sevm : Sevm) (b : Devm) (callGas : Nat) : Nat :=
   callGas + sloadCost sevm b 5 +
     temporalAccountAccessCost (feeFactoryLoadWorld sevm b) (feeFactoryWord sevm b).toAdr + 142
@@ -979,7 +821,6 @@ theorem feeBurn_source_caller_exact {K : WriterKey → Prop} {st : State} {sevm 
   apply rx_push (w := 0x26ec) rfl (by simp only [List.length_cons]; omega)
   exact rx_callRet (g := t_26ec_c68) rfl callee continuation
 
-
 /-- The typed factory result retains the complete observed reply.  Success and code
 existence are justified by the actual factory guard in the observation below. -/
 def feeObservedResult (out : Bytes) : ExternalResult :=
@@ -992,110 +833,9 @@ theorem feeObservedResult_decode (site : CallSite) (target : Adr) {out : Bytes}
   simp only [decodeExternal, requestFor, feeObservedResult, Bool.not_true,
     Bool.and_false, Bool.false_eq_true, ↓reduceIte, width]
 
-/-- The original typed mint handler consumes the source acceptance derived from
-the same actual factory observation; cached reserves are caller obligations. -/
-theorem FeeMintSourceObservation.resume_mint {K : WriterKey → Prop} {st : State} {D : Exec.Deriv}
-    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {r1 r0 ρ : B256} {o : Outcome}
-    (observation : FeeMintSourceObservation K st D sevm b R M r1 r0 ρ o)
-    (prior : Frame) (observed : MintObserved)
-    (state : prior.current.state = st)
-    (reserve0 : observed.reserves.reserve0.val = r0.toNat)
-    (reserve1 : observed.reserves.reserve1.val = r1.toNat) :
-    StaticAnswered sevm (feeFactoryCallWorld sevm b) (feeFactoryWord sevm b).toAdr
-      (requestFor .mintFeeTo (feeFactoryWord sevm b).toAdr .feeTo).calldata observation.out ∧
-    resumeSegment prior (requestFor .mintFeeTo (feeFactoryWord sevm b).toAdr .feeTo)
-      (.mintFee observed) (feeObservedResult observation.out) =
-      (prior.beginResume (requestFor .mintFeeTo (feeFactoryWord sevm b).toAdr .feeTo)).mintAfterFee
-        observed (feeBranchSourceFee st sevm (feeKLastWorld sevm observation.d)
-          (Bytes.toB256 (observation.out.take 32)) r0 r1) := by
-  refine ⟨observation.answer, ?_⟩
-  rw [resumeSegment, feeObservedResult_decode _ _ observation.width]
-  simp only [Frame.beginResume, state, reserve0, reserve1, observation.sourceResult.1]
-
-/-- Burn uses the same cached observation after fee minting, including when the
-fee recipient is the Pair.  The handler reads supply from the actual fee state. -/
-theorem FeeMintSourceObservation.resume_burn {K : WriterKey → Prop} {st : State} {D : Exec.Deriv}
-    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {r1 r0 ρ : B256} {o : Outcome}
-    (observation : FeeMintSourceObservation K st D sevm b R M r1 r0 ρ o)
-    (prior : Frame) (observed : BurnObserved)
-    (state : prior.current.state = st)
-    (reserve0 : observed.locals.reserves.reserve0.val = r0.toNat)
-    (reserve1 : observed.locals.reserves.reserve1.val = r1.toNat) :
-    StaticAnswered sevm (feeFactoryCallWorld sevm b) (feeFactoryWord sevm b).toAdr
-      (requestFor .burnFeeTo (feeFactoryWord sevm b).toAdr .feeTo).calldata observation.out ∧
-    resumeSegment prior (requestFor .burnFeeTo (feeFactoryWord sevm b).toAdr .feeTo)
-      (.burnFee observed) (feeObservedResult observation.out) =
-      (prior.beginResume (requestFor .burnFeeTo (feeFactoryWord sevm b).toAdr .feeTo)).burnAfterFee
-        observed (feeBranchSourceFee st sevm (feeKLastWorld sevm observation.d)
-          (Bytes.toB256 (observation.out.take 32)) r0 r1) := by
-  refine ⟨observation.answer, ?_⟩
-  rw [resumeSegment, feeObservedResult_decode _ _ observation.width]
-  simp only [Frame.beginResume, state, reserve0, reserve1, observation.sourceResult.1]
-
-
-theorem WriterRep.feeFactory_target {K : WriterKey → Prop} {st : State} {sevm : Sevm} {b : Devm}
-    (rep : WriterRep K (b.getStor sevm.currentTarget) st) :
-    (feeFactoryWord sevm b).toAdr = st.factory := by
-  simpa only [feeFactoryWord, Devm.getStorVal, Devm.getStor, toAdr_toB256] using rep.fixed.2.2.1
-
 def feeMintObserved (toWord amount1 amount0 b1 b0 r1 r0 : B256)
     (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112) : MintObserved :=
   { recipient := toWord.toAdr, reserves := ⟨⟨r0.toNat, bound0⟩, ⟨r1.toNat, bound1⟩⟩,
     balance0 := b0, balance1 := b1, amount0 := amount0, amount1 := amount1 }
-
-def feeBurnObserved (toWord token1 token0 L b1 b0 r1 r0 : B256)
-    (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112) : BurnObserved :=
-  { locals := ⟨toWord.toAdr, ⟨⟨r0.toNat, bound0⟩, ⟨r1.toNat, bound1⟩⟩,
-      token0.toAdr, token1.toAdr⟩,
-    balance0 := b0, balance1 := b1, liquidity := L }
-
-/-- Burn's typed observation is built from the actual MLOAD and selected LP
-SLOAD.  The later fee recipient can equal the Pair without changing this cache. -/
-theorem feeBurn_typed_caller_inv {K : WriterKey → Prop} {st : State} {D : Exec.Deriv}
-    {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem} {G : Nat} {C : List Nat} {r : Seg}
-    {len discarded b0 token1 token0 r1 r0 toWord extρ : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem 128 192 M)
-    (rep : WriterRep K (b.getStor sevm.currentTarget) st)
-    (tracked : K (.balance sevm.currentTarget))
-    (bound0 : r0.toNat < 2 ^ 112) (bound1 : r1.toNat < 2 ^ 112)
-    (fresh : FeeMintSourceFresh K st D sevm (feeBurnWorld sevm b)
-      (burnFeeLocals (feeBurnLiquidity sevm b) (feeBurnBalance1 M) b0 token1 token0 r1 r0 toWord extρ R)
-      (feeBurnMemory M sevm.currentTarget) r1 r0 0x15e2)
-    (prior : Frame) (state : prior.current.state = st)
-    (pair : prior.context.pair = sevm.currentTarget)
-    (run : SFunc.RunCutP (StepIn D) cert.prog sevm C
-      (St b (len :: 128 :: discarded :: b0 :: token1 :: token0 :: r1 :: r0 :: 0 :: 0 :: toWord :: extρ :: R) M G)
-      t_15c3_c37 r) :
-    feeBurnLiquidity sevm b = st.balanceOf prior.context.pair ∧
-    ∃ feeGas feePost, ∃ observation : FeeMintSourceObservation K st D sevm (feeBurnWorld sevm b)
-      (burnFeeLocals (feeBurnLiquidity sevm b) (feeBurnBalance1 M) b0 token1 token0 r1 r0 toWord extρ R)
-      (feeBurnMemory M sevm.currentTarget) r1 r0 0x15e2 (.returned feePost),
-      SFunc.RunP (StepIn D) cert.prog sevm
-        (St (feeBurnWorld sevm b)
-          (r1 :: r0 :: 0x15e2 :: burnFeeLocals (feeBurnLiquidity sevm b) (feeBurnBalance1 M)
-            b0 token1 token0 r1 r0 toWord extρ R) (feeBurnMemory M sevm.currentTarget) feeGas)
-        t_26ec_c68 (.returned feePost) ∧
-      SFunc.RunCutP (StepIn D) cert.prog sevm C feePost t_15e2_c37 r ∧
-      StaticAnswered sevm (feeFactoryCallWorld sevm (feeBurnWorld sevm b)) st.factory
-        (requestFor .burnFeeTo st.factory .feeTo).calldata observation.out ∧
-      resumeSegment prior (requestFor .burnFeeTo st.factory .feeTo)
-        (.burnFee (feeBurnObserved toWord token1 token0 (feeBurnLiquidity sevm b)
-          (feeBurnBalance1 M) b0 r1 r0 bound0 bound1)) (feeObservedResult observation.out) =
-        (prior.beginResume (requestFor .burnFeeTo st.factory .feeTo)).burnAfterFee
-          (feeBurnObserved toWord token1 token0 (feeBurnLiquidity sevm b)
-            (feeBurnBalance1 M) b0 r1 r0 bound0 bound1)
-          (feeBranchSourceFee st sevm (feeKLastWorld sevm observation.d)
-            (Bytes.toB256 (observation.out.take 32)) r0 r1) := by
-  obtain ⟨cached, feeGas, feePost, callee, ⟨observation⟩, continuation⟩ :=
-    feeBurn_source_caller_inv fork mem rep tracked bound0 bound1 fresh run
-  have postRep : WriterRep K ((feeBurnWorld sevm b).getStor sevm.currentTarget) st := by
-    rw [feeBurnWorld, afterSload_getStor]
-    exact rep
-  have typed := observation.resume_burn prior
-    (feeBurnObserved toWord token1 token0 (feeBurnLiquidity sevm b)
-      (feeBurnBalance1 M) b0 r1 r0 bound0 bound1) state rfl rfl
-  rw [postRep.feeFactory_target] at typed
-  rw [pair]
-  exact ⟨cached, feeGas, feePost, observation, callee, continuation, typed⟩
 
 end Blanc.Lift.UniswapV2Pair

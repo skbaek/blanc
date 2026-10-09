@@ -21,11 +21,11 @@ Pair frame, in trace order; a re-entered Pair frame is consumed inside its paren
 * `pairSpec U` — the storage-only frame contract "the storage is a finite representation over rows
   of `U`"; `pairEntry U` — its trace-local entry condition (fresh frame, empty output, short calldata,
   every entered Pair frame's rows in `U`);
-* `PairStep` — one committed Pair frame with the invocation consuming it; `PairStep.Authentic`;
-* `pairCarrier`, `pairObservation` — the replay carrier over the storage view, whose steps are frames
+* `PairStep` — one committed Pair frame with the invocation consuming it; `PairStep.AuthenticWith`;
+* `pairCarrierWith`, `pairObservationWith` — the replay carrier over the storage view, whose steps are frames
   and whose replay produces authenticated invocations from every incoming representation;
-* `pair_wholeFrameReplay`, `pairSpec_preservesAdmitted` — the ladder's two contract obligations, from
-  `pairSupply`;
+* `pair_wholeFrameReplayWith`, `pairSpec_preservesAdmittedWith` — the ladder's two contract obligations, from
+  the supplied per-frame consumption theorem;
 * `pair_history_committed` — the headline; `pair_history_initialized` — from the deployment
   checkpoint.
 -/
@@ -139,10 +139,6 @@ theorem pairSpec_soundAdmittedWith
       raw codeEq (code_eq_of_toList hpre.code) fork output representable trivial good sub wrep
   exact ⟨trivial, ⟨_, K', inside, rep⟩⟩
 
-theorem pairSpec_soundAdmitted (pair : Adr) {U : WriterKey → Prop} (inj : WriterInj U)
-    (apart : WriterApart U) : (pairSpec U).SoundAdmitted pair (pairEntry U) :=
-  pairSpec_soundAdmittedWith pair (pairSupply inj apart pairSem pairSem_image)
-
 theorem pairSpec_preservesAdmittedWith
     {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
     {Auth : Exec.Deriv → Entry → Transcript → Prop} (pair : Adr) {U : WriterKey → Prop}
@@ -150,11 +146,6 @@ theorem pairSpec_preservesAdmittedWith
     (pairSpec U).PreservesAdmitted pair (pairEntry U) :=
   (pairSpec U).preserves_inv_admitted pair (pairEntry U)
     (pairSpec_soundAdmittedWith pair supply)
-
-theorem pairSpec_preservesAdmitted (pair : Adr) {U : WriterKey → Prop} (inj : WriterInj U)
-    (apart : WriterApart U) : (pairSpec U).PreservesAdmitted pair (pairEntry U) :=
-  (pairSpec U).preserves_inv_admitted pair (pairEntry U)
-    (pairSpec_soundAdmitted pair inj apart)
 
 /-! ## Steps, carrier and observation -/
 
@@ -182,23 +173,6 @@ inductive PairObservedReplayWith
       (tail : PairObservedReplayWith Consumes out.frame.current.state rest finish) :
       PairObservedReplayWith Consumes st (s :: rest) finish
 
-/-- Legacy observed replay is the exact-consumption instance. -/
-abbrev PairObservedReplay := PairObservedReplayWith (fun _ => ExactConsumes)
-
-/-- Retain the qualified legacy introduction names. -/
-theorem PairObservedReplay.nil (st : State) : PairObservedReplay st [] st :=
-  PairObservedReplayWith.nil st
-
-theorem PairObservedReplay.cons {st finish : State} {s : PairStep} {rest : List PairStep}
-    {out : RunResult}
-    (consumed : ExactConsumes
-      (startTyped {state := st, logs := [], updates := []} s.source.context s.source.entry)
-      s.transcript out)
-    (successful : out.status = .success s.frame.post.output)
-    (tail : PairObservedReplay out.frame.current.state rest finish) :
-    PairObservedReplay st (s :: rest) finish :=
-  PairObservedReplayWith.cons consumed successful tail
-
 /-- Change only the per-frame proof; every selected frame/result/output is preserved. -/
 theorem PairObservedReplayWith.mono
     {Consumes Consumes' : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
@@ -225,12 +199,6 @@ theorem PairObservedReplayWith.sourceReplay
   | cons consumed successful tail ih =>
     exact .cons (weaken _ _ _ _ consumed) successful ih
 
-/-- Erasing the actual-frame observations preserves the original model replay. -/
-theorem PairObservedReplay.forget {st finish : State} {steps : List PairStep}
-    (replay : PairObservedReplay st steps finish) :
-    SourceReplay st (steps.map PairStep.source) finish :=
-  replay.sourceReplay (fun _ _ _ _ consumed => consumed)
-
 /-- Observed replay composes at the same carried model state. -/
 theorem PairObservedReplayWith.append
     {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
@@ -242,15 +210,9 @@ theorem PairObservedReplayWith.append
   | nil st => exact second
   | cons consumed successful tail ih => exact .cons consumed successful (ih second)
 
-theorem PairObservedReplay.append {st middle finish : State} {left right : List PairStep}
-    (first : PairObservedReplay st left middle)
-    (second : PairObservedReplay middle right finish) :
-    PairObservedReplay st (left ++ right) finish :=
-  PairObservedReplayWith.append first second
-
 /-- **An authenticated step.**  The step's frame is a pc-zero, *committed* (`Exec.Frame` carries its
 commit proof; it is restated here), non-static frame at the Pair, and its entry and transcript are the
-ones its actual run decodes and answered (`PairFrameAuth`).  A committed non-static Pair frame always
+ones its actual run decodes and answered (the supplied authentication relation).  A committed non-static Pair frame always
 observes itself (`pairSubtreeFrames`), so a step can never be a phantom: the observation equality of
 the headline places every step's frame among the trace's settled frames. -/
 def PairStep.AuthenticWith (Auth : Exec.Deriv → Entry → Transcript → Prop) (pair : Adr)
@@ -258,9 +220,6 @@ def PairStep.AuthenticWith (Auth : Exec.Deriv → Entry → Transcript → Prop)
   s.frame.pc = 0 ∧ Execution.commits s.frame.out = true ∧ s.frame.sevm.currentTarget = pair ∧
     s.frame.sevm.isStatic = false ∧
     Auth (Blanc.Exec.Frame.rootDeriv s.frame) s.entry s.transcript
-
-def PairStep.Authentic (pair : Adr)
-    (s : PairStep) : Prop := PairStep.AuthenticWith PairFrameAuth pair s
 
 /-- A frame's own observation: itself when it is a non-static Pair frame. -/
 def pairFrameObs (pair : Adr) (frame : Exec.Frame) : List Exec.Frame :=
@@ -287,10 +246,6 @@ def PairReplayWith
       ∃ (finish : State) (K' : WriterKey → Prop), PairObservedReplayWith Consumes st steps finish ∧
         (∀ k, K k → K' k) ∧ (∀ k, K' k → U k) ∧ PairViewRep K' b finish
 
-def PairReplay (pair : Adr)
-    (U : WriterKey → Prop) (a : B256 → B256) (frames : List Exec.Frame) (b : B256 → B256) : Prop :=
-  PairReplayWith (fun _ => ExactConsumes) PairFrameAuth pair U a frames b
-
 section Replay
 
 variable {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
@@ -314,13 +269,6 @@ theorem PairReplayWith.append {a b c : B256 → B256} {left right : List Exec.Fr
     · exact auth₁ s h
     · exact auth₂ s h
   · exact replay₁.append replay₂
-
-theorem PairReplay.nil (view : B256 → B256) : PairReplay pair U view [] view :=
-  PairReplayWith.nil view
-
-theorem PairReplay.append {a b c : B256 → B256} {left right : List Exec.Frame}
-    (first : PairReplay pair U a left b) (second : PairReplay pair U b right c) :
-    PairReplay pair U a (left ++ right) c := PairReplayWith.append first second
 
 end Replay
 
@@ -361,14 +309,6 @@ def pairObservationWith
     rw [storage]
     exact PairReplayWith.nil _
 
-def pairCarrier (pair : Adr)
-    (U : WriterKey → Prop) : ReplayCarrier pair :=
-  pairCarrierWith (fun _ => ExactConsumes) PairFrameAuth pair U
-
-def pairObservation (pair : Adr)
-    (U : WriterKey → Prop) : ReplayObservation (pairCarrier pair U) :=
-  pairObservationWith (fun _ => ExactConsumes) PairFrameAuth pair U
-
 /-- **The whole-frame obligation of the Pair**: a committed non-static Pair frame replays as one
 authenticated step whose observation is its committed subtree. -/
 theorem pair_wholeFrameReplayWith
@@ -404,12 +344,6 @@ theorem pair_wholeFrameReplayWith
     rw [List.flatMap_cons, List.flatMap_nil, List.append_nil]
     rfl
 
-theorem pair_wholeFrameReplay (pair : Adr) {U : WriterKey → Prop} (inj : WriterInj U)
-    (apart : WriterApart U) :
-    Exec.CoreAccounting.WholeFrameReplay pair pairSem (pairEntry U) (pairCarrier pair U)
-      (pairObservation pair U) :=
-  pair_wholeFrameReplayWith pair (pairSupply inj apart pairSem pairSem_image)
-
 theorem pairFrameObs_static {pair : Adr} {f : Exec.Frame} (h : f.sevm.isStatic = true) :
     pairFrameObs pair f = [] := by
   unfold pairFrameObs
@@ -431,10 +365,6 @@ def pairLadderWith
     (fun h => funext h) (fun _ h => pairFrameObs_static h)
     (fun _ h => pairFrameObs_foreign h) (pair_spawnKinds pair)
     (pair_wholeFrameReplayWith pair supply) (pairSpec_preservesAdmittedWith pair supply)
-
-def pairLadder (pair : Adr) {U : WriterKey → Prop} (inj : WriterInj U)
-    (apart : WriterApart U) : AccountingLadderAdmitted (pairSpec U) pair (pairEntry U) :=
-  pairLadderWith pair (pairSupply inj apart pairSem pairSem_image)
 
 /-! ## The configured history -/
 
@@ -477,7 +407,7 @@ runtime is still installed, and there is a list of steps such that
   frames of the trace, in trace order (rolled-back frames are absent, static frames observe nothing):
   each step is an outermost committed Pair frame, and every re-entered Pair frame lies in exactly one
   step's subtree, consumed inside that step's transcript;
-* every step is authenticated against its frame's actual run (`PairStep.Authentic`);
+* every step is authenticated against its frame's actual run (`PairStep.AuthenticWith`);
 * the step's source invocations replay from `st₀` (`SourceReplay`, hence the deterministic fold
   `runSourceInvocations`) to a model state that the future Pair storage represents, over tracked rows
   growing from `K₀` within `K₀ ∪ touched`. -/
@@ -615,23 +545,24 @@ theorem pair_history_ledger_with
     (weaken : ∀ root segment transcript out,
       Consumes root segment transcript out → ExactConsumes segment transcript out)
     {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
-    {factory token0 token1 : Adr} {domain : B256}
+    {K₀ : WriterKey → Prop} {st₀ : State}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
-    (initial : InitializedCheckpoint (checkpoint.state.getStor pair) factory domain token0 token1)
-    (fresh : WriterFreshKeys (fun _ => False) (pairHistoryTouchedKeys pair trace)) :
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
+    (ledger : st₀.Ledger) :
     ∃ steps : List PairStep,
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith Auth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplayWith Consumes (initializedState factory domain token0 token1) steps finish ∧
-        runSourceInvocations (initializedState factory domain token0 token1) (steps.map PairStep.source) = some finish ∧
+        PairObservedReplayWith Consumes st₀ steps finish ∧
+        runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
         finish.Ledger := by
   obtain ⟨_, steps, observed, auth, finish, K', matched, source, realized, _, _, rep⟩ :=
     pair_history_committed_with supplies weaken trace installed initial fresh
   exact ⟨steps, observed, auth, finish, K', matched, realized, rep,
-    source.ledger (State.initialized_ledgerOn factory domain token0 token1).ledger⟩
+    source.ledger ledger⟩
 
 theorem pair_history_oracle_with
     {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
@@ -739,6 +670,27 @@ theorem pair_history_feeOn_product_with
     pair_history_committed_with supplies weaken trace installed initial fresh
   exact ⟨steps, observed, auth, finish, K', matched, realized, rep, source.feeOn_product⟩
 
+/-- LP-ledger preservation from any represented checkpoint whose model state satisfies `State.Ledger`. -/
+theorem pair_history_ledger_from_checkpoint
+    {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
+    (ledger : st₀.Ledger) :
+    ∃ steps : List PairStep,
+      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
+      ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
+        runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
+        WriterRep K' (future.state.getStor pair) finish ∧
+        finish.Ledger :=
+  pair_history_ledger_with
+    (fun _ inj apart => pairAdmittedSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed.positional.forget) trace installed initial fresh ledger
+
 /-- **LP ledger after a history from the deployment checkpoint (U7).**  The future storage represents
 a model state whose LP balances sum to its total supply, `MINIMUM_LIQUIDITY` at address zero and
 fee-to mints included; the ledger at the deployment checkpoint is proved, not assumed. -/
@@ -756,9 +708,8 @@ theorem pair_history_ledger {pair : Adr} {cfg : ChainConfig} {checkpoint future 
         runSourceInvocations (initializedState factory domain token0 token1) (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
         finish.Ledger :=
-  pair_history_ledger_with
-    (fun _ inj apart => pairAdmittedSupply inj apart pairSem pairSem_image)
-    (fun _ _ _ _ consumed => consumed.positional.forget) trace installed initial fresh
+  pair_history_ledger_from_checkpoint trace installed initial fresh
+    (State.initialized_ledgerOn factory domain token0 token1).ledger
 
 /-- **Oracle after a history (U5).**  Each future accumulator is the checkpoint's plus the sum of
 every committed update receipt of the replay (nested committed updates included), modulo `2 ^ 256`.

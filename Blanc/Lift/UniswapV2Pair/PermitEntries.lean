@@ -462,16 +462,6 @@ theorem permitEntry_invP {P : Sevm → Devm → Ninst → Devm → Prop} {sevm :
         ⟨call, post, bound, answered, recovered, signer⟩,
         congrArg Outcome.halted (Except.ok.inj hr).symm⟩
 
-theorem permitEntry_inv {sevm : Sevm} {b : Devm} {G : Nat} {sel : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (run : SFunc.Run cert.prog sevm (St b [sel] getterInitMemory G) t_05e2_c76 o) :
-    (224 : B256) ≤ sevm.data.length.toB256 - 4 ∧ sevm.isStatic = false ∧
-      sevm.benvStat.time ≤ permitDeadline sevm ∧
-      ∃ (gw : B256) (callGas : Nat) (d : Devm) (out : Bytes) (G' : Nat),
-        PermitRawCall sevm b sel gw callGas d out ∧
-        o = .halted (permitPublicPost sevm b d out sel G') :=
-  permitEntry_invP (fun step => step) fork run
-
 theorem permit_selector_invP {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm} {b : Devm}
     {M : Mem} {G : Nat} {o : Outcome}
     (project : ∀ {s : Sevm} {before : Devm} {n : Ninst} {after : Devm},
@@ -514,46 +504,6 @@ theorem permit_selector_invP {P : Sevm → Devm → Ninst → Devm → Prop} {se
   simp only [show B256.eqCheck (Bytes.toB256 [0xd5, 0x05, 0xac, 0xcf]) (0xd505accf : B256)
     = (1 : B256) from by decide, show (1 : B256) ≠ 0 from by decide, ite_false] at h
   exact ⟨_, SFunc.runP_iff_runCutP_nil.mpr h⟩
-
-theorem permit_selector_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
-    (selector : Blanc.Sevm.selector sevm = 0xd505accf)
-    (run : SFunc.Run cert.prog sevm (St b [] M G) t_001a_c0 o) :
-    ∃ G', SFunc.Run cert.prog sevm (St b [0xd505accf] M G') t_05e2_c76 o :=
-  permit_selector_invP (fun step => step) selector run
-
-/-- Every successful pc-zero run with the permit selector takes the success path:
-nonpayable, at least 228 calldata bytes, nonstatic, timely, a successful recovery call
-whose copied word is a nonzero `owner`, and exactly the sequential nonce/approval post. -/
-theorem permit_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0xd505accf)
-    (run : SProg.Run cert.prog sevm (St b [] Mem.empty G) post) :
-    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
-      (224 : B256) ≤ sevm.data.length.toB256 - 4 ∧ sevm.isStatic = false ∧
-      sevm.benvStat.time ≤ permitDeadline sevm ∧
-      ∃ (gw : B256) (callGas : Nat) (d : Devm) (out : Bytes) (G' : Nat),
-        PermitRawCall sevm b 0xd505accf gw callGas d out ∧
-        post = permitPublicPost sevm b d out 0xd505accf G' := by
-  obtain ⟨f, entry, run⟩ := run
-  rw [show cert.prog[0]? = some t_0000_c0 from rfl] at entry
-  cases entry
-  obtain ⟨value, size, _, run⟩ := getter_guards_inv run
-  obtain ⟨_, run⟩ := permit_selector_inv selector run
-  obtain ⟨guard, nonstatic, timely, gw, callGas, d, out, G', call, eq⟩ := permitEntry_inv fork run
-  exact ⟨value, size, guard, nonstatic, timely, gw, callGas, d, out, G', call,
-    Outcome.halted.inj eq⟩
-
-theorem permit_bytecode_refines_raw {sevm : Sevm} {b post : Devm} {G : Nat}
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0xd505accf)
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    sevm.value = 0 ∧ (4 : B256) ≤ sevm.data.length.toB256 ∧
-      (224 : B256) ≤ sevm.data.length.toB256 - 4 ∧ sevm.isStatic = false ∧
-      sevm.benvStat.time ≤ permitDeadline sevm ∧
-      ∃ (gw : B256) (callGas : Nat) (d : Devm) (out : Bytes) (G' : Nat),
-        PermitRawCall sevm b 0xd505accf gw callGas d out ∧
-        post = permitPublicPost sevm b d out 0xd505accf G' :=
-  permit_pc0_inv fork selector (lift_sound cert_check codeEq fork run)
 
 /-- The signer guard, the approval core at pointer 482 (no expansion) and the unwind cost
 2142 gas besides the selected allowance store; the sentry is the store's incoming gas. -/

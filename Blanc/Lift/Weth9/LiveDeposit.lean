@@ -119,21 +119,6 @@ theorem deposit_body_framed {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {
           sevm.value)).logs ++ [_] = _
       rw [afterSstore_logs, afterSload_logs]
 
-/-- The original body interface is a projection of the framed witness. -/
-theorem deposit_body {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {M : Mem} {ret : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
-    (hM : FpMem 96 M) (hroom : S.length < 1000)
-    (hsentry : gCallStipend < G + 1456 +
-      sstoreCost sevm (afterSload sevm b (balSlot sevm.caller)) (balSlot sevm.caller)
-        (b.getStorVal sevm.currentTarget (balSlot sevm.caller) + sevm.value)) :
-    ∃ b', SFunc.RunExact prog sevm (St b (ret :: S) M
-      (G + 1456 + sstoreCost sevm (afterSload sevm b (balSlot sevm.caller)) (balSlot sevm.caller)
-        (b.getStorVal sevm.currentTarget (balSlot sevm.caller) + sevm.value) + 16 +
-        sloadCost sevm b (balSlot sevm.caller) + 104)) t_0440_c1
-      (.returned (St b' S (depMem M sevm.caller.toB256 sevm.value) G)) ∧ b'.output = b.output := by
-  obtain ⟨b', hrun, hout, -⟩ := deposit_body_framed hfork hstatic hM hroom hsentry
-  exact ⟨b', hrun, hout⟩
-
 /-- A payable entry (the `deposit()` wrapper and the fallback): two pushes, the call into the body,
 a `STOP`.  `15` gas before the body, `1` after it. -/
 theorem deposit_wrap_framed {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {T : SFunc}

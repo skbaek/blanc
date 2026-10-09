@@ -7,8 +7,8 @@ import Blanc.Lift.UniswapV2Pair.SwapForwardUpdate
 /-!
 # Forward Burn suffix: transfers, final balances, update, fee checkpoint, event and return
 
-The mirrors of `burnTransfers_caller_inv`, `burnFinalBalances_inv`, `burnUpdate_caller_inv`,
-`burnKLast_caller_inv`, `burnEvent_unlock_inv` and `burnAbi_return_inv`.  Both transfers go through the
+The suffix constructs both transfers, final balance queries, the reserve update, fee checkpoint,
+events and return. Both transfers go through the
 proved `_safeTransfer` helper `safeTransfer_dynamic_forward` (as in the swap body), the first at pointer
 `128` and the second at the pointer the first moved.  The final `balanceOf(pair)` callees are
 `SwapBalanceEnv` premises (ENV), exactly as in the swap back half.
@@ -72,7 +72,7 @@ theorem burnFwdTransfer1_call {sevm : Sevm} {b d : Devm} {R : List B256} {M : Me
 
 /-! ## Final balances -/
 
-/-- **Forward first final query** (dual of `burnFinalFirstRequest_inv` and the first read):
+/-- **Forward first final query:**
 `balanceOf(pair)` to the cached `token0`, staged at `p`, through the supplied callee, at the decoder. -/
 theorem burnFinalFirstBalance_exact {sevm : Sevm} {b d : Devm} {R : List B256} {M : Mem}
     {n callGas tailGas : Nat}

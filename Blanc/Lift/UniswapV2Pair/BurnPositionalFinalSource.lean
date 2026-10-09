@@ -216,47 +216,4 @@ theorem BurnSevenCalls.finalSourceData
   simpa only [List.append_nil, feeObservedResult, priced, request0, frame1, request1, frame2,
     flag, recipient, finished] using first
 
-/-- Compatibility projection of the same final-source witnesses and result. -/
-theorem BurnSevenCalls.finalSource
-    {Auth : Exec.Deriv → Entry → Transcript → Prop}
-    {root : Exec.Deriv} {sevm : Sevm} {b post : Devm}
-    {K J : WriterKey → Prop} {current : Checkpoint} {frame : Frame}
-    (r : BurnSevenCalls root sevm b)
-    (incoming : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (rep : WriterRep J (r.five.second.returned.devm.getStor sevm.currentTarget) frame.current.state)
-    (invocation : List Nat) (context : frame.context = writerContext sevm invocation)
-    (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : some (root.devm.getCode sevm.currentTarget).toList = sem.image)
-    (success : root.exn = .ok post) (fork : CoveredFork sevm.benvStat.fork)
-    (fresh : ∀ F ∈ Exec.rawFrameRoots root.exc, F.sevm.currentTarget = sevm.currentTarget →
-      WriterFreshKeys J (staticViewDecodedKeys F.sevm)) :
-    let priced := r.five.four.sourcePriced current
-    let request0 := burnFinalRequest0 frame priced
-    let frame1 := frame.beginResume request0
-    let request1 := burnFinalRequest1 frame1 priced
-    let frame2 := frame1.beginResume request1
-    let flag := feeOnWord (Bytes.toB256 (r.five.four.three.fee.out.take 32))
-    let recipient := (Sevm.dataWord sevm 4).toAdr.toB256
-    ∃ (updated : State) (event : Event) (oracle : OracleUpdate) (views0 views1 : List StaticViewTurn),
-      let finished := burnFinishedFrame frame2 updated event oracle flag recipient
-        priced.amount0 priced.amount1
-      AdmittedSourceConsumes Auth root r.five.second.returned 5
-        (.suspended frame request0 (.burnFinalBalance0 priced))
-        (.next (feeObservedResult r.final0.out) (staticViewTranscript views0 .done)
-          (.next (feeObservedResult r.final1.out) (staticViewTranscript views1 .done) .done))
-        {status := .success (encodeWords [priced.amount0, priced.amount1]), frame := finished,
-          remaining := .done, childReturns := staticViewChildReturns frame request0 0 views0 ++
-            staticViewChildReturns frame1 request1 0 views1} ∧
-      WriterRep J (post.getStor sevm.currentTarget) finished.current.state ∧
-      post.output = encodeWords [priced.amount0, priced.amount1] ∧
-      post.logs = r.final1.call.returned.devm.logs ++
-        [⟨frame.context.pair, [updateSyncTopic],
-          encodeWords [Bytes.toB256 (r.final0.out.take 32), Bytes.toB256 (r.final1.out.take 32)]⟩,
-         ⟨frame.context.pair,
-          [burnEventTopic, frame.context.sender.toB256, recipient.toAdr.toB256],
-          encodeWords [priced.amount0, priced.amount1]⟩] := by
-  obtain ⟨updated, event, oracle, views0, views1, _, result⟩ :=
-    r.finalSourceData incoming rep invocation context sem image installed success fork fresh
-  exact ⟨updated, event, oracle, views0, views1, result⟩
-
 end Blanc.Lift.UniswapV2Pair

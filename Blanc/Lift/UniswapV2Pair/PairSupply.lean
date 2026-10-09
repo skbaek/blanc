@@ -6,23 +6,17 @@ import Blanc.Lift.UniswapV2Pair.BurnFeeTransfers
 import Blanc.SlotFootprintSubset
 
 /-!
-# The unlocked Pair-frame supply
+# The Pair-frame supply interfaces
 
-`LockedSupply.lean` consumes a committed Pair frame entered while the Pair is locked.  This module is
-its unlocked analogue for the history: every successful pc-zero Pair frame, at any of the 27 selectors,
-is one exact source invocation that *succeeds* in the model, from any incoming finite representation
-inside a separated trace-local universe `U`, and its entry and transcript are authenticated against the
-frame's own derivation (`PairFrameAuth`).
+This module provides the trace-local writer admission and generic frame outcome interfaces used by
+`PairPositionalSupply.lean`. The configured history instantiates `pairSupplyWith` with the recursively
+admitted consumption and actual-position entry authentication of that module.
 
-* `pairFrameKeys` — the HASH-T rows one actual Pair frame selects: its decoded mapping rows, its static
-  view rows, the two LP rows a mint may write, the Pair's own LP row (burn) and every possible
-  fee-recipient row (`mintFeeReplyKeys`);
-* `PairGood U D` — every raw Pair frame root of `D` has its rows in `U`; it gives each family's own
-  trace-key obligation (`swapTraceKeys`, `mintTraceKeys`, `syncTraceKeys`, `LockedGood`);
-* `PairStepOutcome` — the consumed invocation with model success and footprint growth;
-* `SwapAuth`, `MintAuth`, `SyncAuth`, `SkimAuth`, `BurnAuth` — the per-family provenance the frame
-  theorems state, with the transcript named; the lock-free entries use `LockedAuth`;
-* `pairSupply` — the 27-way dispatcher.
+* `pairFrameKeys` — the HASH-T rows selected by one actual Pair frame;
+* `PairGood U D` — every raw Pair frame root of `D` has its rows in `U`;
+* `PairStepOutcomeWith` — the consumed invocation with model success and footprint growth;
+* `PairSupplyRules` — the eleven-family supply obligations;
+* `pairSupplyWith` — the 27-way dispatcher for those supplied obligations.
 -/
 
 namespace Blanc.Lift.UniswapV2Pair
@@ -206,14 +200,6 @@ theorem PairStepOutcomeWith.mono
   exact ⟨entry, nested, child, bytes, K', authenticate entry nested auth,
     consume _ nested child consumed, rest⟩
 
-theorem PairStepOutcome.mono {Auth Auth' : Exec.Deriv → Entry → Transcript → Prop}
-    {U : WriterKey → Prop} {current : Checkpoint} {invocation : List Nat} {K : WriterKey → Prop}
-    {D : Exec.Deriv} {post : Devm} (weaken : ∀ e T, Auth D e T → Auth' D e T)
-    (outcome : PairStepOutcome Auth U current invocation K D post) :
-    PairStepOutcome Auth' U current invocation K D post := by
-  obtain ⟨entry, nested, child, bytes, K', auth, rest⟩ := outcome
-  exact ⟨entry, nested, child, bytes, K', weaken entry nested auth, rest⟩
-
 /-- The step outcome from a consumed successful invocation whose final rows lie in `K` extended by
 universe rows. -/
 theorem pairStepOutcome_with
@@ -238,116 +224,7 @@ theorem pairStepOutcome_with
   obtain ⟨K'', grows, inside, rep'⟩ := writerRep_absorb inj apart sub incoming sub' rep
   exact ⟨entry, nested, child, bytes, K'', auth, consumed, success, outputEq, grows, inside, rep'⟩
 
-theorem pairStepOutcome_of {Auth : Exec.Deriv → Entry → Transcript → Prop} {U K K' : WriterKey → Prop}
-    {current : Checkpoint} {invocation : List Nat} {D : Exec.Deriv} {post : Devm}
-    {entry : Entry} {nested : Transcript} {child : RunResult} {bytes : Bytes}
-    {keys : List WriterKey}
-    (inj : WriterInj U) (apart : WriterApart U) (sub : ∀ k, K k → U k)
-    {s : Stor} (incoming : WriterRep K s current.state)
-    (good : ∀ k ∈ keys, U k) (auth : Auth D entry nested)
-    (consumed : ExactConsumes (startTyped current (writerContext D.sevm invocation) entry) nested child)
-    (success : child.status = .success bytes) (outputEq : bytes = post.output)
-    (grown : ∀ k, K' k → WriterExtend K keys k)
-    (rep : WriterRep K' (post.getStor D.sevm.currentTarget) child.frame.current.state) :
-    PairStepOutcome Auth U current invocation K D post :=
-  pairStepOutcome_with inj apart sub incoming good auth consumed success outputEq grown rep
-
 /-! ## Lock-free entries, at any lock state -/
-
-section Free
-
-variable {U : WriterKey → Prop} (inj : WriterInj U) (apart : WriterApart U)
-  {current : Checkpoint} {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
-  {K : WriterKey → Prop}
-  (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
-  (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-  (representable : sevm.data.length < 2 ^ 256) (sub : ∀ k, K k → U k)
-  (wrep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-include inj apart run codeEq fork representable sub wrep
-
-theorem free_transfer_outcome (selector : Blanc.Sevm.selector sevm = 0xa9059cbb)
-    (good : ∀ k ∈ transferTouched sevm.caller (transferRecipient sevm), U k) :
-    PairStepOutcome LockedAuth U current invocation K
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ post := by
-  obtain ⟨_, _, _, _, result, consumed⟩ := transfer_bytecode_exact_consumes
-    (invocation := invocation) wrep
-    (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good) representable codeEq fork
-    selector run
-  refine pairStepOutcome_of inj apart sub wrep good (Or.inl ⟨selector, rfl, rfl⟩) consumed rfl rfl
-    (fun _ h => h) ?_
-  rw [result.sourceState]
-  exact result.representation
-
-theorem free_approve_outcome (selector : Blanc.Sevm.selector sevm = 0x095ea7b3)
-    (good : ∀ k ∈ approveTouched sevm.caller (approveSpender sevm), U k) :
-    PairStepOutcome LockedAuth U current invocation K
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ post := by
-  obtain ⟨_, _, _, _, ⟨_, representation, _⟩, consumed⟩ := approve_bytecode_exact_consumes
-    (invocation := invocation) wrep
-    (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good) representable codeEq fork
-    selector run
-  exact pairStepOutcome_of inj apart sub wrep good (Or.inr (Or.inl ⟨selector, rfl, rfl⟩))
-    consumed rfl rfl (fun _ h => h) representation
-
-theorem free_transferFrom_outcome (selector : Blanc.Sevm.selector sevm = 0x23b872dd)
-    (good : ∀ k ∈ transferFromTouched (transferFromOwner sevm) sevm.caller
-      (transferFromRecipient sevm), U k) :
-    PairStepOutcome LockedAuth U current invocation K
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ post := by
-  obtain ⟨_, _, _, _, result, consumed⟩ := transferFrom_bytecode_exact_consumes
-    (invocation := invocation) wrep
-    (Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good) representable codeEq fork
-    selector run
-  refine pairStepOutcome_of inj apart sub wrep good
-    (Or.inr (Or.inr (Or.inl ⟨selector, rfl, rfl⟩))) consumed rfl rfl (fun _ h => h) ?_
-  rw [result.sourceState]
-  exact result.representation
-
-omit inj apart in
-theorem free_initialize_outcome (inj : WriterInj U) (apart : WriterApart U)
-    (freshOutput : b.output = []) (selector : Blanc.Sevm.selector sevm = 0x485cc955) :
-    PairStepOutcome LockedAuth U current invocation K
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ post := by
-  obtain ⟨_, _, _, _, _, result, consumed⟩ := initialize_bytecode_exact_consumes
-    (invocation := invocation) wrep representable freshOutput codeEq fork selector run
-  refine pairStepOutcome_of (keys := []) inj apart sub wrep (fun _ h => absurd h List.not_mem_nil)
-    (Or.inr (Or.inr (Or.inr (Or.inl ⟨selector, rfl, rfl⟩)))) consumed rfl rfl
-    (fun _ h => Or.inl h) ?_
-  rw [result.sourceCurrent]
-  exact result.representation
-
-theorem free_permit_outcome (sem : CodeSem) (image : sem.image = some code.toList)
-    (installed : b.getCode sevm.currentTarget = code) (freshOutput : b.output = [])
-    (selector : Blanc.Sevm.selector sevm = 0xd505accf)
-    (touched : ∀ k ∈ permitTouched (permitOwner sevm) (permitSpender sevm), U k)
-    (good : ∀ F ∈ Exec.rawFrameRoots run, F.sevm.currentTarget = sevm.currentTarget →
-      ∀ k ∈ staticViewDecodedKeys F.sevm, U k) :
-    PairStepOutcome LockedAuth U current invocation K
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ post := by
-  obtain ⟨_, _, _, _, _, out, _, entered, views, auth, result, consumed, _⟩ :=
-    permit_bytecode_exact_turns (invocation := invocation) inj apart sub sem image wrep touched
-      (by rw [installed]; exact image.symm) representable codeEq fork selector freshOutput run good
-  obtain ⟨_, representation, _, _, _, _, _, _, _, _, outputEq, _⟩ := result
-  exact pairStepOutcome_of inj apart sub wrep touched
-    (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl ⟨selector, rfl, out, entered, views, rfl, auth⟩)))))
-    consumed rfl outputEq.symm (fun _ h => h) representation
-
-theorem free_view_outcome (view : StaticView)
-    (selector : Blanc.Sevm.selector sevm = view.selector)
-    (good : ∀ k ∈ staticViewDecodedKeys sevm, U k) :
-    PairStepOutcome LockedAuth U current invocation K
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ post := by
-  have fresh := Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub good
-  obtain ⟨_, _, _, storage, _, _, _, consumed, frameCurrent, _, _⟩ :=
-    staticView_source_handler_selected (ctx := writerContext sevm invocation) wrep fresh
-      representable rfl codeEq fork view selector run
-  refine pairStepOutcome_of inj apart sub wrep good
-    (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr ⟨view, selector, rfl, rfl⟩))))) consumed rfl rfl
-    (fun _ h => h) ?_
-  rw [frameCurrent, storage sevm.currentTarget]
-  exact wrep.extend fresh
-
-end Free
 
 /-! ## The lock-guarded families -/
 
@@ -394,7 +271,7 @@ def SyncAuth (D : Exec.Deriv) (entry : Entry) (T : Transcript) : Prop :=
 /-- **Skim provenance.** The entry is the decoded skim; the transcript is the frame's actual
 `balanceOf(pair)` replies and transfer `CALL` replies, in order, with the retained static Pair views and
 the retained mutable turns (foreign logs and re-entered Pair frames, each `LockedAuth`) of the actual
-children (`skim_bytecode_exact_consumes_legacy`). -/
+children. -/
 def SkimAuth (D : Exec.Deriv) (entry : Entry) (T : Transcript) : Prop :=
   Blanc.Sevm.selector D.sevm = 0xbc25cf77 ∧ entry = .skim (skimRecipient D.sevm) ∧
   ∃ (b : Devm) (G : Nat), D.pc = 0 ∧ D.devm = St b [] Mem.empty G ∧
@@ -494,104 +371,7 @@ def BurnAuth (D : Exec.Deriv) (entry : Entry) (T : Transcript) : Prop :=
   entry = .burn ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& Sevm.dataWord D.sevm 4).toAdr ∧
   BurnFrameAuth D T
 
-section Guarded
-
-variable {U : WriterKey → Prop} (inj : WriterInj U) (apart : WriterApart U)
-  {current : Checkpoint} {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
-  {K : WriterKey → Prop}
-  (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
-  (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-  (sub : ∀ k, K k → U k)
-  (wrep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-  (sem : CodeSem) (image : sem.image = some code.toList)
-  (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
-  (good : PairGood U ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)
-include inj apart run codeEq fork sub wrep sem image installed good
-
-theorem pair_mint_outcome (selector : Blanc.Sevm.selector sevm = 0x6a627842) :
-    PairStepOutcome MintAuth U current invocation K
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ post := by
-  have inside := writerExtend_universe sub good.mint
-  obtain ⟨_, _, out0, out1, outF, steps, views0, views1, viewsF, final, rets, K', liquidity, fee,
-      feeLogs, added, consumed, _, _, _, grown, rep, _, _, _, _, _, outputEq, picked, prov0, prov1,
-      provF⟩ :=
-    mint_bytecode_exact_consumes_legacy invocation wrep sem image installed codeEq fork selector run
-      (writerInj_restrict inj inside) (writerApart_restrict apart inside)
-  exact pairStepOutcome_of inj apart sub wrep good.mint
-    ⟨selector, rfl, current, out0, out1, outF, views0, views1, viewsF, steps, rfl, picked, prov0,
-      prov1, provF⟩ consumed rfl outputEq.symm grown rep
-
-theorem pair_sync_outcome (freshOutput : b.output = [])
-    (selector : Blanc.Sevm.selector sevm = 0xfff6cae9) :
-    PairStepOutcome SyncAuth U current invocation K
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ post := by
-  have inside := writerExtend_universe sub good.sync
-  obtain ⟨_, _, result, consumed, rep, _, _, outputEq⟩ :=
-    sync_bytecode_exact_consumes invocation wrep sem image installed freshOutput codeEq fork
-      selector run (writerInj_restrict inj inside) (writerApart_restrict apart inside)
-  exact pairStepOutcome_of (keys := []) inj apart sub wrep (fun _ h => absurd h List.not_mem_nil)
-    ⟨selector, rfl, K, current, invocation, b, post, result, rfl⟩ consumed rfl outputEq.symm
-    (fun _ h => Or.inl h) rep
-
-theorem pair_skim_outcome (freshOutput : b.output = [])
-    (selector : Blanc.Sevm.selector sevm = 0xbc25cf77) :
-    PairStepOutcome SkimAuth U current invocation K
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ post := by
-  have inside := writerExtend_universe sub good.skim
-  obtain ⟨_, _, out0, d, first, out1, d2, views0, views1, turns1, turns3, final, rets, K', added,
-      second, consumed, _, _, grown, rep, _, _, _, _, picked, auth, prov0, prov1, prov2, prov3, outputEq⟩ :=
-    skim_bytecode_exact_consumes_legacy invocation wrep sem image installed freshOutput codeEq fork
-      selector run (writerInj_restrict inj inside) (writerApart_restrict apart inside)
-  exact pairStepOutcome_of inj apart sub wrep good.skim
-    ⟨selector, rfl, b, G, rfl, rfl, out0, d, first, out1, d2, views0, views1, turns1, turns3, second,
-      rfl, picked, auth, prov0, prov1, prov2, prov3⟩ consumed rfl outputEq.symm grown rep
-
-theorem pair_swap_outcome (freshOutput : b.output = [])
-    (selector : Blanc.Sevm.selector sevm = 0x022c0d9f) :
-    PairStepOutcome SwapAuth U current invocation K
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ post := by
-  have inside := writerExtend_universe sub good.skim
-  obtain ⟨_, _, frame, T0, T1, TC, turns0, turns1, turnsC, b1, b2, d, d0, d1, M1, M2, M, p1, p,
-      out0, out1, views0, views1, final, rets, K', added, opt0, opt1, optC, shape0, shape1, shapeC,
-      call0, call1, consumed, frameCheckpoint, frameContext, _, _, _, grown, rep, _, _, _, _, outputEq,
-      auth, prov0, prov1, _⟩ :=
-    swap_bytecode_exact_consumes_legacy invocation wrep sem image installed freshOutput codeEq fork
-      selector run (writerInj_restrict inj inside) (writerApart_restrict apart inside)
-  exact pairStepOutcome_of inj apart sub wrep good.skim
-    ⟨selector, rfl, b, G, current, invocation, frame, rfl, rfl, frameCheckpoint, frameContext,
-      T0, T1, TC, turns0, turns1, turnsC, b1, b2, d, d0, d1, M1, M2, M, p1, p, out0, out1, views0,
-      views1, opt0, opt1, optC, shape0, shape1, shapeC, call0, call1, rfl, auth, prov0, prov1⟩
-    consumed rfl outputEq.symm grown rep
-
-theorem pair_burn_outcome (selector : Blanc.Sevm.selector sevm = 0x89afcb44) :
-    PairStepOutcome BurnAuth U current invocation K
-      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ post := by
-  have row : ∀ k ∈ [WriterKey.balance sevm.currentTarget], U k := by
-    intro k member
-    rw [List.mem_singleton] at member
-    rw [member]
-    exact good.pairRow
-  have fresh := Blanc.SlotFootprint.FreshKeys.of_universe inj apart sub row
-  have sub₁ := writerExtend_universe sub row
-  obtain ⟨a, amount0, amount1, provenance, K', final, rets, _, _, _, inside, grows, consumed, halted,
-      outputEq, rep, _⟩ :=
-    burnRaw_source_authentic_legacy invocation codeEq fork selector (wrep.extend fresh)
-      (Or.inr (List.mem_singleton_self _)) run inj apart sub₁ good.mint sem image installed
-      good.locked good.views
-  cases halted
-  exact ⟨_, a.transcript, _, _, K', ⟨selector, rfl, burnRaw_frameAuth provenance⟩, consumed, rfl,
-    outputEq.symm,
-    fun k h => grows k (Or.inl h), inside, rep⟩
-
-end Guarded
-
 /-! ## The dispatcher -/
-
-/-- **Authenticated entry and transcript of one Pair frame**, by family: the lock-free entries
-(`LockedAuth`), swap, mint, sync, skim and burn. -/
-def PairFrameAuth (D : Exec.Deriv) (entry : Entry) (T : Transcript) : Prop :=
-  LockedAuth D entry T ∨ SwapAuth D entry T ∨ MintAuth D entry T ∨ SyncAuth D entry T ∨
-    SkimAuth D entry T ∨ BurnAuth D entry T
 
 /-- The supply of one successful pc-zero Pair frame at the current checkpoint: from every incoming
 finite representation inside the separated universe `U`, the frame is one authenticated source
@@ -608,11 +388,6 @@ def PairStepSupplyWith
     (∀ k, K k → U k) → WriterRep K (b.getStor sevm.currentTarget) current.state →
     PairStepOutcomeWith Consumes Auth U current invocation K
       ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ post
-
-/-- The legacy supply is the exact-consumption instance with unchanged premises. -/
-def PairStepSupply (Auth : Exec.Deriv → Entry → Transcript → Prop) (U : WriterKey → Prop)
-    (selected : Sevm → Prop) : Prop :=
-  PairStepSupplyWith (fun _ => ExactConsumes) Auth U selected
 
 /-- One operation producer per family, all selecting the same outcome relation.
 The dispatcher below owns the selector inversion; this record supplies no alternative witness. -/
@@ -697,91 +472,5 @@ theorem pairSupplyWith
       representable (h.trans (by decide)) good sub wrep
   · exact rules.views (.getReserves) current invocation run codeEq installedCode fork freshOutput
       representable (h.trans (by decide)) good sub wrep
-
-/-- Compatibility producers for the original authentication and exact-consumption APIs. -/
-theorem pairSupplyRules_legacy {U : WriterKey → Prop} (inj : WriterInj U)
-    (apart : WriterApart U) (sem : CodeSem) (image : sem.image = some code.toList) :
-    PairSupplyRules (fun _ => ExactConsumes) PairFrameAuth U where
-  transfer := by
-    intro current invocation sevm b post G run K codeEq installedCode fork freshOutput
-      representable selector good sub wrep
-    have decoded := good.transferOwn selector
-    exact (free_transfer_outcome inj apart run codeEq fork representable sub wrep
-      selector decoded).mono (fun _ _ a => Or.inl a)
-  approve := by
-    intro current invocation sevm b post G run K codeEq installedCode fork freshOutput
-      representable selector good sub wrep
-    have decoded := good.approveOwn selector
-    exact (free_approve_outcome inj apart run codeEq fork representable sub wrep
-      selector decoded).mono (fun _ _ a => Or.inl a)
-  transferFrom := by
-    intro current invocation sevm b post G run K codeEq installedCode fork freshOutput
-      representable selector good sub wrep
-    have decoded := good.transferFromOwn selector
-    exact (free_transferFrom_outcome inj apart run codeEq fork representable sub wrep
-      selector decoded).mono (fun _ _ a => Or.inl a)
-  initializeEntry := by
-    intro current invocation sevm b post G run K codeEq installedCode fork freshOutput
-      representable selector good sub wrep
-    exact (free_initialize_outcome run codeEq fork representable sub wrep inj apart
-      freshOutput selector).mono (fun _ _ a => Or.inl a)
-  permit := by
-    intro current invocation sevm b post G run K codeEq installedCode fork freshOutput
-      representable selector good sub wrep
-    have decoded := good.permitOwn selector
-    exact (free_permit_outcome inj apart run codeEq fork representable sub wrep sem image
-      installedCode freshOutput selector decoded good.views).mono (fun _ _ a => Or.inl a)
-  mint := by
-    intro current invocation sevm b post G run K codeEq installedCode fork freshOutput
-      representable selector good sub wrep
-    have installed : some (b.getCode sevm.currentTarget).toList = sem.image := by
-      rw [installedCode]
-      exact image.symm
-    exact (pair_mint_outcome inj apart run codeEq fork sub wrep sem image installed good
-      selector).mono (fun _ _ a => Or.inr (Or.inr (Or.inl a)))
-  sync := by
-    intro current invocation sevm b post G run K codeEq installedCode fork freshOutput
-      representable selector good sub wrep
-    have installed : some (b.getCode sevm.currentTarget).toList = sem.image := by
-      rw [installedCode]
-      exact image.symm
-    exact (pair_sync_outcome inj apart run codeEq fork sub wrep sem image installed good
-      freshOutput selector).mono (fun _ _ a => Or.inr (Or.inr (Or.inr (Or.inl a))))
-  skim := by
-    intro current invocation sevm b post G run K codeEq installedCode fork freshOutput
-      representable selector good sub wrep
-    have installed : some (b.getCode sevm.currentTarget).toList = sem.image := by
-      rw [installedCode]
-      exact image.symm
-    exact (pair_skim_outcome inj apart run codeEq fork sub wrep sem image installed good
-      freshOutput selector).mono (fun _ _ a => Or.inr (Or.inr (Or.inr (Or.inr (Or.inl a)))))
-  swap := by
-    intro current invocation sevm b post G run K codeEq installedCode fork freshOutput
-      representable selector good sub wrep
-    have installed : some (b.getCode sevm.currentTarget).toList = sem.image := by
-      rw [installedCode]
-      exact image.symm
-    exact (pair_swap_outcome inj apart run codeEq fork sub wrep sem image installed good
-      freshOutput selector).mono (fun _ _ a => Or.inr (Or.inl a))
-  burn := by
-    intro current invocation sevm b post G run K codeEq installedCode fork freshOutput
-      representable selector good sub wrep
-    have installed : some (b.getCode sevm.currentTarget).toList = sem.image := by
-      rw [installedCode]
-      exact image.symm
-    exact (pair_burn_outcome inj apart run codeEq fork sub wrep sem image installed good
-      selector).mono (fun _ _ a => Or.inr (Or.inr (Or.inr (Or.inr (Or.inr a)))))
-  views := by
-    intro view current invocation sevm b post G run K codeEq installedCode fork freshOutput
-      representable selector good sub wrep
-    exact (free_view_outcome inj apart run codeEq fork representable sub wrep view
-      selector good.viewsOwn).mono (fun _ _ a => Or.inl a)
-
-/-- **The unlocked Pair-frame supply.**  Every successful pc-zero Pair frame, at any of its 27
-selectors, is one authenticated source invocation that succeeds in the model. -/
-theorem pairSupply {U : WriterKey → Prop} (inj : WriterInj U)
-    (apart : WriterApart U) (sem : CodeSem) (image : sem.image = some code.toList) :
-    PairStepSupply PairFrameAuth U (fun _ => True) :=
-  pairSupplyWith (pairSupplyRules_legacy inj apart sem image)
 
 end Blanc.Lift.UniswapV2Pair

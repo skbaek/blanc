@@ -60,10 +60,6 @@ private theorem permit_St_getCode (x : Devm) (S : List B256) (M : Mem) (g : Nat)
 private theorem permit_St_getStor (x : Devm) (S : List B256) (M : Mem) (g : Nat) (a : Adr) :
     Devm.getStor (St x S M g) a = Devm.getStor x a := rfl
 
-private theorem permit_operands (x : Devm) (S : List B256) (M : Mem) (g : Nat) :
-    S <<+ (St x S M g).stack := by
-  simpa only [List.append_nil, St.stack] using pref_append S ([] : List B256)
-
 theorem permitNonceWorld_getCode (sevm : Sevm) (b : Devm) (owner : Adr) (a : Adr) :
     (permitNonceWorld sevm b owner).getCode a = b.getCode a := by
   unfold permitNonceWorld

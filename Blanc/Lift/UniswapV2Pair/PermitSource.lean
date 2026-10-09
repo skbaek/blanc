@@ -343,29 +343,4 @@ theorem permit_public_source_result {K : WriterKey → Prop} {current : Checkpoi
     rw [List.map_nil, List.append_nil]
     rfl
 
-/-- Every successful literal permit run derives value zero, at least 228 calldata bytes,
-nonstatic, timely, a successful recovery call whose copied word is the nonzero owner, and the
-typed segment with its resume at that observed reply. No source endpoint is a premise; the
-observation is an input, never a claim that signatures are unforgeable. -/
-theorem permit_bytecode_refines_source {K : WriterKey → Prop} {current : Checkpoint}
-    {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
-    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (fresh : WriterFreshKeys K (permitTouched (permitOwner sevm) (permitSpender sevm)))
-    (representable : sevm.data.length < 2 ^ 256)
-    (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
-    (selector : Blanc.Sevm.selector sevm = 0xd505accf) (freshOutput : b.output = [])
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
-    sevm.value = 0 ∧ 228 ≤ sevm.data.length ∧ sevm.isStatic = false ∧
-      sevm.benvStat.time ≤ permitDeadline sevm ∧
-      ∃ (gw : B256) (callGas : Nat) (d : Devm) (out : Bytes) (residual : Nat),
-        PermitRawCall sevm b 0xd505accf gw callGas d out ∧
-        ∀ codeExists, PermitSourceResult K current invocation sevm b post d out codeExists residual := by
-  obtain ⟨paid, size, guard, nonstatic, timely, gw, callGas, d, out, residual, call, eq⟩ :=
-    permit_bytecode_refines_raw codeEq fork selector run
-  have length := (word_calldata_guards_iff (n := 224) representable (by decide)).mp ⟨size, guard⟩
-  refine ⟨paid, length, nonstatic, timely, gw, callGas, d, out, residual, call, fun codeExists => ?_⟩
-  rw [eq]
-  exact permit_public_source_result rep fresh freshOutput paid nonstatic timely call.2.1
-    call.2.2.2.2.1 call.2.2.2.2.2
-
 end Blanc.Lift.UniswapV2Pair

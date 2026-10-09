@@ -38,31 +38,32 @@ theorem pair_history_minimum_liquidity_with
     (weaken : ∀ root segment transcript out,
       Consumes root segment transcript out → ExactConsumes segment transcript out)
     {pair : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {factory token0 token1 : Adr} {domain : B256}
+    {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : State}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
-    (initial : InitializedCheckpoint (checkpoint.state.getStor pair) factory domain token0 token1)
-    (fresh : WriterFreshKeys (fun _ => False) (pairHistoryTouchedKeys pair trace))
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
+    (ledger : st₀.Ledger)
+    (floor : st₀.SupplyFloor)
     (nonzero : pair ≠ 0) :
     ∃ steps : List PairStep,
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith Auth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplayWith Consumes (initializedState factory domain token0 token1) steps finish ∧
-        runSourceInvocations (initializedState factory domain token0 token1)
+        PairObservedReplayWith Consumes st₀ steps finish ∧
+        runSourceInvocations st₀
           (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
         ((∀ s ∈ steps, s.source.CallersNonzero) →
           finish.SupplyFloor ∧
           ∀ before after, (before, after) ∈ sourceReplayEdges
-              (initializedState factory domain token0 token1) (steps.map PairStep.source) →
+              st₀ (steps.map PairStep.source) →
             before.SupplyFloor ∧ after.SupplyFloor ∧
               (0 < before.totalSupply.toNat → 1000 ≤ after.totalSupply.toNat)) := by
   obtain ⟨_, steps, observed, auth, finish, K', matched, source, realized, _, _, rep⟩ :=
     pair_history_committed_with supplies weaken trace installed initial fresh
   refine ⟨steps, observed, auth, finish, K', matched, realized, rep, fun callers => ?_⟩
-  exact source.supplyFloor (initialized_supplyFloor factory domain token0 token1)
-    (State.initialized_ledgerOn factory domain token0 token1).ledger
+  exact source.supplyFloor floor ledger
     (steps_pair_nonzero_with auth nonzero)
     (fun inv member => by
       obtain ⟨s, sMem, rfl⟩ := List.mem_map.mp member
@@ -76,25 +77,27 @@ theorem pair_history_feeOff_ratio_with
     (weaken : ∀ root segment transcript out,
       Consumes root segment transcript out → ExactConsumes segment transcript out)
     {pair : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {factory token0 token1 : Adr} {domain : B256}
+    {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : State}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
-    (initial : InitializedCheckpoint (checkpoint.state.getStor pair) factory domain token0 token1)
-    (fresh : WriterFreshKeys (fun _ => False) (pairHistoryTouchedKeys pair trace))
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
+    (ledger : st₀.Ledger)
+    (floor : st₀.SupplyFloor)
     (nonzero : pair ≠ 0) :
     ∃ steps : List PairStep,
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith Auth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplayWith Consumes (initializedState factory domain token0 token1) steps finish ∧
-        runSourceInvocations (initializedState factory domain token0 token1)
+        PairObservedReplayWith Consumes st₀ steps finish ∧
+        runSourceInvocations st₀
           (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
-        (sourceReplayAnswers (initializedState factory domain token0 token1)
+        (sourceReplayAnswers st₀
             (steps.map PairStep.source) →
           (∀ s ∈ steps, s.source.CallersNonzero) →
           ∀ before after, (before, after) ∈ sourceReplayEdges
-              (initializedState factory domain token0 token1) (steps.map PairStep.source) →
+              st₀ (steps.map PairStep.source) →
             0 < before.totalSupply.toNat →
             1000 ≤ after.totalSupply.toNat ∧
               ((before.reserve0.val * before.reserve1.val : ℚ) / (before.totalSupply.toNat : ℚ) ^ 2 ≤
@@ -102,8 +105,7 @@ theorem pair_history_feeOff_ratio_with
   obtain ⟨_, steps, observed, auth, finish, K', matched, source, realized, _, _, rep⟩ :=
     pair_history_committed_with supplies weaken trace installed initial fresh
   refine ⟨steps, observed, auth, finish, K', matched, realized, rep, fun answers callers => ?_⟩
-  have floors := (source.supplyFloor (initialized_supplyFloor factory domain token0 token1)
-    (State.initialized_ledgerOn factory domain token0 token1).ledger
+  have floors := (source.supplyFloor floor ledger
     (steps_pair_nonzero_with auth nonzero)
     (fun inv member => by
       obtain ⟨s, sMem, rfl⟩ := List.mem_map.mp member
@@ -118,6 +120,67 @@ theorem pair_history_feeOff_ratio_with
     pow_pos (Nat.cast_pos.mpr (lt_of_lt_of_le (by decide) outgoing)) 2
   rw [div_le_div_iff₀ beforePos afterPos]
   exact_mod_cast product
+
+/-- Minimum-liquidity preservation from any represented checkpoint satisfying `State.Ledger` and `State.SupplyFloor`. -/
+theorem pair_history_minimum_liquidity_from_checkpoint
+    {pair : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
+    (ledger : st₀.Ledger)
+    (floor : st₀.SupplyFloor)
+    (nonzero : pair ≠ 0) :
+    ∃ steps : List PairStep,
+      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
+      ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
+        runSourceInvocations st₀
+          (steps.map PairStep.source) = some finish ∧
+        WriterRep K' (future.state.getStor pair) finish ∧
+        ((∀ s ∈ steps, s.source.CallersNonzero) →
+          finish.SupplyFloor ∧
+          ∀ before after, (before, after) ∈ sourceReplayEdges
+              st₀ (steps.map PairStep.source) →
+            before.SupplyFloor ∧ after.SupplyFloor ∧
+              (0 < before.totalSupply.toNat → 1000 ≤ after.totalSupply.toNat)) :=
+  pair_history_minimum_liquidity_with
+    (fun _ inj apart => pairAdmittedSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed.positional.forget) trace installed initial fresh ledger floor nonzero
+
+/-- Fee-off share-value ratio preservation from any represented checkpoint satisfying `State.Ledger` and `State.SupplyFloor`. -/
+theorem pair_history_feeOff_ratio_from_checkpoint
+    {pair : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
+    (ledger : st₀.Ledger)
+    (floor : st₀.SupplyFloor)
+    (nonzero : pair ≠ 0) :
+    ∃ steps : List PairStep,
+      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
+      ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
+        runSourceInvocations st₀
+          (steps.map PairStep.source) = some finish ∧
+        WriterRep K' (future.state.getStor pair) finish ∧
+        (sourceReplayAnswers st₀
+            (steps.map PairStep.source) →
+          (∀ s ∈ steps, s.source.CallersNonzero) →
+          ∀ before after, (before, after) ∈ sourceReplayEdges
+              st₀ (steps.map PairStep.source) →
+            0 < before.totalSupply.toNat →
+            1000 ≤ after.totalSupply.toNat ∧
+              ((before.reserve0.val * before.reserve1.val : ℚ) / (before.totalSupply.toNat : ℚ) ^ 2 ≤
+                (after.reserve0.val * after.reserve1.val : ℚ) / (after.totalSupply.toNat : ℚ) ^ 2)) :=
+  pair_history_feeOff_ratio_with
+    (fun _ inj apart => pairAdmittedSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed.positional.forget) trace installed initial fresh ledger floor nonzero
 
 /-- **`MINIMUM_LIQUIDITY` keeps the supply positive (U3 floor).**  For a configured history from the
 deployment checkpoint of a Pair not at address zero: if no step of the history, and no re-entered
@@ -147,9 +210,9 @@ theorem pair_history_minimum_liquidity {pair : Adr} {cfg : ChainConfig}
               (initializedState factory domain token0 token1) (steps.map PairStep.source) →
             before.SupplyFloor ∧ after.SupplyFloor ∧
               (0 < before.totalSupply.toNat → 1000 ≤ after.totalSupply.toNat)) :=
-  pair_history_minimum_liquidity_with
-    (fun _ inj apart => pairAdmittedSupply inj apart pairSem pairSem_image)
-    (fun _ _ _ _ consumed => consumed.positional.forget) trace installed initial fresh nonzero
+  pair_history_minimum_liquidity_from_checkpoint trace installed initial fresh
+    (State.initialized_ledgerOn factory domain token0 token1).ledger
+    (initialized_supplyFloor factory domain token0 token1) nonzero
 
 /-- **Share value as a ratio, fee off, from the deployment checkpoint (U3).**  For a configured history
 from the deployment checkpoint of a Pair not at address zero: if the authenticated answers of the
@@ -182,8 +245,8 @@ theorem pair_history_feeOff_ratio {pair : Adr} {cfg : ChainConfig}
             1000 ≤ after.totalSupply.toNat ∧
               ((before.reserve0.val * before.reserve1.val : ℚ) / (before.totalSupply.toNat : ℚ) ^ 2 ≤
                 (after.reserve0.val * after.reserve1.val : ℚ) / (after.totalSupply.toNat : ℚ) ^ 2)) :=
-  pair_history_feeOff_ratio_with
-    (fun _ inj apart => pairAdmittedSupply inj apart pairSem pairSem_image)
-    (fun _ _ _ _ consumed => consumed.positional.forget) trace installed initial fresh nonzero
+  pair_history_feeOff_ratio_from_checkpoint trace installed initial fresh
+    (State.initialized_ledgerOn factory domain token0 token1).ledger
+    (initialized_supplyFloor factory domain token0 token1) nonzero
 
 end Blanc.Lift.UniswapV2Pair

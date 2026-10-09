@@ -382,11 +382,6 @@ def swapBalanceDecodedTail (second : Bool) : SFunc :=
   | .dest (.next (.reg .pop) (.next (.reg .mload) tail)) => tail
   | _ => .last .stop
 
-theorem swapBalance_decode_shape (second : Bool) :
-    (if second then t_0af5_c5 else t_0a59_c5) =
-      .dest (.next (.reg .pop) (.next (.reg .mload) (swapBalanceDecodedTail second))) := by
-  cases second <;> rfl
-
 /-- The first post-callback query: `balanceOf(pair)` to the cached `token0`. -/
 theorem swapFirstBalance_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {R0 : List B256}
     {C : List Nat} {M : Mem} {G n : Nat} {p t1 t0 : B256} {seg : Seg}

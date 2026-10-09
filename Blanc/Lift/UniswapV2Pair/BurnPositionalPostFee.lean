@@ -103,30 +103,4 @@ theorem BurnThreeCalls.firstTransferCalleeData {root : Exec.Deriv} {sevm : Sevm}
   exact ⟨N, residual, ⟨⟨memory, pricing, pricingNode, guards, gas, state⟩⟩,
     by simpa only [BurnThreeCalls.pricedLocals] using callee⟩
 
-/-- Compatibility projection retaining the original helper interface. -/
-theorem BurnThreeCalls.firstTransferCallee {root : Exec.Deriv} {sevm : Sevm} {b post : Devm}
-    (r : BurnThreeCalls root sevm b) (success : root.exn = .ok post)
-    (fork : CoveredFork sevm.benvStat.fork) :
-    ∃ (N : Exec.Deriv) (residual : Nat), PtrMem 128 192 N.devm.memory ∧
-      Exec.Deriv.ExecFreeUntil r.fee.occurrence.call.returned N ∧
-      Nonempty (CursorStateAt code cert r.fee.occurrence.call.returned t_1fdb_c57
-        (lpBurnPost r.fee.occurrence.call.returned.sevm
-          (afterSload r.fee.occurrence.call.returned.sevm N.devm 0)
-          (r.pricedLocals N) N.devm.memory
-          r.fee.occurrence.call.returned.sevm.currentTarget.toB256
-          (feeBurnLiquidity r.initial.second.returned.sevm r.initial.second.returned.devm) residual)
-        (((feeBurnLiquidity r.initial.second.returned.sevm r.initial.second.returned.devm *
-            Bytes.toB256 (r.initial.out0.take 32)) /
-            N.devm.getStorVal r.fee.occurrence.call.returned.sevm.currentTarget 0) ::
-          (Sevm.dataWord sevm 4).toAdr.toB256 :: burnInitialToken0 sevm b ::
-          0x1698 :: r.pricedLocals N)
-        (lpBurnPost r.fee.occurrence.call.returned.sevm
-          (afterSload r.fee.occurrence.call.returned.sevm N.devm 0)
-          (r.pricedLocals N) N.devm.memory
-          r.fee.occurrence.call.returned.sevm.currentTarget.toB256
-          (feeBurnLiquidity r.initial.second.returned.sevm r.initial.second.returned.devm) residual).memory
-        [t_1698_c13, t_053d_c83]) := by
-  obtain ⟨N, residual, ⟨data⟩, callee⟩ := r.firstTransferCalleeData success fork
-  exact ⟨N, residual, data.memory, data.node_eq ▸ data.cut.free, callee⟩
-
 end Blanc.Lift.UniswapV2Pair

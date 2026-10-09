@@ -114,7 +114,7 @@ REQUIRED_HEADLINES = [
     "Blanc.Lift.UniswapV2Pair.pair_history_oracle",
     "Blanc.Lift.UniswapV2Pair.pair_history_feeOff_product",
     "Blanc.Lift.UniswapV2Pair.pair_history_feeOn_product",
-    "Blanc.Lift.UniswapV2Pair.permit_bytecode_refines_source",
+    "Blanc.Lift.UniswapV2Pair.permit_bytecode_admitted_consumes",
     "Blanc.Lift.UniswapV2Pair.burnRaw_source_authentic",
     "Blanc.Lift.UniswapV2Pair.staticView_bytecode_inv",
     "Blanc.Lift.UniswapV2Pair.pair_history_writer_live",
@@ -166,8 +166,6 @@ NONCLAIM_PHRASES = [
     "no transaction-level uniswap liveness",
     "states the modular sum of the recorded increments",
     "not an existential cost",
-    "not every exported theorem is admitted",
-    "retained as compatibility surfaces",
 ]
 
 # Process and internal-bookkeeping vocabulary the public map must not carry.

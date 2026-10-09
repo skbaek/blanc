@@ -3523,16 +3523,385 @@ example :
 
 /-! S3 Registry enumeration/observability public-role pins.  The dedicated
 gate additionally hashes each normalized declaration header fail-closed. -/
-#check getPausables_runCompiled
-#check getPausables_noSstore_occurrence
-#check registryViews_coherent
-#check pauserSet_local_transition
-#check pauserSet_target_zero_no_success
-#check pauserSet_target_zero_error_logs_unchanged
-#check pauserSet_register_success
-#check pauserSet_register_success_committed
-#check pauserSet_settled_error_not_observable
-#check registryObservation_sound
+-- getPausables_runCompiled
+example
+    (dp : DeployParams) (sevm : Sevm) (base : Devm) (entries : List Entry)
+    (G : Nat) (hfork : CoveredFork sevm.benvStat.fork)
+    (hdata : sevm.data.length.toB256 = 4)
+    (hvalue : sevm.value = 0)
+    (hselector : Sevm.selector sevm = selector "getPausables" [])
+    (_hcodeAddress : sevm.codeAddress = some sevm.currentTarget)
+    (hcode : sevm.code.toList = lidoCircuitBreakerCode dp)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor base sevm.currentTarget)) entries)
+    (hwarm : ∀ key ∈ enumerationStorageKeys entries,
+      (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈ base.accessedStorageKeys) :
+    Prog.RunCompiled sevm
+        (base.setMach ⟨[], Mem.empty,
+          G + getPausablesDispatchGas + getPausablesGasWarm entries, base.stateGas⟩)
+        (runtime dp)
+        ((base.setMach ⟨[], enumPrefixMemory entries entries, G, base.stateGas⟩).withOutput
+          (abiAddressArray entries)) ∧
+      some sevm.code.toList = Prog.compile (runtime dp) :=
+  getPausables_runCompiled dp sevm base entries G hfork hdata hvalue hselector _hcodeAddress hcode
+    hw hwarm
+
+-- getPausables_noSstore_occurrence
+example
+    {root : Exec.Deriv} {path : Prog.SourcePath}
+    (cursor : Exec.Deriv.SourceCursor root
+      (runtime officialParams) path getPausables)
+    (compiled :
+      some root.sevm.code.toList = (runtime officialParams).compile)
+    (occurrence : Exec.NinstOccurrence root)
+    (owned : Exec.Deriv.ParentPrefix cursor.node occurrence.node) :
+    occurrence.instruction ≠ .reg .sstore :=
+  getPausables_noSstore_occurrence cursor compiled occurrence owned
+
+-- registryViews_coherent
+example
+    (fs : List Func) (enumSevm pauserSevm countSevm : Sevm)
+    (base : Devm) (entries : List Entry) (target pauser : B256)
+    (enumG pauserG countG : Nat)
+    (hforkEnum : CoveredFork enumSevm.benvStat.fork)
+    (hforkPauser : CoveredFork pauserSevm.benvStat.fork)
+    (hforkCount : CoveredFork countSevm.benvStat.fork)
+    (hpauserOwner : pauserSevm.currentTarget = enumSevm.currentTarget)
+    (hcountOwner : countSevm.currentTarget = enumSevm.currentTarget)
+    (hpauserData : pauserSevm.data.length.toB256 <? 36 = 0)
+    (hpauserWord : Sevm.dataWord pauserSevm 4 = target)
+    (hcountData : countSevm.data.length.toB256 <? 36 = 0)
+    (hcountWord : Sevm.dataWord countSevm 4 = pauser)
+    (htarget : canonicalAddress target)
+    (hpauser : canonicalAddress pauser)
+    (hw : RegistryWitness
+      (logicalStorageOfStor
+        (Devm.getStor base enumSevm.currentTarget)) entries)
+    (henumWarm : ∀ key ∈ enumerationStorageKeys entries,
+      (⟨enumSevm.currentTarget, key⟩ : Adr × B256) ∈
+        base.accessedStorageKeys)
+    (hpauserWarm :
+      (⟨pauserSevm.currentTarget, assignmentSlot target⟩ : Adr × B256) ∈
+        base.accessedStorageKeys)
+    (hcountWarm :
+      (⟨countSevm.currentTarget, countSlot pauser⟩ : Adr × B256) ∈
+        base.accessedStorageKeys)
+    (hfs : fs[enumLoopSlot]? = some enumLoop) :
+    RegistryViewsRun fs enumSevm pauserSevm countSevm base entries
+      target pauser enumG pauserG countG :=
+  registryViews_coherent fs enumSevm pauserSevm countSevm base entries target pauser enumG pauserG
+    countG hforkEnum hforkPauser hforkCount hpauserOwner hcountOwner hpauserData hpauserWord
+    hcountData hcountWord htarget hpauser hw henumWarm hpauserWarm hcountWarm hfs
+
+-- pauserSet_local_transition
+example
+    (dp : DeployParams) {ca : Adr} {sevm : Sevm}
+    {pre final : Devm} {loc : Nat} {img : Bytes}
+    {entries : List Entry} {target newPauser continuation : B256}
+    (howner : sevm.currentTarget = ca)
+    (hcodeAddress : sevm.codeAddress = some ca)
+    (hbytes : sevm.code.toList = lidoCircuitBreakerCode dp)
+    (htable : (table 0
+      ((runtime dp).main :: (runtime dp).aux))[setPauserSlot]? =
+        some (loc, setPauserKernel))
+    (hwf : Mem.Wf pre.memory)
+    (hr : Mem.Reads pre.memory img)
+    (htargetRead : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (hnewRead : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = newPauser)
+    (hcontinuationRead : Bytes.toB256
+      (img.sliceD (continuationWord * 32).toNat 32 0) = continuation)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor pre ca)) entries)
+    (htarget : canonicalAddress target)
+    (hnew : canonicalAddress newPauser)
+    (hexec : Exec (loc + 1) sevm pre (.ok final)) :
+    ∃ trace postRegistry postImg logged,
+      setPauserSourceTrace entries target newPauser = some trace ∧
+      setPauser entries target newPauser = some trace.postEntries ∧
+      Devm.getStor postRegistry ca =
+        applyRegistryWrites (Devm.getStor pre ca) trace.writes ∧
+      RegistryWitness
+        (logicalStorageOfStor (Devm.getStor postRegistry ca))
+        trace.postEntries ∧
+      logged.logs = postRegistry.logs ++
+        [⟨ca,
+          [pauserSetEvent, target, assignmentAt entries target, newPauser],
+          []⟩] ∧
+      Mem.Wf logged.memory ∧
+      Mem.Reads logged.memory postImg ∧
+      Bytes.toB256
+        (postImg.sliceD (continuationWord * 32).toNat 32 0) = continuation ∧
+      Devm.getStor logged = Devm.getStor postRegistry ∧
+      Func.Run ((runtime dp).main :: (runtime dp).aux) sevm logged
+        (loadWord continuationWord +++ Ninst.iszero :::
+          (Func.call pauseAfterSetSlot).branch
+            (Func.call registerAfterSetSlot)) final ∧
+      ((continuation = 0 ∧
+          ∃ registerPre,
+            postRegistry.stack <<+ registerPre.stack ∧
+            Mem.Wf registerPre.memory ∧
+            Mem.Reads registerPre.memory postImg ∧
+            Devm.getStor registerPre sevm.currentTarget =
+              Devm.getStor postRegistry ca ∧
+            Devm.getCode postRegistry = Devm.getCode registerPre ∧
+            Func.Run ((runtime dp).main :: (runtime dp).aux)
+              sevm registerPre registerAfterSet final) ∨
+        (continuation ≠ 0 ∧
+          ∃ pausePre,
+            postRegistry.stack <<+ pausePre.stack ∧
+            Mem.Wf pausePre.memory ∧
+            Mem.Reads pausePre.memory postImg ∧
+            Devm.getStor pausePre sevm.currentTarget =
+              Devm.getStor postRegistry ca ∧
+            Devm.getCode postRegistry = Devm.getCode pausePre ∧
+            Func.Run ((runtime dp).main :: (runtime dp).aux)
+              sevm pausePre pauseAfterSet final)) :=
+  pauserSet_local_transition dp howner hcodeAddress hbytes htable hwf hr htargetRead hnewRead
+    hcontinuationRead hw htarget hnew hexec
+
+-- pauserSet_target_zero_no_success
+example
+    (dp : DeployParams) {ca : Adr} {sevm : Sevm}
+    {pre final : Devm} {loc : Nat} {img : Bytes}
+    {entries : List Entry} {newPauser continuation : B256}
+    (howner : sevm.currentTarget = ca)
+    (hcodeAddress : sevm.codeAddress = some ca)
+    (hbytes : sevm.code.toList = lidoCircuitBreakerCode dp)
+    (htable : (table 0
+      ((runtime dp).main :: (runtime dp).aux))[setPauserSlot]? =
+        some (loc, setPauserKernel))
+    (hwf : Mem.Wf pre.memory)
+    (hr : Mem.Reads pre.memory img)
+    (htargetRead : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = 0)
+    (hnewRead : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = newPauser)
+    (hcontinuationRead : Bytes.toB256
+      (img.sliceD (continuationWord * 32).toNat 32 0) = continuation)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor pre ca)) entries)
+    (hnew : canonicalAddress newPauser)
+    (hexec : Exec (loc + 1) sevm pre (.ok final)) : False :=
+  pauserSet_target_zero_no_success dp howner hcodeAddress hbytes htable hwf hr htargetRead hnewRead
+    hcontinuationRead hw hnew hexec
+
+-- pauserSet_target_zero_error_logs_unchanged
+example
+    (dp : DeployParams) {ca : Adr} {sevm : Sevm} {pre : Devm}
+    {loc : Nat} {img : Bytes} {stack : List B256}
+    {target : B256} {G : Nat}
+    (howner : sevm.currentTarget = ca)
+    (hcodeAddress : sevm.codeAddress = some ca)
+    (hbytes : sevm.code.toList = lidoCircuitBreakerCode dp)
+    (htable : (table 0
+      ((runtime dp).main :: (runtime dp).aux))[setPauserSlot]? =
+        some (loc, setPauserKernel))
+    (hstack : pre.stack = stack)
+    (hwf : Mem.Wf pre.memory)
+    (hr : Mem.Reads pre.memory img)
+    (htargetRead : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (htargetCanonical : canonicalAddress target)
+    (htargetZero : target = 0)
+    (halign : pre.memory.size % 32 = 0)
+    (hgas : pre.gasLeft = G +
+      (gVerylow +
+        (gVerylow + pre.extCost [⟨(targetWord * 32).toNat, 32⟩]) +
+        gVerylow + (gVerylow + gHigh + gJumpdest) +
+        (gVerylow + gMid + gJumpdest) +
+        revertSelectorCost (pre.setMach ⟨pre.stack,
+          (pre.memory.read (targetWord * 32).toNat 32).2, 0, pre.stateGas⟩)))
+    (hroom : pre.stack.length < 1023) :
+    let fs := (runtime dp).main :: (runtime dp).aux
+    let data := customErrorData "PausableZero"
+    let post := (pre.setMach ⟨stack,
+      (pre.memory.read (targetWord * 32).toNat 32).2.write 0
+        data.toB256.toBytes, G, pre.stateGas⟩).withOutput data
+    (Func.RunCompiledTo fs sevm pre setPauserKernel
+        (.error (.revert, post)) ∧
+      ∃ execution : Exec (loc + 1) sevm pre (.error (.revert, post)),
+        ∀ occurrence : Exec.NinstOccurrence
+            (⟨loc + 1, sevm, pre, .error (.revert, post), execution⟩ :
+              Exec.Deriv),
+          occurrence.instruction ≠ .reg .sstore) ∧
+      post.logs = pre.logs :=
+  pauserSet_target_zero_error_logs_unchanged dp howner hcodeAddress hbytes htable hstack hwf hr htargetRead htargetCanonical htargetZero halign hgas hroom
+
+-- pauserSet_register_success
+example
+    (dp : DeployParams) {ca : Adr} {sevm : Sevm}
+    {pre final : Devm} {loc : Nat} {img : Bytes}
+    {entries : List Entry} {target newPauser continuation : B256}
+    (howner : sevm.currentTarget = ca)
+    (hcodeAddress : sevm.codeAddress = some ca)
+    (hbytes : sevm.code.toList = lidoCircuitBreakerCode dp)
+    (htable : (table 0
+      ((runtime dp).main :: (runtime dp).aux))[setPauserSlot]? =
+        some (loc, setPauserKernel))
+    (hwf : Mem.Wf pre.memory)
+    (hr : Mem.Reads pre.memory img)
+    (htargetRead : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (hnewRead : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = newPauser)
+    (hcontinuationRead : Bytes.toB256
+      (img.sliceD (continuationWord * 32).toNat 32 0) = continuation)
+    (hcontinuation : continuation = 0)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor pre ca)) entries)
+    (htarget : canonicalAddress target)
+    (hnew : canonicalAddress newPauser)
+    (hexec : Exec (loc + 1) sevm pre (.ok final)) :
+    ∃ (trace : SetPauserSourceTrace) (postRegistry : Devm)
+        (suffix : List Log),
+      setPauser entries target newPauser = some trace.postEntries ∧
+      RegistryWitness
+        (logicalStorageOfStor (Devm.getStor final ca)) trace.postEntries ∧
+      final.logs = postRegistry.logs ++
+        [⟨ca,
+          [pauserSetEvent, target, assignmentAt entries target, newPauser],
+          []⟩] ++ suffix :=
+  pauserSet_register_success dp howner hcodeAddress hbytes htable hwf hr htargetRead hnewRead
+    hcontinuationRead hcontinuation hw htarget hnew hexec
+
+-- pauserSet_register_success_committed
+example
+    (dp : DeployParams) {msg : Msg} {ca : Adr}
+    {final settled : Devm} {loc : Nat} {img : Bytes}
+    {entries : List Entry} {target newPauser continuation : B256}
+    (_htargetOwner : msg.target = some ca)
+    (howner : msg.currentTarget = ca)
+    (hcodeAddress : msg.codeAddress = some ca)
+    (hcode : msg.code.toList = lidoCircuitBreakerCode dp)
+    (_hvalue : msg.value = 0)
+    (_hdata : msg.data = registerPauserCalldata target newPauser)
+    (htable : (table 0
+      ((runtime dp).main :: (runtime dp).aux))[setPauserSlot]? =
+        some (loc, setPauserKernel))
+    (hwf : Mem.Wf (initDevm msg).memory)
+    (hr : Mem.Reads (initDevm msg).memory img)
+    (htargetRead : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (hnewRead : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = newPauser)
+    (hcontinuationRead : Bytes.toB256
+      (img.sliceD (continuationWord * 32).toNat 32 0) = continuation)
+    (hcontinuation : continuation = 0)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor (initDevm msg) ca)) entries)
+    (htarget : canonicalAddress target)
+    (hnew : canonicalAddress newPauser)
+    (hexec : Exec (loc + 1) (initSevm msg) (initDevm msg) (.ok final))
+    (hprocess : ProcessMessage msg
+      (.some ⟨⟨loc + 1, initSevm msg, initDevm msg⟩, .ok final⟩)
+      (.ok settled))
+    (hclean : final.error.isNone = true) :
+    ∃ (trace : SetPauserSourceTrace) (postRegistry : Devm)
+        (suffix : List Log),
+      setPauser entries target newPauser = some trace.postEntries ∧
+      RegistryWitness
+        (logicalStorageOfStor (Devm.getStor settled ca)) trace.postEntries ∧
+      settled.logs = postRegistry.logs ++
+        [⟨ca,
+          [pauserSetEvent, target, assignmentAt entries target, newPauser],
+          []⟩] ++ suffix :=
+  pauserSet_register_success_committed dp _htargetOwner howner hcodeAddress hcode _hvalue _hdata
+    htable hwf hr htargetRead hnewRead hcontinuationRead hcontinuation hw htarget hnew hexec
+    hprocess hclean
+
+-- pauserSet_settled_error_not_observable
+example
+    (dp : DeployParams) {msg : Msg} {state : State} {out : MsgCallOutput}
+    {slot : Xlot} {post : Devm} {entries : List Entry}
+    {ca : Adr} {target newPauser : B256}
+    (htargetOwner : msg.target = some ca)
+    (howner : msg.currentTarget = ca)
+    (hcodeAddress : msg.codeAddress = some ca)
+    (hcode : msg.code.toList = lidoCircuitBreakerCode dp)
+    (hvalue : msg.value = 0)
+    (hdata : msg.data = registerPauserCalldata target newPauser ∨
+      msg.data = pauseCalldata target)
+    (htarget : canonicalAddress target)
+    (hnew : canonicalAddress newPauser)
+    (hentry : RegistryWitness
+      (logicalStorageOfStor (msg.benv.state.getStor ca)) entries)
+    (hprocess : ProcessMessage msg slot (.ok post))
+    (hpostError : post.error.isSome)
+    (hrun : processMessageCall msg = .ok (state, out))
+    (herror : out.error.isSome) :
+    out.logs = [] ∧
+      RegistryWitness
+        (logicalStorageOfStor (Devm.getStor post ca)) entries :=
+  pauserSet_settled_error_not_observable dp htargetOwner howner hcodeAddress hcode hvalue hdata
+    htarget hnew hentry hprocess hpostError hrun herror
+
+-- registryObservation_sound
+example
+    (dp : DeployParams) (fs : List Func)
+    (enumSevm pauserSevm countSevm : Sevm)
+    {msg : Msg} {ca : Adr} {final settled : Devm}
+    {loc : Nat} {img : Bytes} {entries : List Entry}
+    {target newPauser continuation : B256}
+    (enumG pauserG countG : Nat)
+    (hforkEnum : CoveredFork enumSevm.benvStat.fork)
+    (hforkPauser : CoveredFork pauserSevm.benvStat.fork)
+    (hforkCount : CoveredFork countSevm.benvStat.fork)
+    (htargetOwner : msg.target = some ca)
+    (howner : msg.currentTarget = ca)
+    (hcodeAddress : msg.codeAddress = some ca)
+    (hcode : msg.code.toList = lidoCircuitBreakerCode dp)
+    (hvalue : msg.value = 0)
+    (hdata : msg.data = registerPauserCalldata target newPauser)
+    (htable : (table 0
+      ((runtime dp).main :: (runtime dp).aux))[setPauserSlot]? =
+        some (loc, setPauserKernel))
+    (hwf : Mem.Wf (initDevm msg).memory)
+    (hr : Mem.Reads (initDevm msg).memory img)
+    (htargetRead : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (hnewRead : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = newPauser)
+    (hcontinuationRead : Bytes.toB256
+      (img.sliceD (continuationWord * 32).toNat 32 0) = continuation)
+    (hcontinuation : continuation = 0)
+    (hw : RegistryWitness
+      (logicalStorageOfStor (Devm.getStor (initDevm msg) ca)) entries)
+    (htarget : canonicalAddress target)
+    (hnew : canonicalAddress newPauser)
+    (henumOwner : enumSevm.currentTarget = ca)
+    (hpauserOwner : pauserSevm.currentTarget = enumSevm.currentTarget)
+    (hcountOwner : countSevm.currentTarget = enumSevm.currentTarget)
+    (hpauserData : pauserSevm.data.length.toB256 <? 36 = 0)
+    (hpauserWord : Sevm.dataWord pauserSevm 4 = target)
+    (hcountData : countSevm.data.length.toB256 <? 36 = 0)
+    (hcountWord : Sevm.dataWord countSevm 4 = newPauser)
+    (hfs : fs[enumLoopSlot]? = some enumLoop)
+    (hexec : Exec (loc + 1) (initSevm msg) (initDevm msg) (.ok final))
+    (hprocess : ProcessMessage msg
+      (.some ⟨⟨loc + 1, initSevm msg, initDevm msg⟩, .ok final⟩)
+      (.ok settled))
+    (hclean : final.error.isNone = true) :
+    ∃ (trace : SetPauserSourceTrace) (postRegistry : Devm)
+        (suffix : List Log) (viewBase : Devm),
+      setPauser entries target newPauser = some trace.postEntries ∧
+      RegistryWitness
+        (logicalStorageOfStor (Devm.getStor settled ca)) trace.postEntries ∧
+      settled.logs = postRegistry.logs ++
+        [⟨ca,
+          [pauserSetEvent, target, assignmentAt entries target, newPauser],
+          []⟩] ++ suffix ∧
+      viewBase = prepareRegistryViewsStorage enumSevm settled
+        trace.postEntries target newPauser ∧
+      Devm.getStor viewBase = Devm.getStor settled ∧
+      viewBase.logs = settled.logs ∧
+      RegistryViewsRun fs enumSevm pauserSevm countSevm viewBase
+        trace.postEntries target newPauser enumG pauserG countG :=
+  registryObservation_sound dp fs enumSevm pauserSevm countSevm enumG pauserG countG hforkEnum
+    hforkPauser hforkCount htargetOwner howner hcodeAddress hcode hvalue hdata htable hwf hr
+    htargetRead hnewRead hcontinuationRead hcontinuation hw htarget hnew henumOwner hpauserOwner
+    hcountOwner hpauserData hpauserWord hcountData hcountWord hfs hexec hprocess hclean
 
 /-! S9 carrier-field pins. The dedicated deployment gate hashes the complete
 record bodies; these Lean wrappers independently pin each public field's type. -/
@@ -7774,21 +8143,44 @@ end Blanc.Lift.UniswapV2Pair
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
--- Uniswap V2 Pair: permit_bytecode_refines_source
-example {K : WriterKey → Prop} {current : Checkpoint}
-    {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
+-- Uniswap V2 Pair: permit_bytecode_admitted_consumes
+example {Auth : Exec.Deriv → Entry → Transcript → Prop} {U K : WriterKey → Prop} (inj : WriterInj U)
+    (apart : WriterApart U) (sub : ∀ k, K k → U k)
+    (sem : CodeSem) (image : sem.image = some code.toList)
+    {current : Checkpoint} {invocation : List Nat} {sevm : Sevm} {b post : Devm} {G : Nat}
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
-    (fresh : WriterFreshKeys K (permitTouched (permitOwner sevm) (permitSpender sevm)))
+    (touched : ∀ k ∈ permitTouched (permitOwner sevm) (permitSpender sevm), U k)
+    (installed : some (b.getCode sevm.currentTarget).toList = sem.image)
     (representable : sevm.data.length < 2 ^ 256)
     (codeEq : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
     (selector : Blanc.Sevm.selector sevm = 0xd505accf) (freshOutput : b.output = [])
-    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post)) :
+    (run : Exec 0 sevm (St b [] Mem.empty G) (.ok post))
+    (good : ∀ F ∈ Exec.rawFrameRoots run, F.sevm.currentTarget = sevm.currentTarget →
+      ∀ k ∈ staticViewDecodedKeys F.sevm, U k) :
     sevm.value = 0 ∧ 228 ≤ sevm.data.length ∧ sevm.isStatic = false ∧
       sevm.benvStat.time ≤ permitDeadline sevm ∧
-      ∃ (gw : B256) (callGas : Nat) (d : Devm) (out : Bytes) (residual : Nat),
-        PermitRawCall sevm b 0xd505accf gw callGas d out ∧
-        ∀ codeExists, PermitSourceResult K current invocation sevm b post d out codeExists residual :=
-  permit_bytecode_refines_source rep fresh representable codeEq fork selector freshOutput run
+      ∃ (actual : PermitCallOccurrence ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ b)
+        (settled : PermitRecoverySettlement actual) (views : List StaticViewTurn),
+        PermitSourceResult K current invocation sevm b post actual.call.returned.devm
+          actual.out settled.entered post.gasLeft ∧
+        PermitRecoveryAuth ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+          actual.out settled.entered views ∧
+        AdmittedSourceConsumes Auth ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩
+          ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ 0
+          (startTyped current (writerContext sevm invocation) (permitDecodedEntry sevm))
+          (.next (permitExternalResult actual.out settled.entered) (staticViewTranscript views .done) .done)
+          (permitPublicDone current invocation sevm
+            (staticViewChildReturns (permitPublicSuspended current invocation sevm)
+              (permitPublicRequest current sevm) 0 views)) ∧
+        ExactConsumes (startTyped current (writerContext sevm invocation) (permitDecodedEntry sevm))
+          (.next (permitExternalResult actual.out settled.entered) (staticViewTranscript views .done) .done)
+          (permitPublicDone current invocation sevm
+            (staticViewChildReturns (permitPublicSuspended current invocation sevm)
+              (permitPublicRequest current sevm) 0 views)) ∧
+        views.map Prod.fst = settled.paths ∧
+        (∀ picked ∈ views, picked.Authentic (permitPublicSuspended current invocation sevm)) :=
+  permit_bytecode_admitted_consumes inj apart sub sem image rep touched installed
+    representable codeEq fork selector freshOutput run good
 
 end Blanc.Lift.UniswapV2Pair
 
@@ -8411,29 +8803,28 @@ example (s : PairStep)  :
 
 end Blanc.Lift.UniswapV2Pair
 
-namespace Blanc.Lift.UniswapV2Pair
-open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+namespace Blanc
+open Jaune
 
--- Uniswap V2 Pair definition: PairStep.Authentic
-example (pair : Adr)
-    (s : PairStep)  :
-    PairStep.Authentic pair s ↔
-      (s.frame.pc = 0 ∧ Execution.commits s.frame.out = true ∧ s.frame.sevm.currentTarget = pair ∧
-    s.frame.sevm.isStatic = false ∧
-    PairFrameAuth (Blanc.Exec.Frame.rootDeriv s.frame) s.entry s.transcript) :=
-  Iff.rfl
+-- Common CALL/STATICCALL statement: successful flag commits the entered child
+example {sevm : Sevm} {pre post : Devm} {x : Xinst}
+    {child : Evm} {raw : Execution}
+    (fork : CoveredFork sevm.benvStat.fork) (callFamily : x = .call ∨ x = .staticcall)
+    (run : Xinst.Run sevm pre x (.some ⟨child, raw⟩) (.ok post))
+    (flag : ∃ f rest, post.stack = f :: rest ∧ f ≠ 0) : Execution.commits raw = true :=
+  Xinst.call_run_flag_commits fork callFamily run flag
 
-end Blanc.Lift.UniswapV2Pair
+end Blanc
 
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
--- Uniswap V2 Pair definition: PairFrameAuth
-example (D : Exec.Deriv) (entry : Entry) (T : Transcript)  :
-    PairFrameAuth D entry T ↔
-      (LockedAuth D entry T ∨ SwapAuth D entry T ∨ MintAuth D entry T ∨ SyncAuth D entry T ∨
-    SkimAuth D entry T ∨ BurnAuth D entry T) :=
-  Iff.rfl
+-- Uniswap V2 Pair erasure statement: retain the same positional outcome witnesses
+example {U : WriterKey → Prop} {current : Checkpoint}
+    {invocation : List Nat} {K : WriterKey → Prop} {root : Exec.Deriv} {post : Devm}
+    (outcome : PairPositionalOutcome U current invocation K root post) :
+    PairStepOutcome PairEntryAuth U current invocation K root post :=
+  PairPositionalOutcome.forget outcome
 
 end Blanc.Lift.UniswapV2Pair
 
@@ -12594,5 +12985,86 @@ example (pair : Adr) (event : Event) :
             in0.toBytes ++ in1.toBytes ++ out0.toBytes ++ out1.toBytes⟩
       | _ => none) := by
   cases event <;> rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+-- Paper review 3 statement: pair_history_ledger_from_checkpoint
+example
+    {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
+    (ledger : st₀.Ledger) :
+    ∃ steps : List PairStep,
+      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
+      ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
+        runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
+        WriterRep K' (future.state.getStor pair) finish ∧
+        finish.Ledger :=
+  pair_history_ledger_from_checkpoint trace installed initial fresh ledger
+
+-- Paper review 3 statement: pair_history_minimum_liquidity_from_checkpoint
+example
+    {pair : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
+    (ledger : st₀.Ledger)
+    (floor : st₀.SupplyFloor)
+    (nonzero : pair ≠ 0) :
+    ∃ steps : List PairStep,
+      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
+      ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
+        runSourceInvocations st₀
+          (steps.map PairStep.source) = some finish ∧
+        WriterRep K' (future.state.getStor pair) finish ∧
+        ((∀ s ∈ steps, s.source.CallersNonzero) →
+          finish.SupplyFloor ∧
+          ∀ before after, (before, after) ∈ sourceReplayEdges
+              st₀ (steps.map PairStep.source) →
+            before.SupplyFloor ∧ after.SupplyFloor ∧
+              (0 < before.totalSupply.toNat → 1000 ≤ after.totalSupply.toNat)) :=
+  pair_history_minimum_liquidity_from_checkpoint trace installed initial fresh ledger floor nonzero
+
+-- Paper review 3 statement: pair_history_feeOff_ratio_from_checkpoint
+example
+    {pair : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
+    (ledger : st₀.Ledger)
+    (floor : st₀.SupplyFloor)
+    (nonzero : pair ≠ 0) :
+    ∃ steps : List PairStep,
+      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
+      ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
+        runSourceInvocations st₀
+          (steps.map PairStep.source) = some finish ∧
+        WriterRep K' (future.state.getStor pair) finish ∧
+        (sourceReplayAnswers st₀
+            (steps.map PairStep.source) →
+          (∀ s ∈ steps, s.source.CallersNonzero) →
+          ∀ before after, (before, after) ∈ sourceReplayEdges
+              st₀ (steps.map PairStep.source) →
+            0 < before.totalSupply.toNat →
+            1000 ≤ after.totalSupply.toNat ∧
+              ((before.reserve0.val * before.reserve1.val : ℚ) / (before.totalSupply.toNat : ℚ) ^ 2 ≤
+                (after.reserve0.val * after.reserve1.val : ℚ) / (after.totalSupply.toNat : ℚ) ^ 2)) :=
+  pair_history_feeOff_ratio_from_checkpoint trace installed initial fresh ledger floor nonzero
 
 end Blanc.Lift.UniswapV2Pair
