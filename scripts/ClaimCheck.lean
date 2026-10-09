@@ -83,6 +83,7 @@ import Blanc.Lift.Weth9.LiveTx
 import Blanc.Lift.Weth9.Creation.Deploy
 import Blanc.Lift.Weth9.Creation.DeployInit
 import Blanc.Lift.Weth9.PrefixTx
+import Blanc.Lift.Weth9.ClosedExit
 import Blanc.Lift.BeaconDeposit.BeaconEnv
 import Blanc.Lift.BeaconDeposit.Creation.Deploy
 import Blanc.Lift.Curve3Crv.CommittedHistory
@@ -10517,6 +10518,51 @@ example : ∀ {ca : Adr} {cfg : ChainConfig} {checkpoint boundary completed : Bl
   @weth9_prefix_tx_withdraw
 
 end Blanc.Lift.Weth9
+
+-- Paper review 2 statement (D2, conditional): weth9_closed_exit_instance
+namespace Blanc.Lift.Weth9.ClosedInstance
+open Jaune Blanc Blanc.ExecutionTrace
+
+example : ∃ st bout, ClosedExitWitness st bout :=
+  weth9_closed_exit_instance
+
+end Blanc.Lift.Weth9.ClosedInstance
+
+-- Paper review 2 constructor (D2, conditional): ClosedExitWitness.mk
+namespace Blanc.Lift.Weth9.ClosedInstance
+open Jaune Blanc Blanc.ExecutionTrace
+
+example : ∀ {st : Jaune.State} {bout : BlockOutput}
+    (positive : 0 < amount)
+    (deployment : processCreateMessage creationMessage = .ok deploymentPost)
+    (checkpoint : deploymentCheckpoint.state = deploymentPost.state)
+    (historyValid : BlockChain.ReachUsing config deploymentCheckpoint historyFuture)
+    (historyNonempty : historyFuture.blocks.length = 2)
+    (deposit : processTransaction (input deploymentPost.state) BlockOutput.init depositTx 0 =
+      .ok (depositedState, depositBout))
+    (committedDeposit : ∃ inv ∈ committedInvocations contractAddress closedHistory,
+      decodeCall inv.sevm = some (.deposit senderE amount))
+    (balanceBefore : (historyFuture.state.getStor contractAddress).get (balSlot senderE) = amount)
+    (admitted : processTransaction withdrawBenv BlockOutput.init withdrawTx 0 = .ok (st, bout))
+    (balanceAfter : (st.getStor contractAddress).get (balSlot senderE) = 0)
+    (storage : st.getStor contractAddress = (historyFuture.state.getStor contractAddress).set
+      (balSlot senderE) 0)
+    (otherStorage : ∀ a, a ≠ contractAddress → st.getStor a = historyFuture.state.getStor a)
+    (holderNonce : (st.get senderE).nonce = 2)
+    (holderEther : (st.get senderE).bal = 849236)
+    (contractEther : (st.get contractAddress).bal = 0)
+    (paid : (st.get contractAddress).bal = historyFuture.state.bal contractAddress - amount)
+    (gasUsed : bout.blockGasUsed = 30344)
+    (cumulativeGasUsed : bout.cumulativeGasUsed = 30344)
+    (gasFormula : bout.blockGasUsed =
+      withdrawGasUsed ((historyFuture.state.getStor contractAddress).get (balSlot senderE)) amount)
+    (clearingRefund : withdrawRefund amount amount = 4800)
+    (overflow : (historyFuture.state.bal senderE).toNat + amount.toNat < 2 ^ 256)
+    (netOfFees : (st.get senderE).bal.toNat + 60688 = 909924),
+    ClosedExitWitness st bout :=
+  @ClosedExitWitness.mk
+
+end Blanc.Lift.Weth9.ClosedInstance
 
 -- Paper review 2 statement: vplus_reachable_capstone
 namespace Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit
