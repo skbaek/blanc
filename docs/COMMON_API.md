@@ -4607,7 +4607,14 @@ instance. The separate `pair_admitted_burn_supply` in
 [`PairPositionalBurn.lean`](../Blanc/Lift/UniswapV2Pair/PairPositionalBurn.lean)
 retains the same seven-call canonical result, both recursively admitted mutable
 queues, actual payout bytes and represented state under the original separated
-universe. The final all-family instance still awaits Swap.
+universe. The separate `pair_admitted_swap_supply` in
+[`PairPositionalSwap.lean`](../Blanc/Lift/UniswapV2Pair/PairPositionalSwap.lean)
+retains the same optional-call canonical result and recursively admitted queues,
+with actual output and represented state. `pairAdmittedSupplyRules` and
+`pairAdmittedSupply` in
+[`PairPositionalSupply.lean`](../Blanc/Lift/UniswapV2Pair/PairPositionalSupply.lean)
+assemble all eleven concrete families through the existing selector dispatcher,
+without an additional supply premise for callers.
 
 `transfer_source_call_at` in
 [`TransferSourceCall.lean`](../Blanc/Lift/UniswapV2Pair/TransferSourceCall.lean)

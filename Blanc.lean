@@ -848,6 +848,8 @@ import Blanc.Lift.UniswapV2Pair.PairPositionalEntry
 import Blanc.Lift.UniswapV2Pair.PairPositionalReady
 import Blanc.Lift.UniswapV2Pair.PairPositionalSkim
 import Blanc.Lift.UniswapV2Pair.PairPositionalBurn
+import Blanc.Lift.UniswapV2Pair.PairPositionalSwap
+import Blanc.Lift.UniswapV2Pair.PairPositionalSupply
 import Blanc.Lift.UniswapV2Pair.PairHistory
 import Blanc.Lift.UniswapV2Pair.SwapForwardAccept
 import Blanc.Lift.UniswapV2Pair.MintForwardAccept
