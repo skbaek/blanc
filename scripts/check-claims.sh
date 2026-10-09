@@ -31,8 +31,8 @@ fi
 
 claim_count="$(grep -Ec '^[[:space:]]*(example|#check)([[:space:]]|$)' \
   "$ROOT/scripts/ClaimCheck.lean")"
-if [[ "$claim_count" -ne 712 ]]; then
-  echo "REGRESSION — claim inventory: expected 712 pins, found $claim_count"
+if [[ "$claim_count" -ne 755 ]]; then
+  echo "REGRESSION — claim inventory: expected 755 pins, found $claim_count"
   exit 1
 fi
 
