@@ -210,15 +210,15 @@ theorem pair_history_initialize_live {pair : Adr} {cfg : ChainConfig}
           (WriterFreshKeys (pairHistoryUniverse pair trace K₀)
               (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty (G + initializeStorageCharge sevm pre + 377),
                 .ok _, run⟩) →
-            PairStepOutcome PairFrameAuth
+            PairAdmittedOutcome
               (WriterExtend (pairHistoryUniverse pair trace K₀)
                 (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
                   (G + initializeStorageCharge sevm pre + 377), .ok _, run⟩))
               { state := finish, logs := [], updates := [] } [] K'
               ⟨0, sevm, St pre [] Mem.empty (G + initializeStorageCharge sevm pre + 377), .ok _, run⟩
               (initializePublicPost sevm pre [0x485cc955] getterInitMemory G)) :=
-  pair_history_initialize_live_with (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
-    (fun _ _ _ _ consumed => consumed)
+  pair_history_initialize_live_with (fun _ inj apart => pairAdmittedSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed.positional.forget)
     trace installed initial fresh target state codeEq fork output representable size selector
     guard sentry0 sentry1
 
@@ -322,7 +322,7 @@ theorem pair_history_permit_live {pair : Adr} {cfg : ChainConfig}
               (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
                 (callGas + permitNonceStoreCharge sevm pre + permitNonceCharge sevm pre + 1137),
                 .ok _, run⟩) →
-            PairStepOutcome PairFrameAuth
+            PairAdmittedOutcome
               (WriterExtend (pairHistoryUniverse pair trace K₀)
                 (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
                   (callGas + permitNonceStoreCharge sevm pre + permitNonceCharge sevm pre + 1137),
@@ -332,8 +332,8 @@ theorem pair_history_permit_live {pair : Adr} {cfg : ChainConfig}
                 (callGas + permitNonceStoreCharge sevm pre + permitNonceCharge sevm pre + 1137),
                 .ok _, run⟩
               (permitPublicPost sevm pre d d.returnData 0xd505accf G)) :=
-  pair_history_permit_live_with (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
-    (fun _ _ _ _ consumed => consumed)
+  pair_history_permit_live_with (fun _ inj apart => pairAdmittedSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed.positional.forget)
     trace installed initial fresh target state codeEq fork output representable size selector
     guard sentry3 call success returnedGas sentry
 

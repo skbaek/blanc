@@ -1,4 +1,4 @@
-import Blanc.Lift.UniswapV2Pair.PairSupply
+import Blanc.Lift.UniswapV2Pair.PairPositionalSupply
 import Blanc.Lift.UniswapV2Pair.SourceReplay
 import Blanc.Lift.UniswapV2Pair.SourceReplayOracle
 import Blanc.Lift.UniswapV2Pair.Creation.DeployInit
@@ -536,16 +536,16 @@ theorem pair_history_committed {pair : Adr} {cfg : ChainConfig} {checkpoint futu
     some (future.state.getCode pair).toList = pairSem.image ∧
     ∃ steps : List PairStep,
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.Authentic pair) ∧
+      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplay st₀ steps finish ∧
+        PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
         SourceReplay st₀ (steps.map PairStep.source) finish ∧
         runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
         (∀ k, K₀ k → K' k) ∧
         (∀ k, K' k → WriterExtend K₀ (pairHistoryTouchedKeys pair trace) k) ∧
         WriterRep K' (future.state.getStor pair) finish :=
-  pair_history_committed_with (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
-    (fun _ _ _ _ consumed => consumed) trace installed initial fresh
+  pair_history_committed_with (fun _ inj apart => pairAdmittedSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed.positional.forget) trace installed initial fresh
 
 theorem pair_history_initialized_with
     {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
@@ -592,9 +592,9 @@ theorem pair_history_initialized {pair : Adr} {cfg : ChainConfig} {checkpoint fu
     some (future.state.getCode pair).toList = pairSem.image ∧
     ∃ steps : List PairStep,
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.Authentic pair) ∧
+      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplay (initializedState factory domain token0 token1) steps finish ∧
+        PairObservedReplayWith PairAdmittedConsumes (initializedState factory domain token0 token1) steps finish ∧
         SourceReplay (initializedState factory domain token0 token1)
           (steps.map PairStep.source) finish ∧
         runSourceInvocations (initializedState factory domain token0 token1)
@@ -602,8 +602,8 @@ theorem pair_history_initialized {pair : Adr} {cfg : ChainConfig} {checkpoint fu
         (∀ k, K' k → k ∈ pairHistoryTouchedKeys pair trace) ∧
         WriterRep K' (future.state.getStor pair) finish :=
   pair_history_initialized_with
-    (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
-    (fun _ _ _ _ consumed => consumed) trace installed initial fresh
+    (fun _ inj apart => pairAdmittedSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed.positional.forget) trace installed initial fresh
 
 /-! ## Model laws carried to the history -/
 
@@ -750,15 +750,15 @@ theorem pair_history_ledger {pair : Adr} {cfg : ChainConfig} {checkpoint future 
     (fresh : WriterFreshKeys (fun _ => False) (pairHistoryTouchedKeys pair trace)) :
     ∃ steps : List PairStep,
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.Authentic pair) ∧
+      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplay (initializedState factory domain token0 token1) steps finish ∧
+        PairObservedReplayWith PairAdmittedConsumes (initializedState factory domain token0 token1) steps finish ∧
         runSourceInvocations (initializedState factory domain token0 token1) (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
         finish.Ledger :=
   pair_history_ledger_with
-    (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
-    (fun _ _ _ _ consumed => consumed) trace installed initial fresh
+    (fun _ inj apart => pairAdmittedSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed.positional.forget) trace installed initial fresh
 
 /-- **Oracle after a history (U5).**  Each future accumulator is the checkpoint's plus the sum of
 every committed update receipt of the replay (nested committed updates included), modulo `2 ^ 256`.
@@ -778,9 +778,9 @@ theorem pair_history_oracle {pair : Adr} {cfg : ChainConfig} {checkpoint future 
     (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
     ∃ steps : List PairStep,
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.Authentic pair) ∧
+      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplay st₀ steps finish ∧
+        PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
         runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
         finish.price0CumulativeLast.toNat =
@@ -798,8 +798,8 @@ theorem pair_history_oracle {pair : Adr} {cfg : ChainConfig} {checkpoint future 
           ∃ s ∈ steps, inv = s.source ∧
             ∀ u ∈ receipts, u.update.timestamp = s.frame.sevm.benvStat.time :=
   pair_history_oracle_with
-    (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
-    (fun _ _ _ _ consumed => consumed) trace installed initial fresh
+    (fun _ inj apart => pairAdmittedSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed.positional.forget) trace installed initial fresh
 
 /-- **Share value never decreases with the protocol fee off (U3).**  For the history's own steps: if
 each step's factory `feeTo` answer is zero (`EntryFeeOff`, mint and burn) and the token answers
@@ -819,9 +819,9 @@ theorem pair_history_feeOff_product {pair : Adr} {cfg : ChainConfig}
     (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
     ∃ steps : List PairStep,
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.Authentic pair) ∧
+      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplay st₀ steps finish ∧
+        PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
         runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
         (sourceReplayAnswers st₀ (steps.map PairStep.source) →
@@ -830,8 +830,8 @@ theorem pair_history_feeOff_product {pair : Adr} {cfg : ChainConfig}
             before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
               after.reserve0.val * after.reserve1.val * before.totalSupply.toNat ^ 2) :=
   pair_history_feeOff_product_with
-    (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
-    (fun _ _ _ _ consumed => consumed) trace installed initial fresh
+    (fun _ inj apart => pairAdmittedSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed.positional.forget) trace installed initial fresh
 
 /-- **Share value with the protocol fee on (U3, fee-on).**  For the history's own steps: if the token
 answers satisfy `EntryNoShrink` over exactly these steps (sync: both answers at least the stored
@@ -850,9 +850,9 @@ theorem pair_history_feeOn_product {pair : Adr} {cfg : ChainConfig}
     (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
     ∃ steps : List PairStep,
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.Authentic pair) ∧
+      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplay st₀ steps finish ∧
+        PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
         runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
         (sourceReplayNoShrink st₀ (steps.map PairStep.source) →
@@ -862,7 +862,7 @@ theorem pair_history_feeOn_product {pair : Adr} {cfg : ChainConfig}
               after.reserve0.val * after.reserve1.val *
                 (before.totalSupply.toNat + entryFeeAmount before inv.entry inv.transcript) ^ 2) :=
   pair_history_feeOn_product_with
-    (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
-    (fun _ _ _ _ consumed => consumed) trace installed initial fresh
+    (fun _ inj apart => pairAdmittedSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed.positional.forget) trace installed initial fresh
 
 end Blanc.Lift.UniswapV2Pair

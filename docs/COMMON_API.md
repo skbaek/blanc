@@ -3213,7 +3213,12 @@ its step can name the committed frame. Worked use: the Uniswap V2 pair
 `pairSpec_soundAdmittedWith`/`pairSpec_preservesAdmittedWith`,
 `pair_wholeFrameReplayWith`/`pairLadderWith` and `pair_history_committed_with`
 retain one supplied source/admission relation through the existing traversal.
-The generic parameter does not supply an all-family admitted instance.
+The public history headlines instantiate this traversal with `pairAdmittedSupply`
+from `PairPositionalSupply.lean`: all eleven concrete operation families retain
+`PairAdmittedConsumes` and actual `PairEntryAuth`. The public live/admin routes
+carry this same admitted history and return `PairAdmittedOutcome` for the new
+successful frame. Erasure into model laws preserves those selected steps and
+their transcripts, including the steps quantified by `NoShrink`.
 Its calling entries consume re-entered ERC-20 frames as nested
 transcript turns; its carrier's boundary is the storage view `(getStor ca).get` (raw `Stor`
 equality is not a function of the words), with representations transported by `WriterRep.congr`.

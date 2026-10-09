@@ -129,7 +129,7 @@ theorem pair_live_outcome_with
 def PairHistoryReplayed {cfg : ChainConfig} {checkpoint future : BlockChain} (pair : Adr)
     (trace : ConfiguredHistoryTrace cfg checkpoint future) (K₀ : WriterKey → Prop) (st₀ : State)
     (finish : State) (K' : WriterKey → Prop) : Prop :=
-  PairHistoryReplayedWith (fun _ => ExactConsumes) PairFrameAuth pair trace K₀ st₀ finish K'
+  PairHistoryReplayedWith PairAdmittedConsumes PairEntryAuth pair trace K₀ st₀ finish K'
 
 theorem pair_history_replayed {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     {K₀ : WriterKey → Prop} {st₀ : State}
@@ -139,8 +139,8 @@ theorem pair_history_replayed {pair : Adr} {cfg : ChainConfig} {checkpoint futur
     (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
     future.state.getCode pair = code ∧
       ∃ (finish : State) (K' : WriterKey → Prop), PairHistoryReplayed pair trace K₀ st₀ finish K' :=
-  pair_history_replayed_with (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
-    (fun _ _ _ _ consumed => consumed) trace installed initial fresh
+  pair_history_replayed_with (fun _ inj apart => pairAdmittedSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed.positional.forget) trace installed initial fresh
 
 /-- The history's facts at a new frame whose world is the history's future world. -/
 theorem PairHistoryReplayed.at_frame {pair : Adr} {cfg : ChainConfig}
@@ -170,12 +170,12 @@ theorem pair_live_outcome {pair : Adr} {cfg : ChainConfig} {checkpoint future : 
     (output : pre.output = []) (representable : sevm.data.length < 2 ^ 256)
     (newFresh : WriterFreshKeys (pairHistoryUniverse pair trace K₀)
       (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty g, .ok post, run⟩)) :
-    PairStepOutcome PairFrameAuth
+    PairAdmittedOutcome
       (WriterExtend (pairHistoryUniverse pair trace K₀)
         (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty g, .ok post, run⟩))
       { state := finish, logs := [], updates := [] } [] K'
       ⟨0, sevm, St pre [] Mem.empty g, .ok post, run⟩ post :=
-  pair_live_outcome_with (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
+  pair_live_outcome_with (fun _ inj apart => pairAdmittedSupply inj apart pairSem pairSem_image)
     initial fresh futureCode replayed run target state codeEq fork output representable newFresh
 
 /-! ## Instances -/
@@ -251,8 +251,8 @@ theorem pair_history_writer_live {pair : Adr} {cfg : ChainConfig} {checkpoint fu
         (writer.post sevm pre G).gasLeft = G ∧
         writer.Result K' { state := finish, logs := [], updates := [] } [] sevm pre
           (writer.post sevm pre G) G :=
-  pair_history_writer_live_with (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
-    (fun _ _ _ _ consumed => consumed)
+  pair_history_writer_live_with (fun _ inj apart => pairAdmittedSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed.positional.forget)
     trace installed initial fresh writer target state codeEq fork representable length selector
     callFresh
 
@@ -468,15 +468,15 @@ theorem pair_history_sync_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
           (WriterFreshKeys (pairHistoryUniverse pair trace K₀)
               (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
                 (syncCalleePrefixGas sevm pre callGas0 + 15 + 229), .ok post, run⟩) →
-            PairStepOutcome PairFrameAuth
+            PairAdmittedOutcome
               (WriterExtend (pairHistoryUniverse pair trace K₀)
                 (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
                   (syncCalleePrefixGas sevm pre callGas0 + 15 + 229), .ok post, run⟩))
               { state := finish, logs := [], updates := [] } [] K'
               ⟨0, sevm, St pre [] Mem.empty (syncCalleePrefixGas sevm pre callGas0 + 15 + 229),
                 .ok post, run⟩ post)) :=
-  pair_history_sync_live_with (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
-    (fun _ _ _ _ consumed => consumed)
+  pair_history_sync_live_with (fun _ inj apart => pairAdmittedSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed.positional.forget)
     trace installed initial fresh target state codeEq fork output representable value size
     selector static sentry nonzero0 call0 success0 returnedGas0 long0 nonzero1 call1 success1
     returnedGas1 long1
@@ -594,14 +594,14 @@ theorem pair_history_mint_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
             liquidity.toBytes ∧
           (WriterFreshKeys (pairHistoryUniverse pair trace K₀)
               (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty (callee.gas + 228), .ok _, run⟩) →
-            PairStepOutcome PairFrameAuth
+            PairAdmittedOutcome
               (WriterExtend (pairHistoryUniverse pair trace K₀)
                 (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty (callee.gas + 228), .ok _, run⟩))
               { state := finish, logs := [], updates := [] } [] K'
               ⟨0, sevm, St pre [] Mem.empty (callee.gas + 228), .ok _, run⟩
               (getterWordPost callee.fee.post [0x6a627842] callee.fee.post.memory liquidity G)) :=
-  pair_history_mint_live_with (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
-    (fun _ _ _ _ consumed => consumed)
+  pair_history_mint_live_with (fun _ inj apart => pairAdmittedSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed.positional.forget)
     trace installed initial fresh target state codeEq fork output representable value size guard
     selector callee rowsFresh
 
@@ -720,7 +720,7 @@ theorem pair_history_swap_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
               (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
                 (swapFrontTransferGas sevm pre d0 d1 cg0 cg1 cgC callee.gas +
                   swapPrefixGas sevm pre (swapAmount0Out sevm) + 279 + 166), .ok _, run⟩) →
-            PairStepOutcome PairFrameAuth
+            PairAdmittedOutcome
               (WriterExtend (pairHistoryUniverse pair trace K₀)
                 (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
                   (swapFrontTransferGas sevm pre d0 d1 cg0 cg1 cgC callee.gas +
@@ -730,8 +730,8 @@ theorem pair_history_swap_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
                 (swapFrontTransferGas sevm pre d0 d1 cg0 cg1 cgC callee.gas +
                   swapPrefixGas sevm pre (swapAmount0Out sevm) + 279 + 166), .ok _, run⟩
               (St callee.post [0x022c0d9f] callee.memory g)) :=
-  pair_history_swap_live_with (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
-    (fun _ _ _ _ consumed => consumed)
+  pair_history_swap_live_with (fun _ inj apart => pairAdmittedSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed.positional.forget)
     trace installed initial fresh target state codeEq fork output representable value size
     selector guards
 
@@ -857,13 +857,13 @@ theorem pair_history_burn_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
           callee.post.gasLeft = g ∧
           (WriterFreshKeys (pairHistoryUniverse pair trace K₀)
               (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩) →
-            PairStepOutcome PairFrameAuth
+            PairAdmittedOutcome
               (WriterExtend (pairHistoryUniverse pair trace K₀)
                 (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩))
               { state := finish, logs := [], updates := [] } [] K'
               ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩ callee.post) :=
-  pair_history_burn_live_with (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
-    (fun _ _ _ _ consumed => consumed)
+  pair_history_burn_live_with (fun _ inj apart => pairAdmittedSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed.positional.forget)
     trace installed initial fresh target state codeEq fork output representable value size guard
     selector callee rowsFresh
 
@@ -955,13 +955,13 @@ theorem pair_history_skim_live {pair : Adr} {cfg : ChainConfig} {checkpoint futu
           callee.post.gasLeft = g ∧
           (WriterFreshKeys (pairHistoryUniverse pair trace K₀)
               (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩) →
-            PairStepOutcome PairFrameAuth
+            PairAdmittedOutcome
               (WriterExtend (pairHistoryUniverse pair trace K₀)
                 (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩))
               { state := finish, logs := [], updates := [] } [] K'
               ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩ callee.post) :=
-  pair_history_skim_live_with (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
-    (fun _ _ _ _ consumed => consumed)
+  pair_history_skim_live_with (fun _ inj apart => pairAdmittedSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed.positional.forget)
     trace installed initial fresh target state codeEq fork output representable value size abi
     selector callee firstFresh
 

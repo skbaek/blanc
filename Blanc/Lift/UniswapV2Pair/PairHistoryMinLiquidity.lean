@@ -135,9 +135,9 @@ theorem pair_history_minimum_liquidity {pair : Adr} {cfg : ChainConfig}
     (nonzero : pair ≠ 0) :
     ∃ steps : List PairStep,
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.Authentic pair) ∧
+      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplay (initializedState factory domain token0 token1) steps finish ∧
+        PairObservedReplayWith PairAdmittedConsumes (initializedState factory domain token0 token1) steps finish ∧
         runSourceInvocations (initializedState factory domain token0 token1)
           (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
@@ -148,8 +148,8 @@ theorem pair_history_minimum_liquidity {pair : Adr} {cfg : ChainConfig}
             before.SupplyFloor ∧ after.SupplyFloor ∧
               (0 < before.totalSupply.toNat → 1000 ≤ after.totalSupply.toNat)) :=
   pair_history_minimum_liquidity_with
-    (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
-    (fun _ _ _ _ consumed => consumed) trace installed initial fresh nonzero
+    (fun _ inj apart => pairAdmittedSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed.positional.forget) trace installed initial fresh nonzero
 
 /-- **Share value as a ratio, fee off, from the deployment checkpoint (U3).**  For a configured history
 from the deployment checkpoint of a Pair not at address zero: if the authenticated answers of the
@@ -167,9 +167,9 @@ theorem pair_history_feeOff_ratio {pair : Adr} {cfg : ChainConfig}
     (nonzero : pair ≠ 0) :
     ∃ steps : List PairStep,
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.Authentic pair) ∧
+      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplay (initializedState factory domain token0 token1) steps finish ∧
+        PairObservedReplayWith PairAdmittedConsumes (initializedState factory domain token0 token1) steps finish ∧
         runSourceInvocations (initializedState factory domain token0 token1)
           (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
@@ -183,7 +183,7 @@ theorem pair_history_feeOff_ratio {pair : Adr} {cfg : ChainConfig}
               ((before.reserve0.val * before.reserve1.val : ℚ) / (before.totalSupply.toNat : ℚ) ^ 2 ≤
                 (after.reserve0.val * after.reserve1.val : ℚ) / (after.totalSupply.toNat : ℚ) ^ 2)) :=
   pair_history_feeOff_ratio_with
-    (fun _ inj apart => pairSupply inj apart pairSem pairSem_image)
-    (fun _ _ _ _ consumed => consumed) trace installed initial fresh nonzero
+    (fun _ inj apart => pairAdmittedSupply inj apart pairSem pairSem_image)
+    (fun _ _ _ _ consumed => consumed.positional.forget) trace installed initial fresh nonzero
 
 end Blanc.Lift.UniswapV2Pair
