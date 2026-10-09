@@ -7621,9 +7621,9 @@ example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     some (future.state.getCode pair).toList = pairSem.image ∧
     ∃ steps : List PairStep,
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.Authentic pair) ∧
+      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplay st₀ steps finish ∧
+        PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
         SourceReplay st₀ (steps.map PairStep.source) finish ∧
         runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
         (∀ k, K₀ k → K' k) ∧
@@ -7646,9 +7646,9 @@ example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     some (future.state.getCode pair).toList = pairSem.image ∧
     ∃ steps : List PairStep,
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.Authentic pair) ∧
+      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplay (initializedState factory domain token0 token1) steps finish ∧
+        PairObservedReplayWith PairAdmittedConsumes (initializedState factory domain token0 token1) steps finish ∧
         SourceReplay (initializedState factory domain token0 token1)
           (steps.map PairStep.source) finish ∧
         runSourceInvocations (initializedState factory domain token0 token1)
@@ -7671,9 +7671,9 @@ example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (fresh : WriterFreshKeys (fun _ => False) (pairHistoryTouchedKeys pair trace)) :
     ∃ steps : List PairStep,
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.Authentic pair) ∧
+      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplay (initializedState factory domain token0 token1) steps finish ∧
+        PairObservedReplayWith PairAdmittedConsumes (initializedState factory domain token0 token1) steps finish ∧
         runSourceInvocations (initializedState factory domain token0 token1) (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
         finish.Ledger :=
@@ -7693,9 +7693,9 @@ example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
     ∃ steps : List PairStep,
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.Authentic pair) ∧
+      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplay st₀ steps finish ∧
+        PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
         runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
         finish.price0CumulativeLast.toNat =
@@ -7728,9 +7728,9 @@ example {pair : Adr} {cfg : ChainConfig}
     (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
     ∃ steps : List PairStep,
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.Authentic pair) ∧
+      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplay st₀ steps finish ∧
+        PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
         runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
         (sourceReplayAnswers st₀ (steps.map PairStep.source) →
@@ -7754,9 +7754,9 @@ example {pair : Adr} {cfg : ChainConfig}
     (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
     ∃ steps : List PairStep,
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.Authentic pair) ∧
+      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplay st₀ steps finish ∧
+        PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
         runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
         (sourceReplayNoShrink st₀ (steps.map PairStep.source) →
@@ -7810,8 +7810,8 @@ example {U K : WriterKey → Prop} {current : Checkpoint}
       F.sevm.currentTarget = sevm.currentTarget → LockedGood U F)
     (staticGood : ∀ F ∈ Exec.rawFrameRoots run, F.sevm.currentTarget = sevm.currentTarget →
       ∀ k ∈ staticViewDecodedKeys F.sevm, U k) :
-    BurnEntryAuthenticFinished U K current ⟨0, sevm, St b [] Mem.empty G, .ok publicPost, run⟩
-      b (.halted publicPost) invocation :=
+    Nonempty (BurnPositionalCanonicalResult U K current invocation
+      ⟨0, sevm, St b [] Mem.empty G, .ok publicPost, run⟩ b publicPost) :=
   burnRaw_source_authentic invocation codeEq fork selector rep tracked run inj apart sub trace sem image installed good staticGood
 
 end Blanc.Lift.UniswapV2Pair
@@ -7950,7 +7950,7 @@ example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
           (WriterFreshKeys (pairHistoryUniverse pair trace K₀)
               (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
                 (syncCalleePrefixGas sevm pre callGas0 + 15 + 229), .ok post, run⟩) →
-            PairStepOutcome PairFrameAuth
+            PairAdmittedOutcome
               (WriterExtend (pairHistoryUniverse pair trace K₀)
                 (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
                   (syncCalleePrefixGas sevm pre callGas0 + 15 + 229), .ok post, run⟩))
@@ -7997,7 +7997,7 @@ example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
             liquidity.toBytes ∧
           (WriterFreshKeys (pairHistoryUniverse pair trace K₀)
               (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty (callee.gas + 228), .ok _, run⟩) →
-            PairStepOutcome PairFrameAuth
+            PairAdmittedOutcome
               (WriterExtend (pairHistoryUniverse pair trace K₀)
                 (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty (callee.gas + 228), .ok _, run⟩))
               { state := finish, logs := [], updates := [] } [] K'
@@ -8042,7 +8042,7 @@ example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
               (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
                 (swapFrontTransferGas sevm pre d0 d1 cg0 cg1 cgC callee.gas +
                   swapPrefixGas sevm pre (swapAmount0Out sevm) + 279 + 166), .ok _, run⟩) →
-            PairStepOutcome PairFrameAuth
+            PairAdmittedOutcome
               (WriterExtend (pairHistoryUniverse pair trace K₀)
                 (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
                   (swapFrontTransferGas sevm pre d0 d1 cg0 cg1 cgC callee.gas +
@@ -8088,7 +8088,7 @@ example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
           callee.post.gasLeft = g ∧
           (WriterFreshKeys (pairHistoryUniverse pair trace K₀)
               (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩) →
-            PairStepOutcome PairFrameAuth
+            PairAdmittedOutcome
               (WriterExtend (pairHistoryUniverse pair trace K₀)
                 (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩))
               { state := finish, logs := [], updates := [] } [] K'
@@ -8126,7 +8126,7 @@ example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
           callee.post.gasLeft = g ∧
           (WriterFreshKeys (pairHistoryUniverse pair trace K₀)
               (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩) →
-            PairStepOutcome PairFrameAuth
+            PairAdmittedOutcome
               (WriterExtend (pairHistoryUniverse pair trace K₀)
                 (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty callee.gas, .ok _, run⟩))
               { state := finish, logs := [], updates := [] } [] K'
@@ -8172,7 +8172,7 @@ example {pair : Adr} {cfg : ChainConfig}
               (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
                 (callGas + permitNonceStoreCharge sevm pre + permitNonceCharge sevm pre + 1137),
                 .ok _, run⟩) →
-            PairStepOutcome PairFrameAuth
+            PairAdmittedOutcome
               (WriterExtend (pairHistoryUniverse pair trace K₀)
                 (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
                   (callGas + permitNonceStoreCharge sevm pre + permitNonceCharge sevm pre + 1137),
@@ -8217,7 +8217,7 @@ example {pair : Adr} {cfg : ChainConfig}
           (WriterFreshKeys (pairHistoryUniverse pair trace K₀)
               (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty (G + initializeStorageCharge sevm pre + 377),
                 .ok _, run⟩) →
-            PairStepOutcome PairFrameAuth
+            PairAdmittedOutcome
               (WriterExtend (pairHistoryUniverse pair trace K₀)
                 (pairDerivKeys ⟨0, sevm, St pre [] Mem.empty
                   (G + initializeStorageCharge sevm pre + 377), .ok _, run⟩))
@@ -8652,8 +8652,8 @@ example {cfg : ChainConfig} {checkpoint future : BlockChain} (pair : Adr)
     PairHistoryReplayed pair trace K₀ st₀ finish K' ↔
       (∃ steps : List PairStep,
     steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-    (∀ s ∈ steps, s.Authentic pair) ∧
-    PairObservedReplay st₀ steps finish ∧
+    (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
+    PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
     runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
     (∀ k, K₀ k → K' k) ∧ (∀ k, K' k → pairHistoryUniverse pair trace K₀ k) ∧
     WriterRep K' (future.state.getStor pair) finish) :=
@@ -9942,9 +9942,9 @@ example : ∀ {pair : Adr} {cfg : ChainConfig}
     (nonzero : pair ≠ 0),
     ∃ steps : List PairStep,
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.Authentic pair) ∧
+      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplay (initializedState factory domain token0 token1) steps finish ∧
+        PairObservedReplayWith PairAdmittedConsumes (initializedState factory domain token0 token1) steps finish ∧
         runSourceInvocations (initializedState factory domain token0 token1)
           (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
@@ -9971,9 +9971,9 @@ example : ∀ {pair : Adr} {cfg : ChainConfig}
     (nonzero : pair ≠ 0),
     ∃ steps : List PairStep,
       steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.Authentic pair) ∧
+      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplay (initializedState factory domain token0 token1) steps finish ∧
+        PairObservedReplayWith PairAdmittedConsumes (initializedState factory domain token0 token1) steps finish ∧
         runSourceInvocations (initializedState factory domain token0 token1)
           (steps.map PairStep.source) = some finish ∧
         WriterRep K' (future.state.getStor pair) finish ∧
@@ -10124,7 +10124,8 @@ example : ∀ {K : WriterKey → Prop} {current : Checkpoint}
       (swapTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩)))
     (hashTApart : WriterApart (WriterExtend K
       (swapTraceKeys ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩))),
-    SwapCanonicalBody (fun _ => True) K current invocation run :=
+    Nonempty (SwapPositionalCanonicalResult K current invocation
+      ⟨0, sevm, St b [] Mem.empty G, .ok post, run⟩ b post) :=
   @swap_bytecode_exact_consumes
 
 end Blanc.Lift.UniswapV2Pair
