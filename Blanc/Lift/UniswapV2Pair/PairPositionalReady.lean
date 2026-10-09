@@ -144,12 +144,9 @@ theorem pair_admitted_mint_supply {U : WriterKey → Prop}
   obtain ⟨result⟩ := mint_positional_canonical invocation rep sem image
     (by rw [installed]; exact image.symm) codeEq fork selector run
     (writerInj_restrict inj inside) (writerApart_restrict apart inside)
-  obtain ⟨_, _, handlers⟩ := mint_positional_balance_handlers run result.positions rep invocation
-    codeEq fork selector
-  have feeFinished := (result.positions.feeResume rep invocation result.sourceFee).trans result.typedFinished
-  have admitted := result.queues.admittedConsumes (Auth := LockedAuth) fork handlers feeFinished
   exact pairStepOutcome_with (Consumes := PairAdmittedConsumes) inj apart sub rep good.mint
-    (PairEntryAt.mint selector) admitted rfl result.output.symm result.grown result.storage
+    (PairEntryAt.mint selector) ⟨result.positional, result.admission LockedAuth⟩
+    rfl result.output.symm result.grown result.storage
 
 
 /-- Compatibility projects the same admitted entry/result/output. -/

@@ -555,7 +555,7 @@ theorem pair_swap_outcome (freshOutput : b.output = [])
       out0, out1, views0, views1, final, rets, K', added, opt0, opt1, optC, shape0, shape1, shapeC,
       call0, call1, consumed, frameCheckpoint, frameContext, _, _, _, grown, rep, _, _, _, _, outputEq,
       auth, prov0, prov1, _⟩ :=
-    swap_bytecode_exact_consumes invocation wrep sem image installed freshOutput codeEq fork
+    swap_bytecode_exact_consumes_legacy invocation wrep sem image installed freshOutput codeEq fork
       selector run (writerInj_restrict inj inside) (writerApart_restrict apart inside)
   exact pairStepOutcome_of inj apart sub wrep good.skim
     ⟨selector, rfl, b, G, current, invocation, frame, rfl, rfl, frameCheckpoint, frameContext,

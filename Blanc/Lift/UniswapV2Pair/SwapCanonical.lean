@@ -185,7 +185,7 @@ callback (or the last taken transfer) left; and the lock prefix before the first
 touches no foreign account. Between those points foreign storage changes only inside the
 actual transfer/callback CALL steps the body names. Each taken transfer's reply bound is
 derived from its own actual 68-byte CALL (`swapTransferCall_replyShort`). -/
-theorem swap_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Checkpoint}
+theorem swap_bytecode_exact_consumes_own_legacy {K : WriterKey → Prop} {current : Checkpoint}
     {sevm : Sevm} {b post : Devm} {G : Nat}
     (invocation : List Nat)
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
@@ -267,7 +267,7 @@ transfer present iff its amount is nonzero, the callback present iff the data is
 under trace-local HASH-T over `WriterExtend K (swapTraceKeys root)`. Each taken transfer's
 reply bound (below `2^160` bytes) is derived from its own actual 68-byte CALL
 (`swapTransferCall_replyShort`). -/
-theorem swap_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpoint}
+theorem swap_bytecode_exact_consumes_legacy {K : WriterKey → Prop} {current : Checkpoint}
     {sevm : Sevm} {b post : Devm} {G : Nat}
     (invocation : List Nat)
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
@@ -285,7 +285,7 @@ theorem swap_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpo
   obtain ⟨_, value, nonstatic, frame, T0, T1, TC, turns0, turns1, turnsC, b1, b2, d, d0, d1, M1, M2,
     M, p1, p, out0, out1, views0, views1, final, rets, K', added, c1, c2, c3, c4, c5, c6, c7, c8, c9,
     c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, _⟩ :=
-    swap_bytecode_exact_consumes_own invocation rep sem image installed freshOutput codeEq fork
+    swap_bytecode_exact_consumes_own_legacy invocation rep sem image installed freshOutput codeEq fork
       selector run hashTInj hashTApart
   exact ⟨value, nonstatic, frame, T0, T1, TC, turns0, turns1, turnsC, b1, b2, d, d0, d1, M1, M2,
     M, p1, p, out0, out1, views0, views1, final, rets, K', added, c1, c2, c3, c4, c5, c6, c7, c8, c9,

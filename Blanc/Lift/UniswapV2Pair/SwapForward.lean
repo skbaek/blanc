@@ -1,4 +1,4 @@
-import Blanc.Lift.UniswapV2Pair.SwapCanonical
+import Blanc.Lift.UniswapV2Pair.SwapPositionalRefinement
 import Blanc.Lift.UniswapV2Pair.GetterStringWalk
 import Blanc.Lift.ExactWalkSolc
 import Blanc.Lift.UniswapV2Pair.SwapForwardFront
@@ -219,11 +219,9 @@ theorem swap_bytecode_forward_consumes {K : WriterKey → Prop} {current : Check
           (swapTraceKeys ⟨0, sevm, St b [] Mem.empty (G + 279 + 166), _, run⟩)) →
         WriterApart (WriterExtend K
           (swapTraceKeys ⟨0, sevm, St b [] Mem.empty (G + 279 + 166), _, run⟩)) →
-        (∀ a, a ≠ sevm.currentTarget → (swapPrefixWorld sevm b).getStor a = b.getStor a) ∧
-        SwapCanonicalBody
-          (fun d => ∀ a, a ≠ sevm.currentTarget →
-            (St back.post [0x022c0d9f] back.memory g).getStor a = d.getStor a)
-          K current invocation run) := by
+        Nonempty (SwapPositionalCanonicalResult K current invocation
+          ⟨0, sevm, St b [] Mem.empty (G + 279 + 166), _, run⟩ b
+          (St back.post [0x022c0d9f] back.memory g))) := by
   intro G
   have body := swapBody_exact fork rep unlocked nonstatic output liquidity0 liquidity1
     to0 to1 guards back front

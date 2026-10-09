@@ -4735,6 +4735,16 @@ and actual output under only code equality, covered fork, Swap selector and
 successful original `Exec 0`. Empty output follows only with a fresh input output
 buffer in the canonical integration.
 
+[`SwapPositionalRefinement.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalRefinement.lean)
+exports the original `swap_bytecode_exact_consumes` and `_own` names under
+unchanged caller premises. Both retain one `SwapPositionalCanonicalResult`,
+including its actual optional slots, full recursively admitted queues, output,
+storage and foreign-storage fields. `swap_bytecode_forward_consumes` returns
+that same carrier for its original constructed raw execution. Lower compatibility
+proofs are explicitly named `swap_bytecode_exact_consumes_legacy` and `_own_legacy`.
+The Mint positional carrier also retains `SourceAdmission` on its own selected
+positional proof; the concrete Mint supplier projects that field directly.
+
 [`SwapSourceOccurrenceTransfer.lean`](../Blanc/Lift/UniswapV2Pair/SwapSourceOccurrenceTransfer.lean)
 binds each supplied Swap transfer to its typed request and complete actual slot
 queue. `swapObservedTransferReply` retains that slot's entered bit, and

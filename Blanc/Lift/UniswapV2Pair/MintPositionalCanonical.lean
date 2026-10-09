@@ -59,6 +59,8 @@ structure MintPositionalCanonicalResult (K : WriterKey → Prop) (current : Chec
     queues.transcript
     {status := .success (encodeWords [liquidity.toB256]), frame := final,
       remaining := .done, childReturns := queues.childReturns}
+  admission : ∀ Auth : Exec.Deriv → Entry → Transcript → Prop,
+    SourceAdmission Auth positional
   checkpoint : final.checkpoint = current
   context : final.context = writerContext root.sevm invocation
   unlocked : final.current.state.unlocked = 1
@@ -153,6 +155,7 @@ theorem mint_positional_canonical {K : WriterKey → Prop} {current : Checkpoint
     feeNode := feeN, feeGas := feeGas, feeFree := free, sourceFee := sourceFee,
     feeState := feeState, final := final, liquidity := liquidity, keys := keys,
     footprint := ?_, typedFinished := typedFinished, positional := positional,
+    admission := fun Auth => (q.admittedConsumes (Auth := Auth) fork handlers feeFinished).choose_spec,
     checkpoint := checkpoint, context := context, unlocked := unlocked,
     grown := grown, storage := storage, output := output, logs := ?_}⟩
   · simpa only [toAdr_toB256] using footprint
