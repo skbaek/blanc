@@ -8630,6 +8630,684 @@ example (Auth : Exec.Deriv → Entry → Transcript → Prop) (U : WriterKey →
 
 end Blanc.Lift.UniswapV2Pair
 
+/-! Paper review 2 (proposal): the claim-carrying definitions the repaired Uniswap headlines are
+newly stated through — the positional entry authentication, the admitted positional consumption and
+its recursive admission, the observed replay and step outcome they instantiate, and the two
+canonical result records.  Definitions are pinned by unfolding, inductive families by the exact type
+of every constructor, records by their exact constructor.  As above, a record's own sub-records
+(`CallOccurrenceStep`, `SourceReplyAt`, `SourceSlotQueue`/`SourceSlotEvents`, `ExactTurns`, the
+Burn/Swap physical-position and source-step records) are not unfolded here. -/
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+-- Uniswap V2 Pair definition: PairStep.AuthenticWith
+example (Auth : Exec.Deriv → Entry → Transcript → Prop) (pair : Adr)
+    (s : PairStep) :
+    PairStep.AuthenticWith Auth pair s ↔
+      (s.frame.pc = 0 ∧ Execution.commits s.frame.out = true ∧ s.frame.sevm.currentTarget = pair ∧
+    s.frame.sevm.isStatic = false ∧
+    Auth (Blanc.Exec.Frame.rootDeriv s.frame) s.entry s.transcript) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: PairEntryAuth
+example (root : Exec.Deriv) (entry : Entry) (T : Transcript) :
+    PairEntryAuth root entry T ↔ PairEntryAt root entry :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: PairEntryAt.transfer
+example : ∀ {root : Exec.Deriv} (selector : Blanc.Sevm.selector root.sevm = 0xa9059cbb),
+    PairEntryAt root (transferDecodedEntry root.sevm) :=
+  @PairEntryAt.transfer
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: PairEntryAt.approve
+example : ∀ {root : Exec.Deriv} (selector : Blanc.Sevm.selector root.sevm = 0x095ea7b3),
+    PairEntryAt root (approveDecodedEntry root.sevm) :=
+  @PairEntryAt.approve
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: PairEntryAt.transferFrom
+example : ∀ {root : Exec.Deriv} (selector : Blanc.Sevm.selector root.sevm = 0x23b872dd),
+    PairEntryAt root (transferFromDecodedEntry root.sevm) :=
+  @PairEntryAt.transferFrom
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: PairEntryAt.initializeEntry
+example : ∀ {root : Exec.Deriv} (selector : Blanc.Sevm.selector root.sevm = 0x485cc955),
+    PairEntryAt root (initializeDecodedEntry root.sevm) :=
+  @PairEntryAt.initializeEntry
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: PairEntryAt.permit
+example : ∀ {root : Exec.Deriv} (selector : Blanc.Sevm.selector root.sevm = 0xd505accf),
+    PairEntryAt root (permitDecodedEntry root.sevm) :=
+  @PairEntryAt.permit
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: PairEntryAt.mint
+example : ∀ {root : Exec.Deriv} (selector : Blanc.Sevm.selector root.sevm = 0x6a627842),
+    PairEntryAt root (.mint (Sevm.dataWord root.sevm 4).toAdr) :=
+  @PairEntryAt.mint
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: PairEntryAt.sync
+example : ∀ {root : Exec.Deriv} (selector : Blanc.Sevm.selector root.sevm = 0xfff6cae9),
+    PairEntryAt root .sync :=
+  @PairEntryAt.sync
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: PairEntryAt.skim
+example : ∀ {root : Exec.Deriv} (selector : Blanc.Sevm.selector root.sevm = 0xbc25cf77),
+    PairEntryAt root (.skim (skimRecipient root.sevm)) :=
+  @PairEntryAt.skim
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: PairEntryAt.swap
+example : ∀ {root : Exec.Deriv} (selector : Blanc.Sevm.selector root.sevm = 0x022c0d9f),
+    PairEntryAt root (swapDecodedEntry root.sevm) :=
+  @PairEntryAt.swap
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: PairEntryAt.burn
+example : ∀ {root : Exec.Deriv} (selector : Blanc.Sevm.selector root.sevm = 0x89afcb44),
+    PairEntryAt root (.burn
+        ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& Sevm.dataWord root.sevm 4).toAdr) :=
+  @PairEntryAt.burn
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: PairEntryAt.view
+example : ∀ {root : Exec.Deriv} (view : StaticView) (selector : Blanc.Sevm.selector root.sevm = view.selector),
+    PairEntryAt root (view.entry root.sevm) :=
+  @PairEntryAt.view
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+-- Uniswap V2 Pair constructor: PairObservedReplayWith.nil
+example : ∀ {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop} (st : State),
+    PairObservedReplayWith Consumes st [] st :=
+  @PairObservedReplayWith.nil
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+-- Uniswap V2 Pair constructor: PairObservedReplayWith.cons
+example : ∀ {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop} {st finish : State} {s : PairStep} {rest : List PairStep} {out : RunResult}
+      (consumed : Consumes (Blanc.Exec.Frame.rootDeriv s.frame)
+        (startTyped {state := st, logs := [], updates := []} s.source.context s.source.entry)
+        s.transcript out)
+      (successful : out.status = .success s.frame.post.output)
+      (tail : PairObservedReplayWith Consumes out.frame.current.state rest finish),
+    PairObservedReplayWith Consumes st (s :: rest) finish :=
+  @PairObservedReplayWith.cons
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: PairStepOutcomeWith
+example (Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop)
+    (Auth : Exec.Deriv → Entry → Transcript → Prop) (U : WriterKey → Prop)
+    (current : Checkpoint) (invocation : List Nat) (K : WriterKey → Prop) (D : Exec.Deriv)
+    (post : Devm) :
+    PairStepOutcomeWith Consumes Auth U current invocation K D post ↔
+      (∃ (entry : Entry) (nested : Transcript) (child : RunResult) (bytes : Bytes)
+    (K' : WriterKey → Prop),
+    Auth D entry nested ∧
+    Consumes D (startTyped current (writerContext D.sevm invocation) entry) nested child ∧
+    child.status = .success bytes ∧ bytes = post.output ∧
+    (∀ k, K k → K' k) ∧ (∀ k, K' k → U k) ∧
+    WriterRep K' (post.getStor D.sevm.currentTarget) child.frame.current.state) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: PairAdmittedOutcome
+example (U : WriterKey → Prop) (current : Checkpoint)
+    (invocation : List Nat) (K : WriterKey → Prop) (root : Exec.Deriv) (post : Devm) :
+    PairAdmittedOutcome U current invocation K root post ↔
+      PairStepOutcomeWith PairAdmittedConsumes PairEntryAuth U current invocation K root post :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: PairAdmittedConsumes
+example (root : Exec.Deriv) (segment : SegmentResult)
+    (transcript : Transcript) (out : RunResult) :
+    PairAdmittedConsumes root segment transcript out ↔
+      ∃ selected : PositionalConsumes root root 0 segment transcript out,
+        PairSourceAdmission selected :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: PairSourceAdmission
+example {root start : Exec.Deriv} {index : Nat}
+    {segment : SegmentResult} {transcript : Transcript} {out : RunResult}
+    (selected : PositionalConsumes root start index segment transcript out) :
+    PairSourceAdmission selected ↔ SourceAdmission LockedAuth selected :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: AdmittedSourceConsumes
+example (Auth : Exec.Deriv → Entry → Transcript → Prop)
+    (root start : Exec.Deriv) (index : Nat) (segment : SegmentResult)
+    (transcript : Transcript) (out : RunResult) :
+    AdmittedSourceConsumes Auth root start index segment transcript out ↔
+      ∃ selected : PositionalConsumes root start index segment transcript out,
+        SourceAdmission Auth selected :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: SourceAdmission.finished
+example : ∀ {Auth : Exec.Deriv → Entry → Transcript → Prop} {root start : Exec.Deriv} {index : Nat} (frame : Frame) (bytes : Bytes)
+      (free : ∀ node, Exec.Deriv.ParentPrefix start node →
+        ∀ x, ¬ Ninst.At node.sevm.code node.pc (.exec x)),
+    SourceAdmission Auth (PositionalConsumes.finished (root := root) (index := index)
+        frame bytes free) :=
+  @SourceAdmission.finished
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: SourceAdmission.failed
+example : ∀ {Auth : Exec.Deriv → Entry → Transcript → Prop} {root start : Exec.Deriv} {index : Nat} (frame : Frame) (failure : Failure)
+      (genuine : failure ≠ .incompleteTranscript)
+      (free : ∀ node, Exec.Deriv.ParentPrefix start node →
+        ∀ x, ¬ Ninst.At node.sevm.code node.pc (.exec x)),
+    SourceAdmission Auth (PositionalConsumes.failed (root := root) (index := index)
+        frame failure genuine free) :=
+  @SourceAdmission.failed
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: SourceAdmission.nextCall
+example : ∀ {Auth : Exec.Deriv → Entry → Transcript → Prop} {root start : Exec.Deriv} {index : Nat}
+      {frame : Frame} {request : Request} {continuation : Continuation}
+      {reply : ExternalResult} {turns tail : Transcript} {executed : TurnsResult} {out : RunResult}
+      (observed : SourceCallAt root frame request reply index)
+      (gap : Exec.Deriv.ExecFreeUntil start observed.call.occurrence.node)
+      (staticExternal : externalStatic frame request = true)
+      (present : (request.requiresCode && !reply.codeExists) = false)
+      (noCodeTurns : reply.codeExists = false → turns = .done)
+      (during : PositionalTurns frame request observed.paths turns executed)
+      (rest : PositionalConsumes root observed.call.returned (index + 1)
+        (resumeSegment
+          (if reply.success then executed.frame else {executed.frame with current := frame.current})
+          request continuation reply) tail out)
+      (admittedRest : SourceAdmission Auth rest),
+    SourceAdmission Auth (PositionalConsumes.nextCall observed gap present noCodeTurns during rest) :=
+  @SourceAdmission.nextCall
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: SourceAdmission.nextMutableCall
+example : ∀ {Auth : Exec.Deriv → Entry → Transcript → Prop} {root start : Exec.Deriv} {index : Nat}
+      {frame : Frame} {request : Request} {continuation : Continuation}
+      {reply : ExternalResult} {turns tail : Transcript} {executed : TurnsResult} {out : RunResult}
+      {events : List (Log ⊕ Exec.LocatedFrame)}
+      (observed : SourceCallAt root frame request reply index)
+      (gap : Exec.Deriv.ExecFreeUntil start observed.call.occurrence.node)
+      (queue : SourceSlotEvents observed.call frame.context.pair index events)
+      (present : (request.requiresCode && !reply.codeExists) = false)
+      (noCodeTurns : reply.codeExists = false → turns = .done)
+      (during : PositionalMutableTurns frame request 0 events turns executed)
+      (rest : PositionalConsumes root observed.call.returned (index + 1)
+        (resumeSegment
+          (if reply.success then executed.frame else {executed.frame with current := frame.current})
+          request continuation reply) tail out)
+      (selectedTurns : List MutableTurn)
+      (mapped : selectedTurns.map MutableTurn.event = events)
+      (transcriptEq : turns = mutableTranscript selectedTurns .done)
+      (authentic : ∀ located entry nested, Sum.inr (located, entry, nested) ∈ selectedTurns →
+        Auth (Exec.Frame.rootDeriv located.frame) entry nested)
+      (admittedDuring : MutableAdmission Auth during)
+      (admittedRest : SourceAdmission Auth rest),
+    SourceAdmission Auth (PositionalConsumes.nextMutableCall observed gap queue present
+        noCodeTurns during rest) :=
+  @SourceAdmission.nextMutableCall
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: MutableAdmission.done
+example : ∀ {Auth : Exec.Deriv → Entry → Transcript → Prop} (frame : Frame) (request : Request) (turn : Nat),
+    MutableAdmission Auth (PositionalMutableTurns.done frame request turn) :=
+  @MutableAdmission.done
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: MutableAdmission.foreignLog
+example : ∀ {Auth : Exec.Deriv → Entry → Transcript → Prop} {frame : Frame} {request : Request} {turn : Nat}
+      {log : Log} {events : List (Log ⊕ Exec.LocatedFrame)} {tail : Transcript} {out : TurnsResult}
+      (mutable : externalStatic frame request = false)
+      (rest : PositionalMutableTurns
+        {frame with current := {frame.current with logs := frame.current.logs ++
+          [.foreign {invocation := frame.context.invocation, site := request.site, turn := turn}
+            log.address log.topics log.data]}}
+        request (turn + 1) events tail out)
+      (admittedRest : MutableAdmission Auth rest),
+    MutableAdmission Auth (PositionalMutableTurns.foreignLog mutable rest) :=
+  @MutableAdmission.foreignLog
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: MutableAdmission.invoke
+example : ∀ {Auth : Exec.Deriv → Entry → Transcript → Prop} {frame : Frame} {request : Request} {turn : Nat}
+      {located : Exec.LocatedFrame} {entry : Entry}
+      {events : List (Log ⊕ Exec.LocatedFrame)} {nested tail : Transcript}
+      {child : RunResult} {out : TurnsResult}
+      (selected : PositionalConsumes (Exec.Frame.rootDeriv located.frame)
+        (Exec.Frame.rootDeriv located.frame) 0
+        (startTyped frame.current
+          (childContext frame request turn located.frame.sevm.caller
+            located.frame.sevm.value located.frame.sevm.isStatic) entry) nested child)
+      (output : child.status = .success
+        (Execution.committedPost located.frame.out located.frame.committed).output)
+      (rest : PositionalMutableTurns {frame with current := child.frame.current}
+        request (turn + 1) events tail out)
+      (admittedChild : SourceAdmission Auth selected)
+      (admittedRest : MutableAdmission Auth rest),
+    MutableAdmission Auth (PositionalMutableTurns.invoke selected output rest) :=
+  @MutableAdmission.invoke
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: PositionalConsumes.finished
+example : ∀ {root start : Exec.Deriv} {index : Nat} (frame : Frame) (bytes : Bytes)
+      (free : ∀ node, Exec.Deriv.ParentPrefix start node →
+        ∀ x, ¬ Ninst.At node.sevm.code node.pc (.exec x)),
+    PositionalConsumes root start index (.finished frame bytes) .done
+        {status := .success bytes, frame := frame, remaining := .done, childReturns := []} :=
+  @PositionalConsumes.finished
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: PositionalConsumes.failed
+example : ∀ {root start : Exec.Deriv} {index : Nat} (frame : Frame) (failure : Failure)
+      (genuine : failure ≠ .incompleteTranscript)
+      (free : ∀ node, Exec.Deriv.ParentPrefix start node →
+        ∀ x, ¬ Ninst.At node.sevm.code node.pc (.exec x)),
+    PositionalConsumes root start index (.failed frame failure) .done
+        {status := .failed failure, frame := frame, remaining := .done, childReturns := []} :=
+  @PositionalConsumes.failed
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: PositionalConsumes.nextCall
+example : ∀ {root start : Exec.Deriv} {index : Nat}
+      {frame : Frame} {request : Request} {continuation : Continuation}
+      {reply : ExternalResult} {turns tail : Transcript} {executed : TurnsResult} {out : RunResult}
+      (observed : SourceCallAt root frame request reply index)
+      (gap : Exec.Deriv.ExecFreeUntil start observed.call.occurrence.node)
+      (present : (request.requiresCode && !reply.codeExists) = false)
+      (noCodeTurns : reply.codeExists = false → turns = .done)
+      (during : PositionalTurns frame request observed.paths turns executed)
+      (rest : PositionalConsumes root observed.call.returned (index + 1)
+        (resumeSegment
+          (if reply.success then executed.frame else {executed.frame with current := frame.current})
+          request continuation reply) tail out),
+    PositionalConsumes root start index (.suspended frame request continuation)
+        (.next reply turns tail) {out with childReturns := executed.childReturns ++ out.childReturns} :=
+  @PositionalConsumes.nextCall
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: PositionalConsumes.nextMutableCall
+example : ∀ {root start : Exec.Deriv} {index : Nat}
+      {frame : Frame} {request : Request} {continuation : Continuation}
+      {reply : ExternalResult} {turns tail : Transcript} {executed : TurnsResult} {out : RunResult}
+      {events : List (Log ⊕ Exec.LocatedFrame)}
+      (observed : SourceCallAt root frame request reply index)
+      (gap : Exec.Deriv.ExecFreeUntil start observed.call.occurrence.node)
+      (queue : SourceSlotEvents observed.call frame.context.pair index events)
+      (present : (request.requiresCode && !reply.codeExists) = false)
+      (noCodeTurns : reply.codeExists = false → turns = .done)
+      (during : PositionalMutableTurns frame request 0 events turns executed)
+      (rest : PositionalConsumes root observed.call.returned (index + 1)
+        (resumeSegment
+          (if reply.success then executed.frame else {executed.frame with current := frame.current})
+          request continuation reply) tail out),
+    PositionalConsumes root start index (.suspended frame request continuation)
+        (.next reply turns tail) {out with childReturns := executed.childReturns ++ out.childReturns} :=
+  @PositionalConsumes.nextMutableCall
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: PositionalMutableTurns.done
+example : ∀ (frame : Frame) (request : Request) (turn : Nat),
+    PositionalMutableTurns frame request turn [] .done
+        {complete := true, frame := frame, childReturns := []} :=
+  @PositionalMutableTurns.done
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: PositionalMutableTurns.foreignLog
+example : ∀ {frame : Frame} {request : Request} {turn : Nat}
+      {log : Log} {events : List (Log ⊕ Exec.LocatedFrame)} {tail : Transcript} {out : TurnsResult}
+      (mutable : externalStatic frame request = false)
+      (rest : PositionalMutableTurns
+        {frame with current :=
+          {frame.current with logs := frame.current.logs ++
+            [.foreign {invocation := frame.context.invocation, site := request.site, turn := turn}
+              log.address log.topics log.data]}}
+        request (turn + 1) events tail out),
+    PositionalMutableTurns frame request turn (.inl log :: events)
+        (.foreignLog log.address log.topics log.data tail) out :=
+  @PositionalMutableTurns.foreignLog
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: PositionalMutableTurns.invoke
+example : ∀ {frame : Frame} {request : Request} {turn : Nat}
+      {located : Exec.LocatedFrame} {entry : Entry}
+      {events : List (Log ⊕ Exec.LocatedFrame)} {transcript tail : Transcript}
+      {child : RunResult} {out : TurnsResult}
+      (selected : PositionalConsumes (Exec.Frame.rootDeriv located.frame)
+        (Exec.Frame.rootDeriv located.frame) 0
+        (startTyped frame.current
+          (childContext frame request turn located.frame.sevm.caller
+            located.frame.sevm.value located.frame.sevm.isStatic) entry) transcript child)
+      (output : child.status = .success
+        (Execution.committedPost located.frame.out located.frame.committed).output)
+      (rest : PositionalMutableTurns {frame with current := child.frame.current}
+        request (turn + 1) events tail out),
+    PositionalMutableTurns frame request turn (.inr located :: events)
+        (.invoke located.frame.sevm.caller located.frame.sevm.value located.frame.sevm.isStatic
+          entry transcript tail)
+        {out with childReturns := child.childReturns ++
+          [{context := childContext frame request turn located.frame.sevm.caller
+              located.frame.sevm.value located.frame.sevm.isStatic,
+            entry := entry, status := child.status}] ++ out.childReturns} :=
+  @PositionalMutableTurns.invoke
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: PositionalTurns.staticViews
+example : ∀ {frame : Frame} {request : Request} {paths : List Exec.LocatedFrame} (views : List StaticViewTurn)
+      (mapped : views.map Prod.fst = paths)
+      (authentic : ∀ picked ∈ views, picked.Authentic frame)
+      {out : TurnsResult}
+      (consumed : ExactTurns frame request 0 (staticViewTranscript views .done) out),
+    PositionalTurns frame request paths (staticViewTranscript views .done) out :=
+  @PositionalTurns.staticViews
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: SourceCallAt.mk
+example : ∀ {root : Exec.Deriv} {frame : Frame} {request : Request}
+    {reply : ExternalResult} {index : Nat}
+    (call : CallOccurrenceStep root (match request.kind with | .call => .call | .staticCall => .staticcall))
+    (message : Msg)
+    (resume : Resume)
+    (nextPc : Nat)
+    (child : Devm)
+    (outputOffset : Nat)
+    (outputSize : Nat)
+    (parent : Devm)
+    (spawned : Evm.step ⟨call.occurrence.node.pc, call.occurrence.node.sevm,
+      call.occurrence.node.devm⟩ = .spawn (Jaune.Frame.ofCall message) resume nextPc)
+    (target : message.target = some request.target)
+    (caller : message.caller = frame.context.pair)
+    (value : message.value = request.value)
+    (calldata : message.data = request.calldata)
+    (static : message.isStatic = externalStatic frame request)
+    (response : ProcessMessage message call.occurrence.slot (.ok child))
+    (resumeEq : resume = Resume.call parent outputOffset outputSize)
+    (resumed : resume.run (.ok child) = .ok call.returned.devm)
+    (replyAt : SourceReplyAt request reply child call.returned outputOffset)
+    (guarded : request.requiresCode = true →
+      (reply.codeExists = true ↔
+        (call.occurrence.node.devm.getCode request.target).size.toB256 ≠ 0))
+    (unguardedEntry : request.requiresCode = false →
+      reply.codeExists = call.occurrence.slot.isSome)
+    (paths : List Exec.LocatedFrame)
+    (queue : SourceSlotQueue call frame.context.pair index paths)
+    (childFrames : List Exec.LocatedFrame)
+    (partition : Exec.descendantFramePaths [] index call.occurrence.node.exc =
+      childFrames ++ Exec.descendantFramePaths [] (index + 1) call.returned.exc),
+    SourceCallAt root frame request reply index :=
+  @SourceCallAt.mk
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: BurnPositionalCanonicalResult.mk
+example : ∀ {U K : WriterKey → Prop} {current : Checkpoint}
+    {invocation : List Nat} {root : Exec.Deriv} {b post : Devm}
+    (positions : BurnSevenCalls root root.sevm b)
+    (first : BurnFirstMutable positions.five.four U current invocation)
+    (second : BurnSecondMutable positions.five first)
+    (views0 : List StaticViewTurn)
+    (views1 : List StaticViewTurn)
+    (viewsF : List StaticViewTurn)
+    (finalViews0 : List StaticViewTurn)
+    (finalViews1 : List StaticViewTurn)
+    (updated : State)
+    (event : Event)
+    (oracle : OracleUpdate)
+    (admitted : AdmittedSourceConsumes LockedAuth root root 0
+      (startTyped current (writerContext root.sevm invocation) (.burn (Sevm.dataWord root.sevm 4).toAdr))
+      (burnPositionalTranscript positions first second views0 views1 viewsF finalViews0 finalViews1)
+      (burnPositionalResult positions first second updated event oracle
+        views0 views1 viewsF finalViews0 finalViews1))
+    (eventEq : event = .sync (Bytes.toB256 (positions.final0.out.take 32)).toNat
+      (Bytes.toB256 (positions.final1.out.take 32)).toNat)
+    (success : root.exn = .ok post)
+    (checkpoint : (burnPositionalFinished positions second updated event oracle).checkpoint = current)
+    (context : (burnPositionalFinished positions second updated event oracle).context =
+      writerContext root.sevm invocation)
+    (unlocked : (burnPositionalFinished positions second updated event oracle).current.state.unlocked = 1)
+    (keys : WriterKey → Prop)
+    (grown : ∀ k, K k → keys k)
+    (inside : ∀ k, keys k → U k)
+    (storage : WriterRep keys (post.getStor root.sevm.currentTarget)
+      (burnPositionalFinished positions second updated event oracle).current.state)
+    (output : post.output = encodeWords [(positions.five.four.sourcePriced current).amount0,
+      (positions.five.four.sourcePriced current).amount1])
+    (added : List PendingLog)
+    (raw : List Log)
+    (sourceLogs : (burnPositionalFinished positions second updated event oracle).current.logs =
+      current.logs ++ added)
+    (rawLogs : post.logs = b.logs ++ raw)
+    (image : added.map (PendingLog.rawWith (burnOwnedRaw root.sevm.currentTarget)) = raw.map some),
+    BurnPositionalCanonicalResult U K current invocation root b post :=
+  @BurnPositionalCanonicalResult.mk
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair constructor: SwapPositionalCanonicalResult.mk
+example : ∀ {K : WriterKey → Prop} {current : Checkpoint}
+    {invocation : List Nat} {root : Exec.Deriv} {b post : Devm}
+    (positions : SwapPhysicalResult root b post)
+    (entryFacts : SwapSourcePrefix (WriterExtend K (swapTraceKeys root)) current invocation root.sevm b)
+    (frontFrame : Frame)
+    (frontIndex : Nat)
+    (frontIndex_eq : frontIndex =
+      (if swapAmount0Out root.sevm = 0 then 0 else 1) +
+      (if swapAmount1Out root.sevm = 0 then 0 else 1) +
+      (if swapDataLength root.sevm = 0 then 0 else 1))
+    (frontTranscript : Transcript → Transcript)
+    (frontReturns : List ChildReturn)
+    (queries : SwapBalancePairSource positions.balances (WriterExtend K (swapTraceKeys root))
+      (writerContext root.sevm invocation) current b frontFrame frontIndex)
+    (updated : SwapSourceUpdate positions.balances queries)
+    (transcript : Transcript)
+    (transcript_eq : transcript = frontTranscript queries.transcript)
+    (result : RunResult)
+    (result_eq : result =
+      {status := .success [], frame := updated.finalFrame, remaining := .done,
+        childReturns := frontReturns ++ queries.childReturns})
+    (admitted : AdmittedSourceConsumes LockedAuth root root 0
+      (startTyped current (writerContext root.sevm invocation) (swapDecodedEntry root.sevm))
+      transcript result)
+    (checkpoint : result.frame.checkpoint = current)
+    (context : result.frame.context = writerContext root.sevm invocation)
+    (unlocked : result.frame.current.state.unlocked = 1)
+    (grown : ∀ k, updated.keys k → WriterExtend K (swapTraceKeys root) k)
+    (storage : WriterRep updated.keys (post.getStor root.sevm.currentTarget) result.frame.current.state)
+    (bound0 : positions.balances.balance0.toNat < 2 ^ 112)
+    (bound1 : positions.balances.balance1.toNat < 2 ^ 112)
+    (added : List PendingLog)
+    (raw : List Log)
+    (sourceLogs : result.frame.current.logs = current.logs ++ added)
+    (rawLogs : post.logs = b.logs ++ raw)
+    (images : added.map (PendingLog.rawWith (swapOwnedRaw root.sevm.currentTarget)) = raw.map some)
+    (output : post.output = [])
+    (actualOutput : result.status = .success post.output)
+    (remaining : result.remaining = .done)
+    (prefixForeign : ∀ a, a ≠ root.sevm.currentTarget →
+      (swapPrefixWorld root.sevm b).getStor a = b.getStor a)
+    (foreign : ∀ a, a ≠ root.sevm.currentTarget →
+      post.getStor a = positions.balances.optional.callback.world.getStor a),
+    SwapPositionalCanonicalResult K current invocation root b post :=
+  @SwapPositionalCanonicalResult.mk
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace
+
+-- Uniswap V2 Pair definition: PairHistoryReplayedWith
+example (Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop)
+    (Auth : Exec.Deriv → Entry → Transcript → Prop)
+    {cfg : ChainConfig} {checkpoint future : BlockChain} (pair : Adr)
+    (trace : ConfiguredHistoryTrace cfg checkpoint future) (K₀ : WriterKey → Prop) (st₀ : State)
+    (finish : State) (K' : WriterKey → Prop) :
+    PairHistoryReplayedWith Consumes Auth pair trace K₀ st₀ finish K' ↔
+      (∃ steps : List PairStep,
+    steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+    (∀ s ∈ steps, s.AuthenticWith Auth pair) ∧
+    PairObservedReplayWith Consumes st₀ steps finish ∧
+    runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
+    (∀ k, K₀ k → K' k) ∧ (∀ k, K' k → pairHistoryUniverse pair trace K₀ k) ∧
+    WriterRep K' (future.state.getStor pair) finish) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune Blanc.ExecutionTrace
 
