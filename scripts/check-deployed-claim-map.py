@@ -166,7 +166,7 @@ NONCLAIM_PHRASES = [
     "no transaction-level uniswap liveness",
     "states the modular sum of the recorded increments",
     "not an existential cost",
-    "the uniswap burn authentication is not positional",
+    "not every exported theorem is admitted",
 ]
 
 # Process and internal-bookkeeping vocabulary the public map must not carry.
