@@ -189,6 +189,12 @@ a covered fork, and calldata of at least 4 bytes and below 2^256.
 | That storage satisfies the footprint INIT with the empty tracked set, for every ETH balance | `Blanc.Lift.Weth9.Creation.weth9_deploy_init_covered` (`Blanc/Lift/Weth9/Creation/DeployInit.lean:22`), by `weth9_deploy_covered` and `Blanc.Lift.Weth9.FootInv.deployed` (`Blanc/Lift/Weth9/Footprint.lean:211`) (metadata-only storage implies `FootInv ∅`) | deploy / INIT | none |
 | Empty storage satisfies `StateInv` | `Blanc.Lift.Weth9.weth9_init_stateInv` (`Blanc/Lift/Weth9/Init.lean:42`) | satisfiability | none |
 
+**Closed instance of the transaction theorem**
+
+| Claim | Theorem | Level / kind | Premises | Notes |
+|---|---|---|---|---|
+| In a synthetic configured BPO2 world, one connected execution, proved by applying `weth9_history_tx_withdraw` with every premise discharged: the recorded creation input, run as a CREATE message from the recorded deployer at nonce 446, installs the certified 3,124-byte runtime at the CREATE address with the constructor's `name`/`symbol`/`decimals` storage; a valid configured block, the history's single step after the checkpoint, commits a signed type-2 `deposit` of 1 wei by a funded holder; and at the history's terminal state a concrete signed type-2 `withdraw(1)` by that holder is admitted by `processTransaction`. The holder's WETH9 balance slot goes from 1 to 0, no other account's storage changes, the contract's ether goes from 1 wei to 0, the holder's nonce becomes 2, and the transaction uses 30,344 gas (intrinsic 21,204 plus frame 13,940 minus the 4,800 clearing refund) | `Blanc.Lift.Weth9.ClosedInstance.weth9_closed_exit_instance` (`Blanc/Lift/Weth9/ClosedExit.lean:69`), whose conclusion `∃ st bout, ClosedExitWitness st bout` is packaged as `Blanc.Lift.Weth9.ClosedInstance.ClosedExitWitness` (`Blanc/Lift/Weth9/ClosedExit.lean:39`); the deployment facts are `Blanc.Lift.Weth9.ClosedInstance.DeploymentFacts` (`Blanc/Lift/Weth9/ClosedDeployment.lean:14`) and `Blanc.Lift.Weth9.ClosedInstance.deployment_facts` (`Blanc/Lift/Weth9/ClosedDeployment.lean:31`); the funded world and the system-contract code are `Blanc.Lift.Weth9.ClosedInstance.initialWorld` (`Blanc/Lift/Weth9/ClosedWorld.lean:28`) and `Blanc.Lift.Weth9.ClosedInstance.systemCode` (`Blanc/Lift/Weth9/ClosedWorld.lean:17`); the chain configuration is `Blanc.Lift.Weth9.ClosedInstance.config` (`Blanc/Lift/Weth9/ClosedBlockData.lean:14`) | History and transaction / closed witness | none (closed): no hypotheses; every premise of `weth9_history_tx_withdraw` is discharged inside the instance, including signature recovery of the withdrawal (and, for building the history, of the deposit), which is computed in the kernel | Satisfiability of the theorem's premises in the model, not a statement about the chain. The world is synthetic: finite funding (1,000,000 wei at the holder, 1 wei at the recorded deployer), chain id 1, BPO2 active from the checkpoint (time 0), and a STOP program at each of the four system-contract addresses instead of the canonical system-contract code. Not historical inclusion of the deployment or of the transactions; not live WETH9 storage; the withdrawal is evaluated at the history's terminal state and is not placed inside a valid successor block. The deployment is a message-level execution that leaves the deployer's nonce at 446 |
+
 **Fork coverage.** The history and liveness theorems assume or derive
 `CoveredFork`; deployment is stated for every covered fork by the `_covered`
 forms; the transaction theorem assumes `CoveredFork benv.stat.fork`.
@@ -1039,7 +1045,29 @@ The required headline theorems are also pinned by exact statement in
 `scripts/ClaimCheck.lean` (gate `scripts/check-claims.sh`), together with the
 definitions they are stated through whose bodies are themselves the claim (pinned
 by unfolding) and the record types they use (pinned field by field), so a weakened
-headline fails there although this checker elaborates no Lean. Further rows are pinned there by name, among them `weth9_history_tx_withdraw`, the reachable V± witnesses (`vplus_reachable_capstone`, `vminus_reachable_capstone`, `vminus_reach_violation`), the Lido finite tier (`registerPauser_nonzero_finite`, `lido_create_finite_init`, `exampleApplicable`), `pair_history_minimum_liquidity` and `pair_history_feeOff_ratio`, the model laws `runTyped_mint_initial`, `runTyped_mint_later`, `runTyped_burn_payout` and `runTyped_swap_canonical_success`, `sqrt_of_run`, the `swap` frame theorem `swap_bytecode_exact_consumes`, the exhibit address `pairAddress_eq` and most, not all, of the statement controls of Section 5.8 (the burn-rounding control `burn_witness_disagrees`, the update-walk controls and `footprintSum_dup_breaks_ledger` are not pinned). The remaining rows, among them the WETH9 liveness rows and the WETH9 mid-block results of Section 5.1, are held here by name and line only.
+headline fails there although this checker elaborates no Lean. The repaired Uniswap headlines are pinned together with the definitions they are
+stated through: by unfolding `PairStep.AuthenticWith`, `PairEntryAuth`,
+`PairStepOutcomeWith`, `PairAdmittedOutcome`, `PairAdmittedConsumes`,
+`PairSourceAdmission`, `AdmittedSourceConsumes` and `PairHistoryReplayedWith`; by
+the types of their constructors, `PairEntryAt`, `PairObservedReplayWith`,
+`SourceAdmission`, `MutableAdmission`, `PositionalConsumes`, `PositionalMutableTurns`
+and `PositionalTurns.staticViews`; and by their record constructors,
+`SourceCallAt.mk`, `BurnPositionalCanonicalResult.mk` and
+`SwapPositionalCanonicalResult.mk`. Further rows are pinned there by name, among them
+`weth9_history_tx_withdraw`, the WETH9 mid-block results `weth9_prefix_footprint_universe` and
+`weth9_prefix_tx_withdraw`, the closed instance
+`Blanc.Lift.Weth9.ClosedInstance.weth9_closed_exit_instance` with its record constructor
+`ClosedExitWitness.mk`, the reachable V± witnesses (`vplus_reachable_capstone`,
+`vminus_reachable_capstone`, `vminus_reach_violation`), the Lido finite tier
+(`registerPauser_nonzero_finite`, `lido_create_finite_init`, `exampleApplicable`),
+`pair_history_minimum_liquidity` and `pair_history_feeOff_ratio`, the model laws
+`runTyped_mint_initial`, `runTyped_mint_later`, `runTyped_burn_payout` and
+`runTyped_swap_canonical_success`, `sqrt_of_run`, the `swap` frame theorem
+`swap_bytecode_exact_consumes`, the exhibit address `pairAddress_eq` and most, not all,
+of the statement controls of Section 5.8 (the burn-rounding control
+`burn_witness_disagrees`, the update-walk controls and `footprintSum_dup_breaks_ledger`
+are not pinned). The remaining rows, among them the WETH9 liveness rows, are held here
+by name and line only.
 
 Every run also executes in-memory falsifiers, each of which must be rejected: a
 misspelled declaration, a stale line, a wrong file, an orphan line reference, a
