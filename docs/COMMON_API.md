@@ -4744,6 +4744,13 @@ that same carrier for its original constructed raw execution. Lower compatibilit
 proofs are explicitly named `swap_bytecode_exact_consumes_legacy` and `_own_legacy`.
 The Mint positional carrier also retains `SourceAdmission` on its own selected
 positional proof; the concrete Mint supplier projects that field directly.
+[`MintPositionalLogs.lean`](../Blanc/Lift/UniswapV2Pair/MintPositionalLogs.lean)
+derives the fee-prefix and complete raw/source log image from that same Mint
+canonical result. The original `mint_bytecode_exact_consumes` and `_own` names
+in [`MintPositionalRefinement.lean`](../Blanc/Lift/UniswapV2Pair/MintPositionalRefinement.lean)
+retain the admitted result with these log images and, for `_own`, foreign-storage
+silence, under unchanged caller premises. Lower compatibility proofs have
+explicit `_legacy` names.
 
 [`SwapSourceOccurrenceTransfer.lean`](../Blanc/Lift/UniswapV2Pair/SwapSourceOccurrenceTransfer.lean)
 binds each supplied Swap transfer to its typed request and complete actual slot

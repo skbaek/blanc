@@ -515,7 +515,7 @@ theorem pair_mint_outcome (selector : Blanc.Sevm.selector sevm = 0x6a627842) :
   obtain ⟨_, _, out0, out1, outF, steps, views0, views1, viewsF, final, rets, K', liquidity, fee,
       feeLogs, added, consumed, _, _, _, grown, rep, _, _, _, _, _, outputEq, picked, prov0, prov1,
       provF⟩ :=
-    mint_bytecode_exact_consumes invocation wrep sem image installed codeEq fork selector run
+    mint_bytecode_exact_consumes_legacy invocation wrep sem image installed codeEq fork selector run
       (writerInj_restrict inj inside) (writerApart_restrict apart inside)
   exact pairStepOutcome_of inj apart sub wrep good.mint
     ⟨selector, rfl, current, out0, out1, outF, views0, views1, viewsF, steps, rfl, picked, prov0,

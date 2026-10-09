@@ -40,7 +40,7 @@ theorem mint_bytecode_foreign_storage {sevm : Sevm} {b post : Devm} {G : Nat}
     (by decide +kernel) (by decide +kernel) (callee.mono Blanc.Lift.StepIn.toRun) (Ne.symm foreign)
 
 /-- The canonical mint frame together with the foreign-storage silence of the same run. -/
-theorem mint_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Checkpoint}
+theorem mint_bytecode_exact_consumes_own_legacy {K : WriterKey → Prop} {current : Checkpoint}
     {sevm : Sevm} {b post : Devm} {G : Nat}
     (invocation : List Nat)
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
@@ -56,7 +56,7 @@ theorem mint_bytecode_exact_consumes_own {K : WriterKey → Prop} {current : Che
     (∀ a, a ≠ sevm.currentTarget → post.getStor a = b.getStor a) ∧
       MintCanonicalResult K current invocation run := by
   exact ⟨mint_bytecode_foreign_storage codeEq fork selector run,
-    mint_bytecode_exact_consumes invocation rep sem image installed codeEq fork selector run
+    mint_bytecode_exact_consumes_legacy invocation rep sem image installed codeEq fork selector run
       inj apart⟩
 
 end Blanc.Lift.UniswapV2Pair

@@ -425,6 +425,8 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.PairTransferCallCursor",
         "Lift.UniswapV2Pair.PermitRawFacts",
         "Lift.UniswapV2Pair.MintPositionalCanonical",
+        "Lift.UniswapV2Pair.MintPositionalLogs",
+        "Lift.UniswapV2Pair.MintPositionalRefinement",
         "Lift.UniswapV2Pair.PairTransferRequestCursor",
         "Lift.UniswapV2Pair.PairTransferReplyCursor",
         "Lift.UniswapV2Pair.PairFeeCursor",

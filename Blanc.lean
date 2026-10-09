@@ -1035,6 +1035,8 @@ import Blanc.Lift.UniswapV2Pair.PairTransferCopyCursor
 import Blanc.Lift.UniswapV2Pair.PairTransferCallCursor
 import Blanc.Lift.UniswapV2Pair.PermitRawFacts
 import Blanc.Lift.UniswapV2Pair.MintPositionalCanonical
+import Blanc.Lift.UniswapV2Pair.MintPositionalLogs
+import Blanc.Lift.UniswapV2Pair.MintPositionalRefinement
 import Blanc.Lift.UniswapV2Pair.PairTransferRequestCursor
 import Blanc.Lift.UniswapV2Pair.PairTransferReplyCursor
 import Blanc.Lift.UniswapV2Pair.PairFeeCursor

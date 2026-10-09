@@ -329,7 +329,7 @@ private theorem mint_encodeWord_inj {x y : B256} (same : encodeWords [x] = encod
     B256.toB256_toBytes] using words
 
 /-- What the canonical mint frame derives from one successful raw mint run `run` (see
-`mint_bytecode_exact_consumes`): the actual observation steps, the exact typed consumption, the
+`mint_bytecode_exact_consumes_legacy`): the actual observation steps, the exact typed consumption, the
 final frame shape, the storage transport, the fee result and its log, the exact raw log list and
 its typed pending logs, the return word, view authenticity and per-call provenance. -/
 def MintCanonicalResult (K : WriterKey → Prop) (current : Checkpoint) (invocation : List Nat)
@@ -389,7 +389,7 @@ tracked rows plus a finite list of rows fixed by the root execution alone), it y
 list (fee mint, first-mint minimum to address zero, recipient mint, Sync, Mint) together with
 the typed pending logs that map onto it, the return word, the final unlock and the original
 checkpoint. -/
-theorem mint_bytecode_exact_consumes {K : WriterKey → Prop} {current : Checkpoint}
+theorem mint_bytecode_exact_consumes_legacy {K : WriterKey → Prop} {current : Checkpoint}
     {sevm : Sevm} {b post : Devm} {G : Nat}
     (invocation : List Nat)
     (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
