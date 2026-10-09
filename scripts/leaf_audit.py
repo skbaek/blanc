@@ -514,7 +514,11 @@ def scan_external_sources(sources: Dict[str, str], population: Set[str]
 
 
 def tracked_external_sources(root: Path) -> Dict[str, str]:
-    """Read tracked ``scripts/`` text plus the root ``Main.lean`` for external-consumer reporting."""
+    """Read tracked script text and ``Main.lean``, excluding the generated review ledger.
+
+    The ledger records past leaves, not consumers. Counting it as a consumer would make
+    reviewing a declaration permanently prevent its deletion by the cascade planner.
+    """
 
     done = subprocess.run(
         ["git", "ls-files", "-z", "--", "scripts", "Main.lean"],
@@ -527,6 +531,8 @@ def tracked_external_sources(root: Path) -> Dict[str, str]:
         if not raw:
             continue
         relative = raw.decode("utf-8")
+        if relative == LEDGER_RELATIVE:
+            continue
         path = root / relative
         try:
             data = path.read_bytes()
@@ -1169,6 +1175,35 @@ def cmd_cascade(root: Path, delete_path: Path, keep_path: Optional[Path]) -> int
 # Bite controls
 # --------------------------------------------------------------------------------------------
 
+def external_sources_controls() -> List[str]:
+    """A tracked review record must not block cascade deletion; a real script still must."""
+
+    with tempfile.TemporaryDirectory(prefix="blanc-leaf-external-") as tmp:
+        root = Path(tmp)
+        (root / "scripts").mkdir()
+        reviewed, consumed = "LeafCascadeFixture.reviewed", "LeafCascadeFixture.consumed"
+        (root / LEDGER_RELATIVE).write_text(json.dumps({"leaves": [reviewed, consumed]}))
+        (root / "scripts/consumer.py").write_text(f"print('{consumed}')\n")
+        for args in (["git", "init", "--quiet"],
+                     ["git", "add", "--", LEDGER_RELATIVE, "scripts/consumer.py"]):
+            done = subprocess.run(args, cwd=str(root), stdout=subprocess.PIPE,
+                                  stderr=subprocess.PIPE, check=False)
+            if done.returncode:
+                raise LeafAuditError(f"external-source fixture setup failed: "
+                                     f"{done.stderr.decode(errors='replace')}")
+        sources = tracked_external_sources(root)
+        population = {reviewed, consumed}
+        external, _ = scan_external_sources(sources, population)
+        result = cascade_closure(population, {}, set(external), population, set())
+        failures = []
+        if LEDGER_RELATIVE in sources or reviewed in external or reviewed in result["blocked"]:
+            failures.append("cascade review ledger: a generated review record blocks deletion")
+        if consumed not in result["blocked"] \
+                or "scripts/consumer.py" not in external.get(consumed, []):
+            failures.append("cascade real script: a tracked consumer must still block deletion")
+        return failures
+
+
 def scan_controls() -> List[str]:
     """Table controls of `scan_uses` on synthetic sources; the failures, empty when all hold."""
 
@@ -1521,6 +1556,14 @@ def self_test(root: Path) -> int:
     else:
         print("OK — source scan: rewriting-tactic lemma lists, namespaces, `open`s, sections, "
               "macros, comments and strings resolved as specified")
+
+    checks += 1
+    external_failures = external_sources_controls()
+    if external_failures:
+        failures.extend(external_failures)
+    else:
+        print("OK — cascade review ledger: reviewed names can be deleted; real tracked script "
+              "consumers still block deletion")
 
     # External consumers: a Lean proof file removes a leaf, while a shell/Python mention is
     # retained on the row as report-only evidence.
