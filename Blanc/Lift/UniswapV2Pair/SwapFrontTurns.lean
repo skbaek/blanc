@@ -23,6 +23,31 @@ structure SwapFrontState (U : WriterKey → Prop) (pair : Adr) (ctx : Context)
     w.logs = b.logs ++ L ∧ added.map (PendingLog.rawWith (lockedOwnedRaw pair)) = L.map some
   checkpoint : F.checkpoint = current
 
+/-- The Swap lock and cached read prefix preserve the initial finite source
+invariant. Both canonical consumers share this single proof. -/
+theorem swap_prefix_source_invariant {K U : WriterKey → Prop} {sevm : Sevm} {b : Devm}
+    {current : Checkpoint} {ctx : Context}
+    (rep : WriterRep K (b.getStor sevm.currentTarget) current.state)
+    (sub : ∀ k, K k → U k) :
+    SwapFrontState U sevm.currentTarget ctx current b
+      (swapLockedFrame current ctx (swapDecodedEntry sevm)) (swapPrefixWorld sevm b) := by
+  have lockedRep := rep.mint_locked_world (sevm := sevm) (b := b)
+  refine ⟨rfl, ⟨K, sub, ?_, rfl⟩, ?_, ?_, ⟨[], [], ?_, ?_, rfl⟩, rfl⟩
+  · unfold swapPrefixWorld
+    rw [afterSload_getStor, afterSload_getStor, afterSload_getStor]
+    exact lockedRep
+  · unfold swapPrefixWorld mintLockedWorld
+    rw [afterSload_getCode, afterSload_getCode, afterSload_getCode, afterSstore_getCode,
+      afterSload_getCode]
+  · unfold swapPrefixWorld mintLockedWorld
+    rw [afterSload_output, afterSload_output, afterSload_output, afterSstore_output,
+      afterSload_output]
+  · rw [List.append_nil]
+    rfl
+  · unfold swapPrefixWorld mintLockedWorld
+    rw [afterSload_logs, afterSload_logs, afterSload_logs, afterSstore_logs, afterSload_logs,
+      List.append_nil]
+
 theorem SwapFrontState.beginResume {U : WriterKey → Prop} {pair : Adr} {ctx : Context}
     {current : Checkpoint} {b : Devm} {F : Frame} {w : Devm}
     (h : SwapFrontState U pair ctx current b F w) (request : Request) :

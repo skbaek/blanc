@@ -4669,6 +4669,16 @@ The already reached optional-bool decoder is inverted by
 It derives acceptance and the complete physical return allocation without
 selecting an external call; the original whole-helper inverse delegates to it.
 
+For the original Swap prefix, `swap_prefix_cursor_state` in
+[`SwapPositionalPrefix.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalPrefix.lean)
+derives the selector, ABI, lock/write, packed-reserve return, liquidity and
+recipient route from original code, fork, selector and successful PC-zero
+execution. It retains the full world, raw cached locals, initialized memory,
+original stop continuation and call-free root gap. The five ABI and eight body
+literal line inverses are shared with the unchanged legacy source inverses in
+`SwapAbi.lean` and `SwapFront.lean`; no desired endpoint or residual gas is a
+public premise.
+
 The moved final balance output uses the original memory image facts
 `burnBalanceReplyMemory_extended`, `burnBalanceReplyMemory_ptr` and
 `burnBalanceReplyMemory_word` in
@@ -4676,6 +4686,87 @@ The moved final balance output uses the original memory image facts
 They preserve the supplied physical free pointer and identify the decoded
 word; the original whole-read inverse and actual final reply cursor share
 these facts.
+
+`swap_transfers_cursor_state` in
+[`SwapPositionalTransfer.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalTransfer.lean)
+composes both optional optimistic transfers from those same original public
+premises. `SwapTransfers` retains each real amount branch, original-root CALL
+slot, complete payload/reply, caller cursor and moving memory/pointer bounds;
+transfer1 starts from transfer0's own world, memory and returned node. A skipped
+amount retains an actual call-free gap; an executed CALL with an absent child
+slot still has its physical occurrence. The shared transfer request/call/reply
+cursors supply each occurrence rather than searching by an equal payload.
+
+`swap_callback_cursor_state` in
+[`SwapPositionalCallback.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalCallback.lean)
+adds the optional callback to that same original-root chain. `SwapCallbacks`
+starts its callback at transfer1's actual result; the executed branch retains
+its own derived code guard, warmed CALL, exact variable calldata, full physical
+reply and checked caller join. The empty-data branch selects no CALL. Pointer
+and ABI length bounds are derived internally. Callback preparation and join
+lines are shared with the unchanged legacy callback inverses.
+
+`swap_balances_cursor_state` in
+[`SwapPositionalBalance.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalBalance.lean)
+adds both required observations to the same optional-call carrier, from the
+same four original premises. Each `SwapBalanceOccurrence` keeps its own guarded
+STATICCALL, full reply and actual word decoder at the moving pointer. The
+second starts from the first returned node, memory and decoded local.
+`SwapBalances.noExecTail` excludes all further external instructions after the
+actual final reply, including the original pending wrapper STOP.
+
+[`SwapPositionalSuffix.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalSuffix.lean)
+finishes the same two decoded balance replies through the actual body return and
+pending wrapper STOP. `swap_physical_result` retains the complete original-root
+optional-call chain, the same acceptance and range facts, final machine image
+and actual output under only code equality, covered fork, Swap selector and
+successful original `Exec 0`. Empty output follows only with a fresh input output
+buffer in the canonical integration.
+
+[`SwapSourceOccurrenceTransfer.lean`](../Blanc/Lift/UniswapV2Pair/SwapSourceOccurrenceTransfer.lean)
+binds each supplied Swap transfer to its typed request and complete actual slot
+queue. `swapObservedTransferReply` retains that slot's entered bit, and
+`swap_resume_observed_transfer` transports both accepted optional-bool replies
+through the same typed continuation without changing the entered bit.
+
+[`SwapSourceOccurrenceCallback.lean`](../Blanc/Lift/UniswapV2Pair/SwapSourceOccurrenceCallback.lean)
+binds the guarded callback request and successful full-byte reply to its same
+physical CALL, message, process, partition and complete queue. The code bit is
+justified by the actual guard rather than by the entered slot bit.
+
+[`SwapPositionalCanonical.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalCanonical.lean)
+exports `swap_positional_canonical` under the original canonical public premises.
+Its one result carries the original physical chain, same recursively admitted
+source transcript/result, actual output, finite storage/key growth, full logs
+and child returns, bounds, unlocked/checkpoint/context and foreign storage.
+`positional`, `admission` and `forget` project that same admitted proof;
+`terminal_logs` exposes actual post-callback Sync-then-Swap order. Actual
+unguarded transfer entry bits are retained; compatibility does not force them
+into the old hardcoded-true legacy transcript.
+
+[`SwapPositionalSourceSuffix.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalSourceSuffix.lean)
+uses the same two balance replies and carried finite frame for pricing, update
+acceptance and admitted static continuations. Its actual no-call suffix finishes
+that same frame, with unlocked storage, checkpoint/context, full source/raw log
+images and foreign storage transported through the same physical post image.
+
+[`SwapSourceOccurrenceBalance.lean`](../Blanc/Lift/UniswapV2Pair/SwapSourceOccurrenceBalance.lean)
+binds both actual guarded STATICCALLs to their full replies and complete static
+view queues. `SwapBalancePairSource` retains their same authentic paths and the
+second source frame resumed from the first exact request; finite key freshness
+is projected from the carried representation and original root universe.
+
+[`SwapPositionalMutableCallback.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalMutableCallback.lean)
+retains the same guarded callback's complete events and recursively admitted
+children. `swap_source_callbacks` composes all optional mutable calls from the
+original decoded source entry to the same actual post-callback node and frame.
+
+[`SwapPositionalMutableTransfer.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalMutableTransfer.lean)
+retains each transfer's same complete event queue, mapped selected turns,
+recursively admitted children, checkpoint, finite locked representation and log
+images. `swap_optional_transfer_admitted` shares both optional-transfer source
+phases and composes only `nextMutableCall` with the same selected queue; its
+source index increases exactly when that external instruction executes.
 
 The Pair mutable fold's `mutable_selected_root_with` in
 [`MutableTurns.lean`](../Blanc/Lift/UniswapV2Pair/MutableTurns.lean)
@@ -4781,3 +4872,11 @@ conclusion has no reliable registered single goal-head trigger.
 shared `burnOwnedRaw` image and `burn_pending_logs_preserves`, which transports
 the existing locked-child pending log image into the Burn/Sync image without
 changing foreign logs. The original Burn source donor imports the same proofs.
+
+### Swap original source prefix and admitted transfers
+
+[`SwapPositionalSourcePrefix.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalSourcePrefix.lean)
+derives the initial source guards, cached words and starting segment from the
+original successful execution. `swap_source_transfers` composes both optional
+transfers from that same physical chain and the same admitted queue witnesses;
+only executed calls advance the source index.

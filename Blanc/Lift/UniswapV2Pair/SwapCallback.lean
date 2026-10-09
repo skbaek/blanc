@@ -162,117 +162,223 @@ private theorem swapExtends2 (M : Mem) (i1 s1 i2 s2 : Nat) (rd : Bytes) :
   rw [List.take_zero]
   rfl
 
-/-- The callback build, code check, CALL and success test, from `t_08e8_c4` to the join. -/
-theorem swapCallbackCall_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {R : List B256}
-    {M : Mem} {G : Nat} {n : Nat} {q t1 t0 r1 r0 len start toWord a1 a0 ρ : B256} {seg : Seg}
-    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem q n M)
-    (lower : 128 ≤ q.toNat) (upper : q.toNat < 2 ^ 162) (short : len.toNat ≤ 2 ^ 32)
-    (run : SFunc.RunCutP (StepIn D) cert.prog sevm []
-      (St b (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: ρ :: R) M G)
-      t_08e8_c4 seg) :
-    let L := t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: ρ :: R
-    ∃ d gas, SwapCallbackCall D sevm b L M q toWord a0 a1 len start d ∧
-      (∃ m', PtrMem q m' d.memory) ∧
-      SFunc.RunCutP (StepIn D) cert.prog sevm [] (St d L d.memory gas) t_09c3_c5 seg := by
-  intro L
+/-- Literal callback calldata preparation, shared by the old inverse and actual cursor. -/
+def swapCallbackPrepareLine : List Ninst := [
+  .reg (.dup 8),
+  .push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide),
+  .reg .and,
+  .push [0x10, 0xd1, 0xe8, 0x5c] (by decide),
+  .reg .caller,
+  .reg (.dup 13),
+  .reg (.dup 13),
+  .reg (.dup 12),
+  .reg (.dup 12),
+  .push [0x40] (by decide),
+  .reg .mload,
+  .reg (.dup 6),
+  .push [0xff, 0xff, 0xff, 0xff] (by decide),
+  .reg .and,
+  .push [0xe0] (by decide),
+  .reg .shl,
+  .reg (.dup 1),
+  .reg .mstore,
+  .push [0x04] (by decide),
+  .reg .add,
+  .reg (.dup 0),
+  .reg (.dup 6),
+  .push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide),
+  .reg .and,
+  .push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide),
+  .reg .and,
+  .reg (.dup 1),
+  .reg .mstore,
+  .push [0x20] (by decide),
+  .reg .add,
+  .reg (.dup 5),
+  .reg (.dup 1),
+  .reg .mstore,
+  .push [0x20] (by decide),
+  .reg .add,
+  .reg (.dup 4),
+  .reg (.dup 1),
+  .reg .mstore,
+  .push [0x20] (by decide),
+  .reg .add,
+  .reg (.dup 0),
+  .push [0x20] (by decide),
+  .reg .add,
+  .reg (.dup 2),
+  .reg (.dup 1),
+  .reg .sub,
+  .reg (.dup 2),
+  .reg .mstore,
+  .reg (.dup 4),
+  .reg (.dup 4),
+  .reg (.dup 2),
+  .reg (.dup 1),
+  .reg (.dup 1),
+  .reg .mstore,
+  .push [0x20] (by decide),
+  .reg .add,
+  .reg (.swap 2),
+  .reg .pop,
+  .reg (.dup 0),
+  .reg (.dup 2),
+  .reg (.dup 4),
+  .reg .calldatacopy,
+  .push [0x00] (by decide),
+  .reg (.dup 1),
+  .reg (.dup 4),
+  .reg .add,
+  .reg .mstore,
+  .push [0x1f] (by decide),
+  .reg .not,
+  .push [0x1f] (by decide),
+  .reg (.dup 2),
+  .reg .add,
+  .reg .and,
+  .reg (.swap 0),
+  .reg .pop,
+  .reg (.dup 0),
+  .reg (.dup 3),
+  .reg .add,
+  .reg (.swap 2),
+  .reg .pop,
+  .reg .pop,
+  .reg .pop,
+  .reg (.swap 6),
+  .reg .pop,
+  .reg .pop,
+  .reg .pop,
+  .reg .pop,
+  .reg .pop,
+  .reg .pop,
+  .reg .pop,
+  .push [0x00] (by decide),
+  .push [0x40] (by decide),
+  .reg .mload,
+  .reg (.dup 0),
+  .reg (.dup 3),
+  .reg .sub,
+  .reg (.dup 1),
+  .push [0x00] (by decide),
+  .reg (.dup 7),
+  .reg (.dup 0)
+]
+
+theorem swapCallbackPrepareLine_inv {sevm : Sevm} {b d : Devm} {R : List B256}
+    {M : Mem} {G n : Nat} {q t1 t0 r1 r0 len start toWord a1 a0 rho : B256}
+    (mem : PtrMem q n M) (lower : 128 ≤ q.toNat) (upper : q.toNat < 2 ^ 162)
+    (short : len.toNat ≤ 2 ^ 32)
+    (run : Line.Run sevm (St b
+      (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: rho :: R)
+      M G) swapCallbackPrepareLine d) :
+    ∃ gas, d = St b
+      ((0xffffffffffffffffffffffffffffffffffffffff &&& toWord) ::
+        (0xffffffffffffffffffffffffffffffffffffffff &&& toWord) :: 0 :: q ::
+        (swapCallbackEnd q len - q) :: q :: 0 :: swapCallbackEnd q len ::
+        0x10d1e85c :: (0xffffffffffffffffffffffffffffffffffffffff &&& toWord) ::
+        t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: rho :: R)
+      (swapCallbackMem M q.toNat swapCallbackSelectorWord sevm.caller.toB256 a0 a1 len
+        (sevm.data.sliceD start.toNat len.toNat 0)) gas := by
   have read0 : Bytes.toB256 (M.read 64 32).1 = q := mem.word
   have same0 : (M.read 64 32).2 = M := mem.read_self (by have := mem.ge; omega)
-  unfold t_08e8_c4 at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_and (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_caller (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨d, hs, run⟩ := ric_nextP run
-  obtain ⟨_, eq⟩ := ri_mload (StepIn.toRun hs)
+  dsimp only [swapCallbackPrepareLine] at run
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_and hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_caller hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨d, hs, run⟩ := Line.of_run_cons run
+  obtain ⟨_, eq⟩ := ri_mload hs
   rw [show (Bytes.toB256 [64]).toNat = 64 from rfl, read0, same0] at eq
   subst d
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_and (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_shl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_mstore (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_and (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_and (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_mstore (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_mstore (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_mstore (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_sub (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_mstore (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_mstore (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_calldatacopy (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_mstore (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_not (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_and (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_and hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_shl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_mstore hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_and hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_and hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_mstore hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_mstore hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_mstore hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_sub hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_mstore hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_mstore hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_pop hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_calldatacopy hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_mstore hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_not hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_and hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_pop hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_pop hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_pop hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_pop hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_pop hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_pop hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_pop hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_pop hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_pop hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_pop hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_pop hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
   dsimp only [List.set] at run
   have vcaller : (0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
       ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&& sevm.caller.toB256) =
@@ -324,17 +430,108 @@ theorem swapCallbackCall_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {R : List
   have read1 : Bytes.toB256 ((swapCallbackMem M q.toNat swapCallbackSelectorWord sevm.caller.toB256
       a0 a1 len data).read 64 32).1 = q := mcb.word
   have same1 := mcb.read_self (by have := mcb.ge; omega : 64 + 32 ≤ m')
-  obtain ⟨d, hs, run⟩ := ric_nextP run
-  obtain ⟨_, eq⟩ := ri_mload (StepIn.toRun hs)
+  obtain ⟨d, hs, run⟩ := Line.of_run_cons run
+  obtain ⟨_, eq⟩ := ri_mload hs
   rw [show (64 : B256).toNat = 64 from rfl, read1, same1] at eq
   subst d
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_sub (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_sub hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  cases run
+  exact ⟨_, rfl⟩
+
+/-- Literal branch on callback data length. -/
+def swapCallbackGuardLine : List Ninst :=
+  [.reg (.dup 6), .reg .iszero, .push [0x09,0xc3] (by decide)]
+
+theorem swapCallbackGuardLine_inv {sevm : Sevm} {b d : Devm} {R : List B256}
+    {M : Mem} {G : Nat} {t1 t0 r1 r0 len start toWord a1 a0 rho : B256}
+    (line : Line.Run sevm (St b
+      (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: rho :: R)
+      M G) swapCallbackGuardLine d) :
+    ∃ gas, d = St b (0x9c3 :: B256.eqCheck len 0 ::
+      t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: rho :: R) M gas := by
+  dsimp only [swapCallbackGuardLine] at line
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_iszero step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨gas, state⟩ := ri_push step
+  cases line
+  exact ⟨gas, state⟩
+
+/-- The callback drops its CALL operands at the checked success join. -/
+def swapCallbackReturnLine : List Ninst := [.reg .pop, .reg .pop, .reg .pop, .reg .pop]
+
+theorem swapCallbackReturnLine_inv {sevm : Sevm} {b d : Devm} {L : List B256}
+    {M : Mem} {G : Nat} {a x y z : B256}
+    (line : Line.Run sevm (St b (a :: x :: y :: z :: L) M G) swapCallbackReturnLine d) :
+    ∃ gas, d = St b L M gas := by
+  dsimp only [swapCallbackReturnLine] at line
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_pop step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_pop step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_pop step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨gas, state⟩ := ri_pop step
+  cases line
+  exact ⟨gas, state⟩
+
+/-- The actual callback input window has its natural, nonwrapping size. -/
+theorem swapCallbackEnd_layout {q len : B256}
+    (upper : q.toNat < 2 ^ 162) (short : len.toNat ≤ 2 ^ 32) :
+    (swapCallbackEnd q len).toNat = q.toNat + 164 + 32 * ((len.toNat + 31) / 32) ∧
+    (swapCallbackEnd q len - q).toNat = 164 + len.toNat + (32 - len.toNat % 32) % 32 := by
+  have a4 : (4 + q).toNat = q.toNat + 4 := by
+    rw [B256.toNat_add, show (4 : B256).toNat = 4 from rfl, Nat.lo_eq_of_lt (by omega), Nat.add_comm]
+  have a36 : (32 + (4 + q)).toNat = q.toNat + 36 := by
+    rw [B256.toNat_add, a4, show (32 : B256).toNat = 32 from rfl, Nat.lo_eq_of_lt (by omega)]
+    omega
+  have a68 : (32 + (32 + (4 + q))).toNat = q.toNat + 68 := by
+    rw [B256.toNat_add, a36, show (32 : B256).toNat = 32 from rfl, Nat.lo_eq_of_lt (by omega)]
+    omega
+  have a100 : (32 + (32 + (32 + (4 + q)))).toNat = q.toNat + 100 := by
+    rw [B256.toNat_add, a68, show (32 : B256).toNat = 32 from rfl, Nat.lo_eq_of_lt (by omega)]
+    omega
+  have a132 : (32 + (32 + (32 + (32 + (4 + q))))).toNat = q.toNat + 132 := by
+    rw [B256.toNat_add, a100, show (32 : B256).toNat = 32 from rfl, Nat.lo_eq_of_lt (by omega)]
+    omega
+  have a164 : (32 + (32 + (32 + (32 + (32 + (4 + q)))))).toNat = q.toNat + 164 := by
+    rw [B256.toNat_add, a132, show (32 : B256).toNat = 32 from rfl, Nat.lo_eq_of_lt (by omega)]
+    omega
+  have mask32 : ((len + 31 &&& ~~~31 : B256)).toNat = 32 * ((len.toNat + 31) / 32) := by
+    have sumNat : (len + (31 : B256)).toNat = len.toNat + 31 := by
+      rw [B256.toNat_add, show (31 : B256).toNat = 31 from rfl, Nat.lo_eq_of_lt (by omega)]
+    rw [B256.toNat_and, sumNat, show (~~~ (31 : B256)).toNat = 2 ^ 256 - 32 from rfl,
+      Nat.and_mask32 (by omega)]
+  have endNat : (swapCallbackEnd q len).toNat = q.toNat + 164 + 32 * ((len.toNat + 31) / 32) := by
+    unfold swapCallbackEnd
+    rw [B256.toNat_add, a164, mask32, Nat.lo_eq_of_lt (by omega)]
+  have insizeNat : (swapCallbackEnd q len - q).toNat = 164 + len.toNat + (32 - len.toNat % 32) % 32 := by
+    rw [B256.toNat_sub_eq_of_le _ _ (B256.le_of_toNat_le_toNat (by rw [endNat]; omega)), endNat]
+    omega
+  exact ⟨endNat, insizeNat⟩
+
+/-- The callback build, code check, CALL and success test, from `t_08e8_c4` to the join. -/
+theorem swapCallbackCall_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {R : List B256}
+    {M : Mem} {G : Nat} {n : Nat} {q t1 t0 r1 r0 len start toWord a1 a0 ρ : B256} {seg : Seg}
+    (fork : CoveredFork sevm.benvStat.fork) (mem : PtrMem q n M)
+    (lower : 128 ≤ q.toNat) (upper : q.toNat < 2 ^ 162) (short : len.toNat ≤ 2 ^ 32)
+    (run : SFunc.RunCutP (StepIn D) cert.prog sevm []
+      (St b (t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: ρ :: R) M G)
+      t_08e8_c4 seg) :
+    let L := t1 :: t0 :: 0 :: 0 :: r1 :: r0 :: len :: start :: toWord :: a1 :: a0 :: ρ :: R
+    ∃ d gas, SwapCallbackCall D sevm b L M q toWord a0 a1 len start d ∧
+      (∃ m', PtrMem q m' d.memory) ∧
+      SFunc.RunCutP (StepIn D) cert.prog sevm [] (St d L d.memory gas) t_09c3_c5 seg := by
+  intro L
+  unfold t_08e8_c4 at run
+  obtain ⟨d, line, run⟩ := SFunc.RunCutP.split_nexts StepIn.toRun swapCallbackPrepareLine run
+  obtain ⟨_, rfl⟩ := swapCallbackPrepareLine_inv mem lower upper short line
+  let data := List.sliceD sevm.data start.toNat len.toNat 0
+  have dataLen : data.length = len.toNat := List.length_sliceD _ _ _ _
+  obtain ⟨m', mcb⟩ := swapCallbackMem_ptr mem (by omega : 96 ≤ q.toNat) swapCallbackSelectorWord
+    sevm.caller.toB256 a0 a1 len data
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_extcodesize fork (StepIn.toRun hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
@@ -357,10 +554,8 @@ theorem swapCallbackCall_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {R : List
   · exact False.elim (failed.false_of_noOk (by decide : t_09b5_c4.noOk = true))
   unfold t_09be_c4 at run
   obtain ⟨_, run⟩ := ric_destP run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
+  obtain ⟨d', line, run⟩ := SFunc.RunCutP.split_nexts StepIn.toRun swapCallbackReturnLine run
+  obtain ⟨_, rfl⟩ := swapCallbackReturnLine_inv line
   have flag0 : flag ≠ 0 := by
     intro h
     rw [h] at flagNz
@@ -369,22 +564,14 @@ theorem swapCallbackCall_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {R : List
     intro h
     rw [h] at codeNz
     exact codeNz (by decide)
-  have mask32 : ((len + 31 &&& ~~~31 : B256)).toNat = 32 * ((len.toNat + 31) / 32) := by
-    have sumNat : (len + (31 : B256)).toNat = len.toNat + 31 := by
-      rw [B256.toNat_add, show (31 : B256).toNat = 31 from rfl, Nat.lo_eq_of_lt (by omega)]
-    rw [B256.toNat_and, sumNat, show (~~~ (31 : B256)).toNat = 2 ^ 256 - 32 from rfl,
-      Nat.and_mask32 (by omega)]
-  have endNat : (swapCallbackEnd q len).toNat = q.toNat + 164 + 32 * ((len.toNat + 31) / 32) := by
-    unfold swapCallbackEnd
-    rw [B256.toNat_add, a164, mask32, Nat.lo_eq_of_lt (by omega)]
-  have insizeNat : (swapCallbackEnd q len - q).toNat = 164 + data.length + (32 - data.length % 32) % 32 := by
-    rw [B256.toNat_sub_eq_of_le _ _ (B256.le_of_toNat_le_toNat (by rw [endNat]; omega)), endNat, dataLen]
-    omega
+  obtain ⟨endNat, insize⟩ := swapCallbackEnd_layout upper short
+  have insizeNat : (swapCallbackEnd q len - q).toNat =
+      164 + data.length + (32 - data.length % 32) % 32 := by
+    rw [dataLen]
+    exact insize
   have calldata := swapCallbackMem_calldata mem.wf q.toNat sevm.caller a0 a1 data
   rw [show Nat.toB256 data.length = len by rw [dataLen, toB256_toNat]] at calldata
   have settled := post.settled flag0
-  simp only [show Bytes.toB256 [0] = (0 : B256) from rfl,
-    show Bytes.toB256 [16, 209, 232, 92] = (0x10d1e85c : B256) from rfl] at call post
   refine ⟨d, _, ⟨code0, ⟨_, _, call⟩, by rw [insizeNat]; exact calldata, flag, flag0, post⟩,
     ?_, run⟩
   rw [settled.1, show (0 : B256).toNat = 0 from rfl, swapExtends2]
@@ -411,9 +598,8 @@ theorem swapCallback_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {R : List B25
   intro L
   unfold t_08e1_c4 at run
   obtain ⟨_, run⟩ := ric_destP run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  obtain ⟨d, line, run⟩ := SFunc.RunCutP.split_nexts StepIn.toRun swapCallbackGuardLine run
+  obtain ⟨_, rfl⟩ := swapCallbackGuardLine_inv line
   rcases ric_branchToP (by intro bad; cases bad) (rfl : cert.prog[5]? = some t_09c3_c5) run with
     ⟨zero, _, run⟩ | ⟨skip, gas, run⟩
   · have nonzero : len ≠ 0 := by

@@ -47,6 +47,216 @@ def swapBodyStack (sevm : Sevm) : List B256 :=
   [swapDataLength sevm, swapDataStart sevm, swapRecipientWord sevm, swapAmount1Out sevm,
     swapAmount0Out sevm, 0x257, 0x022c0d9f]
 
+/-- Literal size-check line shared by the source inverse and original cursor. -/
+def swapAbiSizeLine : List Ninst := [
+  .push [0x02, 0x57] (by decide), .push [4] (by decide), .reg (.dup 0),
+  .reg .calldatasize, .reg .sub, .push [128] (by decide), .reg (.dup 1),
+  .reg .lt, .reg .iszero, .push [0x01, 0xd4] (by decide)]
+
+/-- The ABI size line preserves every non-gas field and computes its literal flag. -/
+theorem swapAbiSizeLine_inv {sevm : Sevm} {b d : Devm} {S : List B256}
+    {M : Mem} {G : Nat}
+    (line : Line.Run sevm (St b S M G) swapAbiSizeLine d) :
+    ∃ G', d = St b
+      (0x01d4 :: B256.eqCheck (B256.ltCheck (sevm.data.length.toB256 - 4) 128) 0 ::
+        (sevm.data.length.toB256 - 4) :: 4 :: 0x0257 :: S) M G' := by
+  dsimp only [swapAbiSizeLine] at line
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_calldatasize step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_sub step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_lt step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_iszero step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨gas, state⟩ := ri_push step
+  cases line
+  exact ⟨gas, state⟩
+
+/-- Literal ABI offset line, shared by both proof views. -/
+def swapAbiOffsetLine : List Ninst := [
+  .reg (.dup 1),
+  .reg .calldataload,
+  .reg (.swap 1),
+  .push [0x20] (by decide),
+  .reg (.dup 1),
+  .reg .add,
+  .reg .calldataload,
+  .reg (.swap 1),
+  .push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide),
+  .push [0x40] (by decide),
+  .reg (.dup 3),
+  .reg .add,
+  .reg .calldataload,
+  .reg .and,
+  .reg (.swap 1),
+  .reg (.swap 0),
+  .reg (.dup 1),
+  .reg .add,
+  .reg (.swap 0),
+  .push [0x80] (by decide),
+  .reg (.dup 1),
+  .reg .add,
+  .push [0x60] (by decide),
+  .reg (.dup 2),
+  .reg .add,
+  .reg .calldataload,
+  .push [0x01, 0x00, 0x00, 0x00, 0x00] (by decide),
+  .reg (.dup 1),
+  .reg .gt,
+  .reg .iszero,
+  .push [0x02, 0x18] (by decide)]
+
+theorem swapAbiOffsetLine_inv {sevm : Sevm} {b d : Devm} {S : List B256}
+    {size : B256} {M : Mem} {G : Nat}
+    (line : Line.Run sevm (St b (size :: 4 :: 0x0257 :: S) M G) swapAbiOffsetLine d) :
+    ∃ G', d = St b
+      ((Bytes.toB256 [0x02, 0x18]) :: (B256.eqCheck (B256.gtCheck (Sevm.dataWord sevm (4 + (Bytes.toB256 [0x60]))) (Bytes.toB256 [0x01, 0x00, 0x00, 0x00, 0x00])) 0) :: (Sevm.dataWord sevm (4 + (Bytes.toB256 [0x60]))) :: (4 + (Bytes.toB256 [0x80])) :: 4 :: (4 + size) :: ((Sevm.dataWord sevm (4 + (Bytes.toB256 [0x40]))) &&& (Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff])) :: (Sevm.dataWord sevm (4 + (Bytes.toB256 [0x20]))) :: (Sevm.dataWord sevm 4) :: 0x0257 :: S) M G' := by
+  dsimp only [swapAbiOffsetLine] at line
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_calldataload step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_add step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_calldataload step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_add step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_calldataload step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_and step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_add step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_add step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_add step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_calldataload step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_gt step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_iszero step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨gas, state⟩ := ri_push step
+  cases line
+  dsimp only [List.set] at state
+  exact ⟨gas, state⟩
+
+/-- Literal ABI head line, shared by both proof views. -/
+def swapAbiHeadLine : List Ninst := [
+  .reg (.dup 2),
+  .reg .add,
+  .reg (.dup 3),
+  .push [0x20] (by decide),
+  .reg (.dup 2),
+  .reg .add,
+  .reg .gt,
+  .reg .iszero,
+  .push [0x02, 0x2a] (by decide)]
+
+theorem swapAbiHeadLine_inv {sevm : Sevm} {b d : Devm} {S : List B256}
+    {off pad base size toWord a1 a0 rho : B256} {M : Mem} {G : Nat}
+    (line : Line.Run sevm (St b (off :: pad :: base :: size :: toWord :: a1 :: a0 :: rho :: S) M G) swapAbiHeadLine d) :
+    ∃ G', d = St b
+      ((Bytes.toB256 [0x02, 0x2a]) :: (B256.eqCheck (B256.gtCheck ((base + off) + (Bytes.toB256 [0x20])) size) 0) :: (base + off) :: pad :: base :: size :: toWord :: a1 :: a0 :: rho :: S) M G' := by
+  dsimp only [swapAbiHeadLine] at line
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_add step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_add step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_gt step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_iszero step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨gas, state⟩ := ri_push step
+  cases line
+  exact ⟨gas, state⟩
+
+/-- Literal ABI tail line, shared by both proof views. -/
+def swapAbiTailLine : List Ninst := [
+  .reg (.dup 0),
+  .reg .calldataload,
+  .reg (.swap 0),
+  .push [0x20] (by decide),
+  .reg .add,
+  .reg (.swap 1),
+  .reg (.dup 4),
+  .push [0x01] (by decide),
+  .reg (.dup 3),
+  .reg .mul,
+  .reg (.dup 4),
+  .reg .add,
+  .reg .gt,
+  .push [0x01, 0x00, 0x00, 0x00, 0x00] (by decide),
+  .reg (.dup 3),
+  .reg .gt,
+  .reg .or,
+  .reg .iszero,
+  .push [0x02, 0x4c] (by decide)]
+
+theorem swapAbiTailLine_inv {sevm : Sevm} {b d : Devm} {S : List B256}
+    {head pad base size toWord a1 a0 rho : B256} {M : Mem} {G : Nat}
+    (line : Line.Run sevm (St b (head :: pad :: base :: size :: toWord :: a1 :: a0 :: rho :: S) M G) swapAbiTailLine d) :
+    ∃ G', d = St b
+      ((Bytes.toB256 [0x02, 0x4c]) :: (B256.eqCheck ((B256.gtCheck (Sevm.dataWord sevm head) (Bytes.toB256 [0x01, 0x00, 0x00, 0x00, 0x00])) ||| (B256.gtCheck (((Bytes.toB256 [0x20]) + head) + ((Sevm.dataWord sevm head) * (Bytes.toB256 [0x01]))) size)) 0) :: pad :: (Sevm.dataWord sevm head) :: ((Bytes.toB256 [0x20]) + head) :: base :: size :: toWord :: a1 :: a0 :: rho :: S) M G' := by
+  dsimp only [swapAbiTailLine] at line
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_calldataload step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_add step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_mul step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_add step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_gt step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_gt step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_or step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_iszero step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨gas, state⟩ := ri_push step
+  cases line
+  dsimp only [List.set] at state
+  exact ⟨gas, state⟩
+
+/-- Literal ABI call line, shared by both proof views. -/
+def swapAbiCallLine : List Ninst := [
+  .reg .pop,
+  .reg (.swap 0),
+  .reg (.swap 2),
+  .reg .pop,
+  .reg (.swap 0),
+  .reg .pop,
+  .push [0x06, 0x83] (by decide)]
+
+theorem swapAbiCallLine_inv {sevm : Sevm} {b d : Devm} {S : List B256}
+    {pad len start base size toWord a1 a0 rho : B256} {M : Mem} {G : Nat}
+    (line : Line.Run sevm (St b (pad :: len :: start :: base :: size :: toWord :: a1 :: a0 :: rho :: S) M G) swapAbiCallLine d) :
+    ∃ G', d = St b
+      ((Bytes.toB256 [0x06, 0x83]) :: len :: start :: toWord :: a1 :: a0 :: rho :: S) M G' := by
+  dsimp only [swapAbiCallLine] at line
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_pop step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_pop step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_pop step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨gas, state⟩ := ri_push step
+  cases line
+  dsimp only [List.set] at state
+  exact ⟨gas, state⟩
+
 /-- Actual PC0, selector dispatch and ABI wrapper: a successful swap run derives the
 nonpayable/size guards, the four literal wrapper guards, and the body's same-D internal call
 with its decoded entry stack and the PC0 memory, followed by the original stop tail. -/
@@ -93,105 +303,37 @@ theorem swapPc0_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {G : Nat} {o : Out
     from by decide, show ¬ ((1 : B256) = 0) from by decide, ite_false] at run
   unfold t_01be_c99 at run
   obtain ⟨_, run⟩ := ric_destP run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_calldatasize (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_sub (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_lt (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  obtain ⟨d, line, run⟩ := SFunc.RunCutP.split_nexts StepIn.toRun swapAbiSizeLine run
+  obtain ⟨_, rfl⟩ := swapAbiSizeLine_inv line
   rcases ric_branchP run with ⟨_, _, failed⟩ | ⟨g1, _, run⟩
   · exact False.elim (failed.false_of_noOk (by decide : t_01d0_c99.noOk = true))
   unfold t_01d4_c99 at run
   obtain ⟨_, run⟩ := ric_destP run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_calldataload (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_calldataload (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_calldataload (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_and (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_calldataload (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_gt (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  obtain ⟨d, line, run⟩ := SFunc.RunCutP.split_nexts StepIn.toRun swapAbiOffsetLine run
+  obtain ⟨_, rfl⟩ := swapAbiOffsetLine_inv line
   rcases ric_branchP run with ⟨_, _, failed⟩ | ⟨g2, _, run⟩
   · exact False.elim (failed.false_of_noOk (by decide : t_0214_c99.noOk = true))
   unfold t_0218_c99 at run
   obtain ⟨_, run⟩ := ric_destP run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_gt (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  obtain ⟨d, line, run⟩ := SFunc.RunCutP.split_nexts StepIn.toRun swapAbiHeadLine run
+  obtain ⟨_, rfl⟩ := swapAbiHeadLine_inv line
   rcases ric_branchP run with ⟨_, _, failed⟩ | ⟨g3, _, run⟩
   · exact False.elim (failed.false_of_noOk (by decide : t_0226_c99.noOk = true))
   unfold t_022a_c99 at run
   obtain ⟨_, run⟩ := ric_destP run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_calldataload (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_mul (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_gt (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_gt (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_or (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  obtain ⟨d, line, run⟩ := SFunc.RunCutP.split_nexts StepIn.toRun swapAbiTailLine run
+  obtain ⟨_, rfl⟩ := swapAbiTailLine_inv line
   rcases ric_branchP run with ⟨_, _, failed⟩ | ⟨g4, _, run⟩
   · exact False.elim (failed.false_of_noOk (by decide : t_0248_c99.noOk = true))
   unfold t_024c_c99 at run
   obtain ⟨_, run⟩ := ric_destP run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  dsimp only [List.set] at run
-  have e4 : Bytes.toB256 [4] = (4 : B256) := rfl
+  obtain ⟨d, line, run⟩ := SFunc.RunCutP.split_nexts StepIn.toRun swapAbiCallLine run
+  obtain ⟨_, rfl⟩ := swapAbiCallLine_inv line
   have e32 : Bytes.toB256 [32] = (32 : B256) := rfl
   have e100 : (4 : B256) + Bytes.toB256 [96] = 100 := by decide
   have e36 : (4 : B256) + 32 = 36 := by decide
   have e68 : (4 : B256) + Bytes.toB256 [64] = 68 := by decide
-  simp only [e4, e32, e100, e36, e68, show Bytes.toB256 [128] = (128 : B256) from rfl,
+  simp only [e32, e100, e36, e68,
     show Bytes.toB256 [1, 0, 0, 0, 0] = (0x100000000 : B256) from rfl,
     show Bytes.toB256 [1] = (1 : B256) from rfl] at g1 g2 g3 g4 run
   have mulOne : ∀ x : B256, x * 1 = x := by

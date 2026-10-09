@@ -2,6 +2,7 @@ import Blanc.Lift.UniswapV2Pair.SwapCut
 import Blanc.Lift.UniswapV2Pair.BalanceCallWalk
 import Blanc.Lift.CodeSizeWalk
 import Blanc.Lift.PtrWordMemory
+import Blanc.Lift.UniswapV2Pair.SyncWalk
 
 /-! The two post-callback `balanceOf(pair)` STATICCALLs of the actual swap body,
 from the cut `t_09c3_c5` to the first amount-in ternary `t_0af5_c5`'s tail.
@@ -187,14 +188,68 @@ theorem swapBalanceReply_word {M : Mem} {p : B256} {pair : Adr} (wf : Mem.Wf M) 
 
 /-- The literal STATICCALL staging and code guard after each masked token load.
 The two sites stage the same operands through slightly different shuffles. -/
-def swapStageTail (second : Bool) : List Ninst :=
+def swapStagePrepare (second : Bool) : List Ninst :=
   [.reg (.swap 1), .push [0x70, 0xa0, 0x82, 0x31] (by decide), .reg (.swap 1),
     .push [0x24] (by decide), .reg (.dup 0), .reg (.dup (if second then 2 else 3)), .reg .add,
     .reg (.swap 2), .push [0x20] (by decide), .reg (.swap 2)] ++
   (if second then [.reg (.swap 0), .reg (.swap 1), .reg (.swap 0)]
     else [.reg (.swap 1), .reg (.swap 0)]) ++
   [.reg (.dup 2), .reg (.swap 0), .reg .sub, .reg .add, .reg (.dup 1), .reg (.dup 6),
-    .reg (.dup 0), .reg .extcodesize, .reg .iszero, .reg (.dup 0), .reg .iszero]
+    .reg (.dup 0)]
+
+theorem swapStagePrepare_inv {sevm : Sevm} {b final : Devm} {S : List B256} {M : Mem}
+    {G : Nat} {second : Bool} {p tm : B256}
+    (run : Line.Run sevm (St b (tm :: p :: p :: S) M G) (swapStagePrepare second) final) :
+    ∃ gas, final = St b (tm :: tm :: p :: 36 :: p :: 32 :: (p + 36) :: 0x70a08231 :: tm :: S) M gas := by
+  cases second
+  · dsimp only [swapStagePrepare, ite_false, List.cons_append, List.nil_append] at run
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_sub hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨gas, rfl⟩ := ri_dup rfl hs
+    cases run
+    exact ⟨gas, by rw [B256.sub_self]; rfl⟩
+  · dsimp only [swapStagePrepare, ite_true, List.cons_append, List.nil_append] at run
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_sub hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨gas, rfl⟩ := ri_dup rfl hs
+    cases run
+    exact ⟨gas, by rw [B256.sub_self]; rfl⟩
+
+/-- Balance staging plus the shared Pair code-guard comparison. -/
+def swapStageTail (second : Bool) : List Ninst := swapStagePrepare second ++ syncCodeGuardLine
 
 theorem swapStageTail_inv {sevm : Sevm} {b final : Devm} {S : List B256} {M : Mem}
     {G : Nat} {second : Bool} {p tm : B256} (fork : CoveredFork sevm.benvStat.fork)
@@ -203,60 +258,10 @@ theorem swapStageTail_inv {sevm : Sevm} {b final : Devm} {S : List B256} {M : Me
       (B256.eqCheck (B256.eqCheck (b.getCode tm.toAdr).size.toB256 0) 0 ::
         B256.eqCheck (b.getCode tm.toAdr).size.toB256 0 ::
         tm :: p :: 36 :: p :: 32 :: (p + 36) :: 0x70a08231 :: tm :: S) M gas := by
-  cases second
-  · dsimp only [swapStageTail, ite_false, List.cons_append, List.nil_append] at run
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_sub hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_extcodesize fork hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_iszero hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨gas, rfl⟩ := ri_iszero hs
-    cases run
-    exact ⟨gas, by rw [B256.sub_self]; rfl⟩
-  · dsimp only [swapStageTail, ite_true, List.cons_append, List.nil_append] at run
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_push hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_sub hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_add hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_extcodesize fork hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_iszero hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-    obtain ⟨_, hs, run⟩ := Line.of_run_cons run; obtain ⟨gas, rfl⟩ := ri_iszero hs
-    cases run
-    exact ⟨gas, by rw [B256.sub_self]; rfl⟩
+  dsimp only [swapStageTail] at run
+  obtain ⟨d, staged, guard⟩ := of_run_append (swapStagePrepare second) run
+  obtain ⟨_, rfl⟩ := swapStagePrepare_inv staged
+  exact syncCodeGuardLine_inv fork guard
 
 /-- The masked token word each balance query targets. -/
 def swapTokenWord (t : B256) : B256 := t &&& 0xffffffffffffffffffffffffffffffffffffffff
@@ -333,6 +338,55 @@ theorem swapBalanceGuard_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {S : List
   rw [post.returnData] at long decoded
   exact ⟨d, out, tailGas, ⟨codeNonzero, gw, callGas, call, post, long, bound, answered⟩, decoded⟩
 
+/-- Token0 masking after the first physical balance request. -/
+def swapBalance0MaskLine : List Ninst :=
+  [.push [0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff]
+    (by decide), .reg (.dup 4), .reg .and]
+
+theorem swapBalance0MaskLine_inv {sevm : Sevm} {b d : Devm} {R : List B256}
+    {M : Mem} {G : Nat} {p t1 t0 : B256}
+    (line : Line.Run sevm (St b (p :: p :: t1 :: t0 :: 0 :: 0 :: R) M G)
+      swapBalance0MaskLine d) :
+    ∃ gas, d = St b (swapTokenWord t0 :: p :: p :: t1 :: t0 :: 0 :: 0 :: R) M gas := by
+  dsimp only [swapBalance0MaskLine] at line
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨gas, state⟩ := ri_and step
+  cases line
+  exact ⟨gas, state⟩
+
+/-- Token1 masking also stores the same physically decoded first balance. -/
+def swapBalance1MaskLine : List Ninst :=
+  [.reg (.swap 1), .reg (.swap 5), .reg .pop,
+   .push [0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff]
+    (by decide), .reg (.dup 3), .reg .and]
+
+theorem swapBalance1MaskLine_inv {sevm : Sevm} {b d : Devm} {R : List B256}
+    {M : Mem} {G : Nat} {p t1 t0 bal0 : B256}
+    (line : Line.Run sevm (St b (p :: p :: bal0 :: t1 :: t0 :: 0 :: 0 :: R) M G)
+      swapBalance1MaskLine d) :
+    ∃ gas, d = St b (swapTokenWord t1 :: p :: p :: t1 :: t0 :: 0 :: bal0 :: R) M gas := by
+  dsimp only [swapBalance1MaskLine] at line
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_pop step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_dup rfl step
+  obtain ⟨_, step, line⟩ := Line.of_run_cons line; obtain ⟨gas, state⟩ := ri_and step
+  cases line
+  exact ⟨gas, state⟩
+
+/-- The actual arithmetic continuation after the selected balance's memory decoder. -/
+def swapBalanceDecodedTail (second : Bool) : SFunc :=
+  match (if second then t_0af5_c5 else t_0a59_c5) with
+  | .dest (.next (.reg .pop) (.next (.reg .mload) tail)) => tail
+  | _ => .last .stop
+
+theorem swapBalance_decode_shape (second : Bool) :
+    (if second then t_0af5_c5 else t_0a59_c5) =
+      .dest (.next (.reg .pop) (.next (.reg .mload) (swapBalanceDecodedTail second))) := by
+  cases second <;> rfl
+
 /-- The first post-callback query: `balanceOf(pair)` to the cached `token0`. -/
 theorem swapFirstBalance_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {R0 : List B256}
     {C : List Nat} {M : Mem} {G n : Nat} {p t1 t0 : B256} {seg : Seg}
@@ -356,9 +410,8 @@ theorem swapFirstBalance_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {R0 : Lis
   obtain ⟨_, line, run⟩ := SFunc.RunCutP.split_nexts (fun step => StepIn.toRun step) swapRequestLine run
   obtain ⟨_, state⟩ := swapRequestLine_inv mem lower width line
   rw [state] at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_and (StepIn.toRun hs)
+  obtain ⟨d, line, run⟩ := SFunc.RunCutP.split_nexts StepIn.toRun swapBalance0MaskLine run
+  obtain ⟨_, rfl⟩ := swapBalance0MaskLine_inv line
   obtain ⟨_, line, run⟩ := SFunc.RunCutP.split_nexts (fun step => StepIn.toRun step) (swapStageTail false) run
   obtain ⟨_, state⟩ := swapStageTail_inv fork line
   rw [state] at run
@@ -400,12 +453,8 @@ theorem swapSecondBalance_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {R0 : Li
   obtain ⟨_, line, run⟩ := SFunc.RunCutP.split_nexts (fun step => StepIn.toRun step) swapRequestLine run
   obtain ⟨_, state⟩ := swapRequestLine_inv reply lower width line
   rw [state] at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_and (StepIn.toRun hs)
+  obtain ⟨d, line, run⟩ := SFunc.RunCutP.split_nexts StepIn.toRun swapBalance1MaskLine run
+  obtain ⟨_, rfl⟩ := swapBalance1MaskLine_inv line
   obtain ⟨_, line, run⟩ := SFunc.RunCutP.split_nexts (fun step => StepIn.toRun step) (swapStageTail true) run
   obtain ⟨_, state⟩ := swapStageTail_inv fork line
   rw [state] at run

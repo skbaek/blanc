@@ -107,23 +107,8 @@ theorem swap_bytecode_front_cut_code {K U : WriterKey → Prop} {current : Check
   have pairEq : ctx.pair = sevm.currentTarget := rfl
   have time : ctx.timestamp = sevm.benvStat.time := rfl
   have ctxStatic : ctx.isStatic = false := nonstatic
-  have lockedRep := rep.mint_locked_world (sevm := sevm) (b := b)
   have inv0 : SwapFrontState U sevm.currentTarget ctx current b locked (swapPrefixWorld sevm b) := by
-    refine ⟨rfl, ⟨K, sub, ?_, rfl⟩, ?_, ?_, ⟨[], [], ?_, ?_, rfl⟩, rfl⟩
-    · unfold swapPrefixWorld
-      rw [afterSload_getStor, afterSload_getStor, afterSload_getStor]
-      exact lockedRep
-    · unfold swapPrefixWorld mintLockedWorld
-      rw [afterSload_getCode, afterSload_getCode, afterSload_getCode, afterSstore_getCode,
-        afterSload_getCode]
-    · unfold swapPrefixWorld mintLockedWorld
-      rw [afterSload_output, afterSload_output, afterSload_output, afterSstore_output,
-        afterSload_output]
-    · rw [List.append_nil]
-      rfl
-    · unfold swapPrefixWorld mintLockedWorld
-      rw [afterSload_logs, afterSload_logs, afterSload_logs, afterSstore_logs, afterSload_logs,
-        List.append_nil]
+    exact swap_prefix_source_invariant rep sub
   obtain ⟨F0, T0, R0, turns0, reach0, inv1, auth0, shape0⟩ :=
     swapTransfer0_phase (locals := locals) env installed pairEq time ctxStatic inv0 opt0
   obtain ⟨F1, T1, R1, turns1, reach1, inv2, auth1, shape1⟩ :=
