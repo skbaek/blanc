@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WETH9 — Blanc</title>
+<meta name="description" content="What Blanc proves about the 3,124 deployed bytes of WETH9: tracked balances stay backed after any valid history, storage replays exactly the committed calls, and a holder's withdrawal transaction is admitted after any history at a closed-form gas cost that 3,749 of 3,749 matching mainnet receipts obey.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fbfaf5'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="../site.css">
+</head>
+<body>
+
+<header id="hdr">
+  <div class="wrap nav">
+    <a class="brand" href="../"><span class="sq"></span><b>Blanc</b><i>/blɑ̃/ — fr. “white”</i></a>
+    <nav class="navlinks" aria-label="Site">
+      <a class="opt" href="../#corpus" aria-current="page">Corpus</a>
+      <a class="opt" href="../method.html">How it works</a>
+      <a class="opt" href="../language.html">Language</a>
+      <a class="opt" href="../#limits">Limits</a>
+      <a class="opt" href="../#check">Check it</a>
+      <a class="btn opt" href="https://skbaek.github.io/jaune/" title="Jaune — the EVM semantics every theorem here is stated against"><span class="sqf"></span>Jaune</a>
+      <a class="btn" href="https://github.com/skbaek/blanc"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg><span class="gh-label">GitHub</span></a>
+      <details class="menu"><summary class="btn">Menu</summary><div class="panel">
+        <a href="../">Home</a><a href="../#corpus">The corpus</a><a href="../method.html">How it works</a>
+        <a href="../language.html">The Blanc language</a><a href="../#limits">Limits</a><a href="../#check">Check it yourself</a>
+        <a href="https://skbaek.github.io/jaune/">Jaune</a>
+      </div></details>
+    </nav>
+  </div>
+</header>
+
+<main>
+<section class="page-hero">
+  <div class="wrap">
+    <p class="crumbs"><a href="../">Blanc</a><span>/</span><a href="../#corpus">Deployed bytecode</a><span>/</span>WETH9</p>
+    <div class="hero-grid">
+      <div>
+        <h1>WETH9.</h1>
+        <p class="lede">The canonical wrapped ether: 3,124 bytes that solc 0.4.19, with its optimizer off, produced in December 2017, holding about 2.16 million ether.</p>
+        <p class="lede-sm">About those exact bytes, Blanc proves that tracked balances stay backed after any valid history; that storage is the ledger replayed over exactly the calls that were committed; and that a holder’s withdrawal transaction is admitted after any history at a gas cost given by a closed formula — a formula every one of 3,749 matching mainnet receipts obeys.</p>
+      </div>
+      <div class="plate idplate">
+        <div class="plate-head"><span class="who"><span class="k">Artifact</span>WETH9</span><span class="meta">Ethereum mainnet</span></div>
+        <div class="hexband wrapband" aria-hidden="true">60 60 60 40 52 60 04 36 10 61 00 af 57 60 00 35 7c 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 90 04 63 ff ff ff ff 16 80 63 06 fd de 03 14 61 00 b9 57 80 63 09 5e a7 b3 14 61 01 47 57 80 63 18 16 0d dd 14 61 01 a1 57 80 63 23 b8 72 dd 14 61 01</div>
+        <dl class="kv">
+          <dt>Address</dt><dd><code>0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2</code></dd>
+          <dt>Runtime</dt><dd>3,124 bytes; Keccak-256 <code>0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23</code></dd>
+          <dt>Compiler</dt><dd>solc 0.4.19, optimizer off</dd>
+          <dt>Created</dt><dd>block 4,719,568 (12 December 2017), transaction <code>0xb953…2fa3</code>, deployer nonce 446</dd>
+          <dt>Holds</dt><dd>about 2,164,823 ETH at block 26,141,229</dd>
+          <dt>Proofs</dt><dd><a href="https://github.com/skbaek/blanc/tree/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Weth9"><code>Blanc/Lift/Weth9/</code></a>, 15,221 lines of Lean</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap layout">
+    <nav class="toc" aria-label="On this page">
+      <span class="t">On this page</span>
+      <a href="#exit">The exit theorem</a>
+      <a href="#gas">The gas, term by term</a>
+      <a href="#chain">Against the chain</a>
+      <a href="#safety">Backing and exact replay</a>
+      <a href="#live">Every writer, live</a>
+      <a href="#deploy">Deployment</a>
+      <a href="#hashes">The hash premise</a>
+      <a href="#limits">Not claimed</a>
+      <a href="#prior">Earlier work</a>
+    </nav>
+
+    <div class="prose">
+      <section id="exit">
+        <p class="eyebrow">Liveness, with exact gas</p>
+        <h2>The exit theorem.</h2>
+        <p>A wrapper’s one job is to give the ether back. Safety theorems cannot say that it will — a contract that always reverts satisfies every invariant of its storage — so this theorem constructs the withdrawal. Its conclusion is a fact about <code>processTransaction</code>, Jaune’s function for executing one transaction inside a block, which block processing calls for every transaction and the conformance fixtures therefore exercise.</p>
+
+        <div class="thm">
+          <div class="head"><span class="tag">Theorem, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Weth9/LiveTx.lean#L631"><code>Blanc.Lift.Weth9.weth9_history_tx_withdraw</code> · LiveTx.lean:631</a></div>
+<pre class="lean"><span class="kw">theorem</span> <span class="nm">weth9_history_tx_withdraw</span>
+    {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {K₀ : Key → Prop}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode ca).toList = weth9Sem.image)
+    (sumNof : SumNof checkpoint.state.bal)
+    (initial : FootInv K₀ (checkpoint.state.getStor ca) (checkpoint.state.bal ca))
+    (fresh : KeysFresh K₀ (historyTouchedKeys ca trace))
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat} {E : Adr} {wad : B256}
+    {chainId : UInt64} {maxPriorityFee maxFee : Nat}
+    (hstate : benv.state = future.state)
+    (hfork : CoveredFork benv.stat.fork)
+    (htype : tx.type = .two chainId maxPriorityFee maxFee (some ca) [])
+    (hvalue : tx.value = 0) (hdata : tx.data = withdrawCalldata wad)
+    (hchain : chainId = benv.stat.chainId)
+    (hprio : maxPriorityFee ≤ maxFee) (hbase : benv.stat.baseFeePerGas ≤ maxFee)
+    (hgas : withdrawIntrinsicGas wad + withdrawFrameGas wad + 811 ≤ tx.gas)
+    (hcap : tx.gas ≤ 16777216)
+    (hroom : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed)
+    (hrecover : recoverSender benv.stat.chainId tx = .ok E)
+    (hnonce : (benv.state.get E).nonce = tx.nonce) (hnonceMax : tx.nonce ≠ UInt64.max)
+    (hnocode : (benv.state.getCode E).size = 0)
+    (hfunds : tx.gas * maxFee ≤ (benv.state.get E).bal.toNat)
+    (hprecE : benv.stat.rules.isPrecomp E = false) (hprecCa : benv.stat.rules.isPrecomp ca = false)
+    (hholder : historyKeyUniverse ca trace K₀ (.bal E))
+    (hbal : wad ≤ (future.state.getStor ca).get (balSlot E))
+    (hcbE : benv.stat.coinbase ≠ E) (hcbCa : benv.stat.coinbase ≠ ca) :
+    ∃ (st : Jaune.State) (bout' : BlockOutput), processTransaction benv bout tx index = .ok (st, bout') ∧
+      bout'.cumulativeGasUsed = bout.cumulativeGasUsed +
+        withdrawGasUsed ((future.state.getStor ca).get (balSlot E)) wad ∧
+      bout'.blockGasUsed = bout.blockGasUsed +
+        withdrawGasUsed ((future.state.getStor ca).get (balSlot E)) wad ∧
+      st.getStor ca = (future.state.getStor ca).set (balSlot E)
+        ((future.state.getStor ca).get (balSlot E) - wad) ∧
+      (∀ a, a ≠ ca → st.getStor a = future.state.getStor a) ∧
+      (st.get E).nonce = tx.nonce + 1 ∧
+      (st.get E).bal = future.state.bal E -
+          (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+            benv.stat.baseFeePerGas)).toB256 + wad +
+        ((tx.gas - withdrawGasUsed ((future.state.getStor ca).get (balSlot E)) wad) *
+          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+            benv.stat.baseFeePerGas)).toB256 ∧
+      (st.get ca).bal = future.state.bal ca - wad ∧
+      ((future.state.bal E).toNat + wad.toNat &lt; 2 ^ 256 →
+        (st.get E).bal.toNat + withdrawGasUsed ((future.state.getStor ca).get (balSlot E)) wad *
+          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas) =
+          (future.state.bal E).toNat + wad.toNat)</pre>
+        </div>
+
+        <p>Twenty-seven explicit hypotheses, nine conclusions. The hypotheses fall into five groups.</p>
+        <ul>
+          <li><b>The history.</b> <code>trace</code> is any configured history from <code>checkpoint</code> to <code>future</code>: a retained run of Jaune’s block transition over valid blocks, each under Prague, Osaka, BPO1 or BPO2. Apart from the hash premise, nothing restricts which transactions it contains or how other contracts call WETH9.</li>
+          <li><b>The checkpoint.</b> The bytes are installed at <code>ca</code>, the total ether is below 2<sup>256</sup>, and the footprint invariant <code>FootInv K₀</code> holds: every nonzero storage word lies at one of the three metadata slots or at a tracked key’s slot, tracked keys occupy distinct slots off the metadata slots, and the tracked balances sum to at most the contract’s ether. Executing WETH9’s recorded creation input establishes it, with nothing tracked and no hash premise (<a href="#deploy">below</a>).</li>
+          <li><b>The hashes.</b> <code>fresh</code> says that each key the history may touch is tracked already or lands on a slot in no use, and that distinct keys land on distinct slots (<a href="#hashes">below</a>).</li>
+          <li><b>The holder.</b> <i>E</i>’s balance key is tracked, its WETH balance covers <code>wad</code>, and <i>E</i> has no code — so it is neither a contract, whose withdrawal needs a premise about the callee, nor an account with an EIP-7702 delegation — and is not a precompile.</li>
+          <li><b>The transaction.</b> Everything else: a type-2 transaction to the contract with zero value and no access list, calldata <code>withdraw(wad)</code>, consistent chain id and fee fields, a gas limit between the needed amount plus 811 and EIP-7825’s cap of 2<sup>24</sup>, room in the block, a signature that recovers to <i>E</i>, <i>E</i>’s nonce and funds, and a fee recipient other than <i>E</i> and the contract, whose fee would otherwise mix into the balances the theorem computes. Signature recovery is a premise because the theorem ranges over every signed transaction; for a concrete transaction the kernel computes it.</li>
+        </ul>
+        <p>The conclusion is the holder’s guarantee. The transaction is admitted; the holder’s balance slot is debited by exactly <code>wad</code> and nothing else in the contract’s storage changes; no other account’s storage changes; the contract’s ether falls by <code>wad</code>; and, net of fees, the holder receives exactly <code>wad</code>: provided their ether plus <code>wad</code> stays below 2<sup>256</sup>, their new balance plus <code>gasUsed</code> times the effective gas price equals their old balance plus <code>wad</code>.</p>
+        <p>The companion <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Weth9/PrefixTx.lean#L11"><code>weth9_prefix_tx_withdraw</code></a> puts the withdrawal where real transactions run: after a block’s two opening system calls and any number of its transactions. Given a history up to the start of a block and the block’s retained execution, it derives the installed code and the footprint invariant at the cut, and if the block’s next transaction is such a withdrawal, it is admitted with the same conclusions — and its result is the one the block actually produced.</p>
+      </section>
+
+      <section id="gas">
+        <p class="eyebrow">Read off the bytes and the fork rules</p>
+        <h2>The gas, term by term.</h2>
+<pre class="lean"><span class="kw">def</span> <span class="nm">withdrawIntrinsicGas</span> (wad : B256) : Nat := 21000 + 4 * calldataTokens (withdrawCalldata wad)
+<span class="kw">def</span> <span class="nm">withdrawFrameGas</span> (wad : B256) : Nat := <span class="kw">if</span> wad = 0 <span class="kw">then</span> 4440 <span class="kw">else</span> 13940
+<span class="kw">def</span> <span class="nm">withdrawRefund</span> (bal wad : B256) : Nat := <span class="kw">if</span> wad ≠ 0 ∧ wad = bal <span class="kw">then</span> 4800 <span class="kw">else</span> 0
+<span class="kw">def</span> <span class="nm">withdrawGasUsed</span> (bal wad : B256) : Nat :=
+  withdrawIntrinsicGas wad + withdrawFrameGas wad - withdrawRefund bal wad</pre>
+        <p>The intrinsic cost is the 21,000 every transaction pays plus four gas per calldata token, a zero byte counting as one token and a nonzero byte as four. The frame cost for a nonzero withdrawal is the sum below.</p>
+        <div class="tablewrap"><table class="data">
+          <thead><tr><th>Part of the <code>withdraw</code> frame, at a transaction’s entry</th><th class="r">Gas</th></tr></thead>
+          <tbody>
+            <tr><td>The instructions’ fixed costs, dispatch included</td><td class="r">2,040</td></tr>
+            <tr><td>A cold read of the holder’s balance slot</td><td class="r">2,100</td></tr>
+            <tr><td>A warm read of the same slot</td><td class="r">100</td></tr>
+            <tr><td>A write that changes a nonzero original value</td><td class="r">2,900</td></tr>
+            <tr><td>The ether transfer to the already-warm sender</td><td class="r">6,800</td></tr>
+            <tr><td><b>Frame, <code>wad</code> ≠ 0</b></td><td class="r"><b>13,940</b></td></tr>
+          </tbody>
+        </table></div>
+        <p>When <code>wad</code> = 0 the write and the transfer cost 100 each and the frame costs 4,440. When a nonzero withdrawal empties the balance, clearing the slot earns EIP-3529’s 4,800-gas refund. The refund cap of one fifth of the gas used and EIP-7623’s calldata floor never bind for this call, which the proof establishes rather than assumes.</p>
+        <p>The 811 gas of margin in the gas-limit premise is gas the transaction must hold but does not use. The <code>CALL</code> that sends the ether is charged 9,100 before the 2,300-gas stipend it hands the recipient comes back unused, so the frame must momentarily hold 2,300 more than the transfer’s net 6,800; and 1,489 gas of the frame’s cost, mostly the <code>Withdrawal</code> event’s <code>LOG2</code>, falls after the call. 2,300 − 1,489 = 811.</p>
+        <div class="tablewrap"><table class="data">
+          <caption>A one-wei withdrawal that empties the balance — the closed instance <a href="#deploy">below</a>.</caption>
+          <thead><tr><th>Quantity</th><th class="r">Gas</th></tr></thead>
+          <tbody>
+            <tr><td>Intrinsic: 21,000 + 4·31 zero bytes + 16·5 nonzero bytes</td><td class="r">21,204</td></tr>
+            <tr><td>Frame</td><td class="r">13,940</td></tr>
+            <tr><td>Consumed before the refund</td><td class="r">35,144</td></tr>
+            <tr><td>Refund for clearing the slot</td><td class="r">4,800</td></tr>
+            <tr><td><b><code>gasUsed</code>, as the receipt records it</b></td><td class="r"><b>30,344</b></td></tr>
+            <tr><td>Gas limit the theorem requires, at least: 35,144 + 811</td><td class="r">35,955</td></tr>
+          </tbody>
+        </table></div>
+        <p class="small dimmer">A gas limit equal to the receipt’s 30,344 does not meet the theorem’s premise; 35,955 is sufficient, not shown to be minimal.</p>
+      </section>
+
+      <section id="chain">
+        <p class="eyebrow">An empirical test, outside the proof</p>
+        <h2>Against the chain.</h2>
+        <p>A gas formula proved against a model is only as good as the model’s gas schedule. The conformance fixtures test that schedule; the formula can also be compared with mainnet directly. In the 30,000 blocks from 26,111,230 to 26,141,229 (3 to 7 October 2026), WETH9’s <code>Withdrawal</code> events locate every direct call to <code>withdraw</code>:</p>
+        <div class="tablewrap"><table class="data">
+          <tbody>
+            <tr><td>Successful direct calls to <code>withdraw</code></td><td class="r">6,823</td></tr>
+            <tr><td>— with calldata other than the 36 bytes of <code>withdraw(w)</code></td><td class="r">1,859</td></tr>
+            <tr><td>— from accounts holding code</td><td class="r">1,070</td></tr>
+            <tr><td>— of transaction type 0</td><td class="r">114</td></tr>
+            <tr><td>— failing the block-boundary balance check</td><td class="r">31</td></tr>
+            <tr><td><b>Of the theorem’s shape, from 2,255 senders</b></td><td class="r"><b>3,749</b></td></tr>
+            <tr><td><b>Receipts whose <code>gasUsed</code> equals the prediction</b></td><td class="r"><b>3,749</b></td></tr>
+          </tbody>
+        </table></div>
+        <p>The matches span twelve combinations of calldata tokens, from 60 to 75, and emptying; none withdraws zero. Two excluded groups still admit a prediction, and their 98 admissible calls of type 0 and 1,590 calls with 37 to 76 bytes of calldata match too; they are counted apart. Calls from accounts with code cannot be predicted, since the ether transfer runs the sender’s code.</p>
+        <p class="note">What the comparison does and does not show. The balance check compares the sender’s WETH balance at the ends of two blocks and calls a withdrawal emptying when the amount equals the earlier balance; it never observes the balance at the transaction’s entry. By the theorem, the prediction depends on the chain’s state only through that one bit, so a misclassification would show as a difference of exactly 4,800 gas; none appears. Since that dependence is itself what the theorem proves, the comparison tests the formula and the model together. It exercises nonzero withdrawals under one fork, BPO2, and establishes none of the theorem’s other hypotheses for these transactions.</p>
+      </section>
+
+      <section id="safety">
+        <p class="eyebrow">Safety, after any history</p>
+        <h2>Backing and exact replay.</h2>
+        <p>Beneath the exit theorem, the safety results hold after any configured history from a checkpoint satisfying the footprint invariant, under the same hash and total-ether premises.</p>
+        <ul class="claims">
+          <li><b>The footprint survives.</b> The code is intact, and there is a footprint of tracked keys — the checkpoint’s, extended by keys the history touched — such that every nonzero storage word sits at a metadata slot or a tracked key’s slot, tracked slots are distinct and apart from the metadata slots, and the tracked balances sum to at most the contract’s ether.
+            <span class="nm"><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Weth9/FootHistory.lean#L114">Blanc.Lift.Weth9.weth9_history_footprint</a></span></li>
+          <li><b>Every tracked balance is backed</b>, in total and one by one, and an address whose balance slot is neither a metadata slot nor a tracked slot is owed nothing.
+            <span class="nm"><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Weth9/FootHistory.lean#L130">Blanc.Lift.Weth9.weth9_history_backed</a></span></li>
+          <li><b>The ledger is exactly the committed calls.</b> The ledger read from the final storage is the model’s ledger run over exactly the settlement-committed calls to the contract’s writers, in order: rolled-back frames are absent, view calls contribute nothing, and a call re-entered from inside a withdrawal’s ether transfer is placed after the withdrawal that made it.
+            <span class="nm"><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Weth9/CommittedHistory.lean#L62">Blanc.Lift.Weth9.weth9_history_committed</a></span></li>
+        </ul>
+      </section>
+
+      <section id="live">
+        <p class="eyebrow">Constructed executions</p>
+        <h2>Every writer, live.</h2>
+        <p>Every writer runs from a fresh frame at a cost that is a closed sum of fixed charges and the actual storage charges of the slots it touches, and so do <code>balanceOf</code> and <code>decimals</code>. A selection:</p>
+        <div class="tablewrap"><table class="data">
+          <thead><tr><th>Call</th><th>Exact frame cost</th><th>Theorem</th></tr></thead>
+          <tbody>
+            <tr><td><code>balanceOf</code></td><td>2,534 cold, 534 warm</td><td><code>weth9_balanceOf_gas_exact</code></td></tr>
+            <tr><td><code>approve</code></td><td>2,320 plus the store’s charge; 24,420 for a cold, never-written slot set nonzero</td><td><code>weth9_approve_live</code></td></tr>
+            <tr><td><code>withdraw</code> to an account without code</td><td>2,040 plus two reads, a store and the transfer</td><td><code>weth9_withdraw_any_live</code></td></tr>
+            <tr><td><code>withdraw</code> to a contract</td><td>as above, given <code>SendOk</code>: the call succeeds, leaves at least 1,489 gas and changes none of WETH9’s storage</td><td><code>weth9_withdraw_send_live</code></td></tr>
+          </tbody>
+        </table></div>
+        <p>Liveness climbs four rungs. From a fresh <b>frame</b>, every writer succeeds at its exact cost. At the <b>model</b> level, any writer call the model accepts is realized by an execution ending in the model’s next ledger. At a <b>reachable state</b> — after any configured history — a tracked holder can withdraw to an account without code, deposit, or transfer what its stored balance covers (<code>weth9_history_withdraw_live</code>, <code>…_deposit_live</code>, <code>…_transfer_live</code>). And as a signed <b>transaction</b>, the withdrawal is admitted, as above. <code>approve</code> and <code>transferFrom</code> are proved live at the frame and model levels only.</p>
+      </section>
+
+      <section id="deploy">
+        <p class="eyebrow">Where a history can start</p>
+        <h2>Deployment, and a closed instance.</h2>
+        <p>An invariant stated at a checkpoint is worth something only if a real state satisfies it. Under every covered fork, Blanc executes the recorded creation input of WETH9’s deployment transaction as a <code>CREATE</code> message from the recorded deployer at nonce 446, and proves that it succeeds, installs exactly the certified runtime at the <code>CREATE</code> address, and leaves exactly the constructor’s <code>name</code>, <code>symbol</code> and <code>decimals</code> storage — which satisfies the footprint invariant with nothing tracked, for every ether balance, with no hash premise (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Weth9/Creation/Deploy.lean#L188"><code>weth9_deploy_covered</code></a>, <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Weth9/Creation/DeployInit.lean#L22"><code>weth9_deploy_init_covered</code></a>). This is a modeled deployment: it runs the historical input under current rules and does not prove that the 2017 transaction was included in the chain.</p>
+        <p>The premises of the exit theorem can all hold at once. <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Weth9/ClosedExit.lean#L69"><code>weth9_closed_exit_instance</code></a> discharges every one of them, with no hypotheses left, on one connected execution in a synthetic BPO2 world: the recorded creation input deploys the runtime; a valid configured block commits a signed deposit of one wei by a funded holder; and at the history’s end a concrete signed <code>withdraw(1)</code> by that holder is admitted, using 30,344 gas. Both signatures are recovered by the kernel. The world is synthetic — finite funding, and a <code>STOP</code> program at each system-contract address in place of the canonical code — so the instance shows the premises are satisfiable together, not that anything happened on mainnet.</p>
+      </section>
+
+      <section id="hashes">
+        <p class="eyebrow">Hashes without axioms</p>
+        <h2>The hash premise, and why it is there.</h2>
+        <p>WETH9 keeps balances and allowances at hashed storage slots, <code>keccak(a ‖ 3)</code> for <code>balanceOf[a]</code>. A proof about such storage must know the slots it reasons about are distinct. Blanc adds no axiom about Keccak-256 — the injectivity axiom some systems adopt is false, since the hash maps an unbounded domain into 2<sup>256</sup> values. Instead the theorem states, as the premise <code>fresh</code>, exactly the separation it uses: each key the history may touch — five per call to the contract, computed from its caller and the first two words of its arguments, whatever the function or outcome — is tracked already or lands on a slot in no use, and distinct keys land on distinct slots.</p>
+        <p>This is a statement about finitely many concrete hash values, which anyone holding the history can compute: five keys and seven Keccak evaluations per call. It is not implied by computational collision resistance, and no reduction is proved. It is also necessary: a written allowance slot that coincides with a tracked balance slot breaks backing (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Weth9/FootFrame.lean#L199"><code>trackedSum_collision_breaks_backing</code></a>).</p>
+      </section>
+
+      <section id="limits">
+        <p class="eyebrow">Stated, so it is not inferred</p>
+        <h2>Not claimed.</h2>
+        <ul class="nc">
+          <li>That today’s WETH9 satisfies the footprint invariant. The theorems start from a modeled fresh deployment; reaching the live contract means rebuilding every address that has held a balance or an allowance from its logs and calldata, and showing from a complete enumeration of its storage that nothing else is stored — a finite check over public data that has not been run.</li>
+          <li>Anything about balances outside the tracked keys, or about accounts holding code, which need the <code>SendOk</code> callee premise to withdraw.</li>
+          <li><code>approve</code> and <code>transferFrom</code> liveness after a history.</li>
+          <li>The effects of static frames, which the committed list leaves out by the form of the statement rather than by proof, and of rolled-back frames.</li>
+          <li>Inclusion: the transaction theorems execute a transaction at a given state or position; whether any block includes it is outside them.</li>
+          <li>Amsterdam, or any fork other than Prague, Osaka, BPO1 and BPO2.</li>
+        </ul>
+        <p>The claim map’s <a href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md#51-weth9-booked-slot-backing-and-exact-ledger-replay">WETH9 section</a> lists every theorem with its premises and its file and line, checked by a gate.</p>
+      </section>
+
+      <section id="prior">
+        <p class="eyebrow">Context</p>
+        <h2>Earlier work, and Blanc’s own WETH.</h2>
+        <p>Verifereum, in HOL4, includes among its experimental developments a WETH9 example on the bytes at the mainnet address. EquiVM proves refinement for a local build of WETH9’s source — 1,763 bytes of solc 0.5.16 output — rather than the deployed 3,124 bytes of solc 0.4.19 output.</p>
+        <p>Blanc also contains a WETH written in its own language — a different artifact with a different subject — whose 988-byte runtime keys balances by raw address words, so its solvency theorem needs no hash premise at all. Two theorems in Blanc’s composition stratum compare it with the deployed WETH9 exactly: <code>balanceOf</code> costs 2,260 gas cold against WETH9’s 2,534, and <code>decimals</code> 158 against 2,444 (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Composition/Weth9WethGas.lean#L29"><code>balanceOf_weth9_vs_weth</code></a>, <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Composition/Weth9WethGas.lean#L34"><code>decimals_weth9_vs_weth</code></a>). <a href="../language.html#weth">More on Blanc’s WETH</a>.</p>
+      </section>
+
+      <nav class="pager" aria-label="Artifacts">
+        <a href="../#corpus"><span class="d">Back to</span><span class="t">The corpus</span></a>
+        <a class="next" href="uniswap-v2.html"><span class="d">Next artifact</span><span class="t">Uniswap V2 pair</span></a>
+      </nav>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap footgrid">
+    <div class="colophon">
+      <a class="brand" href="../" style="margin-bottom:12px"><span class="sq"></span><b>Blanc</b></a>
+      <p>MIT-licensed. Statements, names and line numbers refer to Blanc commit <code>5048a51f</code> and the Jaune revision it pins, <code>2737c8eb</code>. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
+    </div>
+    <div>
+      <h4>Deployed bytecode</h4>
+      <a href="../bytecode/weth9.html">WETH9</a><a href="../bytecode/uniswap-v2.html">Uniswap V2 pair</a><a href="../bytecode/curve-3crv.html">Curve 3Crv</a><a href="../bytecode/deposit-contract.html">Deposit contract</a><a href="../bytecode/curve-pools.html">Curve pools</a><a href="../bytecode/eip-7002.html">EIP-7002 contract</a><a href="../bytecode/lido-circuit-breaker.html">Lido CircuitBreaker</a>
+    </div>
+    <div>
+      <h4>Blanc</h4>
+      <a href="../method.html">How it works</a><a href="../language.html">The language</a><a href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md">Claim map</a><a href="https://github.com/skbaek/blanc/blob/main/scripts/GATES.md">Gate catalogue</a><a href="https://github.com/skbaek/blanc/blob/main/SECURITY.md">Security</a>
+    </div>
+    <div>
+      <h4>Elsewhere</h4>
+      <a href="https://github.com/skbaek/blanc">GitHub</a><a href="https://skbaek.github.io/jaune/">Jaune</a><a href="https://github.com/skbaek/creme">Creme</a>
+    </div>
+  </div>
+</footer>
+<script src="../site.js"></script>
+</body>
+</html>

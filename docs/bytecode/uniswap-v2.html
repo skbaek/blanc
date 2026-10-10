@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Uniswap V2 pair — Blanc</title>
+<meta name="description" content="What Blanc proves about the one 11,293-byte runtime that runs at all 524,109 Uniswap V2 pairs: exact nested replay of committed calls, a balanced LP ledger, the oracle law, share value that falls only through the protocol fee given the tokens' answers, and closed-cost liveness for every state-changing function.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fbfaf5'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="../site.css">
+</head>
+<body>
+
+<header id="hdr">
+  <div class="wrap nav">
+    <a class="brand" href="../"><span class="sq"></span><b>Blanc</b><i>/blɑ̃/ — fr. “white”</i></a>
+    <nav class="navlinks" aria-label="Site">
+      <a class="opt" href="../#corpus" aria-current="page">Corpus</a>
+      <a class="opt" href="../method.html">How it works</a>
+      <a class="opt" href="../language.html">Language</a>
+      <a class="opt" href="../#limits">Limits</a>
+      <a class="opt" href="../#check">Check it</a>
+      <a class="btn opt" href="https://skbaek.github.io/jaune/" title="Jaune — the EVM semantics every theorem here is stated against"><span class="sqf"></span>Jaune</a>
+      <a class="btn" href="https://github.com/skbaek/blanc"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg><span class="gh-label">GitHub</span></a>
+      <details class="menu"><summary class="btn">Menu</summary><div class="panel">
+        <a href="../">Home</a><a href="../#corpus">The corpus</a><a href="../method.html">How it works</a>
+        <a href="../language.html">The Blanc language</a><a href="../#limits">Limits</a><a href="../#check">Check it yourself</a>
+        <a href="https://skbaek.github.io/jaune/">Jaune</a>
+      </div></details>
+    </nav>
+  </div>
+</header>
+
+<main>
+<section class="page-hero">
+  <div class="wrap">
+    <p class="crumbs"><a href="../">Blanc</a><span>/</span><a href="../#corpus">Deployed bytecode</a><span>/</span>Uniswap V2 pair</p>
+    <div class="hero-grid">
+      <div>
+        <h1>Uniswap V2 pair.</h1>
+        <p class="lede">One runtime, every pair. Uniswap V2’s factory deploys each pair from the same creation code, so a single 11,293-byte runtime, compiled by solc 0.5.16 in 2020, runs at all 524,109 pairs it has created.</p>
+        <p class="lede-sm">Blanc’s theorems quantify over the pair, its two tokens and its factory, so they hold of every account running these bytes. After any valid history, the pair’s storage represents its Solidity model replayed over exactly the committed calls, nested callbacks included; the LP ledger balances; the price accumulators obey their law; under a premise on the tokens’ actual answers, a share’s value falls only through the protocol fee; and each of the ten state-changing functions runs at a closed gas cost.</p>
+      </div>
+      <div class="plate idplate">
+        <div class="plate-head"><span class="who"><span class="k">Artifact</span>Uniswap V2 pair</span><span class="meta">exhibit: USDC/WETH</span></div>
+        <div class="hexband wrapband" aria-hidden="true">60 80 60 40 52 34 80 15 61 00 10 57 60 00 80 fd 5b 50 60 04 36 10 61 01 b9 57 60 00 35 60 e0 1c 80 63 6a 62 78 42 11 61 00 f9 57 80 63 ba 9a 7a 56 11 61 00 97 57 80 63 d2 12 20 a7 11 61 00 71 57 80 63 d2 12 20 a7 14 61 05 da 57 80 63 d5 05 ac cf 14 61 05 e2 57 80 63 dd 62 ed 3e 14 61 06</div>
+        <dl class="kv">
+          <dt>Exhibit</dt><dd><code>0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc</code>, the first pair the factory created (block 10,008,355, 5 May 2020)</dd>
+          <dt>Runtime</dt><dd>11,293 bytes; Keccak-256 <code>0x5b83bdbcc56b2e630f2807bbadd2b0c21619108066b92a58de081261089e9ce5</code></dd>
+          <dt>Compiler</dt><dd>solc 0.5.16, optimizer at 999,999 runs; sources <code>Uniswap/v2-core</code> v1.0.1</dd>
+          <dt>Factory</dt><dd><code>0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f</code>; 524,109 pairs at block 26,141,229</dd>
+          <dt>Proofs</dt><dd><a href="https://github.com/skbaek/blanc/tree/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/UniswapV2Pair"><code>Blanc/Lift/UniswapV2Pair/</code></a>, 95,581 lines of Lean</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap layout">
+    <nav class="toc" aria-label="On this page">
+      <span class="t">On this page</span>
+      <a href="#every-pair">Every pair</a>
+      <a href="#answers">Answers as inputs</a>
+      <a href="#history">The history theorem</a>
+      <a href="#value">Ledger, oracle, value</a>
+      <a href="#frames">Every frame</a>
+      <a href="#live">Every function, live</a>
+      <a href="#chain">Against the chain</a>
+      <a href="#deploy">Deployment</a>
+      <a href="#controls">Premises that bite</a>
+      <a href="#limits">Not claimed</a>
+      <a href="#prior">Earlier work</a>
+    </nav>
+
+    <div class="prose">
+      <section id="every-pair">
+        <p class="eyebrow">Identity</p>
+        <h2>Why the theorems reach every pair.</h2>
+        <p>The factory’s code — 13,859 bytes, identical from three providers and equal to the published build of the <code>v1.0.0</code> sources — embeds the pair’s 11,636-byte creation code and has a single <code>CREATE2</code>. That creation code hashes to the init-code hash Uniswap publishes, <code>0x96e8…845f</code>, and its constructor returns bytes 261 to 11,553, counting from zero, as a literal: exactly the lifted runtime. No executable code of the factory, the creation code or the runtime contains <code>SELFDESTRUCT</code>, <code>CALLCODE</code> or <code>DELEGATECALL</code>.</p>
+        <p>So every pair the factory creates holds the lifted runtime. This binding is by inspection of the factory’s source and bytes at one block, not a theorem about its executions; as spot checks, eleven pairs from across the factory’s list — the first, second, third and last among them — hold code with the runtime’s hash.</p>
+      </section>
+
+      <section id="answers">
+        <p class="eyebrow">The method’s hard part</p>
+        <h2>Other contracts’ answers, as inputs.</h2>
+        <p>A pair learns its balances only from each token’s <code>balanceOf</code>, and whether a protocol fee is due only from the factory’s <code>feeTo</code>. A token can answer anything, and a callee can revert or consume all the gas it is given, so no contract that calls others is correct, or live, for every callee. The question is where the premises about callees go.</p>
+        <p>Blanc keeps two layers apart. In the first, answers are <em>inputs</em>. The model the bytes refine is a transcription of the <code>v1.0.1</code> sources that consumes a transcript of the answers a call received. The refinement theorems say the bytes consume the model’s entry over exactly the answers their own run observed. Every step of a history replay is <em>authenticated</em>: its entry is the one its own frame decoded, and its transcript is consumed <em>positionally</em> — each answer tied to the actual call that returned it, with its reply and the nested calls into the pair beneath it, each admitted the same way in turn. The replay, ledger, oracle and refinement theorems live at this layer and take no premise about any token or the factory.</p>
+        <p>In the second layer, the economic statements take a named premise about the answers — but only the answers of the steps of the history at hand. That is a checkable property of a concrete history, not an assumption about every token that might ever exist.</p>
+      </section>
+
+      <section id="history">
+        <p class="eyebrow">Safety, after any history</p>
+        <h2>The history theorem.</h2>
+        <p>After any configured history from a checkpoint at which the bytes are installed and the storage represents a model state, the code is intact and the storage represents the state reached by replaying, in order, exactly the outermost committed non-static calls to the pair, each against the answers its own run observed, at the positions where it observed them. Calls that reach the pair from inside one of these — through a token transfer, the flash-swap callback, or a factory call — are replayed inside the step that contains them. An equation places every committed non-static call to the pair in exactly one step, so no step is invented and none is lost.</p>
+        <p>Representation includes complete support: every nonzero word of the pair’s storage lies at a fixed slot or at the row of a tracked key. The only hash premise is trace-local. From the deployment checkpoint the statement reads:</p>
+        <div class="thm">
+          <div class="head"><span class="tag">Theorem, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/UniswapV2Pair/PairHistory.lean#L516"><code>Blanc.Lift.UniswapV2Pair.pair_history_initialized</code> · PairHistory.lean:516</a></div>
+<pre class="lean"><span class="kw">theorem</span> <span class="nm">pair_history_initialized</span> {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {factory token0 token1 : Adr} {domain : B256}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : InitializedCheckpoint (checkpoint.state.getStor pair) factory domain token0 token1)
+    (fresh : WriterFreshKeys (fun _ => False) (pairHistoryTouchedKeys pair trace)) :
+    some (future.state.getCode pair).toList = pairSem.image ∧
+    ∃ steps : List PairStep,
+      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
+      ∃ (finish : State) (K' : WriterKey → Prop),
+        PairObservedReplayWith PairAdmittedConsumes (initializedState factory domain token0 token1) steps finish ∧
+        SourceReplay (initializedState factory domain token0 token1)
+          (steps.map PairStep.source) finish ∧
+        runSourceInvocations (initializedState factory domain token0 token1)
+          (steps.map PairStep.source) = some finish ∧
+        (∀ k, K' k → k ∈ pairHistoryTouchedKeys pair trace) ∧
+        WriterRep K' (future.state.getStor pair) finish</pre>
+        </div>
+        <p>The general form, <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/UniswapV2Pair/PairHistory.lean#L460"><code>pair_history_committed</code></a>, starts from any represented state, so it applies wherever a pair’s storage can be shown to represent its model.</p>
+      </section>
+
+      <section id="value">
+        <p class="eyebrow">What the replay gives</p>
+        <h2>Ledger, oracle, and the value of a share.</h2>
+        <ul class="claims">
+          <li><b>The LP ledger balances.</b> If the model’s LP balances sum to the total supply at the checkpoint, they still do after any history, every protocol-fee mint included; from the deployment checkpoint this is proved, not assumed. It is a statement about the model’s ledger, whose rows are the tracked keys.
+            <span class="nm"><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/UniswapV2Pair/PairHistory.lean#L697">pair_history_ledger</a> · <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/UniswapV2Pair/PairHistory.lean#L674">pair_history_ledger_from_checkpoint</a></span></li>
+          <li><b>The oracle obeys its law.</b> Each price accumulator is its checkpoint value plus the sum, modulo 2<sup>256</sup>, of every committed update’s increment, ⌊r₁·2<sup>112</sup>/r₀⌋·Δt or symmetrically, with Δt the elapsed time modulo 2<sup>32</sup> by the steps’ own block timestamps. Both wrap-arounds are part of the statement.
+            <span class="nm"><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/UniswapV2Pair/PairHistory.lean#L724">pair_history_oracle</a></span></li>
+          <li><b>A share’s value falls only through the protocol fee.</b> If the factory answered <code>feeTo = 0</code> to the history’s mints and burns, and the token answers satisfy NoShrink, every committed step that starts with positive supply <i>T</i> and reserves r₀, r₁ ends with r₀·r₁·T′² ≤ r₀′·r₁′·T²: the geometric mean of the reserves per LP token, √(r₀·r₁)/T, never decreases. With the fee on, under NoShrink alone, the bound becomes r₀·r₁·T′² ≤ r₀′·r₁′·(T + F)², where F is the step’s exact fee mint, so dilution is bounded by the fee mint alone — the form that matters on mainnet, where the factory has named a fee recipient since 27 December 2025.
+            <span class="nm"><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/UniswapV2Pair/PairHistory.lean#L765">pair_history_feeOff_product</a> · <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/UniswapV2Pair/PairHistory.lean#L796">pair_history_feeOn_product</a></span></li>
+          <li><b>The minimum liquidity stays locked.</b> From a checkpoint satisfying the ledger and a supply floor — a supply of zero, or at least 1,000 LP tokens at address 0, which has granted no allowance — the floor holds after every committed step, provided no step has address 0 as its caller; every step that starts with positive supply ends with at least 1,000, and the fee-off bound then holds as a ratio over the rationals. Deployment establishes both premises.
+            <span class="nm"><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/UniswapV2Pair/PairHistoryMinLiquidity.lean#L192">pair_history_minimum_liquidity</a> · <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/UniswapV2Pair/PairHistoryMinLiquidity.lean#L224">pair_history_feeOff_ratio</a></span></li>
+        </ul>
+        <div class="aside" style="margin-top:24px">
+          <h4>NoShrink, exactly</h4>
+          <p>It concerns only the history’s own steps, of two kinds. At a <code>sync</code>, both balance answers are at least the stored reserves. At a <code>burn</code>, the first answers are at least the stored reserves, and each exceeds the final answer by at most that token’s payout. A token that takes its transfer fee from the recipient, or whose balances only grow, can satisfy it; one that debits the pair beyond its payouts, or rebases downwards, may not. No theorem claims any real token satisfies it. Mint and swap need no such premise: the bytecode’s own checks give the inequality.</p>
+        </div>
+        <p class="note" style="margin-top:20px">The value measured is not market value. Moving the reserves from (100, 100) to (50, 201) at a supply of 100 raises √(r₀·r₁)/T from 1 to about 1.0025, yet at prices of 4 and 1 the new reserves are worth 401, against 500 for the old ones held outside the pool.</p>
+      </section>
+
+      <section id="frames">
+        <p class="eyebrow">Refinement, frame by frame</p>
+        <h2>Every frame is a step of the model.</h2>
+        <p>From any storage that represents a model state, given trace-local freshness of the rows it touches, a successful frame at each of the runtime’s 27 entry points consumes the model’s entry exactly, over the answers its own run observed, with the model’s storage, logs and return bytes. <code>swap</code> is covered in all six successful shapes — each optimistic transfer present exactly when its amount is nonzero, the callback present exactly when its data is nonempty — and no writer succeeds in a static frame. The model’s laws thereby become laws of the bytes:</p>
+        <ul>
+          <li>the first mint prices ⌊√(a₀·a₁)⌋ − 1,000, locks 1,000 at address 0 and credits the recipient the rest, and the bytecode’s own Babylonian square-root loop is walked exactly and equals <code>Nat.sqrt</code> on its full domain;</li>
+          <li>a later mint issues min(⌊a₀·T/r₀⌋, ⌊a₁·T/r₁⌋), with T the supply after the fee mint;</li>
+          <li>a burn pays and returns ⌊L·bᵢ/T⌋ of each token, by exactly two transfer requests;</li>
+          <li>a swap succeeds exactly when the canonical conditions hold — some output positive, outputs below the reserves, <code>to</code> neither token, balances within <code>uint112</code>, some input positive, and the fee-adjusted product check — and then stores exactly those balances as reserves.</li>
+        </ul>
+        <p>Because the frame theorems tie every successful call to the model and the liveness theorems tie every accepted state-changing call to a successful execution, no model that departed from the bytes on a successful call could have been proved to match them. Whether the model reads as the sources do is a separate question, which a reader settles by comparing the two; the <a href="https://github.com/skbaek/blanc/blob/main/docs/registers/UNISWAP_V2_MODEL_REVIEW.md">model register</a> carries a line-by-line correspondence table.</p>
+      </section>
+
+      <section id="live">
+        <p class="eyebrow">Constructed executions</p>
+        <h2>Every state-changing function, live.</h2>
+        <p>After any configured history, each of the ten state-changing entry points executes from program counter 0 whenever the model accepts the call at the replayed state. The cost is closed: fixed charges, the access charges of the actual slots and accounts, and the gas forwarded to each callee, whose own consumption enters only through the callee premise.</p>
+        <div class="tablewrap"><table class="data">
+          <thead><tr><th>Functions</th><th>Callee premises</th><th>Theorem</th></tr></thead>
+          <tbody>
+            <tr><td><code>transfer</code>, <code>approve</code>, <code>transferFrom</code></td><td>none; <code>approve</code> costs exactly 2,342 plus its store</td><td><code>pair_history_writer_live</code></td></tr>
+            <tr><td><code>initialize</code></td><td>none; the caller must be the stored factory</td><td><code>pair_history_initialize_live</code></td></tr>
+            <tr><td><code>sync</code>, <code>mint</code>, <code>burn</code>, <code>skim</code>, <code>swap</code></td><td>the replies and returned gas of the token, factory and callback calls each makes</td><td><code>pair_history_{sync,mint,burn,skim,swap}_live</code></td></tr>
+            <tr><td><code>permit</code></td><td>the recovery precompile’s reply</td><td><code>pair_history_permit_live</code></td></tr>
+          </tbody>
+        </table></div>
+        <p>Every row also takes trace-local freshness of the storage rows the new call touches, and <code>skim</code> additionally of the rows the pair’s own frames decode inside its first transfer; that this transfer leaves the lock-guarded fields unchanged is derived, not assumed. The callee premises cannot be dropped: if the first token, or the callback recipient, holds the reverting code <code>PUSH0 PUSH0 REVERT</code>, no run of <code>sync</code>, <code>skim</code>, <code>mint</code>, or a <code>swap</code> that pays out the first token or calls back succeeds, whatever the gas.</p>
+      </section>
+
+      <section id="chain">
+        <p class="eyebrow">An empirical test, outside the proof</p>
+        <h2>Against the chain: 542 receipts.</h2>
+        <p>The frame theorem for <code>approve</code>, with the protocol’s intrinsic gas and refund added, predicts the receipt of a top-level <code>approve</code> transaction to any pair:</p>
+        <div class="formula">gasUsed <span class="op">=</span> 21,000 <span class="op">+</span> 4·z <span class="op">+</span> 16·n <span class="op">+</span> 2,342 <span class="op">+</span> S <span class="op">−</span> R<small>z and n count the zero and nonzero bytes of the 68-byte input; S, the store’s charge, is 2,100 for the cold slot plus 100 if the amount equals the slot’s value before the transaction, 20,000 if that value is zero and the amount is not, and 2,900 otherwise; R is 4,800 if that value is nonzero and the amount zero.</small></div>
+        <p>Through the 1,444,195 <code>Approval</code> events of the 30,000 blocks ending at block 26,141,229, 542 transactions called <code>approve</code> directly on an account holding the lifted runtime: 476 different pairs, the USDC/WETH exhibit among them five times, from 451 senders, 57 of them accounts with EIP-7702 delegation code, which <code>approve</code> never executes.</p>
+        <div class="tablewrap"><table class="data">
+          <thead><tr><th>Value before → amount</th><th class="r">S</th><th class="r">R</th><th class="r">Compared</th><th class="r">Equal to the prediction</th></tr></thead>
+          <tbody>
+            <tr><td>zero → nonzero</td><td class="r">22,100</td><td class="r">0</td><td class="r">453</td><td class="r">453</td></tr>
+            <tr><td>nonzero → zero</td><td class="r">5,000</td><td class="r">4,800</td><td class="r">80</td><td class="r">80</td></tr>
+            <tr><td>unchanged</td><td class="r">2,200</td><td class="r">0</td><td class="r">8</td><td class="r">8</td></tr>
+            <tr><td>nonzero → a different nonzero</td><td class="r">5,000</td><td class="r">0</td><td class="r">1</td><td class="r">1</td></tr>
+            <tr><td><b>All</b></td><td></td><td></td><td class="r"><b>542</b></td><td class="r"><b>542</b></td></tr>
+          </tbody>
+        </table></div>
+        <p class="small dimmer">The pair has no transaction-level theorem, so this tests the frame theorem’s cost together with the protocol’s transaction rules. With WETH9’s 3,749, it makes 4,291 receipts from the output of two compilers, every one equal to its prediction.</p>
+      </section>
+
+      <section id="deploy">
+        <p class="eyebrow">Where a history can start</p>
+        <h2>Deployment and initialization.</h2>
+        <p>Under every covered fork, the factory’s <code>CREATE2</code> step with the recorded creation code, given an empty target and at least 2,400,000 gas forwarded, installs the certified runtime with the factory recorded as <code>factory</code> and the EIP-712 domain separator over the chain and the new address. Every successful <code>initialize</code> from the factory then leaves exactly the initialized checkpoint of the history theorem — and such a run exists, at a closed cost, so the checkpoint is reached rather than assumed. No hash premise is needed. For the exhibit, the kernel evaluates the <code>CREATE2</code> address from the factory, the salt <code>keccak(USDC ‖ WETH)</code> and the creation code, and obtains <code>0xB4e1…C9Dc</code>.</p>
+        <p class="small dimmer"><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/UniswapV2Pair/Creation/DeployInit.lean#L246"><code>pair_create2_initialize_live</code></a> · <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/UniswapV2Pair/Creation/Facts.lean#L104"><code>pairAddress_eq</code></a>. The factory’s own bytecode is not lifted, so that it issues the <code>initialize</code> call is a premise; the run is then constructed.</p>
+      </section>
+
+      <section id="controls">
+        <p class="eyebrow">Statements that can fail</p>
+        <h2>Premises that bite.</h2>
+        <p>A premise never needed, or a statement that would survive a change to the code, says less than it seems. Kernel-checked controls show these do not:</p>
+        <ul>
+          <li>Without NoShrink, a reachable <code>sync</code> accepts a token answer below the stored reserve and the share-value inequality fails.</li>
+          <li>A mint that rounds up breaks the fee-off share-value inequality on a state it reaches; a fee constant other than 997, or a burn that rounds toward the user, gives a different accepted run.</li>
+          <li>The oracle law needs the <code>uint32</code> wrap: a reached update past 2<sup>32</sup> seconds refutes the law without it.</li>
+          <li>The <code>uint112</code> guard is load-bearing, and every successful raw <code>swap</code> observes balances below 2<sup>112</sup>.</li>
+          <li>A duplicated key breaks the footprint sum, and an allowance slot aliasing a tracked balance slot breaks raw ledger conservation.</li>
+          <li>A salt or init-code hash one bit off gives a different deployment address.</li>
+        </ul>
+      </section>
+
+      <section id="limits">
+        <p class="eyebrow">Stated, so it is not inferred</p>
+        <h2>Not claimed.</h2>
+        <ul class="nc">
+          <li>That any real token satisfies NoShrink, that a factory answers <code>feeTo = 0</code>, or that the reserves are matched by real token holdings.</li>
+          <li>That any price, the time-weighted oracle, or the pool’s economics are fair or safe.</li>
+          <li>Any composition of the pair with a token or with the factory; at the exhibit, WETH’s answers are inputs constrained by NoShrink, not discharged from Blanc’s WETH9 results.</li>
+          <li>That a live pair’s storage represents its model today: per pair, that needs the fixed slots and every mapping row recovered from its logs and <code>permit</code> calls checked, and a complete enumeration of its storage showing nothing else is stored.</li>
+          <li>Transaction-level liveness; unforgeability of <code>permit</code> signatures, whose recovered address is an input; failed calls beyond the controls above.</li>
+        </ul>
+        <p>The claim map’s <a href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md#58-uniswap-v2-pair-exact-committed-replay-share-value-monotonicity-and-gas-exact-liveness">Uniswap section</a> lists every theorem with its premises, file and line.</p>
+      </section>
+
+      <section id="prior">
+        <p class="eyebrow">Context</p>
+        <h2>Earlier work.</h2>
+        <p>In 2020, dapp.org’s audit proved K reachability claims for each method of the pair and factory, against bytecode built from the <code>v1.0.0</code> sources whose published build is byte-identical to the deployed runtime, with an exact symbolic gas cost for success; it made no claim about invariants across calls and assumed tokens matching the pair’s own. EquiVM’s repository has since proved refinement for a local build of the same sources, 8,833 bytes that are not the deployed runtime. To our knowledge, no earlier machine-checked result states the pair’s properties across calls of its bytecode.</p>
+      </section>
+
+      <nav class="pager" aria-label="Artifacts">
+        <a href="weth9.html"><span class="d">Previous artifact</span><span class="t">WETH9</span></a>
+        <a class="next" href="curve-3crv.html"><span class="d">Next artifact</span><span class="t">Curve 3Crv</span></a>
+      </nav>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap footgrid">
+    <div class="colophon">
+      <a class="brand" href="../" style="margin-bottom:12px"><span class="sq"></span><b>Blanc</b></a>
+      <p>MIT-licensed. Statements, names and line numbers refer to Blanc commit <code>5048a51f</code> and the Jaune revision it pins, <code>2737c8eb</code>. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
+    </div>
+    <div>
+      <h4>Deployed bytecode</h4>
+      <a href="../bytecode/weth9.html">WETH9</a><a href="../bytecode/uniswap-v2.html">Uniswap V2 pair</a><a href="../bytecode/curve-3crv.html">Curve 3Crv</a><a href="../bytecode/deposit-contract.html">Deposit contract</a><a href="../bytecode/curve-pools.html">Curve pools</a><a href="../bytecode/eip-7002.html">EIP-7002 contract</a><a href="../bytecode/lido-circuit-breaker.html">Lido CircuitBreaker</a>
+    </div>
+    <div>
+      <h4>Blanc</h4>
+      <a href="../method.html">How it works</a><a href="../language.html">The language</a><a href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md">Claim map</a><a href="https://github.com/skbaek/blanc/blob/main/scripts/GATES.md">Gate catalogue</a><a href="https://github.com/skbaek/blanc/blob/main/SECURITY.md">Security</a>
+    </div>
+    <div>
+      <h4>Elsewhere</h4>
+      <a href="https://github.com/skbaek/blanc">GitHub</a><a href="https://skbaek.github.io/jaune/">Jaune</a><a href="https://github.com/skbaek/creme">Creme</a>
+    </div>
+  </div>
+</footer>
+<script src="../site.js"></script>
+</body>
+</html>

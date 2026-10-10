@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lido CircuitBreaker — Blanc</title>
+<meta name="description" content="What Blanc proves about the 4,584 deployed bytes of Lido's CircuitBreaker: registry consistency after any valid history under universal hash premises, and a finite tier whose premises the kernel decides — a check the live registry passes.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fbfaf5'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="../site.css">
+</head>
+<body>
+
+<header id="hdr">
+  <div class="wrap nav">
+    <a class="brand" href="../"><span class="sq"></span><b>Blanc</b><i>/blɑ̃/ — fr. “white”</i></a>
+    <nav class="navlinks" aria-label="Site">
+      <a class="opt" href="../#corpus" aria-current="page">Corpus</a>
+      <a class="opt" href="../method.html">How it works</a>
+      <a class="opt" href="../language.html">Language</a>
+      <a class="opt" href="../#limits">Limits</a>
+      <a class="opt" href="../#check">Check it</a>
+      <a class="btn opt" href="https://skbaek.github.io/jaune/" title="Jaune — the EVM semantics every theorem here is stated against"><span class="sqf"></span>Jaune</a>
+      <a class="btn" href="https://github.com/skbaek/blanc"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg><span class="gh-label">GitHub</span></a>
+      <details class="menu"><summary class="btn">Menu</summary><div class="panel">
+        <a href="../">Home</a><a href="../#corpus">The corpus</a><a href="../method.html">How it works</a>
+        <a href="../language.html">The Blanc language</a><a href="../#limits">Limits</a><a href="../#check">Check it yourself</a>
+        <a href="https://skbaek.github.io/jaune/">Jaune</a>
+      </div></details>
+    </nav>
+  </div>
+</header>
+
+<main>
+<section class="page-hero">
+  <div class="wrap">
+    <p class="crumbs"><a href="../">Blanc</a><span>/</span><a href="../#corpus">Deployed bytecode</a><span>/</span>Lido CircuitBreaker</p>
+    <div class="hero-grid">
+      <div>
+        <h1>Lido’s CircuitBreaker.</h1>
+        <p class="lede">A registry of emergency pausers: Lido’s DAO assigns a pauser to each protected contract, and the pauser can pause it for a bounded time. 4,584 bytes compiled by solc 0.8.34, deployed on 30 April 2026 — the corpus’s youngest artifact, and the only one deployed under rules Jaune covers.</p>
+        <p class="lede-sm">Its registry is a Solidity array with three hashed mappings beside it, and its results come in two tiers that trade scope for premises. The history tier proves the registry consistent after any valid history, under hash-separation premises over all addresses. The finite tier replaces those premises with checks the kernel decides, for a single update over an explicit list of addresses — and the live registry on mainnet passes the same decidable check.</p>
+      </div>
+      <div class="plate idplate">
+        <div class="plate-head"><span class="who"><span class="k">Artifact</span>Lido CircuitBreaker</span><span class="meta">Ethereum mainnet</span></div>
+        <div class="hexband wrapband" aria-hidden="true">60 80 60 40 52 34 80 15 61 00 0f 57 5f 5f fd 5b 50 60 04 36 10 61 01 15 57 5f 35 60 e0 1c 80 63 71 a9 9c 22 11 61 00 ad 57 80 63 8c d8 0b a0 11 61 00 7d 57 80 63 c4 27 90 9e 11 61 00 63 57 80 63 c4 27 90 9e 14 61 02 a3 57 80 63 c9 38 73 32 14 61 02 c2 57 80 63 d1 0e a3 21 14 61 02 d5 57</div>
+        <dl class="kv">
+          <dt>Address</dt><dd><code>0x6019CB557978296BA3C08a7B73225C0975DFB2F7</code></dd>
+          <dt>Runtime</dt><dd>4,584 bytes; Keccak-256 <code>0x63d4da6a25804fabdc61ace21c19d1f2e1425ab9ade8d8a348a2591e801836ec</code></dd>
+          <dt>Compiler</dt><dd>solc 0.8.34</dd>
+          <dt>Created</dt><dd>block 24,993,190 (30 April 2026, under BPO2), transaction <code>0x9a13…279f</code>, deployer nonce 0</dd>
+          <dt>Proofs</dt><dd><a href="https://github.com/skbaek/blanc/tree/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/LidoCircuitBreakerDeployed"><code>Blanc/Lift/LidoCircuitBreakerDeployed/</code></a>, 12,235 lines of Lean</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap layout">
+    <nav class="toc" aria-label="On this page">
+      <span class="t">On this page</span>
+      <a href="#registry">The registry</a>
+      <a href="#history">The history tier</a>
+      <a href="#finite">The finite tier</a>
+      <a href="#live">The live registry</a>
+      <a href="#deploy">Deployment</a>
+      <a href="#limits">Not claimed</a>
+      <a href="#prior">Earlier work</a>
+    </nav>
+
+    <div class="prose">
+      <section id="registry">
+        <p class="eyebrow">What is stored</p>
+        <h2>The registry, and why it needs hash premises.</h2>
+        <p>The registry is a Solidity array of protected contracts with three mappings: from a contract to its pauser, from a contract to its index in the array, and from a pauser to the number of contracts it guards. Mappings live at Keccak-hashed storage slots, so a proof that they stay consistent must know their slots do not collide — with each other, with the array, or with the fixed slots. Blanc adds no axiom about Keccak-256; it states the separation it uses, and the two tiers state it in two different ways.</p>
+      </section>
+
+      <section id="history">
+        <p class="eyebrow">Safety, after any history</p>
+        <h2>The history tier: consistency, under universal premises.</h2>
+        <p>After any configured history from a checkpoint holding the code and an empty registry, there is a registry witness of the final storage: assignment and index slots are nonzero exactly for registered contracts and agree with the array; every pauser’s count equals its number of assignments; the zero pauser’s count is zero; and the live pausers’ counts sum to the array’s length (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/LidoCircuitBreakerDeployed/History.lean#L56"><code>lido_history_l1_l3</code></a>). And every committed, non-static <code>registerPauser(t, 0)</code> — including one re-entered from inside <code>pause</code>’s external call — removes <code>t</code> with the correct swap-and-pop repair of the array (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/LidoCircuitBreakerDeployed/L2History.lean#L62"><code>lido_history_l2_committed</code></a>).</p>
+        <p>This tier assumes, at every frame, separation conditions on the registry’s hashed slots that quantify over all 2<sup>160</sup> addresses. It is the one family in the corpus that still does. Under a random-function model of Keccak, the chance that such a premise fails is about <i>q</i>·2<sup>−94</sup> per frame for <i>q</i> written slots — four key families, each ranging over 2<sup>160</sup> addresses or indices, among 2<sup>256</sup> slots — but that estimate is a heuristic: no reduction or bound is proved.</p>
+      </section>
+
+      <section id="finite">
+        <p class="eyebrow">Premises the kernel decides</p>
+        <h2>The finite tier: a universal premise traded for a computation.</h2>
+        <p>Its observation, <code>RegistryOn storage entries probes</code>, says that an explicit list of entries is valid and that the array and, for each address in a caller-supplied list of probes, the assignment, index and count words agree with it. A decision procedure, <code>checkRegistryOn</code>, decides it. A successful execution of <code>registerPauser(target, p)</code> for an existing target and a nonzero new pauser takes storage on which the check holds to storage on which it holds for the updated entries — and every separation premise it takes is itself a decidable check on concrete key lists.</p>
+        <div class="thm">
+          <div class="head"><span class="tag">Theorem, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/LidoCircuitBreakerDeployed/FiniteFrame.lean#L97"><code>…LidoCircuitBreakerDeployed.registerPauser_nonzero_finite</code> · FiniteFrame.lean:97</a></div>
+<pre class="lean"><span class="kw">theorem</span> <span class="nm">registerPauser_nonzero_finite</span> {sevm : Sevm} {pre post : Devm}
+    {entries : List LidoCircuitBreaker.Entry} {probes : List B256}
+    {index : Nat} {oldPauser : B256}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (hinstalled : Devm.getCode pre sevm.currentTarget = code)
+    (hcode : sevm.code = Devm.getCode pre sevm.currentTarget)
+    (hfresh : Exec.FreshEntry sevm pre)
+    (hsig : Sevm.dataWord sevm 0 >>> 224 = selector "registerPauser" [.address, .address])
+    (hpre : checkRegistryOn (solRegistryStorage (Devm.getStor pre sevm.currentTarget))
+      entries probes = true)
+    (hcover : checkLiveCovered entries probes = true)
+    (hclosure : Sevm.dataWord sevm 4 ∈ probes ∧ oldPauser ∈ probes ∧
+      Sevm.dataWord sevm 36 ∈ probes)
+    (hnew : Sevm.dataWord sevm 36 ≠ 0)
+    (hfind : findEntry entries (Sevm.dataWord sevm 4) = some (index, oldPauser))
+    (hfaithful : SlotFootprint.checkFaithfulOn solKey (registryQueries probes entries.length)
+      ((nonzeroWrites entries (Sevm.dataWord sevm 4) (Sevm.dataWord sevm 36) oldPauser).map
+        Prod.fst) = true)
+    (hapart : SlotFootprint.checkApartOn solKey (registryQueries probes entries.length)
+      [mapSlot oldPauser 2, mapSlot (Sevm.dataWord sevm 36) 2] = true)
+    (execution : Exec 0 sevm pre (.ok post)) :
+    checkRegistryOn (solRegistryStorage (Devm.getStor post sevm.currentTarget))
+      (setEntryAt index (Sevm.dataWord sevm 4, Sevm.dataWord sevm 36) entries) probes = true ∧
+    checkLiveCovered
+      (setEntryAt index (Sevm.dataWord sevm 4, Sevm.dataWord sevm 36) entries) probes = true</pre>
+        </div>
+        <p>Every hypothesis after the call shape is decidable — the separation premises are literally Boolean checks on finite key lists — so for a concrete state the kernel closes them by evaluation, Keccak included. The premises are not idle: a constructed state with one entry and four probes satisfies all of them at once (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/LidoCircuitBreakerDeployed/FiniteExample.lean#L97"><code>exampleApplicable</code></a>). The price is scope: the finite tier says nothing about addresses outside the probes, about inserting or removing targets, or about histories.</p>
+      </section>
+
+      <section id="live">
+        <p class="eyebrow">The seventh question</p>
+        <h2>The live registry passes the check.</h2>
+        <p>All of the CircuitBreaker’s use lies in forks Jaune covers. At block 26,141,229, 29 explicit probes over 107 storage slots, on which three providers agree, satisfy every field of the decidable <code>RegistryOn</code> check for the 19 live entries — which replaying all 23 <code>PauserSet</code> events since deployment reproduces. The probes cover finitely many addresses, no state root authenticates the reads, and the check was computed outside the kernel; a kernel-checked version of it has not been built.</p>
+      </section>
+
+      <section id="deploy">
+        <p class="eyebrow">Where a history can start</p>
+        <h2>Deployment.</h2>
+        <p>Under every covered fork, the recorded creation input, run as a <code>CREATE</code> from the recorded deployer at nonce 0 with 1,000,000 gas, installs the certified runtime at the mainnet address and leaves exactly the constructor’s storage: a pause duration of 1,814,400 seconds (21 days) and a heartbeat interval of 31,536,000 (365 days) (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/LidoCircuitBreakerDeployed/Creation/Deploy.lean#L192"><code>lido_deploy_covered</code></a>). The finite deployment theorem shows that this storage satisfies <code>RegistryOn [] probes</code> for every probe list passing one decidable check (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/LidoCircuitBreakerDeployed/FiniteInit.lean#L59"><code>lido_create_finite_init</code></a>); the history tier’s empty-registry checkpoint is established under two bounded hash premises. Because the contract was created after BPO2 activated, the historical deployment ran under a covered fork — though, like every deployment here, the theorem is a modeled execution, not a proof of inclusion.</p>
+      </section>
+
+      <section id="limits">
+        <p class="eyebrow">Stated, so it is not inferred</p>
+        <h2>Not claimed.</h2>
+        <ul class="nc">
+          <li>That any target is actually paused, or that pausing succeeds: there is no liveness result at any level, in either tier.</li>
+          <li>That authorization is complete, or anything about setter effects and events.</li>
+          <li>At the history tier, static committed frames and frames under a rolled-back ancestor.</li>
+          <li>At the finite tier, any address outside the probe list, target insertion or removal, and any history.</li>
+        </ul>
+        <p>The claim map’s <a href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md#54-lido-circuitbreaker-registry-integrity-not-targets-are-paused">CircuitBreaker section</a> lists every theorem with its premises, file and line.</p>
+      </section>
+
+      <section id="prior">
+        <p class="eyebrow">Context</p>
+        <h2>Earlier work, and Blanc’s own CircuitBreaker.</h2>
+        <p>Before deployment, Cyfrin checked 41 properties of a pre-deployment revision of the source with the Certora Prover 8.8.1, verifying 38 and reporting three cases of <code>registerPauser</code> as known limitations correct by manual analysis, and matched a local build of the deployed revision to the deployed bytecode. We found no machine-checked verification of the deployed bytecode.</p>
+        <p>Blanc also contains a reimplementation of the CircuitBreaker in its own language, whose registry integrity is proved for every state reachable along a configured chain, with no premise about the code at any other address. <a href="../language.html#circuit-breaker">More on Blanc’s CircuitBreaker</a>.</p>
+      </section>
+
+      <nav class="pager" aria-label="Artifacts">
+        <a href="eip-7002.html"><span class="d">Previous artifact</span><span class="t">EIP-7002 contract</span></a>
+        <a class="next" href="../#corpus"><span class="d">Back to</span><span class="t">The corpus</span></a>
+      </nav>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap footgrid">
+    <div class="colophon">
+      <a class="brand" href="../" style="margin-bottom:12px"><span class="sq"></span><b>Blanc</b></a>
+      <p>MIT-licensed. Statements, names and line numbers refer to Blanc commit <code>5048a51f</code> and the Jaune revision it pins, <code>2737c8eb</code>. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
+    </div>
+    <div>
+      <h4>Deployed bytecode</h4>
+      <a href="../bytecode/weth9.html">WETH9</a><a href="../bytecode/uniswap-v2.html">Uniswap V2 pair</a><a href="../bytecode/curve-3crv.html">Curve 3Crv</a><a href="../bytecode/deposit-contract.html">Deposit contract</a><a href="../bytecode/curve-pools.html">Curve pools</a><a href="../bytecode/eip-7002.html">EIP-7002 contract</a><a href="../bytecode/lido-circuit-breaker.html">Lido CircuitBreaker</a>
+    </div>
+    <div>
+      <h4>Blanc</h4>
+      <a href="../method.html">How it works</a><a href="../language.html">The language</a><a href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md">Claim map</a><a href="https://github.com/skbaek/blanc/blob/main/scripts/GATES.md">Gate catalogue</a><a href="https://github.com/skbaek/blanc/blob/main/SECURITY.md">Security</a>
+    </div>
+    <div>
+      <h4>Elsewhere</h4>
+      <a href="https://github.com/skbaek/blanc">GitHub</a><a href="https://skbaek.github.io/jaune/">Jaune</a><a href="https://github.com/skbaek/creme">Creme</a>
+    </div>
+  </div>
+</footer>
+<script src="../site.js"></script>
+</body>
+</html>

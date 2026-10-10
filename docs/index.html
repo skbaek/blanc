@@ -3,1557 +3,370 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Blanc — keep every freedom, except one</title>
-<meta name="description" content="Keep every freedom, except one: theorems about the exact bytes that deploy, with no compiler in the trust base; proofs a small kernel re-checks under three classical axioms and nothing else; an executable EVM semantics passing the ecosystem’s own fixture corpus; custom hand-optimized bytecode, jumps alone compiler-placed; and a property ceiling rarely available at any price. The bill is one line: a new, deliberately bare language. Ten contracts in — seven ports, from a WETH to the eth2 deposit contract, Lido’s CircuitBreaker, withdrawals gateway, and upgradeable proxy, and an ERC-4626 vault over WETH, and three études — each with a page of receipts.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fdfcf8'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
+<title>Blanc — nothing but the bytes</title>
+<meta name="description" content="Blanc proves theorems in Lean 4 about Ethereum bytecode as it is deployed — WETH9, the Beacon deposit contract, Uniswap V2, Curve, Lido and the EIP-7002 system contract — against Jaune, an executable EVM semantics, with exact gas, liveness, and no axioms beyond Lean's three.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fbfaf5'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="site.css">
-<script>document.documentElement.classList.add('js');</script>
 </head>
 <body>
 
 <header id="hdr">
   <div class="wrap nav">
-    <a class="brand" href="#top">
-      <span class="sq"></span><b>Blanc</b><i>/blɑ̃/ — fr. “white”</i>
-    </a>
-    <nav class="navlinks">
-      <a href="#toc">Contents</a>
-      <a href="#portfolio">Implementations</a>
-      <a href="#claims">The claim</a>
-      <a href="#kinds">Theorems</a>
-      <a href="#landscape">Landscape</a>
-      <a href="#build">Build</a>
-      <a class="ghbtn sib" href="https://skbaek.github.io/jaune/" title="Jaune — the sibling project: the EVM semantics under every theorem here">
-        <span class="sqf"></span>Jaune
-      </a>
-      <a class="ghbtn" href="https://github.com/skbaek/blanc" target="_blank" rel="noopener">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
-        GitHub
-      </a>
+    <a class="brand" href="./"><span class="sq"></span><b>Blanc</b><i>/blɑ̃/ — fr. “white”</i></a>
+    <nav class="navlinks" aria-label="Site">
+      <a class="opt" href="#corpus">Corpus</a>
+      <a class="opt" href="method.html">How it works</a>
+      <a class="opt" href="language.html">Language</a>
+      <a class="opt" href="#limits">Limits</a>
+      <a class="opt" href="#check">Check it</a>
+      <a class="btn opt" href="https://skbaek.github.io/jaune/" title="Jaune — the EVM semantics every theorem here is stated against"><span class="sqf"></span>Jaune</a>
+      <a class="btn" href="https://github.com/skbaek/blanc"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg><span class="gh-label">GitHub</span></a>
+      <details class="menu"><summary class="btn">Menu</summary><div class="panel">
+        <a href="./">Home</a><a href="#corpus">The corpus</a><a href="method.html">How it works</a>
+        <a href="language.html">The Blanc language</a><a href="#limits">Limits</a><a href="#check">Check it yourself</a>
+        <a href="https://skbaek.github.io/jaune/">Jaune</a>
+      </div></details>
     </nav>
   </div>
 </header>
 
 <main id="top">
 
-<!-- ═══════════════════════ TITLE BLOCK ═══════════════════════ -->
+<!-- ════════════════════════════ HERO ════════════════════════════ -->
 <section class="hero">
-  <div class="wrap">
-    <div class="herogrid">
-      <div>
-        <p class="eyebrow">A minimal EVM contract language · Lean 4</p>
-        <h1 style="max-width:none;font-size:clamp(2.35rem,4.9vw,3.4rem)">Keep every freedom.<br>Except one.</h1>
-        <p class="lede">
-          Freedom from trusted compilers, proving theorems about the exact bytes that deploy;
-          freedom to check every proof yourself, with a small kernel, three classical axioms,
-          and <em>nothing</em> else; freedom from semantic gaps with mainnet, built on an
-          executable EVM semantics passing the ecosystem’s own fixture corpus in full,
-          5,006/5,006 supported files; freedom to write custom, hand-optimized bytecode down to the last
-          instruction, jumps alone placed by the proved compiler; and the freedom of expressing
-          and proving any property, up to liveness constructed over every reachable future —
-          a ceiling rarely available at any price.<sup class="fn"><a href="#fn1">1</a></sup>
-        </p>
-        <p class="lede" style="margin-top:14px">
-          The bill is one line: a new, deliberately bare language, austere to write and austere
-          to prove in. §&nbsp;1–6 are what you keep. §&nbsp;7 is the language you pay it in;
-          §&nbsp;8, the bill; §&nbsp;6, the receipts.
-        </p>
-        <div class="ctarow">
-          <a class="btn primary" href="#bytes">What you keep — § 1–6</a>
-          <a class="btn" href="#canvas">What you pay — § 7–8</a>
-        </div>
-      </div>
-
-      <div>
-        <div class="term" id="heroterm"><span class="p">$</span> lake build
-<span class="p">$</span> scripts/check.sh --no-build
-<span class="ok">OK — axiom audit: one union walk over Blanc reaches only the standard axioms; 1060 leaf results</span>
-<span class="p">$</span> scripts/check-weth10-differential.sh
-<span class="ok">OK — WETH10 differential: 147/147 rows agree; 28 runtime entries (27 selectors + receive), 2 identity worlds …</span></div>
-        <p class="cap"><b>Fig. 1</b> — two of the repository’s gates: the axiom-audit line is that
-          gate’s verdict wording at the current audited inventory, which a static gate derives from
-          the committed audit file; the WETH10 differential line is verbatim from the
-          exact-candidate run of 2026-09-03 UTC. The gates pin every audited theorem to its exact
-          axiom set and execute Blanc’s WETH10 beside the deployed original’s runtime, byte for byte,
-          in a pinned oracle.<sup class="fn"><a href="#fn3">3</a></sup></p>
-        <div class="pills">
-          <span class="pill"><span class="d"></span>0 sorry — CI-enforced</span>
-          <span class="pill"><span class="d"></span>axioms: propext · choice · quot</span>
-          <span class="pill"><span class="d"></span>1060 leaf results, one axiom walk in CI</span>
-          <span class="pill">Jaune pinned by commit</span>
-        </div>
+  <div class="wrap hero-grid">
+    <div>
+      <p class="eyebrow">EVM bytecode, verified in Lean 4</p>
+      <h1>Nothing but<br>the bytes.</h1>
+      <p class="lede">Blanc proves theorems about Ethereum contracts as they are deployed: the exact bytes at mainnet addresses — compiled by solc and Vyper between 2017 and 2026, or written by hand in assembly — read without trusting the tools that produced them.</p>
+      <p class="lede">Every theorem is stated against <a href="https://skbaek.github.io/jaune/">Jaune</a>, an executable semantics of the EVM and of block processing that passes all 34,205 blockchain-test cases of Ethereum’s <code>tests@v20.0.2</code> fixtures for the forks in force since May 2025. Lean’s kernel checks every proof, and none uses an axiom beyond Lean’s three standard ones. Gas is exact, so a theorem can say not only that a contract keeps its books, but that a transaction sent to it is admitted, and exactly what it costs.</p>
+      <div class="cta">
+        <a class="btn solid big" href="#corpus">The eight artifacts</a>
+        <a class="btn big" href="method.html">How it works</a>
       </div>
     </div>
 
-    <div class="abstract" id="abstract">
-      <p><span class="lead">Abstract.</span>&nbsp; Blanc is a contract language for the Ethereum Virtual
-      Machine that adds as little to the machine as its authors could manage — four constructors
-      over the raw instruction set, a compiler into deployable bytecode, and a machine-checked
-      proof that the compiler is correct — and asks its user to give up as little: theorems land
-      on the exact bytes that deploy; every declaration is walked for axioms in CI,
-      within Lean’s three canonical axioms; and the semantics underneath, Jaune, is executable and
-      passes the ecosystem’s own fixture corpus. Ten contracts are in — seven ports and three
-      études, each with a page of receipts — among them a WETH10 whose every holder is proved
-      able to redeem at every reachable future of a proved deployment, Lido’s CircuitBreaker with
-      its Registry integrity carried from an official-parameters deployment to every reachable
-      state, and the eth2 deposit contract, its Merkle root carried through twelve SHA-256
-      precompile crossings to every admitted future. Each port is defended in layers — a frozen
-      behavior contract, a differential corpus beside the deployed reference, theorems over the
-      exact compiled bytes, a deviation registry that publishes every known divergence before
-      anyone asks — and one port, the ERC-4626 vault, is four times the size of its reference
-      and says so in its registry, beside the gas it saves on every measured call. The fee is one line, and this page never
-      pretends it is small: a new, deliberately bare language, austere to write and austere to
-      prove in. MIT-licensed.</p>
-    </div>
-
-    <div class="factbar">
-      <div class="fact"><span class="n">4</span>
-        <span class="l">constructors in the whole language — branch, last, next, call. The name is the syntax</span></div>
-      <div class="fact"><span class="n">1060</span>
-        <span class="l">leaf results — independently valuable theorems, all axiom-checked by one walk of the whole library, in CI on every commit</span></div>
-      <div class="fact"><span class="n">10</span>
-        <span class="l">contracts in — seven ports, three études, from a WETH to the eth2 deposit contract — each with a page of receipts</span></div>
-      <div class="fact"><span class="n">147<span class="dimmer" style="font-size:1.05rem">/147</span></span>
-        <span class="l">differential rows agreeing with the deployed WETH10 — all 27 selectors + receive, zero mismatches</span></div>
-    </div>
-
-    <nav class="toc" id="toc" aria-label="Contents">
-      <h2>Contents</h2>
-      <ol>
-        <li><a href="#bytes"><span class="no">1</span> Keep the bytes <span class="dots"></span></a></li>
-        <li><a href="#standard"><span class="no">2</span> Keep the standard of proof <span class="dots"></span></a></li>
-        <li><a href="#ground"><span class="no">3</span> Keep the ground under the theorems <span class="dots"></span></a></li>
-        <li><a href="#freedom"><span class="no">4</span> Keep the whole design space <span class="dots"></span></a></li>
-        <li><a href="#kinds"><span class="no">5</span> Keep the ceiling <span class="dots"></span></a></li>
-        <li><a href="#portfolio"><span class="no">6</span> Keep the receipts <span class="dots"></span></a></li>
-        <li><a href="#canvas"><span class="no">7</span> Barely a language <span class="dots"></span></a></li>
-        <li><a href="#price"><span class="no">8</span> The fee, unvarnished <span class="dots"></span></a></li>
-        <li><a href="#claims"><span class="no">9</span> What a port claims — and how we earn it <span class="dots"></span></a></li>
-        <li><a href="#penultimate"><span class="no">10</span> The penultimate form <span class="dots"></span></a></li>
-        <li><a href="#landscape"><span class="no">11</span> The lay of the land <span class="dots"></span></a></li>
-        <li><a href="#waysin"><span class="no">12</span> Ways in <span class="dots"></span></a></li>
-        <li><a href="#build"><span class="no">13</span> Build it <span class="dots"></span></a></li>
-      </ol>
-    </nav>
+    <figure class="plate" aria-labelledby="exhibit-cap">
+      <div class="plate-head">
+        <span class="who"><span class="k">Exhibit</span>WETH9</span>
+        <span class="meta">0xC02a…6Cc2 · 3,124 bytes · solc 0.4.19 · Dec 2017</span>
+      </div>
+      <div class="hexband" aria-hidden="true">60 60 60 40 52 60 04 36 10 61 00 af 57 60 00 35 7c 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 90 04 63 ff ff ff ff 16 80 63 06 fd de 03 14 61 00</div>
+      <div class="plate-body">
+        <p><b>The exit theorem, in words.</b> Start from any state where these bytes are installed and every stored balance is accounted for and backed. Run any valid history of blocks under the rules of Prague, Osaka, BPO1 or BPO2 whose storage keys do not collide. Then a signed <code>withdraw(w)</code> from a holder without code, holding at least <i>w</i>, with sound nonce, fees and gas limit, is admitted by Jaune’s <code>processTransaction</code>, pays the holder exactly <i>w</i> wei, changes no one else’s storage, and uses exactly</p>
+        <div class="formula"><span class="nowrap"><span class="c">gasUsed</span> <span class="op">=</span> 21,000</span> <span class="nowrap"><span class="op">+</span> 4·tokens(calldata)</span> <span class="nowrap"><span class="op">+</span> 13,940</span> <span class="nowrap"><span class="op">−</span> 4,800<span class="op">·</span>[<i>w</i> empties the balance]</span><small>for <i>w</i> &gt; 0. A zero calldata byte counts as one token, a nonzero byte as four; <i>w</i> = 0 costs 4,440 in place of 13,940.</small></div>
+      </div>
+      <div class="plate-foot">
+        <div class="tally"><span class="n num">3,749 / 3,749</span><span class="l">mainnet withdrawals of exactly this shape, in 30,000 blocks, used precisely the predicted gas — a test of the model against the chain, not part of the proof.</span></div>
+      </div>
+      <figcaption id="exhibit-cap" style="padding:0 22px 16px;background:var(--wash);margin:0"><a class="more" href="bytecode/weth9.html">The full theorem, all 27 hypotheses, and its premises</a></figcaption>
+    </figure>
   </div>
 </section>
 
-<!-- ═══════════════════════ §1 THE BYTES ═══════════════════════ -->
-<section id="bytes">
+<!-- ═══════════════════════════ CORPUS ═══════════════════════════ -->
+<section id="corpus">
   <div class="wrap">
-    <p class="eyebrow"><span class="secno">§ 1</span> What you keep</p>
-    <h2 style="max-width:24ch">Keep the bytes.</h2>
-    <p class="lede" style="margin-top:18px">
-      Every contract theorem on this page is about the exact runtime bytes that deploy — not about
-      a source file a trusted toolchain will later turn into something else. Between your program
-      and the chain sits exactly one added artifact, the compiler, and it enters the theorems
-      rather than the trust base: its correctness is itself a machine-checked theorem, proved
-      once, inherited by every contract, and nothing is taken on its word.
-    </p>
+    <div class="section-head">
+      <p class="eyebrow">The corpus</p>
+      <h2>Eight deployed artifacts. None written for a verifier.</h2>
+      <p class="lede-sm">Two source languages and hand-written assembly, eight toolchains, deployments from 2017 to 2026. The bytes are the ones three separately operated providers return for each address; Blanc reads them through certificates the kernel checks, and nothing was recompiled.</p>
+    </div>
+    <table class="corpus">
+      <thead><tr><th>Artifact</th><th>Produced by</th><th class="r">Runtime</th><th>Deployed</th><th>What is proved</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="name"><a href="bytecode/weth9.html">WETH9</a><span class="sub">Canonical wrapped ether; holds about 2.16 million ETH</span></td>
+          <td class="tool">solc 0.4.19</td><td class="size num">3,124 B</td><td class="year">Dec 2017</td>
+          <td class="what">Tracked balances stay backed after any history; storage replays exactly the committed calls; a withdrawal transaction is admitted after any history at a closed-form <code>gasUsed</code>.</td>
+        </tr>
+        <tr>
+          <td class="name"><a href="bytecode/uniswap-v2.html">Uniswap V2 pair</a><span class="sub">One runtime, run by all 524,109 pairs</span></td>
+          <td class="tool">solc 0.5.16</td><td class="size num">11,293 B</td><td class="year">May 2020</td>
+          <td class="what">Storage is the Solidity model replayed over exactly the committed calls, nested ones included; the LP ledger balances; the oracle obeys its law; share value falls only through the protocol fee, given the tokens’ answers; every state-changing function runs at a closed cost.</td>
+        </tr>
+        <tr>
+          <td class="name"><a href="bytecode/curve-3crv.html">Curve 3Crv</a><span class="sub">LP token of Curve’s DAI/USDC/USDT pool</span></td>
+          <td class="tool">Vyper 0.2.4</td><td class="size num">2,276 B</td><td class="year">Sep 2020</td>
+          <td class="what">Every successful call is exactly a step of a token model; storage replays exactly the committed calls; supply equals the sum of balances.</td>
+        </tr>
+        <tr>
+          <td class="name"><a href="bytecode/deposit-contract.html">Beacon deposit contract</a><span class="sub">Every validator deposit; holds about 91.8 million ETH</span></td>
+          <td class="tool">solc 0.6.11</td><td class="size num">6,358 B</td><td class="year">Oct 2020</td>
+          <td class="what">After any history, storage is the Merkle accumulator of exactly the committed deposits, in order, so the count and root are theirs — with no hash premise.</td>
+        </tr>
+        <tr>
+          <td class="name"><a href="bytecode/curve-pools.html">Curve pool, vulnerable</a><span class="sub">Behind three pools drained in July 2023</span></td>
+          <td class="tool">Vyper 0.2.15</td><td class="size num">17,535 B</td><td class="year">Jul 2021</td>
+          <td class="what">The cross-function reentrancy, executed from deployment: the ledger ends with a supply of 1,800 against an attacker balance of 1,906.</td>
+        </tr>
+        <tr>
+          <td class="name"><a href="bytecode/curve-pools.html">Curve pool, fixed</a><span class="sub">Behind the ETH/stETH-ng pool</span></td>
+          <td class="tool">Vyper 0.3.7</td><td class="size num">18,320 B</td><td class="year">Apr 2023</td>
+          <td class="what">The shared lock excludes reentry into every guarded function, in every execution, whatever code runs in between.</td>
+        </tr>
+        <tr>
+          <td class="name"><a href="bytecode/eip-7002.html">EIP-7002 contract</a><span class="sub">The protocol’s withdrawal-request queue</span></td>
+          <td class="tool">assembly</td><td class="size num">504 B</td><td class="year">Feb 2025</td>
+          <td class="what">The end-of-block call succeeds whatever storage holds; each block’s requests are exactly the oldest pending submissions, in order; the EIP’s fee guarantee is refuted for these bytes.</td>
+        </tr>
+        <tr>
+          <td class="name"><a href="bytecode/lido-circuit-breaker.html">Lido CircuitBreaker</a><span class="sub">Lido’s registry of emergency pausers</span></td>
+          <td class="tool">solc 0.8.34</td><td class="size num">4,584 B</td><td class="year">Apr 2026</td>
+          <td class="what">The pauser registry stays consistent after any history, under hash premises over all addresses; a finite tier replaces those premises with checks the kernel decides.</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="small dimmer" style="margin-top:16px">Balances and the pair count were read at block 26,141,229 (7 October 2026). Full addresses, code hashes and creation transactions are on each artifact’s page and in the <a href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md">claim map</a>.</p>
+  </div>
+</section>
 
-    <div class="grid2" style="margin-top:34px;align-items:start">
+<!-- ═════════════════════════ SIX QUESTIONS ═════════════════════════ -->
+<section id="questions">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">What a result should answer</p>
+      <h2>Six questions to ask of any verification result.</h2>
+      <p class="lede-sm">Each has been answered before; to our knowledge, never all six at once. For the eight artifacts above, Blanc answers every one.</p>
+    </div>
+    <div class="questions">
+      <div class="q"><h3>Is it about the code that runs?</h3>
+        <p>About the deployed bytes themselves, not the source and not a recompilation, so no compiler stands in the trust base. In 2023 that distinction cost Curve’s pools: their source asked for one shared reentrancy lock, and the compiler emitted one lock per function.</p></div>
+      <div class="q"><h3>What does the proof rest on?</h3>
+        <p>Lean’s kernel and its three standard axioms, <code>propext</code>, <code>Classical.choice</code> and <code>Quot.sound</code>. A walk from all 102,116 constants of the library reaches nothing else: no <code>sorry</code>, no native evaluation, no axiom about Keccak-256.</p></div>
+      <div class="q"><h3>Was the code written for the verifier?</h3>
+        <p>No. Seven compiler versions and an assembler, from unoptimized solc 0.4.19 output of 2017 to 504 bytes of hand-written assembly the protocol runs. None of it was shaped for Blanc’s tools.</p></div>
+      <div class="q"><h3>Is the machine the real machine?</h3>
+        <p>Jaune defines the machine, every transaction type, block validation, system calls, withdrawals and requests, every precompile from <code>ecrecover</code> to BLS12-381, and fork selection by schedule — and it runs: 34,205 of 34,205 blockchain-test cases pass, through the same block transition the theorems quantify over.</p></div>
+      <div class="q"><h3>Does the theorem matter?</h3>
+        <p>The properties are the ones people rely on: balances that stay backed, deposits accumulated exactly, withdrawal requests delivered first in, first out, a lock that actually excludes, a ledger that balances.</p></div>
+      <div class="q"><h3>Does it say the contract works?</h3>
+        <p>A contract that always reverts satisfies every invariant. Exact gas lets Blanc construct successful executions too: WETH9’s withdrawal is admitted as a signed transaction after any history; the Uniswap pair’s state-changing functions run at closed costs; the EIP-7002 system call succeeds whatever storage holds.</p></div>
+    </div>
+    <div class="seventh-wrap" style="margin-top:28px">
+      <h3>And a seventh: does a theorem’s starting point hold of the live contract?</h3>
+      <p>For the EIP-7002 contract, yes: at the last block before Prague, mainnet’s storage held exactly the model’s initial state, with the storage root it had at deployment. The CircuitBreaker’s live registry, read from three providers, passes the finite tier’s decidable check on 29 probes. WETH9, the deposit contract, 3Crv and the Uniswap pairs predate the forks Blanc covers; their theorems start from a modeled fresh deployment, and checking their invariants against complete live storage is the next step.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════════════════ RESULTS ═════════════════════════ -->
+<section id="results">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Selected results</p>
+      <h2>What the theorems say.</h2>
+    </div>
+
+    <article class="feature">
       <div>
-        <div class="listing">
-          <div class="bar"><span>Blanc/CommonCore.lean · Blanc/Compiled.lean</span><span class="tag">compiler correctness</span></div>
-<pre><span class="c">-- Backward simulation: from any successful EVM execution</span>
-<span class="c">-- of the compiled bytes, recover a source-level run.</span>
-<span class="k">theorem</span> <span class="d">correct</span> (sevm : <span class="t">Sevm</span>) (pre : <span class="t">Devm</span>) (p : <span class="t">Prog</span>) (post : <span class="t">Devm</span>)
-    (exc : <span class="t">Exec</span> 0 sevm pre (.ok post))
+        <span class="kicker">The protocol’s own code</span>
+        <h3>A system call that cannot fail, and a queue that cannot cheat.</h3>
+        <span class="meta">EIP-7002 contract · 0x0000…7002 · 504 bytes · hand-written assembly</span>
+      </div>
+      <div>
+        <p>Since Prague, every withdrawal request triggered from the execution layer passes through a 504-byte contract, and a block whose end-of-block call to that contract fails is invalid. With its canonical code installed, Blanc proves that this call succeeds whatever the contract’s storage holds, using at most 210,000 gas, and that no history removes the code. Each block’s requests are exactly the oldest pending submissions — at most sixteen, in order, none dropped, duplicated, reordered or emitted early — and an entry at position <i>q</i> of the queue is emitted exactly ⌊<i>q</i>/16⌋ blocks later.</p>
+        <p>The same bytes refute the EIP’s own fee guarantee. The specification computes its fee over unbounded integers; the bytecode computes it in 256-bit words. Blanc proves the bytecode’s fee never exceeds the specified one, equals it exactly when no intermediate value wraps, and builds a three-block history in which a committed submission paid less than the EIP requires. By direct computation the two fees first differ where the specified one already exceeds all the ether in existence more than 10<sup>47</sup> times; two pre-deployment audits had flagged the overflow.</p>
+        <a class="more" href="bytecode/eip-7002.html">EIP-7002, in full</a>
+      </div>
+    </article>
+
+    <article class="feature">
+      <div>
+        <span class="kicker">Curve StableSwap pools</span>
+        <h3>The bug that compiled, and the fix.</h3>
+        <span class="meta">Vyper 0.2.15 · 0x6326…B43E · and Vyper 0.3.7 · 0x847e…4ed9</span>
+      </div>
+      <div>
+        <p>On 30 July 2023, attackers drained several Curve pools. Their source marked every liquidity function <code>@nonreentrant('lock')</code>, asking for one shared lock; Vyper 0.2.15, 0.2.16 and 0.3.0 gave each function a lock of its own. A proof about the source would have certified the guard.</p>
+        <p>Blanc reads the bytes. On the vulnerable implementation behind three of the drained pools, Jaune executes the attack from deployment: <code>remove_liquidity</code> takes its lock in slot 2 and sends ether; the callback enters <code>add_liquidity</code>, whose lock sits in slot 0, and mints; the outer call writes back a stale supply. The ledger ends at a supply of 1,800 against an attacker balance of 1,906. On an implementation compiled by Vyper 0.3.7, Blanc proves that while any of its five mutating guarded functions holds the lock, no frame beneath it enters any of the seven guarded functions — whatever code runs in between, given only that no hash the pool computes lands on the lock’s slot.</p>
+        <a class="more" href="bytecode/curve-pools.html">The two pools, in full</a>
+      </div>
+    </article>
+
+    <article class="feature">
+      <div>
+        <span class="kicker">Uniswap V2</span>
+        <h3>One runtime, every pair.</h3>
+        <span class="meta">solc 0.5.16 · 11,293 bytes · 524,109 pairs</span>
+      </div>
+      <div>
+        <p>Uniswap V2’s factory deploys every pair from one creation code, so a single 11,293-byte runtime runs at all 524,109 of them, and Blanc’s theorems quantify over the pair, its tokens and its factory. After any valid history, from a state representing the Solidity model, the pair’s storage represents that model replayed over exactly the committed calls, with calls made back into the pair through a token or the flash-swap callback replayed inside the step that made them. The LP ledger stays balanced; the price accumulators obey their law, wrap-around included; and, under a premise on the tokens’ actual answers, the geometric mean of the reserves per LP token falls only through the protocol fee.</p>
+        <p>A pair learns its balances only from what tokens answer. Those answers are inputs of the statements, never assumptions folded into definitions: the replay, ledger and oracle theorems take no premise about any token or the factory. All ten state-changing functions run at closed gas costs whenever the model accepts the call, given, for the six that call out, their callees’ replies.</p>
+        <a class="more" href="bytecode/uniswap-v2.html">The pair, in full</a>
+      </div>
+    </article>
+
+    <article class="feature">
+      <div>
+        <span class="kicker">The Beacon deposit contract</span>
+        <h3>Exactly the deposits made.</h3>
+        <span class="meta">0x0000…05Fa · 6,358 bytes · solc 0.6.11</span>
+      </div>
+      <div>
+        <p>Every validator deposit on Ethereum mainnet has passed through this contract, which holds about 91.8 million ether and has counted 2,565,727 deposits. It keeps an incremental Merkle tree of depth 32 over the deposit data. After any valid history from a state that accumulates some list of deposits, Blanc proves its storage accumulates that list followed by exactly the committed deposits, in order; the count slot holds their number, and the root is their reference Merkle root — the incremental algorithm is proved to compute it for every hash function, and the history theorems instantiate the hash as Jaune’s SHA-256. A deposit the model accepts executes at exact gas and extends the tree by exactly its own node. No hash premise appears anywhere.</p>
+        <a class="more" href="bytecode/deposit-contract.html">The deposit contract, in full</a>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ═════════════════════════ HOW ═════════════════════════ -->
+<section id="how">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">How it works</p>
+      <h2>Read the bytes, check the reading, prove about the reading.</h2>
+      <p class="lede-sm">EVM bytecode has no structured control flow, and recovering it is a heuristic art. Blanc does not trust whoever performs it. An untrusted program proposes a <em>certificate</em>, a structured reading of the bytes; a decision procedure evaluated by Lean’s kernel accepts it or rejects it against the literal bytes; and generic theorems, proved once for every certificate, carry reasoning about the reading back to the bytes.</p>
+    </div>
+
+    <ol class="flow" aria-label="The lift path">
+      <li class="step"><span class="t">Runtime bytes</span><span class="d">exactly as deployed</span></li>
+      <li class="step untrusted"><span class="t">Producer</span><span class="d">untrusted; proposes entries, abstract stacks and trees</span></li>
+      <li class="step kernel"><span class="t">Kernel check</span><span class="d"><code>Cert.check</code>, <code>Cert.jumpsOk</code> against the literal bytes</span></li>
+      <li class="step"><span class="t">Generic theorems</span><span class="d"><code>lift_sound</code>, <code>lift_exact</code>, the cursor</span></li>
+    </ol>
+    <ol class="flow levels" aria-label="Levels of statement">
+      <li class="step"><span class="t">Frame</span><span class="d">one execution of the code</span></li>
+      <li class="step"><span class="t">Message</span><span class="d">child calls, reverts, settlement</span></li>
+      <li class="step"><span class="t">Transaction</span><span class="d"><code>processTransaction</code>: validity, intrinsic gas, refunds, fees</span></li>
+      <li class="step"><span class="t">History</span><span class="d">any valid chain of blocks from a checkpoint</span></li>
+    </ol>
+
+    <div class="grid3" style="margin-top:40px">
+      <div><h3><code>lift_sound</code></h3><p class="dim small">Every successful execution of the bytes from program counter 0, on a covered fork, is a run of the certificate’s program — so safety properties of the program hold of the bytes.</p></div>
+      <div><h3><code>lift_exact</code></h3><p class="dim small">Every gas-exact run of the program is a successful execution of the bytes — so a run built forward, one node at a time, becomes a real execution with its exact cost.</p></div>
+      <div><h3>The cursor</h3><p class="dim small">Places every step of an execution, whatever its outcome, at a checked node of the certificate. A reentrancy lock needs this: a frame that later reverts has still run.</p></div>
+    </div>
+    <p style="margin-top:32px"><a class="more" href="method.html">The method in full: committed replay, hashes without axioms, exact gas, deployment, controls</a></p>
+  </div>
+</section>
+
+<!-- ═════════════════════════ TRUST ═════════════════════════ -->
+<section id="trust">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">What you trust</p>
+      <h2>A small kernel, three axioms, and two things no theorem can settle.</h2>
+    </div>
+    <div class="stats" style="margin-bottom:40px">
+      <div class="stat"><span class="n num">1,060</span><span class="l">leaf results — theorems nothing else builds on, each kept for its own value — all covered by one axiom walk</span></div>
+      <div class="stat"><span class="n num">758</span><span class="l">statements pinned exactly, so a weakened claim fails like a broken proof</span></div>
+      <div class="stat"><span class="n num">34,205</span><span class="l">conformance cases Jaune passes, of 34,205 selected, at the revision Blanc pins</span></div>
+      <div class="stat"><span class="n num">86</span><span class="l">gates in the catalogue, all executed afresh and passing at commit <code>5048a51f</code></span></div>
+    </div>
+    <div class="ledger">
+      <div>
+        <h3><span class="k">Checked by the kernel</span>Everything that is proved</h3>
+        <ul class="ticks">
+          <li>Every proof, including every certificate check against the literal bytes it reads.</li>
+          <li>The axioms: one from-scratch walk over every declaration of the library reaches <code>propext</code>, <code>Classical.choice</code> and <code>Quot.sound</code> and nothing else. It does not rely on <code>#print axioms</code>, which can under-report.</li>
+          <li>The statements: an <code>example</code> per pin restates each headline theorem, and each definition its claim is stated through, exactly.</li>
+          <li>The public account: a gate resolves every declaration the claim map cites to its file and line and recomputes every artifact’s code hash from the lifted bytes.</li>
+        </ul>
+      </div>
+      <div>
+        <h3><span class="k">Trusted, and tested</span>What no theorem can establish</h3>
+        <ul class="ticks trust">
+          <li><b>That Jaune’s definitions match Ethereum.</b> Not provable; tested by the fixtures above, run through the block transition the theorems quantify over.</li>
+          <li><b>That the lifted bytes are the chain’s.</b> Three separately operated providers return identical code for every address; this is recorded provenance, not yet a proof from a block’s state root.</li>
+          <li><b>And the premises.</b> Whoever applies a theorem must discharge its hypotheses, and its statement is its specification: the kernel checks proofs, not whether a statement says what a reader wants.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════════════════ LANGUAGE ═════════════════════════ -->
+<section id="language">
+  <div class="wrap">
+    <div class="split">
+      <div>
+        <p class="eyebrow">Blanc, the language</p>
+        <h2>For bytes not yet written: a language whose compiler is a theorem.</h2>
+        <p class="lede-sm" style="margin-top:18px">Blanc began as a programming language: the EVM’s own instructions, arranged by four constructors. Its compiler’s correctness is a Lean theorem, so a property proved of a Blanc program is a fact about the bytes that deploy. Ten contracts are written in it and verified over their compiled bytes, and the history, settlement and liveness machinery they needed is what the lift of deployed bytecode now stands on.</p>
+        <p class="dim">Writing in Blanc buys what reading cannot: storage laid out so that a wrapper’s solvency needs no hash premise at all; runtimes smaller than their references in six ports of seven — WETH in 988 bytes against WETH9’s 3,124; and every implementation choice open, down to the instruction.</p>
+        <p><a class="more" href="language.html">The language and its ten contracts</a></p>
+      </div>
+      <figure>
+        <div class="codehead"><span>Blanc/Semantics.lean — the whole syntax</span></div>
+<pre class="lean"><span class="kw">inductive</span> <span class="nm">Func</span> : Type
+  | branch : Func → Func → Func
+  | last   : Linst → Func
+  | next   : Ninst → Func → Func
+  | call   : Nat → Func
+
+<span class="kw">structure</span> <span class="nm">Prog</span> : Type <span class="kw">where</span>
+  (main : Func)
+  (aux  : List Func)
+
+<span class="cm">-- Blanc/CommonCore.lean: every successful EVM execution
+-- of the compiled bytes is a run of the source program.</span>
+<span class="kw">theorem</span> <span class="nm">correct</span> (sevm : Sevm) (pre : Devm) (p : Prog) (post : Devm)
+    (exc : Exec 0 sevm pre (.ok post))
     (eq : some sevm.code.toList = p.compile) :
-    <span class="t">Prog</span>.<span class="t">Run</span> sevm pre p post
+    Prog.Run sevm pre p post</pre>
+        <figcaption>Four constructors — <b>b</b>ranch, <b>l</b>ast, <b>n</b>ext, <b>c</b>all — and nothing else; the compiler’s one real job is placing jumps.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
 
-<span class="c">-- And, gas-exact, in both directions — the bridge that</span>
-<span class="c">-- lets a proof construct a real execution, not just</span>
-<span class="c">-- take one apart.</span>
-<span class="k">theorem</span> <span class="d">Prog.runCompiled_iff_exec</span> …
-    <span class="t">Prog</span>.<span class="t">RunCompiled</span> sevm pre p post ↔ exec ⟨0, sevm, pre⟩ = .ok post</pre>
+<!-- ═════════════════════════ AGENTS ═════════════════════════ -->
+<section id="agents" class="tight">
+  <div class="wrap">
+    <div class="aside" style="padding:28px 30px">
+      <div class="split" style="gap:36px">
+        <div>
+          <p class="kicker">Who wrote the proofs</p>
+          <h2 style="font-size:clamp(1.5rem,2.6vw,2rem)">Written by agents. Checked by the kernel.</h2>
         </div>
-        <p class="dim" style="font-size:.9rem;margin-top:14px;margin-bottom:0">
-          The direction of <span class="mono">correct</span> matters: a property proved of the
-          source is thereby a fact about what the EVM executes. The biconditional adds the forward
-          direction, which is what liveness and exact-gas theorems are built on.
-        </p>
-      </div>
-
-      <div class="panel">
-        <span class="tick">what lands on the bytes</span>
-        <p class="dim" style="font-size:.94rem">
-          Everything downstream is stated at this altitude. The property inventory of §&nbsp;5 and
-          the endpoint families of §&nbsp;9 hypothesise the compiled bytes in so many words —
-          <span class="mono">some sevm.code.toList = p.compile</span> is a premise found inside
-          the statements, not a convention explained beside them. Even deployment stays on the
-          bytes: WETH10’s root is derived through the real creation-block pipeline — receipt,
-          installed runtime, and all.
-        </p>
-        <p class="dim" style="font-size:.94rem;margin-bottom:0">
-          What the machine itself does is not Blanc’s to say. That ground — and the evidence it
-          stands on — is §&nbsp;3. The language the bytes are written in — and what it costs —
-          is §&nbsp;7.
-        </p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════════════ §2 THE STANDARD ═══════════════════════ -->
-<section id="standard">
-  <div class="wrap">
-    <p class="eyebrow"><span class="secno">§ 2</span> What you keep</p>
-    <h2 style="max-width:26ch">Keep the standard of proof.</h2>
-    <p class="lede" style="margin-top:18px">
-      A verification result is worth what it costs to doubt. Doubting one of Blanc’s costs a lot:
-      every claim is a Lean theorem with a proof object, and the checker of record is Lean’s small
-      kernel — not this project’s code, not a search procedure’s verdict, not a report you are
-      asked to take on reputation. Checking it again yourself is a command, not a negotiation.
-    </p>
-
-    <div class="grid2" style="margin-top:34px;align-items:start">
-      <div class="panel">
-        <span class="tick">the trust base, exhaustively</span>
-        <p class="dim" style="font-size:.94rem;margin-bottom:0">
-          <strong>Three axioms at most, no oracle.</strong> One from-scratch walk in CI follows every
-          constant of the library, and fails unless the union of the axioms it reaches is drawn
-          from <span class="mono">propext</span>,
-          <span class="mono">Classical.choice</span>, and <span class="mono">Quot.sound</span> —
-          Lean’s three canonical axioms, the same ground ordinary classical mathematics stands
-          on. The audit fails on any other axiom, on <span class="mono">sorryAx</span>, and on any
-          <span class="mono">native_decide</span>-style escape into compiled evaluation. Nothing
-          out-of-kernel stands between a statement and its checking.
-        </p>
-      </div>
-      <div class="panel">
-        <span class="tick">statements pinned, not just proofs</span>
-        <p class="dim" style="font-size:.94rem;margin-bottom:0">
-          <strong>A weakened conclusion fails as loudly as a broken proof.</strong> Proving
-          <em>something</em> is cheap; the discipline is keeping the something fixed. A
-          statement-pin gate Lean-checks the exact wording of the protected claims — 758
-          definitions, statements, and record constructors across the shared layer and the
-          protected contract families — so the theorem quoted on this page is
-          character-for-character the theorem CI checks, and a quiet regression in what is
-          <em>claimed</em> trips the same wire as a regression in whether it holds.
-        </p>
-      </div>
-    </div>
-
-    <p class="note" style="margin-top:26px">
-      One consequence, bought early and spent in §&nbsp;6: this standard is indifferent to
-      authorship. A proof written by an agent is checked by the same kernel against the same pinned
-      axioms as a proof written by hand — the trust never lived in the author.
-    </p>
-  </div>
-</section>
-
-<!-- ═══════════════════════ §3 THE GROUND ═══════════════════════ -->
-<section id="ground">
-  <div class="wrap">
-    <p class="eyebrow"><span class="secno">§ 3</span> What you keep</p>
-    <h2 style="max-width:28ch">Keep the ground under the theorems.</h2>
-    <p class="lede" style="margin-top:18px">
-      A contract theorem means no more than the machine model it quantifies over. Blanc states
-      nothing about the EVM on its own authority: every theorem bottoms out in
-      <a href="https://skbaek.github.io/jaune/" style="text-decoration:underline;text-underline-offset:3px">Jaune</a> —
-      an executable EVM semantics written in plain Lean&nbsp;4, imported at a pinned immutable
-      commit — so “which semantics was this proved against” always has a one-line answer.
-    </p>
-
-    <div class="grid2" style="margin-top:34px;align-items:start">
-      <div class="panel">
-        <span class="tick">a semantics that runs</span>
-        <p class="dim" style="font-size:.94rem;margin-bottom:0">
-          <strong>Believing it is not an act of reading.</strong> Because the semantics executes,
-          it can be tested like an implementation: at the pinned commit it passes the ecosystem’s
-          mainnet fixture corpus in full — 5,006/5,006 supported files — and Blanc’s differential gates run each
-          contract in a pinned oracle, beside EELS, Ethereum’s canonical executable specification,
-          or through the pinned Jaune’s own <span class="mono">t8n</span>:
-          147/147 WETH10 rows, 175/175 CircuitBreaker rows, 85/85 OssifiableProxy rows, 44/44
-          deposit-contract rows, 62 agreements plus 9 registered deviations for the withdrawals
-          gateway, all 25 selectors of the ERC-4626 vault beside its compiled OpenZeppelin
-          reference, 11/11, 11/11, and 14/14 fixture suites, and DRIP’s 91 committed BPO2 fixtures. The definitions the corpus
-          exercises are the definitions the theorems quantify over — one set, no shadow model.
-        </p>
-      </div>
-      <div class="panel">
-        <span class="tick">the fine print, kept fine</span>
-        <p class="dim" style="font-size:.94rem;margin-bottom:0">
-          <strong>Separate trust stories, kept separate.</strong> Corpus runs go through Lean’s
-          compiled evaluation; the theorems never rest on that run — their checking is
-          §&nbsp;2’s kernel, end to end. The interpreter is total, which is what lets §&nbsp;5
-          prove settlement theorems with no premise about a hostile callee. And no theorem is
-          quietly relative to an unstated protocol version: each names its chain configuration in
-          its own premises — <span class="mono">ChainConfig.pragueOnly</span>, fork schedules
-          crossing Prague through BPO2 — and every frame or schedule it quantifies over is confined to
-          the four forks its proofs cover, <span class="mono">CoveredFork</span>: Prague, Osaka,
-          BPO1, BPO2. So what
-          was proved, and against what, lives in the statement rather than in a changelog.
-        </p>
-      </div>
-    </div>
-
-    <p class="note" style="margin-top:26px">
-      The division of labour is exact — Jaune owns what the machine does; Blanc owns programs, the
-      compiler, and everything proved about particular contracts — and Jaune keeps
-      <a href="https://skbaek.github.io/jaune/" style="text-decoration:underline;text-underline-offset:3px">an evidence page of its own</a>.
-    </p>
-  </div>
-</section>
-
-<!-- ═══════════════════════ §4 THE DESIGN SPACE ═══════════════════════ -->
-<section id="freedom">
-  <div class="wrap">
-    <p class="eyebrow"><span class="secno">§ 4</span> What you keep</p>
-    <h2 style="max-width:24ch">Keep the whole design space.</h2>
-    <p class="lede" style="margin-top:18px">
-      Storage schemes, stack discipline, dispatch order, calldata handling, error genre, gas
-      layout: every implementation decision is yours, down to the instruction. That freedom is not
-      an aesthetic. It is where whole classes of hypothesis, byte, and gas get designed out before
-      anyone has to argue them away — and each dividend below is either proved or measured, never
-      projected.
-    </p>
-
-    <div class="grid3" style="margin-top:40px">
-      <div class="panel">
-        <span class="tick">hypotheses, designed out</span>
-        <h3>Solvency with no collision clause</h3>
-        <p class="dim">
-          Blanc’s WETH keeps its ledger at raw address words — a scheme a hashed mapping layout
-          cannot express. Its solvency theorem therefore carries no hash-injectivity hypothesis,
-          no “assuming no collisions this transaction”: the statement holds in every case, full
-          stop, because the implementation never bet on a hash. And where the scheme admits a
-          collision the reference cannot express, the contract refuses the write rather than
-          writing through a third party’s balance slot.
-        </p>
-      </div>
-      <div class="panel">
-        <span class="tick">bytes, spent well</span>
-        <h3>Small enough to prove, lean enough to run</h3>
-        <p class="dim">
-          <strong>988 bytes</strong> of WETH runtime against the deployed WETH9’s 3,124;
-          <strong>6,313</strong> of WETH10 against 9,975, with all 27 selectors kept. The same
-          austerity that shrinks the artifact is what holds it within reach of interactive proof —
-          and the measured call-path deltas live on each contract’s page, beside its deviations.
-        </p>
-      </div>
-      <div class="panel">
-        <span class="tick">cost, made exact</span>
-        <h3>Discipline you choose, numbers you prove</h3>
-        <p class="dim">
-          Error genre is a decision, not an accident: every revert site compiles to
-          <span class="mono">PUSH0 PUSH0 REVERT</span>, one observable shape. Dispatch order and
-          calldata handling are decisions too. And because the artifact is fixed and structured,
-          per-endpoint gas closes into proved equations rather than profiler estimates —
-          §&nbsp;5 shows them, cold and warm.
-        </p>
-      </div>
-    </div>
-
-    <p class="note" style="margin-top:26px">
-      One liberty is withheld — computed jump targets, the single structural trade §&nbsp;7 spells
-      out. Everything else about the artifact is yours to decide, which is the difference between
-      a language that permits optimization and a language that merely tolerates it.
-    </p>
-  </div>
-</section>
-
-<!-- ═══════════════════════ §5 KINDS ═══════════════════════ -->
-<section id="kinds">
-  <div class="wrap">
-    <p class="eyebrow"><span class="secno">§ 5</span> What you keep</p>
-    <h2 style="max-width:22ch">Keep the ceiling.</h2>
-    <p class="lede" style="margin-top:18px">
-      Because contracts, compiler, and chain semantics are one mathematical object, statements
-      of a kind rarely available at any price are ordinary here. Eleven kinds have landed so
-      far, each with an instance you can open.
-    </p>
-
-    <div id="flagship" style="margin-top:44px">
-      <h3 style="max-width:34ch">Liveness, constructed, over every reachable future.</h3>
-      <p class="dim measure" style="margin-top:12px">
-        Safety’s neglected dual: “the contract cannot lose your money” is only half a promise —
-        “and it will actually give it back” is the other half. Small instances are routine
-        here: <span class="mono">weth_balanceOf_succeeds</span> and its family build a
-        successful execution instruction by instruction, exact gas in the statement. The
-        kind is stated in full by WETH10’s redeemability guarantee (2026-08-12), where a
-        holder’s risk actually lives: at <em>any</em> reachable future of a proved
-        deployment, <em>after</em> arbitrary other actors — flash loans, reentrancy, hostile
-        callbacks — have done their worst.
-      </p>
-
-      <div class="thm" style="margin-top:26px">
-        <span class="stamp">machine-checked</span>
-        <div class="head">Theorem (<span class="mono">deployment_reachable_future_dualSelector_redeemable_mainnet</span>, Blanc/Weth10Mainnet.lean).</div>
-        <p class="stmt">From a proved deployment of the exact compiled WETH10 runtime, any leg of valid
-          blocks selected by Jaune’s configured mainnet schedule to a checkpoint, and any further
-          configured leg to an arbitrary future snapshot, there is an accounted history of the
-          window carrying the dual-selector redemption guarantee below for an arbitrary holder
-          <span class="mono">u</span>. The unsuffixed theorem has the same shape for any
-          <span class="mono">cfg</span> whose schedule selects only covered forks.</p>
-<pre><span class="k">theorem</span> <span class="d">deployment_reachable_future_dualSelector_redeemable_mainnet</span>
-    {dp : <span class="t">DeployParams</span>} {ca u : <span class="t">Adr</span>}
-    {base deployed checkpoint future : <span class="t">BlockChain</span>}
-    (hroot : <span class="t">MainnetDeploymentRoot</span> base deployed dp ca)
-    (hcheckpoint : <span class="t">BlockChain.ReachUsing</span> mainnetChainConfig deployed checkpoint)
-    (hfuture : <span class="t">BlockChain.ReachUsing</span> mainnetChainConfig checkpoint future) :
-    ∃ history, <span class="t">FutureDualSelectorRedemptionGuarantee</span>
-      mainnetChainConfig dp ca u checkpoint future history</pre>
-      </div>
-      <p class="cap"><b>Read the quantifiers</b> — <span class="mono">u</span> is <em>every</em> holder,
-        not a specially chosen one. <span class="mono">ReachUsing</span> is Jaune’s configured-chain
-        reachability: whole valid blocks, every transaction anyone sent, arbitrary contracts doing
-        arbitrary things — under the model’s one global side condition, that total ETH plus pending
-        withdrawals stays below 2<sup>256</sup> wei. The history is <em>obtained from the
-        reachability derivation</em>, not reconstructed from the endpoints — a logical guarantee
-        about the window, not a trace extractor. The deployment root is no opaque axiom: from one
-        successful canonical creation-block transition through Jaune’s selected configured rules,
-        <span class="mono">DeploymentRoot cfg</span> — receipt success, exact installed runtime,
-        empty storage — is derived, not assumed. The public mainnet constructor selects BPO2. And
-        an all-holders sibling delivers one history carrying the guarantee for every holder at once,
-        without the dual-selector packaging.</p>
-
-      <div class="grid2" style="margin-top:26px;align-items:start">
-        <div class="panel">
-          <span class="tick">what the guarantee packages</span>
-          <p class="dim" style="font-size:.93rem">
-            <strong>Books that balance in ℕ.</strong>
-            <span class="mono">B₀ + ordinaryIn = Bₜ + redeemed + externalTransferredOut</span> —
-            flash-mint credits and repayments proved to pair exactly and cancel, committed credits
-            proved not to wrap, no hidden modular slack. Hence the floor
-            <span class="mono">B₀ ≤ Bₜ + redeemed + externalTransferredOut</span>: whatever the
-            window did, it cannot dilute a holder below their residual.
-          </p>
-          <p class="dim" style="font-size:.93rem">
-            <strong>Exits that provably open, at two altitudes.</strong> For every amount within the
-            residual, every admissible canonical <span class="mono">withdraw</span> or
-            <span class="mono">withdrawTo</span> message at the future snapshot <em>succeeds</em> —
-            constructed execution, not absence of counterexample — and so does the complete signed
-            type-2 transaction, intrinsic gas, validity, and settlement included. For a funded
-            code-free external holder with canonical fields, recovery of its own signature is the
-            sole unproved input.
-          </p>
-          <p class="dim" style="font-size:.93rem;margin-bottom:0">
-            <strong>Attribution, and two corollaries.</strong> Under one stated hash hypothesis,
-            every nonzero permanent outflow in the deployment window traces to the holder’s own
-            call, its in-window <span class="mono">approve</span>, or its in-window
-            <span class="mono">permit</span> — only attribution takes that hypothesis; redeemability
-            never does. Downstream sit the dormant holder — no effectful authorizing act, not a wei
-            lost — and any-order redemption over any supplied duplicate-free holder list, the
-            bank-run shape, with the aggregate effect on balances and ETH exact.
-          </p>
-        </div>
-        <div class="panel">
-          <span class="tick">where it stops</span>
-          <p class="dim" style="font-size:.93rem;margin-bottom:0">
-            The subject is the exact compiled Blanc runtime on an explicit configured schedule,
-            from its proved deployment root — never the Solidity artifact deployed at
-            <span class="mono">0xf4BB…8A9F</span>, which nothing here verifies. Attribution names
-            the account whose recorded act the runtime accepted, not consent or intent: a phished
-            <span class="mono">approve</span> and a relayed <span class="mono">permit</span> both
-            attribute to the signing account. Redemption theorems consume the holder’s message or
-            signed transaction as an input; no theorem forges a signature. A holder with
-            non-delegation contract code that cannot call WETH10 keeps a conserved balance but has
-            no transaction-altitude exit of its own. The supplied everyone-list is not a state
-            enumeration. Inclusion, propagation, key custody, and fee markets are out of frame. The
-            full boundary lives in
-            <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md" style="text-decoration:underline;text-underline-offset:3px">PORTING.md</a>
-            and the WETH10 registries — declared non-claims, in the honest register.
-          </p>
+        <div>
+          <p>The lift of deployed bytecode — 236,372 lines of Lean in 912 files — was written by AI agents in fifteen days, from 25 September to 9 October 2026, under one author’s direction and on top of the existing stack. The coordinator–worker workflow they ran in, <a href="https://github.com/skbaek/creme">Creme</a>, accepts a result only on the gate catalogue’s verdict for the exact commit.</p>
+          <p>Lean’s kernel checks an agent’s proof exactly as it checks a person’s. The trust never lived in the author; it lives in the kernel, the axioms, and the statements, which are there to be read.</p>
         </div>
       </div>
     </div>
-
-    <p class="note" style="margin-top:24px">
-      WETH10’s mainnet schedule is exact: Prague at Unix <span class="mono">1746612311</span>,
-      Osaka at <span class="mono">1764798551</span>, BPO1 at
-      <span class="mono">1765290071</span>, and BPO2 at
-      <span class="mono">1767747671</span>; BPO2 has been live on mainnet since 2026-01-07.
-      A later fork that changes only rule data Jaune already models is a pin bump and
-      re-verification with any new facts explicit. A fork that changes execution semantics
-      changes Jaune itself, and that has now happened once: the pinned Jaune models Amsterdam —
-      its gas metering and block-level access lists — while every Blanc theorem stays confined
-      to Prague, Osaka, BPO1, and BPO2. No Blanc result covers an Amsterdam frame or block.
-    </p>
-
-    <h3 class="subhead" style="margin-top:48px">Ten more kinds <i>— still uncommon</i></h3>
-    <div class="grid3" style="margin-top:16px">
-      <div class="panel">
-        <span class="tick">adversarial settlement</span>
-        <h3>No premise about the borrower</h3>
-        <p class="dim" style="font-size:.93rem">
-          <span class="mono">fmint_flashLoan_settles</span>: a funded, non-static
-          <span class="mono">flashLoan</span> frame ends in success, a deliberate revert, or the
-          non-consensus fault channel — never a consensus exceptional halt — with the borrower’s code
-          <em>universally quantified</em>. Possible because Jaune’s interpreter is total: the callee’s
-          execution comes from totality, not from an assumption about the callee.
-        </p>
-      </div>
-      <div class="panel">
-        <span class="tick">chain altitude</span>
-        <h3>Invariants that survive hard forks</h3>
-        <p class="dim" style="font-size:.93rem">
-          WETH solvency and FMINT conservation are preserved over <em>every</em> state reachable
-          along a valid configured chain — induction over whole blocks, withdrawals and system
-          operations included, across scheduled fork activations from Prague through BPO2. A protocol
-          upgrade is a step in the induction, not a threat to the claim.
-        </p>
-      </div>
-      <div class="panel">
-        <span class="tick">gas, closed-form</span>
-        <h3>The gas cost is a theorem</h3>
-        <p class="dim" style="font-size:.93rem">
-          <span class="mono">fmint.totalSupply()</span> costs 2,218 gas — exactly, as a proved
-          equation, not a profiler’s estimate. WETH’s <span class="mono">balanceOf</span>: 2,260 cold,
-          with the 19-gas nonpayable guard visible in the statement. WETH10’s required views carry
-          exact cold/warm gas uniformly over deployment parameters. Closed forms and maxima ship as
-          lemmas beside the code.
-        </p>
-      </div>
-      <div class="panel">
-        <span class="tick">deployment</span>
-        <h3>Creation, through the real pipeline</h3>
-        <p class="dim" style="font-size:.93rem">
-          WETH10’s deployment root is derived, not axiomatized: from one successful strict
-          singleton type-2 creation block through Jaune’s selected configured transition, the proof
-          reconstructs receipt success, exact installed runtime, empty storage, and the crossed
-          request-system calls — establishing the
-          <span class="mono">DeploymentRoot</span> the guarantee above stands on, with the creation
-          message’s 1,264,071-gas cost as a closed form. The public current-mainnet root is witnessed
-          by a committed BPO2 block and replayed through Jaune; the Prague form remains a corollary.
-        </p>
-      </div>
-      <div class="panel">
-        <span class="tick">open-contract histories</span>
-        <h3>Integrity with no premise about anyone else</h3>
-        <p class="dim" style="font-size:.93rem">
-          <span class="mono">chainUsing_preserves_registryStable</span>: from a checkpoint with
-          the CircuitBreaker’s exact runtime installed and coherent storage, every reachable
-          state stays coherent — with no premise about the bytecode at any other address, no
-          non-reentrancy condition, and no honesty asked of the contracts it pauses. The
-          checkpoint hypothesis is discharged by a proved official-parameters deployment, so
-          the family stands on a derived deployment root rather than an assumed checkpoint.
-        </p>
-      </div>
-      <div class="panel">
-        <span class="tick">error genre</span>
-        <h3>Reverts, constructed exactly</h3>
-        <p class="dim" style="font-size:.93rem">
-          Not “no success exists” but <em>this call reverts, with this error, and no data</em>:
-          unknown-selector and guard executions built instruction by instruction to
-          <span class="mono">.error (.revert, _)</span> with empty returndata. Every Blanc revert site is
-          <span class="mono">PUSH0 PUSH0 REVERT</span> — a discipline a fixture falsifier table shows
-          is observably distinct from the three failure shapes it replaced.
-        </p>
-      </div>
-      <div class="panel">
-        <span class="tick">adversarial arithmetic</span>
-        <h3>No profit, with no honesty premise</h3>
-        <p class="dim" style="font-size:.93rem">
-          <span class="mono">attacker_no_profit</span>: over any attack trace realized along a
-          configured chain from PRORATA’s deployment root — a coalition’s deposits, withdrawals,
-          and donations interleaved around a victim’s deposit — the coalition takes out no more
-          than it put in, with arbitrary callee code inside the quantifier and the
-          <span class="mono">2 ≤ O</span> the pure result needs discharged from the compiled
-          offset. The offset-one leak was found by brute force before any proof was attempted.
-        </p>
-      </div>
-      <div class="panel">
-        <span class="tick">precompile crossings</span>
-        <h3>A Merkle root through the SHA-256 precompile</h3>
-        <p class="dim" style="font-size:.93rem">
-          The deposit contract hashes by <span class="mono">STATICCALL</span> to address
-          <span class="mono">0x2</span> at twelve source-shaped sites; the proofs name the fork’s
-          precompile selection, prove the 64-byte input, and instantiate the answer as exactly
-          <span class="mono">Bytes.sha256</span> — environment facts, not a hash axiom. From a
-          derived Prague deployment, <span class="mono">DeploymentRoot.future_count_root</span>
-          reads the exact count and mixed root off every admitted future.
-        </p>
-      </div>
-      <div class="panel">
-        <span class="tick">delegation, owned</span>
-        <h3>An upgrade that is really a migration</h3>
-        <p class="dim" style="font-size:.93rem">
-          Code address and storage owner pulled apart: a forwarding envelope for an arbitrary
-          certified child, and <span class="mono">upgradeToAndCall_primary_realizes_migration</span>
-          — one authorized execution of the exact compiled OssifiableProxy commits v2, runs the
-          initializer child it spawns, and establishes the relation R2, with calls through the
-          proxy proved to refine before and after. Migration soundness and behavioral refinement
-          are separate conclusions, never evidence for each other.
-        </p>
-      </div>
-      <div class="panel">
-        <span class="tick">composition</span>
-        <h3>Two verified contracts at once</h3>
-        <p class="dim" style="font-size:.93rem">
-          <span class="mono">publicPause_gatewayPinnedTarget</span>: at a successful public pause
-          of the CircuitBreaker with the exact compiled withdrawals gateway installed at the
-          target, the gateway is left paused at exactly the shared projection and the
-          CircuitBreaker’s own cells are untouched — noninterference discharged, not assumed, and
-          no code-shape premise at all. And the run is no longer a premise:
-          <span class="mono">gatewayPauseWorld_closedPublicPause</span> and its sentinel sibling
-          construct it in two concrete Prague worlds, a finite and an infinite pause.
-        </p>
-      </div>
-    </div>
-
-    <p class="note" style="margin-top:26px">
-      Each entry names its theorem; the statements — with their premises, which are part of the
-      claim — are the authority. Where a family is partial correctness, the repository says so in
-      the module docstring; where nothing says a call succeeds, no page of prose may imply one does.
-    </p>
   </div>
 </section>
 
-<!-- ═══════════════════════ §6 THE RECEIPTS ═══════════════════════ -->
-<section id="portfolio">
+<!-- ═════════════════════════ LIMITS ═════════════════════════ -->
+<section id="limits">
   <div class="wrap">
-    <span id="agents"></span>
-    <p class="eyebrow"><span class="secno">§ 6</span> What you keep</p>
-    <h2 style="max-width:24ch">Keep the receipts.</h2>
-    <p class="lede" style="margin-top:18px">
-      The freedoms above are not a prospectus. Every contract theorem, differential row, and
-      measured byte in §&nbsp;1–5 comes from one of ten contracts already in. Each contract raised
-      the bar for the next, and each has a page of its own: how we know it is the contract it
-      names, the deviation registry, the measured deltas, and what the build taught. Three kinds
-      are kept distinct. <strong style="color:var(--ink)">Ports</strong> target a contract that
-      already exists, so every claim can be checked against something you already trust.
-      <strong style="color:var(--ink)">Études</strong> are composed from scratch — deliberately
-      bare contracts, each written to push one hard capability to full proof depth.
-      <strong style="color:var(--ink)">Compositions</strong> are theorems about two verified
-      contracts at once, and live in a stratum of the repository that neither contract may import.
-    </p>
-
-    <h3 class="subhead">Ports <i>— targets you already know</i></h3>
-    <div class="cards">
-      <a class="card" href="contracts/weth.html">
-        <span class="cardhead">
-          <span class="cardicon" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M16 5 26 16 16 27 6 16Z"/><path d="M6 16h20"/></svg></span>
-          <span class="cardtitle"><b>WETH</b><i>wrapped ether · after WETH9</i></span>
-        </span>
-        <p class="carddesc">The first port, and the method’s proof of concept: solvency — the
-          contract always holds enough ETH to honour every balance — carried from a single frame
-          up to every reachable state of a configured chain, across scheduled fork activations.</p>
-        <span class="cardfacts">
-          <span class="chip"><b>988 B</b> vs 3,124 deployed</span>
-          <span class="chip">solvency at chain altitude</span>
-          <span class="chip">11 oracle fixtures</span>
-        </span>
-        <span class="cardgo"><span>evidence · deviations · deltas · notes</span><span>→</span></span>
-      </a>
-      <a class="card" href="contracts/weth10.html">
-        <span class="cardhead">
-          <span class="cardicon" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M16 3.5 27 16 16 28.5 5 16Z"/><path d="M19 9l-6.5 8.5H18L12.5 24"/></svg></span>
-          <span class="cardtitle"><b>WETH10</b><i>flash-minting wrapped ether · after the deployed WETH10</i></span>
-        </span>
-        <p class="carddesc">All 27 selectors plus receive, flash loans,
-          ERC-677-style callbacks, EIP-2612 permit — zero contract code to a closed verification
-          charter, and the future-redeemability theorem of §&nbsp;5 on top.</p>
-        <span class="cardfacts">
-          <span class="chip"><b>6,313 B</b> vs 9,975 deployed</span>
-          <span class="chip">147/147 differential rows</span>
-          <span class="chip">28/28 entry families proved</span>
-        </span>
-        <span class="cardgo"><span>evidence · deviations · deltas · notes</span><span>→</span></span>
-      </a>
-      <a class="card" href="contracts/lido-circuit-breaker.html">
-        <span class="cardhead">
-          <span class="cardicon" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M16 3.5C16 3.5 7 13.8 7 19.5a9 9 0 0 0 18 0C25 13.8 16 3.5 16 3.5Z"/><path d="M13.5 16v7M18.5 16v7"/></svg></span>
-          <span class="cardtitle"><b>CircuitBreaker</b><i>Lido’s emergency pause guardian · after the deployed CircuitBreaker</i></span>
-        </span>
-        <p class="carddesc">Registry integrity as one combined invariant — its
-          corollaries close the three obligations an industrial campaign left open — rooted in a
-          proved official-parameters deployment through the full Prague block pipeline, and preserved at
-          every reachable future over arbitrary hostile callees.</p>
-        <span class="cardfacts">
-          <span class="chip"><b>4,282 B</b> vs 4,584 deployed</span>
-          <span class="chip">175/175 differential rows</span>
-          <span class="chip">0 accepted deviations</span>
-        </span>
-        <span class="cardgo"><span>evidence · deviations · deltas · notes</span><span>→</span></span>
-      </a>
-      <a class="card" href="contracts/beacon-deposit.html">
-        <span class="cardhead">
-          <span class="cardicon" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><circle cx="16" cy="6" r="2.4"/><circle cx="9" cy="16" r="2.4"/><circle cx="23" cy="16" r="2.4"/><circle cx="5" cy="26" r="2.4"/><circle cx="13" cy="26" r="2.4"/><circle cx="19" cy="26" r="2.4"/><circle cx="27" cy="26" r="2.4"/><path d="M14.6 8 10.4 13.9M17.4 8l4.2 5.9M7.9 18.2 6.1 23.8M10.1 18.2l1.8 5.6M21.9 18.2l-1.8 5.6M24.1 18.2l1.8 5.6"/></svg></span>
-          <span class="cardtitle"><b>BeaconDeposit</b><i>the eth2 deposit contract · after the deployed original</i></span>
-        </span>
-        <p class="carddesc">The incremental Merkle accumulator proved from a hash-parametric model
-          down to the exact bytes — across twelve SHA-256 precompile crossings — rooted in a derived
-          Prague deployment, with the exact count and mixed root read off every admitted future.</p>
-        <span class="cardfacts">
-          <span class="chip"><b>2,891 B</b> vs 6,358 deployed</span>
-          <span class="chip">44/44 rows · 0 dearer paths</span>
-          <span class="chip">30-declaration register</span>
-        </span>
-        <span class="cardgo"><span>evidence · deviations · deltas · notes</span><span>→</span></span>
-      </a>
-      <a class="card" href="contracts/lido-triggerable-withdrawals-gateway.html">
-        <span class="cardhead">
-          <span class="cardicon" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M7 5v22M25 5v22M7 9h18M7 23h18"/><path d="M11 16h9M17 13l3 3-3 3"/></svg></span>
-          <span class="cardtitle"><b>TriggerableWithdrawalsGateway</b><i>Lido’s exit gateway · after the deployed gateway</i></span>
-        </span>
-        <p class="carddesc">The CircuitBreaker’s real pause target: 24 selectors and the constructor,
-          the pinned-pause-target bundle proved with noninterference discharged rather than assumed
-          — once the portfolio’s one larger, dearer port, now smaller than its reference and
-          cheaper on all 51 measured paths.</p>
-        <span class="cardfacts">
-          <span class="chip"><b>8,094 B</b> vs 8,128 deployed</span>
-          <span class="chip">62 + 9 differential rows</span>
-          <span class="chip">3 accepted · 2 repaired</span>
-        </span>
-        <span class="cardgo"><span>evidence · deviations · deltas · notes</span><span>→</span></span>
-      </a>
-      <a class="card" href="contracts/ossifiable-proxy.html">
-        <span class="cardhead">
-          <span class="cardicon" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="5" y="5" width="15" height="15"/><rect x="12" y="12" width="15" height="15"/></svg></span>
-          <span class="cardtitle"><b>OssifiableProxy</b><i>Lido’s upgradeable proxy · after the deployed proxy</i></span>
-        </span>
-        <p class="carddesc">Delegatecall made a verified capability: a forwarding envelope for an
-          arbitrary child, all seven control entries with ossification proved irreversible,
-          whole-CREATE rollback, a pre-registered 25-cell efficiency campaign won 25 to 0 — and an
-          upgrade proved to realize its migration.</p>
-        <span class="cardfacts">
-          <span class="chip"><b>2,188 B</b> vs 2,497 deployed</span>
-          <span class="chip">85/85 rows · 25/25 gas wins</span>
-          <span class="chip">1 accepted deviation</span>
-        </span>
-        <span class="cardgo"><span>evidence · deviations · deltas · notes</span><span>→</span></span>
-      </a>
-      <a class="card" href="contracts/prorata-weth-vault.html">
-        <span class="cardhead">
-          <span class="cardicon" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="5" y="6" width="22" height="20" rx="2"/><circle cx="16" cy="16" r="4.5"/><path d="M16 11.5v-2M16 22.5v-2M20.5 16h2M9.5 16h2"/></svg></span>
-          <span class="cardtitle"><b>ERC-4626 vault</b><i>a share vault over WETH · after OpenZeppelin’s ERC4626</i></span>
-        </span>
-        <p class="carddesc">All 25 functions with exact compiled effects over Blanc’s own WETH,
-          capacity proved honest as a statement about why a call can revert, and backing, exact
-          rounding residue, and no coalition profit carried along every configured history of
-          the vault–WETH pair.</p>
-        <span class="cardfacts">
-          <span class="chip"><b>17,481 B</b> vs 4,347 reference</span>
-          <span class="chip">cheaper on 6 of 6 measured calls</span>
-          <span class="chip">9 pre-registered deviations</span>
-        </span>
-        <span class="cardgo"><span>evidence · deviations · deltas · notes</span><span>→</span></span>
-      </a>
-    </div>
-
-    <h3 class="subhead">Études <i>— minimal by design</i></h3>
-    <div class="cards">
-      <a class="card" href="contracts/fmint.html">
-        <span class="cardhead">
-          <span class="cardicon" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><circle cx="16" cy="16" r="11.5"/><path d="M18.5 9.5 13.5 16.5h5L14 23"/></svg></span>
-          <span class="cardtitle"><b>FMINT</b><i>ERC-3156 flash-mint token · referenced against OpenZeppelin</i></span>
-        </span>
-        <p class="carddesc">A token pared down to the one hard thing flash minting adds: supply
-          conservation — <span class="mono">totalSupply&nbsp;=&nbsp;Σ&nbsp;balances</span> — proved
-          under arbitrary reentrant borrower code, with a settlement trichotomy carrying
-          <em>no premise about the borrower at all</em>.</p>
-        <span class="cardfacts">
-          <span class="chip"><b>1,257 B</b> runtime</span>
-          <span class="chip">conservation vs any borrower</span>
-          <span class="chip">11 fixtures / 188 assertions</span>
-        </span>
-        <span class="cardgo"><span>evidence · deviations · deltas · notes</span><span>→</span></span>
-      </a>
-      <a class="card" href="contracts/prorata.html">
-        <span class="cardhead">
-          <span class="cardicon" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M8 16h16"/><circle cx="16" cy="8.5" r="3.2"/><circle cx="16" cy="23.5" r="3.2"/></svg></span>
-          <span class="cardtitle"><b>PRORATA</b><i>pro-rata share ledger · étude #2 of the arithmetic série</i></span>
-        </span>
-        <p class="carddesc">Ratio pricing as an adversarial surface: rounding direction,
-          zero-tolerance preview/actual consistency, and cumulative dust conserved along every
-          configured history — and the inflation attack proved impossible with no honesty premise
-          on any callee, its offset-one leak found by brute force first.</p>
-        <span class="cardfacts">
-          <span class="chip"><b>343 B</b> runtime</span>
-          <span class="chip">no profit vs any coalition</span>
-          <span class="chip">14 fixtures / 131 assertions</span>
-        </span>
-        <span class="cardgo"><span>evidence · oracle · deltas · notes</span><span>→</span></span>
-      </a>
-      <a class="card" href="contracts/drip.html">
-        <span class="cardhead">
-          <span class="cardicon" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M5 26h22M5 26V6"/><path d="M7 23c6 0 10-2 13-6s4.5-8 6-10"/><circle cx="12" cy="21.6" r="1.2"/><circle cx="18" cy="18.2" r="1.2"/><circle cx="23" cy="11.6" r="1.2"/></svg></span>
-          <span class="cardtitle"><b>DRIP</b><i>accrual-index savings ledger · étude #3</i></span>
-        </span>
-        <p class="carddesc">Compounding as fixed-point arithmetic: a Maker-shaped
-          <span class="mono">rpow</span> with a certified two-sided error band, a stale index
-          proved impossible after every successful call, and exact books for every join, drip,
-          and exit along each configured history.</p>
-        <span class="cardfacts">
-          <span class="chip"><b>1,762 B</b> runtime</span>
-          <span class="chip">certified rpow band</span>
-          <span class="chip">91 fixtures / 137 transactions</span>
-        </span>
-        <span class="cardgo"><span>evidence · oracle · deltas · notes</span><span>→</span></span>
-      </a>
-    </div>
-
-    <h3 class="subhead">Compositions <i>— two verified contracts at once</i></h3>
-    <div class="cards">
-      <a class="card" href="contracts/lido-triggerable-withdrawals-gateway.html#composition">
-        <span class="cardhead">
-          <span class="cardicon" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M13.5 18.5a4.2 4.2 0 0 1 0-6l4-4a4.2 4.2 0 0 1 6 6l-1.8 1.8"/><path d="M18.5 13.5a4.2 4.2 0 0 1 0 6l-4 4a4.2 4.2 0 0 1-6-6l1.8-1.8"/></svg></span>
-          <span class="cardtitle"><b>CircuitBreaker × Gateway</b><i>a pause that leaves its target paused</i></span>
-        </span>
-        <p class="carddesc">The first inhabitant of the composition stratum: at a successful public
-          pause of the CircuitBreaker with the exact compiled gateway installed at the target, the
-          gateway is left paused at the shared projection and the CircuitBreaker’s cells are
-          preserved — no code-shape premise, noninterference discharged — and two concrete worlds
-          in which that successful pause is constructed, not assumed.</p>
-        <span class="cardfacts">
-          <span class="chip"><b>12</b> audited theorems</span>
-          <span class="chip">no code-shape premise</span>
-          <span class="chip">2 closed worlds</span>
-        </span>
-        <span class="cardgo"><span>theorem · controls · boundary</span><span>→</span></span>
-      </a>
-      <a class="card" href="contracts/ossifiable-proxy.html#upgrade">
-        <span class="cardhead">
-          <span class="cardicon" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M10 23V9M5.5 13.5 10 9l4.5 4.5"/><path d="M22 9v14M17.5 18.5 22 23l4.5-4.5"/></svg></span>
-          <span class="cardtitle"><b>Proxy × two implementations</b><i>upgrade equivalence, as a theorem</i></span>
-        </span>
-        <p class="carddesc">Five explicit objects — proxy, v1, v2, migration, relation — and two
-          conclusions kept apart: the migration is sound for R2, and the exact compiled proxy’s
-          <span class="mono">upgradeToAndCall</span> performs it, with calls through the proxy
-          proved to refine before and after. Twelve executable rows pinned byte for byte.</p>
-        <span class="cardfacts">
-          <span class="chip"><b>10</b> headlines · 3 assurance theorems</span>
-          <span class="chip">12 witness rows</span>
-          <span class="chip">45 self-test controls</span>
-        </span>
-        <span class="cardgo"><span>theorem · witnesses · boundary</span><span>→</span></span>
-      </a>
-      <a class="card" href="contracts/prorata-weth-vault.html#pair">
-        <span class="cardhead">
-          <span class="cardicon" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><rect x="4" y="9" width="11" height="14" rx="1.5"/><path d="M22.5 8.5 28 16l-5.5 7.5L17 16Z"/><path d="M15 14h3M15 18h3"/></svg></span>
-          <span class="cardtitle"><b>Vault × WETH</b><i>a vault that proves its own asset</i></span>
-        </span>
-        <p class="carddesc">The vault’s chain-level theorems quantify over two exact compiled
-          contracts at once: every WETH frame that touches the vault’s row is classified, and
-          under one finite, stated key-noncollision premise the pair stays backed and WETH stays
-          solvent at every configured state it reaches.</p>
-        <span class="cardfacts">
-          <span class="chip"><b>34</b> composition modules</span>
-          <span class="chip">3 exact child forms</span>
-          <span class="chip">1 premise, named</span>
-        </span>
-        <span class="cardgo"><span>theorems · premise · boundary</span><span>→</span></span>
-      </a>
-    </div>
-
-        <p class="note" style="margin-top:26px">
-          One goal from WETH10’s committed charter did not land, and the ledger says so: a settlement theorem
-          carried over from the previous contract turned out to be <em>false</em> of WETH10’s design.
-          It was struck by explicit amendment, with no replacement installed and nothing nearby
-          relabeled to fill the row. Striking a false goal is the system working — a project that
-          never records a lost bet is not reporting, it is advertising. The same ledgers record
-          that the vault port is four times its reference’s size, and that its attack-trace
-          inhabitant is model-level only: no executed history meeting the attack premises is
-          exhibited.
-        </p>
-
-    <div class="grid2" style="margin-top:34px;align-items:start">
-        <div class="panel">
-          <span class="tick">why the trust story is unchanged</span>
-          <p class="dim" style="font-size:.94rem">
-            Agent-written proofs are exactly as trustworthy as human-written ones, because the trust
-            never lived in the author: every proof, whoever wrote it, is checked by Lean’s kernel,
-            and every audited theorem’s axiom closure is pinned in CI. The gates are built to be
-            hostile to wishful reporting — falsifiers that must fail, shrink-only budgets, coverage
-            that refuses credit for a selector merely embedded in bytes.
-          </p>
-          <p class="dim" style="font-size:.94rem;margin-bottom:0">
-            The human stayed where judgment lives: adjudicating conformance questions, striking the
-            false goal, deciding what a port owes its users. The agent did the part that scales.
-          </p>
-        </div>
-      <div>
-        <div class="term"><span class="p">$</span> scripts/check-layering.sh
-<span class="ok">OK — layering: 10 contract(s) are siblings; 496 module(s) classified, 494 non-root checked, 40 composition module(s) downstream, no cross-contract, inverted or composition-inverted import; …</span>
-<span class="p">$</span> scripts/check-claims.sh
-<span class="ok">OK — claim statements: 758 definitions/statements and exact
-     record constructors pinned by Lean</span>
-<span class="p">$</span> scripts/check-weth.sh --no-build &amp;&amp; scripts/check-fmint.sh --no-build
-<span class="ok">OK — weth fixtures: 11/11 PASS</span>
-<span class="ok">OK — fmint fixtures: 11/11 PASS, manifest cross-check clean</span></div>
-        <p class="cap"><b>Fig. 2</b> — the fast half of the gate battery. The layering line is
-          verbatim from a run on 2026-09-25 UTC, ellipsis marking its two
-          trailing registry clauses; the fixture lines are verbatim from the exact-candidate run of
-          2026-09-03 UTC; the claim line is that gate’s own verdict wording at the current pin
-          count, which a static gate derives from the committed pin file. The
-          full ordered set — layering, trust surface, reference lock, differential, redemption,
-          deployment, axiom audit, statement pins, elaboration budget, fixtures, coverage — is
-          catalogued with scales and pass criteria in
-          <span class="mono">scripts/GATES.md</span>.</p>
+    <div class="split">
+      <div class="section-head" style="margin:0">
+        <p class="eyebrow">Limits</p>
+        <h2>Where the theorems stop.</h2>
+        <p class="lede-sm">Each artifact’s page and the claim map state these precisely; here they are in one place.</p>
+        <p><a class="more" href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md#7-disclosures-and-limits">Every disclosure, item by item</a></p>
       </div>
-    </div>
-
-    <p class="note" style="margin-top:26px">
-      Contracts are <em>siblings</em> in the import hierarchy — no contract’s module imports
-      another’s, mechanically enforced by a layering gate. When one contract needs something another
-      defined, that is evidence the thing was never contract-specific, and it moves upstream with a
-      rename. The shared layer this discipline has accreted — the verification ladder, forward and
-      inversion tactic families, the callback-crossing machinery, the retained execution carriers
-      an étude built to carry its accounting — is the asset each next contract inherits whole.
-      A theorem that genuinely needs two families — a CircuitBreaker pausing a gateway, a vault
-      holding WETH — has one home: a composition stratum strictly downstream of every contract,
-      which no contract or shared module may import. A contract joins the portfolio when its
-      registers close.
-    </p>
-  </div>
-</section>
-
-<!-- ═══════════════════════ §7 THE LANGUAGE ═══════════════════════ -->
-<section id="canvas">
-  <div class="wrap">
-    <p class="eyebrow"><span class="secno">§ 7</span> What you pay</p>
-    <h2 style="max-width:24ch">Barely a language.</h2>
-    <p class="lede" style="margin-top:18px">
-      Contract languages usually add: types, objects, modifiers, a memory manager, an optimizer
-      pipeline. Every addition is expressive power, and every addition is also distance between
-      what you wrote and what the chain runs — distance that ends up paid for in trust. Blanc
-      subtracts instead. The EVM’s own instructions are the vocabulary; four constructors —
-      branch, last, next, call: they spell the name, and they are the whole language — arrange
-      them; the compiler’s one real job is placing jumps. What is left out is the point — the
-      developer keeps the whole surface of the machine, and the verifier keeps a language small
-      enough to prove things <em>about</em>.
-    </p>
-
-    <div class="grid3" style="margin-top:40px">
-      <div class="panel">
-        <span class="tick">7.1 — the name is the syntax</span>
-        <h3>Four constructors, no fifth</h3>
-        <p class="dim">
-          A <span class="mono">Func</span> is a <span class="mono">branch</span> on the stack top, a
-          straight-line <span class="mono">next</span>, a terminal <span class="mono">last</span>, or a
-          <span class="mono">call</span> into the program’s function table. There are no expressions,
-          no variables, no loops-as-syntax — recursion through <span class="mono">call</span> and the
-          machine’s own stack are all there is, which is exactly what a proof has to walk.
-        </p>
-      </div>
-      <div class="panel">
-        <span class="tick">7.2 — structure where it pays</span>
-        <h3>The one liberty withheld</h3>
-        <p class="dim">
-          Raw bytecode lets a program compute a jump target from anything. Blanc doesn’t: control flow
-          is the tree you wrote, and the compiler owns every offset. That single restriction is what
-          makes a reusable proof stack possible — inversion tactics that take an execution apart along
-          the program’s own shape, and forward tactics that build one, gas account included, without
-          per-contract jump reasoning.
-        </p>
-      </div>
-      <div class="panel">
-        <span class="tick">7.3 — batteries, written and proved</span>
-        <h3>The library is whatever you prove</h3>
-        <p class="dim">
-          No standard library comes along to be trusted either: what exists today is what ten
-          contracts have needed — a dispatcher pattern, ABI helpers, a shared
-          <span class="mono">nonpayable</span> guard, a proof ladder — each an ordinary Lean
-          definition, written once, proved, and reused by the next contract. §&nbsp;8 prices what
-          the austerity costs; §&nbsp;4 measured what it buys.
-        </p>
-      </div>
-    </div>
-
-    <h3 style="margin:48px 0 6px">The whole grammar, and a real endpoint</h3>
-    <div style="max-width:640px;margin-top:22px">
-      <div class="tabs" role="tablist" aria-label="Blanc code">
-        <button class="tab" role="tab" aria-selected="true" aria-controls="tp1" id="tb1">the language</button>
-        <button class="tab" role="tab" aria-selected="false" aria-controls="tp2" id="tb2">weth10.withdraw</button>
-      </div>
-      <div class="tabpanel" role="tabpanel" id="tp1" aria-labelledby="tb1">
-        <div class="listing">
-          <div class="bar"><span>Blanc/Semantics.lean</span><span class="tag">the entire syntax</span></div>
-<pre><span class="c">-- B·La·N·C.  This is the whole abstract syntax of the</span>
-<span class="c">-- language: four constructors over Jaune's instruction</span>
-<span class="c">-- types, and a program is functions in a table.</span>
-<span class="k">inductive</span> <span class="t">Func</span> : <span class="t">Type</span>
-  | branch : <span class="t">Func</span> → <span class="t">Func</span> → <span class="t">Func</span>
-  | last : <span class="t">Linst</span> → <span class="t">Func</span>
-  | next : <span class="t">Ninst</span> → <span class="t">Func</span> → <span class="t">Func</span>
-  | call : <span class="t">Nat</span> → <span class="t">Func</span>
-
-<span class="k">structure</span> <span class="t">Prog</span> : <span class="t">Type</span> <span class="k">where</span>
-  (main : <span class="t">Func</span>)
-  (aux : <span class="t">List</span> <span class="t">Func</span>)</pre>
-        </div>
-      </div>
-      <div class="tabpanel" role="tabpanel" id="tp2" aria-labelledby="tb2" hidden>
-        <div class="listing">
-          <div class="bar"><span>Blanc/Weth10.lean</span><span class="tag">source</span></div>
-<pre><span class="k">def</span> <span class="d">withdraw</span> : <span class="t">Func</span> :=
-  loadCallerBalanceAmount 0 +++ balanceTooSmall +++
-  (.call burnBalanceErrorSlot) &lt;?&gt;
-  (debitLoadedBalance +++
-    caller ::: arg 0 +++ pushB256 0 ::: emitTransfer +++
-    swap 0 ::: pop :::
-    sendValueToCaller +++ iszero :::
-    (.call ethTransferErrorSlot) &lt;?&gt;
-    <span class="t">Func</span>.stop)</pre>
-        </div>
-        <p class="dim" style="font-size:.9rem;margin-top:14px;margin-bottom:0">
-          Instructions are the EVM’s own; <span class="mono">:::</span> is
-          <span class="mono">next</span>, <span class="mono">&lt;?&gt;</span> is
-          <span class="mono">branch</span>, and every name above it is ordinary Lean definition —
-          the “standard library” is whatever you prove you need.
-        </p>
-      </div>
-    </div>
-
-    <p class="note" style="margin-top:26px">
-      Four constructors is a position, not a shortage — §&nbsp;10 defends it, one step up from
-      the obvious alternative of none at all.
-    </p>
-  </div>
-</section>
-
-<!-- ═══════════════════════ §8 THE FEE ═══════════════════════ -->
-<section id="price">
-  <div class="wrap">
-    <p class="eyebrow"><span class="secno">§ 8</span> What you pay</p>
-    <h2 style="max-width:22ch">The fee, unvarnished.</h2>
-    <p class="lede" style="margin-top:18px">
-      Everything §&nbsp;1–6 keeps is bought with a single purchase — the language above: new,
-      deliberately bare, austere twice over — once to write your contract in four constructors,
-      once to prove it in an interactive theorem prover. One line on the bill; this
-      section itemises it. The pitch was never that the fee is small — it is that what it buys is
-      not sold elsewhere, and that nothing else is on the bill.
-    </p>
-
-    <div class="panel" style="margin-top:30px">
-      <span class="tick">the ledger — four facets of the fee, and one boundary</span>
-      <ul class="nogo">
-        <li>
-          <div>Solidity, Vyper, and their ecosystems
-            <span class="why">no familiar syntax, no IDE plugins, no framework integration, no OpenZeppelin to import, no auditor fluent in your source language</span></div>
-          <span class="verdict">gone</span>
-        </li>
-        <li>
-          <div>Batteries
-            <span class="why">not included: the standard library is what ten contracts have needed so far — what your contract needs beyond it, you write, and then you prove</span></div>
-          <span class="verdict">not included</span>
-        </li>
-        <li>
-          <div>Distance from the machine
-            <span class="why">Blanc code is EVM instructions with four combinators; you think about the stack, storage words, and gas — the language will not think about them for you</span></div>
-          <span class="verdict">by design</span>
-        </li>
-        <li>
-          <div>Proof effort that rounds to zero
-            <span class="why">the theorems above sit in a library of ~490,000 lines of Lean; interactive proof is real engineering, even with the shared ladder doing the heavy lifting</span></div>
-          <span class="verdict">real cost</span>
-        </li>
-        <li>
-          <div>Verification of contracts already deployed
-            <span class="why">not a fee but a boundary: the theorems are about Blanc’s artifact — verifying the original at its address is a different project, worth doing, and not this one</span></div>
-          <span class="verdict">out of scope</span>
-        </li>
-      </ul>
-    </div>
-
-    <p class="note" style="margin-top:22px">
-      Who should <em>not</em> use Blanc: teams iterating on product-market fit, systems built around
-      upgradeable proxies and vendored library ecosystems, and anyone whose assurance story must be
-      legible to today’s audit market. Who plausibly should: contracts whose invariants are worth
-      more than their development cost — bridges, wrappers, vaults, anything whose one job is to
-      never lose the books. For that class, §&nbsp;6 holds the receipts.
-    </p>
-  </div>
-</section>
-
-
-<!-- ═══════════════════════ §9 THE QUESTION ═══════════════════════ -->
-<section id="claims">
-  <div class="wrap">
-    <p class="eyebrow"><span class="secno">§ 9</span> The questions we expect</p>
-    <h2 style="max-width:26ch">What a port claims — and how we earn it.</h2>
-    <p class="lede" style="margin-top:18px">
-      The portfolio of §&nbsp;6 is staged on contracts you already know — a WETH, a full
-      27-selector WETH10, the eth2 deposit contract, Lido’s CircuitBreaker, its withdrawals
-      gateway, and its upgradeable proxy, and OpenZeppelin’s ERC-4626 vault over WETH — rebuilt
-      in a language you have never heard of. Which
-      invites a fair suspicion: <em>is this claiming to be WETH10 — to the byte? And if not,
-      what kind of win is being advertised?</em>
-    </p>
-    <p class="lede" style="margin-top:14px">
-      To the byte: no — permanently no.<sup class="fn"><a href="#fn4">4</a></sup> What a port
-      claims is a counterfactual: <strong style="color:var(--ink)">were X being written and
-      deployed today, the Blanc implementation would be a better way to build it</strong> — where
-      better is three specific things: behavior that follows a stated, proved specification; an
-      artifact that stays within reach of interactive verification; low-level freedom spent on
-      measured wins. And if what you
-      need verified is bytecode already on chain, Blanc is not that instrument — every theorem
-      here is about Blanc’s own artifact, a boundary §&nbsp;8’s ledger prices with the rest of
-      the bill.
-    </p>
-    <p class="lede" style="margin-top:14px">
-      Grant all of that, and a harder question is still open: what counts as the right
-      behavior — and how do we know the ports have it? A familiar name is not evidence, and a correct compiler is
-      no defense if the program it faithfully compiles is the wrong program. So the answer is
-      built in layers — each catching a different way the claim could fail, none asked to do
-      another’s job. WETH10 answers like this:
-    </p>
-
-    <div class="ladder">
-      <div class="rung">
-        <div class="left"><div class="layer">the statement</div><div class="thmname">WETH10_COMPATIBILITY.md</div></div>
-        <div class="right"><p><strong>“Right” is written down before it is argued.</strong> A
-          compatibility contract freezes the reference’s ordinary-call public boundary, endpoint by
-          endpoint — all 27 selectors and receive: outputs, state and ETH effects, logs, guard
-          order, rollback, what a callback may observe mid-flight — and every row names the
-          evidence that owns it. A behavior nowhere stated can be neither checked nor falsified,
-          so the statement comes first, and it is committed.</p></div>
-      </div>
-      <div class="rung">
-        <div class="left"><div class="layer">the sanity check</div><div class="thmname">check-weth10-differential.sh</div></div>
-        <div class="right"><p><strong>The cheapest way to be wrong is to prove the wrong
-          program — tests catch that first.</strong> A generated corpus executes Blanc’s exact
-          runtime beside the deployed original’s, byte for byte, in a pinned oracle: 147 rows
-          across every entry, two identity worlds, hostile reentrancy, static contexts, eight live
-          channel falsifiers. 147/147 agree. This layer is deliberately modest — chosen
-          executions, not semantic equivalence, never called a proof — and it is what keeps the
-          theorems honest about <em>which</em> X they are theorems about.</p></div>
-      </div>
-      <div class="rung">
-        <div class="left"><div class="layer">the theorems</div><div class="thmname">28/28 families · Weth10*.lean</div></div>
-        <div class="right"><p><strong>Where the corpus samples, the theorems quantify.</strong>
-          Public compiled-effect families cover all 28 runtime entries — reads, state transitions,
-          the three typed callbacks, permit, flash loans, exact rollback and error genres. Above
-          them sit the load-bearing claims: holder-flow conservation in ℕ, dormant-holder
-          protection, a deployment root derived through the real block pipeline, and constructed
-          <span class="mono">withdraw</span>/<span class="mono">withdrawTo</span> success at
-          message and transaction altitude — the future-redeemability guarantee of §&nbsp;5. Every
-          statement ranges over the states, arguments, callbacks, and valid chain histories its
-          quantifiers name, and every one is about the exact compiled bytes.</p></div>
-      </div>
-      <div class="rung base">
-        <div class="left"><div class="layer">the boundary</div><div class="thmname">assurance boundary · registries</div></div>
-        <div class="right"><p><strong>The edge is published with the same care as the
-          center.</strong> The README’s assurance boundary keeps three registers — formally
-          proved, executably tested, not established — and the third is load-bearing: no
-          deployed-runtime verification, no semantic-equivalence claim, no malformed-calldata
-          closure, no key custody or inclusion, no gas, storage, or codehash parity. Deviations
-          from the reference are governed, not forbidden: each is a registry row with a stance
-          and evidence — WETH10’s registry currently holds zero accepted rows in its stated
-          scope — and an observable difference, once discovered, must be restored or recorded.
-          The registry is non-exhaustive; <strong>leaving a known divergence unrecorded is the one
-          prohibited move.</strong></p></div>
-      </div>
-    </div>
-
-    <div class="grid2" style="margin-top:30px;align-items:start">
-      <div class="panel">
-        <span class="tick">the scope of the burden</span>
-        <p class="dim" style="font-size:.94rem;margin-bottom:0">
-          No specification list is ever finished, and the port does not pretend otherwise. It
-          answers, item by item, for everything it wrote — every proved specification and every
-          differential expectation is offered as a statement of what the contract is
-          <em>for</em>, individually contestable — and for anything it is shown, under the
-          registry’s discovered-difference rule. It does not pre-accept burden for specifications
-          no one has written. An earlier, more ambitious instrument that did — a standing wager
-          over every feature-level truth of the deployed original — was retired in August 2026 as
-          unadjudicable in principle; PORTING.md’s policy note records why.
-        </p>
-      </div>
-      <div class="panel">
-        <span class="tick">claims end where evidence ends</span>
-        <p class="dim" style="font-size:.94rem;margin-bottom:0">
-          A property believed but not yet proved is recorded as a counted <em>verification
-          debt</em>, never asserted — asserting unproved properties is what every unverified
-          contract already offers. When a property resists proof, the rule is: claim less, never
-          assert more. The standing terms — the feature test, the interface/accident
-          boundary, the publish-when-discovered rule that stops a stance being invented after a
-          challenge — are
-          <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md" style="text-decoration:underline;text-underline-offset:3px">PORTING.md</a>’s.
-          This page summarises it; that document governs.
-        </p>
-      </div>
-    </div>
-    <div class="chips" style="margin-top:14px">
-      <span class="chip"><b>WETH_DEVIATIONS.md</b> — 5 rows, 2 now agreements</span>
-      <span class="chip"><b>FMINT_DEVIATIONS.md</b> — vs. OpenZeppelin</span>
-      <span class="chip"><b>WETH10_DEVIATIONS.md</b> — zero accepted deviations</span>
-      <span class="chip"><b>LIDO_CIRCUIT_BREAKER_DEVIATIONS.md</b> — zero accepted deviations</span>
-      <span class="chip"><b>BEACON_DEPOSIT_DEVIATIONS.md</b> — 5 rows, none behavioral</span>
-      <span class="chip"><b>LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md</b> — 3 accepted, 2 repaired</span>
-      <span class="chip"><b>OSSIFIABLE_PROXY_DEVIATIONS.md</b> — 1 accepted deviation</span>
-      <span class="chip"><b>PRORATA_WETH_VAULT_DEVIATIONS.md</b> — 9 rows, all pre-registered</span>
-      <span class="chip"><b>WETH10_COMPATIBILITY.md</b> — the frozen boundary, one of four</span>
-    </div>
-
-    <p class="note" style="margin-top:26px">
-      Precedent, from the first port: Blanc’s WETH is several times smaller than the deployed WETH9
-      and cheaper on the call paths measured, and where its simpler storage scheme admits a
-      key-collision WETH9’s layout cannot express, it <em>refuses the operation</em> rather than
-      silently writing through a third party’s balance slot. Each is a deviation from the letter of
-      the reference; each is recorded; and each is a feature no informed deployer would trade back.
-    </p>
-  </div>
-</section>
-
-<!-- ═══════════════════════ §10 PENULTIMATE ═══════════════════════ -->
-<section id="penultimate">
-  <div class="wrap">
-    <p class="eyebrow"><span class="secno">§ 10</span> Position</p>
-    <h2 style="max-width:24ch">The penultimate form.</h2>
-
-    <div class="pull">
-      <blockquote>“…the assembly + Lean paradigm is the final form of software development.”</blockquote>
-      <p class="who">— Yoichi Hirai, <a href="https://blog.zksecurity.xyz/posts/end-coding/" target="_blank" rel="noopener">The Final Form of Software Development</a> (2026)<span class="dimmer"> — AI agents writing machine-level code, proved correct in Lean; cited in Vitalik Buterin’s <a href="https://vitalik.eth.limo/general/2026/05/18/fv.html" target="_blank" rel="noopener">A shallow dive into formal verification</a></span></p>
-    </div>
-
-    <p class="lede" style="margin-top:30px">
-      Blanc agrees with the direction — and adds one amendment from practice.
-    </p>
-
-    <div class="grid2" style="margin-top:24px;align-items:start">
-      <div class="panel">
-        <span class="tick">the agreement</span>
-        <p class="dim" style="font-size:.95rem;margin-bottom:0">
-          High-level languages exist to protect humans from machine-level detail, at the price of
-          compilers, runtimes, and semantic distance between source and chain. If proofs — not
-          familiarity — carry the assurance, and agents — not humans — carry the tedium, most of that
-          protection is overhead. Hirai’s conclusion follows: write the machine’s own code, prove it
-          in Lean, let agents do both. Everything on this page is downstream of taking that seriously.
-        </p>
-      </div>
-      <div class="panel">
-        <span class="tick">the amendment</span>
-        <p class="dim" style="font-size:.95rem;margin-bottom:0">
-          Modern agents are extraordinary; they are not all-powerful, and neither are the humans
-          auditing what they produce. A <em>tiny</em> amount of structure over raw bytecode — Blanc’s
-          is four constructors, at the cost of computed jumps — is disproportionately cheap leverage:
-          control flow becomes a tree proofs can walk, the compiler becomes a theorem proved once and
-          inherited by every contract, and a reusable proof ladder becomes possible at all. Keep the
-          canvas blank; rule four faint lines on it.
-        </p>
-      </div>
-    </div>
-
-    <p class="lede measure" style="margin-top:30px">
-      If machine code written and proved by machines is the final form of software development,
-      Blanc is a considered bid for the <em>penultimate</em> one — and for contracts holding other
-      people’s money, the penultimate form may be the right place to stop.
-    </p>
-  </div>
-</section>
-
-<!-- ═══════════════════════ §11 LANDSCAPE ═══════════════════════ -->
-<section id="landscape">
-  <div class="wrap">
-    <p class="eyebrow"><span class="secno">§ 11</span> The field</p>
-    <h2 style="max-width:22ch">The lay of the land.</h2>
-    <p class="lede" style="margin-top:18px">
-      Blanc is one answer in a field of serious ones, and the honest way to be compared is to
-      publish the comparison. Two families do most of the work. One
-      <strong style="color:var(--ink)">writes verification-friendly code</strong> and proves
-      things about what it wrote — the claims run deepest, and the price is leaving your
-      existing source behind. The other
-      <strong style="color:var(--ink)">verifies code that already exists</strong> — it meets you
-      where you are, and pays for that reach in what it can state. Neither family dominates:
-      which one you need mostly follows from whether your bytecode is already on chain.
-    </p>
-
-    <div class="disclaim">
-      <span class="tick">read this first</span>
-      <p>This table is one project’s best effort to understand its neighbours, compiled from
-      their public repositories, papers, and documentation as read on 2026-08-15. It is not an
-      official survey; the author is not an expert in the systems featured; none of it was
-      contributed to or proofread by their authors, and it may lag their repositories. If you
-      maintain one of these projects and a cell short-changes you,
-      <a href="https://github.com/skbaek/blanc/issues" style="text-decoration:underline;text-underline-offset:3px">file an issue</a> —
-      it will be treated as a defect, exactly like an overclaim about Blanc itself.</p>
-    </div>
-
-    <div class="tablewrap landscape" style="margin-top:26px">
-      <table>
-        <thead><tr><th>project</th><th>foundation</th><th>what it verifies</th><th>gas</th><th>liveness</th><th>where it stops</th></tr></thead>
-        <tbody>
-          <tr class="group"><td colspan="6">writes its own bytecode — verification-first languages &amp; compilers</td></tr>
-          <tr>
-            <td><b>Blanc</b><br><span class="dimmer">this project, over <a href="https://skbaek.github.io/jaune/" style="text-decoration:underline;text-underline-offset:3px">Jaune</a></span></td>
-            <td class="dim">Lean 4; Jaune’s executable EVM semantics at a pinned commit</td>
-            <td class="dim">its own four-constructor source, tied to the exact compiled bytes by a proved compiler; properties lifted to block and chain altitude</td>
-            <td class="dim">exact — proved equations, gas-exact in both run directions</td>
-            <td class="dim">constructed successful executions, at message and transaction altitude</td>
-            <td class="dim">cannot verify contracts already deployed; a new, deliberately bare language — §&nbsp;8 is the bill</td>
-          </tr>
-          <tr>
-            <td><b><a href="https://github.com/lfglabs-dev/verity" target="_blank" rel="noopener" style="text-decoration:underline;text-underline-offset:3px">Verity</a></b><br><span class="dimmer">LFG Labs</span></td>
-            <td class="dim">Lean 4 EDSL, compiled by way of Yul</td>
-            <td class="dim">contract properties of the EDSL program; reports a zero-axiom Lean layer; active, with strong documentation and a paper</td>
-            <td class="dim">not modeled, per its own trust documentation</td>
-            <td class="dim">—</td>
-            <td class="dim">Yul→bytecode goes through a pinned <span class="mono">solc</span> that is trusted, not verified</td>
-          </tr>
-          <tr>
-            <td><b><a href="https://github.com/NethermindEth/Clear" target="_blank" rel="noopener" style="text-decoration:underline;text-underline-offset:3px">Clear</a></b><br><span class="dimmer">Nethermind</span></td>
-            <td class="dim">Lean 4, over the EVMYulLean model</td>
-            <td class="dim">Yul programs, against a formal Yul semantics</td>
-            <td class="dim">—</td>
-            <td class="dim">—</td>
-            <td class="dim">claims live at the Yul level, not the deployed bytes; documents its Yul-model limitations</td>
-          </tr>
-          <tr>
-            <td><b>DeepSEA</b></td>
-            <td class="dim">Coq</td>
-            <td class="dim">programs in its own layered language, compiled toward EVM in the verified-compiler tradition</td>
-            <td class="dim">—</td>
-            <td class="dim">—</td>
-            <td class="dim">a research system</td>
-          </tr>
-          <tr class="group"><td colspan="6">verifies bytecode that already exists</td></tr>
-          <tr>
-            <td><b><a href="https://github.com/runtimeverification/evm-semantics" target="_blank" rel="noopener" style="text-decoration:underline;text-underline-offset:3px">KEVM / Kontrol</a></b><br><span class="dimmer">Runtime Verification</span></td>
-            <td class="dim">K framework; reachability logic over a full EVM semantics</td>
-            <td class="dim">arbitrary EVM bytecode, symbolically; Foundry-shaped entry through Kontrol; the mature incumbent, commercially supported</td>
-            <td class="dim">modeled in the semantics</td>
-            <td class="dim">all-path reachability is partial correctness — claims range over terminating paths</td>
-            <td class="dim">scaling proofs on large contracts remains expert work</td>
-          </tr>
-          <tr>
-            <td><b>Certora Prover</b></td>
-            <td class="dim">SMT, driven by the CVL specification language</td>
-            <td class="dim">arbitrary contracts at bytecode level, highly automated; the audit-market standard, with a long production record</td>
-            <td class="dim">not modeled</td>
-            <td class="dim">—</td>
-            <td class="dim">commercial and closed; soundness is modulo its documented approximations — loop unrolling, summarization</td>
-          </tr>
-          <tr>
-            <td><b>hevm</b></td>
-            <td class="dim">symbolic execution</td>
-            <td class="dim">EVM bytecode — symbolic tests and equivalence checking between two bytecodes; the long-standing open engine of this family</td>
-            <td class="dim">—</td>
-            <td class="dim">—</td>
-            <td class="dim">an engine more than a full stack; bounded-exploration caveats apply</td>
-          </tr>
-          <tr>
-            <td><b>Halmos</b><br><span class="dimmer">a16z</span></td>
-            <td class="dim">symbolic execution over Foundry test suites</td>
-            <td class="dim">your existing tests, with symbolic inputs — specifications are tests, which is also its adoption path</td>
-            <td class="dim">—</td>
-            <td class="dim">—</td>
-            <td class="dim">bounded; a property is checked as far as the tests and unrolling reach, not proved in general</td>
-          </tr>
-          <tr>
-            <td><b>EquiVM</b><br><span class="dimmer">Argot Collective</span></td>
-            <td class="dim">Lean 4, over a ported EVM model</td>
-            <td class="dim">deployed bytecode, by refinement against specifications in a Solidity-like spec language; WETH9 and a MakerDAO suite completed, more scaffolded</td>
-            <td class="dim">out of scope on its published roadmap</td>
-            <td class="dim">its own sources note termination is not forced — an out-of-gas case can discharge the equivalence obligation</td>
-            <td class="dim">per-contract selector hashes enter as axioms; reasoning about what <span class="mono">solc</span> emits is re-earned per compiler version</td>
-          </tr>
-          <tr>
-            <td><b><a href="https://verifereum.org/" target="_blank" rel="noopener" style="text-decoration:underline;text-underline-offset:3px">Verifereum</a></b></td>
-            <td class="dim">HOL4; its own executable EVM semantics, with near-complete execution-spec-test coverage</td>
-            <td class="dim">aims at deployed contracts, through program-logic and compiler work over that semantics; the closest ITP semantic peer</td>
-            <td class="dim">modeled — its semantics passes the ecosystem’s corpus</td>
-            <td class="dim">—</td>
-            <td class="dim">contract-verification tooling younger than the K ecosystem’s</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <p class="cap"><b>Table 1</b> — the lay of the land, as read from public sources on
-      2026-08-15. A “—” cell means we found no documented claim, which may be a fact about our
-      reading rather than about the project; “where it stops” records each project’s own
-      published boundary where one exists. The Blanc row is held to the same register as this
-      whole page; every other row is held to the disclaimer above.</p>
-
-    <div class="grid2" style="margin-top:30px;align-items:start">
-      <div class="panel">
-        <span class="tick">the layer under the table</span>
-        <p class="dim" style="font-size:.93rem;margin-bottom:0">
-          Every stack above stands on an EVM semantics, and those are a landscape of their own:
-          <a href="https://github.com/ethereum/execution-specs" target="_blank" rel="noopener" style="text-decoration:underline;text-underline-offset:3px">EELS</a>,
-          Ethereum’s canonical executable specification — the oracle inside Blanc’s own
-          differential gates — alongside Jaune (Lean 4), Verifereum’s HOL4 semantics, KEVM’s K
-          semantics, and Nethermind’s EVMYulLean. A different project family —
-          <a href="https://github.com/Verified-zkEVM/evm-asm" target="_blank" rel="noopener" style="text-decoration:underline;text-underline-offset:3px">evm-asm</a>,
-          <a href="https://github.com/frisitano/evm-sail" target="_blank" rel="noopener" style="text-decoration:underline;text-underline-offset:3px">evm-sail</a> —
-          verifies implementations <em>of the EVM itself</em>: “is the machine right”, where
-          everything in the table asks “is the contract right”.
-        </p>
-      </div>
-      <div class="panel">
-        <span class="tick">deliberately off the table</span>
-        <p class="dim" style="font-size:.93rem;margin-bottom:0">
-          <span class="mono">solc</span>’s built-in SMTChecker and the property fuzzers —
-          Foundry’s, Echidna, Medusa — are valuable, cheap, and not in the business of
-          machine-checked functional specification; they complement the table rather than
-          competing with it. Early-stage entrants (powdr’s Yul compiler work, small verified-WETH
-          exercises) are noted here rather than rowed. And from outside
-          the EVM: the one ecosystem where revert-freedom is checked routinely, by default, at
-          framework scale is the Move Prover’s <span class="mono">aborts_if</span> discipline — a
-          different VM, and a standing reminder of how much ground this field, Blanc included, has
-          left to cover.
-        </p>
-      </div>
-    </div>
-
-    <div class="disclaim" style="margin-top:30px">
-      <span class="tick">the ceiling, and where it was already cleared</span>
-      <p style="margin-bottom:12px">Impose three asks at once — <b>verify the deployed
-      bytecode</b>, so no compiler is trusted; <b>emit a proof someone else can check</b>, so no
-      solver is trusted; and <b>state a real contract property</b>, not a semantics and not a
-      refinement — and the EVM literature thins out fast. Read on 2026-08-19, nothing else on
-      this table cleared all three much past a wrapper’s solvency; Blanc’s own furthest point on
-      those terms is now the deposit-contract port of §&nbsp;6 — a different artifact from the one
-      Runtime Verification verified, and no claim about that one. The near misses deserve naming
-      precisely, because they are near: Runtime Verification’s eth2 deposit contract and
-      MakerDAO <span class="mono">vat</span> proofs are genuinely bytecode-level and reach well
-      past any wrapper, and Certora’s production record reaches further still. All of them drop
-      the second ask and leave no artifact a third party can re-check. The complexity is
-      available; the checkable proof of it is not.</p>
-      <p>Off the EVM it has already been done, and above a wrapper. Nomadic Labs verified Tezos’
-      Liquidity Baking CPMM in Coq by way of Mi-Cho-Coq — at the level of the contract’s
-      Michelson, with a kernel-checkable proof, establishing that the market-maker invariant is
-      strictly increasing and that all three contract balances stay strictly positive, for a
-      contract live on mainnet at protocol level. That is a solvency-class property on an
-      automated market maker, and it clears every ask above. The reason it was reachable there is
-      structural: on Tezos the deployed artifact <em>is</em> Michelson — typed,
-      structured control flow, no computed jump targets — so the distance between the code on
-      chain and the vocabulary a property is written in is short by construction. On the EVM that
-      distance is the entire problem, and every project in the table above is a different way of
-      paying it. Blanc’s answer is to refuse to emit code that opens the gap rather than to close
-      it after the fact — which makes the Tezos result an existence proof that this family works
-      once the gap is shut, and somebody else’s result rather than evidence for this one. Both
-      stacks still trust their own semantics, Mi-Cho-Coq’s Michelson model and Jaune’s EVM
-      model alike: the assumption neither ask removes, only relocates.</p>
-    </div>
-
-    <p class="note" style="margin-top:26px">
-      How to read it for a decision: if your bytecode is already deployed and cannot change, the
-      second family is your only option, and it is a good one. If you can still choose the
-      source, the first family trades familiarity for depth — Verity keeps more of the familiar
-      toolchain and trusts <span class="mono">solc</span> at the boundary; Blanc spends the
-      familiarity and buys the exact bytes, exact gas, chain altitude, and constructed liveness.
-      §&nbsp;8 prices that trade honestly. This table will be re-read and corrected as the field
-      moves; it is a map, not a defense.
-    </p>
-  </div>
-</section>
-
-<!-- ═══════════════════════ §12 WAYS IN ═══════════════════════ -->
-<section id="waysin">
-  <div class="wrap">
-    <p class="eyebrow"><span class="secno">§ 12</span> Who this is for</p>
-    <h2>Three ways in.</h2>
-
-    <div class="grid3" style="margin-top:34px">
-      <div class="aud">
-        <h3>Teams with an invariant worth a proof</h3>
-        <p>You maintain a wrapper, a vault, a bridge component — something whose entire job is a
-          property you can say in one sentence. Blanc’s worked examples are exactly that shape.
-          Bring the sentence; the ladder from “compiled bytes” to “every reachable chain state” is
-          already built — §&nbsp;6 shows it climbed, ten contracts over.</p>
-        <div class="hook">start: WETH10_COMPATIBILITY.md — a behavior, frozen<br>then: Blanc/Weth10FutureRedeemable.lean — the redeemability guarantee, end to end</div>
-      </div>
-      <div class="aud">
-        <h3>Proof engineers &amp; PL researchers</h3>
-        <p>A live laboratory for proof-cost economics: which abstractions let the fourth contract
-          cost less than the third, where callback-crossing machinery generalises, what a
-          dispatcher-combinator layer owes its clients. ~490,000 lines of worked answers, with the
-          open questions in the goal ledgers.</p>
-        <div class="hook">start: Blanc/Semantics.lean — the four constructors<br>then: Blanc/Ladder.lean · Blanc/Forward.lean — the reusable spine</div>
-      </div>
-      <div class="aud">
-        <h3>Auditors &amp; professional skeptics</h3>
-        <p>This project keeps a register you can attack: deviation rows with stances, counted
-          verification debts, and falsifier tables. Every proved specification and differential
-          expectation is offered as a statement of what the contract is for — contest any item and
-          an answer is owed. And if you find a divergence with no row, that is a defect by the
-          project’s own rules — file it.</p>
-        <div class="hook">start: WETH10_DEVIATIONS.md — zero accepted deviations<br>then: scripts/GATES.md — every gate, scale, and pass criterion</div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════════════ §13 BUILD ═══════════════════════ -->
-<section id="build">
-  <div class="wrap">
-    <p class="eyebrow"><span class="secno">§ 13</span> Reproduce it</p>
-    <h2>One clone, a build, and the audit.</h2>
-    <p class="lede" style="margin-top:16px">
-      The only prerequisite is <a href="https://github.com/leanprover/elan" target="_blank" rel="noopener"
-      style="text-decoration:underline;text-underline-offset:3px">elan</a>, the Lean toolchain manager.
-      Blanc pins Jaune by immutable commit in its lakefile, so a fresh clone builds reproducibly with
-      no sibling checkout — and “which semantics was this proved against” has a one-line answer.
-    </p>
-
-    <div class="grid2" style="margin-top:30px;align-items:start">
-      <div class="panel">
-        <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:14px">
-          <h3>Check the proofs</h3><span class="dimmer" style="font-size:.85rem">no fixtures required — this side is proof, not testing</span>
-        </div>
-        <div class="term"><span class="p">$</span> git clone https://github.com/skbaek/blanc
-<span class="p">$</span> cd blanc &amp;&amp; lake exe cache get &amp;&amp; lake build
-<span class="p">$</span> scripts/check.sh --no-build
-<span class="p">$</span> scripts/check-claims.sh</div>
-        <p class="dim" style="font-size:.88rem;margin:14px 0 0">
-          <span class="mono">check.sh</span> walks every constant of the library once for axioms,
-          and finds the 1060 leaf results — failing on any axiom beyond the three, on <span class="mono">sorryAx</span>,
-          and on any <span class="mono">native_decide</span>-style escape.
-          <span class="mono">check-claims.sh</span> then Lean-checks the exact <em>statements</em> of
-          the protected WETH10 redeemability set, the Lido Registry mutation,
-          enumeration, local-observability, exact constructor/message/transaction/block,
-          direct-root, and rooted-future boundaries, the proxy-pair upgrade boundary,
-          and the PRORATA, ERC-4626 vault, BeaconDeposit, and DRIP headline sets, so a weakened
-          conclusion fails as loudly as a broken proof.
-          Both projects open with <span class="mono">lake exe cache get</span>; skipping it means
-          compiling mathlib from source — hours instead of minutes.
-        </p>
-      </div>
-      <div class="panel">
-        <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:14px">
-          <h3>Read it in order</h3><span class="dimmer" style="font-size:.85rem">the shortest honest path through the claims</span>
-        </div>
-        <dl style="margin:0">
-          <div class="kv"><dt>the behavior</dt><dd><a class="mono" href="https://github.com/skbaek/blanc/blob/main/docs/registers/WETH10_COMPATIBILITY.md" style="text-decoration:underline;text-underline-offset:3px">WETH10_COMPATIBILITY.md</a> — “right”, written down: the frozen boundary, row by row</dd></div>
-          <div class="kv"><dt>the rules</dt><dd><a class="mono" href="https://github.com/skbaek/blanc/blob/main/PORTING.md" style="text-decoration:underline;text-underline-offset:3px">PORTING.md</a> — what a port claims, the deviation discipline, and the note retiring the old wager</dd></div>
-          <div class="kv"><dt>the map</dt><dd><a class="mono" href="https://github.com/skbaek/blanc/blob/main/README.md" style="text-decoration:underline;text-underline-offset:3px">README.md</a> — every module, every theorem family, the assurance boundary</dd></div>
-          <div class="kv"><dt>the gates</dt><dd><a class="mono" href="https://github.com/skbaek/blanc/blob/main/scripts/GATES.md" style="text-decoration:underline;text-underline-offset:3px">scripts/GATES.md</a> — each gate’s command, scale, runtime, and pass criterion</dd></div>
-          <div class="kv"><dt>the showcase</dt><dd><a class="mono" href="https://github.com/skbaek/blanc/blob/main/Blanc/Weth10FutureRedeemable.lean" style="text-decoration:underline;text-underline-offset:3px">Blanc/Weth10FutureRedeemable.lean</a> — read the statement, then its docstring’s scope notes</dd></div>
-          <div class="kv"><dt>the claim map</dt><dd><a class="mono" href="https://github.com/skbaek/blanc/blob/main/docs/registers/LIDO_CIRCUIT_BREAKER_ASSURANCE.md" style="text-decoration:underline;text-underline-offset:3px">LIDO_CIRCUIT_BREAKER_ASSURANCE.md</a> — every CircuitBreaker claim, mapped to the theorem that carries it, non-claims included</dd></div>
-          <div class="kv"><dt>the second map</dt><dd><a class="mono" href="https://github.com/skbaek/blanc/blob/main/docs/registers/BEACON_DEPOSIT_ASSURANCE.md" style="text-decoration:underline;text-underline-offset:3px">BEACON_DEPOSIT_ASSURANCE.md</a> — every deposit-contract claim, with its differential channel or an honest “none”</dd></div>
-          <div class="kv"><dt>the third map</dt><dd><a class="mono" href="https://github.com/skbaek/blanc/blob/main/docs/PRORATA_WETH_VAULT_CLAIM_MAP.md" style="text-decoration:underline;text-underline-offset:3px">docs/PRORATA_WETH_VAULT_CLAIM_MAP.md</a> — every vault sentence: carried by a theorem, by finite evidence only, or not carried</dd></div>
-          <div class="kv"><dt>the fourth map</dt><dd><a class="mono" href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md" style="text-decoration:underline;text-underline-offset:3px">docs/DEPLOYED_BYTECODE_CLAIM_MAP.md</a> — the bytecode already on mainnet: what is proved about WETH9, the deposit contract, 3Crv, the CircuitBreaker and the Vyper pool pair, on which premises, and what is not claimed</dd></div>
-          <div class="kv"><dt>the semantics</dt><dd><a href="https://skbaek.github.io/jaune/" style="text-decoration:underline;text-underline-offset:3px">Jaune</a> — the machine under all of it, with its own evidence page</dd></div>
-        </dl>
-      </div>
-    </div>
-
-    <!-- ═══ footnotes ═══ -->
-    <div class="fnotes" id="notes">
-      <div class="rulehead"></div>
-      <ol>
-        <li id="fn1">“Every freedom” is claimed precisely: each claim in §&nbsp;1–6 is backed
-          the way its own section states — theorems with pinned axiom closures where it says
-          proved, dated gate output where it says measured. It does not mean every true property
-          of every contract has been proved — §&nbsp;9’s claim-discipline governs, and declared
-          non-claims are listed in each contract’s registry.</li>
-        <li id="fn2">Blanc was previously presented as Jaune’s case study; it is now a sibling
-          project with its own charter. Jaune remains the semantics every Blanc theorem is stated
-          over, pinned by immutable commit — see <a href="https://skbaek.github.io/jaune/">the Jaune
-          page</a> for its conformance evidence.</li>
-        <li id="fn3">Every figure about this repository on this page is drawn from a committed
-          report, registry, gate summary, or theorem in the repository; the snapshot was
-          re-derived from the committed tree on 2026-09-25. §&nbsp;11’s landscape table is the
-          one deliberate exception — it describes other people’s projects, on the terms its own
-          disclaimer states. Each gate line says which run it comes from: the WETH10 differential
-          and fixture lines are verbatim output of the exact-candidate 2026-09-03 UTC run, the
-          layering line of a 2026-09-25 run, and the axiom-audit and claim lines render their
-          gates’ verdict wording at counts a static gate derives from the committed audit and pin
-          files. One long line is wrapped and ellipses mark elision; the
-          differential line continues “… 7 state-mutating reentrancy rows, 26
-          STATICCALL-context rows, 69 oracle calls traced, 8 channel falsifiers live.”</li>
-        <li id="fn4">Spelled out, because the boundary rewards precision: when a Blanc contract
-          reimplements WETH9 or WETH10, the deployed original is the <em>reference</em>, never
-          the subject — nothing on this page proves anything about the contract at the reference
-          address. And byte-identity is a non-goal <em>permanently</em>, not merely so far: a
-          compiler that chases another compiler’s bytes inherits its dispatcher, its stack
-          discipline, and its bugs, and can justify nothing beyond “same as before.” The standing
-          statement of what a port claims and never claims is
-          <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md">PORTING.md</a>.</li>
+      <ol class="limits">
+        <li><b>Live state.</b> The deployment theorems run each recorded creation input under current rules; they do not prove the historical transaction was included. Applying the history theorems to today’s WETH9, deposit contract, 3Crv and Uniswap pairs needs their invariants checked on complete live storage, a finite computation over public data not yet done.</li>
+        <li><b>Amsterdam.</b> Jaune runs it, but no theorem here is stated for it: every history theorem requires each block to run under Prague, Osaka, BPO1 or BPO2.</li>
+        <li><b>Premises.</b> Signature recovery, for theorems over every signed transaction; callee behaviour, where success depends on another contract; hash separation over the keys a history touches, and for the CircuitBreaker’s history tier over all addresses; for EIP-7002, at most 2<sup>254</sup> committed submissions.</li>
+        <li><b>Byte identity.</b> That the lifted bytes are mainnet’s rests on providers agreeing, not on a proof from a block header’s state root.</li>
+        <li><b>One contract at a time.</b> The Uniswap theorems take the tokens’ answers as inputs; no theorem yet composes the pair with WETH9 or with its factory.</li>
+        <li><b>Messages, not transactions.</b> The Vyper executions from deployment are sequences of messages, with synthetic token, attacker and receiver code.</li>
+        <li><b>Constant jump targets.</b> Certificates accept a jump only to a known constant destination or a function’s own return address; code that jumps to computed targets cannot yet be certified.</li>
       </ol>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════════════════ CHECK ═════════════════════════ -->
+<section id="check">
+  <div class="wrap">
+    <div class="split">
+      <div>
+        <p class="eyebrow">Check it yourself</p>
+        <h2>One clone, one build, and the gates.</h2>
+        <p class="lede-sm" style="margin-top:18px">The only prerequisite is <a href="https://github.com/leanprover/elan">elan</a>, Lean’s toolchain manager. Blanc pins Jaune by an immutable commit in its lakefile, so “which semantics was this proved against” always has a one-line answer.</p>
+        <p class="dim small">The axiom walk follows every constant of the library once and reports the leaf results; the pin gate elaborates every pinned statement; the claim-map gate checks the public account of the deployed results against the tree; the certificate gate regenerates every certificate from its input and compares it byte for byte. <code>scripts/check-gates.sh --fresh</code> runs the whole catalogue, whose commands and pass criteria are in <a href="https://github.com/skbaek/blanc/blob/main/scripts/GATES.md"><code>scripts/GATES.md</code></a>.</p>
+      </div>
+      <div>
+<pre class="term" data-copy><span class="line"><span class="p">$ </span><span class="cmd">git clone https://github.com/skbaek/blanc &amp;&amp; cd blanc</span></span><span class="line"><span class="p">$ </span><span class="cmd">lake exe cache get &amp;&amp; lake build</span></span><span class="line"><span class="p">$ </span><span class="cmd">scripts/check.sh --no-build</span></span><span class="line"><span class="ok">OK — axiom audit: one union walk over Blanc reaches only the standard axioms; 1060 leaf results</span></span><span class="line"><span class="p">$ </span><span class="cmd">scripts/check-claims.sh</span></span><span class="line"><span class="ok">OK — claim statements: 758 definitions/statements and exact record constructors pinned by Lean</span></span><span class="line"><span class="p">$ </span><span class="cmd">scripts/check-deployed-claim-map.sh</span></span><span class="line"><span class="p">$ </span><span class="cmd">scripts/check-lift-certificates.sh</span></span></pre>
+        <p class="small dimmer" style="margin-top:12px">The two verdict lines are the gates’ own wording at the counts their committed inputs determine. A clean build of the library took 4,380 seconds on a 10-core Apple M5 with 24 GiB of memory.</p>
+      </div>
     </div>
   </div>
 </section>
@@ -1562,27 +375,24 @@
 
 <footer>
   <div class="wrap footgrid">
-    <div style="max-width:46ch">
-      <div class="brand" style="margin-bottom:10px"><span class="sq"></span><b>Blanc</b><i>&nbsp;— over Jaune, the semantics under every theorem</i></div>
-      <p class="dimmer" style="font-size:.85rem;margin:0">
-        MIT-licensed. This page states nothing about Blanc that is not backed by a committed
-        theorem, registry row, gate summary, or goal ledger in the repository — and where
-        evidence ends, it says so. What it says about neighbouring projects, §&nbsp;11’s
-        disclaimer governs.
-      </p>
+    <div class="colophon">
+      <a class="brand" href="./" style="margin-bottom:12px"><span class="sq"></span><b>Blanc</b></a>
+      <p>MIT-licensed. Statements, names and line numbers refer to Blanc commit <code>5048a51f</code> and the Jaune revision it pins, <code>2737c8eb</code>. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
     </div>
-    <div class="footlinks">
-      <a href="https://github.com/skbaek/blanc" target="_blank" rel="noopener">blanc →</a>
-      <a href="https://skbaek.github.io/jaune/">jaune, the sibling →</a>
-      <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md" target="_blank" rel="noopener">porting policy →</a>
-      <a href="https://lean-lang.org" target="_blank" rel="noopener">lean 4 →</a>
-      <a href="https://github.com/skbaek/blanc/issues" target="_blank" rel="noopener">found an overclaim? →</a>
-      <a href="mailto:seulkeebaek@gmail.com">seulkeebaek@gmail.com →</a>
+    <div>
+      <h4>Deployed bytecode</h4>
+      <a href="bytecode/weth9.html">WETH9</a><a href="bytecode/uniswap-v2.html">Uniswap V2 pair</a><a href="bytecode/curve-3crv.html">Curve 3Crv</a><a href="bytecode/deposit-contract.html">Deposit contract</a><a href="bytecode/curve-pools.html">Curve pools</a><a href="bytecode/eip-7002.html">EIP-7002 contract</a><a href="bytecode/lido-circuit-breaker.html">Lido CircuitBreaker</a>
+    </div>
+    <div>
+      <h4>Blanc</h4>
+      <a href="method.html">How it works</a><a href="language.html">The language</a><a href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md">Claim map</a><a href="https://github.com/skbaek/blanc/blob/main/scripts/GATES.md">Gate catalogue</a><a href="https://github.com/skbaek/blanc/blob/main/SECURITY.md">Security</a>
+    </div>
+    <div>
+      <h4>Elsewhere</h4>
+      <a href="https://github.com/skbaek/blanc">GitHub</a><a href="https://skbaek.github.io/jaune/">Jaune</a><a href="https://github.com/skbaek/creme">Creme</a>
     </div>
   </div>
 </footer>
-
 <script src="site.js"></script>
-
 </body>
 </html>

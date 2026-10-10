@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EIP-7002 contract — Blanc</title>
+<meta name="description" content="What Blanc proves about the 504-byte EIP-7002 withdrawal-request contract: its end-of-block system call succeeds whatever storage holds, each block's requests are exactly the oldest pending submissions in order, and the EIP's own fee guarantee is false of the deployed bytes.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fbfaf5'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="../site.css">
+</head>
+<body>
+
+<header id="hdr">
+  <div class="wrap nav">
+    <a class="brand" href="../"><span class="sq"></span><b>Blanc</b><i>/blɑ̃/ — fr. “white”</i></a>
+    <nav class="navlinks" aria-label="Site">
+      <a class="opt" href="../#corpus" aria-current="page">Corpus</a>
+      <a class="opt" href="../method.html">How it works</a>
+      <a class="opt" href="../language.html">Language</a>
+      <a class="opt" href="../#limits">Limits</a>
+      <a class="opt" href="../#check">Check it</a>
+      <a class="btn opt" href="https://skbaek.github.io/jaune/" title="Jaune — the EVM semantics every theorem here is stated against"><span class="sqf"></span>Jaune</a>
+      <a class="btn" href="https://github.com/skbaek/blanc"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg><span class="gh-label">GitHub</span></a>
+      <details class="menu"><summary class="btn">Menu</summary><div class="panel">
+        <a href="../">Home</a><a href="../#corpus">The corpus</a><a href="../method.html">How it works</a>
+        <a href="../language.html">The Blanc language</a><a href="../#limits">Limits</a><a href="../#check">Check it yourself</a>
+        <a href="https://skbaek.github.io/jaune/">Jaune</a>
+      </div></details>
+    </nav>
+  </div>
+</header>
+
+<main>
+<section class="page-hero">
+  <div class="wrap">
+    <p class="crumbs"><a href="../">Blanc</a><span>/</span><a href="../#corpus">Deployed bytecode</a><span>/</span>EIP-7002 contract</p>
+    <div class="hero-grid">
+      <div>
+        <h1>The EIP-7002 contract.</h1>
+        <p class="lede">Since Prague, every validator exit or partial withdrawal triggered from the execution layer passes through these 504 bytes, written by hand in assembly. At the end of every block the client calls the contract, and a block whose call fails is invalid.</p>
+        <p class="lede-sm">With its canonical code installed, Blanc proves that this end-of-block call succeeds whatever the contract’s storage holds; that each block’s requests are exactly the oldest pending submissions, in order, none dropped, duplicated, reordered or emitted early; and that the EIP’s own fee guarantee is false of these bytes — while showing exactly where, and how far beyond any account’s reach, the deployed arithmetic departs from the specification. Mainnet met the theorems’ starting premises when Prague began.</p>
+      </div>
+      <div class="plate idplate">
+        <div class="plate-head"><span class="who"><span class="k">Artifact</span>EIP-7002 contract</span><span class="meta">Ethereum mainnet</span></div>
+        <div class="hexband wrapband" aria-hidden="true">33 73 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff fe 14 60 cb 57 60 11 5f 54 80 7f ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff 14 61 01 f4 57 60 01 82 02 60 01 90 5f 5b 5f 82 11 15 60 68 57 81 01 90 83 02 84 83 02 90 04 91</div>
+        <dl class="kv">
+          <dt>Address</dt><dd><code>0x00000961Ef480Eb55e80D19ad83579A64c007002</code></dd>
+          <dt>Runtime</dt><dd>504 bytes; Keccak-256 <code>0x0345a365d2f4c5975b9f1599abe0a2ee76b7a3a731bc68781bd04c84e4858f50</code></dd>
+          <dt>Written in</dt><dd>assembly for the geas assembler, as published in the EIP and the <code>sys-asm</code> repository</dd>
+          <dt>Created</dt><dd>block 21,881,389 (19 February 2025) by the keyless transaction printed in the EIP</dd>
+          <dt>Used</dt><dd>21,747 requests from Prague’s activation to block 26,141,229; none before</dd>
+          <dt>Proofs</dt><dd><a href="https://github.com/skbaek/blanc/tree/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest"><code>Blanc/Lift/WithdrawalRequest/</code></a>, 13,119 lines of Lean, with two counterexamples in <code>Blanc/Composition/</code></dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap layout">
+    <nav class="toc" aria-label="On this page">
+      <span class="t">On this page</span>
+      <a href="#contract">The contract</a>
+      <a href="#totality">A call that cannot fail</a>
+      <a href="#fifo">Submissions in, requests out</a>
+      <a href="#control">The system-address control</a>
+      <a href="#frames">Every frame, classified</a>
+      <a href="#fee">The fee the bytes compute</a>
+      <a href="#mainnet">Mainnet at Prague</a>
+      <a href="#limits">Not claimed</a>
+      <a href="#prior">Earlier work</a>
+    </nav>
+
+    <div class="prose">
+      <section id="contract">
+        <p class="eyebrow">The protocol’s own code</p>
+        <h2>What the contract does.</h2>
+        <p>A user submits a 56-byte request — a validator’s public key and an amount — with a fee, and the contract queues it, with the caller, at raw storage offsets. At the end of every block the client calls the contract from the reserved system address <code>0xffff…fffe</code>; the contract removes up to sixteen requests from the head of the queue, returns them as the block’s withdrawal requests, which the block header commits to, and updates an <em>excess</em> counter that sets the next fee through <code>fake_exponential(1, excess, 17)</code>. A fault here could drop, duplicate or reorder exits, or invalidate blocks.</p>
+        <p>With no compiler, no ABI and no selector dispatch, the contract also tests whether the method depends on a compiler’s conventions. It needed no extension of the certificate checker. The model the bytes are proved to refine is transcribed from the EIP’s text and pseudocode, not read off the bytes. Its initial state is what deployment leaves: the excess set to an <em>inhibitor</em>, 2<sup>256</sup> − 1, that blocks submissions until the first system call, and an empty queue.</p>
+      </section>
+
+      <section id="totality">
+        <p class="eyebrow">Totality</p>
+        <h2>A system call that cannot fail.</h2>
+        <p>Whatever the contract’s storage holds, as long as its canonical code is installed, the client’s end-of-block call succeeds without error, at an exact, state-dependent cost that never exceeds 210,000 gas — against the 30,000,000 the protocol supplies. The statement has two hypotheses: a covered fork, and the code.</p>
+        <div class="thm">
+          <div class="head"><span class="tag">Theorem, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/SystemProtocol.lean#L245"><code>Blanc.Lift.WithdrawalRequest.checked_system_totality</code> · SystemProtocol.lean:245</a></div>
+<pre class="lean"><span class="kw">theorem</span> <span class="nm">checked_system_totality</span> {benv : Benv} (fork : CoveredFork benv.stat.fork)
+    (installed : benv.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode) :
+    processCheckedSystemTransaction benv withdrawalRequestPredeployAddress [] =
+      .ok ((systemProtocolPost benv).state, systemProtocolOutput benv) ∧
+    (systemProtocolOutput benv).error = none ∧
+    (systemProtocolOutput benv).gasLeft = systemTransactionGas - systemProtocolGas benv ∧
+    systemProtocolGas benv ≤ 210000 ∧
+    (systemProtocolOutput benv).returnData = (systemProtocolPost benv).output ∧
+    (systemProtocolOutput benv).refundCounter = (systemProtocolPost benv).refundCounter</pre>
+        </div>
+        <p>Its history form, <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/SystemHistory.lean#L14"><code>history_checked_system_totality</code></a>, needs only that the canonical code is installed at a checkpoint: after any configured history from there, the call still succeeds. No history removes the code, and nothing a history does to this contract’s storage can make its end-of-block call fail and the block invalid — in Jaune’s semantics.</p>
+      </section>
+
+      <section id="fifo">
+        <p class="eyebrow">Safety, after any history</p>
+        <h2>Submissions in, requests out.</h2>
+        <p>From a checkpoint whose storage represents the initial state, for every block of a configured history, the requests the block hands to the consensus layer are exactly the first queued entries, at most sixteen, in first-in-first-out order, and each is the caller, public key and amount of exactly one committed submission, which paid the fee the bytecode computed. No committed submission is dropped, duplicated, reordered or emitted before it was made; the entries not yet emitted are exactly the queue that storage holds afterwards; and the queue never reaches the four bookkeeping slots.</p>
+        <div class="thm">
+          <div class="head"><span class="tag">Theorem, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/WordFifo.lean#L345"><code>Blanc.Lift.WithdrawalRequest.block_word_fifo</code> · WordFifo.lean:345</a></div>
+<pre class="lean"><span class="kw">theorem</span> <span class="nm">block_word_fifo</span>
+    {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    (history : ConfiguredHistoryTrace cfg checkpoint pre)
+    (block : ConfiguredBlockTrace cfg pre post)
+    (installed : SystemCodeInstalled checkpoint.state)
+    (senders : (ConfiguredHistoryTrace.step history block).NoSenderAt systemAddress)
+    (authorities : (ConfiguredHistoryTrace.step history block).NoAuthorityAt systemAddress)
+    (avoid : ∀ root ∈ (ConfiguredHistoryTrace.step history block).rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
+    (systemEmpty : checkpoint.state.getCode systemAddress = ByteArray.empty)
+    (init : RepresentsStorage (checkpoint.state.getStor withdrawalRequestPredeployAddress).get initial)
+    (occurrences : ((ConfiguredHistoryTrace.step history block).settledFrames.flatMap
+      submissionFramePayments).length ≤ wordOccurrenceCap) :
+    BlockWordFifo history block</pre>
+        </div>
+        <p>The premises are trace-local and finite. The contract recognizes the system call only by its caller, so the history must contain no transaction from the system address, no EIP-7702 authorization signed by it and no creation addressed to it, even a failed one, and the address must hold no code at the checkpoint; the four system contracts must hold their canonical code there; and the history may contain at most 2<sup>254</sup> committed submissions. There is no hash premise, and no entry condition on the frames that run the contract.</p>
+        <p>A companion bounds delivery. An entry at position <i>q</i> of the queue when a block’s requests are computed is emitted exactly ⌊<i>q</i>/16⌋ blocks later, counting that block as zero, in every configured extension of the history that long — and nothing submitted later overtakes it (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/WordDelivery.lean#L309"><code>block_word_delivery</code></a>). Beneath both lies an exact replay: the storage at the end of any such history represents the EIP’s model replayed over exactly the committed submissions and system calls, in order (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/WordReplay.lean#L323"><code>history_word_storage_replay</code></a>).</p>
+      </section>
+
+      <section id="control">
+        <p class="eyebrow">Statements that can fail</p>
+        <h2>The system-address premise is not decorative.</h2>
+        <p>A closed theorem builds a two-block configured history that meets every other premise of the request theorem but places, at the system address, a contract that calls the queue from inside a user transaction and drains it before the block’s own system call — and the conclusion fails (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Composition/WithdrawalRequestDrainControl.lean#L547"><code>systemEmpty_loadBearing_witness</code></a>). As far as we know, putting code at that address would take a signature by its key or a 160-bit Keccak preimage, but Blanc does not prove this, and the premise stays.</p>
+      </section>
+
+      <section id="frames">
+        <p class="eyebrow">Refinement and liveness</p>
+        <h2>Every successful frame, classified.</h2>
+        <p>A successful frame at this code is exactly one of three things, with exact storage, logs and return bytes: the system call’s dequeue; a submission — not static, from a caller other than the system address, with 56 bytes of input and a value covering the fee the bytecode computes; or a fee read. While the excess holds the inhibitor, no user call succeeds. Which failure a rejected call meets is not stated (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/FrameEffects.lean#L33"><code>exec_frame_effect</code></a>). The contract’s balance never decreases, and the committed submissions add exactly their values to it (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/BalanceHistory.lean#L158"><code>history_balance_nondecreasing</code></a>).</p>
+        <p>After any history that leaves the contract active, a submission paying at least the EIP’s fee and started with more than the 2,300-gas stipend beyond its cost executes at exactly 1,258 + 87·<i>k</i> gas plus its storage accesses, where <i>k</i> counts the iterations of the fee loop; a fee read costs 180 + 87·<i>k</i> plus one read (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/NatLiveness.lean#L59"><code>history_submission_nat_live</code></a>).</p>
+      </section>
+
+      <section id="fee">
+        <p class="eyebrow">Specification against bytes</p>
+        <h2>The fee the bytes compute.</h2>
+        <p>The EIP specifies its fee as Python pseudocode over unbounded integers. The bytecode computes the same series in 256-bit words, whose intermediate products can overflow. Two pre-deployment audits noted that its fee therefore departs from the EIP’s once the excess passes 2,892: one judged such an excess unreachable under current settings; the other, noting that a higher block gas limit might bring it within reach, rated the finding informational. Blanc states the agreement exactly.</p>
+<pre class="lean"><span class="kw">theorem</span> <span class="nm">word_fee_le_nat</span> {excess : B256} {iterations : Nat} {output : B256}
+    (run : WordFakeExponential.Run excess 17 1 17 0 iterations output)
+    (model : Blanc.WithdrawalRequest.State) (excessEq : model.excess = excess.toNat) :
+    (output / (17 : B256)).toNat ≤ Blanc.WithdrawalRequest.fee model
+
+<span class="kw">theorem</span> <span class="nm">word_fee_eq_iff_natFeeDomain</span> {excess : B256} {iterations : Nat}
+    {output : B256}
+    (run : WordFakeExponential.Run excess 17 1 17 0 iterations output)
+    (model : Blanc.WithdrawalRequest.State) (excessEq : model.excess = excess.toNat) :
+    (output / (17 : B256)).toNat = Blanc.WithdrawalRequest.fee model ↔
+      NatFeeDomain excess iterations</pre>
+        <p>The bytecode’s fee never exceeds the EIP’s, and equals it exactly when no intermediate value of the series wraps. Then a closed theorem builds a three-block configured history, under the premises of the request theorem, in which a submission is committed after paying 2<sup>245</sup> wei: at least the fee the bytecode computes at an excess of 2,893, about 3.2·10<sup>73</sup> wei, but less than the EIP’s, about 8.1·10<sup>73</sup> wei (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Composition/WithdrawalRequestFeeRefutation.lean#L1182"><code>nat_fee_guarantee_refuted</code></a>). The guarantee that every committed submission paid at least the EIP’s fee is therefore false of the deployed bytes — which is why the request theorem speaks of the fee the bytecode computes.</p>
+        <p>The divergence begins only where the EIP’s own fee is out of any account’s reach. By direct computation, outside the proofs, the two fees agree at every excess below 2,893, and at 2,892 the fee is already about 7.6·10<sup>73</sup> wei, more than 10<sup>47</sup> times all the ether in existence. The wrapped arithmetic does yield a fee of 1 wei near an excess of 2<sup>252</sup>, but every model state a history reaches from deployment has its effective excess plus its count bounded by the number of submissions, so that excess would take about 2<sup>252</sup> of them. The counterexample reaches its excess with 2,895 submissions in one block, on a synthetic Prague chain whose block gas limit, 2<sup>29</sup>, is about nine times mainnet’s; on mainnet the excess has so far peaked at 666, on 19 December 2025.</p>
+      </section>
+
+      <section id="mainnet">
+        <p class="eyebrow">The seventh question</p>
+        <h2>Mainnet, when Prague began.</h2>
+        <p>The contract was deployed before Prague, but its use began only when Prague activated, so all of it lies in forks Jaune covers. At block 22,431,083, the last before Prague, three providers report that its storage held exactly the model’s initial state — the inhibitor in the excess slot, zeros in the count, head and tail — with the same storage root it had at deployment, 549,694 blocks earlier; that it had logged no request; that the four system contracts held their canonical code; and that the system address held none.</p>
+        <p>Mainnet’s state when Prague activated, as the providers report it, therefore met the checkpoint premises of the request theorems. What separates those theorems from the live contract is the premise that mainnet’s history is a configured one, which rests on Jaune’s fidelity, and the exclusions at the system address. Under every covered fork, executing the recorded keyless creation input installs the certified runtime and leaves storage representing that initial state, with no hash premise (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/Creation/Deploy.lean#L88"><code>deploy_initial</code></a>).</p>
+      </section>
+
+      <section id="limits">
+        <p class="eyebrow">Stated, so it is not inferred</p>
+        <h2>Not claimed.</h2>
+        <ul class="nc">
+          <li>How the consensus layer processes the requests, including whether the caller is entitled to act on the validator it names.</li>
+          <li>Whether the fee parameters are economically sound.</li>
+          <li>That the chain produces the later blocks the delivery bound speaks of; distance is counted in configured blocks.</li>
+          <li>Which failure a rejected call meets, or its gas.</li>
+          <li>Storage growth: dequeued slots are left in storage, and nothing is proved about them.</li>
+          <li>Transaction-level liveness; anything beyond 2<sup>254</sup> committed submissions.</li>
+        </ul>
+        <p>The claim map’s <a href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md#57-eip-7002-withdrawal-requests-actual-fee-fifo-from-submissions-to-block-requests">EIP-7002 section</a> lists every theorem with its premises, file and line.</p>
+      </section>
+
+      <section id="prior">
+        <p class="eyebrow">Context</p>
+        <h2>Earlier work.</h2>
+        <p>Before deployment, four audits commissioned by the Ethereum Foundation examined the Pectra system contracts, and a loop-bounded Halmos check compared this contract’s bytecode with references written from the EIP’s pseudocode. We know of no earlier proof about this contract that is unbounded in the excess and in the history, or that follows a request from its submission to the block that emits it.</p>
+      </section>
+
+      <nav class="pager" aria-label="Artifacts">
+        <a href="curve-pools.html"><span class="d">Previous artifact</span><span class="t">The Curve pools</span></a>
+        <a class="next" href="lido-circuit-breaker.html"><span class="d">Next artifact</span><span class="t">Lido CircuitBreaker</span></a>
+      </nav>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap footgrid">
+    <div class="colophon">
+      <a class="brand" href="../" style="margin-bottom:12px"><span class="sq"></span><b>Blanc</b></a>
+      <p>MIT-licensed. Statements, names and line numbers refer to Blanc commit <code>5048a51f</code> and the Jaune revision it pins, <code>2737c8eb</code>. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
+    </div>
+    <div>
+      <h4>Deployed bytecode</h4>
+      <a href="../bytecode/weth9.html">WETH9</a><a href="../bytecode/uniswap-v2.html">Uniswap V2 pair</a><a href="../bytecode/curve-3crv.html">Curve 3Crv</a><a href="../bytecode/deposit-contract.html">Deposit contract</a><a href="../bytecode/curve-pools.html">Curve pools</a><a href="../bytecode/eip-7002.html">EIP-7002 contract</a><a href="../bytecode/lido-circuit-breaker.html">Lido CircuitBreaker</a>
+    </div>
+    <div>
+      <h4>Blanc</h4>
+      <a href="../method.html">How it works</a><a href="../language.html">The language</a><a href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md">Claim map</a><a href="https://github.com/skbaek/blanc/blob/main/scripts/GATES.md">Gate catalogue</a><a href="https://github.com/skbaek/blanc/blob/main/SECURITY.md">Security</a>
+    </div>
+    <div>
+      <h4>Elsewhere</h4>
+      <a href="https://github.com/skbaek/blanc">GitHub</a><a href="https://skbaek.github.io/jaune/">Jaune</a><a href="https://github.com/skbaek/creme">Creme</a>
+    </div>
+  </div>
+</footer>
+<script src="../site.js"></script>
+</body>
+</html>

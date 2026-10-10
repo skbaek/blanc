@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Curve pools — Blanc</title>
+<meta name="description" content="Two Curve StableSwap pool implementations, read from their deployed bytes: on the Vyper 0.2.15 build behind three pools drained in July 2023, Jaune executes the cross-function reentrancy from deployment; on a Vyper 0.3.7 build, Blanc proves the shared lock excludes reentry in every execution.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fbfaf5'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="../site.css">
+</head>
+<body>
+
+<header id="hdr">
+  <div class="wrap nav">
+    <a class="brand" href="../"><span class="sq"></span><b>Blanc</b><i>/blɑ̃/ — fr. “white”</i></a>
+    <nav class="navlinks" aria-label="Site">
+      <a class="opt" href="../#corpus" aria-current="page">Corpus</a>
+      <a class="opt" href="../method.html">How it works</a>
+      <a class="opt" href="../language.html">Language</a>
+      <a class="opt" href="../#limits">Limits</a>
+      <a class="opt" href="../#check">Check it</a>
+      <a class="btn opt" href="https://skbaek.github.io/jaune/" title="Jaune — the EVM semantics every theorem here is stated against"><span class="sqf"></span>Jaune</a>
+      <a class="btn" href="https://github.com/skbaek/blanc"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg><span class="gh-label">GitHub</span></a>
+      <details class="menu"><summary class="btn">Menu</summary><div class="panel">
+        <a href="../">Home</a><a href="../#corpus">The corpus</a><a href="../method.html">How it works</a>
+        <a href="../language.html">The Blanc language</a><a href="../#limits">Limits</a><a href="../#check">Check it yourself</a>
+        <a href="https://skbaek.github.io/jaune/">Jaune</a>
+      </div></details>
+    </nav>
+  </div>
+</header>
+
+<main>
+<section class="page-hero">
+  <div class="wrap">
+    <p class="crumbs"><a href="../">Blanc</a><span>/</span><a href="../#corpus">Deployed bytecode</a><span>/</span>The Curve pools</p>
+    <div class="hero-grid">
+      <div>
+        <h1>The bug that compiled, and the fix.</h1>
+        <p class="lede">On 30 July 2023, attackers drained several Curve pools of assets worth tens of millions of dollars. Their source asked for one reentrancy lock shared by every liquidity function; the compiler emitted one lock per function. A proof about the source would have certified the guard.</p>
+        <p class="lede-sm">Blanc reads the bytes of two implementations of Curve’s StableSwap pool for ether and one other coin. On the vulnerable one, behind three of the drained pools, Jaune executes the attack from deployment and the ledger ends corrupted. On a later one, compiled after the fix, Blanc proves that the lock excludes reentry into every guarded function, in every execution.</p>
+      </div>
+      <div class="plate idplate">
+        <div class="plate-head"><span class="who"><span class="k">Artifacts</span>Two pool implementations</span><span class="meta">Ethereum mainnet</span></div>
+        <div class="hexband wrapband" aria-hidden="true">60 04 36 10 15 61 00 0d 57 61 31 4c 56 5b 60 00 35 60 1c 52 60 00 51 63 0b 4c 7e 4d 81 14 15 61 00 2c 57 33 61 01 40 52 61 00 57 56 5b 63 0c 3e 4b 54 81 14 15 61 00 52 57 60 64 35 60 a0 1c 61 44 7a 57 60 20 60 64 61 01 40 37 60 00 50 61 00 57 56 5b 61 07 eb 56 5b 60 00 54 61 44 7a 57 60</div>
+        <dl class="kv">
+          <dt>Vulnerable</dt><dd><code>0x6326DEbBAa15bCFE603d831e7D75f4fc10d9B43E</code> · 17,535 bytes · Vyper 0.2.15 · block 12,904,329 (26 July 2021)</dd>
+          <dt>Fixed</dt><dd><code>0x847ee1227A9900B73aEeb3a47fAc92c52FD54ed9</code> · 18,320 bytes · Vyper 0.3.7 · block 17,110,099 (April 2023)</dd>
+          <dt>Pools</dt><dd>reached through 45-byte ERC-1167 forwarders: the vulnerable one by pETH/ETH, msETH/ETH and alETH/ETH; the fixed one by the ETH/stETH-ng pool <code>0x21E2…843a</code></dd>
+          <dt>Proofs</dt><dd><a href="https://github.com/skbaek/blanc/tree/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/VyperNonreentrantDeployed"><code>Blanc/Lift/VyperNonreentrantDeployed/</code></a>, 35,894 lines of Lean</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap layout">
+    <nav class="toc" aria-label="On this page">
+      <span class="t">On this page</span>
+      <a href="#locks">One key, two layouts</a>
+      <a href="#attack">The attack, executed</a>
+      <a href="#exclusion">The fix, proved</a>
+      <a href="#witnesses">Not vacuous</a>
+      <a href="#how">How a lock is checked</a>
+      <a href="#limits">Not claimed</a>
+    </nav>
+
+    <div class="prose">
+      <section id="locks">
+        <p class="eyebrow">The bytes, not the source</p>
+        <h2>One key, two layouts.</h2>
+        <p>Both implementations mark their liquidity functions with the same reentrancy key, <code>@nonreentrant('lock')</code>, which asks the compiler for one lock shared by all of them. Vyper 0.2.15, 0.2.16 and 0.3.0 instead reserved a separate lock slot for every decorated function. The vulnerable implementation was deployed on 26 July 2021, less than three days after Vyper 0.2.15 was published.</p>
+        <div class="tablewrap"><table class="data">
+          <thead><tr><th></th><th>Vulnerable: Vyper 0.2.15, <code>0x6326…</code></th><th>Fixed: Vyper 0.3.7, <code>0x847e…</code></th></tr></thead>
+          <tbody>
+            <tr><td><code>remove_liquidity</code></td><td>lock at slot 2 (bytes 6,900–6,911)</td><td rowspan="2">one lock: slot 0, held value 2, shared by all seven guarded functions</td></tr>
+            <tr><td><code>add_liquidity</code></td><td>lock at slot 0 (bytes 88–99)</td></tr>
+          </tbody>
+        </table></div>
+        <p>The theorems locate both guards of the vulnerable implementation in its deployed bytes. Its <code>remove_liquidity</code> reads the total supply, sends ether to the receiver, and only afterwards writes the reduced supply back — so a callback that enters <code>add_liquidity</code>, finding that function’s own lock free, mints against a pool that is only half updated.</p>
+      </section>
+
+      <section id="attack">
+        <p class="eyebrow">A violation, from deployment</p>
+        <h2>The attack, executed.</h2>
+        <p>On every covered fork, Jaune runs eight messages in sequence from a world holding only a funded creator without code, each settling without error. The first executes the implementation’s preserved creation input; the next six create a forwarder, initialize the pool, create a token and an attacker contract, approve the pool and add liquidity, leaving a sound LP ledger: a supply of 2,000, all held by the attacker. The eighth is the attack.</p>
+<pre class="lean">attacker ──► pool.remove_liquidity      slot 2: 0 → 1; reads totalSupply = 2,000
+               └─ ether to attacker ──► attacker ──► pool.add_liquidity
+                                          slot 0 free: enters the body, mints 106,
+                                          balanceOf[attacker] = 2,106
+             remove_liquidity resumes: burns 200, writes back totalSupply = 2,000 − 200
+<b> result:     totalSupply = 1,800  &lt;  balanceOf[attacker] = 1,906</b></pre>
+        <p>The outer call writes back a supply it read before the callback, which erases the 106 tokens minted during the callback from the supply but not from the attacker’s balance (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Reach/ViolFinal.lean#L30"><code>vminus_reachable_capstone</code></a>). A second form states the same violation for every world that agrees with the reached one on the 14 storage slots and 6 accounts the attack reads (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Reach/ViolFinal.lean#L26"><code>vminus_reach_violation</code></a>).</p>
+        <p>The same corruption also happens inside an admitted transaction, from a separate synthetic state: on every covered fork, <code>processTransaction</code> accepts a fixed signed type-2 transaction carrying 16,043,200 gas, every admission check — signature recovery included — discharged by kernel evaluation and only room in the block assumed. The two results concern different worlds and do not compose, and neither replays the historical transactions, which ran under Shanghai, a fork Jaune does not implement. By LlamaRisk’s estimates, attackers extracted about $37 million from the three pools that forward to this implementation.</p>
+      </section>
+
+      <section id="exclusion">
+        <p class="eyebrow">Safety, in every execution</p>
+        <h2>The fix, proved.</h2>
+        <p>For the fixed implementation, Blanc proves that the lock excludes. In any execution, whatever its outcome, while a frame of the pool is inside one of its five mutating guarded functions and has not released the lock, no frame below it enters any of the seven guarded functions of that pool — whatever code the frames in between run.</p>
+        <div class="thm">
+          <div class="head"><span class="tag">Theorem, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/VyperNonreentrantDeployed/Fixed/Exclusion.lean#L128"><code>…VyperNonreentrantDeployed.Fixed.vplus_exclusion</code> · Exclusion.lean:128</a></div>
+<pre class="lean"><span class="kw">theorem</span> <span class="nm">vplus_exclusion</span> {sevm : Sevm} {pre : Devm} {out : Execution}
+    (R : Exec 0 sevm pre out) (hfork : CoveredFork sevm.benvStat.fork) {P : Adr}
+    (hP : pre.getCode P = forwarderCode curvePlainImpl847e ∨ pre.getCode P = code)
+    (hI : pre.getCode curvePlainImpl847e = code)
+    (hroot : sevm.currentTarget = P → sevm.code = pre.getCode P)
+    (hash : lockL.HashAvoidIn P R)
+    {F h c : Exec.Deriv} (hF : F ∈ Exec.rawFrameRoots R)
+    (active : ActiveRel P F h) (spawn : Spawns h c)
+    {G : Exec.Deriv} (hG : G ∈ Exec.rawFrameRoots c.exc) :
+    ¬ lockL.Enters P G</pre>
+        </div>
+        <p>No premise mentions callbacks, reentry, or the value of the lock as a callee sees it: exclusion is derived, not assumed. The one hash premise, <code>hash</code>, is that no Keccak-256 digest the pool computes in that execution equals 0, the lock’s slot. <code>R</code> is an execution of any outcome — a reverted frame has still run — which is why the proof needs the certificate cursor of <a href="../method.html#tools">the method</a>. The theorem holds for the implementation called directly and through the stETH-ng forwarder (<code>hP</code>), for messages, for transactions without EIP-7702 authorizations, and for every execution recorded in a configured history, given for each that the pool’s and the implementation’s code is installed, that its first frame runs the code stored there, and that its hashes avoid the lock’s slot.</p>
+        <p>A frame running this code also never executes <code>DELEGATECALL</code>, <code>CALLCODE</code>, <code>CREATE</code>, <code>CREATE2</code> or <code>SELFDESTRUCT</code>; its only external calls are <code>CALL</code> and <code>STATICCALL</code>.</p>
+      </section>
+
+      <section id="witnesses">
+        <p class="eyebrow">Statements that can fail</p>
+        <h2>Not vacuous: the lock, seen refusing.</h2>
+        <p>An exclusion theorem whose antecedent never holds would say nothing. Three executed witnesses, each on every covered fork, show this one does. The strongest mirrors the attack. Nine messages from the same creator-only world deploy, initialize and fund the pool; in the ninth, <code>remove_liquidity</code> holds the shared lock while it sends 100 wei to a receiver whose code attempts <code>add_liquidity</code> through the forwarder. That frame reads the held lock and reverts without reaching a guarded function; the outer call commits with the ledger still sound — supply and the creator’s balance both 1,800 — and the exclusion theorem is instantiated on this very execution with all of its premises proved (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/VyperNonreentrantDeployed/Fixed/Exit/Capstone.lean#L35"><code>vplus_reachable_capstone</code></a>).</p>
+        <p>Two older witnesses, from synthetic states, refuse a read-only reentry into <code>get_virtual_price()</code> and a mutating reentry through the stETH-ng forwarder.</p>
+      </section>
+
+      <section id="how">
+        <p class="eyebrow">A second pass over the certificate</p>
+        <h2>How a lock is checked.</h2>
+        <p>The fixed pool’s bytes are first read through a certificate like every other artifact. A second Boolean pass then runs over that certificate, with the lock’s state at join points supplied by a 444-line untrusted annotator. The kernel decides that every guarded function body is reached only after the lock was found free, that every mutating body starts with the lock held, and that inside one only release points write the lock’s slot. A soundness theorem, proved along the cursor, connects the pass to every frame that runs the code from program counter 0 on a covered fork, provided the hashes the frame computes avoid the lock’s slot.</p>
+      </section>
+
+      <section id="limits">
+        <p class="eyebrow">Stated, so it is not inferred</p>
+        <h2>Not claimed.</h2>
+        <ul class="nc">
+          <li>A controlled experiment on the fix: the two implementations’ sources differ in other ways too, and the vulnerable result is a concrete violation, not the formal negation of the fixed one’s theorem.</li>
+          <li>That admitted transactions reach the executions from deployment: those are sequences of messages, with implementations placed at their addresses as supplied creation targets and synthetic token, attacker, receiver and clone-deployer code. That transactions can produce equivalent messages is argued, not proved.</li>
+          <li>Anything about unguarded functions, reentry after the lock is released, pricing, or the pool’s economics; liveness; transactions carrying EIP-7702 authorizations.</li>
+          <li>A replay of the historical attack.</li>
+        </ul>
+        <p>The claim map’s sections on the <a href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md#55-vyper-v-guarded-body-reentrancy-exclusion">fixed</a> and <a href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md#56-vyper-v-cross-function-reentrancy-corrupts-the-lp-ledger">vulnerable</a> implementations list every theorem with its premises, file and line. To our knowledge, neither implementation has had a machine-checked treatment before.</p>
+      </section>
+
+      <nav class="pager" aria-label="Artifacts">
+        <a href="deposit-contract.html"><span class="d">Previous artifact</span><span class="t">Beacon deposit contract</span></a>
+        <a class="next" href="eip-7002.html"><span class="d">Next artifact</span><span class="t">EIP-7002 contract</span></a>
+      </nav>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap footgrid">
+    <div class="colophon">
+      <a class="brand" href="../" style="margin-bottom:12px"><span class="sq"></span><b>Blanc</b></a>
+      <p>MIT-licensed. Statements, names and line numbers refer to Blanc commit <code>5048a51f</code> and the Jaune revision it pins, <code>2737c8eb</code>. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
+    </div>
+    <div>
+      <h4>Deployed bytecode</h4>
+      <a href="../bytecode/weth9.html">WETH9</a><a href="../bytecode/uniswap-v2.html">Uniswap V2 pair</a><a href="../bytecode/curve-3crv.html">Curve 3Crv</a><a href="../bytecode/deposit-contract.html">Deposit contract</a><a href="../bytecode/curve-pools.html">Curve pools</a><a href="../bytecode/eip-7002.html">EIP-7002 contract</a><a href="../bytecode/lido-circuit-breaker.html">Lido CircuitBreaker</a>
+    </div>
+    <div>
+      <h4>Blanc</h4>
+      <a href="../method.html">How it works</a><a href="../language.html">The language</a><a href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md">Claim map</a><a href="https://github.com/skbaek/blanc/blob/main/scripts/GATES.md">Gate catalogue</a><a href="https://github.com/skbaek/blanc/blob/main/SECURITY.md">Security</a>
+    </div>
+    <div>
+      <h4>Elsewhere</h4>
+      <a href="https://github.com/skbaek/blanc">GitHub</a><a href="https://skbaek.github.io/jaune/">Jaune</a><a href="https://github.com/skbaek/creme">Creme</a>
+    </div>
+  </div>
+</footer>
+<script src="../site.js"></script>
+</body>
+</html>

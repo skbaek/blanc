@@ -176,6 +176,12 @@ def count_deployment_public_theorems(root: pathlib.Path) -> int:
 # whole line against the gate's own format string; this pattern pins the number.
 CLAIM_TRANSCRIPT = re.compile(r"OK — claim statements: (\d{2,5}) definitions/statements and exact")
 
+# A count of a thousand or more is printed with a thousands separator in site
+# prose ("1,060") and without one in gate transcripts ("1060"). Consumer
+# patterns capture either spelling; captured values are compared after the
+# separators are removed, and the per-surface census counts both spellings.
+GROUPED = r"(\d{1,3}(?:,\d{3})+|\d{2,5})"
+
 LAYERING_MODULE_CELL = re.compile(
     r"\| `scripts/check-layering\.sh` \| [^\n]* \| "
     r"\d{1,5} contracts,\s*(\d{1,5}) modules,"
@@ -221,19 +227,19 @@ CLAIMS = [
                 "docs/index.html",
                 [
                     re.compile(r"axiom audit: one union walk over Blanc reaches only the standard axioms; (\d{2,5}) leaf results"),
-                    re.compile(r'<span class="pill"><span class="d"></span>(\d{2,5}) leaf results'),
-                    # The fact tile. The trailing label is part of the pattern on
-                    # purpose: the sibling tile four lines down has identical markup
-                    # carrying 147/147 differential rows, and a pattern keyed on markup
+                    # The trust tile. The trailing label is part of the pattern on
+                    # purpose: the sibling tile beside it has identical markup
+                    # carrying the claim-pin count, and a pattern keyed on markup
                     # alone matches it and reports a spurious disagreement.
-                    re.compile(
-                        r'<span class="n">(\d{2,5})</span>\s*\n?\s*<span class=\"l\">leaf results'
-                    ),
-                    re.compile(r"finds the\s+(\d{2,5})\s+leaf results"),
+                    re.compile(r'<span class="n num">' + GROUPED + r'</span><span class="l">leaf results'),
                 ],
             ),
+            (
+                "docs/method.html",
+                [re.compile(r"finds the library’s " + GROUPED + r" leaf theorems")],
+            ),
         ],
-        "census": {"README.md": 3, "scripts/GATES.md": 1, "docs/index.html": 4},
+        "census": {"README.md": 3, "scripts/GATES.md": 1, "docs/index.html": 2, "docs/method.html": 1},
         "foreign": [
             "jaune: docs/index.html (3 quotations of the former audited-theorem "
             "count, spelled with a thousands separator, e.g. 1,396; not yet "
@@ -274,20 +280,21 @@ CLAIMS = [
             (
                 "docs/index.html",
                 [
-                    re.compile(
-                        r"protected claims — (\d{2,5})\s*\n\s*definitions, statements, and "
-                        r"record constructors"
-                    ),
+                    # The trust tile, keyed on its own label like the leaf tile.
+                    re.compile(r'<span class="n num">(\d{2,5})</span><span class="l">statements pinned exactly'),
                     CLAIM_TRANSCRIPT,
                 ],
             ),
-            ("docs/contracts/weth10.html", [CLAIM_TRANSCRIPT]),
+            (
+                "docs/method.html",
+                [re.compile(r"statement-pin gate restates (\d{2,5}) statements")],
+            ),
         ],
         "census": {
             "scripts/check-claims.sh": 2,
             "scripts/GATES.md": 1,
             "docs/index.html": 2,
-            "docs/contracts/weth10.html": 1,
+            "docs/method.html": 1,
         },
         "foreign": [],
     },
@@ -328,35 +335,16 @@ CLAIMS = [
                 ],
             ),
             (
-                "docs/index.html",
+                "docs/language.html",
                 [
-                    re.compile(r"OK — WETH10 differential: (\d{2,5})/(\d{2,5}) rows agree"),
-                    # The fact tile, keyed on its own label for the same reason
-                    # the leaf-count tile is.
+                    # The ports table row, keyed on its two size cells: the
+                    # CircuitBreaker paragraph states its own row count in the
+                    # same "N of N" prose.
                     re.compile(
-                        r'<span class="n">(\d{2,5})<span class="dimmer"[^>]*>/(\d{2,5})</span>'
-                        r"</span>\s*\n?\s*<span class=\"l\">differential rows agreeing with the "
-                        r"deployed WETH10"
+                        r'<td>WETH10</td><td class="r">6,313 B</td><td class="r">9,975 B</td>'
+                        r"<td>(\d{2,5}) of (\d{2,5}) differential rows agree</td>"
                     ),
-                    re.compile(r"(\d{2,5})/(\d{2,5}) WETH10 rows"),
-                    # The portfolio card chip. The CircuitBreaker card twenty
-                    # lines down carries identical chip markup with its own row
-                    # count, so the preceding size chip is part of the pattern.
-                    re.compile(
-                        r'<span class="chip"><b>6,313 B</b> vs 9,975 deployed</span>\s*\n\s*'
-                        r'<span class="chip">(\d{2,5})/(\d{2,5}) differential rows</span>'
-                    ),
-                    re.compile(r"in a pinned oracle: (\d{2,5}) rows"),
-                    re.compile(r"channel falsifiers\. (\d{2,5})/(\d{2,5}) agree"),
-                ],
-            ),
-            (
-                "docs/contracts/weth10.html",
-                [
-                    re.compile(r"with a (\d{2,5})-row differential suite"),
-                    re.compile(r"OK — WETH10 differential: (\d{2,5})/(\d{2,5}) rows agree"),
-                    re.compile(r'foldsub">(\d{2,5}) rows vs the deployed runtime'),
-                    re.compile(r"executes (\d{2,5}) generated canonical-call rows"),
+                    re.compile(r"beside the deployed original’s: (\d{2,5}) of (\d{2,5}) rows agree"),
                 ],
             ),
         ],
@@ -364,8 +352,7 @@ CLAIMS = [
             "README.md": 2,
             "PORTING.md": 1,
             "scripts/GATES.md": 2,
-            "docs/index.html": 11,
-            "docs/contracts/weth10.html": 5,
+            "docs/language.html": 4,
         },
         "foreign": [],
     },
@@ -403,39 +390,78 @@ CLAIMS = [
                 ],
             ),
             (
-                "docs/index.html",
+                "docs/language.html",
                 [
-                    re.compile(r"(\d{2,5})/(\d{2,5}) CircuitBreaker rows"),
-                    # The portfolio card chip, keyed on the preceding size chip
-                    # for the same reason the WETH10 chip is: the sibling cards
-                    # carry identical chip markup with their own row counts.
                     re.compile(
-                        r'<span class="chip"><b>4,282 B</b> vs 4,584 deployed</span>'
-                        r"\s*\n\s*"
-                        r'<span class="chip">(\d{2,5})/(\d{2,5}) differential rows</span>'
-                    ),
-                ],
-            ),
-            (
-                "docs/contracts/lido-circuit-breaker.html",
-                [
-                    re.compile(r"a (\d{2,5})-row differential matrix"),
-                    re.compile(
-                        r"OK — Lido CircuitBreaker differential: "
-                        r"(\d{2,5})/(\d{2,5}) rows agree"
-                    ),
-                    re.compile(r'foldsub">(\d{2,5}) rows vs the locked Solidity'),
-                    re.compile(
-                        r"pinned EELS Prague interpreter — (\d{2,5}) rows, agreeing on"
+                        r"(\d{2,5}) of (\d{2,5}) differential rows agree; the register accepts no deviation"
                     ),
                 ],
             ),
         ],
         "census": {
             "scripts/GATES.md": 2,
-            "docs/index.html": 4,
-            "docs/contracts/lido-circuit-breaker.html": 5,
+            "docs/language.html": 2,
         },
+        "foreign": [],
+    },
+    {
+        "name": "BeaconDeposit differential row count",
+        "producer": (
+            "scripts/fixtures/beacon-deposit/manifest.json (rows)",
+            # The committed anti-vacuity manifest of the deposit-contract port's
+            # differential, the same static shape as the WETH10 manifest.
+            lambda root: count_json_list(root, "scripts/fixtures/beacon-deposit/manifest.json", ("rows",)),
+        ),
+        "consumers": [
+            (
+                "scripts/GATES.md",
+                [re.compile(r"check-beacon-deposit-differential\.sh[^\n]*\|\s*(\d{2,5}) runtime rows;")],
+            ),
+            (
+                "docs/language.html",
+                [re.compile(r"Beside the deployed runtime, (\d{2,5}) of (\d{2,5}) differential rows agree")],
+            ),
+        ],
+        "census": {"scripts/GATES.md": 1, "docs/language.html": 2},
+        # 44 also counts registered proof recipes on scripts/GATES.md, so that
+        # surface is censused by its quotation, not by the bare integer.
+        "census_patterns": {"scripts/GATES.md": re.compile(
+            r"check-beacon-deposit-differential\.sh[^\n]*\|\s*\d{2,5} runtime rows;"
+        )},
+        "foreign": [],
+    },
+    {
+        "name": "OssifiableProxy differential case count",
+        "producer": (
+            "scripts/fixtures/lido-ossifiable-proxy/differential-manifest.json (cases)",
+            lambda root: count_json_list(
+                root, "scripts/fixtures/lido-ossifiable-proxy/differential-manifest.json", ("cases",)
+            ),
+        ),
+        "consumers": [
+            (
+                "scripts/GATES.md",
+                [
+                    re.compile(r"compares all (\d{2,5}) frozen constructor/getter/control"),
+                    re.compile(r"\| (\d{2,5})/(\d{2,5}) required agreement rows;"),
+                    re.compile(r"owns the exact ordered (\d{2,5})-row corpus"),
+                    re.compile(r"manifest binding and (\d{2,5})/(\d{2,5}) all-match verdict"),
+                ],
+            ),
+            (
+                "docs/language.html",
+                [re.compile(r"(\d{2,5}) of (\d{2,5}) differential cases agree")],
+            ),
+        ],
+        "census": {"scripts/GATES.md": 4, "docs/language.html": 2},
+        # 85 also counts the gate-economy controls on scripts/GATES.md, so that
+        # surface is censused by its four quotations, not by the bare integer.
+        "census_patterns": {"scripts/GATES.md": re.compile(
+            r"compares all \d{2,5} frozen constructor/getter/control|"
+            r"\| \d{2,5}/\d{2,5} required agreement rows;|"
+            r"owns the exact ordered \d{2,5}-row corpus|"
+            r"manifest binding and \d{2,5}/\d{2,5} all-match verdict"
+        )},
         "foreign": [],
     },
     {
@@ -582,31 +608,8 @@ CLAIMS = [
                 # a different figure.
                 [re.compile(r"\| (\d{1,4}) rows across \d{1,4} pillars,")],
             ),
-            (
-                "docs/contracts/lido-triggerable-withdrawals-gateway.html",
-                [re.compile(r"CircuitBreaker’s (\d{1,4})-row assurance register")],
-            ),
-            (
-                # The contract page states it five times: the meta description,
-                # the register link, the assurance gate's transcript (only its
-                # row-count field is captured here; the transcript's other
-                # figures stay named in UNCHECKED_PUBLISHED_NUMBERS), the pill,
-                # and the closing note.
-                "docs/contracts/lido-circuit-breaker.html",
-                [
-                    re.compile(r"a (\d{1,4})-row consistency-checked assurance register"),
-                    re.compile(r"assurance register</a>:\s+(\d{1,4}) rows mapping"),
-                    re.compile(r"OK — lido-circuit-breaker-assurance: (\d{1,4}) rows across"),
-                    re.compile(r'</span>(\d{1,4})-row assurance register</span>'),
-                    re.compile(r"The (\d{1,4})-row assurance register maps"),
-                ],
-            ),
         ],
-        "census": {
-            "scripts/GATES.md": 1,
-            "docs/contracts/lido-triggerable-withdrawals-gateway.html": 1,
-            "docs/contracts/lido-circuit-breaker.html": 5,
-        },
+        "census": {"scripts/GATES.md": 1},
         "foreign": [],
     },
 ]
@@ -616,9 +619,8 @@ CLAIMS = [
 # TRANSCRIPTS -- published gate output, pinned against the gate's own wording
 # --------------------------------------------------------------------------
 #
-# `docs/index.html` and `docs/contracts/weth10.html` render a claim-gate verdict
-# line styled as a verbatim terminal transcript, under a caption that says
-# "verbatim". A published line styled as gate output that the gate never printed
+# `docs/index.html` renders two gate verdict lines styled as a terminal
+# transcript, under a note that they are the gates' own wording. A published line styled as gate output that the gate never printed
 # is a fabricated-evidence defect, and a count check alone cannot see it: the
 # count can agree while the wording around it is invented, or while the gate's
 # own wording has since moved and left the published copy stale.
@@ -626,15 +628,13 @@ CLAIMS = [
 # So the expected line is DERIVED from the gate's source -- its verdict format
 # string, with the produced count substituted -- and compared against the
 # published copy after unescaping HTML entities and collapsing the hard wrap the
-# site renders it with. Reword the gate and both published copies must follow;
+# site renders it with. Reword the gate and the published copy must follow;
 # reword a published copy and it must still be what the gate says.
 #
 # Only gates whose verdict line is fully determined by a format string and a
 # claim this gate already produces can be pinned this way. The check.sh
 # axiom-audit line qualifies: its OK wording prints only when both halves equal
-# the leaf count. The other transcripts in the same figures
-# interpolate values that only a live run produces; they are named in
-# UNCHECKED_PUBLISHED_NUMBERS rather than half-checked here.
+# the leaf count. The site publishes no other gate transcript.
 
 TRANSCRIPTS = [
     {
@@ -647,13 +647,8 @@ TRANSCRIPTS = [
             (
                 "docs/index.html",
                 re.compile(
-                    r'scripts/check-claims\.sh\s*\n<span class="ok">(.*?)</span>', re.S
-                ),
-            ),
-            (
-                "docs/contracts/weth10.html",
-                re.compile(
-                    r'scripts/check-claims\.sh\s*\n<span class="ok">(.*?)</span>', re.S
+                    r'scripts/check-claims\.sh</span></span><span class="line"><span class="ok">(.*?)</span>',
+                    re.S,
                 ),
             ),
         ],
@@ -670,7 +665,7 @@ TRANSCRIPTS = [
             (
                 "docs/index.html",
                 re.compile(
-                    r'scripts/check\.sh --no-build\s*\n<span class="ok">(.*?)</span>',
+                    r'scripts/check\.sh --no-build</span></span><span class="line"><span class="ok">(.*?)</span>',
                     re.S,
                 ),
             ),
@@ -721,9 +716,9 @@ PATH_REFERENCES = [
 
 UNCHECKED_PUBLISHED_NUMBERS = [
     {
-        "number": "5,006/5,006 supported fixture files (of the 34,205-case "
-        "tests@v20.0.2 corpus the pinned Jaune revision reports)",
-        "surfaces": "docs/index.html",
+        "number": "5,006/5,006 supported fixture files and 34,205/34,205 cases of "
+        "tests@v20.0.2, as the pinned Jaune revision reports them",
+        "surfaces": "docs/index.html, docs/method.html",
         "producer": "none in this tree",
         "blocker": "Jaune's number, produced by a gate in that repository over a "
         "foreign EELS checkout. No committed artifact here determines it, and no "
@@ -731,54 +726,13 @@ UNCHECKED_PUBLISHED_NUMBERS = [
         "Jaune commits the count as an artifact this tree pins.",
     },
     {
-        "number": "85/85 OssifiableProxy differential cases",
-        "surfaces": "scripts/GATES.md, docs/index.html, docs/contracts/ossifiable-proxy.html",
-        "producer": "scripts/fixtures/lido-ossifiable-proxy/differential-manifest.json (cases) "
-        "-- committed, static",
-        "blocker": "The producer is static, but the value is not distinctive on the "
-        "surfaces: 85 also appears as byte counts and unrelated figures across ten "
-        "files, so the per-surface census that makes a claim sound here cannot be "
-        "computed. Registering patterns alone would give partial coverage, which is "
-        "worse than a named gap.",
-    },
-    {
-        "number": "44/44 BeaconDeposit differential rows",
-        "surfaces": "scripts/GATES.md, docs/index.html, docs/contracts/beacon-deposit.html",
-        "producer": "scripts/fixtures/beacon-deposit/manifest.json (rows) -- committed, static",
-        "blocker": "Same non-distinctive-value problem as OssifiableProxy: 44 also "
-        "occurs inside inline SVG path data and a CSS length on docs/index.html, so "
-        "no census is computable.",
-    },
-    {
         "number": "27 WETH10 selectors (and the 28 runtime entries that include receive)",
-        "surfaces": "PORTING.md, README.md, scripts/GATES.md, docs/index.html, "
-        "docs/contracts/weth10.html",
+        "surfaces": "PORTING.md, README.md, scripts/GATES.md, docs/language.html",
         "producer": "scripts/fixtures/weth10/manifest.json "
         "(selectorEndpointEquality.blancSelectorsAscending) -- committed, static",
-        "blocker": "Same non-distinctive-value problem: 27 and 28 occur 29 times "
-        "across the in-scope surfaces in unrelated arithmetic.",
-    },
-    {
-        "number": "the interpolated figures in every published gate transcript other "
-        "than the two registered check-claims.sh copies and the check.sh "
-        "axiom-audit line (23 lines: the WETH10 differential on two surfaces and "
-        "the beacon-deposit, CircuitBreaker, TWG and OssifiableProxy differential "
-        "lines; the layering line on two surfaces; 8 fixture, coverage and "
-        "current-mainnet lines; the beacon-deposit-assurance, "
-        "CircuitBreaker-assurance and proxy-pair-upgrade lines; the PRORATA WETH "
-        "vault oracle and reference lines; the DRIP stack-certificate line and the "
-        "DRIP page's copy of the check-claims.sh line)",
-        "surfaces": "docs/index.html, docs/contracts/*.html",
-        "producer": "the gates themselves, at run time",
-        "blocker": "scripts/check-layering.py is static and deterministic over committed "
-        "files, but this gate has not registered every interpolated field of the "
-        "two published layering transcript copies; the module-count field is "
-        "registered above, while the remaining layering fields and exact transcript "
-        "enumeration remain unchecked. The other verdict lines interpolate values "
-        "computed during their runs and are likewise not fully enumerated here. "
-        "They become checkable when this gate registers each static derivation and "
-        "exact surface, or a gate commits its verdict line as an artifact, the way "
-        "the WETH10 manifest commits its row inventory.",
+        "blocker": "27 and 28 occur in unrelated figures across the in-scope surfaces "
+        "(on docs/language.html, DRIP's 27-decimal fixed point), and no semantic "
+        "quotation census has been written for the four surfaces.",
     },
     {
         "number": "the Lido CircuitBreaker assurance scale cell's figures other than its "
@@ -818,7 +772,7 @@ UNCHECKED_PUBLISHED_NUMBERS = [
     },
 ]
 
-UNCHECKED_PUBLISHED_NUMBER_COUNT = 7
+UNCHECKED_PUBLISHED_NUMBER_COUNT = 4
 
 
 # --------------------------------------------------------------------------
@@ -855,13 +809,19 @@ def line_of(text: str, index: int) -> int:
 
 
 def standalone(value: int) -> re.Pattern:
-    """Occurrences of `value` as a standalone integer.
+    """Occurrences of `value` as a standalone integer, in either spelling.
 
     Excluded on both sides: further digits, hexadecimal digits and an `x`, so a
-    digest or an address never registers; and a preceding `.` or `,`, so a
-    decimal or a grouped number never does either.
+    digest or an address never registers; a preceding `.` or `,`, so a decimal
+    or a grouped number never does either; and a following `,` and digit, so the
+    head of a longer grouped number does not. Values of a thousand or more also
+    match their thousands-separated spelling, as site prose prints them.
     """
-    return re.compile(r"(?<![0-9A-Fa-fx.,])" + str(value) + r"(?![0-9A-Fa-f])")
+    forms = sorted({str(value), f"{value:,}"}, key=len, reverse=True)
+    alternatives = "|".join(re.escape(form) for form in forms)
+    return re.compile(
+        r"(?<![0-9A-Fa-fx.,])(?:" + alternatives + r")(?![0-9A-Fa-f]|,[0-9])"
+    )
 
 
 def collapse(text: str) -> str:
@@ -911,7 +871,7 @@ def check_claims(root: pathlib.Path, failures: list) -> tuple:
                 for m in matches:
                     for g in m.groups():
                         checked += 1
-                        got = int(g)
+                        got = int(g.replace(",", ""))
                         mark = "ok " if got == expected else "BAD"
                         print(f"  {mark} {rel}:{line_of(text, m.start())}  {got}")
                         if got != expected:

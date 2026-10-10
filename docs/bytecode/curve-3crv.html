@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Curve 3Crv — Blanc</title>
+<meta name="description" content="What Blanc proves about the 2,276 deployed bytes of Curve's 3Crv LP token: every successful call is exactly a step of a token model, storage replays exactly the committed calls, and supply always equals the sum of balances.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fbfaf5'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="../site.css">
+</head>
+<body>
+
+<header id="hdr">
+  <div class="wrap nav">
+    <a class="brand" href="../"><span class="sq"></span><b>Blanc</b><i>/blɑ̃/ — fr. “white”</i></a>
+    <nav class="navlinks" aria-label="Site">
+      <a class="opt" href="../#corpus" aria-current="page">Corpus</a>
+      <a class="opt" href="../method.html">How it works</a>
+      <a class="opt" href="../language.html">Language</a>
+      <a class="opt" href="../#limits">Limits</a>
+      <a class="opt" href="../#check">Check it</a>
+      <a class="btn opt" href="https://skbaek.github.io/jaune/" title="Jaune — the EVM semantics every theorem here is stated against"><span class="sqf"></span>Jaune</a>
+      <a class="btn" href="https://github.com/skbaek/blanc"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg><span class="gh-label">GitHub</span></a>
+      <details class="menu"><summary class="btn">Menu</summary><div class="panel">
+        <a href="../">Home</a><a href="../#corpus">The corpus</a><a href="../method.html">How it works</a>
+        <a href="../language.html">The Blanc language</a><a href="../#limits">Limits</a><a href="../#check">Check it yourself</a>
+        <a href="https://skbaek.github.io/jaune/">Jaune</a>
+      </div></details>
+    </nav>
+  </div>
+</header>
+
+<main>
+<section class="page-hero">
+  <div class="wrap">
+    <p class="crumbs"><a href="../">Blanc</a><span>/</span><a href="../#corpus">Deployed bytecode</a><span>/</span>Curve 3Crv</p>
+    <div class="hero-grid">
+      <div>
+        <h1>Curve 3Crv.</h1>
+        <p class="lede">The liquidity-provider token of Curve’s 3pool for DAI, USDC and USDT: 2,276 bytes compiled by Vyper 0.2.4 in September 2020. The pool is its minter; it mints 3Crv to depositors and burns it on withdrawal.</p>
+        <p class="lede-sm">Blanc proves that every successful call to these bytes, for every selector, is exactly a step of a token model — storage, events and return bytes included; that after any valid history the storage is that model run over exactly the committed calls; and that supply always equals the sum of balances. A model proved to match the bytes is also reliable documentation, and this one records a policy a modern ERC-20 user might not expect.</p>
+      </div>
+      <div class="plate idplate">
+        <div class="plate-head"><span class="who"><span class="k">Artifact</span>Curve 3Crv</span><span class="meta">Ethereum mainnet</span></div>
+        <div class="hexband wrapband" aria-hidden="true">60 04 36 10 15 61 00 0d 57 61 08 de 56 5b 60 00 35 60 1c 52 74 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 60 20 52 6f 7f ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff 60 40 52 7f ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff 80 00 00 00 00 00 00 00 00 00 00 00 00 00</div>
+        <dl class="kv">
+          <dt>Address</dt><dd><code>0x6c3F90f043a72FA612cbac8115EE7e52BDe6E490</code></dd>
+          <dt>Runtime</dt><dd>2,276 bytes; Keccak-256 <code>0xb731b7a9a74c6c60d715f0c791d663f1530743a48337e7fab9cf3481afdd9feb</code></dd>
+          <dt>Compiler</dt><dd>Vyper 0.2.4</dd>
+          <dt>Created</dt><dd>block 10,809,467 (6 September 2020), transaction <code>0xa7d9…94f8</code>, deployer nonce 42</dd>
+          <dt>Proofs</dt><dd><a href="https://github.com/skbaek/blanc/tree/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Curve3Crv"><code>Blanc/Lift/Curve3Crv/</code></a>, 9,745 lines of Lean</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap layout">
+    <nav class="toc" aria-label="On this page">
+      <span class="t">On this page</span>
+      <a href="#history">Exactly the committed calls</a>
+      <a href="#frames">Every call, a model step</a>
+      <a href="#policy">A token’s real policy</a>
+      <a href="#live">Live, at exact cost</a>
+      <a href="#deploy">Deployment</a>
+      <a href="#limits">Not claimed</a>
+    </nav>
+
+    <div class="prose">
+      <section id="history">
+        <p class="eyebrow">Safety, after any history</p>
+        <h2>Exactly the committed calls, and conservation.</h2>
+        <p>After any configured history from a checkpoint where the bytes are installed and the storage abstracts a model state, the code is intact and the final storage abstracts the state reached by running the model over exactly the settlement-committed calls to the token’s writers, in order — and that state conserves supply: <code>totalSupply</code> equals the sum of balances. The statement is short enough to read whole:</p>
+        <div class="thm">
+          <div class="head"><span class="tag">Theorem, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Curve3Crv/CommittedHistory.lean#L211"><code>Blanc.Lift.Curve3Crv.c3crv_history_committed_derived</code> · CommittedHistory.lean:211</a></div>
+<pre class="lean"><span class="kw">theorem</span> <span class="nm">c3crv_history_committed_derived</span> {ca : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {initial : Blanc.Curve3Crv.State}
+    {initialKeys : Key → Prop}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode ca).toList = c3crvSem.image)
+    (invariant : VyInv (checkpoint.state.getStor ca) initial initialKeys)
+    (fresh : FreshKeys initialKeys (historyTouchedKeys ca trace)) :
+    some (future.state.getCode ca).toList = c3crvSem.image ∧
+      ∃ s, InvRun initial (committedInvocations ca trace) s ∧
+        runInvocations initial (committedInvocations ca trace) = some s ∧
+        VyInv (future.state.getStor ca) s
+          (Key.extend initialKeys (invocationKeys (committedInvocations ca trace))) ∧
+        Blanc.Curve3Crv.Conserved s</pre>
+        </div>
+        <p>Three hypotheses about the start and one about the hashes. <code>fresh</code> is trace-local: the mapping rows the history touches — rolled-back frames included — are tracked already or land on unused slots, and distinct rows land on distinct slots. No filter on static frames is needed, because no writer can succeed in one: every writer reaches an <code>SSTORE</code> or a <code>LOG3</code>, which a static frame forbids, and Blanc proves it from the frame’s own run (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Curve3Crv/Safe.lean#L202"><code>c3crv_writer_nonstatic</code></a>).</p>
+      </section>
+
+      <section id="frames">
+        <p class="eyebrow">Refinement</p>
+        <h2>Every successful call is a step of the model.</h2>
+        <p>From a fresh entry, a successful frame of the deployed runtime is exactly the model’s step for the decoded call. For a writer, the storage abstraction moves to the model’s next state, the logs are the model’s events, every other account’s storage is untouched, and the return bytes are the model’s: the ABI word <code>true</code> for <code>transfer</code>, <code>transferFrom</code>, <code>approve</code>, <code>mint</code> and <code>burnFrom</code>, empty for <code>set_minter</code> and <code>set_name</code>; the step for <code>set_name</code> also consumes the minter’s answer to <code>owner()</code>. For a view, storage and logs are unchanged and the return bytes equal the model’s output. Unknown selectors and short calldata have no successful run (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Curve3Crv/Safe.lean#L249"><code>c3crv_frame_refines</code></a>).</p>
+      </section>
+
+      <section id="policy">
+        <p class="eyebrow">Documentation that cannot drift</p>
+        <h2>A token’s real policy.</h2>
+        <p>Each of the following is a theorem about the model, carried to the bytes by the refinement theorems above.</p>
+        <ul class="claims">
+          <li><b>Every call conserves supply</b>, and the initial state is conserving.<span class="nm"><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Curve3Crv/Properties.lean#L160">Blanc.Curve3Crv.step_conserved</a></span></li>
+          <li><b>Only the minter changes the supply</b>, and only through <code>mint</code> or <code>burnFrom</code>; <b>only the minter replaces the minter</b>.<span class="nm"><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Curve3Crv/Properties.lean#L183">supply_change_by_minter</a> · <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Curve3Crv/Properties.lean#L202">minter_change_by_minter</a></span></li>
+          <li><b>There is no infinite approval.</b> A non-minter’s <code>transferFrom</code> of a nonzero amount spends allowance even when the allowance is the maximum value.<span class="nm"><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Curve3Crv/Properties.lean#L234">transferFrom_spends_max_allowance</a></span></li>
+          <li><b>The minter may move anything.</b> The minter’s own <code>transferFrom</code> leaves every allowance untouched, as the deployed source’s comment “minter is allowed to transfer anything” says.<span class="nm"><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Curve3Crv/Properties.lean#L250">transferFrom_minter_keeps_allowances</a></span></li>
+          <li><b>Approvals start from zero.</b> <code>approve</code> can set a nonzero allowance only when the current one is zero.<span class="nm"><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Curve3Crv/Properties.lean#L259">approve_zero_first</a></span></li>
+        </ul>
+<pre class="lean" style="margin-top:22px"><span class="kw">theorem</span> <span class="nm">transferFrom_spends_max_allowance</span> {ctx : Ctx} {f d v : B256} {s : State}
+    {out : Out} (h : step ctx (.transferFrom f d v) s = .ok out)
+    (hm : ctx.sender ≠ s.minter) (hv : v ≠ 0) :
+    out.1.allowances f.toAdr ctx.sender ≠ s.allowances f.toAdr ctx.sender</pre>
+      </section>
+
+      <section id="live">
+        <p class="eyebrow">Constructed executions</p>
+        <h2>Live, at an exact cost.</h2>
+        <p>A call the model accepts — any function but <code>set_name</code> — is a real execution ending in the model’s step, with exact logs and return bytes, at an exact cost: there is a constant <i>c</i> such that for every residual <i>G</i> above the 2,300-gas call stipend, the call succeeds when given <i>G</i> + <i>c</i> and leaves exactly <i>G</i> (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Curve3Crv/Exec.lean#L54"><code>c3crv_step_exec</code></a>). The proofs construct each <i>c</i>; the exported theorem names no formula. The same holds at the state any configured history reaches (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Curve3Crv/Liveness.lean#L23"><code>c3crv_history_live</code></a>). <code>set_name</code> asks the minter’s <code>owner()</code> and is live given the callee premise <code>OwnerCallOk</code>, that the answer names the caller.</p>
+      </section>
+
+      <section id="deploy">
+        <p class="eyebrow">Where a history can start</p>
+        <h2>Deployment.</h2>
+        <p>Under every covered fork, the recorded creation input, run as a <code>CREATE</code> from the recorded deployer at nonce 42, installs the runtime at the token’s mainnet address and leaves storage that abstracts the model’s initial state — name, symbol, 18 decimals, zero supply, and the deployer as minter — with no hash premise: the constructor’s write of 0 at <code>keccak(3 ‖ caller)</code> is discharged by kernel evaluation (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Curve3Crv/Creation/Deploy.lean#L297"><code>curve_deploy_covered</code></a>). The recorded deployment therefore satisfies the history theorem’s checkpoint predicate. It is a modeled deployment: the 2020 transaction’s inclusion is not proved.</p>
+      </section>
+
+      <section id="limits">
+        <p class="eyebrow">Stated, so it is not inferred</p>
+        <h2>Not claimed.</h2>
+        <ul class="nc">
+          <li>A closed cost formula; the cost is exact but existential.</li>
+          <li>Logs and return bytes at the history level; they are stated frame by frame.</li>
+          <li><code>set_name</code> without the owner-call premise; transaction-level liveness.</li>
+          <li>That today’s 3Crv storage abstracts a model state: that needs the holders and allowance pairs recovered from its <code>Transfer</code> and <code>Approval</code> logs, and a complete enumeration of its storage showing nothing else is stored.</li>
+        </ul>
+        <p>We found no earlier machine-checked verification of this contract. The claim map’s <a href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md#53-curve-3crv-model-refinement-exact-committed-replay-conservation">3Crv section</a> lists every theorem with its premises, file and line.</p>
+      </section>
+
+      <nav class="pager" aria-label="Artifacts">
+        <a href="uniswap-v2.html"><span class="d">Previous artifact</span><span class="t">Uniswap V2 pair</span></a>
+        <a class="next" href="deposit-contract.html"><span class="d">Next artifact</span><span class="t">Beacon deposit contract</span></a>
+      </nav>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap footgrid">
+    <div class="colophon">
+      <a class="brand" href="../" style="margin-bottom:12px"><span class="sq"></span><b>Blanc</b></a>
+      <p>MIT-licensed. Statements, names and line numbers refer to Blanc commit <code>5048a51f</code> and the Jaune revision it pins, <code>2737c8eb</code>. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
+    </div>
+    <div>
+      <h4>Deployed bytecode</h4>
+      <a href="../bytecode/weth9.html">WETH9</a><a href="../bytecode/uniswap-v2.html">Uniswap V2 pair</a><a href="../bytecode/curve-3crv.html">Curve 3Crv</a><a href="../bytecode/deposit-contract.html">Deposit contract</a><a href="../bytecode/curve-pools.html">Curve pools</a><a href="../bytecode/eip-7002.html">EIP-7002 contract</a><a href="../bytecode/lido-circuit-breaker.html">Lido CircuitBreaker</a>
+    </div>
+    <div>
+      <h4>Blanc</h4>
+      <a href="../method.html">How it works</a><a href="../language.html">The language</a><a href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md">Claim map</a><a href="https://github.com/skbaek/blanc/blob/main/scripts/GATES.md">Gate catalogue</a><a href="https://github.com/skbaek/blanc/blob/main/SECURITY.md">Security</a>
+    </div>
+    <div>
+      <h4>Elsewhere</h4>
+      <a href="https://github.com/skbaek/blanc">GitHub</a><a href="https://skbaek.github.io/jaune/">Jaune</a><a href="https://github.com/skbaek/creme">Creme</a>
+    </div>
+  </div>
+</footer>
+<script src="../site.js"></script>
+</body>
+</html>

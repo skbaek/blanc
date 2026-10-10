@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Blanc language — Blanc</title>
+<meta name="description" content="Blanc's own language: four constructors over the EVM's instructions, a compiler whose correctness is a Lean theorem, and ten contracts verified over their compiled bytes — WETH, WETH10, the deposit contract, Lido's CircuitBreaker, gateway and proxy, an ERC-4626 vault, FMINT, PRORATA and DRIP.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fbfaf5'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+
+<header id="hdr">
+  <div class="wrap nav">
+    <a class="brand" href="./"><span class="sq"></span><b>Blanc</b><i>/blɑ̃/ — fr. “white”</i></a>
+    <nav class="navlinks" aria-label="Site">
+      <a class="opt" href="./#corpus">Corpus</a>
+      <a class="opt" href="method.html">How it works</a>
+      <a class="opt" href="language.html" aria-current="page">Language</a>
+      <a class="opt" href="./#limits">Limits</a>
+      <a class="opt" href="./#check">Check it</a>
+      <a class="btn opt" href="https://skbaek.github.io/jaune/" title="Jaune — the EVM semantics every theorem here is stated against"><span class="sqf"></span>Jaune</a>
+      <a class="btn" href="https://github.com/skbaek/blanc"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg><span class="gh-label">GitHub</span></a>
+      <details class="menu"><summary class="btn">Menu</summary><div class="panel">
+        <a href="./">Home</a><a href="./#corpus">The corpus</a><a href="method.html">How it works</a>
+        <a href="language.html">The Blanc language</a><a href="./#limits">Limits</a><a href="./#check">Check it yourself</a>
+        <a href="https://skbaek.github.io/jaune/">Jaune</a>
+      </div></details>
+    </nav>
+  </div>
+</header>
+
+<main>
+<section class="page-hero">
+  <div class="wrap">
+    <p class="crumbs"><a href="./">Blanc</a><span>/</span>The language</p>
+    <div class="hero-grid">
+      <div>
+        <h1>Blanc, the language.</h1>
+        <p class="lede">Before it read bytes it did not write, Blanc was a way to write bytes that are easy to verify: the EVM’s own instructions, arranged by four constructors, with a compiler whose correctness is a Lean theorem.</p>
+        <p class="lede-sm">Ten contracts are written in it and verified over their compiled bytes — seven ports of contracts that exist on mainnet, three études built to push one hard property to full depth — and three compositions prove things about two of them at once. The execution-history, settlement and liveness machinery they needed is what the verification of deployed bytecode now stands on.</p>
+      </div>
+      <figure>
+        <div class="codehead"><span>Blanc/Weth.lean:36 — a complete function</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Weth.lean#L36">source</a></div>
+<pre class="lean"><span class="kw">def</span> <span class="nm">deposit</span> : Func :=
+  caller ::: sload ::: <span class="cm">-- caller_bal</span>
+  callvalue ::: add ::: <span class="cm">-- (call_val + caller_bal)</span>
+  caller ::: <span class="cm">-- caller :: (call_val + caller_bal)</span>
+  sstore ::: <span class="cm">-- caller WETH balance is now up to date</span>
+  logDeposit</pre>
+        <figcaption>Blanc’s WETH stores a balance at the holder’s own address word — no hashed mapping, so no theorem about it needs a premise about hash collisions. The comments are the source’s own.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap layout">
+    <nav class="toc" aria-label="On this page">
+      <span class="t">On this page</span>
+      <a href="#syntax">Four constructors</a>
+      <a href="#compiler">The compiler, proved</a>
+      <a href="#buys">What it buys</a>
+      <a href="#ports">Seven ports</a>
+      <a href="#etudes">Three études</a>
+      <a href="#compositions">Two contracts at once</a>
+      <a href="#claims">What a port claims</a>
+      <a href="#costs">What it costs</a>
+    </nav>
+
+    <div class="prose">
+      <section id="syntax">
+        <p class="eyebrow">The whole syntax</p>
+        <h2>Four constructors, and nothing else.</h2>
+<pre class="lean"><span class="kw">inductive</span> <span class="nm">Func</span> : Type
+  | branch : Func → Func → Func
+  | last : Linst → Func
+  | next : Ninst → Func → Func
+  | call : Nat → Func
+
+<span class="kw">structure</span> <span class="nm">Prog</span> : Type <span class="kw">where</span>
+  (main : Func)
+  (aux : List Func)</pre>
+        <p>A <code>Func</code> is a branch on the top of the stack, a terminal instruction, a straight-line instruction followed by more code, or a call into the program’s table of functions — <b>b</b>ranch, <b>l</b>ast, <b>n</b>ext, <b>c</b>all. There are no expressions, no variables and no loops as syntax: the instructions are the EVM’s own, and recursion through <code>call</code> and the machine’s stack is all there is, which is exactly what a proof has to walk (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Semantics.lean#L107"><code>Blanc/Semantics.lean</code></a>).</p>
+        <p>One liberty of raw bytecode is withheld: computed jump targets. Control flow is the tree you wrote, and the compiler owns every offset. That single restriction is what makes a reusable proof stack possible — inversion tactics that take an execution apart along the program’s own shape, and forward tactics that build one, gas included, without per-contract jump reasoning.</p>
+      </section>
+
+      <section id="compiler">
+        <p class="eyebrow">Nothing taken on its word</p>
+        <h2>The compiler is a theorem.</h2>
+        <p>Between a Blanc program and the chain sits exactly one artifact, the compiler, and it enters the theorems rather than the trust base. Its correctness is a backward simulation: every successful EVM execution of the compiled bytes is a run of the source program, so a property proved of the source is a fact about what the EVM executes.</p>
+        <div class="thm">
+          <div class="head"><span class="tag">Theorem, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/CommonCore.lean#L2107"><code>Blanc.correct</code> · CommonCore.lean:2107</a></div>
+<pre class="lean"><span class="kw">theorem</span> <span class="nm">correct</span> (sevm : Sevm) (pre : Devm) (p : Prog) (post : Devm)
+    (exc : Exec 0 sevm pre (.ok post))
+    (eq : some sevm.code.toList = p.compile) :
+    Prog.Run sevm pre p post</pre>
+        </div>
+        <p>For liveness a proof must go the other way and construct an execution. A gas-exact companion relates a run of a compiled program to a successful execution of its bytes in both directions, for programs that do not read their own program counter:</p>
+        <div class="thm">
+          <div class="head"><span class="tag">Theorem, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Compiled.lean#L1644"><code>Blanc.Prog.runCompiled_iff_exec</code> · Compiled.lean:1644</a></div>
+<pre class="lean"><span class="kw">theorem</span> <span class="nm">Prog.runCompiled_iff_exec</span> {sevm : Sevm} {pre : Devm} {p : Prog}
+    {post : Devm}
+    (h_pcf : Prog.pcFree p = true)
+    (h_eq : some sevm.code.toList = p.compile) :
+    Prog.RunCompiled sevm pre p post ↔ exec ⟨0, sevm, pre⟩ = .ok post</pre>
+        </div>
+        <p class="small dimmer">By itself this is not liveness for any contract: it converts run witnesses into executions and back, at the level of one frame. Liveness theorems are built on it, contract by contract.</p>
+      </section>
+
+      <section id="buys">
+        <p class="eyebrow">Why write in it</p>
+        <h2>What writing in Blanc buys.</h2>
+        <p>Reading deployed bytes, Blanc proves what the bytes allow. Writing them, it can also choose bytes that make the proof easier and the contract cheaper. Three dividends recur across the ten contracts.</p>
+        <ul>
+          <li><b>Premises designed out.</b> Blanc’s WETH keys balances by raw address words, as above. Its solvency invariant — booked balances, summed over all 2<sup>160</sup> address slots, never exceed the ether the contract holds — is preserved along every configured chain from any state that satisfies it, with no hash premise at all (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Solvent.lean#L1577"><code>chainUsing_preserves_solvent</code></a>). The deployed WETH9’s corresponding results need a premise about the hashed keys a history touches.</li>
+          <li><b>Smaller runtimes, cheaper calls.</b> Six of the seven ports are smaller than the contracts they port, and the seventh, the ERC-4626 vault, is four times larger and still cheaper on every call measured. Two theorems compare Blanc’s WETH with the deployed WETH9 exactly: <code>balanceOf</code> costs 2,260 gas cold against 2,534, and <code>decimals</code> 158 against 2,444.</li>
+          <li><b>Every choice open.</b> Storage layout, dispatch order, calldata handling and error shape are the author’s, down to the instruction — which is how those dividends were designed in rather than argued for.</li>
+        </ul>
+        <div class="tablewrap" style="margin-top:20px"><table class="data">
+          <thead><tr><th>Port</th><th class="r">Blanc runtime</th><th class="r">Reference</th><th>Measured against the reference</th></tr></thead>
+          <tbody>
+            <tr><td>WETH (after WETH9)</td><td class="r">988 B</td><td class="r">3,124 B</td><td><code>balanceOf</code> and <code>decimals</code> cheaper, by theorem</td></tr>
+            <tr><td>WETH10</td><td class="r">6,313 B</td><td class="r">9,975 B</td><td>147 of 147 differential rows agree</td></tr>
+            <tr><td>Beacon deposit contract</td><td class="r">2,891 B</td><td class="r">6,358 B</td><td>67 of 69 transactions cheaper, 2 equal</td></tr>
+            <tr><td>Lido CircuitBreaker</td><td class="r">4,282 B</td><td class="r">4,584 B</td><td>462 of 464 resource boundaries cheaper, 2 equal</td></tr>
+            <tr><td>Lido withdrawals gateway</td><td class="r">8,094 B</td><td class="r">8,128 B</td><td>51 of 51 named gas paths cheaper</td></tr>
+            <tr><td>Lido OssifiableProxy</td><td class="r">2,188 B</td><td class="r">2,497 B</td><td>25 of 25 efficiency cells won</td></tr>
+            <tr><td>ERC-4626 vault</td><td class="r">17,481 B</td><td class="r">4,347 B</td><td>6 of 6 measured calls cheaper</td></tr>
+          </tbody>
+        </table></div>
+        <p class="small dimmer">Sizes are committed artifacts. Except for WETH’s two theorems, the comparisons are finite measurements against a pinned copy of the reference, recorded in each port’s manifests and registers.</p>
+      </section>
+
+      <section id="ports">
+        <p class="eyebrow">Targets you already know</p>
+        <h2>Seven ports.</h2>
+        <p>A port rebuilds a contract that already exists, so every claim can be checked against something a reader already trusts: a frozen statement of the reference’s behavior, a differential corpus run beside the reference’s bytes in a pinned oracle, theorems over the exact compiled Blanc bytes, and a register that publishes every known divergence.</p>
+
+        <h3 id="weth">WETH</h3>
+        <p>Wrapped ether after WETH9, in 988 bytes. Solvency — balances summed over every address slot never exceed the ether held — is preserved by every frame, whatever its callees do, and along every configured chain across fork activations, with no hash premise. <code>balanceOf</code> succeeds at exactly 2,260 gas cold, and the composition stratum compares that cost with the deployed WETH9’s by theorem. Its deviation register has five rows. Blanc also verifies the deployed WETH9 itself, a different subject: <a href="bytecode/weth9.html">WETH9</a>.</p>
+
+        <h3 id="weth10">WETH10</h3>
+        <p>A port of the deployed WETH10 at <code>0xf4BB…8A9F</code> — all 27 functions and <code>receive</code>, flash loans, ERC-677-style callbacks and EIP-2612 permits — in 6,313 bytes against 9,975. Its flagship is a redeemability guarantee. From a deployment root, which a separate theorem derives from one canonical creation block through Jaune’s block transition, any two legs of valid blocks on Jaune’s mainnet schedule yield, for any holder, an accounted history in which that holder’s booked balance obeys an exact identity in the natural numbers — flash credits and repayments cancel — and every admissible <code>withdraw</code> or <code>withdrawTo</code> up to what remains succeeds with its exact effect, as a message and as a complete signed type-2 transaction (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Weth10Mainnet.lean#L319"><code>deployment_reachable_future_dualSelector_redeemable_mainnet</code></a>, statement-pinned; a sibling delivers one history for all holders at once). A generated corpus runs Blanc’s runtime beside the deployed original’s: 147 of 147 rows agree. Its register accepts no behavioral deviation. The deployed WETH10 is the reference here, never the subject: nothing verifies its own bytes.</p>
+
+        <h3 id="deposit">Beacon deposit contract</h3>
+        <p>The eth2 deposit contract in 2,891 bytes against the deployed 6,358 — 54.5 percent smaller — hashing through the SHA-256 precompile. From a Prague deployment block the proofs themselves reconstruct, every state reachable along a Prague-only schedule, with native SHA-256 admitted at address 0x02, holds a deposit count equal to the length of a deposit list and a root equal to that list’s Merkle root (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/BeaconDepositHistoryChain.lean#L140"><code>DeploymentRoot.future_count_root</code></a>, statement-pinned). Beside the deployed runtime, 44 of 44 differential rows agree, and of 69 runtime transactions 67 are cheaper and 2 equal. Blanc also verifies the deployed contract itself: <a href="bytecode/deposit-contract.html">the deposit contract</a>.</p>
+
+        <h3 id="circuit-breaker">Lido CircuitBreaker</h3>
+        <p>Lido’s pauser registry in 4,282 bytes against 4,584. Registry integrity, as one combined invariant, is preserved along every configured chain over covered forks, with no premise about the code at any other address and none about reentrancy (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/LidoCircuitBreakerHistoryChain.lean#L1348"><code>chainUsing_preserves_registryStable</code></a>); rooted forms start it from an official-parameters deployment derived through a Prague block. Three <code>registerPauser</code> obligations that a pre-deployment Certora campaign reported as known limitations are corollaries of that invariant, each statement-pinned. 175 of 175 differential rows agree; the register accepts no deviation. Blanc also verifies the deployed CircuitBreaker itself: <a href="bytecode/lido-circuit-breaker.html">Lido CircuitBreaker</a>.</p>
+
+        <h3 id="gateway">Lido withdrawals gateway</h3>
+        <p>The TriggerableWithdrawalsGateway at <code>0xDC00…037B</code>, the CircuitBreaker’s real pause target: 24 functions and the constructor in 8,094 bytes against 8,128. For every deployment parameter and every distinct CircuitBreaker account, the compiled gateway is a <em>pinned pause target</em>: a clean <code>pauseFor</code> stores exactly the paused-until projection, <code>isPaused</code> answers truthfully, protected functions revert while paused, and no retained write anywhere in a pause’s frame closure touches the CircuitBreaker’s listed cells (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/LidoTriggerableWithdrawalsGatewayPinnedTarget.lean#L617"><code>pinnedPauseTarget</code></a>). The differential has 62 agreements and 9 registered deviations; its register accepts 3 and records 2 as repaired.</p>
+
+        <h3 id="proxy">Lido OssifiableProxy</h3>
+        <p>Lido’s upgradeable proxy in 2,188 bytes against 2,497, with delegatecall made a verified capability: for the exact compiled proxy and any delegated child supplied as an execution certificate, the outer message settles to the child’s status, output, logs and the proxy’s storage, gas and warm sets excluded (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/ProxyPairOssifiableForwarding.lean#L1408"><code>processMessage_forwardingEnvelope</code></a>). After a successful <code>ossify</code>, <code>changeAdmin</code>, <code>upgradeTo</code> and <code>ossify</code> end in <code>ProxyIsOssified()</code> from any frame that sees the locked storage, and a separate theorem covers <code>upgradeToAndCall</code>. 85 of 85 differential cases agree; a pre-registered 25-cell efficiency campaign was won 25 to 0; one deviation is accepted.</p>
+
+        <h3 id="vault">ERC-4626 vault over WETH</h3>
+        <p>A 25-function share vault over Blanc’s own WETH, ported against OpenZeppelin’s ERC4626 at v5.7.0 — 17,481 bytes against 4,347, four times larger, as its register says, and cheaper on all six measured calls. Its chain-level theorems quantify over two exact compiled contracts at once: from a post-installation checkpoint of the pair, along every configured history, the vault’s shares stay conserved, capped and backed by the WETH the vault holds in WETH’s own ledger, and WETH stays solvent — under one finite, trace-local premise that the allowance keys the history visits do not collide (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Composition/ProrataWethVaultLedgerFaithful.lean#L63"><code>pair_history_backed</code></a>); without it, every reachable state is backed or follows an authorized debit. 63 statements are pinned; its register holds nine pre-registered deviations.</p>
+      </section>
+
+      <section id="etudes">
+        <p class="eyebrow">Minimal by design</p>
+        <h2>Three études.</h2>
+        <p>An étude is composed from scratch around one hard property, and taken to full proof depth.</p>
+
+        <h3 id="fmint">FMINT — flash minting</h3>
+        <p>An ERC-3156 flash-mint token in 1,257 bytes. Any <code>flashLoan</code> call given at least the stated gas ends in success, a deliberate revert, or a non-consensus fault — never a consensus exceptional halt — whatever code the borrower runs, with no premise about it (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/FmintSettles.lean#L2530"><code>fmint_flashLoan_settles_of_call</code></a>). That is possible because Jaune’s interpreter is total: the callee’s execution comes from totality, not from an assumption about the callee. Supply conservation, <code>totalSupply</code> = Σ balances, is preserved across arbitrary reentrant borrower code and along every configured chain from any conserved state; <code>totalSupply()</code> costs exactly 2,218 gas.</p>
+
+        <h3 id="prorata">PRORATA — no profit for any coalition</h3>
+        <p>A pro-rata share ledger with a virtual offset of 1,000, in 343 bytes. Over every realized chain history from a checkpoint where its code is installed with empty storage, in which a victim makes one deposit and at most one full exit, the coalition of everyone else takes out no more than it put in, arbitrary callee code inside the quantifier and no honesty premise anywhere (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/ProrataAttackTrace.lean#L713"><code>attacker_no_profit</code></a>, statement-pinned). An exact-integer brute-force oracle found the offset-one leak — one wei in five steps — before any proof was attempted.</p>
+
+        <h3 id="drip">DRIP — compounding</h3>
+        <p>An accrual-index savings ledger with per-second compounding in 27-decimal fixed point, through a Maker-shaped <code>rpow</code> whose two-sided error band is certified, in 1,762 bytes. Its deployment root is derived from a canonical creation block, and along any configured history, any coalition’s total exits never exceed its principal plus its realized accrual, rounded down — every term a fold over the history’s own calls (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/DripTranscriptHistory.lean#L54"><code>history_transcript_entitlement</code></a>, statement-pinned). No successful <code>drip</code> or <code>join</code> leaves the index stale.</p>
+      </section>
+
+      <section id="compositions">
+        <p class="eyebrow">A stratum of its own</p>
+        <h2>Two verified contracts at once.</h2>
+        <p>Contracts are siblings in the import hierarchy: no contract’s module imports another’s, and a gate enforces it. A theorem that genuinely needs two contracts lives in a composition stratum downstream of all of them.</p>
+        <ul>
+          <li><b>CircuitBreaker × gateway.</b> At a successful public pause of the CircuitBreaker with the compiled gateway installed as its target, the target is paused at exactly the projection, with no premise about the target beyond its code (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Composition/LidoCircuitBreakerTriggerableWithdrawalsGateway.lean#L181"><code>publicPause_gatewayPinnedTarget</code></a>); and in two concrete worlds, a finite pause and an infinite one, the successful pause is constructed, not assumed.</li>
+          <li><b>Proxy × two implementations.</b> For an explicit pair of implementations, one authorized execution of the compiled proxy’s <code>upgradeToAndCall</code>, given its initializer child’s run, commits the new implementation and establishes the migration relation, and calls through the proxy are proved to refine before and after.</li>
+          <li><b>Vault × WETH.</b> The backing theorem above, over both contracts’ exact bytes.</li>
+          <li><b>WETH × WETH9.</b> The exact gas comparison of Blanc’s WETH with the deployed WETH9.</li>
+        </ul>
+      </section>
+
+      <section id="claims">
+        <p class="eyebrow">The rules</p>
+        <h2>What a port claims.</h2>
+        <p>A port does not claim to be its reference, to the byte; that is a non-goal, permanently. It claims a counterfactual: were the reference being written today, the Blanc implementation would be a better way to build it — behavior that follows a stated, proved specification; an artifact small enough to stay within reach of interactive proof; low-level freedom spent on measured wins. Deviations from the reference are governed, not forbidden: each is a register row with a stance and evidence, and leaving a known divergence unrecorded is the one prohibited move. A port’s theorems are about Blanc’s artifact; where Blanc verifies the deployed original too — WETH9, the deposit contract, the CircuitBreaker — that is a separate subject with its own page. <a href="https://github.com/skbaek/blanc/blob/main/PORTING.md"><code>PORTING.md</code></a> governs.</p>
+      </section>
+
+      <section id="costs">
+        <p class="eyebrow">The fee</p>
+        <h2>What it costs.</h2>
+        <p>A new, deliberately bare language, austere twice over: once to write a contract in four constructors over raw instructions, once to prove it in an interactive theorem prover. There is no Solidity or Vyper syntax, no framework, no library to import beyond what earlier contracts proved, and no auditor already fluent in the source language. For contracts whose invariants are worth more than their development cost — wrappers, vaults, registries, anything whose one job is to keep the books — that trade can be worth making. For code already deployed, it is no longer a trade at all: Blanc reads <a href="./#corpus">the bytes that exist</a>.</p>
+      </section>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap footgrid">
+    <div class="colophon">
+      <a class="brand" href="./" style="margin-bottom:12px"><span class="sq"></span><b>Blanc</b></a>
+      <p>MIT-licensed. Statements, names and line numbers refer to Blanc commit <code>5048a51f</code> and the Jaune revision it pins, <code>2737c8eb</code>. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
+    </div>
+    <div>
+      <h4>Deployed bytecode</h4>
+      <a href="bytecode/weth9.html">WETH9</a><a href="bytecode/uniswap-v2.html">Uniswap V2 pair</a><a href="bytecode/curve-3crv.html">Curve 3Crv</a><a href="bytecode/deposit-contract.html">Deposit contract</a><a href="bytecode/curve-pools.html">Curve pools</a><a href="bytecode/eip-7002.html">EIP-7002 contract</a><a href="bytecode/lido-circuit-breaker.html">Lido CircuitBreaker</a>
+    </div>
+    <div>
+      <h4>Blanc</h4>
+      <a href="method.html">How it works</a><a href="language.html">The language</a><a href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md">Claim map</a><a href="https://github.com/skbaek/blanc/blob/main/scripts/GATES.md">Gate catalogue</a><a href="https://github.com/skbaek/blanc/blob/main/SECURITY.md">Security</a>
+    </div>
+    <div>
+      <h4>Elsewhere</h4>
+      <a href="https://github.com/skbaek/blanc">GitHub</a><a href="https://skbaek.github.io/jaune/">Jaune</a><a href="https://github.com/skbaek/creme">Creme</a>
+    </div>
+  </div>
+</footer>
+<script src="site.js"></script>
+</body>
+</html>
