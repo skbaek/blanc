@@ -152,7 +152,7 @@
           <li>a burn pays and returns ⌊L·bᵢ/T⌋ of each token, by exactly two transfer requests;</li>
           <li>a swap succeeds exactly when the canonical conditions hold — some output positive, outputs below the reserves, <code>to</code> neither token, balances within <code>uint112</code>, some input positive, and the fee-adjusted product check — and then stores exactly those balances as reserves.</li>
         </ul>
-        <p>Because the frame theorems tie every successful call to the model and the liveness theorems tie every accepted state-changing call to a successful execution, no model that departed from the bytes on a successful call could have been proved to match them. Whether the model reads as the sources do is a separate question, which a reader settles by comparing the two; the <a href="https://github.com/skbaek/blanc/blob/main/docs/registers/UNISWAP_V2_MODEL_REVIEW.md">model register</a> carries a line-by-line correspondence table.</p>
+        <p>Because the frame theorems tie every successful call to the model and the liveness theorems tie every accepted state-changing call to a successful execution, no model that departed from the bytes on a successful call could have been proved to match them. Whether the model reads as the sources do is a separate question, which a reader settles by comparing the two; the <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/docs/registers/UNISWAP_V2_MODEL_REVIEW.md">model register</a> carries a line-by-line correspondence table.</p>
       </section>
 
       <section id="live">
