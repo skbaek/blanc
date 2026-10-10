@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>How it works — Blanc</title>
 <meta name="description" content="How Blanc proves theorems about deployed EVM bytecode: Jaune's executable semantics, kernel-checked certificates, generic lifting theorems, exactly-committed history replay, hashes without axioms, exact gas and liveness, and what the kernel does and does not check.">
+<meta name="theme-color" content="#fbfaf5">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Blanc">
+<meta property="og:title" content="How it works — Blanc">
+<meta property="og:description" content="How Blanc proves theorems about deployed EVM bytecode: Jaune's executable semantics, kernel-checked certificates, generic lifting theorems, exactly-committed history replay, hashes without axioms, exact gas and liveness, and what the kernel does and does not check.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fbfaf5'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="site.css">
 </head>
@@ -69,9 +74,9 @@
           <div class="stat"><span class="n num">45,500</span><span class="l">lines of Lean, about, with no axiom declaration, <code>sorry</code> or foreign function</span></div>
         </div>
         <p><b>Conformance.</b> Jaune’s current-mainnet lane runs the blockchain tests of the fixture release <code>tests@v20.0.2</code> and requires every one whose forks lie among Prague, Osaka, BPO1 and BPO2, transitions included, to pass; the selection comes from the fixtures’ own network labels, and the run fails if anything selected fails or if nothing is selected. At the revision Blanc pins, all 5,006 selected files pass, holding 34,205 cases: 16,673 for Prague, 17,423 for Osaka and 109 across transitions, 47 of them crossing into BPO1 or BPO2. On the legacy <code>ethereum/tests</code> corpus, Jaune’s documentation records 2,978 passing files of 2,983 and diagnoses each exception.</p>
-        <p><b>One function for tests and theorems.</b> Blanc’s history theorems quantify over runs of <code>stateTransitionUsing</code>, Jaune’s configured block transition, and the fixture runner imports each block through a function whose core, <code>stateTransitionE</code>, <code>stateTransitionUsing</code> also reaches. The fixtures therefore test, as compiled code, the per-block transition the theorems describe.</p>
+        <p><b>One function for tests and theorems.</b> Blanc’s history theorems quantify over runs of <code>stateTransitionUsing</code>, Jaune’s configured block transition, and the fixture runner imports each block through a function whose core, <code>stateTransitionE</code>, <code>stateTransitionUsing</code> also reaches. The fixtures therefore test, as compiled code, the per-block transition the theorems describe. What the configured transition adds, a check of the chain’s identity and the choice of fork by the block’s timestamp, the runner performs with the same functions only in the 109 transition cases; a single-fork fixture takes its fork from its label.</p>
         <p><b>Forks.</b> Prague, active on mainnet since 7 May 2025, and Osaka, BPO1 and BPO2, which followed it, are the four forks that have governed mainnet since. Jaune implements each as a complete record of rule data, selected per block by the chain’s schedule. It also implements Amsterdam, the next upgrade; no theorem here is stated for it.</p>
-        <p><b>Trust surface.</b> Jaune’s library contains no axiom, <code>sorry</code>, <code>native_decide</code>, <code>@[extern]</code>, <code>opaque</code>, <code>partial</code> or <code>implemented_by</code>, as a check in Jaune’s repository enforces, with one allowlisted <code>@[csimp]</code> substitution proved equal to the definition it replaces. Its optimized SHA-256 is proved equal on every input to a transcription of NIST FIPS 180-4, in a module outside Blanc’s import closure. For Keccak-256, only the optimized permutation is proved equal to a reference transcription; the transcription’s conformance to the standard rests on test vectors and the fixtures — one reason no theorem here relies on Keccak’s quality as a hash function.</p>
+        <p><b>Trust surface.</b> Jaune’s library contains no axiom, <code>sorry</code>, <code>native_decide</code>, <code>@[extern]</code>, <code>opaque</code>, <code>partial</code> or <code>implemented_by</code>, as a check in Jaune’s repository enforces, with one allowlisted <code>@[csimp]</code> substitution proved equal to the definition it replaces. Its optimized SHA-256 is proved equal on every input to a transcription of NIST FIPS 180-4, in a module outside Blanc’s import closure, so Blanc’s axiom walk does not cover that theorem. For Keccak-256, only the optimized permutation is proved equal to a reference transcription; the transcription’s conformance to the standard rests on test vectors and the fixtures — one reason no theorem here relies on Keccak’s quality as a hash function.</p>
       </section>
 
       <section id="certificates">
@@ -93,7 +98,7 @@
           <li><b>Every outcome.</b> The certificate cursor places every node of a frame’s execution at a checked point of the certificate, whatever the frame eventually does; no statement about it has a success premise.<span class="nm"><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Cursor.lean#L608">Blanc.Lift.cursor_of_parentPrefix</a></span></li>
         </ul>
         <p>Per-contract proofs then use three kinds of walk. <em>Inversion walks</em> establish safety: from a successful run of a tree node, a lemma for each kind of instruction recovers the successor state, and chaining these along a function’s tree replays every path the bytes can take; loops — the EIP-7002 fee series, the Uniswap pair’s Babylonian square root — are walked by induction. <em>Exact walks</em> establish liveness and its cost, building a gas-exact run forward one node at a time. Each step lemma is stated backwards, with its charge written as a numeral wherever the charge is fixed, so that applied to a goal whose gas is <i>g</i> + <i>N</i>, Lean’s unification of natural-number offsets solves the continuation’s gas, and the gas obligations of a walk disappear into unification. The <em>cursor</em> serves statements about executions of any outcome: a lock must stop reentry even into a frame that later reverts.</p>
-        <p>A fourth tool serves locks. For the fixed Vyper pool, a second Boolean pass over the certificate, with the lock’s state at join points supplied by a 444-line untrusted annotator, decides that every guarded body is reached only after the lock was found free, that every mutating body starts with the lock held, and that inside it only release points write the lock’s slot; a soundness theorem along the cursor connects the pass to every frame that runs the code.</p>
+        <p>A fourth tool serves locks. For the fixed Vyper pool, a second Boolean pass over the certificate, with the lock’s state at join points supplied by a 444-line untrusted annotator, decides that every guarded body is reached only after the lock was found free, that every mutating body starts with the lock held, and that inside it only release points write the lock’s slot; a soundness theorem along the cursor connects the pass to every frame that runs the code from its first instruction on a covered fork, provided the hashes the frame computes avoid the lock’s slot.</p>
       </section>
 
       <section id="levels">
@@ -119,8 +124,8 @@
           <tbody>
             <tr><td><b>None</b></td><td>The layout is fixed, and nothing is stored at hashed slots.</td><td>Deposit contract, EIP-7002 contract</td></tr>
             <tr><td><b>Trace-local</b></td><td>Each key the history may touch is tracked already or lands on a slot in no use, and distinct keys land on distinct slots: a fact about finitely many concrete hash values, which anyone holding the history can compute.</td><td>WETH9, 3Crv, Uniswap pair; the fixed Vyper pool, per execution: no digest it computes equals 0, the lock’s slot</td></tr>
-            <tr><td><b>Decided</b></td><td>With concrete keys, separation becomes computation: a decidable check with an exact soundness theorem, closed by the kernel evaluating Keccak.</td><td>CircuitBreaker finite tier; deployment theorems that compute the hashed slots their constructors write</td></tr>
-            <tr><td><b>Universal</b></td><td>Separation quantified over all 2<sup>160</sup> addresses. Under a random-function model the failure chance is about <i>q</i>·2<sup>−94</sup> per frame — a heuristic, with no reduction or bound proved.</td><td>CircuitBreaker history tier only</td></tr>
+            <tr><td><b>Decided</b></td><td>With concrete keys, separation becomes computation: a decidable check with an exact soundness theorem, closed by the kernel evaluating Keccak.</td><td>CircuitBreaker finite tier; the 3Crv deployment theorem, which computes the hashed slot its constructor writes</td></tr>
+            <tr><td><b>Universal</b></td><td>Separation quantified over all 2<sup>160</sup> addresses. Under a random-function model the failure chance is about <i>q</i>·2<sup>−94</sup> per frame — a heuristic, with no reduction or bound proved.</td><td>CircuitBreaker history tier; one WETH9 solvency statement, kept beside its trace-local results</td></tr>
           </tbody>
         </table></div>
         <p>A trace-local premise is not implied by computational collision resistance, and no reduction is proved. It is also necessary: for WETH9, a written allowance slot coinciding with a tracked balance slot breaks backing, and Blanc proves it.</p>
@@ -133,9 +138,9 @@
         <div class="tablewrap"><table class="data">
           <thead><tr><th>Rung</th><th>What it says</th><th>Reached by</th></tr></thead>
           <tbody>
-            <tr><td>Frame</td><td>A fresh frame with enough gas succeeds and costs exactly the stated amount.</td><td>all five below</td></tr>
-            <tr><td>Model</td><td>A call the model accepts is realized by an execution ending in the model’s next state.</td><td>all five</td></tr>
-            <tr><td>Reachable state</td><td>The same at the final state of any configured history.</td><td>WETH9, deposit contract, 3Crv, Uniswap pair, EIP-7002 contract</td></tr>
+            <tr><td>Frame</td><td>A fresh frame with enough gas succeeds and costs exactly the stated amount.</td><td>WETH9, deposit contract, 3Crv, Uniswap pair, EIP-7002 contract</td></tr>
+            <tr><td>Model</td><td>A call the model accepts is realized by an execution ending in the model’s next state.</td><td>the same five</td></tr>
+            <tr><td>Reachable state</td><td>The same at the final state of any configured history.</td><td>the same five</td></tr>
             <tr><td>Transaction</td><td>A signed transaction is admitted by <code>processTransaction</code> and succeeds, with <code>gasUsed</code> in closed form.</td><td>WETH9</td></tr>
           </tbody>
         </table></div>
@@ -177,7 +182,7 @@
         <div class="tablewrap"><table class="data">
           <thead><tr><th>Check</th><th>Scope</th><th class="r">Time</th></tr></thead>
           <tbody>
-            <tr><td>Clean build</td><td>the 1,482 modules the library’s root imports, from source, with Blanc’s artifact cache disabled</td><td class="r">4,380 s</td></tr>
+            <tr><td>Clean build</td><td>the 1,482 modules the library’s root imports, from source, with Blanc’s artifact cache disabled and the toolchain and pinned dependencies prebuilt; wall time, through the host’s memory-admitted build wrapper</td><td class="r">4,380 s</td></tr>
             <tr><td>Axiom walk and leaf census</td><td>1,484 modules, 128,938 constants, its controls included</td><td class="r">397 s</td></tr>
             <tr><td>Conformance</td><td>5,006 fixture files at the pinned Jaune revision, one worker</td><td class="r">1,150 s</td></tr>
             <tr><td>Gate catalogue</td><td>86 rows, every one executed afresh, none reused; all passed</td><td class="r">2,338 s</td></tr>
@@ -194,7 +199,7 @@
         <div class="tablewrap" style="margin-top:22px"><table class="data" style="min-width:880px">
           <thead><tr><th>System</th><th>Semantics</th><th>Existing bytecode</th><th>Trust beyond the prover’s standard base, as stated</th><th>Gas</th><th>Liveness</th></tr></thead>
           <tbody>
-            <tr><td><b>Blanc</b> (Lean 4)</td><td>Jaune; theorems for Prague, Osaka, BPO1, BPO2</td><td>yes: the mainnet bytes, seven compiler versions and an assembler</td><td>none beyond the three standard axioms; recovery a premise of signature-generic theorems; hash separation trace-local, decided or absent, universal on one tier</td><td>exact; closed for WETH9, the Uniswap pair and EIP-7002, explicit sums for the deposit contract, existential for 3Crv</td><td>frame, model, reachable state, transaction</td></tr>
+            <tr><td><b>Blanc</b> (Lean 4)</td><td>Jaune; theorems for Prague, Osaka, BPO1, BPO2</td><td>yes: the mainnet bytes, seven compiler versions and an assembler</td><td>none beyond the three standard axioms; recovery a premise of signature-generic theorems; hash separation trace-local, decided or absent, universal on one tier and in one WETH9 statement</td><td>exact; closed for WETH9, the Uniswap pair and EIP-7002, explicit sums for the deposit contract, existential for 3Crv</td><td>frame, model, reachable state, transaction</td></tr>
             <tr><td>EquiVM (Lean 4)</td><td>EVMLean, a port of EVMYulLean; Cancun</td><td>yes: solc and Vyper output, compiled locally from pinned sources</td><td><code>native_decide</code>; two WETH9 return-size axioms (repository); preprint: an opaque Keccak with per-contract selector-hash axioms</td><td>not compared; out-of-gas runs excluded</td><td>termination “a separate proof obligation”</td></tr>
             <tr><td>Verifereum (HOL4)</td><td>own; Osaka</td><td>yes: WETH9’s mainnet bytes</td><td>README silent; one <code>cheat</code>, in a lemma used only by commented-out WETH specifications</td><td>gas monotonicity theorems (README)</td><td>not stated</td></tr>
             <tr><td>KEVM deposit contract (K)</td><td>KEVM</td><td>yes: Vyper output; solc 0.6.8 build of a pre-deployment commit</td><td>KEVM, the K prover, the bytecode specification</td><td>per-function bounds (Solidity version)</td><td>deposits accepted given enough gas (Vyper version); success and revert paths (Solidity version)</td></tr>
@@ -217,7 +222,7 @@
   <div class="wrap footgrid">
     <div class="colophon">
       <a class="brand" href="./" style="margin-bottom:12px"><span class="sq"></span><b>Blanc</b></a>
-      <p>MIT-licensed. Statements, names and line numbers refer to Blanc commit <code>5048a51f</code> and the Jaune revision it pins, <code>2737c8eb</code>. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
+      <p>MIT-licensed. Statements, names, line numbers and counts refer to Blanc commit <code>5048a51f</code> and the Jaune revision it pins, <code>2737c8eb</code>. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
     </div>
     <div>
       <h4>Deployed bytecode</h4>

@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Curve pools — Blanc</title>
 <meta name="description" content="Two Curve StableSwap pool implementations, read from their deployed bytes: on the Vyper 0.2.15 build behind three pools drained in July 2023, Jaune executes the cross-function reentrancy from deployment; on a Vyper 0.3.7 build, Blanc proves the shared lock excludes reentry in every execution.">
+<meta name="theme-color" content="#fbfaf5">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Blanc">
+<meta property="og:title" content="The Curve pools — Blanc">
+<meta property="og:description" content="Two Curve StableSwap pool implementations, read from their deployed bytes: on the Vyper 0.2.15 build behind three pools drained in July 2023, Jaune executes the cross-function reentrancy from deployment; on a Vyper 0.3.7 build, Blanc proves the shared lock excludes reentry in every execution.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fbfaf5'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="../site.css">
 </head>
@@ -85,6 +90,7 @@
         <p class="eyebrow">A violation, from deployment</p>
         <h2>The attack, executed.</h2>
         <p>On every covered fork, Jaune runs eight messages in sequence from a world holding only a funded creator without code, each settling without error. The first executes the implementation’s preserved creation input; the next six create a forwarder, initialize the pool, create a token and an attacker contract, approve the pool and add liquidity, leaving a sound LP ledger: a supply of 2,000, all held by the attacker. The eighth is the attack.</p>
+<div class="codehead"><span>The eighth message, as a call tree</span></div>
 <pre class="lean">attacker ──► pool.remove_liquidity      slot 2: 0 → 1; reads totalSupply = 2,000
                └─ ether to attacker ──► attacker ──► pool.add_liquidity
                                           slot 0 free: enters the body, mints 106,
@@ -100,7 +106,7 @@
         <h2>The fix, proved.</h2>
         <p>For the fixed implementation, Blanc proves that the lock excludes. In any execution, whatever its outcome, while a frame of the pool is inside one of its five mutating guarded functions and has not released the lock, no frame below it enters any of the seven guarded functions of that pool — whatever code the frames in between run.</p>
         <div class="thm">
-          <div class="head"><span class="tag">Theorem, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/VyperNonreentrantDeployed/Fixed/Exclusion.lean#L128"><code>…VyperNonreentrantDeployed.Fixed.vplus_exclusion</code> · Exclusion.lean:128</a></div>
+          <div class="head"><span class="tag">Statement, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/VyperNonreentrantDeployed/Fixed/Exclusion.lean#L128"><code>…VyperNonreentrantDeployed.Fixed.vplus_exclusion</code> · Exclusion.lean:128</a></div>
 <pre class="lean"><span class="kw">theorem</span> <span class="nm">vplus_exclusion</span> {sevm : Sevm} {pre : Devm} {out : Execution}
     (R : Exec 0 sevm pre out) (hfork : CoveredFork sevm.benvStat.fork) {P : Adr}
     (hP : pre.getCode P = forwarderCode curvePlainImpl847e ∨ pre.getCode P = code)
@@ -113,7 +119,7 @@
     ¬ lockL.Enters P G</pre>
         </div>
         <p>No premise mentions callbacks, reentry, or the value of the lock as a callee sees it: exclusion is derived, not assumed. The one hash premise, <code>hash</code>, is that no Keccak-256 digest the pool computes in that execution equals 0, the lock’s slot. <code>R</code> is an execution of any outcome — a reverted frame has still run — which is why the proof needs the certificate cursor of <a href="../method.html#tools">the method</a>. The theorem holds for the implementation called directly and through the stETH-ng forwarder (<code>hP</code>), for messages, for transactions without EIP-7702 authorizations, and for every execution recorded in a configured history, given for each that the pool’s and the implementation’s code is installed, that its first frame runs the code stored there, and that its hashes avoid the lock’s slot.</p>
-        <p>A frame running this code also never executes <code>DELEGATECALL</code>, <code>CALLCODE</code>, <code>CREATE</code>, <code>CREATE2</code> or <code>SELFDESTRUCT</code>; its only external calls are <code>CALL</code> and <code>STATICCALL</code>.</p>
+        <p>On a covered fork, a frame that runs this code from its first instruction, with hashes that avoid the lock’s slot, also never executes <code>DELEGATECALL</code>, <code>CALLCODE</code>, <code>CREATE</code>, <code>CREATE2</code> or <code>SELFDESTRUCT</code>; its only external calls are <code>CALL</code> and <code>STATICCALL</code> (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/VyperNonreentrantDeployed/Fixed/LockDominance.lean#L44"><code>lock_no_forbidden</code></a>).</p>
       </section>
 
       <section id="witnesses">
@@ -138,7 +144,7 @@
           <li>Anything about unguarded functions, reentry after the lock is released, pricing, or the pool’s economics; liveness; transactions carrying EIP-7702 authorizations.</li>
           <li>A replay of the historical attack.</li>
         </ul>
-        <p>The claim map’s sections on the <a href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md#55-vyper-v-guarded-body-reentrancy-exclusion">fixed</a> and <a href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md#56-vyper-v-cross-function-reentrancy-corrupts-the-lp-ledger">vulnerable</a> implementations list every theorem with its premises, file and line. To our knowledge, neither implementation has had a machine-checked treatment before.</p>
+        <p>The claim map’s sections on the <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md#55-vyper-v-guarded-body-reentrancy-exclusion">fixed</a> and <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md#56-vyper-v-cross-function-reentrancy-corrupts-the-lp-ledger">vulnerable</a> implementations list every theorem with its premises, file and line. To our knowledge, neither implementation has had a machine-checked treatment before.</p>
       </section>
 
       <nav class="pager" aria-label="Artifacts">
@@ -154,7 +160,7 @@
   <div class="wrap footgrid">
     <div class="colophon">
       <a class="brand" href="../" style="margin-bottom:12px"><span class="sq"></span><b>Blanc</b></a>
-      <p>MIT-licensed. Statements, names and line numbers refer to Blanc commit <code>5048a51f</code> and the Jaune revision it pins, <code>2737c8eb</code>. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
+      <p>MIT-licensed. Statements, names, line numbers and counts refer to Blanc commit <code>5048a51f</code> and the Jaune revision it pins, <code>2737c8eb</code>. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
     </div>
     <div>
       <h4>Deployed bytecode</h4>

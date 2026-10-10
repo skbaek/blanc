@@ -3,7 +3,8 @@
 [![CI](https://github.com/skbaek/blanc/actions/workflows/ci.yml/badge.svg)](https://github.com/skbaek/blanc/actions/workflows/ci.yml)
 
 **[skbaek.github.io/blanc](https://skbaek.github.io/blanc/)** — the guided
-tour: the language, what each contract is promised, and what none of it claims.
+tour: what Blanc proves about bytecode already deployed on mainnet, how, and on
+which premises; the Blanc language and its contracts; and what none of it claims.
 **[Jaune](https://github.com/skbaek/jaune)**
 ([site](https://skbaek.github.io/jaune/)) — the EVM semantics every theorem
 here is stated against.

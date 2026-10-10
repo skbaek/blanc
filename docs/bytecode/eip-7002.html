@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EIP-7002 contract — Blanc</title>
 <meta name="description" content="What Blanc proves about the 504-byte EIP-7002 withdrawal-request contract: its end-of-block system call succeeds whatever storage holds, each block's requests are exactly the oldest pending submissions in order, and the EIP's own fee guarantee is false of the deployed bytes.">
+<meta name="theme-color" content="#fbfaf5">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Blanc">
+<meta property="og:title" content="EIP-7002 contract — Blanc">
+<meta property="og:description" content="What Blanc proves about the 504-byte EIP-7002 withdrawal-request contract: its end-of-block system call succeeds whatever storage holds, each block's requests are exactly the oldest pending submissions in order, and the EIP's own fee guarantee is false of the deployed bytes.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fbfaf5'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="../site.css">
 </head>
@@ -84,7 +89,7 @@
         <h2>A system call that cannot fail.</h2>
         <p>Whatever the contract’s storage holds, as long as its canonical code is installed, the client’s end-of-block call succeeds without error, at an exact, state-dependent cost that never exceeds 210,000 gas — against the 30,000,000 the protocol supplies. The statement has two hypotheses: a covered fork, and the code.</p>
         <div class="thm">
-          <div class="head"><span class="tag">Theorem, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/SystemProtocol.lean#L245"><code>Blanc.Lift.WithdrawalRequest.checked_system_totality</code> · SystemProtocol.lean:245</a></div>
+          <div class="head"><span class="tag">Statement, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/SystemProtocol.lean#L245"><code>Blanc.Lift.WithdrawalRequest.checked_system_totality</code> · SystemProtocol.lean:245</a></div>
 <pre class="lean"><span class="kw">theorem</span> <span class="nm">checked_system_totality</span> {benv : Benv} (fork : CoveredFork benv.stat.fork)
     (installed : benv.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode) :
     processCheckedSystemTransaction benv withdrawalRequestPredeployAddress [] =
@@ -103,7 +108,7 @@
         <h2>Submissions in, requests out.</h2>
         <p>From a checkpoint whose storage represents the initial state, for every block of a configured history, the requests the block hands to the consensus layer are exactly the first queued entries, at most sixteen, in first-in-first-out order, and each is the caller, public key and amount of exactly one committed submission, which paid the fee the bytecode computed. No committed submission is dropped, duplicated, reordered or emitted before it was made; the entries not yet emitted are exactly the queue that storage holds afterwards; and the queue never reaches the four bookkeeping slots.</p>
         <div class="thm">
-          <div class="head"><span class="tag">Theorem, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/WordFifo.lean#L345"><code>Blanc.Lift.WithdrawalRequest.block_word_fifo</code> · WordFifo.lean:345</a></div>
+          <div class="head"><span class="tag">Statement, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/WordFifo.lean#L345"><code>Blanc.Lift.WithdrawalRequest.block_word_fifo</code> · WordFifo.lean:345</a></div>
 <pre class="lean"><span class="kw">theorem</span> <span class="nm">block_word_fifo</span>
     {cfg : ChainConfig} {checkpoint pre post : BlockChain}
     (history : ConfiguredHistoryTrace cfg checkpoint pre)
@@ -140,6 +145,8 @@
         <p class="eyebrow">Specification against bytes</p>
         <h2>The fee the bytes compute.</h2>
         <p>The EIP specifies its fee as Python pseudocode over unbounded integers. The bytecode computes the same series in 256-bit words, whose intermediate products can overflow. Two pre-deployment audits noted that its fee therefore departs from the EIP’s once the excess passes 2,892: one judged such an excess unreachable under current settings; the other, noting that a higher block gas limit might bring it within reach, rated the finding informational. Blanc states the agreement exactly.</p>
+<div class="thm">
+          <div class="head"><span class="tag">Statements, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/ExactFeeDomain.lean#L51"><code>…WithdrawalRequest.word_fee_le_nat</code> · ExactFeeDomain.lean:51</a> <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/ExactFeeDomain.lean#L27"><code>word_fee_eq_iff_natFeeDomain</code> · :27</a></div>
 <pre class="lean"><span class="kw">theorem</span> <span class="nm">word_fee_le_nat</span> {excess : B256} {iterations : Nat} {output : B256}
     (run : WordFakeExponential.Run excess 17 1 17 0 iterations output)
     (model : Blanc.WithdrawalRequest.State) (excessEq : model.excess = excess.toNat) :
@@ -151,6 +158,7 @@
     (model : Blanc.WithdrawalRequest.State) (excessEq : model.excess = excess.toNat) :
     (output / (17 : B256)).toNat = Blanc.WithdrawalRequest.fee model ↔
       NatFeeDomain excess iterations</pre>
+        </div>
         <p>The bytecode’s fee never exceeds the EIP’s, and equals it exactly when no intermediate value of the series wraps. Then a closed theorem builds a three-block configured history, under the premises of the request theorem, in which a submission is committed after paying 2<sup>245</sup> wei: at least the fee the bytecode computes at an excess of 2,893, about 3.2·10<sup>73</sup> wei, but less than the EIP’s, about 8.1·10<sup>73</sup> wei (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Composition/WithdrawalRequestFeeRefutation.lean#L1182"><code>nat_fee_guarantee_refuted</code></a>). The guarantee that every committed submission paid at least the EIP’s fee is therefore false of the deployed bytes — which is why the request theorem speaks of the fee the bytecode computes.</p>
         <p>The divergence begins only where the EIP’s own fee is out of any account’s reach. By direct computation, outside the proofs, the two fees agree at every excess below 2,893, and at 2,892 the fee is already about 7.6·10<sup>73</sup> wei, more than 10<sup>47</sup> times all the ether in existence. The wrapped arithmetic does yield a fee of 1 wei near an excess of 2<sup>252</sup>, but every model state a history reaches from deployment has its effective excess plus its count bounded by the number of submissions, so that excess would take about 2<sup>252</sup> of them. The counterexample reaches its excess with 2,895 submissions in one block, on a synthetic Prague chain whose block gas limit, 2<sup>29</sup>, is about nine times mainnet’s; on mainnet the excess has so far peaked at 666, on 19 December 2025.</p>
       </section>
@@ -173,7 +181,7 @@
           <li>Storage growth: dequeued slots are left in storage, and nothing is proved about them.</li>
           <li>Transaction-level liveness; anything beyond 2<sup>254</sup> committed submissions.</li>
         </ul>
-        <p>The claim map’s <a href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md#57-eip-7002-withdrawal-requests-actual-fee-fifo-from-submissions-to-block-requests">EIP-7002 section</a> lists every theorem with its premises, file and line.</p>
+        <p>The claim map’s <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md#57-eip-7002-withdrawal-requests-actual-fee-fifo-from-submissions-to-block-requests">EIP-7002 section</a> lists every theorem with its premises, file and line.</p>
       </section>
 
       <section id="prior">
@@ -195,7 +203,7 @@
   <div class="wrap footgrid">
     <div class="colophon">
       <a class="brand" href="../" style="margin-bottom:12px"><span class="sq"></span><b>Blanc</b></a>
-      <p>MIT-licensed. Statements, names and line numbers refer to Blanc commit <code>5048a51f</code> and the Jaune revision it pins, <code>2737c8eb</code>. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
+      <p>MIT-licensed. Statements, names, line numbers and counts refer to Blanc commit <code>5048a51f</code> and the Jaune revision it pins, <code>2737c8eb</code>. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
     </div>
     <div>
       <h4>Deployed bytecode</h4>

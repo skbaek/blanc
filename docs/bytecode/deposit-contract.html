@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Beacon deposit contract — Blanc</title>
 <meta name="description" content="What Blanc proves about the 6,358 deployed bytes of Ethereum's deposit contract: after any valid history its storage accumulates exactly the committed deposits, its count and Merkle root are theirs, and a deposit executes at exact gas — with no hash premise.">
+<meta name="theme-color" content="#fbfaf5">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Blanc">
+<meta property="og:title" content="Beacon deposit contract — Blanc">
+<meta property="og:description" content="What Blanc proves about the 6,358 deployed bytes of Ethereum's deposit contract: after any valid history its storage accumulates exactly the committed deposits, its count and Merkle root are theirs, and a deposit executes at exact gas — with no hash premise.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fbfaf5'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="../site.css">
 </head>
@@ -75,7 +80,7 @@
         <h2>Exactly the deposits made.</h2>
         <p>From a checkpoint at which the contract’s storage is the accumulator of some list of deposits, after any configured history the storage is the accumulator of that list followed by exactly the deposits whose frames were committed, in order. Rolled-back deposits are filtered out by settlement; nothing is added and nothing is lost. For a fresh deployment the initial list is empty.</p>
         <div class="thm">
-          <div class="head"><span class="tag">Theorem, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/BeaconDeposit/BeaconEnv.lean#L155"><code>Blanc.Lift.BeaconDeposit.configuredHistory_solInv_sys</code> · BeaconEnv.lean:155</a></div>
+          <div class="head"><span class="tag">Statement, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/BeaconDeposit/BeaconEnv.lean#L155"><code>Blanc.Lift.BeaconDeposit.configuredHistory_solInv_sys</code> · BeaconEnv.lean:155</a></div>
 <pre class="lean"><span class="kw">theorem</span> <span class="nm">configuredHistory_solInv_sys</span> {ca : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {initialHistory : List B256}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
@@ -115,7 +120,7 @@
       <section id="environment">
         <p class="eyebrow">Statements that can fail</p>
         <h2>A premise found false, and its replacement.</h2>
-        <p>An earlier family of deposit-contract statements in the repository assumed that no system contract’s code contains a call- or create-type instruction byte at any offset. That premise is false on mainnet: the canonical EIP-7002 contract carries such bytes inside its push data, at offsets 67, 123, 128 and 141, and Blanc proves the premise false of that code (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/SystemContracts.lean#L135"><code>withdrawalRequestCode_not_spawnFree</code></a>). The statements above replace it with the premise that the canonical code is installed — and at block 26,141,229, three providers report that mainnet’s four system contracts held exactly that code, and that the SHA-256 precompile’s address held none.</p>
+        <p>An earlier family of deposit-contract statements in the repository assumed that no system contract’s code contains a call- or create-type instruction byte at any offset. That premise is false on mainnet: the canonical EIP-7002 contract carries such bytes inside its push data, at offsets 67, 123, 128 and 141, and Blanc proves the premise false of that code from the first of them (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/SystemContracts.lean#L135"><code>withdrawalRequestCode_not_spawnFree</code></a>). The statements above replace it with the premise that the canonical code is installed — and at block 26,141,229, three providers report that mainnet’s four system contracts held exactly that code, and that the SHA-256 precompile’s address held none.</p>
         <p>It is the kind of defect that only reading a statement against the chain can catch, and the reason the statements here are written to be read.</p>
       </section>
 
@@ -134,7 +139,7 @@
           <li>Transaction-level liveness: a deposit carries value, which needs a value-carrying transaction envelope.</li>
           <li>Since EIP-6110 the beacon chain consumes the stream of <code>DepositEvent</code> logs; about logs there are single-call statements only.</li>
         </ul>
-        <p>The claim map’s <a href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md#52-beacon-deposit-exact-committed-deposit-history">deposit-contract section</a> lists every theorem with its premises, file and line.</p>
+        <p>The claim map’s <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md#52-beacon-deposit-exact-committed-deposit-history">deposit-contract section</a> lists every theorem with its premises, file and line.</p>
       </section>
 
       <section id="prior">
@@ -157,7 +162,7 @@
   <div class="wrap footgrid">
     <div class="colophon">
       <a class="brand" href="../" style="margin-bottom:12px"><span class="sq"></span><b>Blanc</b></a>
-      <p>MIT-licensed. Statements, names and line numbers refer to Blanc commit <code>5048a51f</code> and the Jaune revision it pins, <code>2737c8eb</code>. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
+      <p>MIT-licensed. Statements, names, line numbers and counts refer to Blanc commit <code>5048a51f</code> and the Jaune revision it pins, <code>2737c8eb</code>. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
     </div>
     <div>
       <h4>Deployed bytecode</h4>

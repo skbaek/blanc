@@ -665,7 +665,7 @@ TRANSCRIPTS = [
             (
                 "docs/index.html",
                 re.compile(
-                    r'scripts/check\.sh --no-build</span></span><span class="line"><span class="ok">(.*?)</span>',
+                    r'scripts/check\.sh</span></span><span class="line"><span class="ok">(.*?)</span>',
                     re.S,
                 ),
             ),

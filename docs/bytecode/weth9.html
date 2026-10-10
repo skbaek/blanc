@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>WETH9 — Blanc</title>
 <meta name="description" content="What Blanc proves about the 3,124 deployed bytes of WETH9: tracked balances stay backed after any valid history, storage replays exactly the committed calls, and a holder's withdrawal transaction is admitted after any history at a closed-form gas cost that 3,749 of 3,749 matching mainnet receipts obey.">
+<meta name="theme-color" content="#fbfaf5">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Blanc">
+<meta property="og:title" content="WETH9 — Blanc">
+<meta property="og:description" content="What Blanc proves about the 3,124 deployed bytes of WETH9: tracked balances stay backed after any valid history, storage replays exactly the committed calls, and a holder's withdrawal transaction is admitted after any history at a closed-form gas cost that 3,749 of 3,749 matching mainnet receipts obey.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fbfaf5'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="../site.css">
 </head>
@@ -78,7 +83,7 @@
         <p>A wrapper’s one job is to give the ether back. Safety theorems cannot say that it will — a contract that always reverts satisfies every invariant of its storage — so this theorem constructs the withdrawal. Its conclusion is a fact about <code>processTransaction</code>, Jaune’s function for executing one transaction inside a block, which block processing calls for every transaction and the conformance fixtures therefore exercise.</p>
 
         <div class="thm">
-          <div class="head"><span class="tag">Theorem, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Weth9/LiveTx.lean#L631"><code>Blanc.Lift.Weth9.weth9_history_tx_withdraw</code> · LiveTx.lean:631</a></div>
+          <div class="head"><span class="tag">Statement, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Weth9/LiveTx.lean#L631"><code>Blanc.Lift.Weth9.weth9_history_tx_withdraw</code> · LiveTx.lean:631</a></div>
 <pre class="lean"><span class="kw">theorem</span> <span class="nm">weth9_history_tx_withdraw</span>
     {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {K₀ : Key → Prop}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
@@ -179,7 +184,7 @@
       <section id="chain">
         <p class="eyebrow">An empirical test, outside the proof</p>
         <h2>Against the chain.</h2>
-        <p>A gas formula proved against a model is only as good as the model’s gas schedule. The conformance fixtures test that schedule; the formula can also be compared with mainnet directly. In the 30,000 blocks from 26,111,230 to 26,141,229 (3 to 7 October 2026), WETH9’s <code>Withdrawal</code> events locate every direct call to <code>withdraw</code>:</p>
+        <p>A gas formula proved against a model is only as good as the model’s gas schedule. The conformance fixtures test that schedule; the formula can also be compared with mainnet directly. In the 30,000 blocks from 26,111,230 to 26,141,229 (3 to 7 October 2026), WETH9’s <code>Withdrawal</code> events locate every successful direct call to <code>withdraw</code>:</p>
         <div class="tablewrap"><table class="data">
           <tbody>
             <tr><td>Successful direct calls to <code>withdraw</code></td><td class="r">6,823</td></tr>
@@ -250,7 +255,7 @@
           <li>Inclusion: the transaction theorems execute a transaction at a given state or position; whether any block includes it is outside them.</li>
           <li>Amsterdam, or any fork other than Prague, Osaka, BPO1 and BPO2.</li>
         </ul>
-        <p>The claim map’s <a href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md#51-weth9-booked-slot-backing-and-exact-ledger-replay">WETH9 section</a> lists every theorem with its premises and its file and line, checked by a gate.</p>
+        <p>The claim map’s <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md#51-weth9-booked-slot-backing-and-exact-ledger-replay">WETH9 section</a> lists every theorem with its premises and its file and line, checked by a gate.</p>
       </section>
 
       <section id="prior">
@@ -273,7 +278,7 @@
   <div class="wrap footgrid">
     <div class="colophon">
       <a class="brand" href="../" style="margin-bottom:12px"><span class="sq"></span><b>Blanc</b></a>
-      <p>MIT-licensed. Statements, names and line numbers refer to Blanc commit <code>5048a51f</code> and the Jaune revision it pins, <code>2737c8eb</code>. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
+      <p>MIT-licensed. Statements, names, line numbers and counts refer to Blanc commit <code>5048a51f</code> and the Jaune revision it pins, <code>2737c8eb</code>. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
     </div>
     <div>
       <h4>Deployed bytecode</h4>

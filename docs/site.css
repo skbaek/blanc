@@ -3,7 +3,8 @@
    The sibling scheme of Jaune's: Jaune derives every colour from aged
    yellow paper and green ink; Blanc derives every colour from an undyed
    white canvas and near-black ink. The warm sienna accent is shared by
-   both sites. Contrast of --ink on --paper is 14.9 : 1.
+   both sites. Contrast on --paper: --ink 15.7 : 1, --ink-3 4.9 : 1,
+   --sienna 6.2 : 1.
    ──────────────────────────────────────────────────────────────── */
 :root{
   --paper:#fbfaf5;
@@ -11,7 +12,7 @@
   --sienna:#96491f;
 
   --ink-2:color-mix(in oklab, var(--ink) 78%, var(--paper));
-  --ink-3:color-mix(in oklab, var(--ink) 56%, var(--paper));
+  --ink-3:color-mix(in oklab, var(--ink) 60%, var(--paper));
   --ink-4:color-mix(in oklab, var(--ink) 34%, var(--paper));
   --rule:color-mix(in oklab, var(--ink) 16%, var(--paper));
   --rule-2:color-mix(in oklab, var(--ink) 34%, var(--paper));

@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Curve 3Crv — Blanc</title>
 <meta name="description" content="What Blanc proves about the 2,276 deployed bytes of Curve's 3Crv LP token: every successful call is exactly a step of a token model, storage replays exactly the committed calls, and supply always equals the sum of balances.">
+<meta name="theme-color" content="#fbfaf5">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Blanc">
+<meta property="og:title" content="Curve 3Crv — Blanc">
+<meta property="og:description" content="What Blanc proves about the 2,276 deployed bytes of Curve's 3Crv LP token: every successful call is exactly a step of a token model, storage replays exactly the committed calls, and supply always equals the sum of balances.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fbfaf5'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="../site.css">
 </head>
@@ -73,7 +78,7 @@
         <h2>Exactly the committed calls, and conservation.</h2>
         <p>After any configured history from a checkpoint where the bytes are installed and the storage abstracts a model state, the code is intact and the final storage abstracts the state reached by running the model over exactly the settlement-committed calls to the token’s writers, in order — and that state conserves supply: <code>totalSupply</code> equals the sum of balances. The statement is short enough to read whole:</p>
         <div class="thm">
-          <div class="head"><span class="tag">Theorem, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Curve3Crv/CommittedHistory.lean#L211"><code>Blanc.Lift.Curve3Crv.c3crv_history_committed_derived</code> · CommittedHistory.lean:211</a></div>
+          <div class="head"><span class="tag">Statement, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Curve3Crv/CommittedHistory.lean#L211"><code>Blanc.Lift.Curve3Crv.c3crv_history_committed_derived</code> · CommittedHistory.lean:211</a></div>
 <pre class="lean"><span class="kw">theorem</span> <span class="nm">c3crv_history_committed_derived</span> {ca : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {initial : Blanc.Curve3Crv.State}
     {initialKeys : Key → Prop}
@@ -88,7 +93,7 @@
           (Key.extend initialKeys (invocationKeys (committedInvocations ca trace))) ∧
         Blanc.Curve3Crv.Conserved s</pre>
         </div>
-        <p>Three hypotheses about the start and one about the hashes. <code>fresh</code> is trace-local: the mapping rows the history touches — rolled-back frames included — are tracked already or land on unused slots, and distinct rows land on distinct slots. No filter on static frames is needed, because no writer can succeed in one: every writer reaches an <code>SSTORE</code> or a <code>LOG3</code>, which a static frame forbids, and Blanc proves it from the frame’s own run (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Curve3Crv/Safe.lean#L202"><code>c3crv_writer_nonstatic</code></a>).</p>
+        <p>Besides the history itself, two hypotheses about the start and one about the hashes. <code>fresh</code> is trace-local: the mapping rows the history touches — rolled-back frames included — are tracked already or land on unused slots, and distinct rows land on distinct slots. No filter on static frames is needed, because no writer can succeed in one: every writer reaches an <code>SSTORE</code> or a <code>LOG3</code>, which a static frame forbids, and Blanc proves it from the frame’s own run (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Curve3Crv/Safe.lean#L202"><code>c3crv_writer_nonstatic</code></a>).</p>
       </section>
 
       <section id="frames">
@@ -135,7 +140,7 @@
           <li><code>set_name</code> without the owner-call premise; transaction-level liveness.</li>
           <li>That today’s 3Crv storage abstracts a model state: that needs the holders and allowance pairs recovered from its <code>Transfer</code> and <code>Approval</code> logs, and a complete enumeration of its storage showing nothing else is stored.</li>
         </ul>
-        <p>We found no earlier machine-checked verification of this contract. The claim map’s <a href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md#53-curve-3crv-model-refinement-exact-committed-replay-conservation">3Crv section</a> lists every theorem with its premises, file and line.</p>
+        <p>We found no earlier machine-checked verification of this contract. The claim map’s <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md#53-curve-3crv-model-refinement-exact-committed-replay-conservation">3Crv section</a> lists every theorem with its premises, file and line.</p>
       </section>
 
       <nav class="pager" aria-label="Artifacts">
@@ -151,7 +156,7 @@
   <div class="wrap footgrid">
     <div class="colophon">
       <a class="brand" href="../" style="margin-bottom:12px"><span class="sq"></span><b>Blanc</b></a>
-      <p>MIT-licensed. Statements, names and line numbers refer to Blanc commit <code>5048a51f</code> and the Jaune revision it pins, <code>2737c8eb</code>. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
+      <p>MIT-licensed. Statements, names, line numbers and counts refer to Blanc commit <code>5048a51f</code> and the Jaune revision it pins, <code>2737c8eb</code>. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
     </div>
     <div>
       <h4>Deployed bytecode</h4>

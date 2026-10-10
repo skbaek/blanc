@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Uniswap V2 pair — Blanc</title>
 <meta name="description" content="What Blanc proves about the one 11,293-byte runtime that runs at all 524,109 Uniswap V2 pairs: exact nested replay of committed calls, a balanced LP ledger, the oracle law, share value that falls only through the protocol fee given the tokens' answers, and closed-cost liveness for every state-changing function.">
+<meta name="theme-color" content="#fbfaf5">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Blanc">
+<meta property="og:title" content="Uniswap V2 pair — Blanc">
+<meta property="og:description" content="What Blanc proves about the one 11,293-byte runtime that runs at all 524,109 Uniswap V2 pairs: exact nested replay of committed calls, a balanced LP ledger, the oracle law, share value that falls only through the protocol fee given the tokens' answers, and closed-cost liveness for every state-changing function.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fbfaf5'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="../site.css">
 </head>
@@ -91,10 +96,10 @@
       <section id="history">
         <p class="eyebrow">Safety, after any history</p>
         <h2>The history theorem.</h2>
-        <p>After any configured history from a checkpoint at which the bytes are installed and the storage represents a model state, the code is intact and the storage represents the state reached by replaying, in order, exactly the outermost committed non-static calls to the pair, each against the answers its own run observed, at the positions where it observed them. Calls that reach the pair from inside one of these — through a token transfer, the flash-swap callback, or a factory call — are replayed inside the step that contains them. An equation places every committed non-static call to the pair in exactly one step, so no step is invented and none is lost.</p>
+        <p>After any configured history from a checkpoint at which the bytes are installed and the storage represents a model state, the code is intact and the storage represents the state reached by replaying, in order, exactly the outermost committed non-static calls to the pair, each against the answers its own run observed, at the positions where it observed them. Calls that reach the pair from inside one of these — through a token transfer or the flash-swap callback — are replayed inside the step that contains them. An equation places every committed non-static call to the pair in exactly one step, so no step is invented and none is lost.</p>
         <p>Representation includes complete support: every nonzero word of the pair’s storage lies at a fixed slot or at the row of a tracked key. The only hash premise is trace-local. From the deployment checkpoint the statement reads:</p>
         <div class="thm">
-          <div class="head"><span class="tag">Theorem, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/UniswapV2Pair/PairHistory.lean#L516"><code>Blanc.Lift.UniswapV2Pair.pair_history_initialized</code> · PairHistory.lean:516</a></div>
+          <div class="head"><span class="tag">Statement, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/UniswapV2Pair/PairHistory.lean#L516"><code>Blanc.Lift.UniswapV2Pair.pair_history_initialized</code> · PairHistory.lean:516</a></div>
 <pre class="lean"><span class="kw">theorem</span> <span class="nm">pair_history_initialized</span> {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     {factory token0 token1 : Adr} {domain : B256}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
@@ -123,11 +128,11 @@
         <ul class="claims">
           <li><b>The LP ledger balances.</b> If the model’s LP balances sum to the total supply at the checkpoint, they still do after any history, every protocol-fee mint included; from the deployment checkpoint this is proved, not assumed. It is a statement about the model’s ledger, whose rows are the tracked keys.
             <span class="nm"><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/UniswapV2Pair/PairHistory.lean#L697">pair_history_ledger</a> · <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/UniswapV2Pair/PairHistory.lean#L674">pair_history_ledger_from_checkpoint</a></span></li>
-          <li><b>The oracle obeys its law.</b> Each price accumulator is its checkpoint value plus the sum, modulo 2<sup>256</sup>, of every committed update’s increment, ⌊r₁·2<sup>112</sup>/r₀⌋·Δt or symmetrically, with Δt the elapsed time modulo 2<sup>32</sup> by the steps’ own block timestamps. Both wrap-arounds are part of the statement.
+          <li><b>The oracle obeys its law.</b> Each price accumulator is its checkpoint value plus the sum, modulo 2<sup>256</sup>, of every committed update’s increment, ⌊r₁·2<sup>112</sup>/r₀⌋·Δt or symmetrically when Δt and both reserves are nonzero, and zero otherwise, with Δt the elapsed time modulo 2<sup>32</sup> by the steps’ own block timestamps. Both wrap-arounds are part of the statement.
             <span class="nm"><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/UniswapV2Pair/PairHistory.lean#L724">pair_history_oracle</a></span></li>
           <li><b>A share’s value falls only through the protocol fee.</b> If the factory answered <code>feeTo = 0</code> to the history’s mints and burns, and the token answers satisfy NoShrink, every committed step that starts with positive supply <i>T</i> and reserves r₀, r₁ ends with r₀·r₁·T′² ≤ r₀′·r₁′·T²: the geometric mean of the reserves per LP token, √(r₀·r₁)/T, never decreases. With the fee on, under NoShrink alone, the bound becomes r₀·r₁·T′² ≤ r₀′·r₁′·(T + F)², where F is the step’s exact fee mint, so dilution is bounded by the fee mint alone — the form that matters on mainnet, where the factory has named a fee recipient since 27 December 2025.
             <span class="nm"><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/UniswapV2Pair/PairHistory.lean#L765">pair_history_feeOff_product</a> · <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/UniswapV2Pair/PairHistory.lean#L796">pair_history_feeOn_product</a></span></li>
-          <li><b>The minimum liquidity stays locked.</b> From a checkpoint satisfying the ledger and a supply floor — a supply of zero, or at least 1,000 LP tokens at address 0, which has granted no allowance — the floor holds after every committed step, provided no step has address 0 as its caller; every step that starts with positive supply ends with at least 1,000, and the fee-off bound then holds as a ratio over the rationals. Deployment establishes both premises.
+          <li><b>The minimum liquidity stays locked.</b> From a checkpoint satisfying the ledger and a supply floor — a supply of zero, or at least 1,000 LP tokens at address 0, which has granted no allowance — for a pair not at address 0, the floor holds after every committed step, provided no step, and no nested call to the pair inside one, has address 0 as its caller; every step that starts with positive supply ends with at least 1,000, and the fee-off bound then holds as a ratio over the rationals. Deployment establishes both premises.
             <span class="nm"><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/UniswapV2Pair/PairHistoryMinLiquidity.lean#L192">pair_history_minimum_liquidity</a> · <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/UniswapV2Pair/PairHistoryMinLiquidity.lean#L224">pair_history_feeOff_ratio</a></span></li>
         </ul>
         <div class="aside" style="margin-top:24px">
@@ -216,7 +221,7 @@
           <li>That a live pair’s storage represents its model today: per pair, that needs the fixed slots and every mapping row recovered from its logs and <code>permit</code> calls checked, and a complete enumeration of its storage showing nothing else is stored.</li>
           <li>Transaction-level liveness; unforgeability of <code>permit</code> signatures, whose recovered address is an input; failed calls beyond the controls above.</li>
         </ul>
-        <p>The claim map’s <a href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md#58-uniswap-v2-pair-exact-committed-replay-share-value-monotonicity-and-gas-exact-liveness">Uniswap section</a> lists every theorem with its premises, file and line.</p>
+        <p>The claim map’s <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md#58-uniswap-v2-pair-exact-committed-replay-share-value-monotonicity-and-gas-exact-liveness">Uniswap section</a> lists every theorem with its premises, file and line.</p>
       </section>
 
       <section id="prior">
@@ -238,7 +243,7 @@
   <div class="wrap footgrid">
     <div class="colophon">
       <a class="brand" href="../" style="margin-bottom:12px"><span class="sq"></span><b>Blanc</b></a>
-      <p>MIT-licensed. Statements, names and line numbers refer to Blanc commit <code>5048a51f</code> and the Jaune revision it pins, <code>2737c8eb</code>. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
+      <p>MIT-licensed. Statements, names, line numbers and counts refer to Blanc commit <code>5048a51f</code> and the Jaune revision it pins, <code>2737c8eb</code>. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
     </div>
     <div>
       <h4>Deployed bytecode</h4>
