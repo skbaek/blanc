@@ -76,7 +76,7 @@ theorem popBurnBy2 {devm : Devm} {x w : B256} {s : List B256} {cost : Nat}
     returnData := rfl, error := rfl, accessedAddresses := rfl,
     accessedStorageKeys := rfl, state := rfl, createdAccounts := rfl,
     transientStorage := rfl, stateGas := rfl, accountReads := rfl,
-    storageReads := rfl }
+    storageReads := rfl, storageWrites := rfl }
 
 /-- A step to a configuration: agreement is kept, and a run from the new
 configuration is a run from the old one. -/
@@ -252,9 +252,9 @@ theorem sstoreStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
           have hcur : devm.getStorVal sevm.currentTarget k = lookupS stor sevm.currentTarget k :=
             hc.2.2.1 _ _
           have h := Ninst.runCompiled_sstore_warm hleg' hs ((hc.1 _).mpr hw) hsentry hstatic
-            (congrArg (fun x => sstoreValueCost (getOrigStorVal sevm sevm.currentTarget k) x v) hcur)
+            (congrArg (fun x => sstoreValueCost (devm.getOrigStorVal sevm sevm.currentTarget k) x v) hcur)
             (congrArg (fun x => sstoreNewRefundCounter sevm.benvStat.rules.gas v
-              (getOrigStorVal sevm sevm.currentTarget k) x devm.refundCounter) hcur)
+              (devm.getOrigStorVal sevm sevm.currentTarget k) x devm.refundCounter) hcur)
             (G := devm.gasLeft - _) (by exact (Nat.sub_add_cancel hgas).symm)
           exact h
         · cases h
@@ -269,10 +269,10 @@ theorem sstoreStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
             hc.2.2.1 _ _
           have h := Ninst.runCompiled_sstore_cold hleg' hs (fun hm => hw ((hc.1 _).mp hm)) hsentry
             hstatic
-            (congrArg (fun x => gasColdSload + sstoreValueCost (getOrigStorVal sevm sevm.currentTarget k) x v)
+            (congrArg (fun x => gasColdSload + sstoreValueCost (devm.getOrigStorVal sevm sevm.currentTarget k) x v)
               hcur)
             (congrArg (fun x => sstoreNewRefundCounter sevm.benvStat.rules.gas v
-              (getOrigStorVal sevm sevm.currentTarget k) x devm.refundCounter) hcur)
+              (devm.getOrigStorVal sevm sevm.currentTarget k) x devm.refundCounter) hcur)
             (G := devm.gasLeft - _) (by exact (Nat.sub_add_cancel hgas).symm)
           exact h
         · cases h
@@ -411,7 +411,7 @@ theorem callStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
             have hC : AcctAgree cp.f.inner.benv.state c.acs := by rw [hst]; exact hc.2.2.2
             have heB : frameEnterB cp.f = .done (.ok child) := by rw [frameEnterB_eq_S hC]; exact he
             obtain ⟨hda, hdk⟩ := resumeCallB_acc hr
-            obtain ⟨hca, hck, hcs⟩ := frameEnterB_done_acc hcr hsg heB
+            obtain ⟨hca, hck⟩ := frameEnterB_done_acc hcr hsg heB
             obtain ⟨benv, hb, hcst⟩ := frameEnterB_done_ok_state hcr hsg heB hce
             rw [benvAfterTransfer_eq_S hC] at hb
             refine ⟨fun x => ?_, fun a => ?_, fun a k => ?_, fun a => ?_⟩
@@ -421,8 +421,9 @@ theorem callStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
             · show a ∈ d.accessedAddresses ↔ a ∈ cp.adrs
               rw [hda a, hca, hia, hpa a]
               exact ⟨fun h => h.elim id (·.2), .inl⟩
-            · show storOf d.state a k = lookupS c.stor a k
-              rw [resumeCallB_state hr, hcs, hst]; exact hc.2.2.1 a k
+            · show storOf d.state a k = lookupS (storTransfer cp.f.inner c.stor c.acs) a k
+              rw [resumeCallB_state hr, hcst]
+              exact benvAfterTransferS_stor hb hC (fun a k => by rw [hst]; exact hc.2.2.1 a k) a k
             · show acctView (d.state.get a) = lookupA (acsTransfer cp.f.inner c.acs) a
               rw [resumeCallB_state hr, hcst]; exact acctAgree_transfer hC hb a
           · intro hc o r'
