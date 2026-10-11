@@ -2546,6 +2546,16 @@ Blanc's [`Blanc/ExecutionOccurrence.lean`](../Blanc/ExecutionOccurrence.lean):
 
 - `Execution.commits` and `Frame.settlementCommits` distinguish raw success
   from complete frame settlement.
+- `Exec.storageReplay_committedPost` supplies `Exec.StorageReplay`: at each
+  owner whose entry code is nonempty, code is preserved and persistent storage
+  equals replay of the retained SSTOREs. Use its second conjunct with the
+  owner's code fact to obtain a cell equality; `Exec.StorageReplay.append`
+  transports that code fact through composition. Account normalization and
+  CREATE preparation can erase storage at code-empty owners, so this is not
+  an all-account storage frame.
+- `Exec.exists_lastRetainedSstore_of_getStor_ne` takes the same entry-code
+  premise when locating the final retained write responsible for a changed
+  cell. Derive it from the contract's existing code invariant.
 - `Exec.descendantFrames`, `Exec.committedFrames`, and retained-node APIs
   traverse only effects that survive the relevant settlement boundary.
 - `Exec.retainedStorageEffectTriples_cont`,

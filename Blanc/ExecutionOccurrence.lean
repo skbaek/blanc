@@ -656,20 +656,37 @@ theorem ProcessMessage.storageReplay_of_body
     simp only [Frame.ofCall] at transfer evmEq
     have preState : pre.state = benv.state := by
       exact congrArg (fun evm : Evm => evm.dyna.state) evmEq
-    have prefixEq : Devm.getStor pre = Devm.getStor parent := by
-      funext owner
-      change pre.state.getStor owner = parent.state.getStor owner
-      rw [preState, parentState, benvAfterTransfer_getStor_eq transfer]
+    have prefixReplay : Exec.StorageReplay parent pre [] := by
+      apply Exec.StorageReplay.of_code_stor
+      · intro owner _
+        calc pre.getCode owner
+            = benv.state.getCode owner :=
+              congrArg (fun state : State => state.getCode owner) preState
+          _ = msg.benv.state.getCode owner :=
+              benvAfterTransfer_ok_getCode transfer owner
+          _ = parent.getCode owner :=
+              (congrArg (fun state : State => state.getCode owner) parentState).symm
+      · intro owner hcode
+        have hmsg : (msg.benv.state.getCode owner).toList ≠ [] := by
+          have h := congrArg (fun state : State => state.getCode owner) parentState
+          change (parent.state.getCode owner).toList ≠ [] at hcode
+          rw [h] at hcode
+          exact hcode
+        calc Devm.getStor pre owner
+            = benv.state.getStor owner :=
+              congrArg (fun state : State => state.getStor owner) preState
+          _ = msg.benv.state.getStor owner :=
+              benvAfterTransfer_getStor_eq transfer hmsg
+          _ = Devm.getStor parent owner :=
+              (congrArg (fun state : State => state.getStor owner) parentState).symm
     have postState : post.state =
         (Execution.committedPost out committed).state :=
       ProcessMessage.ok_state_eq_committedPost process committed
-    have suffixEq : Devm.getStor post =
-        Devm.getStor (Execution.committedPost out committed) := by
-      funext owner
-      exact congrArg (fun state : State => state.getStor owner) postState
+    have suffixReplay : Exec.StorageReplay
+        (Execution.committedPost out committed) post [] :=
+      Exec.StorageReplay.of_state_eq postState
     simpa only [List.nil_append, List.append_nil] using
-      (Exec.StorageReplay.of_getStor_eq prefixEq).append
-        ((body committed).append (Exec.StorageReplay.of_getStor_eq suffixEq))
+      prefixReplay.append ((body committed).append suffixReplay)
   · rw [if_neg settles]
     have settledEq := (RunFrame.some_inv process).2
     have postError : post.error.isSome = true := by
@@ -681,20 +698,20 @@ theorem ProcessMessage.storageReplay_of_body
         exact clean
       cases errorEq : post.error <;> simp_all only [ExceptT.stM_eq, Bool.not_eq_true, Option.isNone_none, ne_eq, not_true_eq_false, Option.isNone_some, Bool.false_eq_true, not_false_eq_true, Option.isSome_some]
     have rollback := (ProcessMessage.rollback_of_error process postError).1
-    apply Exec.StorageReplay.of_getStor_eq
-    funext owner
-    change post.state.getStor owner = parent.state.getStor owner
-    rw [rollback, parentState]
+    apply Exec.StorageReplay.of_state_eq
+    exact rollback.trans parentState.symm
 
 /-- Clean CREATE code-deposit settlement preserves the constructor body's
-persistent storage at every address. -/
+code and persistent storage away from its target address. -/
 theorem ProcessCreateMessage.ok_getStor_eq_inner_of_clean
     {msg : Msg} {slot : Xlot} {post : Devm}
     (process : ProcessCreateMessage msg slot (.ok post))
     (clean : post.error.isSome = false) :
     ∃ inner : Devm,
       ProcessMessage (processCreateMessage.msg msg) slot (.ok inner) ∧
-      Devm.getStor post = Devm.getStor inner ∧
+      (∀ owner, msg.currentTarget ≠ owner →
+        post.getCode owner = inner.getCode owner ∧
+        Devm.getStor post owner = Devm.getStor inner owner) ∧
       inner.error.isSome = false := by
   rcases ProcessCreateMessage.iff_processMessage.mp process with
     ⟨result, innerProcess, settled⟩
@@ -718,12 +735,14 @@ theorem ProcessCreateMessage.ok_getStor_eq_inner_of_clean
                 cases hsg : msg.benv.stat.rules.stateGas with
                 | none =>
                     simp only [hsg] at clean
-                    simp only [Devm.error, processCreateMessage.exceptionalHalt, Devm.setMeta,
+                    simp only [Devm.error, processCreateMessage.exceptionalHalt,
+                      Devm.setMeta, Devm.withStorageWrites, Devm.setWorld,
                       Option.isSome_some, Bool.true_eq_false] at clean
                 | some sg =>
                     simp only [hsg] at clean
                     simp only [Devm.error, processCreateMessage.exceptionalHaltAmsterdam,
-                      Devm.setMeta, Option.isSome_some, Bool.true_eq_false] at clean
+                      Devm.setMeta, Devm.withStorageWrites, Devm.setWorld,
+                      Option.isSome_some, Bool.true_eq_false] at clean
             | revert => cases settled
             | crypto reason => cases settled
             | internal reason => cases settled
@@ -731,19 +750,24 @@ theorem ProcessCreateMessage.ok_getStor_eq_inner_of_clean
             rw [charge] at settled
             have eq := Except.ok.inj settled
             refine ⟨inner, innerProcess, ?_, ?_⟩
-            · funext owner
-              calc
-                Devm.getStor post owner =
-                    Devm.getStor
-                      (charged.setCode msg.currentTarget
-                        ⟨⟨charged.output⟩⟩) owner := by rw [eq]
-                _ = Devm.getStor charged owner := by
-                  change ((charged.state.setCode msg.currentTarget
-                    ⟨⟨charged.output⟩⟩).get owner).stor = _
-                  exact State.setCode_get_stor
-                _ = Devm.getStor inner owner := by
-                  exact congrArg (fun state : State => state.getStor owner)
-                    (chargeCodeGas_state_ok charge)
+            · intro owner target_ne
+              constructor
+              · calc post.getCode owner
+                    = (charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩).getCode owner := by rw [eq]
+                  _ = charged.getCode owner := setCode_getCode target_ne
+                  _ = inner.getCode owner := getCode_eq_of_state_eq (chargeCodeGas_state_ok charge) owner
+              · calc
+                  Devm.getStor post owner =
+                      Devm.getStor
+                        (charged.setCode msg.currentTarget
+                          ⟨⟨charged.output⟩⟩) owner := by rw [eq]
+                  _ = Devm.getStor charged owner := by
+                    change ((charged.state.setCode msg.currentTarget
+                      ⟨⟨charged.output⟩⟩).get owner).stor = _
+                    exact State.setCode_get_stor_ne target_ne
+                  _ = Devm.getStor inner owner := by
+                    exact congrArg (fun state : State => state.getStor owner)
+                      (chargeCodeGas_state_ok charge)
             · cases errorEq : inner.error <;> simp_all only [Option.isSome_eq_false_iff, Option.isNone_iff_eq_none, Option.isNone_none, ExceptT.stM_eq, Option.isSome_none, Option.isNone_some, Bool.false_eq_true]
       · rw [if_neg innerClean] at settled
         have eq := Except.ok.inj settled
@@ -766,14 +790,13 @@ theorem processCreateMessage_msg_getStor_eq_of_empty
   by_cases target : msg.currentTarget = owner
   · subst owner
     dsimp only [processCreateMessage.msg, Msg.withBenv, Benv.setStor, addCreatedAccount,
-      Benv.incrNonce, State.getStor]
+      Benv.incrNonce, Benv.clearStorageWritesIfEmpty, State.getStor]
     rw [State.incrNonce_get_stor]
-    unfold State.setStor
-    rw [State.get_set_self]
+    simp only [State.setStor, State.get_set_self, ite_self]
     exact empty.symm
   · dsimp only [processCreateMessage.msg, Msg.withBenv, Benv.setStor, addCreatedAccount,
-    Benv.incrNonce, State.getStor]
-    rw [State.incrNonce_get_stor, State.setStor_get_stor_ne target]
+    Benv.incrNonce, Benv.clearStorageWritesIfEmpty, State.getStor]
+    rw [State.incrNonce_get_stor, if_neg (fun h => target h.1), State.setStor_get_stor_ne target]
 
 /-- Settlement-aware replay transport for a concrete CREATE constructor.  The
 full CREATE settlement bit, rather than raw constructor success, decides
@@ -785,7 +808,7 @@ theorem ProcessCreateMessage.storageReplay_of_body
     (process : ProcessCreateMessage msg
       (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
     (parentState : parent.state = msg.benv.state)
-    (fresh : Devm.getStor parent msg.currentTarget = .empty)
+    (fresh : ¬ State.Protected parent.state msg.currentTarget)
     (body : ∀ committed : Execution.commits out = true,
       Exec.StorageReplay pre (Execution.committedPost out committed) writes) :
     Exec.StorageReplay parent post
@@ -802,15 +825,26 @@ theorem ProcessCreateMessage.storageReplay_of_body
       ⟨inner, innerProcess, postEq, innerClean⟩
     let prepared : Devm :=
       parent.withState (processCreateMessage.msg msg).benv.state
-    have preparedEq : Devm.getStor prepared = Devm.getStor parent := by
-      rw [show Devm.getStor prepared =
-          (processCreateMessage.msg msg).benv.state.getStor from rfl]
-      rw [processCreateMessage_msg_getStor_eq_of_empty (by
-        rw [← parentState]
-        exact fresh)]
-      funext owner
-      change msg.benv.state.getStor owner = parent.state.getStor owner
-      rw [← parentState]
+    have target_ne : ∀ owner, (parent.getCode owner).toList ≠ [] →
+        msg.currentTarget ≠ owner := by
+      intro owner hcode equal
+      apply fresh
+      rw [equal]
+      exact State.Protected.of_code_ne_nil hcode
+    have preparedReplay : Exec.StorageReplay parent prepared [] := by
+      apply Exec.StorageReplay.of_code_stor
+      · intro owner _
+        change (processCreateMessage.msg msg).benv.state.getCode owner =
+          parent.state.getCode owner
+        rw [processCreateMessage.msg_getCode, parentState]
+      · intro owner hcode
+        change (processCreateMessage.msg msg).benv.state.getStor owner =
+          parent.state.getStor owner
+        dsimp only [processCreateMessage.msg, Msg.withBenv, Benv.incrNonce,
+          Benv.clearStorageWritesIfEmpty, addCreatedAccount, Benv.setStor, State.getStor]
+        rw [State.incrNonce_get_stor,
+          if_neg (fun h => target_ne owner hcode h.1),
+          State.setStor_get_stor_ne (target_ne owner hcode), parentState]
     have innerSettles :
         Frame.settlementCommits
           (Frame.ofCall (processCreateMessage.msg msg)) out = true := by
@@ -821,9 +855,13 @@ theorem ProcessCreateMessage.storageReplay_of_body
     have innerReplay := ProcessMessage.storageReplay_of_body
       innerProcess (parent := prepared) rfl body
     rw [if_pos innerSettles] at innerReplay
-    simpa only [List.nil_append, List.append_nil] using
-      (Exec.StorageReplay.of_getStor_eq preparedEq).append
-        (innerReplay.append (Exec.StorageReplay.of_getStor_eq postEq))
+    have throughInner : Exec.StorageReplay parent inner writes := by
+      simpa only [List.nil_append] using preparedReplay.append innerReplay
+    refine ⟨fun owner hcode => ?_, fun owner hcode key => ?_⟩
+    · exact (postEq owner (target_ne owner hcode)).1.trans
+        (throughInner.1 owner hcode)
+    · rw [(postEq owner (target_ne owner hcode)).2]
+      exact throughInner.2 owner hcode key
   · rw [if_neg settles]
     have settledEq := (RunFrame.some_inv process).2
     have postError : post.error.isSome = true := by
@@ -835,10 +873,8 @@ theorem ProcessCreateMessage.storageReplay_of_body
         cases errorEq : post.error <;> simp_all only [ExceptT.stM_eq, Bool.not_eq_true, Option.isSome_none, Option.isNone_none, Option.isSome_some, Bool.true_eq_false]
       cases errorEq : post.error <;> simp_all only [ExceptT.stM_eq, Bool.not_eq_true, Option.isSome_none, ne_eq, not_true_eq_false, Option.isSome_some, Bool.true_eq_false, not_false_eq_true]
     have rollback := ProcessCreateMessage.rollback_of_error process postError
-    apply Exec.StorageReplay.of_getStor_eq
-    funext owner
-    change post.state.getStor owner = parent.state.getStor owner
-    rw [rollback, parentState]
+    apply Exec.StorageReplay.of_state_eq
+    exact rollback.trans parentState.symm
 
 /-- Replay transport through the concrete recursive slot of a generic CALL. -/
 theorem GenericCall.storageReplay_some_of_body
@@ -880,17 +916,13 @@ theorem GenericCall.storageReplay_some_of_body
       simpa only [ProcessMessage, msg, callPre, Mem.read] using process
     have replay := ProcessMessage.storageReplay_of_body
       process' (parent := callPre) rfl body
-    have prefixEq : Devm.getStor callPre = Devm.getStor pre := rfl
-    have suffixEq : Devm.getStor post = Devm.getStor child := by
-      funext owner
-      exact congrArg (fun state : State => state.getStor owner) childState
     have memoryEq : callPre.memory = pre.memory := rfl
     dsimp only [msg] at replay
     rw [memoryEq] at replay
     dsimp only [callPre] at replay
     convert
-      (Exec.StorageReplay.of_getStor_eq prefixEq).append
-        (replay.append (Exec.StorageReplay.of_getStor_eq suffixEq)) using 1
+      (Exec.StorageReplay.of_state_eq (show callPre.state = pre.state from rfl)).append
+        (replay.append (Exec.StorageReplay.of_state_eq childState)) using 1
     by_cases retain : Frame.settlementCommits
         (Frame.ofCall
           (callMsg sevm (pre.withReturnData []) gas value caller target
@@ -922,8 +954,8 @@ theorem GenericCreate.storageReplay_some_of_body
               ((pre.memory.read mi ms).1))) out = true
        then writes else []) := by
   obtain ⟨frame, resume, spawn, -, -⟩ := XStep.Run.some_inv run
-  have targetEmpty : Devm.getStor pre newAddress = .empty :=
-    genericCreate_step_spawn_getStor_empty spawn
+  have targetUnprotected : ¬ State.Protected pre.state newAddress :=
+    genericCreate_step_spawn_target_unprotected spawn
   unfold GenericCreate genericCreate.step at run
   simp only [Bind.bind, Except.bind, Except.assert, assertDynamic,
     Pure.pure, Except.pure] at run
@@ -950,28 +982,39 @@ theorem GenericCreate.storageReplay_some_of_body
           (.some ⟨⟨pc, childSevm, childPre⟩, out⟩) (.ok settled) := by
         simpa only [ProcessCreateMessage, msg, createPre, Mem.read] using
           process
-      have prefixEq : Devm.getStor createPre = Devm.getStor pre := by
-        funext owner
-        have stateEq : createPre.state =
-            pre.state.incrNonce sevm.currentTarget := by
+      have prefixCode : ∀ owner, createPre.getCode owner = pre.getCode owner := by
+        intro owner
+        change ((pre.state.incrNonce sevm.currentTarget).get owner).code = _
+        exact State.incrNonce_get_code
+      have prefixReplay : Exec.StorageReplay pre createPre [] := by
+        apply Exec.StorageReplay.of_code_stor
+        · exact fun owner _ => prefixCode owner
+        · intro owner hcode
+          change ((pre.state.incrNonce sevm.currentTarget).get owner).stor = _
+          rw [State.incrNonce_get_stor, if_neg (by
+            rintro ⟨equal, empty⟩
+            subst owner
+            exact (ne_wa_of_code_size_zero hcode empty.1) rfl)]
           rfl
-        change createPre.state.getStor owner = pre.state.getStor owner
-        rw [stateEq]
-        exact State.incrNonce_get_stor
+      have targetCodeEmpty : (createPre.getCode newAddress).size = 0 := by
+        rw [prefixCode]
+        exact not_ne_iff.mp (fun nonempty => targetUnprotected (Or.inr nonempty))
       have replay := ProcessCreateMessage.storageReplay_of_body
         process' (parent := createPre) rfl (by
-          rw [prefixEq]
-          exact targetEmpty) body
+          change ¬ State.Protected createPre.state newAddress
+          have collision : ¬ ((createPre.state.get newAddress).nonce ≠ 0 ∨
+              (createPre.state.get newAddress).code.size ≠ 0) := by assumption
+          intro hp
+          rcases hp with nonce | code
+          · exact collision (Or.inl nonce)
+          · exact code targetCodeEmpty) body
       have settledState : post.state = settled.state :=
         Resume.create_state resumeRun.symm
-      have suffixEq : Devm.getStor post = Devm.getStor settled := by
-        funext owner
-        exact congrArg (fun state : State => state.getStor owner) settledState
       dsimp only [msg] at replay
       dsimp only [createPre] at replay
       convert
-        (Exec.StorageReplay.of_getStor_eq prefixEq).append
-          (replay.append (Exec.StorageReplay.of_getStor_eq suffixEq)) using 1
+        prefixReplay.append
+          (replay.append (Exec.StorageReplay.of_state_eq settledState)) using 1
       by_cases retain : Frame.settlementCommits
           (Frame.ofCreate
             (createMsg sevm
@@ -1016,8 +1059,7 @@ theorem Xinst.storageReplay_some_of_body
       exact ⟨result, frameRun, resumeRun.symm⟩
     have replay := GenericCreate.storageReplay_some_of_body run body
     simpa only [List.nil_append] using
-      (Exec.StorageReplay.of_getStor_eq
-        (funext hprefix.getStor).symm).append replay
+      (Exec.StorageReplay.of_state_eq hprefix.state.symm).append replay
   · rcases genericCall_step_spawn_exact spawn with ⟨rfl, rfl⟩
     have run : GenericCall sevm d gas value caller target codeAddress stv
         isStatic ii isz oi osz code disablePrecompiles
@@ -1027,8 +1069,7 @@ theorem Xinst.storageReplay_some_of_body
       exact ⟨result, frameRun, resumeRun.symm⟩
     have replay := GenericCall.storageReplay_some_of_body run body
     simpa only [List.nil_append] using
-      (Exec.StorageReplay.of_getStor_eq
-        (funext hprefix.getStor).symm).append replay
+      (Exec.StorageReplay.of_state_eq hprefix.state.symm).append replay
 
 /-- The storage owner is the executing frame's current target. -/
 def Exec.SuccessfulSstoreOccurrence.storageOwner
@@ -1275,7 +1316,7 @@ private theorem Exec.storageReplay_cont_head
               rw [jumpEq] at frame
               simpa only [Deriv.successfulSstore?, decoded, List.filterMap_cons_none,
                 List.filterMap_nil] using
-                Exec.StorageReplay.of_getStor_eq (funext frame.getStor).symm
+                Exec.StorageReplay.of_state_eq frame.state.symm
       | last last =>
           rw [Evm.step_last decoded] at step
           cases step
@@ -1293,39 +1334,38 @@ private theorem Exec.storageReplay_cont_head
             exact ⟨rfl, rfl⟩
           cases instruction with
           | push bytes bound =>
-              have equal : Devm.getStor pre = Devm.getStor post :=
-                Ninst.Hinv.inv (f := Devm.getStor)
-                  (show Ninst.Run sevm pre (.push bytes bound) post from
-                    ⟨.none, trivial, pc, nrun⟩)
+              have frame := Ninst.push_instructionFrame_effectRec
+                (xl := .none) trivial nrun
+              have equal : pre.state = post.state := frame.state
               simpa only [Deriv.successfulSstore?, decoded, List.filterMap_cons_none,
-                List.filterMap_nil] using Exec.StorageReplay.of_getStor_eq equal.symm
+                List.filterMap_nil] using Exec.StorageReplay.of_state_eq equal.symm
           | dupn imm =>
               have frame := Ninst.dupn_instructionFrame_effectRec
                 (xl := .none) trivial nrun
-              have equal : Devm.getStor pre = Devm.getStor post :=
-                funext (Devm.InstructionFrame.getStor frame)
+              have equal : pre.state = post.state := frame.state
               simpa only [Deriv.successfulSstore?, decoded, List.filterMap_cons_none,
-                List.filterMap_nil] using Exec.StorageReplay.of_getStor_eq equal.symm
+                List.filterMap_nil] using Exec.StorageReplay.of_state_eq equal.symm
           | swapn imm =>
               have frame := Ninst.swapn_instructionFrame_effectRec
                 (xl := .none) trivial nrun
-              have equal : Devm.getStor pre = Devm.getStor post :=
-                funext (Devm.InstructionFrame.getStor frame)
+              have equal : pre.state = post.state := frame.state
               simpa only [Deriv.successfulSstore?, decoded, List.filterMap_cons_none,
-                List.filterMap_nil] using Exec.StorageReplay.of_getStor_eq equal.symm
+                List.filterMap_nil] using Exec.StorageReplay.of_state_eq equal.symm
           | exchange imm =>
               have frame := Ninst.exchange_instructionFrame_effectRec
                 (xl := .none) trivial nrun
-              have equal : Devm.getStor pre = Devm.getStor post :=
-                funext (Devm.InstructionFrame.getStor frame)
+              have equal : pre.state = post.state := frame.state
               simpa only [Deriv.successfulSstore?, decoded, List.filterMap_cons_none,
-                List.filterMap_nil] using Exec.StorageReplay.of_getStor_eq equal.symm
+                List.filterMap_nil] using Exec.StorageReplay.of_state_eq equal.symm
           | exec executable =>
               have xrun : Xinst.Run sevm pre executable .none (.ok post) :=
                 XStep.run_toStep.mp nrun
               simpa only [Deriv.successfulSstore?, decoded, List.filterMap_cons_none,
                 List.filterMap_nil] using
-                Exec.StorageReplay.of_getStor_eq (Xinst.none_getStor_eq xrun)
+                Exec.StorageReplay.of_code_stor (pre := pre) (post := post)
+                  (Xinst.codePreserve_effectRec executable (xl := .none) trivial xrun)
+                  (fun owner hcode => Xinst.none_getStor_eq xrun owner
+                    (State.Protected.of_code_ne_nil hcode))
           | reg regular =>
               have rrun : Rinst.run ⟨pc, sevm, pre⟩ regular = .ok post := by
                 have equal : (.ok post : Execution) =
@@ -1355,7 +1395,8 @@ private theorem Exec.storageReplay_cont_head
                         simp only [Split, stackEq, List.cons_append, List.nil_append,
                           List.cons.injEq, List.nil_eq, reduceCtorEq, and_false] at impossible
                     | cons value tail =>
-                        intro owner storageKey
+                        refine ⟨Rinst.codePreserve_effect .sstore rrun, ?_⟩
+                        intro owner _ storageKey
                         by_cases ownerEq : sevm.currentTarget = owner
                         · subst owner
                           have updated := sstore_getStor_set sstoreRun
@@ -1387,10 +1428,12 @@ private theorem Exec.storageReplay_cont_head
                 simpa only [Deriv.successfulSstore?, decoded, Option.some.injEq, Inst.next.injEq,
                   Ninst.reg.injEq, store, imp_false, IsEmpty.forall_iff, implies_true,
                   List.filterMap_cons_none, List.filterMap_nil] using
-                  Exec.StorageReplay.of_getStor_eq equal.symm
+                  Exec.StorageReplay.of_code_stor (fun owner _ => Rinst.preserves_getCode rrun owner)
+                    (fun owner _ => congrFun equal.symm owner)
 
-/-- A childless successful executable spawn is persistent-storage silent. -/
-private theorem Exec.doneOk_getStor_eq
+/-- A childless successful executable spawn preserves the code and storage
+of each owner whose code is nonempty before the step. -/
+private theorem Exec.doneOk_storageReplay
     {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
     {frame : Jaune.Frame} {resume : Resume}
     {settled : Except (EvmError × State × AdrSet × Tra) Devm}
@@ -1398,22 +1441,24 @@ private theorem Exec.doneOk_getStor_eq
     (enter : frame.enter = .done settled)
     (resumeRun : resume.run settled = .ok post)
     (_hfork : CoveredFork sevm.benvStat.fork) :
-    Devm.getStor post = Devm.getStor pre := by
+    Exec.StorageReplay pre post [] := by
   rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
   have run : Xinst.Run sevm pre x .none (.ok post) := by
     unfold Xinst.Run XStep.Run
     rw [spawn]
     exact ⟨settled, RunFrame.of_done enter, resumeRun.symm⟩
-  exact Xinst.none_getStor_eq run
+  exact Exec.StorageReplay.of_code_stor
+    (Xinst.codePreserve_effectRec x (xl := .none) trivial run)
+    (fun owner hcode => Xinst.none_getStor_eq run owner
+      (State.Protected.of_code_ne_nil hcode))
 
-/-- A committing halted driver node is a successful last instruction, hence
-is persistent-storage silent. -/
-private theorem Exec.halt_getStor_eq
+/-- A committing halted driver node is a successful last instruction and
+preserves the code and storage of each initially code-bearing owner. -/
+private theorem Exec.halt_storageReplay
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (step : Evm.step ⟨pc, sevm, pre⟩ = .halt out)
     (committed : Execution.commits out = true) :
-    Devm.getStor (Execution.committedPost out committed) =
-      Devm.getStor pre := by
+    Exec.StorageReplay pre (Execution.committedPost out committed) [] := by
   cases out with
   | error error => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
@@ -1428,7 +1473,10 @@ private theorem Exec.halt_getStor_eq
               rw [Evm.step_last decoded] at step
               have run : Linst.Run sevm pre last (.ok post) := by
                 exact Step.halt.inj step
-              exact Linst.getStor_eq run
+              exact Exec.StorageReplay.of_code_stor
+                (Linst.codePreserve_effect last run)
+                (fun owner hcode => Linst.getStor_eq run owner
+                  (State.Protected.of_code_ne_nil hcode))
           | next next =>
               rw [Evm.step_next decoded] at step
               exact (Ninst.step_ne_halt_ok step).elim
@@ -1457,7 +1505,7 @@ theorem Exec.storageReplay_committedPost
           (⟨_, _, _, _, Exec.halt step⟩ : Exec.Deriv) = none := rfl
       simpa only [retainedStorageWrites, Exec.retainedNodes_eq_of_commits _ committed,
         Exec.retainedNodesOfCommits, hnone, List.filterMap_cons_none, List.filterMap_nil] using
-        Exec.StorageReplay.of_getStor_eq (Exec.halt_getStor_eq step committed)
+        Exec.halt_storageReplay step committed
   | cont step next ih =>
       have head := Exec.storageReplay_cont_head step next hfork
       have tail := ih committed hfork
@@ -1468,8 +1516,7 @@ theorem Exec.storageReplay_committedPost
   | doneErr step enter resume =>
       simp only [Execution.commits, Bool.false_eq_true] at committed
   | doneOk step enter resume next ih =>
-      have head := Exec.StorageReplay.of_getStor_eq
-        (Exec.doneOk_getStor_eq step enter resume hfork)
+      have head := Exec.doneOk_storageReplay step enter resume hfork
       have tail := ih committed hfork
       have hnone : Exec.Deriv.successfulSstore?
           (⟨_, _, _, _, Exec.doneOk step enter resume next⟩ :
@@ -1505,7 +1552,8 @@ theorem Exec.storageReplay_committedPost
             committed settles,
           List.filterMap_cons, List.nil_append, hnone]
 
-/-- Any committed persistent-storage change has an exact last retained
+/-- Any committed persistent-storage change at an initially code-bearing owner
+has an exact last retained
 successful SSTORE witness at the same owner and raw key, recording the final
 word.  Later no-op writes are included and therefore supersede earlier writes. -/
 theorem Exec.exists_lastRetainedSstore_of_getStor_ne
@@ -1514,6 +1562,7 @@ theorem Exec.exists_lastRetainedSstore_of_getStor_ne
     (committed : Execution.commits out = true)
     (hfork : CoveredFork sevm.benvStat.fork)
     {owner : Adr} {key : B256}
+    (hcode : (pre.getCode owner).toList ≠ [])
     (changed :
       (Devm.getStor pre owner).get key ≠
         (Devm.getStor (Execution.committedPost out committed) owner).get key) :
@@ -1526,7 +1575,7 @@ theorem Exec.exists_lastRetainedSstore_of_getStor_ne
         (Devm.getStor (Execution.committedPost out committed) owner).get key ∧
       write.IsLastRetained := by
   exact Exec.exists_lastRetainedSstore_of_replay
-    (Exec.storageReplay_committedPost run committed hfork owner key) changed
+    ((Exec.storageReplay_committedPost run committed hfork).2 owner hcode key) changed
 
 /-- A same-frame prefix endpoint is a recursive descendant of its start. -/
 private theorem Exec.Deriv.ParentPrefix.le
