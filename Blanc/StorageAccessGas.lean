@@ -58,7 +58,7 @@ theorem sloadScheduleCost_le (sevm : Sevm) (schedule : SloadSchedule) :
 /-- An `SSTORE`'s selected charge: at most a cold access plus its value charge. -/
 theorem sstoreCost_le_value (sevm : Sevm) (d : Devm) (key value : B256) :
     sstoreCost sevm d key value ≤ gasColdSload +
-      sstoreValueCost (getOrigStorVal sevm sevm.currentTarget key)
+      sstoreValueCost (d.getOrigStorVal sevm sevm.currentTarget key)
         (d.getStorVal sevm.currentTarget key) value := by
   unfold sstoreCost
   split <;> omega

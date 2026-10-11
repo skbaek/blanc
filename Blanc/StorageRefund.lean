@@ -26,7 +26,7 @@ theorem sstoreNewRefundCounter_ge_of_original_eq_current
 /-- The selected warm/cold store retains the scalar first-write guarantee. -/
 theorem afterSstore_refundCounter_ge_of_original_eq_current
     (sevm : Sevm) (base : Devm) (key value : B256)
-    (same : getOrigStorVal sevm sevm.currentTarget key =
+    (same : base.getOrigStorVal sevm sevm.currentTarget key =
       base.getStorVal sevm.currentTarget key) :
     base.refundCounter ≤ (afterSstore sevm base key value).refundCounter := by
   rw [afterSstore_refundCounter, same]
@@ -51,7 +51,7 @@ theorem sstoreNewRefundCounter_ge_of_safe (gas : GasSchedule) (new orig cur : B2
     split_ifs <;> omega
 
 theorem afterSstore_refundCounter_ge_of_safe (sevm : Sevm) (base : Devm) (key value : B256)
-    (safe : RefundSafe (getOrigStorVal sevm sevm.currentTarget key)
+    (safe : RefundSafe (base.getOrigStorVal sevm sevm.currentTarget key)
       (base.getStorVal sevm.currentTarget key)) :
     base.refundCounter ≤ (afterSstore sevm base key value).refundCounter := by
   rw [afterSstore_refundCounter]
