@@ -32,7 +32,11 @@ theorem signedBalanceEntry_eq_ofState {ca : Adr} {msg : Msg} {entry : Benv}
       exact sub_zero _
     · rw [ite_eq_right target]
   | true =>
-    obtain ⟨debit, sub, rfl⟩ := of_benvAfterTransfer transfers transfer
+    by_cases hzero : msg.value = 0
+    · rw [Msg.benvAfterTransfer_of_value_zero hzero] at transfer
+      cases transfer
+      simp only [hzero, B256.toNat_zero, Int.ofNat_zero, sub_zero, ite_self]
+    obtain ⟨debit, sub, rfl⟩ := of_benvAfterTransfer transfers hzero transfer
     by_cases target : msg.currentTarget = ca
     · subst ca
       rw [ite_eq_left rfl]
@@ -76,6 +80,7 @@ theorem signedBalanceCredit_frames_sum_le (steps : List SignedBalanceCredit) :
       omega
 
 def signedBalanceCarrier (ca : Adr) : ReplayCarrier ca where
+  readsStorage := false
   Snap := Int
   Step := SignedBalanceCredit
   Tag := Unit

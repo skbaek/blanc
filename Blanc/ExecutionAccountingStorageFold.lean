@@ -35,6 +35,7 @@ theorem GuardedStorageReplay.fold_eq {Event : Type} {update : Stor → Event →
 /-- Storage-only replay: message transfers and incidental balance credits are silent. -/
 def storageFoldCarrier (ca : Adr) (Event : Type) (update : Stor → Event → Stor)
     (valid : Stor → Event → Prop) : ReplayCarrier ca where
+  readsStorage := true
   Snap := Stor
   Step := Event
   Tag := Unit
@@ -42,14 +43,15 @@ def storageFoldCarrier (ca : Adr) (Event : Type) (update : Stor → Event → St
   ofState state := state.getStor ca
   frameEntry _ state := state.getStor ca
   nil := .nil
-  silent := fun storage _ => storage
+  silent := fun storage _ => storage rfl
   credit := by
     intro _ pre post _ storage _ _
     refine ⟨[], ?_⟩
     rw [storage]
     exact .nil _
   entry_eq_ofState := by
-    intro _ _ _ _ transfer _
-    exact congrFun (benvAfterTransfer_getStor_eq transfer) ca
+    intro _ _ caller_ne _ transfer sum_nof
+    exact benvAfterTransfer_getStor_eq_of_safe transfer sum_nof
+      (fun transfers _ => Or.inl (caller_ne transfers))
 
 end Blanc.ExecutionAccountingReplay

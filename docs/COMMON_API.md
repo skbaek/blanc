@@ -3255,7 +3255,10 @@ Use
   arbitrary `ContractSpec` invariant onto the prepared message.
 - `ExecutionTrace.TransactionTrace.debitState_bal_eq` and
   `ExecutionTrace.TransactionTrace.debitState_getStor_eq` project the nonce
-  bump and up-front gas debit;
+  bump and up-front gas debit. Storage equality remains unconditional:
+  `ExecutionTrace.validateTransaction_nonce_ne_max` and
+  `ExecutionTrace.checkTransaction_sender_nonce` extract the admission facts
+  ensuring the increment protects the sender before the debit.
   `ExecutionTrace.TransactionTrace.msg_shouldTransferValue` records that a
   transaction message always transfers its value.
 - `ExecutionTrace.TransactionTrace.accountsToDelete_ne` and

@@ -84,11 +84,11 @@ theorem MsgInv.processCreateMessage_msg
   have state : c.StateInv ca
       (processCreateMessage.msg msg).benv.state := by
     simpa only [processCreateMessage.msg, Msg.withBenv, Benv.incrNonce, addCreatedAccount,
-      Benv.setStor] using (StateInv.incrNonce (StateInv.setStor_ne targetNe ready.state))
+      Benv.setStor, Benv.clearStorageWritesIfEmpty] using (StateInv.incrNonce (StateInv.setStor_ne targetNe ready.state))
   refine ⟨state, ?_, ?_, ?_, ?_, ?_⟩
   · refine ⟨?_, ?_⟩
     · simpa only [processCreateMessage.msg, Msg.withBenv, Benv.incrNonce, addCreatedAccount,
-      Benv.setStor, Std.HashSet.mem_insert, beq_iff_eq, targetNe, false_or] using ready.nodel.ca
+      Benv.setStor, Benv.clearStorageWritesIfEmpty, Std.HashSet.mem_insert, beq_iff_eq, targetNe, false_or] using ready.nodel.ca
     · exact fun empty =>
         (c.sem.ne_nil (state.code.symm.trans (congrArg some empty))) rfl
   · intro target
@@ -130,8 +130,7 @@ theorem StateInv.ne_of_messageCreateCollision_false
   have codeNe : (msg.benv.state.getCode ca).toList ≠ [] :=
     fun empty => (c.sem.ne_nil (inv.code.symm.trans (congrArg some empty))) rfl
   unfold ExecutionTrace.messageCreateCollision at collision
-  rw [Bool.or_eq_false_iff] at collision
-  exact ne_wa_of_not_hasCodeOrNonce codeNe collision.1
+  exact ne_wa_of_not_hasCodeOrNonce codeNe collision
 
 end ContractSpecSem
 

@@ -56,6 +56,59 @@ theorem TransactionTrace.debitState_bal_eq
   rw [State.incrNonce_get_bal]
   rfl
 
+/-- Successful transaction validation excludes the maximal nonce on every fork. -/
+theorem validateTransaction_nonce_ne_max {rules : ForkRules} {tx : Tx}
+    {sender : Adr} {intrinsic floor : Nat}
+    (validation : validateTransaction rules tx sender = .ok (intrinsic, floor)) :
+    tx.nonce ≠ UInt64.max := by
+  intro hmax
+  unfold validateTransaction at validation
+  cases stateGas : rules.stateGas with
+  | some pricing =>
+      simp only [stateGas, hmax, ite_true, bind, Except.bind] at validation
+      cases validation
+  | none =>
+      rw [stateGas] at validation
+      rcases cost : calculateIntrinsicCost rules tx sender with ⟨ig, fc⟩
+      rw [cost] at validation
+      dsimp only at validation
+      split at validation
+      · cases validation
+      · cases cap : rules.tx.maxGas with
+        | none =>
+            simp only [cap, hmax, ite_true, bind, Except.bind] at validation
+            cases validation
+        | some gasCap =>
+            rw [cap] at validation
+            obtain ⟨_, _, validation⟩ := Except.bind_eq_ok validation
+            obtain ⟨_, _, validation⟩ := Except.bind_eq_ok validation
+            simp only [hmax, ite_true, bind, Except.bind] at validation
+            cases validation
+
+/-- Successful transaction admission checks the sender's exact nonce. -/
+theorem checkTransaction_sender_nonce {benv : Benv} {bout : BlockOutput} {tx : Tx}
+    {sender : Adr} {price : Nat} {hashes : List B256} {blobGas : Nat}
+    (checked : checkTransaction benv bout tx = .ok (sender, price, hashes, blobGas)) :
+    (benv.state.get sender).nonce = tx.nonce := by
+  unfold checkTransaction at checked
+  rcases Except.bind_eq_ok checked with ⟨_, _, checked⟩
+  rcases Except.bind_eq_ok checked with ⟨_, _, checked⟩
+  rcases Except.bind_eq_ok checked with ⟨recovered, _, checked⟩
+  rcases Except.bind_eq_ok checked with ⟨_, _, checked⟩
+  rcases Except.bind_eq_ok checked with ⟨_, _, checked⟩
+  rcases Except.bind_eq_ok checked with ⟨_, _, checked⟩
+  rcases Except.bind_eq_ok checked with ⟨_, _, checked⟩
+  rcases Except.bind_eq_ok checked with ⟨_, account, checked⟩
+  have senderEq : recovered = sender := congrArg Prod.fst (Except.ok.inj checked)
+  rw [senderEq, Except.mapError_eq_ok_iff] at account
+  unfold checkTransactionSenderAccount at account
+  split at account
+  · cases account
+  · split at account
+    · cases account
+    · rename_i notGreater notLess
+      exact le_antisymm (le_of_not_gt notGreater) (le_of_not_gt notLess)
+
 /-- The nonce bump and up-front gas debit leave every account's persistent
 storage alone. -/
 theorem TransactionTrace.debitState_getStor_eq
@@ -66,8 +119,20 @@ theorem TransactionTrace.debitState_getStor_eq
   rcases State.of_subBal trace.debit with ⟨_, debitEq⟩
   rw [debitEq]
   show (((benv.state.incrNonce trace.sender).setBal trace.sender _).get ca).stor = _
-  rw [State.setBal_get_stor]
-  exact State.incrNonce_get_stor
+  have nonceEq := checkTransaction_sender_nonce trace.checked
+  have nonceBound : (benv.state.get trace.sender).nonce ≠ UInt64.max := by
+    simpa only [Benv.beginTransaction] using
+      (nonceEq.trans_ne (validateTransaction_nonce_ne_max trace.validation))
+  have nonzero := UInt64.add_one_ne_zero_of_ne_max nonceBound
+  have bumpedNonce : ((benv.state.incrNonce trace.sender).get trace.sender).nonce ≠ 0 := by
+    simpa only [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_nonce] using nonzero
+  rw [State.setBal_get_stor, ite_eq_right (by
+    intro empty
+    exact bumpedNonce empty.2.2.1)]
+  rw [State.incrNonce_get_stor, ite_eq_right (by
+    intro empty
+    exact nonzero empty.2.2.1)]
+  rfl
 
 /-! ## The prepared message -/
 
