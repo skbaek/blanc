@@ -60,6 +60,7 @@ theorem popBurnBy_eq_of_length {xs ys : List B256} {cost : Nat} {a b b' : Devm}
     (left.stateGas.symm.trans right.stateGas)
     (left.accountReads.symm.trans right.accountReads)
     (left.storageReads.symm.trans right.storageReads)
+    (left.storageWrites.symm.trans right.storageWrites)
 
 /-- Two exact burns of one charge reach one state. -/
 theorem burnBy_eq {cost : Nat} {a b b' : Devm}
@@ -80,6 +81,7 @@ theorem burnBy_eq {cost : Nat} {a b b' : Devm}
     (left.stateGas.symm.trans right.stateGas)
     (left.accountReads.symm.trans right.accountReads)
     (left.storageReads.symm.trans right.storageReads)
+    (left.storageWrites.symm.trans right.storageWrites)
 
 /-! ## Inverting one stateful synthetic step by node kind -/
 

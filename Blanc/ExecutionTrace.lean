@@ -115,10 +115,11 @@ theorem ProcessCreateMessageTrace.result
   simpa only [processCreateMessage] using
     (runFrame_result_of_retained trace.retained trace.run)
 
-/-- The collision test used by the create arm of `processMessageCall`. -/
+/-- The collision test used by the create arm of `processMessageCall`: EIP-684
+only. EIP-7610's storage clause is withdrawn upstream, so an account holding
+only storage is deployable and its storage is wiped on entry. -/
 def messageCreateCollision (msg : Msg) : Bool :=
-  accountHasCodeOrNonce msg.benv.state msg.currentTarget ||
-    accountHasStorage msg.benv.state msg.currentTarget
+  accountHasCodeOrNonce msg.benv.state msg.currentTarget
 
 /-- The exact EIP-7702 preparation prefix used by the call arm. -/
 def messageCallDelegation (msg : Msg) : Except EvmError (Msg × Nat) :=
@@ -652,7 +653,8 @@ theorem RequestsTrace.state_eq_consolidationState
       processCheckedSystemTransaction
         { state := trace.withdrawalState
           createdAccounts := benv.createdAccounts
-          stat := benv.stat }
+          stat := benv.stat
+          storageWrites := benv.storageWrites }
         consolidationRequestPredeployAddress [] =
           .ok (trace.consolidationState, trace.consolidationOut) := by
     simpa only [Benv.withState] using trace.consolidationRun
