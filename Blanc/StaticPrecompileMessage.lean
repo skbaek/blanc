@@ -35,14 +35,17 @@ theorem stor_of_processMessage_staticPrecomp
   · rw [hbody.2] at hset
     unfold processMessage.settle at hset
     cases hset
-  · obtain ⟨st_mid, hsub, hbenv⟩ := of_benvAfterTransfer rfl hbt
+  · have hval : (callMsg sevm parent gas 0 sevm.currentTarget target target true true
+          calldata code false).value = 0 := rfl
+    have hbenv : benv = (callMsg sevm parent gas 0 sevm.currentTarget target target true true
+          calldata code false).benv :=
+      benvAfterTransfer_eq_of_not_transfer (fun h => h.2 hval) hbt
     subst benv
     have hca :
         ((callMsg sevm parent gas 0 sevm.currentTarget target target true true
             calldata code false).withBenv
-          (((callMsg sevm parent gas 0 sevm.currentTarget target target true
-              true calldata code false).benv.withState st_mid).addBal
-            target 0)).codeAddress = some target := rfl
+          (callMsg sevm parent gas 0 sevm.currentTarget target target true
+              true calldata code false).benv).codeAddress = some target := rfl
     rcases of_executeCode_someCode hca hbody with hpc | hinterp
     · rcases r0 with x | evm'
       · rw [processMessage.settle_error] at hset
@@ -61,7 +64,7 @@ theorem stor_of_processMessage_staticPrecomp
           intro a
           change (child.state.get a).stor = (parent.state.get a).stor
           rw [hstate]
-          exact (of_state_transfer_fields hsub).1 a
+          rfl
     · exact False.elim (hinterp.1 (by exact hpre))
 
 /-- A synchronous enabled static precompile also preserves every account's
@@ -85,14 +88,17 @@ theorem code_of_processMessage_staticPrecomp
   · rw [hbody.2] at hset
     unfold processMessage.settle at hset
     cases hset
-  · obtain ⟨st_mid, hsub, hbenv⟩ := of_benvAfterTransfer rfl hbt
+  · have hval : (callMsg sevm parent gas 0 sevm.currentTarget target target true true
+          calldata code false).value = 0 := rfl
+    have hbenv : benv = (callMsg sevm parent gas 0 sevm.currentTarget target target true true
+          calldata code false).benv :=
+      benvAfterTransfer_eq_of_not_transfer (fun h => h.2 hval) hbt
     subst benv
     have hca :
         ((callMsg sevm parent gas 0 sevm.currentTarget target target true true
             calldata code false).withBenv
-          (((callMsg sevm parent gas 0 sevm.currentTarget target target true
-              true calldata code false).benv.withState st_mid).addBal
-            target 0)).codeAddress = some target := rfl
+          (callMsg sevm parent gas 0 sevm.currentTarget target target true
+              true calldata code false).benv).codeAddress = some target := rfl
     rcases of_executeCode_someCode hca hbody with hpc | hinterp
     · rcases r0 with x | evm'
       · rw [processMessage.settle_error] at hset
@@ -111,7 +117,7 @@ theorem code_of_processMessage_staticPrecomp
           intro a
           change (child.state.get a).code = (parent.state.get a).code
           rw [hstate]
-          exact (of_state_transfer_fields hsub).2.1 a
+          rfl
     · exact False.elim (hinterp.1 (by exact hpre))
 
 /-- A clean 64-byte SHA-256 child necessarily paid the fixed precompile
@@ -177,7 +183,11 @@ theorem gasSha25664_le_of_processMessage_clean
         change true = false at hclean
         contradiction
     · exact False.elim (hinterp.1 (by
-        obtain ⟨st_mid, hsub, hbenv⟩ := of_benvAfterTransfer rfl hbt
+        have hval : (callMsg sevm parent gas 0 sevm.currentTarget 2 2 true true
+            calldata code false).value = 0 := rfl
+        have hbenv : benv = (callMsg sevm parent gas 0 sevm.currentTarget 2 2 true true
+            calldata code false).benv :=
+          benvAfterTransfer_eq_of_not_transfer (fun h => h.2 hval) hbt
         subst benv
         exact hpre))
 
@@ -226,7 +236,11 @@ theorem output_of_processMessage_sha256_64_clean
         subst child
         rfl
     · exact False.elim (hinterp.1 (by
-        obtain ⟨st_mid, hsub, hbenv⟩ := of_benvAfterTransfer rfl hbt
+        have hval : (callMsg sevm parent gas 0 sevm.currentTarget 2 2 true true
+            calldata code false).value = 0 := rfl
+        have hbenv : benv = (callMsg sevm parent gas 0 sevm.currentTarget 2 2 true true
+            calldata code false).benv :=
+          benvAfterTransfer_eq_of_not_transfer (fun h => h.2 hval) hbt
         subst benv
         exact hpre))
 
