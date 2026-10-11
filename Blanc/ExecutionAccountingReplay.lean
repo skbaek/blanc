@@ -1,24 +1,16 @@
 -- ExecutionAccountingReplay.lean : contract-neutral accounting replay seams.
 --
--- A contract that interprets a retained execution as an ordered ledger replay
--- meets the same four obstacles, and none of them is about its ledger.  One
--- retained CALL or CREATE either settles — in which case its committed body's
--- replay transports to the wrapper's endpoints — or rolls the world back to the
--- message's own pre-transfer state.  A CREATE's fresh-account preparation and a
--- foreign frame's instruction prefix and resumption are invisible to any
--- projection that reads one account.  And a transition that fixes that
--- account's storage while never lowering its balance is either one positive
--- credit or nothing at all.
+-- Retained CALL/CREATE accounting separates body replay, entry transfer and
+-- settlement. Rollback restores the message's pre-transfer world. Successful
+-- CREATE preparation and code deposit preserve the storages a boundary reads
+-- when its target is outside that boundary's declared storage-owner footprint.
+-- A foreign executable slot derives that exclusion from owner protection.
 --
--- Those are laws of settlement, not of any ledger, so they are owned here once,
--- over a `SettlementCarrier`: an abstract snapshot type, an abstract step type,
--- an abstract replay relation, and exactly the three laws the seams below
--- consume.  Its silence law is stated over the whole world, because that is all
--- a settlement seam ever knows, so a boundary may read any number of accounts.
--- `ReplayCarrier` is the account-local carrier, with the two laws behind the
--- storage-fixed balance-monotone classifier, and maps into it.  A contract supplies the carrier
--- and gets the seams back at its own vocabulary; nothing here names a contract,
--- and nothing here needs to.
+-- SettlementCarrier supports any number of observed storage owners, retains
+-- whole-world balance equality, and carries structural entry safety. The local
+-- ReplayCarrier marks whether it reads storage; balance-only carriers therefore
+-- obtain an empty footprint without new code premises. Their strong local entry
+-- law and storage-fixed balance-monotone classifier remain unchanged.
 
 import Blanc.ExecutionOccurrence
 
@@ -27,6 +19,55 @@ namespace Blanc
 open Jaune
 
 namespace ExecutionAccountingReplay
+
+/-- Entry storage is preserved when a positive debit is foreign or the owner
+is protected; the world-sum bound prevents a positive recipient credit wrapping. -/
+theorem benvAfterTransfer_getStor_eq_of_safe
+    {msg : Msg} {entry : Benv} {owner : Adr}
+    (transfer : msg.benvAfterTransfer = .ok entry)
+    (sum_nof : sum msg.benv.state.bal < 2 ^ 256)
+    (safe : msg.shouldTransferValue = true → msg.value ≠ 0 →
+      msg.caller ≠ owner ∨ State.Protected msg.benv.state owner) :
+    entry.state.getStor owner = msg.benv.state.getStor owner := by
+  by_cases zero : msg.value = 0
+  · exact benvAfterTransfer_ok_getStor transfer owner (Or.inl zero)
+  by_cases transfers : msg.shouldTransferValue = true
+  · rcases safe transfers zero with callerNe | hp
+    · obtain ⟨debit, sub, rfl⟩ := of_benvAfterTransfer transfers zero transfer
+      change (debit.addBal msg.currentTarget msg.value).getStor owner = _
+      have debitStorage : debit.getStor owner = msg.benv.state.getStor owner := by
+        obtain ⟨_, debitEq⟩ := State.of_subBal sub
+        rw [debitEq]
+        exact congrArg Acct.stor (State.setBal_get_ne callerNe)
+      by_cases targetEq : msg.currentTarget = owner
+      · have balance := of_transfer_bal_target sub (fun he => callerNe (he.trans targetEq)) sum_nof
+        have positive : (debit.bal msg.currentTarget + msg.value).toNat ≠ 0 := by
+          change ((debit.setBal msg.currentTarget _).get msg.currentTarget).bal.toNat = _ at balance
+          rw [State.setBal_get_self, Acct.clearIfEmpty_bal] at balance
+          have valueNe : msg.value.toNat ≠ 0 := by
+            intro h
+            apply zero
+            exact B256.toNat_inj _ _ h
+          change (debit.bal msg.currentTarget + msg.value).toNat = _ at balance
+          omega
+        unfold State.addBal State.getStor
+        rw [State.setBal_get_stor, if_neg]
+        · exact debitStorage
+        · rintro ⟨_, empty⟩
+          apply positive
+          have hz : debit.bal msg.currentTarget + msg.value = 0 := empty.2.2
+          rw [hz]
+          rfl
+      · unfold State.addBal State.getStor
+        rw [State.setBal_get_ne targetEq]
+        exact debitStorage
+    · exact benvAfterTransfer_ok_getStor transfer owner (Or.inr hp)
+  · rw [of_benvAfterTransfer_no transfers transfer]
+
+/-- Structural storage safety at each owner a boundary observes. -/
+def EntryStorageSafe (owners : Adr → Prop) (msg : Msg) : Prop :=
+  ∀ owner, owners owner → msg.shouldTransferValue = true → msg.value ≠ 0 →
+    msg.caller ≠ owner ∨ State.Protected msg.benv.state owner
 
 /-- The settlement-facing part of a replay interpretation: everything the three
 seams below consume, and nothing else.
@@ -41,15 +82,11 @@ that is the whole reason the two are separate functions.
 The three laws are exactly what the seams use, no more:
 
 * `nil` — a boundary replays to itself with no step;
-* `worldSilent` — a transition that fixes **every** account's storage and
-  balance moves no boundary.  This is all the seams ever know at their three
-  silent sites (CREATE fresh-account preparation, clean code deposit, and the
-  prepared CREATE world): each holds the two whole-world function equalities
-  and nothing account-local.  Stating the law at that strength is what lets a
-  boundary read more than one account — a pair boundary over two storages is
-  an instance, where a law keyed to `ca` alone would be false for it;
-* `entry_eq_ofState` — a successful message transfer connects the entered
-  frame's boundary to the ordinary boundary of the pre-transfer world.
+* `worldSilent` — equality of storage at all declared `storageOwners`, and
+  equality of the whole balance map, imply boundary equality. A multiaccount
+  boundary lists each observed owner; it is not restricted to `ca`;
+* `entry_eq_ofState` — a successful transfer with structural entry safety at
+  those owners connects frame entry to the pre-transfer boundary.
 
 `ca` is the account the seams call *foreign* frames foreign to: it appears only
 in the two value-transfer side conditions of `entry_eq_ofState`.  A carrier
@@ -67,10 +104,11 @@ structure SettlementCarrier (ca : Adr) where
   frameEntry : Sevm → State → Snap
   /-- A boundary replays to itself with no step. -/
   nil : ∀ boundary : Snap, Replay boundary [] boundary
-  /-- A transition that moves no account's storage or balance moves no
-  boundary. -/
+  /-- Accounts whose storage the boundary may read. -/
+  storageOwners : Adr → Prop
+  /-- Scoped storage equality and whole-world balance equality fix the boundary. -/
   worldSilent : ∀ {pre post : State},
-    post.getStor = pre.getStor →
+    (∀ owner, storageOwners owner → post.getStor owner = pre.getStor owner) →
     post.bal = pre.bal →
     ofState post = ofState pre
   /-- A successful message transfer connects the entered frame's boundary to
@@ -78,6 +116,7 @@ structure SettlementCarrier (ca : Adr) where
   entry_eq_ofState : ∀ {msg : Msg} {entry : Benv},
     (msg.shouldTransferValue = true → msg.caller ≠ ca) →
     (msg.shouldTransferValue = false → msg.currentTarget = ca → msg.value = 0) →
+    EntryStorageSafe storageOwners msg →
     msg.benvAfterTransfer = .ok entry →
     sum msg.benv.state.bal < 2 ^ 256 →
     frameEntry (initSevm (msg.withBenv entry)) entry.state =
@@ -90,9 +129,9 @@ settlement seams through `ReplayCarrier.toSettlementCarrier`.
 `Snap`, `Step`, `Replay`, `ofState`, `frameEntry`, `nil` and `entry_eq_ofState`
 are as in `SettlementCarrier`.  The two account-local laws:
 
-* `silent` — a transition that fixes this account's storage and balance moves
-  no boundary, which is how a foreign instruction prefix leaves no trace.  It
-  implies the whole-world law the seams consume;
+* `silent` — balance equality at `ca`, plus storage equality there when
+  `readsStorage = true`, fixes the boundary. A false flag requires a proof
+  of storage independence and converts to an empty storage footprint;
 * `credit` — a storage-fixed strictly increasing balance is some replay, which
   is the only place a step is ever produced.
 
@@ -113,9 +152,11 @@ structure ReplayCarrier (ca : Adr) where
   frameEntry : Sevm → State → Snap
   /-- A boundary replays to itself with no step. -/
   nil : ∀ boundary : Snap, Replay boundary [] boundary
+  /-- Whether silence requires storage equality at this account. -/
+  readsStorage : Bool
   /-- A transition invisible to this account moves no boundary. -/
   silent : ∀ {pre post : State},
-    post.getStor ca = pre.getStor ca →
+    (readsStorage = true → post.getStor ca = pre.getStor ca) →
     (post.bal ca).toNat = (pre.bal ca).toNat →
     ofState post = ofState pre
   /-- A storage-fixed positive balance increase is some replay. -/
@@ -134,8 +175,8 @@ structure ReplayCarrier (ca : Adr) where
     frameEntry (initSevm (msg.withBenv entry)) entry.state =
       ofState msg.benv.state
 
-/-- An account-local carrier as a settlement carrier: the whole-world silence
-law is the account-local one read at `ca`. -/
+/-- A local carrier observes `ca` storage exactly when its storage flag is true;
+its stronger local entry law also supplies the settlement entry law. -/
 def ReplayCarrier.toSettlementCarrier {ca : Adr} (C : ReplayCarrier ca) :
     SettlementCarrier ca where
   Snap := C.Snap
@@ -144,10 +185,12 @@ def ReplayCarrier.toSettlementCarrier {ca : Adr} (C : ReplayCarrier ca) :
   ofState := C.ofState
   frameEntry := C.frameEntry
   nil := C.nil
+  storageOwners owner := owner = ca ∧ C.readsStorage = true
   worldSilent := fun storage_eq balance_eq =>
-    C.silent (congrFun storage_eq ca)
+    C.silent (fun reads => storage_eq ca ⟨rfl, reads⟩)
       (congrArg B256.toNat (congrFun balance_eq ca))
-  entry_eq_ofState := C.entry_eq_ofState
+  entry_eq_ofState := fun caller value _ transfer bound =>
+    C.entry_eq_ofState caller value transfer bound
 
 namespace SettlementCarrier
 
@@ -172,6 +215,7 @@ theorem processMessage_of_body_observed (C : SettlementCarrier ca)
     (caller_ne : msg.shouldTransferValue = true → msg.caller ≠ ca)
     (value_zero : msg.shouldTransferValue = false →
       msg.currentTarget = ca → msg.value = 0)
+    (entrySafe : EntryStorageSafe C.storageOwners msg)
     (sum_nof : sum msg.benv.state.bal < 2 ^ 256)
     {settled : List O}
     (body : ∀ committed : Execution.commits out = true, ∃ steps,
@@ -196,7 +240,7 @@ theorem processMessage_of_body_observed (C : SettlementCarrier ca)
     have prefixEq :
         C.frameEntry sevm pre.state = C.ofState msg.benv.state := by
       rw [sevmEq, preState]
-      exact C.entry_eq_ofState caller_ne value_zero transfer sum_nof
+      exact C.entry_eq_ofState caller_ne value_zero entrySafe transfer sum_nof
     have postState : post.state =
         (Execution.committedPost out committed).state :=
       _root_.Blanc.ProcessMessage.ok_state_eq_committedPost process committed
@@ -229,6 +273,7 @@ theorem processMessage_of_body (C : SettlementCarrier ca)
     (caller_ne : msg.shouldTransferValue = true → msg.caller ≠ ca)
     (value_zero : msg.shouldTransferValue = false →
       msg.currentTarget = ca → msg.value = 0)
+    (entrySafe : EntryStorageSafe C.storageOwners msg)
     (sum_nof : sum msg.benv.state.bal < 2 ^ 256)
     (body : ∀ committed : Execution.commits out = true, ∃ steps,
       C.Replay (C.frameEntry sevm pre.state) steps
@@ -236,7 +281,7 @@ theorem processMessage_of_body (C : SettlementCarrier ca)
     ∃ steps,
       C.Replay (C.ofState msg.benv.state) steps (C.ofState post.state) := by
   exact (C.processMessage_of_body_observed (fun _ => ([] : List Unit)) rfl process
-    caller_ne value_zero sum_nof (settled := [])
+    caller_ne value_zero entrySafe sum_nof (settled := [])
     fun committed => (body committed).imp fun _ replay => ⟨replay, rfl⟩).imp
     fun _ replay => replay.1
 
@@ -252,7 +297,8 @@ theorem processCreateMessage_of_body_observed (C : SettlementCarrier ca)
     (caller_ne : msg.shouldTransferValue = true → msg.caller ≠ ca)
     (value_zero : msg.shouldTransferValue = false →
       msg.currentTarget = ca → msg.value = 0)
-    (fresh : msg.benv.state.getStor msg.currentTarget = .empty)
+    (targetAway : ∀ owner, C.storageOwners owner → msg.currentTarget ≠ owner)
+    (entrySafe : EntryStorageSafe C.storageOwners msg)
     (sum_nof : sum msg.benv.state.bal < 2 ^ 256)
     {settled : List O}
     (body : ∀ committed : Execution.commits out = true, ∃ steps,
@@ -279,8 +325,22 @@ theorem processCreateMessage_of_body_observed (C : SettlementCarrier ca)
       have right := (RunFrame.some_inv balanceProcess).2
       exact Except.ok.inj (left.trans right.symm)
     subst balanceInner
-    have preparedStor :=
-      _root_.Blanc.processCreateMessage_msg_getStor_eq_of_empty fresh
+    have preparedGet : ∀ owner, C.storageOwners owner →
+        (processCreateMessage.msg msg).benv.state.get owner = msg.benv.state.get owner := by
+      intro owner observed
+      dsimp only [processCreateMessage.msg, Msg.withBenv, Benv.setStor,
+        Benv.incrNonce, addCreatedAccount, Benv.clearStorageWritesIfEmpty]
+      rw [State.incrNonce, State.setAccount_get_ne _ (targetAway owner observed),
+        State.setStor, State.get_set_ne _ (targetAway owner observed)]
+    have preparedStor := fun owner observed => congrArg Acct.stor (preparedGet owner observed)
+    have preparedSafe : EntryStorageSafe C.storageOwners (processCreateMessage.msg msg) := by
+      intro owner observed transfers nonzero
+      rcases entrySafe owner observed transfers nonzero with foreign | hp
+      · exact Or.inl foreign
+      · right
+        unfold State.Protected at hp ⊢
+        rw [preparedGet owner observed]
+        exact hp
     have preparedBalance :=
       _root_.Jaune.processCreateMessage_msg_bal_eq msg
     have preparedSnapshot :
@@ -289,7 +349,7 @@ theorem processCreateMessage_of_body_observed (C : SettlementCarrier ca)
       C.worldSilent preparedStor preparedBalance
     have postSnapshot :
         C.ofState post.state = C.ofState inner.state :=
-      C.worldSilent postStor postBalance
+      C.worldSilent (fun owner observed => (postStor owner (targetAway owner observed)).2) postBalance
     have innerSum :
         sum (processCreateMessage.msg msg).benv.state.bal < 2 ^ 256 := by
       rw [preparedBalance]
@@ -300,7 +360,7 @@ theorem processCreateMessage_of_body_observed (C : SettlementCarrier ca)
       Frame.settlementCommits_ofCall_of_raw_commits
         (Frame.raw_commits_of_settlementCommits settles)
     rcases C.processMessage_of_body_observed obs obs_nil
-        innerProcess caller_ne value_zero innerSum body with
+        innerProcess caller_ne value_zero preparedSafe innerSum body with
       ⟨steps, replay, observed⟩
     rw [if_pos innerSettles] at observed
     refine ⟨steps, ?_, by rw [if_pos settles]; exact observed⟩
@@ -332,7 +392,8 @@ theorem processCreateMessage_of_body (C : SettlementCarrier ca)
     (caller_ne : msg.shouldTransferValue = true → msg.caller ≠ ca)
     (value_zero : msg.shouldTransferValue = false →
       msg.currentTarget = ca → msg.value = 0)
-    (fresh : msg.benv.state.getStor msg.currentTarget = .empty)
+    (targetAway : ∀ owner, C.storageOwners owner → msg.currentTarget ≠ owner)
+    (entrySafe : EntryStorageSafe C.storageOwners msg)
     (sum_nof : sum msg.benv.state.bal < 2 ^ 256)
     (body : ∀ committed : Execution.commits out = true, ∃ steps,
       C.Replay (C.frameEntry sevm pre.state) steps
@@ -340,7 +401,7 @@ theorem processCreateMessage_of_body (C : SettlementCarrier ca)
     ∃ steps,
       C.Replay (C.ofState msg.benv.state) steps (C.ofState post.state) := by
   exact (C.processCreateMessage_of_body_observed (fun _ => ([] : List Unit)) rfl
-    process caller_ne value_zero fresh sum_nof (settled := [])
+    process caller_ne value_zero targetAway entrySafe sum_nof (settled := [])
     fun committed => (body committed).imp fun _ replay => ⟨replay, rfl⟩).imp
     fun _ replay => replay.1
 
@@ -357,6 +418,7 @@ theorem xinstForeignSome_observed (C : SettlementCarrier ca)
     (resumeRun : resume.run (.ok settled) = .ok post)
     (target_ne : sevm.currentTarget ≠ ca)
     (hfork : CoveredFork sevm.benvStat.fork)
+    (protection : ∀ owner, C.storageOwners owner → State.Protected pre.state owner)
     (sum_nof : sum pre.state.bal < 2 ^ 256)
     {child : List O}
     (body : ∀ committed : Execution.commits raw = true, ∃ steps,
@@ -391,17 +453,40 @@ theorem xinstForeignSome_observed (C : SettlementCarrier ca)
     have preparedStor : createPre.state.getStor = d.state.getStor := by
       simpa only [createPre] using
         genericCreate_prepared_getStor sevm d newAddress
+          (UInt64.add_one_ne_zero_of_ne_max
+            (genericCreate_step_spawn_nonce_ne_max spawn))
     have preparedBalance : createPre.state.bal = d.state.bal := by
       simpa only [createPre] using genericCreate_prepared_bal sevm d newAddress
     have preparedSnapshot :
         C.ofState createPre.state = C.ofState d.state :=
-      C.worldSilent preparedStor preparedBalance
-    have targetEmpty : Devm.getStor d newAddress = .empty :=
-      genericCreate_step_spawn_getStor_empty spawn
-    have fresh : msg.benv.state.getStor msg.currentTarget = .empty := by
-      change createPre.state.getStor newAddress = .empty
-      rw [preparedStor]
-      exact targetEmpty
+      C.worldSilent (fun owner _ => congrFun preparedStor owner) preparedBalance
+    have creatorNonce : (d.state.get sevm.currentTarget).nonce + 1 ≠ 0 :=
+      UInt64.add_one_ne_zero_of_ne_max (genericCreate_step_spawn_nonce_ne_max spawn)
+    have dProtected : ∀ owner, C.storageOwners owner → State.Protected d.state owner := by
+      intro owner observed
+      rw [← hprefix.state]
+      exact protection owner observed
+    have preparedProtected : ∀ owner, C.storageOwners owner →
+        State.Protected createPre.state owner := by
+      intro owner observed
+      change State.Protected (d.state.incrNonce sevm.currentTarget) owner
+      unfold State.Protected
+      by_cases equal : sevm.currentTarget = owner
+      · subst owner
+        left
+        simpa only [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_nonce] using creatorNonce
+      · rw [State.incrNonce, State.setAccount_get_ne _ equal]
+        exact dProtected owner observed
+    have targetAway : ∀ owner, C.storageOwners owner → msg.currentTarget ≠ owner := by
+      intro owner observed equal
+      have fresh := genericCreate_step_spawn_target_unprotected spawn
+      apply fresh
+      have targetEq : newAddress = owner := equal
+      rw [targetEq]
+      exact dProtected owner observed
+    have entrySafe : EntryStorageSafe C.storageOwners msg := by
+      intro owner observed _ _
+      exact Or.inr (preparedProtected owner observed)
     have callerNe : msg.shouldTransferValue = true → msg.caller ≠ ca := by
       simpa only [msg, createMsg, ne_eq, forall_const] using target_ne
     have valueZero : msg.shouldTransferValue = false →
@@ -412,7 +497,7 @@ theorem xinstForeignSome_observed (C : SettlementCarrier ca)
       rw [preparedBalance]
       exact dSum
     rcases C.processCreateMessage_of_body_observed obs obs_nil process callerNe
-        valueZero fresh msgSum body with ⟨steps, replay, observed⟩
+        valueZero targetAway entrySafe msgSum body with ⟨steps, replay, observed⟩
     have postState : post.state = settled.state :=
       Resume.create_state resumeRun
     refine ⟨steps, ?_, observed⟩
@@ -449,8 +534,14 @@ theorem xinstForeignSome_observed (C : SettlementCarrier ca)
     have msgSum : sum msg.benv.state.bal < 2 ^ 256 := by
       change sum d.state.bal < 2 ^ 256
       exact dSum
+    have entrySafe : EntryStorageSafe C.storageOwners msg := by
+      intro owner observed _ _
+      right
+      change State.Protected d.state owner
+      rw [← hprefix.state]
+      exact protection owner observed
     rcases C.processMessage_of_body_observed obs obs_nil process msgCallerNe
-        msgValueZero msgSum body with ⟨steps, replay, observed⟩
+        msgValueZero entrySafe msgSum body with ⟨steps, replay, observed⟩
     have postState : post.state = settled.state :=
       Resume.call_state resumeRun
     refine ⟨steps, ?_, observed⟩
@@ -469,6 +560,7 @@ theorem xinstForeignSome (C : SettlementCarrier ca)
     (resumeRun : resume.run (.ok settled) = .ok post)
     (target_ne : sevm.currentTarget ≠ ca)
     (hfork : CoveredFork sevm.benvStat.fork)
+    (protection : ∀ owner, C.storageOwners owner → State.Protected pre.state owner)
     (sum_nof : sum pre.state.bal < 2 ^ 256)
     (body : ∀ committed : Execution.commits raw = true, ∃ steps,
       C.Replay (C.frameEntry cevm.sta cevm.dyna.state) steps
@@ -476,7 +568,7 @@ theorem xinstForeignSome (C : SettlementCarrier ca)
     ∃ steps,
       C.Replay (C.ofState pre.state) steps (C.ofState post.state) := by
   exact (C.xinstForeignSome_observed (fun _ => ([] : List Unit)) rfl spawn frameRun
-    resumeRun target_ne hfork sum_nof (child := [])
+    resumeRun target_ne hfork protection sum_nof (child := [])
     fun committed => (body committed).imp fun _ replay => ⟨replay, rfl⟩).imp
     fun _ replay => replay.1
 
@@ -544,6 +636,7 @@ theorem processMessage_of_body (C : ReplayCarrier ca)
     ∃ steps,
       C.Replay (C.ofState msg.benv.state) steps (C.ofState post.state) :=
   C.toSettlementCarrier.processMessage_of_body process caller_ne value_zero
+    (fun owner observed transfers _ => Or.inl (by rw [observed.1]; exact caller_ne transfers))
     sum_nof body
 
 /-- `SettlementCarrier.processCreateMessage_of_body` at an account-local
@@ -556,7 +649,7 @@ theorem processCreateMessage_of_body (C : ReplayCarrier ca)
     (caller_ne : msg.shouldTransferValue = true → msg.caller ≠ ca)
     (value_zero : msg.shouldTransferValue = false →
       msg.currentTarget = ca → msg.value = 0)
-    (fresh : msg.benv.state.getStor msg.currentTarget = .empty)
+    (targetAway : C.readsStorage = true → msg.currentTarget ≠ ca)
     (sum_nof : sum msg.benv.state.bal < 2 ^ 256)
     (body : ∀ committed : Execution.commits out = true, ∃ steps,
       C.Replay (C.frameEntry sevm pre.state) steps
@@ -564,7 +657,9 @@ theorem processCreateMessage_of_body (C : ReplayCarrier ca)
     ∃ steps,
       C.Replay (C.ofState msg.benv.state) steps (C.ofState post.state) :=
   C.toSettlementCarrier.processCreateMessage_of_body process caller_ne
-    value_zero fresh sum_nof body
+    value_zero (fun owner observed => by rw [observed.1]; exact targetAway observed.2)
+    (fun owner observed transfers _ => Or.inl (by rw [observed.1]; exact caller_ne transfers))
+    sum_nof body
 
 /-- `SettlementCarrier.xinstForeignSome` at an account-local carrier. -/
 theorem xinstForeignSome (C : ReplayCarrier ca)
@@ -576,6 +671,7 @@ theorem xinstForeignSome (C : ReplayCarrier ca)
     (resumeRun : resume.run (.ok settled) = .ok post)
     (target_ne : sevm.currentTarget ≠ ca)
     (hfork : CoveredFork sevm.benvStat.fork)
+    (protection : C.readsStorage = true → State.Protected pre.state ca)
     (sum_nof : sum pre.state.bal < 2 ^ 256)
     (body : ∀ committed : Execution.commits raw = true, ∃ steps,
       C.Replay (C.frameEntry cevm.sta cevm.dyna.state) steps
@@ -583,14 +679,14 @@ theorem xinstForeignSome (C : ReplayCarrier ca)
     ∃ steps,
       C.Replay (C.ofState pre.state) steps (C.ofState post.state) :=
   C.toSettlementCarrier.xinstForeignSome spawn frameRun resumeRun target_ne hfork
-    sum_nof body
+    (fun owner observed => by rw [observed.1]; exact protection observed.2) sum_nof body
 
 /-- A transition invisible to this account contributes no step. -/
 theorem silentReplay (C : ReplayCarrier ca) {pre post : State}
     (storage_eq : post.getStor ca = pre.getStor ca)
     (balance_eq : (post.bal ca).toNat = (pre.bal ca).toNat) :
     C.Replay (C.ofState pre) [] (C.ofState post) :=
-  C.nilOfEq (C.silent storage_eq balance_eq)
+  C.nilOfEq (C.silent (fun _ => storage_eq) balance_eq)
 
 /-- `ofStorageEqBalanceMono`, observed: the one credit it may produce is
 observed as nothing. -/
@@ -671,7 +767,11 @@ theorem balanceEntry_eq_ofState {ca : Adr} {msg : Msg} {entry : Benv}
         simp only [target_eq, ↓reduceIte, valueNat, tsub_zero]
       · simp only [target_eq, ↓reduceIte]
   | true =>
-      rcases of_benvAfterTransfer shouldTransfer transfer with
+      by_cases hzero : msg.value = 0
+      · rw [Msg.benvAfterTransfer_of_value_zero hzero] at transfer
+        cases transfer
+        simp only [hzero, B256.toNat_zero, tsub_zero, ite_self]
+      rcases of_benvAfterTransfer shouldTransfer hzero transfer with
         ⟨debit, sub, rfl⟩
       by_cases target_eq : msg.currentTarget = ca
       · subst ca
@@ -689,6 +789,7 @@ theorem balanceEntry_eq_ofState {ca : Adr} {msg : Msg} {entry : Benv}
 and a replay is the arithmetic statement that the credits account for the whole
 move.  It reads no storage and records no provenance. -/
 def balanceCarrier (ca : Adr) : ReplayCarrier ca where
+  readsStorage := false
   Snap := Nat
   Step := Nat
   Tag := Unit

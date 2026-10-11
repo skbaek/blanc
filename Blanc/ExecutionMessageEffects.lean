@@ -14,46 +14,58 @@ open Jaune
 
 namespace ExecutionTrace
 
-/-- A successful message-entry value transfer preserves the complete storage
-map. -/
+/-- Entry transfer preserves storage at a protected observed owner. -/
 theorem benvAfterTransfer_getStor_eq
     {msg : Msg} {entry : Benv}
-    (run : msg.benvAfterTransfer = .ok entry) :
-    entry.state.getStor = msg.benv.state.getStor :=
-  funext (benvAfterTransfer_ok_getStor run)
+    (run : msg.benvAfterTransfer = .ok entry) (owner : Adr)
+    (hp : State.Protected msg.benv.state owner) :
+    entry.state.getStor owner = msg.benv.state.getStor owner :=
+  benvAfterTransfer_ok_getStor run owner (Or.inr hp)
 
-/-- A successful no-interpreter-slot message either rolls back or retains
-only its storage-silent entry transfer. -/
+/-- A no-interpreter-slot message preserves a protected owner's storage. -/
 theorem ProcessMessage.none_ok_getStor_eq
     {msg : Msg} {post : Devm}
-    (run : ProcessMessage msg .none (.ok post)) :
-    post.state.getStor = msg.benv.state.getStor := by
+    (run : ProcessMessage msg .none (.ok post)) (owner : Adr)
+    (hp : State.Protected msg.benv.state owner) :
+    post.state.getStor owner = msg.benv.state.getStor owner := by
   rcases ProcessMessage.none_ok_state_cases run with rollback |
       ⟨entry, transfer, postEq⟩
   · rw [rollback]
   · rw [postEq]
-    exact benvAfterTransfer_getStor_eq transfer
+    exact benvAfterTransfer_getStor_eq transfer owner hp
 
-/-- A successful no-interpreter-slot CREATE is storage-silent when its fresh
-target was storage-empty before constructor preparation. -/
-theorem ProcessCreateMessage.none_ok_getStor_eq_of_empty
+/-- A no-slot CREATE preserves storage at a protected owner away from its target. -/
+theorem ProcessCreateMessage.none_ok_getStor_eq_of_protected_ne
     {msg : Msg} {post : Devm}
-    (run : ProcessCreateMessage msg .none (.ok post))
-    (fresh : msg.benv.state.getStor msg.currentTarget = .empty) :
-    post.state.getStor = msg.benv.state.getStor := by
+    (run : ProcessCreateMessage msg .none (.ok post)) (owner : Adr)
+    (hp : State.Protected msg.benv.state owner)
+    (targetNe : msg.currentTarget ≠ owner) :
+    post.state.getStor owner = msg.benv.state.getStor owner := by
+  have preparedGet : (processCreateMessage.msg msg).benv.state.get owner =
+      msg.benv.state.get owner := by
+    dsimp only [processCreateMessage.msg, Msg.withBenv, Benv.setStor,
+      Benv.incrNonce, addCreatedAccount, Benv.clearStorageWritesIfEmpty]
+    rw [State.incrNonce, State.setAccount_get_ne _ targetNe,
+      State.setStor, State.get_set_ne _ targetNe]
+  have preparedProtected : State.Protected (processCreateMessage.msg msg).benv.state owner := by
+    unfold State.Protected
+    rw [preparedGet]
+    exact hp
   cases error : post.error.isSome with
   | true => rw [ProcessCreateMessage.rollback_of_error run error]
   | false =>
       rcases ProcessCreateMessage.ok_getStor_eq_inner_of_clean run error with
         ⟨inner, innerRun, postEq, _⟩
-      exact postEq.trans
-        ((ProcessMessage.none_ok_getStor_eq innerRun).trans
-          (processCreateMessage_msg_getStor_eq_of_empty fresh))
+      exact (postEq owner targetNe).2.trans
+        ((ProcessMessage.none_ok_getStor_eq innerRun owner preparedProtected).trans
+          (congrArg Acct.stor preparedGet))
 
-private theorem setDelegationStep_getStor_eq
+private theorem setDelegationStep_get_eq
     {auth : Auth} {msg msg' : Msg} {refund refund' : B256}
-    (run : setDelegationStep auth msg refund = .ok ⟨msg', refund'⟩) :
-    msg'.benv.state.getStor = msg.benv.state.getStor := by
+    (run : setDelegationStep auth msg refund = .ok ⟨msg', refund'⟩) (owner : Adr)
+    (nonempty : (msg.benv.state.getCode owner).toList ≠ [])
+    (nondesignator : ¬ isValidDelegation (msg.benv.state.getCode owner)) :
+    msg'.benv.state.get owner = msg.benv.state.get owner := by
   unfold setDelegationStep at run
   dsimp only at run
   split at run
@@ -77,16 +89,29 @@ private theorem setDelegationStep_getStor_eq
           · simp only [Except.ok.injEq, Prod.mk.injEq] at run
             rcases run with ⟨rfl, _⟩
             rfl
-          · simp only [Except.ok.injEq, Prod.mk.injEq] at run
+          · rename_i authority recovered acceptedCode nonceMatch
+            simp only [Except.ok.injEq, Prod.mk.injEq] at run
             rcases run with ⟨rfl, _⟩
-            funext target
-            simp only [Msg.incrNonce, Msg.setCode]
-            exact State.incrNonce_get_stor.trans State.setCode_get_stor
+            have authorityNe : authority ≠ owner := by
+              intro equal
+              subst authority
+              have allowed := Classical.byContradiction (fun hn => acceptedCode hn)
+              rcases allowed with empty | delegated
+              · have sizeZero : (msg.benv.state.getCode owner).size = 0 := by
+                  simpa only [State.getCode, ByteArray.isEmpty, beq_iff_eq] using empty
+                exact (ne_wa_of_code_size_zero nonempty sizeZero) rfl
+              · exact nondesignator delegated
+            dsimp only [Msg.incrNonce, Msg.setCode, Benv.incrNonce,
+              Benv.clearStorageWritesIfEmpty]
+            rw [State.incrNonce, State.setAccount_get_ne _ authorityNe,
+              State.setCode, State.setAccount_get_ne _ authorityNe]
 
-private theorem setDelegationLoop_getStor_eq
+private theorem setDelegationLoop_get_eq
     {auths : List Auth} {msg msg' : Msg} {refund refund' : B256}
-    (run : setDelegationLoop auths msg refund = .ok ⟨msg', refund'⟩) :
-    msg'.benv.state.getStor = msg.benv.state.getStor := by
+    (run : setDelegationLoop auths msg refund = .ok ⟨msg', refund'⟩) (owner : Adr)
+    (nonempty : (msg.benv.state.getCode owner).toList ≠ [])
+    (nondesignator : ¬ isValidDelegation (msg.benv.state.getCode owner)) :
+    msg'.benv.state.get owner = msg.benv.state.get owner := by
   induction auths generalizing msg refund with
   | nil =>
       unfold setDelegationLoop at run
@@ -100,7 +125,11 @@ private theorem setDelegationLoop_getStor_eq
       · cases run
       · rename_i pair step
         obtain ⟨stepMsg, stepRefund⟩ := pair
-        exact (ih run).trans (setDelegationStep_getStor_eq step)
+        have account := setDelegationStep_get_eq step owner nonempty nondesignator
+        have code : stepMsg.benv.state.getCode owner = msg.benv.state.getCode owner :=
+          congrArg Acct.code account
+        exact (ih run (by rw [code]; exact nonempty)
+          (by rw [code]; exact nondesignator)).trans account
 
 /-- One authorization step preserves the block and transaction-static
 environment carried by its message. -/
@@ -174,21 +203,23 @@ private theorem setDelegation_benv_stat
       rcases rest with ⟨rfl, rfl⟩
       exact stat
 
-/-- EIP-7702 authorization processing preserves the complete storage map. -/
+/-- Authorization processing preserves storage at nonempty nondesignator code. -/
 theorem setDelegation_getStor_eq
     {msg delegated : Msg} {refund : B256}
-    (run : setDelegation msg = .ok ⟨delegated, refund⟩) :
-    delegated.benv.state.getStor = msg.benv.state.getStor := by
+    (run : setDelegation msg = .ok ⟨delegated, refund⟩) (owner : Adr)
+    (nonempty : (msg.benv.state.getCode owner).toList ≠ [])
+    (nondesignator : ¬ isValidDelegation (msg.benv.state.getCode owner)) :
+    delegated.benv.state.getStor owner = msg.benv.state.getStor owner := by
   unfold setDelegation at run
   rcases Except.bind_eq_ok run with
     ⟨⟨loopMsg, loopRefund⟩, loop, rest⟩
-  have storage := setDelegationLoop_getStor_eq loop
+  have account := setDelegationLoop_get_eq loop owner nonempty nondesignator
   cases codeAddress : loopMsg.codeAddress with
   | none => simp only [codeAddress, Except.bind_error, reduceCtorEq] at rest
   | some address =>
       simp only [codeAddress, Except.bind_ok, Except.ok.injEq, Prod.mk.injEq] at rest
       rcases rest with ⟨rfl, rfl⟩
-      exact storage
+      exact congrArg Acct.stor account
 
 /-- EIP-7702 authorization processing preserves the complete balance map. -/
 theorem setDelegation_bal_eq
@@ -209,8 +240,10 @@ theorem setDelegation_bal_eq
 /-- The normalized delegation prefix preserves persistent storage. -/
 theorem messageCallDelegation_getStor_eq
     {msg delegated : Msg} {refund : Nat}
-    (run : messageCallDelegation msg = .ok ⟨delegated, refund⟩) :
-    delegated.benv.state.getStor = msg.benv.state.getStor := by
+    (run : messageCallDelegation msg = .ok ⟨delegated, refund⟩) (owner : Adr)
+    (nonempty : (msg.benv.state.getCode owner).toList ≠ [])
+    (nondesignator : ¬ isValidDelegation (msg.benv.state.getCode owner)) :
+    delegated.benv.state.getStor owner = msg.benv.state.getStor owner := by
   unfold messageCallDelegation at run
   split at run
   · simp only [Except.ok.injEq, Prod.mk.injEq] at run
@@ -220,7 +253,7 @@ theorem messageCallDelegation_getStor_eq
       ⟨⟨delegated', refundWord⟩, delegatedRun, rest⟩
     simp only [Except.ok.injEq, Prod.mk.injEq] at rest
     rcases rest with ⟨rfl, rfl⟩
-    exact setDelegation_getStor_eq delegatedRun
+    exact setDelegation_getStor_eq delegatedRun owner nonempty nondesignator
 
 /-- The normalized delegation prefix preserves balances. -/
 theorem messageCallDelegation_bal_eq
@@ -373,20 +406,24 @@ theorem messageCallExecutionMessage_shouldTransferValue_eq (msg : Msg) :
   unfold messageCallExecutionMessage
   split <;> rfl
 
-/-- A false create-collision test certifies that the wrapper's target holds
-no persistent storage, which is exactly the freshness side condition the
-CREATE core asks for. -/
-theorem messageCreateCollision_false_getStor_eq_empty
+/-- A false EIP-684 collision test establishes zero nonce and empty code.
+Storage-only targets remain deployable under the withdrawn EIP-7610 rule. -/
+theorem messageCreateCollision_false_target_unprotected
     {msg : Msg} (collision : messageCreateCollision msg = false) :
-    msg.benv.state.getStor msg.currentTarget = Stor.empty := by
-  unfold messageCreateCollision at collision
-  rw [Bool.or_eq_false_iff] at collision
-  have isEmpty :
-      (msg.benv.state.getStor msg.currentTarget).isEmpty = true := by
-    have noStorage := collision.2
-    unfold accountHasStorage at noStorage
-    simpa only [Bool.not_eq_eq_eq_not, Bool.not_false] using noStorage
-  exact Std.TreeMap.eq_empty_of_isEmpty isEmpty
+    ¬ State.Protected msg.benv.state msg.currentTarget := by
+  unfold messageCreateCollision accountHasCodeOrNonce at collision
+  simp only [Bool.or_eq_false_iff, Bool.not_eq_false',
+    State.getNonce, State.getCode] at collision
+  intro hp
+  rcases hp with nonce | code
+  · have hnonce := of_decide_eq_false collision.1
+    apply nonce
+    have hn : (msg.benv.state.get msg.currentTarget).nonce.toNat = 0 := by
+      change ¬ 0 < (msg.benv.state.get msg.currentTarget).nonce.toNat at hnonce
+      omega
+    exact UInt64.toNat_inj.mp hn
+  · apply code
+    simpa only [ByteArray.isEmpty, beq_iff_eq] using collision.2
 
 /-- A successful create-collision wrapper leaves the world state unchanged. -/
 theorem processMessageCall_createCollision_state_eq
@@ -533,12 +570,12 @@ theorem MsgInv.processCreateMessage_msg
   have state : c.StateInv ca
       (processCreateMessage.msg msg).benv.state := by
     simpa only [processCreateMessage.msg, Msg.withBenv, Benv.incrNonce, addCreatedAccount,
-      Benv.setStor] using
+      Benv.setStor, Benv.clearStorageWritesIfEmpty] using
       (ContractSpec.StateInv.incrNonce (ContractSpec.StateInv.setStor_ne targetNe ready.state))
   refine ⟨state, ?_, ?_, ?_, ?_, ?_⟩
   · refine ⟨?_, ?_⟩
     · simpa only [processCreateMessage.msg, Msg.withBenv, Benv.incrNonce, addCreatedAccount,
-      Benv.setStor, Std.HashSet.mem_insert, beq_iff_eq, targetNe, false_or] using ready.nodel.ca
+      Benv.setStor, Benv.clearStorageWritesIfEmpty, Std.HashSet.mem_insert, beq_iff_eq, targetNe, false_or] using ready.nodel.ca
     · exact fun empty => Prog.compile_ne_nil
         (state.code.symm.trans (congrArg some empty))
   · intro target
@@ -586,8 +623,7 @@ theorem StateInv.ne_of_messageCreateCollision_false
     fun empty => Prog.compile_ne_nil
       (inv.code.symm.trans (congrArg some empty))
   unfold ExecutionTrace.messageCreateCollision at collision
-  rw [Bool.or_eq_false_iff] at collision
-  exact ne_wa_of_not_hasCodeOrNonce codeNe collision.1
+  exact ne_wa_of_not_hasCodeOrNonce codeNe collision
 
 end ContractSpec
 

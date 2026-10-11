@@ -2980,40 +2980,36 @@ ledger.  Use
 [`Blanc/ExecutionAccountingReplay.lean`](../Blanc/ExecutionAccountingReplay.lean)
 rather than restating them:
 
-- `ExecutionAccountingReplay.SettlementCarrier ca` is the settlement-facing
-  interface, and it is exactly what the three seams below consume: `Snap`,
-  `Step`, `Replay`, `ofState`, `frameEntry`, and the three laws `nil`,
-  `worldSilent` and `entry_eq_ofState`.  `worldSilent` is the one to read
-  first: it says only that a transition fixing **every** account's storage and
-  balance moves no boundary — `post.getStor = pre.getStor` and
-  `post.bal = pre.bal` as whole-world function equalities.  That is all a
-  settlement seam ever knows at its three silent sites (CREATE fresh-account
-  preparation, clean code deposit, the prepared CREATE world), and stating the
-  law at that strength is what lets a boundary read **more than one account**.
-  A law keyed to `ca` alone would be false for such a boundary, which is why
-  `Blanc/Composition/ProrataWethVaultHistory.lean`'s two-storage pair boundary
-  is a `SettlementCarrier` and not a `ReplayCarrier`.  `ca` survives only in
-  the two value-transfer side conditions of `entry_eq_ofState`.
-- `ExecutionAccountingReplay.ReplayCarrier ca` is the account-local carrier:
-  the same fields plus credit provenance `Tag`, with the account-local `silent`
-  (storage and balance fixed *at `ca`*) and `credit` (a storage-fixed strictly
-  increasing balance is some replay) in place of `worldSilent`.  It reaches the
-  seams through `ReplayCarrier.toSettlementCarrier`, which discharges
-  `worldSilent` by reading the whole-world equalities at `ca`; the seam
-  theorems are then restated at `ReplayCarrier` under their own names, so an
-  existing account-local consumer needs no change.  **Which to use:** a
-  boundary that reads one account and wants the balance-monotone step
-  classifier (`ofStorageEqBalanceMono`) takes `ReplayCarrier`; a boundary over
-  several accounts, or one that produces its steps some other way, takes
-  `SettlementCarrier` directly and simply never gains `credit`.
-- `ReplayCarrier.processMessage_of_body` and
-  `ReplayCarrier.processCreateMessage_of_body` take the *committed body's*
-  replay to the whole retained CALL or CREATE, splitting on settlement: a
-  noncommitting child rolls the world back and contributes nothing, and
-  fresh-account preparation and code deposit are projection-silent.
-- `ReplayCarrier.xinstForeignSome` does the same for one filled executable slot
-  in a foreign frame, so CALL and CREATE share a single child replay and their
-  instruction prefixes and resumptions stay silent.
+- `ExecutionAccountingReplay.SettlementCarrier ca` supports a boundary over
+  any number of accounts. Its `storageOwners` predicate names the storages it
+  may read; `worldSilent` requires equality at those owners and equality of
+  the whole balance map. `entry_eq_ofState` additionally takes
+  `EntryStorageSafe storageOwners msg`: a positive debit must be foreign to
+  each observed owner or that owner must be `State.Protected`. The composition
+  pair in `Blanc/Composition/ProrataWethVaultHistory.lean` lists both vault and
+  WETH owners; it must not collapse to `ca` alone.
+- `ExecutionAccountingReplay.ReplayCarrier ca` supplies local `silent` and
+  `credit` laws. Its `readsStorage` flag makes the storage premise of `silent`
+  conditional. `ReplayCarrier.toSettlementCarrier` observes only `ca` when
+  that flag is true, and no storage when false. A false flag therefore requires
+  proving balance-only silence; it is not an assumption of storage independence.
+  The local entry and positive-credit laws keep their original statements.
+- `ReplayCarrier.processMessage_of_body` retains its original premises.
+  The settlement-level CALL engine additionally takes `EntryStorageSafe`.
+  Generic CREATE body seams use exclusion of the CREATE target from observed
+  storage owners, replacing the old target-storage-empty premise. The local
+  form requires target inequality only when `readsStorage = true`; rollback
+  remains exact world restoration.
+- `ReplayCarrier.xinstForeignSome` requires owner protection only when it
+  reads storage. The general settlement form requires protection at every
+  footprint owner, deriving CREATE target exclusion from actual target
+  unprotectedness. Balance-only instances discharge the conditional premise
+  without acquiring a code hypothesis.
+- `ExecutionAccountingReplay.benvAfterTransfer_getStor_eq_of_safe` proves
+  owner-local entry storage equality from successful transfer, the existing
+  world-sum bound, and guarded caller-disjoint-or-Protected safety. The sum
+  bound rules out a positive recipient credit wrapping to zero. Use it for
+  true local carrier entry laws without adding a protection premise.
 - `ReplayCarrier.ofStorageEqBalanceMono` is the endpoint classifier: a
   transition that fixes the account's storage and cannot lower its balance is
   one positive credit or no step at all.  A foreign-opcode proof should expose
@@ -3339,8 +3335,9 @@ Use
 - `ExecutionTrace.messageCallDelegation_fields` and its named projections
   (`_caller_eq`, `_target_eq`, `_currentTarget_eq`,
   `_shouldTransferValue_eq`) carry a routing or value field across the
-  EIP-7702 authorization prefix; `_getStor_eq` and `_bal_eq` carry the world,
-  while `_benv_stat` carries the complete static block environment.
+  EIP-7702 authorization prefix. `_getStor_eq` preserves an owner's storage
+  when its code is nonempty and is not a delegation designator; `_bal_eq`
+  preserves the whole balance map, and `_benv_stat` the static environment.
 - `ExecutionTrace.messageCallExecutionMessage_caller_eq` and its siblings
   (`_target_eq`, `_currentTarget_eq`, `_shouldTransferValue_eq`,
   `_getStor_eq`, `_bal_eq`, `_benv_stat`) do the same across delegated-code
@@ -3349,15 +3346,19 @@ Use
   CREATE and collision constructors of an actual transaction message whose
   target is a CALL, exposing that trace's exact delegation, resolved message,
   core trace, and settlement equation for a consumer that must classify it.
-- `ExecutionTrace.benvAfterTransfer_getStor_eq`,
-  `ProcessMessage.none_ok_getStor_eq`,
-  `ProcessCreateMessage.none_ok_getStor_eq_of_empty`,
-  `ExecutionTrace.setDelegation_getStor_eq`, and
-  `ExecutionTrace.setDelegation_bal_eq` are the lower storage/balance seams
-  used by those packaged projections.
-- `ExecutionTrace.messageCreateCollision_false_getStor_eq_empty` and the three
-  `processMessageCall_*_state_eq` theorems expose the collision, CREATE, and
-  CALL wrapper endpoints exactly.
+- `ExecutionTrace.benvAfterTransfer_getStor_eq` and
+  `ProcessMessage.none_ok_getStor_eq` preserve storage at a Protected owner.
+  `ProcessCreateMessage.none_ok_getStor_eq_of_protected_ne` also requires that
+  owner differ from the CREATE target. The true production
+  `GenericCreate.none_getStor_eq` API is unchanged.
+- `ExecutionTrace.setDelegation_getStor_eq` and
+  `messageCallDelegation_getStor_eq` require nonempty, non-designator owner
+  code. Protection by code alone is insufficient: clearing a delegation marker
+  can normalize an account and erase storage. `setDelegation_bal_eq` remains
+  unconditional.
+- `ExecutionTrace.messageCreateCollision_false_target_unprotected` reports
+  zero nonce and empty code, permitting storage-only CREATE targets. The three
+  `processMessageCall_*_state_eq` theorems expose wrapper endpoints exactly.
 - `ContractSpec.MessageRunReady` and the `ContractSpec.MsgInv` transport
   family (`runReady_of_call`, `runReady_of_foreign`,
   `processCreateMessage_msg`, `of_messageCallDelegation`, and
