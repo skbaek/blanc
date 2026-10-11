@@ -53,9 +53,9 @@ private def boundSpec (sem : CodeSem) : ContractSpecSem where
     intro st target value bound _
     rw [sum_addBal_eq st target value bound]
     exact bound
-  inv_transfer := fun _ _ _ _ => trivial
-  inv_recv_transfer := fun _ _ _ _ => trivial
-  inv_addBal := fun _ _ _ => trivial
+  inv_transfer := fun _ _ _ _ _ => trivial
+  inv_recv_transfer := fun _ _ _ _ _ => trivial
+  inv_addBal := fun _ _ _ _ => trivial
 
 private theorem foreign_observation
     (obsForeign : ∀ frame : Exec.Frame,
@@ -113,7 +113,7 @@ theorem nextNone
       Nat.lt_of_le_of_lt (Ninst.balance_effectRec n (xl := .none) trivial step) bound
     obtain ⟨heads, headReplay, headObs⟩ :=
       C.ofStorageEqBalanceMono_observed V (tag sevm pre)
-        (Ninst.foreignNone_getStor_eq hfork step targetNe)
+        (Ninst.foreignNone_getStor_eq hfork step targetNe (State.Protected.of_image installed.1))
         (Ninst.targetBalanceMono_of_none hfork step targetNe bound)
     obtain ⟨tails, tailReplay, tailObs⟩ := replayTail interBound
     rw [entryForeign _ _ targetNe] at tailReplay ⊢
@@ -164,7 +164,7 @@ theorem last
     (hat : Linst.At sevm.code pc l) (step : Linst.Run sevm pre l out)
     (targetNe : sevm.currentTarget ≠ ca) :
     Exec.CoreAccounting ca sem entry C V pc sevm pre out := by
-  intro run committed _ _ _
+  intro run committed _ installed _
   cases out with
   | error error => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
@@ -175,7 +175,7 @@ theorem last
     intro bound
     obtain ⟨steps, replay, observed⟩ :=
       C.ofStorageEqBalanceMono_observed V (tag sevm pre)
-        (congrFun (Linst.getStor_eq step) ca)
+        (Linst.getStor_eq step ca (State.Protected.of_image installed.1))
         (Linst.targetBalanceMono_of_foreign step targetNe bound)
     rw [entryForeign _ _ targetNe]
     exact ⟨steps, replay, observed.trans observations.symm⟩
@@ -312,7 +312,7 @@ theorem nextSome
         have interBound : sum inter.state.bal < 2 ^ 256 := (continuation childPost).side
         obtain ⟨heads, headReplay, headObs⟩ :=
           C.xinstForeignSome_observed V spawnEq frameRun resumeRun targetNe
-            hfork bound child (fun childCommitted => (childAnswer childCommitted).2 childPre.side)
+            hfork (fun _ => State.Protected.of_image installed.1) bound child (fun childCommitted => (childAnswer childCommitted).2 childPre.side)
         obtain ⟨tails, tailReplay, tailObs⟩ := replayTail interBound
         rw [entryForeign _ _ targetNe] at tailReplay ⊢
         refine ⟨heads ++ tails, append headReplay tailReplay, ?_⟩
