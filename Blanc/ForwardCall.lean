@@ -400,7 +400,7 @@ theorem Ninst.runCompiled_sload_selected
 def sstoreCost (sevm : Sevm) (devm : Devm) (key value : B256) : Nat :=
   (if (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
       devm.accessedStorageKeys then 0 else gasColdSload) +
-    sstoreValueCost (getOrigStorVal sevm sevm.currentTarget key)
+    sstoreValueCost (devm.getOrigStorVal sevm sevm.currentTarget key)
       (devm.getStorVal sevm.currentTarget key) value
 
 /-- Meta/world state after one selected warm/cold `SSTORE`. -/
@@ -412,7 +412,7 @@ def afterSstore (sevm : Sevm) (devm : Devm)
     else addAccessedStorageKey devm sevm.currentTarget key
   (accessed.withRefundCounter
       (sstoreNewRefundCounter sevm.benvStat.rules.gas value
-        (getOrigStorVal sevm sevm.currentTarget key)
+        (devm.getOrigStorVal sevm sevm.currentTarget key)
         (devm.getStorVal sevm.currentTarget key) devm.refundCounter)).setStorVal
     sevm.currentTarget key value
 
@@ -593,15 +593,15 @@ lemma Func.runCompiledTo_sstore_warm_step {fs : List Func} {sevm : Sevm}
       Func.RunCompiledTo fs sevm (base.setMach ⟨s, M, G, base.stateGas⟩) rest ex) :
     Func.RunCompiledTo fs sevm devm (Func.next Ninst.sstore rest) ex := by
   subst h_mem
-  have h_bound : sstoreValueCost (getOrigStorVal sevm sevm.currentTarget k)
+  have h_bound : sstoreValueCost (devm.getOrigStorVal sevm sevm.currentTarget k)
       (devm.getStorVal sevm.currentTarget k) v ≤ gasStorageSet := by
     rw [sstoreValueCost]; split_ifs <;> decide
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_sstore_warm (c := sstoreValueCost
-        (getOrigStorVal sevm sevm.currentTarget k)
+        (devm.getOrigStorVal sevm sevm.currentTarget k)
         (devm.getStorVal sevm.currentTarget k) v)
       (G := devm.gasLeft - sstoreValueCost
-        (getOrigStorVal sevm sevm.currentTarget k)
+        (devm.getOrigStorVal sevm sevm.currentTarget k)
         (devm.getStorVal sevm.currentTarget k) v)
       hfork.rules_stateGas_none h_stk h_warm
       (by simp only [gCallStipend, gasStorageSet] at *; omega)
@@ -619,12 +619,12 @@ lemma Func.runCompiledTo_sstore_warm_step {fs : List Func} {sevm : Sevm}
     · show (Devm.getStor _ a).get k' = _
       have h_off : Devm.getStor
           ((devm.withRefundCounter (sstoreNewRefundCounter sevm.benvStat.rules.gas v
-            (getOrigStorVal sevm sevm.currentTarget k)
+            (devm.getOrigStorVal sevm sevm.currentTarget k)
             (devm.getStorVal sevm.currentTarget k)
             devm.refundCounter)).setStorVal sevm.currentTarget k v) a
             = Devm.getStor devm a := by
         simp only [Devm.getStor, Devm.getAcct, Devm.setStorVal, Devm.withState,
-          Devm.setWorld, State.setStorVal]
+          Devm.withStorageWrites, Devm.setWorld, State.setStorVal]
         simp only [Devm.state, State.get_set_ne _ h_adr]
         rfl
       rw [h_off]
@@ -2026,24 +2026,27 @@ lemma exec_empty_code (evm : Evm) (h : evm.sta.code.size = 0) :
   refine ⟨Exec.halt ?_⟩
   simp only [Evm.step, Evm.getInst, ByteArray.getInst, h, not_lt_zero, ↓reduceDIte, Linst.run]
 
-/-- A value-transfer message whose sender can afford the value prepares the
-debit/credit world successfully.  The intermediate debit state is produced by
-the semantics rather than supplied as an envelope premise. -/
+/-- A nonzero value-transfer message whose sender can afford the value
+prepares the debit/credit world successfully.  The intermediate debit state is
+produced by the semantics rather than supplied as an envelope premise.  (A
+zero-value entry moves nothing: `Msg.benvAfterTransfer_of_value_zero`.) -/
 lemma Msg.benvAfterTransfer_of_affordable (msg : Msg)
     (h_transfer : msg.shouldTransferValue = true)
-    (h_affordable : ¬ msg.benv.state.bal msg.caller < msg.value) :
+    (h_affordable : ¬ msg.benv.state.bal msg.caller < msg.value)
+    (h_nz : msg.value ≠ 0) :
     ∃ stmid,
       msg.benv.state.subBal msg.caller msg.value = some stmid ∧
       msg.benvAfterTransfer =
-        .ok ((msg.benv.withState stmid).addBal msg.currentTarget msg.value) := by
+        .ok (((msg.benv.withState stmid).clearStorageWritesIfEmpty msg.caller).addBal
+          msg.currentTarget msg.value) := by
   have hsub : msg.benv.state.subBal msg.caller msg.value =
       some (msg.benv.state.setBal msg.caller
         (msg.benv.state.bal msg.caller - msg.value)) := by
     simp only [State.subBal, h_affordable, ↓reduceIte]
   refine ⟨_, hsub, ?_⟩
   unfold Msg.benvAfterTransfer
-  rw [h_transfer]
-  simp only [if_true, Benv.subBal, hsub]
+  rw [if_pos ⟨h_transfer, h_nz⟩]
+  simp only [Benv.subBal, hsub]
   rfl
 
 /-- After transfer preparation, a non-precompile call enters the ordinary EVM
@@ -3186,18 +3189,18 @@ lemma Func.execSat_sstore_warm_step {fs : List Func} {sevm : Sevm}
       base.error = devm.error →
       base.accountsToDelete = devm.accountsToDelete →
       base.refundCounter = sstoreNewRefundCounter sevm.benvStat.rules.gas v
-        (getOrigStorVal sevm sevm.currentTarget k)
+        (devm.getOrigStorVal sevm sevm.currentTarget k)
         (devm.getStorVal sevm.currentTarget k) devm.refundCounter →
       c ≤ gasStorageSet →
       devm.gasLeft = G + c →
       Func.ExecSat fs sevm (base.setMach ⟨s, M, G, base.stateGas⟩) rest P) :
     Func.ExecSat fs sevm devm (Func.next Ninst.sstore rest) P := by
   subst h_mem
-  have h_bound : sstoreValueCost (getOrigStorVal sevm sevm.currentTarget k)
+  have h_bound : sstoreValueCost (devm.getOrigStorVal sevm sevm.currentTarget k)
       (devm.getStorVal sevm.currentTarget k) v ≤ gasStorageSet := by
     rw [sstoreValueCost]; split_ifs <;> decide
   have h_key : ((devm.withRefundCounter (sstoreNewRefundCounter sevm.benvStat.rules.gas v
-      (getOrigStorVal sevm sevm.currentTarget k)
+      (devm.getOrigStorVal sevm sevm.currentTarget k)
       (devm.getStorVal sevm.currentTarget k)
       devm.refundCounter)).setStorVal sevm.currentTarget k v).getStorVal
         sevm.currentTarget k = v := by
@@ -3205,7 +3208,7 @@ lemma Func.execSat_sstore_warm_step {fs : List Func} {sevm : Sevm}
     rw [setStorVal_getStor_self, Stor.get_set_self]
   have h_oth : ∀ (a : Adr) (k' : B256), (a, k') ≠ (sevm.currentTarget, k) →
       ((devm.withRefundCounter (sstoreNewRefundCounter sevm.benvStat.rules.gas v
-        (getOrigStorVal sevm sevm.currentTarget k)
+        (devm.getOrigStorVal sevm sevm.currentTarget k)
         (devm.getStorVal sevm.currentTarget k)
         devm.refundCounter)).setStorVal sevm.currentTarget k v).getStorVal a k'
           = devm.getStorVal a k' := by
@@ -3219,18 +3222,18 @@ lemma Func.execSat_sstore_warm_step {fs : List Func} {sevm : Sevm}
     · show (Devm.getStor _ a).get k' = _
       have h_off : Devm.getStor
           ((devm.withRefundCounter (sstoreNewRefundCounter sevm.benvStat.rules.gas v
-            (getOrigStorVal sevm sevm.currentTarget k)
+            (devm.getOrigStorVal sevm sevm.currentTarget k)
             (devm.getStorVal sevm.currentTarget k)
             devm.refundCounter)).setStorVal sevm.currentTarget k v) a
             = Devm.getStor devm a := by
         simp only [Devm.getStor, Devm.getAcct, Devm.setStorVal, Devm.withState,
-          Devm.setWorld, State.setStorVal]
+          Devm.withStorageWrites, Devm.setWorld, State.setStorVal]
         simp only [Devm.state, State.get_set_ne _ h_adr]
         rfl
       rw [h_off]
       rfl
   rcases h_next _ _ (devm.gasLeft - sstoreValueCost
-      (getOrigStorVal sevm sevm.currentTarget k)
+      (devm.getOrigStorVal sevm sevm.currentTarget k)
       (devm.getStorVal sevm.currentTarget k) v)
       h_key h_oth
       (fun a => by
@@ -3242,10 +3245,10 @@ lemma Func.execSat_sstore_warm_step {fs : List Func} {sevm : Sevm}
       rfl rfl rfl rfl rfl rfl h_bound (by omega) with ⟨ex, hto, hp⟩
   exact ⟨ex, Func.ExecWitness.next
     (Ninst.runCompiled_sstore_warm (c := sstoreValueCost
-        (getOrigStorVal sevm sevm.currentTarget k)
+        (devm.getOrigStorVal sevm sevm.currentTarget k)
         (devm.getStorVal sevm.currentTarget k) v)
       (G := devm.gasLeft - sstoreValueCost
-        (getOrigStorVal sevm sevm.currentTarget k)
+        (devm.getOrigStorVal sevm sevm.currentTarget k)
         (devm.getStorVal sevm.currentTarget k) v)
       hfork.rules_stateGas_none h_stk h_warm
       (by simp only [gCallStipend, gasStorageSet] at *; omega)
@@ -3400,18 +3403,11 @@ lemma accessDelegation_worldMeta {devm d1 : Devm} {a dadr : Adr}
 kept at the call boundary because zero-value call settlement needs precisely
 this projection, independently of any contract-specific code. -/
 lemma state_subBal_stor {st stmid : State} {sender a : Adr}
-    {value : B256} (h : st.subBal sender value = some stmid) :
+    {value : B256} (h : st.subBal sender value = some stmid)
+    (hp : State.Protected st a) :
     (stmid.get a).stor = (st.get a).stor := by
-  unfold State.subBal at h
-  split at h
-  · contradiction
-  · cases h
-    unfold State.setBal
-    by_cases hsa : sender = a
-    · subst a
-      rw [State.get_set_self]
-      rfl
-    · rw [State.get_set_ne st hsa]
+  rcases State.of_subBal h with ⟨_, rfl⟩
+  exact State.setBal_get_stor_of_protected hp
 
 /-- The account-access charge is at most the cold price. -/
 lemma accessCost_le {x : Adr} {a : AdrSet} : accessCost x a ≤ gasColdAccountAccess := by
@@ -3484,8 +3480,9 @@ lemma Ninst.runCompiled_call_nonzero_codeFree {sevm : Sevm} {devm : Devm}
     change ¬ (d1.getAcct sevm.currentTarget).bal < vw
     exact h_sender
   obtain ⟨stmid, hsub, hbt⟩ :=
-    Msg.benvAfterTransfer_of_affordable msg rfl h_afford
-  let benv' := (msg.benv.withState stmid).addBal msg.currentTarget msg.value
+    Msg.benvAfterTransfer_of_affordable msg rfl h_afford h_value
+  let benv' := ((msg.benv.withState stmid).clearStorageWritesIfEmpty msg.caller).addBal
+    msg.currentTarget msg.value
   let child := initEvm (msg.withBenv benv')
   have henter : (Frame.ofCall msg).enter = .run child := by
     apply Frame.enter_run_of_nonprecompile hbt
@@ -3640,20 +3637,14 @@ lemma Ninst.runCompiled_call_zero_value_codeFree {sevm : Sevm} {devm : Devm}
       post.returnData = [] ∧ post.logs = devm.logs ∧
       post.refundCounter = devm.refundCounter ∧
       post.accountsToDelete.isEmpty = devm.accountsToDelete.isEmpty ∧
-      ∃ stmid,
-        devm.state.subBal sevm.currentTarget 0 = some stmid ∧
-        post.state = stmid.addBal cw.toAdr 0 := by
+      post.state = devm.state := by
   let p := callSpawnParent d1 (mcc + ext)
     iiw.toNat isw.toNat oiw.toNat osw.toNat
   let msg := callSpawnMsg sevm p mcs cw.toAdr dadr
     iiw.toNat isw.toNat code dp
-  have h_afford : ¬ msg.benv.state.bal msg.caller < msg.value := by
-    change ¬ (d1.getAcct sevm.currentTarget).bal < 0
-    rw [B256.lt_iff_toNat_lt_toNat]
-    exact Nat.not_lt.mpr (Nat.zero_le _)
-  obtain ⟨stmid, hsub, hbt⟩ :=
-    Msg.benvAfterTransfer_of_affordable msg rfl h_afford
-  let benv' := (msg.benv.withState stmid).addBal msg.currentTarget msg.value
+  have hbt : msg.benvAfterTransfer = .ok msg.benv :=
+    Msg.benvAfterTransfer_of_value_zero rfl
+  let benv' := msg.benv
   let child := initEvm (msg.withBenv benv')
   have henter : (Frame.ofCall msg).enter = .run child := by
     apply Frame.enter_run_of_nonprecompile hbt
@@ -3738,7 +3729,7 @@ lemma Ninst.runCompiled_call_zero_value_codeFree {sevm : Sevm} {devm : Devm}
       Std.HashSet.emptyWithCapacity).isEmpty = p.accountsToDelete.isEmpty
     simp only [Std.HashSet.union_eq, Std.HashSet.isEmpty_union,
       Std.HashSet.isEmpty_emptyWithCapacity, Bool.and_true]
-  have hpostState : post.state = stmid.addBal cw.toAdr 0 := by
+  have hpostState : post.state = d1.state := by
     dsimp only [post, child, benv', initEvm, initDevm]
     rfl
   have hfields :
@@ -3749,7 +3740,7 @@ lemma Ninst.runCompiled_call_zero_value_codeFree {sevm : Sevm} {devm : Devm}
     simp only [hout, List.take_nil, Devm.memWrite_nil, Devm.stack_setMach,
       Devm.memory_setMach, Devm.gasLeft_setMach, hchildgas]
     exact ⟨trivial, trivial, trivial⟩
-  refine ⟨post, hrun, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, stmid, ?_, ?_⟩
+  refine ⟨post, hrun, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [hfields.1]
     exact congrArg (1 :: ·) hd1stack
   · rw [hfields.2.1]
@@ -3768,12 +3759,7 @@ lemma Ninst.runCompiled_call_zero_value_codeFree {sevm : Sevm} {devm : Devm}
   · rw [hpostDelete]
     change d1.accountsToDelete.isEmpty = devm.accountsToDelete.isEmpty
     rw [hd1delete]
-  · rw [← hd1state]
-    have hsub' : p.state.subBal sevm.currentTarget 0 = some stmid := by
-      simpa only [msg, callSpawnMsg, callMsg, Bool.false_or] using hsub
-    rw [show p.state = d1.state from rfl] at hsub'
-    exact hsub'
-  · exact hpostState
+  · rw [hpostState, hd1state]
 
 /-- The depth-limit arm, packaged as the step interface: at `sevm.depth = 0`
 the `CALL` charges, extends, pushes `0`, and hands the forwarded gas straight

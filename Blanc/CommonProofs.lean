@@ -9583,6 +9583,77 @@ lemma ne_wa_of_code_size_zero {st : State} {wa b : Adr}
   rw [h_empty] at hwa
   exact hwa rfl
 
+/-! ## Protected accounts (Jaune `setAccount` normalization)
+
+An emptied account is deleted together with its storage; an account with a
+nonzero nonce or nonempty code is never emptied by a balance, nonce or code
+write. -/
+
+/-- The successor of a nonce below `UInt64.max` is nonzero. -/
+lemma UInt64.add_one_ne_zero_of_ne_max {n : UInt64} (h : n ≠ UInt64.max) : n + 1 ≠ 0 := by
+  intro h1
+  apply h
+  calc n = n + 1 - 1 := (UInt64.add_sub_cancel n 1).symm
+    _ = 0 - 1 := by rw [h1]
+    _ = UInt64.max := by decide
+
+/-- A balance write keeps every account's nonce. -/
+lemma State.setBal_get_nonce {st : Jaune.State} {b a : Adr} {v : B256} :
+    ((st.setBal b v).get a).nonce = (st.get a).nonce := by
+  by_cases h : b = a
+  · subst h; rw [State.setBal_get_self, Acct.clearIfEmpty_nonce]; rfl
+  · rw [State.setBal_get_ne h]
+
+/-- An account is *protected* when it has a nonzero nonce or nonempty code: no
+balance write can empty it, so no balance write can wipe its storage. -/
+def State.Protected (st : Jaune.State) (a : Adr) : Prop :=
+  (st.get a).nonce ≠ 0 ∨ (st.get a).code.size ≠ 0
+
+/-- An account whose code is a nonempty byte list is protected. -/
+lemma State.Protected.of_code_ne_nil {st : Jaune.State} {a : Adr}
+    (h : (st.getCode a).toList ≠ []) : State.Protected st a := by
+  right
+  intro hz
+  exact (ne_wa_of_code_size_zero h hz) rfl
+
+/-- An account carrying a code image is protected: an image is nonempty. -/
+lemma State.Protected.of_image {st : Jaune.State} {a : Adr} {sem : CodeSem}
+    (h : some (st.getCode a).toList = sem.image) : State.Protected st a :=
+  State.Protected.of_code_ne_nil (sem.ne_nil h.symm)
+
+/-- Protection survives a balance write. -/
+lemma State.Protected.setBal {st : Jaune.State} {a : Adr} (hp : State.Protected st a)
+    (b : Adr) (v : B256) : State.Protected (st.setBal b v) a := by
+  unfold State.Protected at hp ⊢
+  rw [State.setBal_get_nonce, State.setBal_get_code]
+  exact hp
+
+/-- A balance write leaves a protected account's storage alone. Unprotected
+accounts are the storage-only ones a balance write may delete. -/
+lemma State.setBal_get_stor_of_protected {st : Jaune.State} {b a : Adr} {v : B256}
+    (hp : State.Protected st a) : ((st.setBal b v).get a).stor = (st.get a).stor := by
+  rw [State.setBal_get_stor]
+  split_ifs with h
+  · obtain ⟨rfl, hE⟩ := h
+    exfalso
+    rcases hp with hn | hc
+    · exact hn hE.2.1
+    · exact hc hE.1
+  · rfl
+
+/-- Message entry that moves no value — no transfer flag, or a zero value —
+leaves the block environment exactly as it was. -/
+lemma benvAfterTransfer_eq_of_not_transfer {msg : Msg} {entry : Benv}
+    (h : ¬ (msg.shouldTransferValue = true ∧ msg.value ≠ 0))
+    (transfer : msg.benvAfterTransfer = .ok entry) : entry = msg.benv := by
+  by_cases hs : msg.shouldTransferValue = true
+  · have hz : msg.value = 0 := by
+      by_contra hne
+      exact h ⟨hs, hne⟩
+    rw [Msg.benvAfterTransfer_of_value_zero hz] at transfer
+    exact (Except.ok.inj transfer).symm
+  · exact of_benvAfterTransfer_no hs transfer
+
 -- Same bridge via the collision predicate used by `processMessageCall.create`.
 lemma ne_wa_of_not_hasCodeOrNonce {st : State} {wa ct : Adr}
     (hwa : (st.getCode wa).toList ≠ [])

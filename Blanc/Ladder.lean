@@ -40,20 +40,20 @@ structure ContractSpec where
   rises; `Side` is what rules out a wrap. -/
   inv_transfer : ∀ {st st' : Jaune.State} {caller callee ca : Adr} {wad v : B256},
     st.subBal caller wad = some st' → caller ≠ ca → Side st.bal →
-    Inv (st.getStor ca) v (st.bal ca) →
+    State.Protected st ca → Inv (st.getStor ca) v (st.bal ca) →
     Inv ((st'.addBal callee wad).getStor ca) v ((st'.addBal callee wad).bal ca)
   /-- Entering a frame *at* the contract with callvalue `wad`: the transfer has
   already credited `wad` to the contract's balance, and the child frame carries
   it in flight. -/
   inv_recv_transfer : ∀ {st st' : Jaune.State} {caller ca : Adr} {wad : B256},
     st.subBal caller wad = some st' → caller ≠ ca → Side st.bal →
-    Inv (st.getStor ca) 0 (st.bal ca) →
+    State.Protected st ca → Inv (st.getStor ca) 0 (st.bal ca) →
     Inv ((st'.addBal ca wad).getStor ca) wad ((st'.addBal ca wad).bal ca)
   /-- The invariant survives a bare credit under the wei-conservation bound
   (`State.Inv.addBal`: gas refunds, the coinbase fee, withdrawals). -/
   inv_addBal : ∀ {w : Jaune.State} {ca a : Adr} {val v : B256},
     sum w.bal + val.toNat < 2 ^ 256 → Side w.bal →
-    Inv (w.getStor ca) v (w.bal ca) →
+    State.Protected w ca → Inv (w.getStor ca) v (w.bal ca) →
     Inv ((w.addBal a val).getStor ca) v ((w.addBal a val).bal ca)
 
 namespace ContractSpec

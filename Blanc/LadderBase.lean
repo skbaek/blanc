@@ -284,59 +284,6 @@ lemma B256.le_add_right {xs ys : B256} (h : B256.Nof xs ys) : xs ≤ xs + ys := 
 
 
 
-/-- The successor of a nonce below `UInt64.max` is nonzero. -/
-lemma UInt64.add_one_ne_zero_of_ne_max {n : UInt64} (h : n ≠ UInt64.max) : n + 1 ≠ 0 := by
-  intro h1
-  apply h
-  calc n = n + 1 - 1 := (UInt64.add_sub_cancel n 1).symm
-    _ = 0 - 1 := by rw [h1]
-    _ = UInt64.max := by decide
-
-/-- A balance write keeps every account's nonce. -/
-lemma State.setBal_get_nonce {st : Jaune.State} {b a : Adr} {v : B256} :
-    ((st.setBal b v).get a).nonce = (st.get a).nonce := by
-  by_cases h : b = a
-  · subst h; rw [State.setBal_get_self, Acct.clearIfEmpty_nonce]; rfl
-  · rw [State.setBal_get_ne h]
-
-/-- An account is *protected* when it has a nonzero nonce or nonempty code: no
-balance write can empty it, so no balance write can wipe its storage. -/
-def State.Protected (st : Jaune.State) (a : Adr) : Prop :=
-  (st.get a).nonce ≠ 0 ∨ (st.get a).code.size ≠ 0
-
-/-- Protection survives a balance write. -/
-lemma State.Protected.setBal {st : Jaune.State} {a : Adr} (hp : State.Protected st a)
-    (b : Adr) (v : B256) : State.Protected (st.setBal b v) a := by
-  unfold State.Protected at hp ⊢
-  rw [State.setBal_get_nonce, State.setBal_get_code]
-  exact hp
-
-/-- A balance write leaves a protected account's storage alone. Unprotected
-accounts are the storage-only ones a balance write may delete. -/
-lemma State.setBal_get_stor_of_protected {st : Jaune.State} {b a : Adr} {v : B256}
-    (hp : State.Protected st a) : ((st.setBal b v).get a).stor = (st.get a).stor := by
-  rw [State.setBal_get_stor]
-  split_ifs with h
-  · obtain ⟨rfl, hE⟩ := h
-    exfalso
-    rcases hp with hn | hc
-    · exact hn hE.2.1
-    · exact hc hE.1
-  · rfl
-
-/-- Message entry that moves no value — no transfer flag, or a zero value —
-leaves the block environment exactly as it was. -/
-lemma benvAfterTransfer_eq_of_not_transfer {msg : Msg} {entry : Benv}
-    (h : ¬ (msg.shouldTransferValue = true ∧ msg.value ≠ 0))
-    (transfer : msg.benvAfterTransfer = .ok entry) : entry = msg.benv := by
-  by_cases hs : msg.shouldTransferValue = true
-  · have hz : msg.value = 0 := by
-      by_contra hne
-      exact h ⟨hs, hne⟩
-    rw [Msg.benvAfterTransfer_of_value_zero hz] at transfer
-    exact (Except.ok.inj transfer).symm
-  · exact of_benvAfterTransfer_no hs transfer
-
 lemma of_state_transfer_fields {st st' : Jaune.State} {ct callee : Adr} {wad : B256}
     (h_sub : st.subBal ct wad = some st') :
     (∀ a, State.Protected st a → ((st'.addBal callee wad).get a).stor = (st.get a).stor) ∧
@@ -436,6 +383,12 @@ lemma State.setCode_get_stor {st : Jaune.State} {adr a : Adr} {c : ByteArray}
   · subst h
     rw [State.setAccount_get_self, Acct.clearIfEmpty_stor, if_neg (fun hE => hc hE.1)]
   · rw [State.setAccount_get_ne _ h]
+
+/-- Installing code at another address leaves an account's storage alone. -/
+lemma State.setCode_get_stor_ne {st : Jaune.State} {adr a : Adr} {c : ByteArray}
+    (h : adr ≠ a) : ((st.setCode adr c).get a).stor = (st.get a).stor := by
+  simp only [State.setCode]
+  rw [State.setAccount_get_ne _ h]
 
 lemma State.setCode_get_code_ne {st : Jaune.State} {adr a : Adr} {c : ByteArray}
     (h : adr ≠ a) : ((st.setCode adr c).get a).code = (st.get a).code := by

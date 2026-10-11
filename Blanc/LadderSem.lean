@@ -34,17 +34,17 @@ structure ContractSpecSem where
   inv_transfer : ∀ {st st' : Jaune.State} {caller callee ca : Adr}
       {wad v : B256},
     st.subBal caller wad = some st' → caller ≠ ca → Side st.bal →
-    Inv (st.getStor ca) v (st.bal ca) →
+    State.Protected st ca → Inv (st.getStor ca) v (st.bal ca) →
     Inv ((st'.addBal callee wad).getStor ca)
       v ((st'.addBal callee wad).bal ca)
   inv_recv_transfer : ∀ {st st' : Jaune.State} {caller ca : Adr} {wad : B256},
     st.subBal caller wad = some st' → caller ≠ ca → Side st.bal →
-    Inv (st.getStor ca) 0 (st.bal ca) →
+    State.Protected st ca → Inv (st.getStor ca) 0 (st.bal ca) →
     Inv ((st'.addBal ca wad).getStor ca)
       wad ((st'.addBal ca wad).bal ca)
   inv_addBal : ∀ {w : Jaune.State} {ca a : Adr} {val v : B256},
     sum w.bal + val.toNat < 2 ^ 256 → Side w.bal →
-    Inv (w.getStor ca) v (w.bal ca) →
+    State.Protected w ca → Inv (w.getStor ca) v (w.bal ca) →
     Inv ((w.addBal a val).getStor ca) v ((w.addBal a val).bal ca)
 
 lemma code_eq_of_exec_sem {sem : CodeSem} {sevm' : Sevm} {devm' child : Devm}
@@ -216,11 +216,11 @@ lemma Pre.transfer_state {ca : Adr} {sevm : Sevm} {pre inter : Devm}
   · intro h
     show c.Inv (Devm.getStor inter ca) sevm.value (inter.getBal ca)
     rw [h_stor_eq, h_bal_eq]
-    exact c.inv_transfer h_sub h_ne h_pc.side (h_pc.inv.left h)
+    exact c.inv_transfer h_sub h_ne h_pc.side (State.Protected.of_image h_pc.code) (h_pc.inv.left h)
   · intro h
     show c.Inv (Devm.getStor inter ca) 0 (inter.getBal ca)
     rw [h_stor_eq, h_bal_eq]
-    exact c.inv_transfer h_sub h_ne h_pc.side (h_pc.inv.right h)
+    exact c.inv_transfer h_sub h_ne h_pc.side (State.Protected.of_image h_pc.code) (h_pc.inv.right h)
 
 lemma GenericCall.none_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : Devm}
     {gas : Nat} {value : B256} {caller target codeAddress : Adr}
@@ -273,17 +273,17 @@ lemma GenericCall.none_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : 
       · have h_child_state : evm2.state = benv.state := by
           have h := state_of_executePrecomp_ok h_he h_err2
           rw [h]; rfl
-        by_cases h_stv : stv = true
-        · rcases of_benvAfterTransfer (hc_stv.trans h_stv) eq_bt with ⟨st_mid, h_sub, hB⟩
+        by_cases h_tr : stv = true ∧ value ≠ 0
+        · have h_stv := h_tr.1
+          rcases of_benvAfterTransfer (hc_stv.trans h_stv) (by rw [hc_value]; exact h_tr.2) eq_bt with ⟨st_mid, h_sub, hB⟩
           rw [hc_state, hc_caller, hc_value] at h_sub
           have hBs : benv.state = st_mid.addBal target value := by
             rw [hB, hc_ct, hc_value]; rfl
           have h_state : inter.state = st_mid.addBal target value := by
             rw [h_inter_state, h_child_state, hBs]
           exact Pre.transfer_state h_pc (h_ne h_stv) h_sub h_state
-        · have h_stv2 : ¬ childMsg.shouldTransferValue = true := by
-            rw [hc_stv]; exact h_stv
-          have h_benv : benv = childMsg.benv := of_benvAfterTransfer_no h_stv2 eq_bt
+        · have h_benv : benv = childMsg.benv :=
+            benvAfterTransfer_eq_of_not_transfer (by rw [hc_stv, hc_value]; exact h_tr) eq_bt
           apply h_pc.state_eq
           rw [h_inter_state, h_child_state, h_benv]
           exact hc_state
@@ -327,8 +327,9 @@ lemma GenericCreate.none_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter 
       rw [h_state]
       exact State.incrNonce_get_bal
     · show (inter.state.get wa).stor = (devm.state.get wa).stor
-      rw [h_state]
-      exact State.incrNonce_get_stor
+      rw [h_state, State.incrNonce_get_stor, if_neg]
+      rintro ⟨rfl, hE⟩
+      exact (ne_wa_of_code_size_zero (c.sem.ne_nil h_pc.code.symm) hE.1) rfl
   -- a child frame was entered : impossible with an empty slot, since a create
   -- frame always runs interpreted code
   · exfalso
@@ -444,6 +445,10 @@ lemma Pre.child_of_transfer {ca : Adr} {sevm sevm' : Sevm} {devm devm' : Devm}
   have h_side_st : c.Side st.bal := by rw [h_bal_st]; exact h_pc.side
   rcases of_state_transfer_fields (callee := target) h_sub with
     ⟨h_t_stor, h_t_code, _, _, _⟩
+  have h_prot_st : State.Protected st ca := by
+    apply State.Protected.of_image (sem := c.sem)
+    show some (st.get ca).code.toList = c.sem.image
+    rw [h_code]; exact h_pc.code
   have h_inv_st : c.Inv (st.getStor ca) 0 (st.bal ca) := by
     show c.Inv (st.get ca).stor 0 (st.get ca).bal
     rw [h_stor, h_bal ca]
@@ -464,12 +469,12 @@ lemma Pre.child_of_transfer {ca : Adr} {sevm sevm' : Sevm} {devm devm' : Devm}
     subst h_t_ca
     show c.Inv (Devm.getStor devm' target) sevm'.value (devm'.getBal target)
     rw [h_stor', h_bal', h_val h_eq]
-    exact c.inv_recv_transfer h_sub h_ne h_side_st h_inv_st
+    exact c.inv_recv_transfer h_sub h_ne h_side_st h_prot_st h_inv_st
   · intro h_ne_ct
     have h_t_ne : target ≠ ca := fun hc => h_ne_ct (h_ct'.trans hc)
     show c.Inv (Devm.getStor devm' ca) 0 (devm'.getBal ca)
     rw [h_stor', h_bal']
-    exact c.inv_transfer h_sub h_ne h_side_st h_inv_st
+    exact c.inv_transfer h_sub h_ne h_side_st h_prot_st h_inv_st
 
 /-- The child-frame precondition after an outbound value transfer from the
 contract.  The caller supplies the invariant at the debited balance; the
@@ -501,7 +506,7 @@ lemma Pre.child_of_outbound_transfer
     show c.Inv (Devm.getStor devm' ca) sevm'.value (devm'.getBal ca)
     change c.Inv (devm'.state.get ca).stor sevm'.value
       (devm'.state.get ca).bal
-    rw [h_state, h_value, h_t_stor ca, hbal]
+    rw [h_state, h_value, h_t_stor ca (State.Protected.of_image h_code), hbal]
     apply c.inv_recv h_inv
     have h_le_nat := B256.toNat_le_toNat h_le
     change (st.bal ca).toNat = (st.bal ca - value).toNat + value.toNat
@@ -513,7 +518,7 @@ lemma Pre.child_of_outbound_transfer
         (st.get ca).bal - value := h_t_ne h_target'
     show c.Inv (Devm.getStor devm' ca) 0 (devm'.getBal ca)
     change c.Inv (devm'.state.get ca).stor 0 (devm'.state.get ca).bal
-    rw [h_state, h_t_stor ca, hbal]
+    rw [h_state, h_t_stor ca (State.Protected.of_image h_code), hbal]
     exact h_inv
 
 -- the precondition carries over to the initial state of a sub-execution
@@ -612,26 +617,26 @@ lemma GenericCall.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : 
   dsimp only [bind, Except.bind] at hr2
   -- part 1 : the precondition holds for the sub-execution's initial state
   have h_pre1 : c.Pre wa evm'.sta evm'.dyna := by
-    by_cases h_stv : stv = true
-    · rcases of_benvAfterTransfer (hc_stv.trans h_stv) eq_bt with ⟨st_mid, h_sub, hB⟩
+    by_cases h_tr : stv = true ∧ value ≠ 0
+    · have h_stv := h_tr.1
+      rcases of_benvAfterTransfer (hc_stv.trans h_stv) (by rw [hc_value]; exact h_tr.2) eq_bt with ⟨st_mid, h_sub, hB⟩
       rw [hc_state, hc_caller, hc_value] at h_sub
       have h_state : evm'.dyna.state = st_mid.addBal target value := by
         rw [h_ds, hB, hc_ct, hc_value]
         rfl
       exact Pre.child_of_transfer h_pc h_ct_ne (h_ne h_stv) rfl rfl (fun _ => rfl)
         h_sub h_state h_ct' (fun _ => h_v')
-    · have h_stv2 : ¬ childMsg.shouldTransferValue = true := by rw [hc_stv]; exact h_stv
-      have h_benv : benv = childMsg.benv := of_benvAfterTransfer_no h_stv2 eq_bt
+    · have h_benv : benv = childMsg.benv :=
+        benvAfterTransfer_eq_of_not_transfer (by rw [hc_stv, hc_value]; exact h_tr) eq_bt
       have h_state : evm'.dyna.state = devm.state := by
         rw [h_ds, h_benv]; exact hc_state
       apply Pre.child_of_eqs h_pc h_ct_ne h_state
       intro h_eq
-      have h_sf : stv = false := by
-        cases stv
-        · rfl
-        · exact absurd rfl h_stv
       rw [h_v']
-      exact h_tv h_sf (h_ct'.symm.trans h_eq)
+      by_cases hs : stv = true
+      · by_contra hne
+        exact h_tr ⟨hs, hne⟩
+      · exact h_tv (by simpa only [Bool.not_eq_true] using hs) (h_ct'.symm.trans h_eq)
   refine ⟨h_pre1, ?_⟩
   -- part 2 : the precondition is restored after the call returns
   intro h_ifOk
@@ -705,7 +710,7 @@ lemma GenericCreate.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter 
         m.value = endowment ∧ m.currentTarget = newAddress ∧
         m.codeAddress = .none ∧ m.shouldTransferValue = true ∧
         (d5.state.get newAddress).code.size = 0 :=
-    ⟨_, _, hframe, rfl, rfl, rfl, rfl, rfl, rfl, rfl, h_coll.2.1⟩
+    ⟨_, _, hframe, rfl, rfl, rfl, rfl, rfl, rfl, rfl, h_coll.2⟩
   -- the new address cannot be the WETH address, whose code is nonempty
   have h_new_ne : newAddress ≠ wa := by
     intro hc
@@ -763,14 +768,13 @@ lemma GenericCreate.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter 
   have hP_stv : (processCreateMessage.msg childMsg).shouldTransferValue = true := hc_stv
   have h_ds : evm'.dyna.state = benv'.state := by rw [h_evm]; rfl
   have h_ct' : evm'.sta.currentTarget = newAddress := by rw [h_evm]; exact hc_ct
-  -- the balance transfer performed before the sub-execution
-  rcases of_benvAfterTransfer hP_stv eq_bt with ⟨st_mid, h_sub, hB⟩
-  rw [hP_state, hP_caller, hP_value, hc_ct] at h_sub
   have h_base_stor :
       (((childMsg.benv.state.setStor newAddress Stor.empty).incrNonce newAddress).get wa).stor
         = (devm.state.get wa).stor := by
-    rw [State.incrNonce_get_stor, State.setStor_get_stor_ne h_new_ne, hc_state, h_st5,
-      State.incrNonce_get_stor]
+    rw [State.incrNonce_get_stor, if_neg (fun h => h_new_ne h.1),
+      State.setStor_get_stor_ne h_new_ne, hc_state, h_st5, State.incrNonce_get_stor, if_neg]
+    rintro ⟨rfl, hE⟩
+    exact (ne_wa_of_code_size_zero (c.sem.ne_nil h_pc.code.symm) hE.1) rfl
   have h_base_code :
       (((childMsg.benv.state.setStor newAddress Stor.empty).incrNonce newAddress).get wa).code
         = (devm.state.get wa).code := by
@@ -784,14 +788,46 @@ lemma GenericCreate.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter 
       State.incrNonce_get_bal]
   -- part 1 : the precondition holds for the sub-execution's initial state
   have h_pre1 : c.Pre wa evm'.sta evm'.dyna := by
-    have h_state : evm'.dyna.state = st_mid.addBal newAddress endowment := by
-      rw [h_ds, hB]
-      show st_mid.addBal childMsg.currentTarget childMsg.value = _
-      rw [hc_ct, hc_value]
-    apply Pre.child_of_transfer h_pc h_ct_ne h_ct_ne h_base_stor h_base_code h_base_bal
-      h_sub h_state h_ct'
-    intro hc
-    exact absurd (h_ct'.symm.trans hc) h_new_ne
+    by_cases h_nz : endowment ≠ 0
+    · -- the balance transfer performed before the sub-execution
+      rcases of_benvAfterTransfer hP_stv (by rw [hP_value]; exact h_nz) eq_bt with
+        ⟨st_mid, h_sub, hB⟩
+      rw [hP_state, hP_caller, hP_value, hc_ct] at h_sub
+      have h_state : evm'.dyna.state = st_mid.addBal newAddress endowment := by
+        rw [h_ds, hB]
+        show st_mid.addBal childMsg.currentTarget childMsg.value = _
+        rw [hc_ct, hc_value]
+      apply Pre.child_of_transfer h_pc h_ct_ne h_ct_ne h_base_stor h_base_code h_base_bal
+        h_sub h_state h_ct'
+      intro hc
+      exact absurd (h_ct'.symm.trans hc) h_new_ne
+    · -- zero endowment: no transfer, the prepared state is the child's
+      have hbenv : benv' = (processCreateMessage.msg childMsg).benv :=
+        benvAfterTransfer_eq_of_not_transfer
+          (fun h => h_nz (by rw [← hP_value]; exact h.2)) eq_bt
+      have h_state : evm'.dyna.state =
+          (childMsg.benv.state.setStor newAddress Stor.empty).incrNonce newAddress := by
+        rw [h_ds, hbenv, hP_state, hc_ct]
+      have h_bal_f : evm'.dyna.getBal = devm.getBal := by
+        funext a
+        show (evm'.dyna.state.get a).bal = (devm.state.get a).bal
+        rw [h_state]
+        exact h_base_bal a
+      have h_stor_wa : Devm.getStor evm'.dyna wa = Devm.getStor devm wa := by
+        show (evm'.dyna.state.get wa).stor = _
+        rw [h_state]
+        exact h_base_stor
+      refine ⟨?_, ?_, ?_, ?_⟩
+      · show some (evm'.dyna.state.get wa).code.toList = _
+        rw [h_state, h_base_code]
+        exact h_pc.code
+      · rw [h_bal_f]
+        exact h_pc.side
+      · intro hc
+        exact absurd (h_ct'.symm.trans hc) h_new_ne
+      · intro _
+        rw [h_bal_f, h_stor_wa]
+        exact h_pc.inv.right h_ct_ne
   refine ⟨h_pre1, ?_⟩
   -- part 2 : the precondition is restored after the create returns
   intro h_ifOk
@@ -807,8 +843,9 @@ lemma GenericCreate.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter 
       rw [h_inter_state, h_cs, hc_state, h_st5]
       exact State.incrNonce_get_bal
     · show (inter.state.get wa).stor = (devm.state.get wa).stor
-      rw [h_inter_state, h_cs, hc_state, h_st5]
-      exact State.incrNonce_get_stor
+      rw [h_inter_state, h_cs, hc_state, h_st5, State.incrNonce_get_stor, if_neg]
+      rintro ⟨rfl, hE⟩
+      exact (ne_wa_of_code_size_zero (c.sem.ne_nil h_pc.code.symm) hE.1) rfl
   have h_isNone_false : ∀ {dX : Devm}, dX.error.isSome = true → dX.error.isNone ≠ true := by
     intro dX h_some hc
     rw [Option.isNone_iff_eq_none] at hc
@@ -876,7 +913,7 @@ lemma GenericCreate.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter 
         apply Pre.of_postcond h_post h_ct_ne h_pre1.code
           (code_eq_of_exec_sem (hpc0 ▸ ex_sub) h_pre1.code)
         · rw [h_inter_state, ← h_child, Devm.setCode_state, h_stC, hc_ct,
-            State.setCode_get_stor]
+            State.setCode_get_stor_ne h_new_ne]
         · rw [h_inter_state, ← h_child, Devm.setCode_state, h_stC, hc_ct,
             State.setCode_get_code_ne h_new_ne]
         · intro a
@@ -924,7 +961,7 @@ lemma Post.selfdestruct_delete {ca : Adr} {sevm : Sevm} {devm : Devm}
       (addAccountToDelete (devm.setBal sevm.currentTarget 0) sevm.currentTarget).getBal
         sevm.currentTarget = 0 := by
     show ((devm.state.setBal sevm.currentTarget 0).get sevm.currentTarget).bal = 0
-    rw [State.setBal_get_self]; rfl
+    rw [State.setBal_get_self, Acct.clearIfEmpty_bal]; rfl
   have h_bal_ne : ∀ a, sevm.currentTarget ≠ a →
       (addAccountToDelete (devm.setBal sevm.currentTarget 0) sevm.currentTarget).getBal a =
         devm.getBal a := by
@@ -935,7 +972,7 @@ lemma Post.selfdestruct_delete {ca : Adr} {sevm : Sevm} {devm : Devm}
       Devm.getStor (addAccountToDelete (devm.setBal sevm.currentTarget 0) sevm.currentTarget) ca =
         Devm.getStor devm ca := by
     show ((devm.state.setBal sevm.currentTarget 0).get ca).stor = (devm.state.get ca).stor
-    apply State.setBal_get_stor
+    rw [State.setBal_get_ne h_ne]
   have h_dec :
       Decrease sevm.currentTarget (devm.getBal sevm.currentTarget) devm.getBal
         (addAccountToDelete (devm.setBal sevm.currentTarget 0) sevm.currentTarget).getBal := by
@@ -1160,18 +1197,20 @@ theorem StateInv.incrNonce {wa a : Adr} {w : Jaune.State}
     funext b
     show ((w.incrNonce a).get b).bal = (w.get b).bal
     by_cases hb : b = a
-    · subst hb; simp only [State.incrNonce, State.get_set_self]
-    · simp only [State.incrNonce, State.get_set_ne _ (Ne.symm hb)]
+    · subst hb
+      simp only [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_bal]
+    · simp only [State.incrNonce, State.setAccount_get_ne _ (Ne.symm hb)]
   have hstor : (w.incrNonce a).getStor wa = w.getStor wa := by
     show ((w.incrNonce a).get wa).stor = (w.get wa).stor
-    by_cases hb : wa = a
-    · subst hb; simp only [State.incrNonce, State.get_set_self]
-    · simp only [State.incrNonce, State.get_set_ne _ (Ne.symm hb)]
+    rw [State.incrNonce_get_stor, if_neg]
+    rintro ⟨rfl, hE⟩
+    exact (ne_wa_of_code_size_zero (c.sem.ne_nil h.code.symm) hE.1) rfl
   have hcode : (w.incrNonce a).getCode wa = w.getCode wa := by
     show ((w.incrNonce a).get wa).code = (w.get wa).code
     by_cases hb : wa = a
-    · subst hb; simp only [State.incrNonce, State.get_set_self]
-    · simp only [State.incrNonce, State.get_set_ne _ (Ne.symm hb)]
+    · subst hb
+      simp only [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_code]
+    · simp only [State.incrNonce, State.setAccount_get_ne _ (Ne.symm hb)]
   refine ⟨?_, ?_, ?_⟩
   · rw [hcode]; exact h.code
   · rw [hbal]; exact h.side
@@ -1186,7 +1225,7 @@ theorem StateInv.incrNonce {wa a : Adr} {w : Jaune.State}
 theorem StateInv.addBal {ca a : Adr} {val : B256} {w : Jaune.State}
     (hsum : sum w.bal + val.toNat < 2 ^ 256)
     (h : c.StateInv ca w) : c.StateInv ca (w.addBal a val) := by
-  refine ⟨?_, c.side_addBal hsum h.side, c.inv_addBal hsum h.side h.inv⟩
+  refine ⟨?_, c.side_addBal hsum h.side, c.inv_addBal hsum h.side (State.Protected.of_image h.code) h.inv⟩
   show some (((w.addBal a val).get ca).code).toList = c.sem.image
   unfold State.addBal; rw [State.setBal_get_code]; exact h.code
 
@@ -1203,7 +1242,7 @@ theorem StateInv.subBal {ca a : Adr} {val : B256} {w w' : Jaune.State}
       intro b; constructor
       · intro heq; subst heq
         show w.bal a - val = ((w.setBal a (w.bal a - val)).get a).bal
-        rw [State.setBal_get_self]; rfl
+        rw [State.setBal_get_self, Acct.clearIfEmpty_bal]; rfl
       · intro hnb
         show w.bal b = ((w.setBal a (w.bal a - val)).get b).bal
         rw [State.setBal_get_ne hnb]; rfl
@@ -1211,7 +1250,7 @@ theorem StateInv.subBal {ca a : Adr} {val : B256} {w w' : Jaune.State}
     exact c.side_le h.side (by omega)
   · show c.Inv (((w.setBal a (w.bal a - val)).get ca).stor) 0
       ((w.setBal a (w.bal a - val)).get ca).bal
-    rw [State.setBal_get_stor, State.setBal_get_ne hne]; exact h.inv
+    rw [State.setBal_get_ne hne]; exact h.inv
 
 -- Deleting a foreign account (`a ≠ ca`) removes its balance from the sum and
 -- leaves `ca`'s code/balance/storage alone.
@@ -1292,11 +1331,11 @@ lemma Pre.of_inv_transfer {ca : Adr} {sevm' : Sevm} {devm' : Devm}
     subst h_t_ca
     show c.Inv (Devm.getStor devm' target) sevm'.value (devm'.getBal target)
     rw [h_stor', h_bal', h_val h_eq]
-    exact c.inv_recv_transfer h_sub h_ne h_inv.side h_inv.inv
+    exact c.inv_recv_transfer h_sub h_ne h_inv.side (State.Protected.of_image h_inv.code) h_inv.inv
   · intro _
     show c.Inv (Devm.getStor devm' ca) 0 (devm'.getBal ca)
     rw [h_stor', h_bal']
-    exact c.inv_transfer h_sub h_ne h_inv.side h_inv.inv
+    exact c.inv_transfer h_sub h_ne h_inv.side (State.Protected.of_image h_inv.code) h_inv.inv
 
 -- No-transfer counterpart of `Pre.of_inv_transfer`: when no value moves,
 -- the pre-state is the invariant state itself, and `PreSolvent` reduces to the
@@ -1318,20 +1357,21 @@ lemma Pre.of_inv_benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
     (hb : msg.benvAfterTransfer = .ok benv)
     (h_inv : c.StateInv wa msg.benv.state) :
     c.Pre wa (initSevm (msg.withBenv benv)) (initDevm (msg.withBenv benv)) := by
-  by_cases h_stv : msg.shouldTransferValue = true
-  · rcases Jaune.of_benvAfterTransfer h_stv hb with ⟨st_mid, h_sub, hbenv⟩
+  by_cases h_tr : msg.shouldTransferValue = true ∧ msg.value ≠ 0
+  · rcases Jaune.of_benvAfterTransfer h_tr.1 h_tr.2 hb with ⟨st_mid, h_sub, hbenv⟩
     have hbs : (initDevm (msg.withBenv benv)).state
         = st_mid.addBal msg.currentTarget msg.value := by
       show benv.state = _; rw [hbenv]; rfl
-    exact Pre.of_inv_transfer h_inv (h_ne h_stv) h_sub hbs rfl (fun _ => rfl)
-  · have hbenv : benv = msg.benv := of_benvAfterTransfer_no h_stv hb
-    have h_false : msg.shouldTransferValue = false := by
-      cases hh : msg.shouldTransferValue
-      · rfl
-      · exact absurd hh h_stv
+    exact Pre.of_inv_transfer h_inv (h_ne h_tr.1) h_sub hbs rfl (fun _ => rfl)
+  · have hbenv : benv = msg.benv := benvAfterTransfer_eq_of_not_transfer h_tr hb
     have h_inv' : c.StateInv wa (initDevm (msg.withBenv benv)).state := by
       show c.StateInv wa benv.state; rw [hbenv]; exact h_inv
-    exact Pre.of_inv_eqs h_inv' (fun he => h_val0 h_false he)
+    refine Pre.of_inv_eqs h_inv' (fun he => ?_)
+    show msg.value = 0
+    by_cases hs : msg.shouldTransferValue = true
+    · by_contra hne
+      exact h_tr ⟨hs, hne⟩
+    · exact h_val0 (by simpa only [Bool.not_eq_true] using hs) he
 
 -- The post-transfer state itself still satisfies `StateInv`: the transfer only
 -- credits `ca` or moves value between accounts other than `ca`, which is
@@ -1341,8 +1381,9 @@ lemma StateInv.of_benvAfterTransfer {ca : Adr} {msg : Msg} {benv : Benv}
     (hb : msg.benvAfterTransfer = .ok benv)
     (h_inv : c.StateInv ca msg.benv.state) :
     c.StateInv ca benv.state := by
-  by_cases h_stv : msg.shouldTransferValue = true
-  · rcases Jaune.of_benvAfterTransfer h_stv hb with ⟨st_mid, h_sub, hbenv⟩
+  by_cases h_tr : msg.shouldTransferValue = true ∧ msg.value ≠ 0
+  · have h_stv := h_tr.1
+    rcases Jaune.of_benvAfterTransfer h_tr.1 h_tr.2 hb with ⟨st_mid, h_sub, hbenv⟩
     have hbs : benv.state = st_mid.addBal msg.currentTarget msg.value := by
       rw [hbenv]; rfl
     rcases of_state_transfer_fields (callee := msg.currentTarget) h_sub with
@@ -1352,8 +1393,8 @@ lemma StateInv.of_benvAfterTransfer {ca : Adr} {msg : Msg} {benv : Benv}
                    = ((st_mid.addBal msg.currentTarget msg.value).get ca).code from rfl,
                  h_t_code ca]; exact h_inv.code,
            c.side_transfer h_sub h_inv.side,
-           c.inv_transfer h_sub (h_ne h_stv) h_inv.side h_inv.inv⟩
-  · have hbenv : benv = msg.benv := Jaune.of_benvAfterTransfer_no h_stv hb
+           c.inv_transfer h_sub (h_ne h_stv) h_inv.side (State.Protected.of_image h_inv.code) h_inv.inv⟩
+  · have hbenv : benv = msg.benv := benvAfterTransfer_eq_of_not_transfer h_tr hb
     rw [hbenv]; exact h_inv
 
 lemma StateInv.setStor_ne {wa a : Adr} {s : Stor} {w : Jaune.State}
@@ -1779,7 +1820,7 @@ theorem processMessageCall_preserves_inv {wa : Adr} {msg : Msg} {st' : Jaune.Sta
     · rename_i h_col
       simp only [Bool.not_eq_true, Bool.or_eq_false_iff] at h_col
       have h_ct : msg.currentTarget ≠ wa :=
-        ne_wa_of_not_hasCodeOrNonce h_inv.nodel.code h_col.1
+        ne_wa_of_not_hasCodeOrNonce h_inv.nodel.code h_col
       revert h_run
       rcases h_evm : processCreateMessage msg with ⟨err⟩ | ⟨evm⟩
       · simp only [Except.bimap, bind, Except.bind]
@@ -2939,25 +2980,38 @@ theorem post_of_call_self_with {Q : ∀ pc sevm devm exn, Exec pc sevm devm exn 
       · rw [hbody.2, processMessage.settle_error] at hset
         cases hset
       have run_ec : ExecuteCode (childMsg.withBenv benv') xl r0 := hbody
-      -- the value transfer performed before the sub-message run
-      rcases of_benvAfterTransfer hc_stv eq_bt with ⟨st_mid, h_sub, hB⟩
-      rw [hc_state, hc_caller, hc_value] at h_sub
-      rcases of_state_transfer_fields (callee := callee) h_sub with
-        ⟨h_t_stor, h_t_code, -, h_t_self, h_t_ne⟩
-      have hBs : benv'.state = st_mid.addBal callee value := by
-        rw [hB, hc_ct, hc_value]; rfl
-      -- the child's initial state satisfies the precondition
+      -- the child's initial state satisfies the precondition: after the value
+      -- transfer, or unchanged when no value moves (zero-value entry)
       have hchildPre : c.Pre sevm.currentTarget (initSevm (childMsg.withBenv benv'))
           (initDevm (childMsg.withBenv benv')) := by
-        apply Pre.child_of_outbound_transfer (st := s.state) (st_mid := st_mid)
-          (target := callee) (value := value)
-        · exact hcode
-        · exact hside
-        · exact hinv
-        · exact h_sub
-        · exact hBs
-        · exact hc_ct
-        · exact hc_value
+        by_cases h_nz : value ≠ 0
+        · rcases of_benvAfterTransfer hc_stv (by rw [hc_value]; exact h_nz) eq_bt with
+            ⟨st_mid, h_sub, hB⟩
+          rw [hc_state, hc_caller, hc_value] at h_sub
+          have hBs : benv'.state = st_mid.addBal callee value := by
+            rw [hB, hc_ct, hc_value]; rfl
+          apply Pre.child_of_outbound_transfer (st := s.state) (st_mid := st_mid)
+            (target := callee) (value := value)
+          · exact hcode
+          · exact hside
+          · exact hinv
+          · exact h_sub
+          · exact hBs
+          · exact hc_ct
+          · exact hc_value
+        · have hv0 : value = 0 := not_not.mp h_nz
+          have hbenv : benv' = childMsg.benv :=
+            benvAfterTransfer_eq_of_not_transfer
+              (fun h => h_nz (by rw [← hc_value]; exact h.2)) eq_bt
+          have hstate : (initDevm (childMsg.withBenv benv')).state = s.state := by
+            show benv'.state = _
+            rw [hbenv, hc_state]
+          refine Pre.of_inv_eqs ?_ (fun _ => by show childMsg.value = 0; rw [hc_value, hv0])
+          rw [hstate]
+          refine ⟨hcode, hside, ?_⟩
+          have hinv0 := hinv
+          rw [hv0, B256.sub_zero] at hinv0
+          exact hinv0
       -- resolve the settlement : rollback or a clean sub-message result
       obtain ⟨evm2, h_r0, h_settle⟩ := processMessage.settle_ok_cases hset.symm
       subst h_r0
