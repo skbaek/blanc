@@ -1,7 +1,8 @@
 import Blanc.Weth10Stable
 import Blanc.Weth10TransferFunctional
 import Blanc.Weth10Live
-import Blanc.ForwardCall
+import Blanc.Weth10Redeemable.RepinBridge
+import Blanc.StorageRefund
 import Init.Data.Ord.UInt
 
 /-!
@@ -779,7 +780,19 @@ theorem AdmissibleRedemptionTx.upfrontDebit_exists
   · intro a
     dsimp only [debit]
     change (((benv.state.incrNonce owner).setBal owner _).get a).stor = _
-    rw [State.setBal_get_stor, State.incrNonce_get_stor]
+    have nonceBound : (benv.state.get owner).nonce ≠ UInt64.max := by
+      simpa only [State.getNonce] using
+        (henv.nonce_eq.symm.trans_ne henv.nonce_not_max)
+    have nonzero := UInt64.add_one_ne_zero_of_ne_max nonceBound
+    have bumpedNonce : ((benv.state.incrNonce owner).get owner).nonce ≠ 0 := by
+      simpa only [State.incrNonce, State.setAccount_get_self,
+        Acct.clearIfEmpty_nonce] using nonzero
+    rw [State.setBal_get_stor, ite_eq_right (by
+      intro empty
+      exact bumpedNonce empty.2.2.1)]
+    rw [State.incrNonce_get_stor, ite_eq_right (by
+      intro empty
+      exact nonzero empty.2.2.1)]
     rfl
   · intro a
     dsimp only [debit]
@@ -795,7 +808,7 @@ theorem AdmissibleRedemptionTx.upfrontDebit_exists
     change
       (((benv.state.incrNonce owner).setBal owner _).get owner).bal.toNat +
           fee = (benv.state.get owner).bal.toNat
-    rw [State.setBal_get_self]
+    rw [State.setBal_get_self, Acct.clearIfEmpty_bal]
     change
       ((benv.state.incrNonce owner).bal owner - fee.toB256).toNat +
           fee = (benv.state.bal owner).toNat
@@ -845,7 +858,19 @@ theorem AdmissibleSelfRedemptionTx.upfrontDebit_exists
   · intro a
     dsimp only [debit]
     change (((benv.state.incrNonce owner).setBal owner _).get a).stor = _
-    rw [State.setBal_get_stor, State.incrNonce_get_stor]
+    have nonceBound : (benv.state.get owner).nonce ≠ UInt64.max := by
+      simpa only [State.getNonce] using
+        (henv.nonce_eq.symm.trans_ne henv.nonce_not_max)
+    have nonzero := UInt64.add_one_ne_zero_of_ne_max nonceBound
+    have bumpedNonce : ((benv.state.incrNonce owner).get owner).nonce ≠ 0 := by
+      simpa only [State.incrNonce, State.setAccount_get_self,
+        Acct.clearIfEmpty_nonce] using nonzero
+    rw [State.setBal_get_stor, ite_eq_right (by
+      intro empty
+      exact bumpedNonce empty.2.2.1)]
+    rw [State.incrNonce_get_stor, ite_eq_right (by
+      intro empty
+      exact nonzero empty.2.2.1)]
     rfl
   · intro a
     dsimp only [debit]
@@ -861,7 +886,7 @@ theorem AdmissibleSelfRedemptionTx.upfrontDebit_exists
     change
       (((benv.state.incrNonce owner).setBal owner _).get owner).bal.toNat +
           fee = (benv.state.get owner).bal.toNat
-    rw [State.setBal_get_self]
+    rw [State.setBal_get_self, Acct.clearIfEmpty_bal]
     change
       ((benv.state.incrNonce owner).bal owner - fee.toB256).toNat +
           fee = (benv.state.bal owner).toNat
@@ -945,8 +970,8 @@ structure RedemptionCallEffect (e : Sevm) (pre post : Devm)
   refund : post.refundCounter = pre.refundCounter
   accountsToDeleteEmpty :
     post.accountsToDelete.isEmpty = pre.accountsToDelete.isEmpty
-  transfer : ∃ debit,
-    pre.state.subBal e.currentTarget value = some debit ∧
+  transfer : if value = 0 then post.state = pre.state else
+    ∃ debit, pre.state.subBal e.currentTarget value = some debit ∧
       post.state = debit.addBal recipient value
 
 /-- The code-altitude result retained for the ordinary message wrapper. -/
@@ -963,13 +988,17 @@ structure RedemptionCodeOutcome (e : Sevm) (pre post : Devm)
   storageDebit :
     post.getStorVal e.currentTarget owner.toB256 =
       pre.getStorVal e.currentTarget owner.toB256 - amount
-  storageOther : ∀ a k, (a, k) ≠ (e.currentTarget, owner.toB256) →
+  storageOther : ∀ a k,
+    (amount = 0 ∨ (a ≠ e.currentTarget ∧ a ≠ recipient) ∨
+      State.Protected pre.state a) →
+    (a, k) ≠ (e.currentTarget, owner.toB256) →
     post.getStorVal a k = pre.getStorVal a k
-  transfer : ∃ (callState debit : State),
+  transfer : ∃ callState : State,
     (∀ a, callState.bal a = pre.getBal a) ∧
     (∀ a, callState.getCode a = pre.getCode a) ∧
-    callState.subBal e.currentTarget amount = some debit ∧
-    post.state = debit.addBal recipient amount
+    (if amount = 0 then post.state = callState else
+      ∃ debit, callState.subBal e.currentTarget amount = some debit ∧
+        post.state = debit.addBal recipient amount)
 
 lemma RedemptionCodeOutcome.of_setMach {e : Sevm} {pre post : Devm}
     {owner recipient : Adr} {amount : B256} {mach : Mach}
@@ -1039,6 +1068,7 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
   let d := b.setMach ⟨[
     Nat.toB256 G, recipient.toB256, value, 0, 0, 0, 0],
     Mem.empty.write 0 value.toBytes, G, b.stateGas⟩
+  have hdstate : d.state = b.state := rfl
   let d0 := addAccessedAddress
     (d.setMach ⟨[], d.memory, d.gasLeft, d.stateGas⟩) recipient
   rcases hdel : accessDelegation d0 recipient with ⟨dp, dadr, code, dgc, d1⟩
@@ -1130,12 +1160,12 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
         (by rw [hdadr]; exact h_nonprecompile) hcode0
         (by decide) with
           ⟨post, hrun, hstack, _hmem, hpostgas, herr, hout, hreturn,
-            hlogs, hrefund, hdelete, debit, hsub, hstate⟩
+            hlogs, hrefund, hdelete, hstate⟩
     refine ⟨post, hrun, hstack, ?_, ?_⟩
     · rw [hpostgas, hd1g'] at *
       have hret16 : 16 ≤ (G - 0 - acc) / 64 := by omega
       omega
-    · refine ⟨?_, ?_, hreturn, ?_, ?_, ?_, debit, ?_, ?_⟩
+    · refine ⟨?_, ?_, hreturn, ?_, ?_, ?_, ?_⟩
       · change post.error = b.error at herr
         exact herr
       · change post.output = b.output at hout
@@ -1145,9 +1175,8 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
       · change post.refundCounter = b.refundCounter at hrefund
         exact hrefund
       · exact hdelete
-      · change b.state.subBal e.currentTarget 0 = some debit at hsub
-        exact hsub
-      · simpa only [toAdr_toB256] using hstate
+      · exact hstate.trans hdstate
+
   · let create := if ¬ (d1.getAcct recipient).Empty then 0 else gNewAccount
     have hcreate :
         (if ¬ (d1.getAcct recipient).Empty then 0 else gNewAccount) = create := rfl
@@ -1206,7 +1235,7 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
     refine ⟨post, hrun, hstack, ?_, ?_⟩
     · rw [hpostgas]
       omega
-    · refine ⟨?_, ?_, hreturn, ?_, ?_, ?_, debit, ?_, ?_⟩
+    · refine ⟨?_, ?_, hreturn, ?_, ?_, ?_, ?_⟩
       · change post.error = b.error at herr
         exact herr
       · change post.output = b.output at hout
@@ -1216,9 +1245,11 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
       · change post.refundCounter = b.refundCounter at hrefund
         exact hrefund
       · exact hdelete
-      · change b.state.subBal e.currentTarget value = some debit at hsub
-        exact hsub
-      · simpa only [toAdr_toB256] using hstate
+      · rw [ite_eq_right hv]
+        refine ⟨debit, ?_, ?_⟩
+        · change b.state.subBal e.currentTarget value = some debit at hsub
+          exact hsub
+        · simpa only [toAdr_toB256] using hstate
 
 set_option maxRecDepth 621 in
 /-- The actual compiled `withdrawTo` body reaches a successful outcome for an
@@ -1234,6 +1265,8 @@ theorem withdrawTo_execSat {fs : List Func} {e : Sevm} {pre : Devm}
     (h_nonprecompile : e.benvStat.rules.isPrecomp recipient = false)
     (h_code : (pre.getCode recipient).size = 0)
     (h_sender : ¬ pre.getBal e.currentTarget < Sevm.argWord e 1)
+    (h_protected : Sevm.argWord e 1 = 0 ∨
+      State.Protected pre.state e.currentTarget)
     (h_original : getOrigStorVal e e.currentTarget e.caller.toB256 =
       pre.getStorVal e.currentTarget e.caller.toB256)
     (h_refund : pre.refundCounter = 0)
@@ -1249,14 +1282,14 @@ theorem withdrawTo_execSat {fs : List Func} {e : Sevm} {pre : Devm}
   · intro ex hex
     cases ex <;> simp only [Func.ExecWitness] at hex ⊢ <;>
       func_run (2) <;> exact hex
-  refine Func.execSat_sload_step h_fork rfl (by simp only [List.length_cons, List.length_nil,
+  refine Func.execSat_sload_step_with_nonce h_fork rfl (by simp only [List.length_cons, List.length_nil,
     zero_add, Nat.one_lt_ofNat])
     (v := pre.getStorVal e.currentTarget e.caller.toB256) rfl
     (M := Mem.empty) ?_ ?_ ?_
   · rfl
   · simp only [Devm.gasLeft_setMach, gasColdSload]
     omega
-  · intro b₁ c₁ G₁ hw₁ _hacc₁ hstor₁ hbal₁ hcode₁ hrc₁ hlog₁
+  · intro b₁ c₁ G₁ hw₁ _hacc₁ hstor₁ hbal₁ hcode₁ hnonce₁ hrc₁ hlog₁
       hout₁ herr₁ hdelete₁ hlo₁ hhi₁ hG₁
     simp only [Devm.gasLeft_setMach, gasWarmAccess, gasColdSload]
       at hG₁ hlo₁ hhi₁
@@ -1268,10 +1301,10 @@ theorem withdrawTo_execSat {fs : List Func} {e : Sevm} {pre : Devm}
         | show (if pre.getStorVal e.currentTarget e.caller.toB256 <
               Sevm.argWord e 1 then (1 : B256) else 0) = 0
           rw [if_neg (not_lt_of_ge h_amount)]
-    refine Func.execSat_sstore_warm_step h_fork rfl hw₁ h_static
+    refine Func.execSat_sstore_warm_step_with_nonce h_fork rfl hw₁ h_static
       (M := Mem.empty) rfl
       (by simp only [Devm.gasLeft_setMach, gasStorageSet]; omega) ?_
-    intro b₂ c₂ G₂ hkey₂ hoth₂ hbal₂ hcode₂ _hacc₂ hlog₂ hout₂
+    intro b₂ c₂ G₂ hkey₂ hoth₂ hbal₂ hcode₂ hnonce₂ _hacc₂ hlog₂ hout₂
       herr₂ hdelete₂ hrefund₂ hc₂ hG₂
     simp only [Devm.gasLeft_setMach, gasStorageSet] at hG₂ hc₂
     apply Func.execSat_segment
@@ -1280,7 +1313,7 @@ theorem withdrawTo_execSat {fs : List Func} {e : Sevm} {pre : Devm}
         func_run (11) [gMemory] <;> first
         | exact hex
         | exact Devm.extCost_empty_word
-    refine Func.execSat_log_step
+    refine Func.execSat_log_step_with_nonce
       (topics := [transferEvent, e.caller.toB256, 0])
       (s := [Sevm.argWord e 1, e.caller.toB256]) rfl rfl h_static
       (M := Mem.empty.write 0 (Sevm.argWord e 1).toBytes) rfl
@@ -1290,7 +1323,7 @@ theorem withdrawTo_execSat {fs : List Func} {e : Sevm} {pre : Devm}
     · exact Devm.extCost_add_of_size Mem.size_write_word (by decide)
     · exact Mem.read_write_word
     · exact Mem.read_snd_eq_self (by rw [Mem.size_write_word]; decide)
-    · intro b₃ G₃ hlogs₃ hstor₃ hbal₃ hcode₃ _hacc₃ hrefund₃
+    · intro b₃ G₃ hlogs₃ hstor₃ hbal₃ hcode₃ hnonce₃ _hacc₃ hrefund₃
         hout₃ herr₃ hdelete₃ hG₃
       simp only [Devm.gasLeft_setMach] at hG₃
       apply Func.execSat_segment
@@ -1326,23 +1359,50 @@ theorem withdrawTo_execSat {fs : List Func} {e : Sevm} {pre : Devm}
           (fs := fs) hstack hpostgas with
         ⟨post, htail, htailError, htailOutput, htailReturnData,
           htailLogs, htailRefund, htailDelete, htailState⟩
-      rcases hcallEffect.transfer with ⟨debit, hsub, hcallState⟩
-      have htransferFields :=
-        of_state_transfer_fields (callee := recipient) hsub
+      have hnonce : ∀ a, b₃.state.getNonce a = pre.state.getNonce a :=
+        fun a => (hnonce₃ a).trans ((hnonce₂ a).trans (hnonce₁ a))
+      have hprotect : ∀ a, State.Protected pre.state a →
+          State.Protected b₃.state a := by
+        intro a hp
+        unfold State.Protected at hp ⊢
+        change b₃.state.getNonce a ≠ 0 ∨ (b₃.getCode a).size ≠ 0
+        rw [hnonce a, hcode a]
+        exact hp
       have hcallStor : ∀ a k,
+          (Sevm.argWord e 1 = 0 ∨
+            (a ≠ e.currentTarget ∧ a ≠ recipient) ∨
+            State.Protected pre.state a) →
           callPost.getStorVal a k = b₃.getStorVal a k := by
-        intro a k
-        change (callPost.state.get a).stor.get k =
-          (b₃.state.get a).stor.get k
-        rw [hcallState]
-        rw [htransferFields.1 a]
+        intro a k safe
+        by_cases hz : Sevm.argWord e 1 = 0
+        · have hs := hcallEffect.transfer
+          rw [ite_eq_left hz] at hs
+          change (callPost.state.getStor a).get k = _
+          rw [hs]
+          rfl
+        · have hs := hcallEffect.transfer
+          rw [ite_eq_right hz] at hs
+          rcases hs with ⟨debit, hsub, hcallState⟩
+          change (callPost.state.get a).stor.get k = _
+          rw [hcallState]
+          rcases safe with zero | miss | hp
+          · exact False.elim (hz zero)
+          · rw [(State.of_subBal hsub).2]
+            unfold State.addBal
+            rw [State.setBal_get_ne miss.2.symm,
+              State.setBal_get_ne miss.1.symm]
+            rfl
+          · rw [(of_state_transfer_fields hsub).1 a (hprotect a hp)]
+            rfl
       have hpostStor : ∀ a k,
+          (Sevm.argWord e 1 = 0 ∨
+            (a ≠ e.currentTarget ∧ a ≠ recipient) ∨
+            State.Protected pre.state a) →
           post.getStorVal a k = b₃.getStorVal a k := by
-        intro a k
-        change (post.state.get a).stor.get k =
-          (b₃.state.get a).stor.get k
+        intro a k safe
+        change (post.state.get a).stor.get k = _
         rw [htailState]
-        exact hcallStor a k
+        exact hcallStor a k safe
       apply Func.execSat_of_runCompiledTo
         (Func.RunCompiledTo.of_runCompiled htail)
       apply hP post
@@ -1384,8 +1444,11 @@ theorem withdrawTo_execSat {fs : List Func} {e : Sevm} {pre : Devm}
           exact hrc₁.trans h_refund
         have hb₂Refund : 0 ≤ b₂.refundCounter := by
           rw [hrefund₂, ← Sevm.argWord_eq_dataWord, hcurrent, hrc]
-          exact sstoreNewRefundCounter_nonnegative_of_original_eq_current
-            h_original
+          apply sstoreNewRefundCounter_ge_of_safe
+          unfold RefundSafe Devm.getOrigStorVal
+          split
+          · exact Or.inr (Or.inl rfl)
+          · exact Or.inl h_original
         calc
           0 ≤ b₂.refundCounter := hb₂Refund
           _ = b₃.refundCounter := hrefund₃.symm
@@ -1406,24 +1469,28 @@ theorem withdrawTo_execSat {fs : List Func} {e : Sevm} {pre : Devm}
       · calc
           post.getStorVal e.currentTarget e.caller.toB256 =
               b₃.getStorVal e.currentTarget e.caller.toB256 :=
-            hpostStor _ _
+            hpostStor _ _ (h_protected.elim Or.inl (fun hp => Or.inr (Or.inr hp)))
           _ = b₂.getStorVal e.currentTarget e.caller.toB256 := by
             simpa only [Devm.getStorVal_setMach] using
               hstor₃ e.currentTarget e.caller.toB256
           _ = pre.getStorVal e.currentTarget e.caller.toB256 -
               Sevm.argWord e 1 := by
             simpa only [← Sevm.argWord_eq_dataWord] using hkey₂
-      · intro a k hne
+      · intro a k safe hne
         calc
-          post.getStorVal a k = b₃.getStorVal a k := hpostStor a k
+          post.getStorVal a k = b₃.getStorVal a k := hpostStor a k safe
           _ = b₂.getStorVal a k := by
             simpa only [Devm.getStorVal_setMach] using hstor₃ a k
           _ = b₁.getStorVal a k := by
             simpa only [Devm.getStorVal_setMach] using hoth₂ a k hne
           _ = pre.getStorVal a k := by
             simpa only [Devm.getStorVal_setMach] using hstor₁ a k
-      · exact ⟨b₃.state, debit, hbal, hcode, hsub,
-          htailState.trans hcallState⟩
+      · refine ⟨b₃.state, hbal, hcode, ?_⟩
+        have hs := hcallEffect.transfer
+        split_ifs at hs ⊢ with hz
+        · exact htailState.trans hs
+        · rcases hs with ⟨debit, hsub, hcallState⟩
+          exact ⟨debit, hsub, htailState.trans hcallState⟩
 
 set_option maxRecDepth 621 in
 /-- The direct-holder `withdraw` body, proved by walking that body itself.  Its
@@ -1438,6 +1505,8 @@ theorem withdraw_execSat {fs : List Func} {e : Sevm} {pre : Devm}
     (h_nonprecompile : e.benvStat.rules.isPrecomp e.caller = false)
     (h_code : (pre.getCode e.caller).size = 0)
     (h_sender : ¬ pre.getBal e.currentTarget < Sevm.argWord e 0)
+    (h_protected : Sevm.argWord e 0 = 0 ∨
+      State.Protected pre.state e.currentTarget)
     (h_original : getOrigStorVal e e.currentTarget e.caller.toB256 =
       pre.getStorVal e.currentTarget e.caller.toB256)
     (h_refund : pre.refundCounter = 0)
@@ -1453,14 +1522,14 @@ theorem withdraw_execSat {fs : List Func} {e : Sevm} {pre : Devm}
   · intro ex hex
     cases ex <;> simp only [Func.ExecWitness] at hex ⊢ <;>
       func_run (2) <;> exact hex
-  refine Func.execSat_sload_step h_fork rfl (by simp only [List.length_cons, List.length_nil,
+  refine Func.execSat_sload_step_with_nonce h_fork rfl (by simp only [List.length_cons, List.length_nil,
     zero_add, Nat.one_lt_ofNat])
     (v := pre.getStorVal e.currentTarget e.caller.toB256) rfl
     (M := Mem.empty) ?_ ?_ ?_
   · rfl
   · simp only [Devm.gasLeft_setMach, gasColdSload]
     omega
-  · intro b₁ c₁ G₁ hw₁ _hacc₁ hstor₁ hbal₁ hcode₁ hrc₁ hlog₁
+  · intro b₁ c₁ G₁ hw₁ _hacc₁ hstor₁ hbal₁ hcode₁ hnonce₁ hrc₁ hlog₁
       hout₁ herr₁ hdelete₁ hlo₁ hhi₁ hG₁
     simp only [Devm.gasLeft_setMach, gasWarmAccess, gasColdSload]
       at hG₁ hlo₁ hhi₁
@@ -1472,10 +1541,10 @@ theorem withdraw_execSat {fs : List Func} {e : Sevm} {pre : Devm}
         | show (if pre.getStorVal e.currentTarget e.caller.toB256 <
               Sevm.argWord e 0 then (1 : B256) else 0) = 0
           rw [if_neg (not_lt_of_ge h_amount)]
-    refine Func.execSat_sstore_warm_step h_fork rfl hw₁ h_static
+    refine Func.execSat_sstore_warm_step_with_nonce h_fork rfl hw₁ h_static
       (M := Mem.empty) rfl
       (by simp only [Devm.gasLeft_setMach, gasStorageSet]; omega) ?_
-    intro b₂ c₂ G₂ hkey₂ hoth₂ hbal₂ hcode₂ _hacc₂ hlog₂ hout₂
+    intro b₂ c₂ G₂ hkey₂ hoth₂ hbal₂ hcode₂ hnonce₂ _hacc₂ hlog₂ hout₂
       herr₂ hdelete₂ hrefund₂ hc₂ hG₂
     simp only [Devm.gasLeft_setMach, gasStorageSet] at hG₂ hc₂
     apply Func.execSat_segment
@@ -1484,7 +1553,7 @@ theorem withdraw_execSat {fs : List Func} {e : Sevm} {pre : Devm}
         func_run (11) [gMemory] <;> first
         | exact hex
         | exact Devm.extCost_empty_word
-    refine Func.execSat_log_step
+    refine Func.execSat_log_step_with_nonce
       (topics := [transferEvent, e.caller.toB256, 0])
       (s := [Sevm.argWord e 0, e.caller.toB256]) rfl rfl h_static
       (M := Mem.empty.write 0 (Sevm.argWord e 0).toBytes) rfl
@@ -1494,7 +1563,7 @@ theorem withdraw_execSat {fs : List Func} {e : Sevm} {pre : Devm}
     · exact Devm.extCost_add_of_size Mem.size_write_word (by decide)
     · exact Mem.read_write_word
     · exact Mem.read_snd_eq_self (by rw [Mem.size_write_word]; decide)
-    · intro b₃ G₃ hlogs₃ hstor₃ hbal₃ hcode₃ _hacc₃ hrefund₃
+    · intro b₃ G₃ hlogs₃ hstor₃ hbal₃ hcode₃ hnonce₃ _hacc₃ hrefund₃
         hout₃ herr₃ hdelete₃ hG₃
       simp only [Devm.gasLeft_setMach] at hG₃
       apply Func.execSat_segment
@@ -1521,23 +1590,50 @@ theorem withdraw_execSat {fs : List Func} {e : Sevm} {pre : Devm}
           (fs := fs) hstack hpostgas with
         ⟨post, htail, htailError, htailOutput, htailReturnData,
           htailLogs, htailRefund, htailDelete, htailState⟩
-      rcases hcallEffect.transfer with ⟨debit, hsub, hcallState⟩
-      have htransferFields :=
-        of_state_transfer_fields (callee := e.caller) hsub
+      have hnonce : ∀ a, b₃.state.getNonce a = pre.state.getNonce a :=
+        fun a => (hnonce₃ a).trans ((hnonce₂ a).trans (hnonce₁ a))
+      have hprotect : ∀ a, State.Protected pre.state a →
+          State.Protected b₃.state a := by
+        intro a hp
+        unfold State.Protected at hp ⊢
+        change b₃.state.getNonce a ≠ 0 ∨ (b₃.getCode a).size ≠ 0
+        rw [hnonce a, hcode a]
+        exact hp
       have hcallStor : ∀ a k,
+          (Sevm.argWord e 0 = 0 ∨
+            (a ≠ e.currentTarget ∧ a ≠ e.caller) ∨
+            State.Protected pre.state a) →
           callPost.getStorVal a k = b₃.getStorVal a k := by
-        intro a k
-        change (callPost.state.get a).stor.get k =
-          (b₃.state.get a).stor.get k
-        rw [hcallState]
-        rw [htransferFields.1 a]
+        intro a k safe
+        by_cases hz : Sevm.argWord e 0 = 0
+        · have hs := hcallEffect.transfer
+          rw [ite_eq_left hz] at hs
+          change (callPost.state.getStor a).get k = _
+          rw [hs]
+          rfl
+        · have hs := hcallEffect.transfer
+          rw [ite_eq_right hz] at hs
+          rcases hs with ⟨debit, hsub, hcallState⟩
+          change (callPost.state.get a).stor.get k = _
+          rw [hcallState]
+          rcases safe with zero | miss | hp
+          · exact False.elim (hz zero)
+          · rw [(State.of_subBal hsub).2]
+            unfold State.addBal
+            rw [State.setBal_get_ne miss.2.symm,
+              State.setBal_get_ne miss.1.symm]
+            rfl
+          · rw [(of_state_transfer_fields hsub).1 a (hprotect a hp)]
+            rfl
       have hpostStor : ∀ a k,
+          (Sevm.argWord e 0 = 0 ∨
+            (a ≠ e.currentTarget ∧ a ≠ e.caller) ∨
+            State.Protected pre.state a) →
           post.getStorVal a k = b₃.getStorVal a k := by
-        intro a k
-        change (post.state.get a).stor.get k =
-          (b₃.state.get a).stor.get k
+        intro a k safe
+        change (post.state.get a).stor.get k = _
         rw [htailState]
-        exact hcallStor a k
+        exact hcallStor a k safe
       apply Func.execSat_of_runCompiledTo
         (Func.RunCompiledTo.of_runCompiled htail)
       apply hP post
@@ -1579,8 +1675,11 @@ theorem withdraw_execSat {fs : List Func} {e : Sevm} {pre : Devm}
           exact hrc₁.trans h_refund
         have hb₂Refund : 0 ≤ b₂.refundCounter := by
           rw [hrefund₂, ← Sevm.argWord_eq_dataWord, hcurrent, hrc]
-          exact sstoreNewRefundCounter_nonnegative_of_original_eq_current
-            h_original
+          apply sstoreNewRefundCounter_ge_of_safe
+          unfold RefundSafe Devm.getOrigStorVal
+          split
+          · exact Or.inr (Or.inl rfl)
+          · exact Or.inl h_original
         calc
           0 ≤ b₂.refundCounter := hb₂Refund
           _ = b₃.refundCounter := hrefund₃.symm
@@ -1601,24 +1700,28 @@ theorem withdraw_execSat {fs : List Func} {e : Sevm} {pre : Devm}
       · calc
           post.getStorVal e.currentTarget e.caller.toB256 =
               b₃.getStorVal e.currentTarget e.caller.toB256 :=
-            hpostStor _ _
+            hpostStor _ _ (h_protected.elim Or.inl (fun hp => Or.inr (Or.inr hp)))
           _ = b₂.getStorVal e.currentTarget e.caller.toB256 := by
             simpa only [Devm.getStorVal_setMach] using
               hstor₃ e.currentTarget e.caller.toB256
           _ = pre.getStorVal e.currentTarget e.caller.toB256 -
               Sevm.argWord e 0 := by
             simpa only [← Sevm.argWord_eq_dataWord] using hkey₂
-      · intro a k hne
+      · intro a k safe hne
         calc
-          post.getStorVal a k = b₃.getStorVal a k := hpostStor a k
+          post.getStorVal a k = b₃.getStorVal a k := hpostStor a k safe
           _ = b₂.getStorVal a k := by
             simpa only [Devm.getStorVal_setMach] using hstor₃ a k
           _ = b₁.getStorVal a k := by
             simpa only [Devm.getStorVal_setMach] using hoth₂ a k hne
           _ = pre.getStorVal a k := by
             simpa only [Devm.getStorVal_setMach] using hstor₁ a k
-      · exact ⟨b₃.state, debit, hbal, hcode, hsub,
-          htailState.trans hcallState⟩
+      · refine ⟨b₃.state, hbal, hcode, ?_⟩
+        have hs := hcallEffect.transfer
+        split_ifs at hs ⊢ with hz
+        · exact htailState.trans hs
+        · rcases hs with ⟨debit, hsub, hcallState⟩
+          exact ⟨debit, hsub, htailState.trans hcallState⟩
 
 /-! ## Selector paths through the real balanced dispatcher -/
 
@@ -1753,6 +1856,8 @@ theorem withdrawTo_progExecSat (dp : DeployParams)
     (h_nonprecompile : e.benvStat.rules.isPrecomp recipient = false)
     (h_code : (pre.getCode recipient).size = 0)
     (h_sender : ¬ pre.getBal e.currentTarget < Sevm.argWord e 1)
+    (h_protected : Sevm.argWord e 1 = 0 ∨
+      State.Protected pre.state e.currentTarget)
     (h_original : getOrigStorVal e e.currentTarget e.caller.toB256 =
       pre.getStorVal e.currentTarget e.caller.toB256)
     (h_refund : pre.refundCounter = 0)
@@ -1802,6 +1907,7 @@ theorem withdrawTo_progExecSat (dp : DeployParams)
     h_static h_depth h_nonprecompile
     (by simpa only [Devm.getCode_setMach] using h_code)
     (by exact h_sender)
+    h_protected
     (by simpa only [Devm.getStorVal_setMach] using h_original)
     (by exact h_refund)
     (by
@@ -1826,6 +1932,8 @@ theorem withdraw_progExecSat (dp : DeployParams)
     (h_nonprecompile : e.benvStat.rules.isPrecomp e.caller = false)
     (h_code : (pre.getCode e.caller).size = 0)
     (h_sender : ¬ pre.getBal e.currentTarget < Sevm.argWord e 0)
+    (h_protected : Sevm.argWord e 0 = 0 ∨
+      State.Protected pre.state e.currentTarget)
     (h_original : getOrigStorVal e e.currentTarget e.caller.toB256 =
       pre.getStorVal e.currentTarget e.caller.toB256)
     (h_refund : pre.refundCounter = 0)
@@ -1874,6 +1982,7 @@ theorem withdraw_progExecSat (dp : DeployParams)
     h_static h_depth h_nonprecompile
     (by simpa only [Devm.getCode_setMach] using h_code)
     (by exact h_sender)
+    h_protected
     (by simpa only [Devm.getStorVal_setMach] using h_original)
     (by exact h_refund)
     (by
@@ -1898,6 +2007,8 @@ theorem withdrawTo_exec (dp : DeployParams)
     (h_nonprecompile : e.benvStat.rules.isPrecomp recipient = false)
     (h_code : (pre.getCode recipient).size = 0)
     (h_sender : ¬ pre.getBal e.currentTarget < Sevm.argWord e 1)
+    (h_protected : Sevm.argWord e 1 = 0 ∨
+      State.Protected pre.state e.currentTarget)
     (h_original : getOrigStorVal e e.currentTarget e.caller.toB256 =
       pre.getStorVal e.currentTarget e.caller.toB256)
     (h_refund : pre.refundCounter = 0)
@@ -1913,7 +2024,7 @@ theorem withdrawTo_exec (dp : DeployParams)
   have hsat := withdrawTo_progExecSat dp (P := fun ex => ∃ post,
     ex = .ok post ∧ RedemptionCodeOutcome e pre post e.caller recipient
       (Sevm.argWord e 1)) h_data h_value h_sel h_recipient h_amount
-    h_static h_depth h_nonprecompile h_code h_sender h_original h_refund
+    h_static h_depth h_nonprecompile h_code h_sender h_protected h_original h_refund
     h_stack h_mem h_gas (fun post hpost => ⟨post, rfl, hpost⟩) h_fork
   rcases hsat with ⟨ex, hw, post, hex, hpost⟩
   subst ex
@@ -1931,6 +2042,8 @@ theorem withdraw_exec (dp : DeployParams)
     (h_nonprecompile : e.benvStat.rules.isPrecomp e.caller = false)
     (h_code : (pre.getCode e.caller).size = 0)
     (h_sender : ¬ pre.getBal e.currentTarget < Sevm.argWord e 0)
+    (h_protected : Sevm.argWord e 0 = 0 ∨
+      State.Protected pre.state e.currentTarget)
     (h_original : getOrigStorVal e e.currentTarget e.caller.toB256 =
       pre.getStorVal e.currentTarget e.caller.toB256)
     (h_refund : pre.refundCounter = 0)
@@ -1946,7 +2059,7 @@ theorem withdraw_exec (dp : DeployParams)
   have hsat := withdraw_progExecSat dp (P := fun ex => ∃ post,
     ex = .ok post ∧ RedemptionCodeOutcome e pre post e.caller e.caller
       (Sevm.argWord e 0)) h_data h_value h_sel h_amount h_static h_depth
-    h_nonprecompile h_code h_sender h_original h_refund h_stack h_mem h_gas
+    h_nonprecompile h_code h_sender h_protected h_original h_refund h_stack h_mem h_gas
     (fun post hpost => ⟨post, rfl, hpost⟩) h_fork
   rcases hsat with ⟨ex, hw, post, hex, hpost⟩
   subst ex
@@ -2002,34 +2115,24 @@ lemma zero_transfer_bal {st mid : State} {caller target : Adr}
   rcases State.of_subBal hsub with ⟨_, rfl⟩
   intro a
   unfold State.addBal
+  rw [B256.sub_zero, B256.add_zero]
+  have hcredit :
+      ((st.setBal caller (st.bal caller)).setBal target
+        ((st.setBal caller (st.bal caller)).bal target)).bal a =
+      (st.setBal caller (st.bal caller)).bal a := by
+    by_cases ht : target = a
+    · subst a
+      change (((st.setBal caller (st.bal caller)).setBal target _).get target).bal = _
+      rw [State.setBal_get_self, Acct.clearIfEmpty_bal]
+      rfl
+    · exact congrArg Acct.bal (State.setBal_get_ne ht)
+  rw [hcredit]
   by_cases hc : caller = a
   · subst a
-    by_cases ht : target = caller
-    · subst target
-      show (((st.setBal caller _).setBal caller _).get caller).bal = _
-      rw [State.setBal_get_self]
-      show ((st.setBal caller _).get caller).bal + 0 = _
-      rw [State.setBal_get_self]
-      exact B256.sub_add_cancel
-    · show (((st.setBal caller _).setBal target _).get caller).bal = _
-      rw [State.setBal_get_ne ht]
-      show ((st.setBal caller _).get caller).bal = _
-      rw [State.setBal_get_self]
-      change st.bal caller - 0 = st.bal caller
-      exact B256.sub_zero _
-  · by_cases ht : target = a
-    · subst a
-      show (((st.setBal caller _).setBal target _).get target).bal = _
-      rw [State.setBal_get_self]
-      show ((st.setBal caller _).get target).bal + 0 = _
-      rw [State.setBal_get_ne hc]
-      change st.bal target + 0 = st.bal target
-      exact B256.add_zero _
-    · show (((st.setBal caller _).setBal target _).get a).bal = _
-      rw [State.setBal_get_ne ht]
-      show ((st.setBal caller _).get a).bal = _
-      rw [State.setBal_get_ne hc]
-      rfl
+    change ((st.setBal caller (st.bal caller)).get caller).bal = _
+    rw [State.setBal_get_self, Acct.clearIfEmpty_bal]
+    rfl
+  · exact congrArg Acct.bal (State.setBal_get_ne hc)
 
 structure MessageFrameRedemptionOutcome
     (dp : DeployParams) (ca owner recipient : Adr) (q : Nat)
@@ -2065,13 +2168,9 @@ theorem Stable.withdrawTo_messageFrame_of_le
     B256.toNat_toB256_of_lt hq_lt
   have hcurrent : (initSevm msg).currentTarget = ca :=
     henv.currentTarget_eq
-  have haffordable : ¬ msg.benv.state.bal msg.caller < msg.value := by
-    rw [henv.value_eq]
-    exact not_lt_of_ge (B256.zero_le _)
-  rcases Msg.benvAfterTransfer_of_affordable msg
-      henv.shouldTransferValue_eq haffordable with ⟨stmid, hsub, hbt⟩
-  let benv' :=
-    (msg.benv.withState stmid).addBal msg.currentTarget msg.value
+  let benv' := msg.benv
+  have hbt : msg.benvAfterTransfer = .ok benv' :=
+    Msg.benvAfterTransfer_of_value_zero henv.value_eq
   let child := initEvm (msg.withBenv benv')
   have henter : (Frame.ofCall msg).enter = .run child := by
     apply Frame.enter_run_of_nonprecompile (benv := benv') hbt
@@ -2080,28 +2179,20 @@ theorem Stable.withdrawTo_messageFrame_of_le
     · change msg.benv.stat.rules.isPrecomp ca = false
       rw [henv.rules_eq]
       exact henv.target_not_precompile
-  rcases of_state_transfer_fields
-      (callee := msg.currentTarget) hsub with
-    ⟨htopStor, htopCode, _, _, _⟩
   have hentryStor : ∀ a k,
       child.dyna.getStorVal a k = (w.getStor a).get k := by
     intro a k
-    change ((stmid.addBal msg.currentTarget msg.value).get a).stor.get k =
-      (w.get a).stor.get k
-    rw [htopStor a, henv.state_eq]
+    change (msg.benv.state.getStor a).get k = _
+    rw [henv.state_eq]
   have hentryCode : ∀ a,
       child.dyna.getCode a = w.getCode a := by
     intro a
-    change ((stmid.addBal msg.currentTarget msg.value).get a).code =
-      (w.get a).code
-    rw [htopCode a, henv.state_eq]
-  have hsub0 : msg.benv.state.subBal msg.caller 0 = some stmid := by
-    simpa only [henv.value_eq] using hsub
+    change msg.benv.state.getCode a = _
+    rw [henv.state_eq]
   have hentryBal : ∀ a, child.dyna.getBal a = w.bal a := by
     intro a
-    change (stmid.addBal msg.currentTarget msg.value).bal a = w.bal a
-    rw [henv.value_eq]
-    exact (zero_transfer_bal hsub0 a).trans (by rw [henv.state_eq])
+    change msg.benv.state.bal a = _
+    rw [henv.state_eq]
   have hsta : child.sta = initSevm msg := by
     rfl
   have hdata : (initSevm msg).data = withdrawToCalldata recipient q := by
@@ -2155,6 +2246,11 @@ theorem Stable.withdrawTo_messageFrame_of_le
           Sevm.argWord (initSevm msg) 1
         rw [henv.currentTarget_eq, hargs.2]
         exact hsender)
+      (Or.inr (by
+        apply State.Protected.of_image (sem := (weth10 dp).codeSem)
+        change some (child.dyna.getCode msg.currentTarget).toList = _
+        rw [henv.currentTarget_eq, hentryCode]
+        exact hstable.code))
       (by simpa only [initSevm, henv.currentTarget_eq,
           henv.caller_eq] using horiginal)
       (by rfl) (by rfl) (by rfl)
@@ -2221,13 +2317,9 @@ theorem Stable.withdraw_messageFrame_of_le
     B256.toNat_toB256_of_lt hq_lt
   have hcurrent : (initSevm msg).currentTarget = ca :=
     henv.currentTarget_eq
-  have haffordable : ¬ msg.benv.state.bal msg.caller < msg.value := by
-    rw [henv.value_eq]
-    exact not_lt_of_ge (B256.zero_le _)
-  rcases Msg.benvAfterTransfer_of_affordable msg
-      henv.shouldTransferValue_eq haffordable with ⟨stmid, hsub, hbt⟩
-  let benv' :=
-    (msg.benv.withState stmid).addBal msg.currentTarget msg.value
+  let benv' := msg.benv
+  have hbt : msg.benvAfterTransfer = .ok benv' :=
+    Msg.benvAfterTransfer_of_value_zero henv.value_eq
   let child := initEvm (msg.withBenv benv')
   have henter : (Frame.ofCall msg).enter = .run child := by
     apply Frame.enter_run_of_nonprecompile (benv := benv') hbt
@@ -2236,28 +2328,20 @@ theorem Stable.withdraw_messageFrame_of_le
     · change msg.benv.stat.rules.isPrecomp ca = false
       rw [henv.rules_eq]
       exact henv.target_not_precompile
-  rcases of_state_transfer_fields
-      (callee := msg.currentTarget) hsub with
-    ⟨htopStor, htopCode, _, _, _⟩
   have hentryStor : ∀ a k,
       child.dyna.getStorVal a k = (w.getStor a).get k := by
     intro a k
-    change ((stmid.addBal msg.currentTarget msg.value).get a).stor.get k =
-      (w.get a).stor.get k
-    rw [htopStor a, henv.state_eq]
+    change (msg.benv.state.getStor a).get k = _
+    rw [henv.state_eq]
   have hentryCode : ∀ a,
       child.dyna.getCode a = w.getCode a := by
     intro a
-    change ((stmid.addBal msg.currentTarget msg.value).get a).code =
-      (w.get a).code
-    rw [htopCode a, henv.state_eq]
-  have hsub0 : msg.benv.state.subBal msg.caller 0 = some stmid := by
-    simpa only [henv.value_eq] using hsub
+    change msg.benv.state.getCode a = _
+    rw [henv.state_eq]
   have hentryBal : ∀ a, child.dyna.getBal a = w.bal a := by
     intro a
-    change (stmid.addBal msg.currentTarget msg.value).bal a = w.bal a
-    rw [henv.value_eq]
-    exact (zero_transfer_bal hsub0 a).trans (by rw [henv.state_eq])
+    change msg.benv.state.bal a = _
+    rw [henv.state_eq]
   have hsta : child.sta = initSevm msg := by
     rfl
   have hdata : (initSevm msg).data = withdrawCalldata q := by
@@ -2309,6 +2393,11 @@ theorem Stable.withdraw_messageFrame_of_le
           Sevm.argWord (initSevm msg) 0
         rw [henv.currentTarget_eq, harg]
         exact hsender)
+      (Or.inr (by
+        apply State.Protected.of_image (sem := (weth10 dp).codeSem)
+        change some (child.dyna.getCode msg.currentTarget).toList = _
+        rw [henv.currentTarget_eq, hentryCode]
+        exact hstable.code))
       (by simpa only [initSevm, henv.currentTarget_eq,
           henv.caller_eq] using horiginal)
       (by rfl) (by rfl) (by rfl)
@@ -2384,37 +2473,55 @@ theorem Stable.messageRedemption_enabled_of_frame
     exact Prog.compile_ne_nil
       (henv.code_eq.symm.trans (congrArg some hempty))
   rcases hframe.codeOutcome.transfer with
-    ⟨callState, debit, hcallBal, hcallCode, hsub, hpostState⟩
-  rw [hcurrent] at hsub
+    ⟨callState, hcallBal, hcallCode, htransfer⟩
   have hcallNof : sum callState.bal < 2 ^ 256 := by
     rw [funext hcallBal, funext hframe.entryBal]
     exact hstable.sumNof
-  rcases of_state_transfer_fields (callee := recipient) hsub with
-    ⟨htransferStor, htransferCode, hleEth, _, hcontract⟩
-  have hpostCode : ∀ a, post.state.getCode a = w.getCode a := by
-    intro a
-    rw [hpostState]
-    change ((debit.addBal recipient q.toB256).get a).code = _
-    rw [htransferCode a]
-    change callState.getCode a = w.getCode a
-    rw [hcallCode a, hframe.entryCode a]
-  have hpostContract : post.state.bal ca = w.bal ca - q.toB256 := by
-    rw [hpostState, hcontract hrecipient_ne, hcallBal ca,
-      hframe.entryBal ca]
-  have hpostRecipient :
-      (post.state.bal recipient).toNat =
-        (w.bal recipient).toNat + q := by
-    rw [hpostState]
-    have hcredit := of_transfer_bal_target hsub
-      hrecipient_ne.symm hcallNof
-    rw [hcallBal recipient, hframe.entryBal recipient, hq_toNat] at hcredit
-    exact hcredit
-  have hpostOther : ∀ a, a ≠ ca → a ≠ recipient →
-      post.state.bal a = w.bal a := by
-    intro a hca hrecipient
-    rw [hpostState]
-    exact (of_transfer_bal_other hsub hca.symm hrecipient.symm).trans
-      ((hcallBal a).trans (hframe.entryBal a))
+  have hobservations :
+      (∀ a, post.state.getCode a = w.getCode a) ∧
+      post.state.bal ca = w.bal ca - q.toB256 ∧
+      (post.state.bal recipient).toNat = (w.bal recipient).toNat + q ∧
+      (∀ a, a ≠ ca → a ≠ recipient → post.state.bal a = w.bal a) ∧
+      sum post.state.bal = sum w.bal := by
+    by_cases hz : q.toB256 = 0
+    · rw [ite_eq_left hz] at htransfer
+      have hqzero : q = 0 := by
+        rw [← hq_toNat, hz]
+        rfl
+      rw [htransfer]
+      refine ⟨?_, ?_, ?_, ?_, ?_⟩
+      · intro a
+        rw [hcallCode a, hframe.entryCode a]
+      · rw [hz, B256.sub_zero, hcallBal ca, hframe.entryBal ca]
+      · rw [hqzero, Nat.add_zero, hcallBal recipient,
+          hframe.entryBal recipient]
+      · intro a _ _
+        exact (hcallBal a).trans (hframe.entryBal a)
+      · rw [funext hcallBal, funext hframe.entryBal]
+    · rw [ite_eq_right hz] at htransfer
+      rcases htransfer with ⟨debit, hsub, hpostState⟩
+      rw [hcurrent] at hsub
+      rcases of_state_transfer_fields (callee := recipient) hsub with
+        ⟨_, htransferCode, _, _, hcontract⟩
+      rw [hpostState]
+      refine ⟨?_, ?_, ?_, ?_, ?_⟩
+      · intro a
+        change ((debit.addBal recipient q.toB256).get a).code = _
+        rw [htransferCode a]
+        change callState.getCode a = _
+        rw [hcallCode a, hframe.entryCode a]
+      · rw [hcontract hrecipient_ne, hcallBal ca, hframe.entryBal ca]
+      · have hcredit := of_transfer_bal_target hsub
+          hrecipient_ne.symm hcallNof
+        rw [hcallBal recipient, hframe.entryBal recipient, hq_toNat] at hcredit
+        exact hcredit
+      · intro a hca hrecipient
+        exact (of_transfer_bal_other hsub hca.symm hrecipient.symm).trans
+          ((hcallBal a).trans (hframe.entryBal a))
+      · rw [of_state_transfer_sum hsub hcallNof,
+          funext hcallBal, funext hframe.entryBal]
+  rcases hobservations with
+    ⟨hpostCode, hpostContract, hpostRecipient, hpostOther, hpostSumEq⟩
   have hwordLeBooked : q.toB256 ≤ (w.getStor ca).get owner.toB256 := by
     rw [B256.le_iff_toNat_le_toNat, hq_toNat]
     exact hq
@@ -2423,7 +2530,12 @@ theorem Stable.messageRedemption_enabled_of_frame
     exact hq.trans hstable.bookedBalanceNat_le_contractEth
   have hstorageDebit := hframe.codeOutcome.storageDebit
   rw [hcurrent] at hstorageDebit
-  have hstorageOther := hframe.codeOutcome.storageOther
+  have hpEntry : State.Protected entry.state ca :=
+    State.Protected.of_image (sem := (weth10 dp).codeSem)
+      ((congrArg (fun code => some code.toList) (hframe.entryCode ca)).trans
+        hstable.code)
+  have hstorageOther := fun k => hframe.codeOutcome.storageOther ca k
+    (Or.inr (Or.inr hpEntry))
   rw [hcurrent] at hstorageOther
   have hdecrease : Decrease owner q.toB256
       (Stor.rest (w.getStor ca)) (Stor.rest (post.state.getStor ca)) := by
@@ -2444,7 +2556,7 @@ theorem Stable.messageRedemption_enabled_of_frame
         apply hne
         exact (Adr.toB256_inj (x := a) (y := owner)
           (congrArg Prod.snd hp)).symm
-      exact (hstorageOther ca a.toB256 hnePair).trans
+      exact (hstorageOther a.toB256 hnePair).trans
         (hframe.entryStor ca a.toB256)
   have hflashKey : flashMintedSlot ≠ owner.toB256 := by
     intro h
@@ -2454,15 +2566,15 @@ theorem Stable.messageRedemption_enabled_of_frame
     calc
       (post.state.getStor ca).get flashMintedSlot =
           entry.getStorVal ca flashMintedSlot :=
-        hstorageOther ca flashMintedSlot (by
+        hstorageOther flashMintedSlot (by
           intro hp
           exact hflashKey (congrArg Prod.snd hp))
       _ = (w.getStor ca).get flashMintedSlot :=
         hframe.entryStor ca flashMintedSlot
       _ = 0 := hstable.flashZero
   have hpostSum : sum post.state.bal < 2 ^ 256 := by
-    rw [hpostState, of_state_transfer_sum hsub hcallNof]
-    exact hcallNof
+    rw [hpostSumEq]
+    exact hstable.sumNof
   have hpostBacked :
       Stor.Weth10Inv (post.state.getStor ca) 0 (post.state.bal ca) := by
     have hi := Stor.Weth10Inv.withdraw hstable.backed hdecrease
@@ -2498,7 +2610,7 @@ theorem Stable.messageRedemption_enabled_of_frame
       ((w.getStor ca).get a.toB256).toNat
     change (post.getStorVal ca a.toB256).toNat =
       ((w.getStor ca).get a.toB256).toNat
-    rw [hstorageOther ca a.toB256 (by
+    rw [hstorageOther a.toB256 (by
       intro hp
       apply hne
       exact Adr.toB256_inj (x := a) (y := owner)
@@ -2508,8 +2620,7 @@ theorem Stable.messageRedemption_enabled_of_frame
     rw [hq_toNat]
     exact Nat.sub_add_cancel hqEthNat
   · exact hpostRecipient
-  · rw [hpostState, of_state_transfer_sum hsub hcallNof]
-    rw [funext hcallBal, funext hframe.entryBal]
+  · exact hpostSumEq
   · rw [hframe.outLogs, hframe.codeOutcome.logs]
     rw [hframe.entryLogs]
     change [ordinaryTransferLog (initSevm msg) owner.toB256 0 q.toB256] =
@@ -3046,7 +3157,7 @@ lemma addBal_toNat_eq_add_if
   by_cases h : a = target
   · subst a
     change (((w.setBal target _).get target).bal).toNat = _
-    rw [State.setBal_get_self]
+    rw [State.setBal_get_self, Acct.clearIfEmpty_bal]
     change (w.bal target + value).toNat = _
     have hnof : B256.Nof (w.bal target) value := by
       unfold B256.Nof
@@ -3139,15 +3250,6 @@ theorem Stable.transactionRedemption_enabled_of_le
       henv.recipient_code_free
     exact Prog.compile_ne_nil
       (henv.target_code.symm.trans (congrArg some hempty))
-  have hpostStor : ∀ a, post.getStor a = messagePost.state.getStor a := by
-    intro a
-    dsimp only [post, redemptionFinalState]
-    unfold State.addBal
-    change
-      ((((messagePost.state.setBal owner _).setBal
-        benv.stat.coinbase _).get a).stor) = _
-    rw [State.setBal_get_stor, State.setBal_get_stor]
-    rfl
   have hpostCode : ∀ a, post.getCode a = messagePost.state.getCode a := by
     intro a
     dsimp only [post, redemptionFinalState]
@@ -3160,6 +3262,15 @@ theorem Stable.transactionRedemption_enabled_of_le
   have hpostStable : Stable dp ca post :=
     processTransaction_preserves_stable dp ca benv bout bout' tx index post
       hrun hstable.sumNof henv.target_not_created hstable henv.fork_covered
+  have hp : State.Protected messagePost.state ca :=
+    State.Protected.of_image (sem := (weth10 dp).codeSem)
+      ((congrArg (fun code => some code.toList) (hpostCode ca)).symm.trans
+        hpostStable.code)
+  have hpostStor : post.getStor ca = messagePost.state.getStor ca := by
+    dsimp only [post, redemptionFinalState]
+    unfold State.addBal State.getStor
+    rw [State.setBal_get_stor_of_protected (hp.setBal owner _),
+      State.setBal_get_stor_of_protected hp]
   let effective := redemptionEffectiveGasPrice benv tx
   let refundAmount := (tx.gas - usedGas) * effective
   let tipAmount := usedGas * (effective - benv.stat.baseFeePerGas)
@@ -3326,7 +3437,7 @@ theorem Stable.transactionRedemption_enabled_of_le
       bookedBalanceNat post ca owner + q =
           bookedBalanceNat messagePost.state ca owner + q := by
         unfold bookedBalanceNat
-        rw [hpostStor ca]
+        rw [hpostStor]
       _ = bookedBalanceNat debit ca owner := heffect.ownerDebit
       _ = bookedBalanceNat benv.state ca owner := by
         unfold bookedBalanceNat
@@ -3336,7 +3447,7 @@ theorem Stable.transactionRedemption_enabled_of_le
       bookedBalanceNat post ca a =
           bookedBalanceNat messagePost.state ca a := by
         unfold bookedBalanceNat
-        rw [hpostStor ca]
+        rw [hpostStor]
       _ = bookedBalanceNat debit ca a :=
         heffect.otherBookedUnchanged a hne
       _ = bookedBalanceNat benv.state ca a := by
@@ -3344,7 +3455,7 @@ theorem Stable.transactionRedemption_enabled_of_le
         rw [hdebit.storagePreserved ca]
   · intro a
     rw [hpostCode a, heffect.codePreserved a, hdebit.codePreserved a]
-  · rw [hpostStor ca]
+  · rw [hpostStor]
     exact heffect.flashZero
 
 theorem Stable.selfTransactionRedemption_enabled_of_le
@@ -3378,15 +3489,6 @@ theorem Stable.selfTransactionRedemption_enabled_of_le
       henv.owner_code_free
     exact Prog.compile_ne_nil
       (henv.target_code.symm.trans (congrArg some hempty))
-  have hpostStor : ∀ a, post.getStor a = messagePost.state.getStor a := by
-    intro a
-    dsimp only [post, redemptionFinalState]
-    unfold State.addBal
-    change
-      ((((messagePost.state.setBal owner _).setBal
-        benv.stat.coinbase _).get a).stor) = _
-    rw [State.setBal_get_stor, State.setBal_get_stor]
-    rfl
   have hpostCode : ∀ a, post.getCode a = messagePost.state.getCode a := by
     intro a
     dsimp only [post, redemptionFinalState]
@@ -3399,6 +3501,15 @@ theorem Stable.selfTransactionRedemption_enabled_of_le
   have hpostStable : Stable dp ca post :=
     processTransaction_preserves_stable dp ca benv bout bout' tx index post
       hrun hstable.sumNof henv.target_not_created hstable henv.fork_covered
+  have hp : State.Protected messagePost.state ca :=
+    State.Protected.of_image (sem := (weth10 dp).codeSem)
+      ((congrArg (fun code => some code.toList) (hpostCode ca)).symm.trans
+        hpostStable.code)
+  have hpostStor : post.getStor ca = messagePost.state.getStor ca := by
+    dsimp only [post, redemptionFinalState]
+    unfold State.addBal State.getStor
+    rw [State.setBal_get_stor_of_protected (hp.setBal owner _),
+      State.setBal_get_stor_of_protected hp]
   let effective := redemptionEffectiveGasPrice benv tx
   let refundAmount := (tx.gas - usedGas) * effective
   let tipAmount := usedGas * (effective - benv.stat.baseFeePerGas)
@@ -3565,7 +3676,7 @@ theorem Stable.selfTransactionRedemption_enabled_of_le
       bookedBalanceNat post ca owner + q =
           bookedBalanceNat messagePost.state ca owner + q := by
         unfold bookedBalanceNat
-        rw [hpostStor ca]
+        rw [hpostStor]
       _ = bookedBalanceNat debit ca owner := heffect.ownerDebit
       _ = bookedBalanceNat benv.state ca owner := by
         unfold bookedBalanceNat
@@ -3575,7 +3686,7 @@ theorem Stable.selfTransactionRedemption_enabled_of_le
       bookedBalanceNat post ca a =
           bookedBalanceNat messagePost.state ca a := by
         unfold bookedBalanceNat
-        rw [hpostStor ca]
+        rw [hpostStor]
       _ = bookedBalanceNat debit ca a :=
         heffect.otherBookedUnchanged a hne
       _ = bookedBalanceNat benv.state ca a := by
@@ -3583,7 +3694,7 @@ theorem Stable.selfTransactionRedemption_enabled_of_le
         rw [hdebit.storagePreserved ca]
   · intro a
     rw [hpostCode a, heffect.codePreserved a, hdebit.codePreserved a]
-  · rw [hpostStor ca]
+  · rw [hpostStor]
     exact heffect.flashZero
 
 
