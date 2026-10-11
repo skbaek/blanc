@@ -382,59 +382,23 @@ private theorem Msg.benvAfterTransfer_bal_eq_zero_permit
     (hzero : msg.value = 0)
     (hrun : msg.benvAfterTransfer = .ok post) :
     post.state.bal = msg.benv.state.bal := by
-  cases htransfer : msg.shouldTransferValue with
-  | false =>
-      have hnot : ¬ msg.shouldTransferValue = true := by
-        simp only [htransfer, Bool.false_eq_true, not_false_eq_true]
-      have h := of_benvAfterTransfer_no hnot hrun
-      subst post
-      rfl
-  | true =>
-      rcases of_benvAfterTransfer htransfer hrun with
-        ⟨debit, hsub, rfl⟩
-      rw [hzero] at hsub ⊢
-      change (debit.addBal msg.currentTarget 0).bal =
-        msg.benv.state.bal
-      have hdebit : debit.bal = msg.benv.state.bal := by
-        rcases State.of_subBal hsub with ⟨_, rfl⟩
-        funext address
-        unfold State.bal
-        by_cases hcaller : msg.caller = address
-        · subst address
-          rw [State.setBal_get_self]
-          exact B256.sub_zero _
-        · rw [State.setBal_get_ne hcaller]
-      have hadd :
-          (debit.addBal msg.currentTarget 0).bal = debit.bal := by
-        funext address
-        unfold State.addBal State.bal
-        by_cases htarget : msg.currentTarget = address
-        · subst address
-          rw [State.setBal_get_self]
-          exact B256.add_zero _
-        · rw [State.setBal_get_ne htarget]
-      exact hadd.trans hdebit
+  have hpost := benvAfterTransfer_eq_of_not_transfer
+    (by intro h; exact h.2 hzero) hrun
+  subst post
+  rfl
 
 private theorem Msg.benvAfterTransfer_stor_code_permit
     {msg : Msg} {post : Benv}
+    (hzero : msg.value = 0)
     (hrun : msg.benvAfterTransfer = .ok post) :
     (∀ address, post.state.getStor address =
         msg.benv.state.getStor address) ∧
       (∀ address, post.state.getCode address =
         msg.benv.state.getCode address) := by
-  cases htransfer : msg.shouldTransferValue with
-  | false =>
-      have hnot : ¬ msg.shouldTransferValue = true := by
-        simp only [htransfer, Bool.false_eq_true, not_false_eq_true]
-      have h := of_benvAfterTransfer_no hnot hrun
-      subst post
-      exact ⟨fun _ => rfl, fun _ => rfl⟩
-  | true =>
-      rcases of_benvAfterTransfer htransfer hrun with
-        ⟨debit, hsub, rfl⟩
-      have fields := of_state_transfer_fields
-        (callee := msg.currentTarget) hsub
-      exact ⟨fields.1, fields.2.1⟩
+  have hpost := benvAfterTransfer_eq_of_not_transfer
+    (by intro h; exact h.2 hzero) hrun
+  subst post
+  exact ⟨fun _ => rfl, fun _ => rfl⟩
 
 private theorem PermitOwnObservations.of_staticcall_none
     {sevm : Sevm} {callPre callPost parent childPost : Devm}
@@ -457,7 +421,7 @@ private theorem PermitOwnObservations.of_staticcall_none
       _ = callPost.state := hpost.symm
   · have hbal :=
       Msg.benvAfterTransfer_bal_eq_zero_permit hzero htransfer
-    have hfields := Msg.benvAfterTransfer_stor_code_permit htransfer
+    have hfields := Msg.benvAfterTransfer_stor_code_permit hzero htransfer
     refine ⟨Stor.Weth10Silent.of_eq ?_, ?_, ?_⟩
     · change callPre.state.getStor sevm.currentTarget =
         callPost.state.getStor sevm.currentTarget
