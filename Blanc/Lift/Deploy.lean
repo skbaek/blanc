@@ -18,7 +18,7 @@ runs, `RETURN` with its halting state named over a variable state, `returnPost`)
 
 `liftCreate_ok` is contract-neutral: a contract supplies its checked creation certificate and a
 run from the creation frame's start state, and receives the settled post-state with the
-constructor's output installed as the new account's code and the constructor's storage kept.
+constructor's output installed as the new account's code and the exact normalized account storage.
 -/
 
 namespace Blanc.Lift
@@ -151,26 +151,26 @@ theorem liftCreate_post {code : ByteArray} {c : Cert}
   exact processCreateMessage_ok_of_processMessage_and_charge msg hprocess herror hcharge
 
 /-- The settled world's projections: error, remaining gas, code and storage at the new
-address, and every other account unchanged from the constructor's final state. -/
+address after account normalization, and every other account unchanged from the constructor's final state. -/
 theorem liftCreatePost_facts (target : Adr) (raw : Devm) :
     (liftCreatePost target raw).error = raw.error ∧
     (liftCreatePost target raw).gasLeft = raw.gasLeft - raw.output.length * gasCodeDeposit ∧
     (liftCreatePost target raw).state.get target =
-      { raw.state.get target with code := ⟨⟨raw.output⟩⟩ } ∧
+      ({ raw.state.get target with code := ⟨⟨raw.output⟩⟩ } : Acct).clearIfEmpty ∧
     (∀ a, a ≠ target → (liftCreatePost target raw).state.get a = raw.state.get a) := by
   refine ⟨Devm.setCode_error _ _ _, rfl, ?_, fun a ha => ?_⟩
   · show (raw.state.setCode target _).get target = _
     unfold State.setCode
-    rw [State.get_set_self]
+    rw [State.setAccount_get_self]
   · show (raw.state.setCode target _).get a = _
     unfold State.setCode
-    rw [State.get_set_ne _ (Ne.symm ha)]
+    rw [State.setAccount_get_ne _ (Ne.symm ha)]
 
 /-- **Deploying lifted creation code.**  If the checked creation certificate's constructor
 runs, gas-exactly, from the creation frame's start state to `raw` without error, and `raw`'s
 output is admissible code (no `0xEF` prefix, affordable, within the size limit), then
 `processCreateMessage msg` succeeds, installs `raw.output` at `msg.currentTarget`, and keeps
-`raw`'s storage there. -/
+the exact normalized storage there. -/
 theorem liftCreate_ok {code : ByteArray} {c : Cert}
     (hc : Cert.check code c = true) (hj : Cert.jumpsOk code c = true)
     (msg : Msg) (hcodeAddress : msg.codeAddress = .none) (hcode : msg.code = code)
@@ -183,13 +183,14 @@ theorem liftCreate_ok {code : ByteArray} {c : Cert}
     (hmax : raw.output.length ≤ msg.benv.stat.rules.code.maxCodeSize) :
     ∃ post, processCreateMessage msg = .ok post ∧
       (post.getCode msg.currentTarget).toList = raw.output ∧
-      Devm.getStor post msg.currentTarget = Devm.getStor raw msg.currentTarget ∧
+      Devm.getStor post msg.currentTarget =
+        ({ raw.state.get msg.currentTarget with code := ⟨⟨raw.output⟩⟩ } : Acct).clearIfEmpty.stor ∧
       post.error = .none := by
   refine ⟨_, liftCreate_post hc hj msg hcodeAddress hcode hfork htransfer hrun herror hprefix
     hgas hmax, ?_, ?_, ?_⟩
   · unfold Devm.getCode Devm.getAcct
     rw [(liftCreatePost_facts _ raw).2.2.1]
-    simp only [ByteArray.toList_eq_toList_data]
+    simp only [Acct.clearIfEmpty_code, ByteArray.toList_eq_toList_data]
   · unfold Devm.getStor Devm.getAcct
     rw [(liftCreatePost_facts _ raw).2.2.1]
   · rw [(liftCreatePost_facts _ raw).1]

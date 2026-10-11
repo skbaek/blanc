@@ -4530,10 +4530,15 @@ contract-neutral.
   [`Blanc/Lift/PackedShaSize.lean`](../Blanc/Lift/PackedShaSize.lean).
 - Deploying lifted creation code: a gas-exact run of a checked creation certificate's
   constructor from the creation frame's start state settles through Jaune's
-  `processCreateMessage`, installing the constructor's output and keeping its storage
-  (`liftCreate_ok`, with the creation frame `createSeed`; `liftCreate_post` names the exact settled
-  world `liftCreatePost` — deposit-charged gas, installed code, every other account unchanged
-  from the constructor's final state, `liftCreatePost_facts`), and the constructor walk steps
+  `processCreateMessage`, installing the constructor's output and exposing the
+  installed account's normalized storage (`liftCreate_ok`, with creation frame
+  `createSeed`). `liftCreatePost_facts` identifies the target account as the raw
+  target with its code replaced, followed by `Acct.clearIfEmpty`; nonempty
+  installed code recovers the original raw storage equality. Arbitrary creation
+  messages do not supply the nonce-zero collision premise of an actual CREATE.
+  `liftCreate_post` names the exact settled world `liftCreatePost`: deposit-charged
+  gas, installed code, and every other account unchanged from the constructor's
+  final state. The constructor walk steps
   the shared kits lack (`rx_codecopy`, `rxc_sstore`, `rxc_callvalue`, `rx_return_any` and
   `rxc_return_any`, with the halting state `returnPost` named over a variable state;
   `returnPost_state` and `St_state` project the persistent world before substituting
@@ -4544,8 +4549,9 @@ contract-neutral.
   [`Blanc/Lift/CreationOps.lean`](../Blanc/Lift/CreationOps.lean).
 - The settled world of a zero-value CREATE as a closed term of its input world (so a later
   message that takes it as `origState` can evaluate it): the entry world `entryState` and
-  `entry_state` (storage cleared, nonce incremented, the zero debit and credit, in Jaune's own
-  order), and `liftCreatePost_state` (the constructor's world with its output installed) in
+  `entry_state` (target storage cleared and nonce incremented; zero-value entry
+  then preserves that environment, without a caller debit or target credit),
+  and `liftCreatePost_state` (the constructor's world with its output installed) in
   [`Blanc/Lift/CreateEntry.lean`](../Blanc/Lift/CreateEntry.lean).
 - Creating an EIP-1167 clone of any implementation `I` by the 9-byte copier `602d3d8160093d39f3`:
   `creationCode I` (copier ++ `forwarderCode I`), its certificate `copierCert`, the 28-gas walk
