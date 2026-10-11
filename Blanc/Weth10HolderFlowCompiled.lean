@@ -1429,6 +1429,7 @@ theorem Devm.eq_of_burnBy
   · exact hleft.stateGas.symm.trans hright.stateGas
   · exact hleft.accountReads.symm.trans hright.accountReads
   · exact hleft.storageReads.symm.trans hright.storageReads
+  · exact hleft.storageWrites.symm.trans hright.storageWrites
 
 /-- The actual retained root execution, advanced past the runtime's entry
 `JUMPDEST`, is a compiled cursor at `weth10Main`. -/
