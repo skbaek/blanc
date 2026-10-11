@@ -143,7 +143,7 @@ theorem afterSstore_refundCounter
     (sevm : Sevm) (base : Devm) (key value : B256) :
     (afterSstore sevm base key value).refundCounter =
       sstoreNewRefundCounter sevm.benvStat.rules.gas value
-        (getOrigStorVal sevm sevm.currentTarget key)
+        (base.getOrigStorVal sevm sevm.currentTarget key)
         (base.getStorVal sevm.currentTarget key) base.refundCounter := by
   unfold afterSstore
   split <;> rfl
@@ -168,15 +168,22 @@ theorem afterSstore_error
   split <;> rfl
 
 /-- The selected `SSTORE` charge depends on the pre-state only through its
-accessed-key set and the target's storage, so any two states agreeing on both
-are charged identically. -/
+accessed-key set, the target's storage, and its created-account set (an
+account created in this transaction has original value zero), so any two
+states agreeing on all three are charged identically. -/
 theorem sstoreCost_congr {sevm : Sevm} {d1 d2 : Devm} (key value : B256)
     (hkeys : d1.accessedStorageKeys = d2.accessedStorageKeys)
     (hstor : Devm.getStor d1 sevm.currentTarget =
-      Devm.getStor d2 sevm.currentTarget) :
+      Devm.getStor d2 sevm.currentTarget)
+    (hcreated : d1.createdAccounts = d2.createdAccounts) :
     sstoreCost sevm d1 key value = sstoreCost sevm d2 key value := by
   unfold sstoreCost
   rw [hkeys]
+  have horig : d1.getOrigStorVal sevm sevm.currentTarget key =
+      d2.getOrigStorVal sevm sevm.currentTarget key := by
+    unfold Devm.getOrigStorVal
+    rw [hcreated]
+  rw [horig]
   show _ + sstoreValueCost _
     ((Devm.getStor d1 sevm.currentTarget).get key) value = _
   rw [hstor]

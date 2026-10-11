@@ -156,32 +156,6 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64
       (by simpa only [p, msg, h64, h32] using hres)
   simpa only [p, msg, cev, child, post] using hrun
 
-/-- Changing an account balance leaves every account's storage untouched. -/
-lemma State.setBal_get_stor_direct
-    (st : State) (changed queried : Adr) (value : B256) :
-    ((st.setBal changed value).get queried).stor =
-      (st.get queried).stor := by
-  unfold State.setBal
-  by_cases h : changed = queried
-  · subst queried
-    rw [State.get_set_self]
-    rfl
-  · rw [State.get_set_ne st h]
-
-/-- The debit/credit preparation of a call changes balances only, including
-the representation-normalizing zero-value case. -/
-lemma State.subBal_addBal_get_stor
-    {st mid : State} {src dst a : Adr} {value : B256}
-    (hsub : st.subBal src value = some mid) :
-    ((mid.addBal dst value).get a).stor = (st.get a).stor := by
-  unfold State.subBal at hsub
-  split at hsub
-  · contradiction
-  · injection hsub with hmid
-    subst mid
-    unfold State.addBal
-    rw [State.setBal_get_stor_direct, State.setBal_get_stor_direct]
-
 lemma rawInsertIfNew_eq_self_of_contains
     {α : Type} {β : α → Type} [BEq α] [Hashable α]
     (m : Std.DHashMap.Internal.Raw₀ α β) (a : α) (b : β a)
@@ -336,9 +310,7 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
       post.accountsToDelete.isEmpty = devm.accountsToDelete.isEmpty ∧
       post.output = devm.output ∧
       post.error = devm.error ∧
-      ∃ stmid,
-        devm.state.subBal sevm.currentTarget 0 = some stmid ∧
-        post.state = stmid.addBal 2 0 := by
+      post.state = devm.state := by
   let base := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩
   have hextBase : base.extCost
       [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = ext := by
@@ -393,14 +365,9 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
     iiw.toNat 64 oiw.toNat 32
   let msg := staticcallSpawnMsg sevm p mcs 2 2
     iiw.toNat 64 (base.state.getCode 2) false
-  have hafford : ¬ msg.benv.state.bal msg.caller < msg.value := by
-    change ¬ (d0.getAcct sevm.currentTarget).bal < 0
-    rw [B256.lt_iff_toNat_lt_toNat]
-    exact Nat.not_lt.mpr (Nat.zero_le _)
-  obtain ⟨stmid, hsub, hbt⟩ :=
-    Msg.benvAfterTransfer_of_affordable msg rfl hafford
-  let benv' := (msg.benv.withState stmid).addBal
-    msg.currentTarget msg.value
+  have hbt : msg.benvAfterTransfer = .ok msg.benv :=
+    Msg.benvAfterTransfer_of_value_zero rfl
+  let benv' := msg.benv
   have hpre' :
       (!((msg.withBenv benv').disablePrecompiles) &&
         decide ((msg.withBenv benv').benv.stat.rules.isPrecomp 2)) = true := by
@@ -450,12 +417,7 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
     dsimp only [cev, initEvm, initDevm, Msg.withBenv_gas, Msg.withBenv_stat_rules]
     rw [hstateGas]
     rfl
-  have hsub' :
-      devm.state.subBal sevm.currentTarget 0 = some stmid := by
-    have hp : p.state.subBal sevm.currentTarget 0 = some stmid := by
-      simpa only [msg, staticcallSpawnMsg, callMsg, Bool.true_or] using hsub
-    exact hp
-  have hchildState : child.state = stmid.addBal 2 0 := by
+  have hchildState : child.state = devm.state := by
     rfl
   have hstackPost : post.stack = 1 :: s := by
     change 1 :: p.stack = 1 :: s
@@ -492,11 +454,10 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
     intro a
     change (child.state.get a).stor = (devm.state.get a).stor
     rw [hchildState]
-    exact State.subBal_addBal_get_stor hsub'
   have hchildCode : ∀ a, child.getCode a = devm.getCode a := by
     intro a
-    change (stmid.addBal 2 0).getCode a = devm.state.getCode a
-    exact State.subBal_addBal_getCode hsub'
+    change child.state.getCode a = devm.state.getCode a
+    rw [hchildState]
   have hcode : ∀ a, post.getCode a = devm.getCode a := by
     simpa only [post] using
       (successfulCallPost_getCode
@@ -558,13 +519,13 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
   have herrorPost : post.error = devm.error := by
     change p.error = devm.error
     rfl
-  have hstatePost : post.state = stmid.addBal 2 0 := by
-    change child.state = stmid.addBal 2 0
+  have hstatePost : post.state = devm.state := by
+    change child.state = devm.state
     exact hchildState
   exact ⟨post, hrun, hstackPost, hmemoryPost, hgasPost, hreturnData,
     hstorage, hcode, haddresses, hkeys,
     hlogsPost, hrefundPost, hdeletePost, houtputPost, herrorPost,
-    stmid, hsub', hstatePost⟩
+    hstatePost⟩
 
 /-- Compatibility projection of the full warm SHA-256 crossing.  Consumers
 that must settle a transaction should use the `_full` theorem so refund and
@@ -605,16 +566,14 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext
       post.logs = devm.logs ∧
       post.output = devm.output ∧
       post.error = devm.error ∧
-      ∃ stmid,
-        devm.state.subBal sevm.currentTarget 0 = some stmid ∧
-        post.state = stmid.addBal 2 0 := by
+      post.state = devm.state := by
   obtain ⟨post, hrun, hstack, hmemory, hgas', hreturn, hstorage,
       hcode, haddresses, hkeys, hlogs, _hrefund, _hdelete, houtput,
-      herror, stmid, hsub, hstate⟩ :=
+      herror, hstate⟩ :=
     Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
       hstk hgas hext hnodeleg hwarm hpre hfork hdepth hfloor hbound hroom
   exact ⟨post, hrun, hstack, hmemory, hgas', hreturn, hstorage, hcode,
-    haddresses, hkeys, hlogs, houtput, herror, stmid, hsub, hstate⟩
+    haddresses, hkeys, hlogs, houtput, herror, hstate⟩
 
 /-- Ordinary compiled-step projection of the childless warm SHA-256 call.
 All state and gas facts are identical; only the empty child-slot fact is
@@ -655,17 +614,15 @@ theorem Ninst.runCompiled_staticcall_sha256_64_warm_ext
       post.logs = devm.logs ∧
       post.output = devm.output ∧
       post.error = devm.error ∧
-      ∃ stmid,
-        devm.state.subBal sevm.currentTarget 0 = some stmid ∧
-        post.state = stmid.addBal 2 0 := by
+      post.state = devm.state := by
   obtain ⟨post, hrun, hstack, hmemory, hgas', hreturn,
       hstorage, hcode, haddresses, hkeys, hlogs, houtput, herror,
-      stmid, hsub, hstate⟩ :=
+      hstate⟩ :=
     Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext
       hstk hgas hext hnodeleg hwarm hpre hfork hdepth hfloor hbound hroom
   exact ⟨post, hrun.toRunCompiled, hstack, hmemory, hgas', hreturn,
     hstorage, hcode, haddresses, hkeys, hlogs, houtput, herror,
-    stmid, hsub, hstate⟩
+    hstate⟩
 
 /-- Covered-memory compatibility form of
 `runCompiled_staticcall_sha256_64_warm_ext`. -/
@@ -703,9 +660,7 @@ theorem Ninst.runCompiled_staticcall_sha256_64_warm
       post.logs = devm.logs ∧
       post.output = devm.output ∧
       post.error = devm.error ∧
-      ∃ stmid,
-        devm.state.subBal sevm.currentTarget 0 = some stmid ∧
-        post.state = stmid.addBal 2 0 := by
+      post.state = devm.state := by
   have hext : (devm.setMach
       ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
         [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = 0 :=
