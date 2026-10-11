@@ -170,16 +170,18 @@ theorem TransactionTrace.root_frame_of_call_value_with_message
     change tx.value ≤ (benv.state.get E).bal.toNat - _
     omega
   have hdebitStateEq := (State.of_subBal hdebit).2
-  obtain ⟨afterTransferState, _, hentry⟩ := Msg.benvAfterTransfer_of_affordable trace.msg
-    (by rw [hmsgEq]; rfl)
-    (by
-      apply B256.not_lt.mpr
-      rw [hmsgEq]
-      change tx.value.toB256 ≤ (trace.debitState.get E).bal
-      rw [hdebitStateEq, State.incrNonce_bal, State.setBal_get_self]
-      exact hremaining)
-  set after : Benv := (trace.msg.benv.withState afterTransferState).addBal
-    trace.msg.currentTarget trace.msg.value
+  have affordable : ¬ trace.msg.benv.state.bal trace.msg.caller < trace.msg.value := by
+    apply B256.not_lt.mpr
+    rw [hmsgEq]
+    change tx.value.toB256 ≤ (trace.debitState.get E).bal
+    rw [hdebitStateEq, State.incrNonce_bal, State.setBal_get_self, Acct.clearIfEmpty_bal]
+    exact hremaining
+  obtain ⟨after, hentry⟩ : ∃ after, trace.msg.benvAfterTransfer = .ok after := by
+    by_cases zero : trace.msg.value = 0
+    · exact ⟨_, Msg.benvAfterTransfer_of_value_zero zero⟩
+    · obtain ⟨_, _, transfer⟩ := Msg.benvAfterTransfer_of_affordable trace.msg
+        (by rw [hmsgEq]; rfl) affordable zero
+      exact ⟨_, transfer⟩
   obtain ⟨post, hex, herr, -, hR⟩ := hexec trace.debitState trace.msg after hdebit hprepared hentry
   cases hmsg_trace : trace.message with
   | createCollision h_target _ _ =>
