@@ -1722,6 +1722,11 @@ Use [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
   nonce increment to be nonzero. For an actual recursive spawn, use
   `genericCreate_step_spawn_nonce_ne_max` from `Blanc/LadderBase.lean` and
   `UInt64.add_one_ne_zero_of_ne_max` to discharge it.
+  `genericCreate_step_spawn_prepared_target_unprotected` exposes the actual
+  collision check after that creator increment: the new target has zero nonce
+  and empty code in the prepared state. Constructor setup therefore starts its
+  nonce at one. The original `genericCreate_step_spawn_target_unprotected`
+  derives the corresponding pre-increment fact from the same extraction.
 
 ### S3. I need state-relation or write-frame composition
 

@@ -4258,6 +4258,22 @@ theorem genericCreate_step_spawn_nonce_ne_max
   rename_i hpre collision
   exact fun hmax => hpre (Or.inr (Or.inl hmax))
 
+/-- Actual CREATE spawning checks the target after the creator nonce bump. -/
+theorem genericCreate_step_spawn_prepared_target_unprotected
+    {sevm : Sevm} {devm : Devm} {endowment : B256}
+    {newAddress : Adr} {mi ms : Nat} {frame : Frame} {resume : Resume}
+    (hspawn : genericCreate.step sevm devm endowment newAddress mi ms =
+      .spawn frame resume) :
+    ¬ State.Protected (devm.state.incrNonce sevm.currentTarget) newAddress := by
+  simp only [genericCreate.step, Bind.bind, Except.bind, Except.assert,
+    assertDynamic, Pure.pure, Except.pure] at hspawn
+  repeat' split at hspawn
+  all_goals
+    simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hspawn
+  all_goals obtain ⟨rfl, -⟩ := hspawn
+  rename_i hpre collision
+  exact collision
+
 /-- A recursive CREATE spawn passed the collision check (EIP-684 only): the
 target had zero nonce and empty code, so it is not protected. Its storage may
 be nonempty (a storage-only account, EIP-7610 withdrawn); fresh-account
@@ -4269,19 +4285,12 @@ theorem genericCreate_step_spawn_target_unprotected
     (hspawn : genericCreate.step sevm devm endowment newAddress mi ms =
       .spawn frame resume) :
     ¬ State.Protected devm.state newAddress := by
-  simp only [genericCreate.step, Bind.bind, Except.bind, Except.assert,
-    assertDynamic, Pure.pure, Except.pure] at hspawn
-  repeat' split at hspawn
-  all_goals
-    simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hspawn
-  all_goals obtain ⟨rfl, -⟩ := hspawn
-  rename_i hpre collision
+  have collision := genericCreate_step_spawn_prepared_target_unprotected hspawn
+  unfold State.Protected at collision
   push Not at collision
   have hnonce : (devm.state.get sevm.currentTarget).nonce + 1 ≠ 0 :=
-    UInt64.add_one_ne_zero_of_ne_max fun hmax => hpre (Or.inr (Or.inl hmax))
-  have hget : ((devm.state.incrNonce sevm.currentTarget).get newAddress).nonce = 0 ∧
-      ((devm.state.incrNonce sevm.currentTarget).get newAddress).code.size = 0 :=
-    collision
+    UInt64.add_one_ne_zero_of_ne_max (genericCreate_step_spawn_nonce_ne_max hspawn)
+  have hget := collision
   unfold State.Protected
   push Not
   by_cases h : sevm.currentTarget = newAddress
