@@ -99,7 +99,7 @@ def wethSpec : ContractSpec where
     show sum _ < 2 ^ 256
     rw [sum_addBal_eq w a val h_bound]; omega
   inv_transfer := by
-    intro st st' caller callee ca wad v h_sub h_ne h_side h_inv
+    intro st st' caller callee ca wad v h_sub h_ne h_side h_prot h_inv
     have h_nof : sum st.bal < 2 ^ 256 := h_side
     rcases of_state_transfer (callee := callee) h_sub h_nof with
       ⟨h_t_stor, -, -, h_t_le, -, -⟩
@@ -108,13 +108,14 @@ def wethSpec : ContractSpec where
       rw [h_st']
       show ((st.setBal caller _).get ca).bal = (st.get ca).bal
       rw [State.setBal_get_ne h_ne]
-    have h_stor : (st'.addBal callee wad).getStor ca = st.getStor ca := h_t_stor ca
+    have h_stor : (st'.addBal callee wad).getStor ca = st.getStor ca :=
+      h_t_stor ca h_prot
     have h_ge : (st.bal ca).toNat ≤ ((st'.addBal callee wad).bal ca).toNat := by
       by_cases h_eq : callee = ca
       · have h_add : (st'.addBal callee wad).bal ca = st.bal ca + wad := by
           rw [h_eq]
           show ((st'.setBal ca (st'.bal ca + wad)).get ca).bal = _
-          rw [State.setBal_get_self]
+          rw [State.setBal_get_self, Acct.clearIfEmpty_bal]
           show st'.bal ca + wad = _
           rw [h_mid]
         rw [h_add]
@@ -133,10 +134,10 @@ def wethSpec : ContractSpec where
     unfold Stor.Solvent at h_inv ⊢
     omega
   inv_recv_transfer := by
-    intro st st' caller ca wad h_sub h_ne h_side h_inv
+    intro st st' caller ca wad h_sub h_ne h_side h_prot h_inv
     have h_nof : sum st.bal < 2 ^ 256 := h_side
     rcases of_state_transfer (callee := ca) h_sub h_nof with ⟨h_t_stor, -, -, -, -, -⟩
-    have h_stor : (st'.addBal ca wad).getStor ca = st.getStor ca := h_t_stor ca
+    have h_stor : (st'.addBal ca wad).getStor ca = st.getStor ca := h_t_stor ca h_prot
     have h_bal : ((st'.addBal ca wad).bal ca).toNat = (st.bal ca).toNat + wad.toNat :=
       of_transfer_bal_target h_sub h_ne h_nof
     rw [h_stor]
@@ -144,17 +145,17 @@ def wethSpec : ContractSpec where
     rw [B256.toNat_zero] at h_inv
     omega
   inv_addBal := by
-    intro w ca a val v h_bound _ h_inv
+    intro w ca a val v h_bound _ h_prot h_inv
     have h_nof_a : B256.Nof (w.bal a) val := by
       unfold B256.Nof; have := @le_sum w.bal a; omega
     have h_stor : (w.addBal a val).getStor ca = w.getStor ca := by
       show ((w.setBal a _).get ca).stor = (w.get ca).stor
-      rw [State.setBal_get_stor]
+      exact State.setBal_get_stor_of_protected h_prot
     have h_ge : (w.bal ca).toNat ≤ ((w.addBal a val).bal ca).toNat := by
       by_cases h_eq : a = ca
       · subst h_eq
         show (w.bal a).toNat ≤ ((w.setBal a (w.bal a + val)).get a).bal.toNat
-        rw [State.setBal_get_self]
+        rw [State.setBal_get_self, Acct.clearIfEmpty_bal]
         change (w.bal a).toNat ≤ (w.bal a + val).toNat
         rw [B256.toNat_add_eq_of_nof _ _ h_nof_a]; omega
       · show (w.bal ca).toNat ≤ ((w.setBal a _).get ca).bal.toNat
@@ -1166,14 +1167,44 @@ lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
       · rw [hbody.2, processMessage.settle_error] at hset
         cases hset
       have run_ec : ExecuteCode (childMsg.withBenv benv') xl r0 := hbody
-      -- the value transfer performed before the sub-message run
-      rcases of_benvAfterTransfer hc_stv eq_bt with ⟨st_mid, h_sub, hB⟩
-      rw [hc_state, hc_caller, hc_value] at h_sub
+      -- the child's entry state : after the value transfer, or unchanged
+      -- when no value moves (zero-value entry leaves the benv alone)
       have h_nof' : sum s₁.state.bal < 2 ^ 256 := h_nof
-      rcases of_state_transfer (callee := sevm.caller) h_sub h_nof' with
-        ⟨h_t_stor, h_t_code, h_t_sum, h_t_le, h_t_self, h_t_ne⟩
-      have hBs : benv'.state = st_mid.addBal sevm.caller wad := by
+      have h_tr : wad ≠ 0 → ∃ st_mid,
+          s₁.state.subBal sevm.currentTarget wad = some st_mid ∧
+          benv'.state = st_mid.addBal sevm.caller wad := by
+        intro h_nz
+        have h_nz' : childMsg.value ≠ 0 := by rw [hc_value]; exact h_nz
+        obtain ⟨st_mid, h_sub, hB⟩ := of_benvAfterTransfer hc_stv h_nz' eq_bt
+        rw [hc_state, hc_caller, hc_value] at h_sub
+        refine ⟨st_mid, h_sub, ?_⟩
         rw [hB, hc_ct, hc_value]; rfl
+      have h_z : wad = 0 → benv'.state = s₁.state := by
+        intro hv0
+        have hbenv : benv' = childMsg.benv := by
+          apply benvAfterTransfer_eq_of_not_transfer _ eq_bt
+          intro h
+          have h2 := h.2
+          rw [hc_value, hv0] at h2
+          exact h2 rfl
+        rw [hbenv, hc_state]
+      have h_sv0 : wad = 0 → Stor.Solvent (Devm.getStor s₁ sevm.currentTarget) 0
+          (s₁.getBal sevm.currentTarget) := by
+        intro hv0
+        have h := h_sv
+        unfold Stor.Solvent at h ⊢
+        rw [B256.toNat_sub_eq_of_le _ _ h_le] at h
+        have hwad0 : wad.toNat = 0 := by rw [hv0, B256.toNat_zero]
+        omega
+      have h_gb0 : wad = 0 → (initDevm (childMsg.withBenv benv')).getBal
+          sevm.currentTarget = s₁.getBal sevm.currentTarget := by
+        intro hv0
+        have hBs0 := h_z hv0
+        show ((initDevm (childMsg.withBenv benv')).state.get sevm.currentTarget).bal
+          = (s₁.state.get sevm.currentTarget).bal
+        show (benv'.state.get sevm.currentTarget).bal
+          = (s₁.state.get sevm.currentTarget).bal
+        rw [hBs0]
       -- resolve the inner split : either rollback or a clean sub-message result
       obtain ⟨evm2, h_r0, h_settle⟩ := processMessage.settle_ok_cases hset.symm
       subst h_r0
@@ -1181,7 +1212,6 @@ lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
       · -- sub-message failed : state rolled back to the pre-transfer state
         apply solvent_of_state_eq _ h_le h_sv
         rw [h_sf_state, ← h_if]
-        show childMsg.benv.state = s₁.state
         exact hc_state
       -- sub-message succeeded
       have h_if' := h_if.symm
@@ -1193,22 +1223,55 @@ lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
         have h_child_state : child.state = benv'.state := by
           have h := state_of_executePrecomp_ok h_he h_err2
           rw [h]; rfl
-        have h_stor_eq : Devm.getStor sf sevm.currentTarget = Devm.getStor s₁ sevm.currentTarget := by
-          show (sf.state.get sevm.currentTarget).stor = (s₁.state.get sevm.currentTarget).stor
-          rw [h_sf_state, h_child_state, hBs]
-          exact h_t_stor sevm.currentTarget
-        have h_bal_eq : sf.getBal sevm.currentTarget = benv'.state.bal sevm.currentTarget := by
-          show (sf.state.get sevm.currentTarget).bal = (benv'.state.get sevm.currentTarget).bal
-          rw [h_sf_state, h_child_state]
-        rw [h_stor_eq, h_bal_eq, hBs]
-        by_cases h_callee : sevm.caller = sevm.currentTarget
-        · rw [h_t_self h_callee]
-          unfold Stor.Solvent at h_sv ⊢
-          rw [B256.toNat_sub_eq_of_le _ _ h_le] at h_sv
-          have h_defeq : (s₁.state.bal sevm.currentTarget).toNat = (s₁.getBal sevm.currentTarget).toNat := rfl
-          omega
-        · rw [h_t_ne h_callee]
-          exact h_sv
+        by_cases h_nz : wad ≠ 0
+        · -- value moves : the transfer facts describe the child's entry state
+          have h_nz' : childMsg.value ≠ 0 := by rw [hc_value]; exact h_nz
+          obtain ⟨st_mid, h_sub, hB⟩ := of_benvAfterTransfer hc_stv h_nz' eq_bt
+          rw [hc_state, hc_caller, hc_value] at h_sub
+          have h_nof' : sum s₁.state.bal < 2 ^ 256 := h_nof
+          obtain ⟨h_t_stor, -, -, h_t_le, h_t_self, h_t_ne⟩ :=
+            of_state_transfer (callee := sevm.caller) h_sub h_nof'
+          have hBs : benv'.state = st_mid.addBal sevm.caller wad := by
+            rw [hB, hc_ct, hc_value]; rfl
+          have h_prot : State.Protected s₁.state sevm.currentTarget := by
+            apply State.Protected.of_code_ne_nil
+            intro hempty
+            exact Prog.compile_ne_nil (h_code.symm.trans (congrArg some hempty))
+          have h_stor_eq : Devm.getStor sf sevm.currentTarget = Devm.getStor s₁ sevm.currentTarget := by
+            show (sf.state.get sevm.currentTarget).stor = (s₁.state.get sevm.currentTarget).stor
+            rw [h_sf_state, h_child_state, hBs]
+            exact h_t_stor sevm.currentTarget h_prot
+          have h_bal_eq : sf.getBal sevm.currentTarget = benv'.state.bal sevm.currentTarget := by
+            show (sf.state.get sevm.currentTarget).bal = (benv'.state.get sevm.currentTarget).bal
+            rw [h_sf_state, h_child_state]
+          rw [h_stor_eq, h_bal_eq, hBs]
+          by_cases h_callee : sevm.caller = sevm.currentTarget
+          · rw [h_t_self h_callee]
+            unfold Stor.Solvent at h_sv ⊢
+            rw [B256.toNat_sub_eq_of_le _ _ h_le] at h_sv
+            have h_defeq : (s₁.state.bal sevm.currentTarget).toNat = (s₁.getBal sevm.currentTarget).toNat := rfl
+            omega
+          · rw [h_t_ne h_callee]
+            exact h_sv
+        · -- zero value : no transfer, the child's entry state is the entry state
+          have hv0 : wad = 0 := not_not.mp h_nz
+          have hbenv : benv' = childMsg.benv :=
+            benvAfterTransfer_eq_of_not_transfer (fun h => h_nz (by rw [← hc_value]; exact h.2)) eq_bt
+          have hBs0 : benv'.state = s₁.state := by rw [hbenv, hc_state]
+          have h_sv0 : Stor.Solvent (Devm.getStor s₁ sevm.currentTarget) 0
+              (s₁.getBal sevm.currentTarget) := by
+            unfold Stor.Solvent at h_sv ⊢
+            rw [B256.toNat_sub_eq_of_le _ _ h_le] at h_sv
+            have hwad0 : wad.toNat = 0 := by rw [hv0, B256.toNat_zero]
+            omega
+          have h_stor_eq : Devm.getStor sf sevm.currentTarget = Devm.getStor s₁ sevm.currentTarget := by
+            show (sf.state.get sevm.currentTarget).stor = (s₁.state.get sevm.currentTarget).stor
+            rw [h_sf_state, h_child_state, hBs0]
+          have h_bal_eq : sf.getBal sevm.currentTarget = s₁.getBal sevm.currentTarget := by
+            show (sf.state.get sevm.currentTarget).bal = (s₁.state.get sevm.currentTarget).bal
+            rw [h_sf_state, h_child_state, hBs0]
+          rw [h_stor_eq, h_bal_eq]
+          exact h_sv0
       · -- callee is a regular account : a sub-execution takes place
         rw [h_xl_some] at h_fill
         dsimp only [Xlot.Filled] at h_fill
@@ -1240,8 +1303,15 @@ lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
               = weth.compile := by
           show some ((initDevm (childMsg.withBenv benv')).state.get sevm.currentTarget).code.toList
             = weth.compile
-          rw [h_sd_state, hBs, h_t_code sevm.currentTarget]
-          exact h_code
+          by_cases h_nz : wad ≠ 0
+          · obtain ⟨st_mid, h_sub, hBs⟩ := h_tr h_nz
+            obtain ⟨-, h_t_code, -, -, -, -⟩ :=
+              of_state_transfer (callee := sevm.caller) h_sub h_nof'
+            rw [h_sd_state, hBs, h_t_code sevm.currentTarget]
+            exact h_code
+          · have hBs0 := h_z (not_not.mp h_nz)
+            rw [h_sd_state, hBs0]
+            exact h_code
         -- the target program invariant for the sub-execution
         have h_at : Prog.At weth sevm.currentTarget 0
             (initSevm (childMsg.withBenv benv')) (initDevm (childMsg.withBenv benv')) := by
@@ -1281,7 +1351,17 @@ lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
             = Devm.getStor s₁ sevm.currentTarget := by
           show ((initDevm (childMsg.withBenv benv')).state.get sevm.currentTarget).stor
             = (s₁.state.get sevm.currentTarget).stor
-          rw [h_sd_state, hBs, h_t_stor sevm.currentTarget]
+          by_cases h_nz : wad ≠ 0
+          · obtain ⟨st_mid, h_sub, hBs⟩ := h_tr h_nz
+            obtain ⟨h_t_stor, -, -, -, -, -⟩ :=
+              of_state_transfer (callee := sevm.caller) h_sub h_nof'
+            have h_prot : State.Protected s₁.state sevm.currentTarget := by
+              apply State.Protected.of_code_ne_nil
+              intro hempty
+              exact Prog.compile_ne_nil (h_code.symm.trans (congrArg some hempty))
+            rw [h_sd_state, hBs, h_t_stor sevm.currentTarget h_prot]
+          · have hBs0 := h_z (not_not.mp h_nz)
+            rw [h_sd_state, hBs0]
         have h_precond : Precond sevm.currentTarget
             (initSevm (childMsg.withBenv benv')) (initDevm (childMsg.withBenv benv')) := by
           refine ⟨h_code_at, ?_, ?_⟩
@@ -1290,39 +1370,64 @@ lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
               funext a
               show ((initDevm (childMsg.withBenv benv')).state.get a).bal = (benv'.state.get a).bal
               rw [h_sd_state]
-            rw [h_gb_fun, hBs, h_t_sum]; exact h_nof
+            by_cases h_nz : wad ≠ 0
+            · obtain ⟨st_mid, h_sub, hBs⟩ := h_tr h_nz
+              obtain ⟨-, -, h_t_sum, -, -, -⟩ :=
+                of_state_transfer (callee := sevm.caller) h_sub h_nof'
+              rw [h_gb_fun, hBs, h_t_sum]; exact h_nof
+            · have hv0 : wad = 0 := not_not.mp h_nz
+              have hBs0 := h_z hv0
+              have h_gb_fun0 : (initDevm (childMsg.withBenv benv')).getBal = s₁.state.bal := by
+                funext a
+                show ((initDevm (childMsg.withBenv benv')).state.get a).bal = (s₁.state.get a).bal
+                rw [h_sd_state, hBs0]
+              rw [h_gb_fun0]; exact h_nof
           · -- PreSolvent
             refine ⟨?_, ?_⟩
             · intro h_eq
               rw [h_ss_ct] at h_eq
               have h_gv : (initSevm (childMsg.withBenv benv')).value = wad := hc_value
               rw [h_gs, h_gv]
-              have h_gb : (initDevm (childMsg.withBenv benv')).getBal sevm.currentTarget
-                  = s₁.getBal sevm.currentTarget := by
-                show ((initDevm (childMsg.withBenv benv')).state.get sevm.currentTarget).bal
-                  = (s₁.state.get sevm.currentTarget).bal
-                rw [h_sd_state, hBs]
-                show (st_mid.addBal sevm.caller wad).bal sevm.currentTarget
-                  = (s₁.state.get sevm.currentTarget).bal
-                rw [h_t_self h_eq]; rfl
-              rw [h_gb]
-              unfold Stor.Solvent at h_sv ⊢
-              rw [B256.toNat_zero, Nat.add_zero] at h_sv
-              rw [B256.toNat_sub_eq_of_le _ _ h_le] at h_sv
-              have := B256.toNat_le_toNat h_le
-              omega
+              by_cases h_nz : wad ≠ 0
+              · obtain ⟨st_mid, h_sub, hBs⟩ := h_tr h_nz
+                obtain ⟨-, -, -, -, h_t_self, -⟩ :=
+                  of_state_transfer (callee := sevm.caller) h_sub h_nof'
+                have h_gb : (initDevm (childMsg.withBenv benv')).getBal sevm.currentTarget
+                    = s₁.getBal sevm.currentTarget := by
+                  show ((initDevm (childMsg.withBenv benv')).state.get sevm.currentTarget).bal
+                    = (s₁.state.get sevm.currentTarget).bal
+                  rw [h_sd_state, hBs]
+                  show (st_mid.addBal sevm.caller wad).bal sevm.currentTarget
+                    = (s₁.state.get sevm.currentTarget).bal
+                  rw [h_t_self h_eq]; rfl
+                rw [h_gb]
+                unfold Stor.Solvent at h_sv ⊢
+                rw [B256.toNat_zero, Nat.add_zero] at h_sv
+                rw [B256.toNat_sub_eq_of_le _ _ h_le] at h_sv
+                have := B256.toNat_le_toNat h_le
+                omega
+              · have hv0 : wad = 0 := not_not.mp h_nz
+                rw [h_gb0 hv0, hv0]
+                exact h_sv0 hv0
             · intro h_ne
               rw [h_ss_ct] at h_ne
               rw [h_gs]
-              have h_gb : (initDevm (childMsg.withBenv benv')).getBal sevm.currentTarget
-                  = s₁.getBal sevm.currentTarget - wad := by
-                show ((initDevm (childMsg.withBenv benv')).state.get sevm.currentTarget).bal
-                  = s₁.getBal sevm.currentTarget - wad
-                rw [h_sd_state, hBs]
-                show (st_mid.addBal sevm.caller wad).bal sevm.currentTarget
-                  = s₁.getBal sevm.currentTarget - wad
-                rw [h_t_ne h_ne]; rfl
-              rw [h_gb]; exact h_sv
+              by_cases h_nz : wad ≠ 0
+              · obtain ⟨st_mid, h_sub, hBs⟩ := h_tr h_nz
+                obtain ⟨-, -, -, -, -, h_t_ne⟩ :=
+                  of_state_transfer (callee := sevm.caller) h_sub h_nof'
+                have h_gb : (initDevm (childMsg.withBenv benv')).getBal sevm.currentTarget
+                    = s₁.getBal sevm.currentTarget - wad := by
+                  show ((initDevm (childMsg.withBenv benv')).state.get sevm.currentTarget).bal
+                    = s₁.getBal sevm.currentTarget - wad
+                  rw [h_sd_state, hBs]
+                  show (st_mid.addBal sevm.caller wad).bal sevm.currentTarget
+                    = s₁.getBal sevm.currentTarget - wad
+                  rw [h_t_ne h_ne]; rfl
+                rw [h_gb]; exact h_sv
+              · have hv0 : wad = 0 := not_not.mp h_nz
+                rw [h_gb0 hv0]
+                exact h_sv0 hv0
         -- apply the induction hypothesis
         have hchildFork : CoveredFork (initSevm (childMsg.withBenv benv')).benvStat.fork := by
           change CoveredFork (childMsg.withBenv benv').benv.stat.fork
