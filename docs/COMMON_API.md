@@ -884,8 +884,10 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   over an `St`, so an explicit post state has explicit shadows; `ChildAgree.getStorVal`,
   `sloadCost_shadow`/`sstoreCost_shadow` (`sloadCostS`/`sstoreCostS`) and
   `afterSload_shadow`/`afterSstore_shadow` (`afterSloadS`/`afterSstoreS`) restate values, charges
-  and bases on the shadows, which the kernel evaluates without inspecting a hash set. Worked
-  example: the synthetic token's `approve_child` in
+  and bases on the shadows without inspecting the accessed-key hash set.
+  `sstoreCostS` takes the actual `Devm` after `Sevm`; it and `afterSstoreS` retain
+  the machine's created-account-aware original storage read. A transaction
+  snapshot alone does not determine that value. Worked example: the synthetic token's `approve_child` in
   `Blanc/Lift/VyperNonreentrantDeployed/Token20/Frame.lean`.
 - To state a closed walk witness under every covered fork rather than the one its machine
   fixes, transport its kernel facts with
@@ -941,6 +943,10 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   `scallSpawn_re`/`callSpawn_re`/`dcallSpawn_re`, `settle_re` and `frame_enter_re` move walks,
   spawns, settles and the root entry to `(s.withFork g).withOrig W` (any covered fork, the real
   original state) under `ReOK W s`; the `*_withOrig` lemmas are the original-state layer alone.
+  `Blanc.Devm.getOrigStorVal_withOrig_of_eq` transports an actual original-storage
+  read from snapshot agreement at one owner/key; created accounts read zero on
+  both sides. Both the full `OrigAgree` and finite `OrigAgreeOn` transport proofs
+  use it without a not-created premise.
   Hand a transported spawn's agreement and child nodes to lemmas stated over the kernel
   configuration through `pagree_re`/`nodeAt_re`: left to definitional
   unfolding, the kernel compares a concrete machine with its transported form by evaluating both

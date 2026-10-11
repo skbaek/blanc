@@ -114,11 +114,11 @@ theorem ChildAgree.getStorVal {b : Devm} {keys : List (Adr × B256)} {adrs : Lis
 def sloadCostS (t : Adr) (keys : List (Adr × B256)) (k : B256) : Nat :=
   if (t, k) ∈ keys then gasWarmAccess else gasColdSload
 
-/-- `sstoreCost` with the warm test on the key shadow and the current value on the storage
-shadow. -/
-def sstoreCostS (sevm : Sevm) (keys : List (Adr × B256)) (stor : StorShadow) (k v : B256) : Nat :=
+/-- `sstoreCost` with warmth and current value on the shadows, and the original
+value read through the actual machine's created-account set. -/
+def sstoreCostS (sevm : Sevm) (b : Devm) (keys : List (Adr × B256)) (stor : StorShadow) (k v : B256) : Nat :=
   (if (sevm.currentTarget, k) ∈ keys then 0 else gasColdSload) +
-    sstoreValueCost (getOrigStorVal sevm sevm.currentTarget k)
+    sstoreValueCost (b.getOrigStorVal sevm sevm.currentTarget k)
       (lookupS stor sevm.currentTarget k) v
 
 theorem sloadCost_shadow {sevm : Sevm} {b : Devm} {keys : List (Adr × B256)} {adrs : List Adr}
@@ -129,7 +129,7 @@ theorem sloadCost_shadow {sevm : Sevm} {b : Devm} {keys : List (Adr × B256)} {a
 
 theorem sstoreCost_shadow {sevm : Sevm} {b : Devm} {keys : List (Adr × B256)} {adrs : List Adr}
     {stor : StorShadow} {acs : AcctShadow} (h : ChildAgree b keys adrs stor acs) (k v : B256) :
-    sstoreCost sevm b k v = sstoreCostS sevm keys stor k v := by
+    sstoreCost sevm b k v = sstoreCostS sevm b keys stor k v := by
   unfold sstoreCost sstoreCostS
   simp only [h.2.1, ChildAgree.getStorVal h]
 
@@ -137,19 +137,20 @@ theorem sstoreCost_shadow {sevm : Sevm} {b : Devm} {keys : List (Adr × B256)} {
 
 `afterSload`/`afterSstore` decide warmth on the world's accessed-key hash set; their shadow
 forms decide it on the key list and read the current value from the storage shadow, so that a
-concrete post state is evaluated without inspecting a hash set. -/
+concrete post state avoids inspecting the accessed-key hash set while retaining the
+created-account-aware original storage read. -/
 
 /-- `afterSload` with the warm test on the key shadow. -/
 def afterSloadS (t : Adr) (keys : List (Adr × B256)) (b : Devm) (k : B256) : Devm :=
   if (t, k) ∈ keys then b else addAccessedStorageKey b t k
 
-/-- `afterSstore` with the warm test on the key shadow and the current value on the storage
-shadow. -/
+/-- `afterSstore` with warmth/current value on the shadows and the machine's
+created-account-aware original value. -/
 def afterSstoreS (sevm : Sevm) (keys : List (Adr × B256)) (stor : StorShadow) (b : Devm)
     (k v : B256) : Devm :=
   ((if (sevm.currentTarget, k) ∈ keys then b else addAccessedStorageKey b sevm.currentTarget k).withRefundCounter
       (sstoreNewRefundCounter sevm.benvStat.rules.gas v
-        (getOrigStorVal sevm sevm.currentTarget k)
+        (b.getOrigStorVal sevm sevm.currentTarget k)
         (lookupS stor sevm.currentTarget k) b.refundCounter)).setStorVal
     sevm.currentTarget k v
 

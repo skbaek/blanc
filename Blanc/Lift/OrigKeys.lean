@@ -80,8 +80,9 @@ theorem sstoreStep_withOrig_key {c c' : Cfg} {g : SFunc}
   · intro h; cases h
   · intro h; cases h
   · intro h hO
-    have e : getOrigStorVal (s.withOrig O) (s.withOrig O).currentTarget k =
-        getOrigStorVal s s.currentTarget k := hO k v rest rfl
+    have e : c.devm.getOrigStorVal (s.withOrig O) (s.withOrig O).currentTarget k =
+        c.devm.getOrigStorVal s s.currentTarget k :=
+      Blanc.Devm.getOrigStorVal_withOrig_of_eq c.devm s.currentTarget k (hO k v rest rfl)
     simp only [e] at h
     exact h
 

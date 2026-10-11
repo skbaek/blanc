@@ -77,10 +77,20 @@ theorem sevm_withOrig_self (s : Sevm) : s.withOrig s.benvStat.origState = s := r
 
 /-! ## One step -/
 
+/-- Snapshot agreement at one cell preserves the actual original-storage read;
+created accounts read zero on both sides. -/
+theorem _root_.Blanc.Devm.getOrigStorVal_withOrig_of_eq (d : Devm) (owner : Adr) (key : B256)
+    (h : (O.get owner).stor.get key = (s.benvStat.origState.get owner).stor.get key) :
+    d.getOrigStorVal (s.withOrig O) owner key = d.getOrigStorVal s owner key := by
+  unfold Devm.getOrigStorVal
+  split
+  · rfl
+  · exact h
+
 theorem sstoreStep_withOrig (hO : OrigAgree O s.benvStat.origState) (c : Cfg) (k : SFunc) :
     sstoreStep (s.withOrig O) c k = sstoreStep s c k := by
-  have h : ∀ a key, getOrigStorVal (s.withOrig O) a key = getOrigStorVal s a key :=
-    fun a key => hO a key
+  have h : ∀ a key, c.devm.getOrigStorVal (s.withOrig O) a key = c.devm.getOrigStorVal s a key :=
+    fun a key => Devm.getOrigStorVal_withOrig_of_eq c.devm a key (hO a key)
   unfold sstoreStep
   simp only [h]
   rfl
@@ -217,9 +227,9 @@ theorem callPrep_withOrig (c : Cfg) :
 theorem benvAfterTransferS_withOrig (m : Msg) (acs : AcctShadow) :
     benvAfterTransferS (m.withOrig O) acs = (benvAfterTransferS m acs).map (·.withOrig O) := by
   unfold benvAfterTransferS
-  by_cases h : m.shouldTransferValue = true
-  · have h' : (m.withOrig O).shouldTransferValue = true := h
-    simp only [h, h', ↓reduceIte]
+  by_cases h : m.shouldTransferValue ∧ m.value ≠ 0
+  · have h' : (m.withOrig O).shouldTransferValue ∧ (m.withOrig O).value ≠ 0 := h
+    rw [ite_eq_left h, ite_eq_left h']
     by_cases hb : (lookupA acs m.caller).bal < m.value
     · have hb' : (lookupA acs (m.withOrig O).caller).bal < (m.withOrig O).value := hb
       simp only [hb, hb', ↓reduceIte]
@@ -227,8 +237,8 @@ theorem benvAfterTransferS_withOrig (m : Msg) (acs : AcctShadow) :
     · have hb' : ¬ (lookupA acs (m.withOrig O).caller).bal < (m.withOrig O).value := hb
       simp only [hb, hb', ↓reduceIte]
       rfl
-  · have h' : ¬ (m.withOrig O).shouldTransferValue = true := h
-    simp only [h, h', ↓reduceIte]
+  · have h' : ¬ ((m.withOrig O).shouldTransferValue ∧ (m.withOrig O).value ≠ 0) := h
+    rw [ite_eq_right h, ite_eq_right h']
     rfl
 
 theorem settle_withOrig (f : Frame) (raw : Execution) : (f.withOrig O).settle raw = f.settle raw :=
@@ -276,9 +286,9 @@ theorem frameEnterS_withOrig {f : Frame} {acs : AcctShadow} {e : Evm}
 theorem benvAfterTransferB_withOrig (m : Msg) :
     benvAfterTransferB (m.withOrig O) = (benvAfterTransferB m).map (·.withOrig O) := by
   unfold benvAfterTransferB
-  by_cases h : m.shouldTransferValue = true
-  · have h' : (m.withOrig O).shouldTransferValue = true := h
-    simp only [h, h', ↓reduceIte]
+  by_cases h : m.shouldTransferValue ∧ m.value ≠ 0
+  · have h' : (m.withOrig O).shouldTransferValue ∧ (m.withOrig O).value ≠ 0 := h
+    rw [ite_eq_left h, ite_eq_left h']
     by_cases hb : m.benv.state.bal m.caller < m.value
     · have hb' : (m.withOrig O).benv.state.bal (m.withOrig O).caller < (m.withOrig O).value := hb
       simp only [hb, hb', ↓reduceIte]
@@ -287,8 +297,8 @@ theorem benvAfterTransferB_withOrig (m : Msg) :
         hb
       simp only [hb, hb', ↓reduceIte]
       rfl
-  · have h' : ¬ (m.withOrig O).shouldTransferValue = true := h
-    simp only [h, h', ↓reduceIte]
+  · have h' : ¬ ((m.withOrig O).shouldTransferValue ∧ (m.withOrig O).value ≠ 0) := h
+    rw [ite_eq_right h, ite_eq_right h']
     rfl
 
 /-- **A root frame entry that runs code commutes with the original-state change.** -/
