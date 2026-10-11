@@ -1597,21 +1597,29 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   module supplies its `PopBurn.Inv`, `Burn.Inv`, and lifts the existing generic
   `Linst.Hinv` / `Ninst.Hinv` facts to that observation; it deliberately does
   not manufacture a universal `STATICCALL` `Hinv`.
-  `Exec.rawNodes_isStatic_of_static`, `Exec.retainedStorageWrites_eq_nil_of_static`
-  and `Exec.storageView_committedPost_eq_of_static` are the execution-level
-  facts underneath: the static flag reaches every entered child frame and no
-  `SSTORE` completes in one.  It says nothing about transient storage, logs,
-  balances or gas.
+  `Exec.rawNodes_isStatic_of_static` and
+  `Exec.retainedStorageWrites_eq_nil_of_static` propagate the static flag and
+  exclude successful `SSTORE`. Storage can also change through normalized
+  balance transfer, so `Exec.storageView_committedPost_eq_of_static` and
+  `Exec.getStor_committedPost_eq_of_static` require a protected entry current
+  target or empty interpreter code. Actual `STATICCALL` routing supplies this
+  condition internally; both instruction-level APIs keep their statements.
+  For an arbitrary static root, use
+  `Exec.getStor_committedPost_eq_of_static_protected` at a protected owner and
+  `Exec.protected_committedPost_of_static` to transport that protection.
+  `Msg.protected_of_benvAfterTransfer` transports protection through entry;
+  `Msg.getStor_eq_of_safeTransfer` gives global storage equality for disabled
+  transfer, zero value, or self-transfer at a protected account. These facts
+  say nothing about transient storage, logs, balances or gas.
 - Representation-exact storage silence of static execution:
   [`Blanc/StaticCallStorage.lean`](../Blanc/StaticCallStorage.lean).  Use it
   when the boundary is the `Stor` tree itself (a replay carrier that meets at
   *equal* storages) rather than the extensional `Devm.storageView`.
-  `Exec.getStor_committedPost_eq_of_static` says a committing execution of a
-  static frame ends with exactly its entry storage map at every account,
-  children included on a fork named by the `CoveredFork` predicate (the four
-  pre-Amsterdam forks Prague, Osaka, BPO1 and BPO2; Amsterdam is excluded);
-  `Ninst.staticcall_inv_getStor_exact` lifts that to one successful
-  `STATICCALL` under the same explicit premise.
+  The shared raw-storage proof now lives in `Blanc.StaticStorage`;
+  `Ninst.staticcall_getStor_eq` derives its entry condition from actual routing.
+  `Ninst.staticcall_inv_getStor_exact` exposes the same equality for one
+  successful `STATICCALL` on a fork named by `CoveredFork` (Prague, Osaka,
+  BPO1 and BPO2; Amsterdam is excluded), with no new caller premise.
   For a recursive source walk at one covered `Sevm`, use
   `Func.SilentAt`, `Func.SilentIn.toSilentAt`, and
   `Func.observe_eq_of_run_silentAt`: ordinary instruction leaves still use
