@@ -1555,12 +1555,18 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   child (any outcome) enters no guarded body of the same owner and code;
   `LockSpec.locked_core` keeps the lock cell fixed, slot-addressed owner
   `SSTORE`s absent and `NoRetainedWriteTo` true below any locked node.  Both
-  take the per-code `LockSpec.Dominance` and the per-world
-  `OwnerDiscipline`/`HashAvoidIn` as hypotheses.  Reusable step facts there:
+  take nonempty entry world code at the observed owner, the per-code
+  `LockSpec.Dominance` and per-world `OwnerDiscipline`/`HashAvoidIn` hypotheses.
+  The latter definitions constrain interpreted code and hashes; they do not
+  imply world-code protection. Reusable step facts there:
   `Evm.step_cont_getStor_get` (one cell across a continuing step unless an
   owner `SSTORE` hits its key), `Evm.step_doneOk_getStor_eq`,
-  `Evm.step_spawn_enter_getStor` (an entered child starts from the parent's
-  storage), `Ninst.none_getStor_eq_of_ne_sstore`,
+  `Evm.step_spawn_enter_getStor` (an entered child preserves each protected
+  owner's storage), `Ninst.none_getStor_eq_of_ne_sstore`; all four storage
+  helpers require `State.Protected` at the observed owner.
+  `Exec.Deriv.ParentPrefix.codePreserve` transports code along a same-frame
+  prefix, and `Exec.rawFrameRoots_codePreserve` does so to every raw frame root,
+  for owners with nonempty entry code. Also available:
   `Exec.rawFrameDescendants_entry` (pc 0 and covered fork for every raw
   descendant root) and `Exec.Deriv.ParentPrefix.antisymm`.
 - Storage-owner discipline from world premises:
