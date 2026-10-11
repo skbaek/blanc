@@ -4243,11 +4243,15 @@ contract-neutral.
   `reach_between` is `reach_of_parentPrefix` started at any cursor-placed node;
   `noExec_after_of_cursor` says no later node decodes an external instruction
   when the tree from the cursor on is exec-free; `getStor_post_of_silent` says the
-  frame's post storage is the node's storage when the tree from the cursor on is
-  state-silent (`Reach.silentTo`, `SFunc.silentTree`).
-  `StepIn.exec_getStor_eq_of_noDescendants`: in a frame with no raw descendants a
-  lifted external step keeps storage (its child would be the frame itself, and a
-  child is shallower). Worked use: WETH9 `weth9_exec_node`.
+  frame's post storage at an observed owner is the node's storage when the
+  owner is `State.Protected` at that node and the remaining tree is state-silent
+  (`Reach.silentTo`, `SFunc.silentTree`). The accepted terminal tree includes
+  `SELFDESTRUCT`, so a certificate alone does not protect every world owner.
+  `Evm.step_halt_getStor_eq` likewise takes protection at the pre world.
+  `StepIn.exec_getStor_eq_of_noDescendants` preserves a protected observed
+  owner in a frame with no raw descendants (a child would be the frame itself,
+  yet strictly shallower). Worked use: WETH9 `weth9_exec_node`; obtain owner
+  protection from its existing world-code invariant.
 - Restrict external instruction families along a checked certificate cursor:
   [`Blanc/Lift/CallRestriction.lean`](../Blanc/Lift/CallRestriction.lean) defines
   `SFunc.execsSatisfy` and `Cursor.ExecsSatisfy` (active function and pending

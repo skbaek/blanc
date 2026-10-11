@@ -1037,7 +1037,7 @@ def vyStoreStack (cap lp base src : B256) (R : List B256) : List B256 :=
 /-- An `SSTORE`'s selected charge is at most a cold access plus a fresh set. -/
 theorem sstoreCost_le (sevm : Sevm) (d : Devm) (key value : B256) :
     sstoreCost sevm d key value ≤ gasColdSload + gasStorageSet := by
-  have hv : sstoreValueCost (getOrigStorVal sevm sevm.currentTarget key)
+  have hv : sstoreValueCost (d.getOrigStorVal sevm sevm.currentTarget key)
       (d.getStorVal sevm.currentTarget key) value ≤ gasStorageSet := by
     rw [sstoreValueCost]
     split_ifs <;> decide +kernel

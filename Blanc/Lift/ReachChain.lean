@@ -12,7 +12,7 @@ cursor-placed node (`reach_between`).  Two consequences, both stated for a tree 
 (`SFunc.execFreeIn`) or state-silent (`SFunc.silentTree`) from the cursor on:
 
 * `noExec_after_of_cursor`: no later node decodes an external instruction;
-* `getStor_post_of_silent`: the frame's post storage is the node's storage.
+* `getStor_post_of_silent`: a protected observed owner's post storage is the node's storage.
 
 `Reach.silentTo` is the reach lemma behind the second: a reach that runs only accepted instructions, pops
 and burns, through `dest` and `branch` trees and returns into silent continuations, keeps a step-stable
@@ -189,9 +189,11 @@ theorem Exec.Deriv.exists_halt {pc : Nat} {sevm : Sevm} {d post : Devm}
       Evm.step ⟨H.pc, H.sevm, H.devm⟩ = .halt (.ok post) :=
   exists_halt_aux run post rfl
 
-/-- A successful halting step keeps persistent storage. -/
+/-- A successful halting step keeps a protected observed owner's persistent storage. -/
 theorem Evm.step_halt_getStor_eq {pc : Nat} {sevm : Sevm} {pre post : Devm}
-    (step : Evm.step ⟨pc, sevm, pre⟩ = .halt (.ok post)) : Devm.getStor post = Devm.getStor pre := by
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .halt (.ok post)) (owner : Adr)
+    (protection : State.Protected pre.state owner) :
+    Devm.getStor post owner = Devm.getStor pre owner := by
   cases decoded : Evm.getInst ⟨pc, sevm, pre⟩ with
   | none =>
       unfold Evm.step at step
@@ -201,7 +203,7 @@ theorem Evm.step_halt_getStor_eq {pc : Nat} {sevm : Sevm} {pre post : Devm}
       cases instruction with
       | last last =>
           rw [Evm.step_last decoded] at step
-          exact Linst.getStor_eq (Step.halt.inj step)
+          exact Linst.getStor_eq (Step.halt.inj step) owner protection
       | next next =>
           rw [Evm.step_next decoded] at step
           exact (Ninst.step_ne_halt_ok step).elim
@@ -217,14 +219,16 @@ theorem Evm.step_halt_getStor_eq {pc : Nat} {sevm : Sevm} {pre post : Devm}
 
 /-- **The post storage of a silent tail.**  If a cursor-placed node of a successful certified frame has a
 remaining tree that is state-silent (`ok'`-accepted instructions, pops and burns keep the state) with
-silent pending trees, the frame's post storage is that node's storage. -/
+silent pending trees, a protected observed owner's post storage is that node's storage. -/
 theorem getStor_post_of_silent {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
     {R F : Exec.Deriv} {post : Devm} (hout : R.exn = .ok post)
     (hF : Exec.Deriv.ParentPrefix R F) (hfork : CoveredFork R.sevm.benvStat.fork) {κ : Cursor}
     (ok : CursorOK code c F κ) {ok' : Ninst → Bool}
     (hstep : ∀ {sevm d n d'}, ok' n = true → StepIn R sevm d n d' → d'.state = d.state)
     (hf : κ.f.silentTree ok' = true) (hK : ∀ s ∈ κ.K.map Cont.f, s.silentTree ok' = true) :
-    Devm.getStor post = Devm.getStor F.devm := by
+    ∀ owner, State.Protected F.devm.state owner →
+      Devm.getStor post owner = Devm.getStor F.devm owner := by
+  intro owner protection
   have hFout : F.exn = .ok post := (Exec.Deriv.ParentPrefix.exn_eq hF).trans hout
   obtain ⟨fpc, fsevm, fd, fout, frun⟩ := F
   dsimp only at hFout
@@ -236,22 +240,26 @@ theorem getStor_post_of_silent {code : ByteArray} {c : Cert} (hc : Cert.check co
     (fun hn hs hΨ => (hstep hn hs).trans hΨ)
     (fun pop hΨ => pop.state.symm.trans hΨ) (fun burn hΨ => burn.state.symm.trans hΨ)
     reach hf hK rfl
-  refine (Evm.step_halt_getStor_eq hstepH).trans ?_
-  funext a
-  exact getStor_eq_of_state_eq hstate a
+  have haltedProtection : State.Protected H.devm.state owner := by
+    rw [hstate]
+    exact protection
+  exact (Evm.step_halt_getStor_eq hstepH owner haltedProtection).trans
+    (getStor_eq_of_state_eq hstate owner)
 
 /-! ## A childless external step -/
 
-/-- **An external step of a frame with no raw descendants keeps storage.**  The child of a lifted external
+/-- **An external step of a frame with no raw descendants keeps a protected owner's storage.**  The child of a lifted external
 step lies among the frame's raw roots, which are the frame itself alone, and a child is strictly shallower
-than its parent; so the step has no child, and a childless step keeps persistent storage (it is not an
+than its parent; so the step has no child, and a childless step keeps protected-owner storage (it is not an
 `SSTORE`). -/
 theorem StepIn.exec_getStor_eq_of_noDescendants {R : Exec.Deriv}
     (hdesc : Exec.rawFrameDescendants R.exc = []) {d d' : Devm} {x : Xinst}
-    (h : StepIn R R.sevm d (.exec x) d') : Devm.getStor d' = Devm.getStor d := by
+    (h : StepIn R R.sevm d (.exec x) d') (owner : Adr)
+    (protection : State.Protected d.state owner) :
+    Devm.getStor d' owner = Devm.getStor d owner := by
   obtain ⟨xl, hf, pc, hr⟩ := h
   cases xl with
-  | none => exact Ninst.none_getStor_eq_of_ne_sstore hr (by intro h; cases h)
+  | none => exact Ninst.none_getStor_eq_of_ne_sstore hr (by intro h; cases h) owner protection
   | some p =>
     obtain ⟨evm, exn⟩ := p
     obtain ⟨e, he⟩ := hf

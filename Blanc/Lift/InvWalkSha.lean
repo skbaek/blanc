@@ -38,12 +38,12 @@ theorem meta_of_processMessage_sha256_64_clean
   · rw [hbody.2] at hset
     unfold processMessage.settle at hset
     cases hset
-  · obtain ⟨st_mid, hsub, hbenv⟩ := of_benvAfterTransfer rfl hbt
-    subst benv
+  · rw [Msg.benvAfterTransfer_of_value_zero (by rfl)] at hbt
+    cases hbt
     have hca :
         ((callMsg sevm parent gas 0 sevm.currentTarget 2 2 true true
-          calldata code false).withBenv (((callMsg sevm parent gas 0 sevm.currentTarget 2 2 true
-            true calldata code false).benv.withState st_mid).addBal 2 0)).codeAddress =
+          calldata code false).withBenv (callMsg sevm parent gas 0 sevm.currentTarget 2 2 true
+            true calldata code false).benv).codeAddress =
           some 2 := rfl
     rcases of_executeCode_someCode hca hbody with hpc | hinterp
     · have hexec := hpc.2.2
