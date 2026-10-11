@@ -4258,7 +4258,11 @@ contract-neutral.
   also holds the step facts `LockCheck.pp_back` (a node strictly before a
   successor precedes the node), `LockCheck.lockAt_edge` (one cell across a
   same-frame edge that spawns nothing and stores elsewhere) and
-  `LockCheck.cursor_sstore_node`. Worked use:
+  `LockCheck.cursor_sstore_node`. For a continuing step whose opcode is not
+  any `Xinst`, `LockCheck.step_cont_getStor_get_of_noexec` preserves the
+  current target cell when an SSTORE does not address it, without a fork or
+  protected-owner premise. This generic donor awaits hoisting into the driver
+  storage library during re-pin integration. Worked use:
   `Blanc/Lift/VyperNonreentrantDeployed/Fixed/LockDominance.lean`; the full
   `lock_exclusion` instance (dominance, `ownerDiscipline_of_world` for a
   forwarder owner, `NoDelegateFrom` from the cursor, release-pc activity) is
