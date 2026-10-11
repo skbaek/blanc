@@ -3079,15 +3079,16 @@ rather than climbing it again:
   reflexive reach), and `of_configuredHistoryTrace` / `exists_of_reachUsing`
   realize every retained history or reach from an `S.StateInv` root.
 - Small additions it needed: `ReplayCarrier.ofAddBal_observed` (a direct balance credit
-  is one positive credit at `ca` or no step) and the word-bound transports
+  is one positive credit at `ca` or no step, requiring
+  `C.readsStorage = true → State.Protected pre ca`) and the word-bound transports
   `ExecutionTrace.TransactionTrace.msg_sum_nof` and
   `ExecutionTrace.processWithdrawalsState_sum_nof`.  Four more wrapper facts
   live beside them for ladders that do not fit this one:
   `ExecutionTrace.TransactionTrace.msg_caller` (the prepared message's caller
   is the checked sender), `ExecutionTrace.ApplyTransactionsTrace.stat_eq` (a
   transaction list changes the block environment only through state),
-  `ExecutionTrace.processWithdrawalsState_getStor_eq` (direct withdrawals move
-  balances only) and `ExecutionTrace.AppliedBodyTrace.transactionBound` (the
+  `ExecutionTrace.processWithdrawalsState_getStor_eq` (direct withdrawals preserve
+  storage at each `State.Protected` owner) and `ExecutionTrace.AppliedBodyTrace.transactionBound` (the
   withdrawal word bound survives the body prefix).
 
 Minimal example: `Blanc/DripRealizedLadder.lean` builds
@@ -3127,7 +3128,10 @@ import
   `ReplayCarrier.processMessage_of_body_observed`,
   `processCreateMessage_of_body_observed`, `xinstForeignSome_observed` (the
   child segment of a foreign CALL/CREATE slot), `silentReplay_observed`,
-  `ofStorageEqBalanceMono_observed` and `ofAddBal_observed`.
+  `ofStorageEqBalanceMono_observed` and `ofAddBal_observed`. The raw CREATE
+  twin requires `C.readsStorage = true → msg.currentTarget ≠ ca`; the actual
+  foreign-slot twin requires conditional owner protection and derives CREATE
+  exclusion internally. The local CALL twin keeps its original premises.
 
 The observed statements are the proofs: `ReplayObservation`, the
 `SettlementCarrier.*_observed` engines, `ofStorageEqBalanceMono_observed` and
@@ -3150,7 +3154,14 @@ never a supplied storage chain or endpoint condition. The legacy
 `AccountingLadder.Observed.toAdmitted` adapter derives fresh entry from retained
 traces and preserves the existing compiled API. Shared wrapper bounds and
 `ReplayCarrier.ofAddBal_observed` now lives in the admitted module;
-the old ladder reexports them by import.
+the old ladder reexports them by import. Raw `directWithdrawal` rungs in the
+admitted ladder and both legacy twins require
+`carrier.readsStorage = true → State.Protected pre ca`. Zero credits can
+normalize an unprotected storage-only account; positive credits use the existing
+sum bound to preserve storage. Transaction and body rungs derive protection
+from installed-code invariants and retain their statements. The admitted
+`processCreateMessage` needs no separate fresh-storage premise because its
+existing `targetNe` suffices; legacy CREATE signatures retain that premise.
 
 The single-execution bridge is
 [`Blanc/ExecutionAccountingCore.lean`](../Blanc/ExecutionAccountingCore.lean).

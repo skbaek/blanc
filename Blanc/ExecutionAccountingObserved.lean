@@ -52,7 +52,9 @@ theorem processMessage_of_body_observed (C : ReplayCarrier ca)
       V.obs steps = if Frame.settlementCommits (Frame.ofCall msg) out = true
         then settled else [] :=
   C.toSettlementCarrier.processMessage_of_body_observed V.obs V.obs_nil
-    process caller_ne value_zero sum_nof body
+    process caller_ne value_zero (fun owner observed transfers _ => by
+      rw [observed.1]
+      exact Or.inl (caller_ne transfers)) sum_nof body
 
 /-- `SettlementCarrier.processCreateMessage_of_body_observed` at an
 account-local carrier. -/
@@ -65,7 +67,7 @@ theorem processCreateMessage_of_body_observed (C : ReplayCarrier ca)
     (caller_ne : msg.shouldTransferValue = true → msg.caller ≠ ca)
     (value_zero : msg.shouldTransferValue = false →
       msg.currentTarget = ca → msg.value = 0)
-    (fresh : msg.benv.state.getStor msg.currentTarget = .empty)
+    (targetAway : C.readsStorage = true → msg.currentTarget ≠ ca)
     (sum_nof : sum msg.benv.state.bal < 2 ^ 256)
     {settled : List V.O}
     (body : ∀ committed : Execution.commits out = true, ∃ steps,
@@ -77,7 +79,11 @@ theorem processCreateMessage_of_body_observed (C : ReplayCarrier ca)
       V.obs steps = if Frame.settlementCommits (Frame.ofCreate msg) out = true
         then settled else [] :=
   C.toSettlementCarrier.processCreateMessage_of_body_observed V.obs V.obs_nil
-    process caller_ne value_zero fresh sum_nof body
+    process caller_ne value_zero (fun owner observed => by
+      rw [observed.1]
+      exact targetAway observed.2) (fun owner observed transfers _ => by
+      rw [observed.1]
+      exact Or.inl (caller_ne transfers)) sum_nof body
 
 /-- Recursive accounting transport for one actual filled executable slot in a
 foreign frame, observed.  The `if` is exactly the child segment of
@@ -93,6 +99,7 @@ theorem xinstForeignSome_observed (C : ReplayCarrier ca)
     (resumeRun : resume.run (.ok settled) = .ok post)
     (target_ne : sevm.currentTarget ≠ ca)
     (hfork : CoveredFork sevm.benvStat.fork)
+    (protection : C.readsStorage = true → State.Protected pre.state ca)
     (sum_nof : sum pre.state.bal < 2 ^ 256)
     (child : Exec cevm.pc cevm.sta cevm.dyna raw)
     (body : ∀ childCommitted : Execution.commits raw = true, ∃ steps,
@@ -103,7 +110,9 @@ theorem xinstForeignSome_observed (C : ReplayCarrier ca)
       V.obs steps = (if Frame.settlementCommits frame raw = true
         then (Exec.committedFrames child).flatMap V.frameObs else []) :=
   C.toSettlementCarrier.xinstForeignSome_observed V.obs V.obs_nil spawn
-    frameRun resumeRun target_ne hfork sum_nof body
+    frameRun resumeRun target_ne hfork (fun owner observed => by
+      rw [observed.1]
+      exact protection observed.2) sum_nof body
 
 /-- A transition invisible to this account contributes no step, observed as
 nothing. -/

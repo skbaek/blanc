@@ -159,7 +159,7 @@ theorem processCreateMessage (O : L.Observed)
       O.view.obs steps = trace.settledFrames.flatMap O.view.frameObs := by
   exact O.toAdmitted.processCreateMessage trace (trace.freshFrameAdmitted ca)
     ⟨ContractSpec.msgInv_toSem runReady.ready, runReady.codeOrForeign⟩
-    hfork sumNof targetNone targetNe fresh blockIndex transactionIndex
+    hfork sumNof targetNone targetNe blockIndex transactionIndex
 
 open _root_.Blanc.ExecutionTrace in
 
@@ -273,12 +273,13 @@ open _root_.Blanc.ExecutionTrace in
 /-- G8, observed: direct withdrawals are observed as nothing. -/
 theorem directWithdrawal (O : L.Observed)
     (pre : State) (wds : List Withdrawal)
+    (protection : L.carrier.readsStorage = true → State.Protected pre ca)
     (bound : sum pre.bal + wdsum wds < 2 ^ 256)
     (blockIndex : Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState pre) steps
       (L.carrier.ofState (processWithdrawalsState pre wds)) ∧
       O.view.obs steps = [] := by
-  exact O.toAdmitted.directWithdrawal pre wds bound blockIndex
+  exact O.toAdmitted.directWithdrawal pre wds protection bound blockIndex
 
 open _root_.Blanc.ExecutionTrace in
 
@@ -464,11 +465,12 @@ open _root_.Blanc.ExecutionTrace in
 /-- G8.  The direct consensus withdrawals. -/
 theorem directWithdrawal (L : AccountingLadder S ca)
     (pre : State) (wds : List Withdrawal)
+    (protection : L.carrier.readsStorage = true → State.Protected pre ca)
     (bound : sum pre.bal + wdsum wds < 2 ^ 256)
     (blockIndex : Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState pre) steps
       (L.carrier.ofState (processWithdrawalsState pre wds)) := by
-  exact ((Observed.trivial L).directWithdrawal pre wds bound blockIndex).imp
+  exact ((Observed.trivial L).directWithdrawal pre wds protection bound blockIndex).imp
     fun _ replay => replay.1
 
 open _root_.Blanc.ExecutionTrace in

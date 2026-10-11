@@ -58,16 +58,17 @@ theorem TransactionTrace.msg_caller
   rw [← h]
   rfl
 
-/-- G+3.  The direct withdrawals move balances only. -/
+/-- G+3. Direct withdrawals preserve storage at each protected owner. -/
 theorem processWithdrawalsState_getStor_eq (ca : Adr) (state : State)
-    (withdrawals : List Withdrawal) :
+    (withdrawals : List Withdrawal) (protection : State.Protected state ca) :
     (processWithdrawalsState state withdrawals).getStor ca = state.getStor ca := by
   induction withdrawals generalizing state with
   | nil => rfl
   | cons withdrawal withdrawals ih =>
-      rw [processWithdrawalsState_cons, ih]
-      show ((state.setBal withdrawal.recipient _).get ca).stor = (state.get ca).stor
-      rw [State.setBal_get_stor]
+      rw [processWithdrawalsState_cons]
+      change (processWithdrawalsState (state.setBal withdrawal.recipient _) withdrawals).getStor ca = _
+      rw [ih _ (protection.setBal _ _)]
+      exact State.setBal_get_stor_of_protected protection
 
 /-- G+4.  The block's withdrawal bound survives the body prefix. -/
 theorem AppliedBodyTrace.transactionBound
@@ -104,14 +105,42 @@ variable {ca : Adr}
 theorem ofAddBal_observed (C : ReplayCarrier ca) (V : ReplayObservation C)
     (tag : C.Tag)
     {target : Adr} {pre : State} {value : B256}
+    (protection : C.readsStorage = true → State.Protected pre ca)
     (sum_nof : sum pre.bal + value.toNat < 2 ^ 256) :
     ∃ steps, C.Replay (C.ofState pre) steps
       (C.ofState (pre.addBal target value)) ∧ V.obs steps = [] := by
+  by_cases zero : value = 0
+  · subst value
+    have balance : ((pre.addBal target 0).bal ca).toNat = (pre.bal ca).toNat := by
+      by_cases targetEq : target = ca
+      · subst target
+        change (((pre.setBal ca (pre.bal ca + 0)).get ca).bal).toNat = _
+        rw [State.setBal_get_self, Acct.clearIfEmpty_bal]
+        simp only [Acct.withBal, B256.add_zero]
+      · exact congrArg B256.toNat (congrArg Acct.bal (State.setBal_get_ne targetEq))
+    refine ⟨[], C.nilOfEq (C.silent (fun reads => ?_) balance), V.obs_nil⟩
+    exact State.setBal_get_stor_of_protected (protection reads)
   have storage_eq :
       (pre.addBal target value).getStor ca = pre.getStor ca := by
-    show ((pre.setBal target (pre.bal target + value)).get ca).stor =
-      (pre.get ca).stor
-    rw [State.setBal_get_stor]
+    by_cases targetEq : target = ca
+    · subst target
+      have nof : B256.Nof (pre.bal ca) value := by
+        unfold B256.Nof
+        have balanceLe : (pre.bal ca).toNat ≤ sum pre.bal := le_sum
+        omega
+      have valuePositive : 0 < value.toNat := by
+        have valueNatNe : value.toNat ≠ 0 := fun h => zero (B256.toNat_inj _ _ h)
+        omega
+      have positive : 0 < (pre.bal ca + value).toNat := by
+        rw [B256.toNat_add_eq_of_nof _ _ nof]
+        omega
+      show ((pre.setBal ca (pre.bal ca + value)).get ca).stor = (pre.get ca).stor
+      rw [State.setBal_get_stor, ite_eq_right (by
+        intro empty
+        have balanceZero : pre.bal ca + value = 0 := empty.2.2.2
+        rw [balanceZero] at positive
+        exact Nat.lt_irrefl 0 positive)]
+    · exact congrArg Acct.stor (State.setBal_get_ne targetEq)
   apply C.ofStorageEqBalanceMono_observed V tag storage_eq
   by_cases target_eq : target = ca
   · subst target
@@ -121,7 +150,7 @@ theorem ofAddBal_observed (C : ReplayCarrier ca) (V : ReplayObservation C)
       omega
     have word_eq : (pre.addBal ca value).bal ca = pre.bal ca + value := by
       show ((pre.setBal ca (pre.bal ca + value)).get ca).bal = _
-      rw [State.setBal_get_self]
+      rw [State.setBal_get_self, Acct.clearIfEmpty_bal]
       rfl
     rw [word_eq, B256.toNat_add_eq_of_nof _ _ nof]
     omega
@@ -204,9 +233,8 @@ theorem processMessage (L : AccountingLadderAdmitted c ca entry)
       obtain ⟨steps, replay, observed⟩ :=
         L.carrier.ofStorageEqBalanceMono_observed L.view
           (L.tag blockIndex transactionIndex)
-          (congrFun
-            (_root_.Blanc.ExecutionTrace.ProcessMessage.none_ok_getStor_eq
-              process) ca)
+          (_root_.Blanc.ExecutionTrace.ProcessMessage.none_ok_getStor_eq
+            process ca (State.Protected.of_image runReady.ready.state.code))
           (_root_.Blanc.ProcessMessage.targetBalanceMono_of_none process
             runReady.ready.ne sumNof)
       exact ⟨steps, replay, by simp only [observed,
@@ -224,7 +252,9 @@ theorem processMessage (L : AccountingLadderAdmitted c ca entry)
       obtain ⟨steps, replay, observed⟩ :=
         L.carrier.toSettlementCarrier.processMessage_of_body_observed
           L.view.obs L.view.obs_nil process runReady.ready.ne
-          runReady.ready.val0 sumNof fun committed =>
+          runReady.ready.val0 (fun owner observed transfers _ => by
+            rw [observed.1]
+            exact Or.inl (runReady.ready.ne transfers)) sumNof fun committed =>
             L.root blockIndex transactionIndex run transfer evmEq committed admitted
               runReady callerNe rootFork sumNof
       refine ⟨steps, replay, ?_⟩
@@ -241,7 +271,6 @@ theorem processCreateMessage (L : AccountingLadderAdmitted c ca entry)
     (sumNof : sum msg.benv.state.bal < 2 ^ 256)
     (targetNone : msg.target.isNone = true)
     (targetNe : msg.currentTarget ≠ ca)
-    (fresh : msg.benv.state.getStor msg.currentTarget = .empty)
     (blockIndex : Nat) (transactionIndex : Option Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState msg.benv.state) steps
       (L.carrier.ofState post.state) ∧
@@ -252,9 +281,8 @@ theorem processCreateMessage (L : AccountingLadderAdmitted c ca entry)
       obtain ⟨steps, replay, observed⟩ :=
         L.carrier.ofStorageEqBalanceMono_observed L.view
           (L.tag blockIndex transactionIndex)
-          (congrFun
-            (_root_.Blanc.ExecutionTrace.ProcessCreateMessage.none_ok_getStor_eq_of_empty
-              process fresh) ca)
+          (_root_.Blanc.ExecutionTrace.ProcessCreateMessage.none_ok_getStor_eq_of_protected_ne
+            process ca (State.Protected.of_image runReady.ready.state.code) targetNe)
           (_root_.Blanc.ProcessCreateMessage.targetBalanceMono_of_none process
             runReady.ready.ne sumNof)
       exact ⟨steps, replay, by simp only [observed,
@@ -288,7 +316,11 @@ theorem processCreateMessage (L : AccountingLadderAdmitted c ca entry)
       obtain ⟨steps, replay, observed⟩ :=
         L.carrier.toSettlementCarrier.processCreateMessage_of_body_observed
           L.view.obs L.view.obs_nil process runReady.ready.ne
-          runReady.ready.val0 fresh sumNof fun committed =>
+          runReady.ready.val0 (fun owner observed => by
+            rw [observed.1]
+            exact targetNe) (fun owner observed transfers _ => by
+            rw [observed.1]
+            exact Or.inl (runReady.ready.ne transfers)) sumNof fun committed =>
             L.root blockIndex transactionIndex run transfer evmEq committed admitted
               (preparedInv.runReady_of_foreign preparedTargetNe)
               (fun target => absurd target preparedTargetNe) rootFork preparedSum
@@ -327,10 +359,9 @@ theorem messageCall (L : AccountingLadderAdmitted c ca entry)
         rcases runReady.codeOrForeign with call | foreign
         · exact Bool.noConfusion (targetNone.symm.trans call)
         · exact foreign
-      have fresh := messageCreateCollision_false_getStor_eq_empty collision
       obtain ⟨steps, replay, observed⟩ :=
         L.processCreateMessage inner admitted runReady hfork sumNof targetNone targetNe
-          fresh blockIndex transactionIndex
+          blockIndex transactionIndex
       refine ⟨steps, ?_, by simpa only [MessageCallTrace.settledFrames,
         ProcessCreateMessageTrace.settledFrames, ExceptT.stM_eq] using observed⟩
       rw [processMessageCall_createRun_state_eq targetNone collision core result hfork]
@@ -358,10 +389,11 @@ theorem messageCall (L : AccountingLadderAdmitted c ca entry)
           messageCallDelegation_caller_eq delegation]
         exact callerNe target
       have storEq :
-          (messageCallExecutionMessage delegated).benv.state.getStor =
-            msg.benv.state.getStor := by
-        rw [messageCallExecutionMessage_getStor_eq,
-          messageCallDelegation_getStor_eq delegation]
+          (messageCallExecutionMessage delegated).benv.state.getStor ca =
+            msg.benv.state.getStor ca := by
+        rw [messageCallExecutionMessage_getStor_eq]
+        exact messageCallDelegation_getStor_eq delegation ca runReady.ready.nodel.code
+          (c.sem.not_delegation runReady.ready.state.code)
       have balEq :
           (messageCallExecutionMessage delegated).benv.state.bal =
             msg.benv.state.bal := by
@@ -370,7 +402,7 @@ theorem messageCall (L : AccountingLadderAdmitted c ca entry)
       have snapshotEq :
           L.carrier.ofState (messageCallExecutionMessage delegated).benv.state =
             L.carrier.ofState msg.benv.state :=
-        L.carrier.silent (congrFun storEq ca)
+        L.carrier.silent (fun _ => storEq)
           (congrArg B256.toNat (congrFun balEq ca))
       have execSum :
           sum (messageCallExecutionMessage delegated).benv.state.bal <
@@ -455,7 +487,7 @@ theorem transaction (L : AccountingLadderAdmitted c ca entry)
         L.carrier.ofState benv.state := by
     rw [prepareMessage_benv trace.prepared]
     show L.carrier.ofState trace.debitState = _
-    exact L.carrier.silent trace.debitState_getStor_eq
+    exact L.carrier.silent (fun _ => trace.debitState_getStor_eq)
       (congrArg B256.toNat (trace.debitState_bal_eq senderNe))
   -- (2) the prepared message, by G3'
   obtain ⟨messageSteps, messageReplay, messageObserved⟩ :=
@@ -465,15 +497,21 @@ theorem transaction (L : AccountingLadderAdmitted c ca entry)
   -- (3), (4) the two gas credits, funded by the transaction's own debit
   obtain ⟨refundBound, tipBound⟩ :=
     trace.settlement_sum_bounds chronology.refundCounter sumNof hfork
+  have messageInv := trace.message.stateInv_admitted_sem L.preserves (by
+    rw [prepareMessage_benv trace.prepared]
+    simpa only [Benv.beginTransaction] using hfork) admitted
+      (trace.msgInv_sem inv notCreated)
+  have messageProtected := State.Protected.of_image messageInv.1.code
   obtain ⟨refundSteps, refundReplay, refundObserved⟩ :=
     L.carrier.ofAddBal_observed L.view (L.tag blockIndex transactionIndex)
       (target := trace.sender) (pre := trace.messageState)
-      (value := trace.refundValue chronology.refundCounter) refundBound
+      (value := trace.refundValue chronology.refundCounter) (fun _ => messageProtected) refundBound
   obtain ⟨tipSteps, tipReplay, tipObserved⟩ :=
     L.carrier.ofAddBal_observed L.view (L.tag blockIndex transactionIndex)
       (target := benv.stat.coinbase)
       (pre := trace.refundedState chronology.refundCounter)
-      (value := trace.coinbaseValue chronology.refundCounter) tipBound
+      (value := trace.coinbaseValue chronology.refundCounter)
+      (fun _ => messageProtected.setBal _ _) tipBound
   have refundReplay' :
       L.carrier.Replay (L.carrier.ofState trace.messageState) refundSteps
         (L.carrier.ofState (trace.refundedState chronology.refundCounter)) :=
@@ -481,15 +519,12 @@ theorem transaction (L : AccountingLadderAdmitted c ca entry)
   -- (5) the deletion fold never names `ca`
   have deleteGet := foldl_destroyAccount_get_eq
     (state := trace.coinbaseState chronology.refundCounter)
-    (trace.message.stateInv_admitted_sem L.preserves (by
-      rw [prepareMessage_benv trace.prepared]
-      simpa only [Benv.beginTransaction] using hfork) admitted
-      (trace.msgInv_sem inv notCreated)).2
+    messageInv.2
   have finalSnapshot :
       L.carrier.ofState state =
         L.carrier.ofState (trace.coinbaseState chronology.refundCounter) :=
     (congrArg L.carrier.ofState chronology.finalState_eq).trans
-      (L.carrier.silent (congrArg Acct.stor deleteGet)
+      (L.carrier.silent (fun _ => congrArg Acct.stor deleteGet)
         (congrArg B256.toNat (congrArg Acct.bal deleteGet)))
   have tipReplay' :
       L.carrier.Replay
@@ -617,6 +652,7 @@ open _root_.Blanc.ExecutionTrace in
 /-- G8, observed: direct withdrawals are observed as nothing. -/
 theorem directWithdrawal (L : AccountingLadderAdmitted c ca entry)
     (pre : State) (wds : List Withdrawal)
+    (protection : L.carrier.readsStorage = true → State.Protected pre ca)
     (bound : sum pre.bal + wdsum wds < 2 ^ 256)
     (blockIndex : Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState pre) steps
@@ -628,8 +664,9 @@ theorem directWithdrawal (L : AccountingLadderAdmitted c ca entry)
       obtain ⟨headBound, tailBound⟩ := withdrawalCredit_bounds bound
       obtain ⟨headSteps, headReplay, headObserved⟩ :=
         L.carrier.ofAddBal_observed L.view (L.tag blockIndex none)
-          (target := wd.recipient) headBound
-      obtain ⟨tailSteps, tailReplay, tailObserved⟩ := ih _ tailBound
+          (target := wd.recipient) protection headBound
+      obtain ⟨tailSteps, tailReplay, tailObserved⟩ :=
+        ih _ (fun reads => (protection reads).setBal _ _) tailBound
       refine ⟨headSteps ++ tailSteps, ?_, ?_⟩
       · rw [processWithdrawalsState_cons]
         exact L.append headReplay tailReplay
@@ -701,7 +738,8 @@ theorem body (L : AccountingLadderAdmitted c ca entry)
         (by simpa only [Benv.withState] using hfork)
     omega
   obtain ⟨wdSteps, wdReplay, wdObserved⟩ :=
-    L.directWithdrawal trace.transactionBenv.state wds txBound blockIndex
+    L.directWithdrawal trace.transactionBenv.state wds
+      (fun _ => State.Protected.of_image txInv.state.code) txBound blockIndex
   have wdInv := benvInv_processWithdrawalsState_sem txInv txBound
   have wdSum :
       sum (trace.transactionBenv.withState (processWithdrawalsState
