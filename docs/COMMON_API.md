@@ -4434,8 +4434,17 @@ contract-neutral.
   directly (kernel-reducible at the pinned Jaune), the kernel-cheap memory write
   `memWriteB` (with `mem_write_eq_B`), the `CALL`
   preparation `callPrep`/`callPrep_spec`, and chunk composition `wrun_add`/`wrun_add_cont`
-  in [`Blanc/Lift/WitnessArms.lean`](../Blanc/Lift/WitnessArms.lean); the soundness
-  theorem `Witness.wrun_exact` (from `wrun_cont`/`wrun_done` over `RunK`/`Agree`), the
+  in [`Blanc/Lift/WitnessArms.lean`](../Blanc/Lift/WitnessArms.lean). Transfer
+  shadows use `storSetBal` and `storTransfer`: account deletion filters every
+  cell at that owner, debit precedes credit, and zero value leaves the shadows
+  unchanged. `lookupS_filter_owner`, `storSetBal_agree`, and
+  `benvAfterTransferS_stor` prove these exact storage projections;
+  `acctView_clearIfEmpty` preserves the account-view fields. The raw
+  `storOf_setBal` now returns a conditional zero for deletion, and
+  `benvAfterTransferB_stor` concludes agreement with the transferred shadow.
+  `frameEnterB_done_acc` preserves accessed sets; use the separate
+  `frameEnterB_done_ok_state` for a successful child's actual transfer world.
+  The soundness theorem `Witness.wrun_exact` (from `wrun_cont`/`wrun_done` over `RunK`/`Agree`), the
   shadow seeds `stateFoldAcct`/`stateFoldStor`, and code children supplied as data
   (`ChildOk`, `ChildAgree`, `callResume`) in
   [`Blanc/Lift/Witness.lean`](../Blanc/Lift/Witness.lean). A code child discharged by its

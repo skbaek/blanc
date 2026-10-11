@@ -399,7 +399,7 @@ def sstoreStep (sevm : Sevm) (c : Cfg) (g : SFunc) : Option Cfg :=
   match c.devm.stack with
   | k :: v :: s =>
     let ct := sevm.currentTarget
-    let orig := getOrigStorVal sevm ct k
+    let orig := c.devm.getOrigStorVal sevm ct k
     let cur := lookupS c.stor ct k
     let rc := sstoreNewRefundCounter sevm.benvStat.rules.gas v orig cur c.devm.refundCounter
     if sevm.benvStat.rules.stateGas.isNone ∧ gCallStipend < c.devm.gasLeft ∧
@@ -511,40 +511,48 @@ theorem accessCost_eq_L {x : Adr} {s : AdrSet} {l : List Adr} (h : ∀ a, a ∈ 
   unfold accessCost accessCostL
   simp only [h x]
 
+/-- Normalization preserves the fields recorded by the account shadow. -/
+theorem acctView_clearIfEmpty (ac : Acct) : acctView ac.clearIfEmpty = acctView ac := by
+  apply Acct.ext <;> simp only [acctView, Acct.clearIfEmpty_bal,
+    Acct.clearIfEmpty_nonce, Acct.clearIfEmpty_code]
+
 theorem acctAgree_setBal {st : State} {acs : AcctShadow} (h : AcctAgree st acs) (a : Adr)
     (v : B256) : AcctAgree (State.setBal st a v) (acsSetBal acs a v) := by
   intro b
-  unfold State.setBal acsSetBal
-  rw [acctView_get_set]
-  simp only [lookupA]
-  split
-  · subst_vars
-    rw [← h]; rfl
-  · exact h b
+  by_cases same : a = b
+  · subst b
+    rw [State.setBal_get_self, acctView_clearIfEmpty]
+    simp only [acsSetBal, lookupA, ite_true]
+    rw [← h a]
+    rfl
+  · rw [State.setBal_get_ne same]
+    simp only [acsSetBal, lookupA, same, ite_false]
+    exact h b
 
 /-- `Msg.benvAfterTransfer` with the transfer written through `State.setBal`. -/
 def benvAfterTransferB (msg : Msg) : Except (EvmError × State × AdrSet × Tra) Benv :=
-  if msg.shouldTransferValue then
+  if msg.shouldTransferValue ∧ msg.value ≠ 0 then
     if msg.benv.state.bal msg.caller < msg.value then
       .error ⟨.internal (.assertion .none), msg.benv.state, msg.benv.createdAccounts,
         msg.tenv.transientStorage⟩
     else
       let st1 := State.setBal msg.benv.state msg.caller (msg.benv.state.bal msg.caller - msg.value)
-      .ok ((msg.benv.withState st1).withState
-        (State.setBal st1 msg.currentTarget (st1.bal msg.currentTarget + msg.value)))
+      .ok ((((msg.benv.withState st1).clearStorageWritesIfEmpty msg.caller).withState
+        (State.setBal st1 msg.currentTarget (st1.bal msg.currentTarget + msg.value))).clearStorageWritesIfEmpty
+          msg.currentTarget)
   else .ok msg.benv
 
 theorem benvAfterTransfer_eq_B (msg : Msg) : msg.benvAfterTransfer = benvAfterTransferB msg := by
   unfold Msg.benvAfterTransfer benvAfterTransferB
-  by_cases ht : msg.shouldTransferValue = true
-  · simp only [ht, ↓reduceIte]
+  by_cases ht : msg.shouldTransferValue ∧ msg.value ≠ 0
+  · simp only [ht]
     by_cases hb : msg.benv.state.bal msg.caller < msg.value
-    · simp only [Option.toExcept, Benv.subBal, State.subBal, hb, ↓reduceIte, Option.bind_eq_bind,
-      Option.bind_none, Except.bind_error]
-    · simp only [Option.toExcept, Benv.subBal, State.subBal, hb, ↓reduceIte, Option.bind_eq_bind,
-      Option.bind_some, Benv.addBal, State.addBal, Except.bind_ok, Except.ok.injEq]
+    · simp only [Option.toExcept, Benv.subBal, State.subBal, hb, ite_true,
+        Option.bind_eq_bind, Option.bind_none, Except.bind_error]
+    · simp only [Option.toExcept, Benv.subBal, State.subBal, hb, ite_false,
+        Option.bind_eq_bind, Option.bind_some, Benv.addBal, State.addBal, Except.bind_ok]
       rfl
-  · simp only [ht, Bool.false_eq_true, ↓reduceIte]
+  · simp only [ht, ite_false]
 
 /-- `Frame.enter` through `benvAfterTransferB`. -/
 def frameEnterB (f : Frame) : FrameEntry :=
@@ -564,7 +572,7 @@ theorem frame_enter_eq_B (f : Frame) : f.enter = frameEnterB f := by
 the transfer test never inspects the world state. -/
 def benvAfterTransferS (msg : Msg) (acs : AcctShadow) :
     Except (EvmError × State × AdrSet × Tra) Benv :=
-  if msg.shouldTransferValue then
+  if msg.shouldTransferValue ∧ msg.value ≠ 0 then
     if (lookupA acs msg.caller).bal < msg.value then
       .error ⟨.internal (.assertion .none), msg.benv.state, msg.benv.createdAccounts,
         msg.tenv.transientStorage⟩
@@ -572,12 +580,13 @@ def benvAfterTransferS (msg : Msg) (acs : AcctShadow) :
       let st1 := State.setBal msg.benv.state msg.caller ((lookupA acs msg.caller).bal - msg.value)
       let bt := (lookupA (acsSetBal acs msg.caller ((lookupA acs msg.caller).bal - msg.value))
         msg.currentTarget).bal
-      .ok ((msg.benv.withState st1).withState (State.setBal st1 msg.currentTarget (bt + msg.value)))
+      .ok ((((msg.benv.withState st1).clearStorageWritesIfEmpty msg.caller).withState
+        (State.setBal st1 msg.currentTarget (bt + msg.value))).clearStorageWritesIfEmpty msg.currentTarget)
   else .ok msg.benv
 
 /-- The account shadow after a value transfer. -/
 def acsTransfer (msg : Msg) (acs : AcctShadow) : AcctShadow :=
-  if msg.shouldTransferValue then
+  if msg.shouldTransferValue ∧ msg.value ≠ 0 then
     let acs1 := acsSetBal acs msg.caller ((lookupA acs msg.caller).bal - msg.value)
     acsSetBal acs1 msg.currentTarget ((lookupA acs1 msg.currentTarget).bal + msg.value)
   else acs
@@ -604,14 +613,14 @@ theorem acctAgree_transfer {msg : Msg} {acs : AcctShadow} {benv : Benv}
   unfold acsTransfer
   split at ht
   · rename_i hsv
-    simp only [hsv, ↓reduceIte]
+    rw [ite_eq_left hsv]
     split at ht
     · cases ht
     · cases ht
       exact acctAgree_setBal (acctAgree_setBal h _ _) _ _
   · rename_i hsv
     cases ht
-    simp only [hsv, Bool.false_eq_true, ↓reduceIte]
+    rw [ite_eq_right hsv]
     exact h
 
 /-- `Frame.enter` through `benvAfterTransferS`. -/
@@ -848,33 +857,93 @@ theorem callPrep_spec {sevm : Sevm} {c : Cfg} {cp : CallPrep} (h : callPrep sevm
     · cases h
   · cases h
 
+/-- Exact storage projection of a balance update, including empty-account deletion. -/
 theorem storOf_setBal (st : State) (b : Adr) (v : B256) (a : Adr) (k : B256) :
-    storOf (State.setBal st b v) a k = storOf st a k := by
-  unfold storOf State.setBal
-  by_cases h : b = a
-  · subst h; rw [State.get_set_self]; rfl
-  · rw [State.get_set_ne _ h]
+    storOf (State.setBal st b v) a k =
+      if b = a ∧ ((st.get b).withBal v).Empty then 0 else storOf st a k := by
+  unfold storOf
+  rw [State.setBal_get_stor]
+  split <;> rfl
 
-/-- A value transfer moves balances only. -/
-theorem benvAfterTransferB_stor {m : Msg} {benv : Benv} (h : benvAfterTransferB m = .ok benv) :
-    ∀ a k, storOf benv.state a k = storOf m.benv.state a k := by
+/-- Drop every cell of an account deleted by normalization. -/
+def storSetBal (stor : StorShadow) (acs : AcctShadow) (owner : Adr) (value : B256) : StorShadow :=
+  if ((lookupA acs owner).withBal value).Empty then
+    stor.filter (fun row => row.1.1 != owner)
+  else stor
+
+theorem lookupS_filter_owner (stor : StorShadow) (owner a : Adr) (key : B256) :
+    lookupS (stor.filter (fun row => row.1.1 != owner)) a key =
+      if owner = a then 0 else lookupS stor a key := by
+  induction stor with
+  | nil => simp only [List.filter_nil, lookupS]; split <;> rfl
+  | cons row rest ih =>
+      rcases row with ⟨⟨address, slot⟩, value⟩
+      by_cases own : owner = a <;> by_cases hit : address = owner <;>
+        simp_all only [List.filter_cons, bne_iff_ne, ne_eq, lookupS,
+          false_and, ite_true, ite_false, not_true_eq_false, not_false_eq_true]
+
+/-- A raw balance mutation is represented exactly on both shadows. -/
+theorem storSetBal_agree {st : State} {acs : AcctShadow} {stor : StorShadow}
+    (hC : AcctAgree st acs) (hS : ∀ a k, storOf st a k = lookupS stor a k)
+    (owner : Adr) (value : B256) :
+    ∀ a k, storOf (st.setBal owner value) a k = lookupS (storSetBal stor acs owner value) a k := by
   intro a k
-  unfold benvAfterTransferB at h
-  split at h
-  · split at h
-    · cases h
-    · cases h
-      show storOf (State.setBal _ _ _) a k = _
-      rw [storOf_setBal, storOf_setBal]
-  · cases h; rfl
+  have empty : ((st.get owner).withBal value).Empty ↔
+      ((lookupA acs owner).withBal value).Empty := by
+    rw [← hC owner]
+    rfl
+  rw [storOf_setBal]
+  unfold storSetBal
+  by_cases deleted : ((lookupA acs owner).withBal value).Empty
+  · rw [ite_eq_left deleted, lookupS_filter_owner]
+    simp only [empty.mpr deleted, and_true, hS]
+  · rw [ite_eq_right deleted]
+    simp only [show ¬ ((st.get owner).withBal value).Empty from fun h => deleted (empty.mp h),
+      and_false, ite_false, hS]
 
-/-- A precompile child leaves the accessed sets it was given, and the storage. -/
+/-- Storage normalization for a transfer: debit, then credit using the updated
+account shadow. A zero-value transfer leaves both shadows untouched. -/
+def storTransfer (msg : Msg) (stor : StorShadow) (acs : AcctShadow) : StorShadow :=
+  if msg.shouldTransferValue ∧ msg.value ≠ 0 then
+    let debit := (lookupA acs msg.caller).bal - msg.value
+    let acs1 := acsSetBal acs msg.caller debit
+    storSetBal (storSetBal stor acs msg.caller debit) acs1 msg.currentTarget
+      ((lookupA acs1 msg.currentTarget).bal + msg.value)
+  else stor
+
+/-- Successful shadow entry applies precisely the storage-shadow transfer. -/
+theorem benvAfterTransferS_stor {m : Msg} {benv : Benv} {acs : AcctShadow} {stor : StorShadow}
+    (h : benvAfterTransferS m acs = .ok benv) (hC : AcctAgree m.benv.state acs)
+    (hS : ∀ a k, storOf m.benv.state a k = lookupS stor a k) :
+    ∀ a k, storOf benv.state a k = lookupS (storTransfer m stor acs) a k := by
+  unfold benvAfterTransferS at h
+  unfold storTransfer
+  split at h
+  · rename_i transfer
+    rw [ite_eq_left transfer]
+    split at h
+    · cases h
+    · cases h
+      exact storSetBal_agree (acctAgree_setBal hC _ _) (storSetBal_agree hC hS _ _) _ _
+  · rename_i transfer
+    cases h
+    rw [ite_eq_right transfer]
+    exact hS
+
+/-- Successful entry agrees with the exact storage transfer, including deletion. -/
+theorem benvAfterTransferB_stor {m : Msg} {benv : Benv} {acs : AcctShadow} {stor : StorShadow}
+    (h : benvAfterTransferB m = .ok benv) (hC : AcctAgree m.benv.state acs)
+    (hS : ∀ a k, storOf m.benv.state a k = lookupS stor a k) :
+    ∀ a k, storOf benv.state a k = lookupS (storTransfer m stor acs) a k := by
+  rw [benvAfterTransfer_eq_S hC] at h
+  exact benvAfterTransferS_stor h hC hS
+
+/-- A precompile child leaves the accessed sets it was given. -/
 theorem frameEnterB_done_acc {f : Frame} {child : Devm} (hf : f.isCreate = false)
     (hsg : f.inner.benv.stat.rules.stateGas = none)
     (h : frameEnterB f = .done (.ok child)) :
     child.accessedAddresses = f.inner.accessedAddresses ∧
-      child.accessedStorageKeys = f.inner.accessedStorageKeys ∧
-      ∀ a k, storOf child.state a k = storOf f.inner.benv.state a k := by
+      child.accessedStorageKeys = f.inner.accessedStorageKeys := by
   unfold frameEnterB at h
   split at h
   · simp only [Frame.settleMsg, hf, Bool.false_eq_true, ↓reduceIte, processMessage.settle, bind,
@@ -899,10 +968,10 @@ theorem frameEnterB_done_acc {f : Frame} {child : Devm} (hf : f.isCreate = false
             cases m <;>
               simp only [processMessage.settle, bind, Except.bind, executeCode.handleError, reduceCtorEq] at h <;>
               (try split at h) <;> (try cases h) <;>
-              first | exact ⟨rfl, rfl, fun _ _ => rfl⟩ | exact ⟨rfl, rfl, benvAfterTransferB_stor hb⟩
+              exact ⟨rfl, rfl⟩
           · simp only [processMessage.settle, bind, Except.bind, executeCode.handleError] at h
             split at h <;> cases h <;>
-              first | exact ⟨rfl, rfl, fun _ _ => rfl⟩ | exact ⟨rfl, rfl, benvAfterTransferB_stor hb⟩
+              exact ⟨rfl, rfl⟩
         · cases he
 
 /-- A precompile child that succeeds ends in the world the value transfer made. -/
@@ -936,11 +1005,11 @@ theorem frameEnterB_done_ok_state {f : Frame} {child : Devm} (hf : f.isCreate = 
               simp only [processMessage.settle, bind, Except.bind, executeCode.handleError, reduceCtorEq] at h <;>
               (try split at h) <;> (try cases h) <;> first | rfl | (exfalso; simp_all only [Msg.withBenv_stat_rules,
                 Bool.and_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true, Devm.error, Devm.rollback,
-                Devm.setWorld, Bool.true_eq_false])
+                Devm.setWorld, Devm.withStorageWrites, Bool.true_eq_false])
           · simp only [processMessage.settle, bind, Except.bind, executeCode.handleError] at h
             split at h <;> cases h <;> first | rfl | (exfalso; simp_all only [Msg.withBenv_stat_rules,
               Bool.and_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true, Devm.error, Devm.rollback,
-              Devm.setWorld, Bool.true_eq_false])
+              Devm.setWorld, Devm.withStorageWrites, Bool.true_eq_false])
         · cases he
 
 /-- A frame whose entry is the same under every covered fork: its code address is neither
@@ -953,7 +1022,7 @@ def frameEntryForkFree (f : Frame) : Bool :=
   | none => true
 
 /-- A `CALL` whose child answers synchronously (a precompile) and succeeds, run to
-the parent's resumed state; the account shadow takes the value transfer.  A call into
+the parent's resumed state; both shadows take the exact value transfer.  A call into
 `MODEXP` or `P256VERIFY` (`frameEntryForkFree`) is not run: those two precompiles are the
 only ones whose behaviour depends on the covered fork, and a run that avoids them holds under
 every covered fork. -/
@@ -964,7 +1033,7 @@ def callStep (sevm : Sevm) (c : Cfg) (g : SFunc) : Option Cfg :=
     | .done (.ok child) =>
       if child.error.isSome = false ∧ frameEntryForkFree cp.f = true then
         match resumeCallB cp.p cp.oi cp.os (.ok child) with
-        | some d => some ⟨d, g, c.K, c.keys, cp.adrs, c.stor, acsTransfer cp.f.inner c.acs⟩
+        | some d => some ⟨d, g, c.K, c.keys, cp.adrs, storTransfer cp.f.inner c.stor c.acs, acsTransfer cp.f.inner c.acs⟩
         | none => none
       else none
     | _ => none
