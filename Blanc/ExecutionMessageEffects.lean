@@ -12,6 +12,72 @@ namespace Blanc
 
 open Jaune
 
+/-- A CREATE that completes before spawning preserves every owner's storage.
+The only state update is a creator nonce increment guarded against wrapping. -/
+theorem GenericCreate.step_done_getStor
+    {sevm : Sevm} {pre post : Devm} {endowment : B256} {address : Adr}
+    {mi ms : Nat}
+    (step : genericCreate.step sevm pre endowment address mi ms =
+      .done (.ok post)) (owner : Adr) : post.getStor owner = pre.getStor owner := by
+  simp only [genericCreate.step, Bind.bind, Except.bind, Except.assert,
+    assertDynamic, Pure.pure, Except.pure] at step
+  repeat' split at step
+  all_goals simp only [XStep.ofExcept, reduceCtorEq, XStep.done.injEq,
+    Except.ok.injEq] at step
+  all_goals subst post
+  all_goals rename_i pushed pushEq
+  all_goals change pushed.state.getStor owner = pre.state.getStor owner
+  all_goals rw [← (Devm.push_of_push pushEq).state]
+  · rfl
+  · change ((pre.state.incrNonce sevm.currentTarget).get owner).stor = _
+    rw [State.incrNonce_get_stor, ite_eq_right]
+    · rfl
+    · rintro ⟨rfl, empty⟩
+      have admitted : ¬ ((pre.state.get sevm.currentTarget).bal < endowment ∨
+          (pre.state.get sevm.currentTarget).nonce = UInt64.max ∨ sevm.depth = 0) := by
+        assumption
+      exact UInt64.add_one_ne_zero_of_ne_max
+        (fun max => admitted (Or.inr (Or.inl max))) empty.2.1
+
+/-- A CALL that completes before spawning only updates machine fields. -/
+theorem GenericCall.step_done_getStor
+    {sevm : Sevm} {pre post : Devm} {gas : Nat} {value : B256}
+    {caller target codeAddress : Adr} {stv isSt : Bool}
+    {ii isz oi osz : Nat} {code : ByteArray} {dp : Bool}
+    (step : genericCall.step sevm pre gas value caller target codeAddress stv
+      isSt ii isz oi osz code dp = .done (.ok post)) (owner : Adr) :
+    post.getStor owner = pre.getStor owner := by
+  simp only [genericCall.step, Bind.bind, Except.bind, Pure.pure,
+    Except.pure] at step
+  repeat' split at step
+  all_goals simp only [XStep.ofExcept, reduceCtorEq, XStep.done.injEq,
+    Except.ok.injEq] at step
+  all_goals subst post
+  rename_i pushed pushEq
+  exact congrArg (fun state : State => state.getStor owner)
+    (Devm.push_of_push pushEq).state.symm
+
+/-- An actual executable opcode that completes without spawning preserves every
+owner's storage. This does not include a childless message settlement. -/
+theorem Xinst.step_done_getStor
+    {sevm : Sevm} {pre post : Devm} {x : Xinst}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (step : Xinst.step sevm pre x = .done (.ok post)) (owner : Adr) :
+    post.getStor owner = pre.getStor owner := by
+  rcases Xinst.step_shapeCovered sevm pre x fork with
+    ⟨out, shape, frame⟩ | ⟨d, value, address, mi, ms, frame, shape⟩ |
+    ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isSt,
+      ii, isz, oi, osz, code, dp, frame, _, _, _, shape⟩
+  · rw [shape] at step
+    cases step
+    exact (frame.getStor owner).symm
+  · rw [shape] at step
+    exact (GenericCreate.step_done_getStor step owner).trans (frame.getStor owner).symm
+  · rw [shape] at step
+    exact (GenericCall.step_done_getStor step owner).trans (frame.getStor owner).symm
+
+
+
 /-- Nonzero account nonces survive a completed recursive execution slot. -/
 def Xlot.NonceNonzero : Xlot → Prop
   | .none => True
@@ -72,7 +138,8 @@ theorem ProcessCreateMessage.ok_setCode_state_of_clean
     ⟨result, hinner, hsettle⟩
   cases result with
   | error error =>
-      simp [processCreateMessage.settle, Bind.bind, Except.bind] at hsettle
+      change Except.ok post = Except.error error at hsettle
+      cases hsettle
   | ok inner =>
       unfold processCreateMessage.settle at hsettle
       simp only [bind, Except.bind] at hsettle
@@ -91,14 +158,14 @@ theorem ProcessCreateMessage.ok_setCode_state_of_clean
                     rw [hsg] at hsettle
                     have heq := Except.ok.inj hsettle
                     rw [heq] at herror
-                    simp [processCreateMessage.exceptionalHalt,
-                      Devm.error, Devm.withStorageWrites, Devm.setWorld, Devm.setMeta] at herror
+                    change true = false at herror
+                    cases herror
                 | some _ =>
                     rw [hsg] at hsettle
                     have heq := Except.ok.inj hsettle
                     rw [heq] at herror
-                    simp [processCreateMessage.exceptionalHaltAmsterdam,
-                      Devm.error, Devm.withStorageWrites, Devm.setWorld, Devm.setMeta] at herror
+                    change true = false at herror
+                    cases herror
             | revert => cases hsettle
             | crypto reason => cases hsettle
             | internal reason => cases hsettle
@@ -106,18 +173,21 @@ theorem ProcessCreateMessage.ok_setCode_state_of_clean
             rw [hcharge] at hsettle
             have heq := Except.ok.inj hsettle
             refine ⟨inner, hinner, ?_, ⟨⟨charged.output⟩⟩, ?_⟩
-            · cases h : inner.error <;> simp_all
+            · cases h : inner.error with
+              | none => rfl
+              | some error => rw [h] at hinnerNone; cases hinnerNone
             · rw [heq]
               change charged.state.setCode msg.currentTarget _ = _
               rw [chargeCodeGas_state_ok hcharge]
       · rw [if_neg hinnerNone] at hsettle
         have heq := Except.ok.inj hsettle
         rw [heq] at herror
-        simp [Devm.rollback, Devm.setWorld, Devm.error] at herror
-        apply False.elim
-        apply hinnerNone
-        rw [show inner.error = none from herror]
-        rfl
+        change inner.error.isSome = false at herror
+        have errorNone : inner.error = none := by
+          cases h : inner.error with
+          | none => rfl
+          | some error => rw [h] at herror; cases herror
+        exact (hinnerNone (by rw [errorNone]; rfl)).elim
 
 /-- Code-deposit settlement leaves every nonce equal to its inner message's nonce. -/
 theorem ProcessCreateMessage.ok_nonce_eq_inner_of_clean

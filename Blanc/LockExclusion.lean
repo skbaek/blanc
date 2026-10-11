@@ -80,7 +80,6 @@ theorem Evm.step_cont_getStor_get
     (hfork : CoveredFork sevm.benvStat.fork)
     (step : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' post)
     {owner : Adr} {key : B256}
-    (protection : State.Protected pre.state owner)
     (notStore : sevm.currentTarget = owner →
       Ninst.At sevm.code pc (.reg .sstore) → pre.stack.head? ≠ some key) :
     (Devm.getStor post owner).get key = (Devm.getStor pre owner).get key := by
@@ -116,23 +115,51 @@ theorem Evm.step_cont_getStor_get
             unfold Ninst.StepRun
             rw [nstep]
             exact ⟨rfl, rfl⟩
-          by_cases own : sevm.currentTarget = owner
-          · by_cases store : instruction = .reg .sstore
-            · subst instruction owner
-              have sstoreRun : Ninst.Run sevm pre Ninst.sstore post :=
-                ⟨.none, trivial, pc, nrun⟩
-              rcases of_run_sstore sstoreRun with ⟨written, value, popped⟩
-              have pref := pref_of_split popped
-              rcases pref with ⟨rest, stackEq⟩
-              rw [sstore_getStor_set sstoreRun ⟨rest, stackEq⟩]
-              apply Stor.get_set_ne
-              intro same
-              apply notStore rfl decoded
-              simp only [Split, List.cons_append, List.nil_append] at stackEq
-              rw [stackEq, same]
-              rfl
-            · rw [Ninst.none_getStor_eq_of_ne_sstore nrun store owner protection]
-          · rw [Ninst.foreignNone_getStor_eq hfork nrun own protection]
+          cases instruction with
+          | exec executable =>
+              simp only [Ninst.step_exec, XStep.toStep] at nstep
+              cases actual : Xinst.step sevm pre executable with
+              | spawn frame resume => rw [actual] at nstep; cases nstep
+              | done out =>
+                  rw [actual] at nstep
+                  cases out with
+                  | error error => cases nstep
+                  | ok actualPost =>
+                      cases nstep
+                      exact congrArg (fun storage => storage.get key)
+                        (Xinst.step_done_getStor hfork actual owner)
+          | reg regular =>
+              have run : Rinst.run ⟨pc, sevm, pre⟩ regular = .ok post :=
+                ((Step.run_ofExecution (xl := (.none : Xlot))).mp nrun).2.symm
+              by_cases store : regular = .sstore
+              · subst regular
+                by_cases own : sevm.currentTarget = owner
+                · subst owner
+                  have sstoreRun : Ninst.Run sevm pre Ninst.sstore post :=
+                    ⟨.none, trivial, pc, nrun⟩
+                  rcases of_run_sstore sstoreRun with ⟨written, value, popped⟩
+                  rcases pref_of_split popped with ⟨rest, stackEq⟩
+                  rw [sstore_getStor_set sstoreRun ⟨rest, stackEq⟩]
+                  apply Stor.get_set_ne
+                  intro same
+                  apply notStore rfl decoded
+                  simp only [Split, List.cons_append, List.nil_append] at stackEq
+                  rw [stackEq, same]
+                  rfl
+                · rw [sstore_preserves_getStor_ne run own]
+              · rw [← congrFun (Rinst.preserves_stor store run) owner]
+          | push bytes bound =>
+              exact congrArg (fun storage => storage.get key) ((Ninst.push_instructionFrame_effectRec
+                (hxs := bound) (xl := .none) trivial nrun).getStor owner).symm
+          | dupn imm =>
+              exact congrArg (fun storage => storage.get key) ((Ninst.dupn_instructionFrame_effectRec
+                (xl := .none) trivial nrun).getStor owner).symm
+          | swapn imm =>
+              exact congrArg (fun storage => storage.get key) ((Ninst.swapn_instructionFrame_effectRec
+                (xl := .none) trivial nrun).getStor owner).symm
+          | exchange imm =>
+              exact congrArg (fun storage => storage.get key) ((Ninst.exchange_instructionFrame_effectRec
+                (xl := .none) trivial nrun).getStor owner).symm
 
 /-- An immediately completed spawn (precompile, failed entry) preserves
 persistent storage at each structurally protected owner. -/
@@ -248,7 +275,10 @@ theorem Evm.step_spawn_rollback_getStor
       have error : settled.error.isSome = true := by
         unfold Frame.settlementCommits at discarded
         rw [settledEq] at discarded
-        cases h : settled.error <;> simp_all
+        change settled.error.isNone ≠ true at discarded
+        cases h : settled.error with
+        | none => rw [h] at discarded; exact (discarded rfl).elim
+        | some error => rfl
       have process := RunFrame.of_run (raw := raw) enter
       rw [settledEq] at process
       have rollback := ProcessCreateMessage.rollback_of_error process error
@@ -266,7 +296,10 @@ theorem Evm.step_spawn_rollback_getStor
       have error : settled.error.isSome = true := by
         unfold Frame.settlementCommits at discarded
         rw [settledEq] at discarded
-        cases h : settled.error <;> simp_all
+        change settled.error.isNone ≠ true at discarded
+        cases h : settled.error with
+        | none => rw [h] at discarded; exact (discarded rfl).elim
+        | some error => rfl
       have process := RunFrame.of_run (raw := raw) enter
       rw [settledEq] at process
       have rollback := (ProcessMessage.rollback_of_error process error).1
@@ -879,7 +912,7 @@ theorem nodeSafe_of_lockedFrom (dom : L.Dominance) :
       have edge := ParentStep.cont hstep next
       have locked : lockAt P L.slot post = L.locked := by
         unfold lockAt
-        rw [Evm.step_cont_getStor_get hfork hstep (State.Protected.of_code_ne_nil nonempty) (fun owned decoded key =>
+        rw [Evm.step_cont_getStor_get hfork hstep (fun owned decoded key =>
           head.2.1 ⟨owned, decoded, key⟩)]
         exact head.1
       simp only [Exec.rawNodes, List.mem_cons] at member
@@ -980,7 +1013,7 @@ theorem lockAt_of_segment (dom : L.Dominance) {F b h : Exec.Deriv}
       cases edge with
       | cont hstep nextRun =>
           unfold lockAt
-          rw [Evm.step_cont_getStor_get rootFork hstep (State.Protected.of_code_ne_nil nonempty) (fun _ decoded key =>
+          rw [Evm.step_cont_getStor_get rootFork hstep (fun _ decoded key =>
             noStore _ (.refl _) (.step (.cont hstep nextRun) rest) distinct
               ⟨decoded, key⟩)]
           exact locked

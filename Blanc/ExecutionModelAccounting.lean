@@ -227,7 +227,10 @@ theorem Exec.spawn_seam {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm} {frame :
             change (Frame.ofCreate msg).settlementCommits raw = true at settles
             unfold Frame.settlementCommits at settles
             rw [settledEq] at settles
-            cases h : settled.error <;> simp_all
+            change settled.error.isNone = true at settles
+            cases h : settled.error with
+            | none => rfl
+            | some error => rw [h] at settles; cases settles
           have process := RunFrame.of_run (raw := raw) enter
           rw [settledEq] at process
           rcases ProcessCreateMessage.ok_setCode_state_of_clean process clean with

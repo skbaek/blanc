@@ -1275,9 +1275,10 @@ for completed childless message settlement; `Xinst.spawn_run_getStor` and
 `Evm.step_run_getStor` transport code-bearing storage from the settled child's
 committed endpoint or rollback, pointwise. The actual-step helpers
 `GenericCreate.step_done_getStor`, `GenericCall.step_done_getStor` and
-`Xinst.step_done_getStor` preserve every owner when the step itself returns
-`.done (.ok post)`; the executable helper requires `CoveredFork`. These are
-shared-integration hoisting candidates. Successful CALL message transfer is a
+`Xinst.step_done_getStor`, in
+[`Blanc/ExecutionMessageEffects.lean`](../Blanc/ExecutionMessageEffects.lean),
+preserve every owner when the step itself returns `.done (.ok post)`; the
+executable helper requires `CoveredFork`. Successful CALL message transfer is a
 spawn and does not satisfy that actual-step premise. The module also transports
 logs (`Exec.cont_logs_eq`,
 `Exec.doneOk_logs_eq`, `Exec.runOk_logs_eq`, path-independent `Exec.committed_logs_at`,
@@ -1580,11 +1581,13 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   `LockSpec.Dominance` and per-world `OwnerDiscipline`/`HashAvoidIn` hypotheses.
   The latter definitions constrain interpreted code and hashes; they do not
   imply world-code protection. Reusable step facts there:
-  `Evm.step_cont_getStor_get` (one cell across a continuing step unless an
-  owner `SSTORE` hits its key), `Evm.step_doneOk_getStor_eq`,
-  `Evm.step_spawn_enter_getStor` (an entered child preserves each protected
-  owner's storage), `Ninst.none_getStor_eq_of_ne_sstore`; all four storage
-  helpers require `State.Protected` at the observed owner.
+  `Evm.step_cont_getStor_get` preserves one cell across an actual continuing
+  step unless an owner `SSTORE` hits its key; it needs no owner protection.
+  `Evm.step_doneOk_getStor_eq`, `Evm.step_spawn_enter_getStor` (entered child
+  storage), and `Ninst.none_getStor_eq_of_ne_sstore` require `State.Protected`
+  at the observed owner because their execution relations include message
+  settlement. The actual-step helpers in `ExecutionMessageEffects` distinguish
+  immediate opcode completion from completed childless message settlement.
   `Exec.Deriv.ParentPrefix.codePreserve` transports code along a same-frame
   prefix, and `Exec.rawFrameRoots_codePreserve` does so to every raw frame root,
   for owners with nonempty entry code. Also available:
@@ -4281,11 +4284,9 @@ contract-neutral.
   also holds the step facts `LockCheck.pp_back` (a node strictly before a
   successor precedes the node), `LockCheck.lockAt_edge` (one cell across a
   same-frame edge that spawns nothing and stores elsewhere) and
-  `LockCheck.cursor_sstore_node`. For a continuing step whose opcode is not
-  any `Xinst`, `LockCheck.step_cont_getStor_get_of_noexec` preserves the
-  current target cell when an SSTORE does not address it, without a fork or
-  protected-owner premise. This generic donor awaits hoisting into the driver
-  storage library during re-pin integration. Worked use:
+  `LockCheck.cursor_sstore_node`. The continuing arm uses the generic
+  `Evm.step_cont_getStor_get` directly; no separate no-executable-opcode
+  storage bridge is needed. Worked use:
   `Blanc/Lift/VyperNonreentrantDeployed/Fixed/LockDominance.lean`; the full
   `lock_exclusion` instance (dominance, `ownerDiscipline_of_world` for a
   forwarder owner, `NoDelegateFrom` from the cursor, release-pc activity) is

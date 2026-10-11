@@ -39,76 +39,6 @@ theorem pp_back {F n n' b : Exec.Deriv} (reach : PP F n)
     · exact .refl _
     · exact (hne (Exec.Deriv.ParentPrefix.antisymm hbn' h')).elim
 
-/-- A continuing step at a non-executable opcode preserves the running owner's
-cell unless an SSTORE addresses that cell. Unit-owned common donor, to be hoisted
-with the generic driver storage lemmas at integration. -/
-theorem step_cont_getStor_get_of_noexec
-    {pc pc' : Nat} {sevm : Sevm} {pre post : Devm} {key : B256}
-    (step : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' post)
-    (noexec : ∀ x, ¬ Xinst.At sevm.code pc x)
-    (notStore : Ninst.At sevm.code pc (.reg .sstore) → pre.stack.head? ≠ some key) :
-    (post.getStor sevm.currentTarget).get key = (pre.getStor sevm.currentTarget).get key := by
-  cases decoded : Evm.getInst ⟨pc, sevm, pre⟩ with
-  | none =>
-      unfold Evm.step at step
-      rw [decoded] at step
-      cases step
-  | some instruction =>
-      cases instruction with
-      | last last =>
-          rw [Evm.step_last decoded] at step
-          cases step
-      | jump jumpInst =>
-          rw [Evm.step_jump decoded] at step
-          cases jumpEq : Jinst.run ⟨pc, sevm, pre⟩ jumpInst with
-          | error error => rw [jumpEq] at step; cases step
-          | ok pair =>
-              rcases pair with ⟨actualPc, actualPost⟩
-              rw [jumpEq] at step
-              cases step
-              have frame := Jinst.run_instructionFrame ⟨pc, sevm, pre⟩ jumpInst
-              rw [jumpEq] at frame
-              rw [← frame.getStor sevm.currentTarget]
-      | next instruction =>
-          have nstep : Ninst.step ⟨pc, sevm, pre⟩ instruction = .cont pc' post := by
-            rw [← Evm.step_next decoded]
-            exact step
-          have nrun : Ninst.StepRun pc sevm pre instruction .none (.ok post) := by
-            unfold Ninst.StepRun
-            rw [nstep]
-            exact ⟨rfl, rfl⟩
-          cases instruction with
-          | reg regular =>
-              by_cases store : regular = .sstore
-              · subst regular
-                have sstoreRun : Ninst.Run sevm pre Ninst.sstore post :=
-                  ⟨.none, trivial, pc, nrun⟩
-                rcases of_run_sstore sstoreRun with ⟨written, value, popped⟩
-                rcases pref_of_split popped with ⟨rest, stackEq⟩
-                rw [sstore_getStor_set sstoreRun ⟨rest, stackEq⟩]
-                apply Stor.get_set_ne
-                intro same
-                apply notStore decoded
-                simp only [Split, List.cons_append, List.nil_append] at stackEq
-                rw [stackEq, same]
-                rfl
-              · have run : Rinst.run ⟨pc, sevm, pre⟩ regular = .ok post :=
-                  ((Step.run_ofExecution (xl := (.none : Xlot))).mp nrun).2.symm
-                rw [← congrFun (Rinst.preserves_stor store run) sevm.currentTarget]
-          | exec executable => exact (noexec executable decoded).elim
-          | push bytes bound =>
-              exact congrArg (fun storage => storage.get key) ((Ninst.push_instructionFrame_effectRec
-                (hxs := bound) (xl := .none) trivial nrun).getStor sevm.currentTarget).symm
-          | dupn imm =>
-              exact congrArg (fun storage => storage.get key) ((Ninst.dupn_instructionFrame_effectRec
-                (xl := .none) trivial nrun).getStor sevm.currentTarget).symm
-          | swapn imm =>
-              exact congrArg (fun storage => storage.get key) ((Ninst.swapn_instructionFrame_effectRec
-                (xl := .none) trivial nrun).getStor sevm.currentTarget).symm
-          | exchange imm =>
-              exact congrArg (fun storage => storage.get key) ((Ninst.exchange_instructionFrame_effectRec
-                (xl := .none) trivial nrun).getStor sevm.currentTarget).symm
-
 /-- A same-frame edge out of a node that decodes no frame-spawning instruction
 keeps one storage cell of the running account, unless the node is an `SSTORE`
 addressed at it. -/
@@ -118,7 +48,7 @@ theorem lockAt_edge {n n' : Exec.Deriv} {slot : B256}
     (notStore : Ninst.At n.sevm.code n.pc (.reg .sstore) → n.devm.stack.head? ≠ some slot) :
     lockAt n.sevm.currentTarget slot n'.devm = lockAt n.sevm.currentTarget slot n.devm := by
   cases edge with
-  | cont hstep _ => exact step_cont_getStor_get_of_noexec hstep noexec notStore
+  | cont hstep _ => exact Evm.step_cont_getStor_get hfork hstep (fun _ => notStore)
   | doneOk hstep _ _ _ =>
     obtain ⟨x, hx, -, -⟩ := Evm.step_spawn_inv hstep
     exact (noexec x hx).elim
