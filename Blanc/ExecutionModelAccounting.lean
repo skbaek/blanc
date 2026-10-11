@@ -184,17 +184,85 @@ theorem Exec.spawn_seam {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm} {frame :
       ∀ a k, (Devm.getStor inter a).get k = (Devm.getStor pre a).get k) := by
   obtain ⟨x, -, spawn, -⟩ := Evm.step_spawn_inv step
   have childFork := Evm.step_spawn_child_fork step enter hfork
-  have replay := Xinst.storageReplay_some_of_body spawn (RunFrame.of_run enter) hresume
-    (fun committed => Exec.storageReplay_committedPost child committed childFork) hfork
-  have hstor := Evm.step_spawn_enter_getStor hfork step enter
-  refine ⟨fun h settles a k => ?_, fun settles a k => ?_⟩
-  · simp only [settles, ↓reduceIte] at replay
-    have hc := Exec.storageReplay_committedPost child h childFork a k
-    rw [replay a k, hc, hstor]
-  · have hf : Frame.settlementCommits frame raw = false := by simpa only [ne_eq,
-    Bool.not_eq_true] using settles
-    simp only [hf, Bool.false_eq_true, ↓reduceIte] at replay
-    exact replay a k
+  refine ⟨?_, fun discarded a k => ?_⟩
+  · intro committed settles a k
+    rcases Xinst.step_shapeCovered sevm pre x hfork with
+      ⟨execution, shape, -⟩ |
+      ⟨d, endowment, newAddress, mi, ms, hprefix, shape⟩ |
+      ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
+        ii, isz, oi, osz, code, disablePrecompiles, hprefix, _, _, _, shape⟩ <;>
+      rw [shape] at spawn
+    · cases spawn
+    · have preparedUnprotected := genericCreate_step_spawn_prepared_target_unprotected spawn
+      have preparedZero : ((d.state.incrNonce sevm.currentTarget).get newAddress).nonce = 0 :=
+        not_ne_iff.mp (fun nonzero => preparedUnprotected (Or.inl nonzero))
+      rcases genericCreate_step_spawn_exact spawn with ⟨rfl, rfl⟩
+      let prepared := addAccessedAddress
+        (((d.withGasLeft (d.gasLeft - except64th d.gasLeft)).withReturnData
+          []).incrNonce sevm.currentTarget) newAddress
+      let msg := createMsg sevm prepared (except64th d.gasLeft) endowment newAddress
+        ((d.memory.read mi ms).1)
+      change (Frame.ofCreate msg).enter = .run cevm at enter
+      have seed : (cevm.dyna.state.get newAddress).nonce ≠ 0 := by
+        rcases Frame.enter_run_inv enter with ⟨benv, transfer, evmEq⟩
+        have preState := congrArg (fun evm : Evm => evm.dyna.state) evmEq
+        rw [preState]
+        change (benv.state.get newAddress).nonce ≠ 0
+        rw [Msg.benvAfterTransfer_get_nonce transfer newAddress]
+        change (((prepared.state.setStor newAddress .empty).incrNonce newAddress).get
+          newAddress).nonce ≠ 0
+        rw [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_nonce]
+        dsimp only [State.setStor]
+        rw [State.get_set_self]
+        change ((d.state.incrNonce sevm.currentTarget).get newAddress).nonce + 1 ≠ 0
+        rw [preparedZero]
+        decide
+      have retainedNonce := Exec.nonce_ne_zero_committedPost child committed childFork newAddress seed
+      cases settledEq : (Frame.ofCreate msg).settle raw with
+      | error error =>
+          rw [settledEq] at hresume
+          exact (Resume.create_run_error hresume).elim
+      | ok settled =>
+          have clean : settled.error.isSome = false := by
+            change (Frame.ofCreate msg).settlementCommits raw = true at settles
+            unfold Frame.settlementCommits at settles
+            rw [settledEq] at settles
+            cases h : settled.error <;> simp_all
+          have process := RunFrame.of_run (raw := raw) enter
+          rw [settledEq] at process
+          rcases ProcessCreateMessage.ok_setCode_state_of_clean process clean with
+            ⟨inner, innerRun, _, deposited, stateEq⟩
+          have rawEq := ProcessMessage.ok_state_eq_committedPost innerRun committed
+          change (Resume.create prepared newAddress).run _ = .ok inter at hresume
+          rw [settledEq] at hresume
+          have resumedState := Resume.create_state hresume
+          change ((inter.state.get a).stor).get k =
+            (((Execution.committedPost raw committed).state.get a).stor).get k
+          rw [resumedState, stateEq, rawEq]
+          change (((Execution.committedPost raw committed).state.setCode newAddress deposited).get
+            a).stor.get k = ((Execution.committedPost raw committed).state.get a).stor.get k
+          by_cases equal : newAddress = a
+          · subst a
+            rw [State.setCode, State.setAccount_get_self, Acct.clearIfEmpty_stor,
+              ite_eq_right (fun empty => retainedNonce empty.2.1)]
+          · rw [State.setCode, State.setAccount_get_ne _ equal]
+    · rcases genericCall_step_spawn_exact spawn with ⟨rfl, rfl⟩
+      cases settledEq : (Frame.ofCall _).settle raw with
+      | error error =>
+          rw [settledEq] at hresume
+          exact (Resume.call_run_error hresume).elim
+      | ok settled =>
+          have process := RunFrame.of_run (raw := raw) enter
+          rw [settledEq] at process
+          have stateEq := ProcessMessage.ok_state_eq_committedPost process committed
+          rw [settledEq] at hresume
+          have resumedState := Resume.call_state hresume
+          change ((inter.state.get a).stor).get k =
+            (((Execution.committedPost raw committed).state.get a).stor).get k
+          rw [resumedState, stateEq]
+  · exact congrArg (fun stor => stor.get k)
+      (congrFun (Evm.step_spawn_rollback_getStor hfork step enter hresume discarded) a)
+
 
 
 namespace Exec.CoreAccounting
@@ -282,6 +350,8 @@ theorem spawnReplayTarget
       (fun pc s d e _ => Exec.CoreAccounting ca sem entry C V pc s d e)) :
     Exec.CoreAccounting ca sem entry C V 0 sevm pre (.ok post) := by
   intro run committed fork installed admitted
+  have rootNonempty : (pre.getCode ca).toList ≠ [] := fun empty =>
+    sem.ne_nil (installed.1.symm.trans (congrArg some empty)) rfl
   have self : (Exec.committedFrames run).flatMap V.frameObs =
       V.frameObs (Exec.Frame.ofRun run committed) ++
         (Exec.descendantFrames run).flatMap V.frameObs := by
@@ -293,9 +363,10 @@ theorem spawnReplayTarget
       rw [self, hdf, hself]
       rfl
     refine ⟨fun _ => hobs, fun _ => ⟨[], ?_, ?_⟩⟩
-    · have hview := Exec.storageView_committedPost_eq_of_static run hs committed fork
+    · have hview := Exec.getStor_committedPost_eq_of_static_protected run hs committed fork ca
+        (State.Protected.of_image installed.1)
       have heq : C.ofState (Execution.committedPost (.ok post) committed).state =
-          C.ofState pre.state := ofStateGet fun k => congrFun (congrFun hview ca) k
+          C.ofState pre.state := ofStateGet fun k => congrArg (fun stor => stor.get k) hview
       rw [heq, entryOfState]
       exact C.nil _
     · rw [hobs]
@@ -327,32 +398,38 @@ theorem spawnReplayTarget
             unfold Ninst.StepRun
             rw [nstep]
             exact ⟨rfl, rfl⟩
-          have hstor : Devm.getStor post' = Devm.getStor vd :=
-            Ninst.none_getStor_eq_of_ne_sstore nrun (by intro h; cases h)
+          have nodeNonempty : (vd.getCode ca).toList ≠ [] := by
+            rw [Blanc.Exec.Deriv.ParentPrefix.codePreserve hpV ca rootNonempty]
+            exact rootNonempty
+          have hstor : Devm.getStor post' ca = Devm.getStor vd ca :=
+            Ninst.none_getStor_eq_of_ne_sstore nrun (by intro h; cases h) ca
+              (State.Protected.of_code_ne_nil nodeNonempty)
           obtain ⟨hc1, hc2⟩ := c12 _ hpV x hx
           obtain ⟨hrep2, hnoexec⟩ := hc2 _ (Exec.Deriv.ParentStep.cont step next)
           have hdf : Exec.descendantFrames next = [] :=
             Exec.descendantFrames_eq_nil_of_noExec next fun M hM y => hnoexec M hM y
           have hE : C.ofState vd.state = C.ofState post'.state :=
             ofStateGet fun k => by
-              have := congrFun hstor ca
-              exact (congrArg (fun t => Stor.get t k) this).symm
+              exact (congrArg (fun t => Stor.get t k) hstor).symm
           rw [dEq]
           simp only [Exec.descendantFrames, hdf, List.flatMap_nil, List.append_nil]
           refine ⟨own ++ [], append (hE ▸ hc1) hrep2, ?_⟩
           rw [V.obs_append, V.obs_nil, hown, List.append_nil]
       | doneOk step enter resume next =>
           rename_i settled pc' post'
-          have hstor : Devm.getStor post' = Devm.getStor vd :=
-            Evm.step_doneOk_getStor_eq step enter resume
+          have nodeNonempty : (vd.getCode ca).toList ≠ [] := by
+            rw [Blanc.Exec.Deriv.ParentPrefix.codePreserve hpV ca rootNonempty]
+            exact rootNonempty
+          have hstor : Devm.getStor post' ca = Devm.getStor vd ca :=
+            Evm.step_doneOk_getStor_eq step enter resume ca
+              (State.Protected.of_code_ne_nil nodeNonempty)
           obtain ⟨hc1, hc2⟩ := c12 _ hpV x hx
           obtain ⟨hrep2, hnoexec⟩ := hc2 _ (Exec.Deriv.ParentStep.doneOk step enter resume next)
           have hdf : Exec.descendantFrames next = [] :=
             Exec.descendantFrames_eq_nil_of_noExec next fun M hM y => hnoexec M hM y
           have hE : C.ofState vd.state = C.ofState post'.state :=
             ofStateGet fun k => by
-              have := congrFun hstor ca
-              exact (congrArg (fun t => Stor.get t k) this).symm
+              exact (congrArg (fun t => Stor.get t k) hstor).symm
           rw [dEq]
           simp only [Exec.descendantFrames, hdf, List.flatMap_nil, List.append_nil]
           refine ⟨own ++ [], append (hE ▸ hc1) hrep2, ?_⟩
@@ -367,8 +444,12 @@ theorem spawnReplayTarget
           have hdf : Exec.descendantFrames next = [] :=
             Exec.descendantFrames_eq_nil_of_noExec next fun M hM y => hnoexec M hM y
           obtain ⟨seamA, seamB⟩ := Exec.spawn_seam nodeFork step enter child resume
-          have hentry : Devm.getStor cevm.dyna = Devm.getStor vd :=
-            Evm.step_spawn_enter_getStor nodeFork step enter
+          have nodeNonempty : (vd.getCode ca).toList ≠ [] := by
+            rw [Blanc.Exec.Deriv.ParentPrefix.codePreserve hpV ca rootNonempty]
+            exact rootNonempty
+          have hentry : Devm.getStor cevm.dyna ca = Devm.getStor vd ca :=
+            Evm.step_spawn_enter_getStor nodeFork step enter ca
+              (State.Protected.of_code_ne_nil nodeNonempty)
           rw [dEq, Exec.descendantFrames_flatMap_runOk, hdf, List.flatMap_nil, List.append_nil]
           by_cases settles : Frame.settlementCommits frame raw = true
           · have hcommit := Frame.raw_commits_of_settlementCommits settles
@@ -379,8 +460,7 @@ theorem spawnReplayTarget
             have e1 : C.frameEntry cevm.sta cevm.dyna.state = C.ofState vd.state := by
               rw [entryOfState]
               exact ofStateGet fun k => by
-                have := congrFun hentry ca
-                exact congrArg (fun t => Stor.get t k) this
+                exact congrArg (fun t => Stor.get t k) hentry
             have e2 : C.ofState (Execution.committedPost raw hcommit).state =
                 C.ofState inter.state := ofStateGet fun k => (seamA hcommit settles ca k).symm
             rw [e1, e2] at creplay
