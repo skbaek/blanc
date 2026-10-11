@@ -284,9 +284,62 @@ lemma B256.le_add_right {xs ys : B256} (h : B256.Nof xs ys) : xs ≤ xs + ys := 
 
 
 
+/-- The successor of a nonce below `UInt64.max` is nonzero. -/
+lemma UInt64.add_one_ne_zero_of_ne_max {n : UInt64} (h : n ≠ UInt64.max) : n + 1 ≠ 0 := by
+  intro h1
+  apply h
+  calc n = n + 1 - 1 := (UInt64.add_sub_cancel n 1).symm
+    _ = 0 - 1 := by rw [h1]
+    _ = UInt64.max := by decide
+
+/-- A balance write keeps every account's nonce. -/
+lemma State.setBal_get_nonce {st : Jaune.State} {b a : Adr} {v : B256} :
+    ((st.setBal b v).get a).nonce = (st.get a).nonce := by
+  by_cases h : b = a
+  · subst h; rw [State.setBal_get_self, Acct.clearIfEmpty_nonce]; rfl
+  · rw [State.setBal_get_ne h]
+
+/-- An account is *protected* when it has a nonzero nonce or nonempty code: no
+balance write can empty it, so no balance write can wipe its storage. -/
+def State.Protected (st : Jaune.State) (a : Adr) : Prop :=
+  (st.get a).nonce ≠ 0 ∨ (st.get a).code.size ≠ 0
+
+/-- Protection survives a balance write. -/
+lemma State.Protected.setBal {st : Jaune.State} {a : Adr} (hp : State.Protected st a)
+    (b : Adr) (v : B256) : State.Protected (st.setBal b v) a := by
+  unfold State.Protected at hp ⊢
+  rw [State.setBal_get_nonce, State.setBal_get_code]
+  exact hp
+
+/-- A balance write leaves a protected account's storage alone. Unprotected
+accounts are the storage-only ones a balance write may delete. -/
+lemma State.setBal_get_stor_of_protected {st : Jaune.State} {b a : Adr} {v : B256}
+    (hp : State.Protected st a) : ((st.setBal b v).get a).stor = (st.get a).stor := by
+  rw [State.setBal_get_stor]
+  split_ifs with h
+  · obtain ⟨rfl, hE⟩ := h
+    exfalso
+    rcases hp with hn | hc
+    · exact hn hE.2.1
+    · exact hc hE.1
+  · rfl
+
+/-- Message entry that moves no value — no transfer flag, or a zero value —
+leaves the block environment exactly as it was. -/
+lemma benvAfterTransfer_eq_of_not_transfer {msg : Msg} {entry : Benv}
+    (h : ¬ (msg.shouldTransferValue = true ∧ msg.value ≠ 0))
+    (transfer : msg.benvAfterTransfer = .ok entry) : entry = msg.benv := by
+  by_cases hs : msg.shouldTransferValue = true
+  · have hz : msg.value = 0 := by
+      by_contra hne
+      exact h ⟨hs, hne⟩
+    rw [Msg.benvAfterTransfer_of_value_zero hz] at transfer
+    exact (Except.ok.inj transfer).symm
+  · exact of_benvAfterTransfer_no hs transfer
+
 lemma of_state_transfer_fields {st st' : Jaune.State} {ct callee : Adr} {wad : B256}
     (h_sub : st.subBal ct wad = some st') :
-    (∀ a, ((st'.addBal callee wad).get a).stor = (st.get a).stor) ∧
+    (∀ a, State.Protected st a → ((st'.addBal callee wad).get a).stor = (st.get a).stor) ∧
     (∀ a, ((st'.addBal callee wad).get a).code = (st.get a).code) ∧
     wad ≤ st.bal ct ∧
     (callee = ct → (st'.addBal callee wad).bal ct = st.bal ct) ∧
@@ -295,21 +348,24 @@ lemma of_state_transfer_fields {st st' : Jaune.State} {ct callee : Adr} {wad : B
   subst h_st'
   unfold State.addBal
   refine' ⟨_, _, h_le, _, _⟩
-  · intro a; rw [State.setBal_get_stor, State.setBal_get_stor]
+  · intro a hp
+    show ((State.setBal _ callee _).get a).stor = _
+    rw [State.setBal_get_stor_of_protected (hp.setBal _ _),
+      State.setBal_get_stor_of_protected hp]
   · intro a; rw [State.setBal_get_code, State.setBal_get_code]
   · intro h_eq; subst h_eq
     show ((Jaune.State.setBal _ callee _).get callee).bal = _
-    rw [State.setBal_get_self]
+    rw [State.setBal_get_self, Acct.clearIfEmpty_bal]
     show (st.setBal callee (st.bal callee - wad)).bal callee + wad = _
     show ((st.setBal callee (st.bal callee - wad)).get callee).bal + wad = _
-    rw [State.setBal_get_self]
+    rw [State.setBal_get_self, Acct.clearIfEmpty_bal]
     show st.bal callee - wad + wad = _
     rw [B256.sub_add_cancel]
   · intro h_ne
     show ((Jaune.State.setBal _ callee _).get ct).bal = _
     rw [State.setBal_get_ne h_ne]
     show ((st.setBal ct (st.bal ct - wad)).get ct).bal = _
-    rw [State.setBal_get_self]; rfl
+    rw [State.setBal_get_self, Acct.clearIfEmpty_bal]; rfl
 
 -- The `nof`-requiring conjunct of `of_state_transfer`, on its own.
 lemma of_state_transfer_sum {st st' : Jaune.State} {ct callee : Adr} {wad : B256}
@@ -324,7 +380,7 @@ lemma of_state_transfer_sum {st st' : Jaune.State} {ct callee : Adr} {wad : B256
     intro a; constructor
     · intro h_eq; subst h_eq
       show _ = ((st.setBal ct (st.bal ct - wad)).get ct).bal
-      rw [State.setBal_get_self]; rfl
+      rw [State.setBal_get_self, Acct.clearIfEmpty_bal]; rfl
     · intro h_ne
       show st.bal a = ((st.setBal ct (st.bal ct - wad)).get a).bal
       rw [State.setBal_get_ne h_ne]; rfl
@@ -337,7 +393,7 @@ lemma of_state_transfer_sum {st st' : Jaune.State} {ct callee : Adr} {wad : B256
     intro a; constructor
     · intro h_eq; subst h_eq
       show _ = ((mid.setBal callee (mid.bal callee + wad)).get callee).bal
-      rw [State.setBal_get_self]; rfl
+      rw [State.setBal_get_self, Acct.clearIfEmpty_bal]; rfl
     · intro h_ne
       show mid.bal a = ((mid.setBal callee (mid.bal callee + wad)).get a).bal
       rw [State.setBal_get_ne h_ne]; rfl
@@ -354,7 +410,7 @@ lemma of_state_transfer_sum {st st' : Jaune.State} {ct callee : Adr} {wad : B256
 lemma of_state_transfer {st st' : Jaune.State} {ct callee : Adr} {wad : B256}
     (h_sub : st.subBal ct wad = some st')
     (h_nof : sum st.bal < 2 ^ 256) :
-    (∀ a, ((st'.addBal callee wad).get a).stor = (st.get a).stor) ∧
+    (∀ a, State.Protected st a → ((st'.addBal callee wad).get a).stor = (st.get a).stor) ∧
     (∀ a, ((st'.addBal callee wad).get a).code = (st.get a).code) ∧
     sum (st'.addBal callee wad).bal = sum st.bal ∧
     wad ≤ st.bal ct ∧
@@ -365,22 +421,26 @@ lemma of_state_transfer {st st' : Jaune.State} {ct callee : Adr} {wad : B256}
 
 lemma State.setCode_get_bal {st : Jaune.State} {adr a : Adr} {c : ByteArray} :
     ((st.setCode adr c).get a).bal = (st.get a).bal := by
-  unfold State.setCode
+  simp only [State.setCode]
   by_cases h : adr = a
-  · subst h; rw [State.get_set_self]
-  · rw [State.get_set_ne _ h]
+  · subst h; rw [State.setAccount_get_self, Acct.clearIfEmpty_bal]
+  · rw [State.setAccount_get_ne _ h]
 
-lemma State.setCode_get_stor {st : Jaune.State} {adr a : Adr} {c : ByteArray} :
-    ((st.setCode adr c).get a).stor = (st.get a).stor := by
-  unfold State.setCode
+/-- Installing nonempty code never empties an account, so it keeps every
+account's storage. (Installing empty code into a nonce-0, zero-balance account
+deletes it, storage included.) -/
+lemma State.setCode_get_stor {st : Jaune.State} {adr a : Adr} {c : ByteArray}
+    (hc : c.size ≠ 0) : ((st.setCode adr c).get a).stor = (st.get a).stor := by
+  simp only [State.setCode]
   by_cases h : adr = a
-  · subst h; rw [State.get_set_self]
-  · rw [State.get_set_ne _ h]
+  · subst h
+    rw [State.setAccount_get_self, Acct.clearIfEmpty_stor, if_neg (fun hE => hc hE.1)]
+  · rw [State.setAccount_get_ne _ h]
 
 lemma State.setCode_get_code_ne {st : Jaune.State} {adr a : Adr} {c : ByteArray}
     (h : adr ≠ a) : ((st.setCode adr c).get a).code = (st.get a).code := by
-  unfold State.setCode
-  rw [State.get_set_ne _ h]
+  simp only [State.setCode]
+  rw [State.setAccount_get_ne _ h]
 
 lemma State.setStor_get_bal {st : Jaune.State} {adr a : Adr} {s : Stor} :
     ((st.setStor adr s).get a).bal = (st.get a).bal := by
@@ -430,7 +490,7 @@ lemma of_transfer_bal_target {st st_mid : Jaune.State} {caller target : Adr} {va
   have h_eq : ((st.setBal caller (st.bal caller - value)).addBal target value).bal target
       = st.bal target + value := by
     show ((Jaune.State.setBal _ target _).get target).bal = _
-    rw [State.setBal_get_self]
+    rw [State.setBal_get_self, Acct.clearIfEmpty_bal]
     show (st.setBal caller (st.bal caller - value)).bal target + value = _
     rw [h_bal_t]
   rw [h_eq]
@@ -2740,14 +2800,14 @@ lemma GenericCall.none_getStor_eq {sevm : Sevm} {devm inter : Devm}
     {stv isStatic : Bool} {ii is oi os : Nat} {code : ByteArray} {dp : Bool}
     (h_run : GenericCall sevm devm gas value caller target codeAddress stv
       isStatic ii is oi os code dp .none (.ok inter)) :
-    Devm.getStor inter = Devm.getStor devm := by
+    ∀ a, State.Protected devm.state a → Devm.getStor inter a = Devm.getStor devm a := by
+  intro a hp
   unfold GenericCall genericCall.step at h_run
   simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at h_run
   repeat' split at h_run
   all_goals simp only [XStep.ofExcept, XStep.Run] at h_run
   · cases h_run.2
   · rename_i h_push
-    apply funext
     apply getStor_eq_of_state_eq
     rw [Except.ok.inj h_run.2, ← (Devm.push_of_push h_push).state]
     rfl
@@ -2772,8 +2832,7 @@ lemma GenericCall.none_getStor_eq {sevm : Sevm} {devm inter : Devm}
     obtain ⟨evm2, h_r0, h_settle⟩ := processMessage.settle_ok_cases hset.symm
     subst h_r0
     rcases h_settle with ⟨h_err2, h_child⟩ | ⟨h_err2, h_child⟩
-    · apply funext
-      apply getStor_eq_of_state_eq
+    · apply getStor_eq_of_state_eq
       rw [h_inter_state, ← h_child]
       exact hc_state
     · subst h_child
@@ -2785,24 +2844,26 @@ lemma GenericCall.none_getStor_eq {sevm : Sevm} {devm inter : Devm}
           have h := state_of_executePrecomp_ok h_he h_err2
           rw [h]
           rfl
-        by_cases h_stv : stv = true
-        · rcases of_benvAfterTransfer (hc_stv.trans h_stv) eq_bt with
+        by_cases h_tr : stv = true ∧ value ≠ 0
+        · have h_nz : childMsg.value ≠ 0 := by rw [hc_value]; exact h_tr.2
+          rcases of_benvAfterTransfer (hc_stv.trans h_tr.1) h_nz eq_bt with
             ⟨st_mid, h_sub, hB⟩
           rw [hc_state, hc_caller, hc_value] at h_sub
           have hBs : benv.state = st_mid.addBal target value := by
             rw [hB, hc_ct, hc_value]
             rfl
-          apply funext
-          intro a
           show (inter.state.get a).stor = (devm.state.get a).stor
           rw [h_inter_state, h_child_state, hBs]
-          exact (of_state_transfer_fields h_sub).1 a
-        · have h_stv2 : ¬ childMsg.shouldTransferValue = true := by
-            rw [hc_stv]
-            exact h_stv
-          have h_benv : benv = childMsg.benv :=
-            of_benvAfterTransfer_no h_stv2 eq_bt
-          apply funext
+          exact (of_state_transfer_fields h_sub).1 a hp
+        · have h_benv : benv = childMsg.benv := by
+            by_cases h_stv : stv = true
+            · have hz : childMsg.value = 0 := by
+                rw [hc_value]
+                by_contra hne
+                exact h_tr ⟨h_stv, hne⟩
+              rw [Msg.benvAfterTransfer_of_value_zero hz] at eq_bt
+              exact (Except.ok.inj eq_bt).symm
+            · exact of_benvAfterTransfer_no (by rw [hc_stv]; exact h_stv) eq_bt
           apply getStor_eq_of_state_eq
           rw [h_inter_state, h_child_state, h_benv]
           exact hc_state
@@ -2833,11 +2894,15 @@ lemma GenericCreate.none_getStor_eq {sevm : Sevm} {devm inter : Devm}
     have h_state : inter.state = devm.state.incrNonce sevm.currentTarget := by
       rw [Except.ok.inj h_run.2, ← (Devm.push_of_push h_push).state]
       rfl
+    rename_i hpre _ _ _
+    have hnonce : (devm.state.get sevm.currentTarget).nonce + 1 ≠ 0 :=
+      UInt64.add_one_ne_zero_of_ne_max fun hmax => hpre (Or.inr (Or.inl hmax))
     apply funext
     intro a
     show (inter.state.get a).stor = (devm.state.get a).stor
-    rw [h_state]
-    exact State.incrNonce_get_stor
+    rw [h_state, State.incrNonce_get_stor, if_neg]
+    rintro ⟨rfl, hE⟩
+    exact hnonce hE.2.1
   · exfalso
     obtain ⟨r, hframe, hres⟩ := h_run
     obtain ⟨childMsg, hframe, hc_ca⟩ :
@@ -2914,15 +2979,14 @@ lemma GenericCallAmsterdam.none_getStor_eq
     {stv isStatic : Bool} {ii is oi os : Nat} {code : ByteArray} {dp nac ib : Bool}
     (h_run : GenericCallAmsterdam sevm state devm gas reservoir value caller target
       codeAddress stv isStatic ii is oi os code dp nac ib .none (.ok inter)) :
-    Devm.getStor inter = Devm.getStor devm := by
+    ∀ a, State.Protected devm.state a → Devm.getStor inter a = Devm.getStor devm a := by
+  intro a hp
   unfold GenericCallAmsterdam genericCallAmsterdam.step at h_run
   simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at h_run
   repeat' split at h_run
   all_goals simp only [XStep.ofExcept, XStep.Run] at h_run
   · cases h_run.2
   · rename_i h_push
-    apply funext
-    intro a
     change (inter.state.get a).stor = (devm.state.get a).stor
     rw [Except.ok.inj h_run.2, ← (Devm.push_of_push h_push).state]
     by_cases hnac : nac = true
@@ -2953,8 +3017,7 @@ lemma GenericCallAmsterdam.none_getStor_eq
     obtain ⟨evm2, h_r0, h_settle⟩ := processMessage.settle_ok_cases hset.symm
     subst h_r0
     rcases h_settle with ⟨h_err2, h_child⟩ | ⟨h_err2, h_child⟩
-    · apply funext
-      apply getStor_eq_of_state_eq
+    · apply getStor_eq_of_state_eq
       rw [h_inter_state, ← h_child]
       exact hc_state
     · subst h_child
@@ -2966,24 +3029,26 @@ lemma GenericCallAmsterdam.none_getStor_eq
           have h := state_of_executePrecomp_ok h_he h_err2
           rw [h]
           rfl
-        by_cases h_stv : stv = true
-        · rcases of_benvAfterTransfer (hc_stv.trans h_stv) eq_bt with
+        by_cases h_tr : stv = true ∧ value ≠ 0
+        · have h_nz : childMsg.value ≠ 0 := by rw [hc_value]; exact h_tr.2
+          rcases of_benvAfterTransfer (hc_stv.trans h_tr.1) h_nz eq_bt with
             ⟨st_mid, h_sub, hB⟩
           rw [hc_state, hc_caller, hc_value] at h_sub
           have hBs : benv.state = st_mid.addBal target value := by
             rw [hB, hc_ct, hc_value]
             rfl
-          apply funext
-          intro a
           show (inter.state.get a).stor = (devm.state.get a).stor
           rw [h_inter_state, h_child_state, hBs]
-          exact (of_state_transfer_fields h_sub).1 a
-        · have h_stv2 : ¬ childMsg.shouldTransferValue = true := by
-            rw [hc_stv]
-            exact h_stv
-          have h_benv : benv = childMsg.benv :=
-            of_benvAfterTransfer_no h_stv2 eq_bt
-          apply funext
+          exact (of_state_transfer_fields h_sub).1 a hp
+        · have h_benv : benv = childMsg.benv := by
+            by_cases h_stv : stv = true
+            · have hz : childMsg.value = 0 := by
+                rw [hc_value]
+                by_contra hne
+                exact h_tr ⟨h_stv, hne⟩
+              rw [Msg.benvAfterTransfer_of_value_zero hz] at eq_bt
+              exact (Except.ok.inj eq_bt).symm
+            · exact of_benvAfterTransfer_no (by rw [hc_stv]; exact h_stv) eq_bt
           apply getStor_eq_of_state_eq
           rw [h_inter_state, h_child_state, h_benv]
           exact hc_state
@@ -3025,14 +3090,19 @@ private lemma create_access_getStor
 
 private lemma create_collision_getStor
     {sevm : Sevm} {devm d : Devm}
-    (hd : Devm.getStor d = Devm.getStor devm) :
+    (hd : Devm.getStor d = Devm.getStor devm)
+    (hnonce : (d.withholdCreateGas.2.state.get sevm.currentTarget).nonce + 1 ≠ 0) :
     Devm.getStor (d.withholdCreateGas.2.incrNonce sevm.currentTarget) =
       Devm.getStor devm := by
   calc
     Devm.getStor (d.withholdCreateGas.2.incrNonce sevm.currentTarget) =
         Devm.getStor d.withholdCreateGas.2 := by
       funext a
-      exact State.incrNonce_get_stor
+      show ((d.withholdCreateGas.2.state.incrNonce sevm.currentTarget).get a).stor = _
+      rw [State.incrNonce_get_stor, if_neg]
+      · rfl
+      rintro ⟨rfl, hE⟩
+      exact hnonce hE.2.1
     _ = Devm.getStor d := by
       funext a
       exact (Devm.withholdCreateGas_instructionFrame d).getStor a |>.symm
@@ -3065,9 +3135,13 @@ lemma GenericCreateAmsterdam.none_getStor_eq
       funext a
       exact (Devm.balReadAccount_instructionFrame _ _ _).getStor a |>.symm)
   · rename_i hpre hnew xcharge v hchg hcollision xpush hpush
+    have hnonce : (v.withholdCreateGas.2.state.get sevm.currentTarget).nonce + 1 ≠ 0 := by
+      show (v.state.get sevm.currentTarget).nonce + 1 ≠ 0
+      rw [Devm.chargeStateGas_state hchg]
+      exact UInt64.add_one_ne_zero_of_ne_max fun hmax => hpre (Or.inr (Or.inl hmax))
     exact push_getStor hpush
       (create_collision_getStor
-        ((Devm.chargeStateGas_getStor hchg).symm.trans create_access_getStor))
+        ((Devm.chargeStateGas_getStor hchg).symm.trans create_access_getStor) hnonce)
   · exfalso
     obtain ⟨r, hframe, hres⟩ := h_run
     obtain ⟨childMsg, hframe, hc_ca⟩ :
@@ -3088,9 +3162,10 @@ lemma GenericCreateAmsterdam.none_getStor_eq
             .none := hc_ca
       obtain ⟨exn, h_xl, -⟩ := of_executeCode_noneCode hca hbody
       cases h_xl
-  · rename_i hpush
+  · rename_i hpre _ _ _ hpush
     exact push_getStor hpush
-      (create_collision_getStor create_access_getStor)
+      (create_collision_getStor create_access_getStor
+        (UInt64.add_one_ne_zero_of_ne_max fun hmax => hpre (Or.inr (Or.inl hmax))))
   · exfalso
     obtain ⟨r, hframe, hres⟩ := h_run
     obtain ⟨childMsg, hframe, hc_ca⟩ :
@@ -3113,10 +3188,13 @@ lemma GenericCreateAmsterdam.none_getStor_eq
       cases h_xl
 
 /-- Any successful childless executable instruction preserves persistent
-storage at every address. -/
+storage at every protected address (nonzero nonce or nonempty code). An
+unprotected storage-only account can be emptied, and its storage wiped, by a
+value-bearing call's balance writes. -/
 lemma Xinst.none_getStor_eq {sevm : Sevm} {devm inter : Devm} {x : Xinst}
     (h_run : Xinst.Run sevm devm x .none (.ok inter)) :
-    Devm.getStor inter = Devm.getStor devm := by
+    ∀ a, State.Protected devm.state a → Devm.getStor inter a = Devm.getStor devm a := by
+  intro a hp
   unfold Xinst.Run at h_run
   rcases Xinst.step_shape sevm devm x with ⟨ex, hs, hframe⟩ |
     ⟨d, e, na, mi, ms, hf, hs⟩ |
@@ -3128,24 +3206,28 @@ lemma Xinst.none_getStor_eq {sevm : Sevm} {devm inter : Devm} {x : Xinst}
   · obtain ⟨-, hex⟩ := h_run
     rw [← hex] at hframe
     have hif : Devm.InstructionFrame devm inter := hframe
-    exact (funext hif.getStor).symm
-  · exact GenericCreate.none_getStor_eq h_run |>.trans
-      (funext hf.getStor).symm
-  · exact GenericCall.none_getStor_eq h_run |>.trans
-      (funext hf.getStor).symm
-  · exact GenericCreateAmsterdam.none_getStor_eq h_run |>.trans
-      (funext hf.getStor).symm
-  · exact GenericCallAmsterdam.none_getStor_eq h_run |>.trans
-      (funext hf.getStor).symm
+    exact (hif.getStor a).symm
+  · exact (congrFun (GenericCreate.none_getStor_eq h_run) a).trans (hf.getStor a).symm
+  · have hp' : State.Protected d.state a := by
+      have hst : devm.state = d.state := hf.state
+      rw [← hst]; exact hp
+    exact (GenericCall.none_getStor_eq h_run a hp').trans (hf.getStor a).symm
+  · exact (congrFun (GenericCreateAmsterdam.none_getStor_eq h_run) a).trans (hf.getStor a).symm
+  · have hp' : State.Protected d.state a := by
+      have hst : devm.state = d.state := hf.state
+      rw [← hst]; exact hp
+    exact (GenericCallAmsterdam.none_getStor_eq h_run a hp').trans (hf.getStor a).symm
 
 /-- Every successfully terminating last instruction preserves persistent
-storage at every address; `SELFDESTRUCT` changes balances and deletion marks
-only. -/
+storage at every protected address; `SELFDESTRUCT` changes balances and
+deletion marks only, and a balance write can delete only an unprotected
+(storage-only) account. -/
 theorem Linst.getStor_eq
     {sevm : Sevm} {pre post : Devm} {l : Linst}
     (run : Linst.Run sevm pre l (.ok post)) :
-    Devm.getStor post = Devm.getStor pre := by
-  funext owner
+    ∀ owner, State.Protected pre.state owner →
+      Devm.getStor post owner = Devm.getStor pre owner := by
+  intro owner hp
   cases l with
   | stop =>
       simp only [Linst.Run, Linst.run, Except.ok.injEq] at run
@@ -3211,9 +3293,20 @@ theorem Linst.getStor_eq
           · dsimp only
             exact ((Devm.balReadAccount_instructionFrame _ _ _).getStor owner).trans
               ((Devm.balReadAccount_instructionFrame _ _ _).getStor owner)
+        have hstate2 : pre.state = devm2.state := by
+          have h1 : pre.state = devm1.state :=
+            (liftMach_worldEq_of_ok (core := Mach.popToAdr) pop).1
+          rw [h1, ← (chargeGas_worldEq_of_ok charge).1]
+          split <;> simp only [Devm.balReadAccount_state, addAccessedAddress_state]
+        have hp2 : State.Protected devm2.state owner := hstate2 ▸ hp
+        have hp3 : State.Protected transferred.state owner := by
+          rcases State.of_subBal subState with ⟨_, hmid⟩
+          show State.Protected (devm3.state.setBal donee _) owner
+          rw [hmid]
+          exact (hp2.setBal _ _).setBal _ _
         have transferredEq : Devm.getStor devm2 owner =
             Devm.getStor transferred owner :=
-          (of_state_transfer_fields subState).1 owner |>.symm
+          (of_state_transfer_fields subState).1 owner hp2 |>.symm
         have postEq : Devm.getStor transferred owner =
             Devm.getStor post owner := by
           dsimp only [transferred] at final ⊢
@@ -3222,7 +3315,7 @@ theorem Linst.getStor_eq
           · simp only [h_if, if_pos] at final
             have equal := Except.ok.inj final
             rw [← equal]
-            exact State.setBal_get_stor.symm
+            exact (State.setBal_get_stor_of_protected hp3).symm
           · simp only [h_if, if_neg] at final
             have equal := Except.ok.inj final
             rw [← equal]
@@ -3269,9 +3362,15 @@ theorem Linst.getStor_eq
               ((Devm.balReadAccount_instructionFrame _ _ _).getStor owner)
         have stged : Devm.getStor devm2 owner = Devm.getStor devm2b owner :=
           congrFun (Devm.chargeStateGas_getStor stg) owner
+        have hstate2b : pre.state = devm2b.state := by
+          have h1 : pre.state = devm1.state :=
+            (liftMach_worldEq_of_ok (core := Mach.popToAdr) pop).1
+          rw [h1, Devm.chargeStateGas_state stg, ← (chargeGas_worldEq_of_ok charge).1]
+          split <;> simp only [Devm.balReadAccount_state, addAccessedAddress_state]
+        have hp2 : State.Protected devm2b.state owner := hstate2b ▸ hp
         have h_tr1 : Devm.getStor devm2b owner =
             Devm.getStor (devm3.addBal donee ((if donee ∉ devm1.accessedAddresses then addAccessedAddress devm1 donee else devm1).getAcct sevm.currentTarget).bal) owner :=
-          (of_state_transfer_fields subState).1 owner |>.symm
+          (of_state_transfer_fields subState).1 owner hp2 |>.symm
         have h_tr2 : Devm.getStor (devm3.addBal donee ((if donee ∉ devm1.accessedAddresses then addAccessedAddress devm1 donee else devm1).getAcct sevm.currentTarget).bal) owner =
             Devm.getStor transferred owner :=
           (Devm.emitTransferLog_instructionFrame _ _ _ _).getStor owner
@@ -3336,26 +3435,22 @@ theorem ProcessMessage.targetBalanceMono_of_none
       ⟨entry, transfer, post_eq⟩
   · rw [rollback]
   · rw [post_eq]
-    cases shouldTransfer : msg.shouldTransferValue with
-    | false =>
-        have noTransfer : ¬ msg.shouldTransferValue = true := by
-          simp only [shouldTransfer, Bool.false_eq_true, not_false_eq_true]
-        have entry_eq := of_benvAfterTransfer_no noTransfer transfer
-        subst entry
-        exact Nat.le_refl _
-    | true =>
-        rcases of_benvAfterTransfer shouldTransfer transfer with
-          ⟨debit, sub, rfl⟩
-        by_cases target_eq : msg.currentTarget = ca
-        · subst ca
-          change (msg.benv.state.bal msg.currentTarget).toNat ≤
-            ((debit.addBal msg.currentTarget msg.value).bal
-              msg.currentTarget).toNat
-          rw [of_transfer_bal_target sub (caller_ne shouldTransfer) sum_nof]
-          omega
-        · change (msg.benv.state.bal ca).toNat ≤
-            ((debit.addBal msg.currentTarget msg.value).bal ca).toNat
-          rw [of_transfer_bal_other sub (caller_ne shouldTransfer) target_eq]
+    by_cases tr : msg.shouldTransferValue = true ∧ msg.value ≠ 0
+    · rcases of_benvAfterTransfer tr.1 tr.2 transfer with
+        ⟨debit, sub, rfl⟩
+      by_cases target_eq : msg.currentTarget = ca
+      · subst ca
+        change (msg.benv.state.bal msg.currentTarget).toNat ≤
+          ((debit.addBal msg.currentTarget msg.value).bal
+            msg.currentTarget).toNat
+        rw [of_transfer_bal_target sub (caller_ne tr.1) sum_nof]
+        omega
+      · change (msg.benv.state.bal ca).toNat ≤
+          ((debit.addBal msg.currentTarget msg.value).bal ca).toNat
+        rw [of_transfer_bal_other sub (caller_ne tr.1) target_eq]
+    · have entry_eq := benvAfterTransfer_eq_of_not_transfer tr transfer
+      subst entry
+      exact Nat.le_refl _
 
 /-- CREATE settlement around a no-interpreter constructor preserves the same
 foreign-source monotonicity.  Failed creation rolls back; successful code
@@ -3623,7 +3718,8 @@ theorem Ninst.foreignNone_getStor_eq
     {ca : Adr} {pc : Nat} {sevm : Sevm} {pre post : Devm} {n : Ninst}
     (_hfork : CoveredFork sevm.benvStat.fork)
     (run : Ninst.StepRun pc sevm pre n .none (.ok post))
-    (target_ne : sevm.currentTarget ≠ ca) :
+    (target_ne : sevm.currentTarget ≠ ca)
+    (hp : State.Protected pre.state ca) :
     Devm.getStor post ca = Devm.getStor pre ca := by
   cases n with
   | reg regular =>
@@ -3635,7 +3731,7 @@ theorem Ninst.foreignNone_getStor_eq
       · exact (congrFun (Rinst.preserves_stor store regularRun) ca).symm
   | exec executable =>
       simp only [Ninst.StepRun, Ninst.step_exec] at run
-      exact congrFun (Xinst.none_getStor_eq (XStep.run_toStep.mp run)) ca
+      exact Xinst.none_getStor_eq (XStep.run_toStep.mp run) ca hp
   | push bytes bound =>
       have frame := Ninst.push_instructionFrame_effectRec
         (hxs := bound) (xl := .none) trivial run
@@ -3800,7 +3896,8 @@ theorem Linst.targetBalanceMono_of_foreign
               cases subtractedSome
           | some st =>
               simp only [Devm.subBal, hss, Option.bind] at subtractedSome
-              have hde : devm3 = devm2b.withState st :=
+              have hde : devm3 =
+                  (devm2b.withState st).clearStorageWritesIfEmpty sevm.currentTarget :=
                 (Option.some.inj subtractedSome).symm
               have hst : devm3.state = st := by rw [hde]; rfl
               rw [hst]
@@ -4191,47 +4288,41 @@ theorem Xinst.step_spawn_caller_ne_of_target_eq
     exact parent_ne
   · exact (parent_ne (child_eq.symm.trans target_eq)).elim
 
-/-- A recursive CREATE spawn passed the collision check, so the target's
-persistent storage was empty before fresh-account preparation. -/
-theorem genericCreate_step_spawn_getStor_empty
+/-- A recursive CREATE spawn passed the collision check (EIP-684 only): the
+target had zero nonce and empty code, so it is not protected. Its storage may
+be nonempty (a storage-only account, EIP-7610 withdrawn); fresh-account
+preparation wipes it. -/
+theorem genericCreate_step_spawn_target_unprotected
     {sevm : Sevm} {devm : Devm} {endowment : B256}
     {newAddress : Adr} {mi ms : Nat}
     {frame : Frame} {resume : Resume}
     (hspawn : genericCreate.step sevm devm endowment newAddress mi ms =
       .spawn frame resume) :
-    Devm.getStor devm newAddress = .empty := by
+    ¬ State.Protected devm.state newAddress := by
   simp only [genericCreate.step, Bind.bind, Except.bind, Except.assert,
     assertDynamic, Pure.pure, Except.pure] at hspawn
   repeat' split at hspawn
   all_goals
     simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hspawn
   all_goals obtain ⟨rfl, -⟩ := hspawn
-  rename_i collision
+  rename_i hpre collision
   push Not at collision
-  let createPre :=
-    addAccessedAddress
-      (((devm.withGasLeft
-          (devm.gasLeft - except64th devm.gasLeft)).withReturnData
-        []).incrNonce sevm.currentTarget) newAddress
-  have storageEq : Devm.getStor createPre = Devm.getStor devm := by
-    funext owner
-    have stateEq : createPre.state =
-        devm.state.incrNonce sevm.currentTarget := by
-      rfl
-    change createPre.state.getStor owner = devm.state.getStor owner
-    rw [stateEq]
-    exact State.incrNonce_get_stor
-  have sizeZero : (Devm.getStor devm newAddress).size = 0 := by
-    have atCreate : (Devm.getStor createPre newAddress).size = 0 := by
-      exact collision.2.2
-    rw [storageEq] at atCreate
-    exact atCreate
-  apply Jaune.Std.TreeMap.eq_empty_iff_isEmpty.mpr
-  calc
-    (Devm.getStor devm newAddress).isEmpty =
-        ((Devm.getStor devm newAddress).size == 0) :=
-      Std.TreeMap.isEmpty_eq_size_eq_zero
-    _ = true := by simp only [sizeZero, BEq.rfl]
+  have hnonce : (devm.state.get sevm.currentTarget).nonce + 1 ≠ 0 :=
+    UInt64.add_one_ne_zero_of_ne_max fun hmax => hpre (Or.inr (Or.inl hmax))
+  have hget : ((devm.state.incrNonce sevm.currentTarget).get newAddress).nonce = 0 ∧
+      ((devm.state.incrNonce sevm.currentTarget).get newAddress).code.size = 0 :=
+    collision
+  unfold State.Protected
+  push Not
+  by_cases h : sevm.currentTarget = newAddress
+  · subst h
+    exfalso
+    apply hnonce
+    have h1 := hget.1
+    simp only [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_nonce] at h1
+    exact h1
+  · simp only [State.incrNonce, State.setAccount_get_ne _ h] at hget
+    exact hget
 
 /-! ### What a spawned child frame starts with in memory
 
@@ -4458,7 +4549,7 @@ lemma ProcessMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
     · exact h_exec
     · dsimp only [bind, Except.bind]
       split
-      · exact Devm.NoDel.rollback h_exec.atd h_exec.ca h.code
+      · exact (⟨h_exec.atd, h_exec.ca, h.code⟩ : Devm.NoDel wa ((evm2.rollback msg.benv.state msg.tenv.transientStorage).withStorageWrites msg.benv.storageWrites))
       · exact h_exec
 
 lemma ProcessCreateMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
@@ -4516,7 +4607,7 @@ lemma ProcessCreateMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
         rw [setCode_getCode h_ct, h_gc]
         exact h_pm.code
     · rw [if_neg h_err]
-      exact Devm.NoDel.rollback h_pm.atd h_pm.ca h.code
+      exact (⟨h_pm.atd, h_pm.ca, h.code⟩ : Devm.NoDel wa ((evm.rollback msg.benv.state msg.tenv.transientStorage).withStorageWrites msg.benv.storageWrites))
 
 lemma Devm.NoDel.of_instructionFrame {wa : Adr} {d d' : Devm}
     (hf : Devm.InstructionFrame d d') (h : Devm.NoDel wa d) : Devm.NoDel wa d' :=
@@ -4639,7 +4730,7 @@ lemma GenericCreate.inv_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
     obtain ⟨r, hframe, rfl⟩ := h
     have h_ct : newAddress ≠ wa := by
       push Not at h_c2
-      exact ne_wa_of_code_size_zero hnd5.code h_c2.2.1
+      exact ne_wa_of_code_size_zero hnd5.code h_c2.2
     exact Resume.create_noDel hnd5
       (ProcessCreateMessage.inv_noDel inv hframe h_ct ⟨hnd5.ca, hnd5.code⟩)
 
@@ -4849,7 +4940,7 @@ theorem processCreateMessage_preserves_noDel {wa : Adr} {msg : Msg} {evm : Devm}
         exact h_pm.code
     · rw [if_neg herr] at h_rest
       rw [← Except.ok.inj h_rest]
-      exact Devm.NoDel.rollback h_pm.atd h_pm.ca h.code
+      exact (⟨h_pm.atd, h_pm.ca, h.code⟩ : Devm.NoDel wa ((evm2.rollback msg.benv.state msg.tenv.transientStorage).withStorageWrites msg.benv.storageWrites))
 
 lemma setDelegationStep_benv_equiv {auth : Auth} {msg msg' : Msg} {refund refund' : B256}
     (h : setDelegationStep auth msg refund = .ok (msg', refund')) :
@@ -4893,7 +4984,8 @@ lemma setDelegationStep_benv_equiv {auth : Auth} {msg msg' : Msg} {refund refund
                 exact h_not_del (by simpa only [State.getCode] using h_valid)
             change ((_ : Msg).benv.incrNonce authority).state.getCode a = _
             rw [Benv.incrNonce_getCode]
-            dsimp only [Msg.setCode, Lean.Elab.WF.paramLet, State.getCode]
+            dsimp only [Msg.setCode, Lean.Elab.WF.paramLet, State.getCode,
+              Benv.clearStorageWritesIfEmpty]
             rw [State.setCode_get_code_ne h_ne]
 
 lemma setDelegationLoop_benv_equiv {auths : List Auth} {msg msg' : Msg} {refund refund' : B256}
@@ -5039,7 +5131,7 @@ theorem processMessageCall_preserves_noDel {wa : Adr} {msg : Msg} {st' : Jaune.S
       exact AdrSet.not_mem_empty
     · rename_i h_col
       simp only [Bool.not_eq_true, Bool.or_eq_false_iff] at h_col
-      have h_ct := ne_wa_of_not_hasCodeOrNonce h.code h_col.1
+      have h_ct := ne_wa_of_not_hasCodeOrNonce h.code h_col
       revert h_run
       rcases h_evm : processCreateMessage msg with ⟨err⟩ | ⟨evm⟩
       · simp only [Except.bimap, bind, Except.bind]
@@ -5338,16 +5430,14 @@ lemma validateTransaction_calldataFloorGasCost_le_gas {rules : ForkRules} {tx : 
         unfold checkInitcodeSize at h_validate
         split at h_validate
         · cases h_validate
-        · unfold checkTransactionGasCap at h_validate
-          simp only [h_limit] at h_validate
+        · rcases Except.bind_eq_ok h_validate with ⟨_, _, h_validate⟩
+          rcases Except.bind_eq_ok h_validate with ⟨_, _, h_validate⟩
           split at h_validate
-          · cases h_validate
-          · split at h_validate
-            · cases h_validate
-            · have h_result := Except.ok.inj h_validate
-              simp only [Prod.mk.injEq] at h_result
-              obtain ⟨rfl, rfl⟩ := h_result
-              omega
+          · simp only [bind, Except.bind, reduceCtorEq] at h_validate
+          · have h_result := Except.ok.inj h_validate
+            simp only [Prod.mk.injEq] at h_result
+            obtain ⟨rfl, rfl⟩ := h_result
+            omega
   · -- some lane : the structural checks cannot fail on an ok run, and the
     -- separate floor check yields the bound
     rcases h_cost : calculateIntrinsicCost rules tx sender with ⟨ig, floorCost⟩
@@ -5357,6 +5447,7 @@ lemma validateTransaction_calldataFloorGasCost_le_gas {rules : ForkRules} {tx : 
     · dsimp only [bind, Except.bind] at h_validate
       cases h_validate
     · dsimp only [bind, Except.bind] at h_validate
+      rcases Except.bind_eq_ok h_validate with ⟨_, _, h_validate⟩
       rcases Except.bind_eq_ok h_validate with ⟨_, _, h_validate⟩
       rcases Except.bind_eq_ok h_validate with ⟨_, _, h_validate⟩
       rcases Except.bind_eq_ok h_validate with ⟨_, _, h_validate⟩

@@ -1172,6 +1172,21 @@ lemma Devm.chargeStateGas_getStor {amount : Nat} {d d' : Devm}
     · simp only [h2] at h
       cases h
 
+/-- State-gas charging leaves the world state untouched. -/
+lemma Devm.chargeStateGas_state {amount : Nat} {d d' : Devm}
+    (h : chargeStateGas amount d = .ok d') : d'.state = d.state := by
+  dsimp only [ExceptT.stM_eq, chargeStateGas, liftMachExecution, Footprint.toExecution, liftMach,
+    Footprint.liftOutcome, Mach.chargeStateGas, Lean.Elab.WF.paramLet, tsub_le_iff_right] at h
+  by_cases h1 : amount ≤ d.mach.stateGas.left
+  · simp only [h1] at h
+    injection h with heq; subst heq; rfl
+  · simp only [h1] at h
+    by_cases h2 : amount - d.mach.stateGas.left ≤ d.mach.gasLeft
+    · simp only [h2] at h
+      injection h with heq; subst heq; rfl
+    · simp only [h2] at h
+      cases h
+
 lemma Devm.popToNat_machFrame (d : Devm) :
     Outcome.Rel Prod.snd Prod.snd Devm.MachFrame d (Devm.popToNat d) := by
   exact liftMach_machFrame Mach.popToNat d

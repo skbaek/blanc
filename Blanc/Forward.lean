@@ -854,10 +854,10 @@ lemma Rinst.runCore_sstore_cold_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
     (h_stk : devm.stack = k :: v :: s)
     (h_cold : ⟨sevm.currentTarget, k⟩ ∉ devm.accessedStorageKeys)
     (h_sentry : gCallStipend < devm.gasLeft) (h_static : sevm.isStatic = false)
-    (h_cost : sstoreValueCost (getOrigStorVal sevm sevm.currentTarget k)
+    (h_cost : sstoreValueCost (devm.getOrigStorVal sevm sevm.currentTarget k)
       (devm.getStorVal sevm.currentTarget k) v = c)
     (h_refund : sstoreNewRefundCounter sevm.benvStat.rules.gas v
-      (getOrigStorVal sevm sevm.currentTarget k)
+      (devm.getOrigStorVal sevm sevm.currentTarget k)
       (devm.getStorVal sevm.currentTarget k) devm.refundCounter = rc)
     (h_gas : gasColdSload + c ≤ devm.gasLeft) :
     Rinst.runCore pc devm sevm .sstore =
@@ -871,7 +871,7 @@ lemma Rinst.runCore_sstore_cold_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
       let ⟨new_value, d⟩ ← d.pop
       .assert (gCallStipend < d.gasLeft) ⟨.halt (.outOfGas .none), d⟩
       let ct := sevm.currentTarget
-      let original_value := getOrigStorVal sevm ct key
+      let original_value := d.getOrigStorVal sevm ct key
       let current_value := d.getStorVal ct key
       let ⟨d, gasCost2⟩ ← Except.ok <|
         if ⟨ct, key⟩ ∉ d.accessedStorageKeys then
@@ -904,7 +904,9 @@ lemma Rinst.runCore_sstore_cold_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   simp only [ne_eq, h_cold, not_false_eq_true, ↓reduceIte, sstoreValueCost_add]
   -- The popped state's world projections are the pre-state's; naming them so
   -- lets `chargeGas_eq_ok` match syntactically rather than only up to `rfl`.
-  rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).getStorVal
+  rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).getOrigStorVal
+        sevm sevm.currentTarget k = devm.getOrigStorVal sevm sevm.currentTarget k from rfl,
+    show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).getStorVal
         sevm.currentTarget k = devm.getStorVal sevm.currentTarget k from rfl,
     show (addAccessedStorageKey (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩)
         sevm.currentTarget k).refundCounter = devm.refundCounter from rfl]
@@ -912,7 +914,7 @@ lemma Rinst.runCore_sstore_cold_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
     (devm := ((addAccessedStorageKey
       (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) sevm.currentTarget
         k).withRefundCounter
-      (sstoreNewRefundCounter sevm.benvStat.rules.gas v (getOrigStorVal sevm sevm.currentTarget k)
+      (sstoreNewRefundCounter sevm.benvStat.rules.gas v (devm.getOrigStorVal sevm sevm.currentTarget k)
         (devm.getStorVal sevm.currentTarget k) devm.refundCounter)))
     (by
       show gasColdSload + sstoreValueCost _ _ _ ≤ devm.gasLeft
@@ -928,10 +930,10 @@ lemma Rinst.runCore_sstore_warm_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
     (h_stk : devm.stack = k :: v :: s)
     (h_warm : ⟨sevm.currentTarget, k⟩ ∈ devm.accessedStorageKeys)
     (h_sentry : gCallStipend < devm.gasLeft) (h_static : sevm.isStatic = false)
-    (h_cost : sstoreValueCost (getOrigStorVal sevm sevm.currentTarget k)
+    (h_cost : sstoreValueCost (devm.getOrigStorVal sevm sevm.currentTarget k)
       (devm.getStorVal sevm.currentTarget k) v = c)
     (h_refund : sstoreNewRefundCounter sevm.benvStat.rules.gas v
-      (getOrigStorVal sevm sevm.currentTarget k)
+      (devm.getOrigStorVal sevm sevm.currentTarget k)
       (devm.getStorVal sevm.currentTarget k) devm.refundCounter = rc)
     (h_gas : c ≤ devm.gasLeft) :
     Rinst.runCore pc devm sevm .sstore =
@@ -944,7 +946,7 @@ lemma Rinst.runCore_sstore_warm_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
       let ⟨new_value, d⟩ ← d.pop
       .assert (gCallStipend < d.gasLeft) ⟨.halt (.outOfGas .none), d⟩
       let ct := sevm.currentTarget
-      let original_value := getOrigStorVal sevm ct key
+      let original_value := d.getOrigStorVal sevm ct key
       let current_value := d.getStorVal ct key
       let ⟨d, gasCost2⟩ ← Except.ok <|
         if ⟨ct, key⟩ ∉ d.accessedStorageKeys then
@@ -975,13 +977,15 @@ lemma Rinst.runCore_sstore_warm_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   simp only [Except.assert, if_pos h_sentry, bind, Except.bind]
   simp only [Devm.setMach_accessedStorageKeys]
   simp only [ne_eq, h_warm, not_true_eq_false, ↓reduceIte, zero_add]
-  rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).getStorVal
+  rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).getOrigStorVal
+        sevm sevm.currentTarget k = devm.getOrigStorVal sevm sevm.currentTarget k from rfl,
+    show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).getStorVal
         sevm.currentTarget k = devm.getStorVal sevm.currentTarget k from rfl,
     show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).refundCounter
         = devm.refundCounter from rfl]
   rw [chargeGas_eq_ok
     (devm := (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).withRefundCounter
-      (sstoreNewRefundCounter sevm.benvStat.rules.gas v (getOrigStorVal sevm sevm.currentTarget k)
+      (sstoreNewRefundCounter sevm.benvStat.rules.gas v (devm.getOrigStorVal sevm sevm.currentTarget k)
         (devm.getStorVal sevm.currentTarget k) devm.refundCounter))
     (by
       show sstoreValueCost _ _ _ ≤ devm.gasLeft
@@ -1514,10 +1518,10 @@ lemma Ninst.runCompiled_sstore_cold {sevm : Sevm} {devm : Devm} {k v : B256}
     (h_cold : ⟨sevm.currentTarget, k⟩ ∉ devm.accessedStorageKeys)
     (h_sentry : gCallStipend < devm.gasLeft) (h_static : sevm.isStatic = false)
     (h_cost : gasColdSload
-      + sstoreValueCost (getOrigStorVal sevm sevm.currentTarget k)
+      + sstoreValueCost (devm.getOrigStorVal sevm sevm.currentTarget k)
           (devm.getStorVal sevm.currentTarget k) v = c)
     (h_refund : sstoreNewRefundCounter sevm.benvStat.rules.gas v
-      (getOrigStorVal sevm sevm.currentTarget k)
+      (devm.getOrigStorVal sevm sevm.currentTarget k)
       (devm.getStorVal sevm.currentTarget k) devm.refundCounter = rc)
     (h_gas : devm.gasLeft = G + c) :
     Ninst.RunCompiled sevm devm (.reg .sstore)
@@ -1526,7 +1530,7 @@ lemma Ninst.runCompiled_sstore_cold {sevm : Sevm} {devm : Devm} {k v : B256}
           ⟨s, devm.memory, G, devm.stateGas⟩) := by
   subst h_cost
   have h_eq : devm.gasLeft - (gasColdSload
-      + sstoreValueCost (getOrigStorVal sevm sevm.currentTarget k)
+      + sstoreValueCost (devm.getOrigStorVal sevm sevm.currentTarget k)
         (devm.getStorVal sevm.currentTarget k) v) = G := by omega
   rw [← h_eq]
   exact Ninst.runCompiled_reg (by rintro ⟨⟩)
@@ -1541,10 +1545,10 @@ lemma Ninst.runCompiled_sstore_warm {sevm : Sevm} {devm : Devm} {k v : B256}
     (h_stk : devm.stack = k :: v :: s)
     (h_warm : ⟨sevm.currentTarget, k⟩ ∈ devm.accessedStorageKeys)
     (h_sentry : gCallStipend < devm.gasLeft) (h_static : sevm.isStatic = false)
-    (h_cost : sstoreValueCost (getOrigStorVal sevm sevm.currentTarget k)
+    (h_cost : sstoreValueCost (devm.getOrigStorVal sevm sevm.currentTarget k)
       (devm.getStorVal sevm.currentTarget k) v = c)
     (h_refund : sstoreNewRefundCounter sevm.benvStat.rules.gas v
-      (getOrigStorVal sevm sevm.currentTarget k)
+      (devm.getOrigStorVal sevm sevm.currentTarget k)
       (devm.getStorVal sevm.currentTarget k) devm.refundCounter = rc)
     (h_gas : devm.gasLeft = G + c) :
     Ninst.RunCompiled sevm devm (.reg .sstore)
@@ -1552,7 +1556,7 @@ lemma Ninst.runCompiled_sstore_warm {sevm : Sevm} {devm : Devm} {k v : B256}
         ⟨s, devm.memory, G, devm.stateGas⟩) := by
   subst h_cost
   have h_eq : devm.gasLeft
-      - sstoreValueCost (getOrigStorVal sevm sevm.currentTarget k)
+      - sstoreValueCost (devm.getOrigStorVal sevm sevm.currentTarget k)
         (devm.getStorVal sevm.currentTarget k) v = G := by omega
   rw [← h_eq]
   exact Ninst.runCompiled_reg (by rintro ⟨⟩)
@@ -1658,7 +1662,7 @@ lemma Devm.burnBy_setMach_gas {devm : Devm} {cost G : Nat}
     returnData := rfl, error := rfl, accessedAddresses := rfl,
     accessedStorageKeys := rfl, state := rfl, createdAccounts := rfl,
     transientStorage := rfl, stateGas := rfl, accountReads := rfl,
-    storageReads := rfl }
+    storageReads := rfl, storageWrites := rfl }
 
 /-- The exact pop-and-burn between a state whose stack is `x :: s` and the
 same state cut down to `s` with `cost` off the gas account. -/
@@ -1671,7 +1675,7 @@ lemma Devm.popBurnBy_setMach {devm : Devm} {x : B256} {s : List B256}
     returnData := rfl, error := rfl, accessedAddresses := rfl,
     accessedStorageKeys := rfl, state := rfl, createdAccounts := rfl,
     transientStorage := rfl, stateGas := rfl, accountReads := rfl,
-    storageReads := rfl }
+    storageReads := rfl, storageWrites := rfl }
 
 /-! ## The two jump-emitting rules and the program entry
 
@@ -3231,7 +3235,7 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         #[← mkAppM ``Jaune.ForkRules.gas
             #[← mkAppM ``Jaune.BenvStat.rules
               #[← mkAppM ``Jaune.Sevm.benvStat #[sevm]]],
-          v, ← mkAppM ``Jaune.getOrigStorVal #[sevm, tgt, k],
+          v, ← mkAppM ``Jaune.Devm.getOrigStorVal #[d, sevm, tgt, k],
           ← mkAppM ``Jaune.Devm.getStorVal #[d, tgt, k],
           ← mkAppM ``Jaune.Devm.refundCounter #[d]]
       -- Warmth is read off the local context, exactly as at `SLOAD`, and for
