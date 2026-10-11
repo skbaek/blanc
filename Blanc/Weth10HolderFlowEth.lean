@@ -206,8 +206,9 @@ theorem EthBound.trans
 /-! ## Concrete, non-circular ETH movements -/
 
 /-- One concrete ETH movement contributing zero, one, or two classified
-actions.  Every value-transfer constructor retains the actual successful
-`subBal` and `addBal` state.  The global sum bound prevents recipient wrap.
+actions. Nonzero transfers retain the actual successful `subBal` and `addBal`
+state; zero-redemption entry preserves the state exactly. The global sum bound
+prevents recipient wrap.
 The self-call constructor pairs the enclosing redemption with the nested
 ordinary mint, which is the only sound local treatment of WETH calling itself
 with value. -/
@@ -234,6 +235,10 @@ inductive EthStep (ca : Adr) : State → List FlowAction → State → Prop
       (atom_eq : action.atom =
         .ordinaryMint rawRecipient recipient value.toNat) :
       EthStep ca pre [action] post
+  | zeroRedemption {pre action rawSource source ethRecipient}
+      (atom_eq : action.atom =
+        .redemption rawSource source ethRecipient 0) :
+      EthStep ca pre [action] pre
   | redemption {pre debit post target value action rawSource source ethRecipient}
       (target_ne : target ≠ ca)
       (sub : pre.subBal ca value = some debit)
@@ -280,6 +285,10 @@ theorem EthStep.bound
       simp only [EthBound, flowActionsEthMint, FlowAtom.ethMint, List.map_cons, atom_eq,
         List.map_nil, List.sum_cons, List.sum_nil, add_zero, hbal, flowActionsEthRedemption,
         FlowAtom.ethRedemption, Std.le_refl]
+  | zeroRedemption atom_eq =>
+      simp only [EthBound, flowActionsEthMint, flowActionsEthRedemption,
+        List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, atom_eq,
+        FlowAtom.ethMint, FlowAtom.ethRedemption, Nat.add_zero, Std.le_refl]
   | redemption target_ne sub post_eq atom_eq =>
       rename_i debit target value action rawSource source ethRecipient
       subst post
@@ -288,7 +297,7 @@ theorem EthStep.bound
           ((pre.setBal ca (pre.bal ca - value)).addBal target value).bal ca =
             pre.bal ca - value := by
         simp only [State.addBal, State.bal,
-          State.setBal_get_ne target_ne, State.setBal_get_self]
+          State.setBal_get_ne target_ne, State.setBal_get_self, Acct.clearIfEmpty_bal]
         rfl
       have hnat := B256.toNat_sub_eq_of_le (pre.bal ca) value hle
       simp only [EthBound, flowActionsEthMint, FlowAtom.ethMint, List.map_cons, atom_eq,
@@ -314,7 +323,7 @@ theorem EthStep.bound
           omega
         have hbal : (pre.addBal ca value).bal ca = pre.bal ca + value := by
           show ((pre.setBal ca (pre.bal ca + value)).get ca).bal = _
-          rw [State.setBal_get_self]
+          rw [State.setBal_get_self, Acct.clearIfEmpty_bal]
           rfl
         simp only [EthBound, flowActionsEthMint, List.map_nil, List.sum_nil, add_zero, hbal,
           B256.toNat_add_eq_of_nof _ _ hnof, flowActionsEthRedemption, le_add_iff_nonneg_right,
@@ -346,9 +355,15 @@ theorem EthStep.of_benvAfterTransfer_redemption
       .redemption rawSource source ethRecipient msg.value.toNat)
     (hrun : msg.benvAfterTransfer = .ok post) :
     EthStep ca msg.benv.state [action] post.state := by
-  rcases of_benvAfterTransfer htransfer hrun with ⟨debit, hsub, rfl⟩
-  subst ca
-  exact .redemption htarget hsub rfl hatom
+  by_cases hz : msg.value = 0
+  · have hpost := benvAfterTransfer_eq_of_not_transfer
+      (by intro h; exact h.2 hz) hrun
+    subst post
+    apply EthStep.zeroRedemption
+    simpa only [hz, B256.toNat_zero] using hatom
+  · rcases of_benvAfterTransfer htransfer hz hrun with ⟨debit, hsub, rfl⟩
+    subst ca
+    exact .redemption htarget hsub rfl hatom
 
 /-- Contract-neutral entry accounting for the root action of an interpreted
 frame.  A selected ordinary mint is bounded by the frame's actual call value;
@@ -386,71 +401,80 @@ theorem Exec.entryEthBound
       flowActionsEthRedemption
           (Exec.entryEthActions dp ca run hcommit) = 0 :=
     flowActionsEthRedemption_entryEthActions_eq_zero _
-  by_cases hstv : msg.shouldTransferValue = true
-  · rcases of_benvAfterTransfer hstv htransfer with
-      ⟨debit, hsub, hbenv⟩
-    by_cases htarget : msg.currentTarget = ca
-    · have hbal := of_transfer_bal_target hsub (hcaller hstv) hsum
-      have hbenvState :
-          benv.state = debit.addBal msg.currentTarget msg.value := by
-        rw [hbenv]
-        rfl
-      have hbenvBal :
-          (benv.state.bal ca).toNat =
-            (msg.benv.state.bal ca).toNat + msg.value.toNat := by
-        rw [hbenvState, htarget]
-        exact hbal
-      unfold EthBound
-      rw [hredeem, Nat.add_zero]
-      change (msg.benv.state.bal ca).toNat +
-          flowActionsEthMint (Exec.entryEthActions dp ca run hcommit) ≤
-        (benv.state.bal ca).toNat
-      rw [hbenvBal]
-      omega
-    · have hbal := of_transfer_bal_other hsub (hcaller hstv) htarget
-      have hentry : Exec.entryEthActions dp ca run hcommit = [] := by
-        simp only [Exec.entryEthActions, Exec.Frame.flowAction?, Exec.Frame.exactInvocation, Exec.Frame.ofRun, exactInvocation, flowActionEntryEthActions, initSevm, Msg.withBenv, htarget, entryEthActions, Frame.flowAction?, Frame.exactInvocation, false_and, and_false, ↓reduceIte]
-      have hbenvState :
-          benv.state = debit.addBal msg.currentTarget msg.value := by
-        rw [hbenv]
-        rfl
-      have hbenvBal : benv.state.bal ca = msg.benv.state.bal ca := by
-        rw [hbenvState]
-        exact hbal
-      unfold EthBound
-      rw [hentry]
-      simp only [flowActionsEthMint, List.map_nil, List.sum_nil,
-        flowActionsEthRedemption, Nat.add_zero]
-      change (msg.benv.state.bal ca).toNat ≤ (benv.state.bal ca).toNat
-      rw [hbenvBal]
-  · have hbenv := of_benvAfterTransfer_no hstv htransfer
+  by_cases hz : msg.value = 0
+  · have hbenv := benvAfterTransfer_eq_of_not_transfer
+      (by intro h; exact h.2 hz) htransfer
     subst benv
-    by_cases htarget : msg.currentTarget = ca
-    · have hfalse : msg.shouldTransferValue = false := by
-        cases hbool : msg.shouldTransferValue with
-        | false => rfl
-        | true => exact (hstv hbool).elim
-      have hvalue := hval0 hfalse htarget
-      have hvalueNat : msg.value.toNat = 0 := by
-        rw [hvalue]
-        rfl
-      rw [hvalueNat] at hmint
-      have hmintZero :
-          flowActionsEthMint
-              (Exec.entryEthActions dp ca run hcommit) = 0 :=
-        Nat.eq_zero_of_le_zero hmint
-      unfold EthBound
-      rw [hredeem, Nat.add_zero]
-      change (msg.benv.state.bal ca).toNat +
-          flowActionsEthMint (Exec.entryEthActions dp ca run hcommit) ≤
-        (msg.benv.state.bal ca).toNat
-      rw [hmintZero]
-      simp only [add_zero, Std.le_refl]
-    · have hentry : Exec.entryEthActions dp ca run hcommit = [] := by
-        simp only [Exec.entryEthActions, Exec.Frame.flowAction?, Exec.Frame.exactInvocation, Exec.Frame.ofRun, exactInvocation, flowActionEntryEthActions, initSevm, Msg.withBenv, htarget, entryEthActions, Frame.flowAction?, Frame.exactInvocation, false_and, and_false, ↓reduceIte]
-      rw [hentry]
-      exact EthBound.refl ca msg.benv.state
-
+    have hmzero : flowActionsEthMint (Exec.entryEthActions dp ca run hcommit) = 0 :=
+      Nat.eq_zero_of_le_zero (by simpa only [hz, B256.toNat_zero] using hmint)
+    unfold EthBound
+    rw [hmzero, hredeem]
+    exact le_refl _
+  ·
+    by_cases hstv : msg.shouldTransferValue = true
+    · rcases of_benvAfterTransfer hstv hz htransfer with
+        ⟨debit, hsub, hbenv⟩
+      by_cases htarget : msg.currentTarget = ca
+      · have hbal := of_transfer_bal_target hsub (hcaller hstv) hsum
+        have hbenvState :
+            benv.state = debit.addBal msg.currentTarget msg.value := by
+          rw [hbenv]
+          rfl
+        have hbenvBal :
+            (benv.state.bal ca).toNat =
+              (msg.benv.state.bal ca).toNat + msg.value.toNat := by
+          rw [hbenvState, htarget]
+          exact hbal
+        unfold EthBound
+        rw [hredeem, Nat.add_zero]
+        change (msg.benv.state.bal ca).toNat +
+            flowActionsEthMint (Exec.entryEthActions dp ca run hcommit) ≤
+          (benv.state.bal ca).toNat
+        rw [hbenvBal]
+        omega
+      · have hbal := of_transfer_bal_other hsub (hcaller hstv) htarget
+        have hentry : Exec.entryEthActions dp ca run hcommit = [] := by
+          simp only [Exec.entryEthActions, Exec.Frame.flowAction?, Exec.Frame.exactInvocation, Exec.Frame.ofRun, exactInvocation, flowActionEntryEthActions, initSevm, Msg.withBenv, htarget, entryEthActions, Frame.flowAction?, Frame.exactInvocation, false_and, and_false, ↓reduceIte]
+        have hbenvState :
+            benv.state = debit.addBal msg.currentTarget msg.value := by
+          rw [hbenv]
+          rfl
+        have hbenvBal : benv.state.bal ca = msg.benv.state.bal ca := by
+          rw [hbenvState]
+          exact hbal
+        unfold EthBound
+        rw [hentry]
+        simp only [flowActionsEthMint, List.map_nil, List.sum_nil,
+          flowActionsEthRedemption, Nat.add_zero]
+        change (msg.benv.state.bal ca).toNat ≤ (benv.state.bal ca).toNat
+        rw [hbenvBal]
+    · have hbenv := of_benvAfterTransfer_no hstv htransfer
+      subst benv
+      by_cases htarget : msg.currentTarget = ca
+      · have hfalse : msg.shouldTransferValue = false := by
+          cases hbool : msg.shouldTransferValue with
+          | false => rfl
+          | true => exact (hstv hbool).elim
+        have hvalue := hval0 hfalse htarget
+        have hvalueNat : msg.value.toNat = 0 := by
+          rw [hvalue]
+          rfl
+        rw [hvalueNat] at hmint
+        have hmintZero :
+            flowActionsEthMint
+                (Exec.entryEthActions dp ca run hcommit) = 0 :=
+          Nat.eq_zero_of_le_zero hmint
+        unfold EthBound
+        rw [hredeem, Nat.add_zero]
+        change (msg.benv.state.bal ca).toNat +
+            flowActionsEthMint (Exec.entryEthActions dp ca run hcommit) ≤
+          (msg.benv.state.bal ca).toNat
+        rw [hmintZero]
+        simp only [add_zero, Std.le_refl]
+      · have hentry : Exec.entryEthActions dp ca run hcommit = [] := by
+          simp only [Exec.entryEthActions, Exec.Frame.flowAction?, Exec.Frame.exactInvocation, Exec.Frame.ofRun, exactInvocation, flowActionEntryEthActions, initSevm, Msg.withBenv, htarget, entryEthActions, Frame.flowAction?, Frame.exactInvocation, false_and, and_false, ↓reduceIte]
+        rw [hentry]
+        exact EthBound.refl ca msg.benv.state
 /-- Entry accounting for the successful value child of a concrete WETH10
 redemption.  When the recipient is foreign, the parent redemption pays for
 the debit.  When WETH calls itself, the same parent redemption also pays for
@@ -490,38 +514,50 @@ theorem Exec.redemptionEntryEthBound
       flowActionsEthRedemption
           (Exec.entryEthActions dp ca run hcommit) = 0 :=
     flowActionsEthRedemption_entryEthActions_eq_zero _
-  by_cases htarget : msg.currentTarget = ca
-  · rcases of_benvAfterTransfer hstv htransfer with
-      ⟨debit, hsub, hbenv⟩
-    have hbalTransfer :
-        (debit.addBal msg.currentTarget msg.value).bal ca =
-          msg.benv.state.bal ca := by
-      rcases of_state_transfer_fields
-          (callee := msg.currentTarget) hsub with
-        ⟨_, _, _, hself, _⟩
-      rw [← hcaller]
-      exact hself (htarget.trans hcaller.symm)
-    have hbenvBal : benv.state.bal ca = msg.benv.state.bal ca := by
-      rw [hbenv]
-      exact hbalTransfer
-    unfold EthBound
-    rw [flowActionsEthMint, flowActionsEthRedemption]
-    simp only [List.map_cons, List.sum_cons, hatom,
-      FlowAtom.ethMint, FlowAtom.ethRedemption]
-    change (msg.benv.state.bal ca).toNat +
-        (0 + flowActionsEthMint
-          (Exec.entryEthActions dp ca run hcommit)) ≤
-      (benv.state.bal ca).toNat +
-        (msg.value.toNat + flowActionsEthRedemption
-          (Exec.entryEthActions dp ca run hcommit))
-    rw [hbenvBal, hredeem]
+  by_cases hz : msg.value = 0
+  · have hbenv := benvAfterTransfer_eq_of_not_transfer
+      (by intro h; exact h.2 hz) htransfer
+    subst benv
+    have hmzero : flowActionsEthMint (Exec.entryEthActions dp ca run hcommit) = 0 :=
+      Nat.eq_zero_of_le_zero (by simpa only [hz, B256.toNat_zero] using hmint)
+    simp only [EthBound, flowActionsEthMint, flowActionsEthRedemption,
+      List.map_cons, List.sum_cons, hatom, FlowAtom.ethMint,
+      FlowAtom.ethRedemption, hz, B256.toNat_zero] at *
+    change (msg.benv.state.bal ca).toNat + _ ≤
+      (msg.benv.state.bal ca).toNat + _
     omega
-  · have hentry : Exec.entryEthActions dp ca run hcommit = [] := by
-      simp only [Exec.entryEthActions, Exec.Frame.flowAction?, Exec.Frame.exactInvocation, Exec.Frame.ofRun, exactInvocation, flowActionEntryEthActions, initSevm, Msg.withBenv, htarget, entryEthActions, Frame.flowAction?, Frame.exactInvocation, false_and, and_false, ↓reduceIte]
-    rw [hentry]
-    exact (EthStep.of_benvAfterTransfer_redemption hstv hcaller
-      htarget hatom htransfer).bound
-
+  ·
+    by_cases htarget : msg.currentTarget = ca
+    · rcases of_benvAfterTransfer hstv hz htransfer with
+        ⟨debit, hsub, hbenv⟩
+      have hbalTransfer :
+          (debit.addBal msg.currentTarget msg.value).bal ca =
+            msg.benv.state.bal ca := by
+        rcases of_state_transfer_fields
+            (callee := msg.currentTarget) hsub with
+          ⟨_, _, _, hself, _⟩
+        rw [← hcaller]
+        exact hself (htarget.trans hcaller.symm)
+      have hbenvBal : benv.state.bal ca = msg.benv.state.bal ca := by
+        rw [hbenv]
+        exact hbalTransfer
+      unfold EthBound
+      rw [flowActionsEthMint, flowActionsEthRedemption]
+      simp only [List.map_cons, List.sum_cons, hatom,
+        FlowAtom.ethMint, FlowAtom.ethRedemption]
+      change (msg.benv.state.bal ca).toNat +
+          (0 + flowActionsEthMint
+            (Exec.entryEthActions dp ca run hcommit)) ≤
+        (benv.state.bal ca).toNat +
+          (msg.value.toNat + flowActionsEthRedemption
+            (Exec.entryEthActions dp ca run hcommit))
+      rw [hbenvBal, hredeem]
+      omega
+    · have hentry : Exec.entryEthActions dp ca run hcommit = [] := by
+        simp only [Exec.entryEthActions, Exec.Frame.flowAction?, Exec.Frame.exactInvocation, Exec.Frame.ofRun, exactInvocation, flowActionEntryEthActions, initSevm, Msg.withBenv, htarget, entryEthActions, Frame.flowAction?, Frame.exactInvocation, false_and, and_false, ↓reduceIte]
+      rw [hentry]
+      exact (EthStep.of_benvAfterTransfer_redemption hstv hcaller
+        htarget hatom htransfer).bound
 /-! ## Actual successful value-call evidence -/
 
 /-- The committed child behind a value `CALL` whose success flag passed the
@@ -1077,12 +1113,12 @@ theorem MessageReady.processCreateMessage_msg
     have hstate : spec.StateInv ca
         (processCreateMessage.msg msg).benv.state := by
       simpa only [processCreateMessage.msg, Msg.withBenv, Benv.incrNonce, addCreatedAccount,
-        Benv.setStor] using
+        Benv.setStor, Benv.clearStorageWritesIfEmpty] using
         (ContractSpec.StateInv.incrNonce (ContractSpec.StateInv.setStor_ne htargetNe hinv.state))
     refine ⟨hstate, ?_, ?_, ?_, ?_, ?_⟩
     · refine ⟨?_, ?_⟩
       · simpa only [processCreateMessage.msg, Msg.withBenv, Benv.incrNonce, addCreatedAccount,
-        Benv.setStor, Std.HashSet.mem_insert, beq_iff_eq, htargetNe, false_or] using hinv.nodel.ca
+        Benv.setStor, Benv.clearStorageWritesIfEmpty, Std.HashSet.mem_insert, beq_iff_eq, htargetNe, false_or] using hinv.nodel.ca
       · exact fun hempty => Prog.compile_ne_nil
           (hstate.code.symm.trans (congrArg some hempty))
     · intro htarget
