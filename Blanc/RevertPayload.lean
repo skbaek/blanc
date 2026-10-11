@@ -1248,10 +1248,10 @@ theorem rollback_revert_of_exec_revert {msg : Msg} {benv : Benv} {xl : Xlot}
   have h_out := Except.ok.inj hset
   have h_err : out.error = some .revert := by
     rw [h_out]
-    simpa only [Devm.error, Devm.rollback, Devm.setWorld] using h_handled
+    simpa only [Devm.error, Devm.rollback, Devm.setWorld, Devm.withStorageWrites] using h_handled
   have h_output : out.output = post.output := by
     rw [h_out]
-    simpa only [Devm.output, Devm.rollback, Devm.setWorld] using h_handled_output
+    simpa only [Devm.output, Devm.rollback, Devm.setWorld, Devm.withStorageWrites] using h_handled_output
   exact ⟨h_err, h_output,
     ProcessMessage.rollback_of_error h_pm (by simp only [h_err, Option.isSome_some])⟩
 

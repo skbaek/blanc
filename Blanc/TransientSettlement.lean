@@ -548,6 +548,7 @@ private theorem processTopLevelAmsterdam_error_logs
         ((evm.state, ({
           accountReads := evm.meta.accountReads
           storageReads := evm.meta.storageReads
+          storageWrites := evm.world.storageWrites
           gasLeft := evm.gasLeft
           refundCounter := refundCounter
           logs := logs

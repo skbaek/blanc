@@ -577,20 +577,38 @@ private theorem Exec.StorageWrite.last_value_eq_foldlCell
   simp only [List.foldl_cons, matchWrite, if_true]
   exact Exec.StorageWrite.foldlCell_eq_of_none write.value last
 
-/-- Pointwise storage effect of a chronological successful-write list. -/
+/-- Pointwise storage effect of a chronological successful-write list, at every
+owner whose code is nonempty at the start.  Execution never changes such an
+owner's code and never empties it, so its storage changes only by the listed
+writes.  An owner without code (an externally owned or storage-only account) is
+not covered: a balance or nonce write can empty and delete it, and CREATE
+preparation wipes a storage-only target. -/
 def Exec.StorageReplay
     (pre post : Devm) (writes : List Exec.StorageWrite) : Prop :=
-  ∀ owner key,
+  (∀ owner, (pre.getCode owner).toList ≠ [] →
+    post.getCode owner = pre.getCode owner) ∧
+  ∀ owner, (pre.getCode owner).toList ≠ [] → ∀ key,
     (Devm.getStor post owner).get key =
       Exec.StorageWrite.replayCell owner key
         ((Devm.getStor pre owner).get key) writes
 
-theorem Exec.StorageReplay.of_getStor_eq
-    {pre post : Devm} (equal : Devm.getStor post = Devm.getStor pre) :
+theorem Exec.StorageReplay.of_code_stor
+    {pre post : Devm}
+    (code : ∀ owner, (pre.getCode owner).toList ≠ [] →
+      post.getCode owner = pre.getCode owner)
+    (stor : ∀ owner, (pre.getCode owner).toList ≠ [] →
+      Devm.getStor post owner = Devm.getStor pre owner) :
     Exec.StorageReplay pre post [] := by
-  intro owner key
+  refine ⟨code, fun owner h key => ?_⟩
   simpa only [StorageWrite.replayCell, StorageWrite.matches_eq_true, List.foldl_nil] using
-    congrArg (fun storage : Stor => storage.get key) (congrFun equal owner)
+    congrArg (fun storage : Stor => storage.get key) (stor owner h)
+
+theorem Exec.StorageReplay.of_state_eq
+    {pre post : Devm} (equal : post.state = pre.state) :
+    Exec.StorageReplay pre post [] :=
+  Exec.StorageReplay.of_code_stor
+    (fun owner _ => getCode_eq_of_state_eq equal owner)
+    (fun owner _ => getStor_eq_of_state_eq equal owner)
 
 theorem Exec.StorageReplay.append
     {pre middle post : Devm}
@@ -598,17 +616,23 @@ theorem Exec.StorageReplay.append
     (head : Exec.StorageReplay pre middle left)
     (tail : Exec.StorageReplay middle post right) :
     Exec.StorageReplay pre post (left ++ right) := by
-  intro owner key
-  rw [tail owner key, head owner key]
-  unfold Exec.StorageWrite.replayCell
-  exact (Exec.StorageWrite.foldlCell_append _ left right).symm
+  refine ⟨fun owner h => ?_, fun owner h key => ?_⟩
+  · have middleCode := head.1 owner h
+    rw [tail.1 owner (by rw [middleCode]; exact h), middleCode]
+  · have middleCode := head.1 owner h
+    rw [tail.2 owner (by rw [middleCode]; exact h) key, head.2 owner h key]
+    unfold Exec.StorageWrite.replayCell
+    exact (Exec.StorageWrite.foldlCell_append _ left right).symm
 
-/-- Message-entry value transfer changes balances but not persistent storage. -/
+/-- Message-entry value transfer changes balances, not the code or (at an
+account with code) the persistent storage. -/
 theorem benvAfterTransfer_getStor_eq
     {msg : Msg} {benv : Benv}
-    (transfer : msg.benvAfterTransfer = .ok benv) :
-    benv.state.getStor = msg.benv.state.getStor :=
-  funext (benvAfterTransfer_ok_getStor transfer)
+    (transfer : msg.benvAfterTransfer = .ok benv) {owner : Adr}
+    (hcode : (msg.benv.state.getCode owner).toList ≠ []) :
+    benv.state.getStor owner = msg.benv.state.getStor owner :=
+  benvAfterTransfer_ok_getStor transfer owner
+    (Or.inr (Or.inr fun hz => (ne_wa_of_code_size_zero hcode hz) rfl))
 
 /-- Settlement-aware replay transport for a concrete CALL message body. -/
 theorem ProcessMessage.storageReplay_of_body
