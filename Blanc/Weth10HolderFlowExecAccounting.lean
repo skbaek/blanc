@@ -868,14 +868,18 @@ theorem NoFlowStorageAccounting.storageSegmentDelta
         (StorageSegmentDelta.of_weth10Silent ownPrefix).append
           (child.append (StorageSegmentDelta.of_weth10Silent ownSuffix))
 
-/-- Message-entry value transfer changes balances but never persistent
-storage.  This projection is useful both for ordinary calls and for callback
-traces whose value is definitionally zero. -/
+/-- Entry preserves an owner's storage when transfer is disabled, zero, or
+that owner is protected. -/
 theorem benvAfterTransfer_getStor_eq
     {msg : Msg} {benv : Benv}
-    (htransfer : msg.benvAfterTransfer = .ok benv) (a : Adr) :
-    benv.state.getStor a = msg.benv.state.getStor a :=
-  benvAfterTransfer_ok_getStor htransfer a
+    (htransfer : msg.benvAfterTransfer = .ok benv) (a : Adr)
+    (hsafe : msg.shouldTransferValue = false ∨ msg.value = 0 ∨
+      State.Protected msg.benv.state a) :
+    benv.state.getStor a = msg.benv.state.getStor a := by
+  rcases hsafe with hoff | hzero | hp
+  · rw [of_benvAfterTransfer_no (by rw [hoff]; decide) htransfer]
+  · exact benvAfterTransfer_ok_getStor htransfer a (Or.inl hzero)
+  · exact benvAfterTransfer_ok_getStor htransfer a (Or.inr hp)
 
 theorem installedWeth10Code_size_ne_zero
     {dp : DeployParams} {ca : Adr} {pre : Devm}
@@ -918,8 +922,10 @@ theorem processCreateMessage_msg_getStor_eq
       msg.benv.state.getStor ca := by
   dsimp only [processCreateMessage.msg, Msg.withBenv, Benv.setStor, addCreatedAccount,
     Benv.incrNonce, State.getStor]
-  rw [State.incrNonce_get_stor,
-    State.setStor_get_stor_ne htargetNe]
+  change (((msg.benv.state.setStor msg.currentTarget .empty).incrNonce
+    msg.currentTarget).get ca).stor = (msg.benv.state.get ca).stor
+  simp only [State.incrNonce, State.setStor]
+  rw [State.setAccount_get_ne _ htargetNe, State.get_set_ne _ htargetNe]
 
 theorem ProcessCreateMessage.ok_getStorCode_eq_inner_of_clean
     {msg : Msg} {slot : Xlot} {post : Devm} {ca : Adr}
@@ -952,7 +958,9 @@ theorem ProcessCreateMessage.ok_getStorCode_eq_inner_of_clean
                 have heq := Except.ok.inj hsettle
                 rw [heq] at herror
                 split at herror <;>
-                  simp only [Devm.error, processCreateMessage.exceptionalHalt, Devm.setMeta, Option.isSome_some, Bool.true_eq_false, processCreateMessage.exceptionalHaltAmsterdam] at herror
+                  simp only [Devm.error, processCreateMessage.exceptionalHalt, Devm.setMeta,
+                    Devm.withStorageWrites, Devm.setWorld, Option.isSome_some,
+                    Bool.true_eq_false, processCreateMessage.exceptionalHaltAmsterdam] at herror
             | revert => cases hsettle
             | crypto reason => cases hsettle
             | internal reason => cases hsettle
@@ -969,7 +977,7 @@ theorem ProcessCreateMessage.ok_getStorCode_eq_inner_of_clean
                   change
                     ((charged.state.setCode msg.currentTarget
                       ⟨⟨charged.output⟩⟩).get ca).stor = _
-                  exact State.setCode_get_stor
+                  exact State.setCode_get_stor_ne htargetNe
                 _ = inner.state.getStor ca := by
                   rw [chargeCodeGas_state_ok hcharge]
             · calc
@@ -1008,6 +1016,8 @@ theorem ProcessMessage.storageSegmentEffect_of_bodyEffect
     (hprocess : ProcessMessage msg
       (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
     (hparent : parent.state = msg.benv.state)
+    (hsafe : msg.shouldTransferValue = false ∨ msg.value = 0 ∨
+      State.Protected parent.state ca)
     (hbody : ∀ (committed : Execution.commits out = true),
       Nonempty (StorageSegmentEffect ca pre
         (Execution.committedPost out committed)
@@ -1016,6 +1026,10 @@ theorem ProcessMessage.storageSegmentEffect_of_bodyEffect
       (if Blanc.Frame.settlementCommits
           (Frame.ofCall msg) out = true
        then Exec.flowActions dp ca run else [])) := by
+  have hentrySafe : msg.shouldTransferValue = false ∨ msg.value = 0 ∨
+      State.Protected msg.benv.state ca := by
+    rw [← hparent]
+    exact hsafe
   by_cases hsettle : Jaune.Frame.settlementCommits
       (Frame.ofCall msg) out = true
   · rw [if_pos hsettle]
@@ -1033,7 +1047,7 @@ theorem ProcessMessage.storageSegmentEffect_of_bodyEffect
       exact component
     have hentryStorage : Devm.getStor parent ca = Devm.getStor pre ca := by
       exact (congrArg (fun state : State => state.getStor ca) hparent).trans <|
-        (benvAfterTransfer_getStor_eq htransfer ca).symm.trans <|
+        (benvAfterTransfer_getStor_eq htransfer ca hentrySafe).symm.trans <|
           (congrArg (fun state : State => state.getStor ca) hpreState).symm
     have hentryCode : parent.getCode ca = pre.getCode ca := by
       exact (congrArg (fun state : State => state.getCode ca) hparent).trans <|
@@ -1075,14 +1089,20 @@ theorem ProcessMessage.storageSegmentEffect_of_bodyEffect
         (hparent.trans hpostState.symm)
     exact ⟨StorageSegmentEffect.of_getStorCode_eq hstorage hcodeEq⟩
 
-/-- A childless message (empty code or precompile) cannot write persistent
-contract storage.  Message-entry balance transfer and settlement are both
+/-- A childless message (empty code or precompile) preserves the safe observed
+owner's persistent storage.  Message-entry balance transfer and settlement are both
 projected from the actual `ProcessMessage` derivation. -/
 theorem ProcessMessage.storageSegmentEffect_none
     {ca : Adr} {msg : Msg} {post parent : Devm}
     (hprocess : ProcessMessage msg .none (.ok post))
-    (hparent : parent.state = msg.benv.state) :
+    (hparent : parent.state = msg.benv.state)
+    (hsafe : msg.shouldTransferValue = false ∨ msg.value = 0 ∨
+      State.Protected parent.state ca) :
     Nonempty (StorageSegmentEffect ca parent post []) := by
+  have hentrySafe : msg.shouldTransferValue = false ∨ msg.value = 0 ∨
+      State.Protected msg.benv.state ca := by
+    rw [← hparent]
+    exact hsafe
   have hstorage : Devm.getStor parent ca = Devm.getStor post ca := by
     rcases ProcessMessage.none_ok_state_cases hprocess with
       hrollback | ⟨benv, htransfer, hpost⟩
@@ -1090,7 +1110,7 @@ theorem ProcessMessage.storageSegmentEffect_none
         (hparent.trans hrollback.symm)
     · change msg.benvAfterTransfer = .ok benv at htransfer
       exact (congrArg (fun state : State => state.getStor ca) hparent).trans <|
-        (benvAfterTransfer_getStor_eq htransfer ca).symm.trans <|
+        (benvAfterTransfer_getStor_eq htransfer ca hentrySafe).symm.trans <|
           (congrArg (fun state : State => state.getStor ca) hpost).symm
   have hcode : parent.getCode ca = post.getCode ca := by
     rcases ProcessMessage.none_ok_state_cases hprocess with
@@ -1117,6 +1137,8 @@ theorem ProcessCreateMessage.storageSegmentEffect_of_bodyEffect
       (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
     (hparent : parent.state = msg.benv.state)
     (htargetNe : msg.currentTarget ≠ ca)
+    (hsafe : msg.shouldTransferValue = false ∨ msg.value = 0 ∨
+      State.Protected parent.state ca)
     (hbody : ∀ (committed : Execution.commits out = true),
       Nonempty (StorageSegmentEffect ca pre
         (Execution.committedPost out committed)
@@ -1125,6 +1147,22 @@ theorem ProcessCreateMessage.storageSegmentEffect_of_bodyEffect
       (if Blanc.Frame.settlementCommits
           (Frame.ofCreate msg) out = true
        then Exec.flowActions dp ca run else [])) := by
+  have hentrySafe : (processCreateMessage.msg msg).shouldTransferValue = false ∨
+      (processCreateMessage.msg msg).value = 0 ∨
+      State.Protected (processCreateMessage.msg msg).benv.state ca := by
+    rcases hsafe with hoff | hzero | hp
+    · exact Or.inl hoff
+    · exact Or.inr (Or.inl hzero)
+    · apply Or.inr ∘ Or.inr
+      have hget : (processCreateMessage.msg msg).benv.state.get ca =
+          msg.benv.state.get ca := by
+        change (((msg.benv.state.setStor msg.currentTarget .empty).incrNonce
+          msg.currentTarget).get ca) = msg.benv.state.get ca
+        simp only [State.incrNonce, State.setStor]
+        rw [State.setAccount_get_ne _ htargetNe, State.get_set_ne _ htargetNe]
+      unfold State.Protected
+      rw [hget, ← hparent]
+      exact hp
   by_cases hsettle : Jaune.Frame.settlementCommits
       (Frame.ofCreate msg) out = true
   · rw [if_pos hsettle]
@@ -1164,7 +1202,7 @@ theorem ProcessCreateMessage.storageSegmentEffect_of_bodyEffect
         (processCreateMessage.msg msg).benv.state.getCode ca
       rw [hparent, processCreateMessage.msg_getCode]
     have hentryStorage : Devm.getStor prepared ca = Devm.getStor pre ca := by
-      exact (benvAfterTransfer_getStor_eq htransfer ca).symm.trans <|
+      exact (benvAfterTransfer_getStor_eq htransfer ca hentrySafe).symm.trans <|
         (congrArg (fun state : State => state.getStor ca) hpreState).symm
     have hentryCode : prepared.getCode ca = pre.getCode ca := by
       exact (benvAfterTransfer_ok_getCode htransfer ca).symm.trans <|
@@ -1222,6 +1260,7 @@ theorem GenericCall.storageSegmentEffect_some_of_bodyEffect
       isStatic ii is oi os code disablePrecompiles
       (.some ⟨⟨pc', childSevm, childPre⟩, childOut⟩) (.ok inter))
     (childRun : Exec pc' childSevm childPre childOut)
+    (hsafe : stv = false ∨ value = 0 ∨ State.Protected pre.state ca)
     (hbody : ∀ (committed : Execution.commits childOut = true),
       Nonempty (StorageSegmentEffect ca childPre
         (Execution.committedPost childOut committed)
@@ -1251,7 +1290,7 @@ theorem GenericCall.storageSegmentEffect_some_of_bodyEffect
         (.some ⟨⟨pc', childSevm, childPre⟩, childOut⟩) (.ok child) := by
       simpa only [ProcessMessage, msg, callPre, Mem.read] using hprocess
     rcases ProcessMessage.storageSegmentEffect_of_bodyEffect childRun
-        hprocess' (parent := callPre) rfl hbody with ⟨effect⟩
+        hprocess' (parent := callPre) rfl hsafe hbody with ⟨effect⟩
     have hprefixStorage : Devm.getStor pre ca = Devm.getStor callPre ca := by
       rfl
     have hprefixCode : pre.getCode ca = callPre.getCode ca := by
@@ -1279,15 +1318,15 @@ theorem GenericCall.storageSegmentEffect_some_of_bodyEffect
               disablePrecompiles)) childOut = true <;>
         simp only [hretain, ↓reduceIte, List.append_nil, List.nil_append, Bool.false_eq_true]⟩
 
-/-- A CALL-family opcode which completes without an interpreter child is
-storage- and code-silent at every address. -/
+/-- A childless CALL is storage- and code-silent at the safe observed owner. -/
 theorem GenericCall.storageSegmentEffect_none
     {ca : Adr} {sevm : Sevm} {pre post : Devm}
     {gas : Nat} {value : B256} {caller target codeAddress : Adr}
     {stv isStatic : Bool} {ii is oi os : Nat} {code : ByteArray}
     {disablePrecompiles : Bool}
     (hrun : GenericCall sevm pre gas value caller target codeAddress stv
-      isStatic ii is oi os code disablePrecompiles .none (.ok post)) :
+      isStatic ii is oi os code disablePrecompiles .none (.ok post))
+    (hsafe : stv = false ∨ value = 0 ∨ State.Protected pre.state ca) :
     Nonempty (StorageSegmentEffect ca pre post []) := by
   unfold GenericCall genericCall.step at hrun
   simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at hrun
@@ -1319,7 +1358,7 @@ theorem GenericCall.storageSegmentEffect_none
           reduceCtorEq] at hresume
     | ok child =>
         rcases ProcessMessage.storageSegmentEffect_none
-            hprocess (parent := pre.withReturnData []) rfl with ⟨effect⟩
+            hprocess (parent := pre.withReturnData []) rfl hsafe with ⟨effect⟩
         have hresumeState : post.state = child.state :=
           Resume.call_state hresume.symm
         have hsuffixStorage : Devm.getStor child ca = Devm.getStor post ca :=
@@ -1394,7 +1433,13 @@ theorem GenericCreate.storageSegmentEffect_some_of_bodyEffect
           rfl
         change pre.state.getStor ca = createPre.state.getStor ca
         rw [hstate]
-        exact State.incrNonce_get_stor.symm
+        symm
+        change ((pre.state.incrNonce sevm.currentTarget).get ca).stor =
+          (pre.state.get ca).stor
+        rw [State.incrNonce_get_stor, if_neg]
+        rintro ⟨heq, hempty⟩
+        rw [heq] at hempty
+        exact installedWeth10Code_size_ne_zero hcode hempty.1
       have hcreatePreCode : pre.getCode ca = createPre.getCode ca := by
         have hstate : createPre.state =
             pre.state.incrNonce sevm.currentTarget := by
@@ -1403,7 +1448,12 @@ theorem GenericCreate.storageSegmentEffect_some_of_bodyEffect
         rw [hstate]
         exact State.incrNonce_get_code.symm
       rcases ProcessCreateMessage.storageSegmentEffect_of_bodyEffect
-          childRun hprocess (parent := createPre) rfl hnewNe hbody with
+          childRun hprocess (parent := createPre) rfl hnewNe
+          (Or.inr (Or.inr (State.Protected.of_image (sem := (weth10 dp).codeSem)
+            (by
+              change some (createPre.getCode ca).toList = _
+              rw [← hcreatePreCode]
+              exact hcode)))) hbody with
         ⟨effect⟩
       have hresumeState : post.state = settled.state :=
         Resume.create_state hresume.symm
@@ -1439,6 +1489,8 @@ theorem GenericCreate.storageSegmentEffect_none
     (hrun : GenericCreate sevm pre endowment newAddress mi ms
       .none (.ok post)) :
     Nonempty (StorageSegmentEffect ca pre post []) := by
+  have hstorage : Devm.getStor pre ca = Devm.getStor post ca :=
+    (congrFun (Blanc.GenericCreate.none_getStor_eq hrun) ca).symm
   unfold GenericCreate genericCreate.step at hrun
   simp only [Bind.bind, Except.bind, Except.assert, assertDynamic,
     Pure.pure, Except.pure] at hrun
@@ -1459,9 +1511,6 @@ theorem GenericCreate.storageSegmentEffect_none
     have hstate : post.state = pre.state.incrNonce sevm.currentTarget := by
       rw [Except.ok.inj hrun.2, ← (Devm.push_of_push hpush).state]
       rfl
-    have hstorage : Devm.getStor pre ca = Devm.getStor post ca :=
-      State.incrNonce_get_stor.symm.trans
-        (congrArg (fun state : State => state.getStor ca) hstate.symm)
     have hcode : pre.getCode ca = post.getCode ca :=
       State.incrNonce_get_code.symm.trans
         (congrArg (fun state : State => state.getCode ca) hstate.symm)
@@ -1546,7 +1595,12 @@ theorem Xinst.storageSegmentEffect_some_of_bodyEffect
       rw [hspawn]
       exact ⟨.ok settled, hframe, hresume.symm⟩
     rcases GenericCall.storageSegmentEffect_some_of_bodyEffect
-        grun child hbody with ⟨effect⟩
+        grun child (Or.inr (Or.inr (State.Protected.of_image
+          (sem := (weth10 dp).codeSem) (by
+            change some (d.getCode ca).toList = _
+            rw [← hprefix.getCode ca]
+            exact hcode))))
+        hbody with ⟨effect⟩
     exact ⟨by
       simpa only [List.nil_append] using
         (StorageSegmentEffect.of_getStorCode_eq
@@ -1556,7 +1610,8 @@ theorem Xinst.storageSegmentEffect_some_of_bodyEffect
 theorem Xinst.storageSegmentEffect_none
     {ca : Adr} {sevm : Sevm} {pre post : Devm} {x : Xinst}
     (hrun : Xinst.Run sevm pre x .none (.ok post))
-    (hfork : CoveredFork sevm.benvStat.fork) :
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (hp : State.Protected pre.state ca) :
     Nonempty (StorageSegmentEffect ca pre post []) := by
   unfold Xinst.Run at hrun
   rcases Xinst.step_shapeCovered sevm pre x hfork with
@@ -1574,7 +1629,8 @@ theorem Xinst.storageSegmentEffect_none
       simpa only [List.nil_append] using
         (StorageSegmentEffect.of_getStorCode_eq
           (hprefix.getStor ca) (hprefix.getCode ca)).append effect⟩
-  · rcases GenericCall.storageSegmentEffect_none hrun with ⟨effect⟩
+  · rcases GenericCall.storageSegmentEffect_none hrun
+        (Or.inr (Or.inr (hprefix.state ▸ hp))) with ⟨effect⟩
     exact ⟨by
       simpa only [List.nil_append] using
         (StorageSegmentEffect.of_getStorCode_eq
@@ -1679,10 +1735,14 @@ theorem ProcessMessageTrace.storageSegmentDelta_of_forallDeeperAt
     (hfork : CoveredFork msg.benv.stat.fork) :
     Nonempty (StorageSegmentEffect ca parent post
       (Blanc.Weth10.RetainedXlot.flowActions dp ca trace.retained)) := by
+  have hp : State.Protected parent.state ca :=
+    State.Protected.of_image (sem := (weth10 dp).codeSem) hcode
+  have hentrySafe : msg.shouldTransferValue = false ∨ msg.value = 0 ∨
+      State.Protected msg.benv.state ca := Or.inr (Or.inr (hparent ▸ hp))
   rcases trace with ⟨slot, retained, hprocess⟩
   cases retained with
   | none =>
-      exact ProcessMessage.storageSegmentEffect_none hprocess hparent
+      exact ProcessMessage.storageSegmentEffect_none hprocess hparent (Or.inr (Or.inr hp))
   | @some pc sevm pre out run =>
       have henter : (Frame.ofCall msg).enter =
           .run ⟨pc, sevm, pre⟩ :=
@@ -1703,7 +1763,7 @@ theorem ProcessMessageTrace.storageSegmentDelta_of_forallDeeperAt
         simpa only [initEvm, Msg.withBenv, initDevm] using component
       have hentryStorage : Devm.getStor parent ca = Devm.getStor pre ca := by
         exact (congrArg (fun state : State => state.getStor ca) hparent).trans <|
-          (benvAfterTransfer_getStor_eq htransfer ca).symm.trans <|
+          (benvAfterTransfer_getStor_eq htransfer ca hentrySafe).symm.trans <|
             (congrArg (fun state : State => state.getStor ca) hpreState).symm
       have hentryCodeEq : parent.getCode ca = pre.getCode ca := by
         exact (congrArg (fun state : State => state.getCode ca) hparent).trans <|
@@ -4949,7 +5009,8 @@ theorem Ninst.foreignNoneStorageSegmentEffect
     {ca : Adr} {pc : Nat} {sevm : Sevm} {pre post : Devm} {n : Ninst}
     (run : Ninst.StepRun pc sevm pre n .none (.ok post))
     (hforeign : sevm.currentTarget ≠ ca)
-    (hfork : CoveredFork sevm.benvStat.fork) :
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (hp : State.Protected pre.state ca) :
     Nonempty (StorageSegmentEffect ca pre post []) := by
   cases n with
   | reg r =>
@@ -4969,7 +5030,7 @@ theorem Ninst.foreignNoneStorageSegmentEffect
           (Rinst.preserves_getCode hreg ca).symm⟩
   | exec x =>
       simp only [Ninst.StepRun, Ninst.step_exec] at run
-      exact Xinst.storageSegmentEffect_none (XStep.run_toStep.mp run) hfork
+      exact Xinst.storageSegmentEffect_none (XStep.run_toStep.mp run) hfork hp
   | push xs hxs =>
       have hframe := Ninst.push_instructionFrame_effectRec
         (hxs := hxs) (xl := .none) trivial run
@@ -5008,13 +5069,14 @@ balances and marks the foreign donor for deletion. -/
 theorem Linst.foreignStorageSegmentEffect
     {ca : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
     (run : Linst.Run sevm pre l (.ok post))
-    (_hforeign : sevm.currentTarget ≠ ca) :
+    (_hforeign : sevm.currentTarget ≠ ca)
+    (hp : State.Protected pre.state ca) :
     Nonempty (StorageSegmentEffect ca pre post []) := by
   have hcodeFrame := Linst.run_codeFrame run
   have hcode : pre.getCode ca = post.getCode ca :=
     (hcodeFrame ca).symm
   exact ⟨StorageSegmentEffect.of_getStorCode_eq
-    (congrFun (Linst.getStor_eq run) ca).symm hcode⟩
+    (Linst.getStor_eq run ca hp).symm hcode⟩
 
 /-- Foreign nonrecursive handler for `lift_core`. -/
 theorem Exec.CoreStorageSound.nextNone
@@ -5029,7 +5091,8 @@ theorem Exec.CoreStorageSound.nextNone
       (pc + n.size) sevm inter out) :
     Exec.CoreStorageSound dp ca pc sevm pre out := by
   intro run committed hatp _ hcov
-  rcases Ninst.foreignNoneStorageSegmentEffect hstep hforeign hcov with ⟨head⟩
+  rcases Ninst.foreignNoneStorageSegmentEffect hstep hforeign hcov
+      (State.Protected.of_image (sem := (weth10 dp).codeSem) hatp.1) with ⟨head⟩
   have hatpInter : Prog.At (weth10 dp) ca
       (pc + n.size) sevm inter := by
     refine ⟨?_, fun htarget => (hforeign htarget).elim⟩
@@ -5284,7 +5347,7 @@ theorem Exec.CoreStorageSound.last
     (hstep : Linst.Run sevm pre l out)
     (hforeign : sevm.currentTarget ≠ ca) :
     Exec.CoreStorageSound dp ca pc sevm pre out := by
-  intro run committed _ _ _
+  intro run committed hatp _ _
   have hevm : Evm.step ⟨pc, sevm, pre⟩ = .halt out := by
     rw [Evm.step_last hat]
     exact congrArg Step.halt hstep
@@ -5295,7 +5358,8 @@ theorem Exec.CoreStorageSound.last
   | error error =>
       simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
-      rcases Linst.foreignStorageSegmentEffect hstep hforeign with ⟨effect⟩
+      rcases Linst.foreignStorageSegmentEffect hstep hforeign
+          (State.Protected.of_image (sem := (weth10 dp).codeSem) hatp.1) with ⟨effect⟩
       rw [Exec.flowActions_eq_descendantActions_of_currentTarget_ne
           canonical committed hforeign]
       unfold Exec.descendantActions
