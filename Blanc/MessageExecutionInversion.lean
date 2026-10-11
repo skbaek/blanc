@@ -45,12 +45,13 @@ theorem processMessage_clean_rawPost
             exact congrArg Devm.output settleEq
 
 /-- Facts inherited by a retained code frame from its actual message entry.
-Value transfer may change balances, so the state statement is intentionally
-the storage projection that transfer preserves, not whole-state equality. -/
+The selected storage projection survives zero-value entry or entry at a
+protected owner (nonzero nonce or nonempty code). -/
 theorem processMessage_entry_facts
     {msg : Msg} {pc : Nat} {sevm : Sevm} {pre : Devm}
     {raw : Execution}
     {ex : Except (EvmError × State × AdrSet × Tra) Devm} (target : Adr)
+    (hpreserved : msg.value = 0 ∨ State.Protected msg.benv.state target)
     (process : ProcessMessage msg
       (.some ⟨⟨pc, sevm, pre⟩, raw⟩) ex) :
     pc = 0 ∧ sevm.code = msg.code ∧
@@ -72,15 +73,10 @@ theorem processMessage_entry_facts
   have state := congrArg (fun evm : Evm => evm.dyna.state) evmEq
   dsimp only at codeEq current codeAddress data time memory
   change pre.state = benv.state at state
-  have statEq : benv.stat = msg.benv.stat := by
-    by_cases transfers : msg.shouldTransferValue = true
-    · obtain ⟨middle, sub, rfl⟩ :=
-        of_benvAfterTransfer transfers transfer
-      rfl
-    · rw [of_benvAfterTransfer_no transfers transfer]
+  have statEq : benv.stat = msg.benv.stat := benvAfterTransfer_stat transfer
   have storage : pre.state.getStor target =
       msg.benv.state.getStor target := by
-    rw [state, benvAfterTransfer_getStor_eq transfer]
+    rw [state, benvAfterTransfer_ok_getStor transfer target hpreserved]
   refine ⟨pcZero, codeEq, current, codeAddress, data,
     time.trans (congrArg BenvStat.time statEq), storage, ?_⟩
   rw [memory]

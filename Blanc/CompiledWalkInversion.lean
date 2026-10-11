@@ -118,7 +118,8 @@ theorem Devm.PopBurn.trans_burn {xs : List B256} {a b c : Devm}
     transientStorage := hp.transientStorage.trans hb.transientStorage,
     stateGas := hp.stateGas.trans hb.stateGas,
     accountReads := hp.accountReads.trans hb.accountReads,
-    storageReads := hp.storageReads.trans hb.storageReads }
+    storageReads := hp.storageReads.trans hb.storageReads,
+    storageWrites := hp.storageWrites.trans hb.storageWrites }
 
 /-- The nonzero arm, selected the same way.  The jumped arm's extra burn is
 folded into the pop, so this has the same four-part shape as the zero arm. -/

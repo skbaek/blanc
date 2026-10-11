@@ -55,18 +55,20 @@ private theorem Exec.StorageWrite.foldlCell_eq_of_noRetainedWriteTo
       exact none write (by
         simp only [List.mem_cons, member, or_true])
 
-/-- Absence of a retained successful write to one cell preserves that cell in
-every committing outcome of the invocation frame closure. -/
+/-- Absence of a retained successful write to one cell at an entry-code-nonempty
+owner preserves that cell in every committing outcome of the invocation frame
+closure. -/
 theorem Exec.committedCell_eq_of_noRetainedWriteTo
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out)
     (committed : Execution.commits out = true)
     (hfork : CoveredFork sevm.benvStat.fork)
     (owner : Adr) (key : B256)
+    (hcode : (pre.getCode owner).toList ≠ [])
     (noWrite : Exec.NoRetainedWriteTo run owner key) :
     (Devm.getStor (Execution.committedPost out committed) owner).get key =
       (Devm.getStor pre owner).get key := by
-  rw [Exec.storageReplay_committedPost run committed hfork owner key]
+  rw [(Exec.storageReplay_committedPost run committed hfork).2 owner hcode key]
   exact Exec.StorageWrite.foldlCell_eq_of_noRetainedWriteTo _ noWrite
 
 /-- Same-frame continuation never changes the static execution environment. -/

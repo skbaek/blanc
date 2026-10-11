@@ -1538,7 +1538,8 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   target, calldata, time, storage and `Mem.Wf` facts, with `pre.stack = []` and
   `pre.memory = Mem.empty` kept separate as `processMessage_entry_stack` and
   `processMessage_entry_memory` so a walk that reads scratch words can take the
-  image rather than only well-formedness.
+  image rather than only well-formedness. The storage projection requires
+  zero message value or `State.Protected` at the selected owner.
 - Generic execution noninterference:
   [`Blanc/ExecutionNoninterference.lean`](../Blanc/ExecutionNoninterference.lean).
   For `Exec.NoRetainedWriteTo`, first split on `Execution.commits out = true`:
@@ -1546,6 +1547,8 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   `Exec.noRetainedWriteTo_of_no_execOccurrence`,
   `Exec.noRetainedWriteTo_of_sourceSites_no_exec`, and
   `Exec.noRetainedWriteTo_of_frame_owners_ne` are the committing routes.
+  To conclude cell preservation with `Exec.committedCell_eq_of_noRetainedWriteTo`,
+  also supply nonempty entry code at the observed owner.
 - Reentrancy-lock exclusion over the all-outcome frame tree:
   [`Blanc/LockExclusion.lean`](../Blanc/LockExclusion.lean).
   `LockExclusion.LockSpec.lock_exclusion` says an active lock frame's spawned
@@ -1701,7 +1704,10 @@ Use [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
   preserve the complete world-balance map across balance-neutral account
   updates. `genericCreate_prepared_bal`, `genericCreate_prepared_getStor`, and
   `processCreateMessage_msg_bal_eq` package the corresponding CREATE
-  preparation cuts.
+  preparation cuts. `genericCreate_prepared_getStor` requires the creator
+  nonce increment to be nonzero. For an actual recursive spawn, use
+  `genericCreate_step_spawn_nonce_ne_max` from `Blanc/LadderBase.lean` and
+  `UInt64.add_one_ne_zero_of_ne_max` to discharge it.
 
 ### S3. I need state-relation or write-frame composition
 
@@ -2520,7 +2526,8 @@ Use Jaune's `Jaune/MessageExecution.lean`, imported by
   [`Blanc/MessageExecutionInversion.lean`](../Blanc/MessageExecutionInversion.lean):
   `processMessage_clean_rawPost` recovers a clean successful raw post, while
   `processMessage_entry_facts` recovers code, target, calldata, timestamp,
-  entry storage, and memory well-formedness from the actual retained frame;
+  entry storage, and memory well-formedness from the actual retained frame,
+  given zero value or protection of the selected storage owner;
   `processMessage_entry_stack` separately recovers its empty operand stack
   and `processMessage_entry_memory` its empty memory, without changing the
   established conjunction returned by the former.

@@ -4241,6 +4241,23 @@ theorem Xinst.step_spawn_caller_ne_of_target_eq
     exact parent_ne
   · exact (parent_ne (child_eq.symm.trans target_eq)).elim
 
+/-- A recursive CREATE spawn passed the creator-nonce overflow check. -/
+theorem genericCreate_step_spawn_nonce_ne_max
+    {sevm : Sevm} {devm : Devm} {endowment : B256}
+    {newAddress : Adr} {mi ms : Nat}
+    {frame : Frame} {resume : Resume}
+    (hspawn : genericCreate.step sevm devm endowment newAddress mi ms =
+      .spawn frame resume) :
+    (devm.state.get sevm.currentTarget).nonce ≠ UInt64.max := by
+  simp only [genericCreate.step, Bind.bind, Except.bind, Except.assert,
+    assertDynamic, Pure.pure, Except.pure] at hspawn
+  repeat' split at hspawn
+  all_goals
+    simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at hspawn
+  all_goals obtain ⟨rfl, -⟩ := hspawn
+  rename_i hpre collision
+  exact fun hmax => hpre (Or.inr (Or.inl hmax))
+
 /-- A recursive CREATE spawn passed the collision check (EIP-684 only): the
 target had zero nonce and empty code, so it is not protected. Its storage may
 be nonempty (a storage-only account, EIP-7610 withdrawn); fresh-account

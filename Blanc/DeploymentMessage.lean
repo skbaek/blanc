@@ -22,6 +22,7 @@ theorem processCreateMessage_msg_getStor_currentTarget (msg : Msg) :
   rw [State.incrNonce_get_stor]
   unfold State.setStor
   rw [State.get_set_self]
+  split <;> rfl
 
 /-- A zero-value message can always cross its optional entry transfer. -/
 theorem benvAfterTransfer_exists_zero
@@ -74,7 +75,8 @@ theorem processCreateMessage_ok_of_processMessage_error
       processMessage (processCreateMessage.msg msg) = .ok inner)
     (herror : inner.error.isSome = true) :
     processCreateMessage msg =
-      .ok (inner.rollback msg.benv.state msg.tenv.transientStorage) := by
+      .ok ((inner.rollback msg.benv.state msg.tenv.transientStorage).withStorageWrites
+        msg.benv.storageWrites) := by
   rw [processCreateMessage_eq, hprocess]
   unfold processCreateMessage.settle
   simp only [bind, Except.bind]
@@ -311,7 +313,7 @@ theorem processUncheckedSystemTransaction_deploymentSystemProgram
   have hmsgStateGas : msg.benv.stat.rules.stateGas = none := by
     simpa only [msg, begun, processSystemTransactionMsg] using hstateGas'
   have henter : (Frame.ofCall msg).enter = .run (initEvm msg) := by
-    simp only [Frame.enter, Frame.ofCall, executeCode.enter, Msg.benvAfterTransfer, Msg.withBenv, msg, begun, processSystemTransactionMsg, hnp', Bool.false_eq_true, ↓reduceIte, Bool.not_false, decide_false, Bool.and_false, ExceptT.stM_eq]
+    simp only [Frame.enter, Frame.ofCall, executeCode.enter, Msg.benvAfterTransfer, Msg.withBenv, msg, begun, processSystemTransactionMsg, hnp', Bool.false_eq_true, false_and, ↓reduceIte, Bool.not_false, decide_false, Bool.and_false, ExceptT.stM_eq]
   have hrefund : post.refundCounter = 0 := rfl
   have hcall := processMessageCall_ok_of_compiled_exec
     (p := deploymentSystemProgram) (msg := msg)
