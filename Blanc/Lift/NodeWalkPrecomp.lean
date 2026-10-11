@@ -76,7 +76,7 @@ theorem staticcall_done_node {sevm : Sevm} {c : PCfg} {cp : CallPrep} {child d :
     Exec.Deriv.step_done ((step_eq_of_nodeAt hn).trans hs) hent (resumeCallB_sound hr)
   refine ⟨x', e1, ⟨hp1, hs1.trans hn.2.1, hd1⟩, hex1, hdesc1, ?_⟩
   obtain ⟨hda, hdk⟩ := resumeCallB_acc hr
-  obtain ⟨hca, hck, -⟩ := frameEnterB_done_acc hF.create hF.stateGas heB
+  obtain ⟨hca, hck⟩ := frameEnterB_done_acc hF.create hF.stateGas heB
   obtain ⟨benv, hb, hcst⟩ := frameEnterB_done_ok_state hF.create hF.stateGas heB hce
   rw [benvAfterTransfer_eq_S hC] at hb
   refine ⟨fun y => ?_, fun a => ?_, fun a k => ?_, fun a => ?_⟩
@@ -88,18 +88,12 @@ theorem staticcall_done_node {sevm : Sevm} {c : PCfg} {cp : CallPrep} {child d :
     exact ⟨fun h => h.elim id (·.2), .inl⟩
   · show storOf d.state a k = lookupS c.stor a k
     rw [resumeCallB_state hr, hcst]
+    have zero := scallPrep_value_zero hp
     have hb' := hb
-    unfold benvAfterTransferS at hb'
-    split at hb'
-    · split at hb'
-      · cases hb'
-      · cases hb'
-        show storOf (State.setBal _ _ _) a k = _
-        rw [storOf_setBal, storOf_setBal, hF.state]
-        exact hag.2.2.1 a k
-    · cases hb'
-      rw [hF.state]
-      exact hag.2.2.1 a k
+    simp only [benvAfterTransferS, zero, ne_eq, not_true_eq_false, and_false,
+      ite_false, Except.ok.injEq] at hb'
+    rw [← hb', hF.state]
+    exact hag.2.2.1 a k
   · show acctView (d.state.get a) = lookupA (acsTransfer cp.f.inner c.acs) a
     rw [resumeCallB_state hr, hcst]
     exact acctAgree_transfer hC hb a

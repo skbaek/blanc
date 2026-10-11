@@ -803,6 +803,22 @@ theorem scallPrep_spec {sevm : Sevm} {devm : Devm} {adrs : List Adr} {acs : Acct
     · cases h
   · cases h
 
+/-- Every successful static-call preparation builds a zero-value message.
+This projection needs no world or shadow agreement premises. -/
+theorem scallPrep_value_zero {sevm : Sevm} {devm : Devm} {adrs : List Adr}
+    {acs : AcctShadow} {cp : CallPrep} (h : scallPrep sevm devm adrs acs = some cp) :
+    cp.f.inner.value = 0 := by
+  simp only [scallPrep] at h
+  split at h
+  · split at h
+    · split at h
+      · cases h
+      · split at h
+        · cases h; rfl
+        · cases h
+    · cases h
+  · cases h
+
 /-- The walk configuration a frame entered with shadows starts at. -/
 def childCfg (cevm : Evm) (f : Frame) (keys : List (Adr × B256)) (adrs : List Adr)
     (stor : StorShadow) (acs : AcctShadow) : PCfg :=

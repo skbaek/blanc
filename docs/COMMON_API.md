@@ -859,6 +859,9 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   (over `spawn_node`) cross a call-family spawn; `PrepFacts` supplies the settle
   (`PrepFacts.settle_ok`/`settle_error`) and resume (`resume_agree_ok_of`/
   `resume_agree_error_of`; `resume_agree_ok`/`_error` for `STATICCALL`) facts.
+  `scallPrep_value_zero` extracts the zero message value from successful
+  `scallPrep`, without a world or shadow agreement premise; use it with exact
+  zero-value entry to preserve the unchanged storage shadow of a static call.
   [`Blanc/Lift/NodeWalkFrames.lean`](../Blanc/Lift/NodeWalkFrames.lean) builds on it:
   `spawn_resume_ok`/`spawn_resume_err` cross a spawn on any derivation (the child's node, the
   resumed same-frame successor with its agreement, the descendants list), `leaf_frame`/
