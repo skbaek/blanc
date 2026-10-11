@@ -231,6 +231,7 @@ theorem CurveReplay.append {U : Key → Prop} {a b c : Stor} {xs ys : List Write
 /-- The storage-only replay carrier of a Curve history: boundaries are the
 contract's storage, so value credits and foreign frames contribute nothing. -/
 def curveCarrier (ca : Adr) (U : Key → Prop) : ReplayCarrier ca where
+  readsStorage := true
   Snap := Stor
   Step := WriterInvocation
   Tag := Unit
@@ -238,13 +239,14 @@ def curveCarrier (ca : Adr) (U : Key → Prop) : ReplayCarrier ca where
   ofState state := state.getStor ca
   frameEntry _ state := state.getStor ca
   nil := CurveReplay.nil U
-  silent := fun storage _ => storage
+  silent := fun storage _ => storage rfl
   credit := by
     intro _ _ _ _ storage _ _
     exact ⟨[], by rw [storage]; exact CurveReplay.nil U _⟩
   entry_eq_ofState := by
-    intro _ _ _ _ transfer _
-    exact congrFun (benvAfterTransfer_getStor_eq transfer) ca
+    intro _ _ caller_ne _ transfer sum_nof
+    exact benvAfterTransfer_getStor_eq_of_safe transfer sum_nof
+      (fun transfers _ => Or.inl (caller_ne transfers))
 
 /-- Replay steps and committed-frame invocations use the same ordered
 observation. -/
