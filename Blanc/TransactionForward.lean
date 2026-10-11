@@ -213,20 +213,9 @@ message's accounts. -/
 theorem benvAfterTransfer_get_of_value_zero {msg : Msg} {benv : Benv}
     (hzero : msg.value = 0) (h : msg.benvAfterTransfer = .ok benv) (a : Adr) :
     benv.state.get a = msg.benv.state.get a := by
-  by_cases hstv : msg.shouldTransferValue = true
-  · obtain ⟨debit, hsub, rfl⟩ := of_benvAfterTransfer hstv h
-    rw [hzero] at hsub ⊢
-    obtain ⟨_, rfl⟩ := State.of_subBal hsub
-    have hself : ∀ (st : State) (b : Adr) (v : B256), v = st.bal b →
-        (st.setBal b v).get a = st.get a := by
-      intro st b v hv
-      by_cases hb : b = a
-      · subst hb; rw [State.setBal_get_self, hv]; rfl
-      · rw [State.setBal_get_ne hb]
-    show ((msg.benv.state.setBal msg.caller _).setBal msg.currentTarget _).get a = _
-    rw [hself _ _ _ (by simp only [State.bal]; exact B256.add_zero _)]
-    exact hself _ _ _ (B256.sub_zero _)
-  · rw [of_benvAfterTransfer_no hstv h]
+  rw [Msg.benvAfterTransfer_of_value_zero hzero] at h
+  cases h
+  rfl
 
 /-- **A zero-value CREATE frame's entry world, account by account**: the new account keeps its
 balance and code, has its nonce incremented and its storage cleared; every other account is as
@@ -243,9 +232,12 @@ theorem processCreateMessage_msg_afterTransfer_get {msg : Msg} {benv : Benv}
   split
   · next ha =>
     subst ha
-    rw [State.get_set_self, State.get_set_self]
+    rw [State.setAccount_get_self, State.get_set_self]
+    apply Acct.ext <;> simp only [Acct.clearIfEmpty_nonce, Acct.clearIfEmpty_bal,
+      Acct.clearIfEmpty_code, Acct.clearIfEmpty_stor]
+    split <;> rfl
   · next ha =>
-    rw [State.get_set_ne _ (Ne.symm ha), State.get_set_ne _ (Ne.symm ha)]
+    rw [State.setAccount_get_ne _ (Ne.symm ha), State.get_set_ne _ (Ne.symm ha)]
 
 /-- **A call message with a code address that is no precompile settles as its raw execution**: when the
 value moved at entry is zero and the interpreter run from the entry environment succeeds with no frame
@@ -304,7 +296,6 @@ theorem processTransaction_of_stages_receipts
   rw [recoverValidationSender_of_stateGas_none tx hsg']
   simp only [BenvStat.rules, Benv.beginTransaction, transactionPreludeBout, transactionBlobGasFee,
     transactionTenv, Except.mapError] at hvalid hchecked hdebit hprepared hsg hbal hsg' ⊢
-  generalize benv.stat.fork.ruleSet = R at *
   simp only [hvalid, hchecked, hdebit, hprepared, Option.toExcept, allocateEvmGas, hsg, hcall, hrefund]
   apply Exists.intro
   simp only [settleSelfdestructs, hsg, hbal, settleTransactionGas]
@@ -522,21 +513,27 @@ theorem processTransaction_call_value_of_exec_receipts
     have heffTotal := Nat.mul_le_mul_left tx.gas heff_le
     change tx.value ≤ (benv.state.get E).bal.toNat - _
     omega
-  obtain ⟨transferState, _, hentry⟩ := Msg.benvAfterTransfer_of_affordable
-    (callMessage { benv.beginTransaction with state :=
+  let entryMsg := (callMessage { benv.beginTransaction with state :=
       ((benv.state.incrNonce E).setBal E (benv.state.bal E -
         (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
           benv.stat.baseFeePerGas)).toB256)) }
       (transactionTenv benv.beginTransaction tx index E
         (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)
-        intrinsicGas []) tx t) rfl (by
+        intrinsicGas []) tx t)
+  have affordable : ¬ entryMsg.benv.state.bal entryMsg.caller < entryMsg.value := by
+
       apply B256.not_lt.mpr
       change tx.value.toB256 ≤
         (((benv.state.incrNonce E).setBal E (benv.state.bal E -
           (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
             benv.stat.baseFeePerGas)).toB256)).get E).bal
-      rw [State.setBal_get_self]
-      exact hremaining)
+      rw [State.setBal_get_self, Acct.clearIfEmpty_bal]
+      exact hremaining
+  obtain ⟨after, hentry⟩ : ∃ after, entryMsg.benvAfterTransfer = .ok after := by
+    by_cases zero : entryMsg.value = 0
+    · exact ⟨_, Msg.benvAfterTransfer_of_value_zero zero⟩
+    · obtain ⟨_, _, transfer⟩ := Msg.benvAfterTransfer_of_affordable entryMsg rfl affordable zero
+      exact ⟨_, transfer⟩
   have hdebit' : (benv.state.incrNonce E).subBal E
       (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
         benv.stat.baseFeePerGas) + transactionBlobGasFee benv tx).toB256 = some
@@ -755,24 +752,35 @@ theorem CoveredFork.checkTransactionGasCap_ok {s : BenvStat} (h : CoveredFork s.
       (Fork.ruleSet f).tx.maxGas = some 16777216) (Or.inl rfl) (Or.inr rfl) (Or.inr rfl) (Or.inr rfl)
   unfold checkTransactionGasCap
   rcases hcap with hc | hc <;> rw [hc]
-  simp only [gt_iff_lt, Nat.not_lt.mpr hgas, ↓reduceIte]
+  · rfl
+  · change (if gas > 16777216 then _ else .ok () : Except TxValidationError Unit) = .ok ()
+    rw [ite_eq_right (Nat.not_lt.mpr hgas)]
 
 /-- The sender's debit (nonce bump and balance write) leaves every other account alone. -/
 theorem debit_get_ne {st : State} {E a : Adr} {v : B256} (h : E ≠ a) :
     ((st.incrNonce E).setBal E v).get a = st.get a := by
   rw [State.setBal_get_ne h]
   unfold State.incrNonce
-  rw [State.get_set_ne _ h]
+  rw [State.setAccount_get_ne _ h]
 
 /-- The sender's debit: the account keeps its storage and code, gains one in its nonce, and takes
 the written balance. -/
-theorem debit_get_self {st : State} {E : Adr} {v : B256} :
+theorem debit_get_self {st : State} {E : Adr} {v : B256}
+    (nonce : (st.get E).nonce ≠ UInt64.max) :
     ((st.incrNonce E).setBal E v).get E =
       { st.get E with nonce := (st.get E).nonce + 1, bal := v } := by
   rw [State.setBal_get_self]
   unfold State.incrNonce
-  rw [State.get_set_self]
-  rfl
+  rw [State.setAccount_get_self]
+  have nonzero := UInt64.add_one_ne_zero_of_ne_max nonce
+  simp only [Acct.clearIfEmpty]
+  split
+  · rename_i empty
+    exact (nonzero empty.2.1).elim
+  · split
+    · rename_i empty
+      exact (nonzero empty.2.1).elim
+    · rfl
 
 /-- A nonce that is not the maximal one can be incremented without wrapping. -/
 theorem UInt64.add_one_ne_zero {n : UInt64} (h : n ≠ UInt64.max) : n + 1 ≠ 0 := by
@@ -789,9 +797,9 @@ theorem UInt64.add_one_ne_zero {n : UInt64} (h : n ≠ UInt64.max) : n + 1 ≠ 0
   rw [h6]
   omega
 
-/-- A credit reads back as the account with the raised balance. -/
+/-- A raw credit raises the balance and normalizes an empty account. -/
 theorem addBal_get_self (st : State) (a : Adr) (v : B256) :
-    (st.addBal a v).get a = (st.get a).withBal (st.bal a + v) :=
+    (st.addBal a v).get a = ((st.get a).withBal (st.bal a + v)).clearIfEmpty :=
   State.setBal_get_self
 
 /-- A credit leaves every other account alone. -/

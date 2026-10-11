@@ -13,8 +13,9 @@ storage, the callvalue in flight, and the contract's ETH balance — because a
 wrapped-native-token contract's solvency claim needs all three.  A contract
 whose invariant is a property of its storage alone still has to answer the
 record's eight balance obligations, and every one of those answers is the same:
-none of `addBal`, `subBal` or a value transfer moves the storage at any
-address, so the invariant is carried by a rewrite.
+balance movement preserves storage at the protected observed account.
+The generic contract fields supply that protection; an unprotected account
+with only storage can be normalized by a zero balance write.
 
 `ContractSpec.ofStorageOnly` packages that argument once.  It also declines the
 `nof`-class side condition, which a storage-determined invariant never needs.
@@ -28,13 +29,12 @@ namespace Blanc
 
 open Jaune
 
-/-- The storage at `ca` is blind to a debit followed by a credit. -/
+/-- A debit followed by a credit preserves a protected owner's storage. -/
 theorem getStor_subBal_addBal {st st' : Jaune.State} {caller callee ca : Adr}
-    {wad : B256} (h_sub : st.subBal caller wad = some st') :
-    (st'.addBal callee wad).getStor ca = st.getStor ca := by
-  rcases State.of_subBal h_sub with ⟨-, h_st'⟩
-  show ((st'.setBal callee _).get ca).stor = (st.get ca).stor
-  rw [State.setBal_get_stor, h_st', State.setBal_get_stor]
+    {wad : B256} (h_sub : st.subBal caller wad = some st')
+    (protection : State.Protected st ca) :
+    (st'.addBal callee wad).getStor ca = st.getStor ca :=
+  (of_state_transfer_fields h_sub).1 ca protection
 
 /-- A contract whose invariant is determined by its own storage, packaged for
 the generic execution ladder.  The callvalue and balance arguments are
@@ -51,20 +51,19 @@ def ContractSpec.ofStorageOnly (p : Prog) (P : Stor → Prop) : ContractSpec whe
   side_transfer := fun _ _ => trivial
   side_addBal := fun _ _ => trivial
   inv_transfer := by
-    intro st st' caller callee ca wad v h_sub _ _ h_inv
+    intro st st' caller callee ca wad v h_sub _ _ protection h_inv
     show P _
-    rw [getStor_subBal_addBal h_sub]
+    rw [getStor_subBal_addBal h_sub protection]
     exact h_inv
   inv_recv_transfer := by
-    intro st st' caller ca wad h_sub _ _ h_inv
+    intro st st' caller ca wad h_sub _ _ protection h_inv
     show P _
-    rw [getStor_subBal_addBal h_sub]
+    rw [getStor_subBal_addBal h_sub protection]
     exact h_inv
   inv_addBal := by
-    intro w ca a val v _ _ h_inv
+    intro w ca a val v _ _ protection h_inv
     show P _
-    rw [getStor_addBal]
-    exact h_inv
+    exact (congrArg P (State.setBal_get_stor_of_protected protection)).mpr h_inv
 
 /-- A storage-only invariant over certified code semantics. The code image is
 independent of the projection-silent balance and transfer obligations. -/
@@ -79,20 +78,19 @@ def ContractSpecSem.ofStorageOnly (sem : CodeSem) (P : Stor → Prop) : Contract
   side_transfer := fun _ _ => trivial
   side_addBal := fun _ _ => trivial
   inv_transfer := by
-    intro st st' caller callee ca wad v sub _ _ invariant
+    intro st st' caller callee ca wad v sub _ _ protection invariant
     show P _
-    rw [getStor_subBal_addBal sub]
+    rw [getStor_subBal_addBal sub protection]
     exact invariant
   inv_recv_transfer := by
-    intro st st' caller ca wad sub _ _ invariant
+    intro st st' caller ca wad sub _ _ protection invariant
     show P _
-    rw [getStor_subBal_addBal sub]
+    rw [getStor_subBal_addBal sub protection]
     exact invariant
   inv_addBal := by
-    intro st ca target value v _ _ invariant
+    intro st ca target value v _ _ protection invariant
     show P _
-    rw [getStor_addBal]
-    exact invariant
+    exact (congrArg P (State.setBal_get_stor_of_protected protection)).mpr invariant
 
 /-- A semantic storage-only entry invariant is the storage property itself;
 both target cases discard callvalue and balance. -/
@@ -424,13 +422,21 @@ theorem ContractSpec.ofStorageOnly_of_call_sameBenv {p : Prog} {P : Stor → Pro
       · rw [hbody.2, processMessage.settle_error] at hset
         cases hset
       have run_ec : ExecuteCode (childMsg.withBenv benv') xl r0 := hbody
-      -- the value transfer performed before the sub-message run
-      rcases of_benvAfterTransfer hc_stv eq_bt with ⟨st_mid, h_sub, hB⟩
-      rw [hc_state, hc_caller, hc_value] at h_sub
-      rcases of_state_transfer_fields (callee := callee) h_sub with
-        ⟨h_t_stor, h_t_code, -, -, -⟩
-      have hBs : benv'.state = st_mid.addBal callee value := by
-        rw [hB, hc_ct, hc_value]; rfl
+      -- Entry preserves code everywhere and storage at the installed caller.
+      have ownerProtected : State.Protected s.state sevm.currentTarget := by
+        apply State.Protected.of_code_ne_nil
+        intro empty
+        exact Prog.compile_ne_nil (h_code.symm.trans (congrArg some empty))
+      have h_t_stor : benv'.state.getStor sevm.currentTarget =
+          s.state.getStor sevm.currentTarget := by
+        have protection : State.Protected childMsg.benv.state sevm.currentTarget := by
+          rw [hc_state]
+          exact ownerProtected
+        exact (benvAfterTransfer_ok_getStor eq_bt sevm.currentTarget
+          (Or.inr protection)).trans (congrArg (fun st => st.getStor sevm.currentTarget) hc_state)
+      have h_t_code : ∀ owner, benv'.state.getCode owner = s.state.getCode owner := by
+        intro owner
+        rw [benvAfterTransfer_ok_getCode eq_bt, hc_state]
       -- resolve the inner split : either rollback or a clean sub-message result
       obtain ⟨evm2, h_r0, h_settle⟩ := processMessage.settle_ok_cases hset.symm
       subst h_r0
@@ -452,8 +458,8 @@ theorem ContractSpec.ofStorageOnly_of_call_sameBenv {p : Prog} {P : Stor → Pro
         have h_stor_eq : Devm.getStor sf sevm.currentTarget
             = Devm.getStor s sevm.currentTarget := by
           show (sf.state.get sevm.currentTarget).stor = (s.state.get sevm.currentTarget).stor
-          rw [h_sf_state, h_child_state, hBs]
-          exact h_t_stor sevm.currentTarget
+          rw [h_sf_state, h_child_state]
+          exact h_t_stor
         rw [h_stor_eq]
         exact h_cons
       · -- callee is a regular account : a sub-execution takes place
@@ -480,7 +486,9 @@ theorem ContractSpec.ofStorageOnly_of_call_sameBenv {p : Prog} {P : Stor → Pro
               = Prog.compile p := by
           show some ((initDevm (childMsg.withBenv benv')).state.get sevm.currentTarget).code.toList
             = Prog.compile p
-          rw [h_sd_state, hBs, h_t_code sevm.currentTarget]
+          rw [h_sd_state]
+          change some (benv'.state.getCode sevm.currentTarget).toList = Prog.compile p
+          rw [h_t_code sevm.currentTarget]
           exact h_code
         -- the target program invariant for the sub-execution
         have h_at : Prog.At p sevm.currentTarget 0
@@ -513,8 +521,8 @@ theorem ContractSpec.ofStorageOnly_of_call_sameBenv {p : Prog} {P : Stor → Pro
             = Devm.getStor s sevm.currentTarget := by
           show ((initDevm (childMsg.withBenv benv')).state.get sevm.currentTarget).stor
             = (s.state.get sevm.currentTarget).stor
-          rw [h_sd_state, hBs]
-          exact h_t_stor sevm.currentTarget
+          rw [h_sd_state]
+          exact h_t_stor
         have h_precond : (ContractSpec.ofStorageOnly p P).Pre sevm.currentTarget
             (initSevm (childMsg.withBenv benv')) (initDevm (childMsg.withBenv benv')) := by
           refine ⟨h_code_at, trivial, ?_⟩

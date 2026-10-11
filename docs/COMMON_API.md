@@ -3331,8 +3331,10 @@ block's gas counters (`txGasUsed`); `processTransaction_call_value_of_exec_recei
 envelope that also returns the appended receipt key and the receipt at it (`makeReceipt tx none`, the
 cumulative gas, the frame's logs), and `processTransaction_of_stages_receipts` is the stage form behind
 it. Its funds premise covers `tx.gas * maxFee + tx.value`;
-it derives affordability after the gas debit and constructs the value transfer with the shared
-`Msg.benvAfterTransfer_of_affordable` lemma. The signature and successful raw execution remain
+it derives affordability after the gas debit and splits zero from nonzero value.
+`Msg.benvAfterTransfer_of_value_zero` supplies the zero-value entry;
+`Msg.benvAfterTransfer_of_affordable` constructs the nonzero transfer.
+The signature and successful raw execution remain
 premises; the theorem does not construct a signed transaction or a configured history.
 `processTransaction_call_of_exec` retains the original zero-value interface as a specialization.
 The shared parts are `checkTransactionGasFee_two`, `checkTransactionChainId_two`,
@@ -3351,6 +3353,12 @@ CREATE frame's entry world, account by account), `processMessage_call_of_exec`, 
 stage lemma with the block output's gas counters).  Worked use: the deployed WETH9's
 `Blanc/Lift/Weth9/LiveTx.lean` (`weth9_tx_withdraw`, `weth9_history_tx_withdraw`), which feeds it the frame of
 `weth9_withdraw_live_post`.
+
+The raw `debit_get_self` account equation requires the sender nonce to differ
+from `UInt64.max`; transaction admission supplies this nonwrap fact.
+`addBal_get_self` is unconditional and returns the credited account followed
+by `clearIfEmpty`. A balance write can clear an unprotected storage-only
+account, so its full-account equation must retain that normalization.
 
 ### T4. The wrapper is a message call and I must see through delegation
 
@@ -3916,8 +3924,11 @@ never have fired.
 ETH balance, and a contract whose invariant reads only storage still owes the
 record's eight balance obligations.  `ContractSpec.ofStorageOnly` in
 [`Blanc/StorageOnlySpec.lean`](../Blanc/StorageOnlySpec.lean) packages that
-argument once: Jaune's `getStor_addBal` and `getStor_subBal_addBal` say balance movement
-never moves storage, `ofStorageOnly_preInv_iff`/`ofStorageOnly_postInv_iff`
+argument once: `getStor_subBal_addBal` preserves the observed owner's storage
+when `State.Protected` holds at entry; the corresponding credit donor uses
+the same protected-owner domain. The specification's balance obligations
+already supply this protection, so the adapters need no extra hypothesis.
+`ofStorageOnly_preInv_iff`/`ofStorageOnly_postInv_iff`
 reduce the frame invariants to the storage predicate, and
 `ofStorageOnly_funcSound` reduces each per-target obligation to the bare
 storage walk, declining the `nof`-class side condition a storage-determined

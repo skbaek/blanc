@@ -45,6 +45,7 @@ theorem Devm.DispatchFramePreserved.trans {a b c : Devm}
   · exact hab.stateGas.trans hbc.stateGas
   · exact hab.accountReads.trans hbc.accountReads
   · exact hab.storageReads.trans hbc.storageReads
+  · exact hab.storageWrites.trans hbc.storageWrites
 
 /-- A pure gas burn preserves every dispatch-frame field except gas. -/
 theorem dispatchFrame_of_burnBy {cost : Nat} {a b : Devm}
@@ -67,6 +68,7 @@ theorem dispatchFrame_of_burnBy {cost : Nat} {a b : Devm}
   · exact h.stateGas
   · exact h.accountReads
   · exact h.storageReads
+  · exact h.storageWrites
 
 theorem dispatchFrame_of_pushBurn {xs : List B256} {a b : Devm}
     (h : Devm.PushBurn xs a b) : Devm.DispatchFramePreserved a b := by
@@ -88,6 +90,7 @@ theorem dispatchFrame_of_pushBurn {xs : List B256} {a b : Devm}
   · exact h.stateGas
   · exact h.accountReads
   · exact h.storageReads
+  · exact h.storageWrites
 
 theorem dispatchFrame_of_popBurnBy {xs : List B256} {cost : Nat}
     {a b : Devm} (h : Devm.PopBurnBy xs cost a b) :
@@ -110,6 +113,7 @@ theorem dispatchFrame_of_popBurnBy {xs : List B256} {cost : Nat}
   · exact h.stateGas
   · exact h.accountReads
   · exact h.storageReads
+  · exact h.storageWrites
 
 private theorem dispatchFrame_of_popBurn {xs : List B256} {a b : Devm}
     (h : Devm.PopBurn xs a b) : Devm.DispatchFramePreserved a b := by
@@ -131,6 +135,7 @@ private theorem dispatchFrame_of_popBurn {xs : List B256} {a b : Devm}
   · exact h.stateGas
   · exact h.accountReads
   · exact h.storageReads
+  · exact h.storageWrites
 
 theorem dispatchFrame_of_diffBurn {xs ys : List B256} {a b : Devm}
     (h : Devm.DiffBurn xs ys a b) : Devm.DispatchFramePreserved a b := by
@@ -152,6 +157,7 @@ theorem dispatchFrame_of_diffBurn {xs ys : List B256} {a b : Devm}
   · exact h.stateGas
   · exact h.accountReads
   · exact h.storageReads
+  · exact h.storageWrites
 
 private theorem dupFrame {e : Sevm} {a b : Devm}
     (h : Ninst.Run e a (Ninst.dup 0) b) : Devm.DispatchFramePreserved a b := by

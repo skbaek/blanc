@@ -203,13 +203,13 @@ theorem applyBody_forward {benv : Benv} {txs : List (Bytes ⊕ Tx)} {txList : Li
     applyBody benv txs [] = .ok (stC, requestsOutput boutTxs outW.returnData outC.returnData) := by
   have hbal : benv.stat.rules.bal = none := hfork.rules_bal_none
   have hinit : ({} : BalBuilder).incorporateSystem benv.stat.rules 0 benv.state stBeacon
-      (beaconRootsAddress :: outBeacon.accountReads.toList) outBeacon.storageReads.toList =
+      (beaconRootsAddress :: outBeacon.accountReads.toList) outBeacon.storageReads.toList outBeacon.storageWrites.toList =
       ({} : BalBuilder) := by
     unfold BalBuilder.incorporateSystem
     rw [hbal]
   have hinit' : ({} : BalBuilder).incorporateSystem benv.stat.rules 0
       (benv.withState stBeacon).state stHistory
-      (historyStorageAddress :: outHistory.accountReads.toList) outHistory.storageReads.toList =
+      (historyStorageAddress :: outHistory.accountReads.toList) outHistory.storageReads.toList outHistory.storageWrites.toList =
       ({} : BalBuilder) := by
     unfold BalBuilder.incorporateSystem
     rw [hbal]
