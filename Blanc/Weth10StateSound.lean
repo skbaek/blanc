@@ -1300,6 +1300,7 @@ theorem backedPre_of_withdraw_transfer (dp : DeployParams)
     (h_ct : sevm'.currentTarget = target)
     (h_value : sevm'.value = value) :
     (backedSpec weth10 dp).Pre ca sevm' devm' := by
+  have hp : State.Protected st ca := State.Protected.of_image (sem := (weth10 dp).codeSem) h_code
   rcases of_state_transfer_fields (callee := target) h_sub with
     ⟨h_t_stor, h_t_code, h_le, h_t_self, h_t_ne⟩
   refine ⟨?_, ?_, ?_, ?_⟩
@@ -1318,7 +1319,7 @@ theorem backedPre_of_withdraw_transfer (dp : DeployParams)
       (Devm.getBal devm' ca)
     change Stor.Weth10Inv (devm'.state.get ca).stor sevm'.value
       (devm'.state.get ca).bal
-    rw [h_state, h_value, h_t_stor ca, hbal]
+    rw [h_state, h_value, h_t_stor ca hp, hbal]
     change Stor.Weth10Inv (st.get ca).stor 0
       ((st.get ca).bal - value) at h_inv
     change value ≤ (st.get ca).bal at h_le
@@ -1336,7 +1337,7 @@ theorem backedPre_of_withdraw_transfer (dp : DeployParams)
       (Devm.getBal devm' ca)
     change Stor.Weth10Inv (devm'.state.get ca).stor 0
       (devm'.state.get ca).bal
-    rw [h_state, h_t_stor ca, hbal]
+    rw [h_state, h_t_stor ca hp, hbal]
     change Stor.Weth10Inv (st.get ca).stor 0
       ((st.get ca).bal - value) at h_inv
     exact h_inv
@@ -1405,16 +1406,40 @@ theorem backedPost_of_value_call
     · rw [hbody.2, processMessage.settle_error] at hset
       cases hset
     have h_exec : ExecuteCode (childMsg.withBenv benv) xl r0 := hbody
-    rcases of_benvAfterTransfer hc_stv h_bt with
-      ⟨st_mid, h_sub, h_benv⟩
-    rw [hc_state, hc_caller, hc_value] at h_sub
-    have h_benv_state :
-        benv.state = st_mid.addBal c.toAdr v := by
-      rw [h_benv, hc_target, hc_value]
-      rfl
     have h_pre : (backedSpec weth10 dp).Pre ca
         (initSevm (childMsg.withBenv benv))
         (initDevm (childMsg.withBenv benv)) := by
+      by_cases hzero : childMsg.value = 0
+      · have h_benv : benv = childMsg.benv := by
+          rw [Msg.benvAfterTransfer_of_value_zero hzero] at h_bt
+          exact (Except.ok.inj h_bt).symm
+        have h_benv_state : benv.state = s.state := by
+          rw [h_benv, hc_state]
+        have hv : v = 0 := hc_value.symm.trans hzero
+        have h_inv0 : Stor.Weth10Inv (Devm.getStor s ca) 0 (s.getBal ca) := by
+          simpa only [hv, B256.sub_zero] using h_inv
+        refine ⟨?_, ?_, ?_, ?_⟩
+        · change some (benv.state.getCode ca).toList = Prog.compile (weth10 dp)
+          rw [h_benv_state]
+          exact h_code
+        · change SumNof benv.state.bal
+          rw [h_benv_state]
+          exact h_side
+        · intro _
+          change Stor.Weth10Inv (benv.state.getStor ca) childMsg.value (benv.state.bal ca)
+          rw [h_benv_state, hzero]
+          exact h_inv0
+        · intro _
+          change Stor.Weth10Inv (benv.state.getStor ca) 0 (benv.state.bal ca)
+          rw [h_benv_state]
+          exact h_inv0
+      rcases of_benvAfterTransfer hc_stv hzero h_bt with
+        ⟨st_mid, h_sub, h_benv⟩
+      rw [hc_state, hc_caller, hc_value] at h_sub
+      have h_benv_state :
+          benv.state = st_mid.addBal c.toAdr v := by
+        rw [h_benv, hc_target, hc_value]
+        rfl
       apply backedPre_of_withdraw_transfer dp
         (st := s.state) (st_mid := st_mid)
         (target := c.toAdr) (value := v)
@@ -1541,8 +1566,12 @@ theorem value_le_balance_of_run_call_success_guard
       rw [h_bt] at hbody
     · rw [hbody.2, processMessage.settle_error] at hset
       cases hset
+    by_cases hzero : v = 0
+    · rw [hzero]
+      exact B256.zero_le _
     rcases of_benvAfterTransfer
-        (show childMsg.shouldTransferValue = true from rfl) h_bt with
+        (show childMsg.shouldTransferValue = true from rfl)
+        (show childMsg.value ≠ 0 from hzero) h_bt with
       ⟨st_mid, h_sub, h_benv⟩
     change parent.state.subBal sevm.currentTarget v = some st_mid at h_sub
     rw [h_parent_state] at h_sub
@@ -5668,29 +5697,25 @@ def flashExactSpec (dp : DeployParams) (flash : B256) : ContractSpec where
   side_transfer := fun _ _ => trivial
   side_addBal := fun _ _ => trivial
   inv_transfer := by
-    intro st st' caller callee ca wad v h_sub h_ne _ h_inv
+    intro st st' caller callee ca wad v h_sub h_ne _ hp h_inv
     show Stor.FlashAt flash _
     have h_stor : (st'.addBal callee wad).getStor ca = st.getStor ca := by
-      rcases State.of_subBal h_sub with ⟨-, h_st'⟩
-      show ((st'.setBal callee _).get ca).stor = (st.get ca).stor
-      rw [State.setBal_get_stor, h_st', State.setBal_get_stor]
+      exact (of_state_transfer_fields (callee := callee) h_sub).1 ca hp
     rw [h_stor]
     exact h_inv
   inv_recv_transfer := by
-    intro st st' caller ca wad h_sub h_ne _ h_inv
+    intro st st' caller ca wad h_sub h_ne _ hp h_inv
     show Stor.FlashAt flash _
     have h_stor : (st'.addBal ca wad).getStor ca = st.getStor ca := by
-      rcases State.of_subBal h_sub with ⟨-, h_st'⟩
-      show ((st'.setBal ca _).get ca).stor = (st.get ca).stor
-      rw [State.setBal_get_stor, h_st', State.setBal_get_stor]
+      exact (of_state_transfer_fields (callee := ca) h_sub).1 ca hp
     rw [h_stor]
     exact h_inv
   inv_addBal := by
-    intro w ca a val v _ _ h_inv
+    intro w ca a val v _ _ hp h_inv
     show Stor.FlashAt flash _
     have h_stor : (w.addBal a val).getStor ca = w.getStor ca := by
       show ((w.setBal a _).get ca).stor = (w.get ca).stor
-      rw [State.setBal_get_stor]
+      exact State.setBal_get_stor_of_protected hp
     rw [h_stor]
     exact h_inv
 
@@ -5898,23 +5923,16 @@ theorem flashExactRel_of_value_call
     · rw [hbody.2, processMessage.settle_error] at hset
       cases hset
     have h_exec : ExecuteCode (childMsg.withBenv benv) xl r0 := hbody
-    rcases of_benvAfterTransfer hc_stv h_bt with
-      ⟨st_mid, h_sub, h_benv⟩
-    rw [hc_state, hc_caller, hc_value] at h_sub
-    have h_benv_state :
-        benv.state = st_mid.addBal c.toAdr v := by
-      rw [h_benv, hc_target, hc_value]
-      rfl
-    rcases of_state_transfer_fields (callee := c.toAdr) h_sub with
-      ⟨h_t_stor, h_t_code, h_le, h_t_self, h_t_ne⟩
     have h_entry_stor :
         Devm.getStor (initDevm (childMsg.withBenv benv)) ca =
           Devm.getStor s ca := by
       change benv.state.getStor ca = s.state.getStor ca
-      rw [h_benv_state]
-      change ((st_mid.addBal c.toAdr v).get ca).stor =
-        (s.state.get ca).stor
-      rw [h_t_stor ca]
+      rw [benvAfterTransfer_ok_getStor h_bt ca (Or.inr (by
+        rw [hc_state]
+        exact State.Protected.of_image (sem := (weth10 dp).codeSem) h_code)),
+        hc_state]
+    have h_entry_code : benv.state.getCode ca = s.state.getCode ca := by
+      rw [benvAfterTransfer_ok_getCode h_bt ca, hc_state]
     obtain ⟨evm2, h_r0, h_settle⟩ := processMessage.settle_ok_cases hset.symm
     subst h_r0
     rcases h_settle with ⟨h_err2, h_eq⟩ | ⟨h_err2, h_eq_child⟩
@@ -5949,10 +5967,7 @@ theorem flashExactRel_of_value_call
           refine ⟨?_, ?_⟩
           · show some (benv.state.getCode ca).toList =
               Prog.compile (weth10 dp)
-            rw [h_benv_state]
-            change some ((st_mid.addBal c.toAdr v).get ca).code.toList =
-              Prog.compile (weth10 dp)
-            rw [h_t_code ca]
+            rw [h_entry_code]
             exact h_code
           · intro h_child_target
             refine ⟨?_, rfl⟩
@@ -6042,35 +6057,33 @@ theorem backedPost_of_static_call
     · rw [hbody.2, processMessage.settle_error] at hset
       cases hset
     have h_exec : ExecuteCode (childMsg.withBenv benv) xl r0 := hbody
-    rcases of_benvAfterTransfer hc_stv h_bt with
-      ⟨st_mid, h_sub, h_benv⟩
-    rw [hc_state, hc_caller, hc_value] at h_sub
-    have h_benv_state :
-        benv.state = st_mid.addBal t.toAdr 0 := by
-      rw [h_benv, hc_target, hc_value]
-      rfl
-    rcases of_state_transfer_fields (callee := t.toAdr) h_sub with
-      ⟨h_t_stor, h_t_code, h_le, h_t_self, h_t_ne⟩
-    have h_inv0 : Stor.Weth10Inv (Devm.getStor s ca) 0
-        (s.getBal ca - 0) := by
-      rw [b256_sub_zero]
+    have h_benv : benv = childMsg.benv := by
+      rw [Msg.benvAfterTransfer_of_value_zero hc_value] at h_bt
+      exact (Except.ok.inj h_bt).symm
+    have h_benv_state : benv.state = s.state := by
+      rw [h_benv, hc_state]
+    have h_inv0 : Stor.Weth10Inv (Devm.getStor s ca) 0 (s.getBal ca) := by
       have h := h_pre.inv.1 h_target
-      change Stor.Weth10Inv (Devm.getStor s ca) sevm.value
-        (s.getBal ca) at h
+      change Stor.Weth10Inv (Devm.getStor s ca) sevm.value (s.getBal ca) at h
       simpa only [h_value] using h
     have h_pre_child : (backedSpec weth10 dp).Pre ca
         (initSevm (childMsg.withBenv benv))
         (initDevm (childMsg.withBenv benv)) := by
-      apply backedPre_of_withdraw_transfer dp
-        (st := s.state) (st_mid := st_mid)
-        (target := t.toAdr) (value := 0)
-      · exact h_pre.code
-      · exact h_pre.side
-      · exact h_inv0
-      · exact h_sub
-      · exact h_benv_state
-      · exact hc_target
-      · exact hc_value
+      refine ⟨?_, ?_, ?_, ?_⟩
+      · change some (benv.state.getCode ca).toList = Prog.compile (weth10 dp)
+        rw [h_benv_state]
+        exact h_pre.code
+      · change SumNof benv.state.bal
+        rw [h_benv_state]
+        exact h_pre.side
+      · intro _
+        change Stor.Weth10Inv (benv.state.getStor ca) childMsg.value (benv.state.bal ca)
+        rw [h_benv_state, hc_value]
+        exact h_inv0
+      · intro _
+        change Stor.Weth10Inv (benv.state.getStor ca) 0 (benv.state.bal ca)
+        rw [h_benv_state]
+        exact h_inv0
     obtain ⟨evm2, h_r0, h_settle⟩ := processMessage.settle_ok_cases hset.symm
     subst h_r0
     rcases h_settle with ⟨h_err2, h_eq⟩ | ⟨h_err2, h_eq_child⟩
@@ -6193,23 +6206,16 @@ theorem flashExactRel_of_static_call
     · rw [hbody.2, processMessage.settle_error] at hset
       cases hset
     have h_exec : ExecuteCode (childMsg.withBenv benv) xl r0 := hbody
-    rcases of_benvAfterTransfer hc_stv h_bt with
-      ⟨st_mid, h_sub, h_benv⟩
-    rw [hc_state, hc_caller, hc_value] at h_sub
-    have h_benv_state :
-        benv.state = st_mid.addBal t.toAdr 0 := by
-      rw [h_benv, hc_target, hc_value]
-      rfl
-    rcases of_state_transfer_fields (callee := t.toAdr) h_sub with
-      ⟨h_t_stor, h_t_code, h_le, h_t_self, h_t_ne⟩
+    have h_benv : benv = childMsg.benv := by
+      rw [Msg.benvAfterTransfer_of_value_zero hc_value] at h_bt
+      exact (Except.ok.inj h_bt).symm
+    have h_benv_state : benv.state = s.state := by
+      rw [h_benv, hc_state]
     have h_entry_stor :
         Devm.getStor (initDevm (childMsg.withBenv benv)) ca =
           Devm.getStor s ca := by
       change benv.state.getStor ca = s.state.getStor ca
       rw [h_benv_state]
-      change ((st_mid.addBal t.toAdr 0).get ca).stor =
-        (s.state.get ca).stor
-      rw [h_t_stor ca]
     obtain ⟨evm2, h_r0, h_settle⟩ := processMessage.settle_ok_cases hset.symm
     subst h_r0
     rcases h_settle with ⟨h_err2, h_eq⟩ | ⟨h_err2, h_eq_child⟩
@@ -6245,9 +6251,6 @@ theorem flashExactRel_of_static_call
           · show some (benv.state.getCode ca).toList =
               Prog.compile (weth10 dp)
             rw [h_benv_state]
-            change some ((st_mid.addBal t.toAdr 0).get ca).code.toList =
-              Prog.compile (weth10 dp)
-            rw [h_t_code ca]
             exact h_code
           · intro h_child_target
             refine ⟨?_, rfl⟩
