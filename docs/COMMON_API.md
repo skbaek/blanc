@@ -3352,6 +3352,16 @@ stage lemma with the block output's gas counters).  Worked use: the deployed WET
 Use
 [`Blanc/ExecutionMessageEffects.lean`](../Blanc/ExecutionMessageEffects.lean):
 
+- Recursive nonce preservation uses `Xlot.NonceNonzero` to express the child
+  obligation. `Msg.benvAfterTransfer_get_nonce` gives exact nonce equality
+  across value transfer; `ProcessMessage.nonce_ne_zero_of_body` and
+  `ProcessCreateMessage.nonce_ne_zero_of_body` transport that obligation through
+  settlement. `ProcessCreateMessage.ok_nonce_eq_inner_of_clean` isolates nonce
+  equality across successful code deposit. `State.incrNonce_nonce_ne_zero`
+  uses an explicit nonwrap premise, discharged by the actual CREATE precheck
+  in `GenericCreate.nonce_ne_zero_of_body`. The CALL and executable adapters
+  are `GenericCall.nonce_ne_zero_of_body` and `Xinst.nonce_ne_zero_of_body`.
+  These preserve nonce-protected accounts without assuming installed code.
 - `ExecutionTrace.messageCallDelegation_fields` and its named projections
   (`_caller_eq`, `_target_eq`, `_currentTarget_eq`,
   `_shouldTransferValue_eq`) carry a routing or value field across the

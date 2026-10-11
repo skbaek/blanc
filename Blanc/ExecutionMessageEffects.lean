@@ -12,6 +12,243 @@ namespace Blanc
 
 open Jaune
 
+/-- Nonzero account nonces survive a completed recursive execution slot. -/
+def Xlot.NonceNonzero : Xlot → Prop
+  | .none => True
+  | .some ⟨evm, out⟩ => ∀ committed : Execution.commits out = true,
+      ∀ owner, (evm.dyna.state.get owner).nonce ≠ 0 →
+        ((Execution.committedPost out committed).state.get owner).nonce ≠ 0
+
+/-- Value transfer leaves every account nonce unchanged. -/
+theorem Msg.benvAfterTransfer_get_nonce {msg : Msg} {entry : Benv}
+    (transfer : msg.benvAfterTransfer = .ok entry) (owner : Adr) :
+    (entry.state.get owner).nonce = (msg.benv.state.get owner).nonce := by
+  by_cases zero : msg.value = 0
+  · rw [Msg.benvAfterTransfer_of_value_zero zero] at transfer
+    cases transfer
+    rfl
+  by_cases enabled : msg.shouldTransferValue = true
+  · obtain ⟨mid, sub, rfl⟩ := of_benvAfterTransfer enabled zero transfer
+    change ((mid.addBal msg.currentTarget msg.value).get owner).nonce = _
+    rw [State.addBal, State.setBal_get_nonce, (State.of_subBal sub).2,
+      State.setBal_get_nonce]
+  · rw [of_benvAfterTransfer_no enabled transfer]
+
+/-- Message settlement transports nonzero nonces from its actual recursive slot. -/
+theorem ProcessMessage.nonce_ne_zero_of_body {msg : Msg} {slot : Xlot} {post : Devm}
+    (process : ProcessMessage msg slot (.ok post)) (body : Xlot.NonceNonzero slot)
+    (owner : Adr) (nonce : (msg.benv.state.get owner).nonce ≠ 0) :
+    (post.state.get owner).nonce ≠ 0 := by
+  cases slot with
+  | none =>
+      rcases ProcessMessage.none_ok_state_cases process with eq | ⟨entry, transfer, eq⟩
+      · rwa [eq]
+      · rw [eq, Msg.benvAfterTransfer_get_nonce transfer owner]
+        exact nonce
+  | some pair =>
+      rcases pair with ⟨⟨pc, sevm, pre⟩, out⟩
+      by_cases committed : Execution.commits out = true
+      · have entry := (RunFrame.some_inv process).1
+        rcases Frame.enter_run_inv entry with ⟨benv, transfer, equal⟩
+        have preNonce : (pre.state.get owner).nonce = (msg.benv.state.get owner).nonce := by
+          have stateEq := congrArg (fun evm : Evm => evm.dyna.state) equal
+          rw [stateEq]
+          exact Msg.benvAfterTransfer_get_nonce transfer owner
+        rw [ProcessMessage.ok_state_eq_committedPost process committed]
+        exact body committed owner (preNonce ▸ nonce)
+      · rw [ProcessMessage.ok_state_eq_of_not_commits process committed]
+        exact nonce
+
+/-- Code-deposit settlement leaves every nonce equal to its inner message's nonce. -/
+theorem ProcessCreateMessage.ok_nonce_eq_inner_of_clean
+    {msg : Msg} {slot : Xlot} {post : Devm}
+    (hprocess : ProcessCreateMessage msg slot (.ok post))
+    (herror : post.error.isSome = false) :
+    ∃ inner : Devm,
+      ProcessMessage (processCreateMessage.msg msg) slot (.ok inner) ∧
+      ∀ owner, (post.state.get owner).nonce = (inner.state.get owner).nonce := by
+  rcases ProcessCreateMessage.iff_processMessage.mp hprocess with
+    ⟨result, hinner, hsettle⟩
+  cases result with
+  | error error =>
+      simp [processCreateMessage.settle, Bind.bind, Except.bind] at hsettle
+  | ok inner =>
+      unfold processCreateMessage.settle at hsettle
+      simp only [bind, Except.bind] at hsettle
+      by_cases hinnerNone : inner.error.isNone = true
+      · rw [if_pos hinnerNone] at hsettle
+        cases hcharge :
+          processCreateMessage.chargeCodeGas
+            msg.benv.stat.rules inner with
+        | error error =>
+            rw [hcharge] at hsettle
+            rcases error with ⟨error, charged⟩
+            cases error with
+            | halt reason =>
+                cases hsg : msg.benv.stat.rules.stateGas with
+                | none =>
+                    rw [hsg] at hsettle
+                    have heq := Except.ok.inj hsettle
+                    rw [heq] at herror
+                    simp [processCreateMessage.exceptionalHalt,
+                      Devm.error, Devm.withStorageWrites, Devm.setWorld, Devm.setMeta] at herror
+                | some _ =>
+                    rw [hsg] at hsettle
+                    have heq := Except.ok.inj hsettle
+                    rw [heq] at herror
+                    simp [processCreateMessage.exceptionalHaltAmsterdam,
+                      Devm.error, Devm.withStorageWrites, Devm.setWorld, Devm.setMeta] at herror
+            | revert => cases hsettle
+            | crypto reason => cases hsettle
+            | internal reason => cases hsettle
+        | ok charged =>
+            rw [hcharge] at hsettle
+            have heq := Except.ok.inj hsettle
+            refine ⟨inner, hinner, ?_⟩
+            intro owner
+            rw [heq]
+            change ((charged.state.setCode msg.currentTarget ⟨⟨charged.output⟩⟩).get owner).nonce = _
+            by_cases equal : msg.currentTarget = owner
+            · subst owner
+              rw [State.setCode, State.setAccount_get_self, Acct.clearIfEmpty_nonce]
+              exact congrArg (fun state : State => (state.get msg.currentTarget).nonce)
+                (chargeCodeGas_state_ok hcharge)
+            · rw [State.setCode, State.setAccount_get_ne _ equal]
+              exact congrArg (fun state : State => (state.get owner).nonce)
+                (chargeCodeGas_state_ok hcharge)
+      · rw [if_neg hinnerNone] at hsettle
+        have heq := Except.ok.inj hsettle
+        rw [heq] at herror
+        simp [Devm.rollback, Devm.setWorld, Devm.error] at herror
+        apply False.elim
+        apply hinnerNone
+        rw [show inner.error = none from herror]
+        rfl
+
+/-- Fresh CREATE settlement preserves nonzero nonces away from its new target. -/
+theorem ProcessCreateMessage.nonce_ne_zero_of_body
+    {msg : Msg} {slot : Xlot} {post : Devm}
+    (process : ProcessCreateMessage msg slot (.ok post)) (body : Xlot.NonceNonzero slot)
+    (owner : Adr) (nonce : (msg.benv.state.get owner).nonce ≠ 0)
+    (targetNe : msg.currentTarget ≠ owner) : (post.state.get owner).nonce ≠ 0 := by
+  cases errored : post.error.isSome with
+  | true => rw [ProcessCreateMessage.rollback_of_error process errored]; exact nonce
+  | false =>
+      rcases ProcessCreateMessage.ok_nonce_eq_inner_of_clean process errored with
+        ⟨inner, innerRun, postNonce⟩
+      rw [postNonce owner]
+      apply ProcessMessage.nonce_ne_zero_of_body innerRun body owner
+      change (((msg.benv.state.setStor msg.currentTarget .empty).incrNonce
+        msg.currentTarget).get owner).nonce ≠ 0
+      rw [State.incrNonce, State.setAccount_get_ne _ targetNe,
+        State.setStor, State.get_set_ne _ targetNe]
+      exact nonce
+
+/-- A checked nonce increment preserves nonzero nonces at every owner. -/
+theorem State.incrNonce_nonce_ne_zero {state : State} {creator : Adr}
+    (nonwrap : (state.get creator).nonce + 1 ≠ 0) (owner : Adr)
+    (nonce : (state.get owner).nonce ≠ 0) :
+    ((state.incrNonce creator).get owner).nonce ≠ 0 := by
+  by_cases equal : creator = owner
+  · subst owner
+    simpa only [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_nonce] using nonwrap
+  · rw [State.incrNonce, State.setAccount_get_ne _ equal]
+    exact nonce
+
+/-- Recursive CREATE preserves inherited nonzero nonces using its actual precheck. -/
+theorem GenericCreate.nonce_ne_zero_of_body
+    {sevm : Sevm} {pre post : Devm} {endowment : B256} {newAddress : Adr}
+    {mi ms : Nat} {slot : Xlot}
+    (run : GenericCreate sevm pre endowment newAddress mi ms slot (.ok post))
+    (body : Xlot.NonceNonzero slot) (owner : Adr)
+    (nonce : (pre.state.get owner).nonce ≠ 0) : (post.state.get owner).nonce ≠ 0 := by
+  unfold GenericCreate genericCreate.step at run
+  simp only [Bind.bind, Except.bind, Except.assert, assertDynamic, Pure.pure,
+    Except.pure] at run
+  repeat' split at run
+  all_goals simp only [XStep.ofExcept, XStep.Run] at run
+  · cases run.2
+  · cases run.2
+  · cases run.2
+  · rename_i pushed
+    rw [Except.ok.inj run.2, ← (Devm.push_of_push pushed).state]
+    exact nonce
+  · cases run.2
+  · rename_i pushed
+    have stateEq : post.state = pre.state.incrNonce sevm.currentTarget := by
+      rw [Except.ok.inj run.2, ← (Devm.push_of_push pushed).state]
+      rfl
+    rename_i checked _ _ _
+    have nonwrap : (pre.state.get sevm.currentTarget).nonce + 1 ≠ 0 :=
+      UInt64.add_one_ne_zero_of_ne_max fun hmax => checked (Or.inr (Or.inl hmax))
+    rw [stateEq]
+    exact State.incrNonce_nonce_ne_zero nonwrap owner nonce
+  · obtain ⟨result, process, resumed⟩ := run
+    rename_i checked collision
+    have nonwrap : (pre.state.get sevm.currentTarget).nonce + 1 ≠ 0 :=
+      UInt64.add_one_ne_zero_of_ne_max fun hmax => checked (Or.inr (Or.inl hmax))
+    cases result with
+    | error error => exact (Resume.create_run_error resumed.symm).elim
+    | ok settled =>
+      have stateEq := Resume.create_state resumed.symm
+      rw [stateEq]
+      apply ProcessCreateMessage.nonce_ne_zero_of_body process body owner
+      · exact State.incrNonce_nonce_ne_zero nonwrap owner nonce
+      · intro equal
+        change newAddress = owner at equal
+        apply collision
+        left
+        change (((pre.state.incrNonce sevm.currentTarget).get newAddress).nonce ≠ 0)
+        rw [equal]
+        exact State.incrNonce_nonce_ne_zero nonwrap owner nonce
+
+/-- Recursive CALL preserves inherited nonzero nonces through its message settlement. -/
+theorem GenericCall.nonce_ne_zero_of_body
+    {sevm : Sevm} {pre post : Devm} {gas : Nat} {value : B256}
+    {caller target codeAddress : Adr} {stv isStatic : Bool}
+    {ii isz oi osz : Nat} {code : ByteArray} {disablePrecompiles : Bool} {slot : Xlot}
+    (run : GenericCall sevm pre gas value caller target codeAddress stv isStatic
+      ii isz oi osz code disablePrecompiles slot (.ok post))
+    (body : Xlot.NonceNonzero slot) (owner : Adr)
+    (nonce : (pre.state.get owner).nonce ≠ 0) : (post.state.get owner).nonce ≠ 0 := by
+  unfold GenericCall genericCall.step at run
+  simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at run
+  repeat' split at run
+  all_goals simp only [XStep.ofExcept, XStep.Run] at run
+  · cases run.2
+  · rename_i pushed
+    rw [Except.ok.inj run.2, ← (Devm.push_of_push pushed).state]
+    exact nonce
+  · obtain ⟨result, process, resumed⟩ := run
+    cases result with
+    | error error => exact (Resume.call_run_error resumed.symm).elim
+    | ok settled =>
+        rw [Resume.call_state resumed.symm]
+        exact ProcessMessage.nonce_ne_zero_of_body process body owner nonce
+
+/-- Covered executable instructions preserve inherited nonzero nonces. -/
+theorem Xinst.nonce_ne_zero_of_body
+    {sevm : Sevm} {pre post : Devm} {x : Xinst} {slot : Xlot}
+    (run : Xinst.Run sevm pre x slot (.ok post))
+    (fork : CoveredFork sevm.benvStat.fork) (body : Xlot.NonceNonzero slot)
+    (owner : Adr) (nonce : (pre.state.get owner).nonce ≠ 0) :
+    (post.state.get owner).nonce ≠ 0 := by
+  unfold Xinst.Run at run
+  rcases Xinst.step_shapeCovered sevm pre x fork with
+    ⟨execution, shape, frame⟩ |
+    ⟨d, endowment, newAddress, mi, ms, frame, shape⟩ |
+    ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
+      ii, isz, oi, osz, code, disablePrecompiles, frame, _, _, _, shape⟩ <;>
+    rw [shape] at run
+  · obtain ⟨_, equal⟩ := run
+    rw [← equal] at frame
+    have stateEq : pre.state = post.state := frame.state
+    rwa [← stateEq]
+  · apply GenericCreate.nonce_ne_zero_of_body run body owner
+    rwa [← frame.state]
+  · apply GenericCall.nonce_ne_zero_of_body run body owner
+    rwa [← frame.state]
+
 namespace ExecutionTrace
 
 /-- Entry transfer preserves storage at a protected observed owner. -/
