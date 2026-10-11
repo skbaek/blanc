@@ -51,6 +51,11 @@ theorem ProcessMessageTrace.allowanceRegionDelta_of_forallDeeperAt
     (hfork : CoveredFork msg.benv.stat.fork) :
     AllowanceRegionEffect ca parent post
       (trace.retained.attributionStream dp ca) := by
+  have hentrySafe : msg.shouldTransferValue = false ∨ msg.value = 0 ∨
+      State.Protected msg.benv.state ca := by
+    apply Or.inr ∘ Or.inr
+    rw [← hparent]
+    exact State.Protected.of_image (sem := (weth10 dp).codeSem) hcode
   rcases trace with ⟨slot, retained, hprocess⟩
   cases retained with
   | none =>
@@ -62,7 +67,7 @@ theorem ProcessMessageTrace.allowanceRegionDelta_of_forallDeeperAt
         · change msg.benvAfterTransfer = .ok benv at htransfer
           exact (congrArg (fun state : State => state.getStor ca)
               hparent).trans <|
-            (benvAfterTransfer_getStor_eq htransfer ca).symm.trans <|
+            (benvAfterTransfer_getStor_eq htransfer ca hentrySafe).symm.trans <|
               (congrArg (fun state : State => state.getStor ca) hpost).symm
       have hcodeEq : parent.getCode ca = post.getCode ca := by
         rcases ProcessMessage.none_ok_state_cases hprocess with
@@ -97,7 +102,7 @@ theorem ProcessMessageTrace.allowanceRegionDelta_of_forallDeeperAt
           Devm.getStor pre ca := by
         exact (congrArg (fun state : State => state.getStor ca)
             hparent).trans <|
-          (benvAfterTransfer_getStor_eq htransfer ca).symm.trans <|
+          (benvAfterTransfer_getStor_eq htransfer ca hentrySafe).symm.trans <|
             (congrArg (fun state : State => state.getStor ca)
               hpreState).symm
       have hentryCodeEq : parent.getCode ca = pre.getCode ca := by
@@ -1254,6 +1259,11 @@ theorem ProcessMessageTrace.allowanceRegionDeltaSound_of_forallDeeperAt
     (hfork : CoveredFork msg.benv.stat.fork) :
     AllowanceRegionEffectSound ca parent post
       (trace.retained.attributionStream dp ca) := by
+  have hentrySafe : msg.shouldTransferValue = false ∨ msg.value = 0 ∨
+      State.Protected msg.benv.state ca := by
+    apply Or.inr ∘ Or.inr
+    rw [← hparent]
+    exact State.Protected.of_image (sem := (weth10 dp).codeSem) hcode
   rcases trace with ⟨slot, retained, hprocess⟩
   cases retained with
   | none =>
@@ -1265,7 +1275,7 @@ theorem ProcessMessageTrace.allowanceRegionDeltaSound_of_forallDeeperAt
         · change msg.benvAfterTransfer = .ok benv at htransfer
           exact (congrArg (fun state : State => state.getStor ca)
               hparent).trans <|
-            (benvAfterTransfer_getStor_eq htransfer ca).symm.trans <|
+            (benvAfterTransfer_getStor_eq htransfer ca hentrySafe).symm.trans <|
               (congrArg (fun state : State => state.getStor ca) hpost).symm
       have hcodeEq : parent.getCode ca = post.getCode ca := by
         rcases ProcessMessage.none_ok_state_cases hprocess with
@@ -1300,7 +1310,7 @@ theorem ProcessMessageTrace.allowanceRegionDeltaSound_of_forallDeeperAt
           Devm.getStor pre ca := by
         exact (congrArg (fun state : State => state.getStor ca)
             hparent).trans <|
-          (benvAfterTransfer_getStor_eq htransfer ca).symm.trans <|
+          (benvAfterTransfer_getStor_eq htransfer ca hentrySafe).symm.trans <|
             (congrArg (fun state : State => state.getStor ca)
               hpreState).symm
       have hentryCodeEq : parent.getCode ca = pre.getCode ca := by

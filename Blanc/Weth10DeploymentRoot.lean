@@ -380,11 +380,9 @@ theorem prepareCanonicalDeploymentContext
     dsimp only [debit]
     change (((begun.state.incrNonce sender).setBal sender _).get sender).nonce =
       base.state.getNonce sender + 1
-    rw [State.setBal_get_self]
-    change ((begun.state.incrNonce sender).get sender).nonce =
-      base.state.getNonce sender + 1
+    rw [State.setBal_get_nonce]
     unfold State.incrNonce
-    rw [State.get_set_self]
+    rw [State.setAccount_get_self, Acct.clearIfEmpty_nonce]
     change begun.state.getNonce sender + 1 = base.state.getNonce sender + 1
     rw [hbegun_state]
   have htarget : msg.currentTarget = ca := by
@@ -417,7 +415,7 @@ theorem prepareCanonicalDeploymentContext
     dsimp only [debit]
     rw [State.setBal_get_ne hbase.sender_ne_target]
     unfold State.incrNonce
-    rw [State.get_set_ne _ hbase.sender_ne_target]
+    rw [State.setAccount_get_ne _ hbase.sender_ne_target]
     rw [hbegun_state]
   have hnocode : accountHasCodeOrNonce msg.benv.state ca = false := by
     dsimp only [msg, msgBenv]
@@ -791,10 +789,14 @@ theorem canonicalDeploymentTransaction_succeeds
     rw [State.addBal_getCode, State.addBal_getCode]
     exact hmessage.installed
   have hstor : post.getStor ca = Stor.empty := by
+    have hp : State.Protected messagePost ca :=
+      State.Protected.of_image
+        (sem := (weth10 (freshDeployParams cfg.chainId.toB256 ca)).codeSem)
+        hmessage.installed
     dsimp only [post, deploymentFinalState, Blanc.deploymentFinalState]
-    unfold State.addBal
-    unfold State.getStor
-    rw [State.setBal_get_stor, State.setBal_get_stor]
+    unfold State.addBal State.getStor
+    rw [State.setBal_get_stor_of_protected (hp.setBal sender _),
+      State.setBal_get_stor_of_protected hp]
     exact hmessage.emptyStorage
   have hblockLogs : bout.blockLogs = [] := by
     dsimp only [bout, deploymentFinalBout, Blanc.deploymentFinalBout]
@@ -1009,12 +1011,14 @@ theorem canonicalDeploymentApplyBody_succeeds
           (initBenv fork base cb.block.header).stat.rules 0
           (initBenv fork base cb.block.header).state ctx.systemPrefix.stBeacon
           (beaconRootsAddress :: ctx.systemPrefix.outBeacon.accountReads.toList)
-          ctx.systemPrefix.outBeacon.storageReads.toList).incorporateSystem
+          ctx.systemPrefix.outBeacon.storageReads.toList
+          ctx.systemPrefix.outBeacon.storageWrites.toList).incorporateSystem
         (initBenv fork base cb.block.header).stat.rules 0
         ((initBenv fork base cb.block.header).withState ctx.systemPrefix.stBeacon).state
         ctx.systemPrefix.stHistory
         (historyStorageAddress :: ctx.systemPrefix.outHistory.accountReads.toList)
-        ctx.systemPrefix.outHistory.storageReads.toList = (BlockOutput.init : BlockOutput).bal := by
+        ctx.systemPrefix.outHistory.storageReads.toList
+        ctx.systemPrefix.outHistory.storageWrites.toList = (BlockOutput.init : BlockOutput).bal := by
     simp only [BalBuilder.incorporateSystem, hbalNone, Std.TreeMap.empty_eq_emptyc]
     change ({} : BalBuilder) = ({} : BalBuilder)
     rfl

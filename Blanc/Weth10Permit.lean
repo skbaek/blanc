@@ -810,7 +810,8 @@ theorem gasEcrecover_le_of_processMessage_clean
       change true = false at hclean
       contradiction
     · exact False.elim (hinterp.1 (by
-        obtain ⟨st_mid, hsub, hbenv⟩ := of_benvAfterTransfer rfl hbt
+        have hbenv := benvAfterTransfer_eq_of_not_transfer
+          (by intro h; exact h.2 rfl) hbt
         subst benv
         exact hpre))
 
@@ -858,7 +859,8 @@ theorem output_of_processMessage_permitEcrecover_clean
       subst child
       rfl
     · exact False.elim (hinterp.1 (by
-        obtain ⟨st_mid, hsub, hbenv⟩ := of_benvAfterTransfer rfl hbt
+        have hbenv := benvAfterTransfer_eq_of_not_transfer
+          (by intro h; exact h.2 rfl) hbt
         subst benv
         exact hpre))
 
@@ -936,16 +938,15 @@ theorem output_nil_of_processMessage_permitEcrecover_error
         subst child
         rfl
     · exact False.elim (hinterp.1 (by
-        obtain ⟨st_mid, hsub, hbenv⟩ := of_benvAfterTransfer rfl hbt
+        have hbenv := benvAfterTransfer_eq_of_not_transfer
+          (by intro h; exact h.2 rfl) hbt
         subst benv
         exact hpre))
 
 /-- A clean enabled ECRECOVER child changes neither persistent storage nor
 logs.  Together with the exact output theorem above, this is the frame image
-that the caller-side `STATICCALL` resume consumes.  Balance-transfer
-preparation is deliberately projected only through storage: a zero-value
-transfer can normalize a noncanonical account map, but cannot change any
-account's storage. -/
+that the caller-side `STATICCALL` resume consumes. Zero-value message entry
+preserves the complete block environment. -/
 theorem frame_of_processMessage_permitEcrecover_clean
     {sevm : Sevm} {parent child : Devm} {gas : Nat} {code : ByteArray}
     {xl : Xlot} {digest : B256} {v : UInt8} {sigR sigS : B256}
@@ -972,14 +973,14 @@ theorem frame_of_processMessage_permitEcrecover_clean
   · rw [hbody.2] at hset
     unfold processMessage.settle at hset
     cases hset
-  · obtain ⟨st_mid, hsub, hbenv⟩ := of_benvAfterTransfer rfl hbt
+  · have hbenv := benvAfterTransfer_eq_of_not_transfer
+      (by intro h; exact h.2 rfl) hbt
     subst benv
     have hca :
         ((callMsg sevm parent gas 0 sevm.currentTarget 1 1 true true
           (permitEcrecoverImage digest v sigR sigS) code false).withBenv
-          (((callMsg sevm parent gas 0 sevm.currentTarget 1 1 true true
-            (permitEcrecoverImage digest v sigR sigS) code false).benv.withState
-            st_mid).addBal 1 0)).codeAddress = some 1 := rfl
+          (callMsg sevm parent gas 0 sevm.currentTarget 1 1 true true
+            (permitEcrecoverImage digest v sigR sigS) code false).benv).codeAddress = some 1 := rfl
     rcases of_executeCode_someCode hca hbody with hpc | hinterp
     · have hexec := hpc.2.2
       rw [executePrecomp_one_permitImage (by rfl) (by
@@ -1006,8 +1007,7 @@ theorem frame_of_processMessage_permitEcrecover_clean
         rw [callMsg_stat]; exact hfork.rules_stateGas_none
       refine ⟨?_, ?_, hout⟩
       · intro a
-        change ((st_mid.addBal 1 0).get a).stor = (parent.state.get a).stor
-        exact (of_state_transfer_fields hsub).1 a
+        rfl
       · change (match (callMsg sevm parent gas 0 sevm.currentTarget 1 1 true true
             (permitEcrecoverImage digest v sigR sigS) code false).benv.stat.rules.stateGas with
           | none => []

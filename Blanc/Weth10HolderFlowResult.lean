@@ -1,3 +1,4 @@
+import Blanc.ExecutionAccountingAdmission
 import Blanc.Weth10HolderFlowEthExec
 import Blanc.Weth10HolderFlowExecAccounting
 import Blanc.Weth10HolderFlowSelectorFacts
@@ -83,49 +84,6 @@ theorem StateStorageFlowAccounting.of_getStor_eq
   constructor <;>
     simp only [h, holderFlowOfActions, HolderFlow.zero, List.foldl_nil, add_zero, holderCreditLossOfActions, List.map_nil, List.sum_nil, implies_true, supplyFlowOfActions, SupplyFlow.zero, creditLossOfActions]
 
-private theorem state_setBal_getStor_eq
-    (state : State) (address : Adr) (value : B256) :
-    (state.setBal address value).getStor = state.getStor := by
-  funext target
-  by_cases h : address = target
-  · subst target
-    unfold State.setBal State.getStor
-    rw [State.get_set_self]
-    rfl
-  · exact congrArg Acct.stor (State.get_set_ne state h _)
-
-private theorem state_incrNonce_getStor_eq
-    (state : State) (address : Adr) :
-    (state.incrNonce address).getStor = state.getStor := by
-  funext target
-  by_cases h : address = target
-  · subst target
-    unfold State.incrNonce State.getStor
-    rw [State.get_set_self]
-  · exact congrArg Acct.stor (State.get_set_ne state h _)
-
-private theorem state_setCode_getStor_eq
-    (state : State) (address : Adr) (code : ByteArray) :
-    (state.setCode address code).getStor = state.getStor := by
-  funext target
-  by_cases h : address = target
-  · subst target
-    unfold State.setCode State.getStor
-    rw [State.get_set_self]
-  · exact congrArg Acct.stor (State.get_set_ne state h _)
-
-private theorem state_addBal_getStor_eq
-    (state : State) (address : Adr) (value : B256) :
-    (state.addBal address value).getStor = state.getStor := by
-  unfold State.addBal
-  exact state_setBal_getStor_eq state address _
-
-theorem benvAfterTransfer_state_getStor_eq
-    {msg : Msg} {benv : Benv}
-    (h : msg.benvAfterTransfer = .ok benv) :
-    benv.state.getStor = msg.benv.state.getStor :=
-  funext (benvAfterTransfer_ok_getStor h)
-
 /-! ## Settled message boundary -/
 
 /-- The exact raw-execution obligation consumed by the settlement lift. -/
@@ -196,7 +154,9 @@ theorem CompiledBodyStorageHandler.committedExecStorageSound
       msg.benv.state.getStor ca =
         (initDevm (msg.withBenv benv)).state.getStor ca := by
     change msg.benv.state.getStor ca = benv.state.getStor ca
-    exact (congrFun (benvAfterTransfer_state_getStor_eq htransfer) ca).symm
+    exact (benvAfterTransfer_getStor_eq htransfer ca (Or.inr (Or.inr
+      (State.Protected.of_image (sem := (weth10 dp).codeSem)
+        runReady.ready.backed.state.code)))).symm
   exact (StateStorageFlowAccounting.of_getStor_eq hentryStor).append hbody
 
 /-- Storage accounting attached to the exact settled message trace. -/
@@ -225,7 +185,9 @@ theorem ProcessMessage.storageAccounting_of_none
     exact StateStorageFlowAccounting.refl ca msg.benv.state
   · apply StateStorageFlowAccounting.of_getStor_eq
     rw [hpost]
-    exact (congrFun (benvAfterTransfer_state_getStor_eq htransfer) ca).symm
+    exact (benvAfterTransfer_getStor_eq htransfer ca (Or.inr (Or.inr
+      (State.Protected.of_image (sem := (weth10 dp).codeSem)
+        _ready.backed.state.code)))).symm
 
 theorem ProcessMessage.storageAccounting_of_committedExecSound
     {dp : DeployParams} {ca : Adr}
@@ -274,56 +236,9 @@ theorem ProcessCreateMessage.ok_getStor_eq_inner_of_no_error
     ∃ inner : Devm,
       ProcessMessage (processCreateMessage.msg msg) slot (.ok inner) ∧
       post.state.getStor ca = inner.state.getStor ca := by
-  rcases ProcessCreateMessage.iff_processMessage.mp hprocess with
-    ⟨result, hinner, hsettle⟩
-  cases result with
-  | error error =>
-      simp only [processCreateMessage.settle, Option.isNone_iff_eq_none, ExceptT.stM_eq,
-        Except.bind_error, reduceCtorEq] at hsettle
-  | ok inner =>
-      unfold processCreateMessage.settle at hsettle
-      simp only [bind, Except.bind] at hsettle
-      by_cases hinnerNone : inner.error.isNone = true
-      · rw [if_pos hinnerNone] at hsettle
-        cases hcharge :
-          processCreateMessage.chargeCodeGas
-            msg.benv.stat.rules inner with
-        | error error =>
-            rw [hcharge] at hsettle
-            rcases error with ⟨error, charged⟩
-            cases error with
-            | halt reason =>
-                have heq := Except.ok.inj hsettle
-                rw [heq] at herror
-                split at herror <;>
-                  simp only [Devm.error, processCreateMessage.exceptionalHalt, Devm.setMeta, Option.isSome_some, Bool.true_eq_false, processCreateMessage.exceptionalHaltAmsterdam] at herror
-            | revert => cases hsettle
-            | crypto reason => cases hsettle
-            | internal reason => cases hsettle
-        | ok charged =>
-            rw [hcharge] at hsettle
-            have heq := Except.ok.inj hsettle
-            refine ⟨inner, hinner, ?_⟩
-            calc
-              post.state.getStor ca =
-                  (charged.setCode msg.currentTarget
-                    ⟨⟨charged.output⟩⟩).state.getStor ca :=
-                congrArg (fun d : Devm => d.state.getStor ca) heq
-              _ = charged.state.getStor ca := by
-                simpa only [Devm.state, Devm.setCode, Devm.withState, Devm.setWorld] using
-                  congrFun
-                    (state_setCode_getStor_eq charged.state msg.currentTarget ⟨⟨charged.output⟩⟩) ca
-              _ = inner.state.getStor ca := by
-                rw [chargeCodeGas_state_ok hcharge]
-      · rw [if_neg hinnerNone] at hsettle
-        have heq := Except.ok.inj hsettle
-        rw [heq] at herror
-        simp only [Devm.error, Devm.rollback, Devm.setWorld, Option.isSome_eq_false_iff,
-          Option.isNone_iff_eq_none] at herror
-        apply False.elim
-        apply hinnerNone
-        rw [show inner.error = none from herror]
-        rfl
+  rcases ProcessCreateMessage.ok_getStorCode_eq_inner_of_clean hprocess herror
+      _htargetNe with ⟨inner, hinner, hstor, _⟩
+  exact ⟨inner, hinner, hstor⟩
 
 theorem ProcessCreateMessageTrace.storageAccounting_of_committedExecSound
     {dp : DeployParams} {ca : Adr} {msg : Msg} {post : Devm}
@@ -365,88 +280,6 @@ theorem ProcessCreateMessageTrace.storageAccounting_of_committedExecSound
       · intro u
         simpa only [hpost, hpre] using haccounting.holderEquation u
       · simpa only [hpost, hpre] using haccounting.supplyEquation
-
-lemma setDelegationStep_getStor_eq
-    {auth : Auth} {msg msg' : Msg} {rc rc' : B256}
-    (h : setDelegationStep auth msg rc = .ok ⟨msg', rc'⟩) :
-    msg'.benv.state.getStor = msg.benv.state.getStor := by
-  unfold setDelegationStep at h
-  dsimp only at h
-  split at h
-  · simp only [Except.ok.injEq, Prod.mk.injEq] at h
-    rcases h with ⟨rfl, _⟩
-    rfl
-  · split at h
-    · simp only [Except.ok.injEq, Prod.mk.injEq] at h
-      rcases h with ⟨rfl, _⟩
-      rfl
-    · split at h
-      · simp only [Except.ok.injEq, Prod.mk.injEq] at h
-        rcases h with ⟨rfl, _⟩
-        rfl
-      · cases h
-      · split at h
-        · simp only [Except.ok.injEq, Prod.mk.injEq] at h
-          rcases h with ⟨rfl, _⟩
-          rfl
-        · split at h
-          · simp only [Except.ok.injEq, Prod.mk.injEq] at h
-            rcases h with ⟨rfl, _⟩
-            rfl
-          · simp only [Except.ok.injEq, Prod.mk.injEq] at h
-            rcases h with ⟨rfl, _⟩
-            simp only [Msg.incrNonce, Msg.setCode]
-            exact (state_incrNonce_getStor_eq _ _).trans
-              (state_setCode_getStor_eq _ _ _)
-
-lemma setDelegationLoop_getStor_eq
-    {auths : List Auth} {msg msg' : Msg} {rc rc' : B256}
-    (h : setDelegationLoop auths msg rc = .ok ⟨msg', rc'⟩) :
-    msg'.benv.state.getStor = msg.benv.state.getStor := by
-  induction auths generalizing msg rc with
-  | nil =>
-      unfold setDelegationLoop at h
-      simp only [Except.ok.injEq, Prod.mk.injEq] at h
-      rcases h with ⟨rfl, _⟩
-      rfl
-  | cons auth auths ih =>
-      unfold setDelegationLoop at h
-      simp only [bind, Except.bind] at h
-      split at h
-      · cases h
-      · rename_i p hstep
-        obtain ⟨msgStep, rcStep⟩ := p
-        exact (ih h).trans (setDelegationStep_getStor_eq hstep)
-
-lemma setDelegation_getStor_eq
-    {msg delegated : Msg} {refund : B256}
-    (h : setDelegation msg = .ok ⟨delegated, refund⟩) :
-    delegated.benv.state.getStor = msg.benv.state.getStor := by
-  unfold setDelegation at h
-  rcases Except.bind_eq_ok h with
-    ⟨⟨loopMsg, loopRefund⟩, hloop, hrest⟩
-  have hstor := setDelegationLoop_getStor_eq hloop
-  cases hcode : loopMsg.codeAddress with
-  | none => simp only [hcode, Except.bind_error, reduceCtorEq] at hrest
-  | some address =>
-      simp only [hcode, Except.bind_ok, Except.ok.injEq, Prod.mk.injEq] at hrest
-      rcases hrest with ⟨rfl, rfl⟩
-      exact hstor
-
-theorem messageCallDelegation_getStor_eq
-    {msg delegated : Msg} {refund : Nat}
-    (hrun : messageCallDelegation msg = .ok ⟨delegated, refund⟩) :
-    delegated.benv.state.getStor = msg.benv.state.getStor := by
-  unfold messageCallDelegation at hrun
-  split at hrun
-  · simp only [Except.ok.injEq, Prod.mk.injEq] at hrun
-    rcases hrun with ⟨rfl, rfl⟩
-    rfl
-  · rcases Except.bind_eq_ok hrun with
-      ⟨⟨delegated', refundWord⟩, hset, hrest⟩
-    simp only [Except.ok.injEq, Prod.mk.injEq] at hrest
-    rcases hrest with ⟨rfl, rfl⟩
-    exact setDelegation_getStor_eq hset
 
 /-- The concrete committed-execution theorem discharges collision, delegation,
 precompile/no-code, create-settlement, and ordinary call wrappers. -/
@@ -501,15 +334,17 @@ theorem CommittedExecStorageSound.messageStorageSound
       have hstate := processMessageCall_callRun_state_eq
         htarget hdelegation hexecMsg hcore hresult hsg
       have hpre :
-          execMsg.benv.state.getStor = msg.benv.state.getStor := by
-        rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_getStor_eq,
-          messageCallDelegation_getStor_eq hdelegation]
+          execMsg.benv.state.getStor ca = msg.benv.state.getStor ca := by
+        rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_getStor_eq]
+        exact ExecutionTrace.messageCallDelegation_getStor_eq hdelegation ca
+          ((weth10 dp).codeSem.ne_nil ready.backed.state.code.symm)
+          (not_delegation_of_compile ready.backed.state.code)
       change StateStorageFlowAccounting ca msg.benv.state state
         (trace.retained.flowActions dp ca)
       constructor
       · intro u
-        simpa only [← congrFun hpre ca, hstate] using haccounting.holderEquation u
-      · simpa only [← congrFun hpre ca, hstate] using haccounting.supplyEquation
+        simpa only [← hpre, hstate] using haccounting.holderEquation u
+      · simpa only [← hpre, hstate] using haccounting.supplyEquation
 
 /-! ## Transaction-envelope storage identities -/
 
@@ -518,10 +353,8 @@ theorem TransactionTrace.debitState_getStor_eq
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout') :
     trace.debitState.getStor = benv.state.getStor := by
-  rcases State.of_subBal trace.debit with ⟨_, hdebit⟩
-  rw [hdebit]
-  exact (state_setBal_getStor_eq _ _ _).trans
-    (state_incrNonce_getStor_eq _ _)
+  funext owner
+  exact ExecutionTrace.TransactionTrace.debitState_getStor_eq (ca := owner) trace
 
 theorem TransactionTrace.messagePre_getStor_eq
     {ca : Adr}
@@ -603,9 +436,20 @@ theorem TransactionTrace.postMessage_getStor_eq
   have hdelete := trace.accountsToDelete_ne_ca hstable hnotCreated hfork
   have hstateStor := congrArg (fun world : State => world.getStor ca) hstate
   rw [foldl_destroyAccount_getStor_eq hdelete] at hstateStor
-  exact hstateStor.trans
-    ((congrFun (state_addBal_getStor_eq _ _ _) ca).trans
-      (congrFun (state_addBal_getStor_eq _ _ _) ca))
+  have hmsgFork : CoveredFork trace.msg.benv.stat.fork := by
+    rw [prepareMessage_benv trace.prepared]
+    exact hfork
+  have hmessageInv := ContractSpec.processMessageCall_preserves_inv hmsgFork
+    (backedSpec_preserves dp ca) trace.message.result
+    (trace.message_ready hstable hnotCreated).backed
+  have hp : State.Protected trace.messageState ca :=
+    State.Protected.of_image (sem := (weth10 dp).codeSem) hmessageInv.1.code
+  apply hstateStor.trans
+  change (((trace.messageState.setBal trace.sender _).setBal
+    benv.stat.coinbase _).get ca).stor = _
+  rw [State.setBal_get_stor_of_protected (hp.setBal _ _),
+    State.setBal_get_stor_of_protected hp]
+  rfl
 
 theorem TransactionTrace.storageAccounting
     {dp : DeployParams} {ca : Adr}
@@ -669,21 +513,6 @@ theorem SystemMessageTrace.storageAccounting
   unfold MessageCallTrace.StorageAccounted at hmsg
   simpa only [flowActions, systemTransactionMessage, processSystemTransactionMsg,
     Benv.beginTransaction, Lean.Elab.WF.paramLet] using hmsg
-
-theorem processWithdrawalsState_getStor_eq
-    (ca : Adr) (state : State) (withdrawals : List Withdrawal) :
-    (processWithdrawalsState state withdrawals).getStor ca =
-      state.getStor ca := by
-  induction withdrawals generalizing state with
-  | nil => rfl
-  | cons withdrawal withdrawals ih =>
-      change
-        (processWithdrawalsState
-          (state.addBal withdrawal.recipient
-            (withdrawal.amount * Nat.toB256 (10 ^ 9)))
-          withdrawals).getStor ca = state.getStor ca
-      rw [ih]
-      exact congrFun (state_addBal_getStor_eq _ _ _) ca
 
 theorem RequestsTrace.storageAccounting
     {dp : DeployParams} {ca : Adr}
@@ -767,7 +596,9 @@ theorem AppliedBodyTrace.storageAccounting
       StateStorageFlowAccounting ca trace.transactionBenv.state
         (processWithdrawalsState trace.transactionBenv.state wds) [] :=
     StateStorageFlowAccounting.of_getStor_eq
-      (processWithdrawalsState_getStor_eq ca _ _).symm
+      (ExecutionTrace.processWithdrawalsState_getStor_eq ca _ _
+        (State.Protected.of_image (sem := (weth10 dp).codeSem)
+          htransactionsStable.code)).symm
   have htransactionFork : CoveredFork trace.transactionBenv.stat.fork := by
     rw [ExecutionTrace.ApplyTransactionsTrace.stat_eq trace.transactions]
     exact hfork

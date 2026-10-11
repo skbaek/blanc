@@ -485,7 +485,8 @@ private theorem processMessage_weth10_checkpoint
     processCreateMessage_msg_getStor_currentTarget msg
   have h_benv_stor :
       benv.state.getStor msg.currentTarget = Stor.empty := by
-    rw [benvAfterTransfer_ok_getStor h_transfer, h_prepared_stor]
+    rw [benvAfterTransfer_ok_getStor h_transfer msg.currentTarget
+      (Or.inl (show prepared.value = 0 from h_value)), h_prepared_stor]
   refine ⟨initPost, {
     process := h_pm
     output := h_output
@@ -587,24 +588,28 @@ private theorem weth10InstalledPost_certificate
       post.error = .none ∧
       post.refundCounter = 0 ∧
       post.accountsToDelete = .emptyWithCapacity := by
+  have h_code_nonempty : (⟨⟨charged.output⟩⟩ : ByteArray).size ≠ 0 := by
+    change charged.output.length ≠ 0
+    rw [h_output, weth10Code_length]
+    omega
   refine ⟨charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩,
     h_process, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · unfold Devm.getCode Devm.getAcct
     rw [Devm.setCode_state]
     unfold State.setCode
-    rw [State.get_set_self]
+    rw [State.setAccount_get_self, Acct.clearIfEmpty_code]
     simp only [h_output]
   · rw [Devm.setCode_state]
     change
       ((charged.state.setCode msg.currentTarget
         ⟨⟨charged.output⟩⟩).get msg.currentTarget).stor = Stor.empty
-    rw [State.setCode_get_stor]
+    rw [State.setCode_get_stor h_code_nonempty]
     exact h_stor
   · rw [Devm.setCode_state]
     change Stor.Weth10Inv
       ((charged.state.setCode msg.currentTarget
         ⟨⟨charged.output⟩⟩).get msg.currentTarget).stor 0 0
-    rw [State.setCode_get_stor]
+    rw [State.setCode_get_stor h_code_nonempty]
     change Stor.Weth10Inv
       (charged.state.getStor msg.currentTarget) 0 0
     rw [h_stor]

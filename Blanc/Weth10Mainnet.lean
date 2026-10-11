@@ -116,9 +116,11 @@ theorem mainnet_checkTransactionGasCap_of_le
     (hrules : mainnetChainConfig.rulesAt timestamp = .ok rules)
     (hgas : gas ≤ 2 ^ 24) :
     checkTransactionGasCap rules.tx gas = .ok () := by
-  rcases mainnet_rulesAt_eq_named hrules with h | h | h | h <;> subst h <;>
-    simp only [checkTransactionGasCap, pragueRules, pragueTransactionLimits, osakaRules, osakaTransactionLimits, gt_iff_lt, Nat.toString_eq_repr, ite_eq_right_iff, reduceCtorEq, imp_false, not_lt, bpo1Rules, bpo2Rules] <;>
-    omega
+  rcases mainnet_rulesAt_eq_named hrules with h | h | h | h <;> subst h
+  · rfl
+  all_goals
+    change (if gas > 16777216 then _ else .ok () : Except TxValidationError Unit) = .ok ()
+    exact ite_eq_right (Nat.not_lt.mpr hgas)
 
 /-! ## BPO2 deployment root -/
 
