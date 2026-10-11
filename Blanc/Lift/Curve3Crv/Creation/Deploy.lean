@@ -222,7 +222,8 @@ theorem curve_create (msg : Msg) (hvalue : msg.value = 0)
   have fr : CtorFrame sevm := ⟨by rw [hstat]; exact hfork, hstatic⟩
   have hempty : Devm.getStor b sevm.currentTarget = Stor.empty := by
     show benv.state.getStor msg.currentTarget = _
-    rw [benvAfterTransfer_ok_getStor htransfer, processCreateMessage_msg_getStor_currentTarget]
+    rw [benvAfterTransfer_ok_getStor htransfer msg.currentTarget (Or.inl hvalue),
+      processCreateMessage_msg_getStor_currentTarget]
   have hle := ctorCost_le sevm b
   obtain ⟨raw, hrun, hout, herr, hst, hgasLeft⟩ :=
     ctor_run_facts fr hcode hvalue hdata (b := b) (G := msg.gas - ctorCost sevm b) (by omega)
@@ -240,7 +241,12 @@ theorem curve_create (msg : Msg) (hvalue : msg.value = 0)
     (by rw [hlen, hgasLeft]; unfold gasCodeDeposit; omega)
     (by rw [hlen]; exact hmax)
   refine ⟨post, hpost, hcodePost.trans hwin, ?_⟩
-  rw [hstorPost]
+  have hnonempty : ¬ ({ raw.state.get msg.currentTarget with
+      code := ⟨⟨raw.output⟩⟩ } : Acct).Empty := by
+    intro empty
+    have zero : raw.output.length = 0 := empty.1
+    omega
+  simp only [hstorPost, Acct.clearIfEmpty_stor, hnonempty, ↓reduceIte]
   show Devm.getStor raw sevm.currentTarget = _
   rw [hst]
   exact ctor_stor sevm b hempty
