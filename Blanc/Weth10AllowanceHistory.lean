@@ -139,7 +139,9 @@ theorem CompiledBodyAllowanceHandler.committedExecAllowanceSound
       msg.benv.state.getStor ca =
         (initDevm (msg.withBenv benv)).state.getStor ca := by
     change msg.benv.state.getStor ca = benv.state.getStor ca
-    exact (congrFun (benvAfterTransfer_state_getStor_eq htransfer) ca).symm
+    exact (benvAfterTransfer_getStor_eq htransfer ca (Or.inr (Or.inr
+      (State.Protected.of_image (sem := (weth10 dp).codeSem)
+        runReady.ready.backed.state.code)))).symm
   exact (AllowanceTransported.of_getStor_eq hentryStor).append hbody
 
 /-- Allowance transport attached to the exact settled message trace. -/
@@ -168,7 +170,9 @@ theorem ProcessMessage.allowanceTransported_of_none
     exact AllowanceTransported.refl ca msg.benv.state
   · apply AllowanceTransported.of_getStor_eq
     rw [hpost]
-    exact (congrFun (benvAfterTransfer_state_getStor_eq htransfer) ca).symm
+    exact (benvAfterTransfer_getStor_eq htransfer ca (Or.inr (Or.inr
+      (State.Protected.of_image (sem := (weth10 dp).codeSem)
+        _ready.backed.state.code)))).symm
 
 theorem ProcessMessage.allowanceTransported_of_committedExecSound
     {dp : DeployParams} {ca : Adr}
@@ -303,14 +307,16 @@ theorem CommittedExecAllowanceSound.messageAllowanceSound
       have hstate := processMessageCall_callRun_state_eq
         htarget hdelegation hexecMsg hcore hresult hsg
       have hpre :
-          execMsg.benv.state.getStor = msg.benv.state.getStor := by
-        rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_getStor_eq,
-          messageCallDelegation_getStor_eq hdelegation]
+          execMsg.benv.state.getStor ca = msg.benv.state.getStor ca := by
+        rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_getStor_eq]
+        exact ExecutionTrace.messageCallDelegation_getStor_eq hdelegation ca
+          ((weth10 dp).codeSem.ne_nil ready.backed.state.code.symm)
+          (not_delegation_of_compile ready.backed.state.code)
       change AllowanceTransported ca msg.benv.state state
         (trace.retained.attributionStream dp ca)
       intro key hregion
       have h := htransport key hregion
-      rw [congrFun hpre ca] at h
+      rw [hpre] at h
       rw [hstate]
       exact h
 
@@ -460,7 +466,9 @@ theorem AppliedBodyTrace.allowanceTransported
       AllowanceTransported ca trace.transactionBenv.state
         (processWithdrawalsState trace.transactionBenv.state wds) [] :=
     AllowanceTransported.of_getStor_eq
-      (processWithdrawalsState_getStor_eq ca _ _).symm
+      (ExecutionTrace.processWithdrawalsState_getStor_eq ca _ _
+        (State.Protected.of_image (sem := (weth10 dp).codeSem)
+          htransactionsStable.code)).symm
   have htransactionFork : CoveredFork trace.transactionBenv.stat.fork := by
     rw [ExecutionTrace.ApplyTransactionsTrace.stat_eq trace.transactions]
     exact hfork
@@ -651,7 +659,9 @@ theorem CompiledBodyAllowanceReadHandler.committedExecAllowanceReadSound
       msg.benv.state.getStor ca =
         (initDevm (msg.withBenv benv)).state.getStor ca := by
     change msg.benv.state.getStor ca = benv.state.getStor ca
-    exact (congrFun (benvAfterTransfer_state_getStor_eq htransfer) ca).symm
+    exact (benvAfterTransfer_getStor_eq htransfer ca (Or.inr (Or.inr
+      (State.Protected.of_image (sem := (weth10 dp).codeSem)
+        runReady.ready.backed.state.code)))).symm
   exact (AllowanceTransportedSound.of_getStor_eq hentryStor).append hbody
 
 /-- Allowance transport attached to the exact settled message trace. -/
@@ -680,7 +690,9 @@ theorem ProcessMessage.allowanceTransportedSound_of_none
     exact AllowanceTransportedSound.refl ca msg.benv.state
   · apply AllowanceTransportedSound.of_getStor_eq
     rw [hpost]
-    exact (congrFun (benvAfterTransfer_state_getStor_eq htransfer) ca).symm
+    exact (benvAfterTransfer_getStor_eq htransfer ca (Or.inr (Or.inr
+      (State.Protected.of_image (sem := (weth10 dp).codeSem)
+        _ready.backed.state.code)))).symm
 
 theorem ProcessMessage.allowanceTransportedSound_of_committedExecSound
     {dp : DeployParams} {ca : Adr}
@@ -821,18 +833,20 @@ theorem CommittedExecAllowanceReadSound.messageAllowanceReadSound
       have hstate := processMessageCall_callRun_state_eq
         htarget hdelegation hexecMsg hcore hresult hsg
       have hpre :
-          execMsg.benv.state.getStor = msg.benv.state.getStor := by
-        rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_getStor_eq,
-          messageCallDelegation_getStor_eq hdelegation]
+          execMsg.benv.state.getStor ca = msg.benv.state.getStor ca := by
+        rw [hexecMsg, ExecutionTrace.messageCallExecutionMessage_getStor_eq]
+        exact ExecutionTrace.messageCallDelegation_getStor_eq hdelegation ca
+          ((weth10 dp).codeSem.ne_nil ready.backed.state.code.symm)
+          (not_delegation_of_compile ready.backed.state.code)
       change AllowanceTransportedSound ca msg.benv.state state
         (trace.retained.attributionStream dp ca)
       refine ⟨fun key hregion => ?_, ?_⟩
       · have h := htransport.1 key hregion
-        rw [congrFun hpre ca] at h
+        rw [hpre] at h
         rw [hstate]
         exact h
       · have hread := htransport.2
-        rw [congrFun hpre ca] at hread
+        rw [hpre] at hread
         exact hread
 
 /-! ## Transaction and block envelopes -/
@@ -985,7 +999,9 @@ theorem AppliedBodyTrace.allowanceTransportedSound
       AllowanceTransportedSound ca trace.transactionBenv.state
         (processWithdrawalsState trace.transactionBenv.state wds) [] :=
     AllowanceTransportedSound.of_getStor_eq
-      (processWithdrawalsState_getStor_eq ca _ _).symm
+      (ExecutionTrace.processWithdrawalsState_getStor_eq ca _ _
+        (State.Protected.of_image (sem := (weth10 dp).codeSem)
+          htransactionsStable.code)).symm
   have htransactionFork : CoveredFork trace.transactionBenv.stat.fork := by
     rw [ExecutionTrace.ApplyTransactionsTrace.stat_eq trace.transactions]
     exact hfork
