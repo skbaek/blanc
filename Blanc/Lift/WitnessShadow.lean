@@ -4,8 +4,9 @@ import Blanc.Lift.WitnessArms
 
 The witness engine (`Blanc/Lift/WitnessArms.lean`) keeps the world as list shadows, newest
 first: storage writes (`StorShadow`, read by `lookupS`) and account views (`AcctShadow`, read by
-`lookupA`). A run's final shadow is its start shadow with the run's entries prepended. These
-lemmas read such a shadow without enumerating addresses or keys: a prefix that only restates the
+`lookupA`). When a final shadow has an explicit prefix-and-start representation, these
+lemmas read it without enumerating addresses or keys. Account normalization can filter
+entries from a storage shadow, so an arbitrary run need not have that representation: a prefix that only restates the
 start's views changes no account; a prefix that writes elsewhere leaves another address's
 storage; a start that holds nothing at an address leaves the prefix's values there. -/
 

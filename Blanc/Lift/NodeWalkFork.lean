@@ -212,11 +212,19 @@ theorem callPrepP_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork 
 theorem benvAfterTransferS_withFork (m : Msg) (g : Fork) (acs : AcctShadow) :
     benvAfterTransferS (m.withFork g) acs = (benvAfterTransferS m acs).map (·.withFork g) := by
   unfold benvAfterTransferS
-  simp only [Msg.withFork_shouldTransferValue, Msg.withFork_caller, Msg.withFork_value,
-    Msg.withFork_currentTarget, Msg.withFork_benv_state]
-  by_cases h : m.shouldTransferValue = true <;> simp only [h, ↓reduceIte, Bool.false_eq_true]
-  · by_cases hb : (lookupA acs m.caller).bal < m.value <;> simp only [hb, ↓reduceIte] <;> rfl
-  · rfl
+  by_cases h : m.shouldTransferValue ∧ m.value ≠ 0
+  · have h' : (m.withFork g).shouldTransferValue ∧ (m.withFork g).value ≠ 0 := h
+    rw [ite_eq_left h, ite_eq_left h']
+    by_cases hb : (lookupA acs m.caller).bal < m.value
+    · have hb' : (lookupA acs (m.withFork g).caller).bal < (m.withFork g).value := hb
+      rw [ite_eq_left hb, ite_eq_left hb']
+      rfl
+    · have hb' : ¬ (lookupA acs (m.withFork g).caller).bal < (m.withFork g).value := hb
+      rw [ite_eq_right hb, ite_eq_right hb']
+      rfl
+  · have h' : ¬ ((m.withFork g).shouldTransferValue ∧ (m.withFork g).value ≠ 0) := h
+    rw [ite_eq_right h, ite_eq_right h']
+    rfl
 
 theorem benvAfterTransferS_stat {m : Msg} {acs : AcctShadow} {b : Benv}
     (h : benvAfterTransferS m acs = .ok b) : b.stat = m.benv.stat := by
