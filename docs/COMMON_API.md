@@ -1269,9 +1269,17 @@ target frames interleaved with each foreign frame's successful `Exec.logAt?`.
 `Exec.targetLogEventsFrom_frames` proves its frame projection equals
 `Exec.retainedTargetFramesFromAt`, with matching `_target`, `_halt`, `_cont`,
 `_doneOk` and `_runOk` equations. The same module transports one foreign step for
-arbitrary callee code: storage of a code-bearing owner (`Evm.step_cont_getStor_foreign`,
-`Evm.step_done_getStor`, `Xinst.spawn_run_getStor`/`Evm.step_run_getStor`: the settled
-child's committed endpoint or the rollback, pointwise), logs (`Exec.cont_logs_eq`,
+arbitrary callee code: `Evm.step_cont_getStor_foreign` preserves a foreign owner's
+storage without protection; `Evm.step_done_getStor` requires a protected owner
+for completed childless message settlement; `Xinst.spawn_run_getStor` and
+`Evm.step_run_getStor` transport code-bearing storage from the settled child's
+committed endpoint or rollback, pointwise. The actual-step helpers
+`GenericCreate.step_done_getStor`, `GenericCall.step_done_getStor` and
+`Xinst.step_done_getStor` preserve every owner when the step itself returns
+`.done (.ok post)`; the executable helper requires `CoveredFork`. These are
+shared-integration hoisting candidates. Successful CALL message transfer is a
+spawn and does not satisfy that actual-step premise. The module also transports
+logs (`Exec.cont_logs_eq`,
 `Exec.doneOk_logs_eq`, `Exec.runOk_logs_eq`, path-independent `Exec.committed_logs_at`,
 and `Xinst.call_run_logs`: a CALL/STATICCALL appends exactly its committed child's
 logs), the installed image (`CodeSem.At.parentStep`, `CodeSem.At.spawnChild`,

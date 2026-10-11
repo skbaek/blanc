@@ -156,6 +156,71 @@ theorem Exec.targetLogEventsFrom_frames (ca : Adr) (path : List Nat) (counter : 
 
 /-! ## Storage of `ca` across one foreign step -/
 
+/-- A CREATE that completes before spawning preserves every owner's storage.
+The only state update is a creator nonce increment guarded against wrapping. -/
+theorem GenericCreate.step_done_getStor
+    {sevm : Sevm} {pre post : Devm} {endowment : B256} {address : Adr}
+    {mi ms : Nat}
+    (step : genericCreate.step sevm pre endowment address mi ms =
+      .done (.ok post)) (owner : Adr) : post.getStor owner = pre.getStor owner := by
+  simp only [genericCreate.step, Bind.bind, Except.bind, Except.assert,
+    assertDynamic, Pure.pure, Except.pure] at step
+  repeat' split at step
+  all_goals simp only [XStep.ofExcept, reduceCtorEq, XStep.done.injEq,
+    Except.ok.injEq] at step
+  all_goals subst post
+  all_goals rename_i pushed pushEq
+  all_goals change pushed.state.getStor owner = pre.state.getStor owner
+  all_goals rw [← (Devm.push_of_push pushEq).state]
+  · rfl
+  · change ((pre.state.incrNonce sevm.currentTarget).get owner).stor = _
+    rw [State.incrNonce_get_stor, ite_eq_right]
+    · rfl
+    · rintro ⟨rfl, empty⟩
+      have admitted : ¬ ((pre.state.get sevm.currentTarget).bal < endowment ∨
+          (pre.state.get sevm.currentTarget).nonce = UInt64.max ∨ sevm.depth = 0) := by
+        assumption
+      exact UInt64.add_one_ne_zero_of_ne_max
+        (fun max => admitted (Or.inr (Or.inl max))) empty.2.1
+
+/-- A CALL that completes before spawning only updates machine fields. -/
+theorem GenericCall.step_done_getStor
+    {sevm : Sevm} {pre post : Devm} {gas : Nat} {value : B256}
+    {caller target codeAddress : Adr} {stv isSt : Bool}
+    {ii isz oi osz : Nat} {code : ByteArray} {dp : Bool}
+    (step : genericCall.step sevm pre gas value caller target codeAddress stv
+      isSt ii isz oi osz code dp = .done (.ok post)) (owner : Adr) :
+    post.getStor owner = pre.getStor owner := by
+  simp only [genericCall.step, Bind.bind, Except.bind, Pure.pure,
+    Except.pure] at step
+  repeat' split at step
+  all_goals simp only [XStep.ofExcept, reduceCtorEq, XStep.done.injEq,
+    Except.ok.injEq] at step
+  all_goals subst post
+  rename_i pushed pushEq
+  exact congrArg (fun state : State => state.getStor owner)
+    (Devm.push_of_push pushEq).state.symm
+
+/-- An actual executable opcode that completes without spawning preserves every
+owner's storage. This does not include a childless message settlement. -/
+theorem Xinst.step_done_getStor
+    {sevm : Sevm} {pre post : Devm} {x : Xinst}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (step : Xinst.step sevm pre x = .done (.ok post)) (owner : Adr) :
+    post.getStor owner = pre.getStor owner := by
+  rcases Xinst.step_shapeCovered sevm pre x fork with
+    ⟨out, shape, frame⟩ | ⟨d, value, address, mi, ms, frame, shape⟩ |
+    ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isSt,
+      ii, isz, oi, osz, code, dp, frame, _, _, _, shape⟩
+  · rw [shape] at step
+    cases step
+    exact (frame.getStor owner).symm
+  · rw [shape] at step
+    exact (GenericCreate.step_done_getStor step owner).trans (frame.getStor owner).symm
+  · rw [shape] at step
+    exact (GenericCall.step_done_getStor step owner).trans (frame.getStor owner).symm
+
+
 /-- A same-frame step of a frame other than `ca` keeps `ca`'s storage. -/
 theorem Evm.step_cont_getStor_foreign {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
     {ca : Adr} (fork : CoveredFork sevm.benvStat.fork)
@@ -195,22 +260,53 @@ theorem Evm.step_cont_getStor_foreign {pc pc' : Nat} {sevm : Sevm} {pre post : D
             unfold Ninst.StepRun
             rw [nstep]
             exact ⟨rfl, rfl⟩
-          exact Ninst.foreignNone_getStor_eq fork nrun foreign
+          cases instruction with
+          | exec executable =>
+              simp only [Ninst.step_exec, XStep.toStep] at nstep
+              cases actual : Xinst.step sevm pre executable with
+              | spawn frame resume => rw [actual] at nstep; cases nstep
+              | done out =>
+                  rw [actual] at nstep
+                  cases out with
+                  | error error => cases nstep
+                  | ok actualPost =>
+                      cases nstep
+                      exact Xinst.step_done_getStor fork actual ca
+          | reg regular =>
+              have run : Rinst.run ⟨pc, sevm, pre⟩ regular = .ok post :=
+                (Step.run_ofExecution.mp nrun).2.symm
+              by_cases store : regular = .sstore
+              · subst regular
+                exact sstore_preserves_getStor_ne run foreign
+              · exact (congrFun (Rinst.preserves_stor store run) ca).symm
+          | push bytes bound =>
+              exact ((Ninst.push_instructionFrame_effectRec
+                (hxs := bound) (xl := .none) trivial nrun).getStor ca).symm
+          | dupn imm =>
+              exact ((Ninst.dupn_instructionFrame_effectRec
+                (xl := .none) trivial nrun).getStor ca).symm
+          | swapn imm =>
+              exact ((Ninst.swapn_instructionFrame_effectRec
+                (xl := .none) trivial nrun).getStor ca).symm
+          | exchange imm =>
+              exact ((Ninst.exchange_instructionFrame_effectRec
+                (xl := .none) trivial nrun).getStor ca).symm
 
-/-- A childless message leaves every storage map unchanged. -/
+/-- A childless message preserves storage at each structurally protected owner. -/
 theorem Evm.step_done_getStor {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm}
     {frame : Jaune.Frame} {resume : Resume}
     {result : Except (EvmError × State × AdrSet × Tra) Devm}
     (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
     (entered : frame.enter = .done result)
     (resumed : resume.run result = .ok inter) :
-    Devm.getStor inter = Devm.getStor pre := by
+    ∀ ca, State.Protected pre.state ca → Devm.getStor inter ca = Devm.getStor pre ca := by
+  intro ca protection
   rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
   have xrun : Xinst.Run sevm pre x .none (.ok inter) := by
     unfold Xinst.Run XStep.Run
     rw [spawn]
     exact ⟨_, RunFrame.of_done entered, resumed.symm⟩
-  exact Xinst.none_getStor_eq xrun
+  exact Xinst.none_getStor_eq xrun ca protection
 
 /-- A child entered by an executable instruction opens on its parent's storage at every
 code-bearing account, at pc zero with an empty machine and output, under the parent's block
@@ -231,7 +327,12 @@ theorem Xinst.spawn_child_world {sevm : Sevm} {pre : Devm} {x : Xinst}
   · intro ca nonempty
     obtain ⟨storage, _⟩ := Xinst.step_spawn_world fork spawn nonempty
     obtain ⟨benv, transfer, rfl⟩ := Frame.enter_run_inv entered
-    exact (congrFun (benvAfterTransfer_getStor_eq transfer) ca).trans storage
+    have protection : State.Protected frame.inner.benv.state ca := by
+      right
+      intro codeEmpty
+      exact nonempty ((Xinst.step_spawn_getCode spawn ca).symm.trans
+        (ByteArray.eq_empty_of_size_eq_zero codeEmpty))
+    exact (benvAfterTransfer_ok_getStor transfer ca (Or.inr protection)).trans storage
   · refine ⟨?_, ?_, Frame.enter_run_output_empty entered⟩
     · obtain ⟨benv, _, rfl⟩ := Jaune.Frame.enter_run_inv entered
       rfl
@@ -260,15 +361,24 @@ theorem Xinst.spawn_run_getStor {sevm : Sevm} {pre inter : Devm} {x : Xinst}
   have replay := Xinst.storageReplay_some_of_body spawn (RunFrame.of_run entered) resumed
     (fun committed => Exec.storageReplay_committedPost child committed childFork) fork
   have entry := world ca nonempty
+  have codeNe : (pre.getCode ca).toList ≠ [] := by
+    intro empty
+    apply nonempty
+    apply ByteArray.eq_empty_of_size_eq_zero
+    rw [ByteArray.size_eq_length_toList, empty]
+    rfl
+  have childCodeNe : (childEvm.dyna.getCode ca).toList ≠ [] := by
+    rw [Frame.enter_run_getCode entered ca, Xinst.step_spawn_getCode spawn ca]
+    exact codeNe
   refine ⟨?_, ?_⟩
   · intro settles key
     rw [ite_eq_left settles] at replay
     have body := Exec.storageReplay_committedPost child
-      (Frame.raw_commits_of_settlementCommits settles) childFork ca key
-    rw [replay ca key, body, entry]
+      (Frame.raw_commits_of_settlementCommits settles) childFork
+    rw [replay.2 ca codeNe key, body.2 ca childCodeNe key, entry]
   · intro rolled key
     rw [ite_eq_right rolled] at replay
-    simpa only [Exec.StorageWrite.replayCell, List.foldl_nil] using replay ca key
+    simpa only [Exec.StorageWrite.replayCell, List.foldl_nil] using replay.2 ca codeNe key
 
 /-- The same storage transport at a driver spawn. -/
 theorem Evm.step_run_getStor {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm}

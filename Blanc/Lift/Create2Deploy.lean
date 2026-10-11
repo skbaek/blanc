@@ -114,10 +114,9 @@ theorem Xinst.step_create2_spawn {sevm : Sevm} {b : Devm} {S : List B256} {M : M
   rw [ite_eq_right, ite_eq_right]
   · rfl
   · exact fun h => by
-      rcases h with h | h | h
+      rcases h with h | h
       · exact h hfresh.1
       · exact h hfresh.2.1
-      · exact h hfresh.2.2
   · exact fun h => by
       rcases h with h | h | h
       · exact hbal h
