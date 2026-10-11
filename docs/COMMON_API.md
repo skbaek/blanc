@@ -3362,6 +3362,16 @@ Use
   in `GenericCreate.nonce_ne_zero_of_body`. The CALL and executable adapters
   are `GenericCall.nonce_ne_zero_of_body` and `Xinst.nonce_ne_zero_of_body`.
   These preserve nonce-protected accounts without assuming installed code.
+  `ProcessCreateMessage.ok_setCode_state_of_clean` is the common concrete
+  settlement representation behind the nonce projection: the clean output
+  state is the inner message state with target code installed.
+  For actual execution, [`Blanc/LockExclusion.lean`](../Blanc/LockExclusion.lean)
+  provides `Exec.nonce_ne_zero_committedPost`, on covered forks. Its instruction
+  donors are `Rinst.get_nonce_eq_of_ok`, `Ninst.nonce_ne_zero_of_none`,
+  `Evm.step_cont_nonce_ne_zero` and `Linst.get_nonce_eq_of_ok`.
+  `Evm.step_spawn_rollback_getStor` separately preserves all parent storage
+  when complete child settlement discards the result, including unprotected
+  owners; it requires no nonempty-code premise.
 - `ExecutionTrace.messageCallDelegation_fields` and its named projections
   (`_caller_eq`, `_target_eq`, `_currentTarget_eq`,
   `_shouldTransferValue_eq`) carry a routing or value field across the

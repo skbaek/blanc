@@ -1,3 +1,4 @@
+import Blanc.ExecutionMessageEffects
 import Blanc.ExecutionNoninterference
 import Blanc.ExecutionTraceFrames
 import Blanc.PrefixTransport
@@ -218,6 +219,283 @@ theorem Evm.step_spawn_enter_getStor
   rcases Frame.enter_run_inv enter with ⟨benv, transfer, rfl⟩
   exact (benvAfterTransfer_ok_getStor transfer owner (Or.inr messageFacts.2)).trans
     messageFacts.1
+
+/-- A child discarded by complete settlement preserves all parent storage,
+including raw cells at unprotected owners. -/
+theorem Evm.step_spawn_rollback_getStor
+    {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
+    {frame : Jaune.Frame} {resume : Resume} {child : Evm} {raw : Execution}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
+    (enter : frame.enter = .run child)
+    (resumed : resume.run (frame.settle raw) = .ok post)
+    (discarded : frame.settlementCommits raw ≠ true) :
+    Devm.getStor post = Devm.getStor pre := by
+  rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
+  rcases Xinst.step_shapeCovered sevm pre x hfork with
+    ⟨execution, shape, -⟩ |
+    ⟨d, endowment, newAddress, mi, ms, hprefix, shape⟩ |
+    ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
+      ii, isz, oi, osz, code, disablePrecompiles, hprefix, _, _, _, shape⟩ <;>
+    rw [shape] at spawn
+  · cases spawn
+  · have nonce := UInt64.add_one_ne_zero_of_ne_max
+      (genericCreate_step_spawn_nonce_ne_max spawn)
+    rcases genericCreate_step_spawn_exact spawn with ⟨rfl, rfl⟩
+    cases settledEq : (Frame.ofCreate _).settle raw with
+    | error error => rw [settledEq] at resumed; cases resumed
+    | ok settled =>
+      have error : settled.error.isSome = true := by
+        unfold Frame.settlementCommits at discarded
+        rw [settledEq] at discarded
+        cases h : settled.error <;> simp_all
+      have process := RunFrame.of_run (raw := raw) enter
+      rw [settledEq] at process
+      have rollback := ProcessCreateMessage.rollback_of_error process error
+      rw [settledEq] at resumed
+      have stateEq := (Resume.create_state resumed).trans rollback
+      funext owner
+      change post.state.getStor owner = pre.state.getStor owner
+      rw [stateEq]
+      exact (congrFun (genericCreate_prepared_getStor sevm d newAddress nonce) owner).trans
+        (hprefix.getStor owner).symm
+  · rcases genericCall_step_spawn_exact spawn with ⟨rfl, rfl⟩
+    cases settledEq : (Frame.ofCall _).settle raw with
+    | error error => rw [settledEq] at resumed; cases Resume.call_run_error resumed
+    | ok settled =>
+      have error : settled.error.isSome = true := by
+        unfold Frame.settlementCommits at discarded
+        rw [settledEq] at discarded
+        cases h : settled.error <;> simp_all
+      have process := RunFrame.of_run (raw := raw) enter
+      rw [settledEq] at process
+      have rollback := (ProcessMessage.rollback_of_error process error).1
+      rw [settledEq] at resumed
+      have stateEq := (Resume.call_state resumed).trans rollback
+      funext owner
+      change post.state.getStor owner = pre.state.getStor owner
+      rw [stateEq]
+      exact (hprefix.getStor owner).symm
+
+/-- A successful regular instruction keeps every account nonce unchanged. -/
+theorem Rinst.get_nonce_eq_of_ok {pc : Nat} {sevm : Sevm} {pre post : Devm} {r : Rinst}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (run : Rinst.run ⟨pc, sevm, pre⟩ r = .ok post) (owner : Adr) :
+    (post.state.get owner).nonce = (pre.state.get owner).nonce := by
+  by_cases store : r = .sstore
+  · subst r
+    simp only [Rinst.run, Rinst.runCore, fork.rules_stateGas_none] at run
+    rcases Except.bind_eq_ok run with ⟨⟨key, first⟩, popKey, rest⟩
+    rcases Except.bind_eq_ok rest with ⟨⟨value, second⟩, popValue, rest⟩
+    rcases Except.bind_eq_ok rest with ⟨_, asserted, rest⟩
+    rcases Except.bind_eq_ok rest with ⟨⟨third, gas⟩, warmed, rest⟩
+    rcases Except.bind_eq_ok rest with ⟨gas', priced, rest⟩
+    rcases Except.bind_eq_ok rest with ⟨fourth, refund, rest⟩
+    rcases Except.bind_eq_ok rest with ⟨fifth, charged, rest⟩
+    rcases Except.bind_eq_ok rest with ⟨_, asserted', final⟩
+    have eq1 : pre.state = first.state := (Devm.pop_of_pop popKey).state
+    have eq2 : first.state = second.state := (Devm.pop_of_pop popValue).state
+    have eq3 : second.state = third.state := by
+      split at warmed <;> (injection warmed with eq; injection eq with eq _; subst eq) <;> rfl
+    have eq4 : third.state = fourth.state := by
+      injection refund with eq
+      rw [← eq]
+      rfl
+    have eq5 : fourth.state = fifth.state := (chargeGas_worldEq_of_ok charged).1
+    have eq : pre.state = fifth.state := eq1.trans (eq2.trans (eq3.trans (eq4.trans eq5)))
+    rw [← Except.ok.inj final]
+    change ((fifth.state.setStorVal sevm.currentTarget key value).get owner).nonce = _
+    dsimp only [State.setStorVal]
+    by_cases equal : sevm.currentTarget = owner
+    · subst owner
+      rw [State.get_set_self]
+      exact congrArg (fun st : State => (st.get sevm.currentTarget).nonce) eq.symm
+    · rw [State.get_set_ne _ equal]
+      exact congrArg (fun st : State => (st.get owner).nonce) eq.symm
+  · by_cases transient : r = .tstore
+    · subst r
+      have frame := Rinst.tstore_run_transientWriteFrame pc pre sevm
+      rw [run] at frame
+      have stateEq : pre.state = post.state := frame.state
+      rw [← stateEq]
+    · rw [← Rinst.preserves_state store transient run]
+
+/-- Successful ordinary instructions preserve nonzero account nonces. -/
+theorem Ninst.nonce_ne_zero_of_none
+    {pc : Nat} {sevm : Sevm} {pre post : Devm} {n : Ninst}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (run : Ninst.StepRun pc sevm pre n .none (.ok post))
+    (owner : Adr) (nonce : (pre.state.get owner).nonce ≠ 0) :
+    (post.state.get owner).nonce ≠ 0 := by
+  cases n with
+  | reg regular =>
+      rw [Rinst.get_nonce_eq_of_ok fork ((Step.run_ofExecution.mp run).2.symm) owner]
+      exact nonce
+  | exec executable =>
+      simp only [Ninst.StepRun, Ninst.step_exec] at run
+      exact Xinst.nonce_ne_zero_of_body (XStep.run_toStep.mp run) fork trivial owner nonce
+  | push bytes bound =>
+      have stateEq : pre.state = post.state := (Ninst.push_instructionFrame_effectRec (xl := .none) trivial run).state
+      rwa [← stateEq]
+  | dupn imm =>
+      have stateEq : pre.state = post.state := (Ninst.dupn_instructionFrame_effectRec (xl := .none) trivial run).state
+      rwa [← stateEq]
+  | swapn imm =>
+      have stateEq : pre.state = post.state := (Ninst.swapn_instructionFrame_effectRec (xl := .none) trivial run).state
+      rwa [← stateEq]
+  | exchange imm =>
+      have stateEq : pre.state = post.state := (Ninst.exchange_instructionFrame_effectRec (xl := .none) trivial run).state
+      rwa [← stateEq]
+
+/-- A continuing driver step preserves nonzero nonces. -/
+theorem Evm.step_cont_nonce_ne_zero
+    {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' post)
+    (owner : Adr) (nonce : (pre.state.get owner).nonce ≠ 0) :
+    (post.state.get owner).nonce ≠ 0 := by
+  cases decoded : Evm.getInst ⟨pc, sevm, pre⟩ with
+  | none => unfold Evm.step at step; rw [decoded] at step; cases step
+  | some instruction =>
+      cases instruction with
+      | last last => rw [Evm.step_last decoded] at step; cases step
+      | jump jumpInst =>
+          rw [Evm.step_jump decoded] at step
+          cases jumped : Jinst.run ⟨pc, sevm, pre⟩ jumpInst with
+          | error error => rw [jumped] at step; cases step
+          | ok pair =>
+              rcases pair with ⟨actualPc, actualPost⟩
+              rw [jumped] at step
+              cases step
+              have frame := Jinst.run_instructionFrame ⟨pc, sevm, pre⟩ jumpInst
+              rw [jumped] at frame
+              rwa [← frame.state]
+      | next instruction =>
+          have stepped : Ninst.step ⟨pc, sevm, pre⟩ instruction = .cont pc' post := by
+            rw [← Evm.step_next decoded]
+            exact step
+          have nrun : Ninst.StepRun pc sevm pre instruction .none (.ok post) := by
+            unfold Ninst.StepRun
+            rw [stepped]
+            exact ⟨rfl, rfl⟩
+          exact Ninst.nonce_ne_zero_of_none fork nrun owner nonce
+
+/-- A successful terminating instruction keeps all account nonces unchanged. -/
+theorem Linst.get_nonce_eq_of_ok {sevm : Sevm} {pre post : Devm} {last : Linst}
+    (fork : CoveredFork sevm.benvStat.fork) (run : Linst.Run sevm pre last (.ok post))
+    (owner : Adr) : (post.state.get owner).nonce = (pre.state.get owner).nonce := by
+  by_cases destroy : last = .selfdestruct
+  · subst last
+    dsimp only [Linst.Run, Linst.run, ne_eq, Except.bind_ok, ite_not, Lean.Elab.WF.paramLet,
+      Devm.balReadAccount_accessedAddresses, Devm.balReadAccount_getAcct] at run
+    simp only [fork.rules_stateGas_none] at run
+    rcases Except.bind_eq_ok run with ⟨⟨donee, first⟩, pop, rest⟩
+    rcases Except.bind_eq_ok rest with ⟨second, charge, rest⟩
+    rcases Except.bind_eq_ok rest with ⟨_, asserted, rest⟩
+    rcases Except.bind_eq_ok rest with ⟨third, sub, final⟩
+    have subSome : second.subBal sevm.currentTarget
+        (first.getAcct sevm.currentTarget).bal = some third := by
+      cases eq : second.subBal sevm.currentTarget (first.getAcct sevm.currentTarget).bal
+      · rw [eq] at sub
+        contradiction
+      · rw [eq] at sub
+        injection sub with equal
+        subst equal
+        rfl
+    have subState : second.state.subBal sevm.currentTarget
+        (first.getAcct sevm.currentTarget).bal = some third.state := by
+      dsimp only [Devm.subBal, Option.bind_eq_bind, Option.bind] at subSome
+      cases eq : second.state.subBal sevm.currentTarget (first.getAcct sevm.currentTarget).bal
+      · rw [eq] at subSome
+        contradiction
+      · rw [eq] at subSome
+        injection subSome with equal
+        subst equal
+        rfl
+    have stateEq : pre.state = second.state := by
+      have firstEq : pre.state = first.state :=
+        (liftMach_worldEq_of_ok (core := Mach.popToAdr) pop).1
+      rw [firstEq, ← (chargeGas_worldEq_of_ok charge).1]
+      split <;> simp only [Devm.balReadAccount_state, addAccessedAddress_state]
+    let transferred := third.addBal donee (first.getAcct sevm.currentTarget).bal
+    have nonceEq : (transferred.state.get owner).nonce = (pre.state.get owner).nonce := by
+      change ((third.state.addBal donee _).get owner).nonce = _
+      rw [State.addBal, State.setBal_get_nonce, (State.of_subBal subState).2,
+        State.setBal_get_nonce, ← stateEq]
+    have postEq : (post.state.get owner).nonce = (transferred.state.get owner).nonce := by
+      dsimp only [transferred] at final ⊢
+      by_cases deleted : sevm.currentTarget ∈
+          (third.addBal donee (first.getAcct sevm.currentTarget).bal).createdAccounts
+      · simp only [deleted, ite_eq_left] at final
+        rw [← Except.ok.inj final]
+        exact State.setBal_get_nonce
+      · simp only [deleted] at final
+        rw [← Except.ok.inj final]
+    exact postEq.trans nonceEq
+  · have frame := Linst.run_instructionFrame sevm pre last destroy
+    rw [run] at frame
+    have stateEq : pre.state = post.state := frame.state
+    rw [← stateEq]
+
+/-- Nonzero account nonces survive every actual committed execution on a covered fork. -/
+theorem Exec.nonce_ne_zero_committedPost
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true)
+    (fork : CoveredFork sevm.benvStat.fork) (owner : Adr)
+    (nonce : (pre.state.get owner).nonce ≠ 0) :
+    ((Execution.committedPost out committed).state.get owner).nonce ≠ 0 := by
+  revert committed fork owner
+  induction run with
+  | @halt pc sevm pre out step =>
+      intro committed fork owner nonce
+      cases out with
+      | error error => simp only [Execution.commits, Bool.false_eq_true] at committed
+      | ok post =>
+          cases decoded : Evm.getInst ⟨pc, sevm, pre⟩ with
+          | none => unfold Evm.step at step; rw [decoded] at step; cases step
+          | some instruction =>
+              cases instruction with
+              | last last =>
+                  rw [Evm.step_last decoded] at step
+                  have lastRun : Linst.Run sevm pre last (.ok post) := Step.halt.inj step
+                  change (post.state.get owner).nonce ≠ 0
+                  rw [Linst.get_nonce_eq_of_ok fork lastRun owner]
+                  exact nonce
+              | next next =>
+                  rw [Evm.step_next decoded] at step
+                  exact (Ninst.step_ne_halt_ok step).elim
+              | jump jumpInst =>
+                  rw [Evm.step_jump decoded] at step
+                  cases jumped : Jinst.run ⟨pc, sevm, pre⟩ jumpInst <;>
+                    rw [jumped] at step <;> cases step
+  | cont step next ih =>
+      intro committed fork owner nonce
+      exact ih committed fork owner (Evm.step_cont_nonce_ne_zero fork step owner nonce)
+  | doneErr step enter resumed =>
+      intro committed
+      simp only [Execution.commits, Bool.false_eq_true] at committed
+  | @doneOk nodePc nodeSevm nodePre frame resume nextPc settled post final step enter resumed next ih =>
+      intro committed fork owner nonce
+      rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
+      have xrun : Xinst.Run nodeSevm nodePre x .none (.ok post) := by
+        unfold Xinst.Run XStep.Run
+        rw [spawn]
+        exact ⟨_, RunFrame.of_done enter, resumed.symm⟩
+      exact ih committed fork owner (Xinst.nonce_ne_zero_of_body xrun fork trivial owner nonce)
+  | runErr step enter child resumed ih =>
+      intro committed
+      simp only [Execution.commits, Bool.false_eq_true] at committed
+  | @runOk nodePc nodeSevm nodePre frame resume nextPc childEvm raw post final step enter child resumed next childIH nextIH =>
+      intro committed fork owner nonce
+      rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
+      have childFork := Evm.step_spawn_child_fork step enter fork
+      have xrun : Xinst.Run nodeSevm nodePre x (.some ⟨childEvm, raw⟩) (.ok post) := by
+        unfold Xinst.Run XStep.Run
+        rw [spawn]
+        exact ⟨_, RunFrame.of_run enter, resumed.symm⟩
+      have body : Xlot.NonceNonzero (.some ⟨childEvm, raw⟩) :=
+        fun commit childOwner childNonce => childIH commit childFork childOwner childNonce
+      exact nextIH committed fork owner (Xinst.nonce_ne_zero_of_body xrun fork body owner nonce)
 
 /-- Same-frame prefixes preserve every entry-code-nonempty owner's code. -/
 theorem Exec.Deriv.ParentPrefix.codePreserve {root tail : Exec.Deriv}

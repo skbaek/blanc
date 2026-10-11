@@ -59,14 +59,15 @@ theorem ProcessMessage.nonce_ne_zero_of_body {msg : Msg} {slot : Xlot} {post : D
       · rw [ProcessMessage.ok_state_eq_of_not_commits process committed]
         exact nonce
 
-/-- Code-deposit settlement leaves every nonce equal to its inner message's nonce. -/
-theorem ProcessCreateMessage.ok_nonce_eq_inner_of_clean
+/-- Clean code-deposit settlement changes the inner world only by installing target code. -/
+theorem ProcessCreateMessage.ok_setCode_state_of_clean
     {msg : Msg} {slot : Xlot} {post : Devm}
     (hprocess : ProcessCreateMessage msg slot (.ok post))
     (herror : post.error.isSome = false) :
     ∃ inner : Devm,
       ProcessMessage (processCreateMessage.msg msg) slot (.ok inner) ∧
-      ∀ owner, (post.state.get owner).nonce = (inner.state.get owner).nonce := by
+      inner.error.isSome = false ∧
+      ∃ code, post.state = inner.state.setCode msg.currentTarget code := by
   rcases ProcessCreateMessage.iff_processMessage.mp hprocess with
     ⟨result, hinner, hsettle⟩
   cases result with
@@ -104,18 +105,11 @@ theorem ProcessCreateMessage.ok_nonce_eq_inner_of_clean
         | ok charged =>
             rw [hcharge] at hsettle
             have heq := Except.ok.inj hsettle
-            refine ⟨inner, hinner, ?_⟩
-            intro owner
-            rw [heq]
-            change ((charged.state.setCode msg.currentTarget ⟨⟨charged.output⟩⟩).get owner).nonce = _
-            by_cases equal : msg.currentTarget = owner
-            · subst owner
-              rw [State.setCode, State.setAccount_get_self, Acct.clearIfEmpty_nonce]
-              exact congrArg (fun state : State => (state.get msg.currentTarget).nonce)
-                (chargeCodeGas_state_ok hcharge)
-            · rw [State.setCode, State.setAccount_get_ne _ equal]
-              exact congrArg (fun state : State => (state.get owner).nonce)
-                (chargeCodeGas_state_ok hcharge)
+            refine ⟨inner, hinner, ?_, ⟨⟨charged.output⟩⟩, ?_⟩
+            · cases h : inner.error <;> simp_all
+            · rw [heq]
+              change charged.state.setCode msg.currentTarget _ = _
+              rw [chargeCodeGas_state_ok hcharge]
       · rw [if_neg hinnerNone] at hsettle
         have heq := Except.ok.inj hsettle
         rw [heq] at herror
@@ -124,6 +118,23 @@ theorem ProcessCreateMessage.ok_nonce_eq_inner_of_clean
         apply hinnerNone
         rw [show inner.error = none from herror]
         rfl
+
+/-- Code-deposit settlement leaves every nonce equal to its inner message's nonce. -/
+theorem ProcessCreateMessage.ok_nonce_eq_inner_of_clean
+    {msg : Msg} {slot : Xlot} {post : Devm}
+    (process : ProcessCreateMessage msg slot (.ok post))
+    (clean : post.error.isSome = false) :
+    ∃ inner : Devm,
+      ProcessMessage (processCreateMessage.msg msg) slot (.ok inner) ∧
+      ∀ owner, (post.state.get owner).nonce = (inner.state.get owner).nonce := by
+  rcases ProcessCreateMessage.ok_setCode_state_of_clean process clean with
+    ⟨inner, innerRun, _, code, stateEq⟩
+  refine ⟨inner, innerRun, fun owner => ?_⟩
+  rw [stateEq]
+  by_cases equal : msg.currentTarget = owner
+  · subst owner
+    rw [State.setCode, State.setAccount_get_self, Acct.clearIfEmpty_nonce]
+  · rw [State.setCode, State.setAccount_get_ne _ equal]
 
 /-- Fresh CREATE settlement preserves nonzero nonces away from its new target. -/
 theorem ProcessCreateMessage.nonce_ne_zero_of_body
