@@ -4451,11 +4451,14 @@ contract-neutral.
   own witness run: `childStart`/`childStart_agree`, `childRun`, `childOk_of_start`,
   `childOk_of_childRun`, `frame_of_wrun`, `childAgree_of_halt`, and the DELEGATECALL
   preparation `dcallPrep`/`dcallPrep_spec`, in
-  [`Blanc/Lift/WitnessChild.lean`](../Blanc/Lift/WitnessChild.lean); the frame-level spawn
+  [`Blanc/Lift/WitnessChild.lean`](../Blanc/Lift/WitnessChild.lean). Child starts
+  (`childStart`, `NodeWalk.childCfg`, and explicit `frame_of_wrun` inputs) use
+  `storTransfer` alongside `acsTransfer`; reusing the pre-transfer storage
+  shadow requires a separate no-change proof. The frame-level spawn
   fact `SpawnedBy sevm devm x child` (`Xinst.step` spawns a frame entering as `child`) and
   `spawnedBy_of_callPrep`, `spawnedBy_of_childStart`, `spawnedBy_of_dcallPrep` in
   [`Blanc/Lift/WitnessSpawn.lean`](../Blanc/Lift/WitnessSpawn.lean); reading a run's final
-  shadow (start shadow with the run's entries prepended) without enumerating addresses or keys:
+  shadow expressed as a prefix appended to a base shadow, without enumerating addresses or keys:
   `lookupA_append_of_restate` (a prefix restating the start's views changes no account),
   `lookupS_append_of_ne` (writes elsewhere leave an address's storage),
   `lookupS_append_of_absent` (a start with nothing at the address leaves the prefix's values)

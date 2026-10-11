@@ -9,7 +9,7 @@ the machine the call's frame enters with) and `ChildAgree` (its accessed sets, s
 and accounts, as shadows).  This module discharges those two obligations by running the
 child itself: the child's frame starts from the machine `Frame.enter` builds, with the
 parent's shadows (the callee added to the address shadow, the value transfer applied to
-the account shadow), and a halting run of the child's own checked certificate is its
+the account and storage shadows), and a halting run of the child's own checked certificate is its
 `Exec` (through `lift_exact`/`lift_exactM`, supplied by the caller as `hexact`).  The
 settled child is the halted machine itself (a successful call frame settles to its
 result), and its shadows are those of the configuration that halted.
@@ -135,13 +135,12 @@ theorem frameStart_agree {f : Frame} {acs : AcctShadow} {cevm : Evm}
     (hA : ∀ a, a ∈ f.inner.accessedAddresses ↔ a ∈ adrs)
     (hS : ∀ a k, storOf f.inner.benv.state a k = lookupS stor a k)
     (hC : AcctAgree f.inner.benv.state acs) :
-    Agree ⟨cevm.dyna, f0, [], keys, adrs, stor, acsTransfer f.inner acs⟩ := by
+    Agree ⟨cevm.dyna, f0, [], keys, adrs, storTransfer f.inner stor acs, acsTransfer f.inner acs⟩ := by
   obtain ⟨benv, hb, rfl⟩ := frameEnterS_run he
   have hbB : benvAfterTransferB f.inner = .ok benv := by
     rw [benvAfterTransfer_eq_S hC]; exact hb
   refine ⟨fun x => hK x, fun a => hA a, fun a k => ?_, ?_⟩
-  · show storOf benv.state a k = lookupS stor a k
-    rw [benvAfterTransferB_stor hbB]; exact hS a k
+  · exact benvAfterTransferB_stor hbB hC hS a k
   · exact acctAgree_transfer hC hb
 
 /-- A halting run from an agreeing configuration: the halting configuration's shadows
@@ -160,7 +159,7 @@ theorem childAgree_of_halt {fs : List SFunc} {sevm : Sevm} {n : Nat} {c cl : Cfg
 /-- **A code child run by its own certificate.**  The frame `f` enters (`frameEnterS`)
 with the machine `cevm`; its message's accessed sets, storage and accounts agree with
 `keys`/`adrs`/`stor`/`acs`; a run of `fs` from `cevm` with those shadows (the value
-transfer applied to `acs`) that takes the steps `hstep` and then halts, with no error, is
+transfer applied to `stor` and `acs`) that takes the steps `hstep` and then halts, with no error, is
 an `Exec` from `cevm` (by `hexact`), the frame settles to it, and its shadows are the
 halting configuration's. -/
 theorem frame_of_wrun {fs : List SFunc} {f : Frame} {acs : AcctShadow} {cevm : Evm}
@@ -175,7 +174,7 @@ theorem frame_of_wrun {fs : List SFunc} {f : Frame} {acs : AcctShadow} {cevm : E
     (hexact : SProg.RunExact fs cevm.sta cevm.dyna post →
       Nonempty (Exec 0 cevm.sta cevm.dyna (.ok post)))
     (h0 : fs[0]? = some f0)
-    (hstep : StepOk fs cevm.sta ⟨cevm.dyna, f0, [], keys, adrs, stor, acsTransfer f.inner acs⟩ c1)
+    (hstep : StepOk fs cevm.sta ⟨cevm.dyna, f0, [], keys, adrs, storTransfer f.inner stor acs, acsTransfer f.inner acs⟩ c1)
     (hrun : wrun fs cevm.sta n c1 = .done (.halted post) cl)
     (herr : post.error = none) :
     Nonempty (Exec cevm.pc cevm.sta cevm.dyna (.ok post)) ∧ f.settle (.ok post) = .ok post ∧
@@ -197,7 +196,7 @@ def childStart (sevm : Sevm) (c : Cfg) (f0 : SFunc) : Option (Evm × Cfg) :=
     match frameEnterS cp.f c.acs with
     | .run cevm =>
       if frameEntryForkFree cp.f = true then
-        some (cevm, ⟨cevm.dyna, f0, [], c.keys, cp.adrs, c.stor, acsTransfer cp.f.inner c.acs⟩)
+        some (cevm, ⟨cevm.dyna, f0, [], c.keys, cp.adrs, storTransfer cp.f.inner c.stor c.acs, acsTransfer cp.f.inner c.acs⟩)
       else none
     | .done _ => none
   | none => none

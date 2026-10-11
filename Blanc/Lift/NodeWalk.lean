@@ -806,7 +806,7 @@ theorem scallPrep_spec {sevm : Sevm} {devm : Devm} {adrs : List Adr} {acs : Acct
 /-- The walk configuration a frame entered with shadows starts at. -/
 def childCfg (cevm : Evm) (f : Frame) (keys : List (Adr × B256)) (adrs : List Adr)
     (stor : StorShadow) (acs : AcctShadow) : PCfg :=
-  ⟨cevm.pc, cevm.dyna, keys, adrs, stor, acsTransfer f.inner acs⟩
+  ⟨cevm.pc, cevm.dyna, keys, adrs, storTransfer f.inner stor acs, acsTransfer f.inner acs⟩
 
 /-- What a call-family preparation `cp` (`scallPrep`, `callPrepP`, `dcallPrep`) at the
 configuration `c` fixes: the suspended parent's accessed sets, the entry frame's message
@@ -922,21 +922,20 @@ theorem frame_settle_error {f : Frame} {e : EvmError} {d : Devm} (hcr : f.isCrea
     ∃ child, f.settle (.error (e, d)) = .ok child ∧ child.error.isSome = true ∧
       child.state = f.inner.benv.state := by
   rcases hk with rfl | ⟨r, rfl⟩
-  · refine ⟨(d.withError (some .revert)).rollback f.inner.benv.state
-      f.inner.tenv.transientStorage, ?_, rfl, rfl⟩
+  · refine ⟨((d.withError (some .revert)).rollback f.inner.benv.state
+      f.inner.tenv.transientStorage).withStorageWrites f.inner.benv.storageWrites, ?_, rfl, rfl⟩
     simp only [Frame.settle, Frame.settleMsg, hcr, Bool.false_eq_true, ↓reduceIte,
       processMessage.settle, bind, Except.bind, executeCode.handleErrorWith, hsg,
-      executeCode.handleError, ite_eq_left_iff, Bool.not_eq_true, Option.isSome_eq_false_iff,
-      Option.isNone_iff_eq_none, Except.ok.injEq]
-    intro h; cases h
-  · refine ⟨(let evm := d.withGasLeft 0
+      executeCode.handleError]
+    rfl
+  · refine ⟨((let evm := d.withGasLeft 0
       evm.setMeta {evm.meta with output := [], error := some (.halt r)}).rollback
-      f.inner.benv.state f.inner.tenv.transientStorage, ?_, rfl, rfl⟩
+      f.inner.benv.state f.inner.tenv.transientStorage).withStorageWrites
+        f.inner.benv.storageWrites, ?_, rfl, rfl⟩
     simp only [Frame.settle, Frame.settleMsg, hcr, Bool.false_eq_true, ↓reduceIte,
       processMessage.settle, bind, Except.bind, executeCode.handleErrorWith, hsg,
-      executeCode.handleError, ite_eq_left_iff, Bool.not_eq_true, Option.isSome_eq_false_iff,
-      Option.isNone_iff_eq_none, Except.ok.injEq]
-    intro h; cases h
+      executeCode.handleError]
+    rfl
 
 /-- A failed child: the parent resumes with its own shadows (the child's world was rolled
 back to the parent's, and its accessed sets are dropped). -/
