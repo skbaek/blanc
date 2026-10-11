@@ -113,38 +113,10 @@ theorem Msg.benvAfterTransfer_bal_eq_of_value_eq_zero
     (hzero : msg.value = 0)
     (hrun : msg.benvAfterTransfer = .ok post) :
     post.state.bal = msg.benv.state.bal := by
-  cases hstv : msg.shouldTransferValue with
-  | false =>
-      have hnot : ¬ msg.shouldTransferValue = true := by
-        simp only [hstv, Bool.false_eq_true, not_false_eq_true]
-      have h := of_benvAfterTransfer_no hnot hrun
-      subst post
-      rfl
-  | true =>
-      rcases of_benvAfterTransfer hstv hrun with
-        ⟨debit, hsub, rfl⟩
-      rw [hzero] at hsub ⊢
-      change (debit.addBal msg.currentTarget 0).bal =
-        msg.benv.state.bal
-      have hdebitBal : debit.bal = msg.benv.state.bal := by
-        rcases State.of_subBal hsub with ⟨_, rfl⟩
-        funext address
-        unfold State.bal
-        by_cases hcaller : msg.caller = address
-        · subst address
-          rw [State.setBal_get_self]
-          exact B256.sub_zero _
-        · rw [State.setBal_get_ne hcaller]
-      have haddBal :
-          (debit.addBal msg.currentTarget 0).bal = debit.bal := by
-        funext address
-        unfold State.addBal State.bal
-        by_cases htarget : msg.currentTarget = address
-        · subst address
-          rw [State.setBal_get_self]
-          exact B256.add_zero _
-        · rw [State.setBal_get_ne htarget]
-      exact haddBal.trans hdebitBal
+  have hpost := benvAfterTransfer_eq_of_not_transfer
+    (by intro h; exact h.2 hzero) hrun
+  subst post
+  rfl
 
 /-- Message entry at value zero funds every possible root ordinary-mint
 label (whose ETH weight is necessarily zero) without requiring the external
@@ -232,8 +204,13 @@ theorem ProcessMessage.ethBound_of_none_redemption
       List.sum_cons, List.sum_nil, add_zero, flowActionsEthRedemption, FlowAtom.ethRedemption,
       le_add_iff_nonneg_right, zero_le]
   · rw [hpost]
+    by_cases hzero : msg.value = 0
+    · have hentry := benvAfterTransfer_eq_of_not_transfer
+        (by intro h; exact h.2 hzero) htransfer
+      subst benv
+      exact (EthStep.zeroRedemption (by simpa only [hzero, B256.toNat_zero] using hatom)).bound
     by_cases htarget : msg.currentTarget = ca
-    · rcases of_benvAfterTransfer hstv htransfer with
+    · rcases of_benvAfterTransfer hstv hzero htransfer with
         ⟨debit, hsub, rfl⟩
       have hself :=
         (of_state_transfer_fields

@@ -69,13 +69,18 @@ theorem Exec.attributionInner_runOk
 
 /-! ## Message-level allowance transport -/
 
-/-- A childless message (empty code or precompile) cannot write persistent
-contract storage. -/
+/-- A childless message preserves the safe observed owner's storage. -/
 theorem ProcessMessage.allowanceRegionEffect_none
     {ca : Adr} {msg : Msg} {post parent : Devm}
     (hprocess : ProcessMessage msg .none (.ok post))
-    (hparent : parent.state = msg.benv.state) :
+    (hparent : parent.state = msg.benv.state)
+    (hsafe : msg.shouldTransferValue = false ∨ msg.value = 0 ∨
+      State.Protected parent.state ca) :
     AllowanceRegionEffect ca parent post [] := by
+  have hentrySafe : msg.shouldTransferValue = false ∨ msg.value = 0 ∨
+      State.Protected msg.benv.state ca := by
+    rw [← hparent]
+    exact hsafe
   have hstorage : Devm.getStor parent ca = Devm.getStor post ca := by
     rcases ProcessMessage.none_ok_state_cases hprocess with
       hrollback | ⟨benv, htransfer, hpost⟩
@@ -83,7 +88,7 @@ theorem ProcessMessage.allowanceRegionEffect_none
         (hparent.trans hrollback.symm)
     · change msg.benvAfterTransfer = .ok benv at htransfer
       exact (congrArg (fun state : State => state.getStor ca) hparent).trans <|
-        (benvAfterTransfer_getStor_eq htransfer ca).symm.trans <|
+        (benvAfterTransfer_getStor_eq htransfer ca hentrySafe).symm.trans <|
           (congrArg (fun state : State => state.getStor ca) hpost).symm
   have hcode : parent.getCode ca = post.getCode ca := by
     rcases ProcessMessage.none_ok_state_cases hprocess with
@@ -106,6 +111,8 @@ theorem ProcessMessage.allowanceRegionEffect_of_bodyEffect
     (hprocess : ProcessMessage msg
       (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
     (hparent : parent.state = msg.benv.state)
+    (hsafe : msg.shouldTransferValue = false ∨ msg.value = 0 ∨
+      State.Protected parent.state ca)
     (hbody : ∀ (committed : Execution.commits out = true),
       AllowanceRegionEffect ca pre
         (Execution.committedPost out committed)
@@ -114,6 +121,10 @@ theorem ProcessMessage.allowanceRegionEffect_of_bodyEffect
       (if Blanc.Frame.settlementCommits
           (Frame.ofCall msg) out = true
        then Exec.attributionStream dp ca run else []) := by
+  have hentrySafe : msg.shouldTransferValue = false ∨ msg.value = 0 ∨
+      State.Protected msg.benv.state ca := by
+    rw [← hparent]
+    exact hsafe
   by_cases hsettle : Jaune.Frame.settlementCommits
       (Frame.ofCall msg) out = true
   · rw [if_pos hsettle]
@@ -131,7 +142,7 @@ theorem ProcessMessage.allowanceRegionEffect_of_bodyEffect
       exact component
     have hentryStorage : Devm.getStor parent ca = Devm.getStor pre ca := by
       exact (congrArg (fun state : State => state.getStor ca) hparent).trans <|
-        (benvAfterTransfer_getStor_eq htransfer ca).symm.trans <|
+        (benvAfterTransfer_getStor_eq htransfer ca hentrySafe).symm.trans <|
           (congrArg (fun state : State => state.getStor ca) hpreState).symm
     have hentryCode : parent.getCode ca = pre.getCode ca := by
       exact (congrArg (fun state : State => state.getCode ca) hparent).trans <|
@@ -183,6 +194,8 @@ theorem ProcessCreateMessage.allowanceRegionEffect_of_bodyEffect
       (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
     (hparent : parent.state = msg.benv.state)
     (htargetNe : msg.currentTarget ≠ ca)
+    (hsafe : msg.shouldTransferValue = false ∨ msg.value = 0 ∨
+      State.Protected parent.state ca)
     (hbody : ∀ (committed : Execution.commits out = true),
       AllowanceRegionEffect ca pre
         (Execution.committedPost out committed)
@@ -191,6 +204,22 @@ theorem ProcessCreateMessage.allowanceRegionEffect_of_bodyEffect
       (if Blanc.Frame.settlementCommits
           (Frame.ofCreate msg) out = true
        then Exec.attributionStream dp ca run else []) := by
+  have hentrySafe : (processCreateMessage.msg msg).shouldTransferValue = false ∨
+      (processCreateMessage.msg msg).value = 0 ∨
+      State.Protected (processCreateMessage.msg msg).benv.state ca := by
+    rcases hsafe with hoff | hzero | hp
+    · exact Or.inl hoff
+    · exact Or.inr (Or.inl hzero)
+    · apply Or.inr ∘ Or.inr
+      have hget : (processCreateMessage.msg msg).benv.state.get ca =
+          msg.benv.state.get ca := by
+        change (((msg.benv.state.setStor msg.currentTarget .empty).incrNonce
+          msg.currentTarget).get ca) = msg.benv.state.get ca
+        simp only [State.incrNonce, State.setStor]
+        rw [State.setAccount_get_ne _ htargetNe, State.get_set_ne _ htargetNe]
+      unfold State.Protected
+      rw [hget, ← hparent]
+      exact hp
   by_cases hsettle : Jaune.Frame.settlementCommits
       (Frame.ofCreate msg) out = true
   · rw [if_pos hsettle]
@@ -229,7 +258,7 @@ theorem ProcessCreateMessage.allowanceRegionEffect_of_bodyEffect
         (processCreateMessage.msg msg).benv.state.getCode ca
       rw [hparent, processCreateMessage.msg_getCode]
     have hentryStorage : Devm.getStor prepared ca = Devm.getStor pre ca := by
-      exact (benvAfterTransfer_getStor_eq htransfer ca).symm.trans <|
+      exact (benvAfterTransfer_getStor_eq htransfer ca hentrySafe).symm.trans <|
         (congrArg (fun state : State => state.getStor ca) hpreState).symm
     have hentryCode : prepared.getCode ca = pre.getCode ca := by
       exact (benvAfterTransfer_ok_getCode htransfer ca).symm.trans <|
@@ -287,6 +316,7 @@ theorem GenericCall.allowanceRegionEffect_some_of_bodyEffect
       isStatic ii is oi os code disablePrecompiles
       (.some ⟨⟨pc', childSevm, childPre⟩, childOut⟩) (.ok inter))
     (childRun : Exec pc' childSevm childPre childOut)
+    (hsafe : stv = false ∨ value = 0 ∨ State.Protected pre.state ca)
     (hbody : ∀ (committed : Execution.commits childOut = true),
       AllowanceRegionEffect ca childPre
         (Execution.committedPost childOut committed)
@@ -316,7 +346,7 @@ theorem GenericCall.allowanceRegionEffect_some_of_bodyEffect
         (.some ⟨⟨pc', childSevm, childPre⟩, childOut⟩) (.ok child) := by
       simpa only [ProcessMessage, msg, callPre, Mem.read] using hprocess
     have effect := ProcessMessage.allowanceRegionEffect_of_bodyEffect childRun
-      hprocess' (parent := callPre) rfl hbody
+      hprocess' (parent := callPre) rfl hsafe hbody
     have hprefixStorage : Devm.getStor pre ca = Devm.getStor callPre ca := by
       rfl
     have hprefixCode : pre.getCode ca = callPre.getCode ca := by
@@ -343,15 +373,15 @@ theorem GenericCall.allowanceRegionEffect_some_of_bodyEffect
             disablePrecompiles)) childOut = true <;>
       simp only [hretain, ↓reduceIte, List.append_nil, List.nil_append, Bool.false_eq_true]
 
-/-- A CALL-family opcode which completes without an interpreter child is
-storage- and code-silent at every address. -/
+/-- A childless CALL is storage- and code-silent at the safe observed owner. -/
 theorem GenericCall.allowanceRegionEffect_none
     {ca : Adr} {sevm : Sevm} {pre post : Devm}
     {gas : Nat} {value : B256} {caller target codeAddress : Adr}
     {stv isStatic : Bool} {ii is oi os : Nat} {code : ByteArray}
     {disablePrecompiles : Bool}
     (hrun : GenericCall sevm pre gas value caller target codeAddress stv
-      isStatic ii is oi os code disablePrecompiles .none (.ok post)) :
+      isStatic ii is oi os code disablePrecompiles .none (.ok post))
+    (hsafe : stv = false ∨ value = 0 ∨ State.Protected pre.state ca) :
     AllowanceRegionEffect ca pre post [] := by
   unfold GenericCall genericCall.step at hrun
   simp only [Bind.bind, Except.bind, Pure.pure, Except.pure] at hrun
@@ -383,7 +413,7 @@ theorem GenericCall.allowanceRegionEffect_none
           reduceCtorEq] at hresume
     | ok child =>
         have effect := ProcessMessage.allowanceRegionEffect_none
-          (ca := ca) hprocess (parent := pre.withReturnData []) rfl
+          (ca := ca) hprocess (parent := pre.withReturnData []) rfl hsafe
         have hresumeState : post.state = child.state :=
           Resume.call_state hresume.symm
         have hsuffixStorage : Devm.getStor child ca = Devm.getStor post ca :=
@@ -457,7 +487,13 @@ theorem GenericCreate.allowanceRegionEffect_some_of_bodyEffect
           rfl
         change pre.state.getStor ca = createPre.state.getStor ca
         rw [hstate]
-        exact State.incrNonce_get_stor.symm
+        symm
+        change ((pre.state.incrNonce sevm.currentTarget).get ca).stor =
+          (pre.state.get ca).stor
+        rw [State.incrNonce_get_stor, if_neg]
+        rintro ⟨heq, hempty⟩
+        rw [heq] at hempty
+        exact installedWeth10Code_size_ne_zero hcode hempty.1
       have hcreatePreCode : pre.getCode ca = createPre.getCode ca := by
         have hstate : createPre.state =
             pre.state.incrNonce sevm.currentTarget := by
@@ -466,7 +502,12 @@ theorem GenericCreate.allowanceRegionEffect_some_of_bodyEffect
         rw [hstate]
         exact State.incrNonce_get_code.symm
       have effect := ProcessCreateMessage.allowanceRegionEffect_of_bodyEffect
-        childRun hprocess (parent := createPre) rfl hnewNe hbody
+        childRun hprocess (parent := createPre) rfl hnewNe
+          (Or.inr (Or.inr (State.Protected.of_image (sem := (weth10 dp).codeSem)
+            (by
+              change some (createPre.getCode ca).toList = _
+              rw [← hcreatePreCode]
+              exact hcode)))) hbody
       have hresumeState : post.state = settled.state :=
         Resume.create_state hresume.symm
       have hpostStorage : Devm.getStor settled ca = Devm.getStor post ca :=
@@ -499,6 +540,8 @@ theorem GenericCreate.allowanceRegionEffect_none
     (hrun : GenericCreate sevm pre endowment newAddress mi ms
       .none (.ok post)) :
     AllowanceRegionEffect ca pre post [] := by
+  have hstorage : Devm.getStor pre ca = Devm.getStor post ca :=
+    (congrFun (Blanc.GenericCreate.none_getStor_eq hrun) ca).symm
   unfold GenericCreate genericCreate.step at hrun
   simp only [Bind.bind, Except.bind, Except.assert, assertDynamic,
     Pure.pure, Except.pure] at hrun
@@ -519,9 +562,6 @@ theorem GenericCreate.allowanceRegionEffect_none
     have hstate : post.state = pre.state.incrNonce sevm.currentTarget := by
       rw [Except.ok.inj hrun.2, ← (Devm.push_of_push hpush).state]
       rfl
-    have hstorage : Devm.getStor pre ca = Devm.getStor post ca :=
-      State.incrNonce_get_stor.symm.trans
-        (congrArg (fun state : State => state.getStor ca) hstate.symm)
     have hcode : pre.getCode ca = post.getCode ca :=
       State.incrNonce_get_code.symm.trans
         (congrArg (fun state : State => state.getCode ca) hstate.symm)
@@ -607,7 +647,11 @@ theorem Xinst.allowanceRegionEffect_some_of_bodyEffect
       rw [hspawn]
       exact ⟨.ok settled, hframe, hresume.symm⟩
     have effect := GenericCall.allowanceRegionEffect_some_of_bodyEffect
-      grun child hbody
+      grun child (Or.inr (Or.inr (State.Protected.of_image
+          (sem := (weth10 dp).codeSem) (by
+            change some (d.getCode ca).toList = _
+            rw [← hprefix.getCode ca]
+            exact hcode)))) hbody
     simpa only [List.nil_append] using
       (AllowanceRegionEffect.of_getStorCode_eq
         (hprefix.getStor ca) (hprefix.getCode ca)).append effect
@@ -616,7 +660,8 @@ theorem Xinst.allowanceRegionEffect_some_of_bodyEffect
 theorem Xinst.allowanceRegionEffect_none
     {ca : Adr} {sevm : Sevm} {pre post : Devm} {x : Xinst}
     (hrun : Xinst.Run sevm pre x .none (.ok post))
-    (hfork : CoveredFork sevm.benvStat.fork) :
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (hp : State.Protected pre.state ca) :
     AllowanceRegionEffect ca pre post [] := by
   unfold Xinst.Run at hrun
   rcases Xinst.step_shapeCovered sevm pre x hfork with
@@ -634,6 +679,7 @@ theorem Xinst.allowanceRegionEffect_none
       (AllowanceRegionEffect.of_getStorCode_eq
         (hprefix.getStor ca) (hprefix.getCode ca)).append effect
   · have effect := GenericCall.allowanceRegionEffect_none (ca := ca) hrun
+      (Or.inr (Or.inr (hprefix.state ▸ hp)))
     simpa only [List.nil_append] using
       (AllowanceRegionEffect.of_getStorCode_eq
         (hprefix.getStor ca) (hprefix.getCode ca)).append effect
@@ -648,7 +694,8 @@ theorem Ninst.foreignNoneAllowanceRegionEffect
     {ca : Adr} {pc : Nat} {sevm : Sevm} {pre post : Devm} {n : Ninst}
     (run : Ninst.StepRun pc sevm pre n .none (.ok post))
     (hforeign : sevm.currentTarget ≠ ca)
-    (hfork : CoveredFork sevm.benvStat.fork) :
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (hp : State.Protected pre.state ca) :
     AllowanceRegionEffect ca pre post [] := by
   cases n with
   | reg r =>
@@ -668,7 +715,7 @@ theorem Ninst.foreignNoneAllowanceRegionEffect
           (Rinst.preserves_getCode hreg ca).symm
   | exec x =>
       simp only [Ninst.StepRun, Ninst.step_exec] at run
-      exact Xinst.allowanceRegionEffect_none (XStep.run_toStep.mp run) hfork
+      exact Xinst.allowanceRegionEffect_none (XStep.run_toStep.mp run) hfork hp
   | push xs hxs =>
       have hframe := Ninst.push_instructionFrame_effectRec
         (hxs := hxs) (xl := .none) trivial run
@@ -707,13 +754,14 @@ balances and marks the foreign donor for deletion. -/
 theorem Linst.foreignAllowanceRegionEffect
     {ca : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
     (run : Linst.Run sevm pre l (.ok post))
-    (_hforeign : sevm.currentTarget ≠ ca) :
+    (_hforeign : sevm.currentTarget ≠ ca)
+    (hp : State.Protected pre.state ca) :
     AllowanceRegionEffect ca pre post [] := by
   have hcodeFrame := Linst.run_codeFrame run
   have hcode : pre.getCode ca = post.getCode ca :=
     (hcodeFrame ca).symm
   exact AllowanceRegionEffect.of_getStorCode_eq
-    (congrFun (Linst.getStor_eq run) ca).symm hcode
+    (Linst.getStor_eq run ca hp).symm hcode
 
 /-! ## The five interpreter cases -/
 
@@ -740,7 +788,7 @@ theorem Exec.CoreAllowanceSound.nextNone
     Exec.CoreAllowanceSound dp ca pc sevm pre out := by
   intro run committed hatp _ hcov
   have head := Ninst.foreignNoneAllowanceRegionEffect (ca := ca) hstep hforeign
-    hcov
+    hcov (State.Protected.of_image (sem := (weth10 dp).codeSem) hatp.1)
   have hatpInter : Prog.At (weth10 dp) ca
       (pc + n.size) sevm inter := by
     refine ⟨?_, fun htarget => (hforeign htarget).elim⟩
@@ -990,7 +1038,7 @@ theorem Exec.CoreAllowanceSound.last
     (hstep : Linst.Run sevm pre l out)
     (hforeign : sevm.currentTarget ≠ ca) :
     Exec.CoreAllowanceSound dp ca pc sevm pre out := by
-  intro run committed _ _ _
+  intro run committed hatp _ _
   have hevm : Evm.step ⟨pc, sevm, pre⟩ = .halt out := by
     rw [Evm.step_last hat]
     exact congrArg Step.halt hstep
@@ -1003,6 +1051,7 @@ theorem Exec.CoreAllowanceSound.last
   | ok post =>
       have effect := Linst.foreignAllowanceRegionEffect (ca := ca)
         hstep hforeign
+          (State.Protected.of_image (sem := (weth10 dp).codeSem) hatp.1)
       rw [Exec.attributionStream_eq_attributionInner_of_currentTarget_ne
           canonical committed hforeign]
       simpa only [canonical, Exec.attributionInner,
@@ -1085,9 +1134,10 @@ theorem Ninst.foreignNoneAllowanceRegionEffectSound
     {ca : Adr} {pc : Nat} {sevm : Sevm} {pre post : Devm} {n : Ninst}
     (run : Ninst.StepRun pc sevm pre n .none (.ok post))
     (hforeign : sevm.currentTarget ≠ ca)
-    (hfork : CoveredFork sevm.benvStat.fork) :
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (hp : State.Protected pre.state ca) :
     AllowanceRegionEffectSound ca pre post [] :=
-  .of_nilLedger (Ninst.foreignNoneAllowanceRegionEffect run hforeign hfork)
+  .of_nilLedger (Ninst.foreignNoneAllowanceRegionEffect run hforeign hfork hp)
 
 /-- Read-sound form of `Jinst.allowanceRegionEffect`. -/
 theorem Jinst.allowanceRegionEffectSound
@@ -1101,9 +1151,10 @@ theorem Jinst.allowanceRegionEffectSound
 theorem Linst.foreignAllowanceRegionEffectSound
     {ca : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
     (run : Linst.Run sevm pre l (.ok post))
-    (hforeign : sevm.currentTarget ≠ ca) :
+    (hforeign : sevm.currentTarget ≠ ca)
+    (hp : State.Protected pre.state ca) :
     AllowanceRegionEffectSound ca pre post [] :=
-  .of_nilLedger (Linst.foreignAllowanceRegionEffect run hforeign)
+  .of_nilLedger (Linst.foreignAllowanceRegionEffect run hforeign hp)
 
 
 /-- Proof-indexed message transport: the concrete child derivation's allowance
@@ -1116,6 +1167,8 @@ theorem ProcessMessage.allowanceRegionEffectSound_of_bodyEffect
     (hprocess : ProcessMessage msg
       (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
     (hparent : parent.state = msg.benv.state)
+    (hsafe : msg.shouldTransferValue = false ∨ msg.value = 0 ∨
+      State.Protected parent.state ca)
     (hbody : ∀ (committed : Execution.commits out = true),
       AllowanceRegionEffectSound ca pre
         (Execution.committedPost out committed)
@@ -1124,6 +1177,10 @@ theorem ProcessMessage.allowanceRegionEffectSound_of_bodyEffect
       (if Blanc.Frame.settlementCommits
           (Frame.ofCall msg) out = true
        then Exec.attributionStream dp ca run else []) := by
+  have hentrySafe : msg.shouldTransferValue = false ∨ msg.value = 0 ∨
+      State.Protected msg.benv.state ca := by
+    rw [← hparent]
+    exact hsafe
   by_cases hsettle : Jaune.Frame.settlementCommits
       (Frame.ofCall msg) out = true
   · rw [if_pos hsettle]
@@ -1141,7 +1198,7 @@ theorem ProcessMessage.allowanceRegionEffectSound_of_bodyEffect
       exact component
     have hentryStorage : Devm.getStor parent ca = Devm.getStor pre ca := by
       exact (congrArg (fun state : State => state.getStor ca) hparent).trans <|
-        (benvAfterTransfer_getStor_eq htransfer ca).symm.trans <|
+        (benvAfterTransfer_getStor_eq htransfer ca hentrySafe).symm.trans <|
           (congrArg (fun state : State => state.getStor ca) hpreState).symm
     have hentryCode : parent.getCode ca = pre.getCode ca := by
       exact (congrArg (fun state : State => state.getCode ca) hparent).trans <|
@@ -1193,6 +1250,8 @@ theorem ProcessCreateMessage.allowanceRegionEffectSound_of_bodyEffect
       (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
     (hparent : parent.state = msg.benv.state)
     (htargetNe : msg.currentTarget ≠ ca)
+    (hsafe : msg.shouldTransferValue = false ∨ msg.value = 0 ∨
+      State.Protected parent.state ca)
     (hbody : ∀ (committed : Execution.commits out = true),
       AllowanceRegionEffectSound ca pre
         (Execution.committedPost out committed)
@@ -1201,6 +1260,22 @@ theorem ProcessCreateMessage.allowanceRegionEffectSound_of_bodyEffect
       (if Blanc.Frame.settlementCommits
           (Frame.ofCreate msg) out = true
        then Exec.attributionStream dp ca run else []) := by
+  have hentrySafe : (processCreateMessage.msg msg).shouldTransferValue = false ∨
+      (processCreateMessage.msg msg).value = 0 ∨
+      State.Protected (processCreateMessage.msg msg).benv.state ca := by
+    rcases hsafe with hoff | hzero | hp
+    · exact Or.inl hoff
+    · exact Or.inr (Or.inl hzero)
+    · apply Or.inr ∘ Or.inr
+      have hget : (processCreateMessage.msg msg).benv.state.get ca =
+          msg.benv.state.get ca := by
+        change (((msg.benv.state.setStor msg.currentTarget .empty).incrNonce
+          msg.currentTarget).get ca) = msg.benv.state.get ca
+        simp only [State.incrNonce, State.setStor]
+        rw [State.setAccount_get_ne _ htargetNe, State.get_set_ne _ htargetNe]
+      unfold State.Protected
+      rw [hget, ← hparent]
+      exact hp
   by_cases hsettle : Jaune.Frame.settlementCommits
       (Frame.ofCreate msg) out = true
   · rw [if_pos hsettle]
@@ -1239,7 +1314,7 @@ theorem ProcessCreateMessage.allowanceRegionEffectSound_of_bodyEffect
         (processCreateMessage.msg msg).benv.state.getCode ca
       rw [hparent, processCreateMessage.msg_getCode]
     have hentryStorage : Devm.getStor prepared ca = Devm.getStor pre ca := by
-      exact (benvAfterTransfer_getStor_eq htransfer ca).symm.trans <|
+      exact (benvAfterTransfer_getStor_eq htransfer ca hentrySafe).symm.trans <|
         (congrArg (fun state : State => state.getStor ca) hpreState).symm
     have hentryCode : prepared.getCode ca = pre.getCode ca := by
       exact (benvAfterTransfer_ok_getCode htransfer ca).symm.trans <|
@@ -1295,6 +1370,7 @@ theorem GenericCall.allowanceRegionEffectSound_some_of_bodyEffect
       isStatic ii is oi os code disablePrecompiles
       (.some ⟨⟨pc', childSevm, childPre⟩, childOut⟩) (.ok inter))
     (childRun : Exec pc' childSevm childPre childOut)
+    (hsafe : stv = false ∨ value = 0 ∨ State.Protected pre.state ca)
     (hbody : ∀ (committed : Execution.commits childOut = true),
       AllowanceRegionEffectSound ca childPre
         (Execution.committedPost childOut committed)
@@ -1324,7 +1400,7 @@ theorem GenericCall.allowanceRegionEffectSound_some_of_bodyEffect
         (.some ⟨⟨pc', childSevm, childPre⟩, childOut⟩) (.ok child) := by
       simpa only [ProcessMessage, msg, callPre, Mem.read] using hprocess
     have effect := ProcessMessage.allowanceRegionEffectSound_of_bodyEffect childRun
-      hprocess' (parent := callPre) rfl hbody
+      hprocess' (parent := callPre) rfl hsafe hbody
     have hprefixStorage : Devm.getStor pre ca = Devm.getStor callPre ca := by
       rfl
     have hprefixCode : pre.getCode ca = callPre.getCode ca := by
@@ -1410,7 +1486,13 @@ theorem GenericCreate.allowanceRegionEffectSound_some_of_bodyEffect
           rfl
         change pre.state.getStor ca = createPre.state.getStor ca
         rw [hstate]
-        exact State.incrNonce_get_stor.symm
+        symm
+        change ((pre.state.incrNonce sevm.currentTarget).get ca).stor =
+          (pre.state.get ca).stor
+        rw [State.incrNonce_get_stor, if_neg]
+        rintro ⟨heq, hempty⟩
+        rw [heq] at hempty
+        exact installedWeth10Code_size_ne_zero hcode hempty.1
       have hcreatePreCode : pre.getCode ca = createPre.getCode ca := by
         have hstate : createPre.state =
             pre.state.incrNonce sevm.currentTarget := by
@@ -1419,7 +1501,12 @@ theorem GenericCreate.allowanceRegionEffectSound_some_of_bodyEffect
         rw [hstate]
         exact State.incrNonce_get_code.symm
       have effect := ProcessCreateMessage.allowanceRegionEffectSound_of_bodyEffect
-        childRun hprocess (parent := createPre) rfl hnewNe hbody
+        childRun hprocess (parent := createPre) rfl hnewNe
+          (Or.inr (Or.inr (State.Protected.of_image (sem := (weth10 dp).codeSem)
+            (by
+              change some (createPre.getCode ca).toList = _
+              rw [← hcreatePreCode]
+              exact hcode)))) hbody
       have hresumeState : post.state = settled.state :=
         Resume.create_state hresume.symm
       have hpostStorage : Devm.getStor settled ca = Devm.getStor post ca :=
@@ -1497,7 +1584,11 @@ theorem Xinst.allowanceRegionEffectSound_some_of_bodyEffect
       rw [hspawn]
       exact ⟨.ok settled, hframe, hresume.symm⟩
     have effect := GenericCall.allowanceRegionEffectSound_some_of_bodyEffect
-      grun child hbody
+      grun child (Or.inr (Or.inr (State.Protected.of_image
+          (sem := (weth10 dp).codeSem) (by
+            change some (d.getCode ca).toList = _
+            rw [← hprefix.getCode ca]
+            exact hcode)))) hbody
     simpa only [List.nil_append] using
       (AllowanceRegionEffectSound.of_getStorCode_eq
         (hprefix.getStor ca) (hprefix.getCode ca)).append effect
@@ -1528,6 +1619,7 @@ theorem Exec.CoreAllowanceReadSound.nextNone
   intro run committed hatp _ hcov
   have head := Ninst.foreignNoneAllowanceRegionEffectSound (ca := ca) hstep
     hforeign hcov
+      (State.Protected.of_image (sem := (weth10 dp).codeSem) hatp.1)
   have hatpInter : Prog.At (weth10 dp) ca
       (pc + n.size) sevm inter := by
     refine ⟨?_, fun htarget => (hforeign htarget).elim⟩
@@ -1777,7 +1869,7 @@ theorem Exec.CoreAllowanceReadSound.last
     (hstep : Linst.Run sevm pre l out)
     (hforeign : sevm.currentTarget ≠ ca) :
     Exec.CoreAllowanceReadSound dp ca pc sevm pre out := by
-  intro run committed _ _ _
+  intro run committed hatp _ _
   have hevm : Evm.step ⟨pc, sevm, pre⟩ = .halt out := by
     rw [Evm.step_last hat]
     exact congrArg Step.halt hstep
@@ -1790,6 +1882,7 @@ theorem Exec.CoreAllowanceReadSound.last
   | ok post =>
       have effect := Linst.foreignAllowanceRegionEffectSound (ca := ca)
         hstep hforeign
+          (State.Protected.of_image (sem := (weth10 dp).codeSem) hatp.1)
       rw [Exec.attributionStream_eq_attributionInner_of_currentTarget_ne
           canonical committed hforeign]
       simpa only [canonical, Exec.attributionInner,
