@@ -1527,8 +1527,10 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   from an output fact: run the gas-exact forward walk from
   `pre.withGasLeft N` (`Devm.EqModGas.withGasLeft`) and transfer its output
   (`Devm.EqModGas.output_eq`). The same module adds `of_withOutput`,
-  `of_addLog`, `of_popList`, `of_popBurnList`, and gas-independence of the
-  forward cost helpers (`sloadCost_congr`, `sstoreCost_congr`, `afterSload`,
+  `of_addLog`, `of_popList`, `of_popBurnList`, and
+  `Devm.EqModGas.getOrigStorVal_congr`, which transports transaction-original
+  storage reads using equality of the created-account sets. It also supplies
+  gas-independence of the forward cost helpers (`sloadCost_congr`, `sstoreCost_congr`, `afterSload`,
   `afterSstore`). A dispatcher that reaches a non-gas-free entry needs a
   two-run walk to the selected entry first.
 

@@ -114,7 +114,7 @@ theorem popBurnBy_St2 {d w : B256} {c : Nat} :
     returnData := rfl, error := rfl, accessedAddresses := rfl,
     accessedStorageKeys := rfl, state := rfl, createdAccounts := rfl,
     transientStorage := rfl, stateGas := rfl, accountReads := rfl,
-    storageReads := rfl }
+    storageReads := rfl, storageWrites := rfl }
 
 /-- A `JUMPI` that falls through. -/
 theorem rx_branch_zero {d : B256} (k : SFunc.RunExact fs sevm (St b S M G) f o) :

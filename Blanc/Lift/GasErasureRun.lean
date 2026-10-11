@@ -28,19 +28,19 @@ open Jaune
 /-! ## Agreement under the remaining updates -/
 
 theorem Devm.EqModGas.withGasLeft (a : Devm) (g : Nat) : EqModGas a (a.withGasLeft g) :=
-  ⟨rfl, rfl, trivial, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+  ⟨rfl, rfl, trivial, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 theorem Devm.EqModGas.of_withOutput {a b : Devm} (o : Bytes) (h : EqModGas a b) :
     EqModGas (a.withOutput o) (b.withOutput o) :=
   ⟨h.stack, h.memory, trivial, h.logs, h.refundCounter, rfl, h.accountsToDelete, h.returnData,
     h.error, h.accessedAddresses, h.accessedStorageKeys, h.state, h.createdAccounts,
-    h.transientStorage, h.stateGas, h.accountReads, h.storageReads⟩
+    h.transientStorage, h.stateGas, h.accountReads, h.storageReads, h.storageWrites⟩
 
 theorem Devm.EqModGas.of_addLog {a b : Devm} (l : Log) (h : EqModGas a b) :
     EqModGas (a.addLog l) (b.addLog l) :=
   ⟨h.stack, h.memory, trivial, congrArg (· ++ [l]) h.logs, h.refundCounter, h.output,
     h.accountsToDelete, h.returnData, h.error, h.accessedAddresses, h.accessedStorageKeys, h.state,
-    h.createdAccounts, h.transientStorage, h.stateGas, h.accountReads, h.storageReads⟩
+    h.createdAccounts, h.transientStorage, h.stateGas, h.accountReads, h.storageReads, h.storageWrites⟩
 
 theorem Devm.EqModGas.output_eq {a b : Devm} (h : EqModGas a b) : a.output = b.output := h.output
 
@@ -64,7 +64,8 @@ theorem Devm.EqModGas.of_popList {a a₁ b b₁ : Devm} {xs ys : List B256}
     h1.transientStorage.symm.trans (h.transientStorage.trans h2.transientStorage),
     h1.stateGas.symm.trans (h.stateGas.trans h2.stateGas),
     h1.accountReads.symm.trans (h.accountReads.trans h2.accountReads),
-    h1.storageReads.symm.trans (h.storageReads.trans h2.storageReads)⟩⟩
+    h1.storageReads.symm.trans (h.storageReads.trans h2.storageReads),
+    h1.storageWrites.symm.trans (h.storageWrites.trans h2.storageWrites)⟩⟩
 
 /-- Two `PopBurn`s of equally many words from agreeing states pop the same words onto agreeing
 states. -/
@@ -87,7 +88,8 @@ theorem Devm.EqModGas.of_popBurnList {a a₁ b b₁ : Devm} {xs ys : List B256}
     h1.transientStorage.symm.trans (h.transientStorage.trans h2.transientStorage),
     h1.stateGas.symm.trans (h.stateGas.trans h2.stateGas),
     h1.accountReads.symm.trans (h.accountReads.trans h2.accountReads),
-    h1.storageReads.symm.trans (h.storageReads.trans h2.storageReads)⟩⟩
+    h1.storageReads.symm.trans (h.storageReads.trans h2.storageReads),
+    h1.storageWrites.symm.trans (h.storageWrites.trans h2.storageWrites)⟩⟩
 
 /-! ## `KECCAK256` and `LOG n` -/
 
@@ -247,10 +249,18 @@ theorem Devm.EqModGas.sloadCost_congr {a b : Devm} (sevm : Sevm) (k : B256) (h :
   unfold sloadCost
   rw [h.accessedStorageKeys_eq]
 
+/-- Equal created-account sets give the same transaction-original storage value. -/
+theorem Devm.EqModGas.getOrigStorVal_congr {a b : Devm} (sevm : Sevm) (owner : Adr)
+    (key : B256) (h : EqModGas a b) :
+    a.getOrigStorVal sevm owner key = b.getOrigStorVal sevm owner key := by
+  have created : a.createdAccounts = b.createdAccounts := h.createdAccounts
+  unfold Devm.getOrigStorVal
+  rw [created]
+
 theorem Devm.EqModGas.sstoreCost_congr {a b : Devm} (sevm : Sevm) (k v : B256) (h : EqModGas a b) :
     sstoreCost sevm a k v = sstoreCost sevm b k v := by
   unfold sstoreCost
-  rw [h.accessedStorageKeys_eq, h.getStorVal_congr]
+  rw [h.accessedStorageKeys_eq, h.getStorVal_congr, h.getOrigStorVal_congr]
 
 theorem Devm.EqModGas.afterSload {a b : Devm} (sevm : Sevm) (k : B256) (h : EqModGas a b) :
     EqModGas (afterSload sevm a k) (afterSload sevm b k) := by
@@ -264,7 +274,7 @@ theorem Devm.EqModGas.afterSstore {a b : Devm} (sevm : Sevm) (k v : B256) (h : E
     EqModGas (afterSstore sevm a k v) (afterSstore sevm b k v) := by
   unfold Blanc.afterSstore
   dsimp only
-  rw [h.accessedStorageKeys_eq, h.getStorVal_congr, h.refundCounter_eq]
+  rw [h.accessedStorageKeys_eq, h.getStorVal_congr, h.getOrigStorVal_congr, h.refundCounter_eq]
   split_ifs
   · exact h.of_withRefundCounter.of_setStorVal
   · exact h.of_addAccessedStorageKey.of_withRefundCounter.of_setStorVal
