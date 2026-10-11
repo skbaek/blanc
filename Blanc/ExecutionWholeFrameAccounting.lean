@@ -108,9 +108,10 @@ theorem wholeFrameTarget
       rw [self, hdf, hself]
       rfl
     refine ⟨fun _ => hobs, fun _ => ⟨[], ?_, ?_⟩⟩
-    · have hview := Exec.storageView_committedPost_eq_of_static run hs committed fork
+    · have hview := Exec.getStor_committedPost_eq_of_static_protected run hs committed fork ca
+        (State.Protected.of_image installed.1)
       have heq : C.ofState (Execution.committedPost (.ok post) committed).state =
-          C.ofState pre.state := ofStateGet fun k => congrFun (congrFun hview ca) k
+          C.ofState pre.state := ofStateGet fun k => congrArg (fun stor => stor.get k) hview
       rw [heq, entryOfState]
       exact C.nil _
     · rw [hobs]
