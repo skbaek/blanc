@@ -361,6 +361,12 @@ Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
   `Func.ExecWitness.prepend_fsig` and `fsigCost` to construct the shared
   four-instruction selector prefix before the residual function.
 - `Func.ExecSat` / `Prog.ExecSat` package predicates over outcomes.
+- `Func.execSat_sload_step_with_nonce`,
+  `Func.execSat_sstore_warm_step_with_nonce`, and
+  `Func.execSat_log_step_with_nonce` also pass equality of every account nonce
+  to the continuation, immediately after code equality. Use them when a walk
+  must transport nonce-based account protection. The original step helpers
+  retain their signatures as wrappers that discard this additional fact.
 - The `Ninst.runCompiled_*call*` family constructs concrete call crossings.
 - When the walk already holds the callee's own exact run, use
   [`Blanc/Lift/ExactWalkCallChild.lean`](../Blanc/Lift/ExactWalkCallChild.lean):
