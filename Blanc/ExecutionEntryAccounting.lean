@@ -52,6 +52,8 @@ theorem Xinst.step_spawn_world {sevm : Sevm} {devm : Devm} {x : Xinst}
       hf, -, -, -, hsh⟩ <;> rw [hsh] at hs
   · cases hs
   · have hcode := (genericCreate.step_spawn_frame hs)
+    have creatorNonce := UInt64.add_one_ne_zero_of_ne_max
+      (genericCreate_step_spawn_nonce_ne_max hs)
     simp only [genericCreate.step, Bind.bind, Except.bind, Except.assert,
       assertDynamic, Pure.pure, Except.pure] at hs
     repeat' split at hs
@@ -63,11 +65,12 @@ theorem Xinst.step_spawn_world {sevm : Sevm} {devm : Devm} {x : Xinst}
     refine ⟨?_, ?_⟩
     · simp only [Frame.ofCreate]
       dsimp only [createMsg, processCreateMessage.msg, Msg.withBenv, Benv.setStor,
-        addCreatedAccount, Benv.incrNonce, State.getStor]
-      rw [State.incrNonce_get_stor, State.setStor_get_stor_ne hna, addAccessedAddress_state]
+        addCreatedAccount, Benv.incrNonce, Benv.clearStorageWritesIfEmpty, State.getStor]
+      rw [State.incrNonce_get_stor, ite_eq_right (fun empty => hna empty.1),
+        State.setStor_get_stor_ne hna, addAccessedAddress_state]
       show ((((d.withGasLeft (d.gasLeft - except64th d.gasLeft)).withReturnData []).state.incrNonce
         sevm.currentTarget).get a).stor = _
-      rw [State.incrNonce_get_stor]
+      rw [State.incrNonce_get_stor, ite_eq_right (fun empty => creatorNonce empty.2.2.1)]
       exact congrArg (fun w : Jaune.State => (w.get a).stor) hf.state.symm
     · simp only [Frame.ofCreate]
       rw [Jaune.processCreateMessage_msg_bal_eq]
@@ -97,7 +100,12 @@ theorem Evm.step_spawn_child_world {pc : Nat} {sevm : Sevm} {devm : Devm}
   obtain ⟨x, -, hx, -⟩ := Evm.step_spawn_inv hs
   obtain ⟨hstor, hbal⟩ := Xinst.step_spawn_world hfork hx ha
   obtain ⟨benv, transfer, rfl⟩ := Frame.enter_run_inv he
-  refine ⟨(congrFun (benvAfterTransfer_getStor_eq transfer) a).trans hstor, ?_⟩
+  have protection : State.Protected f.inner.benv.state a := by
+    right
+    intro codeEmpty
+    exact ha ((Xinst.step_spawn_getCode hx a).symm.trans
+      (ByteArray.eq_empty_of_size_eq_zero codeEmpty))
+  refine ⟨(benvAfterTransfer_ok_getStor transfer a (Or.inr protection)).trans hstor, ?_⟩
   have h := Msg.benvAfterTransfer_balance_effect (out := .ok benv) transfer
   change State.balSum benv.state ≤ State.balSum f.inner.benv.state at h
   change sum benv.state.bal ≤ _
@@ -170,6 +178,7 @@ theorem EntryReplay.append {a b c : Stor} {xs ys : List Exec.Frame}
 
 /-- The storage boundary at `ca`, with committed frames as steps. -/
 def entryCarrier : ReplayCarrier ca where
+  readsStorage := true
   Snap := Stor
   Step := Exec.Frame
   Tag := Unit
@@ -177,15 +186,16 @@ def entryCarrier : ReplayCarrier ca where
   ofState state := state.getStor ca
   frameEntry _ state := state.getStor ca
   nil := fun _ h => ⟨h, fun _ hf => absurd hf List.not_mem_nil⟩
-  silent := fun storage _ => storage
+  silent := fun storage _ => storage rfl
   credit := by
     intro _ pre post _ storage _ _
     refine ⟨[], fun h => ⟨?_, fun _ hf => absurd hf List.not_mem_nil⟩⟩
     rw [storage]
     exact h
   entry_eq_ofState := by
-    intro _ _ _ _ transfer _
-    exact congrFun (benvAfterTransfer_getStor_eq transfer) ca
+    intro _ _ caller_ne _ transfer sum_nof
+    exact benvAfterTransfer_getStor_eq_of_safe transfer sum_nof
+      (fun transfers _ => Or.inl (caller_ne transfers))
 
 /-- Every non-static committed frame at `ca` is observed, as itself. -/
 def entryObservation : ReplayObservation (entryCarrier ca sem entry I) where
