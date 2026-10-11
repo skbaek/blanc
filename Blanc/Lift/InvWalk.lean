@@ -25,15 +25,15 @@ theorem St.of_stackRel {R1 : List B256 → List B256 → Prop} {R3 : Nat → Nat
     (h : Devm.Rel {Devm.Rels.eq with stack := R1, gasLeft := R3} (St b S M G) d) :
     d = St b d.stack M d.gasLeft := by
   obtain ⟨_, hmem, _, hlogs, hrc, hout, hdel, hrd, herr, haddr, hkeys, hstate, hcre, htr, hsg,
-    hacc, hsto⟩ := h
-  rcases d with ⟨⟨s, m, g, sg⟩, ⟨l, rc, o, del, rd, e, ad, ks, cr, ar, sr⟩, ⟨st, tr⟩⟩
+    hacc, hsto, hwrite⟩ := h
+  rcases d with ⟨⟨s, m, g, sg⟩, ⟨l, rc, o, del, rd, e, ad, ks, cr, ar, sr⟩, ⟨st, tr, sw⟩⟩
   rcases b with ⟨⟨s0, m0, g0, sg0⟩, ⟨l0, rc0, o0, del0, rd0, e0, ad0, ks0, cr0, ar0, sr0⟩,
-    ⟨st0, tr0⟩⟩
+    ⟨st0, tr0, sw0⟩⟩
   simp only [St, Devm.setMach, Devm.memory, Devm.logs, Devm.refundCounter, Devm.output,
     Devm.accountsToDelete, Devm.returnData, Devm.error, Devm.accessedAddresses,
     Devm.accessedStorageKeys, Devm.state, Devm.createdAccounts, Devm.transientStorage,
     Devm.stateGas, Devm.Rels.eq] at *
-  subst hmem hlogs hrc hout hdel hrd herr haddr hkeys hstate hcre htr hsg hacc hsto
+  subst hmem hlogs hrc hout hdel hrd herr haddr hkeys hstate hcre htr hsg hacc hsto hwrite
   rfl
 
 section Steps
@@ -257,15 +257,15 @@ section World
 theorem Devm.eq_setGas_of_burn {a c : Devm} (h : Devm.Burn a c) :
     c = a.setMach ⟨a.stack, a.memory, c.gasLeft, a.stateGas⟩ := by
   obtain ⟨hs, hmem, _, hlogs, hrc, hout, hdel, hrd, herr, haddr, hkeys, hstate, hcre, htr, hsg,
-    hacc, hsto⟩ := h
-  rcases c with ⟨⟨s, m, g, sg⟩, ⟨l, rc, o, del, rd, e, ad, ks, cr, ar, sr⟩, ⟨st, tr⟩⟩
+    hacc, hsto, hwrite⟩ := h
+  rcases c with ⟨⟨s, m, g, sg⟩, ⟨l, rc, o, del, rd, e, ad, ks, cr, ar, sr⟩, ⟨st, tr, sw⟩⟩
   rcases a with ⟨⟨s0, m0, g0, sg0⟩, ⟨l0, rc0, o0, del0, rd0, e0, ad0, ks0, cr0, ar0, sr0⟩,
-    ⟨st0, tr0⟩⟩
+    ⟨st0, tr0, sw0⟩⟩
   simp only [Devm.stack, Devm.memory, Devm.logs, Devm.refundCounter, Devm.output,
     Devm.accountsToDelete, Devm.returnData, Devm.error, Devm.accessedAddresses,
     Devm.accessedStorageKeys, Devm.state, Devm.createdAccounts, Devm.transientStorage,
     Devm.stateGas, Devm.Rels.eq] at *
-  subst hs hmem hlogs hrc hout hdel hrd herr haddr hkeys hstate hcre htr hsg hacc hsto
+  subst hs hmem hlogs hrc hout hdel hrd herr haddr hkeys hstate hcre htr hsg hacc hsto hwrite
   rfl
 
 variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}

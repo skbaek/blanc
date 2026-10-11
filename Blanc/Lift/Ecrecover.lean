@@ -103,8 +103,8 @@ theorem ecrecover_output_of_processMessage_clean
         subst child
         cases hclean
     · exact False.elim (hinterp.1 (by
-        obtain ⟨st_mid, hsub, hbenv⟩ := of_benvAfterTransfer rfl hbt
-        subst benv
+        rw [Msg.benvAfterTransfer_of_value_zero (by rfl)] at hbt
+        cases hbt
         exact hpre))
 
 end Blanc.Lift

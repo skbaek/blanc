@@ -367,7 +367,8 @@ Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
   `Ninst.runCompiled_call_nonzero_child` resumes a nonzero-value `CALL` into a
   non-precompile callee from `exec (initEvm (callChildMsg …)) = .ok cpost` with
   `cpost.error = none`, the child message being the parent-built message over
-  the debited world; the parent lands in `callChildPost` (child world and
+  the debited world with empty-caller storage writes cleared and the callee
+  credited; the parent lands in `callChildPost` (child world and
   warm sets adopted, gas returned, flag `1` pushed, output copied), and
   `callChildPost_facts` projects every field when the child returned nothing.
   A lifted callee supplies `exec … = .ok _` through `exec_iff_exec_eq` from its
@@ -375,7 +376,8 @@ Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
   `adrSet_union_isEmpty` carries an empty deletion set through the resumed
   parent's `accountsToDelete` union.
   The zero-value sibling is `Ninst.runCompiled_call_zero_child` (child message
-  `callChildMsg … 0 …`); `callChildPost_facts_zero` projects the resumed parent
+  `callChildMsg … 0 …` keeps the entry environment and ignores `stmid`);
+  `callChildPost_facts_zero` projects the resumed parent
   when the output window is empty, whatever the child returned.
   For a loop that calls once per iteration (`GAS; CALL` forwarding everything),
   `calculateMsgCallGas_all` closes `calculateMsgCallGas` to all but one 64th of
@@ -4603,8 +4605,13 @@ contract-neutral.
   `rsstoreC`, `rsent`, `rlog2`, `rlog3`, `rreq`) in [`Blanc/Lift/ExactWalkSolc.lean`](../Blanc/Lift/ExactWalkSolc.lean);
   a value-bearing (`callNZ_ex`, `rx_callNZ`) or zero-value (`callZ_ex`, `rx_callZ`) `CALL` to a recipient without
   code, at its net charge `callNet`, with what it leaves (`CallPost`: output, logs, error, refund counter, emptiness of
-  the accounts to delete and the moved balances; `CallPost.getStor`) in
-  [`Blanc/Lift/ExactWalkCall.lean`](../Blanc/Lift/ExactWalkCall.lean).  Worked use: the deployed WETH9's writers,
+  the accounts to delete and the value-sensitive state relation) in
+  [`Blanc/Lift/ExactWalkCall.lean`](../Blanc/Lift/ExactWalkCall.lean).
+  `CallPost.state` is exact state identity at zero value and the debit/credit
+  relation otherwise. `CallPost.getStor` preserves an observed owner when
+  the value is zero or `State.Protected` holds in the entry world; an emptied
+  unprotected account can lose storage under a nonzero transfer.
+  Worked use: the deployed WETH9's writers,
   `Blanc/Lift/Weth9/LiveApprove.lean` … `LiveHistory.lean`.
 - Jump destinations: Jaune's own `jumpable_eq_jumpdestOk` (`Jaune/Machine.lean`)
   replaces its exponential `jumpable` by the linear `jumpdestOk` scan, for every

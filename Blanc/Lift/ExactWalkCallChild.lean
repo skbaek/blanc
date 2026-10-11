@@ -20,13 +20,14 @@ namespace Blanc.Lift
 
 open Jaune
 
-/-- The message a nonzero-value `CALL` enters with once the value has moved:
-the spawned message over the caller's debited world `stmid`, credited at the
-callee. -/
+/-- The message a `CALL` enters after its actual value-transfer preparation. Zero value
+keeps the entry environment; nonzero value installs the debit, clears empty-caller storage
+writes, and credits the callee. -/
 def callChildMsg (sevm : Sevm) (p : Devm) (mcs : Nat) (value : B256) (callee dadr : Adr)
     (ii is : Nat) (code : ByteArray) (dp : Bool) (stmid : State) : Msg :=
-  (valueCallSpawnMsg sevm p mcs value callee dadr ii is code dp).withBenv
-    (((valueCallSpawnMsg sevm p mcs value callee dadr ii is code dp).benv.withState stmid).addBal
+  let msg := valueCallSpawnMsg sevm p mcs value callee dadr ii is code dp
+  if value = 0 then msg else
+    msg.withBenv (((msg.benv.withState stmid).clearStorageWritesIfEmpty msg.caller).addBal
       callee value)
 
 /-- The parent state a `CALL` resumes in after its child halted cleanly. -/
@@ -78,20 +79,23 @@ lemma Ninst.runCompiled_call_nonzero_child {sevm : Sevm} {devm : Devm}
   have h_afford : ¬ msg.benv.state.bal msg.caller < msg.value := by
     change ¬ (d1.getAcct sevm.currentTarget).bal < vw
     exact h_sender
-  obtain ⟨stmid', hsub', hbt⟩ := Msg.benvAfterTransfer_of_affordable msg rfl h_afford
+  obtain ⟨stmid', hsub', hbt⟩ := Msg.benvAfterTransfer_of_affordable msg rfl h_afford h_value
   have hstmid : stmid' = stmid := by
     have h := hsub'
     change d1.state.subBal sevm.currentTarget vw = some stmid' at h
     exact Option.some.inj (h.symm.trans h_sub)
   subst hstmid
-  let benv' := (msg.benv.withState stmid').addBal msg.currentTarget msg.value
+  let benv' := ((msg.benv.withState stmid').clearStorageWritesIfEmpty msg.caller).addBal
+    msg.currentTarget msg.value
   let child := initEvm (msg.withBenv benv')
   have henter : (Frame.ofCall msg).enter = .run child := by
     apply Frame.enter_run_of_nonprecompile hbt
     · rfl
     · change sevm.benvStat.rules.isPrecomp dadr = false
       exact h_nonprecompile
-  have hexec : exec child = .ok cpost := h_exec
+  have hexec : exec child = .ok cpost := by
+    simpa only [callChildMsg, h_value, ite_false, child, benv', msg, p,
+      valueCallSpawnMsg, callMsg] using h_exec
   have hsettle : (Frame.ofCall msg).settle (exec child) = .ok cpost := by
     rw [hexec, Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
     simp only [Frame.ofCall, Frame.settleMsg, processMessage.settle, h_error,
@@ -186,24 +190,18 @@ lemma Ninst.runCompiled_call_zero_child {sevm : Sevm} {devm : Devm}
         cpost oiw.toNat osw.toNat) := by
   let p := callSpawnParent d1 (mcc + ext) iiw.toNat isw.toNat oiw.toNat osw.toNat
   let msg := callSpawnMsg sevm p mcs cw.toAdr dadr iiw.toNat isw.toNat code dp
-  have h_afford : ¬ msg.benv.state.bal msg.caller < msg.value := by
-    change ¬ d1.state.bal sevm.currentTarget < 0
-    rw [B256.not_lt]
-    exact B256.zero_le _
-  obtain ⟨stmid', hsub', hbt⟩ := Msg.benvAfterTransfer_of_affordable msg rfl h_afford
-  have hstmid : stmid' = stmid := by
-    have h := hsub'
-    change d1.state.subBal sevm.currentTarget 0 = some stmid' at h
-    exact Option.some.inj (h.symm.trans h_sub)
-  subst hstmid
-  let benv' := (msg.benv.withState stmid').addBal msg.currentTarget msg.value
+  have hbt : msg.benvAfterTransfer = .ok msg.benv :=
+    Msg.benvAfterTransfer_of_value_zero rfl
+  let benv' := msg.benv
   let child := initEvm (msg.withBenv benv')
   have henter : (Frame.ofCall msg).enter = .run child := by
     apply Frame.enter_run_of_nonprecompile hbt
     · rfl
     · change sevm.benvStat.rules.isPrecomp dadr = false
       exact h_nonprecompile
-  have hexec : exec child = .ok cpost := h_exec
+  have hexec : exec child = .ok cpost := by
+    simpa only [callChildMsg, ite_true, child, benv', msg, p,
+      valueCallSpawnMsg, callSpawnMsg, callMsg, Msg.withBenv] using h_exec
   have hsettle : (Frame.ofCall msg).settle (exec child) = .ok cpost := by
     rw [hexec, Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
     simp only [Frame.ofCall, Frame.settleMsg, processMessage.settle, h_error,

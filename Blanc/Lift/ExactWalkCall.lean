@@ -13,7 +13,7 @@ caller's gas falls by exactly the fixed part of the charge less the stipend:
 * `rx_callNZ`: the step for a nonzero value, at the net charge `callNet` (account access, a possible
   new-account charge, the value-transfer charge, less the stipend);
 
-The step exposes the state the `CALL` leaves (`CallPost`): the balances moved, storage kept, output,
+The step exposes the state the `CALL` leaves (`CallPost`): the value-sensitive state update, output,
 logs, error and refund counter kept and the emptiness of the accounts to delete kept.
 
 Nothing here mentions a contract.
@@ -37,16 +37,24 @@ structure CallPost (sevm : Sevm) (b post : Devm) (a : Adr) (v : B256) : Prop whe
   error : post.error = b.error
   refund : post.refundCounter = b.refundCounter
   accountsToDelete : post.accountsToDelete.isEmpty = b.accountsToDelete.isEmpty
-  state : ∃ stmid, b.state.subBal sevm.currentTarget v = some stmid ∧ post.state = stmid.addBal a v
+  state : if v = 0 then post.state = b.state else
+    ∃ stmid, b.state.subBal sevm.currentTarget v = some stmid ∧ post.state = stmid.addBal a v
 
-/-- A `CALL` to a code-free recipient keeps every account's storage: the balances move and nothing
-else of the world changes. -/
+/-- A `CALL` to a code-free recipient preserves an observed owner's storage when the value is
+zero or the owner is protected in the entry world. -/
 theorem CallPost.getStor {sevm : Sevm} {b post : Devm} {a : Adr} {v : B256}
-    (h : CallPost sevm b post a v) (x : Adr) : Devm.getStor post x = Devm.getStor b x := by
-  obtain ⟨stmid, hsub, hst⟩ := h.state
-  show post.state.getStor x = b.state.getStor x
-  rw [hst]
-  exact getStor_subBal_addBal hsub
+    (h : CallPost sevm b post a v) (x : Adr) (safe : v = 0 ∨ State.Protected b.state x) :
+    Devm.getStor post x = Devm.getStor b x := by
+  have hst := h.state
+  by_cases zero : v = 0
+  · simp only [zero, ite_true] at hst
+    show post.state.getStor x = b.state.getStor x
+    rw [hst]
+  · simp only [zero, ite_false] at hst
+    obtain ⟨stmid, hsub, hst⟩ := hst
+    show post.state.getStor x = b.state.getStor x
+    rw [hst]
+    exact getStor_subBal_addBal hsub (safe.resolve_left zero)
 
 section Steps
 
@@ -149,7 +157,9 @@ theorem callNZ_ex {gw cw vw iiw isw oiw osw : B256} {c : Nat}
   have hpost : post = St post (1 :: S) M G := by
     have := St.self hstk hmem'
     rwa [hgas''] at this
-  exact ⟨post, hrun, ⟨hout, hlogs, herr, hrefund, hdelete, ⟨stmid, hsub, hstate⟩⟩, hpost⟩
+  exact ⟨post, hrun, ⟨hout, hlogs, herr, hrefund, hdelete, by
+    simp only [hvw, ite_false]
+    exact ⟨stmid, hsub, hstate⟩⟩, hpost⟩
 
 /-- The step form of `callNZ_ex`. -/
 theorem rx_callNZ {gw cw vw iiw isw oiw osw : B256} {c : Nat}
@@ -215,8 +225,7 @@ theorem callZ_ex {gw cw iiw isw oiw osw : B256} {c : Nat}
       omega
     simp only [this, ite_false]
     simp only [tsub_zero, add_tsub_cancel_right, ↓reduceIte, add_zero]
-  obtain ⟨post, hrun, hstk, hmem, hgasl, herr, hout, hrd, hlogs, hrefund, hdelete, stmid, hsub,
-    hstate⟩ := Ninst.runCompiled_call_zero_value_codeFree (sevm := sevm) (devm := devm)
+  obtain ⟨post, hrun, hstk, hmem, hgasl, herr, hout, hrd, hlogs, hrefund, hdelete, hstate⟩ := Ninst.runCompiled_call_zero_value_codeFree (sevm := sevm) (devm := devm)
     (gw := gw) (cw := cw) (iiw := iiw) (isw := isw) (oiw := oiw) (osw := osw) (s := S)
     (dp := false) (dadr := cw.toAdr) (code := b.state.getCode cw.toAdr) (dgc := 0) (d1 := X)
     (ext := 0) (acc := accessCost cw.toAdr b.accessedAddresses)
@@ -238,7 +247,7 @@ theorem callZ_ex {gw cw iiw isw oiw osw : B256} {c : Nat}
   have hpost : post = St post (1 :: S) M G := by
     have := St.self hstk hmem'
     rwa [hgas''] at this
-  exact ⟨post, hrun, ⟨hout, hlogs, herr, hrefund, hdelete, ⟨stmid, hsub, hstate⟩⟩, hpost⟩
+  exact ⟨post, hrun, ⟨hout, hlogs, herr, hrefund, hdelete, hstate⟩, hpost⟩
 
 /-- The step form of `callZ_ex`. -/
 theorem rx_callZ {gw cw iiw isw oiw osw : B256} {c : Nat}
