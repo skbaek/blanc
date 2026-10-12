@@ -1732,6 +1732,7 @@ private theorem stubPauseWorld_afterSetStubSeam :
         mid.accessedStorageKeys ∧
       (stubPauseWorldSevm.currentTarget, expirySlot pauseWorldPauser) ∈
         mid.accessedStorageKeys ∧
+      mid.createdAccounts = stubRunAfterSetBase.createdAccounts ∧
       ∀ final : Devm,
         Func.RunCompiled
             ((runtime officialParams).main :: (runtime officialParams).aux)
@@ -1746,7 +1747,7 @@ private theorem stubPauseWorld_afterSetStubSeam :
     change CoveredFork .prague
     exact CoveredFork.prague
   obtain ⟨mid, hstk, hmem, hgas, _herr, _hout, _hret, _hlogs,
-      _hrefund, _hatd, _htrans, hask, _haddrs, _hpaused, hchain, hclose⟩ :=
+      _hrefund, _hatd, _htrans, hask, _haddrs, _hpaused, hchain, hcreatedMid, hclose⟩ :=
     PinnedTargetStubWalk.pauseAfterSet_stub_toSuccess_runCompiled (hfork := hfork)
       ((runtime officialParams).main :: (runtime officialParams).aux)
       stubPauseWorldSevm stubRunAfterSetBase pauseWorldCallee.toB256
@@ -1777,35 +1778,15 @@ private theorem stubPauseWorld_afterSetStubSeam :
         stubPauseWorld_target_not_precompile)
       (by norm_num only)
       (by norm_num only)
-  rcases hchain with ⟨st₁, st₂, hsub₁, hsub₂, hstate⟩
   have htargetOwner : pauseWorldCallee.toB256.toAdr ≠
       configWorldOwner := by
     simpa only [stubPauseWorld_currentTarget] using
       stubPauseWorld_target_ne_owner
   have hownerStor : (mid.state.get configWorldOwner).stor =
       (stubRunAfterSetBase.state.get configWorldOwner).stor := by
-    rw [hstate]
-    have hadd₂ :
-        ((st₂.addBal pauseWorldCallee.toB256.toAdr 0).get
-          configWorldOwner).stor = (st₂.get configWorldOwner).stor := by
-      unfold State.addBal
-      exact State.setBal_get_stor
-    have hwrite :
-        (((st₁.addBal pauseWorldCallee.toB256.toAdr 0).setStorVal
-          pauseWorldCallee.toB256.toAdr PinnedTargetControl.pausedUntilSlot
-          (pauseForProjection stubPauseWorldSevm.benvStat.time
-            pauseWorldDuration)).get configWorldOwner).stor =
-          ((st₁.addBal pauseWorldCallee.toB256.toAdr 0).get
-            configWorldOwner).stor := by
-      unfold State.setStorVal
-      exact congrArg Acct.stor (State.get_set_ne _ htargetOwner _)
-    have hadd₁ :
-        ((st₁.addBal pauseWorldCallee.toB256.toAdr 0).get
-          configWorldOwner).stor = (st₁.get configWorldOwner).stor := by
-      unfold State.addBal
-      exact State.setBal_get_stor
-    exact hadd₂.trans ((Blanc.state_subBal_stor hsub₂).trans
-      (hwrite.trans (hadd₁.trans (Blanc.state_subBal_stor hsub₁))))
+    rw [hchain]
+    unfold State.setStorVal
+    exact congrArg Acct.stor (State.get_set_ne _ htargetOwner _)
   have hstor : ∀ key : B256,
       mid.getStorVal configWorldOwner key =
         stubRunAfterSetBase.getStorVal configWorldOwner key := by
@@ -1813,7 +1794,7 @@ private theorem stubPauseWorld_afterSetStubSeam :
     exact congrArg (fun stor => stor.get key) hownerStor
   refine ⟨mid, hstk, hmem, hgas, hstor,
     (hask _).mpr (Or.inr stubRunAfterSetBase_warmCount),
-    (hask _).mpr (Or.inr stubRunAfterSetBase_warmExpiry), ?_⟩
+    (hask _).mpr (Or.inr stubRunAfterSetBase_warmExpiry), hcreatedMid, ?_⟩
   intro final hrun
   have h := hclose final hrun
   rw [show (42362 + 22731 + 2600 : Nat) = 67693 from by norm_num only] at h
@@ -1859,6 +1840,40 @@ private theorem stubPauseWorld_getOrigStorVal (key : B256) :
   change (stubPauseWorldState.get configWorldOwner).stor.get key = _
   rw [stubPauseWorldState_get_breaker]
 
+private theorem stubWorld_sload_created (sevm : Sevm) (b : Devm) (k : B256) :
+    (temporalSloadBase sevm b k).createdAccounts = b.createdAccounts := by
+  unfold temporalSloadBase
+  split <;> rfl
+
+private theorem stubWorld_sstore_created (sevm : Sevm) (b : Devm) (k v : B256) :
+    (temporalSstorePost sevm b k v).createdAccounts = b.createdAccounts := rfl
+
+private theorem stubWorld_addLog_created (b : Devm) (l : Log) :
+    (b.addLog l).createdAccounts = b.createdAccounts := rfl
+
+private theorem stubWorld_transVal_created (b : Devm) (a : Adr) (k v : B256) :
+    (b.setTransVal a k v).createdAccounts = b.createdAccounts := rfl
+
+/-- The stub world's breaker owner is not created in its transaction, so at any
+state with the entry created-account set its actual original read is the entry
+snapshot word. -/
+private theorem stubPauseWorld_actualOrigStor {d : Devm} {key : B256}
+    (hd : d.createdAccounts = stubPauseWorldPre.createdAccounts := by
+      (try simp only [stubRunAfterSetBase, stubRunRemoveBase3,
+          stubRunCountPost, stubRunKernelBase, indexClearPost, entryClearPost,
+          lengthWritePost, indexWritePost, entryWritePost, assignmentPost,
+          assignmentBase, pauseKernelBase, pauseDurationBase, pauseExpiryBase,
+          pauseLockPost, stubWorld_sload_created, stubWorld_sstore_created,
+          stubWorld_addLog_created, stubWorld_transVal_created,
+          Devm.setMach_createdAccounts]) <;> rfl) :
+    d.getOrigStorVal stubPauseWorldSevm configWorldOwner key =
+      pauseLastWorldStor.get key := by
+  have hnc : configWorldOwner ∉ d.createdAccounts := by
+    rw [hd]
+    exact Std.HashSet.not_mem_emptyWithCapacity
+  rw [Devm.getOrigStorVal, ite_cond_eq_false _ _ (eq_false hnc)]
+  exact stubPauseWorld_getOrigStorVal key
+
 private theorem stubPauseWorld_successSuffix :
     ∃ successPre final : Devm,
       Func.RunCompiled
@@ -1885,7 +1900,7 @@ private theorem stubPauseWorld_successSuffix :
   have hfork : CoveredFork stubPauseWorldSevm.benvStat.fork := by
     change CoveredFork .prague
     exact CoveredFork.prague
-  obtain ⟨mid, hstk, hmem, hgas, hstor, hwarmCount, hwarmExpiry, hclose⟩ :=
+  obtain ⟨mid, hstk, hmem, hgas, hstor, hwarmCount, hwarmExpiry, hmidCreated, hclose⟩ :=
     stubPauseWorld_afterSetStubSeam
   have hmidCount : mid.getStorVal stubPauseWorldSevm.currentTarget
       (countSlot pauseWorldPauser) = 0 := by
@@ -1927,7 +1942,15 @@ private theorem stubPauseWorld_successSuffix :
     hmidExpiry
     (by
       rw [stubPauseWorld_currentTarget]
-      exact stubPauseWorld_originalExpiry)
+      exact (stubPauseWorld_actualOrigStor (hd := hmidCreated.trans (by
+        (try simp only [stubRunAfterSetBase, stubRunRemoveBase3,
+            stubRunCountPost, stubRunKernelBase, indexClearPost, entryClearPost,
+            lengthWritePost, indexWritePost, entryWritePost, assignmentPost,
+            assignmentBase, pauseKernelBase, pauseDurationBase, pauseExpiryBase,
+            pauseLockPost, stubWorld_sload_created, stubWorld_sstore_created,
+            stubWorld_addLog_created, stubWorld_transVal_created,
+            Devm.setMach_createdAccounts]) <;> rfl))).trans
+        pauseLastStor_expiry)
     hwarmExpiry
     (stubRunSvc_reset (by decide) (by decide))
     (by norm_num only [gCallStipend])
@@ -2005,9 +2028,9 @@ private theorem stubPauseWorld_productionRun :
       pauseWorld_indexCallee_ne_count.symm).trans pauseLastStor_index)
     ((stubRunStor_countPost_other pauseWorld_length_ne_assignCallee.symm
       pauseWorld_length_ne_count.symm).trans pauseLastStor_length)
-    ((stubPauseWorld_getOrigStorVal _).trans pauseLastStor_entry)
-    ((stubPauseWorld_getOrigStorVal _).trans pauseLastStor_index)
-    ((stubPauseWorld_getOrigStorVal _).trans pauseLastStor_length)
+    ((stubPauseWorld_actualOrigStor).trans pauseLastStor_entry)
+    ((stubPauseWorld_actualOrigStor).trans pauseLastStor_index)
+    ((stubPauseWorld_actualOrigStor).trans pauseLastStor_length)
     stubRunCost_idxCold stubRunCost_lenCold stubRunCost_arrCold
     stubRunSvc_noop stubRunSvc_noop
     (stubRunSvc_reset (by decide) (by decide))
@@ -2044,11 +2067,11 @@ private theorem stubPauseWorld_productionRun :
     (pauseMemory_spec pauseWorldCallee.toB256
       pauseWorldDuration).2.2.2.2.1
     ((stubRunStor_kernelBase _).trans pauseLastStor_assignment)
-    ((stubPauseWorld_getOrigStorVal _).trans pauseLastStor_assignment)
+    ((stubPauseWorld_actualOrigStor).trans pauseLastStor_assignment)
     (stubRunSvc_reset (by decide) (by decide))
     ((stubRunStor_assignPost_other pauseWorld_assignCallee_ne_count).trans
       pauseLastStor_count)
-    ((stubPauseWorld_getOrigStorVal _).trans pauseLastStor_count)
+    ((stubPauseWorld_actualOrigStor).trans pauseLastStor_count)
     (stubRunSvc_reset (by decide) (by decide))
     (by norm_num only [gCallStipend]) rfl
     (by
@@ -2106,6 +2129,29 @@ private theorem stubPauseWorld_productionRun :
 
 private def stubPauseWorldAfterSetEntry : Devm :=
   stubRunAfterSetBase.setMach ⟨[], stubRunMemoryLast, 67693, stubRunAfterSetBase.stateGas⟩
+
+private theorem stubPauseWorldAfterSetEntry_ownerCode :
+    (stubPauseWorldAfterSetEntry.getCode stubPauseWorldSevm.currentTarget).toList ≠ [] := by
+  have addLogCode : ∀ (d : Devm) (l : Log) (a : Adr),
+      (d.addLog l).getCode a = d.getCode a := fun _ _ _ => rfl
+  have transCode : ∀ (d : Devm) (a : Adr) (k v : B256) (x : Adr),
+      (d.setTransVal a k v).getCode x = d.getCode x := fun _ _ _ _ _ => rfl
+  have hcarry : stubPauseWorldAfterSetEntry.getCode configWorldOwner =
+      stubPauseWorldPre.getCode configWorldOwner := by
+    simp only [stubPauseWorldAfterSetEntry, stubRunAfterSetBase, stubRunRemoveBase3,
+      stubRunCountPost, stubRunKernelBase, indexClearPost, entryClearPost,
+      lengthWritePost, indexWritePost, entryWritePost, assignmentPost,
+      assignmentBase, pauseKernelBase, pauseDurationBase, pauseExpiryBase,
+      pauseLockPost, Devm.getCode_setMach, addLogCode, transCode,
+      temporalSstorePost_getCode, temporalSloadBase_getCode]
+  rw [stubPauseWorld_currentTarget, hcarry]
+  change (stubPauseWorldState.get configWorldOwner).code.toList ≠ []
+  rw [stubPauseWorldState_get_breaker]
+  intro hnil
+  have hempty : lidoCircuitBreakerCode officialParams = [] := by
+    simpa only [configWorldCode, ByteArray.toList_eq_toList_data,
+      List.toList_toArray] using hnil
+  exact Prog.compile_ne_nil (by rw [lidoCircuitBreakerCode_compile, hempty])
 
 private theorem stubPauseWorldAfterSetEntry_memory :
     stubPauseWorldAfterSetEntry.memory = stubRunMemoryLast := by
@@ -2235,6 +2281,7 @@ theorem stubPauseWorld_closedPublicPause :
       rw [← show pauseWorldCallee.toB256.toAdr = pauseWorldCallee from
         toAdr_toB256 pauseWorldCallee]
       exact stubRunAfterSetBase_code)
+    stubPauseWorldAfterSetEntry_ownerCode
     reached.1 reached.2.1 stubPauseWorld_publicPausePremises.entered
     stubPauseWorld_publicPausePremises.dynamic hafter'
   have conclusion := publicPause_stubPinnedTarget (hfork := hfork)

@@ -763,6 +763,16 @@ theorem unregWorld_postCount :
 Every cell the six writes touch carried its entry word in the transaction's
 original state too: this world's `origState` is its entry state. -/
 
+/-- The world's owner is not created in its transaction, so a snapshot
+original word is also the machine's actual original read at entry. -/
+theorem unregWorld_actualOrig {key value : B256}
+    (h : getOrigStorVal unregWorldSevm unregWorldOwner key = value) :
+    unregWorldPre.getOrigStorVal unregWorldSevm unregWorldOwner key = value := by
+  have hnc : unregWorldOwner ∉ unregWorldPre.createdAccounts :=
+    Std.HashSet.not_mem_emptyWithCapacity
+  rw [Devm.getOrigStorVal, ite_cond_eq_false _ _ (eq_false hnc)]
+  exact h
+
 theorem unregWorld_origAssignment :
     getOrigStorVal unregWorldSevm unregWorldOwner
       (assignmentSlot unregWorldTarget) = unregWorldPauser := by
@@ -910,13 +920,13 @@ theorem unregisterWorld_effects :
       hlength unregWorld_value hselector unregWorld_codeAddress_currentTarget
       unregWorld_codeBytes unregWorld_admin hargTarget hargNew
       unregWorld_preWitness unregWorld_find unregWorld_last
-      unregWorld_targetValid unregWorld_pauserValid unregWorld_origAssignment
+      unregWorld_targetValid unregWorld_pauserValid (unregWorld_actualOrig unregWorld_origAssignment)
       (unregWorld_resetCost (by decide) (by decide))
-      unregWorld_postCount unregWorld_origCount
+      unregWorld_postCount (unregWorld_actualOrig unregWorld_origCount)
       (unregWorld_resetCost (by decide) (by decide)) (by decide)
-      unregWorld_entryExpiry unregWorld_origExpiry
+      unregWorld_entryExpiry (unregWorld_actualOrig unregWorld_origExpiry)
       (unregWorld_resetCost (by decide) (by decide))
-      unregWorld_origArray unregWorld_origIndex unregWorld_origLength
+      (unregWorld_actualOrig unregWorld_origArray) (unregWorld_actualOrig unregWorld_origIndex) (unregWorld_actualOrig unregWorld_origLength)
       unregWorld_noopCost unregWorld_noopCost
       (unregWorld_resetCost (by decide) (by decide))
       (unregWorld_resetCost (by decide) (by decide))
@@ -1035,13 +1045,13 @@ theorem unregisterWorld_settles :
       unregWorld_msgCode unregWorld_msgValue unregWorld_msgData
       unregWorld_gasEntry unregWorld_msgAdmin
       unregWorld_preWitness unregWorld_find unregWorld_last
-      unregWorld_targetValid unregWorld_pauserValid unregWorld_origAssignment
+      unregWorld_targetValid unregWorld_pauserValid (unregWorld_actualOrig unregWorld_origAssignment)
       (unregWorld_resetCost (by decide) (by decide))
-      unregWorld_postCount unregWorld_origCount
+      unregWorld_postCount (unregWorld_actualOrig unregWorld_origCount)
       (unregWorld_resetCost (by decide) (by decide)) (by decide)
-      unregWorld_entryExpiry unregWorld_origExpiry
+      unregWorld_entryExpiry (unregWorld_actualOrig unregWorld_origExpiry)
       (unregWorld_resetCost (by decide) (by decide))
-      unregWorld_origArray unregWorld_origIndex unregWorld_origLength
+      (unregWorld_actualOrig unregWorld_origArray) (unregWorld_actualOrig unregWorld_origIndex) (unregWorld_actualOrig unregWorld_origLength)
       unregWorld_noopCost unregWorld_noopCost
       (unregWorld_resetCost (by decide) (by decide))
       (unregWorld_resetCost (by decide) (by decide))

@@ -76,12 +76,17 @@ trace of one exact `pauseAfterSet` occurrence.  The guard and post-CALL branch
 joins connect its boundary states to `entry` and to each other; no arbitrary
 boundary-shaped message is quantified.  Of this predicate's conjuncts, only
 the two `Pinned*BoundaryExecutesProgram` occurrences are target adapter seams;
-the remaining conjuncts are the production parent-trace witness. -/
+the remaining conjuncts are the production parent-trace witness.  The second
+conjunct records that the CircuitBreaker's own account carries code at the
+boundary entry: a storage-only (codeless, emptiable) owner's storage is not
+preserved by its callees under account normalization, so the noninterference
+transport needs it. -/
 def LidoPinnedBoundaryExecutions
     (fs : List Func) (sevm : Sevm) (entry : Devm)
     (target : Adr) (program : Prog) (duration : B256)
     (ex : Execution) : Prop :=
   (entry.getCode target).size.toB256 ≠ 0 ∧
+    (entry.getCode sevm.currentTarget).toList ≠ [] ∧
     ∃ guardTestPost guardPost callPre callPost branchTestPost
         armPre statPre statPost : Devm,
       Line.Run sevm entry pauseCodeGuard guardTestPost ∧

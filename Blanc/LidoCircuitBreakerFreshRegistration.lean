@@ -142,8 +142,8 @@ private theorem registerAfterSet_freshNonzero_runCompiled
   have htail := registerAfterSet_nonzeroNewPauserTail_runCompiled (hfork := hfork) fs sevm base
     M img newPauser timestamp interval expiry 0 0 [carry] gasStorageSet G
     (by simp only [List.length_cons, List.length_nil, zero_add, Std.le_refl]) hwf hreads hnew hnewNonzero hsize halign htime hinterval
-    hintervalCold hexpiry hexpiryOrig hwarmExpiry hstoreCost hstipend hstatic
-    hextension
+    hintervalCold hexpiry (actualOrigStorVal_eq_zero_of_raw hexpiryOrig) hwarmExpiry hstoreCost
+    hstipend hstatic hextension
   have hrun : Func.RunCompiled fs sevm
       (base.setMach ⟨[carry], M, G + 23592, base.stateGas⟩) registerAfterSet
       (((temporalSstorePost sevm
@@ -285,7 +285,7 @@ private theorem afterOldPauser_freshNonzero_runCompiled
     (htime : sevm.benvStat.time = timestamp)
     (hcount : base.getStorVal sevm.currentTarget
       (countSlot newPauser) = count)
-    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hcountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot newPauser) = countOriginal)
     (hcountNext : (1 : B256) + count = nextCount)
     (hcountCost : sstoreValueCost countOriginal count nextCount = countCost)
@@ -408,23 +408,23 @@ private theorem appendTarget_freshNonzero_runCompiled
     (hlengthNext : (1 : B256) + length = next)
     (harray : base.getStorVal sevm.currentTarget
       (arrayEntrySlot next) = 0)
-    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+    (harrayOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot next) = arrayOriginal)
     (harrayCost : sstoreValueCost arrayOriginal 0 target = arrayCost)
     (hwarmArray : (sevm.currentTarget, arrayEntrySlot next) ∈
       base.accessedStorageKeys)
     (hindex : base.getStorVal sevm.currentTarget (indexSlot target) = 0)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
     (hindexCost : sstoreValueCost indexOriginal 0 next = indexCost)
     (hwarmIndex : (sevm.currentTarget, indexSlot target) ∈
       base.accessedStorageKeys)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget
       arrayLengthSlot = lengthOriginal)
     (hlengthCost : sstoreValueCost lengthOriginal length next = lengthCost)
     (hcount : base.getStorVal sevm.currentTarget
       (countSlot newPauser) = count)
-    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hcountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot newPauser) = countOriginal)
     (hcountNext : (1 : B256) + count = nextCount)
     (hcountCost : sstoreValueCost countOriginal count nextCount = countCost)
@@ -648,7 +648,10 @@ private theorem appendTarget_freshNonzero_runCompiled
   rcases afterOldPauser_freshNonzero_runCompiled (hfork := hfork) dp sevm lengthPost M' img'
       target newPauser timestamp interval expiry count nextCount next countOriginal
       countCost G hwf' hreads' htarget' hprevious' hnew' hcontinuation'
-      hnewValid hsize' halign' htime hcountPost hcountOrig hcountNext
+      hnewValid hsize' halign' htime hcountPost
+      (by simpa only [lengthPost, indexPost, arrayPost, lengthBase, temporalSstorePost_getOrigStorVal,
+          temporalSloadBase_getOrigStorVal] using hcountOrig)
+      hcountNext
       hcountCost hintervalPost hintervalColdPost hexpiryPost hexpiryOrig
       hwarmExpiryPost hstatic hextension hexpiryNonzero with
     ⟨post, hafter, hgas, hstoreExpiry, hlogs⟩
@@ -676,13 +679,17 @@ private theorem appendTarget_freshNonzero_runCompiled
         afterGas + 12 + lengthCost, indexPost.stateGas⟩)
       (Ninst.sstore ::: .call afterOldPauserSlot) post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled (hfork := hfork) hlengthIndex hlengthOrig hlengthCost
+      (temporal_sstore_runCompiled (hfork := hfork) hlengthIndex
+        (by simpa only [lengthPost, indexPost, arrayPost, lengthBase, temporalSstorePost_getOrigStorVal,
+          temporalSloadBase_getOrigStorVal] using hlengthOrig)
+        hlengthCost
         hwarmLengthIndex (by norm_num only [gCallStipend]; omega) hstatic)
       hafterCall
   have hlengthTail : Func.RunCompiled fs sevm
       (indexPost.setMach ⟨[next], M', afterGas + 21 + lengthCost, indexPost.stateGas⟩)
       (loadWord arrayLengthWord +++ pushB256 arrayLengthSlot :::
         Ninst.sstore ::: .call afterOldPauserSlot) post := by
+    clear_value afterGas lengthPost indexPost
     func_run (3) [3]
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign' harrayLengthOff']
@@ -708,7 +715,10 @@ private theorem appendTarget_freshNonzero_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore :::
         .call afterOldPauserSlot) post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled (hfork := hfork) hindexArray hindexOrig hindexCost
+      (temporal_sstore_runCompiled (hfork := hfork) hindexArray
+        (by simpa only [lengthPost, indexPost, arrayPost, lengthBase, temporalSstorePost_getOrigStorVal,
+          temporalSloadBase_getOrigStorVal] using hindexOrig)
+        hindexCost
         hwarmIndexArray (by norm_num only [gCallStipend]; omega) hstatic)
       hlengthTail
   have htargetOff' : (targetWord * 32).toNat + 32 ≤ M'.size := by
@@ -782,7 +792,10 @@ private theorem appendTarget_freshNonzero_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore :::
         .call afterOldPauserSlot) post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled (hfork := hfork) harrayBase harrayOrig harrayCost
+      (temporal_sstore_runCompiled (hfork := hfork) harrayBase
+        (by simpa only [lengthPost, indexPost, arrayPost, lengthBase, temporalSstorePost_getOrigStorVal,
+          temporalSloadBase_getOrigStorVal] using harrayOrig)
+        harrayCost
         hwarmArrayBase (by norm_num only [gCallStipend]; omega) hstatic)
       hindexTail
   have harrayTag : Func.RunCompiled fs sevm
@@ -970,33 +983,33 @@ theorem setPauserKernel_freshNonzero_runCompiled
     (hnewValid : nonzeroCanonicalAddress newPauser)
     (hsize : 640 ≤ M.size) (halign : M.size % 32 = 0)
     (htime : sevm.benvStat.time = timestamp)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal 0 newPauser =
       assignmentCost)
     (harray : (assignmentPost sevm base target newPauser).getStorVal
       sevm.currentTarget
         (arrayEntrySlot (Nat.toB256 (entries.length + 1))) = 0)
-    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+    (harrayOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot (Nat.toB256 (entries.length + 1))) = arrayOriginal)
     (harrayCost : sstoreValueCost arrayOriginal 0 target = arrayCost)
     (hwarmArray : (sevm.currentTarget,
       arrayEntrySlot (Nat.toB256 (entries.length + 1))) ∈
         (assignmentPost sevm base target newPauser).accessedStorageKeys)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
     (hindexCost : sstoreValueCost indexOriginal 0
       (Nat.toB256 (entries.length + 1)) = indexCost)
     (hwarmIndex : (sevm.currentTarget, indexSlot target) ∈
       (assignmentPost sevm base target newPauser).accessedStorageKeys)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
       lengthOriginal)
     (hlengthCost : sstoreValueCost lengthOriginal
       (Nat.toB256 entries.length) (Nat.toB256 (entries.length + 1)) =
         lengthCost)
     (hlengthNextWord : (1 : B256) + Nat.toB256 entries.length =
       Nat.toB256 (entries.length + 1))
-    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hcountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot newPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal
       (Nat.toB256 (assignmentCount entries newPauser))
@@ -1184,9 +1197,10 @@ theorem setPauserKernel_freshNonzero_runCompiled
       arrayCost indexCost lengthCost countCost G hwf' hreads' htarget'
       hprevious' hnew' hcontinuation' htargetValid hnewValid hnextBound
       hnextNonzero hsize' halign' hmemoryShape' htime hlength hlengthNext
-      harray harrayOrig
-      harrayCost hwarmArray hindex hindexOrig hindexCost hwarmIndex
-      hlengthOrig hlengthCost hcount hcountOrig hcountNext hcountCost
+      harray ((assignmentPost_getOrigStorVal sevm base target newPauser _ _).trans harrayOrig)
+      harrayCost hwarmArray hindex ((assignmentPost_getOrigStorVal sevm base target newPauser _ _).trans hindexOrig) hindexCost hwarmIndex
+      ((assignmentPost_getOrigStorVal sevm base target newPauser _ _).trans hlengthOrig) hlengthCost hcount
+      ((assignmentPost_getOrigStorVal sevm base target newPauser _ _).trans hcountOrig) hcountNext hcountCost
       hcountCold hinterval hintervalCold hexpiry hexpiryOrig hwarmExpiry
       hstatic hextension hexpiryNonzero with
     ⟨post, happendRaw, hgas, hstoreExpiry, hlogs⟩
@@ -1425,33 +1439,33 @@ theorem registerPauser_body_freshNonzero_runCompiled
     (htargetValid : nonzeroCanonicalAddress target)
     (hnewValid : nonzeroCanonicalAddress newPauser)
     (htime : sevm.benvStat.time = timestamp)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal 0 newPauser =
       assignmentCost)
     (harray : (assignmentPost sevm base target newPauser).getStorVal
       sevm.currentTarget
         (arrayEntrySlot (Nat.toB256 (entries.length + 1))) = 0)
-    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+    (harrayOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot (Nat.toB256 (entries.length + 1))) = arrayOriginal)
     (harrayCost : sstoreValueCost arrayOriginal 0 target = arrayCost)
     (hwarmArray : (sevm.currentTarget,
       arrayEntrySlot (Nat.toB256 (entries.length + 1))) ∈
         (assignmentPost sevm base target newPauser).accessedStorageKeys)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
     (hindexCost : sstoreValueCost indexOriginal 0
       (Nat.toB256 (entries.length + 1)) = indexCost)
     (hwarmIndex : (sevm.currentTarget, indexSlot target) ∈
       (assignmentPost sevm base target newPauser).accessedStorageKeys)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
       lengthOriginal)
     (hlengthCost : sstoreValueCost lengthOriginal
       (Nat.toB256 entries.length) (Nat.toB256 (entries.length + 1)) =
         lengthCost)
     (hlengthNextWord : (1 : B256) + Nat.toB256 entries.length =
       Nat.toB256 (entries.length + 1))
-    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hcountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot newPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal
       (Nat.toB256 (assignmentCount entries newPauser))
@@ -1558,33 +1572,33 @@ theorem registerPauser_runCompiledTo_freshNonzero
     (htargetValid : nonzeroCanonicalAddress target)
     (hnewValid : nonzeroCanonicalAddress newPauser)
     (htime : sevm.benvStat.time = timestamp)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal 0 newPauser =
       assignmentCost)
     (harray : (assignmentPost sevm base target newPauser).getStorVal
       sevm.currentTarget
         (arrayEntrySlot (Nat.toB256 (entries.length + 1))) = 0)
-    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+    (harrayOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot (Nat.toB256 (entries.length + 1))) = arrayOriginal)
     (harrayCost : sstoreValueCost arrayOriginal 0 target = arrayCost)
     (hwarmArray : (sevm.currentTarget,
       arrayEntrySlot (Nat.toB256 (entries.length + 1))) ∈
         (assignmentPost sevm base target newPauser).accessedStorageKeys)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
     (hindexCost : sstoreValueCost indexOriginal 0
       (Nat.toB256 (entries.length + 1)) = indexCost)
     (hwarmIndex : (sevm.currentTarget, indexSlot target) ∈
       (assignmentPost sevm base target newPauser).accessedStorageKeys)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
       lengthOriginal)
     (hlengthCost : sstoreValueCost lengthOriginal
       (Nat.toB256 entries.length) (Nat.toB256 (entries.length + 1)) =
         lengthCost)
     (hlengthNextWord : (1 : B256) + Nat.toB256 entries.length =
       Nat.toB256 (entries.length + 1))
-    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hcountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot newPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal
       (Nat.toB256 (assignmentCount entries newPauser))
@@ -1678,35 +1692,35 @@ theorem registerPauser_freshNonzero_success_settled_effects
     (htargetValid : nonzeroCanonicalAddress target)
     (hnewValid : nonzeroCanonicalAddress newPauser)
     (htime : (initSevm msg).benvStat.time = timestamp)
-    (hassignmentOrig : getOrigStorVal (initSevm msg) ca
+    (hassignmentOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal 0 newPauser =
       assignmentCost)
     (harray : (assignmentPost (initSevm msg) (initDevm msg)
       target newPauser).getStorVal ca
         (arrayEntrySlot (Nat.toB256 (entries.length + 1))) = 0)
-    (harrayOrig : getOrigStorVal (initSevm msg) ca
+    (harrayOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (arrayEntrySlot (Nat.toB256 (entries.length + 1))) = arrayOriginal)
     (harrayCost : sstoreValueCost arrayOriginal 0 target = arrayCost)
     (hwarmArray : (ca,
       arrayEntrySlot (Nat.toB256 (entries.length + 1))) ∈
         (assignmentPost (initSevm msg) (initDevm msg)
           target newPauser).accessedStorageKeys)
-    (hindexOrig : getOrigStorVal (initSevm msg) ca
+    (hindexOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (indexSlot target) = indexOriginal)
     (hindexCost : sstoreValueCost indexOriginal 0
       (Nat.toB256 (entries.length + 1)) = indexCost)
     (hwarmIndex : (ca, indexSlot target) ∈
       (assignmentPost (initSevm msg) (initDevm msg)
         target newPauser).accessedStorageKeys)
-    (hlengthOrig : getOrigStorVal (initSevm msg) ca arrayLengthSlot =
+    (hlengthOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca arrayLengthSlot =
       lengthOriginal)
     (hlengthCost : sstoreValueCost lengthOriginal
       (Nat.toB256 entries.length) (Nat.toB256 (entries.length + 1)) =
         lengthCost)
     (hlengthNextWord : (1 : B256) + Nat.toB256 entries.length =
       Nat.toB256 (entries.length + 1))
-    (hcountOrig : getOrigStorVal (initSevm msg) ca
+    (hcountOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (countSlot newPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal
       (Nat.toB256 (assignmentCount entries newPauser))

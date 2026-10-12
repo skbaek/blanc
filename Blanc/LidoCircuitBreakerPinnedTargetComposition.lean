@@ -27,6 +27,43 @@ private theorem replayCell_eq_of_none
         intro write member
         exact none write (by simp only [List.mem_cons, member, or_true]))
 
+private theorem runCompiled_getCode_eq_of_nonempty
+    {sevm : Sevm} {pre post : Devm} {n : Ninst} {owner : Adr}
+    (run : Ninst.RunCompiled sevm pre n post)
+    (nonempty : (pre.getCode owner).toList ≠ []) :
+    post.getCode owner = pre.getCode owner := by
+  rcases run with ⟨xl, filled, steps⟩
+  have slotCode : Xlot.Rel Devm.CodePreserve xl := by
+    rcases xl with _ | ⟨evm, raw⟩
+    · trivial
+    · rcases filled with ⟨childRun⟩
+      cases raw <;> exact Exec.preserves_getCode childRun
+  exact Ninst.codePreserve_effectRec n slotCode (steps 0) owner nonempty
+
+/-- Kernel-checked reason the owner-code premise of the pinned-target
+noninterference chain cannot be dropped.  A zero-value credit — the balance
+movement a callee's zero-value `SELFDESTRUCT` (or any zero transfer) makes to
+its beneficiary — normalizes an empty storage-only account away, deleting its
+storage with no `SSTORE` anywhere.  An arbitrary pinned-target bundle only
+excludes retained `SSTORE`s to the CircuitBreaker's cells, so for a codeless
+(emptiable) CircuitBreaker owner its cells are not preserved across the
+target's frames; the old, premise-free cell equality is therefore not
+derivable, and the transport now requires the owner's installed code. -/
+theorem storageOnlyOwner_zeroCredit_clears_storage :
+    let owner : Adr := 1
+    let st : State := State.set .empty owner
+      { Acct.nil with stor := Stor.empty.set 0 1 }
+    ((st.addBal owner 0).getStor owner).get 0 ≠ (st.getStor owner).get 0 := by
+  intro owner st
+  have hget : st.get owner = { Acct.nil with stor := Stor.empty.set 0 1 } :=
+    State.get_set_self _ _ _
+  have hempty : ((st.get owner).withBal ((st.get owner).bal + 0)).Empty := by
+    rw [hget]
+    decide
+  change (((st.setBal owner _).get owner).stor).get 0 ≠ ((st.get owner).stor).get 0
+  rw [State.setBal_get_stor, if_pos ⟨rfl, hempty⟩, hget]
+  decide
+
 private theorem pinnedPause_cell_eq
     {sevm : Sevm}
     (hfork : CoveredFork sevm.benvStat.fork) {target : Adr} {program : Prog} {duration : B256}
@@ -37,7 +74,8 @@ private theorem pinnedPause_cell_eq
     (pinned : PinnedPauseBoundaryExecutesProgram
       sevm target program duration callPre callPost)
     (member : key ∈
-      [countSlot sevm.caller.toB256, heartbeatIntervalSlot]) :
+      [countSlot sevm.caller.toB256, heartbeatIntervalSlot])
+    (ownerCode : (callPre.getCode sevm.currentTarget).toList ≠ []) :
     callPost.getStorVal sevm.currentTarget key =
       callPre.getStorVal sevm.currentTarget key := by
   rcases pinned with
@@ -67,7 +105,7 @@ private theorem pinnedPause_cell_eq
     noWrite rawRun
   change (Devm.getStor callPost sevm.currentTarget).get key =
     (Devm.getStor callPre sevm.currentTarget).get key
-  rw [replay sevm.currentTarget key]
+  rw [replay.2 sevm.currentTarget ownerCode key]
   split
   · exact replayCell_eq_of_none noWriteRun
   · rfl
@@ -82,7 +120,8 @@ private theorem pinnedStat_cell_eq
     (pinned : PinnedStatBoundaryExecutesProgram
       sevm target program statPre statPost)
     (member : key ∈
-      [countSlot sevm.caller.toB256, heartbeatIntervalSlot]) :
+      [countSlot sevm.caller.toB256, heartbeatIntervalSlot])
+    (ownerCode : (statPre.getCode sevm.currentTarget).toList ≠ []) :
     statPost.getStorVal sevm.currentTarget key =
       statPre.getStorVal sevm.currentTarget key := by
   rcases pinned with
@@ -112,7 +151,7 @@ private theorem pinnedStat_cell_eq
     noWrite rawRun
   change (Devm.getStor statPost sevm.currentTarget).get key =
     (Devm.getStor statPre sevm.currentTarget).get key
-  rw [replay sevm.currentTarget key]
+  rw [replay.2 sevm.currentTarget ownerCode key]
   split
   · exact replayCell_eq_of_none noWriteRun
   · rfl
@@ -338,11 +377,43 @@ private theorem pinnedTrace_final_cell_eq
     final.getStorVal sevm.currentTarget key =
       entry.getStorVal sevm.currentTarget key := by
   rcases hook with
-    ⟨-, guardTestPost, guardPost, callPre, callPost, branchTestPost,
+    ⟨-, ownerEntry, guardTestPost, guardPost, callPre, callPost, branchTestPost,
       armPre, statPre, statPost, guardRun, guardPop, callStaging,
-      -, -, pinnedPause, -, callIszero, branchPop, statStaging,
+      callRun, -, pinnedPause, -, callIszero, branchPop, statStaging,
       -, -, pinnedStat, observationRun⟩
   rw [hex] at observationRun
+  have callPreOwnerEq : callPre.getCode sevm.currentTarget =
+      entry.getCode sevm.currentTarget := by
+    calc
+      callPre.getCode sevm.currentTarget =
+          guardPost.getCode sevm.currentTarget :=
+        congrFun (pauseCallStaging_codeInv callStaging).symm _
+      _ = guardTestPost.getCode sevm.currentTarget :=
+        (congrArg (fun state : State => state.getCode sevm.currentTarget)
+          guardPop.state).symm
+      _ = entry.getCode sevm.currentTarget :=
+        congrFun (Line.of_inv Devm.getCode
+          (by unfold pauseCodeGuard loadWord; line_inv) guardRun).symm _
+  have callPreOwner : (callPre.getCode sevm.currentTarget).toList ≠ [] := by
+    rw [callPreOwnerEq]
+    exact ownerEntry
+  have statPreOwner : (statPre.getCode sevm.currentTarget).toList ≠ [] := by
+    have statEq : statPre.getCode sevm.currentTarget =
+        callPre.getCode sevm.currentTarget := by
+      calc
+        statPre.getCode sevm.currentTarget =
+            armPre.getCode sevm.currentTarget :=
+          congrFun (pauseStatStaging_codeInv statStaging).symm _
+        _ = branchTestPost.getCode sevm.currentTarget :=
+          (congrArg (fun state : State => state.getCode sevm.currentTarget)
+            branchPop.state).symm
+        _ = callPost.getCode sevm.currentTarget :=
+          congrFun (Ninst.Hinv.inv (f := Devm.getCode)
+            (Ninst.Run.of_runCompiled callIszero)).symm _
+        _ = callPre.getCode sevm.currentTarget :=
+          runCompiled_getCode_eq_of_nonempty callRun callPreOwner
+    rw [statEq]
+    exact callPreOwner
   let cell : Devm → B256 := fun state ↦
     state.getStorVal sevm.currentTarget key
   have guardEq : cell guardTestPost = cell entry :=
@@ -357,7 +428,7 @@ private theorem pinnedTrace_final_cell_eq
     congrArg (fun stor : Adr → Stor ↦ (stor sevm.currentTarget).get key)
       (pauseCallStaging_storInv callStaging).symm
   have callEq : cell callPost = cell callPre :=
-    pinnedPause_cell_eq (hfork := hfork) bundle pinnedPause member
+    pinnedPause_cell_eq (hfork := hfork) bundle pinnedPause member callPreOwner
   have branchTestEq : cell branchTestPost = cell callPost :=
     congrArg (fun stor : Adr → Stor ↦ (stor sevm.currentTarget).get key)
       (Ninst.Hinv.inv (f := Devm.getStor)
@@ -370,7 +441,7 @@ private theorem pinnedTrace_final_cell_eq
     congrArg (fun stor : Adr → Stor ↦ (stor sevm.currentTarget).get key)
       (pauseStatStaging_storInv statStaging).symm
   have statEq : cell statPost = cell statPre :=
-    pinnedStat_cell_eq (hfork := hfork) bundle pinnedStat member
+    pinnedStat_cell_eq (hfork := hfork) bundle pinnedStat member statPreOwner
   have observationEq : cell final = cell statPost :=
     observation_ok_getStorVal_eq_of_ne h_empty h_bubble h_failed h_panic
       different observationRun
@@ -548,13 +619,9 @@ private theorem spawnedMessage_executesProgram
     unfold MessageUsesProgram
     rw [codeEq]
     exact compiled.symm
-  have affordable : ¬ msg.benv.state.bal msg.caller < msg.value := by
-    rw [valueZero]
-    rw [B256.lt_iff_toNat_lt_toNat]
-    exact Nat.not_lt.mpr (Nat.zero_le _)
-  obtain ⟨stmid, -, afterTransfer⟩ :=
-    Msg.benvAfterTransfer_of_affordable msg transferValue affordable
-  let benv := (msg.benv.withState stmid).addBal msg.currentTarget msg.value
+  have afterTransfer : msg.benvAfterTransfer = .ok msg.benv :=
+    Msg.benvAfterTransfer_of_value_zero valueZero
+  let benv := msg.benv
   have enter : (Jaune.Frame.ofCall msg).enter =
       .run (initEvm (msg.withBenv benv)) := by
     apply Frame.enter_run_of_nonprecompile afterTransfer
@@ -567,19 +634,6 @@ private theorem spawnedMessage_executesProgram
   rcases process with ⟨raw, slotEq, -⟩
   subst xl
   exact ⟨uses, initEvm (msg.withBenv benv), raw, rfl, filled⟩
-
-private theorem runCompiled_getCode_eq_of_nonempty
-    {sevm : Sevm} {pre post : Devm} {n : Ninst} {owner : Adr}
-    (run : Ninst.RunCompiled sevm pre n post)
-    (nonempty : (pre.getCode owner).toList ≠ []) :
-    post.getCode owner = pre.getCode owner := by
-  rcases run with ⟨xl, filled, steps⟩
-  have slotCode : Xlot.Rel Devm.CodePreserve xl := by
-    rcases xl with _ | ⟨evm, raw⟩
-    · trivial
-    · rcases filled with ⟨childRun⟩
-      cases raw <;> exact Exec.preserves_getCode childRun
-  exact Ninst.codePreserve_effectRec n slotCode (steps 0) owner nonempty
 
 /-- **The direct-installation crossing.**  A successful `pauseAfterSet` suffix,
 run against an account carrying `program`'s exact compiled bytes directly,
@@ -615,6 +669,7 @@ theorem directBoundaryExecutions_of_afterSet_ok
     (targetNe : target ≠ sevm.currentTarget)
     (nonprecompile : sevm.benvStat.rules.isPrecomp target = false)
     (installed : entry.getCode target = code)
+    (ownerInstalled : (entry.getCode sevm.currentTarget).toList ≠ [])
     (targetWindow : MemWordAt entry
       (targetWord * 32).toNat target.toB256)
     (durationWindow : MemWordAt entry
@@ -787,7 +842,7 @@ theorem directBoundaryExecutions_of_afterSet_ok
         ⟨statMsg, statXl, statChild, statPc, statNextPc, statResume,
           statExact, statExecutes, statTime, statSpawn, statFilled,
           statProcess, statStepRun, statState, statOutput⟩
-      exact ⟨installedNonzero, guardTestPost, guardPost, callPre, callPost,
+      exact ⟨installedNonzero, ownerInstalled, guardTestPost, guardPost, callPre, callPost,
         branchTestPost, armPre, statPre, statPost, guardRun, guardPop,
         callStaging, callRun, callBoundary, pinnedPause,
         afterCallContinuation, callIszero, branchPop, statStaging, statRun,
@@ -811,6 +866,7 @@ theorem stubBoundaryExecutions_of_afterSet_ok
     (targetNe : target ≠ sevm.currentTarget)
     (nonprecompile : sevm.benvStat.rules.isPrecomp target = false)
     (installed : entry.getCode target = PinnedTargetControl.stubCode)
+    (ownerInstalled : (entry.getCode sevm.currentTarget).toList ≠ [])
     (targetWindow : MemWordAt entry
       (targetWord * 32).toNat target.toB256)
     (durationWindow : MemWordAt entry
@@ -822,7 +878,7 @@ theorem stubBoundaryExecutions_of_afterSet_ok
       PinnedTargetControl.stubProgram duration (.ok final) :=
   directBoundaryExecutions_of_afterSet_ok (hfork := hfork) h_empty h_bubble
     stubProgram_compile_toList targetNe nonprecompile
-    installed targetWindow durationWindow dynamic run
+    installed ownerInstalled targetWindow durationWindow dynamic run
 
 private theorem spawnedChild_clean_of_zeroBranch
     {sevm : Sevm} {pre post testPost armPre : Devm}
@@ -883,28 +939,10 @@ private theorem staticcallMessage_entry_getStor_eq
     let generated := callMsg sevm (d.withReturnData []) gas value caller
       target codeAddress transferValue isStatic
       ((d.memory.read ii isz).1) code delegated
-    have generatedEnter :
-        (Jaune.Frame.ofCall generated).enter = .run childEvm := by
-      rw [← frameEq]
-      exact actualEnter
-    rcases Frame.enter_run_inv actualEnter with
-      ⟨actualBenv, actualTransfer, actualEvm⟩
-    rcases Frame.enter_run_inv generatedEnter with
-      ⟨generatedBenv, generatedTransfer, generatedEvm⟩
-    change msg.benvAfterTransfer = .ok actualBenv at actualTransfer
-    change generated.benvAfterTransfer = .ok generatedBenv at generatedTransfer
-    have actualState : childEvm.dyna.state = actualBenv.state := by
-      exact congrArg (fun evm : Evm ↦ evm.dyna.state) actualEvm
-    have generatedState : childEvm.dyna.state = generatedBenv.state := by
-      exact congrArg (fun evm : Evm ↦ evm.dyna.state) generatedEvm
-    have actualStorage : childEvm.dyna.state.getStor owner =
-        msg.benv.state.getStor owner := by
-      rw [actualState, benvAfterTransfer_getStor_eq actualTransfer]
-    have generatedStorage : childEvm.dyna.state.getStor owner =
-        pre.state.getStor owner := by
-      rw [generatedState, benvAfterTransfer_getStor_eq generatedTransfer]
-      exact (hprefix.getStor owner).symm
-    exact actualStorage.symm.trans generatedStorage
+    have benvEq : msg.benv = generated.benv :=
+      congrArg (fun frame : Jaune.Frame => frame.inner.benv) frameEq
+    rw [benvEq]
+    exact (hprefix.getStor owner).symm
 
 private theorem observation_zeroBranch
     {fs : List Func} {sevm : Sevm} {statPost final : Devm}
@@ -981,7 +1019,7 @@ private theorem pinnedTarget_witness_and_paused
           callPre callPost final ∧
         PausedAt pausedUntil final.state target sevm.benvStat.time := by
   rcases hook with
-    ⟨-, guardTestPost, guardPost, callPre, callPost, branchTestPost,
+    ⟨-, -, guardTestPost, guardPost, callPre, callPost, branchTestPost,
       armPre, statPre, statPost, -, -, -, -, callBoundary, pinnedPause,
       -, callIszero, branchPop, statStaging, -, statBoundary, pinnedStat,
       observationRun⟩

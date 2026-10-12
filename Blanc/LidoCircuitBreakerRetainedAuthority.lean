@@ -134,8 +134,11 @@ theorem Exec.runtimeOwnerCellAuthority_of_committedPost_ne
         (Devm.getStor (Execution.committedPost out committed) ca).get key) :
     Exec.RuntimeOwnerCellAuthority dp ca run key
       ((Devm.getStor (Execution.committedPost out committed) ca).get key) := by
+  have ownerCode : (pre.getCode ca).toList ≠ [] := by
+    intro empty
+    exact Prog.compile_ne_nil (installed.1.symm.trans (congrArg some empty))
   rcases Exec.exists_lastRetainedSstore_of_getStor_ne
-      run committed hfork changed with
+      run committed hfork ownerCode changed with
     ⟨write, retained, owner, keyEq, valueEq, last⟩
   rcases Exec.retainedSstore_runtimeOwnerClosure
       run committed installed rootExact write retained owner with
@@ -153,24 +156,30 @@ theorem Exec.runtimeOwnerCellAuthority_of_committedPost_ne
     sourceSite classified sitePc siteInstruction unique role rolePermitted
     authority
 
-/-- The body state entered by an exact `ProcessMessage` has the same persistent
-storage as the message-entry world.  Value transfer may change balances but
-not storage. -/
+/-- The installed CircuitBreaker owner's storage survives message entry.
+The code image makes this owner protected; other storage-only accounts are
+not asserted to survive an arbitrary value transfer. -/
 private theorem ProcessMessage.bodyStorage_eq_entry
-    {msg : Msg} {settled : Devm}
+    {dp : DeployParams} {ca : Adr} {msg : Msg} {settled : Devm}
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (installed : Prog.At (runtime dp) ca pc sevm pre)
     (process : ProcessMessage msg
       (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok settled)) :
-    Devm.getStor pre = msg.benv.state.getStor := by
+    Devm.getStor pre ca = msg.benv.state.getStor ca := by
+  have ownerCode : (pre.getCode ca).toList ≠ [] := by
+    intro empty
+    exact Prog.compile_ne_nil (installed.1.symm.trans (congrArg some empty))
   have enter : (Frame.ofCall msg).enter = .run ⟨pc, sevm, pre⟩ :=
     (RunFrame.some_inv process).1
   rcases Frame.enter_run_inv enter with ⟨benv, transfer, evmEq⟩
+  change msg.benvAfterTransfer = .ok benv at transfer
   have preState : pre.state = benv.state :=
     congrArg (fun evm : Evm => evm.dyna.state) evmEq
-  funext owner
-  change pre.state.getStor owner = msg.benv.state.getStor owner
-  rw [preState, benvAfterTransfer_getStor_eq transfer]
-  rfl
+  have messageCode : (msg.benv.state.getCode ca).toList ≠ [] := by
+    rw [← benvAfterTransfer_ok_getCode transfer ca, ← preState]
+    exact ownerCode
+  change pre.state.getStor ca = msg.benv.state.getStor ca
+  rw [preState, benvAfterTransfer_getStor_eq transfer messageCode]
 
 /-- A clean direct message transfers committed-post retained authority to the
 settled owner cell.  Commitment and both endpoint equalities are derived from
@@ -197,7 +206,7 @@ theorem ProcessMessage.runtimeOwnerCellAuthority_of_clean_settled_ne
     ProcessMessage.settlementCommits_of_some_ok_clean process clean
   have committed : Execution.commits out = true :=
     Frame.raw_commits_of_settlementCommits settles
-  have entryStorage := ProcessMessage.bodyStorage_eq_entry process
+  have entryStorage := ProcessMessage.bodyStorage_eq_entry installed process
   have settledStorage :=
     ProcessMessage.runtimeOwnerStorage_eq_committedPost
       run rootExact process committed
@@ -209,7 +218,7 @@ theorem ProcessMessage.runtimeOwnerCellAuthority_of_clean_settled_ne
     calc
       (msg.benv.state.getStor ca).get key =
           (Devm.getStor pre ca).get key :=
-        (congrArg (fun storage => (storage ca).get key) entryStorage).symm
+        (congrArg (fun storage : Stor => storage.get key) entryStorage).symm
       _ = (Devm.getStor (Execution.committedPost out committed) ca).get key :=
         equal
       _ = (Devm.getStor settled ca).get key :=

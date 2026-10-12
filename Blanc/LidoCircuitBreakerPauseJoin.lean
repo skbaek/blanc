@@ -31,42 +31,6 @@ namespace Blanc.LidoCircuitBreaker
 open Jaune
 open Jaune.Ninst Blanc.Ninst
 
-/-! ## Zero-value seam projections
-
-The crossings leave the parent's state as a zero-value `subBal`/`addBal`
-chain (success leg) or restore it outright (error leg); either way every
-account's storage and code are untouched.  The Kit proves the storage half
-privately for its own two-hop seam; the join needs the one-hop forms, and the
-code forms, so they are re-minted here. -/
-
-private theorem joinState_setBal_acct (st : State) (adr : Adr) (val : B256)
-    (a : Adr) : ((st.setBal adr val).get a).stor = (st.get a).stor ∧
-      ((st.setBal adr val).get a).code = (st.get a).code := by
-  unfold State.setBal
-  by_cases h : adr = a
-  · subst h
-    rw [State.get_set_self]
-    exact ⟨rfl, rfl⟩
-  · rw [State.get_set_ne st h _]
-    exact ⟨rfl, rfl⟩
-
-private theorem joinState_addBal_acct (st : State) (adr : Adr) (val : B256)
-    (a : Adr) : ((st.addBal adr val).get a).stor = (st.get a).stor ∧
-      ((st.addBal adr val).get a).code = (st.get a).code := by
-  unfold State.addBal
-  exact joinState_setBal_acct st adr _ a
-
-private theorem joinState_subBal_acct {st st' : State} {adr : Adr}
-    {val : B256} (h : st.subBal adr val = some st') (a : Adr) :
-    (st'.get a).stor = (st.get a).stor ∧
-      (st'.get a).code = (st.get a).code := by
-  unfold State.subBal at h
-  split at h
-  · contradiction
-  · injection h with h2
-    subst h2
-    exact joinState_setBal_acct st adr _ a
-
 /-! ## Window survival across the resume's memory shape
 
 The contract-independent extension/write transport now lives in
@@ -457,15 +421,11 @@ private lemma responder_crossing_tail {sevm : Sevm} {p : Devm} {mcs : Nat}
     (∀ a : Adr, Devm.getCode postC a = Devm.getCode p a) := by
   set msg : Msg := callMsg sevm p mcs 0 sevm.currentTarget
     callee callee true isStat data calleeCode dp with hmsg
-  have h_afford : ¬ msg.benv.state.bal msg.caller < msg.value := by
-    show ¬ (p.getAcct sevm.currentTarget).bal < 0
-    rw [B256.lt_iff_toNat_lt_toNat]
-    exact Nat.not_lt.mpr (Nat.zero_le _)
-  obtain ⟨stmid, hsub, hbt⟩ :=
-    Msg.benvAfterTransfer_of_affordable msg rfl h_afford
+  have hbt : msg.benvAfterTransfer = .ok msg.benv :=
+    Msg.benvAfterTransfer_of_value_zero rfl
   have henter : (Frame.ofCall msg).enter =
       .run (initEvm (msg.withBenv
-        ((msg.benv.withState stmid).addBal msg.currentTarget msg.value))) := by
+        msg.benv)) := by
     apply Frame.enter_run_of_nonprecompile hbt
     · rfl
     · exact h_nonprecompile
@@ -474,19 +434,14 @@ private lemma responder_crossing_tail {sevm : Sevm} {p : Devm} {mcs : Nat}
   subst hxl
   subst hr
   have hexecraw : exec (initEvm (msg.withBenv
-      ((msg.benv.withState stmid).addBal msg.currentTarget msg.value)))
+      msg.benv))
       = raw :=
     (exec_iff_exec_eq _ _ _ _).mp hfill
-  -- every account's storage and code across the zero-value seam
+  -- a zero-value entry leaves the block environment untouched
   have hseam : ∀ a : Adr,
-      ((((msg.benv.withState stmid).addBal msg.currentTarget
-        msg.value).state.get a).stor = (p.state.get a).stor) ∧
-      ((((msg.benv.withState stmid).addBal msg.currentTarget
-        msg.value).state.get a).code = (p.state.get a).code) := by
-    intro a
-    have h2 := joinState_addBal_acct stmid msg.currentTarget msg.value a
-    have h1 := joinState_subBal_acct hsub a
-    exact ⟨h2.1.trans h1.1, h2.2.trans h1.2⟩
+      ((msg.benv.state.get a).stor = (p.state.get a).stor) ∧
+      ((msg.benv.state.get a).code = (p.state.get a).code) :=
+    fun _ => ⟨rfl, rfl⟩
   rcases hsettle : (Frame.ofCall msg).settle raw with e | child2
   · rw [hsettle, Resume.run_call_fatal] at hres
     cases hres
@@ -532,20 +487,19 @@ private lemma responder_crossing_tail {sevm : Sevm} {p : Devm} {mcs : Nat}
       exfalso
       obtain ⟨e', d', herr⟩ := callee_exec_low_gas
         (m := msg.withBenv
-          ((msg.benv.withState stmid).addBal msg.currentTarget msg.value))
+          msg.benv)
         rfl hlow
       rw [herr, hraw] at hexecraw
       cases hexecraw
     · obtain ⟨out, hexec, _herr, _hout, _hgas, hworld, _⟩ :=
         callee_exec (msg.withBenv
-          ((msg.benv.withState stmid).addBal msg.currentTarget msg.value))
+          msg.benv)
           (mcs - 17) (by change CoveredFork sevm.benvStat.fork; exact hfork)
           rfl (by show mcs = mcs - 17 + 17; omega)
       rw [hexec, hraw] at hexecraw
       have hchild : child2 = out := (Except.ok.inj hexecraw).symm
       have hstate : child2.state =
-          ((msg.benv.withState stmid).addBal msg.currentTarget
-            msg.value).state := by
+          msg.benv.state := by
         rw [hchild]
         exact congrArg World.state hworld
       subst hpost

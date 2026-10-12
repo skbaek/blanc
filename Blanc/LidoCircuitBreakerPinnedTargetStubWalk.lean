@@ -39,7 +39,7 @@ lemma stubPausePost_refundCounter (sevm : Sevm) (base : Devm)
     (duration : B256) :
     (stubPausePost sevm base duration).refundCounter =
       sstoreNewRefundCounter sevm.benvStat.rules.gas (pauseForProjection sevm.benvStat.time duration)
-        (getOrigStorVal sevm sevm.currentTarget pausedUntilSlot)
+        (base.getOrigStorVal sevm sevm.currentTarget pausedUntilSlot)
         (base.getStorVal sevm.currentTarget pausedUntilSlot)
         base.refundCounter := rfl
 
@@ -84,7 +84,7 @@ theorem stubPause_cold_runCompiledTo
       base.accessedStorageKeys)
     (hdynamic : sevm.isStatic = false)
     (hcost : gasColdSload + sstoreValueCost
-      (getOrigStorVal sevm sevm.currentTarget pausedUntilSlot)
+      (base.getOrigStorVal sevm sevm.currentTarget pausedUntilSlot)
       (base.getStorVal sevm.currentTarget pausedUntilSlot)
       (pauseForProjection sevm.benvStat.time duration) = 22100) :
     ∃ post,
@@ -119,7 +119,7 @@ theorem stubPause_cold_runCompiledTo
         omega
       · have hcost' := hcost
         rw [← compact_pause_word_eq_projection] at hcost'
-        simpa only [Devm.getStorVal_setMach] using hcost'
+        exact (Eq.trans rfl hcost')
       · simp only [Devm.gasLeft_setMach]
         omega
     all_goals try {
@@ -128,7 +128,7 @@ theorem stubPause_cold_runCompiledTo
     all_goals try {
       have hcost' := hcost
       rw [← compact_pause_word_eq_projection] at hcost'
-      simpa only [Devm.getStorVal_setMach] using hcost' }
+      exact (Eq.trans rfl hcost') }
     all_goals try {
       simp only [Devm.gasLeft_setMach, gLow]
       omega }
@@ -210,7 +210,7 @@ private theorem stubBaseMain_pause_cold_runCompiledTo
       base.accessedStorageKeys)
     (hdynamic : sevm.isStatic = false)
     (hcost : gasColdSload + sstoreValueCost
-      (getOrigStorVal sevm sevm.currentTarget pausedUntilSlot)
+      (base.getOrigStorVal sevm sevm.currentTarget pausedUntilSlot)
       (base.getStorVal sevm.currentTarget pausedUntilSlot)
       (pauseForProjection sevm.benvStat.time duration) = 22100) :
     ∃ post,
@@ -284,7 +284,7 @@ theorem stubMain_pause_cold_runCompiledTo
       base.accessedStorageKeys)
     (hdynamic : sevm.isStatic = false)
     (hcost : gasColdSload + sstoreValueCost
-      (getOrigStorVal sevm sevm.currentTarget pausedUntilSlot)
+      (base.getOrigStorVal sevm sevm.currentTarget pausedUntilSlot)
       (base.getStorVal sevm.currentTarget pausedUntilSlot)
       (pauseForProjection sevm.benvStat.time duration) = 22100) :
     ∃ post,
@@ -401,7 +401,7 @@ theorem stubProgram_pause_cold_runCompiledTo
       base.accessedStorageKeys)
     (hdynamic : sevm.isStatic = false)
     (hcost : gasColdSload + sstoreValueCost
-      (getOrigStorVal sevm sevm.currentTarget pausedUntilSlot)
+      (base.getOrigStorVal sevm sevm.currentTarget pausedUntilSlot)
       (base.getStorVal sevm.currentTarget pausedUntilSlot)
       (pauseForProjection sevm.benvStat.time duration) = 22100) :
     ∃ post,
@@ -716,7 +716,7 @@ theorem stubPause_exec (m : Msg) (duration : B256) (G : Nat)
       (initDevm m).accessedStorageKeys)
     (hdynamic : (initSevm m).isStatic = false)
     (hcost : gasColdSload + sstoreValueCost
-      (getOrigStorVal (initSevm m) (initSevm m).currentTarget
+      ((initDevm m).getOrigStorVal (initSevm m) (initSevm m).currentTarget
         pausedUntilSlot)
       ((initDevm m).getStorVal (initSevm m).currentTarget pausedUntilSlot)
       (pauseForProjection (initSevm m).benvStat.time duration) = 22100) :
@@ -816,7 +816,7 @@ theorem stubPause_sentinel_execution :
             pausedUntilSlot = 0
           rw [stubPauseSentinelState, State.get_set_self]
           rfl
-        rw [h_orig, h_cur, pauseForProjection]
+        rw [actualOrigStorVal_eq_zero_of_raw h_orig, h_cur, pauseForProjection]
         have hmax : (0 : B256) ≠ B256.max := by
           decide +kernel
         simp only [gasColdSload, sstoreValueCost, pauseInfiniteSentinel, ↓reduceIte, ne_eq, hmax,
