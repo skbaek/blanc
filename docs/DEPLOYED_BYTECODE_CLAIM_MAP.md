@@ -231,14 +231,17 @@ INIT above. Cite this form only with the HASH-U disclosure, and use
 | A successful frame is exactly the model step (decode, accumulator, event, storage shape); other selectors change no storage or logs | `Blanc.Lift.BeaconDeposit.deposit_frame_refines` (`Blanc/Lift/BeaconDeposit/Safe.lean:333`) | Frame / safety | CODE; ENV `ShaReady`; INIT-shaped `SolInv pre` | |
 
 **Liveness.** Frame: `Blanc.Lift.BeaconDeposit.deposit_exec_solInv` (`Blanc/Lift/BeaconDeposit/DepositExec.lean:60`). A model-accepted deposit executes
-at exactly `G + depositGas`, with `depositGas = 656 + bodyGas` and `bodyGas =
-14551 + sloadCost(count) + countStoreCost + bodyInsertGas` [`Blanc.Lift.BeaconDeposit.depositGas` (`Blanc/Lift/BeaconDeposit/DepositExec.lean:25`),
-`Blanc.Lift.BeaconDeposit.bodyGas` (`Blanc/Lift/BeaconDeposit/BodySpec.lean:155`)], appending the model node and event. `get_deposit_count` costs
+at exactly `G + depositGasOf origLive origCount`, with `depositGasOf = 656 + bodyGasOf` and `bodyGasOf =
+14551 + sloadCost(count) + countStoreCostOf origCount + bodyInsertGasOf origLive`, where `origLive` and `origCount`
+are the entry machine's original reads `base.getOrigStorVal` of the stored branch slot and of the count slot (the
+price Jaune charges: `0` at an owner created in the same transaction; Option A, decision
+blanc-repin-os-optionA-delegation-20261012) [`Blanc.Lift.BeaconDeposit.depositGasOf` (`Blanc/Lift/BeaconDeposit/DepositExec.lean:29`),
+`Blanc.Lift.BeaconDeposit.bodyGasOf` (`Blanc/Lift/BeaconDeposit/RepinBridge.lean:89`)], appending the model node and event. `get_deposit_count` costs
 1,514 warm / 3,514 cold; `supportsInterface(id)` succeeds at exact gas `erc165Gas` and returns true exactly when `id` is the ERC-165 or the deposit interface id [`Blanc.Lift.BeaconDeposit.supportsInterface_exec` (`Blanc/Lift/BeaconDeposit/Views.lean:58`)]; `get_deposit_root` costs `Blanc.Lift.BeaconDeposit.rootViewGas` (`Blanc/Lift/BeaconDeposit/RootView.lean:596`). Reachable
 state: `Blanc.Lift.BeaconDeposit.configuredHistory_deposit_live` (`Blanc/Lift/BeaconDeposit/Liveness.lean:24`) says that after any configured history a
 model-accepted deposit executes at exact gas and appends exactly the new node
 (premises: per-frame `beaconEntry`, `DepositDecodable`, `ShaReady`, sentry and
-bound side conditions). **There is no transaction-level Beacon liveness**: a
+bound side conditions, all priced from the same machine original reads). **There is no transaction-level Beacon liveness**: a
 deposit carries value, which needs a value-carrying envelope.
 
 **Deployment / INIT.** `Blanc.Lift.BeaconDeposit.Creation.beacon_deploy_covered` (`Blanc/Lift/BeaconDeposit/Creation/Deploy.lean:144`), for every covered fork
