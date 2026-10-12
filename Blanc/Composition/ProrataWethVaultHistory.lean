@@ -180,6 +180,18 @@ structure PairFrameInv (vault : Adr) (sevm : Sevm) (pre : Devm) : Prop where
   weth : wethSpec.Pre wethAccount sevm pre
   wethFresh : sevm.currentTarget = wethAccount → Exec.FreshEntry sevm pre
 
+/-- A compiled installed program protects its account (repin `ca9f27d`, SA):
+the compiled image is never empty. -/
+theorem protected_of_compile {st : State} {a : Adr} {p : Prog}
+    (h : some (st.getCode a).toList = Prog.compile p) : State.Protected st a :=
+  State.Protected.of_code_ne_nil fun hnil => Prog.compile_ne_nil (by rw [← h, hnil])
+
+/-- Both pair accounts carry their installed programs, so both are protected. -/
+theorem PairFrameInv.protected {vault : Adr} {sevm : Sevm} {pre : Devm}
+    (inv : PairFrameInv vault sevm pre) :
+    State.Protected pre.state vault ∧ State.Protected pre.state wethAccount :=
+  ⟨protected_of_compile inv.vault.preWf.pre.code, protected_of_compile inv.weth.code⟩
+
 /-- A record's provenance names the transaction and sits at or below the emitting frame path. -/
 structure PairProvenanceOk {vault : Adr} (blockIndex : Nat) (transactionIndex : Option Nat)
     (framePath : List Nat) (r : PairStepRecord vault) : Prop where
@@ -458,14 +470,76 @@ theorem WethWithdrawSplit.ofCallFacts_pinned {sevm : Sevm} {pre post : Devm}
     rw [transfer] at frameBody
   · rw [frameBody.2, processMessage.settle_error] at settled
     cases settled
-  rcases of_benvAfterTransfer (rfl : childMsg.shouldTransferValue = true) transfer with
-    ⟨debited, debit, entryEq⟩
-  change parent.state.subBal sevm.currentTarget wad = some debited at debit
-  rw [parentState] at debit
-  have entryState : entry.state = debited.addBal sevm.caller.toB256.toAdr wad := by
-    rw [entryEq]
-    rfl
-  have fields := of_state_transfer_fields (callee := sevm.caller.toB256.toAdr) debit
+  have hmessage : childMsg.benv.state = callPre.state := parentState
+  have atTarget : wethSpec.Pre sevm.currentTarget sevm pre := target ▸ precondition
+  have entryCode : some (callPre.state.getCode sevm.currentTarget).toList =
+      Prog.compile wethSpec.prog := by
+    have h := atTarget.code
+    rw [← congrFun callCode sevm.currentTarget] at h
+    exact h
+  have wethProt : State.Protected callPre.state sevm.currentTarget :=
+    protected_of_compile entryCode
+  have entryCodeEq : ∀ account,
+      entry.state.getCode account = callPre.state.getCode account := by
+    intro account
+    rw [benvAfterTransfer_ok_getCode transfer account, hmessage]
+  -- The entry world at WETH, split on the paid value: a zero payout leaves the
+  -- world untouched (ZV); a positive payout debits WETH, which its installed
+  -- code protects (SA).
+  have entryFacts :
+      entry.state.getStor sevm.currentTarget =
+          callPre.state.getStor sevm.currentTarget ∧
+        entry.state.bal sevm.currentTarget =
+          callPre.state.bal sevm.currentTarget - wad ∧
+        wethSpec.Pre sevm.currentTarget (initSevm (childMsg.withBenv entry))
+          (initDevm (childMsg.withBenv entry)) := by
+    by_cases zero : wad = 0
+    · have entryEq : entry = childMsg.benv :=
+        (Except.ok.inj ((Msg.benvAfterTransfer_of_value_zero
+          (show childMsg.value = 0 from zero)).symm.trans transfer)).symm
+      have stEq : entry.state = callPre.state := by rw [entryEq, hmessage]
+      refine ⟨by rw [stEq], by rw [stEq, zero, B256.sub_zero], ?_⟩
+      refine ⟨?_, ?_, ?_, ?_⟩
+      · change some (entry.state.getCode sevm.currentTarget).toList = _
+        rw [stEq]
+        exact entryCode
+      · change wethSpec.Side entry.state.bal
+        rw [stEq]
+        have side := atTarget.side
+        rw [← callBal] at side
+        exact side
+      · intro childTarget
+        exact absurd childTarget recipientNe
+      · intro _
+        change wethSpec.Inv (entry.state.getStor sevm.currentTarget) 0
+          (entry.state.bal sevm.currentTarget)
+        rw [stEq]
+        have h := solvent atTarget
+        rw [show Sevm.argWord sevm 0 = 0 from zero, B256.sub_zero] at h
+        exact h
+    · rcases of_benvAfterTransfer (rfl : childMsg.shouldTransferValue = true)
+          (show childMsg.value ≠ 0 from zero) transfer with
+        ⟨debited, debit, entryEq⟩
+      change parent.state.subBal sevm.currentTarget wad = some debited at debit
+      rw [parentState] at debit
+      have entryState : entry.state = debited.addBal sevm.caller.toB256.toAdr wad := by
+        rw [entryEq]
+        rfl
+      have fields := of_state_transfer_fields (callee := sevm.caller.toB256.toAdr) debit
+      refine ⟨by rw [entryState]; exact fields.1 sevm.currentTarget wethProt,
+        by rw [entryState]; exact fields.2.2.2.2 recipientNe, ?_⟩
+      apply ContractSpec.Pre.child_of_outbound_transfer
+        (st := callPre.state) (st_mid := debited)
+        (target := sevm.caller.toB256.toAdr) (value := wad)
+      · exact entryCode
+      · have side := atTarget.side
+        rw [← callBal] at side
+        exact side
+      · exact solvent atTarget
+      · exact debit
+      · exact entryState
+      · rfl
+      · rfl
   let payout : Blanc.Prorata.AcceptedPayoutTrace sevm wad callPre callPost :=
     { childMsg := childMsg
       entry := entry
@@ -483,37 +557,19 @@ theorem WethWithdrawSplit.ofCallFacts_pinned {sevm : Sevm} {pre post : Devm}
         change sevm.depth - 1 < sevm.depth
         omega
       entryTransfer := transfer
-      entryStor := by
-        rw [entryState]
-        exact fields.1 sevm.currentTarget
-      entryBalance := by
-        rw [entryState]
-        exact fields.2.2.2.2 recipientNe
+      entryStor := entryFacts.1
+      entryBalance := entryFacts.2.1
       callPostState := callPostState }
-  have atTarget : wethSpec.Pre sevm.currentTarget sevm pre := target ▸ precondition
   refine ⟨⟨callPre, callPost, payout, written, foreignKept, ?_, ?_, ?_, after⟩,
     rfl, rfl, ?_, ?_, ?_, ?_⟩
   · intro account
-    change ((entry.state).get account).code = (pre.getAcct account).code
-    rw [entryState, fields.2.1 account]
+    change (entry.state.getCode account) = (pre.getAcct account).code
+    rw [entryCodeEq]
     exact congrFun callCode account
   · change entry.stat = sevm.benvStat
     rw [benvAfterTransfer_stat transfer]
     rfl
-  · apply ContractSpec.Pre.child_of_outbound_transfer
-      (st := callPre.state) (st_mid := debited)
-      (target := sevm.caller.toB256.toAdr) (value := wad)
-    · have entryCode := atTarget.code
-      rw [← congrFun callCode sevm.currentTarget] at entryCode
-      exact entryCode
-    · have side := atTarget.side
-      rw [← callBal] at side
-      exact side
-    · exact solvent atTarget
-    · exact debit
-    · exact entryState
-    · rfl
-    · rfl
+  · exact entryFacts.2.2
   · change xl = xl
     rfl
   · exact HEq.rfl
@@ -665,13 +721,18 @@ def pairCarrierWith (vault : Adr) (ok : PairStepRecord vault → Prop) :
   frameEntry _ state := PairBoundary.ofState vault state
   nil boundary := ⟨.nil boundary, by simp only [List.not_mem_nil, IsEmpty.forall_iff,
     implies_true]⟩
+  storageOwners owner := owner = vault ∨ owner = wethAccount
   worldSilent := by
     intro _ _ storage_eq _
-    exact PairBoundary.ofState_eq (congrFun storage_eq vault) (congrFun storage_eq wethAccount)
+    exact PairBoundary.ofState_eq (storage_eq vault (Or.inl rfl))
+      (storage_eq wethAccount (Or.inr rfl))
   entry_eq_ofState := by
-    intro _ _ _ _ transfer _
-    have storage := benvAfterTransfer_getStor_eq transfer
-    exact PairBoundary.ofState_eq (congrFun storage vault) (congrFun storage wethAccount)
+    intro _ _ _ _ safe transfer sumNof
+    exact PairBoundary.ofState_eq
+      (ExecutionAccountingReplay.benvAfterTransfer_getStor_eq_of_safe transfer sumNof
+        (safe vault (Or.inl rfl)))
+      (ExecutionAccountingReplay.benvAfterTransfer_getStor_eq_of_safe transfer sumNof
+        (safe wethAccount (Or.inr rfl)))
 
 /-! ## Transport of the frame invariant across a foreign frame's steps
 
@@ -745,8 +806,9 @@ theorem Exec.CorePairReplay.nextNone {vault : Adr} {pc : Nat} {sevm : Sevm} {pre
       fun target => (wethNe target).elim⟩
   have boundary : PairBoundary.ofState vault inter.state =
       PairBoundary.ofState vault pre.state :=
-    PairBoundary.ofState_eq (_root_.Blanc.Ninst.foreignNone_getStor_eq hfork step vaultEq)
-      (_root_.Blanc.Ninst.foreignNone_getStor_eq hfork step wethNe)
+    PairBoundary.ofState_eq
+      (_root_.Blanc.Ninst.foreignNone_getStor_eq hfork step vaultEq inv.protected.1)
+      (_root_.Blanc.Ninst.foreignNone_getStor_eq hfork step wethNe inv.protected.2)
   rw [← boundary]
   cases stepShape : Ninst.step ⟨pc, sevm, pre⟩ n with
   | halt execution =>
@@ -770,13 +832,14 @@ theorem Exec.CorePairReplay.last {vault : Adr} {pc : Nat} {sevm : Sevm} {pre : D
     Exec.CorePairReplay vault pc sevm pre out := by
   by_cases vaultEq : sevm.currentTarget = vault
   · exact Exec.CorePairReplay.vaultFrame vaultSeg vaultEq
-  intro _ committed _ _ _ _ _ _ blockIndex transactionIndex framePath _
+  intro _ committed _ _ _ inv _ _ blockIndex transactionIndex framePath _
   cases out with
   | error error => simp only [Execution.commits, Bool.false_eq_true] at committed
   | ok post =>
       have storage := _root_.Blanc.Linst.getStor_eq step
       exact PairReplayWith.nil_of_eq
-        (PairBoundary.ofState_eq (congrFun storage vault) (congrFun storage wethAccount))
+        (PairBoundary.ofState_eq (storage vault inv.protected.1)
+          (storage wethAccount inv.protected.2))
 
 /-- A jump is world-state silent. -/
 theorem Exec.CorePairReplay.jump {vault : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm}
@@ -1003,7 +1066,12 @@ theorem Exec.CorePairReplay.nextSome {vault : Adr} {pc : Nat} {sevm : Sevm} {pre
                     (PairBoundary.ofState vault pre.state)
                     (PairBoundary.ofState vault inter.state) :=
                 (pairCarrierWith vault okParent).xinstForeignSome
-                  spawnEq frameRun resumeRun.symm wethNe hfork sumNof childBody
+                  spawnEq frameRun resumeRun.symm wethNe hfork
+                  (fun owner observed => by
+                    rcases observed with rfl | rfl
+                    · exact inv.protected.1
+                    · exact inv.protected.2)
+                  sumNof childBody
               exact headReplay.append
                 ((ihNext.resume next committed hfork interInv vaultEq wethNe
                   blockIndex transactionIndex framePath (nextChild + 1)).mono fun r h =>
@@ -1065,17 +1133,31 @@ theorem Exec.CorePairReplay.atTarget {vault : Adr} {sevm : Sevm} {pre post : Dev
           sevm.caller := by
       show split.payout.childMsg.currentTarget = sevm.caller
       rw [split.payout.target, toAdr_toB256]
-    have entryStorage : split.payout.entry.state.getStor = split.callPre.state.getStor := by
-      rw [benvAfterTransfer_getStor_eq split.payout.entryTransfer,
+    -- the vault keeps its installed code through the payout transfer, so it is
+    -- protected there and its storage survives the transfer (SA)
+    have vaultCode : split.payout.childMsg.benv.state.getCode vault =
+        pre.state.getCode vault :=
+      (benvAfterTransfer_ok_getCode split.payout.entryTransfer vault).symm.trans
+        (split.childCode vault)
+    have entryVault : split.payout.entry.state.getStor vault =
+        split.callPre.state.getStor vault := by
+      rw [benvAfterTransfer_ok_getStor split.payout.entryTransfer vault
+        (Or.inr (protected_of_compile (p := Blanc.ProrataWethVault.vault)
+          (by rw [vaultCode]; exact inv.vault.preWf.pre.code))),
         split.payout.messageState]
+    have entryWeth : split.payout.entry.state.getStor wethAccount =
+        split.callPre.state.getStor wethAccount := by
+      have h := split.payout.entryStor
+      rw [target] at h
+      exact h
     -- the prefix record
     have vaultKept : split.payout.entry.state.getStor vault = pre.state.getStor vault := by
-      rw [entryStorage]
+      rw [entryVault]
       exact split.foreignKept vault (by rw [target]; exact distinct)
     have written : split.payout.entry.state.getStor wethAccount =
         (pre.state.getStor wethAccount).set sevm.caller.toB256
           (Devm.getStorVal pre wethAccount sevm.caller.toB256 - Sevm.argWord sevm 0) := by
-      rw [entryStorage]
+      rw [entryWeth]
       have := split.written
       rw [target] at this
       exact this
