@@ -186,7 +186,7 @@ def cutT (x : Bnd1) (c : Cfg) : Cfg :=
 /-- A chunk's end decided against boundary `x` with tails: the prefixes as `obsD1` decides them,
 and what lies after them, compared as terms. -/
 def obsDT (x : Bnd1) : Res →
-    Option (Bool × SFunc × List SFunc × List (Stor × ByteArray) × AdrSet) × StorShadow ×
+    Option (Bool × SFunc × List SFunc × List (Stor × ByteArray) × AdrSet × AdrSet) × StorShadow ×
       AcctShadow
   | .cont c => (obsD1 x (.cont (cutT x c)), c.stor.drop (storOf1 x).length,
       c.acs.drop (acsOf1 x).length)
@@ -194,7 +194,7 @@ def obsDT (x : Bnd1) : Res →
 
 /-- What `obsDT` shows at boundary `x` with the tails `tS`, `tA`. -/
 def obsDOkT (x : Bnd1) (tS : StorShadow) (tA : AcctShadow) :
-    Option (Bool × SFunc × List SFunc × List (Stor × ByteArray) × AdrSet) × StorShadow ×
+    Option (Bool × SFunc × List SFunc × List (Stor × ByteArray) × AdrSet × AdrSet) × StorShadow ×
       AcctShadow :=
   (obsDOk1 x, tS, tA)
 
