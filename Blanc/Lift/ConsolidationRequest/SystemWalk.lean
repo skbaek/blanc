@@ -617,6 +617,17 @@ private theorem withOutput_state (d : Devm) (out : Bytes) :
 private theorem setMach_state_eq (d : Devm) (m : Mach) :
     (d.setMach m).state = d.state := rfl
 
+/-- Actual original value at a store base is zero when the snapshot original is
+zero: a created account reads zero, otherwise the actual read is the snapshot
+read. (Hoisting candidate: replace by the shared safe-refund donor.) -/
+private theorem actualOrig_zero_of_snapshot_zero (sevm : Sevm) (base : Devm)
+    (key : B256) (hsnap : getOrigStorVal sevm sevm.currentTarget key = 0) :
+    base.getOrigStorVal sevm sevm.currentTarget key = 0 := by
+  unfold Devm.getOrigStorVal
+  split
+  · rfl
+  · exact hsnap
+
 /-- The SYSTEM frame halts cleanly with empty return data, a non-negative
 refund counter, and writes confined to slots 0–3. -/
 theorem systemPost_facts (benv : Benv)
@@ -652,8 +663,10 @@ theorem systemPost_facts (benv : Benv)
       (systemSevm benv).currentTarget 2 = 0 := by
     rw [setupBase, getStorVal_afterSload]
     exact hs2
+  have o2 := actualOrig_zero_of_snapshot_zero (systemSevm benv)
+    (setupBase (systemSevm benv) (systemBase benv)) 2 horig2
   have r1 := afterSstore_refundCounter_ge_of_original_eq_current (systemSevm benv)
-    (setupBase (systemSevm benv) (systemBase benv)) 2 0 (horig2.trans c2.symm)
+    (setupBase (systemSevm benv) (systemBase benv)) 2 0 (o2.trans c2.symm)
   have c3 : (afterSstore (systemSevm benv)
       (setupBase (systemSevm benv) (systemBase benv)) 2 0).getStorVal
       (systemSevm benv).currentTarget 3 = 0 := by
@@ -661,10 +674,13 @@ theorem systemPost_facts (benv : Benv)
       Stor.get_set_ne _ (by decide : (2 : B256) ≠ 3), ← getStorVal_eq_getStor,
       setupBase, getStorVal_afterSload, getStorVal_afterSload]
     exact hs3
+  have o3 := actualOrig_zero_of_snapshot_zero (systemSevm benv)
+    (afterSstore (systemSevm benv)
+      (setupBase (systemSevm benv) (systemBase benv)) 2 0) 3 horig3
   have r2 := afterSstore_refundCounter_ge_of_original_eq_current (systemSevm benv)
     (afterSstore (systemSevm benv)
       (setupBase (systemSevm benv) (systemBase benv)) 2 0) 3 0
-    (horig3.trans c3.symm)
+    (o3.trans c3.symm)
   have c0 : (countBase (systemSevm benv)
       (excessBase (systemSevm benv)
         (ptrBase (systemSevm benv)
@@ -675,12 +691,17 @@ theorem systemPost_facts (benv : Benv)
       Stor.get_set_ne _ (by decide : (3 : B256) ≠ 0),
       Stor.get_set_ne _ (by decide : (2 : B256) ≠ 0), ← getStorVal_eq_getStor]
     exact hs0b
+  have o0 := actualOrig_zero_of_snapshot_zero (systemSevm benv)
+    (countBase (systemSevm benv)
+      (excessBase (systemSevm benv)
+        (ptrBase (systemSevm benv)
+          (setupBase (systemSevm benv) (systemBase benv))))) 0 horig0
   have r3 := afterSstore_refundCounter_ge_of_original_eq_current (systemSevm benv)
     (countBase (systemSevm benv)
       (excessBase (systemSevm benv)
         (ptrBase (systemSevm benv)
           (setupBase (systemSevm benv) (systemBase benv))))) 0 0
-    (horig0.trans c0.symm)
+    (o0.trans c0.symm)
   have c1 : (afterSstore (systemSevm benv)
       (countBase (systemSevm benv)
         (excessBase (systemSevm benv)
@@ -694,13 +715,19 @@ theorem systemPost_facts (benv : Benv)
       Stor.get_set_ne _ (by decide : (3 : B256) ≠ 1),
       Stor.get_set_ne _ (by decide : (2 : B256) ≠ 1), ← getStorVal_eq_getStor]
     exact hs1b
+  have o1 := actualOrig_zero_of_snapshot_zero (systemSevm benv)
+    (afterSstore (systemSevm benv)
+      (countBase (systemSevm benv)
+        (excessBase (systemSevm benv)
+          (ptrBase (systemSevm benv)
+            (setupBase (systemSevm benv) (systemBase benv))))) 0 0) 1 horig1
   have r4 := afterSstore_refundCounter_ge_of_original_eq_current (systemSevm benv)
     (afterSstore (systemSevm benv)
       (countBase (systemSevm benv)
         (excessBase (systemSevm benv)
           (ptrBase (systemSevm benv)
             (setupBase (systemSevm benv) (systemBase benv))))) 0 0) 1 0
-    (horig1.trans c1.symm)
+    (o1.trans c1.symm)
   have href0 : (systemBase benv).refundCounter = 0 := rfl
   have hrefund : 0 ≤ (systemPost benv).refundCounter := by
     have hrr : (systemPost benv).refundCounter =

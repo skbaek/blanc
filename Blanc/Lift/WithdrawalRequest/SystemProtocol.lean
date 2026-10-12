@@ -117,6 +117,19 @@ private theorem systemBookkeepingPost_refund (sevm : Sevm) (base : Devm)
   generalize systemBookkeepingBase sevm base = written
   rfl
 
+/-- Actual original-value safety from a snapshot equality: a created account
+reads zero (safe), otherwise the actual read is the snapshot read.
+(Hoisting candidate: replace by the shared safe-refund donor.) -/
+private theorem refundSafe_of_snapshot_eq (sevm : Sevm) (base : Devm) (key : B256)
+    (hsnap : getOrigStorVal sevm sevm.currentTarget key =
+      base.getStorVal sevm.currentTarget key) :
+    RefundSafe (base.getOrigStorVal sevm sevm.currentTarget key)
+      (base.getStorVal sevm.currentTarget key) := by
+  unfold Devm.getOrigStorVal
+  split
+  · exact Or.inr (Or.inl rfl)
+  · exact Or.inl hsnap
+
 /-- Queue reads can alias metadata, but write none of it. Each subsequent
 metadata store is the first write to its own distinct key. -/
 theorem systemFramePost_refund_ge (sevm : Sevm) (base : Devm) (memory : Mem) (gas : Nat)
@@ -132,17 +145,17 @@ theorem systemFramePost_refund_ge (sevm : Sevm) (base : Devm) (memory : Mem) (ga
   have pointersRefund : queue.refundCounter ≤ pointers.refundCounter := by
     unfold pointers systemFramePointers systemPointerBase
     split
-    · have head := afterSstore_refundCounter_ge_of_original_eq_current sevm queue 2 0
-        (queueOriginal 2)
+    · have head := afterSstore_refundCounter_ge_of_safe sevm queue 2 0
+        (refundSafe_of_snapshot_eq sevm queue 2 (queueOriginal 2))
       have tailOriginal : getOrigStorVal sevm sevm.currentTarget 3 =
           (afterSstore sevm queue 2 0).getStorVal sevm.currentTarget 3 := by
         rw [getStorVal_eq_getStor, afterSstore_getStor_self,
           Stor.get_set_ne _ (by decide : (2 : B256) ≠ 3), ← getStorVal_eq_getStor]
         exact queueOriginal 3
-      exact head.trans (afterSstore_refundCounter_ge_of_original_eq_current
-        sevm _ 3 0 tailOriginal)
-    · exact afterSstore_refundCounter_ge_of_original_eq_current
-        sevm queue 2 _ (queueOriginal 2)
+      exact head.trans (afterSstore_refundCounter_ge_of_safe
+        sevm _ 3 0 (refundSafe_of_snapshot_eq sevm _ 3 tailOriginal))
+    · exact afterSstore_refundCounter_ge_of_safe
+        sevm queue 2 _ (refundSafe_of_snapshot_eq sevm queue 2 (queueOriginal 2))
   have pointersOriginal (key : B256) (key2 : (2 : B256) ≠ key) (key3 : (3 : B256) ≠ key) :
       getOrigStorVal sevm sevm.currentTarget key = pointers.getStorVal sevm.currentTarget key := by
     unfold pointers systemFramePointers systemPointerBase
@@ -163,10 +176,12 @@ theorem systemFramePost_refund_ge (sevm : Sevm) (base : Devm) (memory : Mem) (ga
       Stor.get_set_ne _ (by decide : (0 : B256) ≠ 1), ← getStorVal_eq_getStor]
     simp only [systemCountRead, systemExcessRead, getStorVal_afterSload]
     exact pointersOriginal 1 (by decide) (by decide)
-  have excessRefund := afterSstore_refundCounter_ge_of_original_eq_current
-    sevm (systemCountRead sevm pointers) 0 (systemNewExcess sevm pointers) excessOriginal
-  have countRefund := afterSstore_refundCounter_ge_of_original_eq_current
-    sevm (systemExcessStore sevm pointers) 1 0 countOriginal
+  have excessRefund := afterSstore_refundCounter_ge_of_safe
+    sevm (systemCountRead sevm pointers) 0 (systemNewExcess sevm pointers)
+    (refundSafe_of_snapshot_eq sevm (systemCountRead sevm pointers) 0 excessOriginal)
+  have countRefund := afterSstore_refundCounter_ge_of_safe
+    sevm (systemExcessStore sevm pointers) 1 0
+    (refundSafe_of_snapshot_eq sevm (systemExcessStore sevm pointers) 1 countOriginal)
   have readsRefund : (systemCountRead sevm pointers).refundCounter = pointers.refundCounter := by
     simp only [systemCountRead, systemExcessRead, afterSload_refundCounter]
   rw [systemFramePost, systemBookkeepingPost_refund]
