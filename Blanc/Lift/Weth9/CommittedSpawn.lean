@@ -1,4 +1,5 @@
 import Blanc.Lift.Weth9.CommittedReplay
+import Blanc.Lift.CursorSourceRunReturn
 
 /-!
 # The spawn obligations of a WETH9 frame
@@ -71,17 +72,33 @@ theorem weth9_exec_node {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (
   cases hs with
   | next habs =>
     have hchain : Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N' := hN.snoc edge
-    have hfsil : afterCall.silentTree regSilent = true := by decide
-    have hKsil : ∀ s ∈ K.map Cont.f, s.silentTree regSilent = true := by
-      rw [hκK]
-      intro s hs
-      rw [List.mem_singleton] at hs
-      subst hs
-      decide
     refine ⟨?_, ?_⟩
-    · exact getStor_post_of_silent cert_check (R := ⟨0, sevm, pre, .ok post, run⟩) (post := post)
-        rfl hchain fork ok₁ (ok' := regSilent)
-        (fun hn hs => Ninst.Run.state_of_regSilent hn (StepIn.toRun hs)) hfsil hKsil
+    · -- The suffix after the `CALL` (`afterCall`, then its one continuation `t_0264_c24`) is
+      -- state-silent with a non-`SELFDESTRUCT` terminal, so the frame's post world is `N'`'s.
+      have hsevmN' : N'.sevm = sevm := Blanc.Exec.Deriv.ParentPrefix.sevm_eq hchain
+      have hforkN' : CoveredFork N'.sevm.benvStat.fork := by rw [hsevmN']; exact fork
+      have success : N'.exn = .ok post := Exec.Deriv.ParentPrefix.exn_eq hchain
+      have hS : SilentSet prog [] = true := rfl
+      have hstate : post.state = N'.devm.state := by
+        rcases ok₁.sourceRunReturn cert_check success hforkN' with halted |
+            ⟨cont, tail, state, run', hK, -, -, returned, okC⟩
+        · exact SFunc.RunP.state_of_silent StepIn.toRun hS (f := afterCall) (by decide)
+            (by decide) halted
+        · have h1 : state.state = N'.devm.state :=
+            SFunc.RunP.state_of_silent StepIn.toRun hS (f := afterCall) (by decide) (by decide)
+              returned
+          have hK' : K = cont :: tail := hK
+          rw [hK'] at hκK
+          simp only [List.map_cons, List.cons.injEq, List.map_eq_nil_iff] at hκK
+          obtain ⟨hcf, rfl⟩ := hκK
+          have hforkC : CoveredFork N'.sevm.benvStat.fork := hforkN'
+          rcases okC.sourceRunReturn cert_check rfl hforkC with halted2 |
+              ⟨cont2, tail2, -, -, hK2, -⟩
+          · have h2 := SFunc.RunP.state_of_silent StepIn.toRun hS (f := t_0264_c24)
+              (by decide) (by decide) (hcf ▸ halted2)
+            exact h2.trans h1
+          · exact absurd hK2 (by simp only [reduceCtorEq, not_false_eq_true])
+      exact funext fun a => getStor_eq_of_state_eq hstate a
     · intro M hM y
       exact noExec_after_of_cursor cert_check hchain hM fork ok₁ (E := []) rfl
         (by exact afterCall_execFree)
@@ -140,15 +157,22 @@ theorem weth9_spawnReplay (ca : Adr) {U : Key → Prop} (hinj : KeyInj U) :
       exact LedgerReplay.nil _
     · simp only [hd, Option.isSome_some, ↓reduceIte]
       exact replay_one hinj hkeys hd hstor
-    · obtain ⟨d10, sf, hstorc, hstep, hstate⟩ :=
+    · obtain ⟨d10, sf, hstorc, hcode10, hstep, hstate⟩ :=
         weth9_withdraw_frame StepIn.toRun hin ⟨who, w, hd⟩
       have hdesc : Exec.rawFrameDescendants run = [] :=
         Exec.rawFrameDescendants_eq_nil_of_noExec run hnone
-      have hsf : Devm.getStor sf = Devm.getStor d10 :=
-        StepIn.exec_getStor_eq_of_noDescendants (R := ⟨0, sevm, pre, .ok post, run⟩) hdesc hstep
+      have hne : (pre.getCode sevm.currentTarget).toList ≠ [] :=
+        (footSpec U).sem.ne_nil installed.1.symm
+      have htol : (State.getCode d10.state sevm.currentTarget).toList ≠ [] := by
+        show (d10.getCode sevm.currentTarget).toList ≠ []
+        rw [hcode10]
+        exact hne
+      have hprot : State.Protected d10.state sevm.currentTarget :=
+        State.Protected.of_code_ne_nil htol
+      have hsf : Devm.getStor sf sevm.currentTarget = Devm.getStor d10 sevm.currentTarget :=
+        StepIn.exec_getStor_eq_of_noDescendants (R := ⟨0, sevm, pre, .ok post, run⟩) hdesc hstep _ hprot
       have hpost : Devm.getStor post sevm.currentTarget = Devm.getStor d10 sevm.currentTarget :=
-        (getStor_eq_of_state_eq hstate sevm.currentTarget).trans
-          (congrFun hsf sevm.currentTarget)
+        (getStor_eq_of_state_eq hstate sevm.currentTarget).trans hsf
       obtain ⟨rfl, rfl⟩ := decodeCall_withdraw_inv hd
       simp only [hd, Option.isSome_some, ↓reduceIte]
       rw [hpost]

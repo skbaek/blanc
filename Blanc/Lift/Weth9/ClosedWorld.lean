@@ -37,10 +37,12 @@ theorem systemWorld_bal (a : Adr) : (systemWorld.get a).bal = 0 := by
     State.setCode_get_bal]
   rfl
 
+theorem systemCode_size : systemCode.size ≠ 0 := by decide +kernel
+
 theorem systemWorld_stor (a : Adr) : (systemWorld.get a).stor = .empty := by
   unfold systemWorld
-  rw [State.setCode_get_stor, State.setCode_get_stor, State.setCode_get_stor,
-    State.setCode_get_stor]
+  rw [State.setCode_get_stor systemCode_size, State.setCode_get_stor systemCode_size,
+    State.setCode_get_stor systemCode_size, State.setCode_get_stor systemCode_size]
   rfl
 
 theorem initialWorld_canonical : initialWorld.Canonical :=

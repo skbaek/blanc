@@ -31,11 +31,12 @@ theorem deposit_prepared_success {benv : Benv} (ctx : DepositTxContext benv)
   subst msg
   have statEq := benvAfterTransfer_stat hentry
   have afterState : after.state = depositTransferState benv.state := by
-    obtain ⟨mid, hsub, equation⟩ := of_benvAfterTransfer (by rfl) hentry
+    obtain ⟨mid, hsub, equation⟩ := of_benvAfterTransfer (by rfl)
+      (by show depositTx.value.toB256 ≠ 0; decide +kernel) hentry
     obtain ⟨_, midEq⟩ := State.of_subBal hsub
     have bal : (depositDebitState benv.state).bal senderE = 900000 := by
       change (((benv.state.incrNonce senderE).setBal senderE 900000).get senderE).bal = 900000
-      rw [State.setBal_get_self]
+      rw [State.setBal_get_self, Acct.clearIfEmpty_bal]
       rfl
     have midState : mid = (depositDebitState benv.state).setBal senderE 899999 := by
       change mid = (depositDebitState benv.state).setBal senderE
@@ -63,11 +64,22 @@ theorem deposit_prepared_success {benv : Benv} (ctx : DepositTxContext benv)
       depositTx contractAddress).withBenv after
   have current : (initDevm child).getStorVal contractAddress (balSlot senderE) = 0 := by
     change (after.state.getStor contractAddress).get (balSlot senderE) = 0
-    rw [afterState, depositTransferState, getStor_addBal]
-    change (((depositDebitState benv.state).setBal senderE 899999).get contractAddress).stor.get _ = 0
-    rw [State.setBal_get_stor, depositDebitState, State.setBal_get_stor,
-      State.incrNonce_get_stor]
-    exact ctx.slot
+    have hsc : senderE ≠ contractAddress := by decide +kernel
+    have hcodeCa : (((depositDebitState benv.state).setBal senderE 899999).get contractAddress).code =
+        Weth9.code := by
+      rw [State.setBal_get_ne hsc, depositDebitState, State.setBal_get_ne hsc]
+      exact State.incrNonce_get_code.trans ctx.code
+    rw [afterState, depositTransferState, getStor_addBal, if_neg]
+    · change (((depositDebitState benv.state).setBal senderE 899999).get contractAddress).stor.get _ = 0
+      rw [State.setBal_get_ne hsc, depositDebitState, State.setBal_get_ne hsc,
+        State.incrNonce_get_stor, if_neg (fun h => hsc h.1)]
+      exact ctx.slot
+    · rintro ⟨-, hE⟩
+      apply code_size_ne_zero
+      have h1 := hE.1
+      change (((depositDebitState benv.state).setBal senderE 899999).get contractAddress).code.size = 0
+        at h1
+      rwa [hcodeCa] at h1
   refine ⟨code, fork, Frame.enter_run_of_nonprecompile hentry (by rfl) ?_, ?_⟩
   · change after.stat.rules.isPrecomp contractAddress = false
     rw [statEq]
@@ -77,7 +89,11 @@ theorem deposit_prepared_success {benv : Benv} (ctx : DepositTxContext benv)
     decide +kernel
   · obtain ⟨post, execution, _, gas, error, refund, deleted, state, logs⟩ :=
       deposit_frame_success (sevm := initSevm child) (pre := initDevm child) code fork rfl rfl rfl rfl rfl rfl rfl (by rfl) current
-        (by change (after.stat.origState.getStor contractAddress).get (balSlot senderE) = 0
+        (by
+          unfold Devm.getOrigStorVal
+          split
+          · rfl
+          · change (after.stat.origState.getStor contractAddress).get (balSlot senderE) = 0
             rw [statEq]; exact ctx.slot)
         (by change (contractAddress, balSlot senderE) ∉
               (Std.HashSet.ofList ([] : List (Adr × B256)))

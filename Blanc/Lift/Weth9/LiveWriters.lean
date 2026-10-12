@@ -290,7 +290,10 @@ theorem callNet_ge (b : Devm) (a : Adr) : 6800 ≤ callNet b a := by
 /-- **`withdraw(wad)` to an externally owned account is live, gas-exact, with the final machine.**  The
 hypotheses of `weth9_withdraw_live`; besides the gas, output and storage it exposes what the frame
 leaves of its final machine (`WithdrawPost`): the frame error, the refund counter, the accounts to
-delete, the `Withdrawal` event, and the ether moved from the contract to the caller. -/
+delete, the `Withdrawal` event, and the ether moved from the contract to the caller.  Under Jaune's
+account normalization the storage conclusions need the contract protected (`hprot_ca`) and the caller's
+credit not to empty it (`hrecv`: the caller protected, or no wrap); see `weth9_withdraw_live_target_deleted` and
+`weth9_withdraw_live_caller_deleted` for what happens otherwise. -/
 theorem weth9_withdraw_live_post {sevm : Sevm} {pre : Devm} {G : Nat}
     (h_code : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
     (h_static : sevm.isStatic = false) (h_value : sevm.value = 0)
@@ -302,6 +305,9 @@ theorem weth9_withdraw_live_post {sevm : Sevm} {pre : Devm} {G : Nat}
     (h_eoa : (pre.getCode sevm.caller).size = 0)
     (h_prec : sevm.benvStat.rules.isPrecomp sevm.caller = false)
     (h_eth : ¬ (pre.getAcct sevm.currentTarget).bal < Sevm.dataWord sevm 4)
+    (hprot_ca : State.Protected pre.state sevm.currentTarget)
+    (hrecv : State.Protected pre.state sevm.caller ∨
+      B256.Nof (pre.getAcct sevm.caller).bal (Sevm.dataWord sevm 4))
     (h_gas : pre.gasLeft = G + withdrawGas sevm pre) (hG : 811 ≤ G) :
     ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧ post.gasLeft = G ∧
       WithdrawPost sevm pre post (Sevm.dataWord sevm 4) ∧
@@ -311,7 +317,7 @@ theorem weth9_withdraw_live_post {sevm : Sevm} {pre : Devm} {G : Nat}
       ∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor pre a := by
   have hcn := callNet_ge pre sevm.caller
   obtain ⟨post, hrun, hg, hp, hs1, hs2⟩ := weth9_withdraw_runExact_post hfork h_static h_value h_sel
-    h_len h_len' h_stack h_mem h_depth hwad hle h_eoa h_prec h_eth h_gas
+    h_len h_len' h_stack h_mem h_depth hwad hle h_eoa h_prec h_eth hprot_ca hrecv h_gas
     (by
       have e : gCallStipend = 2300 := rfl
       generalize callNet pre sevm.caller = x at hcn ⊢
@@ -322,7 +328,9 @@ theorem weth9_withdraw_live_post {sevm : Sevm} {pre : Devm} {G : Nat}
   exact ⟨post, (exec_iff_exec_eq 0 sevm pre (.ok post)).mp (exec_of_runExact h_code hfork hrun), hg,
     hp, hs1, hs2⟩
 
-/-- **`withdraw(wad)` to an externally owned account is live, gas-exact.**  With `0 < wad ≤
+/-- **`withdraw(wad)` to an externally owned account is live, gas-exact** for a protected contract and a
+caller protected or whose credit does not wrap (`hprot_ca`, `hrecv`; otherwise the send can empty and delete
+either account with its storage).  With `0 < wad ≤
 balanceOf[caller]`, a caller without code that is no precompile, the contract holding the ether and the
 frame not the outermost, at gas `G + withdrawGas` with `811 ≤ G` the call succeeds ending at gas `G`;
 it debits the caller's balance slot and no other storage, and returns nothing. -/
@@ -337,6 +345,9 @@ theorem weth9_withdraw_live {sevm : Sevm} {pre : Devm} {G : Nat}
     (h_eoa : (pre.getCode sevm.caller).size = 0)
     (h_prec : sevm.benvStat.rules.isPrecomp sevm.caller = false)
     (h_eth : ¬ (pre.getAcct sevm.currentTarget).bal < Sevm.dataWord sevm 4)
+    (hprot_ca : State.Protected pre.state sevm.currentTarget)
+    (hrecv : State.Protected pre.state sevm.caller ∨
+      B256.Nof (pre.getAcct sevm.caller).bal (Sevm.dataWord sevm 4))
     (h_gas : pre.gasLeft = G + withdrawGas sevm pre) (hG : 811 ≤ G) :
     ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧ post.gasLeft = G ∧ post.output = pre.output ∧
       Devm.getStor post sevm.currentTarget = (Devm.getStor pre sevm.currentTarget).set
@@ -344,9 +355,183 @@ theorem weth9_withdraw_live {sevm : Sevm} {pre : Devm} {G : Nat}
         (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) - Sevm.dataWord sevm 4) ∧
       ∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor pre a := by
   obtain ⟨post, hex, hg, hp, hs1, hs2⟩ := weth9_withdraw_live_post h_code hfork h_static h_value h_sel
-    h_len h_len' h_stack h_mem h_depth hwad hle h_eoa h_prec h_eth h_gas hG
+    h_len h_len' h_stack h_mem h_depth hwad hle h_eoa h_prec h_eth hprot_ca hrecv h_gas hG
   exact ⟨post, hex, hg, hp.output, hs1, hs2⟩
 
+/-- **Re-pin evidence (SA): a nonzero `withdraw` can delete the contract's account with its storage.**  Under
+the premises of `weth9_withdraw_live`, if the frame's world account at the contract has no code, nonce `0`
+and exactly `wad` ether (`sevm.code` is the interpreted WETH9 code, which the premises do not tie to the
+world), the send empties and normalizes it, so its storage ends empty. -/
+theorem weth9_withdraw_live_target_deleted {sevm : Sevm} {pre : Devm} {G : Nat}
+    (h_code : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (h_static : sevm.isStatic = false) (h_value : sevm.value = 0)
+    (h_sel : Sevm.selector sevm = wdSel)
+    (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
+    (h_stack : pre.stack = []) (h_mem : pre.memory = Mem.empty) (h_depth : sevm.depth ≠ 0)
+    (hwad : Sevm.dataWord sevm 4 ≠ 0)
+    (hle : Sevm.dataWord sevm 4 ≤ pre.getStorVal sevm.currentTarget (balSlot sevm.caller))
+    (h_eoa : (pre.getCode sevm.caller).size = 0)
+    (h_prec : sevm.benvStat.rules.isPrecomp sevm.caller = false)
+    (h_eth : ¬ (pre.getAcct sevm.currentTarget).bal < Sevm.dataWord sevm 4)
+    (h_gas : pre.gasLeft = G + withdrawGas sevm pre) (hG : 811 ≤ G)
+    (hne : sevm.caller ≠ sevm.currentTarget)
+    (hnonce : (pre.getAcct sevm.currentTarget).nonce = 0)
+    (hcode : (pre.getAcct sevm.currentTarget).code.size = 0)
+    (hbal : (pre.getAcct sevm.currentTarget).bal = Sevm.dataWord sevm 4)
+    {post : Devm} (hex : exec ⟨0, sevm, pre⟩ = .ok post) :
+    Devm.getStor post sevm.currentTarget = .empty := by
+  have hcn := callNet_ge pre sevm.caller
+  obtain ⟨post0, hrun, -, hp⟩ := weth9_withdraw_runExact_core hfork h_static h_value h_sel
+    h_len h_len' h_stack h_mem h_depth hwad hle h_eoa h_prec h_eth h_gas
+    (by
+      have e : gCallStipend = 2300 := rfl
+      generalize callNet pre sevm.caller = x at hcn ⊢
+      generalize sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller)
+        (wV sevm pre (Sevm.dataWord sevm 4)) = y
+      omega)
+    (by have e : gCallStipend = 2300 := rfl; omega)
+  have hex0 := (exec_iff_exec_eq 0 sevm pre (.ok post0)).mp (exec_of_runExact h_code hfork hrun)
+  rw [hex] at hex0
+  cases hex0
+  have hcs := hp.state
+  rw [if_neg hwad] at hcs
+  obtain ⟨stmid, hsub, hst⟩ := hcs
+  obtain ⟨-, hstmid⟩ := State.of_subBal hsub
+  obtain ⟨st, hst3⟩ := afterSstore_getAcct (sevm := sevm) (b := wB2 sevm pre)
+    (key := balSlot sevm.caller) (value := wV sevm pre (Sevm.dataWord sevm 4)) sevm.currentTarget
+  have hacct2 : (wB2 sevm pre).getAcct sevm.currentTarget = pre.getAcct sevm.currentTarget := by
+    show (wB2 sevm pre).state.get _ = pre.state.get _
+    rw [Blanc.Lift.NodeWalk.afterSload_state, Blanc.Lift.NodeWalk.afterSload_state]
+  rw [hacct2] at hst3
+  show (post.state.get sevm.currentTarget).stor = _
+  rw [hst]
+  unfold State.addBal
+  rw [State.setBal_get_ne hne, hstmid, State.setBal_get_stor, if_pos]
+  refine ⟨rfl, ?_⟩
+  have h3 : (wB3 sevm pre (Sevm.dataWord sevm 4)).state.get sevm.currentTarget =
+      { pre.getAcct sevm.currentTarget with stor := st } := hst3
+  have hb3 : (wB3 sevm pre (Sevm.dataWord sevm 4)).state.bal sevm.currentTarget =
+      Sevm.dataWord sevm 4 := by
+    show ((wB3 sevm pre (Sevm.dataWord sevm 4)).state.get _).bal = _
+    rw [h3]; exact hbal
+  rw [hb3, B256.sub_self, h3]
+  exact ⟨hcode, hnonce, rfl⟩
+
+/-- **Re-pin evidence (SA): a nonzero `withdraw` can delete the caller's account with its storage.**  Under
+the premises of `weth9_withdraw_live` (the contract may even be protected), a caller with nonce `0` whose
+balance plus `wad` wraps to `0` is emptied by the credit and normalized, so its storage ends empty. -/
+theorem weth9_withdraw_live_caller_deleted {sevm : Sevm} {pre : Devm} {G : Nat}
+    (h_code : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (h_static : sevm.isStatic = false) (h_value : sevm.value = 0)
+    (h_sel : Sevm.selector sevm = wdSel)
+    (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
+    (h_stack : pre.stack = []) (h_mem : pre.memory = Mem.empty) (h_depth : sevm.depth ≠ 0)
+    (hwad : Sevm.dataWord sevm 4 ≠ 0)
+    (hle : Sevm.dataWord sevm 4 ≤ pre.getStorVal sevm.currentTarget (balSlot sevm.caller))
+    (h_eoa : (pre.getCode sevm.caller).size = 0)
+    (h_prec : sevm.benvStat.rules.isPrecomp sevm.caller = false)
+    (h_eth : ¬ (pre.getAcct sevm.currentTarget).bal < Sevm.dataWord sevm 4)
+    (h_gas : pre.gasLeft = G + withdrawGas sevm pre) (hG : 811 ≤ G)
+    (hne : sevm.caller ≠ sevm.currentTarget)
+    (hnonce : (pre.getAcct sevm.caller).nonce = 0)
+    (hwrap : (pre.getAcct sevm.caller).bal + Sevm.dataWord sevm 4 = 0)
+    {post : Devm} (hex : exec ⟨0, sevm, pre⟩ = .ok post) :
+    Devm.getStor post sevm.caller = .empty := by
+  have hcn := callNet_ge pre sevm.caller
+  obtain ⟨post0, hrun, -, hp⟩ := weth9_withdraw_runExact_core hfork h_static h_value h_sel
+    h_len h_len' h_stack h_mem h_depth hwad hle h_eoa h_prec h_eth h_gas
+    (by
+      have e : gCallStipend = 2300 := rfl
+      generalize callNet pre sevm.caller = x at hcn ⊢
+      generalize sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller)
+        (wV sevm pre (Sevm.dataWord sevm 4)) = y
+      omega)
+    (by have e : gCallStipend = 2300 := rfl; omega)
+  have hex0 := (exec_iff_exec_eq 0 sevm pre (.ok post0)).mp (exec_of_runExact h_code hfork hrun)
+  rw [hex] at hex0
+  cases hex0
+  have hcs := hp.state
+  rw [if_neg hwad] at hcs
+  obtain ⟨stmid, hsub, hst⟩ := hcs
+  obtain ⟨-, hstmid⟩ := State.of_subBal hsub
+  obtain ⟨st, hst3⟩ := afterSstore_getAcct (sevm := sevm) (b := wB2 sevm pre)
+    (key := balSlot sevm.caller) (value := wV sevm pre (Sevm.dataWord sevm 4)) sevm.caller
+  have hacct2 : (wB2 sevm pre).getAcct sevm.caller = pre.getAcct sevm.caller := by
+    show (wB2 sevm pre).state.get _ = pre.state.get _
+    rw [Blanc.Lift.NodeWalk.afterSload_state, Blanc.Lift.NodeWalk.afterSload_state]
+  rw [hacct2] at hst3
+  have h3 : (wB3 sevm pre (Sevm.dataWord sevm 4)).state.get sevm.caller =
+      { pre.getAcct sevm.caller with stor := st } := hst3
+  have hmid : stmid.get sevm.caller = { pre.getAcct sevm.caller with stor := st } := by
+    rw [hstmid, State.setBal_get_ne (Ne.symm hne), h3]
+  show (post.state.get sevm.caller).stor = _
+  rw [hst]
+  unfold State.addBal
+  rw [State.setBal_get_stor, if_pos]
+  refine ⟨rfl, ?_⟩
+  have hcodeC : (pre.getAcct sevm.caller).code.size = 0 := h_eoa
+  have hbm : stmid.bal sevm.caller = (pre.getAcct sevm.caller).bal := by
+    show (stmid.get sevm.caller).bal = _
+    rw [hmid]
+  rw [hbm, hwrap, hmid]
+  exact ⟨hcodeC, hnonce, rfl⟩
+
+/-- **Without its protection premises, `weth9_withdraw_live`'s conclusion fails at an unprotected, exactly funded contract**
+(Lean evidence for its premises under Jaune ca9f27d, cause SA): with the remaining balance word
+nonzero, no run satisfies its target-storage clause. -/
+theorem weth9_withdraw_live_target_refuted {sevm : Sevm} {pre : Devm} {G : Nat}
+    (h_code : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (h_static : sevm.isStatic = false) (h_value : sevm.value = 0)
+    (h_sel : Sevm.selector sevm = wdSel)
+    (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
+    (h_stack : pre.stack = []) (h_mem : pre.memory = Mem.empty) (h_depth : sevm.depth ≠ 0)
+    (hwad : Sevm.dataWord sevm 4 ≠ 0)
+    (hle : Sevm.dataWord sevm 4 ≤ pre.getStorVal sevm.currentTarget (balSlot sevm.caller))
+    (h_eoa : (pre.getCode sevm.caller).size = 0)
+    (h_prec : sevm.benvStat.rules.isPrecomp sevm.caller = false)
+    (h_eth : ¬ (pre.getAcct sevm.currentTarget).bal < Sevm.dataWord sevm 4)
+    (h_gas : pre.gasLeft = G + withdrawGas sevm pre) (hG : 811 ≤ G)
+    (hne : sevm.caller ≠ sevm.currentTarget)
+    (hnonce : (pre.getAcct sevm.currentTarget).nonce = 0)
+    (hcode : (pre.getAcct sevm.currentTarget).code.size = 0)
+    (hbal : (pre.getAcct sevm.currentTarget).bal = Sevm.dataWord sevm 4)
+    (hrest : pre.getStorVal sevm.currentTarget (balSlot sevm.caller) - Sevm.dataWord sevm 4 ≠ 0) :
+    ¬ ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧
+      Devm.getStor post sevm.currentTarget = (Devm.getStor pre sevm.currentTarget).set
+        (balSlot sevm.caller)
+        (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) - Sevm.dataWord sevm 4) := by
+  rintro ⟨post, hex, hst⟩
+  have he := weth9_withdraw_live_target_deleted h_code hfork h_static h_value h_sel h_len h_len'
+    h_stack h_mem h_depth hwad hle h_eoa h_prec h_eth h_gas hG hne hnonce hcode hbal hex
+  have hk := congrArg (fun s : Stor => s.get (balSlot sevm.caller)) (he.symm.trans hst)
+  simp only [Stor.get_set_self] at hk
+  exact hrest (hk.symm.trans rfl)
+
+/-- **Without its protection premises, `weth9_withdraw_live`'s conclusion fails at a wrapping caller credit** (Lean evidence for
+its premises under Jaune ca9f27d, cause SA): a caller with nonce `0`, nonempty storage and a balance
+that `wad` wraps to `0` loses that storage, contradicting the all-other-storage clause. -/
+theorem weth9_withdraw_live_caller_refuted {sevm : Sevm} {pre : Devm} {G : Nat}
+    (h_code : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (h_static : sevm.isStatic = false) (h_value : sevm.value = 0)
+    (h_sel : Sevm.selector sevm = wdSel)
+    (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
+    (h_stack : pre.stack = []) (h_mem : pre.memory = Mem.empty) (h_depth : sevm.depth ≠ 0)
+    (hwad : Sevm.dataWord sevm 4 ≠ 0)
+    (hle : Sevm.dataWord sevm 4 ≤ pre.getStorVal sevm.currentTarget (balSlot sevm.caller))
+    (h_eoa : (pre.getCode sevm.caller).size = 0)
+    (h_prec : sevm.benvStat.rules.isPrecomp sevm.caller = false)
+    (h_eth : ¬ (pre.getAcct sevm.currentTarget).bal < Sevm.dataWord sevm 4)
+    (h_gas : pre.gasLeft = G + withdrawGas sevm pre) (hG : 811 ≤ G)
+    (hne : sevm.caller ≠ sevm.currentTarget)
+    (hnonce : (pre.getAcct sevm.caller).nonce = 0)
+    (hwrap : (pre.getAcct sevm.caller).bal + Sevm.dataWord sevm 4 = 0)
+    (hstor : Devm.getStor pre sevm.caller ≠ .empty) :
+    ¬ ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧
+      ∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor pre a := by
+  rintro ⟨post, hex, hother⟩
+  have he := weth9_withdraw_live_caller_deleted h_code hfork h_static h_value h_sel h_len h_len'
+    h_stack h_mem h_depth hwad hle h_eoa h_prec h_eth h_gas hG hne hnonce hwrap hex
+  exact hstor ((hother _ hne).symm.trans he)
 
 /-! ## From the model's acceptance to the storage-level premises -/
 
@@ -532,6 +717,47 @@ at the cost of its case. -/
 def withdrawAnyGas (sevm : Sevm) (pre : Devm) : Nat :=
   if Sevm.dataWord sevm 4 = 0 then withdrawZeroGas sevm pre else withdrawGas sevm pre
 
+/-- **`withdraw(wad)` to an externally owned account is live, gas-exact, for every `wad`, with the contract's
+storage** (re-pin helper): the target-storage half of `weth9_withdraw_any_live`, which needs only the contract
+protected (no caller-credit premise). -/
+theorem weth9_withdraw_any_live_self {sevm : Sevm} {pre : Devm} {G : Nat}
+    (h_code : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (h_static : sevm.isStatic = false) (h_value : sevm.value = 0)
+    (h_sel : Sevm.selector sevm = wdSel)
+    (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
+    (h_stack : pre.stack = []) (h_mem : pre.memory = Mem.empty) (h_depth : sevm.depth ≠ 0)
+    (hle : Sevm.dataWord sevm 4 ≤ pre.getStorVal sevm.currentTarget (balSlot sevm.caller))
+    (h_eoa : (pre.getCode sevm.caller).size = 0)
+    (h_prec : sevm.benvStat.rules.isPrecomp sevm.caller = false)
+    (h_eth : ¬ (pre.getAcct sevm.currentTarget).bal < Sevm.dataWord sevm 4)
+    (hprot_ca : State.Protected pre.state sevm.currentTarget)
+    (h_gas : pre.gasLeft = G + withdrawAnyGas sevm pre) (hG : 811 ≤ G) :
+    ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧ post.gasLeft = G ∧ post.output = pre.output ∧
+      Devm.getStor post sevm.currentTarget = (Devm.getStor pre sevm.currentTarget).set
+        (balSlot sevm.caller)
+        (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) - Sevm.dataWord sevm 4) := by
+  unfold withdrawAnyGas at h_gas
+  by_cases hw : Sevm.dataWord sevm 4 = 0
+  · simp only [hw, ↓reduceIte] at h_gas
+    obtain ⟨post, hex, hg, ho, hs1, -⟩ := weth9_withdraw_zero_live h_code hfork h_static h_value
+      h_sel h_len h_len' h_stack h_mem h_depth hw h_eoa h_prec h_gas (by omega)
+    exact ⟨post, hex, hg, ho, hs1⟩
+  · simp only [hw, ↓reduceIte] at h_gas
+    have hcn := callNet_ge pre sevm.caller
+    obtain ⟨post, hrun, hg, hp⟩ := weth9_withdraw_runExact_core hfork h_static h_value h_sel
+      h_len h_len' h_stack h_mem h_depth hw hle h_eoa h_prec h_eth h_gas
+      (by
+        have e : gCallStipend = 2300 := rfl
+        generalize callNet pre sevm.caller = x at hcn ⊢
+        generalize sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller)
+          (wV sevm pre (Sevm.dataWord sevm 4)) = y
+        omega)
+      (by have e : gCallStipend = 2300 := rfl; omega)
+    exact ⟨post, (exec_iff_exec_eq 0 sevm pre (.ok post)).mp (exec_of_runExact h_code hfork hrun), hg,
+      hp.output, hp.getStor_self_of_ne_zero hw hprot_ca⟩
+
+/-- **`withdraw(wad)` to an externally owned account is live, gas-exact, for every `wad`** (`hprot_ca`,
+`hrecv` as in `weth9_withdraw_live`), at the cost of its case. -/
 theorem weth9_withdraw_any_live {sevm : Sevm} {pre : Devm} {G : Nat}
     (h_code : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
     (h_static : sevm.isStatic = false) (h_value : sevm.value = 0)
@@ -542,6 +768,9 @@ theorem weth9_withdraw_any_live {sevm : Sevm} {pre : Devm} {G : Nat}
     (h_eoa : (pre.getCode sevm.caller).size = 0)
     (h_prec : sevm.benvStat.rules.isPrecomp sevm.caller = false)
     (h_eth : ¬ (pre.getAcct sevm.currentTarget).bal < Sevm.dataWord sevm 4)
+    (hprot_ca : State.Protected pre.state sevm.currentTarget)
+    (hrecv : State.Protected pre.state sevm.caller ∨
+      B256.Nof (pre.getAcct sevm.caller).bal (Sevm.dataWord sevm 4))
     (h_gas : pre.gasLeft = G + withdrawAnyGas sevm pre) (hG : 811 ≤ G) :
     ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧ post.gasLeft = G ∧ post.output = pre.output ∧
       Devm.getStor post sevm.currentTarget = (Devm.getStor pre sevm.currentTarget).set
@@ -555,7 +784,8 @@ theorem weth9_withdraw_any_live {sevm : Sevm} {pre : Devm} {G : Nat}
       h_depth hw h_eoa h_prec h_gas (by omega)
   · simp only [hw, ↓reduceIte] at h_gas
     exact weth9_withdraw_live h_code hfork h_static h_value h_sel h_len h_len' h_stack h_mem h_depth
-      hw hle h_eoa h_prec h_eth h_gas hG
+      hw hle h_eoa h_prec h_eth hprot_ca hrecv h_gas hG
+
 
 
 /-! ## Withdrawing to a contract
@@ -658,8 +888,14 @@ theorem approveGas_cold_set {sevm : Sevm} {pre : Devm}
     (hcur : pre.getStorVal sevm.currentTarget
       (allowSlot sevm.caller (Sevm.dataWord sevm 4).toAdr) = 0)
     (hw : Sevm.dataWord sevm 36 ≠ 0) : approveGas sevm pre = 24420 := by
+  have horigM : pre.getOrigStorVal sevm sevm.currentTarget
+      (allowSlot sevm.caller (Sevm.dataWord sevm 4).toAdr) = 0 := by
+    unfold Devm.getOrigStorVal
+    split
+    · rfl
+    · exact horig
   unfold approveGas sstoreCost sstoreValueCost
-  simp only [hcold, horig, hcur, ite_false]
+  simp only [hcold, horigM, hcur, ite_false]
   simp only [ne_eq, Ne.symm hw, not_false_eq_true, and_self, ↓reduceIte]
   decide
 

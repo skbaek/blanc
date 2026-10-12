@@ -17,7 +17,7 @@ structure DepositFramePost (sevm : Sevm) (pre post : Devm) : Prop where
   error : post.error = pre.error
   refund : post.refundCounter = sstoreNewRefundCounter sevm.benvStat.rules.gas
     (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) + sevm.value)
-    (getOrigStorVal sevm sevm.currentTarget (balSlot sevm.caller))
+    (pre.getOrigStorVal sevm sevm.currentTarget (balSlot sevm.caller))
     (pre.getStorVal sevm.currentTarget (balSlot sevm.caller)) pre.refundCounter
   accountsToDelete : post.accountsToDelete = pre.accountsToDelete
   logs : ∃ event : Log, event.address = sevm.currentTarget ∧ post.logs = pre.logs ++ [event]
@@ -107,6 +107,16 @@ theorem deposit_body_framed {sevm : Sevm} {b : Devm} {G : Nat} {S : List B256} {
         (mapSlot sevm.caller.toB256 3) (b.getStorVal sevm.currentTarget (mapSlot sevm.caller.toB256 3) +
           sevm.value)).refundCounter = _
       rw [afterSstore_refundCounter, getStorVal_afterSload, afterSload_refundCounter]
+      have hcreated : (afterSload sevm b (mapSlot sevm.caller.toB256 3)).createdAccounts =
+          b.createdAccounts := by
+        unfold afterSload
+        split <;> rfl
+      have horig : (afterSload sevm b (mapSlot sevm.caller.toB256 3)).getOrigStorVal
+          sevm sevm.currentTarget (mapSlot sevm.caller.toB256 3) =
+          b.getOrigStorVal sevm sevm.currentTarget (mapSlot sevm.caller.toB256 3) := by
+        unfold Devm.getOrigStorVal
+        rw [hcreated]
+      rw [horig]
       rfl
     · exact (Devm.addLog_instructionFrame _ _).accountsToDelete.symm.trans
         ((afterSstore_accountsToDelete _ _ _ _).trans afterSload_accountsToDelete)

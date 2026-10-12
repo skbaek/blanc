@@ -2,7 +2,8 @@ import Blanc.Lift.Weth9.ClosedFoot
 import Blanc.Lift.Weth9.ClosedWithdrawData
 
 /-!
-A synthetic, connected applicability witness for `weth9_history_tx_withdraw`.
+A synthetic, connected applicability witness for `weth9_history_tx_withdraw` (its coinbase
+carries no storage and its contract was not created in the block environment).
 It begins with actual recorded-bytecode CREATE execution, then one valid BPO2
 configured block committing a positive signed deposit, and ends with admitted
 full withdrawal at the terminal state. It authenticates neither mainnet
@@ -67,6 +68,23 @@ structure ClosedExitWitness (st : Jaune.State) (bout : BlockOutput) : Prop where
 /-- One closed, positive, full-balance application of the history transaction
 headline. There are no application hypotheses or section parameters. -/
 theorem weth9_closed_exit_instance : ∃ st bout, ClosedExitWitness st bout := by
+  have hfresh : contractAddress ∉ withdrawBenv.createdAccounts := AdrSet.not_mem_empty
+  have hcbStor : withdrawBenv.state.getStor withdrawBenv.stat.coinbase = .empty := by
+    change depositedState.getStor 0 = .empty
+    have hnof : B256.Nof (deploymentPost.state.get 0).bal 45038 := by
+      rw [deployment_account_ne 0 contractAddress_ne_zero.symm]
+      unfold B256.Nof
+      have h0 : (initialWorld.get 0).bal = 0 := by
+        have := initialWorld_bal 0
+        change (initialWorld.get 0).bal = _ at this
+        rw [this]
+        decide +kernel
+      rw [h0]
+      decide +kernel
+    rw [depositedState, deposit_settled_other_stor _ _ contractAddress_ne_zero
+      (by rw [deployment_holder]; decide +kernel) hnof]
+    change (deploymentPost.state.get 0).stor = .empty
+    rw [deployment_account_ne 0 contractAddress_ne_zero.symm, initialWorld_stor]
   obtain ⟨st, bout, admitted, cumulative, gas, storage, otherStorage, nonce, holder,
       contract, net⟩ := weth9_history_tx_withdraw
     (ca := contractAddress) (K₀ := fun _ => False) closedHistory
@@ -86,7 +104,7 @@ theorem weth9_closed_exit_instance : ∃ st bout, ClosedExitWitness st bout := b
         rw [deposited_holder]; decide +kernel)
     closed_sender_precompile closed_contract_precompile closedHistory_holder
     (by rw [deposited_weth_balance])
-    closed_coinbase_sender closed_coinbase_contract
+    closed_coinbase_sender closed_coinbase_contract hfresh (Or.inr hcbStor)
   have subtract : amount - amount = (0 : B256) := by decide +kernel
   rw [deposited_weth_balance, subtract] at storage
   have zero : (st.getStor contractAddress).get (balSlot senderE) = 0 := by
