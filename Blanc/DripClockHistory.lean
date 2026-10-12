@@ -32,7 +32,7 @@ private theorem messageCall_clock_admitted
       exact RetainedXlot.frameAdmitted_benvStat_of_runFrame (Q := fun stat =>
         stat.time.toNat ≤ T) coreTrace.retained coreTrace.run (by
           simpa only [Frame.ofCreate, processCreateMessage.msg, Msg.withBenv, Benv.incrNonce,
-            addCreatedAccount, Benv.setStor] using htime) ca
+            addCreatedAccount, Benv.setStor, Benv.clearStorageWritesIfEmpty] using htime) ca
   | callRun target delegated refund delegation execMsg execMsgEq evm core
       coreTrace result =>
       subst execMsgEq
