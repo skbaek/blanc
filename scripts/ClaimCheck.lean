@@ -6975,10 +6975,12 @@ example
     (hnocode : (benv.state.getCode E).size = 0)
     (hfunds : tx.gas * maxFee ≤ (benv.state.get E).bal.toNat)
     (hprecE : benv.stat.rules.isPrecomp E = false) (hprecCa : benv.stat.rules.isPrecomp ca = false)
-    (hcode : benv.state.getCode ca = code)
+    (hcode : benv.state.getCode ca = code) (hfresh : ca ∉ benv.createdAccounts)
     (hinv : FootInv U (benv.state.getStor ca) (benv.state.bal ca)) (hholder : U (.bal E))
     (hbal : wad ≤ (benv.state.getStor ca).get (balSlot E))
-    (hcbE : benv.stat.coinbase ≠ E) (hcbCa : benv.stat.coinbase ≠ ca) :
+    (hcbE : benv.stat.coinbase ≠ E) (hcbCa : benv.stat.coinbase ≠ ca)
+    (hcbSafe : State.Protected benv.state benv.stat.coinbase ∨
+      benv.state.getStor benv.stat.coinbase = .empty) :
     ∃ (st : Jaune.State) (bout' : BlockOutput), processTransaction benv bout tx index = .ok (st, bout') ∧
       bout'.cumulativeGasUsed = bout.cumulativeGasUsed +
         withdrawGasUsed ((benv.state.getStor ca).get (balSlot E)) wad ∧
@@ -6999,7 +7001,7 @@ example
         (st.get E).bal.toNat + withdrawGasUsed ((benv.state.getStor ca).get (balSlot E)) wad *
           (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas) =
           (benv.state.bal E).toNat + wad.toNat) :=
-  weth9_tx_withdraw hfork htype hvalue hdata hchain hprio hbase hgas hcap hroom hrecover hnonce hnonceMax hnocode hfunds hprecE hprecCa hcode hinv hholder hbal hcbE hcbCa
+  weth9_tx_withdraw hfork htype hvalue hdata hchain hprio hbase hgas hcap hroom hrecover hnonce hnonceMax hnocode hfunds hprecE hprecCa hcode hfresh hinv hholder hbal hcbE hcbCa hcbSafe
 
 end Blanc.Lift.Weth9
 
@@ -10808,7 +10810,10 @@ example : ∀ {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {K
     (hprecE : benv.stat.rules.isPrecomp E = false) (hprecCa : benv.stat.rules.isPrecomp ca = false)
     (hholder : historyKeyUniverse ca trace K₀ (.bal E))
     (hbal : wad ≤ (future.state.getStor ca).get (balSlot E))
-    (hcbE : benv.stat.coinbase ≠ E) (hcbCa : benv.stat.coinbase ≠ ca),
+    (hcbE : benv.stat.coinbase ≠ E) (hcbCa : benv.stat.coinbase ≠ ca)
+    (hfresh : ca ∉ benv.createdAccounts)
+    (hcbSafe : State.Protected benv.state benv.stat.coinbase ∨
+      benv.state.getStor benv.stat.coinbase = .empty),
     ∃ (st : Jaune.State) (bout' : BlockOutput), processTransaction benv bout tx index = .ok (st, bout') ∧
       bout'.cumulativeGasUsed = bout.cumulativeGasUsed +
         withdrawGasUsed ((future.state.getStor ca).get (balSlot E)) wad ∧
@@ -10883,7 +10888,9 @@ example : ∀ {ca : Adr} {cfg : ChainConfig} {checkpoint boundary completed : Bl
     (hprecE : cut.benv.stat.rules.isPrecomp E = false) (hprecCa : cut.benv.stat.rules.isPrecomp ca = false)
     (hholder : Key.extend K₀ (prefixTouchedKeys ca history block cut) (.bal E))
     (hbal : wad ≤ (cut.benv.state.getStor ca).get (balSlot E))
-    (hcbE : cut.benv.stat.coinbase ≠ E) (hcbCa : cut.benv.stat.coinbase ≠ ca),
+    (hcbE : cut.benv.stat.coinbase ≠ E) (hcbCa : cut.benv.stat.coinbase ≠ ca)
+    (hcbSafe : State.Protected cut.benv.state cut.benv.stat.coinbase ∨
+      cut.benv.state.getStor cut.benv.stat.coinbase = .empty),
     ∃ (st : Jaune.State) (bout' : BlockOutput), processTransaction cut.benv cut.bout tx index = .ok (st, bout') ∧
       bout'.cumulativeGasUsed = cut.bout.cumulativeGasUsed +
         withdrawGasUsed ((cut.benv.state.getStor ca).get (balSlot E)) wad ∧

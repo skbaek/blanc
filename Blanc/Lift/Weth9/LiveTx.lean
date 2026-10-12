@@ -652,287 +652,8 @@ theorem weth9_tx_withdraw_run
   rw [hU] at hcum hblk
   exact ⟨post, bout', hproc, hcum, hblk, hstCa, hstOther, hbalE, hnonceE, hbalCa, hgetO⟩
 
-/- STOPPED (reserved decision, Jaune ca9f27d SA; see the weth9 unit report).  The registered statement
-below is false under account normalization: `weth9_tx_withdraw_coinbase_refuted` refutes it.  Its text is
-kept verbatim for the decision.
-
-/-- **`withdraw(wad)` as a transaction: `processTransaction` succeeds.**  A type-2 transaction `tx` from
-the externally owned account `E` (no code, nonce `tx.nonce`, funds for the maximum fee) to the deployed
-WETH9 `ca`, with value `0` and `withdraw(wad)` calldata, no access list and honest fee
-fields (`maxPriorityFee ≤ maxFee`, the block's base fee at most `maxFee`), is processed by Jaune's
-`processTransaction` at a block whose state carries the footprint invariant `FootInv U` at `ca`, with
-`E`'s balance slot a tracked holder covering `wad`, provided the signature recovers `E`
-(`recoverSender … = .ok E`, the only cryptographic premise), the transaction's gas is at least its
-intrinsic gas plus the frame's (`withdrawFrameGas`: `13940`, or `4440` for `wad = 0`) plus `811` (and within
-the EIP-7825 cap), and the block has room
-for it.  The gas the receipt records is `withdrawGasUsed`; the world it returns has `E`'s WETH9 balance
-slot debited by `wad`, no other storage touched, the nonce of `E` advanced, `wad` ether moved from `ca`
-to `E` (the fee `tx.gas * effectiveGasPrice` taken from `E` and the unused part refunded), the coinbase
-being neither. -/
-theorem weth9_tx_withdraw
-    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat} {E ca : Adr} {wad : B256}
-    {chainId : UInt64} {maxPriorityFee maxFee : Nat} {U : Key → Prop}
-    (hfork : CoveredFork benv.stat.fork)
-    (htype : tx.type = .two chainId maxPriorityFee maxFee (some ca) [])
-    (hvalue : tx.value = 0) (hdata : tx.data = withdrawCalldata wad)
-    (hchain : chainId = benv.stat.chainId)
-    (hprio : maxPriorityFee ≤ maxFee) (hbase : benv.stat.baseFeePerGas ≤ maxFee)
-    (hgas : withdrawIntrinsicGas wad + withdrawFrameGas wad + 811 ≤ tx.gas)
-    (hcap : tx.gas ≤ 16777216)
-    (hroom : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed)
-    (hrecover : recoverSender benv.stat.chainId tx = .ok E)
-    (hnonce : (benv.state.get E).nonce = tx.nonce) (hnonceMax : tx.nonce ≠ UInt64.max)
-    (hnocode : (benv.state.getCode E).size = 0)
-    (hfunds : tx.gas * maxFee ≤ (benv.state.get E).bal.toNat)
-    (hprecE : benv.stat.rules.isPrecomp E = false) (hprecCa : benv.stat.rules.isPrecomp ca = false)
-    (hcode : benv.state.getCode ca = code)
-    (hinv : FootInv U (benv.state.getStor ca) (benv.state.bal ca)) (hholder : U (.bal E))
-    (hbal : wad ≤ (benv.state.getStor ca).get (balSlot E))
-    (hcbE : benv.stat.coinbase ≠ E) (hcbCa : benv.stat.coinbase ≠ ca) :
-    ∃ (st : Jaune.State) (bout' : BlockOutput), processTransaction benv bout tx index = .ok (st, bout') ∧
-      bout'.cumulativeGasUsed = bout.cumulativeGasUsed +
-        withdrawGasUsed ((benv.state.getStor ca).get (balSlot E)) wad ∧
-      bout'.blockGasUsed = bout.blockGasUsed +
-        withdrawGasUsed ((benv.state.getStor ca).get (balSlot E)) wad ∧
-      st.getStor ca = (benv.state.getStor ca).set (balSlot E)
-        ((benv.state.getStor ca).get (balSlot E) - wad) ∧
-      (∀ a, a ≠ ca → st.getStor a = benv.state.getStor a) ∧
-      (st.get E).nonce = tx.nonce + 1 ∧
-      (st.get E).bal = benv.state.bal E -
-          (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
-            benv.stat.baseFeePerGas)).toB256 + wad +
-        ((tx.gas - withdrawGasUsed ((benv.state.getStor ca).get (balSlot E)) wad) *
-          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
-            benv.stat.baseFeePerGas)).toB256 ∧
-      (st.get ca).bal = benv.state.bal ca - wad ∧
-      ((benv.state.bal E).toNat + wad.toNat < 2 ^ 256 →
-        (st.get E).bal.toNat + withdrawGasUsed ((benv.state.getStor ca).get (balSlot E)) wad *
-          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas) =
-          (benv.state.bal E).toNat + wad.toNat) := by
-  have hsg : benv.stat.rules.stateGas = none := CoveredFork.rules_stateGas_none hfork
-  have hEca : E ≠ ca := by
-    intro h
-    subst h
-    rw [hcode] at hnocode
-    exact code_size_ne_zero hnocode
-  have htk : calldataTokens (withdrawCalldata wad) ≤ 144 := by
-    have := calldataTokens_le (withdrawCalldata wad)
-    rw [withdrawCalldata_length] at this
-    omega
-  have hcost := withdrawTx_intrinsic wad (tx := tx) (sender := E) hsg
-    (CoveredFork.rules_txBase (s := benv.stat) hfork)
-    (CoveredFork.rules_floorTokenCost (s := benv.stat) hfork) htype hdata
-  have hmaxgas : max (withdrawIntrinsicGas wad) (calldataTokens (withdrawCalldata wad) * 10 + 21000) ≤
-      tx.gas := by
-    have hi : withdrawIntrinsicGas wad = 21000 + 4 * calldataTokens (withdrawCalldata wad) := rfl
-    have hf : 4440 ≤ withdrawFrameGas wad := by unfold withdrawFrameGas; split_ifs <;> omega
-    omega
-  have hnodeleg : getDelegatedCodeAddress (benv.state.getCode ca) = none := by
-    rw [hcode]; exact getDelegatedCodeAddress_code
-  have hexec : ∀ (debit : Jaune.State) (msg : Msg) (after : Benv),
-      (benv.state.incrNonce E).subBal E
-        (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
-          benv.stat.baseFeePerGas)).toB256 = some debit →
-      prepareMessage { benv.beginTransaction with state := debit }
-        (transactionTenv benv.beginTransaction tx index E
-          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)
-          (withdrawIntrinsicGas wad) []) tx = .ok msg →
-      msg.benvAfterTransfer = .ok after →
-      ∃ post, exec (initEvm (msg.withBenv after)) = .ok post ∧ post.error = none ∧
-        0 ≤ post.refundCounter ∧
-        (post.gasLeft + withdrawIntrinsicGas wad + withdrawFrameGas wad = tx.gas ∧
-          post.refundCounter = ((withdrawRefund ((benv.state.getStor ca).get (balSlot E)) wad : Nat) : Int) ∧
-          post.accountsToDelete.isEmpty = true ∧
-          post.state.getStor ca = (benv.state.getStor ca).set (balSlot E)
-            ((benv.state.getStor ca).get (balSlot E) - wad) ∧
-          (∀ a, a ≠ ca → post.state.getStor a = benv.state.getStor a) ∧
-          (post.state.get E).bal = benv.state.bal E -
-            (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
-              benv.stat.baseFeePerGas)).toB256 + wad ∧
-          (post.state.get E).nonce = tx.nonce + 1 ∧
-          (post.state.get ca).bal = benv.state.bal ca - wad) := by
-    intro debit msg after hdebit hprep hentry
-    set v : B256 := (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
-      benv.stat.baseFeePerGas)).toB256 with hv
-    rw [prepareMessage_call (by rw [htype]; rfl)] at hprep
-    have hm : callMessage { benv.beginTransaction with state := debit }
-        (transactionTenv benv.beginTransaction tx index E
-          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)
-          (withdrawIntrinsicGas wad) []) tx ca = msg := Except.ok.inj hprep
-    obtain ⟨-, hdeb⟩ := State.of_subBal hdebit
-    have hd_ne : ∀ a, E ≠ a → debit.get a = benv.state.get a := fun a h => by
-      rw [hdeb]; exact debit_get_ne h
-    have hd_E : debit.get E = { benv.state.get E with
-        nonce := (benv.state.get E).nonce + 1, bal := benv.state.bal E - v } := by
-      rw [hdeb, debit_get_self, State.incrNonce_bal]
-    have hm_caller : msg.caller = E := by rw [← hm]; rfl
-    have hm_ct : msg.currentTarget = ca := by rw [← hm]; rfl
-    have hm_value : msg.value = 0 := by rw [← hm]; show tx.value.toB256 = 0; rw [hvalue]; rfl
-    have hm_data : msg.data = tx.data := by rw [← hm]; rfl
-    have hm_static : msg.isStatic = false := by rw [← hm]; rfl
-    have hm_depth : msg.depth = 1024 := by rw [← hm]; rfl
-    have hm_code : msg.code = debit.getCode ca := by rw [← hm]; rfl
-    have hm_gas : msg.gas = tx.gas - withdrawIntrinsicGas wad := by rw [← hm]; rfl
-    have hm_state : msg.benv.state = debit := by rw [← hm]; rfl
-    have hm_keys : (⟨ca, balSlot E⟩ : Adr × B256) ∉ msg.accessedStorageKeys := by
-      rw [← hm]
-      simp only [callMessage, transactionTenv, Std.TreeMap.empty_eq_emptyc, Tx.accessList,
-        TxType.accessList, htype, List.map_nil, Std.HashSet.ofList_singleton, List.flatten_nil,
-        Std.HashSet.ofList_nil, Std.HashSet.not_mem_empty, not_false_eq_true]
-    have hm_addrs : E ∈ msg.accessedAddresses := by
-      rw [← hm]
-      simp only [callMessage, transactionTenv, Std.TreeMap.empty_eq_emptyc,
-        Std.HashSet.mem_insertMany_list, Std.HashSet.mem_ofList, List.contains_eq_mem,
-        List.mem_cons, List.mem_map, Prod.exists, exists_and_right, exists_eq_right,
-        List.decide_mem_cons, Bool.or_eq_true, beq_iff_eq, decide_eq_true_eq, List.mem_append,
-        List.not_mem_nil, or_false, true_or, or_true, decide_true]
-    have hafter : ∀ a, after.state.get a = debit.get a := fun a => by
-      have := benvAfterTransfer_get_of_value_zero hm_value hentry a
-      rw [this, hm_state]
-    have hstat : after.stat = benv.beginTransaction.stat := by
-      rw [benvAfterTransfer_stat hentry, ← hm]; rfl
-    have hpre_stor : ∀ a, after.state.getStor a = benv.state.getStor a := fun a => by
-      show (after.state.get a).stor = (benv.state.get a).stor
-      rw [hafter]
-      by_cases h : E = a
-      · subst h; rw [hd_E]
-      · rw [hd_ne a h]
-    have hpre_ca : after.state.get ca = benv.state.get ca := by
-      rw [hafter, hd_ne ca hEca]
-    have hpre_E : after.state.get E = { benv.state.get E with
-        nonce := (benv.state.get E).nonce + 1, bal := benv.state.bal E - v } := by
-      rw [hafter, hd_E]
-    obtain ⟨post, hex, herr, hgl, hrf, hatd, hst, hso, hbE, hnE, hbC⟩ := weth9_withdraw_entry
-      (sevm := initSevm (msg.withBenv after)) (pre := initDevm (msg.withBenv after))
-      (E := E) (ca := ca) (b := (benv.state.getStor ca).get (balSlot E)) (wad := wad)
-      (G := tx.gas - withdrawIntrinsicGas wad - withdrawFrameGas wad)
-      (by show msg.code = code; rw [hm_code, State.getCode, hd_ne ca hEca]; exact hcode)
-      (by show CoveredFork after.stat.fork; rw [hstat]; exact hfork)
-      hm_caller hm_ct hm_static hm_value (by show msg.data = _; rw [hm_data]; exact hdata)
-      rfl rfl (by show msg.depth ≠ 0; rw [hm_depth]; decide)
-      (by show (after.state.get ca).stor.get _ = _; rw [hpre_ca]; rfl) hbal
-      (by show ((after.stat.origState.get ca).stor).get _ = _; rw [hstat]; rfl)
-      (by show ((after.state.get E).code).size = 0; rw [hpre_E]; exact hnocode)
-      (by show after.stat.rules.isPrecomp E = false; rw [hstat]; exact hprecE)
-      (by
-        show ¬ (after.state.get ca).bal < wad
-        rw [hpre_ca]
-        intro hlt
-        have h1 := B256.toNat_lt_toNat hlt
-        have h2 := B256.toNat_le_toNat hbal
-        have h3 := hinv.balance_le hholder
-        change (benv.state.get ca).bal.toNat < wad.toNat at h1
-        change ((benv.state.getStor ca).get (balSlot E)).toNat ≤ (benv.state.get ca).bal.toNat at h3
-        omega)
-      hm_keys hm_addrs
-      (by
-        show ¬ (after.state.get E).Empty
-        rw [hpre_E]
-        rintro ⟨-, h0, -⟩
-        exact UInt64.add_one_ne_zero (by rw [hnonce]; exact hnonceMax) h0)
-      hEca rfl rfl
-      (by show msg.gas = _; rw [hm_gas]; omega)
-      (by omega)
-    have hE' : (initDevm (msg.withBenv after)).state.get E = after.state.get E := rfl
-    have hC' : (initDevm (msg.withBenv after)).state.get ca = after.state.get ca := rfl
-    refine ⟨post, hex, herr, ?_, by omega, hrf, ?_, ?_, ?_, ?_, ?_, ?_⟩
-    · rw [hrf]; exact Int.natCast_nonneg _
-    · rw [hatd]; rfl
-    · have h1 := hst
-      rw [show (initDevm (msg.withBenv after)).state.getStor ca = benv.state.getStor ca from
-        hpre_stor ca] at h1
-      exact h1
-    · intro a ha
-      exact (hso a ha).trans (hpre_stor a)
-    · rw [hbE, hE', hpre_E]
-    · rw [hnE, hE', hpre_E]
-      show (benv.state.get E).nonce + 1 = tx.nonce + 1
-      rw [hnonce]
-    · rw [hbC, hC', hpre_ca]
-      rfl
-  obtain ⟨debit, post, bout', hQ, hproc, hcum, hblk⟩ := processTransaction_call_of_exec
-    (E := E) (t := ca) (Q := fun _ post => post.gasLeft + withdrawIntrinsicGas wad + withdrawFrameGas wad = tx.gas ∧
-          post.refundCounter = ((withdrawRefund ((benv.state.getStor ca).get (balSlot E)) wad : Nat) : Int) ∧
-          post.accountsToDelete.isEmpty = true ∧
-          post.state.getStor ca = (benv.state.getStor ca).set (balSlot E)
-            ((benv.state.getStor ca).get (balSlot E) - wad) ∧
-          (∀ a, a ≠ ca → post.state.getStor a = benv.state.getStor a) ∧
-          (post.state.get E).bal = benv.state.bal E -
-            (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
-              benv.stat.baseFeePerGas)).toB256 + wad ∧
-          (post.state.get E).nonce = tx.nonce + 1 ∧
-          (post.state.get ca).bal = benv.state.bal ca - wad)
-    hfork htype hvalue hchain hprio hbase hcost hmaxgas (CoveredFork.checkTransactionGasCap_ok (s := benv.stat) hfork hcap)
-    hnonceMax hroom hrecover hnonce (by
-      have h0 : (benv.state.get E).code.size = 0 := hnocode
-      simp only [ByteArray.isEmpty, h0, BEq.rfl]) hfunds hnodeleg hprecCa hexec
-  obtain ⟨hgl, hrf, hatd, hstCa, hstOther, hbalE, hnonceE, hbalCa⟩ := hQ
-  have hdel : post.accountsToDelete.toList = [] := by
-    apply List.isEmpty_iff.mp
-    rw [Std.HashSet.isEmpty_toList]
-    exact hatd
-  have hrfn : post.refundCounter.toNat = withdrawRefund ((benv.state.getStor ca).get (balSlot E)) wad := by
-    rw [hrf]
-    exact Int.toNat_natCast _
-  have hU : txGasUsed tx.gas (calldataTokens (withdrawCalldata wad) * 10 + 21000) post.gasLeft
-      post.refundCounter.toNat = withdrawGasUsed ((benv.state.getStor ca).get (balSlot E)) wad := by
-    unfold txGasUsed withdrawGasUsed
-    rw [hrfn]
-    have hi : withdrawIntrinsicGas wad = 21000 + 4 * calldataTokens (withdrawCalldata wad) := rfl
-    by_cases hw0 : wad = 0
-    · have h1 : withdrawFrameGas wad = 4440 := by simp only [withdrawFrameGas, hw0, ↓reduceIte]
-      have h2 : withdrawRefund ((benv.state.getStor ca).get (balSlot E)) wad = 0 := by
-        simp only [withdrawRefund, hw0, ne_eq, not_true_eq_false, false_and, ↓reduceIte]
-      omega
-    · have h1 : withdrawFrameGas wad = 13940 := by simp only [withdrawFrameGas, hw0, ↓reduceIte]
-      have h2 : withdrawRefund ((benv.state.getStor ca).get (balSlot E)) wad ≤ 4800 := by
-        unfold withdrawRefund; split_ifs <;> omega
-      omega
-  rw [hU, hdel] at hproc
-  rw [hU] at hcum hblk
-  refine ⟨((post.state.addBal E ((tx.gas - withdrawGasUsed ((benv.state.getStor ca).get (balSlot E)) wad) *
-          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas)).toB256).addBal
-        benv.stat.coinbase (withdrawGasUsed ((benv.state.getStor ca).get (balSlot E)) wad *
-          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas))).toB256), bout', hproc, hcum, hblk,
-    ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · rw [getStor_addBal, getStor_addBal]
-    exact hstCa
-  · intro a ha
-    rw [getStor_addBal, getStor_addBal]
-    exact hstOther a ha
-  · rw [addBal_get_ne _ hcbE, addBal_get_self]
-    exact hnonceE
-  · rw [addBal_get_ne _ hcbE, addBal_get_self]
-    show (post.state.get E).bal + _ = _
-    rw [hbalE]
-  · rw [addBal_get_ne _ hcbCa, addBal_get_ne _ hEca]
-    exact hbalCa
-  · intro hnof
-    rw [addBal_get_ne _ hcbE, addBal_get_self]
-    show ((post.state.get E).bal + _).toNat + _ = _
-    rw [hbalE]
-    have hused : withdrawGasUsed ((benv.state.getStor ca).get (balSlot E)) wad ≤ tx.gas := by
-      have hu : withdrawGasUsed ((benv.state.getStor ca).get (balSlot E)) wad ≤
-          withdrawIntrinsicGas wad + withdrawFrameGas wad := by unfold withdrawGasUsed; omega
-      omega
-    have heff : min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas ≤
-        maxFee := by omega
-    have hF : tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
-        benv.stat.baseFeePerGas) ≤ (benv.state.bal E).toNat :=
-      le_trans (Nat.mul_le_mul_left _ heff) hfunds
-    rw [sender_net_toNat hF (Nat.mul_le_mul_right _ (Nat.sub_le _ _)) hnof]
-    have hsplit : tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
-        benv.stat.baseFeePerGas) =
-        (tx.gas - withdrawGasUsed ((benv.state.getStor ca).get (balSlot E)) wad) *
-          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas) +
-        withdrawGasUsed ((benv.state.getStor ca).get (balSlot E)) wad *
-          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas) := by
-      rw [← Nat.add_mul, Nat.sub_add_cancel hused]
-    omega
--/
-
-/-- **The registered `weth9_tx_withdraw` conclusion fails at a storage-only coinbase** (Lean refutation of the
-old header under Jaune ca9f27d, cause SA).  The transaction always credits the coinbase its fee, `0` when
+/-- **Without its protection premises, `weth9_tx_withdraw`'s conclusion fails at a storage-only coinbase** (Lean evidence for
+its premises under Jaune ca9f27d, cause SA).  The transaction always credits the coinbase its fee, `0` when
 the priority fee is `0`; a coinbase with nonce `0`, no code, no ether and nonempty storage is then empty
 and the credit deletes it with its storage, contradicting the all-other-storage clause. -/
 theorem weth9_tx_withdraw_coinbase_refuted
@@ -980,10 +701,10 @@ theorem weth9_tx_withdraw_coinbase_refuted
   rw [addBal_get_ne _ (Ne.symm hcbE), hcbAcct, hcbBal, hprio0, Nat.zero_min, Nat.mul_zero]
   rfl
 
-/-- **`withdraw(wad)` as a transaction: `processTransaction` succeeds** (re-pin helper: the statement of
-`weth9_tx_withdraw` plus `hcbSafe`, the coinbase protected or without storage; the closing fee credit
-normalizes an emptied coinbase, cause SA). -/
-theorem weth9_tx_withdraw_safe
+/-- **`withdraw(wad)` as a transaction: `processTransaction` succeeds** The contract is not an
+account created in the block environment (`hfresh`), and the coinbase is protected or carries no storage
+(`hcbSafe`): the closing fee credit, `0` included, normalizes an emptied coinbase. -/
+theorem weth9_tx_withdraw
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat} {E ca : Adr} {wad : B256}
     {chainId : UInt64} {maxPriorityFee maxFee : Nat} {U : Key → Prop}
     (hfork : CoveredFork benv.stat.fork)
@@ -1105,12 +826,8 @@ theorem weth9_tx_withdraw_safe
       rw [← Nat.add_mul, Nat.sub_add_cancel hused]
     omega
 
-/- STOPPED (reserved decision, Jaune ca9f27d SA/OS; see the weth9 unit report).  The registered statement
-below is false under account normalization: at the future state, a storage-only coinbase and a zero
-priority fee refute it (`weth9_history_tx_withdraw_coinbase_refuted`; the history premises constrain
-neither the coinbase nor the block environment's created accounts).  Its text is kept verbatim.
-
-/-- **After any configured history, a holder's `withdraw(wad)` transaction is processed.**  The
+/-- **After any configured history, a holder's `withdraw(wad)` transaction is processed** (`hfresh`: the
+contract not created in the block environment; `hcbSafe`: the coinbase protected or without storage).  The
 transaction of `weth9_tx_withdraw` at the block whose state is the future state of a configured
 history (`trace`) from a checkpoint holding the deployed WETH9 (`installed`, `sumNof`, `initial`,
 `fresh`: the premises of `weth9_history_withdraw_live`): the holder `E` is one of the history's tracked
@@ -1118,75 +835,6 @@ keys, its recorded balance covers `wad`, and everything else is the transaction'
 transaction returns has the holder's balance slot debited by `wad`, no other storage touched, and the
 holder paid `wad` ether. -/
 theorem weth9_history_tx_withdraw
-    {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {K₀ : Key → Prop}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (installed : some (checkpoint.state.getCode ca).toList = weth9Sem.image)
-    (sumNof : SumNof checkpoint.state.bal)
-    (initial : FootInv K₀ (checkpoint.state.getStor ca) (checkpoint.state.bal ca))
-    (fresh : KeysFresh K₀ (historyTouchedKeys ca trace))
-    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat} {E : Adr} {wad : B256}
-    {chainId : UInt64} {maxPriorityFee maxFee : Nat}
-    (hstate : benv.state = future.state)
-    (hfork : CoveredFork benv.stat.fork)
-    (htype : tx.type = .two chainId maxPriorityFee maxFee (some ca) [])
-    (hvalue : tx.value = 0) (hdata : tx.data = withdrawCalldata wad)
-    (hchain : chainId = benv.stat.chainId)
-    (hprio : maxPriorityFee ≤ maxFee) (hbase : benv.stat.baseFeePerGas ≤ maxFee)
-    (hgas : withdrawIntrinsicGas wad + withdrawFrameGas wad + 811 ≤ tx.gas)
-    (hcap : tx.gas ≤ 16777216)
-    (hroom : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed)
-    (hrecover : recoverSender benv.stat.chainId tx = .ok E)
-    (hnonce : (benv.state.get E).nonce = tx.nonce) (hnonceMax : tx.nonce ≠ UInt64.max)
-    (hnocode : (benv.state.getCode E).size = 0)
-    (hfunds : tx.gas * maxFee ≤ (benv.state.get E).bal.toNat)
-    (hprecE : benv.stat.rules.isPrecomp E = false) (hprecCa : benv.stat.rules.isPrecomp ca = false)
-    (hholder : historyKeyUniverse ca trace K₀ (.bal E))
-    (hbal : wad ≤ (future.state.getStor ca).get (balSlot E))
-    (hcbE : benv.stat.coinbase ≠ E) (hcbCa : benv.stat.coinbase ≠ ca) :
-    ∃ (st : Jaune.State) (bout' : BlockOutput), processTransaction benv bout tx index = .ok (st, bout') ∧
-      bout'.cumulativeGasUsed = bout.cumulativeGasUsed +
-        withdrawGasUsed ((future.state.getStor ca).get (balSlot E)) wad ∧
-      bout'.blockGasUsed = bout.blockGasUsed +
-        withdrawGasUsed ((future.state.getStor ca).get (balSlot E)) wad ∧
-      st.getStor ca = (future.state.getStor ca).set (balSlot E)
-        ((future.state.getStor ca).get (balSlot E) - wad) ∧
-      (∀ a, a ≠ ca → st.getStor a = future.state.getStor a) ∧
-      (st.get E).nonce = tx.nonce + 1 ∧
-      (st.get E).bal = future.state.bal E -
-          (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
-            benv.stat.baseFeePerGas)).toB256 + wad +
-        ((tx.gas - withdrawGasUsed ((future.state.getStor ca).get (balSlot E)) wad) *
-          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
-            benv.stat.baseFeePerGas)).toB256 ∧
-      (st.get ca).bal = future.state.bal ca - wad ∧
-      ((future.state.bal E).toNat + wad.toNat < 2 ^ 256 →
-        (st.get E).bal.toNat + withdrawGasUsed ((future.state.getStor ca).get (balSlot E)) wad *
-          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas) =
-          (future.state.bal E).toNat + wad.toNat) := by
-  obtain ⟨hc, -, hfoot⟩ := weth9_history_footprint_universe trace installed sumNof initial fresh
-  have hcode : benv.state.getCode ca = code := by
-    rw [hstate]
-    exact code_eq_of_toList (Option.some.inj hc)
-  have hbal' : wad ≤ (benv.state.getStor ca).get (balSlot E) := by rw [hstate]; exact hbal
-  have hinv : FootInv (historyKeyUniverse ca trace K₀) (benv.state.getStor ca) (benv.state.bal ca) := by
-    rw [hstate]; exact hfoot
-  obtain ⟨st, bout', hproc, hcum, hblk, hst, hoth, hnE, hbE, hbC, hnet⟩ := weth9_tx_withdraw hfork htype
-    hvalue hdata hchain hprio hbase hgas hcap hroom hrecover hnonce hnonceMax hnocode hfunds
-    hprecE hprecCa hcode hinv hholder hbal' hcbE hcbCa
-  rw [hstate] at hcum hblk hst hoth hbE hbC hnet
-  exact ⟨st, bout', hproc, hcum, hblk, hst, hoth, hnE, hbE, hbC, hnet⟩
--/
-
-/-- **After any configured history, a holder's `withdraw(wad)` transaction is processed** (re-pin helper: the
-statement of `weth9_history_tx_withdraw` plus `hfresh`, the contract not created in the block environment,
-and `hcbSafe`, the coinbase protected or without storage).  The
-transaction of `weth9_tx_withdraw` at the block whose state is the future state of a configured
-history (`trace`) from a checkpoint holding the deployed WETH9 (`installed`, `sumNof`, `initial`,
-`fresh`: the premises of `weth9_history_withdraw_live`): the holder `E` is one of the history's tracked
-keys, its recorded balance covers `wad`, and everything else is the transaction's own.  The world the
-transaction returns has the holder's balance slot debited by `wad`, no other storage touched, and the
-holder paid `wad` ether. -/
-theorem weth9_history_tx_withdraw_safe
     {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {K₀ : Key → Prop}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (installed : some (checkpoint.state.getCode ca).toList = weth9Sem.image)
@@ -1242,14 +890,14 @@ theorem weth9_history_tx_withdraw_safe
   have hbal' : wad ≤ (benv.state.getStor ca).get (balSlot E) := by rw [hstate]; exact hbal
   have hinv : FootInv (historyKeyUniverse ca trace K₀) (benv.state.getStor ca) (benv.state.bal ca) := by
     rw [hstate]; exact hfoot
-  obtain ⟨st, bout', hproc, hcum, hblk, hst, hoth, hnE, hbE, hbC, hnet⟩ := weth9_tx_withdraw_safe hfork
+  obtain ⟨st, bout', hproc, hcum, hblk, hst, hoth, hnE, hbE, hbC, hnet⟩ := weth9_tx_withdraw hfork
     htype hvalue hdata hchain hprio hbase hgas hcap hroom hrecover hnonce hnonceMax hnocode hfunds
     hprecE hprecCa hcode hfresh hinv hholder hbal' hcbE hcbCa hcbSafe
   rw [hstate] at hcum hblk hst hoth hbE hbC hnet
   exact ⟨st, bout', hproc, hcum, hblk, hst, hoth, hnE, hbE, hbC, hnet⟩
 
-/-- **The registered `weth9_history_tx_withdraw` conclusion fails at a storage-only coinbase** (Lean
-refutation of the old header under Jaune ca9f27d, cause SA): the history premises leave the block's
+/-- **Without its protection premises, `weth9_history_tx_withdraw`'s conclusion fails at a storage-only coinbase** (Lean
+for its premises under Jaune ca9f27d, cause SA): the history premises leave the block's
 coinbase free, and `weth9_tx_withdraw_coinbase_refuted` applies at the future state. -/
 theorem weth9_history_tx_withdraw_coinbase_refuted
     {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {K₀ : Key → Prop}

@@ -139,54 +139,8 @@ theorem weth9_transferFrom_model_live {sevm : Sevm} {pre : Devm} {G : Nat} {K : 
   refine ⟨post, hex, hg, ho, model_ledger hinv hfresh ?_ hok⟩
   simpa only [tfCall, Call.stor] using hst
 
-/- STOPPED (reserved decision, Jaune ca9f27d SA; see the weth9 unit report).  The registered statement
-below is false under account normalization: `weth9_withdraw_model_live_refuted` refutes it.  Its text is
-kept verbatim for the decision.
-
-/-- **`withdraw` to an externally owned account realises the model's step, gas-exact.**  The footprint
-backs the send: the caller's tracked balance is covered by the contract's ether. -/
-theorem weth9_withdraw_model_live {sevm : Sevm} {pre : Devm} {G : Nat} {K : Key → Prop} {l' : Ledger}
-    (h_code : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
-    (h_static : sevm.isStatic = false) (h_value : sevm.value = 0)
-    (h_sel : Sevm.selector sevm = wdSel)
-    (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
-    (h_stack : pre.stack = []) (h_mem : pre.memory = Mem.empty) (h_depth : sevm.depth ≠ 0)
-    (h_eoa : (pre.getCode sevm.caller).size = 0)
-    (h_prec : sevm.benvStat.rules.isPrecomp sevm.caller = false)
-    (hinv : FootInv K (Devm.getStor pre sevm.currentTarget) (pre.getBal sevm.currentTarget))
-    (hfresh : KeysFresh K (wdCall sevm).keys)
-    (hok : (ledger (Key.extend K (wdCall sevm).keys) (Devm.getStor pre sevm.currentTarget)).step
-      (wdCall sevm) = some l')
-    (h_gas : pre.gasLeft = G + withdrawAnyGas sevm pre) (hG : 811 ≤ G) :
-    ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧ post.gasLeft = G ∧ post.output = pre.output ∧
-      ledger (Key.extend K (wdCall sevm).keys) (Devm.getStor post sevm.currentTarget) = l' := by
-  obtain ⟨s', hs'⟩ := Option.ne_none_iff_exists'.mp
-    (Call.stor_ne_none_of_step (fun k hk => Or.inr hk) hok)
-  have hnlt : ¬ (Devm.getStor pre sevm.currentTarget).get (balSlot sevm.caller) <
-      Sevm.dataWord sevm 4 := by
-    intro hlt
-    simp only [Call.stor, wdCall, hlt, ↓reduceIte, reduceCtorEq] at hs'
-  have hle : Sevm.dataWord sevm 4 ≤ pre.getStorVal sevm.currentTarget (balSlot sevm.caller) :=
-    B256.not_lt.mp hnlt
-  have hbk : (Key.extend K (wdCall sevm).keys) (.bal sevm.caller) := Or.inr (by simp only [Call.keys,
-    wdCall, List.mem_cons, List.not_mem_nil, or_false])
-  have hb := (hinv.extend hfresh).balance_le hbk
-  have h_eth : ¬ (pre.getAcct sevm.currentTarget).bal < Sevm.dataWord sevm 4 := by
-    intro hlt
-    have h1 := B256.toNat_lt_toNat hlt
-    have h2 := B256.toNat_le_toNat hle
-    have h3 : (pre.getStorVal sevm.currentTarget (balSlot sevm.caller)).toNat ≤
-        (pre.getAcct sevm.currentTarget).bal.toNat := hb
-    omega
-  obtain ⟨post, hex, hg, ho, hst, hother⟩ := weth9_withdraw_any_live h_code hfork h_static h_value
-    h_sel h_len h_len' h_stack h_mem h_depth hle h_eoa h_prec h_eth h_gas hG
-  refine ⟨post, hex, hg, ho, model_ledger hinv hfresh ?_ hok⟩
-  simp only [wdCall, Call.stor, hnlt, ↓reduceIte, hst]
-  rfl
--/
-
-/-- **The registered `weth9_withdraw_model_live` conclusion fails at an unprotected, exactly funded contract**
-(Lean refutation of the old header under Jaune ca9f27d, cause SA).  `FootInv` bounds only the tracked
+/-- **Without its protection premises, `weth9_withdraw_model_live`'s conclusion fails at an unprotected, exactly funded contract**
+(Lean evidence for its premises under Jaune ca9f27d, cause SA).  `FootInv` bounds only the tracked
 balances by the contract's ether; it does not protect the contract's account.  When the world account at
 the contract has no code, nonce `0` and exactly `wad` ether, a nonzero `withdraw` empties and deletes it, so
 a tracked nonzero allowance word is lost while the model's next ledger keeps it. -/
@@ -242,10 +196,11 @@ theorem weth9_withdraw_model_live_refuted {sevm : Sevm} {pre : Devm} {G : Nat} {
         (Devm.getStor pre sevm.currentTarget).get (allowSlot o p) := trackedAllow_self hK
     exact hword (ht.symm.trans (h1.symm.trans rfl))
 
-/-- **`withdraw` to an externally owned account realises the model's step, gas-exact** (re-pin helper: the
-statement of `weth9_withdraw_model_live` plus a protected contract, `hprot_ca`).  The footprint
+/-- **`withdraw` to an externally owned account realises the model's step, gas-exact** for a
+protected contract (`hprot_ca`: nonzero nonce or code; an unprotected one the send empties is deleted with its
+storage).  The footprint
 backs the send: the caller's tracked balance is covered by the contract's ether. -/
-theorem weth9_withdraw_model_live_safe {sevm : Sevm} {pre : Devm} {G : Nat} {K : Key → Prop} {l' : Ledger}
+theorem weth9_withdraw_model_live {sevm : Sevm} {pre : Devm} {G : Nat} {K : Key → Prop} {l' : Ledger}
     (h_code : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
     (h_static : sevm.isStatic = false) (h_value : sevm.value = 0)
     (h_sel : Sevm.selector sevm = wdSel)

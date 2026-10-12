@@ -2,8 +2,8 @@ import Blanc.Lift.Weth9.ClosedFoot
 import Blanc.Lift.Weth9.ClosedWithdrawData
 
 /-!
-A synthetic, connected applicability witness for `weth9_history_tx_withdraw_safe` (the re-pin form
-of the stopped `weth9_history_tx_withdraw`, with the coinbase storage-free here).
+A synthetic, connected applicability witness for `weth9_history_tx_withdraw` (its coinbase
+carries no storage and its contract was not created in the block environment).
 It begins with actual recorded-bytecode CREATE execution, then one valid BPO2
 configured block committing a positive signed deposit, and ends with admitted
 full withdrawal at the terminal state. It authenticates neither mainnet
@@ -86,7 +86,7 @@ theorem weth9_closed_exit_instance : ∃ st bout, ClosedExitWitness st bout := b
     change (deploymentPost.state.get 0).stor = .empty
     rw [deployment_account_ne 0 contractAddress_ne_zero.symm, initialWorld_stor]
   obtain ⟨st, bout, admitted, cumulative, gas, storage, otherStorage, nonce, holder,
-      contract, net⟩ := weth9_history_tx_withdraw_safe
+      contract, net⟩ := weth9_history_tx_withdraw
     (ca := contractAddress) (K₀ := fun _ => False) closedHistory
     (by change some (deploymentPost.state.getCode contractAddress).toList = weth9Sem.image
         rw [deployment_installed]; rfl)

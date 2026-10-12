@@ -1,4 +1,5 @@
 import Blanc.Lift.Weth9.CommittedReplay
+import Blanc.Lift.CursorSourceRunReturn
 
 /-!
 # The spawn obligations of a WETH9 frame
@@ -44,8 +45,8 @@ theorem weth9_exec_node {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (
     Devm.getStor N.devm sevm.currentTarget =
       (Devm.getStor pre sevm.currentTarget).set (balSlot sevm.caller)
         ((Devm.getStor pre sevm.currentTarget).get (balSlot sevm.caller) - Sevm.dataWord sevm 4) ∧
-    ∀ N', Exec.Deriv.ParentStep N' N → (∀ owner, State.Protected N'.devm.state owner →
-      Devm.getStor post owner = Devm.getStor N'.devm owner) ∧
+    ∀ N', Exec.Deriv.ParentStep N' N →
+      Devm.getStor post = Devm.getStor N'.devm ∧
       ∀ M, Exec.Deriv.ParentPrefix N' M → ∀ y, ¬ Ninst.At M.sevm.code M.pc (.exec y) := by
   obtain ⟨x, hx⟩ := hat
   obtain ⟨κ, reach, ok⟩ := reach_of_parentPrefix cert_check
@@ -71,18 +72,33 @@ theorem weth9_exec_node {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (
   cases hs with
   | next habs =>
     have hchain : Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N' := hN.snoc edge
-    have hfsil : afterCall.silentTree regSilent = true := by decide
-    have hKsil : ∀ s ∈ K.map Cont.f, s.silentTree regSilent = true := by
-      rw [hκK]
-      intro s hs
-      rw [List.mem_singleton] at hs
-      subst hs
-      decide
     refine ⟨?_, ?_⟩
-    · intro owner hprot
-      exact getStor_post_of_silent cert_check (R := ⟨0, sevm, pre, .ok post, run⟩) (post := post)
-        rfl hchain fork ok₁ (ok' := regSilent)
-        (fun hn hs => Ninst.Run.state_of_regSilent hn (StepIn.toRun hs)) hfsil hKsil owner hprot
+    · -- The suffix after the `CALL` (`afterCall`, then its one continuation `t_0264_c24`) is
+      -- state-silent with a non-`SELFDESTRUCT` terminal, so the frame's post world is `N'`'s.
+      have hsevmN' : N'.sevm = sevm := Blanc.Exec.Deriv.ParentPrefix.sevm_eq hchain
+      have hforkN' : CoveredFork N'.sevm.benvStat.fork := by rw [hsevmN']; exact fork
+      have success : N'.exn = .ok post := Exec.Deriv.ParentPrefix.exn_eq hchain
+      have hS : SilentSet prog [] = true := rfl
+      have hstate : post.state = N'.devm.state := by
+        rcases ok₁.sourceRunReturn cert_check success hforkN' with halted |
+            ⟨cont, tail, state, run', hK, -, -, returned, okC⟩
+        · exact SFunc.RunP.state_of_silent StepIn.toRun hS (f := afterCall) (by decide)
+            (by decide) halted
+        · have h1 : state.state = N'.devm.state :=
+            SFunc.RunP.state_of_silent StepIn.toRun hS (f := afterCall) (by decide) (by decide)
+              returned
+          have hK' : K = cont :: tail := hK
+          rw [hK'] at hκK
+          simp only [List.map_cons, List.cons.injEq, List.map_eq_nil_iff] at hκK
+          obtain ⟨hcf, rfl⟩ := hκK
+          have hforkC : CoveredFork N'.sevm.benvStat.fork := hforkN'
+          rcases okC.sourceRunReturn cert_check rfl hforkC with halted2 |
+              ⟨cont2, tail2, -, -, hK2, -⟩
+          · have h2 := SFunc.RunP.state_of_silent StepIn.toRun hS (f := t_0264_c24)
+              (by decide) (by decide) (hcf ▸ halted2)
+            exact h2.trans h1
+          · exact absurd hK2 (by simp only [reduceCtorEq, not_false_eq_true])
+      exact funext fun a => getStor_eq_of_state_eq hstate a
     · intro M hM y
       exact noExec_after_of_cursor cert_check hchain hM fork ok₁ (E := []) rfl
         (by exact afterCall_execFree)
@@ -174,18 +190,7 @@ theorem weth9_spawnReplay (ca : Adr) {U : Key → Prop} (hinj : KeyInj U) :
       refine ⟨?_, hnoexec⟩
       show LedgerReplay (ledger U (Devm.getStor N'.devm sevm.currentTarget)) []
         (ledger U (Devm.getStor post sevm.currentTarget))
-      have hN' : Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N' := hN.snoc edge
-      have hne : (pre.getCode sevm.currentTarget).toList ≠ [] :=
-        (footSpec U).sem.ne_nil installed.1.symm
-      have hcodeN : N'.devm.getCode sevm.currentTarget = pre.getCode sevm.currentTarget :=
-        Exec.Deriv.ParentPrefix.codePreserve hN' _ hne
-      have htol : (State.getCode N'.devm.state sevm.currentTarget).toList ≠ [] := by
-        show (N'.devm.getCode sevm.currentTarget).toList ≠ []
-        rw [hcodeN]
-        exact hne
-      have hprotN : State.Protected N'.devm.state sevm.currentTarget :=
-        State.Protected.of_code_ne_nil htol
-      rw [hpost _ hprotN]
+      rw [hpost]
       exact LedgerReplay.nil _
 
 end Blanc.Lift.Weth9
