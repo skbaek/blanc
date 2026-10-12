@@ -1,5 +1,5 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1Kernel
-import Blanc.Lift.VyperNonreentrantDeployed.RepinBridge
+import Blanc.Lift.WitnessChild
 
 /-!
 V- witness, frame 1 whole: `remove_liquidity(200, [0, 0], A)` on the deployed 0x6326
@@ -34,7 +34,7 @@ theorem frame1_full (d1 : Devm)
       (storOf post.state proxyAddress balanceOfASlot.toB256).toNat = 1906 ∧
       (storOf post.state proxyAddress (2 : Nat).toB256).toNat = 0 ∧ post.error = none := by
   have hk := frame1_kernel d1
-  rw [RepinBridge.withCreatedAccounts_of_eq c1, childObs_eq g1 o1 e1] at hk
+  rw [Blanc.Devm.withCreatedAccounts_of_eq c1, childObs_eq g1 o1 e1] at hk
   unfold run1 run1From callPairFrom at hk
   split at hk
   · rename_i c1 h1

@@ -661,6 +661,14 @@ lemma Devm.addLog_getStor (devm : Devm) (log : Log) :
 lemma Devm.addLog_createdAccounts (devm : Devm) (log : Log) :
     (devm.addLog log).createdAccounts = devm.createdAccounts := rfl
 
+/-- A machine whose created-account set is `E` is itself with that set replaced by `E`. -/
+theorem Devm.withCreatedAccounts_of_eq {d : Devm} {E : AdrSet} (h : d.createdAccounts = E) :
+    d.withCreatedAccounts E = d := by
+  rcases d with ⟨_, ⟨_, _, _, _, _, _, _, _, _, _, _⟩, _⟩
+  simp only [Devm.createdAccounts] at h
+  subst h
+  rfl
+
 /-- A refund-counter update leaves account code alone; rewrite with this law
 before unfolding a concrete SSTORE post tower. -/
 lemma Devm.withRefundCounter_getCode (devm : Devm) (refundCounter : Int) (a : Adr) :
@@ -9698,6 +9706,11 @@ lemma State.Protected.of_image {st : Jaune.State} {a : Adr} {sem : CodeSem}
     (h : some (st.getCode a).toList = sem.image) : State.Protected st a :=
   State.Protected.of_code_ne_nil (sem.ne_nil h.symm)
 
+/-- An account carrying a compiled program is protected: a compiled image is nonempty. -/
+theorem State.Protected.of_compile {st : State} {a : Adr} {p : Prog}
+    (h : some (st.getCode a).toList = Prog.compile p) : State.Protected st a :=
+  State.Protected.of_code_ne_nil fun hnil => Prog.compile_ne_nil (by rw [← h, hnil])
+
 /-- Protection survives a balance write. -/
 lemma State.Protected.setBal {st : Jaune.State} {a : Adr} (hp : State.Protected st a)
     (b : Adr) (v : B256) : State.Protected (st.setBal b v) a := by
@@ -9821,6 +9834,36 @@ lemma benvAfterTransfer_eq_of_not_transfer {msg : Msg} {entry : Benv}
     rw [Msg.benvAfterTransfer_of_value_zero hz] at transfer
     exact (Except.ok.inj transfer).symm
   · exact of_benvAfterTransfer_no hs transfer
+
+/-- A full-balance self-payment empties a codeless, nonce-zero account, so
+Jaune `ca9f27d` deletes it with its storage at message entry. This is why a
+storage-preservation statement across message entry needs zero value or a
+`State.Protected` owner. -/
+theorem selfPayment_entry_clears_storage {msg : Msg} {entry : Benv}
+    (transfers : msg.shouldTransferValue = true)
+    (self : msg.caller = msg.currentTarget) (nonzero : msg.value ≠ 0)
+    (hnonce : (msg.benv.state.get msg.caller).nonce = 0)
+    (hcode : (msg.benv.state.get msg.caller).code.size = 0)
+    (hbal : (msg.benv.state.get msg.caller).bal = msg.value)
+    (transfer : msg.benvAfterTransfer = .ok entry) :
+    entry.state.getStor msg.currentTarget = Stor.empty := by
+  obtain ⟨debited, debit, entryEq⟩ := of_benvAfterTransfer transfers nonzero transfer
+  have entryState : entry.state = debited.addBal msg.currentTarget msg.value := by
+    rw [entryEq]
+    rfl
+  rw [entryState, ← self]
+  unfold State.subBal at debit
+  rw [if_neg (by unfold State.bal; rw [hbal]; exact lt_irrefl _)] at debit
+  cases debit
+  unfold State.addBal State.getStor
+  rw [State.setBal_get_stor]
+  split
+  · rfl
+  · rw [State.setBal_get_stor, if_pos]
+    refine ⟨rfl, hcode, hnonce, ?_⟩
+    unfold State.bal
+    rw [hbal]
+    exact B256.sub_self _
 
 -- Same bridge via the collision predicate used by `processMessageCall.create`.
 lemma ne_wa_of_not_hasCodeOrNonce {st : State} {wa ct : Adr}

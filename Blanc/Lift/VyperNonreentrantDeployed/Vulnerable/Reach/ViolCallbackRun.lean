@@ -1,5 +1,5 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolBoundary
-import Blanc.Lift.VyperNonreentrantDeployed.RepinBridge
+import Blanc.Lift.WitnessChild
 
 /-!
 # V− P2, F3/F4 kernel run: the callback frame and its forwarder child
@@ -289,12 +289,12 @@ theorem e5Cb_sta_tenv : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m :
 
 /-- F3's `CALL` moves its 100 wei between accounts with nonzero nonces: no storage is deleted. -/
 theorem keepsCb : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    RepinBridge.transferKeepsStor (cpCb O tS tA m w).f.inner (cACb O tS tA m w).acs = true := by
+    Blanc.Lift.Witness.transferKeepsStor (cpCb O tS tA m w).f.inner (cACb O tS tA m w).acs = true := by
   kernel_forall_rfl
 
 /-- F4's `DELEGATECALL` moves no value. -/
 theorem keepsCb5 : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    RepinBridge.transferKeepsStor (cpCb5 O tS tA m w).f.inner (acs4Cb O tS tA m w) = true := by
+    Blanc.Lift.Witness.transferKeepsStor (cpCb5 O tS tA m w).f.inner (acs4Cb O tS tA m w) = true := by
   kernel_forall_rfl
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol

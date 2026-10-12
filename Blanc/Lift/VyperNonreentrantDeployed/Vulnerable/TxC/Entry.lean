@@ -1,7 +1,7 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Run
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxTopC
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Entry
-import Blanc.Lift.VyperNonreentrantDeployed.RepinBridge
+import Blanc.Lift.WitnessChild
 
 /-!
 V- as an admitted transaction, the entry facts of the deep chain: each frame's start
@@ -76,7 +76,7 @@ theorem cp2C_spec :
     (by rw [e1C31_state]; exact e1C_world.2)
 
 /-- The proxy's `DELEGATECALL` moves no value: frame 2 starts on `A'`'s storage. -/
-theorem keeps2C : RepinBridge.transferKeepsStor cp2C.f.inner acs1C = true := by kernel_rfl
+theorem keeps2C : Blanc.Lift.Witness.transferKeepsStor cp2C.f.inner acs1C = true := by kernel_rfl
 
 /-- **Frame 2 starts in agreement**: its accessed sets, storage and accounts are the proxy
 frame's, the implementation added. -/
@@ -86,7 +86,7 @@ theorem c2C_agree : Agree c2C := by
     (fun x => by rw [hik, hpk, e1C31_keys]; exact e1C_keys x) (fun a => by rw [hia]; exact hpa a)
     (fun a k => by rw [hst, e1C31_state]; exact e1C_world.1 a k)
     (by rw [hst, e1C31_state]; exact e1C_world.2)
-  rwa [RepinBridge.storTransfer_of_keeps keeps2C] at h
+  rwa [Blanc.Lift.Witness.storTransfer_of_keeps keeps2C] at h
 
 theorem agree_cfg339C : Agree cfg339C := (wrun_cont cfg339C_eq).1 c2C_agree
 
@@ -126,7 +126,7 @@ theorem e4C_keys : ∀ x, x ∈ e4C.dyna.accessedStorageKeys ↔ x ∈ aCallC.ke
 
 /-- `A'`'s callback `CALL` moves its 100 wei between accounts with nonzero nonces: no storage is
 deleted. -/
-theorem keeps4C : RepinBridge.transferKeepsStor cp4C.f.inner aCallC.acs = true := by kernel_rfl
+theorem keeps4C : Blanc.Lift.Witness.transferKeepsStor cp4C.f.inner aCallC.acs = true := by kernel_rfl
 
 theorem e4C_world : (∀ a k, storOf e4C.dyna.state a k = lookupS aCallC.stor a k) ∧
     AcctAgree e4C.dyna.state acs4C := by
@@ -139,7 +139,7 @@ theorem e4C_world : (∀ a k, storOf e4C.dyna.state a k = lookupS aCallC.stor a 
   rw [hs]
   refine ⟨fun a k => ?_, acctAgree_transfer hC hb⟩
   rw [benvAfterTransferB_stor hbB hC (fun a k => by rw [hst]; exact agree_aCallC.2.2.1 a k),
-    RepinBridge.storTransfer_of_keeps keeps4C]
+    Blanc.Lift.Witness.storTransfer_of_keeps keeps4C]
 
 theorem e4C31_acc : e4C31.dyna.accessedAddresses = e4C.dyna.accessedAddresses := rfl
 theorem e4C31_keys : e4C31.dyna.accessedStorageKeys = e4C.dyna.accessedStorageKeys := rfl

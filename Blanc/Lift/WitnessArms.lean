@@ -412,9 +412,10 @@ theorem origReadK_eq (devm : Devm) (sevm : Sevm) (a : Adr) (k : B256) :
     have hn : a ∉ devm.createdAccounts := by
       intro hm
       have he : devm.createdAccounts.isEmpty = true := by
-        simp [Std.HashSet.isEmpty_eq_size_eq_zero, h]
+        simp only [Std.HashSet.isEmpty_eq_size_eq_zero, h, beq_self_eq_true]
       exact Std.HashSet.isEmpty_iff_forall_not_mem.mp he a hm
-    simp [Devm.getOrigStorVal, hn]
+    unfold Devm.getOrigStorVal
+    rw [ite_eq_right hn]
   · rfl
 
 /-- `SSTORE` at a key the shadow decides warm or cold (`Ninst.runCompiled_sstore_*`).  The

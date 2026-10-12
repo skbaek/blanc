@@ -1,5 +1,5 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolBoundary
-import Blanc.Lift.VyperNonreentrantDeployed.RepinBridge
+import Blanc.Lift.WitnessChild
 
 /-!
 # V− V4, the re-entrant `add_liquidity` frame (F5): step 2625 to its `RETURN`
@@ -69,7 +69,7 @@ theorem reHalt : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
 /-- F5 creates no account: its halted machine's created set is the empty one the boundary
 fixes. -/
 theorem reHalt_created : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    RepinBridge.haltCreated (wrun fsI sRe 128 (Boundary.cfgOfT bRe4377 tS tA m w)) =
+    Blanc.Lift.Witness.haltCreated (wrun fsI sRe 128 (Boundary.cfgOfT bRe4377 tS tA m w)) =
       .emptyWithCapacity := by
   kernel_forall_rfl
 

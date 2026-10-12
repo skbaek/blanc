@@ -83,7 +83,7 @@ theorem frame2_child (d3 : Devm)
                 (fun a k => by rw [hst, e1T31_state]; exact e1T_world.1 a k)
                 (by rw [hst, e1T31_state]; exact e1T_world.2) hcr hsg
                 (fun hr => lift_exactM cert_checkM cert_jumpsOkM e2T_code e2T_fork hr) fs1_zero
-                (by rw [RepinBridge.storTransfer_of_keeps keeps2T]; exact s) hr herr
+                (by rw [Blanc.Lift.Witness.storTransfer_of_keeps keeps2T]; exact s) hr herr
               exact ⟨post, cl', hx, hs, ha, hg,
                 List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) ho, herr, h26, hA, h2', hrf,
                 hatd, hcrd⟩

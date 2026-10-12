@@ -180,17 +180,11 @@ structure PairFrameInv (vault : Adr) (sevm : Sevm) (pre : Devm) : Prop where
   weth : wethSpec.Pre wethAccount sevm pre
   wethFresh : sevm.currentTarget = wethAccount → Exec.FreshEntry sevm pre
 
-/-- A compiled installed program protects its account (repin `ca9f27d`, SA):
-the compiled image is never empty. -/
-theorem protected_of_compile {st : State} {a : Adr} {p : Prog}
-    (h : some (st.getCode a).toList = Prog.compile p) : State.Protected st a :=
-  State.Protected.of_code_ne_nil fun hnil => Prog.compile_ne_nil (by rw [← h, hnil])
-
 /-- Both pair accounts carry their installed programs, so both are protected. -/
 theorem PairFrameInv.protected {vault : Adr} {sevm : Sevm} {pre : Devm}
     (inv : PairFrameInv vault sevm pre) :
     State.Protected pre.state vault ∧ State.Protected pre.state wethAccount :=
-  ⟨protected_of_compile inv.vault.preWf.pre.code, protected_of_compile inv.weth.code⟩
+  ⟨State.Protected.of_compile inv.vault.preWf.pre.code, State.Protected.of_compile inv.weth.code⟩
 
 /-- A record's provenance names the transaction and sits at or below the emitting frame path. -/
 structure PairProvenanceOk {vault : Adr} (blockIndex : Nat) (transactionIndex : Option Nat)
@@ -478,7 +472,7 @@ theorem WethWithdrawSplit.ofCallFacts_pinned {sevm : Sevm} {pre post : Devm}
     rw [← congrFun callCode sevm.currentTarget] at h
     exact h
   have wethProt : State.Protected callPre.state sevm.currentTarget :=
-    protected_of_compile entryCode
+    State.Protected.of_compile entryCode
   have entryCodeEq : ∀ account,
       entry.state.getCode account = callPre.state.getCode account := by
     intro account
@@ -1142,7 +1136,7 @@ theorem Exec.CorePairReplay.atTarget {vault : Adr} {sevm : Sevm} {pre post : Dev
     have entryVault : split.payout.entry.state.getStor vault =
         split.callPre.state.getStor vault := by
       rw [benvAfterTransfer_ok_getStor split.payout.entryTransfer vault
-        (Or.inr (protected_of_compile (p := Blanc.ProrataWethVault.vault)
+        (Or.inr (State.Protected.of_compile (p := Blanc.ProrataWethVault.vault)
           (by rw [vaultCode]; exact inv.vault.preWf.pre.code))),
         split.payout.messageState]
     have entryWeth : split.payout.entry.state.getStor wethAccount =

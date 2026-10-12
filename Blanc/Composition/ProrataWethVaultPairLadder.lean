@@ -621,7 +621,7 @@ theorem retainedTransactionPairReplayFaithful {vault : Adr} {benv : Benv} {bout 
   have messageProtected {c : ContractSpec} {a : Adr} (preserves : c.Preserves a)
       (ainv : c.StateInv a benv.state) (notCreated : a ∉ benv.createdAccounts) :
       State.Protected trace.messageState a :=
-    protected_of_compile (ContractSpec.processMessageCall_preserves_inv messageFork
+    State.Protected.of_compile (ContractSpec.processMessageCall_preserves_inv messageFork
       preserves trace.message.result (trace.msgInv ainv notCreated)).1.code
   have creditKept {a : Adr} (hp : State.Protected trace.messageState a) :
       (trace.coinbaseState chronology.refundCounter).getStor a =

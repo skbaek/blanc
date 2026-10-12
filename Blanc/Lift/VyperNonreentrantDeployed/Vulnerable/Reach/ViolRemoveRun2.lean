@@ -1,5 +1,5 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolRemoveRun1
-import Blanc.Lift.VyperNonreentrantDeployed.RepinBridge
+import Blanc.Lift.WitnessChild
 
 /-!
 # V− P2, F2 post-`CALL` stages: the callback resume to the first chunk boundary

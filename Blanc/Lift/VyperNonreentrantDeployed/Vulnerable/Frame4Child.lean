@@ -1,7 +1,7 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame4Full
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1Full
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Check
-import Blanc.Lift.VyperNonreentrantDeployed.RepinBridge
+import Blanc.Lift.WitnessChild
 
 /-!
 V- witness, frame 4 as a child: the implementation frame the proxy's `DELEGATECALL`
@@ -54,7 +54,7 @@ theorem e3_keys : ∀ x, x ∈ e3.dyna.accessedStorageKeys ↔ x ∈ aCall.keys 
 
 /-- The attacker's `CALL` moves its 100 wei between accounts with nonzero nonces: no storage
 is deleted. -/
-theorem keeps3 : RepinBridge.transferKeepsStor cp3.f.inner aCall.acs = true := by kernel_rfl
+theorem keeps3 : Blanc.Lift.Witness.transferKeepsStor cp3.f.inner aCall.acs = true := by kernel_rfl
 
 /-- The proxy's world at entry: the attacker's storage, the accounts after the transfer. -/
 theorem e3_world : (∀ a k, storOf e3.dyna.state a k = lookupS aCall.stor a k) ∧
@@ -67,7 +67,7 @@ theorem e3_world : (∀ a k, storOf e3.dyna.state a k = lookupS aCall.stor a k) 
   rw [hs]
   refine ⟨fun a k => ?_, acctAgree_transfer hC hb⟩
   rw [benvAfterTransferB_stor hbB hC (fun a k => by rw [hst]; exact agree_aCall.2.2.1 a k),
-    RepinBridge.storTransfer_of_keeps keeps3]
+    Blanc.Lift.Witness.storTransfer_of_keeps keeps3]
 
 theorem e31_acc : e31.dyna.accessedAddresses = e3.dyna.accessedAddresses := rfl
 theorem e31_keys : e31.dyna.accessedStorageKeys = e3.dyna.accessedStorageKeys := rfl
@@ -142,7 +142,7 @@ theorem post4_created : post4.createdAccounts = .emptyWithCapacity := by
   exact h.2.2.2.2.2.2.2
 
 /-- The proxy's `DELEGATECALL` moves no value: frame 4 starts on the attacker's storage. -/
-theorem keeps4 : RepinBridge.transferKeepsStor cp4.f.inner acs3 = true := by kernel_rfl
+theorem keeps4 : Blanc.Lift.Witness.transferKeepsStor cp4.f.inner acs3 = true := by kernel_rfl
 
 /-- **Frame 4 as the proxy's child.** -/
 theorem frame4_child : Nonempty (Exec e4.pc e4.sta e4.dyna (.ok post4)) ∧
@@ -155,7 +155,7 @@ theorem frame4_child : Nonempty (Exec e4.pc e4.sta e4.dyna (.ok post4)) ∧
     (fun a k => by rw [hst, e31_state]; exact e3_world.1 a k)
     (by rw [hst, e31_state]; exact e3_world.2) hcr hsg
     (fun hr => lift_exactM cert_checkM cert_jumpsOkM e4_code e4_fork hr) fs1_zero
-    (by rw [RepinBridge.storTransfer_of_keeps keeps4]; exact ⟨id, fun _ _ r => r⟩) hrun herr
+    (by rw [Blanc.Lift.Witness.storTransfer_of_keeps keeps4]; exact ⟨id, fun _ _ r => r⟩) hrun herr
   rw [hk, ha, hs, hc] at h
   exact h
 

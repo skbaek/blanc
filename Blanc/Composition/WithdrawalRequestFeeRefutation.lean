@@ -715,7 +715,7 @@ theorem blockB_run {benv : Benv} {lastHash : B256}
       (post.state.bal senderE + R) := by
     rw [bodyPost_get_other hfork hCcode hz senderE (by decide) (by decide), hsB, settledState,
       addBal_get_ne _ hcb, addBal_get_self,
-      Blanc.Lift.WithdrawalRequest.RepinBridge.clearIfEmpty_withBal_of_nonce hnonce1]
+      Blanc.Acct.clearIfEmpty_withBal_of_nonce hnonce1]
   refine ⟨bodyPost_zero hfork hCcode hz, ?_, ?_, ?_, ?_⟩
   · rw [hget, hpostE, hsE]
     rfl

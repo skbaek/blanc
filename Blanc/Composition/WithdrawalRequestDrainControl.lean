@@ -341,7 +341,7 @@ theorem blockD_run {benv : Benv} {lastHash : B256}
   have hgetE : sC.get senderE = (postC.state.get senderE).withBal
       (postC.state.bal senderE + RC) := by
     rw [hsC, settledState, addBal_get_ne _ hcb, addBal_get_self,
-      Blanc.Lift.WithdrawalRequest.RepinBridge.clearIfEmpty_withBal_of_nonce hnonceC]
+      Blanc.Acct.clearIfEmpty_withBal_of_nonce hnonceC]
   have husedC := txGasUsed_le (gas := txC.gas) (floor := 23000) (left := postC.gasLeft)
     (refund := postC.refundCounter.toNat) (by decide)
   have hgasC : txC.gas = 2 ^ 20 := rfl

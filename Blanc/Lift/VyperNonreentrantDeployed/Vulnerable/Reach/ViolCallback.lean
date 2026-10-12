@@ -1,5 +1,5 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolCallbackRun
-import Blanc.Lift.VyperNonreentrantDeployed.RepinBridge
+import Blanc.Lift.WitnessChild
 
 /-!
 # V− P2, F3 (with F4 as its child and F5 by `ReAddFrame`): the callback frame
@@ -369,7 +369,7 @@ theorem c5Cb_agree : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Me
     exact hC4
   have hdc := dcallPrep_spec (cpCb5_eq O tS tA m w) hA4 hC4'
   obtain ⟨dstep, dpa, dpk, dcr, dia, dik, dsg, dst8, dst9⟩ := hdc
-  refine RepinBridge.frameStart_agree_keep (Vulnerable.t_0000_c0) (e5Cb_eq O tS tA m w)
+  refine Blanc.Lift.Witness.frameStart_agree_keep (Vulnerable.t_0000_c0) (e5Cb_eq O tS tA m w)
     ?hK ?hA' ?hS ?hC (keepsCb5 O tS tA m w)
   · intro x
     rw [dik, dpk, e4Cb31_keys O tS tA m w, e4Cb_entry_keys O tS tA m w, cik, cpk]
@@ -384,7 +384,7 @@ theorem c5Cb_agree : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Me
       exact hb4
     have hstor := benvAfterTransferB_stor hB hC4pre
       (fun a k => by rw [cst8]; exact hA.2.2.1 a k) a k
-    rw [hstor, RepinBridge.storTransfer_of_keeps (keepsCb O tS tA m w)]
+    rw [hstor, Blanc.Lift.Witness.storTransfer_of_keeps (keepsCb O tS tA m w)]
   · rw [dst8, e4Cb31_state O tS tA m w, he4]
     exact hC4
 
@@ -491,7 +491,7 @@ theorem halt2_shadows : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m :
 /-- The callback frame and its forwarder child pass F5's created-account set through. -/
 theorem halt2_created : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
     (w : World) (post : Devm),
-    RepinBridge.haltCreated (wrun fsA (sCb.withOrig O) 2 (C1 O tS tA m w post)) =
+    Blanc.Lift.Witness.haltCreated (wrun fsA (sCb.withOrig O) 2 (C1 O tS tA m w post)) =
       post.createdAccounts := by
   kernel_forall_rfl
 
@@ -1206,7 +1206,7 @@ theorem callback_frame (hRe : ReAddFrame) : CallbackFrame := by
   · simp only [Prod.mk.injEq] at htup
     obtain ⟨hgas, hout, herrB, hkeys, hadrs, hstor, hacs⟩ := htup
     have herrN : p.error = none := herrN_of _ herrB
-    simp only [RepinBridge.haltCreated] at hcrH
+    simp only [Blanc.Lift.Witness.haltCreated] at hcrH
     exact closeCb_of g O tS tA m w hg c1' s12 hwr hgas hout herrN (hcrH.trans hcrRe)
       hkeys hadrs hstor hacs reentry
   · simp only [Prod.mk.injEq] at htup

@@ -1,7 +1,7 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5Full
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Entry
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame4Child
-import Blanc.Lift.VyperNonreentrantDeployed.RepinBridge
+import Blanc.Lift.WitnessChild
 
 /-!
 V- as an admitted transaction, frame 5 as a child: the implementation frame the proxy's
@@ -68,7 +68,7 @@ theorem post5T_created : post5T.createdAccounts = .emptyWithCapacity := by
   exact h.2.2.2.2.2.2.2.2.2
 
 /-- The proxy's `DELEGATECALL` moves no value: frame 5 starts on `A'`'s storage. -/
-theorem keeps5T : RepinBridge.transferKeepsStor cp5T.f.inner acs4T = true := by kernel_rfl
+theorem keeps5T : Blanc.Lift.Witness.transferKeepsStor cp5T.f.inner acs4T = true := by kernel_rfl
 
 /-- **Frame 5 as the proxy's child.** -/
 theorem frame5_child : Nonempty (Exec e5T.pc e5T.sta e5T.dyna (.ok post5T)) ∧
@@ -81,7 +81,7 @@ theorem frame5_child : Nonempty (Exec e5T.pc e5T.sta e5T.dyna (.ok post5T)) ∧
     (fun a k => by rw [hst, e4T31_state]; exact e4T_world.1 a k)
     (by rw [hst, e4T31_state]; exact e4T_world.2) hcr hsg
     (fun hr => lift_exactM cert_checkM cert_jumpsOkM e5T_code e5T_fork hr) fs1_zero
-    (by rw [RepinBridge.storTransfer_of_keeps keeps5T]; exact ⟨id, fun _ _ r => r⟩) hrun herr
+    (by rw [Blanc.Lift.Witness.storTransfer_of_keeps keeps5T]; exact ⟨id, fun _ _ r => r⟩) hrun herr
   rw [hk, ha, hs, hc] at h
   exact h
 

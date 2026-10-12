@@ -208,7 +208,7 @@ theorem vminus_witness :
       (fun x => by rw [hik, hpk, e31_keys]; exact e3_keys x) (fun a => by rw [hia]; exact hpa a)
       (fun a k => by rw [hst, e31_state]; exact e3_world.1 a k)
       (by rw [hst, e31_state]; exact e3_world.2)
-    rwa [RepinBridge.storTransfer_of_keeps keeps4] at h
+    rwa [Blanc.Lift.Witness.storTransfer_of_keeps keeps4] at h
   obtain ⟨hx4, -, ha4⟩ := frame4_child
   have hsub := subtree_facts
   simp only [Prod.mk.injEq] at hsub

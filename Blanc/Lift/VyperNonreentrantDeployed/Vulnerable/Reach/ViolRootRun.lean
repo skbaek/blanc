@@ -1,6 +1,6 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolBoundary
 import Blanc.Lift.NodeWalkFork
-import Blanc.Lift.VyperNonreentrantDeployed.RepinBridge
+import Blanc.Lift.WitnessChild
 
 /-!
 # V− P2, F0/F1 kernel run: the root frame and its forwarder child
@@ -228,12 +228,12 @@ theorem e2_sta_eq : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Met
 
 /-- F0's `CALL` of the clone keeps the storage shadow (no account it touches can be deleted). -/
 theorem keepsR : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    RepinBridge.transferKeepsStor (cpR O tS tA m w).f.inner (cR O tS tA m w).acs = true := by
+    Blanc.Lift.Witness.transferKeepsStor (cpR O tS tA m w).f.inner (cR O tS tA m w).acs = true := by
   kernel_forall_rfl
 
 /-- F1's `DELEGATECALL` moves no value. -/
 theorem keepsF2 : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    RepinBridge.transferKeepsStor (cpF2 O tS tA m w).f.inner (acs1R O tS tA m w) = true := by
+    Blanc.Lift.Witness.transferKeepsStor (cpF2 O tS tA m w).f.inner (acs1R O tS tA m w) = true := by
   kernel_forall_rfl
 
 /-- F2's start configuration (the probe's convention). -/

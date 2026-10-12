@@ -224,7 +224,7 @@ theorem remove_frame (hCb : CallbackFrame) : RemoveFrame := by
   have aCb : ChildAgree postCb keysCb adrsCb (storCb ++ tS) (acsCb ++ tA) := by
     rw [← hkeysCb, ← hadrsCb, ← hstorCb, ← hacsCb]; exact hkCb.2
   obtain ⟨m1, w1, h1⟩ := Boundary.obsDT_cont (rmChunkX1 tS tA m w postCb)
-  rw [RepinBridge.withCreatedAccounts_of_eq hcrCb, hcbObs, cRm339_eq] at h1
+  rw [Blanc.Devm.withCreatedAccounts_of_eq hcrCb, hcbObs, cRm339_eq] at h1
   simp only [runRmA, Boundary.callPairA] at h1
   obtain ⟨cA, hR1, h1⟩ : ∃ cA,
       callResume sRm (cRm339 tS tA m w) postCb keysCb adrsCb
@@ -280,7 +280,7 @@ theorem remove_frame (hCb : CallbackFrame) : RemoveFrame := by
     (tokChild_out tS tA m2 w2) (tokChild_err tS tA m2 w2)
   obtain ⟨m3, w3, h3⟩ := Boundary.obsDT_cont
     (rmChunkX3 tS tA m2 w2 (dTokRm tS tA m2 w2))
-  rw [RepinBridge.withCreatedAccounts_of_eq (tokChild_created tS tA m2 w2), htokObs,
+  rw [Blanc.Devm.withCreatedAccounts_of_eq (tokChild_created tS tA m2 w2), htokObs,
     cTokRm_eq] at h3
   simp only [runRmB, Boundary.callPairA] at h3
   obtain ⟨cB, hR2, h3⟩ : ∃ cB,

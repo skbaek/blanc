@@ -60,29 +60,6 @@ theorem gatewayPauseKeys_union_resume_mem
     (target, resumeSinceSlot)
     (gatewayPauseKeys_resume_mem keys target caller)
 
-/-- Delegation resolution leaves the created-account set alone (hoisting
-candidate; private twins live in `LidoCircuitBreakerPauseWorld` and
-`LidoCircuitBreakerPinnedTargetStubCrossing`). -/
-private lemma gatewayCrossing_accessDelegation_createdAccounts {devm d1 : Devm}
-    {a dadr : Adr} {dp : Bool} {code : ByteArray} {dgc : Nat}
-    (h : accessDelegation devm a = ⟨dp, dadr, code, dgc, d1⟩) :
-    d1.createdAccounts = devm.createdAccounts := by
-  unfold accessDelegation at h
-  rcases hd : getDelegatedCodeAddress (devm.state.getCode a) with _ | adr <;>
-    simp only [hd] at h
-  · cases h
-    rfl
-  · cases h
-    rfl
-
-/-- `SSTORE` leaves the created-account set alone (hoisting candidate; a
-private twin lives in `Lift/WithdrawalRequest/FloodWalk`). -/
-private lemma gatewayCrossing_afterSstore_createdAccounts (sevm : Sevm)
-    (b : Devm) (key value : B256) :
-    (afterSstore sevm b key value).createdAccounts = b.createdAccounts := by
-  unfold afterSstore
-  split <;> rfl
-
 private lemma gatewayCrossing_pauseResumeWarm_createdAccounts (sevm : Sevm)
     (base : Devm) :
     (pauseResumeWarm sevm base).createdAccounts = base.createdAccounts := by
@@ -94,9 +71,8 @@ private lemma gatewayCrossing_pauseSentinelPost_createdAccounts (sevm : Sevm)
     (pauseSentinelPost sevm base G).createdAccounts = base.createdAccounts := by
   unfold pauseSentinelPost
   rw [Devm.setMach_createdAccounts,
-    show ∀ (d : Devm) (l : Log), (d.addLog l).createdAccounts =
-      d.createdAccounts from fun _ _ => rfl,
-    gatewayCrossing_afterSstore_createdAccounts,
+    Devm.addLog_createdAccounts,
+    afterSstore_createdAccounts,
     gatewayCrossing_pauseResumeWarm_createdAccounts]
 
 private lemma gatewayCrossing_pauseFinitePost_createdAccounts (sevm : Sevm)
@@ -105,9 +81,8 @@ private lemma gatewayCrossing_pauseFinitePost_createdAccounts (sevm : Sevm)
       base.createdAccounts := by
   unfold pauseFinitePost pauseLogged pauseStored
   rw [Devm.setMach_createdAccounts,
-    show ∀ (d : Devm) (l : Log), (d.addLog l).createdAccounts =
-      d.createdAccounts from fun _ _ => rfl,
-    gatewayCrossing_afterSstore_createdAccounts,
+    Devm.addLog_createdAccounts,
+    afterSstore_createdAccounts,
     gatewayCrossing_pauseResumeWarm_createdAccounts]
 
 /-- The value-zero \`CALL\` crossing whose child is the exact compiled gateway
@@ -458,7 +433,7 @@ private lemma runCompiled_call_zero_value_gatewayPause
       split
       · exact gatewayCrossing_pauseSentinelPost_createdAccounts _ _ _
       · exact gatewayCrossing_pauseFinitePost_createdAccounts _ _ _ _
-    have hd := gatewayCrossing_accessDelegation_createdAccounts h_del
+    have hd := accessDelegation_createdAccounts h_del
     exact hc.trans hd
 
 /-- Resolve the warm, non-delegated parent `CALL` completely.  The parent
@@ -871,7 +846,7 @@ private lemma runCompiled_statcall_gatewayQuery
       ((initDevm childMsg).withOutput
         (1 : B256).toBytes).createdAccounts from
       congrArg (fun view => view.createdAccounts) hmetaOut]
-    have hd := gatewayCrossing_accessDelegation_createdAccounts h_del
+    have hd := accessDelegation_createdAccounts h_del
     exact hd
 
 /-- Resolve the warm, non-delegated parent `STATICCALL` completely.  The
@@ -1032,103 +1007,6 @@ private theorem installedCodeGuard_runCompiled
     have hg : G + 18 - 18 = G := by omega
     rw [hg]
     exact htail
-
-/-! ## Zero-value balance writes at protected accounts (repin `ca9f27d`, SA)
-
-Under Jaune `ca9f27d` a balance write normalizes an emptied account away with
-its storage.  At a `State.Protected` account a balance write of the current
-balance is nevertheless the identity on the whole world.  The world is a
-`Std.TreeMap`, which has no public extensionality principle, so the identity is
-proved structurally: re-inserting a present key with its own value rebuilds
-exactly the same balanced tree.  Hoisting candidates for `CommonProofs`. -/
-
-open Std.DTreeMap.Internal in
-/-- Re-inserting a present key with its stored value is the identity on the
-raw balanced tree. -/
-private theorem impl_insert!_eq_self_of_get? {β : Type} :
-    ∀ (t : Impl Adr (fun _ => β)), t.Balanced → ∀ (k : Adr) (v : β),
-      Impl.Const.get? t k = some v → Impl.insert! k v t = t
-  | .leaf, _, k, v, h => by simp [Impl.Const.get?] at h
-  | .inner sz k' v' l r, hb, k, v, h => by
-    obtain ⟨hl, hr, hroot, _⟩ := Impl.balanced_inner_iff.mp hb
-    unfold Impl.Const.get? at h
-    unfold Impl.insert!
-    split at h
-    · rename_i hc
-      rw [hc]
-      simp only
-      rw [impl_insert!_eq_self_of_get? l hl k v h,
-        Impl.balanceL!_eq_balance! hl hr
-          (Impl.BalanceLPrecond.erase (Or.inl hroot)),
-        ← Impl.balance_eq_balance! (hlb := hl) (hrb := hr)
-          (hlr := Or.inl (Impl.BalanceLPrecond.erase (Or.inl hroot)))]
-      exact Impl.balance_eq_inner hb
-    · rename_i hc
-      rw [hc]
-      simp only
-      rw [impl_insert!_eq_self_of_get? r hr k v h,
-        Impl.balanceR!_eq_balance! hl hr
-          (Impl.BalanceLPrecond.erase (Or.inl hroot.symm)),
-        ← Impl.balance_eq_balance! (hlb := hl) (hrb := hr)
-          (hlr := Or.inr (Impl.BalanceLPrecond.erase (Or.inl hroot.symm)))]
-      exact Impl.balance_eq_inner hb
-    · rename_i hc
-      rw [hc]
-      simp only [Option.some.injEq] at h
-      have hk : k = k' := Std.LawfulEqCmp.eq_of_compare hc
-      subst hk h
-      rfl
-
-open Std.DTreeMap.Internal in
-/-- Re-inserting a present account with its stored value is the identity. -/
-private theorem state_insert_eq_self {st : State} {a : Adr} {ac : Acct}
-    (h : st[a]? = some ac) : st.insert a ac = st := by
-  rcases st with ⟨⟨t, wf⟩⟩
-  have hi := impl_insert!_eq_self_of_get? t wf.balanced a ac h
-  show (⟨⟨(t.insert a ac wf.balanced).impl, _⟩⟩ : State) = ⟨⟨t, wf⟩⟩
-  congr 2
-  rw [Impl.insert_eq_insert!, hi]
-
-/-- Writing a protected account's own balance back is the identity. -/
-private theorem state_setBal_bal_eq_of_protected {st : State} {a : Adr}
-    (hp : State.Protected st a) : st.setBal a (st.bal a) = st := by
-  have hnb : ¬ (st.get a).Empty := by
-    rintro hE
-    rcases hp with hn | hc
-    · exact hn hE.2.1
-    · exact hc hE.1
-  have hnnil : st.get a ≠ .nil := by
-    rintro hnil
-    apply hnb
-    rw [hnil]
-    exact ⟨by rfl, by rfl, by rfl⟩
-  have hmem : st[a]? = some (st.get a) := by
-    unfold State.get at hnnil ⊢
-    rw [Std.TreeMap.getD_eq_getD_getElem?] at hnnil ⊢
-    cases h : st[a]? with
-    | none => rw [h] at hnnil; exact absurd rfl hnnil
-    | some v => rfl
-  unfold State.setBal State.setAccount State.set
-  have hwb : (st.get a).withBal (st.bal a) = st.get a := rfl
-  have hclear : (st.get a).clearIfEmpty = st.get a := by
-    unfold Acct.clearIfEmpty
-    simp only [hnb, ↓reduceIte]
-  rw [hwb, hclear]
-  simp only [hnnil, ↓reduceIte]
-  exact state_insert_eq_self hmem
-
-/-- A zero-value debit of a protected account is the identity. -/
-private theorem state_subBal_zero_of_protected {st : State} {a : Adr}
-    (hp : State.Protected st a) : st.subBal a 0 = some st := by
-  unfold State.subBal
-  rw [if_neg (not_lt.mpr (B256.zero_le _)), B256.sub_zero,
-    state_setBal_bal_eq_of_protected hp]
-
-/-- A zero-value credit of a protected account is the identity. -/
-private theorem state_addBal_zero_of_protected {st : State} {a : Adr}
-    (hp : State.Protected st a) : st.addBal a 0 = st := by
-  unfold State.addBal
-  rw [B256.add_zero, state_setBal_bal_eq_of_protected hp]
 
 /-- `pauseAfterSet_gateway_toSuccess_runCompiled` together with the
 intermediate machine's created-account set and exact world, which the concrete
@@ -1578,20 +1456,20 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled_created
       rw [State.get_set_ne _ h]
       exact hprot
   have hsub1' : base.state.subBal sevm.currentTarget 0 = some base.state :=
-    state_subBal_zero_of_protected hprot
+    State.subBal_zero_of_protected hprot
   have hsub2' : ((base.state.addBal target.toAdr 0).setStorVal target.toAdr
       resumeSinceSlot (pauseForProjection sevm.benvStat.time duration)).subBal
         sevm.currentTarget 0 =
       some (base.state.setStorVal target.toAdr resumeSinceSlot
         (pauseForProjection sevm.benvStat.time duration)) := by
-    rw [state_addBal_zero_of_protected (hprotTarget hgatewayCode)]
-    exact state_subBal_zero_of_protected hprotS
+    rw [State.addBal_zero_of_protected (hprotTarget hgatewayCode)]
+    exact State.subBal_zero_of_protected hprotS
   have hstate2 : (post2.setMach ⟨[], pauseDecodedMemory M duration, Gb - 41,
       post2.stateGas⟩).state =
       (base.state.setStorVal target.toAdr resumeSinceSlot
         (pauseForProjection sevm.benvStat.time duration)).addBal
           target.toAdr 0 := by
-    rw [state_addBal_zero_of_protected (hprotTarget hcodeS)]
+    rw [State.addBal_zero_of_protected (hprotTarget hcodeS)]
     exact hpost2
   have hcreatedB : post2.createdAccounts = base.createdAccounts := by
     rw [hcreated2]

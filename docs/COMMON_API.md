@@ -1804,6 +1804,12 @@ Use [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
   identity for inserting a key at its current value, not map extensionality.
   Without protection the zero write can normalize an empty account to absent
   and erase its storage, so the premise is necessary.
+- `State.Protected.of_compile` (an account carrying `Prog.compile p` is
+  protected) sits beside `State.Protected.of_image` and `.of_code_ne_nil` in
+  `Blanc/CommonProofs.lean`. `selfPayment_entry_clears_storage` is the
+  mechanism that makes protection necessary across message entry: a
+  full-balance self-payment empties a codeless, nonce-zero account, and the entry
+  deletes it with its storage.
 - `Acct.clearIfEmpty_of_not_empty`, `Acct.clearIfEmpty_withBal_of_code`,
   `Acct.clearIfEmpty_withBal_of_nonce` (with `Acct.withBal_nonce`/`_code`) in
   `Blanc/CommonProofs.lean` remove the normalization of a nonempty account or
@@ -4557,7 +4563,14 @@ contract-neutral.
   [`Blanc/Lift/WitnessChild.lean`](../Blanc/Lift/WitnessChild.lean). Child starts
   (`childStart`, `NodeWalk.childCfg`, and explicit `frame_of_wrun` inputs) use
   `storTransfer` alongside `acsTransfer`; reusing the pre-transfer storage
-  shadow requires a separate no-change proof. The frame-level spawn
+  shadow requires a separate no-change proof. That proof is
+  `transferKeepsStor m acs` (decided by evaluation: no value moves, or both
+  endpoints have a nonzero shadow nonce) with `storTransfer_of_keeps`, and
+  `frameStart_agree_keep` is `frameStart_agree` with the parent's storage shadow
+  itself (`storSetBal_of_nonce`, `lookupA_acsSetBal_nonce` underneath);
+  `haltCreated` projects a run's halted created set for a kernel decision. A
+  settled child supplied as data is restored by `Devm.withCreatedAccounts_of_eq`
+  (`Blanc/CommonProofs.lean`). The frame-level spawn
   fact `SpawnedBy sevm devm x child` (`Xinst.step` spawns a frame entering as `child`) and
   `spawnedBy_of_callPrep`, `spawnedBy_of_childStart`, `spawnedBy_of_dcallPrep` in
   [`Blanc/Lift/WitnessSpawn.lean`](../Blanc/Lift/WitnessSpawn.lean); reading a run's final

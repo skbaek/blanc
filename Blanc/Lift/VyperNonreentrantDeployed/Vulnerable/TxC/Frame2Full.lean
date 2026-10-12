@@ -101,7 +101,7 @@ theorem frame2C_child_at (hg : CoveredFork g) (d3 : Devm)
                 (fun a k => by rw [hst, e1C31_state]; exact e1C_world.1 a k)
                 (by rw [hst, e1C31_state]; exact e1C_world.2) hcr hsg
                 (fun hr => lift_exactM cert_checkM cert_jumpsOkM e2C_code (hg : CoveredFork g) hr)
-                fs1_zero (by rw [RepinBridge.storTransfer_of_keeps (by exact keeps2C)]; exact s) hr herr
+                fs1_zero (by rw [Blanc.Lift.Witness.storTransfer_of_keeps (by exact keeps2C)]; exact s) hr herr
               exact ⟨post, cl', hx, hs, ha, hgas,
                 List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) ho, herr, h26, hA, h2', hrf,
                 hatd, hcrd⟩
