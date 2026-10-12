@@ -1,4 +1,5 @@
 import Blanc.Lift.Weth9.ClosedDepositTxData
+import Blanc.Lift.Weth9.RepinBridge
 
 namespace Blanc.Lift.Weth9.ClosedInstance
 
@@ -24,11 +25,6 @@ theorem deposit_settled_code (st : Jaune.State) (a : Adr) :
     rw [depositTransferState, State.addBal_getCode, State.setBal_getCode,
       depositDebitState, State.setBal_getCode]
     exact State.incrNonce_get_code
-
-/-- An account that is not empty survives normalization unchanged. -/
-theorem acct_clearIfEmpty_of_not_empty {ac : Acct} (h : ¬ ac.Empty) : ac.clearIfEmpty = ac := by
-  unfold Acct.clearIfEmpty
-  rw [if_neg h]
 
 /-- The settled deposit writes the contract's balance slot and keeps the rest of its storage, provided
 the contract carries code (so no balance write normalizes it; cause SA). -/
@@ -99,7 +95,7 @@ theorem deposit_settled_other_stor (st : Jaune.State) (a : Adr)
       rw [depositTransferState, getStor_addBal, if_neg (fun h => other h.1)]
       change (((depositDebitState st).setBal senderE 899999).get senderE).stor = _
       rw [State.setBal_get_self, depositDebitState, debit_get_self hnonce,
-        acct_clearIfEmpty_of_not_empty]
+        Acct.clearIfEmpty_of_not_empty]
       · rfl
       · rintro ⟨-, -, hz⟩
         have ne : (899999 : B256) ≠ 0 := by decide +kernel
@@ -140,7 +136,7 @@ theorem deposit_settled_holder (st : Jaune.State) (hnonce : (st.get senderE).non
     unfold depositTransferState
     rw [addBal_get_ne _ senderE_ne_contractAddress.symm, State.setBal_get_self,
       depositDebitState, debit_get_self hnonce]
-    rw [acct_clearIfEmpty_of_not_empty]
+    rw [Acct.clearIfEmpty_of_not_empty]
     · rfl
     · rintro ⟨-, -, hz⟩
       have ne : (899999 : B256) ≠ 0 := by decide +kernel
@@ -149,7 +145,7 @@ theorem deposit_settled_holder (st : Jaune.State) (hnonce : (st.get senderE).non
     (((depositFrameState st).get senderE).bal + 9924)).clearIfEmpty = _
   rw [frame]
   have sum : (899999 : B256) + 9924 = 909923 := by decide +kernel
-  rw [acct_clearIfEmpty_of_not_empty]
+  rw [Acct.clearIfEmpty_of_not_empty]
   · change { st.get senderE with nonce := (st.get senderE).nonce + 1, bal := (899999 : B256) + 9924 } = _
     rw [sum]
   · rintro ⟨-, -, hz⟩
