@@ -146,7 +146,13 @@ theorem creationMessage_success : ∃ post, CreateResult post := by
       show creationMessage.currentTarget = target by rfl] using
       processCreateMessage_msg_getStor_currentTarget creationMessage
   have hbenvStorage : benv.state.getStor target = Stor.empty := by
-    rw [congrFun (benvAfterTransfer_getStor_eq htransfer) target]
+    have hentry : prepared.benvAfterTransfer = .ok prepared.benv :=
+      Msg.benvAfterTransfer_of_value_zero (by rfl)
+    rw [hentry] at htransfer
+    have hbenv : benv = prepared.benv := by
+      injection htransfer with h
+      exact h.symm
+    rw [hbenv]
     exact hpreparedStorage
   have hbaseStorage : base.state.getStor target = Stor.empty := by
     change benv.state.getStor target = Stor.empty
@@ -301,6 +307,15 @@ theorem creationMessage_success : ∃ post, CreateResult post := by
     dsimp only [charged]
     rw [Devm.setMach_error]
     exact hrawErrorNone
+  have hruntimeLength : runtimeBaselineBytes.length = 2188 := by
+    have heq : runtimeBaselineArtifactBytes = runtimeBaselineBytes :=
+      Option.some.inj
+        (runtimeBaselineArtifact_compile.symm.trans runtimeBaseline_compile)
+    rw [← heq]
+    exact runtimeBaselineArtifactBytes_length
+  have hchargedCodeNonempty : (⟨⟨charged.output⟩⟩ : ByteArray).size ≠ 0 := by
+    simp only [ByteArray.size, Array.size, hchargedOutput, hruntimeLength]
+    decide
   let post := charged.setCode creationMessage.currentTarget
     ⟨⟨charged.output⟩⟩
   have hcreate : processCreateMessage creationMessage = .ok post := by
@@ -321,18 +336,18 @@ theorem creationMessage_success : ∃ post, CreateResult post := by
     unfold Devm.getCode Devm.getAcct
     rw [Devm.setCode_state]
     unfold State.setCode
-    rw [State.get_set_self]
+    rw [State.setAccount_get_self, Acct.clearIfEmpty_code]
     simp only [hchargedOutput]
   · dsimp only [post]
     change
       ((charged.state.setCode target _).get target).stor.get
         implementationSlotLit = _
-    rw [State.setCode_get_stor]
+    rw [State.setCode_get_stor hchargedCodeNonempty]
     exact hchargedImplementation
   · dsimp only [post]
     change
       ((charged.state.setCode target _).get target).stor.get adminSlotLit = _
-    rw [State.setCode_get_stor]
+    rw [State.setCode_get_stor hchargedCodeNonempty]
     exact hchargedAdmin
   · dsimp only [post]
     rw [Devm.setCode_logs]

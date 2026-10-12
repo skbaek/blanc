@@ -1101,7 +1101,8 @@ private theorem proxy_revert_delegatecall :
     proxy_revert_h_del
   obtain ⟨raw, hchild, herr, hout, hgas, hstate, htra, hlogs⟩ :=
     proxy_revert_child_exec
-  let childPost := raw.withError (some .revert)
+  let childPost := (raw.withError (some .revert)).withStorageWrites
+    proxyRevertChild.benv.storageWrites
   have hrawerr : (raw.withError (some .revert)).error.isSome = true := by
     rfl
   have hsettle :
@@ -1123,6 +1124,7 @@ private theorem proxy_revert_delegatecall :
       · change proxyRevertChild.tenv.transientStorage = raw.transientStorage
         rw [htra]
         rfl
+      · rfl
   have hce : childPost.error.isSome = true := by
     exact hrawerr
   have hchildgas : childPost.gasLeft = 22117 := by

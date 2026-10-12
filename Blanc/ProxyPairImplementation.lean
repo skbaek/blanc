@@ -147,7 +147,8 @@ theorem implGuarded_runCompiledTo_nonzero
     func_run [0, 22100, 3]
     case h_legacy => exact hfork.rules_stateGas_none
     all_goals try {simp only [Devm.setMach_gasLeft, B256.eqCheck, h_data, ↓reduceIte]}
-    all_goals try {rw [Devm.getStorVal_setMach, h_orig, h_cur]; decide}
+    all_goals try {simp only [Devm.getOrigStorVal, h_orig, ite_self,
+      Devm.getStorVal_setMach, h_cur]; decide}
     case h_ext =>
       rw [show ((0 : B256) * 32).toNat = 0 by decide]
       exact Devm.extCost_empty_word
@@ -245,7 +246,7 @@ private lemma static_sstore_run
       let ⟨new_value, d⟩ ← d.pop
       .assert (gCallStipend < d.gasLeft) ⟨.halt (.outOfGas .none), d⟩
       let ct := sevm.currentTarget
-      let original_value := getOrigStorVal sevm ct key
+      let original_value := d.getOrigStorVal sevm ct key
       let current_value := d.getStorVal ct key
       let ⟨d, gasCost2⟩ ← .ok <|
         if ((ct, key) : Adr × B256) ∉ d.accessedStorageKeys then
@@ -292,8 +293,9 @@ private lemma static_sstore_run
   refine ⟨post, ?_, ?_, ?_, ?_⟩
   rw [Devm.pop_eq_ok h_stack]
   simp only [ExceptT.stM_eq, Except.assert, ite_not, ne_eq, assertDynamic, h_static, Bool.not_true,
-    Bool.false_eq_true, ↓reduceIte, Except.bind_error, Except.bind_ok, h_pop, h_orig,
-    Devm.setMach_gasLeft, h_stipend, Devm.getStorVal_setMach, h_cur, true_and,
+    Bool.false_eq_true, ↓reduceIte, Except.bind_error, Except.bind_ok, h_pop,
+    Devm.setMach_gasLeft, h_stipend, Devm.getOrigStorVal, h_orig, ite_self,
+    Devm.getStorVal_setMach, h_cur, true_and,
     Devm.setMach_accessedStorageKeys, h_cold, h_if, h_charge, d2, d1, d0, post]
   · rw [Devm.setMach_state]
     exact hworld.1.symm

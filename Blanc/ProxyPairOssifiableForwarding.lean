@@ -569,8 +569,9 @@ private theorem clean_tail_relation
     simp only [Frame.ofCall, Frame.settle, Frame.settleMsg,
       executeCode.handleErrorWith_ok, processMessage.settle]
     change (if (forwardingCleanPost d child gas).error.isSome = true then
-      Except.ok ((forwardingCleanPost d child gas).rollback
-        outer.benv.state outer.tenv.transientStorage)
+      Except.ok (((forwardingCleanPost d child gas).rollback
+        outer.benv.state outer.tenv.transientStorage).withStorageWrites
+          outer.benv.storageWrites)
       else Except.ok (forwardingCleanPost d child gas)) =
         Except.ok (forwardingCleanPost d child gas)
     rw [finalError]
