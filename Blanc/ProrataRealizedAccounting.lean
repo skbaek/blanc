@@ -102,28 +102,44 @@ theorem messageEntry_eq_ofState
         simp only [messageEntry, target_eq, ↓reduceIte, beforeCredit, valueNat, tsub_zero, ofState]
       · simp only [messageEntry, target_eq, ↓reduceIte]
   | true =>
-      rcases of_benvAfterTransfer shouldTransfer transfer with
-        ⟨debit, sub, rfl⟩
-      have fields := of_state_transfer_fields
-        (callee := msg.currentTarget) sub
-      by_cases target_eq : msg.currentTarget = ca
-      · subst ca
-        unfold messageEntry
-        rw [if_pos rfl]
-        unfold beforeCredit ofState
-        apply congrArg₂ RealizedSnapshot.mk
-        · exact fields.1 msg.currentTarget
-        · change ((debit.addBal msg.currentTarget msg.value).bal
-              msg.currentTarget).toNat - msg.value.toNat = _
-          rw [of_transfer_bal_target sub (caller_ne shouldTransfer) sum_nof]
-          exact Nat.add_sub_cancel _ _
-      · unfold messageEntry
-        rw [if_neg target_eq]
-        unfold ofState
-        apply congrArg₂ RealizedSnapshot.mk
-        · exact fields.1 ca
-        · exact congrArg B256.toNat
-            (of_transfer_bal_other sub (caller_ne shouldTransfer) target_eq)
+      by_cases hv : msg.value = 0
+      · -- Zero value: entry is the untouched environment (ZV).
+        have hbt0 : msg.benvAfterTransfer = .ok msg.benv :=
+          Msg.benvAfterTransfer_of_value_zero hv
+        have hentry : entry = msg.benv :=
+          (Except.ok.inj (hbt0.symm.trans transfer)).symm
+        subst entry
+        by_cases target_eq : msg.currentTarget = ca
+        · have valueNat : msg.value.toNat = 0 := by
+            rw [hv]
+            rfl
+          simp only [messageEntry, target_eq, ↓reduceIte, beforeCredit, valueNat, tsub_zero, ofState]
+        · simp only [messageEntry, target_eq, ↓reduceIte]
+      · have h_nz : msg.value ≠ 0 := hv
+        have hstor : entry.state.getStor ca = msg.benv.state.getStor ca :=
+          ExecutionAccountingReplay.benvAfterTransfer_getStor_eq_of_safe
+            transfer sum_nof
+            (fun _ _ => Or.inl (caller_ne shouldTransfer))
+        rcases of_benvAfterTransfer shouldTransfer h_nz transfer with
+          ⟨debit, sub, rfl⟩
+        by_cases target_eq : msg.currentTarget = ca
+        · subst ca
+          unfold messageEntry
+          rw [if_pos rfl]
+          unfold beforeCredit ofState
+          apply congrArg₂ RealizedSnapshot.mk
+          · exact hstor
+          · change ((debit.addBal msg.currentTarget msg.value).bal
+                msg.currentTarget).toNat - msg.value.toNat = _
+            rw [of_transfer_bal_target sub (caller_ne shouldTransfer) sum_nof]
+            exact Nat.add_sub_cancel _ _
+        · unfold messageEntry
+          rw [if_neg target_eq]
+          unfold ofState
+          apply congrArg₂ RealizedSnapshot.mk
+          · exact hstor
+          · exact congrArg B256.toNat
+              (of_transfer_bal_other sub (caller_ne shouldTransfer) target_eq)
 
 /-- The realized boundary at an instruction-frame entry.  A frame executing
 PRORATA begins immediately before its value credit; a foreign frame begins at
@@ -509,7 +525,8 @@ theorem AcceptedPayout.exists_trace
     {sevm : Sevm} {paid : B256}
     {callPre callPost guardPost returnPre : Devm}
     (payout : AcceptedPayout sevm paid callPre callPost guardPost returnPre)
-    (recipient_ne : sevm.caller.toB256.toAdr ≠ sevm.currentTarget) :
+    (recipient_ne : sevm.caller.toB256.toAdr ≠ sevm.currentTarget)
+    (hprot : State.Protected callPre.state sevm.currentTarget) :
     Nonempty (AcceptedPayoutTrace sevm paid callPre callPost) := by
   rcases payout with
     ⟨gasWord, xs, parent, child, xl, delegated, nextAddress, code, avail, pc,
@@ -546,32 +563,59 @@ theorem AcceptedPayout.exists_trace
     rw [htransfer] at hbody
   · rw [hbody.2, processMessage.settle_error] at hset
     cases hset
-  · rcases of_benvAfterTransfer hshouldTransfer htransfer with
-      ⟨debited, hsub, hentry⟩
-    rw [hmessageState, hcaller, hvalue] at hsub
-    have hentryState :
-        entry.state = debited.addBal sevm.caller.toB256.toAdr paid := by
-      rw [hentry, htarget, hvalue]
-      rfl
-    have hchildDepth :
-        (initSevm (childMsg.withBenv entry)).depth < sevm.depth := by
-      change sevm.depth - 1 < sevm.depth
-      omega
-    have fields := of_state_transfer_fields
-      (callee := sevm.caller.toB256.toAdr) hsub
-    have hentryStor :
-        entry.state.getStor sevm.currentTarget =
-          callPre.state.getStor sevm.currentTarget := by
-      rw [hentryState]
-      exact fields.1 sevm.currentTarget
-    have hentryBalance :
-        entry.state.bal sevm.currentTarget =
-          callPre.state.bal sevm.currentTarget - paid := by
-      rw [hentryState]
-      exact fields.2.2.2.2 recipient_ne
-    exact ⟨⟨childMsg, entry, child, trace, hclean, hmessageState, hbenvStat,
-      hshouldTransfer, hcaller, hvalue, htarget, htargetNe, hchildDepth, htransfer,
-      hentryStor, hentryBalance, hcallPostState⟩⟩
+  · by_cases hp : paid = 0
+    · -- Zero payout: entry is the untouched environment (ZV).
+      have hval0 : childMsg.value = 0 := hvalue.trans hp
+      have hbt0 : childMsg.benvAfterTransfer = .ok childMsg.benv :=
+        Msg.benvAfterTransfer_of_value_zero hval0
+      have hentry_eq : entry = childMsg.benv :=
+        (Except.ok.inj (hbt0.symm.trans htransfer)).symm
+      subst entry
+      have hentryStor :
+          childMsg.benv.state.getStor sevm.currentTarget =
+            callPre.state.getStor sevm.currentTarget := by
+        rw [hmessageState]
+      have hentryBalance :
+          childMsg.benv.state.bal sevm.currentTarget =
+            callPre.state.bal sevm.currentTarget - paid := by
+        rw [hmessageState, hp, B256.sub_zero]
+      have hchildDepth :
+          (initSevm (childMsg.withBenv childMsg.benv)).depth < sevm.depth := by
+        change sevm.depth - 1 < sevm.depth
+        omega
+      exact ⟨⟨childMsg, childMsg.benv, child, trace, hclean, hmessageState, hbenvStat,
+        hshouldTransfer, hcaller, hvalue, htarget, htargetNe, hchildDepth, htransfer,
+        hentryStor, hentryBalance, hcallPostState⟩⟩
+    · -- Nonzero payout: debit then credit.
+      have h_nz : childMsg.value ≠ 0 := by
+        rw [hvalue]
+        exact hp
+      rcases of_benvAfterTransfer hshouldTransfer h_nz htransfer with
+        ⟨debited, hsub, hentry⟩
+      rw [hmessageState, hcaller, hvalue] at hsub
+      have hentryState :
+          entry.state = debited.addBal sevm.caller.toB256.toAdr paid := by
+        rw [hentry, htarget, hvalue]
+        rfl
+      have hchildDepth :
+          (initSevm (childMsg.withBenv entry)).depth < sevm.depth := by
+        change sevm.depth - 1 < sevm.depth
+        omega
+      have fields := of_state_transfer_fields
+        (callee := sevm.caller.toB256.toAdr) hsub
+      have hentryStor :
+          entry.state.getStor sevm.currentTarget =
+            callPre.state.getStor sevm.currentTarget := by
+        rw [hentryState]
+        exact fields.1 sevm.currentTarget hprot
+      have hentryBalance :
+          entry.state.bal sevm.currentTarget =
+            callPre.state.bal sevm.currentTarget - paid := by
+        rw [hentryState]
+        exact fields.2.2.2.2 recipient_ne
+      exact ⟨⟨childMsg, entry, child, trace, hclean, hmessageState, hbenvStat,
+        hshouldTransfer, hcaller, hvalue, htarget, htargetNe, hchildDepth, htransfer,
+        hentryStor, hentryBalance, hcallPostState⟩⟩
 
 /-- The settled prefix and the accepted child entry meet at the exact paid
 boundary of one withdrawal accounting step. -/
@@ -585,14 +629,15 @@ theorem WithdrawPreCallEffect.accountingEffect_of_acceptedPayout
       (Devm.getBal pre sevm.currentTarget + 1) /
         ((Devm.getStor pre sevm.currentTarget).get supplySlot + offset))
     (payout : AcceptedPayout sevm paid callPre callPost guardPost returnPre)
-    (recipient_ne : sevm.caller.toB256.toAdr ≠ sevm.currentTarget) :
+    (recipient_ne : sevm.caller.toB256.toAdr ≠ sevm.currentTarget)
+    (hprot : State.Protected callPre.state sevm.currentTarget) :
     ∃ trace : AcceptedPayoutTrace sevm paid callPre callPost,
       RealizedEffect offset.toNat
         (.withdraw (Sevm.argWord sevm 0).toNat paid.toNat)
         (some sevm.caller)
         (RealizedSnapshot.ofState sevm.currentTarget pre.state)
         (RealizedSnapshot.ofState sevm.currentTarget trace.entry.state) := by
-  obtain ⟨trace⟩ := payout.exists_trace recipient_ne
+  obtain ⟨trace⟩ := payout.exists_trace recipient_ne hprot
   have fields := effect
   unfold WithdrawPreCallEffect at fields
   dsimp only [Lean.Elab.WF.paramLet] at fields
@@ -650,23 +695,56 @@ theorem WithdrawPreCallEffect.acceptedPayoutChildPre
         (Devm.getBal callPre sevm.currentTarget - paid) := by
     rw [congrFun callBalance sevm.currentTarget, paid_eq]
     exact effect.settlement_inv preInvariant
-  rcases of_benvAfterTransfer trace.shouldTransferValue trace.entryTransfer with
-    ⟨debit, sub, entry_eq⟩
-  rw [trace.messageState, trace.caller, trace.value] at sub
-  have entryState : trace.entry.state =
-      debit.addBal sevm.caller.toB256.toAdr paid := by
-    rw [entry_eq, trace.target, trace.value]
-    rfl
-  apply ContractSpec.Pre.child_of_outbound_transfer
-    (st := callPre.state) (st_mid := debit)
-    (target := sevm.caller.toB256.toAdr) (value := paid)
-  · exact childCode
-  · exact childSide
-  · exact childInvariant
-  · exact sub
-  · exact entryState
-  · exact trace.target
-  · exact trace.value
+  by_cases hp : paid = 0
+  · -- Zero payout: entry is the untouched environment (ZV).
+    have hval0 : trace.childMsg.value = 0 := trace.value.trans hp
+    have hbt0 : trace.childMsg.benvAfterTransfer = .ok trace.childMsg.benv :=
+      Msg.benvAfterTransfer_of_value_zero hval0
+    have hentry_eq : trace.entry = trace.childMsg.benv :=
+      (Except.ok.inj (hbt0.symm.trans trace.entryTransfer)).symm
+    have hinv0 : Inv (Devm.getStor callPre sevm.currentTarget) 0
+        (Devm.getBal callPre sevm.currentTarget) := by
+      have h := childInvariant
+      rw [hp, B256.sub_zero] at h
+      exact h
+    have hpre0 : prorataSpec.Pre sevm.currentTarget
+        (initSevm (trace.childMsg.withBenv trace.entry)) callPre := by
+      refine ⟨childCode, childSide, ?_, ?_⟩
+      · intro _
+        have hval : (initSevm (trace.childMsg.withBenv trace.entry)).value =
+            trace.childMsg.value := rfl
+        rw [hval, trace.value, hp]
+        exact hinv0
+      · intro _
+        exact hinv0
+    have hstate0 : (initDevm (trace.childMsg.withBenv trace.entry)).state =
+        callPre.state := by
+      have hbb : (initDevm (trace.childMsg.withBenv trace.entry)).state =
+          trace.entry.state := rfl
+      rw [hbb, hentry_eq]
+      exact trace.messageState
+    exact hpre0.state_eq hstate0
+  · -- Nonzero payout: debit then credit.
+    have h_nz : trace.childMsg.value ≠ 0 := by
+      rw [trace.value]
+      exact hp
+    rcases of_benvAfterTransfer trace.shouldTransferValue h_nz trace.entryTransfer with
+      ⟨debit, sub, entry_eq⟩
+    rw [trace.messageState, trace.caller, trace.value] at sub
+    have entryState : trace.entry.state =
+        debit.addBal sevm.caller.toB256.toAdr paid := by
+      rw [entry_eq, trace.target, trace.value]
+      rfl
+    apply ContractSpec.Pre.child_of_outbound_transfer
+      (st := callPre.state) (st_mid := debit)
+      (target := sevm.caller.toB256.toAdr) (value := paid)
+    · exact childCode
+    · exact childSide
+    · exact childInvariant
+    · exact sub
+    · exact entryState
+    · exact trace.target
+    · exact trace.value
 
 /-- The realized accounting content of one successful deployed withdrawal.
 Its first step stops at the paid child entry; the retained child trace then
@@ -750,8 +828,22 @@ theorem BodyEntry.realizedWithdrawal
   rcases pays with
     ⟨callPre, callPost, guardPost, returnPre, effect, payout,
       hpostStor, hpostBalance, _⟩
+  have heffectCode : callPre.getCode = bodyPre.getCode := by
+    have h := effect
+    unfold WithdrawPreCallEffect at h
+    exact h.2.2.2.2.1
+  have hprot : State.Protected callPre.state sevm.currentTarget := by
+    apply State.Protected.of_code_ne_nil
+    intro hnil
+    apply Prog.compile_ne_nil
+    have hcc : some (callPre.getCode sevm.currentTarget).toList =
+        Prog.compile prorataSpec.prog := by
+      rw [heffectCode]
+      exact bodyPrecondition.code
+    rw [← hcc]
+    exact congrArg some hnil
   rcases effect.accountingEffect_of_acceptedPayout bodyInvariant rfl payout
-      recipient_ne with ⟨trace, accounting⟩
+      recipient_ne hprot with ⟨trace, accounting⟩
   have hpreSnapshot :
       RealizedSnapshot.ofState sevm.currentTarget bodyPre.state =
         RealizedSnapshot.beforeCredit sevm.currentTarget sevm.value
@@ -995,7 +1087,8 @@ theorem of_transfer_from_ne
     (provenance : ProrataAccountingProvenance)
     (caller_ne : caller ≠ ca)
     (sub : pre.subBal caller value = some debit)
-    (sum_nof : sum pre.bal < 2 ^ 256) :
+    (sum_nof : sum pre.bal < 2 ^ 256)
+    (hprot : State.Protected pre ca) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca pre) steps
@@ -1009,14 +1102,14 @@ theorem of_transfer_from_ne
       of_transfer_bal_target sub caller_ne sum_nof
     by_cases positive : 0 < value.toNat
     · exact ⟨_, singleton provenance
-        (accountingEffect_externalCredit (fields.1 ca) balance_eq positive)⟩
+        (accountingEffect_externalCredit (fields.1 ca hprot) balance_eq positive)⟩
     · have zero : value.toNat = 0 := Nat.eq_zero_of_not_pos positive
       have snapshot_eq :
           RealizedSnapshot.ofState ca (debit.addBal ca value) =
             RealizedSnapshot.ofState ca pre := by
         unfold RealizedSnapshot.ofState
         exact congrArg₂ RealizedSnapshot.mk
-          (fields.1 ca)
+          (fields.1 ca hprot)
           (by rw [balance_eq, zero, Nat.add_zero])
       exact ⟨[], nil_of_eq snapshot_eq⟩
   · have balance_eq :
@@ -1027,7 +1120,7 @@ theorem of_transfer_from_ne
           RealizedSnapshot.ofState ca pre := by
       unfold RealizedSnapshot.ofState
       exact congrArg₂ RealizedSnapshot.mk
-        (fields.1 ca)
+        (fields.1 ca hprot)
         (congrArg B256.toNat balance_eq)
     exact ⟨[], nil_of_eq snapshot_eq⟩
 
@@ -1036,7 +1129,8 @@ it targets PRORATA and is positive; every other case is a projected no-op. -/
 theorem of_addBal
     {ca target : Adr} {pre : State} {value : B256}
     (provenance : ProrataAccountingProvenance)
-    (sum_nof : sum pre.bal + value.toNat < 2 ^ 256) :
+    (sum_nof : sum pre.bal + value.toNat < 2 ^ 256)
+    (hprot : State.Protected pre ca) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca pre) steps
@@ -1045,7 +1139,7 @@ theorem of_addBal
       (pre.addBal target value).getStor ca = pre.getStor ca := by
     show ((pre.setBal target (pre.bal target + value)).get ca).stor =
       (pre.get ca).stor
-    rw [State.setBal_get_stor]
+    rw [State.setBal_get_stor_of_protected hprot]
   by_cases target_eq : target = ca
   · subst target
     have nof : B256.Nof (pre.bal ca) value := by
@@ -1058,7 +1152,7 @@ theorem of_addBal
       have word_eq : (pre.addBal ca value).bal ca =
           pre.bal ca + value := by
         show ((pre.setBal ca (pre.bal ca + value)).get ca).bal = _
-        rw [State.setBal_get_self]
+        rw [State.setBal_get_self, Acct.clearIfEmpty_bal]
         rfl
       rw [word_eq, B256.toNat_add_eq_of_nof _ _ nof]
     by_cases positive : 0 < value.toNat
@@ -1099,10 +1193,11 @@ def carrier (ca : Adr) : ExecutionAccountingReplay.ReplayCarrier ca where
   ofState := RealizedSnapshot.ofState ca
   frameEntry := RealizedSnapshot.execEntry ca
   nil := ProrataAccountingReplay.nil
+  readsStorage := true
   silent := by
-    intro _ _ storage_eq balance_eq
+    intro _ _ storage_cond balance_eq
     unfold RealizedSnapshot.ofState
-    exact congrArg₂ RealizedSnapshot.mk storage_eq balance_eq
+    exact congrArg₂ RealizedSnapshot.mk (storage_cond rfl) balance_eq
   credit := by
     intro provenance _ _ _ storage_eq balance_eq positive
     exact ⟨_, singleton provenance
@@ -1184,13 +1279,14 @@ theorem Ninst.foreignNoneAccountingReplay
     (run : Ninst.StepRun pc sevm pre n .none (.ok post))
     (target_ne : sevm.currentTarget ≠ ca)
     (sum_nof : sum pre.state.bal < 2 ^ 256)
-    (provenance : ProrataAccountingProvenance) :
+    (provenance : ProrataAccountingProvenance)
+    (hprot : State.Protected pre.state ca) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca pre.state) steps
         (RealizedSnapshot.ofState ca post.state) := by
   exact ProrataAccountingReplay.of_storage_eq_balance_mono provenance
-    (_root_.Blanc.Ninst.foreignNone_getStor_eq hfork run target_ne)
+    (_root_.Blanc.Ninst.foreignNone_getStor_eq hfork run target_ne hprot)
     (_root_.Blanc.Ninst.targetBalanceMono_of_none hfork run target_ne sum_nof)
 
 /-- Every successful terminal instruction in a foreign frame realizes exactly
@@ -1200,13 +1296,14 @@ theorem Linst.foreignAccountingReplay
     (run : Linst.Run sevm pre l (.ok post))
     (target_ne : sevm.currentTarget ≠ ca)
     (sum_nof : sum pre.state.bal < 2 ^ 256)
-    (provenance : ProrataAccountingProvenance) :
+    (provenance : ProrataAccountingProvenance)
+    (hprot : State.Protected pre.state ca) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca pre.state) steps
         (RealizedSnapshot.ofState ca post.state) := by
   exact ProrataAccountingReplay.of_storage_eq_balance_mono provenance
-    (congrFun (_root_.Blanc.Linst.getStor_eq run) ca)
+    (_root_.Blanc.Linst.getStor_eq run ca hprot)
     (_root_.Blanc.Linst.targetBalanceMono_of_foreign
       run target_ne sum_nof)
 

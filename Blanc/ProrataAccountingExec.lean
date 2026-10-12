@@ -37,13 +37,14 @@ theorem Xinst.foreignSomeAccountingReplay
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.execEntry ca cevm.sta cevm.dyna.state) steps
         (RealizedSnapshot.ofState ca
-          (Execution.committedPost raw committed).state)) :
+          (Execution.committedPost raw committed).state))
+    (hprot : State.Protected pre.state ca) :
     ∃ steps,
       ProrataAccountingReplay offset.toNat
         (RealizedSnapshot.ofState ca pre.state) steps
         (RealizedSnapshot.ofState ca post.state) :=
   (ProrataAccountingReplay.carrier ca).xinstForeignSome spawn frameRun
-    resumeRun target_ne hfork sum_nof body
+    resumeRun target_ne hfork (fun _ => hprot) sum_nof body
 
 /-- Proof-indexed committed accounting replay for one interpreter suffix.
 `nextChild` is the ordinal of the next frame spawned by the current execution;
@@ -226,8 +227,14 @@ theorem Exec.CoreProrataAccounting.nextNone
       transactionIndex := transactionIndex
       framePath := framePath
       actor := none }
+  have hprot : State.Protected pre.state ca := by
+    apply State.Protected.of_code_ne_nil
+    intro hnil
+    apply Prog.compile_ne_nil
+    rw [← precondition.code]
+    exact congrArg some hnil
   rcases Ninst.foreignNoneAccountingReplay hfork step target_ne sumNof provenance
-      with ⟨headSteps, headReplay⟩
+      hprot with ⟨headSteps, headReplay⟩
   cases stepShape : Ninst.step ⟨pc, sevm, pre⟩ n with
   | halt execution =>
       simp only [Ninst.StepRun, stepShape, Step.Run] at step
@@ -287,8 +294,14 @@ theorem Exec.CoreProrataAccounting.last
           transactionIndex := transactionIndex
           framePath := framePath
           actor := none }
+      have hprot : State.Protected pre.state ca := by
+        apply State.Protected.of_code_ne_nil
+        intro hnil
+        apply Prog.compile_ne_nil
+        rw [← precondition.code]
+        exact congrArg some hnil
       rcases Linst.foreignAccountingReplay step target_ne sumNof provenance
-          with ⟨steps, replay⟩
+          hprot with ⟨steps, replay⟩
       refine ⟨steps, ?_⟩
       rw [RealizedSnapshot.execEntry_of_target_ne target_ne]
       exact replay
@@ -468,8 +481,14 @@ theorem Exec.CoreProrataAccounting.nextSome
                 exact ihChild child childCommitted childAt childPrecondition
                   childDirect childCaller childFork blockIndex transactionIndex
                   (framePath ++ [nextChild]) 0
+              have hprot : State.Protected pre.state ca := by
+                apply State.Protected.of_code_ne_nil
+                intro hnil
+                apply Prog.compile_ne_nil
+                rw [← precondition.code]
+                exact congrArg some hnil
               rcases Xinst.foreignSomeAccountingReplay spawnEq frameRun
-                  resumeRun.symm target_ne hfork sumNof childBody with
+                  resumeRun.symm target_ne hfork sumNof childBody hprot with
                 ⟨headSteps, headReplay⟩
               rcases ihNext next committed installedInter interPre
                   (fun target => (target_ne target).elim)

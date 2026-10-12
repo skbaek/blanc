@@ -192,7 +192,7 @@ def prorataSpec : ContractSpec where
     rw [sum_addBal_eq w a val h_bound]
     omega
   inv_transfer := by
-    intro st st' caller callee ca wad value h_sub h_ne h_side h_inv
+    intro st st' caller callee ca wad value h_sub h_ne h_side h_prot h_inv
     have h_nof : sum st.bal < 2 ^ 256 := h_side
     rcases of_state_transfer (callee := callee) h_sub h_nof with
       ⟨h_t_stor, -, -, h_t_le, -, -⟩
@@ -202,14 +202,14 @@ def prorataSpec : ContractSpec where
       show ((st.setBal caller _).get ca).bal = (st.get ca).bal
       rw [State.setBal_get_ne h_ne]
     have h_stor : (st'.addBal callee wad).getStor ca = st.getStor ca :=
-      h_t_stor ca
+      h_t_stor ca h_prot
     have h_ge :
         (st.bal ca).toNat ≤ ((st'.addBal callee wad).bal ca).toNat := by
       by_cases h_eq : callee = ca
       · have h_add : (st'.addBal callee wad).bal ca = st.bal ca + wad := by
           rw [h_eq]
           show ((st'.setBal ca (st'.bal ca + wad)).get ca).bal = _
-          rw [State.setBal_get_self]
+          rw [State.setBal_get_self, Acct.clearIfEmpty_bal]
           show st'.bal ca + wad = _
           rw [h_mid]
         rw [h_add]
@@ -231,32 +231,32 @@ def prorataSpec : ContractSpec where
     rw [h_stor]
     exact h_inv.mono h_ge
   inv_recv_transfer := by
-    intro st st' caller ca wad h_sub h_ne h_side h_inv
+    intro st st' caller ca wad h_sub h_ne h_side h_prot h_inv
     have h_nof : sum st.bal < 2 ^ 256 := h_side
     rcases of_state_transfer (callee := ca) h_sub h_nof with
       ⟨h_t_stor, -, -, -, -, -⟩
     have h_stor : (st'.addBal ca wad).getStor ca = st.getStor ca :=
-      h_t_stor ca
+      h_t_stor ca h_prot
     have h_bal : ((st'.addBal ca wad).bal ca).toNat =
         (st.bal ca).toNat + wad.toNat :=
       of_transfer_bal_target h_sub h_ne h_nof
     rw [h_stor]
     exact h_inv.recv h_bal
   inv_addBal := by
-    intro w ca a val value h_bound _ h_inv
+    intro w ca a val value h_bound _ h_prot h_inv
     have h_nof_a : B256.Nof (w.bal a) val := by
       unfold B256.Nof
       have := @le_sum w.bal a
       omega
     have h_stor : (w.addBal a val).getStor ca = w.getStor ca := by
       show ((w.setBal a _).get ca).stor = (w.get ca).stor
-      rw [State.setBal_get_stor]
+      rw [State.setBal_get_stor_of_protected h_prot]
     have h_ge : (w.bal ca).toNat ≤ ((w.addBal a val).bal ca).toNat := by
       by_cases h_eq : a = ca
       · subst h_eq
         show (w.bal a).toNat ≤
           ((w.setBal a (w.bal a + val)).get a).bal.toNat
-        rw [State.setBal_get_self]
+        rw [State.setBal_get_self, Acct.clearIfEmpty_bal]
         change (w.bal a).toNat ≤ (w.bal a + val).toNat
         rw [B256.toNat_add_eq_of_nof _ _ h_nof_a]
         omega
