@@ -1,5 +1,6 @@
 import Blanc.Lift.UniswapV2Pair.CalleeControls
 import Blanc.Lift.UniswapV2Pair.Creation.DeployInit
+import Blanc.Lift.UniswapV2Pair.RepinBridge
 
 /-!
 # U6: premise-free `sync` liveness is false on the configured family
@@ -121,13 +122,19 @@ theorem reachWorld_configured :
       reachWorld.getCode reachToken = revertingCode ∧
       ∀ f, CoveredFork f → ¬ (Fork.ruleSet f).isPrecomp reachToken := by
   have ne : reachToken ≠ reachPair := by decide
+  have hcode : code.toList ≠ [] := by
+    intro hnil
+    have hlen := Creation.runtimeWindow_length
+    rw [Creation.runtimeWindow_eq, hnil] at hlen
+    exact absurd hlen (by decide)
   have pairAcct : reachWorld.getAcct reachPair =
       { (((default : Devm).state.setStor reachPair
           (initializedStor 1 reachPair 0x4000 reachToken 0x3000)).get reachPair) with
         code := code } := by
     rw [reachWorld_acct]
     unfold State.setCode
-    rw [State.get_set_ne _ ne, State.get_set_self]
+    rw [State.setAccount_get_ne _ ne, State.setAccount_get_self]
+    exact Acct.clearIfEmpty_of_code_toList_ne_nil _ hcode
   have pairStor : reachWorld.getStor reachPair = initializedStor 1 reachPair 0x4000 reachToken 0x3000 := by
     unfold Devm.getStor
     rw [pairAcct]
@@ -145,7 +152,7 @@ theorem reachWorld_configured :
   · unfold Devm.getCode
     rw [reachWorld_acct]
     unfold State.setCode
-    rw [State.get_set_self]
+    rw [State.setAccount_get_self, Acct.clearIfEmpty_code]
   · intro f covered
     exact covered.cases (motive := fun f => ¬ (Fork.ruleSet f).isPrecomp reachToken)
       (by decide) (by decide) (by decide) (by decide)
