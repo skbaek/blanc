@@ -177,8 +177,13 @@ theorem processCreateMessage_ossifiable_emptySetup_success
       processCreateMessage_msg_getStor_currentTarget msg
   have hbenvStorage :
       benv.state.getStor msg.currentTarget = Stor.empty := by
-    rw [congrFun (benvAfterTransfer_getStor_eq htransfer)
-      msg.currentTarget]
+    have hentry : prepared.benvAfterTransfer = .ok prepared.benv :=
+      Msg.benvAfterTransfer_of_value_zero hvalue
+    rw [hentry] at htransfer
+    have hbenv : benv = prepared.benv := by
+      injection htransfer with h
+      exact h.symm
+    rw [hbenv]
     exact hpreparedStorage
   have hbaseStorage :
       base.state.getStor msg.currentTarget = Stor.empty := by
@@ -339,6 +344,10 @@ theorem processCreateMessage_ossifiable_emptySetup_success
     dsimp only [charged]
     rw [Devm.setMach_error]
     exact hrawErrorNone
+  have hchargedCodeNonempty : (⟨⟨charged.output⟩⟩ : ByteArray).size ≠ 0 := by
+    simp only [ByteArray.size, Array.size, hchargedOutput,
+      runtimeBaselineBytes_length_exact]
+    decide
   let post := charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩
   have hcreate : processCreateMessage msg = .ok post := by
     simpa only [post] using
@@ -356,14 +365,14 @@ theorem processCreateMessage_ossifiable_emptySetup_success
     unfold Devm.getCode Devm.getAcct
     rw [Devm.setCode_state]
     unfold State.setCode
-    rw [State.get_set_self]
+    rw [State.setAccount_get_self, Acct.clearIfEmpty_code]
     simp only [hchargedOutput]
   · dsimp only [post]
     rw [Devm.setCode_state]
     change
       ((charged.state.setCode msg.currentTarget _).get
         msg.currentTarget).stor = _
-    rw [State.setCode_get_stor]
+    rw [State.setCode_get_stor hchargedCodeNonempty]
     exact hchargedStorage
   · dsimp only [post]
     rw [Devm.setCode_logs]

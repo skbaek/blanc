@@ -412,42 +412,24 @@ private def sharedValueMessage (state : State) : Msg :=
     disablePrecompiles := true }
 
 private def sharedValueAfterTransfer (state : State) : Benv :=
-  let outer := sharedValueMessage state
-  (outer.benv.withState
-      (outer.benv.state.setBal outer.caller
-        (outer.benv.state.bal outer.caller - outer.value))).addBal
-    outer.currentTarget outer.value
+  (sharedValueMessage state).benv
 
 private theorem sharedValueMessage_transfer (state : State) :
     (sharedValueMessage state).benvAfterTransfer =
       .ok (sharedValueAfterTransfer state) := by
-  unfold Msg.benvAfterTransfer sharedValueAfterTransfer
-  dsimp only [sharedValueMessage, Benv.subBal, State.subBal]
-  rw [if_neg]
-  · rfl
-  · intro insufficient
-    rw [B256.lt_iff_toNat_lt_toNat] at insufficient
-    change (state.bal upgradeAdmin).toNat < 0 at insufficient
-    exact Nat.not_lt_zero _ insufficient
+  exact Msg.benvAfterTransfer_of_value_zero rfl
 
 private theorem sharedValueAfterTransfer_stor
     (state : State) (address : Adr) :
     ((sharedValueAfterTransfer state).state.get address).stor =
       (state.get address).stor := by
-  unfold sharedValueAfterTransfer
-  change ((((state.setBal upgradeAdmin (state.bal upgradeAdmin - 0)).addBal
-    upgradeProxy 0).get address).stor) = _
-  unfold State.addBal
-  rw [State.setBal_get_stor, State.setBal_get_stor]
+  rfl
 
 private theorem sharedValueAfterTransfer_code
     (state : State) (address : Adr) :
     (sharedValueAfterTransfer state).state.getCode address =
       state.getCode address := by
-  unfold sharedValueAfterTransfer
-  change ((state.setBal upgradeAdmin (state.bal upgradeAdmin - 0)).addBal
-    upgradeProxy 0).getCode address = _
-  rw [State.addBal_getCode, State.setBal_getCode]
+  rfl
 
 private theorem sharedValuePrefixCost (state : State) :
     ossifiableFallbackPrefixCost
