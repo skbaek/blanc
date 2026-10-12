@@ -345,12 +345,10 @@ private theorem spawnedMessage_executes_weth
     unfold MessageUsesProgram
     rw [Blanc.wethCode_compile]
     exact congrArg some codeEq
-  have affordable : ¬ msg.benv.state.bal msg.caller < msg.value := by
-    rw [valueZero, B256.lt_iff_toNat_lt_toNat]
-    exact Nat.not_lt.mpr (Nat.zero_le _)
-  obtain ⟨stmid, -, afterTransfer⟩ :=
-    Msg.benvAfterTransfer_of_affordable msg transferValue affordable
-  let benv := (msg.benv.withState stmid).addBal msg.currentTarget msg.value
+  have _ := transferValue
+  have afterTransfer : msg.benvAfterTransfer = .ok msg.benv :=
+    Msg.benvAfterTransfer_of_value_zero valueZero
+  let benv := msg.benv
   have enter : (Jaune.Frame.ofCall msg).enter =
       .run (initEvm (msg.withBenv benv)) := by
     apply Frame.enter_run_of_nonprecompile afterTransfer
