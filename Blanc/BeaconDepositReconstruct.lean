@@ -60,17 +60,14 @@ theorem ReconstructMetaCarrier.afterHash
     (hlogs : post.logs = base.logs)
     (houtput : post.output = base.output)
     (herror : post.error = base.error)
-    (htransfer : exists stmid,
-      base.state.subBal sevm.currentTarget 0 = some stmid /\
-      post.state = stmid.addBal 2 0) :
+    (hstate : post.state = base.state) :
     ReconstructMetaCarrier sevm origin post := by
-  obtain ⟨stmid, hsub, hstate⟩ := htransfer
   refine ⟨fun a => (hstorage a).trans (h.storage a),
     fun a => (hcode a).trans (h.code a),
     haddresses.trans h.accessedAddresses,
     hkeys.trans h.accessedStorageKeys,
     hlogs.trans h.logs, houtput.trans h.output, herror.trans h.error, ?_⟩
-  exact ReconstructZeroTransferChain.step h.state hsub hstate
+  exact hstate.symm ▸ h.state
 
 /-- Machine-only changes preserve cumulative reconstruction metadata. -/
 theorem ReconstructMetaCarrier.setMach

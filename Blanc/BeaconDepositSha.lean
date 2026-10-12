@@ -91,9 +91,7 @@ theorem sha64_success_prefix_runCompiledTo_ext
       callPost.logs = base.logs ∧
       callPost.output = base.output ∧
       callPost.error = base.error ∧
-      (∃ stmid,
-        base.state.subBal sevm.currentTarget 0 = some stmid ∧
-        callPost.state = stmid.addBal 2 0) ∧
+      callPost.state = base.state ∧
       ∀ {ex : Execution},
         Func.RunCompiledTo fs sevm
           (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩) success ex →
@@ -109,7 +107,7 @@ theorem sha64_success_prefix_runCompiledTo_ext
       base.memory, K + 221 + ext, base.stateGas⟩
   obtain ⟨callPost, hstat, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
-      hlogs, houtput, herror, stmid, hsub, hstate⟩ :=
+      hlogs, houtput, herror, hstate⟩ :=
     Ninst.runCompiled_staticcall_sha256_64_warm_ext
       (sevm := sevm) (devm := callPre)
       (iiw := inputWord * 32) (oiw := outputWord * 32)
@@ -170,12 +168,13 @@ theorem sha64_success_prefix_runCompiledTo_ext
     calc
       callPost.error = callPre.error := herror
       _ = base.error := by rfl
-  have hsub' : base.state.subBal sevm.currentTarget 0 = some stmid := by
-    change base.state.subBal sevm.currentTarget 0 = some stmid at hsub
-    exact hsub
+  have hstate' : callPost.state = base.state := by
+    calc
+      callPost.state = callPre.state := hstate
+      _ = base.state := by rfl
   refine ⟨callPost, hstack, hmemory', hgas', hreturn',
     hstorage', hcode', haddresses', hkeys',
-    hlogs', houtput', herror', ⟨stmid, hsub', hstate⟩, ?_⟩
+    hlogs', houtput', herror', hstate', ?_⟩
   intro ex htail
   have hge :
       (Nat.toB256 callPost.returnData.length <? (32 : B256)) = 0 := by
@@ -305,9 +304,7 @@ theorem sha64_success_prefix_runCompiledTo
       callPost.logs = base.logs ∧
       callPost.output = base.output ∧
       callPost.error = base.error ∧
-      (∃ stmid,
-        base.state.subBal sevm.currentTarget 0 = some stmid ∧
-        callPost.state = stmid.addBal 2 0) ∧
+      callPost.state = base.state ∧
       ∀ {ex : Execution},
         Func.RunCompiledTo fs sevm
           (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩) success ex →
