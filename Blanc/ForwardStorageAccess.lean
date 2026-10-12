@@ -167,6 +167,62 @@ theorem afterSstore_error
   unfold afterSstore
   split <;> rfl
 
+/-! ### Created accounts and the machine original read
+
+Jaune prices `SSTORE` from `Devm.getOrigStorVal`, which reads `0` at an account
+created in this transaction and the transaction-start snapshot otherwise. These
+laws carry that read across the selected storage steps. -/
+
+/-- A selected `SLOAD` leaves the created-account set unchanged. -/
+theorem afterSload_createdAccounts
+    (sevm : Sevm) (base : Devm) (key : B256) :
+    (afterSload sevm base key).createdAccounts = base.createdAccounts := by
+  unfold afterSload
+  split <;> rfl
+
+/-- A selected `SSTORE` leaves the created-account set unchanged. -/
+theorem afterSstore_createdAccounts
+    (sevm : Sevm) (devm : Devm) (key value : B256) :
+    (afterSstore sevm devm key value).createdAccounts =
+      devm.createdAccounts := by
+  unfold afterSstore
+  split <;> rfl
+
+/-- The machine original read agrees between two machines with the same
+created-account set. -/
+theorem getOrigStorVal_congr_created
+    {sevm : Sevm} {d1 d2 : Devm} (adr : Adr) (key : B256)
+    (hcreated : d1.createdAccounts = d2.createdAccounts) :
+    d1.getOrigStorVal sevm adr key = d2.getOrigStorVal sevm adr key := by
+  unfold Devm.getOrigStorVal
+  rw [hcreated]
+
+/-- At an account absent from `createdAccounts`, the machine original read is
+the static snapshot read. -/
+theorem getOrigStorVal_of_not_created {sevm : Sevm} {d : Devm} {adr : Adr}
+    {key : B256} (h : adr ∉ d.createdAccounts) :
+    d.getOrigStorVal sevm adr key = getOrigStorVal sevm adr key := by
+  unfold Devm.getOrigStorVal
+  rw [ite_eq_right h]
+
+/-- A zero transaction-start snapshot word is also the machine's actual
+original word: a created owner reads `0` regardless, and an existing owner reads
+the snapshot. -/
+theorem actualOrigStorVal_eq_zero_of_raw
+    {sevm : Sevm} {d : Devm} {a : Adr} {key : B256}
+    (h : getOrigStorVal sevm a key = 0) :
+    d.getOrigStorVal sevm a key = 0 := by
+  unfold Devm.getOrigStorVal
+  split
+  · rfl
+  · exact h
+
+/-- Warming a storage key does not change the machine original read. -/
+theorem addAccessedStorageKey_getOrigStorVal (d : Devm) (owner : Adr)
+    (k : B256) (sevm : Sevm) (a : Adr) (key : B256) :
+    (addAccessedStorageKey d owner k).getOrigStorVal sevm a key =
+      d.getOrigStorVal sevm a key := rfl
+
 /-- The selected `SSTORE` charge depends on the pre-state only through its
 accessed-key set, the target's storage, and its created-account set (an
 account created in this transaction has original value zero), so any two

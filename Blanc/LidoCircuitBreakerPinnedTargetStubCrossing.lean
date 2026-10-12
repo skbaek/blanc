@@ -15,18 +15,6 @@ open PinnedTargetControl
 
 /-! ## Parent/child boundary helpers -/
 
-private lemma stubCrossing_accessDelegation_createdAccounts {devm d1 : Devm}
-    {a dadr : Adr} {dp : Bool} {code : ByteArray} {dgc : Nat}
-    (h : accessDelegation devm a = ⟨dp, dadr, code, dgc, d1⟩) :
-    d1.createdAccounts = devm.createdAccounts := by
-  unfold accessDelegation at h
-  rcases hd : getDelegatedCodeAddress (devm.state.getCode a) with _ | adr <;>
-    simp only [hd] at h
-  · cases h
-    rfl
-  · cases h
-    rfl
-
 /-- The value-zero `CALL` crossing whose child is the source-compiled pinned
 target stub on its cold `pauseFor(uint256)` route. -/
 private lemma runCompiled_call_zero_value_stubPause
@@ -314,7 +302,7 @@ private lemma runCompiled_call_zero_value_stubPause
   · change out.createdAccounts = devm.createdAccounts
     rw [show out.createdAccounts = _ from
       congrArg (fun view => view.createdAccounts) hmetaOut]
-    have hc := stubCrossing_accessDelegation_createdAccounts h_del
+    have hc := accessDelegation_createdAccounts h_del
     exact hc
 
 /-- Resolve the warm, non-delegated parent `CALL` completely.  The parent
@@ -691,7 +679,7 @@ private lemma runCompiled_staticcall_stubQuery
   · change out.createdAccounts = devm.createdAccounts
     rw [show out.createdAccounts = _ from
       congrArg (fun view => view.createdAccounts) hmetaOut]
-    have hc := stubCrossing_accessDelegation_createdAccounts h_del
+    have hc := accessDelegation_createdAccounts h_del
     exact hc
 
 /-- Resolve the warm, non-delegated parent `STATICCALL` completely.  The

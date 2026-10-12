@@ -194,55 +194,6 @@ theorem submissionKey_distinct (sevm : Sevm) (b : Devm)
     slots 1 0 (by decide) (by decide) (by decide), slots 2 0 (by decide) (by decide) (by decide),
     slots 2 1 (by decide) (by decide) (by decide)⟩
 
-/-- `SLOAD` warms a key only; the created-account set is unchanged.
-(Hoisting candidate: replace by the shared actual-read transport donor.) -/
-private theorem afterSload_createdAccounts (sevm : Sevm) (b : Devm) (key : B256) :
-    (afterSload sevm b key).createdAccounts = b.createdAccounts := by
-  unfold afterSload
-  split <;> rfl
-
-/-- `SSTORE` writes storage only; the created-account set is unchanged.
-(Hoisting candidate: replace by the shared actual-read transport donor.) -/
-private theorem afterSstore_createdAccounts (sevm : Sevm) (b : Devm)
-    (key value : B256) :
-    (afterSstore sevm b key value).createdAccounts = b.createdAccounts := by
-  unfold afterSstore
-  split <;> rfl
-
-/-- A log append touches logs only; the created-account set is unchanged.
-(Hoisting candidate: replace by the shared actual-read transport donor.) -/
-private theorem addLog_createdAccounts (d : Devm) (l : Log) :
-    (d.addLog l).createdAccounts = d.createdAccounts := rfl
-
-/-- Actual original-value reads agree when the created-account sets agree.
-(Hoisting candidate: replace by the shared actual-read transport donor.) -/
-private theorem getOrigStorVal_congr_created (sevm : Sevm) (d1 d2 : Devm)
-    (a : Adr) (k : B256) (h : d1.createdAccounts = d2.createdAccounts) :
-    d1.getOrigStorVal sevm a k = d2.getOrigStorVal sevm a k := by
-  unfold Devm.getOrigStorVal
-  rw [h]
-
-/-- A zero actual original charges no more than a `RefundSafe` snapshot
-original: the created branch reads zero, and `RefundSafe` excludes the one
-case (nonzero snapshot with zero current) where zero would charge more.
-(Hoisting candidate: move to the shared refund/gas library.) -/
-private theorem sstoreValueCost_zero_le_of_safe (cur new snap : B256)
-    (hsafe : RefundSafe snap cur) :
-    sstoreValueCost 0 cur new ≤ sstoreValueCost snap cur new := by
-  have warm_le : ∀ o c n : B256, gasWarmAccess ≤ sstoreValueCost o c n := by
-    intro o c n
-    unfold sstoreValueCost
-    split_ifs <;> decide
-  rcases hsafe with h | h | h
-  · rw [h]
-    by_cases hz : cur = 0
-    · rw [hz]
-    · rw [sstoreValueCost_of_ne (fun e => hz e.symm)]
-      exact warm_le _ _ _
-  · rw [h]
-  · rw [sstoreValueCost_of_ne (fun e => h e.symm)]
-    exact warm_le _ _ _
-
 /-- A committed submission never lowers the refund counter when none of its five stores
 can take the clearing-reversal branch: each store's transaction-original value equals the
 value it finds (`RefundSafe`), is zero, or the value it finds is nonzero.  The metadata
@@ -401,16 +352,16 @@ theorem userSubmissionGas_le (sevm : Sevm) (b : Devm) (σ : Blanc.WithdrawalRequ
     simp only [submissionCountRead, afterSload_createdAccounts]
   have g5created : (submissionLogged sevm (afterSload sevm b 0) Mem.empty).createdAccounts =
       b.createdAccounts := by
-    simp only [submissionLogged, addLog_createdAccounts, submissionWordsStore,
+    simp only [submissionLogged, Devm.addLog_createdAccounts, submissionWordsStore,
       submissionWord1Store, submissionCallerStore, submissionTailRead,
       submissionCountStore, submissionCountRead, afterSstore_createdAccounts,
       afterSload_createdAccounts]
   have g1 : (submissionCountRead sevm (afterSload sevm b 0)).getOrigStorVal sevm
       sevm.currentTarget 1 = b.getOrigStorVal sevm sevm.currentTarget 1 :=
-    getOrigStorVal_congr_created sevm _ _ _ _ g1created
+    getOrigStorVal_congr_created (sevm := sevm) _ _ g1created
   have g5 : (submissionLogged sevm (afterSload sevm b 0) Mem.empty).getOrigStorVal sevm
       sevm.currentTarget 3 = b.getOrigStorVal sevm sevm.currentTarget 3 :=
-    getOrigStorVal_congr_created sevm _ _ _ _ g5created
+    getOrigStorVal_congr_created (sevm := sevm) _ _ g5created
   rw [g1] at s1
   rw [g5] at s5
   have v2 := sstoreValueCost_le ((submissionTailRead sevm (afterSload sevm b 0)).getOrigStorVal

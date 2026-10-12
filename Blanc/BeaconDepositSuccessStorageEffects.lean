@@ -426,7 +426,7 @@ theorem depositSuccessSuffix_storageEffectRun
     exact hcount
   have horigMid :
       mid.getOrigStorVal sevm sevm.currentTarget (branchSlot n) = orig := by
-    rw [RepinBridge.getOrigStorVal_congr_created _ _ hmeta.created]
+    rw [Blanc.getOrigStorVal_congr_created _ _ hmeta.created]
     exact horig
   obtain ⟨finalBase, finalMemory, hfinal, hcommit⟩ :=
     commitDeposit_firstLive_exists_storageEffectRun (hfork := hfork)

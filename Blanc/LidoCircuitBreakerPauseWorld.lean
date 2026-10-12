@@ -167,18 +167,6 @@ sets are exported as membership equivalences because
 `incorporateChildOnSuccess` unions the parent's set with the child's copy of
 that same set, and `Std.HashSet` union is extensional in membership only. -/
 
-private lemma accessDelegation_createdAccounts {devm d1 : Devm} {a dadr : Adr}
-    {dp : Bool} {code : ByteArray} {dgc : Nat}
-    (h : accessDelegation devm a = ⟨dp, dadr, code, dgc, d1⟩) :
-    d1.createdAccounts = devm.createdAccounts := by
-  unfold accessDelegation at h
-  rcases hd : getDelegatedCodeAddress (devm.state.getCode a) with _ | adr <;>
-    simp only [hd] at h
-  · cases h
-    rfl
-  · cases h
-    rfl
-
 /-- The delegation resolution leaves the transient store and the accessed
 storage keys alone; only the accessed-address set can move. -/
 private lemma accessDelegation_worldMeta {devm d1 : Devm} {a dadr : Adr}

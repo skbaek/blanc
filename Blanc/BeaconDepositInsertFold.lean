@@ -126,7 +126,7 @@ theorem insertionStoreCostOf_eq_sstoreCost
     change (Devm.getStor base sevm.currentTarget).get s.key = stor.get s.key
     rw [carrier.stor, horiginStor]
   have hbaseOrig : base.getOrigStorVal sevm sevm.currentTarget s.key = orig :=
-    (RepinBridge.getOrigStorVal_congr_created _ _ carrier.created).trans horig
+    (Blanc.getOrigStorVal_congr_created _ _ carrier.created).trans horig
   simp only [insertionStoreCostOf, sstoreCost, carrier.keys, hcurrent,
     hbaseOrig]
 
@@ -212,7 +212,7 @@ private def insertionLoopCarrier_step
   · rw [hlogs, Blanc.afterSload_logs, carrier.logs]
   · rw [houtput, Blanc.afterSload_output, carrier.output]
   · rw [herror, Blanc.afterSload_error, carrier.error]
-  · rw [hcreated, RepinBridge.afterSload_createdAccounts, carrier.created]
+  · rw [hcreated, Blanc.afterSload_createdAccounts, carrier.created]
 
 /-- Exact-effect CPS composition of any dead insertion prefix.  Every dead
 iteration is storage-effect neutral; the list is inherited from the supplied

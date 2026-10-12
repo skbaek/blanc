@@ -1,7 +1,6 @@
 import Blanc.BeaconDepositEventMemory
 import Blanc.BytesWrite
 import Blanc.ForwardLog
-import Blanc.BeaconDepositRepinBridge
 
 /-!
 # Beacon deposit event compiled carrier
@@ -940,7 +939,7 @@ private theorem emitDepositEvent_runCompiledTo
           (([pushB256 depositEventTopic] ++ logWith 0 0 18) +++ body) ex := by
   obtain ⟨logged, hlogs, hstor, hstorMap, hbal, hcode, haccess, haddresses,
       houtput, herror, hcreated, hlift⟩ :=
-    RepinBridge.runCompiledTo_log_step_exists_created (fs := fs) (sevm := sevm)
+    Blanc.Func.runCompiledTo_log_step_exists (fs := fs) (sevm := sevm)
       (devm := base.setMach
         ⟨[0 * 32, 18 * 32, depositEventTopic], memory, G + 5358, base.stateGas⟩)
       (n := (0 : Fin 4).succ) (topics := [depositEventTopic]) (s := [])

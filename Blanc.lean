@@ -269,6 +269,7 @@ import Blanc.BeaconDepositSuccessChronology
 import Blanc.BeaconDepositConstructorEffects
 import Blanc.BeaconDepositBridgeCompiled
 import Blanc.BeaconDepositSuccessSettlement
+import Blanc.BeaconDepositRepinRefutation
 import Blanc.BeaconDepositCountEffects
 import Blanc.BeaconDepositRootEffects
 import Blanc.BeaconDepositRootPublic

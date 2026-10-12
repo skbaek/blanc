@@ -1,4 +1,5 @@
 import Blanc.LidoCircuitBreakerAccess
+import Blanc.ForwardStorageAccess
 
 /-!
 Shared substrate for the Lido CircuitBreaker registration transitions.
@@ -198,18 +199,6 @@ theorem temporalSloadBase_logs
     (temporalSloadBase sevm base key).logs = base.logs := by
   unfold temporalSloadBase
   split <;> rfl
-
-/-- A zero transaction-start snapshot word is also the machine's actual
-original word: a created owner reads `0` regardless, and an existing owner reads
-the snapshot.  Hoisting candidate for the common library. -/
-theorem actualOrigStorVal_eq_zero_of_raw
-    {sevm : Sevm} {d : Devm} {a : Adr} {key : B256}
-    (h : getOrigStorVal sevm a key = 0) :
-    d.getOrigStorVal sevm a key = 0 := by
-  unfold Devm.getOrigStorVal
-  split
-  · rfl
-  · exact h
 
 theorem temporalSloadBase_getOrigStorVal
     (sevm : Sevm) (base : Devm) (readKey : B256) (a : Adr) (key : B256) :

@@ -537,38 +537,6 @@ theorem stub_isPaused_truthful
     rw [dispatchZero] at flagEq
     exact (flagNonzero flagEq).elim
 
-/-- Entry facts of a retained code frame that do not depend on the entry
-transfer preserving any storage: frame-entry program counter, code, addresses,
-calldata, timestamp and memory well-formedness.  Generic-shaped; a hoisting
-candidate beside `MessageExecution.processMessage_entry_facts`. -/
-private theorem stub_entry_facts
-    {msg : Msg} {pc : Nat} {sevm : Sevm} {pre : Devm}
-    {raw : Execution}
-    {ex : Except (EvmError × State × AdrSet × Tra) Devm}
-    (process : ProcessMessage msg
-      (.some ⟨⟨pc, sevm, pre⟩, raw⟩) ex) :
-    pc = 0 ∧ sevm.code = msg.code ∧
-      sevm.currentTarget = msg.currentTarget ∧
-      sevm.codeAddress = msg.codeAddress ∧ sevm.data = msg.data ∧
-      sevm.benvStat.time = msg.benv.stat.time ∧
-      Mem.Wf pre.memory := by
-  have enter := (RunFrame.some_inv process).1
-  have pcZero := Frame.enter_run_pc enter
-  have codeEq := Frame.enter_run_code enter
-  have current := Frame.enter_run_currentTarget enter
-  have memory := Blanc.Frame.enter_run_memory enter
-  rcases Frame.enter_run_inv enter with ⟨benv, transfer, evmEq⟩
-  change msg.benvAfterTransfer = .ok benv at transfer
-  have data := congrArg (fun evm : Evm => evm.sta.data) evmEq
-  have codeAddress := congrArg (fun evm : Evm => evm.sta.codeAddress) evmEq
-  have time := congrArg (fun evm : Evm => evm.sta.benvStat.time) evmEq
-  dsimp only at codeEq current codeAddress data time memory
-  have statEq : benv.stat = msg.benv.stat := benvAfterTransfer_stat transfer
-  refine ⟨pcZero, codeEq, current, codeAddress, data,
-    time.trans (congrArg BenvStat.time statEq), ?_⟩
-  rw [memory]
-  exact Mem.wf_empty
-
 /-- The compiled stub discharges the complete Lido specialization, including
 one nonempty protected selector whose clean paused execution must revert. -/
 theorem stub_lidoPinnedPauseTarget
@@ -691,7 +659,7 @@ theorem stub_lidoPinnedPauseTarget
     · rcases executes with
         ⟨messageUses, ⟨pc, sevm, pre⟩, raw, xlEq, ⟨witnessRun⟩⟩
       subst xl
-      rcases stub_entry_facts process with
+      rcases MessageExecution.processMessage_entry_frame_facts process with
         ⟨pcZero, codeEq, current, entryCodeAddress, data, time, memoryWf⟩
       subst pc
       have clean : child.error.isSome = false := by

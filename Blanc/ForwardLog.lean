@@ -73,12 +73,13 @@ lemma Func.runCompiledTo_log_step_exists {fs : List Func} {sevm : Sevm}
       logged.accessedAddresses = devm.accessedAddresses ∧
       logged.output = devm.output ∧
       logged.error = devm.error ∧
+      logged.createdAccounts = devm.createdAccounts ∧
       ∀ {ex : Execution},
         Func.RunCompiledTo fs sevm (logged.setMach ⟨s, M', G, logged.stateGas⟩) rest ex →
         Func.RunCompiledTo fs sevm devm (Func.next (.reg (.log n)) rest) ex := by
   refine ⟨devm.addLog ⟨sevm.currentTarget, topics, payload⟩, rfl,
     fun _ _ => rfl, fun _ => rfl, fun _ => rfl, fun _ => rfl, rfl, rfl,
-    rfl, rfl, ?_⟩
+    rfl, rfl, rfl, ?_⟩
   intro ex htail
   subst h_mem
   exact Func.RunCompiledTo.next

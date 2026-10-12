@@ -102,16 +102,13 @@ theorem weth9_create_framed (msg : Msg) (hvalue : msg.value = 0)
   have hrawNe : raw.output ≠ [] := by
     intro hcon
     rw [hcon] at hlen
-    simp at hlen
+    exact absurd hlen (by decide)
   have hcodeSize : (({ raw.state.get msg.currentTarget with code :=
       (⟨⟨raw.output⟩⟩ : ByteArray) } : Acct).code.size ≠ 0) := by
     intro hz
-    simp at hz
-    have hemptyCode : Blanc.Lift.Weth9.code = ByteArray.empty := hcodeEq.symm.trans hz
-    have htl := congrArg ByteArray.toList hemptyCode
-    rw [← hwin] at htl
-    simp at htl
-    exact hrawNe htl
+    have hz' : (⟨⟨raw.output⟩⟩ : ByteArray) = ByteArray.empty :=
+      ByteArray.size_eq_zero_iff.mp hz
+    exact hrawNe (congrArg (fun b : ByteArray => b.data.toList) hz')
   have hnotEmpty : ¬ (({ raw.state.get msg.currentTarget with code :=
       (⟨⟨raw.output⟩⟩ : ByteArray) } : Acct).Empty) := by
     intro hem

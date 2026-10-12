@@ -1,7 +1,6 @@
 import Blanc.Lift.ExactWalkCut
 import Blanc.ForwardSha256
 import Blanc.ForwardStorageAccess
-import Blanc.BeaconDepositRepinBridge
 import Jaune.MulDiv
 
 /-!
@@ -142,7 +141,7 @@ theorem staticcall_sha_step {sevm : Sevm} {b : Devm} {iiw oiw : B256} {S : List 
     Devm.extCost_covered hcov
   obtain ⟨post, hrun, hstack, hmem, hgas, hrd, hstor, hcode, haddr, hkeys, hlogs, -, -, hout,
       herr, -, hcreated⟩ :=
-    Blanc.BeaconDeposit.RepinBridge.childlessRunCompiled_staticcall_sha256_64_warm_ext_created
+    Blanc.Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
       (sevm := sevm)
       (devm := St b (Nat.toB256 (G + 184) :: 2 :: iiw :: 64 :: oiw :: 32 :: S) M (G + 184))
       (G := G + 184) (ext := 0) (s := S) rfl rfl hext hnodeleg hwarm hpre hfork hdepth

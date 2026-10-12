@@ -297,13 +297,13 @@ theorem w_calldataLength :
 
 theorem w_dataBound : (wSevm gas).data.length < 2 ^ 256 := by
   rw [w_data, w_calldataLength]
-  norm_num
+  norm_num only
 
 theorem w_dec : DepositAbiDecodable (wSevm gas).data wPubkey wCredentials
     wSignature wNode := by
   rw [w_data]
   exact canonicalDepositCalldata_decodable
-    ⟨rfl, by rw [w_calldataLength]; norm_num⟩
+    ⟨rfl, by rw [w_calldataLength]; norm_num only⟩
 
 theorem w_selector : Sevm.selector (wSevm gas) = depositSelector := by
   apply selector_eq_of_data_eq_abiSelectorBytes_append
@@ -455,7 +455,7 @@ theorem w_countCost :
   have horig : (afterSload (wSevm gas) (wBase gas) depositCountSlot).getOrigStorVal
       (wSevm gas) (wSevm gas).currentTarget depositCountSlot = 0 := by
     unfold Devm.getOrigStorVal
-    rw [RepinBridge.afterSload_createdAccounts]
+    rw [Blanc.afterSload_createdAccounts]
     exact if_pos (wBase_created gas)
   have hcur : (afterSload (wSevm gas) (wBase gas) depositCountSlot).getStorVal
       (wSevm gas).currentTarget depositCountSlot = 0 := by
@@ -516,7 +516,7 @@ theorem w_firstLive :
     FirstLive ((accOfStor (Devm.getStor (wBase wGas)
       (wSevm wGas).currentTarget)).count + 1) 0 := by
   rw [w_getStor, accOfStor_wStor_count]
-  exact ⟨by norm_num, fun j hj => absurd hj (Nat.not_lt_zero j)⟩
+  exact ⟨by norm_num only, fun j hj => absurd hj (Nat.not_lt_zero j)⟩
 
 theorem w_ok :
     deposit Bytes.sha256
@@ -541,12 +541,12 @@ theorem not_oldSettledEffects : ¬ OldSettledEffects := by
       (wCounted wGas).accessedStorageKeys 20000 0 100000
       (w_transfer wGas) (w_codeAddress wGas) w_notPrecompile rfl rfl
       (w_dataBound wGas) (w_dec wGas) w_ok rfl rfl (w_countCost wGas)
-      (by norm_num) w_firstLive (w_selector wGas) (w_nodeleg wGas)
+      (by norm_num only) w_firstLive (w_selector wGas) (w_nodeleg wGas)
       (w_warm wGas) (w_pre wGas) (w_depth wGas) (w_static wGas)
-      (by rw [w_rawCost]; norm_num [gCallStipend])
-      (by rw [w_rawCost]; simp only [insertionDeadGas]; norm_num)
-      (by rw [w_rawCost]; simp only [insertionDeadGas]; norm_num [gCallStipend])
-      (by rw [w_rawCost]; simp only [insertionDeadGas]; norm_num)
+      (by rw [w_rawCost]; norm_num only [gCallStipend])
+      (by rw [w_rawCost]; simp only [insertionDeadGas]; norm_num only)
+      (by rw [w_rawCost]; simp only [insertionDeadGas]; norm_num only [gCallStipend])
+      (by rw [w_rawCost]; simp only [insertionDeadGas]; norm_num only)
       (w_code wGas) (by rw [w_rawEntry]; rfl)
   obtain ⟨post, hrun, -, hpostGas, -, -, -, -, -, -, hpostError, hcompile⟩ :=
     deposit_success_runCompiled (hfork := w_fork wGas) (wSevm wGas) (wBase wGas)
@@ -554,12 +554,12 @@ theorem not_oldSettledEffects : ¬ OldSettledEffects := by
       (Devm.getStor (wCounted wGas) (wSevm wGas).currentTarget)
       (wCounted wGas).accessedStorageKeys 20000 0 102800
       (w_dataBound wGas) (w_dec wGas) w_ok rfl rfl (w_countCost wGas)
-      (by norm_num) w_firstLive (w_selector wGas) (w_nodeleg wGas)
+      (by norm_num only) w_firstLive (w_selector wGas) (w_nodeleg wGas)
       (w_warm wGas) (w_pre wGas) (w_depth wGas) (w_static wGas)
-      (by rw [w_actualCost]; norm_num [gCallStipend])
-      (by rw [w_actualCost]; simp only [insertionDeadGas]; norm_num)
-      (by rw [w_actualCost]; simp only [insertionDeadGas]; norm_num [gCallStipend])
-      (by rw [w_actualCost]; simp only [insertionDeadGas]; norm_num)
+      (by rw [w_actualCost]; norm_num only [gCallStipend])
+      (by rw [w_actualCost]; simp only [insertionDeadGas]; norm_num only)
+      (by rw [w_actualCost]; simp only [insertionDeadGas]; norm_num only [gCallStipend])
+      (by rw [w_actualCost]; simp only [insertionDeadGas]; norm_num only)
       (w_code wGas) rfl
   rw [w_actualEntry] at hrun
   have hentry : (wBase wGas).setMach

@@ -97,8 +97,8 @@ theorem commitDeposit_firstLive_exists_storageEffectRun
   have horigCount : countPost.getOrigStorVal sevm sevm.currentTarget
       (branchSlot (0 + n)) = orig := by
     rw [Nat.zero_add,
-      RepinBridge.getOrigStorVal_congr_created _ _
-        (RepinBridge.afterSstore_createdAccounts _ _ _ _)]
+      Blanc.getOrigStorVal_congr_created _ _
+        (Blanc.afterSstore_createdAccounts _ _ _ _)]
     exact horig
   obtain ⟨finalBase, finalMemory, hfinal, run⟩ :=
     insertionLoop_firstLive_exists_storageEffectRun (hfork := hfork)

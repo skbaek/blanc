@@ -135,13 +135,13 @@ theorem txD_exec {benv : Benv} {index : Nat} {σ : Blanc.WithdrawalRequest.State
     show (after.state.get a).stor = (benv.state.get a).stor
     rw [hafter]
     by_cases h : senderE = a
-    · subst h; rw [hdeb, RepinBridge.debit_get_self_of_protected hprot]
+    · subst h; rw [hdeb, debit_get_self_of_protected hprot]
     · rw [hd_ne a h]
   have hcodeAll : ∀ a, after.state.getCode a = benv.state.getCode a := fun a => by
     show (after.state.get a).code = (benv.state.get a).code
     rw [hafter]
     by_cases h : senderE = a
-    · subst h; rw [hdeb, RepinBridge.debit_get_self_of_protected hprot]
+    · subst h; rw [hdeb, debit_get_self_of_protected hprot]
     · rw [hd_ne a h]
   set m := msg.withBenv after with hmdef
   obtain ⟨post, hex, herr, hrepP, hcodeP, hstorP, hlogsP, hdelP, hrefP⟩ :=

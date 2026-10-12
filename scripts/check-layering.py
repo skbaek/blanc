@@ -654,6 +654,7 @@ CONTRACTS = {
                        "BeaconDepositSuccessChronology",
                        "BeaconDepositBridgeCompiled",
                        "BeaconDepositSuccessSettlement",
+                       "BeaconDepositRepinRefutation",
                        "BeaconDepositSuccessSource",
                        "BeaconDepositCountEffects",
                        "BeaconDepositDeploymentMessage",

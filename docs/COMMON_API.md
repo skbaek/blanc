@@ -179,7 +179,9 @@ registry has identified the likely vocabulary.
   access sets, output, and error while threading an arbitrary continuation:
   `Func.runCompiledTo_log_step_ext` and its exhibited-state form
   `Func.runCompiledTo_log_step_exists` in
-  [`Blanc/ForwardLog.lean`](../Blanc/ForwardLog.lean).
+  [`Blanc/ForwardLog.lean`](../Blanc/ForwardLog.lean). The exhibited form
+  also exposes the unchanged created-account set, which carries Jaune's
+  machine original read across the log.
 - Selected storage access uses the neutral `sloadCost` / `afterSload` and
   `sstoreCost` / `afterSstore` carriers in
   [`Blanc/ForwardStorageAccess.lean`](../Blanc/ForwardStorageAccess.lean).
@@ -206,6 +208,18 @@ registry has identified the likely vocabulary.
   The same module bounds an SSTORE: `sstoreCost_le_value` (cold access plus the
   value charge), `sstoreValueCost_le` (at most a fresh set) and
   `sstoreValueCost_of_ne` (a dirty slot costs the warm charge).
+- Jaune prices `SSTORE` from the machine original read `Devm.getOrigStorVal`,
+  which is `0` at an account created in this transaction and the snapshot
+  otherwise. In [`Blanc/ForwardStorageAccess.lean`](../Blanc/ForwardStorageAccess.lean),
+  `afterSload_createdAccounts` / `afterSstore_createdAccounts` carry the
+  created-account set across the selected steps (`Devm.addLog_createdAccounts`
+  in `Blanc/CommonProofs.lean` across a log), `getOrigStorVal_congr_created`
+  transports the read between machines with equal created sets,
+  `getOrigStorVal_of_not_created` reduces it to the snapshot at an uncreated
+  owner, `actualOrigStorVal_eq_zero_of_raw` turns a zero snapshot into a zero
+  machine read, and `addAccessedStorageKey_getOrigStorVal` crosses key
+  warming. Keep a snapshot premise and convert it with these rather than
+  restating a theorem on the snapshot read.
 - `sstoreNewRefundCounter_ge_of_original_eq_current` proves an SSTORE whose
   original and current slot values agree cannot decrease an arbitrary refund
   counter; `afterSstore_refundCounter_ge_of_original_eq_current` carries this
@@ -214,6 +228,11 @@ registry has identified the likely vocabulary.
   current nonzero) rules out the clearing-reversal branch:
   `sstoreNewRefundCounter_ge_of_safe` / `afterSstore_refundCounter_ge_of_safe` in
   [`Blanc/StorageRefund.lean`](../Blanc/StorageRefund.lean).
+  `refundSafe_of_snapshot_eq` derives `RefundSafe` at the machine original read
+  from a snapshot-equals-current premise, and `sstoreValueCost_zero_le_of_safe`
+  bounds the charge at a zero (created-account) original by the charge at a
+  `RefundSafe` snapshot original, so a snapshot-priced bound remains an upper
+  bound.
 - For TWG trigger packets, local-call rebasing commutes with constant-store
   prefixes by `Trigger.rebaseLocalCalls_prependStoresRev` in
   [`Blanc/LidoTriggerableWithdrawalsGatewayTrigger.lean`](../Blanc/LidoTriggerableWithdrawalsGatewayTrigger.lean).
@@ -392,7 +411,8 @@ Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
   `SFunc.RunExactCut.iterate` bodies; the EIP-7002 flood looper
   (`Blanc/Lift/WithdrawalRequest/FloodRun.lean`) is the worked example.
 - `accessDelegation_worldMeta` carries transient storage and the storage-access
-  warm set through the exact delegation-resolution equation.
+  warm set through the exact delegation-resolution equation;
+  `accessDelegation_createdAccounts` carries the created-account set.
 - `state_subBal_stor` preserves every account's storage across a successful
   balance subtraction in call settlement.
 - `hashSetPair_mem_union_right` transports a known `(Adr × B256)` membership
@@ -587,8 +607,9 @@ For raw `SSTORE` exclusion on one exact selected compiled path, use
   [`Blanc/ForwardSha256.lean`](../Blanc/ForwardSha256.lean); the ordinary
   `runCompiled_*` projection intentionally forgets the empty child slot. Use
   `Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full` when later
-  transaction settlement also needs the crossing's exact refund preservation
-  and account-deletion-set emptiness preservation.
+  transaction settlement also needs the crossing's exact refund preservation,
+  account-deletion-set emptiness preservation, or the unchanged
+  created-account set (which an exact later `SSTORE` price depends on).
 - `Prog.exists_exec_noRawSstore` produces the exact `Exec` witness and
   `Exec.NoRawSstore`; its consequences exclude every successful raw SSTORE and
   force `retainedStorageWrites = []` for that same witness;
@@ -1569,7 +1590,9 @@ and closes at the following `SSTORE` without changing or duplicating the body.
   `pre.memory = Mem.empty` kept separate as `processMessage_entry_stack` and
   `processMessage_entry_memory` so a walk that reads scratch words can take the
   image rather than only well-formedness. The storage projection requires
-  zero message value or `State.Protected` at the selected owner.
+  zero message value or `State.Protected` at the selected owner;
+  `processMessage_entry_frame_facts` gives every other conjunct with no
+  storage premise.
 - Generic execution noninterference:
   [`Blanc/ExecutionNoninterference.lean`](../Blanc/ExecutionNoninterference.lean).
   For `Exec.NoRetainedWriteTo`, first split on `Execution.commits out = true`:
@@ -1773,6 +1796,12 @@ Use [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
   identity for inserting a key at its current value, not map extensionality.
   Without protection the zero write can normalize an empty account to absent
   and erase its storage, so the premise is necessary.
+- `Acct.clearIfEmpty_of_not_empty`, `Acct.clearIfEmpty_withBal_of_code`,
+  `Acct.clearIfEmpty_withBal_of_nonce` (with `Acct.withBal_nonce`/`_code`) in
+  `Blanc/CommonProofs.lean` remove the normalization of a nonempty account or
+  of a balance write at a coded or nonce-carrying account. Rewrite with the
+  `withBal` forms rather than closing the branch by `exact`: at a concrete
+  literal credit the unifier otherwise unfolds word arithmetic.
 - `Acct.clearIfEmpty_of_code_toList_ne_nil` (in `Blanc/CommonProofs.lean`) is
   the account-level form: `setAccount` normalization is the identity on an
   account whose code is a nonempty byte list, so a code installation followed
@@ -3412,6 +3441,10 @@ stage lemma with the block output's gas counters).  Worked use: the deployed WET
 
 The raw `debit_get_self` account equation requires the sender nonce to differ
 from `UInt64.max`; transaction admission supplies this nonwrap fact.
+`debit_get_self_of_protected` is the same equation for a sender that is
+`State.Protected` after its nonce increment (`incrNonce_protected_self` restates
+that premise on the original account), so an extracted frame helper without
+admission can take the weaker structural premise.
 `addBal_get_self` is unconditional and returns the credited account followed
 by `clearIfEmpty`. A balance write can clear an unprotected storage-only
 account, so its full-account equation must retain that normalization.
@@ -4296,8 +4329,11 @@ contract-neutral.
   `Evm.step_halt_getStor_eq` likewise takes protection at the pre world.
   `StepIn.exec_getStor_eq_of_noDescendants` preserves a protected observed
   owner in a frame with no raw descendants (a child would be the frame itself,
-  yet strictly shallower). Worked use: WETH9 `weth9_exec_node`; obtain owner
-  protection from its existing world-code invariant.
+  yet strictly shallower). When the remaining source suffix is `SFunc.silent`
+  (which excludes `SELFDESTRUCT` terminals) no protection is needed: WETH9
+  `weth9_exec_node` takes the actual source run from the node's cursor
+  (`CursorOK.sourceRunReturn`) and concludes `post.state = N'.devm.state` by
+  `SFunc.RunP.state_of_silent`, for every owner.
 - Restrict external instruction families along a checked certificate cursor:
   [`Blanc/Lift/CallRestriction.lean`](../Blanc/Lift/CallRestriction.lean) defines
   `SFunc.execsSatisfy` and `Cursor.ExecsSatisfy` (active function and pending

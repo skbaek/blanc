@@ -117,19 +117,6 @@ private theorem systemBookkeepingPost_refund (sevm : Sevm) (base : Devm)
   generalize systemBookkeepingBase sevm base = written
   rfl
 
-/-- Actual original-value safety from a snapshot equality: a created account
-reads zero (safe), otherwise the actual read is the snapshot read.
-(Hoisting candidate: replace by the shared safe-refund donor.) -/
-private theorem refundSafe_of_snapshot_eq (sevm : Sevm) (base : Devm) (key : B256)
-    (hsnap : getOrigStorVal sevm sevm.currentTarget key =
-      base.getStorVal sevm.currentTarget key) :
-    RefundSafe (base.getOrigStorVal sevm sevm.currentTarget key)
-      (base.getStorVal sevm.currentTarget key) := by
-  unfold Devm.getOrigStorVal
-  split
-  · exact Or.inr (Or.inl rfl)
-  · exact Or.inl hsnap
-
 /-- Queue reads can alias metadata, but write none of it. Each subsequent
 metadata store is the first write to its own distinct key. -/
 theorem systemFramePost_refund_ge (sevm : Sevm) (base : Devm) (memory : Mem) (gas : Nat)

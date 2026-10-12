@@ -1,19 +1,5 @@
 import Blanc.Lift.Weth9.ClosedDepositTxData
 
-/-! ## Re-pin bridge (Jaune ca9f27d), hoisting candidate
-
-Generic helper the WETH9 re-pin needed and the shared library lacked.  It lives here, not in a separate
-`RepinBridge` module, because `scripts/check-layering.py` lists every WETH9 module explicitly. -/
-
-namespace Jaune
-
-/-- An account that is not empty survives `setAccount` normalization unchanged. -/
-theorem Acct.clearIfEmpty_of_not_empty {ac : Acct} (h : ¬ ac.Empty) : ac.clearIfEmpty = ac := by
-  unfold Acct.clearIfEmpty
-  rw [if_neg h]
-
-end Jaune
-
 namespace Blanc.Lift.Weth9.ClosedInstance
 
 open Jaune Blanc Blanc.Lift

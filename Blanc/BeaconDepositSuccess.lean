@@ -267,9 +267,9 @@ theorem depositEndpoint_success_runCompiledTo
     simpa only [oldCount] using hcount
   have horig' : stagedBase.getOrigStorVal sevm sevm.currentTarget
       (branchSlot n) = orig := by
-    rw [RepinBridge.getOrigStorVal_congr_created _ _ hstagedCreated,
-      RepinBridge.getOrigStorVal_congr_created _ _
-        (RepinBridge.afterSload_createdAccounts _ _ _)]
+    rw [Blanc.getOrigStorVal_congr_created _ _ hstagedCreated,
+      Blanc.getOrigStorVal_congr_created _ _
+        (Blanc.afterSload_createdAccounts _ _ _)]
     exact horig
   have hnodeleg' : getDelegatedCodeAddress (stagedBase.getCode 2) = none := by
     change getDelegatedCodeAddress (logged.getCode 2) = none

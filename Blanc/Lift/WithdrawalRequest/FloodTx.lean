@@ -18,88 +18,6 @@ Signatures are produced from the published secp256k1 key 1 by
 `recoverSender` equation is proved here by `decide +kernel`.
 -/
 
-/-! ## Re-pin bridge (unit-local hoisting candidates)
-
-Generic transaction-debit and account-normalization facts the witness transactions need
-after Jaune `ca9f27d` normalizes account writes through `setAccount`. They belong next to
-`debit_get_self` in `Blanc/TransactionForward.lean`; they live here only because a family
-unit may not edit that core module or register a new module with the layering and count
-gates. -/
-
-namespace Blanc.Lift.WithdrawalRequest.RepinBridge
-
-open Jaune
-
-/-- A sender protected after its nonce increment had a non-wrapping nonce or code,
-stated on the original account. -/
-theorem incrNonce_protected_self {st : State} {E : Adr}
-    (hp : State.Protected (st.incrNonce E) E) :
-    (st.get E).nonce + 1 ≠ 0 ∨ (st.get E).code.size ≠ 0 := by
-  have hn : ((st.incrNonce E).get E).nonce = (st.get E).nonce + 1 := by
-    unfold State.incrNonce
-    rw [State.setAccount_get_self, Acct.clearIfEmpty_nonce]
-  have hc : ((st.incrNonce E).get E).code = (st.get E).code := State.incrNonce_get_code
-  rcases hp with h | h
-  · rw [hn] at h
-    exact Or.inl h
-  · rw [hc] at h
-    exact Or.inr h
-
-/-- `debit_get_self` for a sender that is protected after its nonce increment, instead of
-one whose original nonce is below the maximum: the debit keeps storage and code, bumps the
-nonce and writes the balance. -/
-theorem debit_get_self_of_protected {st : State} {E : Adr} {v : B256}
-    (hp : State.Protected (st.incrNonce E) E) :
-    ((st.incrNonce E).setBal E v).get E =
-      { st.get E with nonce := (st.get E).nonce + 1, bal := v } := by
-  have keep := incrNonce_protected_self hp
-  rw [State.setBal_get_self]
-  unfold State.incrNonce
-  rw [State.setAccount_get_self]
-  simp only [Acct.clearIfEmpty]
-  split
-  · rename_i empty
-    exact (keep.elim (fun h => h empty.2.1) (fun h => h empty.1)).elim
-  · split
-    · rename_i empty
-      exact (keep.elim (fun h => h empty.2.1) (fun h => h empty.1)).elim
-    · rfl
-
-/-- A balance write keeps the nonce. -/
-theorem acct_withBal_nonce (ac : Acct) (b : B256) : (ac.withBal b).nonce = ac.nonce := rfl
-
-/-- A balance write keeps the code. -/
-theorem acct_withBal_code (ac : Acct) (b : B256) : (ac.withBal b).code = ac.code := rfl
-
-/-- Normalization leaves a balance write alone at an account with code.
-
-Stated on `ac.withBal b` so callers rewrite instead of closing the normalization branch
-with `exact h hEmpty.1`: that asks the unifier for `(ac.withBal b).code = ac.code`, which
-it first tries as `ac.withBal b =?= ac`. At a concrete credit (`bal + (2 ^ 245).toB256`)
-that check exhausted the 16 GiB build scope in `FloodTx.txC_exec`. -/
-theorem clearIfEmpty_withBal_of_code {ac : Acct} {b : B256} (h : ac.code.size ≠ 0) :
-    (ac.withBal b).clearIfEmpty = ac.withBal b := by
-  unfold Acct.clearIfEmpty
-  split
-  · rename_i hE
-    have hc : (ac.withBal b).code.size = 0 := hE.1
-    rw [acct_withBal_code] at hc
-    exact (h hc).elim
-  · rfl
-
-/-- Normalization leaves a balance write alone at an account with a nonzero nonce. -/
-theorem clearIfEmpty_withBal_of_nonce {ac : Acct} {b : B256} (h : ac.nonce ≠ 0) :
-    (ac.withBal b).clearIfEmpty = ac.withBal b := by
-  unfold Acct.clearIfEmpty
-  split
-  · rename_i hE
-    have hn : (ac.withBal b).nonce = 0 := hE.2.1
-    rw [acct_withBal_nonce] at hn
-    exact (h hn).elim
-  · rfl
-
-end Blanc.Lift.WithdrawalRequest.RepinBridge
-
 namespace Blanc.Lift.WithdrawalRequest.FloodTx
 
 open Jaune Blanc.Lift Blanc.ExecutionTrace FloodWalk
@@ -462,7 +380,7 @@ theorem txC_exec
     show (mid.addBal msg.currentTarget msg.value).get withdrawalRequestPredeployAddress = _
     rw [hm_ct, hm_value, addBal_get_self, hmid', hm_state, hm_caller]
     simp only [State.bal, State.setBal_get_ne hEP, hd_ne _ hEP]
-    rw [RepinBridge.clearIfEmpty_withBal_of_code hszP']
+    rw [Acct.clearIfEmpty_withBal_of_code hszP']
   -- the frame
   set m := msg.withBenv after with hmdef
   have hm'_ct : (initSevm m).currentTarget = withdrawalRequestPredeployAddress := hm_ct
@@ -886,7 +804,7 @@ theorem txB_processTransaction
       show (mid.addBal msg.currentTarget msg.value).get looperAddress = _
       rw [hm_ct, hm_value, addBal_get_self, hmid', hm_state, hm_caller]
       simp only [State.bal, State.setBal_get_ne hEL, hd_ne _ hEL]
-      rw [RepinBridge.clearIfEmpty_withBal_of_code hszL']
+      rw [Acct.clearIfEmpty_withBal_of_code hszL']
     -- the frame
     set m := msg.withBenv after with hmdef
     have hfork' : CoveredFork m.benv.stat.fork := by
@@ -945,7 +863,7 @@ theorem txB_processTransaction
             rw [hd_E]
           rw [e2, hnonce]
           decide
-        rw [State.setBal_get_self, if_pos rfl, RepinBridge.clearIfEmpty_withBal_of_nonce hdn]
+        rw [State.setBal_get_self, if_pos rfl, Acct.clearIfEmpty_withBal_of_nonce hdn]
       · rw [State.setBal_get_ne h, if_neg h]
     have hafter_ne : ∀ a, a ≠ looperAddress → after.state.get a = mid.get a := by
       intro a ha

@@ -34,8 +34,8 @@ lemma keep_afterSstore_sload_twice {sevm : Sevm} {b : Devm} {k v : B256} :
   · simp only [afterSstore_logs, afterSload_logs]
   · simp only [afterSstore_output, afterSload_output]
   · simp only [afterSstore_error, afterSload_error]
-  · simp only [Blanc.BeaconDeposit.RepinBridge.afterSstore_createdAccounts,
-      Blanc.BeaconDeposit.RepinBridge.afterSload_createdAccounts]
+  · simp only [Blanc.afterSstore_createdAccounts,
+      Blanc.afterSload_createdAccounts]
 
 -- SEGMENT: safeCountBump
 /-- **Inversion of segment 6 (`t_0ea6_c20 → t_0f6e_c20`).**  Success forces the reconstructed

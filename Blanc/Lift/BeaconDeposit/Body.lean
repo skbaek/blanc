@@ -6,7 +6,6 @@ import Blanc.Lift.BeaconDeposit.BodyNode
 import Blanc.Lift.BeaconDeposit.BodyCount
 import Blanc.Lift.BeaconDeposit.BodyInsertDead
 import Blanc.Lift.BeaconDeposit.BodyInsertLive
-import Blanc.Lift.BeaconDeposit.RepinBridge
 import Jaune.MulDiv
 
 /-!
@@ -132,7 +131,7 @@ theorem LoopBase.step {sevm : Sevm} {b₀ b b' : Devm} {h : Nat}
   output := by rw [hK.output, afterSload_output, hL.output]
   error := by rw [hK.error, afterSload_error, hL.error]
   created := by
-    rw [hK.created, Blanc.BeaconDeposit.RepinBridge.afterSload_createdAccounts, hL.created]
+    rw [hK.created, Blanc.afterSload_createdAccounts, hL.created]
   keys y := by
     rw [hK.keys, afterSload_accessedStorageKeys, mem_sloadAccessedStorageKeys, hL.keys]
     constructor
@@ -216,7 +215,7 @@ theorem insert_loop {sevm : Sevm} {b₀ : Devm} {G : Nat} {x n : Nat} {node0 ori
       show (Devm.getStor b sevm.currentTarget).get _ = _
       rw [hL.stor, hstor1]
     have hob : b.getOrigStorVal sevm sevm.currentTarget (solBranchSlot h) = orig :=
-      (Blanc.BeaconDeposit.RepinBridge.getOrigStorVal_congr_created _ _ hL.created).trans horig
+      (Blanc.getOrigStorVal_congr_created _ _ hL.created).trans horig
     have hcost : sstoreCost sevm b (solBranchSlot h) nd =
         liveStoreCostOf orig sevm keys0 stor1 h nd := by
       unfold sstoreCost liveStoreCostOf
@@ -487,10 +486,10 @@ theorem deposit_body_runExact (sevm : Sevm) (b : Devm) (sel : B256) (g : Nat)
   have hcreated5 : b5.createdAccounts = b.createdAccounts := by
     rw [hK5.created, hK4.created, hK3.created]
     show b2.createdAccounts = _
-    rw [hK2.created, hK1.created, Blanc.BeaconDeposit.RepinBridge.afterSload_createdAccounts]
+    rw [hK2.created, hK1.created, Blanc.afterSload_createdAccounts]
   have hcs5 : sstoreCost sevm b5 solCountSlot (1 + w) = cs := by
     rw [sstoreCost_eq_countStoreCostOf hwarm5 hw5,
-      Blanc.BeaconDeposit.RepinBridge.getOrigStorVal_congr_created _ _ hcreated5, horigCount]
+      Blanc.getOrigStorVal_congr_created _ _ hcreated5, horigCount]
   have hroot : BeaconDeposit.hashPair Bytes.sha256
       (Bytes.sha256 (pkR.toBytes ++ sevm.data.sliceD wP.toNat 32 0))
       (Bytes.sha256 (BeaconDeposit.le64 a.toNat ++ BeaconDeposit.zeros 24 ++ sR.toBytes)) = rt := by
@@ -531,8 +530,8 @@ theorem deposit_body_runExact (sevm : Sevm) (b : Devm) (sel : B256) (g : Nat)
       bodyLiveCostOf origLive sevm b :=
     liveStoreCostOf_congr (Stor.get_set_ne _ (Ne.symm (solBranchSlot_ne_count hn)) _)
   have hob6 : b6.getOrigStorVal sevm sevm.currentTarget (solBranchSlot n) = origLive := by
-    refine (Blanc.BeaconDeposit.RepinBridge.getOrigStorVal_congr_created _ _ ?_).trans horigLive
-    rw [hK6.created, Blanc.BeaconDeposit.RepinBridge.afterSstore_createdAccounts, hcreated5]
+    refine (Blanc.getOrigStorVal_congr_created _ _ ?_).trans horigLive
+    rw [hK6.created, Blanc.afterSstore_createdAccounts, hcreated5]
   have hc6 : ∀ y, b6.getCode y = b.getCode y := fun y => by
     rw [hK6.code, afterSstore_getCode, hK5.code, hK4.code, hc3]
   have ha6 : b6.accessedAddresses = b.accessedAddresses := by

@@ -1,6 +1,5 @@
 import Blanc.BeaconDepositBridge
 import Blanc.BeaconDepositDeploy
-import Blanc.BeaconDepositRepinBridge
 import Blanc.BeaconDepositWriteSites
 import Blanc.BytesWrite
 import Blanc.ForwardStorageEffects
@@ -638,7 +637,7 @@ theorem constructorSha64_success_storageEffectRun_ext
   obtain ⟨callPost, hstat, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
       hlogs, hrefund, hdelete, houtput, herror, hstate, hcreated⟩ :=
-    RepinBridge.childlessRunCompiled_staticcall_sha256_64_warm_ext_created
+    Blanc.Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
       (sevm := sevm) (devm := callPre)
       (iiw := inputWord * 32) (oiw := outputWord * 32)
       (s := stack) (G := K + 221 + ext) (ext := ext)

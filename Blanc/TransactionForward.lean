@@ -782,6 +782,41 @@ theorem debit_get_self {st : State} {E : Adr} {v : B256}
       exact (nonzero empty.2.1).elim
     · rfl
 
+/-- A sender protected after its nonce increment had a non-wrapping nonce or code,
+stated on the original account. -/
+theorem incrNonce_protected_self {st : State} {E : Adr}
+    (hp : State.Protected (st.incrNonce E) E) :
+    (st.get E).nonce + 1 ≠ 0 ∨ (st.get E).code.size ≠ 0 := by
+  have hn : ((st.incrNonce E).get E).nonce = (st.get E).nonce + 1 := by
+    unfold State.incrNonce
+    rw [State.setAccount_get_self, Acct.clearIfEmpty_nonce]
+  have hc : ((st.incrNonce E).get E).code = (st.get E).code := State.incrNonce_get_code
+  rcases hp with h | h
+  · rw [hn] at h
+    exact Or.inl h
+  · rw [hc] at h
+    exact Or.inr h
+
+/-- `debit_get_self` for a sender that is protected after its nonce increment, instead of
+one whose original nonce is below the maximum: the debit keeps storage and code, bumps the
+nonce and writes the balance. -/
+theorem debit_get_self_of_protected {st : State} {E : Adr} {v : B256}
+    (hp : State.Protected (st.incrNonce E) E) :
+    ((st.incrNonce E).setBal E v).get E =
+      { st.get E with nonce := (st.get E).nonce + 1, bal := v } := by
+  have keep := incrNonce_protected_self hp
+  rw [State.setBal_get_self]
+  unfold State.incrNonce
+  rw [State.setAccount_get_self]
+  simp only [Acct.clearIfEmpty]
+  split
+  · rename_i empty
+    exact (keep.elim (fun h => h empty.2.1) (fun h => h empty.1)).elim
+  · split
+    · rename_i empty
+      exact (keep.elim (fun h => h empty.2.1) (fun h => h empty.1)).elim
+    · rfl
+
 /-- A nonce that is not the maximal one can be incremented without wrapping. -/
 theorem UInt64.add_one_ne_zero {n : UInt64} (h : n ≠ UInt64.max) : n + 1 ≠ 0 := by
   intro h'

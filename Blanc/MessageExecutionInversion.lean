@@ -44,6 +44,37 @@ theorem processMessage_clean_rawPost
               Option.isSome_none, Except.ok.injEq] at settleEq
             exact congrArg Devm.output settleEq
 
+/-- Entry facts of a retained code frame that do not depend on the entry
+transfer preserving any storage: frame-entry program counter, code, addresses,
+calldata, timestamp and memory well-formedness. -/
+theorem processMessage_entry_frame_facts
+    {msg : Msg} {pc : Nat} {sevm : Sevm} {pre : Devm}
+    {raw : Execution}
+    {ex : Except (EvmError × State × AdrSet × Tra) Devm}
+    (process : ProcessMessage msg
+      (.some ⟨⟨pc, sevm, pre⟩, raw⟩) ex) :
+    pc = 0 ∧ sevm.code = msg.code ∧
+      sevm.currentTarget = msg.currentTarget ∧
+      sevm.codeAddress = msg.codeAddress ∧ sevm.data = msg.data ∧
+      sevm.benvStat.time = msg.benv.stat.time ∧
+      Mem.Wf pre.memory := by
+  have enter := (RunFrame.some_inv process).1
+  have pcZero := Frame.enter_run_pc enter
+  have codeEq := Frame.enter_run_code enter
+  have current := Frame.enter_run_currentTarget enter
+  have memory := Blanc.Frame.enter_run_memory enter
+  rcases Frame.enter_run_inv enter with ⟨benv, transfer, evmEq⟩
+  change msg.benvAfterTransfer = .ok benv at transfer
+  have data := congrArg (fun evm : Evm => evm.sta.data) evmEq
+  have codeAddress := congrArg (fun evm : Evm => evm.sta.codeAddress) evmEq
+  have time := congrArg (fun evm : Evm => evm.sta.benvStat.time) evmEq
+  dsimp only at codeEq current codeAddress data time memory
+  have statEq : benv.stat = msg.benv.stat := benvAfterTransfer_stat transfer
+  refine ⟨pcZero, codeEq, current, codeAddress, data,
+    time.trans (congrArg BenvStat.time statEq), ?_⟩
+  rw [memory]
+  exact Mem.wf_empty
+
 /-- Facts inherited by a retained code frame from its actual message entry.
 The selected storage projection survives zero-value entry or entry at a
 protected owner (nonzero nonce or nonempty code). -/
@@ -60,27 +91,17 @@ theorem processMessage_entry_facts
       sevm.benvStat.time = msg.benv.stat.time ∧
       pre.state.getStor target = msg.benv.state.getStor target ∧
       Mem.Wf pre.memory := by
+  obtain ⟨pcZero, codeEq, current, codeAddress, data, time, memory⟩ :=
+    processMessage_entry_frame_facts process
   have enter := (RunFrame.some_inv process).1
-  have pcZero := Frame.enter_run_pc enter
-  have codeEq := Frame.enter_run_code enter
-  have current := Frame.enter_run_currentTarget enter
-  have memory := Blanc.Frame.enter_run_memory enter
   rcases Frame.enter_run_inv enter with ⟨benv, transfer, evmEq⟩
   change msg.benvAfterTransfer = .ok benv at transfer
-  have data := congrArg (fun evm : Evm => evm.sta.data) evmEq
-  have codeAddress := congrArg (fun evm : Evm => evm.sta.codeAddress) evmEq
-  have time := congrArg (fun evm : Evm => evm.sta.benvStat.time) evmEq
   have state := congrArg (fun evm : Evm => evm.dyna.state) evmEq
-  dsimp only at codeEq current codeAddress data time memory
   change pre.state = benv.state at state
-  have statEq : benv.stat = msg.benv.stat := benvAfterTransfer_stat transfer
   have storage : pre.state.getStor target =
       msg.benv.state.getStor target := by
     rw [state, benvAfterTransfer_ok_getStor transfer target hpreserved]
-  refine ⟨pcZero, codeEq, current, codeAddress, data,
-    time.trans (congrArg BenvStat.time statEq), storage, ?_⟩
-  rw [memory]
-  exact Mem.wf_empty
+  exact ⟨pcZero, codeEq, current, codeAddress, data, time, storage, memory⟩
 
 /-- A retained code frame starts with the empty EVM operand stack.  This is
 kept separate from `processMessage_entry_facts` so adding the projection does

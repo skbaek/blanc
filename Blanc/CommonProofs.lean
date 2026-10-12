@@ -657,6 +657,10 @@ lemma Devm.addLog_getStor (devm : Devm) (log : Log) :
     Devm.getStor (devm.addLog log) = Devm.getStor devm := by
   rfl
 
+/-- A log append leaves the created-account set unchanged. -/
+lemma Devm.addLog_createdAccounts (devm : Devm) (log : Log) :
+    (devm.addLog log).createdAccounts = devm.createdAccounts := rfl
+
 /-- A refund-counter update leaves account code alone; rewrite with this law
 before unfolding a concrete SSTORE post tower. -/
 lemma Devm.withRefundCounter_getCode (devm : Devm) (refundCounter : Int) (a : Adr) :
@@ -9623,6 +9627,45 @@ lemma State.setBal_get_nonce {st : Jaune.State} {b a : Adr} {v : B256} :
   by_cases h : b = a
   · subst h; rw [State.setBal_get_self, Acct.clearIfEmpty_nonce]; rfl
   · rw [State.setBal_get_ne h]
+
+/-- An account that is not empty survives `setAccount` normalization unchanged. -/
+theorem Acct.clearIfEmpty_of_not_empty {ac : Acct} (h : ¬ ac.Empty) : ac.clearIfEmpty = ac := by
+  unfold Acct.clearIfEmpty
+  rw [if_neg h]
+
+/-- A balance write keeps the nonce. -/
+theorem Acct.withBal_nonce (ac : Acct) (b : B256) : (ac.withBal b).nonce = ac.nonce := rfl
+
+/-- A balance write keeps the code. -/
+theorem Acct.withBal_code (ac : Acct) (b : B256) : (ac.withBal b).code = ac.code := rfl
+
+/-- Normalization leaves a balance write alone at an account with code.
+
+Stated on `ac.withBal b` so callers rewrite instead of closing the normalization branch
+with `exact h hEmpty.1`: that asks the unifier for `(ac.withBal b).code = ac.code`, which
+it first tries as `ac.withBal b =?= ac`. At a concrete credit such as
+`bal + (2 ^ 245).toB256` that check unfolds literal word arithmetic and can exhaust a
+16 GiB build scope. -/
+theorem Acct.clearIfEmpty_withBal_of_code {ac : Acct} {b : B256} (h : ac.code.size ≠ 0) :
+    (ac.withBal b).clearIfEmpty = ac.withBal b := by
+  unfold Acct.clearIfEmpty
+  split
+  · rename_i hE
+    have hc : (ac.withBal b).code.size = 0 := hE.1
+    rw [Acct.withBal_code] at hc
+    exact (h hc).elim
+  · rfl
+
+/-- Normalization leaves a balance write alone at an account with a nonzero nonce. -/
+theorem Acct.clearIfEmpty_withBal_of_nonce {ac : Acct} {b : B256} (h : ac.nonce ≠ 0) :
+    (ac.withBal b).clearIfEmpty = ac.withBal b := by
+  unfold Acct.clearIfEmpty
+  split
+  · rename_i hE
+    have hn : (ac.withBal b).nonce = 0 := hE.2.1
+    rw [Acct.withBal_nonce] at hn
+    exact (h hn).elim
+  · rfl
 
 /-- `setAccount` normalization is the identity on an account whose code is a
 nonempty byte list. -/

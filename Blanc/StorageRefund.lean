@@ -1,4 +1,5 @@
 import Blanc.ForwardStorageAccess
+import Blanc.StorageAccessGas
 
 /-! Refund monotonicity for a store to an unchanged original slot. -/
 
@@ -56,5 +57,37 @@ theorem afterSstore_refundCounter_ge_of_safe (sevm : Sevm) (base : Devm) (key va
     base.refundCounter ≤ (afterSstore sevm base key value).refundCounter := by
   rw [afterSstore_refundCounter]
   exact sstoreNewRefundCounter_ge_of_safe _ _ _ _ _ safe
+
+/-- Actual original-value safety from a snapshot equality: a created account
+reads zero (safe), otherwise the actual read is the snapshot read. -/
+theorem refundSafe_of_snapshot_eq (sevm : Sevm) (base : Devm) (key : B256)
+    (hsnap : getOrigStorVal sevm sevm.currentTarget key =
+      base.getStorVal sevm.currentTarget key) :
+    RefundSafe (base.getOrigStorVal sevm sevm.currentTarget key)
+      (base.getStorVal sevm.currentTarget key) := by
+  unfold Devm.getOrigStorVal
+  split
+  · exact Or.inr (Or.inl rfl)
+  · exact Or.inl hsnap
+
+/-- A zero actual original charges no more than a `RefundSafe` snapshot
+original: the created branch reads zero, and `RefundSafe` excludes the one
+case (nonzero snapshot with zero current) where zero would charge more. -/
+theorem sstoreValueCost_zero_le_of_safe (cur new snap : B256)
+    (hsafe : RefundSafe snap cur) :
+    sstoreValueCost 0 cur new ≤ sstoreValueCost snap cur new := by
+  have warm_le : ∀ o c n : B256, gasWarmAccess ≤ sstoreValueCost o c n := by
+    intro o c n
+    unfold sstoreValueCost
+    split_ifs <;> decide
+  rcases hsafe with h | h | h
+  · rw [h]
+    by_cases hz : cur = 0
+    · rw [hz]
+    · rw [sstoreValueCost_of_ne (fun e => hz e.symm)]
+      exact warm_le _ _ _
+  · rw [h]
+  · rw [sstoreValueCost_of_ne (fun e => h e.symm)]
+    exact warm_le _ _ _
 
 end Blanc

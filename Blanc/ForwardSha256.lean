@@ -310,7 +310,8 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
       post.accountsToDelete.isEmpty = devm.accountsToDelete.isEmpty ∧
       post.output = devm.output ∧
       post.error = devm.error ∧
-      post.state = devm.state := by
+      post.state = devm.state ∧
+      post.createdAccounts = devm.createdAccounts := by
   let base := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩
   have hextBase : base.extCost
       [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = ext := by
@@ -519,13 +520,15 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
   have herrorPost : post.error = devm.error := by
     change p.error = devm.error
     rfl
+  have hcreatedPost : post.createdAccounts = devm.createdAccounts := by
+    rfl
   have hstatePost : post.state = devm.state := by
     change child.state = devm.state
     exact hchildState
   exact ⟨post, hrun, hstackPost, hmemoryPost, hgasPost, hreturnData,
     hstorage, hcode, haddresses, hkeys,
     hlogsPost, hrefundPost, hdeletePost, houtputPost, herrorPost,
-    hstatePost⟩
+    hstatePost, hcreatedPost⟩
 
 /-- Compatibility projection of the full warm SHA-256 crossing.  Consumers
 that must settle a transaction should use the `_full` theorem so refund and
@@ -569,7 +572,7 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext
       post.state = devm.state := by
   obtain ⟨post, hrun, hstack, hmemory, hgas', hreturn, hstorage,
       hcode, haddresses, hkeys, hlogs, _hrefund, _hdelete, houtput,
-      herror, hstate⟩ :=
+      herror, hstate, _hcreated⟩ :=
     Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
       hstk hgas hext hnodeleg hwarm hpre hfork hdepth hfloor hbound hroom
   exact ⟨post, hrun, hstack, hmemory, hgas', hreturn, hstorage, hcode,

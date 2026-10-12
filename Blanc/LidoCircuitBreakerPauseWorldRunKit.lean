@@ -724,11 +724,6 @@ hypothesis-supplied value case, and the successor world is the ordinary
 `temporalSstorePost` over the warmed base — so a store suffix can thread it
 exactly like a cold `SLOAD`. -/
 
-private theorem addAccessedStorageKey_getOrigStorVal (d : Devm) (owner : Adr)
-    (k : B256) (sevm : Sevm) (a : Adr) (key : B256) :
-    (addAccessedStorageKey d owner k).getOrigStorVal sevm a key =
-      d.getOrigStorVal sevm a key := rfl
-
 theorem temporal_sstore_cold_runCompiled
     {sevm : Sevm} {base : Devm} {key value current original : B256}
     {stack : List B256} {M : Mem} {G cost : Nat}
