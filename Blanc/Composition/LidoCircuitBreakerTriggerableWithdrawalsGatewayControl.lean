@@ -223,16 +223,24 @@ theorem gatewayPauseWorld_publicPausePremises :
   · rw [gatewayPauseWorld_callerWord]
     exact pauseWorld_entryOne_ne_count.symm
 
-/-! ## Every entry-3 premise except reachability
+/-! ## The entry-3 closure at a reached entry
 
-This is the exact residual: hand it any successful production run of this world
-and entry 3's conclusion follows, with no further hypothesis. -/
+This is the exact residual: hand it a successful production run of this world,
+its reached `pauseAfterSet` entry, and the owner's installed code there, and
+entry 3's conclusion follows. -/
 
 theorem gatewayPauseWorld_closedPremises
     {ex : Execution} {final : Devm}
     (publicRun : Prog.RunCompiledTo gatewayPauseWorldSevm gatewayPauseWorldPre
       (runtime officialParams) ex)
-    (success : ex = .ok final) :
+    (success : ex = .ok final)
+    (entry : Devm)
+    (reachedAt : PublicPauseAfterSetAt
+      ((runtime officialParams).main :: (runtime officialParams).aux)
+      gatewayPauseWorldSevm gatewayPauseWorldPre pauseWorldCallee.toB256
+      pauseWorldDuration (gatewayCode controlDeployParams) ex entry)
+    (ownerInstalled : (entry.getCode
+      gatewayPauseWorldSevm.currentTarget).toList ≠ []) :
     PublicPausePinnedTargetConclusion gatewayPauseWorldSevm
       gatewayPauseWorldPre pauseWorldCallee.toB256 pauseWorldDuration
       (gatewayCode controlDeployParams)
@@ -240,7 +248,7 @@ theorem gatewayPauseWorld_closedPremises
       LidoTriggerableWithdrawalsGateway.pausedUntil ex final :=
   publicPause_gatewayPinnedTarget (hfork := by first | (change CoveredFork .prague; exact CoveredFork.prague) | decide) gatewayPauseWorld_publicPausePremises
     gatewayPauseWorld_target_ne_owner gatewayPauseWorld_target_not_precompile
-    publicRun success
+    publicRun success entry reachedAt ownerInstalled
 
 /-! ## Falsifiers
 

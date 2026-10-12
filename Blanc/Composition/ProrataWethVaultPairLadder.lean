@@ -225,7 +225,11 @@ theorem PairBenvInv.afterWithdrawals {vault : Adr} {benv : Benv} {wds : List Wit
     rfl
     (by
       show LedgerConserved _ ((processWithdrawalsState benv.state wds).getStor vault)
-      rw [processWithdrawalsState_getStor_eq]
+      have hprotV : State.Protected benv.state vault := by
+        apply State.Protected.of_code_ne_nil
+        intro hnil
+        exact Prog.compile_ne_nil (by rw [← inv.world.vaultCode.code, hnil])
+      rw [processWithdrawalsState_getStor_eq _ _ _ hprotV]
       exact inv.world.conserved)
 -- PB:209; `processWithdrawalsState_getStor_eq` is §4 (G+3).
 
@@ -711,8 +715,16 @@ theorem retainedBodyPairReplayFaithful {vault : Adr} {benv : Benv} {txs : List (
       (PairBoundary.ofState vault trace.transactionBenv.state)
       (PairBoundary.ofState vault (processWithdrawalsState trace.transactionBenv.state wds)) :=
     PairReplayWith.nil_of_eq (PairBoundary.ofState_eq
-      (processWithdrawalsState_getStor_eq vault trace.transactionBenv.state wds)
-      (processWithdrawalsState_getStor_eq wethAccount trace.transactionBenv.state wds))
+      (processWithdrawalsState_getStor_eq vault trace.transactionBenv.state wds
+        (by
+          apply State.Protected.of_code_ne_nil
+          intro hnil
+          exact Prog.compile_ne_nil (by rw [← txInv.world.vaultCode.code, hnil])))
+      (processWithdrawalsState_getStor_eq wethAccount trace.transactionBenv.state wds
+        (by
+          apply State.Protected.of_code_ne_nil
+          intro hnil
+          exact Prog.compile_ne_nil (by rw [← txInv.world.weth.code, hnil]))))
   have wdInv := txInv.afterWithdrawals (trace.transactionBound bound inv.covered)
   -- (5) request calls, by R6
   have requestReplay := retainedRequestsPairReplayFaithful trace.requests wdInv blockIndex

@@ -1666,7 +1666,7 @@ theorem ExactWethChildSuccess.worldProgramRun
     exact congrArg Devm.logs childEq
   obtain ⟨pcZero, codeEq, currentTarget, codeAddress, dataEq, -, storageEq,
     -⟩ := Blanc.MessageExecution.processMessage_entry_facts
-      wethAccount process
+      wethAccount (Or.inl target.valueZero) process
   have stackEq := Blanc.MessageExecution.processMessage_entry_stack process
   have memoryEq := Blanc.MessageExecution.processMessage_entry_memory process
   have enter := (RunFrame.some_inv process).1
@@ -1684,7 +1684,8 @@ theorem ExactWethChildSuccess.worldProgramRun
       Devm.getStor parentPre := by
     funext owner
     obtain ⟨-, -, -, -, -, -, ownerStorage, -⟩ :=
-      Blanc.MessageExecution.processMessage_entry_facts owner process
+      Blanc.MessageExecution.processMessage_entry_facts owner
+        (Or.inl target.valueZero) process
     exact ownerStorage.trans
       (congrArg (fun state : State => state.getStor owner) childWorld)
   have exactCode : some childEvm.sta.code.toList = Prog.compile Blanc.weth := by

@@ -147,6 +147,7 @@ theorem gatewayBoundaryExecutions_of_afterSet_ok
     (targetNe : target ≠ sevm.currentTarget)
     (nonprecompile : sevm.benvStat.rules.isPrecomp target = false)
     (installed : entry.getCode target = gatewayCode dp)
+    (ownerInstalled : (entry.getCode sevm.currentTarget).toList ≠ [])
     (targetWindow : MemWordAt entry
       (targetWord * 32).toNat target.toB256)
     (durationWindow : MemWordAt entry
@@ -156,7 +157,7 @@ theorem gatewayBoundaryExecutions_of_afterSet_ok
     LidoPinnedBoundaryExecutions fs sevm entry target
       (LidoTriggerableWithdrawalsGateway.runtime dp) duration (.ok final) :=
   directBoundaryExecutions_of_afterSet_ok hfork h_empty h_bubble
-    (gatewayCode_compile dp) targetNe nonprecompile installed
+    (gatewayCode_compile dp) targetNe nonprecompile installed ownerInstalled
     targetWindow durationWindow dynamic run
 
 /-! ## Entry 3: the pinned-target closure
@@ -177,7 +178,14 @@ Lido CircuitBreaker, with the exact compiled Triggerable Withdrawals Gateway
 runtime directly installed at a distinct, non-precompile target account, the
 committed outcome family holds, the actual gateway `pauseFor`/`isPaused`
 executions occur, and the gateway account is left paused at exactly
-`pauseForProjection entryTime duration` on the same successful final state. -/
+`pauseForProjection entryTime duration` on the same successful final state.
+
+The reached `pauseAfterSet` entry and the owner's installed code there are
+explicit premises (decision `blanc-composition-gateway-owner-code-20261012`):
+an entry-scoped code fact cannot be transported from `pre` inside this unit —
+the reachability path's code preservation lives in non-owned
+`Blanc/LidoCircuitBreakerPublicPause.lean` — so callers hand the reached entry
+itself over. -/
 theorem publicPause_gatewayPinnedTarget
     {sevm : Sevm} {pre final : Devm} {owner : Adr}
     (hfork : CoveredFork sevm.benvStat.fork)
@@ -189,27 +197,26 @@ theorem publicPause_gatewayPinnedTarget
     (targetNe : target.toAdr ≠ sevm.currentTarget)
     (nonprecompile : sevm.benvStat.rules.isPrecomp target.toAdr = false)
     (publicRun : Prog.RunCompiledTo sevm pre (runtime officialParams) ex)
-    (success : ex = .ok final) :
+    (success : ex = .ok final)
+    (entry : Devm)
+    (reachedAt : PublicPauseAfterSetAt
+      ((runtime officialParams).main :: (runtime officialParams).aux)
+      sevm pre target duration (gatewayCode dp) ex entry)
+    (ownerInstalled : (entry.getCode sevm.currentTarget).toList ≠ []) :
     PublicPausePinnedTargetConclusion sevm pre target duration (gatewayCode dp)
       (LidoTriggerableWithdrawalsGateway.runtime dp)
       LidoTriggerableWithdrawalsGateway.pausedUntil ex final := by
-  obtain ⟨entry, reached⟩ :=
-    publicPause_reaches_pauseAfterSet premises publicRun
-  have canonicalTarget : target.toAdr.toB256 = target :=
-    toB256_toAdr premises.targetCanonical
+  have reached := reachedAt
   rcases reached with
     ⟨targetWindow, durationWindow, targetCodeAt, countDecrement, afterSetRun⟩
-  have reachedAt :
-      PublicPauseAfterSetAt
-        ((runtime officialParams).main :: (runtime officialParams).aux)
-        sevm pre target duration (gatewayCode dp) ex entry :=
-    ⟨targetWindow, durationWindow, targetCodeAt, countDecrement, afterSetRun⟩
+  have canonicalTarget : target.toAdr.toB256 = target :=
+    toB256_toAdr premises.targetCanonical
   subst success
   have hook := gatewayBoundaryExecutions_of_afterSet_ok (hfork := hfork)
     (fs := (runtime officialParams).main :: (runtime officialParams).aux)
     (by rfl) (by rfl) targetNe nonprecompile
-    targetCodeAt (by rw [canonicalTarget]; exact targetWindow) durationWindow
-    premises.dynamic afterSetRun
+    targetCodeAt ownerInstalled (by rw [canonicalTarget]; exact targetWindow)
+    durationWindow premises.dynamic afterSetRun
   exact publicPause_pinnedTarget hfork premises targetNe publicRun
     (gateway_lidoPinnedPauseTarget dp sevm.currentTarget sevm.caller
       target.toAdr targetNe)

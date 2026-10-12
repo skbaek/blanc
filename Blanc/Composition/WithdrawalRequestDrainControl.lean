@@ -257,7 +257,8 @@ theorem blockD_run {benv : Benv} {lastHash : B256}
         .ok (bodyPost benv s, bodyOut benv s bout) ∧
       bout.blockGasUsed ≤ 2 ^ 28 ∧
       Blanc.WithdrawalRequest.RepresentsStorage
-        (s.getStor withdrawalRequestPredeployAddress).get (Blanc.WithdrawalRequest.system σ1) := by
+        (s.getStor withdrawalRequestPredeployAddress).get (Blanc.WithdrawalRequest.system σ1) ∧
+      s.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode := by
   have hsender : (stHistory benv).get senderE = senderE1Acct :=
     (stHistory_get_of_installed hfork installed hlast (by decide) (by decide)).trans hpre.sender
   have hcodeW : (stHistory benv).getCode withdrawalRequestPredeployAddress =
@@ -305,16 +306,42 @@ theorem blockD_run {benv : Benv} {lastHash : B256}
     exact hprocC
   have hcodesC : ∀ a, sC.getCode a = (stHistory benv).getCode a := fun a =>
     TxCPost_settled_codes hQ _ _ a _ _
+  have hpC : State.Protected postC.state consolidationRequestPredeployAddress := by
+    apply State.Protected.of_code_ne_nil
+    have hmem : (consolidationRequestPredeployAddress, Blanc.consolidationRequestCode) ∈
+        systemContracts := by
+      simp only [systemContracts, List.mem_cons, List.not_mem_nil, or_false, or_true]
+    have hcC : postC.state.getCode consolidationRequestPredeployAddress =
+        Blanc.consolidationRequestCode :=
+      (hQ.2.2.2.1 _).trans hcodeC
+    rw [hcC]
+    exact (systemContracts_facts _ hmem).2.2
   have hstorC : sC.getStor consolidationRequestPredeployAddress =
       (stHistory benv).getStor consolidationRequestPredeployAddress :=
-    TxCPost_settled_stor7251 hQ (by decide) _ _ _ _
+    TxCPost_settled_stor7251 hQ (by decide) _ _ _ _ hpC
+  have hpW : State.Protected postC.state withdrawalRequestPredeployAddress := by
+    apply State.Protected.of_code_ne_nil
+    have hcW : postC.state.getCode withdrawalRequestPredeployAddress =
+        Blanc.withdrawalRequestCode :=
+      (hQ.2.2.2.1 _).trans hcodeW
+    rw [hcW]
+    exact Blanc.Lift.WithdrawalRequest.withdrawalRequestCode_sem_facts.2
   have hrep1 : Blanc.WithdrawalRequest.RepresentsStorage
       (sC.getStor withdrawalRequestPredeployAddress).get σ1 := by
-    rw [hsC, settledState_getStor]
+    rw [hsC, settledState_getStor _ _ _ _ _ _ hpW]
     exact hQ.1
+  have hnonceC : (postC.state.get senderE).nonce ≠ 0 := by
+    have h2 : (postC.state.get senderE).nonce = 2 := by
+      rw [hQ.2.2.2.2.2.2.1]
+      show ((stHistory benv).get senderE).nonce + 1 = 2
+      rw [hsender]
+      rfl
+    rw [h2]
+    decide
   have hgetE : sC.get senderE = (postC.state.get senderE).withBal
       (postC.state.bal senderE + RC) := by
-    rw [hsC, settledState, addBal_get_ne _ hcb, addBal_get_self]
+    rw [hsC, settledState, addBal_get_ne _ hcb, addBal_get_self,
+      Blanc.Lift.WithdrawalRequest.RepinBridge.clearIfEmpty_withBal_of_nonce hnonceC]
   have husedC := txGasUsed_le (gas := txC.gas) (floor := 23000) (left := postC.gasLeft)
     (refund := postC.refundCounter.toNat) (by decide)
   have hgasC : txC.gas = 2 ^ 20 := rfl
@@ -414,21 +441,38 @@ theorem blockD_run {benv : Benv} {lastHash : B256}
     change sC.getCode _ = _
     rw [hcodesC]
     exact hcodeC
+  have hpD : State.Protected postD.state withdrawalRequestPredeployAddress := by
+    apply State.Protected.of_code_ne_nil
+    have hcD : postD.state.getCode withdrawalRequestPredeployAddress =
+        Blanc.withdrawalRequestCode :=
+      (hQD.2.2.2.1 _).trans ((hcodesC _).trans hcodeW)
+    rw [hcD]
+    exact Blanc.Lift.WithdrawalRequest.withdrawalRequestCode_sem_facts.2
+  have hpD7251 : State.Protected postD.state consolidationRequestPredeployAddress := by
+    apply State.Protected.of_code_ne_nil
+    have hmem : (consolidationRequestPredeployAddress, Blanc.consolidationRequestCode) ∈
+        systemContracts := by
+      simp only [systemContracts, List.mem_cons, List.not_mem_nil, or_false, or_true]
+    have hcD : postD.state.getCode consolidationRequestPredeployAddress =
+        Blanc.consolidationRequestCode :=
+      (hQD.2.2.2.1 _).trans ((hcodesC _).trans hcodeC)
+    rw [hcD]
+    exact (systemContracts_facts _ hmem).2.2
   have hz : Slots7251Zero sD := by
     apply slots7251Zero_of_getStor _ hpre.zero
-    rw [hsD, settledState_getStor, hQD.2.2.1 _ (by decide)]
+    rw [hsD, settledState_getStor _ _ _ _ _ _ hpD7251, hQD.2.2.1 _ (by decide)]
     change sC.getStor _ = _
     rw [hstorC]
     exact stHistory_getStor_inst hfork installed hlast _ (by decide) (by decide)
   have husedD := txGasUsed_le (gas := txD.gas) (floor := 21000) (left := postD.gasLeft)
     (refund := postD.refundCounter.toNat) (by decide)
   refine ⟨sD, boutD, htxs, body_of_txs hfork installed hlast rfl htxs hdeposit hWcode hCcode hz,
-    ?_, ?_⟩
+    ?_, ?_, hWcode⟩
   · rw [hblkD, hblkC]
     change 0 + _ + _ ≤ 2 ^ 28
     have hgasD : txD.gas = 2 ^ 20 := rfl
     omega
-  · rw [hsD, settledState_getStor]
+  · rw [hsD, settledState_getStor _ _ _ _ _ _ hpD]
     exact hQD.1
 
 /-- **Stage D**: block D as a configured block trace.  It commits `txC`'s submission frame, and
@@ -445,7 +489,7 @@ theorem drain_stageD {pre : BlockChain} {parent : Block} (ready : ChainReady pre
         s.queue = [] := by
   obtain ⟨lh, hl⟩ := blockHashes_getLast_of_ne ready.nonempty
   have hf := benvAt_facts pre parent
-  obtain ⟨sD, boutD, -, hbody, hgas, -⟩ := blockD_run (benv := benvAt pre parent) hf.1
+  obtain ⟨sD, boutD, -, hbody, hgas, -, -⟩ := blockD_run (benv := benvAt pre parent) hf.1
     installed hl hpre (hf.2.2.1.trans ready.chainId) hf.2.2.2.1
     (by rw [hf.2.2.2.2.1]; decide) hf.2.2.2.2.2.1
   obtain ⟨trace⟩ := witnessBlockTrace ready.last hbound ready.chainId ready.gasLimit
@@ -471,7 +515,7 @@ theorem drain_stageD {pre : BlockChain} {parent : Block} (ready : ChainReady pre
     rw [blockEq]
     show witnessCoinbase ≠ senderE
     decide
-  obtain ⟨s0, bout0, htxs0, -, -, hrep0⟩ := blockD_run (benv := benv0) hfork0 installed0 hl0 hpre0
+  obtain ⟨s0, bout0, htxs0, -, -, hrep0, hs0code⟩ := blockD_run (benv := benv0) hfork0 installed0 hl0 hpre0
     hchain hbase (by rw [hlimit]; decide) hcb
   obtain ⟨hB, hH⟩ := AppliedBodyTrace.history_eq trace.bodyTrace hfork0 installed0
   have hrun := trace.bodyTrace.transactions.run
@@ -531,10 +575,18 @@ theorem drain_stageD {pre : BlockChain} {parent : Block} (ready : ChainReady pre
     unfold submissionFramePayments
     rw [ite_eq_left hpay]
     exact List.mem_singleton_self _
-  · change Blanc.WithdrawalRequest.RepresentsStorage
+  · have hprotW : State.Protected trace.bodyTrace.transactionBenv.state
+        withdrawalRequestPredeployAddress := by
+      apply State.Protected.of_code_ne_nil
+      have htbState : trace.bodyTrace.transactionBenv.state = s0 := by
+        have h := congrArg Benv.state htb
+        exact h
+      rw [htbState, hs0code]
+      exact Blanc.Lift.WithdrawalRequest.withdrawalRequestCode_sem_facts.2
+    change Blanc.WithdrawalRequest.RepresentsStorage
       ((processWithdrawalsState trace.bodyTrace.transactionBenv.state trace.block.wds).getStor
         _).get _
-    rw [processWithdrawalsState_getStor_eq, htb]
+    rw [processWithdrawalsState_getStor_eq _ _ _ hprotW, htb]
     exact hrep0
 
 /-! ## The negative control -/

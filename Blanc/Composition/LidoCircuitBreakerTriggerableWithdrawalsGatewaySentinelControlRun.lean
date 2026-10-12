@@ -1990,6 +1990,30 @@ private theorem gatewayRunMemoryLast_durationWindow {devm : Devm}
     rw [List.takeD_length]
   rw [← gatewayRunImageLast_duration, Bytes.toBytes_toB256_of_length hlen]
 
+private theorem sentinelGatewayPauseWorldAfterSetEntry_ownerCode :
+    (sentinelGatewayPauseWorldAfterSetEntry.getCode
+      sentinelGatewayPauseWorldSevm.currentTarget).toList ≠ [] := by
+  have addLogCode : ∀ (d : Devm) (l : Log) (a : Adr),
+      (d.addLog l).getCode a = d.getCode a := fun _ _ _ => rfl
+  have transCode : ∀ (d : Devm) (a : Adr) (k v : B256) (x : Adr),
+      (d.setTransVal a k v).getCode x = d.getCode x := fun _ _ _ _ _ => rfl
+  have hcarry : sentinelGatewayPauseWorldAfterSetEntry.getCode configWorldOwner =
+      sentinelGatewayPauseWorldPre.getCode configWorldOwner := by
+    simp only [sentinelGatewayPauseWorldAfterSetEntry, gatewayRunAfterSetBase,
+      gatewayRunRemoveBase3, gatewayRunCountPost, gatewayRunKernelBase,
+      indexClearPost, entryClearPost, lengthWritePost, indexWritePost,
+      entryWritePost, assignmentPost, assignmentBase, pauseKernelBase,
+      pauseDurationBase, pauseExpiryBase, pauseLockPost, Devm.getCode_setMach,
+      addLogCode, transCode, temporalSstorePost_getCode, temporalSloadBase_getCode]
+  rw [sentinelGatewayPauseWorld_currentTarget, hcarry]
+  change (sentinelGatewayPauseWorldState.get configWorldOwner).code.toList ≠ []
+  rw [sentinelGatewayPauseWorldState_get_breaker]
+  intro hnil
+  have hempty : lidoCircuitBreakerCode officialParams = [] := by
+    simpa only [configWorldCode, ByteArray.toList_eq_toList_data,
+      List.toList_toArray] using hnil
+  exact Prog.compile_ne_nil (by rw [lidoCircuitBreakerCode_compile, hempty])
+
 private theorem sentinelGatewayPauseWorld_afterSetAt {final : Devm}
     (hafter : Func.RunCompiledTo
       ((runtime officialParams).main :: (runtime officialParams).aux)
@@ -2062,8 +2086,11 @@ theorem sentinelGatewayPauseWorld_closedPublicPause :
       rw [← show pauseWorldCallee.toB256.toAdr = pauseWorldCallee from
         toAdr_toB256 pauseWorldCallee]
       exact gatewayRunAfterSetBase_code)
+    sentinelGatewayPauseWorldAfterSetEntry_ownerCode
     reached.1 reached.2.1 sentinelGatewayPauseWorld_publicPausePremises.dynamic hafter'
   have conclusion := sentinelGatewayPauseWorld_closedPremises hprog rfl
+    sentinelGatewayPauseWorldAfterSetEntry reached
+    sentinelGatewayPauseWorldAfterSetEntry_ownerCode
   refine ⟨sentinelGatewayPauseWorldAfterSetEntry, successPre, final, hprog, reached,
     hsuccess, ?_, hook, conclusion.1, conclusion⟩
   simpa only [sentinelGatewayPauseWorldAfterSetEntry] using hni
