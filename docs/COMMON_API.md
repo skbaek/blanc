@@ -4499,8 +4499,13 @@ contract-neutral.
   scaffolding for deciding a long `wrun` as kernel chunks between literal boundaries
   (`Boundary.Bnd`/`obsB`/`cfgOf`/`obsD`/`obsDOk`, their composition `obsD_chain`,
   `obsD_chain3`, `obsB_of_obsD`, `run_of_obsB` (every boundary also records that the frame's
-  accounts to delete are still empty, `AtdClean`); `Bnd1`/`cfgOf1`/`obsD1`/
-  `obsDOk1` with the refund counter and the accounts to delete optional; and a two-code-child frame's staging `callPairFrom`/`callPairA`/`callPairB`/
+  accounts to delete are still empty and that the transaction's created accounts are empty,
+  `AtdClean`: `SSTORE`'s original read consults the created set, so a chunk over free
+  bookkeeping is decided with it fixed; a settled child supplied as data must likewise carry
+  an empty created set, e.g. `childObs … (d.withCreatedAccounts .emptyWithCapacity)`);
+  `Bnd1`/`cfgOf1`/`obsD1`/
+  `obsDOk1` with the refund counter and the accounts to delete optional (the created set always
+  empty); and a two-code-child frame's staging `callPairFrom`/`callPairA`/`callPairB`/
   `callPairFrom_stages`) in
   [`Blanc/Lift/WitnessBoundary.lean`](../Blanc/Lift/WitnessBoundary.lean). Code tries given as
   generated literals (checked once by kernel `rfl`): `CodeTries.ofData` in
