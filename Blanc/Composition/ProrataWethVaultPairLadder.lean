@@ -263,6 +263,22 @@ structure PairMsgInv (vaultAddr : Adr) (msg : Msg) : Prop where
   callerNotVault : msg.caller ≠ vaultAddr
   callerNotWeth : msg.caller ≠ wethAccount
 
+/-- Both pair accounts carry nonempty code in the message world, so both are protected there
+(repin `ca9f27d`, SA). -/
+theorem PairMsgInv.protected {vault : Adr} {msg : Msg} (ready : PairMsgInv vault msg) :
+    State.Protected msg.benv.state vault ∧ State.Protected msg.benv.state wethAccount :=
+  ⟨State.Protected.of_code_ne_nil ready.vault.nodel.code,
+    State.Protected.of_code_ne_nil ready.weth.nodel.code⟩
+
+/-- The pair accounts are storage-safe at any message entry: both are protected. -/
+theorem PairMsgInv.entrySafe {vault : Adr} {msg : Msg} (ready : PairMsgInv vault msg)
+    (ok : PairStepRecord vault → Prop) :
+    ExecutionAccountingReplay.EntryStorageSafe (pairCarrierWith vault ok).storageOwners msg := by
+  intro owner observed _ _
+  rcases observed with rfl | rfl
+  · exact Or.inr ready.protected.1
+  · exact Or.inr ready.protected.2
+
 /-- A message that is about to run: an actual call, or a CREATE at an address that is neither pair
 account. -/
 structure PairMessageReady (vaultAddr : Adr) (msg : Msg) : Prop extends PairMsgInv vaultAddr msg where
@@ -417,7 +433,8 @@ theorem retainedProcessMessagePairReplayFaithful {vault : Adr} {msg : Msg} {post
   | none =>
       have storage := _root_.Blanc.ExecutionTrace.ProcessMessage.none_ok_getStor_eq process
       exact PairReplayWith.nil_of_eq
-        (PairBoundary.ofState_eq (congrFun storage vault) (congrFun storage wethAccount))
+        (PairBoundary.ofState_eq (storage vault ready.protected.1)
+          (storage wethAccount ready.protected.2))
   | @some pc sevm pre out run =>
       show PairReplayWith vault
         (fun r => PairProvenanceOk blockIndex transactionIndex [] r ∧
@@ -425,7 +442,7 @@ theorem retainedProcessMessagePairReplayFaithful {vault : Adr} {msg : Msg} {post
       apply (pairCarrierWith vault
         (fun r => PairProvenanceOk blockIndex transactionIndex [] r ∧
           PairStepRecord.OwnIn vault (Exec.rawFrameRoots run) r)).processMessage_of_body process
-        ready.weth.ne ready.weth.val0 ready.weth.state.side
+        ready.weth.ne ready.weth.val0 (ready.entrySafe _) ready.weth.state.side
       intro committed
       have enter := (RunFrame.some_inv process).1
       rcases Frame.enter_run_inv enter with ⟨entry, transfer, evmEq⟩
@@ -440,7 +457,6 @@ theorem retainedProcessCreateMessagePairReplayFaithful {vault : Adr} {msg : Msg}
     (ready : PairMsgInv vault msg)
     (targetNone : msg.target.isNone = true)
     (vaultNe : msg.currentTarget ≠ vault) (wethNe : msg.currentTarget ≠ wethAccount)
-    (fresh : msg.benv.state.getStor msg.currentTarget = .empty)
     (blockIndex : Nat) (transactionIndex : Option Nat) :
     PairReplayWith vault
       (fun r => PairProvenanceOk blockIndex transactionIndex [] r ∧
@@ -449,11 +465,12 @@ theorem retainedProcessCreateMessagePairReplayFaithful {vault : Adr} {msg : Msg}
   rcases trace with ⟨slot, retained, process⟩
   cases retained with
   | none =>
-      have storage :=
-        _root_.Blanc.ExecutionTrace.ProcessCreateMessage.none_ok_getStor_eq_of_empty
-          process fresh
       exact PairReplayWith.nil_of_eq
-        (PairBoundary.ofState_eq (congrFun storage vault) (congrFun storage wethAccount))
+        (PairBoundary.ofState_eq
+          (_root_.Blanc.ExecutionTrace.ProcessCreateMessage.none_ok_getStor_eq_of_protected_ne
+            process vault ready.protected.1 vaultNe)
+          (_root_.Blanc.ExecutionTrace.ProcessCreateMessage.none_ok_getStor_eq_of_protected_ne
+            process wethAccount ready.protected.2 wethNe))
   | @some pc sevm pre out run =>
       show PairReplayWith vault
         (fun r => PairProvenanceOk blockIndex transactionIndex [] r ∧
@@ -461,7 +478,12 @@ theorem retainedProcessCreateMessagePairReplayFaithful {vault : Adr} {msg : Msg}
       apply (pairCarrierWith vault
         (fun r => PairProvenanceOk blockIndex transactionIndex [] r ∧
           PairStepRecord.OwnIn vault (Exec.rawFrameRoots run) r)).processCreateMessage_of_body
-        process ready.weth.ne ready.weth.val0 fresh ready.weth.state.side
+        process ready.weth.ne ready.weth.val0
+        (fun owner observed => by
+          rcases observed with rfl | rfl
+          · exact vaultNe
+          · exact wethNe)
+        (ready.entrySafe _) ready.weth.state.side
       intro committed
       have preparedNe : ∀ {a : Adr}, msg.currentTarget ≠ a →
           (processCreateMessage.msg msg).currentTarget ≠ a := by
@@ -473,10 +495,11 @@ theorem retainedProcessCreateMessagePairReplayFaithful {vault : Adr} {msg : Msg}
           distinct := ready.distinct
           wethNonprecompile := by
             simpa only [processCreateMessage.msg, Msg.withBenv, Benv.incrNonce, addCreatedAccount,
-              Benv.setStor, Bool.false_eq_true, eq_iff_iff, iff_false] using ready.wethNonprecompile
+              Benv.setStor, Benv.clearStorageWritesIfEmpty, Bool.false_eq_true, eq_iff_iff,
+              iff_false] using ready.wethNonprecompile
           covered := by
             simpa only [processCreateMessage.msg, Msg.withBenv, Benv.incrNonce, addCreatedAccount,
-              Benv.setStor] using ready.covered
+              Benv.setStor, Benv.clearStorageWritesIfEmpty] using ready.covered
           callerNotVault := by
             simpa only [processCreateMessage.msg, Msg.withBenv, ne_eq] using ready.callerNotVault
           callerNotWeth := by
@@ -510,12 +533,11 @@ theorem retainedMessageCallPairReplayFaithful {vault : Adr} {msg : Msg} {state :
         Bool.noConfusion ((ready.createCollision (.inl hit)).symm.trans collision)
       have wethNe : msg.currentTarget ≠ wethAccount := fun hit =>
         Bool.noConfusion ((ready.createCollision (.inr hit)).symm.trans collision)
-      have fresh := messageCreateCollision_false_getStor_eq_empty collision
       have boundary := congrArg (PairBoundary.ofState vault)
         (processMessageCall_createRun_state_eq targetNone collision core result ready.covered)
       rw [boundary]
       exact retainedProcessCreateMessagePairReplayFaithful inner ready targetNone vaultNe wethNe
-        fresh blockIndex transactionIndex
+        blockIndex transactionIndex
   | callRun targetSome delegated refund delegation execMsg execMsgEq evm core inner result =>
       subst execMsgEq
       have stateEq :=
@@ -539,12 +561,19 @@ theorem retainedMessageCallPairReplayFaithful {vault : Adr} {msg : Msg} {state :
           codeOrForeign := Or.inl (by
             rw [messageCallExecutionMessage_target_eq, messageCallDelegation_target_eq delegation]
             exact targetSome) }
-      have storEq : (messageCallExecutionMessage delegated).benv.state.getStor =
-          msg.benv.state.getStor := by
-        rw [messageCallExecutionMessage_getStor_eq, messageCallDelegation_getStor_eq delegation]
+      have storEq : ∀ owner, (msg.benv.state.getCode owner).toList ≠ [] →
+          ¬ isValidDelegation (msg.benv.state.getCode owner) →
+          (messageCallExecutionMessage delegated).benv.state.getStor owner =
+            msg.benv.state.getStor owner := by
+        intro owner nonempty nondesignator
+        rw [messageCallExecutionMessage_getStor_eq]
+        exact messageCallDelegation_getStor_eq delegation owner nonempty nondesignator
       have boundary := congrArg (PairBoundary.ofState vault) stateEq
-      rw [boundary, ← PairBoundary.ofState_eq (congrFun storEq vault)
-        (congrFun storEq wethAccount)]
+      rw [boundary, ← PairBoundary.ofState_eq
+        (storEq vault ready.vault.nodel.code
+          (not_delegation_of_compile ready.vault.state.code))
+        (storEq wethAccount ready.weth.nodel.code
+          (not_delegation_of_compile ready.weth.state.code))]
       exact retainedProcessMessagePairReplayFaithful inner execReady blockIndex transactionIndex
 
 -- PX:717–779 / G:225–295; the createRun arm replaces `codeOrForeign` by the collision derivation (§5).
@@ -586,11 +615,31 @@ theorem retainedTransactionPairReplayFaithful {vault : Adr} {benv : Benv} {bout 
     retainedMessageCallPairReplayFaithful trace.message ready blockIndex transactionIndex
   rw [debitBoundary] at messageReplay
   -- (3), (4) the two gas credits move balances only
+  have messageFork : CoveredFork trace.msg.benv.stat.fork := by
+    rw [prepareMessage_benv trace.prepared]
+    simpa only [Benv.beginTransaction] using inv.covered
+  have messageProtected {c : ContractSpec} {a : Adr} (preserves : c.Preserves a)
+      (ainv : c.StateInv a benv.state) (notCreated : a ∉ benv.createdAccounts) :
+      State.Protected trace.messageState a :=
+    protected_of_compile (ContractSpec.processMessageCall_preserves_inv messageFork
+      preserves trace.message.result (trace.msgInv ainv notCreated)).1.code
+  have creditKept {a : Adr} (hp : State.Protected trace.messageState a) :
+      (trace.coinbaseState chronology.refundCounter).getStor a =
+        trace.messageState.getStor a := by
+    change (((trace.messageState.addBal trace.sender
+      (trace.refundValue chronology.refundCounter)).addBal benv.stat.coinbase
+        (trace.coinbaseValue chronology.refundCounter)).get a).stor =
+      (trace.messageState.get a).stor
+    unfold State.addBal
+    rw [State.setBal_get_stor_of_protected (hp.setBal _ _),
+      State.setBal_get_stor_of_protected hp]
   have settled : PairBoundary.ofState vault (trace.coinbaseState chronology.refundCounter) =
       PairBoundary.ofState vault trace.messageState :=
     PairBoundary.ofState_eq
-      ((getStor_addBal _ vault _ _).trans (getStor_addBal _ vault _ _))
-      ((getStor_addBal _ wethAccount _ _).trans (getStor_addBal _ wethAccount _ _))
+      (creditKept (messageProtected (pairVaultCodeSpec_preserves vault)
+        inv.world.vaultCode inv.vaultNotCreated))
+      (creditKept (messageProtected (wethSpec_preserves wethAccount)
+        inv.world.weth inv.wethNotCreated))
   -- (5) the deletion fold names neither pair account
   have vaultKept := foldl_destroyAccount_get_eq
     (state := trace.coinbaseState chronology.refundCounter)
