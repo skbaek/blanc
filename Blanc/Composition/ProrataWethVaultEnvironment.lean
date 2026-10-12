@@ -999,11 +999,54 @@ theorem calldataSelector_nil_not_mem :
     ∀ sel ∈ wethSelectors, calldataSelector [] ≠ sel := by
   decide +kernel
 
+/-- A full-balance self-payment empties a codeless, nonce-zero account, so
+Jaune `ca9f27d` deletes it with its storage at message entry (SA).  Kernel
+mechanism behind the zero-value premise of `weth_message_run_or_quiet` and the
+five WETH silence/split theorems below. -/
+theorem selfPayment_entry_clears_storage {msg : Msg} {entry : Benv}
+    (transfers : msg.shouldTransferValue = true)
+    (self : msg.caller = msg.currentTarget) (nonzero : msg.value ≠ 0)
+    (hnonce : (msg.benv.state.get msg.caller).nonce = 0)
+    (hcode : (msg.benv.state.get msg.caller).code.size = 0)
+    (hbal : (msg.benv.state.get msg.caller).bal = msg.value)
+    (transfer : msg.benvAfterTransfer = .ok entry) :
+    entry.state.getStor msg.currentTarget = Stor.empty := by
+  obtain ⟨debited, debit, entryEq⟩ := of_benvAfterTransfer transfers nonzero transfer
+  have entryState : entry.state = debited.addBal msg.currentTarget msg.value := by
+    rw [entryEq]
+    rfl
+  rw [entryState, ← self]
+  unfold State.subBal at debit
+  rw [if_neg (by unfold State.bal; rw [hbal]; exact lt_irrefl _)] at debit
+  cases debit
+  unfold State.addBal State.getStor
+  rw [State.setBal_get_stor]
+  split
+  · rfl
+  · rw [State.setBal_get_stor, if_pos]
+    refine ⟨rfl, hcode, hnonce, ?_⟩
+    unfold State.bal
+    rw [hbal]
+    exact B256.sub_self _
+
 /-- **The settled WETH message reduction.**  A retained committing message to
 `wethAccount` running the inherited WETH program either changed no cell at all
 (no interpreted slot, or a rolled-back settlement) or exposes the actual
-gas-exact compiled run whose WETH storage frame is the message's.  The
-zero-value premise keeps the slotless entry transfer inert (SA). -/
+gas-exact compiled run whose WETH storage frame is the message's.
+
+The zero-value premise is necessary under Jaune `ca9f27d` (SA), not a
+convenience: `MessageUsesProgram` constrains only `msg.code`, not the code
+installed at `wethAccount`.  Take a message whose caller and target are both
+`wethAccount`, whose world account there is codeless with nonce `0`, balance
+`v > 0` and a nonzero cell at a non-address key, and whose value is `v`.  The
+entry transfer empties and deletes that account with its storage
+(`selfPayment_entry_clears_storage`), so the run's entry WETH storage differs
+from the message's and, for a selector that writes no non-address cell (a view,
+the deposit fallback, a zero `transfer`, a zero `withdraw` whose self-callback
+runs the fallback), the committed post cell differs as well: both disjuncts
+fail.  The same corner refutes the zero-free forms of the five theorems below.
+Protection of the installed WETH account would also suffice, but no premise
+here states it. -/
 theorem weth_message_run_or_quiet {msg : Msg} {post : Devm} {slot : Xlot}
     (filled : Xlot.Filled slot)
     (process : ProcessMessage msg slot (.ok post))
