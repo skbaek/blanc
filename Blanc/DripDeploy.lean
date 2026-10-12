@@ -557,8 +557,8 @@ theorem constructorProgram_runCompiled {sevm : Sevm} {pre : Devm} {G : Nat}
     · rw [haccess9]; exact hcoldChi
     · simp only [s9, Devm.gasLeft_setMach, gCallStipend]; omega
     · exact hstatic
-    · simp only [horigChi, hc9, hvcS]
-    · simp only [horigChi, hc9, hrefund9, hrcS]
+    · simp only [Devm.getOrigStorVal, horigChi, ite_self, hc9, hvcS]
+    · simp only [Devm.getOrigStorVal, horigChi, ite_self, hc9, hrefund9, hrcS]
     · simp only [s9, Devm.gasLeft_setMach, gasColdSload, gasStorageSet, Nat.add_assoc]
   have h11 : Ninst.RunCompiled sevm s10 timestamp s11 := by
     simpa only [s11, s10, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
@@ -589,8 +589,8 @@ theorem constructorProgram_runCompiled {sevm : Sevm} {pre : Devm} {G : Nat}
     · exact haccess12
     · simp only [s12, Devm.gasLeft_setMach, gCallStipend]; omega
     · exact hstatic
-    · simp only [horigRho, hcur12, hvcT]
-    · simp only [horigRho, hcur12, hrefund12, hrcT]
+    · simp only [Devm.getOrigStorVal, horigRho, ite_self, hcur12, hvcT]
+    · simp only [Devm.getOrigStorVal, horigRho, ite_self, hcur12, hrefund12, hrcT]
     · simp only [s12, Devm.gasLeft_setMach, gasColdSload, gasStorageSet, Nat.add_assoc]
   have h14 : Ninst.RunCompiled sevm s13 (pushCreationCoordinate 1762) s14 := by
     simpa only [s14, s13, pushCreationCoordinate, Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach, Devm.memory_setMach, Devm.stateGas_setMach] using
@@ -816,8 +816,9 @@ theorem processMessage_drip_checkpoint
   have h_orr : getOrigStorVal (initSevm seeded) msg.currentTarget rhoSlot = 0 := by
     simpa only [getOrigStorVal, getOrigAcct, h_beq] using h_origRho
   have h_benv_stor : benv.state.getStor msg.currentTarget = Stor.empty := by
-    have h := congrFun (benvAfterTransfer_getStor_eq (msg := prepared) h_transfer) msg.currentTarget
-    rw [h]
+    have h := Msg.benvAfterTransfer_of_value_zero (msg := prepared) h_value
+    rw [h] at h_transfer
+    cases h_transfer
     exact processCreateMessage_msg_getStor_currentTarget msg
   have h_curchi : (initDevm seeded).getStorVal msg.currentTarget chiSlot = 0 := by
     show (benv.state.getStor msg.currentTarget).get chiSlot = 0
@@ -1074,26 +1075,32 @@ private theorem dripInstalledPost_certificate
       post.refundCounter = 0 ∧
       post.accountsToDelete = .emptyWithCapacity ∧
       post.getBal msg.currentTarget = 0 := by
+  have hnonempty : (ByteArray.mk ⟨charged.output⟩).size ≠ 0 := by
+    have hlen : code.length = 1762 := codeSize_exact
+    rw [ByteArray.size_eq_length_toList, ByteArray.toList_eq_toList_data]
+    change charged.output.length ≠ 0
+    rw [h_output]
+    omega
   refine ⟨charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩,
     h_process, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · unfold Devm.getCode Devm.getAcct
     rw [Devm.setCode_state]
     unfold State.setCode
-    rw [State.get_set_self]
+    rw [State.setAccount_get_self, Acct.clearIfEmpty_code]
     simp only [h_output]
   · change ((charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩).state.getStor
         msg.currentTarget).get chiSlot = scale
     rw [Devm.setCode_state]
     change (((charged.state.setCode msg.currentTarget
         ⟨⟨charged.output⟩⟩).get msg.currentTarget).stor).get chiSlot = scale
-    rw [State.setCode_get_stor]
+    rw [State.setCode_get_stor hnonempty]
     exact h_chi
   · change ((charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩).state.getStor
         msg.currentTarget).get rhoSlot = msg.benv.stat.time
     rw [Devm.setCode_state]
     change (((charged.state.setCode msg.currentTarget
         ⟨⟨charged.output⟩⟩).get msg.currentTarget).stor).get rhoSlot = msg.benv.stat.time
-    rw [State.setCode_get_stor]
+    rw [State.setCode_get_stor hnonempty]
     exact h_rho
   · intro k hkc hkr
     change ((charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩).state.getStor
@@ -1101,7 +1108,7 @@ private theorem dripInstalledPost_certificate
     rw [Devm.setCode_state]
     change (((charged.state.setCode msg.currentTarget
         ⟨⟨charged.output⟩⟩).get msg.currentTarget).stor).get k = 0
-    rw [State.setCode_get_stor]
+    rw [State.setCode_get_stor hnonempty]
     exact h_pie k hkc hkr
   · exact h_logs
   · exact h_output
@@ -1488,11 +1495,11 @@ theorem prepareCanonicalDeploymentContext
     dsimp only [debit]
     change (((begun.state.incrNonce sender).setBal sender _).get sender).nonce =
       base.state.getNonce sender + 1
-    rw [State.setBal_get_self]
+    rw [State.setBal_get_nonce]
     change ((begun.state.incrNonce sender).get sender).nonce =
       base.state.getNonce sender + 1
     unfold State.incrNonce
-    rw [State.get_set_self]
+    rw [State.setAccount_get_self, Acct.clearIfEmpty_nonce]
     change begun.state.getNonce sender + 1 = base.state.getNonce sender + 1
     rw [hbegun_state]
   have htarget : msg.currentTarget = ca := by
@@ -1525,7 +1532,7 @@ theorem prepareCanonicalDeploymentContext
     dsimp only [debit]
     rw [State.setBal_get_ne hbase.sender_ne_target]
     unfold State.incrNonce
-    rw [State.get_set_ne _ hbase.sender_ne_target]
+    rw [State.setAccount_get_ne _ hbase.sender_ne_target]
     rw [hbegun_state]
   have hnocode : accountHasCodeOrNonce msg.benv.state ca = false := by
     dsimp only [msg, msgBenv]
@@ -1945,7 +1952,14 @@ theorem canonicalDeploymentTransaction_succeeds
     dsimp only [post, deploymentFinalState]
     unfold State.addBal
     unfold State.getStor
-    rw [State.setBal_get_stor, State.setBal_get_stor]
+    have hp : State.Protected messagePost ca := by
+      right
+      have hlen : code.length = 1762 := codeSize_exact
+      change (messagePost.getCode ca).size ≠ 0
+      rw [hmessage.installed, ByteArray.size_eq_length_toList, ByteArray.toList_eq_toList_data]
+      exact Nat.ne_of_gt (by omega : code.length > 0)
+    rw [State.setBal_get_stor_of_protected (hp.setBal _ _),
+      State.setBal_get_stor_of_protected hp]
   have hchi : (post.getStor ca).get chiSlot = scale := by
     rw [hstor_eq]
     exact hmessage.chi
@@ -2173,12 +2187,14 @@ theorem canonicalDeploymentApplyBody_succeeds
           (initBenv fork base cb.block.header).stat.rules 0
           (initBenv fork base cb.block.header).state ctx.systemPrefix.stBeacon
           (beaconRootsAddress :: ctx.systemPrefix.outBeacon.accountReads.toList)
-          ctx.systemPrefix.outBeacon.storageReads.toList).incorporateSystem
+          ctx.systemPrefix.outBeacon.storageReads.toList
+          ctx.systemPrefix.outBeacon.storageWrites.toList).incorporateSystem
         (initBenv fork base cb.block.header).stat.rules 0
         ((initBenv fork base cb.block.header).withState ctx.systemPrefix.stBeacon).state
         ctx.systemPrefix.stHistory
         (historyStorageAddress :: ctx.systemPrefix.outHistory.accountReads.toList)
-        ctx.systemPrefix.outHistory.storageReads.toList = (BlockOutput.init : BlockOutput).bal := by
+        ctx.systemPrefix.outHistory.storageReads.toList
+        ctx.systemPrefix.outHistory.storageWrites.toList = (BlockOutput.init : BlockOutput).bal := by
     simp only [BalBuilder.incorporateSystem, hbalNone, Std.TreeMap.empty_eq_emptyc]
     change ({} : BalBuilder) = ({} : BalBuilder)
     rfl
