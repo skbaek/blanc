@@ -254,7 +254,7 @@ theorem registerAfterSet_oldLastZero_runCompiled
       base.accessedStorageKeys)
     (hexpiry : base.getStorVal sevm.currentTarget
       (expirySlot oldPauser) = oldExpiry)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot oldPauser) = oldExpiryOriginal)
     (hwarmExpiry : (sevm.currentTarget, expirySlot oldPauser) ∈
       base.accessedStorageKeys)
@@ -421,11 +421,11 @@ private theorem removeTarget_foundZeroRetained_runCompiled
     (hlength : base.getStorVal sevm.currentTarget arrayLengthSlot = next)
     (hcount : base.getStorVal sevm.currentTarget
       (countSlot oldPauser) = remaining)
-    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+    (harrayOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot next) = arrayOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget
       arrayLengthSlot = lengthOriginal)
     (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
     (hmovedIndexCost : sstoreValueCost indexOriginal next next =
@@ -636,11 +636,11 @@ private theorem afterOldPauser_foundZeroRetained_runCompiled
     (hlength : base.getStorVal sevm.currentTarget arrayLengthSlot = next)
     (hcount : base.getStorVal sevm.currentTarget
       (countSlot oldPauser) = remaining)
-    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+    (harrayOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot next) = arrayOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget
       arrayLengthSlot = lengthOriginal)
     (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
     (hmovedIndexCost : sstoreValueCost indexOriginal next next =
@@ -755,22 +755,22 @@ theorem setPauserKernel_foundZeroRetainedLast_runCompiled
     (htargetValid : nonzeroCanonicalAddress target)
     (holdValid : nonzeroCanonicalAddress oldPauser)
     (hsize : M.size = 640)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser 0 =
       assignmentCost)
     (hcount : (assignmentPost sevm base target 0).getStorVal
       sevm.currentTarget (countSlot oldPauser) = oldCount)
-    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hcountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot oldPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
       countCost)
     (hremaining : oldCount - 1 ≠ 0)
-    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+    (harrayOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot (Nat.toB256 entries.length)) = arrayOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
       lengthOriginal)
     (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
     (hmovedIndexCost : sstoreValueCost indexOriginal
@@ -824,6 +824,11 @@ theorem setPauserKernel_foundZeroRetainedLast_runCompiled
   let countBase := temporalSloadBase sevm assignPost (countSlot oldPauser)
   let countPost := temporalSstorePost sevm countBase (countSlot oldPauser)
     (oldCount - 1)
+  have hcountPostOrig : ∀ (a : Adr) (k : B256),
+      countPost.getOrigStorVal sevm a k = base.getOrigStorVal sevm a k := by
+    intro a k
+    simp only [countPost, countBase, assignPost, temporalSstorePost_getOrigStorVal,
+      temporalSloadBase_getOrigStorVal, assignmentPost_getOrigStorVal]
   let M' := M.write (previousPauserWord * 32).toNat oldPauser.toBytes
   let img' := Bytes.writeAt img (previousPauserWord * 32).toNat
     oldPauser.toBytes
@@ -958,7 +963,8 @@ theorem setPauserKernel_foundZeroRetainedLast_runCompiled
     hwf' hreads' htarget' hprevious' hnew' hcontinuation' htargetValid
     holdValid hremaining hnextNonzero hnextBound 640 3 3 hsize'
     (by rw [hsize']) (by decide) (by decide) (by decide) (by decide)
-    harray hindexVal hlengthVal hcountVal harrayOrig hindexOrig hlengthOrig
+    harray hindexVal hlengthVal hcountVal ((hcountPostOrig _ _).trans harrayOrig)
+    ((hcountPostOrig _ _).trans hindexOrig) ((hcountPostOrig _ _).trans hlengthOrig)
     hholeCost hmovedIndexCost htailClearCost hlengthRestoreCost
     hindexClearCost (hwarmTransport _ hwarmArray) (hwarmTransport _ hwarmIndex)
     (hwarmTransport _ hwarmLength) hwarmCount rfl hgasFinal hstatic
@@ -1291,22 +1297,22 @@ theorem registerPauser_body_foundZeroRetainedLast_runCompiled
     (hlast : index + 1 = entries.length)
     (htargetValid : nonzeroCanonicalAddress target)
     (holdValid : nonzeroCanonicalAddress oldPauser)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser 0 =
       assignmentCost)
     (hcount : (assignmentPost sevm base target 0).getStorVal
       sevm.currentTarget (countSlot oldPauser) = oldCount)
-    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hcountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot oldPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
       countCost)
     (hremaining : oldCount - 1 ≠ 0)
-    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+    (harrayOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot (Nat.toB256 entries.length)) = arrayOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
       lengthOriginal)
     (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
     (hmovedIndexCost : sstoreValueCost indexOriginal
@@ -1410,22 +1416,22 @@ theorem registerPauser_runCompiledTo_foundZeroRetainedLast
     (hlast : index + 1 = entries.length)
     (htargetValid : nonzeroCanonicalAddress target)
     (holdValid : nonzeroCanonicalAddress oldPauser)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser 0 =
       assignmentCost)
     (hcount : (assignmentPost sevm base target 0).getStorVal
       sevm.currentTarget (countSlot oldPauser) = oldCount)
-    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hcountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot oldPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
       countCost)
     (hremaining : oldCount - 1 ≠ 0)
-    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+    (harrayOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot (Nat.toB256 entries.length)) = arrayOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
       lengthOriginal)
     (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
     (hmovedIndexCost : sstoreValueCost indexOriginal
@@ -1521,22 +1527,22 @@ theorem registerPauser_foundZeroRetainedLast_success_settled_effects
     (hlast : index + 1 = entries.length)
     (htargetValid : nonzeroCanonicalAddress target)
     (holdValid : nonzeroCanonicalAddress oldPauser)
-    (hassignmentOrig : getOrigStorVal (initSevm msg) ca
+    (hassignmentOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser 0 =
       assignmentCost)
     (hcount : (assignmentPost (initSevm msg) (initDevm msg)
       target 0).getStorVal ca (countSlot oldPauser) = oldCount)
-    (hcountOrig : getOrigStorVal (initSevm msg) ca
+    (hcountOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (countSlot oldPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
       countCost)
     (hremaining : oldCount - 1 ≠ 0)
-    (harrayOrig : getOrigStorVal (initSevm msg) ca
+    (harrayOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (arrayEntrySlot (Nat.toB256 entries.length)) = arrayOriginal)
-    (hindexOrig : getOrigStorVal (initSevm msg) ca
+    (hindexOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal (initSevm msg) ca arrayLengthSlot =
+    (hlengthOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca arrayLengthSlot =
       lengthOriginal)
     (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
     (hmovedIndexCost : sstoreValueCost indexOriginal
@@ -1703,15 +1709,15 @@ private theorem removeTarget_foundZeroRetainedSwapPop_runCompiled
     (hlength : base.getStorVal sevm.currentTarget arrayLengthSlot = len)
     (hcount : base.getStorVal sevm.currentTarget
       (countSlot oldPauser) = remaining)
-    (hholeOrig : getOrigStorVal sevm sevm.currentTarget
+    (hholeOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot idx) = holeOriginal)
-    (hmovedOrig : getOrigStorVal sevm sevm.currentTarget
+    (hmovedOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot lastTarget) = movedOriginal)
-    (htailOrig : getOrigStorVal sevm sevm.currentTarget
+    (htailOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot len) = tailOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget
       arrayLengthSlot = lengthOriginal)
     (hholeCost : sstoreValueCost holeOriginal holeCurrent lastTarget =
       holeCost)
@@ -1942,15 +1948,15 @@ private theorem afterOldPauser_foundZeroRetainedSwapPop_runCompiled
     (hlength : base.getStorVal sevm.currentTarget arrayLengthSlot = len)
     (hcount : base.getStorVal sevm.currentTarget
       (countSlot oldPauser) = remaining)
-    (hholeOrig : getOrigStorVal sevm sevm.currentTarget
+    (hholeOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot idx) = holeOriginal)
-    (hmovedOrig : getOrigStorVal sevm sevm.currentTarget
+    (hmovedOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot lastTarget) = movedOriginal)
-    (htailOrig : getOrigStorVal sevm sevm.currentTarget
+    (htailOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot len) = tailOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget
       arrayLengthSlot = lengthOriginal)
     (hholeCost : sstoreValueCost holeOriginal holeCurrent lastTarget =
       holeCost)
@@ -2079,26 +2085,26 @@ theorem setPauserKernel_foundZeroRetainedSwapPop_runCompiled
     (htargetValid : nonzeroCanonicalAddress target)
     (holdValid : nonzeroCanonicalAddress oldPauser)
     (hsize : M.size = 640)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser 0 =
       assignmentCost)
     (hcount : (assignmentPost sevm base target 0).getStorVal
       sevm.currentTarget (countSlot oldPauser) = oldCount)
-    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hcountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot oldPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
       countCost)
     (hremaining : oldCount - 1 ≠ 0)
-    (hholeOrig : getOrigStorVal sevm sevm.currentTarget
+    (hholeOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot (Nat.toB256 (index + 1))) = holeOriginal)
-    (hmovedOrig : getOrigStorVal sevm sevm.currentTarget
+    (hmovedOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot (sourceLastTarget entries)) = movedOriginal)
-    (htailOrig : getOrigStorVal sevm sevm.currentTarget
+    (htailOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot (Nat.toB256 entries.length)) = tailOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
       lengthOriginal)
     (hholeCost : sstoreValueCost holeOriginal target
       (sourceLastTarget entries) = holeCost)
@@ -2181,6 +2187,11 @@ theorem setPauserKernel_foundZeroRetainedSwapPop_runCompiled
   let countBase := temporalSloadBase sevm assignPost (countSlot oldPauser)
   let countPost := temporalSstorePost sevm countBase (countSlot oldPauser)
     (oldCount - 1)
+  have hcountPostOrig : ∀ (a : Adr) (k : B256),
+      countPost.getOrigStorVal sevm a k = base.getOrigStorVal sevm a k := by
+    intro a k
+    simp only [countPost, countBase, assignPost, temporalSstorePost_getOrigStorVal,
+      temporalSloadBase_getOrigStorVal, assignmentPost_getOrigStorVal]
   let M' := M.write (previousPauserWord * 32).toNat oldPauser.toBytes
   let img' := Bytes.writeAt img (previousPauserWord * 32).toNat
     oldPauser.toBytes
@@ -2360,7 +2371,9 @@ theorem setPauserKernel_foundZeroRetainedSwapPop_runCompiled
     hlastValid hlastNe holdValid hremaining hidxNonzero hidxBound hlenNonzero
     hlenBound hidxNeLen 640 3 3 hsize' (by rw [hsize']) (by decide) (by decide)
     (by decide) (by decide) hhole hmoved htail hindexVal hlengthVal hcountVal
-    hholeOrig hmovedOrig htailOrig hindexOrig hlengthOrig hholeCost
+    ((hcountPostOrig _ _).trans hholeOrig) ((hcountPostOrig _ _).trans hmovedOrig)
+    ((hcountPostOrig _ _).trans htailOrig) ((hcountPostOrig _ _).trans hindexOrig)
+    ((hcountPostOrig _ _).trans hlengthOrig) hholeCost
     hmovedIndexCost htailClearCost hlengthRestoreCost hindexClearCost
     (hwarmTransport _ hwarmHole) (hwarmTransport _ hwarmMoved)
     (hwarmTransport _ hwarmTail) (hwarmTransport _ hwarmIndex)
@@ -2487,26 +2500,26 @@ theorem registerPauser_body_foundZeroRetainedSwapPop_runCompiled
     (hnotLast : index + 1 < entries.length)
     (htargetValid : nonzeroCanonicalAddress target)
     (holdValid : nonzeroCanonicalAddress oldPauser)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser 0 =
       assignmentCost)
     (hcount : (assignmentPost sevm base target 0).getStorVal
       sevm.currentTarget (countSlot oldPauser) = oldCount)
-    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hcountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot oldPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
       countCost)
     (hremaining : oldCount - 1 ≠ 0)
-    (hholeOrig : getOrigStorVal sevm sevm.currentTarget
+    (hholeOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot (Nat.toB256 (index + 1))) = holeOriginal)
-    (hmovedOrig : getOrigStorVal sevm sevm.currentTarget
+    (hmovedOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot (sourceLastTarget entries)) = movedOriginal)
-    (htailOrig : getOrigStorVal sevm sevm.currentTarget
+    (htailOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot (Nat.toB256 entries.length)) = tailOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
       lengthOriginal)
     (hholeCost : sstoreValueCost holeOriginal target
       (sourceLastTarget entries) = holeCost)
@@ -2614,26 +2627,26 @@ theorem registerPauser_runCompiledTo_foundZeroRetainedSwapPop
     (hnotLast : index + 1 < entries.length)
     (htargetValid : nonzeroCanonicalAddress target)
     (holdValid : nonzeroCanonicalAddress oldPauser)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser 0 =
       assignmentCost)
     (hcount : (assignmentPost sevm base target 0).getStorVal
       sevm.currentTarget (countSlot oldPauser) = oldCount)
-    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hcountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot oldPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
       countCost)
     (hremaining : oldCount - 1 ≠ 0)
-    (hholeOrig : getOrigStorVal sevm sevm.currentTarget
+    (hholeOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot (Nat.toB256 (index + 1))) = holeOriginal)
-    (hmovedOrig : getOrigStorVal sevm sevm.currentTarget
+    (hmovedOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot (sourceLastTarget entries)) = movedOriginal)
-    (htailOrig : getOrigStorVal sevm sevm.currentTarget
+    (htailOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot (Nat.toB256 entries.length)) = tailOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
       lengthOriginal)
     (hholeCost : sstoreValueCost holeOriginal target
       (sourceLastTarget entries) = holeCost)
@@ -2737,26 +2750,26 @@ theorem registerPauser_foundZeroRetainedSwapPop_success_settled_effects
     (hnotLast : index + 1 < entries.length)
     (htargetValid : nonzeroCanonicalAddress target)
     (holdValid : nonzeroCanonicalAddress oldPauser)
-    (hassignmentOrig : getOrigStorVal (initSevm msg) ca
+    (hassignmentOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser 0 =
       assignmentCost)
     (hcount : (assignmentPost (initSevm msg) (initDevm msg)
       target 0).getStorVal ca (countSlot oldPauser) = oldCount)
-    (hcountOrig : getOrigStorVal (initSevm msg) ca
+    (hcountOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (countSlot oldPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
       countCost)
     (hremaining : oldCount - 1 ≠ 0)
-    (hholeOrig : getOrigStorVal (initSevm msg) ca
+    (hholeOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (arrayEntrySlot (Nat.toB256 (index + 1))) = holeOriginal)
-    (hmovedOrig : getOrigStorVal (initSevm msg) ca
+    (hmovedOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (indexSlot (sourceLastTarget entries)) = movedOriginal)
-    (htailOrig : getOrigStorVal (initSevm msg) ca
+    (htailOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (arrayEntrySlot (Nat.toB256 entries.length)) = tailOriginal)
-    (hindexOrig : getOrigStorVal (initSevm msg) ca
+    (hindexOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal (initSevm msg) ca arrayLengthSlot =
+    (hlengthOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca arrayLengthSlot =
       lengthOriginal)
     (hholeCost : sstoreValueCost holeOriginal target
       (sourceLastTarget entries) = holeCost)
@@ -2909,7 +2922,7 @@ private theorem finishSetPauser_oldLastZero_runCompiled
       base.accessedStorageKeys)
     (hexpiry : base.getStorVal sevm.currentTarget
       (expirySlot oldPauser) = oldExpiry)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot oldPauser) = oldExpiryOriginal)
     (hwarmExpiry : (sevm.currentTarget, expirySlot oldPauser) ∈
       base.accessedStorageKeys)
@@ -2996,13 +3009,13 @@ private theorem removeTarget_foundZeroOldLast_runCompiled
       (countSlot oldPauser) = 0)
     (hexpiry : base.getStorVal sevm.currentTarget
       (expirySlot oldPauser) = oldExpiry)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot oldPauser) = oldExpiryOriginal)
-    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+    (harrayOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot next) = arrayOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget
       arrayLengthSlot = lengthOriginal)
     (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
     (hmovedIndexCost : sstoreValueCost indexOriginal next next =
@@ -3175,7 +3188,9 @@ private theorem removeTarget_foundZeroOldLast_runCompiled
     hcontinuationLast holdValid.1
     (by simpa only [countKey] using hcountRemove)
     (hwarmRemove _ hwarmCount)
-    (by simpa only [expiryKey] using hexpiryRemove) hexpiryOrig
+    (by simpa only [expiryKey] using hexpiryRemove)
+    ((indexClearPost_getOrigStorVal sevm tailPost target oldLength _ _).trans
+      ((entryClearPost_getOrigStorVal sevm base target next _ _).trans hexpiryOrig))
     (hwarmRemove _ hwarmExpiry) hclearCost hgasStipend
     (by rw [hsizeLast]; decide) halignLast hstatic
   have hrun := removeTarget_toFinish_runCompiled (hfork := hfork) dp sevm base M img
@@ -3251,13 +3266,13 @@ private theorem afterOldPauser_foundZeroOldLast_runCompiled
       (countSlot oldPauser) = 0)
     (hexpiry : base.getStorVal sevm.currentTarget
       (expirySlot oldPauser) = oldExpiry)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot oldPauser) = oldExpiryOriginal)
-    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+    (harrayOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot next) = arrayOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget
       arrayLengthSlot = lengthOriginal)
     (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
     (hmovedIndexCost : sstoreValueCost indexOriginal next next =
@@ -3386,27 +3401,27 @@ theorem setPauserKernel_foundZeroOldLast_runCompiled
     (htargetValid : nonzeroCanonicalAddress target)
     (holdValid : nonzeroCanonicalAddress oldPauser)
     (hsize : M.size = 640)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser 0 =
       assignmentCost)
     (hcount : (assignmentPost sevm base target 0).getStorVal
       sevm.currentTarget (countSlot oldPauser) = oldCount)
-    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hcountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot oldPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
       countCost)
     (hretired : oldCount - 1 = 0)
     (hexpiry : base.getStorVal sevm.currentTarget
       (expirySlot oldPauser) = oldExpiry)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot oldPauser) = oldExpiryOriginal)
     (hclearCost : sstoreValueCost oldExpiryOriginal oldExpiry 0 = clearCost)
-    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+    (harrayOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot (Nat.toB256 entries.length)) = arrayOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
       lengthOriginal)
     (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
     (hmovedIndexCost : sstoreValueCost indexOriginal
@@ -3474,6 +3489,11 @@ theorem setPauserKernel_foundZeroOldLast_runCompiled
   let countBase := temporalSloadBase sevm assignPost (countSlot oldPauser)
   let countPost := temporalSstorePost sevm countBase (countSlot oldPauser)
     (oldCount - 1)
+  have hcountPostOrig : ∀ (a : Adr) (k : B256),
+      countPost.getOrigStorVal sevm a k = base.getOrigStorVal sevm a k := by
+    intro a k
+    simp only [countPost, countBase, assignPost, temporalSstorePost_getOrigStorVal,
+      temporalSloadBase_getOrigStorVal, assignmentPost_getOrigStorVal]
   let M' := M.write (previousPauserWord * 32).toNat oldPauser.toBytes
   let img' := Bytes.writeAt img (previousPauserWord * 32).toNat
     oldPauser.toBytes
@@ -3621,8 +3641,9 @@ theorem setPauserKernel_foundZeroOldLast_runCompiled
     clearCost G hwf' hreads' htarget' hprevious' hnew' hcontinuation'
     htargetValid holdValid hnextNonzero hnextBound 640 3 3 hsize'
     (by rw [hsize']) (by decide) (by decide) (by decide) (by decide)
-    harray hindexVal hlengthVal hcountVal hexpiryVal hexpiryOrig harrayOrig
-    hindexOrig hlengthOrig hholeCost hmovedIndexCost htailClearCost
+    harray hindexVal hlengthVal hcountVal hexpiryVal ((hcountPostOrig _ _).trans hexpiryOrig)
+    ((hcountPostOrig _ _).trans harrayOrig) ((hcountPostOrig _ _).trans hindexOrig)
+    ((hcountPostOrig _ _).trans hlengthOrig) hholeCost hmovedIndexCost htailClearCost
     hlengthRestoreCost hindexClearCost hclearCost
     (hwarmTransport _ hwarmArray) (hwarmTransport _ hwarmIndex)
     (hwarmTransport _ hwarmLength) hwarmCount (hwarmTransport _ hwarmExpiry)
@@ -3754,27 +3775,27 @@ theorem registerPauser_body_foundZeroOldLast_runCompiled
     (hlast : index + 1 = entries.length)
     (htargetValid : nonzeroCanonicalAddress target)
     (holdValid : nonzeroCanonicalAddress oldPauser)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser 0 =
       assignmentCost)
     (hcount : (assignmentPost sevm base target 0).getStorVal
       sevm.currentTarget (countSlot oldPauser) = oldCount)
-    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hcountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot oldPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
       countCost)
     (hretired : oldCount - 1 = 0)
     (hexpiry : base.getStorVal sevm.currentTarget
       (expirySlot oldPauser) = oldExpiry)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot oldPauser) = oldExpiryOriginal)
     (hclearCost : sstoreValueCost oldExpiryOriginal oldExpiry 0 = clearCost)
-    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+    (harrayOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot (Nat.toB256 entries.length)) = arrayOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
       lengthOriginal)
     (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
     (hmovedIndexCost : sstoreValueCost indexOriginal
@@ -3882,27 +3903,27 @@ theorem registerPauser_runCompiledTo_foundZeroOldLast
     (hlast : index + 1 = entries.length)
     (htargetValid : nonzeroCanonicalAddress target)
     (holdValid : nonzeroCanonicalAddress oldPauser)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser 0 =
       assignmentCost)
     (hcount : (assignmentPost sevm base target 0).getStorVal
       sevm.currentTarget (countSlot oldPauser) = oldCount)
-    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hcountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot oldPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
       countCost)
     (hretired : oldCount - 1 = 0)
     (hexpiry : base.getStorVal sevm.currentTarget
       (expirySlot oldPauser) = oldExpiry)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot oldPauser) = oldExpiryOriginal)
     (hclearCost : sstoreValueCost oldExpiryOriginal oldExpiry 0 = clearCost)
-    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+    (harrayOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot (Nat.toB256 entries.length)) = arrayOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
       lengthOriginal)
     (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
     (hmovedIndexCost : sstoreValueCost indexOriginal
@@ -4008,27 +4029,27 @@ theorem registerPauser_foundZeroOldLast_success_settled_effects
     (hlast : index + 1 = entries.length)
     (htargetValid : nonzeroCanonicalAddress target)
     (holdValid : nonzeroCanonicalAddress oldPauser)
-    (hassignmentOrig : getOrigStorVal (initSevm msg) ca
+    (hassignmentOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser 0 =
       assignmentCost)
     (hcount : (assignmentPost (initSevm msg) (initDevm msg)
       target 0).getStorVal ca (countSlot oldPauser) = oldCount)
-    (hcountOrig : getOrigStorVal (initSevm msg) ca
+    (hcountOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (countSlot oldPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
       countCost)
     (hretired : oldCount - 1 = 0)
     (hexpiry : (initDevm msg).getStorVal ca
       (expirySlot oldPauser) = oldExpiry)
-    (hexpiryOrig : getOrigStorVal (initSevm msg) ca
+    (hexpiryOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (expirySlot oldPauser) = oldExpiryOriginal)
     (hclearCost : sstoreValueCost oldExpiryOriginal oldExpiry 0 = clearCost)
-    (harrayOrig : getOrigStorVal (initSevm msg) ca
+    (harrayOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (arrayEntrySlot (Nat.toB256 entries.length)) = arrayOriginal)
-    (hindexOrig : getOrigStorVal (initSevm msg) ca
+    (hindexOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal (initSevm msg) ca arrayLengthSlot =
+    (hlengthOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca arrayLengthSlot =
       lengthOriginal)
     (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
     (hmovedIndexCost : sstoreValueCost indexOriginal
@@ -4207,17 +4228,17 @@ private theorem removeTarget_swapPop_foundZeroOldLast_runCompiled
       (countSlot oldPauser) = 0)
     (hexpiry : base.getStorVal sevm.currentTarget
       (expirySlot oldPauser) = oldExpiry)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot oldPauser) = oldExpiryOriginal)
-    (hholeOrig : getOrigStorVal sevm sevm.currentTarget
+    (hholeOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot idx) = holeOriginal)
-    (hmovedOrig : getOrigStorVal sevm sevm.currentTarget
+    (hmovedOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot lastTarget) = movedOriginal)
-    (htailOrig : getOrigStorVal sevm sevm.currentTarget
+    (htailOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot len) = tailOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget
       arrayLengthSlot = lengthOriginal)
     (hholeCost : sstoreValueCost holeOriginal holeCurrent lastTarget =
       holeCost)
@@ -4408,7 +4429,9 @@ private theorem removeTarget_swapPop_foundZeroOldLast_runCompiled
     hcontinuationLast holdValid.1
     (by simpa only [countKey] using hcountRemove)
     (hwarmRemove _ hwarmCount)
-    (by simpa only [expiryKey] using hexpiryRemove) hexpiryOrig
+    (by simpa only [expiryKey] using hexpiryRemove)
+    ((indexClearPost_getOrigStorVal sevm tailPost target oldLength _ _).trans
+      ((swapPopClearPost_getOrigStorVal sevm base lastTarget idx len _ _).trans hexpiryOrig))
     (hwarmRemove _ hwarmExpiry) hclearCost hgasStipend
     (by rw [hsizeLast]; decide) halignLast hstatic
   have hrun := removeTarget_swapPop_toFinish_runCompiled (hfork := hfork) dp sevm base M img
@@ -4494,17 +4517,17 @@ private theorem afterOldPauser_swapPop_foundZeroOldLast_runCompiled
       (countSlot oldPauser) = 0)
     (hexpiry : base.getStorVal sevm.currentTarget
       (expirySlot oldPauser) = oldExpiry)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot oldPauser) = oldExpiryOriginal)
-    (hholeOrig : getOrigStorVal sevm sevm.currentTarget
+    (hholeOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot idx) = holeOriginal)
-    (hmovedOrig : getOrigStorVal sevm sevm.currentTarget
+    (hmovedOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot lastTarget) = movedOriginal)
-    (htailOrig : getOrigStorVal sevm sevm.currentTarget
+    (htailOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot len) = tailOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget
       arrayLengthSlot = lengthOriginal)
     (hholeCost : sstoreValueCost holeOriginal holeCurrent lastTarget =
       holeCost)
@@ -4639,31 +4662,31 @@ theorem setPauserKernel_foundZeroOldLastSwapPop_runCompiled
     (htargetValid : nonzeroCanonicalAddress target)
     (holdValid : nonzeroCanonicalAddress oldPauser)
     (hsize : M.size = 640)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser 0 =
       assignmentCost)
     (hcount : (assignmentPost sevm base target 0).getStorVal
       sevm.currentTarget (countSlot oldPauser) = oldCount)
-    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hcountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot oldPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
       countCost)
     (hretired : oldCount - 1 = 0)
     (hexpiry : base.getStorVal sevm.currentTarget
       (expirySlot oldPauser) = oldExpiry)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot oldPauser) = oldExpiryOriginal)
     (hclearCost : sstoreValueCost oldExpiryOriginal oldExpiry 0 = clearCost)
-    (hholeOrig : getOrigStorVal sevm sevm.currentTarget
+    (hholeOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot (Nat.toB256 (index + 1))) = holeOriginal)
-    (hmovedOrig : getOrigStorVal sevm sevm.currentTarget
+    (hmovedOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot (sourceLastTarget entries)) = movedOriginal)
-    (htailOrig : getOrigStorVal sevm sevm.currentTarget
+    (htailOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot (Nat.toB256 entries.length)) = tailOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
       lengthOriginal)
     (hholeCost : sstoreValueCost holeOriginal target
       (sourceLastTarget entries) = holeCost)
@@ -4760,6 +4783,11 @@ theorem setPauserKernel_foundZeroOldLastSwapPop_runCompiled
   let countBase := temporalSloadBase sevm assignPost (countSlot oldPauser)
   let countPost := temporalSstorePost sevm countBase (countSlot oldPauser)
     (oldCount - 1)
+  have hcountPostOrig : ∀ (a : Adr) (k : B256),
+      countPost.getOrigStorVal sevm a k = base.getOrigStorVal sevm a k := by
+    intro a k
+    simp only [countPost, countBase, assignPost, temporalSstorePost_getOrigStorVal,
+      temporalSloadBase_getOrigStorVal, assignmentPost_getOrigStorVal]
   let M' := M.write (previousPauserWord * 32).toNat oldPauser.toBytes
   let img' := Bytes.writeAt img (previousPauserWord * 32).toNat
     oldPauser.toBytes
@@ -4954,8 +4982,10 @@ theorem setPauserKernel_foundZeroOldLastSwapPop_runCompiled
     htarget' hprevious' hnew' hcontinuation' htargetValid hlastValid hlastNe
     holdValid hidxNonzero hidxBound hlenNonzero hlenBound hidxNeLen 640 3 3
     hsize' (by rw [hsize']) (by decide) (by decide) (by decide) (by decide)
-    hhole hmoved htail hindexVal hlengthVal hcountVal hexpiryVal hexpiryOrig
-    hholeOrig hmovedOrig htailOrig hindexOrig hlengthOrig hholeCost
+    hhole hmoved htail hindexVal hlengthVal hcountVal hexpiryVal ((hcountPostOrig _ _).trans hexpiryOrig)
+    ((hcountPostOrig _ _).trans hholeOrig) ((hcountPostOrig _ _).trans hmovedOrig)
+    ((hcountPostOrig _ _).trans htailOrig) ((hcountPostOrig _ _).trans hindexOrig)
+    ((hcountPostOrig _ _).trans hlengthOrig) hholeCost
     hmovedIndexCost htailClearCost hlengthRestoreCost hindexClearCost
     hclearCost (hwarmTransport _ hwarmHole) (hwarmTransport _ hwarmMoved)
     (hwarmTransport _ hwarmTail) (hwarmTransport _ hwarmIndex)
@@ -5091,31 +5121,31 @@ theorem registerPauser_body_foundZeroOldLastSwapPop_runCompiled
     (hnotLast : index + 1 < entries.length)
     (htargetValid : nonzeroCanonicalAddress target)
     (holdValid : nonzeroCanonicalAddress oldPauser)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser 0 =
       assignmentCost)
     (hcount : (assignmentPost sevm base target 0).getStorVal
       sevm.currentTarget (countSlot oldPauser) = oldCount)
-    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hcountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot oldPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
       countCost)
     (hretired : oldCount - 1 = 0)
     (hexpiry : base.getStorVal sevm.currentTarget
       (expirySlot oldPauser) = oldExpiry)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot oldPauser) = oldExpiryOriginal)
     (hclearCost : sstoreValueCost oldExpiryOriginal oldExpiry 0 = clearCost)
-    (hholeOrig : getOrigStorVal sevm sevm.currentTarget
+    (hholeOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot (Nat.toB256 (index + 1))) = holeOriginal)
-    (hmovedOrig : getOrigStorVal sevm sevm.currentTarget
+    (hmovedOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot (sourceLastTarget entries)) = movedOriginal)
-    (htailOrig : getOrigStorVal sevm sevm.currentTarget
+    (htailOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot (Nat.toB256 entries.length)) = tailOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
       lengthOriginal)
     (hholeCost : sstoreValueCost holeOriginal target
       (sourceLastTarget entries) = holeCost)
@@ -5228,31 +5258,31 @@ theorem registerPauser_runCompiledTo_foundZeroOldLastSwapPop
     (hnotLast : index + 1 < entries.length)
     (htargetValid : nonzeroCanonicalAddress target)
     (holdValid : nonzeroCanonicalAddress oldPauser)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser 0 =
       assignmentCost)
     (hcount : (assignmentPost sevm base target 0).getStorVal
       sevm.currentTarget (countSlot oldPauser) = oldCount)
-    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hcountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot oldPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
       countCost)
     (hretired : oldCount - 1 = 0)
     (hexpiry : base.getStorVal sevm.currentTarget
       (expirySlot oldPauser) = oldExpiry)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot oldPauser) = oldExpiryOriginal)
     (hclearCost : sstoreValueCost oldExpiryOriginal oldExpiry 0 = clearCost)
-    (hholeOrig : getOrigStorVal sevm sevm.currentTarget
+    (hholeOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot (Nat.toB256 (index + 1))) = holeOriginal)
-    (hmovedOrig : getOrigStorVal sevm sevm.currentTarget
+    (hmovedOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot (sourceLastTarget entries)) = movedOriginal)
-    (htailOrig : getOrigStorVal sevm sevm.currentTarget
+    (htailOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot (Nat.toB256 entries.length)) = tailOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
       lengthOriginal)
     (hholeCost : sstoreValueCost holeOriginal target
       (sourceLastTarget entries) = holeCost)
@@ -5361,31 +5391,31 @@ theorem registerPauser_foundZeroOldLastSwapPop_success_settled_effects
     (hnotLast : index + 1 < entries.length)
     (htargetValid : nonzeroCanonicalAddress target)
     (holdValid : nonzeroCanonicalAddress oldPauser)
-    (hassignmentOrig : getOrigStorVal (initSevm msg) ca
+    (hassignmentOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser 0 =
       assignmentCost)
     (hcount : (assignmentPost (initSevm msg) (initDevm msg)
       target 0).getStorVal ca (countSlot oldPauser) = oldCount)
-    (hcountOrig : getOrigStorVal (initSevm msg) ca
+    (hcountOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (countSlot oldPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
       countCost)
     (hretired : oldCount - 1 = 0)
     (hexpiry : (initDevm msg).getStorVal ca
       (expirySlot oldPauser) = oldExpiry)
-    (hexpiryOrig : getOrigStorVal (initSevm msg) ca
+    (hexpiryOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (expirySlot oldPauser) = oldExpiryOriginal)
     (hclearCost : sstoreValueCost oldExpiryOriginal oldExpiry 0 = clearCost)
-    (hholeOrig : getOrigStorVal (initSevm msg) ca
+    (hholeOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (arrayEntrySlot (Nat.toB256 (index + 1))) = holeOriginal)
-    (hmovedOrig : getOrigStorVal (initSevm msg) ca
+    (hmovedOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (indexSlot (sourceLastTarget entries)) = movedOriginal)
-    (htailOrig : getOrigStorVal (initSevm msg) ca
+    (htailOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (arrayEntrySlot (Nat.toB256 entries.length)) = tailOriginal)
-    (hindexOrig : getOrigStorVal (initSevm msg) ca
+    (hindexOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal (initSevm msg) ca arrayLengthSlot =
+    (hlengthOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca arrayLengthSlot =
       lengthOriginal)
     (hholeCost : sstoreValueCost holeOriginal target
       (sourceLastTarget entries) = holeCost)

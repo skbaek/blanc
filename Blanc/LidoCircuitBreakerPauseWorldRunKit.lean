@@ -32,10 +32,9 @@ consumed there directly, and this leaf carries the bridging material:
   so a store suffix can thread a genuinely cold write exactly like a cold
   `SLOAD`.
 
-* **Seam transports.**  The crossings pin the boundary state's world as a
-  zero-value `subBal`/`addBal` chain; `seam_getStorVal` collapses that chain
-  on storage projections, in the style of `Weth10HolderFlowResult.lean`'s
-  `state_addBal_getStor_eq`.
+* **Seam transports.**  The zero-value crossings leave the boundary state's
+  world equal to the pre-call state; `seam_getStorVal` reads that equality
+  on storage projections.
 
 The existential `pauseAfterSet` boundary leg that this module originally
 carried has been promoted upstream to `pauseAfterSet_toSuccess_runCompiled` in
@@ -71,9 +70,9 @@ private theorem removeTarget_restoreTail_runCompiled
       arrayLengthSlot = lengthValue)
     (hindex : base.getStorVal sevm.currentTarget
       (indexSlot target) = indexValue)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget
       arrayLengthSlot = lengthOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
     (hlengthCost : sstoreValueCost lengthOriginal lengthValue oldLength =
       lengthRestoreCost)
@@ -173,7 +172,8 @@ private theorem removeTarget_restoreTail_runCompiled
             G + finishGas + 12 + indexClearCost, lengthPost.stateGas⟩)
         Ninst.sstore
         (removePost.setMach ⟨stack, M, G + finishGas + 12, removePost.stateGas⟩) := by
-      exact temporal_sstore_runCompiled (hfork := hfork) hindexPost hindexOrig hindexCost
+      exact temporal_sstore_runCompiled (hfork := hfork) hindexPost
+        ((lengthWritePost_getOrigStorVal sevm base _ _ _).trans hindexOrig) hindexCost
         hwarmIndexPost hgasFinal hstatic
     exact Func.RunCompiled.next hsstore hfinishCall
   have hindexTail : Func.RunCompiled fs sevm
@@ -253,11 +253,11 @@ private theorem removeTarget_storePrefix_runCompiled
       (indexSlot target) = next)
     (hlength : base.getStorVal sevm.currentTarget
       arrayLengthSlot = next)
-    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+    (harrayOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot next) = arrayOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget
       arrayLengthSlot = lengthOriginal)
     (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
     (hmovedIndexCost : sstoreValueCost indexOriginal next next =
@@ -422,7 +422,9 @@ private theorem removeTarget_storePrefix_runCompiled
     dp sevm tailPost M img target oldLength next next 0 stack hstack
     lengthOriginal indexOriginal lengthRestoreCost indexClearCost finishGas G
     hreads htarget hlengthWord htargetValid hsize halign hlengthTail hindexTail
-    hlengthOrig hindexOrig hlengthRestoreCost hindexClearCost hwarmLengthTail
+    ((entryClearPost_getOrigStorVal sevm base target next _ _).trans hlengthOrig)
+    ((entryClearPost_getOrigStorVal sevm base target next _ _).trans hindexOrig)
+    hlengthRestoreCost hindexClearCost hwarmLengthTail
     hwarmIndexTail hsub hgasFinal hstatic post
     (by simpa only [tailPost] using hfinish)
   let fs := (runtime dp).main :: (runtime dp).aux
@@ -449,7 +451,9 @@ private theorem removeTarget_storePrefix_runCompiled
         .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled (hfork := hfork) harrayMoved harrayOrig htailClearCost
+      (temporal_sstore_runCompiled (hfork := hfork) harrayMoved
+        ((indexWritePost_getOrigStorVal sevm base target next _ _).trans harrayOrig)
+        htailClearCost
         hwarmArrayMoved (lt_of_lt_of_le hgasFinal (by omega)) hstatic)
       hrestore'
   have htailTag : Func.RunCompiled fs sevm
@@ -530,7 +534,9 @@ private theorem removeTarget_storePrefix_runCompiled
         .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled (hfork := hfork) hindexHole hindexOrig hmovedIndexCost
+      (temporal_sstore_runCompiled (hfork := hfork) hindexHole
+        ((entryWritePost_getOrigStorVal sevm base target next _ _).trans hindexOrig)
+        hmovedIndexCost
         hwarmIndexHole (lt_of_lt_of_le hgasFinal (by omega)) hstatic)
       htailPrefix
   have hmovedTag : Func.RunCompiled fs sevm
@@ -718,12 +724,17 @@ hypothesis-supplied value case, and the successor world is the ordinary
 `temporalSstorePost` over the warmed base — so a store suffix can thread it
 exactly like a cold `SLOAD`. -/
 
+private theorem addAccessedStorageKey_getOrigStorVal (d : Devm) (owner : Adr)
+    (k : B256) (sevm : Sevm) (a : Adr) (key : B256) :
+    (addAccessedStorageKey d owner k).getOrigStorVal sevm a key =
+      d.getOrigStorVal sevm a key := rfl
+
 theorem temporal_sstore_cold_runCompiled
     {sevm : Sevm} {base : Devm} {key value current original : B256}
     {stack : List B256} {M : Mem} {G cost : Nat}
     (hfork : CoveredFork sevm.benvStat.fork)
     (hcurrent : base.getStorVal sevm.currentTarget key = current)
-    (horiginal : getOrigStorVal sevm sevm.currentTarget key = original)
+    (horiginal : base.getOrigStorVal sevm sevm.currentTarget key = original)
     (hcost : sstoreValueCost original current value = cost)
     (hcold : (sevm.currentTarget, key) ∉ base.accessedStorageKeys)
     (hgas : gCallStipend < G + gasColdSload + cost)
@@ -743,15 +754,12 @@ theorem temporal_sstore_cold_runCompiled
   · simp only [Devm.gasLeft_setMach]
     omega
   · exact hstatic
-  · simp only [Devm.getStorVal_setMach, hcurrent, horiginal]
+  · rw [show (base.setMach ⟨key :: value :: stack, M,
+        G + gasColdSload + cost, base.stateGas⟩).getOrigStorVal
+        sevm sevm.currentTarget key = original from horiginal]
+    simp only [Devm.getStorVal_setMach, hcurrent]
     rw [hcost]
-  · show sstoreNewRefundCounter sevm.benvStat.rules.gas value
-        (getOrigStorVal sevm sevm.currentTarget key)
-        (base.getStorVal sevm.currentTarget key) base.refundCounter =
-      sstoreNewRefundCounter sevm.benvStat.rules.gas value
-        (getOrigStorVal sevm sevm.currentTarget key)
-        (base.getStorVal sevm.currentTarget key) base.refundCounter
-    rfl
+  · rfl
   · simp only [Devm.gasLeft_setMach]
     omega
 
@@ -797,11 +805,11 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
       (indexSlot target) = next)
     (hlength : base.getStorVal sevm.currentTarget
       arrayLengthSlot = next)
-    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+    (harrayOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot next) = arrayOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget
       arrayLengthSlot = lengthOriginal)
     (hidxSloadCost : temporalSloadCost sevm base (indexSlot target) =
       idxSloadCost)
@@ -1024,7 +1032,15 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
     htargetValid hnextNonzero hnextBound
     (by rw [hsizeLast]; exact Nat.le_max_right _ _) halignLast
     harray3 hindex3
-    hlength3 harrayOrig hindexOrig hlengthOrig hholeCost hmovedIndexCost
+    hlength3 (by simpa only [base3, base2, base1, temporalSstorePost_getOrigStorVal, temporalSloadBase_getOrigStorVal, addAccessedStorageKey_getOrigStorVal,
+          entryClearPost_getOrigStorVal, indexWritePost_getOrigStorVal, entryWritePost_getOrigStorVal,
+          lengthWritePost_getOrigStorVal] using harrayOrig)
+    (by simpa only [base3, base2, base1, temporalSstorePost_getOrigStorVal, temporalSloadBase_getOrigStorVal, addAccessedStorageKey_getOrigStorVal,
+          entryClearPost_getOrigStorVal, indexWritePost_getOrigStorVal, entryWritePost_getOrigStorVal,
+          lengthWritePost_getOrigStorVal] using hindexOrig)
+    (by simpa only [base3, base2, base1, temporalSstorePost_getOrigStorVal, temporalSloadBase_getOrigStorVal, addAccessedStorageKey_getOrigStorVal,
+          entryClearPost_getOrigStorVal, indexWritePost_getOrigStorVal, entryWritePost_getOrigStorVal,
+          lengthWritePost_getOrigStorVal] using hlengthOrig) hholeCost hmovedIndexCost
     htailClearCost hlengthRestoreCost hindexClearCost hwarmArray3 hwarmIndex3
     hwarmLength3 hsub hgasFinal hstatic post
     (by simpa only [MIndex, MLength, MLast, base3, base2, base1,
@@ -1657,15 +1673,15 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
       (indexSlot target) = idx)
     (hlength : base.getStorVal sevm.currentTarget
       arrayLengthSlot = len)
-    (hholeOrig : getOrigStorVal sevm sevm.currentTarget
+    (hholeOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot idx) = holeOriginal)
-    (hmovedOrig : getOrigStorVal sevm sevm.currentTarget
+    (hmovedOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot lastTarget) = movedOriginal)
-    (htailOrig : getOrigStorVal sevm sevm.currentTarget
+    (htailOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot len) = tailOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget
       arrayLengthSlot = lengthOriginal)
     (hidxSloadCost : temporalSloadCost sevm base (indexSlot target) =
       idxSloadCost)
@@ -2096,7 +2112,13 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
     lengthOriginal indexOriginal lengthRestoreCost indexClearCost finishGas G
     hreadsLast htargetLast hlengthLast htargetValid
     (by rw [hsizeLast]; exact Nat.le_max_right _ _) halignLast
-    hlengthTailPost hindexTailPost hlengthOrig hindexOrig
+    hlengthTailPost hindexTailPost
+    (by simpa only [tailPost, movedPost, holePost, base3, base2, base1, temporalSstorePost_getOrigStorVal, temporalSloadBase_getOrigStorVal, addAccessedStorageKey_getOrigStorVal,
+          entryClearPost_getOrigStorVal, indexWritePost_getOrigStorVal, entryWritePost_getOrigStorVal,
+          lengthWritePost_getOrigStorVal] using hlengthOrig)
+    (by simpa only [tailPost, movedPost, holePost, base3, base2, base1, temporalSstorePost_getOrigStorVal, temporalSloadBase_getOrigStorVal, addAccessedStorageKey_getOrigStorVal,
+          entryClearPost_getOrigStorVal, indexWritePost_getOrigStorVal, entryWritePost_getOrigStorVal,
+          lengthWritePost_getOrigStorVal] using hindexOrig)
     hlengthRestoreCost hindexClearCost hwarmLengthTail hwarmIndexTail hsub
     hgasFinal hstatic post
     (by
@@ -2126,7 +2148,11 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled (hfork := hfork) htailMovedPost htailOrig htailClearCost
+      (temporal_sstore_runCompiled (hfork := hfork) htailMovedPost
+        (by simpa only [movedPost, holePost, base3, base2, base1, temporalSstorePost_getOrigStorVal, temporalSloadBase_getOrigStorVal, addAccessedStorageKey_getOrigStorVal,
+          entryClearPost_getOrigStorVal, indexWritePost_getOrigStorVal, entryWritePost_getOrigStorVal,
+          lengthWritePost_getOrigStorVal] using htailOrig)
+        htailClearCost
         hwarmTailMoved (lt_of_lt_of_le hgasFinal (by omega)) hstatic)
       hrestore'
   have htailTag : Func.RunCompiled fs sevm
@@ -2139,6 +2165,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore ::: pushB256 0 :::
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
+    clear_value movedPost
     func_run (2) [tailKey]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
@@ -2160,6 +2187,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         pushB256 0 ::: targetIndexKey +++ Ninst.sstore :::
         .call finishSetPauserSlot)
       post := by
+    clear_value movedPost
     func_run (2) [3]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
@@ -2186,6 +2214,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         pushB256 0 ::: targetIndexKey +++ Ninst.sstore :::
         .call finishSetPauserSlot)
       post := by
+    clear_value movedPost
     func_run (1)
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach]); omega)
@@ -2208,7 +2237,10 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_cold_runCompiled (hfork := hfork) hmovedHolePost hmovedOrig
+      (temporal_sstore_cold_runCompiled (hfork := hfork) hmovedHolePost
+        (by simpa only [holePost, base3, base2, base1, temporalSstorePost_getOrigStorVal, temporalSloadBase_getOrigStorVal, addAccessedStorageKey_getOrigStorVal,
+          entryClearPost_getOrigStorVal, indexWritePost_getOrigStorVal, entryWritePost_getOrigStorVal,
+          lengthWritePost_getOrigStorVal] using hmovedOrig)
         hmovedIndexCost hmovedColdHole
         (lt_of_lt_of_le hgasFinal (by omega)) hstatic)
       htailPrefix
@@ -2223,6 +2255,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore ::: pushB256 0 :::
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
+    clear_value holePost
     func_run (2) [movedKey]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
@@ -2245,6 +2278,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         pushB256 0 ::: targetIndexKey +++ Ninst.sstore :::
         .call finishSetPauserSlot)
       post := by
+    clear_value holePost
     func_run (2) [3]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
@@ -2272,6 +2306,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore ::: pushB256 0 :::
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
+    clear_value holePost
     func_run (2) [3]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach]); omega)
@@ -2302,7 +2337,10 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_cold_runCompiled (hfork := hfork) hhole3 hholeOrig hholeCost hholeCold3
+      (temporal_sstore_cold_runCompiled (hfork := hfork) hhole3
+        (by simpa only [base3, base2, base1, temporalSstorePost_getOrigStorVal, temporalSloadBase_getOrigStorVal, addAccessedStorageKey_getOrigStorVal,
+          entryClearPost_getOrigStorVal, indexWritePost_getOrigStorVal, entryWritePost_getOrigStorVal,
+          lengthWritePost_getOrigStorVal] using hholeOrig) hholeCost hholeCold3
         (lt_of_lt_of_le hgasFinal (by omega)) hstatic)
       hmovedPrefix
   have hholePrefix : Func.RunCompiled fs sevm
@@ -2493,6 +2531,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore ::: pushB256 0 :::
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
+    clear_value movedPost
     func_run (2) [tailKey]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
@@ -2862,47 +2901,17 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
 
 /-! ## Seam transports
 
-The crossings pin the boundary state's world as a zero-value `subBal`/`addBal`
-chain over the pre-call state.  On storage projections that chain is the
-identity, in the style of `Blanc/Weth10HolderFlowResult.lean`'s private
-`state_addBal_getStor_eq`. -/
-
-private theorem state_setBal_stor (st : State) (adr : Adr) (val : B256)
-    (a : Adr) : ((st.setBal adr val).get a).stor = (st.get a).stor := by
-  by_cases h : adr = a
-  · subst h
-    unfold State.setBal
-    rw [State.get_set_self]
-    rfl
-  · exact congrArg Acct.stor (State.get_set_ne st h _)
-
-private theorem state_addBal_stor (st : State) (adr : Adr) (val : B256)
-    (a : Adr) : ((st.addBal adr val).get a).stor = (st.get a).stor := by
-  unfold State.addBal
-  exact state_setBal_stor st adr _ a
-
-private theorem state_subBal_stor {st st' : State} {adr : Adr} {val : B256}
-    (h : st.subBal adr val = some st') (a : Adr) :
-    (st'.get a).stor = (st.get a).stor := by
-  unfold State.subBal at h
-  split at h
-  · contradiction
-  · injection h with h2
-    subst h2
-    exact state_setBal_stor st adr _ a
+Both zero-value crossings leave the block environment untouched, so the
+boundary state's world is the pre-call state exactly; on storage projections
+the seam is the identity. -/
 
 /-- The two-hop seam: the boundary state the crossings leave behind reads the
 same storage as the pre-call state, cell for cell. -/
-theorem seam_getStorVal {mid b : Devm} {ct : Adr} {t : B256}
-    (hchain : ∃ st₁ st₂ : State,
-      b.state.subBal ct 0 = some st₁ ∧
-      (st₁.addBal t.toAdr 0).subBal ct 0 = some st₂ ∧
-      mid.state = st₂.addBal t.toAdr 0)
+theorem seam_getStorVal {mid b : Devm}
+    (hstate : mid.state = b.state)
     (a : Adr) (key : B256) :
     mid.getStorVal a key = b.getStorVal a key := by
-  obtain ⟨st₁, st₂, hsub1, hsub2, hstate⟩ := hchain
   show (mid.state.get a).stor.get key = (b.state.get a).stor.get key
-  rw [hstate, state_addBal_stor, state_subBal_stor hsub2,
-    state_addBal_stor, state_subBal_stor hsub1]
+  rw [hstate]
 
 end Blanc.LidoCircuitBreaker

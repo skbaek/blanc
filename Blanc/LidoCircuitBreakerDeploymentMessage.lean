@@ -527,8 +527,11 @@ private theorem processMessage_official_constructor_checkpoint
       processCreateMessage_msg_getStor_currentTarget msg
   have hbenvStorage :
       benv.state.getStor msg.currentTarget = Stor.empty := by
-    rw [congrFun (benvAfterTransfer_getStor_eq htransfer)
-      msg.currentTarget]
+    have hbenv : benv = prepared.benv := by
+      have h := htransfer
+      rw [Msg.benvAfterTransfer_of_value_zero (msg := prepared) hvalue] at h
+      exact (Except.ok.inj h).symm
+    rw [hbenv]
     exact hpreparedStorage
   have hbaseStorage :
       base.state.getStor msg.currentTarget = Stor.empty := by
@@ -691,6 +694,10 @@ private theorem officialCreateMessageResult_of_charged
     (h : OfficialChargedCreateCheckpoint msg benv raw charged G) :
     ∃ post, OfficialCreateMessageResult msg.currentTarget msg post := by
   let post := charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩
+  have hcodeSize : (⟨⟨charged.output⟩⟩ : ByteArray).size ≠ 0 := by
+    change charged.output.length ≠ 0
+    rw [h.output, lidoCircuitBreakerCode_official_length]
+    decide
   have hrun : processCreateMessage msg = .ok post := by
     simpa only [post] using
       processCreateMessage_ok_of_processMessage_and_charge msg h.process
@@ -705,7 +712,7 @@ private theorem officialCreateMessageResult_of_charged
     change
       ((charged.state.setCode msg.currentTarget
         ⟨⟨charged.output⟩⟩).get msg.currentTarget).stor = _
-    rw [State.setCode_get_stor]
+    rw [State.setCode_get_stor hcodeSize]
     exact h.storage
   have hpostPause : post.getStorVal msg.currentTarget pauseDurationSlot =
       officialConstructorArgs.initialPauseDuration := by
@@ -729,7 +736,7 @@ private theorem officialCreateMessageResult_of_charged
       (logicalStorageOfStor
         (((charged.state.setCode msg.currentTarget
           ⟨⟨charged.output⟩⟩).get msg.currentTarget).stor)) []
-    rw [State.setCode_get_stor]
+    rw [State.setCode_get_stor hcodeSize]
     exact h.emptyRegistry
   have hpostCoherent :
       RegistryCoherent (post.state.getStor msg.currentTarget) := by
@@ -738,7 +745,7 @@ private theorem officialCreateMessageResult_of_charged
     change RegistryCoherent
       (((charged.state.setCode msg.currentTarget
         ⟨⟨charged.output⟩⟩).get msg.currentTarget).stor)
-    rw [State.setCode_get_stor]
+    rw [State.setCode_get_stor hcodeSize]
     exact h.coherent
   have hpostLogs : post.logs = officialConstructorLogs msg.currentTarget := by
     change charged.logs = officialConstructorLogs msg.currentTarget
@@ -769,7 +776,7 @@ private theorem officialCreateMessageResult_of_charged
     unfold Devm.getCode Devm.getAcct
     rw [Devm.setCode_state]
     unfold State.setCode
-    rw [State.get_set_self]
+    rw [State.setAccount_get_self, Acct.clearIfEmpty_code]
     simp only [h.output]
   have hpostCodeList :
       (post.getCode msg.currentTarget).toList =

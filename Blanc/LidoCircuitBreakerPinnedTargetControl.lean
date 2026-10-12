@@ -537,6 +537,38 @@ theorem stub_isPaused_truthful
     rw [dispatchZero] at flagEq
     exact (flagNonzero flagEq).elim
 
+/-- Entry facts of a retained code frame that do not depend on the entry
+transfer preserving any storage: frame-entry program counter, code, addresses,
+calldata, timestamp and memory well-formedness.  Generic-shaped; a hoisting
+candidate beside `MessageExecution.processMessage_entry_facts`. -/
+private theorem stub_entry_facts
+    {msg : Msg} {pc : Nat} {sevm : Sevm} {pre : Devm}
+    {raw : Execution}
+    {ex : Except (EvmError × State × AdrSet × Tra) Devm}
+    (process : ProcessMessage msg
+      (.some ⟨⟨pc, sevm, pre⟩, raw⟩) ex) :
+    pc = 0 ∧ sevm.code = msg.code ∧
+      sevm.currentTarget = msg.currentTarget ∧
+      sevm.codeAddress = msg.codeAddress ∧ sevm.data = msg.data ∧
+      sevm.benvStat.time = msg.benv.stat.time ∧
+      Mem.Wf pre.memory := by
+  have enter := (RunFrame.some_inv process).1
+  have pcZero := Frame.enter_run_pc enter
+  have codeEq := Frame.enter_run_code enter
+  have current := Frame.enter_run_currentTarget enter
+  have memory := Blanc.Frame.enter_run_memory enter
+  rcases Frame.enter_run_inv enter with ⟨benv, transfer, evmEq⟩
+  change msg.benvAfterTransfer = .ok benv at transfer
+  have data := congrArg (fun evm : Evm => evm.sta.data) evmEq
+  have codeAddress := congrArg (fun evm : Evm => evm.sta.codeAddress) evmEq
+  have time := congrArg (fun evm : Evm => evm.sta.benvStat.time) evmEq
+  dsimp only at codeEq current codeAddress data time memory
+  have statEq : benv.stat = msg.benv.stat := benvAfterTransfer_stat transfer
+  refine ⟨pcZero, codeEq, current, codeAddress, data,
+    time.trans (congrArg BenvStat.time statEq), ?_⟩
+  rw [memory]
+  exact Mem.wf_empty
+
 /-- The compiled stub discharges the complete Lido specialization, including
 one nonempty protected selector whose clean paused execution must revert. -/
 theorem stub_lidoPinnedPauseTarget
@@ -554,7 +586,8 @@ theorem stub_lidoPinnedPauseTarget
     rcases executes with
       ⟨messageUses, ⟨pc, sevm, pre⟩, raw, xlEq, ⟨run⟩⟩
     subst xl
-    rcases MessageExecution.processMessage_entry_facts target process with
+    rcases MessageExecution.processMessage_entry_facts target
+        (Or.inl exactCall.valueZero) process with
       ⟨pcZero, codeEq, current, codeAddress, data, time,
         entryStorage, memoryWf⟩
     subst pc
@@ -573,7 +606,8 @@ theorem stub_lidoPinnedPauseTarget
     rcases executes with
       ⟨messageUses, ⟨pc, sevm, pre⟩, raw, xlEq, ⟨run⟩⟩
     subst xl
-    rcases MessageExecution.processMessage_entry_facts target process with
+    rcases MessageExecution.processMessage_entry_facts target
+        (Or.inl exactCall.valueZero) process with
       ⟨pcZero, codeEq, current, codeAddress, data, time,
         entryStorage, memoryWf⟩
     subst pc
@@ -627,7 +661,9 @@ theorem stub_lidoPinnedPauseTarget
       ⟨messageUses, ⟨pc, sevm, pre⟩, raw, xlEq, ⟨witnessRun⟩⟩
     subst xl
     intro actualRun
-    rcases MessageExecution.processMessage_entry_facts target process with
+    rcases MessageExecution.processMessage_entry_facts target
+        (Or.inl (by rcases inbound with ⟨_, call⟩ | call <;> exact call.valueZero))
+        process with
       ⟨pcZero, codeEq, current, codeAddress, data, time,
         entryStorage, memoryWf⟩
     have msgCurrent : msg.currentTarget = target := by
@@ -655,9 +691,8 @@ theorem stub_lidoPinnedPauseTarget
     · rcases executes with
         ⟨messageUses, ⟨pc, sevm, pre⟩, raw, xlEq, ⟨witnessRun⟩⟩
       subst xl
-      rcases MessageExecution.processMessage_entry_facts target process with
-        ⟨pcZero, codeEq, current, entryCodeAddress, data, time,
-          entryStorage, memoryWf⟩
+      rcases stub_entry_facts process with
+        ⟨pcZero, codeEq, current, entryCodeAddress, data, time, memoryWf⟩
       subst pc
       have clean : child.error.isSome = false := by
         rw [childClean]
@@ -969,34 +1004,16 @@ private theorem benignCallCallerBalance :
   rw [hparent]
   rfl
 
-private def benignCallEntryMid : State :=
-  benignCallMsg.benv.state.setBal benignCallMsg.caller
-    (benignCallMsg.benv.state.bal benignCallMsg.caller -
-      benignCallMsg.value)
-
-private def benignCallEntryBenv : Benv :=
-  (benignCallMsg.benv.withState benignCallEntryMid).addBal
-    benignCallMsg.currentTarget benignCallMsg.value
+/-- A zero-value entry leaves the block environment untouched. -/
+private def benignCallEntryBenv : Benv := benignCallMsg.benv
 
 private def benignCallEntryEvm : Evm :=
   initEvm (benignCallMsg.withBenv benignCallEntryBenv)
 
 private theorem benignCallRootEnter :
     (Jaune.Frame.ofCall benignCallMsg).enter = .run benignCallEntryEvm := by
-  obtain ⟨stmid, hsub, hbt⟩ :=
-    Msg.benvAfterTransfer_of_affordable benignCallMsg rfl (by
-      rw [benignCallCallerBalance]
-      decide +kernel)
-  have expectedSub :
-      benignCallMsg.benv.state.subBal benignCallMsg.caller
-          benignCallMsg.value =
-        some benignCallEntryMid := by
-    unfold State.subBal benignCallEntryMid
-    rw [benignCallCallerBalance]
-    rw [show benignCallMsg.value = 0 by rfl]
-    simp only [if_neg (by decide +kernel : ¬ (0 : B256) < 0)]
-  rw [expectedSub] at hsub
-  cases hsub
+  have hbt : benignCallMsg.benvAfterTransfer = .ok benignCallMsg.benv :=
+    Msg.benvAfterTransfer_of_value_zero rfl
   unfold Jaune.Frame.enter Jaune.Frame.ofCall
   simp only
   rw [hbt]
@@ -1052,8 +1069,6 @@ private theorem benignCallEntry_childCode :
     benignCallEntryEvm.dyna.getCode benignCallTarget =
       benignCallChildCode := by
   change benignCallEntryBenv.state.getCode benignCallTarget = _
-  unfold benignCallEntryBenv Benv.addBal Benv.withState benignCallEntryMid
-  rw [State.addBal_getCode, State.setBal_getCode]
   exact benignCallState_childCode
 
 private theorem benignCallEvm8_childCode :
@@ -1190,14 +1205,8 @@ private def benignCallSpawn : BenignCallSpawn benignCallEntryEvm :=
     nextPc := 13
     hstep := benignCallSpawnStep }
 
-private def benignCallChildMid : State :=
-  benignCallChildMsg.benv.state.setBal benignCallChildMsg.caller
-    (benignCallChildMsg.benv.state.bal benignCallChildMsg.caller -
-      benignCallChildMsg.value)
-
-private def benignCallChildBenv : Benv :=
-  (benignCallChildMsg.benv.withState benignCallChildMid).addBal
-    benignCallChildMsg.currentTarget benignCallChildMsg.value
+/-- A zero-value entry leaves the block environment untouched. -/
+private def benignCallChildBenv : Benv := benignCallChildMsg.benv
 
 private def benignCallChildEvm : Evm :=
   initEvm (benignCallChildMsg.withBenv benignCallChildBenv)
@@ -1213,19 +1222,8 @@ private theorem benignCallNot_lt_zero (x : B256) : ¬ x < 0 := by
 
 private theorem benignCallChildEnter :
     benignCallChildFrame.enter = .run benignCallChildEvm := by
-  obtain ⟨stmid, hsub, hbt⟩ :=
-    Msg.benvAfterTransfer_of_affordable benignCallChildMsg rfl (by
-      rw [show benignCallChildMsg.value = 0 by rfl]
-      exact benignCallNot_lt_zero _)
-  have expectedSub :
-      benignCallChildMsg.benv.state.subBal benignCallChildMsg.caller
-          benignCallChildMsg.value =
-        some benignCallChildMid := by
-    unfold State.subBal benignCallChildMid
-    rw [show benignCallChildMsg.value = 0 by rfl]
-    rw [if_neg (benignCallNot_lt_zero _)]
-  rw [expectedSub] at hsub
-  cases hsub
+  have hbt : benignCallChildMsg.benvAfterTransfer = .ok benignCallChildMsg.benv :=
+    Msg.benvAfterTransfer_of_value_zero rfl
   unfold benignCallChildFrame Jaune.Frame.enter Jaune.Frame.ofCall
   simp only
   rw [hbt]
@@ -1502,32 +1500,16 @@ private theorem wrongBoolCallerBalance :
   rw [hget]
   rfl
 
-private def wrongBoolEntryMid : State :=
-  wrongBoolMsg.benv.state.setBal wrongBoolMsg.caller
-    (wrongBoolMsg.benv.state.bal wrongBoolMsg.caller - wrongBoolMsg.value)
-
-private def wrongBoolEntryBenv : Benv :=
-  (wrongBoolMsg.benv.withState wrongBoolEntryMid).addBal
-    wrongBoolMsg.currentTarget wrongBoolMsg.value
+/-- A zero-value entry leaves the block environment untouched. -/
+private def wrongBoolEntryBenv : Benv := wrongBoolMsg.benv
 
 private def wrongBoolEntryEvm : Evm :=
   initEvm (wrongBoolMsg.withBenv wrongBoolEntryBenv)
 
 private theorem wrongBoolEntry :
     (Frame.ofCall wrongBoolMsg).enter = .run wrongBoolEntryEvm := by
-  obtain ⟨stmid, hsub, hbt⟩ :=
-    Msg.benvAfterTransfer_of_affordable wrongBoolMsg rfl (by
-      rw [wrongBoolCallerBalance]
-      decide +kernel)
-  have expectedSub :
-      wrongBoolMsg.benv.state.subBal wrongBoolMsg.caller wrongBoolMsg.value =
-        some wrongBoolEntryMid := by
-    unfold State.subBal wrongBoolEntryMid
-    rw [wrongBoolCallerBalance]
-    rw [show wrongBoolMsg.value = 0 by rfl]
-    simp only [if_neg (by decide +kernel : ¬ (0 : B256) < 0)]
-  rw [expectedSub] at hsub
-  cases hsub
+  have hbt : wrongBoolMsg.benvAfterTransfer = .ok wrongBoolMsg.benv :=
+    Msg.benvAfterTransfer_of_value_zero rfl
   unfold Frame.enter Frame.ofCall
   simp only
   rw [hbt]
@@ -1824,6 +1806,20 @@ private theorem RetainedWriteFixture.process (w : RetainedWriteFixture) :
   rw [w.settle] at runFrame
   exact runFrame
 
+/-- The CircuitBreaker account carries its installed child code at the root
+frame's entry: a zero-value entry leaves the block environment untouched. -/
+private theorem RetainedWriteFixture.circuitBreakerCode (w : RetainedWriteFixture) :
+    (w.rootEvm.dyna.getCode retainedWriteCircuitBreaker).toList ≠ [] := by
+  obtain ⟨benv, transfer, evmEq⟩ := Frame.enter_run_inv w.enter
+  change retainedWriteMsg.benvAfterTransfer = .ok benv at transfer
+  rw [Msg.benvAfterTransfer_of_value_zero rfl] at transfer
+  cases transfer
+  rw [evmEq]
+  change (retainedWriteState.get retainedWriteCircuitBreaker).code.toList ≠ []
+  unfold retainedWriteState
+  rw [State.get_set_self]
+  decide +kernel
+
 private theorem RetainedWriteFixture.notNoRetainedWrite (w :
     RetainedWriteFixture) :
     ¬ Exec.NoRetainedWriteTo w.run retainedWriteCircuitBreaker
@@ -1834,7 +1830,8 @@ private theorem RetainedWriteFixture.notNoRetainedWrite (w :
   have preserved := Exec.committedCell_eq_of_noRetainedWriteTo w.run
     committed (by
       rw [Frame.enter_run_benvStat w.enter]
-      decide) retainedWriteCircuitBreaker retainedWriteKey noWrite
+      decide) retainedWriteCircuitBreaker retainedWriteKey
+      w.circuitBreakerCode noWrite
   apply w.rootChanged
   simpa only [Execution.committedPost] using preserved.symm
 
@@ -1892,7 +1889,7 @@ theorem retainedWrite_distinctTarget_descendant_falsifier
   rcases Exec.exists_lastRetainedSstore_of_getStor_ne w.run committed
       (by
       rw [Frame.enter_run_benvStat w.enter]
-      decide) changed with
+      decide) w.circuitBreakerCode changed with
     ⟨write, retained, owner, key, value, last⟩
   have codeEq : w.rootEvm.sta.code = retainedWriteMsg.code :=
     Frame.enter_run_code w.enter

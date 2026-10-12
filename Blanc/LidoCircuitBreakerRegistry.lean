@@ -5811,13 +5811,13 @@ private theorem directPausePath_sstore_warm_revert_step
         (phase := phase) run := by
   subst M
   have hbound : sstoreValueCost
-      (getOrigStorVal sevm sevm.currentTarget k)
+      (devm.getOrigStorVal sevm sevm.currentTarget k)
       (devm.getStorVal sevm.currentTarget k) v ≤ gasStorageSet := by
     rw [sstoreValueCost]
     split_ifs <;> decide
   let base :=
     (devm.withRefundCounter (sstoreNewRefundCounter sevm.benvStat.rules.gas v
-      (getOrigStorVal sevm sevm.currentTarget k)
+      (devm.getOrigStorVal sevm sevm.currentTarget k)
       (devm.getStorVal sevm.currentTarget k)
       devm.refundCounter)).setStorVal sevm.currentTarget k v
   have hkey : base.getStorVal sevm.currentTarget k = v := by
@@ -5835,10 +5835,8 @@ private theorem directPausePath_sstore_warm_revert_step
       rfl
     · show (Devm.getStor _ a).get k' = _
       have hoff : Devm.getStor base a = Devm.getStor devm a := by
-        simp only [base, Devm.getStor, Devm.getAcct, Devm.setStorVal,
-          Devm.withState, Devm.setWorld, State.setStorVal]
-        simp only [Devm.state, State.get_set_ne _ hadr]
-        rfl
+        dsimp only [base]
+        rw [setStorVal_getStor_ne hadr, Devm.withRefundCounter_getStor]
       rw [hoff]
       rfl
   have hbalances : ∀ a : Adr, base.getBal a = devm.getBal a := by
@@ -5855,7 +5853,7 @@ private theorem directPausePath_sstore_warm_revert_step
   have haddresses : base.accessedAddresses = devm.accessedAddresses := rfl
   have hlogs : base.logs = devm.logs := rfl
   let c := sstoreValueCost
-    (getOrigStorVal sevm sevm.currentTarget k)
+    (devm.getOrigStorVal sevm sevm.currentTarget k)
     (devm.getStorVal sevm.currentTarget k) v
   let G := devm.gasLeft - c
   have hgasEq : devm.gasLeft = G + c := by
@@ -5915,14 +5913,14 @@ private theorem directPausePath_assignment_zero_warm_revert_step
         (phase := .beforeWrite) run := by
   subst M
   have hbound : sstoreValueCost
-      (getOrigStorVal sevm sevm.currentTarget (assignmentSlot target))
+      (devm.getOrigStorVal sevm sevm.currentTarget (assignmentSlot target))
       (devm.getStorVal sevm.currentTarget (assignmentSlot target)) 0 ≤
         gasStorageSet := by
     rw [sstoreValueCost]
     split_ifs <;> decide
   let base :=
     (devm.withRefundCounter (sstoreNewRefundCounter sevm.benvStat.rules.gas 0
-      (getOrigStorVal sevm sevm.currentTarget (assignmentSlot target))
+      (devm.getOrigStorVal sevm sevm.currentTarget (assignmentSlot target))
       (devm.getStorVal sevm.currentTarget (assignmentSlot target))
       devm.refundCounter)).setStorVal sevm.currentTarget
         (assignmentSlot target) 0
@@ -5942,10 +5940,8 @@ private theorem directPausePath_assignment_zero_warm_revert_step
       rfl
     · show (Devm.getStor _ a).get k' = _
       have hoff : Devm.getStor base a = Devm.getStor devm a := by
-        simp only [base, Devm.getStor, Devm.getAcct, Devm.setStorVal,
-          Devm.withState, Devm.setWorld, State.setStorVal]
-        simp only [Devm.state, State.get_set_ne _ hadr]
-        rfl
+        dsimp only [base]
+        rw [setStorVal_getStor_ne hadr, Devm.withRefundCounter_getStor]
       rw [hoff]
       rfl
   have hbalances : ∀ a : Adr, base.getBal a = devm.getBal a := by
@@ -5962,7 +5958,7 @@ private theorem directPausePath_assignment_zero_warm_revert_step
   have haddresses : base.accessedAddresses = devm.accessedAddresses := rfl
   have hlogs : base.logs = devm.logs := rfl
   let c := sstoreValueCost
-    (getOrigStorVal sevm sevm.currentTarget (assignmentSlot target))
+    (devm.getOrigStorVal sevm sevm.currentTarget (assignmentSlot target))
     (devm.getStorVal sevm.currentTarget (assignmentSlot target)) 0
   let G := devm.gasLeft - c
   have hgasEq : devm.gasLeft = G + c := by
@@ -15898,8 +15894,8 @@ theorem pause_direct_postWrite_revert_settles_and_restores_registry
     ⟨raw, _mid, _mainRun, programRun, _entryBurn, _hmid, rawOutput,
       _mainExec, rootExec, rootPath, _write, _owner, _key, _value⟩
   have evidence := rootPath.beforeWriteEvidence
-  let post := (raw.withError (some .revert)).rollback msg.benv.state
-    msg.tenv.transientStorage
+  let post := ((raw.withError (some .revert)).rollback msg.benv.state
+    msg.tenv.transientStorage).withStorageWrites msg.benv.storageWrites
   have hprocess : ProcessMessage msg
       (.some ⟨⟨0, sevm, pre⟩, .error (.revert, raw)⟩)
       (.ok post) := by

@@ -15,6 +15,18 @@ open PinnedTargetControl
 
 /-! ## Parent/child boundary helpers -/
 
+private lemma stubCrossing_accessDelegation_createdAccounts {devm d1 : Devm}
+    {a dadr : Adr} {dp : Bool} {code : ByteArray} {dgc : Nat}
+    (h : accessDelegation devm a = ⟨dp, dadr, code, dgc, d1⟩) :
+    d1.createdAccounts = devm.createdAccounts := by
+  unfold accessDelegation at h
+  rcases hd : getDelegatedCodeAddress (devm.state.getCode a) with _ | adr <;>
+    simp only [hd] at h
+  · cases h
+    rfl
+  · cases h
+    rfl
+
 /-- The value-zero `CALL` crossing whose child is the source-compiled pinned
 target stub on its cold `pauseFor(uint256)` route. -/
 private lemma runCompiled_call_zero_value_stubPause
@@ -68,21 +80,17 @@ private lemma runCompiled_call_zero_value_stubPause
       (∀ a, a ∈ post.accessedAddresses ↔ a ∈ d1.accessedAddresses) ∧
       post.getStorVal cw.toAdr pausedUntilSlot =
         pauseForProjection sevm.benvStat.time duration ∧
-      ∃ stmid,
-        devm.state.subBal sevm.currentTarget 0 = some stmid ∧
-        post.state = (stmid.addBal cw.toAdr 0).setStorVal cw.toAdr
-          pausedUntilSlot (pauseForProjection sevm.benvStat.time duration) := by
+      post.state = devm.state.setStorVal cw.toAdr
+          pausedUntilSlot (pauseForProjection sevm.benvStat.time duration) ∧
+      post.createdAccounts = devm.createdAccounts := by
   let p := callSpawnParent d1 (mcc + ext)
     iiw.toNat isw.toNat oiw.toNat osw.toNat
   let msg := callSpawnMsg sevm p mcs cw.toAdr dadr
     iiw.toNat isw.toNat code dp
-  have h_afford : ¬ msg.benv.state.bal msg.caller < msg.value := by
-    change ¬ (d1.getAcct sevm.currentTarget).bal < 0
-    rw [B256.lt_iff_toNat_lt_toNat]
-    exact Nat.not_lt.mpr (Nat.zero_le _)
-  obtain ⟨stmid, hsub, hbt⟩ :=
-    Msg.benvAfterTransfer_of_affordable msg rfl h_afford
-  let benv' := (msg.benv.withState stmid).addBal msg.currentTarget msg.value
+  have hbt : msg.benvAfterTransfer = .ok msg.benv :=
+    Msg.benvAfterTransfer_of_value_zero rfl
+  let benv' := msg.benv
+  have hd1state' : d1.state = devm.state := (accessDelegation_frame h_del).1
   let child := initEvm (msg.withBenv benv')
   have henter : (Frame.ofCall msg).enter = .run child := by
     apply Frame.enter_run_of_nonprecompile hbt
@@ -99,16 +107,14 @@ private lemma runCompiled_call_zero_value_stubPause
   have hchildCurrent :
       (initDevm (msg.withBenv benv')).getStorVal cw.toAdr pausedUntilSlot =
         0 := by
-    change ((stmid.addBal cw.toAdr 0).get cw.toAdr).stor.get
-      pausedUntilSlot = 0
-    unfold State.addBal
-    rw [State.setBal_get_stor, state_subBal_stor hsub]
+    change (d1.state.get cw.toAdr).stor.get pausedUntilSlot = 0
     exact h_current
   have hchildOriginal :
-      getOrigStorVal (initSevm (msg.withBenv benv')) cw.toAdr
-        pausedUntilSlot = 0 := by
-    change getOrigStorVal sevm cw.toAdr pausedUntilSlot = 0
-    exact h_original
+      (initDevm (msg.withBenv benv')).getOrigStorVal
+        (initSevm (msg.withBenv benv')) cw.toAdr pausedUntilSlot = 0 :=
+    actualOrigStorVal_eq_zero_of_raw (by
+      change getOrigStorVal sevm cw.toAdr pausedUntilSlot = 0
+      exact h_original)
   have hchildCold :
       (cw.toAdr, pausedUntilSlot) ∉
         (initDevm (msg.withBenv benv')).accessedStorageKeys := by
@@ -116,8 +122,8 @@ private lemma runCompiled_call_zero_value_stubPause
     change (cw.toAdr, pausedUntilSlot) ∉ d1.accessedStorageKeys
     exact h_cold
   have hchildCost : gasColdSload + sstoreValueCost
-      (getOrigStorVal (initSevm (msg.withBenv benv')) cw.toAdr
-        pausedUntilSlot)
+      ((initDevm (msg.withBenv benv')).getOrigStorVal
+        (initSevm (msg.withBenv benv')) cw.toAdr pausedUntilSlot)
       ((initDevm (msg.withBenv benv')).getStorVal cw.toAdr pausedUntilSlot)
       (pauseForProjection ((initSevm (msg.withBenv benv')).benvStat.time) duration) =
         22100 := by
@@ -154,8 +160,8 @@ private lemma runCompiled_call_zero_value_stubPause
       congrArg (fun view => view.refundCounter) hmetaOut]
     rw [stubPausePost_refundCounter]
     change sstoreNewRefundCounter sevm.benvStat.rules.gas (pauseForProjection sevm.benvStat.time duration)
-      (getOrigStorVal (initSevm (msg.withBenv benv')) cw.toAdr
-        pausedUntilSlot)
+      ((initDevm (msg.withBenv benv')).getOrigStorVal
+        (initSevm (msg.withBenv benv')) cw.toAdr pausedUntilSlot)
       ((initDevm (msg.withBenv benv')).getStorVal cw.toAdr pausedUntilSlot)
       0 = 0
     rw [hchildOriginal, hchildCurrent]
@@ -195,13 +201,15 @@ private lemma runCompiled_call_zero_value_stubPause
     rw [stubPausePost_transientStorage]
     rfl
   have hstateOut : out.state =
-      (stmid.addBal cw.toAdr 0).setStorVal cw.toAdr pausedUntilSlot
+      devm.state.setStorVal cw.toAdr pausedUntilSlot
         (pauseForProjection sevm.benvStat.time duration) := by
     rw [show out.state =
       (stubPausePost (initSevm (msg.withBenv benv'))
         (initDevm (msg.withBenv benv')) duration).state from
       congrArg (fun world => world.state) hworldOut]
     rw [stubPausePost_state]
+    change d1.state.setStorVal _ _ _ = _
+    rw [hd1state']
     rfl
   have hsettle : (Frame.ofCall msg).settle (exec child) = .ok out := by
     rw [show exec child = .ok out from hexec,
@@ -242,7 +250,7 @@ private lemma runCompiled_call_zero_value_stubPause
     Ninst.runCompiled_call_zero_value hfork h_stk h_ext h_del h_acc h_split h_gas
       h_depth (by simpa only [p, msg]) (by simpa only [p, msg, ExceptT.stM_eq] using hres)
   refine ⟨post, hrun, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
-    ?_, ?_, stmid, ?_, ?_⟩
+    ?_, ?_, ?_, ?_⟩
   · rw [Devm.memWrite_stack, Devm.stack_setMach]
     change 1 :: d1.stack = 1 :: s
     rw [hd1stack]
@@ -301,13 +309,13 @@ private lemma runCompiled_call_zero_value_stubPause
       fun h => Std.HashSet.mem_union_iff.mpr (Or.inl h)⟩
   · change out.getStorVal cw.toAdr pausedUntilSlot = _
     exact heffectOut
-  · rw [← hd1state]
-    have hsub' : p.state.subBal sevm.currentTarget 0 = some stmid := by
-      simpa only [msg, callSpawnMsg, callMsg, Bool.false_or] using hsub
-    rw [show p.state = d1.state from rfl] at hsub'
-    exact hsub'
   · change out.state = _
     exact hstateOut
+  · change out.createdAccounts = devm.createdAccounts
+    rw [show out.createdAccounts = _ from
+      congrArg (fun view => view.createdAccounts) hmetaOut]
+    have hc := stubCrossing_accessDelegation_createdAccounts h_del
+    exact hc
 
 /-- Resolve the warm, non-delegated parent `CALL` completely.  The parent
 charge is the warm access `100` plus the compiled stub's `22185`. -/
@@ -355,10 +363,9 @@ private lemma stubPause_call_crossing
         a ∈ devm.accessedAddresses) ∧
       post.getStorVal target.toAdr pausedUntilSlot =
         pauseForProjection sevm.benvStat.time duration ∧
-      ∃ stmid,
-        devm.state.subBal sevm.currentTarget 0 = some stmid ∧
-        post.state = (stmid.addBal target.toAdr 0).setStorVal target.toAdr
-          pausedUntilSlot (pauseForProjection sevm.benvStat.time duration) := by
+      post.state = devm.state.setStorVal target.toAdr
+          pausedUntilSlot (pauseForProjection sevm.benvStat.time duration) ∧
+      post.createdAccounts = devm.createdAccounts := by
   have hnodel : getDelegatedCodeAddress
       ((devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
         target.toAdr) = none := by
@@ -430,7 +437,7 @@ private lemma stubPause_call_crossing
       d0.accessedStorageKeys := by
     exact hcold
   obtain ⟨post, hrun, hstack, hmem, hgasl, herr, hout, hret, hlogs,
-    hrefund, hatd, htrans, hask, haa, heffect, stmid, hsub, hstate⟩ :=
+    hrefund, hatd, htrans, hask, haa, heffect, hstate, hcreated⟩ :=
     runCompiled_call_zero_value_stubPause (hfork := hfork)
       (gw := Nat.toB256 G) (cw := target) (duration := duration)
       hstk
@@ -442,7 +449,7 @@ private lemma stubPause_call_crossing
       hmcs (by simpa only [hd0mem] using hdata) hd0current horiginal hd0cold
       hdynamic hnew hroom
   refine ⟨post, hrun, hstack, hmem, ?_, herr, hout, hret, hlogs, hrefund,
-    hatd, htrans, hask, ?_, heffect, stmid, hsub, hstate⟩
+    hatd, htrans, hask, ?_, heffect, hstate, hcreated⟩
   · rw [hgasl, hd0gas]
     exact hgasout
   · intro a
@@ -504,20 +511,16 @@ private lemma runCompiled_staticcall_stubQuery
       (∀ k, k ∈ post.accessedStorageKeys ↔ k ∈ devm.accessedStorageKeys) ∧
       (∀ a, a ∈ post.accessedAddresses ↔ a ∈ d1.accessedAddresses) ∧
       post.getStorVal tw.toAdr pausedUntilSlot = storedUntil ∧
-      ∃ stmid,
-        devm.state.subBal sevm.currentTarget 0 = some stmid ∧
-        post.state = stmid.addBal tw.toAdr 0 := by
+      post.state = devm.state ∧
+      post.createdAccounts = devm.createdAccounts := by
   let p := callSpawnParent d1 (mcc + ext)
     iiw.toNat isw.toNat oiw.toNat osw.toNat
   let msg := staticcallSpawnMsg sevm p mcs tw.toAdr dadr
     iiw.toNat isw.toNat code dp
-  have h_afford : ¬ msg.benv.state.bal msg.caller < msg.value := by
-    change ¬ (d1.getAcct sevm.currentTarget).bal < 0
-    rw [B256.lt_iff_toNat_lt_toNat]
-    exact Nat.not_lt.mpr (Nat.zero_le _)
-  obtain ⟨stmid, hsub, hbt⟩ :=
-    Msg.benvAfterTransfer_of_affordable msg rfl h_afford
-  let benv' := (msg.benv.withState stmid).addBal msg.currentTarget msg.value
+  have hbt : msg.benvAfterTransfer = .ok msg.benv :=
+    Msg.benvAfterTransfer_of_value_zero rfl
+  let benv' := msg.benv
+  have hd1state' : d1.state = devm.state := (accessDelegation_frame h_del).1
   let child := initEvm (msg.withBenv benv')
   have henter : (Frame.ofCall msg).enter = .run child := by
     apply Frame.enter_run_of_nonprecompile hbt
@@ -533,10 +536,7 @@ private lemma runCompiled_staticcall_stubQuery
   have hchildStored :
       (initDevm (msg.withBenv benv')).getStorVal tw.toAdr pausedUntilSlot =
         storedUntil := by
-    change ((stmid.addBal tw.toAdr 0).get tw.toAdr).stor.get
-      pausedUntilSlot = storedUntil
-    unfold State.addBal
-    rw [State.setBal_get_stor, state_subBal_stor hsub]
+    change (d1.state.get tw.toAdr).stor.get pausedUntilSlot = storedUntil
     exact h_stored
   have hchildWarm :
       (tw.toAdr, pausedUntilSlot) ∈
@@ -593,10 +593,10 @@ private lemma runCompiled_staticcall_stubQuery
       (initDevm (msg.withBenv benv')).transientStorage from
       congrArg (fun world => world.transientStorage) hworldOut]
     rfl
-  have hstateOut : out.state = stmid.addBal tw.toAdr 0 := by
+  have hstateOut : out.state = devm.state := by
     rw [show out.state = (initDevm (msg.withBenv benv')).state from
       congrArg (fun world => world.state) hworldOut]
-    rfl
+    exact hd1state'
   have hsettle : (Frame.ofCall msg).settle (exec child) = .ok out := by
     rw [show exec child = .ok out from hexec,
       Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
@@ -638,7 +638,7 @@ private lemma runCompiled_staticcall_stubQuery
         h_depth)
       (by simpa only [p, msg] using henter) (by simpa only [p, msg, ExceptT.stM_eq] using hres)
   refine ⟨post, hrun, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
-    ?_, stmid, ?_, ?_⟩
+    ?_, ?_, ?_⟩
   · rw [Devm.memWrite_stack, Devm.stack_setMach]
     change 1 :: d1.stack = 1 :: s
     rw [hd1stack]
@@ -686,13 +686,13 @@ private lemma runCompiled_staticcall_stubQuery
       fun h => Std.HashSet.mem_union_iff.mpr (Or.inl h)⟩
   · change out.getStorVal tw.toAdr pausedUntilSlot = storedUntil
     exact heffectOut
-  · rw [← hd1state]
-    have hsub' : p.state.subBal sevm.currentTarget 0 = some stmid := by
-      simpa only [msg, staticcallSpawnMsg, callMsg, Bool.true_or] using hsub
-    rw [show p.state = d1.state from rfl] at hsub'
-    exact hsub'
-  · change out.state = stmid.addBal tw.toAdr 0
+  · change out.state = devm.state
     exact hstateOut
+  · change out.createdAccounts = devm.createdAccounts
+    rw [show out.createdAccounts = _ from
+      congrArg (fun view => view.createdAccounts) hmetaOut]
+    have hc := stubCrossing_accessDelegation_createdAccounts h_del
+    exact hc
 
 /-- Resolve the warm, non-delegated parent `STATICCALL` completely.  The
 parent charge is the warm access `100` plus the compiled stub's `172`. -/
@@ -734,9 +734,8 @@ private lemma stubQuery_staticcall_crossing
       (∀ k, k ∈ post.accessedStorageKeys ↔ k ∈ devm.accessedStorageKeys) ∧
       (∀ a, a ∈ post.accessedAddresses ↔ a ∈ devm.accessedAddresses) ∧
       post.getStorVal target.toAdr pausedUntilSlot = storedUntil ∧
-      ∃ stmid,
-        devm.state.subBal sevm.currentTarget 0 = some stmid ∧
-        post.state = stmid.addBal target.toAdr 0 := by
+      post.state = devm.state ∧
+      post.createdAccounts = devm.createdAccounts := by
   have hnodel : getDelegatedCodeAddress
       ((devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
         target.toAdr) = none := by
@@ -807,7 +806,7 @@ private lemma stubQuery_staticcall_crossing
   have hd0warmSlot : (target.toAdr, pausedUntilSlot) ∈
       d0.accessedStorageKeys := by exact hwarmSlot
   obtain ⟨post, hrun, hstack, hmem, hgasl, herr, hout, hret, hlogs,
-    hrefund, hatd, htrans, hask, haa, heffect, stmid, hsub, hstate⟩ :=
+    hrefund, hatd, htrans, hask, haa, heffect, hstate, hcreated⟩ :=
     runCompiled_staticcall_stubQuery (hfork := hfork)
       (gw := Nat.toB256 G) (tw := target) (storedUntil := storedUntil)
       hstk
@@ -819,7 +818,7 @@ private lemma stubQuery_staticcall_crossing
       hmcs (by simpa only [hd0mem] using hdata) hd0stored hd0warmSlot
       hpaused hroom
   refine ⟨post, hrun, hstack, hmem, ?_, herr, hout, hret, hlogs, hrefund,
-    hatd, htrans, hask, ?_, heffect, stmid, hsub, hstate⟩
+    hatd, htrans, hask, ?_, heffect, hstate, hcreated⟩
   · rw [hgasl, hd0gas]
     exact hgasout
   · intro a
@@ -1023,12 +1022,9 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
         (a = target.toAdr ∨ a ∈ base.accessedAddresses)) ∧
       mid.getStorVal target.toAdr pausedUntilSlot =
         pauseForProjection sevm.benvStat.time duration ∧
-      (∃ st₁ st₂ : State,
-        base.state.subBal sevm.currentTarget 0 = some st₁ ∧
-        ((st₁.addBal target.toAdr 0).setStorVal target.toAdr
-          pausedUntilSlot (pauseForProjection sevm.benvStat.time duration)).subBal
-            sevm.currentTarget 0 = some st₂ ∧
-        mid.state = st₂.addBal target.toAdr 0) ∧
+      mid.state = base.state.setStorVal target.toAdr pausedUntilSlot
+        (pauseForProjection sevm.benvStat.time duration) ∧
+      mid.createdAccounts = base.createdAccounts ∧
       ∀ post : Devm,
         Func.RunCompiled fs sevm mid pauseSuccess post →
         Func.RunCompiled fs sevm
@@ -1165,8 +1161,8 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
     rw [hs]
     decide +kernel
   obtain ⟨post1, hrun1, hstk1, hmem1, hgas1, herr1, hout1, hret1, hlogs1,
-    hrefund1, hatd1, htrans1, hask1, haa1, heffect1, st₁, hsub1,
-    hstate1⟩ :=
+    hrefund1, hatd1, htrans1, hask1, haa1, heffect1,
+    hstate1, hcreated1⟩ :=
     stubPause_call_crossing (hfork := hfork) (sevm := sevm)
       (devm := (temporalAccountAccessBase base target.toAdr).setMach
         ⟨[Nat.toB256 (Gb + 22663), target, 0, 284, 36, 0, 0],
@@ -1219,15 +1215,14 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
     rw [← hstk1, ← hmem1', ← hgas1']
     rfl
   have hcode1 : post1.state.getCode target.toAdr = stubCode := by
-    rw [hstate1, state_setStorVal_getCode, State.addBal_getCode,
-      State.subBal_getCode hsub1]
+    rw [hstate1, state_setStorVal_getCode]
     show (temporalAccountAccessBase base target.toAdr).state.getCode
       target.toAdr = stubCode
     rw [temporalAccountAccessBase_state]
     exact hstubCode
   obtain ⟨post2, hrun2, hstk2, hmem2, hgas2, herr2, hout2, hret2, hlogs2,
-    hrefund2, hatd2, htrans2, hask2, haa2, heffect2, st₂, hsub2,
-    hstate2⟩ :=
+    hrefund2, hatd2, htrans2, hask2, haa2, heffect2,
+    hstate2, hcreated2⟩ :=
     stubQuery_staticcall_crossing (hfork := hfork) (sevm := sevm)
       (devm := post1.setMach
         ⟨[Nat.toB256 (Gb + 334), target, 284, 4, 0, 32],
@@ -1327,18 +1322,23 @@ theorem pauseAfterSet_stub_toSuccess_runCompiled
     show a ∈ (temporalAccountAccessBase base target.toAdr
       ).accessedAddresses ↔ (a = target.toAdr ∨ a ∈ base.accessedAddresses)
     exact temporalAccountAccessBase_mem base target.toAdr a
-  have hsub1' : base.state.subBal sevm.currentTarget 0 = some st₁ := by
-    rw [← temporalAccountAccessBase_state base target.toAdr]
-    exact hsub1
-  have hsub2' :
-      ((st₁.addBal target.toAdr 0).setStorVal target.toAdr pausedUntilSlot
-        (pauseForProjection sevm.benvStat.time duration)).subBal sevm.currentTarget 0 =
-          some st₂ := by
-    rw [← hstate1]
-    exact hsub2
+  have hstateB : post2.state = base.state.setStorVal target.toAdr pausedUntilSlot
+      (pauseForProjection sevm.benvStat.time duration) := by
+    rw [hstate2]
+    show post1.state = _
+    rw [hstate1]
+    show (temporalAccountAccessBase base target.toAdr).state.setStorVal _ _ _ = _
+    rw [temporalAccountAccessBase_state]
+  have hcreatedB : post2.createdAccounts = base.createdAccounts := by
+    rw [hcreated2]
+    show post1.createdAccounts = base.createdAccounts
+    rw [hcreated1]
+    show (temporalAccountAccessBase base target.toAdr).createdAccounts = _
+    unfold temporalAccountAccessBase Lift.temporalAccountAccessBase
+    split <;> rfl
   refine ⟨post2.setMach ⟨[], pauseDecodedMemory M duration, Gb - 19, post2.stateGas⟩,
     rfl, rfl, rfl, herrB, houtB, hret2, hlogsB, hrefundB, hatdB, htransB,
-    haskB, haaB, ?_, ⟨st₁, st₂, hsub1', hsub2', hstate2⟩, ?_⟩
+    haskB, haaB, ?_, hstateB, hcreatedB, ?_⟩
   · simpa only [Devm.getStorVal_setMach] using heffect2
   intro post hwalk
   have hC : Func.RunCompiled fs sevm

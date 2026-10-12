@@ -123,12 +123,14 @@ theorem canonicalDeploymentApplyBody_succeeds
           (initBenv .prague base cb.block.header).stat.rules 0
           (initBenv .prague base cb.block.header).state ctx.systemPrefix.stBeacon
           (beaconRootsAddress :: ctx.systemPrefix.outBeacon.accountReads.toList)
-          ctx.systemPrefix.outBeacon.storageReads.toList).incorporateSystem
+          ctx.systemPrefix.outBeacon.storageReads.toList
+          ctx.systemPrefix.outBeacon.storageWrites.toList).incorporateSystem
         (initBenv .prague base cb.block.header).stat.rules 0
         ((initBenv .prague base cb.block.header).withState ctx.systemPrefix.stBeacon).state
         ctx.systemPrefix.stHistory
         (historyStorageAddress :: ctx.systemPrefix.outHistory.accountReads.toList)
-        ctx.systemPrefix.outHistory.storageReads.toList = (BlockOutput.init : BlockOutput).bal := by
+        ctx.systemPrefix.outHistory.storageReads.toList
+        ctx.systemPrefix.outHistory.storageWrites.toList = (BlockOutput.init : BlockOutput).bal := by
     simp only [BalBuilder.incorporateSystem, hbalNone, Std.TreeMap.empty_eq_emptyc]
     change ({} : BalBuilder) = ({} : BalBuilder)
     rfl

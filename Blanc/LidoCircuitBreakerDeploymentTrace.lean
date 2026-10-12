@@ -1223,6 +1223,11 @@ theorem officialConstructorColdStore_runCompiled
       (base.setMach ⟨[key, value], memory, G + 22100, base.stateGas⟩)
       (sstore ::: rest) post := by
   have hzeroValue : (0 : B256) ≠ value := Ne.symm hvalue
+  have horiginalActual :
+      (base.setMach ⟨[key, value], memory, G + 22100, base.stateGas⟩).getOrigStorVal
+        sevm sevm.currentTarget key = 0 := by
+    unfold Devm.getOrigStorVal
+    simp only [horiginal, ite_self]
   apply Func.RunCompiled.next
   · apply Ninst.runCompiled_sstore_cold hfork.rules_stateGas_none
         (c := 22100) (G := G) (rc := base.refundCounter)
@@ -1230,10 +1235,12 @@ theorem officialConstructorColdStore_runCompiled
     · simpa only [Devm.setMach, Devm.accessedStorageKeys] using hcold
     · simpa only [Devm.gasLeft_setMach] using hsentry
     · exact hstatic
-    · simp only [Devm.getStorVal_setMach, hcurrent, horiginal]
+    · simp only [Devm.getStorVal_setMach, hcurrent, horiginalActual]
       simp only [gasColdSload, sstoreValueCost, ne_eq, hzeroValue, not_false_eq_true, and_self,
         ↓reduceIte, gasStorageSet, Nat.reduceAdd]
-    · simp only [Devm.setMach, Devm.refundCounter, horiginal]
+    · rw [horiginalActual, Devm.getStorVal_setMach, hcurrent]
+      change sstoreNewRefundCounter sevm.benvStat.rules.gas value 0 0
+        base.refundCounter = base.refundCounter
       simp only [sstoreNewRefundCounter, ne_eq, hzeroValue, ↓reduceIte, not_true_eq_false,
         false_and, ite_self]
     · simp only [Devm.gasLeft_setMach]
