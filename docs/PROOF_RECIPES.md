@@ -365,11 +365,11 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 
 - Status: `active`
 - Triggers: `goal-shape:terminal-return-revert`
-- Preferred path: For an offset-zero 32-byte RETURN or empty REVERT, use `Func.runCompiledTo_return_word_at_zero` or `Func.runCompiledTo_revert_empty_at_zero`; use the more general `Func.runCompiledTo_return_word` and `Func.runCompiledTo_revert` only when the offset, size, stack tail, or payload differs.
-- Boundary: These are construction lemmas for two common terminal shapes, not inversion theorems and not a replacement for the general terminal APIs.
+- Preferred path: For two PUSH1-zero instructions followed by an empty RETURN from an empty stack and empty memory, use `Func.runCompiledTo_push1Zero_return_empty`, which pays exactly six gas. For an offset-zero 32-byte RETURN or empty REVERT, use `Func.runCompiledTo_return_word_at_zero` or `Func.runCompiledTo_revert_empty_at_zero`; use the more general `Func.runCompiledTo_return_word` and `Func.runCompiledTo_revert` only when the offset, size, stack tail, or payload differs.
+- Boundary: These construction lemmas cover the stated terminal sequences, including the exact two-PUSH1-zero prefix; they are not inversion theorems or replacements for the general terminal APIs.
 - Owner module: [Blanc/ExecutionTerminal.lean](../Blanc/ExecutionTerminal.lean)
 - Canonical example: [Blanc/ExecutionTerminal.lean](../Blanc/ExecutionTerminal.lean) — `Func.runCompiledTo_return_word_at_zero`
-- Registered symbols: `module:Blanc/ExecutionTerminal.lean`, `declaration:Func.runCompiledTo_return_word_at_zero`, `declaration:Func.runCompiledTo_revert_empty_at_zero`
+- Registered symbols: `module:Blanc/ExecutionTerminal.lean`, `declaration:Func.runCompiledTo_return_word_at_zero`, `declaration:Func.runCompiledTo_revert_empty_at_zero`, `declaration:Func.runCompiledTo_push1Zero_return_empty`
 - Review: `proof-infrastructure` on `2026-08-29`
 
 ## `full-length-slice`

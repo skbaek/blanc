@@ -649,6 +649,8 @@ Use [`Blanc/ExecutionTerminal.lean`](../Blanc/ExecutionTerminal.lean):
 
 - `Func.runCompiledTo_return_word_at_zero` for a known 32-byte return at offset 0.
 - `Func.runCompiledTo_revert_empty_at_zero` for an empty revert at offset 0.
+- `Func.runCompiledTo_push1Zero_return_empty` for two PUSH1-zero instructions
+  followed by an empty RETURN from an empty stack and empty memory, paying exactly six gas.
 
 For different offsets, sizes, stack tails, or payloads, use the general
 `Func.runCompiledTo_return_word` in `ForwardCall` or

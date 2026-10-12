@@ -1,7 +1,7 @@
 import Blanc.ProxyPairOssifiableConstructorNonempty
 import Blanc.MessageExecution
 import Blanc.MachineDataFacts
-import Blanc.ProxyPairRepinBridge
+import Blanc.ExecutionTerminal
 
 namespace Blanc.ProxyPair.OssifiableBothSlotFixture
 

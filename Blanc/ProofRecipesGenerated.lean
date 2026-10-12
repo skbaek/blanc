@@ -277,9 +277,9 @@ def recipes : List Recipe := [
     id := "compiled-terminal-at-zero"
     status := "active"
     triggers := ["goal-shape:terminal-return-revert"]
-    preferredPath := "For an offset-zero 32-byte RETURN or empty REVERT, use `Func.runCompiledTo_return_word_at_zero` or `Func.runCompiledTo_revert_empty_at_zero`; use the more general `Func.runCompiledTo_return_word` and `Func.runCompiledTo_revert` only when the offset, size, stack tail, or payload differs."
-    symbols := ["module:Blanc/ExecutionTerminal.lean", "declaration:Func.runCompiledTo_return_word_at_zero", "declaration:Func.runCompiledTo_revert_empty_at_zero"]
-    boundary := "These are construction lemmas for two common terminal shapes, not inversion theorems and not a replacement for the general terminal APIs."
+    preferredPath := "For two PUSH1-zero instructions followed by an empty RETURN from an empty stack and empty memory, use `Func.runCompiledTo_push1Zero_return_empty`, which pays exactly six gas. For an offset-zero 32-byte RETURN or empty REVERT, use `Func.runCompiledTo_return_word_at_zero` or `Func.runCompiledTo_revert_empty_at_zero`; use the more general `Func.runCompiledTo_return_word` and `Func.runCompiledTo_revert` only when the offset, size, stack tail, or payload differs."
+    symbols := ["module:Blanc/ExecutionTerminal.lean", "declaration:Func.runCompiledTo_return_word_at_zero", "declaration:Func.runCompiledTo_revert_empty_at_zero", "declaration:Func.runCompiledTo_push1Zero_return_empty"]
+    boundary := "These construction lemmas cover the stated terminal sequences, including the exact two-PUSH1-zero prefix; they are not inversion theorems or replacements for the general terminal APIs."
   },
   {
     id := "full-length-slice"
