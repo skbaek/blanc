@@ -263,7 +263,8 @@ theorem Exec.CoreDripTranscript.nextNone
   have sumNof : sum pre.state.bal < 2 ^ 256 := precondition.side
   rcases (carrier coalition ca).ofStorageEqBalanceMono_observed
       (transcriptView coalition ca) ()
-      (_root_.Blanc.Ninst.foreignNone_getStor_eq hfork step target_ne)
+      (_root_.Blanc.Ninst.foreignNone_getStor_eq hfork step target_ne
+        (dripEntrySpec_pre_protected precondition))
       (_root_.Blanc.Ninst.targetBalanceMono_of_none hfork step target_ne sumNof) with
     ⟨headSteps, headReplay, headKinds⟩
   change List RealizedStep at headSteps
@@ -297,7 +298,7 @@ theorem Exec.CoreDripTranscript.last
       have sumNof : sum pre.state.bal < 2 ^ 256 := precondition.side
       rcases (carrier coalition ca).ofStorageEqBalanceMono_observed
           (transcriptView coalition ca) ()
-          (congrFun (_root_.Blanc.Linst.getStor_eq step) ca)
+          (_root_.Blanc.Linst.getStor_eq step ca (dripEntrySpec_pre_protected precondition))
           (_root_.Blanc.Linst.targetBalanceMono_of_foreign step target_ne
             sumNof) with
         ⟨steps, replay, kinds⟩
@@ -374,7 +375,7 @@ theorem Exec.CoreDripTranscript.nextSome
       have sumNof : sum pre.state.bal < 2 ^ 256 := precondition.side
       rcases (carrier coalition ca).xinstForeignSome_observed
           (transcriptView coalition ca) spawnEq frameRun resumeRun target_ne
-          hfork sumNof child
+          hfork (fun _ => dripEntrySpec_pre_protected precondition) sumNof child
           (fun childCommitted => ihChild child childCommitted childFork childAt
             childPrecondition childDirect childCaller childCanonical) with
         ⟨headSteps, headReplay, headKinds⟩

@@ -5,6 +5,7 @@
 -- proved by Lean; no fixture result is a theorem premise.
 
 import Blanc.DripDeploy
+import Blanc.Drip.RepinBridge
 import Blanc.RlpConcrete
 import Blanc.DripRpow
 
@@ -930,6 +931,47 @@ def concreteConstructorEntry : State :=
   (concreteConstructorPrepared.setBal concreteCreateSender
     (concreteConstructorPrepared.bal concreteCreateSender - 0)).addBal concreteCreateTarget 0
 
+private theorem concreteConstructorPrepared_sender_nonce :
+    (concreteConstructorPrepared.get concreteCreateSender).nonce = 1 := by
+  have different : concreteCreateTarget ≠ concreteCreateSender := by decide +kernel
+  unfold concreteConstructorPrepared
+  rw [State.incrNonce, State.setAccount_get_ne _ different]
+  unfold State.setStor
+  rw [State.get_set_ne _ different]
+  unfold concreteDeploymentDebit
+  rw [State.setBal_get_nonce]
+  unfold State.incrNonce
+  rw [State.setAccount_get_self, Acct.clearIfEmpty_nonce, concreteGenesisSender]
+  rfl
+
+private theorem concreteConstructorPrepared_target_nonce :
+    (concreteConstructorPrepared.get concreteCreateTarget).nonce = 1 := by
+  have different : concreteCreateSender ≠ concreteCreateTarget := by decide +kernel
+  unfold concreteConstructorPrepared
+  rw [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_nonce]
+  unfold State.setStor
+  rw [State.get_set_self]
+  change (concreteDeploymentDebit.get concreteCreateTarget).nonce + 1 = 1
+  unfold concreteDeploymentDebit
+  rw [State.setBal_get_ne different]
+  unfold State.incrNonce
+  rw [State.setAccount_get_ne _ different, concreteGenesisTarget]
+  rfl
+
+private theorem concreteConstructorEntry_eq_prepared :
+    concreteConstructorEntry = concreteConstructorPrepared := by
+  have senderProtected : State.Protected concreteConstructorPrepared concreteCreateSender := by
+    left
+    rw [concreteConstructorPrepared_sender_nonce]
+    decide
+  have targetProtected : State.Protected concreteConstructorPrepared concreteCreateTarget := by
+    left
+    rw [concreteConstructorPrepared_target_nonce]
+    decide
+  unfold concreteConstructorEntry
+  rw [B256.sub_zero, RepinBridge.setBal_current_of_protected senderProtected,
+    RepinBridge.addBal_zero_of_protected targetProtected]
+
 /-- A finite update expression for the actual deployed world, including fees. -/
 def concreteDeploymentState : State :=
   deploymentFinalState (initBenv .prague concreteBase concreteExecutionHeader)
@@ -955,25 +997,17 @@ theorem concreteDeployed_state : concreteDeployed.state = concreteDeploymentStat
   have hdebitEq : ctx.debit = concreteDeploymentDebit := by
     rw [hbegun, hprice] at hdebit
     exact hdebit
-  obtain ⟨mid, hsub, hentryEq⟩ := of_benvAfterTransfer
-    (msg := processCreateMessage.msg ctx.msg) ctx.msg_shouldTransferValue_eq hentry
-  have hmid := (State.of_subBal hsub).2
+  have zero : (processCreateMessage.msg ctx.msg).value = 0 := ctx.msg_value_eq
+  rw [Msg.benvAfterTransfer_of_value_zero zero] at hentry
+  cases hentry
   have hprepared : (processCreateMessage.msg ctx.msg).benv.state = concreteConstructorPrepared := by
     change (ctx.msg.benv.state.setStor ctx.msg.currentTarget .empty).incrNonce ctx.msg.currentTarget = _
     rw [ctx.msg_benv_eq]
     simp only [ctx.target_eq]
     rw [hdebitEq]
     rfl
-  have hentryState : entry.state = concreteConstructorEntry := by
-    rw [hentryEq]
-    change mid.addBal ctx.msg.currentTarget ctx.msg.value = _
-    rw [hmid]
-    change (((processCreateMessage.msg ctx.msg).benv.state.setBal ctx.msg.caller
-      ((processCreateMessage.msg ctx.msg).benv.state.bal ctx.msg.caller - ctx.msg.value)).addBal
-      ctx.msg.currentTarget ctx.msg.value) = _
-    rw [hprepared, ctx.msg_caller_eq, ctx.msg_value_eq]
-    simp only [ctx.target_eq]
-    rfl
+  have hentryState : (processCreateMessage.msg ctx.msg).benv.state = concreteConstructorEntry := by
+    rw [hprepared, concreteConstructorEntry_eq_prepared]
   rw [hstate, hentryState, ctx.msg_time_eq, ctx.systemPrefix.environment_eq,
     hpreviewBenv, concreteCreateGasUsed]
   rfl
