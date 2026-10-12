@@ -465,13 +465,14 @@ structure WithdrawPost (sevm : Sevm) (pre post : Devm) (wad : B256) : Prop where
     ∃ stmid, (wB3 sevm pre wad).state.subBal sevm.currentTarget wad = some stmid ∧
       post.state = stmid.addBal sevm.caller wad
 
-/-- **Liveness of `withdraw(wad)` to an externally owned account, gas-exact, with the final machine.**  A frame entering
+/-- **Liveness of `withdraw(wad)` to an externally owned account, gas-exact, with the final machine**, before any
+storage conclusion (no protection premise).  A frame entering
 `withdraw(wad)` with `0 < wad ≤ balanceOf[caller]`, whose caller has no code and is no precompile, and
 whose contract holds the ether, succeeds at exactly `withdrawGas` (the recipient's empty code returns
 the whole stipend, so the send is a single step); it debits the caller's balance slot and touches no
 other storage.  (`h_sentry`: the debit's `SSTORE` runs with more than `gCallStipend` gas;
 `h_callgas`: the `CALL` leaves the frame at least the stipend the callee returns.) -/
-theorem weth9_withdraw_runExact_post {sevm : Sevm} {pre : Devm} {G : Nat}
+theorem weth9_withdraw_runExact_core {sevm : Sevm} {pre : Devm} {G : Nat}
     (hfork : CoveredFork sevm.benvStat.fork) (h_static : sevm.isStatic = false)
     (h_value : sevm.value = 0) (h_sel : Sevm.selector sevm = wdSel)
     (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
@@ -481,18 +482,12 @@ theorem weth9_withdraw_runExact_post {sevm : Sevm} {pre : Devm} {G : Nat}
     (h_code : (pre.getCode sevm.caller).size = 0)
     (h_prec : sevm.benvStat.rules.isPrecomp sevm.caller = false)
     (h_eth : ¬ (pre.getAcct sevm.currentTarget).bal < Sevm.dataWord sevm 4)
-    (hprot_ca : State.Protected pre.state sevm.currentTarget)
-    (hprot_caller : State.Protected pre.state sevm.caller)
     (h_gas : pre.gasLeft = G + withdrawGas sevm pre)
     (h_sentry : gCallStipend < G + 1 + 1488 + callNet pre sevm.caller + 69 +
       sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller) (wV sevm pre (Sevm.dataWord sevm 4)))
     (h_callgas : gCallStipend ≤ G + 1 + 1488) :
     ∃ post, SProg.RunExact prog sevm pre post ∧ post.gasLeft = G ∧
-      WithdrawPost sevm pre post (Sevm.dataWord sevm 4) ∧
-      Devm.getStor post sevm.currentTarget = (Devm.getStor pre sevm.currentTarget).set
-        (balSlot sevm.caller)
-        (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) - Sevm.dataWord sevm 4) ∧
-      ∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor pre a := by
+      WithdrawPost sevm pre post (Sevm.dataWord sevm 4) := by
   have hsel : Sevm.selector sevm = 0x2e1a7d4d := h_sel.trans wdSel_eq
   have hg : G + 1 + 1488 + callNet pre sevm.caller + 69 +
       sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller) (wV sevm pre (Sevm.dataWord sevm 4)) + 16 +
@@ -520,22 +515,9 @@ theorem weth9_withdraw_runExact_post {sevm : Sevm} {pre : Devm} {G : Nat}
     rw [Blanc.Lift.NodeWalk.afterSload_state, Blanc.Lift.NodeWalk.afterSload_state]
   have hacct2 : ∀ x, (wB2 sevm pre).getAcct x = pre.getAcct x :=
     fun x => congrArg (·.get x) hstate2
-  have hprot3 : ∀ x, State.Protected pre.state x →
-      State.Protected (wB3 sevm pre (Sevm.dataWord sevm 4)).state x := by
-    intro x hx
-    obtain ⟨st, hst⟩ := afterSstore_getAcct (sevm := sevm) (b := wB2 sevm pre)
-      (key := balSlot sevm.caller) (value := wV sevm pre (Sevm.dataWord sevm 4)) x
-    rw [hacct2] at hst
-    unfold State.Protected at hx
-    show ((wB3 sevm pre (Sevm.dataWord sevm 4)).getAcct x).nonce ≠ 0 ∨
-      ((wB3 sevm pre (Sevm.dataWord sevm 4)).getAcct x).code.size ≠ 0
-    rw [hst]
-    rcases hx with hn | hc
-    · exact Or.inl hn
-    · exact Or.inr hc
   obtain ⟨postW, hw, hpe⟩ := withdraw_wrapper (sevm := sevm) (b := pre) (G := G) (X := _)
     (sel := Sevm.selector sevm) h_value hbody
-  refine ⟨postW, ⟨_, rfl, ?_⟩, ?_, ⟨?_, ?_, ?_, ?_, ?_, ?_⟩, ?_, ?_⟩
+  refine ⟨postW, ⟨_, rfl, ?_⟩, ?_, ⟨?_, ?_, ?_, ?_, ?_, ?_⟩⟩
   · have h0 := dispatch_withdraw (b := pre) h_len h_len' hsel hw
     rw [pre_eq_St h_stack h_mem hg] at h0
     exact h0
@@ -583,46 +565,131 @@ theorem weth9_withdraw_runExact_post {sevm : Sevm} {pre : Devm} {G : Nat}
     rw [if_neg hwad] at hcs ⊢
     obtain ⟨stmid, hsub, hst⟩ := hcs
     exact ⟨stmid, hsub, hst⟩
-  · rw [hpe]
-    show Devm.getStor post sevm.currentTarget = _
-    have hcs := hcp.state
-    rw [if_neg hwad] at hcs
-    obtain ⟨stmid, hsub, hst⟩ := hcs
-    have h1 : Devm.getStor post sevm.currentTarget =
-        Devm.getStor (wB3 sevm pre (Sevm.dataWord sevm 4)) sevm.currentTarget := by
-      have hsa : State.getStor (stmid.addBal sevm.caller (Sevm.dataWord sevm 4)) sevm.currentTarget =
-          State.getStor (wB3 sevm pre (Sevm.dataWord sevm 4)).state sevm.currentTarget :=
-        getStor_subBal_addBal hsub (hprot3 _ hprot_ca)
-      show State.getStor post.state _ = State.getStor (wB3 sevm pre (Sevm.dataWord sevm 4)).state _
-      rw [hst]
-      exact hsa
-    rw [h1]
-    simp only [wB3, wB2, wB1, wV, getStorVal_afterSload, afterSstore_getStor_self,
-      afterSload_getStor]
-  · intro a ha
-    rw [hpe]
-    show Devm.getStor post a = _
-    have hcs := hcp.state
-    rw [if_neg hwad] at hcs
-    obtain ⟨stmid, hsub, hst⟩ := hcs
-    have hpost3 : Devm.getStor post a = Devm.getStor (wB3 sevm pre (Sevm.dataWord sevm 4)) a := by
-      by_cases hcaller : a = sevm.caller
-      · subst hcaller
-        have h1 : State.getStor (stmid.addBal sevm.caller (Sevm.dataWord sevm 4)) sevm.caller =
-            State.getStor (wB3 sevm pre (Sevm.dataWord sevm 4)).state sevm.caller :=
-          getStor_subBal_addBal hsub (hprot3 _ hprot_caller)
-        show State.getStor post.state _ = State.getStor (wB3 sevm pre (Sevm.dataWord sevm 4)).state _
-        rw [hst]
-        exact h1
-      · obtain ⟨-, rfl⟩ := State.of_subBal hsub
-        show (post.state.get a).stor = ((wB3 sevm pre (Sevm.dataWord sevm 4)).state.get a).stor
-        rw [hst]
-        unfold State.addBal
-        rw [State.setBal_get_ne (Ne.symm hcaller), State.setBal_get_ne (Ne.symm ha)]
-    rw [hpost3]
-    simp only [wB3, wB2, wB1, ne_eq, ha.symm, not_false_eq_true, afterSstore_getStor_ne,
-      afterSload_getStor]
 
+/-- The accounts of the world `withdraw`'s debit `SSTORE` leaves agree with the frame's in nonce, code and
+balance. -/
+theorem wB3_acct_fields (sevm : Sevm) (pre : Devm) (wad : B256) (x : Adr) :
+    ((wB3 sevm pre wad).getAcct x).nonce = (pre.getAcct x).nonce ∧
+      ((wB3 sevm pre wad).getAcct x).code = (pre.getAcct x).code ∧
+      ((wB3 sevm pre wad).getAcct x).bal = (pre.getAcct x).bal := by
+  have hstate2 : (wB2 sevm pre).state = pre.state := by
+    rw [Blanc.Lift.NodeWalk.afterSload_state, Blanc.Lift.NodeWalk.afterSload_state]
+  obtain ⟨st, hst⟩ := afterSstore_getAcct (sevm := sevm) (b := wB2 sevm pre)
+    (key := balSlot sevm.caller) (value := wV sevm pre wad) x
+  rw [show (wB2 sevm pre).getAcct x = pre.getAcct x from congrArg (·.get x) hstate2] at hst
+  show ((wB3 sevm pre wad).getAcct x).nonce = _ ∧ _
+  rw [hst]
+  exact ⟨rfl, rfl, rfl⟩
+
+/-- **The contract storage a nonzero `withdraw(wad)` leaves**, read off `WithdrawPost`.  Under Jaune's
+account normalization (cause SA) the send deletes the contract's account with its storage when the debit
+empties an unprotected account; `hprot_ca` excludes that. -/
+theorem WithdrawPost.getStor_self_of_ne_zero {sevm : Sevm} {pre post : Devm} {wad : B256}
+    (h : WithdrawPost sevm pre post wad) (hwad : wad ≠ 0)
+    (hprot_ca : State.Protected pre.state sevm.currentTarget) :
+    Devm.getStor post sevm.currentTarget = (Devm.getStor pre sevm.currentTarget).set
+        (balSlot sevm.caller) (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) - wad) := by
+  have hcs := h.state
+  rw [if_neg hwad] at hcs
+  obtain ⟨stmid, hsub, hst⟩ := hcs
+  have hacct3 := wB3_acct_fields sevm pre wad
+  have hprot3 : State.Protected (wB3 sevm pre wad).state sevm.currentTarget := by
+    unfold State.Protected at hprot_ca ⊢
+    show ((wB3 sevm pre wad).getAcct _).nonce ≠ 0 ∨ ((wB3 sevm pre wad).getAcct _).code.size ≠ 0
+    rw [(hacct3 _).1, (hacct3 _).2.1]
+    exact hprot_ca
+  have h1 : Devm.getStor post sevm.currentTarget =
+      Devm.getStor (wB3 sevm pre wad) sevm.currentTarget := by
+    show State.getStor post.state _ = State.getStor (wB3 sevm pre wad).state _
+    rw [hst]
+    exact getStor_subBal_addBal hsub hprot3
+  rw [h1]
+  simp only [wB3, wB2, wB1, wV, getStorVal_afterSload, afterSstore_getStor_self,
+    afterSload_getStor]
+
+/-- **The other storage a nonzero `withdraw(wad)` leaves**, read off `WithdrawPost`: unchanged, provided
+the caller's credit does not wrap (`hrecv`); a wrap to `0` would empty and normalize a nonce-`0` caller
+(cause SA). -/
+theorem WithdrawPost.getStor_other_of_ne_zero {sevm : Sevm} {pre post : Devm} {wad : B256}
+    (h : WithdrawPost sevm pre post wad) (hwad : wad ≠ 0)
+    (hrecv : B256.Nof (pre.getAcct sevm.caller).bal wad) :
+    ∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor pre a := by
+  have hcs := h.state
+  rw [if_neg hwad] at hcs
+  obtain ⟨stmid, hsub, hst⟩ := hcs
+  have hacct3 := wB3_acct_fields sevm pre wad
+  intro a ha
+  have hpost3 : Devm.getStor post a = Devm.getStor (wB3 sevm pre wad) a := by
+    obtain ⟨-, hstmid⟩ := State.of_subBal hsub
+    by_cases hcaller : a = sevm.caller
+    · subst hcaller
+      have hmid : stmid.get sevm.caller = (wB3 sevm pre wad).state.get sevm.caller := by
+        rw [hstmid]
+        exact State.setBal_get_ne (Ne.symm ha)
+      show State.getStor post.state _ = State.getStor (wB3 sevm pre wad).state _
+      rw [hst, Jaune.getStor_addBal, if_neg]
+      · show (stmid.get sevm.caller).stor = _
+        rw [hmid]; rfl
+      · rintro ⟨-, hempty⟩
+        have hz : stmid.bal sevm.caller + wad = 0 := hempty.2.2
+        have hb : stmid.bal sevm.caller = (pre.getAcct sevm.caller).bal := by
+          show (stmid.get sevm.caller).bal = _
+          rw [hmid]
+          exact (hacct3 sevm.caller).2.2
+        rw [hb] at hz
+        have hn := B256.toNat_add_eq_of_nof _ _ hrecv
+        rw [hz, B256.toNat_zero] at hn
+        apply hwad
+        apply B256.toNat_inj
+        rw [B256.toNat_zero]
+        omega
+    · show (post.state.get a).stor = ((wB3 sevm pre wad).state.get a).stor
+      rw [hst]
+      unfold State.addBal
+      rw [State.setBal_get_ne (Ne.symm hcaller), hstmid, State.setBal_get_ne (Ne.symm ha)]
+  rw [hpost3]
+  simp only [wB3, wB2, wB1, ne_eq, ha.symm, not_false_eq_true, afterSstore_getStor_ne,
+    afterSload_getStor]
+
+/-- **The storage a nonzero `withdraw(wad)` leaves**: both halves, under contract protection and no
+caller-credit wrap. -/
+theorem WithdrawPost.getStor_of_ne_zero {sevm : Sevm} {pre post : Devm} {wad : B256}
+    (h : WithdrawPost sevm pre post wad) (hwad : wad ≠ 0)
+    (hprot_ca : State.Protected pre.state sevm.currentTarget)
+    (hrecv : B256.Nof (pre.getAcct sevm.caller).bal wad) :
+    Devm.getStor post sevm.currentTarget = (Devm.getStor pre sevm.currentTarget).set
+        (balSlot sevm.caller) (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) - wad) ∧
+      ∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor pre a :=
+  ⟨h.getStor_self_of_ne_zero hwad hprot_ca, h.getStor_other_of_ne_zero hwad hrecv⟩
+
+/-- **Liveness of `withdraw(wad)` to an externally owned account, gas-exact, with the final machine and
+its storage.**  `weth9_withdraw_runExact_core` with `WithdrawPost.getStor_of_ne_zero`: the contract is
+protected and the caller's credit does not wrap. -/
+theorem weth9_withdraw_runExact_post {sevm : Sevm} {pre : Devm} {G : Nat}
+    (hfork : CoveredFork sevm.benvStat.fork) (h_static : sevm.isStatic = false)
+    (h_value : sevm.value = 0) (h_sel : Sevm.selector sevm = wdSel)
+    (h_len : 4 ≤ sevm.data.length) (h_len' : sevm.data.length < 2 ^ 256)
+    (h_stack : pre.stack = []) (h_mem : pre.memory = Mem.empty) (h_depth : sevm.depth ≠ 0)
+    (hwad : Sevm.dataWord sevm 4 ≠ 0)
+    (hle : Sevm.dataWord sevm 4 ≤ pre.getStorVal sevm.currentTarget (balSlot sevm.caller))
+    (h_code : (pre.getCode sevm.caller).size = 0)
+    (h_prec : sevm.benvStat.rules.isPrecomp sevm.caller = false)
+    (h_eth : ¬ (pre.getAcct sevm.currentTarget).bal < Sevm.dataWord sevm 4)
+    (hprot_ca : State.Protected pre.state sevm.currentTarget)
+    (hrecv : B256.Nof (pre.getAcct sevm.caller).bal (Sevm.dataWord sevm 4))
+    (h_gas : pre.gasLeft = G + withdrawGas sevm pre)
+    (h_sentry : gCallStipend < G + 1 + 1488 + callNet pre sevm.caller + 69 +
+      sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller) (wV sevm pre (Sevm.dataWord sevm 4)))
+    (h_callgas : gCallStipend ≤ G + 1 + 1488) :
+    ∃ post, SProg.RunExact prog sevm pre post ∧ post.gasLeft = G ∧
+      WithdrawPost sevm pre post (Sevm.dataWord sevm 4) ∧
+      Devm.getStor post sevm.currentTarget = (Devm.getStor pre sevm.currentTarget).set
+        (balSlot sevm.caller)
+        (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) - Sevm.dataWord sevm 4) ∧
+      ∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor pre a := by
+  obtain ⟨post, hrun, hg, hp⟩ := weth9_withdraw_runExact_core hfork h_static h_value h_sel h_len h_len'
+    h_stack h_mem h_depth hwad hle h_code h_prec h_eth h_gas h_sentry h_callgas
+  exact ⟨post, hrun, hg, hp, hp.getStor_of_ne_zero hwad hprot_ca hrecv⟩
 
 /-- **What `withdraw(0)` costs** for a code-free caller: as `withdrawGas` with the send at the account
 access alone (the zero-value `CALL` forwards the stipend and gets it all back). -/

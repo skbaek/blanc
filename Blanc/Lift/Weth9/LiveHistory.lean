@@ -112,8 +112,33 @@ theorem weth9_history_withdraw_live {ca : Adr} {cfg : ChainConfig} {checkpoint f
     have h3 : (pre.getStorVal sevm.currentTarget (balSlot sevm.caller)).toNat ≤
         (pre.getAcct sevm.currentTarget).bal.toNat := hb
     omega
-  obtain ⟨post, hex, hg, ho, hst, hother⟩ := weth9_withdraw_any_live hc hfork h_static h_value h_sel
-    h_len h_len' h_stack h_mem h_depth hle h_eoa h_prec h_eth h_gas hG
+  obtain ⟨hinst, hsum, -⟩ := weth9_history_footprint_universe trace installed sumNof initial fresh
+  have hacct : ∀ x, pre.getAcct x = future.state.get x := fun x => by
+    show pre.state.get x = _
+    rw [hpre]
+  have hprot_ca : State.Protected pre.state sevm.currentTarget := by
+    rw [hpre, hca]
+    exact State.Protected.of_image hinst
+  have hne : sevm.caller ≠ sevm.currentTarget := by
+    intro he
+    have hz : (future.state.getCode ca).size = 0 := by
+      have h0 : (pre.state.get sevm.caller).code.size = 0 := h_eoa
+      rw [hpre, he, hca] at h0
+      exact h0
+    have hn : (future.state.getCode ca).toList ≠ [] := weth9Sem.ne_nil hinst.symm
+    exact (ne_wa_of_code_size_zero hn hz) rfl
+  have hrecv : B256.Nof (pre.getAcct sevm.caller).bal (Sevm.dataWord sevm 4) := by
+    unfold B256.Nof
+    have h2 := add_le_sum_of_ne future.state.bal hne
+    have h3 : (Sevm.dataWord sevm 4).toNat ≤ (pre.getAcct sevm.currentTarget).bal.toNat :=
+      B256.toNat_le_toNat (B256.not_lt.mp h_eth)
+    rw [hacct] at h3 ⊢
+    unfold SumNof at hsum
+    change (future.state.get sevm.caller).bal.toNat +
+      (future.state.get sevm.currentTarget).bal.toNat ≤ sum future.state.bal at h2
+    omega
+  obtain ⟨post, hex, hg, ho, hst, hother⟩ := weth9_withdraw_any_live_safe hc hfork h_static h_value
+    h_sel h_len h_len' h_stack h_mem h_depth hle h_eoa h_prec h_eth hprot_ca hrecv h_gas hG
   subst hca
   refine ⟨post, hex, hg, ho, ?_, ?_⟩
   · rw [hst, e1]
