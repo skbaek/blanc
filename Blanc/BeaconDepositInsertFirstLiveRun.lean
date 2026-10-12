@@ -13,10 +13,12 @@ theorem insertionLoop_firstLive_exists_storageEffectRun
     {fs : List Func} {sevm : Sevm} {origin base : Devm}
     (hfork : CoveredFork sevm.benvStat.fork)
     {memory : Mem} {oldCount : B256} {stor : Stor}
-    {height n size G : Nat} {node : B256} {keys : KeySet}
+    {height n size G : Nat} {node orig : B256} {keys : KeySet}
     (carrier : InsertionLoopCarrier origin base memory oldCount
       (insertionNatState height size node keys))
     (horiginStor : Devm.getStor origin sevm.currentTarget = stor)
+    (horig : origin.getOrigStorVal sevm sevm.currentTarget
+      (branchSlot (height + n)) = orig)
     (hheight : height + n < 32)
     (hsize : size < 2 ^ 32)
     (hfirst : FirstLive size n)
@@ -26,10 +28,10 @@ theorem insertionLoop_firstLive_exists_storageEffectRun
     (hdepth : sevm.depth ≠ 0)
     (hstatic : sevm.isStatic = false)
     (hsentry : gCallStipend < G + 2 +
-      insertionFirstLiveStoreCost sevm stor keys height n node)
+      insertionFirstLiveStoreCostOf orig sevm stor keys height n node)
     (hbound :
       (G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys height n node) +
+          insertionFirstLiveStoreCostOf orig sevm stor keys height n node) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState height size node keys) < 2 ^ 256)
     (hinsertionContinuation :
@@ -43,7 +45,7 @@ theorem insertionLoop_firstLive_exists_storageEffectRun
         (base.setMach
           ⟨[Nat.toB256 height], memory,
             (G + 46 +
-                insertionFirstLiveStoreCost sevm stor keys height n node) +
+                insertionFirstLiveStoreCostOf orig sevm stor keys height n node) +
               insertionDeadGas sevm.currentTarget stor n
                 (insertionNatState height size node keys), base.stateGas⟩)
         insertionLoop
@@ -64,7 +66,7 @@ theorem insertionLoop_firstLive_exists_storageEffectRun
       sevm.currentTarget stor n height size node keys
       (by omega) hsize hfirst
   have hcost :=
-    insertionStoreCost_iter_eq_firstLive
+    insertionStoreCostOf_iter_eq_firstLive orig
       sevm stor keys height n size node hheight hsize
   have hkey :=
     insertionLoopIter_key
@@ -74,7 +76,9 @@ theorem insertionLoop_firstLive_exists_storageEffectRun
       sevm.currentTarget stor n height size node keys (by omega)
   obtain ⟨finalBase, finalMemory, finalCarrier, run⟩ :=
     insertionLoop_deadThenLive_exists_storageEffectRun (hfork := hfork)
-      carrier horiginStor hdead hlive hnodeleg hwarm hpre hdepth hstatic
+      (orig := orig)
+      carrier horiginStor (by rw [hkey]; exact horig) hdead hlive hnodeleg
+      hwarm hpre hdepth hstatic
       (by rw [hcost]; exact hsentry)
       (by rw [hcost]; exact hbound)
       hinsertionContinuation hinsertionLoop

@@ -1,5 +1,6 @@
 import Blanc.BeaconDepositBridge
 import Blanc.BeaconDepositDeploy
+import Blanc.BeaconDepositRepinBridge
 import Blanc.BeaconDepositWriteSites
 import Blanc.BytesWrite
 import Blanc.ForwardStorageEffects
@@ -619,6 +620,7 @@ theorem constructorSha64_success_storageEffectRun_ext
       callPost.output = base.output ∧
       callPost.error = base.error ∧
       callPost.state = base.state ∧
+      callPost.createdAccounts = base.createdAccounts ∧
       ∀ {ex : Execution} {effects : List (Adr × B256 × B256)},
         Func.StorageEffectRun fs sevm
           (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩)
@@ -635,8 +637,8 @@ theorem constructorSha64_success_storageEffectRun_ext
       base.memory, K + 221 + ext, base.stateGas⟩
   obtain ⟨callPost, hstat, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
-      hlogs, hrefund, hdelete, houtput, herror, hstate⟩ :=
-    Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
+      hlogs, hrefund, hdelete, houtput, herror, hstate, hcreated⟩ :=
+    RepinBridge.childlessRunCompiled_staticcall_sha256_64_warm_ext_created
       (sevm := sevm) (devm := callPre)
       (iiw := inputWord * 32) (oiw := outputWord * 32)
       (s := stack) (G := K + 221 + ext) (ext := ext)
@@ -711,7 +713,7 @@ theorem constructorSha64_success_storageEffectRun_ext
       _ = base.state := by rfl
   refine ⟨callPost, hstack, hmemory', hgas', hreturn', hstorage', hcode',
     haddresses', hkeys', hlogs', hrefund', hdelete', houtput', herror',
-    hstate', ?_⟩
+    hstate', hcreated, ?_⟩
   intro ex effects tail
   have hge :
       (Nat.toB256 callPost.returnData.length <? (32 : B256)) = 0 := by
@@ -879,7 +881,7 @@ theorem constructorZeroHashLoop_succ_storageEffectRun
     exact Devm.extCost_covered covered
   obtain ⟨shaPost, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys, hlogs, hrefund, hdelete,
-      houtput, herror, hstate, shaLift⟩ :=
+      houtput, herror, hstate, hcreated, shaLift⟩ :=
     constructorSha64_success_storageEffectRun_ext
       (fs := fs) (sevm := sevm) (base := shaBase)
       (inputWord := 0) (outputWord := constructorNodeWord)
@@ -934,8 +936,8 @@ theorem constructorZeroHashLoop_succ_storageEffectRun
       shaPost.error = shaBase.error := herror
       _ = base.error := rfl
   have hcost : sstoreCost sevm shaPost key node = C := by
-    exact (sstoreCost_congr (d1 := shaPost) (d2 := base) key node
-      hkeysBase (hstorageBase sevm.currentTarget)).trans rfl
+    exact sstoreCost_congr (d1 := shaPost) (d2 := base) key node
+      hkeysBase (hstorageBase sevm.currentTarget) hcreated
   have extendsPair : pair.extends
       [⟨((0 : B256) * 32).toNat, 64⟩,
         ⟨(constructorNodeWord * 32).toNat, 32⟩] = pair :=

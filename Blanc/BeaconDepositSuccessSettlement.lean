@@ -130,6 +130,8 @@ theorem deposit_success_settled_effects
       signature depositDataRoot s' ev stor keys countCost n G hdataBound hdec
       hOk hstor hkeys hcount hheight hfirst hselector hnodeleg hwarm hpre
       hdepth hstatic hbranchSentry hbound hcountSentry hreconstructBound hcode
+      (orig := getOrigStorVal sevm sevm.currentTarget (branchSlot (0 + n)))
+      ?horigReserved
       with ⟨post, hrun, hstack, hgas, hlogs, hcountStor, hstorage, hcodes,
         haddresses, houtput, herror, hcompile⟩
   have hentryState : base.setMach
@@ -148,7 +150,7 @@ theorem deposit_success_settled_effects
     cases base
     rfl
   have hrunEntry : Prog.RunCompiledTo sevm base runtime (.ok post) := by
-    rw [hentryState] at hrun
+    rw [← depositRuntimeSuccessGas_eq_of, hentryState] at hrun
     exact Prog.RunCompiledTo.of_runCompiled hrun
   have hexec : exec ⟨0, sevm, base⟩ = .ok post :=
     Prog.exec_of_runCompiledTo hrunEntry hcompile

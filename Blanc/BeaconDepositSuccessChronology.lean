@@ -135,10 +135,14 @@ theorem deposit_success_retainedStorageEffectTriples
       (by simpa only [s] using hstor)
       (by simpa only [s] using hkeys)
       (by simpa only [s] using hcount)
+      (orig := getOrigStorVal sevm sevm.currentTarget (branchSlot (0 + n)))
+      ?horigReserved
       hheight (by simpa only [s] using hfirst) hnodeleg hwarm hpre hdepth
-      hstatic hbranchSentry (by simpa only [s] using hbound)
-      (by simpa only [s] using hcountSentry)
-      (by simpa only [s] using hreconstructBound) (by rfl) (by rfl)
+      hstatic hbranchSentry
+      (by simpa only [s, insertionFirstLiveStoreCost_eq_of] using hbound)
+      (by simpa only [s, insertionFirstLiveStoreCost_eq_of] using hcountSentry)
+      (by simpa only [s, insertionFirstLiveStoreCost_eq_of] using
+        hreconstructBound) (by rfl) (by rfl)
   let branchValue :=
     accumulatedNode Bytes.sha256 (accOfStor stor).branch
       0 n depositDataRoot
@@ -154,7 +158,8 @@ theorem deposit_success_retainedStorageEffectTriples
       depositEndpoint (.ok post)
       [(sevm.currentTarget, depositCountSlot, Nat.toB256 s.count + 1),
         (sevm.currentTarget, branchSlot n, branchValue)] := by
-    simpa only [post, branchValue] using hendpoint
+    simpa only [post, branchValue, ← depositEndpointSuccessGas_eq_of] using
+      hendpoint
   have hlengthWordNe : sevm.data.length.toB256 ≠ 0 := by
     intro hzero
     have hnat := congrArg B256.toNat hzero

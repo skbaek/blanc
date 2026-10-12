@@ -15,6 +15,18 @@ namespace Blanc.BeaconDeposit
 open Jaune
 open Jaune.Ninst Blanc.Ninst
 
+/- STOPPED (reserved registered statement P6, cause OS; see the unit report).
+Jaune `ca9f27d` prices the terminal branch `SSTORE` from the machine read
+`Devm.getOrigStorVal`, which is zero for an owner in `createdAccounts`, while
+this unchanged header prices it from the raw transaction-start snapshot
+(`insertionFirstLiveStoreCost`, inside `depositRuntimeSuccessGas`).  The only
+remaining obligation is the reserved read agreement
+`base.getOrigStorVal sevm sevm.currentTarget (branchSlot n) =
+  getOrigStorVal sevm sevm.currentTarget (branchSlot (0 + n))`,
+which the arbitrary-base premises do not supply.  The original text is kept
+verbatim below, with only the reserved hole marked, until the user decides
+between the actual-original (A) and not-created (B) restatements.
+
 /-- C6 compiled flagship: a model-successful deposit starting from an
 artifact-invariant storage state executes the compiled runtime and preserves
 that invariant for the history extended by the deposited data node. -/
@@ -108,6 +120,8 @@ theorem deposit_success_artifactInv
       signature depositDataRoot s' ev stor keys countCost n G hdataBound hdec
       hOk hstor hkeys hcount hheight hfirst hselector hnodeleg hwarm hpre
       hdepth hstatic hbranchSentry hbound hcountSentry hreconstructBound hcode
+      (orig := getOrigStorVal sevm sevm.currentTarget (branchSlot (0 + n)))
+      ?horigReserved
   have targetStorage : Devm.getStor post sevm.currentTarget =
       stor.set (branchSlot n)
         (accumulatedNode Bytes.sha256 (accOfStor stor).branch
@@ -116,5 +130,6 @@ theorem deposit_success_artifactInv
   refine ⟨post, run, ?_⟩
   exact ArtifactInv.of_depositSuccessCompiledStorage
     hinvariant hOk hheight hfirst countStorage targetStorage
+-/
 
 end Blanc.BeaconDeposit

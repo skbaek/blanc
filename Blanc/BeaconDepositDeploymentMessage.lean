@@ -158,10 +158,14 @@ theorem processCreateMessage_establishes_artifact
       prepared.benv.state.getStor msg.currentTarget = Stor.empty := by
     simpa only [prepared] using
       processCreateMessage_msg_getStor_currentTarget msg
+  have hbenvEq : benv = prepared.benv := by
+    have hzero : prepared.benvAfterTransfer = .ok prepared.benv :=
+      Msg.benvAfterTransfer_of_value_zero hvalue
+    rw [hzero] at htransfer
+    exact (Except.ok.inj htransfer).symm
   have hbenvStorage :
       benv.state.getStor msg.currentTarget = Stor.empty := by
-    rw [congrFun (benvAfterTransfer_getStor_eq htransfer)
-      msg.currentTarget]
+    rw [hbenvEq]
     exact hpreparedStorage
   have hbaseStorage :
       Devm.getStor base sevm.currentTarget = Stor.empty := by
@@ -256,8 +260,8 @@ theorem processCreateMessage_establishes_artifact
     unfold Devm.getCode Devm.getAcct
     rw [Devm.setCode_state]
     unfold State.setCode
-    rw [State.get_set_self]
-    simp only [hchargedOutput, ByteArray.toList_eq_toList_data]
+    simp only [State.setAccount_get_self, Acct.clearIfEmpty_code,
+      hchargedOutput, ByteArray.toList_eq_toList_data]
   have hpostCompile :
       some (post.getCode msg.currentTarget).toList = Prog.compile runtime := by
     rw [hpostCode]
@@ -267,11 +271,16 @@ theorem processCreateMessage_establishes_artifact
     exact constructorAppendedRuntime_length_exact
   have hpostStorage : Devm.getStor post msg.currentTarget =
       constructorFinalStorage := by
-    dsimp only [post]
-    rw [congrFun (Jaune.Devm.setCode_getStor charged msg.currentTarget
-      ⟨⟨charged.output⟩⟩) msg.currentTarget]
-    change (charged.state.get msg.currentTarget).stor = _
-    rw [← hmach.state]
+    have hcodeSize : (⟨⟨charged.output⟩⟩ : ByteArray).size ≠ 0 := by
+      have hlength : charged.output.length = 2891 := by
+        rw [hchargedOutput]
+        exact constructorAppendedRuntime_length_exact
+      change charged.output.toArray.size ≠ 0
+      rw [List.size_toArray, hlength]
+      decide
+    change ((charged.state.setCode msg.currentTarget
+      ⟨⟨charged.output⟩⟩).get msg.currentTarget).stor = _
+    rw [State.setCode_get_stor hcodeSize, ← hmach.state]
     change Devm.getStor raw msg.currentTarget = _
     exact hrawStorage
   have hpostArtifact :

@@ -31,6 +31,27 @@ def depositEndpointSuccessGas
     5799 + sloadCost sevm base depositCountSlot) +
   depositGuardsGas) + 521
 
+/-- `depositEndpointSuccessGas` with the terminal branch write priced from a
+supplied original word (see `insertionFirstLiveStoreCostOf`). -/
+def depositEndpointSuccessGasOf (orig : B256)
+    (sevm : Sevm) (base : Devm) (stor : Stor) (keys : KeySet)
+    (node : B256) (n size countCost G : Nat) : Nat :=
+  ((((((G + 46 +
+          insertionFirstLiveStoreCostOf orig sevm stor keys 0 n node) +
+        insertionDeadGas sevm.currentTarget stor n
+          (insertionNatState 0 size node keys)) +
+      38 + countCost) + 1838) +
+    5799 + sloadCost sevm base depositCountSlot) +
+  depositGuardsGas) + 521
+
+theorem depositEndpointSuccessGas_eq_of
+    (sevm : Sevm) (base : Devm) (stor : Stor) (keys : KeySet)
+    (node : B256) (n size countCost G : Nat) :
+    depositEndpointSuccessGas sevm base stor keys node n size countCost G =
+      depositEndpointSuccessGasOf
+        (getOrigStorVal sevm sevm.currentTarget (branchSlot (0 + n)))
+        sevm base stor keys node n size countCost G := rfl
+
 /-- A model-successful deposit runs the complete compiled endpoint.  The
 exhibited carriers retain the event boundary, reconstruction metadata, and
 insertion state needed by the public effect theorem. -/
@@ -38,7 +59,7 @@ theorem depositEndpoint_success_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
     (hfork : CoveredFork sevm.benvStat.fork)
     {pubkey withdrawalCredentials signature : Bytes}
-    {depositDataRoot : B256} {s s' : Acc} {ev : DepositEvent}
+    {depositDataRoot orig : B256} {s s' : Acc} {ev : DepositEvent}
     {stor : Stor} {keys : KeySet} {countCost n G : Nat}
     (hdataBound : sevm.data.length < 2 ^ 256)
     (hdec : DepositAbiDecodable sevm.data pubkey withdrawalCredentials
@@ -59,6 +80,7 @@ theorem depositEndpoint_success_runCompiledTo
     (hcount :
       sstoreCost sevm (afterSload sevm base depositCountSlot)
         depositCountSlot (Nat.toB256 s.count + 1) = countCost)
+    (horig : base.getOrigStorVal sevm sevm.currentTarget (branchSlot n) = orig)
     (hheight : n < 32)
     (hfirst : FirstLive (s.count + 1) n)
     (hnodeleg : getDelegatedCodeAddress (base.getCode 2) = none)
@@ -67,22 +89,22 @@ theorem depositEndpoint_success_runCompiledTo
     (hdepth : sevm.depth ≠ 0)
     (hstatic : sevm.isStatic = false)
     (hbranchSentry : gCallStipend < G + 2 +
-      insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot)
+      insertionFirstLiveStoreCostOf orig sevm stor keys 0 n depositDataRoot)
     (hbound :
       (G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+          insertionFirstLiveStoreCostOf orig sevm stor keys 0 n depositDataRoot) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0 (s.count + 1) depositDataRoot keys) <
         2 ^ 256)
     (hcountSentry : gCallStipend <
       ((G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+          insertionFirstLiveStoreCostOf orig sevm stor keys 0 n depositDataRoot) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0 (s.count + 1) depositDataRoot keys)) +
         14 + countCost)
     (hreconstructBound :
       ((((G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+          insertionFirstLiveStoreCostOf orig sevm stor keys 0 n depositDataRoot) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0 (s.count + 1) depositDataRoot keys)) +
         38 + countCost) + 59) + 1762 < 2 ^ 256)
@@ -125,7 +147,7 @@ theorem depositEndpoint_success_runCompiledTo
       Func.RunCompiledTo fs sevm
         (base.setMach
           ⟨[], Mem.empty,
-            depositEndpointSuccessGas sevm base stor keys depositDataRoot
+            depositEndpointSuccessGasOf orig sevm base stor keys depositDataRoot
               n (s.count + 1) countCost G, base.stateGas⟩)
         depositEndpoint
         (.ok
@@ -189,12 +211,12 @@ theorem depositEndpoint_success_runCompiledTo
         simpa only [hamountNat, holdNat] using hevent.symm
   let suffixGas :=
     ((((G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+          insertionFirstLiveStoreCostOf orig sevm stor keys 0 n depositDataRoot) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0 (s.count + 1) depositDataRoot keys)) +
       38 + countCost) + 1838)
   obtain ⟨logged, hlogs, hstorVal, hstorMap, hbal, hcode, hloadedKeys,
-      haddresses, houtput, herror, heventLift⟩ :=
+      haddresses, houtput, herror, hcreated, heventLift⟩ :=
     stageDepositEvent_runCompiledTo
       (fs := fs) (sevm := sevm) (base := base)
       (amount := amount) (oldCount := oldCount) (G := suffixGas)
@@ -224,6 +246,8 @@ theorem depositEndpoint_success_runCompiledTo
     change logged.accessedStorageKeys =
       (afterSload sevm base depositCountSlot).accessedStorageKeys
     exact hloadedKeys
+  have hstagedCreated : stagedBase.createdAccounts =
+      (afterSload sevm base depositCountSlot).createdAccounts := hcreated
   have hstor' : Devm.getStor
       (afterSstore sevm stagedBase depositCountSlot (oldCount + 1))
       sevm.currentTarget = stor := by
@@ -239,8 +263,14 @@ theorem depositEndpoint_success_runCompiledTo
   have hcount' :
       sstoreCost sevm stagedBase depositCountSlot (oldCount + 1) =
         countCost := by
-    rw [Blanc.sstoreCost_congr _ _ hstagedKeys hstagedStor]
+    rw [Blanc.sstoreCost_congr _ _ hstagedKeys hstagedStor hstagedCreated]
     simpa only [oldCount] using hcount
+  have horig' : stagedBase.getOrigStorVal sevm sevm.currentTarget
+      (branchSlot n) = orig := by
+    rw [RepinBridge.getOrigStorVal_congr_created _ _ hstagedCreated,
+      RepinBridge.getOrigStorVal_congr_created _ _
+        (RepinBridge.afterSload_createdAccounts _ _ _)]
+    exact horig
   have hnodeleg' : getDelegatedCodeAddress (stagedBase.getCode 2) = none := by
     change getDelegatedCodeAddress (logged.getCode 2) = none
     rw [hcode 2, Blanc.afterSload_getCode]
@@ -259,7 +289,8 @@ theorem depositEndpoint_success_runCompiledTo
       (n := n) (size := s.count + 1) (G := G)
       hsource hwithdrawal rfl hsignature hnode hnodeleg' hwarm' hpre hdepth
       hstatic hrootArg hcapWord hshift hheight (by omega) hfirst hstor'
-      hkeys' hcount' hbranchSentry hbound hcountSentry hreconstructBound
+      hkeys' hcount' horig' hbranchSentry hbound hcountSentry
+      hreconstructBound
       hinsertionContinuation hinsertionLoop
   have heventRun : Func.RunCompiledTo fs sevm
       (base.setMach
@@ -290,7 +321,7 @@ theorem depositEndpoint_success_runCompiledTo
     hbal, hcode, hloadedKeys, haddresses, houtput, herror, hmeta, hfinal, ?_⟩
   · rw [Blanc.afterSload_logs, hstaged] at hlogs
     exact hlogs
-  · simpa only [depositEndpoint, depositEndpointSuccessGas, suffixGas] using
+  · simpa only [depositEndpoint, depositEndpointSuccessGasOf, suffixGas] using
       habi
 
 end Blanc.BeaconDeposit

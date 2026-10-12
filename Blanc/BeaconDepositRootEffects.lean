@@ -195,7 +195,7 @@ private theorem rootShaTail_storageEffectRun
     decide +kernel
   obtain ⟨callPost, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys, hlogs, houtput, herror,
-      _htransfer, hlift⟩ :=
+      _htransfer, _hcreated, hlift⟩ :=
     sha64_success_prefix_storageEffectRun (hfork := hfork)
       (fs := runtime.main :: runtime.aux)
       (sevm := sevm) (inputWord := 0) (outputWord := nodeWord)
@@ -1111,7 +1111,7 @@ private theorem rootFinishShaReturn_storageEffectRun
     decide +kernel
   obtain ⟨callPost, _hstack, hmemory, _hgas, hreturnData,
       hstorage, hcode, haddresses, hkeys,
-      hlogs, _houtput, herror, _htransfer, hlift⟩ :=
+      hlogs, _houtput, herror, _htransfer, _hcreated, hlift⟩ :=
     sha64_success_prefix_storageEffectRun (hfork := hfork)
       (fs := runtime.main :: runtime.aux)
       (sevm := sevm) (base := shaBase)

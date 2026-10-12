@@ -302,7 +302,7 @@ theorem depositSuccessSuffix_storageEffectRun
     {fs : List Func} {sevm : Sevm} {base : Devm}
     (hfork : CoveredFork sevm.benvStat.fork)
     {pubkey withdrawalCredentials signature amountLE : Bytes}
-    {oldCount amount node : B256} {stor : Stor} {keys : KeySet}
+    {oldCount amount node orig : B256} {stor : Stor} {keys : KeySet}
     {countCost n size G : Nat}
     (source : ReconstructSourceMemoryCarrier base.memory
       (pubkey ++ zeros 16) (signature.take 64) (signature.drop 64)
@@ -331,18 +331,19 @@ theorem depositSuccessSuffix_storageEffectRun
       (afterSstore sevm base depositCountSlot
         (oldCount + 1)).accessedStorageKeys = keys)
     (hcount : sstoreCost sevm base depositCountSlot (oldCount + 1) = countCost)
+    (horig : base.getOrigStorVal sevm sevm.currentTarget (branchSlot n) = orig)
     (hbranchSentry : gCallStipend < G + 2 +
-      insertionFirstLiveStoreCost sevm stor keys 0 n node)
+      insertionFirstLiveStoreCostOf orig sevm stor keys 0 n node)
     (hbound :
-      (G + 46 + insertionFirstLiveStoreCost sevm stor keys 0 n node) +
+      (G + 46 + insertionFirstLiveStoreCostOf orig sevm stor keys 0 n node) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0 size node keys) < 2 ^ 256)
     (hcountSentry : gCallStipend <
-      ((G + 46 + insertionFirstLiveStoreCost sevm stor keys 0 n node) +
+      ((G + 46 + insertionFirstLiveStoreCostOf orig sevm stor keys 0 n node) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0 size node keys)) + 14 + countCost)
     (hreconstructBound :
-      ((((G + 46 + insertionFirstLiveStoreCost sevm stor keys 0 n node) +
+      ((((G + 46 + insertionFirstLiveStoreCostOf orig sevm stor keys 0 n node) +
           insertionDeadGas sevm.currentTarget stor n
             (insertionNatState 0 size node keys)) + 38 + countCost) + 59) +
         1762 < 2 ^ 256)
@@ -360,7 +361,7 @@ theorem depositSuccessSuffix_storageEffectRun
         (base.setMach
           ⟨[], base.memory,
             ((((G + 46 +
-                  insertionFirstLiveStoreCost sevm stor keys 0 n node) +
+                  insertionFirstLiveStoreCostOf orig sevm stor keys 0 n node) +
                 insertionDeadGas sevm.currentTarget stor n
                   (insertionNatState 0 size node keys)) + 38 + countCost)) +
               1838, base.stateGas⟩)
@@ -386,7 +387,7 @@ theorem depositSuccessSuffix_storageEffectRun
               (depositDataNode Bytes.sha256 pubkey withdrawalCredentials
                 signature amountLE))])
       (G :=
-        (((G + 46 + insertionFirstLiveStoreCost sevm stor keys 0 n
+        (((G + 46 + insertionFirstLiveStoreCostOf orig sevm stor keys 0 n
               (depositDataNode Bytes.sha256 pubkey withdrawalCredentials
                 signature amountLE)) +
             insertionDeadGas sevm.currentTarget stor n
@@ -421,13 +422,17 @@ theorem depositSuccessSuffix_storageEffectRun
   have hcountMid :
       sstoreCost sevm mid depositCountSlot (oldCount + 1) = countCost := by
     rw [Blanc.sstoreCost_congr _ _ hmeta.accessedStorageKeys
-      (hmeta.storage sevm.currentTarget)]
+      (hmeta.storage sevm.currentTarget) hmeta.created]
     exact hcount
+  have horigMid :
+      mid.getOrigStorVal sevm sevm.currentTarget (branchSlot n) = orig := by
+    rw [RepinBridge.getOrigStorVal_congr_created _ _ hmeta.created]
+    exact horig
   obtain ⟨finalBase, finalMemory, hfinal, hcommit⟩ :=
     commitDeposit_firstLive_exists_storageEffectRun (hfork := hfork)
       (fs := fs) (sevm := sevm) (base := mid) (memory := mid.memory)
       (oldCount := oldCount) (n := n) (size := size) (G := G)
-      hstart hshift hstorMid hkeysMid hheight hsize hfirst hnodelegMid
+      hstart horigMid hshift hstorMid hkeysMid hheight hsize hfirst hnodelegMid
       hwarmMid hpre hdepth hstatic
       (by rw [hcountMid] at *; exact hbranchSentry)
       (by rw [hcountMid] at *; exact hbound)

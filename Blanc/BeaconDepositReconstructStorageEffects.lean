@@ -221,7 +221,7 @@ theorem reconstructPubkeySha_storageEffectRun
     exact hwarm
   obtain ⟨callPost, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
-      hlogs, houtputMeta, herror, htransfer, hlift⟩ :=
+      hlogs, houtputMeta, herror, htransfer, hcreated, hlift⟩ :=
     sha64_success_prefix_storageEffectRun (hfork := hfork)
       (fs := fs) (sevm := sevm) (base := base)
       (inputWord := 6) (outputWord := nodeWord)
@@ -243,7 +243,7 @@ theorem reconstructPubkeySha_storageEffectRun
     exact source.writeNode (Bytes.sha256 pubkeyInput) (by omega)
   have hmeta : ReconstructMetaCarrier sevm origin callPost :=
     hmetaBase.afterHash hstorage hcode haddresses hkeys hlogs houtputMeta herror
-      htransfer
+      htransfer hcreated
   refine ⟨callPost, hstack, hmemory', ⟨hcarrier⟩, hgas, hreturn', hmeta, ?_⟩
   intro ex htail
   have hwhole := hlift htail
@@ -304,7 +304,7 @@ theorem reconstructSignatureFirstSha_storageEffectRun
     exact hwarm
   obtain ⟨callPost, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
-      hlogs, houtputMeta, herror, htransfer, hlift⟩ :=
+      hlogs, houtputMeta, herror, htransfer, hcreated, hlift⟩ :=
     sha64_success_prefix_storageEffectRun_ext (hfork := hfork)
       (fs := fs) (sevm := sevm) (base := base)
       (inputWord := 13) (outputWord := intermediateWord)
@@ -337,7 +337,7 @@ theorem reconstructSignatureFirstSha_storageEffectRun
     exact hextended.writeIntermediate (Bytes.sha256 signatureFirst) (by omega)
   have hmeta : ReconstructMetaCarrier sevm origin callPost :=
     hmetaBase.afterHash hstorage hcode haddresses hkeys hlogs houtputMeta
-      herror htransfer
+      herror htransfer hcreated
   refine ⟨callPost, hstack, hmemory', ⟨hcarrier⟩, hgas, hreturn', hmeta, ?_⟩
   intro ex htail
   have hwhole := hlift htail
@@ -413,7 +413,7 @@ theorem reconstructSignatureSecondSha_storageEffectRun
     exact hwarm
   obtain ⟨callPost, _hstack, hmemory, _hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
-      hlogs, houtputMeta, herror, htransfer, hlift⟩ :=
+      hlogs, houtputMeta, herror, htransfer, hcreated, hlift⟩ :=
     sha64_success_prefix_storageEffectRun_ext (hfork := hfork)
       (fs := fs) (sevm := sevm) (base := shaBase)
       (inputWord := 0) (outputWord := secondIntermediateWord)
@@ -453,7 +453,7 @@ theorem reconstructSignatureSecondSha_storageEffectRun
       (reconstructSignatureSecondDigest signatureTail) (by omega)
   have hmeta : ReconstructMetaCarrier sevm origin callPost :=
     hmetaSha.afterHash hstorage hcode haddresses hkeys hlogs houtputMeta
-      herror htransfer
+      herror htransfer hcreated
   refine ⟨callPost, ?_, ⟨hcarrier⟩, hreturn', hmeta, ?_⟩
   · simpa only [stagedMemory] using hmemory'
   intro ex htail
@@ -580,7 +580,7 @@ theorem reconstructPairSha_storageEffectRun
     exact hwarm
   obtain ⟨callPost, _hstack, hmemory, _hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
-      hlogs, houtputMeta, herror, htransfer, hlift⟩ :=
+      hlogs, houtputMeta, herror, htransfer, hcreated, hlift⟩ :=
     sha64_success_prefix_storageEffectRun (hfork := hfork)
       (fs := fs) (sevm := sevm) (base := shaBase)
       (inputWord := 0) (outputWord := outputWord)
@@ -599,7 +599,7 @@ theorem reconstructPairSha_storageEffectRun
     simpa only [hashPair] using hreturn
   have hmeta : ReconstructMetaCarrier sevm origin callPost :=
     hmetaSha.afterHash hstorage hcode haddresses hkeys hlogs houtputMeta
-      herror htransfer
+      herror htransfer hcreated
   refine ⟨callPost, ?_, hreturn', hmeta, ?_⟩
   · simpa only [stagedMemory] using hmemory'
   intro ex htail

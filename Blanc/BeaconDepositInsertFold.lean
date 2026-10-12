@@ -84,6 +84,7 @@ structure InsertionLoopCarrier (origin base : Devm) (memory : Mem)
   logs : base.logs = origin.logs
   output : base.output = origin.output
   error : base.error = origin.error
+  created : base.createdAccounts = origin.createdAccounts
 
 /-- Selected warm/cold charge of the terminal branch write, phrased entirely
 over the predicted loop state and the unchanged pre-insertion storage. -/
@@ -94,18 +95,40 @@ def insertionStoreCost (sevm : Sevm) (stor : Stor)
   sstoreValueCost (getOrigStorVal sevm sevm.currentTarget s.key)
     (stor.get s.key) s.node
 
-theorem insertionStoreCost_eq_sstoreCost
-    {sevm : Sevm} {origin base : Devm} {memory : Mem}
-    {oldCount : B256} {s : InsertionLoopState} {stor : Stor}
-    (carrier : InsertionLoopCarrier origin base memory oldCount s)
-    (horiginStor : Devm.getStor origin sevm.currentTarget = stor) :
+/-- `insertionStoreCost` with the value charge priced from a supplied
+original word.  Jaune prices `SSTORE` from the machine read
+`Devm.getOrigStorVal`, which is zero for an owner created in the current
+transaction; `insertionStoreCost` is the instance at the raw snapshot read. -/
+def insertionStoreCostOf (orig : B256) (sevm : Sevm) (stor : Stor)
+    (s : InsertionLoopState) : Nat :=
+  (if (⟨sevm.currentTarget, s.key⟩ : Adr × B256) ∈ s.keys then 0
+    else gasColdSload) +
+  sstoreValueCost orig (stor.get s.key) s.node
+
+theorem insertionStoreCost_eq_of (sevm : Sevm) (stor : Stor)
+    (s : InsertionLoopState) :
     insertionStoreCost sevm stor s =
+      insertionStoreCostOf (getOrigStorVal sevm sevm.currentTarget s.key)
+        sevm stor s := rfl
+
+/-- The predicted terminal charge is the actual `SSTORE` charge once its
+original word is the machine read at the insertion origin. -/
+theorem insertionStoreCostOf_eq_sstoreCost
+    {sevm : Sevm} {origin base : Devm} {memory : Mem}
+    {oldCount : B256} {s : InsertionLoopState} {stor : Stor} {orig : B256}
+    (carrier : InsertionLoopCarrier origin base memory oldCount s)
+    (horiginStor : Devm.getStor origin sevm.currentTarget = stor)
+    (horig : origin.getOrigStorVal sevm sevm.currentTarget s.key = orig) :
+    insertionStoreCostOf orig sevm stor s =
       sstoreCost sevm base s.key s.node := by
   have hcurrent :
       base.getStorVal sevm.currentTarget s.key = stor.get s.key := by
     change (Devm.getStor base sevm.currentTarget).get s.key = stor.get s.key
     rw [carrier.stor, horiginStor]
-  simp only [insertionStoreCost, sstoreCost, carrier.keys, hcurrent]
+  have hbaseOrig : base.getOrigStorVal sevm sevm.currentTarget s.key = orig :=
+    (RepinBridge.getOrigStorVal_congr_created _ _ carrier.created).trans horig
+  simp only [insertionStoreCostOf, sstoreCost, carrier.keys, hcurrent,
+    hbaseOrig]
 
 theorem insertionReadGas_eq_sloadCost
     (sevm : Sevm) (base : Devm) (key : B256) :
@@ -170,11 +193,13 @@ private def insertionLoopCarrier_step
       (afterSload sevm base s.key).accessedStorageKeys)
     (hlogs : callPost.logs = (afterSload sevm base s.key).logs)
     (houtput : callPost.output = (afterSload sevm base s.key).output)
-    (herror : callPost.error = (afterSload sevm base s.key).error) :
+    (herror : callPost.error = (afterSload sevm base s.key).error)
+    (hcreated : callPost.createdAccounts =
+      (afterSload sevm base s.key).createdAccounts) :
     InsertionLoopCarrier origin callPost
       (callPost.memory.write 608 (s.size >>> 1).toBytes)
       oldCount (s.step sevm.currentTarget stor) := by
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · simpa only [InsertionLoopState.step] using hmem.writeShiftedSize (s.size >>> 1)
   · intro a
     rw [hstorage, Blanc.afterSload_getStor, carrier.stor]
@@ -187,6 +212,7 @@ private def insertionLoopCarrier_step
   · rw [hlogs, Blanc.afterSload_logs, carrier.logs]
   · rw [houtput, Blanc.afterSload_output, carrier.output]
   · rw [herror, Blanc.afterSload_error, carrier.error]
+  · rw [hcreated, RepinBridge.afterSload_createdAccounts, carrier.created]
 
 /-- Exact-effect CPS composition of any dead insertion prefix.  Every dead
 iteration is storage-effect neutral; the list is inherited from the supplied
@@ -285,7 +311,7 @@ theorem insertionLoop_dead_iterations_exists_storageEffectRun
         exact hwarmBase
       obtain ⟨callPost, _hstack, _hmemory, hcallMemNE,
           _hgas, _hreturn, hstorage, hcode, haddresses, hkeys,
-          hlogs, houtput, herror, lift⟩ :=
+          hlogs, houtput, herror, hcreated, lift⟩ :=
         insertionShaTail_storageEffectRun (hfork := hfork)
           (fs := fs) (sevm := sevm) (base := shaBase)
           (height := s.height) (K := K + tailGas)
@@ -325,6 +351,7 @@ theorem insertionLoop_dead_iterations_exists_storageEffectRun
         dsimp only [next, loaded]
         exact insertionLoopCarrier_step carrier hcallMem'
           hstorage' hcode' haddresses' hkeys' hlogs' houtput' herror'
+          hcreated
       obtain ⟨ex, hP, nextRun⟩ :=
         ih nextCarrier hdeadNext hnextBound (by
           intro base' memory' nextCarrier'
@@ -376,9 +403,11 @@ theorem insertionLoop_deadThenLive_exists_storageEffectRun
     {fs : List Func} {sevm : Sevm} {origin base : Devm}
     (hfork : CoveredFork sevm.benvStat.fork)
     {memory : Mem} {oldCount : B256} {s : InsertionLoopState}
-    {stor : Stor} {n G : Nat}
+    {stor : Stor} {n G : Nat} {orig : B256}
     (carrier : InsertionLoopCarrier origin base memory oldCount s)
     (horiginStor : Devm.getStor origin sevm.currentTarget = stor)
+    (horig : origin.getOrigStorVal sevm sevm.currentTarget
+      (insertionLoopIter sevm.currentTarget stor n s).key = orig)
     (hdead : InsertionLoopDead sevm.currentTarget stor n s)
     (hfinalLive :
       (insertionLoopIter sevm.currentTarget stor n s).live)
@@ -388,10 +417,10 @@ theorem insertionLoop_deadThenLive_exists_storageEffectRun
     (hdepth : sevm.depth ≠ 0)
     (hstatic : sevm.isStatic = false)
     (hsentry : gCallStipend < G + 2 +
-      insertionStoreCost sevm stor
+      insertionStoreCostOf orig sevm stor
         (insertionLoopIter sevm.currentTarget stor n s))
     (hbound :
-      (G + 46 + insertionStoreCost sevm stor
+      (G + 46 + insertionStoreCostOf orig sevm stor
           (insertionLoopIter sevm.currentTarget stor n s)) +
         insertionDeadGas sevm.currentTarget stor n s < 2 ^ 256)
     (hinsertionContinuation :
@@ -403,7 +432,7 @@ theorem insertionLoop_deadThenLive_exists_storageEffectRun
       Func.StorageEffectRun fs sevm
         (base.setMach
           ⟨[s.height], memory,
-            (G + 46 + insertionStoreCost sevm stor
+            (G + 46 + insertionStoreCostOf orig sevm stor
                 (insertionLoopIter sevm.currentTarget stor n s)) +
               insertionDeadGas sevm.currentTarget stor n s, base.stateGas⟩)
         insertionLoop
@@ -415,7 +444,7 @@ theorem insertionLoop_deadThenLive_exists_storageEffectRun
           (insertionLoopIter sevm.currentTarget stor n s).key,
           (insertionLoopIter sevm.currentTarget stor n s).node)] := by
   let final := insertionLoopIter sevm.currentTarget stor n s
-  let terminalGas := G + 46 + insertionStoreCost sevm stor final
+  let terminalGas := G + 46 + insertionStoreCostOf orig sevm stor final
   obtain ⟨ex, hfinal, run⟩ :=
     insertionLoop_dead_iterations_exists_storageEffectRun (hfork := hfork)
       (P := fun ex => ∃ finalBase finalMemory,
@@ -431,13 +460,13 @@ theorem insertionLoop_deadThenLive_exists_storageEffectRun
       (by
         intro finalBase finalMemory finalCarrier
         have hcost :=
-          insertionStoreCost_eq_sstoreCost finalCarrier horiginStor
+          insertionStoreCostOf_eq_sstoreCost finalCarrier horiginStor horig
         have hkey : final.key = branchBase + final.height := rfl
         have hbit : ((1 : B256) &&& final.size) ≠ 0 := by
           change final.live at hfinalLive
           exact hfinalLive
         have hsentryFinal : gCallStipend < G + 2 +
-            insertionStoreCost sevm stor final := by
+            insertionStoreCostOf orig sevm stor final := by
           simpa only [final] using hsentry
         rw [hcost, hkey] at hsentryFinal
         have live := insertionLoopLive_storageEffectRun (hfork := hfork)
@@ -446,7 +475,7 @@ theorem insertionLoop_deadThenLive_exists_storageEffectRun
         have hcost' :
             sstoreCost sevm finalBase
                 (branchBase + final.height) final.node =
-              insertionStoreCost sevm stor final := by
+              insertionStoreCostOf orig sevm stor final := by
           rw [← hkey, ← hcost]
         rw [hcost'] at live
         refine ⟨.ok ((afterSstore sevm finalBase final.key final.node).setMach

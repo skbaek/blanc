@@ -274,7 +274,7 @@ private theorem depositPostHashError_endpoint_runCompiledTo
     DepositEndpointErrorWitness sevm base G error.reason := by
   let K := G + depositPostHashErrorGuardCost error + guardPrefixCost
   obtain ⟨logged, _hlogs, _hstorVal, _hstorMap, _hbal, hcode,
-      _hloadedKeys, haddresses, _houtput, _herror, heventLift⟩ :=
+      _hloadedKeys, haddresses, _houtput, _herror, _hcreated, heventLift⟩ :=
     stageDepositEvent_storageEffectRun
       (fs := runtime.main :: runtime.aux) (sevm := sevm) (base := base) (hfork := hfork)
       (amount := amount) (oldCount := oldCount) (G := K + 1779)

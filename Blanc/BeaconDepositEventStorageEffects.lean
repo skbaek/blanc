@@ -48,6 +48,8 @@ theorem stageDepositEvent_storageEffectRun
         (afterSload sevm base depositCountSlot).output ∧
       logged.error =
         (afterSload sevm base depositCountSlot).error ∧
+      logged.createdAccounts =
+        (afterSload sevm base depositCountSlot).createdAccounts ∧
       ∀ {ex : Execution},
         Func.StorageEffectRun fs sevm
           (logged.setMach
@@ -59,14 +61,14 @@ theorem stageDepositEvent_storageEffectRun
               G + 5799 + sloadCost sevm base depositCountSlot, base.stateGas⟩)
           (stageDepositEvent +++ body) ex effects := by
   obtain ⟨logged, hlogs, hstor, hstorMap, hbal, hcode, haccess, haddresses,
-      houtput, herror, hlift⟩ :=
+      houtput, herror, hcreated, hlift⟩ :=
     stageDepositEvent_runCompiledTo (hfork := hfork)
       (fs := fs) (sevm := sevm) (base := base)
       (amount := amount) (oldCount := oldCount) (G := G)
       (body := .last .stop)
       hdec0 hdec1 hdec2 hvalue hstatic
   refine ⟨logged, hlogs, hstor, hstorMap, hbal, hcode, haccess, haddresses,
-    houtput, herror, ?_⟩
+    houtput, herror, hcreated, ?_⟩
   intro ex htail
   let stopPost := logged.setMach
     ⟨[], depositEventMemory sevm.data amount oldCount, G, logged.stateGas⟩
