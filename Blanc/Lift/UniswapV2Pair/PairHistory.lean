@@ -284,13 +284,16 @@ def pairCarrierWith
   ofState world := (world.getStor pair).get
   frameEntry _ world := (world.getStor pair).get
   nil := PairReplayWith.nil
-  silent := fun storage _ => by rw [storage]
+  readsStorage := true
+  silent := fun storage _ => by rw [storage rfl]
   credit := by
     intro _ pre post _ storage _ _
     exact ⟨[], by rw [storage]; exact PairReplayWith.nil _⟩
   entry_eq_ofState := by
-    intro _ _ _ _ transfer _
-    exact congrArg Stor.get (congrFun (benvAfterTransfer_getStor_eq transfer) pair)
+    intro _ _ caller_ne _ transfer sum_nof
+    exact congrArg Stor.get
+      (benvAfterTransfer_getStor_eq_of_safe transfer sum_nof
+        (fun h1 _ => Or.inl (caller_ne h1)))
 
 /-- The Pair's observation: every committed non-static Pair frame of each step's subtree. -/
 def pairObservationWith
