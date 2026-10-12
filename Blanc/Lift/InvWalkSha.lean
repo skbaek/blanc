@@ -14,8 +14,8 @@ theorem addAccessedAddress_eq_self_of_mem {d : Devm} {a : Adr} (h : a ∈ d.acce
   simp only [Devm.accessedAddresses] at h'
   simp only [addAccessedAddress, liftMachMetaPure, Meta.addAccessedAddress, h']
 
-/-- A clean 64-byte SHA-256 child keeps the parent's access sets and logs nothing (the
-meta-field companion of `output_of_processMessage_sha256_64_clean`). -/
+/-- A clean 64-byte SHA-256 child keeps the parent's access sets and created-account set and
+logs nothing (the meta-field companion of `output_of_processMessage_sha256_64_clean`). -/
 theorem meta_of_processMessage_sha256_64_clean
     {sevm : Sevm} {parent child : Devm} {gas : Nat} {calldata : Bytes}
     {code : ByteArray} {xl : Xlot}
@@ -26,7 +26,8 @@ theorem meta_of_processMessage_sha256_64_clean
         calldata code false) xl (.ok child))
     (hclean : child.error.isSome = false) (hfork : CoveredFork sevm.benvStat.fork) :
     child.accessedAddresses = parent.accessedAddresses ∧
-      child.accessedStorageKeys = parent.accessedStorageKeys ∧ child.logs = [] := by
+      child.accessedStorageKeys = parent.accessedStorageKeys ∧ child.logs = [] ∧
+        child.createdAccounts = parent.createdAccounts := by
   have hgas : 84 ≤ gas :=
     gasSha25664_le_of_processMessage_clean hpre hlen hpm hclean
   obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp hpm
@@ -62,7 +63,7 @@ theorem meta_of_processMessage_sha256_64_clean
         simp only [bind, Except.bind, Option.isSome] at hset
         injection hset with hchild
         subst child
-        refine ⟨rfl, rfl, ?_⟩
+        refine ⟨rfl, rfl, ?_, rfl⟩
         have hsg := hfork.rules_stateGas_none
         simp only [initEvm, initDevm, Devm.withOutput_logs]
         dsimp only [Devm.withGasLeft, Devm.setMach, Devm.logs, liftMachPure]
@@ -72,13 +73,14 @@ theorem meta_of_processMessage_sha256_64_clean
           exact absurd (heq.symm.trans hsg) (by simp only [reduceCtorEq, not_false_eq_true])
     · exact False.elim (hinterp.1 hpre)
 
-/-- The successful resume of a call: access sets merged, error kept. -/
+/-- The successful resume of a call: access sets merged, error kept, created-account set
+taken from the child. -/
 theorem Resume.call_ok_meta {parent child sf : Devm} {oi os : Nat}
     (h : (Resume.call parent oi os).run (.ok child) = .ok sf)
     (hc : child.error.isSome = false) :
     sf.accessedAddresses = parent.accessedAddresses.union child.accessedAddresses ∧
       sf.accessedStorageKeys = parent.accessedStorageKeys.union child.accessedStorageKeys ∧
-      sf.error = parent.error := by
+      sf.error = parent.error ∧ sf.createdAccounts = child.createdAccounts := by
   unfold Resume.run liftToExecution at h
   simp only [bind, Except.bind, hc] at h
   rcases hp : (incorporateChildOnSuccess parent child child.output).push 1 with _ | d' <;>
@@ -88,7 +90,7 @@ theorem Resume.call_ok_meta {parent child sf : Devm} {oi os : Nat}
     subst h
     have := Devm.eq_of_push_ok hp
     subst this
-    exact ⟨rfl, rfl, rfl⟩
+    exact ⟨rfl, rfl, rfl, rfl⟩
 
 /-- **`STATICCALL` of the SHA-256 precompile, inverted.**  Over a 64-byte input window at
 `ii` and a 32-byte output window at `oi`, with address 2 warm, undelegated and a precompile of
@@ -183,15 +185,16 @@ theorem ri_staticcall_sha {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G 
   have hout := output_of_processMessage_sha256_64_clean hpre hlen pm hclean
   have hstor := stor_of_processMessage_staticPrecomp hpre pm
   have hcode := code_of_processMessage_staticPrecomp hpre pm
-  obtain ⟨hca, hck, hcl⟩ := meta_of_processMessage_sha256_64_clean hpre hlen pm hclean hfork
-  obtain ⟨hra, hrk, hre⟩ := Resume.call_ok_meta hsplit hclean
+  obtain ⟨hca, hck, hcl, hcc⟩ :=
+    meta_of_processMessage_sha256_64_clean hpre hlen pm hclean hfork
+  obtain ⟨hra, hrk, hre, hrc⟩ := Resume.call_ok_meta hsplit hclean
   have hlogs := Resume.call_logs hsplit
   simp only [hclean, Bool.false_eq_true, ↓reduceIte, hcl, List.append_nil] at hlogs
   have hmem := Resume.call_memory hsplit
   rw [hout, List.take_of_length_le (by rw [B256.length_toBytes])] at hmem
   have hst := Resume.call_state hsplit
   refine ⟨d, d.gasLeft, ⟨fun a => ?_, fun a => ?_, ?_, ?_, hlogs, (Resume.call_output hsplit).trans rfl, hre,
-    (Resume.call_returnData hsplit).trans hout⟩, St.self hstk hmem⟩
+    (Resume.call_returnData hsplit).trans hout, hrc.trans (hcc.trans rfl)⟩, St.self hstk hmem⟩
   · exact (getStor_eq_of_state_eq hst a).trans (hstor a)
   · exact (getCode_eq_of_state_eq hst a).trans (hcode a)
   · rw [hra, hca, hashSet_union_self]; rfl

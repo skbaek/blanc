@@ -6,6 +6,7 @@ import Blanc.Lift.BeaconDeposit.BodyNode
 import Blanc.Lift.BeaconDeposit.BodyCount
 import Blanc.Lift.BeaconDeposit.BodyInsertDead
 import Blanc.Lift.BeaconDeposit.BodyInsertLive
+import Blanc.Lift.BeaconDeposit.RepinBridge
 import Jaune.MulDiv
 
 /-!
@@ -107,7 +108,8 @@ theorem mem_sloadAccessedStorageKeys {t : Adr} {keys : KeySet} {k : B256} {y : A
 /-! ## The base through the insertion loop -/
 
 /-- What the insertion loop keeps of the base `b₀` it started from, at height `h`: everything
-but the key set, which has gained the branch slots below `h`. -/
+but the key set, which has gained the branch slots below `h`.  The created-account set is kept,
+so the machine original read `Devm.getOrigStorVal` is the base's. -/
 structure LoopBase (tgt : Adr) (b₀ b : Devm) (h : Nat) : Prop where
   stor : ∀ a, Devm.getStor b a = Devm.getStor b₀ a
   code : ∀ a, b.getCode a = b₀.getCode a
@@ -117,6 +119,7 @@ structure LoopBase (tgt : Adr) (b₀ b : Devm) (h : Nat) : Prop where
   error : b.error = b₀.error
   keys : ∀ y, y ∈ b.accessedStorageKeys ↔
     y ∈ b₀.accessedStorageKeys ∨ ∃ j < h, y = (tgt, solBranchSlot j)
+  created : b.createdAccounts = b₀.createdAccounts
 
 theorem LoopBase.step {sevm : Sevm} {b₀ b b' : Devm} {h : Nat}
     (hL : LoopBase sevm.currentTarget b₀ b h)
@@ -128,6 +131,8 @@ theorem LoopBase.step {sevm : Sevm} {b₀ b b' : Devm} {h : Nat}
   logs := by rw [hK.logs, afterSload_logs, hL.logs]
   output := by rw [hK.output, afterSload_output, hL.output]
   error := by rw [hK.error, afterSload_error, hL.error]
+  created := by
+    rw [hK.created, Blanc.BeaconDeposit.RepinBridge.afterSload_createdAccounts, hL.created]
   keys y := by
     rw [hK.keys, afterSload_accessedStorageKeys, mem_sloadAccessedStorageKeys, hL.keys]
     constructor
@@ -163,8 +168,9 @@ theorem LoopBase.mem_self {tgt : Adr} {b₀ b : Devm} {h : Nat} (hL : LoopBase t
 /-! ## The insertion loop -/
 
 /-- **The insertion loop from height `h`**, `m` dead iterations before the storing one at
-`n = h + m`: the dead segment `m` times (by induction), then the storing segment. -/
-theorem insert_loop {sevm : Sevm} {b₀ : Devm} {G : Nat} {x n : Nat} {node0 : B256}
+`n = h + m`: the dead segment `m` times (by induction), then the storing segment.  The storing
+`SSTORE` is priced from `orig`, the loop base's machine original read of the stored slot. -/
+theorem insert_loop {sevm : Sevm} {b₀ : Devm} {G : Nat} {x n : Nat} {node0 orig : B256}
     {br : Nat → B256} {keys0 : KeySet} {stor1 : Stor}
     {x₁ x₂ x₃ x₄ y₁ y₂ y₃ y₄ y₅ y₆ y₇ d : B256} {rest : List B256}
     (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
@@ -175,19 +181,20 @@ theorem insert_loop {sevm : Sevm} {b₀ : Devm} {G : Nat} {x n : Nat} {node0 : B
     (hbr : ∀ h < 32, stor1.get (solBranchSlot h) = br h)
     (hkeys : ∀ j < 32, ((sevm.currentTarget, solBranchSlot j) ∈ b₀.accessedStorageKeys ↔
       (sevm.currentTarget, solBranchSlot j) ∈ keys0))
+    (horig : b₀.getOrigStorVal sevm sevm.currentTarget (solBranchSlot n) = orig)
     (hsentry : gCallStipend < G + 51 +
-      liveStoreCost sevm keys0 stor1 n (insertNode Bytes.sha256 br n node0)) :
+      liveStoreCostOf orig sevm keys0 stor1 n (insertNode Bytes.sha256 br n node0)) :
     ∀ m h b M, h + m = n → LoopBase sevm.currentTarget b₀ b h →
       BodyMem M (1024 + 96 * h) (Nat.toB256 (928 + 96 * h)) [] →
       G + (deadRun sevm.currentTarget keys0 h m +
-        (143 + liveStoreCost sevm keys0 stor1 n (insertNode Bytes.sha256 br n node0))) < 2 ^ 256 →
+        (143 + liveStoreCostOf orig sevm keys0 stor1 n (insertNode Bytes.sha256 br n node0))) < 2 ^ 256 →
       ∃ bf Mf, BaseRel
           (afterSstore sevm b₀ (solBranchSlot n) (insertNode Bytes.sha256 br n node0)) bf ∧
         SFunc.RunExact prog sevm
           (St b (Nat.toB256 h :: Nat.toB256 (x / 2 ^ h) :: insertNode Bytes.sha256 br h node0 ::
             x₁ :: x₂ :: x₃ :: x₄ :: y₁ :: y₂ :: y₃ :: y₄ :: y₅ :: y₆ :: y₇ :: d :: rest) M
             (G + (deadRun sevm.currentTarget keys0 h m +
-              (143 + liveStoreCost sevm keys0 stor1 n (insertNode Bytes.sha256 br n node0)))))
+              (143 + liveStoreCostOf orig sevm keys0 stor1 n (insertNode Bytes.sha256 br n node0)))))
           t_0f6e_c23 (.returned (St bf rest Mf G)) := by
   intro m
   induction m with
@@ -208,9 +215,12 @@ theorem insert_loop {sevm : Sevm} {b₀ : Devm} {G : Nat} {x n : Nat} {node0 : B
     have hval : b.getStorVal sevm.currentTarget (solBranchSlot h) = stor1.get (solBranchSlot h) := by
       show (Devm.getStor b sevm.currentTarget).get _ = _
       rw [hL.stor, hstor1]
-    have hcost : sstoreCost sevm b (solBranchSlot h) nd = liveStoreCost sevm keys0 stor1 h nd := by
-      unfold sstoreCost liveStoreCost
-      rw [hval]
+    have hob : b.getOrigStorVal sevm sevm.currentTarget (solBranchSlot h) = orig :=
+      (Blanc.BeaconDeposit.RepinBridge.getOrigStorVal_congr_created _ _ hL.created).trans horig
+    have hcost : sstoreCost sevm b (solBranchSlot h) nd =
+        liveStoreCostOf orig sevm keys0 stor1 h nd := by
+      unfold sstoreCost liveStoreCostOf
+      rw [hval, hob]
       congr 1
       by_cases hk : (sevm.currentTarget, solBranchSlot h) ∈ keys0
       · rw [ite_eq_left (hmem.mpr hk), ite_eq_left hk]
@@ -231,7 +241,7 @@ theorem insert_loop {sevm : Sevm} {b₀ : Devm} {G : Nat} {x n : Nat} {node0 : B
     intro h b M hhm hL hM hG
     have hh : h < n := by omega
     have hh32 : h < 32 := by omega
-    set L := 143 + liveStoreCost sevm keys0 stor1 n (insertNode Bytes.sha256 br n node0)
+    set L := 143 + liveStoreCostOf orig sevm keys0 stor1 n (insertNode Bytes.sha256 br n node0)
     have hcostS : sloadCost sevm b (solBranchSlot h) =
         sloadCostOfKeys sevm.currentTarget keys0 (solBranchSlot h) := by
       unfold sloadCost sloadCostOfKeys
@@ -348,19 +358,26 @@ written), whose `solAcc` is the model's new accumulator; one log, the model even
 every other account's storage, all code, the accessed addresses, output and error are
 unchanged.  Premises: the SHA-256 precompile's (`ShaReady`), a frame not at the maximal call
 depth (at depth `0` the `STATICCALL` fails), a non-static frame, the two
-`SSTORE` sentries, and the gas below `2^256`. -/
+`SSTORE` sentries, and the gas below `2^256`.  The two `SSTORE`s are priced from `origLive` and
+`origCount`, the entry machine's original reads of the stored branch slot and of the count slot
+(`Devm.getOrigStorVal`, which is what Jaune charges). -/
 theorem deposit_body_runExact (sevm : Sevm) (b : Devm) (sel : B256) (g : Nat)
-    (s' : BeaconDeposit.Acc) (ev : BeaconDeposit.DepositEvent)
+    (s' : BeaconDeposit.Acc) (ev : BeaconDeposit.DepositEvent) {origLive origCount : B256}
+    (horigLive : b.getOrigStorVal sevm sevm.currentTarget (solBranchSlot (bodyDepth sevm b)) =
+      origLive)
+    (horigCount : b.getOrigStorVal sevm sevm.currentTarget solCountSlot = origCount)
     (hdec : DepositDecodable sevm) (hcd : sevm.data.length < 2 ^ 256)
     (hOk : BeaconDeposit.deposit Bytes.sha256 (solAcc (Devm.getStor b sevm.currentTarget))
       (argBytes sevm 0) (argBytes sevm 1) (argBytes sevm 2) (argRoot sevm) sevm.value.toNat =
         .ok (s', ev))
     (hsha : ShaReady sevm b) (hdepth : sevm.depth ≠ 0) (hstatic : sevm.isStatic = false)
-    (hsentryLive : gCallStipend < g + 52 + bodyLiveCost sevm b)
-    (hsentryCount : gCallStipend < g + 4 + bodyInsertGas sevm b + countStoreCost sevm (bodyCount sevm b))
-    (hbound : g + 1 + bodyGas sevm b < 2 ^ 256) :
+    (hsentryLive : gCallStipend < g + 52 + bodyLiveCostOf origLive sevm b)
+    (hsentryCount : gCallStipend < g + 4 + bodyInsertGasOf origLive sevm b +
+      countStoreCostOf origCount (bodyCount sevm b))
+    (hbound : g + 1 + bodyGasOf origLive origCount sevm b < 2 ^ 256) :
     ∃ b' M', SFunc.RunExact prog sevm
-        (St b (depositArgStack sevm [sel]) mem0 (g + 1 + bodyGas sevm b)) t_0304_c7
+        (St b (depositArgStack sevm [sel]) mem0 (g + 1 + bodyGasOf origLive origCount sevm b))
+        t_0304_c7
         (.returned (St b' [sel] M' (g + 1))) ∧
       Devm.getStor b' sevm.currentTarget = bodyStor sevm b ∧
       solAcc (Devm.getStor b' sevm.currentTarget) = s' ∧
@@ -396,15 +413,16 @@ theorem deposit_body_runExact (sevm : Sevm) (b : Devm) (sel : B256) (g : Nat)
     omega
   set a := gweiAmount sevm
   -- gas accounting
-  set L := bodyInsertGas sevm b
-  set cs := countStoreCost sevm w
+  set L := bodyInsertGasOf origLive sevm b
+  set cs := countStoreCostOf origCount w
   set G6 := g + 1 + L
   set G5 := G6 + (281 + cs)
   set G4 := G5 + 2553
   set G3 := G4 + 2526
   set G2 := G3 + 6205
   set G1 := G2 + 1104
-  have hstart : G1 + (1882 + sloadCost sevm b solCountSlot) = g + 1 + bodyGas sevm b := by
+  have hstart : G1 + (1882 + sloadCost sevm b solCountSlot) =
+      g + 1 + bodyGasOf origLive origCount sevm b := by
     show _ = g + 1 + (14551 + sloadCostOfKeys sevm.currentTarget b.accessedStorageKeys
       solCountSlot + cs + L)
     rw [sloadCostOfKeys_eq_sloadCost]
@@ -466,8 +484,13 @@ theorem deposit_body_runExact (sevm : Sevm) (b : Devm) (sel : B256) (g : Nat)
     rw [hstor5]; rfl
   have hwarm5 : (⟨sevm.currentTarget, solCountSlot⟩ : Adr × B256) ∈ b5.accessedStorageKeys := by
     rw [hkeys5, mem_sloadAccessedStorageKeys]; exact .inr rfl
+  have hcreated5 : b5.createdAccounts = b.createdAccounts := by
+    rw [hK5.created, hK4.created, hK3.created]
+    show b2.createdAccounts = _
+    rw [hK2.created, hK1.created, Blanc.BeaconDeposit.RepinBridge.afterSload_createdAccounts]
   have hcs5 : sstoreCost sevm b5 solCountSlot (1 + w) = cs := by
-    unfold sstoreCost; rw [ite_eq_left hwarm5, hw5, Nat.zero_add]; rfl
+    rw [sstoreCost_eq_countStoreCostOf hwarm5 hw5,
+      Blanc.BeaconDeposit.RepinBridge.getOrigStorVal_congr_created _ _ hcreated5, horigCount]
   have hroot : BeaconDeposit.hashPair Bytes.sha256
       (Bytes.sha256 (pkR.toBytes ++ sevm.data.sliceD wP.toNat 32 0))
       (Bytes.sha256 (BeaconDeposit.le64 a.toNat ++ BeaconDeposit.zeros 24 ++ sR.toBytes)) = rt := by
@@ -504,8 +527,12 @@ theorem deposit_body_runExact (sevm : Sevm) (b : Devm) (sel : B256) (g : Nat)
       · exact absurd h hne
       · exact absurd h hne
     · exact fun h => .inl (.inl h)
-  have hlc : liveStoreCost sevm b.accessedStorageKeys stor1 n nd = bodyLiveCost sevm b :=
-    liveStoreCost_congr (Stor.get_set_ne _ (Ne.symm (solBranchSlot_ne_count hn)) _)
+  have hlc : liveStoreCostOf origLive sevm b.accessedStorageKeys stor1 n nd =
+      bodyLiveCostOf origLive sevm b :=
+    liveStoreCostOf_congr (Stor.get_set_ne _ (Ne.symm (solBranchSlot_ne_count hn)) _)
+  have hob6 : b6.getOrigStorVal sevm sevm.currentTarget (solBranchSlot n) = origLive := by
+    refine (Blanc.BeaconDeposit.RepinBridge.getOrigStorVal_congr_created _ _ ?_).trans horigLive
+    rw [hK6.created, Blanc.BeaconDeposit.RepinBridge.afterSstore_createdAccounts, hcreated5]
   have hc6 : ∀ y, b6.getCode y = b.getCode y := fun y => by
     rw [hK6.code, afterSstore_getCode, hK5.code, hK4.code, hc3]
   have ha6 : b6.accessedAddresses = b.accessedAddresses := by
@@ -513,14 +540,14 @@ theorem deposit_body_runExact (sevm : Sevm) (b : Devm) (sel : B256) (g : Nat)
   have hM6' : BodyMem M6 (1024 + 96 * 0) (Nat.toB256 (928 + 96 * 0)) [] := hM6
   have hL0' : LoopBase sevm.currentTarget b6 b6 0 :=
     ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl, fun _ =>
-      ⟨.inl, fun h => h.elim id (fun ⟨_, hj, _⟩ => absurd hj (Nat.not_lt_zero _))⟩⟩
+      ⟨.inl, fun h => h.elim id (fun ⟨_, hj, _⟩ => absurd hj (Nat.not_lt_zero _))⟩, rfl⟩
   obtain ⟨bf, Mf, hW, rL⟩ := insert_loop (sevm := sevm) (b₀ := b6) (G := g + 1) (x := x) (n := n)
-    (node0 := rt) (br := br) (keys0 := b.accessedStorageKeys) (stor1 := stor1)
+    (node0 := rt) (orig := origLive) (br := br) (keys0 := b.accessedStorageKeys) (stor1 := stor1)
     (x₁ := sR) (x₂ := pkR) (x₃ := 128) (x₄ := a) (y₁ := rt) (y₂ := 96) (y₃ := sP) (y₄ := 32)
     (y₅ := wP) (y₆ := 48) (y₇ := pP) (d := 440) (rest := [sel]) hsha.fork hstatic
     (hsha.of_eq hc6 ha6) hdepth (by simp only [List.length_cons, List.length_nil, zero_add,
       Nat.one_le_ofNat]) (by omega) hn (fun h hh => insertDepth_dead 32 x h hh)
-    (insertDepth_live 32 x (by omega) hx32) hb6stor hbr hkeys6 (by rw [hlc]; omega)
+    (insertDepth_live 32 x (by omega) hx32) hb6stor hbr hkeys6 hob6 (by rw [hlc]; omega)
     n 0 b6 M6 (by omega) hL0' hM6' (by rw [hlc]; show g + 1 + L < 2 ^ 256; omega)
   rw [hlc] at rL
   have e1 : (1 + w) = Nat.toB256 (x / 2 ^ 0) := by

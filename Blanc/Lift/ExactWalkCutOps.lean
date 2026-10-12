@@ -1,6 +1,7 @@
 import Blanc.Lift.ExactWalkCut
 import Blanc.ForwardSha256
 import Blanc.ForwardStorageAccess
+import Blanc.BeaconDepositRepinBridge
 import Jaune.MulDiv
 
 /-!
@@ -59,8 +60,10 @@ theorem one_add_toB256 {h : Nat} (hh : h + 1 < 2 ^ 256) :
 /-! ## What the SHA-256 precompile call leaves -/
 
 /-- The world after a successful precompile call, relative to the one before:
-storage, code, access sets, logs, output and error unchanged, and the return
-data set to `rd`. -/
+storage, code, access sets, logs, output, error and the created-account set
+unchanged, and the return data set to `rd`.  The created-account set matters
+because Jaune prices `SSTORE` from the machine original read
+`Devm.getOrigStorVal`, which consults it (master-authorized core-b CR1). -/
 structure ShaCallPost (b b' : Devm) (rd : Bytes) : Prop where
   stor : ∀ a, Devm.getStor b' a = Devm.getStor b a
   code : ∀ a, b'.getCode a = b.getCode a
@@ -70,6 +73,7 @@ structure ShaCallPost (b b' : Devm) (rd : Bytes) : Prop where
   output : b'.output = b.output
   error : b'.error = b.error
   returnData : b'.returnData = rd
+  created : b'.createdAccounts = b.createdAccounts
 
 /-- The SHA-256 precompile premises (`Ninst.runCompiled_staticcall_sha256_64_warm`) a frame's
 world carries: address 2 undelegated and warm, a precompile of the fork, a covered fork.  The
@@ -131,13 +135,23 @@ theorem staticcall_sha_step {sevm : Sevm} {b : Devm} {iiw oiw : B256} {S : List 
         (St b (Nat.toB256 (G + 184) :: 2 :: iiw :: 64 :: oiw :: 32 :: S) M (G + 184))
         (.exec .staticcall)
         (St b' (1 :: S) (M.write oiw.toNat (Bytes.sha256 (M.read iiw.toNat 64).1).toBytes) G) := by
-  obtain ⟨post, hrun, hstack, hmem, hgas, hrd, hstor, hcode, haddr, hkeys, hlogs, hout, herr,
-      -⟩ :=
-    Ninst.runCompiled_staticcall_sha256_64_warm (sevm := sevm)
+  have hext : ((St b (Nat.toB256 (G + 184) :: 2 :: iiw :: 64 :: oiw :: 32 :: S) M
+      (G + 184)).setMach ⟨S, M, G + 184,
+        (St b (Nat.toB256 (G + 184) :: 2 :: iiw :: 64 :: oiw :: 32 :: S) M
+          (G + 184)).stateGas⟩).extCost [⟨iiw.toNat, 64⟩, ⟨oiw.toNat, 32⟩] = 0 :=
+    Devm.extCost_covered hcov
+  obtain ⟨post, hrun, hstack, hmem, hgas, hrd, hstor, hcode, haddr, hkeys, hlogs, -, -, hout,
+      herr, -, hcreated⟩ :=
+    Blanc.BeaconDeposit.RepinBridge.childlessRunCompiled_staticcall_sha256_64_warm_ext_created
+      (sevm := sevm)
       (devm := St b (Nat.toB256 (G + 184) :: 2 :: iiw :: 64 :: oiw :: 32 :: S) M (G + 184))
-      (G := G + 184) (s := S) rfl rfl hcov hnodeleg hwarm hpre hfork hdepth (by omega) hbound
-      hroom
-  refine ⟨post, ⟨hstor, hcode, haddr, hkeys, hlogs, hout, herr, hrd⟩, ?_⟩
+      (G := G + 184) (ext := 0) (s := S) rfl rfl hext hnodeleg hwarm hpre hfork hdepth
+      (by omega) hbound hroom
+  have hrun := hrun.toRunCompiled
+  simp only [Nat.add_zero] at hgas
+  rw [show (St b (Nat.toB256 (G + 184) :: 2 :: iiw :: 64 :: oiw :: 32 :: S) M
+      (G + 184)).memory = M from rfl, Mem.extends_covered hcov] at hmem
+  refine ⟨post, ⟨hstor, hcode, haddr, hkeys, hlogs, hout, herr, hrd, hcreated⟩, ?_⟩
   have hG' : G + 184 - 184 = G := by omega
   rw [hG'] at hgas
   have := St.self (d := post) hstack hmem
