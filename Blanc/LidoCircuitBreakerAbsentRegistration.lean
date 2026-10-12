@@ -180,11 +180,11 @@ private theorem afterOldPauser_absentZero_runCompiled
     (hindex : base.getStorVal sevm.currentTarget
       (indexSlot target) = next)
     (hlength : base.getStorVal sevm.currentTarget arrayLengthSlot = next)
-    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+    (harrayOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot next) = arrayOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget
       arrayLengthSlot = lengthOriginal)
     (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
     (hmovedIndexCost : sstoreValueCost indexOriginal next next =
@@ -344,18 +344,18 @@ private theorem appendTarget_then_runCompiled
     (hlengthNext : (1 : B256) + length = next)
     (harray : base.getStorVal sevm.currentTarget
       (arrayEntrySlot next) = 0)
-    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+    (harrayOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot next) = arrayOriginal)
     (harrayCost : sstoreValueCost arrayOriginal 0 target = arrayCost)
     (hwarmArray : (sevm.currentTarget, arrayEntrySlot next) ∈
       base.accessedStorageKeys)
     (hindex : base.getStorVal sevm.currentTarget (indexSlot target) = 0)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
     (hindexCost : sstoreValueCost indexOriginal 0 next = indexCost)
     (hwarmIndex : (sevm.currentTarget, indexSlot target) ∈
       base.accessedStorageKeys)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget
       arrayLengthSlot = lengthOriginal)
     (hlengthCost : sstoreValueCost lengthOriginal length next = lengthCost)
     (hgasAfter : gCallStipend < afterGas + 12)
@@ -487,13 +487,17 @@ private theorem appendTarget_then_runCompiled
         afterGas + 12 + lengthCost, indexPost.stateGas⟩)
       (Ninst.sstore ::: .call afterOldPauserSlot) post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled (hfork := hfork) hlengthIndex hlengthOrig hlengthCost
+      (temporal_sstore_runCompiled (hfork := hfork) hlengthIndex
+        (by simpa only [lengthPost, indexPost, arrayPost, lengthBase, temporalSstorePost_getOrigStorVal,
+          temporalSloadBase_getOrigStorVal] using hlengthOrig)
+        hlengthCost
         hwarmLengthIndex (by omega) hstatic)
       hafterCall
   have hlengthTail : Func.RunCompiled fs sevm
       (indexPost.setMach ⟨[next], M', afterGas + 21 + lengthCost, indexPost.stateGas⟩)
       (loadWord arrayLengthWord +++ pushB256 arrayLengthSlot :::
         Ninst.sstore ::: .call afterOldPauserSlot) post := by
+    clear_value lengthPost indexPost
     func_run (3) [3]
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign' harrayLengthOff']
@@ -520,7 +524,10 @@ private theorem appendTarget_then_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore :::
         .call afterOldPauserSlot) post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled (hfork := hfork) hindexArray hindexOrig hindexCost
+      (temporal_sstore_runCompiled (hfork := hfork) hindexArray
+        (by simpa only [lengthPost, indexPost, arrayPost, lengthBase, temporalSstorePost_getOrigStorVal,
+          temporalSloadBase_getOrigStorVal] using hindexOrig)
+        hindexCost
         hwarmIndexArray (by omega) hstatic)
       hlengthTail
   have htargetOff' : (targetWord * 32).toNat + 32 ≤ M'.size := by
@@ -591,7 +598,10 @@ private theorem appendTarget_then_runCompiled
         pushB256 arrayLengthSlot ::: Ninst.sstore :::
         .call afterOldPauserSlot) post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled (hfork := hfork) harrayBase harrayOrig harrayCost
+      (temporal_sstore_runCompiled (hfork := hfork) harrayBase
+        (by simpa only [lengthPost, indexPost, arrayPost, lengthBase, temporalSstorePost_getOrigStorVal,
+          temporalSloadBase_getOrigStorVal] using harrayOrig)
+        harrayCost
         hwarmArrayBase (by omega) hstatic)
       hindexTail
   have harrayTag : Func.RunCompiled fs sevm
@@ -716,11 +726,11 @@ private theorem appendTarget_absentZero_runCompiled
       (arrayEntrySlot next) = 0)
     (hindex : base.getStorVal sevm.currentTarget
       (indexSlot target) = 0)
-    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+    (harrayOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot next) = arrayOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget
       arrayLengthSlot = lengthOriginal)
     (harrayCost : sstoreValueCost arrayOriginal 0 target = arrayCost)
     (hindexCost : sstoreValueCost indexOriginal 0 next = indexCost)
@@ -860,8 +870,14 @@ private theorem appendTarget_absentZero_runCompiled
     lengthOriginal holeCost movedIndexCost tailClearCost lengthRestoreCost
     indexClearCost G hwfAppend hreadsAppend htargetAppend hpreviousAppend
     hnewAppend hcontinuationAppend htargetValid hnextNonzero hnextBound
-    hsizeAppend halignAppend harrayPost hindexPost hlengthPost harrayOrig
-    hindexOrig hlengthOrig hholeCost hmovedIndexCost htailClearCost
+    hsizeAppend halignAppend harrayPost hindexPost hlengthPost
+    (by simpa only [lengthPost, indexPost, arrayPost, lengthBase, temporalSstorePost_getOrigStorVal,
+          temporalSloadBase_getOrigStorVal] using harrayOrig)
+    (by simpa only [lengthPost, indexPost, arrayPost, lengthBase, temporalSstorePost_getOrigStorVal,
+          temporalSloadBase_getOrigStorVal] using hindexOrig)
+    (by simpa only [lengthPost, indexPost, arrayPost, lengthBase, temporalSstorePost_getOrigStorVal,
+          temporalSloadBase_getOrigStorVal] using hlengthOrig)
+    hholeCost hmovedIndexCost htailClearCost
     hlengthRestoreCost hindexClearCost hwarmArrayPost hwarmIndexPost
     hwarmLengthPost hsub hgasFinal hstatic
   have hrun := appendTarget_then_runCompiled (hfork := hfork) dp sevm base M img target
@@ -1012,26 +1028,26 @@ theorem setPauserKernel_absentZero_runCompiled
       (img.sliceD (continuationWord * 32).toNat 32 0) = 0)
     (htargetValid : nonzeroCanonicalAddress target)
     (hsize : M.size = 640)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal 0 0 =
       assignmentCost)
     (harray : (assignmentPost sevm base target 0).getStorVal
       sevm.currentTarget
         (arrayEntrySlot (Nat.toB256 (entries.length + 1))) = 0)
-    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+    (harrayOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot (Nat.toB256 (entries.length + 1))) = arrayOriginal)
     (harrayCost : sstoreValueCost arrayOriginal 0 target = arrayCost)
     (hwarmArray : (sevm.currentTarget,
       arrayEntrySlot (Nat.toB256 (entries.length + 1))) ∈
         (assignmentPost sevm base target 0).accessedStorageKeys)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
     (hindexCost : sstoreValueCost indexOriginal 0
       (Nat.toB256 (entries.length + 1)) = indexCost)
     (hwarmIndex : (sevm.currentTarget, indexSlot target) ∈
       (assignmentPost sevm base target 0).accessedStorageKeys)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
       lengthOriginal)
     (hlengthCost : sstoreValueCost lengthOriginal
       (Nat.toB256 entries.length) (Nat.toB256 (entries.length + 1)) =
@@ -1194,8 +1210,9 @@ theorem setPauserKernel_absentZero_runCompiled
     lengthOriginal arrayCost indexCost lengthCost holeCost movedIndexCost
     tailClearCost lengthRestoreCost indexClearCost G hwf' hreads' htarget'
     hprevious' hnew' hcontinuation' htargetValid hnextNonzero hnextBound
-    hsize' hlength hlengthNext harray hindex harrayOrig hindexOrig
-    hlengthOrig harrayCost hindexCost hlengthCost hholeCost
+    hsize' hlength hlengthNext harray hindex ((assignmentPost_getOrigStorVal sevm base target 0 _ _).trans harrayOrig)
+    ((assignmentPost_getOrigStorVal sevm base target 0 _ _).trans hindexOrig)
+    ((assignmentPost_getOrigStorVal sevm base target 0 _ _).trans hlengthOrig) harrayCost hindexCost hlengthCost hholeCost
     hmovedIndexCost htailClearCost hlengthRestoreCost hindexClearCost
     hwarmArray hwarmIndex hsub hgasFinal hstatic
   have happend : Func.RunCompiled
@@ -1464,26 +1481,26 @@ theorem registerPauser_body_absentZero_runCompiled
       (logicalStorageOfStor (Devm.getStor base sevm.currentTarget)) entries)
     (hfind : findEntry entries target = none)
     (htargetValid : nonzeroCanonicalAddress target)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal 0 0 =
       assignmentCost)
     (harray : (assignmentPost sevm base target 0).getStorVal
       sevm.currentTarget
         (arrayEntrySlot (Nat.toB256 (entries.length + 1))) = 0)
-    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+    (harrayOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot (Nat.toB256 (entries.length + 1))) = arrayOriginal)
     (harrayCost : sstoreValueCost arrayOriginal 0 target = arrayCost)
     (hwarmArray : (sevm.currentTarget,
       arrayEntrySlot (Nat.toB256 (entries.length + 1))) ∈
         (assignmentPost sevm base target 0).accessedStorageKeys)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
     (hindexCost : sstoreValueCost indexOriginal 0
       (Nat.toB256 (entries.length + 1)) = indexCost)
     (hwarmIndex : (sevm.currentTarget, indexSlot target) ∈
       (assignmentPost sevm base target 0).accessedStorageKeys)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
       lengthOriginal)
     (hlengthCost : sstoreValueCost lengthOriginal
       (Nat.toB256 entries.length) (Nat.toB256 (entries.length + 1)) =
@@ -1583,26 +1600,26 @@ theorem registerPauser_runCompiledTo_absentZero
       (logicalStorageOfStor (Devm.getStor base sevm.currentTarget)) entries)
     (hfind : findEntry entries target = none)
     (htargetValid : nonzeroCanonicalAddress target)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal 0 0 =
       assignmentCost)
     (harray : (assignmentPost sevm base target 0).getStorVal
       sevm.currentTarget
         (arrayEntrySlot (Nat.toB256 (entries.length + 1))) = 0)
-    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+    (harrayOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot (Nat.toB256 (entries.length + 1))) = arrayOriginal)
     (harrayCost : sstoreValueCost arrayOriginal 0 target = arrayCost)
     (hwarmArray : (sevm.currentTarget,
       arrayEntrySlot (Nat.toB256 (entries.length + 1))) ∈
         (assignmentPost sevm base target 0).accessedStorageKeys)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
     (hindexCost : sstoreValueCost indexOriginal 0
       (Nat.toB256 (entries.length + 1)) = indexCost)
     (hwarmIndex : (sevm.currentTarget, indexSlot target) ∈
       (assignmentPost sevm base target 0).accessedStorageKeys)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget arrayLengthSlot =
       lengthOriginal)
     (hlengthCost : sstoreValueCost lengthOriginal
       (Nat.toB256 entries.length) (Nat.toB256 (entries.length + 1)) =
@@ -1692,28 +1709,28 @@ theorem registerPauser_absentZero_success_settled_effects
       (logicalStorageOfStor (Devm.getStor (initDevm msg) ca)) entries)
     (hfind : findEntry entries target = none)
     (htargetValid : nonzeroCanonicalAddress target)
-    (hassignmentOrig : getOrigStorVal (initSevm msg) ca
+    (hassignmentOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal 0 0 =
       assignmentCost)
     (harray : (assignmentPost (initSevm msg) (initDevm msg)
       target 0).getStorVal ca
         (arrayEntrySlot (Nat.toB256 (entries.length + 1))) = 0)
-    (harrayOrig : getOrigStorVal (initSevm msg) ca
+    (harrayOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (arrayEntrySlot (Nat.toB256 (entries.length + 1))) = arrayOriginal)
     (harrayCost : sstoreValueCost arrayOriginal 0 target = arrayCost)
     (hwarmArray : (ca,
       arrayEntrySlot (Nat.toB256 (entries.length + 1))) ∈
         (assignmentPost (initSevm msg) (initDevm msg)
           target 0).accessedStorageKeys)
-    (hindexOrig : getOrigStorVal (initSevm msg) ca
+    (hindexOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (indexSlot target) = indexOriginal)
     (hindexCost : sstoreValueCost indexOriginal 0
       (Nat.toB256 (entries.length + 1)) = indexCost)
     (hwarmIndex : (ca, indexSlot target) ∈
       (assignmentPost (initSevm msg) (initDevm msg)
         target 0).accessedStorageKeys)
-    (hlengthOrig : getOrigStorVal (initSevm msg) ca arrayLengthSlot =
+    (hlengthOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca arrayLengthSlot =
       lengthOriginal)
     (hlengthCost : sstoreValueCost lengthOriginal
       (Nat.toB256 entries.length) (Nat.toB256 (entries.length + 1)) =
