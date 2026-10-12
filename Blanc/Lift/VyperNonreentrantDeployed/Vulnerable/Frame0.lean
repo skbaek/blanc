@@ -34,7 +34,7 @@ def benvStat0 : BenvStat := { (default : BenvStat) with origState := world0 }
 value 0, 30,000,000 gas, at Jaune depth 1024 (EELS depth 0), with empty accessed sets, over
 the pre-state `world0`. -/
 def msg0 : Msg where
-  benv := ⟨world0, .emptyWithCapacity, benvStat0⟩
+  benv := ⟨world0, .emptyWithCapacity, benvStat0, .emptyWithCapacity⟩
   tenv := default
   caller := attackerAddress
   target := some proxyAddress

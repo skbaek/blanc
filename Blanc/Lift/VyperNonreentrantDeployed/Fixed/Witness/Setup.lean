@@ -74,7 +74,7 @@ def benvStat0 : BenvStat := { (default : BenvStat) with origState := world0 }
 
 /-- **The top-level message call.** -/
 def msg0 : Msg where
-  benv := ⟨world0, .emptyWithCapacity, benvStat0⟩
+  benv := ⟨world0, .emptyWithCapacity, benvStat0, .emptyWithCapacity⟩
   tenv := default
   caller := callerAddress
   target := some poolAddress

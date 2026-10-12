@@ -135,12 +135,12 @@ theorem ctor_run (sevm : Sevm) (b : Devm) (G : Nat)
     · exact rx_return_any rfl (return_charge _ _)
 
 /-- The selected charge of the constructor's mint on the freshly cleared target: cold unless
-the message pre-warmed `(target, caller)`, valued against the block-original slot. -/
+the message pre-warmed `(target, caller)`, valued against the selected zero original
+(the CREATE target is always in the entry machine's created accounts). -/
 def mintSstoreGas (msg : Msg) : Nat :=
   (if (⟨msg.currentTarget, msg.caller.toB256⟩ : Adr × B256) ∈ msg.accessedStorageKeys then 0
     else gasColdSload) +
-  sstoreValueCost ((msg.benv.stat.origState.get msg.currentTarget).stor.get msg.caller.toB256) 0
-    1000000
+  sstoreValueCost 0 0 1000000
 
 /-- The token account after creation: nonce incremented, balance kept, storage the mint only,
 the registered runtime installed. -/
@@ -149,6 +149,20 @@ def tokenAcct (W : State) (T creator : Adr) : Acct where
   bal := (W.get T).bal
   stor := Stor.empty.set creator.toB256 1000000
   code := Blanc.Lift.VyperNonreentrantDeployed.Token20.code
+
+/-- The installed runtime is nonempty (its size is the constructor-output length). -/
+theorem installed_code_size_ne_zero :
+    Blanc.Lift.VyperNonreentrantDeployed.Token20.code.size ≠ 0 := by
+  have h : Blanc.Lift.VyperNonreentrantDeployed.Token20.code.size = runtime.length := rfl
+  rw [h, runtime_length]
+  decide
+
+/-- An account carrying the installed runtime is never empty. -/
+theorem installed_not_empty {ac : Acct}
+    (hcode : ac.code = Blanc.Lift.VyperNonreentrantDeployed.Token20.code) :
+    ¬ ac.Empty := by
+  intro h
+  exact installed_code_size_ne_zero (hcode ▸ h.1)
 
 theorem runtime_code :
     (⟨⟨runtime⟩⟩ : ByteArray) = Blanc.Lift.VyperNonreentrantDeployed.Token20.code :=
@@ -180,17 +194,34 @@ theorem create_token (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
     exact benvAfterTransfer_stat htransfer
   have hempty : b.getStor sevm.currentTarget = Stor.empty := by
     change benv.state.getStor msg.currentTarget = Stor.empty
-    rw [benvAfterTransfer_ok_getStor htransfer, processCreateMessage_msg_getStor_currentTarget]
+    rw [benvAfterTransfer_ok_getStor htransfer _ (Or.inl hvalue),
+      processCreateMessage_msg_getStor_currentTarget]
+  have h0 : (processCreateMessage.msg msg).benvAfterTransfer =
+      .ok (processCreateMessage.msg msg).benv :=
+    Msg.benvAfterTransfer_of_value_zero (show (processCreateMessage.msg msg).value = 0 from hvalue)
+  have hbenv_eq : benv = (processCreateMessage.msg msg).benv :=
+    Except.ok.inj (htransfer.symm.trans h0)
+  have hmem : sevm.currentTarget ∈ b.createdAccounts := by
+    have h1 : b.createdAccounts = benv.createdAccounts := rfl
+    rw [h1, hbenv_eq]
+    show msg.currentTarget ∈ (processCreateMessage.msg msg).benv.createdAccounts
+    unfold processCreateMessage.msg addCreatedAccount
+    show msg.currentTarget ∈ (msg.benv.createdAccounts.insert msg.currentTarget)
+    exact Std.HashSet.mem_insert_self
   have hsc : sstoreCost sevm b (mintKey sevm) 1000000 = mintSstoreGas msg := by
-    unfold sstoreCost mintSstoreGas getOrigStorVal getOrigAcct
-    rw [hstat]
+    have horig0 : b.getOrigStorVal sevm sevm.currentTarget (mintKey sevm) = 0 := by
+      unfold Devm.getOrigStorVal
+      rw [ite_eq_left hmem]
     have hcur : b.getStorVal sevm.currentTarget (mintKey sevm) = 0 := by
       unfold Devm.getStorVal
       change (b.getStor sevm.currentTarget).get _ = 0
       rw [hempty]
       rfl
-    rw [hcur]
-    rfl
+    have hkeys : b.accessedStorageKeys = msg.accessedStorageKeys := rfl
+    have hct : sevm.currentTarget = msg.currentTarget := rfl
+    have hkey : mintKey sevm = msg.caller.toB256 := rfl
+    unfold sstoreCost mintSstoreGas
+    rw [horig0, hcur, hct, hkeys, hkey]
   have hcg : ctorGas sevm b = 81 + mintSstoreGas msg := by
     rw [ctorGas, hsc]
   have hcost : ctorGas sevm b ≤ msg.gas :=
@@ -231,7 +262,15 @@ theorem create_token (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
     rw [State.get_set_self, processCreateMessage_msg_afterTransfer_get hvalue htransfer,
       if_pos rfl, runtime_code]
     unfold tokenAcct
-    rfl
+    apply Acct.ext
+    · simp only [Acct.clearIfEmpty_nonce]
+    · simp only [Acct.clearIfEmpty_bal]
+    · simp only [Acct.clearIfEmpty_stor]
+      split
+      · rename_i h
+        exact absurd h (installed_not_empty (by rfl))
+      · rfl
+    · simp only [Acct.clearIfEmpty_code]
   · intro a ha
     rw [pf.2.2.2 a ha, hraw, State.get_setStorVal_ne _ _ _ (Ne.symm ha),
       processCreateMessage_msg_afterTransfer_get hvalue htransfer, if_neg ha]
