@@ -7,6 +7,7 @@
 
 import Blanc.DripHistory
 import Blanc.DripAccounting
+import Blanc.Drip.RepinBridge
 import Blanc.ExecutionPath
 import Blanc.ExecutionMessageEffects
 import Blanc.ExecutionBodyEffects
@@ -133,6 +134,19 @@ theorem TransactionMessageOccurrence.msg_shouldTransferValue
     msg.shouldTransferValue = true := by
   induction occurrence with
   | head head tail => exact head.msg_shouldTransferValue
+  | tail head tail occurrence ih => exact ih
+
+/-- The selected transaction retains its bumped sender nonce at message preparation. -/
+theorem TransactionMessageOccurrence.msg_caller_nonce_ne_zero
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+    {bout finalBout : BlockOutput}
+    {trace : ExecutionTrace.ApplyTransactionsTrace txs benv bout finalBenv finalBout}
+    {msg : Msg} {state : State} {out : MsgCallOutput}
+    {message : ExecutionTrace.MessageCallTrace msg state out}
+    (occurrence : TransactionMessageOccurrence trace message) :
+    (msg.benv.state.get msg.caller).nonce ≠ 0 := by
+  induction occurrence with
+  | head head tail => exact RepinBridge.transaction_msg_caller_nonce_ne_zero head
   | tail head tail occurrence ih => exact ih
 
 /-- The selected transaction's prepared message inherits the actual prefix's
@@ -474,12 +488,30 @@ theorem ConfiguredDirectCall.precredit_of_afterTransfer
       call.execMsg.benv.state.subBal call.execMsg.caller call.execMsg.value = some debit ∧
       (initDevm (call.execMsg.withBenv afterTransfer)).state =
         debit.addBal ca call.execMsg.value := by
-  rcases of_benvAfterTransfer call.exec_shouldTransferValue transfer with
-    ⟨debit, sub, afterEq⟩
-  refine ⟨debit, sub, ?_⟩
-  show afterTransfer.state = debit.addBal ca call.execMsg.value
-  rw [afterEq, call.exec_currentTarget]
-  rfl
+  by_cases zero : call.execMsg.value = 0
+  · have sourceNonce := envelope.occurrence.msg_caller_nonce_ne_zero
+    have execNonce : (call.execMsg.benv.state.get call.execMsg.caller).nonce ≠ 0 := by
+      rw [call.execMsg_eq, ExecutionTrace.messageCallExecutionMessage_caller_eq,
+        ExecutionTrace.messageCallDelegation_caller_eq call.delegation,
+        RepinBridge.messageCallExecutionMessage_state]
+      exact RepinBridge.messageCallDelegation_nonce_ne_zero call.delegation msg.caller sourceNonce
+    have ready := (envelope.ready.of_messageCallDelegation call.delegation).messageCallExecutionMessage
+    have targetProtected : State.Protected call.execMsg.benv.state ca := by
+      rw [call.execMsg_eq]
+      exact State.Protected.of_code_ne_nil ready.nodel.code
+    rw [Msg.benvAfterTransfer_of_value_zero zero] at transfer
+    cases transfer
+    refine ⟨call.execMsg.benv.state, ?_, ?_⟩
+    · rw [zero]
+      exact RepinBridge.subBal_zero_of_protected (Or.inl execNonce)
+    · change call.execMsg.benv.state = call.execMsg.benv.state.addBal ca call.execMsg.value
+      rw [zero, RepinBridge.addBal_zero_of_protected targetProtected]
+  · rcases of_benvAfterTransfer call.exec_shouldTransferValue zero transfer with
+      ⟨debit, sub, afterEq⟩
+    refine ⟨debit, sub, ?_⟩
+    show afterTransfer.state = debit.addBal ca call.execMsg.value
+    rw [afterEq, call.exec_currentTarget]
+    rfl
 
 /-- The outer CALL wrapper's recorded state is its retained core's settled
 state.  This is the bridge from transaction-envelope provenance to the raw
@@ -585,7 +617,8 @@ theorem ConfiguredDirectCall.error_snapshot
         congrFun
           (ExecutionTrace.messageCallExecutionMessage_getStor_eq call.delegated) ca
       _ = msg.benv.state.getStor ca :=
-        congrFun (ExecutionTrace.messageCallDelegation_getStor_eq call.delegation) ca
+        ExecutionTrace.messageCallDelegation_getStor_eq call.delegation ca
+          envelope.ready.nodel.code (not_delegation_of_compile envelope.ready.state.code)
   · have rollback := (ProcessMessage.rollback_of_error call.core.run error).1
     calc
       messageState.bal ca = call.evm.state.bal ca :=
