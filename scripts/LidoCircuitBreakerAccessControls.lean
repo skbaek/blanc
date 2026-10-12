@@ -942,16 +942,21 @@ private def twoWriteCode : ByteArray := ByteArray.mk #[0x55, 0x55, 0x00]
 private def twoWriteSevm : Sevm :=
   { (default : Sevm) with code := twoWriteCode }
 
+/-- The writing account carries the running program, as a deployed contract's
+account does: last-retained attribution is stated for owners with installed
+code (Jaune `ca9f27d` deletes an emptied account together with its storage). -/
+private def twoWriteAcctPre : Acct :=
+  { nonce := 0, bal := 0, stor := Stor.empty, code := twoWriteCode }
+
 private def twoWritePre : Devm :=
-  ((default : Devm).withGasLeft 100000).withStack [0, 1, 0, 2]
+  ((((default : Devm).withGasLeft 100000).withStack [0, 1, 0, 2]).withState
+    (State.set Std.TreeMap.empty 0 twoWriteAcctPre))
 
 private def twoWriteAcctMid : Acct :=
-  { nonce := 0, bal := 0, stor := Stor.empty.set 0 1,
-    code := ByteArray.mk #[] }
+  { nonce := 0, bal := 0, stor := Stor.empty.set 0 1, code := twoWriteCode }
 
 private def twoWriteAcctEnd : Acct :=
-  { nonce := 0, bal := 0, stor := (Stor.empty.set 0 1).set 0 2,
-    code := ByteArray.mk #[] }
+  { nonce := 0, bal := 0, stor := (Stor.empty.set 0 1).set 0 2, code := twoWriteCode }
 
 private def twoWriteMid : Devm :=
   { mach :=
@@ -969,8 +974,9 @@ private def twoWriteMid : Devm :=
         accessedStorageKeys := Std.HashSet.emptyWithCapacity.insert (0, 0)
         createdAccounts := Std.HashSet.emptyWithCapacity }
     world :=
-      { state := State.set Std.TreeMap.empty 0 twoWriteAcctMid
-        transientStorage := ∅ } }
+      { state := State.set (State.set Std.TreeMap.empty 0 twoWriteAcctPre) 0 twoWriteAcctMid
+        transientStorage := ∅
+        storageWrites := Std.HashSet.emptyWithCapacity.insert (0, 0) } }
 
 private def twoWriteEnd : Devm :=
   { mach :=
@@ -988,9 +994,10 @@ private def twoWriteEnd : Devm :=
         accessedStorageKeys := Std.HashSet.emptyWithCapacity.insert (0, 0)
         createdAccounts := Std.HashSet.emptyWithCapacity }
     world :=
-      { state := State.set (State.set Std.TreeMap.empty 0 twoWriteAcctMid) 0
-          twoWriteAcctEnd
-        transientStorage := ∅ } }
+      { state := State.set (State.set (State.set Std.TreeMap.empty 0 twoWriteAcctPre) 0
+          twoWriteAcctMid) 0 twoWriteAcctEnd
+        transientStorage := ∅
+        storageWrites := (Std.HashSet.emptyWithCapacity.insert (0, 0)).insert (0, 0) } }
 
 private theorem state_get_empty {a : Adr} :
     State.get Std.TreeMap.empty a = Acct.nil := by
@@ -1024,24 +1031,24 @@ private theorem b256_one_eq_two_false : ((1 : B256) = 2) = False := by
   simp only [eq_iff_iff, iff_false]
   decide
 
-/-- The 47 entries of `tw_norm` that are pure definitional unfoldings: `dsimp`
+/-- The 57 entries of `tw_norm` that are pure definitional unfoldings: `dsimp`
 can use every one of them, so they carry no rewriting cost. -/
 macro "tw_defs" : tactic => `(tactic|
   try dsimp only [
-    twoWriteMid, twoWriteEnd, twoWriteAcctMid, twoWriteAcctEnd, Rinst.run,
+    twoWriteMid, twoWriteEnd, twoWriteAcctPre, twoWriteAcctMid, twoWriteAcctEnd, Rinst.run,
     Rinst.runCore, Bind.bind, Except.bind, Except.assert, assertDynamic,
-    getOrigStorVal, getOrigAcct, Devm.getStorVal, Devm.getAcct,
+    Devm.getOrigStorVal, getOrigStorVal, getOrigAcct, Devm.getStorVal, Devm.getAcct,
     sstoreNewRefundCounter, safeSub, twoWriteSevm, twoWritePre, twoWriteCode,
     default, BenvStat.rules, Fork.ruleSet, pragueRules, Devm.balReadStorage, Devm.balReadAccount,
     Option.isSome, Devm.withGasLeft, Devm.withStack, Devm.setMach, Devm.setMeta,
     Devm.setWorld, Devm.stack, Devm.gasLeft, Devm.state,
-    Devm.accessedStorageKeys, Devm.refundCounter, addAccessedStorageKey,
+    Devm.accessedStorageKeys, Devm.createdAccounts, Devm.refundCounter, addAccessedStorageKey,
     liftMachMetaPure, Meta.addAccessedStorageKey, Devm.withRefundCounter,
-    Devm.setStorVal, State.setStorVal, Devm.withState, Devm.mach, Devm.meta,
+    Devm.setStorVal, State.setStorVal, Devm.withState, Devm.withStorageWrites, Devm.mach, Devm.meta,
     Devm.world, Devm.error, gCallStipend, gasColdSload, gasStorageSet,
     gasWarmAccess, gasStorageUpdate, rSClear])
 
-/-- The 30 entries of `tw_norm` that are genuine rewrites: the empty-state and
+/-- The 31 entries of `tw_norm` that are genuine rewrites: the empty-state and
 set-self storage laws, the concrete `B256` disequalities, and the propositional
 and arithmetic normalizers that steer the two decisions. -/
 macro "tw_lemmas" : tactic => `(tactic|
@@ -1052,14 +1059,14 @@ macro "tw_lemmas" : tactic => `(tactic|
     b256_zero_eq_two_false, b256_one_eq_two_false, eq_self_iff_true, and_true,
     true_and, and_false, false_and, not_true, not_false_iff,
     not_false_eq_true, ne_eq, Std.HashSet.not_mem_emptyWithCapacity,
-    Std.HashSet.mem_insert, ite_true, ite_false, if_true, if_false,
+    Std.HashSet.mem_insert, ite_self, ite_true, ite_false, if_true, if_false,
     Nat.reduceAdd, Nat.reduceSub])
 
 /-- One normalization pass for the double-write machine: unfold the `SSTORE`
 step, steer the accessed-storage-set and storage-read decisions, and fold the
 result back into the named literal states.
 
-The same 79 entries are used as before, in four passes rather than one fused
+The same 88 entries are used as before, in four passes rather than one fused
 `simp`.  `Devm.pop_def` and `chargeGas_def` are the only two that `dsimp`
 cannot use (`Jaune/Machine.lean:2356`, `:2021`; each is proved by
 `cases … <;> rfl`, so neither is a `rfl`-lemma), and `chargeGas_def` is
@@ -1116,9 +1123,16 @@ private theorem twoWriteCommits :
 
 private theorem twoWritePre_cell :
     (Devm.getStor twoWritePre twoWriteSevm.currentTarget).get 0 = 0 := by
-  simp only [Devm.getStor, Devm.getAcct, twoWritePre, twoWriteSevm, default,
-    Devm.withGasLeft, Devm.withStack, Devm.setMach, Devm.state,
-    state_get_empty, acctNil_stor, stor_get_empty]
+  show (State.get (State.set Std.TreeMap.empty 0 twoWriteAcctPre) 0).stor.get 0 = 0
+  rw [State.get_set_self]
+  exact stor_get_empty
+
+/-- The writing account carries the program it runs. -/
+private theorem twoWritePre_code :
+    (twoWritePre.getCode twoWriteSevm.currentTarget).toList ≠ [] := by
+  show (State.get (State.set Std.TreeMap.empty 0 twoWriteAcctPre) 0).code.toList ≠ []
+  rw [State.get_set_self, ByteArray.toList_eq_toList_data]
+  decide
 
 private theorem twoWriteEnd_cell :
     (Devm.getStor twoWriteEnd twoWriteSevm.currentTarget).get 0 = 2 := by
@@ -1170,7 +1184,7 @@ private theorem twoWrite_lastRetained_exists :
     decide
   obtain ⟨write, retained, owner, key, value, last⟩ :=
     Exec.exists_lastRetainedSstore_of_getStor_ne twoWriteRun twoWriteCommits
-      CoveredFork.prague changed
+      CoveredFork.prague twoWritePre_code changed
   refine ⟨write, retained, owner, key, ?_, last⟩
   rw [value, show Execution.committedPost (.ok twoWriteEnd) twoWriteCommits =
     twoWriteEnd from rfl, twoWriteEnd_cell]

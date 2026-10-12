@@ -1,5 +1,6 @@
 import Blanc.LidoCircuitBreakerRegistry
 import Blanc.ForwardCall
+import Blanc.ForwardStorageAccess
 
 /-!
 Concrete positive and semantic-mutant controls for the Lido CircuitBreaker
@@ -295,9 +296,18 @@ private def targetZeroMutantSevm : Sevm :=
     code := targetZeroGuardAfterAssignmentCode
     isStatic := false }
 
+/-- The mutant's account carries the mutant program, as a deployed Registry
+account carries its runtime: last-retained attribution is stated for owners
+with installed code (Jaune `ca9f27d` deletes an emptied account with its
+storage). -/
+private def targetZeroMutantAcct : Acct :=
+  { nonce := 0, bal := 0, stor := Stor.empty,
+    code := targetZeroGuardAfterAssignmentCode }
+
 private def targetZeroMutantBase : Devm :=
-  addAccessedStorageKey (default : Devm)
-    targetZeroMutantOwner (assignmentSlot 0)
+  (addAccessedStorageKey (default : Devm)
+    targetZeroMutantOwner (assignmentSlot 0)).withState
+      (State.set Std.TreeMap.empty targetZeroMutantOwner targetZeroMutantAcct)
 
 private def targetZeroMutantPre : Devm :=
   targetZeroMutantBase.setMach
@@ -344,6 +354,38 @@ private theorem targetZeroMutant_pushKey :
   · rfl
   · decide
 
+/-- The mutant creates no account, so the machine original read is the
+transaction-start snapshot read. -/
+private theorem targetZeroMutantD2_origRead (k : B256) :
+    targetZeroMutantD2.getOrigStorVal targetZeroMutantSevm
+        targetZeroMutantSevm.currentTarget k =
+      getOrigStorVal targetZeroMutantSevm targetZeroMutantSevm.currentTarget k :=
+  getOrigStorVal_of_not_created Std.HashSet.not_mem_emptyWithCapacity
+
+/-- The mutant's assignment cell starts at zero in every pre-store machine. -/
+private theorem targetZeroMutant_cell_zero :
+    (State.get (State.set Std.TreeMap.empty targetZeroMutantOwner
+      targetZeroMutantAcct) targetZeroMutantOwner).stor.get (assignmentSlot 0) = 0 := by
+  rw [State.get_set_self]
+  simp only [targetZeroMutantAcct, Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc,
+    Std.TreeMap.getD_emptyc]
+
+private theorem targetZeroMutantD2_current :
+    targetZeroMutantD2.getStorVal targetZeroMutantSevm.currentTarget
+      (assignmentSlot 0) = 0 :=
+  targetZeroMutant_cell_zero
+
+/-- The mutant's account carries the program it runs. -/
+private theorem targetZeroMutantPre_code :
+    (targetZeroMutantPre.getCode targetZeroMutantOwner).toList ≠ [] := by
+  show (State.get (State.set Std.TreeMap.empty targetZeroMutantOwner
+    targetZeroMutantAcct) targetZeroMutantOwner).code.toList ≠ []
+  rw [State.get_set_self]
+  intro h
+  exact Prog.compile_ne_nil (by
+    rw [← targetZeroGuardAfterAssignment_compile]
+    exact congrArg some h)
+
 private theorem targetZeroMutant_store :
     Ninst.RunCompiled targetZeroMutantSevm targetZeroMutantD2
       Blanc.Ninst.sstore targetZeroMutantD3 := by
@@ -357,8 +399,10 @@ private theorem targetZeroMutant_store :
     exact Std.HashSet.mem_insert_self
   · decide
   · rfl
-  · decide
-  · decide
+  · rw [targetZeroMutantD2_origRead, targetZeroMutantD2_current]
+    decide
+  · rw [targetZeroMutantD2_origRead, targetZeroMutantD2_current]
+    decide
   · rfl
 
 private theorem targetZeroMutant_funcRun :
@@ -387,8 +431,8 @@ private theorem targetZeroMutant_progRun :
 
 private theorem targetZeroMutant_preValue :
     targetZeroMutantPre.getStorVal targetZeroMutantOwner
-      (assignmentSlot 0) = 0 := by
-  rfl
+      (assignmentSlot 0) = 0 :=
+  targetZeroMutant_cell_zero
 
 private theorem targetZeroMutant_postValue :
     targetZeroMutantPost.getStorVal targetZeroMutantOwner
@@ -427,7 +471,7 @@ private theorem targetZeroMutant_write
     rw [targetZeroMutant_preValue, targetZeroMutant_postValue]
     decide
   rcases Exec.exists_lastRetainedSstore_of_getStor_ne execution rfl (by decide)
-      hchanged with
+      targetZeroMutantPre_code hchanged with
     ⟨write, hretained, howner, hkey, hvalue, _⟩
   refine ⟨write, hretained, howner, hkey, hvalue.trans ?_⟩
   simpa only [Execution.committedPost, Devm.getStor, Devm.getStorVal] using
