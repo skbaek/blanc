@@ -67,8 +67,10 @@ def initWrites : StorShadow :=
    ((proxyAddr, 15), 1000000000000000000),
    ((proxyAddr, 6), ethCoin.toNat.toB256)]
 
-/-- The account entries the implementation frame's four precompile `CALL`s prepend (the
-identity precompile and the proxy, each restating its view). -/
+/-- Account entries restating views already in `acs3` (the identity precompile and the proxy).
+The frame's four zero-value precompile `CALL`s no longer prepend them to the account shadow
+(zero-value entry leaves the shadow unchanged); `precompAcs ++ acs3` still names the same
+accounts (`precompAcs_restate`). -/
 def precompAcs : AcctShadow :=
   [((4 : Adr), ⟨0, 0, .empty, .empty⟩), (proxyAddr, ⟨1, 0, .empty, fwdCode⟩),
    ((4 : Adr), ⟨0, 0, .empty, .empty⟩), (proxyAddr, ⟨1, 0, .empty, fwdCode⟩),
@@ -84,11 +86,16 @@ def obsI : Res → Option (Nat × List Nat × Bool × Nat × StorShadow × AcctS
 
 /-- **The implementation frame, run.** 663 steps from its entry to its `STOP`: 729,444 gas
 left, no output, no error, one log (`Transfer(0, proxy, 0)`), the twelve writes at the proxy
-over the start storage, and no account changed. -/
+over the start storage, and no account changed (the account shadow is the start's). -/
 theorem runI :
     obsI (wrun fsI eI.sta 663 cI0) =
-      some (729444, [], true, 1, initWrites ++ stor2, precompAcs ++ acs3) := by
+      some (729444, [], true, 1, initWrites ++ stor2, acs3) := by
   kernel_rfl
+
+theorem precompAcs_restate : ∀ e ∈ precompAcs, e.2 = lookupA acs3 e.1 := by
+  intro e he
+  simp only [precompAcs, List.mem_cons, List.not_mem_nil, or_false] at he
+  rcases he with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rfl
 
 /-- The implementation frame's settled machine, as its parent sees it. -/
 abbrev obsChildI (d : Devm) : Devm := childObs 729444 [] d
