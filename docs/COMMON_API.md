@@ -1773,6 +1773,12 @@ Use [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
   identity for inserting a key at its current value, not map extensionality.
   Without protection the zero write can normalize an empty account to absent
   and erase its storage, so the premise is necessary.
+- `Acct.clearIfEmpty_of_code_toList_ne_nil` (in `Blanc/CommonProofs.lean`) is
+  the account-level form: `setAccount` normalization is the identity on an
+  account whose code is a nonempty byte list, so a code installation followed
+  by `State.setAccount_get_self` returns the written account exactly. Jaune's
+  `Acct.clearIfEmpty_bal`, `_nonce`, `_code`, and `_stor` project single fields
+  without any premise.
 
 ### S3. I need state-relation or write-frame composition
 

@@ -9624,6 +9624,20 @@ lemma State.setBal_get_nonce {st : Jaune.State} {b a : Adr} {v : B256} :
   · subst h; rw [State.setBal_get_self, Acct.clearIfEmpty_nonce]; rfl
   · rw [State.setBal_get_ne h]
 
+/-- `setAccount` normalization is the identity on an account whose code is a
+nonempty byte list. -/
+theorem Acct.clearIfEmpty_of_code_toList_ne_nil (ac : Acct) (h : ac.code.toList ≠ []) :
+    ac.clearIfEmpty = ac := by
+  have hne : ¬ ac.Empty := by
+    rintro ⟨hsize, _, _⟩
+    apply h
+    have hlen : ac.code.toList.length = 0 := by
+      rw [ByteArray.toList_eq_toList_data, Array.length_toList]
+      exact hsize
+    exact List.length_eq_zero_iff.mp hlen
+  unfold Acct.clearIfEmpty
+  simp only [hne, ↓reduceIte]
+
 /-- An account is *protected* when it has a nonzero nonce or nonempty code: no
 balance write can empty it, so no balance write can wipe its storage. -/
 def State.Protected (st : Jaune.State) (a : Adr) : Prop :=

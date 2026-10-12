@@ -1,6 +1,5 @@
 import Blanc.Lift.UniswapV2Pair.CalleeControls
 import Blanc.Lift.UniswapV2Pair.Creation.DeployInit
-import Blanc.Lift.UniswapV2Pair.RepinBridge
 
 /-!
 # U6: premise-free `sync` liveness is false on the configured family
