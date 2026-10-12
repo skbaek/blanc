@@ -214,47 +214,7 @@ private theorem proxyCorrespondenceMsg_entryIdentity
     (data : Bytes) (isStatic : Bool) :
     (proxyCorrespondenceMsg data isStatic).benvAfterTransfer =
       .ok (proxyCorrespondenceMsg data isStatic).benv := by
-  have hproxy : proxyAcct ≠ Acct.nil := by
-    intro h
-    have hcode := congrArg (fun ac : Acct => ac.code.size) h
-    change proxyBytes.length = 0 at hcode
-    rw [proxyBytes_length] at hcode
-    omega
-  have himpl : implAcct ≠ Acct.nil := by
-    intro h
-    have hcode := congrArg (fun ac : Acct => ac.code.size) h
-    change implGuardedBytes.length = 0 at hcode
-    rw [implGuardedBytes_length] at hcode
-    omega
-  have hset : pairState.setBal proxyAdr 0 = pairState := by
-    rw [State.setBal, pairState_proxyAcct]
-    have hwith : proxyAcct.withBal 0 = proxyAcct := by rfl
-    rw [hwith]
-    unfold pairState
-    simp only [State.set, if_neg hproxy, if_neg himpl]
-    rfl
-  have hsubState : pairState.subBal proxyAdr 0 = some pairState := by
-    unfold State.subBal
-    simp only [State.bal, pairState_proxyAcct]
-    rw [if_neg (by decide)]
-    change some (pairState.setBal proxyAdr ((0 : B256) - 0)) =
-      some pairState
-    rw [show (0 : B256) - 0 = 0 by rfl, hset]
-  have hsub : pairBenv.subBal proxyAdr 0 = some pairBenv := by
-    unfold Benv.subBal
-    rw [show pairBenv.state = pairState by rfl, hsubState]
-    rfl
-  have hadd : pairBenv.addBal proxyAdr 0 = pairBenv := by
-    unfold Benv.addBal State.addBal
-    rw [show pairBenv.state = pairState by rfl]
-    simp only [State.bal, pairState_proxyAcct]
-    rw [show proxyAcct.bal = 0 by rfl]
-    rw [show (0 : B256) + 0 = 0 by rfl, hset]
-    rfl
-  unfold Msg.benvAfterTransfer
-  simp only [proxyCorrespondenceMsg, if_pos]
-  rw [hsub]
-  simp only [bind, Except.bind, Option.toExcept, hadd]
+  exact Msg.benvAfterTransfer_of_value_zero rfl
 
 /-- The concrete correspondence fixture satisfies the complete premise set
 whenever its calldata has the implementation's fixed 32-byte shape. -/

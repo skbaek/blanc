@@ -220,7 +220,7 @@ private theorem
   · simp only [Devm.getStorVal_setMach,
       initialize_addAccessedStorageKey_getStorVal,
       initialize_addAccessedAddress_getStorVal, himplementationRaw,
-      himplementationOriginal, hnew]
+      Devm.getOrigStorVal, himplementationOriginal, ite_self, hnew]
     rw [sstoreValueCost,
       if_pos ⟨rfl, fun h => himplementationWordNonzero h.symm⟩,
       if_pos rfl]
@@ -228,7 +228,7 @@ private theorem
   simp only [hnew, Devm.getStorVal_setMach,
     initialize_addAccessedStorageKey_getStorVal,
     initialize_addAccessedAddress_getStorVal, himplementationRaw,
-    himplementationOriginal]
+    Devm.getOrigStorVal, himplementationOriginal, ite_self]
   rw [show G + 23252 - 22120 = G + 1132 from by omega]
   unfold initializeLog
   func_run (4) [1125]
@@ -493,7 +493,7 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
     · simp only [Devm.getStorVal_setMach,
         initialize_addAccessedStorageKey_getStorVal,
         initialize_addAccessedAddress_getStorVal, himplementationRaw,
-        himplementationOriginal, hnew]
+        Devm.getOrigStorVal, himplementationOriginal, ite_self, hnew]
       rw [sstoreValueCost,
         if_pos ⟨rfl, fun h => himplementationWordNonzero h.symm⟩,
         if_pos rfl]
@@ -501,7 +501,7 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
     simp only [hnew, Devm.getStorVal_setMach,
       initialize_addAccessedStorageKey_getStorVal,
       initialize_addAccessedAddress_getStorVal, himplementationRaw,
-      himplementationOriginal]
+      Devm.getOrigStorVal, himplementationOriginal, ite_self]
     obtain ⟨k, hk⟩ : ∃ k, (24750 : Nat) = k := ⟨_, rfl⟩
     rw [hk]
     unfold initializeLog
