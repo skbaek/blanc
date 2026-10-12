@@ -69,13 +69,15 @@ theorem history_nonempty : historyFuture.blocks.length = 2 := rfl
 
 theorem deposited_holder : depositedState.get senderE =
     { holderAccount with nonce := 1, bal := 909923 } := by
-  rw [depositedState, deposit_settled_holder, deployment_holder]
+  rw [depositedState, deposit_settled_holder _ (by rw [deployment_holder]; decide +kernel),
+    deployment_holder]
   rfl
 
 theorem deposited_weth_balance :
     (historyFuture.state.getStor contractAddress).get (balSlot senderE) = amount := by
   change ((depositSettledState deploymentPost.state).getStor contractAddress).get _ = _
-  rw [deposit_settled_stor, Stor.get_set_self]
+  rw [deposit_settled_stor _ (by rw [deployment_contract]; exact code_size_ne_zero),
+    Stor.get_set_self]
   rfl
 
 theorem deposited_contract_ether : historyFuture.state.bal contractAddress = amount := by
