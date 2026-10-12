@@ -149,25 +149,53 @@ private theorem withdraw_post
   · rw [hbody.2, processMessage.settle_error] at hset
     cases hset
   have hexec : ExecuteCode (childMsg.withBenv benv) xl r0 := hbody
-  rcases of_benvAfterTransfer hcStv hbt with
-    ⟨stMid, hsub, hbenv⟩
-  rw [hcState, hcCaller, hcValue] at hsub
-  have hbenvState : benv.state = stMid.addBal sevm.caller.toB256.toAdr p := by
-    rw [hbenv, hcTarget, hcValue]
-    rfl
   have hchildPre : prorataSpec.Pre ca
       (initSevm (childMsg.withBenv benv))
       (initDevm (childMsg.withBenv benv)) := by
-    apply ContractSpec.Pre.child_of_outbound_transfer
-      (st := callPre.state) (st_mid := stMid)
-      (target := sevm.caller.toB256.toAdr) (value := p)
-    · exact hcode
-    · exact hside
-    · exact hinv
-    · exact hsub
-    · exact hbenvState
-    · exact hcTarget
-    · exact hcValue
+    by_cases hp : p = 0
+    · -- Zero-value entry leaves the block environment untouched (ZV).
+      have hval0 : childMsg.value = 0 := hcValue.trans hp
+      have hbt0 : childMsg.benvAfterTransfer = Except.ok childMsg.benv :=
+        Msg.benvAfterTransfer_of_value_zero hval0
+      have hbenv_eq : benv = childMsg.benv :=
+        (Except.ok.inj (hbt0.symm.trans hbt)).symm
+      have hinv0 : Inv (callPre.getStor ca) 0 (callPre.getBal ca) := by
+        have h := hinv
+        rw [hp, B256.sub_zero] at h
+        exact h
+      have hpre0 : prorataSpec.Pre ca (initSevm (childMsg.withBenv benv)) callPre := by
+        refine ⟨hcode, hside, ?_, ?_⟩
+        · intro _
+          have hval : (initSevm (childMsg.withBenv benv)).value = childMsg.value := rfl
+          rw [hval, hcValue, hp]
+          exact hinv0
+        · intro _
+          exact hinv0
+      have hstate0 : (initDevm (childMsg.withBenv benv)).state = callPre.state := by
+        have hbb : (initDevm (childMsg.withBenv benv)).state = benv.state := rfl
+        rw [hbb, hbenv_eq]
+        exact hcState
+      exact hpre0.state_eq hstate0
+    · -- Nonzero transfer: debit then credit.
+      have h_nz : childMsg.value ≠ 0 := by
+        rw [hcValue]
+        exact hp
+      rcases of_benvAfterTransfer hcStv h_nz hbt with
+        ⟨stMid, hsub, hbenv⟩
+      rw [hcState, hcCaller, hcValue] at hsub
+      have hbenvState : benv.state = stMid.addBal sevm.caller.toB256.toAdr p := by
+        rw [hbenv, hcTarget, hcValue]
+        rfl
+      apply ContractSpec.Pre.child_of_outbound_transfer
+        (st := callPre.state) (st_mid := stMid)
+        (target := sevm.caller.toB256.toAdr) (value := p)
+      · exact hcode
+      · exact hside
+      · exact hinv
+      · exact hsub
+      · exact hbenvState
+      · exact hcTarget
+      · exact hcValue
   obtain ⟨evm2, hr0, hsettle⟩ := processMessage.settle_ok_cases hset.symm
   subst hr0
   rcases hsettle with ⟨herr, heq⟩ | ⟨herr, hchild⟩
