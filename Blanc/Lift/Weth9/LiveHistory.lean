@@ -138,7 +138,7 @@ theorem weth9_history_withdraw_live {ca : Adr} {cfg : ChainConfig} {checkpoint f
       (future.state.get sevm.currentTarget).bal.toNat ≤ sum future.state.bal at h2
     omega
   obtain ⟨post, hex, hg, ho, hst, hother⟩ := weth9_withdraw_any_live_safe hc hfork h_static h_value
-    h_sel h_len h_len' h_stack h_mem h_depth hle h_eoa h_prec h_eth hprot_ca hrecv h_gas hG
+    h_sel h_len h_len' h_stack h_mem h_depth hle h_eoa h_prec h_eth hprot_ca (Or.inr hrecv) h_gas hG
   subst hca
   refine ⟨post, hex, hg, ho, ?_, ?_⟩
   · rw [hst, e1]

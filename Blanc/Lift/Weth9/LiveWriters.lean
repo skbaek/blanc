@@ -292,7 +292,7 @@ hypotheses of `weth9_withdraw_live`; besides the gas, output and storage it expo
 leaves of its final machine (`WithdrawPost`): the frame error, the refund counter, the accounts to
 delete, the `Withdrawal` event, and the ether moved from the contract to the caller.  Under Jaune's
 account normalization the storage conclusions need the contract protected (`hprot_ca`) and the caller's
-credit not to wrap (`hrecv`); see `weth9_withdraw_live_target_deleted` and
+credit not to empty it (`hrecv`: the caller protected, or no wrap); see `weth9_withdraw_live_target_deleted` and
 `weth9_withdraw_live_caller_deleted` for what happens otherwise. -/
 theorem weth9_withdraw_live_post {sevm : Sevm} {pre : Devm} {G : Nat}
     (h_code : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
@@ -306,7 +306,8 @@ theorem weth9_withdraw_live_post {sevm : Sevm} {pre : Devm} {G : Nat}
     (h_prec : sevm.benvStat.rules.isPrecomp sevm.caller = false)
     (h_eth : ¬ (pre.getAcct sevm.currentTarget).bal < Sevm.dataWord sevm 4)
     (hprot_ca : State.Protected pre.state sevm.currentTarget)
-    (hrecv : B256.Nof (pre.getAcct sevm.caller).bal (Sevm.dataWord sevm 4))
+    (hrecv : State.Protected pre.state sevm.caller ∨
+      B256.Nof (pre.getAcct sevm.caller).bal (Sevm.dataWord sevm 4))
     (h_gas : pre.gasLeft = G + withdrawGas sevm pre) (hG : 811 ≤ G) :
     ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧ post.gasLeft = G ∧
       WithdrawPost sevm pre post (Sevm.dataWord sevm 4) ∧
@@ -344,7 +345,8 @@ theorem weth9_withdraw_live_safe {sevm : Sevm} {pre : Devm} {G : Nat}
     (h_prec : sevm.benvStat.rules.isPrecomp sevm.caller = false)
     (h_eth : ¬ (pre.getAcct sevm.currentTarget).bal < Sevm.dataWord sevm 4)
     (hprot_ca : State.Protected pre.state sevm.currentTarget)
-    (hrecv : B256.Nof (pre.getAcct sevm.caller).bal (Sevm.dataWord sevm 4))
+    (hrecv : State.Protected pre.state sevm.caller ∨
+      B256.Nof (pre.getAcct sevm.caller).bal (Sevm.dataWord sevm 4))
     (h_gas : pre.gasLeft = G + withdrawGas sevm pre) (hG : 811 ≤ G) :
     ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧ post.gasLeft = G ∧ post.output = pre.output ∧
       Devm.getStor post sevm.currentTarget = (Devm.getStor pre sevm.currentTarget).set
@@ -826,7 +828,8 @@ theorem weth9_withdraw_any_live_safe {sevm : Sevm} {pre : Devm} {G : Nat}
     (h_prec : sevm.benvStat.rules.isPrecomp sevm.caller = false)
     (h_eth : ¬ (pre.getAcct sevm.currentTarget).bal < Sevm.dataWord sevm 4)
     (hprot_ca : State.Protected pre.state sevm.currentTarget)
-    (hrecv : B256.Nof (pre.getAcct sevm.caller).bal (Sevm.dataWord sevm 4))
+    (hrecv : State.Protected pre.state sevm.caller ∨
+      B256.Nof (pre.getAcct sevm.caller).bal (Sevm.dataWord sevm 4))
     (h_gas : pre.gasLeft = G + withdrawAnyGas sevm pre) (hG : 811 ≤ G) :
     ∃ post, exec ⟨0, sevm, pre⟩ = .ok post ∧ post.gasLeft = G ∧ post.output = pre.output ∧
       Devm.getStor post sevm.currentTarget = (Devm.getStor pre sevm.currentTarget).set

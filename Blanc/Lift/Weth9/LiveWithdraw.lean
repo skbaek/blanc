@@ -608,11 +608,11 @@ theorem WithdrawPost.getStor_self_of_ne_zero {sevm : Sevm} {pre post : Devm} {wa
     afterSload_getStor]
 
 /-- **The other storage a nonzero `withdraw(wad)` leaves**, read off `WithdrawPost`: unchanged, provided
-the caller's credit does not wrap (`hrecv`); a wrap to `0` would empty and normalize a nonce-`0` caller
-(cause SA). -/
+the caller is protected or its credit does not wrap (`hrecv`); a wrap to `0` would empty and normalize an
+unprotected caller (cause SA). -/
 theorem WithdrawPost.getStor_other_of_ne_zero {sevm : Sevm} {pre post : Devm} {wad : B256}
     (h : WithdrawPost sevm pre post wad) (hwad : wad ≠ 0)
-    (hrecv : B256.Nof (pre.getAcct sevm.caller).bal wad) :
+    (hrecv : State.Protected pre.state sevm.caller ∨ B256.Nof (pre.getAcct sevm.caller).bal wad) :
     ∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor pre a := by
   have hcs := h.state
   rw [if_neg hwad] at hcs
@@ -631,6 +631,14 @@ theorem WithdrawPost.getStor_other_of_ne_zero {sevm : Sevm} {pre post : Devm} {w
       · show (stmid.get sevm.caller).stor = _
         rw [hmid]; rfl
       · rintro ⟨-, hempty⟩
+        rcases hrecv with hp | hrecv
+        · have hn : (stmid.get sevm.caller).nonce = (pre.getAcct sevm.caller).nonce := by
+            rw [hmid]; exact (hacct3 sevm.caller).1
+          have hc : (stmid.get sevm.caller).code = (pre.getAcct sevm.caller).code := by
+            rw [hmid]; exact (hacct3 sevm.caller).2.1
+          rcases hp with hp | hp
+          · exact hp (hn ▸ hempty.2.1)
+          · exact hp (hc ▸ hempty.1)
         have hz : stmid.bal sevm.caller + wad = 0 := hempty.2.2
         have hb : stmid.bal sevm.caller = (pre.getAcct sevm.caller).bal := by
           show (stmid.get sevm.caller).bal = _
@@ -656,7 +664,7 @@ caller-credit wrap. -/
 theorem WithdrawPost.getStor_of_ne_zero {sevm : Sevm} {pre post : Devm} {wad : B256}
     (h : WithdrawPost sevm pre post wad) (hwad : wad ≠ 0)
     (hprot_ca : State.Protected pre.state sevm.currentTarget)
-    (hrecv : B256.Nof (pre.getAcct sevm.caller).bal wad) :
+    (hrecv : State.Protected pre.state sevm.caller ∨ B256.Nof (pre.getAcct sevm.caller).bal wad) :
     Devm.getStor post sevm.currentTarget = (Devm.getStor pre sevm.currentTarget).set
         (balSlot sevm.caller) (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) - wad) ∧
       ∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor pre a :=
@@ -676,7 +684,8 @@ theorem weth9_withdraw_runExact_post {sevm : Sevm} {pre : Devm} {G : Nat}
     (h_prec : sevm.benvStat.rules.isPrecomp sevm.caller = false)
     (h_eth : ¬ (pre.getAcct sevm.currentTarget).bal < Sevm.dataWord sevm 4)
     (hprot_ca : State.Protected pre.state sevm.currentTarget)
-    (hrecv : B256.Nof (pre.getAcct sevm.caller).bal (Sevm.dataWord sevm 4))
+    (hrecv : State.Protected pre.state sevm.caller ∨
+      B256.Nof (pre.getAcct sevm.caller).bal (Sevm.dataWord sevm 4))
     (h_gas : pre.gasLeft = G + withdrawGas sevm pre)
     (h_sentry : gCallStipend < G + 1 + 1488 + callNet pre sevm.caller + 69 +
       sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller) (wV sevm pre (Sevm.dataWord sevm 4)))
