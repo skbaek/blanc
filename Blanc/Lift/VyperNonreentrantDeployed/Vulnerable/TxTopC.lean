@@ -150,12 +150,18 @@ theorem e0C_stor : ∀ a k, storOf e0C.dyna.state a k = storOf worldTx a k := by
   obtain ⟨benv, hb, he⟩ := e0C_meta
   have hbB : benvAfterTransferB msgC = .ok benv := by
     rw [benvAfterTransfer_eq_S acctAgree_worldTx]; exact hb
+  have hB : msgC.benvAfterTransfer = .ok benv := by
+    rw [benvAfterTransfer_eq_B]; exact hbB
+  have hval : msgC.value = 0 := by kernel_rfl
+  have h0 : msgC.benvAfterTransfer = .ok msgC.benv :=
+    Msg.benvAfterTransfer_of_value_zero hval
+  have heq : benv = msgC.benv := by rw [hB] at h0; cases h0; rfl
   intro a k
   show storOf e0C.dyna.state a k = _
-  rw [he]
-  show storOf benv.state a k = _
-  rw [benvAfterTransferB_stor hbB]
-  rfl
+  rw [he, heq]
+  show storOf msgC.benv.state a k = _
+  have hst : msgC.benv.state = worldTx := by kernel_rfl
+  rw [hst]
 
 /-- The account shadow after the (zero) value transfer of the top-level message. -/
 def acsC1 : AcctShadow := acsTransfer msgC acsTx0
