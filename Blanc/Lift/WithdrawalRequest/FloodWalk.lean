@@ -229,14 +229,19 @@ case (nonzero snapshot with zero current) where zero would charge more.
 private theorem sstoreValueCost_zero_le_of_safe (cur new snap : B256)
     (hsafe : RefundSafe snap cur) :
     sstoreValueCost 0 cur new ≤ sstoreValueCost snap cur new := by
-  simp only [sstoreValueCost, gasStorageSet, gasStorageUpdate, gasColdSload,
-    gasWarmAccess]
+  have warm_le : ∀ o c n : B256, gasWarmAccess ≤ sstoreValueCost o c n := by
+    intro o c n
+    unfold sstoreValueCost
+    split_ifs <;> decide
   rcases hsafe with h | h | h
-  · subst h
-    split_ifs with h1 h2 h3 h4 <;> simp_all
-  · subst h
-    split_ifs with h1 h2 <;> simp_all
-  · split_ifs with h1 h2 h3 h4 <;> simp_all
+  · rw [h]
+    by_cases hz : cur = 0
+    · rw [hz]
+    · rw [sstoreValueCost_of_ne (fun e => hz e.symm)]
+      exact warm_le _ _ _
+  · rw [h]
+  · rw [sstoreValueCost_of_ne (fun e => h e.symm)]
+    exact warm_le _ _ _
 
 /-- A committed submission never lowers the refund counter when none of its five stores
 can take the clearing-reversal branch: each store's transaction-original value equals the
