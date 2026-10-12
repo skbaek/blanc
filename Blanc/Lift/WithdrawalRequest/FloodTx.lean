@@ -18,6 +18,88 @@ Signatures are produced from the published secp256k1 key 1 by
 `recoverSender` equation is proved here by `decide +kernel`.
 -/
 
+/-! ## Re-pin bridge (unit-local hoisting candidates)
+
+Generic transaction-debit and account-normalization facts the witness transactions need
+after Jaune `ca9f27d` normalizes account writes through `setAccount`. They belong next to
+`debit_get_self` in `Blanc/TransactionForward.lean`; they live here only because a family
+unit may not edit that core module or register a new module with the layering and count
+gates. -/
+
+namespace Blanc.Lift.WithdrawalRequest.RepinBridge
+
+open Jaune
+
+/-- A sender protected after its nonce increment had a non-wrapping nonce or code,
+stated on the original account. -/
+theorem incrNonce_protected_self {st : State} {E : Adr}
+    (hp : State.Protected (st.incrNonce E) E) :
+    (st.get E).nonce + 1 ≠ 0 ∨ (st.get E).code.size ≠ 0 := by
+  have hn : ((st.incrNonce E).get E).nonce = (st.get E).nonce + 1 := by
+    unfold State.incrNonce
+    rw [State.setAccount_get_self, Acct.clearIfEmpty_nonce]
+  have hc : ((st.incrNonce E).get E).code = (st.get E).code := State.incrNonce_get_code
+  rcases hp with h | h
+  · rw [hn] at h
+    exact Or.inl h
+  · rw [hc] at h
+    exact Or.inr h
+
+/-- `debit_get_self` for a sender that is protected after its nonce increment, instead of
+one whose original nonce is below the maximum: the debit keeps storage and code, bumps the
+nonce and writes the balance. -/
+theorem debit_get_self_of_protected {st : State} {E : Adr} {v : B256}
+    (hp : State.Protected (st.incrNonce E) E) :
+    ((st.incrNonce E).setBal E v).get E =
+      { st.get E with nonce := (st.get E).nonce + 1, bal := v } := by
+  have keep := incrNonce_protected_self hp
+  rw [State.setBal_get_self]
+  unfold State.incrNonce
+  rw [State.setAccount_get_self]
+  simp only [Acct.clearIfEmpty]
+  split
+  · rename_i empty
+    exact (keep.elim (fun h => h empty.2.1) (fun h => h empty.1)).elim
+  · split
+    · rename_i empty
+      exact (keep.elim (fun h => h empty.2.1) (fun h => h empty.1)).elim
+    · rfl
+
+/-- A balance write keeps the nonce. -/
+theorem acct_withBal_nonce (ac : Acct) (b : B256) : (ac.withBal b).nonce = ac.nonce := rfl
+
+/-- A balance write keeps the code. -/
+theorem acct_withBal_code (ac : Acct) (b : B256) : (ac.withBal b).code = ac.code := rfl
+
+/-- Normalization leaves a balance write alone at an account with code.
+
+Stated on `ac.withBal b` so callers rewrite instead of closing the normalization branch
+with `exact h hEmpty.1`: that asks the unifier for `(ac.withBal b).code = ac.code`, which
+it first tries as `ac.withBal b =?= ac`. At a concrete credit (`bal + (2 ^ 245).toB256`)
+that check exhausted the 16 GiB build scope in `FloodTx.txC_exec`. -/
+theorem clearIfEmpty_withBal_of_code {ac : Acct} {b : B256} (h : ac.code.size ≠ 0) :
+    (ac.withBal b).clearIfEmpty = ac.withBal b := by
+  unfold Acct.clearIfEmpty
+  split
+  · rename_i hE
+    have hc : (ac.withBal b).code.size = 0 := hE.1
+    rw [acct_withBal_code] at hc
+    exact (h hc).elim
+  · rfl
+
+/-- Normalization leaves a balance write alone at an account with a nonzero nonce. -/
+theorem clearIfEmpty_withBal_of_nonce {ac : Acct} {b : B256} (h : ac.nonce ≠ 0) :
+    (ac.withBal b).clearIfEmpty = ac.withBal b := by
+  unfold Acct.clearIfEmpty
+  split
+  · rename_i hE
+    have hn : (ac.withBal b).nonce = 0 := hE.2.1
+    rw [acct_withBal_nonce] at hn
+    exact (h hn).elim
+  · rfl
+
+end Blanc.Lift.WithdrawalRequest.RepinBridge
+
 namespace Blanc.Lift.WithdrawalRequest.FloodTx
 
 open Jaune Blanc.Lift Blanc.ExecutionTrace FloodWalk
@@ -71,22 +153,27 @@ theorem userSubmissionGas_le_iters (sevm : Sevm) (b : Devm) (iters : Nat) :
     (1 + (1 + submissionKey sevm (afterSload sevm b 0))) (Sevm.dataWord sevm 32)
   have s5 := sstoreCost_le_value sevm (submissionLogged sevm (afterSload sevm b 0) Mem.empty) 3
     (1 + submissionTail sevm (afterSload sevm b 0))
-  have v1 := sstoreValueCost_le (getOrigStorVal sevm sevm.currentTarget 1)
+  have v1 := sstoreValueCost_le
+    ((submissionCountRead sevm (afterSload sevm b 0)).getOrigStorVal sevm sevm.currentTarget 1)
     ((submissionCountRead sevm (afterSload sevm b 0)).getStorVal sevm.currentTarget 1)
     (1 + submissionCount sevm (afterSload sevm b 0))
-  have v2 := sstoreValueCost_le (getOrigStorVal sevm sevm.currentTarget
-    (submissionKey sevm (afterSload sevm b 0)))
+  have v2 := sstoreValueCost_le
+    ((submissionTailRead sevm (afterSload sevm b 0)).getOrigStorVal sevm sevm.currentTarget
+      (submissionKey sevm (afterSload sevm b 0)))
     ((submissionTailRead sevm (afterSload sevm b 0)).getStorVal sevm.currentTarget
       (submissionKey sevm (afterSload sevm b 0))) sevm.caller.toB256
-  have v3 := sstoreValueCost_le (getOrigStorVal sevm sevm.currentTarget
-    (1 + submissionKey sevm (afterSload sevm b 0)))
+  have v3 := sstoreValueCost_le
+    ((submissionCallerStore sevm (afterSload sevm b 0)).getOrigStorVal sevm sevm.currentTarget
+      (1 + submissionKey sevm (afterSload sevm b 0)))
     ((submissionCallerStore sevm (afterSload sevm b 0)).getStorVal sevm.currentTarget
       (1 + submissionKey sevm (afterSload sevm b 0))) (Sevm.dataWord sevm 0)
-  have v4 := sstoreValueCost_le (getOrigStorVal sevm sevm.currentTarget
-    (1 + (1 + submissionKey sevm (afterSload sevm b 0))))
+  have v4 := sstoreValueCost_le
+    ((submissionWord1Store sevm (afterSload sevm b 0)).getOrigStorVal sevm sevm.currentTarget
+      (1 + (1 + submissionKey sevm (afterSload sevm b 0))))
     ((submissionWord1Store sevm (afterSload sevm b 0)).getStorVal sevm.currentTarget
       (1 + (1 + submissionKey sevm (afterSload sevm b 0)))) (Sevm.dataWord sevm 32)
-  have v5 := sstoreValueCost_le (getOrigStorVal sevm sevm.currentTarget 3)
+  have v5 := sstoreValueCost_le
+    ((submissionLogged sevm (afterSload sevm b 0) Mem.empty).getOrigStorVal sevm sevm.currentTarget 3)
     ((submissionLogged sevm (afterSload sevm b 0) Mem.empty).getStorVal sevm.currentTarget 3)
     (1 + submissionTail sevm (afterSload sevm b 0))
   rw [userSubmissionGas_empty]
@@ -209,7 +296,8 @@ theorem txC_exec
     (hexcess : σ.excess + 1 < 2 ^ 256)
     (hrun : WordFakeExponential.Run σ.excess.toB256 17 1 17 0 iters out)
     (hpaid : (out / (17 : B256)).toNat ≤ 2 ^ 245)
-    (hiters : iters ≤ 10000) :
+    (hiters : iters ≤ 10000)
+    (hprot : State.Protected (benv.state.incrNonce senderE) senderE) :
     ∀ (debit : State) (msg : Msg) (after : Benv),
       (benv.state.incrNonce senderE).subBal senderE
         (txC.gas * (min 1 (8 - benv.stat.baseFeePerGas) +
@@ -233,12 +321,49 @@ theorem txC_exec
   obtain ⟨-, hdeb⟩ := State.of_subBal hdebit
   have hd_ne : ∀ a, senderE ≠ a → debit.get a = benv.state.get a := fun a h => by
     rw [hdeb]; exact debit_get_ne h
+  have hR : ¬ (({benv.state.get senderE with
+      nonce := (benv.state.get senderE).nonce + 1} : Acct).Empty) := by
+    rintro hE
+    rcases hprot with hn | hc
+    · apply hn
+      rw [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_nonce]
+      exact hE.2.1
+    · apply hc
+      rw [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_code]
+      exact hE.1
   have hd_E : debit.get senderE = { benv.state.get senderE with
       nonce := (benv.state.get senderE).nonce + 1, bal := benv.state.bal senderE - v } := by
-    rw [hdeb, debit_get_self, State.incrNonce_bal]
+    rw [hdeb, State.setBal_get_self, Acct.mk.injEq]
+    refine ⟨?_, ?_, ?_, ?_⟩
+    · rw [Acct.clearIfEmpty_nonce]
+      show (((benv.state.incrNonce senderE).get senderE).nonce) = _
+      rw [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_nonce]
+    · rw [Acct.clearIfEmpty_bal]
+      show ((benv.state.incrNonce senderE).bal senderE - v) = _
+      rw [State.incrNonce_bal]
+    · rw [Acct.clearIfEmpty_stor]
+      split_ifs with hW
+      · exfalso
+        rcases hprot with hn | hc
+        · exact hn hW.2.1
+        · exact hc hW.1
+      · show (((benv.state.incrNonce senderE).get senderE).stor) = _
+        rw [State.incrNonce_get_stor]
+        split_ifs with h
+        · exact absurd h.2 hR
+        · rfl
+    · rw [Acct.clearIfEmpty_code]
+      show (((benv.state.incrNonce senderE).get senderE).code) = _
+      rw [State.incrNonce_get_code]
   have hm_caller : msg.caller = senderE := by rw [← hm]; rfl
   have hm_ct : msg.currentTarget = withdrawalRequestPredeployAddress := by rw [← hm]; rfl
   have hm_value : msg.value = (2 ^ 245 : Nat).toB256 := by rw [← hm]; rfl
+  have hm_nz : msg.value ≠ 0 := by
+    rw [hm_value]
+    intro h
+    have h2 := congrArg B256.toNat h
+    rw [B256.toNat_toB256_of_lt h245, B256.toNat_zero] at h2
+    exact absurd h2 (by positivity)
   have hm_data : msg.data = payload := by rw [← hm]; rfl
   have hm_static : msg.isStatic = false := by rw [← hm]; rfl
   have hm_code : msg.code = debit.getCode withdrawalRequestPredeployAddress := by
@@ -247,16 +372,68 @@ theorem txC_exec
   have hm_state : msg.benv.state = debit := by rw [← hm]; rfl
   have hm_stat : msg.benv.stat = benv.beginTransaction.stat := by rw [← hm]; rfl
   have hm_stv : msg.shouldTransferValue = true := by rw [← hm]; rfl
-  obtain ⟨mid, hmid, hafter⟩ := of_benvAfterTransfer hm_stv hentry
+  obtain ⟨mid, hmid, hafter⟩ := of_benvAfterTransfer hm_stv hm_nz hentry
   obtain ⟨-, hmid'⟩ := State.of_subBal hmid
   have hstat : after.stat = benv.beginTransaction.stat := by
     rw [benvAfterTransfer_stat hentry, hm_stat]
+  have hne_src : (benv.state.get senderE).nonce + 1 ≠ 0 ∨
+      (benv.state.get senderE).code.size ≠ 0 := by
+    rcases hprot with hn | hc
+    · left
+      have e : ((benv.state.incrNonce senderE).get senderE).nonce =
+          (benv.state.get senderE).nonce + 1 := by
+        rw [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_nonce]
+      rwa [e] at hn
+    · right
+      have e : ((benv.state.incrNonce senderE).get senderE).code =
+          (benv.state.get senderE).code := by
+        rw [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_code]
+      rwa [e] at hc
+  have hprotD : State.Protected debit senderE := by
+    rw [hdeb]
+    exact hprot.setBal _ _
+  have hprot_call : State.Protected msg.benv.state msg.caller := by
+    rw [hm_state, hm_caller]
+    exact hprotD
+  have hmidP_code : (mid.get withdrawalRequestPredeployAddress).code =
+      withdrawalRequestCode := by
+    rw [hmid', hm_caller, State.setBal_get_ne hEP, hm_state, hd_ne _ hEP]
+    exact hcode
+  have hszP : ((mid.get withdrawalRequestPredeployAddress).code).size ≠ 0 := by
+    rw [hmidP_code, withdrawalRequestCode_size]
+    omega
+  have hszP' : ((benv.state.get withdrawalRequestPredeployAddress).code).size ≠ 0 := by
+    have e : (benv.state.get withdrawalRequestPredeployAddress).code =
+        withdrawalRequestCode := hcode
+    rw [e, withdrawalRequestCode_size]
+    omega
   have hstor : ∀ a, after.state.getStor a = benv.state.getStor a := fun a => by
-    rw [benvAfterTransfer_ok_getStor hentry a, hm_state]
-    show (debit.get a).stor = (benv.state.get a).stor
-    by_cases h : senderE = a
-    · subst h; rw [hd_E]
-    · rw [hd_ne a h]
+    rw [hafter]
+    show ((mid.addBal msg.currentTarget msg.value).getStor a) = (benv.state.getStor a)
+    rw [getStor_addBal]
+    split_ifs with hcond
+    · obtain ⟨-, hE⟩ := hcond
+      exfalso
+      rw [hm_ct] at hE
+      exact hszP hE.1
+    · rw [hmid']
+      show ((((msg.benv.state.setBal msg.caller
+          ((msg.benv.state.bal msg.caller) - msg.value)).get a).stor)) = _
+      by_cases hca : msg.caller = a
+      · subst hca
+        rw [State.setBal_get_stor_of_protected hprot_call, hm_state, hm_caller, hdeb,
+          State.setBal_get_stor_of_protected hprot, State.incrNonce_get_stor]
+        split_ifs with h
+        · exact absurd h.2 hR
+        · rfl
+      · have e : (msg.benv.state.setBal msg.caller
+            ((msg.benv.state.bal msg.caller) - msg.value)).get a
+            = msg.benv.state.get a := State.setBal_get_ne hca
+        rw [e, hm_state]
+        show (((debit.get a).stor)) = _
+        have hEa : senderE ≠ a := by rw [← hm_caller]; exact hca
+        rw [hd_ne _ hEa]
+        rfl
   have hcodeAll : ∀ a, after.state.getCode a = benv.state.getCode a := fun a => by
     rw [benvAfterTransfer_ok_getCode hentry a, hm_state]
     show (debit.get a).code = (benv.state.get a).code
@@ -271,7 +448,13 @@ theorem txC_exec
     rw [hm_ct, addBal_get_ne _ hEP.symm, hmid', hm_state, hm_caller, hm_value,
       State.setBal_get_self]
     simp only [State.bal, hd_E]
-    rfl
+    unfold Acct.clearIfEmpty
+    split_ifs with hW
+    · exfalso
+      rcases hne_src with hn | hc
+      · exact hn hW.2.1
+      · exact hc hW.1
+    · rfl
   have hafter_P : after.state.get withdrawalRequestPredeployAddress =
       (benv.state.get withdrawalRequestPredeployAddress).withBal
         (benv.state.bal withdrawalRequestPredeployAddress + (2 ^ 245 : Nat).toB256) := by
@@ -279,6 +462,7 @@ theorem txC_exec
     show (mid.addBal msg.currentTarget msg.value).get withdrawalRequestPredeployAddress = _
     rw [hm_ct, hm_value, addBal_get_self, hmid', hm_state, hm_caller]
     simp only [State.bal, State.setBal_get_ne hEP, hd_ne _ hEP]
+    rw [RepinBridge.clearIfEmpty_withBal_of_code hszP']
   -- the frame
   set m := msg.withBenv after with hmdef
   have hm'_ct : (initSevm m).currentTarget = withdrawalRequestPredeployAddress := hm_ct
@@ -442,8 +626,11 @@ theorem txC_processTransaction
   have hnodeleg :
       getDelegatedCodeAddress (benv.state.getCode withdrawalRequestPredeployAddress) = none := by
     rw [hcode]; exact withdrawalRequestCode_nondelegated
+  have hprot : State.Protected (benv.state.incrNonce senderE) senderE :=
+    Or.inl (State.incrNonce_nonce_ne_zero (by rw [hnonce]; decide) senderE
+      (by rw [hnonce]; decide))
   have hexec := txC_exec (benv := benv) (index := index) hfork hcode hrep hbounds hexcess
-    hrun hpaid hiters
+    hrun hpaid hiters hprot
   obtain ⟨_, post, bout', hQ, hproc, hcum, hblk, hkeys, hreceipt⟩ :=
     processTransaction_call_value_of_exec_receipts
     (E := senderE) (t := withdrawalRequestPredeployAddress)
@@ -576,6 +763,7 @@ theorem txB_processTransaction
   have hcap : checkTransactionGasCap benv.stat.rules.tx txB.gas = .ok () := by
     unfold checkTransactionGasCap
     rw [hnocap]
+    rfl
   have hnodeleg : getDelegatedCodeAddress (benv.state.getCode looperAddress) = none := by
     rw [hLcode]; exact looper_nondelegated
   have h2895 : ((2895 : Nat).toB256).toNat = 2895 := B256.toNat_toB256_of_lt (by decide)
@@ -600,10 +788,17 @@ theorem txB_processTransaction
       rw [hdeb]; exact debit_get_ne h
     have hd_E : debit.get senderE = { benv.state.get senderE with
         nonce := (benv.state.get senderE).nonce + 1, bal := benv.state.bal senderE - v } := by
-      rw [hdeb, debit_get_self, State.incrNonce_bal]
+      rw [hdeb, debit_get_self (by rw [hnonce]; decide), State.incrNonce_bal]
     have hm_caller : msg.caller = senderE := by rw [← hm]; rfl
     have hm_ct : msg.currentTarget = looperAddress := by rw [← hm]; rfl
     have hm_value : msg.value = (2895 : Nat).toB256 := by rw [← hm]; rfl
+    have hm_nz : msg.value ≠ 0 := by
+      rw [hm_value]
+      intro h
+      have h2 := congrArg B256.toNat h
+      rw [B256.toNat_toB256_of_lt (by omega : (2895 : Nat) < 2 ^ 256),
+        B256.toNat_zero] at h2
+      exact absurd h2 (by positivity)
     have hm_data : msg.data = txB.data := by rw [← hm]; rfl
     have hm_static : msg.isStatic = false := by rw [← hm]; rfl
     have hm_depth : msg.depth = 1024 := by rw [← hm]; rfl
@@ -612,16 +807,72 @@ theorem txB_processTransaction
     have hm_state : msg.benv.state = debit := by rw [← hm]; rfl
     have hm_stat : msg.benv.stat = benv.beginTransaction.stat := by rw [← hm]; rfl
     have hm_stv : msg.shouldTransferValue = true := by rw [← hm]; rfl
-    obtain ⟨mid, hmid, hafter⟩ := of_benvAfterTransfer hm_stv hentry
+    obtain ⟨mid, hmid, hafter⟩ := of_benvAfterTransfer hm_stv hm_nz hentry
     obtain ⟨-, hmid'⟩ := State.of_subBal hmid
     have hstat : after.stat = benv.beginTransaction.stat := by
       rw [benvAfterTransfer_stat hentry, hm_stat]
+    have hprotE : State.Protected (benv.state.incrNonce senderE) senderE := by
+      left
+      have e : ((benv.state.incrNonce senderE).get senderE).nonce =
+          (benv.state.get senderE).nonce + 1 := by
+        rw [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_nonce]
+      rw [e, hnonce]
+      decide
+    have hR_E : ¬ (({benv.state.get senderE with
+        nonce := (benv.state.get senderE).nonce + 1} : Acct).Empty) := by
+      rintro hE
+      rcases hprotE with hn | hc
+      · apply hn
+        rw [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_nonce]
+        exact hE.2.1
+      · apply hc
+        rw [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_code]
+        exact hE.1
+    have hprotD_E : State.Protected debit senderE := by
+      rw [hdeb]
+      exact hprotE.setBal _ _
+    have hprot_call_E : State.Protected msg.benv.state msg.caller := by
+      rw [hm_state, hm_caller]
+      exact hprotD_E
+    have hmidL_code : (mid.get looperAddress).code = Blanc.Lift.FloodLooper.code := by
+      rw [hmid', hm_caller, State.setBal_get_ne hEL, hm_state, hd_ne _ hEL]
+      exact hLcode
+    have hszL : ((mid.get looperAddress).code).size ≠ 0 := by
+      rw [hmidL_code]
+      show (54 : Nat) ≠ 0
+      omega
+    have hszL' : ((benv.state.get looperAddress).code).size ≠ 0 := by
+      have e : (benv.state.get looperAddress).code = Blanc.Lift.FloodLooper.code := hLcode
+      rw [e]
+      show (54 : Nat) ≠ 0
+      omega
     have hstor : ∀ a, after.state.getStor a = benv.state.getStor a := fun a => by
-      rw [benvAfterTransfer_ok_getStor hentry a, hm_state]
-      show (debit.get a).stor = (benv.state.get a).stor
-      by_cases h : senderE = a
-      · subst h; rw [hd_E]
-      · rw [hd_ne a h]
+      rw [hafter]
+      show ((mid.addBal msg.currentTarget msg.value).getStor a) = (benv.state.getStor a)
+      rw [getStor_addBal]
+      split_ifs with hcond
+      · obtain ⟨-, hE⟩ := hcond
+        exfalso
+        rw [hm_ct] at hE
+        exact hszL hE.1
+      · rw [hmid']
+        show ((((msg.benv.state.setBal msg.caller
+            ((msg.benv.state.bal msg.caller) - msg.value)).get a).stor)) = _
+        by_cases hca : msg.caller = a
+        · subst hca
+          rw [State.setBal_get_stor_of_protected hprot_call_E, hm_state, hm_caller, hdeb,
+            State.setBal_get_stor_of_protected hprotE, State.incrNonce_get_stor]
+          split_ifs with h
+          · exact absurd h.2 hR_E
+          · rfl
+        · have e : (msg.benv.state.setBal msg.caller
+              ((msg.benv.state.bal msg.caller) - msg.value)).get a
+              = msg.benv.state.get a := State.setBal_get_ne hca
+          rw [e, hm_state]
+          show (((debit.get a).stor)) = _
+          have hEa : senderE ≠ a := by rw [← hm_caller]; exact hca
+          rw [hd_ne _ hEa]
+          rfl
     have hcodeAll : ∀ a, after.state.getCode a = benv.state.getCode a := fun a => by
       rw [benvAfterTransfer_ok_getCode hentry a, hm_state]
       show (debit.get a).code = (benv.state.get a).code
@@ -635,6 +886,7 @@ theorem txB_processTransaction
       show (mid.addBal msg.currentTarget msg.value).get looperAddress = _
       rw [hm_ct, hm_value, addBal_get_self, hmid', hm_state, hm_caller]
       simp only [State.bal, State.setBal_get_ne hEL, hd_ne _ hEL]
+      rw [RepinBridge.clearIfEmpty_withBal_of_code hszL']
     -- the frame
     set m := msg.withBenv after with hmdef
     have hfork' : CoveredFork m.benv.stat.fork := by
@@ -687,7 +939,13 @@ theorem txB_processTransaction
       intro a
       rw [hmid', hm_state, hm_caller, hm_value]
       by_cases h : senderE = a
-      · subst h; rw [State.setBal_get_self, if_pos rfl]
+      · subst h
+        have hdn : (debit.get senderE).nonce ≠ 0 := by
+          have e2 : (debit.get senderE).nonce = (benv.state.get senderE).nonce + 1 := by
+            rw [hd_E]
+          rw [e2, hnonce]
+          decide
+        rw [State.setBal_get_self, if_pos rfl, RepinBridge.clearIfEmpty_withBal_of_nonce hdn]
       · rw [State.setBal_get_ne h, if_neg h]
     have hafter_ne : ∀ a, a ≠ looperAddress → after.state.get a = mid.get a := by
       intro a ha

@@ -101,7 +101,8 @@ theorem txD_exec {benv : Benv} {index : Nat} {σ : Blanc.WithdrawalRequest.State
     (hcode : benv.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode)
     (hrep : Blanc.WithdrawalRequest.RepresentsStorage
       (benv.state.getStor withdrawalRequestPredeployAddress).get σ)
-    (hsum : Blanc.WithdrawalRequest.effectiveExcess σ + σ.count < 2 ^ 256) :
+    (hsum : Blanc.WithdrawalRequest.effectiveExcess σ + σ.count < 2 ^ 256)
+    (hprot : State.Protected (benv.state.incrNonce senderE) senderE) :
     ∀ (debit : State) (msg : Msg) (after : Benv),
       (benv.state.incrNonce senderE).subBal senderE
         (txD.gas * (min 1 (8 - benv.stat.baseFeePerGas) +
@@ -134,13 +135,13 @@ theorem txD_exec {benv : Benv} {index : Nat} {σ : Blanc.WithdrawalRequest.State
     show (after.state.get a).stor = (benv.state.get a).stor
     rw [hafter]
     by_cases h : senderE = a
-    · subst h; rw [hdeb, debit_get_self]
+    · subst h; rw [hdeb, RepinBridge.debit_get_self_of_protected hprot]
     · rw [hd_ne a h]
   have hcodeAll : ∀ a, after.state.getCode a = benv.state.getCode a := fun a => by
     show (after.state.get a).code = (benv.state.get a).code
     rw [hafter]
     by_cases h : senderE = a
-    · subst h; rw [hdeb, debit_get_self]
+    · subst h; rw [hdeb, RepinBridge.debit_get_self_of_protected hprot]
     · rw [hd_ne a h]
   set m := msg.withBenv after with hmdef
   obtain ⟨post, hex, herr, hrepP, hcodeP, hstorP, hlogsP, hdelP, hrefP⟩ :=
@@ -219,7 +220,10 @@ theorem txD_processTransaction
     propext (iff_of_false (systemAddress_not_precompile hfork) (by decide))
   have hnodeleg : getDelegatedCodeAddress (benv.state.getCode systemAddress) = none := by
     rw [hdrainer]; decide
-  have hexec := txD_exec (benv := benv) (index := index) hfork hdrainer hcode hrep hsum
+  have hprot : State.Protected (benv.state.incrNonce senderE) senderE :=
+    Or.inl (State.incrNonce_nonce_ne_zero (by rw [hnonce]; decide) senderE
+      (by rw [hnonce]; decide))
+  have hexec := txD_exec (benv := benv) (index := index) hfork hdrainer hcode hrep hsum hprot
   obtain ⟨_, post, bout', hQ, hproc, hcum, hblk, hkeys, hreceipt⟩ :=
     processTransaction_call_value_of_exec_receipts
     (E := senderE) (t := systemAddress)

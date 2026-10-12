@@ -239,7 +239,15 @@ theorem systemPost_facts (benv : Benv) :
     rw [afterSstore_error]
     rfl
   · change 0 ≤ (afterSstore (systemSevm benv) (systemBase benv) _ _).refundCounter
-    exact afterSstore_refundCounter_ge_of_original_eq_current _ _ _ _ rfl
+    have safe : RefundSafe ((systemBase benv).getOrigStorVal (systemSevm benv)
+        (systemSevm benv).currentTarget (systemKey benv))
+        ((systemBase benv).getStorVal (systemSevm benv).currentTarget
+          (systemKey benv)) := by
+      unfold Devm.getOrigStorVal
+      split
+      · exact Or.inr (Or.inl rfl)
+      · exact Or.inl rfl
+    exact afterSstore_refundCounter_ge_of_safe _ _ _ _ safe
   · change (afterSstore (systemSevm benv) (systemBase benv) _ _).state = _
     rw [afterSstore_state]
     rfl
