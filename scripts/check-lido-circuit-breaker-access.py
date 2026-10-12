@@ -344,12 +344,12 @@ ROLES = {
         "setHeartbeatInterval_runCompiledTo_error_of_not_admin":
             "c06dfe62846223944d66a3297bb5f42baaebdc156405a60e02a8b6a4a8461820",
         "setHeartbeatInterval_success_settled_effects":
-            "7d999b4ff2e8f0f7ae95191fc04e515b2a1214b076c38df9c2d4ca549f402f1d",
+            "a6a928706ee96c35a592f85fee3116ec0bafd37ace808d213f4cd0dd72b61fb3",
         "setHeartbeatInterval_settled_error_restores_owner":
             "14f02920900d8dfc5c484da2f3de4f47a2a7726d6dd9a358533d5edf3deeff37",
         # Heartbeat success arm and its three source-ordered failure arms.
         "heartbeat_runCompiledTo_of_checkedExtension":
-            "0f63bea199ad2494e9e1146ba3c46ade8dee517121f6697f58f2a339b30b5015",
+            "a47562de2f7c53b5872e4296c824a26e0476e1ccdc93fa39832dc7a74ef58df3",
         "heartbeat_runCompiledTo_error_of_count_zero":
             "dfa946eb479481253c44dc735a86ad80aeb4e07e46e9bec0b4abba44053310ee",
         "heartbeat_runCompiledTo_error_of_expired":
@@ -357,7 +357,7 @@ ROLES = {
         "heartbeat_runCompiledTo_error_of_add_wrap":
             "73eacf68a037bb2cbcb69824e1d7034dc76c05944c648f3e7212ca260a561454",
         "heartbeat_success_settled_effects":
-            "67d009fd6f02d74d5f538adf7e5760441b782ae15a758ae5ceeadcba25aa2875",
+            "5812a4f9a5d15d228a4c3477ca18fee17b8023182cf7a15897b5d12688ff5e60",
         "heartbeat_settled_error_restores_owner":
             "eaba8350289f67a716a5960880ba8a6a4ba3d056d7c8583b3f07ff514dac12c8",
     },
@@ -448,63 +448,63 @@ ROLES = {
         "freshRegistration_sourceTrace_witness":
             "46aa83f709300ccb03334e27aee03b0fca8b9cbd1c5d3892d9404cb7a23f4657",
         "registerPauser_runCompiledTo_freshNonzero":
-            "9f25ed65272664593fcf42d1aee7e1667a6c7edba1c9ac58ed9b7b67a23328f7",
+            "da034e97eef6e3d44c6b95dbab5ecff9d0df937fc7d29ca4736f98523753d748",
         "registerPauser_freshNonzero_success_settled_effects":
-            "9b4c1d0cfb6b3a42881b1c38431d04355094f1df33dc9c4b283f5dafa7072a19",
+            "9e5d5f6e66fcea14d02f70ff9214437dfe28dfb8272dabcd733103efe71df54e",
     },
     "absent": {
         "absentZeroRegistration_sourceTrace_witness":
             "d73d20a0ad2e60eeac554250fb6ca9458afd6d1a5607565a8fc01bd71ec0508a",
         "registerPauser_runCompiledTo_absentZero":
-            "a730ea7e19d7d4c80b12b92b89dc073813dd8d64547e1b5b04a9ef6df403315e",
+            "7795f216accf9e69d4ed3297dccd1d3283cd7a72a2a10458863cf679a1c84d32",
         "registerPauser_absentZero_success_settled_effects":
-            "a79c992b1fc197fa3b3e154cdda20c5e2b4a2a4f837a6b5b0d8c10e9b548439b",
+            "9fd82d5d6698479499be5ff6e7704ab348b562e0e4c29ee367c36015f0f07c54",
     },
     "unregister": {
         "foundZeroRetainedRegistration_sourceTrace_witness":
             "9e62f0cdecca971234d4cc239118aecefd58d3072f44f9df2ccc7a8a0c4e1439",
         "registerPauser_runCompiledTo_foundZeroRetainedLast":
-            "c32a247527902e92d08c84923d405f618ba6b0e64a682792b14a1a124604c9f4",
+            "3ad2dbe0e1d7bbd62b45eea24a82302c69ce3256f8c052521b06b867f893f720",
         "registerPauser_foundZeroRetainedLast_success_settled_effects":
-            "6ecb406a9ee7cc02f33e408a37e7e580452f9083037c059c743035cd18af6af0",
+            "c18d69bbc60c05120f714e532e78896b65e2876db30bc26af2708e71350dcf98",
         "registerPauser_runCompiledTo_foundZeroRetainedSwapPop":
-            "3975a48b6a24e7889eb07cffa12791b53d14e75e9904ef04c36e24639d941cc3",
+            "177c9af98914a797805839809047044c569796b352e385b3d644b17451b17002",
         "registerPauser_foundZeroRetainedSwapPop_success_settled_effects":
-            "5b5f5ed1e15888f44e5229e90ac167c9496b76528daa0d1f107566ff36507cf6",
+            "ab46fe29e7a0ce3711898a2e1438e14ed7a854af931b851bf39a32dcae7221e8",
         "registerPauser_runCompiledTo_foundZeroOldLast":
-            "dbd1200c6f18564ababef49f173120610df3ac222b59876e237841ccf69d1cc5",
+            "30c42e160922a474505a8535c994d99e0260c836ab6c34df7b3ab74ff125f78b",
         "registerPauser_foundZeroOldLast_success_settled_effects":
-            "17c4cad040e30c6e085b1a8ba1b900357e80fe77d156042614267e2f0b985b5d",
+            "7094747cc545ea16fb75e5b61b5f5c09230e074f537a6b396f0e1afb0e5803e8",
         "registerPauser_runCompiledTo_foundZeroOldLastSwapPop":
-            "4567a23ca60294380db4d6091da40324ff0332fc4dd4faf088360fbb3027ce5f",
+            "549ff26e4f869aac22b9dc8fc34a512c7a74c7e5ce31f5f51b6731452c63bce5",
         "registerPauser_foundZeroOldLastSwapPop_success_settled_effects":
-            "48fe4679733633c38c615bbe575f8c9d6a0e217eb78144bddf041bc77df5e386",
+            "36f09e348ae64edd0c3d51f3028f9fbda31c6ee8f8363e35b10fff16b0754d1f",
     },
     "replacement": {
         "foundNonzeroReplacement_sourceTrace_witness":
             "39984f11d713ee86af9155e04308c48289e011a3f9718ba707f4d0f6d5032094",
         "registerPauser_runCompiledTo_retainedNonzero":
-            "4b04704225aef1b5e32da2558c1d40a5bf7f6c4ebff4c6ec80611fe1f6c49f67",
+            "967381fd84cb4e8a56e382387d95d7f5887d95a90db0b79195fa95f8fafc05b2",
         "registerPauser_retainedNonzero_success_settled_effects":
-            "760e5d3e2f02be96c2b94e3b8c6eec9e3e985aaa21bf7b4032a9013fad11e525",
+            "1d96ed070519b8a54c355b3a789a8a7d4199879a54bfb7f4e37270900edae248",
         "registerPauser_runCompiledTo_oldLastNonzero":
-            "c0bf431575d5b384f3cdac38bd803af70d09ba90d8691ff2e260e9037701b04c",
+            "8fb9f7d2afa4faea3452be8e9939d4d932a26d1f59c7a389fd583133944b080f",
         "registerPauser_oldLastNonzero_success_settled_effects":
-            "6d852570f5667f9020a0f572cf25b07ca1eca2d9718f82b497b9928e56cee4a9",
+            "10fe1430c52bc5bda96f121bca545ae447ff05b9ff7b740d0556e90cfeadc52b",
     },
     "substrate": {
         "registerPauser_stageArgs_runCompiled":
             "4f06fd9c9e0058056d634e3333995c0fe16ad3f9e82507debd45b07ec0d9f00c",
         "setPauserKernel_foundNonzero_finishSetPauser_runCompiled":
-            "1c20614b62b482aee1f2d90c96601d2c190cca7dd6ac22570783012fe074b653",
+            "9ed9b31928b3cd610b7f49bca7a15006307f45ac1c0cfbc2563ddde213ea560d",
         "removeTarget_toFinish_runCompiled":
-            "736ee2ac0f68262f851c97053a310ca1f65b65f920d016cd1351388954ae03f0",
+            "90fc7fa5734a6b4c01b032534f49bd7461e86407cc91f48596ad807c5386f2fd",
         "removeTarget_runCompiled":
-            "d6a8c0a84ab0764a9d34c273a2994d3a9fb8b17a6abab98237f756557841bc91",
+            "344ab7525d4e6bd144c1d59013d59637a9cd5641b03e74803ac87a05e4a5644c",
         "removeTarget_swapPop_toFinish_runCompiled":
-            "ada0290854bb7003d618e79d9665b81924389c854e598680d6d0bc31dd83d19e",
+            "e7157d7036a6fdfa41fe1fa545a855c0e1679ff9d28a541fa246684e4439cfa5",
         "removeTarget_swapPop_runCompiled":
-            "0e0a574182a77f580ba7e76fd0e07e4943a38ddf1f0d9ae32cfa802de064991b",
+            "bc29985a23e43e0462ec6de65f49e7a12f1c76574cdfc5453112dfb7018de4df",
     },
     # ---- AT7 pause suffix and AT8 inhabitation ----
     # `sourceAttainment` and `registrationWorld` are owners for the trust scan
@@ -873,7 +873,7 @@ ROLES = {
             "addd5265deefc79b9627c31db14841831fcf00f35c6cc970c02c571992f579a3",
         # What makes the line above a fact about the pause: the tower plus the `PauserSet` record IS `pauseAfterSet`'s entry, on the pause's continuation.
         "removeTarget_pauseAfterSet_runCompiled":
-            "02cff68785ad6e97c1bd24ce214c4780892cedf19b6fd6eeaeb7cb1a0ff58de1",
+            "2efb6081b8f0b9a6ba9eb621fbf223f05f3defe01518b1de855fba55eea3bf9d",
         # P3: neither storage nor transient storage moves between the boundary and the CALL.
         "pauseCallEntry_frame":
             "3ab2582962f43225ded36acf5f835fdffdbda408072fdd3c9f96c4acca0e6566",

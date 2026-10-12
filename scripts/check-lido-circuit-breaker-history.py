@@ -633,7 +633,7 @@ DEFINITION_PINS = {
         "RegistryCoherent": "e89b4dcf96254b323d874f57fc07f0c22e642c46297152a325de097ed875fa00",
         "RegistryStable": "099ddbc2833ee8e3ea9bee46492656e357496f545563ee5c63cf3508f4613eba",
         "StorFixed": "1803c987cdacc7b80b0c59518a9878f11bf1803b40f0c27c70c858493da7b123",
-        "registrySpec": "9a12c6a59f12d993fdec779bc056711f251424cf854d51639bd0e4e3503b8d19"
+        "registrySpec": "da61e9462f4e40aae2bba2cff2f845dc43d80344870ed7976d5df234163504dd"
     }
 }
 # <<< DEFINITION PINS <<<
@@ -757,7 +757,7 @@ VOCABULARY_PINS = {
         "Blanc.Func.getStor_eq_of_run_storSilentIn": "15e4b349ffc9ce4a35e8e6b0573213efe975a1a991db75705b73c8b3065ea159"
     },
     "Blanc/Ladder.lean": {
-        "Blanc.ContractSpec": "74cb032721b7e1cdff473d3da8860eda24ad0e2521b806386e659c5201ca116c",
+        "Blanc.ContractSpec": "34e4f26079c75650f59290ca1f645ab3b08bc900211fb7767dd2954f0827649a",
         "Blanc.ContractSpec.FuncSound": "7a905dcb38bdc25ca1f166a0c46076c80fd2eff0827f0078d8048d8379356400",
         "Blanc.ContractSpec.MsgInv": "3ef6dcf39e3da7573446e9726f2d8524c4cc58aaef8e682c0f404134a6a527b2",
         "Blanc.ContractSpec.Post": "9f679f2df84d0d895c840ecac3adace6100217e20e096ddb7afb63a6ab369128",
