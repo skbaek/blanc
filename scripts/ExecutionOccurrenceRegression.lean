@@ -185,7 +185,9 @@ private def historyCode : ByteArray := ByteArray.mk #[
   0x60, 0x07, 0x60, 0x00, 0x55, 0x00]
 private def historySevm : Sevm :=
   { (default : Sevm) with code := historyCode }
-private def historyPre : Devm := (default : Devm).withGasLeft 100000
+private def historyPre : Devm :=
+  ((default : Devm).withGasLeft 100000).setCode
+    historySevm.currentTarget historyCode
 
 private structure HistoryFixture where
   s2 : Devm
@@ -399,7 +401,11 @@ private theorem history_publicLastWriter (fixture : HistoryFixture) :
       write.storageOwner = historySevm.currentTarget ∧
       write.key = 0 ∧ write.value = 7 ∧ write.IsLastRetained := by
   rcases Exec.exists_lastRetainedSstore_of_getStor_ne
-      fixture.run fixture.commits (by decide) fixture.changed with
+      fixture.run fixture.commits (by decide)
+      (by simp only [historyPre, Devm.setCode, Devm.clearStorageWritesIfEmpty,
+        Devm.withStorageWrites, Devm.withState, Devm.setWorld, Devm.getCode,
+        Devm.getAcct, Devm.state, State.setCode, State.setAccount_get_self,
+        Acct.clearIfEmpty_code]; decide +kernel) fixture.changed with
     ⟨write, retained, owner, key, value, last⟩
   exact ⟨write, retained, owner, key, value.trans fixture.finalValue, last⟩
 
