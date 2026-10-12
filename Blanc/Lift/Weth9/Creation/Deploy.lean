@@ -72,9 +72,11 @@ theorem weth9_create_framed (msg : Msg) (hvalue : msg.value = 0)
     show benv.stat = (processCreateMessage.msg msg).benv.stat
     exact benvAfterTransfer_stat htransfer
   have fr : CtorFrame sevm := ⟨by rw [hstat]; exact hfork, hstatic⟩
+  have hinnerValue : (processCreateMessage.msg msg).value = 0 := hvalue
   have hempty : Devm.getStor b sevm.currentTarget = Stor.empty := by
     show benv.state.getStor msg.currentTarget = _
-    rw [benvAfterTransfer_ok_getStor htransfer, processCreateMessage_msg_getStor_currentTarget]
+    rw [benvAfterTransfer_ok_getStor htransfer _ (Or.inl hinnerValue),
+      processCreateMessage_msg_getStor_currentTarget]
   have hstor : ∀ x, (Devm.getStor b sevm.currentTarget).get x = 0 := fun x => by
     rw [hempty]; simp only [Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc,
       Std.TreeMap.getD_emptyc]
@@ -97,18 +99,40 @@ theorem weth9_create_framed (msg : Msg) (hvalue : msg.value = 0)
   have hcodeEq : (⟨⟨raw.output⟩⟩ : ByteArray) = Blanc.Lift.Weth9.code := by
     rw [hwin]
     rw [ByteArray.toList_eq_toList_data]
+  have hrawNe : raw.output ≠ [] := by
+    intro hcon
+    rw [hcon] at hlen
+    simp at hlen
+  have hcodeSize : (({ raw.state.get msg.currentTarget with code :=
+      (⟨⟨raw.output⟩⟩ : ByteArray) } : Acct).code.size ≠ 0) := by
+    intro hz
+    simp at hz
+    have hemptyCode : Blanc.Lift.Weth9.code = ByteArray.empty := hcodeEq.symm.trans hz
+    have htl := congrArg ByteArray.toList hemptyCode
+    rw [← hwin] at htl
+    simp at htl
+    exact hrawNe htl
+  have hnotEmpty : ¬ (({ raw.state.get msg.currentTarget with code :=
+      (⟨⟨raw.output⟩⟩ : ByteArray) } : Acct).Empty) := by
+    intro hem
+    exact hcodeSize hem.1
+  have hclear : (({ raw.state.get msg.currentTarget with code :=
+      (⟨⟨raw.output⟩⟩ : ByteArray) } : Acct).clearIfEmpty =
+      { raw.state.get msg.currentTarget with code := (⟨⟨raw.output⟩⟩ : ByteArray) }) := by
+    unfold Acct.clearIfEmpty
+    rw [if_neg hnotEmpty]
   refine ⟨post, hpost, ?_, ?_, ?_⟩
   · show (post.state.get msg.currentTarget).code.toList = _
-    rw [(liftCreatePost_facts _ raw).2.2.1, hcodeEq]
+    rw [(liftCreatePost_facts _ raw).2.2.1, hclear, hcodeEq]
   · show (post.state.get msg.currentTarget).stor = _
-    rw [(liftCreatePost_facts _ raw).2.2.1]
+    rw [(liftCreatePost_facts _ raw).2.2.1, hclear]
     change Devm.getStor raw sevm.currentTarget = _
     rw [hst, hempty]
     rfl
   · intro a
     by_cases ha : a = msg.currentTarget
     · subst ha
-      rw [ite_eq_left rfl, (liftCreatePost_facts _ raw).2.2.1, hcodeEq, hworld]
+      rw [ite_eq_left rfl, (liftCreatePost_facts _ raw).2.2.1, hclear, hcodeEq, hworld]
       change { ((((benv.state.setStorVal msg.currentTarget 0 nameSlotWord).setStorVal
         msg.currentTarget 1 symbolSlotWord).setStorVal msg.currentTarget 2 18).get
         msg.currentTarget) with code := Blanc.Lift.Weth9.code } = _

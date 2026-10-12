@@ -41,10 +41,18 @@ theorem deposit_intrinsic {rules : ForkRules}
 theorem deposit_frame_gas {sevm : Sevm} {pre : Devm}
     (hvalue : sevm.value = 1)
     (hcur : pre.getStorVal sevm.currentTarget (balSlot sevm.caller) = 0)
-    (horig : getOrigStorVal sevm sevm.currentTarget (balSlot sevm.caller) = 0)
+    (horig : pre.getOrigStorVal sevm sevm.currentTarget (balSlot sevm.caller) = 0)
     (hcold : (sevm.currentTarget, balSlot sevm.caller) ∉ pre.accessedStorageKeys) :
     depositGas sevm pre = 23974 ∧ depositStore sevm pre = 20000 := by
   have warm := mem_afterSload_accessedStorageKeys sevm pre (balSlot sevm.caller)
+  have horig' : (afterSload sevm pre (balSlot sevm.caller)).getOrigStorVal sevm sevm.currentTarget
+      (balSlot sevm.caller) = 0 := by
+    have hc : (afterSload sevm pre (balSlot sevm.caller)).createdAccounts = pre.createdAccounts := by
+      unfold afterSload
+      split <;> rfl
+    unfold Devm.getOrigStorVal at horig ⊢
+    rw [hc]
+    exact horig
   have load : depositLoad sevm pre = 2100 := by
     unfold depositLoad sloadCost
     simp only [hcold, ite_false]
@@ -52,7 +60,7 @@ theorem deposit_frame_gas {sevm : Sevm} {pre : Devm}
   have store : depositStore sevm pre = 20000 := by
     have sum : (0 : B256) + 1 = 1 := by decide +kernel
     unfold depositStore sstoreCost
-    simp only [warm, ite_true, getStorVal_afterSload, hcur, horig, hvalue, sum]
+    simp only [warm, ite_true, getStorVal_afterSload, hcur, horig', hvalue, sum]
     decide +kernel
   exact ⟨by rw [depositGas, load, store], store⟩
 
@@ -65,7 +73,7 @@ theorem deposit_frame_success {sevm : Sevm} {pre : Devm}
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty)
     (hgas : pre.gasLeft = 28936)
     (hcur : pre.getStorVal contractAddress (balSlot senderE) = 0)
-    (horig : getOrigStorVal sevm contractAddress (balSlot senderE) = 0)
+    (horig : pre.getOrigStorVal sevm contractAddress (balSlot senderE) = 0)
     (hcold : (contractAddress, balSlot senderE) ∉ pre.accessedStorageKeys)
     (herror : pre.error = none) (hrefund : pre.refundCounter = 0)
     (hlogs : pre.logs = []) :
@@ -78,7 +86,7 @@ theorem deposit_frame_success {sevm : Sevm} {pre : Devm}
   have current : pre.getStorVal sevm.currentTarget (balSlot sevm.caller) = 0 := by
     rw [hcaller, htarget]
     exact hcur
-  have original : getOrigStorVal sevm sevm.currentTarget (balSlot sevm.caller) = 0 := by
+  have original : pre.getOrigStorVal sevm sevm.currentTarget (balSlot sevm.caller) = 0 := by
     rw [hcaller, htarget]
     exact horig
   have cold : (sevm.currentTarget, balSlot sevm.caller) ∉ pre.accessedStorageKeys := by

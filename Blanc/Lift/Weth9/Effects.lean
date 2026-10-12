@@ -450,14 +450,14 @@ theorem weth9_frame_effect {P : Sevm → Devm → Ninst → Devm → Prop}
     · right; left
       refine ⟨_, hd, (fun _ _ h => by cases h), ?_⟩
       rw [hk] at hg
-      have hok := (Weth9.transfer_wrapper_okX hg (run.mono hP)).of_same hs
+      have hok := (Weth9.transfer_wrapper_okX hg (run.mono hP)).of_same ⟨hs.stor, hs.bal⟩
       have := xferStorStep_of_okX hok
       simp only [Outcome.devm, toAdr_toB256] at this
       simpa only [Call.stor] using this
     · right; left
       refine ⟨_, hd, (fun _ _ h => by cases h), ?_⟩
       rw [hk] at hg
-      have hok := (Weth9.transferFrom_wrapper_okX hg (run.mono hP)).of_same hs
+      have hok := (Weth9.transferFrom_wrapper_okX hg (run.mono hP)).of_same ⟨hs.stor, hs.bal⟩
       have := xferStorStep_of_okX hok
       simp only [Outcome.devm, toAdr_toB256] at this
       simpa only [Call.stor] using this

@@ -51,10 +51,10 @@ theorem Link.line_nonexec (l : Link) : ∀ n ∈ l.line, ∀ x, n ≠ .exec x :=
 `dest :: (σ =? sel) :: sel :: ys`. -/
 theorem link_walk {sevm : Sevm} {s s' : Devm} {l : Link} {sel : B256} {ys : Stack}
     (hp : sel :: ys <<+ s.stack) (run : Line.Run sevm s l.line s') :
-    (Bytes.toB256 l.dest :: (Bytes.toB256 l.σ =? sel) :: sel :: ys <<+ s'.stack) ∧ Same s s' := by
+    (Bytes.toB256 l.dest :: (Bytes.toB256 l.σ =? sel) :: sel :: ys <<+ s'.stack) ∧ SameCode s s' := by
   unfold Link.line at run
   refine ⟨?_, Line.of_inv Devm.getStor (by line_inv) run,
-    Line.of_inv Devm.getBal (by line_inv) run⟩
+    Line.of_inv Devm.getBal (by line_inv) run, Line.of_inv Devm.getCode (by line_inv) run⟩
   obtain ⟨s1, h1, run⟩ := Line.of_run_cons run
   obtain ⟨s2, h2, run⟩ := Line.of_run_cons run
   obtain ⟨s3, h3, run⟩ := Line.of_run_cons run
@@ -123,9 +123,9 @@ theorem link_runP (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {fs :
     {sevm : Sevm} (l : Link) {rest : SFunc} {d : Devm} {o : Outcome} {sel : B256} {ys : Stack}
     (hp : sel :: ys <<+ d.stack)
     (run : SFunc.RunP P fs sevm d (chain l.line (.branchTo rest l.k)) o) :
-    (sel = Bytes.toB256 l.σ ∧ ∃ (g : SFunc) (d' : Devm), fs[l.k]? = some g ∧ Same d d' ∧
+    (sel = Bytes.toB256 l.σ ∧ ∃ (g : SFunc) (d' : Devm), fs[l.k]? = some g ∧ SameCode d d' ∧
         sel :: ys <<+ d'.stack ∧ SFunc.RunP P fs sevm d' g o) ∨
-    (sel ≠ Bytes.toB256 l.σ ∧ ∃ d' : Devm, Same d d' ∧ sel :: ys <<+ d'.stack ∧
+    (sel ≠ Bytes.toB256 l.σ ∧ ∃ d' : Devm, SameCode d d' ∧ sel :: ys <<+ d'.stack ∧
         SFunc.RunP P fs sevm d' rest o) := by
   obtain ⟨d1, hl, run⟩ := run_chain_prefixP l.line [] run
   obtain ⟨hp1, s01⟩ := link_walk hp (hl.toRun hP)
@@ -133,11 +133,11 @@ theorem link_runP (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {fs :
   cases run with
   | toZero dd pop run =>
     obtain ⟨-, hc, hp2⟩ := prefix_of_popBurn2 hp1 pop
-    exact .inr ⟨fun h => ne_of_eqc_eq hc h.symm, _, s01.trans (Same.of_state pop.state), hp2, run⟩
+    exact .inr ⟨fun h => ne_of_eqc_eq hc h.symm, _, s01.trans (SameCode.of_state pop.state), hp2, run⟩
   | toSucc dd w hnz lookup pop run =>
     obtain ⟨-, hc, hp2⟩ := prefix_of_popBurn2 hp1 pop
     subst hc
-    exact .inl ⟨(eq_of_eqc_ne hnz).symm, _, _, lookup, s01.trans (Same.of_state pop.state), hp2,
+    exact .inl ⟨(eq_of_eqc_ne hnz).symm, _, _, lookup, s01.trans (SameCode.of_state pop.state), hp2,
       run⟩
 
 /-- **The comparisons in order**: the run enters the goto of the first link whose selector is the one
@@ -147,14 +147,14 @@ theorem dispatch_runP (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {
     ∀ (ls : List Link) {f : SFunc} {d : Devm} {o : Outcome} {sel : B256} {ys : Stack},
       sel :: ys <<+ d.stack → SFunc.RunP P fs sevm d (dispatchTree ls f) o →
       (∃ l ∈ ls, sel = Bytes.toB256 l.σ ∧ ∃ (g : SFunc) (d' : Devm), fs[l.k]? = some g ∧
-          Same d d' ∧ sel :: ys <<+ d'.stack ∧ SFunc.RunP P fs sevm d' g o) ∨
-      ((∀ l ∈ ls, sel ≠ Bytes.toB256 l.σ) ∧ ∃ d' : Devm, Same d d' ∧ sel :: ys <<+ d'.stack ∧
+          SameCode d d' ∧ sel :: ys <<+ d'.stack ∧ SFunc.RunP P fs sevm d' g o) ∨
+      ((∀ l ∈ ls, sel ≠ Bytes.toB256 l.σ) ∧ ∃ d' : Devm, SameCode d d' ∧ sel :: ys <<+ d'.stack ∧
           SFunc.RunP P fs sevm d' f o) := by
   intro ls
   induction ls with
   | nil =>
     intro f d o sel ys hp run
-    exact .inr ⟨fun l hl => absurd hl List.not_mem_nil, d, ⟨rfl, rfl⟩, hp, run⟩
+    exact .inr ⟨fun l hl => absurd hl List.not_mem_nil, d, ⟨rfl, rfl, rfl⟩, hp, run⟩
   | cons l ls ih =>
     intro f d o sel ys hp run
     rcases link_runP hP l hp run with ⟨hsel, g, d', hg, hs, hp', run'⟩ | ⟨hne, d', hs, hp', run'⟩
@@ -189,10 +189,10 @@ theorem ltc_eq_zero {x y : B256} (h : (x <? y) = 0) : ¬ x < y := by
 /-- The preamble leaves the destination of the fallback and the size test above the stack it found. -/
 theorem preamble_walk {sevm : Sevm} {s s' : Devm} {xs : Stack} (hp : xs <<+ s.stack)
     (run : Line.Run sevm s preamble s') :
-    Bytes.toB256 [0x00, 0xaf] :: (sevm.data.length.toB256 <? 4) :: xs <<+ s'.stack ∧ Same s s' := by
+    Bytes.toB256 [0x00, 0xaf] :: (sevm.data.length.toB256 <? 4) :: xs <<+ s'.stack ∧ SameCode s s' := by
   unfold preamble at run
   refine ⟨?_, Line.of_inv Devm.getStor (by line_inv) run,
-    Line.of_inv Devm.getBal (by line_inv) run⟩
+    Line.of_inv Devm.getBal (by line_inv) run, Line.of_inv Devm.getCode (by line_inv) run⟩
   obtain ⟨s1, h1, run⟩ := Line.of_run_cons run
   obtain ⟨s2, h2, run⟩ := Line.of_run_cons run
   obtain ⟨s3, h3, run⟩ := Line.of_run_cons run
@@ -214,10 +214,10 @@ theorem preamble_walk {sevm : Sevm} {s s' : Devm} {xs : Stack} (hp : xs <<+ s.st
 /-- The selector extraction leaves the calldata selector on top of the stack. -/
 theorem extract_walk {sevm : Sevm} {s s' : Devm} {xs : Stack} (hp : xs <<+ s.stack)
     (run : Line.Run sevm s extractLine s') :
-    Sevm.selector sevm :: xs <<+ s'.stack ∧ Same s s' := by
+    Sevm.selector sevm :: xs <<+ s'.stack ∧ SameCode s s' := by
   unfold extractLine at run
   refine ⟨?_, Line.of_inv Devm.getStor (by line_inv) run,
-    Line.of_inv Devm.getBal (by line_inv) run⟩
+    Line.of_inv Devm.getBal (by line_inv) run, Line.of_inv Devm.getCode (by line_inv) run⟩
   obtain ⟨s1, h1, run⟩ := Line.of_run_cons run
   obtain ⟨s2, h2, run⟩ := Line.of_run_cons run
   obtain ⟨s3, h3, run⟩ := Line.of_run_cons run
@@ -254,9 +254,9 @@ selector is the calldata selector.  Storage and balances are unchanged on the wa
 theorem weth9_route (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {sevm : Sevm}
     {pre post : Devm} (hrun : SProg.RunP P prog sevm pre post) :
     ((shortCall sevm ∨ ∀ l ∈ links, Sevm.selector sevm ≠ Bytes.toB256 l.σ) ∧
-        ∃ d' : Devm, Same pre d' ∧ SFunc.RunP P prog sevm d' t_00af_c0 (.halted post)) ∨
+        ∃ d' : Devm, SameCode pre d' ∧ SFunc.RunP P prog sevm d' t_00af_c0 (.halted post)) ∨
     ∃ l ∈ links, ¬ shortCall sevm ∧ Sevm.selector sevm = Bytes.toB256 l.σ ∧
-      ∃ (g : SFunc) (d' : Devm), prog[l.k]? = some g ∧ Same pre d' ∧
+      ∃ (g : SFunc) (d' : Devm), prog[l.k]? = some g ∧ SameCode pre d' ∧
         SFunc.RunP P prog sevm d' g (.halted post) := by
   obtain ⟨f, hf, run⟩ := hrun
   rw [entry0_lookup] at hf
@@ -272,7 +272,7 @@ theorem weth9_route (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {se
     rw [tree_000d] at run
     obtain ⟨d2, hl2, run⟩ := run_chain_prefixP extractLine [] run
     obtain ⟨hp3, s23⟩ := extract_walk hp2 (hl2.toRun hP)
-    have s03 := s01.trans ((Same.of_state pop.state).trans s23)
+    have s03 := s01.trans ((SameCode.of_state pop.state).trans s23)
     rcases dispatch_runP hP links hp3 run with ⟨l, hl, hsel, g, d', hg, hs, -, run'⟩ |
         ⟨hne, d', hs, -, run'⟩
     · exact .inr ⟨l, hl, hshort, hsel, g, d', hg, s03.trans hs, run'⟩
@@ -280,7 +280,7 @@ theorem weth9_route (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {se
   | succ dd w hnz pop run =>
     obtain ⟨-, hc, hp2⟩ := prefix_of_popBurn2 hp1 pop
     subst hc
-    exact .inl ⟨.inl (ltc_ne_zero hnz), _, s01.trans (Same.of_state pop.state), run⟩
+    exact .inl ⟨.inl (ltc_ne_zero hnz), _, s01.trans (SameCode.of_state pop.state), run⟩
 
 end RunPRoute
 
@@ -307,33 +307,33 @@ theorem link_reach (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {fs 
     {sevm : Sevm} (l : Link) {rest : SFunc} {d : Devm} {K : List SFunc} {T : Conf} {sel : B256}
     {ys : Stack} (hp : sel :: ys <<+ d.stack)
     (run : Reach P fs sevm ⟨d, chain l.line (.branchTo rest l.k), K⟩ T) (hT : AtExec T) :
-    (sel = Bytes.toB256 l.σ ∧ ∃ (g : SFunc) (d' : Devm), fs[l.k]? = some g ∧ Same d d' ∧
+    (sel = Bytes.toB256 l.σ ∧ ∃ (g : SFunc) (d' : Devm), fs[l.k]? = some g ∧ SameCode d d' ∧
         sel :: ys <<+ d'.stack ∧ Reach P fs sevm ⟨d', g, K⟩ T) ∨
-    (sel ≠ Bytes.toB256 l.σ ∧ ∃ d' : Devm, Same d d' ∧ sel :: ys <<+ d'.stack ∧
+    (sel ≠ Bytes.toB256 l.σ ∧ ∃ d' : Devm, SameCode d d' ∧ sel :: ys <<+ d'.stack ∧
         Reach P fs sevm ⟨d', rest, K⟩ T) := by
   obtain ⟨d1, hl, run⟩ := Reach.chain_prefix l.line l.line_nonexec run hT
   obtain ⟨hp1, s01⟩ := link_walk hp (hl.toRun hP)
   change Reach P fs sevm ⟨d1, .branchTo rest l.k, K⟩ T at run
   rcases Reach.branchTo run hT with ⟨t, d2, pop, run'⟩ | ⟨t, w, g, d2, hw, hk, pop, run'⟩
   · obtain ⟨-, hc, hp2⟩ := prefix_of_popBurn2 hp1 pop
-    exact .inr ⟨fun h => ne_of_eqc_eq hc h.symm, _, s01.trans (Same.of_state pop.state), hp2, run'⟩
+    exact .inr ⟨fun h => ne_of_eqc_eq hc h.symm, _, s01.trans (SameCode.of_state pop.state), hp2, run'⟩
   · obtain ⟨-, hc, hp2⟩ := prefix_of_popBurn2 hp1 pop
     subst hc
-    exact .inl ⟨(eq_of_eqc_ne hw).symm, _, _, hk, s01.trans (Same.of_state pop.state), hp2, run'⟩
+    exact .inl ⟨(eq_of_eqc_ne hw).symm, _, _, hk, s01.trans (SameCode.of_state pop.state), hp2, run'⟩
 
 theorem dispatch_reach (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {fs : List SFunc}
     {sevm : Sevm} :
     ∀ (ls : List Link) {f : SFunc} {d : Devm} {K : List SFunc} {T : Conf} {sel : B256} {ys : Stack},
       sel :: ys <<+ d.stack → Reach P fs sevm ⟨d, dispatchTree ls f, K⟩ T → AtExec T →
       (∃ l ∈ ls, sel = Bytes.toB256 l.σ ∧ ∃ (g : SFunc) (d' : Devm), fs[l.k]? = some g ∧
-          Same d d' ∧ sel :: ys <<+ d'.stack ∧ Reach P fs sevm ⟨d', g, K⟩ T) ∨
-      ((∀ l ∈ ls, sel ≠ Bytes.toB256 l.σ) ∧ ∃ d' : Devm, Same d d' ∧ sel :: ys <<+ d'.stack ∧
+          SameCode d d' ∧ sel :: ys <<+ d'.stack ∧ Reach P fs sevm ⟨d', g, K⟩ T) ∨
+      ((∀ l ∈ ls, sel ≠ Bytes.toB256 l.σ) ∧ ∃ d' : Devm, SameCode d d' ∧ sel :: ys <<+ d'.stack ∧
           Reach P fs sevm ⟨d', f, K⟩ T) := by
   intro ls
   induction ls with
   | nil =>
     intro f d K T sel ys hp run hT
-    exact .inr ⟨fun l hl => absurd hl List.not_mem_nil, d, ⟨rfl, rfl⟩, hp, run⟩
+    exact .inr ⟨fun l hl => absurd hl List.not_mem_nil, d, ⟨rfl, rfl, rfl⟩, hp, run⟩
   | cons l ls ih =>
     intro f d K T sel ys hp run hT
     rcases link_reach hP l hp run hT with ⟨hsel, g, d', hg, hs, hp', run'⟩ |
@@ -369,7 +369,7 @@ fallback — is exec-free (`RouteCheck.lean`). -/
 theorem weth9_reach_route (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {sevm : Sevm}
     {pre : Devm} {T : Conf} (run : Reach P prog sevm ⟨pre, t_0000_c0, []⟩ T) (hT : AtExec T) :
     ¬ shortCall sevm ∧ Sevm.selector sevm = Bytes.toB256 [0x2e, 0x1a, 0x7d, 0x4d] ∧
-      ∃ d' : Devm, Same pre d' ∧ Reach P prog sevm ⟨d', t_0243_c24, []⟩ T := by
+      ∃ d' : Devm, SameCode pre d' ∧ Reach P prog sevm ⟨d', t_0243_c24, []⟩ T := by
   rw [tree_0000] at run
   obtain ⟨d1, hl, run⟩ := Reach.chain_prefix preamble preamble_nonexec run hT
   obtain ⟨hp1, s01⟩ := preamble_walk nil_pref (hl.toRun hP)
@@ -380,7 +380,7 @@ theorem weth9_reach_route (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d
     rw [tree_000d] at run
     obtain ⟨d3, hl2, run⟩ := Reach.chain_prefix extractLine extractLine_nonexec run hT
     obtain ⟨hp3, s23⟩ := extract_walk hp2 (hl2.toRun hP)
-    have s03 := s01.trans ((Same.of_state pop.state).trans s23)
+    have s03 := s01.trans ((SameCode.of_state pop.state).trans s23)
     rcases dispatch_reach hP links hp3 run hT with ⟨l, hl, hsel, g, d', hg, hs, -, run'⟩ |
         ⟨-, d', hs, -, run'⟩
     · simp only [links, List.mem_cons, List.not_mem_nil, or_false] at hl
