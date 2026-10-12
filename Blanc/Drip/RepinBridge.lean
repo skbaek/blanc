@@ -211,4 +211,11 @@ theorem messageCallExecutionMessage_state (msg : Msg) :
   unfold ExecutionTrace.messageCallExecutionMessage
   split <;> rfl
 
+/-- Parent hoist debt: project before unfolding a concrete write tower. -/
+theorem setStorVal_createdAccounts (machine : Devm) (address : Adr) (key value : B256) :
+    (machine.setStorVal address key value).createdAccounts = machine.createdAccounts := rfl
+
+theorem withRefundCounter_createdAccounts (machine : Devm) (refund : Int) :
+    (machine.withRefundCounter refund).createdAccounts = machine.createdAccounts := rfl
+
 end Blanc.Drip.RepinBridge
