@@ -1495,6 +1495,96 @@ def control_lean_entry_source_and_imports_invalidate() -> None:
 
 
 
+def control_toolchain_imports_bind_authenticated_complete_artifacts() -> None:
+    """Trace-free stdlib imports bind bytes and membership, never a name guess."""
+    with tempfile.TemporaryDirectory(prefix="gate-toolchain-control-") as temporary:
+        root = Path(temporary).resolve()
+        library = root / "toolchain/lib/lean"
+        library.mkdir(parents=True)
+        for name in ("Init.olean", "Lean.olean", "Lean/Elab/Frontend.olean.private"):
+            path = library / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"frozen compiled artifact")
+        entry = root / "Eval.lean"
+        entry.write_text("import Lean\nexample : True := trivial\n")
+        resolved = [library / "Init.olean", library / "Lean.olean"]
+        prefix_output = str(root / "toolchain") + "\n"
+        original = gc.subprocess.run
+
+        def fake_run(command, **kwargs):
+            if command == ["lake", "env", "lean", "--print-prefix"]:
+                return subprocess.CompletedProcess(command, 0, prefix_output, "")
+            require(command == ["lake", "env", "lean", "--deps", "--stdin"],
+                    "fallback must ask Lean for its actual resolution without elaboration")
+            require(kwargs["input"] == "import Lean\n", "resolution request changed")
+            return subprocess.CompletedProcess(command, 0,
+                "".join(str(path) + "\n" for path in resolved), "")
+
+        def identity():
+            gc.forget_digests()
+            return gc.component_lean_entries(root, ["Eval.lean"])[0]
+
+        def refused(action, message):
+            gc.forget_digests()
+            try:
+                action()
+            except gc.Unresolvable:
+                return
+            raise ControlFailure(message)
+
+        gc.subprocess.run = fake_run
+        try:
+            baseline = identity()
+            require(identity() == baseline, "unchanged toolchain must stay identifiable")
+            private = library / "Lean/Elab/Frontend.olean.private"
+            private.write_bytes(b"changed transitive private artifact")
+            require(identity() != baseline, "transitive artifact bytes must invalidate")
+            private.write_bytes(b"frozen compiled artifact")
+            require(identity() == baseline, "sole byte restoration must recover identity")
+            addition = library / "New.olean"
+            addition.write_bytes(b"new artifact")
+            require(identity() != baseline, "artifact membership must invalidate")
+            addition.unlink()
+            require(identity() == baseline, "sole membership restoration must recover identity")
+            resolved.append(root / "shadow.olean")
+            resolved[-1].write_bytes(b"outside toolchain")
+            refused(identity, "shadowed imports must not authenticate toolchain bytes")
+            resolved.pop()
+            resolved.remove(library / "Lean.olean")
+            refused(identity, "missing resolved module must refuse")
+            resolved.append(library / "Lean.olean")
+            (library / "Lean.olean").unlink()
+            refused(identity, "absent imported artifact must refuse")
+            (library / "Lean.olean").write_bytes(b"frozen compiled artifact")
+            addition.symlink_to(library / "Lean.olean")
+            refused(identity, "aliased artifact population must refuse")
+            addition.unlink()
+            for prefix_output in ("", "relative\n", str(root / "toolchain") + "\nextra\n"):
+                refused(identity, "malformed toolchain prefix must refuse")
+            prefix_output = str(root / "toolchain") + "\n"
+            refused(lambda: gc.module_dep_hash(root, "Blanc.Missing"),
+                    "unknown absent package module must still refuse")
+            trace = root / ".lake/build/lib/lean/Lean.trace"
+            trace.parent.mkdir(parents=True)
+            trace.write_text('{"depHash":"lake-authority"}')
+            require(gc.module_dep_hash(root, "Lean") == "lake-authority",
+                    "source-to-Lake trace authority must retain precedence")
+            trace.write_text("malformed")
+            refused(lambda: gc.module_dep_hash(root, "Lean"),
+                    "malformed existing trace must never fall back")
+            trace.unlink()
+            trace.mkdir()
+            refused(lambda: gc.module_dep_hash(root, "Lean"),
+                    "non-regular trace must never fall back")
+            trace.rmdir()
+            trace.symlink_to(root / "absent-trace")
+            refused(lambda: gc.module_dep_hash(root, "Lean"),
+                    "dangling trace alias must never fall back")
+        finally:
+            gc.subprocess.run = original
+            gc.forget_digests()
+
+
 def control_transitive_edit_reaches_the_gate() -> None:
     """The point of delegating to Lake: a gate naming only a root still
     invalidates when something deep beneath that root moves, because the root's
@@ -4490,6 +4580,7 @@ CONTROLS = (
     control_missing_trace_forces_execution,
     control_malformed_trace_forces_execution,
     control_lean_entry_source_and_imports_invalidate,
+    control_toolchain_imports_bind_authenticated_complete_artifacts,
     control_transitive_edit_reaches_the_gate,
     control_unparsable_import_cannot_hide_a_dependency,
     control_git_ref_movement_invalidates,

@@ -384,7 +384,16 @@ Lake traces, and each trace supplies a `depHash` covering that module's source,
 the Lean version and options, and every transitive imported artifact including
 Jaune. There is no second, hand-maintained import graph here. An evaluator under
 `scripts/` that Lake has no target for is identified by its own source plus the
-`depHash` of each module it imports.
+`depHash` of each module it imports. A direct toolchain import such as `Lean`
+has no Lake trace. Only that missing-trace case may use the actual toolchain:
+`lake env lean --print-prefix` selects it, and `lean --deps --stdin` must resolve
+the named artifact and every direct dependency inside its canonical `lib/lean`.
+The fingerprint then conservatively binds that entire library's regular-file
+population by relative path and SHA-256, covering transitive compiled artifacts
+without inventing an import graph. Missing artifacts, foreign resolutions,
+aliases, unreadable populations and malformed existing Lake traces refuse
+identity. The population snapshot is discarded before post-execution drift
+checks. Version text alone never substitutes for artifact identity.
 
 The local `.lake/blanc-build-certificate-v3.json` may satisfy the build
 prerequisite without rebuilding only when its host, all Lean sources, Lake

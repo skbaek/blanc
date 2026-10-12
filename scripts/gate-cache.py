@@ -285,6 +285,10 @@ class Unresolvable(RuntimeError):
     """
 
 
+class MissingLakeTrace(Unresolvable):
+    """Only a literally absent trace may ask the toolchain for authority."""
+
+
 def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -345,6 +349,7 @@ def file_identity(path: Path) -> str:
 
 
 _TOOL_MEMO: dict[str, str] = {}
+_TOOLCHAIN_ARTIFACT_MEMO: dict[str, str] = {}
 
 
 def forget_digests() -> None:
@@ -352,6 +357,7 @@ def forget_digests() -> None:
 
     _DIGEST_MEMO.clear()
     _TOOL_MEMO.clear()
+    _TOOLCHAIN_ARTIFACT_MEMO.clear()
 
 
 def canonical(value: Any) -> bytes:
@@ -798,7 +804,7 @@ SOUNDNESS_AUTHORITY_NAMES = frozenset({
     "SHARED_STATE_RELATIVE", "EVIDENCE_FILENAME_PREFIX", "LEGACY_EVIDENCE_FILENAME",
     "BUILD_CERTIFICATE_RELATIVE", "RUNNER_HOST_IDENTITY_SOURCE",
     "AUTHORITY_IMPORT_BINDINGS_KEY", "module_scope_imports", "import_binding_map",
-    "BUILD_CERTIFICATE_SCHEMA", "GateCacheError", "Unresolvable",
+    "BUILD_CERTIFICATE_SCHEMA", "GateCacheError", "Unresolvable", "MissingLakeTrace",
     "git_common_dir", "shared_state_path", "cache_path", "legacy_cache_path",
     "build_certificate_path",
     "sha256_bytes",
@@ -808,6 +814,7 @@ SOUNDNESS_AUTHORITY_NAMES = frozenset({
     "gate_uses_t8n_resolver", "semantic_authority_digest", "runner_identity",
     "resolve_path", "component_files", "glob_population", "traversable_population",
     "component_populations", "trace_path_for", "module_dep_hash",
+    "toolchain_artifact_identity", "toolchain_module_identity",
     "component_lean_modules", "imports_of", "component_lean_entries", "git_output",
     "component_git_refs", "component_external", "component_env", "component_tools",
     "component_clock", "component_material_output", "fingerprint", "empty_cache", "read_cache",
@@ -1131,11 +1138,78 @@ def trace_path_for(root: Path, module: str) -> Path:
     relative = module.replace(".", "/") + ".trace"
     for trace_root in LEAN_TRACE_ROOTS:
         candidate = root / trace_root / relative
+        if candidate.is_symlink() or (candidate.exists() and not candidate.is_file()):
+            raise Unresolvable(f"non-regular Lake trace for module {module}: {candidate}")
         if candidate.is_file():
             return candidate
-    raise Unresolvable(
+    raise MissingLakeTrace(
         f"no Lake trace for module {module}; run `lake build` before selection"
     )
+
+
+def toolchain_artifact_identity(library: Path) -> str:
+    """Conservative transitive identity for trace-free toolchain imports.
+
+    No import graph is invented: every regular file under the actual compiled
+    library is bound by relative path and bytes. Clear this snapshot together
+    with file/tool memos before every post-execution drift check.
+    """
+    memo = _TOOLCHAIN_ARTIFACT_MEMO.get(str(library))
+    if memo is not None:
+        return memo
+    detail: dict[str, str] = {}
+
+    def walk_error(error: OSError) -> None:
+        raise Unresolvable(f"cannot enumerate toolchain artifacts: {error}")
+
+    try:
+        for directory, dirs, files in os.walk(library, onerror=walk_error):
+            for name in dirs:
+                if (Path(directory) / name).is_symlink():
+                    raise Unresolvable("symlinked toolchain artifact directory")
+            for name in files:
+                path = Path(directory) / name
+                if path.is_symlink() or not path.is_file():
+                    raise Unresolvable(f"non-regular toolchain artifact: {path}")
+                digest = hashlib.sha256()
+                with path.open("rb") as source:
+                    for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                        digest.update(chunk)
+                detail[str(path.relative_to(library))] = digest.hexdigest()
+    except OSError as error:
+        raise Unresolvable(f"unreadable toolchain artifacts: {error}") from error
+    if not detail:
+        raise Unresolvable("empty toolchain artifact population")
+    identity = digest_of(detail)
+    _TOOLCHAIN_ARTIFACT_MEMO[str(library)] = identity
+    return identity
+
+
+def toolchain_module_identity(root: Path, module: str) -> str:
+    """Authenticate a missing-trace import against Lean's actual resolution."""
+    if re.fullmatch(r"(?:Init|Lean|Std|Lake)(?:\.[A-Za-z_][A-Za-z0-9_']*)*", module) is None:
+        raise Unresolvable(f"no Lake trace for module {module}")
+    prefix = subprocess.run(["lake", "env", "lean", "--print-prefix"],
+                            cwd=root, capture_output=True, text=True, check=False)
+    lines = prefix.stdout.splitlines()
+    if prefix.returncode or prefix.stderr or len(lines) != 1 or not Path(lines[0]).is_absolute():
+        raise Unresolvable("cannot authenticate Lean toolchain prefix")
+    library = Path(lines[0]) / "lib/lean"
+    if not library.is_dir() or library.resolve() != library:
+        raise Unresolvable("absent or aliased Lean toolchain library")
+    expected = library / (module.replace(".", "/") + ".olean")
+    dependencies = subprocess.run(["lake", "env", "lean", "--deps", "--stdin"],
+                                  input=f"import {module}\n", cwd=root,
+                                  capture_output=True, text=True, check=False)
+    paths = [Path(line) for line in dependencies.stdout.splitlines()]
+    if dependencies.returncode or dependencies.stderr or expected not in paths:
+        raise Unresolvable(f"cannot resolve toolchain module {module}")
+    for path in paths:
+        if not path.is_absolute() or not path.is_file() or path.resolve() != path:
+            raise Unresolvable(f"absent or aliased toolchain import: {path}")
+        if not path.is_relative_to(library):
+            raise Unresolvable(f"import {module} resolves outside the toolchain: {path}")
+    return "toolchain:" + toolchain_artifact_identity(library)
 
 
 def module_dep_hash(root: Path, module: str) -> str:
@@ -1146,7 +1220,10 @@ def module_dep_hash(root: Path, module: str) -> str:
     would make the skip unsound, so it raises.
     """
 
-    path = trace_path_for(root, module)
+    try:
+        path = trace_path_for(root, module)
+    except MissingLakeTrace:
+        return toolchain_module_identity(root, module)
     try:
         trace = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
