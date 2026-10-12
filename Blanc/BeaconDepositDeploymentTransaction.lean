@@ -183,10 +183,18 @@ theorem canonicalDeploymentTransaction_succeeds
   have hlength : (post.getCode ca).toList.length = 2891 := by
     rw [hinstalled]
     exact constructorAppendedRuntime_length_exact
+  have hprotected : State.Protected messagePost ca := by
+    apply State.Protected.of_code_ne_nil
+    rw [hmessage.installed]
+    intro hnil
+    have hlen := constructorAppendedRuntime_length_exact
+    rw [hnil] at hlen
+    simp only [List.length_nil, OfNat.zero_ne_ofNat] at hlen
   have hstor : post.getStor ca = messagePost.getStor ca := by
     dsimp only [post, deploymentFinalState]
     unfold State.addBal State.getStor
-    rw [State.setBal_get_stor, State.setBal_get_stor]
+    rw [State.setBal_get_stor_of_protected (hprotected.setBal _ _),
+      State.setBal_get_stor_of_protected hprotected]
   have hstorage : post.getStor ca = constructorFinalStorage := by
     rw [hstor]
     exact hmessage.storage

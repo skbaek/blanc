@@ -11,9 +11,10 @@ unique first-live branch write. -/
 theorem commitDeposit_firstLive_exists_storageEffectRun
     {fs : List Func} {sevm : Sevm} {base : Devm}
     (hfork : CoveredFork sevm.benvStat.fork)
-    {memory : Mem} {oldCount node : B256}
+    {memory : Mem} {oldCount node orig : B256}
     {stor : Stor} {keys : KeySet} {n size G : Nat}
     (hmem : InsertionStartMemoryCarrier memory oldCount node)
+    (horig : base.getOrigStorVal sevm sevm.currentTarget (branchSlot n) = orig)
     (hshift : oldCount + 1 = Nat.toB256 size)
     (hstor : Devm.getStor
       (afterSstore sevm base depositCountSlot (oldCount + 1))
@@ -34,15 +35,15 @@ theorem commitDeposit_firstLive_exists_storageEffectRun
     (hdepth : sevm.depth ≠ 0)
     (hstatic : sevm.isStatic = false)
     (hbranchSentry : gCallStipend < G + 2 +
-      insertionFirstLiveStoreCost sevm stor keys 0 n node)
+      insertionFirstLiveStoreCostOf orig sevm stor keys 0 n node)
     (hbound :
       (G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n node) +
+          insertionFirstLiveStoreCostOf orig sevm stor keys 0 n node) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0 size node keys) < 2 ^ 256)
     (hcountSentry : gCallStipend <
       ((G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n node) +
+          insertionFirstLiveStoreCostOf orig sevm stor keys 0 n node) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0 size node keys)) +
       14 + sstoreCost sevm base depositCountSlot (oldCount + 1))
@@ -59,7 +60,7 @@ theorem commitDeposit_firstLive_exists_storageEffectRun
         (base.setMach
           ⟨[], memory,
             ((G + 46 +
-                insertionFirstLiveStoreCost sevm stor keys 0 n node) +
+                insertionFirstLiveStoreCostOf orig sevm stor keys 0 n node) +
               insertionDeadGas sevm.currentTarget stor n
                 (insertionNatState 0 size node keys)) +
             38 + sstoreCost sevm base depositCountSlot (oldCount + 1), base.stateGas⟩)
@@ -81,7 +82,7 @@ theorem commitDeposit_firstLive_exists_storageEffectRun
   have carrier :
       InsertionLoopCarrier countPost countPost nextMemory oldCount
         (insertionNatState 0 size node keys) := by
-    refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · simpa only [insertionNatState] using hmem'
     · intro a
       rfl
@@ -92,17 +93,24 @@ theorem commitDeposit_firstLive_exists_storageEffectRun
     · rfl
     · rfl
     · rfl
+    · rfl
+  have horigCount : countPost.getOrigStorVal sevm sevm.currentTarget
+      (branchSlot (0 + n)) = orig := by
+    rw [Nat.zero_add,
+      RepinBridge.getOrigStorVal_congr_created _ _
+        (RepinBridge.afterSstore_createdAccounts _ _ _ _)]
+    exact horig
   obtain ⟨finalBase, finalMemory, hfinal, run⟩ :=
     insertionLoop_firstLive_exists_storageEffectRun (hfork := hfork)
       (height := 0) (n := n) (size := size) (G := G)
-      carrier hstor (by omega) hsize hfirst hnodeleg hwarm hpre hdepth
+      carrier hstor horigCount (by omega) hsize hfirst hnodeleg hwarm hpre hdepth
       hstatic hbranchSentry hbound hinsertionContinuation hinsertionLoop
   have hzero : Nat.toB256 0 = (0 : B256) := by decide +kernel
   have tail : Func.StorageEffectRun fs sevm
       (countPost.setMach
         ⟨[0], nextMemory,
           (G + 46 +
-              insertionFirstLiveStoreCost sevm stor keys 0 n node) +
+              insertionFirstLiveStoreCostOf orig sevm stor keys 0 n node) +
             insertionDeadGas sevm.currentTarget stor n
               (insertionNatState 0 size node keys), base.stateGas⟩)
       insertionLoop
@@ -117,7 +125,7 @@ theorem commitDeposit_firstLive_exists_storageEffectRun
   have commit := commitDeposit_storageEffectRun (hfork := hfork)
     (K :=
       (G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n node) +
+          insertionFirstLiveStoreCostOf orig sevm stor keys 0 n node) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0 size node keys))
     hmem hcountSentry hstatic hinsertionLoop tail
@@ -129,9 +137,10 @@ accumulated node, and post-insertion carrier. -/
 theorem commitDeposit_firstLive_exists_runCompiledTo
     {fs : List Func} {sevm : Sevm} {base : Devm}
     (hfork : CoveredFork sevm.benvStat.fork)
-    {memory : Mem} {oldCount node : B256}
+    {memory : Mem} {oldCount node orig : B256}
     {stor : Stor} {keys : KeySet} {n size G : Nat}
     (hmem : InsertionStartMemoryCarrier memory oldCount node)
+    (horig : base.getOrigStorVal sevm sevm.currentTarget (branchSlot n) = orig)
     (hshift : oldCount + 1 = Nat.toB256 size)
     (hstor : Devm.getStor
       (afterSstore sevm base depositCountSlot (oldCount + 1))
@@ -152,15 +161,15 @@ theorem commitDeposit_firstLive_exists_runCompiledTo
     (hdepth : sevm.depth ≠ 0)
     (hstatic : sevm.isStatic = false)
     (hbranchSentry : gCallStipend < G + 2 +
-      insertionFirstLiveStoreCost sevm stor keys 0 n node)
+      insertionFirstLiveStoreCostOf orig sevm stor keys 0 n node)
     (hbound :
       (G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n node) +
+          insertionFirstLiveStoreCostOf orig sevm stor keys 0 n node) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0 size node keys) < 2 ^ 256)
     (hcountSentry : gCallStipend <
       ((G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n node) +
+          insertionFirstLiveStoreCostOf orig sevm stor keys 0 n node) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0 size node keys)) +
       14 + sstoreCost sevm base depositCountSlot (oldCount + 1))
@@ -177,7 +186,7 @@ theorem commitDeposit_firstLive_exists_runCompiledTo
         (base.setMach
           ⟨[], memory,
             ((G + 46 +
-                insertionFirstLiveStoreCost sevm stor keys 0 n node) +
+                insertionFirstLiveStoreCostOf orig sevm stor keys 0 n node) +
               insertionDeadGas sevm.currentTarget stor n
                 (insertionNatState 0 size node keys)) +
             38 + sstoreCost sevm base depositCountSlot (oldCount + 1), base.stateGas⟩)
@@ -187,7 +196,7 @@ theorem commitDeposit_firstLive_exists_runCompiledTo
             0 n node)).setMach ⟨[], finalMemory, G, finalBase.stateGas⟩)) := by
   obtain ⟨finalBase, finalMemory, hfinal, storageRun⟩ :=
     commitDeposit_firstLive_exists_storageEffectRun (hfork := hfork)
-      hmem hshift hstor hkeys hheight hsize hfirst hnodeleg hwarm hpre hdepth
+      hmem horig hshift hstor hkeys hheight hsize hfirst hnodeleg hwarm hpre hdepth
       hstatic hbranchSentry hbound hcountSentry hinsertionContinuation
       hinsertionLoop
   exact ⟨finalBase, finalMemory, hfinal, storageRun.run⟩

@@ -1,5 +1,6 @@
 import Blanc.BeaconDeposit
 import Blanc.ForwardSha256
+import Blanc.BeaconDepositRepinBridge
 import Blanc.StaticPrecompileMessage
 
 /-!
@@ -91,9 +92,8 @@ theorem sha64_success_prefix_runCompiledTo_ext
       callPost.logs = base.logs ∧
       callPost.output = base.output ∧
       callPost.error = base.error ∧
-      (∃ stmid,
-        base.state.subBal sevm.currentTarget 0 = some stmid ∧
-        callPost.state = stmid.addBal 2 0) ∧
+      callPost.state = base.state ∧
+      callPost.createdAccounts = base.createdAccounts ∧
       ∀ {ex : Execution},
         Func.RunCompiledTo fs sevm
           (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩) success ex →
@@ -107,10 +107,10 @@ theorem sha64_success_prefix_runCompiledTo_ext
       (inputWord * 32) :: (64 : B256) ::
       (outputWord * 32) :: (32 : B256) :: stack,
       base.memory, K + 221 + ext, base.stateGas⟩
-  obtain ⟨callPost, hstat, hstack, hmemory, hgas, hreturn,
+  obtain ⟨callPost, hstatChildless, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
-      hlogs, houtput, herror, stmid, hsub, hstate⟩ :=
-    Ninst.runCompiled_staticcall_sha256_64_warm_ext
+      hlogs, _hrefund, _hdelete, houtput, herror, hstate, hcreated⟩ :=
+    RepinBridge.childlessRunCompiled_staticcall_sha256_64_warm_ext_created
       (sevm := sevm) (devm := callPre)
       (iiw := inputWord * 32) (oiw := outputWord * 32)
       (s := stack) (G := K + 221 + ext) (ext := ext)
@@ -170,12 +170,14 @@ theorem sha64_success_prefix_runCompiledTo_ext
     calc
       callPost.error = callPre.error := herror
       _ = base.error := by rfl
-  have hsub' : base.state.subBal sevm.currentTarget 0 = some stmid := by
-    change base.state.subBal sevm.currentTarget 0 = some stmid at hsub
-    exact hsub
+  have hstate' : callPost.state = base.state := by
+    calc
+      callPost.state = callPre.state := hstate
+      _ = base.state := by rfl
   refine ⟨callPost, hstack, hmemory', hgas', hreturn',
     hstorage', hcode', haddresses', hkeys',
-    hlogs', houtput', herror', ⟨stmid, hsub', hstate⟩, ?_⟩
+    hlogs', houtput', herror', hstate', hcreated, ?_⟩
+  have hstat := hstatChildless.toRunCompiled
   intro ex htail
   have hge :
       (Nat.toB256 callPost.returnData.length <? (32 : B256)) = 0 := by
@@ -305,9 +307,8 @@ theorem sha64_success_prefix_runCompiledTo
       callPost.logs = base.logs ∧
       callPost.output = base.output ∧
       callPost.error = base.error ∧
-      (∃ stmid,
-        base.state.subBal sevm.currentTarget 0 = some stmid ∧
-        callPost.state = stmid.addBal 2 0) ∧
+      callPost.state = base.state ∧
+      callPost.createdAccounts = base.createdAccounts ∧
       ∀ {ex : Execution},
         Func.RunCompiledTo fs sevm
           (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩) success ex →

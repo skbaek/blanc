@@ -23,7 +23,11 @@ Unlike `deposit_success_settled_effects_of_processMessage`, this forward
 headline does not assume a successful `ProcessMessage`.  It identifies the
 compiled entry with the environment produced by `Msg.benvAfterTransfer`,
 derives the raw execution from `deposit_success_runCompiled`, and then uses
-the common post-transfer settlement adapter. -/
+the common post-transfer settlement adapter.
+
+The terminal branch write is priced from the machine original read
+`base.getOrigStorVal` (zero for an owner created earlier in the transaction),
+as Jaune's `SSTORE` prices it; created owners remain covered. -/
 theorem deposit_success_settled_effects
     {msg : Msg} {benv : Benv} {codeAddress : Adr}
     (sevm : Sevm) (base : Devm)
@@ -72,10 +76,14 @@ theorem deposit_success_settled_effects
     (hdepth : sevm.depth ≠ 0)
     (hstatic : sevm.isStatic = false)
     (hbranchSentry : gCallStipend < G + 2 +
-      insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot)
+      insertionFirstLiveStoreCostOf
+        (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+        sevm stor keys 0 n depositDataRoot)
     (hbound :
       (G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+          insertionFirstLiveStoreCostOf
+            (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+            sevm stor keys 0 n depositDataRoot) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0
             ((accOfStor
@@ -83,7 +91,9 @@ theorem deposit_success_settled_effects
             depositDataRoot keys) < 2 ^ 256)
     (hcountSentry : gCallStipend <
       ((G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+          insertionFirstLiveStoreCostOf
+            (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+            sevm stor keys 0 n depositDataRoot) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0
             ((accOfStor
@@ -91,7 +101,9 @@ theorem deposit_success_settled_effects
             depositDataRoot keys)) + 14 + countCost)
     (hreconstructBound :
       ((((G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+          insertionFirstLiveStoreCostOf
+            (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+            sevm stor keys 0 n depositDataRoot) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0
             ((accOfStor
@@ -100,7 +112,9 @@ theorem deposit_success_settled_effects
         1762 < 2 ^ 256)
     (hcode : sevm.code.toList = code)
     (hgasEntry : base.gasLeft =
-      depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
+      depositRuntimeSuccessGasOf
+        (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+        sevm base stor keys depositDataRoot n
         ((accOfStor (Devm.getStor base sevm.currentTarget)).count + 1)
         countCost G) :
     ∃ settled,
@@ -130,11 +144,13 @@ theorem deposit_success_settled_effects
       signature depositDataRoot s' ev stor keys countCost n G hdataBound hdec
       hOk hstor hkeys hcount hheight hfirst hselector hnodeleg hwarm hpre
       hdepth hstatic hbranchSentry hbound hcountSentry hreconstructBound hcode
+      (orig := base.getOrigStorVal sevm sevm.currentTarget (branchSlot n)) rfl
       with ⟨post, hrun, hstack, hgas, hlogs, hcountStor, hstorage, hcodes,
         haddresses, houtput, herror, hcompile⟩
   have hentryState : base.setMach
       ⟨[], Mem.empty,
-        depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
+        depositRuntimeSuccessGasOf (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+          sevm base stor keys depositDataRoot n
           ((accOfStor
             (Devm.getStor base sevm.currentTarget)).count + 1)
           countCost G, base.stateGas⟩ = base := by

@@ -42,12 +42,13 @@ structure ReconstructMetaCarrier
   output : current.output = origin.output
   error : current.error = origin.error
   state : ReconstructZeroTransferChain sevm origin.state current.state
+  created : current.createdAccounts = origin.createdAccounts
 
 /-- Initial cumulative metadata carrier. -/
 theorem ReconstructMetaCarrier.refl (sevm : Sevm) (base : Devm) :
     ReconstructMetaCarrier sevm base base :=
   ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl, rfl,
-    ReconstructZeroTransferChain.refl base.state⟩
+    ReconstructZeroTransferChain.refl base.state, rfl⟩
 
 /-- Extend cumulative metadata by one successful SHA-256 call. -/
 theorem ReconstructMetaCarrier.afterHash
@@ -60,17 +61,16 @@ theorem ReconstructMetaCarrier.afterHash
     (hlogs : post.logs = base.logs)
     (houtput : post.output = base.output)
     (herror : post.error = base.error)
-    (htransfer : exists stmid,
-      base.state.subBal sevm.currentTarget 0 = some stmid /\
-      post.state = stmid.addBal 2 0) :
+    (hstate : post.state = base.state)
+    (hcreated : post.createdAccounts = base.createdAccounts) :
     ReconstructMetaCarrier sevm origin post := by
-  obtain ⟨stmid, hsub, hstate⟩ := htransfer
   refine ⟨fun a => (hstorage a).trans (h.storage a),
     fun a => (hcode a).trans (h.code a),
     haddresses.trans h.accessedAddresses,
     hkeys.trans h.accessedStorageKeys,
-    hlogs.trans h.logs, houtput.trans h.output, herror.trans h.error, ?_⟩
-  exact ReconstructZeroTransferChain.step h.state hsub hstate
+    hlogs.trans h.logs, houtput.trans h.output, herror.trans h.error, ?_,
+    hcreated.trans h.created⟩
+  exact hstate.symm ▸ h.state
 
 /-- Machine-only changes preserve cumulative reconstruction metadata. -/
 theorem ReconstructMetaCarrier.setMach
@@ -78,7 +78,7 @@ theorem ReconstructMetaCarrier.setMach
     (h : ReconstructMetaCarrier sevm origin current) (mach : Mach) :
     ReconstructMetaCarrier sevm origin (current.setMach mach) :=
   ⟨h.storage, h.code, h.accessedAddresses, h.accessedStorageKeys,
-    h.logs, h.output, h.error, h.state⟩
+    h.logs, h.output, h.error, h.state, h.created⟩
 
 /-- Exact cost of loading one memory word and storing it at another word. -/
 def reconstructLoadStoreCost (sourceWord targetWord : B256) : Nat :=
@@ -307,7 +307,7 @@ theorem reconstructPubkeySha_runCompiledTo
     exact hwarm
   obtain ⟨callPost, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
-      hlogs, houtputMeta, herror, htransfer, hlift⟩ :=
+      hlogs, houtputMeta, herror, htransfer, hcreated, hlift⟩ :=
     sha64_success_prefix_runCompiledTo (hfork := hfork)
       (fs := fs) (sevm := sevm) (base := base)
       (inputWord := 6) (outputWord := nodeWord)
@@ -328,7 +328,7 @@ theorem reconstructPubkeySha_runCompiledTo
     exact source.writeNode (Bytes.sha256 pubkeyInput) (by omega)
   have hmeta : ReconstructMetaCarrier sevm origin callPost :=
     hmetaBase.afterHash hstorage hcode haddresses hkeys hlogs houtputMeta herror
-      htransfer
+      htransfer hcreated
   refine ⟨callPost, hstack, hmemory', ⟨hcarrier⟩, hgas, hreturn', hmeta, ?_⟩
   intro ex htail
   have hwhole := hlift htail
@@ -387,7 +387,7 @@ theorem reconstructSignatureFirstSha_runCompiledTo
     exact hwarm
   obtain ⟨callPost, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
-      hlogs, houtputMeta, herror, htransfer, hlift⟩ :=
+      hlogs, houtputMeta, herror, htransfer, hcreated, hlift⟩ :=
     sha64_success_prefix_runCompiledTo_ext (hfork := hfork)
       (fs := fs) (sevm := sevm) (base := base)
       (inputWord := 13) (outputWord := intermediateWord)
@@ -419,7 +419,7 @@ theorem reconstructSignatureFirstSha_runCompiledTo
     exact hextended.writeIntermediate (Bytes.sha256 signatureFirst) (by omega)
   have hmeta : ReconstructMetaCarrier sevm origin callPost :=
     hmetaBase.afterHash hstorage hcode haddresses hkeys hlogs houtputMeta
-      herror htransfer
+      herror htransfer hcreated
   refine ⟨callPost, hstack, hmemory', ⟨hcarrier⟩, hgas, hreturn', hmeta, ?_⟩
   intro ex htail
   have hwhole := hlift htail
@@ -543,7 +543,7 @@ theorem reconstructSignatureSecondSha_runCompiledTo
     exact hwarm
   obtain ⟨callPost, _hstack, hmemory, _hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
-      hlogs, houtputMeta, herror, htransfer, hlift⟩ :=
+      hlogs, houtputMeta, herror, htransfer, hcreated, hlift⟩ :=
     sha64_success_prefix_runCompiledTo_ext (hfork := hfork)
       (fs := fs) (sevm := sevm) (base := shaBase)
       (inputWord := 0) (outputWord := secondIntermediateWord)
@@ -582,7 +582,7 @@ theorem reconstructSignatureSecondSha_runCompiledTo
       (reconstructSignatureSecondDigest signatureTail) (by omega)
   have hmeta : ReconstructMetaCarrier sevm origin callPost :=
     hmetaSha.afterHash hstorage hcode haddresses hkeys hlogs houtputMeta
-      herror htransfer
+      herror htransfer hcreated
   refine ⟨callPost, ?_, ⟨hcarrier⟩, hreturn', hmeta, ?_⟩
   · simpa only [stagedMemory] using hmemory'
   intro ex htail
@@ -712,7 +712,7 @@ theorem reconstructPairSha_runCompiledTo
     exact hwarm
   obtain ⟨callPost, _hstack, hmemory, _hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
-      hlogs, houtputMeta, herror, htransfer, hlift⟩ :=
+      hlogs, houtputMeta, herror, htransfer, hcreated, hlift⟩ :=
     sha64_success_prefix_runCompiledTo (hfork := hfork)
       (fs := fs) (sevm := sevm) (base := shaBase)
       (inputWord := 0) (outputWord := outputWord)
@@ -730,7 +730,7 @@ theorem reconstructPairSha_runCompiledTo
     simpa only [hashPair] using hreturn
   have hmeta : ReconstructMetaCarrier sevm origin callPost :=
     hmetaSha.afterHash hstorage hcode haddresses hkeys hlogs houtputMeta
-      herror htransfer
+      herror htransfer hcreated
   refine ⟨callPost, ?_, hreturn', hmeta, ?_⟩
   · simpa only [stagedMemory] using hmemory'
   intro ex htail
