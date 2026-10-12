@@ -202,11 +202,11 @@ theorem prepareCanonicalDeploymentContext
     dsimp only [debit]
     change (((begun.state.incrNonce sender).setBal sender _).get sender).nonce =
       base.state.getNonce sender + 1
-    rw [State.setBal_get_self]
+    rw [State.setBal_get_self, Acct.clearIfEmpty_nonce]
     change ((begun.state.incrNonce sender).get sender).nonce =
       base.state.getNonce sender + 1
     unfold State.incrNonce
-    rw [State.get_set_self]
+    rw [State.setAccount_get_self, Acct.clearIfEmpty_nonce]
     change begun.state.getNonce sender + 1 = base.state.getNonce sender + 1
     rw [hbegunState]
   have htarget : msg.currentTarget = ca := by
@@ -232,7 +232,7 @@ theorem prepareCanonicalDeploymentContext
     dsimp only [debit]
     rw [State.setBal_get_ne hbase.sender_ne_target]
     unfold State.incrNonce
-    rw [State.get_set_ne _ hbase.sender_ne_target]
+    rw [State.setAccount_get_ne _ hbase.sender_ne_target]
     rw [hbegunState]
   have hnocode : accountHasCodeOrNonce msg.benv.state ca = false := by
     dsimp only [msg, msgBenv]

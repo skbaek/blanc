@@ -752,12 +752,12 @@ theorem freshRegistrationWorld_run :
       hlength freshWorld_value hselector freshWorld_codeAddress
       freshWorld_codeBytes freshWorld_admin hargTarget hargNew
       freshWorld_preWitness freshWorld_find freshWorld_targetValid
-      freshWorld_pauserValid freshWorld_time freshWorld_origAssignment
-      freshWorld_assignmentCost freshWorld_postArray freshWorld_origArray
+      freshWorld_pauserValid freshWorld_time (actualOrigStorVal_eq_zero_of_raw freshWorld_origAssignment)
+      freshWorld_assignmentCost freshWorld_postArray (actualOrigStorVal_eq_zero_of_raw freshWorld_origArray)
       freshWorld_arrayCost freshWorld_postWarmArrayEntry
-      freshWorld_origIndex freshWorld_indexCost freshWorld_postWarmIndex
-      freshWorld_origLength freshWorld_lengthCost freshWorld_lengthNextWord
-      freshWorld_origCount freshWorld_countCost freshWorld_countNextWord
+      (actualOrigStorVal_eq_zero_of_raw freshWorld_origIndex) freshWorld_indexCost freshWorld_postWarmIndex
+      (actualOrigStorVal_eq_zero_of_raw freshWorld_origLength) freshWorld_lengthCost freshWorld_lengthNextWord
+      (actualOrigStorVal_eq_zero_of_raw freshWorld_origCount) freshWorld_countCost freshWorld_countNextWord
       freshWorld_postColdCount freshWorld_postInterval
       freshWorld_postColdInterval freshWorld_postExpiry freshWorld_origExpiry
       freshWorld_postWarmExpiry freshWorld_static freshWorld_extension

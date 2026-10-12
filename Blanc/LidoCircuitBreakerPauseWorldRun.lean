@@ -66,6 +66,48 @@ def pauseLastSevm : Sevm := pauseWorldSevm pauseLastWorldStor pauseLastWorldGas
 /-- The row-19 world's dynamic half at entry. -/
 def pauseLastPre : Devm := pauseWorldPre pauseLastWorldStor pauseLastWorldGas
 
+/-! ## The created-account set through the walk carriers
+
+Every carrier the witness walks thread leaves the created-account set alone;
+these one-layer facts let a `simp only` peel a whole carrier tower without
+unfolding its storage. -/
+
+private theorem pauseWorldRun_sload_created (sevm : Sevm) (b : Devm) (k : B256) :
+    (temporalSloadBase sevm b k).createdAccounts = b.createdAccounts := by
+  unfold temporalSloadBase
+  split <;> rfl
+
+private theorem pauseWorldRun_sstore_created (sevm : Sevm) (b : Devm) (k v : B256) :
+    (temporalSstorePost sevm b k v).createdAccounts = b.createdAccounts := rfl
+
+private theorem pauseWorldRun_addKey_created (b : Devm) (a : Adr) (k : B256) :
+    (addAccessedStorageKey b a k).createdAccounts = b.createdAccounts := rfl
+
+private theorem pauseWorldRun_addLog_created (b : Devm) (l : Log) :
+    (b.addLog l).createdAccounts = b.createdAccounts := rfl
+
+private theorem pauseWorldRun_transVal_created (b : Devm) (a : Adr) (k v : B256) :
+    (b.setTransVal a k v).createdAccounts = b.createdAccounts := rfl
+
+/-- The witness worlds' breaker owner is not created in its transaction, so at
+any state whose created-account set is still the entry one, the machine's
+actual original read is the entry snapshot word. -/
+theorem pauseWorld_actualOrigStor (stor : Stor) (gas : Nat) {d : Devm} {key : B256}
+    (hd : d.createdAccounts = (pauseWorldPre stor gas).createdAccounts := by
+      (try simp only [indexClearPost, entryClearPost, lengthWritePost, indexWritePost,
+        entryWritePost, swapPopClearPost, assignmentPost, assignmentBase, foundKernelPost,
+        pauseKernelBase, pauseDurationBase, pauseExpiryBase, pauseLockPost,
+        pauseWorldRun_sload_created, pauseWorldRun_sstore_created,
+        pauseWorldRun_addKey_created, pauseWorldRun_addLog_created,
+        pauseWorldRun_transVal_created, Devm.setMach_createdAccounts]) <;> rfl) :
+    d.getOrigStorVal (pauseWorldSevm stor gas) configWorldOwner key =
+      stor.get key := by
+  have hnc : configWorldOwner ∉ d.createdAccounts := by
+    rw [hd]
+    exact Std.HashSet.not_mem_emptyWithCapacity
+  rw [Devm.getOrigStorVal, ite_cond_eq_false _ _ (eq_false hnc)]
+  exact pauseWorld_getOrigStor stor gas
+
 /-! ## Projection helpers
 
 Small `rfl`-or-split lemmas for reading fields through the tower layers the
@@ -2115,7 +2157,7 @@ private theorem pauseLastWorld_master :
     exact CoveredFork.prague
   -- the existential pauseAfterSet leg at the post-removal boundary
   obtain ⟨mid, hstk, hmem, hgas, herrF, houtF, hretF, hlogsF, hrefundF,
-    hatdF, htransF, haskF, haaF, hchain, hclose⟩ :=
+    hatdF, htransF, haskF, haaF, hchain, hcreatedMid, hclose⟩ :=
     pauseAfterSet_toSuccess_runCompiled (hfork := hfork)
       ((runtime officialParams).main :: (runtime officialParams).aux)
       pauseLastSevm ((indexClearPost pauseLastSevm (entryClearPost pauseLastSevm (temporalSloadBase pauseLastSevm (temporalSloadBase pauseLastSevm (temporalSloadBase pauseLastSevm (temporalSstorePost pauseLastSevm (temporalSloadBase pauseLastSevm (assignmentPost pauseLastSevm
@@ -2206,7 +2248,14 @@ private theorem pauseLastWorld_master :
       rw [if_pos hmidWarmCount]
       rfl)
     hmidExpiry
-    ((pauseWorld_getOrigStor pauseLastWorldStor pauseLastWorldGas).trans
+    ((pauseWorld_actualOrigStor pauseLastWorldStor pauseLastWorldGas
+      (hd := hcreatedMid.trans (by
+        (try simp only [indexClearPost, entryClearPost, lengthWritePost, indexWritePost,
+          entryWritePost, swapPopClearPost, assignmentPost, assignmentBase, foundKernelPost,
+          pauseKernelBase, pauseDurationBase, pauseExpiryBase, pauseLockPost,
+          pauseWorldRun_sload_created, pauseWorldRun_sstore_created,
+          pauseWorldRun_addKey_created, pauseWorldRun_addLog_created,
+          pauseWorldRun_transVal_created, Devm.setMach_createdAccounts]) <;> rfl))).trans
       pauseLastStor_expiry)
     hmidWarmExpiry
     (lastSvc_reset (by decide) (by decide))
@@ -2269,11 +2318,11 @@ private theorem pauseLastWorld_master :
       pauseWorld_indexCallee_ne_count.symm).trans pauseLastStor_index)
     ((lastStor_countPost_other pauseWorld_length_ne_assignCallee.symm
       pauseWorld_length_ne_count.symm).trans pauseLastStor_length)
-    ((pauseWorld_getOrigStor pauseLastWorldStor pauseLastWorldGas).trans
+    ((pauseWorld_actualOrigStor pauseLastWorldStor pauseLastWorldGas).trans
       pauseLastStor_entry)
-    ((pauseWorld_getOrigStor pauseLastWorldStor pauseLastWorldGas).trans
+    ((pauseWorld_actualOrigStor pauseLastWorldStor pauseLastWorldGas).trans
       pauseLastStor_index)
-    ((pauseWorld_getOrigStor pauseLastWorldStor pauseLastWorldGas).trans
+    ((pauseWorld_actualOrigStor pauseLastWorldStor pauseLastWorldGas).trans
       pauseLastStor_length)
     lastCost_idxCold lastCost_lenCold lastCost_arrCold
     lastSvc_noop lastSvc_noop (lastSvc_reset (by decide) (by decide))
@@ -2312,12 +2361,12 @@ private theorem pauseLastWorld_master :
     (pauseMemory_spec pauseWorldCallee.toB256 pauseWorldDuration).2.2.2.1
     (pauseMemory_spec pauseWorldCallee.toB256 pauseWorldDuration).2.2.2.2.1
     ((lastStor_kernelBase _).trans pauseLastStor_assignment)
-    ((pauseWorld_getOrigStor pauseLastWorldStor pauseLastWorldGas).trans
+    ((pauseWorld_actualOrigStor pauseLastWorldStor pauseLastWorldGas).trans
       pauseLastStor_assignment)
     (lastSvc_reset (by decide) (by decide))
     ((lastStor_assignPost_other pauseWorld_assignCallee_ne_count).trans
       pauseLastStor_count)
-    ((pauseWorld_getOrigStor pauseLastWorldStor pauseLastWorldGas).trans
+    ((pauseWorld_actualOrigStor pauseLastWorldStor pauseLastWorldGas).trans
       pauseLastStor_count)
     (lastSvc_reset (by decide) (by decide))
     (by norm_num only [gCallStipend]) rfl
@@ -4178,7 +4227,7 @@ private theorem pauseRetainedWorld_master :
     change CoveredFork .prague
     exact CoveredFork.prague
   obtain ⟨mid, hstk, hmem, hgas, herrF, houtF, hretF, hlogsF, hrefundF,
-    hatdF, htransF, haskF, haaF, hchain, hclose⟩ :=
+    hatdF, htransF, haskF, haaF, hchain, hcreatedMid, hclose⟩ :=
     pauseAfterSet_toSuccess_runCompiled (hfork := hfork)
       ((runtime officialParams).main :: (runtime officialParams).aux)
       pauseRetainedSevm ((temporalSstorePost pauseRetainedSevm (lengthWritePost pauseRetainedSevm (temporalSstorePost pauseRetainedSevm (temporalSstorePost pauseRetainedSevm
@@ -4280,7 +4329,14 @@ private theorem pauseRetainedWorld_master :
       rfl)
     (by show B256.Nof pauseWorldTime pauseWorldInterval; exact return_nof)
     hmidExpiry
-    ((pauseWorld_getOrigStor pauseRetainedWorldStor pauseRetainedWorldGas).trans pauseRetainedStor_expiry)
+    ((pauseWorld_actualOrigStor pauseRetainedWorldStor pauseRetainedWorldGas
+      (hd := hcreatedMid.trans (by
+        (try simp only [indexClearPost, entryClearPost, lengthWritePost, indexWritePost,
+          entryWritePost, swapPopClearPost, assignmentPost, assignmentBase, foundKernelPost,
+          pauseKernelBase, pauseDurationBase, pauseExpiryBase, pauseLockPost,
+          pauseWorldRun_sload_created, pauseWorldRun_sstore_created,
+          pauseWorldRun_addKey_created, pauseWorldRun_addLog_created,
+          pauseWorldRun_transVal_created, Devm.setMach_createdAccounts]) <;> rfl))).trans pauseRetainedStor_expiry)
     hmidWarmExpiry
     (by
       show sstoreValueCost pauseWorldExpiry pauseWorldExpiry
@@ -4362,11 +4418,11 @@ private theorem pauseRetainedWorld_master :
       pauseWorld_indexCallee_ne_count.symm).trans pauseRetainedStor_index)
     ((returnStor_countPost_other pauseWorld_length_ne_assignCallee.symm
       pauseWorld_length_ne_count.symm).trans pauseRetainedStor_length)
-    ((pauseWorld_getOrigStor pauseRetainedWorldStor pauseRetainedWorldGas).trans pauseRetainedStor_entryOne)
-    ((pauseWorld_getOrigStor pauseRetainedWorldStor pauseRetainedWorldGas).trans pauseRetainedStor_indexT2)
-    ((pauseWorld_getOrigStor pauseRetainedWorldStor pauseRetainedWorldGas).trans pauseRetainedStor_entryTwo)
-    ((pauseWorld_getOrigStor pauseRetainedWorldStor pauseRetainedWorldGas).trans pauseRetainedStor_index)
-    ((pauseWorld_getOrigStor pauseRetainedWorldStor pauseRetainedWorldGas).trans pauseRetainedStor_length)
+    ((pauseWorld_actualOrigStor pauseRetainedWorldStor pauseRetainedWorldGas).trans pauseRetainedStor_entryOne)
+    ((pauseWorld_actualOrigStor pauseRetainedWorldStor pauseRetainedWorldGas).trans pauseRetainedStor_indexT2)
+    ((pauseWorld_actualOrigStor pauseRetainedWorldStor pauseRetainedWorldGas).trans pauseRetainedStor_entryTwo)
+    ((pauseWorld_actualOrigStor pauseRetainedWorldStor pauseRetainedWorldGas).trans pauseRetainedStor_index)
+    ((pauseWorld_actualOrigStor pauseRetainedWorldStor pauseRetainedWorldGas).trans pauseRetainedStor_length)
     returnCost_idxCold returnCost_lenCold returnCost_tailCold
     returnCold_hole returnCold_moved
     (lastSvc_reset (by decide) (by decide))
@@ -4402,11 +4458,11 @@ private theorem pauseRetainedWorld_master :
     (pauseMemory_spec pauseWorldCallee.toB256 pauseWorldDuration).2.2.2.1
     (pauseMemory_spec pauseWorldCallee.toB256 pauseWorldDuration).2.2.2.2.1
     ((returnStor_kernelBase _).trans pauseRetainedStor_assignment)
-    ((pauseWorld_getOrigStor pauseRetainedWorldStor pauseRetainedWorldGas).trans pauseRetainedStor_assignment)
+    ((pauseWorld_actualOrigStor pauseRetainedWorldStor pauseRetainedWorldGas).trans pauseRetainedStor_assignment)
     (lastSvc_reset (by decide) (by decide))
     ((returnStor_assignPost_other pauseWorld_assignCallee_ne_count).trans
       pauseRetainedStor_count)
-    ((pauseWorld_getOrigStor pauseRetainedWorldStor pauseRetainedWorldGas).trans pauseRetainedStor_count)
+    ((pauseWorld_actualOrigStor pauseRetainedWorldStor pauseRetainedWorldGas).trans pauseRetainedStor_count)
     (lastSvc_reset (by decide) (by decide))
     (by norm_num only [gCallStipend]) rfl
     (by

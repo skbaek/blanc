@@ -203,10 +203,17 @@ theorem canonicalDeploymentTransaction_succeeds
     dsimp only [post, deploymentFinalState]
     rw [State.addBal_getCode, State.addBal_getCode]
     exact hmessage.installed
+  have hprot : State.Protected messagePost ca := by
+    apply State.Protected.of_code_ne_nil
+    intro hnil
+    have h := hmessage.installed
+    rw [hnil] at h
+    exact Prog.compile_ne_nil h.symm
   have hstor : post.getStor ca = messagePost.getStor ca := by
     dsimp only [post, deploymentFinalState]
     unfold State.addBal State.getStor
-    rw [State.setBal_get_stor, State.setBal_get_stor]
+    rw [State.setBal_get_stor_of_protected (hprot.setBal _ _),
+      State.setBal_get_stor_of_protected hprot]
   have hpause : (post.getStor ca).get pauseDurationSlot =
       officialConstructorArgs.initialPauseDuration := by
     rw [hstor]

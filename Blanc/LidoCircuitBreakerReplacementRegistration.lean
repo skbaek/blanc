@@ -155,7 +155,7 @@ theorem registerAfterSet_oldLastNonzero_runCompiled
       base.accessedStorageKeys)
     (holdExpiry : base.getStorVal sevm.currentTarget
       (expirySlot oldPauser) = oldExpiry)
-    (holdExpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (holdExpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot oldPauser) = oldExpiryOriginal)
     (hwarmOldExpiry : (sevm.currentTarget, expirySlot oldPauser) ∈
       base.accessedStorageKeys)
@@ -169,7 +169,7 @@ theorem registerAfterSet_oldLastNonzero_runCompiled
     (hexpiry : (temporalSstorePost sevm base
       (expirySlot oldPauser) 0).getStorVal sevm.currentTarget
         (expirySlot newPauser) = currentExpiry)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot newPauser) = expiryOriginal)
     (hwarmNewExpiry : (sevm.currentTarget, expirySlot newPauser) ∈
       base.accessedStorageKeys)
@@ -227,7 +227,8 @@ theorem registerAfterSet_oldLastNonzero_runCompiled
     storeCost G hstack (Mem.Wf.write hwf _ _) (Mem.Reads.write hwf hreads 0 _)
     hnew0 hnewNonzero (by omega) (by rw [hsize0]; exact halign) htime
     (by rw [getStorVal_addLog]; exact hinterval) hintervalCold0
-    (by rw [getStorVal_addLog]; exact hexpiry) hexpiryOrig hwarmNewExpiry0
+    (by rw [getStorVal_addLog]; exact hexpiry)
+    ((temporalSstorePost_getOrigStorVal sevm base (expirySlot oldPauser) 0 _ _).trans hexpiryOrig) hwarmNewExpiry0
     hstoreCost hgasStipend hstatic hextension
   have h := registerAfterSet_oldLast_newPauserTail_runCompiled (hfork := hfork) fs sevm base M
     img oldPauser oldExpiry oldExpiryOriginal stack clearCost
@@ -274,7 +275,7 @@ theorem finishSetPauser_oldLastNonzero_runCompiled
       base.accessedStorageKeys)
     (holdExpiry : base.getStorVal sevm.currentTarget
       (expirySlot oldPauser) = oldExpiry)
-    (holdExpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (holdExpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot oldPauser) = oldExpiryOriginal)
     (hwarmOldExpiry : (sevm.currentTarget, expirySlot oldPauser) ∈
       base.accessedStorageKeys)
@@ -288,7 +289,7 @@ theorem finishSetPauser_oldLastNonzero_runCompiled
     (hexpiry : (temporalSstorePost sevm base
       (expirySlot oldPauser) 0).getStorVal sevm.currentTarget
         (expirySlot newPauser) = currentExpiry)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot newPauser) = expiryOriginal)
     (hwarmNewExpiry : (sevm.currentTarget, expirySlot newPauser) ∈
       base.accessedStorageKeys)
@@ -515,7 +516,7 @@ theorem registerAfterSet_retainedNonzero_runCompiled
       base.accessedStorageKeys)
     (hexpiry : base.getStorVal sevm.currentTarget
       (expirySlot newPauser) = currentExpiry)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot newPauser) = expiryOriginal)
     (hwarmNewExpiry : (sevm.currentTarget, expirySlot newPauser) ∈
       base.accessedStorageKeys)
@@ -588,7 +589,7 @@ theorem finishSetPauser_retainedNonzero_runCompiled
       base.accessedStorageKeys)
     (hexpiry : base.getStorVal sevm.currentTarget
       (expirySlot newPauser) = currentExpiry)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot newPauser) = expiryOriginal)
     (hwarmNewExpiry : (sevm.currentTarget, expirySlot newPauser) ∈
       base.accessedStorageKeys)
@@ -658,6 +659,14 @@ def foundNonzeroKernelPost (sevm : Sevm) (base : Devm)
       (countSlot newPauser))
     (countSlot newPauser) nextCount
 
+theorem foundNonzeroKernelPost_getOrigStorVal (sevm : Sevm) (base : Devm)
+    (target newPauser oldPauser oldCount nextCount : B256) (a : Adr) (key : B256) :
+    (foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount
+      nextCount).getOrigStorVal sevm a key = base.getOrigStorVal sevm a key := by
+  unfold foundNonzeroKernelPost
+  rw [temporalSstorePost_getOrigStorVal, temporalSloadBase_getOrigStorVal,
+    foundKernelPost_getOrigStorVal]
+
 /-- Exact `setPauserKernel` reserve for a retained replacement: the shared
 found-nonzero Registry prefix, the new pauser's count read and write, and the
 5654 gas plus expiry-store value cost of the retained `finishSetPauser` arm. -/
@@ -705,13 +714,13 @@ theorem setPauserKernel_retainedNonzero_runCompiled
     (hsize : M.size = 640)
     (hassignment : base.getStorVal sevm.currentTarget
       (assignmentSlot target) = oldPauser)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser
       newPauser = assignmentCost)
     (hcount : (assignmentPost sevm base target newPauser).getStorVal
       sevm.currentTarget (countSlot oldPauser) = oldCount)
-    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hcountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot oldPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
       countCost)
@@ -719,7 +728,7 @@ theorem setPauserKernel_retainedNonzero_runCompiled
       (foundKernelPost sevm base target newPauser oldPauser
         oldCount).getStorVal sevm.currentTarget (countSlot newPauser) =
         newCount)
-    (hnewCountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hnewCountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot newPauser) = newCountOriginal)
     (hnewCountNext : (1 : B256) + newCount = nextCount)
     (hnewCountCost : sstoreValueCost newCountOriginal newCount nextCount =
@@ -738,7 +747,7 @@ theorem setPauserKernel_retainedNonzero_runCompiled
     (hexpiry : (foundNonzeroKernelPost sevm base target newPauser oldPauser
       oldCount nextCount).getStorVal sevm.currentTarget
         (expirySlot newPauser) = currentExpiry)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot newPauser) = expiryOriginal)
     (hwarmNewExpiry : (sevm.currentTarget, expirySlot newPauser) ∈
       (foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount
@@ -819,7 +828,8 @@ theorem setPauserKernel_retainedNonzero_runCompiled
     (Mem.Wf.write hwf _ _) (Mem.Reads.write hwf hreads _ _) htarget'
     hprevious' hnew' hcontinuation' holdValid.1 hnewNonzero hremaining
     hremainingCount hwarmOldCount htime hinterval hintervalCold hexpiry
-    hexpiryOrig hwarmNewExpiry hstoreCost hgasStipend hstatic
+    ((foundNonzeroKernelPost_getOrigStorVal sevm base target newPauser oldPauser oldCount
+      nextCount _ _).trans hexpiryOrig) hwarmNewExpiry hstoreCost hgasStipend hstatic
     (by omega) (by rw [hsize']) hextension
   dsimp only [foundNonzeroKernelPost] at hfinish
   have hkernel := setPauserKernel_foundNonzero_finishSetPauser_runCompiled (hfork := hfork) dp
@@ -1066,13 +1076,13 @@ theorem registerPauser_body_retainedNonzero_runCompiled
     (holdValid : nonzeroCanonicalAddress oldPauser)
     (hassignment : base.getStorVal sevm.currentTarget
       (assignmentSlot target) = oldPauser)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser
       newPauser = assignmentCost)
     (hcount : (assignmentPost sevm base target newPauser).getStorVal
       sevm.currentTarget (countSlot oldPauser) = oldCount)
-    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hcountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot oldPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
       countCost)
@@ -1080,7 +1090,7 @@ theorem registerPauser_body_retainedNonzero_runCompiled
       (foundKernelPost sevm base target newPauser oldPauser
         oldCount).getStorVal sevm.currentTarget (countSlot newPauser) =
         newCount)
-    (hnewCountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hnewCountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot newPauser) = newCountOriginal)
     (hnewCountNext : (1 : B256) + newCount = nextCount)
     (hnewCountCost : sstoreValueCost newCountOriginal newCount nextCount =
@@ -1099,7 +1109,7 @@ theorem registerPauser_body_retainedNonzero_runCompiled
     (hexpiry : (foundNonzeroKernelPost sevm base target newPauser oldPauser
       oldCount nextCount).getStorVal sevm.currentTarget
         (expirySlot newPauser) = currentExpiry)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot newPauser) = expiryOriginal)
     (hwarmNewExpiry : (sevm.currentTarget, expirySlot newPauser) ∈
       (foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount
@@ -1256,13 +1266,13 @@ theorem registerPauser_runCompiledTo_retainedNonzero
     (holdValid : nonzeroCanonicalAddress oldPauser)
     (hassignment : base.getStorVal sevm.currentTarget
       (assignmentSlot target) = oldPauser)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser
       newPauser = assignmentCost)
     (hcount : (assignmentPost sevm base target newPauser).getStorVal
       sevm.currentTarget (countSlot oldPauser) = oldCount)
-    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hcountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot oldPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
       countCost)
@@ -1270,7 +1280,7 @@ theorem registerPauser_runCompiledTo_retainedNonzero
       (foundKernelPost sevm base target newPauser oldPauser
         oldCount).getStorVal sevm.currentTarget (countSlot newPauser) =
         newCount)
-    (hnewCountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hnewCountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot newPauser) = newCountOriginal)
     (hnewCountNext : (1 : B256) + newCount = nextCount)
     (hnewCountCost : sstoreValueCost newCountOriginal newCount nextCount =
@@ -1289,7 +1299,7 @@ theorem registerPauser_runCompiledTo_retainedNonzero
     (hexpiry : (foundNonzeroKernelPost sevm base target newPauser oldPauser
       oldCount nextCount).getStorVal sevm.currentTarget
         (expirySlot newPauser) = currentExpiry)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot newPauser) = expiryOriginal)
     (hwarmNewExpiry : (sevm.currentTarget, expirySlot newPauser) ∈
       (foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount
@@ -1388,20 +1398,20 @@ theorem registerPauser_retainedNonzero_success_settled_effects
     (holdValid : nonzeroCanonicalAddress oldPauser)
     (hassignment : (initDevm msg).getStorVal ca
       (assignmentSlot target) = oldPauser)
-    (hassignmentOrig : getOrigStorVal (initSevm msg) ca
+    (hassignmentOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser
       newPauser = assignmentCost)
     (hcount : (assignmentPost (initSevm msg) (initDevm msg) target
       newPauser).getStorVal ca (countSlot oldPauser) = oldCount)
-    (hcountOrig : getOrigStorVal (initSevm msg) ca
+    (hcountOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (countSlot oldPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
       countCost)
     (hnewCount :
       (foundKernelPost (initSevm msg) (initDevm msg) target newPauser
         oldPauser oldCount).getStorVal ca (countSlot newPauser) = newCount)
-    (hnewCountOrig : getOrigStorVal (initSevm msg) ca
+    (hnewCountOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (countSlot newPauser) = newCountOriginal)
     (hnewCountNext : (1 : B256) + newCount = nextCount)
     (hnewCountCost : sstoreValueCost newCountOriginal newCount nextCount =
@@ -1420,7 +1430,7 @@ theorem registerPauser_retainedNonzero_success_settled_effects
     (hexpiry : (foundNonzeroKernelPost (initSevm msg) (initDevm msg) target
       newPauser oldPauser oldCount nextCount).getStorVal ca
         (expirySlot newPauser) = currentExpiry)
-    (hexpiryOrig : getOrigStorVal (initSevm msg) ca
+    (hexpiryOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (expirySlot newPauser) = expiryOriginal)
     (hwarmNewExpiry : (ca, expirySlot newPauser) ∈
       (foundNonzeroKernelPost (initSevm msg) (initDevm msg) target newPauser
@@ -1587,13 +1597,13 @@ theorem setPauserKernel_oldLastNonzero_runCompiled
     (hsize : M.size = 640)
     (hassignment : base.getStorVal sevm.currentTarget
       (assignmentSlot target) = oldPauser)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser
       newPauser = assignmentCost)
     (hcount : (assignmentPost sevm base target newPauser).getStorVal
       sevm.currentTarget (countSlot oldPauser) = oldCount)
-    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hcountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot oldPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
       countCost)
@@ -1601,7 +1611,7 @@ theorem setPauserKernel_oldLastNonzero_runCompiled
       (foundKernelPost sevm base target newPauser oldPauser
         oldCount).getStorVal sevm.currentTarget (countSlot newPauser) =
         newCount)
-    (hnewCountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hnewCountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot newPauser) = newCountOriginal)
     (hnewCountNext : (1 : B256) + newCount = nextCount)
     (hnewCountCost : sstoreValueCost newCountOriginal newCount nextCount =
@@ -1612,7 +1622,7 @@ theorem setPauserKernel_oldLastNonzero_runCompiled
     (holdExpiry : (foundNonzeroKernelPost sevm base target newPauser oldPauser
       oldCount nextCount).getStorVal sevm.currentTarget
         (expirySlot oldPauser) = oldExpiry)
-    (holdExpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (holdExpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot oldPauser) = oldExpiryOriginal)
     (hwarmOldExpiry : (sevm.currentTarget, expirySlot oldPauser) ∈
       (foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount
@@ -1630,7 +1640,7 @@ theorem setPauserKernel_oldLastNonzero_runCompiled
       (foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount
         nextCount) (expirySlot oldPauser) 0).getStorVal sevm.currentTarget
         (expirySlot newPauser) = currentExpiry)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot newPauser) = expiryOriginal)
     (hwarmNewExpiry : (sevm.currentTarget, expirySlot newPauser) ∈
       (foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount
@@ -1716,8 +1726,10 @@ theorem setPauserKernel_oldLastNonzero_runCompiled
       zero_le])
     (Mem.Wf.write hwf _ _) (Mem.Reads.write hwf hreads _ _) htarget'
     hprevious' hnew' hcontinuation' holdValid.1 hnewNonzero hcountZero
-    hwarmOldCount holdExpiry holdExpiryOrig hwarmOldExpiry hclearCost htime
-    hinterval hintervalCold hexpiry hexpiryOrig hwarmNewExpiry hstoreCost
+    hwarmOldCount holdExpiry ((foundNonzeroKernelPost_getOrigStorVal sevm base target newPauser oldPauser oldCount
+      nextCount _ _).trans holdExpiryOrig) hwarmOldExpiry hclearCost htime
+    hinterval hintervalCold hexpiry ((foundNonzeroKernelPost_getOrigStorVal sevm base target newPauser oldPauser oldCount
+      nextCount _ _).trans hexpiryOrig) hwarmNewExpiry hstoreCost
     hgasStipend hstatic (by omega) (by rw [hsize'])
     hextension
   dsimp only [foundNonzeroKernelPost] at hfinish
@@ -1781,13 +1793,13 @@ theorem registerPauser_body_oldLastNonzero_runCompiled
     (holdValid : nonzeroCanonicalAddress oldPauser)
     (hassignment : base.getStorVal sevm.currentTarget
       (assignmentSlot target) = oldPauser)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser
       newPauser = assignmentCost)
     (hcount : (assignmentPost sevm base target newPauser).getStorVal
       sevm.currentTarget (countSlot oldPauser) = oldCount)
-    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hcountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot oldPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
       countCost)
@@ -1795,7 +1807,7 @@ theorem registerPauser_body_oldLastNonzero_runCompiled
       (foundKernelPost sevm base target newPauser oldPauser
         oldCount).getStorVal sevm.currentTarget (countSlot newPauser) =
         newCount)
-    (hnewCountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hnewCountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot newPauser) = newCountOriginal)
     (hnewCountNext : (1 : B256) + newCount = nextCount)
     (hnewCountCost : sstoreValueCost newCountOriginal newCount nextCount =
@@ -1806,7 +1818,7 @@ theorem registerPauser_body_oldLastNonzero_runCompiled
     (holdExpiry : (foundNonzeroKernelPost sevm base target newPauser oldPauser
       oldCount nextCount).getStorVal sevm.currentTarget
         (expirySlot oldPauser) = oldExpiry)
-    (holdExpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (holdExpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot oldPauser) = oldExpiryOriginal)
     (hwarmOldExpiry : (sevm.currentTarget, expirySlot oldPauser) ∈
       (foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount
@@ -1824,7 +1836,7 @@ theorem registerPauser_body_oldLastNonzero_runCompiled
       (foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount
         nextCount) (expirySlot oldPauser) 0).getStorVal sevm.currentTarget
         (expirySlot newPauser) = currentExpiry)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot newPauser) = expiryOriginal)
     (hwarmNewExpiry : (sevm.currentTarget, expirySlot newPauser) ∈
       (foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount
@@ -2025,13 +2037,13 @@ theorem registerPauser_runCompiledTo_oldLastNonzero
     (holdValid : nonzeroCanonicalAddress oldPauser)
     (hassignment : base.getStorVal sevm.currentTarget
       (assignmentSlot target) = oldPauser)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser
       newPauser = assignmentCost)
     (hcount : (assignmentPost sevm base target newPauser).getStorVal
       sevm.currentTarget (countSlot oldPauser) = oldCount)
-    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hcountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot oldPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
       countCost)
@@ -2039,7 +2051,7 @@ theorem registerPauser_runCompiledTo_oldLastNonzero
       (foundKernelPost sevm base target newPauser oldPauser
         oldCount).getStorVal sevm.currentTarget (countSlot newPauser) =
         newCount)
-    (hnewCountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hnewCountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot newPauser) = newCountOriginal)
     (hnewCountNext : (1 : B256) + newCount = nextCount)
     (hnewCountCost : sstoreValueCost newCountOriginal newCount nextCount =
@@ -2050,7 +2062,7 @@ theorem registerPauser_runCompiledTo_oldLastNonzero
     (holdExpiry : (foundNonzeroKernelPost sevm base target newPauser oldPauser
       oldCount nextCount).getStorVal sevm.currentTarget
         (expirySlot oldPauser) = oldExpiry)
-    (holdExpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (holdExpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot oldPauser) = oldExpiryOriginal)
     (hwarmOldExpiry : (sevm.currentTarget, expirySlot oldPauser) ∈
       (foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount
@@ -2068,7 +2080,7 @@ theorem registerPauser_runCompiledTo_oldLastNonzero
       (foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount
         nextCount) (expirySlot oldPauser) 0).getStorVal sevm.currentTarget
         (expirySlot newPauser) = currentExpiry)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot newPauser) = expiryOriginal)
     (hwarmNewExpiry : (sevm.currentTarget, expirySlot newPauser) ∈
       (foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount
@@ -2179,20 +2191,20 @@ theorem registerPauser_oldLastNonzero_success_settled_effects
     (holdValid : nonzeroCanonicalAddress oldPauser)
     (hassignment : (initDevm msg).getStorVal ca
       (assignmentSlot target) = oldPauser)
-    (hassignmentOrig : getOrigStorVal (initSevm msg) ca
+    (hassignmentOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser
       newPauser = assignmentCost)
     (hcount : (assignmentPost (initSevm msg) (initDevm msg) target
       newPauser).getStorVal ca (countSlot oldPauser) = oldCount)
-    (hcountOrig : getOrigStorVal (initSevm msg) ca
+    (hcountOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (countSlot oldPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
       countCost)
     (hnewCount :
       (foundKernelPost (initSevm msg) (initDevm msg) target newPauser
         oldPauser oldCount).getStorVal ca (countSlot newPauser) = newCount)
-    (hnewCountOrig : getOrigStorVal (initSevm msg) ca
+    (hnewCountOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (countSlot newPauser) = newCountOriginal)
     (hnewCountNext : (1 : B256) + newCount = nextCount)
     (hnewCountCost : sstoreValueCost newCountOriginal newCount nextCount =
@@ -2203,7 +2215,7 @@ theorem registerPauser_oldLastNonzero_success_settled_effects
     (holdExpiry : (foundNonzeroKernelPost (initSevm msg) (initDevm msg) target
       newPauser oldPauser oldCount nextCount).getStorVal ca
         (expirySlot oldPauser) = oldExpiry)
-    (holdExpiryOrig : getOrigStorVal (initSevm msg) ca
+    (holdExpiryOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (expirySlot oldPauser) = oldExpiryOriginal)
     (hwarmOldExpiry : (ca, expirySlot oldPauser) ∈
       (foundNonzeroKernelPost (initSevm msg) (initDevm msg) target newPauser
@@ -2221,7 +2233,7 @@ theorem registerPauser_oldLastNonzero_success_settled_effects
       (foundNonzeroKernelPost (initSevm msg) (initDevm msg) target newPauser
         oldPauser oldCount nextCount) (expirySlot oldPauser) 0).getStorVal ca
         (expirySlot newPauser) = currentExpiry)
-    (hexpiryOrig : getOrigStorVal (initSevm msg) ca
+    (hexpiryOrig : (initDevm msg).getOrigStorVal (initSevm msg) ca
       (expirySlot newPauser) = expiryOriginal)
     (hwarmNewExpiry : (ca, expirySlot newPauser) ∈
       (foundNonzeroKernelPost (initSevm msg) (initDevm msg) target newPauser

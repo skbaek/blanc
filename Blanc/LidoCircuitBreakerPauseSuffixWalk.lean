@@ -196,9 +196,8 @@ private lemma responder_call_crossing
       post.transientStorage = devm.transientStorage ∧
       (∀ k, k ∈ post.accessedStorageKeys ↔ k ∈ devm.accessedStorageKeys) ∧
       (∀ a, a ∈ post.accessedAddresses ↔ a ∈ devm.accessedAddresses) ∧
-      ∃ stmid,
-        devm.state.subBal sevm.currentTarget 0 = some stmid ∧
-        post.state = stmid.addBal target.toAdr 0 := by
+      post.state = devm.state ∧
+      post.createdAccounts = devm.createdAccounts := by
   have hnodel : getDelegatedCodeAddress
       ((devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
         target.toAdr) = none := by
@@ -251,7 +250,7 @@ private lemma responder_call_crossing
     unfold except64th at h1 h2
     exact ⟨by omega, by omega, by omega⟩
   obtain ⟨post, hrun, hstack, hmem, hgasl, herr, hout, hret, hlogs, hrefund,
-    hatd, htrans, hask, haa, stmid, hsub, hstate⟩ :=
+    hatd, htrans, hask, haa, hstate, hcreated⟩ :=
     runCompiled_call_zero_value_responder (hfork := hfork) (gw := Nat.toB256 G) (cw := target)
       hstk (show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
         [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = 0 from hext)
@@ -259,7 +258,7 @@ private lemma responder_call_crossing
       (show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
         target.toAdr = calleeCode from hcode) hmcs17 hroom
   refine ⟨post, hrun, hstack, hmem, ?_, herr, hout, hret, hlogs, hrefund,
-    hatd, htrans, hask, ?_, stmid, hsub, hstate⟩
+    hatd, htrans, hask, ?_, hstate, hcreated⟩
   · rw [hgasl, hd0gas]
     exact hgasout
   · intro a
@@ -304,9 +303,8 @@ private lemma responder_staticcall_crossing
       post.transientStorage = devm.transientStorage ∧
       (∀ k, k ∈ post.accessedStorageKeys ↔ k ∈ devm.accessedStorageKeys) ∧
       (∀ a, a ∈ post.accessedAddresses ↔ a ∈ devm.accessedAddresses) ∧
-      ∃ stmid,
-        devm.state.subBal sevm.currentTarget 0 = some stmid ∧
-        post.state = stmid.addBal target.toAdr 0 := by
+      post.state = devm.state ∧
+      post.createdAccounts = devm.createdAccounts := by
   have hnodel : getDelegatedCodeAddress
       ((devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
         target.toAdr) = none := by
@@ -359,7 +357,7 @@ private lemma responder_staticcall_crossing
     unfold except64th at h1 h2
     exact ⟨by omega, by omega, by omega⟩
   obtain ⟨post, hrun, hstack, hmem, hgasl, herr, hout, hret, hlogs, hrefund,
-    hatd, htrans, hask, haa, stmid, hsub, hstate⟩ :=
+    hatd, htrans, hask, haa, hstate, hcreated⟩ :=
     runCompiled_staticcall_responder (hfork := hfork) (gw := Nat.toB256 G) (tw := target)
       hstk (show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
         [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = 0 from hext)
@@ -367,7 +365,7 @@ private lemma responder_staticcall_crossing
       (show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
         target.toAdr = calleeCode from hcode) hmcs17 hroom
   refine ⟨post, hrun, hstack, hmem, ?_, herr, hout, hret, hlogs, hrefund,
-    hatd, htrans, hask, ?_, stmid, hsub, hstate⟩
+    hatd, htrans, hask, ?_, hstate, hcreated⟩
   · rw [hgasl, hd0gas]
     exact hgasout
   · intro a
@@ -403,7 +401,7 @@ theorem pauseExpiryFinish_ok_runCompiled
     (hcaller : sevm.caller.toB256 = pauser)
     (hexpiry : base.getStorVal sevm.currentTarget (expirySlot pauser) =
       expiryCurrent)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot pauser) = expiryOriginal)
     (hwarmExpiry : (sevm.currentTarget, expirySlot pauser) ∈
       base.accessedStorageKeys)
@@ -560,7 +558,7 @@ theorem pauseSuccess_zeroCount_ok_runCompiled
     (hcountCost : temporalSloadCost sevm base (countSlot pauser) = countCost)
     (hexpiry : base.getStorVal sevm.currentTarget (expirySlot pauser) =
       expiryCurrent)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot pauser) = expiryOriginal)
     (hwarmExpiry : (sevm.currentTarget, expirySlot pauser) ∈
       base.accessedStorageKeys)
@@ -646,7 +644,8 @@ theorem pauseSuccess_zeroCount_ok_runCompiled
     refine pauseExpiryFinish_ok_runCompiled (hfork := hfork) fs sevm countBase
       (M.write 0 duration.toBytes) pauser 0
       expiryCurrent expiryOriginal storeCost G (by omega) halign' hcaller
-      ?_ hexpiryOrig ?_ hstoreCost hstipend hstatic
+      ?_ ((temporalSloadBase_getOrigStorVal sevm eventBase _ _ _).trans hexpiryOrig)
+      ?_ hstoreCost hstipend hstatic
     · rw [show countBase.getStorVal sevm.currentTarget (expirySlot pauser) =
         eventBase.getStorVal sevm.currentTarget (expirySlot pauser) from
           temporalSloadBase_getStorVal sevm eventBase (countSlot pauser) _ _]
@@ -748,7 +747,7 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
     (hnof : B256.Nof sevm.benvStat.time interval)
     (hexpiry : base.getStorVal sevm.currentTarget (expirySlot pauser) =
       expiryCurrent)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot pauser) = expiryOriginal)
     (hwarmExpiry : (sevm.currentTarget, expirySlot pauser) ∈
       base.accessedStorageKeys)
@@ -840,7 +839,9 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
     refine pauseExpiryFinish_ok_runCompiled (hfork := hfork) fs sevm intervalBase
       (M.write 0 duration.toBytes) pauser (interval + sevm.benvStat.time)
       expiryCurrent expiryOriginal storeCost G (by omega) halign' hcaller
-      ?_ hexpiryOrig ?_ hstoreCost hstipend hstatic
+      ?_ ((temporalSloadBase_getOrigStorVal sevm countBase _ _ _).trans
+        ((temporalSloadBase_getOrigStorVal sevm eventBase _ _ _).trans hexpiryOrig))
+      ?_ hstoreCost hstipend hstatic
     · rw [show intervalBase.getStorVal sevm.currentTarget
           (expirySlot pauser) =
         countBase.getStorVal sevm.currentTarget (expirySlot pauser) from
@@ -995,7 +996,7 @@ being a frame fact), the `pauseFor(uint256)` `CALL` and the `isPaused()`
 The boundary state exists only behind the crossings' existentials, so it is
 **exported existentially**: the consumer receives the actual `mid`, its
 projection facts — machine fields, result fields, meta-set memberships, and
-the state as the double zero-value `subBal`/`addBal` chain — and a closure
+the state, which both zero-value crossings leave exactly as it was — and a closure
 extending any continuation walk from `mid` to the full `pauseAfterSet` walk.
 
 An earlier form of this leg instead fixed its final state `post` *before*
@@ -1040,10 +1041,8 @@ theorem pauseAfterSet_toSuccess_runCompiled
       (∀ k, k ∈ mid.accessedStorageKeys ↔ k ∈ base.accessedStorageKeys) ∧
       (∀ a, a ∈ mid.accessedAddresses ↔
         (a = target.toAdr ∨ a ∈ base.accessedAddresses)) ∧
-      (∃ st₁ st₂ : State,
-        base.state.subBal sevm.currentTarget 0 = some st₁ ∧
-        (st₁.addBal target.toAdr 0).subBal sevm.currentTarget 0 = some st₂ ∧
-        mid.state = st₂.addBal target.toAdr 0) ∧
+      mid.state = base.state ∧
+      mid.createdAccounts = base.createdAccounts ∧
       ∀ post : Devm,
         Func.RunCompiled fs sevm mid pauseSuccess post →
         Func.RunCompiled fs sevm
@@ -1168,7 +1167,7 @@ theorem pauseAfterSet_toSuccess_runCompiled
     rw [Mem.read_snd_eq_self (memExtSize_of_le (by omega) (by omega))]
   -- the first crossing
   obtain ⟨post1, hrun1, hstk1, hmem1, hgas1, herr1, hout1, hret1, hlogs1,
-    hrefund1, hatd1, htrans1, hask1, haa1, st₁, hsub1, hstate1⟩ :=
+    hrefund1, hatd1, htrans1, hask1, haa1, hstate1, hcreated1⟩ :=
     responder_call_crossing (hfork := hfork) (sevm := sevm)
       (devm := (temporalAccountAccessBase base target.toAdr).setMach
         ⟨[Nat.toB256 (Gb + 359), target, 0, 284, 36, 0, 0],
@@ -1208,13 +1207,13 @@ theorem pauseAfterSet_toSuccess_runCompiled
     rfl
   -- the second crossing
   have hcode1 : post1.state.getCode target.toAdr = calleeCode := by
-    rw [hstate1, State.addBal_getCode, State.subBal_getCode hsub1]
+    rw [hstate1]
     show (temporalAccountAccessBase base target.toAdr).state.getCode
       target.toAdr = calleeCode
     rw [temporalAccountAccessBase_state]
     exact hcalleeCode
   obtain ⟨post2, hrun2, hstk2, hmem2, hgas2, herr2, hout2, hret2, hlogs2,
-    hrefund2, hatd2, htrans2, hask2, haa2, st₂, hsub2, hstate2⟩ :=
+    hrefund2, hatd2, htrans2, hask2, haa2, hstate2, hcreated2⟩ :=
     responder_staticcall_crossing (hfork := hfork) (sevm := sevm)
       (devm := post1.setMach
         ⟨[Nat.toB256 (Gb + 198), target, 284, 4, 0, 32],
@@ -1302,16 +1301,21 @@ theorem pauseAfterSet_toSuccess_runCompiled
     show a ∈ (temporalAccountAccessBase base target.toAdr
       ).accessedAddresses ↔ (a = target.toAdr ∨ a ∈ base.accessedAddresses)
     exact temporalAccountAccessBase_mem base target.toAdr a
-  have hsub1' : base.state.subBal sevm.currentTarget 0 = some st₁ := by
-    rw [← temporalAccountAccessBase_state base target.toAdr]
-    exact hsub1
-  have hsub2' : (st₁.addBal target.toAdr 0).subBal sevm.currentTarget 0 =
-      some st₂ := by
-    rw [← hstate1]
-    exact hsub2
+  have hstateB : post2.state = base.state := by
+    rw [hstate2]
+    show post1.state = base.state
+    rw [hstate1]
+    exact temporalAccountAccessBase_state base target.toAdr
+  have hcreatedB : post2.createdAccounts = base.createdAccounts := by
+    rw [hcreated2]
+    show post1.createdAccounts = base.createdAccounts
+    rw [hcreated1]
+    show (temporalAccountAccessBase base target.toAdr).createdAccounts = _
+    unfold temporalAccountAccessBase Lift.temporalAccountAccessBase
+    split <;> rfl
   refine ⟨post2.setMach ⟨[], pauseDecodedMemory M duration, Gb, post2.stateGas⟩,
     rfl, rfl, rfl, herrB, houtB, hret2, hlogsB, hrefundB, hatdB, htransB,
-    haskB, haaB, ⟨st₁, st₂, hsub1', hsub2', hstate2⟩, ?_⟩
+    haskB, haaB, hstateB, hcreatedB, ?_⟩
   intro post hwalk
   -- segment C: the decode, from the second crossing to the boundary
   have hC : Func.RunCompiled fs sevm

@@ -356,15 +356,15 @@ theorem removeTarget_pauseAfterSet_runCompiled
       (indexSlot target) = idx)
     (hlength : base.getStorVal sevm.currentTarget
       arrayLengthSlot = len)
-    (hholeOrig : getOrigStorVal sevm sevm.currentTarget
+    (hholeOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot idx) = holeOriginal)
-    (hmovedOrig : getOrigStorVal sevm sevm.currentTarget
+    (hmovedOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot lastTarget) = movedOriginal)
-    (htailOrig : getOrigStorVal sevm sevm.currentTarget
+    (htailOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot len) = tailOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget
       arrayLengthSlot = lengthOriginal)
     (hholeCost : sstoreValueCost holeOriginal holeCurrent lastTarget =
       holeCost)
