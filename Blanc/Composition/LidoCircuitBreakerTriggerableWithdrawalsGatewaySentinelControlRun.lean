@@ -1404,6 +1404,36 @@ private theorem gatewayRunAfterSetBase_code :
   simpa only [gatewayRunAfterSetBase, gatewayRunRemoveBase3, gatewayRunCountPost,
     gatewayRunKernelBase] using hcode
 
+/-- The CircuitBreaker owner keeps its installed runtime at the after-set
+entry, so it is `State.Protected` there (TWG-3 crossing premise, decision
+blanc-composition-twg2-protected-20261012, cause SA). -/
+private theorem gatewayRunAfterSetBase_ownerProtected :
+    State.Protected gatewayRunAfterSetBase.state
+      sentinelGatewayPauseWorldSevm.currentTarget := by
+  apply State.Protected.of_code_ne_nil
+  have addLogCode : ∀ (d : Devm) (l : Log) (a : Adr),
+      (d.addLog l).getCode a = d.getCode a := fun _ _ _ => rfl
+  have transCode : ∀ (d : Devm) (a : Adr) (k v : B256) (x : Adr),
+      (d.setTransVal a k v).getCode x = d.getCode x := fun _ _ _ _ _ => rfl
+  have hcarry : gatewayRunAfterSetBase.getCode configWorldOwner =
+      sentinelGatewayPauseWorldPre.getCode configWorldOwner := by
+    simp only [gatewayRunAfterSetBase,
+      gatewayRunRemoveBase3, gatewayRunCountPost, gatewayRunKernelBase,
+      indexClearPost, entryClearPost, lengthWritePost, indexWritePost,
+      entryWritePost, assignmentPost, assignmentBase, pauseKernelBase,
+      pauseDurationBase, pauseExpiryBase, pauseLockPost, Devm.getCode_setMach,
+      addLogCode, transCode, temporalSstorePost_getCode, temporalSloadBase_getCode]
+  change (gatewayRunAfterSetBase.getCode
+    sentinelGatewayPauseWorldSevm.currentTarget).toList ≠ []
+  rw [sentinelGatewayPauseWorld_currentTarget, hcarry]
+  change (sentinelGatewayPauseWorldState.get configWorldOwner).code.toList ≠ []
+  rw [sentinelGatewayPauseWorldState_get_breaker]
+  intro hnil
+  have hempty : lidoCircuitBreakerCode officialParams = [] := by
+    simpa only [configWorldCode, ByteArray.toList_eq_toList_data,
+      List.toList_toArray] using hnil
+  exact Prog.compile_ne_nil (by rw [lidoCircuitBreakerCode_compile, hempty])
+
 private theorem gatewayRunAfterSetBase_targetKeyCold (key : B256) :
     (pauseWorldCallee.toB256.toAdr, key) ∉
       gatewayRunAfterSetBase.accessedStorageKeys := by
@@ -1530,6 +1560,7 @@ private theorem gatewayRunAfterSetBase_resumeCold :
 
 private theorem sentinelGatewayPauseWorld_afterSetGatewaySeam :
     ∃ mid : Devm,
+      mid.createdAccounts = gatewayRunAfterSetBase.createdAccounts ∧
       mid.stack = [] ∧
       mid.memory = pauseDecodedMemory gatewayRunMemoryLast pauseInfiniteSentinel ∧
       mid.gasLeft = 42321 ∧
@@ -1550,9 +1581,10 @@ private theorem sentinelGatewayPauseWorld_afterSetGatewaySeam :
             (gatewayRunAfterSetBase.setMach
               ⟨[], gatewayRunMemoryLast, 71123, gatewayRunAfterSetBase.stateGas⟩)
             pauseAfterSet final := by
-  obtain ⟨mid, hstk, hmem, hgas, _herr, _hout, _hret, _hlogs,
-      _hrefund, _hatd, _htrans, hask, _haddrs, _hpaused, hchain, hclose⟩ :=
-    pauseAfterSet_gateway_toSuccess_runCompiled (hfork := by first | (change CoveredFork .prague; exact CoveredFork.prague) | decide)
+  obtain ⟨mid, hcreated, hmidState, hstk, hmem, hgas, _herr, _hout, _hret,
+      _hlogs, _hrefund, _hatd, _htrans, hask, _haddrs, _hpaused, _hchain,
+      hclose⟩ :=
+    pauseAfterSet_gateway_toSuccess_runCompiled_created (hfork := by first | (change CoveredFork .prague; exact CoveredFork.prague) | decide)
       ((runtime officialParams).main :: (runtime officialParams).aux)
       sentinelGatewayPauseWorldSevm gatewayRunAfterSetBase pauseWorldCallee.toB256
       pauseInfiniteSentinel gatewayRunMemoryLast gatewayRunImageLast 2600 42362
@@ -1593,42 +1625,22 @@ private theorem sentinelGatewayPauseWorld_afterSetGatewaySeam :
       (by
         simp only [gatewayPauseChildCost]
         norm_num only [ite_true])
-  rcases hchain with ⟨st₁, st₂, hsub₁, hsub₂, hstate⟩
+      gatewayRunAfterSetBase_ownerProtected
   have htargetOwner : pauseWorldCallee.toB256.toAdr ≠
       configWorldOwner := by
     simpa only [sentinelGatewayPauseWorld_currentTarget] using
       sentinelGatewayPauseWorld_target_ne_owner
   have hownerStor : (mid.state.get configWorldOwner).stor =
       (gatewayRunAfterSetBase.state.get configWorldOwner).stor := by
-    rw [hstate]
-    have hadd₂ :
-        ((st₂.addBal pauseWorldCallee.toB256.toAdr 0).get
-          configWorldOwner).stor = (st₂.get configWorldOwner).stor := by
-      unfold State.addBal
-      exact State.setBal_get_stor
-    have hwrite :
-        (((st₁.addBal pauseWorldCallee.toB256.toAdr 0).setStorVal
-          pauseWorldCallee.toB256.toAdr
-          LidoTriggerableWithdrawalsGateway.resumeSinceSlot
-          (pauseForProjection sentinelGatewayPauseWorldSevm.benvStat.time
-            pauseInfiniteSentinel)).get configWorldOwner).stor =
-          ((st₁.addBal pauseWorldCallee.toB256.toAdr 0).get
-            configWorldOwner).stor := by
-      unfold State.setStorVal
-      exact congrArg Acct.stor (State.get_set_ne _ htargetOwner _)
-    have hadd₁ :
-        ((st₁.addBal pauseWorldCallee.toB256.toAdr 0).get
-          configWorldOwner).stor = (st₁.get configWorldOwner).stor := by
-      unfold State.addBal
-      exact State.setBal_get_stor
-    exact hadd₂.trans ((Blanc.state_subBal_stor hsub₂).trans
-      (hwrite.trans (hadd₁.trans (Blanc.state_subBal_stor hsub₁))))
+    rw [hmidState]
+    unfold State.setStorVal
+    exact congrArg Acct.stor (State.get_set_ne _ htargetOwner _)
   have hstor : ∀ key : B256,
       mid.getStorVal configWorldOwner key =
         gatewayRunAfterSetBase.getStorVal configWorldOwner key := by
     intro key
     exact congrArg (fun stor => stor.get key) hownerStor
-  refine ⟨mid, hstk, hmem, hgas, hstor,
+  refine ⟨mid, hcreated, hstk, hmem, hgas, hstor,
     (hask _).mpr (Std.HashSet.mem_union_iff.mpr
       (Or.inl gatewayRunAfterSetBase_warmCount)),
     (hask _).mpr (Std.HashSet.mem_union_iff.mpr
@@ -1679,6 +1691,60 @@ private theorem sentinelGatewayPauseWorld_getOrigStorVal (key : B256) :
   change (sentinelGatewayPauseWorldState.get configWorldOwner).stor.get key = _
   rw [sentinelGatewayPauseWorldState_get_breaker]
 
+/-! The created-account set through the walk carriers (cause OS): every carrier
+leaves it alone, so the owner's actual original read stays the entry snapshot
+word.  Private twins of `LidoCircuitBreakerPauseWorldRun`'s carrier lemmas. -/
+
+private theorem sentinelGatewayPauseWorldRun_sload_created (sevm : Sevm) (b : Devm) (k : B256) :
+    (temporalSloadBase sevm b k).createdAccounts = b.createdAccounts := by
+  unfold temporalSloadBase
+  split <;> rfl
+
+private theorem sentinelGatewayPauseWorldRun_sstore_created (sevm : Sevm) (b : Devm) (k v : B256) :
+    (temporalSstorePost sevm b k v).createdAccounts = b.createdAccounts := rfl
+
+private theorem sentinelGatewayPauseWorldRun_addKey_created (b : Devm) (a : Adr) (k : B256) :
+    (addAccessedStorageKey b a k).createdAccounts = b.createdAccounts := rfl
+
+private theorem sentinelGatewayPauseWorldRun_addLog_created (b : Devm) (l : Log) :
+    (b.addLog l).createdAccounts = b.createdAccounts := rfl
+
+private theorem sentinelGatewayPauseWorldRun_transVal_created (b : Devm) (a : Adr) (k v : B256) :
+    (b.setTransVal a k v).createdAccounts = b.createdAccounts := rfl
+
+/-- At any state whose created-account set is still the entry one, the
+machine's actual original read at the CircuitBreaker owner is its entry
+snapshot word. -/
+private theorem sentinelGatewayPauseWorld_actualOrigStor {d : Devm} {key : B256}
+    (hd : d.createdAccounts = sentinelGatewayPauseWorldPre.createdAccounts := by
+      (try simp only [gatewayRunAfterSetBase, gatewayRunRemoveBase3,
+        gatewayRunCountPost, gatewayRunKernelBase,
+        indexClearPost, entryClearPost, lengthWritePost, indexWritePost,
+        entryWritePost, swapPopClearPost, assignmentPost, assignmentBase,
+        foundKernelPost, pauseKernelBase, pauseDurationBase, pauseExpiryBase,
+        pauseLockPost, sentinelGatewayPauseWorldRun_sload_created, sentinelGatewayPauseWorldRun_sstore_created,
+        sentinelGatewayPauseWorldRun_addKey_created, sentinelGatewayPauseWorldRun_addLog_created,
+        sentinelGatewayPauseWorldRun_transVal_created, Devm.setMach_createdAccounts]) <;> rfl) :
+    d.getOrigStorVal sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldSevm.currentTarget key =
+      getOrigStorVal sentinelGatewayPauseWorldSevm configWorldOwner key := by
+  have hnc : sentinelGatewayPauseWorldSevm.currentTarget ∉ d.createdAccounts := by
+    rw [hd]
+    exact Std.HashSet.not_mem_emptyWithCapacity
+  rw [Devm.getOrigStorVal]
+  simp only [hnc, ↓reduceIte]
+  rw [sentinelGatewayPauseWorld_currentTarget]
+
+private theorem gatewayRunAfterSetBase_createdAccounts :
+    gatewayRunAfterSetBase.createdAccounts = sentinelGatewayPauseWorldPre.createdAccounts := by
+  simp only [gatewayRunAfterSetBase, gatewayRunRemoveBase3,
+    gatewayRunCountPost, gatewayRunKernelBase,
+    indexClearPost, entryClearPost, lengthWritePost, indexWritePost,
+    entryWritePost, assignmentPost, assignmentBase,
+    pauseKernelBase, pauseDurationBase, pauseExpiryBase,
+    pauseLockPost, sentinelGatewayPauseWorldRun_sload_created, sentinelGatewayPauseWorldRun_sstore_created,
+    sentinelGatewayPauseWorldRun_addKey_created, sentinelGatewayPauseWorldRun_addLog_created,
+    sentinelGatewayPauseWorldRun_transVal_created, Devm.setMach_createdAccounts]
+
 private theorem sentinelGatewayPauseWorld_successSuffix :
     ∃ successPre final : Devm,
       Func.RunCompiled
@@ -1702,7 +1768,8 @@ private theorem sentinelGatewayPauseWorld_successSuffix :
       PauseSuccessNoninterference sentinelGatewayPauseWorldSevm
         (gatewayRunAfterSetBase.setMach
           ⟨[], gatewayRunMemoryLast, 71123, gatewayRunAfterSetBase.stateGas⟩) successPre := by
-  obtain ⟨mid, hstk, hmem, hgas, hstor, hwarmCount, hwarmExpiry, hclose⟩ :=
+  obtain ⟨mid, hcreated, hstk, hmem, hgas, hstor, hwarmCount, hwarmExpiry,
+      hclose⟩ :=
     sentinelGatewayPauseWorld_afterSetGatewaySeam
   have hmidCount : mid.getStorVal sentinelGatewayPauseWorldSevm.currentTarget
       (countSlot pauseWorldPauser) = 0 := by
@@ -1744,9 +1811,9 @@ private theorem sentinelGatewayPauseWorld_successSuffix :
       rw [if_pos hwarmCount]
       rfl)
     hmidExpiry
-    (by
-      rw [sentinelGatewayPauseWorld_currentTarget]
-      exact sentinelGatewayPauseWorld_originalExpiry)
+    ((sentinelGatewayPauseWorld_actualOrigStor
+      (hd := hcreated.trans gatewayRunAfterSetBase_createdAccounts)).trans
+      sentinelGatewayPauseWorld_originalExpiry)
     hwarmExpiry
     (stubRunSvc_reset (by decide) (by decide))
     (by norm_num only [gCallStipend])
@@ -1834,9 +1901,9 @@ private theorem sentinelGatewayPauseWorld_productionRun :
       pauseWorld_indexCallee_ne_count.symm).trans sentinelPauseLastStor_index)
     ((gatewayRunStor_countPost_other pauseWorld_length_ne_assignCallee.symm
       pauseWorld_length_ne_count.symm).trans sentinelPauseLastStor_length)
-    ((sentinelGatewayPauseWorld_getOrigStorVal _).trans sentinelPauseLastStor_entry)
-    ((sentinelGatewayPauseWorld_getOrigStorVal _).trans sentinelPauseLastStor_index)
-    ((sentinelGatewayPauseWorld_getOrigStorVal _).trans sentinelPauseLastStor_length)
+    (((sentinelGatewayPauseWorld_actualOrigStor).trans (sentinelGatewayPauseWorld_getOrigStorVal _)).trans sentinelPauseLastStor_entry)
+    (((sentinelGatewayPauseWorld_actualOrigStor).trans (sentinelGatewayPauseWorld_getOrigStorVal _)).trans sentinelPauseLastStor_index)
+    (((sentinelGatewayPauseWorld_actualOrigStor).trans (sentinelGatewayPauseWorld_getOrigStorVal _)).trans sentinelPauseLastStor_length)
     gatewayRunCost_idxCold gatewayRunCost_lenCold gatewayRunCost_arrCold
     stubRunSvc_noop stubRunSvc_noop
     (stubRunSvc_reset (by decide) (by decide))
@@ -1873,11 +1940,11 @@ private theorem sentinelGatewayPauseWorld_productionRun :
     (pauseMemory_spec pauseWorldCallee.toB256
       pauseInfiniteSentinel).2.2.2.2.1
     ((gatewayRunStor_kernelBase _).trans sentinelPauseLastStor_assignment)
-    ((sentinelGatewayPauseWorld_getOrigStorVal _).trans sentinelPauseLastStor_assignment)
+    (((sentinelGatewayPauseWorld_actualOrigStor).trans (sentinelGatewayPauseWorld_getOrigStorVal _)).trans sentinelPauseLastStor_assignment)
     (stubRunSvc_reset (by decide) (by decide))
     ((gatewayRunStor_assignPost_other pauseWorld_assignCallee_ne_count).trans
       sentinelPauseLastStor_count)
-    ((sentinelGatewayPauseWorld_getOrigStorVal _).trans sentinelPauseLastStor_count)
+    (((sentinelGatewayPauseWorld_actualOrigStor).trans (sentinelGatewayPauseWorld_getOrigStorVal _)).trans sentinelPauseLastStor_count)
     (stubRunSvc_reset (by decide) (by decide))
     (by norm_num only [gCallStipend]) rfl
     (by
