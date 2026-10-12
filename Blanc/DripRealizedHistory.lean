@@ -7,7 +7,7 @@
 
 import Blanc.DripHistory
 import Blanc.DripAccounting
-import Blanc.Drip.RepinBridge
+import Blanc.ExecutionAccountingAdmission
 import Blanc.ExecutionPath
 import Blanc.ExecutionMessageEffects
 import Blanc.ExecutionBodyEffects
@@ -146,7 +146,7 @@ theorem TransactionMessageOccurrence.msg_caller_nonce_ne_zero
     (occurrence : TransactionMessageOccurrence trace message) :
     (msg.benv.state.get msg.caller).nonce ≠ 0 := by
   induction occurrence with
-  | head head tail => exact RepinBridge.transaction_msg_caller_nonce_ne_zero head
+  | head head tail => exact ExecutionTrace.TransactionTrace.msg_caller_nonce_ne_zero head
   | tail head tail occurrence ih => exact ih
 
 /-- The selected transaction's prepared message inherits the actual prefix's
@@ -493,8 +493,8 @@ theorem ConfiguredDirectCall.precredit_of_afterTransfer
     have execNonce : (call.execMsg.benv.state.get call.execMsg.caller).nonce ≠ 0 := by
       rw [call.execMsg_eq, ExecutionTrace.messageCallExecutionMessage_caller_eq,
         ExecutionTrace.messageCallDelegation_caller_eq call.delegation,
-        RepinBridge.messageCallExecutionMessage_state]
-      exact RepinBridge.messageCallDelegation_nonce_ne_zero call.delegation msg.caller sourceNonce
+        ExecutionTrace.messageCallExecutionMessage_state]
+      exact ExecutionTrace.messageCallDelegation_nonce_ne_zero call.delegation msg.caller sourceNonce
     have ready := (envelope.ready.of_messageCallDelegation call.delegation).messageCallExecutionMessage
     have targetProtected : State.Protected call.execMsg.benv.state ca := by
       rw [call.execMsg_eq]
@@ -503,9 +503,9 @@ theorem ConfiguredDirectCall.precredit_of_afterTransfer
     cases transfer
     refine ⟨call.execMsg.benv.state, ?_, ?_⟩
     · rw [zero]
-      exact RepinBridge.subBal_zero_of_protected (Or.inl execNonce)
+      exact State.subBal_zero_of_protected (Or.inl execNonce)
     · change call.execMsg.benv.state = call.execMsg.benv.state.addBal ca call.execMsg.value
-      rw [zero, RepinBridge.addBal_zero_of_protected targetProtected]
+      rw [zero, State.addBal_zero_of_protected targetProtected]
   · rcases of_benvAfterTransfer call.exec_shouldTransferValue zero transfer with
       ⟨debit, sub, afterEq⟩
     refine ⟨debit, sub, ?_⟩

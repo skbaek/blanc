@@ -555,6 +555,94 @@ theorem setDelegation_bal_eq
       rcases rest with ⟨rfl, rfl⟩
       exact balance
 
+/-- One EIP-7702 authorization step keeps every nonzero nonce nonzero: the
+only nonce write is a guarded increment of the authority. -/
+theorem setDelegationStep_nonce_ne_zero
+    {auth : Auth} {msg msg' : Msg} {refund refund' : B256}
+    (run : setDelegationStep auth msg refund = .ok ⟨msg', refund'⟩) (owner : Adr)
+    (nonce : (msg.benv.state.get owner).nonce ≠ 0) :
+    (msg'.benv.state.get owner).nonce ≠ 0 := by
+  unfold setDelegationStep at run
+  dsimp only at run
+  split at run
+  · simp only [Except.ok.injEq, Prod.mk.injEq] at run
+    rcases run with ⟨rfl, _⟩
+    exact nonce
+  · split at run
+    · simp only [Except.ok.injEq, Prod.mk.injEq] at run
+      rcases run with ⟨rfl, _⟩
+      exact nonce
+    · split at run
+      · simp only [Except.ok.injEq, Prod.mk.injEq] at run
+        rcases run with ⟨rfl, _⟩
+        exact nonce
+      · cases run
+      · split at run
+        · simp only [Except.ok.injEq, Prod.mk.injEq] at run
+          rcases run with ⟨rfl, _⟩
+          exact nonce
+        · split at run
+          · simp only [Except.ok.injEq, Prod.mk.injEq] at run
+            rcases run with ⟨rfl, _⟩
+            exact nonce
+          · rename_i authority recovered acceptedCode nonceMatch
+            simp only [Except.ok.injEq, Prod.mk.injEq] at run
+            rcases run with ⟨rfl, _⟩
+            by_cases equal : authority = owner
+            · subst owner
+              have matched : (msg.benv.state.get authority).nonce = auth.nonce := by
+                simpa only [bne_iff_ne, not_not] using nonceMatch
+              have nonwrap : auth.nonce + 1 ≠ 0 :=
+                UInt64.add_one_ne_zero_of_ne_max ‹auth.nonce ≠ UInt64.max›
+              dsimp only [Msg.incrNonce, Msg.setCode, Benv.incrNonce,
+                Benv.clearStorageWritesIfEmpty]
+              rw [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_nonce,
+                State.setCode, State.setAccount_get_self, Acct.clearIfEmpty_nonce]
+              simpa only [matched] using nonwrap
+            · dsimp only [Msg.incrNonce, Msg.setCode, Benv.incrNonce,
+                Benv.clearStorageWritesIfEmpty]
+              rw [State.incrNonce, State.setAccount_get_ne _ equal,
+                State.setCode, State.setAccount_get_ne _ equal]
+              exact nonce
+
+/-- The authorization loop keeps every nonzero nonce nonzero. -/
+theorem setDelegationLoop_nonce_ne_zero
+    {auths : List Auth} {msg msg' : Msg} {refund refund' : B256}
+    (run : setDelegationLoop auths msg refund = .ok ⟨msg', refund'⟩) (owner : Adr)
+    (nonce : (msg.benv.state.get owner).nonce ≠ 0) :
+    (msg'.benv.state.get owner).nonce ≠ 0 := by
+  induction auths generalizing msg refund with
+  | nil =>
+      unfold setDelegationLoop at run
+      cases run
+      exact nonce
+  | cons auth auths ih =>
+      unfold setDelegationLoop at run
+      cases step : setDelegationStep auth msg refund with
+      | error error => simp only [step, bind, Except.bind] at run; cases run
+      | ok pair =>
+          rcases pair with ⟨next, nextRefund⟩
+          simp only [step, bind, Except.bind] at run
+          exact ih run (setDelegationStep_nonce_ne_zero step owner nonce)
+
+/-- Authorization processing keeps every nonzero nonce nonzero. -/
+theorem setDelegation_nonce_ne_zero
+    {msg msg' : Msg} {refund' : B256}
+    (run : setDelegation msg = .ok ⟨msg', refund'⟩) (owner : Adr)
+    (nonce : (msg.benv.state.get owner).nonce ≠ 0) :
+    (msg'.benv.state.get owner).nonce ≠ 0 := by
+  unfold setDelegation at run
+  cases loop : setDelegationLoop msg.tenv.stat.auths msg 0 with
+  | error error => simp only [loop, bind, Except.bind] at run; cases run
+  | ok pair =>
+      rcases pair with ⟨next, nextRefund⟩
+      have inherited := setDelegationLoop_nonce_ne_zero loop owner nonce
+      simp only [loop, bind, Except.bind] at run
+      split at run
+      · cases run
+      · cases run
+        exact inherited
+
 /-- The normalized delegation prefix preserves persistent storage. -/
 theorem messageCallDelegation_getStor_eq
     {msg delegated : Msg} {refund : Nat}
@@ -588,6 +676,23 @@ theorem messageCallDelegation_bal_eq
     simp only [Except.ok.injEq, Prod.mk.injEq] at rest
     rcases rest with ⟨rfl, rfl⟩
     exact setDelegation_bal_eq delegatedRun
+
+/-- The normalized delegation prefix keeps every nonzero nonce nonzero. -/
+theorem messageCallDelegation_nonce_ne_zero
+    {msg delegated : Msg} {refund : Nat}
+    (run : messageCallDelegation msg = .ok ⟨delegated, refund⟩)
+    (owner : Adr) (nonce : (msg.benv.state.get owner).nonce ≠ 0) :
+    (delegated.benv.state.get owner).nonce ≠ 0 := by
+  unfold messageCallDelegation at run
+  split at run
+  · simp only [Except.ok.injEq, Prod.mk.injEq] at run
+    rcases run with ⟨rfl, rfl⟩
+    exact nonce
+  · rcases Except.bind_eq_ok run with
+      ⟨⟨delegated', refundWord⟩, delegatedRun, rest⟩
+    simp only [Except.ok.injEq, Prod.mk.injEq] at rest
+    rcases rest with ⟨rfl, rfl⟩
+    exact setDelegation_nonce_ne_zero delegatedRun owner nonce
 
 /-- The normalized EIP-7702 delegation prefix preserves the complete static
 block environment. -/
@@ -662,6 +767,12 @@ theorem messageCallExecutionMessage_getStor_eq (msg : Msg) :
 theorem messageCallExecutionMessage_bal_eq (msg : Msg) :
     (messageCallExecutionMessage msg).benv.state.bal =
       msg.benv.state.bal := by
+  unfold messageCallExecutionMessage
+  split <;> rfl
+
+/-- Resolving delegated code leaves the complete world state alone. -/
+theorem messageCallExecutionMessage_state (msg : Msg) :
+    (messageCallExecutionMessage msg).benv.state = msg.benv.state := by
   unfold messageCallExecutionMessage
   split <;> rfl
 

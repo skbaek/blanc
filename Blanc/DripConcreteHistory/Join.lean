@@ -959,8 +959,8 @@ noncomputable def concreteJoinRhoBase : Devm :=
 
 private theorem concreteJoinChiBase_notCreated :
     concreteCreateTarget ∉ concreteJoinChiBase.createdAccounts := by
-  rw [concreteJoinChiBase, RepinBridge.setStorVal_createdAccounts,
-    RepinBridge.withRefundCounter_createdAccounts]
+  rw [concreteJoinChiBase, Devm.setStorVal_createdAccounts,
+    Devm.withRefundCounter_createdAccounts]
   exact concreteJoinStorageBase_notCreated
 
 private theorem concreteJoin_rhoStore :
@@ -999,8 +999,8 @@ noncomputable def concreteJoinRowBase : Devm :=
 
 private theorem concreteJoinRhoBase_notCreated :
     concreteCreateTarget ∉ concreteJoinRhoBase.createdAccounts := by
-  rw [concreteJoinRhoBase, RepinBridge.setStorVal_createdAccounts,
-    RepinBridge.withRefundCounter_createdAccounts]
+  rw [concreteJoinRhoBase, Devm.setStorVal_createdAccounts,
+    Devm.withRefundCounter_createdAccounts]
   exact concreteJoinChiBase_notCreated
 
 private theorem concreteJoin_rowStore :
@@ -1032,8 +1032,8 @@ noncomputable def concreteJoinTotalBase : Devm :=
 
 private theorem concreteJoinRowBase_notCreated :
     concreteCreateTarget ∉ concreteJoinRowBase.createdAccounts := by
-  rw [concreteJoinRowBase, RepinBridge.setStorVal_createdAccounts,
-    RepinBridge.withRefundCounter_createdAccounts]
+  rw [concreteJoinRowBase, Devm.setStorVal_createdAccounts,
+    Devm.withRefundCounter_createdAccounts]
   exact concreteJoinRhoBase_notCreated
 
 private theorem concreteJoin_totalStore :
@@ -1377,16 +1377,14 @@ theorem concreteJoinTransactionCode (a : Adr) :
   unfold concreteJoinMessageState concreteJoinRuntimePost
   rw [Devm.withOutput_state, Devm.setMach_state]
   change concreteJoinTotalBase.getCode a = _
-  have refund : ∀ machine : Devm, (machine.withRefundCounter 0).getCode a = machine.getCode a :=
-    fun _ => rfl
   unfold concreteJoinTotalBase
-  rw [Devm.setStorVal_getCode, refund]
+  rw [Devm.setStorVal_getCode, Devm.withRefundCounter_getCode]
   unfold concreteJoinRowBase
-  rw [Devm.setStorVal_getCode, refund]
+  rw [Devm.setStorVal_getCode, Devm.withRefundCounter_getCode]
   unfold concreteJoinRhoBase
-  rw [Devm.setStorVal_getCode, refund]
+  rw [Devm.setStorVal_getCode, Devm.withRefundCounter_getCode]
   unfold concreteJoinChiBase
-  rw [Devm.setStorVal_getCode, refund]
+  rw [Devm.setStorVal_getCode, Devm.withRefundCounter_getCode]
   change concreteJoinEntry.state.getCode a = _
   change ((concreteJoinDebit.setBal _ _).addBal _ _).getCode a = _
   rw [State.addBal_getCode, State.setBal_getCode]

@@ -1730,7 +1730,13 @@ Use [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
 - `Devm.getStorVal_setStorVal_self` is persistent storage read-after-write.
 - Jaune's `Devm.setStorVal_getCode` carries account code across a persistent
   storage write, and Jaune's `Devm.setCode_getStor` storage across code
-  installation. `Devm.setCode_logs`,
+  installation. `Devm.withRefundCounter_getStor`,
+  `Devm.withRefundCounter_getCode`, `Devm.withRefundCounter_getBal`, and
+  `Devm.withRefundCounter_createdAccounts` cut through the refund-counter
+  update of an SSTORE post; `Devm.setStorVal_createdAccounts` carries the
+  created-account set across the storage write itself. Rewrite with these
+  before unfolding a concrete write tower instead of a `change` or a local
+  `rfl` restatement. `Devm.setCode_logs`,
   `Devm.setCode_output`, `Devm.setCode_error`,
   `Devm.setCode_refundCounter`, and `Devm.setCode_accountsToDelete` carry the
   persistent storage and frame observations that code installation does not
@@ -1759,6 +1765,14 @@ Use [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
   and empty code in the prepared state. Constructor setup therefore starts its
   nonce at one. The original `genericCreate_step_spawn_target_unprotected`
   derives the corresponding pre-increment fact from the same extraction.
+- `State.setBal_current_of_protected`, `State.addBal_zero_of_protected`, and
+  `State.subBal_zero_of_protected` (in `Blanc/CommonProofs.lean`) are exact
+  world equalities: a zero credit, zero debit, or current-balance rewrite at a
+  `State.Protected` owner returns the identical raw world. Their tree step is
+  `treeMap_insert_same` (over `treeMapImpl_insert_same`), an exact structural
+  identity for inserting a key at its current value, not map extensionality.
+  Without protection the zero write can normalize an empty account to absent
+  and erase its storage, so the premise is necessary.
 
 ### S3. I need state-relation or write-frame composition
 
@@ -3315,6 +3329,10 @@ Use
   ensuring the increment protects the sender before the debit.
   `ExecutionTrace.TransactionTrace.msg_shouldTransferValue` records that a
   transaction message always transfers its value.
+  `ExecutionTrace.TransactionTrace.msg_caller_nonce_ne_zero` (in
+  [`Blanc/ExecutionAccountingAdmission.lean`](../Blanc/ExecutionAccountingAdmission.lean),
+  beside `TransactionTrace.msg_caller`) packages those two admission facts:
+  the prepared message's caller has a nonzero nonce, so it is `State.Protected`.
 - `ExecutionTrace.TransactionTrace.accountsToDelete_ne` and
   `ExecutionTrace.foldl_destroyAccount_get_eq` cover the final deletion fold.
 - `ExecutionTrace.TransactionTrace.settlement_sum_bounds` funds the sender
@@ -3423,10 +3441,13 @@ Use
   EIP-7702 authorization prefix. `_getStor_eq` preserves an owner's storage
   when its code is nonempty and is not a delegation designator; `_bal_eq`
   preserves the whole balance map, and `_benv_stat` the static environment.
+  `_nonce_ne_zero` keeps every nonzero nonce nonzero (unconditionally: the
+  only nonce write is a guarded authority increment), with the same law at
+  `setDelegationStep`, `setDelegationLoop`, and `setDelegation`.
 - `ExecutionTrace.messageCallExecutionMessage_caller_eq` and its siblings
   (`_target_eq`, `_currentTarget_eq`, `_shouldTransferValue_eq`,
   `_getStor_eq`, `_bal_eq`, `_benv_stat`) do the same across delegated-code
-  resolution.
+  resolution; `_state` equates the whole world state.
 - `ExecutionTrace.TransactionTrace.exists_callRun_of_target` eliminates the
   CREATE and collision constructors of an actual transaction message whose
   target is a CALL, exposing that trace's exact delegation, resolved message,

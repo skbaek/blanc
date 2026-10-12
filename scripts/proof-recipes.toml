@@ -671,7 +671,7 @@ review_date = "2026-08-30"
 id = "devm-common-update-laws"
 status = "active"
 triggers = ["goal-shape:devm-common-update-law"]
-preferred_path = "Before proving a record projection by `rfl`, search the public `Devm` laws in `CommonProofs`: memory writes, accessed-storage/setMach cancellation, storage/code read-after-write, code-installation observations, and the reusable RETURN/SSTORE post projection cuts are named there. For Solidity address-typed storage, use `addressSlotReadWord`/`addressSlotWriteWord` and the value-carrying `loadAddressWordAt`/`storeAddressWordAt` inversions rather than restating mask algebra locally. For synthetic constructor machines, project `Blanc.Lift.St_state` and `Blanc.Lift.returnPost_state` from `Lift.Deploy` before substituting concrete memory images. Jaune also supplies update-first projection laws such as `Devm.memWrite_gasLeft` and `Devm.setMach_accessedStorageKeys`."
+preferred_path = "Before proving a record projection by `rfl`, search the public `Devm` laws in `CommonProofs`: memory writes, accessed-storage/setMach cancellation, storage/code read-after-write, code-installation observations, the refund-counter and storage-write code/balance/created-account cuts of an SSTORE post, and the reusable RETURN/SSTORE post projection cuts are named there. For Solidity address-typed storage, use `addressSlotReadWord`/`addressSlotWriteWord` and the value-carrying `loadAddressWordAt`/`storeAddressWordAt` inversions rather than restating mask algebra locally. For synthetic constructor machines, project `Blanc.Lift.St_state` and `Blanc.Lift.returnPost_state` from `Lift.Deploy` before substituting concrete memory images. Jaune also supplies update-first projection laws such as `Devm.memWrite_gasLeft` and `Devm.setMach_accessedStorageKeys`."
 boundary = "Use the smallest abstract-base law that matches the goal. Do not unfold a concrete effect tower merely because these laws themselves are definitionally simple."
 owner_module = "Blanc/CommonProofs.lean"
 canonical_example = "Blanc/CommonProofs.lean:Devm.addAccessedStorageKey_setMach_setMach"
@@ -692,6 +692,10 @@ symbols = [
   "declaration:Devm.sstoreBase_state",
   "declaration:Devm.sstoreBase_accessedStorageKeys",
   "declaration:Devm.sstoreWarmBase_accessedStorageKeys",
+  "declaration:Devm.withRefundCounter_getCode",
+  "declaration:Devm.withRefundCounter_getBal",
+  "declaration:Devm.withRefundCounter_createdAccounts",
+  "declaration:Devm.setStorVal_createdAccounts",
   "module:Blanc/AddressSlot.lean",
   "module:Blanc/AddressSlotProofs.lean",
   "declaration:addressSlotReadWord",

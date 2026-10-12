@@ -159,8 +159,8 @@ theorem concreteDripEntryState_eq :
     (concreteDripDebit.setBal concreteCreateSender
       (concreteDripDebit.bal concreteCreateSender - 0)).addBal concreteCreateTarget 0 =
         concreteDripDebit := by
-  rw [B256.sub_zero, RepinBridge.setBal_current_of_protected concreteDripDebit_sender_protected,
-    RepinBridge.addBal_zero_of_protected concreteDripDebit_target_protected]
+  rw [B256.sub_zero, State.setBal_current_of_protected concreteDripDebit_sender_protected,
+    State.addBal_zero_of_protected concreteDripDebit_target_protected]
 
 noncomputable def concreteDripEntry : Benv :=
   concreteDripMessage.benv.withState

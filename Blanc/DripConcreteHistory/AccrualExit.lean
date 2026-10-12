@@ -553,8 +553,8 @@ private theorem concreteDripStorageBase_notCreated :
 
 private theorem concreteDripChiBase_notCreated :
     concreteCreateTarget ∉ concreteDripChiBase.createdAccounts := by
-  rw [concreteDripChiBase, RepinBridge.setStorVal_createdAccounts,
-    RepinBridge.withRefundCounter_createdAccounts]
+  rw [concreteDripChiBase, Devm.setStorVal_createdAccounts,
+    Devm.withRefundCounter_createdAccounts]
   exact concreteDripStorageBase_notCreated
 
 private theorem concreteDripStorageBase_warm (key : B256) (hk : key = chiSlot ∨ key = rhoSlot) :
@@ -1492,8 +1492,8 @@ theorem concreteExitEntryState_eq :
     (concreteExitDebit.setBal concreteCreateSender
       (concreteExitDebit.bal concreteCreateSender - 0)).addBal concreteCreateTarget 0 =
         concreteExitDebit := by
-  rw [B256.sub_zero, RepinBridge.setBal_current_of_protected concreteExitDebit_sender_protected,
-    RepinBridge.addBal_zero_of_protected concreteExitDebit_target_protected]
+  rw [B256.sub_zero, State.setBal_current_of_protected concreteExitDebit_sender_protected,
+    State.addBal_zero_of_protected concreteExitDebit_target_protected]
 
 noncomputable def concreteExitEntry : Benv :=
   concreteExitMessage.benv.withState
@@ -1540,18 +1540,15 @@ theorem concreteJoinedTargetBalance : concreteJoined.state.bal concreteCreateTar
         (d.setStorVal concreteCreateTarget k v).getBal concreteCreateTarget =
           d.getBal concreteCreateTarget :=
       (Devm.StateWriteFrame.getBal_eq (Devm.setStorVal_stateWriteFrame d _ k v) _).symm
-    have refund : ∀ machine : Devm,
-        (machine.withRefundCounter 0).getBal concreteCreateTarget = machine.getBal concreteCreateTarget :=
-      fun _ => rfl
     change (concreteJoinTotalBase).getBal concreteCreateTarget = _
     unfold concreteJoinTotalBase
-    rw [hs, refund]
+    rw [hs, Devm.withRefundCounter_getBal]
     unfold concreteJoinRowBase
-    rw [hs, refund]
+    rw [hs, Devm.withRefundCounter_getBal]
     unfold concreteJoinRhoBase
-    rw [hs, refund]
+    rw [hs, Devm.withRefundCounter_getBal]
     unfold concreteJoinChiBase
-    rw [hs, refund]
+    rw [hs, Devm.withRefundCounter_getBal]
     rfl
   have hz : (0 : Adr) ≠ concreteCreateTarget := by decide +kernel
   have ht : concreteCreateSender ≠ concreteCreateTarget := by decide +kernel
@@ -1582,14 +1579,11 @@ theorem concreteDrippedTargetBalance : concreteDripped.state.bal concreteCreateT
         (d.setStorVal concreteCreateTarget k v).getBal concreteCreateTarget =
           d.getBal concreteCreateTarget :=
       (Devm.StateWriteFrame.getBal_eq (Devm.setStorVal_stateWriteFrame d _ k v) _).symm
-    have refund : ∀ machine : Devm,
-        (machine.withRefundCounter 0).getBal concreteCreateTarget = machine.getBal concreteCreateTarget :=
-      fun _ => rfl
     change (concreteDripRhoBase).getBal concreteCreateTarget = _
     unfold concreteDripRhoBase
-    rw [hs, refund]
+    rw [hs, Devm.withRefundCounter_getBal]
     unfold concreteDripChiBase
-    rw [hs, refund]
+    rw [hs, Devm.withRefundCounter_getBal]
     rfl
   have hz : (0 : Adr) ≠ concreteCreateTarget := by decide +kernel
   have ht : concreteCreateSender ≠ concreteCreateTarget := by decide +kernel
@@ -2259,20 +2253,20 @@ private theorem concreteExitStorageBase_notCreated :
 
 private theorem concreteExitChiBase_notCreated :
     concreteCreateTarget ∉ concreteExitChiBase.createdAccounts := by
-  rw [concreteExitChiBase, RepinBridge.setStorVal_createdAccounts,
-    RepinBridge.withRefundCounter_createdAccounts]
+  rw [concreteExitChiBase, Devm.setStorVal_createdAccounts,
+    Devm.withRefundCounter_createdAccounts]
   exact concreteExitStorageBase_notCreated
 
 private theorem concreteExitRhoBase_notCreated :
     concreteCreateTarget ∉ concreteExitRhoBase.createdAccounts := by
-  rw [concreteExitRhoBase, RepinBridge.setStorVal_createdAccounts,
-    RepinBridge.withRefundCounter_createdAccounts]
+  rw [concreteExitRhoBase, Devm.setStorVal_createdAccounts,
+    Devm.withRefundCounter_createdAccounts]
   exact concreteExitChiBase_notCreated
 
 private theorem concreteExitRowBase_notCreated :
     concreteCreateTarget ∉ concreteExitRowBase.createdAccounts := by
-  rw [concreteExitRowBase, RepinBridge.setStorVal_createdAccounts,
-    RepinBridge.withRefundCounter_createdAccounts]
+  rw [concreteExitRowBase, Devm.setStorVal_createdAccounts,
+    Devm.withRefundCounter_createdAccounts]
   exact concreteExitRhoBase_notCreated
 
 private theorem concreteExitStorageBase_warm (key : B256)
@@ -2450,16 +2444,14 @@ theorem concreteExitTotalBase_balance : concreteExitTotalBase.getBal concreteCre
   have hs (d : Devm) (k v : B256) :
       (d.setStorVal concreteCreateTarget k v).getBal concreteCreateTarget = d.getBal concreteCreateTarget :=
     (Devm.StateWriteFrame.getBal_eq (Devm.setStorVal_stateWriteFrame d _ k v) _).symm
-  have refund : ∀ machine : Devm,
-      (machine.withRefundCounter 0).getBal concreteCreateTarget = machine.getBal concreteCreateTarget := fun _ => rfl
   unfold concreteExitTotalBase
-  rw [hs, refund]
+  rw [hs, Devm.withRefundCounter_getBal]
   unfold concreteExitRowBase
-  rw [hs, refund]
+  rw [hs, Devm.withRefundCounter_getBal]
   unfold concreteExitRhoBase
-  rw [hs, refund]
+  rw [hs, Devm.withRefundCounter_getBal]
   unfold concreteExitChiBase
-  rw [hs, refund]
+  rw [hs, Devm.withRefundCounter_getBal]
   exact concreteExitDevm_balance
 
 theorem concreteExitTotalBase_storage : Devm.getStor concreteExitTotalBase concreteCreateTarget =
@@ -2479,16 +2471,14 @@ theorem concreteExitTotalBase_storage : Devm.getStor concreteExitTotalBase concr
 
 theorem concreteExitTotalBase_code (a : Adr) :
     concreteExitTotalBase.getCode a = concreteDripped.state.getCode a := by
-  have refund : ∀ machine : Devm, (machine.withRefundCounter 0).getCode a = machine.getCode a :=
-    fun _ => rfl
   unfold concreteExitTotalBase
-  rw [Devm.setStorVal_getCode, refund]
+  rw [Devm.setStorVal_getCode, Devm.withRefundCounter_getCode]
   unfold concreteExitRowBase
-  rw [Devm.setStorVal_getCode, refund]
+  rw [Devm.setStorVal_getCode, Devm.withRefundCounter_getCode]
   unfold concreteExitRhoBase
-  rw [Devm.setStorVal_getCode, refund]
+  rw [Devm.setStorVal_getCode, Devm.withRefundCounter_getCode]
   unfold concreteExitChiBase
-  rw [Devm.setStorVal_getCode, refund]
+  rw [Devm.setStorVal_getCode, Devm.withRefundCounter_getCode]
   change concreteExitEntry.state.getCode a = _
   change ((concreteExitDebit.setBal _ _).addBal _ _).getCode a = _
   rw [State.addBal_getCode, State.setBal_getCode]
@@ -2553,16 +2543,14 @@ private theorem concreteExitTotalBase_senderBalance :
   have hs (d : Devm) (k v : B256) :
       (d.setStorVal concreteCreateTarget k v).getBal concreteCreateSender = d.getBal concreteCreateSender :=
     (Devm.StateWriteFrame.getBal_eq (Devm.setStorVal_stateWriteFrame d _ k v) _).symm
-  have refund : ∀ machine : Devm,
-      (machine.withRefundCounter 0).getBal concreteCreateSender = machine.getBal concreteCreateSender := fun _ => rfl
   unfold concreteExitTotalBase
-  rw [hs, refund]
+  rw [hs, Devm.withRefundCounter_getBal]
   unfold concreteExitRowBase
-  rw [hs, refund]
+  rw [hs, Devm.withRefundCounter_getBal]
   unfold concreteExitRhoBase
-  rw [hs, refund]
+  rw [hs, Devm.withRefundCounter_getBal]
   unfold concreteExitChiBase
-  rw [hs, refund]
+  rw [hs, Devm.withRefundCounter_getBal]
   change (((concreteExitDebit.setBal concreteCreateSender
     (concreteExitDebit.bal concreteCreateSender - 0)).addBal concreteCreateTarget 0).get
       concreteCreateSender).bal = _

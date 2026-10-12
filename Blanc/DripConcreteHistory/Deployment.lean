@@ -5,7 +5,6 @@
 -- proved by Lean; no fixture result is a theorem premise.
 
 import Blanc.DripDeploy
-import Blanc.Drip.RepinBridge
 import Blanc.RlpConcrete
 import Blanc.DripRpow
 
@@ -969,8 +968,8 @@ private theorem concreteConstructorEntry_eq_prepared :
     rw [concreteConstructorPrepared_target_nonce]
     decide
   unfold concreteConstructorEntry
-  rw [B256.sub_zero, RepinBridge.setBal_current_of_protected senderProtected,
-    RepinBridge.addBal_zero_of_protected targetProtected]
+  rw [B256.sub_zero, State.setBal_current_of_protected senderProtected,
+    State.addBal_zero_of_protected targetProtected]
 
 /-- A finite update expression for the actual deployed world, including fees. -/
 def concreteDeploymentState : State :=

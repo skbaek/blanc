@@ -657,6 +657,26 @@ lemma Devm.addLog_getStor (devm : Devm) (log : Log) :
     Devm.getStor (devm.addLog log) = Devm.getStor devm := by
   rfl
 
+/-- A refund-counter update leaves account code alone; rewrite with this law
+before unfolding a concrete SSTORE post tower. -/
+lemma Devm.withRefundCounter_getCode (devm : Devm) (refundCounter : Int) (a : Adr) :
+    (devm.withRefundCounter refundCounter).getCode a = devm.getCode a := by
+  rfl
+
+lemma Devm.withRefundCounter_getBal (devm : Devm) (refundCounter : Int) (a : Adr) :
+    (devm.withRefundCounter refundCounter).getBal a = devm.getBal a := by
+  rfl
+
+/-- Neither a refund-counter update nor a persistent storage write changes
+the created-account set. -/
+lemma Devm.withRefundCounter_createdAccounts (devm : Devm) (refundCounter : Int) :
+    (devm.withRefundCounter refundCounter).createdAccounts = devm.createdAccounts := by
+  rfl
+
+lemma Devm.setStorVal_createdAccounts (devm : Devm) (address : Adr) (key value : B256) :
+    (devm.setStorVal address key value).createdAccounts = devm.createdAccounts := by
+  rfl
+
 lemma Devm.WorldEq.getStor {d d' : Devm} (h : Devm.WorldEq d d') (a : Adr) :
     Devm.getStor d a = Devm.getStor d' a := by
   unfold Devm.getStor Devm.getAcct
@@ -9640,6 +9660,97 @@ lemma State.setBal_get_stor_of_protected {st : Jaune.State} {b a : Adr} {v : B25
     · exact hn hE.2.1
     · exact hc hE.1
   · rfl
+
+open Std.DTreeMap.Internal in
+/-- Inserting a key at its current value returns the identical balanced raw
+tree: an exact representation identity, not extensional tree equivalence. -/
+theorem treeMapImpl_insert_same {α β : Type} [Ord α] [Std.LawfulEqOrd α]
+    (tree : Impl α (fun _ => β)) (balanced : tree.Balanced) (key : α) (value : β)
+    (found : Impl.Const.get? tree key = some value) :
+    (Impl.insert key value tree balanced).impl = tree := by
+  induction tree with
+  | leaf => simp only [Impl.Const.get?] at found; cases found
+  | inner size k v left right ihLeft ihRight =>
+      cases compared : compare key k with
+      | lt =>
+          simp only [Impl.Const.get?, compared] at found
+          simp only [Impl.insert, compared]
+          simp only [ihLeft balanced.left found, Impl.balanceL_eq_balance,
+            Impl.balance_eq_inner balanced]
+      | gt =>
+          simp only [Impl.Const.get?, compared] at found
+          simp only [Impl.insert, compared]
+          simp only [ihRight balanced.right found, Impl.balanceR_eq_balance,
+            Impl.balance_eq_inner balanced]
+      | eq =>
+          have same : key = k := Std.LawfulEqOrd.eq_of_compare compared
+          subst k
+          simp only [Impl.Const.get?, compared, Option.some.injEq] at found
+          subst value
+          simp only [Impl.insert, compared]
+
+/-- Inserting a key at its current value returns the identical `TreeMap`. -/
+theorem treeMap_insert_same {α β : Type} [Ord α] [Std.LawfulEqOrd α]
+    (tree : Std.TreeMap α β) (key : α) (value : β)
+    (found : tree[key]? = some value) : tree.insert key value = tree := by
+  cases tree with
+  | mk inner =>
+      cases inner with
+      | mk raw wf =>
+          change Std.DTreeMap.Internal.Impl.Const.get? raw key = some value at found
+          simp only [Std.TreeMap.insert, Std.DTreeMap.insert,
+            treeMapImpl_insert_same raw wf.balanced key value found]
+
+/-- Rewriting a protected account's current balance is the identity on the raw
+world tree: protection rules out the `clearIfEmpty` normalization. -/
+theorem State.setBal_current_of_protected {state : State} {owner : Adr}
+    (hp : State.Protected state owner) :
+    state.setBal owner (state.bal owner) = state := by
+  have notEmpty : ¬ (state.get owner).Empty := by
+    intro empty
+    rcases hp with nonce | code
+    · exact nonce empty.2.1
+    · exact code empty.1
+  have notNil : state.get owner ≠ Acct.nil := by
+    intro nil
+    apply notEmpty
+    rw [nil]
+    exact ⟨rfl, rfl, rfl⟩
+  have found : state[owner]? = some (state.get owner) := by
+    cases lookup : state[owner]? with
+    | none =>
+        have nil : state.get owner = Acct.nil := by
+          rw [State.get_eq_getD, lookup]
+          rfl
+        exact (notNil nil).elim
+    | some account =>
+        rw [State.get_eq_getD, lookup]
+        rfl
+  have unchanged : (state.get owner).withBal (state.bal owner) = state.get owner := by
+    unfold State.bal
+    cases state.get owner
+    rfl
+  unfold State.setBal
+  rw [unchanged]
+  unfold State.setAccount
+  rw [Acct.clearIfEmpty, if_neg notEmpty]
+  unfold State.set
+  rw [if_neg notNil]
+  exact treeMap_insert_same state owner (state.get owner) found
+
+/-- A zero credit to a protected account is the identity on the world. -/
+theorem State.addBal_zero_of_protected {state : State} {owner : Adr}
+    (hp : State.Protected state owner) : state.addBal owner 0 = state := by
+  unfold State.addBal
+  rw [B256.add_zero]
+  exact State.setBal_current_of_protected hp
+
+/-- A zero debit from a protected account succeeds with the identical world. -/
+theorem State.subBal_zero_of_protected {state : State} {owner : Adr}
+    (hp : State.Protected state owner) : state.subBal owner 0 = some state := by
+  unfold State.subBal
+  simp only [B256.lt_iff_toNat_lt_toNat, B256.toNat_zero, Nat.not_lt_zero, if_false, B256.sub_zero,
+    State.setBal_current_of_protected hp]
 
 /-- Message entry that moves no value — no transfer flag, or a zero value —
 leaves the block environment exactly as it was. -/

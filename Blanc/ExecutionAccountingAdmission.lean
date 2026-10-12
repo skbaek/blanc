@@ -58,6 +58,24 @@ theorem TransactionTrace.msg_caller
   rw [← h]
   rfl
 
+/-- A transaction's prepared message caller has a nonzero nonce: admission
+bounds the sender nonce below `UInt64.max` before its increment. -/
+theorem TransactionTrace.msg_caller_nonce_ne_zero
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout') :
+    (trace.msg.benv.state.get trace.msg.caller).nonce ≠ 0 := by
+  rw [trace.msg_caller, prepareMessage_benv trace.prepared]
+  change (trace.debitState.get trace.sender).nonce ≠ 0
+  rcases State.of_subBal trace.debit with ⟨_, debitEq⟩
+  rw [debitEq, State.setBal_get_nonce]
+  have nonceEq := checkTransaction_sender_nonce trace.checked
+  have nonceBound : (benv.state.get trace.sender).nonce ≠ UInt64.max := by
+    simpa only [Benv.beginTransaction] using
+      (nonceEq.trans_ne (validateTransaction_nonce_ne_max trace.validation))
+  have nonzero := UInt64.add_one_ne_zero_of_ne_max nonceBound
+  simpa only [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_nonce] using nonzero
+
 /-- G+3. Direct withdrawals preserve storage at each protected owner. -/
 theorem processWithdrawalsState_getStor_eq (ca : Adr) (state : State)
     (withdrawals : List Withdrawal) (protection : State.Protected state ca) :
