@@ -458,11 +458,12 @@ structure WithdrawPost (sevm : Sevm) (pre post : Devm) (wad : B256) : Prop where
   error : post.error = pre.error
   logs : post.logs = pre.logs ++ [⟨sevm.currentTarget, [wdTopic, sevm.caller.toB256], wad.toBytes⟩]
   refund : post.refundCounter = sstoreNewRefundCounter sevm.benvStat.rules.gas (wV sevm pre wad)
-    (getOrigStorVal sevm sevm.currentTarget (balSlot sevm.caller))
+    (pre.getOrigStorVal sevm sevm.currentTarget (balSlot sevm.caller))
     (pre.getStorVal sevm.currentTarget (balSlot sevm.caller)) pre.refundCounter
   accountsToDelete : post.accountsToDelete.isEmpty = pre.accountsToDelete.isEmpty
-  state : ∃ stmid, (wB3 sevm pre wad).state.subBal sevm.currentTarget wad = some stmid ∧
-    post.state = stmid.addBal sevm.caller wad
+  state : if wad = 0 then post.state = (wB3 sevm pre wad).state else
+    ∃ stmid, (wB3 sevm pre wad).state.subBal sevm.currentTarget wad = some stmid ∧
+      post.state = stmid.addBal sevm.caller wad
 
 /-- **Liveness of `withdraw(wad)` to an externally owned account, gas-exact, with the final machine.**  A frame entering
 `withdraw(wad)` with `0 < wad ≤ balanceOf[caller]`, whose caller has no code and is no precompile, and
@@ -480,6 +481,8 @@ theorem weth9_withdraw_runExact_post {sevm : Sevm} {pre : Devm} {G : Nat}
     (h_code : (pre.getCode sevm.caller).size = 0)
     (h_prec : sevm.benvStat.rules.isPrecomp sevm.caller = false)
     (h_eth : ¬ (pre.getAcct sevm.currentTarget).bal < Sevm.dataWord sevm 4)
+    (hprot_ca : State.Protected pre.state sevm.currentTarget)
+    (hprot_caller : State.Protected pre.state sevm.caller)
     (h_gas : pre.gasLeft = G + withdrawGas sevm pre)
     (h_sentry : gCallStipend < G + 1 + 1488 + callNet pre sevm.caller + 69 +
       sstoreCost sevm (wB2 sevm pre) (balSlot sevm.caller) (wV sevm pre (Sevm.dataWord sevm 4)))
@@ -513,6 +516,23 @@ theorem weth9_withdraw_runExact_post {sevm : Sevm} {pre : Devm} {G : Nat}
           (value := wV sevm pre (Sevm.dataWord sevm 4)) sevm.currentTarget
         simpa only [wB3, wB2, wB1, Devm.getBal, afterSload_getAcct] using h1
       rw [e]; exact h_eth)
+  have hstate2 : (wB2 sevm pre).state = pre.state := by
+    rw [Blanc.Lift.NodeWalk.afterSload_state, Blanc.Lift.NodeWalk.afterSload_state]
+  have hacct2 : ∀ x, (wB2 sevm pre).getAcct x = pre.getAcct x :=
+    fun x => congrArg (·.get x) hstate2
+  have hprot3 : ∀ x, State.Protected pre.state x →
+      State.Protected (wB3 sevm pre (Sevm.dataWord sevm 4)).state x := by
+    intro x hx
+    obtain ⟨st, hst⟩ := afterSstore_getAcct (sevm := sevm) (b := wB2 sevm pre)
+      (key := balSlot sevm.caller) (value := wV sevm pre (Sevm.dataWord sevm 4)) x
+    rw [hacct2] at hst
+    unfold State.Protected at hx
+    show ((wB3 sevm pre (Sevm.dataWord sevm 4)).getAcct x).nonce ≠ 0 ∨
+      ((wB3 sevm pre (Sevm.dataWord sevm 4)).getAcct x).code.size ≠ 0
+    rw [hst]
+    rcases hx with hn | hc
+    · exact Or.inl hn
+    · exact Or.inr hc
   obtain ⟨postW, hw, hpe⟩ := withdraw_wrapper (sevm := sevm) (b := pre) (G := G) (X := _)
     (sel := Sevm.selector sevm) h_value hbody
   refine ⟨postW, ⟨_, rfl, ?_⟩, ?_, ⟨?_, ?_, ?_, ?_, ?_, ?_⟩, ?_, ?_⟩
@@ -537,22 +557,69 @@ theorem weth9_withdraw_runExact_post {sevm : Sevm} {pre : Devm} {G : Nat}
     rw [hcp.refund]
     simp only [wB3, wB2, wB1, wV, getStorVal_afterSload, afterSstore_refundCounter,
       afterSload_refundCounter]
+    have hc1 : (afterSload sevm pre (balSlot sevm.caller)).createdAccounts =
+        pre.createdAccounts := by
+      unfold afterSload
+      split <;> rfl
+    have hc2 : (afterSload sevm (afterSload sevm pre (balSlot sevm.caller))
+        (balSlot sevm.caller)).createdAccounts =
+        (afterSload sevm pre (balSlot sevm.caller)).createdAccounts := by
+      show (afterSload sevm (wB1 sevm pre) (balSlot sevm.caller)).createdAccounts =
+        (wB1 sevm pre).createdAccounts
+      unfold afterSload
+      split <;> rfl
+    have horig : (afterSload sevm (afterSload sevm pre (balSlot sevm.caller))
+        (balSlot sevm.caller)).getOrigStorVal sevm sevm.currentTarget (balSlot sevm.caller) =
+        pre.getOrigStorVal sevm sevm.currentTarget (balSlot sevm.caller) := by
+      unfold Devm.getOrigStorVal
+      rw [hc2, hc1]
+    rw [horig]
   · rw [hpe]
     show post.accountsToDelete.isEmpty = _
     rw [hcp.accountsToDelete]
     simp only [wB3, wB2, wB1, afterSstore_accountsToDelete, afterSload_accountsToDelete]
   · rw [hpe]
-    obtain ⟨stmid, hsub, hst⟩ := hcp.state
+    have hcs := hcp.state
+    rw [if_neg hwad] at hcs ⊢
+    obtain ⟨stmid, hsub, hst⟩ := hcs
     exact ⟨stmid, hsub, hst⟩
   · rw [hpe]
     show Devm.getStor post sevm.currentTarget = _
-    rw [hcp.getStor]
+    have hcs := hcp.state
+    rw [if_neg hwad] at hcs
+    obtain ⟨stmid, hsub, hst⟩ := hcs
+    have h1 : Devm.getStor post sevm.currentTarget =
+        Devm.getStor (wB3 sevm pre (Sevm.dataWord sevm 4)) sevm.currentTarget := by
+      have hsa : State.getStor (stmid.addBal sevm.caller (Sevm.dataWord sevm 4)) sevm.currentTarget =
+          State.getStor (wB3 sevm pre (Sevm.dataWord sevm 4)).state sevm.currentTarget :=
+        getStor_subBal_addBal hsub (hprot3 _ hprot_ca)
+      show State.getStor post.state _ = State.getStor (wB3 sevm pre (Sevm.dataWord sevm 4)).state _
+      rw [hst]
+      exact hsa
+    rw [h1]
     simp only [wB3, wB2, wB1, wV, getStorVal_afterSload, afterSstore_getStor_self,
       afterSload_getStor]
   · intro a ha
     rw [hpe]
     show Devm.getStor post a = _
-    rw [hcp.getStor]
+    have hcs := hcp.state
+    rw [if_neg hwad] at hcs
+    obtain ⟨stmid, hsub, hst⟩ := hcs
+    have hpost3 : Devm.getStor post a = Devm.getStor (wB3 sevm pre (Sevm.dataWord sevm 4)) a := by
+      by_cases hcaller : a = sevm.caller
+      · subst hcaller
+        have h1 : State.getStor (stmid.addBal sevm.caller (Sevm.dataWord sevm 4)) sevm.caller =
+            State.getStor (wB3 sevm pre (Sevm.dataWord sevm 4)).state sevm.caller :=
+          getStor_subBal_addBal hsub (hprot3 _ hprot_caller)
+        show State.getStor post.state _ = State.getStor (wB3 sevm pre (Sevm.dataWord sevm 4)).state _
+        rw [hst]
+        exact h1
+      · obtain ⟨-, rfl⟩ := State.of_subBal hsub
+        show (post.state.get a).stor = ((wB3 sevm pre (Sevm.dataWord sevm 4)).state.get a).stor
+        rw [hst]
+        unfold State.addBal
+        rw [State.setBal_get_ne (Ne.symm hcaller), State.setBal_get_ne (Ne.symm ha)]
+    rw [hpost3]
     simp only [wB3, wB2, wB1, ne_eq, ha.symm, not_false_eq_true, afterSstore_getStor_ne,
       afterSload_getStor]
 
@@ -624,23 +691,41 @@ theorem weth9_withdraw_zero_runExact_post {sevm : Sevm} {pre : Devm} {G : Nat}
     rw [hcp.refund]
     simp only [wB3, wB2, wB1, wV, getStorVal_afterSload, afterSstore_refundCounter,
       afterSload_refundCounter]
+    have hc1 : (afterSload sevm pre (balSlot sevm.caller)).createdAccounts =
+        pre.createdAccounts := by
+      unfold afterSload
+      split <;> rfl
+    have hc2 : (afterSload sevm (afterSload sevm pre (balSlot sevm.caller))
+        (balSlot sevm.caller)).createdAccounts =
+        (afterSload sevm pre (balSlot sevm.caller)).createdAccounts := by
+      show (afterSload sevm (wB1 sevm pre) (balSlot sevm.caller)).createdAccounts =
+        (wB1 sevm pre).createdAccounts
+      unfold afterSload
+      split <;> rfl
+    have horig : (afterSload sevm (afterSload sevm pre (balSlot sevm.caller))
+        (balSlot sevm.caller)).getOrigStorVal sevm sevm.currentTarget (balSlot sevm.caller) =
+        pre.getOrigStorVal sevm sevm.currentTarget (balSlot sevm.caller) := by
+      unfold Devm.getOrigStorVal
+      rw [hc2, hc1]
+    rw [horig]
   · rw [hpe]
     show post.accountsToDelete.isEmpty = _
     rw [hcp.accountsToDelete]
     simp only [wB3, wB2, wB1, afterSstore_accountsToDelete, afterSload_accountsToDelete]
   · rw [hpe]
-    obtain ⟨stmid, hsub, hst⟩ := hcp.state
-    rw [hw0] at hsub ⊢
-    exact ⟨stmid, hsub, hst⟩
+    have hcs := hcp.state
+    rw [hw0] at hcs ⊢
+    rw [ite_eq_left rfl] at hcs ⊢
+    exact hcs
   · rw [hpe]
     show Devm.getStor post sevm.currentTarget = _
-    rw [hcp.getStor]
+    rw [hcp.getStor _ (Or.inl rfl)]
     simp only [wB3, wB2, wB1, wV, getStorVal_afterSload, afterSstore_getStor_self,
       afterSload_getStor]
   · intro a ha
     rw [hpe]
     show Devm.getStor post a = _
-    rw [hcp.getStor]
+    rw [hcp.getStor _ (Or.inl rfl)]
     simp only [wB3, wB2, wB1, ne_eq, ha.symm, not_false_eq_true, afterSstore_getStor_ne,
       afterSload_getStor]
 

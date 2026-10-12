@@ -44,8 +44,8 @@ theorem weth9_exec_node {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (
     Devm.getStor N.devm sevm.currentTarget =
       (Devm.getStor pre sevm.currentTarget).set (balSlot sevm.caller)
         ((Devm.getStor pre sevm.currentTarget).get (balSlot sevm.caller) - Sevm.dataWord sevm 4) ∧
-    ∀ N', Exec.Deriv.ParentStep N' N →
-      Devm.getStor post = Devm.getStor N'.devm ∧
+    ∀ N', Exec.Deriv.ParentStep N' N → (∀ owner, State.Protected N'.devm.state owner →
+      Devm.getStor post owner = Devm.getStor N'.devm owner) ∧
       ∀ M, Exec.Deriv.ParentPrefix N' M → ∀ y, ¬ Ninst.At M.sevm.code M.pc (.exec y) := by
   obtain ⟨x, hx⟩ := hat
   obtain ⟨κ, reach, ok⟩ := reach_of_parentPrefix cert_check
@@ -79,9 +79,10 @@ theorem weth9_exec_node {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (
       subst hs
       decide
     refine ⟨?_, ?_⟩
-    · exact getStor_post_of_silent cert_check (R := ⟨0, sevm, pre, .ok post, run⟩) (post := post)
+    · intro owner hprot
+      exact getStor_post_of_silent cert_check (R := ⟨0, sevm, pre, .ok post, run⟩) (post := post)
         rfl hchain fork ok₁ (ok' := regSilent)
-        (fun hn hs => Ninst.Run.state_of_regSilent hn (StepIn.toRun hs)) hfsil hKsil
+        (fun hn hs => Ninst.Run.state_of_regSilent hn (StepIn.toRun hs)) hfsil hKsil owner hprot
     · intro M hM y
       exact noExec_after_of_cursor cert_check hchain hM fork ok₁ (E := []) rfl
         (by exact afterCall_execFree)
@@ -140,15 +141,22 @@ theorem weth9_spawnReplay (ca : Adr) {U : Key → Prop} (hinj : KeyInj U) :
       exact LedgerReplay.nil _
     · simp only [hd, Option.isSome_some, ↓reduceIte]
       exact replay_one hinj hkeys hd hstor
-    · obtain ⟨d10, sf, hstorc, hstep, hstate⟩ :=
+    · obtain ⟨d10, sf, hstorc, hcode10, hstep, hstate⟩ :=
         weth9_withdraw_frame StepIn.toRun hin ⟨who, w, hd⟩
       have hdesc : Exec.rawFrameDescendants run = [] :=
         Exec.rawFrameDescendants_eq_nil_of_noExec run hnone
-      have hsf : Devm.getStor sf = Devm.getStor d10 :=
-        StepIn.exec_getStor_eq_of_noDescendants (R := ⟨0, sevm, pre, .ok post, run⟩) hdesc hstep
+      have hne : (pre.getCode sevm.currentTarget).toList ≠ [] :=
+        (footSpec U).sem.ne_nil installed.1.symm
+      have htol : (State.getCode d10.state sevm.currentTarget).toList ≠ [] := by
+        show (d10.getCode sevm.currentTarget).toList ≠ []
+        rw [hcode10]
+        exact hne
+      have hprot : State.Protected d10.state sevm.currentTarget :=
+        State.Protected.of_code_ne_nil htol
+      have hsf : Devm.getStor sf sevm.currentTarget = Devm.getStor d10 sevm.currentTarget :=
+        StepIn.exec_getStor_eq_of_noDescendants (R := ⟨0, sevm, pre, .ok post, run⟩) hdesc hstep _ hprot
       have hpost : Devm.getStor post sevm.currentTarget = Devm.getStor d10 sevm.currentTarget :=
-        (getStor_eq_of_state_eq hstate sevm.currentTarget).trans
-          (congrFun hsf sevm.currentTarget)
+        (getStor_eq_of_state_eq hstate sevm.currentTarget).trans hsf
       obtain ⟨rfl, rfl⟩ := decodeCall_withdraw_inv hd
       simp only [hd, Option.isSome_some, ↓reduceIte]
       rw [hpost]
@@ -166,7 +174,18 @@ theorem weth9_spawnReplay (ca : Adr) {U : Key → Prop} (hinj : KeyInj U) :
       refine ⟨?_, hnoexec⟩
       show LedgerReplay (ledger U (Devm.getStor N'.devm sevm.currentTarget)) []
         (ledger U (Devm.getStor post sevm.currentTarget))
-      rw [hpost]
+      have hN' : Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N' := hN.snoc edge
+      have hne : (pre.getCode sevm.currentTarget).toList ≠ [] :=
+        (footSpec U).sem.ne_nil installed.1.symm
+      have hcodeN : N'.devm.getCode sevm.currentTarget = pre.getCode sevm.currentTarget :=
+        Exec.Deriv.ParentPrefix.codePreserve hN' _ hne
+      have htol : (State.getCode N'.devm.state sevm.currentTarget).toList ≠ [] := by
+        show (N'.devm.getCode sevm.currentTarget).toList ≠ []
+        rw [hcodeN]
+        exact hne
+      have hprotN : State.Protected N'.devm.state sevm.currentTarget :=
+        State.Protected.of_code_ne_nil htol
+      rw [hpost _ hprotN]
       exact LedgerReplay.nil _
 
 end Blanc.Lift.Weth9
