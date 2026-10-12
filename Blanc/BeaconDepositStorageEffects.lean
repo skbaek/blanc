@@ -1,6 +1,7 @@
 import Blanc.BeaconDepositInsert
 import Blanc.BeaconDepositWriteSites
 import Blanc.ForwardStorageEffects
+import Blanc.BeaconDepositRepinBridge
 
 /-!
 # Beacon deposit exact retained storage effects
@@ -135,9 +136,8 @@ theorem sha64_success_prefix_storageEffectRun_ext
       callPost.logs = base.logs ∧
       callPost.output = base.output ∧
       callPost.error = base.error ∧
-      (∃ stmid,
-        base.state.subBal sevm.currentTarget 0 = some stmid ∧
-        callPost.state = stmid.addBal 2 0) ∧
+      callPost.state = base.state ∧
+      callPost.createdAccounts = base.createdAccounts ∧
       ∀ {ex : Execution},
         Func.StorageEffectRun fs sevm
           (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩)
@@ -154,8 +154,8 @@ theorem sha64_success_prefix_storageEffectRun_ext
       base.memory, K + 221 + ext, base.stateGas⟩
   obtain ⟨callPost, hstat, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
-      hlogs, houtput, herror, stmid, hsub, hstate⟩ :=
-    Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext
+      hlogs, _hrefund, _hdelete, houtput, herror, hstate, hcreated⟩ :=
+    RepinBridge.childlessRunCompiled_staticcall_sha256_64_warm_ext_created
       (sevm := sevm) (devm := callPre)
       (iiw := inputWord * 32) (oiw := outputWord * 32)
       (s := stack) (G := K + 221 + ext) (ext := ext)
@@ -214,12 +214,13 @@ theorem sha64_success_prefix_storageEffectRun_ext
     calc
       callPost.error = callPre.error := herror
       _ = base.error := by rfl
-  have hsub' : base.state.subBal sevm.currentTarget 0 = some stmid := by
-    change base.state.subBal sevm.currentTarget 0 = some stmid at hsub
-    exact hsub
+  have hstate' : callPost.state = base.state := by
+    calc
+      callPost.state = callPre.state := hstate
+      _ = base.state := by rfl
   refine ⟨callPost, hstack, hmemory', hgas', hreturn',
     hstorage', hcode', haddresses', hkeys',
-    hlogs', houtput', herror', ⟨stmid, hsub', hstate⟩, ?_⟩
+    hlogs', houtput', herror', hstate', hcreated, ?_⟩
   intro ex tail
   have hge :
       (Nat.toB256 callPost.returnData.length <? (32 : B256)) = 0 := by
@@ -340,9 +341,8 @@ theorem sha64_success_prefix_storageEffectRun
       callPost.logs = base.logs ∧
       callPost.output = base.output ∧
       callPost.error = base.error ∧
-      (∃ stmid,
-        base.state.subBal sevm.currentTarget 0 = some stmid ∧
-        callPost.state = stmid.addBal 2 0) ∧
+      callPost.state = base.state ∧
+      callPost.createdAccounts = base.createdAccounts ∧
       ∀ {ex : Execution},
         Func.StorageEffectRun fs sevm
           (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩)
@@ -532,6 +532,7 @@ theorem insertionShaTail_storageEffectRun
       callPost.logs = base.logs ∧
       callPost.output = base.output ∧
       callPost.error = base.error ∧
+      callPost.createdAccounts = base.createdAccounts ∧
       ∀ {ex : Execution},
         Func.StorageEffectRun fs sevm
           (callPost.setMach
@@ -552,7 +553,7 @@ theorem insertionShaTail_storageEffectRun
     decide +kernel
   obtain ⟨callPost, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
-      hlogs, houtput, herror, _htransfer, lift⟩ :=
+      hlogs, houtput, herror, _htransfer, hcreated, lift⟩ :=
     sha64_success_prefix_storageEffectRun (hfork := hfork)
       (fs := fs) (sevm := sevm) (base := base)
       (inputWord := 0) (outputWord := nodeWord)
@@ -576,7 +577,7 @@ theorem insertionShaTail_storageEffectRun
     exact hcarrierBase
   refine ⟨callPost, hstack, hmemory', ⟨hcarrier⟩, hgas', hreturn',
     hstorage, hcode, haddresses, hkeys,
-    hlogs, houtput, herror, ?_⟩
+    hlogs, houtput, herror, hcreated, ?_⟩
   intro ex tail
   have hinsertion : Func.StorageEffectRun fs sevm
       (callPost.setMach

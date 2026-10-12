@@ -21,17 +21,39 @@ def depositRuntimeSuccessGas
   depositEndpointSuccessGas sevm base stor keys node n size countCost G +
     depositRouteGas
 
+/-- `depositRuntimeSuccessGas` with the terminal branch write priced from a
+supplied original word (see `insertionFirstLiveStoreCostOf`). -/
+def depositRuntimeSuccessGasOf (orig : B256)
+    (sevm : Sevm) (base : Devm) (stor : Stor) (keys : KeySet)
+    (node : B256) (n size countCost G : Nat) : Nat :=
+  depositEndpointSuccessGasOf orig sevm base stor keys node n size countCost G +
+    depositRouteGas
+
+theorem depositRuntimeSuccessGas_eq_of
+    (sevm : Sevm) (base : Devm) (stor : Stor) (keys : KeySet)
+    (node : B256) (n size countCost G : Nat) :
+    depositRuntimeSuccessGas sevm base stor keys node n size countCost G =
+      depositRuntimeSuccessGasOf
+        (getOrigStorVal sevm sevm.currentTarget (branchSlot (0 + n)))
+        sevm base stor keys node n size countCost G := rfl
+
 /-- A successful pure-model deposit has an exact successful compiled runtime
 execution.  Storage is the count-updated target map followed by the unique
 first-live branch write; every non-target storage map, code, accessed-address
 set, output, and error is unchanged, and exactly one byte-exact event is
-appended. -/
+appended.
+
+The terminal branch write is priced from `orig`, which must be the machine
+original read `base.getOrigStorVal` of that branch cell (Jaune prices
+`SSTORE` from it; it is zero for an owner created in the current
+transaction).  Instantiating `orig` with the raw snapshot read recovers the
+pre-re-pin gas expression only when the two reads agree. -/
 theorem deposit_success_runCompiled
     (sevm : Sevm) (base : Devm)
     (hfork : CoveredFork sevm.benvStat.fork)
     (pubkey withdrawalCredentials signature : Bytes)
     (depositDataRoot : B256) (s' : Acc) (ev : DepositEvent)
-    (stor : Stor) (keys : KeySet) (countCost n G : Nat)
+    (stor : Stor) (keys : KeySet) (countCost n G : Nat) {orig : B256}
     (hdataBound : sevm.data.length < 2 ^ 256)
     (hdec : DepositAbiDecodable sevm.data pubkey withdrawalCredentials
       signature depositDataRoot)
@@ -67,10 +89,10 @@ theorem deposit_success_runCompiled
     (hdepth : sevm.depth ≠ 0)
     (hstatic : sevm.isStatic = false)
     (hbranchSentry : gCallStipend < G + 2 +
-      insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot)
+      insertionFirstLiveStoreCostOf orig sevm stor keys 0 n depositDataRoot)
     (hbound :
       (G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+          insertionFirstLiveStoreCostOf orig sevm stor keys 0 n depositDataRoot) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0
             ((accOfStor
@@ -78,7 +100,7 @@ theorem deposit_success_runCompiled
             depositDataRoot keys) < 2 ^ 256)
     (hcountSentry : gCallStipend <
       ((G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+          insertionFirstLiveStoreCostOf orig sevm stor keys 0 n depositDataRoot) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0
             ((accOfStor
@@ -86,19 +108,20 @@ theorem deposit_success_runCompiled
             depositDataRoot keys)) + 14 + countCost)
     (hreconstructBound :
       ((((G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+          insertionFirstLiveStoreCostOf orig sevm stor keys 0 n depositDataRoot) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0
             ((accOfStor
               (Devm.getStor base sevm.currentTarget)).count + 1)
             depositDataRoot keys)) + 38 + countCost) + 59) +
         1762 < 2 ^ 256)
-    (hcode : sevm.code.toList = code) :
+    (hcode : sevm.code.toList = code)
+    (horig : base.getOrigStorVal sevm sevm.currentTarget (branchSlot n) = orig) :
     ∃ post,
       Prog.RunCompiled sevm
         (base.setMach
           ⟨[], Mem.empty,
-            depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
+            depositRuntimeSuccessGasOf orig sevm base stor keys depositDataRoot n
               ((accOfStor
                 (Devm.getStor base sevm.currentTarget)).count + 1)
               countCost G, base.stateGas⟩)
@@ -142,7 +165,7 @@ theorem deposit_success_runCompiled
       hdataBound hdec (by simpa only [s] using hOk) hcountValue
       (by simpa only [s] using hstor)
       (by simpa only [s] using hkeys)
-      (by simpa only [s] using hcount)
+      (by simpa only [s] using hcount) horig
       hheight (by simpa only [s] using hfirst) hnodeleg hwarm hpre hdepth
       hstatic hbranchSentry (by simpa only [s] using hbound)
       (by simpa only [s] using hcountSentry)
@@ -158,7 +181,7 @@ theorem deposit_success_runCompiled
       (runtime.main :: runtime.aux) sevm
       (base.setMach
         ⟨[], Mem.empty,
-          depositEndpointSuccessGas sevm base stor keys depositDataRoot n
+          depositEndpointSuccessGasOf orig sevm base stor keys depositDataRoot n
             (s.count + 1) countCost G, base.stateGas⟩)
       depositEndpoint (.ok post) := by
     simpa only [post, branchValue] using hendpointTo
@@ -166,7 +189,7 @@ theorem deposit_success_runCompiled
       (runtime.main :: runtime.aux) sevm
       (base.setMach
         ⟨[], Mem.empty,
-          depositEndpointSuccessGas sevm base stor keys depositDataRoot n
+          depositEndpointSuccessGasOf orig sevm base stor keys depositDataRoot n
             (s.count + 1) countCost G, base.stateGas⟩)
       depositEndpoint post :=
     Func.RunCompiled.of_runCompiledTo_ok hendpointTo'
@@ -181,10 +204,10 @@ theorem deposit_success_runCompiled
   have hrun : Prog.RunCompiled sevm
       (base.setMach
         ⟨[], Mem.empty,
-          depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
+          depositRuntimeSuccessGasOf orig sevm base stor keys depositDataRoot n
             (s.count + 1) countCost G, base.stateGas⟩)
       runtime post := by
-    simpa only [depositRuntimeSuccessGas] using hroute
+    simpa only [depositRuntimeSuccessGasOf] using hroute
   have hcountStor : stor =
       (Devm.getStor base sevm.currentTarget).set depositCountSlot
         (Nat.toB256 s.count + 1) := by

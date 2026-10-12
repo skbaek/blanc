@@ -1,5 +1,6 @@
 import Blanc.BeaconDepositBridge
 import Blanc.BeaconDepositDeploy
+import Blanc.BeaconDepositRepinBridge
 import Blanc.BeaconDepositWriteSites
 import Blanc.BytesWrite
 import Blanc.ForwardStorageEffects
@@ -618,9 +619,8 @@ theorem constructorSha64_success_storageEffectRun_ext
       callPost.accountsToDelete.isEmpty = base.accountsToDelete.isEmpty ∧
       callPost.output = base.output ∧
       callPost.error = base.error ∧
-      (∃ stmid,
-        base.state.subBal sevm.currentTarget 0 = some stmid ∧
-        callPost.state = stmid.addBal 2 0) ∧
+      callPost.state = base.state ∧
+      callPost.createdAccounts = base.createdAccounts ∧
       ∀ {ex : Execution} {effects : List (Adr × B256 × B256)},
         Func.StorageEffectRun fs sevm
           (callPost.setMach ⟨stack, callPost.memory, K, callPost.stateGas⟩)
@@ -637,8 +637,8 @@ theorem constructorSha64_success_storageEffectRun_ext
       base.memory, K + 221 + ext, base.stateGas⟩
   obtain ⟨callPost, hstat, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys,
-      hlogs, hrefund, hdelete, houtput, herror, stmid, hsub, hstate⟩ :=
-    Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
+      hlogs, hrefund, hdelete, houtput, herror, hstate, hcreated⟩ :=
+    RepinBridge.childlessRunCompiled_staticcall_sha256_64_warm_ext_created
       (sevm := sevm) (devm := callPre)
       (iiw := inputWord * 32) (oiw := outputWord * 32)
       (s := stack) (G := K + 221 + ext) (ext := ext)
@@ -707,12 +707,13 @@ theorem constructorSha64_success_storageEffectRun_ext
     calc
       callPost.error = callPre.error := herror
       _ = base.error := by rfl
-  have hsub' : base.state.subBal sevm.currentTarget 0 = some stmid := by
-    change base.state.subBal sevm.currentTarget 0 = some stmid at hsub
-    exact hsub
+  have hstate' : callPost.state = base.state := by
+    calc
+      callPost.state = callPre.state := hstate
+      _ = base.state := by rfl
   refine ⟨callPost, hstack, hmemory', hgas', hreturn', hstorage', hcode',
     haddresses', hkeys', hlogs', hrefund', hdelete', houtput', herror',
-    ⟨stmid, hsub', hstate⟩, ?_⟩
+    hstate', hcreated, ?_⟩
   intro ex effects tail
   have hge :
       (Nat.toB256 callPost.returnData.length <? (32 : B256)) = 0 := by
@@ -880,7 +881,7 @@ theorem constructorZeroHashLoop_succ_storageEffectRun
     exact Devm.extCost_covered covered
   obtain ⟨shaPost, hstack, hmemory, hgas, hreturn,
       hstorage, hcode, haddresses, hkeys, hlogs, hrefund, hdelete,
-      houtput, herror, hstate, shaLift⟩ :=
+      houtput, herror, hstate, hcreated, shaLift⟩ :=
     constructorSha64_success_storageEffectRun_ext
       (fs := fs) (sevm := sevm) (base := shaBase)
       (inputWord := 0) (outputWord := constructorNodeWord)
@@ -935,8 +936,8 @@ theorem constructorZeroHashLoop_succ_storageEffectRun
       shaPost.error = shaBase.error := herror
       _ = base.error := rfl
   have hcost : sstoreCost sevm shaPost key node = C := by
-    exact (sstoreCost_congr (d1 := shaPost) (d2 := base) key node
-      hkeysBase (hstorageBase sevm.currentTarget)).trans rfl
+    exact sstoreCost_congr (d1 := shaPost) (d2 := base) key node
+      hkeysBase (hstorageBase sevm.currentTarget) hcreated
   have extendsPair : pair.extends
       [⟨((0 : B256) * 32).toNat, 64⟩,
         ⟨(constructorNodeWord * 32).toNat, 32⟩] = pair :=
@@ -1074,7 +1075,7 @@ private theorem sstoreCost_le_constructor_bound
     (sevm : Sevm) (base : Devm) (key value : B256) :
     sstoreCost sevm base key value ≤ gasColdSload + gasStorageSet := by
   have valueBound : sstoreValueCost
-      (getOrigStorVal sevm sevm.currentTarget key)
+      (base.getOrigStorVal sevm sevm.currentTarget key)
       (base.getStorVal sevm.currentTarget key) value ≤ gasStorageSet := by
     rw [sstoreValueCost]
     split_ifs <;> decide +kernel
@@ -1483,10 +1484,15 @@ private theorem constructorZeroHashLoop_remaining_storageEffectRun
               shaPost.refundCounter := by
             rw [afterSstore_refundCounter]
             have originalZero :
-                getOrigStorVal sevm sevm.currentTarget key = 0 := by
-              unfold getOrigStorVal getOrigAcct
-              rw [originalEmpty]
-              rfl
+                shaPost.getOrigStorVal sevm sevm.currentTarget key = 0 := by
+              unfold Devm.getOrigStorVal
+              by_cases hcreated :
+                sevm.currentTarget ∈ shaPost.createdAccounts
+              · rw [if_pos hcreated]
+              · rw [if_neg hcreated]
+                unfold getOrigStorVal getOrigAcct
+                rw [originalEmpty]
+                rfl
             rw [originalZero, currentZero]
             unfold sstoreNewRefundCounter
             by_cases different : (0 : B256) ≠ node <;> simp only [ne_eq, different, not_false_eq_true, ↓reduceIte, not_true_eq_false, and_true, false_and, and_self]

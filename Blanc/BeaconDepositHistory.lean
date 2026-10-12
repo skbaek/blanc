@@ -3,6 +3,7 @@ import Blanc.ContractAdmission
 import Blanc.ExecutionFrameEntry
 import Blanc.ExecutionHistoryEffects
 import Blanc.ExecutionOccurrence
+import Blanc.StorageOnlySpec
 
 /-!
 # Beacon deposit open-history specification
@@ -55,34 +56,21 @@ def historySpec (baseline : List B256) : ContractSpec where
   side_transfer := fun _ _ => trivial
   side_addBal := fun _ _ => trivial
   inv_transfer := by
-    intro state state' caller callee ca value inflight sub callerNe _ history
+    intro state state' caller callee ca value inflight sub _ _ protection
+      history
     show HistoryExtends baseline _
-    have storageEq : (state'.addBal callee value).getStor ca =
-        state.getStor ca := by
-      rcases State.of_subBal sub with ⟨_, stateEq⟩
-      show ((state'.setBal callee _).get ca).stor = (state.get ca).stor
-      rw [State.setBal_get_stor, stateEq, State.setBal_get_stor]
-    rw [storageEq]
+    rw [getStor_subBal_addBal sub protection]
     exact history
   inv_recv_transfer := by
-    intro state state' caller ca value sub callerNe _ history
+    intro state state' caller ca value sub _ _ protection history
     show HistoryExtends baseline _
-    have storageEq : (state'.addBal ca value).getStor ca =
-        state.getStor ca := by
-      rcases State.of_subBal sub with ⟨_, stateEq⟩
-      show ((state'.setBal ca _).get ca).stor = (state.get ca).stor
-      rw [State.setBal_get_stor, stateEq, State.setBal_get_stor]
-    rw [storageEq]
+    rw [getStor_subBal_addBal sub protection]
     exact history
   inv_addBal := by
-    intro state ca address value inflight _ _ history
+    intro state ca address value inflight _ _ protection history
     show HistoryExtends baseline _
-    have storageEq : (state.addBal address value).getStor ca =
-        state.getStor ca := by
-      show ((state.setBal address _).get ca).stor = (state.get ca).stor
-      rw [State.setBal_get_stor]
-    rw [storageEq]
-    exact history
+    exact (congrArg (HistoryExtends baseline)
+      (State.setBal_get_stor_of_protected protection)).mpr history
 
 /-- The exact world/rules facts that make calls to address `0x2` use native
 SHA-256 rather than delegated interpreted code.  Warmth is intentionally not

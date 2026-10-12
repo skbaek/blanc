@@ -5986,10 +5986,14 @@ example {msg : Msg} {benv : Benv} {codeAddress : Adr}
     (hdepth : sevm.depth ≠ 0)
     (hstatic : sevm.isStatic = false)
     (hbranchSentry : gCallStipend < G + 2 +
-      insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot)
+      insertionFirstLiveStoreCostOf
+        (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+        sevm stor keys 0 n depositDataRoot)
     (hbound :
       (G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+          insertionFirstLiveStoreCostOf
+            (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+            sevm stor keys 0 n depositDataRoot) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0
             ((accOfStor
@@ -5997,7 +6001,9 @@ example {msg : Msg} {benv : Benv} {codeAddress : Adr}
             depositDataRoot keys) < 2 ^ 256)
     (hcountSentry : gCallStipend <
       ((G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+          insertionFirstLiveStoreCostOf
+            (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+            sevm stor keys 0 n depositDataRoot) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0
             ((accOfStor
@@ -6005,7 +6011,9 @@ example {msg : Msg} {benv : Benv} {codeAddress : Adr}
             depositDataRoot keys)) + 14 + countCost)
     (hreconstructBound :
       ((((G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+          insertionFirstLiveStoreCostOf
+            (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+            sevm stor keys 0 n depositDataRoot) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0
             ((accOfStor
@@ -6014,7 +6022,9 @@ example {msg : Msg} {benv : Benv} {codeAddress : Adr}
         1762 < 2 ^ 256)
     (hcode : sevm.code.toList = code)
     (hgasEntry : base.gasLeft =
-      depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
+      depositRuntimeSuccessGasOf
+        (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+        sevm base stor keys depositDataRoot n
         ((accOfStor (Devm.getStor base sevm.currentTarget)).count + 1)
         countCost G) :
     ∃ settled,
@@ -6319,10 +6329,14 @@ example (sevm : Sevm) (base : Devm)
     (hstatic : sevm.isStatic = false)
     (hbaseError : base.error = none)
     (hbranchSentry : gCallStipend < G + 2 +
-      insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot)
+      insertionFirstLiveStoreCostOf
+        (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+        sevm stor keys 0 n depositDataRoot)
     (hbound :
       (G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+          insertionFirstLiveStoreCostOf
+            (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+            sevm stor keys 0 n depositDataRoot) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0
             ((accOfStor
@@ -6330,7 +6344,9 @@ example (sevm : Sevm) (base : Devm)
             depositDataRoot keys) < 2 ^ 256)
     (hcountSentry : gCallStipend <
       ((G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+          insertionFirstLiveStoreCostOf
+            (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+            sevm stor keys 0 n depositDataRoot) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0
             ((accOfStor
@@ -6338,7 +6354,9 @@ example (sevm : Sevm) (base : Devm)
             depositDataRoot keys)) + 14 + countCost)
     (hreconstructBound :
       ((((G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+          insertionFirstLiveStoreCostOf
+            (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+            sevm stor keys 0 n depositDataRoot) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0
             ((accOfStor
@@ -6350,7 +6368,9 @@ example (sevm : Sevm) (base : Devm)
       ∃ execution : Exec 0 sevm
           (base.setMach
             ⟨[], Mem.empty,
-              depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
+              depositRuntimeSuccessGasOf
+                (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+                sevm base stor keys depositDataRoot n
                 ((accOfStor
                   (Devm.getStor base sevm.currentTarget)).count + 1)
                 countCost G, base.stateGas⟩)
@@ -6358,7 +6378,9 @@ example (sevm : Sevm) (base : Devm)
         Prog.RunCompiledTo sevm
             (base.setMach
               ⟨[], Mem.empty,
-                depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
+                depositRuntimeSuccessGasOf
+                  (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+                  sevm base stor keys depositDataRoot n
                   ((accOfStor
                     (Devm.getStor base sevm.currentTarget)).count + 1)
                   countCost G, base.stateGas⟩)
@@ -6445,10 +6467,14 @@ example (sevm : Sevm) (base : Devm)
     (hdepth : sevm.depth ≠ 0)
     (hstatic : sevm.isStatic = false)
     (hbranchSentry : gCallStipend < G + 2 +
-      insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot)
+      insertionFirstLiveStoreCostOf
+        (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+        sevm stor keys 0 n depositDataRoot)
     (hbound :
       (G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+          insertionFirstLiveStoreCostOf
+            (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+            sevm stor keys 0 n depositDataRoot) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0
             ((accOfStor
@@ -6456,7 +6482,9 @@ example (sevm : Sevm) (base : Devm)
             depositDataRoot keys) < 2 ^ 256)
     (hcountSentry : gCallStipend <
       ((G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+          insertionFirstLiveStoreCostOf
+            (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+            sevm stor keys 0 n depositDataRoot) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0
             ((accOfStor
@@ -6464,7 +6492,9 @@ example (sevm : Sevm) (base : Devm)
             depositDataRoot keys)) + 14 + countCost)
     (hreconstructBound :
       ((((G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+          insertionFirstLiveStoreCostOf
+            (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+            sevm stor keys 0 n depositDataRoot) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0
             ((accOfStor
@@ -6476,7 +6506,9 @@ example (sevm : Sevm) (base : Devm)
       Prog.RunCompiled sevm
           (base.setMach
             ⟨[], Mem.empty,
-              depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
+              depositRuntimeSuccessGasOf
+                (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+                sevm base stor keys depositDataRoot n
                 ((accOfStor
                   (Devm.getStor base sevm.currentTarget)).count + 1)
                 countCost G, base.stateGas⟩)

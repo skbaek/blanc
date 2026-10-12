@@ -36,4 +36,38 @@ theorem insertionStoreCost_iter_eq_firstLive
     insertionLoopIter_node sevm.currentTarget stor n height size node keys
       (by omega)]
 
+/-- `insertionFirstLiveStoreCost` with the value charge priced from a supplied
+original word (see `insertionStoreCostOf`). -/
+def insertionFirstLiveStoreCostOf (orig : B256) (sevm : Sevm) (stor : Stor)
+    (keys : KeySet) (height n : Nat) (node : B256) : Nat :=
+  (if (⟨sevm.currentTarget, branchSlot (height + n)⟩ : Adr × B256) ∈
+      insertionNatKeys sevm.currentTarget n height keys
+    then 0 else gasColdSload) +
+  sstoreValueCost orig
+    (stor.get (branchSlot (height + n)))
+    (accumulatedNode Bytes.sha256 (accOfStor stor).branch height n node)
+
+theorem insertionFirstLiveStoreCost_eq_of (sevm : Sevm) (stor : Stor)
+    (keys : KeySet) (height n : Nat) (node : B256) :
+    insertionFirstLiveStoreCost sevm stor keys height n node =
+      insertionFirstLiveStoreCostOf
+        (getOrigStorVal sevm sevm.currentTarget (branchSlot (height + n)))
+        sevm stor keys height n node := rfl
+
+theorem insertionStoreCostOf_iter_eq_firstLive (orig : B256)
+    (sevm : Sevm) (stor : Stor) (keys : KeySet)
+    (height n size : Nat) (node : B256)
+    (hheight : height + n < 32) (hsize : size < 2 ^ 32) :
+    insertionStoreCostOf orig sevm stor
+        (insertionLoopIter sevm.currentTarget stor n
+          (insertionNatState height size node keys)) =
+      insertionFirstLiveStoreCostOf orig sevm stor keys height n node := by
+  unfold insertionStoreCostOf insertionFirstLiveStoreCostOf
+  rw [insertionLoopIter_key sevm.currentTarget stor n height size node keys
+      hheight hsize,
+    insertionLoopIter_keys sevm.currentTarget stor n height size node keys
+      (by omega) hsize,
+    insertionLoopIter_node sevm.currentTarget stor n height size node keys
+      (by omega)]
+
 end Blanc.BeaconDeposit
