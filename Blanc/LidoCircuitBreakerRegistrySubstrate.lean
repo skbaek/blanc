@@ -100,9 +100,14 @@ def temporalSloadCost (sevm : Sevm) (base : Devm)
 def temporalSstorePost (sevm : Sevm) (base : Devm)
     (key value : B256) : Devm :=
   (base.withRefundCounter (sstoreNewRefundCounter sevm.benvStat.rules.gas value
-    (getOrigStorVal sevm sevm.currentTarget key)
+    (base.getOrigStorVal sevm sevm.currentTarget key)
     (base.getStorVal sevm.currentTarget key) base.refundCounter)).setStorVal
       sevm.currentTarget key value
+
+private theorem temporalSstore_getOrigStorVal_setMach
+    {base : Devm} {mach : Mach} {sevm : Sevm} {a : Adr} {key : B256} :
+    (base.setMach mach).getOrigStorVal sevm a key =
+      base.getOrigStorVal sevm a key := rfl
 
 theorem temporal_sload_runCompiled
     {sevm : Sevm} {base : Devm} {key value : B256}
@@ -138,7 +143,7 @@ theorem temporal_sstore_runCompiled
     {stack : List B256} {M : Mem} {G cost : Nat}
     (hfork : CoveredFork sevm.benvStat.fork)
     (hcurrent : base.getStorVal sevm.currentTarget key = current)
-    (horiginal : getOrigStorVal sevm sevm.currentTarget key = original)
+    (horiginal : base.getOrigStorVal sevm sevm.currentTarget key = original)
     (hcost : sstoreValueCost original current value = cost)
     (hwarm : (sevm.currentTarget, key) ∈ base.accessedStorageKeys)
     (hgas : gCallStipend < G + cost)
@@ -154,10 +159,11 @@ theorem temporal_sstore_runCompiled
   · simpa only [accessedStorageKeys_setMach] using hwarm
   · simpa only [Devm.gasLeft_setMach] using hgas
   · exact hstatic
-  · simp only [Devm.getStorVal_setMach, hcurrent, horiginal]
+  · simp only [Devm.getStorVal_setMach, hcurrent, temporalSstore_getOrigStorVal_setMach,
+      horiginal]
     exact hcost
-  · simp only [Devm.getStorVal_setMach, refundCounter_setMach,
-      hcurrent, horiginal]
+  · simp only [temporalSstorePost, Devm.getStorVal_setMach, refundCounter_setMach,
+      temporalSstore_getOrigStorVal_setMach]
   · simp only [Devm.gasLeft_setMach]
 
 theorem temporalSloadBase_warm
@@ -193,6 +199,20 @@ theorem temporalSloadBase_logs
   unfold temporalSloadBase
   split <;> rfl
 
+theorem temporalSloadBase_getOrigStorVal
+    (sevm : Sevm) (base : Devm) (readKey : B256) (a : Adr) (key : B256) :
+    (temporalSloadBase sevm base readKey).getOrigStorVal sevm a key =
+      base.getOrigStorVal sevm a key := by
+  unfold temporalSloadBase
+  split <;> rfl
+
+theorem temporalSstorePost_getOrigStorVal
+    (sevm : Sevm) (base : Devm) (writeKey value : B256) (a : Adr) (key : B256) :
+    (temporalSstorePost sevm base writeKey value).getOrigStorVal sevm a key =
+      base.getOrigStorVal sevm a key := by
+  unfold temporalSstorePost
+  rfl
+
 theorem temporalSstorePost_other
     (sevm : Sevm) (base : Devm) (writeKey value : B256)
     (a : Adr) (key : B256)
@@ -206,19 +226,18 @@ theorem temporalSstorePost_other
     show (Devm.getStor _ sevm.currentTarget).get key = _
     rw [setStorVal_getStor_self, Stor.get_set_ne _ hk]
     rfl
-  · change (Devm.getStor _ a).get key = _
-    simp only [temporalSstorePost, Devm.getStor, Devm.getAcct,
-      Devm.setStorVal, Devm.withState, Devm.setWorld, State.setStorVal,
-      Devm.state]
-    rw [State.get_set_ne _ ha]
+  · unfold temporalSstorePost
+    change (Devm.getStor _ a).get key = _
+    rw [setStorVal_getStor_ne ha, Devm.withRefundCounter_getStor]
     rfl
 
 theorem temporalSstorePost_self
     (sevm : Sevm) (base : Devm) (key value : B256) :
     (temporalSstorePost sevm base key value).getStorVal
       sevm.currentTarget key = value := by
-  simp only [Devm.getStorVal, Devm.getAcct, Devm.state, temporalSstorePost, Devm.setStorVal,
-    Devm.withState, Devm.setWorld, State.setStorVal, State.get_set_self, Stor.get_set_self]
+  unfold temporalSstorePost
+  show (Devm.getStor _ sevm.currentTarget).get key = value
+  rw [setStorVal_getStor_self, Stor.get_set_self]
 
 theorem temporalSstorePost_accessedStorageKeys
     (sevm : Sevm) (base : Devm) (key value : B256) :
@@ -469,7 +488,7 @@ theorem afterOldPauser_finishSetPauser_runCompiled
     (hsize : 576 ≤ M.size) (halign : M.size % 32 = 0)
     (hcount : base.getStorVal sevm.currentTarget
       (countSlot newPauser) = count)
-    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hcountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot newPauser) = countOriginal)
     (hcountNext : (1 : B256) + count = nextCount)
     (hcountCost : sstoreValueCost countOriginal count nextCount = countCost)
@@ -515,8 +534,9 @@ theorem afterOldPauser_finishSetPauser_runCompiled
         G + 12 + countCost, countBase.stateGas⟩)
       (Ninst.sstore ::: .call finishSetPauserSlot) post := by
     apply Func.RunCompiled.next
-    · exact temporal_sstore_runCompiled (hfork := hfork) hcountBase hcountOrig hcountCost
-        hwarmCount hgasStipend hstatic
+    · exact temporal_sstore_runCompiled (hfork := hfork) hcountBase
+        (by simpa only [countBase, temporalSloadBase_getOrigStorVal] using hcountOrig)
+        hcountCost hwarmCount hgasStipend hstatic
     · exact hfinishCall
   have hnewCovered : (newPauserWord * 32).toNat + 32 ≤ M.size := by
     have hoff : (newPauserWord * 32).toNat + 32 = 576 := by decide
@@ -646,6 +666,19 @@ def assignmentPost (sevm : Sevm) (base : Devm)
   temporalSstorePost sevm (assignmentBase sevm base target)
     (assignmentSlot target) newPauser
 
+theorem assignmentBase_getOrigStorVal
+    (sevm : Sevm) (base : Devm) (target : B256) (a : Adr) (key : B256) :
+    (assignmentBase sevm base target).getOrigStorVal sevm a key =
+      base.getOrigStorVal sevm a key :=
+  temporalSloadBase_getOrigStorVal sevm base _ a key
+
+theorem assignmentPost_getOrigStorVal
+    (sevm : Sevm) (base : Devm) (target newPauser : B256) (a : Adr) (key : B256) :
+    (assignmentPost sevm base target newPauser).getOrigStorVal sevm a key =
+      base.getOrigStorVal sevm a key := by
+  unfold assignmentPost
+  rw [temporalSstorePost_getOrigStorVal, assignmentBase_getOrigStorVal]
+
 theorem newPauserWord_prepend_runCompiled
     {fs : List Func} {sevm : Sevm} {base : Devm} {M : Mem}
     {value : B256} {stack : List B256} {G : Nat}
@@ -773,7 +806,7 @@ theorem registerAfterSet_oldLast_newPauserTail_runCompiled
       base.accessedStorageKeys)
     (hexpiry : base.getStorVal sevm.currentTarget
       (expirySlot oldPauser) = oldExpiry)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot oldPauser) = oldExpiryOriginal)
     (hwarmExpiry : (sevm.currentTarget, expirySlot oldPauser) ∈
       base.accessedStorageKeys)
@@ -984,7 +1017,7 @@ private theorem registerAfterSet_expiryStoreLogTail_runCompiled
     (halign : M.size % 32 = 0)
     (hexpiry : base.getStorVal sevm.currentTarget
       (expirySlot newPauser) = currentExpiry)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot newPauser) = expiryOriginal)
     (hwarmExpiry : (sevm.currentTarget, expirySlot newPauser) ∈
       base.accessedStorageKeys)
@@ -1114,7 +1147,7 @@ theorem registerAfterSet_nonzeroNewPauserTail_runCompiled
       base.accessedStorageKeys)
     (hexpiry : base.getStorVal sevm.currentTarget
       (expirySlot newPauser) = currentExpiry)
-    (hexpiryOrig : getOrigStorVal sevm sevm.currentTarget
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
       (expirySlot newPauser) = expiryOriginal)
     (hwarmExpiry : (sevm.currentTarget, expirySlot newPauser) ∈
       base.accessedStorageKeys)
@@ -1177,7 +1210,8 @@ theorem registerAfterSet_nonzeroNewPauserTail_runCompiled
   have htail := registerAfterSet_expiryStoreLogTail_runCompiled (hfork := hfork) fs sevm
     (temporalSloadBase sevm base heartbeatIntervalSlot) M img newPauser expiry
     currentExpiry expiryOriginal stack storeCost G hstack hwf hreads hnew hsize
-    halign (by rw [temporalSloadBase_getStorVal]; exact hexpiry) hexpiryOrig
+    halign (by rw [temporalSloadBase_getStorVal]; exact hexpiry)
+    ((temporalSloadBase_getOrigStorVal sevm base _ _ _).trans hexpiryOrig)
     (temporalSloadBase_preserves_warm sevm base heartbeatIntervalSlot
       (expirySlot newPauser) hwarmExpiry)
     hstoreCost hgasStipend hstatic
@@ -1247,7 +1281,7 @@ theorem setPauserKernel_append_runCompiled
     (hsize : 640 ≤ M.size) (halign : M.size % 32 = 0)
     (hassignment : base.getStorVal sevm.currentTarget
       (assignmentSlot target) = 0)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal 0 newPauser =
       assignmentCost)
@@ -1375,7 +1409,8 @@ theorem setPauserKernel_append_runCompiled
             previousCountKey +++ Ninst.sstore ::: .call afterOldPauserSlot)))
       out := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled (hfork := hfork) hassignmentBase hassignmentOrig
+      (temporal_sstore_runCompiled (hfork := hfork) hassignmentBase
+        ((assignmentBase_getOrigStorVal sevm base target _ _).trans hassignmentOrig)
         hassignmentCost hwarmAssignment hgasStore hstatic)
       hiszero
   have htargetKeySecond : Func.RunCompiled fs sevm
@@ -1590,13 +1625,13 @@ theorem setPauserKernel_found_runCompiled
     (hsizeLow : 640 ≤ M.size) (halign : M.size % 32 = 0)
     (hassignment : base.getStorVal sevm.currentTarget
       (assignmentSlot target) = oldPauser)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser
       newPauser = assignmentCost)
     (hcount : (assignmentPost sevm base target newPauser).getStorVal
       sevm.currentTarget (countSlot oldPauser) = oldCount)
-    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hcountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot oldPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
       countCost)
@@ -1711,7 +1746,10 @@ theorem setPauserKernel_found_runCompiled
         G + afterGas + 12 + countCost, countBase.stateGas⟩)
       (Ninst.sstore ::: .call afterOldPauserSlot) out :=
     Func.RunCompiled.next
-      (temporal_sstore_runCompiled (hfork := hfork) hcountBase hcountOrig hcountCost hwarmCount
+      (temporal_sstore_runCompiled (hfork := hfork) hcountBase
+        ((temporalSloadBase_getOrigStorVal sevm assignPost _ _ _).trans
+          ((assignmentPost_getOrigStorVal sevm base target newPauser _ _).trans hcountOrig))
+        hcountCost hwarmCount
         hgasFinal hstatic) hafterCall
   have hcountKeyStore : Func.RunCompiled fs sevm
       (countBase.setMach ⟨[oldCount - 1], M',
@@ -1809,7 +1847,8 @@ theorem setPauserKernel_found_runCompiled
             .call afterOldPauserSlot)))
       out := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled (hfork := hfork) hassignmentBase hassignmentOrig
+      (temporal_sstore_runCompiled (hfork := hfork) hassignmentBase
+        ((assignmentBase_getOrigStorVal sevm base target _ _).trans hassignmentOrig)
         hassignmentCost hwarmAssignment (by
           dsimp only [elseGas]
           omega) hstatic)
@@ -2008,6 +2047,15 @@ def foundKernelPost (sevm : Sevm) (base : Devm)
       (countSlot oldPauser))
     (countSlot oldPauser) (oldCount - 1)
 
+theorem foundKernelPost_getOrigStorVal
+    (sevm : Sevm) (base : Devm) (target newPauser oldPauser oldCount : B256)
+    (a : Adr) (key : B256) :
+    (foundKernelPost sevm base target newPauser oldPauser oldCount).getOrigStorVal
+      sevm a key = base.getOrigStorVal sevm a key := by
+  unfold foundKernelPost
+  rw [temporalSstorePost_getOrigStorVal, temporalSloadBase_getOrigStorVal,
+    assignmentPost_getOrigStorVal]
+
 /-- Complete Registry walk for the found-target arm with a **nonzero** new
 pauser — the replacement chronology's three writes.  The kernel prefix replaces
 the assignment and decrements the old pauser's count, then `afterOldPauser`
@@ -2037,13 +2085,13 @@ theorem setPauserKernel_foundNonzero_finishSetPauser_runCompiled
     (hsize : M.size = 640)
     (hassignment : base.getStorVal sevm.currentTarget
       (assignmentSlot target) = oldPauser)
-    (hassignmentOrig : getOrigStorVal sevm sevm.currentTarget
+    (hassignmentOrig : base.getOrigStorVal sevm sevm.currentTarget
       (assignmentSlot target) = assignmentOriginal)
     (hassignmentCost : sstoreValueCost assignmentOriginal oldPauser
       newPauser = assignmentCost)
     (hcount : (assignmentPost sevm base target newPauser).getStorVal
       sevm.currentTarget (countSlot oldPauser) = oldCount)
-    (hcountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hcountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot oldPauser) = countOriginal)
     (hcountCost : sstoreValueCost countOriginal oldCount (oldCount - 1) =
       countCost)
@@ -2051,7 +2099,7 @@ theorem setPauserKernel_foundNonzero_finishSetPauser_runCompiled
       (foundKernelPost sevm base target newPauser oldPauser
         oldCount).getStorVal sevm.currentTarget (countSlot newPauser) =
         newCount)
-    (hnewCountOrig : getOrigStorVal sevm sevm.currentTarget
+    (hnewCountOrig : base.getOrigStorVal sevm sevm.currentTarget
       (countSlot newPauser) = newCountOriginal)
     (hnewCountNext : (1 : B256) + newCount = nextCount)
     (hnewCountCost : sstoreValueCost newCountOriginal newCount nextCount =
@@ -2098,7 +2146,7 @@ theorem setPauserKernel_foundNonzero_finishSetPauser_runCompiled
     (foundKernelPost sevm base target newPauser oldPauser oldCount) M' img'
     newPauser newCount nextCount newCountOriginal [] newCountCost G out
     (by simp only [List.length_nil, zero_le]) hreads' hnew' hnewNonzero (by omega) halign' hnewCount
-    hnewCountOrig hnewCountNext hnewCountCost hgasStipend hstatic hfinish
+    ((foundKernelPost_getOrigStorVal sevm base _ _ _ _ _ _).trans hnewCountOrig) hnewCountNext hnewCountCost hgasStipend hstatic hfinish
   have hg : G + 64 + temporalSloadCost sevm
         (foundKernelPost sevm base target newPauser oldPauser oldCount)
         (countSlot newPauser) + newCountCost =
@@ -2412,6 +2460,19 @@ def indexClearPost (sevm : Sevm) (base : Devm)
     (lengthWritePost sevm base oldLength)
     (indexSlot target) 0
 
+theorem lengthWritePost_getOrigStorVal
+    (sevm : Sevm) (base : Devm) (oldLength : B256) (a : Adr) (key : B256) :
+    (lengthWritePost sevm base oldLength).getOrigStorVal sevm a key =
+      base.getOrigStorVal sevm a key :=
+  temporalSstorePost_getOrigStorVal sevm base _ _ a key
+
+theorem indexClearPost_getOrigStorVal
+    (sevm : Sevm) (base : Devm) (target oldLength : B256) (a : Adr) (key : B256) :
+    (indexClearPost sevm base target oldLength).getOrigStorVal sevm a key =
+      base.getOrigStorVal sevm a key := by
+  unfold indexClearPost
+  rw [temporalSstorePost_getOrigStorVal, lengthWritePost_getOrigStorVal]
+
 private theorem removeTarget_restoreTail_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (hfork : CoveredFork sevm.benvStat.fork)
@@ -2432,9 +2493,9 @@ private theorem removeTarget_restoreTail_runCompiled
       arrayLengthSlot = lengthValue)
     (hindex : base.getStorVal sevm.currentTarget
       (indexSlot target) = indexValue)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget
       arrayLengthSlot = lengthOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
     (hlengthCost : sstoreValueCost lengthOriginal lengthValue oldLength =
       lengthRestoreCost)
@@ -2534,7 +2595,8 @@ private theorem removeTarget_restoreTail_runCompiled
             G + finishGas + 12 + indexClearCost, lengthPost.stateGas⟩)
         Ninst.sstore
         (removePost.setMach ⟨stack, M, G + finishGas + 12, removePost.stateGas⟩) := by
-      exact temporal_sstore_runCompiled (hfork := hfork) hindexPost hindexOrig hindexCost
+      exact temporal_sstore_runCompiled (hfork := hfork) hindexPost
+        ((lengthWritePost_getOrigStorVal sevm base _ _ _).trans hindexOrig) hindexCost
         hwarmIndexPost hgasFinal hstatic
     exact Func.RunCompiled.next hsstore hfinishCall
   have hindexTail : Func.RunCompiled fs sevm
@@ -2601,6 +2663,26 @@ def entryClearPost (sevm : Sevm) (base : Devm)
     (indexWritePost sevm base target next)
     (arrayEntrySlot next) 0
 
+theorem entryWritePost_getOrigStorVal
+    (sevm : Sevm) (base : Devm) (target next : B256) (a : Adr) (key : B256) :
+    (entryWritePost sevm base target next).getOrigStorVal sevm a key =
+      base.getOrigStorVal sevm a key :=
+  temporalSstorePost_getOrigStorVal sevm base _ _ a key
+
+theorem indexWritePost_getOrigStorVal
+    (sevm : Sevm) (base : Devm) (target next : B256) (a : Adr) (key : B256) :
+    (indexWritePost sevm base target next).getOrigStorVal sevm a key =
+      base.getOrigStorVal sevm a key := by
+  unfold indexWritePost
+  rw [temporalSstorePost_getOrigStorVal, entryWritePost_getOrigStorVal]
+
+theorem entryClearPost_getOrigStorVal
+    (sevm : Sevm) (base : Devm) (target next : B256) (a : Adr) (key : B256) :
+    (entryClearPost sevm base target next).getOrigStorVal sevm a key =
+      base.getOrigStorVal sevm a key := by
+  unfold entryClearPost
+  rw [temporalSstorePost_getOrigStorVal, indexWritePost_getOrigStorVal]
+
 /-! One-layer transport lemmas over an abstract base for the named removal
 states.  Definitional transport across the nested `temporalSstorePost` tower
 makes `whnf` unfold the base state at every layer and is measured to diverge;
@@ -2654,11 +2736,11 @@ private theorem removeTarget_storePrefix_runCompiled
       (indexSlot target) = next)
     (hlength : base.getStorVal sevm.currentTarget
       arrayLengthSlot = next)
-    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+    (harrayOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot next) = arrayOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget
       arrayLengthSlot = lengthOriginal)
     (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
     (hmovedIndexCost : sstoreValueCost indexOriginal next next =
@@ -2823,7 +2905,9 @@ private theorem removeTarget_storePrefix_runCompiled
     dp sevm tailPost M img target oldLength next next 0 stack hstack
     lengthOriginal indexOriginal lengthRestoreCost indexClearCost finishGas G
     hreads htarget hlengthWord htargetValid hsize halign hlengthTail hindexTail
-    hlengthOrig hindexOrig hlengthRestoreCost hindexClearCost hwarmLengthTail
+    ((entryClearPost_getOrigStorVal sevm base target next _ _).trans hlengthOrig)
+    ((entryClearPost_getOrigStorVal sevm base target next _ _).trans hindexOrig)
+    hlengthRestoreCost hindexClearCost hwarmLengthTail
     hwarmIndexTail hsub hgasFinal hstatic post
     (by simpa only [tailPost] using hfinish)
   let fs := (runtime dp).main :: (runtime dp).aux
@@ -2850,7 +2934,9 @@ private theorem removeTarget_storePrefix_runCompiled
         .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled (hfork := hfork) harrayMoved harrayOrig htailClearCost
+      (temporal_sstore_runCompiled (hfork := hfork) harrayMoved
+        ((indexWritePost_getOrigStorVal sevm base target next _ _).trans harrayOrig)
+        htailClearCost
         hwarmArrayMoved (lt_of_lt_of_le hgasFinal (by omega)) hstatic)
       hrestore'
   have htailTag : Func.RunCompiled fs sevm
@@ -2928,7 +3014,9 @@ private theorem removeTarget_storePrefix_runCompiled
         .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled (hfork := hfork) hindexHole hindexOrig hmovedIndexCost
+      (temporal_sstore_runCompiled (hfork := hfork) hindexHole
+        ((entryWritePost_getOrigStorVal sevm base target next _ _).trans hindexOrig)
+        hmovedIndexCost
         hwarmIndexHole (lt_of_lt_of_le hgasFinal (by omega)) hstatic)
       htailPrefix
   have hmovedTag : Func.RunCompiled fs sevm
@@ -3146,11 +3234,11 @@ theorem removeTarget_toFinish_runCompiled
       (indexSlot target) = next)
     (hlength : base.getStorVal sevm.currentTarget
       arrayLengthSlot = next)
-    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+    (harrayOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot next) = arrayOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget
       arrayLengthSlot = lengthOriginal)
     (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
     (hmovedIndexCost : sstoreValueCost indexOriginal next next =
@@ -3707,11 +3795,11 @@ theorem removeTarget_runCompiled
       (indexSlot target) = next)
     (hlength : base.getStorVal sevm.currentTarget
       arrayLengthSlot = next)
-    (harrayOrig : getOrigStorVal sevm sevm.currentTarget
+    (harrayOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot next) = arrayOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget
       arrayLengthSlot = lengthOriginal)
     (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
     (hmovedIndexCost : sstoreValueCost indexOriginal next next =
@@ -3792,6 +3880,13 @@ def swapPopClearPost (sevm : Sevm) (base : Devm)
     (indexWritePost sevm base lastTarget idx)
     (arrayEntrySlot len) 0
 
+theorem swapPopClearPost_getOrigStorVal
+    (sevm : Sevm) (base : Devm) (lastTarget idx len : B256) (a : Adr) (key : B256) :
+    (swapPopClearPost sevm base lastTarget idx len).getOrigStorVal sevm a key =
+      base.getOrigStorVal sevm a key := by
+  unfold swapPopClearPost
+  rw [temporalSstorePost_getOrigStorVal, indexWritePost_getOrigStorVal]
+
 /-- The five stores of a general swap-pop, from the scratch words already
 holding the removed index, the array length and the moved target. -/
 private theorem removeTarget_swapPop_storePrefix_runCompiled
@@ -3832,15 +3927,15 @@ private theorem removeTarget_swapPop_storePrefix_runCompiled
       (indexSlot target) = idx)
     (hlength : base.getStorVal sevm.currentTarget
       arrayLengthSlot = len)
-    (hholeOrig : getOrigStorVal sevm sevm.currentTarget
+    (hholeOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot idx) = holeOriginal)
-    (hmovedOrig : getOrigStorVal sevm sevm.currentTarget
+    (hmovedOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot lastTarget) = movedOriginal)
-    (htailOrig : getOrigStorVal sevm sevm.currentTarget
+    (htailOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot len) = tailOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget
       arrayLengthSlot = lengthOriginal)
     (hholeCost : sstoreValueCost holeOriginal holeCurrent lastTarget =
       holeCost)
@@ -4026,7 +4121,10 @@ private theorem removeTarget_swapPop_storePrefix_runCompiled
     dp sevm tailPost M img target oldLength len idx 0 stack hstack
     lengthOriginal indexOriginal lengthRestoreCost indexClearCost finishGas G
     hreads htarget hlengthWord htargetValid hsize halign hlengthTailPost
-    hindexTailPost hlengthOrig hindexOrig hlengthRestoreCost hindexClearCost
+    hindexTailPost
+    ((swapPopClearPost_getOrigStorVal sevm base lastTarget idx len _ _).trans hlengthOrig)
+    ((swapPopClearPost_getOrigStorVal sevm base lastTarget idx len _ _).trans hindexOrig)
+    hlengthRestoreCost hindexClearCost
     hwarmLengthTail hwarmIndexTail hsub hgasFinal hstatic post
     (by simpa only [tailPost] using hfinish)
   let fs := (runtime dp).main :: (runtime dp).aux
@@ -4053,7 +4151,9 @@ private theorem removeTarget_swapPop_storePrefix_runCompiled
         .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled (hfork := hfork) htailMovedPost htailOrig htailClearCost
+      (temporal_sstore_runCompiled (hfork := hfork) htailMovedPost
+        ((indexWritePost_getOrigStorVal sevm base lastTarget idx _ _).trans htailOrig)
+        htailClearCost
         hwarmTailMoved (lt_of_lt_of_le hgasFinal (by omega)) hstatic)
       hrestore'
   have htailTag : Func.RunCompiled fs sevm
@@ -4131,7 +4231,9 @@ private theorem removeTarget_swapPop_storePrefix_runCompiled
         .call finishSetPauserSlot)
       post := by
     exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled (hfork := hfork) hmovedHolePost hmovedOrig hmovedIndexCost
+      (temporal_sstore_runCompiled (hfork := hfork) hmovedHolePost
+        ((entryWritePost_getOrigStorVal sevm base lastTarget idx _ _).trans hmovedOrig)
+        hmovedIndexCost
         hwarmMovedHole (lt_of_lt_of_le hgasFinal (by omega)) hstatic)
       htailPrefix
   have hmovedTag : Func.RunCompiled fs sevm
@@ -4357,15 +4459,15 @@ theorem removeTarget_swapPop_toFinish_runCompiled
       (indexSlot target) = idx)
     (hlength : base.getStorVal sevm.currentTarget
       arrayLengthSlot = len)
-    (hholeOrig : getOrigStorVal sevm sevm.currentTarget
+    (hholeOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot idx) = holeOriginal)
-    (hmovedOrig : getOrigStorVal sevm sevm.currentTarget
+    (hmovedOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot lastTarget) = movedOriginal)
-    (htailOrig : getOrigStorVal sevm sevm.currentTarget
+    (htailOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot len) = tailOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget
       arrayLengthSlot = lengthOriginal)
     (hholeCost : sstoreValueCost holeOriginal holeCurrent lastTarget =
       holeCost)
@@ -4939,15 +5041,15 @@ theorem removeTarget_swapPop_runCompiled
       (indexSlot target) = idx)
     (hlength : base.getStorVal sevm.currentTarget
       arrayLengthSlot = len)
-    (hholeOrig : getOrigStorVal sevm sevm.currentTarget
+    (hholeOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot idx) = holeOriginal)
-    (hmovedOrig : getOrigStorVal sevm sevm.currentTarget
+    (hmovedOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot lastTarget) = movedOriginal)
-    (htailOrig : getOrigStorVal sevm sevm.currentTarget
+    (htailOrig : base.getOrigStorVal sevm sevm.currentTarget
       (arrayEntrySlot len) = tailOriginal)
-    (hindexOrig : getOrigStorVal sevm sevm.currentTarget
+    (hindexOrig : base.getOrigStorVal sevm sevm.currentTarget
       (indexSlot target) = indexOriginal)
-    (hlengthOrig : getOrigStorVal sevm sevm.currentTarget
+    (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget
       arrayLengthSlot = lengthOriginal)
     (hholeCost : sstoreValueCost holeOriginal holeCurrent lastTarget =
       holeCost)
