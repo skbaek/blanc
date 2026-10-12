@@ -35,9 +35,11 @@ theorem create_initial (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
     pre_eq_St rfl rfl (Nat.sub_add_cancel hcost)
   rw [hpre] at hrun
   have facts := constructorPost_facts sevm b G
+  have hvalue0 : (processCreateMessage.msg msg).value = 0 := hvalue
   have hempty : b.getStor sevm.currentTarget = Stor.empty := by
     change benv.state.getStor msg.currentTarget = Stor.empty
-    rw [benvAfterTransfer_ok_getStor htransfer, processCreateMessage_msg_getStor_currentTarget]
+    rw [benvAfterTransfer_ok_getStor htransfer _ (Or.inl hvalue0),
+      processCreateMessage_msg_getStor_currentTarget]
   have herror : (constructorPost sevm b G).error = none := facts.2.1.trans rfl
   have hprefix : (constructorPost sevm b G).output.head? ≠ some 0xEF := by
     rw [facts.1]
@@ -58,7 +60,15 @@ theorem create_initial (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
   · rw [facts.1] at hinstalled
     rw [ByteArray.toList_eq_toList_data, ByteArray.toList_eq_toList_data] at hinstalled
     exact congrArg ByteArray.mk (Array.toList_inj.mp hinstalled)
-  · rw [hstorage]
+  · rw [hstorage, facts.1]
+    have hne : (⟨⟨Blanc.withdrawalRequestCode.toList⟩⟩ : ByteArray).size ≠ 0 := by
+      show (List.toArray Blanc.withdrawalRequestCode.toList).size ≠ 0
+      rw [List.size_toArray, runtime_length]
+      decide
+    have hnotempty : ¬ ({ (constructorPost sevm b G).state.get msg.currentTarget with
+        code := ⟨⟨Blanc.withdrawalRequestCode.toList⟩⟩ } : Acct).Empty :=
+      fun hacc => hne hacc.1
+    rw [Acct.clearIfEmpty_stor, ite_eq_right hnotempty]
     change RepresentsStorage (constructorPost sevm b G |>.getStor sevm.currentTarget).get initial
     rw [facts.2.2.1, hempty]
     exact initial_storage

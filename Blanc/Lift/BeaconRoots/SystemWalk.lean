@@ -493,12 +493,27 @@ theorem systemPost_facts (benv : Benv) :
     rw [afterSstore_error, systemMid, afterSstore_error]
     rfl
   · change 0 ≤ (afterSstore (systemSevm benv) (systemMid benv) _ _).refundCounter
+    have safe1 : RefundSafe ((systemBase benv).getOrigStorVal (systemSevm benv)
+        (systemSevm benv).currentTarget (systemKey benv))
+        ((systemBase benv).getStorVal (systemSevm benv).currentTarget
+          (systemKey benv)) := by
+      unfold Devm.getOrigStorVal
+      split
+      · exact Or.inr (Or.inl rfl)
+      · exact Or.inl rfl
     have first : (0 : Int) ≤ (systemMid benv).refundCounter :=
-      afterSstore_refundCounter_ge_of_original_eq_current _ _ _ _ rfl
-    refine first.trans (afterSstore_refundCounter_ge_of_original_eq_current _ _ _ _ ?_)
-    rw [getStorVal_eq_getStor, systemMid, afterSstore_getStor_self,
-      Stor.get_set_ne _ (systemKey_ne benv), ← getStorVal_eq_getStor]
-    rfl
+      afterSstore_refundCounter_ge_of_safe _ _ _ _ safe1
+    have safe2 : RefundSafe ((systemMid benv).getOrigStorVal (systemSevm benv)
+        (systemSevm benv).currentTarget (systemRootKey benv))
+        ((systemMid benv).getStorVal (systemSevm benv).currentTarget
+          (systemRootKey benv)) := by
+      unfold Devm.getOrigStorVal
+      split
+      · exact Or.inr (Or.inl rfl)
+      · rw [getStorVal_eq_getStor, systemMid, afterSstore_getStor_self,
+          Stor.get_set_ne _ (systemKey_ne benv), ← getStorVal_eq_getStor]
+        exact Or.inl rfl
+    refine first.trans (afterSstore_refundCounter_ge_of_safe _ _ _ _ safe2)
   · change (afterSstore (systemSevm benv) (systemMid benv) _ _).state = _
     rw [afterSstore_state, systemMid, afterSstore_state]
     rfl
