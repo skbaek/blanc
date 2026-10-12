@@ -41,8 +41,9 @@ open Jaune
 /-! ## World frames -/
 
 /-- The world of `b'` is `b`'s, as far as the body can observe: storage, code, access sets,
-logs, output and error.  (Balances and the return-data buffer may differ: the precompile call
-touches both.) -/
+logs, output, error and the created-account set (which the machine original read
+`Devm.getOrigStorVal` consults when pricing an `SSTORE`).  (Balances and the return-data
+buffer may differ: the precompile call touches both.) -/
 structure Keep (b b' : Devm) : Prop where
   stor : ∀ a, Devm.getStor b' a = Devm.getStor b a
   code : ∀ a, b'.getCode a = b.getCode a
@@ -51,14 +52,15 @@ structure Keep (b b' : Devm) : Prop where
   logs : b'.logs = b.logs
   output : b'.output = b.output
   error : b'.error = b.error
+  created : b'.createdAccounts = b.createdAccounts
 
 theorem Keep.refl (b : Devm) : Keep b b :=
-  ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl, rfl⟩
+  ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 theorem Keep.trans {b b' b'' : Devm} (h : Keep b b') (h' : Keep b' b'') : Keep b b'' :=
   ⟨fun a => (h'.stor a).trans (h.stor a), fun a => (h'.code a).trans (h.code a),
     h'.addrs.trans h.addrs, h'.keys.trans h.keys, h'.logs.trans h.logs,
-    h'.output.trans h.output, h'.error.trans h.error⟩
+    h'.output.trans h.output, h'.error.trans h.error, h'.created.trans h.created⟩
 
 theorem _root_.Blanc.Lift.ShaReady.keep {sevm : Sevm} {b b' : Devm} (h : ShaReady sevm b)
     (hk : Keep b b') : ShaReady sevm b' :=

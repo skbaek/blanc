@@ -17,11 +17,14 @@ Following the port-side precedent (`insertionFirstLiveStoreCostOf` /
 and neighboring `...Of` definitions), this module adds the `...Of` variants
 priced from a supplied original word, with `rfl` links back to the static
 defs and the machine-read connection under an explicit `horig` premise.
-The remaining transport — `createdAccounts` preservation across the SHA-256
-call sites (`ShaCallPost` in `Blanc/Lift/ExactWalkCutOps.lean` and its
-`PackedSha*` producers) — is a core request (see the unit report); once it
-lands, the `horig` premises discharge from `..._createdAccounts` facts plus
-`getOrigStorVal_of_not_created` below.
+The transport across the SHA-256 call sites is `ShaCallPost.created`
+(`Blanc/Lift/ExactWalkCutOps.lean`, master-authorized core-b CR1), carried by
+`Keep.created` and `LoopBase.created`.
+
+The body-level `...Of` costs (`bodyLiveCostOf`, `bodyInsertGasOf`, `bodyGasOf`)
+price the two body `SSTORE`s from supplied original words; the restated P2
+liveness headers supply the machine reads of the entry base (Option A, master
+decision under blanc-repin-os-optionA-delegation-20261012).
 
 Reuse note: `afterSload_createdAccounts`, `afterSstore_createdAccounts` and
 `getOrigStorVal_congr_created` already exist in
@@ -67,6 +70,40 @@ theorem liveStoreCostOf_congr {orig : B256} {sevm : Sevm} {keys : KeySet}
     liveStoreCostOf orig sevm keys s n nd =
       liveStoreCostOf orig sevm keys t n nd := by
   unfold liveStoreCostOf; rw [h]
+
+/-! ## Body-level `...Of` costs -/
+
+/-- The storing `SSTORE`'s charge (`bodyLiveCost`), priced from a supplied original word. -/
+def bodyLiveCostOf (orig : B256) (sevm : Sevm) (b : Devm) : Nat :=
+  liveStoreCostOf orig sevm b.accessedStorageKeys (Devm.getStor b sevm.currentTarget)
+    (bodyDepth sevm b) (bodyNode sevm b)
+
+/-- The insertion loop's gas (`bodyInsertGas`), its `SSTORE` priced from a supplied original
+word. -/
+def bodyInsertGasOf (orig : B256) (sevm : Sevm) (b : Devm) : Nat :=
+  deadRun sevm.currentTarget b.accessedStorageKeys 0 (bodyDepth sevm b) +
+    (143 + bodyLiveCostOf orig sevm b)
+
+/-- The body's gas (`bodyGas`), the storing `SSTORE` priced from `origLive` and the count
+`SSTORE` from `origCount`. -/
+def bodyGasOf (origLive origCount : B256) (sevm : Sevm) (b : Devm) : Nat :=
+  14551 + sloadCostOfKeys sevm.currentTarget b.accessedStorageKeys solCountSlot +
+    countStoreCostOf origCount (bodyCount sevm b) + bodyInsertGasOf origLive sevm b
+
+theorem bodyLiveCost_eq_of (sevm : Sevm) (b : Devm) :
+    bodyLiveCost sevm b =
+      bodyLiveCostOf (getOrigStorVal sevm sevm.currentTarget (solBranchSlot (bodyDepth sevm b)))
+        sevm b := rfl
+
+theorem bodyInsertGas_eq_of (sevm : Sevm) (b : Devm) :
+    bodyInsertGas sevm b =
+      bodyInsertGasOf
+        (getOrigStorVal sevm sevm.currentTarget (solBranchSlot (bodyDepth sevm b))) sevm b := rfl
+
+theorem bodyGas_eq_of (sevm : Sevm) (b : Devm) :
+    bodyGas sevm b =
+      bodyGasOf (getOrigStorVal sevm sevm.currentTarget (solBranchSlot (bodyDepth sevm b)))
+        (getOrigStorVal sevm sevm.currentTarget solCountSlot) sevm b := rfl
 
 /-! ## Machine-read connection -/
 

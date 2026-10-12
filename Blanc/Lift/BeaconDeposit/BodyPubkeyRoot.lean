@@ -164,7 +164,7 @@ theorem body_pubkeyRoot {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G :
         List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) hsha'.nodeleg hsha'.warm
       hsha'.pre hsha'.fork hdepth (by omega)
   refine ⟨b', M', ⟨hpost.stor, hpost.code, hpost.addrs, hpost.keys, hpost.logs, hpost.output,
-    hpost.error⟩, ⟨hwf', hs', img', hr', ?_, ?_⟩, fun o k => ?_⟩
+    hpost.error, hpost.created⟩, ⟨hwf', hs', img', hr', ?_, ?_⟩, fun o k => ?_⟩
   · rw [hw', show (0x160 : B256) = Nat.toB256 352 by decide]
   · intro p hp
     simp only [List.mem_cons, List.mem_nil_iff, or_false] at hp

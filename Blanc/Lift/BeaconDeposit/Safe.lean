@@ -99,7 +99,7 @@ theorem safe_insert_loop {sevm : Sevm} {b₀ : Devm} {x : Nat} {node0 : B256}
     BaseRel (afterSstore sevm b₀ (solBranchSlot h) (insertNode Bytes.sha256 br h node0)) bf
   have hL0 : LoopBase sevm.currentTarget b₀ b₀ 0 :=
     ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl, fun _ =>
-      ⟨.inl, fun h => h.elim id (fun ⟨_, hj, _⟩ => absurd hj (Nat.not_lt_zero _))⟩⟩
+      ⟨.inl, fun h => h.elim id (fun ⟨_, hj, _⟩ => absurd hj (Nat.not_lt_zero _))⟩, rfl⟩
   refine SFunc.RunP.loop (P := Ninst.Run) (k := 23) (g := t_0f6e_c23) rfl I Q ?_ _ o
     ⟨0, b₀, M, G, rfl, by omega, fun j hj => absurd hj (Nat.not_lt_zero _), hL0, hM⟩ run
   intro devm ⟨h, bh, Mh, Gh, hdevm, hh, hdead, hL, hMh⟩ r hrun

@@ -261,7 +261,8 @@ theorem iter {sevm : Sevm} (fr : CtorFrame sevm) {i : Nat} (hi : i < 31) {b : De
   refine rxc_add' (toB256_add_push (c := 33) (by decide) (by omega)) (by simp only [List.length_cons,
     List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   rw [show 33 + (1 + i) = 34 + i by omega]
-  rw [hSS, sstoreCost_congr (d1 := b2) (d2 := b') _ _ hpost.keys.symm (hpost.stor _).symm]
+  rw [hSS, sstoreCost_congr (d1 := b2) (d2 := b') _ _ hpost.keys.symm (hpost.stor _).symm
+    hpost.created.symm]
   refine rxc_sstore fr.fork ?_ fr.static ?_
   · unfold gCallStipend; omega
   refine rxc_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_

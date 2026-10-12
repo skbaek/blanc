@@ -39,6 +39,7 @@ theorem DepositReplay.append {pre middle post : Stor} {left right : List B256}
 /-- Beacon's replay reads storage only. Value transfers and balance credits
 therefore contribute an empty history segment. -/
 def depositCarrier (ca : Adr) : ReplayCarrier ca where
+  readsStorage := true
   Snap := Stor
   Step := B256
   Tag := Unit
@@ -46,13 +47,14 @@ def depositCarrier (ca : Adr) : ReplayCarrier ca where
   ofState state := state.getStor ca
   frameEntry _ state := state.getStor ca
   nil := DepositReplay.nil
-  silent := fun storage _ => storage
+  silent := fun storage _ => storage rfl
   credit := by
     intro _ _ _ _ storage _ _
     exact ⟨[], by rw [storage]; exact DepositReplay.nil _⟩
   entry_eq_ofState := by
-    intro _ _ _ _ transfer _
-    exact congrFun (benvAfterTransfer_getStor_eq transfer) ca
+    intro _ _ caller_ne _ transfer sum_nof
+    exact benvAfterTransfer_getStor_eq_of_safe transfer sum_nof
+      (fun transfers _ => Or.inl (caller_ne transfers))
 
 /-- Replay nodes and committed-frame nodes use the same ordered observation. -/
 def depositObservation (ca : Adr) : ReplayObservation (depositCarrier ca) where

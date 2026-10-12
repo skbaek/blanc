@@ -89,7 +89,7 @@ theorem body_insertDead {sevm : Sevm} {b : Devm} {sz nd : B256} {R : List B256} 
       (by omega) hfp' (by simp only [List.length_cons]; omega) hok1.nodeleg hok1.warm hok1.pre hok1.fork hdepth
       (by unfold deadGas at hG; omega)
   refine ⟨b', M', ⟨hpost.stor, hpost.code, hpost.addrs, hpost.keys, hpost.logs, hpost.output,
-    hpost.error⟩, ⟨hwf', by rw [hs']; omega, img', hr', by rw [hw']; congr 2; omega,
+    hpost.error, hpost.created⟩, ⟨hwf', by rw [hs']; omega, img', hr', by rw [hw']; congr 2; omega,
       by simp only [List.not_mem_nil, IsEmpty.forall_iff, implies_true]⟩, fun o k => ?_⟩
   rw [SFunc.runExact_iff_runExactCut_nil] at k ⊢
   unfold deadGas

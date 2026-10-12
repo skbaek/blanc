@@ -14,7 +14,7 @@ open Jaune
 
 /-- A precompile call keeps the body's world. -/
 theorem Keep.of_sha {b b' : Devm} {rd : Bytes} (h : ShaCallPost b b' rd) : Keep b b' :=
-  ⟨h.stor, h.code, h.addrs, h.keys, h.logs, h.output, h.error⟩
+  ⟨h.stor, h.code, h.addrs, h.keys, h.logs, h.output, h.error, h.created⟩
 
 /-! ## The slice helper (entry 13) -/
 

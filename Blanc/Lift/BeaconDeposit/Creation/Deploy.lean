@@ -72,7 +72,9 @@ theorem beacon_create (msg : Msg) (hvalue : msg.value = 0) (hcodeAddress : msg.c
   have st : CtorStart sevm b := by
     refine ⟨hcode, hvalue, fun x => ?_, ?_, hshaWarm, rfl⟩
     · show (benv.state.getStor msg.currentTarget).get x = 0
-      rw [benvAfterTransfer_ok_getStor htransfer, processCreateMessage_msg_getStor_currentTarget]
+      rw [benvAfterTransfer_ok_getStor htransfer _
+          (Or.inl (show (processCreateMessage.msg msg).value = 0 from hvalue)),
+        processCreateMessage_msg_getStor_currentTarget]
       rfl
     · show getDelegatedCodeAddress (benv.state.getCode 2) = none
       rw [benvAfterTransfer_ok_getCode htransfer, processCreateMessage.msg_getCode]
@@ -90,8 +92,14 @@ theorem beacon_create (msg : Msg) (hvalue : msg.value = 0) (hcodeAddress : msg.c
     hcodeAddress hcode hfork htransfer hrun herr
     (by rw [hwin, ByteArray.toList_eq_toList_data]; decide) (by rw [hlen]; exact le_trans (by decide) hgasLeft)
     (by rw [hlen]; exact hmax)
+  have hcode_ne :
+      ({ raw.state.get msg.currentTarget with code := ⟨⟨raw.output⟩⟩ } : Acct).code.size ≠ 0 := by
+    show (⟨⟨raw.output⟩⟩ : ByteArray).size ≠ 0
+    have hsize : (⟨⟨raw.output⟩⟩ : ByteArray).size = raw.output.length := rfl
+    rw [hsize, hlen]
+    decide
   refine ⟨post, hpost, hcodePost.trans hwin, ?_⟩
-  rw [hstorPost]
+  rw [hstorPost, Acct.clearIfEmpty_stor, ite_eq_right (fun hE => hcode_ne hE.1)]
   exact solInv_of_ctorStor hstor
 
 /-! ## The recorded deployment, closed -/
