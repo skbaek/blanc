@@ -103,10 +103,64 @@ theorem concreteDripDebit_balance :
   change ((concreteJoined.state.incrNonce concreteCreateSender).setBal concreteCreateSender
     ((concreteJoined.state.incrNonce concreteCreateSender).bal concreteCreateSender - 1000000)).bal _ = _
   unfold State.bal
-  rw [State.setBal_get_self, State.incrNonce_get_bal]
+  rw [State.setBal_get_self, Acct.clearIfEmpty_bal, State.incrNonce_get_bal]
   change concreteJoined.state.bal concreteCreateSender - 1000000 = _
   rw [concreteJoinedSenderBalance]
   decide +kernel
+
+private theorem concreteDripDebit_sender_nonce :
+    (concreteDripDebit.get concreteCreateSender).nonce = 3 := by
+  unfold concreteDripDebit
+  rw [State.setBal_get_nonce]
+  unfold State.incrNonce
+  rw [State.setAccount_get_self, Acct.clearIfEmpty_nonce]
+  change concreteJoined.state.getNonce concreteCreateSender + 1 = 3
+  rw [concreteJoinedSenderNonce]
+  rfl
+
+private theorem concreteDripDebit_sender_protected :
+    State.Protected concreteDripDebit concreteCreateSender := by
+  left
+  rw [concreteDripDebit_sender_nonce]
+  decide
+
+private theorem concreteDripDebit_target_protected :
+    State.Protected concreteDripDebit concreteCreateTarget := by
+  right
+  have hlen : code.length = 1762 := codeSize_exact
+  change (concreteDripDebit.getCode concreteCreateTarget).size ≠ 0
+  have image : (concreteDripDebit.getCode concreteCreateTarget).toList = code := concreteDripMessage_code
+  rw [ByteArray.size_eq_length_toList, image]
+  omega
+
+private theorem concreteDripDebit_storage (address : Adr) :
+    (concreteDripDebit.get address).stor = (concreteJoined.state.get address).stor := by
+  have bumped : ((concreteJoined.state.incrNonce concreteCreateSender).get concreteCreateSender).nonce = 3 := by
+    rw [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_nonce]
+    change concreteJoined.state.getNonce concreteCreateSender + 1 = 3
+    rw [concreteJoinedSenderNonce]
+    rfl
+  unfold concreteDripDebit
+  rw [State.setBal_get_stor, if_neg]
+  · rw [State.incrNonce_get_stor, if_neg]
+    rintro ⟨_, empty⟩
+    have nonzero : concreteJoined.state.getNonce concreteCreateSender + 1 ≠ 0 := by
+      rw [concreteJoinedSenderNonce]
+      decide
+    exact nonzero empty.2.1
+  · rintro ⟨_, empty⟩
+    have nonzero : ((concreteJoined.state.incrNonce concreteCreateSender).get concreteCreateSender).nonce ≠ 0 := by
+      rw [bumped]
+      decide
+    exact nonzero empty.2.1
+
+/-- The synthetic zero debit and zero credit are the identity on the actual debited world. -/
+theorem concreteDripEntryState_eq :
+    (concreteDripDebit.setBal concreteCreateSender
+      (concreteDripDebit.bal concreteCreateSender - 0)).addBal concreteCreateTarget 0 =
+        concreteDripDebit := by
+  rw [B256.sub_zero, RepinBridge.setBal_current_of_protected concreteDripDebit_sender_protected,
+    RepinBridge.addBal_zero_of_protected concreteDripDebit_target_protected]
 
 noncomputable def concreteDripEntry : Benv :=
   concreteDripMessage.benv.withState
@@ -115,24 +169,16 @@ noncomputable def concreteDripEntry : Benv :=
 
 theorem concreteDripEntry_run :
     concreteDripMessage.benvAfterTransfer = .ok concreteDripEntry := by
-  unfold concreteDripEntry concreteDripMessage
-  generalize concreteDripDebit = debit
-  generalize concreteDripTxInput.beginTransaction = begun
-  generalize concreteDripTenv = tenv
-  have hnot : ¬ debit.bal concreteCreateSender < (0 : B256) := by
-    rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_zero]
-    omega
-  simp only [Msg.benvAfterTransfer, if_true, Benv.subBal, State.subBal, hnot, if_false,
-    bind, Option.bind, Option.toExcept, Except.bind, Benv.addBal, Benv.withState]
+  rw [Msg.benvAfterTransfer_of_value_zero rfl]
+  unfold concreteDripEntry
+  rw [concreteDripEntryState_eq]
+  rfl
 
 theorem concreteDripEntry_storage (address : Adr) :
     (concreteDripEntry.state.get address).stor = (concreteJoined.state.get address).stor := by
   change (((concreteDripDebit.setBal _ _).addBal _ _).get address).stor = _
-  unfold State.addBal
-  rw [State.setBal_get_stor, State.setBal_get_stor]
-  unfold concreteDripDebit
-  dsimp only
-  rw [State.setBal_get_stor, State.incrNonce_get_stor]
+  rw [concreteDripEntryState_eq]
+  exact concreteDripDebit_storage address
 
 
 noncomputable def concreteDripSevm : Sevm := initSevm (concreteDripMessage.withBenv concreteDripEntry)
