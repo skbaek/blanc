@@ -103,8 +103,10 @@ theorem mutable_source_slot_turns_with
     ⟨evm, raw, callee, resume, pc, child, next, spawn, enter, resumed, slot, run, paths⟩
   · have actual : SourceSlotEvents call frame.context.pair index [] := Or.inl ⟨none, rfl⟩
     rw [none] at primitive
+    have hprot : State.Protected call.occurrence.node.devm.state pair :=
+      State.Protected.of_image installed
     obtain ⟨turns, c, added, rets, rest⟩ := unchanged [] actual rfl
-      (fun k => by rw [Xinst.none_getStor_eq primitive])
+      (fun k => by rw [Xinst.none_getStor_eq primitive pair hprot])
       ((Xinst.call_run_logs fork family primitive).1 rfl)
     exact ⟨[], turns, c, added, rets, actual, rest⟩
   · let events := if settles : Jaune.Frame.settlementCommits callee raw = true then
