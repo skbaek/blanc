@@ -194,11 +194,17 @@ theorem settledState_getCode (post : Devm) (E coinbase a : Adr) (refund tip : B2
   unfold settledState
   rw [State.addBal_getCode, State.addBal_getCode]
 
-/-- Settlement credits preserve every account's storage map: `addBal` is a `setBal`,
-whose storage projection is shared `State.setBal_get_stor`. -/
-theorem settledState_getStor (post : Devm) (E coinbase a : Adr) (refund tip : B256) :
+/-- Settlement credits preserve a protected account's storage map: `addBal` is a
+`setBal`, whose storage projection at a protected owner is shared
+`State.setBal_get_stor_of_protected` (SA: a balance write can normalize an
+unprotected storage-only account). -/
+theorem settledState_getStor (post : Devm) (E coinbase a : Adr) (refund tip : B256)
+    (hp : State.Protected post.state a) :
     (settledState post E coinbase refund tip).getStor a = post.state.getStor a := by
-  simp only [settledState, State.getStor, State.addBal, State.setBal_get_stor]
+  unfold settledState State.getStor State.addBal
+  have h1 : State.Protected (post.state.setBal E (post.state.bal E + refund)) a :=
+    hp.setBal E (post.state.bal E + refund)
+  rw [State.setBal_get_stor_of_protected h1, State.setBal_get_stor_of_protected hp]
 
 /-- Block C's settled state keeps every installed code: its frame already does
 (`TxCPost`'s code leg). -/
@@ -214,11 +220,12 @@ non-predeploy map (`TxCPost`'s storage leg). -/
 theorem TxCPost_settled_stor7251 {benv : Benv} {σ : Blanc.WithdrawalRequest.State}
     {iters : Nat} {post : Devm} (hQ : TxCPost benv σ iters post)
     (hne : consolidationRequestPredeployAddress ≠ withdrawalRequestPredeployAddress)
-    (E coinbase : Adr) (refund tip : B256) :
+    (E coinbase : Adr) (refund tip : B256)
+    (hp : State.Protected post.state consolidationRequestPredeployAddress) :
     (settledState post E coinbase refund tip).getStor
       consolidationRequestPredeployAddress =
       benv.state.getStor consolidationRequestPredeployAddress := by
-  rw [settledState_getStor]
+  rw [settledState_getStor _ _ _ _ _ _ hp]
   exact hQ.2.2.1 consolidationRequestPredeployAddress hne
 
 /-- Block B's settled state keeps the 7002 code: its frame says so directly. -/
@@ -248,12 +255,13 @@ theorem TxBPost_settled_stor7251 {benv : Benv} {σ0 : Blanc.WithdrawalRequest.St
     (hE : consolidationRequestPredeployAddress ≠ senderE)
     (hL : consolidationRequestPredeployAddress ≠ looperAddress)
     (hP : consolidationRequestPredeployAddress ≠ withdrawalRequestPredeployAddress)
-    (E coinbase : Adr) (refund tip : B256) :
+    (E coinbase : Adr) (refund tip : B256)
+    (hp : State.Protected post.state consolidationRequestPredeployAddress) :
     (settledState post E coinbase refund tip).getStor
       consolidationRequestPredeployAddress =
       benv.state.getStor consolidationRequestPredeployAddress := by
   have hget := hQ.2.2.2.2.2.2 consolidationRequestPredeployAddress hE hL hP
-  rw [settledState_getStor]
+  rw [settledState_getStor _ _ _ _ _ _ hp]
   exact congrArg (·.stor) hget
 
 /-! ## Preservation through the 7002 system call -/

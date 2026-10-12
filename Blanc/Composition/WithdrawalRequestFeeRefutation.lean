@@ -357,8 +357,11 @@ theorem txC_submissionFrame {benv : Benv} {state : State} {bout' : BlockOutput}
   have hrecover : recoverSender benv.stat.chainId txC = .ok senderE := by
     rw [hchain]
     exact txC_recoveredSender
+  have hprot : State.Protected (benv.state.incrNonce senderE) senderE :=
+    Or.inl (State.incrNonce_nonce_ne_zero (by rw [hnonce]; decide) senderE
+      (by rw [hnonce]; decide))
   have hexecC := txC_exec (benv := benv) (index := 0) hfork hcode hrep hbounds hexcess
-    hrun hpaid hiters
+    hrun hpaid hiters hprot
   obtain ⟨debit, msg, after, post, ⟨-, hct, hstatic, hcaller, hdata, hvalue, hstor⟩, frame,
       hmem, -, hsevm, hpre, -⟩ :=
     TransactionTrace.root_frame_of_call_value
@@ -380,7 +383,16 @@ theorem txC_submissionFrame {benv : Benv} {state : State} {bout' : BlockOutput}
         obtain ⟨-, hdeb⟩ := State.of_subBal hdebit
         have hstorAll : after.state.getStor withdrawalRequestPredeployAddress =
             benv.state.getStor withdrawalRequestPredeployAddress := by
-          rw [benvAfterTransfer_ok_getStor hentry, ← hm]
+          have hmsgState : msg.benv.state = debit := by rw [← hm]; rfl
+          have hsize : ((msg.benv.state.get withdrawalRequestPredeployAddress).code).size ≠ 0 := by
+            have e : (msg.benv.state.get withdrawalRequestPredeployAddress).code =
+                Blanc.withdrawalRequestCode := by
+              rw [hmsgState, hdeb, State.setBal_get_code, State.incrNonce_get_code]
+              exact hcode
+            rw [e, Blanc.Lift.WithdrawalRequest.withdrawalRequestCode_size]
+            decide
+          rw [benvAfterTransfer_ok_getStor hentry withdrawalRequestPredeployAddress
+            (Or.inr (Or.inr hsize)), ← hm]
           show (debit.get withdrawalRequestPredeployAddress).stor = _
           rw [hdeb, debit_get_ne hEP]
           rfl
@@ -664,23 +676,46 @@ theorem blockB_run {benv : Benv} {lastHash : B256}
     (TxBPost_settled_otherCode hQ _ (by decide) (by decide) (by decide) _ _ _ _).trans
       ((stHistory_getCode_inst hfork installed hlast _ (by decide) (by decide)).trans
         (systemCodeInstalled_consolidation installed))
+  have hpB : State.Protected post.state consolidationRequestPredeployAddress := by
+    apply State.Protected.of_code_ne_nil
+    have hgetC := hQ.2.2.2.2.2.2 consolidationRequestPredeployAddress
+      (by decide) (by decide) (by decide)
+    have hmem : (consolidationRequestPredeployAddress, Blanc.consolidationRequestCode) ∈
+        systemContracts := by
+      simp only [systemContracts, List.mem_cons, List.not_mem_nil, or_false, or_true]
+    have hcC : post.state.getCode consolidationRequestPredeployAddress =
+        Blanc.consolidationRequestCode := by
+      have hcc : post.state.getCode consolidationRequestPredeployAddress =
+          (stHistory benv).getCode consolidationRequestPredeployAddress :=
+        congrArg (·.code) hgetC
+      exact hcc.trans ((stHistory_getCode_inst hfork installed hlast _ (by decide)
+        (by decide)).trans (systemCodeInstalled_consolidation installed))
+    rw [hcC]
+    exact (systemContracts_facts _ hmem).2.2
   have hz : Slots7251Zero sB :=
     slots7251Zero_of_getStor ((TxBPost_settled_stor7251 hQ (by decide) (by decide) (by decide)
-      _ _ _ _).trans (stHistory_getStor_inst hfork installed hlast _ (by decide) (by decide)))
+      _ _ _ _ hpB).trans (stHistory_getStor_inst hfork installed hlast _ (by decide) (by decide)))
       hpre.zero
   refine ⟨sB, bout', body_of_txs hfork installed hlast (decode_single txB) htxs hdeposit
     hWcode hCcode hz, ?_, ?_⟩
   · rw [hblk]
     exact (Nat.zero_add _).le.trans (txGasUsed_le (by decide))
   -- the sender after the body
-  have hget : (bodyPost benv sB).get senderE = (post.state.get senderE).withBal
-      (post.state.bal senderE + R) := by
-    rw [bodyPost_get_other hfork hCcode hz senderE (by decide) (by decide), hsB, settledState,
-      addBal_get_ne _ hcb, addBal_get_self]
   have hpostE := hQ.2.2.2.2.2.1
   have hsE : (benv.withState (stHistory benv)).state.get senderE =
       { Acct.nil with nonce := 0, bal := senderEFunds.toB256 } :=
     hsender.trans checkpoint_get_senderE
+  have hnonce1 : (post.state.get senderE).nonce ≠ 0 := by
+    have h1 : (post.state.get senderE).nonce =
+        ((benv.withState (stHistory benv)).state.get senderE).nonce + 1 := by
+      rw [hpostE]
+    rw [h1, hsE]
+    decide
+  have hget : (bodyPost benv sB).get senderE = (post.state.get senderE).withBal
+      (post.state.bal senderE + R) := by
+    rw [bodyPost_get_other hfork hCcode hz senderE (by decide) (by decide), hsB, settledState,
+      addBal_get_ne _ hcb, addBal_get_self,
+      Blanc.Lift.WithdrawalRequest.RepinBridge.clearIfEmpty_withBal_of_nonce hnonce1]
   refine ⟨bodyPost_zero hfork hCcode hz, ?_, ?_, ?_, ?_⟩
   · rw [hget, hpostE, hsE]
     rfl
@@ -708,9 +743,13 @@ theorem blockB_run {benv : Benv} {lastHash : B256}
     unfold senderEFunds at hF ⊢
     rw [toNat_sub_sub_add (by rw [hF]; omega) (by omega) (by rw [hF]; omega), hF]
     omega
-  · have hrepF : Blanc.WithdrawalRequest.RepresentsStorage
+  · have hpW : State.Protected post.state withdrawalRequestPredeployAddress := by
+      apply State.Protected.of_code_ne_nil
+      rw [hQ.1]
+      exact Blanc.Lift.WithdrawalRequest.withdrawalRequestCode_sem_facts.2
+    have hrepF : Blanc.WithdrawalRequest.RepresentsStorage
         (sB.getStor withdrawalRequestPredeployAddress).get σF := by
-      rw [hsB, settledState_getStor]
+      rw [hsB, settledState_getStor _ _ _ _ _ _ hpW]
       exact hQ.2.1
     exact bodyPost_represents hfork hCcode hz hrepF
       (by rw [σF_effectiveExcess, σF_fields.2.1]; decide)
@@ -817,8 +856,19 @@ theorem blockC_run {benv : Benv} {lastHash : B256}
       Blanc.consolidationRequestCode :=
     (hcodes _).trans ((stHistory_getCode_inst hfork installed hlast _ (by decide)
       (by decide)).trans (systemCodeInstalled_consolidation installed))
+  have hpC : State.Protected post.state consolidationRequestPredeployAddress := by
+    apply State.Protected.of_code_ne_nil
+    have hmem : (consolidationRequestPredeployAddress, Blanc.consolidationRequestCode) ∈
+        systemContracts := by
+      simp only [systemContracts, List.mem_cons, List.not_mem_nil, or_false, or_true]
+    have hcC : post.state.getCode consolidationRequestPredeployAddress =
+        Blanc.consolidationRequestCode :=
+      (hQ.2.2.2.1 _).trans ((stHistory_getCode_inst hfork installed hlast _ (by decide)
+        (by decide)).trans (systemCodeInstalled_consolidation installed))
+    rw [hcC]
+    exact (systemContracts_facts _ hmem).2.2
   have hz : Slots7251Zero sC :=
-    slots7251Zero_of_getStor ((TxCPost_settled_stor7251 hQ (by decide) _ _ _ _).trans
+    slots7251Zero_of_getStor ((TxCPost_settled_stor7251 hQ (by decide) _ _ _ _ hpC).trans
       (stHistory_getStor_inst hfork installed hlast _ (by decide) (by decide))) hpre.zero
   refine ⟨sC, bout', body_of_txs hfork installed hlast (decode_single txC) htxs hdeposit
     hWcode hCcode hz, ?_⟩

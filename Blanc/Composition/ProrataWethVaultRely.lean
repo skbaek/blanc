@@ -768,24 +768,29 @@ theorem weth_run_mkTransferFromInvocation
     exact Mem.wf_empty
   · simpa only [Bool.false_eq_true, ↓reduceIte] using selected
 
-/-- **Slotless message preserves every cell.**  With no interpreted
+/-- **Slotless message preserves every protected cell.**  With no interpreted
 slot the message settles to its entry world or its post-transfer
-world; value transfer moves balances only. -/
+world; value transfer moves balances only, and protected storage survives
+(zero value or a protected owner, SA). -/
 theorem processMessage_none_preserves_cell
     {msg : Msg} {post : Devm}
     (process : ProcessMessage msg .none (.ok post))
-    (owner : Adr) (key : B256) :
+    (owner : Adr) (key : B256)
+    (hpreserved : msg.value = 0 ∨ State.Protected msg.benv.state owner) :
     (post.state.getStor owner).get key =
       (msg.benv.state.getStor owner).get key := by
   rcases ProcessMessage.none_ok_state_cases process with
     rollback | ⟨benv, transfer, postEq⟩
   · rw [rollback]
   · rw [postEq]
-    rw [benvAfterTransfer_preserves_getStor transfer owner]
+    rw [benvAfterTransfer_preserves_getStor transfer owner hpreserved]
 
-/-- **Static message preserves every cell (interpreted slot).**  A
+/-- **Static message preserves every protected cell (interpreted slot).**  A
 static interpreted slot retains no storage write; a noncommitting slot
-rolls back. -/
+rolls back.  The owner must be protected at message entry (SA): a static
+run can still wipe an unprotected storage-bearing owner through a
+zero-value `CALLCODE` self-transfer, so a zero message value alone no
+longer suffices. -/
 theorem weth_static_processMessage_some_preserves_cell
     {msg : Msg} {post : Devm}
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
@@ -793,7 +798,8 @@ theorem weth_static_processMessage_some_preserves_cell
     (process : ProcessMessage msg (.some ⟨⟨pc, sevm, pre⟩, out⟩) (.ok post))
     (static : msg.isStatic = true)
     (hfork : CoveredFork sevm.benvStat.fork)
-    (owner : Adr) (key : B256) :
+    (owner : Adr) (key : B256)
+    (hprot : State.Protected msg.benv.state owner) :
     (post.state.getStor owner).get key =
       (msg.benv.state.getStor owner).get key := by
   by_cases settles : Frame.settlementCommits (Frame.ofCall msg) out = true
@@ -809,16 +815,20 @@ theorem weth_static_processMessage_some_preserves_cell
       rw [sevmEq]
       show msg.isStatic = true
       exact static
-    have viewEq :=
-      Exec.storageView_committedPost_eq_of_static run childStatic committed hfork
+    have hprotPre : State.Protected pre.state owner := by
+      have preState : pre.state = entry.state :=
+        congrArg (fun evm : Evm => evm.dyna.state) evmEq
+      rw [preState]
+      exact Msg.protected_of_benvAfterTransfer transfer owner hprot
     have cellEq : ((Execution.committedPost out committed).state.getStor owner).get key
         = (pre.state.getStor owner).get key := by
-      have h := congrFun (congrFun viewEq owner) key
-      simp only [Devm.storageView] at h
-      exact h
+      have h := Exec.getStor_committedPost_eq_of_static_protected
+        run childStatic committed hfork owner hprotPre
+      have h2 := congrArg (fun storage : Stor => storage.get key) h
+      simpa only [Devm.getStor, Devm.getAcct, State.getStor] using h2
     rw [cellEq]
     obtain ⟨_, _, _, _, _, _, storEq, _⟩ :=
-      MessageExecution.processMessage_entry_facts owner process
+      MessageExecution.processMessage_entry_facts owner (Or.inr hprot) process
     rw [storEq]
   · have settledEq := (RunFrame.some_inv process).2
     have postError : post.error.isSome = true := by

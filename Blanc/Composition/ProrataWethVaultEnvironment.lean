@@ -999,15 +999,60 @@ theorem calldataSelector_nil_not_mem :
     ∀ sel ∈ wethSelectors, calldataSelector [] ≠ sel := by
   decide +kernel
 
+/-- A full-balance self-payment empties a codeless, nonce-zero account, so
+Jaune `ca9f27d` deletes it with its storage at message entry (SA).  Kernel
+mechanism behind the zero-value premise of `weth_message_run_or_quiet` and the
+five WETH silence/split theorems below. -/
+theorem selfPayment_entry_clears_storage {msg : Msg} {entry : Benv}
+    (transfers : msg.shouldTransferValue = true)
+    (self : msg.caller = msg.currentTarget) (nonzero : msg.value ≠ 0)
+    (hnonce : (msg.benv.state.get msg.caller).nonce = 0)
+    (hcode : (msg.benv.state.get msg.caller).code.size = 0)
+    (hbal : (msg.benv.state.get msg.caller).bal = msg.value)
+    (transfer : msg.benvAfterTransfer = .ok entry) :
+    entry.state.getStor msg.currentTarget = Stor.empty := by
+  obtain ⟨debited, debit, entryEq⟩ := of_benvAfterTransfer transfers nonzero transfer
+  have entryState : entry.state = debited.addBal msg.currentTarget msg.value := by
+    rw [entryEq]
+    rfl
+  rw [entryState, ← self]
+  unfold State.subBal at debit
+  rw [if_neg (by unfold State.bal; rw [hbal]; exact lt_irrefl _)] at debit
+  cases debit
+  unfold State.addBal State.getStor
+  rw [State.setBal_get_stor]
+  split
+  · rfl
+  · rw [State.setBal_get_stor, if_pos]
+    refine ⟨rfl, hcode, hnonce, ?_⟩
+    unfold State.bal
+    rw [hbal]
+    exact B256.sub_self _
+
 /-- **The settled WETH message reduction.**  A retained committing message to
 `wethAccount` running the inherited WETH program either changed no cell at all
 (no interpreted slot, or a rolled-back settlement) or exposes the actual
-gas-exact compiled run whose WETH storage frame is the message's. -/
+gas-exact compiled run whose WETH storage frame is the message's.
+
+The zero-value premise is necessary under Jaune `ca9f27d` (SA), not a
+convenience: `MessageUsesProgram` constrains only `msg.code`, not the code
+installed at `wethAccount`.  Take a message whose caller and target are both
+`wethAccount`, whose world account there is codeless with nonce `0`, balance
+`v > 0` and a nonzero cell at a non-address key, and whose value is `v`.  The
+entry transfer empties and deletes that account with its storage
+(`selfPayment_entry_clears_storage`), so the run's entry WETH storage differs
+from the message's and, for a selector that writes no non-address cell (a view,
+the deposit fallback, a zero `transfer`, a zero `withdraw` whose self-callback
+runs the fallback), the committed post cell differs as well: both disjuncts
+fail.  The same corner refutes the zero-free forms of the five theorems below.
+Protection of the installed WETH account would also suffice, but no premise
+here states it. -/
 theorem weth_message_run_or_quiet {msg : Msg} {post : Devm} {slot : Xlot}
     (filled : Xlot.Filled slot)
     (process : ProcessMessage msg slot (.ok post))
     (target : msg.currentTarget = wethAccount)
-    (uses : MessageUsesProgram msg Blanc.weth) :
+    (uses : MessageUsesProgram msg Blanc.weth)
+    (hval : msg.value = 0) :
     (∀ (owner : Adr) (key : B256),
         (post.state.getStor owner).get key =
           (msg.benv.state.getStor owner).get key) ∨
@@ -1022,7 +1067,7 @@ theorem weth_message_run_or_quiet {msg : Msg} {post : Devm} {slot : Xlot}
   cases slot with
   | none =>
       exact Or.inl (fun owner key =>
-        processMessage_none_preserves_cell process owner key)
+        processMessage_none_preserves_cell process owner key (Or.inl hval))
   | some entry =>
       obtain ⟨⟨pc, sevm, pre⟩, raw⟩ := entry
       by_cases clean : post.error.isSome = false
@@ -1031,7 +1076,8 @@ theorem weth_message_run_or_quiet {msg : Msg} {post : Devm} {slot : Xlot}
         subst rawEq
         obtain ⟨exc⟩ := filled
         obtain ⟨pcZero, codeEq, current, -, dataEq, -, entryStorage, memoryWf⟩ :=
-          MessageExecution.processMessage_entry_facts wethAccount process
+          MessageExecution.processMessage_entry_facts wethAccount (Or.inl hval)
+            process
         subst pcZero
         have code : some sevm.code.toList = Prog.compile Blanc.weth := by
           rw [codeEq]; exact uses
@@ -1056,6 +1102,7 @@ theorem weth_transfer_message_silence {vault : Adr}
     (process : ProcessMessage msg slot (.ok post))
     (target : msg.currentTarget = wethAccount)
     (uses : MessageUsesProgram msg Blanc.weth)
+    (hval : msg.value = 0)
     (data : ∃ tail, msg.data =
       abiSelectorBytes (selector "transfer" [.address, .uint256]) ++ tail)
     (_collision : NoVaultAllowanceKeyCollision history vault)
@@ -1065,7 +1112,7 @@ theorem weth_transfer_message_silence {vault : Adr}
       (msg.benv.state.getStor wethAccount).get (wethAllowanceKey p.1 p.2) := by
   obtain ⟨tail, dataEq⟩ := data
   have invalid := touchedWethAllowancePairs_keys_nonaddress touched
-  rcases weth_message_run_or_quiet filled process target uses with
+  rcases weth_message_run_or_quiet filled process target uses hval with
     silent | ⟨sevm, pre, rawPost, current, sevmData, -, run, entry, exit⟩
   · exact silent _ _
   · have selected : Sevm.selector sevm =
@@ -1086,6 +1133,7 @@ theorem weth_view_message_silence
     (process : ProcessMessage msg slot (.ok post))
     (target : msg.currentTarget = wethAccount)
     (uses : MessageUsesProgram msg Blanc.weth)
+    (hval : msg.value = 0)
     (data : ∃ sel ∈ wethViewSelectors, ∃ tail,
       msg.data = abiSelectorBytes sel ++ tail ∧
         Bytes.toB256 (abiSelectorBytes sel) = sel)
@@ -1093,7 +1141,7 @@ theorem weth_view_message_silence
     (post.state.getStor wethAccount).get key =
       (msg.benv.state.getStor wethAccount).get key := by
   obtain ⟨sel, member, tail, dataEq, canonical⟩ := data
-  rcases weth_message_run_or_quiet filled process target uses with
+  rcases weth_message_run_or_quiet filled process target uses hval with
     silent | ⟨sevm, pre, rawPost, current, sevmData, -, run, entry, exit⟩
   · exact silent _ _
   · have selected : Sevm.selector sevm = sel :=
@@ -1114,11 +1162,12 @@ theorem weth_fallback_message_silence
     (process : ProcessMessage msg slot (.ok post))
     (target : msg.currentTarget = wethAccount)
     (uses : MessageUsesProgram msg Blanc.weth)
+    (hval : msg.value = 0)
     (miss : ∀ sel ∈ wethSelectors, calldataSelector msg.data ≠ sel)
     (key : B256) (invalid : ¬ ValidAdr key) :
     (post.state.getStor wethAccount).get key =
       (msg.benv.state.getStor wethAccount).get key := by
-  rcases weth_message_run_or_quiet filled process target uses with
+  rcases weth_message_run_or_quiet filled process target uses hval with
     silent | ⟨sevm, pre, rawPost, current, sevmData, -, run, entry, exit⟩
   · exact silent _ _
   · have selectorMiss : ∀ sel ∈ wethSelectors, Sevm.selector sevm ≠ sel := by
@@ -1145,11 +1194,12 @@ theorem weth_empty_message_silence
     (process : ProcessMessage msg slot (.ok post))
     (target : msg.currentTarget = wethAccount)
     (uses : MessageUsesProgram msg Blanc.weth)
+    (hval : msg.value = 0)
     (empty : msg.data = [])
     (key : B256) (invalid : ¬ ValidAdr key) :
     (post.state.getStor wethAccount).get key =
       (msg.benv.state.getStor wethAccount).get key :=
-  weth_fallback_message_silence filled process target uses
+  weth_fallback_message_silence filled process target uses hval
     (by rw [empty]; exact calldataSelector_nil_not_mem) key invalid
 
 /-- **Gap 4 (withdraw), as the split it has to be.**
@@ -1167,6 +1217,7 @@ theorem weth_withdraw_message_split
     (process : ProcessMessage msg slot (.ok post))
     (target : msg.currentTarget = wethAccount)
     (uses : MessageUsesProgram msg Blanc.weth)
+    (hval : msg.value = 0)
     (data : ∃ tail, msg.data =
       abiSelectorBytes (selector "withdraw" [.uint256]) ++ tail)
     (key : B256) (invalid : ¬ ValidAdr key) :
@@ -1180,7 +1231,7 @@ theorem weth_withdraw_message_split
           (post.state.getStor wethAccount).get key =
             (Devm.getStor callPost wethAccount).get key) := by
   obtain ⟨tail, dataEq⟩ := data
-  rcases weth_message_run_or_quiet filled process target uses with
+  rcases weth_message_run_or_quiet filled process target uses hval with
     silent | ⟨sevm, pre, rawPost, current, sevmData, -, run, entry, exit⟩
   · exact Or.inl (silent _ _)
   · have selected : Sevm.selector sevm = selector "withdraw" [.uint256] :=

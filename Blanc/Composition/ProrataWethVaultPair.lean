@@ -415,34 +415,12 @@ private theorem benvAfterTransfer_bal_le_of_value_zero
   | false =>
       rw [of_benvAfterTransfer_no (by simp only [stv, Bool.false_eq_true, not_false_eq_true]) transfer]
   | true =>
-      have inert : ∀ x : B256, (x - msg.value).toNat = x.toNat := by
-        intro x
-        have zeroLe : msg.value ≤ x := by
-          rw [B256.le_iff_toNat_le_toNat, zero, B256.toNat_zero]
-          exact Nat.zero_le _
-        rw [B256.toNat_sub_eq_of_le _ _ zeroLe, zero, B256.toNat_zero,
-          Nat.sub_zero]
-      obtain ⟨mid, sub, rfl⟩ := of_benvAfterTransfer stv transfer
-      obtain ⟨-, rfl⟩ := State.of_subBal sub
-      show _ ≤ (Jaune.State.bal ((msg.benv.state.setBal msg.caller
-        (msg.benv.state.bal msg.caller - msg.value)).addBal
-          msg.currentTarget msg.value) account).toNat
-      rw [show Jaune.State.bal ((msg.benv.state.setBal msg.caller
-          (msg.benv.state.bal msg.caller - msg.value)).addBal
-            msg.currentTarget msg.value) account =
-          Jaune.State.bal (msg.benv.state.setBal msg.caller
-            (msg.benv.state.bal msg.caller - msg.value)) account from
-        congrArg Acct.bal (State.setBal_get_ne notTarget)]
-      by_cases caller : msg.caller = account
-      · subst caller
-        rw [show Jaune.State.bal (msg.benv.state.setBal msg.caller
-            (msg.benv.state.bal msg.caller - msg.value)) msg.caller =
-            msg.benv.state.bal msg.caller - msg.value from
-          congrArg Acct.bal State.setBal_get_self, inert]
-      · rw [show Jaune.State.bal (msg.benv.state.setBal msg.caller
-            (msg.benv.state.bal msg.caller - msg.value)) account =
-            msg.benv.state.bal account from
-          congrArg Acct.bal (State.setBal_get_ne caller)]
+      -- At `value = 0` the entry transfer leaves the environment untouched
+      -- (ZV), even when a value transfer is nominally enabled.
+      have hzero := Msg.benvAfterTransfer_of_value_zero zero
+      rw [hzero] at transfer
+      cases transfer
+      exact le_rfl
 
 /-- **One vault message preserves the stable boundary.**
 
@@ -461,8 +439,12 @@ theorem vault_processMessage_preserves_stable
     (hfork : CoveredFork msg.benv.stat.fork)
     (stable : PairStable vault rules msg.benv.state) :
     PairStable vault rules post.state := by
+  have hprotV : State.Protected msg.benv.state vault := by
+    apply State.Protected.of_code_ne_nil
+    intro hnil
+    exact Prog.compile_ne_nil (by rw [← stable.vaultInstalled, hnil])
   obtain ⟨pcEq, sevmCode, sevmTarget, -, -, -, -, memoryWf⟩ :=
-    MessageExecution.processMessage_entry_facts vault process
+    MessageExecution.processMessage_entry_facts vault (Or.inr hprotV) process
   by_cases settles : Frame.settlementCommits (Frame.ofCall msg) out = true
   · have committed := Frame.raw_commits_of_settlementCommits settles
     cases out with
@@ -529,13 +511,15 @@ theorem vault_processMessage_preserves_stable
           rw [ct]
           show PairBacked vault (pre.state.getStor vault)
             (pre.state.getStor wethAccount)
-          rw [entryState, benvAfterTransfer_preserves_getStor transfer vault,
-            benvAfterTransfer_preserves_getStor transfer wethAccount]
+          rw [entryState, benvAfterTransfer_preserves_getStor transfer vault
+            (Or.inl msgZero),
+            benvAfterTransfer_preserves_getStor transfer wethAccount
+            (Or.inl msgZero)]
           exact stable.backed
         have wethSumNof : SumNof (Stor.rest (Devm.getStor pre wethAccount)) := by
           show SumNof (Stor.rest (pre.state.getStor wethAccount))
           rw [entryState, benvAfterTransfer_preserves_getStor transfer
-            wethAccount]
+            wethAccount (Or.inl msgZero)]
           exact stable.wethRowSumNof
         have callerNe : sevm.caller ≠ sevm.currentTarget := by
           rw [ct, sevmEq]
@@ -564,7 +548,7 @@ theorem vault_processMessage_preserves_stable
             show balSum (pre.state.getStor wethAccount) + (0 : B256).toNat ≤
               (pre.state.bal wethAccount).toNat
             rw [entryState, benvAfterTransfer_preserves_getStor transfer
-              wethAccount]
+              wethAccount (Or.inl msgZero)]
             have solvent : balSum (msg.benv.state.getStor wethAccount) +
                 (0 : B256).toNat ≤ (msg.benv.state.bal wethAccount).toNat :=
               stable.wethSolvent

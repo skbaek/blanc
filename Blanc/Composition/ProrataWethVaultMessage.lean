@@ -693,14 +693,17 @@ theorem ConfiguredRoot.chain_conserved {vault : Adr} {sevm : Sevm}
   chain.preserves_conserved root.conserved
 
 
-/-- A successful message-entry value transfer preserves every account's
-storage map.  Balances move; storage does not. -/
+/-- A successful message-entry value transfer preserves a protected account's
+storage map (or any account's at zero value).  Balances move; protected
+storage does not (SA: a nonzero transfer can normalize an unprotected
+storage-only account). -/
 theorem benvAfterTransfer_preserves_getStor
     {msg : Msg} {benv : Benv}
     (transfer : msg.benvAfterTransfer = .ok benv)
-    (target : Adr) :
+    (target : Adr)
+    (hpreserved : msg.value = 0 ∨ State.Protected msg.benv.state target) :
     benv.state.getStor target = msg.benv.state.getStor target :=
-  benvAfterTransfer_ok_getStor transfer target
+  benvAfterTransfer_ok_getStor transfer target hpreserved
 
 /-! ## Vault calls preserve the ledger
 
@@ -716,12 +719,14 @@ to the entry world. -/
 
 /-- **Vault call preserves the ledger (slotless message).**  With no
 interpreted slot the message settles to its entry world or its
-post-transfer world; value transfer moves balances only. -/
+post-transfer world; value transfer moves balances only, and a protected
+vault keeps its storage map (SA). -/
 theorem vault_processMessage_none_preserves_conserved
     {vault : Adr} {msg : Msg} {post : Devm}
     (process : ProcessMessage msg .none (.ok post))
     (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
-      (msg.benv.state.getStor vault)) :
+      (msg.benv.state.getStor vault))
+    (hprot : State.Protected msg.benv.state vault) :
     LedgerConserved Blanc.ProrataWethVault.supplySlot
       (post.state.getStor vault) := by
   rcases ProcessMessage.none_ok_state_cases process with
@@ -730,11 +735,13 @@ theorem vault_processMessage_none_preserves_conserved
     exact conserved
   · rw [postEq]
     exact conserved.of_eq
-      (benvAfterTransfer_preserves_getStor transfer vault).symm
+      (benvAfterTransfer_preserves_getStor transfer vault
+        (Or.inr hprot)).symm
 
 /-- **Vault call preserves the ledger (interpreted message).**  From a
 retained interpreted slot, the committing case exposes its gas-exact run
-to the one-message rung; the noncommitting case rolls back. -/
+to the one-message rung; the noncommitting case rolls back.  Message entry
+needs the vault protected (SA). -/
 theorem vault_processMessage_some_preserves_conserved
     {vault : Adr} {msg : Msg} {post : Devm}
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
@@ -747,11 +754,12 @@ theorem vault_processMessage_some_preserves_conserved
     (wethCode : (msg.benv.state.getCode wethAccount).toList = Blanc.wethCode)
     (hfork : CoveredFork msg.benv.stat.fork)
     (conserved : LedgerConserved Blanc.ProrataWethVault.supplySlot
-      (msg.benv.state.getStor vault)) :
+      (msg.benv.state.getStor vault))
+    (hprot : State.Protected msg.benv.state vault) :
     LedgerConserved Blanc.ProrataWethVault.supplySlot
       (post.state.getStor vault) := by
   obtain ⟨pcEq, sevmCode, sevmTarget, _, _, _, storEq, memoryWf⟩ :=
-    MessageExecution.processMessage_entry_facts vault process
+    MessageExecution.processMessage_entry_facts vault (Or.inr hprot) process
   by_cases settles : Frame.settlementCommits (Frame.ofCall msg) out = true
   · have committed := Frame.raw_commits_of_settlementCommits settles
     cases out with

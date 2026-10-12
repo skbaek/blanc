@@ -6634,6 +6634,7 @@ example
     (nonprecompile : sevm.benvStat.rules.isPrecomp target = false)
     (installed : entry.getCode target =
       Blanc.Composition.LidoCircuitBreakerTwg.gatewayCode dp)
+    (ownerInstalled : (entry.getCode sevm.currentTarget).toList ≠ [])
     (targetWindow : MemWordAt entry (targetWord * 32).toNat target.toB256)
     (durationWindow : MemWordAt entry (durationWord * 32).toNat duration)
     (dynamic : sevm.isStatic = false)
@@ -6641,7 +6642,8 @@ example
     LidoPinnedBoundaryExecutions fs sevm entry target
       (LidoTriggerableWithdrawalsGateway.runtime dp) duration (.ok final) :=
   Blanc.Composition.LidoCircuitBreakerTwg.gatewayBoundaryExecutions_of_afterSet_ok hfork h_empty
-    h_bubble targetNe nonprecompile installed targetWindow durationWindow dynamic run
+    h_bubble targetNe nonprecompile installed ownerInstalled targetWindow durationWindow
+    dynamic run
 
 example
     {sevm : Sevm} {pre final : Devm} {owner : Adr}
@@ -6655,13 +6657,19 @@ example
     (targetNe : target.toAdr ≠ sevm.currentTarget)
     (nonprecompile : sevm.benvStat.rules.isPrecomp target.toAdr = false)
     (publicRun : Prog.RunCompiledTo sevm pre (runtime officialParams) ex)
-    (success : ex = .ok final) :
+    (success : ex = .ok final)
+    (entry : Devm)
+    (reachedAt : PublicPauseAfterSetAt
+      ((runtime officialParams).main :: (runtime officialParams).aux)
+      sevm pre target duration
+      (Blanc.Composition.LidoCircuitBreakerTwg.gatewayCode dp) ex entry)
+    (ownerInstalled : (entry.getCode sevm.currentTarget).toList ≠ []) :
     PublicPausePinnedTargetConclusion sevm pre target duration
       (Blanc.Composition.LidoCircuitBreakerTwg.gatewayCode dp)
       (LidoTriggerableWithdrawalsGateway.runtime dp)
       LidoTriggerableWithdrawalsGateway.pausedUntil ex final :=
   Blanc.Composition.LidoCircuitBreakerTwg.publicPause_gatewayPinnedTarget hfork premises targetNe
-    nonprecompile publicRun success
+    nonprecompile publicRun success entry reachedAt ownerInstalled
 
 /-! Reachability closure: the finite concrete world now supplies the production
 run, exact after-set cut, boundary executions, noninterference and headline

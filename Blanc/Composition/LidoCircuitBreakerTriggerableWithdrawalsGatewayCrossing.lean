@@ -60,6 +60,56 @@ theorem gatewayPauseKeys_union_resume_mem
     (target, resumeSinceSlot)
     (gatewayPauseKeys_resume_mem keys target caller)
 
+/-- Delegation resolution leaves the created-account set alone (hoisting
+candidate; private twins live in `LidoCircuitBreakerPauseWorld` and
+`LidoCircuitBreakerPinnedTargetStubCrossing`). -/
+private lemma gatewayCrossing_accessDelegation_createdAccounts {devm d1 : Devm}
+    {a dadr : Adr} {dp : Bool} {code : ByteArray} {dgc : Nat}
+    (h : accessDelegation devm a = ⟨dp, dadr, code, dgc, d1⟩) :
+    d1.createdAccounts = devm.createdAccounts := by
+  unfold accessDelegation at h
+  rcases hd : getDelegatedCodeAddress (devm.state.getCode a) with _ | adr <;>
+    simp only [hd] at h
+  · cases h
+    rfl
+  · cases h
+    rfl
+
+/-- `SSTORE` leaves the created-account set alone (hoisting candidate; a
+private twin lives in `Lift/WithdrawalRequest/FloodWalk`). -/
+private lemma gatewayCrossing_afterSstore_createdAccounts (sevm : Sevm)
+    (b : Devm) (key value : B256) :
+    (afterSstore sevm b key value).createdAccounts = b.createdAccounts := by
+  unfold afterSstore
+  split <;> rfl
+
+private lemma gatewayCrossing_pauseResumeWarm_createdAccounts (sevm : Sevm)
+    (base : Devm) :
+    (pauseResumeWarm sevm base).createdAccounts = base.createdAccounts := by
+  unfold pauseResumeWarm pauseRoleWarm addAccessedStorageKey
+  rfl
+
+private lemma gatewayCrossing_pauseSentinelPost_createdAccounts (sevm : Sevm)
+    (base : Devm) (G : Nat) :
+    (pauseSentinelPost sevm base G).createdAccounts = base.createdAccounts := by
+  unfold pauseSentinelPost
+  rw [Devm.setMach_createdAccounts,
+    show ∀ (d : Devm) (l : Log), (d.addLog l).createdAccounts =
+      d.createdAccounts from fun _ _ => rfl,
+    gatewayCrossing_afterSstore_createdAccounts,
+    gatewayCrossing_pauseResumeWarm_createdAccounts]
+
+private lemma gatewayCrossing_pauseFinitePost_createdAccounts (sevm : Sevm)
+    (base : Devm) (duration : B256) (G : Nat) :
+    (pauseFinitePost sevm base duration G).createdAccounts =
+      base.createdAccounts := by
+  unfold pauseFinitePost pauseLogged pauseStored
+  rw [Devm.setMach_createdAccounts,
+    show ∀ (d : Devm) (l : Log), (d.addLog l).createdAccounts =
+      d.createdAccounts from fun _ _ => rfl,
+    gatewayCrossing_afterSstore_createdAccounts,
+    gatewayCrossing_pauseResumeWarm_createdAccounts]
+
 /-- The value-zero \`CALL\` crossing whose child is the exact compiled gateway
 on its cold, authorized finite \`pauseFor(uint256)\` route. -/
 private lemma runCompiled_call_zero_value_gatewayPause
@@ -126,22 +176,17 @@ private lemma runCompiled_call_zero_value_gatewayPause
       (∀ a, a ∈ post.accessedAddresses ↔ a ∈ d1.accessedAddresses) ∧
       post.getStorVal cw.toAdr resumeSinceSlot =
         pauseForProjection sevm.benvStat.time duration ∧
-      ∃ stmid,
-        devm.state.subBal sevm.currentTarget 0 = some stmid ∧
-        post.state = (stmid.addBal cw.toAdr 0).setStorVal cw.toAdr
-          resumeSinceSlot
-            (pauseForProjection sevm.benvStat.time duration) := by
+      post.state = devm.state.setStorVal cw.toAdr resumeSinceSlot
+        (pauseForProjection sevm.benvStat.time duration) ∧
+      post.createdAccounts = devm.createdAccounts := by
   let p := callSpawnParent d1 (mcc + ext)
     iiw.toNat isw.toNat oiw.toNat osw.toNat
   let msg := callSpawnMsg sevm p mcs cw.toAdr dadr
     iiw.toNat isw.toNat code delegated
-  have h_afford : ¬ msg.benv.state.bal msg.caller < msg.value := by
-    change ¬ (d1.getAcct sevm.currentTarget).bal < 0
-    rw [B256.lt_iff_toNat_lt_toNat]
-    exact Nat.not_lt.mpr (Nat.zero_le _)
-  obtain ⟨stmid, hsub, hbt⟩ :=
-    Msg.benvAfterTransfer_of_affordable msg rfl h_afford
-  let benv' := (msg.benv.withState stmid).addBal msg.currentTarget msg.value
+  have hbt : msg.benvAfterTransfer = .ok msg.benv :=
+    Msg.benvAfterTransfer_of_value_zero rfl
+  let benv' := msg.benv
+  have hd1state' : d1.state = devm.state := (accessDelegation_frame h_del).1
   let childMsg := msg.withBenv benv'
   let childSevm := initSevm childMsg
   let childBase := initDevm childMsg
@@ -158,17 +203,9 @@ private lemma runCompiled_call_zero_value_gatewayPause
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] from
         callSpawnParent_memory]
     exact h_data
-  have hsubD1 : d1.state.subBal sevm.currentTarget 0 = some stmid := by
-    have hsubP : p.state.subBal sevm.currentTarget 0 = some stmid := by
-      simpa only [msg, callSpawnMsg, callMsg, Bool.false_or] using hsub
-    rw [show p.state = d1.state from rfl] at hsubP
-    exact hsubP
   have hchildStor (key : B256) :
-      childBase.getStorVal cw.toAdr key = d1.getStorVal cw.toAdr key := by
-    change ((stmid.addBal cw.toAdr 0).get cw.toAdr).stor.get key =
-      (d1.state.get cw.toAdr).stor.get key
-    unfold State.addBal
-    rw [State.setBal_get_stor, state_subBal_stor hsubD1]
+      childBase.getStorVal cw.toAdr key = d1.getStorVal cw.toAdr key :=
+    rfl
   have hchildTarget : childSevm.currentTarget = cw.toAdr := rfl
   have hchildCaller : childSevm.caller = sevm.currentTarget := rfl
   have hchildTime : childSevm.benvStat.time = sevm.benvStat.time := rfl
@@ -190,6 +227,9 @@ private lemma runCompiled_call_zero_value_gatewayPause
       getOrigStorVal childSevm childSevm.currentTarget resumeSinceSlot = 0 := by
     change getOrigStorVal sevm cw.toAdr resumeSinceSlot = 0
     exact h_original
+  have hchildOriginalBase : childBase.getOrigStorVal childSevm
+      childSevm.currentTarget resumeSinceSlot = 0 :=
+    actualOrigStorVal_eq_zero_of_raw hchildOriginal
   have hchildColdResume : (childSevm.currentTarget, resumeSinceSlot) ∉
       (pauseRoleWarm childSevm childBase).accessedStorageKeys := by
     change (cw.toAdr, resumeSinceSlot) ∉
@@ -265,7 +305,7 @@ private lemma runCompiled_call_zero_value_gatewayPause
     rw [← houtDef]
     simp only [exactOut, gatewayPauseChildPost]
     split <;> simp only [pauseSentinelPost_refundCounter,
-      pauseFinitePost_refundCounter, hchildOriginal, hchildResume]
+      pauseFinitePost_refundCounter, hchildOriginalBase, hchildResume]
     all_goals
       unfold sstoreNewRefundCounter
       have hrefundBase : childBase.refundCounter = 0 := rfl
@@ -291,18 +331,20 @@ private lemma runCompiled_call_zero_value_gatewayPause
     simp only [exactOut, gatewayPauseChildPost]
     split <;> simp only [pauseSentinelPost_transientStorage, pauseFinitePost_transientStorage] <;> rfl
   have hstateOut : out.state =
-      (stmid.addBal cw.toAdr 0).setStorVal cw.toAdr resumeSinceSlot
+      devm.state.setStorVal cw.toAdr resumeSinceSlot
         (pauseForProjection sevm.benvStat.time duration) := by
     rw [← houtDef]
     simp only [exactOut, gatewayPauseChildPost]
     split
     · rename_i hinfinite
-      rw [pauseSentinelPost_state, hchildTarget, pauseForProjection,
-        if_pos hinfinite]
+      rw [pauseSentinelPost_state, hchildTarget]
+      change d1.state.setStorVal _ _ _ = _
+      rw [hd1state', pauseForProjection, if_pos hinfinite]
       rfl
     · rename_i hfinite
-      rw [pauseFinitePost_state, hchildTarget, hchildTime,
-        pauseForProjection, if_neg hfinite]
+      rw [pauseFinitePost_state, hchildTarget, hchildTime]
+      change d1.state.setStorVal _ _ _ = _
+      rw [hd1state', pauseForProjection, if_neg hfinite]
       congr 1
       exact B256.add_comm (xs := duration) (ys := sevm.benvStat.time)
   have heffectOut : out.getStorVal cw.toAdr resumeSinceSlot =
@@ -360,8 +402,8 @@ private lemma runCompiled_call_zero_value_gatewayPause
     Ninst.runCompiled_call_zero_value hfork h_stk h_ext h_del h_acc h_split h_gas
       h_depth (by simpa only [p, msg] using henter)
       (by simpa only [p, msg] using hres)
-  refine ⟨post, hrun, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
-    ?_, ?_, stmid, ?_, ?_⟩
+  refine ⟨post, hrun, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
+    ?_, ?_, ?_, ?_, ?_⟩
   · rw [Devm.memWrite_stack, Devm.stack_setMach]
     change 1 :: d1.stack = 1 :: s
     rw [hd1stack]
@@ -407,13 +449,17 @@ private lemma runCompiled_call_zero_value_gatewayPause
       fun h => Std.HashSet.mem_union_iff.mpr (Or.inl h)⟩
   · change out.getStorVal cw.toAdr resumeSinceSlot = _
     exact heffectOut
-  · rw [← hd1state]
-    have hsub' : p.state.subBal sevm.currentTarget 0 = some stmid := by
-      simpa only [msg, callSpawnMsg, callMsg, Bool.false_or] using hsub
-    rw [show p.state = d1.state from rfl] at hsub'
-    exact hsub'
   · change out.state = _
     exact hstateOut
+  · change out.createdAccounts = devm.createdAccounts
+    have hc : out.createdAccounts = d1.createdAccounts := by
+      rw [← houtDef]
+      simp only [exactOut, gatewayPauseChildPost]
+      split
+      · exact gatewayCrossing_pauseSentinelPost_createdAccounts _ _ _
+      · exact gatewayCrossing_pauseFinitePost_createdAccounts _ _ _ _
+    have hd := gatewayCrossing_accessDelegation_createdAccounts h_del
+    exact hc.trans hd
 
 /-- Resolve the warm, non-delegated parent `CALL` completely.  The parent
 charge is the warm access `100` plus the compiled gateway's `25598`. -/
@@ -474,11 +520,9 @@ private lemma gatewayPause_call_crossing
         a ∈ devm.accessedAddresses) ∧
       post.getStorVal target.toAdr resumeSinceSlot =
         pauseForProjection sevm.benvStat.time duration ∧
-      ∃ stmid,
-        devm.state.subBal sevm.currentTarget 0 = some stmid ∧
-        post.state = (stmid.addBal target.toAdr 0).setStorVal target.toAdr
-          resumeSinceSlot
-            (pauseForProjection sevm.benvStat.time duration) := by
+      post.state = devm.state.setStorVal target.toAdr resumeSinceSlot
+        (pauseForProjection sevm.benvStat.time duration) ∧
+      post.createdAccounts = devm.createdAccounts := by
   have hnodel : getDelegatedCodeAddress
       ((devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
         target.toAdr) = none := by
@@ -561,7 +605,7 @@ private lemma gatewayPause_call_crossing
         { sevm with currentTarget := target.toAdr, caller := sevm.currentTarget }
         d0).accessedStorageKeys := hcoldResume
   obtain ⟨post, hrun, hstack, hmem, hgasl, herr, hout, hret, hlogs,
-    hrefund, hatd, htrans, hask, haa, heffect, stmid, hsub, hstate⟩ :=
+    hrefund, hatd, htrans, hask, haa, heffect, hstate, hcreated⟩ :=
     runCompiled_call_zero_value_gatewayPause (hfork := hfork)
       (gw := Nat.toB256 G) (cw := target) (duration := duration)
       hstk
@@ -574,7 +618,7 @@ private lemma gatewayPause_call_crossing
       hd0resume horiginal
       hd0coldResume hdynamic hduration hnew htime hroom
   refine ⟨post, hrun, hstack, hmem, ?_, herr, hout, hret, hlogs, hrefund,
-    hatd, htrans, hask, ?_, heffect, stmid, hsub, hstate⟩
+    hatd, htrans, hask, ?_, heffect, hstate, hcreated⟩
   · rw [hgasl, hd0gas]
     exact hgasout
   · intro a
@@ -637,20 +681,15 @@ private lemma runCompiled_statcall_gatewayQuery
       (∀ k, k ∈ post.accessedStorageKeys ↔ k ∈ devm.accessedStorageKeys) ∧
       (∀ a, a ∈ post.accessedAddresses ↔ a ∈ d1.accessedAddresses) ∧
       post.getStorVal tw.toAdr resumeSinceSlot = storedUntil ∧
-      ∃ stmid,
-        devm.state.subBal sevm.currentTarget 0 = some stmid ∧
-        post.state = stmid.addBal tw.toAdr 0 := by
+      post.state = devm.state ∧
+      post.createdAccounts = devm.createdAccounts := by
   let p := callSpawnParent d1 (mcc + ext)
     iiw.toNat isw.toNat oiw.toNat osw.toNat
   let msg := staticcallSpawnMsg sevm p mcs tw.toAdr dadr
     iiw.toNat isw.toNat code dp
-  have h_afford : ¬ msg.benv.state.bal msg.caller < msg.value := by
-    change ¬ (d1.getAcct sevm.currentTarget).bal < 0
-    rw [B256.lt_iff_toNat_lt_toNat]
-    exact Nat.not_lt.mpr (Nat.zero_le _)
-  obtain ⟨stmid, hsub, hbt⟩ :=
-    Msg.benvAfterTransfer_of_affordable msg rfl h_afford
-  let benv' := (msg.benv.withState stmid).addBal msg.currentTarget msg.value
+  have hbt : msg.benvAfterTransfer = .ok msg.benv :=
+    Msg.benvAfterTransfer_of_value_zero rfl
+  let benv' := msg.benv
   let childMsg := msg.withBenv benv'
   let child := initEvm childMsg
   have henter : (Frame.ofCall msg).enter = .run child := by
@@ -665,19 +704,10 @@ private lemma runCompiled_statcall_gatewayQuery
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] from
         callSpawnParent_memory]
     exact h_data
-  have hsubD1 : d1.state.subBal sevm.currentTarget 0 = some stmid := by
-    have hsubP : p.state.subBal sevm.currentTarget 0 = some stmid := by
-      simpa only [msg, staticcallSpawnMsg, callMsg, Bool.true_or] using hsub
-    rw [show p.state = d1.state from rfl] at hsubP
-    exact hsubP
   have hchildStored :
       (initDevm childMsg).getStorVal tw.toAdr resumeSinceSlot =
-        storedUntil := by
-    change ((stmid.addBal tw.toAdr 0).get tw.toAdr).stor.get
-      resumeSinceSlot = storedUntil
-    unfold State.addBal
-    rw [State.setBal_get_stor, state_subBal_stor hsubD1]
-    exact h_stored
+        storedUntil :=
+    h_stored
   have hchildWarm :
       (tw.toAdr, resumeSinceSlot) ∈
         (initDevm childMsg).accessedStorageKeys := by
@@ -738,10 +768,8 @@ private lemma runCompiled_statcall_gatewayQuery
       (initDevm childMsg).transientStorage from
       congrArg (fun world => world.transientStorage) hworldOut]
     rfl
-  have hstateOut : out.state = stmid.addBal tw.toAdr 0 := by
-    rw [show out.state = (initDevm childMsg).state from
-      congrArg (fun world => world.state) hworldOut]
-    rfl
+  have hstateOut : out.state = (initDevm childMsg).state :=
+    congrArg (fun world => world.state) hworldOut
   have herr0 : out.error = none := by
     rw [herr]
     rfl
@@ -786,8 +814,8 @@ private lemma runCompiled_statcall_gatewayQuery
         h_depth)
       (by simpa only [p, msg] using henter)
       (by simpa only [p, msg] using hres)
-  refine ⟨post, hrun, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
-    ?_, stmid, ?_, ?_⟩
+  refine ⟨post, hrun, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
+    ?_, ?_, ?_, ?_, ?_⟩
   · rw [Devm.memWrite_stack, Devm.stack_setMach]
     change 1 :: d1.stack = 1 :: s
     rw [hd1stack]
@@ -835,13 +863,16 @@ private lemma runCompiled_statcall_gatewayQuery
       fun h => Std.HashSet.mem_union_iff.mpr (Or.inl h)⟩
   · change out.getStorVal tw.toAdr resumeSinceSlot = storedUntil
     exact heffectOut
-  · rw [← hd1state]
-    have hsub' : p.state.subBal sevm.currentTarget 0 = some stmid := by
-      simpa only [msg, staticcallSpawnMsg, callMsg, Bool.true_or] using hsub
-    rw [show p.state = d1.state from rfl] at hsub'
-    exact hsub'
-  · change out.state = stmid.addBal tw.toAdr 0
-    exact hstateOut
+  · change out.state = devm.state
+    rw [hstateOut, show (initDevm childMsg).state = d1.state from rfl,
+      hd1state]
+  · change out.createdAccounts = devm.createdAccounts
+    rw [show out.createdAccounts =
+      ((initDevm childMsg).withOutput
+        (1 : B256).toBytes).createdAccounts from
+      congrArg (fun view => view.createdAccounts) hmetaOut]
+    have hd := gatewayCrossing_accessDelegation_createdAccounts h_del
+    exact hd
 
 /-- Resolve the warm, non-delegated parent `STATICCALL` completely.  The
 parent charge is the warm access `100` plus the compiled gateway's `242`. -/
@@ -884,9 +915,8 @@ private lemma gatewayQuery_statcall_crossing
       (∀ k, k ∈ post.accessedStorageKeys ↔ k ∈ devm.accessedStorageKeys) ∧
       (∀ a, a ∈ post.accessedAddresses ↔ a ∈ devm.accessedAddresses) ∧
       post.getStorVal target.toAdr resumeSinceSlot = storedUntil ∧
-      ∃ stmid,
-        devm.state.subBal sevm.currentTarget 0 = some stmid ∧
-        post.state = stmid.addBal target.toAdr 0 := by
+      post.state = devm.state ∧
+      post.createdAccounts = devm.createdAccounts := by
   have hnodel : getDelegatedCodeAddress
       ((devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).state.getCode
         target.toAdr) = none := by
@@ -957,7 +987,7 @@ private lemma gatewayQuery_statcall_crossing
   have hd0warmSlot : (target.toAdr, resumeSinceSlot) ∈
       d0.accessedStorageKeys := by exact hwarmSlot
   obtain ⟨post, hrun, hstack, hmem, hgasl, herr, hout, hret, hlogs,
-    hrefund, hatd, htrans, hask, haa, heffect, stmid, hsub, hstate⟩ :=
+    hrefund, hatd, htrans, hask, haa, heffect, hstate, hcreated⟩ :=
     runCompiled_statcall_gatewayQuery (hfork := hfork)
       (gw := Nat.toB256 G) (tw := target) (storedUntil := storedUntil)
       hstk
@@ -969,7 +999,7 @@ private lemma gatewayQuery_statcall_crossing
       hmcs (by simpa only [hd0mem] using hdata) hd0stored hd0warmSlot
       hpaused hroom
   refine ⟨post, hrun, hstack, hmem, ?_, herr, hout, hret, hlogs, hrefund,
-    hatd, htrans, hask, ?_, heffect, stmid, hsub, hstate⟩
+    hatd, htrans, hask, ?_, heffect, hstate, hcreated⟩
   · rw [hgasl, hd0gas]
     exact hgasout
   · intro a
@@ -1003,9 +1033,108 @@ private theorem installedCodeGuard_runCompiled
     rw [hg]
     exact htail
 
-/-- The complete `pauseAfterSet` suffix when both external boundaries execute
-the installed source-compiled Triggerable Withdrawals Gateway. -/
-theorem pauseAfterSet_gateway_toSuccess_runCompiled
+/-! ## Zero-value balance writes at protected accounts (repin `ca9f27d`, SA)
+
+Under Jaune `ca9f27d` a balance write normalizes an emptied account away with
+its storage.  At a `State.Protected` account a balance write of the current
+balance is nevertheless the identity on the whole world.  The world is a
+`Std.TreeMap`, which has no public extensionality principle, so the identity is
+proved structurally: re-inserting a present key with its own value rebuilds
+exactly the same balanced tree.  Hoisting candidates for `CommonProofs`. -/
+
+open Std.DTreeMap.Internal in
+/-- Re-inserting a present key with its stored value is the identity on the
+raw balanced tree. -/
+private theorem impl_insert!_eq_self_of_get? {β : Type} :
+    ∀ (t : Impl Adr (fun _ => β)), t.Balanced → ∀ (k : Adr) (v : β),
+      Impl.Const.get? t k = some v → Impl.insert! k v t = t
+  | .leaf, _, k, v, h => by simp [Impl.Const.get?] at h
+  | .inner sz k' v' l r, hb, k, v, h => by
+    obtain ⟨hl, hr, hroot, _⟩ := Impl.balanced_inner_iff.mp hb
+    unfold Impl.Const.get? at h
+    unfold Impl.insert!
+    split at h
+    · rename_i hc
+      rw [hc]
+      simp only
+      rw [impl_insert!_eq_self_of_get? l hl k v h,
+        Impl.balanceL!_eq_balance! hl hr
+          (Impl.BalanceLPrecond.erase (Or.inl hroot)),
+        ← Impl.balance_eq_balance! (hlb := hl) (hrb := hr)
+          (hlr := Or.inl (Impl.BalanceLPrecond.erase (Or.inl hroot)))]
+      exact Impl.balance_eq_inner hb
+    · rename_i hc
+      rw [hc]
+      simp only
+      rw [impl_insert!_eq_self_of_get? r hr k v h,
+        Impl.balanceR!_eq_balance! hl hr
+          (Impl.BalanceLPrecond.erase (Or.inl hroot.symm)),
+        ← Impl.balance_eq_balance! (hlb := hl) (hrb := hr)
+          (hlr := Or.inr (Impl.BalanceLPrecond.erase (Or.inl hroot.symm)))]
+      exact Impl.balance_eq_inner hb
+    · rename_i hc
+      rw [hc]
+      simp only [Option.some.injEq] at h
+      have hk : k = k' := Std.LawfulEqCmp.eq_of_compare hc
+      subst hk h
+      rfl
+
+open Std.DTreeMap.Internal in
+/-- Re-inserting a present account with its stored value is the identity. -/
+private theorem state_insert_eq_self {st : State} {a : Adr} {ac : Acct}
+    (h : st[a]? = some ac) : st.insert a ac = st := by
+  rcases st with ⟨⟨t, wf⟩⟩
+  have hi := impl_insert!_eq_self_of_get? t wf.balanced a ac h
+  show (⟨⟨(t.insert a ac wf.balanced).impl, _⟩⟩ : State) = ⟨⟨t, wf⟩⟩
+  congr 2
+  rw [Impl.insert_eq_insert!, hi]
+
+/-- Writing a protected account's own balance back is the identity. -/
+private theorem state_setBal_bal_eq_of_protected {st : State} {a : Adr}
+    (hp : State.Protected st a) : st.setBal a (st.bal a) = st := by
+  have hnb : ¬ (st.get a).Empty := by
+    rintro hE
+    rcases hp with hn | hc
+    · exact hn hE.2.1
+    · exact hc hE.1
+  have hnnil : st.get a ≠ .nil := by
+    rintro hnil
+    apply hnb
+    rw [hnil]
+    exact ⟨by rfl, by rfl, by rfl⟩
+  have hmem : st[a]? = some (st.get a) := by
+    unfold State.get at hnnil ⊢
+    rw [Std.TreeMap.getD_eq_getD_getElem?] at hnnil ⊢
+    cases h : st[a]? with
+    | none => rw [h] at hnnil; exact absurd rfl hnnil
+    | some v => rfl
+  unfold State.setBal State.setAccount State.set
+  have hwb : (st.get a).withBal (st.bal a) = st.get a := rfl
+  have hclear : (st.get a).clearIfEmpty = st.get a := by
+    unfold Acct.clearIfEmpty
+    simp only [hnb, ↓reduceIte]
+  rw [hwb, hclear]
+  simp only [hnnil, ↓reduceIte]
+  exact state_insert_eq_self hmem
+
+/-- A zero-value debit of a protected account is the identity. -/
+private theorem state_subBal_zero_of_protected {st : State} {a : Adr}
+    (hp : State.Protected st a) : st.subBal a 0 = some st := by
+  unfold State.subBal
+  rw [if_neg (not_lt.mpr (B256.zero_le _)), B256.sub_zero,
+    state_setBal_bal_eq_of_protected hp]
+
+/-- A zero-value credit of a protected account is the identity. -/
+private theorem state_addBal_zero_of_protected {st : State} {a : Adr}
+    (hp : State.Protected st a) : st.addBal a 0 = st := by
+  unfold State.addBal
+  rw [B256.add_zero, state_setBal_bal_eq_of_protected hp]
+
+/-- `pauseAfterSet_gateway_toSuccess_runCompiled` together with the
+intermediate machine's created-account set and exact world, which the concrete
+worlds need for the machine's actual original-storage reads (cause OS) and the
+owner's storage (cause SA/ZV). -/
+theorem pauseAfterSet_gateway_toSuccess_runCompiled_created
     (fs : List Func) (sevm : Sevm) (base : Devm)
     (hfork : CoveredFork sevm.benvStat.fork)
     (target duration : B256) (M : Mem) (img : Bytes)
@@ -1038,8 +1167,12 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
     (hdepth : sevm.depth ≠ 0)
     (hnp : sevm.benvStat.rules.isPrecomp target.toAdr = false)
     (hgasfloor : 46 ≤ Gb)
-    (hbound : Gb + gatewayPauseChildCost duration + 526 < 2 ^ 256) :
+    (hbound : Gb + gatewayPauseChildCost duration + 526 < 2 ^ 256)
+    (hprot : State.Protected base.state sevm.currentTarget) :
     ∃ mid : Devm,
+      mid.createdAccounts = base.createdAccounts ∧
+      mid.state = base.state.setStorVal target.toAdr resumeSinceSlot
+        (pauseForProjection sevm.benvStat.time duration) ∧
       mid.stack = [] ∧
       mid.memory = pauseDecodedMemory M duration ∧
       mid.gasLeft = Gb - 41 ∧
@@ -1206,8 +1339,7 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
     rw [controlGatewayCode_size]
     decide +kernel
   obtain ⟨post1, hrun1, hstk1, hmem1, hgas1, herr1, hout1, hret1, hlogs1,
-    hrefund1, hatd1, htrans1, hask1, haa1, heffect1, st₁, hsub1,
-    hstate1⟩ :=
+    hrefund1, hatd1, htrans1, hask1, haa1, heffect1, hstate1, hcreated1⟩ :=
     gatewayPause_call_crossing (hfork := hfork) (sevm := sevm)
       (devm := (temporalAccountAccessBase base target.toAdr).setMach
         ⟨[Nat.toB256 (Gb + gatewayPauseChildCost duration + 526),
@@ -1279,21 +1411,17 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
     rw [← hstk1, ← hmem1', ← hgas1']
     rfl
   have hcode1 : post1.state.getCode target.toAdr = gatewayCode controlDeployParams := by
-    have hwriteCode :
-        ((st₁.addBal target.toAdr 0).setStorVal target.toAdr
-          resumeSinceSlot
-            (pauseForProjection sevm.benvStat.time duration)).getCode
-            target.toAdr =
-          (st₁.addBal target.toAdr 0).getCode target.toAdr := by
+    have hwriteCode {w : State} :
+        (w.setStorVal target.toAdr resumeSinceSlot
+          (pauseForProjection sevm.benvStat.time duration)).getCode
+          target.toAdr = w.getCode target.toAdr := by
       unfold State.getCode
       have h := congrFun
-        (State.setStorVal_balCodeEq (st₁.addBal target.toAdr 0)
-          target.toAdr resumeSinceSlot
-            (pauseForProjection sevm.benvStat.time duration))
+        (State.setStorVal_balCodeEq w target.toAdr resumeSinceSlot
+          (pauseForProjection sevm.benvStat.time duration))
         target.toAdr
       exact (congrArg Prod.snd h).symm
-    rw [hstate1, hwriteCode, State.addBal_getCode,
-      State.subBal_getCode hsub1]
+    rw [hstate1, hwriteCode]
     show (temporalAccountAccessBase base target.toAdr).state.getCode
       target.toAdr = gatewayCode controlDeployParams
     rw [temporalAccountAccessBase_state]
@@ -1310,8 +1438,7 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
           target.toAdr sevm.currentTarget.toB256) = _
     rw [temporalAccountAccessBase_accessedStorageKeys]
   obtain ⟨post2, hrun2, hstk2, hmem2, hgas2, herr2, hout2, hret2, hlogs2,
-    hrefund2, hatd2, htrans2, hask2, haa2, heffect2, st₂, hsub2,
-    hstate2⟩ :=
+    hrefund2, hatd2, htrans2, hask2, haa2, heffect2, hstate2', hcreated2⟩ :=
     gatewayQuery_statcall_crossing (hfork := hfork) (sevm := sevm)
       (devm := post1.setMach
         ⟨[Nat.toB256 (Gb + 382), target, 284, 4, 0, 32],
@@ -1414,19 +1541,68 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
     show a ∈ (temporalAccountAccessBase base target.toAdr
       ).accessedAddresses ↔ (a = target.toAdr ∨ a ∈ base.accessedAddresses)
     exact temporalAccountAccessBase_mem base target.toAdr a
-  have hsub1' : base.state.subBal sevm.currentTarget 0 = some st₁ := by
-    rw [← temporalAccountAccessBase_state base target.toAdr]
-    exact hsub1
-  have hsub2' :
-      ((st₁.addBal target.toAdr 0).setStorVal target.toAdr resumeSinceSlot
-        (pauseForProjection sevm.benvStat.time duration)).subBal
-          sevm.currentTarget 0 =
-          some st₂ := by
-    rw [← hstate1]
-    exact hsub2
+  -- Both zero-value boundaries leave the world unchanged (ZV), so the
+  -- intermediate world is the base world with the gateway's pause word.  The
+  -- conclusion's zero-value debit/credit chain is the identity on it: the
+  -- CircuitBreaker owner is protected by `hprot` (decision
+  -- blanc-composition-twg2-protected-20261012, cause SA) and the gateway by its
+  -- installed code.
+  have hprotTarget {s : State}
+      (hs : s.getCode target.toAdr = gatewayCode controlDeployParams) :
+      State.Protected s target.toAdr := by
+    refine Or.inr ?_
+    show (s.getCode target.toAdr).size ≠ 0
+    rw [hs, controlGatewayCode_size]
+    omega
+  have hpost1 : post1.state = base.state.setStorVal target.toAdr
+      resumeSinceSlot (pauseForProjection sevm.benvStat.time duration) := by
+    rw [hstate1]
+    show (temporalAccountAccessBase base target.toAdr).state.setStorVal _ _ _ = _
+    rw [temporalAccountAccessBase_state]
+  have hpost2 : post2.state = base.state.setStorVal target.toAdr
+      resumeSinceSlot (pauseForProjection sevm.benvStat.time duration) := by
+    rw [hstate2']
+    exact hpost1
+  have hcodeS : (base.state.setStorVal target.toAdr resumeSinceSlot
+      (pauseForProjection sevm.benvStat.time duration)).getCode target.toAdr =
+      gatewayCode controlDeployParams := by
+    rw [← hpost1]
+    exact hcode1
+  have hprotS : State.Protected (base.state.setStorVal target.toAdr
+      resumeSinceSlot (pauseForProjection sevm.benvStat.time duration))
+      sevm.currentTarget := by
+    by_cases h : target.toAdr = sevm.currentTarget
+    · rw [← h]
+      exact hprotTarget hcodeS
+    · unfold State.Protected State.setStorVal
+      rw [State.get_set_ne _ h]
+      exact hprot
+  have hsub1' : base.state.subBal sevm.currentTarget 0 = some base.state :=
+    state_subBal_zero_of_protected hprot
+  have hsub2' : ((base.state.addBal target.toAdr 0).setStorVal target.toAdr
+      resumeSinceSlot (pauseForProjection sevm.benvStat.time duration)).subBal
+        sevm.currentTarget 0 =
+      some (base.state.setStorVal target.toAdr resumeSinceSlot
+        (pauseForProjection sevm.benvStat.time duration)) := by
+    rw [state_addBal_zero_of_protected (hprotTarget hgatewayCode)]
+    exact state_subBal_zero_of_protected hprotS
+  have hstate2 : (post2.setMach ⟨[], pauseDecodedMemory M duration, Gb - 41,
+      post2.stateGas⟩).state =
+      (base.state.setStorVal target.toAdr resumeSinceSlot
+        (pauseForProjection sevm.benvStat.time duration)).addBal
+          target.toAdr 0 := by
+    rw [state_addBal_zero_of_protected (hprotTarget hcodeS)]
+    exact hpost2
+  have hcreatedB : post2.createdAccounts = base.createdAccounts := by
+    rw [hcreated2]
+    show post1.createdAccounts = base.createdAccounts
+    rw [hcreated1]
+    show (temporalAccountAccessBase base target.toAdr).createdAccounts = _
+    unfold temporalAccountAccessBase Lift.temporalAccountAccessBase
+    split <;> rfl
   refine ⟨post2.setMach ⟨[], pauseDecodedMemory M duration, Gb - 41, post2.stateGas⟩,
-    rfl, rfl, rfl, herrB, houtB, hret2, hlogsB, hrefundB, hatdB, htransB,
-    haskB, haaB, ?_, ⟨st₁, st₂, hsub1', hsub2', hstate2⟩, ?_⟩
+    hcreatedB, hpost2, rfl, rfl, rfl, herrB, houtB, hret2, hlogsB, hrefundB, hatdB, htransB,
+    haskB, haaB, ?_, ⟨base.state, _, hsub1', hsub2', hstate2⟩, ?_⟩
   · simpa only [Devm.getStorVal_setMach] using heffect2
   intro post hwalk
   have hC : Func.RunCompiled fs sevm
@@ -1604,5 +1780,82 @@ theorem pauseAfterSet_gateway_toSuccess_runCompiled
         Gb + gatewayPauseChildCost duration + 585 + codeCost := by omega
     rw [hg]
     exact Func.RunCompiled.next hextStep hA2
+
+/-- The complete `pauseAfterSet` suffix when both external boundaries execute
+the installed source-compiled Triggerable Withdrawals Gateway. -/
+theorem pauseAfterSet_gateway_toSuccess_runCompiled
+    (fs : List Func) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (target duration : B256) (M : Mem) (img : Bytes)
+    (codeCost Gb : Nat)
+    (hwf : Mem.Wf M)
+    (hreads : Mem.Reads M img)
+    (htarget : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (hduration : Bytes.toB256
+      (img.sliceD (durationWord * 32).toNat 32 0) = duration)
+    (hsize : M.size = 768)
+    (hcodeCost : temporalAccountAccessCost base target.toAdr = codeCost)
+    (hgatewayCode : base.getCode target.toAdr = gatewayCode controlDeployParams)
+    (hmembership : base.getStorVal target.toAdr
+      (roleMembershipSlot pauseRole sevm.currentTarget.toB256) ≠ 0)
+    (hcold : (target.toAdr,
+      roleMembershipSlot pauseRole sevm.currentTarget.toB256) ∉
+        base.accessedStorageKeys)
+    (hresume : base.getStorVal target.toAdr resumeSinceSlot = 0)
+    (horiginal : getOrigStorVal sevm target.toAdr resumeSinceSlot = 0)
+    (hcoldResume : (target.toAdr, resumeSinceSlot) ∉
+      (pauseRoleWarm
+        { sevm with currentTarget := target.toAdr, caller := sevm.currentTarget }
+        base).accessedStorageKeys)
+    (hdynamic : sevm.isStatic = false)
+    (hdurationNonzero : duration ≠ 0)
+    (hnew : pauseForProjection sevm.benvStat.time duration ≠ 0)
+    (hpaused : sevm.benvStat.time <
+      pauseForProjection sevm.benvStat.time duration)
+    (hdepth : sevm.depth ≠ 0)
+    (hnp : sevm.benvStat.rules.isPrecomp target.toAdr = false)
+    (hgasfloor : 46 ≤ Gb)
+    (hbound : Gb + gatewayPauseChildCost duration + 526 < 2 ^ 256)
+    (hprot : State.Protected base.state sevm.currentTarget) :
+    ∃ mid : Devm,
+      mid.stack = [] ∧
+      mid.memory = pauseDecodedMemory M duration ∧
+      mid.gasLeft = Gb - 41 ∧
+      mid.error = base.error ∧
+      mid.output = base.output ∧
+      mid.returnData = (1 : B256).toBytes ∧
+      mid.logs = base.logs ++ [gatewayPauseEvent target.toAdr duration] ∧
+      mid.refundCounter = base.refundCounter ∧
+      mid.accountsToDelete.isEmpty = base.accountsToDelete.isEmpty ∧
+      mid.transientStorage = base.transientStorage ∧
+      (∀ k, k ∈ mid.accessedStorageKeys ↔
+        k ∈ base.accessedStorageKeys.union
+          (gatewayPauseKeys base.accessedStorageKeys target.toAdr
+            sevm.currentTarget.toB256)) ∧
+      (∀ a, a ∈ mid.accessedAddresses ↔
+        (a = target.toAdr ∨ a ∈ base.accessedAddresses)) ∧
+      mid.getStorVal target.toAdr resumeSinceSlot =
+        pauseForProjection sevm.benvStat.time duration ∧
+      (∃ st₁ st₂ : State,
+        base.state.subBal sevm.currentTarget 0 = some st₁ ∧
+        ((st₁.addBal target.toAdr 0).setStorVal target.toAdr
+          resumeSinceSlot
+            (pauseForProjection sevm.benvStat.time duration)).subBal
+            sevm.currentTarget 0 = some st₂ ∧
+        mid.state = st₂.addBal target.toAdr 0) ∧
+      ∀ post : Devm,
+        Func.RunCompiled fs sevm mid pauseSuccess post →
+        Func.RunCompiled fs sevm
+          (base.setMach ⟨[], M,
+            Gb + gatewayPauseChildCost duration + 594 + codeCost, base.stateGas⟩)
+          pauseAfterSet post := by
+  obtain ⟨mid, _, _, h⟩ :=
+    pauseAfterSet_gateway_toSuccess_runCompiled_created (hfork := hfork)
+      fs sevm base target duration M img codeCost Gb hwf hreads htarget
+      hduration hsize hcodeCost hgatewayCode hmembership hcold hresume
+      horiginal hcoldResume hdynamic hdurationNonzero hnew hpaused hdepth hnp
+      hgasfloor hbound hprot
+  exact ⟨mid, h⟩
 
 end Blanc.Composition.LidoCircuitBreakerTwg
