@@ -69,14 +69,13 @@ def storA : StorShadow :=
    ((proxyAddress, (7 : Nat).toB256), tokenAddress.toNat.toB256)]
 
 /-- The accounts after the attacker's subtree (newest first): the 100 wei went to `A`
-(frame 1's `CALL`) and came back (`A`'s `CALL` to `P`). -/
+(frame 1's `CALL`) and came back (`A`'s `CALL` to `P`); the zero-value identity-precompile
+`CALL` (step 323) adds no entry. -/
 def acsA : AcctShadow :=
   [(proxyAddress, ⟨1, (1000 : Nat).toB256, .empty, proxyCode⟩),
    (attackerAddress, ⟨1, (0 : Nat).toB256, .empty, attackerCode⟩),
    (attackerAddress, ⟨1, (100 : Nat).toB256, .empty, attackerCode⟩),
    (proxyAddress, ⟨1, (900 : Nat).toB256, .empty, proxyCode⟩),
-   ((4 : Adr), ⟨0, (0 : Nat).toB256, .empty, .empty⟩),
-   (proxyAddress, ⟨1, (1000 : Nat).toB256, .empty, proxyCode⟩),
    (tokenAddress, ⟨1, (0 : Nat).toB256, .empty, tokenCode⟩),
    (attackerAddress, ⟨1, (0 : Nat).toB256, .empty, attackerCode⟩),
    (implementationAddress, ⟨1, (0 : Nat).toB256, .empty, code⟩),

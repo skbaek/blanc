@@ -43,14 +43,12 @@ def setupState (W : State) : State :=
 
 theorem implAddr_ne_proxyAddr : implAddr ≠ proxyAddr := by decide
 
-theorem implSstoreGas_fresh (fork : Fork) (W : State) (hI : W.get implAddr = .nil) :
+theorem implSstoreGas_fresh (fork : Fork) (W : State) (_hI : W.get implAddr = .nil) :
     Creation.implSstoreGas (implCreateMsg fork W) = 22100 := by
   unfold Creation.implSstoreGas
   have hcold : ((implCreateMsg fork W).currentTarget, (10 : B256)) ∉
       (implCreateMsg fork W).accessedStorageKeys := Std.HashSet.not_mem_emptyWithCapacity
   rw [if_neg hcold]
-  change gasColdSload + sstoreValueCost ((W.get implAddr).stor.get 10) 0 31337 = 22100
-  rw [hI]
   rfl
 
 /-- **Messages 1 and 2 compose.** The clone message's input world is exactly the

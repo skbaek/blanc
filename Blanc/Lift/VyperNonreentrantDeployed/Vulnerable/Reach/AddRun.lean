@@ -115,14 +115,10 @@ def storAdd : StorShadow :=
   initWrites.filter (fun e => decide (e.2 ≠ 0)) ++ stor2
 
 /-- The account shadow the implementation frame halts with (its entries' views, newest first:
-the identity precompile and the clone restated by the calls, the token child's, the value
-moved at the message's entry). -/
+the value moved at the message's entry; the zero-value identity-precompile and token calls add
+no entry). -/
 def acsB : AcctShadow :=
-  [((4 : Adr), ⟨0, 0, .empty, .empty⟩), (proxyAddr, ⟨1, 1000, .empty, fwdCode⟩),
-   (tokenAddr, ⟨1, 0, .empty, Token20.code⟩), (proxyAddr, ⟨1, 1000, .empty, fwdCode⟩),
-   ((4 : Adr), ⟨0, 0, .empty, .empty⟩), (proxyAddr, ⟨1, 1000, .empty, fwdCode⟩),
-   ((4 : Adr), ⟨0, 0, .empty, .empty⟩), (proxyAddr, ⟨1, 1000, .empty, fwdCode⟩),
-   (proxyAddr, ⟨1, 1000, .empty, fwdCode⟩),
+  [(proxyAddr, ⟨1, 1000, .empty, fwdCode⟩),
    (creator, ⟨0, creatorFunds - 1000, .empty, .empty⟩)] ++ acs6
 
 /-- What the implementation frame's halt shows, decided value by value. -/

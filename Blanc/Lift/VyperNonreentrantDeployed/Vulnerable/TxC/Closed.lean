@@ -60,9 +60,9 @@ theorem vminus_txC_message (g : Fork) (hg : CoveredFork g) :
         (storOf post.state proxyAddress balanceOfA2Slot.toB256).toNat = 1906 ∧
         (storOf post.state proxyAddress (26 : Nat).toB256).toNat <
           (storOf post.state proxyAddress balanceOfA2Slot.toB256).toNat := by
-  obtain ⟨d1, ck, ca, cs, cc, hgas, ho, he, hok, ha, h26, hA, hr, hd⟩ := frame1C_child_at hg
+  obtain ⟨d1, ck, ca, cs, cc, hgas, ho, he, hok, ha, h26, hA, hr, hd, hcr⟩ := frame1C_child_at hg
   obtain ⟨post, hx, hpm, herr, hgasP, hout, hrf, hatd, hst⟩ :=
-    txC_message_of_child_at hg d1 ck ca cs cc hgas ho he hr hd hok ha
+    txC_message_of_child_at hg d1 ck ca cs cc hgas ho he hr hd hcr hok ha
   have hf := msgC_facts
   simp only [Prod.mk.injEq] at hf
   obtain ⟨hcaller, htarget, -, -, -, -, -, -⟩ := hf

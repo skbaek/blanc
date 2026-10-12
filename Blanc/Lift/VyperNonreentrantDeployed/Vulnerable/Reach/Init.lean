@@ -56,20 +56,9 @@ theorem initWrites_footprint (k : B256) (hk : k ∉ configSlots) : lookupS initW
        subst hek
        exact absurd (by decide) hk)
 
-theorem precompAcs_restate : ∀ e ∈ precompAcs, e.2 = lookupA acs3 e.1 := by
-  intro e he
-  simp only [precompAcs, List.mem_cons, List.not_mem_nil, or_false] at he
-  rcases he with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rfl
-
-theorem acs3_split : acs3 = [(proxyAddr, ⟨1, 0, .empty, fwdCode⟩),
-    (creator, ⟨0, creatorFunds, .empty, .empty⟩)] ++ acs2 := by
+/-- Message 3 carries no value, so its entry leaves the account shadow unchanged. -/
+theorem acs3_eq : acs3 = acs2 := by
   kernel_rfl
-
-theorem acs3_restate : ∀ e ∈ ([(proxyAddr, ⟨1, 0, .empty, fwdCode⟩),
-    (creator, ⟨0, creatorFunds, .empty, .empty⟩)] : AcctShadow), e.2 = lookupA acs2 e.1 := by
-  intro e he
-  simp only [List.mem_cons, List.not_mem_nil, or_false] at he
-  rcases he with rfl | rfl <;> rfl
 
 /-- The settled world of message 3, read off: the proxy's storage is `initWrites`, every other
 address keeps `world2`'s storage, every account keeps its view. -/
@@ -82,8 +71,7 @@ theorem init_world_facts {post : Devm}
   refine ⟨fun k => (hs _ k).trans (lookupS_append_of_absent stor2_absent k),
     fun a hne k => ?_, fun a => ?_⟩
   · rw [hs, lookupS_append_of_ne (fun e he h => hne (h.symm.trans (initWrites_at e he))), storAgree2]
-  · rw [ha a, lookupA_append_of_restate precompAcs_restate, acs3_split,
-      lookupA_append_of_restate acs3_restate, acctAgree2 a]
+  · rw [ha a, lookupA_append_of_restate precompAcs_restate, acs3_eq, acctAgree2 a]
 
 theorem cleanPool_of {W : State} (h : ∀ k, storOf W proxyAddr k = lookupS initWrites proxyAddr k) :
     CleanPool W := by

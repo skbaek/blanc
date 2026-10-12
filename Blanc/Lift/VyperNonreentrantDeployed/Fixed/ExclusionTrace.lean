@@ -131,9 +131,9 @@ theorem _root_.Blanc.ExecutionTrace.ProcessCreateMessageTrace.vplus {msg : Msg}
       simp only [Frame.ofCreate] at transfer evmEq
       have same := benvAfterTransfer_ok_getCode transfer
       have targetNe : msg.currentTarget ≠ P := by
+        -- EIP-684 alone (EIP-7610 withdrawn): the collision test is code-or-nonce.
         unfold messageCreateCollision at hcollision
-        rw [Bool.or_eq_false_iff] at hcollision
-        exact ne_wa_of_not_hasCodeOrNonce (holds_code_ne_nil hP) hcollision.1
+        exact ne_wa_of_not_hasCodeOrNonce (holds_code_ne_nil hP) hcollision
       obtain ⟨rfl, rfl, rfl⟩ : pc = 0 ∧
           sevm = initSevm ((processCreateMessage.msg msg).withBenv entry) ∧
           pre = initDevm ((processCreateMessage.msg msg).withBenv entry) := by

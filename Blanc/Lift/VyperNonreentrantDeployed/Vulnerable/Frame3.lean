@@ -59,12 +59,23 @@ theorem post3_keep : ∀ d : Devm,
       (d32 (obsChild4 d)).state) := by
   kernel_forall_rfl
 
+/-- The proxy frame passes its child's created-account set through (it creates nothing). -/
+theorem post3F_created : ∀ d : Devm,
+    (post3F (obsChild4 d)).createdAccounts = d.createdAccounts := by
+  kernel_forall_rfl
+
 /-- The proxy frame's settled machine. -/
 def post3 : Devm := post3F post4
 
 theorem obsChild4_post4 : obsChild4 post4 = post4 := by
   obtain ⟨-, hg, ho, he, -⟩ := r4_facts
   exact childObs_eq hg ho he
+
+/-- The proxy frame creates no account. -/
+theorem post3_created : post3.createdAccounts = .emptyWithCapacity := by
+  have h := post3F_created post4
+  rw [obsChild4_post4] at h
+  exact h.trans post4_created
 
 theorem e3_code : e3.sta.code = proxyCode := by kernel_rfl
 

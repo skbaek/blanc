@@ -116,9 +116,12 @@ theorem fsI_zero : fsI[0]? = some t_0000_c0 := by kernel_rfl
 
 theorem cI0_agree : Agree cI0 := by
   obtain ⟨-, hpa, hpk, -, hia, hik, -, hst, -⟩ := dcallPrep_spec cpI_eq e3_adrs e3_world.1
-  exact frameStart_agree t_0000_c0 eI_eq
+  have h := frameStart_agree t_0000_c0 eI_eq
     (fun x => by rw [hik, hpk]; exact e3_keys x) (fun a => by rw [hia]; exact hpa a)
     (fun a k => by rw [hst]; exact e3_world.2 a k) (by rw [hst]; exact e3_world.1)
+  have hs : storTransfer cpI.f.inner stor2 acs3 = stor2 := by kernel_rfl
+  rw [hs] at h
+  exact h
 
 /-- **The implementation frame, under any covered fork**: an `Exec` of the registered runtime
 from the machine the forwarder's `DELEGATECALL` enters, ending with 729,444 gas, no output and
@@ -158,7 +161,7 @@ theorem frameI_at (hg : CoveredFork g) :
         rw [hpc]; exact hx
       · exact List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) hout
       · rw [hst d rfl, hcl.2.2.1, hstor]
-      · rw [hst d rfl, hcl.2.2.2 a, hacs]
+      · rw [hst d rfl, hcl.2.2.2 a, hacs, lookupA_append_of_restate precompAcs_restate]
 
 /-! ### Message 3 -/
 

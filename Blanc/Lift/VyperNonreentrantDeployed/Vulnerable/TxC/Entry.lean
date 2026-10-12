@@ -1,6 +1,7 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Run
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxTopC
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Entry
+import Blanc.Lift.VyperNonreentrantDeployed.RepinBridge
 
 /-!
 V- as an admitted transaction, the entry facts of the deep chain: each frame's start
@@ -56,7 +57,8 @@ theorem e1C_world : (∀ a k, storOf e1C.dyna.state a k = lookupS callCfgC.stor 
     rw [benvAfterTransfer_eq_S hC]; exact hb
   rw [hs]
   refine ⟨fun a k => ?_, acctAgree_transfer hC hb⟩
-  rw [benvAfterTransferB_stor hbB, hst]; exact callCfgC_agree.2.2.1 a k
+  rw [benvAfterTransferB_stor hbB hC (fun a k => by rw [hst]; exact callCfgC_agree.2.2.1 a k),
+    show storTransfer cp0C.f.inner callCfgC.stor callCfgC.acs = callCfgC.stor by kernel_rfl]
 
 theorem e1C31_acc : e1C31.dyna.accessedAddresses = e1C.dyna.accessedAddresses := rfl
 theorem e1C31_keys : e1C31.dyna.accessedStorageKeys = e1C.dyna.accessedStorageKeys := rfl
@@ -73,14 +75,18 @@ theorem cp2C_spec :
   dcallPrep_spec cp2C_eq (fun a => by rw [e1C31_acc]; exact e1C_adrs a)
     (by rw [e1C31_state]; exact e1C_world.2)
 
+/-- The proxy's `DELEGATECALL` moves no value: frame 2 starts on `A'`'s storage. -/
+theorem keeps2C : RepinBridge.transferKeepsStor cp2C.f.inner acs1C = true := by kernel_rfl
+
 /-- **Frame 2 starts in agreement**: its accessed sets, storage and accounts are the proxy
 frame's, the implementation added. -/
 theorem c2C_agree : Agree c2C := by
   obtain ⟨-, hpa, hpk, -, hia, hik, -, hst, -⟩ := cp2C_spec
-  exact frameStart_agree t_0000_c0 e2C_eq
+  have h := frameStart_agree t_0000_c0 e2C_eq
     (fun x => by rw [hik, hpk, e1C31_keys]; exact e1C_keys x) (fun a => by rw [hia]; exact hpa a)
     (fun a k => by rw [hst, e1C31_state]; exact e1C_world.1 a k)
     (by rw [hst, e1C31_state]; exact e1C_world.2)
+  rwa [RepinBridge.storTransfer_of_keeps keeps2C] at h
 
 theorem agree_cfg339C : Agree cfg339C := (wrun_cont cfg339C_eq).1 c2C_agree
 
@@ -118,6 +124,10 @@ theorem e4C_keys : ∀ x, x ∈ e4C.dyna.accessedStorageKeys ↔ x ∈ aCallC.ke
   intro x
   rw [hk, hik, hpk]; exact agree_aCallC.1 x
 
+/-- `A'`'s callback `CALL` moves its 100 wei between accounts with nonzero nonces: no storage is
+deleted. -/
+theorem keeps4C : RepinBridge.transferKeepsStor cp4C.f.inner aCallC.acs = true := by kernel_rfl
+
 theorem e4C_world : (∀ a k, storOf e4C.dyna.state a k = lookupS aCallC.stor a k) ∧
     AcctAgree e4C.dyna.state acs4C := by
   obtain ⟨-, -, -, -, -, -, -, hst⟩ := cp4C_spec
@@ -128,7 +138,8 @@ theorem e4C_world : (∀ a k, storOf e4C.dyna.state a k = lookupS aCallC.stor a 
     rw [benvAfterTransfer_eq_S hC]; exact hb
   rw [hs]
   refine ⟨fun a k => ?_, acctAgree_transfer hC hb⟩
-  rw [benvAfterTransferB_stor hbB, hst]; exact agree_aCallC.2.2.1 a k
+  rw [benvAfterTransferB_stor hbB hC (fun a k => by rw [hst]; exact agree_aCallC.2.2.1 a k),
+    RepinBridge.storTransfer_of_keeps keeps4C]
 
 theorem e4C31_acc : e4C31.dyna.accessedAddresses = e4C.dyna.accessedAddresses := rfl
 theorem e4C31_keys : e4C31.dyna.accessedStorageKeys = e4C.dyna.accessedStorageKeys := rfl

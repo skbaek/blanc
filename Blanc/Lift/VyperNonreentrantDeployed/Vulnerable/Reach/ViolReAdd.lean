@@ -70,7 +70,8 @@ theorem reRun_kernel (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World) 
       .cont (Boundary.cfgOfT bReBody tS tA mB wB)) ∧
     ∃ d cl, wrun fsI sRe 4505 (Boundary.cfgOfT bRe0 tS tA m w) = .done (.halted d) cl ∧
       d.gasLeft = gasRe ∧ d.output = outRe ∧ d.error = none ∧ cl.keys = keysRe ∧
-      cl.adrs = adrsRe ∧ cl.stor = storRe ++ tS ∧ cl.acs = acsRe ++ tA := by
+      cl.adrs = adrsRe ∧ cl.stor = storRe ++ tS ∧ cl.acs = acsRe ++ tA ∧
+      d.createdAccounts = .emptyWithCapacity := by
   obtain ⟨m1, w1, e1⟩ := Boundary.obsDT_cont (reChunk1112 tS tA m w)
   obtain ⟨m2, w2, e2⟩ := Boundary.obsDT_cont (reChunk1159 tS tA m1 w1)
   obtain ⟨m3, w3, e3⟩ := Boundary.obsDT_cont (reChunk2527 tS tA m2 w2)
@@ -80,6 +81,8 @@ theorem reRun_kernel (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World) 
   obtain ⟨m7, w7, e7⟩ := Boundary.obsDT_cont (reChunk4377 tS tA m6 w6)
   obtain ⟨d, cl, e8, hg, ho, he, hk, ha, hs, hc⟩ :=
     reHalt_spec (reHalt tS tA m7 w7).1 (reHalt tS tA m7 w7).2
+  have hcr := reHalt_created tS tA m7 w7
+  rw [e8] at hcr
   have hB : wrun fsI sRe (1112 + 47 + 1368 + 98) (Boundary.cfgOfT bRe0 tS tA m w) =
       .cont (Boundary.cfgOfT bReBody tS tA m4 w4) :=
     wrun_add_cont (wrun_add_cont (wrun_add_cont e1 e2) e3) e4
@@ -88,7 +91,7 @@ theorem reRun_kernel (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World) 
     wrun_add_cont (wrun_add_cont (wrun_add_cont (wrun_add_cont hB e5) e6) e7) e8
   rw [show 1112 + 47 + 1368 + 98 = 2625 from rfl] at hB
   rw [show 1112 + 47 + 1368 + 98 + 463 + 960 + 329 + 128 = 4505 from rfl] at hH
-  exact ⟨⟨m4, w4, hB⟩, d, cl, hH, hg, ho, he, hk, ha, hs, hc⟩
+  exact ⟨⟨m4, w4, hB⟩, d, cl, hH, hg, ho, he, hk, ha, hs, hc, hcr⟩
 
 /-! ### The transport to the actual machine -/
 
@@ -108,7 +111,7 @@ theorem reRun_at {g : Fork} {O : State} (hg : CoveredFork g)
 /-- **P1: the re-entrant `add_liquidity` frame (F5).** -/
 theorem reAdd_frame : ReAddFrame := by
   intro g O tS tA m w hg hO hag
-  obtain ⟨⟨mB, wB, hB⟩, d, cl, hH, hgas, hout, herr, hk, ha, hs, hc⟩ := reRun_kernel tS tA m w
+  obtain ⟨⟨mB, wB, hB⟩, d, cl, hH, hgas, hout, herr, hk, ha, hs, hc, hcr⟩ := reRun_kernel tS tA m w
   have hBat := reRun_at hg hO hB (fun h => Res.noConfusion h) fun x hx =>
     of_decide_eq_true (List.all_eq_true.mp (reBody_keys mB wB) x hx)
   have hHat := reRun_at hg hO hH (fun h => Res.noConfusion h) fun x hx =>
@@ -120,7 +123,7 @@ theorem reAdd_frame : ReAddFrame := by
   have hca := childAgree_of_halt hHat hag
   rw [hk, ha, hs, hc] at hca
   have hagB := (wrun_cont hBat).1 hag
-  refine ⟨d, hx, hgas, hout, herr, hca, ⟨_, hBat, hagB, rfl, ?_, ?_⟩,
+  refine ⟨d, hx, hgas, hout, herr, hcr, hca, ⟨_, hBat, hagB, rfl, ?_, ?_⟩,
     fun f h1 h2 => frame_settle_ok h1 h2 herr⟩
   · rw [hagB.2.2.1, Boundary.cfgOfT_stor]; exact (reBody_locks tS).1
   · rw [hagB.2.2.1, Boundary.cfgOfT_stor]; exact (reBody_locks tS).2

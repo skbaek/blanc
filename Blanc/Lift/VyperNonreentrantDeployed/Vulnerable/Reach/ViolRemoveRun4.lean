@@ -1,4 +1,5 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolRemoveRun3
+import Blanc.Lift.VyperNonreentrantDeployed.RepinBridge
 
 /-!
 # V− P2, F2 token stages: the token `transfer` child and the third boundary
@@ -43,15 +44,9 @@ def storTok : StorShadow :=
     (900 : Nat).toB256),
    ((proxyAddr, (9 : Nat).toB256), (900 : Nat).toB256)] ++ storCb
 
-/-- The token child's account-shadow prefix at its halt: the touched accounts,
-then the callback's halt shadow. -/
-def acsTok : AcctShadow :=
-  [(tokenAddr, ⟨1, (0 : Nat).toB256, .empty, Token20.code⟩),
-    (proxyAddr, ⟨1, (1000 : Nat).toB256, .empty, fwdCode⟩),
-    ((4 : Adr), ⟨0, (0 : Nat).toB256, .empty, .empty⟩),
-    (proxyAddr, ⟨1, (1000 : Nat).toB256, .empty, fwdCode⟩),
-    ((4 : Adr), ⟨0, (0 : Nat).toB256, .empty, .empty⟩),
-    (proxyAddr, ⟨1, (1000 : Nat).toB256, .empty, fwdCode⟩)] ++ acsCb
+/-- The token child's account-shadow prefix at its halt: the callback's halt shadow (the
+zero-value token and identity-precompile calls add no entry). -/
+def acsTok : AcctShadow := acsCb
 
 /-- The token child's return data: word 1. -/
 def outTok : Bytes := List.replicate 31 0 ++ [0x01]
@@ -87,6 +82,11 @@ def clTokRm (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World) : Cfg :=
   match childRun Token20.prog Token20.code sRm 200 (cTokRm tS tA m w) with
   | .done (.halted _) cl => cl
   | _ => Boundary.cfgOfT bRm0 tS tA m w
+
+/-- The token child creates no account (F2's created set passes through its run). -/
+theorem tokChild_created : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
+    (dTokRm tS tA m w).createdAccounts = .emptyWithCapacity := by
+  kernel_forall_rfl
 
 /-- The token child's halt observations, checked once. -/
 def tokHaltObs : Res → Bool
@@ -245,7 +245,8 @@ world and bookkeeping, for any token child at the observed gas and output. -/
 theorem rmChunkX3 : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World)
     (d : Devm),
     Boundary.obsDT bRmX3 (runRmB tS tA
-      (wrun fsI sRm 11 (Boundary.cfgOfT bRmX2 tS tA m w)) (childObs gasTok outTok d)) =
+      (wrun fsI sRm 11 (Boundary.cfgOfT bRmX2 tS tA m w))
+      (childObs gasTok outTok (d.withCreatedAccounts .emptyWithCapacity))) =
       Boundary.obsDOkT bRmX3 tS tA := by
   kernel_forall_rfl
 

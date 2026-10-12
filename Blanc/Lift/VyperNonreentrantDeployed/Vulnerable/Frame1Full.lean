@@ -1,4 +1,5 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1Kernel
+import Blanc.Lift.VyperNonreentrantDeployed.RepinBridge
 
 /-!
 V- witness, frame 1 whole: `remove_liquidity(200, [0, 0], A)` on the deployed 0x6326
@@ -20,20 +21,20 @@ theorem fs1_zero : fs1[0]? = some t_0000_c0 := by kernel_rfl
 
 /-- **Frame 1 of the V- witness.**  Given the attacker child `d1` (its `Exec` derivation
 and settlement, `ChildOk`; its observed gas, output and success; its world shadows,
-`ChildAgree`), frame 1, with the token child run by its own certificate, is a gas-exact
+`ChildAgree`; and that it creates no account, which `SSTORE`'s original reads observe), frame 1, with the token child run by its own certificate, is a gas-exact
 run of the certificate from `pre1` to a halted machine with the EELS gas and return data
 `[100, 100]`, whose world has `totalSupply = 1800 < 1906 = balanceOf[A]` and the
 remove-lock released, with no error. -/
 theorem frame1_full (d1 : Devm)
     (g1 : d1.gasLeft = gasA) (o1 : d1.output = []) (e1 : d1.error = none)
-    (k1 : ChildOk sevm1 cfg339 d1) (a1 : ChildAgree d1 keysA adrsA storA acsA) :
+    (c1 : d1.createdAccounts = .emptyWithCapacity) (k1 : ChildOk sevm1 cfg339 d1) (a1 : ChildAgree d1 keysA adrsA storA acsA) :
     ∃ post, SProg.RunExact fs1 sevm1 pre1 post ∧ post.gasLeft = 29372882 ∧
       post.output = word 100 ++ word 100 ∧
       (storOf post.state proxyAddress (26 : Nat).toB256).toNat = 1800 ∧
       (storOf post.state proxyAddress balanceOfASlot.toB256).toNat = 1906 ∧
       (storOf post.state proxyAddress (2 : Nat).toB256).toNat = 0 ∧ post.error = none := by
   have hk := frame1_kernel d1
-  rw [childObs_eq g1 o1 e1] at hk
+  rw [RepinBridge.withCreatedAccounts_of_eq c1, childObs_eq g1 o1 e1] at hk
   unfold run1 run1From callPairFrom at hk
   split at hk
   · rename_i c1 h1

@@ -55,7 +55,8 @@ def run2C (d : Devm) : Res := run2FromC (wrun fs1 sta2C 339 c2C) d
 
 /-- The EELS observation at frame 2's `RETURN`: gas 15,327,639, return data `[100, 100]`,
 `totalSupply = 1800 < 1906 = balanceOf[A']`, lock released, success. -/
-def obs2CEELS : Option (Nat × List Nat × Nat × Nat × Nat × Bool × AdrSet) :=
-  some (15327639, (word 100 ++ word 100).map UInt8.toNat, 1800, 1906, 0, true, .emptyWithCapacity)
+def obs2CEELS : Option (Nat × List Nat × Nat × Nat × Nat × Bool × AdrSet × AdrSet) :=
+  some (15327639, (word 100 ++ word 100).map UInt8.toNat, 1800, 1906, 0, true, .emptyWithCapacity,
+    .emptyWithCapacity)
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC

@@ -235,7 +235,7 @@ theorem sstoreStep_cont {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} {g : SFunc}
     StepOk fs sevm c c' := by
   rcases c with ⟨devm, f, K, keys, adrs, stor, acs⟩
   simp only at hf; subst hf
-  simp only [sstoreStep] at h
+  simp only [sstoreStep, origReadK_eq] at h
   split at h
   · rename_i k v s hs
     split at h

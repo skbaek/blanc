@@ -82,7 +82,7 @@ def benvInit : BenvStat := { (default : BenvStat) with origState := worldInit }
 
 /-- **The top-level message call.** -/
 def msgTop : Msg where
-  benv := ⟨worldInit, .emptyWithCapacity, benvInit⟩
+  benv := ⟨worldInit, .emptyWithCapacity, benvInit, .emptyWithCapacity⟩
   tenv := default
   caller := senderAddress
   target := some proxyAddress

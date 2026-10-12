@@ -1,4 +1,5 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.ForkKernel
+import Blanc.Lift.VyperNonreentrantDeployed.RepinBridge
 
 /-!
 V- witness under every covered fork: the frames.
@@ -143,7 +144,8 @@ theorem frame4_child_at (hg : CoveredFork g) :
     (fun a k => by rw [hst, e31_state]; exact e3_world.1 a k)
     (by rw [hst, e31_state]; exact e3_world.2) hcr hsg
     (fun hr => lift_exactM cert_checkM cert_jumpsOkM e4_code (hg : CoveredFork g) hr) fs1_zero
-    ⟨id, fun _ _ r => r⟩ ((r4_at hg).trans hrun) herr
+    (by rw [RepinBridge.storTransfer_of_keeps (by exact keeps4)]; exact ⟨id, fun _ _ r => r⟩)
+    ((r4_at hg).trans hrun) herr
   rw [hk, ha, hs, hc] at h
   exact h
 
@@ -265,6 +267,7 @@ attacker child `d1`, frame 1, with the token child run by its own certificate, i
 run of the certificate from `pre1`. -/
 theorem frame1_full_at (hg : CoveredFork g) (d1 : Devm)
     (g1 : d1.gasLeft = gasA) (o1 : d1.output = []) (e1 : d1.error = none)
+    (c1 : d1.createdAccounts = .emptyWithCapacity)
     (k1 : ChildOk (sevm1.withFork g) cfg339 d1) (a1 : ChildAgree d1 keysA adrsA storA acsA) :
     ∃ post, SProg.RunExact fs1 (sevm1.withFork g) pre1 post ∧ post.gasLeft = 29372882 ∧
       post.output = word 100 ++ word 100 ∧
@@ -272,7 +275,7 @@ theorem frame1_full_at (hg : CoveredFork g) (d1 : Devm)
       (storOf post.state proxyAddress balanceOfASlot.toB256).toNat = 1906 ∧
       (storOf post.state proxyAddress (2 : Nat).toB256).toNat = 0 ∧ post.error = none := by
   have hk := frame1_kernel d1
-  rw [childObs_eq g1 o1 e1] at hk
+  rw [RepinBridge.withCreatedAccounts_of_eq c1, childObs_eq g1 o1 e1] at hk
   have hk' : obs1 (callPairFrom fs1 (sevm1.withFork g) fsT Token.code 234 23 188 keysA adrsA
       storA acsA (wrun fs1 (sevm1.withFork g) 339 c0) d1) = obs1EELS := by
     rw [callPairFrom_withFork CoveredFork.prague hg rfl, wrun_withFork CoveredFork.prague hg rfl]
@@ -329,6 +332,6 @@ theorem frame1_closed_at (hg : CoveredFork g) :
       (storOf post.state proxyAddress balanceOfASlot.toB256).toNat = 1906 ∧
       (storOf post.state proxyAddress (2 : Nat).toB256).toNat = 0 ∧ post.error = none :=
   let ⟨k, a, g', o, e⟩ := attacker_child_at hg
-  frame1_full_at hg post2 g' o e k a
+  frame1_full_at hg post2 g' o e post2_created k a
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Subtree

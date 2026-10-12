@@ -59,16 +59,13 @@ theorem create_fixtures (fork : Fork) (hfork : CoveredFork fork)
     Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.create_token (tokenCreateMsg fork world4)
       hfork rfl rfl rfl rfl rfl (by show (82000 : Nat) ≤ 200000; decide)
   have hv4 : acctView (world4.get tokenAddr) = Acct.nil := (hW.1 tokenAddr).trans rfl
-  have horig : (world4.get tokenAddr).stor.get creator.toB256 = 0 :=
-    (hW.2 tokenAddr creator.toB256).trans (lookupS_storOracle_ne hTP hTI _)
   have hmint : Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.mintSstoreGas
       (tokenCreateMsg fork world4) = 22100 := by
-    have h1 : (tokenCreateMsg fork world4).benv.stat.origState = world4 := rfl
     have h2 : (tokenCreateMsg fork world4).currentTarget = tokenAddr := rfl
     have h3 : (tokenCreateMsg fork world4).caller = creator := rfl
     have h4 : (tokenCreateMsg fork world4).accessedStorageKeys = .emptyWithCapacity := rfl
     unfold Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.mintSstoreGas
-    rw [h1, h2, h3, h4, horig, if_neg Std.HashSet.not_mem_emptyWithCapacity]
+    rw [h2, h3, h4, if_neg Std.HashSet.not_mem_emptyWithCapacity]
     rfl
   have hw5 : postT.state = world5 := hTstate
   have hTacct : postT.state.get tokenAddr =

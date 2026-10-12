@@ -65,6 +65,11 @@ theorem post1T_keep : ∀ d : Devm,
 
 theorem e1T_code : e1T.sta.code = proxyCode := by kernel_rfl
 
+/-- The proxy frame creates no account (its child's pinned created set passes through). -/
+theorem post1TF_created : ∀ d : Devm,
+    (post1TF (obsChild2 d)).createdAccounts = .emptyWithCapacity := by
+  kernel_forall_rfl
+
 /-- **Frame 1 (the proxy) as `A'`'s child**, with the corruption in its world: there are a
 settled machine `d1` and shadows for it such that `d1` is `A'`'s `CALL` child (`ChildOk` at
 `TxTop.callCfg`) with the tx trace's gas, return data and success, and its storage shadow has
@@ -74,17 +79,19 @@ theorem frame1_child : ∃ (d1 : Devm) (ck : List (Adr × B256)) (ca : List Adr)
       ChildOk e0tx.sta callCfg d1 ∧ ChildAgree d1 ck ca cs cc ∧
       (lookupS cs proxyAddress (26 : Nat).toB256).toNat = 1800 ∧
       (lookupS cs proxyAddress balanceOfA2Slot.toB256).toNat = 1906 ∧
-      d1.refundCounter = refund0 ∧ d1.accountsToDelete = .emptyWithCapacity := by
+      d1.refundCounter = refund0 ∧ d1.accountsToDelete = .emptyWithCapacity ∧
+      d1.createdAccounts = .emptyWithCapacity := by
   obtain ⟨k3, a3, g3, o3, e3', r3, t3⟩ := callback_child
-  obtain ⟨post2, cl, hx2, hs2, ha2, hg2, ho2, he2, h26, hA, -, hr2, ht2⟩ :=
-    frame2_child post3T g3 o3 e3' r3 t3 k3 a3
-  have hobs : obsChild2 post2 = post2 := childObsX_eq hg2 (by rw [ho2]; rfl) he2 hr2 ht2
+  obtain ⟨post2, cl, hx2, hs2, ha2, hg2, ho2, he2, h26, hA, -, hr2, ht2, hc2⟩ :=
+    frame2_child post3T g3 o3 e3' r3 t3 post3T_created k3 a3
+  have hobs : obsChild2 post2 = post2 := childObsX_eq hg2 (by rw [ho2]; rfl) he2 hr2 ht2 hc2
+  have hcrd1 := post1TF_created post2
   have hr := resume1T_eq post2
   have ht := tail1T_eq post2
   have hh := return1T_eq post2
   have ho := post1T_obs post2
   have hk := post1T_keep post2
-  rw [hobs] at hr ht hh ho hk
+  rw [hobs] at hr ht hh ho hk hcrd1
   simp only [Prod.mk.injEq] at ho hk
   obtain ⟨hg, hout, he, hrf, hatd⟩ := ho
   obtain ⟨hka, hkk, hks⟩ := hk
@@ -110,7 +117,7 @@ theorem frame1_child : ∃ (d1 : Devm) (ck : List (Adr × B256)) (ca : List Adr)
   have hpe : post2.error.isSome = false := by rw [he2]; rfl
   refine ⟨post1TF post2, callCfg.keys ++ cl.keys, cp2T.adrs ++ cl.adrs, cl.stor, cl.acs, hg,
     List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) hout, herr, ?_,
-    ⟨fun a => ?_, fun x => ?_, fun a k => ?_, fun a => ?_⟩, h26, hA, hrf, hatd⟩
+    ⟨fun a => ?_, fun x => ?_, fun a k => ?_, fun a => ?_⟩, h26, hA, hrf, hatd, hcrd1⟩
   · intro cp cevm hp he'
     rw [cp0_eq] at hp; cases hp
     rw [e1T_eq] at he'; cases he'

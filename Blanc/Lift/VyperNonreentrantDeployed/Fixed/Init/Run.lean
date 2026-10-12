@@ -160,12 +160,12 @@ theorem initFactsB :
     (dI world2).error = none ∧ (dI world2).gasLeft = 679367 ∧ (dI world2).refundCounter = 0 := by
   kernel_rfl_and
 
-/-- The shadows the run leaves: its canonical storage log is `storInit`; its account log
-names the identity precompile, the clone, the creator and the implementation, each read as at
-the start. -/
+/-- The shadows the run leaves: its canonical storage log is `storInit`; its account log is
+the start's (the creator, the clone and the implementation: the zero-value calls add no entry),
+each read as at the start. -/
 theorem initFactsC :
     canonS (cI3 world2).stor = storInit ∧
-    (cI3 world2).acs.map Prod.fst = [4, proxyAddr, proxyAddr, creator, creator, proxyAddr, implAddr] ∧
+    (cI3 world2).acs.map Prod.fst = [creator, proxyAddr, implAddr] ∧
     lookupA (cI3 world2).acs 4 = lookupA acs0 4 ∧
     lookupA (cI3 world2).acs proxyAddr = lookupA acs0 proxyAddr ∧
     lookupA (cI3 world2).acs creator = lookupA acs0 creator ∧

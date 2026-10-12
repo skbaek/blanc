@@ -82,14 +82,15 @@ the proxy frame's gas, output, success and shadows. -/
 theorem callback_of_child (d3 : Devm) (k3 : ChildOk e3T.sta aCallT d3)
     (a3 : ChildAgree d3 keysH4T adrsH4T storAT acsAT) (g3 : d3.gasLeft = gas4T)
     (o3 : d3.output = word 106) (e4T' : d3.error = none) (r3 : d3.refundCounter = refund4)
-    (t3 : d3.accountsToDelete = .emptyWithCapacity) :
+    (t3 : d3.accountsToDelete = .emptyWithCapacity)
+    (c3 : d3.createdAccounts = .emptyWithCapacity) :
     ChildOk e2T.sta cfg339T (haltedOf (run3T d3)) ∧
       ChildAgree (haltedOf (run3T d3)) keysAT adrsAT storAT acsAT ∧
       (haltedOf (run3T d3)).gasLeft = gasAT ∧ (haltedOf (run3T d3)).output = [] ∧
       (haltedOf (run3T d3)).error = none ∧ (haltedOf (run3T d3)).refundCounter = refund3 ∧
       (haltedOf (run3T d3)).accountsToDelete = .emptyWithCapacity := by
   have hk := frame3_kernel d3
-  rw [show obsChild4 d3 = d3 from childObsX_eq g3 o3 e4T' r3 t3] at hk
+  rw [show obsChild4 d3 = d3 from childObsX_eq g3 o3 e4T' r3 t3 c3] at hk
   unfold run3T at hk ⊢
   split at hk
   · rename_i c hc
@@ -116,7 +117,18 @@ theorem callback_child : ChildOk e2T.sta cfg339T post3T ∧ ChildAgree post3T ke
     post3T.gasLeft = gasAT ∧ post3T.output = [] ∧ post3T.error = none ∧
     post3T.refundCounter = refund3 ∧ post3T.accountsToDelete = .emptyWithCapacity :=
   let ⟨k3, a3, g3, o3, e4T', r4, t4⟩ := frame4_child
-  callback_of_child post4T k3 a3 g3 o3 e4T' r4 t4
+  callback_of_child post4T k3 a3 g3 o3 e4T' r4 t4 post4T_created
+
+/-- The callback frame creates no account (its child's pinned created set passes through). -/
+theorem run3T_created : ∀ d : Devm,
+    (haltedOf (run3T (obsChild4 d))).createdAccounts = .emptyWithCapacity := by
+  kernel_forall_rfl
+
+theorem post3T_created : post3T.createdAccounts = .emptyWithCapacity := by
+  obtain ⟨-, -, g3, o3, e4T', r4, t4⟩ := frame4_child
+  have h := run3T_created post4T
+  rw [show obsChild4 post4T = post4T from childObsX_eq g3 o3 e4T' r4 t4 post4T_created] at h
+  exact h
 
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx

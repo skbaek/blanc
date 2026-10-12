@@ -42,6 +42,11 @@ theorem e2_code : e2.sta.code = Attacker.code := byteArray_eq_of_toList (by deci
 
 theorem e2_fork : CoveredFork e2.sta.benvStat.fork := of_decide_eq_true (by decide +kernel)
 
+/-- The attacker frame passes its child's created-account set through (it creates nothing). -/
+theorem run2_created : ∀ d : Devm,
+    (haltedOf (run2 (obsChild3 d))).createdAccounts = d.createdAccounts := by
+  kernel_forall_rfl
+
 /-- The attacker frame's settled machine. -/
 def post2 : Devm := haltedOf (run2 post3)
 
@@ -83,6 +88,13 @@ theorem attacker_child : ChildOk sevm1 cfg339 post2 ∧ ChildAgree post2 keysA a
   let ⟨k3, a3, g3, o3, e3'⟩ := frame3_child
   attacker_of_child post3 k3 a3 g3 o3 e3'
 
+/-- The attacker's subtree creates no account. -/
+theorem post2_created : post2.createdAccounts = .emptyWithCapacity := by
+  obtain ⟨-, -, g3, o3, e3'⟩ := frame3_child
+  have h := run2_created post3
+  rw [show obsChild3 post3 = post3 from childObs_eq g3 o3 e3'] at h
+  exact h.trans post3_created
+
 /-- **Frame 1 of the V- witness, closed.**  `remove_liquidity(200, [0, 0], A)` on the
 deployed 0x6326 certificate, with its attacker subtree (the reentrant `add_liquidity`
 through the proxy) and its token child both run, is a gas-exact run from `pre1` to a
@@ -95,6 +107,6 @@ theorem frame1_closed :
       (storOf post.state proxyAddress balanceOfASlot.toB256).toNat = 1906 ∧
       (storOf post.state proxyAddress (2 : Nat).toB256).toNat = 0 ∧ post.error = none :=
   let ⟨k, a, g, o, e⟩ := attacker_child
-  frame1_full post2 g o e k a
+  frame1_full post2 g o e post2_created k a
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Subtree

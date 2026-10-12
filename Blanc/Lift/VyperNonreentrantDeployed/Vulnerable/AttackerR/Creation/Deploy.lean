@@ -151,6 +151,12 @@ theorem create_attacker (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
   · rw [pf.2.1, facts.2.2.2, facts.1, runtime_length]
     rfl
   · rw [pf.2.2.1, facts.2.2.1, facts.1]
+    unfold Acct.clearIfEmpty
+    rw [if_neg (fun h => by
+      have hs := h.1
+      change runtime.length = 0 at hs
+      rw [runtime_length] at hs
+      exact absurd hs (by decide))]
     change ({ benv.state.get msg.currentTarget with code := _ } : Acct) = _
     rw [processCreateMessage_msg_afterTransfer_get hvalue htransfer, if_pos rfl, runtime_code]
     rfl

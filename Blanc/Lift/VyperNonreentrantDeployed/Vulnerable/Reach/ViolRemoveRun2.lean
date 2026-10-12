@@ -1,4 +1,5 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolRemoveRun1
+import Blanc.Lift.VyperNonreentrantDeployed.RepinBridge
 
 /-!
 # V− P2, F2 post-`CALL` stages: the callback resume to the first chunk boundary
@@ -49,7 +50,8 @@ theorem rm339_stor26 : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : W
 /-- F2's `CALL` entered configuration (the `childStart` shape). -/
 def cc3Rm (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World) : Cfg :=
   ⟨(e3Rm tS tA m w).dyna, AttackerR.t_0000_c0, [], (cRm339 tS tA m w).keys,
-    (cpRm tS tA m w).adrs, (cRm339 tS tA m w).stor,
+    (cpRm tS tA m w).adrs,
+    storTransfer (cpRm tS tA m w).f.inner (cRm339 tS tA m w).stor (cRm339 tS tA m w).acs,
     acsTransfer (cpRm tS tA m w).f.inner (cRm339 tS tA m w).acs⟩
 
 /-- F2's `CALL` starts the callback child at the entered configuration. -/
@@ -106,7 +108,8 @@ output. -/
 theorem rmChunkX1 : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World)
     (d : Devm),
     Boundary.obsDT bRmX1 (runRmA tS tA
-      (wrun fsI sRm 339 (Boundary.cfgOfT bRm0 tS tA m w)) (childObs gasCb [] d)) =
+      (wrun fsI sRm 339 (Boundary.cfgOfT bRm0 tS tA m w))
+      (childObs gasCb [] (d.withCreatedAccounts .emptyWithCapacity))) =
       Boundary.obsDOkT bRmX1 tS tA := by
   kernel_forall_rfl
 

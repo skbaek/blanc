@@ -55,14 +55,11 @@ theorem approveFacts : ∀ W : State,
     (eP W).dyna.error = none := by
   kernel_forall_rfl_and
 
+/-- The message carries no value, so its entry leaves the account shadow unchanged. -/
+theorem acsP_eq : acsP = acs6 := by kernel_rfl
+
 theorem acsP_lookup (a : Adr) : lookupA acsP a = lookupA acs6 a := by
-  refine lookupA_eq_of_keys (fun b hb => ?_) a
-  have hk : acsP.map Prod.fst ++ acs6.map Prod.fst =
-      [tokenAddr, creator, attackerAddr, tokenAddr, proxyAddr, implAddr, creator, attackerAddr,
-        tokenAddr, proxyAddr, implAddr, creator] := by kernel_rfl
-  rw [hk] at hb
-  simp only [List.mem_cons, List.not_mem_nil, or_false] at hb
-  rcases hb with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rfl
+  rw [acsP_eq]
 
 theorem lookup_stor5_allow : lookupS stor5 tokenAddr allowCPSlot = 0 := by decide +kernel
 
@@ -99,10 +96,13 @@ theorem approve_message_at (hg : CoveredFork g) (hW : WorldIs W acs6 stor5) :
   set c : PCfg := childCfg ((eP W).withFork g) ((frameP W).withFork g) [] [] stor5 acs6 with hc
   have hag : PAgree c := frameStart_agree .undefined (eP_at hg) mem_emptyWithCapacity_keys
     mem_emptyWithCapacity_adrs hW.2 hW.1
-  have horig : getOrigStorVal sevm tokenAddr allowCPSlot = 0 := by
-    show ((eP W).sta.benvStat.origState.get tokenAddr).stor.get allowCPSlot = 0
-    rw [eP_stat]
-    exact (hW.2 tokenAddr allowCPSlot).trans lookup_stor5_allow
+  have horig : c.devm.getOrigStorVal sevm tokenAddr allowCPSlot = 0 := by
+    unfold Devm.getOrigStorVal
+    split
+    · rfl
+    · show ((eP W).sta.benvStat.origState.get tokenAddr).stor.get allowCPSlot = 0
+      rw [eP_stat]
+      exact (hW.2 tokenAddr allowCPSlot).trans lookup_stor5_allow
   have hmem : c.devm.memory = Mem.empty := by
     show (eP W).dyna.memory = _
     rcases hm : (eP W).dyna.memory with ⟨data, size⟩
@@ -111,8 +111,8 @@ theorem approve_message_at (hg : CoveredFork g) (hW : WorldIs W acs6 stor5) :
     subst hmems
     rw [Array.toList_eq_nil_iff.mp hmemd]
     rfl
-  have hgasS : c.devm.gasLeft = 77697 + Token20.approveGasS sevm c.keys c.stor := by
-    show (eP W).dyna.gasLeft = 77697 + (203 + sstoreCostS sevm [] stor5 (Token20.apSlot sevm)
+  have hgasS : c.devm.gasLeft = 77697 + Token20.approveGasS sevm c.devm c.keys c.stor := by
+    show (eP W).dyna.gasLeft = 77697 + (203 + sstoreCostS sevm c.devm [] stor5 (Token20.apSlot sevm)
       (Token20.apVal sevm))
     have hs : Token20.apSlot sevm = allowCPSlot := hslot
     have hv : Token20.apVal sevm = 1000 := hval

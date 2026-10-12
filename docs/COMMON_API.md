@@ -978,6 +978,14 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   read from snapshot agreement at one owner/key; created accounts read zero on
   both sides. Both the full `OrigAgree` and finite `OrigAgreeOn` transport proofs
   use it without a not-created premise.
+  The interpreter's `SSTORE` arm reads the original value through
+  `Blanc.Lift.Witness.origReadK` (WitnessArms), not `Devm.getOrigStorVal` directly:
+  `Std.HashSet` membership in `createdAccounts` does not reduce in the kernel (the
+  bucket index goes through the opaque `System.Platform.numBits`), while the set's
+  `size` field does, so an empty created set is decided by size. A proof that
+  unfolds `sstoreStep` rewrites with `origReadK_eq` to recover the machine read.
+  A concrete witness whose created set is nonempty still cannot be kernel-evaluated
+  through an `SSTORE` that needs the original value.
   Hand a transported spawn's agreement and child nodes to lemmas stated over the kernel
   configuration through `pagree_re`/`nodeAt_re`: left to definitional
   unfolding, the kernel compares a concrete machine with its transported form by evaluating both
@@ -4562,8 +4570,13 @@ contract-neutral.
   scaffolding for deciding a long `wrun` as kernel chunks between literal boundaries
   (`Boundary.Bnd`/`obsB`/`cfgOf`/`obsD`/`obsDOk`, their composition `obsD_chain`,
   `obsD_chain3`, `obsB_of_obsD`, `run_of_obsB` (every boundary also records that the frame's
-  accounts to delete are still empty, `AtdClean`); `Bnd1`/`cfgOf1`/`obsD1`/
-  `obsDOk1` with the refund counter and the accounts to delete optional; and a two-code-child frame's staging `callPairFrom`/`callPairA`/`callPairB`/
+  accounts to delete are still empty and that the transaction's created accounts are empty,
+  `AtdClean`: `SSTORE`'s original read consults the created set, so a chunk over free
+  bookkeeping is decided with it fixed; a settled child supplied as data must likewise carry
+  an empty created set, e.g. `childObs … (d.withCreatedAccounts .emptyWithCapacity)`);
+  `Bnd1`/`cfgOf1`/`obsD1`/
+  `obsDOk1` with the refund counter and the accounts to delete optional (the created set always
+  empty); and a two-code-child frame's staging `callPairFrom`/`callPairA`/`callPairB`/
   `callPairFrom_stages`) in
   [`Blanc/Lift/WitnessBoundary.lean`](../Blanc/Lift/WitnessBoundary.lean). Code tries given as
   generated literals (checked once by kernel `rfl`): `CodeTries.ofData` in

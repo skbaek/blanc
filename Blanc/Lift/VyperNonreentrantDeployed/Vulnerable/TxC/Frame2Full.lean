@@ -39,6 +39,7 @@ configuration has `totalSupply = 1800 < 1906 = balanceOf[A']` and the remove-loc
 theorem frame2C_child_at (hg : CoveredFork g) (d3 : Devm)
     (g3 : d3.gasLeft = gasAC) (o3 : d3.output = []) (e3' : d3.error = none)
     (r3 : d3.refundCounter = refund3) (t3 : d3.accountsToDelete = .emptyWithCapacity)
+    (c3 : d3.createdAccounts = .emptyWithCapacity)
     (k3 : ChildOk (e2C.withFork g).sta cfg339C d3)
     (a3 : ChildAgree d3 keysAT adrsAC storAT acsAT) :
     ∃ (post : Devm) (cl : Cfg),
@@ -49,9 +50,10 @@ theorem frame2C_child_at (hg : CoveredFork g) (d3 : Devm)
       (lookupS cl.stor proxyAddress (26 : Nat).toB256).toNat = 1800 ∧
       (lookupS cl.stor proxyAddress balanceOfA2Slot.toB256).toNat = 1906 ∧
       (lookupS cl.stor proxyAddress (2 : Nat).toB256).toNat = 0 ∧
-      post.refundCounter = refund2 ∧ post.accountsToDelete = .emptyWithCapacity := by
+      post.refundCounter = refund2 ∧ post.accountsToDelete = .emptyWithCapacity ∧
+      post.createdAccounts = .emptyWithCapacity := by
   have hk := frame2C_kernel d3
-  rw [childObsX_eq g3 o3 e3' r3 t3] at hk
+  rw [childObsX_eq g3 o3 e3' r3 t3 c3] at hk
   unfold run2C run2FromC at hk
   rw [← e2C_sta_eq] at hk
   have hf2 : CoveredFork e2C.sta.benvStat.fork := by rw [e2C_block.1]; exact CoveredFork.prague
@@ -88,7 +90,7 @@ theorem frame2C_child_at (hg : CoveredFork g) (d3 : Devm)
             · simp only [obs2T, obs2CEELS, List.map_append, reduceCtorEq] at hk'
             · simp only [obs2T, obs2CEELS, Option.some.injEq, Prod.mk.injEq, Bool.and_eq_true,
                 decide_eq_true_eq] at hk'
-              obtain ⟨hgas, ho, h26, hA, h2', ⟨he, hrf⟩, hatd⟩ := hk'
+              obtain ⟨hgas, ho, h26, hA, h2', ⟨he, hrf⟩, hatd, hcrd⟩ := hk'
               obtain ⟨-, hpa, hpk, hcr, hia, hik, hsg, hst, -⟩ := cp2C_spec_at hg
               have herr : post.error = none := Option.isNone_iff_eq_none.mp he
               obtain ⟨hx, hs, ha⟩ := frame_of_wrun (fs := fs1) (f := (cp2C.withFork g).f)
@@ -99,10 +101,10 @@ theorem frame2C_child_at (hg : CoveredFork g) (d3 : Devm)
                 (fun a k => by rw [hst, e1C31_state]; exact e1C_world.1 a k)
                 (by rw [hst, e1C31_state]; exact e1C_world.2) hcr hsg
                 (fun hr => lift_exactM cert_checkM cert_jumpsOkM e2C_code (hg : CoveredFork g) hr)
-                fs1_zero s hr herr
+                fs1_zero (by rw [RepinBridge.storTransfer_of_keeps (by exact keeps2C)]; exact s) hr herr
               exact ⟨post, cl', hx, hs, ha, hgas,
                 List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) ho, herr, h26, hA, h2', hrf,
-                hatd⟩
+                hatd, hcrd⟩
             · simp only [obs2T, obs2CEELS, List.map_append, reduceCtorEq] at hk'
             · simp only [obs2T, obs2CEELS, List.map_append, reduceCtorEq] at hk'
           · simp only [obs2T, obs2CEELS, List.map_append, reduceCtorEq] at hk'

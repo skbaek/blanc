@@ -135,8 +135,8 @@ theorem vplus_exclusion {sevm : Sevm} {pre : Devm} {out : Execution}
     (active : ActiveRel P F h) (spawn : Spawns h c)
     {G : Exec.Deriv} (hG : G ∈ Exec.rawFrameRoots c.exc) :
     ¬ lockL.Enters P G :=
-  LockSpec.lock_exclusion (L := lockL) (P := P) R hfork lock_dominance (ownerDiscipline R hfork hP hI hroot)
-    hash hF (active.active hfork hash hF) spawn hG
+  LockSpec.lock_exclusion (L := lockL) (P := P) R hfork (pool_code_toList_ne_nil hP) lock_dominance
+    (ownerDiscipline R hfork hP hI hroot) hash hF (active.active hfork hash hF) spawn hG
 
 /-- V+ for the implementation address itself (`P = I`, no forwarder). -/
 theorem vplus_exclusion_impl {sevm : Sevm} {pre : Devm} {out : Execution}

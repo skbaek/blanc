@@ -1,6 +1,7 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame4Full
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1Full
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Check
+import Blanc.Lift.VyperNonreentrantDeployed.RepinBridge
 
 /-!
 V- witness, frame 4 as a child: the implementation frame the proxy's `DELEGATECALL`
@@ -51,6 +52,10 @@ theorem e3_keys : ∀ x, x ∈ e3.dyna.accessedStorageKeys ↔ x ∈ aCall.keys 
   intro x
   rw [hk, hik, hpk]; exact agree_aCall.1 x
 
+/-- The attacker's `CALL` moves its 100 wei between accounts with nonzero nonces: no storage
+is deleted. -/
+theorem keeps3 : RepinBridge.transferKeepsStor cp3.f.inner aCall.acs = true := by kernel_rfl
+
 /-- The proxy's world at entry: the attacker's storage, the accounts after the transfer. -/
 theorem e3_world : (∀ a k, storOf e3.dyna.state a k = lookupS aCall.stor a k) ∧
     AcctAgree e3.dyna.state acs3 := by
@@ -61,7 +66,8 @@ theorem e3_world : (∀ a k, storOf e3.dyna.state a k = lookupS aCall.stor a k) 
     rw [benvAfterTransfer_eq_S hC]; exact hb
   rw [hs]
   refine ⟨fun a k => ?_, acctAgree_transfer hC hb⟩
-  rw [benvAfterTransferB_stor hbB, hst]; exact agree_aCall.2.2.1 a k
+  rw [benvAfterTransferB_stor hbB hC (fun a k => by rw [hst]; exact agree_aCall.2.2.1 a k),
+    RepinBridge.storTransfer_of_keeps keeps3]
 
 theorem e31_acc : e31.dyna.accessedAddresses = e3.dyna.accessedAddresses := rfl
 theorem e31_keys : e31.dyna.accessedStorageKeys = e3.dyna.accessedStorageKeys := rfl
@@ -108,14 +114,14 @@ def cl4 : Cfg := haltCfgOf r4
 /-- What a halt with frame 4's observation is. -/
 theorem obs4_facts {r : Res} (h : obs4 r = obs4EELS) : ∃ d cl, r = .done (.halted d) cl ∧
     d.gasLeft = gas4 ∧ d.output = word 106 ∧ d.error = none ∧ cl.keys = keys4 ∧
-    cl.adrs = adrs4 ∧ cl.stor = storA ∧ cl.acs = acsA := by
+    cl.adrs = adrs4 ∧ cl.stor = storA ∧ cl.acs = acsA ∧ d.createdAccounts = .emptyWithCapacity := by
   rcases r with c | ⟨d | d, cl⟩ | _
   · simp only [obs4, obs4EELS, reduceCtorEq] at h
   · simp only [obs4, obs4EELS, Option.some.injEq, Prod.mk.injEq, Bool.and_eq_true,
       decide_eq_true_eq] at h
-    obtain ⟨hg, ho, ⟨⟨⟨he, hk⟩, ha⟩, hs⟩, hc⟩ := h
+    obtain ⟨hg, ho, ⟨⟨⟨he, hk⟩, ha⟩, hs⟩, hc, hcr⟩ := h
     exact ⟨d, cl, rfl, hg, List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) ho,
-      Option.isNone_iff_eq_none.mp he, hk, ha, hs, hc⟩
+      Option.isNone_iff_eq_none.mp he, hk, ha, hs, hc, hcr⟩
   · simp only [obs4, obs4EELS, reduceCtorEq] at h
   · simp only [obs4, obs4EELS, reduceCtorEq] at h
 
@@ -126,7 +132,17 @@ theorem r4_facts : r4 = .done (.halted post4) cl4 ∧ post4.gasLeft = gas4 ∧
   have hd : post4 = d := congrArg haltedOf hr
   have hc : cl4 = cl := congrArg haltCfgOf hr
   subst hd hc
-  exact ⟨hr, h⟩
+  exact ⟨hr, h.1, h.2.1, h.2.2.1, h.2.2.2.1, h.2.2.2.2.1, h.2.2.2.2.2.1, h.2.2.2.2.2.2.1⟩
+
+/-- Frame 4 creates no account: its halted machine's created set is the empty one. -/
+theorem post4_created : post4.createdAccounts = .emptyWithCapacity := by
+  obtain ⟨d, cl, hr, h⟩ := obs4_facts frame4_kernel
+  have hd : post4 = d := congrArg haltedOf hr
+  subst hd
+  exact h.2.2.2.2.2.2.2
+
+/-- The proxy's `DELEGATECALL` moves no value: frame 4 starts on the attacker's storage. -/
+theorem keeps4 : RepinBridge.transferKeepsStor cp4.f.inner acs3 = true := by kernel_rfl
 
 /-- **Frame 4 as the proxy's child.** -/
 theorem frame4_child : Nonempty (Exec e4.pc e4.sta e4.dyna (.ok post4)) ∧
@@ -139,7 +155,7 @@ theorem frame4_child : Nonempty (Exec e4.pc e4.sta e4.dyna (.ok post4)) ∧
     (fun a k => by rw [hst, e31_state]; exact e3_world.1 a k)
     (by rw [hst, e31_state]; exact e3_world.2) hcr hsg
     (fun hr => lift_exactM cert_checkM cert_jumpsOkM e4_code e4_fork hr) fs1_zero
-    ⟨id, fun _ _ r => r⟩ hrun herr
+    (by rw [RepinBridge.storTransfer_of_keeps keeps4]; exact ⟨id, fun _ _ r => r⟩) hrun herr
   rw [hk, ha, hs, hc] at h
   exact h
 
