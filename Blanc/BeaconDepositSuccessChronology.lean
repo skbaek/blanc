@@ -18,7 +18,11 @@ open Jaune.Ninst Blanc.Ninst
 
 /-- A model-successful public deposit has an actual compiled execution whose
 complete retained storage-effect list is count first and the unique first-live
-branch cell second. -/
+branch cell second.
+
+The terminal branch write is priced from the machine original read
+`base.getOrigStorVal` (zero for an owner created earlier in the transaction),
+as Jaune's `SSTORE` prices it; created owners remain covered. -/
 theorem deposit_success_retainedStorageEffectTriples
     (sevm : Sevm) (base : Devm)
     (hfork : CoveredFork sevm.benvStat.fork)
@@ -61,10 +65,14 @@ theorem deposit_success_retainedStorageEffectTriples
     (hstatic : sevm.isStatic = false)
     (hbaseError : base.error = none)
     (hbranchSentry : gCallStipend < G + 2 +
-      insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot)
+      insertionFirstLiveStoreCostOf
+        (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+        sevm stor keys 0 n depositDataRoot)
     (hbound :
       (G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+          insertionFirstLiveStoreCostOf
+            (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+            sevm stor keys 0 n depositDataRoot) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0
             ((accOfStor
@@ -72,7 +80,9 @@ theorem deposit_success_retainedStorageEffectTriples
             depositDataRoot keys) < 2 ^ 256)
     (hcountSentry : gCallStipend <
       ((G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+          insertionFirstLiveStoreCostOf
+            (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+            sevm stor keys 0 n depositDataRoot) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0
             ((accOfStor
@@ -80,7 +90,9 @@ theorem deposit_success_retainedStorageEffectTriples
             depositDataRoot keys)) + 14 + countCost)
     (hreconstructBound :
       ((((G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+          insertionFirstLiveStoreCostOf
+            (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+            sevm stor keys 0 n depositDataRoot) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0
             ((accOfStor
@@ -92,7 +104,9 @@ theorem deposit_success_retainedStorageEffectTriples
       ∃ execution : Exec 0 sevm
           (base.setMach
             ⟨[], Mem.empty,
-              depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
+              depositRuntimeSuccessGasOf
+                (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+                sevm base stor keys depositDataRoot n
                 ((accOfStor
                   (Devm.getStor base sevm.currentTarget)).count + 1)
                 countCost G, base.stateGas⟩)
@@ -100,7 +114,9 @@ theorem deposit_success_retainedStorageEffectTriples
         Prog.RunCompiledTo sevm
           (base.setMach
             ⟨[], Mem.empty,
-              depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
+              depositRuntimeSuccessGasOf
+                (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+                sevm base stor keys depositDataRoot n
                 ((accOfStor
                   (Devm.getStor base sevm.currentTarget)).count + 1)
                 countCost G, base.stateGas⟩)
@@ -135,13 +151,12 @@ theorem deposit_success_retainedStorageEffectTriples
       (by simpa only [s] using hstor)
       (by simpa only [s] using hkeys)
       (by simpa only [s] using hcount)
-      (orig := getOrigStorVal sevm sevm.currentTarget (branchSlot (0 + n)))
-      ?horigReserved
+      (orig := base.getOrigStorVal sevm sevm.currentTarget (branchSlot n)) rfl
       hheight (by simpa only [s] using hfirst) hnodeleg hwarm hpre hdepth
       hstatic hbranchSentry
-      (by simpa only [s, insertionFirstLiveStoreCost_eq_of] using hbound)
-      (by simpa only [s, insertionFirstLiveStoreCost_eq_of] using hcountSentry)
-      (by simpa only [s, insertionFirstLiveStoreCost_eq_of] using
+      (by simpa only [s] using hbound)
+      (by simpa only [s] using hcountSentry)
+      (by simpa only [s] using
         hreconstructBound) (by rfl) (by rfl)
   let branchValue :=
     accumulatedNode Bytes.sha256 (accOfStor stor).branch
@@ -153,13 +168,13 @@ theorem deposit_success_retainedStorageEffectTriples
       (runtime.main :: runtime.aux) sevm
       (base.setMach
         ⟨[], Mem.empty,
-          depositEndpointSuccessGas sevm base stor keys depositDataRoot n
+          depositEndpointSuccessGasOf (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+            sevm base stor keys depositDataRoot n
             (s.count + 1) countCost G, base.stateGas⟩)
       depositEndpoint (.ok post)
       [(sevm.currentTarget, depositCountSlot, Nat.toB256 s.count + 1),
         (sevm.currentTarget, branchSlot n, branchValue)] := by
-    simpa only [post, branchValue, ← depositEndpointSuccessGas_eq_of] using
-      hendpoint
+    simpa only [post, branchValue] using hendpoint
   have hlengthWordNe : sevm.data.length.toB256 ≠ 0 := by
     intro hzero
     have hnat := congrArg B256.toNat hzero
@@ -180,7 +195,7 @@ theorem deposit_success_retainedStorageEffectTriples
       hlengthWordNe hselector hendpoint'
         (by simpa only [Execution.commits, Option.isNone_iff_eq_none] using hpostError) hcode
   refine ⟨post, execution, ?_, ?_, hcompiled⟩
-  · simpa only [depositRuntimeSuccessGas, s] using hrun
+  · simpa only [depositRuntimeSuccessGasOf, s] using hrun
   · exact heffects
 
 end Blanc.BeaconDeposit

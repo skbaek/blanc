@@ -15,21 +15,13 @@ namespace Blanc.BeaconDeposit
 open Jaune
 open Jaune.Ninst Blanc.Ninst
 
-/- STOPPED (reserved registered statement P6, cause OS; see the unit report).
-Jaune `ca9f27d` prices the terminal branch `SSTORE` from the machine read
-`Devm.getOrigStorVal`, which is zero for an owner in `createdAccounts`, while
-this unchanged header prices it from the raw transaction-start snapshot
-(`insertionFirstLiveStoreCost`, inside `depositRuntimeSuccessGas`).  The only
-remaining obligation is the reserved read agreement
-`base.getOrigStorVal sevm sevm.currentTarget (branchSlot n) =
-  getOrigStorVal sevm sevm.currentTarget (branchSlot (0 + n))`,
-which the arbitrary-base premises do not supply.  The original text is kept
-verbatim below, with only the reserved hole marked, until the user decides
-between the actual-original (A) and not-created (B) restatements.
-
 /-- C6 compiled flagship: a model-successful deposit starting from an
 artifact-invariant storage state executes the compiled runtime and preserves
-that invariant for the history extended by the deposited data node. -/
+that invariant for the history extended by the deposited data node.
+
+The terminal branch write is priced from the machine original read
+`base.getOrigStorVal` (zero for an owner created earlier in the transaction),
+as Jaune's `SSTORE` prices it; created owners remain covered. -/
 theorem deposit_success_artifactInv
     (sevm : Sevm) (base : Devm)
     (hfork : CoveredFork sevm.benvStat.fork)
@@ -74,10 +66,14 @@ theorem deposit_success_artifactInv
     (hdepth : sevm.depth ≠ 0)
     (hstatic : sevm.isStatic = false)
     (hbranchSentry : gCallStipend < G + 2 +
-      insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot)
+      insertionFirstLiveStoreCostOf
+        (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+        sevm stor keys 0 n depositDataRoot)
     (hbound :
       (G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+          insertionFirstLiveStoreCostOf
+            (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+            sevm stor keys 0 n depositDataRoot) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0
             ((accOfStor
@@ -85,7 +81,9 @@ theorem deposit_success_artifactInv
             depositDataRoot keys) < 2 ^ 256)
     (hcountSentry : gCallStipend <
       ((G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+          insertionFirstLiveStoreCostOf
+            (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+            sevm stor keys 0 n depositDataRoot) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0
             ((accOfStor
@@ -93,7 +91,9 @@ theorem deposit_success_artifactInv
             depositDataRoot keys)) + 14 + countCost)
     (hreconstructBound :
       ((((G + 46 +
-          insertionFirstLiveStoreCost sevm stor keys 0 n depositDataRoot) +
+          insertionFirstLiveStoreCostOf
+            (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+            sevm stor keys 0 n depositDataRoot) +
         insertionDeadGas sevm.currentTarget stor n
           (insertionNatState 0
             ((accOfStor
@@ -105,7 +105,9 @@ theorem deposit_success_artifactInv
       Prog.RunCompiled sevm
         (base.setMach
           ⟨[], Mem.empty,
-            depositRuntimeSuccessGas sevm base stor keys depositDataRoot n
+            depositRuntimeSuccessGasOf
+              (base.getOrigStorVal sevm sevm.currentTarget (branchSlot n))
+              sevm base stor keys depositDataRoot n
               ((accOfStor
                 (Devm.getStor base sevm.currentTarget)).count + 1)
               countCost G, base.stateGas⟩)
@@ -120,8 +122,7 @@ theorem deposit_success_artifactInv
       signature depositDataRoot s' ev stor keys countCost n G hdataBound hdec
       hOk hstor hkeys hcount hheight hfirst hselector hnodeleg hwarm hpre
       hdepth hstatic hbranchSentry hbound hcountSentry hreconstructBound hcode
-      (orig := getOrigStorVal sevm sevm.currentTarget (branchSlot (0 + n)))
-      ?horigReserved
+      (orig := base.getOrigStorVal sevm sevm.currentTarget (branchSlot n)) rfl
   have targetStorage : Devm.getStor post sevm.currentTarget =
       stor.set (branchSlot n)
         (accumulatedNode Bytes.sha256 (accOfStor stor).branch
@@ -130,6 +131,5 @@ theorem deposit_success_artifactInv
   refine ⟨post, run, ?_⟩
   exact ArtifactInv.of_depositSuccessCompiledStorage
     hinvariant hOk hheight hfirst countStorage targetStorage
--/
 
 end Blanc.BeaconDeposit
