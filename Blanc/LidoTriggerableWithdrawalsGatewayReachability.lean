@@ -359,11 +359,12 @@ private theorem pauseStored_refundCounter
     (sevm : Sevm) (base : Devm) (duration : B256) :
     (pauseStored sevm base duration).refundCounter =
       sstoreNewRefundCounter sevm.benvStat.rules.gas (duration + sevm.benvStat.time)
-        (getOrigStorVal sevm sevm.currentTarget resumeSinceSlot)
+        (base.getOrigStorVal sevm sevm.currentTarget resumeSinceSlot)
         (base.getStorVal sevm.currentTarget resumeSinceSlot)
         base.refundCounter := by
   rw [pauseStored, afterSstore_refundCounter,
     pauseResumeWarm_getStorVal, pauseResumeWarm_refundCounter]
+  rfl
 
 private theorem pauseStored_transientStorage
     (sevm : Sevm) (base : Devm) (duration : B256) :
@@ -420,7 +421,7 @@ theorem pauseFinitePost_refundCounter
     (sevm : Sevm) (base : Devm) (duration : B256) (G : Nat) :
     (pauseFinitePost sevm base duration G).refundCounter =
       sstoreNewRefundCounter sevm.benvStat.rules.gas (duration + sevm.benvStat.time)
-        (getOrigStorVal sevm sevm.currentTarget resumeSinceSlot)
+        (base.getOrigStorVal sevm sevm.currentTarget resumeSinceSlot)
         (base.getStorVal sevm.currentTarget resumeSinceSlot)
         base.refundCounter := by
   rw [pauseFinitePost, setMach_refundCounter_local, pauseLogged,
@@ -507,12 +508,13 @@ theorem pauseSentinelPost_refundCounter
     (sevm : Sevm) (base : Devm) (G : Nat) :
     (pauseSentinelPost sevm base G).refundCounter =
       sstoreNewRefundCounter sevm.benvStat.rules.gas pauseInfinitely
-        (getOrigStorVal sevm sevm.currentTarget resumeSinceSlot)
+        (base.getOrigStorVal sevm sevm.currentTarget resumeSinceSlot)
         (base.getStorVal sevm.currentTarget resumeSinceSlot)
         base.refundCounter := by
   rw [pauseSentinelPost, setMach_refundCounter_local,
     addLog_refundCounter_local, afterSstore_refundCounter,
     pauseResumeWarm_getStorVal, pauseResumeWarm_refundCounter]
+  rfl
 
 theorem pauseSentinelPost_transientStorage
     (sevm : Sevm) (base : Devm) (G : Nat) :
@@ -864,7 +866,8 @@ private theorem pauseFiniteSstore_runCompiled
   have hcost : sstoreCost sevm
       base resumeSinceSlot value = 20000 := by
     unfold sstoreCost
-    simp only [hwarm, if_pos, Nat.zero_add, horiginal, hresume]
+    simp only [hwarm, if_pos, Nat.zero_add, Devm.getOrigStorVal,
+      horiginal, ite_self, hresume]
     rw [sstoreValueCost, if_pos ⟨rfl, hvalueNonzero.symm⟩, if_pos rfl]
     norm_num only [gasStorageSet]
   simpa only [hcost] using
