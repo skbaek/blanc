@@ -2,6 +2,7 @@ import Blanc.LidoCircuitBreakerCode
 import Blanc.LidoCircuitBreakerRegistry
 import Blanc.LidoCircuitBreakerRegistryModel
 import Blanc.ForwardCall
+import Blanc.ForwardStorageAccess
 
 /-!
 Concrete successful exact-code execution control for the CircuitBreaker
@@ -108,9 +109,9 @@ private theorem registerAfterSetStoreExecSatOf
       norm_num only [gCallStipend, gasStorageSet]
     · exact hstatic
     · change sstoreValueCost
-        (getOrigStorVal e e.currentTarget (expirySlot 9))
+        (d.getOrigStorVal e e.currentTarget (expirySlot 9))
         (d.getStorVal e.currentTarget (expirySlot 9)) 10 = gasStorageSet
-      simp only [sstoreValueCost, hexpiryOrig, hexpiry, ne_eq, true_and, ↓reduceIte, ite_not, ite_eq_right_iff]
+      simp only [sstoreValueCost, actualOrigStorVal_eq_zero_of_raw hexpiryOrig, hexpiry, ne_eq, true_and, ↓reduceIte, ite_not, ite_eq_right_iff]
       intro h
       exact False.elim ((by decide : (0 : B256) ≠ 10) h)
     · rfl
@@ -701,7 +702,7 @@ private theorem newCountUpdateTailExecSatOf
       (fun ex => ∃ post, ex = .ok post) := by
   let d₁ := addAccessedStorageKey d e.currentTarget (countSlot 9)
   let refund := sstoreNewRefundCounter e.benvStat.rules.gas 1
-    (getOrigStorVal e e.currentTarget (countSlot 9))
+    (d₁.getOrigStorVal e e.currentTarget (countSlot 9))
     (d₁.getStorVal e.currentTarget (countSlot 9)) d₁.refundCounter
   let d₂ := (d₁.withRefundCounter refund).setStorVal
     e.currentTarget (countSlot 9) 1
@@ -727,11 +728,9 @@ private theorem newCountUpdateTailExecSatOf
       rfl
     · show (Devm.getStor d₂ a).get k = _
       have hoff : Devm.getStor d₂ a = Devm.getStor d₁ a := by
-        simp only [d₂, Devm.getStor, Devm.getAcct, Devm.setStorVal,
-          Devm.withRefundCounter, Devm.withState, Devm.setWorld,
-          State.setStorVal, Devm.state]
-        rw [State.get_set_ne _ ha]
-        rfl
+        rw [show d₂ = (d₁.withRefundCounter refund).setStorVal
+            e.currentTarget (countSlot 9) 1 by rfl,
+          setStorVal_getStor_ne ha, Devm.withRefundCounter_getStor]
       rw [hoff]
       change (Devm.getStor d₁ a).get k = (Devm.getStor d₁ a).get k
       rfl
@@ -808,9 +807,9 @@ private theorem newCountUpdateTailExecSatOf
       · norm_num only [gCallStipend, gasStorageSet, Devm.gasLeft_setMach]
       · exact hstatic
       · change sstoreValueCost
-          (getOrigStorVal e e.currentTarget (countSlot 9))
+          (d₁.getOrigStorVal e e.currentTarget (countSlot 9))
           (d₁.getStorVal e.currentTarget (countSlot 9)) 1 = gasStorageSet
-        simp only [sstoreValueCost, hcountOrig, hcount₁, ne_eq, true_and, ↓reduceIte, ite_not, ite_eq_right_iff]
+        simp only [sstoreValueCost, actualOrigStorVal_eq_zero_of_raw hcountOrig, hcount₁, ne_eq, true_and, ↓reduceIte, ite_not, ite_eq_right_iff]
         intro h
         exact False.elim ((by decide : (0 : B256) ≠ 1) h)
       · rfl
@@ -978,7 +977,7 @@ private theorem afterOldPauserExecSatOf
 private def successfulWritePost (e : Sevm) (d : Devm)
     (key value : B256) : Devm :=
   (d.withRefundCounter (sstoreNewRefundCounter e.benvStat.rules.gas value
-    (getOrigStorVal e e.currentTarget key)
+    (d.getOrigStorVal e e.currentTarget key)
     (d.getStorVal e.currentTarget key) d.refundCounter)).setStorVal
       e.currentTarget key value
 
@@ -1005,7 +1004,7 @@ private structure SuccessfulWriteCertificate
   error : post.error = d.error
   accountsToDelete : post.accountsToDelete = d.accountsToDelete
   refundCounter : post.refundCounter = sstoreNewRefundCounter e.benvStat.rules.gas value
-    (getOrigStorVal e e.currentTarget key)
+    (d.getOrigStorVal e e.currentTarget key)
     (d.getStorVal e.currentTarget key) d.refundCounter
 
 private def successfulWriteCertificateOf
@@ -1016,7 +1015,7 @@ private def successfulWriteCertificateOf
     show (Devm.getStor _ e.currentTarget).get key = value
     rw [show post =
         (d.withRefundCounter (sstoreNewRefundCounter e.benvStat.rules.gas value
-          (getOrigStorVal e e.currentTarget key)
+          (d.getOrigStorVal e e.currentTarget key)
           (d.getStorVal e.currentTarget key)
           d.refundCounter)).setStorVal e.currentTarget key value by rfl,
       setStorVal_getStor_self, Stor.get_set_self]
@@ -1029,18 +1028,18 @@ private def successfulWriteCertificateOf
       show (Devm.getStor _ e.currentTarget).get k = _
       rw [show post =
           (d.withRefundCounter (sstoreNewRefundCounter e.benvStat.rules.gas value
-            (getOrigStorVal e e.currentTarget key)
+            (d.getOrigStorVal e e.currentTarget key)
             (d.getStorVal e.currentTarget key)
             d.refundCounter)).setStorVal e.currentTarget key value by rfl,
         setStorVal_getStor_self, Stor.get_set_ne _ hk]
       rfl
     · show (Devm.getStor post a).get k = _
       have hoff : Devm.getStor post a = Devm.getStor d a := by
-        simp only [post, successfulWritePost, Devm.getStor, Devm.getAcct,
-          Devm.setStorVal, Devm.withRefundCounter, Devm.withState,
-          Devm.setWorld, State.setStorVal, Devm.state]
-        rw [State.get_set_ne _ ha]
-        rfl
+        rw [show post = (d.withRefundCounter (sstoreNewRefundCounter e.benvStat.rules.gas value
+            (d.getOrigStorVal e e.currentTarget key)
+            (d.getStorVal e.currentTarget key)
+            d.refundCounter)).setStorVal e.currentTarget key value by rfl,
+          setStorVal_getStor_ne ha, Devm.withRefundCounter_getStor]
       rw [hoff]
       rfl
   refine {
@@ -1089,9 +1088,9 @@ private theorem execSat_successfulWrite_step
     · simp only [Devm.gasLeft_setMach, gCallStipend, gasStorageSet]; omega
     · exact hstatic
     · change sstoreValueCost
-        (getOrigStorVal e e.currentTarget key)
+        (d.getOrigStorVal e e.currentTarget key)
         (d.getStorVal e.currentTarget key) value = gasStorageSet
-      simp only [sstoreValueCost, horiginal, hcurrent, ne_eq, true_and, ↓reduceIte, ite_not, ite_eq_right_iff]
+      simp only [sstoreValueCost, actualOrigStorVal_eq_zero_of_raw horiginal, hcurrent, ne_eq, true_and, ↓reduceIte, ite_not, ite_eq_right_iff]
       intro h
       exact False.elim (hvalue h.symm)
     · rfl
