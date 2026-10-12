@@ -50,8 +50,8 @@ end TfS
 abbrev apSlot (sevm : Sevm) : B256 := allowSlot sevm.caller (apSpender sevm)
 
 /-- What `approve` costs, on the shadows. -/
-def approveGasS (sevm : Sevm) (keys : List (Adr × B256)) (stor : StorShadow) : Nat :=
-  203 + sstoreCostS sevm keys stor (apSlot sevm) (apVal sevm)
+def approveGasS (sevm : Sevm) (b : Devm) (keys : List (Adr × B256)) (stor : StorShadow) : Nat :=
+  203 + sstoreCostS sevm b keys stor (apSlot sevm) (apVal sevm)
 
 /-- The machine a successful `approve` halts with, on the shadows. -/
 def approvePostS (sevm : Sevm) (c : PCfg) (G : Nat) : Devm :=
@@ -64,7 +64,7 @@ theorem approve_child {sevm : Sevm} {c : PCfg} {G : Nat} (hcode : sevm.code = co
     (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hsel : Sevm.selector sevm = 0x095ea7b3) (hpc : c.pc = 0) (hstack : c.devm.stack = [])
     (hmem : c.devm.memory = Mem.empty) (hag : PAgree c)
-    (hgas : c.devm.gasLeft = G + approveGasS sevm c.keys c.stor) (hsent : gCallStipend < G) :
+    (hgas : c.devm.gasLeft = G + approveGasS sevm c.devm c.keys c.stor) (hsent : gCallStipend < G) :
     ChildAgree (approvePostS sevm c G) ((sevm.currentTarget, apSlot sevm) :: c.keys) c.adrs
         (((sevm.currentTarget, apSlot sevm), apVal sevm) :: c.stor) c.acs ∧
       ∀ x, NodeAt sevm c x → x.exn = .ok (approvePostS sevm c G) ∧

@@ -99,10 +99,13 @@ theorem approve_message_at (hg : CoveredFork g) (hW : WorldIs W acs6 stor5) :
   set c : PCfg := childCfg ((eP W).withFork g) ((frameP W).withFork g) [] [] stor5 acs6 with hc
   have hag : PAgree c := frameStart_agree .undefined (eP_at hg) mem_emptyWithCapacity_keys
     mem_emptyWithCapacity_adrs hW.2 hW.1
-  have horig : getOrigStorVal sevm tokenAddr allowCPSlot = 0 := by
-    show ((eP W).sta.benvStat.origState.get tokenAddr).stor.get allowCPSlot = 0
-    rw [eP_stat]
-    exact (hW.2 tokenAddr allowCPSlot).trans lookup_stor5_allow
+  have horig : c.devm.getOrigStorVal sevm tokenAddr allowCPSlot = 0 := by
+    unfold Devm.getOrigStorVal
+    split
+    · rfl
+    · show ((eP W).sta.benvStat.origState.get tokenAddr).stor.get allowCPSlot = 0
+      rw [eP_stat]
+      exact (hW.2 tokenAddr allowCPSlot).trans lookup_stor5_allow
   have hmem : c.devm.memory = Mem.empty := by
     show (eP W).dyna.memory = _
     rcases hm : (eP W).dyna.memory with ⟨data, size⟩
@@ -111,8 +114,8 @@ theorem approve_message_at (hg : CoveredFork g) (hW : WorldIs W acs6 stor5) :
     subst hmems
     rw [Array.toList_eq_nil_iff.mp hmemd]
     rfl
-  have hgasS : c.devm.gasLeft = 77697 + Token20.approveGasS sevm c.keys c.stor := by
-    show (eP W).dyna.gasLeft = 77697 + (203 + sstoreCostS sevm [] stor5 (Token20.apSlot sevm)
+  have hgasS : c.devm.gasLeft = 77697 + Token20.approveGasS sevm c.devm c.keys c.stor := by
+    show (eP W).dyna.gasLeft = 77697 + (203 + sstoreCostS sevm c.devm [] stor5 (Token20.apSlot sevm)
       (Token20.apVal sevm))
     have hs : Token20.apSlot sevm = allowCPSlot := hslot
     have hv : Token20.apVal sevm = 1000 := hval
