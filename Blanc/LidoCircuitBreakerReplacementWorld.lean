@@ -399,6 +399,16 @@ theorem replWorld_getOrigStorVal {oldCount : B256} {gas : Nat} {key : B256} :
   change ((replWorldState oldCount).get replWorldOwner).stor.get key = _
   rw [replWorldState, State.get_set_self]
 
+/-- The world's owner is not created in its transaction, so the machine's
+actual original read is the transaction-start snapshot word. -/
+theorem replWorld_actualOrigStorVal {oldCount : B256} {gas : Nat} {key : B256} :
+    (replWorldPre oldCount gas).getOrigStorVal (replWorldSevm oldCount gas)
+      replWorldOwner key = (replWorldStor oldCount).get key := by
+  have hnc : replWorldOwner ∉ (replWorldPre oldCount gas).createdAccounts :=
+    Std.HashSet.not_mem_emptyWithCapacity
+  rw [Devm.getOrigStorVal, ite_cond_eq_false _ _ (eq_false hnc)]
+  exact replWorld_getOrigStorVal
+
 theorem replWorld_getStor (oldCount : B256) (gas : Nat) :
     Devm.getStor (replWorldPre oldCount gas) replWorldOwner =
       replWorldStor oldCount := by
@@ -735,7 +745,7 @@ theorem replRetainedWorld_run :
         rw [replWorld_currentTarget, replWorld_getStorVal]
         exact replWorld_stor_assignment _)
       (by
-        rw [replWorld_currentTarget, replWorld_getOrigStorVal]
+        rw [replWorld_currentTarget, replWorld_actualOrigStorVal]
         exact replWorld_stor_assignment _)
       (replWorld_resetCost (by decide) (by decide))
       (by
@@ -743,7 +753,7 @@ theorem replRetainedWorld_run :
           replWorld_assignmentPost_getStorVal replWorld_assignment_ne_oldCount]
         exact replWorld_stor_oldCount _)
       (by
-        rw [replWorld_currentTarget, replWorld_getOrigStorVal]
+        rw [replWorld_currentTarget, replWorld_actualOrigStorVal]
         exact replWorld_stor_oldCount _)
       (replWorld_resetCost (by decide) (by decide))
       (by
@@ -752,7 +762,7 @@ theorem replRetainedWorld_run :
             replWorld_newCount_ne_oldCount.symm replWorld_assignment_ne_newCount]
         exact replWorld_stor_newCount _)
       (by
-        rw [replWorld_currentTarget, replWorld_getOrigStorVal]
+        rw [replWorld_currentTarget, replWorld_actualOrigStorVal]
         exact replWorld_stor_newCount _)
       (by decide) (replWorld_setCost (by decide)) (by decide)
       (by
@@ -776,7 +786,7 @@ theorem replRetainedWorld_run :
             replWorld_assignment_ne_newExpiry]
         exact replWorld_stor_newExpiry _)
       (by
-        rw [replWorld_currentTarget, replWorld_getOrigStorVal]
+        rw [replWorld_currentTarget, replWorld_actualOrigStorVal]
         exact replWorld_stor_newExpiry _)
       (by
         rw [replWorld_currentTarget,
@@ -899,7 +909,7 @@ theorem replOldLastWorld_run :
         rw [replWorld_currentTarget, replWorld_getStorVal]
         exact replWorld_stor_assignment _)
       (by
-        rw [replWorld_currentTarget, replWorld_getOrigStorVal]
+        rw [replWorld_currentTarget, replWorld_actualOrigStorVal]
         exact replWorld_stor_assignment _)
       (replWorld_resetCost (by decide) (by decide))
       (by
@@ -907,7 +917,7 @@ theorem replOldLastWorld_run :
           replWorld_assignmentPost_getStorVal replWorld_assignment_ne_oldCount]
         exact replWorld_stor_oldCount _)
       (by
-        rw [replWorld_currentTarget, replWorld_getOrigStorVal]
+        rw [replWorld_currentTarget, replWorld_actualOrigStorVal]
         exact replWorld_stor_oldCount _)
       (replWorld_resetCost (by decide) (by decide))
       (by
@@ -916,7 +926,7 @@ theorem replOldLastWorld_run :
             replWorld_newCount_ne_oldCount.symm replWorld_assignment_ne_newCount]
         exact replWorld_stor_newCount _)
       (by
-        rw [replWorld_currentTarget, replWorld_getOrigStorVal]
+        rw [replWorld_currentTarget, replWorld_actualOrigStorVal]
         exact replWorld_stor_newCount _)
       (by decide) (replWorld_setCost (by decide))
       (by
@@ -929,7 +939,7 @@ theorem replOldLastWorld_run :
             replWorld_assignment_ne_oldExpiry]
         exact replWorld_stor_oldExpiry _)
       (by
-        rw [replWorld_currentTarget, replWorld_getOrigStorVal]
+        rw [replWorld_currentTarget, replWorld_actualOrigStorVal]
         exact replWorld_stor_oldExpiry _)
       (by
         rw [replWorld_currentTarget,
@@ -954,7 +964,7 @@ theorem replOldLastWorld_run :
             replWorld_assignment_ne_newExpiry]
         exact replWorld_stor_newExpiry _)
       (by
-        rw [replWorld_currentTarget, replWorld_getOrigStorVal]
+        rw [replWorld_currentTarget, replWorld_actualOrigStorVal]
         exact replWorld_stor_newExpiry _)
       (by
         rw [replWorld_currentTarget,

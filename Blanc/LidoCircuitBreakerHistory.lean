@@ -32,7 +32,8 @@ def RegistryCoherent (s : Stor) : Prop :=
 /-- The Lido CircuitBreaker contract specification.  Storage-only: the
 invariant ignores the callvalue in flight and the contract's ETH balance, so
 the balance side condition is trivial and every balance-movement slot is
-discharged by the fact that `subBal`/`addBal` do not touch storage. -/
+discharged by the fact that `subBal`/`addBal` do not touch the storage of an
+owner the ladder already knows is protected (nonzero nonce or nonempty code). -/
 def registrySpec (dp : DeployParams) : ContractSpec where
   prog := runtime dp
   Inv := fun s _ _ => RegistryCoherent s
@@ -44,30 +45,19 @@ def registrySpec (dp : DeployParams) : ContractSpec where
   side_transfer := fun _ _ => trivial
   side_addBal := fun _ _ => trivial
   inv_transfer := by
-    intro st st' caller callee ca wad v h_sub h_ne _ h_inv
-    show RegistryCoherent _
-    have h_stor : (st'.addBal callee wad).getStor ca = st.getStor ca := by
-      rcases State.of_subBal h_sub with ⟨-, h_st'⟩
-      show ((st'.setBal callee _).get ca).stor = (st.get ca).stor
-      rw [State.setBal_get_stor, h_st', State.setBal_get_stor]
-    rw [h_stor]
+    intro st st' caller callee ca wad v h_sub _ _ protection h_inv
+    show RegistryCoherent ((st'.addBal callee wad).get ca).stor
+    rw [(of_state_transfer_fields h_sub).1 ca protection]
     exact h_inv
   inv_recv_transfer := by
-    intro st st' caller ca wad h_sub h_ne _ h_inv
-    show RegistryCoherent _
-    have h_stor : (st'.addBal ca wad).getStor ca = st.getStor ca := by
-      rcases State.of_subBal h_sub with ⟨-, h_st'⟩
-      show ((st'.setBal ca _).get ca).stor = (st.get ca).stor
-      rw [State.setBal_get_stor, h_st', State.setBal_get_stor]
-    rw [h_stor]
+    intro st st' caller ca wad h_sub _ _ protection h_inv
+    show RegistryCoherent ((st'.addBal ca wad).get ca).stor
+    rw [(of_state_transfer_fields h_sub).1 ca protection]
     exact h_inv
   inv_addBal := by
-    intro w ca a val v _ _ h_inv
-    show RegistryCoherent _
-    have h_stor : (w.addBal a val).getStor ca = w.getStor ca := by
-      show ((w.setBal a _).get ca).stor = (w.get ca).stor
-      rw [State.setBal_get_stor]
-    rw [h_stor]
+    intro w ca a val v _ _ protection h_inv
+    show RegistryCoherent ((w.setBal a _).get ca).stor
+    rw [State.setBal_get_stor_of_protected protection]
     exact h_inv
 
 /-- The reader-facing stable checkpoint: the exact compiled runtime is

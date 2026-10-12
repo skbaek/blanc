@@ -2306,7 +2306,10 @@ theorem setPauseDuration_body_runCompiledTo
       rw [Mem.size_write_word_at, Mem.size_write_word]) rfl]
     decide
   case h_cost =>
-    simpa only [Devm.getStorVal_setMach, configWorld_getStorVal_addLog, horig,
+    have horig' : ∀ d : Devm,
+        d.getOrigStorVal sevm sevm.currentTarget pauseDurationSlot = 0 :=
+      fun _ => actualOrigStorVal_eq_zero_of_raw horig
+    simpa only [Devm.getStorVal_setMach, configWorld_getStorVal_addLog, horig',
       hold, harg] using hsstoreCost
   case a => exact Func.RunCompiledTo.last rfl
 

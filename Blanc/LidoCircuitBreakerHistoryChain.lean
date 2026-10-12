@@ -129,13 +129,26 @@ private lemma coherent_of_childFrame {dp : DeployParams} {sevm : Sevm}
   · rw [hbody.2, processMessage.settle_error] at hset
     cases hset
   have run_ec : ExecuteCode (childMsg.withBenv benv') xl r0 := hbody
-  -- the value transfer performed before the sub-message run: balances only
-  rcases of_benvAfterTransfer hc_stv eq_bt with ⟨st_mid, h_sub, hB⟩
-  rw [hc_state, hc_caller, hc_value] at h_sub
-  rcases of_state_transfer_fields (callee := target) h_sub with
-    ⟨h_t_stor, h_t_code, -, -, -⟩
-  have hBs : benv'.state = st_mid.addBal target value := by
-    rw [hB, hc_ct, hc_value]; rfl
+  -- the value transfer before the sub-message run keeps every account's code
+  -- and, because the contract's installed program protects it, its storage
+  have h_prot : State.Protected childMsg.benv.state sevm.currentTarget := by
+    rw [hc_state]
+    apply State.Protected.of_code_ne_nil
+    intro hnil
+    exact Prog.compile_ne_nil (by
+      show Prog.compile (runtime dp) = some []
+      rw [← h_code]
+      exact congrArg some hnil)
+  have h_stor_ct : (benv'.state.get sevm.currentTarget).stor =
+      (s.state.get sevm.currentTarget).stor := by
+    have h := benvAfterTransfer_ok_getStor eq_bt sevm.currentTarget (Or.inr h_prot)
+    rw [hc_state] at h
+    exact h
+  have h_code_ct : (benv'.state.get sevm.currentTarget).code =
+      (s.state.get sevm.currentTarget).code := by
+    have h := benvAfterTransfer_ok_getCode eq_bt sevm.currentTarget
+    rw [hc_state] at h
+    exact h
   -- resolve the settlement : rollback, or a clean sub-message result
   obtain ⟨evm2, h_r0, h_settle⟩ := processMessage.settle_ok_cases hset.symm
   subst h_r0
@@ -158,8 +171,8 @@ private lemma coherent_of_childFrame {dp : DeployParams} {sevm : Sevm}
           = Devm.getStor s sevm.currentTarget := by
         show (child.state.get sevm.currentTarget).stor
           = (s.state.get sevm.currentTarget).stor
-        rw [h_child_state, hBs]
-        exact h_t_stor sevm.currentTarget
+        rw [h_child_state]
+        exact h_stor_ct
       rw [h_stor_eq]
       exact h_coh
     · -- the callee is a regular account : a sub-execution takes place
@@ -184,7 +197,7 @@ private lemma coherent_of_childFrame {dp : DeployParams} {sevm : Sevm}
             = Prog.compile (runtime dp) := by
         show some ((initDevm (childMsg.withBenv benv')).state.get
           sevm.currentTarget).code.toList = Prog.compile (runtime dp)
-        rw [h_sd_state, hBs, h_t_code sevm.currentTarget]
+        rw [h_sd_state, h_code_ct]
         exact h_code
       -- the target-program invariant for the sub-execution
       have h_at : Prog.At (runtime dp) sevm.currentTarget 0
@@ -211,8 +224,8 @@ private lemma coherent_of_childFrame {dp : DeployParams} {sevm : Sevm}
           = Devm.getStor s sevm.currentTarget := by
         show ((initDevm (childMsg.withBenv benv')).state.get sevm.currentTarget).stor
           = (s.state.get sevm.currentTarget).stor
-        rw [h_sd_state, hBs]
-        exact h_t_stor sevm.currentTarget
+        rw [h_sd_state]
+        exact h_stor_ct
       have h_inv : RegistryCoherent
           (Devm.getStor (initDevm (childMsg.withBenv benv')) sevm.currentTarget) := by
         rw [h_gs]; exact h_coh
@@ -226,9 +239,7 @@ private lemma coherent_of_childFrame {dp : DeployParams} {sevm : Sevm}
           (.ok child) ex_sub h_depth_lt h_at
           (by
             change CoveredFork benv'.stat.fork
-            rw [hB]
-            change CoveredFork childMsg.benv.stat.fork
-            rw [hc_stat]
+            rw [benvAfterTransfer_stat eq_bt, hc_stat]
             exact hfork)
           ⟨h_precond, fun _ => Mem.wf_empty⟩
       exact hpost.inv

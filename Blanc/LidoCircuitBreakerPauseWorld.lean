@@ -26,8 +26,9 @@ Three layers, none of which composes the walk itself:
   skeleton with the code-free child replaced by the responder.  Each exports
   the full post-`CALL` projection list a continuation walk consumes — stack,
   memory, gas, error, output, returndata, logs, refund counter,
-  accounts-to-delete, transient storage, both accessed sets, and the state as
-  the zero-value `subBal`/`addBal` chain.
+  accounts-to-delete, transient storage, both accessed sets, and the state:
+  a zero-value entry leaves the block environment untouched, so the state is
+  the caller's state exactly.
 * **The worlds** (`pauseWorld…`): the row-19 world (`…Last…`, the pauser's
   single assignment, so the pause retires it and clears its expiry) and the
   row-18 world (`…Retained…`, a second target `t2` keeps the pauser's count
@@ -84,10 +85,11 @@ theorem calleeMain_runCompiledTo (fs : List Func) (sevm : Sevm) (base : Devm)
       post.refundCounter = base.refundCounter ∧
       post.accountsToDelete = base.accountsToDelete ∧
       post.accessedAddresses = base.accessedAddresses ∧
-      post.accessedStorageKeys = base.accessedStorageKeys := by
+      post.accessedStorageKeys = base.accessedStorageKeys ∧
+      post.createdAccounts = base.createdAccounts := by
   apply Exists.intro
   refine ⟨?walk, ?herr, ?hout, ?hgas, ?hworld, ?hlogs, ?hrefund, ?hatd,
-    ?haa, ?hask⟩
+    ?haa, ?hask, ?hcreated⟩
   case walk =>
     unfold calleeMain mstoreAt
     func_run [3]
@@ -129,9 +131,10 @@ theorem callee_exec (m : Msg) (G : Nat)
       post.refundCounter = 0 ∧
       post.accountsToDelete = Std.HashSet.emptyWithCapacity ∧
       post.accessedAddresses = m.accessedAddresses ∧
-      post.accessedStorageKeys = m.accessedStorageKeys := by
+      post.accessedStorageKeys = m.accessedStorageKeys ∧
+      post.createdAccounts = (initDevm m).createdAccounts := by
   obtain ⟨post, walk, herr, hout, hgasPost, hworld, hlogs, hrefund, hatd,
-    haa, hask⟩ :=
+    haa, hask, hcreated⟩ :=
     calleeMain_runCompiledTo [calleeMain] (initSevm m) (initDevm m) G
   have hlogs0 : (initDevm m).logs = [] := by
     change (match m.benv.stat.rules.stateGas with
@@ -140,7 +143,7 @@ theorem callee_exec (m : Msg) (G : Nat)
     rw [hfork.rules_stateGas_none]
   refine ⟨post, ?_, herr, hout, hgasPost, hworld, by rw [hlogs, hlogs0],
     by rw [hrefund]; rfl, by rw [hatd]; rfl, by rw [haa]; rfl,
-    by rw [hask]; rfl⟩
+    by rw [hask]; rfl, hcreated⟩
   have hrun : Prog.RunCompiledTo (initSevm m) (initDevm m) calleeProg
       (.ok post) := by
     refine Prog.runCompiledTo_intro (G := G + 16)
@@ -163,6 +166,18 @@ exports the full projection list a continuation walk consumes; the accessed
 sets are exported as membership equivalences because
 `incorporateChildOnSuccess` unions the parent's set with the child's copy of
 that same set, and `Std.HashSet` union is extensional in membership only. -/
+
+private lemma accessDelegation_createdAccounts {devm d1 : Devm} {a dadr : Adr}
+    {dp : Bool} {code : ByteArray} {dgc : Nat}
+    (h : accessDelegation devm a = ⟨dp, dadr, code, dgc, d1⟩) :
+    d1.createdAccounts = devm.createdAccounts := by
+  unfold accessDelegation at h
+  rcases hd : getDelegatedCodeAddress (devm.state.getCode a) with _ | adr <;>
+    simp only [hd] at h
+  · cases h
+    rfl
+  · cases h
+    rfl
 
 /-- The delegation resolution leaves the transient store and the accessed
 storage keys alone; only the accessed-address set can move. -/
@@ -220,20 +235,15 @@ lemma runCompiled_call_zero_value_responder {sevm : Sevm} {devm : Devm}
       post.transientStorage = devm.transientStorage ∧
       (∀ k, k ∈ post.accessedStorageKeys ↔ k ∈ devm.accessedStorageKeys) ∧
       (∀ a, a ∈ post.accessedAddresses ↔ a ∈ d1.accessedAddresses) ∧
-      ∃ stmid,
-        devm.state.subBal sevm.currentTarget 0 = some stmid ∧
-        post.state = stmid.addBal cw.toAdr 0 := by
+      post.state = devm.state ∧
+      post.createdAccounts = devm.createdAccounts := by
   let p := callSpawnParent d1 (mcc + ext)
     iiw.toNat isw.toNat oiw.toNat osw.toNat
   let msg := callSpawnMsg sevm p mcs cw.toAdr dadr
     iiw.toNat isw.toNat code dp
-  have h_afford : ¬ msg.benv.state.bal msg.caller < msg.value := by
-    change ¬ (d1.getAcct sevm.currentTarget).bal < 0
-    rw [B256.lt_iff_toNat_lt_toNat]
-    exact Nat.not_lt.mpr (Nat.zero_le _)
-  obtain ⟨stmid, hsub, hbt⟩ :=
-    Msg.benvAfterTransfer_of_affordable msg rfl h_afford
-  let benv' := (msg.benv.withState stmid).addBal msg.currentTarget msg.value
+  have hbt : msg.benvAfterTransfer = .ok msg.benv :=
+    Msg.benvAfterTransfer_of_value_zero rfl
+  let benv' := msg.benv
   let child := initEvm (msg.withBenv benv')
   have henter : (Frame.ofCall msg).enter = .run child := by
     apply Frame.enter_run_of_nonprecompile hbt
@@ -241,7 +251,7 @@ lemma runCompiled_call_zero_value_responder {sevm : Sevm} {devm : Devm}
     · change sevm.benvStat.rules.isPrecomp dadr = false
       exact h_nonprecompile
   obtain ⟨out, hexec, herr, hout, hgasOut, hworld, hlogsOut, hrefundOut,
-    hatdOut, haaOut, haskOut⟩ :=
+    hatdOut, haaOut, haskOut, hcreatedOut⟩ :=
     callee_exec (msg.withBenv benv') (mcs - 17)
       (by change CoveredFork sevm.benvStat.fork; exact hfork)
       (by change code = calleeCode; exact h_code)
@@ -288,8 +298,7 @@ lemma runCompiled_call_zero_value_responder {sevm : Sevm} {devm : Devm}
     haskOut.trans hd1wm.2
   have hpaa : p.accessedAddresses = d1.accessedAddresses := rfl
   have haaOut' : out.accessedAddresses = d1.accessedAddresses := haaOut
-  refine ⟨post, hrun, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
-    stmid, ?_, ?_⟩
+  refine ⟨post, hrun, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · show ((((incorporateChildOnSuccess p out out.output).setMach
       ⟨1 :: p.stack, p.memory, p.gasLeft + out.gasLeft, (incorporateChildOnSuccess p out out.output).stateGas⟩).memWrite
         oiw.toNat (out.output.take osw.toNat))).stack = 1 :: s
@@ -345,15 +354,14 @@ lemma runCompiled_call_zero_value_responder {sevm : Sevm} {devm : Devm}
     rw [hpaa, haaOut']
     exact ⟨fun h => (Std.HashSet.mem_union_iff.mp h).elim id id,
       fun h => Std.HashSet.mem_union_iff.mpr (Or.inl h)⟩
-  · rw [← hd1state]
-    have hsub' : p.state.subBal sevm.currentTarget 0 = some stmid := by
-      simpa only [msg, callSpawnMsg, callMsg, Bool.false_or] using hsub
-    rw [show p.state = d1.state from rfl] at hsub'
-    exact hsub'
-  · change out.state = stmid.addBal cw.toAdr 0
+  · change out.state = devm.state
     rw [show out.state = (initDevm (msg.withBenv benv')).state from
       congrArg World.state hworld]
-    rfl
+    exact hd1state
+  · change out.createdAccounts = devm.createdAccounts
+    rw [hcreatedOut]
+    have hc := accessDelegation_createdAccounts h_del
+    exact hc
 
 /-- The `STATICCALL` sibling.  Same six stack operands as the value-zero part
 of `CALL` minus the value word, same `callSpawnParent`, same `.call` resume
@@ -395,20 +403,15 @@ lemma runCompiled_staticcall_responder {sevm : Sevm} {devm : Devm}
       post.transientStorage = devm.transientStorage ∧
       (∀ k, k ∈ post.accessedStorageKeys ↔ k ∈ devm.accessedStorageKeys) ∧
       (∀ a, a ∈ post.accessedAddresses ↔ a ∈ d1.accessedAddresses) ∧
-      ∃ stmid,
-        devm.state.subBal sevm.currentTarget 0 = some stmid ∧
-        post.state = stmid.addBal tw.toAdr 0 := by
+      post.state = devm.state ∧
+      post.createdAccounts = devm.createdAccounts := by
   let p := callSpawnParent d1 (mcc + ext)
     iiw.toNat isw.toNat oiw.toNat osw.toNat
   let msg := staticcallSpawnMsg sevm p mcs tw.toAdr dadr
     iiw.toNat isw.toNat code dp
-  have h_afford : ¬ msg.benv.state.bal msg.caller < msg.value := by
-    change ¬ (d1.getAcct sevm.currentTarget).bal < 0
-    rw [B256.lt_iff_toNat_lt_toNat]
-    exact Nat.not_lt.mpr (Nat.zero_le _)
-  obtain ⟨stmid, hsub, hbt⟩ :=
-    Msg.benvAfterTransfer_of_affordable msg rfl h_afford
-  let benv' := (msg.benv.withState stmid).addBal msg.currentTarget msg.value
+  have hbt : msg.benvAfterTransfer = .ok msg.benv :=
+    Msg.benvAfterTransfer_of_value_zero rfl
+  let benv' := msg.benv
   let child := initEvm (msg.withBenv benv')
   have henter : (Frame.ofCall msg).enter = .run child := by
     apply Frame.enter_run_of_nonprecompile hbt
@@ -416,7 +419,7 @@ lemma runCompiled_staticcall_responder {sevm : Sevm} {devm : Devm}
     · change sevm.benvStat.rules.isPrecomp dadr = false
       exact h_nonprecompile
   obtain ⟨out, hexec, herr, hout, hgasOut, hworld, hlogsOut, hrefundOut,
-    hatdOut, haaOut, haskOut⟩ :=
+    hatdOut, haaOut, haskOut, hcreatedOut⟩ :=
     callee_exec (msg.withBenv benv') (mcs - 17)
       (by change CoveredFork sevm.benvStat.fork; exact hfork)
       (by change code = calleeCode; exact h_code)
@@ -465,8 +468,7 @@ lemma runCompiled_staticcall_responder {sevm : Sevm} {devm : Devm}
     haskOut.trans hd1wm.2
   have hpaa : p.accessedAddresses = d1.accessedAddresses := rfl
   have haaOut' : out.accessedAddresses = d1.accessedAddresses := haaOut
-  refine ⟨post, hrun, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
-    stmid, ?_, ?_⟩
+  refine ⟨post, hrun, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · show ((((incorporateChildOnSuccess p out out.output).setMach
       ⟨1 :: p.stack, p.memory, p.gasLeft + out.gasLeft, (incorporateChildOnSuccess p out out.output).stateGas⟩).memWrite
         oiw.toNat (out.output.take osw.toNat))).stack = 1 :: s
@@ -522,15 +524,14 @@ lemma runCompiled_staticcall_responder {sevm : Sevm} {devm : Devm}
     rw [hpaa, haaOut']
     exact ⟨fun h => (Std.HashSet.mem_union_iff.mp h).elim id id,
       fun h => Std.HashSet.mem_union_iff.mpr (Or.inl h)⟩
-  · rw [← hd1state]
-    have hsub' : p.state.subBal sevm.currentTarget 0 = some stmid := by
-      simpa only [msg, staticcallSpawnMsg, callMsg, Bool.true_or] using hsub
-    rw [show p.state = d1.state from rfl] at hsub'
-    exact hsub'
-  · change out.state = stmid.addBal tw.toAdr 0
+  · change out.state = devm.state
     rw [show out.state = (initDevm (msg.withBenv benv')).state from
       congrArg World.state hworld]
-    rfl
+    exact hd1state
+  · change out.createdAccounts = devm.createdAccounts
+    rw [hcreatedOut]
+    have hc := accessDelegation_createdAccounts h_del
+    exact hc
 
 /-! ## The two witness worlds
 
