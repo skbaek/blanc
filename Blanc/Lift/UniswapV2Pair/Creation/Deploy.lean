@@ -58,7 +58,8 @@ theorem pair_create (msg : Msg) (hvalue : msg.value = 0)
   have hempty : Devm.getStor (initDevm (createSeed msg benv))
       (initSevm (createSeed msg benv)).currentTarget = Stor.empty := by
     show benv.state.getStor msg.currentTarget = _
-    rw [benvAfterTransfer_ok_getStor htransfer, processCreateMessage_msg_getStor_currentTarget]
+    rw [benvAfterTransfer_ok_getStor htransfer _ (Or.inl hvalue),
+      processCreateMessage_msg_getStor_currentTarget]
   have hstor : ∀ x, (Devm.getStor (initDevm (createSeed msg benv))
       (initSevm (createSeed msg benv)).currentTarget).get x = 0 := fun x => by
     rw [hempty]
@@ -82,7 +83,14 @@ theorem pair_create (msg : Msg) (hvalue : msg.value = 0)
     (by rw [hwin]; exact runtime_head)
     (by rw [hlen, hgasLeft]; unfold gasCodeDeposit; omega) (by rw [hlen]; exact hmax)
   refine ⟨post, hpost, hcodePost.trans hwin, ?_, herrPost⟩
-  rw [hstorPost]
+  have hne : ¬ ({ raw.state.get msg.currentTarget with code := ⟨⟨raw.output⟩⟩ } : Acct).Empty := by
+    intro he
+    have hsize : (⟨⟨raw.output⟩⟩ : ByteArray).size ≠ 0 := by
+      rw [show (⟨⟨raw.output⟩⟩ : ByteArray).size = raw.output.length from rfl, hlen]
+      decide
+    exact hsize he.1
+  rw [hstorPost, Acct.clearIfEmpty_stor]
+  simp only [hne, ↓reduceIte]
   show Devm.getStor raw (initSevm (createSeed msg benv)).currentTarget = _
   rw [hst, hempty, hstat]
   rfl

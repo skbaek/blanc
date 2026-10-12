@@ -348,7 +348,8 @@ theorem mutable_retained_fold_inv_with {pair : Adr} {Rep : State → Stor → Pr
     · cases out with
       | error error => simp only [Execution.commits, Bool.false_eq_true] at committed
       | ok post =>
-        have storage := Blanc.Lift.Evm.step_halt_getStor_eq step
+        have hprot : State.Protected pre.state pair := State.Protected.of_image installed.1
+        have storage := Blanc.Lift.Evm.step_halt_getStor_eq step pair hprot
         have logs := Exec.committed_logs_at (.halt step) committed fork [] 0
         simp only [Exec.stateBoundariesOfCommits, List.flatMap_cons, List.flatMap_nil,
           Exec.boundaryOwnLogs, Exec.stateBoundary, List.append_nil] at logs
@@ -442,7 +443,8 @@ theorem mutable_retained_fold_inv_with {pair : Adr} {Rep : State → Stor → Pr
           exact List.mem_singleton_self _))
     · have nextInstalled := CodeSem.At.parentStep (.doneOk step enter resumed next) next
         (.doneOk step enter resumed next) installed target
-      have storage := congrFun (Evm.step_done_getStor step enter resumed) pair
+      have hprot : State.Protected pre.state pair := State.Protected.of_image installed.1
+      have storage := Evm.step_done_getStor step enter resumed pair hprot
       have nextRep : Rep frame.current.state (inter.getStor pair) := by
         rw [storage]
         exact rep
@@ -650,7 +652,8 @@ theorem mutable_call_turns {pair : Adr} {Rep : State → Stor → Prop} {Good : 
     exact stepRun
   cases xl with
   | none =>
-    have storage := Xinst.none_getStor_eq xrun
+    have hprot : State.Protected pre.state pair := State.Protected.of_image installed
+    have storage := Xinst.none_getStor_eq xrun pair hprot
     exact unchanged (d.getStor pair) (fun k => by rw [storage])
       ((Xinst.call_run_logs fork callFamily xrun).1 rfl) (Or.inl xrun)
   | some slot =>

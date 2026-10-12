@@ -234,13 +234,25 @@ theorem staticView_parent_rep {K : WriterKey → Prop} {frame : Frame}
     intro empty
     exact sem.ne_nil (installed.1.symm.trans (congrArg some empty)) rfl
   have codeEq := Blanc.Exec.Deriv.ParentStep.codePreserve edge frame.context.pair nonempty
-  have storageEq : Devm.getStor inter = Devm.getStor pre :=
-    (Exec.getStor_committedPost_eq_of_static next static committed fork).symm.trans
-      (Exec.getStor_committedPost_eq_of_static run static committed fork)
+  have hprot_pre : State.Protected pre.state frame.context.pair :=
+    State.Protected.of_image installed.1
+  have hinter : (inter.getCode frame.context.pair).toList ≠ [] := by
+    rw [codeEq]
+    exact nonempty
+  have hprot_inter : State.Protected inter.state frame.context.pair :=
+    State.Protected.of_code_ne_nil hinter
+  have hpre : (out.committedPost committed).getStor frame.context.pair =
+      pre.getStor frame.context.pair :=
+    Exec.getStor_committedPost_eq_of_static_protected run static committed fork _ hprot_pre
+  have hinter_eq : (out.committedPost committed).getStor frame.context.pair =
+      inter.getStor frame.context.pair :=
+    Exec.getStor_committedPost_eq_of_static_protected next static committed fork _ hprot_inter
+  have storageEq : inter.getStor frame.context.pair = pre.getStor frame.context.pair :=
+    hinter_eq.symm.trans hpre
   refine ⟨⟨?_, fun target => (foreign target).elim⟩, ?_⟩
   · rw [codeEq]
     exact installed.1
-  · rw [congrFun storageEq frame.context.pair]
+  · rw [storageEq]
     exact rep
 
 /-- The supplied interpreted spawn opens on the same finite Pair representation
