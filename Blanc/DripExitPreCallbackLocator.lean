@@ -298,7 +298,7 @@ theorem ofCall_settle_of_clean {raw : Execution} {child : Devm}
       · simp only [bind, Except.bind, flagged, if_true, Except.ok.injEq] at settled
         subst settled
         exfalso
-        simp only [Devm.error, Devm.rollback, Devm.setWorld, Option.isSome_eq_false_iff,
+        simp only [Devm.error, Devm.rollback, Devm.setWorld, Devm.withStorageWrites, Option.isSome_eq_false_iff,
           Option.isNone_iff_eq_none] at clean
         simp only [Devm.error, clean, Option.isSome_none, Bool.false_eq_true] at flagged
       · simp only [bind, Except.bind, flagged, Bool.false_eq_true, if_false] at settled ⊢
