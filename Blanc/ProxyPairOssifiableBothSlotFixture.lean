@@ -1,5 +1,7 @@
 import Blanc.ProxyPairOssifiableConstructorNonempty
 import Blanc.MessageExecution
+import Blanc.MachineDataFacts
+import Blanc.ProxyPairRepinBridge
 
 namespace Blanc.ProxyPair.OssifiableBothSlotFixture
 
@@ -95,6 +97,15 @@ private theorem getStorVal_sstoreBase_ne
   simp only [State.setStorVal, State.get_set_self]
   rw [Stor.get_set_ne _ hne]
 
+private theorem setupImplementationCost_zero :
+    sstoreValueCost 0 implementation.toB256 postSetupImplementation.toB256 = 100 := by
+  decide
+
+private theorem setupAdminCost_zero :
+    gasColdSload + sstoreValueCost 0 0 postSetupAdmin.toB256 = 22100 := by
+  decide
+
+
 theorem setupMain_runCompiledTo
     (fs : List Func) (sevm : Sevm) (base : Devm) (G : Nat)
     (hfork : CoveredFork sevm.benvStat.fork)
@@ -128,48 +139,52 @@ theorem setupMain_runCompiledTo
       post.accessedStorageKeys =
         base.accessedStorageKeys.insert
           (sevm.currentTarget, adminSlotLit) := by
+  have implementationOriginal (d : Devm) :
+      d.getOrigStorVal sevm sevm.currentTarget implementationSlotLit = 0 := by
+    simp only [Devm.getOrigStorVal, himplementationOriginal, ite_self]
+  have adminOriginal (d : Devm) :
+      d.getOrigStorVal sevm sevm.currentTarget adminSlotLit = 0 := by
+    simp only [Devm.getOrigStorVal, hadminOriginal, ite_self]
   apply Exists.intro
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · unfold setupMain push1Zero
-    func_run [100, 22100]
+    func_run (6) [100, 22100]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try
       (rw [Devm.gasLeft_setMach]
        dsimp only [setupBodyGas, gCallStipend]
        omega)
-    · simp only [Devm.getStorVal_setMach]
-      rw [himplementationOriginal, himplementationCurrent]
-      decide
-    · simp only [Devm.getStorVal_setMach,
+    · simp only [implementationOriginal, Devm.getStorVal_setMach]
+      rw [himplementationCurrent]
+      exact setupImplementationCost_zero
+    · simp only [adminOriginal, Devm.getStorVal_setMach,
         getStorVal_setStorVal_ne _ _ _ _ _
           (show implementationSlotLit ≠ adminSlotLit by decide),
         getStorVal_withRefundCounter]
-      rw [hadminOriginal, hadminCurrent]
-      decide
-    · apply Func.runCompiledTo_return_word (i := 0) (sz := 0) (s := [])
-        (e := 0) (G := G) (out := [])
-      · rfl
-      · exact Devm.extCost_empty_window
-      · rw [Devm.gasLeft_setMach]
+      rw [hadminCurrent]
+      exact setupAdminCost_zero
+    · have htailGas : G + setupBodyGas - 22212 = G + 6 := by
         dsimp only [setupBodyGas]
         omega
-      · rw [show B256.toNat (0 : B256) = 0 by decide]
-        exact congrArg Prod.fst Devm.memRead_zero
-  · simp only [Devm.withOutput_error, Devm.memRead_error,
+      rw [htailGas]
+      exact Func.runCompiledTo_push1Zero_return_empty fs sevm _ G
+  · simp only [Devm.withOutput_error,
       Devm.setMach_error, Devm.sstoreBase_error]
     rfl
   · rfl
   · rfl
-  · simp only [Devm.returnPost_getStorVal, Devm.getStorVal_setMach,
+  · rw [Devm.getStorVal_of_state (Devm.withOutput_state _ _)]
+    simp only [Devm.getStorVal_setMach,
       getStorVal_sstoreBase_ne _ _ _ _ _ _
         (show adminSlotLit ≠ implementationSlotLit by decide),
       Devm.getStorVal_setStorVal_self]
-  · simp only [Devm.returnPost_getStorVal, Devm.getStorVal_setMach,
+  · rw [Devm.getStorVal_of_state (Devm.withOutput_state _ _)]
+    simp only [Devm.getStorVal_setMach,
       Devm.getStorVal_setStorVal_self]
-  · simp only [Devm.withOutput_logs, Devm.memRead_logs,
+  · simp only [Devm.withOutput_logs,
       Devm.setMach_logs, Devm.sstoreBase_logs]
     rfl
-  · simp only [Devm.returnPost_accessedStorageKeys,
+  · simp only [Devm.withOutput_accessedStorageKeys,
       Devm.setMach_accessedStorageKeys,
       Devm.sstoreBase_accessedStorageKeys]
     simp only [Devm.setMach_accessedStorageKeys,

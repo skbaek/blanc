@@ -330,7 +330,8 @@ private theorem stageMask_complete
     unfold stageSstore
     func_run (2) [20000]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    · simp only [Devm.getStorVal_setMach, hrawLog, horiginal, hnew]
+    · simp only [Devm.getOrigStorVal, horiginal, ite_self,
+        Devm.getStorVal_setMach, hrawLog, hnew]
       rw [hrawZero, sstoreValueCost,
         if_pos ⟨rfl, fun h => hrequestedNonzero h.symm⟩, if_pos rfl]
       norm_num only [gasStorageSet]
@@ -505,7 +506,8 @@ private theorem stageMask_dirtyCovered_complete
     unfold stageSstore
     func_run (2) [100]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    · simp only [Devm.getStorVal_setMach, hrawLog, horiginal]
+    · simp only [Devm.getOrigStorVal, horiginal, ite_self,
+        Devm.getStorVal_setMach, hrawLog]
       rw [sstoreValueCost, if_neg (by
         intro hclean
         exact hrawNonzero hclean.1.symm)]
