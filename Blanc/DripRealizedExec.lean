@@ -61,7 +61,7 @@ def dripEntrySpec : ContractSpec where
     rw [sum_addBal_eq w a val h_bound]
     omega
   inv_transfer := by
-    intro st st' caller callee ca wad value h_sub h_ne h_side h_inv
+    intro st st' caller callee ca wad value h_sub h_ne h_side _hp h_inv
     have h_nof : sum st.bal < 2 ^ 256 := h_side
     rcases of_state_transfer (callee := callee) h_sub h_nof with
       ⟨-, -, -, h_t_le, -, -⟩
@@ -76,7 +76,7 @@ def dripEntrySpec : ContractSpec where
       · have h_add : (st'.addBal callee wad).bal ca = st.bal ca + wad := by
           rw [h_eq]
           show ((st'.setBal ca (st'.bal ca + wad)).get ca).bal = _
-          rw [State.setBal_get_self]
+          rw [State.setBal_get_self, Acct.clearIfEmpty_bal]
           show st'.bal ca + wad = _
           rw [h_mid]
         rw [h_add]
@@ -97,7 +97,7 @@ def dripEntrySpec : ContractSpec where
         rw [h_other]
     exact Nat.le_trans h_inv h_ge
   inv_recv_transfer := by
-    intro st st' caller ca wad h_sub h_ne h_side _
+    intro st st' caller ca wad h_sub h_ne h_side _hp _
     have h_nof : sum st.bal < 2 ^ 256 := h_side
     have h_bal : ((st'.addBal ca wad).bal ca).toNat =
         (st.bal ca).toNat + wad.toNat :=
@@ -105,7 +105,7 @@ def dripEntrySpec : ContractSpec where
     show wad.toNat ≤ _
     omega
   inv_addBal := by
-    intro w ca a val value h_bound _ h_inv
+    intro w ca a val value h_bound _ _hp h_inv
     have h_nof_a : B256.Nof (w.bal a) val := by
       unfold B256.Nof
       have := @le_sum w.bal a
@@ -115,7 +115,7 @@ def dripEntrySpec : ContractSpec where
       · subst h_eq
         show (w.bal a).toNat ≤
           ((w.setBal a (w.bal a + val)).get a).bal.toNat
-        rw [State.setBal_get_self]
+        rw [State.setBal_get_self, Acct.clearIfEmpty_bal]
         change (w.bal a).toNat ≤ (w.bal a + val).toNat
         rw [B256.toNat_add_eq_of_nof _ _ h_nof_a]
         omega
@@ -123,6 +123,14 @@ def dripEntrySpec : ContractSpec where
         rw [State.setBal_get_ne h_eq]
         exact Nat.le_refl _
     exact Nat.le_trans h_inv h_ge
+
+/-- The companion precondition retains the existing installed runtime image. -/
+theorem dripEntrySpec_pre_protected {ca : Adr} {sevm : Sevm} {pre : Devm}
+    (precondition : dripEntrySpec.Pre ca sevm pre) : State.Protected pre.state ca := by
+  apply State.Protected.of_code_ne_nil
+  intro empty
+  have compiled : some (pre.getCode ca).toList = Prog.compile runtime := precondition.code
+  exact Prog.compile_ne_nil (compiled.symm.trans (congrArg some empty))
 
 /-- Every successful execution preserves the side spec: the world total never
 rises, and the exit form of the invariant is vacuous. -/
@@ -163,27 +171,29 @@ the state-indexed write lemmas can be reused at the pre-credit boundary. -/
 def precreditState (ca : Adr) (value : B256) (state : State) : State :=
   state.setBal ca (state.bal ca - value)
 
-theorem precreditState_getStor (ca : Adr) (value : B256) (state : State) :
+theorem precreditState_getStor (ca : Adr) (value : B256) (state : State)
+    (hp : State.Protected state ca) :
     (precreditState ca value state).getStor ca = state.getStor ca := by
   show ((state.setBal ca _).get ca).stor = (state.get ca).stor
-  rw [State.setBal_get_stor]
+  rw [State.setBal_get_stor_of_protected hp]
 
 theorem precreditState_bal {ca : Adr} {value : B256} {state : State}
     (credited : value.toNat ≤ (state.bal ca).toNat) :
     ((precreditState ca value state).bal ca).toNat =
       (state.bal ca).toNat - value.toNat := by
   show ((state.setBal ca (state.bal ca - value)).get ca).bal.toNat = _
-  rw [State.setBal_get_self]
+  rw [State.setBal_get_self, Acct.clearIfEmpty_bal]
   exact B256.toNat_sub_eq_of_le _ _ (B256.le_of_toNat_le_toNat credited)
 
 theorem execEntrySnapshot_of_target {coalition : Finset Adr} {ca : Adr}
     {sevm : Sevm} {state : State} (target : sevm.currentTarget = ca)
-    (credited : sevm.value.toNat ≤ (state.bal ca).toNat) :
+    (credited : sevm.value.toNat ≤ (state.bal ca).toNat)
+    (hp : State.Protected state ca) :
     execEntrySnapshot coalition ca sevm state =
       snapshot coalition ca (precreditState ca sevm.value state) := by
   unfold execEntrySnapshot ExecutionAccountingReplay.balanceEntry snapshot
     coalitionUnits
-  rw [if_pos target, precreditState_getStor, precreditState_bal credited]
+  rw [if_pos target, precreditState_getStor ca sevm.value state hp, precreditState_bal credited]
 
 /-- One positive outside credit as a realized step. -/
 theorem externalCredit_chain {coalition : Finset Adr} {ca : Adr}
@@ -213,13 +223,14 @@ noncomputable def carrier (coalition : Finset Adr) (ca : Adr) :
   Snap := Snapshot
   Step := RealizedStep
   Tag := Unit
+  readsStorage := true
   Replay := RealizedChain
   ofState := snapshot coalition ca
   frameEntry := execEntrySnapshot coalition ca
   nil := Chain.nil
   silent := by
     intro _ _ storage_eq balance_eq
-    exact snapshot_eq_of_getStor_bal storage_eq (B256.toNat_inj _ _ balance_eq)
+    exact snapshot_eq_of_getStor_bal (storage_eq rfl) (B256.toNat_inj _ _ balance_eq)
   credit := by
     intro _ pre post amount storage_eq balance_eq positive
     rcases externalCredit_chain (coalition := coalition) storage_eq balance_eq
@@ -232,7 +243,8 @@ noncomputable def carrier (coalition : Finset Adr) (ca : Adr) :
     have balance := ExecutionAccountingReplay.balanceEntry_eq_ofState
       caller_ne value_zero transfer sum_nof
     have storage : entry.state.getStor ca = msg.benv.state.getStor ca :=
-      congrFun (benvAfterTransfer_getStor_eq transfer) ca
+      ExecutionAccountingReplay.benvAfterTransfer_getStor_eq_of_safe transfer sum_nof
+        (fun enabled _ => Or.inl (caller_ne enabled))
     unfold execEntrySnapshot
     rw [balance]
     unfold snapshot coalitionUnits
@@ -464,30 +476,48 @@ theorem exit_handoff_of_components (coalition : Finset Adr) {sevm : Sevm}
   · simp only [Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
     processMessage.settle, Except.bind_error, reduceCtorEq] at failed
   have transfer' : childMsg.benvAfterTransfer = .ok entry := transfer
-  rcases of_benvAfterTransfer (msg := childMsg) rfl transfer' with
-    ⟨debit, sub, entryEq⟩
-  have sub' : callPre.state.subBal sevm.currentTarget payout = some debit := by
-    change parent.state.subBal _ _ = some debit at sub
-    rwa [parentState] at sub
-  have entryState : entry.state =
-      debit.addBal sevm.caller.toB256.toAdr payout := by
-    rw [entryEq]
-    rfl
-  have fields := of_state_transfer_fields
-    (callee := sevm.caller.toB256.toAdr) sub'
-  have entryStor : entry.state.getStor sevm.currentTarget =
-      callPre.state.getStor sevm.currentTarget := by
-    rw [entryState]
-    exact fields.1 sevm.currentTarget
-  have entryBalance : entry.state.bal sevm.currentTarget =
-      pre.state.bal sevm.currentTarget - payout := by
-    rw [entryState, fields.2.2.2.2 recipient_ne]
-    exact congrArg (· - payout) (congrFun balPre sevm.currentTarget)
-  have funded : payout ≤ pre.state.bal sevm.currentTarget := by
-    have := fields.2.2.1
-    rwa [show callPre.state.bal sevm.currentTarget =
-      pre.state.bal sevm.currentTarget from congrFun balPre sevm.currentTarget]
-      at this
+  have callProtected : State.Protected callPre.state sevm.currentTarget := by
+    apply State.Protected.of_code_ne_nil
+    intro empty
+    have compiled : some (pre.getCode sevm.currentTarget).toList = Prog.compile runtime := precondition.code
+    have sameCode := congrFun codePre sevm.currentTarget
+    change (callPre.getCode sevm.currentTarget).toList = [] at empty
+    rw [sameCode] at empty
+    exact Prog.compile_ne_nil (compiled.symm.trans (congrArg some empty))
+  have entryEffects :
+      entry.state.getStor sevm.currentTarget = callPre.state.getStor sevm.currentTarget ∧
+      entry.state.bal sevm.currentTarget = pre.state.bal sevm.currentTarget - payout ∧
+      payout ≤ pre.state.bal sevm.currentTarget := by
+    by_cases zero : payout = 0
+    · have childZero : childMsg.value = 0 := zero
+      rw [Msg.benvAfterTransfer_of_value_zero childZero] at transfer'
+      cases transfer'
+      refine ⟨?_, ?_, ?_⟩
+      · change parent.state.getStor sevm.currentTarget = _
+        rw [parentState]
+      · change parent.state.bal sevm.currentTarget = _
+        rw [parentState, zero, B256.sub_zero]
+        exact congrFun balPre sevm.currentTarget
+      · rw [zero]
+        exact B256.le_of_toNat_le_toNat (Nat.zero_le _)
+    · rcases of_benvAfterTransfer (msg := childMsg) rfl zero transfer' with
+        ⟨debit, sub, entryEq⟩
+      have sub' : callPre.state.subBal sevm.currentTarget payout = some debit := by
+        change parent.state.subBal _ _ = some debit at sub
+        rwa [parentState] at sub
+      have entryState : entry.state = debit.addBal sevm.caller.toB256.toAdr payout := by
+        rw [entryEq]
+        rfl
+      have fields := of_state_transfer_fields (callee := sevm.caller.toB256.toAdr) sub'
+      refine ⟨?_, ?_, ?_⟩
+      · rw [entryState]
+        exact fields.1 sevm.currentTarget callProtected
+      · rw [entryState, fields.2.2.2.2 recipient_ne]
+        exact congrArg (· - payout) (congrFun balPre sevm.currentTarget)
+      · have funding := fields.2.2.1
+        rwa [show callPre.state.bal sevm.currentTarget = pre.state.bal sevm.currentTarget from
+          congrFun balPre sevm.currentTarget] at funding
+  rcases entryEffects with ⟨entryStor, entryBalance, funded⟩
   have htimele := le_of_not_gt hclock
   have timeEq : sevm.benvStat.time.toNat =
       rhoN (pre.state.getStor sevm.currentTarget) + elapsed := by
@@ -528,22 +558,56 @@ theorem exit_handoff_of_components (coalition : Finset Adr) {sevm : Sevm}
   rw [quote] at effect
   have childPre : dripEntrySpec.Pre sevm.currentTarget
       (initSevm (childMsg.withBenv entry)) (initDevm (childMsg.withBenv entry)) := by
-    apply ContractSpec.Pre.child_of_outbound_transfer
-      (st := callPre.state) (st_mid := debit)
-      (target := sevm.caller.toB256.toAdr) (value := payout)
-    · show some (Devm.getCode callPre sevm.currentTarget).toList = _
-      rw [codePre]
-      exact precondition.code
-    · show SumNof (Devm.getBal callPre)
-      rw [balPre]
-      exact precondition.side
-    · show (0 : B256).toNat ≤ _
-      rw [B256.toNat_zero]
-      exact Nat.zero_le _
-    · exact sub'
-    · exact entryState
-    · rfl
-    · rfl
+    by_cases zero : payout = 0
+    · have childZero : childMsg.value = 0 := zero
+      have transferZero := transfer'
+      rw [Msg.benvAfterTransfer_of_value_zero childZero] at transferZero
+      cases transferZero
+      refine ⟨?_, ?_, ⟨?_, ?_⟩⟩
+      · change some (parent.getCode sevm.currentTarget).toList = _
+        change some (parent.state.getCode sevm.currentTarget).toList = _
+        rw [parentState]
+        change some (callPre.getCode sevm.currentTarget).toList = _
+        rw [codePre]
+        exact precondition.code
+      · change SumNof parent.getBal
+        change SumNof parent.state.bal
+        rw [parentState]
+        change SumNof callPre.getBal
+        rw [balPre]
+        exact precondition.side
+      · intro _
+        change payout.toNat ≤ _
+        rw [zero, B256.toNat_zero]
+        exact Nat.zero_le _
+      · intro _
+        change (0 : B256).toNat ≤ _
+        rw [B256.toNat_zero]
+        exact Nat.zero_le _
+    · rcases of_benvAfterTransfer (msg := childMsg) rfl zero transfer' with
+        ⟨debit, sub, entryEq⟩
+      have sub' : callPre.state.subBal sevm.currentTarget payout = some debit := by
+        change parent.state.subBal _ _ = some debit at sub
+        rwa [parentState] at sub
+      have entryState : entry.state = debit.addBal sevm.caller.toB256.toAdr payout := by
+        rw [entryEq]
+        rfl
+      apply ContractSpec.Pre.child_of_outbound_transfer
+        (st := callPre.state) (st_mid := debit)
+        (target := sevm.caller.toB256.toAdr) (value := payout)
+      · show some (Devm.getCode callPre sevm.currentTarget).toList = _
+        rw [codePre]
+        exact precondition.code
+      · show SumNof (Devm.getBal callPre)
+        rw [balPre]
+        exact precondition.side
+      · show (0 : B256).toNat ≤ _
+        rw [B256.toNat_zero]
+        exact Nat.zero_le _
+      · exact sub'
+      · exact entryState
+      · rfl
+      · rfl
   have postSnapshot : snapshot coalition sevm.currentTarget post.state =
       snapshot coalition sevm.currentTarget child.state := by
     rw [← callPostState]
@@ -788,6 +852,7 @@ theorem exec_nonexit_head (coalition : Finset Adr) {sevm : Sevm}
       op.pre = execEntrySnapshot coalition sevm.currentTarget sevm pre.state ∧
       op.kind = opTag coalition sevm pre ∧
       op.post = snapshot coalition sevm.currentTarget post.state := by
+  have protection := dripEntrySpec_pre_protected precondition
   have credited : sevm.value.toNat ≤ (pre.state.bal sevm.currentTarget).toNat :=
     precondition.inv.1 rfl
   obtain ⟨joinDrip, exitDrip, exitJoin, assetsDrip, assetsJoin, assetsExit,
@@ -810,11 +875,11 @@ theorem exec_nonexit_head (coalition : Finset Adr) {sevm : Sevm}
           (ca := sevm.currentTarget)
           (pre := precreditState sevm.currentTarget sevm.value pre.state)
           (post := post.state) (amount := sevm.value.toNat)
-          (by rw [precreditState_getStor, stateEq])
+          (by rw [precreditState_getStor _ _ _ protection, stateEq])
           (by rw [← stateEq, precreditState_bal credited]; omega)
           positive with ⟨op, kindEq, preEq, postEq⟩
       refine ⟨op, ?_, kindEq.trans tag.symm, postEq⟩
-      rw [preEq, execEntrySnapshot_of_target rfl credited]
+      rw [preEq, execEntrySnapshot_of_target rfl credited protection]
   · have member := exec_selector_mem exc hcode hempty
     simp only [selectors, List.mem_cons, List.not_mem_nil, or_false] at member
     rcases member with hsel | hsel | hsel | hsel | hsel
@@ -878,7 +943,7 @@ theorem exec_nonexit_head (coalition : Finset Adr) {sevm : Sevm}
           (Devm.getStorVal pre sevm.currentTarget rhoSlot).toNat + _
         omega
       have before :=
-        precreditState_getStor sevm.currentTarget sevm.value pre.state
+        precreditState_getStor sevm.currentTarget sevm.value pre.state protection
       have effect := join_write_realized_effect coalition sevm.currentTarget
         sevm.caller
         (before := precreditState sevm.currentTarget sevm.value pre.state)
@@ -900,7 +965,7 @@ theorem exec_nonexit_head (coalition : Finset Adr) {sevm : Sevm}
           omega)
       rw [quote] at effect
       refine ⟨⟨_, _, _, effect⟩, ?_, ?_, rfl⟩
-      · exact (execEntrySnapshot_of_target rfl credited).symm
+      · exact (execEntrySnapshot_of_target rfl credited protection).symm
       · simp only [opTag, hempty, hsel, joinDrip, if_false, if_true]
         rfl
 
@@ -1152,7 +1217,8 @@ theorem Exec.CoreDripAccounting.nextNone
     ⟨interPre.code, fun target => (target_ne target).elim⟩
   have sumNof : sum pre.state.bal < 2 ^ 256 := precondition.side
   rcases (carrier coalition ca).ofStorageEqBalanceMono ()
-      (_root_.Blanc.Ninst.foreignNone_getStor_eq hfork step target_ne)
+      (_root_.Blanc.Ninst.foreignNone_getStor_eq hfork step target_ne
+        (dripEntrySpec_pre_protected precondition))
       (_root_.Blanc.Ninst.targetBalanceMono_of_none hfork step target_ne sumNof) with
     ⟨headSteps, headReplay⟩
   rcases ih next committed hfork installedInter interPre
@@ -1179,7 +1245,7 @@ theorem Exec.CoreDripAccounting.last
   | ok post =>
       have sumNof : sum pre.state.bal < 2 ^ 256 := precondition.side
       rcases (carrier coalition ca).ofStorageEqBalanceMono ()
-          (congrFun (_root_.Blanc.Linst.getStor_eq step) ca)
+          (_root_.Blanc.Linst.getStor_eq step ca (dripEntrySpec_pre_protected precondition))
           (_root_.Blanc.Linst.targetBalanceMono_of_foreign step target_ne
             sumNof) with
         ⟨steps, replay⟩
@@ -1393,7 +1459,8 @@ theorem Exec.CoreDripAccounting.nextSome
           ⟨steps, chain, _⟩
         exact ⟨steps, chain⟩
       rcases (carrier coalition ca).xinstForeignSome spawnEq frameRun
-          resumeRun target_ne hfork sumNof childBody with
+          resumeRun target_ne hfork (fun _ => dripEntrySpec_pre_protected precondition)
+          sumNof childBody with
         ⟨headSteps, headReplay⟩
       rcases ihNext next committed hfork installedInter interPre
           (fun target => (target_ne target).elim)
