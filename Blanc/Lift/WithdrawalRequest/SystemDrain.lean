@@ -125,12 +125,14 @@ theorem drain_call {sevm : Sevm} {base : Devm} {Gc : Nat} {cw : B256}
   have mstor : (initDevm msg).getStor withdrawalRequestPredeployAddress =
       base.getStor withdrawalRequestPredeployAddress := by
     rw [← hmsg]
-    exact getStor_subBal_addBal hsub
+    rfl
   have mcodeP : (initDevm msg).getCode withdrawalRequestPredeployAddress =
       Blanc.withdrawalRequestCode := by
-    rw [← hmsg]
-    change (stmid.addBal cw.toAdr 0).getCode withdrawalRequestPredeployAddress = _
-    rw [State.addBal_getCode, ← hstmid, State.setBal_getCode]
+    have hsame : (initDevm msg).getCode withdrawalRequestPredeployAddress =
+        base.getCode withdrawalRequestPredeployAddress := by
+      rw [← hmsg]
+      rfl
+    rw [hsame]
     exact hcode
   have mrep : Blanc.WithdrawalRequest.RepresentsStorage
       ((initDevm msg).getStorVal (initSevm msg).currentTarget) σ := by
@@ -211,12 +213,10 @@ theorem drain_call {sevm : Sevm} {base : Devm} {Gc : Nat} {cw : B256}
   have mstorAll : ∀ a, (initDevm msg).getStor a = base.getStor a := by
     intro a
     rw [← hmsg]
-    exact getStor_subBal_addBal hsub
+    rfl
   have mcodeAll : ∀ a, (initDevm msg).getCode a = base.getCode a := by
     intro a
     rw [← hmsg]
-    change (stmid.addBal cw.toAdr 0).getCode a = _
-    rw [State.addBal_getCode, ← hstmid, State.setBal_getCode]
     rfl
   have mlogs : (initDevm msg).logs = [] := by
     change (match (initSevm msg).benvStat.rules.stateGas with
