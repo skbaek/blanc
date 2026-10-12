@@ -351,7 +351,8 @@ theorem pinnedPauseTarget_pauseFor_effect
   rcases executes with
     ⟨messageUses, ⟨pc, sevm, pre⟩, raw, xlEq, ⟨run⟩⟩
   subst xl
-  rcases MessageExecution.processMessage_entry_facts gateway process with
+  rcases MessageExecution.processMessage_entry_facts gateway
+      (Or.inl exactCall.valueZero) process with
     ⟨pcZero, codeEq, current, _codeAddress, data, time,
       _entryStorage, _memoryWf⟩
   subst pc
@@ -393,7 +394,8 @@ theorem pinnedPauseTarget_isPaused_truthful
   rcases executes with
     ⟨messageUses, ⟨pc, sevm, pre⟩, raw, xlEq, ⟨run⟩⟩
   subst xl
-  rcases MessageExecution.processMessage_entry_facts gateway process with
+  rcases MessageExecution.processMessage_entry_facts gateway
+      (Or.inl exactCall.valueZero) process with
     ⟨pcZero, codeEq, current, _codeAddress, data, time,
       entryStorage, memoryWf⟩
   subst pc
@@ -487,7 +489,12 @@ theorem pinnedPauseTarget_circuitBreaker_noninterference
   subst xl
   intro actualRun
   by_cases committed : Execution.commits raw = true
-  · rcases MessageExecution.processMessage_entry_facts gateway process with
+  · have valueZero : msg.value = 0 := by
+      rcases inbound with ⟨duration, exactCall⟩ | exactCall
+      · exact exactCall.valueZero
+      · exact exactCall.valueZero
+    rcases MessageExecution.processMessage_entry_facts gateway
+      (Or.inl valueZero) process with
       ⟨pcZero, codeEq, current, codeAddress, data, _time,
         _entryStorage, _memoryWf⟩
     apply Exec.noRetainedWriteTo_of_no_sameFrame_execAt actualRun
@@ -579,9 +586,46 @@ theorem pinnedPauseTarget_protectedSurface_reverts
     rcases executes with
       ⟨messageUses, ⟨pc, sevm, pre⟩, raw, xlEq, ⟨run⟩⟩
     subst xl
-    rcases MessageExecution.processMessage_entry_facts gateway process with
-      ⟨pcZero, codeEq, current, _entryCodeAddress, data, time,
-        entryStorage, _memoryWf⟩
+    have enter := (RunFrame.some_inv process).1
+    have pcZero := Frame.enter_run_pc enter
+    have codeEq := Frame.enter_run_code enter
+    have current := Frame.enter_run_currentTarget enter
+    dsimp only [Frame.ofCall] at pcZero codeEq current
+    rcases Frame.enter_run_inv enter with ⟨benv, transfer, entryEq⟩
+    change msg.benvAfterTransfer = .ok benv at transfer
+    have data := congrArg (fun evm : Evm => evm.sta.data) entryEq
+    change sevm.data = msg.data at data
+    have timeEntry := congrArg (fun evm : Evm => evm.sta.benvStat.time) entryEq
+    change sevm.benvStat.time = benv.stat.time at timeEntry
+    have statEq : benv.stat = msg.benv.stat := benvAfterTransfer_stat transfer
+    have time := timeEntry.trans (congrArg BenvStat.time statEq)
+    have entryState := congrArg (fun evm : Evm => evm.dyna.state) entryEq
+    change pre.state = benv.state at entryState
+    have entryStorageCases :
+        pre.state.getStor gateway = msg.benv.state.getStor gateway ∨
+          pre.state.getStor gateway = .empty := by
+      rw [entryState]
+      by_cases valueZero : msg.value = 0
+      · exact Or.inl (benvAfterTransfer_ok_getStor transfer gateway (Or.inl valueZero))
+      by_cases transfers : msg.shouldTransferValue = true
+      · obtain ⟨middle, debit, rfl⟩ := of_benvAfterTransfer transfers valueZero transfer
+        change (middle.addBal msg.currentTarget msg.value).getStor gateway =
+            msg.benv.state.getStor gateway ∨
+          (middle.addBal msg.currentTarget msg.value).getStor gateway = .empty
+        rw [getStor_addBal]
+        split
+        · exact Or.inr rfl
+        · rw [(State.of_subBal debit).2]
+          change ((msg.benv.state.setBal msg.caller
+              (msg.benv.state.bal msg.caller - msg.value)).get gateway).stor =
+              msg.benv.state.getStor gateway ∨
+            ((msg.benv.state.setBal msg.caller
+              (msg.benv.state.bal msg.caller - msg.value)).get gateway).stor = .empty
+          rw [State.setBal_get_stor]
+          split
+          · exact Or.inr rfl
+          · exact Or.inl rfl
+      · exact Or.inl (by rw [of_benvAfterTransfer_no transfers transfer])
     subst pc
     rcases MessageExecution.processMessage_clean_rawPost process clean with
       ⟨rawPost, rfl, _rawClean, _stateEq, _outputEq⟩
@@ -596,6 +640,39 @@ theorem pinnedPauseTarget_protectedSurface_reverts
     have selectedData : sevm.data =
         abiSelectorBytes selTriggerFullWithdrawals ++ tail :=
       data.trans messageData
+    have actualRole : CallerHasRole (Devm.getStor pre sevm.currentTarget)
+        addFullWithdrawalRequestRole sevm.caller.toB256 := by
+      have guard := runtime_guard_zero_of_prog_run_ok compiled
+      have selectorEq : Sevm.selector sevm = selTriggerFullWithdrawals :=
+        selector_eq_of_data_eq_abiSelectorBytes_append (by rfl) selectedData
+      obtain ⟨dispatchPre, dispatchRun, _dispatchStack, dispatchFrame⟩ :=
+        trigger_body_of_prog_run_empty_frame compiled
+          (MessageExecution.processMessage_entry_stack process) guard selectorEq
+      obtain ⟨afterValidationPre, afterValidationRun, validatorState⟩ :=
+        triggerFullWithdrawals_ok_reaches_afterValidation dispatchRun
+      have validationState : pre.state = afterValidationPre.state :=
+        dispatchFrame.state.trans validatorState
+      rw [rebasedTriggerAfterValidation_exact] at afterValidationRun
+      rcases triggerCoreFlatRoleGuard_route (tail := ([] : Stack)) nil_pref
+          afterValidationRun with
+        ⟨authorizedPre, hasRole, authorizedRun, _authorizedStack,
+          _authorizedStor, _authorizedBal⟩ |
+        ⟨_callPre, _lacksRole, callRun, _callStack, _callStor, _callBal⟩
+      · rw [getStor_eq_of_state_eq validationState]
+        exact hasRole
+      · have impossible := rebasedTriggerRoleFailure_call_reverts_exact callRun
+        rcases impossible with ⟨_d, outcome⟩ | ⟨_revertPost, outcome, _output⟩ <;>
+          cases outcome
+    have entryStorage : pre.state.getStor gateway =
+        msg.benv.state.getStor gateway := by
+      rcases entryStorageCases with preserved | wiped
+      · exact preserved
+      · exfalso
+        unfold CallerHasRole at actualRole
+        change (pre.state.getStor sevm.currentTarget).get
+          (roleMembershipSlot addFullWithdrawalRequestRole sevm.caller.toB256) ≠ 0 at actualRole
+        rw [current.trans currentTarget, wiped] at actualRole
+        exact actualRole rfl
     have rawPaused : sevm.benvStat.time <
         pre.getStorVal sevm.currentTarget resumeSinceSlot := by
       unfold PausedAt pausedUntil at paused
