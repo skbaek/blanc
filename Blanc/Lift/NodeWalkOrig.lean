@@ -92,7 +92,7 @@ theorem sstoreStep_withOrig (hO : OrigAgree O s.benvStat.origState) (c : Cfg) (k
   have h : ∀ a key, c.devm.getOrigStorVal (s.withOrig O) a key = c.devm.getOrigStorVal s a key :=
     fun a key => Devm.getOrigStorVal_withOrig_of_eq c.devm a key (hO a key)
   unfold sstoreStep
-  simp only [h]
+  simp only [origReadK_eq, h]
   rfl
 
 theorem ninst_step_reg_withOrig (pc : Nat) (d : Devm) {r : Rinst} (hr : r ≠ .sstore) :

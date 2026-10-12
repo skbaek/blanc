@@ -394,12 +394,37 @@ def sloadStep (sevm : Sevm) (c : Cfg) (g : SFunc) : Option Cfg :=
     else none
   | _ => none
 
-/-- `SSTORE` at a key the shadow decides warm or cold (`Ninst.runCompiled_sstore_*`). -/
+/-- Kernel-evaluable form of the machine's original-storage read `Devm.getOrigStorVal`.
+`Std.HashSet` membership in `createdAccounts` does not reduce in the kernel (its bucket index
+goes through the opaque `System.Platform.numBits`), but the set's `size` field does: an empty
+created set is decided by its size, and the original value is then the transaction-start
+snapshot's.  Propositionally equal to the machine read (`origReadK_eq`).  Generic: nothing here
+is contract-specific. -/
+def origReadK (devm : Devm) (sevm : Sevm) (a : Adr) (k : B256) : B256 :=
+  if devm.createdAccounts.size = 0 then Jaune.getOrigStorVal sevm a k
+  else devm.getOrigStorVal sevm a k
+
+theorem origReadK_eq (devm : Devm) (sevm : Sevm) (a : Adr) (k : B256) :
+    origReadK devm sevm a k = devm.getOrigStorVal sevm a k := by
+  unfold origReadK
+  split
+  · rename_i h
+    have hn : a ∉ devm.createdAccounts := by
+      intro hm
+      have he : devm.createdAccounts.isEmpty = true := by
+        simp [Std.HashSet.isEmpty_eq_size_eq_zero, h]
+      exact Std.HashSet.isEmpty_iff_forall_not_mem.mp he a hm
+    simp [Devm.getOrigStorVal, hn]
+  · rfl
+
+/-- `SSTORE` at a key the shadow decides warm or cold (`Ninst.runCompiled_sstore_*`).  The
+original value is read through `origReadK` so that a kernel evaluation of a concrete run decides
+it; `origReadK_eq` returns it to the machine's `Devm.getOrigStorVal`. -/
 def sstoreStep (sevm : Sevm) (c : Cfg) (g : SFunc) : Option Cfg :=
   match c.devm.stack with
   | k :: v :: s =>
     let ct := sevm.currentTarget
-    let orig := c.devm.getOrigStorVal sevm ct k
+    let orig := origReadK c.devm sevm ct k
     let cur := lookupS c.stor ct k
     let rc := sstoreNewRefundCounter sevm.benvStat.rules.gas v orig cur c.devm.refundCounter
     if sevm.benvStat.rules.stateGas.isNone ∧ gCallStipend < c.devm.gasLeft ∧

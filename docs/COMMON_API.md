@@ -949,6 +949,14 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   read from snapshot agreement at one owner/key; created accounts read zero on
   both sides. Both the full `OrigAgree` and finite `OrigAgreeOn` transport proofs
   use it without a not-created premise.
+  The interpreter's `SSTORE` arm reads the original value through
+  `Blanc.Lift.Witness.origReadK` (WitnessArms), not `Devm.getOrigStorVal` directly:
+  `Std.HashSet` membership in `createdAccounts` does not reduce in the kernel (the
+  bucket index goes through the opaque `System.Platform.numBits`), while the set's
+  `size` field does, so an empty created set is decided by size. A proof that
+  unfolds `sstoreStep` rewrites with `origReadK_eq` to recover the machine read.
+  A concrete witness whose created set is nonempty still cannot be kernel-evaluated
+  through an `SSTORE` that needs the original value.
   Hand a transported spawn's agreement and child nodes to lemmas stated over the kernel
   configuration through `pagree_re`/`nodeAt_re`: left to definitional
   unfolding, the kernel compares a concrete machine with its transported form by evaluating both
