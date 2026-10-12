@@ -93,14 +93,16 @@ noncomputable def wethCarrier (ca : Adr) (U : Key → Prop) : ReplayCarrier ca w
   ofState state := ledger U (state.getStor ca)
   frameEntry _ state := ledger U (state.getStor ca)
   nil := LedgerReplay.nil
-  silent := fun storage _ => by rw [storage]
+  readsStorage := true
+  silent := fun hstor _ => by rw [hstor rfl]
   credit := by
     intro _ pre post _ storage _ _
     exact ⟨[], by rw [storage]; exact LedgerReplay.nil _⟩
   entry_eq_ofState := by
-    intro _ _ _ _ transfer _
+    intro msg entry caller_ne _ transfer sum_nof
     show ledger U _ = ledger U _
-    rw [congrFun (benvAfterTransfer_getStor_eq transfer) ca]
+    rw [benvAfterTransfer_getStor_eq_of_safe transfer sum_nof
+      (fun ht _ => Or.inl (caller_ne ht))]
 
 /-- Replay steps and committed-frame invocations use the same ordered observation. -/
 noncomputable def wethObservation (ca : Adr) (U : Key → Prop) :
