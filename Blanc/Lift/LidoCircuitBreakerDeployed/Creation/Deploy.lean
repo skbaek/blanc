@@ -90,7 +90,8 @@ theorem lido_create (msg : Msg) (hvalue : msg.value = 0)
   have fr : CtorFrame sevm := ⟨by rw [hstat]; exact hfork, hstatic⟩
   have hempty : Devm.getStor b sevm.currentTarget = Stor.empty := by
     show benv.state.getStor msg.currentTarget = _
-    rw [benvAfterTransfer_ok_getStor htransfer, processCreateMessage_msg_getStor_currentTarget]
+    rw [benvAfterTransfer_ok_getStor htransfer _ (Or.inl hvalue),
+      processCreateMessage_msg_getStor_currentTarget]
   have hle := ctorCost_le sevm b
   obtain ⟨raw, hrun, hout, herr, hst, hgasLeft⟩ :=
     ctor_run_facts fr hcode hvalue hempty (b := b) (G := msg.gas - ctorCost sevm b) (by omega)
@@ -104,8 +105,14 @@ theorem lido_create (msg : Msg) (hvalue : msg.value = 0)
     (by rw [hout]; exact runtime_head)
     (by rw [hlen, hgasLeft]; unfold gasCodeDeposit; omega)
     (by rw [hlen]; exact hmax)
+  have hcode_ne :
+      ({ raw.state.get msg.currentTarget with code := ⟨⟨raw.output⟩⟩ } : Acct).code.size ≠ 0 := by
+    show (⟨⟨raw.output⟩⟩ : ByteArray).size ≠ 0
+    have hsize : (⟨⟨raw.output⟩⟩ : ByteArray).size = raw.output.length := rfl
+    rw [hsize, hlen]
+    decide
   refine ⟨post, hpost, hcodePost.trans hout, ?_⟩
-  rw [hstorPost]
+  rw [hstorPost, Acct.clearIfEmpty_stor, ite_eq_right (fun hE => hcode_ne hE.1)]
   show Devm.getStor raw sevm.currentTarget = _
   rw [hst]
   rfl
