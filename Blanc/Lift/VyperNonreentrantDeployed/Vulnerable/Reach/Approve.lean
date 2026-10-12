@@ -55,14 +55,11 @@ theorem approveFacts : ∀ W : State,
     (eP W).dyna.error = none := by
   kernel_forall_rfl_and
 
+/-- The message carries no value, so its entry leaves the account shadow unchanged. -/
+theorem acsP_eq : acsP = acs6 := by kernel_rfl
+
 theorem acsP_lookup (a : Adr) : lookupA acsP a = lookupA acs6 a := by
-  refine lookupA_eq_of_keys (fun b hb => ?_) a
-  have hk : acsP.map Prod.fst ++ acs6.map Prod.fst =
-      [tokenAddr, creator, attackerAddr, tokenAddr, proxyAddr, implAddr, creator, attackerAddr,
-        tokenAddr, proxyAddr, implAddr, creator] := by kernel_rfl
-  rw [hk] at hb
-  simp only [List.mem_cons, List.not_mem_nil, or_false] at hb
-  rcases hb with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> rfl
+  rw [acsP_eq]
 
 theorem lookup_stor5_allow : lookupS stor5 tokenAddr allowCPSlot = 0 := by decide +kernel
 

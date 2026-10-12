@@ -1,4 +1,5 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolCallbackRun
+import Blanc.Lift.VyperNonreentrantDeployed.RepinBridge
 
 /-!
 # V− P2, F3 (with F4 as its child and F5 by `ReAddFrame`): the callback frame
@@ -43,6 +44,7 @@ def CallbackFrame : Prop :=
       StepOk fsA ((sCb.withOrig O).withFork g) (Boundary.cfgOfT bCb0 tS tA m w) c1 ∧
       wrun fsA ((sCb.withOrig O).withFork g) 2 c1 = .done (.halted post) cl ∧
       post.gasLeft = gasCb ∧ post.output = [] ∧ post.error = none ∧
+      post.createdAccounts = .emptyWithCapacity ∧
       cl.keys = keysCb ∧ cl.adrs = adrsCb ∧ cl.stor = storCb ++ tS ∧ cl.acs = acsCb ++ tA ∧
       ReentryFacts ((sCb.withOrig O).withFork g) (Boundary.cfgOfT bCb0 tS tA m w)
 
@@ -367,7 +369,8 @@ theorem c5Cb_agree : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Me
     exact hC4
   have hdc := dcallPrep_spec (cpCb5_eq O tS tA m w) hA4 hC4'
   obtain ⟨dstep, dpa, dpk, dcr, dia, dik, dsg, dst8, dst9⟩ := hdc
-  refine frameStart_agree (Vulnerable.t_0000_c0) (e5Cb_eq O tS tA m w) ?hK ?hA' ?hS ?hC
+  refine RepinBridge.frameStart_agree_keep (Vulnerable.t_0000_c0) (e5Cb_eq O tS tA m w)
+    ?hK ?hA' ?hS ?hC (keepsCb5 O tS tA m w)
   · intro x
     rw [dik, dpk, e4Cb31_keys O tS tA m w, e4Cb_entry_keys O tS tA m w, cik, cpk]
     exact hA.1 x
@@ -379,9 +382,9 @@ theorem c5Cb_agree : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Me
     have hB : benvAfterTransferB (cpCb O tS tA m w).f.inner = .ok benv4 := by
       rw [benvAfterTransfer_eq_S hC4pre]
       exact hb4
-    have hstor := benvAfterTransferB_stor hB a k
-    rw [hstor, cst8]
-    exact hA.2.2.1 a k
+    have hstor := benvAfterTransferB_stor hB hC4pre
+      (fun a k => by rw [cst8]; exact hA.2.2.1 a k) a k
+    rw [hstor, RepinBridge.storTransfer_of_keeps (keepsCb O tS tA m w)]
   · rw [dst8, e4Cb31_state O tS tA m w, he4]
     exact hC4
 
@@ -483,6 +486,13 @@ theorem halt2_shadows : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m :
       | _ => (0, [], true, [], [], [], [])) =
       (gasCb, [], false, keysCb, adrsCb, storCb ++ tS, acsCb ++ tA) := by
   simp only [C1, cACb_keys, cpCb_adrs, cpCb5_adrs]
+  kernel_forall_rfl
+
+/-- The callback frame and its forwarder child pass F5's created-account set through. -/
+theorem halt2_created : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
+    (w : World) (post : Devm),
+    RepinBridge.haltCreated (wrun fsA (sCb.withOrig O) 2 (C1 O tS tA m w post)) =
+      post.createdAccounts := by
   kernel_forall_rfl
 
 /-! ## The halt decoder -/
@@ -1082,7 +1092,7 @@ theorem closeCb_of (g : Fork) (O : State) (tS : StorShadow) (tA : AcctShadow)
     (hwr : wrun fsA (sCb.withOrig O) 2 c1' =
       Res.done (Outcome.halted p) cl')
     (hgas : p.gasLeft = gasCb) (hout : p.output = [])
-    (herrN : p.error = none)
+    (herrN : p.error = none) (hcrN : p.createdAccounts = .emptyWithCapacity)
     (hkeys : cl'.keys = keysCb) (hadrs : cl'.adrs = adrsCb)
     (hstor : cl'.stor = storCb ++ tS) (hacs : cl'.acs = acsCb ++ tA)
     (reentry : ReentryFacts ((sCb.withOrig O).withFork g)
@@ -1092,6 +1102,7 @@ theorem closeCb_of (g : Fork) (O : State) (tS : StorShadow) (tA : AcctShadow)
       wrun fsA ((sCb.withOrig O).withFork g) 2 c1 =
         Res.done (Outcome.halted post) cl ∧
       post.gasLeft = gasCb ∧ post.output = [] ∧ post.error = none ∧
+      post.createdAccounts = .emptyWithCapacity ∧
       cl.keys = keysCb ∧ cl.adrs = adrsCb ∧ cl.stor = storCb ++ tS ∧
       cl.acs = acsCb ++ tA ∧
       ReentryFacts (((sCb.withOrig O).withFork g))
@@ -1102,7 +1113,7 @@ theorem closeCb_of (g : Fork) (O : State) (tS : StorShadow) (tA : AcctShadow)
   have hS : ∀ n c, wrun fsA ((sCb.withOrig O).withFork g) n c =
       wrun fsA (sCb.withOrig O) n c :=
     fun n c => wrun_withFork hF hg (sCb_orig_hx O) fsA n c
-  exact ⟨c1', cl', p, s12, by rw [hS]; exact hwr, hgas, hout, herrN, hkeys,
+  exact ⟨c1', cl', p, s12, by rw [hS]; exact hwr, hgas, hout, herrN, hcrN, hkeys,
     hadrs, hstor, hacs, reentry⟩
 
 /-! ## The callback frame -/
@@ -1129,7 +1140,7 @@ theorem callback_frame (hRe : ReAddFrame) : CallbackFrame := by
       (c5Cb O tS tA m w).devm.world) := by
     rw [← heq5]
     exact hAgree5
-  obtain ⟨post, hexec5, hgasRe, houtRe, herrRe, hchildRe,
+  obtain ⟨post, hexec5, hgasRe, houtRe, herrRe, hcrRe, hchildRe,
     ⟨cB, hrun5, hagreeB, hfB, hs0B, hs2B⟩, hsettleRe⟩ :=
     hRe g O tS tA _ _ hg hRead agreeRe
   -- F5's entered frame is P1's initial frame.
@@ -1186,23 +1197,21 @@ theorem callback_frame (hRe : ReAddFrame) : CallbackFrame := by
     (wrun_cont run32).trans sRes
   -- F4's child: settled forwarder machine.
   have htup := halt2_shadows O tS tA m w post
-  rw [← hc1C1] at htup
-  match hwr : wrun fsA (sCb.withOrig O) 2 c1' with
-  | .done (.halted p) cl =>
-    rw [hwr] at htup
-    dsimp only at htup
-    simp only [Prod.mk.injEq] at htup
+  have hcrH := halt2_created O tS tA m w post
+  rw [← hc1C1] at htup hcrH
+  generalize hwr : wrun fsA (sCb.withOrig O) 2 c1' = r at htup hcrH
+  rcases r with c | ⟨p | p, cl⟩ | _
+  · simp only [Prod.mk.injEq] at htup
+    exact absurd htup.2.2.1 (by decide)
+  · simp only [Prod.mk.injEq] at htup
     obtain ⟨hgas, hout, herrB, hkeys, hadrs, hstor, hacs⟩ := htup
     have herrN : p.error = none := herrN_of _ herrB
-    exact closeCb_of g O tS tA m w hg c1' s12 hwr hgas hout herrN
+    simp only [RepinBridge.haltCreated] at hcrH
+    exact closeCb_of g O tS tA m w hg c1' s12 hwr hgas hout herrN (hcrH.trans hcrRe)
       hkeys hadrs hstor hacs reentry
-  | _ =>
-    rw [hwr] at htup
-    split at htup <;> try simp only [Prod.mk.injEq, reduceCtorEq] at htup
-    obtain ⟨hgas, hout, herrB, hkeys, hadrs, hstor, hacs⟩ := htup
-    have herrN := herrN_of _ herrB
-    exact closeCb_of g O tS tA m w hg c1' s12 hwr hgas hout herrN
-      hkeys hadrs hstor hacs reentry
-    exact htup.2.2.1.elim
+  · simp only [Prod.mk.injEq] at htup
+    exact absurd htup.2.2.1 (by decide)
+  · simp only [Prod.mk.injEq] at htup
+    exact absurd htup.2.2.1 (by decide)
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol

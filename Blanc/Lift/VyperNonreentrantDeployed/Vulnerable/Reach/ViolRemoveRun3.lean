@@ -46,18 +46,15 @@ def machRmX2 : Mach :=
 
 /-- F2 at 220 steps after `bRmX1` (11 steps before the token's `transfer`
 `CALL`; node `t_1d0d_c53`): the second own chunk boundary. Storage is the
-resume's plus the `(proxy, 9) := 900` write; keys the resume's; addresses and
-accounts carry two identity-precompile touches each. -/
+resume's plus the `(proxy, 9) := 900` write; keys the resume's; accounts the resume's;
+addresses carry two identity-precompile touches (the zero-value calls add no account entry). -/
 def bRmX2 : Boundary.Bnd1 :=
   (machRmX2, Vulnerable.t_1d0d_c53, [],
     [(proxyAddr, (8 : Nat).toB256), (proxyAddr, (26 : Nat).toB256),
       (proxyAddr, (2 : Nat).toB256)] ++ keysCb,
     [(4 : Adr), (4 : Adr), attackerAddr, (4 : Adr), implAddr, proxyAddr] ++ adrsCb,
     [((proxyAddr, (9 : Nat).toB256), (900 : Nat).toB256)] ++ storCb,
-    [((4 : Adr), ⟨0, (0 : Nat).toB256, .empty, .empty⟩),
-      (proxyAddr, ⟨1, (1000 : Nat).toB256, .empty, fwdCode⟩),
-      ((4 : Adr), ⟨0, (0 : Nat).toB256, .empty, .empty⟩),
-      (proxyAddr, ⟨1, (1000 : Nat).toB256, .empty, fwdCode⟩)] ++ acsCb,
+    acsCb,
     [], List.replicate 31 0 ++ [0x44, 0xa9, 0x05, 0x9c, 0xbb] ++
       List.replicate 12 0 ++ List.replicate 20 0x44 ++ List.replicate 12 0 ++
       List.replicate 19 0 ++ [0x64], none, false)

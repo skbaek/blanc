@@ -28,18 +28,18 @@ def adrs5C : List Adr :=
 
 /-- Frame 5's halt: gas, return data, no error, the refund counter and whether the halting
 configuration's storage keys, addresses and storage shadows are `keys5T`/`adrs5C`/`storAT`
-(decided), and its account shadow and set of accounts to delete (compared by the kernel as
-terms). -/
-def obs5C : Res → Option (Nat × List Nat × Bool × AcctShadow × AdrSet)
+(decided), and its account shadow, set of accounts to delete and set of created accounts
+(compared by the kernel as terms). -/
+def obs5C : Res → Option (Nat × List Nat × Bool × AcctShadow × AdrSet × AdrSet)
   | .done (.halted d) cl => some (d.gasLeft, d.output.map UInt8.toNat, d.error.isNone &&
       decide (cl.keys = keys5T) && decide (cl.adrs = adrs5C) && decide (cl.stor = storAT) &&
-      decide (d.refundCounter = refund5), cl.acs, d.accountsToDelete)
+      decide (d.refundCounter = refund5), cl.acs, d.accountsToDelete, d.createdAccounts)
   | _ => none
 
 /-- The EELS observation at frame 5's `RETURN`: gas 14,656,753, returning 106 (the LP minted to
 `A'`), with `totalSupply = balanceOf[A'] = 2106` in `P`'s storage shadow. -/
-def obs5EELSC : Option (Nat × List Nat × Bool × AcctShadow × AdrSet) :=
-  some (gas5C, (word 106).map UInt8.toNat, true, acsAT, .emptyWithCapacity)
+def obs5EELSC : Option (Nat × List Nat × Bool × AcctShadow × AdrSet × AdrSet) :=
+  some (gas5C, (word 106).map UInt8.toNat, true, acsAT, .emptyWithCapacity, .emptyWithCapacity)
 
 /-- Frame 5's run from its real spawn. -/
 def r5C : Res := wrun fs1 e5C.sta 4505 c5C

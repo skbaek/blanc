@@ -1,4 +1,5 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Run
+import Blanc.Lift.VyperNonreentrantDeployed.RepinBridge
 
 /-!
 V- as an admitted transaction, the entry facts of the deep chain: each frame's start
@@ -52,7 +53,8 @@ theorem e1T_world : (∀ a k, storOf e1T.dyna.state a k = lookupS callCfg.stor a
     rw [benvAfterTransfer_eq_S hC]; exact hb
   rw [hs]
   refine ⟨fun a k => ?_, acctAgree_transfer hC hb⟩
-  rw [benvAfterTransferB_stor hbB, hst]; exact callCfg_agree.2.2.1 a k
+  rw [benvAfterTransferB_stor hbB hC (fun a k => by rw [hst]; exact callCfg_agree.2.2.1 a k),
+    show storTransfer cp0.f.inner callCfg.stor callCfg.acs = callCfg.stor by kernel_rfl]
 
 theorem e1T31_acc : e1T31.dyna.accessedAddresses = e1T.dyna.accessedAddresses := rfl
 theorem e1T31_keys : e1T31.dyna.accessedStorageKeys = e1T.dyna.accessedStorageKeys := rfl
@@ -69,14 +71,18 @@ theorem cp2T_spec :
   dcallPrep_spec cp2T_eq (fun a => by rw [e1T31_acc]; exact e1T_adrs a)
     (by rw [e1T31_state]; exact e1T_world.2)
 
+/-- The proxy's `DELEGATECALL` moves no value: frame 2 starts on `A'`'s storage. -/
+theorem keeps2T : RepinBridge.transferKeepsStor cp2T.f.inner acs1T = true := by kernel_rfl
+
 /-- **Frame 2 starts in agreement**: its accessed sets, storage and accounts are the proxy
 frame's, the implementation added. -/
 theorem c2T_agree : Agree c2T := by
   obtain ⟨-, hpa, hpk, -, hia, hik, -, hst, -⟩ := cp2T_spec
-  exact frameStart_agree t_0000_c0 e2T_eq
+  have h := frameStart_agree t_0000_c0 e2T_eq
     (fun x => by rw [hik, hpk, e1T31_keys]; exact e1T_keys x) (fun a => by rw [hia]; exact hpa a)
     (fun a k => by rw [hst, e1T31_state]; exact e1T_world.1 a k)
     (by rw [hst, e1T31_state]; exact e1T_world.2)
+  rwa [RepinBridge.storTransfer_of_keeps keeps2T] at h
 
 theorem agree_cfg339T : Agree cfg339T := (wrun_cont cfg339T_eq).1 c2T_agree
 
@@ -114,6 +120,10 @@ theorem e4T_keys : ∀ x, x ∈ e4T.dyna.accessedStorageKeys ↔ x ∈ aCallT.ke
   intro x
   rw [hk, hik, hpk]; exact agree_aCallT.1 x
 
+/-- `A'`'s callback `CALL` moves its 100 wei between accounts with nonzero nonces: no storage is
+deleted. -/
+theorem keeps4T : RepinBridge.transferKeepsStor cp4T.f.inner aCallT.acs = true := by kernel_rfl
+
 theorem e4T_world : (∀ a k, storOf e4T.dyna.state a k = lookupS aCallT.stor a k) ∧
     AcctAgree e4T.dyna.state acs4T := by
   obtain ⟨-, -, -, -, -, -, -, hst⟩ := cp4T_spec
@@ -124,7 +134,8 @@ theorem e4T_world : (∀ a k, storOf e4T.dyna.state a k = lookupS aCallT.stor a 
     rw [benvAfterTransfer_eq_S hC]; exact hb
   rw [hs]
   refine ⟨fun a k => ?_, acctAgree_transfer hC hb⟩
-  rw [benvAfterTransferB_stor hbB, hst]; exact agree_aCallT.2.2.1 a k
+  rw [benvAfterTransferB_stor hbB hC (fun a k => by rw [hst]; exact agree_aCallT.2.2.1 a k),
+    RepinBridge.storTransfer_of_keeps keeps4T]
 
 theorem e4T31_acc : e4T31.dyna.accessedAddresses = e4T.dyna.accessedAddresses := rfl
 theorem e4T31_keys : e4T31.dyna.accessedStorageKeys = e4T.dyna.accessedStorageKeys := rfl

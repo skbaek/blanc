@@ -217,10 +217,12 @@ theorem vminus_witness_covered (g : Fork) (hg : CoveredFork g) :
   obtain ⟨hx0, hpm, he0, -, ho0, hst0⟩ := frame0_of_child_at hg post1 hx1 hg1 ho1 he1
   -- frame 4's entry agreement
   obtain ⟨-, hpa, hpk, -, hia, hik, -, hst, -⟩ := cp4_spec
-  have hag4 : Agree c4 := frameStart_agree t_0000_c0 e4_eq
-    (fun x => by rw [hik, hpk, e31_keys]; exact e3_keys x) (fun a => by rw [hia]; exact hpa a)
-    (fun a k => by rw [hst, e31_state]; exact e3_world.1 a k)
-    (by rw [hst, e31_state]; exact e3_world.2)
+  have hag4 : Agree c4 := by
+    have h := frameStart_agree t_0000_c0 e4_eq
+      (fun x => by rw [hik, hpk, e31_keys]; exact e3_keys x) (fun a => by rw [hia]; exact hpa a)
+      (fun a k => by rw [hst, e31_state]; exact e3_world.1 a k)
+      (by rw [hst, e31_state]; exact e3_world.2)
+    rwa [RepinBridge.storTransfer_of_keeps keeps4] at h
   obtain ⟨hx4, -, ha4⟩ := frame4_child_at hg
   have hsub := subtree_facts
   simp only [Prod.mk.injEq] at hsub

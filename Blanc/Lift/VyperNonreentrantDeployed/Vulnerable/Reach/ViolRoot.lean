@@ -1,4 +1,5 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolRootRun
+import Blanc.Lift.VyperNonreentrantDeployed.RepinBridge
 
 /-!
 # V− P2, F0/F1 entry: the root frame and its forwarder child
@@ -112,7 +113,8 @@ theorem c2R_agree : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Met
     exact hC1
   have hdc := dcallPrep_spec (cpF2_eq O tS tA m w) hA4 hC4'
   obtain ⟨dstep, dpa, dpk, dcr, dia, dik, dsg, dst8, dst9⟩ := hdc
-  refine frameStart_agree (Vulnerable.t_0000_c0) (e2_eq O tS tA m w) ?hK ?hA' ?hS ?hC
+  refine RepinBridge.frameStart_agree_keep (Vulnerable.t_0000_c0) (e2_eq O tS tA m w)
+    ?hK ?hA' ?hS ?hC (keepsF2 O tS tA m w)
   · intro x
     rw [dik, dpk, e1'11_keys O tS tA m w, e1_entry_keys O tS tA m w, cik, cpk]
     exact hA.1 x
@@ -124,9 +126,9 @@ theorem c2R_agree : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Met
     have hB : benvAfterTransferB (cpR O tS tA m w).f.inner = .ok benv1 := by
       rw [benvAfterTransfer_eq_S hC1pre]
       exact hb1
-    have hstor := benvAfterTransferB_stor hB a k
-    rw [hstor, cst8]
-    exact hA.2.2.1 a k
+    have hstor := benvAfterTransferB_stor hB hC1pre
+      (fun a k => by rw [cst8]; exact hA.2.2.1 a k) a k
+    rw [hstor, RepinBridge.storTransfer_of_keeps (keepsR O tS tA m w)]
   · rw [dst8, e1'11_state O tS tA m w, he1]
     exact hC1
 

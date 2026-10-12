@@ -70,10 +70,18 @@ theorem eB_kok (W : State) : CoveredFork (eB W).sta.benvStat.fork ∧
 
 theorem acsTransfer_frameA (W : State) : acsTransfer (frameA W).inner acs6 = acsA := rfl
 
+/-- The 1000 wei the message moves deletes no account: the storage shadow is unchanged. -/
+theorem storTransfer_frameA : ∀ W : State, storTransfer (frameA W).inner stor6 acs6 = stor6 := by
+  kernel_forall_rfl
+
+/-- The implementation frame's entry (a `DELEGATECALL`) moves no value. -/
+theorem storTransfer_cpA : ∀ W : State, storTransfer (cpA W).f.inner stor6 acsA = stor6 := by
+  kernel_forall_rfl
+
 theorem eA_agree (hW : WorldIs W acs6 stor6) : Agree ⟨(eA W).dyna, .undefined, [], [], [], stor6, acsA⟩ := by
   have h := frameStart_agree (f := frameA W) (keys := []) (adrs := []) .undefined (addFacts0 W).1
     mem_emptyWithCapacity_keys mem_emptyWithCapacity_adrs hW.2 hW.1
-  rwa [acsTransfer_frameA] at h
+  rwa [acsTransfer_frameA, storTransfer_frameA] at h
 
 theorem eA31_adrs (hW : WorldIs W acs6 stor6) :
     ∀ a, a ∈ (eA31 W).dyna.accessedAddresses ↔ a ∈ ([] : List Adr) := by
@@ -163,9 +171,11 @@ theorem fsI_zero' : fsI[0]? = some t_0000_c0 := by kernel_rfl
 theorem cB0_agree (hW : WorldIs W acs6 stor6) : Agree (cB0 W) := by
   obtain ⟨-, hpa, hpk, -, hia, hik, -, hst, -⟩ := dcallPrep_spec (addFacts0 W).2.2.1
     (eA31_adrs hW) (eA31_world hW).1
-  exact frameStart_agree t_0000_c0 (addFacts0 W).2.2.2.1
+  have h := frameStart_agree t_0000_c0 (addFacts0 W).2.2.2.1
     (fun x => by rw [hik, hpk]; exact eA31_keys hW x) (fun a => by rw [hia]; exact hpa a)
     (fun a k => by rw [hst]; exact (eA31_world hW).2 a k) (by rw [hst]; exact (eA31_world hW).1)
+  rw [storTransfer_cpA W] at h
+  exact h
 
 /-- The actual implementation frame's machine (original state `W`) is the kernel's with its
 original state changed back to `W`. -/

@@ -34,9 +34,9 @@ theorem vminus_tx_message :
         (storOf post.state proxyAddress balanceOfA2Slot.toB256).toNat = 1906 ∧
         (storOf post.state proxyAddress (26 : Nat).toB256).toNat <
           (storOf post.state proxyAddress balanceOfA2Slot.toB256).toNat := by
-  obtain ⟨d1, ck, ca, cs, cc, hg, ho, he, hok, ha, h26, hA, hr, hd⟩ := frame1_child
+  obtain ⟨d1, ck, ca, cs, cc, hg, ho, he, hok, ha, h26, hA, hr, hd, hcr⟩ := frame1_child
   obtain ⟨post, hx, hpm, herr, hgas, hout, hrf, hatd, hst⟩ :=
-    tx_message_of_child d1 ck ca cs cc hg ho he hr hd hok ha
+    tx_message_of_child d1 ck ca cs cc hg ho he hr hd hcr hok ha
   have hf := msg0tx_facts
   simp only [Prod.mk.injEq] at hf
   obtain ⟨hcaller, htarget, -, -, -, -, hfork⟩ := hf

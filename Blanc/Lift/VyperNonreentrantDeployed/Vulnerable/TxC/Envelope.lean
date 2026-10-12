@@ -156,11 +156,15 @@ theorem vminus_txC_process (g : Fork) (hg : CoveredFork g) (bout : BlockOutput)
     hcall (by rfl)
   refine ⟨_, bout', hproc, ?_⟩
   have hlist : Std.HashSet.toList post.accountsToDelete = [] := by rw [hatd]; simp only [Std.HashSet.toList_emptyWithCapacity]
-  have hst : ∀ (v₁ v₂ : B256) (a : Adr) (k : B256),
-      storOf ((post.state.addBal eAddress v₁).addBal (benvPre.withFork g).stat.coinbase v₂) a k =
-        storOf post.state a k := by
-    intro v₁ v₂ a k
-    simp only [State.addBal, storOf_setBal]
+  -- The settlement credits only the sender `E` (also the coinbase); the observed pool `P` is
+  -- another address, so its storage is untouched whatever the credits (even an emptied `E`).
+  have hne : (eAddress = proxyAddress) = False := eq_false (by decide)
+  have hcb : (benvPre.withFork g).stat.coinbase = eAddress := rfl
+  have hst : ∀ (v₁ v₂ : B256) (k : B256),
+      storOf ((post.state.addBal eAddress v₁).addBal (benvPre.withFork g).stat.coinbase v₂)
+        proxyAddress k = storOf post.state proxyAddress k := by
+    intro v₁ v₂ k
+    simp only [State.addBal, storOf_setBal, hcb, hne, false_and, if_false]
   simp only [hlist, List.foldl_nil, hst]
   exact ⟨h26, hA, hlt⟩
 

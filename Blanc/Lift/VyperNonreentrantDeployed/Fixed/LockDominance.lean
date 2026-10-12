@@ -1,4 +1,5 @@
 import Blanc.Lift.LockCheckFlow
+import Blanc.OwnerDiscipline
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Check
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.LockCheck
 
@@ -24,7 +25,6 @@ open Jaune Blanc.LockExclusion Blanc.Lift.LockCheck
 /-- The comparator's lock as a `LockSpec` over its runtime. -/
 def lockL : LockSpec := ⟨code, 0, 2, lockBodies, lockMutBodies⟩
 
-
 /-- **The comparator's lock dominance.** -/
 theorem lock_dominance : lockL.Dominance :=
   dominance cert_check lock_cert
@@ -47,5 +47,14 @@ theorem lock_no_forbidden {F : Exec.Deriv} (hpc : F.pc = 0)
     (∀ x, Ninst.At n.sevm.code n.pc (.exec x) → x = .call ∨ x = .staticcall) ∧
       ¬ Linst.At n.sevm.code n.pc .selfdestruct :=
   no_forbidden cert_check lock_cert hpc hfork hcode hhash hp
+
+/-- A pool owner holding the comparator or its forwarder carries nonempty code (the lock proofs'
+replay domain under account normalization). -/
+theorem pool_code_toList_ne_nil {s : Jaune.State} {P : Jaune.Adr}
+    (hP : s.getCode P = forwarderCode curvePlainImpl847e ∨ s.getCode P = code) :
+    (s.getCode P).toList ≠ [] := by
+  intro e
+  have hs : (s.getCode P).size = 0 := by rw [ByteArray.size_eq_length_toList, e]; rfl
+  rcases hP with h | h <;> rw [h] at hs <;> revert hs <;> decide +kernel
 
 end Blanc.Lift.VyperNonreentrantDeployed.Fixed

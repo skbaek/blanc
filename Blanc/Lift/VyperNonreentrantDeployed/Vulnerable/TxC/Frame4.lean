@@ -75,7 +75,17 @@ def post4C : Devm := post4CF post5C
 
 theorem obsChild5_post5C : obsChild5C post5C = post5C := by
   obtain ⟨-, hg, ho, he, -, -, -, -, hr, ha⟩ := r5C_facts
-  exact childObsX_eq hg ho he hr ha
+  exact childObsX_eq hg ho he hr ha post5C_created
+
+/-- The proxy frame creates no account (its child's pinned created set passes through). -/
+theorem post4CF_created : ∀ d : Devm,
+    (post4CF (obsChild5C d)).createdAccounts = .emptyWithCapacity := by
+  kernel_forall_rfl
+
+theorem post4C_created : post4C.createdAccounts = .emptyWithCapacity := by
+  have h := post4CF_created post5C
+  rw [obsChild5_post5C] at h
+  exact h
 
 theorem e4C_code : e4C.sta.code = proxyCode := by kernel_rfl
 

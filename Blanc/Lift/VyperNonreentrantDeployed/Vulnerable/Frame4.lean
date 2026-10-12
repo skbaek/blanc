@@ -15,16 +15,18 @@ open Blanc.Lift.VyperNonreentrantDeployed Blanc.Lift.VyperNonreentrantDeployed.V
 
 /-- Frame 4's halt: gas, return data, no error and whether the halting configuration's
 storage keys, addresses and storage shadows are `keys4`/`adrs4`/`storA` (decided), and its
-account shadow (compared by the kernel as a term: its codes are the fixture's constants). -/
-def obs4 : Res → Option (Nat × List Nat × Bool × AcctShadow)
+account shadow (compared by the kernel as a term: its codes are the fixture's constants), and
+the transaction's created-account set (compared as a term: no account is created). -/
+def obs4 : Res → Option (Nat × List Nat × Bool × AcctShadow × AdrSet)
   | .done (.halted d) cl => some (d.gasLeft, d.output.map UInt8.toNat, d.error.isNone &&
-      decide (cl.keys = keys4) && decide (cl.adrs = adrs4) && decide (cl.stor = storA), cl.acs)
+      decide (cl.keys = keys4) && decide (cl.adrs = adrs4) && decide (cl.stor = storA), cl.acs,
+      d.createdAccounts)
   | _ => none
 
 /-- The EELS observation at frame 4's `RETURN`: gas 28,053,821, returning 106 (the LP
 minted to `A`), with `totalSupply = balanceOf[A] = 2106` in `P`'s storage shadow. -/
-def obs4EELS : Option (Nat × List Nat × Bool × AcctShadow) :=
-  some (gas4, (word 106).map UInt8.toNat, true, acsA)
+def obs4EELS : Option (Nat × List Nat × Bool × AcctShadow × AdrSet) :=
+  some (gas4, (word 106).map UInt8.toNat, true, acsA, .emptyWithCapacity)
 
 /-- Frame 4's run from its real spawn. -/
 def r4 : Res := wrun fs1 e4.sta 4505 c4

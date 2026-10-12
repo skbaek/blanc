@@ -154,12 +154,9 @@ def adrs563 : List Adr := [(4 : Adr), (4 : Adr)] ++ adrs343
 /-- Step 563's storage: `balances[1] := 900` over the attacker child's. -/
 def stor563 : StorShadow := ((proxyAddress, (9 : Nat).toB256), (900 : Nat).toB256) :: storA
 
-/-- Step 563's accounts: the two identity-precompile calls (steps 506 and 559) over `acsA`. -/
-def acs563 : AcctShadow :=
-  [((4 : Adr), ⟨0, (0 : Nat).toB256, .empty, .empty⟩),
-   (proxyAddress, ⟨1, (1000 : Nat).toB256, .empty, proxyCode⟩),
-   ((4 : Adr), ⟨0, (0 : Nat).toB256, .empty, .empty⟩),
-   (proxyAddress, ⟨1, (1000 : Nat).toB256, .empty, proxyCode⟩)] ++ acsA
+/-- Step 563's accounts: `acsA` (the two identity-precompile calls, steps 506 and 559, carry no
+value and add no entry). -/
+def acs563 : AcctShadow := acsA
 
 /-- Step 563's return data: the identity precompile's copy of the token calldata
 `transfer(A, 100)` behind its length word. -/
@@ -261,10 +258,8 @@ def stor578 : StorShadow :=
   [((tokenAddress, attackerAddress.toNat.toB256), (100 : Nat).toB256),
    ((tokenAddress, proxyAddress.toNat.toB256), (900 : Nat).toB256)] ++ stor563
 
-/-- Step 578's accounts: the token `CALL`'s (zero-value) transfer over step 563's. -/
-def acs578 : AcctShadow :=
-  [(tokenAddress, ⟨1, (0 : Nat).toB256, .empty, tokenCode⟩),
-   (proxyAddress, ⟨1, (1000 : Nat).toB256, .empty, proxyCode⟩)] ++ acs563
+/-- Step 578's accounts: step 563's (the token `CALL` carries no value and adds no entry). -/
+def acs578 : AcctShadow := acs563
 
 /-- Step 578, whose return data is the token's `true`. -/
 def bnd578 : Bnd1 := (mach578, t_1d27_c53, [], keys578, adrs578, stor578, acs578, [], word 1, none, false)
@@ -280,7 +275,8 @@ three steps. -/
 def run1b (c : Cfg) : Res := callPairB fs1 sevm1 fsT Token.code 11 23 3 c
 
 theorem frame1_k1 : ∀ d1 : Devm,
-    obsD1 bnd343 (run1a (wrun fs1 sevm1 339 c0) (childObs gasA [] d1)) = obsDOk1 bnd343 := by
+    obsD1 bnd343 (run1a (wrun fs1 sevm1 339 c0)
+      (childObs gasA [] (d1.withCreatedAccounts .emptyWithCapacity))) = obsDOk1 bnd343 := by
   kernel_forall_rfl
 
 theorem frame1_k2 : ∀ (m : Meta) (w : World),
@@ -309,7 +305,11 @@ theorem run1From_stages {r0 : Res} {d : Devm} {x1 x2 x3 : Bnd1}
   callPairFrom_stages (P := fun r => obs1 r = obs1EELS) (n1 := 3) (n2 := 220) (n3 := 11)
     (n4 := 3) (n5 := 185) rfl rfl h1 h2 h3 h4
 
-theorem frame1_kernel : ∀ d1 : Devm, obs1 (run1 (childObs gasA [] d1)) = obs1EELS := fun d1 =>
-  run1From_stages (frame1_k1 d1) frame1_k2 frame1_k3 frame1_k4
+/-- Frame 1 from any settled attacker child with the EELS gas and output that creates no
+account (an `SSTORE`'s original value reads the transaction's created set, which the child's
+settlement hands back to frame 1). -/
+theorem frame1_kernel : ∀ d1 : Devm,
+    obs1 (run1 (childObs gasA [] (d1.withCreatedAccounts .emptyWithCapacity))) = obs1EELS :=
+  fun d1 => run1From_stages (frame1_k1 d1) frame1_k2 frame1_k3 frame1_k4
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1

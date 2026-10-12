@@ -62,18 +62,13 @@ def storAT : StorShadow :=
    ((proxyAddress, (8 : Nat).toB256), (1000 : Nat).toB256),
    ((proxyAddress, (7 : Nat).toB256), tokenAddress.toNat.toB256)]
 
-/-- The accounts after the callback subtree. -/
+/-- The accounts after the callback subtree (zero-value calls, the identity precompile's and the
+transaction's own, add no entry). -/
 def acsAT : AcctShadow :=
   [(proxyAddress, ⟨1, (1000 : Nat).toB256, .empty, proxyCode⟩),
    (a2Address, ⟨1, (0 : Nat).toB256, .empty, Attacker2.code⟩),
    (a2Address, ⟨1, (100 : Nat).toB256, .empty, Attacker2.code⟩),
    (proxyAddress, ⟨1, (900 : Nat).toB256, .empty, proxyCode⟩),
-   ((4 : Adr), ⟨0, (0 : Nat).toB256, .empty, .empty⟩),
-   (proxyAddress, ⟨1, (1000 : Nat).toB256, .empty, proxyCode⟩),
-   (proxyAddress, ⟨1, (1000 : Nat).toB256, .empty, proxyCode⟩),
-   (a2Address, ⟨1, (0 : Nat).toB256, .empty, Attacker2.code⟩),
-   (a2Address, ⟨1, (0 : Nat).toB256, .empty, Attacker2.code⟩),
-   (eAddress, ⟨1, (0 : Nat).toB256, .empty, .empty⟩),
    (eAddress, ⟨1, (0 : Nat).toB256, .empty, .empty⟩),
    (tokenAddress, ⟨1, (0 : Nat).toB256, .empty, tokenCode⟩),
    (a2Address, ⟨1, (0 : Nat).toB256, .empty, Attacker2.code⟩),
@@ -82,18 +77,18 @@ def acsAT : AcctShadow :=
 
 /-- Frame 5's halt: gas, return data, no error, the refund counter and whether the halting
 configuration's storage keys, addresses and storage shadows are `keys5T`/`adrs5T`/`storAT`
-(decided), and its account shadow and set of accounts to delete (compared by the kernel as
-terms). -/
-def obs5 : Res → Option (Nat × List Nat × Bool × AcctShadow × AdrSet)
+(decided), and its account shadow, set of accounts to delete and set of created accounts
+(compared by the kernel as terms). -/
+def obs5 : Res → Option (Nat × List Nat × Bool × AcctShadow × AdrSet × AdrSet)
   | .done (.halted d) cl => some (d.gasLeft, d.output.map UInt8.toNat, d.error.isNone &&
       decide (cl.keys = keys5T) && decide (cl.adrs = adrs5T) && decide (cl.stor = storAT) &&
-      decide (d.refundCounter = refund5), cl.acs, d.accountsToDelete)
+      decide (d.refundCounter = refund5), cl.acs, d.accountsToDelete, d.createdAccounts)
   | _ => none
 
 /-- The EELS observation at frame 5's `RETURN`: gas 27,618,340, returning 106 (the LP minted to
 `A'`), with `totalSupply = balanceOf[A'] = 2106` in `P`'s storage shadow. -/
-def obs5EELS : Option (Nat × List Nat × Bool × AcctShadow × AdrSet) :=
-  some (gas5T, (word 106).map UInt8.toNat, true, acsAT, .emptyWithCapacity)
+def obs5EELS : Option (Nat × List Nat × Bool × AcctShadow × AdrSet × AdrSet) :=
+  some (gas5T, (word 106).map UInt8.toNat, true, acsAT, .emptyWithCapacity, .emptyWithCapacity)
 
 /-- Frame 5's run from its real spawn. -/
 def r5 : Res := wrun fs1 e5T.sta 4505 c5T

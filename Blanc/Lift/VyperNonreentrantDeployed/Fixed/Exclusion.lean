@@ -134,17 +134,8 @@ theorem vplus_exclusion {sevm : Sevm} {pre : Devm} {out : Execution}
     {F h c : Exec.Deriv} (hF : F ∈ Exec.rawFrameRoots R)
     (active : ActiveRel P F h) (spawn : Spawns h c)
     {G : Exec.Deriv} (hG : G ∈ Exec.rawFrameRoots c.exc) :
-    ¬ lockL.Enters P G := by
-  have hne : (pre.getCode P).toList ≠ [] := by
-    intro hempty
-    have size : (pre.getCode P).size = 0 := by
-      rw [ByteArray.size_eq_length_toList, hempty]; rfl
-    rcases hP with h | h <;> rw [h] at size
-    · simp only [ByteArray.size, forwarderCode, List.size_toArray, List.length_cons,
-      List.length_nil, zero_add, Nat.reduceAdd, OfNat.ofNat_ne_zero] at size
-    · rw [code_size] at size
-      exact absurd size (by decide)
-  exact LockSpec.lock_exclusion (L := lockL) (P := P) R hfork hne lock_dominance
+    ¬ lockL.Enters P G :=
+  LockSpec.lock_exclusion (L := lockL) (P := P) R hfork (pool_code_toList_ne_nil hP) lock_dominance
     (ownerDiscipline R hfork hP hI hroot) hash hF (active.active hfork hash hF) spawn hG
 
 /-- V+ for the implementation address itself (`P = I`, no forwarder). -/

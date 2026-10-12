@@ -159,12 +159,9 @@ def adrsT563 : List Adr := [(4 : Adr), (4 : Adr)] ++ adrsT343
 /-- Step 563's storage: `balances[1] := 900` over the callback child's. -/
 def storT563 : StorShadow := ((proxyAddress, (9 : Nat).toB256), (900 : Nat).toB256) :: storAT
 
-/-- Step 563's accounts: the two identity-precompile calls (steps 506 and 559) over `acsAT`. -/
-def acsT563 : AcctShadow :=
-  [((4 : Adr), ⟨0, (0 : Nat).toB256, .empty, .empty⟩),
-   (proxyAddress, ⟨1, (1000 : Nat).toB256, .empty, proxyCode⟩),
-   ((4 : Adr), ⟨0, (0 : Nat).toB256, .empty, .empty⟩),
-   (proxyAddress, ⟨1, (1000 : Nat).toB256, .empty, proxyCode⟩)] ++ acsAT
+/-- Step 563's accounts: `acsAT` (the two identity-precompile calls, steps 506 and 559, carry
+no value and add no entry). -/
+def acsT563 : AcctShadow := acsAT
 
 /-- Step 563's return data: the identity precompile's copy of the token calldata
 `transfer(A, 100)` behind its length word. -/
@@ -266,10 +263,8 @@ def storT578 : StorShadow :=
   [((tokenAddress, a2Address.toNat.toB256), (100 : Nat).toB256),
    ((tokenAddress, proxyAddress.toNat.toB256), (900 : Nat).toB256)] ++ storT563
 
-/-- Step 578's accounts: the token `CALL`'s (zero-value) transfer over step 563's. -/
-def acsT578 : AcctShadow :=
-  [(tokenAddress, ⟨1, (0 : Nat).toB256, .empty, tokenCode⟩),
-   (proxyAddress, ⟨1, (1000 : Nat).toB256, .empty, proxyCode⟩)] ++ acsT563
+/-- Step 578's accounts: step 563's (the token `CALL` carries no value and adds no entry). -/
+def acsT578 : AcctShadow := acsT563
 
 /-- Step 578, whose return data is the token's `true`. -/
 def bndT578 : Bnd1 := (machT578, t_1d27_c53, [], keysT578, adrsT578, storT578, acsT578, [], word 1, some refund3, true)

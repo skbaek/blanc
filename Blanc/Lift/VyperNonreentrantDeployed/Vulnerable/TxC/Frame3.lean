@@ -65,14 +65,15 @@ theorem callbackC_of_child_at (hg : CoveredFork g) (d3 : Devm)
     (k3 : ChildOk (e3C.withFork g).sta aCallC d3)
     (a3 : ChildAgree d3 keysH4C adrsH4C storAT acsAT) (g3 : d3.gasLeft = gas4C)
     (o3 : d3.output = word 106) (e4T' : d3.error = none) (r3 : d3.refundCounter = refund4)
-    (t3 : d3.accountsToDelete = .emptyWithCapacity) :
+    (t3 : d3.accountsToDelete = .emptyWithCapacity)
+    (c3 : d3.createdAccounts = .emptyWithCapacity) :
     ChildOk (e2C.withFork g).sta cfg339C (haltedOf (run3C d3)) ∧
       ChildAgree (haltedOf (run3C d3)) keysAT adrsAC storAT acsAT ∧
       (haltedOf (run3C d3)).gasLeft = gasAC ∧ (haltedOf (run3C d3)).output = [] ∧
       (haltedOf (run3C d3)).error = none ∧ (haltedOf (run3C d3)).refundCounter = refund3 ∧
       (haltedOf (run3C d3)).accountsToDelete = .emptyWithCapacity := by
   have hk := frame3C_kernel d3
-  rw [show obsChild4C d3 = d3 from childObsX_eq g3 o3 e4T' r3 t3] at hk
+  rw [show obsChild4C d3 = d3 from childObsX_eq g3 o3 e4T' r3 t3 c3] at hk
   have hf3 : CoveredFork e3C.sta.benvStat.fork := by rw [e3C_block.1]; exact CoveredFork.prague
   unfold run3C at hk ⊢
   split at hk
@@ -105,6 +106,17 @@ theorem callbackC_child_at (hg : CoveredFork g) :
       post3C.gasLeft = gasAC ∧ post3C.output = [] ∧ post3C.error = none ∧
       post3C.refundCounter = refund3 ∧ post3C.accountsToDelete = .emptyWithCapacity :=
   let ⟨k3, a3, g3, o3, e4T', r4, t4⟩ := frame4C_child_at hg
-  callbackC_of_child_at hg post4C k3 a3 g3 o3 e4T' r4 t4
+  callbackC_of_child_at hg post4C k3 a3 g3 o3 e4T' r4 t4 post4C_created
+
+/-- The callback frame creates no account (its child's pinned created set passes through). -/
+theorem run3C_created : ∀ d : Devm,
+    (haltedOf (run3C (obsChild4C d))).createdAccounts = .emptyWithCapacity := by
+  kernel_forall_rfl
+
+theorem post3C_created : post3C.createdAccounts = .emptyWithCapacity := by
+  obtain ⟨-, -, g3, o3, e4T', r4, t4⟩ := frame4C_child_at CoveredFork.prague
+  have h := run3C_created post4C
+  rw [show obsChild4C post4C = post4C from childObsX_eq g3 o3 e4T' r4 t4 post4C_created] at h
+  exact h
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC

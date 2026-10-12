@@ -3,6 +3,7 @@ import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Fork
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame4Child
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxTopC
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Frame5Child
+import Blanc.Lift.VyperNonreentrantDeployed.RepinBridge
 
 /-!
 V- as an admitted transaction, frame 5 as a child: the implementation frame the proxy's
@@ -38,14 +39,14 @@ def cl5C : Cfg := haltCfgOf r5C
 theorem obs5C_facts {r : Res} (h : obs5C r = obs5EELSC) : ∃ d cl, r = .done (.halted d) cl ∧
     d.gasLeft = gas5C ∧ d.output = word 106 ∧ d.error = none ∧ cl.keys = keys5T ∧
     cl.adrs = adrs5C ∧ cl.stor = storAT ∧ cl.acs = acsAT ∧ d.refundCounter = refund5 ∧
-    d.accountsToDelete = .emptyWithCapacity := by
+    d.accountsToDelete = .emptyWithCapacity ∧ d.createdAccounts = .emptyWithCapacity := by
   rcases r with c | ⟨d | d, cl⟩ | _
   · simp only [obs5C, obs5EELSC, reduceCtorEq] at h
   · simp only [obs5C, obs5EELSC, Option.some.injEq, Prod.mk.injEq, Bool.and_eq_true,
       decide_eq_true_eq] at h
-    obtain ⟨hg, ho, ⟨⟨⟨⟨he, hk⟩, ha⟩, hs⟩, hrf⟩, hc, hatd⟩ := h
+    obtain ⟨hg, ho, ⟨⟨⟨⟨he, hk⟩, ha⟩, hs⟩, hrf⟩, hc, hatd, hcrd⟩ := h
     exact ⟨d, cl, rfl, hg, List.map_injective_iff.mpr (fun _ _ h => UInt8.toNat_inj.mp h) ho,
-      Option.isNone_iff_eq_none.mp he, hk, ha, hs, hc, hrf, hatd⟩
+      Option.isNone_iff_eq_none.mp he, hk, ha, hs, hc, hrf, hatd, hcrd⟩
   · simp only [obs5C, obs5EELSC, reduceCtorEq] at h
   · simp only [obs5C, obs5EELSC, reduceCtorEq] at h
 
@@ -57,7 +58,18 @@ theorem r5C_facts : r5C = .done (.halted post5C) cl5C ∧ post5C.gasLeft = gas5C
   have hd : post5C = d := congrArg haltedOf hr
   have hc : cl5C = cl := congrArg haltCfgOf hr
   subst hd hc
-  exact ⟨hr, h⟩
+  obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, -⟩ := h
+  exact ⟨hr, h1, h2, h3, h4, h5, h6, h7, h8, h9⟩
+
+/-- Frame 5 creates no account. -/
+theorem post5C_created : post5C.createdAccounts = .emptyWithCapacity := by
+  obtain ⟨d, cl, hr, h⟩ := obs5C_facts frame5C_kernel
+  have hd : post5C = d := congrArg haltedOf hr
+  subst hd
+  exact h.2.2.2.2.2.2.2.2.2
+
+/-- The proxy's `DELEGATECALL` moves no value: frame 5 starts on `A'`'s storage. -/
+theorem keeps5C : RepinBridge.transferKeepsStor cp5C.f.inner acs4C = true := by kernel_rfl
 
 /-- **Frame 5 as the proxy's child, under any covered fork.** -/
 theorem frame5C_child_at (hg : CoveredFork g) :
@@ -73,7 +85,8 @@ theorem frame5C_child_at (hg : CoveredFork g) :
     (fun a k => by rw [hst, e4C31_state]; exact e4C_world.1 a k)
     (by rw [hst, e4C31_state]; exact e4C_world.2) hcr hsg
     (fun hr => lift_exactM cert_checkM cert_jumpsOkM e5C_code (hg : CoveredFork g) hr) fs1_zero
-    ⟨id, fun _ _ r => r⟩ ((r5C_at hg).trans hrun) herr
+    (by rw [RepinBridge.storTransfer_of_keeps (by exact keeps5C)]; exact ⟨id, fun _ _ r => r⟩)
+    ((r5C_at hg).trans hrun) herr
   rw [hk, ha, hs, hc] at h
   exact h
 

@@ -31,17 +31,21 @@ open Blanc.Lift.VyperNonreentrantDeployed
 open Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1
 open Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxTop
 
-/-- `d` with its refund counter and its set of accounts to delete replaced by a literal and the
-empty set: a settled child's other observed parts (its refund counter and that it deletes
-nothing) as literals, so that a parent's run over it evaluates them. -/
+/-- `d` with its refund counter, its set of accounts to delete and its set of created accounts
+replaced by a literal and the empty sets: a settled child's other observed parts (its refund
+counter, that it deletes nothing and that the transaction has created nothing) as literals, so
+that a parent's run over it evaluates them (an `SSTORE`'s original value reads the created set). -/
 def pinRA (r : Int) (d : Devm) : Devm :=
-  ⟨d.mach, { d.meta with refundCounter := r, accountsToDelete := .emptyWithCapacity }, d.world⟩
+  ⟨d.mach,
+    { d.meta with refundCounter := r, accountsToDelete := .emptyWithCapacity, createdAccounts := .emptyWithCapacity },
+    d.world⟩
 
 theorem pinRA_eq {d : Devm} {r : Int} (hr : d.refundCounter = r)
-    (ha : d.accountsToDelete = .emptyWithCapacity) : pinRA r d = d := by
+    (ha : d.accountsToDelete = .emptyWithCapacity)
+    (hc : d.createdAccounts = .emptyWithCapacity) : pinRA r d = d := by
   rcases d with ⟨⟨_, _, _, _⟩, ⟨_, _, _, _, _, _, _, _, _, _, _⟩, _⟩
-  simp only [Devm.refundCounter, Devm.accountsToDelete] at hr ha
-  subst hr ha
+  simp only [Devm.refundCounter, Devm.accountsToDelete, Devm.createdAccounts] at hr ha hc
+  subst hr ha hc
   rfl
 
 /-- A settled child with its gas, output, success, refund counter and (empty) accounts to delete
@@ -50,9 +54,10 @@ def childObsX (g : Nat) (out : Bytes) (r : Int) (d : Devm) : Devm := pinRA r (ch
 
 theorem childObsX_eq {d : Devm} {g : Nat} {out : Bytes} {r : Int} (hg : d.gasLeft = g)
     (ho : d.output = out) (he : d.error = none) (hr : d.refundCounter = r)
-    (ha : d.accountsToDelete = .emptyWithCapacity) : childObsX g out r d = d := by
+    (ha : d.accountsToDelete = .emptyWithCapacity)
+    (hc : d.createdAccounts = .emptyWithCapacity) : childObsX g out r d = d := by
   unfold childObsX
-  rw [pinRA_eq (d := childObs g out d) hr ha]
+  rw [pinRA_eq (d := childObs g out d) hr ha hc]
   exact childObs_eq hg ho he
 
 /-- The refund counters of the chain's frames, by evaluation of the interpreter over the real
@@ -133,6 +138,7 @@ theorem tx_message_of_child (d1 : Devm)
     (ck : List (Adr × B256)) (ca : List Adr) (cs : StorShadow) (cc : AcctShadow)
     (hg : d1.gasLeft = childGas) (ho : d1.output = childOut) (he : d1.error = none)
     (hr : d1.refundCounter = refund0) (hd : d1.accountsToDelete = .emptyWithCapacity)
+    (hcr : d1.createdAccounts = .emptyWithCapacity)
     (hok : ChildOk e0tx.sta callCfg d1) (ha : ChildAgree d1 ck ca cs cc) :
     ∃ post, Nonempty (Exec e0tx.pc e0tx.sta e0tx.dyna (.ok post)) ∧
       processMessage msg0tx = .ok post ∧ post.error = none ∧
@@ -140,7 +146,7 @@ theorem tx_message_of_child (d1 : Devm)
       post.accountsToDelete = .emptyWithCapacity ∧
       (∀ a k, storOf post.state a k = lookupS cs a k) := by
   have hk := frame0tx_kernel d1 ck ca cs cc
-  rw [childObsX_eq hg ho he hr hd] at hk
+  rw [childObsX_eq hg ho he hr hd hcr] at hk
   unfold run0 at hk
   split at hk
   · rename_i c hc

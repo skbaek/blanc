@@ -85,8 +85,7 @@ theorem oracleFactsA :
 
 theorem oracleFactsC :
     canonS (cO3 world3).stor = storOracle ∧
-    (cO3 world3).acs.map Prod.fst =
-      [proxyAddr, creator, creator, proxyAddr, implAddr] ∧
+    (cO3 world3).acs.map Prod.fst = [creator, proxyAddr, implAddr] ∧
     lookupA (cO3 world3).acs proxyAddr = lookupA acs0 proxyAddr ∧
     lookupA (cO3 world3).acs creator = lookupA acs0 creator ∧
     lookupA (cO3 world3).acs implAddr = lookupA acs0 implAddr := by

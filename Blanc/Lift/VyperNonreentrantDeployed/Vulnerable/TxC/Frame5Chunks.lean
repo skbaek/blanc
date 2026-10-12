@@ -54,7 +54,7 @@ theorem e5C_sta_eq : e5C.sta = sta5C := by kernel_rfl
 /-- The boundary configuration over a free world and free bookkeeping. -/
 def cfgB5C (m : Meta) (w : World) : Cfg :=
   ⟨⟨machC2625, { { m with refundCounter := 2800, output := [], returnData := [], error := none } with
-    accountsToDelete := .emptyWithCapacity }, w⟩,
+    accountsToDelete := .emptyWithCapacity, createdAccounts := .emptyWithCapacity }, w⟩,
     t_0370_c63, [], keys2625, adrs5C, storT2625, acsAT⟩
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC

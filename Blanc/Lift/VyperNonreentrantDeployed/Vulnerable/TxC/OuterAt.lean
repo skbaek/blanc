@@ -38,6 +38,7 @@ theorem txC_message_of_child_at (hg : CoveredFork g) (d1 : Devm)
     (ck : List (Adr × B256)) (ca : List Adr) (cs : StorShadow) (cc : AcctShadow)
     (hgas : d1.gasLeft = childGasC) (ho : d1.output = childOut) (he : d1.error = none)
     (hr : d1.refundCounter = refund0) (hd : d1.accountsToDelete = .emptyWithCapacity)
+    (hcr : d1.createdAccounts = .emptyWithCapacity)
     (hok : ChildOk (e0C.withFork g).sta callCfgC d1) (ha : ChildAgree d1 ck ca cs cc) :
     ∃ post, Nonempty (Exec (e0C.withFork g).pc (e0C.withFork g).sta (e0C.withFork g).dyna
         (.ok post)) ∧
@@ -46,7 +47,7 @@ theorem txC_message_of_child_at (hg : CoveredFork g) (d1 : Devm)
       post.accountsToDelete = .emptyWithCapacity ∧
       (∀ a k, storOf post.state a k = lookupS cs a k) := by
   have hk := frame0txC_kernel d1 ck ca cs cc
-  rw [childObsX_eq hgas ho he hr hd] at hk
+  rw [childObsX_eq hgas ho he hr hd hcr] at hk
   have hf0 : CoveredFork e0C.sta.benvStat.fork := by rw [e0C_block.1]; exact CoveredFork.prague
   unfold run0C at hk
   split at hk
