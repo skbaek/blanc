@@ -71,20 +71,20 @@ def lidoSpec : ContractSpecSem where
   side_transfer := fun _ _ => trivial
   side_addBal := fun _ _ => trivial
   inv_transfer := by
-    intro st st' caller callee ca wad v h_sub _ _ h_inv
+    intro st st' caller callee ca wad v h_sub _ _ hprot h_inv
     show ∃ entries, RegistryWitness (solRegistryStorage _) entries
-    rw [getStor_subBal_addBal h_sub]
+    rw [getStor_subBal_addBal h_sub hprot]
     exact h_inv
   inv_recv_transfer := by
-    intro st st' caller ca wad h_sub _ _ h_inv
+    intro st st' caller ca wad h_sub _ _ hprot h_inv
     show ∃ entries, RegistryWitness (solRegistryStorage _) entries
-    rw [getStor_subBal_addBal h_sub]
+    rw [getStor_subBal_addBal h_sub hprot]
     exact h_inv
   inv_addBal := by
-    intro w ca a val v _ _ h_inv
+    intro w ca a val v _ _ hprot h_inv
     show ∃ entries, RegistryWitness (solRegistryStorage _) entries
-    rw [getStor_addBal]
-    exact h_inv
+    exact (congrArg (fun s => ∃ entries, RegistryWitness (solRegistryStorage s) entries)
+      (State.setBal_get_stor_of_protected hprot)).mpr h_inv
 
 theorem lidoSpec_inv :
     lidoSpec.Inv = fun stor _ _ => ∃ entries, RegistryWitness (solRegistryStorage stor) entries :=
