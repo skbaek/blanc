@@ -1776,68 +1776,90 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
       (slot_injective_payload (region := arrayRegion)
         (by norm_num only [arrayRegion]) hlenBound hidxBound
         (by simpa only [tailKey, holeKey, arrayEntrySlot] using h)).symm
+  -- Project through one symbolic read stage at each opaque boundary.
+  have hbase1Value (key : B256) :
+      base1.getStorVal sevm.currentTarget key =
+        base.getStorVal sevm.currentTarget key :=
+    temporalSloadBase_getStorVal sevm base indexKey sevm.currentTarget key
+  have hbase2Value (key : B256) :
+      base2.getStorVal sevm.currentTarget key =
+        base.getStorVal sevm.currentTarget key := by
+    clear_value base1
+    change (temporalSloadBase sevm base1 arrayLengthSlot).getStorVal sevm.currentTarget key = base.getStorVal sevm.currentTarget key
+    as_aux_lemma =>
+      exact (temporalSloadBase_getStorVal sevm base1 arrayLengthSlot
+        sevm.currentTarget key).trans (hbase1Value key)
+  have hbase3Value (key : B256) :
+      base3.getStorVal sevm.currentTarget key =
+        base.getStorVal sevm.currentTarget key := by
+    clear_value base2 base1
+    change (temporalSloadBase sevm base2 tailKey).getStorVal sevm.currentTarget key = base.getStorVal sevm.currentTarget key
+    as_aux_lemma =>
+      exact (temporalSloadBase_getStorVal sevm base2 tailKey
+        sevm.currentTarget key).trans (hbase2Value key)
+  have hbase1Original (key : B256) :
+      base1.getOrigStorVal sevm sevm.currentTarget key =
+        base.getOrigStorVal sevm sevm.currentTarget key :=
+    temporalSloadBase_getOrigStorVal sevm base indexKey sevm.currentTarget key
+  have hbase2Original (key : B256) :
+      base2.getOrigStorVal sevm sevm.currentTarget key =
+        base.getOrigStorVal sevm sevm.currentTarget key := by
+    clear_value base1
+    change (temporalSloadBase sevm base1 arrayLengthSlot).getOrigStorVal sevm sevm.currentTarget key = base.getOrigStorVal sevm sevm.currentTarget key
+    as_aux_lemma =>
+      exact (temporalSloadBase_getOrigStorVal sevm base1 arrayLengthSlot
+        sevm.currentTarget key).trans (hbase1Original key)
+  have hbase3Original (key : B256) :
+      base3.getOrigStorVal sevm sevm.currentTarget key =
+        base.getOrigStorVal sevm sevm.currentTarget key := by
+    clear_value base2 base1
+    change (temporalSloadBase sevm base2 tailKey).getOrigStorVal sevm sevm.currentTarget key = base.getOrigStorVal sevm sevm.currentTarget key
+    as_aux_lemma =>
+      exact (temporalSloadBase_getOrigStorVal sevm base2 tailKey
+        sevm.currentTarget key).trans (hbase2Original key)
+  have hholeOriginal (key : B256) :
+      holePost.getOrigStorVal sevm sevm.currentTarget key =
+        base.getOrigStorVal sevm sevm.currentTarget key := by
+    clear_value base3 base2 base1
+    change (temporalSstorePost sevm (addAccessedStorageKey base3 sevm.currentTarget holeKey) holeKey lastTarget).getOrigStorVal sevm sevm.currentTarget key = base.getOrigStorVal sevm sevm.currentTarget key
+    as_aux_lemma =>
+      exact (temporalSstorePost_getOrigStorVal sevm
+        (addAccessedStorageKey base3 sevm.currentTarget holeKey) holeKey
+        lastTarget sevm.currentTarget key).trans
+        ((addAccessedStorageKey_getOrigStorVal base3 sevm.currentTarget
+          holeKey sevm sevm.currentTarget key).trans (hbase3Original key))
+  have hmovedOriginal (key : B256) :
+      movedPost.getOrigStorVal sevm sevm.currentTarget key =
+        base.getOrigStorVal sevm sevm.currentTarget key := by
+    clear_value holePost base3 base2 base1
+    change (temporalSstorePost sevm (addAccessedStorageKey holePost sevm.currentTarget movedKey) movedKey idx).getOrigStorVal sevm sevm.currentTarget key = base.getOrigStorVal sevm sevm.currentTarget key
+    as_aux_lemma =>
+      exact (temporalSstorePost_getOrigStorVal sevm
+        (addAccessedStorageKey holePost sevm.currentTarget movedKey) movedKey
+        idx sevm.currentTarget key).trans
+        ((addAccessedStorageKey_getOrigStorVal holePost sevm.currentTarget
+          movedKey sevm sevm.currentTarget key).trans (hholeOriginal key))
+  have htailOriginal (key : B256) :
+      tailPost.getOrigStorVal sevm sevm.currentTarget key =
+        base.getOrigStorVal sevm sevm.currentTarget key := by
+    clear_value movedPost holePost base3 base2 base1
+    change (temporalSstorePost sevm movedPost tailKey 0).getOrigStorVal sevm sevm.currentTarget key = base.getOrigStorVal sevm sevm.currentTarget key
+    as_aux_lemma =>
+      exact (temporalSstorePost_getOrigStorVal sevm movedPost tailKey 0
+        sevm.currentTarget key).trans (hmovedOriginal key)
   -- the three reads' values and the two cold write keys, at the threaded base
   have hhole3 : base3.getStorVal sevm.currentTarget holeKey = holeCurrent := by
-    show (temporalSloadBase sevm base2
-      (arrayEntrySlot len)).getStorVal sevm.currentTarget holeKey =
-      holeCurrent
-    rw [temporalSloadBase_getStorVal]
-    show (temporalSloadBase sevm base1
-      arrayLengthSlot).getStorVal sevm.currentTarget holeKey = holeCurrent
-    rw [temporalSloadBase_getStorVal]
-    show (temporalSloadBase sevm base
-      (indexSlot target)).getStorVal sevm.currentTarget holeKey = holeCurrent
-    rw [temporalSloadBase_getStorVal]
-    exact hhole
+    exact (hbase3Value holeKey).trans hhole
   have htail3 : base3.getStorVal sevm.currentTarget tailKey = lastTarget := by
-    show (temporalSloadBase sevm base2
-      (arrayEntrySlot len)).getStorVal sevm.currentTarget tailKey = lastTarget
-    rw [temporalSloadBase_getStorVal]
-    show (temporalSloadBase sevm base1
-      arrayLengthSlot).getStorVal sevm.currentTarget tailKey = lastTarget
-    rw [temporalSloadBase_getStorVal]
-    show (temporalSloadBase sevm base
-      (indexSlot target)).getStorVal sevm.currentTarget tailKey = lastTarget
-    rw [temporalSloadBase_getStorVal]
-    exact htail
+    exact (hbase3Value tailKey).trans htail
   have hindex3 : base3.getStorVal sevm.currentTarget indexKey = idx := by
-    show (temporalSloadBase sevm base2
-      (arrayEntrySlot len)).getStorVal sevm.currentTarget indexKey = idx
-    rw [temporalSloadBase_getStorVal]
-    show (temporalSloadBase sevm base1
-      arrayLengthSlot).getStorVal sevm.currentTarget indexKey = idx
-    rw [temporalSloadBase_getStorVal]
-    show (temporalSloadBase sevm base
-      (indexSlot target)).getStorVal sevm.currentTarget indexKey = idx
-    rw [temporalSloadBase_getStorVal]
-    exact hindex
+    exact (hbase3Value indexKey).trans hindex
   have hmoved3 : base3.getStorVal sevm.currentTarget movedKey =
       movedCurrent := by
-    show (temporalSloadBase sevm base2
-      (arrayEntrySlot len)).getStorVal sevm.currentTarget movedKey =
-      movedCurrent
-    rw [temporalSloadBase_getStorVal]
-    show (temporalSloadBase sevm base1
-      arrayLengthSlot).getStorVal sevm.currentTarget movedKey = movedCurrent
-    rw [temporalSloadBase_getStorVal]
-    show (temporalSloadBase sevm base
-      (indexSlot target)).getStorVal sevm.currentTarget movedKey =
-      movedCurrent
-    rw [temporalSloadBase_getStorVal]
-    exact hmoved
+    exact (hbase3Value movedKey).trans hmoved
   have hlength3 : base3.getStorVal sevm.currentTarget arrayLengthSlot =
       len := by
-    show (temporalSloadBase sevm base2
-      (arrayEntrySlot len)).getStorVal sevm.currentTarget arrayLengthSlot =
-      len
-    rw [temporalSloadBase_getStorVal]
-    show (temporalSloadBase sevm base1
-      arrayLengthSlot).getStorVal sevm.currentTarget arrayLengthSlot = len
-    rw [temporalSloadBase_getStorVal]
-    show (temporalSloadBase sevm base
-      (indexSlot target)).getStorVal sevm.currentTarget arrayLengthSlot = len
-    rw [temporalSloadBase_getStorVal]
-    exact hlength
+    exact (hbase3Value arrayLengthSlot).trans hlength
   have hholeCold3 : (sevm.currentTarget, holeKey) ∉
       base3.accessedStorageKeys :=
     not_mem_temporalSloadBase
@@ -1854,125 +1876,149 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
       (pairNe hmovedTailNe.symm)
   have hmovedColdHole : (sevm.currentTarget, movedKey) ∉
       holePost.accessedStorageKeys := by
-    rw [show holePost = temporalSstorePost sevm
-      (addAccessedStorageKey base3 sevm.currentTarget holeKey) holeKey
-      lastTarget from rfl,
-      temporalSstorePost_accessedStorageKeys,
-      addAccessedStorageKey_accessedStorageKeys]
-    exact not_mem_hashSet_insert hmovedCold3 (pairNe hmovedHole.symm)
+    clear_value base3 base2 base1
+    as_aux_lemma =>
+      rw [show holePost = temporalSstorePost sevm
+        (addAccessedStorageKey base3 sevm.currentTarget holeKey) holeKey
+        lastTarget from rfl,
+        temporalSstorePost_accessedStorageKeys,
+        addAccessedStorageKey_accessedStorageKeys]
+      exact not_mem_hashSet_insert hmovedCold3 (pairNe hmovedHole.symm)
   -- values across the write tower
   have hmovedHolePost : holePost.getStorVal sevm.currentTarget movedKey =
       movedCurrent := by
-    rw [show holePost = temporalSstorePost sevm
-      (addAccessedStorageKey base3 sevm.currentTarget holeKey) holeKey
-      lastTarget from rfl,
-      temporalSstorePost_other sevm _ holeKey lastTarget
-        sevm.currentTarget movedKey (pairNe hmovedHole),
-      addAccessedStorageKey_getStorVal]
-    exact hmoved3
+    clear_value base3 base2 base1
+    as_aux_lemma =>
+      rw [show holePost = temporalSstorePost sevm
+        (addAccessedStorageKey base3 sevm.currentTarget holeKey) holeKey
+        lastTarget from rfl,
+        temporalSstorePost_other sevm _ holeKey lastTarget
+          sevm.currentTarget movedKey (pairNe hmovedHole),
+        addAccessedStorageKey_getStorVal]
+      exact hmoved3
   have htailMovedPost : movedPost.getStorVal sevm.currentTarget tailKey =
       lastTarget := by
-    rw [show movedPost = temporalSstorePost sevm
-      (addAccessedStorageKey holePost sevm.currentTarget movedKey) movedKey
-      idx from rfl,
-      temporalSstorePost_other sevm _ movedKey idx
-        sevm.currentTarget tailKey (pairNe hmovedTailNe.symm),
-      addAccessedStorageKey_getStorVal,
-      show holePost = temporalSstorePost sevm
-        (addAccessedStorageKey base3 sevm.currentTarget holeKey) holeKey
-        lastTarget from rfl,
-      temporalSstorePost_other sevm _ holeKey lastTarget
-        sevm.currentTarget tailKey (pairNe htailHole),
-      addAccessedStorageKey_getStorVal]
-    exact htail3
+    clear_value base3 base2 base1
+    as_aux_lemma =>
+      rw [show movedPost = temporalSstorePost sevm
+        (addAccessedStorageKey holePost sevm.currentTarget movedKey) movedKey
+        idx from rfl,
+        temporalSstorePost_other sevm _ movedKey idx
+          sevm.currentTarget tailKey (pairNe hmovedTailNe.symm),
+        addAccessedStorageKey_getStorVal,
+        show holePost = temporalSstorePost sevm
+          (addAccessedStorageKey base3 sevm.currentTarget holeKey) holeKey
+          lastTarget from rfl,
+        temporalSstorePost_other sevm _ holeKey lastTarget
+          sevm.currentTarget tailKey (pairNe htailHole),
+        addAccessedStorageKey_getStorVal]
+      exact htail3
   have hlengthTailPost : tailPost.getStorVal sevm.currentTarget
       arrayLengthSlot = len := by
-    rw [show tailPost = temporalSstorePost sevm movedPost tailKey 0 from rfl,
-      temporalSstorePost_other sevm movedPost tailKey 0
-        sevm.currentTarget arrayLengthSlot (pairNe hlengthTailNe),
-      show movedPost = temporalSstorePost sevm
-        (addAccessedStorageKey holePost sevm.currentTarget movedKey) movedKey
-        idx from rfl,
-      temporalSstorePost_other sevm _ movedKey idx
-        sevm.currentTarget arrayLengthSlot (pairNe hmovedLength.symm),
-      addAccessedStorageKey_getStorVal,
-      show holePost = temporalSstorePost sevm
-        (addAccessedStorageKey base3 sevm.currentTarget holeKey) holeKey
-        lastTarget from rfl,
-      temporalSstorePost_other sevm _ holeKey lastTarget
-        sevm.currentTarget arrayLengthSlot (pairNe hlengthHole),
-      addAccessedStorageKey_getStorVal]
-    exact hlength3
+    clear_value base3 base2 base1
+    as_aux_lemma =>
+      rw [show tailPost = temporalSstorePost sevm movedPost tailKey 0 from rfl,
+        temporalSstorePost_other sevm movedPost tailKey 0
+          sevm.currentTarget arrayLengthSlot (pairNe hlengthTailNe),
+        show movedPost = temporalSstorePost sevm
+          (addAccessedStorageKey holePost sevm.currentTarget movedKey) movedKey
+          idx from rfl,
+        temporalSstorePost_other sevm _ movedKey idx
+          sevm.currentTarget arrayLengthSlot (pairNe hmovedLength.symm),
+        addAccessedStorageKey_getStorVal,
+        show holePost = temporalSstorePost sevm
+          (addAccessedStorageKey base3 sevm.currentTarget holeKey) holeKey
+          lastTarget from rfl,
+        temporalSstorePost_other sevm _ holeKey lastTarget
+          sevm.currentTarget arrayLengthSlot (pairNe hlengthHole),
+        addAccessedStorageKey_getStorVal]
+      exact hlength3
   have hindexTailPost : tailPost.getStorVal sevm.currentTarget indexKey =
       idx := by
-    rw [show tailPost = temporalSstorePost sevm movedPost tailKey 0 from rfl,
-      temporalSstorePost_other sevm movedPost tailKey 0
-        sevm.currentTarget indexKey (pairNe hindexTailNe),
-      show movedPost = temporalSstorePost sevm
-        (addAccessedStorageKey holePost sevm.currentTarget movedKey) movedKey
-        idx from rfl,
-      temporalSstorePost_other sevm _ movedKey idx
-        sevm.currentTarget indexKey (pairNe hindexMovedNe),
-      addAccessedStorageKey_getStorVal,
-      show holePost = temporalSstorePost sevm
-        (addAccessedStorageKey base3 sevm.currentTarget holeKey) holeKey
-        lastTarget from rfl,
-      temporalSstorePost_other sevm _ holeKey lastTarget
-        sevm.currentTarget indexKey (pairNe hindexHoleNe),
-      addAccessedStorageKey_getStorVal]
-    exact hindex3
+    clear_value base3 base2 base1
+    as_aux_lemma =>
+      rw [show tailPost = temporalSstorePost sevm movedPost tailKey 0 from rfl,
+        temporalSstorePost_other sevm movedPost tailKey 0
+          sevm.currentTarget indexKey (pairNe hindexTailNe),
+        show movedPost = temporalSstorePost sevm
+          (addAccessedStorageKey holePost sevm.currentTarget movedKey) movedKey
+          idx from rfl,
+        temporalSstorePost_other sevm _ movedKey idx
+          sevm.currentTarget indexKey (pairNe hindexMovedNe),
+        addAccessedStorageKey_getStorVal,
+        show holePost = temporalSstorePost sevm
+          (addAccessedStorageKey base3 sevm.currentTarget holeKey) holeKey
+          lastTarget from rfl,
+        temporalSstorePost_other sevm _ holeKey lastTarget
+          sevm.currentTarget indexKey (pairNe hindexHoleNe),
+        addAccessedStorageKey_getStorVal]
+      exact hindex3
   -- warmth across the write tower
+  -- Freeze read warmth before transporting it through the cold write tower.
+  have hwarmTail3 : (sevm.currentTarget, tailKey) ∈
+      base3.accessedStorageKeys :=
+    temporalSloadBase_warm sevm base2 (arrayEntrySlot len)
+  have hwarmLength3 : (sevm.currentTarget, arrayLengthSlot) ∈
+      base3.accessedStorageKeys :=
+    temporalSloadBase_preserves_warm sevm base2 (arrayEntrySlot len) _
+      (temporalSloadBase_warm sevm base1 arrayLengthSlot)
+  have hwarmIndex3 : (sevm.currentTarget, indexKey) ∈
+      base3.accessedStorageKeys :=
+    temporalSloadBase_preserves_warm sevm base2 (arrayEntrySlot len) _
+      (temporalSloadBase_preserves_warm sevm base1 arrayLengthSlot _
+        (temporalSloadBase_warm sevm base (indexSlot target)))
   have hwarmTailMoved : (sevm.currentTarget, tailKey) ∈
       movedPost.accessedStorageKeys := by
-    rw [show movedPost = temporalSstorePost sevm
-      (addAccessedStorageKey holePost sevm.currentTarget movedKey) movedKey
-      idx from rfl,
-      temporalSstorePost_accessedStorageKeys,
-      addAccessedStorageKey_accessedStorageKeys,
-      show holePost = temporalSstorePost sevm
-        (addAccessedStorageKey base3 sevm.currentTarget holeKey) holeKey
-        lastTarget from rfl,
-      temporalSstorePost_accessedStorageKeys,
-      addAccessedStorageKey_accessedStorageKeys]
-    exact Std.HashSet.mem_insert.mpr (Or.inr (Std.HashSet.mem_insert.mpr
-      (Or.inr (temporalSloadBase_warm sevm base2 (arrayEntrySlot len)))))
+    clear_value base3 base2 base1
+    as_aux_lemma =>
+      rw [show movedPost = temporalSstorePost sevm
+        (addAccessedStorageKey holePost sevm.currentTarget movedKey) movedKey
+        idx from rfl,
+        temporalSstorePost_accessedStorageKeys,
+        addAccessedStorageKey_accessedStorageKeys,
+        show holePost = temporalSstorePost sevm
+          (addAccessedStorageKey base3 sevm.currentTarget holeKey) holeKey
+          lastTarget from rfl,
+        temporalSstorePost_accessedStorageKeys,
+        addAccessedStorageKey_accessedStorageKeys]
+      exact Std.HashSet.mem_insert.mpr (Or.inr (Std.HashSet.mem_insert.mpr
+        (Or.inr hwarmTail3)))
   have hwarmLengthTail : (sevm.currentTarget, arrayLengthSlot) ∈
       tailPost.accessedStorageKeys := by
-    rw [show tailPost = temporalSstorePost sevm movedPost tailKey 0 from rfl,
-      temporalSstorePost_accessedStorageKeys,
-      show movedPost = temporalSstorePost sevm
-        (addAccessedStorageKey holePost sevm.currentTarget movedKey) movedKey
-        idx from rfl,
-      temporalSstorePost_accessedStorageKeys,
-      addAccessedStorageKey_accessedStorageKeys,
-      show holePost = temporalSstorePost sevm
-        (addAccessedStorageKey base3 sevm.currentTarget holeKey) holeKey
-        lastTarget from rfl,
-      temporalSstorePost_accessedStorageKeys,
-      addAccessedStorageKey_accessedStorageKeys]
-    exact Std.HashSet.mem_insert.mpr (Or.inr (Std.HashSet.mem_insert.mpr
-      (Or.inr (temporalSloadBase_preserves_warm sevm base2
-        (arrayEntrySlot len) _
-        (temporalSloadBase_warm sevm base1 arrayLengthSlot)))))
+    clear_value base3 base2 base1
+    as_aux_lemma =>
+      rw [show tailPost = temporalSstorePost sevm movedPost tailKey 0 from rfl,
+        temporalSstorePost_accessedStorageKeys,
+        show movedPost = temporalSstorePost sevm
+          (addAccessedStorageKey holePost sevm.currentTarget movedKey) movedKey
+          idx from rfl,
+        temporalSstorePost_accessedStorageKeys,
+        addAccessedStorageKey_accessedStorageKeys,
+        show holePost = temporalSstorePost sevm
+          (addAccessedStorageKey base3 sevm.currentTarget holeKey) holeKey
+          lastTarget from rfl,
+        temporalSstorePost_accessedStorageKeys,
+        addAccessedStorageKey_accessedStorageKeys]
+      exact Std.HashSet.mem_insert.mpr (Or.inr (Std.HashSet.mem_insert.mpr
+        (Or.inr hwarmLength3)))
   have hwarmIndexTail : (sevm.currentTarget, indexKey) ∈
       tailPost.accessedStorageKeys := by
-    rw [show tailPost = temporalSstorePost sevm movedPost tailKey 0 from rfl,
-      temporalSstorePost_accessedStorageKeys,
-      show movedPost = temporalSstorePost sevm
-        (addAccessedStorageKey holePost sevm.currentTarget movedKey) movedKey
-        idx from rfl,
-      temporalSstorePost_accessedStorageKeys,
-      addAccessedStorageKey_accessedStorageKeys,
-      show holePost = temporalSstorePost sevm
-        (addAccessedStorageKey base3 sevm.currentTarget holeKey) holeKey
-        lastTarget from rfl,
-      temporalSstorePost_accessedStorageKeys,
-      addAccessedStorageKey_accessedStorageKeys]
-    exact Std.HashSet.mem_insert.mpr (Or.inr (Std.HashSet.mem_insert.mpr
-      (Or.inr (temporalSloadBase_preserves_warm sevm base2
-        (arrayEntrySlot len) _
-        (temporalSloadBase_preserves_warm sevm base1 arrayLengthSlot _
-          (temporalSloadBase_warm sevm base (indexSlot target)))))))
+    clear_value base3 base2 base1
+    as_aux_lemma =>
+      rw [show tailPost = temporalSstorePost sevm movedPost tailKey 0 from rfl,
+        temporalSstorePost_accessedStorageKeys,
+        show movedPost = temporalSstorePost sevm
+          (addAccessedStorageKey holePost sevm.currentTarget movedKey) movedKey
+          idx from rfl,
+        temporalSstorePost_accessedStorageKeys,
+        addAccessedStorageKey_accessedStorageKeys,
+        show holePost = temporalSstorePost sevm
+          (addAccessedStorageKey base3 sevm.currentTarget holeKey) holeKey
+          lastTarget from rfl,
+        temporalSstorePost_accessedStorageKeys,
+        addAccessedStorageKey_accessedStorageKeys]
+      exact Std.HashSet.mem_insert.mpr (Or.inr (Std.HashSet.mem_insert.mpr
+        (Or.inr hwarmIndex3)))
   -- the staged image
   have hwfIndex : Mem.Wf MIndex := hwf.write _ _
   have hreadsIndex : Mem.Reads MIndex imgIndex :=
@@ -2085,12 +2131,8 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
     hreadsLast htargetLast hlengthLast htargetValid
     (by rw [hsizeLast]; exact Nat.le_max_right _ _) halignLast
     hlengthTailPost hindexTailPost
-    (by simpa only [tailPost, movedPost, holePost, base3, base2, base1, temporalSstorePost_getOrigStorVal, temporalSloadBase_getOrigStorVal, addAccessedStorageKey_getOrigStorVal,
-          entryClearPost_getOrigStorVal, indexWritePost_getOrigStorVal, entryWritePost_getOrigStorVal,
-          lengthWritePost_getOrigStorVal] using hlengthOrig)
-    (by simpa only [tailPost, movedPost, holePost, base3, base2, base1, temporalSstorePost_getOrigStorVal, temporalSloadBase_getOrigStorVal, addAccessedStorageKey_getOrigStorVal,
-          entryClearPost_getOrigStorVal, indexWritePost_getOrigStorVal, entryWritePost_getOrigStorVal,
-          lengthWritePost_getOrigStorVal] using hindexOrig)
+    ((htailOriginal arrayLengthSlot).trans hlengthOrig)
+    ((htailOriginal indexKey).trans hindexOrig)
     hlengthRestoreCost hindexClearCost hwarmLengthTail hwarmIndexTail hsub
     hgasFinal hstatic post
     (by
@@ -2121,9 +2163,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
       post := by
     exact Func.RunCompiled.next
       (temporal_sstore_runCompiled (hfork := hfork) htailMovedPost
-        (by simpa only [movedPost, holePost, base3, base2, base1, temporalSstorePost_getOrigStorVal, temporalSloadBase_getOrigStorVal, addAccessedStorageKey_getOrigStorVal,
-          entryClearPost_getOrigStorVal, indexWritePost_getOrigStorVal, entryWritePost_getOrigStorVal,
-          lengthWritePost_getOrigStorVal] using htailOrig)
+        ((hmovedOriginal tailKey).trans htailOrig)
         htailClearCost
         hwarmTailMoved (lt_of_lt_of_le hgasFinal (by omega)) hstatic)
       hrestore'
@@ -2204,9 +2244,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
       post := by
     exact Func.RunCompiled.next
       (temporal_sstore_cold_runCompiled (hfork := hfork) hmovedHolePost
-        (by simpa only [holePost, base3, base2, base1, temporalSstorePost_getOrigStorVal, temporalSloadBase_getOrigStorVal, addAccessedStorageKey_getOrigStorVal,
-          entryClearPost_getOrigStorVal, indexWritePost_getOrigStorVal, entryWritePost_getOrigStorVal,
-          lengthWritePost_getOrigStorVal] using hmovedOrig)
+        ((hholeOriginal movedKey).trans hmovedOrig)
         hmovedIndexCost hmovedColdHole
         (lt_of_lt_of_le hgasFinal (by omega)) hstatic)
       htailPrefix
@@ -2300,9 +2338,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
       post := by
     exact Func.RunCompiled.next
       (temporal_sstore_cold_runCompiled (hfork := hfork) hhole3
-        (by simpa only [base3, base2, base1, temporalSstorePost_getOrigStorVal, temporalSloadBase_getOrigStorVal, addAccessedStorageKey_getOrigStorVal,
-          entryClearPost_getOrigStorVal, indexWritePost_getOrigStorVal, entryWritePost_getOrigStorVal,
-          lengthWritePost_getOrigStorVal] using hholeOrig) hholeCost hholeCold3
+        ((hbase3Original holeKey).trans hholeOrig) hholeCost hholeCold3
         (lt_of_lt_of_le hgasFinal (by omega)) hstatic)
       hmovedPrefix
   have hholePrefix : Func.RunCompiled fs sevm

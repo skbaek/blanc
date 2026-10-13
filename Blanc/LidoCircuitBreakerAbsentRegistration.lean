@@ -469,17 +469,19 @@ private theorem appendTarget_then_runCompiled
   have hafterCall : Func.RunCompiled fs sevm
       (lengthPost.setMach ⟨[next], M', afterGas + 12, lengthPost.stateGas⟩)
       (.call afterOldPauserSlot) post := by
-    apply Func.RunCompiled.call hafterLookup
-      (by simp only [Devm.stack_setMach, List.length_cons,
-          List.length_nil]; decide)
-    · simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
-        Devm.memory_setMach] using
-        (Devm.burnBy_setMach_gas
-          (devm := lengthPost.setMach ⟨[next], M', afterGas + 12, lengthPost.stateGas⟩)
-          (cost := gVerylow + gMid + gJumpdest) (G := afterGas)
-          (by simp only [Devm.gasLeft_setMach]
-              norm_num only [gVerylow, gMid, gJumpdest]))
-    · exact hafter'
+    clear_value lengthPost indexPost arrayPost lengthBase
+    as_aux_lemma =>
+      apply Func.RunCompiled.call hafterLookup
+        (by simp only [Devm.stack_setMach, List.length_cons,
+            List.length_nil]; decide)
+      · simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
+          Devm.memory_setMach] using
+          (Devm.burnBy_setMach_gas
+            (devm := lengthPost.setMach ⟨[next], M', afterGas + 12, lengthPost.stateGas⟩)
+            (cost := gVerylow + gMid + gJumpdest) (G := afterGas)
+            (by simp only [Devm.gasLeft_setMach]
+                norm_num only [gVerylow, gMid, gJumpdest]))
+      · exact hafter'
   have hstoreLength : Func.RunCompiled fs sevm
       (indexPost.setMach ⟨[arrayLengthSlot, next, next], M',
         afterGas + 12 + lengthCost, indexPost.stateGas⟩)
@@ -495,26 +497,27 @@ private theorem appendTarget_then_runCompiled
       (indexPost.setMach ⟨[next], M', afterGas + 21 + lengthCost, indexPost.stateGas⟩)
       (loadWord arrayLengthWord +++ pushB256 arrayLengthSlot :::
         Ninst.sstore ::: .call afterOldPauserSlot) post := by
-    clear_value lengthPost indexPost
-    func_run (3) [3]
-    case h_cost =>
-      rw [Devm.extCost_zero_of_le halign' harrayLengthOff']
-      norm_num only [gVerylow]
-    case a =>
-      have hmem : (M'.read (arrayLengthWord * 32).toNat 32).2 = M' := by
-        rw [Mem.read_snd_eq_self
-          (memExtSize_of_le halign' harrayLengthOff')]
-      have hval : (M'.read (arrayLengthWord * 32).toNat 32).1.toB256 =
-          next := by
-        rw [Mem.Reads.read hreads']
-        dsimp only [img']
-        rw [show 32 = next.toBytes.length by rw [B256.length_toBytes],
-          Bytes.sliceD_writeAt, B256.toB256_toBytes]
-      rw [hval, hmem]
-      have hg : afterGas + 21 + lengthCost - 9 =
-          afterGas + 12 + lengthCost := by clear * -; omega
-      rw [hg]
-      exact hstoreLength
+    clear_value lengthPost indexPost arrayPost lengthBase fs
+    as_aux_lemma =>
+      func_run (3) [3]
+      case h_cost =>
+        rw [Devm.extCost_zero_of_le halign' harrayLengthOff']
+        norm_num only [gVerylow]
+      case a =>
+        have hmem : (M'.read (arrayLengthWord * 32).toNat 32).2 = M' := by
+          rw [Mem.read_snd_eq_self
+            (memExtSize_of_le halign' harrayLengthOff')]
+        have hval : (M'.read (arrayLengthWord * 32).toNat 32).1.toB256 =
+            next := by
+          rw [Mem.Reads.read hreads']
+          dsimp only [img']
+          rw [show 32 = next.toBytes.length by rw [B256.length_toBytes],
+            Bytes.sliceD_writeAt, B256.toB256_toBytes]
+        rw [hval, hmem]
+        have hg : afterGas + 21 + lengthCost - 9 =
+            afterGas + 12 + lengthCost := by clear * -; omega
+        rw [hg]
+        exact hstoreLength
   have hstoreIndex : Func.RunCompiled fs sevm
       (arrayPost.setMach ⟨[indexKey, next, next], M',
         afterGas + 21 + lengthCost + indexCost, arrayPost.stateGas⟩)
@@ -550,44 +553,50 @@ private theorem appendTarget_then_runCompiled
       (tagTop indexRegion +++ Ninst.sstore :::
         loadWord arrayLengthWord +++ pushB256 arrayLengthSlot :::
         Ninst.sstore ::: .call afterOldPauserSlot) post := by
-    func_run (2) [indexKey]
-    case a =>
-      have hg : afterGas + 27 + lengthCost + indexCost - 6 =
-          afterGas + 21 + lengthCost + indexCost := by clear * -; omega
-      rw [hg]
-      exact hstoreIndex
+    clear_value lengthPost indexPost arrayPost lengthBase fs
+    as_aux_lemma =>
+      func_run (2) [indexKey]
+      case a =>
+        have hg : afterGas + 27 + lengthCost + indexCost - 6 =
+            afterGas + 21 + lengthCost + indexCost := by clear * -; omega
+        rw [hg]
+        exact hstoreIndex
   have hindexTargetLoad : Func.RunCompiled fs sevm
       (arrayPost.setMach ⟨[next, next], M',
         afterGas + 33 + lengthCost + indexCost, arrayPost.stateGas⟩)
       (loadWord targetWord +++ tagTop indexRegion +++ Ninst.sstore :::
         loadWord arrayLengthWord +++ pushB256 arrayLengthSlot :::
         Ninst.sstore ::: .call afterOldPauserSlot) post := by
-    func_run (2) [3]
-    case h_cost =>
-      rw [Devm.extCost_zero_of_le halign' htargetOff']
-      norm_num only [gVerylow]
-    case a =>
-      rw [htargetVal, htargetMem]
-      have hg : afterGas + 33 + lengthCost + indexCost - 6 =
-          afterGas + 27 + lengthCost + indexCost := by clear * -; omega
-      rw [hg]
-      exact hindexTag
+    clear_value lengthPost indexPost arrayPost lengthBase fs
+    as_aux_lemma =>
+      func_run (2) [3]
+      case h_cost =>
+        rw [Devm.extCost_zero_of_le halign' htargetOff']
+        norm_num only [gVerylow]
+      case a =>
+        rw [htargetVal, htargetMem]
+        have hg : afterGas + 33 + lengthCost + indexCost - 6 =
+            afterGas + 27 + lengthCost + indexCost := by clear * -; omega
+        rw [hg]
+        exact hindexTag
   have hindexTail : Func.RunCompiled fs sevm
       (arrayPost.setMach ⟨[next], M',
         afterGas + 39 + lengthCost + indexCost, arrayPost.stateGas⟩)
       (loadWord arrayLengthWord +++ targetIndexKey +++ Ninst.sstore :::
         loadWord arrayLengthWord +++ pushB256 arrayLengthSlot :::
         Ninst.sstore ::: .call afterOldPauserSlot) post := by
-    func_run (2) [3]
-    case h_cost =>
-      rw [Devm.extCost_zero_of_le halign' harrayLengthOff']
-      norm_num only [gVerylow]
-    case a =>
-      rw [hlengthVal, hlengthMem]
-      have hg : afterGas + 39 + lengthCost + indexCost - 6 =
-          afterGas + 33 + lengthCost + indexCost := by clear * -; omega
-      rw [hg]
-      exact hindexTargetLoad
+    clear_value lengthPost indexPost arrayPost lengthBase fs
+    as_aux_lemma =>
+      func_run (2) [3]
+      case h_cost =>
+        rw [Devm.extCost_zero_of_le halign' harrayLengthOff']
+        norm_num only [gVerylow]
+      case a =>
+        rw [hlengthVal, hlengthMem]
+        have hg : afterGas + 39 + lengthCost + indexCost - 6 =
+            afterGas + 33 + lengthCost + indexCost := by clear * -; omega
+        rw [hg]
+        exact hindexTargetLoad
   have hstoreArray : Func.RunCompiled fs sevm
       (lengthBase.setMach ⟨[arrayKey, target, next], M',
         afterGas + 39 + lengthCost + indexCost + arrayCost, lengthBase.stateGas⟩)
@@ -609,12 +618,14 @@ private theorem appendTarget_then_runCompiled
         loadWord arrayLengthWord +++ targetIndexKey +++ Ninst.sstore :::
         loadWord arrayLengthWord +++ pushB256 arrayLengthSlot :::
         Ninst.sstore ::: .call afterOldPauserSlot) post := by
-    func_run (2) [arrayKey]
-    case a =>
-      have hg : afterGas + 45 + arrayCost + indexCost + lengthCost - 6 =
-          afterGas + 39 + lengthCost + indexCost + arrayCost := by clear * -; omega
-      rw [hg]
-      exact hstoreArray
+    clear_value lengthPost indexPost arrayPost lengthBase fs
+    as_aux_lemma =>
+      func_run (2) [arrayKey]
+      case a =>
+        have hg : afterGas + 45 + arrayCost + indexCost + lengthCost - 6 =
+            afterGas + 39 + lengthCost + indexCost + arrayCost := by clear * -; omega
+        rw [hg]
+        exact hstoreArray
   have harrayLengthLoad : Func.RunCompiled fs sevm
       (lengthBase.setMach ⟨[target, next], M',
         afterGas + 51 + arrayCost + indexCost + lengthCost, lengthBase.stateGas⟩)
@@ -622,16 +633,18 @@ private theorem appendTarget_then_runCompiled
         loadWord arrayLengthWord +++ targetIndexKey +++ Ninst.sstore :::
         loadWord arrayLengthWord +++ pushB256 arrayLengthSlot :::
         Ninst.sstore ::: .call afterOldPauserSlot) post := by
-    func_run (2) [3]
-    case h_cost =>
-      rw [Devm.extCost_zero_of_le halign' harrayLengthOff']
-      norm_num only [gVerylow]
-    case a =>
-      rw [hlengthVal, hlengthMem]
-      have hg : afterGas + 51 + arrayCost + indexCost + lengthCost - 6 =
-          afterGas + 45 + arrayCost + indexCost + lengthCost := by clear * -; omega
-      rw [hg]
-      exact harrayTag
+    clear_value lengthPost indexPost arrayPost lengthBase fs
+    as_aux_lemma =>
+      func_run (2) [3]
+      case h_cost =>
+        rw [Devm.extCost_zero_of_le halign' harrayLengthOff']
+        norm_num only [gVerylow]
+      case a =>
+        rw [hlengthVal, hlengthMem]
+        have hg : afterGas + 51 + arrayCost + indexCost + lengthCost - 6 =
+            afterGas + 45 + arrayCost + indexCost + lengthCost := by clear * -; omega
+        rw [hg]
+        exact harrayTag
   have harrayTail : Func.RunCompiled fs sevm
       (lengthBase.setMach ⟨[next], M',
         afterGas + 57 + arrayCost + indexCost + lengthCost, lengthBase.stateGas⟩)
@@ -640,16 +653,18 @@ private theorem appendTarget_then_runCompiled
         loadWord arrayLengthWord +++ targetIndexKey +++ Ninst.sstore :::
         loadWord arrayLengthWord +++ pushB256 arrayLengthSlot :::
         Ninst.sstore ::: .call afterOldPauserSlot) post := by
-    func_run (2) [3]
-    case h_cost =>
-      rw [Devm.extCost_zero_of_le halign' htargetOff']
-      norm_num only [gVerylow]
-    case a =>
-      rw [htargetVal, htargetMem]
-      have hg : afterGas + 57 + arrayCost + indexCost + lengthCost - 6 =
-          afterGas + 51 + arrayCost + indexCost + lengthCost := by clear * -; omega
-      rw [hg]
-      exact harrayLengthLoad
+    clear_value lengthPost indexPost arrayPost lengthBase fs
+    as_aux_lemma =>
+      func_run (2) [3]
+      case h_cost =>
+        rw [Devm.extCost_zero_of_le halign' htargetOff']
+        norm_num only [gVerylow]
+      case a =>
+        rw [htargetVal, htargetMem]
+        have hg : afterGas + 57 + arrayCost + indexCost + lengthCost - 6 =
+            afterGas + 51 + arrayCost + indexCost + lengthCost := by clear * -; omega
+        rw [hg]
+        exact harrayLengthLoad
   have hmemoryCost : arrayLengthMemoryCost M = 6 := by
     simp only [arrayLengthMemoryCost, hsize]
     decide +kernel
@@ -663,15 +678,17 @@ private theorem appendTarget_then_runCompiled
         loadWord arrayLengthWord +++ targetIndexKey +++ Ninst.sstore :::
         loadWord arrayLengthWord +++ pushB256 arrayLengthSlot :::
         Ninst.sstore ::: .call afterOldPauserSlot) post := by
-    rw [hmemoryCost]
-    func_run (5) [next, 6]
-    case h_ext => exact Devm.extCost_of_size hsize (by decide +kernel)
-    case a =>
-      have hg : afterGas + 72 + 6 + arrayCost + indexCost + lengthCost -
-          (15 + 6) =
-          afterGas + 57 + arrayCost + indexCost + lengthCost := by clear * -; omega
-      rw [hg]
-      exact harrayTail
+    clear_value lengthPost indexPost arrayPost lengthBase fs
+    as_aux_lemma =>
+      rw [hmemoryCost]
+      func_run (5) [next, 6]
+      case h_ext => exact Devm.extCost_of_size hsize (by decide +kernel)
+      case a =>
+        have hg : afterGas + 72 + 6 + arrayCost + indexCost + lengthCost -
+            (15 + 6) =
+            afterGas + 57 + arrayCost + indexCost + lengthCost := by clear * -; omega
+        rw [hg]
+        exact harrayTail
   have hload : Func.RunCompiled fs sevm
       (base.setMach ⟨[arrayLengthSlot], M,
         afterGas + 72 + arrayLengthMemoryCost M +
