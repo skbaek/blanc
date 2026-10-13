@@ -4069,6 +4069,16 @@
      {
       "path": "Blanc/Solvent.lean",
       "reason": "classified contract-module subject of the clean ownership audit and in-memory falsifiers; the static and semantic prerequisites verify the committed corpus"
+     },
+     {
+      "root": "Blanc",
+      "pattern": "Lift/*/**/*.lean",
+      "reason": "classified contract-module subject of the clean ownership audit and in-memory falsifiers; the static and semantic prerequisites verify the committed corpus"
+     },
+     {
+      "root": "Blanc",
+      "pattern": "Curve3Crv/*.lean",
+      "reason": "classified contract-module subject of the clean ownership audit and in-memory falsifiers; the static and semantic prerequisites verify the committed corpus"
      }
     ]
    },
