@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>WETH9 — Blanc</title>
-<meta name="description" content="What Blanc proves about the 3,124 deployed bytes of WETH9: tracked balances stay backed after any valid history, storage replays exactly the committed calls, and a holder's withdrawal transaction is admitted after any history at a closed-form gas cost that 3,749 of 3,749 matching mainnet receipts obey.">
+<meta name="description" content="What Blanc proves about the 3,124 deployed bytes of WETH9: tracked balances stay backed after any valid history, storage replays exactly the committed calls, and a holder's withdrawal transaction is admitted after any history at a closed-form gas cost that 3,748 of 3,748 compared mainnet receipts obey.">
 <meta name="theme-color" content="#fbfaf5">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Blanc">
 <meta property="og:title" content="WETH9 — Blanc">
-<meta property="og:description" content="What Blanc proves about the 3,124 deployed bytes of WETH9: tracked balances stay backed after any valid history, storage replays exactly the committed calls, and a holder's withdrawal transaction is admitted after any history at a closed-form gas cost that 3,749 of 3,749 matching mainnet receipts obey.">
+<meta property="og:description" content="What Blanc proves about the 3,124 deployed bytes of WETH9: tracked balances stay backed after any valid history, storage replays exactly the committed calls, and a holder's withdrawal transaction is admitted after any history at a closed-form gas cost that 3,748 of 3,748 compared mainnet receipts obey.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fbfaf5'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="../site.css">
 </head>
@@ -43,7 +43,7 @@
       <div>
         <h1>WETH9.</h1>
         <p class="lede">The canonical wrapped ether: 3,124 bytes that solc 0.4.19, with its optimizer off, produced in December 2017, holding about 2.16 million ether.</p>
-        <p class="lede-sm">About those exact bytes, Blanc proves that tracked balances stay backed after any valid history; that storage is the ledger replayed over exactly the calls that were committed; and that a holder’s withdrawal transaction is admitted after any history at a gas cost given by a closed formula — a formula every one of 3,749 matching mainnet receipts obeys.</p>
+        <p class="lede-sm">About those exact bytes, Blanc proves that tracked balances stay backed after any valid history; that storage is the ledger replayed over exactly the calls that were committed; and that a holder’s withdrawal transaction is admitted after any history at a gas cost given by a closed formula — a formula every one of 3,748 compared mainnet receipts obeys.</p>
       </div>
       <div class="plate idplate">
         <div class="plate-head"><span class="who"><span class="k">Artifact</span>WETH9</span><span class="meta">Ethereum mainnet</span></div>
@@ -191,13 +191,14 @@
             <tr><td>— with calldata other than the 36 bytes of <code>withdraw(w)</code></td><td class="r">1,859</td></tr>
             <tr><td>— from accounts holding code</td><td class="r">1,070</td></tr>
             <tr><td>— of transaction type 0</td><td class="r">114</td></tr>
-            <tr><td>— failing the block-boundary balance check</td><td class="r">31</td></tr>
-            <tr><td><b>Of the theorem’s shape, from 2,255 senders</b></td><td class="r"><b>3,749</b></td></tr>
-            <tr><td><b>Receipts whose <code>gasUsed</code> equals the prediction</b></td><td class="r"><b>3,749</b></td></tr>
+            <tr><td><b>Of the theorem’s shape</b></td><td class="r"><b>3,780</b></td></tr>
+            <tr><td>— sharing their block with another WETH9 event that names the sender</td><td class="r">32</td></tr>
+            <tr><td><b>Compared, from 2,255 senders</b></td><td class="r"><b>3,748</b></td></tr>
+            <tr><td><b>Receipts whose <code>gasUsed</code> equals the prediction</b></td><td class="r"><b>3,748</b></td></tr>
           </tbody>
         </table></div>
         <p>The matches span twelve combinations of calldata tokens, from 60 to 75, and emptying; none withdraws zero. Two excluded groups still admit a prediction, and their 98 admissible calls of type 0 and 1,590 calls with 37 to 76 bytes of calldata match too; they are counted apart. Calls from accounts with code cannot be predicted, since the ether transfer runs the sender’s code.</p>
-        <p class="note">What the comparison does and does not show. The balance check compares the sender’s WETH balance at the ends of two blocks and calls a withdrawal emptying when the amount equals the earlier balance; it never observes the balance at the transaction’s entry. By the theorem, the prediction depends on the chain’s state only through that one bit, so a misclassification would show as a difference of exactly 4,800 gas; none appears. Since that dependence is itself what the theorem proves, the comparison tests the formula and the model together. It exercises nonzero withdrawals under one fork, BPO2, and establishes none of the theorem’s other hypotheses for these transactions.</p>
+        <p class="note">What the comparison does and does not show. The prediction needs one bit of state, whether the withdrawal empties the sender’s balance, so it needs the balance the withdrawal starts from. WETH9 logs an event for every change to a balance; when no other event of the block names the sender, that balance is the sender’s balance at the end of the previous block, and a withdrawal is called emptying when its amount equals that balance. This holds for 3,748 of the 3,780; the other 32 share their block with another WETH9 event naming the sender, and are set aside. Every one of the 3,748 receipts equals the prediction. The comparison exercises nonzero withdrawals under one fork, BPO2, and establishes none of the theorem’s other hypotheses for these transactions.</p>
       </section>
 
       <section id="safety">

@@ -62,7 +62,7 @@
         <div class="formula"><span class="nowrap"><span class="c">gasUsed</span> <span class="op">=</span> 21,000</span> <span class="nowrap"><span class="op">+</span> 4·tokens(calldata)</span> <span class="nowrap"><span class="op">+</span> 13,940</span> <span class="nowrap"><span class="op">−</span> 4,800<span class="op">·</span>[<i>w</i> empties the balance]</span><small>for <i>w</i> &gt; 0. A zero calldata byte counts as one token, a nonzero byte as four; <i>w</i> = 0 costs 4,440 in place of 13,940.</small></div>
       </div>
       <div class="plate-foot">
-        <div class="tally"><span class="n num">3,749 / 3,749</span><span class="l">mainnet withdrawals of exactly this shape, in 30,000 blocks, used precisely the predicted gas — a test of the model against the chain, not part of the proof.</span></div>
+        <div class="tally"><span class="n num">3,748 / 3,748</span><span class="l">mainnet withdrawals of exactly this shape whose starting balance the logs determine, in 30,000 blocks, used precisely the predicted gas — a test of the model against the chain, not part of the proof.</span></div>
       </div>
       <figcaption id="exhibit-cap" style="padding:0 22px 16px;background:var(--wash);margin:0"><a class="more" href="bytecode/weth9.html">The full theorem, all 27 hypotheses, and its premises</a></figcaption>
     </figure>
@@ -142,7 +142,7 @@
       <div class="q"><h3>Was the code written for the verifier?</h3>
         <p>No. Seven compiler versions and an assembler, from unoptimized solc 0.4.19 output of 2017 to 504 bytes of hand-written assembly the protocol runs. None of it was shaped for Blanc’s tools.</p></div>
       <div class="q"><h3>Is the machine the real machine?</h3>
-        <p>Jaune defines the machine, every transaction type, block validation, system calls, withdrawals and requests, every precompile from <code>ecrecover</code> to BLS12-381, and fork selection by schedule — and it runs: 34,205 of 34,205 blockchain-test cases pass, run through the core of the block transition the theorems quantify over. Its gas schedule meets the chain too: in a 30,000-block window, every WETH9 <code>withdraw</code> of the proved shape — 3,749 of them — used exactly the gas Blanc proves, and so did all 542 Uniswap-pair <code>approve</code> calls compared, counting the standard intrinsic charge on top of the proved frame cost.</p></div>
+        <p>Jaune defines the machine, every transaction type, block validation, system calls, withdrawals and requests, every precompile from <code>ecrecover</code> to BLS12-381, and fork selection by schedule — and it runs: 34,205 of 34,205 blockchain-test cases pass, run through the core of the block transition the theorems quantify over. Its gas schedule meets the chain too: in a 30,000-block window, every WETH9 <code>withdraw</code> of the proved shape whose starting balance the logs determine — 3,748 of 3,780 — used exactly the gas Blanc proves, and so did all 542 Uniswap-pair <code>approve</code> calls compared, counting the standard intrinsic charge on top of the proved frame cost.</p></div>
       <div class="q"><h3>Does the theorem matter?</h3>
         <p>The properties are the ones people rely on: balances that stay backed, deposits accumulated exactly, withdrawal requests delivered first in, first out, a lock that actually excludes, a ledger that balances.</p></div>
       <div class="q"><h3>Does it say the contract works?</h3>
