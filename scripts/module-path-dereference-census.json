@@ -113,6 +113,13 @@
       "call": "resolve_bound_file",
       "class": "generator output binding",
       "source": "hash-bound captured source and runtime adapter inputs"
+    },
+    {
+      "id": "gate-cache-tracked-population",
+      "script": "scripts/gate-cache.py",
+      "call": "resolve_bound_file",
+      "class": "generator output binding",
+      "source": "Git index-selected Lean source binding with required alias/containment checks; no exception"
     }
   ]
 }

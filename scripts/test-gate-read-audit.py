@@ -236,7 +236,48 @@ def declared_untracked_control() -> None:
         ], result
 
 
+def tracked_population_coverage_control() -> None:
+    module = load_audit()
+    with tempfile.TemporaryDirectory(prefix="gate-read-tracked-control-") as directory:
+        root = Path(directory).resolve()
+        (root / "future").mkdir()
+        for name in ("future/Selected.lean", "future/Unselected.lean", "Exempt.lean"):
+            (root / name).write_text("example : True := trivial\n", encoding="utf-8")
+        subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+        subprocess.run(["git", "add", "--", "future/Selected.lean", "Exempt.lean"], cwd=root, check=True)
+        module.ROOT = root
+        module.OUT_DIR = root / "audit"
+        module.HOOK_DIR = HOOK
+        module.OUT_DIR.mkdir()
+        gate = {"id": "tracked", "command": [sys.executable, "-B", "-c",
+                "open('future/Selected.lean').read(); open('future/Unselected.lean').read(); open('Exempt.lean').read()"],
+                "inputs": {"populations": [
+                    {"root": ".", "pattern": "*.lean", "tracked": True, "exclude": ["Exempt.lean"]},
+                    {"root": ".", "pattern": "Exempt.lean", "tracked": True, "mode": "membership"},
+                ]}}
+        result = module.audit_gate(gate, [root], set())
+        assert result["exit"] == 0 and result["undeclared"] == ["Exempt.lean", "future/Unselected.lean"], result
+        assert not result["unverified"], result
+        original = module.gc.glob_population
+        def refused(_root, spec):
+            if spec.get("tracked"):
+                raise module.gc.Unresolvable("synthetic unavailable Git index")
+            return original(_root, spec)
+        module.gc.glob_population = refused
+        try:
+            result = module.audit_gate(gate, [root], set())
+            assert any("unavailable Git index" in text for text in result["unverified"]), result
+            membership_gate = dict(gate, inputs={"populations": [
+                {"root": ".", "pattern": "Exempt.lean", "tracked": True, "mode": "membership"},
+            ]})
+            result = module.audit_gate(membership_gate, [root], set())
+            assert any("unavailable Git index" in text for text in result["unverified"]), result
+        finally:
+            module.gc.glob_population = original
+
+
 def main() -> int:
+    tracked_population_coverage_control()
     hook_control()
     declared_untracked_control()
     code, cold, audited, output, _ = exercise([])

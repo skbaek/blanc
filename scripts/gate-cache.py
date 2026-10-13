@@ -506,6 +506,11 @@ def load_registry(path: Path) -> dict[str, Any]:
             )
         if kind == "cacheable" and not inputs:
             raise GateCacheError(f"cacheable gate {identifier} declares no inputs")
+        populations = inputs.get("populations", [])
+        if not isinstance(populations, list):
+            raise GateCacheError(f"gate {identifier} has malformed populations")
+        for population in populations:
+            validate_tracked_population(population)
         clock = inputs.get("clock")
         if clock is not None:
             if (
@@ -791,6 +796,7 @@ def command_text(gate: dict[str, Any]) -> str:
 RUNNER_SOUNDNESS_SOURCE = "gate-cache.py"
 RUNNER_T8N_SOURCE = "gate_cache_t8n_root.py"
 RUNNER_HOST_IDENTITY_SOURCE = "gate_cache_host_identity.py"
+RUNNER_PATH_POLICY_SOURCE = "module_path_policy.py"
 
 # Top-level authorities whose semantics can change whether an earlier verdict
 # is valid for a candidate.  The AST digest deliberately excludes comments,
@@ -802,7 +808,7 @@ SOUNDNESS_AUTHORITY_NAMES = frozenset({
     "IMPORT_LINE", "IMPORT_LIKE", "INPUT_KINDS", "GATE_KINDS",
     "TOOL_COMMANDS", "LEGACY_EELS_PIN", "CURRENT_T8N_PIN", "NAMED_ROOTS",
     "SHARED_STATE_RELATIVE", "EVIDENCE_FILENAME_PREFIX", "LEGACY_EVIDENCE_FILENAME",
-    "BUILD_CERTIFICATE_RELATIVE", "RUNNER_HOST_IDENTITY_SOURCE",
+    "BUILD_CERTIFICATE_RELATIVE", "RUNNER_HOST_IDENTITY_SOURCE", "RUNNER_PATH_POLICY_SOURCE",
     "AUTHORITY_IMPORT_BINDINGS_KEY", "module_scope_imports", "import_binding_map",
     "BUILD_CERTIFICATE_SCHEMA", "GateCacheError", "Unresolvable", "MissingLakeTrace",
     "git_common_dir", "shared_state_path", "cache_path", "legacy_cache_path",
@@ -811,7 +817,8 @@ SOUNDNESS_AUTHORITY_NAMES = frozenset({
     "file_digest", "file_identity", "forget_digests", "canonical", "digest_of",
     "load_registry", "is_code_under_scripts", "economy_work_classes",
     "_input_strings", "_validate_oracle_lanes",
-    "gate_uses_t8n_resolver", "semantic_authority_digest", "runner_identity",
+    "gate_uses_t8n_resolver", "gate_uses_tracked_population",
+    "validate_tracked_population", "tracked_population", "semantic_authority_digest", "runner_identity",
     "resolve_path", "component_files", "glob_population", "traversable_population",
     "component_populations", "trace_path_for", "module_dep_hash",
     "toolchain_artifact_identity", "toolchain_module_identity",
@@ -838,6 +845,11 @@ def gate_uses_t8n_resolver(gate: dict[str, Any]) -> bool:
     )
 
 
+def gate_uses_tracked_population(gate: dict[str, Any]) -> bool:
+    return any(spec.get("tracked") is True
+               for spec in gate.get("inputs", {}).get("populations", []))
+
+
 def runner_identity_sources(gate: dict[str, Any]) -> tuple[str, ...]:
     """Soundness code relevant to this gate, excluding pure serialization.
 
@@ -850,6 +862,8 @@ def runner_identity_sources(gate: dict[str, Any]) -> tuple[str, ...]:
     sources = [f"{RUNNER_SOUNDNESS_SOURCE}#soundness", RUNNER_HOST_IDENTITY_SOURCE]
     if gate_uses_t8n_resolver(gate):
         sources.append(RUNNER_T8N_SOURCE)
+    if gate_uses_tracked_population(gate):
+        sources.append(RUNNER_PATH_POLICY_SOURCE)
     return tuple(sources)
 
 
@@ -948,6 +962,8 @@ def runner_identity(gate: dict[str, Any]) -> tuple[str, dict[str, str]]:
     }
     if gate_uses_t8n_resolver(gate):
         detail[f"scripts/{RUNNER_T8N_SOURCE}"] = file_digest(here / RUNNER_T8N_SOURCE)
+    if gate_uses_tracked_population(gate):
+        detail[f"scripts/{RUNNER_PATH_POLICY_SOURCE}"] = file_digest(here / RUNNER_PATH_POLICY_SOURCE)
     return digest_of({"schema": SCHEMA_VERSION, "sources": detail}), detail
 
 
@@ -1028,7 +1044,113 @@ def component_files(root: Path, paths: list[str]) -> tuple[str, dict[str, str]]:
     return digest_of(detail), detail
 
 
+def validate_tracked_population(spec: dict[str, Any]) -> None:
+    """Bounded repo-root Git selections: Lean sources or the exact scripts subtree."""
+    if not isinstance(spec, dict):
+        raise GateCacheError("population specification must be an object")
+    if "tracked" not in spec:
+        return
+    if spec["tracked"] is not True:
+        raise GateCacheError("tracked population selector must be literal true")
+    if set(spec) - {"root", "pattern", "tracked", "exclude", "mode"}:
+        raise GateCacheError("tracked population carries unknown fields")
+    mode = spec.get("mode", "content")
+    if (spec.get("root", ".") != "." or not isinstance(mode, str)
+            or mode not in {"content", "membership"}):
+        raise GateCacheError("tracked population requires repository root and content/membership mode")
+    pattern = spec.get("pattern")
+    if not isinstance(pattern, str) or not pattern or pattern != pattern.strip():
+        raise GateCacheError("tracked population needs an exact Lean pathspec")
+    if pattern == "scripts":
+        if mode != "content":
+            raise GateCacheError("tracked scripts subtree requires content mode")
+    elif pattern != "*.lean":
+        components = pattern.split("/")
+        if (not pattern.endswith(".lean") or "\\" in pattern
+                or any(part in {"", ".", "..", ".lake"} for part in components)
+                or any(char in pattern for char in "*?[:\0\n\r")):
+            raise GateCacheError("tracked population permits '*.lean' or an exact relative Lean path")
+    excludes = spec.get("exclude", [])
+    if not isinstance(excludes, list) or not all(isinstance(item, str) for item in excludes):
+        raise GateCacheError("tracked population exclusions must be strings")
+
+
+def tracked_population(root: Path, spec: dict[str, Any]) -> list[str]:
+    """Git index selection, exact worktree bindings, never commit-only identity.
+
+    Lean selections exclude .lake components; the scripts workspace population
+    follows its literal Git subtree selection without that filter. Every selected
+    path uses the common reject-all-aliases binding policy before exclusions and fingerprinting.
+    Import it lazily; only tracked consumers bind its implementation as authority.
+    """
+    validate_tracked_population(spec)
+    try:
+        import module_path_policy as path_policy
+    except ImportError as error:
+        raise Unresolvable(f"tracked population path authority unavailable: {error}") from error
+
+    try:
+        top = subprocess.run(["git", "-C", str(root), "rev-parse", "--show-toplevel"],
+                             capture_output=True, check=True)
+        if Path(top.stdout.decode("utf-8").strip()).resolve(strict=True) != root.resolve(strict=True):
+            raise Unresolvable("tracked population root is not Git's repository root")
+        index_result = subprocess.run(["git", "-C", str(root), "rev-parse", "--git-path", "index"],
+                                      capture_output=True, check=True)
+        index_name = index_result.stdout.decode("utf-8").rstrip("\n")
+        if not index_name or "\n" in index_name or "\0" in index_name:
+            raise Unresolvable("tracked population index path is malformed")
+        index = Path(index_name)
+        if not index.is_absolute():
+            index = root / index
+        if index.is_symlink() or not index.is_file() or not os.access(index, os.R_OK):
+            raise Unresolvable("tracked population Git index is missing or unreadable")
+        conflicts = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "--unmerged", "-z", "--", spec["pattern"]],
+            capture_output=True, check=True,
+        )
+        if conflicts.stdout:
+            raise Unresolvable("tracked population has unmerged index paths")
+        result = subprocess.run(["git", "-C", str(root), "ls-files", "-z", "--", spec["pattern"]],
+                                capture_output=True, check=True)
+        payload = result.stdout
+        if payload and not payload.endswith(b"\0"):
+            raise Unresolvable("tracked population selection is not NUL terminated")
+        raw_names = payload[:-1].split(b"\0") if payload else []
+        if any(not item for item in raw_names):
+            raise Unresolvable("tracked population has empty index paths")
+        names = [item.decode("utf-8") for item in raw_names]
+        if len(names) != len(set(names)):
+            raise Unresolvable("tracked population has duplicate or unmerged index paths")
+        found = []
+        for raw in names:
+            components = raw.split("/")
+            if (raw != raw.strip() or "\\" in raw
+                    or any(part in {"", ".", ".."} for part in components)
+                    or (spec["pattern"] == "scripts" and components[0] != "scripts")
+                    or (spec["pattern"] != "scripts" and not raw.endswith(".lean"))
+                    or (spec["pattern"] not in {"scripts", "*.lean"} and raw != spec["pattern"])):
+                raise Unresolvable(f"malformed tracked source path: {raw!r}")
+            if spec["pattern"] != "scripts" and ".lake" in components:
+                continue
+            path = path_policy.resolve_bound_file(
+                root, raw, allow_missing=False, site="gate-cache-tracked-population",
+            )
+            # Membership binds availability and path safety, not exempt file contents.
+            if not os.access(path, os.R_OK):
+                raise Unresolvable(f"tracked population file is unreadable: {raw}")
+            if any(fnmatch.fnmatch(raw, excluded) for excluded in spec.get("exclude", [])):
+                continue
+            found.append(raw)
+        return sorted(found)
+    except (OSError, UnicodeError, subprocess.SubprocessError,
+            path_policy.ModulePathPolicyError) as error:
+        raise Unresolvable(f"cannot authenticate tracked source population: {error}") from error
+
+
 def glob_population(root: Path, spec: dict[str, Any]) -> list[str]:
+    validate_tracked_population(spec)
+    if spec.get("tracked") is True:
+        return tracked_population(root, spec)
     base = spec.get("root", ".")
     pattern = spec.get("pattern")
     if not isinstance(base, str) or not isinstance(pattern, str):
@@ -3016,13 +3138,16 @@ def render_inventory(root: Path) -> str:
                     excluded = spec.get("exclude", [])
                     suffix = f" excluding {', '.join(excluded)}" if excluded else ""
                     mode = spec.get("mode", "content")
+                    selection = "Git index selected; " if spec.get("tracked") is True else ""
+                    if spec.get("tracked") is True and spec["pattern"] != "scripts":
+                        selection += ".lake components excluded; "
                     where = {
                         "membership": "membership only",
                         "traversable": "readable, contributes no digest",
                     }.get(mode, "path and content")
                     lines.append(
                         f"- population: `{spec.get('root', '.')}/{spec['pattern']}`"
-                        f"{suffix} ({where})"
+                        f"{suffix} ({selection}{where})"
                     )
             elif kind == "external":
                 for spec in value:

@@ -927,7 +927,7 @@ leaf theorems: theorems of a `Blanc.*` module that no other Blanc declaration
 uses (`scripts/leaf_audit.py`, `scripts/GATES.md` "Leaf audit"), the
 independently valuable results, each covered by the union walk. It is generated
 into `scripts/leaf-count.json` (never hand-edited) and quoted by the README and
-the sites. At this commit it is 1060 leaf results (1057 public, 3 private).
+the sites. At this commit it is 1103 leaf results (1096 public, 7 private).
 The count is a property of the library at a commit, not of any cited theorem;
 a cited theorem that another theorem uses is simply not a leaf. Bind any
 quoted figure to `git rev-parse HEAD`, as the README does.

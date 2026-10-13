@@ -724,6 +724,300 @@ def control_population_membership_invalidates() -> None:
         require(s.disposition("g") == "fresh", "a rename must force execution")
 
 
+def control_tracked_lean_selection_and_content_invalidates() -> None:
+    """Actual index-only transitions and worktree content both prevent stale reuse."""
+    with scratch() as s:
+        s.write("Main.lean", "def main := 1\n")
+        s.write("lakefile.lean", "import Lake\n")
+        s.write("scripts/Outside.lean", "example : True := by simp only [True.intro]\n")
+        s.write("future/nested/New.lean", "example : True := by simp only [True.intro]\n")
+        s.git("add", "--", "Main.lean", "lakefile.lean", "scripts/Outside.lean")
+        command = s.passing_gate("g.sh", "ran.txt")
+        row = simple_gate("g", [command], {"populations": [
+            {"root": ".", "pattern": "*.lean", "tracked": True},
+        ]}, "^OK — g.sh: ")
+        s.registry([row])
+        require(s.run() == 0 and s.run() == 0 and s.ran("ran.txt") == 1,
+                "unchanged tracked corpus must reuse the successful verdict")
+        def identity():
+            gc.forget_digests()
+            return gc.fingerprint(s.root, row)[0]
+        original = identity()
+        require(gc.glob_population(s.root, row["inputs"]["populations"][0]) ==
+                ["Main.lean", "lakefile.lean", "scripts/Outside.lean"],
+                "Git wildcard must find only the recursively tracked population")
+        for name in ("Main.lean", "lakefile.lean", "scripts/Outside.lean"):
+            path = s.root / name
+            old = path.read_bytes()
+            path.write_text("example : True := by simp\n", encoding="utf-8")
+            require(identity() != original and s.disposition("g") == "fresh",
+                    f"changed {name} must not reuse cached green")
+            path.write_bytes(old)
+            require(identity() == original, "sole byte restoration must recover baseline identity")
+        s.git("add", "--", "future/nested/New.lean")
+        added = identity()
+        require(added != original, "index-only add outside scripts must invalidate")
+        path = s.root / "future/nested/New.lean"
+        old = path.read_bytes()
+        path.write_text("example : True := by simp\n", encoding="utf-8")
+        require(identity() != added, "new tracked location's bytes must be fingerprinted too")
+        # Demonstrate the actual default scanner rejects this selected source.
+        s.write("Blanc.lean", "import Blanc.Clean\n")
+        s.write("Blanc/Clean.lean", "example : True := by trivial\n")
+        for exempt in ("scripts/fixtures/leaf-audit/compliant.lean", "scripts/SimpaUsingSyntaxControl.lean"):
+            s.write(exempt, "example : True := by simp\n")
+            s.git("add", "--", exempt)
+        scanner = Path(__file__).resolve().parent / "explicit_simp.py"
+        result = subprocess.run([sys.executable, "-B", str(scanner), "check", "--root", str(s.root)],
+                                capture_output=True, text=True, check=False)
+        require(result.returncode == 1 and "future/nested/New.lean" in result.stdout,
+                "new tracked source violation must bite through the actual default scanner")
+        path.write_bytes(old)
+        before_remove = identity()
+        s.git("rm", "-q", "--cached", "--", "future/nested/New.lean")
+        require(path.read_bytes() == old and identity() != before_remove,
+                "index-only removal with identical disk bytes must invalidate")
+        s.write("docs/unrelated.md", "unread prose\n")
+        unchanged = identity()
+        path.write_text("untracked outside source change\n", encoding="utf-8")
+        require(identity() == unchanged, "unselected outside source/prose must not invalidate")
+        source = s.root / "Main.lean"
+        source.rename(s.root / "Renamed.lean")
+        s.git("rm", "-q", "--cached", "--", "Main.lean")
+        s.git("add", "--", "Renamed.lean")
+        require(identity() != unchanged, "identical-byte tracked rename must bind the path")
+
+
+def control_tracked_exemption_membership_and_blanc_walk() -> None:
+    with scratch() as s:
+        exemptions = ("scripts/fixtures/leaf-audit/compliant.lean", "scripts/SimpaUsingSyntaxControl.lean")
+        s.write("Blanc.lean", "import Blanc.Clean\n")
+        s.write("Blanc/Clean.lean", "example : True := by trivial\n")
+        scanner = Path(__file__).resolve().parent / "explicit_simp.py"
+        for exempt in exemptions:
+            s.write(exempt, "example : True := by simp\n")
+            s.git("add", "--", exempt)
+        result = subprocess.run([sys.executable, "-B", str(scanner), "check", "--root", str(s.root)],
+                                capture_output=True, text=True, check=False)
+        require(result.returncode == 0, "required exemptions must have a green scanner baseline")
+        for exempt in exemptions:
+            specs = [{"root": ".", "pattern": exempt, "tracked": True, "mode": "membership"}]
+            baseline = gc.component_populations(s.root, specs)[0]
+            old = (s.root / exempt).read_bytes()
+            (s.root / exempt).write_text("different deliberately exempt syntax\n", encoding="utf-8")
+            require(gc.component_populations(s.root, specs)[0] == baseline,
+                    "exemption membership must not pretend to scan fixture syntax")
+            (s.root / exempt).write_bytes(old)
+            s.git("rm", "-q", "--cached", "--", exempt)
+            require(gc.component_populations(s.root, specs)[0] != baseline,
+                    "required exemption index removal must invalidate")
+            result = subprocess.run([sys.executable, "-B", str(scanner), "check", "--root", str(s.root)],
+                                    capture_output=True, text=True, check=False)
+            require(result.returncode == 2 and exempt in result.stdout + result.stderr,
+                    "actual scanner must refuse removal of each required exemption")
+            (s.root / exempt).write_bytes(old)
+            s.git("add", "--", exempt)
+            require(gc.component_populations(s.root, specs)[0] == baseline,
+                    "restoring only exemption bytes and index recovers baseline identity")
+        s.git("rm", "-q", "--cached", "--", *exemptions)
+        # .lake is excluded by component even below another directory.
+        s.write("nested/.lake/Hidden.lean", "ignored\n")
+        s.git("add", "--", "nested/.lake/Hidden.lean")
+        require(gc.glob_population(s.root, {"root": ".", "pattern": "*.lean", "tracked": True}) == [],
+                "any .lake component must stay outside the scanner selection")
+        specs = [{"root": "Blanc", "pattern": "**/*.lean"}]
+        empty = gc.component_populations(s.root, specs)[0]
+        s.write("Blanc/Untracked.lean", "example : True := by trivial\n")
+        require(gc.component_populations(s.root, specs)[0] != empty,
+                "untracked new Blanc modules must remain in the filesystem corpus")
+
+
+def control_tracked_population_uncertainty_refuses() -> None:
+    with scratch() as s:
+        spec = {"root": ".", "pattern": "*.lean", "tracked": True}
+        s.write("Main.lean", "one\n")
+        s.git("add", "--", "Main.lean")
+        before = gc.component_populations(s.root, [spec])[0]
+        def refuses(selected=spec):
+            try:
+                gc.component_populations(s.root, [selected])
+            except (gc.Unresolvable, gc.GateCacheError):
+                return
+            raise ControlFailure("uncertain tracked population was fingerprinted")
+        path = s.root / "Main.lean"
+        old = path.read_bytes()
+        path.unlink()
+        refuses()
+        refuses(dict(spec, exclude=["Main.lean"]))
+        outside = s.write("outside.txt", "one\n")
+        path.symlink_to(outside)
+        refuses()
+        refuses(dict(spec, exclude=["Main.lean"]))
+        path.unlink()
+        os.link(outside, path)
+        refuses()
+        refuses(dict(spec, exclude=["Main.lean"]))
+        path.unlink()
+        path.write_bytes(old)
+        require(gc.component_populations(s.root, [spec])[0] == before,
+                "exact restored regular binding must recover baseline identity")
+        index = s.root / ".git/index"
+        index_bytes = index.read_bytes()
+        index.unlink()
+        refuses()
+        index.write_bytes(index_bytes)
+        require(gc.component_populations(s.root, [spec])[0] == before,
+                "sole index-byte restoration must recover baseline identity")
+        blob = s.git("rev-parse", ":Main.lean")
+        subprocess.run(["git", "update-index", "--index-info"], cwd=s.root, check=True,
+                       input=f"0 {'0' * len(blob)}\tMain.lean\n100644 {blob} 2\tMain.lean\n",
+                       text=True, capture_output=True)
+        require(s.git("ls-files", "--", "*.lean") == "Main.lean",
+                "single-stage conflict must not depend on duplicate-name rejection")
+        refuses()
+        s.git("add", "--", "Main.lean")
+        require(gc.component_populations(s.root, [spec])[0] == before,
+                "restoring only index selection recovers conflict-free identity")
+        original_run = gc.subprocess.run
+        for payload in (b"../Escape.lean\0", b"/tmp/Escape.lean\0", b"\xff.lean\0",
+                        b"Main.lean\0Main.lean\0", b"Main.lean", b"\0", b"Main.lean\0\0"):
+            def fake(command, *args, **kwargs):
+                if "ls-files" in command and "--unmerged" not in command:
+                    return subprocess.CompletedProcess(command, 0, payload, b"")
+                return original_run(command, *args, **kwargs)
+            with patched(gc.subprocess, "run", fake):
+                refuses()
+        def wrong_exact(command, *args, **kwargs):
+            if "ls-files" in command and "--unmerged" not in command:
+                return subprocess.CompletedProcess(command, 0, b"Other.lean\0", b"")
+            return original_run(command, *args, **kwargs)
+        s.write("Other.lean", "unselected\n")
+        with patched(gc.subprocess, "run", wrong_exact):
+            refuses(dict(spec, pattern="Main.lean"))
+        def failed(command, *args, **kwargs):
+            if "ls-files" in command:
+                raise subprocess.CalledProcessError(1, command)
+            return original_run(command, *args, **kwargs)
+        with patched(gc.subprocess, "run", failed):
+            refuses()
+        def missing_git(command, *args, **kwargs):
+            raise FileNotFoundError("synthetic missing Git")
+        with patched(gc.subprocess, "run", missing_git):
+            refuses()
+        for changes in ({"tracked": False}, {"tracked": "true"}, {"root": "scripts"},
+                        {"mode": "traversable"}, {"pattern": ":(glob)**/*.lean"},
+                        {"pattern": "../Escape.lean"}, {"mystery": True}):
+            row = simple_gate("g", ["scripts/g.sh"], {"populations": [dict(spec, **changes)]}, "^OK — g: ")
+            gc.atomic_json(gc.registry_path(s.root), {"schema": 1, "gates": [row]})
+            try:
+                s.load()
+            except gc.GateCacheError:
+                pass
+            else:
+                raise ControlFailure(f"malformed tracked selector admitted: {changes}")
+
+
+def control_tracked_policy_identity_and_new_site_census() -> None:
+    ordinary = simple_gate("plain", ["plain"], {"files": ["x"]}, "^OK — plain: ")
+    tracked = simple_gate("tracked", ["tracked"], {"populations": [
+        {"root": ".", "pattern": "*.lean", "tracked": True},
+    ]}, "^OK — tracked: ")
+    before_plain = gc.runner_identity(ordinary)[0]
+    before_tracked = gc.runner_identity(tracked)[0]
+    original = gc.file_digest
+    with patched(gc, "file_digest", lambda p: "f" * 64 if p.name == gc.RUNNER_PATH_POLICY_SOURCE else original(p)):
+        require(gc.runner_identity(ordinary)[0] == before_plain,
+                "path policy bytes must not invalidate unrelated runner consumers")
+        require(gc.runner_identity(tracked)[0] != before_tracked,
+                "tracked consumers must bind the shared policy implementation")
+    import module_path_policy as policy
+    root = Path(gc.__file__).resolve().parent.parent
+    document = policy.load_census(root)
+    rows = document["sites"]
+    require(sum(row["id"] == "gate-cache-tracked-population" for row in rows) == 1,
+            "new guarded call needs exactly one enforced census row")
+    policy.audit_census(root, document)
+    mutant = copy.deepcopy(document)
+    mutant["sites"] = [row for row in rows if row["id"] != "gate-cache-tracked-population"]
+    try:
+        policy.audit_census(root, mutant)
+    except policy.ModulePathPolicyError as error:
+        require("gate-cache-tracked-population" in str(error) and "missing rows" in str(error),
+                "omission must reject at the actual new call-site boundary")
+    else:
+        raise ControlFailure("removing only the new required census row was accepted")
+
+
+def control_tracked_script_workspace_inputs() -> None:
+    """Every captured workspace buffer and its Git membership are actual input."""
+    with scratch() as s:
+        names = ("scripts/Input.json", "scripts/Source.sol", "scripts/code.lean.in",
+                 "scripts/cache/.lake/Data.txt", "Main.lean")
+        for name in names:
+            s.write(name, "captured input one\n")
+            s.git("add", "--", name)
+        s.write("scripts/leaf-review.json", "informational ledger one\n")
+        s.git("add", "--", "scripts/leaf-review.json")
+        specs = [{"root": ".", "pattern": "scripts", "tracked": True,
+                  "exclude": ["scripts/leaf-review.json"]},
+                 {"root": ".", "pattern": "Main.lean", "tracked": True}]
+        def identity():
+            gc.forget_digests()
+            return gc.component_populations(s.root, specs)[0]
+        baseline = identity()
+        require(gc.glob_population(s.root, specs[0]) == sorted(names[:-1]),
+                "complete non-Lean workspace inputs and nested .lake script data must be selected")
+        for name in names:
+            path = s.root / name
+            old_bytes = path.read_bytes()
+            path.write_bytes(b"binary\0workspace input")
+            require(identity() != baseline,
+                    "binary/text classification or workspace bytes must not reuse prior identity")
+            path.write_bytes(old_bytes)
+            require(identity() == baseline, "sole byte restoration must recover workspace identity")
+        (s.root / "scripts/leaf-review.json").write_text("informational ledger two\n", encoding="utf-8")
+        require(identity() == baseline, "excluded past-leaf ledger must not become a workspace consumer")
+        path = s.write("scripts/future/Data.json", "new workspace input\n")
+        require(identity() == baseline, "untracked workspace neighbor is not a captured input")
+        s.git("add", "--", "scripts/future/Data.json")
+        after_add = identity()
+        require(after_add != baseline, "index-only new workspace data must invalidate")
+        s.git("rm", "-q", "--cached", "--", "scripts/future/Data.json")
+        require(path.is_file() and identity() == baseline,
+                "index-only removal restores the exact prior workspace corpus")
+        s.git("rm", "-q", "--cached", "--", "Main.lean")
+        require(identity() != baseline, "Main's index-only selection must be bound too")
+
+
+def control_doc_counts_imported_resolver_content() -> None:
+    root = Path(gc.__file__).resolve().parent.parent
+    registry = gc.load_registry(gc.registry_path(root))
+    row = next(g for g in registry["gates"] if g["id"] == "doc-counts")
+    require("scripts/axiom_audit.py" in row["inputs"]["files"],
+            "doc-counts' transitive imported producer must be content authority")
+    with scratch() as s:
+        source = s.write("scripts/axiom_audit.py", "resolver one\n")
+        command = s.passing_gate("g.sh", "ran.txt")
+        s.registry([simple_gate("g", [command], {"files": ["scripts/axiom_audit.py"]}, "^OK — g.sh: ")])
+        require(s.run() == 0 and s.run() == 0 and s.ran("ran.txt") == 1,
+                "unchanged imported producer must reuse its successful baseline")
+        before = gc.component_files(s.root, ["scripts/axiom_audit.py"])[0]
+        source.write_text("resolver two\n", encoding="utf-8")
+        gc.forget_digests()
+        require(gc.component_files(s.root, ["scripts/axiom_audit.py"])[0] != before,
+                "imported resolver byte movement must invalidate doc-counts")
+        source.write_text("resolver one\n", encoding="utf-8")
+        gc.forget_digests()
+        require(gc.component_files(s.root, ["scripts/axiom_audit.py"])[0] == before,
+                "sole byte restoration recovers imported producer baseline identity")
+        source.unlink()
+        gc.forget_digests()
+        require(gc.component_files(s.root, ["scripts/axiom_audit.py"])[0] != before,
+                "missing imported producer must change the content identity")
+        require(s.disposition("g") == "fresh",
+                "missing imported producer must never reuse the cached green baseline")
+
+
 def control_unrelated_change_still_reuses() -> None:
     """The anti-vacuity half: a selector that reruns everything is worthless."""
 
@@ -4523,7 +4817,26 @@ def control_negative_beacon_current_mainnet_exec_leaks_the_gate_hold() -> None:
                   "an exec that bypasses the wrapper EXIT trap was accepted")
 
 
+def control_negative_frozen_tracked_selection_is_caught() -> None:
+    original = gc.tracked_population
+    snapshots = {}
+    def frozen(root, spec):
+        key = (str(root), gc.canonical(spec))
+        if key not in snapshots:
+            snapshots[key] = original(root, spec)
+        return list(snapshots[key])
+    with patched(gc, "tracked_population", frozen):
+        try:
+            control_tracked_lean_selection_and_content_invalidates()
+        except ControlFailure as error:
+            require("index-only add" in str(error),
+                    "the negative must fail at the selection transition, not setup")
+        else:
+            raise ControlFailure("frozen Git selection escaped its index-transition control")
+
+
 NEGATIVE_CONTROLS = (
+    control_negative_frozen_tracked_selection_is_caught,
     control_negative_reverting_to_hostname_identity_breaks_rename_stability,
     control_negative_laundering_unknown_into_unchanged,
     control_negative_dropping_the_post_execution_drift_check,
@@ -4556,6 +4869,12 @@ CONTROLS = (
     control_first_run_executes_and_second_reuses,
     control_content_change_invalidates,
     control_population_membership_invalidates,
+    control_tracked_lean_selection_and_content_invalidates,
+    control_tracked_exemption_membership_and_blanc_walk,
+    control_tracked_population_uncertainty_refuses,
+    control_tracked_policy_identity_and_new_site_census,
+    control_doc_counts_imported_resolver_content,
+    control_tracked_script_workspace_inputs,
     control_unrelated_change_still_reuses,
     control_declared_untracked_read_contributes_no_digest,
     control_untracked_subject_glob_is_narrow_and_unfingerprinted,

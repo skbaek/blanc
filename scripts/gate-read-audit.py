@@ -156,6 +156,12 @@ def declared_coverage(
             pass
 
     for spec in inputs.get("populations", []):
+        if spec.get("tracked") is True:
+            names = gc.glob_population(ROOT, spec)  # uncertainty must remain visible in every mode
+            if spec.get("mode", "content") != "membership":
+                for name in names:
+                    exact.add(gc.resolve_path(ROOT, name).resolve())
+            continue  # required index membership never certifies a source-content read
         try:
             base = gc.resolve_path(ROOT, spec.get("root", ".")).resolve()
         except Exception:
@@ -174,7 +180,8 @@ def declared_coverage(
             for name in gc.glob_population(ROOT, spec):
                 exact.add(gc.resolve_path(ROOT, name).resolve())
         except Exception:
-            pass
+            if spec.get("tracked") is True:
+                raise
 
     for given in inputs.get("lean_entries", []):
         path = (ROOT / given).resolve()
@@ -352,7 +359,11 @@ def audit_gate(gate: dict, roots: list[Path], runner_bindings: set[Path]) -> dic
     # Neither can carry content into a verdict.
     reads = {raw for raw in reads if Path(raw).is_file()}
 
-    exact, subtrees, untracked = declared_coverage(gate)
+    try:
+        exact, subtrees, untracked = declared_coverage(gate)
+    except Exception as error:
+        exact, subtrees, untracked = set(), [], {}
+        unverified.add(f"declared tracked population is unresolved: {error}")
     runner_content = runner_content_files(gate)
     covered, lake, external, undeclared = 0, set(), set(), set()
     runner_identity, runner_binding_reads = set(), set()
