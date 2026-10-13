@@ -3439,6 +3439,26 @@
      {
       "pattern": "**/*",
       "root": "scripts/lift"
+     },
+     {
+      "pattern": "**/Cert.lean",
+      "root": "Blanc/Lift"
+     },
+     {
+      "pattern": "**/Check*.lean",
+      "root": "Blanc/Lift"
+     },
+     {
+      "pattern": "**/Jumps.lean",
+      "root": "Blanc/Lift"
+     },
+     {
+      "pattern": "**/LockAnn.lean",
+      "root": "Blanc/Lift"
+     },
+     {
+      "pattern": "**/LockCheck.lean",
+      "root": "Blanc/Lift"
      }
     ],
     "tools": [
@@ -3446,7 +3466,7 @@
     ]
    },
    "kind": "cacheable",
-   "note": "Non-elaborating deterministic regeneration; byte-compares generated certificates from committed runtime hex inputs against Blanc/Lift/**/Cert.lean and registered Check.lean modules. The producer is untrusted; the Lean Cert.check in the Check modules is the trust boundary. On each run the producer reconciles its opcode table against Blanc/Lift/Transfer.lean and Blanc/AbstractStackTransfer.lean. No external inputs.",
+   "note": "Non-elaborating deterministic regeneration; byte-compares generated certificates from committed runtime hex inputs against Blanc/Lift/**/Cert.lean and registered Check.lean modules. The producer is untrusted; the Lean Cert.check in the Check modules is the trust boundary. On each run the producer reconciles its opcode table against Blanc/Lift/Transfer.lean and Blanc/AbstractStackTransfer.lean. No external inputs. Generated-output populations bind every certificate, check shard, jump table and lock annotation/check, including newly registered families and added or removed check shards.",
    "order": 73,
    "verdict": {
     "expect_exit": 0,
