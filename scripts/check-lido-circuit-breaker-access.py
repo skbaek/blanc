@@ -12,6 +12,7 @@ owner-closure/retained-last-writer settlement bridge.
 from __future__ import annotations
 
 import re
+import importlib.util
 import hashlib
 import subprocess
 import sys
@@ -22,6 +23,14 @@ import gate_semaphore
 from lean_header import HeaderError, header_before_definition, parser_controls
 
 ROOT = Path(__file__).resolve().parent.parent
+
+# Reuse the repository's conservative Lean lexer.  This gate retains its own
+# stricter forbidden-token policy; comment and literal prose is not Lean code.
+_TRUST_SPEC = importlib.util.spec_from_file_location(
+    "s5_trust_surface", ROOT / "scripts/check-trust-surface.py")
+assert _TRUST_SPEC and _TRUST_SPEC.loader
+trust_surface = importlib.util.module_from_spec(_TRUST_SPEC)
+_TRUST_SPEC.loader.exec_module(trust_surface)
 
 # The six proof owners of this family.  `sites` classifies, `access` states the
 # temporal views and transitions, `authority` attributes a raw same-frame
@@ -1099,10 +1108,43 @@ def require_controls(source: str) -> None:
         if token not in source:
             fail(f"fixture no longer owns required semantic channel {token}")
 
+def forbidden_trust_token(source: str) -> str | None:
+    match = FORBIDDEN.search(trust_surface.mask_non_code(source))
+    return match.group(1) if match else None
+
+
+def trust_scan_controls() -> None:
+    # Pin every prohibited code token independently of FORBIDDEN's spelling.
+    # These are lexer/policy controls, not finite evidence for a Lean theorem.
+    for token in ("sorry", "admit", "axiom", "opaque", "native_decide",
+                  "implemented_by"):
+        for source in (f"-- {token}\ndef x := {token}\n",
+                       f"/- outer /- nested -/ -/ {token}\n",
+                       'def s := s!"{' + token + '}"\n'):
+            if forbidden_trust_token(source) != token:
+                fail(f"trust scanner accepted code token {token!r}")
+        for source in (f"-- {token}\ndef x := 1\n",
+                       f"/- outer /- nested -/ {token} -/\n",
+                       f"/-- {token} -/\ndef x := 1\n",
+                       'def s := "' + token + '"\n'):
+            if forbidden_trust_token(source) is not None:
+                fail(f"trust scanner rejected non-code token {token!r}")
+    for source in ('/- unfinished', 'def s := "unfinished',
+                   'def s := s!"{opaque'):
+        try:
+            forbidden_trust_token(source)
+        except trust_surface.MaskError:
+            continue
+        fail("trust scanner accepted unterminated Lean text")
+
+
 def no_trust_shortcut(path: Path) -> None:
-    match = FORBIDDEN.search(text(path))
-    if match:
-        fail(f"forbidden trust token {match.group(1)!r} in {path.relative_to(ROOT)}")
+    try:
+        token = forbidden_trust_token(text(path))
+    except trust_surface.MaskError as error:
+        fail(f"cannot classify Lean code in {path.relative_to(ROOT)}: {error}")
+    if token:
+        fail(f"forbidden trust token {token!r} in {path.relative_to(ROOT)}")
 
 
 def pin_role_headers(key: str, source: str) -> None:
@@ -1550,6 +1592,7 @@ def compile_fixture() -> None:
         fail("fixture failed to compile:\n" + run.stdout)
 
 def main() -> None:
+    trust_scan_controls()
     try:
         parser_controls()
     except HeaderError as error:

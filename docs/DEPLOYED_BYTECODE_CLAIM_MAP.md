@@ -977,7 +977,7 @@ Names that the tables above write unqualified.
 | `nonzeroWrites` | `Blanc.Lift.LidoCircuitBreakerDeployed.nonzeroWrites` (`Blanc/Lift/LidoCircuitBreakerDeployed/RegistryLayout.lean:763`) | the logical writes of a nonzero `registerPauser` update of an existing target |
 | `mapSlot` | `Blanc.Lift.mapSlot` (`Blanc/Lift/MapSlot.lean:19`) | the Solidity mapping slot `keccak(key ++ base)` |
 | `findEntry` | `Blanc.LidoCircuitBreaker.findEntry` (`Blanc/LidoCircuitBreakerRegistryModel.lean:12`) | the index and pauser of a target in an entry list |
-| `HashAvoidIn` | `Blanc.LockExclusion.LockSpec.HashAvoidIn` (`Blanc/LockExclusion.lean:723`) | every frame of the pool running the lock code avoids the lock slot with its executed hashes (HASH-T) |
+| `HashAvoidIn` | `Blanc.LockExclusion.LockSpec.HashAvoidIn` (`Blanc/LockExclusion.lean:726`) | every frame of the pool running the lock code avoids the lock slot with its executed hashes (HASH-T) |
 | `VplusExcludes` | `Blanc.Lift.VyperNonreentrantDeployed.Fixed.VplusExcludes` (`Blanc/Lift/VyperNonreentrantDeployed/Fixed/ExclusionTrace.lean:44`) | the statement form of the V+ exclusion |
 | `InitializedCheckpoint` | `Blanc.Lift.UniswapV2Pair.InitializedCheckpoint` (`Blanc/Lift/UniswapV2Pair/Creation/DeployInit.lean:34`) | the Pair's INIT after deployment and `initialize`: the pair storage represents `initializedState` over the empty tracked footprint |
 | `initializedState` | `Blanc.Lift.UniswapV2Pair.initializedState` (`Blanc/Lift/UniswapV2Pair/Creation/DeployInit.lean:29`) | the model state after a factory deploys a pair with a given domain separator and initializes it with two tokens: zero supply, reserves, accumulators and `kLast`, `unlocked = 1`, no ledger row |

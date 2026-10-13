@@ -1311,6 +1311,7 @@
     "files": [
      "scripts/check-lido-circuit-breaker-access.sh",
      "scripts/check-lido-circuit-breaker-access.py",
+     "scripts/check-trust-surface.py",
      "Blanc/LidoCircuitBreakerSites.lean",
      "Blanc/LidoCircuitBreakerAccess.lean",
      "Blanc/LidoCircuitBreakerAuthority.lean",
