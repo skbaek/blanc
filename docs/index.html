@@ -138,7 +138,7 @@
       <div class="q"><h3>Is it about the code that runs?</h3>
         <p>About the deployed bytes themselves, not the source and not a recompilation, so no compiler stands in the trust base. In 2023 that distinction cost Curve’s pools: their source asked for one shared reentrancy lock, and the compiler emitted one lock per function.</p></div>
       <div class="q"><h3>What does the proof rest on?</h3>
-        <p>Lean’s kernel and its three standard axioms, <code>propext</code>, <code>Classical.choice</code> and <code>Quot.sound</code>. A walk from all 102,614 constants of the library reaches nothing else: no <code>sorry</code>, no native evaluation, no axiom about Keccak-256.</p></div>
+        <p>Lean’s kernel and its three standard axioms, <code>propext</code>, <code>Classical.choice</code> and <code>Quot.sound</code>. A walk from all 102,646 constants of the library reaches nothing else: no <code>sorry</code>, no native evaluation, no axiom about Keccak-256.</p></div>
       <div class="q"><h3>Was the code written for the verifier?</h3>
         <p>No. Seven compiler versions and an assembler, from unoptimized solc 0.4.19 output of 2017 to 504 bytes of hand-written assembly the protocol runs. None of it was shaped for Blanc’s tools.</p></div>
       <div class="q"><h3>Is the machine the real machine?</h3>
