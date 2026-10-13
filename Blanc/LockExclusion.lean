@@ -329,11 +329,14 @@ theorem Rinst.get_nonce_eq_of_ok {pc : Nat} {sevm : Sevm} {pre post : Devm} {r :
     have eq1 : pre.state = first.state := (Devm.pop_of_pop popKey).state
     have eq2 : first.state = second.state := (Devm.pop_of_pop popValue).state
     have eq3 : second.state = third.state := by
-      split at warmed <;> (injection warmed with eq; injection eq with eq _; subst eq) <;> rfl
+      split at warmed <;>
+        have projected := congrArg (fun pair : Devm × Nat => pair.1.state)
+          (Except.ok.inj warmed) <;>
+        exact (Devm.balReadStorage_state sevm.benvStat.rules
+          sevm.currentTarget key second).symm.trans projected
     have eq4 : third.state = fourth.state := by
-      injection refund with eq
-      rw [← eq]
-      rfl
+      have projected := congrArg Devm.state (Except.ok.inj refund)
+      exact projected
     have eq5 : fourth.state = fifth.state := (chargeGas_worldEq_of_ok charged).1
     have eq : pre.state = fifth.state := eq1.trans (eq2.trans (eq3.trans (eq4.trans eq5)))
     rw [← Except.ok.inj final]

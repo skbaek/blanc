@@ -187,7 +187,7 @@ private theorem removeTarget_restoreTail_runCompiled
     have hrun := pushZero_targetIndexKey_prepend_runCompiled htargetValue
       htargetMemory halign htargetCovered (by omega) htail
     have hg : G + finishGas + 12 + indexClearCost + 14 =
-        G + finishGas + 26 + indexClearCost := by omega
+        G + finishGas + 26 + indexClearCost := by clear * -; omega
     rw [hg] at hrun
     exact hrun
   have hstoreLength : Func.RunCompiled fs sevm
@@ -208,8 +208,8 @@ private theorem removeTarget_restoreTail_runCompiled
         hwarmLength (lt_of_lt_of_le hgasFinal (by omega)) hstatic
     exact Func.RunCompiled.next hsstore hindexTail
   func_run (6) [3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
+  all_goals first | (case a => skip) | (case h_cost => skip) |
+      try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hlengthCovered]
     norm_num only [gVerylow]
@@ -222,7 +222,7 @@ private theorem removeTarget_restoreTail_runCompiled
       _ _
     rw [hsub]
     have hg : G + finishGas + 44 + indexClearCost + lengthRestoreCost - 18 =
-        G + finishGas + 26 + indexClearCost + lengthRestoreCost := by omega
+        G + finishGas + 26 + indexClearCost + lengthRestoreCost := by clear * -; omega
     simpa only [hg] using hstoreLength
 
 private theorem removeTarget_storePrefix_runCompiled
@@ -437,7 +437,7 @@ private theorem removeTarget_storePrefix_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     have hg : G + finishGas + 44 + lengthRestoreCost + indexClearCost =
-        G + finishGas + 44 + indexClearCost + lengthRestoreCost := by omega
+        G + finishGas + 44 + indexClearCost + lengthRestoreCost := by clear * -; omega
     rw [hg]
     simpa only [fs, tailPost] using hrestore
   have hstoreTail : Func.RunCompiled fs sevm
@@ -467,13 +467,11 @@ private theorem removeTarget_storePrefix_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     func_run (2) [arrayKey]
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 50 + lengthRestoreCost + indexClearCost +
           tailClearCost - 6 =
           G + finishGas + 44 + lengthRestoreCost + indexClearCost +
-            tailClearCost := by omega
+            tailClearCost := by clear * -; omega
       rw [hg]
       exact hstoreTail
   have htailLength : Func.RunCompiled fs sevm
@@ -488,8 +486,6 @@ private theorem removeTarget_storePrefix_runCompiled
         .call finishSetPauserSlot)
       post := by
     func_run (2) [3]
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign (covered arrayLengthWord (by decide))]
       norm_num only [gVerylow]
@@ -498,7 +494,7 @@ private theorem removeTarget_storePrefix_runCompiled
       have hg : G + finishGas + 56 + lengthRestoreCost + indexClearCost +
           tailClearCost - 6 =
           G + finishGas + 50 + lengthRestoreCost + indexClearCost +
-            tailClearCost := by omega
+            tailClearCost := by clear * -; omega
       rw [hg]
       exact htailTag
   have htailPrefix : Func.RunCompiled fs sevm
@@ -513,13 +509,11 @@ private theorem removeTarget_storePrefix_runCompiled
         .call finishSetPauserSlot)
       post := by
     func_run (1)
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case a =>
       have hg : G + finishGas + 58 + lengthRestoreCost + indexClearCost +
           tailClearCost - 2 =
           G + finishGas + 56 + lengthRestoreCost + indexClearCost +
-            tailClearCost := by omega
+            tailClearCost := by clear * -; omega
       rw [hg]
       exact htailLength
   have hstoreMoved : Func.RunCompiled fs sevm
@@ -551,13 +545,11 @@ private theorem removeTarget_storePrefix_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     func_run (2) [indexKey]
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 64 + lengthRestoreCost + indexClearCost +
           tailClearCost + movedIndexCost - 6 =
           G + finishGas + 58 + lengthRestoreCost + indexClearCost +
-            tailClearCost + movedIndexCost := by omega
+            tailClearCost + movedIndexCost := by clear * -; omega
       rw [hg]
       exact hstoreMoved
   have hmovedLast : Func.RunCompiled fs sevm
@@ -573,8 +565,6 @@ private theorem removeTarget_storePrefix_runCompiled
         .call finishSetPauserSlot)
       post := by
     func_run (2) [3]
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign (covered lastTargetWord (by decide))]
       norm_num only [gVerylow]
@@ -583,7 +573,7 @@ private theorem removeTarget_storePrefix_runCompiled
       have hg : G + finishGas + 70 + lengthRestoreCost + indexClearCost +
           tailClearCost + movedIndexCost - 6 =
           G + finishGas + 64 + lengthRestoreCost + indexClearCost +
-            tailClearCost + movedIndexCost := by omega
+            tailClearCost + movedIndexCost := by clear * -; omega
       rw [hg]
       exact hmovedTag
   have hmovedPrefix : Func.RunCompiled fs sevm
@@ -599,8 +589,8 @@ private theorem removeTarget_storePrefix_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     func_run (2) [3]
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach]); omega)
+    all_goals first | (case a => skip) | (case h_cost => skip) |
+      try ((try simp only [Devm.stack_setMach]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign (covered removedIndexWord (by decide))]
       norm_num only [gVerylow]
@@ -609,7 +599,7 @@ private theorem removeTarget_storePrefix_runCompiled
       have hg : G + finishGas + 76 + lengthRestoreCost + indexClearCost +
           tailClearCost + movedIndexCost - 6 =
           G + finishGas + 70 + lengthRestoreCost + indexClearCost +
-            tailClearCost + movedIndexCost := by omega
+            tailClearCost + movedIndexCost := by clear * -; omega
       rw [hg]
       exact hmovedLast
   have hstoreHole : Func.RunCompiled fs sevm
@@ -643,13 +633,11 @@ private theorem removeTarget_storePrefix_runCompiled
         .call finishSetPauserSlot)
       post := by
     func_run (2) [arrayKey]
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 82 + lengthRestoreCost + indexClearCost +
           tailClearCost + movedIndexCost + holeCost - 6 =
           G + finishGas + 76 + lengthRestoreCost + indexClearCost +
-            tailClearCost + movedIndexCost + holeCost := by omega
+            tailClearCost + movedIndexCost + holeCost := by clear * -; omega
       rw [hg]
       exact hstoreHole
   have hholeRemoved : Func.RunCompiled fs sevm
@@ -666,8 +654,6 @@ private theorem removeTarget_storePrefix_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     func_run (2) [3]
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign (covered removedIndexWord (by decide))]
       norm_num only [gVerylow]
@@ -676,7 +662,7 @@ private theorem removeTarget_storePrefix_runCompiled
       have hg : G + finishGas + 88 + lengthRestoreCost + indexClearCost +
           tailClearCost + movedIndexCost + holeCost - 6 =
           G + finishGas + 82 + lengthRestoreCost + indexClearCost +
-            tailClearCost + movedIndexCost + holeCost := by omega
+            tailClearCost + movedIndexCost + holeCost := by clear * -; omega
       rw [hg]
       exact hholeTag
   have hholePrefix : Func.RunCompiled fs sevm
@@ -694,8 +680,8 @@ private theorem removeTarget_storePrefix_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     func_run (2) [3]
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach]); omega)
+    all_goals first | (case a => skip) | (case h_cost => skip) |
+      try ((try simp only [Devm.stack_setMach]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign (covered lastTargetWord (by decide))]
       norm_num only [gVerylow]
@@ -704,13 +690,13 @@ private theorem removeTarget_storePrefix_runCompiled
       have hg : G + finishGas + 94 + lengthRestoreCost + indexClearCost +
           tailClearCost + movedIndexCost + holeCost - 6 =
           G + finishGas + 88 + lengthRestoreCost + indexClearCost +
-            tailClearCost + movedIndexCost + holeCost := by omega
+            tailClearCost + movedIndexCost + holeCost := by clear * -; omega
       rw [hg]
       exact hholeRemoved
   have hg : G + finishGas + 94 + lengthRestoreCost + indexClearCost + tailClearCost +
       movedIndexCost + holeCost =
       G + finishGas + 94 + holeCost + movedIndexCost + tailClearCost +
-        lengthRestoreCost + indexClearCost := by omega
+        lengthRestoreCost + indexClearCost := by clear * -; omega
   simpa only [hg, lastTargetIndexKey, prepend_append, fs,
     arrayKey, indexKey, holePost, movedPost, tailPost] using hholePrefix
 
@@ -1082,13 +1068,11 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
       post := by
     try clear_value base3 base2 base1
     func_run (1)
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 100 + lastExtCost + holeCost + movedIndexCost +
           tailClearCost + lengthRestoreCost + indexClearCost - 3 =
           G + finishGas + 97 + lastExtCost + holeCost + movedIndexCost +
-            tailClearCost + lengthRestoreCost + indexClearCost := by omega
+            tailClearCost + lengthRestoreCost + indexClearCost := by clear * -; omega
       rw [hg]
       exact hsaveLast
   have harrSloadStep : Ninst.RunCompiled sevm
@@ -1144,15 +1128,15 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
       post := by
     try clear_value base3 base2 base1
     func_run (2) [arrayKey]
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
+    all_goals first | (case a => skip) | (case h_cost => skip) |
+      try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 106 + lastExtCost + holeCost + movedIndexCost +
           tailClearCost + lengthRestoreCost + indexClearCost +
           arrSloadCost - 6 =
           G + finishGas + 100 + lastExtCost + holeCost + movedIndexCost +
             tailClearCost + lengthRestoreCost + indexClearCost +
-            arrSloadCost := by omega
+            arrSloadCost := by clear * -; omega
       rw [hg]
       exact hloadLastStorage
   have hlengthValue :
@@ -1186,8 +1170,8 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
       post := by
     try clear_value base3 base2 base1
     func_run (2) [3]
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach]); omega)
+    all_goals first | (case a => skip) | (case h_cost => skip) |
+      try ((try simp only [Devm.stack_setMach]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halignLength (by
         rw [hsizeLength, show (arrayLengthWord * 32).toNat + 32 = 704 by decide]
@@ -1200,7 +1184,7 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
           arrSloadCost - 6 =
           G + finishGas + 106 + lastExtCost + holeCost + movedIndexCost +
             tailClearCost + lengthRestoreCost + indexClearCost +
-            arrSloadCost := by omega
+            arrSloadCost := by clear * -; omega
       rw [hg]
       exact hlastTag
   have hsaveLength : Func.RunCompiled fs sevm
@@ -1248,15 +1232,13 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
       post := by
     try clear_value base3 base2 base1
     func_run (1)
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 118 + lastExtCost + lengthExtCost + holeCost +
           movedIndexCost + tailClearCost + lengthRestoreCost +
           indexClearCost + arrSloadCost - 3 =
           G + finishGas + 115 + lastExtCost + lengthExtCost + holeCost +
             movedIndexCost + tailClearCost + lengthRestoreCost +
-            indexClearCost + arrSloadCost := by omega
+            indexClearCost + arrSloadCost := by clear * -; omega
       rw [hg]
       exact hsaveLength
   have hlenSloadStep : Ninst.RunCompiled sevm
@@ -1318,15 +1300,13 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
       post := by
     try clear_value base3 base2 base1
     func_run (1)
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case a =>
       have hg : G + finishGas + 121 + lastExtCost + lengthExtCost + holeCost +
           movedIndexCost + tailClearCost + lengthRestoreCost +
           indexClearCost + arrSloadCost + lenSloadCost - 3 =
           G + finishGas + 118 + lastExtCost + lengthExtCost + holeCost +
             movedIndexCost + tailClearCost + lengthRestoreCost +
-            indexClearCost + arrSloadCost + lenSloadCost := by omega
+            indexClearCost + arrSloadCost + lenSloadCost := by clear * -; omega
       rw [hg]
       exact hlengthLoad
   have hsaveIndex : Func.RunCompiled fs sevm
@@ -1378,8 +1358,6 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
       post := by
     try clear_value base3 base2 base1
     func_run (1)
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 127 + lastExtCost + indexExtCost +
           lengthExtCost + holeCost + movedIndexCost + tailClearCost +
@@ -1387,7 +1365,7 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
           lenSloadCost - 3 =
           G + finishGas + 124 + lastExtCost + indexExtCost + lengthExtCost +
             holeCost + movedIndexCost + tailClearCost + lengthRestoreCost +
-            indexClearCost + arrSloadCost + lenSloadCost := by omega
+            indexClearCost + arrSloadCost + lenSloadCost := by clear * -; omega
       rw [hg]
       exact hsaveIndex
   have hidxSloadStep : Ninst.RunCompiled sevm
@@ -1466,8 +1444,8 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
       hlastPrefix hsaveLength hsaveLengthPrefix hlenSloadStep hlengthLoad
       hlengthPrefix hsaveIndex hsaveIndexPrefix hidxSloadStep hfinish
     func_run (2) [indexKey]
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
+    all_goals first | (case a => skip) | (case h_cost => skip) |
+      try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 133 + lastExtCost + indexExtCost +
           lengthExtCost + holeCost + movedIndexCost + tailClearCost +
@@ -1500,8 +1478,8 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
       post := by
     try clear_value base3 base2 base1
     func_run (2) [3]
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach]); omega)
+    all_goals first | (case a => skip) | (case h_cost => skip) |
+      try ((try simp only [Devm.stack_setMach]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign htargetCovered]
       norm_num only [gVerylow]
@@ -1592,9 +1570,8 @@ private theorem removeTarget_holeStorePrefix_runCompiled
       (tagTop arrayRegion +++ Ninst.sstore ::: tail)
       post := by
     func_run (2) [arrayEntrySlot idx]
-    all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
-      have hg : G + 6 - 6 = G := by omega
+      have hg : G + 6 - 6 = G := by clear * -; omega
       rw [hg]
       exact hstoreHole
   have hholeRemoved : Func.RunCompiled fs sevm
@@ -1604,23 +1581,23 @@ private theorem removeTarget_holeStorePrefix_runCompiled
         Ninst.sstore ::: tail)
       post := by
     func_run (2) [3]
-    all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign hremovedCovered]
       norm_num only [gVerylow]
     case a =>
       rw [hremovedValue, hremovedMemory]
-      have hg : G + 12 - 6 = G + 6 := by omega
+      have hg : G + 12 - 6 = G + 6 := by clear * -; omega
       rw [hg]
       exact hholeTag
   func_run (2) [3]
-  all_goals try ((try simp only [Devm.stack_setMach]); omega)
+  all_goals first | (case a => skip) | (case h_cost => skip) |
+      try ((try simp only [Devm.stack_setMach]); omega)
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hlastCovered]
     norm_num only [gVerylow]
   case a =>
     rw [hlastValue, hlastMemory]
-    have hg : G + 18 - 6 = G + 12 := by omega
+    have hg : G + 18 - 6 = G + 12 := by clear * -; omega
     rw [hg]
     exact hholeRemoved
 
@@ -2129,7 +2106,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     have hg : G + finishGas + 44 + lengthRestoreCost + indexClearCost =
-        G + finishGas + 44 + indexClearCost + lengthRestoreCost := by omega
+        G + finishGas + 44 + indexClearCost + lengthRestoreCost := by clear * -; omega
     rw [hg]
     simpa only [fs, tailPost] using hrestore
   have hstoreTail : Func.RunCompiled fs sevm
@@ -2162,13 +2139,11 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
       post := by
     clear_value movedPost
     func_run (2) [tailKey]
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 50 + lengthRestoreCost + indexClearCost +
           tailClearCost - 6 =
           G + finishGas + 44 + lengthRestoreCost + indexClearCost +
-            tailClearCost := by omega
+            tailClearCost := by clear * -; omega
       rw [hg]
       exact hstoreTail
   have htailLength : Func.RunCompiled fs sevm
@@ -2184,8 +2159,6 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
       post := by
     clear_value movedPost
     func_run (2) [3]
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halignLast
         (hMLastCovered arrayLengthWord (by decide))]
@@ -2195,7 +2168,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
       have hg : G + finishGas + 56 + lengthRestoreCost + indexClearCost +
           tailClearCost - 6 =
           G + finishGas + 50 + lengthRestoreCost + indexClearCost +
-            tailClearCost := by omega
+            tailClearCost := by clear * -; omega
       rw [hg]
       exact htailTag
   have htailPrefix : Func.RunCompiled fs sevm
@@ -2211,13 +2184,11 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
       post := by
     clear_value movedPost
     func_run (1)
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case a =>
       have hg : G + finishGas + 58 + lengthRestoreCost + indexClearCost +
           tailClearCost - 2 =
           G + finishGas + 56 + lengthRestoreCost + indexClearCost +
-            tailClearCost := by omega
+            tailClearCost := by clear * -; omega
       rw [hg]
       exact htailLength
   have hstoreMoved : Func.RunCompiled fs sevm
@@ -2252,13 +2223,11 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
       post := by
     clear_value holePost
     func_run (2) [movedKey]
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 64 + lengthRestoreCost + indexClearCost +
           tailClearCost + gasColdSload + movedIndexCost - 6 =
           G + finishGas + 58 + lengthRestoreCost + indexClearCost +
-            tailClearCost + gasColdSload + movedIndexCost := by omega
+            tailClearCost + gasColdSload + movedIndexCost := by clear * -; omega
       rw [hg]
       exact hstoreMoved
   have hmovedLast : Func.RunCompiled fs sevm
@@ -2275,8 +2244,6 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
       post := by
     clear_value holePost
     func_run (2) [3]
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halignLast
         (hMLastCovered lastTargetWord (by decide))]
@@ -2286,7 +2253,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
       have hg : G + finishGas + 70 + lengthRestoreCost + indexClearCost +
           tailClearCost + gasColdSload + movedIndexCost - 6 =
           G + finishGas + 64 + lengthRestoreCost + indexClearCost +
-            tailClearCost + gasColdSload + movedIndexCost := by omega
+            tailClearCost + gasColdSload + movedIndexCost := by clear * -; omega
       rw [hg]
       exact hmovedTag
   have hmovedPrefix : Func.RunCompiled fs sevm
@@ -2303,8 +2270,8 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
       post := by
     clear_value holePost
     func_run (2) [3]
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach]); omega)
+    all_goals first | (case a => skip) | (case h_cost => skip) |
+      try ((try simp only [Devm.stack_setMach]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halignLast
         (hMLastCovered removedIndexWord (by decide))]
@@ -2314,7 +2281,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
       have hg : G + finishGas + 76 + lengthRestoreCost + indexClearCost +
           tailClearCost + gasColdSload + movedIndexCost - 6 =
           G + finishGas + 70 + lengthRestoreCost + indexClearCost +
-            tailClearCost + gasColdSload + movedIndexCost := by omega
+            tailClearCost + gasColdSload + movedIndexCost := by clear * -; omega
       rw [hg]
       exact hmovedLast
   have hstoreHole : Func.RunCompiled fs sevm
@@ -2363,7 +2330,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         holeCost =
         (G + finishGas + 76 + lengthRestoreCost + indexClearCost +
           tailClearCost + gasColdSload + movedIndexCost + gasColdSload +
-          holeCost) + 18 := by omega
+          holeCost) + 18 := by clear * -; omega
     rw [hg]
     simpa only [holeKey] using hrun
   -- the store suffix entered from the third read, at the staged image
@@ -2387,7 +2354,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         indexClearCost =
         G + finishGas + 94 + lengthRestoreCost + indexClearCost +
           tailClearCost + gasColdSload + movedIndexCost + gasColdSload +
-          holeCost := by omega
+          holeCost := by clear * -; omega
     rw [hg]
     simpa only [lastTargetIndexKey, prepend_append] using hholePrefix
   -- values at the intermediate read bases
@@ -2462,15 +2429,13 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         .call finishSetPauserSlot)
       post := by
     func_run (1)
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 100 + lastExtCost + gasColdSload +
           gasColdSload + holeCost + movedIndexCost + tailClearCost +
           lengthRestoreCost + indexClearCost - 3 =
           G + finishGas + 97 + lastExtCost + gasColdSload + gasColdSload +
             holeCost + movedIndexCost + tailClearCost + lengthRestoreCost +
-            indexClearCost := by omega
+            indexClearCost := by clear * -; omega
       rw [hg]
       exact hsaveLast
   have harrSloadStep : Ninst.RunCompiled sevm
@@ -2528,15 +2493,15 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
       post := by
     clear_value movedPost
     func_run (2) [tailKey]
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
+    all_goals first | (case a => skip) | (case h_cost => skip) |
+      try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 106 + lastExtCost + gasColdSload +
           gasColdSload + holeCost + movedIndexCost + tailClearCost +
           lengthRestoreCost + indexClearCost + arrSloadCost - 6 =
           G + finishGas + 100 + lastExtCost + gasColdSload + gasColdSload +
             holeCost + movedIndexCost + tailClearCost + lengthRestoreCost +
-            indexClearCost + arrSloadCost := by omega
+            indexClearCost + arrSloadCost := by clear * -; omega
       rw [hg]
       exact hloadLastStorage
   have hlastPrefix : Func.RunCompiled fs sevm
@@ -2556,8 +2521,8 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         .call finishSetPauserSlot)
       post := by
     func_run (2) [3]
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach]); omega)
+    all_goals first | (case a => skip) | (case h_cost => skip) |
+      try ((try simp only [Devm.stack_setMach]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halignLength (by
         rw [hsizeLength, show (arrayLengthWord * 32).toNat + 32 = 704 by decide]
@@ -2570,7 +2535,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
           lengthRestoreCost + indexClearCost + arrSloadCost - 6 =
           G + finishGas + 106 + lastExtCost + gasColdSload + gasColdSload +
             holeCost + movedIndexCost + tailClearCost + lengthRestoreCost +
-            indexClearCost + arrSloadCost := by omega
+            indexClearCost + arrSloadCost := by clear * -; omega
       rw [hg]
       exact hlastTag
   have hsaveLength : Func.RunCompiled fs sevm
@@ -2617,8 +2582,6 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     func_run (1)
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 118 + lastExtCost + lengthExtCost +
           gasColdSload + gasColdSload + holeCost + movedIndexCost +
@@ -2626,7 +2589,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
           arrSloadCost - 3 =
           G + finishGas + 115 + lastExtCost + lengthExtCost + gasColdSload +
             gasColdSload + holeCost + movedIndexCost + tailClearCost +
-            lengthRestoreCost + indexClearCost + arrSloadCost := by omega
+            lengthRestoreCost + indexClearCost + arrSloadCost := by clear * -; omega
       rw [hg]
       exact hsaveLength
   have hlenSloadStep : Ninst.RunCompiled sevm
@@ -2690,8 +2653,6 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     func_run (1)
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case a =>
       have hg : G + finishGas + 121 + lastExtCost + lengthExtCost +
           gasColdSload + gasColdSload + holeCost + movedIndexCost +
@@ -2700,7 +2661,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
           G + finishGas + 118 + lastExtCost + lengthExtCost + gasColdSload +
             gasColdSload + holeCost + movedIndexCost + tailClearCost +
             lengthRestoreCost + indexClearCost + arrSloadCost +
-            lenSloadCost := by omega
+            lenSloadCost := by clear * -; omega
       rw [hg]
       exact hlengthLoad
   have hsaveIndex : Func.RunCompiled fs sevm
@@ -2753,8 +2714,6 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         .call finishSetPauserSlot)
       post := by
     func_run (1)
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 127 + lastExtCost + indexExtCost +
           lengthExtCost + gasColdSload + gasColdSload + holeCost +
@@ -2763,7 +2722,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
           G + finishGas + 124 + lastExtCost + indexExtCost + lengthExtCost +
             gasColdSload + gasColdSload + holeCost + movedIndexCost +
             tailClearCost + lengthRestoreCost + indexClearCost +
-            arrSloadCost + lenSloadCost := by omega
+            arrSloadCost + lenSloadCost := by clear * -; omega
       rw [hg]
       exact hsaveIndex
   have hidxSloadStep : Ninst.RunCompiled sevm
@@ -2841,8 +2800,8 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     func_run (2) [indexKey]
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
+    all_goals first | (case a => skip) | (case h_cost => skip) |
+      try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case a =>
       have hg : G + finishGas + 133 + lastExtCost + indexExtCost +
           lengthExtCost + gasColdSload + gasColdSload + holeCost +
@@ -2851,7 +2810,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
           G + finishGas + 127 + lastExtCost + indexExtCost + lengthExtCost +
             gasColdSload + gasColdSload + holeCost + movedIndexCost +
             tailClearCost + lengthRestoreCost + indexClearCost +
-            arrSloadCost + lenSloadCost + idxSloadCost := by omega
+            arrSloadCost + lenSloadCost + idxSloadCost := by clear * -; omega
       rw [hg]
       exact hindexLoad
   have hindexPrefix : Func.RunCompiled fs sevm
@@ -2874,8 +2833,8 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
       post := by
     func_run (2) [3]
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach]); omega)
+    all_goals first | (case a => skip) | (case h_cost => skip) |
+      try ((try simp only [Devm.stack_setMach]); omega)
     case h_cost =>
       rw [Devm.extCost_zero_of_le halign htargetCovered]
       norm_num only [gVerylow]
@@ -2888,7 +2847,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
           G + finishGas + 133 + lastExtCost + indexExtCost + lengthExtCost +
             gasColdSload + gasColdSload + holeCost + movedIndexCost +
             tailClearCost + lengthRestoreCost + indexClearCost +
-            arrSloadCost + lenSloadCost + idxSloadCost := by omega
+            arrSloadCost + lenSloadCost + idxSloadCost := by clear * -; omega
       rw [hg]
       exact hindexTag
   simp only [removeTarget]

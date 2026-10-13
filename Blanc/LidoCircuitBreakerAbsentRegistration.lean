@@ -150,7 +150,7 @@ private theorem finishSetPauser_absentZero_runCompiled
       [pauserSetEvent, target, 0, 0], []⟩).setMach ⟨[carry], M, G, (base.addLog ⟨sevm.currentTarget, [pauserSetEvent, target, 0, 0], []⟩).stateGas⟩)
     (by simp only [List.length_cons, List.length_nil, zero_add, Std.le_refl]) hreads htarget hprevious hnew hcontinuation hsize halign
     hstatic hregister
-  have hg : G + 46 + 1935 = G + 1981 := by omega
+  have hg : G + 46 + 1935 = G + 1981 := by clear * -; omega
   rw [hg] at h
   exact h
 
@@ -322,7 +322,7 @@ private theorem afterOldPauser_absentZero_runCompiled
   have hg : G + 2424 + holeCost + movedIndexCost + tailClearCost +
         lengthRestoreCost + indexClearCost + 35 =
       G + 2459 + holeCost + movedIndexCost + tailClearCost +
-        lengthRestoreCost + indexClearCost := by omega
+        lengthRestoreCost + indexClearCost := by clear * -; omega
   rw [hg] at h
   exact h
 
@@ -514,7 +514,7 @@ private theorem appendTarget_then_runCompiled
           Bytes.sliceD_writeAt, B256.toB256_toBytes]
       rw [hval, hmem]
       have hg : afterGas + 21 + lengthCost - 9 =
-          afterGas + 12 + lengthCost := by omega
+          afterGas + 12 + lengthCost := by clear * -; omega
       rw [hg]
       exact hstoreLength
   have hstoreIndex : Func.RunCompiled fs sevm
@@ -555,7 +555,7 @@ private theorem appendTarget_then_runCompiled
     func_run (2) [indexKey]
     case a =>
       have hg : afterGas + 27 + lengthCost + indexCost - 6 =
-          afterGas + 21 + lengthCost + indexCost := by omega
+          afterGas + 21 + lengthCost + indexCost := by clear * -; omega
       rw [hg]
       exact hstoreIndex
   have hindexTargetLoad : Func.RunCompiled fs sevm
@@ -571,7 +571,7 @@ private theorem appendTarget_then_runCompiled
     case a =>
       rw [htargetVal, htargetMem]
       have hg : afterGas + 33 + lengthCost + indexCost - 6 =
-          afterGas + 27 + lengthCost + indexCost := by omega
+          afterGas + 27 + lengthCost + indexCost := by clear * -; omega
       rw [hg]
       exact hindexTag
   have hindexTail : Func.RunCompiled fs sevm
@@ -587,7 +587,7 @@ private theorem appendTarget_then_runCompiled
     case a =>
       rw [hlengthVal, hlengthMem]
       have hg : afterGas + 39 + lengthCost + indexCost - 6 =
-          afterGas + 33 + lengthCost + indexCost := by omega
+          afterGas + 33 + lengthCost + indexCost := by clear * -; omega
       rw [hg]
       exact hindexTargetLoad
   have hstoreArray : Func.RunCompiled fs sevm
@@ -614,7 +614,7 @@ private theorem appendTarget_then_runCompiled
     func_run (2) [arrayKey]
     case a =>
       have hg : afterGas + 45 + arrayCost + indexCost + lengthCost - 6 =
-          afterGas + 39 + lengthCost + indexCost + arrayCost := by omega
+          afterGas + 39 + lengthCost + indexCost + arrayCost := by clear * -; omega
       rw [hg]
       exact hstoreArray
   have harrayLengthLoad : Func.RunCompiled fs sevm
@@ -631,7 +631,7 @@ private theorem appendTarget_then_runCompiled
     case a =>
       rw [hlengthVal, hlengthMem]
       have hg : afterGas + 51 + arrayCost + indexCost + lengthCost - 6 =
-          afterGas + 45 + arrayCost + indexCost + lengthCost := by omega
+          afterGas + 45 + arrayCost + indexCost + lengthCost := by clear * -; omega
       rw [hg]
       exact harrayTag
   have harrayTail : Func.RunCompiled fs sevm
@@ -649,7 +649,7 @@ private theorem appendTarget_then_runCompiled
     case a =>
       rw [htargetVal, htargetMem]
       have hg : afterGas + 57 + arrayCost + indexCost + lengthCost - 6 =
-          afterGas + 51 + arrayCost + indexCost + lengthCost := by omega
+          afterGas + 51 + arrayCost + indexCost + lengthCost := by clear * -; omega
       rw [hg]
       exact harrayLengthLoad
   have hmemoryCost : arrayLengthMemoryCost M = 6 := by
@@ -671,7 +671,7 @@ private theorem appendTarget_then_runCompiled
     case a =>
       have hg : afterGas + 72 + 6 + arrayCost + indexCost + lengthCost -
           (15 + 6) =
-          afterGas + 57 + arrayCost + indexCost + lengthCost := by omega
+          afterGas + 57 + arrayCost + indexCost + lengthCost := by clear * -; omega
       rw [hg]
       exact harrayTail
   have hload : Func.RunCompiled fs sevm
@@ -695,7 +695,7 @@ private theorem appendTarget_then_runCompiled
           arrayCost + indexCost + lengthCost - 3 =
         afterGas + 72 + arrayLengthMemoryCost M +
           arrayCost + indexCost + lengthCost +
-          temporalSloadCost sevm base arrayLengthSlot := by omega
+          temporalSloadCost sevm base arrayLengthSlot := by clear * -; omega
     rw [hg]
     exact hload
 
@@ -1309,7 +1309,7 @@ private theorem absentCanonicalAddressArgs_success_runCompiled
         ([Ninst.and] +++ ((.call emptyRevertSlot) <?> tail)) post := by
       func_run (2) [0]
       case h_arm =>
-        have hg : G' + 16 - 16 = G' := by omega
+        have hg : G' + 16 - 16 = G' := by clear * -; omega
         rw [hg]
         exact htail
     have hshiftRaw : Func.RunCompiled
@@ -1337,7 +1337,7 @@ private theorem absentCanonicalAddressArgs_success_runCompiled
             ([Ninst.and] +++ ((.call emptyRevertSlot) <?> tail)))) post := by
       func_run (2) [~~~(0 : B256)]
       case a => exact hshift
-    have hg : G' + 16 + 6 + 5 = G' + 27 := by omega
+    have hg : G' + 16 + 6 + 5 = G' + 27 := by clear * -; omega
     have hsplit :
         checkNonAddress +++ ((.call emptyRevertSlot) <?> tail) =
           [pushB256 0, not] +++
@@ -1359,7 +1359,7 @@ private theorem absentCanonicalAddressArgs_success_runCompiled
       ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach ⟨[], Mem.empty, G + 33, base.stateGas⟩)
       (canonicalAddressArg 1 body) post := by
-    have hg : G + 27 + 6 = G + 33 := by omega
+    have hg : G + 27 + 6 = G + 33 := by clear * -; omega
     have hsplit :
         canonicalAddressArg 1 body =
           arg 1 +++ checkNonAddress +++
@@ -1381,7 +1381,7 @@ private theorem absentCanonicalAddressArgs_success_runCompiled
       ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach ⟨[], Mem.empty, G + 33 + 33, base.stateGas⟩)
       (canonicalAddressArg 0 (canonicalAddressArg 1 body)) post := by
-    have hg : G + 33 + 27 + 6 = G + 33 + 33 := by omega
+    have hg : G + 33 + 27 + 6 = G + 33 + 33 := by clear * -; omega
     have hsplit :
         canonicalAddressArg 0 (canonicalAddressArg 1 body) =
           arg 0 +++ checkNonAddress +++
@@ -1389,7 +1389,7 @@ private theorem absentCanonicalAddressArgs_success_runCompiled
       rfl
     rw [← hg, hsplit]
     exact htargetArg
-  have hg : G + 33 + 33 = G + 66 := by omega
+  have hg : G + 33 + 33 = G + 66 := by clear * -; omega
   rw [← hg]
   exact htargetRun
 
