@@ -422,9 +422,9 @@ theorem Linst.get_nonce_eq_of_ok {sevm : Sevm} {pre post : Devm} {last : Linst}
     (owner : Adr) : (post.state.get owner).nonce = (pre.state.get owner).nonce := by
   by_cases destroy : last = .selfdestruct
   · subst last
-    dsimp only [Linst.Run, Linst.run, ne_eq, Except.bind_ok, ite_not, Lean.Elab.WF.paramLet,
-      Devm.balReadAccount_accessedAddresses, Devm.balReadAccount_getAcct] at run
-    simp only [fork.rules_stateGas_none] at run
+    simp only [Linst.Run, Linst.run, fork.rules_stateGas_none,
+      Devm.balReadAccount_of_bal_none fork.rules_bal_none,
+      ne_eq, Except.bind_ok, ite_not, Lean.Elab.WF.paramLet] at run
     rcases Except.bind_eq_ok run with ⟨⟨donee, first⟩, pop, rest⟩
     rcases Except.bind_eq_ok rest with ⟨second, charge, rest⟩
     rcases Except.bind_eq_ok rest with ⟨_, asserted, rest⟩

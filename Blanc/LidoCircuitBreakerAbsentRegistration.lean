@@ -378,8 +378,8 @@ private theorem appendTarget_then_runCompiled
           temporalSloadCost sevm base arrayLengthSlot +
           arrayCost + indexCost + lengthCost, base.stateGas⟩)
       appendTarget post := by
-  let arrayKey := arrayEntrySlot next
-  let indexKey := indexSlot target
+  generalize harrayKey : arrayEntrySlot next = arrayKey at *
+  generalize hindexKey : indexSlot target = indexKey at *
   let lengthBase := temporalSloadBase sevm base arrayLengthSlot
   let arrayPost := temporalSstorePost sevm lengthBase arrayKey target
   let indexPost := temporalSstorePost sevm arrayPost indexKey next
@@ -388,8 +388,9 @@ private theorem appendTarget_then_runCompiled
     htargetValid.2 htargetValid.2 hnextBound
   have hlengthFamilies := registryAddressFamilies_ne_arrayLengthSlot
     htargetValid.2 htargetValid.2
-  have hlengthArray :=
-    arrayLengthSlot_ne_arrayEntrySlot_of_pos_lt hnextNonzero hnextBound
+  have hlengthArray : arrayLengthSlot ≠ arrayKey := by
+    simpa only [harrayKey] using
+      arrayLengthSlot_ne_arrayEntrySlot_of_pos_lt hnextNonzero hnextBound
   have pairNe {left right : B256} (h : left ≠ right) :
       (sevm.currentTarget, left) ≠ (sevm.currentTarget, right) := by
     intro hp
@@ -411,7 +412,7 @@ private theorem appendTarget_then_runCompiled
   have hindexArray : arrayPost.getStorVal sevm.currentTarget indexKey = 0 := by
     rw [temporalSstorePost_other sevm lengthBase arrayKey target
       sevm.currentTarget indexKey (pairNe (by
-        simpa only [arrayKey, indexKey] using harrayFamilies.2.1))]
+        simpa only [harrayKey, hindexKey] using harrayFamilies.2.1))]
     rw [temporalSloadBase_getStorVal]
     exact hindex
   have hwarmIndexArray : (sevm.currentTarget, indexKey) ∈
@@ -423,7 +424,7 @@ private theorem appendTarget_then_runCompiled
       arrayLengthSlot = length := by
     rw [temporalSstorePost_other sevm arrayPost indexKey next
       sevm.currentTarget arrayLengthSlot (pairNe (by
-        simpa only [indexKey] using Ne.symm hlengthFamilies.2.1))]
+        simpa only [hindexKey] using Ne.symm hlengthFamilies.2.1))]
     rw [temporalSstorePost_other sevm lengthBase arrayKey target
       sevm.currentTarget arrayLengthSlot (pairNe hlengthArray)]
     exact hlengthBase
@@ -461,8 +462,7 @@ private theorem appendTarget_then_runCompiled
       ((runtime dp).main :: (runtime dp).aux) sevm
       (lengthPost.setMach ⟨[next], M', afterGas, lengthPost.stateGas⟩)
       afterOldPauser post := by
-    simpa only [lengthPost, indexPost, arrayPost, lengthBase, M', arrayKey,
-      indexKey] using hafter
+    simpa only [lengthPost, indexPost, arrayPost, lengthBase, M'] using hafter
   let fs := (runtime dp).main :: (runtime dp).aux
   have hafterLookup : fs[afterOldPauserSlot]? = some afterOldPauser := by
     simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,

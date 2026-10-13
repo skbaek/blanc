@@ -466,8 +466,8 @@ private theorem appendTarget_freshNonzero_runCompiled
           [pauserSetEvent, target, 0, newPauser], []⟩,
          ⟨sevm.currentTarget,
           [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩] := by
-  let arrayKey := arrayEntrySlot next
-  let indexKey := indexSlot target
+  generalize harrayKey : arrayEntrySlot next = arrayKey at *
+  generalize hindexKey : indexSlot target = indexKey at *
   let countKey := countSlot newPauser
   let lengthBase := temporalSloadBase sevm base arrayLengthSlot
   let arrayPost := temporalSstorePost sevm lengthBase arrayKey target
@@ -480,8 +480,9 @@ private theorem appendTarget_freshNonzero_runCompiled
     htargetValid.2 hnewValid.2 hnextBound
   have hlengthFamilies := registryAddressFamilies_ne_arrayLengthSlot
     htargetValid.2 hnewValid.2
-  have hlengthArray :=
-    arrayLengthSlot_ne_arrayEntrySlot_of_pos_lt hnextNonzero hnextBound
+  have hlengthArray : arrayLengthSlot ≠ arrayKey := by
+    simpa only [harrayKey] using
+      arrayLengthSlot_ne_arrayEntrySlot_of_pos_lt hnextNonzero hnextBound
   have hlengthInterval : arrayLengthSlot ≠ heartbeatIntervalSlot := by
     simpa only [arrayLengthSlot, heartbeatIntervalSlot] using
       slot_ne_of_region_ne
@@ -511,7 +512,7 @@ private theorem appendTarget_freshNonzero_runCompiled
   have hindexArray : arrayPost.getStorVal sevm.currentTarget indexKey = 0 := by
     rw [temporalSstorePost_other sevm lengthBase arrayKey target
       sevm.currentTarget indexKey (pairNe (by
-        simpa only [arrayKey, indexKey] using harrayFamilies.2.1))]
+        simpa only [harrayKey, hindexKey] using harrayFamilies.2.1))]
     rw [temporalSloadBase_getStorVal]
     exact hindex
   have hwarmIndexArray : (sevm.currentTarget, indexKey) ∈
@@ -523,7 +524,7 @@ private theorem appendTarget_freshNonzero_runCompiled
       arrayLengthSlot = length := by
     rw [temporalSstorePost_other sevm arrayPost indexKey next
       sevm.currentTarget arrayLengthSlot (pairNe (by
-        simpa only [indexKey] using Ne.symm hlengthFamilies.2.1))]
+        simpa only [hindexKey] using Ne.symm hlengthFamilies.2.1))]
     rw [temporalSstorePost_other sevm lengthBase arrayKey target
       sevm.currentTarget arrayLengthSlot (pairNe hlengthArray)]
     exact hlengthBase
@@ -537,10 +538,10 @@ private theorem appendTarget_freshNonzero_runCompiled
       sevm.currentTarget countKey (pairNe (by
         simpa only [countKey] using hlengthFamilies.2.2))]
     rw [temporalSstorePost_other sevm arrayPost indexKey next
-      sevm.currentTarget countKey (pairNe (Ne.symm hfamilies.2.2))]
+      sevm.currentTarget countKey (pairNe (by simpa only [hindexKey, countKey] using Ne.symm hfamilies.2.2))]
     rw [temporalSstorePost_other sevm lengthBase arrayKey target
       sevm.currentTarget countKey (pairNe (by
-        simpa only [arrayKey, countKey] using harrayFamilies.2.2))]
+        simpa only [harrayKey, countKey] using harrayFamilies.2.2))]
     rw [temporalSloadBase_getStorVal]
     exact hcount
   have hcountColdPost : (sevm.currentTarget, countKey) ∉
@@ -556,7 +557,7 @@ private theorem appendTarget_freshNonzero_runCompiled
       sevm.currentTarget heartbeatIntervalSlot (pairNe (Ne.symm hlengthInterval))]
     rw [temporalSstorePost_other sevm arrayPost indexKey next
       sevm.currentTarget heartbeatIntervalSlot (pairNe (by
-        simpa only [heartbeatIntervalSlot, indexKey, indexSlot] using
+        simpa only [heartbeatIntervalSlot, ← hindexKey, indexSlot] using
           slot_ne_of_region_ne
           (leftRegion := configRegion) (rightRegion := indexRegion)
           (left := (1 : B256)) (right := target)
@@ -566,7 +567,7 @@ private theorem appendTarget_freshNonzero_runCompiled
           (by norm_num only [configRegion, indexRegion])))]
     rw [temporalSstorePost_other sevm lengthBase arrayKey target
       sevm.currentTarget heartbeatIntervalSlot (pairNe (by
-        simpa only [heartbeatIntervalSlot, arrayKey, arrayEntrySlot] using
+        simpa only [heartbeatIntervalSlot, ← harrayKey, arrayEntrySlot] using
           slot_ne_of_region_ne
           (leftRegion := configRegion) (rightRegion := arrayRegion)
           (left := (1 : B256)) (right := next)
@@ -592,10 +593,10 @@ private theorem appendTarget_freshNonzero_runCompiled
       (pairNe hexpiryArray.1)]
     rw [temporalSstorePost_other sevm arrayPost indexKey next
       sevm.currentTarget (expirySlot newPauser)
-      (pairNe hexpiryRegistry.2.1)]
+      (pairNe (by simpa only [hindexKey] using hexpiryRegistry.2.1))]
     rw [temporalSstorePost_other sevm lengthBase arrayKey target
       sevm.currentTarget (expirySlot newPauser)
-      (pairNe hexpiryArray.2)]
+      (pairNe (by simpa only [harrayKey] using hexpiryArray.2))]
     rw [temporalSloadBase_getStorVal]
     exact hexpiry
   have hwarmExpiryPost : (sevm.currentTarget, expirySlot newPauser) ∈
@@ -920,15 +921,15 @@ private theorem appendTarget_freshNonzero_runCompiled
                 (temporalSstorePost sevm
                   (temporalSstorePost sevm
                     (temporalSloadBase sevm base arrayLengthSlot)
-                    (arrayEntrySlot next) target)
-                  (indexSlot target) next)
+                    arrayKey target)
+                  indexKey next)
                 arrayLengthSlot next)
               (countSlot newPauser) + countCost - 3 =
           afterGas + 72 + arrayLengthMemoryCost M +
             arrayCost + indexCost + lengthCost +
             temporalSloadCost sevm base arrayLengthSlot := by
         dsimp only [afterGas, lengthPost, indexPost, arrayPost, lengthBase,
-          countKey, indexKey, arrayKey]
+          countKey]
         omega
       rw [hg]
       exact hload
