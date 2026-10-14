@@ -323,7 +323,7 @@ def declared_names(root: Path, extra_files: Iterable[str] = ()) -> Dict[str, Tup
     """``{fully qualified name: (kind, private)}`` for declarations written in Blanc's sources.
 
     A lexical scan with a namespace stack over comment-stripped text, not Lean's elaborator: it
-    recognises the declaration shapes this repository writes (`namespace`/`section`/`end`, dotted
+    recognises the declaration shapes this repository writes (`namespace`/`section`/`mutual`/`end`, dotted
     declaration names, `_root_`, `private`, `protected`) and nothing else. It is deliberately the
     strict side of resolution -- a name it cannot place is reported as not declared -- and it is
     used by the register gates only to require that a cited name still exists, spelled in full.
@@ -347,6 +347,9 @@ def declared_names(root: Path, extra_files: Iterable[str] = ()) -> Dict[str, Tup
             m = _NS_OPEN.match(text)
             if m:
                 stack.append(("namespace", m.group(1)))
+                continue
+            if text == "mutual" and not line[:1].isspace():
+                stack.append(("mutual", ""))
                 continue
             if _NS_SECTION.match(text) and not line[:1].isspace():
                 stack.append(("section", ""))
@@ -583,6 +586,49 @@ def self_test() -> Tuple[List[str], int]:
     refused_output("wrong claim set", _GOOD_OUTPUT.replace("Blanc.A.c: []", "Blanc.A.c: [propext]"),
                    "reported")
     refused_output("unclaimed report", _GOOD_OUTPUT + "AXIOM OK Blanc.A.z: []\n", "not claimed")
+    # A mutual block closes independently of its enclosing namespace/section.
+    # Exercise exact names on both sides of each end; an accidentally unqualified
+    # name is a failure even when all expected positive names are also present.
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="blanc-declared-names-") as directory:
+        root = Path(directory)
+        (root / "Blanc.lean").write_text("", encoding="utf-8")
+        (root / "Blanc").mkdir()
+        (root / "Blanc" / "Resolver.lean").write_text("""namespace Blanc.Resolver
+section
+mutual
+inductive First where
+  | mk : Second → First
+inductive Second where
+  | mk : First → Second
+end
+private def afterMutual : Nat := 0
+end
+namespace Nested
+mutual
+inductive Third where
+  | mk : Third
+end
+theorem Third.reflexive (x : Third) : x = x := rfl
+end Nested
+def afterNested : Nat := 0
+def _root_.Outside : Nat := 0
+end Blanc.Resolver
+def OutsideAfter : Nat := 0
+""", encoding="utf-8")
+        expected = {
+            "Blanc.Resolver.First": ("inductive", False),
+            "Blanc.Resolver.Second": ("inductive", False),
+            "Blanc.Resolver.afterMutual": ("def", True),
+            "Blanc.Resolver.Nested.Third": ("inductive", False),
+            "Blanc.Resolver.Nested.Third.reflexive": ("theorem", False),
+            "Blanc.Resolver.afterNested": ("def", False),
+            "Outside": ("def", False),
+            "OutsideAfter": ("def", False),
+        }
+        actual = declared_names(root)
+        if actual != expected:
+            failures.append(f"mutual namespace resolution: expected {expected}, got {actual}")
     return failures, controls
 
 
@@ -600,7 +646,7 @@ def main(argv: List[str]) -> int:
         if failures:
             return 1
         print(f"OK — axiom audit driver controls: {controls} controls refuse and the good source "
-              "and report pass")
+              "and report and lexical namespace controls pass")
         return 0
     if len(argv) != 2 or argv[0] not in ("run", "claims"):
         print("usage: axiom_audit.py {run|claims} AUDIT.lean | self-test", file=sys.stderr)
