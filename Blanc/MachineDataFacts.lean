@@ -33,4 +33,18 @@ theorem Devm.getStorVal_of_state {s t : Devm} (h : s.state = t.state)
   unfold Devm.getStorVal Devm.getAcct
   rw [h]
 
+/-- A successful machine debit projects to the same successful state debit.
+Storage-write bookkeeping does not change the projected account state. -/
+theorem Devm.subBal_state {before after : Devm} {address : Adr} {value : B256}
+    (h : before.subBal address value = some after) :
+    before.state.subBal address value = some after.state := by
+  unfold Devm.subBal at h
+  cases hs : before.state.subBal address value with
+  | none =>
+      simp only [hs, bind, Option.bind] at h
+      contradiction
+  | some state =>
+      simp only [hs, bind, Option.bind, Option.some.injEq] at h
+      exact congrArg (fun d : Devm => some d.state) h
+
 end Blanc

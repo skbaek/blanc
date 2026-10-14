@@ -101,12 +101,12 @@ theorem copy68Memory_read {M : Mem} {source target : Nat}
       src.toBytes.take 4 ++ dst.toBytes.drop 4 := mergeFour_bytes src dst
   have maskEq : B256.bexp 256 (32 - 4) - 1 = mask := by
     rw [show (32 : B256) - 4 = 28 from rfl]
-    have expEq : Nat.powMod 256 28 (2 ^ 256) =
+    have expEq : (256 : Nat) ^ 28 % (2 ^ 256) =
         0x100000000000000000000000000000000000000000000000000000000 := by
-      norm_num only [Nat.powMod, Nat.powMod.go, ite_true, ite_false]
-    unfold B256.bexp
-    change (Nat.powMod 256 28 (2 ^ 256)).toB256 - 1 = mask
-    rw [expEq]
+      norm_num only
+    rw [B256.bexp_eq]
+    rw [show (256 : B256).toNat = 256 from rfl,
+      show (28 : B256).toNat = 28 from rfl, expEq]
     rfl
   rw [maskEq]
   change (((N2.read (target + 64) 32).2.write (target + 64) (((src &&& ~~~mask) ||| (dst &&& mask)).toBytes)).read target 68).1 =

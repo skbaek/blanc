@@ -41,6 +41,12 @@ def proofRecipeLeafTriggerMatches (target : Lean.Expr) (trigger : String) : Tact
       return head == some `Blanc.CompiledStackSafety.ResumeSafe
   | "goal-shape:finite-coalition-ledger" =>
       return proofRecipeContainsName `Blanc.ledgerSumOn target
+  | "goal-shape:machine-state-debit" =>
+      return (proofRecipeEqLhs? target).bind proofRecipeHeadName? ==
+        some `Jaune.State.subBal
+  | "goal-shape:word-exponentiation" =>
+      return (proofRecipeEqLhs? target).bind proofRecipeHeadName? ==
+        some `Jaune.B256.bexp
   | "goal-shape:compile-prepend" =>
       return (proofRecipeCompileFunction? target).bind proofRecipeHeadName? ==
         some `Blanc.prepend
@@ -55,8 +61,6 @@ def proofRecipeMatches (target : Lean.Expr)
     if ← proofRecipeLeafTriggerMatches target trigger then
       return true
     if ← proofRecipeTriggerMatches target trigger then
-      return true
-    if ← proofRecipeLeafTriggerMatches target trigger then
       return true
   return false
 

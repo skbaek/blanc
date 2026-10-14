@@ -2362,9 +2362,9 @@ def natOfOrLocalEq? (g : MVarId) (e : Expr) : MetaM (Option (Nat × Option Expr)
         return some (n, some decl.toExpr)
       | _ => return none
 
-/-- Apply `name` to `g`, fixing the arguments in `given` and returning the
+/-- Apply `name` to `g`, fixing the arguments in `fixedArgs` and returning the
 argument positions in `holes` as goals. -/
-def applyLemma (g : MVarId) (name : Name) (given : List (Nat × Expr))
+def applyLemma (g : MVarId) (name : Name) (fixedArgs : List (Nat × Expr))
     (holes : List Nat) : MetaM (List MVarId) := do
   let info ← getConstInfo name
   let lvls ← info.levelParams.mapM fun _ => mkFreshLevelMVar
@@ -2373,7 +2373,7 @@ def applyLemma (g : MVarId) (name : Name) (given : List (Nat × Expr))
   for i in holes do
     if i ≥ mvars.size then throwError "func_run: bad hole {i} for {name}"
     (mvars[i]!).mvarId!.setKind .syntheticOpaque
-  for (i, e) in given do
+  for (i, e) in fixedArgs do
     if i ≥ mvars.size then throwError "func_run: bad argument {i} for {name}"
     unless ← isDefEq mvars[i]! e do
       throwError "func_run: cannot fix argument {i} of {name} to{indentExpr e}"

@@ -339,17 +339,10 @@ theorem concreteCreateChecked :
   rw [checkTransaction, hgas]
   simp only [Except.mapError, bind, Except.bind]
   rw [hchain]
-  change (do
-    let sender ← Except.mapError TransitionError.senderRecovery (recoverSender 1 concreteCreateTx)
-    let (effective, maxFee) ← Except.mapError TransitionError.transaction
-      (checkTransactionGasFee (initBenv .prague concreteBase concreteExecutionHeader).beginTransaction concreteCreateTx)
-    let (maxFee, hashes) ← Except.mapError TransitionError.transaction
-      (checkTransactionBlobData (initBenv .prague concreteBase concreteExecutionHeader).beginTransaction concreteCreateTx maxFee)
-    Except.mapError TransitionError.transaction (checkTransactionReceiver concreteCreateTx)
-    Except.mapError TransitionError.transaction (checkTransactionAuthorizationList concreteCreateTx)
-    Except.mapError TransitionError.transaction (checkTransactionSenderAccount (concreteGenesisState.get sender) concreteCreateTx maxFee)
-    pure (sender, effective, hashes, 0)) = _
-  rw [concreteCreateRecoveredSender]
+  rw [show (initBenv .prague concreteBase concreteExecutionHeader).beginTransaction.stat.chainId = 1
+    from rfl, concreteCreateRecoveredSender]
+  rw [show (initBenv .prague concreteBase concreteExecutionHeader).beginTransaction.state =
+    concreteGenesisState from rfl]
   simp only [Except.mapError, bind, Except.bind, concreteGenesisSender]
   decide +kernel
 

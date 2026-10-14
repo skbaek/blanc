@@ -16,13 +16,13 @@
 # the alternative if you also want a reusable local-dev override — that needs a
 # Lake-DSL edit under the repo's Lean discipline.
 #
-# VERIFIED IN PRODUCTION. All three verify-on-run items are confirmed by the
-# run history: `lake update jaune` re-resolves the manifest before the build,
-# the elan install + PATH export make `lake` available, and the summary reports
-# the tested HEAD sha and the pin-delta. Observed wall time has ranged ~345 s
-# to ~1,114 s (5.7-18.6 min) as blanc's proof surface has grown; the 60 min
-# timeout below is deliberately kept well clear of that ceiling rather than
-# tightened, since a canary that times out on growth is a false alarm.
+# The live dependency is resolved before the build. Cache reuse is keyed by
+# toolchain, the committed manifest, the tested Jaune HEAD and this Blanc
+# commit. The normal CI cache is a fallback; Lake rechecks source/dependency
+# identities after the repin. Save only when every canary check succeeds.
+# Run 38578979297 exhausted the unchanged 60-minute ceiling without a project
+# cache. Cache restoration reduces repeated work; cold-run capacity still
+# needs an observed successful run and is not inferred from a cache hit.
 # ============================================================================
 name: canary (blanc vs jaune@HEAD)
 
@@ -41,16 +41,19 @@ concurrency:
 jobs:
   canary:
     runs-on: ubuntu-24.04
-    # Basis: blanc's clean build compiles all of jaune from source (mathlib
-    # cached via `lake exe cache get`). Measure on the first run and tighten.
+    env:
+      LAKE_CACHE_DIR: ${{ github.workspace }}/.lake/cache
     timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v6
 
       - name: Re-pin jaune to main HEAD (CI checkout only — never committed)
+        id: jaune-head
         run: |
           HEAD_SHA="$(git ls-remote https://github.com/skbaek/jaune.git refs/heads/main | cut -f1)"
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid Jaune HEAD" >&2; exit 1; }
+          echo "sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
           OLD_PIN="$(grep -oE '[0-9a-f]{40}' lakefile.lean | head -1)"
           echo "jaune main HEAD: $HEAD_SHA"
           echo "blanc pin:       $OLD_PIN"
@@ -62,6 +65,16 @@ jobs:
             echo "- blanc's current pin:      \`$OLD_PIN\`"
             echo "- (pin delta = commits in jaune \`$OLD_PIN..$HEAD_SHA\`)"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Restore project artifacts
+        uses: actions/cache@v4
+        with:
+          # Match lean-action's default path spelling for cache-version parity.
+          path: ./.lake
+          key: canary-lake-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ steps.jaune-head.outputs.sha }}-${{ github.sha }}
+          restore-keys: |
+            canary-lake-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-${{ steps.jaune-head.outputs.sha }}-
+            lake-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lake-manifest.json') }}-
 
       # Toolchain only (no build yet): the build must happen AFTER `lake update`.
       - name: Install elan (Lean toolchain manager)

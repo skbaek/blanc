@@ -266,11 +266,7 @@ theorem feePreparation_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
   dsimp only [List.set] at h
   obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
   obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_exp (StepIn.toRun hs)
-  rw [show B256.bexp (Bytes.toB256 [0x01, 0x00]) (Bytes.toB256 [0x00]) = 1 from by
-    unfold B256.bexp
-    rw [show (Bytes.toB256 [0x00]).toNat = 0 from rfl]
-    simp only [Nat.powMod, Nat.powMod.go]
-    rfl] at h
+  rw [show B256.bexp (Bytes.toB256 [0x01, 0x00]) (Bytes.toB256 [0x00]) = 1 from B256.bexp_zero _] at h
   obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
   dsimp only [List.set] at h
   obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_div (StepIn.toRun hs)
@@ -336,11 +332,7 @@ theorem feePreparation_exact {sevm : Sevm} {b : Devm} {R : List B256}
     SFunc.RunExact cert.prog sevm
       (St b (r1 :: r0 :: ρ :: R) M (G + load + 115)) t_26ec_c68 o := by
   have requestMem := feeRequestMemory_ptr mem
-  have exponent : B256.bexp (Bytes.toB256 [0x01, 0x00]) (Bytes.toB256 [0x00]) = 1 := by
-    unfold B256.bexp
-    rw [show (Bytes.toB256 [0x00]).toNat = 0 from rfl]
-    simp only [Nat.powMod, Nat.powMod.go]
-    rfl
+  have exponent : B256.bexp (Bytes.toB256 [0x01, 0x00]) (Bytes.toB256 [0x00]) = 1 := B256.bexp_zero _
   unfold t_26ec_c68
   apply rx_dest
   apply rx_push rfl (by simp only [List.length_cons]; omega)

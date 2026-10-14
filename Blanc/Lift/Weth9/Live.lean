@@ -373,11 +373,8 @@ WETH9 stores `decimals` as a `uint8` packed at the bottom of slot 2, so unlike
 Blanc-WETH (which returns the constant `0x12`) the call reads storage:
 `sload(2) / 256^0 & 0xff`. -/
 
-theorem bexp_256_0 : B256.bexp (Bytes.toB256 [0x01, 0x00]) 0 = 1 := by
-  unfold B256.bexp
-  rw [show (0 : B256).toNat = 0 from rfl]
-  simp only [Nat.powMod, Nat.reducePow, Nat.not_ofNat_le_one, ↓reduceIte, Nat.powMod.go]
-  rfl
+theorem bexp_256_0 : B256.bexp (Bytes.toB256 [0x01, 0x00]) 0 = 1 :=
+  B256.bexp_zero _
 
 theorem div_one' (s : B256) : s / 1 = s := by
   apply B256.toNat_inj

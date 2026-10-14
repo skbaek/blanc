@@ -102,7 +102,12 @@ def owner (env : Environment) (n : Name) : Option Name :=
       else if kept.isAnonymous then none
       else
         let parent := pfx ++ kept
-        if env.contains parent then some parent else none
+        -- Constructor auxiliaries belong to the type, just like the constructor.
+        -- Otherwise an unused structure appears used by its own `mk.injEq`.
+        match env.find? parent with
+        | some (.ctorInfo v) => some v.induct
+        | some _ => some parent
+        | none => none
 
 /-- The module a constant came from; `_current` for a constant of the elaborated file. -/
 def moduleOf (env : Environment) (n : Name) : Name :=

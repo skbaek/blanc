@@ -76,11 +76,7 @@ theorem pair_fee_preparation_cursor_state {root : Exec.Deriv} {b post : Devm}
       dsimp only [List.set] at line
       obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_push hs
       obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_exp hs
-      rw [show B256.bexp (Bytes.toB256 [0x01, 0x00]) (Bytes.toB256 [0x00]) = 1 from by
-        unfold B256.bexp
-        rw [show (Bytes.toB256 [0x00]).toNat = 0 from rfl]
-        simp only [Nat.powMod, Nat.powMod.go]
-        rfl] at line
+      rw [show B256.bexp (Bytes.toB256 [0x01, 0x00]) (Bytes.toB256 [0x00]) = 1 from B256.bexp_zero _] at line
       obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_swap rfl hs
       dsimp only [List.set] at line
       obtain ⟨_, hs, line⟩ := Line.of_run_cons line; obtain ⟨_, rfl⟩ := ri_div hs

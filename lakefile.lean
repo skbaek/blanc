@@ -9,10 +9,10 @@ package «blanc» where
   ]
 
 require mathlib from git
-  "https://github.com/leanprover-community/mathlib4.git" @ "v4.34.0"
+  "https://github.com/leanprover-community/mathlib4.git" @ "v4.35.0"
 
 require jaune from git
-  "https://github.com/skbaek/jaune.git" @ "ca9f27db54242611d22749e9679b9095b99238ee"
+  "https://github.com/skbaek/jaune.git" @ "19bc216c8e343fa198de72505ab92ae493b81a3c"
 
 /-- Blanc's library. `needs` builds the pinned Jaune's `Assurance` library first:
 its `ExecutionAxioms` module pins the exact axiom sets of the canonical

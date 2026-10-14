@@ -1469,6 +1469,28 @@ def self_test(root: Path) -> int:
         print(f"OK — parser-descriptor rule disabled in the driver: {gained} become definition "
               f"leaves; the shared driver leaves syntax machinery out of the population")
 
+    # A structure/class with only its generated auxiliaries is a definition leaf.
+    # The existing Pt/Qt/Two fixture keeps real consumers, so those must stay used.
+    constructor_source = base + "\nnamespace LeafFixture\n" + (
+        "structure UnusedStructure where\n  x : Nat\n"
+        "class UnusedClass where\n  x : Nat\nend LeafFixture\n")
+    constructor_leaves = [ns + "UnusedClass", ns + "UnusedStructure"]
+    expect_definitions("unused structure and class despite constructor auxiliaries",
+                       constructor_source, expected_base_definitions + constructor_leaves)
+    checks += 1
+    constructor_mutant = analyze(census_of(constructor_source, (
+        "match env.find? parent with\n"
+        "        | some (.ctorInfo v) => some v.induct\n"
+        "        | some _ => some parent\n"
+        "        | none => none",
+        "if env.contains parent then some parent else none")), {"_current": constructor_source})
+    mutant_definitions = {leaf_key(row) for row in constructor_mutant["definition_leaves"]}
+    hidden = sorted(set(expected_base_definitions + constructor_leaves) - mutant_definitions)
+    if hidden != constructor_leaves:
+        failures.append(f"constructor auxiliary mutant: expected {constructor_leaves} hidden, got {hidden}")
+    else:
+        print(f"OK — constructor auxiliary attribution removed: {hidden} disappear; control bites")
+
     # Generated per-constructor eliminators (`Two.left.elim`) belong to their inductive: without
     # the rule every multi-constructor inductive contributes one definition leaf per constructor.
     checks += 1
@@ -1712,11 +1734,10 @@ def self_test(root: Path) -> int:
                    exposed_by({"top_sole", "top_shared"}), ["helper_sole"])
     expect_cascade("cascade: an implicitly selected instance stays used while its user stays",
                    exposed_by({"top_sole"}), ["helper_sole"])
-    # The class itself stays used: the census attributes its constructor's generated lemmas
-    # (`CascadeC.mk.injEq`, ...) to the constructor, which mentions the class. The cascade inherits
-    # the census's notion of use exactly, so the class is not exposed.
-    expect_cascade("cascade: the instance is exposed once its only user goes",
-                   exposed_by({"cascadeUser"}), ["cascadeInst"])
+    # Once the only instance user and then the instance disappear, the class is unused too.
+    # Constructor auxiliaries are self-use of the class, not permanent external users.
+    expect_cascade("cascade: the instance and class are exposed once their only user goes",
+                   exposed_by({"cascadeUser"}), ["CascadeC", "cascadeInst"])
     expect_cascade("cascade: an rfl lemma named only in a deleted simp-only list is exposed",
                    exposed_by({"simp_user"}), ["f", "rfl_lemma"])
     checks += 1

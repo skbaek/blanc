@@ -614,6 +614,7 @@ theorem RegistryWitness.applyFreshWritesOfReadEffect
         (fun current write => if write.1 = key then write.2 else current)
         (s.read key)) :
     RegistryWitness post (entries ++ [(target, newPauser)]) := by
+  dsimp only [List.foldl] at hread
   have hnext256 := hw.fresh_length_lt_2pow256
   have hnext252 :
       (Nat.toB256 (entries.length + 1)).toNat < 2 ^ 252 := by
@@ -652,7 +653,6 @@ theorem RegistryWitness.applyFreshWritesOfReadEffect
     · exact hw.pausersValid entry hmem
     · exact hnew
   · rw [hread]
-    simp only [List.foldl_cons, List.foldl_nil]
     simp only [haddressLength.2.2, ↓reduceIte, List.length_append, List.length_cons,
       List.length_nil, zero_add]
   · intro index hindex
@@ -681,7 +681,6 @@ theorem RegistryWitness.applyFreshWritesOfReadEffect
             omega) heq
         omega
       rw [hread]
-      simp only [List.foldl_cons, List.foldl_nil]
       simp only [hfamilies.2.2, ↓reduceIte, hlengthOld, hfamilies.2.1, hnewOld, hfamilies.1,
         targetAt_append_old entries (target, newPauser) hold]
       simpa only using hw.arrayWords index hold
@@ -694,7 +693,6 @@ theorem RegistryWitness.applyFreshWritesOfReadEffect
         registryAddressFamilies_ne_arrayEntrySlot
           htarget.2 hnew.2 hnext252
       rw [hread]
-      simp only [List.foldl_cons, List.foldl_nil]
       simp only [hfamilies.2.2, ↓reduceIte, hlengthNext, hfamilies.2.1,
         targetAt_append_length_of_findEntry_none hfind]
   · intro wanted hwanted
@@ -707,7 +705,6 @@ theorem RegistryWitness.applyFreshWritesOfReadEffect
     by_cases heq : wanted = target
     · subst wanted
       rw [hread]
-      simp only [List.foldl_cons, List.foldl_nil]
       simp only [Ne.symm hpair.2.1, ↓reduceIte, Ne.symm hlength.1, Ne.symm hpair.1,
         Ne.symm harray.1, assignmentAt_append_target_of_findEntry_none hfind]
     · have hassignment : assignmentSlot target ≠ assignmentSlot wanted := by
@@ -715,7 +712,6 @@ theorem RegistryWitness.applyFreshWritesOfReadEffect
         exact (Ne.symm heq)
           (assignmentSlot_injective htarget.2 hwanted hslots)
       rw [hread]
-      simp only [List.foldl_cons, List.foldl_nil]
       simp only [Ne.symm hpair.2.1, ↓reduceIte, Ne.symm hlength.1, Ne.symm hpair.1,
         Ne.symm harray.1, hassignment,
         assignmentAt_append_of_ne entries target newPauser wanted heq]
@@ -730,14 +726,12 @@ theorem RegistryWitness.applyFreshWritesOfReadEffect
     by_cases heq : wanted = target
     · subst wanted
       rw [hread]
-      simp only [List.foldl_cons, List.foldl_nil]
       simp only [Ne.symm hpair.2.2, ↓reduceIte, ite_self,
         oneBasedIndexAt_append_target_of_findEntry_none hfind]
     · have hindexSlot : indexSlot target ≠ indexSlot wanted := by
         intro hslots
         exact (Ne.symm heq) (indexSlot_injective htarget.2 hwanted hslots)
       rw [hread]
-      simp only [List.foldl_cons, List.foldl_nil]
       simp only [Ne.symm hpair.2.2, ↓reduceIte, Ne.symm hlength.2.1, hindexSlot, Ne.symm harray.2.1,
         hpair.1, oneBasedIndexAt_append_of_ne entries target newPauser wanted heq]
       simpa only using hw.indices wanted hwanted
@@ -751,13 +745,11 @@ theorem RegistryWitness.applyFreshWritesOfReadEffect
     by_cases heq : wanted = newPauser
     · subst wanted
       rw [hread]
-      simp only [List.foldl_cons, List.foldl_nil]
       simp only [↓reduceIte, Nat.add_comm, assignmentCount_append]
     · have hcountSlot : countSlot newPauser ≠ countSlot wanted := by
         intro hslots
         exact (Ne.symm heq) (countSlot_injective hnew.2 hwanted hslots)
       rw [hread]
-      simp only [List.foldl_cons, List.foldl_nil]
       simp only [hcountSlot, ↓reduceIte, Ne.symm hlength.2.2, hpair.2.2, Ne.symm harray.2.2,
         hpair.2.1, assignmentCount_append, if_neg (Ne.symm heq), zero_add]
       simpa only using hw.counts wanted hwanted
@@ -777,7 +769,6 @@ theorem RegistryWitness.applyFreshWritesOfReadEffect
       intro hslots
       exact hnew.1 (countSlot_injective hnew.2 hzeroCanonical hslots)
     rw [hread]
-    simp only [List.foldl_cons, List.foldl_nil]
     simp only [hcount0, ↓reduceIte, Ne.symm hlength.2.2, hpair.2.2, Ne.symm harray.2.2, hpair.2.1]
     simpa only using hw.zeroCount
 
@@ -832,6 +823,7 @@ theorem RegistryWitness.applyFoundNonzeroWritesOfReadEffect
         (fun current write => if write.1 = key then write.2 else current)
         (s.read key)) :
     RegistryWitness post (setEntryAt index (target, newPauser) entries) := by
+  dsimp only [List.foldl] at hread
   have hold : nonzeroCanonicalAddress oldPauser :=
     hw.pausersValid (target, oldPauser) (mem_of_findEntry hfind)
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
@@ -844,7 +836,6 @@ theorem RegistryWitness.applyFoundNonzeroWritesOfReadEffect
     have hnewLength :=
       registryAddressFamilies_ne_arrayLengthSlot htarget.2 hnew.2
     rw [hread]
-    simp only [List.foldl_cons, List.foldl_nil]
     simp only [hnewLength.2.2, ↓reduceIte, holdLength.2.2, holdLength.1,
       setEntryAt_length_of_findEntry hfind]
     simpa only using hw.lengthWord
@@ -867,7 +858,6 @@ theorem RegistryWitness.applyFoundNonzeroWritesOfReadEffect
     have hnewArray :=
       registryAddressFamilies_ne_arrayEntrySlot htarget.2 hnew.2 hword252
     rw [hread]
-    simp only [List.foldl_cons, List.foldl_nil]
     simp only [hnewArray.2.2, ↓reduceIte, holdArray.2.2, holdArray.1,
       targetAt_setEntryAt_of_findEntry hfind holdIndex]
     simpa only using hw.arrayWords wantedIndex holdIndex
@@ -879,7 +869,6 @@ theorem RegistryWitness.applyFoundNonzeroWritesOfReadEffect
     by_cases heq : wanted = target
     · subst wanted
       rw [hread]
-      simp only [List.foldl_cons, List.foldl_nil]
       simp only [Ne.symm hnewPair.2.1, ↓reduceIte, Ne.symm holdPair.2.1,
         assignmentAt_setEntryAt_target_of_findEntry hfind]
     · have hassignment : assignmentSlot target ≠ assignmentSlot wanted := by
@@ -887,7 +876,6 @@ theorem RegistryWitness.applyFoundNonzeroWritesOfReadEffect
         exact (Ne.symm heq)
           (assignmentSlot_injective htarget.2 hwanted hslots)
       rw [hread]
-      simp only [List.foldl_cons, List.foldl_nil]
       simp only [Ne.symm hnewPair.2.1, ↓reduceIte, Ne.symm holdPair.2.1, hassignment,
         assignmentAt_setEntryAt_of_findEntry_ne hfind heq]
       simpa only using hw.assignments wanted hwanted
@@ -897,7 +885,6 @@ theorem RegistryWitness.applyFoundNonzeroWritesOfReadEffect
     have hnewPair :=
       registryAddressFamilies_pairwise htarget.2 hwanted hnew.2
     rw [hread]
-    simp only [List.foldl_cons, List.foldl_nil]
     simp only [Ne.symm hnewPair.2.2, ↓reduceIte, Ne.symm holdPair.2.2, holdPair.1,
       oneBasedIndexAt_setEntryAt_of_findEntry hfind]
     simpa only using hw.indices wanted hwanted
@@ -907,7 +894,6 @@ theorem RegistryWitness.applyFoundNonzeroWritesOfReadEffect
     by_cases hnewEq : wanted = newPauser
     · subst wanted
       rw [hread]
-      simp only [List.foldl_cons, List.foldl_nil]
       simp only [↓reduceIte, assignmentCount_setEntryAt_of_findEntry hfind]
     · have hcountNew : countSlot newPauser ≠ countSlot wanted := by
         intro hslots
@@ -916,7 +902,6 @@ theorem RegistryWitness.applyFoundNonzeroWritesOfReadEffect
       by_cases holdEq : wanted = oldPauser
       · subst wanted
         rw [hread]
-        simp only [List.foldl_cons, List.foldl_nil]
         simp only [hcountNew, ↓reduceIte, assignmentCount_setEntryAt_of_findEntry hfind,
           Ne.symm hnewEq, add_zero]
       · have hcountOld : countSlot oldPauser ≠ countSlot wanted := by
@@ -924,7 +909,6 @@ theorem RegistryWitness.applyFoundNonzeroWritesOfReadEffect
           exact (Ne.symm holdEq)
             (countSlot_injective hold.2 hwanted hslots)
         rw [hread]
-        simp only [List.foldl_cons, List.foldl_nil]
         simp only [hcountNew, ↓reduceIte, hcountOld, hassignment.2.1]
         rw [assignmentCount_setEntryAt_of_findEntry hfind]
         simp only [Ne.symm holdEq, ↓reduceIte, tsub_zero, Ne.symm hnewEq, add_zero]
@@ -942,7 +926,6 @@ theorem RegistryWitness.applyFoundNonzeroWritesOfReadEffect
       intro hslots
       exact hnew.1 (countSlot_injective hnew.2 hzeroCanonical hslots)
     rw [hread]
-    simp only [List.foldl_cons, List.foldl_nil]
     simp only [hnew0, ↓reduceIte, hold0, hassignment.2.1]
     simpa only using hw.zeroCount
 
@@ -1000,6 +983,7 @@ theorem RegistryWitness.applyAbsentZeroWritesOfReadEffect
         (fun current write => if write.1 = key then write.2 else current)
         (s.read key)) :
     RegistryWitness post entries := by
+  dsimp only [List.foldl] at hread
   have hnext256 := hw.fresh_length_lt_2pow256
   have hnext252 :
       (Nat.toB256 (entries.length + 1)).toNat < 2 ^ 252 := by
@@ -1021,7 +1005,6 @@ theorem RegistryWitness.applyAbsentZeroWritesOfReadEffect
       have hlength :=
         registryAddressFamilies_ne_arrayLengthSlot htarget.2 htarget.2
       rw [hread]
-      simp only [List.foldl_cons, List.foldl_nil]
       simp only [hlength.2.1, ↓reduceIte]
     arrayWords := by
       intro index hindex
@@ -1050,7 +1033,6 @@ theorem RegistryWitness.applyAbsentZeroWritesOfReadEffect
             omega) heq
         omega
       rw [hread]
-      simp only [List.foldl_cons, List.foldl_nil]
       simp only [hfamilies.2.1, ↓reduceIte, holdLength, hfreshOld, hfamilies.1]
       simpa only using hw.arrayWords index hindex
     assignments := by
@@ -1064,7 +1046,6 @@ theorem RegistryWitness.applyAbsentZeroWritesOfReadEffect
       by_cases heq : wanted = target
       · subst wanted
         rw [hread]
-        simp only [List.foldl_cons, List.foldl_nil]
         simp only [Ne.symm hpair.1, ↓reduceIte, Ne.symm hlength.1, Ne.symm harray.1,
           findEntry_none_assignmentAt hfind]
       · have hassignment : assignmentSlot target ≠ assignmentSlot wanted := by
@@ -1072,7 +1053,6 @@ theorem RegistryWitness.applyAbsentZeroWritesOfReadEffect
           exact (Ne.symm heq)
             (assignmentSlot_injective htarget.2 hwanted hslots)
         rw [hread]
-        simp only [List.foldl_cons, List.foldl_nil]
         simp only [Ne.symm hpair.1, ↓reduceIte, Ne.symm hlength.1, Ne.symm harray.1, hassignment]
         simpa only using hw.assignments wanted hwanted
     indices := by
@@ -1086,14 +1066,12 @@ theorem RegistryWitness.applyAbsentZeroWritesOfReadEffect
       by_cases heq : wanted = target
       · subst wanted
         rw [hread]
-        simp only [List.foldl_cons, List.foldl_nil]
         (simp only [↓reduceIte, findEntry_none_oneBasedIndexAt hfind]; rfl)
       · have hindexSlot : indexSlot target ≠ indexSlot wanted := by
           intro hslots
           exact (Ne.symm heq)
             (indexSlot_injective htarget.2 hwanted hslots)
         rw [hread]
-        simp only [List.foldl_cons, List.foldl_nil]
         simp only [hindexSlot, ↓reduceIte, Ne.symm hlength.2.1, Ne.symm harray.2.1, hpair.1]
         simpa only using hw.indices wanted hwanted
     counts := by
@@ -1105,7 +1083,6 @@ theorem RegistryWitness.applyAbsentZeroWritesOfReadEffect
       have hpair :=
         registryAddressFamilies_pairwise htarget.2 htarget.2 hwanted
       rw [hread]
-      simp only [List.foldl_cons, List.foldl_nil]
       simp only [hpair.2.2, ↓reduceIte, Ne.symm hlength.2.2, Ne.symm harray.2.2, hpair.2.1]
       simpa only using hw.counts wanted hwanted
     zeroCount := by
@@ -1121,7 +1098,6 @@ theorem RegistryWitness.applyAbsentZeroWritesOfReadEffect
       have hpair :=
         registryAddressFamilies_pairwise htarget.2 htarget.2 hzeroCanonical
       rw [hread]
-      simp only [List.foldl_cons, List.foldl_nil]
       simp only [hpair.2.2, ↓reduceIte, Ne.symm hlength.2.2, Ne.symm harray.2.2, hpair.2.1]
       simpa only using hw.zeroCount
   }
@@ -3004,6 +2980,7 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
         (fun current write => if write.1 = key then write.2 else current)
         (s.read key)) :
     RegistryWitness post (swapPop entries index) := by
+  dsimp only [List.foldl] at hread
   have hindexLt := findEntry_index_lt hfind
   have hold : nonzeroCanonicalAddress oldPauser :=
     hw.pausersValid (target, oldPauser) (mem_of_findEntry hfind)
@@ -3046,7 +3023,6 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
       have hlastFamilies :=
         registryAddressFamilies_ne_arrayLengthSlot hlastTarget.2 hold.2
       rw [hread]
-      simp only [List.foldl_cons, List.foldl_nil]
       simp only [hfamilies.2.1, ↓reduceIte, swapPop_length_of_findEntry hfind]
     arrayWords := by
       intro wantedIndex hwanted
@@ -3090,7 +3066,6 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
             arrayEntrySlot (Nat.toB256 entries.length) ≠
               arrayEntrySlot (Nat.toB256 (index + 1)) := htail
         rw [hread]
-        simp only [List.foldl_cons, List.foldl_nil]
         simp only [htargetArray.2.1, ↓reduceIte, hlengthArray, htailHole, hlastArray.2.1]
         rw [htargetMoved, targetAt_last_of_last entries hlast]
       · have hhole :
@@ -3099,7 +3074,6 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
           intro hslots
           exact heq (hw.arrayEntrySlot_injective hindexLt hwantedOld hslots).symm
         rw [hread]
-        simp only [List.foldl_cons, List.foldl_nil]
         simp only [htargetArray.2.1, ↓reduceIte, hlengthArray, htail, hlastArray.2.1, hhole,
           htargetArray.2.2, htargetArray.1]
         rw [targetAt_swapPop_of_ne entries hindexLt hpostIndex heq]
@@ -3121,7 +3095,6 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
       by_cases heq : wanted = target
       · subst wanted
         rw [hread]
-        simp only [List.foldl_cons, List.foldl_nil]
         simp only [Ne.symm htargetPair.1, ↓reduceIte, Ne.symm hlength.1, Ne.symm htail.1,
           Ne.symm hlastPair.1, Ne.symm hhole.1, Ne.symm hcountPair.2.1,
           assignmentAt_swapPop_target_of_findEntry hfind hw.targetsNodup]
@@ -3130,7 +3103,6 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
           exact (Ne.symm heq)
             (assignmentSlot_injective htarget.2 hwanted hslots)
         rw [hread]
-        simp only [List.foldl_cons, List.foldl_nil]
         simp only [Ne.symm htargetPair.1, ↓reduceIte, Ne.symm hlength.1, Ne.symm htail.1,
           Ne.symm hlastPair.1, Ne.symm hhole.1, Ne.symm hcountPair.2.1, hassignment]
         rw [assignmentAt_swapPop_of_findEntry_ne hfind hw.targetsNodup heq]
@@ -3148,7 +3120,6 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
       by_cases htargetEq : wanted = target
       · subst wanted
         rw [hread]
-        simp only [List.foldl_cons, List.foldl_nil]
         simp only [↓reduceIte, oneBasedIndexAt_swapPop_target_of_findEntry hfind hw.targetsNodup]
         rfl
       · have htargetIndex : indexSlot target ≠ indexSlot wanted := by
@@ -3167,7 +3138,6 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
               exact (Ne.symm hneqLast)
                 (indexSlot_injective hlastTarget.2 hwanted hslots)
             rw [hread]
-            simp only [List.foldl_cons, List.foldl_nil]
             simp only [htargetIndex, ↓reduceIte, Ne.symm hlength.2.1, Ne.symm htail.2.1, hlastIndex,
               Ne.symm hhole.2.1, Ne.symm hassignmentPair.2.2, hassignmentPair.1,
               oneBasedIndexAt_swapPop_of_findEntry_none hfind hwantedFind]
@@ -3188,7 +3158,6 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
                 rw [hi, targetAt_last_of_last entries hlast] at htargetAt
                 exact htargetEq htargetAt
               rw [hread]
-              simp only [List.foldl_cons, List.foldl_nil]
               simp only [htargetIndex, ↓reduceIte, Ne.symm hlength.2.1, Ne.symm htail.2.1,
                 oneBasedIndexAt_swapPop_moved_of_lt_last entries hfind hw.targetsNodup hlast
                     hnonself]
@@ -3197,7 +3166,6 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
                 exact (Ne.symm hlastEq)
                   (indexSlot_injective hlastTarget.2 hwanted hslots)
               rw [hread]
-              simp only [List.foldl_cons, List.foldl_nil]
               simp only [htargetIndex, ↓reduceIte, Ne.symm hlength.2.1, Ne.symm htail.2.1,
                 hlastIndex, Ne.symm hhole.2.1, Ne.symm hassignmentPair.2.2, hassignmentPair.1]
               rw [oneBasedIndexAt_swapPop_of_findEntry_ne_last
@@ -3218,7 +3186,6 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
       by_cases heq : wanted = oldPauser
       · subst wanted
         rw [hread]
-        simp only [List.foldl_cons, List.foldl_nil]
         simp only [hassignment.2.2, ↓reduceIte, Ne.symm hlength.2.2, Ne.symm htail.2.2,
           hlastIndex.2.2, Ne.symm hhole.2.2, assignmentCount_swapPop_of_findEntry hfind]
       · have hcount : countSlot oldPauser ≠ countSlot wanted := by
@@ -3226,7 +3193,6 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
           exact (Ne.symm heq)
             (countSlot_injective hold.2 hwanted hslots)
         rw [hread]
-        simp only [List.foldl_cons, List.foldl_nil]
         simp only [hassignment.2.2, ↓reduceIte, Ne.symm hlength.2.2, Ne.symm htail.2.2,
           hlastIndex.2.2, Ne.symm hhole.2.2, hcount, hassignment.2.1]
         rw [assignmentCount_swapPop_of_findEntry hfind]
@@ -3253,7 +3219,6 @@ theorem RegistryWitness.applyFoundZeroWritesOfReadEffect
       have hlength :=
         registryAddressFamilies_ne_arrayLengthSlot htarget.2 hzeroCanonical
       rw [hread]
-      simp only [List.foldl_cons, List.foldl_nil]
       simp only [hassignment.2.2, ↓reduceIte, Ne.symm hlength.2.2, Ne.symm htail.2.2,
         hlastIndex.2.2, Ne.symm hhole.2.2, hcount, hassignment.2.1]
       simpa only using hw.zeroCount

@@ -1,4 +1,5 @@
 import Blanc.CommonProofs
+import Blanc.MachineDataFacts
 
 namespace Blanc
 
@@ -3210,26 +3211,11 @@ theorem Linst.getStor_eq
         rcases Except.bind_eq_ok rest with
           ⟨devm3, sub, final⟩
         have subSome : devm2.subBal sevm.currentTarget
-            (devm1.getAcct sevm.currentTarget).bal = some devm3 := by
-          cases eq : devm2.subBal sevm.currentTarget
-              (devm1.getAcct sevm.currentTarget).bal
-          · rw [eq] at sub
-            contradiction
-          · rw [eq] at sub
-            injection sub with equal
-            subst equal
-            rfl
+            (devm1.getAcct sevm.currentTarget).bal = some devm3 :=
+          Option.toExcept_eq_ok sub
         have subState : devm2.state.subBal sevm.currentTarget
-            (devm1.getAcct sevm.currentTarget).bal = some devm3.state := by
-          dsimp only [Devm.subBal, Option.bind_eq_bind, Option.bind] at subSome
-          cases eq : devm2.state.subBal sevm.currentTarget
-              (devm1.getAcct sevm.currentTarget).bal
-          · rw [eq] at subSome
-            contradiction
-          · rw [eq] at subSome
-            injection subSome with equal
-            subst equal
-            rfl
+            (devm1.getAcct sevm.currentTarget).bal = some devm3.state :=
+          Devm.subBal_state subSome
         let transferred := devm3.addBal donee
           (devm1.getAcct sevm.currentTarget).bal
         have preToOne : Devm.getStor pre owner = Devm.getStor devm1 owner :=
@@ -3284,23 +3270,10 @@ theorem Linst.getStor_eq
         have hp1 : (donee, devm1).1 = donee := rfl
         have hp2 : (donee, devm1).2 = devm1 := rfl
         rw [hp1, hp2] at final
-        have subSome : devm2b.subBal sevm.currentTarget ((if donee ∉ devm1.accessedAddresses then addAccessedAddress devm1 donee else devm1).getAcct sevm.currentTarget).bal = some devm3 := by
-          cases eq : devm2b.subBal sevm.currentTarget ((if donee ∉ devm1.accessedAddresses then addAccessedAddress devm1 donee else devm1).getAcct sevm.currentTarget).bal
-          · rw [eq] at sub
-            contradiction
-          · rw [eq] at sub
-            injection sub with equal
-            subst equal
-            rfl
-        have subState : devm2b.state.subBal sevm.currentTarget ((if donee ∉ devm1.accessedAddresses then addAccessedAddress devm1 donee else devm1).getAcct sevm.currentTarget).bal = some devm3.state := by
-          dsimp only [Devm.subBal, Option.bind_eq_bind, Option.bind] at subSome
-          cases eq : devm2b.state.subBal sevm.currentTarget ((if donee ∉ devm1.accessedAddresses then addAccessedAddress devm1 donee else devm1).getAcct sevm.currentTarget).bal
-          · rw [eq] at subSome
-            contradiction
-          · rw [eq] at subSome
-            injection subSome with equal
-            subst equal
-            rfl
+        have subSome : devm2b.subBal sevm.currentTarget ((if donee ∉ devm1.accessedAddresses then addAccessedAddress devm1 donee else devm1).getAcct sevm.currentTarget).bal = some devm3 :=
+          Option.toExcept_eq_ok sub
+        have subState : devm2b.state.subBal sevm.currentTarget ((if donee ∉ devm1.accessedAddresses then addAccessedAddress devm1 donee else devm1).getAcct sevm.currentTarget).bal = some devm3.state :=
+          Devm.subBal_state subSome
         let transferred := (devm3.addBal donee ((if donee ∉ devm1.accessedAddresses then addAccessedAddress devm1 donee else devm1).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget donee ((if donee ∉ devm1.accessedAddresses then addAccessedAddress devm1 donee else devm1).getAcct sevm.currentTarget).bal
         have preToOne : Devm.getStor pre owner = Devm.getStor devm1 owner :=
           congrFun (Devm.popToAdr_getStor_eq pop) owner
@@ -3747,26 +3720,11 @@ theorem Linst.targetBalanceMono_of_foreign
         rcases Except.bind_eq_ok rest with
           ⟨devm3, subtracted, final⟩
         have subtractedSome : devm2.subBal sevm.currentTarget
-            (devm1.getAcct sevm.currentTarget).bal = some devm3 := by
-          cases equal : devm2.subBal sevm.currentTarget
-              (devm1.getAcct sevm.currentTarget).bal
-          · rw [equal] at subtracted
-            contradiction
-          · rw [equal] at subtracted
-            injection subtracted with state_eq
-            subst state_eq
-            rfl
+            (devm1.getAcct sevm.currentTarget).bal = some devm3 :=
+          Option.toExcept_eq_ok subtracted
         have subtractedState : devm2.state.subBal sevm.currentTarget
-            (devm1.getAcct sevm.currentTarget).bal = some devm3.state := by
-          dsimp only [Devm.subBal, Option.bind_eq_bind, Option.bind] at subtractedSome
-          cases equal : devm2.state.subBal sevm.currentTarget
-              (devm1.getAcct sevm.currentTarget).bal
-          · rw [equal] at subtractedSome
-            contradiction
-          · rw [equal] at subtractedSome
-            injection subtractedSome with state_eq
-            subst state_eq
-            rfl
+            (devm1.getAcct sevm.currentTarget).bal = some devm3.state :=
+          Devm.subBal_state subtractedSome
         have chargedBalance : devm2.state.bal = pre.state.bal := by
           have h1 : devm1.getBal = devm2.getBal := by
             funext address
@@ -3829,31 +3787,11 @@ theorem Linst.targetBalanceMono_of_foreign
         have hp2 : (destination, devm1).2 = devm1 := rfl
         rw [hp1, hp2] at final
         have subtractedSome : devm2b.subBal sevm.currentTarget
-            ((if destination ∉ devm1.accessedAddresses then addAccessedAddress devm1 destination else devm1).getAcct sevm.currentTarget).bal = some devm3 := by
-          cases equal : devm2b.subBal sevm.currentTarget
-              ((if destination ∉ devm1.accessedAddresses then addAccessedAddress devm1 destination else devm1).getAcct sevm.currentTarget).bal
-          · rw [equal] at subtracted
-            contradiction
-          · rw [equal] at subtracted
-            injection subtracted with state_eq
-            subst state_eq
-            rfl
+            ((if destination ∉ devm1.accessedAddresses then addAccessedAddress devm1 destination else devm1).getAcct sevm.currentTarget).bal = some devm3 :=
+          Option.toExcept_eq_ok subtracted
         have subtractedState : devm2b.state.subBal sevm.currentTarget
-            ((if destination ∉ devm1.accessedAddresses then addAccessedAddress devm1 destination else devm1).getAcct sevm.currentTarget).bal = some devm3.state := by
-          cases hss : devm2b.state.subBal sevm.currentTarget
-              ((if destination ∉ devm1.accessedAddresses then addAccessedAddress devm1 destination else devm1).getAcct sevm.currentTarget).bal with
-          | none =>
-              have hnone : Devm.subBal devm2b sevm.currentTarget ((if destination ∉ devm1.accessedAddresses then addAccessedAddress devm1 destination else devm1).getAcct sevm.currentTarget).bal = none := by
-                simp only [Devm.subBal, hss, Option.bind]; rfl
-              rw [hnone] at subtractedSome
-              cases subtractedSome
-          | some st =>
-              simp only [Devm.subBal, hss, Option.bind] at subtractedSome
-              have hde : devm3 =
-                  (devm2b.withState st).clearStorageWritesIfEmpty sevm.currentTarget :=
-                (Option.some.inj subtractedSome).symm
-              have hst : devm3.state = st := by rw [hde]; rfl
-              rw [hst]
+            ((if destination ∉ devm1.accessedAddresses then addAccessedAddress devm1 destination else devm1).getAcct sevm.currentTarget).bal = some devm3.state :=
+          Devm.subBal_state subtractedSome
         have chargedBalance : devm2b.state.bal = pre.state.bal := by
           have hchg : devm1.getBal = devm2.getBal := by
             funext address

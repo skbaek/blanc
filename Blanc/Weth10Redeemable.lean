@@ -1896,8 +1896,9 @@ theorem withdrawTo_progExecSat (dp : DeployParams)
     have h_leaf :
         B256.eqCheck (0x205c2878 : B256) 0x205c2878 = 1 := by decide
     rw [weth10Main_eq_withdrawTo]
-    cases ex <;> simp only [Func.ExecWitness] at hex ⊢ <;>
-      func_run (33) [0, (0x205c2878 : B256), 1, 1, 1, 0, 0, 1, 1] <;>
+    cases ex <;> simp only [Func.ExecWitness] at hex ⊢
+    all_goals
+      func_run (33) [0, (0x205c2878 : B256), 1, 1, 1, 0, 0, 1, 1]
       simpa only [weth10Main_eq_withdrawTo] using hex
   have hbody := withdrawTo_execSat
     (fs := withdrawToMain dp :: (weth10 dp).aux) (e := e)
@@ -1972,8 +1973,9 @@ theorem withdraw_progExecSat (dp : DeployParams)
     have h_leaf :
         B256.eqCheck (0x2e1a7d4d : B256) 0x2e1a7d4d = 1 := by decide
     rw [weth10Main_eq_withdraw]
-    cases ex <;> simp only [Func.ExecWitness] at hex ⊢ <;>
-      func_run (33) [0, (0x2e1a7d4d : B256), 1, 1, 0, 1, 0, 1, 1] <;>
+    cases ex <;> simp only [Func.ExecWitness] at hex ⊢
+    all_goals
+      func_run (33) [0, (0x2e1a7d4d : B256), 1, 1, 0, 1, 0, 1, 1]
       simpa only [weth10Main_eq_withdraw] using hex
   have hbody := withdraw_execSat
     (fs := withdrawMain dp :: (weth10 dp).aux) (e := e)
