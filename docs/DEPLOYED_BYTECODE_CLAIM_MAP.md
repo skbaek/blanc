@@ -924,11 +924,12 @@ of this map). The checker requires this table to equal the rows of
 
 **The count.** The published number of results is the leaf search's count of
 leaf theorems: theorems of a `Blanc.*` module that no other Blanc declaration
-uses (`scripts/leaf_audit.py`, `scripts/GATES.md` "Leaf audit"), the
-independently valuable results, each covered by the union walk. It is generated
+uses (`scripts/leaf_audit.py`, `scripts/GATES.md` "Leaf audit"), each covered
+by the union walk. It is generated
 into `scripts/leaf-count.json` (never hand-edited) and quoted by the README and
-the sites. At this commit it is 1103 leaf results (1096 public, 7 private).
-The count is a property of the library at a commit, not of any cited theorem;
+the sites. At this commit it is 1106 leaf results (1098 public, 8 private).
+The review ledger separately records the last review; the audit reports new
+or changed leaves. The count is a property of the library at a commit, not of any cited theorem;
 a cited theorem that another theorem uses is simply not a leaf. Bind any
 quoted figure to `git rev-parse HEAD`, as the README does.
 
