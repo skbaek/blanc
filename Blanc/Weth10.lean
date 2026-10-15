@@ -839,12 +839,50 @@ private theorem weth10TemplateCode_compile_of_emit
 private def weth10ZeroTable : List (Nat × Func) :=
   table 0 ((weth10 ⟨0, 0⟩).main :: (weth10 ⟨0, 0⟩).aux)
 
+private theorem weth10Main_size : compsize (weth10Main ⟨0, 0⟩) = 4000 := by
+  decide +kernel
+
+private theorem weth10Aux_sizes :
+    weth10Aux.map compsize = [3, 109, 145, 141, 109, 141, 145, 109, 109, 145, 109, 109, 7, 37, 173, 244, 109, 107, 242] := by
+  decide +kernel
+
+private theorem weth10ZeroTable_eq :
+    weth10ZeroTable =
+      [(0, weth10Main ⟨0, 0⟩),
+      (4001, Func.revert),
+      (4005, flashTokenError),
+      (4115, individualLimitError),
+      (4261, totalLimitError),
+      (4403, flashFailedError),
+      (4513, allowanceError),
+      (4655, burnBalanceError),
+      (4801, expiredPermitError),
+      (4911, invalidPermitError),
+      (5021, transferBalanceError),
+      (5167, ethTransferError),
+      (5277, etherTransferError),
+      (5387, bubbleRevert),
+      (5395, boolReturn),
+      (5433, flashSettle),
+      (5607, transferFromCore),
+      (5852, withdrawFromCore),
+      (5962, flashBurn),
+      (6070, permitRecover)] := by
+  have hs := weth10Aux_sizes
+  simp only [weth10Aux, List.map_cons, List.map_nil, List.cons.injEq] at hs
+  rcases hs with ⟨h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11,
+    h12, h13, h14, h15, h16, h17, h18, _⟩
+  simp only [weth10ZeroTable, weth10, weth10Aux, table, weth10Main_size,
+    h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13,
+    h14, h15, h16, h17, Nat.reduceAdd]
+
 private theorem weth10ZeroTable_locations :
     weth10ZeroTable.map Prod.fst =
       [0, 4001, 4005, 4115, 4261, 4403, 4513, 4655,
        4801, 4911, 5021, 5167, 5277, 5387, 5395, 5433,
        5607, 5852, 5962, 6070] := by
-  decide +kernel
+  rw [weth10ZeroTable_eq]
+  rfl
 
 private theorem boolReturn_emit_zero :
     Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 5396 boolReturn =
@@ -856,13 +894,6 @@ private theorem permitRecover_emit_zero :
     Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 6071 permitRecover =
       (weth10TemplateCode.drop 6071).take 242 := by
   rw [weth10ZeroTable_locations]
-  decide +kernel
-
-private theorem weth10Main_size : compsize (weth10Main ⟨0, 0⟩) = 4000 := by
-  decide +kernel
-
-private theorem weth10Aux_sizes :
-    weth10Aux.map compsize = [3, 109, 145, 141, 109, 141, 145, 109, 109, 145, 109, 109, 7, 37, 173, 244, 109, 107, 242] := by
   decide +kernel
 
 private theorem revert_emit_zero :
@@ -966,36 +997,6 @@ private theorem flashBurn_emit_zero :
       (weth10TemplateCode.drop 5963).take 107 := by
   rw [weth10ZeroTable_locations]
   decide +kernel
-
-private theorem weth10ZeroTable_eq :
-    weth10ZeroTable =
-      [(0, weth10Main ⟨0, 0⟩),
-      (4001, Func.revert),
-      (4005, flashTokenError),
-      (4115, individualLimitError),
-      (4261, totalLimitError),
-      (4403, flashFailedError),
-      (4513, allowanceError),
-      (4655, burnBalanceError),
-      (4801, expiredPermitError),
-      (4911, invalidPermitError),
-      (5021, transferBalanceError),
-      (5167, ethTransferError),
-      (5277, etherTransferError),
-      (5387, bubbleRevert),
-      (5395, boolReturn),
-      (5433, flashSettle),
-      (5607, transferFromCore),
-      (5852, withdrawFromCore),
-      (5962, flashBurn),
-      (6070, permitRecover)] := by
-  have hs := weth10Aux_sizes
-  simp only [weth10Aux, List.map_cons, List.map_nil, List.cons.injEq] at hs
-  rcases hs with ⟨h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11,
-    h12, h13, h14, h15, h16, h17, h18, _⟩
-  simp only [weth10ZeroTable, weth10, weth10Aux, table, weth10Main_size,
-    h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13,
-    h14, h15, h16, h17, Nat.reduceAdd]
 
 private def weth10TreeSlice (fuel start count : Nat) : DispatchTree :=
   DispatchTree.build fuel (((weth10Funcs ⟨0, 0⟩).drop start).take count)
