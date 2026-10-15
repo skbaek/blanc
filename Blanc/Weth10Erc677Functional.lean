@@ -207,8 +207,7 @@ private lemma normalize_adr_toB256 (a : Adr) :
     rfl
   rw [hm]
   rcases a with ⟨ahi, alo⟩
-  simp only [Adr.toB256, B256.and_eq_and_prod_and,
-    B128.and_eq_and_prod_and, UInt64.zero_and]
+  simp only [Adr.toB256]
   apply Prod.ext
   · apply Prod.ext
     · rfl
@@ -504,7 +503,7 @@ private theorem boolReturn_success_effect
         rw [B256.lt_iff_toNat_lt_toNat,
           B256.toNat_toB256_of_lt (by omega)]
         exact hlt'
-      rw [B256.ltCheck, if_pos hltWord] at hshortFlag
+      rw [B256.ltCheck, ite_eq_left hltWord] at hshortFlag
       exact B256.zero_ne_one hshortFlag.symm
     rw [hshortFlag] at hp3
     have hp4 : xs <<+ s4.stack := cons_pref_cons_inv hp3
@@ -1506,7 +1505,7 @@ theorem rawTokenCallbackIndexedStepBoundary_of_prefix
     · simpa only [show (0 : B256).toNat = 0 from rfl] using
         hparentMemory
     · simpa only [input, show (0 : B256).toNat = 0 from rfl,
-        if_true, Nat.add_zero] using hmessage
+        ite_true, Nat.add_zero] using hmessage
     · simpa only [show (0 : B256).toNat = 0 from rfl] using
         hpostMemory
 
@@ -1568,7 +1567,7 @@ theorem callBoolCallback_rawStepBoundary
     · simpa only [show (0 : B256).toNat = 0 from rfl] using
         h_parent_memory
     · simpa only [input, show (0 : B256).toNat = 0 from rfl,
-        if_true, Nat.add_zero] using h_message
+        ite_true, Nat.add_zero] using h_message
     · simpa only [show (0 : B256).toNat = 0 from rfl] using
         h_post_memory
 
@@ -1632,7 +1631,7 @@ theorem callBoolCallback_rawBoundary
     · simpa only [show (0 : B256).toNat = 0 from rfl] using
         h_parent_memory
     · simpa only [input, show (0 : B256).toNat = 0 from rfl,
-        if_true, Nat.add_zero] using h_message
+        ite_true, Nat.add_zero] using h_message
     · simpa only [show (0 : B256).toNat = 0 from rfl] using
         h_post_memory
 
@@ -1763,7 +1762,7 @@ theorem callBoolCallback_successEffect
       rw [h_child_clean]
       decide
     have h_mid_logs : callPost.logs = pre.logs ++ child.logs := by
-      rw [Resume.call_logs h_resume, if_neg h_clean_not,
+      rw [Resume.call_logs h_resume, ite_eq_right h_clean_not,
         h_parent_logs, ← h_logs_pre]
     have h_mid_output : callPost.output = pre.output := by
       rw [Resume.call_output h_resume, h_parent_output, ← h_output_pre]
@@ -1807,7 +1806,7 @@ theorem callBoolCallback_successEffect
     · exact h_parent_logs.trans h_logs_pre.symm
     · exact h_parent_output.trans h_output_pre.symm
     · simpa only [show (0 : B256).toNat = 0 from rfl,
-        if_true, Nat.add_zero] using h_message
+        ite_true, Nat.add_zero] using h_message
 
 /-! ## Approval callback -/
 

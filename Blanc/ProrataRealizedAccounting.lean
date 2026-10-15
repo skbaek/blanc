@@ -125,7 +125,7 @@ theorem messageEntry_eq_ofState
         by_cases target_eq : msg.currentTarget = ca
         · subst ca
           unfold messageEntry
-          rw [if_pos rfl]
+          rw [ite_eq_left rfl]
           unfold beforeCredit ofState
           apply congrArg₂ RealizedSnapshot.mk
           · exact hstor
@@ -134,7 +134,7 @@ theorem messageEntry_eq_ofState
             rw [of_transfer_bal_target sub (caller_ne shouldTransfer) sum_nof]
             exact Nat.add_sub_cancel _ _
         · unfold messageEntry
-          rw [if_neg target_eq]
+          rw [ite_eq_right target_eq]
           unfold ofState
           apply congrArg₂ RealizedSnapshot.mk
           · exact hstor

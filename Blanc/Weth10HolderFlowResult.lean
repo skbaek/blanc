@@ -1075,7 +1075,7 @@ theorem Exec.Frame.flowAction_eq_none_of_currentTarget_ne
     (htarget : frame.sevm.currentTarget ≠ ca) :
     Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none := by
   unfold Exec.Frame.flowAction?
-  rw [if_neg]
+  rw [ite_eq_right]
   intro invocation
   exact htarget invocation.2.1
 
@@ -1086,7 +1086,7 @@ theorem Exec.Frame.flowAction_eq_none_of_codeAddress_ne
     (hcodeAddress : frame.sevm.codeAddress ≠ some ca) :
     Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none := by
   unfold Exec.Frame.flowAction?
-  rw [if_neg]
+  rw [ite_eq_right]
   intro invocation
   exact hcodeAddress invocation.2.2.1
 
@@ -1097,7 +1097,7 @@ theorem Exec.Frame.flowAction_eq_none_of_code_ne
     (hcode : some frame.sevm.code.toList ≠ Prog.compile (weth10 dp)) :
     Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none := by
   unfold Exec.Frame.flowAction?
-  rw [if_neg]
+  rw [ite_eq_right]
   intro invocation
   exact hcode invocation.2.2.2
 
@@ -1108,7 +1108,7 @@ theorem Exec.Frame.flowAction_eq_none_of_pc_ne
     (hpc : frame.pc ≠ 0) :
     Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none := by
   unfold Exec.Frame.flowAction?
-  rw [if_neg]
+  rw [ite_eq_right]
   intro invocation
   exact hpc invocation.1
 

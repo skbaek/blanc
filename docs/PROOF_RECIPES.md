@@ -504,3 +504,25 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Canonical example: [Blanc/LidoCircuitBreakerPauseSuffixWalk.lean](../Blanc/LidoCircuitBreakerPauseSuffixWalk.lean) — `temporal_extcodesize_runCompiled`
 - Registered symbols: `module:Blanc/Lift/CodeSizeWalk.lean`, `declaration:Blanc.Lift.temporalAccountAccessBase`, `declaration:Blanc.Lift.temporalAccountAccessBase_state`, `declaration:Blanc.Lift.temporalAccountAccessBase_output`, `declaration:Blanc.Lift.temporalAccountAccessBase_logs`, `declaration:Blanc.Lift.temporalAccountAccessCost`, `declaration:Blanc.Lift.temporal_extcodesize_runCompiled`, `declaration:Blanc.Lift.ri_extcodesize`, `declaration:Blanc.Lift.rx_extcodesize`
 - Review: `proof-infrastructure` on `2026-10-03`
+
+## `machine-state-debit`
+
+- Status: `active`
+- Triggers: `goal-shape:machine-state-debit`
+- Preferred path: Use `Devm.subBal_state` to project a successful machine debit to its account-state debit. If the hypothesis is an `Option.toExcept` success, first use Jaune's `Option.toExcept_eq_ok`. Keep the machine symbolic instead of unfolding its full record through repeated option inversions.
+- Boundary: Requires the successful debit equation; it does not establish sufficient funds, preserve the debited balance, or identify the whole post-machine. Advice recognizes only a direct equality whose left side is State.subBal, without normalizing state expressions or searching nested operands.
+- Owner module: [Blanc/MachineDataFacts.lean](../Blanc/MachineDataFacts.lean)
+- Canonical example: [Blanc/MachineDataFacts.lean](../Blanc/MachineDataFacts.lean) — `Devm.subBal_state`
+- Registered symbols: `module:Blanc/MachineDataFacts.lean`, `declaration:Blanc.Devm.subBal_state`
+- Review: `proof-infrastructure` on `2026-10-15`
+
+## `word-exponentiation`
+
+- Status: `active`
+- Triggers: `goal-shape:word-exponentiation`
+- Preferred path: For exponent zero use Jaune's `B256.bexp_zero`; for a general exponent rewrite with `B256.bexp_eq` to obtain natural-number exponentiation modulo 2^256. Rewrite small word-to-Nat conversions explicitly before closed arithmetic, rather than unfolding the modular-exponentiation implementation. The shared packed-word special case `Lift.bexp_256_32` supplies 256^32 = 0 as an EVM word.
+- Boundary: EVM exponentiation wraps modulo 2^256; ordinary unbounded-power identities need that modulus. This does not justify evaluating a large symbolic exponent or concrete memory. Advice recognizes only a direct equality whose left side is B256.bexp; nested arithmetic and reversed equalities are left to the author.
+- Owner module: [Blanc/Lift/PackedSha.lean](../Blanc/Lift/PackedSha.lean)
+- Canonical example: [Blanc/Lift/PackedSha.lean](../Blanc/Lift/PackedSha.lean) — `bexp_256_32`
+- Registered symbols: `module:Blanc/Lift/PackedSha.lean`, `declaration:Blanc.Lift.bexp_256_32`
+- Review: `proof-infrastructure` on `2026-10-15`

@@ -80,8 +80,8 @@ theorem swapInWord_source {balance amountOut : B256} {r : Nat} (bound : r < 2 ^ 
   unfold swapInWord
   rw [swapMask_reserve bound]
   by_cases above : Nat.toB256 r - amountOut < balance
-  · rw [if_pos above, B256.toNat_sub_eq_of_le _ _ (B256.le_of_lt above), diff]
-  · rw [if_neg above]
+  · rw [ite_eq_left above, B256.toNat_sub_eq_of_le _ _ (B256.le_of_lt above), diff]
+  · rw [ite_eq_right above]
     rw [B256.lt_iff_toNat_lt_toNat, diff] at above
     change 0 = _
     omega
@@ -138,8 +138,8 @@ theorem swapCheck_source {bal0 bal1 a0 a1 : B256} {r0 r1 : Nat}
   unfold swapInputs swapCheck
   dsimp only
   rw [← in0, ← in1]
-  rw [if_pos guard, if_pos ⟨b0, m0⟩, if_pos c0, if_pos ⟨b1, m1⟩, if_pos c1, if_pos adj,
-    if_pos (by rw [show (1000 : Nat) ^ 2 = 1000000 from rfl]; omega)]
+  rw [ite_eq_left guard, ite_eq_left ⟨b0, m0⟩, ite_eq_left c0, ite_eq_left ⟨b1, m1⟩, ite_eq_left c1, ite_eq_left adj,
+    ite_eq_left (by rw [show (1000 : Nat) ^ 2 = 1000000 from rfl]; omega)]
 
 /-- The source request for the first post-callback balance. -/
 def swapRequest0 (frame : Frame) (locals : SwapLocals) : Request :=

@@ -451,7 +451,7 @@ private theorem sharedValuePrefixCost (state : State) :
   have cold : ossifiableFallbackSloadCost sevm entry = 2100 := by
     have keys : entry.accessedStorageKeys = .emptyWithCapacity := by rfl
     unfold ossifiableFallbackSloadCost
-    rw [keys, if_neg]
+    rw [keys, ite_eq_right]
     · rfl
     · simp only [Std.HashSet.not_mem_emptyWithCapacity, not_false_eq_true]
   change ossifiableFallbackPrefixCost sevm entry = 2128
@@ -525,7 +525,7 @@ private theorem sharedValueCallPre_state (state : State) :
       (sharedValueAfterTransfer state).state := by
   unfold sharedValueCallPre OssifiableFallbackPrefixBudget.callPre
     OssifiableFallbackPrefixBudget.afterSloadBase
-  rw [if_neg (sharedValueBeforeSload_cold state)]
+  rw [ite_eq_right (sharedValueBeforeSload_cold state)]
   rfl
 
 private theorem sharedValueCallPre_addresses (state : State) :
@@ -533,7 +533,7 @@ private theorem sharedValueCallPre_addresses (state : State) :
       (.emptyWithCapacity : Std.HashSet Adr) := by
   unfold sharedValueCallPre OssifiableFallbackPrefixBudget.callPre
     OssifiableFallbackPrefixBudget.afterSloadBase
-  rw [if_neg (sharedValueBeforeSload_cold state)]
+  rw [ite_eq_right (sharedValueBeforeSload_cold state)]
   rfl
 
 private theorem sharedValueCallPre_keys (state : State) :
@@ -542,7 +542,7 @@ private theorem sharedValueCallPre_keys (state : State) :
         (upgradeProxy, implementationSlotLit) := by
   unfold sharedValueCallPre OssifiableFallbackPrefixBudget.callPre
     OssifiableFallbackPrefixBudget.afterSloadBase
-  rw [if_neg (sharedValueBeforeSload_cold state)]
+  rw [ite_eq_right (sharedValueBeforeSload_cold state)]
   rfl
 
 private theorem sharedValueCallPre_gas (state : State) :
@@ -553,14 +553,14 @@ private theorem sharedValueCallPre_error (state : State) :
     (sharedValueCallPre state).error = none := by
   unfold sharedValueCallPre OssifiableFallbackPrefixBudget.callPre
     OssifiableFallbackPrefixBudget.afterSloadBase
-  rw [if_neg (sharedValueBeforeSload_cold state)]
+  rw [ite_eq_right (sharedValueBeforeSload_cold state)]
   rfl
 
 private theorem sharedValueCallPre_logs (state : State) :
     (sharedValueCallPre state).logs = [] := by
   unfold sharedValueCallPre OssifiableFallbackPrefixBudget.callPre
     OssifiableFallbackPrefixBudget.afterSloadBase
-  rw [if_neg (sharedValueBeforeSload_cold state)]
+  rw [ite_eq_right (sharedValueBeforeSload_cold state)]
   rfl
 
 private theorem sharedValueCallPre_transient (state : State) :
@@ -568,7 +568,7 @@ private theorem sharedValueCallPre_transient (state : State) :
       (sharedValueMessage state).tenv.transientStorage := by
   unfold sharedValueCallPre OssifiableFallbackPrefixBudget.callPre
     OssifiableFallbackPrefixBudget.afterSloadBase
-  rw [if_neg (sharedValueBeforeSload_cold state)]
+  rw [ite_eq_right (sharedValueBeforeSload_cold state)]
   rfl
 
 private theorem sharedValueAfterAccess_code

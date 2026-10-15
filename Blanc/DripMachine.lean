@@ -192,7 +192,7 @@ that word back into the equality it stands for; unsigned-order flags use
 private theorem eq_of_iszero_eqCheck_eq_zero {x y : B256}
     (h : ((x =? y) =? 0) = 0) : x = y := by
   by_contra hne
-  simp only [B256.eqCheck, if_neg hne] at h
+  simp only [B256.eqCheck, ite_eq_right hne] at h
   exact absurd h (by decide +kernel)
 
 private theorem nofm_right_zero (x : B256) : B256.Nofm x 0 := by
@@ -270,7 +270,7 @@ private theorem of_run_roundedMulRecovery_prefix {fs : List Func} {e : Sevm}
           from Stack.swapCore_succ Stack.swapCore_zero) (of_run_swap hs3) h8
       exact prefix_of_iszero hz (prefix_of_eq he h9)
     exact ⟨s2, mid2, frame2, hp2, Func.RunPrefix.trans hpre1 hpre2, run⟩
-  · simp only [roundedMulRecovery, if_neg same] at run ⊢
+  · simp only [roundedMulRecovery, ite_eq_right same] at run ⊢
     rcases run_prefix_prepend (l := loadWord leftWord) (path := path)
       (gasFree_loadWord leftWord) run with
       ⟨s1, mid1, hline1, run, hpre1⟩
@@ -772,11 +772,11 @@ private theorem of_run_rpowAfterSquare_prefix {fs : List Func}
     obtain ⟨t, midT, hpt, framet, hpreA, run⟩ :=
       of_run_rpowAdvance_prefix (path := midV) hlookup frameV hpV run
     refine ⟨t, setScratch image exponentWord (scratch image exponentWord / 2),
-      midT, by rw [if_neg heven]; trivial, ?_, ?_, ?_, ?_, framet, hpt,
+      midT, by rw [ite_eq_right heven]; trivial, ?_, ?_, ?_, ?_, framet, hpt,
       Func.RunPrefix.trans hpre0 (Func.RunPrefix.trans hpre1
         (Func.RunPrefix.trans hpre2 (Func.RunPrefix.trans hpreB hpreA))),
       run⟩
-    · rw [if_neg heven]
+    · rw [ite_eq_right heven]
       exact scratch_setScratch_of_disjoint image _ exponent_accumulator.symm
     · exact scratch_setScratch_of_disjoint image _ exponent_base.symm
     · exact scratch_setScratch_self image exponentWord _
@@ -796,13 +796,13 @@ private theorem of_run_rpowAfterSquare_prefix {fs : List Func}
       of_run_guardedRoundedMul_prefix (path := midV) frameV hpV run
     obtain ⟨t, midT, hpt, framet, hpreA, run⟩ :=
       of_run_rpowAdvance_prefix (path := midV1) hlookup frameV1 hpV1 run
-    refine ⟨t, _, midT, by rw [if_pos hodd]; exact ⟨hnofm, hnof⟩, ?_, ?_, ?_,
+    refine ⟨t, _, midT, by rw [ite_eq_left hodd]; exact ⟨hnofm, hnof⟩, ?_, ?_, ?_,
       ?_, framet, hpt,
       Func.RunPrefix.trans hpre0 (Func.RunPrefix.trans hpre1
         (Func.RunPrefix.trans hpre2 (Func.RunPrefix.trans hpreB
           (Func.RunPrefix.trans hpreM hpreA)))),
       run⟩
-    · rw [if_pos hodd,
+    · rw [ite_eq_left hodd,
         scratch_setScratch_of_disjoint _ _ exponent_accumulator.symm,
         scratch_setScratch_self]
       unfold B256.mulr
@@ -864,7 +864,7 @@ theorem of_run_rpowLoop_prefix {fs : List Func} (hlookup : AuxLookup fs)
   · -- exponent zero: the loop is the identity and jumps straight to composition
     have hE : scratch image exponentWord = 0 :=
       B256.toNat_inj _ 0 (by rw [hexp, hn, B256.toNat_zero])
-    rw [hE, B256.eqCheck, if_pos rfl] at hp2
+    rw [hE, B256.eqCheck, ite_eq_left rfl] at hp2
     rcases run_prefix_branch (path := mid2) run with
       ⟨u, midU, hpop, hsquare, hpreB⟩
       | ⟨w, u, v, midV, hnz, hpop, hburn, hcompose, hpreB⟩
@@ -874,16 +874,16 @@ theorem of_run_rpowLoop_prefix {fs : List Func} (hlookup : AuxLookup fs)
         Func.RunPrefix.trans hpre0 (Func.RunPrefix.trans hpre1
           (Func.RunPrefix.trans hpre2 hpreB)),
         hcompose⟩
-      · rw [B256.RPowLoopGuards, dif_pos hn]
+      · rw [B256.RPowLoopGuards, dite_eq_left hn]
         trivial
-      · rw [B256.rpowLoop, dif_pos hn]
+      · rw [B256.rpowLoop, dite_eq_left hn]
       · rw [← hburn.stack]
         exact (popBurn_pref hpop hp2).2
   · -- exponent nonzero: square, conditionally multiply, halve, recurse
     have hE : scratch image exponentWord ≠ 0 := by
       intro hzero
       exact hn (by rw [← hexp, hzero, B256.toNat_zero])
-    rw [B256.eqCheck, if_neg hE] at hp2
+    rw [B256.eqCheck, ite_eq_right hE] at hp2
     rcases run_prefix_branch (path := mid2) run with
       ⟨u, midU, hpop, hsquare, hpreB⟩
       | ⟨w, u, v, midV, hnz, hpop, hburn, hcompose, hpreB⟩
@@ -921,14 +921,14 @@ theorem of_run_rpowLoop_prefix {fs : List Func} (hlookup : AuxLookup fs)
         (Func.RunPrefix.trans hpre2 (Func.RunPrefix.trans hpreB
           (Func.RunPrefix.trans hpreM (Func.RunPrefix.trans hpreA hpreIH))))),
       run⟩
-    · rw [B256.RPowLoopGuards, dif_neg hn]
+    · rw [B256.RPowLoopGuards, dite_eq_right hn]
       refine ⟨hnofmSquare, hnofSquare, ?_, hguards2⟩
       by_cases hpar : n % 2 = 1
-      · rw [if_pos hpar] at hcond ⊢
+      · rw [ite_eq_left hpar] at hcond ⊢
         exact ⟨hcond.1, by rw [B256.mul_comm]; exact hcond.2⟩
-      · rw [if_neg hpar]
+      · rw [ite_eq_right hpar]
         trivial
-    · rw [B256.rpowLoop, dif_neg hn]
+    · rw [B256.rpowLoop, dite_eq_right hn]
       exact hacc3
     · exact ((LoopOnly.base image _).trans hloop12).trans hloop23
 
@@ -1166,9 +1166,9 @@ private theorem of_run_halveExponent_prefix {fs : List Func}
     Func.RunPrefix.trans hpre1 (Func.RunPrefix.trans hpre2
       (Func.RunPrefix.trans hpre3 hpreL)),
     run⟩
-  · rw [B256.RPowGuards, if_neg hrateNe, if_neg hkNat, ← hacc]
+  · rw [B256.RPowGuards, ite_eq_right hrateNe, ite_eq_right hkNat, ← hacc]
     exact hguardsL
-  · rw [haccF, B256.rpow, if_neg hrateNe, if_neg hkNat, ← hacc]
+  · rw [haccF, B256.rpow, ite_eq_right hrateNe, ite_eq_right hkNat, ← hacc]
   · rw [hloopF.storedChi,
       scratch_setScratch_of_disjoint _ _ storedChi_exponent, hchiImg]
   · rw [hloopF.now, scratch_setScratch_of_disjoint _ _ now_exponent, hnowImg]
@@ -1399,7 +1399,7 @@ theorem of_run_freshStart_prefix {fs : List Func} (hlookup : AuxLookup fs)
   have frame25 := frame24.line (by line_inv) (by line_inv) (by line_inv) hline25
   have hp25 : (rate =? 0) :: tail <<+ s25.stack :=
     prefix_of_iszero (of_run_singleton hline25) hp24
-  rw [B256.eqCheck, if_neg hrateNe] at hp25
+  rw [B256.eqCheck, ite_eq_right hrateNe] at hp25
   rcases run_prefix_branch (path := mid25) run with
     ⟨s26, mid26, hpop26, run, hpreB⟩
     | ⟨w, s26, s26', mid26x, hnz, hpop26, hburn26, run, hpreB⟩
@@ -1491,7 +1491,7 @@ theorem of_run_freshStart_prefix {fs : List Func} (hlookup : AuxLookup fs)
     have hk : (e.benvStat.time -
         Devm.getStorVal entry e.currentTarget rhoSlot) ≠ 0 := by
       intro hzero
-      rw [hzero, B256.eqCheck, if_pos rfl] at hflag
+      rw [hzero, B256.eqCheck, ite_eq_left rfl] at hflag
       exact absurd hflag (by decide +kernel)
     have hkNat : (e.benvStat.time -
         Devm.getStorVal entry e.currentTarget rhoSlot).toNat ≠ 0 := by
@@ -1541,7 +1541,7 @@ theorem of_run_freshStart_prefix {fs : List Func} (hlookup : AuxLookup fs)
       obtain ⟨tm, imageM, midH, hguards, haccF, hchi, hnow, hmachine,
         frameF, hpF, hpreH, run⟩ :=
         of_run_halveExponent_prefix hlookup (path := mid34) hkNat
-          (by rw [if_neg heven]) (by rw [scratch_setScratch_of_disjoint _ _ exponent_accumulator,
+          (by rw [ite_eq_right heven]) (by rw [scratch_setScratch_of_disjoint _ _ exponent_accumulator,
           scratch_setScratch_of_disjoint _ _ exponent_base,
           scratch_setScratch_self]) (scratch_setScratch_self _ _ _) (by rw [scratch_setScratch_of_disjoint _ _ base_accumulator,
           scratch_setScratch_self]) (by rw [scratch_setScratch_of_disjoint _ _ storedChi_accumulator,
@@ -1616,7 +1616,7 @@ theorem of_run_freshStart_prefix {fs : List Func} (hlookup : AuxLookup fs)
       obtain ⟨tm, imageM, midH, hguards, haccF, hchi, hnow, hmachine,
         frameF, hpF, hpreH, run⟩ :=
         of_run_halveExponent_prefix hlookup (path := mid34) hkNat
-          (by rw [if_pos hodd]) (by rw [scratch_setScratch_of_disjoint _ _ exponent_accumulator,
+          (by rw [ite_eq_left hodd]) (by rw [scratch_setScratch_of_disjoint _ _ exponent_accumulator,
           scratch_setScratch_of_disjoint _ _ exponent_base,
           scratch_setScratch_self]) (scratch_setScratch_self _ _ _) (by rw [scratch_setScratch_of_disjoint _ _ base_accumulator,
           scratch_setScratch_self]) (by rw [scratch_setScratch_of_disjoint _ _ storedChi_accumulator,
@@ -1670,7 +1670,7 @@ theorem of_run_freshStart_prefix {fs : List Func} (hlookup : AuxLookup fs)
     have hk : (e.benvStat.time -
         Devm.getStorVal entry e.currentTarget rhoSlot) = 0 := by
       by_contra hne
-      rw [B256.eqCheck, if_neg hne] at hp28
+      rw [B256.eqCheck, ite_eq_right hne] at hp28
       exact absurd (popBurn_pref hpop29 hp28).1 hnz'
     have hkNat : (e.benvStat.time -
         Devm.getStorVal entry e.currentTarget rhoSlot).toNat = 0 := by
@@ -1693,10 +1693,10 @@ theorem of_run_freshStart_prefix {fs : List Func} (hlookup : AuxLookup fs)
       ⟨s31, mid31, hline31, run, hpre31⟩
     obtain ⟨hp31, frame31⟩ := frame30.mstoreAt hp30 hline31
     refine converge (midK := mid31) ?_ ?_ ?_ ?_ ?_ frame31 hp31 ?_ run
-    · rw [hkNat, B256.RPowGuards, if_neg hrateNe, if_pos rfl]
+    · rw [hkNat, B256.RPowGuards, ite_eq_right hrateNe, ite_eq_left rfl]
       trivial
-    · rw [scratch_setScratch_self, hkNat, B256.rpow, if_neg hrateNe,
-        if_pos rfl]
+    · rw [scratch_setScratch_self, hkNat, B256.rpow, ite_eq_right hrateNe,
+        ite_eq_left rfl]
     · rw [scratch_setScratch_of_disjoint _ _ storedChi_accumulator,
         scratch_setScratch_of_disjoint _ _ storedChi_base,
         scratch_setScratch_of_disjoint _ _ storedChi_exponent,
@@ -1828,7 +1828,7 @@ private theorem of_run_routeTest_prefix {fs : List Func} {e : Sevm}
     exact (popBurn_pref hpop hp1).2
   · have htag : scratch image routeWord = c := by
       by_contra hne
-      rw [B256.eqCheck, if_neg (fun h => hne h.symm)] at hp1
+      rw [B256.eqCheck, ite_eq_right (fun h => hne h.symm)] at hp1
       exact absurd (popBurn_pref hpop hp1).1 hnz
     refine Or.inl ⟨htag, ?_⟩
     have frame3 := (frame1.of_popBurn hpop).of_burn hburn
@@ -1919,7 +1919,7 @@ theorem of_run_freshRoute_prefix {fs : List Func} (hlookup : AuxLookup fs)
   · exact absurd run not_run_revert
   · have htag : scratch image routeWord = routeJoin := by
       by_contra hne
-      rw [B256.eqCheck, if_neg (fun h => hne h.symm)] at hp6
+      rw [B256.eqCheck, ite_eq_right (fun h => hne h.symm)] at hp6
       exact absurd (popBurn_pref hpop hp6).1 hnz
     refine ⟨s8, mid8, (frame6.of_popBurn hpop).of_burn hburn, ?_,
       Or.inr (Or.inr (Or.inr (Or.inr ⟨htag, ?_, run⟩)))⟩

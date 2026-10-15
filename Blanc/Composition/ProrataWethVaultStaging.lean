@@ -1156,7 +1156,7 @@ theorem checkedCall_status_nonzero
     have statusNonzero : status ≠ 0 := by
       intro statusZero
       subst statusZero
-      rw [B256.eqCheck, if_pos rfl] at flagZero
+      rw [B256.eqCheck, ite_eq_left rfl] at flagZero
       exact B256.zero_ne_one flagZero.symm
     have zeroSource := Ninst.Run.of_runCompiled zeroRun
     have bodyState : bodyPre.state = callPost.state :=
@@ -1189,7 +1189,7 @@ theorem ExactWethChildOccurrence.successFlag_of_nonzero
     exact (List.cons.inj (statusStack.symm.trans actualStack)).1
   by_cases childError : child.error.isSome
   · have statusZero : status = 0 := by
-      simpa only [childError, if_pos] using statusEq
+      simpa only [childError, ite_eq_left] using statusEq
     exact (statusNonzero statusZero).elim
   · have childErrorFalse : child.error.isSome = false :=
       Bool.eq_false_of_not_eq_true childError
@@ -1758,7 +1758,7 @@ theorem callGasAvailable_of_runCompiled
   have code : base.state.getCode wethAccount = pre.getCode wethAccount := rfl
   have nondelegated : getDelegatedCodeAddress (pre.getCode wethAccount) = none := by
     unfold getDelegatedCodeAddress
-    rw [if_neg config.notDelegated]
+    rw [ite_eq_right config.notDelegated]
   have delegation : sevm.benvStat.rules.gas.accessDelegation base wethAccount =
       ⟨false, wethAccount, pre.getCode wethAccount, 0, base⟩ := by
     simp only [GasSchedule.accessDelegation, code, nondelegated]
@@ -2533,7 +2533,7 @@ theorem staticGasAvailable_of_runCompiled
   have code : base.state.getCode wethAccount = pre.getCode wethAccount := rfl
   have nondelegated : getDelegatedCodeAddress (pre.getCode wethAccount) = none := by
     unfold getDelegatedCodeAddress
-    rw [if_neg config.notDelegated]
+    rw [ite_eq_right config.notDelegated]
   have delegation : sevm.benvStat.rules.gas.accessDelegation base wethAccount =
       ⟨false, wethAccount, pre.getCode wethAccount, 0, base⟩ := by
     simp only [GasSchedule.accessDelegation, code, nondelegated]

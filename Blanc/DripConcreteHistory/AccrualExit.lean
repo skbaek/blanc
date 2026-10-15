@@ -788,19 +788,7 @@ theorem concreteDrip_transaction :
   have hauths : concreteDripTx.auths = [] := rfl
   unfold processTransaction
   simp only [bind, Except.bind]
-  change (do
-    let validationSender ←
-      ((match concreteDripTxInput.beginTransaction.stat.rules.stateGas with
-        | none => Except.ok 0
-        | some _ => do
-          Except.mapError TransitionError.transaction
-            (checkTransactionChainId concreteDripTxInput.beginTransaction concreteDripTx)
-          Except.mapError (fun e => TransitionError.senderRecovery e)
-            (recoverSender concreteDripTxInput.beginTransaction.stat.chainId concreteDripTx)) :
-        Except TransitionError Adr)
-    (fun _ => _) validationSender) =
-      .ok (concreteDripTransactionState, concreteDripTransactionBout) <;>
-  rw [hvalidationStateGas]
+  rw [recoverValidationSender_of_stateGas_none concreteDripTx hvalidationStateGas]
   simp only [bind, Except.bind]
   rw [hrules]
   simp only [Except.mapError]
@@ -1350,26 +1338,13 @@ theorem concreteExitChecked :
   have hfee : checkTransactionGasFee
       (initBenv .prague concreteDripped concreteExitExecutionHeader).beginTransaction
       concreteExitTx = .ok (2, 4000000) := by decide +kernel
-  rw [checkTransaction, hgas]
-  simp only [Except.mapError, bind, Except.bind]
-  rw [hchain]
-  change (do
-    let sender ← Except.mapError TransitionError.senderRecovery (recoverSender 1 concreteExitTx)
-    let (effective, maxFee) ← Except.mapError TransitionError.transaction
-      (checkTransactionGasFee (initBenv .prague concreteDripped concreteExitExecutionHeader).beginTransaction concreteExitTx)
-    let (maxFee, hashes) ← Except.mapError TransitionError.transaction
-      (checkTransactionBlobData (initBenv .prague concreteDripped concreteExitExecutionHeader).beginTransaction concreteExitTx maxFee)
-    Except.mapError TransitionError.transaction (checkTransactionReceiver concreteExitTx)
-    Except.mapError TransitionError.transaction (checkTransactionAuthorizationList concreteExitTx)
-    Except.mapError TransitionError.transaction (checkTransactionSenderAccount (concreteDripped.state.get sender) concreteExitTx maxFee)
-    pure (sender, effective, hashes, 0)) = _
-  rw [concreteExitRecoveredSender, hfee]
-  change (do
-    Except.mapError TransitionError.transaction
-      (checkTransactionSenderAccount (concreteDripped.state.get concreteCreateSender) concreteExitTx 4000000)
-    pure (concreteCreateSender, 2, [], 0)) = _
-  rw [concreteExitSenderChecked]
-  rfl
+  have hblob : checkTransactionBlobData
+      (initBenv .prague concreteDripped concreteExitExecutionHeader).beginTransaction
+      concreteExitTx 4000000 = .ok (4000000, []) := by rfl
+  have hreceiver : checkTransactionReceiver concreteExitTx = .ok () := by rfl
+  have hauth : checkTransactionAuthorizationList concreteExitTx = .ok () := by rfl
+  exact checkTransaction_ok_of_parts hgas hchain concreteExitRecoveredSender hfee
+    hblob hreceiver hauth concreteExitSenderChecked
 
 noncomputable def concreteExitTxInput : Benv :=
   initBenv .prague concreteDripped concreteExitExecutionHeader
@@ -2850,19 +2825,7 @@ theorem concreteExit_transaction :
   have hauths : concreteExitTx.auths = [] := rfl
   unfold processTransaction
   simp only [bind, Except.bind]
-  change (do
-    let validationSender ←
-      ((match concreteExitTxInput.beginTransaction.stat.rules.stateGas with
-        | none => Except.ok 0
-        | some _ => do
-          Except.mapError TransitionError.transaction
-            (checkTransactionChainId concreteExitTxInput.beginTransaction concreteExitTx)
-          Except.mapError (fun e => TransitionError.senderRecovery e)
-            (recoverSender concreteExitTxInput.beginTransaction.stat.chainId concreteExitTx)) :
-        Except TransitionError Adr)
-    (fun _ => _) validationSender) =
-      .ok (concreteExitTransactionState, concreteExitTransactionBout) <;>
-  rw [hvalidationStateGas]
+  rw [recoverValidationSender_of_stateGas_none concreteExitTx hvalidationStateGas]
   simp only [bind, Except.bind]
   rw [hrules]
   simp only [Except.mapError]

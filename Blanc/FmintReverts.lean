@@ -259,7 +259,7 @@ theorem tokenNeSelf_runCompiledTo {sevm : Sevm} {pre : Devm}
           · show B256.eqCheck sevm.currentTarget.toB256 (Sevm.argWord sevm 1) = 0
             rw [argWord_one_of_decodes h_dec]
             show (if sevm.currentTarget.toB256 = token then (1 : B256) else 0) = 0
-            rw [if_neg (fun h => h_ne h.symm)]
+            rw [ite_eq_right (fun h => h_ne h.symm)]
           · exact Func.runCompiledTo_revert_of (i := 0) (sz := 0) (s := [])
               (G := g - 131) rfl Devm.extCost_empty_window rfl
               Devm.memRead_zero),

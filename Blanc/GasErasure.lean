@@ -797,8 +797,8 @@ private theorem run_sload {e : Sevm} {a a' b b' : Devm} {pc1 pc2 : Nat}
     rw [hkey, hasa1]
   by_cases hwarm : ⟨e.currentTarget, k1⟩ ∈ a1.accessedStorageKeys
   · have hwarm2 := hcond.mp hwarm
-    simp only [if_pos hwarm] at h1
-    simp only [if_pos hwarm2] at h2
+    simp only [ite_eq_left hwarm] at h1
+    simp only [ite_eq_left hwarm2] at h2
     rcases Except.bind_eq_ok h1 with ⟨m1, hc1, hpush1⟩
     rcases Except.bind_eq_ok h2 with ⟨m2, hc2, hpush2⟩
     have hag2 := hag1.of_burn (Devm.burn_of_chargeGas hc1) (Devm.burn_of_chargeGas hc2)
@@ -815,8 +815,8 @@ private theorem run_sload {e : Sevm} {a a' b b' : Devm} {pc1 pc2 : Nat}
     exact hagB.of_push (Devm.push_of_push hpush1) (Devm.push_of_push hpush2)
   · have hcold2 : ¬ ⟨e.currentTarget, k2⟩ ∈ b1.accessedStorageKeys :=
       fun hc => hwarm (hcond.mpr hc)
-    simp only [if_neg hwarm] at h1
-    simp only [if_neg hcold2] at h2
+    simp only [ite_eq_right hwarm] at h1
+    simp only [ite_eq_right hcold2] at h2
     rw [← hkey] at h2
     rcases Except.bind_eq_ok h1 with ⟨m1, hc1, hpush1⟩
     rcases Except.bind_eq_ok h2 with ⟨m2, hc2, hpush2⟩
@@ -872,8 +872,8 @@ private theorem run_sstore {e : Sevm} {a a' b b' : Devm} {pc1 pc2 : Nat}
   obtain ⟨hag3, hg2eq⟩ : Devm.EqModGas a3 b3 ∧ g21 = g22 := by
     by_cases hcold : ⟨e.currentTarget, k1⟩ ∉ a2.accessedStorageKeys
     · have hcold2 : ⟨e.currentTarget, k2⟩ ∉ b2.accessedStorageKeys := hcond.mpr hcold
-      rw [if_pos hcold] at hacc1
-      rw [if_pos hcold2] at hacc2
+      rw [ite_eq_left hcold] at hacc1
+      rw [ite_eq_left hcold2] at hacc2
       simp only [Prod.mk.injEq] at hacc1 hacc2
       rcases hacc1 with ⟨ha3, hg21⟩
       rcases hacc2 with ⟨hb3, hg22⟩
@@ -887,8 +887,8 @@ private theorem run_sstore {e : Sevm} {a a' b b' : Devm} {pc1 pc2 : Nat}
       exact hagB.of_addAccessedStorageKey
     · have hwarm2 : ¬ ⟨e.currentTarget, k2⟩ ∉ b2.accessedStorageKeys :=
         fun hc => hcold (hcond.mp hc)
-      rw [if_neg hcold] at hacc1
-      rw [if_neg hwarm2] at hacc2
+      rw [ite_eq_right hcold] at hacc1
+      rw [ite_eq_right hwarm2] at hacc2
       simp only [Prod.mk.injEq] at hacc1 hacc2
       rcases hacc1 with ⟨ha3, hg21⟩
       rcases hacc2 with ⟨hb3, hg22⟩

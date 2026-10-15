@@ -260,7 +260,7 @@ theorem create_token (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
   · rw [pf.2.2.1, hraw, facts.1]
     unfold State.setStorVal
     rw [State.get_set_self, processCreateMessage_msg_afterTransfer_get hvalue htransfer,
-      if_pos rfl, runtime_code]
+      ite_eq_left rfl, runtime_code]
     unfold tokenAcct
     apply Acct.ext
     · simp only [Acct.clearIfEmpty_nonce]
@@ -273,7 +273,7 @@ theorem create_token (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
     · simp only [Acct.clearIfEmpty_code]
   · intro a ha
     rw [pf.2.2.2 a ha, hraw, State.get_setStorVal_ne _ _ _ (Ne.symm ha),
-      processCreateMessage_msg_afterTransfer_get hvalue htransfer, if_neg ha]
+      processCreateMessage_msg_afterTransfer_get hvalue htransfer, ite_eq_right ha]
   · rw [CreateEntry.liftCreatePost_state, hraw, facts.1, runtime_code,
       CreateEntry.entry_state hvalue hstv htransfer]
 

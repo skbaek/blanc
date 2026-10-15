@@ -703,7 +703,7 @@ theorem pushAt_exact_revertOrOk {pc sevm pre xs exn}
     exact (hro.not_noRevert_error rfl hn).elim
   | cont h exc' =>
     have hs := hstep.symm.trans h
-    rw [Ninst.step_push, if_neg hne] at hs
+    rw [Ninst.step_push, ite_eq_right hne] at hs
     obtain ⟨hpc, hrun⟩ := Step.ofExecution_cont hs
     cases hpc
     rcases Devm.pushRun_exact hrun with ⟨hroom, hgas⟩
@@ -1379,7 +1379,7 @@ private theorem reach_of_dispatchWith_build :
           rw [← B256.not_lt]
           intro hlt
           have hgt : z.fst > sig := hlt
-          rw [B256.gtCheck, if_pos hgt] at popped
+          rw [B256.gtCheck, ite_eq_left hgt] at popped
           exact B256.zero_ne_one popped.1
         have hmemberDrop : (sig, body) ∈ all.drop split := by
           rcases hmemberSplit with hin | hin
@@ -1401,7 +1401,7 @@ private theorem reach_of_dispatchWith_build :
         have popped := popBurn_pref (Devm.PopBurn.of_popBurnBy hpop) ptest
         have hlt : sig < z.fst := by
           by_contra hnlt
-          rw [B256.gtCheck, if_neg (fun hgt => hnlt hgt)] at popped
+          rw [B256.gtCheck, ite_eq_right (fun hgt => hnlt hgt)] at popped
           exact hflag popped.1
         have hmemberTake : (sig, body) ∈ all.take split := by
           rcases hmemberSplit with hin | hin

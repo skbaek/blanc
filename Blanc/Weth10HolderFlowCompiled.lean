@@ -2986,7 +2986,7 @@ private theorem Exec.Frame.CompiledCursor.compiledValueRedemptionContinuation
   have hcovered : Sevm.argWord frame.sevm amountArg ≤ balance := by
     rw [← B256.not_lt]
     intro hlt
-    rw [B256.ltCheck, if_pos hlt] at hflag
+    rw [B256.ltCheck, ite_eq_left hlt] at hflag
     exact B256.zero_ne_one hflag.symm
   rw [hflag] at hguardStack
   have hsuccessStack :
@@ -4852,7 +4852,7 @@ theorem action_eq_of_flowAction_eq
         currentTarget := frame.sevm.currentTarget
         codeAddress := frame.sevm.codeAddress
         depth := frame.sevm.depth } := by
-  simp only [Blanc.Weth10.Exec.Frame.flowAction?, if_pos context.invocation, hatom,
+  simp only [Blanc.Weth10.Exec.Frame.flowAction?, ite_eq_left context.invocation, hatom,
     Option.map_some, Option.some.injEq] at haction
   exact haction.symm
 
@@ -4864,7 +4864,7 @@ private theorem debit_eq_of_flowAction_eq
     action.debit =
       primaryDebitProvenance frame.sevm frame.pre frame.post := by
   unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
-  rw [if_pos context.invocation] at haction
+  rw [ite_eq_left context.invocation] at haction
   cases hatom : primaryFlowAtom frame.sevm with
   | none => simp only [hatom, Option.map_none, reduceCtorEq] at haction
   | some atom =>
@@ -4964,7 +4964,7 @@ theorem flashSettlement_reconstruction
   · have hpostmax : (Devm.getStor post e.currentTarget).get
         (flashAllowanceRuntimeKey e) = B256.max := by
       rw [hkey, hmax.2.1, hmax.1]
-    rw [if_pos hpostmax]
+    rw [ite_eq_left hpostmax]
     exact ⟨houtcome, rfl, hmax.1⟩
   · rcases hfinite with
       ⟨allowance, hnotmax, hle, hread, hwrite, _hlogs⟩
@@ -4987,7 +4987,7 @@ theorem flashSettlement_reconstruction
         (flashAllowanceRuntimeKey e) ≠ B256.max := by
       rw [hpostafter]
       exact hafternotmax
-    rw [if_neg hpostnotmax]
+    rw [ite_eq_right hpostnotmax]
     have hbefore : (Devm.getStor post e.currentTarget).get
           (flashAllowanceRuntimeKey e) + Sevm.argWord e 2 = allowance := by
       rw [hpostafter]
@@ -6011,14 +6011,14 @@ theorem Exec.Frame.hasNoWethBalanceOwnEffect_of_recognized
       · have hprimary : primaryFlowAtom e ≠ none := by
           simp only [primaryFlowAtom, hempty, ↓reduceIte, ne_eq, reduceCtorEq, not_false_eq_true]
         unfold Blanc.Weth10.Exec.Frame.flowAction? at hnone
-        rw [if_pos context.invocation] at hnone
+        rw [ite_eq_left context.invocation] at hnone
         cases h : primaryFlowAtom e with
         | none => exact (hprimary h).elim
         | some atom => simp only [h, Option.map_some, reduceCtorEq] at hnone
       have hnonempty : e.data.length.toB256 ≠ 0 := hempty
       have hprimary : primaryFlowAtom e = none := by
         unfold Blanc.Weth10.Exec.Frame.flowAction? at hnone
-        rw [if_pos context.invocation] at hnone
+        rw [ite_eq_left context.invocation] at hnone
         cases h : primaryFlowAtom e with
         | none => rfl
         | some atom => simp only [h, Option.map_some, reduceCtorEq] at hnone
@@ -7067,7 +7067,7 @@ theorem Exec.Frame.hasCompiledBalanceOwnEffect
       · have hprimary : primaryFlowAtom frame.sevm ≠ none := by
           simp only [primaryFlowAtom, hempty, ↓reduceIte, ne_eq, reduceCtorEq, not_false_eq_true]
         unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
-        rw [if_pos context.invocation] at haction
+        rw [ite_eq_left context.invocation] at haction
         cases hatom : primaryFlowAtom frame.sevm with
         | none => exact (hprimary hatom).elim
         | some atom => simp only [hatom, Option.map_some, reduceCtorEq] at haction

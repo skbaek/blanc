@@ -46,7 +46,7 @@ theorem deployedStor_metadata :
     · rw [← h1]; exact List.mem_cons_of_mem _ (List.mem_cons_self ..)
     · by_cases h0 : (0 : B256) = x
       · rw [← h0]; exact List.mem_cons_self ..
-      · rw [if_neg h2, if_neg h1, if_neg h0] at hx
+      · rw [ite_eq_right h2, ite_eq_right h1, ite_eq_right h0] at hx
         exact absurd (by simp only [Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc,
           Std.TreeMap.getD_emptyc]) hx
 
@@ -117,7 +117,7 @@ theorem weth9_create_framed (msg : Msg) (hvalue : msg.value = 0)
       (⟨⟨raw.output⟩⟩ : ByteArray) } : Acct).clearIfEmpty =
       { raw.state.get msg.currentTarget with code := (⟨⟨raw.output⟩⟩ : ByteArray) }) := by
     unfold Acct.clearIfEmpty
-    rw [if_neg hnotEmpty]
+    rw [ite_eq_right hnotEmpty]
   refine ⟨post, hpost, ?_, ?_, ?_⟩
   · show (post.state.get msg.currentTarget).code.toList = _
     rw [(liftCreatePost_facts _ raw).2.2.1, hclear, hcodeEq]

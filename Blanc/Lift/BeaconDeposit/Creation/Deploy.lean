@@ -30,7 +30,7 @@ open Jaune Blanc.BeaconDeposit Blanc.Lift.BeaconDeposit Blanc.ForkUniform
 accumulator. -/
 theorem solInv_of_ctorStor {s : Stor} (h : CtorStor 31 s) : SolInv s [] := by
   have hlow : ∀ x : B256, x.toNat < 33 → s.get x = 0 := fun x hx => by
-    rw [h x, if_neg (by omega)]
+    rw [h x, ite_eq_right (by omega)]
   have hbranch : ∀ k, k < 32 → s.get (solBranchSlot k) = 0 := fun k hk =>
     hlow _ (by rw [solBranchSlot, toNat_toB256' (by omega)]; omega)
   have hcount : s.get solCountSlot = 0 := hlow _ (by decide)

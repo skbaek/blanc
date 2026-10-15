@@ -851,11 +851,11 @@ private theorem refine_transferFrom_spend (hinv : VyInv stor s K)
       v ≤ s.allowances f' a) ?_ ?_ ?_
   · intro r
     simp only [rawOf, rawTransferFrom, ← ha_def, ← hf_def, ← hd_def, ← hv_def]
-    rw [hs1, hs2, hff, hy, ← hst1_def, ← hst2_def, if_pos hspend, ← hz_def, ← hst3_def]
+    rw [hs1, hs2, hff, hy, ← hst1_def, ← hst2_def, ite_eq_left hspend, ← hz_def, ← hst3_def]
     split_ifs with hc <;> simp_all only [ne_eq, Nat.reducePow, eq_comm, not_false_eq_true, forall_const, true_and, Option.some.injEq, and_self, not_and, not_le, false_iff, isEmpty_Prop, implies_true, IsEmpty.forall_iff]
   · intro o
     simp only [callAt, Curve3Crv.step, Curve3Crv.body, c3ctx, ← ha_def, ← hf_def, ← hd_def,
-      ← hv_def, ← hf'_def, ← hd'_def]
+      ← hv_def]
     by_cases hv : sevm.value = 0
     · simp only [hv, ite_true, Curve3Crv.transferFrom_eq_ok, true_and, B256.Nof]
       constructor
@@ -870,7 +870,7 @@ private theorem refine_transferFrom_spend (hinv : VyInv stor s K)
     have hstep : Curve3Crv.step (c3ctx sevm ow) (callAt sevm 5) s =
         .ok (s', [.transfer f' d' v], .bool true) := by
       simp only [callAt, Curve3Crv.step, Curve3Crv.body, c3ctx, ← ha_def, ← hf_def, ← hd_def,
-        ← hv_def, ← hf'_def, ← hd'_def, hv, ite_true]
+        ← hv_def, hv, ite_true]
       exact Curve3Crv.transferFrom_eq_ok.mpr
         ⟨hfr, hdr, hle, hnof, fun _ => hal, by simp only [hs'_def, hbf_def, hf'_def, hd'_def,
           hmint, ↓reduceIte]⟩
@@ -889,7 +889,7 @@ private theorem refine_transferFrom_spend (hinv : VyInv stor s K)
         rw [hst3_def, Stor.get_set_ne _ h3, hst2_def, Stor.get_set_ne _ h2, hst1_def,
           Stor.get_set_ne _ h1]
       · intro k hk
-        simp only [hks, List.mem_cons, List.not_mem_nil, or_false] at hk
+        simp only [List.mem_cons, List.not_mem_nil, or_false] at hk
         rcases hk with rfl | rfl | rfl
         · dsimp only [Key.slot, Key.val]
           rw [hs'_def]
@@ -912,12 +912,12 @@ private theorem refine_transferFrom_spend (hinv : VyInv stor s K)
       · intro k hk
         cases k with
         | bal c =>
-          simp only [hks, List.mem_cons, Key.bal.injEq, List.not_mem_nil, or_false, not_or]
+          simp only [List.mem_cons, Key.bal.injEq, List.not_mem_nil, or_false, not_or]
             at hk
           show ledgerCredit (ledgerDebit bf f' v) d' v c = bf c
           rw [ledgerCredit_ne _ hk.2.1, ledgerDebit_ne _ hk.1]
         | allow o p =>
-          simp only [hks, List.mem_cons, Key.allow.injEq, List.not_mem_nil, or_false, not_or]
+          simp only [List.mem_cons, Key.allow.injEq, List.not_mem_nil, or_false, not_or]
             at hk
           show Function.update s.allowances f' (ledgerDebit (s.allowances f') a v) o p =
             s.allowances o p
@@ -1064,12 +1064,12 @@ theorem refine_transferFrom (hinv : VyInv stor s K)
       (s', [.transfer f' d' v], .bool true)
       (sevm.value = 0 ∧ v ≤ bf f' ∧ (ledgerDebit bf f' v d').toNat + v.toNat < 2 ^ 256) ?_ ?_ ?_
     · intro r
-      simp only [rawOf, rawTransferFrom, ← ha_def, ← hf_def, ← hd_def, ← hv_def, ← hbf_def]
-      rw [hs1, hs2, hff, hy, ← hst1_def, ← hst2_def, if_neg hspend]
+      simp only [rawOf, rawTransferFrom, ← ha_def, ← hf_def, ← hd_def, ← hv_def]
+      rw [hs1, hs2, hff, hy, ← hst1_def, ← hst2_def, ite_eq_right hspend]
       split_ifs with hc <;> simp_all only [eq_comm, Nat.reducePow, ne_eq, Decidable.not_not, not_true_eq_false, IsEmpty.forall_iff, and_true, true_and, Option.some.injEq, and_self, not_and, not_lt, false_iff, isEmpty_Prop, implies_true]
     · intro o
       simp only [callAt, Curve3Crv.step, Curve3Crv.body, c3ctx, ← ha_def, ← hf_def, ← hd_def,
-        ← hv_def, ← hf'_def, ← hd'_def]
+        ← hv_def]
       by_cases hv : sevm.value = 0
       · simp only [hv, ite_true, Curve3Crv.transferFrom_eq_ok, true_and, B256.Nof]
         constructor
@@ -1084,7 +1084,7 @@ theorem refine_transferFrom (hinv : VyInv stor s K)
       have hstep : Curve3Crv.step (c3ctx sevm ow) (callAt sevm 5) s =
           .ok (s', [.transfer f' d' v], .bool true) := by
         simp only [callAt, Curve3Crv.step, Curve3Crv.body, c3ctx, ← ha_def, ← hf_def, ← hd_def,
-          ← hv_def, ← hf'_def, ← hd'_def, hv, ite_true]
+          ← hv_def, hv, ite_true]
         exact Curve3Crv.transferFrom_eq_ok.mpr
           ⟨hfr, hdr, hle, hnof, fun hc => absurd hmint hc,
             by simp only [hs'_def, hbf_def, hf'_def, hd'_def, hmint, ↓reduceIte]⟩
@@ -1100,7 +1100,7 @@ theorem refine_transferFrom (hinv : VyInv stor s K)
             reduceCtorEq, List.not_mem_nil, or_self, or_false, or_true])
           rw [hst2_def, Stor.get_set_ne _ h2, hst1_def, Stor.get_set_ne _ h1]
         · intro k hk
-          simp only [hks, List.mem_cons, List.not_mem_nil, or_false] at hk
+          simp only [List.mem_cons, List.not_mem_nil, or_false] at hk
           rcases hk with rfl | rfl | rfl
           · show st2.get (vyBalSlot f') = ledgerCredit (ledgerDebit bf f' v) d' v f'
             rw [hst2_def, hst1_def]
@@ -1115,7 +1115,7 @@ theorem refine_transferFrom (hinv : VyInv stor s K)
         · intro k hk
           cases k with
           | bal c =>
-            simp only [hks, List.mem_cons, Key.bal.injEq, List.not_mem_nil, or_false, not_or] at hk
+            simp only [List.mem_cons, Key.bal.injEq, List.not_mem_nil, or_false, not_or] at hk
             show ledgerCredit (ledgerDebit bf f' v) d' v c = bf c
             rw [ledgerCredit_ne _ hk.2.1, ledgerDebit_ne _ hk.1]
           | allow o p => rfl

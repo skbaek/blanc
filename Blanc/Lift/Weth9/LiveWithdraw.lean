@@ -562,7 +562,7 @@ theorem weth9_withdraw_runExact_core {sevm : Sevm} {pre : Devm} {G : Nat}
     simp only [wB3, wB2, wB1, afterSstore_accountsToDelete, afterSload_accountsToDelete]
   · rw [hpe]
     have hcs := hcp.state
-    rw [if_neg hwad] at hcs ⊢
+    rw [ite_eq_right hwad] at hcs ⊢
     obtain ⟨stmid, hsub, hst⟩ := hcs
     exact ⟨stmid, hsub, hst⟩
 
@@ -590,7 +590,7 @@ theorem WithdrawPost.getStor_self_of_ne_zero {sevm : Sevm} {pre post : Devm} {wa
     Devm.getStor post sevm.currentTarget = (Devm.getStor pre sevm.currentTarget).set
         (balSlot sevm.caller) (pre.getStorVal sevm.currentTarget (balSlot sevm.caller) - wad) := by
   have hcs := h.state
-  rw [if_neg hwad] at hcs
+  rw [ite_eq_right hwad] at hcs
   obtain ⟨stmid, hsub, hst⟩ := hcs
   have hacct3 := wB3_acct_fields sevm pre wad
   have hprot3 : State.Protected (wB3 sevm pre wad).state sevm.currentTarget := by
@@ -615,7 +615,7 @@ theorem WithdrawPost.getStor_other_of_ne_zero {sevm : Sevm} {pre post : Devm} {w
     (hrecv : State.Protected pre.state sevm.caller ∨ B256.Nof (pre.getAcct sevm.caller).bal wad) :
     ∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor pre a := by
   have hcs := h.state
-  rw [if_neg hwad] at hcs
+  rw [ite_eq_right hwad] at hcs
   obtain ⟨stmid, hsub, hst⟩ := hcs
   have hacct3 := wB3_acct_fields sevm pre wad
   intro a ha
@@ -627,7 +627,7 @@ theorem WithdrawPost.getStor_other_of_ne_zero {sevm : Sevm} {pre post : Devm} {w
         rw [hstmid]
         exact State.setBal_get_ne (Ne.symm ha)
       show State.getStor post.state _ = State.getStor (wB3 sevm pre wad).state _
-      rw [hst, Jaune.getStor_addBal, if_neg]
+      rw [hst, Jaune.getStor_addBal, ite_eq_right]
       · show (stmid.get sevm.caller).stor = _
         rw [hmid]; rfl
       · rintro ⟨-, hempty⟩

@@ -690,7 +690,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferNonzero
           pref_head_unique hp2 (pref_append [w] s3.stack)
         have hargZero : Sevm.argWord e 0 = 0 := by
           by_contra hne
-          rw [B256.eqCheck, if_neg hne] at hflag
+          rw [B256.eqCheck, ite_eq_right hne] at hflag
           exact hnz hflag.symm
         exact absurd hargZero hto'
 

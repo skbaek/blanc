@@ -93,7 +93,7 @@ theorem push_safe (value : B256) {pre : Devm} {words : Pattern}
       (pre.push value) := by
   have bound : pre.stack.length < 1024 := matched.length ▸ room
   rw [Devm.push_def]
-  simp only [Except.assert, if_pos bound, bind, Except.bind, SafeResult,
+  simp only [Except.assert, ite_eq_left bound, bind, Except.bind, SafeResult,
     Devm.stack_setMach]
   exact matched.push_exact value
 

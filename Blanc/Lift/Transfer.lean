@@ -708,7 +708,7 @@ private theorem call_fail_stack_exact {sevm : Sevm} {s sf : Devm}
       · by_cases hbal : ((s10.memExtends
             [(inputIndex4, inputSize5), (outputIndex6, outputSize7)]).getAcct
               sevm.currentTarget).bal < value3
-        · rw [if_pos hbal] at h_run
+        · rw [ite_eq_left hbal] at h_run
           rcases eq12 : Devm.push 0
                 (s10.memExtends [(inputIndex4, inputSize5), (outputIndex6, outputSize7)]) with
                 _ | ⟨v12, s12, world12⟩ <;> simp only [eq12] at h_run
@@ -723,7 +723,7 @@ private theorem call_fail_stack_exact {sevm : Sevm} {s sf : Devm}
               exact hs10
             simpa only [List.nil_append, List.cons_append] using congrArg
               (fun z => (0 :: z)) hmem
-        · rw [if_neg hbal] at h_run
+        · rw [ite_eq_right hbal] at h_run
           simp only [genericCall.step] at h_run
           split at h_run
           · simp only [Bind.bind, Except.bind] at h_run
@@ -755,10 +755,10 @@ private theorem call_fail_stack_exact {sevm : Sevm} {s sf : Devm}
               exact hs10
             by_cases herr : child.error.isSome
             · have hsf := Resume.call_stack_flag h_split.symm
-              rw [if_pos herr] at hsf
+              rw [ite_eq_left herr] at hsf
               rw [hsf, hparent]
             · have hsf := Resume.call_stack_flag h_split.symm
-              rw [if_neg herr] at hsf
+              rw [ite_eq_right herr] at hsf
               rw [hsf, hparent] at hfail
               have hz : (0 : B256) = 1 :=
                 pref_head_unique hfail.1 (pref_append [1] xs)
@@ -931,10 +931,10 @@ private theorem staticcall_fail_stack_exact {sevm : Sevm} {s sf : Devm}
           exact hs10
         by_cases herr : child.error.isSome
         · have hsf := Resume.call_stack_flag h_split.symm
-          rw [if_pos herr] at hsf
+          rw [ite_eq_left herr] at hsf
           rw [hsf, hparent]
         · have hsf := Resume.call_stack_flag h_split.symm
-          rw [if_neg herr] at hsf
+          rw [ite_eq_right herr] at hsf
           rw [hsf, hparent] at hfail
           have hz : (0 : B256) = 1 :=
             pref_head_unique hfail.1 (pref_append [1] xs)

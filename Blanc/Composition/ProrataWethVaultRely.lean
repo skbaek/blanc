@@ -304,7 +304,7 @@ theorem touchedWethAllowancePairs_keys_nonaddress
     by_cases same : Sevm.argWord call.sevm 0 = call.sevm.caller.toB256
     · simp only [WethAllowanceInvocation.pair?, approval, Bool.false_eq_true, ↓reduceIte, same,
       reduceCtorEq] at pairEq
-    · simp only [if_neg same] at effect
+    · simp only [ite_eq_right same] at effect
       obtain ⟨valid, _⟩ := effect
       simp only [WethAllowanceInvocation.pair?, approval, Bool.false_eq_true, ↓reduceIte, same,
         Option.some.injEq] at pairEq
@@ -378,11 +378,11 @@ theorem allowance_debit_classification (call : WethAllowanceInvocation) :
     dsimp only at effect
     rw [call.target] at effect
     by_cases same : Sevm.argWord call.sevm 0 = call.sevm.caller.toB256
-    · simp only [if_pos same] at effect
+    · simp only [ite_eq_left same] at effect
       refine Or.inr (Or.inl ⟨rfl, same, ?_, effect⟩)
       simp only [WethAllowanceInvocation.writtenPair?, approval, Bool.false_eq_true, ↓reduceIte,
         WethAllowanceInvocation.pair?, same, Option.filter_none]
-    · simp only [if_neg same] at effect
+    · simp only [ite_eq_right same] at effect
       obtain ⟨valid, result⟩ := effect
       rcases result with ⟨maximum, silent⟩ | ⟨finite, covered, stored, witness⟩
       · refine Or.inr (Or.inr (Or.inl ⟨rfl, same, maximum, ?_, silent⟩))
@@ -440,9 +440,9 @@ theorem foreign_debit_excluded
     dsimp only at effect
     rw [call.target] at effect
     by_cases same : Sevm.argWord call.sevm 0 = call.sevm.caller.toB256
-    · simp only [if_pos same] at effect
+    · simp only [ite_eq_left same] at effect
       exact (effect _ keyShape).symm
-    · simp only [if_neg same] at effect
+    · simp only [ite_eq_right same] at effect
       obtain ⟨valid, result⟩ := effect
       rcases result with ⟨maximum, silent⟩ | ⟨finite, covered, stored, witness⟩
       · exact (silent _ keyShape).symm

@@ -1,4 +1,5 @@
 import Blanc.DripConcreteHistory.Join
+import Blanc.TransactionForward
 
 namespace Blanc
 open Jaune
@@ -17,26 +18,13 @@ theorem concreteDripChecked :
   have hfee : checkTransactionGasFee
       (initBenv .prague concreteJoined concreteDripExecutionHeader).beginTransaction
       concreteDripTx = .ok (2, 4000000) := by decide +kernel
-  rw [checkTransaction, hgas]
-  simp only [Except.mapError, bind, Except.bind]
-  rw [hchain]
-  change (do
-    let sender ← Except.mapError TransitionError.senderRecovery (recoverSender 1 concreteDripTx)
-    let (effective, maxFee) ← Except.mapError TransitionError.transaction
-      (checkTransactionGasFee (initBenv .prague concreteJoined concreteDripExecutionHeader).beginTransaction concreteDripTx)
-    let (maxFee, hashes) ← Except.mapError TransitionError.transaction
-      (checkTransactionBlobData (initBenv .prague concreteJoined concreteDripExecutionHeader).beginTransaction concreteDripTx maxFee)
-    Except.mapError TransitionError.transaction (checkTransactionReceiver concreteDripTx)
-    Except.mapError TransitionError.transaction (checkTransactionAuthorizationList concreteDripTx)
-    Except.mapError TransitionError.transaction (checkTransactionSenderAccount (concreteJoined.state.get sender) concreteDripTx maxFee)
-    pure (sender, effective, hashes, 0)) = _
-  rw [concreteDripRecoveredSender, hfee]
-  change (do
-    Except.mapError TransitionError.transaction
-      (checkTransactionSenderAccount (concreteJoined.state.get concreteCreateSender) concreteDripTx 4000000)
-    pure (concreteCreateSender, 2, [], 0)) = _
-  rw [concreteDripSenderChecked]
-  rfl
+  have hblob : checkTransactionBlobData
+      (initBenv .prague concreteJoined concreteDripExecutionHeader).beginTransaction
+      concreteDripTx 4000000 = .ok (4000000, []) := by rfl
+  have hreceiver : checkTransactionReceiver concreteDripTx = .ok () := by rfl
+  have hauth : checkTransactionAuthorizationList concreteDripTx = .ok () := by rfl
+  exact checkTransaction_ok_of_parts hgas hchain concreteDripRecoveredSender hfee
+    hblob hreceiver hauth concreteDripSenderChecked
 
 noncomputable def concreteDripTxInput : Benv :=
   initBenv .prague concreteJoined concreteDripExecutionHeader

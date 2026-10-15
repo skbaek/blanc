@@ -222,8 +222,8 @@ private theorem
       initialize_addAccessedAddress_getStorVal, himplementationRaw,
       Devm.getOrigStorVal, himplementationOriginal, ite_self, hnew]
     rw [sstoreValueCost,
-      if_pos ⟨rfl, fun h => himplementationWordNonzero h.symm⟩,
-      if_pos rfl]
+      ite_eq_left ⟨rfl, fun h => himplementationWordNonzero h.symm⟩,
+      ite_eq_left rfl]
     norm_num only [gasStorageSet]
   simp only [hnew, Devm.getStorVal_setMach,
     initialize_addAccessedStorageKey_getStorVal,
@@ -495,8 +495,8 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
         initialize_addAccessedAddress_getStorVal, himplementationRaw,
         Devm.getOrigStorVal, himplementationOriginal, ite_self, hnew]
       rw [sstoreValueCost,
-        if_pos ⟨rfl, fun h => himplementationWordNonzero h.symm⟩,
-        if_pos rfl]
+        ite_eq_left ⟨rfl, fun h => himplementationWordNonzero h.symm⟩,
+        ite_eq_left rfl]
       norm_num only [gasStorageSet]
     simp only [hnew, Devm.getStorVal_setMach,
       initialize_addAccessedStorageKey_getStorVal,

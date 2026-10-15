@@ -2370,17 +2370,15 @@ def check_source() -> Any:
                 child_names = [emit_node(c) for c in node.children]
                 thm = f"entry_{i}_step_{counter[0]}"
                 counter[0] += 1
-                # The branch-only lemmas (the two `AVal.jumps?` shortcut facts and the
-                # taken-side pc's `B256.toNat_toB256_of_lt`/`Bool` and/or-with-a-known-side
+                # The branch-only lemmas (core `Option.none_beq_some` for the two
+                # `AVal.jumps?` shortcut facts, and the `Bool` and/or-with-a-known-side
                 # cleanup) only apply to a 2-child (`.branch`) step; a 1-child (`.dest`/
                 # join-ref crossing) step never produces a `none == some _` or `||`/`&&`
-                # term, so including them there is only linter noise.
+                # term, so including them there is only linter noise.  Lean 4.35's
+                # unused-simp-argument linter reported `B256.toNat_toB256_of_lt` and the
+                # other six `Bool` identities unused in every step of the registered row.
                 branch_only = ([
-                    "B256.toNat_toB256_of_lt",
-                    "Bool.true_and", "Bool.and_true", "Bool.false_or", "Bool.or_false",
-                    "Bool.true_or", "Bool.or_true", "Bool.false_and", "Bool.and_false",
-                    "show ((none : Option Bool) == some true) = false from by decide",
-                    "show ((none : Option Bool) == some false) = false from by decide",
+                    "Bool.and_true", "Bool.or_true", "Option.none_beq_some",
                 ] if len(node.children) == 2 else [])
                 # The default-simp-set facts these steps used, captured with `simp?` from
                 # every split node of the registered row: the step is an explicit
@@ -2390,8 +2388,8 @@ def check_source() -> Any:
                                 "UInt8.ofNat_one", "UInt8.reduceAdd",
                                 "Bool.and_eq_true", "beq_iff_eq"]
                 simp_names = ([node.sfunc, "checkNodeT", "AVal.jumps?", "Ninst.size",
-                               "Ninst.pcFree", "Ninst.toBytes", "Rinst.toUInt8", "Xinst.toUInt8",
-                               "pushToB8L", "bytesAtT", "LTrie.get?",
+                               "Ninst.pcFree", "Ninst.toBytes", "Rinst.toUInt8",
+                               "pushToB8L", "bytesAtT",
                                "List.length_cons", "List.length_nil"] + normal_forms +
                               branch_only + node.hints + child_names)
                 block.extend([

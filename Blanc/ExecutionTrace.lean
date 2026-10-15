@@ -245,7 +245,7 @@ theorem exists_messageCallTrace {msg : Msg} {state : State}
         rcases exists_processMessageTrace _ (.ok evm) hcore with ⟨trace⟩
         exact ⟨.callRun htargetFalse delegated refundWord.toNat (by
           unfold messageCallDelegation
-          rw [if_neg hauth, hw]
+          rw [ite_eq_right hauth, hw]
           rfl)
           (messageCallExecutionMessage delegated) rfl evm hcore trace h_result⟩
       · rename_i hcode
@@ -257,7 +257,7 @@ theorem exists_messageCallTrace {msg : Msg} {state : State}
         rcases exists_processMessageTrace _ (.ok evm) hcore with ⟨trace⟩
         exact ⟨.callRun htargetFalse delegated refundWord.toNat (by
           unfold messageCallDelegation
-          rw [if_neg hauth, hw]
+          rw [ite_eq_right hauth, hw]
           rfl)
           (messageCallExecutionMessage delegated) rfl evm hcore trace h_result⟩
 

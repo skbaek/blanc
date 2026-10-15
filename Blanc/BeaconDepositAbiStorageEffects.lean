@@ -47,13 +47,13 @@ private theorem validateDynamicTailAfterArg_success_storageEffectRun
   have hoffsetLt :
       B256.ltCheck offset (Nat.toB256 (2 ^ 32)) = 1 := by
     simp only [B256.ltCheck]
-    rw [if_pos]
+    rw [ite_eq_left]
     rw [B256.lt_iff_toNat_lt_toNat, hoffsetNat, hlimitNat]
     exact hoffset
   have hlengthLt :
       B256.ltCheck length (Nat.toB256 (2 ^ 32)) = 1 := by
     simp only [B256.ltCheck]
-    rw [if_pos]
+    rw [ite_eq_left]
     rw [B256.lt_iff_toNat_lt_toNat, hlengthNat, hlimitNat]
     exact hlength
   have hoffsetPlusFour :
@@ -72,7 +72,7 @@ private theorem validateDynamicTailAfterArg_success_storageEffectRun
   have hlengthWordInBounds :
       B256.ltCheck sevm.data.length.toB256 (36 + offset) = 0 := by
     simp only [B256.ltCheck]
-    rw [if_neg]
+    rw [ite_eq_right]
     rw [B256.lt_iff_toNat_lt_toNat,
       B256.toNat_toB256_of_lt hdataBound, hoffsetPlusThirtySixNat]
     omega
@@ -101,7 +101,7 @@ private theorem validateDynamicTailAfterArg_success_storageEffectRun
   have hpaddedInBounds :
       B256.ltCheck sevm.data.length.toB256 paddedEnd = 0 := by
     simp only [B256.ltCheck]
-    rw [if_neg]
+    rw [ite_eq_right]
     rw [B256.lt_iff_toNat_lt_toNat,
       B256.toNat_toB256_of_lt hdataBound, hpaddedEndNat]
     omega
@@ -486,7 +486,7 @@ theorem validateDepositAbi_success_storageEffectRun
   have hheadInBounds :
       B256.ltCheck sevm.data.length.toB256 132 = 0 := by
     simp only [B256.ltCheck]
-    rw [if_neg]
+    rw [ite_eq_right]
     rw [B256.lt_iff_toNat_lt_toNat, hlengthNat,
       show (132 : B256).toNat = 132 by decide +kernel]
     exact not_lt_of_ge hdec.head

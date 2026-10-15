@@ -109,7 +109,7 @@ theorem applyImage_sliceD_of_avoids
       · rw [List.sliceD_eq_map, List.sliceD_eq_map]
         apply List.map_congr_left
         intro i hi
-        rw [Bytes.getD_writeAt, if_neg]
+        rw [Bytes.getD_writeAt, ite_eq_right]
         omega
       · subst width
         simp only [List.sliceD, List.takeD_zero]

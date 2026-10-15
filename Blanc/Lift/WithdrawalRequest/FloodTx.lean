@@ -863,8 +863,8 @@ theorem txB_processTransaction
             rw [hd_E]
           rw [e2, hnonce]
           decide
-        rw [State.setBal_get_self, if_pos rfl, Acct.clearIfEmpty_withBal_of_nonce hdn]
-      · rw [State.setBal_get_ne h, if_neg h]
+        rw [State.setBal_get_self, ite_eq_left rfl, Acct.clearIfEmpty_withBal_of_nonce hdn]
+      · rw [State.setBal_get_ne h, ite_eq_right h]
     have hafter_ne : ∀ a, a ≠ looperAddress → after.state.get a = mid.get a := by
       intro a ha
       rw [hafter]
@@ -879,10 +879,10 @@ theorem txB_processTransaction
     · have hdbal : debit.bal senderE = benv.state.bal senderE - v := by
         show (debit.get senderE).bal = _
         rw [hd_E]
-      rw [hpost_ne _ hEL (by decide), hafter_ne _ hEL, hmid_get, if_pos rfl, hdbal, hd_E]
+      rw [hpost_ne _ hEL (by decide), hafter_ne _ hEL, hmid_get, ite_eq_left rfl, hdbal, hd_E]
       rfl
     · intro a haE haL haP
-      rw [hpost_ne a haL haP, hafter_ne a haL, hmid_get, if_neg (Ne.symm haE), hd_ne a (Ne.symm haE)]
+      rw [hpost_ne a haL haP, hafter_ne a haL, hmid_get, ite_eq_right (Ne.symm haE), hd_ne a (Ne.symm haE)]
     have hL : (m.benv.state.bal m.currentTarget).toNat = (benv.state.bal looperAddress).toNat + 2895 := by
       show (after.state.get msg.currentTarget).bal.toNat = _
       rw [hm_ct, hafter_L]

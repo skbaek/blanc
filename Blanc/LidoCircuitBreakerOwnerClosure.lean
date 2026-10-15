@@ -305,13 +305,13 @@ theorem Exec.CoreRuntimeOwnerClosed.nextNone
       have hcanonical : run = Exec.cont hevm next := Exec.unique _ _
       subst run
       unfold Exec.committedFrames at member
-      rw [dif_pos committed] at member
+      rw [dite_eq_left committed] at member
       simp only [List.mem_cons] at member
       rcases member with rfl | descendant
       · exact (hforeign owner).elim
       · apply tail frame
         · unfold Exec.committedFrames
-          rw [dif_pos committed]
+          rw [dite_eq_left committed]
           simp only [List.mem_cons]
           exact Or.inr (by
             simpa only [Exec.descendantFrames] using descendant)
@@ -342,13 +342,13 @@ theorem Exec.CoreRuntimeOwnerClosed.nextNone
       have hcanonical : run = canonical := Exec.unique _ _
       subst run
       unfold Exec.committedFrames at member
-      rw [dif_pos committed] at member
+      rw [dite_eq_left committed] at member
       simp only [List.mem_cons] at member
       rcases member with rfl | descendant
       · exact (hforeign owner).elim
       · apply tail frame
         · unfold Exec.committedFrames
-          rw [dif_pos committed]
+          rw [dite_eq_left committed]
           simp only [List.mem_cons]
           exact Or.inr (by
             simpa only [canonical, Exec.descendantFrames] using descendant)
@@ -382,13 +382,13 @@ theorem Exec.CoreRuntimeOwnerClosed.jump
   have tail := ih next committed installedInter
     (fun htarget => (hforeign htarget).elim)
   unfold Exec.committedFrames at member
-  rw [dif_pos committed] at member
+  rw [dite_eq_left committed] at member
   simp only [List.mem_cons] at member
   rcases member with rfl | descendant
   · exact (hforeign owner).elim
   · apply tail frame
     · unfold Exec.committedFrames
-      rw [dif_pos committed]
+      rw [dite_eq_left committed]
       simp only [List.mem_cons]
       exact Or.inr (by
         simpa only [Exec.descendantFrames] using descendant)
@@ -411,7 +411,7 @@ theorem Exec.CoreRuntimeOwnerClosed.last
   have hcanonical : run = Exec.halt hevm := Exec.unique _ _
   subst run
   unfold Exec.committedFrames at member
-  rw [dif_pos committed] at member
+  rw [dite_eq_left committed] at member
   simp only [Exec.descendantFrames, List.mem_singleton] at member
   subst frame
   exact (hforeign owner).elim
@@ -516,7 +516,7 @@ theorem Exec.CoreRuntimeOwnerClosed.nextSome
                     hs hparentNe hnonempty
                     (by rw [hinnerTarget]
                         dsimp only [getDelegatedCodeAddress]
-                        rw [if_neg (not_delegation_of_compile installed.1)])
+                        rw [ite_eq_right (not_delegation_of_compile installed.1)])
                 rcases Frame.enter_run_inv henter with
                   ⟨benv, htransfer, hinit⟩
                 have hcadrInit :=
@@ -542,7 +542,7 @@ theorem Exec.CoreRuntimeOwnerClosed.nextSome
               have tail := ihNext next committed installedInter
                 (fun htarget => (hforeign htarget).elim)
               unfold Exec.committedFrames at member
-              rw [dif_pos committed] at member
+              rw [dite_eq_left committed] at member
               simp only [List.mem_cons] at member
               rcases member with rfl | descendant
               · exact (hforeign owner).elim
@@ -558,17 +558,17 @@ theorem Exec.CoreRuntimeOwnerClosed.nextSome
                   rcases descendant with (rfl | hchild) | hnext
                   · apply childClosed (Exec.Frame.ofRun child childCommits)
                     · unfold Exec.committedFrames
-                      rw [dif_pos childCommits]
+                      rw [dite_eq_left childCommits]
                       simp only [mem_cons, true_or]
                     · simpa only [Exec.Frame.ofRun] using owner
                   · apply childClosed frame
                     · unfold Exec.committedFrames
-                      rw [dif_pos childCommits]
+                      rw [dite_eq_left childCommits]
                       simp only [mem_cons, hchild, or_true]
                     · exact owner
                   · apply tail frame
                     · unfold Exec.committedFrames
-                      rw [dif_pos committed]
+                      rw [dite_eq_left committed]
                       simp only [List.mem_cons]
                       exact Or.inr hnext
                     · exact owner
@@ -576,7 +576,7 @@ theorem Exec.CoreRuntimeOwnerClosed.nextSome
                   simp only [List.nil_append] at descendant
                   apply tail frame
                   · unfold Exec.committedFrames
-                    rw [dif_pos committed]
+                    rw [dite_eq_left committed]
                     simp only [List.mem_cons]
                     exact Or.inr descendant
                   · exact owner
@@ -722,11 +722,11 @@ private theorem Exec.runtimeDescendantOwnerClosure :
         · exact childClosed child childCommits hchildAt hchildDirect
             (Exec.Frame.ofRun child childCommits)
             (by unfold Exec.committedFrames
-                rw [dif_pos childCommits]
+                rw [dite_eq_left childCommits]
                 simp only [mem_cons, true_or]) owner
         · exact childClosed child childCommits hchildAt hchildDirect retained
             (by unfold Exec.committedFrames
-                rw [dif_pos childCommits]
+                rw [dite_eq_left childCommits]
                 simp only [mem_cons, childMember, or_true]) owner
         · exact nextClosed retained nextMember owner
       · rw [Exec.descendantFrames_runOk_of_not_settlementCommits
@@ -748,7 +748,7 @@ private theorem Exec.CoreRuntimeOwnerClosed.atTarget
     refine ⟨rfl, target, direct target, ?_⟩
     exact (installed.2 target).1
   unfold Exec.committedFrames at member
-  rw [dif_pos committed] at member
+  rw [dite_eq_left committed] at member
   simp only [List.mem_cons] at member
   rcases member with rfl | descendant
   · simpa only [root, Exec.Frame.exactInvocation_iff_rootDeriv,

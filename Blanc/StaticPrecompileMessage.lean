@@ -53,11 +53,11 @@ theorem stor_of_processMessage_staticPrecomp
       · unfold processMessage.settle at hset
         dsimp only [bind, Except.bind] at hset
         by_cases herr : evm'.error.isSome = true
-        · rw [if_pos herr] at hset
+        · rw [ite_eq_left herr] at hset
           intro a
           rw [Except.ok.inj hset]
           rfl
-        · rw [if_neg herr] at hset
+        · rw [ite_eq_right herr] at hset
           have heq : child = evm' := Except.ok.inj hset
           subst heq
           have hstate := state_of_executePrecomp_ok hpc.2.2 herr
@@ -106,11 +106,11 @@ theorem code_of_processMessage_staticPrecomp
       · unfold processMessage.settle at hset
         dsimp only [bind, Except.bind] at hset
         by_cases herr : evm'.error.isSome = true
-        · rw [if_pos herr] at hset
+        · rw [ite_eq_left herr] at hset
           intro a
           rw [Except.ok.inj hset]
           rfl
-        · rw [if_neg herr] at hset
+        · rw [ite_eq_right herr] at hset
           have heq : child = evm' := Except.ok.inj hset
           subst heq
           have hstate := state_of_executePrecomp_ok hpc.2.2 herr
@@ -164,7 +164,7 @@ theorem gasSha25664_le_of_processMessage_clean
         exact hlen
       unfold executeSha256 PrecompResult.chargeGas at hexec
       simp only [hlen'] at hexec
-      rw [if_neg (by
+      rw [ite_eq_right (by
         show ¬(60 + 12 * ceilDiv 64 32) ≤
           (initEvm ((callMsg sevm parent gas 0 sevm.currentTarget 2 2 true true
             calldata code false).withBenv benv)).dyna.gasLeft

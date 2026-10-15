@@ -133,7 +133,8 @@ private theorem address_observation_effect
         sourceLastTarget entries
       else if assignmentSlot target = logicalKey then 0
       else (solRegistryStorage raw).read logicalKey := by
-    simp only [logicalRemovalPost, List.foldl_cons, List.foldl_nil, Ne.symm hremoved, ↓reduceIte,
+    dsimp only [logicalRemovalPost, List.foldl]
+    simp only [Ne.symm hremoved, ↓reduceIte,
       Ne.symm hlength, Ne.symm hmoved, Ne.symm hcount]
   rw [hraw, hlogical, hbase]
   simp only [hassignmentKey, hholeKey, htailKey]
@@ -213,7 +214,8 @@ private theorem word_observation_effect
       else if countSlot oldPauser = logicalKey then
         Nat.toB256 (assignmentCount entries oldPauser - 1)
       else (solRegistryStorage raw).read logicalKey := by
-    simp only [logicalRemovalPost, List.foldl_cons, List.foldl_nil, Ne.symm htail, ↓reduceIte,
+    dsimp only [logicalRemovalPost, List.foldl]
+    simp only [Ne.symm htail, ↓reduceIte,
       Ne.symm hhole, Ne.symm hassignment]
   rw [hraw, hlogical, hbase]
   simp only [hcountKey, hmovedKey, hlengthKey, hremovedKey]

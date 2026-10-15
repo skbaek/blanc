@@ -205,27 +205,27 @@ theorem WethFrameClass.classification_complete
     WethFrameClass.classify? frame = some cls := by
   obtain ⟨identity, fit⟩ := classified
   unfold WethFrameClass.classify?
-  rw [if_pos identity]
+  rw [ite_eq_left identity]
   obtain ⟨approveMem, transferFromMem, transferMem, withdrawMem⟩ :=
     writer_mem_wethSelectors
   cases cls with
   | view =>
       obtain ⟨notApprove, notTransferFrom, notTransfer, notWithdraw⟩ :=
         wethViewSelectors_not_writer _ fit
-      rw [if_neg (fun h => notApprove h), if_neg (fun h => notTransferFrom h),
-        if_neg (fun h => notTransfer h), if_neg (fun h => notWithdraw h)]
-      exact if_pos fit
+      rw [ite_eq_right (fun h => notApprove h), ite_eq_right (fun h => notTransferFrom h),
+        ite_eq_right (fun h => notTransfer h), ite_eq_right (fun h => notWithdraw h)]
+      exact ite_eq_left fit
   | approve owner spender wad =>
       obtain ⟨selected, rfl, rfl, rfl⟩ := fit
-      rw [if_pos selected]
+      rw [ite_eq_left selected]
   | deposit caller value =>
       obtain ⟨miss, rfl, rfl⟩ := fit
       have notView : Sevm.selector frame.sevm ∉ wethViewSelectors := by
         intro member
         exact miss _ (wethViewSelectors_subset _ member) rfl
-      rw [if_neg (miss _ approveMem), if_neg (miss _ transferFromMem),
-        if_neg (miss _ transferMem), if_neg (miss _ withdrawMem),
-        if_neg notView]
+      rw [ite_eq_right (miss _ approveMem), ite_eq_right (miss _ transferFromMem),
+        ite_eq_right (miss _ transferMem), ite_eq_right (miss _ withdrawMem),
+        ite_eq_right notView]
   | withdraw caller wad =>
       obtain ⟨selected, rfl, rfl⟩ := fit
       have notApprove : Sevm.selector frame.sevm ≠
@@ -237,8 +237,8 @@ theorem WethFrameClass.classification_complete
       have notTransfer : Sevm.selector frame.sevm ≠
           selector "transfer" [.address, .uint256] := by
         rw [selected]; decide +kernel
-      rw [if_neg notApprove, if_neg notTransferFrom, if_neg notTransfer,
-        if_pos selected]
+      rw [ite_eq_right notApprove, ite_eq_right notTransferFrom, ite_eq_right notTransfer,
+        ite_eq_left selected]
   | transfer caller dst wad =>
       obtain ⟨selected, rfl, rfl, rfl⟩ := fit
       have notApprove : Sevm.selector frame.sevm ≠
@@ -247,13 +247,13 @@ theorem WethFrameClass.classification_complete
       have notTransferFrom : Sevm.selector frame.sevm ≠
           selector "transferFrom" [.address, .address, .uint256] := by
         rw [selected]; decide +kernel
-      rw [if_neg notApprove, if_neg notTransferFrom, if_pos selected]
+      rw [ite_eq_right notApprove, ite_eq_right notTransferFrom, ite_eq_left selected]
   | transferFrom caller src dst wad =>
       obtain ⟨selected, rfl, rfl, rfl, rfl⟩ := fit
       have notApprove : Sevm.selector frame.sevm ≠
           selector "approve" [.address, .uint256] := by
         rw [selected]; decide +kernel
-      rw [if_neg notApprove, if_pos selected]
+      rw [ite_eq_right notApprove, ite_eq_left selected]
 
 /-- **Totality.**  Exact compiled WETH identity is the classifier's only
 precondition: no successful WETH frame is left unclassified.  This is the one
@@ -265,7 +265,7 @@ theorem WethFrameClass.classification_total
       WethFrameClass.Classified frame cls := by
   have present : ∃ cls, WethFrameClass.classify? frame = some cls := by
     unfold WethFrameClass.classify?
-    rw [if_pos identity]
+    rw [ite_eq_left identity]
     repeat' split
     all_goals exact ⟨_, rfl⟩
   obtain ⟨cls, classified⟩ := present
@@ -962,8 +962,8 @@ theorem wethFrame_vaultRow_classified (vault : Adr) (frame : Exec.Frame)
             selected⟩,
           rfl, rfl, rfl, rfl, owner, ?_⟩))
         simp only [WethAllowanceInvocation.pair?, owner,
-          if_neg (Ne.symm (vaultKeyNe callerNotVault)), Bool.false_eq_true,
-          if_false]
+          ite_eq_right (Ne.symm (vaultKeyNe callerNotVault)), Bool.false_eq_true,
+          ite_false]
       · by_cases credited : (Sevm.argWord frame.sevm 1).toAdr = vault
         · by_cases positive : 0 < (Sevm.argWord frame.sevm 2).toNat
           · exact Or.inr (Or.inl ⟨(Sevm.argWord frame.sevm 0).toAdr,

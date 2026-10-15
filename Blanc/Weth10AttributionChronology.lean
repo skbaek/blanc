@@ -197,7 +197,7 @@ theorem Exec.attributionInner_eq_nil_of_descendantFrames_eq_nil
       split at h
       · exact absurd h (by simp only [List.cons_append, reduceCtorEq, not_false_eq_true])
       · rename_i hnot
-        rw [dif_neg hnot, List.nil_append]
+        rw [dite_eq_right hnot, List.nil_append]
         exact ihNext (by simpa only [List.nil_append] using h)
 
 /-- Public analog of the compiled module's halt-step emptiness: a derivation

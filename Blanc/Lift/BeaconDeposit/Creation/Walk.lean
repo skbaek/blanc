@@ -84,7 +84,7 @@ theorem toB256_add_push {i c : Nat} {x : UInt8} (hx : Bytes.toB256 [x] = Nat.toB
 theorem ctorStor_get {i j : Nat} {s : Stor} (h : CtorStor i s) (hj : j ≤ i) (hi : i < 1000) :
     s.get (Nat.toB256 (33 + j)) = zeroHash Bytes.sha256 j := by
   rw [h, toNat_toB256' (by omega)]
-  rw [if_pos ⟨by omega, by omega⟩, Nat.add_sub_cancel_left]
+  rw [ite_eq_left ⟨by omega, by omega⟩, Nat.add_sub_cancel_left]
 
 theorem ctorStor_succ {i : Nat} {s : Stor} (h : CtorStor i s) (hi : i < 1000) :
     CtorStor (i + 1) (s.set (Nat.toB256 (34 + i)) (zeroHash Bytes.sha256 (i + 1))) := by
@@ -93,14 +93,14 @@ theorem ctorStor_succ {i : Nat} {s : Stor} (h : CtorStor i s) (hi : i < 1000) :
   by_cases hx : Nat.toB256 (34 + i) = x
   · subst hx
     rw [toNat_toB256' (by omega)]
-    rw [if_pos rfl, if_pos ⟨by omega, by omega⟩, show 34 + i - 33 = i + 1 by omega]
+    rw [ite_eq_left rfl, ite_eq_left ⟨by omega, by omega⟩, show 34 + i - 33 = i + 1 by omega]
   · simp only [hx, ↓reduceIte]
     rw [h x]
     have hne : x.toNat ≠ 34 + i := fun e => hx (by
       apply B256.toNat_inj; rw [toNat_toB256' (by omega), e])
     by_cases hlo : 33 ≤ x.toNat ∧ x.toNat ≤ 33 + i
-    · rw [if_pos hlo, if_pos ⟨hlo.1, by omega⟩]
-    · rw [if_neg hlo, if_neg (by omega)]
+    · rw [ite_eq_left hlo, ite_eq_left ⟨hlo.1, by omega⟩]
+    · rw [ite_eq_right hlo, ite_eq_right (by omega)]
 
 /-! ## One iteration -/
 
@@ -162,7 +162,7 @@ theorem iter {sevm : Sevm} (fr : CtorFrame sevm) {i : Nat} (hi : i < 31) {b : De
   · rw [afterSstore_error, hpost.error, hb2, hb1, afterSload_error, afterSload_error]
     exact inv.error
   · rw [hw', show fp i + 96 = fp (i + 1) by unfold fp; omega]
-  · rw [hs']; unfold memAt fp; rw [if_neg (by omega)]; omega
+  · rw [hs']; unfold memAt fp; rw [ite_eq_right (by omega)]; omega
   -- the loop head: `i < 31`, fall through into the body
   unfold t_0014_c2
   refine rxc_dest ?_
@@ -172,7 +172,7 @@ theorem iter {sevm : Sevm} (fr : CtorFrame sevm) {i : Nat} (hi : i < 31) {b : De
   refine rxc_lt (v := 1) ?_ (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.one_lt_ofNat]) ?_
   · rw [show Bytes.toB256 [0x1f] = Nat.toB256 31 by decide, lt_toB256 (by omega) (by omega),
-      if_pos hi]
+      ite_eq_left hi]
   refine rxc_iszero (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.one_lt_ofNat]) ?_
   refine rxc_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
@@ -192,7 +192,7 @@ theorem iter {sevm : Sevm} (fr : CtorFrame sevm) {i : Nat} (hi : i < 31) {b : De
   refine rxc_lt (v := 1) ?_ (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.reduceAdd, Nat.reduceLT]) ?_
   · rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, lt_toB256 (by omega) (by omega),
-      if_pos (by omega)]
+      ite_eq_left (by omega)]
   refine rxc_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
   refine rxc_branch_succ (by decide) ?_
@@ -214,7 +214,7 @@ theorem iter {sevm : Sevm} (fr : CtorFrame sevm) {i : Nat} (hi : i < 31) {b : De
   refine rxc_lt (v := 1) ?_ (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.reduceAdd, Nat.reduceLT]) ?_
   · rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, lt_toB256 (by omega) (by omega),
-      if_pos (by omega)]
+      ite_eq_left (by omega)]
   refine rxc_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
   refine rxc_branch_succ (by decide) ?_
@@ -252,7 +252,7 @@ theorem iter {sevm : Sevm} (fr : CtorFrame sevm) {i : Nat} (hi : i < 31) {b : De
   refine rxc_lt (v := 1) ?_ (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.reduceAdd, Nat.reduceLT]) ?_
   · rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, lt_toB256 (by omega) (by omega),
-      if_pos (by omega)]
+      ite_eq_left (by omega)]
   refine rxc_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
   refine rxc_branch_succ (by decide) ?_
@@ -329,7 +329,7 @@ theorem exit {sevm : Sevm} (hcode : sevm.code = code) {b : Devm} {M : Mem}
     rwa [runtimeWindow_length] at this
   obtain ⟨p1, p2, p3, p4⟩ :=
     returnPost_facts (St b [Nat.toB256 0, Nat.toB256 6358] M2 G) (Nat.toB256 0) (Nat.toB256 6358) []
-  simp only [St.memory, St.gasLeft, toNat_toB256' (show 6358 < 2 ^ 256 by decide),
+  simp only [St.memory, toNat_toB256' (show 6358 < 2 ^ 256 by decide),
     toNat_toB256' (show 0 < 2 ^ 256 by decide), hout] at p1
   refine ⟨returnPost (St b [Nat.toB256 0, Nat.toB256 6358] M2 G) (Nat.toB256 0) (Nat.toB256 6358)
     [], ?_, p1, p2.trans inv.error, p3 _, p4⟩

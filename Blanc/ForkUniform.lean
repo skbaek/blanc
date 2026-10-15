@@ -362,13 +362,13 @@ theorem benvAfterTransfer_withFork (m : Msg) (g : Fork) :
   · have h' : (m.withFork g).shouldTransferValue = true ∧ (m.withFork g).value ≠ 0 := by
       simpa only [Msg.withFork_shouldTransferValue, Msg.withFork_value] using h
     unfold Msg.benvAfterTransfer Benv.subBal
-    rw [if_pos h, if_pos h']
+    rw [ite_eq_left h, ite_eq_left h']
     simp only [Msg.withFork_benv_state, Msg.withFork_caller, Msg.withFork_value]
     cases m.benv.state.subBal m.caller m.value <;> rfl
   · have h' : ¬((m.withFork g).shouldTransferValue = true ∧ (m.withFork g).value ≠ 0) := by
       simpa only [Msg.withFork_shouldTransferValue, Msg.withFork_value] using h
     unfold Msg.benvAfterTransfer
-    rw [if_neg h, if_neg h']
+    rw [ite_eq_right h, ite_eq_right h']
     rfl
 
 theorem executeCode_enter_withFork {m : Msg} {g : Fork} (hf : CoveredFork m.benv.stat.fork)

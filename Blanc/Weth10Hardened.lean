@@ -469,11 +469,11 @@ theorem Exec.exists_descendantFrame_of_mem_attributionInner
           rcases Exec.mem_frameContribution hhere with
             ⟨hrecord, hexact⟩ | hinner
           · exact ⟨_, List.mem_append_left _
-              (by rw [dif_pos hsettles]; exact List.mem_cons_self),
+              (by rw [dite_eq_left hsettles]; exact List.mem_cons_self),
               hrecord, hexact⟩
           · obtain ⟨frame, hframe, hrecord, hexact⟩ := ihChild record hinner
             exact ⟨frame, List.mem_append_left _
-              (by rw [dif_pos hsettles]; exact List.mem_cons_of_mem _ hframe),
+              (by rw [dite_eq_left hsettles]; exact List.mem_cons_of_mem _ hframe),
               hrecord, hexact⟩
         · cases hhere
       · obtain ⟨frame, hframe, hrecord, hexact⟩ := ihNext record hnext
@@ -497,7 +497,7 @@ theorem Exec.exists_committedFrame_of_mem_attributionStream
         Exec.Frame.ofRun run hcommits ::
           Jaune.Exec.descendantFrames run := by
       unfold Jaune.Exec.committedFrames
-      rw [dif_pos hcommits]
+      rw [dite_eq_left hcommits]
     rcases Exec.mem_frameContribution hmem with ⟨hrecord, hexact⟩ | hinner
     · exact ⟨_, by rw [hframes]; exact List.mem_cons_self, hrecord, hexact⟩
     · obtain ⟨frame, hframe, hrecord, hexact⟩ :=
@@ -764,7 +764,7 @@ private theorem delegated_witness {e : Sevm} {pre post : Devm} {u : Adr}
     · show e.caller = u
       rw [← hsource, hself, toAdr_toB256]
   · refine Or.inr ⟨spendEventOf e pre, hevent hself, hsource, ?_⟩
-    simp only [delegatedDebitOf, callerAllowanceBranch, if_neg hself]
+    simp only [delegatedDebitOf, callerAllowanceBranch, ite_eq_right hself]
     split <;>
       simp only [delegatedKey?, callerAllowanceRuntimeKey_eq_projected, AllowanceEvent.key,
         spendEventOf]
@@ -971,23 +971,23 @@ theorem attributionRootAt_cases (recent : List CountedFrame) (key : B256) :
             | approveStore value =>
                 refine Or.inr ⟨record, List.mem_cons_self, event,
                   hallowance, hkey, Or.inl ⟨⟨value, hvisit⟩, ?_⟩⟩
-                simp only [attributionRootAt, hallowance, hvisit, if_pos hkey]
+                simp only [attributionRootAt, hallowance, hvisit, ite_eq_left hkey]
             | permitStore value =>
                 refine Or.inr ⟨record, List.mem_cons_self, event,
                   hallowance, hkey, Or.inr ⟨⟨value, hvisit⟩, ?_⟩⟩
-                simp only [attributionRootAt, hallowance, hvisit, if_pos hkey]
+                simp only [attributionRootAt, hallowance, hvisit, ite_eq_left hkey]
             | _ =>
                 rw [show attributionRootAt (record :: rest) key =
                   attributionRootAt rest key by
                     simp only [attributionRootAt, hallowance, hvisit,
-                      if_pos hkey]]
+                      ite_eq_left hkey]]
                 rcases ih with h | ⟨other, hother, ev, hev, hk, hroot⟩
                 · exact Or.inl h
                 · exact Or.inr ⟨other, List.mem_cons_of_mem _ hother, ev,
                     hev, hk, hroot⟩
           · rw [show attributionRootAt (record :: rest) key =
               attributionRootAt rest key by
-                simp only [attributionRootAt, hallowance, if_neg hkey]]
+                simp only [attributionRootAt, hallowance, ite_eq_right hkey]]
             rcases ih with h | ⟨other, hother, ev, hev, hk, hroot⟩
             · exact Or.inl h
             · exact Or.inr ⟨other, List.mem_cons_of_mem _ hother, ev, hev,
@@ -1071,7 +1071,7 @@ theorem CountedFrame.hardenedContribution_eq_permanentOutflow
             simpa only [AttributionRoot.attributedTo, decide_eq_true_eq] using
               (hownerEq ▸ howner : ev.owner.toAdr = u)
     simp only [CountedFrame.hardenedContribution, haction, hactiondebit,
-      hhard, if_true]
+      hhard, ite_true]
 
 /-! ## The unconditional bound -/
 

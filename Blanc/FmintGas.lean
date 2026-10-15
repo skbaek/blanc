@@ -357,11 +357,11 @@ theorem fmintGas_tsSel {sevm : Sevm} {pre : Devm} :
             else totalSupplyGas) := by
   by_cases h : (⟨sevm.currentTarget, supplySlot⟩ : Adr × B256)
       ∈ pre.accessedStorageKeys
-  · rw [if_pos h]
-    simp only [fmintGas, fmintGasWith, if_pos h]
+  · rw [ite_eq_left h]
+    simp only [fmintGas, fmintGasWith, ite_eq_left h]
     rfl
-  · rw [if_neg h]
-    simp only [fmintGas, fmintGasWith, if_neg h]
+  · rw [ite_eq_right h]
+    simp only [fmintGas, fmintGasWith, ite_eq_right h]
     rfl
 
 /-- **`totalSupply()` costs exactly what `fmintGas` says it does — with no
@@ -389,11 +389,11 @@ theorem totalSupply_gas_exact_fmintGas {sevm : Sevm} {pre : Devm} {cost : Nat}
   rw [h_sel, fmintGas_tsSel] at h_cost
   by_cases h : (⟨sevm.currentTarget, supplySlot⟩ : Adr × B256)
       ∈ pre.accessedStorageKeys
-  · rw [if_pos h] at h_cost
+  · rw [ite_eq_left h] at h_cost
     injection h_cost with h_cost
     subst h_cost
     exact totalSupply_warm_gas_exact h_code hfork h_sel h_stack h_mem h h_gas
-  · rw [if_neg h] at h_cost
+  · rw [ite_eq_right h] at h_cost
     injection h_cost with h_cost
     subst h_cost
     exact totalSupply_gas_exact h_code hfork h_sel h_stack h_mem h h_gas
@@ -432,20 +432,20 @@ theorem fmintGas_le_max {sel : B256} {sevm : Sevm} {pre : Devm} {cost : Nat}
   simp only [fmintGasMax, fmintGasMaxWith]
   by_cases ht : sel = tsSel
   · subst ht
-    rw [if_pos rfl] at h_cost ⊢
+    rw [ite_eq_left rfl] at h_cost ⊢
     refine ⟨_, rfl, ?_⟩
     injection h_cost with h_cost
     subst h_cost
     split <;> decide
-  · rw [if_neg ht] at h_cost ⊢
+  · rw [ite_eq_right ht] at h_cost ⊢
     by_cases hd : sel = dcSel
     · subst hd
-      rw [if_pos rfl] at h_cost ⊢
+      rw [ite_eq_left rfl] at h_cost ⊢
       refine ⟨_, rfl, ?_⟩
       injection h_cost with h_cost
       subst h_cost
       exact Nat.le_refl _
-    · rw [if_neg hd] at h_cost
+    · rw [ite_eq_right hd] at h_cost
       exact absurd h_cost (by simp only [reduceCtorEq, not_false_eq_true])
 
 end Fmint

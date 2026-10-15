@@ -51,8 +51,8 @@ lemma Bytes.sliceD_stagedPair
     simp only [List.get_eq_getElem, List.getElem_map, List.getElem_range,
       zero_add]
     by_cases hi : i < 32
-    · rw [Bytes.getD_writeAt, if_neg (by omega),
-        Bytes.getD_writeAt, if_pos (by
+    · rw [Bytes.getD_writeAt, ite_eq_right (by omega),
+        Bytes.getD_writeAt, ite_eq_left (by
           simp only [B256.length_toBytes]
           omega)]
       rw [List.getElem_append_left (by
@@ -66,7 +66,7 @@ lemma Bytes.sliceD_stagedPair
       have hir : i - 32 < right.toBytes.length := by
         rw [B256.length_toBytes]
         omega
-      rw [Bytes.getD_writeAt, if_pos (by
+      rw [Bytes.getD_writeAt, ite_eq_left (by
         simp only [B256.length_toBytes]
         omega)]
       rw [List.getElem_append_right (by

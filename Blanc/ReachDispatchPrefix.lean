@@ -181,7 +181,7 @@ private theorem reach_of_dispatch_build_logs :
             rw [← B256.not_lt]
             intro h_lt
             have h_gt : z.fst > sig := h_lt
-            rw [B256.gtCheck, if_pos h_gt] at h_flag
+            rw [B256.gtCheck, ite_eq_left h_gt] at h_flag
             exact B256.zero_ne_one h_flag
           have h_mem_drop : (sig, f) ∈
               ((w, p) :: y :: ys).drop
@@ -216,7 +216,7 @@ private theorem reach_of_dispatch_build_logs :
           rcases popBurn_pref h_pop h_pfx1 with ⟨h_flag, h_pfx2⟩
           have h_lt : sig < z.fst := by
             by_contra h_nlt
-            rw [B256.gtCheck, if_neg (fun h_gt => h_nlt h_gt)] at h_flag
+            rw [B256.gtCheck, ite_eq_right (fun h_gt => h_nlt h_gt)] at h_flag
             exact h_ne h_flag
           have h_mem_take : (sig, f) ∈
               ((w, p) :: y :: ys).take

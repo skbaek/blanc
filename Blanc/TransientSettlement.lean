@@ -383,7 +383,7 @@ theorem caughtCall_childSettlement
       resumed.transientStorage = msg.tenv.transientStorage := by
   have hrollback := ProcessMessage.rollback_of_error hpm herr
   have hlogs := Resume.call_logs hresume
-  rw [if_pos herr] at hlogs
+  rw [ite_eq_left herr] at hlogs
   have hstate := Resume.call_state hresume
   have htra := Resume.call_transientStorage hresume
   exact ⟨hrollback.1, hrollback.2, hlogs,
@@ -399,7 +399,7 @@ theorem cleanCall_childSettlement
       resumed.state = child.state ∧
       resumed.transientStorage = child.transientStorage := by
   have hlogs := Resume.call_logs hresume
-  rw [if_neg (by simpa only [Bool.not_eq_true, Option.isSome_eq_false_iff,
+  rw [ite_eq_right (by simpa only [Bool.not_eq_true, Option.isSome_eq_false_iff,
     Option.isNone_iff_eq_none] using hclean)] at hlogs
   exact ⟨hlogs, Resume.call_state hresume,
     Resume.call_transientStorage hresume⟩
@@ -560,13 +560,13 @@ private theorem processTopLevelAmsterdam_error_logs
         } : MsgCallOutput)) : State × MsgCallOutput) :
           Except EvmError (State × MsgCallOutput))) = .ok (state, out) at hrest
     by_cases clean : evm.error.isNone
-    · rw [if_pos clean] at hrest
+    · rw [ite_eq_left clean] at hrest
       rcases Except.bind_eq_ok hrest with ⟨refund, hrefund, hfinal⟩
       cases hfinal
       simp_all only [Option.isNone_iff_eq_none, Option.isSome_none, Bool.false_eq_true]
-    · rw [if_neg clean] at hrest
+    · rw [ite_eq_right clean] at hrest
       cases hrest
-      simp only [if_neg clean]
+      simp only [ite_eq_right clean]
 
 private theorem processMessageCall_create_error_logs
     {msg : Msg} {state : State} {out : MsgCallOutput}
@@ -580,14 +580,14 @@ private theorem processMessageCall_create_error_logs
       rfl
     · rcases Except.bind_eq_ok run with ⟨evm, hprocess, hrest⟩
       by_cases clean : evm.error.isNone
-      · rw [if_pos clean] at hrest
+      · rw [ite_eq_left clean] at hrest
         rcases Except.bind_eq_ok hrest with ⟨refund, hrefund, hfinal⟩
         cases hfinal
-        simp_all only [Bool.or_eq_true, not_or, Bool.not_eq_true, Option.isNone_iff_eq_none,
+        simp_all only [Bool.not_eq_true, Option.isNone_iff_eq_none,
           Option.isSome_none, Bool.false_eq_true]
-      · rw [if_neg clean] at hrest
+      · rw [ite_eq_right clean] at hrest
         cases hrest
-        simp only [if_neg clean]
+        simp only [ite_eq_right clean]
   · exact processTopLevelAmsterdam_error_logs run herr
 
 private theorem processMessageCall_call_error_logs
@@ -601,27 +601,27 @@ private theorem processMessageCall_call_error_logs
     · simp only [bind, Except.bind] at run
       rcases Except.bind_eq_ok run with ⟨evm, hprocess, hrest⟩
       by_cases clean : evm.error.isNone
-      · rw [if_pos clean] at hrest
+      · rw [ite_eq_left clean] at hrest
         rcases Except.bind_eq_ok hrest with ⟨refund, hrefund, hfinal⟩
         cases hfinal
         simp_all only [List.isEmpty_iff, Option.isNone_iff_eq_none, Option.isSome_none,
           Bool.false_eq_true]
-      · rw [if_neg clean] at hrest
+      · rw [ite_eq_right clean] at hrest
         cases hrest
-        simp only [if_neg clean]
+        simp only [ite_eq_right clean]
     · rcases Except.bind_eq_ok run with
         ⟨⟨delegated, setValue⟩, hdelegated, hrest⟩
       simp only [bind, Except.bind] at hrest
       rcases Except.bind_eq_ok hrest with ⟨evm, hprocess, hrest⟩
       by_cases clean : evm.error.isNone
-      · rw [if_pos clean] at hrest
+      · rw [ite_eq_left clean] at hrest
         rcases Except.bind_eq_ok hrest with ⟨refund, hrefund, hfinal⟩
         cases hfinal
         simp_all only [List.isEmpty_iff, Option.isNone_iff_eq_none, Option.isSome_none,
           Bool.false_eq_true]
-      · rw [if_neg clean] at hrest
+      · rw [ite_eq_right clean] at hrest
         cases hrest
-        simp only [if_neg clean]
+        simp only [ite_eq_right clean]
   · exact processTopLevelAmsterdam_error_logs run herr
 
 /-- An errored top-level message exposes no logs. Its `returnData` remains an

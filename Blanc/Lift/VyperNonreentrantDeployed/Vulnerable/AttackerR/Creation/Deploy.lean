@@ -152,17 +152,17 @@ theorem create_attacker (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
     rfl
   · rw [pf.2.2.1, facts.2.2.1, facts.1]
     unfold Acct.clearIfEmpty
-    rw [if_neg (fun h => by
+    rw [ite_eq_right (fun h => by
       have hs := h.1
       change runtime.length = 0 at hs
       rw [runtime_length] at hs
       exact absurd hs (by decide))]
     change ({ benv.state.get msg.currentTarget with code := _ } : Acct) = _
-    rw [processCreateMessage_msg_afterTransfer_get hvalue htransfer, if_pos rfl, runtime_code]
+    rw [processCreateMessage_msg_afterTransfer_get hvalue htransfer, ite_eq_left rfl, runtime_code]
     rfl
   · intro a ha
     rw [pf.2.2.2 a ha, facts.2.2.1]
-    exact (processCreateMessage_msg_afterTransfer_get hvalue htransfer a).trans (if_neg ha)
+    exact (processCreateMessage_msg_afterTransfer_get hvalue htransfer a).trans (ite_eq_right ha)
   · rw [CreateEntry.liftCreatePost_state, facts.2.2.1, facts.1, runtime_code]
     exact congrArg (fun W => State.setCode W msg.currentTarget
       Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.code)

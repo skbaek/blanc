@@ -42,8 +42,7 @@ theorem addressSlotReadWord_eq_toAdr_toB256 (raw : B256) :
   unfold addressSlotReadWord
   rw [hmask]
   rcases raw with ⟨⟨high, middle⟩, low⟩
-  simp only [B256.toAdr, Adr.toB256, B256.and_eq_and_prod_and,
-    B128.and_eq_and_prod_and, UInt64.zero_and]
+  simp only [B256.toAdr, Adr.toB256]
   apply Prod.ext
   · apply Prod.ext
     · exact UInt64.zero_and

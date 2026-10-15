@@ -211,9 +211,9 @@ private theorem permitCoreTailByteAt_eq_zero_33_165
   have heqSize : Ninst.eq.size = 1 := by decide +kernel
   by_cases heq : i - 33 < 1
   · conv_lhs => rw [Func.compileShape, Func.byteAtByShape,
-        if_pos (by rw [heqSize]; exact heq)]
+        ite_eq_left (by rw [heqSize]; exact heq)]
     conv_rhs => rw [Func.compileShape, Func.byteAtByShape,
-        if_pos (by rw [heqSize]; exact heq)]
+        ite_eq_left (by rw [heqSize]; exact heq)]
   · conv_lhs => rw [byteAt_next_to_tail
         (locations := locations) (n := n + 33)
         (inst0 := Ninst.eq) (inst := Ninst.eq)

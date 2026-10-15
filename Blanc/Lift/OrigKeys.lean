@@ -320,7 +320,7 @@ theorem childRun_withOrig_keys (fs : List SFunc) (code : ByteArray) (n : Nat) (c
       rw [h2, h3] at hs hO ⊢
       split
       · rename_i hc
-        rw [if_pos hc] at hs hO
+        rw [ite_eq_left hc] at hs hO
         rw [← hst] at hO
         exact wrun_withOrig_keys fs n cc hs hO
       · rfl

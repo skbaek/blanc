@@ -598,7 +598,7 @@ theorem Exec.Deriv.ParentStepActions.permitStaticcallOutcome
           · have hsettles : Frame.settlementCommits
                 (Frame.ofCall msg) raw = true :=
               Frame.settlementCommits_ofCall_of_raw_commits hcommits
-            simpa only [hsettles, if_true] using
+            simpa only [hsettles, ite_true] using
               (PermitStaticcallOutcome.committed child trace hcommits)
           · have hnotSettles : Frame.settlementCommits
                 (Frame.ofCall msg) raw ≠ true := by

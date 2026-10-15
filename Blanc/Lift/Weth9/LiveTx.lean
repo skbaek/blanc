@@ -201,11 +201,11 @@ theorem WithdrawPost.acct {sevm : Sevm} {pre post : Devm} {wad : B256} (h : With
       { pre.state.get sevm.currentTarget with stor := sC } := hC
   have hs := h.state
   by_cases hw : wad = 0
-  · rw [if_pos hw] at hs
+  · rw [ite_eq_left hw] at hs
     subst hw
     rw [hs, hE', hC']
     exact ⟨(B256.add_zero _).symm, rfl, (B256.sub_zero _).symm⟩
-  rw [if_neg hw] at hs
+  rw [ite_eq_right hw] at hs
   obtain ⟨stmid, hsub, hst⟩ := hs
   obtain ⟨-, hmid⟩ := State.of_subBal hsub
   have hmidE : stmid.get sevm.caller = (wB3 sevm pre wad).state.get sevm.caller := by
@@ -247,10 +247,10 @@ theorem WithdrawPost.get_other {sevm : Sevm} {pre post : Devm} {wad : B256}
     rfl
   have hs := h.state
   by_cases hw : wad = 0
-  · rw [if_pos hw] at hs
+  · rw [ite_eq_left hw] at hs
     rw [hs]
     exact h3
-  · rw [if_neg hw] at hs
+  · rw [ite_eq_right hw] at hs
     obtain ⟨stmid, hsub, hst⟩ := hs
     obtain ⟨-, hmid⟩ := State.of_subBal hsub
     rw [hst]
@@ -549,7 +549,7 @@ theorem weth9_tx_withdraw_run
         show (initDevm (msg.withBenv after)).getOrigStorVal (initSevm (msg.withBenv after)) ca
           (balSlot E) = _
         unfold Devm.getOrigStorVal
-        rw [if_neg hcreated]
+        rw [ite_eq_right hcreated]
         show ((after.stat.origState.get ca).stor).get _ = _
         rw [hstat]
         rfl)
@@ -691,7 +691,7 @@ theorem weth9_tx_withdraw_coinbase_refuted
   cases hp'
   have hcbAcct := hgetO _ hcbE hcbCa
   apply hcbStor
-  rw [← hoth _ hcbCa, getStor_addBal, if_pos]
+  rw [← hoth _ hcbCa, getStor_addBal, ite_eq_left]
   refine ⟨rfl, ?_⟩
   rw [addBal_get_ne _ (Ne.symm hcbE), hcbAcct]
   show (benv.state.get benv.stat.coinbase).code.size = 0 ∧ (benv.state.get benv.stat.coinbase).nonce = 0 ∧
@@ -759,14 +759,14 @@ theorem weth9_tx_withdraw
     exact UInt64.add_one_ne_zero hnonceMax
   have hcbAcct := hgetO _ hcbE hcbCa
   refine ⟨_, bout', hproc, hcum, hblk, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · rw [getStor_addBal, if_neg (fun h => hcbCa h.1), getStor_addBal, if_neg (fun h => hEca h.1)]
+  · rw [getStor_addBal, ite_eq_right (fun h => hcbCa h.1), getStor_addBal, ite_eq_right (fun h => hEca h.1)]
     exact hstCa
   · intro a ha
     rw [getStor_addBal, getStor_addBal]
     by_cases hacb : benv.stat.coinbase = a
     · subst hacb
       rcases hcbSafe with hp | hemp
-      · rw [if_neg, if_neg (fun h => hcbE.symm h.1)]
+      · rw [ite_eq_right, ite_eq_right (fun h => hcbE.symm h.1)]
         · exact hstOther _ ha
         · rintro ⟨-, hempty⟩
           have hn : ((post.state.addBal E (Nat.toB256 ((tx.gas - withdrawGasUsed
@@ -787,14 +787,14 @@ theorem weth9_tx_withdraw
         · rfl
         · rfl
         · rw [hstOther _ ha, hemp]
-    · rw [if_neg (fun h => hacb h.1)]
+    · rw [ite_eq_right (fun h => hacb h.1)]
       by_cases haE : E = a
       · subst haE
-        rw [if_neg]
+        rw [ite_eq_right]
         · exact hstOther _ ha
         · rintro ⟨-, hempty⟩
           exact hEn hempty.2.1
-      · rw [if_neg (fun h => haE h.1)]
+      · rw [ite_eq_right (fun h => haE h.1)]
         exact hstOther a ha
   · rw [addBal_get_ne _ hcbE, addBal_get_self, Acct.clearIfEmpty_nonce]
     exact hnonceE

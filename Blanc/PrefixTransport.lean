@@ -72,7 +72,7 @@ theorem Exec.Deriv.ParentStep.exists_of_pushAt_ok
   | halt h => cases Ninst.step_ne_halt_ok (hstatic.symm.trans h)
   | cont h next =>
       have sourceStep := hstatic.symm.trans h
-      rw [Ninst.step_push, if_neg hne] at sourceStep
+      rw [Ninst.step_push, ite_eq_right hne] at sourceStep
       obtain ⟨hpc, hrun⟩ := Step.ofExecution_cont sourceStep
       cases hpc
       exact ⟨_, next, .cont h next, Devm.pushBurn_of_run hrun⟩

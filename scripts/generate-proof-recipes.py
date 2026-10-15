@@ -607,6 +607,10 @@ TRIGGER_MATCHER = "proofRecipeTriggerMatches"
 # quietly contributing nothing; and the entries are themselves checked, so one
 # that becomes checkable, or stops matching its stated reason, fails.
 UNCHECKED_DISPATCH_ARMS: Dict[str, str] = {
+    "goal-shape:machine-state-debit":
+        "names Jaune.State.subBal only; checked by the pinned Jaune surface",
+    "goal-shape:word-exponentiation":
+        "names Jaune.B256.bexp only; checked by the pinned Jaune surface",
     "context-shape:intermediate-devm":
         "counts local hypotheses headed by Jaune.Devm",
     "goal-shape:devm-common-update-law":
@@ -653,8 +657,10 @@ STRUCTURAL_DISPATCH_ARMS = frozenset({"goal-shape:shared-subject-kernel-decision
 # When ``.lake/packages/jaune`` is materialized at that exact rev, every name is
 # additionally resolved against the pinned source. See ``validate_jaune_dispatch``
 # for what that verification does and does not establish.
-JAUNE_DISPATCH_PIN = "ca9f27db54242611d22749e9679b9095b99238ee"
+JAUNE_DISPATCH_PIN = "55d296d768c5c9134cbf415d77b950b866939156"
 JAUNE_DISPATCH_SURFACE = frozenset({
+    "Jaune.State.subBal",
+    "Jaune.B256.bexp",
     "Jaune.Devm",
     "Jaune.Devm.accessedAddresses",
     "Jaune.Devm.accessedStorageKeys",
@@ -722,6 +728,8 @@ UNWITNESSED_RECIPES: Dict[str, str] = {
 # The set is pinned by name rather than counted so that losing a witness and
 # gaining an unrelated one cannot cancel out.
 REACHABILITY_WITNESSED_TRIGGERS = frozenset({
+    "goal-shape:machine-state-debit",
+    "goal-shape:word-exponentiation",
     "context-shape:intermediate-devm",
     "goal-head:CompiledStackSafety.Certificate",
     "goal-head:CompiledStackSafety.StepSafe",

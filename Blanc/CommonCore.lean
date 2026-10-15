@@ -632,7 +632,7 @@ lemma ByteArray.toList_eq_toList_data {xs : ByteArray} :
     induction ys generalizing xs with
       | nil =>
         unfold _root_.ByteArray.toList.loop
-        rw [if_neg _, List.reverse_reverse, List.append_nil]
+        rw [ite_eq_right _, List.reverse_reverse, List.append_nil]
         simp only [ByteArray.size, append_nil, size_toArray, lt_self_iff_false, not_false_eq_true]
       | cons y ys ih =>
         unfold _root_.ByteArray.toList.loop
@@ -644,7 +644,7 @@ lemma ByteArray.toList_eq_toList_data {xs : ByteArray} :
           length_nil, zero_add]
         have rw'' : y :: xs.reverse = (xs ++ [y]).reverse := by simp only [reverse_append,
           reverse_cons, reverse_nil, nil_append, cons_append]
-        rw [if_pos _, rw, List.append_cons, rw', rw'', ih]
+        rw [ite_eq_left _, rw, List.append_cons, rw', rw'', ih]
         simp only [ByteArray.size, size_toArray, length_append, length_cons, lt_add_iff_pos_right,
           add_pos_iff, zero_lt_one, or_true]
   rcases xs with ⟨⟨xs⟩⟩; apply gen [] xs
@@ -668,7 +668,7 @@ lemma Jinst.at_of_slice {code : ByteArray} {pc : Nat} {j : Jinst} {xs : Bytes}
     Jinst.At code pc j := by
   have eq := List.get?_eq_of_slice slice
   simp only [Jinst.At, ByteArray.getInst]
-  rw [dif_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
+  rw [dite_eq_left (ByteArray.lt_size_of_getElem?_eq_some eq)]
   have rw := ByteArray.getElem_of_getElem?_eq_some eq
     (ByteArray.lt_size_of_getElem?_eq_some eq)
   split <;>
@@ -681,7 +681,7 @@ lemma Linst.at_of_slice {code : ByteArray} {pc : Nat} {l : Linst} {xs : Bytes}
     Linst.At code pc l := by
   have eq := List.get?_eq_of_slice slice
   simp only [Linst.At, ByteArray.getInst]
-  rw [dif_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
+  rw [dite_eq_left (ByteArray.lt_size_of_getElem?_eq_some eq)]
   have rw := ByteArray.getElem_of_getElem?_eq_some eq
     (ByteArray.lt_size_of_getElem?_eq_some eq)
   split <;>
@@ -779,7 +779,7 @@ lemma ByteArray.sliceD_eq_replicate (xs : ByteArray) (m n : Nat) (d : UInt8)
   case zero => rfl
   case succ n ih =>
     simp only [ByteArray.sliceD];
-    rw [dif_neg (not_lt.mpr le)]
+    rw [dite_eq_right (not_lt.mpr le)]
 
 lemma ByteArray.sliceD_eq (xs : ByteArray) (m n : Nat) (d : UInt8) :
     ByteArray.sliceD xs m n d = xs.toList.sliceD m n d := by
@@ -812,7 +812,7 @@ lemma pushAt_of_slice {code : ByteArray} {pc} {xs : Bytes} (le : xs.length ≤ 3
     (ByteArray.lt_size_of_getElem?_eq_some eq)
   simp only [PushAt, ByteArray.getInst]
   refine' ⟨le, _⟩
-  rw [dif_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
+  rw [dite_eq_left (ByteArray.lt_size_of_getElem?_eq_some eq)]
   split <;>
   try { rename (UInt8.toInstType _ = _) => h
         rw [rw, toInstType_pushToB8 le] at h; cases h }
@@ -833,7 +833,7 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
     simp only [Ninst.toBytes] at slice
     have eq := List.get?_eq_of_slice slice
     simp only [Ninst.At, ByteArray.getInst]
-    rw [dif_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
+    rw [dite_eq_left (ByteArray.lt_size_of_getElem?_eq_some eq)]
     have rw := ByteArray.getElem_of_getElem?_eq_some eq
       (ByteArray.lt_size_of_getElem?_eq_some eq)
     split <;>
@@ -855,7 +855,7 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
     simp only [Ninst.toBytes] at slice
     have eq := List.get?_eq_of_slice slice
     simp only [Ninst.At, ByteArray.getInst]
-    rw [dif_pos (ByteArray.lt_size_of_getElem?_eq_some eq)]
+    rw [dite_eq_left (ByteArray.lt_size_of_getElem?_eq_some eq)]
     have rw := ByteArray.getElem_of_getElem?_eq_some eq
       (ByteArray.lt_size_of_getElem?_eq_some eq)
     split <;>
@@ -870,7 +870,7 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
     rw [List.slice_cons_iff] at slice1
     rcases slice1 with ⟨eq1, _⟩
     simp only [Ninst.At, ByteArray.getInst]
-    rw [dif_pos (ByteArray.lt_size_of_getElem?_eq_some eq0)]
+    rw [dite_eq_left (ByteArray.lt_size_of_getElem?_eq_some eq0)]
     have hbyte0 := ByteArray.getElem_of_getElem?_eq_some eq0
       (ByteArray.lt_size_of_getElem?_eq_some eq0)
     have hlt1 : pc + 1 < code.size :=
@@ -878,7 +878,7 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
     have hbyte1 : code[pc + 1] = a :=
       ByteArray.getElem_of_getElem?_eq_some eq1 hlt1
     have hD : code.byteD (pc + 1) = a := by
-      rw [ByteArray.byteD, dif_pos hlt1, hbyte1]
+      rw [ByteArray.byteD, dite_eq_left hlt1, hbyte1]
     have hR : (0xE6 : UInt8).toInstType = .R := rfl
     have hmapnone : (UInt8.toRinst 0xE6 <&> (Inst.next ∘ Ninst.reg)) = none := rfl
     split <;>
@@ -903,7 +903,7 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
     rw [List.slice_cons_iff] at slice1
     rcases slice1 with ⟨eq1, _⟩
     simp only [Ninst.At, ByteArray.getInst]
-    rw [dif_pos (ByteArray.lt_size_of_getElem?_eq_some eq0)]
+    rw [dite_eq_left (ByteArray.lt_size_of_getElem?_eq_some eq0)]
     have hbyte0 := ByteArray.getElem_of_getElem?_eq_some eq0
       (ByteArray.lt_size_of_getElem?_eq_some eq0)
     have hlt1 : pc + 1 < code.size :=
@@ -911,7 +911,7 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
     have hbyte1 : code[pc + 1] = a :=
       ByteArray.getElem_of_getElem?_eq_some eq1 hlt1
     have hD : code.byteD (pc + 1) = a := by
-      rw [ByteArray.byteD, dif_pos hlt1, hbyte1]
+      rw [ByteArray.byteD, dite_eq_left hlt1, hbyte1]
     have hR : (0xE7 : UInt8).toInstType = .R := rfl
     have hmapnone : (UInt8.toRinst 0xE7 <&> (Inst.next ∘ Ninst.reg)) = none := rfl
     split <;>
@@ -936,7 +936,7 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
     rw [List.slice_cons_iff] at slice1
     rcases slice1 with ⟨eq1, _⟩
     simp only [Ninst.At, ByteArray.getInst]
-    rw [dif_pos (ByteArray.lt_size_of_getElem?_eq_some eq0)]
+    rw [dite_eq_left (ByteArray.lt_size_of_getElem?_eq_some eq0)]
     have hbyte0 := ByteArray.getElem_of_getElem?_eq_some eq0
       (ByteArray.lt_size_of_getElem?_eq_some eq0)
     have hlt1 : pc + 1 < code.size :=
@@ -944,7 +944,7 @@ lemma Ninst.at_of_slice {code : ByteArray} {pc : Nat} {n : Ninst}
     have hbyte1 : code[pc + 1] = a :=
       ByteArray.getElem_of_getElem?_eq_some eq1 hlt1
     have hD : code.byteD (pc + 1) = a := by
-      rw [ByteArray.byteD, dif_pos hlt1, hbyte1]
+      rw [ByteArray.byteD, dite_eq_left hlt1, hbyte1]
     have hR : (0xE8 : UInt8).toInstType = .R := rfl
     have hmapnone : (UInt8.toRinst 0xE8 <&> (Inst.next ∘ Ninst.reg)) = none := rfl
     split <;>

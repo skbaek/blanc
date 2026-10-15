@@ -62,7 +62,7 @@ theorem helper {sevm : Sevm} (fr : CtorFrame sevm) {b : Devm} {M : Mem} {n ℓ :
   have hsz' : (M.write 0 p.toBytes).size = n := by
     rw [Mem.size_write_word_aligned (by omega) (by omega), hsz]; omega
   have hgt : ∀ x : B256, B256.gtCheck x x = 0 := fun x => by
-    unfold B256.gtCheck; rw [if_neg (lt_irrefl x)]
+    unfold B256.gtCheck; rw [ite_eq_right (lt_irrefl x)]
   rw [show G + helperCost sevm b p (Nat.toB256 (ℓ + ℓ) ||| w) =
     G + 115 + sstoreCost sevm (afterSload sevm b p) p (Nat.toB256 (ℓ + ℓ) ||| w) + 172 +
       sloadCost sevm b p + 7 by unfold helperCost; omega]
@@ -108,7 +108,7 @@ theorem helper {sevm : Sevm} (fr : CtorFrame sevm) {b : Devm} {M : Mem} {n ℓ :
   refine rx_dup (n := 2) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, Nat.reduceMod, List.set_cons_succ, List.length_cons]; omega) ?_
   refine rx_push (w := Nat.toB256 31) (by decide) (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, Nat.reduceMod, List.set_cons_succ, List.length_cons]; omega) ?_
   refine rx_lt (v := 0) ?_ (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, Nat.reduceMod, List.set_cons_succ, List.length_cons]; omega) ?_
-  · rw [lt_toB256 (by omega) (by omega), if_neg (by omega)]
+  · rw [lt_toB256 (by omega) (by omega), ite_eq_right (by omega)]
   refine rx_push rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, Nat.reduceMod, List.set_cons_succ, List.length_cons]; omega) ?_
   refine rx_branch_zero ?_
   unfold t_00f9_c2
@@ -468,13 +468,13 @@ theorem ctor_run_framed {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code =
   have hold1 : (wName sevm b).getStorVal ca 1 = 0 := by
     show (Devm.getStor (wName sevm b) ca).get 1 = 0
     rw [wName, afterSstore_getStor_self, afterSload_getStor, Stor.get_set_ite,
-      if_neg (by decide)]
+      ite_eq_right (by decide)]
     exact hstor' 1
   have hold2 : (wSymbol sevm b).getStorVal ca 2 = 0 := by
     show (Devm.getStor (wSymbol sevm b) ca).get 2 = 0
     rw [wSymbol, afterSstore_getStor_self, afterSload_getStor, Stor.get_set_ite,
-      if_neg (by decide), wName, afterSstore_getStor_self, afterSload_getStor,
-      Stor.get_set_ite, if_neg (by decide)]
+      ite_eq_right (by decide), wName, afterSstore_getStor_self, afterSload_getStor,
+      Stor.get_set_ite, ite_eq_right (by decide)]
     exact hstor' 2
   refine ⟨returnPost (St (afterSstore sevm (wDecimals sevm b) 2 18)
       [Nat.toB256 0, Nat.toB256 3124] m10 G) (Nat.toB256 0) (Nat.toB256 3124) [], ⟨t_0000_c0, rfl,

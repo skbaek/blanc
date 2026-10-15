@@ -24,8 +24,7 @@ theorem normalizedAddress_valid (w : B256) :
     simp only [UInt64.toBitVec_not, BitVec.and_not_self, BitVec.ofNat_eq_ofNat, BitVec.zero_and,
       UInt64.toBitVec_ofNat]
   rcases w with ⟨⟨whh, whl⟩, ⟨wlh, wll⟩⟩
-  simp only [addressMask, B256.and_eq_and_prod_and,
-    B128.and_eq_and_prod_and]
+  simp only [addressMask]
   apply Prod.ext
   · apply Prod.ext
     · exact hand_not _ _
@@ -1167,7 +1166,7 @@ theorem backedPre_of_transferNonzeroThen (dp : DeployParams) (ca : Adr)
   have h_token_le : Sevm.argWord sevm 1 ≤ balance := by
     rw [← B256.not_lt]
     intro hlt
-    rw [B256.ltCheck, if_pos hlt] at h_flag
+    rw [B256.ltCheck, ite_eq_left hlt] at h_flag
     exact B256.zero_ne_one h_flag.symm
   rw [h_flag] at hp2
   have hp3 :
@@ -1845,7 +1844,7 @@ theorem backedPre_of_transferZeroThen (dp : DeployParams) (ca : Adr)
   have h_token_le : Sevm.argWord sevm 1 ≤ balance := by
     rw [← B256.not_lt]
     intro hlt
-    rw [B256.ltCheck, if_pos hlt] at h_flag
+    rw [B256.ltCheck, ite_eq_left hlt] at h_flag
     exact B256.zero_ne_one h_flag.symm
   rw [h_flag] at hp2
   have hp3 :
@@ -2071,7 +2070,7 @@ theorem backedSpec_withdraw_funcSound (dp : DeployParams) (ca : Adr) :
   have h_token_le : Sevm.argWord sevm 0 ≤ balance := by
     rw [← B256.not_lt]
     intro hlt
-    rw [B256.ltCheck, if_pos hlt] at h_flag
+    rw [B256.ltCheck, ite_eq_left hlt] at h_flag
     exact B256.zero_ne_one h_flag.symm
   rw [h_flag] at hp2
   have hp3 :
@@ -2311,7 +2310,7 @@ theorem backedSpec_withdrawTo_funcSound (dp : DeployParams) (ca : Adr) :
   have h_token_le : Sevm.argWord sevm 1 ≤ balance := by
     rw [← B256.not_lt]
     intro hlt
-    rw [B256.ltCheck, if_pos hlt] at h_flag
+    rw [B256.ltCheck, ite_eq_left hlt] at h_flag
     exact B256.zero_ne_one h_flag.symm
   rw [h_flag] at hp2
   have hp3 :
@@ -2484,7 +2483,7 @@ theorem backedPost_of_transferFromNonzero (dp : DeployParams) (ca : Adr)
   have h_token_le : Sevm.argWord sevm 2 ≤ balance := by
     rw [← B256.not_lt]
     intro hlt
-    rw [B256.ltCheck, if_pos hlt] at h_flag
+    rw [B256.ltCheck, ite_eq_left hlt] at h_flag
     exact B256.zero_ne_one h_flag.symm
   rw [h_flag] at hp2
   have hp3 :
@@ -2602,7 +2601,7 @@ theorem backedPost_of_transferFromZero (dp : DeployParams) (ca : Adr)
   have h_token_le : Sevm.argWord sevm 2 ≤ balance := by
     rw [← B256.not_lt]
     intro hlt
-    rw [B256.ltCheck, if_pos hlt] at h_flag
+    rw [B256.ltCheck, ite_eq_left hlt] at h_flag
     exact B256.zero_ne_one h_flag.symm
   rw [h_flag] at hp2
   have hp3 : [balance, Sevm.argWord sevm 2, owner] <<+ s3.stack :=
@@ -2874,7 +2873,7 @@ theorem backedPost_of_withdrawFromCore (dp : DeployParams) (ca : Adr)
   have h_token_le : Sevm.argWord sevm 2 ≤ balance := by
     rw [← B256.not_lt]
     intro hlt
-    rw [B256.ltCheck, if_pos hlt] at h_flag
+    rw [B256.ltCheck, ite_eq_left hlt] at h_flag
     exact B256.zero_ne_one h_flag.symm
   rw [h_flag] at hp2
   have hp3 : [balance, Sevm.argWord sevm 2, owner] <<+ s3.stack :=
@@ -3352,7 +3351,7 @@ private theorem b256_sub_zero (x : B256) : x - 0 = x := by
     rcases h with h | ⟨_, h⟩
     · exact UInt64.not_lt_zero h
     · exact UInt64.not_lt_zero h
-  rw [if_neg h, B128.sub_zero, B128.sub_zero, B128.sub_zero]
+  rw [ite_eq_right h, B128.sub_zero, B128.sub_zero, B128.sub_zero]
 
 private theorem b256_zero_le (x : B256) : (0 : B256) ≤ x := by
   rw [← B256.not_lt]
@@ -3674,7 +3673,7 @@ theorem of_transferNonzeroThen_flash
   have h_token_le : Sevm.argWord sevm 1 ≤ balance := by
     rw [← B256.not_lt]
     intro hlt
-    rw [B256.ltCheck, if_pos hlt] at h_flag
+    rw [B256.ltCheck, ite_eq_left hlt] at h_flag
     exact B256.zero_ne_one h_flag.symm
   rw [h_flag] at hp2
   have hp3 :
@@ -3756,7 +3755,7 @@ theorem transferFromNonzero_flashStable (dp : DeployParams) :
   have h_token_le : Sevm.argWord sevm 2 ≤ balance := by
     rw [← B256.not_lt]
     intro hlt
-    rw [B256.ltCheck, if_pos hlt] at h_flag
+    rw [B256.ltCheck, ite_eq_left hlt] at h_flag
     exact B256.zero_ne_one h_flag.symm
   rw [h_flag] at hp2
   have hp3 : [balance, Sevm.argWord sevm 2, owner] <<+ s3.stack :=
@@ -3896,7 +3895,7 @@ theorem flashBurn_storage_at_receiver
   have h_token_le : Sevm.argWord sevm 2 ≤ balance := by
     rw [← B256.not_lt]
     intro hlt
-    rw [B256.ltCheck, if_pos hlt] at h_flag
+    rw [B256.ltCheck, ite_eq_left hlt] at h_flag
     exact B256.zero_ne_one h_flag.symm
   rw [h_flag] at hp2
   have hp3 : [balance, Sevm.argWord sevm 2, ownerWord] <<+ s3.stack :=
@@ -4766,7 +4765,7 @@ theorem of_flashLoan_toCall_frame
   have h_amount_le : Sevm.argWord sevm 2 ≤ maxUint112 := by
     rw [← B256.not_lt]
     intro hlt
-    rw [B256.ltCheck, if_pos hlt] at h_amount_flag
+    rw [B256.ltCheck, ite_eq_left hlt] at h_amount_flag
     exact B256.zero_ne_one h_amount_flag.symm
   rw [h_amount_flag] at hpAmountFlag
   have hpAmount : [Sevm.argWord sevm 2] <<+ sa5.stack :=
@@ -4908,7 +4907,7 @@ theorem of_flashLoan_toCall_frame
   have h_total_le : Sevm.argWord sevm 2 + flash ≤ maxUint112 := by
     rw [← B256.not_lt]
     intro hlt
-    rw [B256.ltCheck, if_pos hlt] at h_total_flag
+    rw [B256.ltCheck, ite_eq_left hlt] at h_total_flag
     exact B256.zero_ne_one h_total_flag.symm
   rw [h_total_flag] at hpTotal
   have hpT8 : (Sevm.argWord sevm 2 + flash) ::
@@ -7982,7 +7981,7 @@ theorem of_transferZeroThen_exact
   have h_token_le : Sevm.argWord sevm 1 ≤ balance := by
     rw [← B256.not_lt]
     intro hlt
-    rw [B256.ltCheck, if_pos hlt] at h_flag
+    rw [B256.ltCheck, ite_eq_left hlt] at h_flag
     exact B256.zero_ne_one h_flag.symm
   rw [h_flag] at hp2
   have hp3 :
@@ -8280,7 +8279,7 @@ theorem of_callerBurnThen_exact
   have h_token_le : Sevm.argWord sevm amountArg ≤ balance := by
     rw [← B256.not_lt]
     intro hlt
-    rw [B256.ltCheck, if_pos hlt] at h_flag
+    rw [B256.ltCheck, ite_eq_left hlt] at h_flag
     exact B256.zero_ne_one h_flag.symm
   rw [h_flag] at hp2
   have hp3 :
@@ -8406,7 +8405,7 @@ theorem of_argBurnThen_exact
   have h_token_le : Sevm.argWord sevm amountArg ≤ balance := by
     rw [← B256.not_lt]
     intro hlt
-    rw [B256.ltCheck, if_pos hlt] at h_flag
+    rw [B256.ltCheck, ite_eq_left hlt] at h_flag
     exact B256.zero_ne_one h_flag.symm
   rw [h_flag] at hp2
   have hp3 : [balance, Sevm.argWord sevm amountArg, owner] <<+ s3.stack :=

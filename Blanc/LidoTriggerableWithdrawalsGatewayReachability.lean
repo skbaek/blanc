@@ -471,7 +471,7 @@ theorem pauseFinitePost_accessedStorageKeys
     unfold pauseResumeWarm
     exact Std.HashSet.mem_insert_self
   unfold sloadAccessedStorageKeys
-  rw [if_pos hwarm]
+  rw [ite_eq_left hwarm]
 
 theorem pauseSentinelPost_gasLeft
     (sevm : Sevm) (base : Devm) (G : Nat) :
@@ -561,7 +561,7 @@ theorem pauseSentinelPost_accessedStorageKeys
     unfold pauseResumeWarm
     exact Std.HashSet.mem_insert_self
   unfold sloadAccessedStorageKeys
-  rw [if_pos hwarm]
+  rw [ite_eq_left hwarm]
 
 /-! ## The authorization prefix -/
 
@@ -866,9 +866,9 @@ private theorem pauseFiniteSstore_runCompiled
   have hcost : sstoreCost sevm
       base resumeSinceSlot value = 20000 := by
     unfold sstoreCost
-    simp only [hwarm, if_pos, Nat.zero_add, Devm.getOrigStorVal,
+    simp only [hwarm, ite_eq_left, Nat.zero_add, Devm.getOrigStorVal,
       horiginal, ite_self, hresume]
-    rw [sstoreValueCost, if_pos ⟨rfl, hvalueNonzero.symm⟩, if_pos rfl]
+    rw [sstoreValueCost, ite_eq_left ⟨rfl, hvalueNonzero.symm⟩, ite_eq_left rfl]
     norm_num only [gasStorageSet]
   simpa only [hcost] using
     (Ninst.runCompiled_sstore_selected_setMach

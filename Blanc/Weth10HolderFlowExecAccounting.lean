@@ -43,7 +43,7 @@ theorem Exec.flowActions_eq_root_append_descendants
         (Exec.Frame.ofRun run hcommits)).toList ++
         Exec.descendantActions dp ca run := by
   unfold Exec.flowActions Exec.descendantActions Exec.committedFrames
-  simp only [dif_pos hcommits, List.filterMap_cons, Option.toList]
+  simp only [dite_eq_left hcommits, List.filterMap_cons, Option.toList]
   cases Blanc.Weth10.Exec.Frame.flowAction? dp ca
       (Exec.Frame.ofRun run hcommits) <;> rfl
 
@@ -72,8 +72,8 @@ theorem Exec.descendantActions_runOk
   by_cases hs : Jaune.Frame.settlementCommits f raw = true
   · have hc : Execution.commits raw = true :=
       Jaune.Frame.raw_commits_of_settlementCommits hs
-    simp only [dif_pos hs, dif_pos hc]
-  · simp only [dif_neg hs, List.filterMap_nil, List.nil_append]
+    simp only [dite_eq_left hs, dite_eq_left hc]
+  · simp only [dite_eq_right hs, List.filterMap_nil, List.nil_append]
 
 /-- Exact wrap-aware balance-storage accounting for a labelled execution
 segment.  The holder equation retains self-transfer on both sides; the supply
@@ -946,7 +946,7 @@ theorem ProcessCreateMessage.ok_getStorCode_eq_inner_of_clean
       unfold processCreateMessage.settle at hsettle
       simp only [bind, Except.bind] at hsettle
       by_cases hinnerNone : inner.error.isNone = true
-      · rw [if_pos hinnerNone] at hsettle
+      · rw [ite_eq_left hinnerNone] at hsettle
         cases hcharge :
           processCreateMessage.chargeCodeGas
             msg.benv.stat.rules inner with
@@ -992,7 +992,7 @@ theorem ProcessCreateMessage.ok_getStorCode_eq_inner_of_clean
                   exact State.setCode_get_code_ne htargetNe
                 _ = inner.state.getCode ca := by
                   rw [chargeCodeGas_state_ok hcharge]
-      · rw [if_neg hinnerNone] at hsettle
+      · rw [ite_eq_right hinnerNone] at hsettle
         have heq := Except.ok.inj hsettle
         rw [heq] at herror
         simp only [Devm.error, Devm.rollback, Devm.setWorld, Option.isSome_eq_false_iff,
@@ -1032,7 +1032,7 @@ theorem ProcessMessage.storageSegmentEffect_of_bodyEffect
     exact hsafe
   by_cases hsettle : Jaune.Frame.settlementCommits
       (Frame.ofCall msg) out = true
-  · rw [if_pos hsettle]
+  · rw [ite_eq_left hsettle]
     have committed : Execution.commits out = true :=
       Frame.raw_commits_of_settlementCommits hsettle
     rcases hbody committed with ⟨body⟩
@@ -1069,7 +1069,7 @@ theorem ProcessMessage.storageSegmentEffect_of_bodyEffect
           (body.append
             (StorageSegmentEffect.of_getStorCode_eq
               hpostStorage hpostCode))⟩
-  · rw [if_neg hsettle]
+  · rw [ite_eq_right hsettle]
     have hset := (RunFrame.some_inv hprocess).2
     have herr : post.error.isSome = true := by
       have hnone : post.error.isNone ≠ true := by
@@ -1165,7 +1165,7 @@ theorem ProcessCreateMessage.storageSegmentEffect_of_bodyEffect
       exact hp
   by_cases hsettle : Jaune.Frame.settlementCommits
       (Frame.ofCreate msg) out = true
-  · rw [if_pos hsettle]
+  · rw [ite_eq_left hsettle]
     have committed : Execution.commits out = true :=
       Frame.raw_commits_of_settlementCommits hsettle
     rcases hbody committed with ⟨body⟩
@@ -1226,7 +1226,7 @@ theorem ProcessCreateMessage.storageSegmentEffect_of_bodyEffect
           (body.append
             (StorageSegmentEffect.of_getStorCode_eq
               hsuffixStorage hsuffixCode))⟩
-  · rw [if_neg hsettle]
+  · rw [ite_eq_right hsettle]
     have hset := (RunFrame.some_inv hprocess).2
     have herr : post.error.isSome = true := by
       have hnone : post.error.isNone ≠ true := by
@@ -1436,7 +1436,7 @@ theorem GenericCreate.storageSegmentEffect_some_of_bodyEffect
         symm
         change ((pre.state.incrNonce sevm.currentTarget).get ca).stor =
           (pre.state.get ca).stor
-        rw [State.incrNonce_get_stor, if_neg]
+        rw [State.incrNonce_get_stor, ite_eq_right]
         rintro ⟨heq, hempty⟩
         rw [heq] at hempty
         exact installedWeth10Code_size_ne_zero hcode hempty.1
@@ -1938,7 +1938,7 @@ theorem RawTokenCallbackIndexedStepBoundary.storageSegmentEffect
       simpa only [msg, callMsg] using htarget
     have hnodel : getDelegatedCodeAddress (callPre.getCode ca) = none := by
       dsimp only [getDelegatedCodeAddress]
-      rw [if_neg (not_delegation_of_compile hcallPreCode)]
+      rw [ite_eq_right (not_delegation_of_compile hcallPreCode)]
     simp only [callMsg, htargetCa, hnodel, Option.getD_none, Bool.false_or, msg]
   rcases trace.storageSegmentDelta_of_forallDeeperAt hparent hmsgDepth
       hcallPreCode htargetCode htargetDirect hdeeper hfork with ⟨childEffect⟩
@@ -2008,7 +2008,7 @@ theorem RawFlashCallbackIndexedStepBoundary.storageSegmentEffect
       simpa only [msg, callMsg] using htarget
     have hnodel : getDelegatedCodeAddress (pre.getCode ca) = none := by
       dsimp only [getDelegatedCodeAddress]
-      rw [if_neg (not_delegation_of_compile installed)]
+      rw [ite_eq_right (not_delegation_of_compile installed)]
     simp only [callMsg, hreceiver, hnodel, Option.getD_none, Bool.false_or, msg]
   rcases trace.storageSegmentDelta_of_forallDeeperAt hparent hmsgDepth
       installed htargetCode htargetDirect hdeeper hfork with ⟨childEffect⟩
@@ -2060,7 +2060,7 @@ theorem AcceptedValueCallTrace.storageSegmentEffect
       simpa only [callMsg] using htarget
     have hnodel : getDelegatedCodeAddress (callPre.getCode ca) = none := by
       dsimp only [getDelegatedCodeAddress]
-      rw [if_neg (not_delegation_of_compile installed)]
+      rw [ite_eq_right (not_delegation_of_compile installed)]
     simp only [callMsg, htarget', hnodel, Option.getD_none]
   have hchildFork : CoveredFork trace.childMessage.benv.stat.fork := by
     rw [trace.childMessage_eq]
@@ -3157,7 +3157,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_allowance
   refine ⟨allowance, hnonempty, ?_, allowance_childlessTerminal,
     ?_, ?_, ?_⟩
   · rw [hselector]
-    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
+    simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false, or_true]
   · exact allowanceSelector_noPrimaryFlow.selectsNoPrimaryFlow
       (hselector.trans allowanceSelector_word_eq_local)
   · rw [hselector, allowanceSelector_word_eq_local]
@@ -3387,7 +3387,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_receive
       have hprimary : primaryFlowAtom frame.sevm ≠ none := by
         simp only [primaryFlowAtom, hempty, ↓reduceIte, ne_eq, reduceCtorEq, not_false_eq_true]
       unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
-      rw [if_pos context.invocation] at haction
+      rw [ite_eq_left context.invocation] at haction
       cases hatom : primaryFlowAtom frame.sevm with
       | none => exact (hprimary hatom).elim
       | some atom => simp only [hatom, Option.map_some, reduceCtorEq] at haction
@@ -3437,7 +3437,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_deposit
             frame.sevm.value.toNat) := by
         simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector]
       unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
-      rw [if_pos context.invocation, hatom] at haction
+      rw [ite_eq_left context.invocation, hatom] at haction
       simp only [Option.map_some, reduceCtorEq] at haction
   | some action =>
       have ledger :=
@@ -3493,7 +3493,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_depositTo
         simp only [primaryFlowAtom, hnonempty, ↓reduceIte, hselector,
           depositToSelector_ne_depositSelector, decide_true, Bool.true_or]
       unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
-      rw [if_pos context.invocation, hatom] at haction
+      rw [ite_eq_left context.invocation, hatom] at haction
       simp only [Option.map_some, reduceCtorEq] at haction
   | some action =>
       have ledger :=
@@ -3585,7 +3585,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_depositToAndCall
   cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
-      rw [if_pos context.invocation, hatom] at haction
+      rw [ite_eq_left context.invocation, hatom] at haction
       simp only [Option.map_some, reduceCtorEq] at haction
   | some action =>
       have ledger :=
@@ -3697,7 +3697,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_flashLoan
   cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
-      rw [if_pos context.invocation, hprimary] at haction
+      rw [ite_eq_left context.invocation, hprimary] at haction
       simp only [Option.map_some, reduceCtorEq] at haction
   | some action =>
       have ledger :=
@@ -3867,7 +3867,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_withdraw
   cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
-      rw [if_pos context.invocation, hprimary] at haction
+      rw [ite_eq_left context.invocation, hprimary] at haction
       simp only [Option.map_some, reduceCtorEq] at haction
   | some action =>
       have actionEq := action_eq_of_primaryFlowAtom context hprimary haction
@@ -3912,7 +3912,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_withdrawTo
   cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
-      rw [if_pos context.invocation, hprimary] at haction
+      rw [ite_eq_left context.invocation, hprimary] at haction
       simp only [Option.map_some, reduceCtorEq] at haction
   | some action =>
       have actionEq := action_eq_of_primaryFlowAtom context hprimary haction
@@ -3957,7 +3957,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferZero
   cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
-      rw [if_pos context.invocation, hprimary] at haction
+      rw [ite_eq_left context.invocation, hprimary] at haction
       simp only [Option.map_some, reduceCtorEq] at haction
   | some action =>
       have actionEq := action_eq_of_primaryFlowAtom context hprimary haction
@@ -4004,7 +4004,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferFromZero
   cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
-      rw [if_pos context.invocation, hprimary] at haction
+      rw [ite_eq_left context.invocation, hprimary] at haction
       simp only [Option.map_some, reduceCtorEq] at haction
   | some action =>
       have actionEq := action_eq_of_primaryFlowAtom context hprimary haction
@@ -4062,7 +4062,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_withdrawFrom
   cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
-      rw [if_pos context.invocation, hprimary] at haction
+      rw [ite_eq_left context.invocation, hprimary] at haction
       simp only [Option.map_some, reduceCtorEq] at haction
   | some action =>
       have actionEq := action_eq_of_primaryFlowAtom context hprimary haction
@@ -4140,7 +4140,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferAndCall
     cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
     | none =>
         unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
-        rw [if_pos context.invocation, hprimary] at haction
+        rw [ite_eq_left context.invocation, hprimary] at haction
         simp only [Option.map_some, reduceCtorEq] at haction
     | some action =>
         have actionEq :=
@@ -4214,7 +4214,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferAndCall
     cases haction : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
     | none =>
         unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
-        rw [if_pos context.invocation, hprimary] at haction
+        rw [ite_eq_left context.invocation, hprimary] at haction
         simp only [Option.map_some, reduceCtorEq] at haction
     | some action =>
         have actionEq :=
@@ -4239,7 +4239,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferAndCall
                     (Sevm.argWord frame.sevm 0).toAdr) := by
             by_cases hself : frame.sevm.caller =
                 (Sevm.argWord frame.sevm 0).toAdr
-            · rw [if_pos hself, hself]
+            · rw [ite_eq_left hself, hself]
               exact ((hdecrease
                 (Sevm.argWord frame.sevm 0).toAdr).1 hself).symm
             · simpa only [hself, ↓reduceIte] using
@@ -4334,7 +4334,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_permit
         have hnodel :
             getDelegatedCodeAddress (callPre.getCode ca) = none := by
           dsimp only [getDelegatedCodeAddress]
-          rw [if_neg (not_delegation_of_compile installedCall)]
+          rw [ite_eq_right (not_delegation_of_compile installedCall)]
         simp only [trace.codeAddress, htargetCa, hnodel, Option.getD_none]
       have hmsgFork : CoveredFork trace.msg.benv.stat.fork := by
         rw [trace.benvStat]
@@ -4381,7 +4381,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferNonzero
           transferSelector_ne_depositToAndCallSelector, Bool.or_self, Bool.false_eq_true,
           decide_true, Bool.true_or, hto]
       unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
-      rw [if_pos context.invocation, hatom] at haction
+      rw [ite_eq_left context.invocation, hatom] at haction
       simp only [Option.map_some, reduceCtorEq] at haction
   | some action =>
       have ledger :=
@@ -4436,7 +4436,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferNonzero
                     (Stor.rest (Devm.getStor pre ca))
                       (Sevm.argWord e 0).toAdr) := by
                 by_cases hself : e.caller = (Sevm.argWord e 0).toAdr
-                · rw [if_pos hself, hself]
+                · rw [ite_eq_left hself, hself]
                   exact
                     ((hdecrease (Sevm.argWord e 0).toAdr).1 hself).symm
                 · simpa only [hself, ↓reduceIte] using
@@ -4523,7 +4523,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferFromNonzero
           Bool.false_eq_true, transferFromSelector_ne_transferSelector,
           transferFromSelector_ne_transferAndCallSelector, hto]
       unfold Blanc.Weth10.Exec.Frame.flowAction? at haction
-      rw [if_pos context.invocation, hatom] at haction
+      rw [ite_eq_left context.invocation, hatom] at haction
       simp only [Option.map_some, reduceCtorEq] at haction
   | some action =>
       have ledger :=
@@ -4587,7 +4587,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_transferFromNonzero
                       (Sevm.argWord e 1).toAdr) := by
                 by_cases hself : (Sevm.argWord e 0).toAdr =
                     (Sevm.argWord e 1).toAdr
-                · rw [if_pos hself, hself]
+                · rw [ite_eq_left hself, hself]
                   exact
                     ((hdecrease (Sevm.argWord e 1).toAdr).1 hself).symm
                 · simpa only [hself, ↓reduceIte] using
@@ -5267,7 +5267,7 @@ theorem Exec.CoreStorageSound.nextSome
                     hs hparentNe hnonempty
                     (by rw [hinnerTarget]
                         dsimp only [getDelegatedCodeAddress]
-                        rw [if_neg (not_delegation_of_compile hatp.1)])
+                        rw [ite_eq_right (not_delegation_of_compile hatp.1)])
                 have hcodeAddressInit :=
                   congrArg (fun evm : Evm => evm.sta.codeAddress) hinit
                 dsimp only [Msg.withBenv, initEvm, initSevm] at hcodeAddressInit

@@ -979,7 +979,7 @@ theorem maxFlashLoan_output
         unfold guard
         line_inv) hguard).trans
         (funext fun a => getCode_eq_of_state_eq hpop.state a)
-    rw [if_neg hne]
+    rw [ite_eq_right hne]
     exact ⟨hout, hstor.symm, hbal.symm, (hcode1.trans hcode2).symm⟩
   · have hpopStack := hpop.stack
     simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hpopStack
@@ -992,7 +992,7 @@ theorem maxFlashLoan_output
       have hne' :
           sevm.currentTarget.toB256 ≠ Sevm.argWord sevm 0 := by
         exact fun h => hne h.symm
-      rw [B256.eqCheck, if_neg hne'] at hflag
+      rw [B256.eqCheck, ite_eq_right hne'] at hflag
       exact hnz hflag.symm
     have hm : s.memory = s3.memory :=
       (Line.of_inv Devm.memory (by
@@ -1023,7 +1023,7 @@ theorem maxFlashLoan_output
         line_inv) hguard).trans
         ((funext fun a => getCode_eq_of_state_eq hpop.state a).trans
           (funext fun a => getCode_eq_of_state_eq hburn.state a))
-    rw [if_pos heq]
+    rw [ite_eq_left heq]
     exact ⟨hout, hstor.symm, hbal.symm, (hcode1.trans hcode2).symm⟩
 
 /-! ## Compiled public-selector observations -/

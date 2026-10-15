@@ -1896,7 +1896,7 @@ lemma Rinst.sstore_runCore_stateWriteFrame
         dsimp only
         by_cases hacc : max (if (sevm.currentTarget, key) ∉ d.accessedStorageKeys
             then gasColdSload else gasWarmAccess) (gCallStipend + 1) ≤ d.gasLeft
-        · simp only [if_pos hacc, Except.bind_ok]
+        · simp only [ite_eq_left hacc, Except.bind_ok]
           let cold :=
             (sevm.currentTarget, key) ∉ d.accessedStorageKeys
           let d2 : Devm := if cold then
@@ -1956,7 +1956,7 @@ lemma Rinst.sstore_runCore_stateWriteFrame
               (Devm.balReadAccount_instructionFrame sevm.benvStat.rules
                 sevm.currentTarget d7))
           exact Devm.setStorVal_stateWriteFrame _ _ _ _
-        · simp only [if_neg hacc]
+        · simp only [ite_eq_right hacc]
           exact Devm.stateWriteFrame_refl d
       · exact Devm.stateWriteFrame_refl pre
 
@@ -2180,10 +2180,10 @@ theorem ProcessMessage.rollback_of_error {msg : Msg} {xl : Xlot} {out : Devm}
   unfold processMessage.settle at hset
   dsimp only [bind, Except.bind] at hset
   by_cases herr' : evm'.error.isSome = true
-  · rw [if_pos herr'] at hset
+  · rw [ite_eq_left herr'] at hset
     rw [Except.ok.inj hset]
     exact ⟨rfl, rfl⟩
-  · rw [if_neg herr'] at hset
+  · rw [ite_eq_right herr'] at hset
     exact absurd (Except.ok.inj hset ▸ herr) herr'
 
 /-- Settlement agrees on crypto failures: both fork handlers rethrow them. -/
@@ -2280,7 +2280,7 @@ theorem ProcessMessage.ok_state_eq_of_not_commits
               hhandle] using hsettle
           unfold processMessage.settle at hsettle'
           simp only [bind, Except.bind] at hsettle'
-          rw [if_pos hhandled] at hsettle'
+          rw [ite_eq_left hhandled] at hsettle'
           have heq := Except.ok.inj hsettle'
           calc
             post.state =
@@ -2298,7 +2298,7 @@ theorem ProcessMessage.ok_state_eq_of_not_commits
               hhandle] using hsettle
           unfold processMessage.settle at hsettle'
           simp only [bind, Except.bind] at hsettle'
-          rw [if_pos hhandled] at hsettle'
+          rw [ite_eq_left hhandled] at hsettle'
           have heq := Except.ok.inj hsettle'
           calc
             post.state =
@@ -2404,7 +2404,7 @@ theorem ProcessCreateMessage.rollback_of_error
       unfold processCreateMessage.settle at hsettle
       simp only [bind, Except.bind] at hsettle
       by_cases hinnerNone : inner.error.isNone = true
-      · rw [if_pos hinnerNone] at hsettle
+      · rw [ite_eq_left hinnerNone] at hsettle
         cases hcharge :
           processCreateMessage.chargeCodeGas
             msg.benv.stat.rules inner with
@@ -2441,7 +2441,7 @@ theorem ProcessCreateMessage.rollback_of_error
             rw [hsettle] at herror
             change charged.error.isSome = true at herror
             simp only [hchargedError, Option.isSome_none, Bool.false_eq_true] at herror
-      · rw [if_neg hinnerNone] at hsettle
+      · rw [ite_eq_right hinnerNone] at hsettle
         have heq := Except.ok.inj hsettle
         calc
           post.state =
@@ -2638,7 +2638,7 @@ lemma Resume.createAmsterdam_getCode {state : StateGasRules} {parent : Devm}
     split
     · -- Error path: guard, optional refund credit, status push.
       by_cases hP : child.AmsterdamFailedChildSettled
-      · rw [if_pos hP]
+      · rw [ite_eq_left hP]
         dsimp only
         split
         · rw [Devm.push_getCode_gen rfl a,
@@ -2648,17 +2648,17 @@ lemma Resume.createAmsterdam_getCode {state : StateGasRules} {parent : Devm}
         · rw [Devm.push_getCode_gen rfl a]
           dsimp only [incorporateChildAmsterdamOnError]
           exact h
-      · rw [if_neg hP]
+      · rw [ite_eq_right hP]
         dsimp only [Execution.getCode]
         exact h
     · -- Success path: guard, incorporation, status push.
       by_cases hP : child.AmsterdamChildUncommitted
-      · rw [if_pos hP]
+      · rw [ite_eq_left hP]
         dsimp only
         rw [Devm.push_getCode_gen rfl a]
         dsimp only [incorporateChildAmsterdamOnSuccess]
         exact h
-      · rw [if_neg hP]
+      · rw [ite_eq_right hP]
         dsimp only [Execution.getCode]
         exact h
 
@@ -2944,10 +2944,10 @@ lemma Resume.callAmsterdam_getCode {state : StateGasRules} {parent : Devm}
     split
     · -- Error path: guard, optional refund credit, status push, memory write.
       by_cases hP : child.AmsterdamFailedChildSettled
-      · rw [if_pos hP]
+      · rw [ite_eq_left hP]
         dsimp only
         by_cases hnac : nac = true
-        · rw [if_pos hnac]
+        · rw [ite_eq_left hnac]
           rcases hpush : (Devm.creditStateGasRefund state.newAccount
               (incorporateChildAmsterdamOnError parent child
                 child.output)).push 0 with
@@ -2956,7 +2956,7 @@ lemma Resume.callAmsterdam_getCode {state : StateGasRules} {parent : Devm}
           · show (evm2.memWrite outputIndex _).getCode a = parent.getCode a
             rw [hmw]
             exact hp.trans h
-        · rw [if_neg hnac]
+        · rw [ite_eq_right hnac]
           rcases hpush : (incorporateChildAmsterdamOnError parent child
               child.output).push 0 with
             e | evm2 <;> have hp := Devm.push_getCode_gen hpush a
@@ -2964,12 +2964,12 @@ lemma Resume.callAmsterdam_getCode {state : StateGasRules} {parent : Devm}
           · show (evm2.memWrite outputIndex _).getCode a = parent.getCode a
             rw [hmw]
             exact hp.trans h
-      · rw [if_neg hP]
+      · rw [ite_eq_right hP]
         dsimp only [Execution.getCode]
         exact h
     · -- Success path: guard, incorporation, status push, memory write.
       by_cases hP : child.AmsterdamChildUncommitted
-      · rw [if_pos hP]
+      · rw [ite_eq_left hP]
         dsimp only
         rcases hpush : (incorporateChildAmsterdamOnSuccess parent child
             child.output).push 1 with
@@ -2978,7 +2978,7 @@ lemma Resume.callAmsterdam_getCode {state : StateGasRules} {parent : Devm}
         · show (evm2.memWrite outputIndex _).getCode a = parent.getCode a
           rw [hmw]
           exact hp.trans h
-      · rw [if_neg hP]
+      · rw [ite_eq_right hP]
         dsimp only [Execution.getCode]
         exact h
 
@@ -3085,22 +3085,22 @@ lemma GenericCallAmsterdam.codePreserve
   · obtain ⟨-, rfl⟩ := run
     rename_i heq
     by_cases hnac : newAccountCharged = true
-    · rw [if_pos hnac] at heq
+    · rw [ite_eq_left hnac] at heq
       rw [Devm.push_getCode_gen heq a, Devm.creditStateGasRefund_getCode,
         Devm.restoreChildGas_getCode]
       rfl
-    · rw [if_neg hnac] at heq
+    · rw [ite_eq_right hnac] at heq
       rw [Devm.push_getCode_gen heq a, Devm.restoreChildGas_getCode]
       rfl
   -- early exit, push succeeded
   · obtain ⟨-, rfl⟩ := run
     rename_i heq
     by_cases hnac : newAccountCharged = true
-    · rw [if_pos hnac] at heq
+    · rw [ite_eq_left hnac] at heq
       rw [Devm.push_getCode_gen heq a, Devm.creditStateGasRefund_getCode,
         Devm.restoreChildGas_getCode]
       rfl
-    · rw [if_neg hnac] at heq
+    · rw [ite_eq_right hnac] at heq
       rw [Devm.push_getCode_gen heq a, Devm.restoreChildGas_getCode]
       rfl
   -- the child frame is entered
@@ -3396,7 +3396,7 @@ lemma accessDelegation_of_not_delegation {d : Devm} {adr : Adr}
     accessDelegation d adr = ⟨false, adr, d.getCode adr, 0, d⟩ := by
   have hnone : getDelegatedCodeAddress (d.state.getCode adr) = none := by
     dsimp only [getDelegatedCodeAddress]
-    rw [if_neg (show ¬ isValidDelegation (d.state.getCode adr) from h)]
+    rw [ite_eq_right (show ¬ isValidDelegation (d.state.getCode adr) from h)]
   dsimp only [accessDelegation]
   rw [hnone]
   rfl
@@ -3408,7 +3408,7 @@ lemma GasSchedule.accessDelegation_of_not_delegation {gas : GasSchedule}
     gas.accessDelegation d adr = ⟨false, adr, d.getCode adr, 0, d⟩ := by
   have hnone : getDelegatedCodeAddress (d.state.getCode adr) = none := by
     dsimp only [getDelegatedCodeAddress]
-    rw [if_neg (show ¬ isValidDelegation (d.state.getCode adr) from h)]
+    rw [ite_eq_right (show ¬ isValidDelegation (d.state.getCode adr) from h)]
   dsimp only [GasSchedule.accessDelegation]
   rw [hnone]
   rfl
@@ -3420,7 +3420,7 @@ lemma GasSchedule.delegationCost_of_not_delegation {gas : GasSchedule} {d : Devm
   unfold GasSchedule.delegationCost
   have hnone : getDelegatedCodeAddress (d.state.getCode adr) = none := by
     dsimp only [getDelegatedCodeAddress]
-    rw [if_neg (show ¬ isValidDelegation (d.state.getCode adr) from h)]
+    rw [ite_eq_right (show ¬ isValidDelegation (d.state.getCode adr) from h)]
   simp only [hnone]
 
 /-- Undelegated Amsterdam completion reads the target's own code. -/
@@ -4614,7 +4614,7 @@ lemma Linst.selfdestruct_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Ex
                 change st.getCode adr = res2.getCode adr
                 exact State.subBal_getCode h_st
             by_cases h_if : sevm.currentTarget ∈ (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).createdAccounts
-            · simp only [h_if, if_pos]
+            · simp only [h_if, ite_eq_left]
               intro run; rw [← run]
               change (addAccountToDelete _ _).getCode adr = devm.getCode adr
               have h_add : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).getCode adr = res3.getCode adr := by
@@ -4653,9 +4653,9 @@ lemma Linst.selfdestruct_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Ex
           intro run; rw [← run]
           dsimp only [assert, ite_not] at hg
           by_cases hle : gasSelfDestruct + (if res1.1 ∉ res1.2.accessedAddresses then sevm.benvStat.rules.gas.coldAccountAccess else 0) ≤ res1.2.gasLeft
-          · simp only [hle, if_true] at hg
+          · simp only [hle, ite_true] at hg
             contradiction
-          · simp only [hle, if_false] at hg
+          · simp only [hle, ite_false] at hg
             simp only [Except.error.injEq] at hg; subst hg
             exact Devm.popToAdr_getCode_eq h1 adr
         case ok _ =>
@@ -4695,7 +4695,7 @@ lemma Linst.selfdestruct_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Ex
                 have h_emit : ((res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).getCode adr = (res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).getCode adr :=
                   ((Devm.emitTransferLog_instructionFrame _ _ _ _).getCode adr).symm
                 by_cases h_if : sevm.currentTarget ∈ ((res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).createdAccounts
-                · simp only [h_if, if_pos]
+                · simp only [h_if, ite_eq_left]
                   intro run; rw [← run]
                   have h_del : (addAccountToDelete ((res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal) sevm.currentTarget).getCode adr = ((res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).getCode adr := by
                     rfl
@@ -8905,7 +8905,7 @@ theorem reach_of_dispatchWith_build :
         have h_le : z.fst ≤ sig := by
           rw [← B256.not_lt]; intro h_lt
           have h_gt : z.fst > sig := h_lt
-          rw [B256.gtCheck, if_pos h_gt] at h_flag
+          rw [B256.gtCheck, ite_eq_left h_gt] at h_flag
           exact B256.zero_ne_one h_flag
         have h_mem_drop : (sig, f) ∈
             ((w, p) :: y :: ys).drop ((((w, p) :: y :: ys).length + 1) / 2) := by
@@ -8927,7 +8927,7 @@ theorem reach_of_dispatchWith_build :
         rcases popBurn_pref h_pop h_pfx1 with ⟨h_flag, h_pfx2⟩
         have h_lt : sig < z.fst := by
           by_contra h_nlt
-          rw [B256.gtCheck, if_neg (fun h_gt => h_nlt h_gt)] at h_flag
+          rw [B256.gtCheck, ite_eq_right (fun h_gt => h_nlt h_gt)] at h_flag
           exact h_ne h_flag
         have h_mem_take : (sig, f) ∈
             ((w, p) :: y :: ys).take ((((w, p) :: y :: ys).length + 1) / 2) := by
@@ -9096,7 +9096,7 @@ private theorem reach_of_dispatch_build :
           rw [← B256.not_lt]
           intro h_lt
           have h_gt : z.fst > sig := h_lt
-          rw [B256.gtCheck, if_pos h_gt] at h_flag
+          rw [B256.gtCheck, ite_eq_left h_gt] at h_flag
           exact B256.zero_ne_one h_flag
         have h_mem_drop : (sig, f) ∈
             ((w, p) :: y :: ys).drop
@@ -9124,7 +9124,7 @@ private theorem reach_of_dispatch_build :
         rcases popBurn_pref h_pop h_pfx1 with ⟨h_flag, h_pfx2⟩
         have h_lt : sig < z.fst := by
           by_contra h_nlt
-          rw [B256.gtCheck, if_neg (fun h_gt => h_nlt h_gt)] at h_flag
+          rw [B256.gtCheck, ite_eq_right (fun h_gt => h_nlt h_gt)] at h_flag
           exact h_ne h_flag
         have h_mem_take : (sig, f) ∈
             ((w, p) :: y :: ys).take
@@ -9188,7 +9188,7 @@ theorem not_run_dispatch_of_miss :
     intro h₂
     have h_pfx1 : (w =? sig) :: ws <<+ s₁.stack := by
       generalize_line_prefix
-    rw [B256.eqCheck, if_neg h_ne] at h_pfx1
+    rw [B256.eqCheck, ite_eq_right h_ne] at h_pfx1
     rcases of_run_branch h₂ with
         ⟨s₂, h_pop, h_runf⟩ |
         ⟨v, s₂, s₃, h_vne, h_pop, h_burn, h_runf⟩
@@ -9371,7 +9371,7 @@ theorem reach_of_dispatchWith_build_logs :
         have h_le : z.fst ≤ sig := by
           rw [← B256.not_lt]; intro h_lt
           have h_gt : z.fst > sig := h_lt
-          rw [B256.gtCheck, if_pos h_gt] at h_flag
+          rw [B256.gtCheck, ite_eq_left h_gt] at h_flag
           exact B256.zero_ne_one h_flag
         have h_mem_drop : (sig, f) ∈
             ((w, p) :: y :: ys).drop
@@ -9401,7 +9401,7 @@ theorem reach_of_dispatchWith_build_logs :
       · rcases popBurn_pref h_pop h_pfx1 with ⟨h_flag, h_pfx2⟩
         have h_lt : sig < z.fst := by
           by_contra h_nlt
-          rw [B256.gtCheck, if_neg (fun h_gt => h_nlt h_gt)] at h_flag
+          rw [B256.gtCheck, ite_eq_right (fun h_gt => h_nlt h_gt)] at h_flag
           exact h_ne h_flag
         have h_mem_take : (sig, f) ∈
             ((w, p) :: y :: ys).take
@@ -9639,7 +9639,7 @@ lemma State.setBal_get_nonce {st : Jaune.State} {b a : Adr} {v : B256} :
 /-- An account that is not empty survives `setAccount` normalization unchanged. -/
 theorem Acct.clearIfEmpty_of_not_empty {ac : Acct} (h : ¬ ac.Empty) : ac.clearIfEmpty = ac := by
   unfold Acct.clearIfEmpty
-  rw [if_neg h]
+  rw [ite_eq_right h]
 
 /-- A balance write keeps the nonce. -/
 theorem Acct.withBal_nonce (ac : Acct) (b : B256) : (ac.withBal b).nonce = ac.nonce := rfl
@@ -9803,9 +9803,9 @@ theorem State.setBal_current_of_protected {state : State} {owner : Adr}
   unfold State.setBal
   rw [unchanged]
   unfold State.setAccount
-  rw [Acct.clearIfEmpty, if_neg notEmpty]
+  rw [Acct.clearIfEmpty, ite_eq_right notEmpty]
   unfold State.set
-  rw [if_neg notNil]
+  rw [ite_eq_right notNil]
   exact treeMap_insert_same state owner (state.get owner) found
 
 /-- A zero credit to a protected account is the identity on the world. -/
@@ -9819,7 +9819,7 @@ theorem State.addBal_zero_of_protected {state : State} {owner : Adr}
 theorem State.subBal_zero_of_protected {state : State} {owner : Adr}
     (hp : State.Protected state owner) : state.subBal owner 0 = some state := by
   unfold State.subBal
-  simp only [B256.lt_iff_toNat_lt_toNat, B256.toNat_zero, Nat.not_lt_zero, if_false, B256.sub_zero,
+  simp only [B256.lt_iff_toNat_lt_toNat, B256.toNat_zero, Nat.not_lt_zero, ite_false, B256.sub_zero,
     State.setBal_current_of_protected hp]
 
 /-- Message entry that moves no value — no transfer flag, or a zero value —
@@ -9853,13 +9853,13 @@ theorem selfPayment_entry_clears_storage {msg : Msg} {entry : Benv}
     rfl
   rw [entryState, ← self]
   unfold State.subBal at debit
-  rw [if_neg (by unfold State.bal; rw [hbal]; exact lt_irrefl _)] at debit
+  rw [ite_eq_right (by unfold State.bal; rw [hbal]; exact lt_irrefl _)] at debit
   cases debit
   unfold State.addBal State.getStor
   rw [State.setBal_get_stor]
   split
   · rfl
-  · rw [State.setBal_get_stor, if_pos]
+  · rw [State.setBal_get_stor, ite_eq_left]
     refine ⟨rfl, hcode, hnonce, ?_⟩
     unfold State.bal
     rw [hbal]
@@ -10115,7 +10115,7 @@ lemma Linst.selfdestruct_preserves_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
                 rfl
             have hd3 : Devm.NoDel wa res3 := Devm.NoDel.of_eqs h_sub_ds.symm h_sub.symm hd
             by_cases h_if : sevm.currentTarget ∈ (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).createdAccounts
-            · simp only [h_if, if_pos]
+            · simp only [h_if, ite_eq_left]
               intro run; rw [← run]
               have h_ca_eq : (res3.addBal res1.1 (res1.2.getAcct sevm.currentTarget).bal).createdAccounts = res3.createdAccounts := rfl
               have h_ca : sevm.currentTarget ∈ res3.createdAccounts := h_ca_eq ▸ h_if
@@ -10163,9 +10163,9 @@ lemma Linst.selfdestruct_preserves_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
           intro run; rw [← run]
           dsimp only [assert, ite_not] at hg
           by_cases hle : gasSelfDestruct + (if res1.1 ∉ res1.2.accessedAddresses then sevm.benvStat.rules.gas.coldAccountAccess else 0) ≤ res1.2.gasLeft
-          · simp only [hle, if_true] at hg
+          · simp only [hle, ite_true] at hg
             contradiction
-          · simp only [hle, if_false] at hg
+          · simp only [hle, ite_false] at hg
             simp only [Except.error.injEq] at hg; subst hg
             exact Devm.NoDel.of_eqs (Devm.popToAdr_delSets_eq h1).symm (Devm.popToAdr_getCode_eq h1 wa).symm h
         case ok _ =>
@@ -10225,7 +10225,7 @@ lemma Linst.selfdestruct_preserves_noDel {wa : Adr} {sevm : Sevm} {devm : Devm}
                 have hdE : Devm.NoDel wa ((res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal) :=
                   Devm.NoDel.of_eqs (Devm.emitTransferLog_instructionFrame _ _ _ _).delSets ((Devm.emitTransferLog_instructionFrame _ _ _ _).getCode wa) hdA
                 by_cases h_if : sevm.currentTarget ∈ ((res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).createdAccounts
-                · simp only [h_if, if_pos]
+                · simp only [h_if, ite_eq_left]
                   intro run; rw [← run]
                   have h_ca_eq : ((res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).createdAccounts = res3.createdAccounts := by
                     exact (Devm.emitTransferLog_instructionFrame _ _ _ _).createdAccounts.symm.trans rfl
@@ -10269,7 +10269,7 @@ lemma Msg.NoDel.benvAfterTransfer_err {wa : Adr} {msg : Msg}
     (h : Msg.NoDel wa msg) : wa ∉ x.2.2.1 ∧ (x.2.1.getCode wa).toList ≠ [] := by
   by_cases h_stv : msg.shouldTransferValue = true ∧ msg.value ≠ 0
   · unfold Msg.benvAfterTransfer at h_run
-    rw [if_pos h_stv] at h_run
+    rw [ite_eq_left h_stv] at h_run
     cases h_sub : msg.benv.subBal msg.caller msg.value
     · rw [h_sub] at h_run
       simp only [Except.error.injEq, Option.toExcept, Except.bind, bind] at h_run
@@ -10279,7 +10279,7 @@ lemma Msg.NoDel.benvAfterTransfer_err {wa : Adr} {msg : Msg}
       dsimp only [Option.toExcept, Except.bind_ok] at h_run
       contradiction
   · unfold Msg.benvAfterTransfer at h_run
-    rw [if_neg h_stv] at h_run
+    rw [ite_eq_right h_stv] at h_run
     contradiction
 
 lemma chargeCodeGas_delSets_ok {rules : ForkRules} {d d' : Devm}
@@ -10457,7 +10457,7 @@ lemma Msg.NoDel.benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
     (h : Msg.NoDel wa msg) : Msg.NoDel wa (msg.withBenv benv) := by
   by_cases h_stv : msg.shouldTransferValue = true ∧ msg.value ≠ 0
   · unfold Msg.benvAfterTransfer at h_run
-    rw [if_pos h_stv] at h_run
+    rw [ite_eq_left h_stv] at h_run
     unfold Benv.subBal at h_run
     rcases h_sub : msg.benv.state.subBal msg.caller msg.value with _ | st_mid
     · rw [h_sub] at h_run
@@ -10480,7 +10480,7 @@ lemma Msg.NoDel.benvAfterTransfer {wa : Adr} {msg : Msg} {benv : Benv}
         exact h.code
       exact ⟨hBc ▸ h.ca, h_code⟩
   · unfold Msg.benvAfterTransfer at h_run
-    rw [if_neg h_stv] at h_run
+    rw [ite_eq_right h_stv] at h_run
     have heq : benv = msg.benv := (Except.ok.inj h_run).symm
     subst heq
     exact h
@@ -10670,12 +10670,12 @@ theorem processMessage_settle_ok_state_cases
       simp only [bind, Except.bind] at h
       cases herr : raw.error.isSome with
       | false =>
-          rw [if_neg (by simpa only [Bool.not_eq_true, Option.isSome_eq_false_iff,
+          rw [ite_eq_right (by simpa only [Bool.not_eq_true, Option.isSome_eq_false_iff,
             Option.isNone_iff_eq_none] using herr)] at h
           exact Or.inr ⟨raw, rfl, herr,
             (congrArg Devm.state (Except.ok.inj h)).symm⟩
       | true =>
-          rw [if_pos herr] at h
+          rw [ite_eq_left herr] at h
           have heq := Except.ok.inj h
           exact Or.inl <| calc
             post.state =
@@ -10885,7 +10885,7 @@ lemma Linst.selfdestruct_balance_effect :
             by_cases hdel : sevm.currentTarget ∈
                 (res3.addBal res1.1
                   (res1.2.getAcct sevm.currentTarget).bal).createdAccounts
-            · simp only [hdel, if_pos]
+            · simp only [hdel, ite_eq_left]
               intro run
               rw [← run]
               unfold Execution.Rel Outcome.Rel
@@ -10974,7 +10974,7 @@ lemma Linst.selfdestruct_balance_effect :
                 have htransfer : State.BalNoninc pre.state (res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).state :=
                   balNoninc_refl_trans.1.2 hPreState (State.sub_addBal_noninc (dst := res1.1) hsub)
                 by_cases h_if : sevm.currentTarget ∈ ((res3.addBal res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget res1.1 (((if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2)).getAcct sevm.currentTarget).bal).createdAccounts
-                · simp only [h_if, if_pos]
+                · simp only [h_if, ite_eq_left]
                   intro run; rw [← run]
                   unfold Execution.Rel Outcome.Rel
                   apply Devm.balNoninc_of_state
@@ -11005,7 +11005,7 @@ lemma Msg.benvAfterTransfer_balance_effect {msg : Msg}
     State.BalNoninc msg.benv.state (BenvExecution.state out) := by
   by_cases h_stv : msg.shouldTransferValue = true ∧ msg.value ≠ 0
   · unfold Msg.benvAfterTransfer at h
-    rw [if_pos h_stv] at h
+    rw [ite_eq_left h_stv] at h
     unfold Benv.subBal at h
     rcases h_sub : msg.benv.state.subBal msg.caller msg.value with _ | st_mid
     · rw [h_sub] at h
@@ -11018,7 +11018,7 @@ lemma Msg.benvAfterTransfer_balance_effect {msg : Msg}
       change State.BalNoninc msg.benv.state (st_mid.addBal msg.currentTarget msg.value)
       exact State.sub_addBal_noninc h_sub
   · unfold Msg.benvAfterTransfer at h
-    rw [if_neg h_stv] at h
+    rw [ite_eq_right h_stv] at h
     rw [← h]
     exact Nat.le_refl _
 
@@ -11228,9 +11228,9 @@ theorem processMessage.settle_ok_cases {msg : Msg}
     unfold processMessage.settle at hset
     dsimp only [bind, Except.bind] at hset
     by_cases herr : evm.error.isSome = true
-    · rw [if_pos herr] at hset
+    · rw [ite_eq_left herr] at hset
       exact .inl ⟨herr, Except.ok.inj hset⟩
-    · rw [if_neg herr] at hset
+    · rw [ite_eq_right herr] at hset
       exact .inr ⟨herr, Except.ok.inj hset⟩
 
 /-- Master balance effect for the code-execution layer: running the callee's
@@ -11448,10 +11448,10 @@ lemma Resume.createAmsterdam_balance {state : StateGasRules} {parent : Devm}
     exact h
   · split
     · by_cases hP : child.AmsterdamFailedChildSettled
-      · rw [if_pos hP]
+      · rw [ite_eq_left hP]
         dsimp only
         by_cases hnac : nac = true
-        · rw [if_pos hnac]
+        · rw [ite_eq_left hnac]
           refine Execution.Rel.trans_left balNoninc_refl_trans.2.2
             (balNoninc_refl_trans.2.2
               (incorporateChildAmsterdamOnError_balance_effect h)
@@ -11459,22 +11459,22 @@ lemma Resume.createAmsterdam_balance {state : StateGasRules} {parent : Devm}
                 (Devm.creditStateGasRefund_instructionFrame _ _)))
             (Outcome.Rel.mono Devm.instructionFrame_refines_balNoninc
               (Devm.push_instructionFrame 0 _))
-        · rw [if_neg hnac]
+        · rw [ite_eq_right hnac]
           exact Execution.Rel.trans_left balNoninc_refl_trans.2.2
             (incorporateChildAmsterdamOnError_balance_effect h)
             (Outcome.Rel.mono Devm.instructionFrame_refines_balNoninc
               (Devm.push_instructionFrame 0 _))
-      · rw [if_neg hP]
+      · rw [ite_eq_right hP]
         simp only [Execution.Rel, Outcome.Rel]
         exact Devm.balNoninc_of_state h
     · by_cases hP : child.AmsterdamChildUncommitted
-      · rw [if_pos hP]
+      · rw [ite_eq_left hP]
         dsimp only
         exact Execution.Rel.trans_left balNoninc_refl_trans.2.2
           (incorporateChildAmsterdamOnSuccess_balance_effect h)
           (Outcome.Rel.mono Devm.instructionFrame_refines_balNoninc
             (Devm.push_instructionFrame _ _))
-      · rw [if_neg hP]
+      · rw [ite_eq_right hP]
         simp only [Execution.Rel, Outcome.Rel]
         exact Devm.balNoninc_of_state h
 
@@ -11492,27 +11492,27 @@ lemma Resume.callAmsterdam_balance {state : StateGasRules} {parent : Devm}
     exact h
   · split
     · by_cases hP : child.AmsterdamFailedChildSettled
-      · rw [if_pos hP]
+      · rw [ite_eq_left hP]
         dsimp only
         by_cases hnac : nac = true
-        · rw [if_pos hnac]
+        · rw [ite_eq_left hnac]
           exact Devm.pushMemWrite_balance
             (balNoninc_refl_trans.2.2
               (incorporateChildAmsterdamOnError_balance_effect h)
               (Devm.instructionFrame_refines_balNoninc
                 (Devm.creditStateGasRefund_instructionFrame _ _)))
-        · rw [if_neg hnac]
+        · rw [ite_eq_right hnac]
           exact Devm.pushMemWrite_balance
             (incorporateChildAmsterdamOnError_balance_effect h)
-      · rw [if_neg hP]
+      · rw [ite_eq_right hP]
         simp only [Execution.Rel, Outcome.Rel]
         exact Devm.balNoninc_of_state h
     · by_cases hP : child.AmsterdamChildUncommitted
-      · rw [if_pos hP]
+      · rw [ite_eq_left hP]
         dsimp only
         exact Devm.pushMemWrite_balance
           (incorporateChildAmsterdamOnSuccess_balance_effect h)
-      · rw [if_neg hP]
+      · rw [ite_eq_right hP]
         simp only [Execution.Rel, Outcome.Rel]
         exact Devm.balNoninc_of_state h
 
@@ -12926,28 +12926,28 @@ lemma Array.getD_writeD {ξ : Type} (d : ξ) :
     intro xs n i h
     simp only [List.length_cons] at h
     have hn : n < xs.size := by omega
-    rw [Array.writeD, dif_pos hn]
+    rw [Array.writeD, dite_eq_left hn]
     rw [ih (xs.set n y hn) (n + 1) i (by rw [Array.size_set]; omega)]
     rw [Array.getD_set]
     by_cases hi : i = n
     · subst hi
-      rw [if_neg (by omega), if_pos rfl, if_pos (by simp only [Std.le_refl, length_cons,
+      rw [ite_eq_right (by omega), ite_eq_left rfl, ite_eq_left (by simp only [Std.le_refl, length_cons,
         lt_add_iff_pos_right, add_pos_iff, zero_lt_one, or_true, and_self]), Nat.sub_self]
       rfl
     · by_cases hlt : n ≤ i ∧ i < n + (y :: ys).length
       · have h1 : n + 1 ≤ i ∧ i < n + 1 + ys.length := by
           simp only [List.length_cons] at hlt; omega
-        rw [if_pos h1, if_pos hlt]
+        rw [ite_eq_left h1, ite_eq_left hlt]
         have : i - n = (i - (n + 1)) + 1 := by omega
         rw [this]; rfl
       · have h1 : ¬ (n + 1 ≤ i ∧ i < n + 1 + ys.length) := by
           simp only [List.length_cons] at hlt; omega
-        rw [if_neg h1, if_neg hlt, if_neg hi]
+        rw [ite_eq_right h1, ite_eq_right hlt, ite_eq_right hi]
 
 lemma Array.getD_setIfInBounds {ξ : Type} (a : Array ξ) (k : Nat) (x : ξ)
     (hk : k < a.size) (i : Nat) (d : ξ) :
     (a.setIfInBounds k x).getD i d = if i = k then x else a.getD i d := by
-  simp only [Array.setIfInBounds, dif_pos hk]
+  simp only [Array.setIfInBounds, dite_eq_left hk]
   exact Array.getD_set a k x hk i d
 
 lemma Array.foldl_setIfInBounds_getD {ξ : Type} (d : ξ) :
@@ -12970,18 +12970,18 @@ lemma Array.foldl_setIfInBounds_getD {ξ : Type} (d : ξ) :
     rw [Array.getD_setIfInBounds a k x hk]
     by_cases hi : i = k
     · subst hi
-      rw [if_neg (by omega), if_pos rfl, if_pos (by simp only [Std.le_refl, length_cons,
+      rw [ite_eq_right (by omega), ite_eq_left rfl, ite_eq_left (by simp only [Std.le_refl, length_cons,
         lt_add_iff_pos_right, add_pos_iff, zero_lt_one, or_true, and_self]), Nat.sub_self]
       rfl
     · by_cases hlt : k ≤ i ∧ i < k + (x :: l).length
       · have h1 : k + 1 ≤ i ∧ i < k + 1 + l.length := by
           simp only [List.length_cons] at hlt; omega
-        rw [if_pos h1, if_pos hlt]
+        rw [ite_eq_left h1, ite_eq_left hlt]
         have hsub : i - k = (i - (k + 1)) + 1 := by omega
         rw [hsub]; rfl
       · have h1 : ¬ (k + 1 ≤ i ∧ i < k + 1 + l.length) := by
           simp only [List.length_cons] at hlt; omega
-        rw [if_neg h1, if_neg hlt, if_neg hi]
+        rw [ite_eq_right h1, ite_eq_right hlt, ite_eq_right hi]
 
 /-- Read-back for `Array.copyD`, whose contract is "overwrite the front of `ys`
 with `xs`, keeping `ys`'s length".  With `xs` no longer than `ys` nothing is
@@ -12994,11 +12994,11 @@ lemma Array.getD_copyD {ξ : Type} (xs ys : Array ξ) (d : ξ) (h : xs.size ≤ 
   rw [Array.foldl_setIfInBounds_getD d xs.toList ys 0 i (by simpa only [Array.length_toList,
     zero_add] using h)]
   by_cases hi : i < xs.size
-  · rw [if_pos (by simpa only [_root_.zero_le, Array.length_toList, zero_add, true_and] using hi), if_pos hi, Nat.sub_zero]
+  · rw [ite_eq_left (by simpa only [_root_.zero_le, Array.length_toList, zero_add, true_and] using hi), ite_eq_left hi, Nat.sub_zero]
     simp only [getD_eq_getElem?_getD, Array.length_toList, hi, getElem?_pos, Array.getElem_toList,
       Option.getD_some, Array.getD, ↓reduceDIte, Array.getInternal_eq_getElem]
-  · rw [if_neg (by simpa only [_root_.zero_le, Array.length_toList, zero_add, true_and,
-    not_lt] using hi), if_neg hi]
+  · rw [ite_eq_right (by simpa only [_root_.zero_le, Array.length_toList, zero_add, true_and,
+    not_lt] using hi), ite_eq_right hi]
 
 /-- Pointwise read-back for an in-bounds source byte copied into an in-bounds
 target byte.  Unlike `Array.getD_copyD`, this does not require the whole source
@@ -13042,11 +13042,11 @@ lemma Array.getD_copyD_of_lt {ξ : Type} (xs ys : Array ξ) (d : ξ) (i : Nat)
             rw [ih' _ _ _ (by omega)]
             by_cases offsetInBounds : offset < array.size
             · rw [Array.getD_setIfInBounds _ _ _ offsetInBounds,
-                if_neg (by omega)]
+                ite_eq_right (by omega)]
             · simp only [Array.setIfInBounds, offsetInBounds, ↓reduceDIte,
               Array.getD_eq_getD_getElem?]
         rw [preservesBefore _ _ _ _ (by omega)]
-        rw [Array.getD_setIfInBounds _ _ _ inBounds, if_pos rfl]
+        rw [Array.getD_setIfInBounds _ _ _ inBounds, ite_eq_left rfl]
         simp only [tsub_self, getD_eq_getElem?_getD, length_cons, add_pos_iff, zero_lt_one, or_true,
           getElem?_pos, getElem_cons_zero, Option.getD_some]
       · rw [ih _ _ _ (by rw [Array.size_setIfInBounds]; exact inBounds)
@@ -13085,7 +13085,7 @@ lemma Array.getD_copyD_of_size_le {ξ : Type} (xs ys : Array ξ) (d : ξ)
       rw [ih _ _ _ (by simp only [length_cons] at after ⊢; omega)]
       by_cases offsetInBounds : offset < array.size
       · rw [Array.getD_setIfInBounds _ _ _ offsetInBounds,
-          if_neg (by simp only [length_cons] at after; omega)]
+          ite_eq_right (by simp only [length_cons] at after; omega)]
       · simp only [Array.setIfInBounds, offsetInBounds, ↓reduceDIte, Array.getD_eq_getD_getElem?]
   exact preservesAfter xs.toList ys 0 i (by simpa only [Array.length_toList, zero_add] using hxs)
 
@@ -13119,9 +13119,9 @@ lemma List.getD_takeD {ξ : Type} (d : ξ) :
       rw [show ((l.head?.getD d :: List.takeD n l.tail d).getD (i + 1) d)
             = (List.takeD n l.tail d).getD i d from rfl, ih l.tail i]
       by_cases hi : i < n
-      · rw [if_pos hi, if_pos (by omega)]
+      · rw [ite_eq_left hi, ite_eq_left (by omega)]
         cases l <;> simp only [tail_nil, getD_eq_getElem?_getD, length_nil, _root_.not_lt_zero, not_false_eq_true, getElem?_neg, Option.getD_none, tail_cons, getElem?_cons_succ]
-      · rw [if_neg hi, if_neg (by omega)]
+      · rw [ite_eq_right hi, ite_eq_right (by omega)]
 
 lemma List.takeD_nil_eq_replicate {ξ} (d : ξ) :
     ∀ n, List.takeD n ([] : List ξ) d = List.replicate n d := by
@@ -13165,12 +13165,12 @@ lemma Bytes.getD_writeAt (bs : Bytes) (n : Nat) (xs : Bytes) (i : Nat) :
   simp only [Bytes.writeAt, List.append_assoc]
   have hlen : (List.takeD n bs 0).length = n := List.takeD_length n bs 0
   by_cases h1 : i < n
-  · rw [List.getD_append_left 0 (by omega), List.getD_takeD, if_pos h1,
-      if_neg (by omega)]
+  · rw [List.getD_append_left 0 (by omega), List.getD_takeD, ite_eq_left h1,
+      ite_eq_right (by omega)]
   · rw [List.getD_append_right 0 (by omega), hlen]
     by_cases h2 : i < n + xs.length
-    · rw [List.getD_append_left 0 (by omega), if_pos ⟨by omega, h2⟩]
-    · rw [List.getD_append_right 0 (by omega), if_neg (by omega),
+    · rw [List.getD_append_left 0 (by omega), ite_eq_left ⟨by omega, h2⟩]
+    · rw [List.getD_append_right 0 (by omega), ite_eq_right (by omega),
         List.getD_drop]
       congr 1
       omega
@@ -13242,9 +13242,9 @@ lemma Nat.le_mul_ceilDiv (n m : Nat) (hm : 0 < m) : n ≤ m * ceilDiv n m := by
   simp only [ceilDiv]
   have hdm := Nat.div_add_mod n m
   rcases Nat.eq_zero_or_pos (n % m) with h | h
-  · rw [if_pos h, Nat.add_zero]
+  · rw [ite_eq_left h, Nat.add_zero]
     omega
-  · rw [if_neg (by omega), Nat.mul_add, Nat.mul_one]
+  · rw [ite_eq_right (by omega), Nat.mul_add, Nat.mul_one]
     have := Nat.mod_lt n hm
     omega
 
@@ -13326,11 +13326,11 @@ lemma Mem.write_aux {μ : Mem} (hwf : Mem.Wf μ) (n : Nat) :
     simp only [Mem.Wf] at hwf
     simp only [Mem.write]
     by_cases h1 : n + (y :: ys).length ≤ μ.size
-    · rw [if_pos h1]
+    · rw [ite_eq_left h1]
       by_cases h2 : n + (y :: ys).length ≤ μ.data.size
-      · rw [if_pos h2]
+      · rw [ite_eq_left h2]
         exact ⟨μ.data, rfl, h2, hwf, fun _ => rfl⟩
-      · rw [if_neg h2]
+      · rw [ite_eq_right h2]
         refine ⟨Array.copyD μ.data
           (Array.replicate (n + (y :: ys).length) 0x00), rfl, ?_, ?_, ?_⟩
         · rw [Array.size_copyD, Array.size_replicate]
@@ -13338,10 +13338,10 @@ lemma Mem.write_aux {μ : Mem} (hwf : Mem.Wf μ) (n : Nat) :
         · intro i
           rw [Array.getD_copyD _ _ _ (by rw [Array.size_replicate]; omega)]
           by_cases hi : i < μ.data.size
-          · rw [if_pos hi]
-          · rw [if_neg hi, Array.getD_replicate_zero,
+          · rw [ite_eq_left hi]
+          · rw [ite_eq_right hi, Array.getD_replicate_zero,
               Array.getD_of_size_le 0 (Nat.not_lt.mp hi)]
-    · rw [if_neg h1]
+    · rw [ite_eq_right h1]
       have hle : n + (y :: ys).length ≤ ceil32 (n + (y :: ys).length) :=
         Nat.le_ceil32 _
       refine ⟨Array.copyD μ.data
@@ -13351,8 +13351,8 @@ lemma Mem.write_aux {μ : Mem} (hwf : Mem.Wf μ) (n : Nat) :
       · intro i
         rw [Array.getD_copyD _ _ _ (by rw [Array.size_replicate]; omega)]
         by_cases hi : i < μ.data.size
-        · rw [if_pos hi]
-        · rw [if_neg hi, Array.getD_replicate_zero,
+        · rw [ite_eq_left hi]
+        · rw [ite_eq_right hi, Array.getD_replicate_zero,
             Array.getD_of_size_le 0 (Nat.not_lt.mp hi)]
 
 lemma Mem.Wf.write {μ : Mem} (h : Mem.Wf μ) (n : Nat) (ys : Bytes) :
@@ -13376,7 +13376,7 @@ lemma Mem.Reads.write {μ : Mem} {bs : Bytes} (hwf : Mem.Wf μ) (h : Mem.Reads �
     intro i
     rw [Bytes.getD_writeAt]
     simp only [List.length_nil, Nat.add_zero]
-    rw [if_neg (by omega)]
+    rw [ite_eq_right (by omega)]
     exact h i
   | cons y ys =>
     rcases Mem.write_aux hwf n (ys := y :: ys) (by simp only [ne_eq, reduceCtorEq,
@@ -13385,8 +13385,8 @@ lemma Mem.Reads.write {μ : Mem} {bs : Bytes} (hwf : Mem.Wf μ) (h : Mem.Reads �
     intro i
     rw [hdata, Array.getD_writeD 0 _ A n i hlen, Bytes.getD_writeAt]
     by_cases hin : n ≤ i ∧ i < n + (y :: ys).length
-    · rw [if_pos hin, if_pos hin]
-    · rw [if_neg hin, if_neg hin, hreads i]
+    · rw [ite_eq_left hin, ite_eq_left hin]
+    · rw [ite_eq_right hin, ite_eq_right hin, hreads i]
       exact h i
 
 /-! ### Reading the image back
@@ -13470,7 +13470,7 @@ lemma Bytes.sliceD_writeAt_before
   intro i hi
   have hi' := List.mem_range.mp hi
   rw [Bytes.getD_writeAt]
-  rw [if_neg]
+  rw [ite_eq_right]
   omega
 
 /-- The mirror of `Bytes.sliceD_writeAt_before`: a write that lands entirely
@@ -13486,7 +13486,7 @@ lemma Bytes.sliceD_writeAt_after
   intro i hi
   have hi' := List.mem_range.mp hi
   rw [Bytes.getD_writeAt]
-  rw [if_neg]
+  rw [ite_eq_right]
   omega
 
 /-- A padded read wholly inside a written window reads the corresponding
@@ -13501,7 +13501,7 @@ lemma Bytes.sliceD_writeAt_inside
   apply List.map_congr_left
   intro i hi
   have hi' := List.mem_range.mp hi
-  rw [Bytes.getD_writeAt, if_pos (by omega)]
+  rw [Bytes.getD_writeAt, ite_eq_left (by omega)]
   congr 1
   omega
 
@@ -13597,7 +13597,7 @@ lemma Mem.read_write_zero (μ : Mem) {ys : Bytes} (hne : ys ≠ []) :
           simp only [List.get_eq_getElem, List.getElem_map,
             List.getElem_range, zero_add]
           rw [Array.getD_writeD 0 (b :: bs) μ.data 0 n (by omega),
-            if_pos (by omega)]
+            ite_eq_left (by omega)]
           simp only [tsub_zero, getD_eq_getElem?_getD, List.getElem?_eq_getElem h2,
             Option.getD_some]
       · simp only [Mem.read, Array.sliceD_eq_map]
@@ -13610,7 +13610,7 @@ lemma Mem.read_write_zero (μ : Mem) {ys : Bytes} (hne : ys ≠ []) :
           rw [Array.getD_writeD 0 (b :: bs)
             (Array.copyD μ.data (Array.replicate (b :: bs).length 0))
             0 n (by simp only [length_cons, zero_add, Array.size_copyD, Array.size_replicate,
-              Std.le_refl]), if_pos (by omega)]
+              Std.le_refl]), ite_eq_left (by omega)]
           simp only [tsub_zero, getD_eq_getElem?_getD, List.getElem?_eq_getElem h2,
             Option.getD_some]
     · simp only [Mem.read, Array.sliceD_eq_map]
@@ -13626,7 +13626,7 @@ lemma Mem.read_write_zero (μ : Mem) {ys : Bytes} (hne : ys ≠ []) :
           0 n (by
             rw [Array.size_copyD, Array.size_replicate]
             simpa only [length_cons, zero_add] using Nat.le_ceil32 (b :: bs).length),
-          if_pos (by omega)]
+          ite_eq_left (by omega)]
         simp only [tsub_zero, getD_eq_getElem?_getD, List.getElem?_eq_getElem h2, Option.getD_some]
 
 /-- Pointwise read-back below the allocated end of a nonempty memory write.
@@ -13646,15 +13646,15 @@ lemma Mem.getD_write_below_end (μ : Mem) (start : Nat) {ys : Bytes}
       · rw [Array.getD_writeD (0 : UInt8) (b :: bs) μ.data start i
           (by omega)]
         by_cases hstart : start ≤ i
-        · rw [if_pos (by omega), if_pos hstart]
-        · rw [if_neg (by omega), if_neg hstart]
+        · rw [ite_eq_left (by omega), ite_eq_left hstart]
+        · rw [ite_eq_right (by omega), ite_eq_right hstart]
       · rw [Array.getD_writeD (0 : UInt8) (b :: bs)
           (Array.copyD μ.data
             (Array.replicate (start + (b :: bs).length) (0 : UInt8)))
           start i (by simp only [length_cons, Array.size_copyD, Array.size_replicate, Std.le_refl])]
         by_cases hstart : start ≤ i
-        · rw [if_pos (by omega), if_pos hstart]
-        · rw [if_neg (by omega), if_neg hstart]
+        · rw [ite_eq_left (by omega), ite_eq_left hstart]
+        · rw [ite_eq_right (by omega), ite_eq_right hstart]
           by_cases hold : i < μ.data.size
           · rw [Array.getD_copyD_of_lt _ _ _ _ hold
               (by simp only [length_cons, Array.size_replicate]; omega)]
@@ -13669,8 +13669,8 @@ lemma Mem.getD_write_below_end (μ : Mem) (start : Nat) {ys : Bytes}
           rw [Array.size_copyD, Array.size_replicate]
           exact Nat.le_ceil32 _)]
       by_cases hstart : start ≤ i
-      · rw [if_pos (by omega), if_pos hstart]
-      · rw [if_neg (by omega), if_neg hstart]
+      · rw [ite_eq_left (by omega), ite_eq_left hstart]
+      · rw [ite_eq_right (by omega), ite_eq_right hstart]
         by_cases hold : i < μ.data.size
         · rw [Array.getD_copyD_of_lt _ _ _ _ hold
             (by simp only [length_cons, Array.size_replicate]; exact lt_of_lt_of_le hi (Nat.le_ceil32 _))]
@@ -13725,12 +13725,12 @@ lemma Mem.read_two_word_writes_at_raw (μ : Mem) (start : Nat)
         simp only [h, length_nil, OfNat.zero_ne_ofNat] at hlen)
       (by simp only [B256.length_toBytes]; omega)]
     by_cases hhalf : i < 32
-    · rw [if_neg (by omega), Mem.getD_write_below_end _ start
+    · rw [ite_eq_right (by omega), Mem.getD_write_below_end _ start
         (by
           intro h
           have hlen := B256.length_toBytes left
           simp only [h, length_nil, OfNat.zero_ne_ofNat] at hlen)
-        (by simp only [B256.length_toBytes, add_lt_add_iff_left]; omega), if_pos (by omega)]
+        (by simp only [B256.length_toBytes, add_lt_add_iff_left]; omega), ite_eq_left (by omega)]
       calc
         left.toBytes.getD (start + i - start) 0 =
             left.toBytes.getD i 0 := by congr 1 <;> omega
@@ -13741,7 +13741,7 @@ lemma Mem.read_two_word_writes_at_raw (μ : Mem) (start : Nat)
           rw [List.getD_eq_getElem?_getD,
             List.getElem?_eq_getElem hright]
           rfl
-    · rw [if_pos (by omega)]
+    · rw [ite_eq_left (by omega)]
       have hsub : start + i - (start + 32) = i - 32 := by omega
       rw [hsub]
       calc
@@ -13786,7 +13786,7 @@ lemma Mem.read_two_word_writes_at_raw_right_first (μ : Mem) (start : Nat)
   · exact absurd rfl hleft
   change (((μ'.write start (b :: bs)).read start 64).1) = _
   simp only [Mem.write]
-  rw [if_pos hsize, if_pos hdata]
+  rw [ite_eq_left hsize, ite_eq_left hdata]
   simp only [Mem.read, Array.sliceD_eq_map]
   apply List.ext_get
   · simp only [List.length_map, List.length_range, List.length_append,
@@ -13798,7 +13798,7 @@ lemma Mem.read_two_word_writes_at_raw_right_first (μ : Mem) (start : Nat)
     rw [Array.getD_writeD (0 : UInt8) (b :: bs) μ'.data start
       (start + i) hdata]
     by_cases hhalf : i < 32
-    · rw [if_pos (by omega)]
+    · rw [ite_eq_left (by omega)]
       calc
         (b :: bs).getD (start + i - start) 0 =
             (b :: bs).getD i 0 := by congr 1 <;> omega
@@ -13809,10 +13809,10 @@ lemma Mem.read_two_word_writes_at_raw_right_first (μ : Mem) (start : Nat)
           rw [List.getD_eq_getElem?_getD,
             List.getElem?_eq_getElem hout]
           rfl
-    · rw [if_neg (by omega)]
+    · rw [ite_eq_right (by omega)]
       dsimp only [cons_append, μ']
       rw [Mem.getD_write_below_end μ (start + 32) hright
-        (by simp only [B256.length_toBytes]; omega), if_pos (by omega)]
+        (by simp only [B256.length_toBytes]; omega), ite_eq_left (by omega)]
       have hsub : start + i - (start + 32) = i - 32 := by omega
       rw [hsub]
       calc

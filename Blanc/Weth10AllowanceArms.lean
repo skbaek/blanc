@@ -153,9 +153,9 @@ theorem Exec.Frame.allowanceRegionEffect_of_approve
       rw [hset]
       by_cases hkey :
           projectedAllowanceKey e.caller.toB256 (Sevm.argWord e 0) = key
-      · rw [if_pos hkey, ← hkey, ← approveRuntimeKey_eq_projected]
+      · rw [ite_eq_left hkey, ← hkey, ← approveRuntimeKey_eq_projected]
         exact Stor.get_set_self _ _ _
-      · rw [if_neg hkey]
+      · rw [ite_eq_right hkey]
         apply Stor.get_set_ne
         rw [approveRuntimeKey_eq_projected]
         exact hkey

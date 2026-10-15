@@ -964,7 +964,7 @@ theorem decodeUpgradeToAndCallControl_boundary
   have hsizeGuard :
       (Nat.toB256 sevm.data.length <? (100 : B256)) = 0 := by
     unfold B256.ltCheck
-    rw [if_neg (by
+    rw [ite_eq_right (by
       rw [B256.lt_iff_toNat_lt_toNat,
         B256.toNat_toB256_of_lt (by omega),
         show ((100 : B256)).toNat = 100 from by decide]
@@ -973,7 +973,7 @@ theorem decodeUpgradeToAndCallControl_boundary
   have hheaderGuard :
       (Nat.toB256 sevm.data.length <? (132 : B256)) = 0 := by
     unfold B256.ltCheck
-    rw [if_neg (by
+    rw [ite_eq_right (by
       rw [B256.lt_iff_toNat_lt_toNat,
         B256.toNat_toB256_of_lt (by omega),
         show ((132 : B256)).toNat = 132 from by decide]
@@ -983,7 +983,7 @@ theorem decodeUpgradeToAndCallControl_boundary
       (Nat.toB256 setupCalldata.length >?
         upgradeToAndCallAbiMaxUint64) = 0 := by
     unfold B256.gtCheck
-    rw [if_neg (by
+    rw [ite_eq_right (by
       apply not_lt_of_ge
       rw [B256.le_iff_toNat_le_toNat,
         B256.toNat_toB256_of_lt hlength256,
@@ -994,7 +994,7 @@ theorem decodeUpgradeToAndCallControl_boundary
       (Nat.toB256 sevm.data.length <?
         (Nat.toB256 setupCalldata.length + 132)) = 0 := by
     unfold B256.ltCheck
-    rw [if_neg (by
+    rw [ite_eq_right (by
       rw [B256.lt_iff_toNat_lt_toNat,
         B256.toNat_toB256_of_lt (by omega), B256.toNat_add,
         B256.toNat_toB256_of_lt hlength256,

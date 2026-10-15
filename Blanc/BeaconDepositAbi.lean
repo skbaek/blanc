@@ -205,13 +205,13 @@ private theorem validateDynamicTailAfterArg_success_runCompiledTo
   have hoffsetLt :
       B256.ltCheck offset (Nat.toB256 (2 ^ 32)) = 1 := by
     simp only [B256.ltCheck]
-    rw [if_pos]
+    rw [ite_eq_left]
     rw [B256.lt_iff_toNat_lt_toNat, hoffsetNat, hlimitNat]
     exact hoffset
   have hlengthLt :
       B256.ltCheck length (Nat.toB256 (2 ^ 32)) = 1 := by
     simp only [B256.ltCheck]
-    rw [if_pos]
+    rw [ite_eq_left]
     rw [B256.lt_iff_toNat_lt_toNat, hlengthNat, hlimitNat]
     exact hlength
   have hoffsetPlusFour :
@@ -231,7 +231,7 @@ private theorem validateDynamicTailAfterArg_success_runCompiledTo
   have hlengthWordInBounds :
       B256.ltCheck sevm.data.length.toB256 (36 + offset) = 0 := by
     simp only [B256.ltCheck]
-    rw [if_neg]
+    rw [ite_eq_right]
     rw [B256.lt_iff_toNat_lt_toNat,
       B256.toNat_toB256_of_lt hdataBound, hoffsetPlusThirtySixNat]
     omega
@@ -260,7 +260,7 @@ private theorem validateDynamicTailAfterArg_success_runCompiledTo
   have hpaddedInBounds :
       B256.ltCheck sevm.data.length.toB256 paddedEnd = 0 := by
     simp only [B256.ltCheck]
-    rw [if_neg]
+    rw [ite_eq_right]
     rw [B256.lt_iff_toNat_lt_toNat,
       B256.toNat_toB256_of_lt hdataBound, hpaddedEndNat]
     omega
@@ -394,7 +394,7 @@ private theorem validateDynamicTailAfterArg_failure_runCompiledTo
       have hoffsetLt :
           B256.ltCheck offset (Nat.toB256 (2 ^ 32)) = 0 := by
         simp only [B256.ltCheck]
-        rw [if_neg]
+        rw [ite_eq_right]
         rw [B256.lt_iff_toNat_lt_toNat, hoffsetNat, hlimitNat]
         exact hfailure
       have hoffsetRun : Func.RunCompiledTo fs sevm
@@ -406,7 +406,7 @@ private theorem validateDynamicTailAfterArg_failure_runCompiledTo
             (base.setMach ⟨offset :: stack, memory, G, base.stateGas⟩).withOutput [])) := by
         func_run (5) [0, 1]
         all_goals try {
-          simp only [Devm.stack_setMach, List.length_cons] at *
+          simp only [Devm.stack_setMach] at *
           omega }
         all_goals try omega
         have hguard := Func.runCompiledTo_emptyRevertGuard
@@ -436,7 +436,7 @@ private theorem validateDynamicTailAfterArg_failure_runCompiledTo
       have hoffsetLt :
           B256.ltCheck offset (Nat.toB256 (2 ^ 32)) = 1 := by
         simp only [B256.ltCheck]
-        rw [if_pos]
+        rw [ite_eq_left]
         rw [B256.lt_iff_toNat_lt_toNat, hoffsetNat, hlimitNat]
         exact hoffset
       have hoffsetPlusThirtySixNat :
@@ -451,7 +451,7 @@ private theorem validateDynamicTailAfterArg_failure_runCompiledTo
       have hlengthWordOut :
           B256.ltCheck sevm.data.length.toB256 (36 + offset) = 1 := by
         simp only [B256.ltCheck]
-        rw [if_pos]
+        rw [ite_eq_left]
         rw [B256.lt_iff_toNat_lt_toNat,
           B256.toNat_toB256_of_lt hdataBound, hoffsetPlusThirtySixNat]
         omega
@@ -505,7 +505,7 @@ private theorem validateDynamicTailAfterArg_failure_runCompiledTo
       have hoffsetLt :
           B256.ltCheck offset (Nat.toB256 (2 ^ 32)) = 1 := by
         simp only [B256.ltCheck]
-        rw [if_pos]
+        rw [ite_eq_left]
         rw [B256.lt_iff_toNat_lt_toNat, hoffsetNat, hlimitNat]
         exact hoffset
       have hoffsetPlusFour :
@@ -530,14 +530,14 @@ private theorem validateDynamicTailAfterArg_failure_runCompiledTo
       have hlengthWordInBounds :
           B256.ltCheck sevm.data.length.toB256 (36 + offset) = 0 := by
         simp only [B256.ltCheck]
-        rw [if_neg]
+        rw [ite_eq_right]
         rw [B256.lt_iff_toNat_lt_toNat,
           B256.toNat_toB256_of_lt hdataBound, hoffsetPlusThirtySixNat]
         omega
       have hlengthLt :
           B256.ltCheck length (Nat.toB256 (2 ^ 32)) = 0 := by
         simp only [B256.ltCheck]
-        rw [if_neg]
+        rw [ite_eq_right]
         rw [B256.lt_iff_toNat_lt_toNat, hlengthNat, hlimitNat]
         exact hlength
       have hlengthRun : Func.RunCompiledTo fs sevm
@@ -622,13 +622,13 @@ private theorem validateDynamicTailAfterArg_failure_runCompiledTo
       have hoffsetLt :
           B256.ltCheck offset (Nat.toB256 (2 ^ 32)) = 1 := by
         simp only [B256.ltCheck]
-        rw [if_pos]
+        rw [ite_eq_left]
         rw [B256.lt_iff_toNat_lt_toNat, hoffsetNat, hlimitNat]
         exact hoffset
       have hlengthLt :
           B256.ltCheck length (Nat.toB256 (2 ^ 32)) = 1 := by
         simp only [B256.ltCheck]
-        rw [if_pos]
+        rw [ite_eq_left]
         rw [B256.lt_iff_toNat_lt_toNat, hlengthNat, hlimitNat]
         exact hlength
       have hoffsetPlusFour :
@@ -653,7 +653,7 @@ private theorem validateDynamicTailAfterArg_failure_runCompiledTo
       have hlengthWordInBounds :
           B256.ltCheck sevm.data.length.toB256 (36 + offset) = 0 := by
         simp only [B256.ltCheck]
-        rw [if_neg]
+        rw [ite_eq_right]
         rw [B256.lt_iff_toNat_lt_toNat,
           B256.toNat_toB256_of_lt hdataBound, hoffsetPlusThirtySixNat]
         omega
@@ -685,7 +685,7 @@ private theorem validateDynamicTailAfterArg_failure_runCompiledTo
       have hpaddedOut :
           B256.ltCheck sevm.data.length.toB256 paddedEnd = 1 := by
         simp only [B256.ltCheck]
-        rw [if_pos]
+        rw [ite_eq_left]
         rw [B256.lt_iff_toNat_lt_toNat,
           B256.toNat_toB256_of_lt hdataBound, hpaddedEndNat]
         omega
@@ -1196,7 +1196,7 @@ private theorem validateDepositAbi_head_success_runCompiledTo
   have hheadInBounds :
       B256.ltCheck sevm.data.length.toB256 132 = 0 := by
     simp only [B256.ltCheck]
-    rw [if_neg]
+    rw [ite_eq_right]
     rw [B256.lt_iff_toNat_lt_toNat,
       B256.toNat_toB256_of_lt hdataBound,
       show (132 : B256).toNat = 132 by decide +kernel]
@@ -1226,7 +1226,7 @@ theorem validateDepositAbi_failure_runCompiledTo
       have hheadOut :
           B256.ltCheck sevm.data.length.toB256 132 = 1 := by
         simp only [B256.ltCheck]
-        rw [if_pos]
+        rw [ite_eq_left]
         rw [B256.lt_iff_toNat_lt_toNat,
           B256.toNat_toB256_of_lt hdataBound,
           show (132 : B256).toNat = 132 by decide +kernel]
@@ -1234,7 +1234,7 @@ theorem validateDepositAbi_failure_runCompiledTo
       unfold validateDepositAbi DepositAbiFailure.endpointGas
       func_run (3) [1]
       all_goals try {
-        simp only [Devm.stack_setMach, List.length_cons] at *
+        simp only [Devm.stack_setMach] at *
         omega }
       all_goals try omega
       simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach,
@@ -1362,7 +1362,7 @@ theorem validateDepositAbi_success_runCompiledTo
   have hheadInBounds :
       B256.ltCheck sevm.data.length.toB256 132 = 0 := by
     simp only [B256.ltCheck]
-    rw [if_neg]
+    rw [ite_eq_right]
     rw [B256.lt_iff_toNat_lt_toNat, hlengthNat,
       show (132 : B256).toNat = 132 by decide +kernel]
     exact not_lt_of_ge hdec.head

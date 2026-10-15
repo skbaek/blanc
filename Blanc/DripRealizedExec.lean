@@ -162,7 +162,7 @@ theorem execEntrySnapshot_of_target_ne {coalition : Finset Adr} {ca : Adr}
     {sevm : Sevm} {state : State} (target_ne : sevm.currentTarget ≠ ca) :
     execEntrySnapshot coalition ca sevm state = snapshot coalition ca state := by
   unfold execEntrySnapshot ExecutionAccountingReplay.balanceEntry
-  rw [if_neg target_ne]
+  rw [ite_eq_right target_ne]
   rfl
 
 /-- The world a DRIP frame's value credit was applied to, reconstructed by
@@ -193,7 +193,7 @@ theorem execEntrySnapshot_of_target {coalition : Finset Adr} {ca : Adr}
       snapshot coalition ca (precreditState ca sevm.value state) := by
   unfold execEntrySnapshot ExecutionAccountingReplay.balanceEntry snapshot
     coalitionUnits
-  rw [if_pos target, precreditState_getStor ca sevm.value state hp, precreditState_bal credited]
+  rw [ite_eq_left target, precreditState_getStor ca sevm.value state hp, precreditState_bal credited]
 
 /-- One positive outside credit as a realized step. -/
 theorem externalCredit_chain {coalition : Finset Adr} {ca : Adr}
@@ -282,10 +282,10 @@ theorem coalitionUnits_exit_write (coalition : Finset Adr) (ca caller : Adr)
     · subst holder
       unfold pieN
       rw [storage, Stor.get_set_ne _ (pieSlot_ne_totalUnitsSlot caller).symm _,
-        Stor.get_set_self, B256.toNat_sub_eq_of_le _ _ rowLe, if_pos rfl]
+        Stor.get_set_self, B256.toNat_sub_eq_of_le _ _ rowLe, ite_eq_left rfl]
       have := B256.toNat_le_toNat rowLe
       omega
-    · simp only [if_neg same, Nat.add_zero]
+    · simp only [ite_eq_right same, Nat.add_zero]
       unfold pieN
       rw [storage, Stor.get_set_ne _ (pieSlot_ne_totalUnitsSlot holder).symm _,
         Stor.get_set_ne _ (fun eq => same (pieSlot_injective eq).symm) _,
@@ -351,14 +351,14 @@ theorem exit_write_realized_effect (coalition : Finset Adr) (ca caller : Adr)
       (after.bal ca).toNat⟩
   rw [chi, rho, total, bal]
   by_cases member : caller ∈ coalition
-  · simp only [member, if_true] at counted
+  · simp only [member, ite_true] at counted
     have owned : units.toNat ≤ coalitionUnits coalition ca before := by omega
     have afterEq : coalitionUnits coalition ca after =
         coalitionUnits coalition ca before - units.toNat := by omega
     rw [afterEq]
     simp only [member, decide_true]
     exact .exitCounted _ _ _ _ _ _ _ _ _ owned totalLeNat fundedNat quote
-  · simp only [member, if_false, Nat.add_zero] at counted
+  · simp only [member, ite_false, Nat.add_zero] at counted
     rw [counted]
     simp only [member, decide_false]
     exact .exitOutside _ _ _ _ _ _ _ _ _ totalLeNat fundedNat quote
@@ -861,12 +861,12 @@ theorem exec_nonexit_head (coalition : Finset Adr) {sevm : Sevm}
   · have stateEq := (exec_receive exc hcode hempty).1
     by_cases hvalue : sevm.value = 0
     · have tag : opTag coalition sevm pre = .silent := by
-        simp only [opTag, hempty, hvalue, if_true]
+        simp only [opTag, hempty, hvalue, ite_true]
       apply head_of_effect
       rw [tag, execEntrySnapshot_of_value_zero hvalue, stateEq]
       exact .silent _
     · have tag : opTag coalition sevm pre = .externalCredit sevm.value.toNat := by
-        simp only [opTag, hempty, hvalue, if_true, if_false]
+        simp only [opTag, hempty, hvalue, ite_true, ite_false]
       have positive : 0 < sevm.value.toNat := by
         rcases Nat.eq_zero_or_pos sevm.value.toNat with zero | positive
         · exact absurd (B256.toNat_inj _ _ (zero.trans B256.toNat_zero.symm)) hvalue
@@ -886,7 +886,7 @@ theorem exec_nonexit_head (coalition : Finset Adr) {sevm : Sevm}
     · -- convertToAssets
       have tag : opTag coalition sevm pre = .silent := by
         simp only [opTag, hempty, hsel, assetsDrip, assetsJoin, assetsExit,
-          if_false]
+          ite_false]
       have hvalue := (exec_enters_convertToAssets exc hcode hsel hempty).1
       have storage := (convertToAssets_exec_effect exc hcode hsel hempty
         hcanon).2.2.2.2.2.2.1
@@ -904,7 +904,7 @@ theorem exec_nonexit_head (coalition : Finset Adr) {sevm : Sevm}
     · -- convertToUnits
       have tag : opTag coalition sevm pre = .silent := by
         simp only [opTag, hempty, hsel, unitsDrip, unitsJoin, unitsExit,
-          if_false]
+          ite_false]
       have hvalue := (exec_enters_convertToUnits exc hcode hsel hempty).1
       have storage := (convertToUnits_exec_effect exc hcode hsel hempty
         hcanon).2.2.2.2.2.2.1
@@ -921,7 +921,7 @@ theorem exec_nonexit_head (coalition : Finset Adr) {sevm : Sevm}
         drip_exec_realized_effect coalition exc hcode hsel hempty hcanon⟩,
         ?_, ?_, rfl⟩
       · exact (execEntrySnapshot_of_value_zero hvalue).symm
-      · simp only [opTag, hempty, hsel, if_false, if_true]
+      · simp only [opTag, hempty, hsel, ite_false, ite_true]
     · -- join
       rcases join_exec_effect exc hcode hsel hempty hcanon with
         ⟨assetCap, rowCap, totalCap, lower, _, clock, _, guards,
@@ -966,7 +966,7 @@ theorem exec_nonexit_head (coalition : Finset Adr) {sevm : Sevm}
       rw [quote] at effect
       refine ⟨⟨_, _, _, effect⟩, ?_, ?_, rfl⟩
       · exact (execEntrySnapshot_of_target rfl credited protection).symm
-      · simp only [opTag, hempty, hsel, joinDrip, if_false, if_true]
+      · simp only [opTag, hempty, hsel, joinDrip, ite_false, ite_true]
         rfl
 
 /-- Every successful frame of the deployed runtime is one tagged head step
@@ -995,7 +995,7 @@ theorem exec_targetReplay (coalition : Finset Adr) {sevm : Sevm}
     rcases exitNested handoff with ⟨nested, chain⟩
     refine ⟨⟨_, _, _, handoff.effect⟩, nested, ?_, ?_, ?_⟩
     · exact (execEntrySnapshot_of_value_zero hvalue).symm
-    · simp only [opTag, hempty, hsel, exitDrip, exitJoin, if_false, if_true]
+    · simp only [opTag, hempty, hsel, exitDrip, exitJoin, ite_false, ite_true]
     · rw [handoff.postSnapshot]
       exact chain
   · have hnotExit : sevm.data.length.toB256 = 0 ∨ Sevm.selector sevm ≠ exitSelector := by
@@ -1358,7 +1358,7 @@ theorem Drip.foreignSpawn_facts {ca : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm}
                 spawnEq parentTargetNe targetCodeNonempty
                 (by rw [innerTarget]
                     dsimp only [getDelegatedCodeAddress]
-                    rw [if_neg
+                    rw [ite_eq_right
                       (not_delegation_of_compile installed.1)])
             have childCodeAddress :=
               congrArg (fun evm : Evm => evm.sta.codeAddress) childEvmEq

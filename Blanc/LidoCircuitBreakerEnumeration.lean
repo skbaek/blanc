@@ -162,7 +162,7 @@ private theorem enumHeaderMemory_size (entries : List Entry) :
   have hfirst : (Mem.empty.write 0 (Nat.toB256 32).toBytes).size = 32 :=
     Mem.size_write_word
   rw [Mem.size_write_word_at,
-    if_neg (by rw [hfirst]; omega)]
+    ite_eq_right (by rw [hfirst]; omega)]
   rfl
 
 private theorem enumHeaderMemory_reads (entries : List Entry) :
@@ -184,7 +184,7 @@ private theorem enumHeaderImage_length (entries : List Entry) :
 private theorem enumMemory_write_next_size (memory : Mem) (entry : Entry)
     (n : Nat) (hsize : memory.size = 64 + 32 * n) :
     (memory.write (64 + 32 * n) entry.1.toBytes).size = 64 + 32 * (n + 1) := by
-  rw [Mem.size_write_word_at, if_neg (by rw [hsize]; omega)]
+  rw [Mem.size_write_word_at, ite_eq_right (by rw [hsize]; omega)]
   unfold ceil32
   rw [show (64 + 32 * n + 32) % 32 = 0 by omega]
   rfl
@@ -782,7 +782,7 @@ private theorem enumFirstHeaderMemory_extCost_second
       ⟨stack, Mem.empty.write 0 (Nat.toB256 32).toBytes, G, base.stateGas⟩).extCost
       [⟨32, 32⟩] = 3 := by
   apply Devm.extCost_of_size
-  · rw [Mem.size_write_word_at, if_neg (by simp only [zero_add, Mem.empty, nonpos_iff_eq_zero,
+  · rw [Mem.size_write_word_at, ite_eq_right (by simp only [zero_add, Mem.empty, nonpos_iff_eq_zero,
     OfNat.ofNat_ne_zero, not_false_eq_true])]
   · rfl
 
@@ -1085,6 +1085,7 @@ theorem getPauser_body_runCompiled
   have hword0 : Sevm.dataWord sevm (32 * 0 + 4) = target := by
     exact hword
   have hgasFinal : G + 179 - 179 = G := by omega
+  have hdataWalk : Nat.toB256 sevm.data.length <? Nat.toB256 (4 + 32 * 1) = 0 := hdata
   rcases registryScalarReturn_runCompiled fs sevm base
       (assignmentAt entries target) G with ⟨post, hreturn, houtput⟩
   refine ⟨post, ?_, houtput⟩
@@ -1136,6 +1137,7 @@ theorem getPausableCount_body_runCompiled
   have hword0 : Sevm.dataWord sevm (32 * 0 + 4) = pauser := by
     exact hword
   have hgasFinal : G + 179 - 179 = G := by omega
+  have hdataWalk : Nat.toB256 sevm.data.length <? Nat.toB256 (4 + 32 * 1) = 0 := hdata
   rcases registryScalarReturn_runCompiled fs sevm base
       (Nat.toB256 (assignmentCount entries pauser)) G with
     ⟨post, hreturn, houtput⟩
@@ -1979,7 +1981,7 @@ theorem pauserSet_register_success_committed
     processMessage.settle, executeCode.handleErrorWith_ok, Except.bind_ok] at hsettle
   have hnotError : final.error.isSome ≠ true := by
     cases herror : final.error <;> simp_all only [ExceptT.stM_eq, Option.isSome_none, Bool.false_eq_true, ↓reduceIte, Option.isNone_none, Except.ok.injEq, ne_eq, not_false_eq_true, Option.isSome_some, Option.isNone_some]
-  rw [if_neg hnotError] at hsettle
+  rw [ite_eq_right hnotError] at hsettle
   have hsettled : settled = final := Except.ok.inj hsettle
   subst settled
   have hinitOwner : (initSevm msg).currentTarget = ca := by

@@ -1658,7 +1658,7 @@ private theorem ScratchWord.of_write
               List.getElem_range]
             rw [Array.getD_writeD 0 (byte :: bytes) memory.data
               (scratchOffset word) (scratchOffset word + index) (by omega),
-              if_pos (by omega)]
+              ite_eq_left (by omega)]
             simp only [add_tsub_cancel_left, List.getD_eq_getElem?_getD,
               List.getElem?_eq_getElem hbound, Option.getD_some]
         · simp only [Mem.read, Array.sliceD_eq_map]
@@ -1674,7 +1674,7 @@ private theorem ScratchWord.of_write
                   (scratchOffset word + (byte :: bytes).length) 0x00))
               (scratchOffset word) (scratchOffset word + index)
               (by rw [Array.size_copyD, Array.size_replicate]),
-              if_pos (by omega)]
+              ite_eq_left (by omega)]
             simp only [add_tsub_cancel_left, List.getD_eq_getElem?_getD,
               List.getElem?_eq_getElem hbound, Option.getD_some]
       · simp only [Mem.read, Array.sliceD_eq_map]
@@ -1693,7 +1693,7 @@ private theorem ScratchWord.of_write
             (by
               rw [Array.size_copyD, Array.size_replicate]
               exact Nat.le_ceil32 _),
-            if_pos (by omega)]
+            ite_eq_left (by omega)]
           simp only [add_tsub_cancel_left, List.getD_eq_getElem?_getD,
             List.getElem?_eq_getElem hbound, Option.getD_some]
     refine ⟨hread, ?_, ?_⟩
@@ -1747,7 +1747,7 @@ private theorem ScratchWord.foldPreservesBefore
       rw [ih _ _ _ (by omega)]
       by_cases offsetInBounds : offset < array.size
       · rw [Array.getD_setIfInBounds _ _ _ offsetInBounds,
-          if_neg (by omega)]
+          ite_eq_right (by omega)]
       · simp only [Array.setIfInBounds, offsetInBounds, ↓reduceDIte, Array.getD_eq_getD_getElem?]
 
 private theorem ScratchWord.foldReadsMember
@@ -1772,7 +1772,7 @@ private theorem ScratchWord.foldReadsMember
       · subst index
         rw [ScratchWord.foldPreservesBefore default
           _ _ _ _ (by omega)]
-        rw [Array.getD_setIfInBounds _ _ _ inBounds, if_pos rfl]
+        rw [Array.getD_setIfInBounds _ _ _ inBounds, ite_eq_left rfl]
         simp only [tsub_self, List.getD_eq_getElem?_getD, List.length_cons, add_pos_iff,
           zero_lt_one, or_true, getElem?_pos, List.getElem_cons_zero, Option.getD_some]
       · have afterNext : offset + 1 ≤ index := by omega
@@ -1826,7 +1826,7 @@ private theorem ScratchWord.writeBefore
         { data := Array.writeD memory.data offset (byte :: bytes),
           size := memory.size } := by
       simp only [Mem.write]
-      rw [if_pos writeSize, if_pos writeData]
+      rw [ite_eq_left writeSize, ite_eq_left writeData]
     rw [memoryEq]
     refine ⟨?_, ?_, sizeCovered⟩
     · change Array.sliceD
@@ -1842,7 +1842,7 @@ private theorem ScratchWord.writeBefore
       apply List.map_congr_left
       intro index member
       rw [Array.getD_writeD 0 (byte :: bytes) memory.data offset
-        (scratchOffset carrierWord + index) writeData, if_neg]
+        (scratchOffset carrierWord + index) writeData, ite_eq_right]
       have indexLt := List.mem_range.mp member
       omega
     · change scratchOffset carrierWord + 32 ≤
@@ -1882,7 +1882,7 @@ private theorem ScratchWord.writeAfter
           apply List.map_congr_left
           intro index member
           rw [Array.getD_writeD 0 (byte :: bytes) memory.data offset
-            (scratchOffset carrierWord + index) dataEnough, if_neg]
+            (scratchOffset carrierWord + index) dataEnough, ite_eq_right]
           have indexLt := List.mem_range.mp member
           omega
         · change scratchOffset carrierWord + 32 ≤
@@ -1906,7 +1906,7 @@ private theorem ScratchWord.writeAfter
           have indexLt := List.mem_range.mp member
           rw [Array.getD_writeD 0 (byte :: bytes) copied offset
             (scratchOffset carrierWord + index) copiedSize,
-            if_neg (by omega)]
+            ite_eq_right (by omega)]
           rw [ScratchWord.getD_copyD_of_lt
             memory.data
             (Array.replicate (offset + (byte :: bytes).length) 0)
@@ -1938,7 +1938,7 @@ private theorem ScratchWord.writeAfter
         have indexLt := List.mem_range.mp member
         rw [Array.getD_writeD 0 (byte :: bytes) copied offset
           (scratchOffset carrierWord + index) copiedSize,
-          if_neg (by omega)]
+          ite_eq_right (by omega)]
         rw [ScratchWord.getD_copyD_of_lt
           memory.data
           (Array.replicate

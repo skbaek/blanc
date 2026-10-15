@@ -55,7 +55,7 @@ theorem Ninst.runCompiled_pushB256AsPush2OrPush32
       (le := by simp only [Nat.toUInt8_eq, List.length_cons, List.length_nil, zero_add,
         Nat.reduceAdd, Nat.reduceLeDiff, bytes]) (c := gVerylow) (G := G)
       cost gas room
-    rw [CreationArtifact.pushB256AsPush2OrPush32, if_pos fit]
+    rw [CreationArtifact.pushB256AsPush2OrPush32, ite_eq_left fit]
     simpa only [bytes, pushed] using run
   · have run := Ninst.runCompiled_pushBytes
       (sevm := sevm) (devm := devm) (xs := word.toBytes)
@@ -68,7 +68,7 @@ theorem Ninst.runCompiled_pushB256AsPush2OrPush32
           simp only [B256.length_toBytes, List.length_nil] at lengths
           omega
         simp only [pushCost, hne, ↓reduceIte]) gas room
-    rw [CreationArtifact.pushB256AsPush2OrPush32, if_neg fit]
+    rw [CreationArtifact.pushB256AsPush2OrPush32, ite_eq_right fit]
     simpa only [B256.toB256_toBytes] using run
 
 namespace CreationArtifact

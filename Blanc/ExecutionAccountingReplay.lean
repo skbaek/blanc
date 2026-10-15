@@ -51,7 +51,7 @@ theorem benvAfterTransfer_getStor_eq_of_safe
           change (debit.bal msg.currentTarget + msg.value).toNat = _ at balance
           omega
         unfold State.addBal State.getStor
-        rw [State.setBal_get_stor, if_neg]
+        rw [State.setBal_get_stor, ite_eq_right]
         · exact debitStorage
         · rintro ⟨_, empty⟩
           apply positive
@@ -245,7 +245,7 @@ theorem processMessage_of_body_observed (C : SettlementCarrier ca)
         (Execution.committedPost out committed).state :=
       _root_.Blanc.ProcessMessage.ok_state_eq_committedPost process committed
     rcases body committed with ⟨steps, replay, observed⟩
-    refine ⟨steps, ?_, by rw [if_pos settles]; exact observed⟩
+    refine ⟨steps, ?_, by rw [ite_eq_left settles]; exact observed⟩
     rw [← prefixEq, postState]
     exact replay
   · have settledEq := (RunFrame.some_inv process).2
@@ -260,7 +260,7 @@ theorem processMessage_of_body_observed (C : SettlementCarrier ca)
     have rollback :=
       (_root_.Blanc.ProcessMessage.rollback_of_error process postError).1
     exact ⟨[], C.nilOfEq (congrArg C.ofState rollback),
-      by rw [if_neg settles]; exact obs_nil⟩
+      by rw [ite_eq_right settles]; exact obs_nil⟩
 
 /-- Settlement-aware accounting replay for one retained CALL message.  A
 committing child contributes its recursively proved body; a noncommitting child
@@ -362,8 +362,8 @@ theorem processCreateMessage_of_body_observed (C : SettlementCarrier ca)
     rcases C.processMessage_of_body_observed obs obs_nil
         innerProcess caller_ne value_zero preparedSafe innerSum body with
       ⟨steps, replay, observed⟩
-    rw [if_pos innerSettles] at observed
-    refine ⟨steps, ?_, by rw [if_pos settles]; exact observed⟩
+    rw [ite_eq_left innerSettles] at observed
+    refine ⟨steps, ?_, by rw [ite_eq_left settles]; exact observed⟩
     rw [← preparedSnapshot, postSnapshot]
     exact replay
   · have settledEq := (RunFrame.some_inv process).2
@@ -378,7 +378,7 @@ theorem processCreateMessage_of_body_observed (C : SettlementCarrier ca)
     have rollback :=
       _root_.Blanc.ProcessCreateMessage.rollback_of_error process postError
     exact ⟨[], C.nilOfEq (congrArg C.ofState rollback),
-      by rw [if_neg settles]; exact obs_nil⟩
+      by rw [ite_eq_right settles]; exact obs_nil⟩
 
 /-- Settlement-aware accounting replay for one retained CREATE constructor.
 Fresh-account preparation is silent in any account-local projection; clean code
@@ -775,12 +775,12 @@ theorem balanceEntry_eq_ofState {ca : Adr} {msg : Msg} {entry : Benv}
         ⟨debit, sub, rfl⟩
       by_cases target_eq : msg.currentTarget = ca
       · subst ca
-        rw [if_pos rfl]
+        rw [ite_eq_left rfl]
         change ((debit.addBal msg.currentTarget msg.value).bal
             msg.currentTarget).toNat - msg.value.toNat = _
         rw [of_transfer_bal_target sub (caller_ne shouldTransfer) sum_nof]
         exact Nat.add_sub_cancel _ _
-      · rw [if_neg target_eq]
+      · rw [ite_eq_right target_eq]
         change ((debit.addBal msg.currentTarget msg.value).bal ca).toNat = _
         exact congrArg B256.toNat
           (of_transfer_bal_other sub (caller_ne shouldTransfer) target_eq)

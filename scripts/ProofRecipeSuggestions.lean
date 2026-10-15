@@ -1,4 +1,5 @@
 import Blanc.ProofRecipeTactic
+import Blanc.MachineDataFacts
 import Blanc.Lift.CodeSizeWalk
 import Blanc.RootedExecution
 import Blanc.MessageExecution
@@ -101,6 +102,36 @@ elab "expect_no_recipe_offered" id:str : tactic =>
     let target ← Lean.instantiateMVars (← Lean.Elab.Tactic.getMainTarget)
     if ← proofRecipeMatches target (← proofRecipeById id.getString) then
       throwError "expected blanc_suggest not to offer proof recipe {id.getString} on this goal"
+
+-- EXPECT: machine-state-debit
+example {before after : Devm} {address : Adr} {value : B256}
+    (h : before.subBal address value = some after) :
+    before.state.subBal address value = some after.state := by
+  expect_recipe_trigger "goal-shape:machine-state-debit"
+  expect_recipe_offered "machine-state-debit"
+  blanc_suggest
+  exact Devm.subBal_state h
+
+example (s : State) (a : Adr) (v : B256) : True ∨ s.subBal a v = none := by
+  expect_no_recipe_trigger "goal-shape:machine-state-debit"
+  expect_no_recipe_offered "machine-state-debit"
+  exact Or.inl trivial
+
+-- EXPECT: word-exponentiation
+example (x : B256) : B256.bexp x 0 = 1 := by
+  expect_recipe_trigger "goal-shape:word-exponentiation"
+  expect_recipe_offered "word-exponentiation"
+  blanc_suggest
+  exact B256.bexp_zero x
+
+example (x y : B256) : x + B256.bexp y 0 = x + 1 := by
+  expect_no_recipe_trigger "goal-shape:word-exponentiation"
+  expect_no_recipe_offered "word-exponentiation"
+  rw [B256.bexp_zero]
+
+example (x : B256) : 1 = B256.bexp x 0 := by
+  expect_no_recipe_trigger "goal-shape:word-exponentiation"
+  exact (B256.bexp_zero x).symm
 
 -- EXPECT: extcodesize-compiled-step
 -- The named alias is a real compiled account-access step.

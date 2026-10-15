@@ -122,14 +122,14 @@ theorem WethAllowanceInvocation.vaultDebit_wad_eq_zero {vault : Adr}
   · -- maximum allowance: the visited cell reads `B256.max`, never zero
     have ownerEq : Sevm.argWord call.sevm 0 = vault.toB256 := by
       simp only [WethAllowanceInvocation.pair?, approval, Bool.false_eq_true, ↓reduceIte,
-        if_neg other, Option.some.injEq, Prod.mk.injEq] at pair
+        ite_eq_right other, Option.some.injEq, Prod.mk.injEq] at pair
       exact pair.1
     rw [ownerEq, quiet] at maximum
     exact absurd maximum (by decide +kernel)
   · -- finite branch: `wad ≤ cell`, and the cell reads zero
     have ownerEq : Sevm.argWord call.sevm 0 = vault.toB256 := by
       simp only [WethAllowanceInvocation.pair?, approval, Bool.false_eq_true, ↓reduceIte,
-        if_neg other, Option.some.injEq, Prod.mk.injEq] at pair
+        ite_eq_right other, Option.some.injEq, Prod.mk.injEq] at pair
       exact pair.1
     rw [ownerEq, quiet] at covered
     have h := B256.toNat_le_toNat covered

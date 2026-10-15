@@ -1226,8 +1226,8 @@ theorem coalitionUnits_join_write (coalition : Finset Adr) (ca caller : Adr)
     · subst holder
       unfold pieN
       rw [storage, Stor.get_set_ne _ (pieSlot_ne_totalUnitsSlot caller).symm _,
-        Stor.get_set_self, B256.toNat_add_eq_of_nof _ _ rowNof, if_pos rfl]
-    · simp only [if_neg same, Nat.add_zero]
+        Stor.get_set_self, B256.toNat_add_eq_of_nof _ _ rowNof, ite_eq_left rfl]
+    · simp only [ite_eq_right same, Nat.add_zero]
       unfold pieN
       rw [storage, Stor.get_set_ne _ (pieSlot_ne_totalUnitsSlot holder).symm _,
         Stor.get_set_ne _ (fun eq => same (pieSlot_injective eq).symm) _,
@@ -1287,9 +1287,9 @@ theorem join_write_realized_effect (coalition : Finset Adr) (ca caller : Adr)
       (after.bal ca).toNat⟩
   rw [chi, rho, counted, total, balance]
   by_cases member : caller ∈ coalition
-  · simp only [member, if_true, decide_true]
+  · simp only [member, ite_true, decide_true]
     exact .joinCounted _ _ _ _ _ _ _ _ _ quote
-  · simp only [member, if_false, decide_false, Nat.add_zero]
+  · simp only [member, ite_false, decide_false, Nat.add_zero]
     exact .joinOutside _ _ _ _ _ _ _ _ _ quote
 
 /-- The runtime's operand guards justify the natural quote and both ledger

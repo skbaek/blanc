@@ -53,14 +53,14 @@ theorem LTrie.get?_ofList {α : Type} (d : Nat) (l : List α) (hl : l.length ≤
   | succ d ih =>
     simp only [LTrie.ofList, LTrie.get?]
     by_cases hi : i < 2 ^ d
-    · rw [if_pos hi]
+    · rw [ite_eq_left hi]
       rw [ih (l := l.take (2 ^ d)) (i := i)]
       · simp only [hi, List.getElem?_take_of_lt]
       · have htake : (l.take (2 ^ d)).length ≤ 2 ^ d := by
           rw [List.length_take]
           exact min_le_left _ _
         exact htake
-    · rw [if_neg hi]
+    · rw [ite_eq_right hi]
       rw [ih (l := l.drop (2 ^ d)) (i := i - 2 ^ d)]
       · have hdrop : ∀ (n : Nat) (xs : List α) (j : Nat), n ≤ j →
             (xs.drop n)[j - n]? = xs[j]? := by

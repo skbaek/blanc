@@ -63,7 +63,7 @@ private lemma bytesWriteAt_single_then
     rw [Bytes.getD_writeAt, Bytes.getD_writeAt, Bytes.getD_writeAt]
     simp only [List.length_cons, List.length_nil]
     by_cases hi : i < base
-    · rw [if_neg (by omega), if_neg (by omega), if_neg (by omega)]
+    · rw [ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega)]
     · by_cases hieq : i = base
       · subst i
         simp only [add_le_iff_nonpos_right, nonpos_iff_eq_zero, one_ne_zero, false_and, ↓reduceIte,
@@ -72,11 +72,11 @@ private lemma bytesWriteAt_single_then
           List.getElem_cons_zero, Option.getD_some, add_pos_iff, or_true]
       · have hgt : base + 1 ≤ i := by omega
         by_cases htail : i < base + 1 + tail.length
-        · rw [if_pos ⟨hgt, htail⟩, if_pos (by omega)]
+        · rw [ite_eq_left ⟨hgt, htail⟩, ite_eq_left (by omega)]
           have hsub : i - base = (i - (base + 1)) + 1 := by omega
           rw [hsub]
           rfl
-        · rw [if_neg (by omega), if_neg (by omega), if_neg (by omega)]
+        · rw [ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega)]
 
 private theorem storeLowBytesImage_eq
     {n : Nat} {image : Bytes} {base : Nat} {word : B256} (hn : 0 < n) :

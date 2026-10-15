@@ -19,8 +19,8 @@ block fails `BlockWordFifo` (`systemEmpty_loadBearing_witness`):
   predeploy runs its system path and dequeues `txC`'s request before the block's own system
   call: at the request boundary the queue is empty although the block committed a submission.
 
-Code at SYSTEM_ADDRESS cannot arise on mainnet (no key or CREATE reaches it); the witness
-lives only in the formal model, where it shows the trace-local exclusion is necessary.
+The absence of code at SYSTEM_ADDRESS is an explicit `block_word_fifo` premise, not a proved
+mainnet exclusion. This formal-model witness shows why that trace-local exclusion is necessary.
 -/
 
 namespace Blanc.Lift.WithdrawalRequest.DrainControl

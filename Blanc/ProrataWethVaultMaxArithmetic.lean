@@ -28,7 +28,7 @@ theorem maxDepositViewN_eq_of_stable {receiver assets supply : Nat}
     (receiverNonzero : receiver ≠ 0) (stable : supply ≤ maxSupplyN) :
     maxDepositViewN receiver assets supply = maxDepositN assets supply := by
   unfold maxDepositViewN
-  rw [if_neg receiverNonzero, if_neg (Nat.not_lt_of_ge stable)]
+  rw [ite_eq_right receiverNonzero, ite_eq_right (Nat.not_lt_of_ge stable)]
 
 /-! At a stable supply and a nonzero receiver the public `maxMint` view is the
 bare capacity formula. -/
@@ -36,7 +36,7 @@ theorem maxMintViewN_eq_of_stable {receiver assets supply : Nat}
     (receiverNonzero : receiver ≠ 0) (stable : supply ≤ maxSupplyN) :
     maxMintViewN receiver assets supply = maxMintN assets supply := by
   unfold maxMintViewN
-  rw [if_neg receiverNonzero, if_neg (Nat.not_lt_of_ge stable)]
+  rw [ite_eq_right receiverNonzero, ite_eq_right (Nat.not_lt_of_ge stable)]
 
 /-! At a stable supply, a booked balance within the supply and a word-sized
 asset row, the public `maxWithdraw` view is unsaturated. -/
@@ -46,7 +46,7 @@ theorem maxWithdrawViewN_eq_of_stable {balance assets supply : Nat}
     maxWithdrawViewN balance assets supply =
       maxWithdrawN balance assets supply := by
   unfold maxWithdrawViewN
-  rw [if_neg (Nat.not_lt_of_ge stable)]
+  rw [ite_eq_right (Nat.not_lt_of_ge stable)]
   exact Nat.min_eq_right ((maxWithdrawN_le_assets balanceLe).trans assetsWord)
 
 /-! **An immediate round trip never profits.**  Depositing `amount` against

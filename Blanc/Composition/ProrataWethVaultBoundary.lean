@@ -257,7 +257,7 @@ theorem ExactWethChildOccurrence.success_of_post
     injection listEq with headEq
   have errorSomeFalse : child.error.isSome = false := by
     by_cases h : child.error.isSome = true
-    · simp only [h, if_pos] at headEq
+    · simp only [h, ite_eq_left] at headEq
       exact (B256.zero_ne_one headEq).elim
     · exact Bool.eq_false_of_not_eq_true h
   have errorNone : child.error = none := by
@@ -295,7 +295,7 @@ theorem ExactWethChildOccurrence.rollback_of_post
   have childError : child.error.isSome := by
     by_cases childError : child.error.isSome
     · exact childError
-    · rw [if_neg childError] at headEq
+    · rw [ite_eq_right childError] at headEq
       exact (B256.zero_ne_one headEq.symm).elim
   have rollback := ProcessMessage.rollback_of_error process childError
   exact postState.trans (rollback.1.trans childWorld)
@@ -406,7 +406,7 @@ theorem exactWethCallOccurrence_of_runCompiled_anyStatic
     rfl
   have hnone : getDelegatedCodeAddress (pre.getCode wethAccount) = none := by
     unfold getDelegatedCodeAddress
-    rw [if_neg config.notDelegated]
+    rw [ite_eq_right config.notDelegated]
   have hdel : accessDelegation base wethAccount =
       ⟨false, wethAccount, pre.getCode wethAccount, 0, base⟩ := by
     simp only [accessDelegation, hcode, hnone]
@@ -565,7 +565,7 @@ theorem exactWethStatcallOccurrence_of_runCompiled
     rfl
   have hnone : getDelegatedCodeAddress (pre.getCode wethAccount) = none := by
     unfold getDelegatedCodeAddress
-    rw [if_neg config.notDelegated]
+    rw [ite_eq_right config.notDelegated]
   have hdel : accessDelegation base wethAccount =
       ⟨false, wethAccount, pre.getCode wethAccount, 0, base⟩ := by
     simp only [accessDelegation, hcode, hnone]

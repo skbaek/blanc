@@ -31,8 +31,8 @@ theorem deposit_settled_stor (st : Jaune.State)
     (hcode : (st.get contractAddress).code.size ≠ 0) :
     (depositSettledState st).getStor contractAddress =
       (st.getStor contractAddress).set (balSlot senderE) 1 := by
-  rw [depositSettledState, getStor_addBal, if_neg (fun h => contractAddress_ne_zero h.1.symm),
-    getStor_addBal, if_neg (fun h => senderE_ne_contractAddress h.1)]
+  rw [depositSettledState, getStor_addBal, ite_eq_right (fun h => contractAddress_ne_zero h.1.symm),
+    getStor_addBal, ite_eq_right (fun h => senderE_ne_contractAddress h.1)]
   unfold depositFrameState State.setStorVal State.getStor
   rw [State.get_set_self]
   change ((depositTransferState st).getStor contractAddress).set (balSlot senderE) 1 =
@@ -41,7 +41,7 @@ theorem deposit_settled_stor (st : Jaune.State)
       st.get contractAddress := by
     rw [State.setBal_get_ne senderE_ne_contractAddress, depositDebitState,
       debit_get_ne senderE_ne_contractAddress]
-  rw [depositTransferState, getStor_addBal, if_neg]
+  rw [depositTransferState, getStor_addBal, ite_eq_right]
   · change (((depositDebitState st).setBal senderE 899999).get contractAddress).stor.set _ _ = _
     rw [hmid]
     rfl
@@ -60,11 +60,11 @@ theorem deposit_settled_other_stor (st : Jaune.State) (a : Adr)
   rw [depositSettledState, getStor_addBal]
   by_cases h0 : (0 : Adr) = a
   · subst a
-    rw [if_neg, getStor_addBal, if_neg (fun h => senderE_ne_zero h.1)]
+    rw [ite_eq_right, getStor_addBal, ite_eq_right (fun h => senderE_ne_zero h.1)]
     · unfold depositFrameState State.setStorVal State.getStor
       rw [State.get_set_ne _ other]
       change (depositTransferState st).getStor 0 = st.getStor 0
-      rw [depositTransferState, getStor_addBal, if_neg (fun h => contractAddress_ne_zero h.1)]
+      rw [depositTransferState, getStor_addBal, ite_eq_right (fun h => contractAddress_ne_zero h.1)]
       change (((depositDebitState st).setBal senderE 899999).get 0).stor = _
       rw [State.setBal_get_ne senderE_ne_zero, depositDebitState, debit_get_ne senderE_ne_zero]
       rfl
@@ -84,14 +84,14 @@ theorem deposit_settled_other_stor (st : Jaune.State) (a : Adr)
       rw [hz, B256.toNat_zero] at hn
       have : (45038 : B256).toNat = 45038 := rfl
       omega
-  rw [if_neg (fun h => h0 h.1), getStor_addBal]
+  rw [ite_eq_right (fun h => h0 h.1), getStor_addBal]
   by_cases hE : senderE = a
   · subst a
-    rw [if_neg]
+    rw [ite_eq_right]
     · unfold depositFrameState State.setStorVal State.getStor
       rw [State.get_set_ne _ other]
       change (depositTransferState st).getStor senderE = st.getStor senderE
-      rw [depositTransferState, getStor_addBal, if_neg (fun h => other h.1)]
+      rw [depositTransferState, getStor_addBal, ite_eq_right (fun h => other h.1)]
       change (((depositDebitState st).setBal senderE 899999).get senderE).stor = _
       rw [State.setBal_get_self, depositDebitState, debit_get_self hnonce,
         Acct.clearIfEmpty_of_not_empty]
@@ -112,11 +112,11 @@ theorem deposit_settled_other_stor (st : Jaune.State) (a : Adr)
       rw [hb] at hz'
       have ne : (899999 : B256) + 9924 ≠ 0 := by decide +kernel
       exact ne hz'
-  · rw [if_neg (fun h => hE h.1)]
+  · rw [ite_eq_right (fun h => hE h.1)]
     unfold depositFrameState State.setStorVal State.getStor
     rw [State.get_set_ne _ other]
     change (depositTransferState st).getStor a = st.getStor a
-    rw [depositTransferState, getStor_addBal, if_neg (fun h => other h.1)]
+    rw [depositTransferState, getStor_addBal, ite_eq_right (fun h => other h.1)]
     change (((depositDebitState st).setBal senderE 899999).get a).stor = _
     rw [State.setBal_get_ne hE, depositDebitState, debit_get_ne hE]
     rfl

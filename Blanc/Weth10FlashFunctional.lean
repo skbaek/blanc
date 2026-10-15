@@ -542,7 +542,7 @@ theorem of_rawFlashLoanSuccessTail_step
       rw [hclean]
       decide
     have h_mid_logs : mid.logs = sc.logs ++ child.logs := by
-      rw [Resume.call_logs h_resume, if_neg hcleanNot, hlogs_par]
+      rw [Resume.call_logs h_resume, ite_eq_right hcleanNot, hlogs_par]
     have h_mid_output : mid.output = sc.output := by
       rw [Resume.call_output h_resume, houtput_par]
     rcases of_run_next h_run with ⟨s1, r_iz, h_run⟩
@@ -565,7 +565,7 @@ theorem of_rawFlashLoanSuccessTail_step
     simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hps2
     rw [hps2] at hp1
     rw [show ((1 : B256) =? 0) = 0 from by
-      rw [B256.eqCheck, if_neg (fun h => B256.zero_ne_one h.symm)]] at hp1
+      rw [B256.eqCheck, ite_eq_right (fun h => B256.zero_ne_one h.symm)]] at hp1
     have hp2 : [amount, receiver.toB256] <<+ s2.stack :=
       cons_pref_cons_inv hp1
     rcases of_run_prepend (returnDataShorterThan 32) _ h_run with
@@ -620,7 +620,7 @@ theorem of_rawFlashLoanSuccessTail_step
       have h0 : (CALLBACK_SUCCESS =?
           Bytes.toB256 (s4.returnData.sliceD 0 32 0)) = 0 := by
         simp only [B256.eqCheck]
-        exact if_neg (fun h => hne h.symm)
+        exact ite_eq_right (fun h => hne h.symm)
       rw [h0, show ((0 : B256) =? 0) = 1 from by
         simp only [B256.eqCheck, ↓reduceIte]] at h_flag2
       exact B256.zero_ne_one h_flag2.symm
@@ -688,7 +688,7 @@ theorem of_rawFlashLoanSuccessTail_step
       ?_, hclean, hlen, hmagicChild, h_resume, h_mid_state, h_mid_rd,
       h_mid_stack, h_mid_logs, h_mid_output⟩
     · simpa only [show (0 : B256).toNat = 0 from rfl] using hmem_par
-    · simpa only [show (0 : B256).toNat = 0 from rfl, if_true,
+    · simpa only [show (0 : B256).toNat = 0 from rfl, ite_true,
         Nat.add_zero] using run_pm
 
 /-- Compatibility projection of `of_rawFlashLoanSuccessTail_step`. -/
@@ -1284,7 +1284,7 @@ theorem of_flashSettle_allowance
     have hcover : Sevm.argWord e 2 ≤ allowance := by
       rw [← B256.not_lt]
       intro hlt
-      rw [B256.ltCheck, if_pos hlt] at hguardFlag
+      rw [B256.ltCheck, ite_eq_left hlt] at hguardFlag
       exact B256.zero_ne_one hguardFlag.symm
     rw [hguardFlag] at hpGuard
     have hpBeforeMutate : allowance :: Sevm.argWord e 2 ::
@@ -1451,7 +1451,7 @@ theorem of_flashSettle_allowance
     have hallowanceMax : allowance = B256.max := by
       apply B256.eq_max_of_not_eq_zero
       by_contra hnotZero
-      rw [B256.eqCheck, if_neg hnotZero] at hflagEq
+      rw [B256.eqCheck, ite_eq_right hnotZero] at hflagEq
       exact hnzmax hflagEq.symm
     rw [hflagEq] at hpLoad
     have hpMax : allowance :: flashAllowanceRuntimeKey e ::

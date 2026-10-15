@@ -108,12 +108,12 @@ theorem deployedStor_get (c x : B256) :
   unfold deployedStor coreStor
   simp only [Stor.get_set_ite]
   by_cases h6 : (6 : B256) = x
-  · rw [if_pos h6, if_pos h6]
-  · rw [if_neg h6, if_neg h6]
+  · rw [ite_eq_left h6, ite_eq_left h6]
+  · rw [ite_eq_right h6, ite_eq_right h6]
     by_cases h5 : (5 : B256) = x
-    · rw [if_pos h5, if_pos h5]
+    · rw [ite_eq_left h5, ite_eq_left h5]
       split_ifs <;> rfl
-    · rw [if_neg h5, if_neg h5]
+    · rw [ite_eq_right h5, ite_eq_right h5]
 
 theorem coreStor_support : ∀ x, coreStor.get x ≠ 0 → x ∈ vyFixedSlots := by
   intro x hx
@@ -145,7 +145,7 @@ theorem deployedStor_vyInv (a : Adr) (hbal : balSlotOf a.toB256 ∉ vyFixedSlots
   have hne : ∀ x ∈ vyFixedSlots, balSlotOf a.toB256 ≠ x := fun x hx h => hbal (h ▸ hx)
   have hfix : ∀ x ∈ vyFixedSlots, x ≠ 6 → (deployedStor a.toB256).get x = coreStor.get x :=
     fun x hx h6 => by
-      rw [deployedStor_get, if_neg (Ne.symm h6), if_neg (hne x hx)]
+      rw [deployedStor_get, ite_eq_right (Ne.symm h6), ite_eq_right (hne x hx)]
   refine ⟨?_, ?_, ?_, ?_, ?_, fun _ h => h.elim, fun k _ => by cases k <;> rfl, ?_,
     fun _ _ h => h.elim, fun _ h => h.elim, ?_⟩
   · rw [hfix _ (by simp only [vyFixedSlots, vyDecimalsSlot, vySupplySlot, vyMinterSlot,
@@ -157,7 +157,7 @@ theorem deployedStor_vyInv (a : Adr) (hbal : balSlotOf a.toB256 ∉ vyFixedSlots
     show coreStor.get 5 = 0
     decide +kernel
   · show (deployedStor a.toB256).get 6 = a.toB256
-    rw [deployedStor_get, if_pos rfl]
+    rw [deployedStor_get, ite_eq_left rfl]
   · rw [vyStr_congr (t := coreStor) (hfix _ (by simp only [vyFixedSlots, vyDecimalsSlot,
     vySupplySlot, vyMinterSlot, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]) (by decide +kernel)) ?_]
     · show VyStr coreStor vyNameBase 2 curveShapedName
@@ -182,10 +182,10 @@ theorem deployedStor_vyInv (a : Adr) (hbal : balSlotOf a.toB256 ∉ vyFixedSlots
     by_cases h6 : (6 : B256) = x
     · subst h6; simp only [vyFixedSlots, vyMinterSlot, List.mem_cons, List.not_mem_nil, or_false,
       true_or, or_true]
-    · rw [if_neg h6] at hx
+    · rw [ite_eq_right h6] at hx
       by_cases hb : balSlotOf a.toB256 = x
-      · rw [if_pos hb] at hx; exact absurd rfl hx
-      · rw [if_neg hb] at hx; exact coreStor_support x hx
+      · rw [ite_eq_left hb] at hx; exact absurd rfl hx
+      · rw [ite_eq_right hb] at hx; exact coreStor_support x hx
   · show (0 : B256).toNat = sum (fun _ : Adr => (0 : B256))
     rw [sum, sumBelow_zero, B256.toNat_zero]
 

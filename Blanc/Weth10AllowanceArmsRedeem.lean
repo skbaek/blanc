@@ -811,7 +811,7 @@ theorem Exec.Frame.CountedCursor.redeemAllowanceRegionStorage
                   (callCursor.pre.getCode target.toAdr) = none := by
                 rw [htargetCa]
                 dsimp only [getDelegatedCodeAddress]
-                rw [if_neg (not_delegation_of_compile hcallCodeAt)]
+                rw [ite_eq_right (not_delegation_of_compile hcallCodeAt)]
               rcases hdelegation with ⟨_, hna, _, _⟩ | ⟨_, hsome, _, _, _⟩
               · exact hna.trans htargetCa
               · simp only [hnone, reduceCtorEq] at hsome
@@ -1840,7 +1840,7 @@ theorem Exec.Frame.CountedCursor.redeemAllowanceRegionSound
                   (callCursor.pre.getCode target.toAdr) = none := by
                 rw [htargetCa]
                 dsimp only [getDelegatedCodeAddress]
-                rw [if_neg (not_delegation_of_compile hcallCodeAt)]
+                rw [ite_eq_right (not_delegation_of_compile hcallCodeAt)]
               rcases hdelegation with ⟨_, hna, _, _⟩ | ⟨_, hsome, _, _, _⟩
               · exact hna.trans htargetCa
               · simp only [hnone, reduceCtorEq] at hsome

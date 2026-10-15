@@ -777,7 +777,7 @@ theorem checkLink_isOk [DecidableEq Label]
   · rename_i r h
     rw [h_res] at h
     obtain rfl : r = resolved := (Except.ok.inj h).symm
-    simp only [h_comp, dif_pos]
+    simp only [h_comp, dite_eq_left]
     rfl
 
 /-! ## Verification controls -/

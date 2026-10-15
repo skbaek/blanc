@@ -185,7 +185,7 @@ theorem supportsInterfaceEndpoint_runCompiled
   have hnotShort :
       B256.ltCheck sevm.data.length.toB256 36 = 0 := by
     simp only [B256.ltCheck]
-    rw [if_neg]
+    rw [ite_eq_right]
     rw [B256.lt_iff_toNat_lt_toNat,
       B256.toNat_toB256_of_lt hdataBound,
       show (36 : B256).toNat = 36 by decide +kernel]
@@ -216,7 +216,7 @@ theorem supportsInterfaceEndpoint_short_runCompiledTo
         (base.setMach ⟨base.stack, base.memory, G, base.stateGas⟩).withOutput [])) := by
   have hlt : B256.ltCheck sevm.data.length.toB256 36 = 1 := by
     simp only [B256.ltCheck]
-    rw [if_pos]
+    rw [ite_eq_left]
     rw [B256.lt_iff_toNat_lt_toNat,
       B256.toNat_toB256_of_lt (by omega),
       show (36 : B256).toNat = 36 by decide +kernel]

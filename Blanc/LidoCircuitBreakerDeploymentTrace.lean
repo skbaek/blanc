@@ -495,7 +495,7 @@ theorem constructorPatchPair_runCompiled
   have hoffsetNat : (Nat.toB256 offset).toNat = offset :=
     B256.toNat_toB256_of_lt hoffsetBound
   simp only [loadArgumentIndexForProof_eq, storeByteOffsetForProof_eq,
-    pushCompactNatForProof_eq, pushFixedNatForProof_eq, if_pos hoffset]
+    pushCompactNatForProof_eq, pushFixedNatForProof_eq, ite_eq_left hoffset]
   apply Func.RunCompiled.next
   · apply Ninst.runCompiled_pushB256 (c := pushGas) (G := G + 9) hpush
     · simp only [Devm.gasLeft_setMach]
@@ -1625,7 +1625,7 @@ theorem constructorArgumentMstorePrefix_runCompiled
     rw [List.toB256_pair offset hoffsetLt]
     exact B256.toNat_toB256_of_lt hoffsetBound
   simp only [loadArgumentIndexForProof_eq, storeByteOffsetForProof_eq,
-    pushCompactNatForProof_eq, pushFixedNatForProof_eq, if_pos hoffsetLt]
+    pushCompactNatForProof_eq, pushFixedNatForProof_eq, ite_eq_left hoffsetLt]
   apply Func.RunCompiled.next
   · apply Ninst.runCompiled_pushB256
         (c := indexPushCost)
@@ -1704,7 +1704,7 @@ theorem constructorZeroMstorePrefix_runCompiled
     rw [List.toB256_pair offset hoffsetLt]
     exact B256.toNat_toB256_of_lt hoffsetBound
   simp only [storeByteOffsetForProof_eq, pushFixedNatForProof_eq,
-    if_pos hoffsetLt]
+    ite_eq_left hoffsetLt]
   apply Func.RunCompiled.next
   · apply Ninst.runCompiled_pushB256 (c := 2)
         (G := Gafter + (6 + storeExt))
@@ -1955,7 +1955,7 @@ theorem officialConstructorReturnLine_runCompiled
       (pushFixedNatForProof 4282 :::
         pushCompactNatForProof constructorRuntimeBaseForProof ::: rest) post := by
   simp only [pushFixedNatForProof_eq, pushCompactNatForProof_eq,
-    if_pos (show 4282 < 2 ^ 16 by decide)]
+    ite_eq_left (show 4282 < 2 ^ 16 by decide)]
   func_run (2)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   exact hrest
@@ -3153,8 +3153,8 @@ private theorem officialConstructorValidationFinish_runCompiled
       officialConstructorValidationFinish post := by
   unfold officialConstructorValidationFinish
   simp only [pushCompactNatForProof_eq, pushFixedNatForProof_eq,
-    if_pos (show 4282 < 2 ^ 16 by decide),
-    if_pos (show 616 < 2 ^ 16 by decide)]
+    ite_eq_left (show 4282 < 2 ^ 16 by decide),
+    ite_eq_left (show 616 < 2 ^ 16 by decide)]
   func_run (3)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   exact hrest
@@ -3581,8 +3581,8 @@ private theorem officialConstructorValidationDecode_runCompiled
   rw [lidoCircuitBreakerConstructorProgram_main_official,
     officialConstructorValidationBody_eq_staged]
   simp only [pushFixedNatForProof_eq, pushCompactNatForProof_eq,
-    if_pos (show 5122 < 2 ^ 16 by decide),
-    if_pos (show 4898 < 2 ^ 16 by decide)]
+    ite_eq_left (show 5122 < 2 ^ 16 by decide),
+    ite_eq_left (show 4898 < 2 ^ 16 by decide)]
   func_run (11) [1, 0, 45]
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try simp only [B256.eqCheck, hvalue, ↓reduceIte, Nat.reduceShiftRight, Nat.toUInt8_eq, UInt8.reduceOfNat, Nat.reduceSubDiff, add_tsub_cancel_right]

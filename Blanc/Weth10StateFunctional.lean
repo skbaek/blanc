@@ -482,8 +482,7 @@ theorem normalizedAddressArg_eq_toAdr_toB256
   unfold normalizedAddressArg
   rw [hmask]
   rcases Sevm.argWord e k with ⟨⟨high, middle⟩, low⟩
-  simp only [B256.toAdr, Adr.toB256, B256.and_eq_and_prod_and,
-    B128.and_eq_and_prod_and, UInt64.zero_and]
+  simp only [B256.toAdr, Adr.toB256]
   apply Prod.ext
   · apply Prod.ext
     · exact UInt64.zero_and

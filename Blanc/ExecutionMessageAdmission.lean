@@ -230,10 +230,10 @@ theorem ProcessMessageTrace.stateInv_admitted_sem
   unfold processMessage.settle at settle
   dsimp only [bind, Except.bind] at settle
   by_cases failed : evm.error.isSome = true
-  · rw [if_pos failed] at settle
+  · rw [ite_eq_left failed] at settle
     rw [Except.ok.inj settle]
     exact ready.ready.state
-  · rw [if_neg failed] at settle
+  · rw [ite_eq_right failed] at settle
     have postEq : evm = post := Except.ok.inj settle.symm
     subst postEq
     rcases of_executeCode_cases body with
@@ -290,7 +290,7 @@ theorem ProcessCreateMessageTrace.stateInv_admitted_sem
   unfold processCreateMessage.settle at rest
   dsimp only [bind, Except.bind] at rest
   by_cases clean : innerPost.error.isNone = true
-  · rw [if_pos clean] at rest
+  · rw [ite_eq_left clean] at rest
     rcases codeGas : processCreateMessage.chargeCodeGas msg.benv.stat.rules
         innerPost with ⟨error, charged⟩ | charged
     · rw [codeGas] at rest
@@ -309,7 +309,7 @@ theorem ProcessCreateMessageTrace.stateInv_admitted_sem
       rw [← Except.ok.inj rest, Devm.setCode_state,
         chargeCodeGas_state_ok codeGas]
       exact StateInv.setCode_ne targetNe innerInv
-  · rw [if_neg clean] at rest
+  · rw [ite_eq_right clean] at rest
     rw [← Except.ok.inj rest]
     exact ready.state
 

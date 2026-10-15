@@ -455,7 +455,7 @@ theorem pinnedPauseTarget_isPaused_truthful
       · intro wordEq
         by_cases raw : rawPaused
         · exact pausedEq.mp raw
-        · simp only [if_neg raw] at wordEq
+        · simp only [ite_eq_right raw] at wordEq
           exfalso
           exact (show (0 : B256) ≠ 1 by decide) wordEq
       · intro paused
@@ -682,7 +682,7 @@ theorem pinnedPauseTarget_protectedSurface_reverts
       exact paused
     have rawPausedCheck : B256.ltCheck sevm.benvStat.time
         (pre.getStorVal sevm.currentTarget resumeSinceSlot) ≠ 0 := by
-      rw [B256.ltCheck, if_pos rawPaused]
+      rw [B256.ltCheck, ite_eq_left rawPaused]
       decide
     exact (triggerFullWithdrawals_selected_paused_not_ok compiled
       (MessageExecution.processMessage_entry_stack process) selectedData

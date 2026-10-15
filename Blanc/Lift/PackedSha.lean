@@ -898,7 +898,7 @@ theorem pair_mem_sha {img : Bytes} {n f : Nat} {h1 h2 : B256} {X : SFunc}
   refine rxc_dup (n := 1) rfl (by simp only [List.length_cons]; omega) ?_
   refine rxc_dup (n := 1) rfl (by simp only [List.length_cons]; omega) ?_
   refine rxc_add' (v := Nat.toB256 (f + 32))
-    (by simp only [p20, p40, p60]; exact add_toB256' (by omega) (by omega)) (by simp only [List.length_cons]; omega) ?_
+    (by simp only [p20]; exact add_toB256' (by omega) (by omega)) (by simp only [List.length_cons]; omega) ?_
   refine rxc_swap (n := 4) rfl ?_
   refine rxc_swap (n := 0) rfl ?_
   refine rxc_swap (n := 4) rfl ?_
@@ -907,7 +907,7 @@ theorem pair_mem_sha {img : Bytes} {n f : Nat} {h1 h2 : B256} {X : SFunc}
   refine rxc_dup (n := 0) rfl (by simp only [List.set_cons_succ, List.set_cons_zero, List.length_cons]; omega) ?_
   refine rxc_dup (n := 2) rfl (by simp only [List.set_cons_succ, List.set_cons_zero, List.length_cons]; omega) ?_
   refine rxc_add' (v := Nat.toB256 (f + 64))
-    (by simp only [p20, p40, p60]; exact add_toB256' (by omega) (by omega)) (by simp only [List.set_cons_succ, List.set_cons_zero, List.length_cons]; omega) ?_
+    (by simp only [p40]; exact add_toB256' (by omega) (by omega)) (by simp only [List.set_cons_succ, List.set_cons_zero, List.length_cons]; omega) ?_
   refine rxc_swap (n := 2) rfl ?_
   refine rxc_swap (n := 0) rfl ?_
   refine rxc_swap (n := 2) rfl ?_
@@ -924,7 +924,7 @@ theorem pair_mem_sha {img : Bytes} {n f : Nat} {h1 h2 : B256} {X : SFunc}
     (by simp only [List.set_cons_succ, List.set_cons_zero, List.length_cons]; omega) ?_
   refine rxc_dup (n := 2) rfl (by simp only [List.set_cons_succ, List.set_cons_zero, List.length_cons]; omega) ?_
   refine rxc_add' (v := Nat.toB256 64)
-    (by simp only [p20, p40, p60]; exact add_toB256' (by omega) (by omega)) (by simp only [List.set_cons_succ, List.set_cons_zero, List.length_cons]; omega) ?_
+    (by simp only [p40]; exact add_toB256' (by omega) (by omega)) (by simp only [List.set_cons_succ, List.set_cons_zero, List.length_cons]; omega) ?_
   refine rxc_dup (n := 1) rfl (by simp only [List.set_cons_succ, List.set_cons_zero, List.length_cons]; omega) ?_
   refine rxc_mstore (c := 3) (M' := M3) ?_ (by rw [toNat_toB256' (by omega)]) ?_
   · rw [toNat_toB256' (by omega)]; exact charge_covered hs2 hn (by omega)
@@ -932,7 +932,7 @@ theorem pair_mem_sha {img : Bytes} {n f : Nat} {h1 h2 : B256} {X : SFunc}
   refine rxc_swap (n := 0) rfl ?_
   refine rxc_swap (n := 2) rfl ?_
   refine rxc_add' (v := Nat.toB256 (f + 96))
-    (by simp only [p20, p40, p60]; exact add_toB256' (by omega) (by omega)) (by simp only [List.set_cons_succ, List.set_cons_zero, List.length_cons]; omega) ?_
+    (by simp only [p60]; exact add_toB256' (by omega) (by omega)) (by simp only [List.set_cons_succ, List.set_cons_zero, List.length_cons]; omega) ?_
   refine rxc_swap (n := 0) rfl ?_
   refine rxc_dup (n := 1) rfl (by simp only [List.set_cons_succ, List.set_cons_zero, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.length_cons]; omega) ?_
   refine rxc_swap (n := 0) rfl ?_
@@ -951,7 +951,7 @@ theorem pair_mem_sha {img : Bytes} {n f : Nat} {h1 h2 : B256} {X : SFunc}
   refine rxc_swap (n := 1) rfl ?_
   refine rxc_dup (n := 4) rfl (by simp only [List.set_cons_succ, List.set_cons_zero, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, Nat.one_mod, Nat.reduceMod, List.length_cons]; omega) ?_
   refine rxc_add' (v := Nat.toB256 (f + 32))
-    (by simp only [p20, p40, p60]; exact add_toB256' (by omega) (by omega)) (by simp only [List.set_cons_succ, List.set_cons_zero, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, Nat.one_mod, Nat.reduceMod, List.length_cons]; omega) ?_
+    (by simp only [p20]; exact add_toB256' (by omega) (by omega)) (by simp only [List.set_cons_succ, List.set_cons_zero, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, Nat.one_mod, Nat.reduceMod, List.length_cons]; omega) ?_
   refine rxc_swap (n := 0) rfl ?_
   refine rxc_dup (n := 0) rfl (by simp only [List.set_cons_succ, List.set_cons_zero, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, Nat.one_mod, Nat.reduceMod, List.length_cons]; omega) ?_
   refine rxc_dup (n := 3) rfl (by simp only [List.set_cons_succ, List.set_cons_zero, Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, Nat.one_mod, Nat.reduceMod, List.length_cons]; omega) ?_

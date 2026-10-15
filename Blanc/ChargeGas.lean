@@ -12,7 +12,7 @@ lemma chargeGas_eq_outOfGas {cost : Nat} {devm : Devm}
   rw [chargeGas_def]
   have hs : safeSub devm.gasLeft cost = none := by
     unfold safeSub
-    rw [if_neg (by omega)]
+    rw [ite_eq_right (by omega)]
   rw [hs]
 
 end Blanc

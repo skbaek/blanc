@@ -179,7 +179,7 @@ lemma cert_prog_of_entry : ∀ (c : Cert) (k : Nat) (e : Entry),
   | [], _, _, he => by simp only [Cert.entries, List.map_nil, List.length_nil, not_lt_zero,
     not_false_eq_true, getElem?_neg, reduceCtorEq] at he
   | (e0, f0) :: c, 0, e, he => by
-      simp only [Cert.entries, Cert.prog, List.map_cons,
+      simp only [Cert.entries, List.map_cons,
         List.getElem?_cons_zero, Option.some.injEq] at he
       cases he
       exact ⟨f0, by simp only [Cert.prog, List.map_cons, List.length_cons, List.length_map,

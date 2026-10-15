@@ -126,7 +126,7 @@ private theorem stageCopy_runCompiled
   have hsizeCopied : copiedMemory.size = 2208 := by
     unfold copiedMemory
     rw [Mem.size_write_of_length hruntimeLength (by omega), hsize,
-      if_neg (by omega)]
+      ite_eq_right (by omega)]
     decide
   have houtputCopied : (copiedMemory.read 0 2188).1 = runtimeBytes := by
     unfold copiedMemory
@@ -333,7 +333,7 @@ private theorem stageMask_complete
     · simp only [Devm.getOrigStorVal, horiginal, ite_self,
         Devm.getStorVal_setMach, hrawLog, hnew]
       rw [hrawZero, sstoreValueCost,
-        if_pos ⟨rfl, fun h => hrequestedNonzero h.symm⟩, if_pos rfl]
+        ite_eq_left ⟨rfl, fun h => hrequestedNonzero h.symm⟩, ite_eq_left rfl]
       norm_num only [gasStorageSet]
     exact stageCopy_runCompiled
       (fs := fs) (sevm := sevm) (memory := memory2)
@@ -508,7 +508,7 @@ private theorem stageMask_dirtyCovered_complete
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     · simp only [Devm.getOrigStorVal, horiginal, ite_self,
         Devm.getStorVal_setMach, hrawLog]
-      rw [sstoreValueCost, if_neg (by
+      rw [sstoreValueCost, ite_eq_right (by
         intro hclean
         exact hrawNonzero hclean.1.symm)]
       norm_num only [gasWarmAccess]

@@ -22,17 +22,17 @@ theorem creditLoss_eq_zero_iff (x y : B256) :
   constructor
   · intro heq
     by_contra h
-    rw [if_neg h] at heq
+    rw [ite_eq_right h] at heq
     omega
   · intro h
-    rw [if_pos h]
+    rw [ite_eq_left h]
 
 /-- Every overflowing `B256` credit discards exactly one modulus. -/
 theorem creditLoss_eq_two_pow_of_not_nof (x y : B256)
     (h : ¬ B256.Nof x y) :
     creditLoss x y = 2 ^ 256 := by
   unfold B256.Nof at h
-  rw [creditLoss, if_neg h]
+  rw [creditLoss, ite_eq_right h]
 
 /-- A wrapped word credit together with its diagnostic loss is exactly the
 corresponding addition in `Nat`. -/

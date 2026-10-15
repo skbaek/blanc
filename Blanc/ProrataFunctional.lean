@@ -249,7 +249,7 @@ private theorem withdraw_body_of_prorataMain
   have hdepositFlag := selector_flag hp h₁
   have hne : selector "withdraw" [.uint256] ≠ selector "deposit" [] := by
     decide +kernel
-  rw [B256.eqCheck, if_neg hne] at hdepositFlag
+  rw [B256.eqCheck, ite_eq_right hne] at hdepositFlag
   rcases of_run_branch hdepositBranch with
     ⟨u, hpop, hcontinue⟩ | ⟨w, u, v, hnz, hpop, hburn, hwrong⟩
   · rcases of_run_prepend [callvalue] _ hcontinue with
@@ -303,7 +303,7 @@ private theorem convertToShares_body_of_prorataMain
   have hdepositFlag := selector_flag hp h₁
   have hdepositNe : selector "convertToShares" [.uint256] ≠ selector "deposit" [] := by
     decide +kernel
-  rw [B256.eqCheck, if_neg hdepositNe] at hdepositFlag
+  rw [B256.eqCheck, ite_eq_right hdepositNe] at hdepositFlag
   rcases of_run_branch hdepositBranch with
     ⟨u, hpop, hcontinue⟩ | ⟨w, u, v, hnz, hpop, hburn, hwrong⟩
   · rcases of_run_prepend [callvalue] _ hcontinue with
@@ -325,7 +325,7 @@ private theorem convertToShares_body_of_prorataMain
       have hwithdrawNe : selector "convertToShares" [.uint256] ≠
           selector "withdraw" [.uint256] := by
         decide +kernel
-      rw [B256.eqCheck, if_neg hwithdrawNe] at hwithdrawFlag
+      rw [B256.eqCheck, ite_eq_right hwithdrawNe] at hwithdrawFlag
       rcases of_run_branch hwithdrawBranch with
         ⟨a, hpopWithdraw, hcontinueShares⟩ |
         ⟨q, a, b, hnzWithdraw, hpopWithdraw, hburnWithdraw, hwrong⟩
@@ -372,7 +372,7 @@ private theorem convertToAssets_body_of_prorataMain
   have hdepositFlag := selector_flag hp h₁
   have hdepositNe : selector "convertToAssets" [.uint256] ≠ selector "deposit" [] := by
     decide +kernel
-  rw [B256.eqCheck, if_neg hdepositNe] at hdepositFlag
+  rw [B256.eqCheck, ite_eq_right hdepositNe] at hdepositFlag
   rcases of_run_branch hdepositBranch with
     ⟨u, hpop, hcontinue⟩ | ⟨w, u, v, hnz, hpop, hburn, hwrong⟩
   · rcases of_run_prepend [callvalue] _ hcontinue with
@@ -394,7 +394,7 @@ private theorem convertToAssets_body_of_prorataMain
       have hwithdrawNe : selector "convertToAssets" [.uint256] ≠
           selector "withdraw" [.uint256] := by
         decide +kernel
-      rw [B256.eqCheck, if_neg hwithdrawNe] at hwithdrawFlag
+      rw [B256.eqCheck, ite_eq_right hwithdrawNe] at hwithdrawFlag
       rcases of_run_branch hwithdrawBranch with
         ⟨a, hpopWithdraw, hcontinueShares⟩ |
         ⟨q, a, b, hnzWithdraw, hpopWithdraw, hburnWithdraw, hwrong⟩
@@ -406,7 +406,7 @@ private theorem convertToAssets_body_of_prorataMain
         have hsharesNe : selector "convertToAssets" [.uint256] ≠
             selector "convertToShares" [.uint256] := by
           decide +kernel
-        rw [B256.eqCheck, if_neg hsharesNe] at hsharesFlag
+        rw [B256.eqCheck, ite_eq_right hsharesNe] at hsharesFlag
         rcases of_run_branch hsharesBranch with
           ⟨c, hpopShares, hassetEntry⟩ |
           ⟨q, c, d, hnzShares, hpopShares, hburnShares, hwrong⟩

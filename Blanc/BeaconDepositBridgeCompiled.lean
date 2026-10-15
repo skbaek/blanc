@@ -127,7 +127,7 @@ theorem deposit_success_artifactInv
       stor.set (branchSlot n)
         (accumulatedNode Bytes.sha256 (accOfStor stor).branch
           0 n depositDataRoot) := by
-    simpa only [if_pos] using postStorage sevm.currentTarget
+    simpa only [ite_eq_left] using postStorage sevm.currentTarget
   refine ⟨post, run, ?_⟩
   exact ArtifactInv.of_depositSuccessCompiledStorage
     hinvariant hOk hheight hfirst countStorage targetStorage

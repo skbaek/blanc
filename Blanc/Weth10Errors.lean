@@ -265,7 +265,7 @@ theorem callbackMagicMismatchPrefix_runCompiledTo {dp : DeployParams}
       intro hc
       rw [show (Nat.toB256 base.returnData.length <? (32 : B256)) =
         if Nat.toB256 base.returnData.length < 32 then (1 : B256) else 0
-          from rfl, if_pos hc] at h_ge
+          from rfl, ite_eq_left hc] at h_ge
       exact (by decide : (1 : B256) ≠ 0) h_ge
     rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256,
       show ((32 : B256)).toNat = 32 from rfl, Nat.lo_eq] at h1
@@ -425,7 +425,7 @@ theorem flashFee_wrongToken_runCompiledTo {dp : DeployParams} {sevm : Sevm}
             (errorData "WETH: flash mint only WETH10"))) := by
   func_run (5) [0]
   all_goals try {
-    simp only [Devm.stack_setMach, List.length_cons] at *
+    simp only [Devm.stack_setMach] at *
     omega }
   all_goals try omega
   · change sevm.currentTarget.toB256 =? Sevm.argWord sevm 0 = 0

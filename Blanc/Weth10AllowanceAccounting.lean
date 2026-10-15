@@ -133,7 +133,7 @@ theorem Exec.attributionStream_eq_frameContribution
       Exec.frameContribution dp ca (Exec.Frame.ofRun run h)
         (Exec.attributionInner dp ca run) := by
   unfold Exec.attributionStream
-  rw [dif_pos h]
+  rw [dite_eq_left h]
 
 /-- A frame whose allowance activity precedes its spawns contributes its own
 record ahead of its descendant stream. -/
@@ -145,7 +145,7 @@ theorem Exec.frameContribution_eq_cons
     Exec.frameContribution dp ca frame inner =
       CountedFrame.ofFrame dp ca frame :: inner := by
   unfold Exec.frameContribution
-  rw [if_pos hexact, if_neg (by simp only [hnotlast, Bool.false_eq_true, not_false_eq_true])]
+  rw [ite_eq_left hexact, ite_eq_right (by simp only [hnotlast, Bool.false_eq_true, not_false_eq_true])]
 
 /-- A frame whose allowance activity follows its spawns — `flashLoan`'s
 post-callback settlement, `permit`'s post-`STATICCALL` store — contributes
@@ -158,7 +158,7 @@ theorem Exec.frameContribution_eq_append
     Exec.frameContribution dp ca frame inner =
       inner ++ [CountedFrame.ofFrame dp ca frame] := by
   unfold Exec.frameContribution
-  rw [if_pos hexact, if_pos hlast]
+  rw [ite_eq_left hexact, ite_eq_left hlast]
 
 /-- Flash-specific form of `Exec.frameContribution_eq_append`. -/
 theorem Exec.frameContribution_eq_append_of_flash
@@ -188,7 +188,7 @@ theorem Exec.frameContribution_eq_inner
     (hnotexact : ¬ Blanc.Weth10.Exec.Frame.exactInvocation dp ca frame) :
     Exec.frameContribution dp ca frame inner = inner := by
   unfold Exec.frameContribution
-  rw [if_neg hnotexact]
+  rw [ite_eq_right hnotexact]
 
 /-! ## The region carrier -/
 

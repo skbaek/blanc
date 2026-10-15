@@ -206,10 +206,10 @@ theorem chargeStateGas_safe (amount : Nat) {pre : Devm} {words : Pattern}
   simp only [chargeStateGas, Mach.chargeStateGas, liftMachExecution, liftMach,
     Footprint.toExecution, Footprint.liftOutcome]
   by_cases enough : amount ≤ stateGas.left
-  · simp only [enough, if_true, SafeResult, Devm.setMach]
+  · simp only [enough, ite_true, SafeResult, Devm.setMach]
     exact matched.of_stack_eq rfl
   · by_cases spill : amount - stateGas.left ≤ gasLeft
-    · simp only [enough, spill, if_true, if_false, SafeResult, Devm.setMach]
+    · simp only [enough, spill, ite_true, ite_false, SafeResult, Devm.setMach]
       exact matched.of_stack_eq rfl
     · simp only [SafeResult, enough, ↓reduceIte, spill, StackFault, not_false_eq_true]
 
@@ -312,7 +312,7 @@ theorem sload_safe (pc : Nat) (sevm : Sevm)
   intro result popped
   by_cases warm : (sevm.currentTarget, result.1) ∈
       result.2.accessedStorageKeys
-  · simp only [warm, if_pos]
+  · simp only [warm, ite_eq_left]
     apply (chargeGas_safe gasWarmAccess popped.2).bind
     intro charged chargedMatch
     exact (push_safe _
@@ -598,11 +598,11 @@ theorem jumpiTransfer_safe {evm : Evm} {input output : Pattern}
               apply (chargeGas_safe gHigh conditionPopped.2).bind
               intro charged chargedMatch
               by_cases zero : actualCondition = 0
-              · simp only [zero, if_pos, bind, Except.bind, SafeResult]
+              · simp only [zero, ite_eq_left, bind, Except.bind, SafeResult]
                 exact ⟨actualCondition, conditionPopped.1,
                   Or.inl ⟨zero, True.intro⟩,
                   chargedMatch⟩
-              · simp only [if_neg zero]
+              · simp only [ite_eq_right zero]
                 apply (assert_true_safe _ noStackFault_invalidJumpDest).bind
                 intro _ valid
                 exact ⟨actualCondition, conditionPopped.1,
@@ -867,17 +867,17 @@ theorem resume_callAmsterdam_safe
       · intro post run
         cases charged <;>
           simp only [Resume.run, liftToExecution, bind, Except.bind, Devm.push_def,
-            Except.assert, hErr, hSucc, hCredit, if_pos room, Bool.false_eq_true,
-            if_false, if_true] at run
+            Except.assert, hErr, hSucc, hCredit, ite_eq_left room, Bool.false_eq_true,
+            ite_false, ite_true] at run
         all_goals
           by_cases failed : child.error.isSome = true
           · by_cases settledChild : child.AmsterdamFailedChildSettled
-            · simp only [failed, settledChild, if_true] at run
+            · simp only [failed, settledChild, ite_true] at run
               cases run
               exact continuation _ 0 (Or.inl rfl) rfl
             · simp only [ExceptT.stM_eq, failed, ↓reduceIte, settledChild, reduceCtorEq] at run
           · by_cases uncommitted : child.AmsterdamChildUncommitted
-            · simp only [failed, uncommitted, if_true, if_false, Bool.false_eq_true] at run
+            · simp only [failed, uncommitted, ite_true, ite_false, Bool.false_eq_true] at run
               cases run
               exact continuation _ 1 (Or.inr rfl) rfl
             · simp only [ExceptT.stM_eq, failed, Bool.false_eq_true, ↓reduceIte, uncommitted,
@@ -885,19 +885,19 @@ theorem resume_callAmsterdam_safe
       · intro err post run fault
         cases charged <;>
           simp only [Resume.run, liftToExecution, bind, Except.bind, Devm.push_def,
-            Except.assert, hErr, hSucc, hCredit, if_pos room, Bool.false_eq_true,
-            if_false, if_true] at run
+            Except.assert, hErr, hSucc, hCredit, ite_eq_left room, Bool.false_eq_true,
+            ite_false, ite_true] at run
         all_goals
           by_cases failed : child.error.isSome = true
           · by_cases settledChild : child.AmsterdamFailedChildSettled
             · simp only [ExceptT.stM_eq, failed, ↓reduceIte, settledChild, reduceCtorEq] at run
-            · simp only [failed, settledChild, if_true, if_false] at run
+            · simp only [failed, settledChild, ite_true, ite_false] at run
               cases run
               simp only [StackFault] at fault
           · by_cases uncommitted : child.AmsterdamChildUncommitted
             · simp only [ExceptT.stM_eq, failed, Bool.false_eq_true, ↓reduceIte, uncommitted,
               reduceCtorEq] at run
-            · simp only [failed, uncommitted, if_true, if_false, Bool.false_eq_true] at run
+            · simp only [failed, uncommitted, ite_false, Bool.false_eq_true] at run
               cases run
               simp only [StackFault] at fault
 
@@ -1071,12 +1071,12 @@ theorem callTransfer_safe (pc : Nat)
                                 by_cases insufficient :
                                     ((charged.memExtends ranges).getAcct
                                       evm.sta.currentTarget).bal < valueResult.1
-                                · rw [if_pos insufficient]
+                                · rw [ite_eq_left insufficient]
                                   apply (push_safe 0 extendedMatch room).bind
                                   intro pushed pushedMatch
                                   exact ⟨rfl,
                                     ((pushedMatch.withReturnData []).withGasLeft _).forget_head⟩
-                                · rw [if_neg insufficient]
+                                · rw [ite_eq_right insufficient]
                                   exact genericCall_step_safe
                                     evm.sta (charged.memExtends ranges) _
                                     valueResult.1 evm.sta.currentTarget

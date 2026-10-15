@@ -31,10 +31,10 @@ theorem byteAt_prepend_eq_prefix
             (.next inst.size (Ninst.immAccepted inst) (rest +++ p0).compileShape)
             (inst ::: (rest +++ p0)) i d
       by_cases hinst : i < inst.size
-      · conv_lhs => rw [Func.byteAtByShape, if_pos hinst]
-        conv_rhs => rw [Func.byteAtByShape, if_pos hinst]
-      · conv_lhs => rw [Func.byteAtByShape, if_neg hinst]
-        conv_rhs => rw [Func.byteAtByShape, if_neg hinst]
+      · conv_lhs => rw [Func.byteAtByShape, ite_eq_left hinst]
+        conv_rhs => rw [Func.byteAtByShape, ite_eq_left hinst]
+      · conv_lhs => rw [Func.byteAtByShape, ite_eq_right hinst]
+        conv_rhs => rw [Func.byteAtByShape, ite_eq_right hinst]
         apply ih
         simp only [prefixByteSize] at hi
         omega
@@ -56,7 +56,7 @@ theorem byteAt_prepend_to_tail
         Func.byteAtByShape locations n
             (.next inst.size (Ninst.immAccepted inst) (rest +++ p0).compileShape)
             (inst ::: (rest +++ p)) i d = _
-      conv_lhs => rw [Func.byteAtByShape, if_neg (Nat.not_lt_of_ge hinst)]
+      conv_lhs => rw [Func.byteAtByShape, ite_eq_right (Nat.not_lt_of_ge hinst)]
       rw [ih (n := n + inst.size) (i := i - inst.size) (by
         simp only [prefixByteSize] at hlo
         omega)]
@@ -74,7 +74,7 @@ theorem byteAt_next_to_tail
       Func.byteAtByShape locations (n + inst0.size) p0.compileShape
         p (i - inst0.size) d := by
   rw [Func.compileShape, Func.byteAtByShape,
-    if_neg (Nat.not_lt_of_ge hlo)]
+    ite_eq_right (Nat.not_lt_of_ge hlo)]
 
 theorem byteAt_branch_eq_header
     (locations : List Nat) (n : Nat)
@@ -86,9 +86,9 @@ theorem byteAt_branch_eq_header
       Func.byteAtByShape locations n
         (.branch left0.compileShape right0.compileShape)
         (.branch left0 right0) i d := by
-  conv_lhs => rw [Func.byteAtByShape, if_pos (by
+  conv_lhs => rw [Func.byteAtByShape, ite_eq_left (by
     simpa only [List.length_cons, List.length_nil, Nat.reduceAdd] using hi)]
-  conv_rhs => rw [Func.byteAtByShape, if_pos (by
+  conv_rhs => rw [Func.byteAtByShape, ite_eq_left (by
     simpa only [List.length_cons, List.length_nil, Nat.reduceAdd] using hi)]
 theorem byteAt_branch_to_left
     (locations : List Nat) (n : Nat)
@@ -100,11 +100,11 @@ theorem byteAt_branch_to_left
       Func.byteAtByShape locations (n + 4) left0.compileShape left
         (i - 4) d := by
   conv_lhs => rw [Func.byteAtByShape]
-  conv_lhs => rw [if_neg (by
+  conv_lhs => rw [ite_eq_right (by
     simp only [List.length_cons, List.length_nil]
     omega)]
   dsimp only
-  conv_lhs => rw [if_pos (by
+  conv_lhs => rw [ite_eq_left (by
     simpa only [List.length_cons, List.length_nil, Nat.reduceAdd] using
       hinside)]
   simp only [List.length_cons, List.length_nil, Nat.reduceAdd]
@@ -116,14 +116,14 @@ lemma byteAt_branch_jumpdest
         (.branch left right) (4 + left0.compileShape.byteSize) d =
       Jinst.jumpdest.toUInt8 := by
   conv_lhs => rw [Func.byteAtByShape]
-  conv_lhs => rw [if_neg (by
+  conv_lhs => rw [ite_eq_right (by
     simp only [List.length_cons, List.length_nil]
     omega)]
   dsimp only
-  conv_lhs => rw [if_neg (by
+  conv_lhs => rw [ite_eq_right (by
     simp only [List.length_cons, List.length_nil, Nat.reduceAdd]
     omega)]
-  conv_lhs => rw [if_pos (by
+  conv_lhs => rw [ite_eq_left (by
     simp only [List.length_cons, List.length_nil, Nat.reduceAdd]
     omega)]
   have hi0 :
@@ -166,14 +166,14 @@ theorem byteAt_branch_to_right
         (n + 5 + left0.compileShape.byteSize) right0.compileShape right
         (i - (5 + left0.compileShape.byteSize)) d := by
   conv_lhs => rw [Func.byteAtByShape]
-  conv_lhs => rw [if_neg (by
+  conv_lhs => rw [ite_eq_right (by
     simp only [List.length_cons, List.length_nil]
     omega)]
   dsimp only
-  conv_lhs => rw [if_neg (by
+  conv_lhs => rw [ite_eq_right (by
     simp only [List.length_cons, List.length_nil, Nat.reduceAdd]
     omega)]
-  conv_lhs => rw [if_neg (by
+  conv_lhs => rw [ite_eq_right (by
     simp only [List.length_cons, List.length_nil, Nat.reduceAdd]
     omega)]
   simp only [List.length_cons, List.length_nil, Nat.reduceAdd]
@@ -205,11 +205,11 @@ theorem byteAt_pushFullWord_data
         (j + 1) 0 =
       w.toBytes.getD j 0 := by
   rw [Func.compileShape, Func.byteAtByShape]
-  rw [if_pos (by
+  rw [ite_eq_left (by
     simp only [Ninst.size, B256.length_toBytes]
     omega)]
   rw [List.getD_takeD]
-  rw [if_pos (by
+  rw [ite_eq_left (by
     simp only [Ninst.size, B256.length_toBytes]
     omega)]
   simp only [Ninst.toBytes, pushToB8L, List.getD_cons_succ]
@@ -239,15 +239,15 @@ lemma dispatchNodeByteAt_to_onPath
             (.branch on0.compileShape off0.compileShape))))
       (Ninst.dup 0 ::: Ninst.pushB256 selector ::: Ninst.gt :::
         (off <?> on)) i d = _
-  conv_lhs => rw [Func.byteAtByShape, if_neg (by omega)]
-  conv_lhs => rw [Func.byteAtByShape, if_neg (by omega)]
-  conv_lhs => rw [Func.byteAtByShape, if_neg (by omega)]
+  conv_lhs => rw [Func.byteAtByShape, ite_eq_right (by omega)]
+  conv_lhs => rw [Func.byteAtByShape, ite_eq_right (by omega)]
+  conv_lhs => rw [Func.byteAtByShape, ite_eq_right (by omega)]
   conv_lhs => rw [Func.byteAtByShape]
-  conv_lhs => rw [if_neg (by
+  conv_lhs => rw [ite_eq_right (by
     simp only [List.length_cons, List.length_nil]
     omega)]
   dsimp only
-  conv_lhs => rw [if_pos (by
+  conv_lhs => rw [ite_eq_left (by
     simpa only [hdup, hpush, hgt, List.length_cons, List.length_nil,
       Nat.reduceAdd, hiEq] using hinside)]
   simp only [hdup, hpush, hgt, List.length_cons, List.length_nil,
@@ -274,19 +274,19 @@ lemma dispatchNodeByteAt_to_offPath
             (.branch on0.compileShape off0.compileShape))))
       (Ninst.dup 0 ::: Ninst.pushB256 selector ::: Ninst.gt :::
         (off <?> on)) i d = _
-  conv_lhs => rw [Func.byteAtByShape, if_neg (by omega)]
-  conv_lhs => rw [Func.byteAtByShape, if_neg (by omega)]
-  conv_lhs => rw [Func.byteAtByShape, if_neg (by omega)]
+  conv_lhs => rw [Func.byteAtByShape, ite_eq_right (by omega)]
+  conv_lhs => rw [Func.byteAtByShape, ite_eq_right (by omega)]
+  conv_lhs => rw [Func.byteAtByShape, ite_eq_right (by omega)]
   conv_lhs => rw [Func.byteAtByShape]
-  conv_lhs => rw [if_neg (by
+  conv_lhs => rw [ite_eq_right (by
     simp only [List.length_cons, List.length_nil]
     omega)]
   dsimp only
-  conv_lhs => rw [if_neg (by
+  conv_lhs => rw [ite_eq_right (by
     simp only [hdup, hpush, hgt, List.length_cons, List.length_nil,
       Nat.reduceAdd]
     omega)]
-  conv_lhs => rw [if_neg (by
+  conv_lhs => rw [ite_eq_right (by
     simp only [hdup, hpush, hgt, List.length_cons, List.length_nil,
       Nat.reduceAdd]
     omega)]
@@ -339,25 +339,25 @@ lemma dispatchNodeByteAt_jumpdest
             (.branch on0.compileShape off0.compileShape))))
       (Ninst.dup 0 ::: Ninst.pushB256 selector ::: Ninst.gt :::
         (off <?> on)) (11 + on0.compileShape.byteSize) d = _
-  conv_lhs => rw [Func.byteAtByShape, if_neg (by
+  conv_lhs => rw [Func.byteAtByShape, ite_eq_right (by
     simp only [hdup]
     omega)]
-  conv_lhs => rw [Func.byteAtByShape, if_neg (by
+  conv_lhs => rw [Func.byteAtByShape, ite_eq_right (by
     simp only [hdup, hpush]
     omega)]
-  conv_lhs => rw [Func.byteAtByShape, if_neg (by
+  conv_lhs => rw [Func.byteAtByShape, ite_eq_right (by
     simp only [hdup, hpush, hgt]
     omega)]
   conv_lhs => rw [Func.byteAtByShape]
-  conv_lhs => rw [if_neg (by
+  conv_lhs => rw [ite_eq_right (by
     simp only [hdup, hpush, hgt, List.length_cons, List.length_nil]
     omega)]
   dsimp only
-  conv_lhs => rw [if_neg (by
+  conv_lhs => rw [ite_eq_right (by
     simp only [hdup, hpush, hgt, List.length_cons, List.length_nil,
       Nat.reduceAdd]
     omega)]
-  conv_lhs => rw [if_pos (by
+  conv_lhs => rw [ite_eq_left (by
     simp only [hdup, hpush, hgt, List.length_cons, List.length_nil,
       Nat.reduceAdd]
     omega)]
@@ -401,7 +401,7 @@ theorem compile_prepend
       have hxs : ∀ j ∈ xs, Ninst.immAccepted j = true :=
         fun j hj => hacc j (by simp only [List.mem_cons, hj, or_true])
       simp only [prepend, Func.compile, ih _ hxs, CompiledShape.prefixByteSize,
-        List.flatMap_cons, Nat.add_assoc, hi, guard, eq_self_iff_true, ite_true]
+        List.flatMap_cons, Nat.add_assoc, hi, guard, ite_true]
       cases Func.compile l (n + (i.size + CompiledShape.prefixByteSize xs)) p <;>
         simp only [Option.pure_def, Option.bind_eq_bind, Option.bind_none, Option.bind_fun_none, List.append_assoc, Option.bind_some]
 

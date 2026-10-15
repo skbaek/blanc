@@ -36,7 +36,7 @@ theorem lookupS_append_of_ne {p l : StorShadow} {a : Adr} (h : ∀ e ∈ p, e.1.
   | cons e p ih =>
     obtain ⟨⟨b, j⟩, v⟩ := e
     simp only [List.cons_append, lookupS]
-    rw [if_neg fun hb => h _ List.mem_cons_self hb.1]
+    rw [ite_eq_right fun hb => h _ List.mem_cons_self hb.1]
     exact ih fun e he => h e (List.mem_cons_of_mem _ he)
 
 /-- A start shadow with no entry at `a` leaves `a`'s storage to the prefix. -/
@@ -50,7 +50,7 @@ theorem lookupS_append_of_absent {p l : StorShadow} {a : Adr} (h : ∀ e ∈ l, 
     | cons e l ih =>
       obtain ⟨⟨b, j⟩, v⟩ := e
       simp only [lookupS]
-      rw [if_neg fun hb => h _ List.mem_cons_self hb.1]
+      rw [ite_eq_right fun hb => h _ List.mem_cons_self hb.1]
       exact ih fun e he => h e (List.mem_cons_of_mem _ he)
   | cons e p ih =>
     obtain ⟨⟨b, j⟩, v⟩ := e

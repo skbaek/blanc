@@ -253,14 +253,14 @@ theorem wDeposit_ok :
   have hw : wCredentials.length = 32 := List.length_replicate
   have hs : wSignature.length = 96 := List.length_replicate
   unfold deposit
-  rw [if_neg (by rw [hp]; decide), if_neg (by rw [hw]; decide),
-    if_neg (by rw [hs]; decide),
-    if_neg (by norm_num only [oneEther]),
-    if_neg (by norm_num only [oneEther, oneGwei]),
-    if_neg (by norm_num only [oneEther, oneGwei])]
+  rw [ite_eq_right (by rw [hp]; decide), ite_eq_right (by rw [hw]; decide),
+    ite_eq_right (by rw [hs]; decide),
+    ite_eq_right (by norm_num only [oneEther]),
+    ite_eq_right (by norm_num only [oneEther, oneGwei]),
+    ite_eq_right (by norm_num only [oneEther, oneGwei])]
   dsimp only
-  rw [if_neg (by rw [wNode]; exact not_not.mpr rfl), accOfStor_wStor_count,
-    if_neg (by norm_num only)]
+  rw [ite_eq_right (by rw [wNode]; exact not_not.mpr rfl), accOfStor_wStor_count,
+    ite_eq_right (by norm_num only)]
   rfl
 
 /-! ## Header premises of the witness -/
@@ -275,7 +275,7 @@ theorem w_fork : CoveredFork (wSevm gas).benvStat.fork := by
 
 theorem w_transfer : (wMsg gas).benvAfterTransfer = .ok wBenv := by
   unfold Msg.benvAfterTransfer
-  rw [if_neg (by simp only [wMsg, Bool.false_eq_true, false_and,
+  rw [ite_eq_right (by simp only [wMsg, Bool.false_eq_true, false_and,
     not_false_eq_true])]
   rfl
 
@@ -417,7 +417,7 @@ theorem w_machineOrig :
     (wBase gas).getOrigStorVal (wSevm gas) (wSevm gas).currentTarget
       (branchSlot 0) = 0 := by
   unfold Devm.getOrigStorVal
-  exact if_pos (wBase_created gas)
+  exact ite_eq_left (wBase_created gas)
 
 theorem w_rawCost :
     insertionFirstLiveStoreCost (wSevm gas)
@@ -427,7 +427,7 @@ theorem w_rawCost :
   simp only [Nat.add_zero, insertionNatKeys, accumulatedNode,
     w_counted_branch_cold gas, ↓reduceIte, w_rawOrig, w_counted_branch]
   unfold sstoreValueCost
-  rw [if_pos ⟨rfl, wCell_ne_node⟩, if_neg wCell_ne_zero]
+  rw [ite_eq_left ⟨rfl, wCell_ne_node⟩, ite_eq_right wCell_ne_zero]
   rfl
 
 theorem w_actualCost :
@@ -440,7 +440,7 @@ theorem w_actualCost :
   simp only [Nat.add_zero, insertionNatKeys, accumulatedNode,
     w_counted_branch_cold gas, ↓reduceIte, w_machineOrig, w_counted_branch]
   unfold sstoreValueCost
-  rw [if_neg (fun h => wCell_ne_zero h.1.symm)]
+  rw [ite_eq_right (fun h => wCell_ne_zero h.1.symm)]
   rfl
 
 theorem w_countCost :
@@ -456,17 +456,17 @@ theorem w_countCost :
       (wSevm gas) (wSevm gas).currentTarget depositCountSlot = 0 := by
     unfold Devm.getOrigStorVal
     rw [Blanc.afterSload_createdAccounts]
-    exact if_pos (wBase_created gas)
+    exact ite_eq_left (wBase_created gas)
   have hcur : (afterSload (wSevm gas) (wBase gas) depositCountSlot).getStorVal
       (wSevm gas).currentTarget depositCountSlot = 0 := by
     change (Devm.getStor (afterSload (wSevm gas) (wBase gas) depositCountSlot)
       (wSevm gas).currentTarget).get depositCountSlot = 0
     rw [Blanc.afterSload_getStor, w_getStor, wStor_count]
   unfold sstoreCost
-  rw [if_pos hwarm, horig, hcur, w_getStor, accOfStor_wStor_count,
+  rw [ite_eq_left hwarm, horig, hcur, w_getStor, accOfStor_wStor_count,
     show Nat.toB256 0 + 1 = (1 : B256) by decide]
   unfold sstoreValueCost
-  rw [if_pos ⟨rfl, by decide⟩, if_pos rfl]
+  rw [ite_eq_left ⟨rfl, by decide⟩, ite_eq_left rfl]
   rfl
 
 theorem w_sloadCost :
@@ -476,7 +476,7 @@ theorem w_sloadCost :
     simp only [wBase, initDevm, Devm.accessedStorageKeys, Msg.withBenv, wMsg]
     exact Std.HashSet.not_mem_emptyWithCapacity
   unfold sloadCost
-  rw [if_neg hcold]
+  rw [ite_eq_right hcold]
   rfl
 
 end prices
@@ -597,8 +597,8 @@ theorem underfunded_value_gap (raw node : B256) (hraw : raw ≠ 0)
     (hnode : node ≠ 0) :
     sstoreValueCost 0 0 node = sstoreValueCost raw 0 node + 19900 := by
   unfold sstoreValueCost
-  rw [if_pos ⟨rfl, fun h => hnode h.symm⟩, if_pos rfl,
-    if_neg (fun h => hraw h.1)]
+  rw [ite_eq_left ⟨rfl, fun h => hnode h.symm⟩, ite_eq_left rfl,
+    ite_eq_right (fun h => hraw h.1)]
   rfl
 
 end Blanc.BeaconDeposit.RepinRefutation

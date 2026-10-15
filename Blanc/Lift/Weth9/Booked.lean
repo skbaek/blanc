@@ -57,18 +57,18 @@ theorem booked_set_bal (s : Stor) {r a : Adr} (w : B256) (hr : BalRep r)
   constructor
   · intro h
     subst b
-    simp only [booked, if_pos hr, hra]
+    simp only [booked, ite_eq_left hr, hra]
     rw [Stor.get_set_self]
   · intro hne
     by_cases hb : BalRep b
-    · simp only [booked, if_pos hr, if_pos hb]
+    · simp only [booked, ite_eq_left hb]
       rw [Stor.get_set_ne]
       intro hslot
       rcases Nat.lt_trichotomy r.toNat b.toNat with hlt | heq | hlt
       · exact (hb r hlt) (hra.trans hslot)
       · exact hne (adr_eq_of_toNat_eq heq)
       · exact (hr b hlt) (hra.trans hslot).symm
-    · simp only [booked, if_pos hr, if_neg hb]
+    · simp only [booked, ite_eq_right hb]
 
 theorem increase_booked {s : Stor} {a r : Adr} {v : B256}
     (hr : BalRep r) (hra : balSlot r = balSlot a) :
@@ -78,7 +78,7 @@ theorem increase_booked {s : Stor} {a r : Adr} {v : B256}
   constructor
   · intro h
     subst b
-    simp only [booked, if_pos hr, hra]
+    simp only [booked, ite_eq_left hr, hra]
     rw [Stor.get_set_self]
   · intro hne
     exact (booked_set_bal (s := s) (r := r) (a := a)
@@ -92,7 +92,7 @@ theorem decrease_booked {s : Stor} {a r : Adr} {v : B256}
   constructor
   · intro h
     subst b
-    simp only [booked, if_pos hr, hra]
+    simp only [booked, ite_eq_left hr, hra]
     rw [Stor.get_set_self]
   · intro hne
     exact (booked_set_bal (s := s) (r := r) (a := a)

@@ -764,7 +764,7 @@ lemma transfer_of_transferFrom {fs : List Func} {sevm : Sevm} {s r : Devm} :
   have h_ltflag : (sbal <? wad) = 0 := pref_head_unique hs11 (pref_append [0] a12.stack)
   have h_le : wad ≤ sbal := by
     rw [← B256.not_lt]; intro hlt
-    rw [B256.ltCheck, if_pos hlt] at h_ltflag
+    rw [B256.ltCheck, ite_eq_left hlt] at h_ltflag
     exact B256.zero_ne_one h_ltflag.symm
   rw [h_ltflag] at hs11
   have hs12 : [sbal, wad, wad, src] <<+ a12.stack := cons_pref_cons_inv hs11
@@ -1332,7 +1332,7 @@ lemma of_send_to_caller {sevm : Sevm} {s sf : Devm} {wad}
           have h_none : getDelegatedCodeAddress
               ((addAccessedAddress devm7 sevm.caller).state.getCode sevm.caller) = none := by
             dsimp only [getDelegatedCodeAddress]
-            rw [if_neg h_notdel]
+            rw [ite_eq_right h_notdel]
           have h_gas_code :
               (sevm.benvStat.rules.gas.accessDelegation
                 (addAccessedAddress devm7 sevm.caller) sevm.caller).2.2.1 =
@@ -1463,7 +1463,7 @@ lemma withdraw_preserves_solvent {sevm : Sevm} {s r : Devm}
   have h_ltflag : (cbal <? wad) = 0 := pref_head_unique hp₁ (pref_append [0] s₂.stack)
   have h_wad : wad ≤ cbal := by
     rw [← B256.not_lt]; intro hlt
-    rw [B256.ltCheck, if_pos hlt] at h_ltflag
+    rw [B256.ltCheck, ite_eq_left hlt] at h_ltflag
     exact B256.zero_ne_one h_ltflag.symm
   rw [h_ltflag] at hp₁
   have hp₂ : [cbal, wad, wad] <<+ s₂.stack := cons_pref_cons_inv hp₁

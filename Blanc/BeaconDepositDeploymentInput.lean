@@ -148,7 +148,7 @@ theorem prepareCanonicalDeploymentContext
       (begun.state.incrNonce sender).subBal sender fee.toB256 =
         some debit := by
     unfold State.subBal
-    rw [if_neg hnotlt]
+    rw [ite_eq_right hnotlt]
   let tenv := deploymentTenv txInput tx sender 0
   let currentTarget :=
     computeContractAddress tenv.stat.origin

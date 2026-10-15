@@ -406,7 +406,7 @@ private theorem depositLengthGuard_failure_runCompiledTo
         simp only [Devm.gasLeft_setMach, errorCost, guardBase,
           gVerylow])
       (by simp only [Devm.stack_setMach, List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mload_of
@@ -419,7 +419,7 @@ private theorem depositLengthGuard_failure_runCompiledTo
       (by rw [Devm.memory_setMach, hindex, hmemory])
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256
       (c := gVerylow) (G := (G + errorCost) + 6) hexpectedPush
@@ -427,7 +427,7 @@ private theorem depositLengthGuard_failure_runCompiledTo
       (by
         simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
         omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   func_run (2) [0, 1]
   case h_val => simp only [B256.eqCheck, Ne.symm hne, ↓reduceIte]
@@ -557,7 +557,7 @@ private theorem depositAmountUpperGuard_failure_runCompiledTo
   case h_ext =>
     rw [hamountWord]
     exact Devm.extCost_of_size hmem.size_eq (by decide +kernel)
-  case h_val => rw [B256.ltCheck, if_pos hupper]
+  case h_val => rw [B256.ltCheck, ite_eq_left hupper]
   simpa only [writtenMemory, guardBase, errorCost,
       Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.memory_setMach,
       ReachableReason.slot, Nat.add_sub_cancel, hamountWord] using
@@ -665,7 +665,7 @@ private theorem depositCapGuard_failure_runCompiledTo
   case h_val =>
     rw [show (oldCountWord * 32 : B256).toNat = 576 by decide +kernel,
       hread]
-    rw [B256.ltCheck, if_neg hcap]
+    rw [B256.ltCheck, ite_eq_right hcap]
   simpa only [guardBase, errorCost, Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas,
       Devm.memory_setMach,
       show (oldCountWord * 32 : B256).toNat = 576 by decide +kernel,

@@ -67,12 +67,12 @@ theorem create_clone_exact (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
     rfl
   · rw [pf.2.2.1, facts.2.2.1, facts.1, forwarder_code]
     change ({ benv.state.get msg.currentTarget with code := _ } : Acct) = _
-    rw [processCreateMessage_msg_afterTransfer_get hvalue htransfer, if_pos rfl]
+    rw [processCreateMessage_msg_afterTransfer_get hvalue htransfer, ite_eq_left rfl]
     unfold cloneAcct
     rfl
   · intro a ha
     rw [pf.2.2.2 a ha, facts.2.2.1]
-    exact (processCreateMessage_msg_afterTransfer_get hvalue htransfer a).trans (if_neg ha)
+    exact (processCreateMessage_msg_afterTransfer_get hvalue htransfer a).trans (ite_eq_right ha)
   · intro hstv
     rw [CreateEntry.liftCreatePost_state, facts.2.2.1, facts.1, forwarder_code]
     show benv.state.setCode _ _ = _

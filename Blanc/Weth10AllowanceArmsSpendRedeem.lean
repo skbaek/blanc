@@ -343,7 +343,7 @@ private theorem Exec.Frame.CountedCursor.enterSpendCallerAllowanceThenFork
         · rw [hstor]
     · -- a finite allowance is decremented at the tagged runtime key
       have hmaxFlag : ((~~~ allowance) =? 0) = 0 := by
-        rw [B256.eqCheck, if_neg]
+        rw [B256.eqCheck, ite_eq_right]
         intro hzero
         exact hmax (B256.eq_max_of_not_eq_zero hzero)
       rw [hmaxFlag] at hloadPrefix
@@ -822,7 +822,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceStorage
                   (callCursor.pre.getCode target.toAdr) = none := by
                 rw [htargetCa]
                 dsimp only [getDelegatedCodeAddress]
-                rw [if_neg (not_delegation_of_compile hcallCodeAt)]
+                rw [ite_eq_right (not_delegation_of_compile hcallCodeAt)]
               rcases hdelegation with ⟨_, hna, _, _⟩ | ⟨_, hsome, _, _, _⟩
               · exact hna.trans htargetCa
               · simp only [hnone, reduceCtorEq] at hsome
@@ -1046,12 +1046,12 @@ theorem Exec.Frame.allowanceRegionEffect_of_withdrawFrom
         by_cases hpk :
             projectedAllowanceKey (Sevm.argWord frame.sevm 0)
               frame.sevm.caller.toB256 = key
-        · rw [if_pos hpk, ← hpk, ← callerAllowanceRuntimeKey_eq_projected]
+        · rw [ite_eq_left hpk, ← hpk, ← callerAllowanceRuntimeKey_eq_projected]
           exact Stor.get_set_self _ _ _
         · have hne : callerAllowanceRuntimeKey frame.sevm ≠ key := by
             rw [callerAllowanceRuntimeKey_eq_projected]
             exact hpk
-          rw [if_neg hpk, Stor.get_set_ne _ hne _, ← congrFun hpreStor ca]
+          rw [ite_eq_right hpk, Stor.get_set_ne _ hne _, ← congrFun hpreStor ca]
   have hsplit := applyAllowanceLedger_append (Devm.getStor frame.pre ca)
     (Devm.getStor coreCursor.pre ca) [CountedFrame.ofFrame dp ca frame]
     (Exec.attributionInner dp ca frame.run) key hmid
@@ -1244,12 +1244,12 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromZero
         by_cases hpk :
             projectedAllowanceKey (Sevm.argWord frame.sevm 0)
               frame.sevm.caller.toB256 = key
-        · rw [if_pos hpk, ← hpk, ← callerAllowanceRuntimeKey_eq_projected]
+        · rw [ite_eq_left hpk, ← hpk, ← callerAllowanceRuntimeKey_eq_projected]
           exact Stor.get_set_self _ _ _
         · have hne : callerAllowanceRuntimeKey frame.sevm ≠ key := by
             rw [callerAllowanceRuntimeKey_eq_projected]
             exact hpk
-          rw [if_neg hpk, Stor.get_set_ne _ hne _, ← congrFun hpreStor ca]
+          rw [ite_eq_right hpk, Stor.get_set_ne _ hne _, ← congrFun hpreStor ca]
   have hsplit := applyAllowanceLedger_append (Devm.getStor frame.pre ca)
     (Devm.getStor zeroCursor.pre ca) [CountedFrame.ofFrame dp ca frame]
     (Exec.attributionInner dp ca frame.run) key hmid
@@ -1567,7 +1567,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceSound
                   (callCursor.pre.getCode target.toAdr) = none := by
                 rw [htargetCa]
                 dsimp only [getDelegatedCodeAddress]
-                rw [if_neg (not_delegation_of_compile hcallCodeAt)]
+                rw [ite_eq_right (not_delegation_of_compile hcallCodeAt)]
               rcases hdelegation with ⟨_, hna, _, _⟩ | ⟨_, hsome, _, _, _⟩
               · exact hna.trans htargetCa
               · simp only [hnone, reduceCtorEq] at hsome
@@ -1805,12 +1805,12 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_withdrawFrom
         by_cases hpk :
             projectedAllowanceKey (Sevm.argWord frame.sevm 0)
               frame.sevm.caller.toB256 = key
-        · rw [if_pos hpk, ← hpk, ← callerAllowanceRuntimeKey_eq_projected]
+        · rw [ite_eq_left hpk, ← hpk, ← callerAllowanceRuntimeKey_eq_projected]
           exact Stor.get_set_self _ _ _
         · have hne : callerAllowanceRuntimeKey frame.sevm ≠ key := by
             rw [callerAllowanceRuntimeKey_eq_projected]
             exact hpk
-          rw [if_neg hpk, Stor.get_set_ne _ hne _, ← congrFun hpreStor ca]
+          rw [ite_eq_right hpk, Stor.get_set_ne _ hne _, ← congrFun hpreStor ca]
   rw [hstream]
   exact (⟨⟨hmid, hcoreCode⟩,
       AllowanceEntryReadSound.ofFrame htarget
@@ -2007,12 +2007,12 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferFromZero
         by_cases hpk :
             projectedAllowanceKey (Sevm.argWord frame.sevm 0)
               frame.sevm.caller.toB256 = key
-        · rw [if_pos hpk, ← hpk, ← callerAllowanceRuntimeKey_eq_projected]
+        · rw [ite_eq_left hpk, ← hpk, ← callerAllowanceRuntimeKey_eq_projected]
           exact Stor.get_set_self _ _ _
         · have hne : callerAllowanceRuntimeKey frame.sevm ≠ key := by
             rw [callerAllowanceRuntimeKey_eq_projected]
             exact hpk
-          rw [if_neg hpk, Stor.get_set_ne _ hne _, ← congrFun hpreStor ca]
+          rw [ite_eq_right hpk, Stor.get_set_ne _ hne _, ← congrFun hpreStor ca]
   rw [hstream]
   exact (⟨⟨hmid, hzeroCode⟩,
       AllowanceEntryReadSound.ofFrame htarget

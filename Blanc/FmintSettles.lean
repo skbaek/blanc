@@ -277,7 +277,7 @@ theorem flashLoan_runCompiledTo_mint {sevm : Sevm} {pre : Devm}
     rw [argWord_one_of_decodes h_dec, h_token]
     show (if sevm.currentTarget.toB256 = sevm.currentTarget.toB256
       then (1 : B256) else 0) = 1
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   · show ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat).and
       (Sevm.argWord sevm 0) = 0
     rw [h_arg0, ← addressMask_eq_shl]
@@ -297,7 +297,7 @@ theorem flashLoan_runCompiledTo_mint {sevm : Sevm} {pre : Devm}
     rw [h_arg2]
     show (if ~~~ (Devm.getStorVal pre sevm.currentTarget supplySlot) < amount
       then (1 : B256) else 0) = 0
-    rw [if_neg (not_lt_of_ge (B256.le_not_of_nof h_nof))]
+    rw [ite_eq_right (not_lt_of_ge (B256.le_not_of_nof h_nof))]
   -- (3) the mint: the receiver's balance, read then written
   refine Func.runCompiledTo_sload_step hfork rfl (by simp only [List.length_cons, List.length_nil,
     zero_add, Nat.reduceAdd, Nat.reduceLT])
@@ -727,7 +727,7 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
       rw [argWord_one_of_decodes h_dec, h_token]
       show (if sevm.currentTarget.toB256 = sevm.currentTarget.toB256
         then (1 : B256) else 0) = 1
-      rw [if_pos rfl]
+      rw [ite_eq_left rfl]
     · show ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat).and
         (Sevm.argWord sevm 0) = 0
       rw [h_arg0, ← addressMask_eq_shl]
@@ -750,7 +750,7 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
       rw [h_arg2]
       show (if ~~~ (Devm.getStorVal pre sevm.currentTarget supplySlot) < amount
         then (1 : B256) else 0) = 0
-      rw [if_neg (not_lt_of_ge (B256.le_not_of_nof h_nof))]
+      rw [ite_eq_right (not_lt_of_ge (B256.le_not_of_nof h_nof))]
     exact hex
   refine Func.execSat_sload_step hfork rfl (by simp only [List.length_cons, List.length_nil,
     zero_add, Nat.reduceAdd, Nat.reduceLT])
@@ -1111,7 +1111,7 @@ lemma flashLoanCallMem_size {sevm : Sevm} {amount : B256} {payload : Bytes} :
   · rw [show ∀ μ : Mem, Mem.write μ 224 [] = μ from fun _ => rfl, h7]
     decide
   · rw [Mem.size_write_cons, h7,
-      if_neg (by simp only [List.length_cons]; omega),
+      ite_eq_right (by simp only [List.length_cons]; omega),
       ceil32_eq_mul, ceil32_eq_mul]
     omega
 
@@ -1132,13 +1132,13 @@ lemma flashLoanCallMem_covered {sevm : Sevm} {amount : B256} {data : Bytes}
   set q := (31 + data.length) / 32 with hq
   have h1 : memExtSize (224 + 32 * q) 28 (196 + 32 * q) = 224 + 32 * q := by
     unfold memExtSize
-    rw [if_neg (by omega)]
+    rw [ite_eq_right (by omega)]
     simp only [ceilDiv]
     rw [show (224 + 32 * q) % 32 = 0 from by omega,
       show (28 + (196 + 32 * q)) % 32 = 0 from by omega,
       show (224 + 32 * q) / 32 = 7 + q from by omega,
       show (28 + (196 + 32 * q)) / 32 = 7 + q from by omega]
-    simp only [if_true, Nat.add_zero, Nat.max_self]
+    simp only [ite_true, Nat.add_zero, Nat.max_self]
     omega
   rw [h1]
   show memExtSize (224 + 32 * q) 0 0 = 224 + 32 * q
@@ -1370,7 +1370,7 @@ lemma execSat_returnDataShort_leaf {sevm : Sevm} {d : Devm}
       (d.setMach ⟨1 :: [amount, receiver], M, Gc, d.stateGas⟩) flashLoanFromFlag P := by
   have h_lt : (Nat.toB256 d.returnData.length <? (32 : B256)) = 1 := by
     show (if Nat.toB256 d.returnData.length < 32 then (1 : B256) else 0) = 1
-    refine if_pos ?_
+    refine ite_eq_left ?_
     rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256,
       show ((32 : B256)).toNat = 32 from rfl,
       Nat.lo_eq_of_lt (show d.returnData.length < 2 ^ 256 from
@@ -1411,7 +1411,7 @@ lemma execSat_magicMismatch_leaf {sevm : Sevm} {d : Devm}
       intro hc
       rw [show (Nat.toB256 d.returnData.length <? (32 : B256))
         = if Nat.toB256 d.returnData.length < 32 then (1 : B256) else 0 from rfl,
-        if_pos hc] at h_ge
+        ite_eq_left hc] at h_ge
       exact (by decide : (1 : B256) ≠ 0) h_ge
     rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256,
       show ((32 : B256)).toNat = 32 from rfl, Nat.lo_eq] at h1
@@ -1456,7 +1456,7 @@ lemma returnData_bound_of_not_short {d : Devm}
     intro hc
     rw [show (Nat.toB256 d.returnData.length <? (32 : B256))
       = if Nat.toB256 d.returnData.length < 32 then (1 : B256) else 0 from rfl,
-      if_pos hc] at h_ge
+      ite_eq_left hc] at h_ge
     exact (by decide : (1 : B256) ≠ 0) h_ge
   rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256,
     show ((32 : B256)).toNat = 32 from rfl, Nat.lo_eq] at h1
@@ -2141,11 +2141,11 @@ theorem flashLoan_settles_error {sevm : Sevm} {pre : Devm}
         (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
       rw [show (Nat.toB256 dd.returnData.length <? (32 : B256))
         = if Nat.toB256 dd.returnData.length < 32 then (1 : B256) else 0
-        from rfl, if_pos hLen]
+        from rfl, ite_eq_left hLen]
     · have h_ge : (Nat.toB256 dd.returnData.length <? (32 : B256)) = 0 := by
         rw [show (Nat.toB256 dd.returnData.length <? (32 : B256))
           = if Nat.toB256 dd.returnData.length < 32 then (1 : B256) else 0
-          from rfl, if_neg hLen]
+          from rfl, ite_eq_right hLen]
       have h32c : (flashLoanCallMem sevm amount data).size % 32 = 0 := by
         rw [flashLoanCallMem_size, ceil32_eq_mul]; omega
       have hmszc : 64 ≤ (flashLoanCallMem sevm amount data).size := by
@@ -2159,7 +2159,7 @@ theorem flashLoan_settles_error {sevm : Sevm} {pre : Devm}
             (flashLoanCallMem sevm amount data))
           = if erc3156Magic = flashLoanReturnDataHead dd
               (flashLoanCallMem sevm amount data) then (1 : B256) else 0
-          from rfl, if_neg hMagic]
+          from rfl, ite_eq_right hMagic]
       case pos =>
         have h_eq : (erc3156Magic =? flashLoanReturnDataHead dd
             (flashLoanCallMem sevm amount data)) = 1 := by
@@ -2167,7 +2167,7 @@ theorem flashLoan_settles_error {sevm : Sevm} {pre : Devm}
               (flashLoanCallMem sevm amount data))
             = if erc3156Magic = flashLoanReturnDataHead dd
                 (flashLoanCallMem sevm amount data) then (1 : B256) else 0
-            from rfl, if_pos hMagic]
+            from rfl, ite_eq_left hMagic]
         refine execSat_spend_step h_ge h_eq h32c hmszc (by omega) ?_
         intro M' hsM'
         have h32' : M'.size % 32 = 0 := by rw [hsM']; exact h32c
@@ -2182,18 +2182,18 @@ theorem flashLoan_settles_error {sevm : Sevm} {pre : Devm}
               (by rw [show B256.eqCheck
                     (((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& hh) 0
                   = if ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& hh = 0
-                    then (1 : B256) else 0 from rfl, if_pos hA])
+                    then (1 : B256) else 0 from rfl, ite_eq_left hA])
               (by rw [show B256.eqCheck (~~~ hh) 0
-                  = if ~~~ hh = 0 then (1 : B256) else 0 from rfl, if_pos hB])
+                  = if ~~~ hh = 0 then (1 : B256) else 0 from rfl, ite_eq_left hB])
               (by decide) h32' hmsz' (by omega)
               (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
           · exact execSat_slotCollision_leaf (va := 1) (mx := 0) hhash.symm
               (by rw [show B256.eqCheck
                     (((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& hh) 0
                   = if ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& hh = 0
-                    then (1 : B256) else 0 from rfl, if_pos hA])
+                    then (1 : B256) else 0 from rfl, ite_eq_left hA])
               (by rw [show B256.eqCheck (~~~ hh) 0
-                  = if ~~~ hh = 0 then (1 : B256) else 0 from rfl, if_neg hB])
+                  = if ~~~ hh = 0 then (1 : B256) else 0 from rfl, ite_eq_right hB])
               (by decide) h32' hmsz' (by omega)
               (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
         · by_cases hB : ~~~ hh = 0
@@ -2201,18 +2201,18 @@ theorem flashLoan_settles_error {sevm : Sevm} {pre : Devm}
               (by rw [show B256.eqCheck
                     (((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& hh) 0
                   = if ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& hh = 0
-                    then (1 : B256) else 0 from rfl, if_neg hA])
+                    then (1 : B256) else 0 from rfl, ite_eq_right hA])
               (by rw [show B256.eqCheck (~~~ hh) 0
-                  = if ~~~ hh = 0 then (1 : B256) else 0 from rfl, if_pos hB])
+                  = if ~~~ hh = 0 then (1 : B256) else 0 from rfl, ite_eq_left hB])
               (by decide) h32' hmsz' (by omega)
               (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
           · refine execSat_spendGuard_step hhash.symm
               (by rw [show B256.eqCheck
                     (((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& hh) 0
                   = if ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat) &&& hh = 0
-                    then (1 : B256) else 0 from rfl, if_neg hA])
+                    then (1 : B256) else 0 from rfl, ite_eq_right hA])
               (by rw [show B256.eqCheck (~~~ hh) 0
-                  = if ~~~ hh = 0 then (1 : B256) else 0 from rfl, if_neg hB])
+                  = if ~~~ hh = 0 then (1 : B256) else 0 from rfl, ite_eq_right hB])
               h32' hmsz' (by omega) ?_
             intro M'' hsM''
             have h32'' : M''.size % 32 = 0 := by rw [hsM'']; exact h32'
@@ -2222,7 +2222,7 @@ theorem flashLoan_settles_error {sevm : Sevm} {pre : Devm}
                 (by rw [show B256.eqCheck
                       (~~~ dd.getStorVal sevm.currentTarget hh) 0
                     = if ~~~ dd.getStorVal sevm.currentTarget hh = 0
-                      then (1 : B256) else 0 from rfl, if_pos hMax])
+                      then (1 : B256) else 0 from rfl, ite_eq_left hMax])
                 (by omega) ?_
               intro b G hstor hEb hG
               by_cases hBal : b.getStorVal sevm.currentTarget receiver < amount
@@ -2230,13 +2230,13 @@ theorem flashLoan_settles_error {sevm : Sevm} {pre : Devm}
                   (by rw [show (b.getStorVal sevm.currentTarget receiver
                       <? amount)
                     = if b.getStorVal sevm.currentTarget receiver < amount
-                      then (1 : B256) else 0 from rfl, if_pos hBal])
+                      then (1 : B256) else 0 from rfl, ite_eq_left hBal])
                   (by omega) (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
               · exact execSat_burnOk_leaf (hfork := hfork) rfl
                   (by rw [show (b.getStorVal sevm.currentTarget receiver
                       <? amount)
                     = if b.getStorVal sevm.currentTarget receiver < amount
-                      then (1 : B256) else 0 from rfl, if_neg hBal])
+                      then (1 : B256) else 0 from rfl, ite_eq_right hBal])
                   h_static h32'' hmsz'' (by omega)
                   (fun post hp => Or.inl ⟨post, rfl, hp.trans (hEb.trans hEr)⟩)
             · by_cases hAlw : dd.getStorVal sevm.currentTarget hh < amount
@@ -2244,19 +2244,19 @@ theorem flashLoan_settles_error {sevm : Sevm} {pre : Devm}
                   (by rw [show B256.eqCheck
                         (~~~ dd.getStorVal sevm.currentTarget hh) 0
                       = if ~~~ dd.getStorVal sevm.currentTarget hh = 0
-                        then (1 : B256) else 0 from rfl, if_neg hMax])
+                        then (1 : B256) else 0 from rfl, ite_eq_right hMax])
                   (by rw [show (dd.getStorVal sevm.currentTarget hh <? amount)
                     = if dd.getStorVal sevm.currentTarget hh < amount
-                      then (1 : B256) else 0 from rfl, if_pos hAlw])
+                      then (1 : B256) else 0 from rfl, ite_eq_left hAlw])
                   (by omega) (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
               · refine execSat_spendFin_step (hfork := hfork) rfl
                   (by rw [show B256.eqCheck
                         (~~~ dd.getStorVal sevm.currentTarget hh) 0
                       = if ~~~ dd.getStorVal sevm.currentTarget hh = 0
-                        then (1 : B256) else 0 from rfl, if_neg hMax])
+                        then (1 : B256) else 0 from rfl, ite_eq_right hMax])
                   (by rw [show (dd.getStorVal sevm.currentTarget hh <? amount)
                     = if dd.getStorVal sevm.currentTarget hh < amount
-                      then (1 : B256) else 0 from rfl, if_neg hAlw])
+                      then (1 : B256) else 0 from rfl, ite_eq_right hAlw])
                   h_static (by omega) ?_
                 intro b G hkey hoth hEb hG
                 by_cases hBal :
@@ -2265,13 +2265,13 @@ theorem flashLoan_settles_error {sevm : Sevm} {pre : Devm}
                     (by rw [show (b.getStorVal sevm.currentTarget receiver
                         <? amount)
                       = if b.getStorVal sevm.currentTarget receiver < amount
-                        then (1 : B256) else 0 from rfl, if_pos hBal])
+                        then (1 : B256) else 0 from rfl, ite_eq_left hBal])
                     (by omega) (fun post => Or.inr (Or.inl ⟨post, rfl⟩))
                 · exact execSat_burnOk_leaf (hfork := hfork) rfl
                     (by rw [show (b.getStorVal sevm.currentTarget receiver
                         <? amount)
                       = if b.getStorVal sevm.currentTarget receiver < amount
-                        then (1 : B256) else 0 from rfl, if_neg hBal])
+                        then (1 : B256) else 0 from rfl, ite_eq_right hBal])
                     h_static h32'' hmsz'' (by omega)
                     (fun post hp =>
                       Or.inl ⟨post, rfl, hp.trans (hEb.trans hEr)⟩)
@@ -2375,7 +2375,7 @@ theorem receiverNotAddress_runCompiledTo {sevm : Sevm} {pre : Devm}
             rw [argWord_one_of_decodes h_dec, h_token]
             show (if sevm.currentTarget.toB256 = sevm.currentTarget.toB256
               then (1 : B256) else 0) = 1
-            rw [if_pos rfl]
+            rw [ite_eq_left rfl]
           · refine Func.runCompiledTo_branch_succ (G := g - 163) h_ne rfl
               (by simp only [Devm.stack_setMach, List.length_cons,
                 List.length_nil]; omega)
@@ -2479,7 +2479,7 @@ theorem fmint_amount_over_bound_reverts {sevm : Sevm} {pre : Devm}
       rw [argWord_one_of_decodes h_dec, h_token]
       show (if sevm.currentTarget.toB256 = sevm.currentTarget.toB256
         then (1 : B256) else 0) = 1
-      rw [if_pos rfl]
+      rw [ite_eq_left rfl]
     · show ((~~~ (0 : B256)) <<< (Nat.toB256 160).toNat).and
         (Sevm.argWord sevm 0) = 0
       rw [h_arg0, ← addressMask_eq_shl]
@@ -2500,7 +2500,7 @@ theorem fmint_amount_over_bound_reverts {sevm : Sevm} {pre : Devm}
       rw [h_arg2]
       show (if ~~~ (Devm.getStorVal pre sevm.currentTarget supplySlot) < amount
         then (1 : B256) else 0) = 1
-      rw [if_pos h_lt]
+      rw [ite_eq_left h_lt]
     func_run (3) [~~~ (Devm.getStorVal pre sevm.currentTarget supplySlot), 1]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     exact Func.runCompiledTo_revert_func (G := G - 24)
@@ -2647,7 +2647,7 @@ theorem frame_settles_of_exec_settles {msg : Msg} {benv : Benv} {xl : Xlot}
       subst h_evm
       unfold processMessage.settle at hset
       dsimp only [bind, Except.bind] at hset
-      rw [if_neg (by rw [herr]; simp only [Option.isSome_none, Bool.false_eq_true,
+      rw [ite_eq_right (by rw [herr]; simp only [Option.isSome_none, Bool.false_eq_true,
         not_false_eq_true])] at hset
       exact Or.inl (by rw [Except.ok.inj hset, herr])
     · rw [hx] at key
@@ -2655,7 +2655,7 @@ theorem frame_settles_of_exec_settles {msg : Msg} {benv : Benv} {xl : Xlot}
       subst h_evm
       unfold processMessage.settle at hset
       dsimp only [bind, Except.bind] at hset
-      rw [if_pos (show (post.withError (some SettledHalt.revert)).error.isSome
+      rw [ite_eq_left (show (post.withError (some SettledHalt.revert)).error.isSome
         = true from rfl)] at hset
       exact Or.inr (by rw [Except.ok.inj hset]; rfl)
     · rcases e with r | _ | r | r

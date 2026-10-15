@@ -258,7 +258,7 @@ private lemma mask_word_iff (x : B256) (c : UInt64) (hc : c.toNat < 2^32) :
     ((a &&& 0xffffffff00000000, b &&& 0), (c' &&& 0, d &&& 0)) =
         ((c <<< (32 : UInt64), 0), (0, 0)) ↔
       ((0, 0), (0, a >>> (32 : UInt64))) = ((0, 0), (0, c))
-  simp only [UInt64.and_zero, UInt64.zero_and]
+  simp only [UInt64.and_zero]
   constructor
   · intro h
     have ha := congrArg (fun z : B256 => z.1.1) h
@@ -420,7 +420,7 @@ theorem wrapper_true {sevm : Sevm} {b b' : Devm} {g : Nat} {sel v : B256}
   refine rx_dup2 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
   refine rx_lt (v := 0) (by
-    rw [B256.ltCheck, if_neg]
+    rw [B256.ltCheck, ite_eq_right]
     intro h
     have h1 := B256.toNat_lt_toNat h
     have h4 : (4 : B256).toNat = 4 := by decide
@@ -493,7 +493,7 @@ theorem wrapper_false {sevm : Sevm} {b b' : Devm} {g : Nat} {sel v : B256}
   refine rx_dup2 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
     Nat.reduceLT]) ?_
   refine rx_lt (v := 0) (by
-    rw [B256.ltCheck, if_neg]
+    rw [B256.ltCheck, ite_eq_right]
     intro h
     have h1 := B256.toNat_lt_toNat h
     have h4 : (4 : B256).toNat = 4 := by decide
@@ -541,7 +541,7 @@ theorem dispatch_supports {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome}
   refine rx_calldatasize (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.one_lt_ofNat]) ?_
   refine rx_lt (v := 0) (by
-    rw [B256.ltCheck, if_neg]
+    rw [B256.ltCheck, ite_eq_right]
     intro h
     have h1 := B256.toNat_lt_toNat h
     rw [B256.toNat_toB256_of_lt h_len'] at h1
@@ -560,7 +560,7 @@ theorem dispatch_supports {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome}
   refine rx_push (w := 0x01ffc9a7) (by decide) (by simp only [List.length_cons, List.length_nil,
     zero_add, Nat.reduceAdd, Nat.reduceLT]) ?_
   refine rx_eq (v := 1) (by
-    rw [B256.eqCheck, if_pos]
+    rw [B256.eqCheck, ite_eq_left]
     exact hsel.symm) (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
   refine rx_push (w := 0x44) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.reduceAdd, Nat.reduceLT]) ?_

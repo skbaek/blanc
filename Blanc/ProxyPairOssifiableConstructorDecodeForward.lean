@@ -45,7 +45,7 @@ private theorem Mem.size_write_of_lt {memory : Mem} {offset : Nat}
   rcases bytes with _ | ⟨byte, bytes⟩
   · exact absurd rfl hne
   · simp only [Mem.write]
-    rw [if_neg (by simpa only [List.length_cons] using Nat.not_le.mpr hlt)]
+    rw [ite_eq_right (by simpa only [List.length_cons] using Nat.not_le.mpr hlt)]
 
 private theorem decodeForwardHeadMemory_size (sevm : Sevm) :
     (decodeForwardHeadMemory sevm).size = 96 := by

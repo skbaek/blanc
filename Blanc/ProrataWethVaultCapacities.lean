@@ -109,7 +109,7 @@ theorem maxMintAfterAssetCap_trace
       exact selectedPrefix
     have returned := returnWord_trace returnPrefix returnRun
     have selected := minWord_eq_toB256_min roomFits cap
-    rw [if_pos roomLt] at selected
+    rw [ite_eq_left roomLt] at selected
     rw [← selected]
     exact returned
   · have zeroPrefix : (0 : B256) :: tail <<+ branchPre.stack := by
@@ -135,7 +135,7 @@ theorem maxMintAfterAssetCap_trace
       exact selectedPrefix
     have returned := returnWord_trace returnPrefix returnRun
     have selected := minWord_eq_toB256_min roomFits cap
-    rw [if_neg roomLt] at selected
+    rw [ite_eq_right roomLt] at selected
     rw [← selected]
     exact returned
 

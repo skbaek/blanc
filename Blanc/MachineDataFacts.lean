@@ -23,7 +23,7 @@ theorem B256.mul_comm (x y : B256) : x * y = y * x := by
 theorem B256.not_lt_of_ltCheck_eq_zero {x y : B256} (h : (x <? y) = 0) :
     ¬ x < y := by
   intro hlt
-  rw [B256.ltCheck, if_pos hlt] at h
+  rw [B256.ltCheck, ite_eq_left hlt] at h
   exact absurd h (by decide +kernel)
 
 /-- Equality of account states preserves a persistent-storage word at any key. -/

@@ -505,17 +505,17 @@ theorem wethGas_boSel {sevm : Sevm} {pre : Devm} :
               ∈ pre.accessedStorageKeys then balanceOfGasWarm else balanceOfGas) := by
   by_cases h : (⟨sevm.currentTarget, Sevm.dataWord sevm 4⟩ : Adr × B256)
       ∈ pre.accessedStorageKeys
-  · rw [if_pos h]
-    simp only [wethGas, wethGasWith, if_pos h]
+  · rw [ite_eq_left h]
+    simp only [wethGas, wethGasWith, ite_eq_left h]
     rfl
-  · rw [if_neg h]
-    simp only [wethGas, wethGasWith, if_neg h]
+  · rw [ite_eq_right h]
+    simp only [wethGas, wethGasWith, ite_eq_right h]
     rfl
 
 /-- `wethGas` at `decimals()`, for every state: it reads no storage. -/
 theorem wethGas_dcSel {sevm : Sevm} {pre : Devm} :
     wethGas dcSel sevm pre = some decimalsGas := by
-  simp only [wethGas, wethGasWith, if_neg dcSel_ne_boSel]
+  simp only [wethGas, wethGasWith, ite_eq_right dcSel_ne_boSel]
   rfl
 
 /-- **`balanceOf(address)` costs exactly what `wethGas` says it does — with no
@@ -554,11 +554,11 @@ theorem weth_balanceOf_gas_exact_wethGas {sevm : Sevm} {pre : Devm} {cost : Nat}
   rw [h_sel, wethGas_boSel] at h_cost
   by_cases h : (⟨sevm.currentTarget, Sevm.dataWord sevm 4⟩ : Adr × B256)
       ∈ pre.accessedStorageKeys
-  · rw [if_pos h] at h_cost
+  · rw [ite_eq_left h] at h_cost
     injection h_cost with h_cost
     subst h_cost
     exact weth_balanceOf_warm_gas_exact h_code hfork h_value h_sel h_stack h_mem h h_gas
-  · rw [if_neg h] at h_cost
+  · rw [ite_eq_right h] at h_cost
     injection h_cost with h_cost
     subst h_cost
     exact weth_balanceOf_gas_exact h_code hfork h_value h_sel h_stack h_mem h h_gas
@@ -687,20 +687,20 @@ theorem wethGas_le_max {sel : B256} {sevm : Sevm} {pre : Devm} {cost : Nat}
   simp only [wethGasMax, wethGasMaxWith]
   by_cases hb : sel = boSel
   · subst hb
-    rw [if_pos rfl] at h_cost ⊢
+    rw [ite_eq_left rfl] at h_cost ⊢
     refine ⟨_, rfl, ?_⟩
     injection h_cost with h_cost
     subst h_cost
     split <;> decide
-  · rw [if_neg hb] at h_cost ⊢
+  · rw [ite_eq_right hb] at h_cost ⊢
     by_cases hd : sel = dcSel
     · subst hd
-      rw [if_pos rfl] at h_cost ⊢
+      rw [ite_eq_left rfl] at h_cost ⊢
       refine ⟨_, rfl, ?_⟩
       injection h_cost with h_cost
       subst h_cost
       exact Nat.le_refl _
-    · rw [if_neg hd] at h_cost
+    · rw [ite_eq_right hd] at h_cost
       exact absurd h_cost (by simp only [reduceCtorEq, not_false_eq_true])
 
 end Blanc

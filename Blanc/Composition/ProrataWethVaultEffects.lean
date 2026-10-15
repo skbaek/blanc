@@ -216,7 +216,7 @@ private theorem updateAllowance_exact
       intro same
       simp only [B256.eqCheck, same, ↓reduceIte] at flagZero
       exact B256.zero_ne_one flagZero.symm
-    rw [if_neg different]
+    rw [ite_eq_right different]
     dsimp only
     rw [flagZero] at pa
     have pb : [wad, src] <<+ b.stack := cons_pref_cons_inv pa
@@ -340,7 +340,7 @@ private theorem updateAllowance_exact
       have covered : wad ≤ allowed := by
         rw [← B256.not_lt]
         intro less
-        rw [B256.ltCheck, if_pos less] at zero
+        rw [B256.ltCheck, ite_eq_left less] at zero
         exact B256.zero_ne_one zero.symm
       rw [zero] at pt
       have pu := cons_pref_cons_inv pt
@@ -368,7 +368,7 @@ private theorem updateAllowance_exact
       have flagEq := pref_head_unique po (pref_append [flag] p.stack)
       have complementZero : ~~~ allowed = 0 := by
         by_contra different
-        simp only [B256.eqCheck, if_neg different] at flagEq
+        simp only [B256.eqCheck, ite_eq_right different] at flagEq
         exact flagNe flagEq.symm
       refine Or.inl ⟨B256.eq_max_of_not_eq_zero complementZero, ?_⟩
       exact (Func.of_inv Devm.getStor Devm.getStor (by func_inv) run).symm.trans
@@ -380,9 +380,9 @@ private theorem updateAllowance_exact
     have flagEq := pref_head_unique pa (pref_append [flag] b.stack)
     have same : src = sevm.caller.toB256 := by
       by_contra different
-      simp only [B256.eqCheck, if_neg different] at flagEq
+      simp only [B256.eqCheck, ite_eq_right different] at flagEq
       exact flagNe flagEq.symm
-    rw [if_pos same]
+    rw [ite_eq_left same]
     exact (Func.of_inv Devm.getStor Devm.getStor (by func_inv) run).symm.trans
       ((funext (Devm.Burn.getStor hc)).trans
         ((funext (Devm.PopBurn.getStor hb)).trans storage.symm))
@@ -1284,7 +1284,7 @@ theorem transferFromBody_exactEffect
   have covered : wad ≤ sourceBalance := by
     rw [← B256.not_lt]
     intro less
-    rw [B256.ltCheck, if_pos less] at lessZero
+    rw [B256.ltCheck, ite_eq_left less] at lessZero
     exact B256.zero_ne_one lessZero.symm
   rw [lessZero] at hs11
   have hs12 : [sourceBalance, wad, wad, src] <<+ a12.stack :=
@@ -1529,11 +1529,11 @@ theorem weth_transferFrom_compiled_allowance_effect
     (getStor_eq_of_state_eq entryState sevm.currentTarget)).trans off
   dsimp only
   by_cases same : Sevm.argWord sevm 0 = sevm.caller.toB256
-  · rw [if_pos same]
-    simp only [WethAllowanceUpdateEffect, if_pos same] at effect
+  · rw [ite_eq_left same]
+    simp only [WethAllowanceUpdateEffect, ite_eq_left same] at effect
     exact off.trans (Stor.AgreeOffAdr.of_eq (congrFun effect.symm sevm.currentTarget))
-  · rw [if_neg same]
-    simp only [WethAllowanceUpdateEffect, if_neg same] at effect
+  · rw [ite_eq_right same]
+    simp only [WethAllowanceUpdateEffect, ite_eq_right same] at effect
     obtain ⟨valid, result⟩ := effect
     have read := off _ valid
     change pre.getStorVal sevm.currentTarget _ = allowancePre.getStorVal sevm.currentTarget _ at read
@@ -1585,7 +1585,7 @@ theorem WethAllowanceInvocation.allowance_effect (call : WethAllowanceInvocation
     by_cases same : Sevm.argWord call.sevm 0 = call.sevm.caller.toB256
     · simpa only [writtenPair?, approval, Bool.false_eq_true, ↓reduceIte, pair?, same,
       Option.filter_none] using effect
-    · simp only [if_neg same] at effect
+    · simp only [ite_eq_right same] at effect
       obtain ⟨valid, result⟩ := effect
       rcases result with ⟨maximum, silent⟩ | ⟨finite, covered, stored, witness⟩
       · simpa only [writtenPair?, approval, Bool.false_eq_true, ↓reduceIte, Option.filter, pair?,
@@ -1618,7 +1618,7 @@ theorem WethAllowanceInvocation.transferFrom_writer_has_sstore
   by_cases same : Sevm.argWord call.sevm 0 = call.sevm.caller.toB256
   · simp only [writtenPair?, approval, Bool.false_eq_true, ↓reduceIte, pair?, same,
     Option.filter_none, reduceCtorEq] at writer
-  · simp only [if_neg same] at effect
+  · simp only [ite_eq_right same] at effect
     rcases effect.2 with ⟨maximum, silent⟩ | ⟨finite, covered, stored, witness⟩
     · simp only [writtenPair?, approval, Bool.false_eq_true, ↓reduceIte, Option.filter, pair?,
       same, maximum, bne_self_eq_false, reduceCtorEq] at writer
@@ -1702,7 +1702,7 @@ theorem ExactWethChildSuccess.worldProgramRun
   have childNotError : ¬ child.error.isSome := by
     simpa only [Bool.not_eq_true, Option.isSome_eq_false_iff, Option.isNone_iff_eq_none] using clean
   have finalLogs : parentPost.logs = parentPre.logs ++ rawPost.logs := by
-    rw [if_neg childNotError, settledLogs] at postLogs
+    rw [ite_eq_right childNotError, settledLogs] at postLogs
     exact postLogs
   refine ⟨childEvm.sta, childEvm.dyna, rawPost, ?_, ?_, ?_, ?_, ?_,
     stackEq, memoryEq, logsEq, storageWorld, compiled, rawError,

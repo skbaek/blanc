@@ -335,7 +335,7 @@ theorem root_run {fs : List SFunc} {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
   refine rx_eq (S := [])
     (x := systemAddress.toB256) (y := sevm.caller.toB256) (v := 1)
     (by rw [hcaller]; simp only [B256.eqCheck, ite_true])
-    (by simp only [List.length_cons, List.length_nil]; decide) ?_
+    (by simp only [List.length_nil]; decide) ?_
   rw [show G + 13 + 31 +
       sstoreCost sevm b (sevm.benvStat.time % (0x1fff : B256)) sevm.benvStat.time +
       sstoreCost sevm

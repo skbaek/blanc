@@ -144,7 +144,7 @@ theorem ProcessCreateMessage.ok_setCode_state_of_clean
       unfold processCreateMessage.settle at hsettle
       simp only [bind, Except.bind] at hsettle
       by_cases hinnerNone : inner.error.isNone = true
-      · rw [if_pos hinnerNone] at hsettle
+      · rw [ite_eq_left hinnerNone] at hsettle
         cases hcharge :
           processCreateMessage.chargeCodeGas
             msg.benv.stat.rules inner with
@@ -179,7 +179,7 @@ theorem ProcessCreateMessage.ok_setCode_state_of_clean
             · rw [heq]
               change charged.state.setCode msg.currentTarget _ = _
               rw [chargeCodeGas_state_ok hcharge]
-      · rw [if_neg hinnerNone] at hsettle
+      · rw [ite_eq_right hinnerNone] at hsettle
         have heq := Except.ok.inj hsettle
         rw [heq] at herror
         change inner.error.isSome = false at herror

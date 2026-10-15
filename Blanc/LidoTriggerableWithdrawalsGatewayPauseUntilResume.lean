@@ -282,7 +282,7 @@ private theorem pauseUntilGuard_effect
         simpa only [hflag] using pPast
       have hnot : ¬ expiry < sevm.benvStat.time := by
         intro hpast
-        rw [B256.ltCheck, if_pos hpast] at hflag
+        rw [B256.ltCheck, ite_eq_left hpast] at hflag
         exact (by decide : (1 : B256) ≠ 0) hflag
       exact ⟨sentinelTestPre, hpop, testRun,
         (popBurn_pref (Devm.PopBurn.of_popBurnBy hpop) pPast').2, hnot⟩
@@ -599,7 +599,7 @@ theorem resume_ok_authorized_effect
       B256.ltCheck sevm.data.length.toB256 (4 : B256) = 0 := by
     rw [calldata, resumeCalldata_length]
     change B256.ltCheck (4 : B256) 4 = 0
-    rw [B256.ltCheck, if_neg (lt_irrefl _)]
+    rw [B256.ltCheck, ite_eq_right (lt_irrefl _)]
   have selected : Sevm.selector sevm = selResume := by
     apply selector_eq_of_data_eq_abiSelectorBytes_append
         (selected := selResume) (tail := [])

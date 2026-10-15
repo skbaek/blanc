@@ -86,7 +86,7 @@ theorem depositCapGuard_runCompiledTo
   case h_val =>
     rw [show (oldCountWord * 32 : B256).toNat = 576 by decide +kernel,
       hread]
-    rw [B256.ltCheck, if_pos hcap]
+    rw [B256.ltCheck, ite_eq_left hcap]
   case h_arm =>
     rw [show (oldCountWord * 32 : B256).toNat = 576 by decide +kernel,
       hmemory]

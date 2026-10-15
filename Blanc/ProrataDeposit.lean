@@ -232,7 +232,7 @@ private theorem deposit_guard_prefix
       exact (by decide +kernel : (0 : B256) + 1 ≠ 0) hz
   have hfa : (maxValue <? sevm.value) = 0 := by
     simp only [B256.ltCheck]
-    exact if_neg ha
+    exact ite_eq_right ha
   have hpAfter :
       (Devm.getBal pre sevm.currentTarget - sevm.value) :: 0 ::
         maxBalance :: supplySlot :: [] <<+ after.stack := by
@@ -371,7 +371,7 @@ theorem deposit_effect
     have hcap : maxBalance = maxSupply := by decide +kernel
     have hlt' : maxBalance < S + m := by rwa [hcap]
     have hone : maxBalance <? (S + m) = 1 := by
-      simp only [B256.ltCheck, if_pos hlt']
+      simp only [B256.ltCheck, ite_eq_left hlt']
     exact B256.zero_ne_one (hone.symm.trans hflag).symm
   have p19 : (S + m) :: m :: S :: (B0 + 1) :: 0 :: maxBalance :: supplySlot :: [] <<+
       s19.stack := (popBurn_pref hpop p18).2

@@ -1247,7 +1247,7 @@ theorem Exec.Frame.primaryFlowAtom_eq_some_of_flowAction_eq_some
     (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = some action) :
     primaryFlowAtom frame.sevm = some action.atom := by
   unfold Blanc.Weth10.Exec.Frame.flowAction? at classified
-  rw [if_pos context.invocation] at classified
+  rw [ite_eq_left context.invocation] at classified
   have mapped := congrArg (Option.map FlowAction.atom) classified
   simpa only [Option.map_map, Function.comp_def, Option.map_id_fun', id_eq, Option.map_some] using
     mapped
@@ -1270,7 +1270,7 @@ theorem Exec.Frame.BalanceSstoreOccurrence.classify_of_primary_role
   cases classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
   | none =>
       unfold Blanc.Weth10.Exec.Frame.flowAction? at classified
-      rw [if_pos context.invocation, primary] at classified
+      rw [ite_eq_left context.invocation, primary] at classified
       simp only [Option.map_some, reduceCtorEq] at classified
   | some action =>
       have selected :=
@@ -4864,7 +4864,7 @@ theorem Exec.Frame.BalanceSstoreOccurrence.classify_of_receive
     cases classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame with
     | none =>
         unfold Blanc.Weth10.Exec.Frame.flowAction? at classified
-        rw [if_pos context.invocation] at classified
+        rw [ite_eq_left context.invocation] at classified
         simp only [primaryFlowAtom, empty, ↓reduceIte, Option.map_some, reduceCtorEq] at classified
     | some action =>
         have atomEq : action.atom =

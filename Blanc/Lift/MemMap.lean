@@ -113,21 +113,21 @@ theorem Mem.write_base (μ : Mem) (n : Nat) {ys : Bytes} (hne : ys ≠ []) :
   | cons y ys =>
     simp only [Mem.write]
     by_cases h1 : n + (y :: ys).length ≤ μ.size
-    · rw [if_pos h1]
+    · rw [ite_eq_left h1]
       by_cases h2 : n + (y :: ys).length ≤ μ.data.size
-      · rw [if_pos h2]
+      · rw [ite_eq_left h2]
         exact ⟨μ.data, rfl, h2, Nat.le_refl _, h1, fun _ _ => rfl⟩
-      · rw [if_neg h2]
+      · rw [ite_eq_right h2]
         refine ⟨Array.copyD μ.data
           (Array.replicate (n + (y :: ys).length) 0x00), rfl, ?_, Nat.le_refl _, h1, ?_⟩
         · rw [Array.size_copyD, Array.size_replicate]
         · intro i _
           rw [Array.getD_copyD _ _ _ (by rw [Array.size_replicate]; omega)]
           by_cases hi : i < μ.data.size
-          · rw [if_pos hi]
-          · rw [if_neg hi, Array.getD_replicate_zero,
+          · rw [ite_eq_left hi]
+          · rw [ite_eq_right hi, Array.getD_replicate_zero,
               Array.getD_of_size_le 0 (Nat.not_lt.mp hi)]
-    · rw [if_neg h1]
+    · rw [ite_eq_right h1]
       have hle : n + (y :: ys).length ≤ ceil32 (n + (y :: ys).length) :=
         Nat.le_ceil32 _
       refine ⟨Array.copyD μ.data
@@ -150,7 +150,7 @@ theorem Mem.write_agree (μ : Mem) (n : Nat) (ys : Bytes) :
     obtain ⟨A, hdata, hA, hsz, _, hagree⟩ := Mem.write_base μ n (ys := y :: ys) (by simp only [ne_eq,
       reduceCtorEq, not_false_eq_true])
     refine ⟨hsz, fun i hi hout => ?_⟩
-    rw [hdata, Array.getD_writeD 0 _ A n i hA, if_neg (by omega)]
+    rw [hdata, Array.getD_writeD 0 _ A n i hA, ite_eq_right (by omega)]
     exact hagree i hi
 
 /-- A written word reads back, on any memory. -/
@@ -170,7 +170,7 @@ theorem Mem.memWord_write_word (μ : Mem) (n : Nat) (v : B256) :
     · intro j h1 h2
       simp only [List.getElem_map, List.getElem_range]
       rw [Array.getD_writeD 0 _ A n (n + j) hA,
-        if_pos (by simp only [Array.getD_eq_getD_getElem?, List.length_map, List.length_range] at h1; omega)]
+        ite_eq_left (by simp only [Array.getD_eq_getD_getElem?, List.length_map, List.length_range] at h1; omega)]
       simp only [add_tsub_cancel_left, List.getD_eq_getElem?_getD,
         List.getElem?_eq_getElem h2, Option.getD_some]
   rw [hmap]
@@ -537,7 +537,7 @@ theorem step_mem_sound (b : Bool) {sevm : Sevm} {pre post : Devm} {n : Ninst}
   | false => exact ⟨h', memMatches_nil _ _⟩
   | true =>
     refine ⟨?_, absMem_sound hframe hstack hm run⟩
-    simp only [if_true]
+    simp only [ite_true]
     cases ht : memTop n a μ with
     | none => cases a' <;> exact h'
     | some v =>
@@ -603,7 +603,7 @@ theorem RetIn.of_step (b : Bool) {n : Ninst} {a a' : List AVal} {μ : MemMap}
     · exact .inl (by simpa only [Bool.false_eq_true, ↓reduceIte] using h)
     · simp only [Bool.false_eq_true, ↓reduceIte, List.map_nil, List.not_mem_nil] at h
   | true =>
-    simp only [if_true] at h
+    simp only [ite_true] at h
     rcases h with h | h
     · cases ht : memTop n a μ with
       | none => rw [ht] at h; exact .inl (by cases a' <;> exact h)

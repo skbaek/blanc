@@ -5259,7 +5259,7 @@ private theorem previewWithdrawProduct_13918_compile :
   all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [finishQuotient_up_14051_compile, hb0, hb1, hb2]
-  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  simp only [bind, Option.bind, pure, Pure.pure]
   have hj0 : ((prorataWethVaultCodeChunk54.drop 94).take 32) ++ ((prorataWethVaultCodeChunk54.drop 126).take 85) = (prorataWethVaultCodeChunk54.drop 94).take 117 := by
     simpa only [List.drop_drop, Nat.reduceAdd] using
       (List.take_add (l := prorataWethVaultCodeChunk54.drop 94) (i := 32) (j := 85)).symm
@@ -5300,7 +5300,7 @@ private theorem previewWithdrawArithmetic_13292_compile :
     (prorataWethVaultCodeChunk51.drop 240 ++ prorataWethVaultCodeChunk52 ++ prorataWethVaultCodeChunk53 ++ prorataWethVaultCodeChunk54.take 93) (prorataWethVaultCodeChunk54.drop 94 ++ prorataWethVaultCodeChunk55.take 11)
     previewWithdrawMulDiv_13296_compile (by rw [hlen]) (by decide) previewWithdrawProduct_13918_compile
   rw [hbranch]
-  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  simp only [List.append_assoc]
   have hheader : ([0x61, (13917 >>> 8).toUInt8, Nat.toUInt8 13917, 0x57] : Bytes) = (prorataWethVaultCodeChunk51.drop 236).take 4 := by rfl
   have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk54.drop 93).take 1 := by rfl
   rw [hheader, hjump]
@@ -5999,7 +5999,7 @@ private theorem convertArithmetic_14454_compile :
     (prorataWethVaultCodeChunk56.drop 122 ++ prorataWethVaultCodeChunk57 ++ prorataWethVaultCodeChunk58.take 167) (prorataWethVaultCodeChunk58.drop 168 ++ prorataWethVaultCodeChunk59 ++ prorataWethVaultCodeChunk60.take 109)
     convertMulDiv_14458_compile (by rw [hlen]) (by decide) convertShiftedDiv_15016_compile
   rw [hbranch]
-  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  simp only [List.append_assoc]
   have hheader : ([0x61, (15015 >>> 8).toUInt8, Nat.toUInt8 15015, 0x57] : Bytes) = (prorataWethVaultCodeChunk56.drop 118).take 4 := by rfl
   have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk58.drop 167).take 1 := by rfl
   rw [hheader, hjump]
@@ -6323,7 +6323,7 @@ private theorem approveStage_14188_compile :
   all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [approveKey_14207_compile, hb0]
-  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  simp only [bind, Option.bind, pure, Pure.pure]
   have hj0 : ((prorataWethVaultCodeChunk55.drop 108).take 19) ++ ((prorataWethVaultCodeChunk55.drop 127).take 99) = (prorataWethVaultCodeChunk55.drop 108).take 118 := by
     simpa only [List.drop_drop, Nat.reduceAdd] using
       (List.take_add (l := prorataWethVaultCodeChunk55.drop 108) (i := 19) (j := 99)).symm
@@ -6683,7 +6683,7 @@ private theorem transferStage_12960_compile :
   all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [transferKey_12981_compile, hb0]
-  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  simp only [bind, Option.bind, pure, Pure.pure]
   have hj0 : ((prorataWethVaultCodeChunk50.drop 160).take 21) ++ (prorataWethVaultCodeChunk50.drop 181) = prorataWethVaultCodeChunk50.drop 160 := by
     simpa only [List.drop_drop, Nat.reduceAdd] using
       List.take_append_drop 21 (prorataWethVaultCodeChunk50.drop 160)
@@ -7684,7 +7684,7 @@ private theorem depositViewArithmetic_181_compile :
     (prorataWethVaultCodeChunk0.drop 185 ++ prorataWethVaultCodeChunk1 ++ prorataWethVaultCodeChunk2.take 230) (prorataWethVaultCodeChunk2.drop 231 ++ prorataWethVaultCodeChunk3.take 116)
     depositViewMul_185_compile (by rw [hlen]) (by decide) depositViewProduct_743_compile
   rw [hbranch]
-  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  simp only [List.append_assoc]
   have hheader : ([0x61, (742 >>> 8).toUInt8, Nat.toUInt8 742, 0x57] : Bytes) = (prorataWethVaultCodeChunk0.drop 181).take 4 := by rfl
   have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk2.drop 230).take 1 := by rfl
   rw [hheader, hjump]
@@ -8125,7 +8125,7 @@ private theorem depositViewArithmetic_2506_compile :
     (prorataWethVaultCodeChunk9.drop 206 ++ prorataWethVaultCodeChunk10 ++ prorataWethVaultCodeChunk11.take 251) (prorataWethVaultCodeChunk11.drop 252 ++ prorataWethVaultCodeChunk12.take 137)
     depositViewMul_2510_compile (by rw [hlen]) (by decide) depositViewProduct_3068_compile
   rw [hbranch]
-  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  simp only [List.append_assoc]
   have hheader : ([0x61, (3067 >>> 8).toUInt8, Nat.toUInt8 3067, 0x57] : Bytes) = (prorataWethVaultCodeChunk9.drop 202).take 4 := by rfl
   have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk11.drop 251).take 1 := by rfl
   rw [hheader, hjump]
@@ -8571,7 +8571,7 @@ private theorem directTransferStage_7757_compile :
   all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [directTransferSlot_7776_compile, hb0]
-  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  simp only [bind, Option.bind, pure, Pure.pure]
   have hj0 : ((prorataWethVaultCodeChunk30.drop 77).take 19) ++ ((prorataWethVaultCodeChunk30.drop 96).take 4) = (prorataWethVaultCodeChunk30.drop 77).take 23 := by
     simpa only [List.drop_drop, Nat.reduceAdd] using
       (List.take_add (l := prorataWethVaultCodeChunk30.drop 77) (i := 19) (j := 4)).symm
@@ -9332,7 +9332,7 @@ private theorem previewMintArithmetic_6528_compile :
     (prorataWethVaultCodeChunk25.drop 132 ++ prorataWethVaultCodeChunk26 ++ prorataWethVaultCodeChunk27.take 241) (prorataWethVaultCodeChunk27.drop 242 ++ prorataWethVaultCodeChunk28 ++ prorataWethVaultCodeChunk29.take 247)
     previewMintMul_6532_compile (by rw [hlen]) (by decide) previewMintShift_7154_compile
   rw [hbranch]
-  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  simp only [List.append_assoc]
   have hheader : ([0x61, (7153 >>> 8).toUInt8, Nat.toUInt8 7153, 0x57] : Bytes) = (prorataWethVaultCodeChunk25.drop 128).take 4 := by rfl
   have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk27.drop 241).take 1 := by rfl
   rw [hheader, hjump]
@@ -9968,7 +9968,7 @@ private theorem redeemArithmetic_4382_compile :
     (prorataWethVaultCodeChunk17.drop 34 ++ prorataWethVaultCodeChunk18 ++ prorataWethVaultCodeChunk19.take 80) (prorataWethVaultCodeChunk19.drop 81 ++ prorataWethVaultCodeChunk20 ++ prorataWethVaultCodeChunk21.take 23)
     redeemMul_4386_compile (by rw [hlen]) (by decide) redeemShift_4945_compile
   rw [hbranch]
-  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  simp only [List.append_assoc]
   have hheader : ([0x61, (4944 >>> 8).toUInt8, Nat.toUInt8 4944, 0x57] : Bytes) = (prorataWethVaultCodeChunk17.drop 30).take 4 := by rfl
   have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk19.drop 80).take 1 := by rfl
   rw [hheader, hjump]
@@ -10609,7 +10609,7 @@ private theorem mintArithmetic_8017_compile :
     (prorataWethVaultCodeChunk31.drop 85 ++ prorataWethVaultCodeChunk32 ++ prorataWethVaultCodeChunk33.take 195) (prorataWethVaultCodeChunk33.drop 196 ++ prorataWethVaultCodeChunk34 ++ prorataWethVaultCodeChunk35.take 202)
     mintMul_8021_compile (by rw [hlen]) (by decide) mintShift_8644_compile
   rw [hbranch]
-  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  simp only [List.append_assoc]
   have hheader : ([0x61, (8643 >>> 8).toUInt8, Nat.toUInt8 8643, 0x57] : Bytes) = (prorataWethVaultCodeChunk31.drop 81).take 4 := by rfl
   have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk33.drop 195).take 1 := by rfl
   rw [hheader, hjump]
@@ -11092,7 +11092,7 @@ private theorem withdrawProduct_6206_compile :
   all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [withdrawFinish_6340_compile, hb0, hb1, hb2]
-  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  simp only [bind, Option.bind, pure, Pure.pure]
   have hj0 : ((prorataWethVaultCodeChunk24.drop 62).take 33) ++ ((prorataWethVaultCodeChunk24.drop 95).take 85) = (prorataWethVaultCodeChunk24.drop 62).take 118 := by
     simpa only [List.drop_drop, Nat.reduceAdd] using
       (List.take_add (l := prorataWethVaultCodeChunk24.drop 62) (i := 33) (j := 85)).symm
@@ -11114,7 +11114,7 @@ private theorem withdrawArithmetic_5579_compile :
     (prorataWethVaultCodeChunk21.drop 207 ++ prorataWethVaultCodeChunk22 ++ prorataWethVaultCodeChunk23 ++ prorataWethVaultCodeChunk24.take 61) ((prorataWethVaultCodeChunk24.drop 62).take 174)
     withdrawMul_5583_compile (by rw [hlen]) (by decide) withdrawProduct_6206_compile
   rw [hbranch]
-  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  simp only [List.append_assoc]
   have hheader : ([0x61, (6205 >>> 8).toUInt8, Nat.toUInt8 6205, 0x57] : Bytes) = (prorataWethVaultCodeChunk21.drop 203).take 4 := by rfl
   have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk24.drop 61).take 1 := by rfl
   rw [hheader, hjump]
@@ -11767,7 +11767,7 @@ private theorem maxWithdrawArithmetic_1254_compile :
     (prorataWethVaultCodeChunk4.drop 234 ++ prorataWethVaultCodeChunk5 ++ prorataWethVaultCodeChunk6 ++ prorataWethVaultCodeChunk7.take 58) (prorataWethVaultCodeChunk7.drop 59 ++ prorataWethVaultCodeChunk8 ++ prorataWethVaultCodeChunk9.take 35)
     maxWithdrawMul_1258_compile (by rw [hlen]) (by decide) maxWithdrawShift_1851_compile
   rw [hbranch]
-  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  simp only [List.append_assoc]
   have hheader : ([0x61, (1850 >>> 8).toUInt8, Nat.toUInt8 1850, 0x57] : Bytes) = (prorataWethVaultCodeChunk4.drop 230).take 4 := by rfl
   have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk7.drop 58).take 1 := by rfl
   rw [hheader, hjump]
@@ -12316,7 +12316,7 @@ private theorem maxMintArithmetic_3378_compile :
     (prorataWethVaultCodeChunk13.drop 54 ++ prorataWethVaultCodeChunk14 ++ prorataWethVaultCodeChunk15.take 163) (prorataWethVaultCodeChunk15.drop 164 ++ prorataWethVaultCodeChunk16.take 79)
     maxMintMul_3382_compile (by rw [hlen]) (by decide) maxMintProduct_4004_compile
   rw [hbranch]
-  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  simp only [List.append_assoc]
   have hheader : ([0x61, (4003 >>> 8).toUInt8, Nat.toUInt8 4003, 0x57] : Bytes) = (prorataWethVaultCodeChunk13.drop 50).take 4 := by rfl
   have hjump : ([0x5b] : Bytes) = (prorataWethVaultCodeChunk15.drop 163).take 1 := by rfl
   rw [hheader, hjump]
@@ -13729,7 +13729,7 @@ private theorem depositAux_compile :
   all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [depositAuxCaller_compile, hb0]
-  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  simp only [bind, Option.bind, pure, Pure.pure]
   have hj0 : ((prorataWethVaultCodeChunk61.drop 59).take 4) ++ (prorataWethVaultCodeChunk61.drop 63) = prorataWethVaultCodeChunk61.drop 59 := by
     simpa only [List.drop_drop, Nat.reduceAdd] using
       List.take_append_drop 4 (prorataWethVaultCodeChunk61.drop 59)
@@ -13818,7 +13818,7 @@ private theorem mintAuxWrites_compile :
   all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [mintAuxTail_compile, hb0, hb1, hb2]
-  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  simp only [bind, Option.bind, pure, Pure.pure]
   have hj0 : ((prorataWethVaultCodeChunk63.drop 56).take 21) ++ ((prorataWethVaultCodeChunk63.drop 77).take 48) = (prorataWethVaultCodeChunk63.drop 56).take 69 := by
     simpa only [List.drop_drop, Nat.reduceAdd] using
       (List.take_add (l := prorataWethVaultCodeChunk63.drop 56) (i := 21) (j := 48)).symm
@@ -14155,7 +14155,7 @@ private theorem mintAux_compile :
   all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [mintAuxCaller_compile, hb0]
-  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  simp only [bind, Option.bind, pure, Pure.pure]
   have hj0 : ((prorataWethVaultCodeChunk62.drop 141).take 4) ++ (prorataWethVaultCodeChunk62.drop 145) = prorataWethVaultCodeChunk62.drop 141 := by
     simpa only [List.drop_drop, Nat.reduceAdd] using
       List.take_append_drop 4 (prorataWethVaultCodeChunk62.drop 141)
@@ -14225,7 +14225,7 @@ private theorem withdrawBurnAuxLog_compile :
   all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [withdrawBurnAuxTail_compile, hb0]
-  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  simp only [bind, Option.bind, pure, Pure.pure]
   have hj0 : ((prorataWethVaultCodeChunk66.drop 166).take 59) ++ ((prorataWethVaultCodeChunk66.drop 225).take 10) = (prorataWethVaultCodeChunk66.drop 166).take 69 := by
     simpa only [List.drop_drop, Nat.reduceAdd] using
       (List.take_add (l := prorataWethVaultCodeChunk66.drop 166) (i := 59) (j := 10)).symm
@@ -14365,7 +14365,7 @@ private theorem withdrawBurnAuxWrites_compile :
   all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [withdrawBurnAuxCall_compile, hb0, hb1]
-  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  simp only [bind, Option.bind, pure, Pure.pure]
   have hj0 : ((prorataWethVaultCodeChunk66.drop 48).take 12) ++ ((prorataWethVaultCodeChunk66.drop 60).take 48) = (prorataWethVaultCodeChunk66.drop 48).take 60 := by
     simpa only [List.drop_drop, Nat.reduceAdd] using
       (List.take_add (l := prorataWethVaultCodeChunk66.drop 48) (i := 12) (j := 48)).symm
@@ -14478,7 +14478,7 @@ private theorem redeemBurnAuxLog_compile :
   all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [redeemBurnAuxTail_compile, hb0]
-  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  simp only [bind, Option.bind, pure, Pure.pure]
   have hj0 : ((prorataWethVaultCodeChunk67.drop 141).take 59) ++ ((prorataWethVaultCodeChunk67.drop 200).take 10) = (prorataWethVaultCodeChunk67.drop 141).take 69 := by
     simpa only [List.drop_drop, Nat.reduceAdd] using
       (List.take_add (l := prorataWethVaultCodeChunk67.drop 141) (i := 59) (j := 10)).symm
@@ -14618,7 +14618,7 @@ private theorem redeemBurnAuxWrites_compile :
   all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [redeemBurnAuxCall_compile, hb0, hb1]
-  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  simp only [bind, Option.bind, pure, Pure.pure]
   have hj0 : ((prorataWethVaultCodeChunk67.drop 23).take 12) ++ ((prorataWethVaultCodeChunk67.drop 35).take 48) = (prorataWethVaultCodeChunk67.drop 23).take 60 := by
     simpa only [List.drop_drop, Nat.reduceAdd] using
       (List.take_add (l := prorataWethVaultCodeChunk67.drop 23) (i := 12) (j := 48)).symm
@@ -14689,7 +14689,7 @@ private def transferAuxGuardPrefix : Line := loadWord ownerWord ++ [sload] ++ ms
 private theorem transferAuxGuardPrefix_size : prefixByteSize transferAuxGuardPrefix = 18 := by rfl
 
 private theorem transferAuxTrue_compile : Func.compile vaultTable 16900 (returnTrue) = some ((prorataWethVaultCodeChunk66.drop 4).take 8) := by
-  simp only [returnTrue, mstoreAt, returnMemoryRange, prepend, Func.compile]
+  simp only [returnTrue, mstoreAt, prepend, Func.compile]
   rfl
 
 open ProrataWethVault Jaune.Ninst Ninst in
@@ -14805,7 +14805,7 @@ open ProrataWethVault Jaune.Ninst Ninst in
 private def maxMintAuxQuote : Func := loadWord quoteWord +++ Func.call returnWordSlot
 
 private theorem maxMintAuxQuote_compile : Func.compile vaultTable 17430 (maxMintAuxQuote) = some ((prorataWethVaultCodeChunk68.drop 22).take 8) := by
-  simp only [maxMintAuxQuote, ProrataWethVault.shareRoom, ProrataWethVault.loadWord, prepend, Func.compile, vault_table_returnWord]
+  simp only [maxMintAuxQuote, ProrataWethVault.loadWord, prepend, Func.compile, vault_table_returnWord]
   rfl
 
 open ProrataWethVault Jaune.Ninst Ninst in
@@ -15281,7 +15281,7 @@ private theorem withdrawQuoteAux_compile :
   all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [withdrawQuoteAuxCaller_compile, hb0]
-  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  simp only [bind, Option.bind, pure, Pure.pure]
   have hj0 : ((prorataWethVaultCodeChunk63.drop 223).take 4) ++ (prorataWethVaultCodeChunk63.drop 227) = prorataWethVaultCodeChunk63.drop 223 := by
     simpa only [List.drop_drop, Nat.reduceAdd] using
       List.take_append_drop 4 (prorataWethVaultCodeChunk63.drop 223)
@@ -15708,7 +15708,7 @@ private theorem redeemQuoteAux_compile :
   all_goals discharge_prepend_acceptance
   simp only [Nat.reduceAdd]
   rw [redeemQuoteAuxCaller_compile, hb0]
-  simp only [bind, Option.bind, pure, Pure.pure, List.append_assoc]
+  simp only [bind, Option.bind, pure, Pure.pure]
   have hj0 : ((prorataWethVaultCodeChunk64.drop 176).take 4) ++ (prorataWethVaultCodeChunk64.drop 180) = prorataWethVaultCodeChunk64.drop 176 := by
     simpa only [List.drop_drop, Nat.reduceAdd] using
       List.take_append_drop 4 (prorataWethVaultCodeChunk64.drop 176)
@@ -15733,7 +15733,7 @@ private theorem vaultTable_source : vaultTable = vaultEntries := by
   simp only [vaultTable, vaultEntries, vault_aux_source, table, hmain, hrevert, hreturn,
     aux_depositAfterQuote_size, aux_mintAfterQuote_size, aux_withdrawAfterQuote_size,
     aux_redeemAfterQuote_size, aux_transferStaged_size, aux_withdrawBurn_size,
-    aux_redeemBurn_size, aux_maxMintAfterAssetCap_size, Nat.reduceAdd]
+    aux_redeemBurn_size, Nat.reduceAdd]
 
 private theorem vaultTableTail10_compile :
     Table.compile vaultTable [(17378, ProrataWethVault.maxMintAfterAssetCap)] = some (prorataWethVaultCodeChunk67.drop 226 ++ prorataWethVaultCodeChunk68.take 73) := by
@@ -15754,7 +15754,7 @@ private theorem vaultTableTail9_compile :
   rw [Table.compile]
   simp only [Nat.reduceAdd]
   rw [redeemBurnAux_compile, vaultTableTail10_compile]
-  simp only [Table.compile, bind, Option.bind, pure, Pure.pure, List.append_nil]
+  simp only [bind, Option.bind, pure, Pure.pure]
   have hmarker : ([Jinst.toUInt8 .jumpdest] : Bytes) = (prorataWethVaultCodeChunk66.drop 251).take 1 := by rfl
   rw [hmarker]
   try simp only [List.append_assoc]
@@ -15772,7 +15772,7 @@ private theorem vaultTableTail8_compile :
   rw [Table.compile]
   simp only [Nat.reduceAdd]
   rw [withdrawBurnAux_compile, vaultTableTail9_compile]
-  simp only [Table.compile, bind, Option.bind, pure, Pure.pure, List.append_nil]
+  simp only [bind, Option.bind, pure, Pure.pure]
   have hmarker : ([Jinst.toUInt8 .jumpdest] : Bytes) = (prorataWethVaultCodeChunk66.drop 20).take 1 := by rfl
   rw [hmarker]
   try simp only [List.append_assoc]
@@ -15790,7 +15790,7 @@ private theorem vaultTableTail7_compile :
   rw [Table.compile]
   simp only [Nat.reduceAdd]
   rw [transferAux_compile, vaultTableTail8_compile]
-  simp only [Table.compile, bind, Option.bind, pure, Pure.pure, List.append_nil]
+  simp only [bind, Option.bind, pure, Pure.pure]
   have hmarker : ([Jinst.toUInt8 .jumpdest] : Bytes) = (prorataWethVaultCodeChunk65.drop 128).take 1 := by rfl
   rw [hmarker]
   try simp only [List.append_assoc]
@@ -15808,7 +15808,7 @@ private theorem vaultTableTail6_compile :
   rw [Table.compile]
   simp only [Nat.reduceAdd]
   rw [redeemQuoteAux_compile, vaultTableTail7_compile]
-  simp only [Table.compile, bind, Option.bind, pure, Pure.pure, List.append_nil]
+  simp only [bind, Option.bind, pure, Pure.pure]
   have hmarker : ([Jinst.toUInt8 .jumpdest] : Bytes) = (prorataWethVaultCodeChunk64.drop 175).take 1 := by rfl
   rw [hmarker]
   try simp only [List.append_assoc]
@@ -15826,7 +15826,7 @@ private theorem vaultTableTail5_compile :
   rw [Table.compile]
   simp only [Nat.reduceAdd]
   rw [withdrawQuoteAux_compile, vaultTableTail6_compile]
-  simp only [Table.compile, bind, Option.bind, pure, Pure.pure, List.append_nil]
+  simp only [bind, Option.bind, pure, Pure.pure]
   have hmarker : ([Jinst.toUInt8 .jumpdest] : Bytes) = (prorataWethVaultCodeChunk63.drop 222).take 1 := by rfl
   rw [hmarker]
   try simp only [List.append_assoc]
@@ -15844,7 +15844,7 @@ private theorem vaultTableTail4_compile :
   rw [Table.compile]
   simp only [Nat.reduceAdd]
   rw [mintAux_compile, vaultTableTail5_compile]
-  simp only [Table.compile, bind, Option.bind, pure, Pure.pure, List.append_nil]
+  simp only [bind, Option.bind, pure, Pure.pure]
   have hmarker : ([Jinst.toUInt8 .jumpdest] : Bytes) = (prorataWethVaultCodeChunk62.drop 140).take 1 := by rfl
   rw [hmarker]
   try simp only [List.append_assoc]
@@ -15862,7 +15862,7 @@ private theorem vaultTableTail3_compile :
   rw [Table.compile]
   simp only [Nat.reduceAdd]
   rw [depositAux_compile, vaultTableTail4_compile]
-  simp only [Table.compile, bind, Option.bind, pure, Pure.pure, List.append_nil]
+  simp only [bind, Option.bind, pure, Pure.pure]
   have hmarker : ([Jinst.toUInt8 .jumpdest] : Bytes) = (prorataWethVaultCodeChunk61.drop 58).take 1 := by rfl
   rw [hmarker]
   try simp only [List.append_assoc]
@@ -15880,7 +15880,7 @@ private theorem vaultTableTail2_compile :
   rw [Table.compile]
   simp only [Nat.reduceAdd]
   rw [vaultReturnWordAux_compile, vaultTableTail3_compile]
-  simp only [Table.compile, bind, Option.bind, pure, Pure.pure, List.append_nil]
+  simp only [bind, Option.bind, pure, Pure.pure]
   have hmarker : ([Jinst.toUInt8 .jumpdest] : Bytes) = (prorataWethVaultCodeChunk61.drop 51).take 1 := by rfl
   rw [hmarker]
   try simp only [List.append_assoc]
@@ -15898,7 +15898,7 @@ private theorem vaultTableTail1_compile :
   rw [Table.compile]
   simp only [Nat.reduceAdd]
   rw [vaultRevertAux_compile, vaultTableTail2_compile]
-  simp only [Table.compile, bind, Option.bind, pure, Pure.pure, List.append_nil]
+  simp only [bind, Option.bind, pure, Pure.pure]
   have hmarker : ([Jinst.toUInt8 .jumpdest] : Bytes) = (prorataWethVaultCodeChunk61.drop 47).take 1 := by rfl
   rw [hmarker]
   try simp only [List.append_assoc]
@@ -15916,7 +15916,7 @@ private theorem vaultTableTail0_compile :
   rw [Table.compile]
   simp only [Nat.reduceAdd]
   rw [vaultMain_compile, vaultTableTail1_compile]
-  simp only [Table.compile, bind, Option.bind, pure, Pure.pure, List.append_nil]
+  simp only [bind, Option.bind, pure, Pure.pure]
   have hmarker : ([Jinst.toUInt8 .jumpdest] : Bytes) = prorataWethVaultCodeChunk0.take 1 := by rfl
   rw [hmarker]
   try simp only [List.append_assoc]

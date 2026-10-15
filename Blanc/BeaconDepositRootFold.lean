@@ -306,7 +306,7 @@ theorem rootLoop_iterations_exists_runCompiledTo
         exact hwarm
       by_cases hlive : s.live
       · have hkey : s.key = branchBase + s.height := by
-          simp only [RootLoopState.key, if_pos hlive]
+          simp only [RootLoopState.key, ite_eq_left hlive]
         let left := stor.get s.key
         let loaded := afterSload sevm base s.key
         let staged :=
@@ -407,12 +407,12 @@ theorem rootLoop_iterations_exists_runCompiledTo
               K + rootLoopGas sevm.currentTarget stor (n + 1) s := by
           rw [hcost]
           dsimp only [tailGas, next]
-          simp only [rootLoopGas, rootLoopStepGas, if_pos hlive]
+          simp only [rootLoopGas, rootLoopStepGas, ite_eq_left hlive]
           omega
         rw [hgas] at hstage
         exact ⟨ex, hP, hstage⟩
       · have hkey : s.key = zeroHashBase + s.height := by
-          simp only [RootLoopState.key, if_neg hlive]
+          simp only [RootLoopState.key, ite_eq_right hlive]
         have hbit : ((1 : B256) &&& s.size) = 0 := by
           exact not_ne_iff.mp hlive
         let right := stor.get s.key
@@ -515,7 +515,7 @@ theorem rootLoop_iterations_exists_runCompiledTo
               K + rootLoopGas sevm.currentTarget stor (n + 1) s := by
           rw [hcost]
           dsimp only [tailGas, next]
-          simp only [rootLoopGas, rootLoopStepGas, if_neg hlive]
+          simp only [rootLoopGas, rootLoopStepGas, ite_eq_right hlive]
           omega
         rw [hgas] at hstage
         exact ⟨ex, hP, hstage⟩
@@ -585,7 +585,7 @@ private theorem rootNatState_key_of_odd
     (hodd : size % 2 = 1) :
     (rootNatState height size node keys).key = branchSlot height := by
   unfold RootLoopState.key
-  rw [if_pos ((rootNatState_live_iff height size node keys hsize).2 hodd)]
+  rw [ite_eq_left ((rootNatState_live_iff height size node keys hsize).2 hodd)]
   exact branchBase_add_toB256 height hheight
 
 private theorem rootNatState_key_of_even
@@ -598,7 +598,7 @@ private theorem rootNatState_key_of_even
     have := (rootNatState_live_iff height size node keys hsize).1 hlive
     omega
   unfold RootLoopState.key
-  rw [if_neg hdead]
+  rw [ite_eq_right hdead]
   exact zeroHashBase_add_toB256 height hheight
 
 private theorem shift256_32 (n : Nat) (hn : n < 2 ^ 32) :
@@ -616,7 +616,7 @@ private theorem rootNatState_step_of_odd
   have hlive : (rootNatState height size node keys).live :=
     (rootNatState_live_iff height size node keys (by omega)).2 hodd
   unfold RootLoopState.step
-  simp only [hlive, if_pos]
+  simp only [hlive, ite_eq_left]
   rw [rootNatState_key_of_odd height size node keys hheight (by omega) hodd]
   unfold rootNatState
   rw [toB256_succ_of_lt_32 height hheight, shift256_32 size hsize,
@@ -635,7 +635,7 @@ private theorem rootNatState_step_of_even
     have := (rootNatState_live_iff height size node keys (by omega)).1 hlive
     omega
   unfold RootLoopState.step
-  simp only [hdead, if_false]
+  simp only [hdead, ite_false]
   rw [rootNatState_key_of_even height size node keys hheight (by omega)
       heven]
   unfold rootNatState
@@ -687,7 +687,7 @@ private theorem rootLoopIter_rootNatState
             node)
           (keys := rootReadKeys owner keys (branchSlot height))
           (by omega) (by omega)]
-        simp only [climb, rootNatKeys, hodd, if_true]
+        simp only [climb, rootNatKeys, hodd, ite_true]
         rw [div_two_div_pow]
         congr 1
         all_goals omega
@@ -808,7 +808,7 @@ theorem getDepositRootEndpoint_prefix_runCompiledTo
           gVerylow]
         omega)
       (by simp only [Devm.stack_setMach, List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (rootSload_runCompiled (hfork := hfork)
@@ -825,7 +825,7 @@ theorem getDepositRootEndpoint_prefix_runCompiledTo
       (by
         simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
         omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256
@@ -838,7 +838,7 @@ theorem getDepositRootEndpoint_prefix_runCompiledTo
       (by
         simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
         omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mstore_of
@@ -854,7 +854,7 @@ theorem getDepositRootEndpoint_prefix_runCompiledTo
       (by
         dsimp only [M1]
         rfl)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256
       (w := shiftedSizeWord * 32) (c := gVerylow)
@@ -866,7 +866,7 @@ theorem getDepositRootEndpoint_prefix_runCompiledTo
       (by
         simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
         omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mstore_of
@@ -882,14 +882,14 @@ theorem getDepositRootEndpoint_prefix_runCompiledTo
       (by
         dsimp only [M2]
         rfl)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256
       (w := 0) (c := gBase) (G := K + 23)
       pushCost_zero
       (by simp only [Devm.gasLeft_setMach, gBase])
       (by simp only [Devm.stack_setMach, List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256
@@ -902,7 +902,7 @@ theorem getDepositRootEndpoint_prefix_runCompiledTo
       (by
         simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
         omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mstore_of
@@ -918,14 +918,14 @@ theorem getDepositRootEndpoint_prefix_runCompiledTo
       (by
         dsimp only [M3]
         rfl)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256
       (w := 0) (c := gBase) (G := K + 12)
       pushCost_zero
       (by simp only [Devm.gasLeft_setMach, gBase])
       (by simp only [Devm.stack_setMach, List.length_nil]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.runCompiledTo_call' (G := K) hrootLoop
   · simp only [Devm.stack_setMach, List.length_cons, List.length_nil]

@@ -1116,3 +1116,27 @@ symbols = [
 ]
 review_owner = "proof-infrastructure"
 review_date = "2026-10-03"
+
+[[recipe]]
+id = "machine-state-debit"
+status = "active"
+triggers = ["goal-shape:machine-state-debit"]
+preferred_path = "Use `Devm.subBal_state` to project a successful machine debit to its account-state debit. If the hypothesis is an `Option.toExcept` success, first use Jaune's `Option.toExcept_eq_ok`. Keep the machine symbolic instead of unfolding its full record through repeated option inversions."
+boundary = "Requires the successful debit equation; it does not establish sufficient funds, preserve the debited balance, or identify the whole post-machine. Advice recognizes only a direct equality whose left side is State.subBal, without normalizing state expressions or searching nested operands."
+owner_module = "Blanc/MachineDataFacts.lean"
+canonical_example = "Blanc/MachineDataFacts.lean:Devm.subBal_state"
+symbols = ["module:Blanc/MachineDataFacts.lean", "declaration:Blanc.Devm.subBal_state"]
+review_owner = "proof-infrastructure"
+review_date = "2026-10-15"
+
+[[recipe]]
+id = "word-exponentiation"
+status = "active"
+triggers = ["goal-shape:word-exponentiation"]
+preferred_path = "For exponent zero use Jaune's `B256.bexp_zero`; for a general exponent rewrite with `B256.bexp_eq` to obtain natural-number exponentiation modulo 2^256. Rewrite small word-to-Nat conversions explicitly before closed arithmetic, rather than unfolding the modular-exponentiation implementation. The shared packed-word special case `Lift.bexp_256_32` supplies 256^32 = 0 as an EVM word."
+boundary = "EVM exponentiation wraps modulo 2^256; ordinary unbounded-power identities need that modulus. This does not justify evaluating a large symbolic exponent or concrete memory. Advice recognizes only a direct equality whose left side is B256.bexp; nested arithmetic and reversed equalities are left to the author."
+owner_module = "Blanc/Lift/PackedSha.lean"
+canonical_example = "Blanc/Lift/PackedSha.lean:bexp_256_32"
+symbols = ["module:Blanc/Lift/PackedSha.lean", "declaration:Blanc.Lift.bexp_256_32"]
+review_owner = "proof-infrastructure"
+review_date = "2026-10-15"

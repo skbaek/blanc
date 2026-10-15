@@ -523,8 +523,8 @@ theorem flashSettlement_allowanceLedger
     by_cases hkeyEq :
         projectedAllowanceKey (normalizedAddressArg e 0)
           e.currentTarget.toB256 = key
-    · rw [if_pos hkeyEq, ← hkeyEq, ← flashAllowanceRuntimeKey_eq_projected]
-    · rw [if_neg hkeyEq]
+    · rw [ite_eq_left hkeyEq, ← hkeyEq, ← flashAllowanceRuntimeKey_eq_projected]
+    · rw [ite_eq_right hkeyEq]
       refine flashSettlement_region_locality houtcome hburn hkey ?_
       rw [flashAllowanceRuntimeKey_eq_projected]
       exact hkeyEq
@@ -622,7 +622,7 @@ private theorem RawFlashCallbackStepBoundary.allowanceRegionEffect
         getDelegatedCodeAddress (pre.getCode receiver) = none := by
       rw [hreceiver]
       dsimp only [getDelegatedCodeAddress]
-      rw [if_neg (not_delegation_of_compile installed)]
+      rw [ite_eq_right (not_delegation_of_compile installed)]
     rcases hdelegation with ⟨_, hna, _, _⟩ | ⟨_, hsome, _, _, _⟩
     · exact hna.trans hreceiver
     · simp only [hnone, reduceCtorEq] at hsome
@@ -1040,7 +1040,7 @@ private theorem RawFlashCallbackStepBoundary.allowanceRegionEffectSound
         getDelegatedCodeAddress (pre.getCode receiver) = none := by
       rw [hreceiver]
       dsimp only [getDelegatedCodeAddress]
-      rw [if_neg (not_delegation_of_compile installed)]
+      rw [ite_eq_right (not_delegation_of_compile installed)]
     rcases hdelegation with ⟨_, hna, _, _⟩ | ⟨_, hsome, _, _, _⟩
     · exact hna.trans hreceiver
     · simp only [hnone, reduceCtorEq] at hsome

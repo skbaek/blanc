@@ -286,7 +286,7 @@ theorem ofCall_settle_of_clean {raw : Execution} {child : Devm}
     (stateGasEq : left.benv.stat.rules.stateGas = right.benv.stat.rules.stateGas) :
     (Frame.ofCall right).settle raw = .ok child := by
   simp only [Frame.ofCall, Frame.settle, Frame.settleMsg, processMessage.settle,
-    Bool.false_eq_true, if_false] at settled ⊢
+    Bool.false_eq_true, ite_false] at settled ⊢
   rw [← stateGasEq]
   cases handled : executeCode.handleErrorWith left.benv.stat.rules.stateGas raw with
   | error e =>
@@ -295,13 +295,13 @@ theorem ofCall_settle_of_clean {raw : Execution} {child : Devm}
   | ok evm =>
       rw [handled] at settled
       by_cases flagged : evm.error.isSome = true
-      · simp only [bind, Except.bind, flagged, if_true, Except.ok.injEq] at settled
+      · simp only [bind, Except.bind, flagged, ite_true, Except.ok.injEq] at settled
         subst settled
         exfalso
         simp only [Devm.error, Devm.rollback, Devm.setWorld, Devm.withStorageWrites, Option.isSome_eq_false_iff,
           Option.isNone_iff_eq_none] at clean
         simp only [Devm.error, clean, Option.isSome_none, Bool.false_eq_true] at flagged
-      · simp only [bind, Except.bind, flagged, Bool.false_eq_true, if_false] at settled ⊢
+      · simp only [bind, Except.bind, flagged, Bool.false_eq_true, ite_false] at settled ⊢
         exact settled
 
 end Drip

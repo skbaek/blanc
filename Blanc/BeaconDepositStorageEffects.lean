@@ -42,13 +42,13 @@ private theorem sha64_success_suffix_storageEffectRun
       (by omega))
     (by rintro ⟨⟩)
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.zero
     (by simp only [Devm.stack_setMach, List.length_cons]; omega)
     (Devm.popBurnBy_setMach (s := stack) (G := K + 21)
       (by simp only [Devm.stack_setMach])
       (by simp only [Devm.gasLeft_setMach, gVerylow, gHigh]))
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
   change Func.StorageEffectRun fs sevm _
     (Ninst.pushB256 32 ::: Ninst.returndatasize ::: Ninst.lt :::
       ((.call emptyRevertSlot) <?> success)) ex effects
@@ -60,7 +60,7 @@ private theorem sha64_success_suffix_storageEffectRun
       (by simp only [Devm.stack_setMach]; omega))
     (by rintro ⟨⟩)
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_pushItem
       (sevm := sevm)
@@ -74,7 +74,7 @@ private theorem sha64_success_suffix_storageEffectRun
       (by simp only [Devm.stack_setMach, List.length_cons]; omega))
     (by rintro ⟨⟩)
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_binary
       (sevm := sevm)
@@ -90,7 +90,7 @@ private theorem sha64_success_suffix_storageEffectRun
       (by omega))
     (by rintro ⟨⟩)
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.zero
     (by simp only [Devm.stack_setMach, List.length_cons]; omega)
     (Devm.popBurnBy_setMach (s := stack) (G := K)
@@ -253,7 +253,7 @@ theorem sha64_success_prefix_storageEffectRun_ext
         omega)
       (by simp only [Devm.stack_setMach]; omega))
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.next_of_not_exec
     (Ninst.runCompiled_pushB256
       (w := outputWord * 32) (c := cout)
@@ -261,7 +261,7 @@ theorem sha64_success_prefix_storageEffectRun_ext
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons]; omega))
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.next_of_not_exec
     (Ninst.runCompiled_pushB256
       (w := (64 : B256)) (c := c64)
@@ -269,7 +269,7 @@ theorem sha64_success_prefix_storageEffectRun_ext
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons]; omega))
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.next_of_not_exec
     (Ninst.runCompiled_pushB256
       (w := inputWord * 32) (c := cin)
@@ -277,21 +277,21 @@ theorem sha64_success_prefix_storageEffectRun_ext
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons]; omega))
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.next_of_not_exec
     (Ninst.runCompiled_pushB256
       (w := (2 : B256)) (c := c2) (G := K + 223 + ext) rfl
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons]; omega))
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.next_of_not_exec
     (Ninst.runCompiled_gas
       (G := K + 221 + ext)
       (by simp only [Devm.gasLeft_setMach, gBase]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons]; omega))
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.next hstat
   have hpost : callPost.setMach
       ⟨1 :: stack, callPost.memory, K + 37, callPost.stateGas⟩ = callPost := by
@@ -399,7 +399,7 @@ theorem insertionContinuation_storageEffectRun
         List.length_nil]; omega))
     (by rintro ⟨⟩)
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   have hmload :=
     Ninst.runCompiled_mload_of
@@ -422,7 +422,7 @@ theorem insertionContinuation_storageEffectRun
   apply Func.StorageEffectRun.next_effectNeutral hmload
     (by rintro ⟨⟩)
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_pushB256
       (w := (1 : B256)) (c := gVerylow) (G := K + 27)
@@ -432,7 +432,7 @@ theorem insertionContinuation_storageEffectRun
         List.length_nil]; omega))
     (by rintro ⟨⟩)
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_binary
@@ -446,7 +446,7 @@ theorem insertionContinuation_storageEffectRun
       (by simp only [List.length_cons, List.length_nil]; omega))
     (by rintro ⟨⟩)
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_pushB256
       (w := shiftedSizeWord * 32) (c := gVerylow) (G := K + 21)
@@ -456,7 +456,7 @@ theorem insertionContinuation_storageEffectRun
         List.length_nil]; omega))
     (by rintro ⟨⟩)
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_mstore_of
@@ -466,7 +466,7 @@ theorem insertionContinuation_storageEffectRun
       (by simp only [Devm.gasLeft_setMach, gVerylow]) rfl)
     (by rintro ⟨⟩)
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, hoff]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, hoff]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_pushB256
       (w := (1 : B256)) (c := gVerylow) (G := K + 15)
@@ -476,7 +476,7 @@ theorem insertionContinuation_storageEffectRun
         List.length_nil]; omega))
     (by rintro ⟨⟩)
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_binary
@@ -490,7 +490,7 @@ theorem insertionContinuation_storageEffectRun
       (by simp only [List.length_nil]; omega))
     (by rintro ⟨⟩)
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.call hloop
     (by simp only [Devm.stack_setMach, List.length_cons,
       List.length_nil]; omega)
@@ -638,7 +638,7 @@ theorem insertionLive_storageEffectRun
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega))
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.StorageEffectRun.next_of_not_exec
     (Ninst.runCompiled_pushB256 (w := branchBase) (c := 3)
@@ -648,7 +648,7 @@ theorem insertionLive_storageEffectRun
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega))
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.StorageEffectRun.next_of_not_exec
     (Ninst.runCompiled_binary (r := .add) (f := (· + ·))
@@ -659,7 +659,7 @@ theorem insertionLive_storageEffectRun
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
       (by simp only [List.length_cons, List.length_nil]; omega))
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
   apply Func.StorageEffectRun.next_of_not_exec
     (Ninst.runCompiled_pushB256 (w := 640) (c := 3)
       (G := K + 8 + sstoreCost sevm base (branchBase + height) node)
@@ -668,7 +668,7 @@ theorem insertionLive_storageEffectRun
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega))
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   have hmload :=
     Ninst.runCompiled_mload_of
@@ -691,7 +691,7 @@ theorem insertionLive_storageEffectRun
   apply Func.StorageEffectRun.next_of_not_exec
     hmload
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.next_of_not_exec
     (Ninst.runCompiled_swap (n := 0)
       (S := (branchBase + height) :: node :: [height])
@@ -699,7 +699,7 @@ theorem insertionLive_storageEffectRun
       rfl
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega))
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
   apply Func.StorageEffectRun.next_of_not_exec
     (Ninst.runCompiled_sstore_selected_setMach hfork
       (base := base) (key := branchBase + height) (value := node)
@@ -710,7 +710,7 @@ theorem insertionLive_storageEffectRun
     (Ninst.runCompiled_pop (G := K) rfl
       (by simp only [Devm.gasLeft_setMach, gBase]))
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
   exact Func.StorageEffectRun.last rfl
 
 private theorem insertionLoopBit_storageEffectRun
@@ -747,7 +747,7 @@ private theorem insertionLoopBit_storageEffectRun
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_cons]; omega))
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.StorageEffectRun.next_of_not_exec
     (Ninst.runCompiled_mload_of
@@ -768,14 +768,14 @@ private theorem insertionLoopBit_storageEffectRun
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [List.length_cons]; omega))
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.next_of_not_exec
     (Ninst.runCompiled_pushB256 (w := 1) (c := 3) (G := K + 3)
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_cons]; omega))
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.StorageEffectRun.next_of_not_exec
     (Ninst.runCompiled_binary (r := .and) (f := B256.and)
@@ -831,7 +831,7 @@ private theorem insertionStageLoadedLeft_storageEffectRun
       (by simp only [Devm.stack_setMach, List.length_cons]; omega))
     (by rintro ⟨⟩)
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_mstore_of
@@ -843,7 +843,7 @@ private theorem insertionStageLoadedLeft_storageEffectRun
       (by simp only [Devm.gasLeft_setMach, gVerylow]) rfl)
     (by rintro ⟨⟩)
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
   change Func.StorageEffectRun fs sevm
     (base.setMach ⟨height :: stack, M1, K + 12, base.stateGas⟩) _ ex effects
   apply Func.StorageEffectRun.next_effectNeutral
@@ -853,7 +853,7 @@ private theorem insertionStageLoadedLeft_storageEffectRun
       (by simp only [Devm.stack_setMach, List.length_cons]; omega))
     (by rintro ⟨⟩)
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   have hmload :=
     Ninst.runCompiled_mload_of
@@ -879,7 +879,7 @@ private theorem insertionStageLoadedLeft_storageEffectRun
   apply Func.StorageEffectRun.next_effectNeutral hmload
     (by rintro ⟨⟩)
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_pushB256 (w := 32) (c := 3) (G := K + 3)
       (by decide +kernel)
@@ -887,7 +887,7 @@ private theorem insertionStageLoadedLeft_storageEffectRun
       (by simp only [Devm.stack_setMach, List.length_cons]; omega))
     (by rintro ⟨⟩)
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_mstore_of
       (i := 32) (v := node) (s := height :: stack)
@@ -928,7 +928,7 @@ private theorem insertionDeadLoad_storageEffectRun
       (by simp only [Devm.stack_setMach, List.length_cons]; omega))
     (by rintro ⟨⟩)
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_pushB256 (w := branchBase) (c := 3)
@@ -938,7 +938,7 @@ private theorem insertionDeadLoad_storageEffectRun
       (by simp only [Devm.stack_setMach, List.length_cons]; omega))
     (by rintro ⟨⟩)
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_binary (r := .add) (f := (· + ·))
@@ -950,7 +950,7 @@ private theorem insertionDeadLoad_storageEffectRun
       (by simp only [List.length_cons]; omega))
     (by rintro ⟨⟩)
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
   apply Func.StorageEffectRun.next_effectNeutral
     (Ninst.runCompiled_sload_selected hfork hval
       (by simp only [List.length_cons]; omega))
@@ -1145,7 +1145,7 @@ theorem commitDeposit_storageEffectRun
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_nil]; omega))
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   have hmload :=
     Ninst.runCompiled_mload_of
@@ -1168,7 +1168,7 @@ theorem commitDeposit_storageEffectRun
       (by simp only [List.length_nil]; omega)
   apply Func.StorageEffectRun.next_of_not_exec hmload
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.next_of_not_exec
     (Ninst.runCompiled_pushB256 (w := 1) (c := 3)
       (G := K + 29 +
@@ -1178,7 +1178,7 @@ theorem commitDeposit_storageEffectRun
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega))
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.StorageEffectRun.next_of_not_exec
     (Ninst.runCompiled_binary (r := .add) (f := (· + ·))
@@ -1191,7 +1191,7 @@ theorem commitDeposit_storageEffectRun
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
       (by simp only [List.length_nil]; omega))
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.StorageEffectRun.next_of_not_exec
     (Ninst.runCompiled_dup (n := 0) (w := oldCount + 1)
       (G := K + 23 +
@@ -1201,7 +1201,7 @@ theorem commitDeposit_storageEffectRun
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega))
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.StorageEffectRun.next_of_not_exec
     (Ninst.runCompiled_pushB256 (w := 608) (c := 3)
@@ -1212,7 +1212,7 @@ theorem commitDeposit_storageEffectRun
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega))
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.StorageEffectRun.next_of_not_exec
     (Ninst.runCompiled_mstore_of
@@ -1226,7 +1226,7 @@ theorem commitDeposit_storageEffectRun
       (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
       rfl)
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach,
     show (608 : B256).toNat = 608 by decide +kernel]
   apply Func.StorageEffectRun.next_of_not_exec
     (Ninst.runCompiled_pushB256 (w := depositCountSlot) (c := 3)
@@ -1237,7 +1237,7 @@ theorem commitDeposit_storageEffectRun
       (by simp only [Devm.stack_setMach, List.length_cons,
         List.length_nil]; omega))
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.StorageEffectRun.next_of_not_exec
     (Ninst.runCompiled_sstore_selected_setMach hfork
@@ -1252,7 +1252,7 @@ theorem commitDeposit_storageEffectRun
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_nil]; omega))
     (by rintro operation ⟨⟩)
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.StorageEffectRun.call hloop
     (by simp only [Devm.stack_setMach, List.length_cons,

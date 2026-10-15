@@ -164,7 +164,7 @@ theorem vminus_txC_process (g : Fork) (hg : CoveredFork g) (bout : BlockOutput)
       storOf ((post.state.addBal eAddress v₁).addBal (benvPre.withFork g).stat.coinbase v₂)
         proxyAddress k = storOf post.state proxyAddress k := by
     intro v₁ v₂ k
-    simp only [State.addBal, storOf_setBal, hcb, hne, false_and, if_false]
+    simp only [State.addBal, storOf_setBal, hcb, hne, false_and, ite_false]
   simp only [hlist, List.foldl_nil, hst]
   exact ⟨h26, hA, hlt⟩
 

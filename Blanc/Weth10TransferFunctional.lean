@@ -760,7 +760,7 @@ theorem transferNonzeroThen_callbackPrefix_effect (dp : DeployParams)
   have hcover : Sevm.argWord e 1 ≤ balance := by
     rw [← B256.not_lt]
     intro hlt
-    rw [B256.ltCheck, if_pos hlt] at hflag
+    rw [B256.ltCheck, ite_eq_left hlt] at hflag
     exact B256.zero_ne_one hflag.symm
   rw [hflag] at hp2
   have hp3 : balance :: Sevm.argWord e 1 :: e.caller.toB256 ::
@@ -985,7 +985,7 @@ theorem of_callerBurnThen_callback_effect
   have hcover : Sevm.argWord e amountArg ≤ balance := by
     rw [← B256.not_lt]
     intro hlt
-    rw [B256.ltCheck, if_pos hlt] at hflag
+    rw [B256.ltCheck, ite_eq_left hlt] at hflag
     exact B256.zero_ne_one hflag.symm
   rw [hflag] at hp2
   have hp3 : balance :: Sevm.argWord e amountArg ::
@@ -1361,7 +1361,7 @@ theorem transferThen_callbackPrefix_effect (dp : DeployParams)
       pref_head_unique hp2 (pref_append [0] s3.stack)
     have hargNonzero : Sevm.argWord e 0 ≠ 0 := by
       intro hz
-      rw [hz, B256.eqCheck, if_pos rfl] at hflag
+      rw [hz, B256.eqCheck, ite_eq_left rfl] at hflag
       exact B256.zero_ne_one hflag.symm
     have hstor_pre_s3 : Devm.getStor pre = Devm.getStor s3 :=
       (Line.of_inv Devm.getStor (by line_inv) harg).trans
@@ -1421,7 +1421,7 @@ theorem transferThen_callbackPrefix_effect (dp : DeployParams)
       pref_head_unique hp2 (pref_append [w] s3.stack)
     have hargZero : Sevm.argWord e 0 = 0 := by
       by_contra hne
-      rw [B256.eqCheck, if_neg hne] at hflag
+      rw [B256.eqCheck, ite_eq_right hne] at hflag
       exact hnz hflag.symm
     have hstor_pre_s4 : Devm.getStor pre = Devm.getStor s4 :=
       (Line.of_inv Devm.getStor (by line_inv) harg).trans
@@ -1529,7 +1529,7 @@ theorem transfer_successEffect (dp : DeployParams)
       pref_head_unique hp2 (pref_append [0] s3.stack)
     have hargNonzero : Sevm.argWord e 0 ≠ 0 := by
       intro hz
-      rw [hz, B256.eqCheck, if_pos rfl] at hflag
+      rw [hz, B256.eqCheck, ite_eq_left rfl] at hflag
       exact B256.zero_ne_one hflag.symm
     have hstor_s_s3 : Devm.getStor s = Devm.getStor s3 :=
       (Line.of_inv Devm.getStor (by line_inv) harg).trans
@@ -1577,7 +1577,7 @@ theorem transfer_successEffect (dp : DeployParams)
       pref_head_unique hp2 (pref_append [w] s3.stack)
     have hargZero : Sevm.argWord e 0 = 0 := by
       by_contra hne
-      rw [B256.eqCheck, if_neg hne] at hflag
+      rw [B256.eqCheck, ite_eq_right hne] at hflag
       exact hnz hflag.symm
     have hstor_s_s4 : Devm.getStor s = Devm.getStor s4 :=
       (Line.of_inv Devm.getStor (by line_inv) harg).trans
@@ -1801,7 +1801,7 @@ theorem of_argBurnThen_effect
   have hcover : Sevm.argWord e amountArg ≤ balance := by
     rw [← B256.not_lt]
     intro hlt
-    rw [B256.ltCheck, if_pos hlt] at hflag
+    rw [B256.ltCheck, ite_eq_left hlt] at hflag
     exact B256.zero_ne_one hflag.symm
   rw [hflag] at hp2
   have hp3 : balance :: Sevm.argWord e amountArg :: owner ::
@@ -1995,7 +1995,7 @@ theorem transferFromNonzero_effect (dp : DeployParams)
   have hcover : Sevm.argWord e 2 ≤ balance := by
     rw [← B256.not_lt]
     intro hlt
-    rw [B256.ltCheck, if_pos hlt] at hflag
+    rw [B256.ltCheck, ite_eq_left hlt] at hflag
     exact B256.zero_ne_one hflag.symm
   rw [hflag] at hp2
   have hp3 : balance :: Sevm.argWord e 2 :: owner ::
@@ -2161,7 +2161,7 @@ theorem transferFromCore_successEffect (dp : DeployParams)
       pref_head_unique hp2 (pref_append [0] s3.stack)
     have hargNonzero : Sevm.argWord e 1 ≠ 0 := by
       intro hz
-      rw [hz, B256.eqCheck, if_pos rfl] at hflag
+      rw [hz, B256.eqCheck, ite_eq_left rfl] at hflag
       exact B256.zero_ne_one hflag.symm
     have hstor_s_s3 : Devm.getStor s = Devm.getStor s3 :=
       (Line.of_inv Devm.getStor (by line_inv) harg).trans
@@ -2209,7 +2209,7 @@ theorem transferFromCore_successEffect (dp : DeployParams)
       pref_head_unique hp2 (pref_append [w] s3.stack)
     have hargZero : Sevm.argWord e 1 = 0 := by
       by_contra hne
-      rw [B256.eqCheck, if_neg hne] at hflag
+      rw [B256.eqCheck, ite_eq_right hne] at hflag
       exact hnz hflag.symm
     have hstor_s_s4 : Devm.getStor s = Devm.getStor s4 :=
       (Line.of_inv Devm.getStor (by line_inv) harg).trans
@@ -2308,7 +2308,7 @@ theorem of_spendCallerAllowanceThen_effect
       pref_head_unique hp1 (pref_append [0] s2.stack)
     have hnonselfWord : Sevm.argWord e 0 ≠ e.caller.toB256 := by
       intro heq
-      rw [heq, B256.eqCheck, if_pos rfl] at hselfFlag
+      rw [heq, B256.eqCheck, ite_eq_left rfl] at hselfFlag
       exact B256.zero_ne_one hselfFlag.symm
     let keyLine : Line :=
       arg 0 ++ mstoreAt 0 ++ [caller] ++ mstoreAt 1 ++
@@ -2462,7 +2462,7 @@ theorem of_spendCallerAllowanceThen_effect
       have hcover : Sevm.argWord e amountArg ≤ allowance := by
         rw [← B256.not_lt]
         intro hlt
-        rw [B256.ltCheck, if_pos hlt] at hguardFlag
+        rw [B256.ltCheck, ite_eq_left hlt] at hguardFlag
         exact B256.zero_ne_one hguardFlag.symm
       rw [hguardFlag] at hpGuard
       have hpBeforeMutate : allowance :: Sevm.argWord e amountArg ::
@@ -2620,7 +2620,7 @@ theorem of_spendCallerAllowanceThen_effect
       have hallowanceMax : allowance = B256.max := by
         apply B256.eq_max_of_not_eq_zero
         by_contra hnotZero
-        rw [B256.eqCheck, if_neg hnotZero] at hflagEq
+        rw [B256.eqCheck, ite_eq_right hnotZero] at hflagEq
         exact hnzmax hflagEq.symm
       rcases of_run_next hmax with ⟨sm3, hpop1, hmax1⟩
       rcases of_run_next hmax1 with ⟨sm4, hpop2, hcallRun⟩
@@ -2686,7 +2686,7 @@ theorem of_spendCallerAllowanceThen_effect
     have hselfWord : Sevm.argWord e 0 = e.caller.toB256 := by
       apply Eq.symm
       by_contra hne
-      rw [B256.eqCheck, if_neg hne] at hflagEq
+      rw [B256.eqCheck, ite_eq_right hne] at hflagEq
       exact hnzself hflagEq.symm
     rcases of_run_call hself with
       ⟨f, corePre, hget, hcallBurn, hcore⟩

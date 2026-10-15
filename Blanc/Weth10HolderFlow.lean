@@ -566,7 +566,7 @@ theorem Exec.retainedChildActions_eq_nil_of_create_codeDepositRollback
     cases hoption : settled.error with
     | none => simp only [hoption, Option.isSome_none, Bool.false_eq_true] at herror
     | some error => simp only [hoption, Option.isNone_some, Bool.false_eq_true] at hcommit
-  simp only [if_neg hnot]
+  simp only [ite_eq_right hnot]
 
 /-! ## Contract-neutral retained-trace compatibility
 

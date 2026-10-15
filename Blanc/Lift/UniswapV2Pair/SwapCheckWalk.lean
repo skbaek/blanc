@@ -70,7 +70,7 @@ theorem swapInputsDecoded_inv {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
       obtain ⟨G1, run⟩ := ric_jump (by decide) rfl run
       refine ⟨G1, ?_⟩
       unfold swapInWord
-      rw [if_neg (show ¬ (reserveMask112 &&& r0) - a0 < bal0 from swap_not_gt_of_gtCheck_eq zero)]
+      rw [ite_eq_right (show ¬ (reserveMask112 &&& r0) - a0 < bal0 from swap_not_gt_of_gtCheck_eq zero)]
       exact run
     · unfold t_0b1f_c5 at run
       obtain ⟨_, run⟩ := ric_dest run
@@ -83,7 +83,7 @@ theorem swapInputsDecoded_inv {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
       obtain ⟨G1, hs, run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_sub hs
       refine ⟨G1, ?_⟩
       unfold swapInWord
-      rw [if_pos (show (reserveMask112 &&& r0) - a0 < bal0 from swap_gt_of_gtCheck_ne nonzero)]
+      rw [ite_eq_left (show (reserveMask112 &&& r0) - a0 < bal0 from swap_gt_of_gtCheck_ne nonzero)]
       exact run
   clear run
   obtain ⟨_, run⟩ := first
@@ -110,7 +110,7 @@ theorem swapInputsDecoded_inv {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
       obtain ⟨G2, run⟩ := ric_jump (by decide) rfl run
       refine ⟨G2, ?_⟩
       unfold swapInWord
-      rw [if_neg (show ¬ (reserveMask112 &&& r1) - a1 < bal1 from swap_not_gt_of_gtCheck_eq zero)]
+      rw [ite_eq_right (show ¬ (reserveMask112 &&& r1) - a1 < bal1 from swap_not_gt_of_gtCheck_eq zero)]
       exact run
     · unfold t_0b59_c6 at run
       obtain ⟨_, run⟩ := ric_dest run
@@ -123,7 +123,7 @@ theorem swapInputsDecoded_inv {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
       obtain ⟨G2, hs, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_sub hs
       refine ⟨G2, ?_⟩
       unfold swapInWord
-      rw [if_pos (show (reserveMask112 &&& r1) - a1 < bal1 from swap_gt_of_gtCheck_ne nonzero)]
+      rw [ite_eq_left (show (reserveMask112 &&& r1) - a1 < bal1 from swap_gt_of_gtCheck_ne nonzero)]
       exact run
   clear run
   obtain ⟨_, run⟩ := second

@@ -1457,7 +1457,7 @@ theorem prepareCanonicalDeploymentContext
       (begun.state.incrNonce sender).subBal sender fee.toB256 =
         some debit := by
     unfold State.subBal
-    rw [if_neg hnotlt]
+    rw [ite_eq_right hnotlt]
   let tenv := deploymentTenv txInput deploymentTx sender 0
   let currentTarget :=
     computeContractAddress tenv.stat.origin
@@ -1710,9 +1710,9 @@ theorem canonicalDeploymentMessage_succeeds
       rw [ctx.msg_target_eq]
       rfl]
     unfold processMessageCall.create
-    simp only [if_true]
+    simp only [ite_true]
     rw [ctx.target_eq]
-    simp only [ctx.noCodeOrNonce, ctx.noStorage, Bool.or_self, Bool.false_eq_true, ↓reduceIte,
+    simp only [ctx.noCodeOrNonce, Bool.false_eq_true, ↓reduceIte,
       Except.bimap, hcreate, id_eq, Option.isNone_iff_eq_none, Except.bind_ok, Nat.cast_zero, herr,
       htoNat, directCreateMessageOutputOf]
     rw [hmsgStateGas]
@@ -1907,7 +1907,7 @@ theorem canonicalDeploymentTransaction_succeeds
       ExecutionTrace.transactionPreludeBout] at hchecked
     rw [hchecked]
     simp only [Tx.isTypeThree, Tx.accessList, TxType.accessList, Tx.auths,
-      htype, Bool.false_eq_true, if_false, Nat.add_zero,
+      htype, Bool.false_eq_true, ite_false, Nat.add_zero,
       Benv.beginTransaction]
     rw [hdebit]
     simp only [Option.toExcept]

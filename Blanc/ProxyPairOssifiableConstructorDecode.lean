@@ -158,7 +158,7 @@ theorem ossifiableConstructorDecode_headBoundary
   have hguard :
       (sevm.code.size.toB256 <? Nat.toB256 (argsOffset + 96)) = 0 := by
     unfold B256.ltCheck
-    rw [if_neg]
+    rw [ite_eq_right]
     rw [B256.lt_iff_toNat_lt_toNat,
       B256.toNat_toB256_of_lt hcodeSize,
       B256.toNat_toB256_of_lt hcoordinate]
@@ -433,7 +433,7 @@ theorem OssifiableConstructorAddressBoundary.offsetBound
       (ossifiableConstructorCodeWord sevm.code.toList (argsOffset + 64) >?
         ossifiableConstructorAbiMaxUint64) = 0 := by
     unfold B256.gtCheck
-    rw [if_neg hbound]
+    rw [ite_eq_right hbound]
   have pZero : (0 : B256) :: tail <<+ s3.stack := by
     simpa only [hguard, List.append_eq, List.nil_append] using p3
   obtain ⟨next, hpop, nextRun, pNext⟩ :=
@@ -628,7 +628,7 @@ theorem OssifiableConstructorPointerBoundary.lengthComplete
           (ossifiableConstructorCodeWord sevm.code.toList (argsOffset + 64)) +
             32)) = 0 := by
     unfold B256.ltCheck
-    rw [if_neg]
+    rw [ite_eq_right]
     rw [B256.lt_iff_toNat_lt_toNat,
       B256.toNat_toB256_of_lt hcodeSize]
     omega
@@ -820,7 +820,7 @@ theorem OssifiableConstructorLengthBoundary.lengthBound
               (argsOffset + 64))).toNat >?
         ossifiableConstructorAbiMaxUint64) = 0 := by
     unfold B256.gtCheck
-    rw [if_neg hbound]
+    rw [ite_eq_right hbound]
   have pZero : (0 : B256) :: tail <<+ s3.stack := by
     simpa only [hguard, List.append_eq, List.nil_append] using p3
   obtain ⟨next, hpop, nextRun, pNext⟩ :=
@@ -976,7 +976,7 @@ theorem OssifiableConstructorLengthBoundBoundary.payloadComplete
               (ossifiableConstructorCodeWord sevm.code.toList
                 (argsOffset + 64))).toNat)) = 0 := by
     unfold B256.ltCheck
-    rw [if_neg]
+    rw [ite_eq_right]
     rw [B256.lt_iff_toNat_lt_toNat,
       B256.toNat_toB256_of_lt hcodeSize]
     omega
@@ -1270,7 +1270,7 @@ theorem ossifiableConstructorDecode_shortHead_route
   have hguard :
       (sevm.code.size.toB256 <? Nat.toB256 (argsOffset + 96)) = 1 := by
     unfold B256.ltCheck
-    rw [if_pos hlt]
+    rw [ite_eq_left hlt]
   have pOne : (1 : B256) :: tail <<+ s3.stack := by
     simpa only [hguard] using p3
   obtain ⟨callPre, _, _, hpop, callRun, pCall⟩ :=
@@ -1447,7 +1447,7 @@ private theorem constructorDecode_step_largeWord
   have p3 := prefix_of_gt r3 p2
   have hguard : (value >? ossifiableConstructorAbiMaxUint64) = 1 := by
     unfold B256.gtCheck
-    rw [if_pos hlarge]
+    rw [ite_eq_left hlarge]
   have pOne : (1 : B256) :: tail <<+ s3.stack := by
     simpa only [hguard, List.append_eq, List.nil_append] using p3
   obtain ⟨callPre, _, _, hpop, callRun, pCall⟩ :=
@@ -1561,7 +1561,7 @@ private theorem constructorDecode_step_codeSizeShort
     exact hshort
   have hguard : (sevm.code.size.toB256 <? bound) = 1 := by
     unfold B256.ltCheck
-    rw [if_pos hlt]
+    rw [ite_eq_left hlt]
   have pOne : (1 : B256) :: tail <<+ s2.stack := by
     simpa only [hguard] using p2
   obtain ⟨callPre, _, _, hpop, callRun, pCall⟩ :=

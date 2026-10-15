@@ -2694,7 +2694,10 @@ unfolds several `absentZero*Post` definitions at once. -/
 theorem entryClearPost_accessedStorageKeys
     (sevm : Sevm) (base : Devm) (target next : B256) :
     (entryClearPost sevm base target next).accessedStorageKeys =
-      base.accessedStorageKeys := rfl
+      base.accessedStorageKeys := by
+  -- One layer at a time: `rfl` across the three-layer tower exhausts `whnf` on Lean 4.35.
+  rw [entryClearPost, temporalSstorePost_accessedStorageKeys, indexWritePost, temporalSstorePost_accessedStorageKeys,
+    entryWritePost, temporalSstorePost_accessedStorageKeys]
 
 theorem indexClearPost_accessedStorageKeys
     (sevm : Sevm) (base : Devm) (target oldLength : B256) :
@@ -2703,7 +2706,10 @@ theorem indexClearPost_accessedStorageKeys
 
 theorem entryClearPost_logs
     (sevm : Sevm) (base : Devm) (target next : B256) :
-    (entryClearPost sevm base target next).logs = base.logs := rfl
+    (entryClearPost sevm base target next).logs = base.logs := by
+  -- One layer at a time: `rfl` across the three-layer tower exhausts `whnf` on Lean 4.35.
+  rw [entryClearPost, temporalSstorePost_logs, indexWritePost, temporalSstorePost_logs,
+    entryWritePost, temporalSstorePost_logs]
 
 theorem indexClearPost_logs
     (sevm : Sevm) (base : Devm) (target oldLength : B256) :

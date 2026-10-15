@@ -109,7 +109,7 @@ private theorem delegatedKey_inv {e : Sevm} {pre post : Devm}
         simp only [callerAllowanceBranch, hself, ↓reduceIte]] at hkey
       simp only [delegatedKey?, reduceCtorEq] at hkey
     · refine ⟨hself, ?_⟩
-      simp only [callerAllowanceBranch, if_neg hself] at hkey
+      simp only [callerAllowanceBranch, ite_eq_right hself] at hkey
       split at hkey <;> simpa only [delegatedKey?, Option.some.injEq] using hkey.symm
   simp only [primaryDebitProvenance] at hdebit
   split_ifs at hdebit with h1 h2 h3 h4 h5
@@ -248,10 +248,10 @@ private theorem outflow_eq_zero_of_argWord_two_toNat_zero
         transferFromSelector_ne_transferSelector, transferFromSelector_ne_transferAndCallSelector]
     rw [hchain] at hprimary
     by_cases hto : Sevm.argWord e 1 = 0
-    · rw [if_pos hto] at hprimary
+    · rw [ite_eq_left hto] at hprimary
       cases hprimary
       exact Or.inl ⟨_, _, _, rfl⟩
-    · rw [if_neg hto] at hprimary
+    · rw [ite_eq_right hto] at hprimary
       cases hprimary
       exact Or.inr ⟨_, _, _, _, rfl⟩
   · have hchain : primaryFlowAtom e =
@@ -896,7 +896,7 @@ private theorem applyAllowanceLedger_eq_zero_of_checkpointRoot
       | some event =>
           dsimp only
           by_cases hkey : event.key = key
-          · rw [if_pos hkey]
+          · rw [ite_eq_left hkey]
             cases hwrite : event.visit.written? with
             | none =>
                 apply ih (record :: rest) hsplit' key
@@ -914,7 +914,7 @@ private theorem applyAllowanceLedger_eq_zero_of_checkpointRoot
                 intro v hv
                 rw [hsound init record rest hsplit' event hallow v hv]
                 exact ih (record :: rest) hsplit' event.key hprior
-          · rw [if_neg hkey]
+          · rw [ite_eq_right hkey]
             apply ih (record :: rest) hsplit' key
             simpa only [List.reverse_append, List.reverse_cons, List.reverse_nil, List.nil_append,
               List.cons_append, attributionRootAt, hallow, hkey, ↓reduceIte] using hroot
@@ -1164,7 +1164,7 @@ private theorem zeroReads_go
         | some ev =>
             dsimp only
             by_cases hkey : ev.key = projectedAllowanceKey owner spender
-            · rw [if_pos hkey]
+            · rw [ite_eq_left hkey]
               have hpair : (ev.owner, ev.spender) = (owner, spender) :=
                 eq_of_projectedAllowanceKey_eq _ hpairs _
                   (mem_touchedPairs.mpr ⟨head, hheadWhole, ev, hallow, rfl⟩) _
@@ -1179,7 +1179,7 @@ private theorem zeroReads_go
                   exact written_eq_zero_of_read_zero
                     (hrooted head hheadWhole) (hdormant head hheadWhole)
                     hallow hevOwner (hheadRead ev hallow hevOwner) hwrite
-            · rw [if_neg hkey]
+            · rw [ite_eq_right hkey]
               exact hinv owner spender howner' hmem
 
 /-! ## The residual, discharged

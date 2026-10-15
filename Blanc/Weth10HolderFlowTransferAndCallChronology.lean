@@ -379,7 +379,7 @@ private theorem Exec.Frame.CompiledCursor.reachTransferNonzeroCallback
   have hcover : Sevm.argWord frame.sevm 1 ≤ balance := by
     rw [← B256.not_lt]
     intro hlt
-    rw [B256.ltCheck, if_pos hlt] at hflag
+    rw [B256.ltCheck, ite_eq_left hlt] at hflag
     exact B256.zero_ne_one hflag.symm
   rw [hflag] at hguardPrefix
   have hsuccessPrefix :

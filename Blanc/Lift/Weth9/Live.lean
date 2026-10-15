@@ -165,7 +165,7 @@ theorem dispatch_head {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome}
   refine rx_calldatasize (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.one_lt_ofNat]) ?_
   refine rx_lt (v := 0) ?_ (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
-  · rw [B256.ltCheck, if_neg]
+  · rw [B256.ltCheck, ite_eq_right]
     intro h
     have h1 := B256.toNat_lt_toNat h
     rw [B256.toNat_toB256_of_lt h_len'] at h1
@@ -632,22 +632,22 @@ theorem weth9Gas_boSel {sevm : Sevm} {pre : Devm} :
     weth9Gas boSel sevm pre =
       some (if boKey sevm ∈ pre.accessedStorageKeys then balanceOfGas9Warm else balanceOfGas9) := by
   by_cases h : boKey sevm ∈ pre.accessedStorageKeys
-  · rw [if_pos h]
-    simp only [weth9Gas, weth9GasWith, if_pos h]
+  · rw [ite_eq_left h]
+    simp only [weth9Gas, weth9GasWith, ite_eq_left h]
     rfl
-  · rw [if_neg h]
-    simp only [weth9Gas, weth9GasWith, if_neg h]
+  · rw [ite_eq_right h]
+    simp only [weth9Gas, weth9GasWith, ite_eq_right h]
     rfl
 
 theorem weth9Gas_dcSel {sevm : Sevm} {pre : Devm} :
     weth9Gas dcSel sevm pre =
       some (if dcKey sevm ∈ pre.accessedStorageKeys then decimalsGas9Warm else decimalsGas9) := by
   by_cases h : dcKey sevm ∈ pre.accessedStorageKeys
-  · rw [if_pos h]
-    simp only [weth9Gas, weth9GasWith, if_neg dcSel_ne_boSel, if_pos h]
+  · rw [ite_eq_left h]
+    simp only [weth9Gas, weth9GasWith, ite_eq_right dcSel_ne_boSel, ite_eq_left h]
     rfl
-  · rw [if_neg h]
-    simp only [weth9Gas, weth9GasWith, if_neg dcSel_ne_boSel, if_neg h]
+  · rw [ite_eq_right h]
+    simp only [weth9Gas, weth9GasWith, ite_eq_right dcSel_ne_boSel, ite_eq_right h]
     rfl
 
 /-- The most a priced WETH9 entrypoint can cost: the storage read cold. -/
@@ -671,20 +671,20 @@ theorem weth9Gas_le_max {sel : B256} {sevm : Sevm} {pre : Devm} {cost : Nat}
   simp only [weth9GasMax, weth9GasMaxWith]
   by_cases hb : sel = boSel
   · subst hb
-    rw [if_pos rfl] at h_cost ⊢
+    rw [ite_eq_left rfl] at h_cost ⊢
     refine ⟨_, rfl, ?_⟩
     injection h_cost with h_cost
     subst h_cost
     split <;> decide
-  · rw [if_neg hb] at h_cost ⊢
+  · rw [ite_eq_right hb] at h_cost ⊢
     by_cases hd : sel = dcSel
     · subst hd
-      rw [if_pos rfl] at h_cost ⊢
+      rw [ite_eq_left rfl] at h_cost ⊢
       refine ⟨_, rfl, ?_⟩
       injection h_cost with h_cost
       subst h_cost
       split <;> decide
-    · rw [if_neg hd] at h_cost
+    · rw [ite_eq_right hd] at h_cost
       exact absurd h_cost (by simp only [reduceCtorEq, not_false_eq_true])
 
 /-! ## The runs -/
@@ -717,7 +717,7 @@ theorem weth9_balanceOf_runExact {sevm : Sevm} {pre : Devm} {cost : Nat}
   rw [h_sel, weth9Gas_boSel] at h_cost
   injection h_cost with h_cost
   by_cases hw : boKey sevm ∈ pre.accessedStorageKeys
-  · rw [if_pos hw, balanceOfGas9Warm_eq] at h_cost
+  · rw [ite_eq_left hw, balanceOfGas9Warm_eq] at h_cost
     subst h_cost
     obtain ⟨post, hrun, hg, ho⟩ := bal_entry (b := pre) (g := pre.gasLeft - 534)
       (G := pre.gasLeft - 534 + 53 + 191) h_value
@@ -727,7 +727,7 @@ theorem weth9_balanceOf_runExact {sevm : Sevm} {pre : Devm} {cost : Nat}
     have h0 := dispatch_balanceOf (b := pre) h_len h_len' hsel hrun
     rw [pre_eq_St h_stack h_mem (by omega)] at h0
     exact ⟨post, ⟨_, rfl, h0⟩, by omega, ho⟩
-  · rw [if_neg hw, balanceOfGas9_eq] at h_cost
+  · rw [ite_eq_right hw, balanceOfGas9_eq] at h_cost
     subst h_cost
     obtain ⟨post, hrun, hg, ho⟩ := bal_entry (b := pre) (g := pre.gasLeft - 2534)
       (G := pre.gasLeft - 2534 + 53 + 2191) h_value
@@ -757,7 +757,7 @@ theorem weth9_decimals_runExact {sevm : Sevm} {pre : Devm} {cost : Nat}
   rw [h_sel, weth9Gas_dcSel] at h_cost
   injection h_cost with h_cost
   by_cases hw : dcKey sevm ∈ pre.accessedStorageKeys
-  · rw [if_pos hw, decimalsGas9Warm_eq] at h_cost
+  · rw [ite_eq_left hw, decimalsGas9Warm_eq] at h_cost
     subst h_cost
     obtain ⟨post, hrun, hg, ho⟩ := dec_entry (b := pre) (g := pre.gasLeft - 444)
       (G := pre.gasLeft - 444 + 65 + 151) h_value
@@ -767,7 +767,7 @@ theorem weth9_decimals_runExact {sevm : Sevm} {pre : Devm} {cost : Nat}
     rw [pre_eq_St h_stack h_mem (by omega)] at h0
     refine ⟨post, ⟨_, rfl, h0⟩, by omega, ?_⟩
     rw [ho, and_ff3]
-  · rw [if_neg hw, decimalsGas9_eq] at h_cost
+  · rw [ite_eq_right hw, decimalsGas9_eq] at h_cost
     subst h_cost
     obtain ⟨post, hrun, hg, ho⟩ := dec_entry (b := pre) (g := pre.gasLeft - 2444)
       (G := pre.gasLeft - 2444 + 65 + 2151) h_value

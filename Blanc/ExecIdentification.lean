@@ -142,11 +142,11 @@ theorem Exec.descendantFrames_flatMap_of_nextSome {α : Type} (f : Exec.Frame �
       rw [Exec.unique next' next]
       by_cases settles : Frame.settlementCommits frame raw = true
       · rw [Exec.descendantFrames_runOk_of_settlementCommits hstep henter child
-          _ next settles, if_pos settles]
+          _ next settles, ite_eq_left settles]
         simp only [List.cons_append, List.flatMap_cons, List.flatMap_append, committedFrames,
           Frame.raw_commits_of_settlementCommits settles, ↓reduceDIte, List.append_assoc]
       · rw [Exec.descendantFrames_runOk_of_not_settlementCommits hstep henter
-          child _ next settles, if_neg settles, List.nil_append]
+          child _ next settles, ite_eq_right settles, List.nil_append]
   | halt hstep => cases hroot.symm.trans hstep
   | cont hstep _ => cases hroot.symm.trans hstep
   | doneErr hstep henter' _ =>

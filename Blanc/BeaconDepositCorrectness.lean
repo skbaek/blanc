@@ -270,11 +270,11 @@ theorem climb_spec (H : Bytes → B256) (ls : List B256) :
         rw [Nat.div_div_eq_div_mul, ← Nat.pow_succ]
       have harith : h + (k + 1) = (h + 1) + k := by omega
       rcases Nat.mod_two_eq_zero_or_one (ls.length / 2 ^ h) with hb | hb
-      · rw [if_neg (by omega), hsize,
+      · rw [ite_eq_right (by omega), hsize,
           ← rootAt_pending_even H h ls.length ls rfl hb, harith]
         exact ih (h + 1) br (harith ▸ hlt)
           (fun h' h1 h2 => hbr h' (by omega) (by omega))
-      · rw [if_pos hb, hbr h le_rfl (by omega) hb, hsize,
+      · rw [ite_eq_left hb, hbr h le_rfl (by omega) hb, hsize,
           ← rootAt_pending_odd H h ls.length ls rfl hb, harith]
         exact ih (h + 1) br (harith ▸ hlt)
           (fun h' h1 h2 => hbr h' (by omega) (by omega))
@@ -389,7 +389,7 @@ theorem walk_eq_some_firstLive (H : Bytes → B256) (branch : Nat → B256)
             rw [div_two_div_pow]
             exact hfirst.2 (j + 1) (by omega)
         simp only [walk]
-        rw [if_neg (by omega)]
+        rw [ite_eq_right (by omega)]
         have hrec := ih (fuel := fuel) (start := start + 1)
           (size := size / 2) (node := hashPair H (branch start) node)
           (by omega) hfirst'
@@ -410,7 +410,7 @@ theorem walk_eq_none_iff (H : Bytes → B256) :
       intro h size node br
       simp only [walk]
       rcases Nat.mod_two_eq_zero_or_one size with hb | hb
-      · rw [if_neg (by omega), ih (h + 1) (size / 2) _ br]
+      · rw [ite_eq_right (by omega), ih (h + 1) (size / 2) _ br]
         constructor
         · intro hj j hjk
           rcases Nat.eq_zero_or_pos j with hj0 | hj0
@@ -424,7 +424,7 @@ theorem walk_eq_none_iff (H : Bytes → B256) :
         · intro hj j hjk
           rw [div_two_div_pow]
           exact hj (j + 1) (by omega)
-      · rw [if_pos hb]
+      · rw [ite_eq_left hb]
         constructor
         · intro hnone
           exact absurd hnone (Option.some_ne_none _)
@@ -457,14 +457,14 @@ theorem insert_isSome_iff (H : Bytes → B256) (s : Acc) (node : B256) :
     (Acc.insert H s node).isSome ↔ s.count < 2 ^ 32 - 1 := by
   unfold Acc.insert
   by_cases hc : s.count < 2 ^ 32 - 1
-  · rw [if_pos hc, Option.isSome_map]
+  · rw [ite_eq_left hc, Option.isSome_map]
     rw [walk_isSome_iff]
     have h1 : (s.count + 1) % 2 ^ 32 = s.count + 1 := Nat.mod_eq_of_lt (by omega)
     rw [h1]
     constructor
     · intro _; exact hc
     · intro _; omega
-  · rw [if_neg hc]
+  · rw [ite_eq_right hc]
     simp only [Option.isSome_none, Bool.false_eq_true, Nat.reducePow, Nat.add_one_sub_one,
       false_iff, not_lt]
     omega
@@ -478,7 +478,7 @@ theorem insert_eq_some_firstLive (H : Bytes → B256) (s : Acc) (node : B256)
       some ⟨setSlot s.branch h
         (accumulatedNode H s.branch 0 h node), s.count + 1⟩ := by
   unfold Acc.insert
-  rw [if_pos hcap, walk_eq_some_firstLive H s.branch node hh hfirst]
+  rw [ite_eq_left hcap, walk_eq_some_firstLive H s.branch node hh hfirst]
   simp only [zero_add, Option.map_some]
 
 /-! ## Insertion preserves the invariant -/
@@ -588,7 +588,7 @@ theorem walk_insert_spec (H : Bytes → B256) (ls : List B256) (leaf : B256) :
       simp only [walk]
       rcases Nat.mod_two_eq_zero_or_one ((ls.length + 1) / 2 ^ h) with hb | hb
       · -- dead bit at `h`: combine with the old completed block and recurse
-        rw [if_neg (by omega), div_pow_div_two]
+        rw [ite_eq_right (by omega), div_pow_div_two]
         have hpow1 : (2 : Nat) ^ (h + 1) = 2 ^ h * 2 := Nat.pow_succ 2 h
         have hmod1 : (ls.length + 1) % 2 ^ (h + 1) = 0 := by
           rw [Nat.mod_pow_succ, hb, Nat.mul_zero, Nat.add_zero, hmod]
@@ -649,14 +649,14 @@ theorem walk_insert_spec (H : Bytes → B256) (ls : List B256) (leaf : B256) :
         exact ih (h + 1) br (by omega) hmod1 hne1 hlt1
           (fun h' h1 h2 hbit => hbr h' (by omega) h2 hbit)
       · -- live bit at `h`: write the node and stop
-        rw [if_pos hb]
+        rw [ite_eq_left hb]
         refine ⟨setSlot br h
           (rootAt H h ((ls ++ [leaf]).drop (ls.length + 1 - 2 ^ h))), rfl, ?_⟩
         intro h' h32 hbit
         unfold setSlot
         by_cases heq : h' = h
         · subst heq
-          rw [if_pos rfl]
+          rw [ite_eq_left rfl]
           have hm1 : (ls.length + 1) % 2 ^ (h' + 1) = 2 ^ h' := by
             rw [Nat.mod_pow_succ, hb, Nat.mul_one, hmod, Nat.zero_add]
           have hstart : (ls.length + 1) / 2 ^ (h' + 1) * 2 ^ (h' + 1)
@@ -665,7 +665,7 @@ theorem walk_insert_spec (H : Bytes → B256) (ls : List B256) (leaf : B256) :
           unfold completedBlock
           rw [hstart, List.take_of_length_le
             (by rw [List.length_drop, hlen']; omega)]
-        · rw [if_neg heq]
+        · rw [ite_eq_right heq]
           rcases Nat.lt_or_ge h' h with hlth | hgeh
           · have := bit_zero_of_mod_zero (ls.length + 1) h h' hlth hmod
             omega
@@ -710,7 +710,7 @@ theorem insert_spec (H : Bytes → B256) (s : Acc) (ls : List B256)
   rw [hsize, hnode0] at hwalk
   refine ⟨⟨br', s.count + 1⟩, ?_, rfl, ?_, ?_, ?_⟩
   · unfold Acc.insert
-    rw [if_pos hcap, hwalk]
+    rw [ite_eq_left hcap, hwalk]
     rfl
   · simp only [hc, List.length_append, List.length_cons, List.length_nil, zero_add]
   · have hl : (ls ++ [leaf]).length = ls.length + 1 := by simp only [List.length_append,
@@ -779,7 +779,7 @@ theorem deposit_ok_spec (H : Bytes → B256) (s : Acc)
     hcap', ?_, h2.symm, ?_⟩
   · rw [← h1]
   · unfold Acc.insert
-    rw [if_pos hcap', hwalk]
+    rw [ite_eq_left hcap', hwalk]
     exact congrArg some h1
 
 /-- A successful deposit with a known first live height has the exact branch

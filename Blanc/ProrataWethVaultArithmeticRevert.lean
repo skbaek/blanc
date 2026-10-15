@@ -785,7 +785,7 @@ theorem finishQuotient_up_run {pre : Devm} {out : Execution} {image : Bytes}
         quotientAt remainderAt nil_pref (Func.stopTable_get k) capRun
     obtain rfl := Func.Run.stop_inv stopRun
     have valueMax := pref_head_unique valuePrefix maxStack
-    rw [if_neg remNonzero] at valueMax
+    rw [ite_eq_right remNonzero] at valueMax
     exact safe remNonzero valueMax
 
 /-- The straight-line half of `divideSimple`. -/
@@ -1206,7 +1206,7 @@ theorem divide512_up_run {pre : Devm} {out : Execution} {image : Bytes}
         wideRemainderWord_eq_zero_iff (high := high) (low := low)
           denominatorZero'
       by_cases remainderZero : wideRemainderWord high low denominator = 0
-      · rw [if_pos remainderZero] at valueMax
+      · rw [ite_eq_left remainderZero] at valueMax
         have quotientZero := eq_zero_of_sub_one_eq_max valueMax
         rw [quotientEq] at quotientZero
         have nat := congrArg B256.toNat quotientZero
@@ -1228,14 +1228,14 @@ theorem divide512_up_run {pre : Devm} {out : Execution} {image : Bytes}
             _ ≤ high.toNat * wordModulusN + low.toNat := Nat.le_add_right _ _
         unfold wordModulusN at wideBig
         omega
-      · rw [if_neg remainderZero] at valueMax
+      · rw [ite_eq_right remainderZero] at valueMax
         rw [quotientEq] at valueMax
         have nat := congrArg B256.toNat valueMax
         rw [B256.toNat_toB256_of_lt floorFits, maxWord_toNat] at nat
         have natRem : wideNumeratorN high low % denominator.toNat ≠ 0 :=
           fun zero => remainderZero (remainderIff.mpr zero)
         unfold ceilDiv at fits
-        rw [if_neg natRem, nat] at fits
+        rw [ite_eq_right natRem, nat] at fits
         unfold maxWordN wordModulusN at fits
         omega
 
@@ -1524,7 +1524,7 @@ theorem productQuotient_ne_max {x y : B256}
       (productLowWord x y).toNat := by
     rw [Nat.add_comm, Nat.add_mul_mod_self_right,
       Nat.mod_eq_of_lt (by unfold wordModulusN; exact lLt)]
-  rw [div, mod, if_neg lPos, hNat] at fits
+  rw [div, mod, ite_eq_right lPos, hNat] at fits
   unfold maxWordN at fits
   omega
 

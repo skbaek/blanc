@@ -85,7 +85,7 @@ theorem processCreateMessage_ok_of_processMessage_error
     rw [Option.isNone_iff_eq_none] at hnone
     rw [hnone] at herror
     cases herror
-  rw [if_neg hnotNone]
+  rw [ite_eq_right hnotNone]
 
 /-- The outer message result induced by a successful direct CREATE after code
 charging.  Constructor families may retain their historical wrapper names,
@@ -256,17 +256,17 @@ private theorem processMessageCall_ok_of_compiled_exec
     rw [henter]
     unfold Frame.settle Frame.settleMsg processMessage.settle
     simp only [hexec, executeCode.handleErrorWith_ok, herror, Frame.ofCall, Option.isSome,
-      Bool.false_eq_true, if_false, bind, Except.bind]
+      Bool.false_eq_true, ite_false, bind, Except.bind]
   have hdelegation : getDelegatedCodeAddress msg.code = none := by
     unfold getDelegatedCodeAddress
-    rw [if_neg (not_delegation_of_compile hcompile)]
+    rw [ite_eq_right (not_delegation_of_compile hcompile)]
   have htoNat : Int.toNat? post.refundCounter =
       some post.refundCounter.toNat :=
     Int.mem_toNat?.mpr (Int.toNat_of_nonneg hrefund).symm
   unfold processMessageCall
   rw [htarget]
   unfold processMessageCall.call
-  simp only [hauths, List.isEmpty, if_true, bind, Except.bind,
+  simp only [hauths, List.isEmpty, ite_true, bind, Except.bind,
     hdelegation, hprocess, Except.bimap, id_eq, herror, Option.isNone,
     htoNat, Option.toExcept, Nat.cast_zero, zero_add, hstateGas]
   rfl
@@ -372,7 +372,7 @@ theorem processCheckedSystemTransaction_deploymentSystemProgram
       hbytesne
   refine ⟨out, ?_, herr, hrefund, hlogs, hdelete, hreturn⟩
   unfold processCheckedSystemTransaction
-  simp only [hne, Bool.false_eq_true, if_false]
+  simp only [hne, Bool.false_eq_true, ite_false]
   unfold processUncheckedSystemTransaction at hrun
   rw [hrun]
   simp only [Except.mapError, Prod.mk.eta, Except.bind_ok, herr]

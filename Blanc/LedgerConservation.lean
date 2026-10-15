@@ -52,7 +52,7 @@ theorem ledgerSumOn_increase {coalition : Finset Adr} {receiver : Adr}
   · unfold ledgerSumOn
     rw [← Finset.sum_erase_add coalition (fun account => (after account).toNat) member,
       ← Finset.sum_erase_add coalition (fun account => (before account).toNat) member,
-      if_pos member, ← (increase receiver).1 rfl,
+      ite_eq_left member, ← (increase receiver).1 rfl,
       B256.toNat_add_eq_of_nof _ _ nof]
     have erased :
         (coalition.erase receiver).sum (fun account => (after account).toNat) =
@@ -83,7 +83,7 @@ theorem ledgerSumOn_decrease {coalition : Finset Adr} {owner : Adr}
   · unfold ledgerSumOn
     rw [← Finset.sum_erase_add coalition (fun account => (after account).toNat) member,
       ← Finset.sum_erase_add coalition (fun account => (before account).toNat) member,
-      if_pos member, ← (decrease owner).1 rfl,
+      ite_eq_left member, ← (decrease owner).1 rfl,
       B256.toNat_sub_eq_of_le _ _ covered]
     have erased :
         (coalition.erase owner).sum (fun account => (after account).toNat) =

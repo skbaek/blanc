@@ -182,13 +182,13 @@ theorem scallPrep_withOrig (d : Devm) (adrs : List Adr) (acs : AcctShadow) :
   have e2 : (s.withOrig O).depth = s.depth := rfl
   have e3 : (s.withOrig O).isStatic = s.isStatic := rfl
   have e4 : (s.withOrig O).currentTarget = s.currentTarget := rfl
-  simp only [e1, e2, e3, e4]
+  simp only [e1, e2]
   by_cases h : decide (CoveredFork s.benvStat.fork) = true ∧ s.depth ≠ 0
-  · rw [if_pos h, if_pos h]
+  · rw [ite_eq_left h, ite_eq_left h]
     split
-    · rename_i heq; simp only [heq, Option.map_none]
+    · rename_i heq; simp only [Option.map_none]
     · split_ifs <;> rfl
-  · rw [if_neg h, if_neg h]; rfl
+  · rw [ite_eq_right h, ite_eq_right h]; rfl
 
 theorem dcallPrep_withOrig (d : Devm) (adrs : List Adr) (acs : AcctShadow) :
     dcallPrep (s.withOrig O) d adrs acs = (dcallPrep s d adrs acs).map (·.withOrig O) := by
@@ -199,13 +199,13 @@ theorem dcallPrep_withOrig (d : Devm) (adrs : List Adr) (acs : AcctShadow) :
   have e2 : (s.withOrig O).depth = s.depth := rfl
   have e3 : (s.withOrig O).isStatic = s.isStatic := rfl
   have e4 : (s.withOrig O).currentTarget = s.currentTarget := rfl
-  simp only [e1, e2, e3, e4]
+  simp only [e1, e2]
   by_cases h : decide (CoveredFork s.benvStat.fork) = true ∧ s.depth ≠ 0
-  · rw [if_pos h, if_pos h]
+  · rw [ite_eq_left h, ite_eq_left h]
     split
-    · rename_i heq; simp only [heq, Option.map_none]
+    · rename_i heq; simp only [Option.map_none]
     · split_ifs <;> rfl
-  · rw [if_neg h, if_neg h]; rfl
+  · rw [ite_eq_right h, ite_eq_right h]; rfl
 
 theorem callPrep_withOrig (c : Cfg) :
     callPrep (s.withOrig O) c = (callPrep s c).map (·.withOrig O) := by
@@ -218,11 +218,11 @@ theorem callPrep_withOrig (c : Cfg) :
   have e4 : (s.withOrig O).currentTarget = s.currentTarget := rfl
   simp only [e1, e2, e3, e4]
   by_cases h : decide (CoveredFork s.benvStat.fork) = true ∧ s.depth ≠ 0
-  · rw [if_pos h, if_pos h]
+  · rw [ite_eq_left h, ite_eq_left h]
     split
-    · rename_i heq; simp only [heq, Option.map_none]
+    · rename_i heq; simp only [Option.map_none]
     · split_ifs <;> rfl
-  · rw [if_neg h, if_neg h]; rfl
+  · rw [ite_eq_right h, ite_eq_right h]; rfl
 
 theorem benvAfterTransferS_withOrig (m : Msg) (acs : AcctShadow) :
     benvAfterTransferS (m.withOrig O) acs = (benvAfterTransferS m acs).map (·.withOrig O) := by

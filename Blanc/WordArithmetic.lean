@@ -267,7 +267,7 @@ theorem productHighWord_mul_add_productLowWord_toNat (x y : B256) :
         (0 : B256) ≤ B256.mulmod x y B256.max - productLowWord x y :=
       B256.le_of_toNat_le_toNat (Nat.zero_le _)
     have hhigh : (productHighWord x y).toNat = q := by
-      rw [productHighWord, if_neg hnotBorrow]
+      rw [productHighWord, ite_eq_right hnotBorrow]
       rw [B256.toNat_sub_eq_of_le _ _ hzeroLe, B256.toNat_zero,
         Nat.sub_zero]
       rw [B256.toNat_sub_eq_of_le _ _ hleWord, hscratchWord, hlow,
@@ -308,7 +308,7 @@ theorem productHighWord_mul_add_productLowWord_toNat (x y : B256) :
       rw [B256.toNat_one, hwrapped]
       omega
     have hhigh : (productHighWord x y).toNat = q := by
-      rw [productHighWord, if_pos hborrow]
+      rw [productHighWord, ite_eq_left hborrow]
       rw [B256.toNat_sub_eq_of_le _ _ honeLe, hwrapped, B256.toNat_one]
       omega
     rw [hhigh, hlow]
@@ -481,7 +481,7 @@ theorem wordDiv_eq_toB256_div (x y : B256) :
       Nat.toB256 (x.toNat / B256.zero.toNat)
     unfold B256.divMod
     have zeroEq : B256.zero = (0 : B256) := by rfl
-    rw [if_pos zeroEq]
+    rw [ite_eq_left zeroEq]
     change (0 : B256) = Nat.toB256 (x.toNat / 0)
     rw [Nat.div_zero]
     rfl
@@ -596,7 +596,7 @@ theorem wideSubWords_reconstruct
       omega
     have highSub :
         (wideSubHighWord high low remainder).toNat = high.toNat - 1 := by
-      rw [wideSubHighWord, wideBorrowWord, B256.ltCheck, if_pos borrow,
+      rw [wideSubHighWord, wideBorrowWord, B256.ltCheck, ite_eq_left borrow,
         B256.toNat_sub_eq_of_le _ _ oneLeHigh, B256.toNat_one]
     have lowSub :
         (wideSubLowWord low remainder).toNat =
@@ -645,7 +645,7 @@ theorem wideSubWords_reconstruct
       B256.le_of_toNat_le_toNat (Nat.zero_le _)
     have highSub :
         (wideSubHighWord high low remainder).toNat = high.toNat := by
-      rw [wideSubHighWord, wideBorrowWord, B256.ltCheck, if_neg borrow,
+      rw [wideSubHighWord, wideBorrowWord, B256.ltCheck, ite_eq_right borrow,
         B256.toNat_sub_eq_of_le _ _ zeroLeHigh,
         B256.toNat_zero, Nat.sub_zero]
     rw [highSub, lowSub]
@@ -905,9 +905,9 @@ theorem roundedQuotientWord_eq_toB256_ceilDiv
     (if remainder = 0 then quotient else quotient + 1) =
       Nat.toB256 (ceilDiv n d) := by
   by_cases exactDivision : n % d = 0
-  · rw [if_pos (remainderZero.mpr exactDivision), quotientEq]
+  · rw [ite_eq_left (remainderZero.mpr exactDivision), quotientEq]
     simp only [ceilDiv, exactDivision, ↓reduceIte, add_zero]
-  · rw [if_neg (fun h => exactDivision (remainderZero.mp h)), quotientEq,
+  · rw [ite_eq_right (fun h => exactDivision (remainderZero.mp h)), quotientEq,
       toB256_add_one]
     simp only [ceilDiv, exactDivision, ↓reduceIte]
 
@@ -940,12 +940,12 @@ theorem minWord_eq_toB256_min
       rw [B256.lt_iff_toNat_lt_toNat,
         B256.toNat_toB256_of_lt (by simpa only [Nat.reducePow, wordModulusN] using aFits)]
       exact less
-    rw [if_pos wordLess, Nat.min_eq_left (Nat.le_of_lt less)]
+    rw [ite_eq_left wordLess, Nat.min_eq_left (Nat.le_of_lt less)]
   · have wordNotLess : ¬ Nat.toB256 a < b := by
       rw [B256.lt_iff_toNat_lt_toNat,
         B256.toNat_toB256_of_lt (by simpa only [Nat.reducePow, wordModulusN] using aFits)]
       exact less
-    rw [if_neg wordNotLess, Nat.min_eq_right (Nat.le_of_not_gt less),
+    rw [ite_eq_right wordNotLess, Nat.min_eq_right (Nat.le_of_not_gt less),
       Jaune.toB256_toNat]
 
 /-- Saturating a natural at the largest EVM word before conversion makes the
@@ -983,11 +983,11 @@ theorem ceilPredQuotientWord_eq_toB256
         B256.toNat_toB256_of_lt quotientBound]
       change 1 ≤ n / d
       omega
-    rw [if_pos (remainderZero.mpr exactDivision), quotientEq,
+    rw [ite_eq_left (remainderZero.mpr exactDivision), quotientEq,
       wordSub_eq_toB256_sub_of_le oneLe,
       B256.toNat_toB256_of_lt quotientBound, B256.toNat_one]
     simp only [ceilDiv, exactDivision, ↓reduceIte, add_zero]
-  · rw [if_neg (fun h => exactDivision (remainderZero.mp h)), quotientEq]
+  · rw [ite_eq_right (fun h => exactDivision (remainderZero.mp h)), quotientEq]
     simp only [ceilDiv, exactDivision, ↓reduceIte, add_tsub_cancel_right]
 
 /-- Removing one from a ceiling quotient never exceeds the corresponding

@@ -722,7 +722,7 @@ theorem executeEcrecover_permitImage {evm : Evm} {digest : B256} {v : UInt8}
     (hgas : gasEcrecover ≤ evm.dyna.gasLeft) :
     executeEcrecover evm = permitEcrecoverResult digest v r s := by
   unfold executeEcrecover PrecompResult.chargeGas
-  rw [if_pos hgas]
+  rw [ite_eq_left hgas]
   simp only [hdata, permitEcrecoverImage_word_zero,
     permitEcrecoverImage_word_one, permitEcrecoverImage_word_two,
     permitEcrecoverImage_word_three]
@@ -793,7 +793,7 @@ theorem gasEcrecover_le_of_processMessage_clean
               (initEvm ((callMsg sevm parent gas 0 sevm.currentTarget 1 1 true true
                 calldata code false).withBenv benv))) from rfl] at hexec
       unfold executeEcrecover PrecompResult.chargeGas at hexec
-      rw [if_neg (by
+      rw [ite_eq_right (by
         show ¬gasEcrecover ≤
           (initEvm ((callMsg sevm parent gas 0 sevm.currentTarget 1 1 true true
             calldata code false).withBenv benv)).dyna.gasLeft
@@ -921,7 +921,7 @@ theorem output_nil_of_processMessage_permitEcrecover_error
                   true true (permitEcrecoverImage digest v sigR sigS) code
                   false).withBenv benv))) from rfl] at hexec
         unfold executeEcrecover PrecompResult.chargeGas at hexec
-        rw [if_neg (by
+        rw [ite_eq_right (by
           show ¬gasEcrecover ≤
             (initEvm ((callMsg sevm parent gas 0 sevm.currentTarget 1 1 true
               true (permitEcrecoverImage digest v sigR sigS) code false).withBenv
@@ -1476,7 +1476,7 @@ theorem of_recoverPermitSigner
           _ = Devm.getStor parent a := hchildStor a
           _ = Devm.getStor q a := getStor_eq_of_state_eq hstate a
       have hlogsU : u.logs = q.logs := by
-        rw [Resume.call_logs hresume, if_neg hcleanNot, hchildLogs,
+        rw [Resume.call_logs hresume, ite_eq_right hcleanNot, hchildLogs,
           List.append_nil, hparentLogs]
       have houtputU : u.output = q.output := by
         rw [Resume.call_output hresume, hparentOutput]
@@ -1779,8 +1779,7 @@ private lemma permit_normalizeAddress_owner (owner : Adr) :
     rfl
   rw [hm]
   rcases owner with ⟨ahi, alo⟩
-  simp only [Adr.toB256, B256.and_eq_and_prod_and,
-    B128.and_eq_and_prod_and, UInt64.zero_and]
+  simp only [Adr.toB256]
   apply Prod.ext
   · apply Prod.ext
     · rfl
@@ -3356,7 +3355,7 @@ private theorem permit_success_not_expired_core (dp : DeployParams)
   · have hflag := (popBurn_pref hpop hpflag).1
     rw [B256.gtCheck] at hflag
     by_contra hgt
-    rw [if_pos hgt] at hflag
+    rw [ite_eq_left hgt] at hflag
     exact B256.zero_ne_one hflag
   · rcases of_run_call hcall with ⟨f, s3, hget, hcallBurn, hrev⟩
     have hf : f = expiredPermitError := by

@@ -111,7 +111,7 @@ theorem withdraw_success_within_maxWithdraw
     omega
   rw [← supplyNat]
   unfold Blanc.ProrataWethVault.maxWithdrawViewN
-  rw [if_neg (Nat.not_lt_of_ge stable)]
+  rw [ite_eq_right (Nat.not_lt_of_ge stable)]
   apply (Nat.le_min).2
   constructor
   · exact amountWord

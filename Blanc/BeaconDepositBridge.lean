@@ -192,11 +192,11 @@ theorem accOfStor_constructorFinalStorage :
   apply congrArg₂ Acc.mk
   · funext height
     by_cases bound : height < 32
-    · simp only [bound, if_true]
+    · simp only [bound, ite_true]
       apply constructorZeroHashStorage_get_of_region_ne (limit := 31) (by omega)
       intro zeroHeight positive le
       exact branchSlot_ne_zeroHashSlot bound (by omega)
-    · simp only [bound, if_false]
+    · simp only [bound, ite_false]
   · have countWord :
         (constructorZeroHashStorage 31).get depositCountSlot = 0 := by
       apply constructorZeroHashStorage_get_of_region_ne (limit := 31) (by omega)
@@ -264,9 +264,9 @@ theorem accOfStor_countWrite_branch
       (accOfStor stor).branch := by
   funext height
   by_cases bound : height < 32
-  · simp only [accOfStor, bound, if_true,
+  · simp only [accOfStor, bound, ite_true,
       Stor.get_set_ne _ (branchSlot_ne_depositCountSlot bound).symm _]
-  · simp only [accOfStor, bound, if_false]
+  · simp only [accOfStor, bound, ite_false]
 
 theorem accOfStor_applyDepositWrites
     (stor : Stor) (height : Nat) (node : B256)
@@ -279,7 +279,7 @@ theorem accOfStor_applyDepositWrites
   apply congrArg₂ Acc.mk
   · funext selected
     by_cases selectedBound : selected < 32
-    · simp only [selectedBound, if_true, applyDepositWrites, setSlot]
+    · simp only [selectedBound, ite_true, applyDepositWrites, setSlot]
       by_cases same : selected = height
       · subst selected
         rw [Stor.get_set_self]
@@ -288,12 +288,12 @@ theorem accOfStor_applyDepositWrites
           intro slotEqual
           apply same
           exact (branchSlot_injective heightBound selectedBound slotEqual).symm
-        rw [if_neg same,
+        rw [ite_eq_right same,
           Stor.get_set_ne _ keyNe _,
           Stor.get_set_ne _
             (branchSlot_ne_depositCountSlot selectedBound).symm _]
-    · simp only [selectedBound, if_false, setSlot,
-        if_neg (by omega : selected ≠ height)]
+    · simp only [selectedBound, ite_false, setSlot,
+        ite_eq_right (by omega : selected ≠ height)]
   · rw [applyDepositWrites,
       Stor.get_set_ne _ (branchSlot_ne_depositCountSlot heightBound) _,
       Stor.get_set_self,

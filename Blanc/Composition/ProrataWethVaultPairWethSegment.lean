@@ -278,7 +278,7 @@ theorem wethFramePairSegment (vault : Adr) : WethFramePairSegment vault := by
         rw [debited]
       have pair : call.pair? = some (vault.toB256, call.sevm.caller.toB256) := by
         simp only [call, WethAllowanceInvocation.pair?, owner,
-          if_neg (Ne.symm (vaultKeyNe callerNe)), Bool.false_eq_true, if_false]
+          ite_eq_right (Ne.symm (vaultKeyNe callerNe)), Bool.false_eq_true, ite_false]
       exact wethRecord_segment
         (debitRecord call callerNe owner pair (debited ▸ move) vaultKept linked
           provenance actor) rfl rfl rfl

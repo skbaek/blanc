@@ -646,7 +646,7 @@ private theorem pairAttackStep_of_record {vault victim : Adr}
         simp only [PairFlow.VictimRow] at rows
         obtain ⟨hpost, hminted, -⟩ := accounts
         by_cases hrecv : receiver = victim
-        · rw [if_pos hrecv] at rows
+        · rw [ite_eq_left hrecv] at rows
           refine ⟨_, _, PairAttackEffect.depositToVictim state (charge r) assets shares
             (by rw [hacc]; exact hminted), ?_, ?_, hrest, ?_, ?_, ?_, ?_, ?_⟩
           · simp only [PairAttackState.inboundCross, hacc, hpost]
@@ -655,7 +655,7 @@ private theorem pairAttackStep_of_record {vault victim : Adr}
             stepCredit, hf, hrecv, hpayer, ↓reduceIte, stepPayout,
             Prorata.AttackAttribution.coalitionAmount_zero, add_zero, stepSharesIn, stepSharesOut,
             ne_eq, not_false_eq_true, and_self]
-        · rw [if_neg hrecv] at rows
+        · rw [ite_eq_right hrecv] at rows
           refine ⟨_, _, PairAttackEffect.nonVictimDeposit state (charge r) assets shares
             (by rw [hacc]; exact hminted), ?_, ?_, hrest, ?_, ?_, ?_, ?_, ?_⟩
           · simp only [PairAttackState.inbound, hacc, hpost]
@@ -669,7 +669,7 @@ private theorem pairAttackStep_of_record {vault victim : Adr}
         obtain ⟨-, hpaid, -, hpost⟩ := accounts
         have hgift : owner = victim → shares ≤ state.giftShares := fun howner =>
           state.le_giftShares_of_lock (row := r.victimRowAfter victim)
-            (by rw [if_pos howner] at rows; rw [hvictim]; exact rows) hlock
+            (by rw [ite_eq_left howner] at rows; rw [hvictim]; exact rows) hlock
         have hnon : owner ≠ victim → shares ≤ state.nonVictimShares := fun howner => by
           have := r.debited_add_victimRow_le conserved (party := owner) (amount := shares)
             (by rw [hf]; rfl) howner
@@ -677,7 +677,7 @@ private theorem pairAttackStep_of_record {vault victim : Adr}
         cases retained with
         | true =>
             by_cases howner : owner = victim
-            · rw [if_pos howner] at rows
+            · rw [ite_eq_left howner] at rows
               refine ⟨_, _, PairAttackEffect.delegatedWithdraw state (charge r) shares 0
                 (hgift howner) (Nat.zero_le _), ?_, ?_, hrest, ?_, ?_, ?_, ?_, ?_⟩
               · simp only [PairAttackState.outboundDelegated, hacc, tsub_zero,
@@ -689,7 +689,7 @@ private theorem pairAttackStep_of_record {vault victim : Adr}
                 Prorata.AttackAttribution.outsideAmount_zero, PairAttackState.inflowPrice,
                 stepCredit, hf, howner, stepPayout, ↓reduceIte, stepSharesIn, ne_eq, true_or,
                 and_self, stepSharesOut]
-            · rw [if_neg howner] at rows
+            · rw [ite_eq_right howner] at rows
               refine ⟨_, _, PairAttackEffect.nonVictimWithdraw state (charge r) shares 0
                 (hnon howner) (Nat.zero_le _), ?_, ?_, hrest, ?_, ?_, ?_, ?_, ?_⟩
               · simp only [PairAttackState.outbound, hacc, tsub_zero,
@@ -703,7 +703,7 @@ private theorem pairAttackStep_of_record {vault victim : Adr}
                 intro h
                 simp only [victimMove, PairFlow.victimOwn, hf, howner, h, and_self, decide_true,
                   Bool.true_eq_false] at hmove
-              rw [if_pos howner] at rows
+              rw [ite_eq_left howner] at rows
               refine ⟨_, _, PairAttackEffect.delegatedWithdraw state (charge r) shares assets
                 (hgift howner) (by rw [hacc]; exact hpaid), ?_, ?_, hrest, ?_, ?_, ?_, ?_, ?_⟩
               · simp only [PairAttackState.outboundDelegated, hacc, hpost, Bool.false_eq_true,
@@ -715,7 +715,7 @@ private theorem pairAttackStep_of_record {vault victim : Adr}
                 Bool.false_eq_true, ↓reduceIte, hrecv, and_false,
                 Prorata.AttackAttribution.outsideAmount_zero, stepSharesIn, ne_eq,
                 not_false_eq_true, or_true, and_self, stepSharesOut]
-            · rw [if_neg howner] at rows
+            · rw [ite_eq_right howner] at rows
               refine ⟨_, _, PairAttackEffect.nonVictimWithdraw state (charge r) shares assets
                 (hnon howner) (by rw [hacc]; exact hpaid), ?_, ?_, hrest, ?_, ?_, ?_, ?_, ?_⟩
               · simp only [PairAttackState.outbound, hacc, hpost, Bool.false_eq_true, ↓reduceIte]
@@ -739,12 +739,12 @@ private theorem pairAttackStep_of_record {vault victim : Adr}
         simp only [PairFlow.VictimRow] at rows
         by_cases hs : source = victim <;> by_cases hr : receiver = victim
         · -- victim to itself
-          rw [if_pos hs, if_pos hr] at rows
+          rw [ite_eq_left hs, ite_eq_left hr] at rows
           refine ⟨_, _, PairAttackEffect.shareMoveWithin state false amount,
             by rw [hacc, accounts], by rw [hvictim]; omega, hrest, ?_, ?_, ?_, ?_, ?_⟩
           all_goals simp only [stepCredit, hf, hs, hr, Prorata.AttackAttribution.coalitionAmount_zero, add_zero, stepPayout, Prorata.AttackAttribution.outsideAmount_zero, stepSharesIn, ne_eq, not_true_eq_false, and_false, ↓reduceIte, stepSharesOut, and_true]
         · -- victim gift: priced in at the ceiling
-          rw [if_pos hs, if_neg hr] at rows
+          rw [ite_eq_left hs, ite_eq_right hr] at rows
           refine ⟨_, _, PairAttackEffect.shareMoveFromVictim state amount
             (state.le_giftShares_of_lock (by rw [hvictim]; exact rows) hlock),
             ?_, ?_, hrest, ?_, ?_, ?_, ?_, ?_⟩
@@ -755,7 +755,7 @@ private theorem pairAttackStep_of_record {vault victim : Adr}
             stepPayout, Prorata.AttackAttribution.outsideAmount_zero, stepSharesIn, ne_eq, hr,
             not_false_eq_true, and_self, ↓reduceIte, stepSharesOut, not_true_eq_false]
         · -- non-victim gift to the victim: priced out at the floor
-          rw [if_neg hs, if_pos hr] at rows
+          rw [ite_eq_right hs, ite_eq_left hr] at rows
           refine ⟨_, _, PairAttackEffect.shareMoveToVictim state amount (by
               have := r.debited_add_victimRow_le conserved (party := source) (amount := amount)
                 (by rw [hf]; rfl) hs
@@ -768,7 +768,7 @@ private theorem pairAttackStep_of_record {vault victim : Adr}
             stepPayout, Prorata.AttackAttribution.outsideAmount_zero, stepSharesIn, hs, ne_eq,
             not_true_eq_false, and_self, ↓reduceIte, stepSharesOut, not_false_eq_true]
         · -- within the non-victim side
-          rw [if_neg hs, if_neg hr] at rows
+          rw [ite_eq_right hs, ite_eq_right hr] at rows
           refine ⟨_, _, PairAttackEffect.shareMoveWithin state true amount,
             by rw [hacc, accounts], by rw [hvictim]; omega, hrest, ?_, ?_, ?_, ?_, ?_⟩
           all_goals simp only [stepCredit, hf, Prorata.AttackAttribution.coalitionAmount_zero, add_zero, stepPayout, Prorata.AttackAttribution.outsideAmount_zero, stepSharesIn, hs, ne_eq, hr, not_false_eq_true, and_true, ↓reduceIte, stepSharesOut, and_false]

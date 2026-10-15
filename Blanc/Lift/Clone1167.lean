@@ -175,11 +175,11 @@ theorem create (I : Adr) {c : Cert} (hc : c = copierCert)
     rfl
   · rw [pf.2.2.1, facts.2.2.1, facts.1]
     change ({ benv.state.get msg.currentTarget with code := _ } : Acct) = _
-    rw [processCreateMessage_msg_afterTransfer_get hvalue htransfer, if_pos rfl]
+    rw [processCreateMessage_msg_afterTransfer_get hvalue htransfer, ite_eq_left rfl]
     rfl
   · intro a ha
     rw [pf.2.2.2 a ha, facts.2.2.1]
-    exact (processCreateMessage_msg_afterTransfer_get hvalue htransfer a).trans (if_neg ha)
+    exact (processCreateMessage_msg_afterTransfer_get hvalue htransfer a).trans (ite_eq_right ha)
   · rw [CreateEntry.liftCreatePost_state, facts.2.2.1, facts.1]
     exact congrArg (fun W => State.setCode W msg.currentTarget (Blanc.forwarderCode I))
       (CreateEntry.entry_state hvalue hstv htransfer)

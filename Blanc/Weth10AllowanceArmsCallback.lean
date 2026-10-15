@@ -456,7 +456,7 @@ private theorem RawTokenCallbackIndexedStepBoundary.allowanceRegionEffect
       simpa only [msg, callMsg] using htarget
     have hnodel : getDelegatedCodeAddress (callPre.getCode ca) = none := by
       dsimp only [getDelegatedCodeAddress]
-      rw [if_neg (not_delegation_of_compile hcallPreCode)]
+      rw [ite_eq_right (not_delegation_of_compile hcallPreCode)]
     simp only [msg, callMsg, htargetCa, hnodel, Option.getD_none]
   have childEffect := trace.allowanceRegionDelta_of_forallDeeperAt hparent
     hmsgDepth hcallPreCode htargetCode htargetDirect hdeeper hfork
@@ -1256,9 +1256,9 @@ theorem Exec.Frame.allowanceRegionEffect_of_approveAndCall
     rw [hstorCa]
     by_cases hkeyEq : projectedAllowanceKey frame.sevm.caller.toB256
         (Sevm.argWord frame.sevm 0) = key
-    · rw [if_pos hkeyEq, ← hkeyEq, ← approveRuntimeKey_eq_projected]
+    · rw [ite_eq_left hkeyEq, ← hkeyEq, ← approveRuntimeKey_eq_projected]
       exact Stor.get_set_self _ _ _
-    · rw [if_neg hkeyEq]
+    · rw [ite_eq_right hkeyEq]
       apply Stor.get_set_ne
       rw [approveRuntimeKey_eq_projected]
       exact hkeyEq
@@ -1334,7 +1334,7 @@ private theorem RawTokenCallbackIndexedStepBoundary.allowanceRegionEffectSound
       simpa only [msg, callMsg] using htarget
     have hnodel : getDelegatedCodeAddress (callPre.getCode ca) = none := by
       dsimp only [getDelegatedCodeAddress]
-      rw [if_neg (not_delegation_of_compile hcallPreCode)]
+      rw [ite_eq_right (not_delegation_of_compile hcallPreCode)]
     simp only [msg, callMsg, htargetCa, hnodel, Option.getD_none]
   have childEffect := trace.allowanceRegionDeltaSound_of_forallDeeperAt hparent
     hmsgDepth hcallPreCode htargetCode htargetDirect hdeeper hfork
@@ -1788,9 +1788,9 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_approveAndCall
     rw [hstorCa]
     by_cases hkeyEq : projectedAllowanceKey frame.sevm.caller.toB256
         (Sevm.argWord frame.sevm 0) = key
-    · rw [if_pos hkeyEq, ← hkeyEq, ← approveRuntimeKey_eq_projected]
+    · rw [ite_eq_left hkeyEq, ← hkeyEq, ← approveRuntimeKey_eq_projected]
       exact Stor.get_set_self _ _ _
-    · rw [if_neg hkeyEq]
+    · rw [ite_eq_right hkeyEq]
       apply Stor.get_set_ne
       rw [approveRuntimeKey_eq_projected]
       exact hkeyEq

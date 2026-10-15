@@ -407,7 +407,7 @@ private theorem constructorZeroHashLoop_succ_dispatch_storageEffectRun
         (by rintro impossible; cases impossible) rfl rfl
         (by
           simp only [B256.ltCheck]
-          rw [if_pos]
+          rw [ite_eq_left]
           rw [B256.lt_iff_toNat_lt_toNat,
             B256.toNat_toB256_of_lt (by omega : height < 2 ^ 256)]
           rw [show ((31 : B256).toNat) = 31 by decide +kernel]
@@ -727,7 +727,7 @@ theorem constructorSha64_success_storageEffectRun_ext
     unfold constructorReturnDataShorterThan
     storage_effect_run (2) [0]
     all_goals try {
-      simp only [Devm.stack_setMach, List.length_cons] at *
+      simp only [Devm.stack_setMach] at *
       omega }
     all_goals try omega
     refine Func.StorageEffectRun.next_constructorPushWord
@@ -738,7 +738,7 @@ theorem constructorSha64_success_storageEffectRun_ext
       omega
     · storage_effect_run (3) [0]
       all_goals try {
-        simp only [Devm.stack_setMach, List.length_cons] at *
+        simp only [Devm.stack_setMach] at *
         omega }
       simpa only [Devm.setMach_setMach, Devm.stack_setMach,
         Devm.memory_setMach, Devm.gasLeft_setMach, Devm.stateGas_setMach,
@@ -1487,8 +1487,8 @@ private theorem constructorZeroHashLoop_remaining_storageEffectRun
               unfold Devm.getOrigStorVal
               by_cases hcreated :
                 sevm.currentTarget ∈ shaPost.createdAccounts
-              · rw [if_pos hcreated]
-              · rw [if_neg hcreated]
+              · rw [ite_eq_left hcreated]
+              · rw [ite_eq_right hcreated]
                 unfold getOrigStorVal getOrigAcct
                 rw [originalEmpty]
                 rfl

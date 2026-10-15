@@ -284,7 +284,7 @@ private theorem transferFromCore_allowanceKey (dp : DeployParams)
       pref_head_unique hp2 (pref_append [w] s3.stack)
     have hargZero : Sevm.argWord e 1 = 0 := by
       by_contra hne
-      rw [B256.eqCheck, if_neg hne] at hflag
+      rw [B256.eqCheck, ite_eq_right hne] at hflag
       exact hnz hflag.symm
     exact absurd hargZero hto
 
@@ -549,12 +549,12 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromNonzero
           by_cases hpk :
               projectedAllowanceKey (Sevm.argWord e 0) e.caller.toB256 =
                 key
-          · rw [if_pos hpk, ← hpk, ← callerAllowanceRuntimeKey_eq_projected]
+          · rw [ite_eq_left hpk, ← hpk, ← callerAllowanceRuntimeKey_eq_projected]
             exact Stor.get_set_self _ _ _
           · have hne : callerAllowanceRuntimeKey e ≠ key := by
               rw [callerAllowanceRuntimeKey_eq_projected]
               exact hpk
-            rw [if_neg hpk, Stor.get_set_ne _ hne _,
+            rw [ite_eq_right hpk, Stor.get_set_ne _ hne _,
               congrFun hstor0 e.currentTarget]
 
 /-! ## The read-sound variant

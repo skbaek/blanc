@@ -61,7 +61,7 @@ theorem Prog.jumpable_of_get?_table_appended
   refine ⟨?_, noPushBefore_succ_of_getElem? hw.right
     (by rw [Jinst.toInstType_toUInt8]; simp only [ne_eq, reduceCtorEq, not_false_eq_true]) hw.left⟩
   unfold jumpable
-  rw [dif_pos hlt, hbyte, if_pos rfl]
+  rw [dite_eq_left hlt, hbyte, ite_eq_left rfl]
   exact hw.left
 
 /-! ## Appended-code liveness -/

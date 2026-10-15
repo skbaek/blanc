@@ -381,21 +381,21 @@ private theorem solRegistryStorage_read_of_set
     ⟨probe, hprobe, rfl⟩ | ⟨probe, hprobe, rfl⟩ | ⟨probe, hprobe, rfl⟩ |
       rfl | ⟨i, hi, rfl⟩
   · rw [solKey_assignmentSlot hprobe]
-    rw [solRegistryStorage_assignment _ _ hprobe, Stor.get_set_ite, if_pos rfl,
+    rw [solRegistryStorage_assignment _ _ hprobe, Stor.get_set_ite, ite_eq_left rfl,
       registryRawValue_assignmentSlot hprobe]
     exact addressSlotReadWord_write_of_clean _ _ (hclean (Or.inl ⟨probe, hprobe, rfl⟩))
   · rw [solKey_indexSlot hprobe]
-    rw [solRegistryStorage_index _ _ hprobe, Stor.get_set_ite, if_pos rfl,
+    rw [solRegistryStorage_index _ _ hprobe, Stor.get_set_ite, ite_eq_left rfl,
       registryRawValue_indexSlot hprobe]
   · rw [solKey_countSlot hprobe]
-    rw [solRegistryStorage_count _ _ hprobe, Stor.get_set_ite, if_pos rfl,
+    rw [solRegistryStorage_count _ _ hprobe, Stor.get_set_ite, ite_eq_left rfl,
       registryRawValue_countSlot hprobe]
   · rw [solKey_arrayLengthSlot]
-    rw [solRegistryStorage_length, Stor.get_set_ite, if_pos rfl,
+    rw [solRegistryStorage_length, Stor.get_set_ite, ite_eq_left rfl,
       registryRawValue_arrayLengthSlot]
   · have hbound : i + 1 < 2 ^ 252 := by omega
     rw [solKey_arrayEntrySlot hbound]
-    rw [solRegistryStorage_array _ _ hbound, Stor.get_set_ite, if_pos rfl,
+    rw [solRegistryStorage_array _ _ hbound, Stor.get_set_ite, ite_eq_left rfl,
       registryRawValue_arrayEntrySlot hbound]
     exact addressSlotReadWord_write_of_clean _ _ (hclean (Or.inr ⟨i, hi, rfl⟩))
 
@@ -412,15 +412,15 @@ private theorem solRegistryStorage_step
       ).read key =
       if logicalKey = key then value else (solRegistryStorage before).read key := by
   by_cases heq : logicalKey = key
-  · simp only [if_pos heq]
+  · simp only [ite_eq_left heq]
     rw [← heq]
     exact solRegistryStorage_read_of_set hlength hkeyObs hclean
-  · simp only [if_neg heq]
+  · simp only [ite_eq_right heq]
     have hne : solKey logicalKey ≠ solKey key := by
       intro hcontra
       exact heq (hfaithfulOne hcontra.symm).symm
     apply solRegistryStorage_read_congr hlength hkey
-    rw [Stor.get_set_ite, if_neg hne]
+    rw [Stor.get_set_ite, ite_eq_right hne]
 
 /-- **The unified raw-write transport lemma.**  Given the actual raw writes
 of a chronological chain of logical Registry writes (plain words or

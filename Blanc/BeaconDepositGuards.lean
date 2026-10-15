@@ -183,7 +183,7 @@ theorem depositAmountUpperGuard_runCompiledTo
     rw [show (amountWord * 32 : B256).toNat = 672 by decide +kernel]
     exact Devm.extCost_of_size hmem.size_eq (by decide +kernel)
   case h_val =>
-    rw [B256.ltCheck, if_neg (B256.not_lt.mpr hupper)]
+    rw [B256.ltCheck, ite_eq_right (B256.not_lt.mpr hupper)]
   case h_arm =>
     rw [show (amountWord * 32 : B256).toNat = 672 by decide +kernel]
     simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Nat.add_sub_cancel] using htail

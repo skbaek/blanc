@@ -194,7 +194,7 @@ lemma Frame.enter_eq_done_executePrecomp {f : Frame} {benv : Benv} {adr : Adr}
   unfold Frame.enter
   rw [h_bt]
   unfold executeCode.enter
-  simp only [h_ca, h_pre, if_true]
+  simp only [h_ca, h_pre, ite_true]
 
 /-- A call-type instruction that never spawns at all: `Xinst.step` itself
 returned `.done`.  The depth-1024 arm below is the case this exists for. -/
@@ -253,10 +253,10 @@ lemma Ninst.runCompiled_sload_of {sevm : Sevm} {devm base : Devm} {k v : B256}
     Ninst.RunCompiled sevm devm (.reg .sload)
       (base.setMach ⟨v :: s, devm.memory, G, base.stateGas⟩) := by
   by_cases h : (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys
-  · rw [if_pos h] at h_base h_cost
+  · rw [ite_eq_left h] at h_base h_cost
     subst h_base; subst h_cost
     exact Ninst.runCompiled_sload_warm hfork.rules_stateGas_none h_stk h h_val h_gas h_room
-  · rw [if_neg h] at h_base h_cost
+  · rw [ite_eq_right h] at h_base h_cost
     subst h_base; subst h_cost
     exact Ninst.runCompiled_sload_cold hfork.rules_stateGas_none h_stk h h_val h_gas h_room
 
@@ -267,8 +267,8 @@ lemma mem_accessedStorageKeys_sload_of {sevm : Sevm} {devm base : Devm}
       then devm else addAccessedStorageKey devm sevm.currentTarget k) = base) :
     (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ base.accessedStorageKeys := by
   by_cases h : (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys
-  · rw [if_pos h] at h_base; subst h_base; exact h
-  · rw [if_neg h] at h_base; subst h_base
+  · rw [ite_eq_left h] at h_base; subst h_base; exact h
+  · rw [ite_eq_right h] at h_base; subst h_base
     exact Std.HashSet.mem_insert_self
 
 /-- A key already warm stays warm across an unrelated `SLOAD`. -/
@@ -279,8 +279,8 @@ lemma mem_accessedStorageKeys_sload_of_mem {sevm : Sevm} {devm base : Devm}
     (h_mem : (⟨a, k'⟩ : Adr × B256) ∈ devm.accessedStorageKeys) :
     (⟨a, k'⟩ : Adr × B256) ∈ base.accessedStorageKeys := by
   by_cases h : (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys
-  · rw [if_pos h] at h_base; subst h_base; exact h_mem
-  · rw [if_neg h] at h_base; subst h_base
+  · rw [ite_eq_left h] at h_base; subst h_base; exact h_mem
+  · rw [ite_eq_right h] at h_base; subst h_base
     exact Std.HashSet.mem_insert.mpr (Or.inr h_mem)
 
 /-- The storage a `SLOAD` reads is the storage it leaves: the accessed set is
@@ -291,8 +291,8 @@ lemma getStorVal_sload_of {sevm : Sevm} {devm base : Devm} {k : B256}
       then devm else addAccessedStorageKey devm sevm.currentTarget k) = base) :
     base.getStorVal a k' = devm.getStorVal a k' := by
   by_cases h : (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys
-  · rw [if_pos h] at h_base; subst h_base; rfl
-  · rw [if_neg h] at h_base; subst h_base; rfl
+  · rw [ite_eq_left h] at h_base; subst h_base; rfl
+  · rw [ite_eq_right h] at h_base; subst h_base; rfl
 
 /-- …and so is the original storage the `SSTORE` pricing compares against. -/
 lemma refundCounter_sload_of {sevm : Sevm} {devm base : Devm} {k : B256}
@@ -300,8 +300,8 @@ lemma refundCounter_sload_of {sevm : Sevm} {devm base : Devm} {k : B256}
       then devm else addAccessedStorageKey devm sevm.currentTarget k) = base) :
     base.refundCounter = devm.refundCounter := by
   by_cases h : (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys
-  · rw [if_pos h] at h_base; subst h_base; rfl
-  · rw [if_neg h] at h_base; subst h_base; rfl
+  · rw [ite_eq_left h] at h_base; subst h_base; rfl
+  · rw [ite_eq_right h] at h_base; subst h_base; rfl
 
 /-- A read emits no log. -/
 lemma logs_sload_of {sevm : Sevm} {devm base : Devm} {k : B256}
@@ -309,8 +309,8 @@ lemma logs_sload_of {sevm : Sevm} {devm base : Devm} {k : B256}
       then devm else addAccessedStorageKey devm sevm.currentTarget k) = base) :
     base.logs = devm.logs := by
   by_cases h : (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys
-  · rw [if_pos h] at h_base; subst h_base; rfl
-  · rw [if_neg h] at h_base; subst h_base; rfl
+  · rw [ite_eq_left h] at h_base; subst h_base; rfl
+  · rw [ite_eq_right h] at h_base; subst h_base; rfl
 
 /-- The charge is between the two schedule constants, whichever arm fires. -/
 lemma le_sload_cost_of {sevm : Sevm} {devm : Devm} {k : B256} {c : Nat}
@@ -377,13 +377,13 @@ theorem Ninst.runCompiled_sload_selected
   by_cases hwarm :
       (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
         base.accessedStorageKeys
-  · rw [sloadCost, if_pos hwarm, afterSload, if_pos hwarm]
+  · rw [sloadCost, ite_eq_left hwarm, afterSload, ite_eq_left hwarm]
     exact Ninst.runCompiled_sload_warm
       (k := key) (v := value) (s := stack) (G := G)
       hfork.rules_stateGas_none rfl hwarm hvalue
       (by simp only [Devm.gasLeft_setMach, gasWarmAccess])
       hroom
-  · rw [sloadCost, if_neg hwarm, afterSload, if_neg hwarm]
+  · rw [sloadCost, ite_eq_right hwarm, afterSload, ite_eq_right hwarm]
     simpa only [addAccessedStorageKey_setMach_setMach_selected,
       Devm.memory_setMach, Devm.stateGas_setMach] using
       (Ninst.runCompiled_sload_cold
@@ -440,11 +440,11 @@ theorem Ninst.runCompiled_sstore_selected
   by_cases hwarm :
       (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
         devm.accessedStorageKeys
-  · simp only [sstoreCost, if_pos hwarm, Nat.zero_add,
+  · simp only [sstoreCost, ite_eq_left hwarm, Nat.zero_add,
       afterSstore] at hgas ⊢
     exact Ninst.runCompiled_sstore_warm hfork.rules_stateGas_none hstack hwarm hsentry hstatic
       rfl rfl hgas
-  · simp only [sstoreCost, if_neg hwarm, afterSstore] at hgas ⊢
+  · simp only [sstoreCost, ite_eq_right hwarm, afterSstore] at hgas ⊢
     exact Ninst.runCompiled_sstore_cold hfork.rules_stateGas_none hstack hwarm hsentry hstatic
       rfl rfl hgas
 
@@ -706,11 +706,11 @@ lemma memExtSize_of_le {n i sz : Nat} (h32 : n % 32 = 0) (hw : i + sz ≤ n) :
   · rfl
   · have h1 : ceilDiv (i + sz) 32 ≤ ceilDiv n 32 := by
       simp only [ceilDiv]
-      rw [if_pos h32]
+      rw [ite_eq_left h32]
       split_ifs with h2 <;> omega
     rw [Nat.max_eq_left h1]
     simp only [ceilDiv]
-    rw [if_pos h32]
+    rw [ite_eq_left h32]
     omega
 
 /-- The window charge vanishes for a window a word-aligned image covers — the
@@ -728,7 +728,7 @@ lemma Mem.size_write_of_le {N : Mem} {n : Nat} {bs : Bytes}
   rcases bs with _ | ⟨x, xs⟩
   · rfl
   · rw [Mem.size_write_cons,
-      if_pos (by simp only [List.length_cons] at h ⊢; omega)]
+      ite_eq_left (by simp only [List.length_cons] at h ⊢; omega)]
 
 /-- Reading a covered window of a word-aligned image leaves the size alone. -/
 lemma Mem.size_read_snd_of_le {N : Mem} {i sz : Nat} (h32 : N.size % 32 = 0)
@@ -767,7 +767,7 @@ refutes the conclusion. -/
 lemma memExtSize_eq_ceil32_of_le {n i sz : Nat}
     (hsz : 0 < sz) (h : n ≤ i + sz) : memExtSize n i sz = ceil32 (i + sz) := by
   have hne : ¬ sz = 0 := by omega
-  simp only [memExtSize, if_neg hne]
+  simp only [memExtSize, ite_eq_right hne]
   have hmax : max (ceilDiv n 32) (ceilDiv (i + sz) 32) = ceilDiv (i + sz) 32 := by
     refine Nat.max_eq_right ?_
     simp only [ceilDiv]
@@ -817,8 +817,8 @@ lemma Mem.size_write_of_size {N : Mem} {bs : Bytes} {i n len : Nat}
     add_pos_iff, zero_lt_one, or_true]
     rw [Mem.size_write_of_length hlen hpos]
     by_cases hfit : i + len ≤ N.size
-    · rw [if_pos hfit, memExtSize_of_le h32 hfit]
-    · rw [if_neg hfit, memExtSize_eq_ceil32_of_le (by omega) (by omega)]
+    · rw [ite_eq_left hfit, memExtSize_of_le h32 hfit]
+    · rw [ite_eq_right hfit, memExtSize_eq_ceil32_of_le (by omega) (by omega)]
 
 /-- **Control** — the memory-size premise the spike's proxy walk carried as a
 *hypothesis* is now derivable.  This is the two-window shape: the image is
@@ -1024,7 +1024,7 @@ lemma calculateMsgCallGas_zero {gas gl ext acc : Nat} (h : acc + ext ≤ gl) :
     calculateMsgCallGas 0 gas gl ext acc =
       ⟨min gas (except64th (gl - ext - acc)) + acc,
         min gas (except64th (gl - ext - acc))⟩ := by
-  rw [calculateMsgCallGas, if_pos (rfl : (0 : Nat) = 0), if_neg (by omega)]
+  rw [calculateMsgCallGas, ite_eq_left (rfl : (0 : Nat) = 0), ite_eq_right (by omega)]
   show (min gas (except64th (gl - ext - acc)) + acc,
     min gas (except64th (gl - ext - acc)) + 0) = _
   rw [Nat.add_zero]
@@ -1071,7 +1071,7 @@ lemma genericCall.step_spawn {sevm : Sevm} {devm : Devm} {gas : Nat}
             codeAddress stv isStatic
             ((devm.withReturnData []).memory.data.sliceD ii is 0) code dp))
         (.call (devm.withReturnData []) oi os) := by
-  rw [genericCall.step, if_neg h_depth]
+  rw [genericCall.step, ite_eq_right h_depth]
 
 /-- The depth-limit arm: `sevm.depth = 0` is Jaune's encoding of "no room for a
 child", and the instruction answers `0` on the stack with the requested gas
@@ -1088,7 +1088,7 @@ lemma genericCall.step_zero_depth {sevm : Sevm} {devm : Devm} {gas : Nat}
         ii is oi os code dp =
       .done (.ok ((devm.withReturnData []).setMach
         ⟨0 :: devm.stack, devm.memory, devm.gasLeft + gas, devm.stateGas⟩)) := by
-  rw [genericCall.step, if_pos h_depth]
+  rw [genericCall.step, ite_eq_left h_depth]
   show XStep.ofExcept
     (Devm.push 0
       (((devm.withReturnData []).withGasLeft
@@ -1211,15 +1211,15 @@ lemma Xinst.step_call_zero_value {sevm : Sevm} {devm : Devm}
   -- than `rw` for `h_del`: the new-account `if` carries a `Decidable` instance
   -- that depends on the term being rewritten.
   simp only [h_del]
-  simp only [if_pos (show ¬(d1.getAcct cw.toAdr).Empty ∨ True from Or.inr trivial),
-    if_pos trivial, Nat.add_zero,
+  simp only [ite_eq_left (show ¬(d1.getAcct cw.toAdr).Empty ∨ True from Or.inr trivial),
+    ite_eq_left trivial, Nat.add_zero,
     show ((0 : B256).toNat) = 0 from rfl]
   simp only [h_split]
   rw [chargeGas_eq_ok (devm := d1) h_gas]
-  simp only [Except.assert, if_pos (Or.inr trivial)]
+  simp only [Except.assert, ite_eq_left (Or.inr trivial)]
   -- The balance short-circuit tests `senderBal < 0`, which no `B256` satisfies:
   -- at `value = 0` the branch is unreachable rather than excluded by a premise.
-  rw [if_neg (by
+  rw [ite_eq_right (by
     rw [B256.lt_iff_toNat_lt_toNat]
     exact Nat.not_lt.mpr (Nat.zero_le _))]
   rfl
@@ -1332,9 +1332,9 @@ lemma Xinst.step_call_nonzero {sevm : Sevm} {devm : Devm}
     (devm := devm.setMach
       ⟨osw :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach, Devm.stateGas_setMach]
-  simp only [h_del, h_value, or_false, if_false, h_create, h_split]
+  simp only [h_del, h_value, or_false, ite_false, h_create, h_split]
   rw [chargeGas_eq_ok (devm := d1) h_gas]
-  simp only [Except.assert, h_dynamic, Bool.not_false, if_true]
+  simp only [Except.assert, h_dynamic, Bool.not_false, ite_true]
   have h_sender' :
       ¬ (((d1.setMach
           ⟨d1.stack, d1.memory,
@@ -1346,7 +1346,7 @@ lemma Xinst.step_call_nonzero {sevm : Sevm} {devm : Devm}
           sevm.currentTarget).bal < vw := by
     change ¬ (d1.getAcct sevm.currentTarget).bal < vw
     exact h_sender
-  rw [if_neg h_sender']
+  rw [ite_eq_right h_sender']
   rfl
 
 private lemma accessDelegation_stack_state {devm d1 : Devm}
@@ -1478,9 +1478,9 @@ lemma Xinst.step_call_nonzero_insufficient {sevm : Sevm} {devm : Devm}
       ⟨osw :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach, Devm.stateGas_setMach]
-  simp only [h_del, h_value, or_false, if_false, h_create, h_split]
+  simp only [h_del, h_value, or_false, ite_false, h_create, h_split]
   rw [chargeGas_eq_ok (devm := d1) h_gas]
-  simp only [Except.assert, h_dynamic, Bool.not_false, if_true]
+  simp only [Except.assert, h_dynamic, Bool.not_false, ite_true]
   have h_sender' :
       (((d1.setMach
           ⟨d1.stack, d1.memory,
@@ -1492,7 +1492,7 @@ lemma Xinst.step_call_nonzero_insufficient {sevm : Sevm} {devm : Devm}
           sevm.currentTarget).bal < vw := by
     change (d1.getAcct sevm.currentTarget).bal < vw
     exact h_sender
-  rw [if_pos h_sender']
+  rw [ite_eq_left h_sender']
   have hframe := accessDelegation_stack_state h_del
   have hd1stack : d1.stack = s := by
     have h := hframe.1
@@ -2045,7 +2045,7 @@ lemma Msg.benvAfterTransfer_of_affordable (msg : Msg)
     simp only [State.subBal, h_affordable, ↓reduceIte]
   refine ⟨_, hsub, ?_⟩
   unfold Msg.benvAfterTransfer
-  rw [if_pos ⟨h_transfer, h_nz⟩]
+  rw [ite_eq_left ⟨h_transfer, h_nz⟩]
   simp only [Benv.subBal, hsub]
   rfl
 
@@ -2062,7 +2062,7 @@ lemma Frame.enter_run_of_nonprecompile {f : Frame} {benv : Benv} {adr : Adr}
   rw [h_bt]
   unfold executeCode.enter
   simp only [h_ca]
-  rw [if_neg]
+  rw [ite_eq_right]
   intro h
   have hn : ¬ (f.inner.withBenv benv).benv.stat.rules.isPrecomp adr := by
     rw [h_nonprecompile]
@@ -2405,7 +2405,7 @@ lemma Resume.run_call_err {parent child : Devm} {oi os : Nat}
     else
       (incorporateChildOnSuccess parent child child.output).push 1 >>= fun e2 =>
         Except.ok (e2.memWrite oi (child.output.take os))) = _
-  rw [if_pos h_err, Devm.push_eq_ok
+  rw [ite_eq_left h_err, Devm.push_eq_ok
     (devm := incorporateChildOnError parent child child.output)
     (by show parent.stack.length < 1024; exact h_room)]
   rfl
@@ -2437,7 +2437,7 @@ lemma Resume.run_call_ok {parent child : Devm} {oi os : Nat}
     else
       (incorporateChildOnSuccess parent child child.output).push 1 >>= fun e2 =>
         Except.ok (e2.memWrite oi (child.output.take os))) = _
-  rw [if_neg (by rw [h_ok]; exact Bool.false_ne_true), Devm.push_eq_ok
+  rw [ite_eq_right (by rw [h_ok]; exact Bool.false_ne_true), Devm.push_eq_ok
     (devm := incorporateChildOnSuccess parent child child.output)
     (by show parent.stack.length < 1024; exact h_room)]
   rfl
@@ -2554,7 +2554,7 @@ lemma Frame.settle_error_inv {f : Frame} {raw : Execution}
     executeCode.handleError raw = .error p := by
   unfold Frame.settle Frame.settleMsg at h
   rw [h_call] at h
-  simp only [Bool.false_eq_true, if_false] at h
+  simp only [Bool.false_eq_true, ite_false] at h
   rcases hh : executeCode.handleErrorWith f.inner.benv.stat.rules.stateGas raw with q | evm <;>
     rw [hh] at h
   · have hq : q = p := by
@@ -3531,7 +3531,7 @@ lemma calculateMsgCallGas_cost_le {value gas gasLeft mem extra : Nat}
     (h : extra + mem ≤ gasLeft) :
     (calculateMsgCallGas value gas gasLeft mem extra).1 + mem ≤ gasLeft := by
   unfold calculateMsgCallGas
-  rw [if_neg (not_lt_of_ge h)]
+  rw [ite_eq_right (not_lt_of_ge h)]
   dsimp only []
   have hmin : min gas (except64th (gasLeft - mem - extra)) ≤
       except64th (gasLeft - mem - extra) := Nat.min_le_right _ _

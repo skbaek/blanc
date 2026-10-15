@@ -44,8 +44,8 @@ theorem worldIs_set {W W' : State} {acs : AcctShadow} {stor sT : StorShadow} {T 
     WorldIs W' ((T, acctView ac) :: acs) (sT ++ stor) := by
   refine ⟨fun a => ?_, fun a k => ?_⟩
   · by_cases h : a = T
-    · subst h; rw [hT]; simp only [lookupA, if_pos]
-    · rw [hrest a h, hW.1 a]; simp only [lookupA, Ne.symm h, if_false]
+    · subst h; rw [hT]; simp only [lookupA, ite_eq_left]
+    · rw [hrest a h, hW.1 a]; simp only [lookupA, Ne.symm h, ite_false]
   · by_cases h : a = T
     · subst h; rw [storOf, hT]; exact hstor k
     · rw [storOf, hrest a h, ← storOf, hW.2 a k,
@@ -203,8 +203,8 @@ theorem setup_checkpoint (fork : Fork) (hfork : CoveredFork fork) :
       rw [Stor.get_set_ite]
       simp only [List.cons_append, List.nil_append, lookupS, true_and]
       by_cases hk : creator.toB256 = k
-      · rw [if_pos hk, if_pos hk]
-      · rw [if_neg hk, if_neg hk, stor2_token]; rfl)
+      · rw [ite_eq_left hk, ite_eq_left hk]
+      · rw [ite_eq_right hk, ite_eq_right hk, stor2_token]; rfl)
   have hvT : acctView (Token20.Creation.tokenAcct postC.state tokenAddr creator) =
       ⟨1, 0, .empty, Token20.code⟩ := by
     simp only [acctView, Token20.Creation.tokenAcct, hTn, hTb]; rfl
@@ -216,13 +216,13 @@ theorem setup_checkpoint (fork : Fork) (hfork : CoveredFork fork) :
   have hAatk' : attackerPost.state.get attackerAddr =
       AttackerR.Creation.attackerAcct tokenPost.state attackerAddr := hAatk
   obtain ⟨hAn, hAb⟩ := nonce_bal_of_nil hWT.1 (show lookupA ((tokenAddr, _) :: acs2) attackerAddr = .nil
-    by simp only [lookupA, show tokenAddr ≠ attackerAddr by decide, if_false]; exact acs2_attacker)
+    by simp only [lookupA, show tokenAddr ≠ attackerAddr by decide, ite_false]; exact acs2_attacker)
   have hWA := worldIs_set (sT := []) hWT hAatk' hArest (by simp only [List.not_mem_nil,
     false_implies, implies_true])
     (fun k => by
       show Stor.empty.get k = _
       simp only [List.nil_append, List.cons_append, lookupS,
-        show tokenAddr ≠ attackerAddr by decide, false_and, if_false]
+        show tokenAddr ≠ attackerAddr by decide, false_and, ite_false]
       rw [stor2_attacker]; rfl)
   have hvA : acctView (AttackerR.Creation.attackerAcct tokenPost.state attackerAddr) =
       ⟨1, 0, .empty, AttackerR.code⟩ := by

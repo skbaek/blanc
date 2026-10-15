@@ -350,11 +350,11 @@ theorem ClaimsAdmissible.step
     by_cases hu : c.owner = u
     · subst hu
       have hdebit := heffect.ownerDebit
-      rw [if_pos (rfl : c.owner = c.owner)] at hb
+      rw [ite_eq_left (rfl : c.owner = c.owner)] at hb
       omega
     · have hne : u ≠ c.owner := fun h => hu h.symm
       have hother := heffect.otherBookedUnchanged u hne
-      rw [if_neg hu] at hb
+      rw [ite_eq_right hu] at hb
       omega
 
 /-! ## The aggregate outcome -/
@@ -410,7 +410,7 @@ theorem redeemClaims_run
       have henv := canonicalRedemptionMessage_admissible hca hsel hstable hcadm
       have hq : c.amount ≤ bookedBalanceNat w ca c.owner := by
         have hb := hadm.budget c.owner
-        rw [ownerClaimTotal_cons, if_pos rfl] at hb
+        rw [ownerClaimTotal_cons, ite_eq_left rfl] at hb
         omega
       obtain ⟨mid, out, hrun, heffect⟩ :=
         hstable.messageRedemption_enabled_of_le hq henv
@@ -425,10 +425,10 @@ theorem redeemClaims_run
         by_cases hu : c.owner = v
         · subst hu
           have hdebit := heffect.ownerDebit
-          rw [if_pos rfl]
+          rw [ite_eq_left rfl]
           omega
         · have hother := heffect.otherBookedUnchanged v (fun h => hu h.symm)
-          rw [if_neg hu]
+          rw [ite_eq_right hu]
           omega
       · have hcontract := heffect.contractEthDebit
         have hv := hout.contractEth
@@ -440,11 +440,11 @@ theorem redeemClaims_run
         by_cases hr : c.recipient = a
         · subst hr
           have hcredit := heffect.recipientEthCredit
-          rw [if_pos rfl]
+          rw [ite_eq_left rfl]
           omega
         · have hkeep := heffect.otherEthUnchanged a ha (fun h => hr h.symm)
           rw [hkeep] at hv
-          rw [if_neg hr]
+          rw [ite_eq_right hr]
           omega
       · intro es hes
         have hcons : ClaimsAdmissible rules ca w (c :: (cs ++ es)) := hes

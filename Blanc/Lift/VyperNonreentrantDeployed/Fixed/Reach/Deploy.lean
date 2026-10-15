@@ -35,7 +35,7 @@ theorem implSstoreGas_fresh (fork : Fork) (W : State) (_hI : W.get implAddr = .n
   unfold Creation.implSstoreGas
   have hcold : ((implCreateMsg fork W).currentTarget, (1 : B256)) ∉
       (implCreateMsg fork W).accessedStorageKeys := Std.HashSet.not_mem_emptyWithCapacity
-  rw [if_neg hcold]
+  rw [ite_eq_right hcold]
   rfl
 
 /-- **Messages 1 and 2 compose.** The clone message's input world is exactly the

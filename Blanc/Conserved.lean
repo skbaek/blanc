@@ -960,7 +960,7 @@ lemma of_transferFrom {fs : List Func} {sevm : Sevm} {s r : Devm} :
   have h_ltflag : (sbal <? wad) = 0 := pref_head_unique hs11 (pref_append [0] a12.stack)
   have h_le : wad ≤ sbal := by
     rw [← B256.not_lt]; intro hlt
-    rw [B256.ltCheck, if_pos hlt] at h_ltflag
+    rw [B256.ltCheck, ite_eq_left hlt] at h_ltflag
     exact B256.zero_ne_one h_ltflag.symm
   rw [h_ltflag] at hs11
   have hs12 : [sbal, wad, wad, src] <<+ a12.stack := cons_pref_cons_inv hs11
@@ -1176,7 +1176,7 @@ lemma of_burnAndReturn {fs : List Func} {sevm : Sevm} {s r : Devm} {wad receiver
   have h_ltflag : (rbal <? wad) = 0 := pref_head_unique hs5 (pref_append [0] s6.stack)
   have h_le : wad ≤ rbal := by
     rw [← B256.not_lt]; intro hlt
-    rw [B256.ltCheck, if_pos hlt] at h_ltflag
+    rw [B256.ltCheck, ite_eq_left hlt] at h_ltflag
     exact B256.zero_ne_one h_ltflag.symm
   rw [h_ltflag] at hs5
   have hs6 : [rbal, wad, a.toB256] <<+ s6.stack := cons_pref_cons_inv hs5
@@ -1834,7 +1834,7 @@ theorem flashLoan_preserves_conserved {sevm : Sevm} {s r : Devm}
     pref_head_unique hs15 (pref_append [0] s16.stack)
   have h_bound : amount ≤ ~~~ supply := by
     rw [← B256.not_lt]; intro hlt
-    rw [B256.ltCheck, if_pos hlt] at h_boundflag
+    rw [B256.ltCheck, ite_eq_left hlt] at h_boundflag
     exact B256.zero_ne_one h_boundflag.symm
   have h_nof : B256.Nof ((Devm.getStor s sevm.currentTarget).get Fmint.supplySlot) amount := by
     rw [← h_supply']

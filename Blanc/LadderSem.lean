@@ -327,7 +327,7 @@ lemma GenericCreate.none_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter 
       rw [h_state]
       exact State.incrNonce_get_bal
     · show (inter.state.get wa).stor = (devm.state.get wa).stor
-      rw [h_state, State.incrNonce_get_stor, if_neg]
+      rw [h_state, State.incrNonce_get_stor, ite_eq_right]
       rintro ⟨rfl, hE⟩
       exact (ne_wa_of_code_size_zero (c.sem.ne_nil h_pc.code.symm) hE.1) rfl
   -- a child frame was entered : impossible with an empty slot, since a create
@@ -645,7 +645,7 @@ lemma GenericCall.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : 
     rcases of_handleError_err h_he with ⟨evm2', h_ok2, h_some2, _⟩ | ⟨e, h_err2⟩
     · have h_eq2 : evm2 = evm2' := Except.ok.inj h_ok2
       subst h_eq2
-      rw [if_pos h_some2] at hr2
+      rw [ite_eq_left h_some2] at hr2
       have h_child := Except.ok.inj hr2
       apply h_pc.state_eq
       rw [h_inter_state, ← h_child]
@@ -659,14 +659,14 @@ lemma GenericCall.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter : 
     have h_post : c.Post wa evm'.sta child3 := h_ifOk
     by_cases h_err : child3.error.isSome = true
     · -- the sub-execution set the error flag : the parent state is rolled back
-      rw [if_pos h_err] at hr2
+      rw [ite_eq_left h_err] at hr2
       have h_child := Except.ok.inj hr2
       apply h_pc.state_eq
       rw [h_inter_state, ← h_child]
       show childMsg.benv.state = devm.state
       exact hc_state
     · -- clean success : reconstruct the precondition from the postcondition
-      rw [if_neg h_err] at hr2
+      rw [ite_eq_right h_err] at hr2
       have h_child := Except.ok.inj hr2
       subst h_child
       exact Pre.of_postcond h_post h_ct_ne h_pre1.code
@@ -771,8 +771,8 @@ lemma GenericCreate.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter 
   have h_base_stor :
       (((childMsg.benv.state.setStor newAddress Stor.empty).incrNonce newAddress).get wa).stor
         = (devm.state.get wa).stor := by
-    rw [State.incrNonce_get_stor, if_neg (fun h => h_new_ne h.1),
-      State.setStor_get_stor_ne h_new_ne, hc_state, h_st5, State.incrNonce_get_stor, if_neg]
+    rw [State.incrNonce_get_stor, ite_eq_right (fun h => h_new_ne h.1),
+      State.setStor_get_stor_ne h_new_ne, hc_state, h_st5, State.incrNonce_get_stor, ite_eq_right]
     rintro ⟨rfl, hE⟩
     exact (ne_wa_of_code_size_zero (c.sem.ne_nil h_pc.code.symm) hE.1) rfl
   have h_base_code :
@@ -843,7 +843,7 @@ lemma GenericCreate.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter 
       rw [h_inter_state, h_cs, hc_state, h_st5]
       exact State.incrNonce_get_bal
     · show (inter.state.get wa).stor = (devm.state.get wa).stor
-      rw [h_inter_state, h_cs, hc_state, h_st5, State.incrNonce_get_stor, if_neg]
+      rw [h_inter_state, h_cs, hc_state, h_st5, State.incrNonce_get_stor, ite_eq_right]
       rintro ⟨rfl, hE⟩
       exact (ne_wa_of_code_size_zero (c.sem.ne_nil h_pc.code.symm) hE.1) rfl
   have h_isNone_false : ∀ {dX : Devm}, dX.error.isSome = true → dX.error.isNone ≠ true := by
@@ -862,12 +862,12 @@ lemma GenericCreate.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter 
     rcases of_handleError_err h_he with ⟨evmB', h_okB, h_someB, _⟩ | ⟨e, h_errB⟩
     · have h_eqB : evmB = evmB' := Except.ok.inj h_okB
       subst h_eqB
-      rw [if_pos h_someB] at h_ifB
+      rw [ite_eq_left h_someB] at h_ifB
       have h_A := Except.ok.inj h_ifB
       have h_someA : evmA.error.isSome = true := by
         rw [← h_A]
         exact h_someB
-      rw [if_neg (h_isNone_false h_someA)] at h_ifA
+      rw [ite_eq_right (h_isNone_false h_someA)] at h_ifA
       have h_child := Except.ok.inj h_ifA
       apply h_rb
       rw [← h_child]
@@ -880,21 +880,21 @@ lemma GenericCreate.some_preserves_precond {wa : Adr} {sevm : Sevm} {devm inter 
     have h_post : c.Post wa evm'.sta child4 := h_ifOk
     by_cases h_errC : child4.error.isSome = true
     · -- the sub-execution set the error flag : the parent state is rolled back
-      rw [if_pos h_errC] at h_ifB
+      rw [ite_eq_left h_errC] at h_ifB
       have h_A := Except.ok.inj h_ifB
       have h_someA : evmA.error.isSome = true := by
         rw [← h_A]
         exact h_errC
-      rw [if_neg (h_isNone_false h_someA)] at h_ifA
+      rw [ite_eq_right (h_isNone_false h_someA)] at h_ifA
       have h_child := Except.ok.inj h_ifA
       apply h_rb
       rw [← h_child]
       rfl
     · -- clean success
-      rw [if_neg h_errC] at h_ifB
+      rw [ite_eq_right h_errC] at h_ifB
       have h_A := Except.ok.inj h_ifB
       subst h_A
-      rw [if_pos (h_isNone_true h_errC)] at h_ifA
+      rw [ite_eq_left (h_isNone_true h_errC)] at h_ifA
       rcases h_cc : processCreateMessage.chargeCodeGas childMsg.benv.stat.rules child4
         with ⟨errC, evmC⟩ | evmC
       · -- code-deposit gas charge failed
@@ -1202,7 +1202,7 @@ theorem StateInv.incrNonce {wa a : Adr} {w : Jaune.State}
     · simp only [State.incrNonce, State.setAccount_get_ne _ (Ne.symm hb)]
   have hstor : (w.incrNonce a).getStor wa = w.getStor wa := by
     show ((w.incrNonce a).get wa).stor = (w.get wa).stor
-    rw [State.incrNonce_get_stor, if_neg]
+    rw [State.incrNonce_get_stor, ite_eq_right]
     rintro ⟨rfl, hE⟩
     exact (ne_wa_of_code_size_zero (c.sem.ne_nil h.code.symm) hE.1) rfl
   have hcode : (w.incrNonce a).getCode wa = w.getCode wa := by
@@ -1491,11 +1491,11 @@ theorem processMessage_preserves_inv {wa : Adr} {msg : Msg} {evm : Devm}
   dsimp only [bind, Except.bind] at hset
   by_cases herr : evm'.error.isSome = true
   · -- sub-execution failed : state rolled back to the pre-transfer state
-    rw [if_pos herr] at hset
+    rw [ite_eq_left herr] at hset
     rw [Except.ok.inj hset]
     exact h_inv
   · -- clean success
-    rw [if_neg herr] at hset
+    rw [ite_eq_right herr] at hset
     have h_eq : evm' = evm := Except.ok.inj hset.symm
     subst h_eq
     rcases of_executeCode_cases hbody with ⟨adr, h_he⟩ | ⟨exn, h_xl, h_he⟩
@@ -1550,7 +1550,7 @@ theorem processCreateMessage_preserves_inv {wa : Adr} {msg : Msg} {evm : Devm}
   unfold processCreateMessage.settle at h_rest
   dsimp only [bind, Except.bind] at h_rest
   by_cases herr : evm2.error.isNone = true
-  · rw [if_pos herr] at h_rest
+  · rw [ite_eq_left herr] at h_rest
     rcases hcg : processCreateMessage.chargeCodeGas msg.benv.stat.rules evm2
       with ⟨err, evm3⟩ | evm3
     · -- code-gas charge failed
@@ -1567,7 +1567,7 @@ theorem processCreateMessage_preserves_inv {wa : Adr} {msg : Msg} {evm : Devm}
       rw [← Except.ok.inj h_rest, Devm.setCode_state, chargeCodeGas_state_ok hcg]
       exact StateInv.setCode_ne h_ct_ne h_pm
   · -- sub-message failed : state rolled back to `msg.benv.state`
-    rw [if_neg herr] at h_rest
+    rw [ite_eq_right herr] at h_rest
     rw [← Except.ok.inj h_rest]; exact h_inv
 
 lemma setDelegationStep_preserves_inv {wa : Adr} {auth : Auth} {msg msg' : Msg}
@@ -1818,7 +1818,7 @@ theorem processMessageCall_preserves_inv {wa : Adr} {msg : Msg} {st' : Jaune.Sta
       cases h_eq
       exact h_inv.state
     · rename_i h_col
-      simp only [Bool.not_eq_true, Bool.or_eq_false_iff] at h_col
+      simp only [Bool.not_eq_true] at h_col
       have h_ct : msg.currentTarget ≠ wa :=
         ne_wa_of_not_hasCodeOrNonce h_inv.nodel.code h_col
       revert h_run

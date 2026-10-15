@@ -192,9 +192,9 @@ theorem maxMint_body_effect
       simp only [receiverZero, B256.toNat_zero]
     have zeroWord : Nat.toB256 0 = (0 : B256) := by decide +kernel
     refine ⟨receiverValid, ?_, ?_⟩
-    · simpa only [maxMintViewN, receiverNatZero, if_pos] using
+    · simpa only [maxMintViewN, receiverNatZero, ite_eq_left] using
         wordModulusN_pos
-    · simpa only [maxMintViewN, receiverNatZero, if_pos, zeroWord] using
+    · simpa only [maxMintViewN, receiverNatZero, ite_eq_left, zeroWord] using
         lifted
   · rcases nonzeroReceiver with
       ⟨receiverNonzero, supplyEntry, supplyStack, supplyWf,
@@ -240,10 +240,10 @@ theorem maxMint_body_effect
         exact unstable
       have zeroWord : Nat.toB256 0 = (0 : B256) := by decide +kernel
       refine ⟨receiverValid, ?_, ?_⟩
-      · simpa only [maxMintViewN, if_neg receiverNatNonzero,
-          if_pos unstableAtEntry] using wordModulusN_pos
-      · simpa only [maxMintViewN, if_neg receiverNatNonzero,
-          if_pos unstableAtEntry, zeroWord] using lifted
+      · simpa only [maxMintViewN, ite_eq_right receiverNatNonzero,
+          ite_eq_left unstableAtEntry] using wordModulusN_pos
+      · simpa only [maxMintViewN, ite_eq_right receiverNatNonzero,
+          ite_eq_left unstableAtEntry, zeroWord] using lifted
     · rcases stableSupply with
         ⟨readEntry, stable, readStack, readSupplyWindow, -, stableState,
           stableLogs, readRun⟩
@@ -289,10 +289,10 @@ theorem maxMint_body_effect
         exact stable
       rw [← entryToReadState, supplyAtEntry] at resultFits lifted
       exact ⟨receiverValid,
-        by simpa only [maxMintViewN, if_neg receiverNatNonzero,
-          if_neg (Nat.not_lt_of_ge stableAtEntry)] using resultFits,
-        by simpa only [maxMintViewN, if_neg receiverNatNonzero,
-          if_neg (Nat.not_lt_of_ge stableAtEntry)] using lifted⟩
+        by simpa only [maxMintViewN, ite_eq_right receiverNatNonzero,
+          ite_eq_right (Nat.not_lt_of_ge stableAtEntry)] using resultFits,
+        by simpa only [maxMintViewN, ite_eq_right receiverNatNonzero,
+          ite_eq_right (Nat.not_lt_of_ge stableAtEntry)] using lifted⟩
 
 /-- Exact compiled body effect of `maxDeposit`, with the same receiver and
 supply-domain routing as `maxMint` but its own ceiling-predecessor capacity
@@ -343,9 +343,9 @@ theorem maxDeposit_body_effect
       simp only [receiverZero, B256.toNat_zero]
     have zeroWord : Nat.toB256 0 = (0 : B256) := by decide +kernel
     refine ⟨receiverValid, ?_, ?_⟩
-    · simpa only [maxDepositViewN, receiverNatZero, if_pos] using
+    · simpa only [maxDepositViewN, receiverNatZero, ite_eq_left] using
         wordModulusN_pos
-    · simpa only [maxDepositViewN, receiverNatZero, if_pos, zeroWord] using
+    · simpa only [maxDepositViewN, receiverNatZero, ite_eq_left, zeroWord] using
         lifted
   · rcases nonzeroReceiver with
       ⟨receiverNonzero, supplyEntry, supplyStack, supplyWf,
@@ -391,10 +391,10 @@ theorem maxDeposit_body_effect
         exact unstable
       have zeroWord : Nat.toB256 0 = (0 : B256) := by decide +kernel
       refine ⟨receiverValid, ?_, ?_⟩
-      · simpa only [maxDepositViewN, if_neg receiverNatNonzero,
-          if_pos unstableAtEntry] using wordModulusN_pos
-      · simpa only [maxDepositViewN, if_neg receiverNatNonzero,
-          if_pos unstableAtEntry, zeroWord] using lifted
+      · simpa only [maxDepositViewN, ite_eq_right receiverNatNonzero,
+          ite_eq_left unstableAtEntry] using wordModulusN_pos
+      · simpa only [maxDepositViewN, ite_eq_right receiverNatNonzero,
+          ite_eq_left unstableAtEntry, zeroWord] using lifted
     · rcases stableSupply with
         ⟨readEntry, stable, readStack, readSupplyWindow, -, stableState,
           stableLogs, readRun⟩
@@ -441,10 +441,10 @@ theorem maxDeposit_body_effect
         exact stable
       rw [← entryToReadState, supplyAtEntry] at resultFits lifted
       exact ⟨receiverValid,
-        by simpa only [maxDepositViewN, if_neg receiverNatNonzero,
-          if_neg (Nat.not_lt_of_ge stableAtEntry)] using resultFits,
-        by simpa only [maxDepositViewN, if_neg receiverNatNonzero,
-          if_neg (Nat.not_lt_of_ge stableAtEntry)] using lifted⟩
+        by simpa only [maxDepositViewN, ite_eq_right receiverNatNonzero,
+          ite_eq_right (Nat.not_lt_of_ge stableAtEntry)] using resultFits,
+        by simpa only [maxDepositViewN, ite_eq_right receiverNatNonzero,
+          ite_eq_right (Nat.not_lt_of_ge stableAtEntry)] using lifted⟩
 
 /-- Exact compiled body effect of `maxWithdraw`.  The owner's staged balance
 is carried through supply staging, the domain branch, the WETH child, and the
@@ -543,9 +543,9 @@ theorem maxWithdraw_body_effect
       exact unstable
     have zeroWord : Nat.toB256 0 = (0 : B256) := by decide +kernel
     refine ⟨ownerValid, ?_, ?_⟩
-    · simpa only [maxWithdrawViewN, if_pos unstableAtEntry] using
+    · simpa only [maxWithdrawViewN, ite_eq_left unstableAtEntry] using
         wordModulusN_pos
-    · simpa only [maxWithdrawViewN, if_pos unstableAtEntry, zeroWord] using
+    · simpa only [maxWithdrawViewN, ite_eq_left unstableAtEntry, zeroWord] using
         lifted
   · rcases stableSupply with
       ⟨readEntry, stable, readStack, readSupplyWindow, branchPreserves,
@@ -605,9 +605,9 @@ theorem maxWithdraw_body_effect
     rw [← entryToReadState, amountAtEntry, supplyAtEntry] at resultFits lifted
     exact ⟨ownerValid,
       by simpa only [maxWithdrawViewN,
-        if_neg (Nat.not_lt_of_ge stableAtEntry)] using resultFits,
+        ite_eq_right (Nat.not_lt_of_ge stableAtEntry)] using resultFits,
       by simpa only [maxWithdrawViewN,
-        if_neg (Nat.not_lt_of_ge stableAtEntry)] using lifted⟩
+        ite_eq_right (Nat.not_lt_of_ge stableAtEntry)] using lifted⟩
 
 /-! ## Public compiled selectors -/
 

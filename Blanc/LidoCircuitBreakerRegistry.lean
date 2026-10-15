@@ -461,7 +461,7 @@ private theorem Bytes.sliceD_writeAt_after
   intro i hi
   have hi' := List.mem_range.mp hi
   rw [Bytes.getD_writeAt]
-  rw [if_neg]
+  rw [ite_eq_right]
   omega
 
 /-- The three removal scratch writes occur strictly after the caller words. -/
@@ -572,8 +572,8 @@ theorem applyRegistryWrites_get (s : Stor) (writes : List RegistryWrite)
       simp only [List.foldl_cons]
       rw [ih]
       by_cases h : write.1 = key
-      · rw [if_pos h, ← h, Stor.get_set_self]
-      · rw [if_neg h, Stor.get_set_ne s h write.2]
+      · rw [ite_eq_left h, ← h, Stor.get_set_self]
+      · rw [ite_eq_right h, Stor.get_set_ne s h write.2]
 
 /-- A concrete Registry witness makes every current assignment canonical,
 including the zero value of an absent target. -/
@@ -751,7 +751,7 @@ theorem RegistryWitness.applyFreshWritesOfReadEffect
         exact (Ne.symm heq) (countSlot_injective hnew.2 hwanted hslots)
       rw [hread]
       simp only [hcountSlot, ↓reduceIte, Ne.symm hlength.2.2, hpair.2.2, Ne.symm harray.2.2,
-        hpair.2.1, assignmentCount_append, if_neg (Ne.symm heq), zero_add]
+        hpair.2.1, assignmentCount_append, ite_eq_right (Ne.symm heq), zero_add]
       simpa only using hw.counts wanted hwanted
   · have hzeroCanonical : canonicalAddress (0 : B256) := by
       unfold canonicalAddress
@@ -1664,7 +1664,7 @@ private theorem setPauser_run_split_old_assignment
           (pref_of_split hpop.stack)).left
       have hold : oldPauser = 0 := by
         by_contra hne
-        rw [B256.eqCheck, if_neg hne] at hflag
+        rw [B256.eqCheck, ite_eq_right hne] at hflag
         exact hnz hflag.symm
       have htail : xs <<+ afterPop.stack := by
         have hflagPrefix' : w :: xs <<+ s1.stack := by
@@ -2165,7 +2165,7 @@ private theorem afterOldPauser_run_split_new_assignment
           (pref_of_split hpop.stack)).left
       have hnew : newPauser = 0 := by
         by_contra hne
-        rw [B256.eqCheck, if_neg hne] at hflag
+        rw [B256.eqCheck, ite_eq_right hne] at hflag
         exact hnz hflag.symm
       have htail : xs <<+ afterPop.stack := by
         have hflagPrefix' : w :: xs <<+ sFlag.stack := by
@@ -4224,7 +4224,7 @@ theorem finishSetPauser_run_split_continuation
           (pref_of_split hpop.stack)).left
       have hcontinuation : continuation = 0 := by
         by_contra hne
-        rw [B256.eqCheck, if_neg hne] at hflag
+        rw [B256.eqCheck, ite_eq_right hne] at hflag
         exact hnz hflag.symm
       have htail : pre.stack <<+ afterPop.stack := by
         have hpFlag' : flag :: pre.stack <<+ sFlag.stack := by
@@ -6498,7 +6498,7 @@ private theorem ProcessMessage.error_isSome_of_raw_revert
   have herr : (raw.withError (some .revert)).error.isSome = true := by rfl
   unfold processMessage.settle at hsettle
   simp only [bind, Except.bind] at hsettle
-  rw [if_pos herr] at hsettle
+  rw [ite_eq_left herr] at hsettle
   have hpost := Except.ok.inj hsettle
   rw [hpost]
   rfl

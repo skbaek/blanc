@@ -80,7 +80,7 @@ theorem claimN_add_ge (o c m supply balance : Nat) :
       claimN o (c + m) supply balance := by
   unfold claimN payN
   rw [Nat.add_mul]
-  exact Nat.add_div_le_add_div _ _ _
+  exact Nat.div_add_div_le_add_div
 
 /-- The floor/ceil subadditivity behind every share inflow:
 `floor ((c + m) X / D) ≤ floor (c X / D) + ceilDiv (m X) D`. -/

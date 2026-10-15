@@ -367,7 +367,7 @@ theorem checkTransactionSenderCode_of_admissible
   change (w.get owner).code.isEmpty ∨
     isValidDelegation (w.get owner).code at howner
   unfold checkTransactionSenderCode
-  rw [if_neg (not_not_intro howner)]
+  rw [ite_eq_right (not_not_intro howner)]
 
 /-- A fully formed type-2 envelope whose validation, recovery, fee, nonce,
 target, access-list, and gas facts are explicit, but whose fields contain no
@@ -529,7 +529,7 @@ theorem NonSignatureRedemptionTxEnvelope.admissible_of_recoveredSender
     simp only
     rw [hcost]
     simp only
-    rw [if_neg (by omega)]
+    rw [ite_eq_right (by omega)]
     cases hmax : rules.tx.maxGas with
     | none =>
         simp only [checkInitcodeSize, TxType.receiver?, henv.type_eq, henv.nonce_not_max, ↓reduceIte, Option.isNone_some, gt_iff_lt, Bool.false_and, Bool.false_eq_true, Except.bind_ok]
@@ -550,7 +550,7 @@ theorem NonSignatureRedemptionTxEnvelope.admissible_of_recoveredSender
         simpa only [prelude, redemptionTxPreludeBout, Blanc.deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout, Benv.beginTransaction, deploymentTxPreludeBout] using henv.block_gas_room
       unfold checkTransactionGasLimits
       simp only [hbsg]
-      rw [if_neg (Nat.not_lt_of_ge hgasAvailable), hblobGas]
+      rw [ite_eq_right (Nat.not_lt_of_ge hgasAvailable), hblobGas]
       simp only [gt_iff_lt, not_lt_zero, ↓reduceIte]
     have hchain : checkTransactionChainId benv.beginTransaction tx =
         .ok () := by
@@ -559,9 +559,9 @@ theorem NonSignatureRedemptionTxEnvelope.admissible_of_recoveredSender
         .ok (redemptionEffectiveGasPrice benv tx, tx.gas * maxFee) := by
       simp only [checkTransactionGasFee, henv.type_eq,
         checkTransactionDynamicGasFee, Benv.beginTransaction]
-      rw [if_neg (Nat.not_lt_of_ge henv.priority_fee_le_max)]
-      simp only [if_neg (Nat.not_lt_of_ge henv.base_fee_le_max),
-        if_neg (Nat.not_lt_of_ge henv.max_fee_fits)]
+      rw [ite_eq_right (Nat.not_lt_of_ge henv.priority_fee_le_max)]
+      simp only [ite_eq_right (Nat.not_lt_of_ge henv.base_fee_le_max),
+        ite_eq_right (Nat.not_lt_of_ge henv.max_fee_fits)]
       simp only [redemptionEffectiveGasPrice, Blanc.deploymentEffectiveGasPrice, henv.type_eq, deploymentEffectiveGasPrice]
     have hblob : checkTransactionBlobData benv.beginTransaction tx
         (tx.gas * maxFee) = .ok (tx.gas * maxFee, []) := by
@@ -578,9 +578,9 @@ theorem NonSignatureRedemptionTxEnvelope.admissible_of_recoveredSender
       have hnonceAcct : (benv.state.get owner).nonce = tx.nonce := by
         simpa only [State.getNonce] using henv.nonce_eq.symm
       rw [hnonceAcct]
-      simp only [gt_iff_lt, lt_self_iff_false, if_false]
+      simp only [gt_iff_lt, lt_self_iff_false, ite_false]
       have hfunded := henv.max_fee_funded
-      rw [if_neg (by
+      rw [ite_eq_right (by
         unfold State.bal at hfunded
         simpa only [henv.value_eq, add_zero, not_lt] using Nat.not_lt_of_ge hfunded)]
       rw [checkTransactionSenderCode_of_admissible
@@ -771,7 +771,7 @@ theorem AdmissibleRedemptionTx.upfrontDebit_exists
       some ((benv.state.incrNonce owner).setBal owner
         ((benv.state.incrNonce owner).bal owner - fee.toB256)) := by
     unfold State.subBal
-    rw [if_neg hnotlt]
+    rw [ite_eq_right hnotlt]
   let debit := (benv.state.incrNonce owner).setBal owner
     ((benv.state.incrNonce owner).bal owner - fee.toB256)
   have hsub' : (benv.state.incrNonce owner).subBal owner fee.toB256 =
@@ -849,7 +849,7 @@ theorem AdmissibleSelfRedemptionTx.upfrontDebit_exists
       some ((benv.state.incrNonce owner).setBal owner
         ((benv.state.incrNonce owner).bal owner - fee.toB256)) := by
     unfold State.subBal
-    rw [if_neg hnotlt]
+    rw [ite_eq_right hnotlt]
   let debit := (benv.state.incrNonce owner).setBal owner
     ((benv.state.incrNonce owner).bal owner - fee.toB256)
   have hsub' : (benv.state.incrNonce owner).subBal owner fee.toB256 =
@@ -1104,7 +1104,7 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
     have hnone :
         getDelegatedCodeAddress (d0.state.getCode recipient) = none := by
       dsimp only [getDelegatedCodeAddress]
-      rw [if_neg hnotdel]
+      rw [ite_eq_right hnotdel]
     have hd : (accessDelegation d0 recipient).2.1 = recipient := by
       dsimp only [accessDelegation]
       rw [hnone]
@@ -1213,7 +1213,7 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
     have hmcs16 : 16 ≤ mcs := by
       change mcs = min (Nat.toB256 G).toNat (except64th avail) +
         (if value.toNat = 0 then 0 else gCallStipend) at hmcs
-      rw [hmcs, if_neg hvnat]
+      rw [hmcs, ite_eq_right hvnat]
       norm_num only [gCallStipend]
       omega
     have hdel' : accessDelegation
@@ -1300,7 +1300,7 @@ theorem withdrawTo_execSat {fs : List Func} {e : Sevm} {pre : Devm}
         | exact hex
         | show (if pre.getStorVal e.currentTarget e.caller.toB256 <
               Sevm.argWord e 1 then (1 : B256) else 0) = 0
-          rw [if_neg (not_lt_of_ge h_amount)]
+          rw [ite_eq_right (not_lt_of_ge h_amount)]
     refine Func.execSat_sstore_warm_step_with_nonce h_fork rfl hw₁ h_static
       (M := Mem.empty) rfl
       (by simp only [Devm.gasLeft_setMach, gasStorageSet]; omega) ?_
@@ -1540,7 +1540,7 @@ theorem withdraw_execSat {fs : List Func} {e : Sevm} {pre : Devm}
         | exact hex
         | show (if pre.getStorVal e.currentTarget e.caller.toB256 <
               Sevm.argWord e 0 then (1 : B256) else 0) = 0
-          rw [if_neg (not_lt_of_ge h_amount)]
+          rw [ite_eq_right (not_lt_of_ge h_amount)]
     refine Func.execSat_sstore_warm_step_with_nonce h_fork rfl hw₁ h_static
       (M := Mem.empty) rfl
       (by simp only [Devm.gasLeft_setMach, gasStorageSet]; omega) ?_
@@ -2096,17 +2096,17 @@ theorem processMessageCall_eq_of_exec
     simp only [executeCode.handleErrorWith, hsg']
     unfold executeCode.handleError
     simp only [hexec, herror, Frame.ofCall, Option.isSome,
-      Bool.false_eq_true, if_false, bind, Except.bind]
+      Bool.false_eq_true, ite_false, bind, Except.bind]
   have hdelegation : getDelegatedCodeAddress msg.code = none := by
     unfold getDelegatedCodeAddress
-    rw [if_neg (not_delegation_of_compile hcompile)]
+    rw [ite_eq_right (not_delegation_of_compile hcompile)]
   have htoNat : Int.toNat? post.refundCounter =
       some post.refundCounter.toNat :=
     Int.mem_toNat?.mpr (Int.toNat_of_nonneg hrefund).symm
   unfold processMessageCall
   rw [htarget]
   unfold processMessageCall.call
-  simp only [hauths, List.isEmpty, if_true, bind, Except.bind,
+  simp only [hauths, List.isEmpty, ite_true, bind, Except.bind,
     hdelegation, hprocess, Except.bimap, id_eq, herror, Option.isNone,
     htoNat, Option.toExcept, Nat.cast_zero, zero_add, hsg]
   rfl
@@ -3003,7 +3003,7 @@ theorem AdmissibleRedemptionTx.processTransaction_eq_of_message
     ExecutionTrace.transactionPreludeBout] at hchecked
   rw [hchecked]
   simp only [Tx.isTypeThree, Tx.accessList, TxType.accessList, Tx.auths,
-    htype, Bool.false_eq_true, if_false, Nat.add_zero,
+    htype, Bool.false_eq_true, ite_false, Nat.add_zero,
     Benv.beginTransaction]
   rw [hdebit.subBal]
   simp only [Option.toExcept]
@@ -3017,9 +3017,9 @@ theorem AdmissibleRedemptionTx.processTransaction_eq_of_message
   rw [hprepare']
   simp only [Except.bind]
   rw [hframe.process]
-  simp only [Except.mapError, Except.bind]
+  simp only [Except.mapError]
   rw [hrefund]
-  simp only [Option.toExcept, hdelete, List.foldl_nil]
+  simp only [hdelete, List.foldl_nil]
   simp only [settleSelfdestructs, hsg]
   have hsettlement :
       settleTransactionGas rules tx.gas
@@ -3109,7 +3109,7 @@ theorem AdmissibleSelfRedemptionTx.processTransaction_eq_of_message
     ExecutionTrace.transactionPreludeBout] at hchecked
   rw [hchecked]
   simp only [Tx.isTypeThree, Tx.accessList, TxType.accessList, Tx.auths,
-    htype, Bool.false_eq_true, if_false, Nat.add_zero,
+    htype, Bool.false_eq_true, ite_false, Nat.add_zero,
     Benv.beginTransaction]
   rw [hdebit.subBal]
   simp only [Option.toExcept]
@@ -3123,9 +3123,9 @@ theorem AdmissibleSelfRedemptionTx.processTransaction_eq_of_message
   rw [hprepare']
   simp only [Except.bind]
   rw [hframe.process]
-  simp only [Except.mapError, Except.bind]
+  simp only [Except.mapError]
   rw [hrefund]
-  simp only [Option.toExcept, hdelete, List.foldl_nil]
+  simp only [hdelete, List.foldl_nil]
   simp only [settleSelfdestructs, hsg]
   have hsettlement :
       settleTransactionGas rules tx.gas

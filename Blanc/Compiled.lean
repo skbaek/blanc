@@ -391,11 +391,11 @@ lemma Devm.pushRun_exact {x : B256} {pre inter : Devm} {cost : Nat}
   rw [Devm.push_def] at eq_push
   simp only [Except.assert, bind, Except.bind] at eq_push
   by_cases h_room : d.stack.length < 1024
-  · simp only [if_pos h_room] at eq_push
+  · simp only [ite_eq_left h_room] at eq_push
     injection eq_push with eq_inter
     rw [← eq_inter]
     exact ⟨hst ▸ h_room, hg⟩
-  · simp only [if_neg h_room] at eq_push
+  · simp only [ite_eq_right h_room] at eq_push
     cases eq_push
 
 /-! ## pc-independence of a pc-free `Ninst`
@@ -471,7 +471,7 @@ lemma pushAt_run {pc sevm pre xs post} (exc : Exec pc sevm pre (.ok post))
   | halt h => cases Ninst.step_ne_halt_ok (hstep.symm.trans h)
   | cont h exc' =>
     have hs := hstep.symm.trans h
-    rw [Ninst.step_push, if_neg hne] at hs
+    rw [Ninst.step_push, ite_eq_right hne] at hs
     obtain ⟨hpc, hrun⟩ := Step.ofExecution_cont hs
     cases hpc
     exact ⟨_, exc', hrun, Exec.Deriv.Prec.cont h exc'⟩
@@ -783,7 +783,7 @@ lemma peel_inst_of_push {bs : Bytes} (le : bs.length ≤ 32) :
   match hbs : bs with
   | [] => exact Or.inr ⟨Or.inl (by simp only [List.length_nil, zero_add, Nat.lt_add_one]), rfl⟩
   | x :: bs' => exact Or.inl ⟨by simp only [List.length_cons, le_add_iff_nonneg_left, zero_le], by simp only [List.length_cons, Nat.reduceLeDiff] at le ⊢; omega, by simp only [List.length_cons,
-    Nat.reduceSubDiff, Nat.add_right_cancel_iff, Nat.add_left_cancel_iff]⟩
+    Nat.reduceSubDiff]⟩
 
 /-- An accepted `DUPN`/`SWAPN` immediate is never a `PUSH`-class byte, so the
 boundary walk can peel it as data. Peels all 256 bytes by the
@@ -1011,7 +1011,7 @@ theorem Prog.jumpable_of_get?_table {f fs} {code : ByteArray} {n loc : Nat} {r :
   refine ⟨?_, noPushBefore_succ_of_getElem? hw.right
     (by rw [Jinst.toInstType_toUInt8]; simp only [ne_eq, reduceCtorEq, not_false_eq_true]) hw.left⟩
   unfold jumpable
-  rw [dif_pos hlt, hbyte, if_pos rfl]
+  rw [dite_eq_left hlt, hbyte, ite_eq_left rfl]
   exact hw.left
 
 /-- `subcode_compile_branch`, carrying the boundary condition: the `JUMPDEST`
@@ -1071,9 +1071,9 @@ lemma subcode_compile_branch_jumpable {code : ByteArray} {k : Nat}
   · rw [hidx]
     have hlt := ByteArray.lt_size_of_getElem?_eq_some (List.get?_eq_of_slice hjd)
     unfold jumpable
-    rw [dif_pos hlt,
+    rw [dite_eq_left hlt,
       ByteArray.getElem_of_getElem?_eq_some (List.get?_eq_of_slice hjd) hlt,
-      if_pos rfl]
+      ite_eq_left rfl]
     exact harm
   · rw [h_qbs]; rw [hidx]; exact h5.right
   · rw [hidx]; exact h5.left
@@ -1132,7 +1132,7 @@ lemma chargeGas_eq_ok {cost : Nat} {devm : Devm} (h : cost ≤ devm.gasLeft) :
       .ok (devm.setMach ⟨devm.stack, devm.memory, devm.gasLeft - cost, devm.stateGas⟩) := by
   rw [chargeGas_def]
   have hs : safeSub devm.gasLeft cost = some (devm.gasLeft - cost) := by
-    unfold safeSub; rw [if_pos h]
+    unfold safeSub; rw [ite_eq_left h]
   rw [hs]
   rfl
 
@@ -1141,7 +1141,7 @@ lemma Devm.push_eq_ok {x : B256} {devm : Devm} (h : devm.stack.length < 1024) :
     Devm.push x devm =
       .ok (devm.setMach ⟨x :: devm.stack, devm.memory, devm.gasLeft, devm.stateGas⟩) := by
   rw [Devm.push_def]
-  simp only [Except.assert, bind, Except.bind, if_pos h]
+  simp only [Except.assert, bind, Except.bind, ite_eq_left h]
   rfl
 
 /-- `Devm.pop`, evaluated forward: on a cons-shaped stack, it succeeds. -/
@@ -1161,7 +1161,7 @@ lemma Evm.push_cont {pc : Nat} {sevm : Sevm} {devm : Devm} {xs : Bytes}
       .cont (pc + xs.length + 1)
         (devm.setMach
           ⟨xs.toB256 :: devm.stack, devm.memory, devm.gasLeft - gVerylow, devm.stateGas⟩) := by
-  rw [Evm.step_next h_at, Ninst.step_push, if_neg hne]
+  rw [Evm.step_next h_at, Ninst.step_push, ite_eq_right hne]
   rw [chargeGas_eq_ok h_gas]
   simp only [bind, Except.bind]
   rw [Devm.push_eq_ok (devm := devm.setMach
@@ -1215,7 +1215,7 @@ lemma Evm.jumpi_cont_zero {pc : Nat} {sevm : Sevm} {devm : Devm} {x : B256}
     simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach, Devm.stateGas_setMach]
     rw [chargeGas_eq_ok
       (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
-    simp only [if_true]
+    simp only [ite_true]
     rfl
   rw [hrun]
   rfl
@@ -1242,7 +1242,7 @@ lemma Evm.jumpi_cont_jump {pc : Nat} {sevm : Sevm} {devm : Devm} {x w : B256}
     simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach, Devm.stateGas_setMach]
     rw [chargeGas_eq_ok
       (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
-    simp only [if_neg h_ne, Except.assert, if_pos h_jp]
+    simp only [ite_eq_right h_ne, Except.assert, ite_eq_left h_jp]
     rfl
   rw [hrun]
   rfl
@@ -1265,7 +1265,7 @@ lemma Evm.jump_cont {pc : Nat} {sevm : Sevm} {devm : Devm} {x : B256}
     simp only [bind, Except.bind]
     rw [chargeGas_eq_ok
       (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
-    simp only [Except.assert, if_pos h_jp]
+    simp only [Except.assert, ite_eq_left h_jp]
     rfl
   rw [hrun]
   rfl

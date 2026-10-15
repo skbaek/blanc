@@ -531,7 +531,7 @@ private theorem Exec.StorageWrite.foldlCell_eq_of_none
   | nil => rfl
   | cons head tail ih =>
       simp only [List.foldl_cons]
-      rw [if_neg (none head (by simp only [List.mem_cons, true_or]))]
+      rw [ite_eq_right (none head (by simp only [List.mem_cons, true_or]))]
       exact ih initial (by
         intro write member
         exact none write (by simp only [List.mem_cons, member, or_true]))
@@ -574,7 +574,7 @@ private theorem Exec.StorageWrite.last_value_eq_foldlCell
       write.value := by
   subst writes
   rw [Exec.StorageWrite.foldlCell_append]
-  simp only [List.foldl_cons, matchWrite, if_true]
+  simp only [List.foldl_cons, matchWrite, ite_true]
   exact Exec.StorageWrite.foldlCell_eq_of_none write.value last
 
 /-- Pointwise storage effect of a chronological successful-write list, at every
@@ -648,7 +648,7 @@ theorem ProcessMessage.storageReplay_of_body
       (if Frame.settlementCommits (Frame.ofCall msg) out = true
        then writes else []) := by
   by_cases settles : Frame.settlementCommits (Frame.ofCall msg) out = true
-  · rw [if_pos settles]
+  · rw [ite_eq_left settles]
     have committed := Frame.raw_commits_of_settlementCommits settles
     have enter : (Frame.ofCall msg).enter = .run ⟨pc, sevm, pre⟩ :=
       (RunFrame.some_inv process).1
@@ -687,7 +687,7 @@ theorem ProcessMessage.storageReplay_of_body
       Exec.StorageReplay.of_state_eq postState
     simpa only [List.nil_append, List.append_nil] using
       prefixReplay.append ((body committed).append suffixReplay)
-  · rw [if_neg settles]
+  · rw [ite_eq_right settles]
     have settledEq := (RunFrame.some_inv process).2
     have postError : post.error.isSome = true := by
       have notNone : post.error.isNone ≠ true := by
@@ -722,7 +722,7 @@ theorem ProcessCreateMessage.ok_getStor_eq_inner_of_clean
       unfold processCreateMessage.settle at settled
       simp only [bind, Except.bind] at settled
       by_cases innerClean : inner.error.isNone = true
-      · rw [if_pos innerClean] at settled
+      · rw [ite_eq_left innerClean] at settled
         cases charge : processCreateMessage.chargeCodeGas
             msg.benv.stat.rules inner with
         | error error =>
@@ -769,7 +769,7 @@ theorem ProcessCreateMessage.ok_getStor_eq_inner_of_clean
                     exact congrArg (fun state : State => state.getStor owner)
                       (chargeCodeGas_state_ok charge)
             · cases errorEq : inner.error <;> simp_all only [Option.isSome_eq_false_iff, Option.isNone_iff_eq_none, Option.isNone_none, ExceptT.stM_eq, Option.isSome_none, Option.isNone_some, Bool.false_eq_true]
-      · rw [if_neg innerClean] at settled
+      · rw [ite_eq_right innerClean] at settled
         have eq := Except.ok.inj settled
         rw [eq] at clean
         change (inner.rollback msg.benv.state
@@ -796,7 +796,7 @@ theorem processCreateMessage_msg_getStor_eq_of_empty
     exact empty.symm
   · dsimp only [processCreateMessage.msg, Msg.withBenv, Benv.setStor, addCreatedAccount,
     Benv.incrNonce, Benv.clearStorageWritesIfEmpty, State.getStor]
-    rw [State.incrNonce_get_stor, if_neg (fun h => target h.1), State.setStor_get_stor_ne target]
+    rw [State.incrNonce_get_stor, ite_eq_right (fun h => target h.1), State.setStor_get_stor_ne target]
 
 /-- Settlement-aware replay transport for a concrete CREATE constructor.  The
 full CREATE settlement bit, rather than raw constructor success, decides
@@ -815,7 +815,7 @@ theorem ProcessCreateMessage.storageReplay_of_body
       (if Frame.settlementCommits (Frame.ofCreate msg) out = true
        then writes else []) := by
   by_cases settles : Frame.settlementCommits (Frame.ofCreate msg) out = true
-  · rw [if_pos settles]
+  · rw [ite_eq_left settles]
     have clean : post.error.isSome = false := by
       have settledEq := (RunFrame.some_inv process).2
       unfold Frame.settlementCommits at settles
@@ -843,7 +843,7 @@ theorem ProcessCreateMessage.storageReplay_of_body
         dsimp only [processCreateMessage.msg, Msg.withBenv, Benv.incrNonce,
           Benv.clearStorageWritesIfEmpty, addCreatedAccount, Benv.setStor, State.getStor]
         rw [State.incrNonce_get_stor,
-          if_neg (fun h => target_ne owner hcode h.1),
+          ite_eq_right (fun h => target_ne owner hcode h.1),
           State.setStor_get_stor_ne (target_ne owner hcode), parentState]
     have innerSettles :
         Frame.settlementCommits
@@ -854,7 +854,7 @@ theorem ProcessCreateMessage.storageReplay_of_body
       cases errorEq : inner.error <;> simp_all only [ExceptT.stM_eq, Option.isSome_eq_false_iff, Option.isNone_iff_eq_none, Option.isSome_none, Option.isNone_none, Option.isSome_some, Bool.true_eq_false]
     have innerReplay := ProcessMessage.storageReplay_of_body
       innerProcess (parent := prepared) rfl body
-    rw [if_pos innerSettles] at innerReplay
+    rw [ite_eq_left innerSettles] at innerReplay
     have throughInner : Exec.StorageReplay parent inner writes := by
       simpa only [List.nil_append] using preparedReplay.append innerReplay
     refine ⟨fun owner hcode => ?_, fun owner hcode key => ?_⟩
@@ -862,7 +862,7 @@ theorem ProcessCreateMessage.storageReplay_of_body
         (throughInner.1 owner hcode)
     · rw [(postEq owner (target_ne owner hcode)).2]
       exact throughInner.2 owner hcode key
-  · rw [if_neg settles]
+  · rw [ite_eq_right settles]
     have settledEq := (RunFrame.some_inv process).2
     have postError : post.error.isSome = true := by
       have notClean : post.error.isSome ≠ false := by
@@ -991,7 +991,7 @@ theorem GenericCreate.storageReplay_some_of_body
         · exact fun owner _ => prefixCode owner
         · intro owner hcode
           change ((pre.state.incrNonce sevm.currentTarget).get owner).stor = _
-          rw [State.incrNonce_get_stor, if_neg (by
+          rw [State.incrNonce_get_stor, ite_eq_right (by
             rintro ⟨equal, empty⟩
             subst owner
             exact (ne_wa_of_code_size_zero hcode empty.1) rfl)]
@@ -2063,7 +2063,7 @@ theorem Exec.Deriv.ParentPrefix.advance_pushToward
                 Ninst.step ⟨pc, sevm, pre⟩ (.push xs le) :=
             Evm.step_next pushAt
           have sourceStep := hstatic.symm.trans hstep
-          rw [Ninst.step_push, if_neg hne] at sourceStep
+          rw [Ninst.step_push, ite_eq_right hne] at sourceStep
           obtain ⟨hpc, hrun⟩ := Step.ofExecution_cont sourceStep
           cases hpc
           exact ⟨_, next, .cont hstep next, rest,

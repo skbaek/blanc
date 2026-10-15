@@ -17,26 +17,13 @@ theorem concreteJoinChecked :
   have hfee : checkTransactionGasFee
       (initBenv .prague concreteDeployed concreteJoinExecutionHeader).beginTransaction
       concreteJoinTx = .ok (2, 4000000) := by decide +kernel
-  rw [checkTransaction, hgas]
-  simp only [Except.mapError, bind, Except.bind]
-  rw [hchain]
-  change (do
-    let sender ← Except.mapError TransitionError.senderRecovery (recoverSender 1 concreteJoinTx)
-    let (effective, maxFee) ← Except.mapError TransitionError.transaction
-      (checkTransactionGasFee (initBenv .prague concreteDeployed concreteJoinExecutionHeader).beginTransaction concreteJoinTx)
-    let (maxFee, hashes) ← Except.mapError TransitionError.transaction
-      (checkTransactionBlobData (initBenv .prague concreteDeployed concreteJoinExecutionHeader).beginTransaction concreteJoinTx maxFee)
-    Except.mapError TransitionError.transaction (checkTransactionReceiver concreteJoinTx)
-    Except.mapError TransitionError.transaction (checkTransactionAuthorizationList concreteJoinTx)
-    Except.mapError TransitionError.transaction (checkTransactionSenderAccount (concreteDeployed.state.get sender) concreteJoinTx maxFee)
-    pure (sender, effective, hashes, 0)) = _
-  rw [concreteJoinRecoveredSender, hfee]
-  change (do
-    Except.mapError TransitionError.transaction
-      (checkTransactionSenderAccount (concreteDeployed.state.get concreteCreateSender) concreteJoinTx 4000000)
-    pure (concreteCreateSender, 2, [], 0)) = _
-  rw [concreteJoinSenderChecked]
-  rfl
+  have hblob : checkTransactionBlobData
+      (initBenv .prague concreteDeployed concreteJoinExecutionHeader).beginTransaction
+      concreteJoinTx 4000000 = .ok (4000000, []) := by rfl
+  have hreceiver : checkTransactionReceiver concreteJoinTx = .ok () := by rfl
+  have hauth : checkTransactionAuthorizationList concreteJoinTx = .ok () := by rfl
+  exact checkTransaction_ok_of_parts hgas hchain concreteJoinRecoveredSender hfee
+    hblob hreceiver hauth concreteJoinSenderChecked
 
 noncomputable def concreteJoinTxInput : Benv :=
   initBenv .prague concreteDeployed concreteJoinExecutionHeader
@@ -1322,19 +1309,7 @@ theorem concreteJoin_transaction :
   have hauths : concreteJoinTx.auths = [] := rfl
   unfold processTransaction
   simp only [bind, Except.bind]
-  change (do
-    let validationSender ←
-      ((match concreteJoinTxInput.beginTransaction.stat.rules.stateGas with
-        | none => Except.ok 0
-        | some _ => do
-          Except.mapError TransitionError.transaction
-            (checkTransactionChainId concreteJoinTxInput.beginTransaction concreteJoinTx)
-          Except.mapError (fun e => TransitionError.senderRecovery e)
-            (recoverSender concreteJoinTxInput.beginTransaction.stat.chainId concreteJoinTx)) :
-        Except TransitionError Adr)
-    (fun _ => _) validationSender) =
-      .ok (concreteJoinTransactionState, concreteJoinTransactionBout) <;>
-  rw [hvalidationStateGas]
+  rw [recoverValidationSender_of_stateGas_none concreteJoinTx hvalidationStateGas]
   simp only [bind, Except.bind]
   rw [hrules]
   simp only [Except.mapError]

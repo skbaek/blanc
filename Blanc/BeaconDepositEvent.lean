@@ -255,7 +255,7 @@ private theorem pushMstoreAt_runCompiledTo
       (G := G + wordGas + gVerylow) hvalueCost
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   apply Func.runCompiledTo_mstoreAt
       (pushGas := wordGas) (extGas := 0) hwordCost hroom
@@ -289,7 +289,7 @@ private theorem loadAmountStoreLe64_runCompiledTo
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mload_of
@@ -308,7 +308,7 @@ private theorem loadAmountStoreLe64_runCompiledTo
       simpa only [hamountAddress] using hreadFit
     rw [hext]
     decide
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply storeLe64At_runCompiledTo
       (memory := memory) (word := amount) (address := 352)
       (offset := 352) (G := G) (stack := stack)
@@ -371,7 +371,7 @@ private theorem copyDynamicPayload_runCompiledTo
       hsizeCost
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256
@@ -379,7 +379,7 @@ private theorem copyDynamicPayload_runCompiledTo
       hoffsetCost
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_mload_of
@@ -398,14 +398,14 @@ private theorem copyDynamicPayload_runCompiledTo
       exact Devm.extCost_zero_of_le hsize32 hreadFit
     rw [hext]
     decide
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256
       (G := G + gVerylow + destinationGas + copyGas)
       hdeltaCost
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_binary
@@ -416,13 +416,13 @@ private theorem copyDynamicPayload_runCompiledTo
       (by rintro ⟨⟩) rfl rfl rfl
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [List.length_cons]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.memory_setMach]
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256
       (G := G + copyGas) hdestinationCost
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach, List.length_cons]; omega)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.runCompiledTo_calldatacopy_step
       (M := memory) (c := copyGas) rfl rfl ?_ ?_ ?_
@@ -993,7 +993,7 @@ private theorem emitDepositEvent_runCompiledTo
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach]; decide)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256
@@ -1001,7 +1001,7 @@ private theorem emitDepositEvent_runCompiledTo
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_cons]; decide)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_pushB256
@@ -1009,7 +1009,7 @@ private theorem emitDepositEvent_runCompiledTo
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach])
       (by simp only [Devm.stack_setMach, List.length_cons]; decide)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   exact hlift htail
 
@@ -1084,7 +1084,7 @@ private theorem stageEventCountLog_runCompiledTo
       (by decide +kernel)
       (by simp only [Devm.gasLeft_setMach]; omega)
       (by simp only [Devm.stack_setMach]; decide)) ?_
-  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, afterSload_stateGas, afterSstore_stateGas, Devm.stack_setMach,
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
     Devm.memory_setMach]
   refine Func.RunCompiledTo.next
     (Ninst.runCompiled_sload_selected

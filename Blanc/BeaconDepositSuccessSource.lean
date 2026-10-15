@@ -1598,7 +1598,7 @@ theorem depositCapGuard_success_of_run
     by_contra hnot
     have hzero : (oldCount <? Nat.toB256 (2 ^ 32 - 1)) = 0 := by
       simp only [B256.ltCheck]
-      rw [if_neg hnot]
+      rw [ite_eq_right hnot]
     have hone :
         ((oldCount <? Nat.toB256 (2 ^ 32 - 1)) =? 0) = 1 := by
       rw [hzero]
@@ -2580,7 +2580,7 @@ private theorem depositAmountUpperGuard_success_of_run
     have hone : (Nat.toB256 (2 ^ 64 - 1) <?
         (sevm.value / Nat.toB256 oneGwei)) = 1 := by
       simp only [B256.ltCheck]
-      rw [if_pos hlt]
+      rw [ite_eq_left hlt]
     exact (by decide +kernel : (1 : B256) ≠ 0) (hone.symm.trans hflag)
   refine ⟨hupper, next, hpNext, restRun, ?_, ?_⟩
   · rw [memoryNext,
@@ -2617,9 +2617,9 @@ theorem deposit_ok_of_guard_facts
           ⟨pubkey, withdrawalCredentials, le64 (value / oneGwei), signature,
             le64 s.count⟩) := by
   unfold deposit
-  rw [if_neg (by omega), if_neg (by omega), if_neg (by omega),
-    if_neg (by omega), if_neg (by omega), if_neg (by omega),
-    if_neg (by simpa only [not_not] using hroot), if_neg (by omega),
+  rw [ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega),
+    ite_eq_right (by omega), ite_eq_right (by omega), ite_eq_right (by omega),
+    ite_eq_right (by simpa only [not_not] using hroot), ite_eq_right (by omega),
     walk_eq_some_firstLive Bytes.sha256 s.branch
       (depositDataNode Bytes.sha256 pubkey withdrawalCredentials signature
         (le64 (value / oneGwei))) hheight hfirst]

@@ -254,8 +254,8 @@ theorem pairVisit?_vaultFrame {vault : Adr} {d : Exec.Deriv}
     rw [target]
     exact fun equal => distinct equal.symm
   unfold Exec.Deriv.pairVisit?
-  rw [if_neg (fun h => wethNe h.2.2.1),
-    if_pos ⟨commits, pcZero, target, direct, code, selected⟩]
+  rw [ite_eq_right (fun h => wethNe h.2.2.1),
+    ite_eq_left ⟨commits, pcZero, target, direct, code, selected⟩]
 
 /-- The classifier at a committed exact WETH frame root that is an allowance invocation's own
 frame: that invocation's visit. -/
@@ -269,7 +269,7 @@ theorem pairVisit?_wethFrame {vault : Adr} {d : Exec.Deriv} (call : WethAllowanc
   have selected := call.selected
   rw [sevmEq] at selected
   unfold Exec.Deriv.pairVisit?
-  rw [if_pos ⟨commits, pcZero, target, direct, code⟩]
+  rw [ite_eq_left ⟨commits, pcZero, target, direct, code⟩]
   cases approval : call.approval with
   | false =>
       rw [approval] at selected
@@ -278,12 +278,12 @@ theorem pairVisit?_wethFrame {vault : Adr} {d : Exec.Deriv} (call : WethAllowanc
           selector "approve" [.address, .uint256] := by decide +kernel
       have notApprove : Sevm.selector d.sevm ≠ selector "approve" [.address, .uint256] :=
         fun equal => distinct (selected.symm.trans equal)
-      rw [if_neg notApprove, if_pos selected]
+      rw [ite_eq_right notApprove, ite_eq_left selected]
       simp only [WethAllowanceInvocation.visit, approval, sevmEq, preEq]
   | true =>
       rw [approval] at selected
       simp only [↓reduceIte] at selected
-      rw [if_pos selected]
+      rw [ite_eq_left selected]
       simp only [WethAllowanceInvocation.visit, approval, sevmEq, preEq]
 
 /-- A record witnessed among a foreign continuation's raw roots is witnessed among its raw
@@ -977,7 +977,7 @@ theorem Exec.CorePairReplay.nextSome {vault : Adr} {pc : Nat} {sevm : Sevm} {pre
                     spawnEq parentTargetNe targetCodeNonempty
                     (by rw [innerTarget]
                         dsimp only [getDelegatedCodeAddress]
-                        rw [if_neg (not_delegation_of_compile installed)])
+                        rw [ite_eq_right (not_delegation_of_compile installed)])
                 have childCodeAddress :=
                   congrArg (fun evm : Evm => evm.sta.codeAddress) childEvmEq
                 dsimp only [Msg.withBenv, initEvm, initSevm] at childCodeAddress

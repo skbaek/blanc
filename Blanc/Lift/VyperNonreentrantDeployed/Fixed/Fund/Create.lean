@@ -24,8 +24,8 @@ theorem receiverAddr_ne : receiverAddr ≠ proxyAddr ∧ receiverAddr ≠ implAd
 theorem stor_empty_set_get (c k : B256) (v : B256) :
     (Stor.empty.set c v).get k = if c = k then v else 0 := by
   by_cases h : c = k
-  · subst h; rw [Stor.get_set_self, if_pos rfl]
-  · rw [Stor.get_set_ne _ h, stor_empty_get, if_neg h]
+  · subst h; rw [Stor.get_set_self, ite_eq_left rfl]
+  · rw [Stor.get_set_ne _ h, stor_empty_get, ite_eq_right h]
 
 /-- The shadows that describe the world after both creations. -/
 theorem acs6_eq (a : Adr) :
@@ -65,7 +65,7 @@ theorem create_fixtures (fork : Fork) (hfork : CoveredFork fork)
     have h3 : (tokenCreateMsg fork world4).caller = creator := rfl
     have h4 : (tokenCreateMsg fork world4).accessedStorageKeys = .emptyWithCapacity := rfl
     unfold Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.mintSstoreGas
-    rw [h2, h3, h4, if_neg Std.HashSet.not_mem_emptyWithCapacity]
+    rw [h2, h3, h4, ite_eq_right Std.HashSet.not_mem_emptyWithCapacity]
     rfl
   have hw5 : postT.state = world5 := hTstate
   have hTacct : postT.state.get tokenAddr =
@@ -86,8 +86,8 @@ theorem create_fixtures (fork : Fork) (hfork : CoveredFork fork)
         show (Stor.empty.set creator.toB256 1000000).get k = lookupS stor5 tokenAddr k
         rw [stor_empty_set_get]
         by_cases hk : creator.toB256 = k
-        · rw [if_pos hk]; simp only [stor5, lookupS, true_and, hk, ↓reduceIte]
-        · rw [if_neg hk]
+        · rw [ite_eq_left hk]; simp only [stor5, lookupS, true_and, hk, ↓reduceIte]
+        · rw [ite_eq_right hk]
           simp only [stor5, lookupS, true_and, hk, ↓reduceIte]
           exact (lookupS_storOracle_ne hTP hTI k).symm)
       (fun a k ha => by simp only [stor5, lookupS, Ne.symm ha, false_and, ↓reduceIte])

@@ -351,7 +351,7 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
   have h_token : Sevm.argWord sevm 1 = sevm.currentTarget.toB256 := by
     by_contra hne
     have h0 : (sevm.currentTarget.toB256 =? Sevm.argWord sevm 1) = 0 := by
-      simp only [B256.eqCheck]; exact if_neg (fun h => hne h.symm)
+      simp only [B256.eqCheck]; exact ite_eq_right (fun h => hne h.symm)
     rw [h0, show ((0 : B256) =? 0) = 1 from by simp only [B256.eqCheck, ↓reduceIte]] at h_tokflag
     exact B256.zero_ne_one h_tokflag.symm
   rw [h_tokflag] at hs4
@@ -456,7 +456,7 @@ theorem of_flashLoan_toCall {sevm : Sevm} {s r : Devm}
     pref_head_unique hs15 (pref_append [0] s16.stack)
   have h_bound : Sevm.argWord sevm 2 ≤ ~~~ supply := by
     rw [← B256.not_lt]; intro hlt
-    rw [B256.ltCheck, if_pos hlt] at h_boundflag
+    rw [B256.ltCheck, ite_eq_left hlt] at h_boundflag
     exact B256.zero_ne_one h_boundflag.symm
   have h_nof : B256.Nof ((Devm.getStor s sevm.currentTarget).get supplySlot)
       (Sevm.argWord sevm 2) := h_supply' ▸ B256.nof_of_le_not h_bound
@@ -1102,7 +1102,7 @@ theorem of_flashLoanFromCall {sevm : Sevm} {sc r : Devm} {amount : B256}
     simp only [Stack.Pop, Split, List.nil_append, List.cons_append] at hps2
     rw [hps2] at hp1
     rw [show ((1 : B256) =? 0) = 0 from by
-      rw [B256.eqCheck, if_neg (fun h => B256.zero_ne_one h.symm)]] at hp1
+      rw [B256.eqCheck, ite_eq_right (fun h => B256.zero_ne_one h.symm)]] at hp1
     have hp2 : [amount, a.toB256] <<+ s2.stack := cons_pref_cons_inv hp1
     -- `returnDataShorterThan 32`, and the untaken revert arm
     rcases of_run_prepend (returnDataShorterThan 32) _ h_run with ⟨s3, h_rst, h_run⟩
@@ -1151,7 +1151,7 @@ theorem of_flashLoanFromCall {sevm : Sevm} {sc r : Devm} {amount : B256}
       have h0 : (erc3156Magic =? Bytes.toB256 (s4.returnData.sliceD 0 32 0))
           = 0 := by
         simp only [B256.eqCheck]
-        exact if_neg (fun h => hne h.symm)
+        exact ite_eq_right (fun h => hne h.symm)
       rw [h0, show ((0 : B256) =? 0) = 1 from by simp only [B256.eqCheck, ↓reduceIte]] at h_flag2
       exact B256.zero_ne_one h_flag2.symm
     rw [h_flag2] at hp6
@@ -1608,7 +1608,7 @@ lemma of_spendAllowanceThenBurn_val {sevm : Sevm} {s r : Devm} {wad : B256}
       pref_head_unique hs16 (pref_append [0] s17.stack)
     have h_le : wad ≤ allow := by
       rw [← B256.not_lt]; intro hlt
-      rw [B256.ltCheck, if_pos hlt] at h_flag17
+      rw [B256.ltCheck, ite_eq_left hlt] at h_flag17
       exact B256.zero_ne_one h_flag17.symm
     rw [h_flag17] at hs16
     have hs17 : [allow, repayKey a sevm.currentTarget, wad, a.toB256] <<+ s17.stack :=
@@ -1716,7 +1716,7 @@ lemma of_spendAllowanceThenBurn_val {sevm : Sevm} {s r : Devm} {wad : B256}
     have h_max : allow = B256.max := by
       apply B256.eq_max_of_not_eq_zero
       by_contra hne
-      rw [B256.eqCheck, if_neg hne] at h_w13
+      rw [B256.eqCheck, ite_eq_right hne] at h_w13
       exact h_ne13 h_w13.symm
     rw [h_w13] at hs12
     have hs13 : [allow, repayKey a sevm.currentTarget, wad, a.toB256] <<+ s13.stack :=
@@ -1932,7 +1932,7 @@ lemma of_burnAndReturn_val {fs : List Func} {sevm : Sevm} {s r : Devm}
   have h_ltflag : (rbal <? wad) = 0 := pref_head_unique hs5 (pref_append [0] s6.stack)
   have h_le : wad ≤ rbal := by
     rw [← B256.not_lt]; intro hlt
-    rw [B256.ltCheck, if_pos hlt] at h_ltflag
+    rw [B256.ltCheck, ite_eq_left hlt] at h_ltflag
     exact B256.zero_ne_one h_ltflag.symm
   rw [h_ltflag] at hs5
   have hs6 : [rbal, wad, a.toB256] <<+ s6.stack := cons_pref_cons_inv hs5

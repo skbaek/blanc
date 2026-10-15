@@ -422,7 +422,7 @@ private lemma Bytes.sliceD_writeAt_selector
   · simp only [List.getD_eq_getElem?_getD, List.length_map, List.length_range, h]
   · intro i h₁ h₂
     simp only [List.getElem_map, List.getElem_range]
-    rw [Bytes.getD_writeAt, if_pos (by
+    rw [Bytes.getD_writeAt, ite_eq_left (by
       simp only [Nat.zero_le, true_and, B256.length_toBytes]
       omega)]
     have hd := congrArg (fun bs : Bytes => bs.getD i 0)
@@ -1244,7 +1244,7 @@ theorem rollback_revert_of_exec_revert {msg : Msg} {benv : Benv} {xl : Xlot}
   rw [h_r0] at hset
   unfold processMessage.settle at hset
   dsimp only [bind, Except.bind] at hset
-  rw [if_pos (by simp only [h_handled, Option.isSome_some])] at hset
+  rw [ite_eq_left (by simp only [h_handled, Option.isSome_some])] at hset
   have h_out := Except.ok.inj hset
   have h_err : out.error = some .revert := by
     rw [h_out]

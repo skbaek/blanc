@@ -1666,7 +1666,7 @@ theorem finishQuotient_up_image_trace
     refine ⟨?_, bodyPre, ?_, ?_, ?_, bodyRun⟩
     · intro remainderNonzero
       exact (remainderNonzero remainderZero).elim
-    · simp only [if_pos remainderZero]
+    · simp only [ite_eq_left remainderZero]
       rw [← callBurn.stack]
       exact quotientPrefix
     · constructor <;> rw [← callBurn.memory]
@@ -1748,7 +1748,7 @@ theorem finishQuotient_up_image_trace
         Func.WalkInv.call callRun
       obtain rfl := Option.some.inj (callLookup.symm.trans lookup)
       refine ⟨(fun _ => quotientMax), bodyPre, ?_, ?_, ?_, bodyRun⟩
-      · simp only [if_neg remainderZero]
+      · simp only [ite_eq_right remainderZero]
         rw [← callBurn.stack]
         exact sumPrefix
       · constructor <;> rw [← callBurn.memory, ← roundMemory]
@@ -1890,7 +1890,7 @@ theorem finishQuotient_capCeilPred_trace
       Func.WalkInv.call callRun
     obtain rfl := Option.some.inj (callLookup.symm.trans lookup)
     refine ⟨bodyPre, ?_, bodyRun⟩
-    simp only [if_pos remainderZero]
+    simp only [ite_eq_left remainderZero]
     rw [← callBurn.stack]
     exact differencePrefix
   · have zeroPrefix : (0 : B256) :: tail <<+ remainderTest.stack := by
@@ -1912,7 +1912,7 @@ theorem finishQuotient_capCeilPred_trace
       Func.WalkInv.call callRun
     obtain rfl := Option.some.inj (callLookup.symm.trans lookup)
     refine ⟨bodyPre, ?_, bodyRun⟩
-    simp only [if_neg remainderZero]
+    simp only [ite_eq_right remainderZero]
     rw [← callBurn.stack]
     exact quotientPrefix
 

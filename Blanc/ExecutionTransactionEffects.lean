@@ -76,13 +76,13 @@ theorem validateTransaction_nonce_ne_max {rules : ForkRules} {tx : Tx}
       · cases validation
       · cases cap : rules.tx.maxGas with
         | none =>
-            simp only [cap, hmax, ite_true, bind, Except.bind] at validation
+            simp only [cap, bind, Except.bind] at validation
             cases validation
         | some gasCap =>
             rw [cap] at validation
             obtain ⟨_, _, validation⟩ := Except.bind_eq_ok validation
             obtain ⟨_, _, validation⟩ := Except.bind_eq_ok validation
-            simp only [hmax, ite_true, bind, Except.bind] at validation
+            simp only [bind, Except.bind] at validation
             cases validation
 
 /-- Successful transaction admission checks the sender's exact nonce. -/

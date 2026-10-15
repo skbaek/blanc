@@ -424,7 +424,7 @@ theorem Exec.CoreProrataAccounting.nextSome
                     spawnEq parentTargetNe targetCodeNonempty
                     (by rw [innerTarget]
                         dsimp only [getDelegatedCodeAddress]
-                        rw [if_neg
+                        rw [ite_eq_right
                           (not_delegation_of_compile installed.1)])
                 have childCodeAddress :=
                   congrArg (fun evm : Evm => evm.sta.codeAddress) childEvmEq

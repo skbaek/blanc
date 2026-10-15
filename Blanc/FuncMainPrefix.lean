@@ -174,7 +174,7 @@ theorem dispatchWith_run_prefix_of_sorted :
           have h_le : z.fst ≤ sig := by
             rw [← B256.not_lt]; intro h_lt
             have h_gt : z.fst > sig := h_lt
-            rw [B256.gtCheck, if_pos h_gt] at hflag
+            rw [B256.gtCheck, ite_eq_left h_gt] at hflag
             exact B256.zero_ne_one hflag
           have h_mem_drop : (sig, f) ∈
               ((w, p) :: y :: ys).drop ((((w, p) :: y :: ys).length + 1) / 2) := by
@@ -199,7 +199,7 @@ theorem dispatchWith_run_prefix_of_sorted :
         · rcases popBurn_pref hpop h_pfx₁ with ⟨hflag, h_pfx₂⟩
           have h_lt : sig < z.fst := by
             by_contra h_nlt
-            rw [B256.gtCheck, if_neg (fun h_gt => h_nlt h_gt)] at hflag
+            rw [B256.gtCheck, ite_eq_right (fun h_gt => h_nlt h_gt)] at hflag
             exact hne hflag
           have h_mem_take : (sig, f) ∈
               ((w, p) :: y :: ys).take ((((w, p) :: y :: ys).length + 1) / 2) := by
@@ -278,7 +278,7 @@ theorem of_run_exactCalldata_prefix {fs : List Func} {sevm : Sevm} {s r : Devm}
     have hsize' : sevm.data.length.toB256 = size := by
       by_cases h : sevm.data.length.toB256 = size
       · exact h
-      · exact absurd (by rw [hw, B256.eqCheck, if_neg h]) hnz
+      · exact absurd (by rw [hw, B256.eqCheck, ite_eq_right h]) hnz
     exact ⟨v, midV, hsize',
       (Line.of_inv Devm.state (by line_inv) hframe).trans
         (hpop.state.trans hburn.state),

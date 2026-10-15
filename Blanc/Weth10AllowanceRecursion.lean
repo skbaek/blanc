@@ -62,10 +62,10 @@ theorem Exec.attributionInner_runOk
        else []) ++ Exec.attributionInner dp ca next := by
   rw [Exec.attributionInner]
   by_cases hs : Jaune.Frame.settlementCommits f raw = true
-  · rw [dif_pos hs, dif_pos hs,
+  · rw [dite_eq_left hs, dite_eq_left hs,
       Exec.attributionStream_eq_frameContribution dp ca child
         (Jaune.Frame.raw_commits_of_settlementCommits hs)]
-  · rw [dif_neg hs, dif_neg hs]
+  · rw [dite_eq_right hs, dite_eq_right hs]
 
 /-! ## Message-level allowance transport -/
 
@@ -127,7 +127,7 @@ theorem ProcessMessage.allowanceRegionEffect_of_bodyEffect
     exact hsafe
   by_cases hsettle : Jaune.Frame.settlementCommits
       (Frame.ofCall msg) out = true
-  · rw [if_pos hsettle]
+  · rw [ite_eq_left hsettle]
     have committed : Execution.commits out = true :=
       Frame.raw_commits_of_settlementCommits hsettle
     have body := hbody committed
@@ -163,7 +163,7 @@ theorem ProcessMessage.allowanceRegionEffect_of_bodyEffect
         (body.append
           (AllowanceRegionEffect.of_getStorCode_eq
             hpostStorage hpostCode))
-  · rw [if_neg hsettle]
+  · rw [ite_eq_right hsettle]
     have hset := (RunFrame.some_inv hprocess).2
     have herr : post.error.isSome = true := by
       have hnone : post.error.isNone ≠ true := by
@@ -222,7 +222,7 @@ theorem ProcessCreateMessage.allowanceRegionEffect_of_bodyEffect
       exact hp
   by_cases hsettle : Jaune.Frame.settlementCommits
       (Frame.ofCreate msg) out = true
-  · rw [if_pos hsettle]
+  · rw [ite_eq_left hsettle]
     have committed : Execution.commits out = true :=
       Frame.raw_commits_of_settlementCommits hsettle
     have body := hbody committed
@@ -281,7 +281,7 @@ theorem ProcessCreateMessage.allowanceRegionEffect_of_bodyEffect
         (body.append
           (AllowanceRegionEffect.of_getStorCode_eq
             hsuffixStorage hsuffixCode))
-  · rw [if_neg hsettle]
+  · rw [ite_eq_right hsettle]
     have hset := (RunFrame.some_inv hprocess).2
     have herr : post.error.isSome = true := by
       have hnone : post.error.isNone ≠ true := by
@@ -490,7 +490,7 @@ theorem GenericCreate.allowanceRegionEffect_some_of_bodyEffect
         symm
         change ((pre.state.incrNonce sevm.currentTarget).get ca).stor =
           (pre.state.get ca).stor
-        rw [State.incrNonce_get_stor, if_neg]
+        rw [State.incrNonce_get_stor, ite_eq_right]
         rintro ⟨heq, hempty⟩
         rw [heq] at hempty
         exact installedWeth10Code_size_ne_zero hcode hempty.1
@@ -960,7 +960,7 @@ theorem Exec.CoreAllowanceSound.nextSome
                     hs hparentNe hnonempty
                     (by rw [hinnerTarget]
                         dsimp only [getDelegatedCodeAddress]
-                        rw [if_neg (not_delegation_of_compile hatp.1)])
+                        rw [ite_eq_right (not_delegation_of_compile hatp.1)])
                 have hcodeAddressInit :=
                   congrArg (fun evm : Evm => evm.sta.codeAddress) hinit
                 dsimp only [Msg.withBenv, initEvm, initSevm] at hcodeAddressInit
@@ -1183,7 +1183,7 @@ theorem ProcessMessage.allowanceRegionEffectSound_of_bodyEffect
     exact hsafe
   by_cases hsettle : Jaune.Frame.settlementCommits
       (Frame.ofCall msg) out = true
-  · rw [if_pos hsettle]
+  · rw [ite_eq_left hsettle]
     have committed : Execution.commits out = true :=
       Frame.raw_commits_of_settlementCommits hsettle
     have body := hbody committed
@@ -1219,7 +1219,7 @@ theorem ProcessMessage.allowanceRegionEffectSound_of_bodyEffect
         (body.append
           (AllowanceRegionEffectSound.of_getStorCode_eq
             hpostStorage hpostCode))
-  · rw [if_neg hsettle]
+  · rw [ite_eq_right hsettle]
     have hset := (RunFrame.some_inv hprocess).2
     have herr : post.error.isSome = true := by
       have hnone : post.error.isNone ≠ true := by
@@ -1278,7 +1278,7 @@ theorem ProcessCreateMessage.allowanceRegionEffectSound_of_bodyEffect
       exact hp
   by_cases hsettle : Jaune.Frame.settlementCommits
       (Frame.ofCreate msg) out = true
-  · rw [if_pos hsettle]
+  · rw [ite_eq_left hsettle]
     have committed : Execution.commits out = true :=
       Frame.raw_commits_of_settlementCommits hsettle
     have body := hbody committed
@@ -1337,7 +1337,7 @@ theorem ProcessCreateMessage.allowanceRegionEffectSound_of_bodyEffect
         (body.append
           (AllowanceRegionEffectSound.of_getStorCode_eq
             hsuffixStorage hsuffixCode))
-  · rw [if_neg hsettle]
+  · rw [ite_eq_right hsettle]
     have hset := (RunFrame.some_inv hprocess).2
     have herr : post.error.isSome = true := by
       have hnone : post.error.isNone ≠ true := by
@@ -1489,7 +1489,7 @@ theorem GenericCreate.allowanceRegionEffectSound_some_of_bodyEffect
         symm
         change ((pre.state.incrNonce sevm.currentTarget).get ca).stor =
           (pre.state.get ca).stor
-        rw [State.incrNonce_get_stor, if_neg]
+        rw [State.incrNonce_get_stor, ite_eq_right]
         rintro ⟨heq, hempty⟩
         rw [heq] at hempty
         exact installedWeth10Code_size_ne_zero hcode hempty.1
@@ -1791,7 +1791,7 @@ theorem Exec.CoreAllowanceReadSound.nextSome
                     hs hparentNe hnonempty
                     (by rw [hinnerTarget]
                         dsimp only [getDelegatedCodeAddress]
-                        rw [if_neg (not_delegation_of_compile hatp.1)])
+                        rw [ite_eq_right (not_delegation_of_compile hatp.1)])
                 have hcodeAddressInit :=
                   congrArg (fun evm : Evm => evm.sta.codeAddress) hinit
                 dsimp only [Msg.withBenv, initEvm, initSevm] at hcodeAddressInit

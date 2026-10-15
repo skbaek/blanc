@@ -427,7 +427,7 @@ private theorem convertToShares_tail_effect
     have hcap : maxBalance = maxSupply := by decide +kernel
     have hlt' : maxBalance < S + m := by rwa [hcap]
     have hone : maxBalance <? (S + m) = 1 := by
-      simp only [B256.ltCheck, if_pos hlt']
+      simp only [B256.ltCheck, ite_eq_left hlt']
     exact B256.zero_ne_one (hone.symm.trans hflag).symm
   have pafter : m :: S :: (B + 1) :: 0 :: Sevm.argWord sevm 0 :: maxBalance :: supplySlot :: [] <<+
       after.stack := (popBurn_pref hpop p17).2

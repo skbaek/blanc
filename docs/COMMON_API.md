@@ -1741,6 +1741,13 @@ If several updates form a familiar semantic post-state, continue to S2.
 
 ### S2. I need a reusable composite projection cut
 
+`Devm.subBal_state` in
+[`Blanc/MachineDataFacts.lean`](../Blanc/MachineDataFacts.lean) projects a
+successful machine debit to the corresponding successful account-state debit.
+For an `Option.toExcept` success, first use Jaune's `Option.toExcept_eq_ok`.
+Neither result proves sufficient funds or equality of the whole machine;
+use them to avoid unfolding machine records through repeated option cases.
+
 `Devm.getStorVal_of_state` in
 [`Blanc/MachineDataFacts.lean`](../Blanc/MachineDataFacts.lean) transports a
 persistent-storage word across account-state equality, without requiring
@@ -1923,6 +1930,17 @@ laws live in [`Blanc/LadderBase.lean`](../Blanc/LadderBase.lean):
   equation with an unmoved supply.
 
 ### S6. I need a basic EVM-word identity
+
+For EVM exponentiation, use Jaune's `B256.bexp_zero` and `B256.bexp_eq`
+from its pinned `Jaune.Basic` API. The latter exposes `x.toNat ^ y.toNat`
+modulo `2^256`; the zero-exponent theorem covers every word, including zero.
+Rewrite small word-to-Nat conversions explicitly before closed arithmetic.
+Do not unfold `Nat.powMod` or rely on its implementation helpers: Lean4.35
+also has a root `Nat.powMod`, while Jaune's wrapper preserves its own
+`m ≤ 1` convention. The shared `Lift.bexp_256_32` in
+[`Blanc/Lift/PackedSha.lean`](../Blanc/Lift/PackedSha.lean) covers the packed
+word-copy special case. The leaf advice tactic recognizes direct `bexp`
+equalities without normalizing a concrete state or memory expression.
 
 For the natural-number arithmetic of a Babylonian square-root loop, use
 [`Blanc/Lift/BabylonianSqrt.lean`](../Blanc/Lift/BabylonianSqrt.lean), namespace

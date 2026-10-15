@@ -191,7 +191,7 @@ lemma rawUnion_self
     (hwf : Std.DHashMap.Internal.Raw.WFImp m.1) :
     Std.DHashMap.Internal.Raw₀.union m m = m := by
   unfold Std.DHashMap.Internal.Raw₀.union
-  rw [if_pos (le_refl _)]
+  rw [ite_eq_left (le_refl _)]
   rw [Std.DHashMap.Internal.Raw₀.insertManyIfNew_eq_insertListIfNewₘ_toListModel]
   apply rawInsertListIfNew_eq_self_of_forall_contains
   intro p hp
@@ -334,7 +334,7 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
       gasWarmAccess := by
     change accessCost 2 devm.accessedAddresses + 0 = gasWarmAccess
     unfold accessCost
-    rw [if_pos hwarm]
+    rw [ite_eq_left hwarm]
     omega
   obtain ⟨mcc, mcs, hsplit⟩ : ∃ mcc mcs,
       calculateMsgCallGas 0 (Nat.toB256 G).toNat d0.gasLeft
@@ -346,7 +346,7 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
       B256.toNat_toB256_of_lt hbound
     rw [hd0gas] at hsplit
     unfold calculateMsgCallGas at hsplit
-    rw [hGnat, if_neg (by simp only [gasWarmAccess]; omega)] at hsplit
+    rw [hGnat, ite_eq_right (by simp only [gasWarmAccess]; omega)] at hsplit
     simp only [gasWarmAccess] at hsplit
     have hmin :
         min G (except64th (G - ext - 100)) =

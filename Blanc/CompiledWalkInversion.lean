@@ -491,7 +491,7 @@ private lemma of_run_revert_window {sevm : Sevm} {devm : Devm} {i sz : B256}
             ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).gasLeft
             (devm.extCost [⟨i.toNat, sz.toNat⟩]) = none := by
           unfold safeSub
-          rw [if_neg (by simp only [Devm.gasLeft_setMach]; omega)]
+          rw [ite_eq_right (by simp only [Devm.gasLeft_setMach]; omega)]
         rw [hs]
       rw [hcg]
     exact Or.inl ⟨_, h_eq.symm.trans h_oog⟩
@@ -672,7 +672,7 @@ theorem of_run_revert_window_frame
             (devm.setMach ⟨tail, devm.memory, devm.gasLeft, devm.stateGas⟩).gasLeft
             (devm.extCost [⟨i.toNat, sz.toNat⟩]) = none := by
           unfold safeSub
-          rw [if_neg (by simp only [Devm.gasLeft_setMach]; omega)]
+          rw [ite_eq_right (by simp only [Devm.gasLeft_setMach]; omega)]
         rw [hsafe]
       rw [hcharge]
     exact Or.inl ⟨_, heq.symm.trans hoog, rfl, rfl, rfl⟩

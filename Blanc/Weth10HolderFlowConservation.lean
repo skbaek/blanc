@@ -64,9 +64,9 @@ theorem FlowAction.holderCreditLoss_eq_zero_of_creditNof
   | some credit =>
       simp only
       by_cases hrecipient : credit.recipient = u
-      · rw [if_pos hrecipient]
+      · rw [ite_eq_left hrecipient]
         exact credit.loss_eq_zero_iff.mpr (h credit hcredit)
-      · rw [if_neg hrecipient]
+      · rw [ite_eq_right hrecipient]
 
 theorem holderCreditLossOfActions_eq_zero_of_creditNof
     {actions : List FlowAction} (h : FlowActionsCreditNof actions)

@@ -218,7 +218,7 @@ theorem validateDynamicTailAfterArg_success_of_run
     by_contra hnot
     have hlt : (offset <? Nat.toB256 (2 ^ 32)) = 0 := by
       simp only [B256.ltCheck]
-      rw [if_neg hnot]
+      rw [ite_eq_right hnot]
     rw [hlt] at hOffsetFlag
     exact (by decide +kernel : ((0 : B256) =? 0) ≠ 0) hOffsetFlag
   have hOffset256 : dynamicOffset sevm.data head < 2 ^ 256 :=
@@ -253,7 +253,7 @@ theorem validateDynamicTailAfterArg_success_of_run
       intro hlt
       have : (sevm.data.length.toB256 <? (36 + offset)) = 1 := by
         simp only [B256.ltCheck]
-        rw [if_pos hlt]
+        rw [ite_eq_left hlt]
       rw [this] at hEndFlag
       exact (by decide +kernel : (1 : B256) ≠ 0) hEndFlag
     have hwordLe : (36 + offset).toNat ≤ sevm.data.length.toB256.toNat := by
@@ -292,7 +292,7 @@ theorem validateDynamicTailAfterArg_success_of_run
     by_contra hnot
     have hlt : (length <? Nat.toB256 (2 ^ 32)) = 0 := by
       simp only [B256.ltCheck]
-      rw [if_neg hnot]
+      rw [ite_eq_right hnot]
     rw [hlt] at hLengthFlag
     exact (by decide +kernel : ((0 : B256) =? 0) ≠ 0) hLengthFlag
   have hLength256 : dynamicLength sevm.data head < 2 ^ 256 :=
@@ -353,7 +353,7 @@ theorem validateDynamicTailAfterArg_success_of_run
       intro hlt
       have : sevm.data.length.toB256 <? paddedEnd = 1 := by
         simp only [B256.ltCheck]
-        rw [if_pos hlt]
+        rw [ite_eq_left hlt]
       rw [this] at hPaddedFlag
       exact (by decide +kernel : (1 : B256) ≠ 0) hPaddedFlag
     have hwordLe : paddedEnd.toNat ≤ sevm.data.length.toB256.toNat := by
@@ -538,7 +538,7 @@ theorem validateDepositAbi_success_of_run
       intro hlt
       have hcheck : (sevm.data.length.toB256 <? (132 : B256)) = 1 := by
         simp only [B256.ltCheck]
-        rw [if_pos hlt]
+        rw [ite_eq_left hlt]
       rw [hcheck] at hHeadFlag
       exact (by decide +kernel : (1 : B256) ≠ 0) hHeadFlag
     have hwordLe : (132 : B256).toNat ≤

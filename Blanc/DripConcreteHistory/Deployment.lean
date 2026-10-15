@@ -7,6 +7,7 @@
 import Blanc.DripDeploy
 import Blanc.RlpConcrete
 import Blanc.DripRpow
+import Blanc.TransactionForward
 
 namespace Blanc
 namespace Drip
@@ -336,15 +337,20 @@ theorem concreteCreateChecked :
   have hchain : checkTransactionChainId
       (initBenv .prague concreteBase concreteExecutionHeader).beginTransaction
       concreteCreateTx = .ok () := by decide +kernel
-  rw [checkTransaction, hgas]
-  simp only [Except.mapError, bind, Except.bind]
-  rw [hchain]
-  rw [show (initBenv .prague concreteBase concreteExecutionHeader).beginTransaction.stat.chainId = 1
-    from rfl, concreteCreateRecoveredSender]
-  rw [show (initBenv .prague concreteBase concreteExecutionHeader).beginTransaction.state =
-    concreteGenesisState from rfl]
-  simp only [Except.mapError, bind, Except.bind, concreteGenesisSender]
-  decide +kernel
+  have hfee : checkTransactionGasFee
+      (initBenv .prague concreteBase concreteExecutionHeader).beginTransaction
+      concreteCreateTx = .ok (2, 4000000) := by decide +kernel
+  have hblob : checkTransactionBlobData
+      (initBenv .prague concreteBase concreteExecutionHeader).beginTransaction
+      concreteCreateTx 4000000 = .ok (4000000, []) := by rfl
+  have hreceiver : checkTransactionReceiver concreteCreateTx = .ok () := by rfl
+  have hauth : checkTransactionAuthorizationList concreteCreateTx = .ok () := by rfl
+  have hsender : checkTransactionSenderAccount (concreteGenesisState.get concreteCreateSender)
+      concreteCreateTx 4000000 = .ok () := by
+    rw [concreteGenesisSender]
+    decide +kernel
+  exact checkTransaction_ok_of_parts hgas hchain concreteCreateRecoveredSender hfee
+    hblob hreceiver hauth hsender
 
 theorem concreteCreateGasUsed : deploymentTransactionGasBound
     (initBenv .prague concreteBase concreteExecutionHeader)
@@ -482,7 +488,7 @@ theorem concreteHeaderEncoded (sr tr rr wr rh : B256) :
       [0xf9, 2, 0x59] ++ concreteHeaderPayload sr tr rr wr rh := by
   rw [concreteHeaderBLT, BLT.toBytes, BLTs.toBytes, concreteHeaderPayloadEncoded,
     concreteHeaderPayload_length]
-  simp only [show ¬ (601 < 56) from by decide, if_false]
+  simp only [show ¬ (601 < 56) from by decide, ite_false]
   have hpack : Nat.toBytesPack 601 = [2, 0x59] := by
     simp only [Nat.toBytesPack, Nat.toBytes, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.toBytes.aux,
       Nat.reduceMod, Nat.toUInt8_eq, UInt8.reduceOfNat, Nat.reduceDiv]
@@ -550,7 +556,7 @@ theorem concreteTxStringEncoded : (BLT.bytes concreteCreateTxRlp).toBytes =
   have hp : Nat.toBytesPack 2086 = [8, 0x26] := by
     simp only [Nat.toBytesPack, Nat.toBytes, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.toBytes.aux,
       Nat.reduceMod, Nat.toUInt8_eq, UInt8.reduceOfNat, Nat.reduceDiv]
-  simp only [show ¬ (2086 < 56) from by decide, if_false, hp]
+  simp only [show ¬ (2086 < 56) from by decide, ite_false, hp]
   rfl
 
 theorem concreteTxListEncoded : (BLT.list [.bytes concreteCreateTxRlp]).toBytes =
@@ -561,7 +567,7 @@ theorem concreteTxListEncoded : (BLT.list [.bytes concreteCreateTxRlp]).toBytes 
   have hp : Nat.toBytesPack 2089 = [8, 0x29] := by
     simp only [Nat.toBytesPack, Nat.toBytes, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.toBytes.aux,
       Nat.reduceMod, Nat.toUInt8_eq, UInt8.reduceOfNat, Nat.reduceDiv]
-  simp only [show ¬ (3 + 2086 < 56) from by decide, if_false, hp]
+  simp only [show ¬ (3 + 2086 < 56) from by decide, ite_false, hp]
   rfl
 
 def concreteDeploymentBlock (sr tr rr wr rh : B256) : Block :=
@@ -593,7 +599,7 @@ theorem concreteBlockEncoded (sr tr rr wr rh : B256) :
   have hp : Nat.toBytesPack 2698 = [0x0a, 0x8a] := by
     simp only [Nat.toBytesPack, Nat.toBytes, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.toBytes.aux,
       Nat.reduceMod, Nat.toUInt8_eq, UInt8.reduceOfNat, Nat.reduceDiv]
-  simp only [show ¬ (2698 < 56) from by decide, if_false, hp]
+  simp only [show ¬ (2698 < 56) from by decide, ite_false, hp]
   rfl
 
 theorem concreteHeaderDiff (k : Nat) (sr tr rr wr rh : B256) (tail : Bytes) :
@@ -663,7 +669,7 @@ theorem concreteBlockDecode (sr tr rr wr rh : B256) :
     (if [0xf9, 0x0a, 0x8a] ++ concreteBlockPayload sr tr rr wr rh ≠
       (concreteDeploymentBlock sr tr rr wr rh).toBLT.toBytes then _ else _) = _
   rw [concreteBlockEncoded]
-  simp only [ne_eq, not_true_eq_false, if_false, Except.mapError]
+  simp only [ne_eq, not_true_eq_false, ite_false, Except.mapError]
   rfl
 
 def concreteCanonicalBlock (sr tr rr wr rh : B256) : CanonicalBlock :=
@@ -1013,7 +1019,7 @@ theorem concreteDeployedSenderNonce : concreteDeployed.state.getNonce concreteCr
   simp only [constructorInstalledState, constructorStoredState, concreteConstructorEntry,
     concreteConstructorPrepared, concreteDeploymentDebit, State.addBal, State.setBal,
     State.setCode, State.setStorVal, State.setStor, State.incrNonce,
-    State.get_set_self, State.get_set_ne _ ht, State.get_set_ne _ hz, concreteGenesisSender]
+    State.get_set_self, concreteGenesisSender]
   decide +kernel
 
 theorem concreteDeployedSenderBalance :
@@ -1026,7 +1032,7 @@ theorem concreteDeployedSenderBalance :
   simp only [constructorInstalledState, constructorStoredState, concreteConstructorEntry,
     concreteConstructorPrepared, concreteDeploymentDebit, State.addBal, State.setBal,
     State.setCode, State.setStorVal, State.setStor, State.incrNonce, State.bal,
-    State.get_set_self, State.get_set_ne _ ht, State.get_set_ne _ hz, concreteGenesisSender]
+    State.get_set_self, concreteGenesisSender]
   decide +kernel
 
 theorem concreteDeployedCode (address : Adr) (hne : concreteCreateTarget ≠ address) :

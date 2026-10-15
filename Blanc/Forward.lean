@@ -85,7 +85,7 @@ lemma Ninst.runCompiled_reg {sevm : Sevm} {devm devm' : Devm} {r : Rinst}
   unfold Ninst.StepRun
   rw [Ninst.step_reg]
   refine Step.run_ofExecution.mpr ⟨rfl, ?_⟩
-  simp only [Rinst.run, if_neg h_ne]
+  simp only [Rinst.run]
   rw [← Rinst.runCore_pc_irrel h_ne 0 pc, h]
 
 /-- The gas a `PUSH` costs: `PUSH0` takes no immediate and is a `gBase`
@@ -125,7 +125,7 @@ Proved from `Bytes.toB256_sig`, so it needs no computation on `w` — an
 alone. -/
 lemma pushCost_of_ne_zero {w : B256} (h : w ≠ 0) :
     pushCost (w.toBytes.sig) = gVerylow := by
-  rw [pushCost, if_neg]
+  rw [pushCost, ite_eq_right]
   intro h_nil
   exact h (by rw [← B256.toB256_toBytes w, ← Bytes.toB256_sig, h_nil]; rfl)
 
@@ -278,7 +278,7 @@ lemma Rinst.runCore_extcodesize_cold_eq_ok {pc : Nat} {devm : Devm}
   have h_addresses :
       (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses =
         devm.accessedAddresses := rfl
-  rw [if_neg (by rw [h_addresses]; exact h_cold)]
+  rw [ite_eq_right (by rw [h_addresses]; exact h_cold)]
   set d0 : Devm := addAccessedAddress
     (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) x.toAdr with hd0
   have h_d0_gas : d0.gasLeft = devm.gasLeft := rfl
@@ -330,7 +330,7 @@ lemma Rinst.runCore_extcodesize_warm_eq_ok {pc : Nat} {devm : Devm}
   have h_addresses :
       (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedAddresses =
         devm.accessedAddresses := rfl
-  rw [if_pos (by rw [h_addresses]; exact h_warm)]
+  rw [ite_eq_left (by rw [h_addresses]; exact h_warm)]
   rw [chargeGas_eq_ok
     (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
@@ -376,7 +376,7 @@ lemma Rinst.runCore_sload_cold_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   simp only [bind, Except.bind]
   have h_keys : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedStorageKeys
       = devm.accessedStorageKeys := rfl
-  rw [if_neg (by rw [h_keys]; exact h_cold)]
+  rw [ite_eq_right (by rw [h_keys]; exact h_cold)]
   set d0 : Devm := addAccessedStorageKey
     (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) sevm.currentTarget k with hd0
   have h_d0_gas : d0.gasLeft = devm.gasLeft := rfl
@@ -434,7 +434,7 @@ lemma Rinst.runCore_sload_warm_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   simp only [bind, Except.bind]
   have h_keys : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).accessedStorageKeys
       = devm.accessedStorageKeys := rfl
-  rw [if_pos (by rw [h_keys]; exact h_warm)]
+  rw [ite_eq_left (by rw [h_keys]; exact h_warm)]
   rw [chargeGas_eq_ok
     (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
@@ -586,7 +586,7 @@ lemma Rinst.runCore_mload_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   rw [h_ext, chargeGas_eq_ok
     (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
-    Devm.stack_setMach, Devm.setMach_returnData, Devm.stateGas_setMach]
+    Devm.stack_setMach, Devm.stateGas_setMach]
   rw [Devm.push_eq_ok
     (devm := (devm.setMach ⟨s, devm.memory,
       devm.gasLeft - (gVerylow + devm.extCost [⟨i.toNat, 32⟩]), devm.stateGas⟩).memRead
@@ -622,7 +622,7 @@ lemma Rinst.runCore_keccak256_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   rw [h_ext, chargeGas_eq_ok
     (devm := devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩) h_gas]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
-    Devm.stack_setMach, Devm.setMach_returnData, Devm.stateGas_setMach]
+    Devm.stack_setMach, Devm.stateGas_setMach]
   rw [Devm.push_eq_ok
     (devm := (devm.setMach ⟨s, devm.memory,
       devm.gasLeft - (gKeccak256 + gasKeccak256Word * ceilDiv sz.toNat 32
@@ -738,7 +738,7 @@ lemma Rinst.runCore_returndatacopy_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
     Devm.stack_setMach, Devm.stateGas_setMach]
   change (if devm.returnData.length < ri.toNat + sz.toNat then _ else _) = _
-  rw [if_neg (by omega)]
+  rw [ite_eq_right (by omega)]
   simp only [Devm.setMach_returnData]
   rfl
 
@@ -897,9 +897,9 @@ lemma Rinst.runCore_sstore_cold_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   rw [Devm.pop_eq_ok
     (devm := devm.setMach ⟨v :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
-    Devm.gasLeft_setMach, Prod.snd, Devm.stateGas_setMach]
+    Devm.gasLeft_setMach, Devm.stateGas_setMach]
   change (Except.assert (gCallStipend < devm.gasLeft) _ >>= _) = _
-  simp only [Except.assert, if_pos h_sentry, bind, Except.bind]
+  simp only [Except.assert, ite_eq_left h_sentry, bind, Except.bind]
   simp only [Devm.setMach_accessedStorageKeys]
   simp only [ne_eq, h_cold, not_false_eq_true, ↓reduceIte, sstoreValueCost_add]
   -- The popped state's world projections are the pre-state's; naming them so
@@ -972,9 +972,9 @@ lemma Rinst.runCore_sstore_warm_eq_ok {pc : Nat} {devm : Devm} {sevm : Sevm}
   rw [Devm.pop_eq_ok
     (devm := devm.setMach ⟨v :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
-    Devm.gasLeft_setMach, Prod.snd, Devm.stateGas_setMach]
+    Devm.gasLeft_setMach, Devm.stateGas_setMach]
   change (Except.assert (gCallStipend < devm.gasLeft) _ >>= _) = _
-  simp only [Except.assert, if_pos h_sentry, bind, Except.bind]
+  simp only [Except.assert, ite_eq_left h_sentry, bind, Except.bind]
   simp only [Devm.setMach_accessedStorageKeys]
   simp only [ne_eq, h_warm, not_true_eq_false, ↓reduceIte, zero_add]
   rw [show (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).getOrigStorVal
@@ -1007,7 +1007,7 @@ lemma Mem.size_write_word {w : B256} :
   · exact absurd (hb ▸ B256.length_toBytes w) (by simp only [List.length_nil,
     OfNat.zero_ne_ofNat, not_false_eq_true])
   · have hlen : (b :: bs).length = 32 := hb ▸ B256.length_toBytes w
-    simp only [Mem.write, Mem.empty, hlen, if_neg (by decide : ¬ (0 + 32 ≤ 0))]
+    simp only [Mem.write, Mem.empty, hlen, ite_eq_right (by decide : ¬ (0 + 32 ≤ 0))]
     rfl
 
 /-- And reading that word back gives it unchanged: `Mem.Reads` carries the image
@@ -1111,7 +1111,7 @@ lemma Ninst.runCompiled_pushBytes {sevm : Sevm} {devm : Devm}
 /-- A full-width word immediate is nonempty, costs `gVerylow`, and pushes the
 word itself without normalizing its 32-byte image. -/
 lemma pushCost_toBytes (w : B256) : pushCost w.toBytes = gVerylow := by
-  rw [pushCost, if_neg]
+  rw [pushCost, ite_eq_right]
   intro h
   have hlen := B256.length_toBytes w
   rw [h] at hlen

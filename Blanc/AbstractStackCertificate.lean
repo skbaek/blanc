@@ -320,11 +320,11 @@ theorem Table.lookup_of_row {table : Table} (ordered : table.Ordered)
       rcases row with ⟨rfl, rfl⟩ | row | row
       · simp only [lookup, lt_self_iff_false, ↓reduceIte]
       · have before := ordered.1 _ _ row
-        simp only [Table.lookup, if_pos before]
+        simp only [Table.lookup, ite_eq_left before]
         exact ihLeft ordered.2.2.1 row
       · have after := ordered.2.1 _ _ row
         have before : ¬ pc < key := by omega
-        simp only [Table.lookup, if_neg before, if_pos after]
+        simp only [Table.lookup, ite_eq_right before, ite_eq_left after]
         exact ihRight ordered.2.2.2 row
 
 theorem Table.row_of_lookup {table : Table} {pc : Nat} {input : Pattern}
@@ -426,7 +426,7 @@ theorem Table.count_zero {table : Table} {pc : Nat}
         exact absent words (Or.inl ⟨same.symm, rfl⟩)
       have leftZero := ihLeft (fun input row => absent input (Or.inr (Or.inl row)))
       have rightZero := ihRight (fun input row => absent input (Or.inr (Or.inr row)))
-      simp only [Table.count, leftZero, rightZero, if_neg different, Nat.add_zero]
+      simp only [Table.count, leftZero, rightZero, ite_eq_right different, Nat.add_zero]
 
 /-- Strict checked ordering excludes even duplicate rows with equal patterns. -/
 theorem Table.count_le_one {table : Table} (ordered : table.Ordered) (pc : Nat) :
@@ -440,7 +440,7 @@ theorem Table.count_le_one {table : Table} (ordered : table.Ordered) (pc : Nat) 
           intro input row
           have after := ordered.2.1 _ _ row
           omega)
-        simpa only [Table.count, if_neg different, rightZero, Nat.add_zero] using
+        simpa only [Table.count, ite_eq_right different, rightZero, Nat.add_zero] using
           ihLeft ordered.2.2.1
       · have leftZero : left.count pc = 0 := Table.count_zero (by
           intro input row
@@ -450,9 +450,9 @@ theorem Table.count_le_one {table : Table} (ordered : table.Ordered) (pc : Nat) 
             intro input row
             have after := ordered.2.1 _ _ row
             omega)
-          simp only [Table.count, leftZero, rightZero, if_pos same,
+          simp only [Table.count, leftZero, rightZero, ite_eq_left same,
             Nat.zero_add, Nat.add_zero, Nat.le_refl]
-        · simpa only [Table.count, leftZero, if_neg same, Nat.zero_add] using
+        · simpa only [Table.count, leftZero, ite_eq_right same, Nat.zero_add] using
             ihRight ordered.2.2.2
 
 /-- Complete finite validation, retaining the accepted transfer family's

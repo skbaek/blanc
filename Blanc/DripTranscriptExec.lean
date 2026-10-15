@@ -66,7 +66,7 @@ theorem frameCall_of_target_ne {coalition : Finset Adr} {ca : Adr}
     {frame : Exec.Frame} (target_ne : frame.sevm.currentTarget ≠ ca) :
     frameCall coalition ca frame = [] := by
   unfold frameCall
-  rw [if_neg fun both => target_ne both.1]
+  rw [ite_eq_right fun both => target_ne both.1]
 
 /-- A committed foreign root's transcript is that of its descendants. -/
 theorem committedFrames_flatMap_of_target_ne {coalition : Finset Adr}
@@ -75,7 +75,7 @@ theorem committedFrames_flatMap_of_target_ne {coalition : Finset Adr}
     (target_ne : sevm.currentTarget ≠ ca) :
     (Exec.committedFrames run).flatMap (frameCall coalition ca) =
       (Exec.descendantFrames run).flatMap (frameCall coalition ca) := by
-  simp only [Exec.committedFrames, dif_pos committed, List.flatMap_cons]
+  simp only [Exec.committedFrames, dite_eq_left committed, List.flatMap_cons]
   rw [frameCall_of_target_ne (frame := Exec.Frame.ofRun run committed)
     target_ne, List.nil_append]
 
@@ -151,7 +151,7 @@ theorem exec_targetReplayAt (coalition : Finset Adr) {sevm : Sevm}
     rcases exitNested handoff with ⟨nested, chain, kinds⟩
     refine ⟨⟨_, _, _, handoff.effect⟩, nested, ?_, ?_, ?_, ?_⟩
     · exact (execEntrySnapshot_of_value_zero hvalue).symm
-    · simp only [opTag, hempty, hsel, exitDrip, exitJoin, if_false, if_true]
+    · simp only [opTag, hempty, hsel, exitDrip, exitJoin, ite_false, ite_true]
     · rw [handoff.postSnapshot]
       exact chain
     · rw [handoff.frames]
@@ -232,7 +232,7 @@ theorem Exec.CoreDripTranscript.atTarget
         exact chain
   rcases replay with ⟨op, nested, preEq, kindEq, tail, kinds⟩
   refine ⟨op :: nested, Chain.cons preEq tail, ?_⟩
-  simp only [Exec.committedFrames, dif_pos committed, List.flatMap_cons]
+  simp only [Exec.committedFrames, dite_eq_left committed, List.flatMap_cons]
   rw [callKinds_cons, kinds, kindEq]
   congr 1
   -- The frame's own transcript entry is its computed tag, since it runs `ca`.
@@ -240,8 +240,8 @@ theorem Exec.CoreDripTranscript.atTarget
       (opTag coalition sevm pre).isCall = true
     then [opTag coalition sevm pre] else []
   by_cases call : (opTag coalition sevm pre).isCall = true
-  · rw [if_pos call, if_pos ⟨rfl, call⟩]
-  · rw [if_neg call, if_neg fun both => call both.2]
+  · rw [ite_eq_left call, ite_eq_left ⟨rfl, call⟩]
+  · rw [ite_eq_right call, ite_eq_right fun both => call both.2]
 
 /-- Foreign nonrecursive execution contributes no call, so the suffix's
 transcript is its continuation's. -/

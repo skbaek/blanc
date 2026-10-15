@@ -27,7 +27,7 @@ private theorem pushDeployWord_word_byte
       (.next (pushDeployWord 0).size
         (Ninst.immAccepted (pushDeployWord 0)) p0.compileShape)
       (pushDeployWord w ::: p) (j + 1) d = _
-  rw [Func.byteAtByShape, if_pos (by
+  rw [Func.byteAtByShape, ite_eq_left (by
     simpa only [hsize0] using Nat.add_lt_add_right hj 1)]
   rw [hsize0]
   simp only [pushDeployWord, Ninst.toBytes, pushToB8L, pushToB8,
@@ -80,16 +80,16 @@ private theorem domainCachedPathByteAt_eq_zero_0_2
           (pushDeployWord 0 ::: domainReturnTail).compileShape)
         (Ninst.pop ::: pushDeployWord 0 ::: domainReturnTail) i 0
   by_cases hpop : i < 1
-  · conv_lhs => rw [Func.byteAtByShape, if_pos (by
+  · conv_lhs => rw [Func.byteAtByShape, ite_eq_left (by
       simpa only [Ninst.size] using hpop)]
-    conv_rhs => rw [Func.byteAtByShape, if_pos (by
+    conv_rhs => rw [Func.byteAtByShape, ite_eq_left (by
       simpa only [Ninst.size] using hpop)]
   · have hi1 : i = 1 := by omega
     subst i
-    conv_lhs => rw [Func.byteAtByShape, if_neg (by
+    conv_lhs => rw [Func.byteAtByShape, ite_eq_right (by
       simp only [Ninst.size]
       omega)]
-    conv_rhs => rw [Func.byteAtByShape, if_neg (by
+    conv_rhs => rw [Func.byteAtByShape, ite_eq_right (by
       simp only [Ninst.size]
       omega)]
     simp only [Ninst.size, Nat.reduceSub]
@@ -109,7 +109,7 @@ private theorem domainCachedPathByteAt_word
           (pushDeployWord 0 ::: domainReturnTail).compileShape)
         (Ninst.pop :::
           pushDeployWord dp.cachedDomainSeparator ::: domainReturnTail) i 0 = _
-  conv_lhs => rw [Func.byteAtByShape, if_neg (by
+  conv_lhs => rw [Func.byteAtByShape, ite_eq_right (by
     simp only [Ninst.size]
     omega)]
   simp only [Ninst.size]
@@ -139,10 +139,10 @@ private theorem domainCachedPathByteAt_eq_zero_34_40
         (.next Ninst.pop.size (Ninst.immAccepted Ninst.pop)
           (pushDeployWord 0 ::: domainReturnTail).compileShape)
         (Ninst.pop ::: pushDeployWord 0 ::: domainReturnTail) i 0
-  conv_lhs => rw [Func.byteAtByShape, if_neg (by
+  conv_lhs => rw [Func.byteAtByShape, ite_eq_right (by
     simp only [Ninst.size]
     omega)]
-  conv_rhs => rw [Func.byteAtByShape, if_neg (by
+  conv_rhs => rw [Func.byteAtByShape, ite_eq_right (by
     simp only [Ninst.size]
     omega)]
   simp only [Ninst.size]
@@ -181,13 +181,13 @@ private theorem domainAfterChainByteAt_eq_zero_0_132
         (Ninst.eq ::: Func.branch domainCalculatePath
           (domainCachedPath (⟨0, 0⟩ : DeployParams))) i 0
   by_cases heq : i < 1
-  · conv_lhs => rw [Func.byteAtByShape, if_pos (by
+  · conv_lhs => rw [Func.byteAtByShape, ite_eq_left (by
       simpa only [Ninst.size] using heq)]
-    conv_rhs => rw [Func.byteAtByShape, if_pos (by
+    conv_rhs => rw [Func.byteAtByShape, ite_eq_left (by
       simpa only [Ninst.size] using heq)]
-  · conv_lhs => rw [Func.byteAtByShape, if_neg (by
+  · conv_lhs => rw [Func.byteAtByShape, ite_eq_right (by
       simpa only [Ninst.size] using heq)]
-    conv_rhs => rw [Func.byteAtByShape, if_neg (by
+    conv_rhs => rw [Func.byteAtByShape, ite_eq_right (by
       simpa only [Ninst.size] using heq)]
     simp only [Ninst.size]
     have hcalc : domainCalculatePath.compileShape.byteSize = 124 := by
@@ -226,7 +226,7 @@ private theorem domainAfterChainByteAt_to_cachedPath
             (domainCachedPath (⟨0, 0⟩ : DeployParams)).compileShape))
         (Ninst.eq :::
           Func.branch domainCalculatePath (domainCachedPath dp)) i 0 = _
-  conv_lhs => rw [Func.byteAtByShape, if_neg (by
+  conv_lhs => rw [Func.byteAtByShape, ite_eq_right (by
     simp only [Ninst.size]
     omega)]
   simp only [Ninst.size]

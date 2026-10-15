@@ -240,7 +240,7 @@ theorem deposit_success_runCompiled
   · intro a
     by_cases ha : a = sevm.currentTarget
     · subst a
-      simp only [if_pos]
+      simp only [ite_eq_left]
       change Devm.getStor
         (afterSstore sevm finalBase (branchSlot n) branchValue)
           sevm.currentTarget = stor.set (branchSlot n) branchValue
@@ -252,7 +252,7 @@ theorem deposit_success_runCompiled
         stor.set (branchSlot n) branchValue
       rw [hstorMap sevm.currentTarget, Blanc.afterSload_getStor,
         ← hcountStor]
-    · simp only [if_neg ha]
+    · simp only [ite_eq_right ha]
       change Devm.getStor
         (afterSstore sevm finalBase (branchSlot n) branchValue) a =
           Devm.getStor base a

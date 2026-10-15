@@ -382,7 +382,7 @@ lemma State.setCode_get_stor {st : Jaune.State} {adr a : Adr} {c : ByteArray}
   simp only [State.setCode]
   by_cases h : adr = a
   · subst h
-    rw [State.setAccount_get_self, Acct.clearIfEmpty_stor, if_neg (fun hE => hc hE.1)]
+    rw [State.setAccount_get_self, Acct.clearIfEmpty_stor, ite_eq_right (fun hE => hc hE.1)]
   · rw [State.setAccount_get_ne _ h]
 
 /-- Installing code at another address leaves an account's storage alone. -/
@@ -493,7 +493,7 @@ lemma Jinst.preserves_state
       · simp only [Jinst.Run, Jinst.run, Jinst.runCore, chargeGas_def, Devm.setMach,
           bind, Except.bind, safeSub] at run
         rw [h1] at run
-        simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+        simp only [h_gas, ite_eq_left, Except.ok.injEq, Prod.mk.injEq] at run
         cases run
         subst_vars
         rfl
@@ -511,7 +511,7 @@ lemma Jinst.preserves_state
         rw [h1] at run
         dsimp only at run
         by_cases h_gas : gMid ≤ devm.gasLeft <;> simp only [Devm.gasLeft] at h_gas
-        · simp only [h_gas, if_pos] at run
+        · simp only [h_gas, ite_eq_left] at run
           by_cases h_jump : jumpable sevm.code x.toNat = true
           · simp only [h_jump] at run
             cases run
@@ -531,7 +531,7 @@ lemma Jinst.preserves_state
           bind, Except.bind, safeSub] at run
         rw [h1] at run
         by_cases h_gas : gJumpdest ≤ devm.gasLeft
-        · simp only [h_gas, if_pos] at run
+        · simp only [h_gas, ite_eq_left] at run
           cases run
           subst_vars
           rfl
@@ -545,7 +545,7 @@ lemma Jinst.preserves_state
         rw [h1] at run
         dsimp only at run
         by_cases h_gas : gMid ≤ devm.gasLeft <;> simp only [Devm.gasLeft] at h_gas
-        · simp only [h_gas, if_pos] at run
+        · simp only [h_gas, ite_eq_left] at run
           by_cases h_jump : jumpable sevm.code x.toNat = true
           · simp only [h_jump] at run
             cases run
@@ -561,9 +561,9 @@ lemma Jinst.preserves_state
         rw [h2] at run
         dsimp only at run
         by_cases h_gas : gHigh ≤ devm.gasLeft <;> simp only [Devm.gasLeft] at h_gas
-        · simp only [h_gas, if_pos] at run
+        · simp only [h_gas, ite_eq_left] at run
           by_cases h_cond : x2 = 0
-          · simp only [h_cond, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+          · simp only [h_cond, ite_eq_left, Except.ok.injEq, Prod.mk.injEq] at run
             cases run
             subst_vars
             rfl
@@ -581,7 +581,7 @@ lemma Jinst.preserves_state
           bind, Except.bind, safeSub] at run
         rw [h1] at run
         by_cases h_gas : gJumpdest ≤ devm.gasLeft
-        · simp only [h_gas, if_pos, Except.ok.injEq, Prod.mk.injEq] at run
+        · simp only [h_gas, ite_eq_left, Except.ok.injEq, Prod.mk.injEq] at run
           cases run
           subst_vars
           rfl
@@ -1038,7 +1038,7 @@ lemma accessDelegation_code_of_not {devm : Devm} {adr : Adr}
     (accessDelegation devm adr).2.2.1 = devm.state.getCode adr := by
   have hnone : getDelegatedCodeAddress (devm.state.getCode adr) = none := by
     dsimp only [getDelegatedCodeAddress]
-    rw [if_neg h]
+    rw [ite_eq_right h]
   dsimp only [accessDelegation]
   rw [hnone]
 
@@ -1161,11 +1161,11 @@ theorem rollback_of_no_success {msg : Msg} {benv : Benv} {xl : Xlot} {out : Devm
   unfold processMessage.settle at hset
   dsimp only [bind, Except.bind] at hset
   by_cases herr : evm'.error.isSome = true
-  · rw [if_pos herr] at hset
+  · rw [ite_eq_left herr] at hset
     have h_err : out.error.isSome = true := by rw [Except.ok.inj hset]; exact herr
     exact ⟨h_err, ProcessMessage.rollback_of_error h_pm h_err⟩
   · exfalso
-    rw [if_neg herr] at hset
+    rw [ite_eq_right herr] at hset
     have h_eq : evm' = out := Except.ok.inj hset.symm
     subst h_eq
     rcases h_ca : (msg.withBenv benv).codeAddress with _ | adr
@@ -1272,10 +1272,10 @@ lemma Resume.call_stack_flag {parent child : Devm} {oi os : Nat} {sf : Devm}
   dsimp only [bind, Except.bind] at h
   split at h
   · rename_i herr
-    rw [if_pos herr]
+    rw [ite_eq_left herr]
     exact key (incorporateChildOnError parent child child.output) rfl 0 h
   · rename_i herr
-    rw [if_neg herr]
+    rw [ite_eq_right herr]
     exact key (incorporateChildOnSuccess parent child child.output) rfl 1 h
 
 /-- The CALL-family return path hands the parent exactly the child's output as
@@ -1373,12 +1373,12 @@ lemma Resume.call_logs {parent child : Devm} {oi os : Nat} {sf : Devm}
   unfold Resume.run liftToExecution at h
   dsimp only [bind, Except.bind] at h
   by_cases herr : child.error.isSome
-  · rw [if_pos herr] at h ⊢
-    simpa only [if_pos herr] using
-      key (incorporateChildOnError parent child child.output) (by rw [if_pos herr]; rfl) 0 h
-  · rw [if_neg herr] at h ⊢
-    simpa only [if_neg herr] using
-      key (incorporateChildOnSuccess parent child child.output) (by rw [if_neg herr]; rfl) 1 h
+  · rw [ite_eq_left herr] at h ⊢
+    simpa only [ite_eq_left herr] using
+      key (incorporateChildOnError parent child child.output) (by rw [ite_eq_left herr]; rfl) 0 h
+  · rw [ite_eq_right herr] at h ⊢
+    simpa only [ite_eq_right herr] using
+      key (incorporateChildOnSuccess parent child child.output) (by rw [ite_eq_right herr]; rfl) 1 h
 
 /-- The `transientStorage` companion of `Resume.call_state`: on both settled
 paths the CALL-family return installs the child's transient store alongside
@@ -1420,7 +1420,7 @@ lemma chargeGas_le {cost : Nat} {devm devm' : Devm}
     unfold safeSub at heq
     by_cases hc : cost ≤ devm.gasLeft
     · exact hc
-    · rw [if_neg hc] at heq
+    · rw [ite_eq_right hc] at heq
       cases heq
 
 /-- When the CALL-family gas charge went through, the stipend the child was
@@ -1434,10 +1434,10 @@ lemma calculateMsgCallGas_stipend {value gas gasLeft mem extra : Nat}
       = min gas (except64th avail) + (if value = 0 then 0 else gCallStipend) := by
   unfold calculateMsgCallGas at h ⊢
   by_cases hlow : gasLeft < extra + mem
-  · rw [if_pos hlow] at h
+  · rw [ite_eq_left hlow] at h
     dsimp only [] at h
     omega
-  · rw [if_neg hlow]
+  · rw [ite_eq_right hlow]
     exact ⟨gasLeft - mem - extra, rfl⟩
 
 /-- **The value-carrying `KECCAK256` inversion.**  `keccak256` pushes the hash of
@@ -2049,7 +2049,7 @@ lemma of_step_call_val_with_depth_frame
           ProcessMessage.rollback_of_error run_pm₀ herr
         refine ⟨?_, ?_, ?_⟩
         · have hsf := Resume.call_stack_flag h_split.symm
-          rw [if_pos herr] at hsf
+          rw [ite_eq_left herr] at hsf
           rw [hsf, h_stk_par]
           exact pref_cons hp
         · rw [Resume.call_state h_split.symm, h_roll.1, h_st_par]
@@ -2113,7 +2113,7 @@ lemma of_step_call_val_with_depth_frame
             Bool.not_eq_true] using herr, h_split.symm,
           Resume.call_state h_split.symm, Resume.call_returnData h_split.symm,
           Resume.call_memory h_split.symm,
-          by rw [Resume.call_stack_flag h_split.symm, if_neg herr], spawned⟩
+          by rw [Resume.call_stack_flag h_split.symm, ite_eq_right herr], spawned⟩
 
 /-- Run-based compatibility interface retains its original statement. -/
 lemma of_run_call_val_with_depth_frame
@@ -2854,7 +2854,7 @@ lemma GenericCreate.none_getStor_eq {sevm : Sevm} {devm inter : Devm}
     apply funext
     intro a
     show (inter.state.get a).stor = (devm.state.get a).stor
-    rw [h_state, State.incrNonce_get_stor, if_neg]
+    rw [h_state, State.incrNonce_get_stor, ite_eq_right]
     rintro ⟨rfl, hE⟩
     exact hnonce hE.2.1
   · exfalso
@@ -3053,7 +3053,7 @@ private lemma create_collision_getStor
         Devm.getStor d.withholdCreateGas.2 := by
       funext a
       show ((d.withholdCreateGas.2.state.incrNonce sevm.currentTarget).get a).stor = _
-      rw [State.incrNonce_get_stor, if_neg]
+      rw [State.incrNonce_get_stor, ite_eq_right]
       · rfl
       rintro ⟨rfl, hE⟩
       exact hnonce hE.2.1
@@ -3251,11 +3251,11 @@ theorem Linst.getStor_eq
           dsimp only [transferred] at final ⊢
           by_cases h_if : sevm.currentTarget ∈
               (devm3.addBal donee (devm1.getAcct sevm.currentTarget).bal).createdAccounts
-          · simp only [h_if, if_pos] at final
+          · simp only [h_if, ite_eq_left] at final
             have equal := Except.ok.inj final
             rw [← equal]
             exact (State.setBal_get_stor_of_protected hp3).symm
-          · simp only [h_if, if_neg] at final
+          · simp only [h_if] at final
             have equal := Except.ok.inj final
             rw [← equal]
         exact (preToOne.trans (charged.trans
@@ -3305,11 +3305,11 @@ theorem Linst.getStor_eq
         have postEq : Devm.getStor transferred owner = Devm.getStor post owner := by
           by_cases h_if : sevm.currentTarget ∈
               ((devm3.addBal donee ((if donee ∉ devm1.accessedAddresses then addAccessedAddress devm1 donee else devm1).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget donee ((if donee ∉ devm1.accessedAddresses then addAccessedAddress devm1 donee else devm1).getAcct sevm.currentTarget).bal).createdAccounts
-          · simp only [h_if, if_pos] at final
+          · simp only [h_if, ite_eq_left] at final
             have equal := Except.ok.inj final
             rw [← equal]
             rfl
-          · simp only [h_if, if_neg] at final
+          · simp only [h_if] at final
             have equal := Except.ok.inj final
             rw [← equal]
         exact (preToOne.trans (charged.trans (stged.trans
@@ -3763,7 +3763,7 @@ theorem Linst.targetBalanceMono_of_foreign
           dsimp only [transferred] at final ⊢
           by_cases h_if : sevm.currentTarget ∈
               (devm3.addBal destination (devm1.getAcct sevm.currentTarget).bal).createdAccounts
-          · simp only [h_if, if_pos] at final
+          · simp only [h_if, ite_eq_left] at final
             have state_eq := Except.ok.inj final
             rw [← state_eq]
             change ((transferred.setBal sevm.currentTarget 0).state.bal ca) =
@@ -3771,7 +3771,7 @@ theorem Linst.targetBalanceMono_of_foreign
             show ((transferred.state.setBal sevm.currentTarget 0).get ca).bal =
               (transferred.state.get ca).bal
             rw [State.setBal_get_ne target_ne]
-          · simp only [h_if, if_neg] at final
+          · simp only [h_if] at final
             have state_eq := Except.ok.inj final
             rw [← state_eq]
         rw [← chargedBalance, postBalance]
@@ -3830,11 +3830,11 @@ theorem Linst.targetBalanceMono_of_foreign
           · rw [of_transfer_bal_other subtractedState target_ne destination_eq]
         have postBalance : post.state.bal ca = transferred.state.bal ca := by
           by_cases h_if : sevm.currentTarget ∈ ((devm3.addBal destination ((if destination ∉ devm1.accessedAddresses then addAccessedAddress devm1 destination else devm1).getAcct sevm.currentTarget).bal).emitTransferLog sevm.currentTarget destination ((if destination ∉ devm1.accessedAddresses then addAccessedAddress devm1 destination else devm1).getAcct sevm.currentTarget).bal).createdAccounts
-          · simp only [h_if, if_pos] at final
+          · simp only [h_if, ite_eq_left] at final
             have state_eq := Except.ok.inj final
             rw [← state_eq]
             rfl
-          · simp only [h_if, if_neg] at final
+          · simp only [h_if] at final
             have state_eq := Except.ok.inj final
             rw [← state_eq]
         rw [← chargedBalance, postBalance]
@@ -4486,7 +4486,7 @@ lemma ProcessCreateMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
   · have h_evm : Devm.NoDel wa evm := h_pm
     dsimp only [bind, Except.bind]
     by_cases h_err : evm.error.isNone = true
-    · rw [if_pos h_err]
+    · rw [ite_eq_left h_err]
       cases h_cg : processCreateMessage.chargeCodeGas msg.benv.stat.rules evm with
       | error e =>
         rcases e with ⟨err, evm'⟩
@@ -4523,7 +4523,7 @@ lemma ProcessCreateMessage.inv_noDel {wa : Adr} {msg : Msg} {xl : Xlot}
         show ((evm'.setCode msg.currentTarget ⟨⟨evm'.output⟩⟩).getCode wa).toList ≠ []
         rw [setCode_getCode h_ct, h_gc]
         exact h_pm.code
-    · rw [if_neg h_err]
+    · rw [ite_eq_right h_err]
       exact (⟨h_pm.atd, h_pm.ca, h.code⟩ : Devm.NoDel wa ((evm.rollback msg.benv.state msg.tenv.transientStorage).withStorageWrites msg.benv.storageWrites))
 
 lemma Devm.NoDel.of_instructionFrame {wa : Adr} {d d' : Devm}
@@ -4824,7 +4824,7 @@ theorem processCreateMessage_preserves_noDel {wa : Adr} {msg : Msg} {evm : Devm}
   unfold processCreateMessage.settle at h_rest
   dsimp only [bind, Except.bind] at h_rest
   · by_cases herr : evm2.error.isNone = true
-    · rw [if_pos herr] at h_rest
+    · rw [ite_eq_left herr] at h_rest
       rcases hcg : processCreateMessage.chargeCodeGas msg.benv.stat.rules evm2
         with ⟨err, evm3⟩ | evm3
       · rw [hcg] at h_rest
@@ -4855,7 +4855,7 @@ theorem processCreateMessage_preserves_noDel {wa : Adr} {msg : Msg} {evm : Devm}
         show ((evm3.setCode msg.currentTarget ⟨⟨evm3.output⟩⟩).getCode wa).toList ≠ []
         rw [setCode_getCode h_ct, h_gc]
         exact h_pm.code
-    · rw [if_neg herr] at h_rest
+    · rw [ite_eq_right herr] at h_rest
       rw [← Except.ok.inj h_rest]
       exact (⟨h_pm.atd, h_pm.ca, h.code⟩ : Devm.NoDel wa ((evm2.rollback msg.benv.state msg.tenv.transientStorage).withStorageWrites msg.benv.storageWrites))
 
@@ -5047,7 +5047,7 @@ theorem processMessageCall_preserves_noDel {wa : Adr} {msg : Msg} {st' : Jaune.S
       subst h_out
       exact AdrSet.not_mem_empty
     · rename_i h_col
-      simp only [Bool.not_eq_true, Bool.or_eq_false_iff] at h_col
+      simp only [Bool.not_eq_true] at h_col
       have h_ct := ne_wa_of_not_hasCodeOrNonce h.code h_col
       revert h_run
       rcases h_evm : processCreateMessage msg with ⟨err⟩ | ⟨evm⟩
@@ -5063,7 +5063,7 @@ theorem processMessageCall_preserves_noDel {wa : Adr} {msg : Msg} {st' : Jaune.S
           · injection h_run
           · simp only [Except.ok.injEq, Prod.mk.injEq] at h_run
             rcases h_run with ⟨_, rfl⟩
-            simp_all only [id_eq, if_pos]
+            simp_all only [id_eq, ite_eq_left]
             exact h_nodel.atd
         · simp only [id_eq, Except.ok.injEq, Prod.mk.injEq] at h_run
           rcases h_run with ⟨_, rfl⟩
@@ -5217,7 +5217,7 @@ lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
       have h_blob' := Except.ok.inj h_blob
       simp only [Prod.mk.injEq] at h_blob'
       obtain ⟨rfl, rfl⟩ := h_blob'
-      simp only [Tx.isTypeThree, h_type, Bool.false_eq_true, if_false]
+      simp only [Tx.isTypeThree, h_type, Bool.false_eq_true, ite_false]
       omega
   | one chainId gasPrice receiver accessList =>
     simp only [checkTransactionGasFee, h_type, checkTransactionLegacyGasFee] at h_fee
@@ -5231,7 +5231,7 @@ lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
       have h_blob' := Except.ok.inj h_blob
       simp only [Prod.mk.injEq] at h_blob'
       obtain ⟨rfl, rfl⟩ := h_blob'
-      simp only [Tx.isTypeThree, h_type, Bool.false_eq_true, if_false]
+      simp only [Tx.isTypeThree, h_type, Bool.false_eq_true, ite_false]
       omega
   | two chainId maxPriorityFeePerGas maxFeePerGas receiver accessList =>
     simp only [checkTransactionGasFee, h_type, checkTransactionDynamicGasFee] at h_fee
@@ -5248,7 +5248,7 @@ lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
         have h_blob' := Except.ok.inj h_blob
         simp only [Prod.mk.injEq] at h_blob'
         obtain ⟨rfl, rfl⟩ := h_blob'
-        simp only [Tx.isTypeThree, h_type, Bool.false_eq_true, if_false]
+        simp only [Tx.isTypeThree, h_type, Bool.false_eq_true, ite_false]
         have h_effective :
             min maxPriorityFeePerGas (maxFeePerGas - benv.stat.baseFeePerGas) +
                 benv.stat.baseFeePerGas ≤ maxFeePerGas := by
@@ -5308,7 +5308,7 @@ lemma checkTransaction_upfront_lt_modulus {benv : Benv} {bout : BlockOutput}
         have h_blob' := Except.ok.inj h_blob
         simp only [Prod.mk.injEq] at h_blob'
         obtain ⟨rfl, rfl⟩ := h_blob'
-        simp only [Tx.isTypeThree, h_type, Bool.false_eq_true, if_false]
+        simp only [Tx.isTypeThree, h_type, Bool.false_eq_true, ite_false]
         have h_effective :
             min maxPriorityFeePerGas (maxFeePerGas - benv.stat.baseFeePerGas) +
                 benv.stat.baseFeePerGas ≤ maxFeePerGas := by

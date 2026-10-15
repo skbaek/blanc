@@ -155,7 +155,7 @@ private theorem Exec.Deriv.ParentPrefix.advancePushToward_appended
                 Ninst.step ⟨pc, sevm, pre⟩ (.push xs le) :=
             Evm.step_next pushAt
           have sourceStep := hstatic.symm.trans hstep
-          rw [Ninst.step_push, if_neg hne] at sourceStep
+          rw [Ninst.step_push, ite_eq_right hne] at sourceStep
           obtain ⟨hpc, hrun⟩ := Step.ofExecution_cont sourceStep
           cases hpc
           exact ⟨_, next, .cont hstep next, rest,

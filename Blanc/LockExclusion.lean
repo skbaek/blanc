@@ -424,7 +424,7 @@ theorem Linst.get_nonce_eq_of_ok {sevm : Sevm} {pre post : Devm} {last : Linst}
   · subst last
     simp only [Linst.Run, Linst.run, fork.rules_stateGas_none,
       Devm.balReadAccount_of_bal_none fork.rules_bal_none,
-      ne_eq, Except.bind_ok, ite_not, Lean.Elab.WF.paramLet] at run
+      ne_eq, Except.bind_ok, ite_not] at run
     rcases Except.bind_eq_ok run with ⟨⟨donee, first⟩, pop, rest⟩
     rcases Except.bind_eq_ok rest with ⟨second, charge, rest⟩
     rcases Except.bind_eq_ok rest with ⟨_, asserted, rest⟩
@@ -452,7 +452,7 @@ theorem Linst.get_nonce_eq_of_ok {sevm : Sevm} {pre post : Devm} {last : Linst}
       have firstEq : pre.state = first.state :=
         (liftMach_worldEq_of_ok (core := Mach.popToAdr) pop).1
       rw [firstEq, ← (chargeGas_worldEq_of_ok charge).1]
-      split <;> simp only [Devm.balReadAccount_state, addAccessedAddress_state]
+      split <;> simp only [addAccessedAddress_state]
     let transferred := third.addBal donee (first.getAcct sevm.currentTarget).bal
     have nonceEq : (transferred.state.get owner).nonce = (pre.state.get owner).nonce := by
       change ((third.state.addBal donee _).get owner).nonce = _

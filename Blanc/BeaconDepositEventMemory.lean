@@ -129,7 +129,7 @@ private theorem Bytes.sliceD_writeAt_inside_event
   apply List.map_congr_left
   intro i hi
   have hi' := List.mem_range.mp hi
-  rw [Bytes.getD_writeAt, if_pos (by omega)]
+  rw [Bytes.getD_writeAt, ite_eq_left (by omega)]
   congr 1
   omega
 

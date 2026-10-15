@@ -334,7 +334,7 @@ theorem depositAmountUpperGuard_storageEffectRun
       (x := Nat.toB256 (2 ^ 64 - 1)) (y := amount)
       (v := 0) (s := []) (G := G + 13)
       (by rintro ⟨⟩) rfl rfl
-      (by rw [B256.ltCheck, if_neg (B256.not_lt.mpr hupper)])
+      (by rw [B256.ltCheck, ite_eq_right (B256.not_lt.mpr hupper)])
       (by simp only [Devm.gasLeft_setMach, gVerylow])
       (by simp only [List.length_nil]; omega))
     (by rintro ⟨⟩) (by rintro operation ⟨⟩)

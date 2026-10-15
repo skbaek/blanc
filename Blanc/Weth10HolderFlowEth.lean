@@ -178,7 +178,7 @@ theorem Exec.flowActions_eq_entry_append_body
         Exec.bodyEthActions dp ca run hcommit := by
   unfold Exec.flowActions Exec.committedFrames Exec.entryEthActions
     Exec.bodyEthActions
-  simp only [dif_pos hcommit, List.filterMap_cons]
+  simp only [dite_eq_left hcommit, List.filterMap_cons]
   generalize hroot :
       Exec.Frame.flowAction? dp ca (Exec.Frame.ofRun run hcommit) = root
   cases root with
@@ -1183,7 +1183,7 @@ theorem ProcessCreateMessageTrace.ethBound_of_committedExecSound
         (by rw [processCreateMessage.msg_benvStat]; exact hfork)
       unfold EthBound at hbound ⊢
       rw [hpost, ← congrFun (processCreateMessage_msg_bal_eq msg) ca]
-      simpa only [Bool.true_eq_false, if_false] using hbound
+      simpa only [Bool.true_eq_false, ite_false] using hbound
 
 theorem MessageReady.of_messageCallDelegation
     {dp : DeployParams} {ca : Adr} {msg delegated : Msg} {refund : Nat}

@@ -377,6 +377,22 @@ def recipes : List Recipe := [
     symbols := ["module:Blanc/Lift/CodeSizeWalk.lean", "declaration:Blanc.Lift.temporalAccountAccessBase", "declaration:Blanc.Lift.temporalAccountAccessBase_state", "declaration:Blanc.Lift.temporalAccountAccessBase_output", "declaration:Blanc.Lift.temporalAccountAccessBase_logs", "declaration:Blanc.Lift.temporalAccountAccessCost", "declaration:Blanc.Lift.temporal_extcodesize_runCompiled", "declaration:Blanc.Lift.ri_extcodesize", "declaration:Blanc.Lift.rx_extcodesize"]
     boundary := "This advice matches only a literal EXTCODESIZE Ninst.RunCompiled goal. It does not solve fork, word, stack, gas or successor-state obligations, match another opcode, invert Ninst.Run, or identify a generic SFunc.RunExact goal as an EXTCODESIZE walk. It does not establish nonzero code size or callee liveness."
   },
+  {
+    id := "machine-state-debit"
+    status := "active"
+    triggers := ["goal-shape:machine-state-debit"]
+    preferredPath := "Use `Devm.subBal_state` to project a successful machine debit to its account-state debit. If the hypothesis is an `Option.toExcept` success, first use Jaune's `Option.toExcept_eq_ok`. Keep the machine symbolic instead of unfolding its full record through repeated option inversions."
+    symbols := ["module:Blanc/MachineDataFacts.lean", "declaration:Blanc.Devm.subBal_state"]
+    boundary := "Requires the successful debit equation; it does not establish sufficient funds, preserve the debited balance, or identify the whole post-machine. Advice recognizes only a direct equality whose left side is State.subBal, without normalizing state expressions or searching nested operands."
+  },
+  {
+    id := "word-exponentiation"
+    status := "active"
+    triggers := ["goal-shape:word-exponentiation"]
+    preferredPath := "For exponent zero use Jaune's `B256.bexp_zero`; for a general exponent rewrite with `B256.bexp_eq` to obtain natural-number exponentiation modulo 2^256. Rewrite small word-to-Nat conversions explicitly before closed arithmetic, rather than unfolding the modular-exponentiation implementation. The shared packed-word special case `Lift.bexp_256_32` supplies 256^32 = 0 as an EVM word."
+    symbols := ["module:Blanc/Lift/PackedSha.lean", "declaration:Blanc.Lift.bexp_256_32"]
+    boundary := "EVM exponentiation wraps modulo 2^256; ordinary unbounded-power identities need that modulus. This does not justify evaluating a large symbolic exponent or concrete memory. Advice recognizes only a direct equality whose left side is B256.bexp; nested arithmetic and reversed equalities are left to the author."
+  },
 ]
 
 end Blanc.ProofRecipes

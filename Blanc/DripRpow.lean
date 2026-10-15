@@ -151,7 +151,7 @@ population count, not the expanded tree's node count. -/
 theorem drip_rpow_runtime_ops_exact (k : Nat) :
     rpowOps rate.toNat k =
       if k = 0 then 0 else binaryDepth (k / 2) + binaryWeight (k / 2) := by
-  rw [rpowOps_eq_depth_add_weight, if_neg rateNat_ne_zero]
+  rw [rpowOps_eq_depth_add_weight, ite_eq_right rateNat_ne_zero]
 
 /-- The frozen four-byte elapsed ceiling admits at most 62 rounded runtime
 multiplications. -/
@@ -162,7 +162,7 @@ theorem drip_rpow_runtime_ops_le_62 {k : Nat}
   by_cases hk0 : k = 0
   · subst k
     simp only [rpowOps, rateNat_exact, OfNat.ofNat_ne_zero, ↓reduceIte, zero_le]
-  · rw [drip_rpow_runtime_ops_exact, if_neg hk0]
+  · rw [drip_rpow_runtime_ops_exact, ite_eq_right hk0]
     have hhalf : k / 2 < 2 ^ 31 := by
       norm_num only
       omega

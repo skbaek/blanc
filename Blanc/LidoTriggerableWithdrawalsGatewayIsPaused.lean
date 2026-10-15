@@ -45,7 +45,7 @@ theorem isPaused_exact_of_prog_run
       B256.ltCheck sevm.data.length.toB256 (4 : B256) = 0 := by
     rw [calldata, isPausedCalldata_length]
     change B256.ltCheck (4 : B256) 4 = 0
-    rw [B256.ltCheck, if_neg (lt_irrefl _)]
+    rw [B256.ltCheck, ite_eq_right (lt_irrefl _)]
   have selected : Sevm.selector sevm = selIsPaused := by
     apply selector_eq_of_data_eq_abiSelectorBytes_append
         (selected := selIsPaused) (tail := [])

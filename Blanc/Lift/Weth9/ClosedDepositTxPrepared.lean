@@ -69,10 +69,10 @@ theorem deposit_prepared_success {benv : Benv} (ctx : DepositTxContext benv)
         Weth9.code := by
       rw [State.setBal_get_ne hsc, depositDebitState, State.setBal_get_ne hsc]
       exact State.incrNonce_get_code.trans ctx.code
-    rw [afterState, depositTransferState, getStor_addBal, if_neg]
+    rw [afterState, depositTransferState, getStor_addBal, ite_eq_right]
     · change (((depositDebitState benv.state).setBal senderE 899999).get contractAddress).stor.get _ = 0
       rw [State.setBal_get_ne hsc, depositDebitState, State.setBal_get_ne hsc,
-        State.incrNonce_get_stor, if_neg (fun h => hsc h.1)]
+        State.incrNonce_get_stor, ite_eq_right (fun h => hsc h.1)]
       exact ctx.slot
     · rintro ⟨-, hE⟩
       apply code_size_ne_zero

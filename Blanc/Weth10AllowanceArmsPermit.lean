@@ -727,14 +727,14 @@ private theorem entryReadSound_staticcallCrossing
           (Exec.attributionInner dp ca child)
        else []) := by
   by_cases hcommit : Blanc.Frame.settlementCommits f raw = true
-  · rw [dif_pos hcommit]
+  · rw [dite_eq_left hcommit]
     have hcommits :=
       Blanc.Frame.raw_commits_of_settlementCommits hcommit
     have hstream : Exec.attributionStream dp ca child =
         Exec.frameContribution dp ca (Exec.Frame.ofRun child hcommits)
           (Exec.attributionInner dp ca child) := by
       unfold Exec.attributionStream
-      rw [dif_pos hcommits]
+      rw [dite_eq_left hcommits]
     rw [← hstream]
     have hfstat : f.inner.benv.stat = sevm.benvStat := by
       have hx : Xinst.step sevm pre .staticcall = .spawn f rsm :=
@@ -765,7 +765,7 @@ private theorem entryReadSound_staticcallCrossing
                 getDelegatedCodeAddress (pre.getCode target) = none := by
               rw [htargetCa]
               dsimp only [getDelegatedCodeAddress]
-              rw [if_neg (not_delegation_of_compile installed)]
+              rw [ite_eq_right (not_delegation_of_compile installed)]
             rw [hcodeAddress, hnone, htargetCa]
             rfl)
           hdeeper (by
@@ -773,7 +773,7 @@ private theorem entryReadSound_staticcallCrossing
             rw [hmsgStat]
             exact hfork)
       exact hchild.entryRead
-  · rw [dif_neg hcommit]
+  · rw [dite_eq_right hcommit]
     exact .nil _
 
 /-- Read-sound reading of one permit `STATICCALL` edge, in the shape the
@@ -1352,7 +1352,7 @@ private theorem permitStatcallRegionSilent_of_forallDeeperAt
           getDelegatedCodeAddress (u.getCode (1 : B256).toAdr) = none := by
         rw [htargetCa]
         dsimp only [getDelegatedCodeAddress]
-        rw [if_neg (not_delegation_of_compile hcodeAt)]
+        rw [ite_eq_right (not_delegation_of_compile hcodeAt)]
       rcases hdelegation with ⟨_, hna, _, _⟩ | ⟨_, hsome, _, _, _⟩
       · exact hna.trans htargetCa
       · simp only [hnone, reduceCtorEq] at hsome
@@ -1485,8 +1485,8 @@ private theorem Exec.Frame.allowanceRegionEffect_ownRecord_of_permit
       rw [hstor key hkey, show projectedAllowanceKey (Sevm.argWord e 0)
         (Sevm.argWord e 1) = permitRuntimeAllowanceKey e from rfl]
       by_cases hkeyCase : permitRuntimeAllowanceKey e = key
-      · rw [if_pos hkeyCase, ← hkeyCase, Stor.get_set_self]
-      · rw [if_neg hkeyCase, Stor.get_set_ne _ hkeyCase _,
+      · rw [ite_eq_left hkeyCase, ← hkeyCase, Stor.get_set_self]
+      · rw [ite_eq_right hkeyCase, Stor.get_set_ne _ hkeyCase _,
           Stor.get_set_ne _ (permitRuntimeNonceKey_ne_allowance e hkey) _]
 
 /-! ## The two `permit` arms -/

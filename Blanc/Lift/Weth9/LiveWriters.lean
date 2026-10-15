@@ -394,7 +394,7 @@ theorem weth9_withdraw_live_target_deleted {sevm : Sevm} {pre : Devm} {G : Nat}
   rw [hex] at hex0
   cases hex0
   have hcs := hp.state
-  rw [if_neg hwad] at hcs
+  rw [ite_eq_right hwad] at hcs
   obtain ⟨stmid, hsub, hst⟩ := hcs
   obtain ⟨-, hstmid⟩ := State.of_subBal hsub
   obtain ⟨st, hst3⟩ := afterSstore_getAcct (sevm := sevm) (b := wB2 sevm pre)
@@ -406,7 +406,7 @@ theorem weth9_withdraw_live_target_deleted {sevm : Sevm} {pre : Devm} {G : Nat}
   show (post.state.get sevm.currentTarget).stor = _
   rw [hst]
   unfold State.addBal
-  rw [State.setBal_get_ne hne, hstmid, State.setBal_get_stor, if_pos]
+  rw [State.setBal_get_ne hne, hstmid, State.setBal_get_stor, ite_eq_left]
   refine ⟨rfl, ?_⟩
   have h3 : (wB3 sevm pre (Sevm.dataWord sevm 4)).state.get sevm.currentTarget =
       { pre.getAcct sevm.currentTarget with stor := st } := hst3
@@ -451,7 +451,7 @@ theorem weth9_withdraw_live_caller_deleted {sevm : Sevm} {pre : Devm} {G : Nat}
   rw [hex] at hex0
   cases hex0
   have hcs := hp.state
-  rw [if_neg hwad] at hcs
+  rw [ite_eq_right hwad] at hcs
   obtain ⟨stmid, hsub, hst⟩ := hcs
   obtain ⟨-, hstmid⟩ := State.of_subBal hsub
   obtain ⟨st, hst3⟩ := afterSstore_getAcct (sevm := sevm) (b := wB2 sevm pre)
@@ -467,7 +467,7 @@ theorem weth9_withdraw_live_caller_deleted {sevm : Sevm} {pre : Devm} {G : Nat}
   show (post.state.get sevm.caller).stor = _
   rw [hst]
   unfold State.addBal
-  rw [State.setBal_get_stor, if_pos]
+  rw [State.setBal_get_stor, ite_eq_left]
   refine ⟨rfl, ?_⟩
   have hcodeC : (pre.getAcct sevm.caller).code.size = 0 := h_eoa
   have hbm : stmid.bal sevm.caller = (pre.getAcct sevm.caller).bal := by

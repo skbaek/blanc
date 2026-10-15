@@ -53,7 +53,7 @@ theorem body_guards {sevm : Sevm} {b : Devm} {sel rt sP wP pP : B256} {G : Nat}
   have hnotlt1 : ¬ sevm.value < (0x0de0b6b3a7640000 : B256) := by
     rw [B256.lt_iff_toNat_lt_toNat, h1ether]; omega
   have hltz : B256.ltCheck sevm.value (0x0de0b6b3a7640000 : B256) = 0 := by
-    rw [B256.ltCheck, if_neg hnotlt1]
+    rw [B256.ltCheck, ite_eq_right hnotlt1]
   have hmodv : sevm.value % (1000000000 : B256) = 0 := by
     apply B256.toNat_inj
     rw [B256.toNat_mod hyne, h1e9, hv2]
@@ -63,7 +63,7 @@ theorem body_guards {sevm : Sevm} {b : Devm} {sel rt sP wP pP : B256} {G : Nat}
   have hle64 : gweiAmount sevm ≤ (0xffffffffffffffff : B256) := by
     rw [B256.le_iff_toNat_le_toNat, hgweiNat, hmaskNat]; omega
   have hgtz : B256.gtCheck (gweiAmount sevm) (0xffffffffffffffff : B256) = 0 := by
-    rw [B256.gtCheck, if_neg (B256.not_lt.mpr hle64)]
+    rw [B256.gtCheck, ite_eq_right (B256.not_lt.mpr hle64)]
   set cnt := b.getStorVal sevm.currentTarget solCountSlot with hcntdef
   set b'' := afterSload sevm b solCountSlot with hb''def
   -- the first `to_little_endian_64` call, over `mem0`, encoding the gwei amount

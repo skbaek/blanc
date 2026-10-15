@@ -70,9 +70,9 @@ theorem initialWorld_get (a : Adr) :
   unfold Fixed.Reach.initialWorld
   by_cases h : a = creator
   · subst h
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
     exact State.get_set_self _ _ _
-  · rw [if_neg h, State.get_set_ne _ (Ne.symm h)]
+  · rw [ite_eq_right h, State.get_set_ne _ (Ne.symm h)]
     rfl
 
 /-- `world2`, account by account (from `setup_creations`). -/
@@ -85,25 +85,25 @@ theorem world2_get (a : Adr) :
   unfold world2
   rw [← hS]
   by_cases hi : a = implAddr
-  · subst hi; rw [if_pos rfl, hI]
-  · rw [if_neg hi]
+  · subst hi; rw [ite_eq_left rfl, hI]
+  · rw [ite_eq_right hi]
     by_cases hp : a = proxyAddr
-    · subst hp; rw [if_pos rfl, hP]
-    · rw [if_neg hp, hF a hi hp]
+    · subst hp; rw [ite_eq_left rfl, hP]
+    · rw [ite_eq_right hp, hF a hi hp]
 
 theorem acctAgree2 : AcctAgree world2 acs2 := by
   intro a
   rw [world2_get, initialWorld_get]
   by_cases hc : a = creator
   · subst hc
-    rw [if_neg creator_ne_implAddr, if_neg creator_ne_proxyAddr, if_pos rfl]
+    rw [ite_eq_right creator_ne_implAddr, ite_eq_right creator_ne_proxyAddr, ite_eq_left rfl]
     rfl
   · by_cases hi : a = implAddr
     · subst hi; rfl
     · by_cases hp : a = proxyAddr
       · subst hp; rfl
-      · rw [if_neg hi, if_neg hp, if_neg hc]
-        simp only [acs2, lookupA, Ne.symm hc, Ne.symm hi, Ne.symm hp, if_false]
+      · rw [ite_eq_right hi, ite_eq_right hp, ite_eq_right hc]
+        simp only [acs2, lookupA, Ne.symm hc, Ne.symm hi, Ne.symm hp, ite_false]
         rfl
 
 theorem storAgree2 : ∀ a k, storOf world2 a k = lookupS stor2 a k := by
@@ -112,21 +112,21 @@ theorem storAgree2 : ∀ a k, storOf world2 a k = lookupS stor2 a k := by
   rw [world2_get, initialWorld_get]
   by_cases hi : a = implAddr
   · subst hi
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
     show (Stor.empty.set 10 31337).get k = _
     rw [Stor.get_set_ite]
     simp only [stor2, lookupS, true_and]
     by_cases hk : (10 : B256) = k
-    · rw [if_pos hk, if_pos hk]
-    · rw [if_neg hk, if_neg hk]
+    · rw [ite_eq_left hk, ite_eq_left hk]
+    · rw [ite_eq_right hk, ite_eq_right hk]
       rfl
-  · rw [if_neg hi]
+  · rw [ite_eq_right hi]
     have hl : lookupS stor2 a k = 0 := by
-      simp only [stor2, lookupS, Ne.symm hi, false_and, if_false]
+      simp only [stor2, lookupS, Ne.symm hi, false_and, ite_false]
     rw [hl]
     by_cases hp : a = proxyAddr
     · subst hp; rfl
-    · rw [if_neg hp]
+    · rw [ite_eq_right hp]
       split <;> rfl
 
 /-- The Prague block environment's message 3, its frame and the machine it enters with. -/

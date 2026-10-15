@@ -103,7 +103,7 @@ theorem weth9_exec_node {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (
       exact noExec_after_of_cursor cert_check hchain hM fork ok₁ (E := []) rfl
         (by exact afterCall_execFree)
         (by
-          simp only [hκK, List.map_cons, List.mem_singleton, forall_eq]
+          simp only [hκK, List.mem_singleton, forall_eq]
           decide) y
 
 /-- WETH9 frames spawn only by `CALL`/`STATICCALL` (the certificate cursor). -/

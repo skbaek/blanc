@@ -504,15 +504,15 @@ private lemma byteAt_main_to_dispatch
           (.branch (fsig +++ p).compileShape receiveEther.compileShape)))
       (Ninst.calldatasize ::: Ninst.iszero :::
         (receiveEther <?> (fsig +++ q))) i d = _
-  conv_lhs => rw [Func.byteAtByShape, if_neg (by omega)]
-  conv_lhs => rw [Func.byteAtByShape, if_neg (by omega)]
+  conv_lhs => rw [Func.byteAtByShape, ite_eq_right (by omega)]
+  conv_lhs => rw [Func.byteAtByShape, ite_eq_right (by omega)]
   conv_lhs => rw [Func.byteAtByShape]
-  conv_lhs => rw [if_neg (by
+  conv_lhs => rw [ite_eq_right (by
     simp only [List.length_cons, List.length_nil]
     rw [hcd, hiz]
     omega)]
   dsimp only
-  conv_lhs => rw [if_pos (by
+  conv_lhs => rw [ite_eq_left (by
     simpa only [List.length_cons, List.length_nil, Nat.reduceAdd] using
       hinside)]
   change
@@ -527,10 +527,10 @@ private lemma byteAt_main_to_dispatch
       (Ninst.pushB256 0 ::: Ninst.calldataload :::
         Ninst.pushB256 224 ::: Ninst.shr ::: q)
       (i - Ninst.calldatasize.size - Ninst.iszero.size - 4) d = _
-  conv_lhs => rw [Func.byteAtByShape, if_neg (by omega)]
-  conv_lhs => rw [Func.byteAtByShape, if_neg (by omega)]
-  conv_lhs => rw [Func.byteAtByShape, if_neg (by omega)]
-  conv_lhs => rw [Func.byteAtByShape, if_neg (by omega)]
+  conv_lhs => rw [Func.byteAtByShape, ite_eq_right (by omega)]
+  conv_lhs => rw [Func.byteAtByShape, ite_eq_right (by omega)]
+  conv_lhs => rw [Func.byteAtByShape, ite_eq_right (by omega)]
+  conv_lhs => rw [Func.byteAtByShape, ite_eq_right (by omega)]
   simp only [hcd, hiz, hp0, hcdl, hp224, hshr]
   have hn : n + 1 + 1 + 4 + 1 + 1 + 2 + 1 = n + 11 := by omega
   have hi' : i - 1 - 1 - 4 - 1 - 1 - 2 - 1 = i - 11 := by omega
