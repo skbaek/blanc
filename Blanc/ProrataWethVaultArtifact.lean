@@ -69,6 +69,7 @@ theorem auxLayout_exact :
         maxMintAfterAssetCap ] := rfl
 
 theorem runtimeCodeSize_exact : prorataWethVaultCode.length = 17481 := by
+  simp only [prorataWethVaultCode, List.length_append]
   decide +kernel
 
 theorem runtimeCodeWithinEip170 : prorataWethVaultCode.length ≤ 24576 := by
