@@ -194,15 +194,34 @@ def m7 : Mem := m6.write 160 (Nat.toB256 4).toBytes
 def m8 : Mem := m7.write 192 symbolWord.toBytes
 def m9 : Mem := m8.write 0 (1 : B256).toBytes
 
-theorem m1_size : m1.size = 96 := by decide +kernel
-theorem m2_size : m2.size = 96 := by decide +kernel
-theorem m3_size : m3.size = 128 := by decide +kernel
-theorem m4_size : m4.size = 160 := by decide +kernel
-theorem m5_size : m5.size = 160 := by decide +kernel
-theorem m6_size : m6.size = 160 := by decide +kernel
-theorem m7_size : m7.size = 192 := by decide +kernel
-theorem m8_size : m8.size = 224 := by decide +kernel
-theorem m9_size : m9.size = 224 := by decide +kernel
+theorem m1_size : m1.size = 96 := by
+  rw [m1, Mem.size_write_of_size (show Mem.empty.size = 0 from rfl) (by decide)
+    (B256.length_toBytes _)]
+  decide
+theorem m2_size : m2.size = 96 := by
+  rw [m2, Mem.size_write_of_size m1_size (by decide) (B256.length_toBytes _)]
+  decide
+theorem m3_size : m3.size = 128 := by
+  rw [m3, Mem.size_write_of_size m2_size (by decide) (B256.length_toBytes _)]
+  decide
+theorem m4_size : m4.size = 160 := by
+  rw [m4, Mem.size_write_of_size m3_size (by decide) (B256.length_toBytes _)]
+  decide
+theorem m5_size : m5.size = 160 := by
+  rw [m5, Mem.size_write_of_size m4_size (by decide) (B256.length_toBytes _)]
+  decide
+theorem m6_size : m6.size = 160 := by
+  rw [m6, Mem.size_write_of_size m5_size (by decide) (B256.length_toBytes _)]
+  decide
+theorem m7_size : m7.size = 192 := by
+  rw [m7, Mem.size_write_of_size m6_size (by decide) (B256.length_toBytes _)]
+  decide
+theorem m8_size : m8.size = 224 := by
+  rw [m8, Mem.size_write_of_size m7_size (by decide) (B256.length_toBytes _)]
+  decide
+theorem m9_size : m9.size = 224 := by
+  rw [m9, Mem.size_write_of_size m8_size (by decide) (B256.length_toBytes _)]
+  decide
 
 theorem nameWord_mask : (~~~ Bytes.toB256 [0xff]) &&& nameWord = nameWord := by decide +kernel
 theorem symbolWord_mask : (~~~ Bytes.toB256 [0xff]) &&& symbolWord = symbolWord := by
