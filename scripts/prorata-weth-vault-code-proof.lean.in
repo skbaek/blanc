@@ -947,7 +947,8 @@ private theorem vault_main_size :
     rw [← Func.CompileShape.byteSize_compileShape]
     exact vaultTree_dispatch_size
   rw [vault_source_main, Func.CompileShape.byteSize_compileShape]
-  simp only [Func.mainWith, fsig, cdl, shiftRight, List.cons_append, List.nil_append, prepend, compsize, htree]
+  simp only [Func.mainWith, fsig, cdl, shiftRight, List.cons_append, List.nil_append, prepend]
+  rw [compsize, compsize, compsize, compsize, htree]
   decide +kernel
 
 private theorem vault_table_revert :
@@ -11596,7 +11597,9 @@ private theorem vaultTree_dispatch_compile :
   have hsize : prefixByteSize [Ninst.dup 0, Ninst.pushB256 0x94bf804d, Ninst.gt] = 7 := by rfl
   rw [hsize]
   simp only [Nat.reduceAdd]
-  have hlen : (prorataWethVaultCodeChunk0.drop 17 ++ prorataWethVaultCodeChunk1 ++ prorataWethVaultCodeChunk2 ++ prorataWethVaultCodeChunk3 ++ prorataWethVaultCodeChunk4 ++ prorataWethVaultCodeChunk5 ++ prorataWethVaultCodeChunk6 ++ prorataWethVaultCodeChunk7 ++ prorataWethVaultCodeChunk8 ++ prorataWethVaultCodeChunk9 ++ prorataWethVaultCodeChunk10 ++ prorataWethVaultCodeChunk11 ++ prorataWethVaultCodeChunk12 ++ prorataWethVaultCodeChunk13 ++ prorataWethVaultCodeChunk14 ++ prorataWethVaultCodeChunk15 ++ prorataWethVaultCodeChunk16 ++ prorataWethVaultCodeChunk17 ++ prorataWethVaultCodeChunk18 ++ prorataWethVaultCodeChunk19 ++ prorataWethVaultCodeChunk20 ++ prorataWethVaultCodeChunk21 ++ prorataWethVaultCodeChunk22 ++ prorataWethVaultCodeChunk23 ++ prorataWethVaultCodeChunk24 ++ prorataWethVaultCodeChunk25 ++ prorataWethVaultCodeChunk26 ++ prorataWethVaultCodeChunk27 ++ prorataWethVaultCodeChunk28 ++ prorataWethVaultCodeChunk29 ++ prorataWethVaultCodeChunk30 ++ prorataWethVaultCodeChunk31 ++ prorataWethVaultCodeChunk32 ++ prorataWethVaultCodeChunk33 ++ prorataWethVaultCodeChunk34 ++ prorataWethVaultCodeChunk35.take 218).length = 9161 := by decide +kernel
+  have hlen : (prorataWethVaultCodeChunk0.drop 17 ++ prorataWethVaultCodeChunk1 ++ prorataWethVaultCodeChunk2 ++ prorataWethVaultCodeChunk3 ++ prorataWethVaultCodeChunk4 ++ prorataWethVaultCodeChunk5 ++ prorataWethVaultCodeChunk6 ++ prorataWethVaultCodeChunk7 ++ prorataWethVaultCodeChunk8 ++ prorataWethVaultCodeChunk9 ++ prorataWethVaultCodeChunk10 ++ prorataWethVaultCodeChunk11 ++ prorataWethVaultCodeChunk12 ++ prorataWethVaultCodeChunk13 ++ prorataWethVaultCodeChunk14 ++ prorataWethVaultCodeChunk15 ++ prorataWethVaultCodeChunk16 ++ prorataWethVaultCodeChunk17 ++ prorataWethVaultCodeChunk18 ++ prorataWethVaultCodeChunk19 ++ prorataWethVaultCodeChunk20 ++ prorataWethVaultCodeChunk21 ++ prorataWethVaultCodeChunk22 ++ prorataWethVaultCodeChunk23 ++ prorataWethVaultCodeChunk24 ++ prorataWethVaultCodeChunk25 ++ prorataWethVaultCodeChunk26 ++ prorataWethVaultCodeChunk27 ++ prorataWethVaultCodeChunk28 ++ prorataWethVaultCodeChunk29 ++ prorataWethVaultCodeChunk30 ++ prorataWethVaultCodeChunk31 ++ prorataWethVaultCodeChunk32 ++ prorataWethVaultCodeChunk33 ++ prorataWethVaultCodeChunk34 ++ prorataWethVaultCodeChunk35.take 218).length = 9161 := by
+    simp only [List.length_append, List.length_drop, List.length_take]
+    decide +kernel
   have hbranch := compile_branch vaultTable 13 9178 _ _
     (prorataWethVaultCodeChunk0.drop 17 ++ prorataWethVaultCodeChunk1 ++ prorataWethVaultCodeChunk2 ++ prorataWethVaultCodeChunk3 ++ prorataWethVaultCodeChunk4 ++ prorataWethVaultCodeChunk5 ++ prorataWethVaultCodeChunk6 ++ prorataWethVaultCodeChunk7 ++ prorataWethVaultCodeChunk8 ++ prorataWethVaultCodeChunk9 ++ prorataWethVaultCodeChunk10 ++ prorataWethVaultCodeChunk11 ++ prorataWethVaultCodeChunk12 ++ prorataWethVaultCodeChunk13 ++ prorataWethVaultCodeChunk14 ++ prorataWethVaultCodeChunk15 ++ prorataWethVaultCodeChunk16 ++ prorataWethVaultCodeChunk17 ++ prorataWethVaultCodeChunk18 ++ prorataWethVaultCodeChunk19 ++ prorataWethVaultCodeChunk20 ++ prorataWethVaultCodeChunk21 ++ prorataWethVaultCodeChunk22 ++ prorataWethVaultCodeChunk23 ++ prorataWethVaultCodeChunk24 ++ prorataWethVaultCodeChunk25 ++ prorataWethVaultCodeChunk26 ++ prorataWethVaultCodeChunk27 ++ prorataWethVaultCodeChunk28 ++ prorataWethVaultCodeChunk29 ++ prorataWethVaultCodeChunk30 ++ prorataWethVaultCodeChunk31 ++ prorataWethVaultCodeChunk32 ++ prorataWethVaultCodeChunk33 ++ prorataWethVaultCodeChunk34 ++ prorataWethVaultCodeChunk35.take 218) (prorataWethVaultCodeChunk35.drop 219 ++ prorataWethVaultCodeChunk36 ++ prorataWethVaultCodeChunk37 ++ prorataWethVaultCodeChunk38 ++ prorataWethVaultCodeChunk39 ++ prorataWethVaultCodeChunk40 ++ prorataWethVaultCodeChunk41 ++ prorataWethVaultCodeChunk42 ++ prorataWethVaultCodeChunk43 ++ prorataWethVaultCodeChunk44 ++ prorataWethVaultCodeChunk45 ++ prorataWethVaultCodeChunk46 ++ prorataWethVaultCodeChunk47 ++ prorataWethVaultCodeChunk48 ++ prorataWethVaultCodeChunk49 ++ prorataWethVaultCodeChunk50 ++ prorataWethVaultCodeChunk51 ++ prorataWethVaultCodeChunk52 ++ prorataWethVaultCodeChunk53 ++ prorataWethVaultCodeChunk54 ++ prorataWethVaultCodeChunk55 ++ prorataWethVaultCodeChunk56 ++ prorataWethVaultCodeChunk57 ++ prorataWethVaultCodeChunk58 ++ prorataWethVaultCodeChunk59 ++ prorataWethVaultCodeChunk60 ++ prorataWethVaultCodeChunk61.take 47)
     rootRight_dispatch_compile (by rw [hlen]) (by decide) rootLeft_dispatch_compile
@@ -13169,11 +13172,8 @@ open ProrataWethVault Jaune.Ninst Ninst in
 private def maxMintAuxRoom : Func := shareRoom +++ Func.call returnWordSlot
 
 private theorem maxMintAuxRoom_compile : Func.compile vaultTable 17439 (maxMintAuxRoom) = some ((prorataWethVaultCodeChunk68.drop 31).take 42) := by
-  rw [maxMintAuxRoom, compile_prepend]
-  all_goals discharge_prepend_acceptance
-  have hsize : prefixByteSize ProrataWethVault.shareRoom = 38 := by rfl
-  rw [hsize]
-  simp only [Nat.reduceAdd, returnWord_slot_compile_at, bind, Option.bind, pure, Pure.pure]
+  simp only [maxMintAuxRoom, ProrataWethVault.shareRoom, ProrataWethVault.loadWord,
+    List.cons_append, List.nil_append, prepend, Func.compile, vault_table_returnWord]
   rfl
 
 private theorem maxMintAux_source_cut : ProrataWethVault.maxMintAfterAssetCap =
