@@ -1,3 +1,4 @@
+import Std.Tactic.BVDecide
 import Blanc.ProxyPairOssifiableProgram
 import Blanc.LinearDispatchCorrectness
 import Blanc.DelegatecallEnvelope
