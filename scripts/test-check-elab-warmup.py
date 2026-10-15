@@ -302,6 +302,43 @@ def calibration_routing_controls(root: Path) -> None:
     assert merged.count("Blanc/B.lean") == 1 and "OK\t1.000\tBlanc/B.lean" in merged
 
 
+def timing_format_controls(root: Path) -> None:
+    """Inject the timer's output through Bash's documented TIMEFORMAT literal
+    behavior. The production gate is unchanged; malformed timing must refuse
+    before report assembly or any evidence publication, even if Lean passed.
+    """
+    hook = root.parent / "timer-hook.bash"
+    hook.write_text(
+        "trap 'case \"$BASH_COMMAND\" in ELAPSED=*) TIMEFORMAT=$MOCK_TIME_LITERAL;; esac' DEBUG\n",
+        encoding="utf-8",
+    )
+    baseline = root / "scripts/baseline-elab.txt"
+    before = baseline.read_bytes()
+    report = root / "scripts/report-elab.txt"
+    for index, literal in enumerate(["1.:00", "nan", "inf", "1,5", "", "0", "1.999900"]):
+        report.unlink(missing_ok=True)
+        log = root.parent / f"timer-{index}.log"
+        environment = dict(os.environ, BASH_ENV=str(hook), MOCK_TIME_LITERAL=literal,
+                           MOCK_AFFECTED="Blanc/A.lean", MOCK_A_TIME="1.000",
+                           MOCK_LAKE_LOG=str(log),
+                           PATH=str(root.parent / "bin") + os.pathsep + os.environ["PATH"])
+        result = subprocess.run([str(root / "scripts/check-elab.sh"), "--list", "--no-build"],
+                                cwd=root, env=environment, text=True, capture_output=True)
+        events = log.read_text().splitlines()
+        if literal in {"0", "1.999900"}:
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert f"OK\t{literal}\tBlanc/A.lean" in result.stdout, result.stdout
+            assert report.exists()
+        else:
+            assert result.returncode == 2, result.stdout + result.stderr
+            assert "REGRESSION — elab: invalid elapsed time" in result.stdout, result.stdout
+            assert first(events, "selector merge") == -1, events
+            assert first(events, "selector commit") == -1, events
+            assert first(events, "selector publish") == -1, events
+            assert not report.exists()
+        assert baseline.read_bytes() == before
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="blanc-elab-warmup-") as directory:
         root = make_root(Path(directory))
@@ -336,7 +373,10 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="blanc-elab-calibrate-") as directory:
         calibration_routing_controls(make_cal_root(Path(directory)))
 
-    print("OK — elab warm-up and plan-before-hold controls: full slowdown/refusal, restored green, "
+    with tempfile.TemporaryDirectory(prefix="blanc-elab-timer-") as directory:
+        timing_format_controls(make_root(Path(directory)))
+
+    print("OK — numeric elapsed-time controls; elab warm-up and plan-before-hold controls: full slowdown/refusal, restored green, "
           "incremental and calibration runs warm up too, no-op plan takes no heavy boundary, measuring plan takes it "
           "before elaborating and re-plans inside it; calibration refusal writes nothing and "
           "never reaches admit/commit/publish, green calibration admits through admit-calibration "
