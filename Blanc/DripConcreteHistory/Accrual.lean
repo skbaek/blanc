@@ -367,27 +367,94 @@ private theorem concreteDrip_chiMemoryFacts :
     Bytes.toB256 ((concreteDripStagingMemory.write 160 rate.toBytes).read 160 32).1 = rate ∧
     ((concreteDripStagingMemory.write 160 rate.toBytes).read 160 32).2 =
       concreteDripStagingMemory.write 160 rate.toBytes := by
-  exact ⟨by decide +kernel, by decide +kernel, Mem.read_snd_eq_self (by decide +kernel)⟩
+  have hsize : (concreteDripStagingMemory.write 160 rate.toBytes).size = 192 :=
+    Mem.size_write_of_size (i := 160) concreteDrip_stagingSize
+      (by decide) (B256.length_toBytes rate)
+  have hreads : Mem.Reads (concreteDripStagingMemory.write 160 rate.toBytes)
+      (Bytes.writeAt (Bytes.writeAt [] 32 (4 : B256).toBytes) 160 rate.toBytes) := by
+    unfold concreteDripStagingMemory
+    repeat' first | apply Mem.Reads.write | apply Mem.Wf.write |
+      exact Mem.wf_empty | exact Mem.reads_empty
+  refine ⟨hsize, ?_, Mem.read_snd_eq_self ?_⟩
+  · rw [hreads.read]
+    exact Bytes.readWord_writeAt_self _ _ _
+  · rw [hsize]
+    decide
 
 private theorem concreteDrip_clockMemoryFacts : concreteDripClockMemory.size = 224 ∧
     Bytes.toB256 (concreteDripClockMemory.read 192 32).1 = 5 ∧
     (concreteDripClockMemory.read 192 32).2 = concreteDripClockMemory := by
-  exact ⟨by decide +kernel, by decide +kernel, Mem.read_snd_eq_self (by decide +kernel)⟩
+  have hsize : concreteDripClockMemory.size = 224 :=
+    Mem.size_write_of_size (i := 192) concreteDrip_chiMemoryFacts.1
+      (by decide) (B256.length_toBytes (5 : B256))
+  have hreads : Mem.Reads concreteDripClockMemory
+      (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt [] 32 (4 : B256).toBytes)
+        160 rate.toBytes) 192 (5 : B256).toBytes) := by
+    unfold concreteDripClockMemory concreteDripStagingMemory
+    repeat' first | apply Mem.Reads.write | apply Mem.Wf.write |
+      exact Mem.wf_empty | exact Mem.reads_empty
+  refine ⟨hsize, ?_, Mem.read_snd_eq_self ?_⟩
+  · rw [hreads.read]
+    exact Bytes.readWord_writeAt_self _ _ _
+  · rw [hsize]
+    decide
 
 private theorem concreteDrip_exponentMemoryFacts : concreteDripExponentMemory.size = 224 ∧
     Bytes.toB256 (concreteDripExponentMemory.read 0 32).1 = 3 ∧
     (concreteDripExponentMemory.read 0 32).2 = concreteDripExponentMemory := by
-  exact ⟨by decide +kernel, by decide +kernel, Mem.read_snd_eq_self (by decide +kernel)⟩
+  have hsize : concreteDripExponentMemory.size = 224 :=
+    Mem.size_write_of_size (i := 0) concreteDrip_clockMemoryFacts.1
+      (by decide) (B256.length_toBytes (3 : B256))
+  refine ⟨hsize, ?_, Mem.read_snd_eq_self ?_⟩
+  · change Bytes.toB256 ((concreteDripClockMemory.write 0 (3 : B256).toBytes).read 0 32).1 = 3
+    simpa only [B256.length_toBytes, B256.toB256_toBytes] using
+      congrArg Bytes.toB256 (Mem.read_write_zero concreteDripClockMemory
+        (ys := (3 : B256).toBytes) (by decide))
+  · rw [hsize]
+    decide
 
 private theorem concreteDrip_baseMemoryFacts : concreteDripBaseMemory.size = 256 ∧
     Bytes.toB256 (concreteDripBaseMemory.read 0 32).1 = 3 ∧
     (concreteDripBaseMemory.read 0 32).2 = concreteDripBaseMemory := by
-  exact ⟨by decide +kernel, by decide +kernel, Mem.read_snd_eq_self (by decide +kernel)⟩
+  have hsize : concreteDripBaseMemory.size = 256 :=
+    Mem.size_write_of_size (i := 224) concreteDrip_exponentMemoryFacts.1
+      (by decide) (B256.length_toBytes rate)
+  have hreads : Mem.Reads concreteDripBaseMemory
+      (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt []
+        32 (4 : B256).toBytes) 160 rate.toBytes) 192 (5 : B256).toBytes)
+        0 (3 : B256).toBytes) 224 rate.toBytes) := by
+    unfold concreteDripBaseMemory concreteDripExponentMemory
+      concreteDripClockMemory concreteDripStagingMemory
+    repeat' first | apply Mem.Reads.write | apply Mem.Wf.write |
+      exact Mem.wf_empty | exact Mem.reads_empty
+  refine ⟨hsize, ?_, Mem.read_snd_eq_self ?_⟩
+  · rw [hreads.read,
+      Bytes.readWord_writeAt_of_disjoint _ 0 224 _ (by decide)]
+    exact Bytes.readWord_writeAt_self _ _ _
+  · rw [hsize]
+    decide
 
 private theorem concreteDrip_accumulatorMemoryFacts : concreteDripAccumulatorMemory.size = 288 ∧
     Bytes.toB256 (concreteDripAccumulatorMemory.read 0 32).1 = 3 ∧
     (concreteDripAccumulatorMemory.read 0 32).2 = concreteDripAccumulatorMemory := by
-  exact ⟨by decide +kernel, by decide +kernel, Mem.read_snd_eq_self (by decide +kernel)⟩
+  have hsize : concreteDripAccumulatorMemory.size = 288 :=
+    Mem.size_write_of_size (i := 256) concreteDrip_baseMemoryFacts.1
+      (by decide) (B256.length_toBytes rate)
+  have hreads : Mem.Reads concreteDripAccumulatorMemory
+      (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt []
+        32 (4 : B256).toBytes) 160 rate.toBytes) 192 (5 : B256).toBytes)
+        0 (3 : B256).toBytes) 224 rate.toBytes) 256 rate.toBytes) := by
+    unfold concreteDripAccumulatorMemory concreteDripBaseMemory
+      concreteDripExponentMemory concreteDripClockMemory concreteDripStagingMemory
+    repeat' first | apply Mem.Reads.write | apply Mem.Wf.write |
+      exact Mem.wf_empty | exact Mem.reads_empty
+  refine ⟨hsize, ?_, Mem.read_snd_eq_self ?_⟩
+  · rw [hreads.read,
+      Bytes.readWord_writeAt_of_disjoint _ 0 256 _ (by decide),
+      Bytes.readWord_writeAt_of_disjoint _ 0 224 _ (by decide)]
+    exact Bytes.readWord_writeAt_self _ _ _
+  · rw [hsize]
+    decide
 
 theorem concreteDrip_freshStart (sevm : Sevm) (base post : Devm) (G : Nat)
     (htime : sevm.benvStat.time = 5)
