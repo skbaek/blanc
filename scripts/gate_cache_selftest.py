@@ -1788,6 +1788,127 @@ def control_lean_entry_source_and_imports_invalidate() -> None:
         )
 
 
+def control_pinned_dependency_trace_identity_and_refusals() -> None:
+    """An existing Lake dependency is identified, never trusted by name alone."""
+    with scratch() as s:
+        module = "Batteries.Tactic.OpenPrivate"
+        relative = "Batteries/Tactic/OpenPrivate.trace"
+        packages = []
+
+        def package(name):
+            directory = s.root / ".lake/packages" / name
+            directory.mkdir(parents=True)
+            for args in (("init", "-q"), ("config", "user.email", "control@example.invalid"),
+                         ("config", "user.name", "control")):
+                subprocess.run(["git", *args], cwd=directory, check=True, capture_output=True)
+            (directory / ".gitignore").write_text("/.lake/\n")
+            (directory / "source.lean").write_text("-- dependency source\n")
+            subprocess.run(["git", "add", ".gitignore", "source.lean"], cwd=directory,
+                           check=True, capture_output=True)
+            subprocess.run(["git", "commit", "-qm", "dependency fixture"], cwd=directory,
+                           check=True, capture_output=True)
+            pin = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=directory,
+                                          text=True).strip()
+            packages.append({"name": name, "type": "git", "rev": pin})
+            trace = directory / ".lake/build/lib/lean" / relative
+            trace.parent.mkdir(parents=True)
+            trace.write_text('{"depHash":"dependency-one"}')
+            return directory, trace
+
+        def manifest():
+            s.write("lake-manifest.json", json.dumps({"packages": packages}))
+
+        def identity():
+            return gc.component_lean_entries(s.root, ["scripts/Eval.lean"])[0]
+
+        def refused(message):
+            try:
+                identity()
+            except gc.Unresolvable:
+                return
+            raise ControlFailure(message)
+
+        directory, trace = package("batteries")
+        manifest()
+        s.write("scripts/Eval.lean", f"import {module}\n")
+        baseline = identity()
+        require(gc.module_dep_hash(s.root, module) == "dependency-one",
+                "pinned dependency trace must supply the actual depHash")
+        require(identity() == baseline, "unchanged pinned dependency must stay identifiable")
+        trace.write_text('{"depHash":"dependency-two"}')
+        require(identity() != baseline, "dependency depHash movement must change the entry identity")
+        trace.write_text('{"depHash":"dependency-one"}')
+        require(identity() == baseline, "restored dependency bytes must restore the identity")
+
+        for text in ("not-json", '{"depHash":""}', "[]"):
+            trace.write_text(text)
+            refused("malformed dependency trace must refuse")
+        trace.write_text('{"depHash":"dependency-one"}')
+        trace.unlink()
+        refused("missing dependency trace must refuse")
+        trace.symlink_to(directory / "source.lean")
+        refused("aliased dependency trace must refuse")
+        trace.unlink()
+        trace.mkdir()
+        refused("directory dependency trace must refuse")
+        trace.rmdir()
+        trace.write_text('{"depHash":"dependency-one"}')
+
+        build = directory / ".lake/build"
+        saved = directory / ".lake/saved-build"
+        build.rename(saved)
+        build.symlink_to(saved, target_is_directory=True)
+        refused("aliased dependency trace ancestor must refuse")
+        build.unlink()
+        saved.rename(build)
+
+        packages[0]["rev"] = "0" * 40
+        manifest()
+        refused("mismatched dependency pin must refuse")
+        packages[0]["rev"] = "not-an-exact-pin"
+        manifest()
+        refused("unpinned dependency must refuse")
+        packages[0]["rev"] = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=directory, text=True).strip()
+        manifest()
+        (directory / "source.lean").write_text("-- dirty dependency\n")
+        refused("dirty dependency must refuse")
+        (directory / "source.lean").write_text("-- dependency source\n")
+        packages.clear()
+        manifest()
+        refused("unregistered dependency trace must not identify an import")
+        packages.append({"name": "batteries", "type": "git", "rev": subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=directory, text=True).strip()})
+        package("other")
+        manifest()
+        refused("ambiguous dependency trace providers must refuse")
+        packages.pop()
+        manifest()
+        require(identity() == baseline, "restoring only the control bytes restores identity")
+
+
+def control_negative_ignoring_pinned_dependency_trace_movement() -> None:
+    original = gc.module_dep_hash
+    try:
+        gc.module_dep_hash = lambda root, module: (
+            "dependency-one" if module == "Batteries.Tactic.OpenPrivate"
+            else original(root, module))
+        must_fail(control_pinned_dependency_trace_identity_and_refusals,
+                  "dependency depHash movement laundered into unchanged")
+    finally:
+        gc.module_dep_hash = original
+
+
+def control_negative_ignoring_dependency_package_pin() -> None:
+    original = gc.component_external
+    try:
+        gc.component_external = lambda root, specs: ("ignored", {})
+        must_fail(control_pinned_dependency_trace_identity_and_refusals,
+                  "mismatched dependency package pin ignored")
+    finally:
+        gc.component_external = original
+
+
 
 def control_toolchain_imports_bind_authenticated_complete_artifacts() -> None:
     """Trace-free stdlib imports bind bytes and membership, never a name guess."""
@@ -4836,6 +4957,8 @@ def control_negative_frozen_tracked_selection_is_caught() -> None:
 
 
 NEGATIVE_CONTROLS = (
+    control_negative_ignoring_pinned_dependency_trace_movement,
+    control_negative_ignoring_dependency_package_pin,
     control_negative_frozen_tracked_selection_is_caught,
     control_negative_reverting_to_hostname_identity_breaks_rename_stability,
     control_negative_laundering_unknown_into_unchanged,
@@ -4899,6 +5022,7 @@ CONTROLS = (
     control_missing_trace_forces_execution,
     control_malformed_trace_forces_execution,
     control_lean_entry_source_and_imports_invalidate,
+    control_pinned_dependency_trace_identity_and_refusals,
     control_toolchain_imports_bind_authenticated_complete_artifacts,
     control_transitive_edit_reaches_the_gate,
     control_unparsable_import_cannot_hide_a_dependency,
