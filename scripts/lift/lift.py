@@ -319,7 +319,7 @@ def run_registry(args: argparse.Namespace) -> int:
                 continue
             out = Path(tmp) / ident
             out.mkdir()
-            argv = [sys.executable, str(SCRIPT), "--blanc-root", str(root),
+            argv = [sys.executable, "-B", str(SCRIPT), "--blanc-root", str(root),
                     "--hex", str(hex_file), "--sha256", row["input"]["runtime_sha256"],
                     "--namespace", row["namespace"], "--cert-out", str(out / "Cert.lean")]
             for option in ("code_import", "code_ref"):
