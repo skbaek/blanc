@@ -126,6 +126,41 @@ def storInit : StorShadow :=
 
 /-! ## The kernel decisions -/
 
+private theorem initFacts :
+    (frameEnterS (fI world2) acs0 = .run (eI world2) ∧
+    ((eI world2).pc, (eI world2).sta.currentTarget, (eI world2).sta.code, (eI world2).sta.benvStat.fork,
+      (eI world2).sta.benvStat.excessBlobGas) =
+      (0, proxyAddr, Blanc.forwarderCode Blanc.curvePlainImpl847e, .prague, 0) ∧
+    pwalkH .refuse fwdTries (eI world2).sta okAny 11 (cI world2) = .cont (cI1 world2) ∧
+    (cI1 world2).pc = 31 ∧
+    decodeT 6 fwdTries.bytes 31 = some (.next (.exec .delegatecall)) ∧
+    dcallPrep (eI world2).sta (cI1 world2).devm (cI1 world2).adrs (cI1 world2).acs = some (cpI world2) ∧
+    frameEnterS (cpI world2).f (cI1 world2).acs = .run (eIB world2) ∧
+    ((eIB world2).pc, (eIB world2).sta.currentTarget, (eIB world2).sta.code) = (0, proxyAddr, code) ∧
+    (cpI world2).f.inner.codeAddress = some implAddr ∧
+    pwalkH (.avoid 0) codeTries (eIB world2).sta okAny 393 (cIB0 world2) = .cont (cIB1 world2) ∧
+    (cIB1 world2).pc = 3515 ∧
+    decodeT 15 codeTries.bytes 3515 = some (.next (.exec .staticcall)) ∧
+    scallPrep (eIB world2).sta (cIB1 world2).devm (cIB1 world2).adrs (cIB1 world2).acs = some (cpId world2) ∧
+    (cpId world2).f.inner.codeAddress = some 4 ∧
+    frameEnterS (cpId world2).f (cIB1 world2).acs = .done (.ok (chId world2)) ∧
+    (chId world2).error = none ∧
+    resumeCallB (cpId world2).p (cpId world2).oi (cpId world2).os (.ok (chId world2)) = some (dIB2 world2)) ∧
+    (pwalkH (.avoid 0) codeTries (eIB world2).sta okAny 154 (cIB2 world2) = .cont (cIB3 world2) ∧
+    pwalkH (.avoid 0) codeTries (eIB world2).sta okAny 1 (cIB3 world2) = .halt (.ok (dIB world2)) ∧
+    (dIB world2).error = none ∧
+    resumeCallB (cpI world2).p (cpI world2).oi (cpI world2).os (.ok (dIB world2)) = some (dI2 world2) ∧
+    pwalkH .refuse fwdTries (eI world2).sta okAny 10 (cI2 world2) = .cont (cI3 world2) ∧
+    pwalkH .refuse fwdTries (eI world2).sta okAny 1 (cI3 world2) = .halt (.ok (dI world2)) ∧
+    (dI world2).error = none ∧ (dI world2).gasLeft = 679367 ∧ (dI world2).refundCounter = 0) ∧
+    (canonS (cI3 world2).stor = storInit ∧
+    (cI3 world2).acs.map Prod.fst = [creator, proxyAddr, implAddr] ∧
+    lookupA (cI3 world2).acs 4 = lookupA acs0 4 ∧
+    lookupA (cI3 world2).acs proxyAddr = lookupA acs0 proxyAddr ∧
+    lookupA (cI3 world2).acs creator = lookupA acs0 creator ∧
+    lookupA (cI3 world2).acs implAddr = lookupA acs0 implAddr) := by
+  kernel_rfl_and
+
 /-- The forwarder to its `DELEGATECALL`, and the implementation frame to the identity call. -/
 theorem initFactsA :
     frameEnterS (fI world2) acs0 = .run (eI world2) ∧
@@ -147,7 +182,7 @@ theorem initFactsA :
     frameEnterS (cpId world2).f (cIB1 world2).acs = .done (.ok (chId world2)) ∧
     (chId world2).error = none ∧
     resumeCallB (cpId world2).p (cpId world2).oi (cpId world2).os (.ok (chId world2)) = some (dIB2 world2) := by
-  kernel_rfl_and
+  exact initFacts.1
 
 /-- The implementation frame after the identity call, `STOP`, and the forwarder's tail. -/
 theorem initFactsB :
@@ -158,7 +193,7 @@ theorem initFactsB :
     pwalkH .refuse fwdTries (eI world2).sta okAny 10 (cI2 world2) = .cont (cI3 world2) ∧
     pwalkH .refuse fwdTries (eI world2).sta okAny 1 (cI3 world2) = .halt (.ok (dI world2)) ∧
     (dI world2).error = none ∧ (dI world2).gasLeft = 679367 ∧ (dI world2).refundCounter = 0 := by
-  kernel_rfl_and
+  exact initFacts.2.1
 
 /-- The shadows the run leaves: its canonical storage log is `storInit`; its account log is
 the start's (the creator, the clone and the implementation: the zero-value calls add no entry),
@@ -170,6 +205,6 @@ theorem initFactsC :
     lookupA (cI3 world2).acs proxyAddr = lookupA acs0 proxyAddr ∧
     lookupA (cI3 world2).acs creator = lookupA acs0 creator ∧
     lookupA (cI3 world2).acs implAddr = lookupA acs0 implAddr := by
-  kernel_rfl_and
+  exact initFacts.2.2
 
 end Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init
