@@ -83,11 +83,6 @@ def clTokRm (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World) : Cfg :=
   | .done (.halted _) cl => cl
   | _ => Boundary.cfgOfT bRm0 tS tA m w
 
-/-- The token child creates no account (F2's created set passes through its run). -/
-theorem tokChild_created : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    (dTokRm tS tA m w).createdAccounts = .emptyWithCapacity := by
-  kernel_forall_rfl
-
 /-- The token child's halt observations, checked once. -/
 def tokHaltObs : Res → Bool
   | .done (.halted d) cl =>
@@ -104,10 +99,23 @@ def tokHaltRest : Res → List (Stor × ByteArray) × StorShadow × AcctShadow
       cl.acs.drop acsTok.length)
   | _ => ([], [], [])
 
+private theorem tokenHaltFacts : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
+    ((dTokRm tS tA m w).createdAccounts = .emptyWithCapacity) ∧
+    (tokHaltObs (childRun Token20.prog Token20.code sRm 200 (cTokRm tS tA m w)) = true ∧
+      tokHaltRest (childRun Token20.prog Token20.code sRm 200 (cTokRm tS tA m w)) = (Boundary.restsOf acsTok, tS, tA)) := by
+  kernel_forall_rfl_and
+
+/-- The token child creates no account (F2's created set passes through its run). -/
+theorem tokChild_created : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
+    (dTokRm tS tA m w).createdAccounts = .emptyWithCapacity := by
+  intro tS tA m w
+  exact (tokenHaltFacts tS tA m w).1
+
 theorem tokHalt : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
     tokHaltObs (childRun Token20.prog Token20.code sRm 200 (cTokRm tS tA m w)) = true ∧
       tokHaltRest (childRun Token20.prog Token20.code sRm 200 (cTokRm tS tA m w)) = (Boundary.restsOf acsTok, tS, tA) := by
-  kernel_forall_rfl_and
+  intro tS tA m w
+  exact (tokenHaltFacts tS tA m w).2
 
 theorem tokHalt_spec {r : Res} {tS : StorShadow} {tA : AcctShadow} (h : tokHaltObs r = true)
     (hr : tokHaltRest r = (Boundary.restsOf acsTok, tS, tA)) :
@@ -137,12 +145,14 @@ private theorem tokChild_facts (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w
     (clTokRm tS tA m w).keys = keysTok ∧
     (clTokRm tS tA m w).adrs = adrsTok ∧
     (clTokRm tS tA m w).stor = storTok ++ tS ∧
-    (clTokRm tS tA m w).acs = acsTok ++ tA := by
+    (clTokRm tS tA m w).acs = acsTok ++ tA ∧
+    resKeys (childRun Token20.prog Token20.code sRm 200 (cTokRm tS tA m w)) =
+      keysTok := by
   obtain ⟨d, cl, hr, hg, ho, he, hk, ha, hs, hc⟩ :=
     tokHalt_spec (tokHalt tS tA m w).1 (tokHalt tS tA m w).2
   unfold dTokRm clTokRm
   rw [hr]
-  exact ⟨rfl, hg, ho, he, hk, ha, hs, hc⟩
+  exact ⟨rfl, hg, ho, he, hk, ha, hs, hc, hk⟩
 
 theorem tokChild_eq : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
     childRun Token20.prog Token20.code sRm 200 (cTokRm tS tA m w) =
@@ -185,15 +195,14 @@ theorem tokChild_stor : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : 
 theorem tokChild_acs : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
     (clTokRm tS tA m w).acs = acsTok ++ tA := by
   intro tS tA m w
-  exact (tokChild_facts tS tA m w).2.2.2.2.2.2.2
+  exact (tokChild_facts tS tA m w).2.2.2.2.2.2.2.1
 
 /-- The token child's recorded keys (for the origin-state transport). -/
 theorem tokRun_keys : ∀ (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
     resKeys (childRun Token20.prog Token20.code sRm 200 (cTokRm tS tA m w)) =
       keysTok := by
   intro tS tA m w
-  rw [tokChild_eq]
-  exact tokChild_keys tS tA m w
+  exact (tokChild_facts tS tA m w).2.2.2.2.2.2.2.2
 
 /-! ## Third chunk boundary and its run -/
 
