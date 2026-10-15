@@ -64,15 +64,26 @@ def obs3 : Res → Option (Nat × List Nat × Bool × AcctShadow × AdrSet)
       decide (d.refundCounter = refund3), cl.acs, d.accountsToDelete)
   | _ => none
 
+/- Share the concrete parent normalization across the observation certificates. -/
+private theorem frame3T_kernel : ∀ d : Devm,
+    (obs3 (run3T (obsChild4 d)) = some (gasAT, [], true, acsAT, .emptyWithCapacity)) ∧
+    ((haltedOf (run3T (obsChild4 d))).createdAccounts = .emptyWithCapacity) ∧
+    (e3T.sta.code = Attacker2.code) ∧
+    (e3T.sta.benvStat.fork = .prague) := by
+  kernel_forall_rfl_and
+
 theorem frame3_kernel : ∀ d : Devm,
     obs3 (run3T (obsChild4 d)) = some (gasAT, [], true, acsAT, .emptyWithCapacity) := by
-  kernel_forall_rfl
+  intro d
+  exact (frame3T_kernel d).1
 
 theorem fs3_zero : fs3[0]? = some Attacker2.t_0000_c0 := by kernel_rfl
 
-theorem e3T_code : e3T.sta.code = Attacker2.code := byteArray_eq_of_toList (by decide +kernel)
+theorem e3T_code : e3T.sta.code = Attacker2.code := (frame3T_kernel default).2.2.1
 
-theorem e3T_fork : CoveredFork e3T.sta.benvStat.fork := of_decide_eq_true (by decide +kernel)
+theorem e3T_fork : CoveredFork e3T.sta.benvStat.fork := by
+  rw [(frame3T_kernel default).2.2.2]
+  exact CoveredFork.prague
 
 /-- The attacker frame's settled machine. -/
 def post3T : Devm := haltedOf (run3T post4T)
@@ -122,7 +133,8 @@ theorem callback_child : ChildOk e2T.sta cfg339T post3T ∧ ChildAgree post3T ke
 /-- The callback frame creates no account (its child's pinned created set passes through). -/
 theorem run3T_created : ∀ d : Devm,
     (haltedOf (run3T (obsChild4 d))).createdAccounts = .emptyWithCapacity := by
-  kernel_forall_rfl
+  intro d
+  exact (frame3T_kernel d).2.1
 
 theorem post3T_created : post3T.createdAccounts = .emptyWithCapacity := by
   obtain ⟨-, -, g3, o3, e4T', r4, t4⟩ := frame4_child
