@@ -2114,7 +2114,7 @@ def inst_starts(bs: bytes) -> List[bool]:
 
 def literal_tries_lines(depth: int) -> List[str]:
     """The code tries as data: depth-8 subtrees as definitions, the top levels over them, and
-    one kernel check each (`kernel_rfl`) that the data is `LTrie.ofList` of the code.  Each
+    kernel checks (`kernel_rfl`) that the data is `LTrie.ofList` of the code.  Each
     per-entry decision then unfolds data instead of rebuilding the tries (about 1 s each)."""
     sub = min(8, depth)
     width = 1 << sub
@@ -2144,9 +2144,28 @@ def literal_tries_lines(depth: int) -> List[str]:
                 return f"{name}_{lo}"
             h = 1 << (d - 1)
             return f"(.node {top_tree(lo, d - 1)} {top_tree(lo + h, d - 1)})"
-        out += [f"def {name} : LTrie {ty} := {top_tree(0, top)}", "",
-                f"theorem {name}_eq : {name} = LTrie.ofList {depth} ({src}) := by",
-                "  kernel_rfl", ""]
+        out += [f"def {name} : LTrie {ty} := {top_tree(0, top)}", ""]
+        if depth < 15:
+            proof = "  kernel_rfl"
+        else:
+            # Cut large tries into subtrees with at most 8192 populated leaves.
+            # Keep a short final region whole, avoiding a separate empty-tail
+            # proof, then assemble the unchanged equality by congruence.
+            def subtree_proof(lo: int, d: int, source: str) -> str:
+                if min(1 << (d + sub), max(0, len(vals) - lo * width)) <= 8192:
+                    lemma = f"{name}_eq_part_{lo}"
+                    out.extend([
+                        f"private theorem {lemma} : {top_tree(lo, d)} =",
+                        f"    LTrie.ofList {d + sub} ({source}) := by",
+                        "  kernel_rfl", "",
+                    ])
+                    return lemma
+                half = 1 << (d - 1)
+                left = subtree_proof(lo, d - 1, f"({source}).take (2 ^ {d + sub - 1})")
+                right = subtree_proof(lo + half, d - 1, f"({source}).drop (2 ^ {d + sub - 1})")
+                return f"(congrArg₂ LTrie.node {left} {right})"
+            proof = f"  exact {subtree_proof(0, top, src)}"
+        out += [f"theorem {name}_eq : {name} = LTrie.ofList {depth} ({src}) := by", proof, ""]
     out += [
         f"def codeTries : CodeTries code {depth} :=",
         f"  CodeTries.ofData code {depth} bytesTrie startsTrie bytesTrie_eq startsTrie_eq",
