@@ -1,3 +1,4 @@
+import Blanc.Lift.KernelBatchForall
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.Frame5Child
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame3
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxTopC
@@ -42,33 +43,55 @@ def post4CF (d : Devm) : Devm :=
 /-- Frame 5's settled machine as the proxy's child, its observed parts as literals. -/
 abbrev obsChild5C (d : Devm) : Devm := childObsX gas5C (word 106) refund5 d
 
+/-- The proxy frame's gas at its `RETURN`, and its return data (the child's). -/
+def gas4C : Nat := 14890357
+
+/- Share the concrete parent normalization across the seven kernel certificates. -/
+private theorem frame4C_kernel : ∀ d : Devm,
+    (resumeCallB cp5C.p cp5C.oi cp5C.os (.ok (obsChild5C d)) = some (d4C (obsChild5C d))) ∧
+    (stepN 10 ⟨32, e4C.sta, d4C (obsChild5C d)⟩ = some (e4C44 (obsChild5C d))) ∧
+    (Evm.step (e4C44 (obsChild5C d)) = .halt (.ok (post4CF (obsChild5C d)))) ∧
+    (((post4CF (obsChild5C d)).gasLeft, (post4CF (obsChild5C d)).output.map UInt8.toNat,
+      (post4CF (obsChild5C d)).error.isNone, (post4CF (obsChild5C d)).refundCounter,
+      (post4CF (obsChild5C d)).accountsToDelete) =
+    (gas4C, (word 106).map UInt8.toNat, true, refund4, .emptyWithCapacity)) ∧
+    (((post4CF (obsChild5C d)).accessedAddresses, (post4CF (obsChild5C d)).accessedStorageKeys,
+      (post4CF (obsChild5C d)).state) =
+    ((d4C (obsChild5C d)).accessedAddresses, (d4C (obsChild5C d)).accessedStorageKeys,
+      (d4C (obsChild5C d)).state)) ∧
+    ((post4CF (obsChild5C d)).createdAccounts = .emptyWithCapacity) ∧
+    (e4C.sta.code = proxyCode) := by
+  kernel_forall_rfl_and
+
 theorem resume4C_eq : ∀ d : Devm,
     resumeCallB cp5C.p cp5C.oi cp5C.os (.ok (obsChild5C d)) = some (d4C (obsChild5C d)) := by
-  kernel_forall_rfl
+  intro d
+  exact (frame4C_kernel d).1
 
 theorem tail4C_eq : ∀ d : Devm, stepN 10 ⟨32, e4C.sta, d4C (obsChild5C d)⟩ = some (e4C44 (obsChild5C d)) := by
-  kernel_forall_rfl
+  intro d
+  exact (frame4C_kernel d).2.1
 
 theorem return4C_eq : ∀ d : Devm,
     Evm.step (e4C44 (obsChild5C d)) = .halt (.ok (post4CF (obsChild5C d))) := by
-  kernel_forall_rfl
-
-/-- The proxy frame's gas at its `RETURN`, and its return data (the child's). -/
-def gas4C : Nat := 14890357
+  intro d
+  exact (frame4C_kernel d).2.2.1
 
 theorem post4C_obs : ∀ d : Devm,
     ((post4CF (obsChild5C d)).gasLeft, (post4CF (obsChild5C d)).output.map UInt8.toNat,
       (post4CF (obsChild5C d)).error.isNone, (post4CF (obsChild5C d)).refundCounter,
       (post4CF (obsChild5C d)).accountsToDelete) =
     (gas4C, (word 106).map UInt8.toNat, true, refund4, .emptyWithCapacity) := by
-  kernel_forall_rfl
+  intro d
+  exact (frame4C_kernel d).2.2.2.1
 
 theorem post4C_keep : ∀ d : Devm,
     ((post4CF (obsChild5C d)).accessedAddresses, (post4CF (obsChild5C d)).accessedStorageKeys,
       (post4CF (obsChild5C d)).state) =
     ((d4C (obsChild5C d)).accessedAddresses, (d4C (obsChild5C d)).accessedStorageKeys,
       (d4C (obsChild5C d)).state) := by
-  kernel_forall_rfl
+  intro d
+  exact (frame4C_kernel d).2.2.2.2.1
 
 /-- The proxy frame's settled machine. -/
 def post4C : Devm := post4CF post5C
@@ -80,14 +103,16 @@ theorem obsChild5_post5C : obsChild5C post5C = post5C := by
 /-- The proxy frame creates no account (its child's pinned created set passes through). -/
 theorem post4CF_created : ∀ d : Devm,
     (post4CF (obsChild5C d)).createdAccounts = .emptyWithCapacity := by
-  kernel_forall_rfl
+  intro d
+  exact (frame4C_kernel d).2.2.2.2.2.1
 
 theorem post4C_created : post4C.createdAccounts = .emptyWithCapacity := by
   have h := post4CF_created post5C
   rw [obsChild5_post5C] at h
   exact h
 
-theorem e4C_code : e4C.sta.code = proxyCode := by kernel_rfl
+theorem e4C_code : e4C.sta.code = proxyCode :=
+  (frame4C_kernel default).2.2.2.2.2.2
 
 /-- The shadows frame 4 hands back to `A'`: its own (`A'`'s at its `CALL`) and frame 5's; frame
 5's storage and accounts (`storAT`, `acsAT`) pass through. -/
