@@ -810,8 +810,9 @@ theorem pause_body_runCompiled
         total - 57 - 235 by omega] at h
     exact h
   refine Func.RunCompiled.next hassignSload ?_
+  have hcallerEq : B256.eqCheck sevm.caller.toB256 pauser = 1 := by
+    simp only [B256.eqCheck, hcaller, ↓reduceIte]
   func_run (3) [1]
-  case h_val => simp only [B256.eqCheck, hcaller, ↓reduceIte]
   have hexpiryGas :
       total - 57 - 235 - assignmentCost - 19 =
         total - 57 - 235 - assignmentCost - 27 + 8 := by
@@ -838,8 +839,9 @@ theorem pause_body_runCompiled
         expiryCost = total - 57 - 235 - assignmentCost - 27 by omega] at h
     exact h
   refine Func.RunCompiled.next hexpirySload ?_
+  have hliveCheck : B256.ltCheck sevm.benvStat.time expiry = 1 := by
+    simp only [B256.ltCheck, hlive, ↓reduceIte]
   func_run (3) [1]
-  case h_val => simp only [B256.ltCheck, hlive, ↓reduceIte]
   func_run (1)
   -- The configured pause duration is staged with the rest of the image.
   have hdurationSload : Ninst.RunCompiled sevm

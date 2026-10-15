@@ -1106,6 +1106,54 @@ private theorem registerAfterSet_expiryStoreLogTail_runCompiled
       rfl
   exact Func.RunCompiled.next hsstore htail
 
+/-- The `tagTop expiryRegion` step in front of `registerAfterSet_expiryStoreLogTail_runCompiled`,
+over an abstract base: the loaded new-pauser word is tagged into its expiry slot and the store/log
+tail runs.  A separate declaration so the kernel checks these two steps against a small state
+rather than the enclosing walk's concrete tower (Lean 4.35 kernel timeout otherwise). -/
+private theorem registerAfterSet_tagExpiryStoreLogTail_runCompiled
+    (fs : List Func) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (M : Mem) (img : Bytes)
+    (word newPauser expiry currentExpiry expiryOriginal : B256)
+    (stack : List B256) (storeCost G : Nat)
+    (hword : word = newPauser)
+    (hstack : stack.length ≤ 1)
+    (hwf : Mem.Wf M)
+    (hreads : Mem.Reads M img)
+    (hnew : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = newPauser)
+    (hsize : 640 ≤ M.size)
+    (halign : M.size % 32 = 0)
+    (hexpiry : base.getStorVal sevm.currentTarget
+      (expirySlot newPauser) = currentExpiry)
+    (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
+      (expirySlot newPauser) = expiryOriginal)
+    (hwarmExpiry : (sevm.currentTarget, expirySlot newPauser) ∈
+      base.accessedStorageKeys)
+    (hstoreCost : sstoreValueCost expiryOriginal currentExpiry expiry =
+      storeCost)
+    (hgasStipend : gCallStipend < G + 1395 + storeCost)
+    (hstatic : sevm.isStatic = false) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨word :: expiry :: stack,
+        M.write 0 expiry.toBytes, G + 1401 + storeCost, base.stateGas⟩)
+      (tagTop expiryRegion +++ Ninst.sstore :::
+        loadWord newPauserWord +++ pushB256 heartbeatUpdatedEvent :::
+        logWith 1 0 1 +++ Func.stop)
+      (((temporalSstorePost sevm base (expirySlot newPauser) expiry).addLog
+        ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser],
+          expiry.toBytes⟩).setMach
+        ⟨stack, M.write 0 expiry.toBytes, G, ((temporalSstorePost sevm base (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
+  subst hword
+  have htail := registerAfterSet_expiryStoreLogTail_runCompiled (hfork := hfork) fs sevm
+    base M img word expiry currentExpiry expiryOriginal stack storeCost G hstack hwf hreads hnew
+    hsize halign hexpiry hexpiryOrig hwarmExpiry hstoreCost hgasStipend hstatic
+  unfold tagTop
+  func_run (2) [expirySlot word]
+  have hg : G + 1401 + storeCost - 6 = G + 1395 + storeCost := by omega
+  rw [hg, prepend.eq_1]
+  exact htail
+
 /-- Generic **nonzero-new-pauser** suffix of `registerAfterSet`: the shared
 subterm all three arms reach after the previous pauser has been disposed of.  The
 new-pauser scratch word is nonzero, so the walk computes the checked heartbeat
@@ -1208,15 +1256,16 @@ theorem registerAfterSet_nonzeroNewPauserTail_runCompiled
         addAccessedStorageKey base sevm.currentTarget
           heartbeatIntervalSlot := by
     simp only [temporalSloadBase, if_neg hintervalCold]
-  have htail := registerAfterSet_expiryStoreLogTail_runCompiled (hfork := hfork) fs sevm
-    (temporalSloadBase sevm base heartbeatIntervalSlot) M img newPauser expiry
-    currentExpiry expiryOriginal stack storeCost G hstack hwf hreads hnew hsize
+  have htag := registerAfterSet_tagExpiryStoreLogTail_runCompiled (hfork := hfork) fs sevm
+    (temporalSloadBase sevm base heartbeatIntervalSlot) M img _ newPauser expiry
+    currentExpiry expiryOriginal stack storeCost G hnewValueM' hstack hwf hreads hnew hsize
     halign (by rw [temporalSloadBase_getStorVal]; exact hexpiry)
     ((temporalSloadBase_getOrigStorVal sevm base _ _ _).trans hexpiryOrig)
     (temporalSloadBase_preserves_warm sevm base heartbeatIntervalSlot
       (expirySlot newPauser) hwarmExpiry)
     hstoreCost hgasStipend hstatic
-  func_run (20) [3, 0, expiry, 0, 0, 3, expirySlot newPauser]
+  -- Walk to the new-pauser MLOAD; the tag and store/log tail is a separate lemma.
+  func_run (18) [3, 0, expiry, 0, 0, 3]
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
   case h_cost =>
@@ -1240,19 +1289,14 @@ theorem registerAfterSet_nonzeroNewPauserTail_runCompiled
     simp only [show ((0 : B256) * 32).toNat = 0 by decide]
     erw [Devm.extCost_zero_of_le halignM' hnewCoveredM']
     norm_num only [gVerylow]
-  case h_val =>
-    rw [hnewMemory]
-    simp only [show ((0 : B256) * 32).toNat = 0 by decide]
-    rw [hnewValueM']
-    rfl
   case a =>
     rw [Devm.addAccessedStorageKey_setMach_setMach, hnewMemory]
     simp only [show ((0 : B256) * 32).toNat = 0 by decide]
     rw [hnewMemoryM', ← hafterIntervalEq]
-    have hg : G + 3569 + storeCost - 2174 = G + 1395 + storeCost := by omega
+    have hg : G + 3569 + storeCost - 2168 = G + 1401 + storeCost := by omega
     rw [hg]
-    rw [temporalSloadBase_stateGas] at htail
-    exact htail
+    rw [temporalSloadBase_stateGas] at htag
+    exact htag
 
 /-- Exact kernel prefix reserve for the append arm: the outer nonzero guard
 and the assignment replacement for a target whose recorded pauser is zero,

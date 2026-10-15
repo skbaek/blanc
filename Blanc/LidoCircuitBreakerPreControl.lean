@@ -489,13 +489,15 @@ theorem pause_body_runCompiledTo_error_of_locked
     ?_, rfl, rfl, ?_, ?_⟩
   · unfold pauseReentrantGas pause requireStaticArgs canonicalAddressArg arg
       cdl checkNonAddress pushAddressMask
-    func_run (12) [0, ~~~(0 : B256), addressMask, 0]
-    case h_val =>
+    have hdataWalk : Nat.toB256 sevm.data.length <? Nat.toB256 (4 + 32 * 1) = 0 := by
       rw [hdataLength]
       decide +kernel
-    case h_val =>
+    have hmaskWalk : B256.and addressMask (Sevm.dataWord sevm (32 * 0 + 4)) = 0 := by
       rw [show (32 * 0 + 4 : B256) = 4 by decide +kernel, hdataTarget]
       exact hmask
+    have hshlWalk : (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat = addressMask :=
+      addressMask_eq_shl.symm
+    func_run (12) [0, ~~~(0 : B256), addressMask, 0]
     case h_arm =>
       func_run (1)
       set total := G + 202 with htotal
@@ -513,9 +515,9 @@ theorem pause_body_runCompiledTo_error_of_locked
           (by simp only [List.length_nil, Nat.ofNat_pos])
         simpa only [Devm.memory_setMach, Devm.setMach_setMach, Devm.stateGas_setMach] using h
       refine Func.RunCompiledTo.next htload ?_
-      func_run (3) [0]
-      case h_val =>
+      have hlockedWalk : B256.eqCheck (base.getTransVal sevm.currentTarget lockKey) 0 = 0 := by
         simp only [B256.eqCheck, hlocked, ↓reduceIte]
+      func_run (3) [0]
       case h_body =>
         apply Func.runCompiledTo_revertSelector (G := G)
         · simp only [customErrorData, List.length_take, B256.length_toBytes, Nat.reduceLeDiff,
