@@ -1015,7 +1015,14 @@ set_option maxHeartbeats 800000 in
 private theorem runtimeEntryShapes_eq (dp : DeployParams) :
     dispatchEntryShapes (funcs dp) =
       dispatchEntryShapes (funcs ⟨0, 0, 0, 0, 0⟩) := by
-  rfl
+  have push_size (word : B256) : (pushDeployWord word).size = 33 := by rfl
+  have push_accepted (word : B256) : Ninst.immAccepted (pushDeployWord word) = true := by rfl
+  simp only [dispatchEntryShapes, funcs, List.map_cons, List.map_nil,
+    admin, minPauseDuration, maxPauseDuration, minHeartbeatInterval, maxHeartbeatInterval,
+    returnDeployWord, registerPauser, setPauseDuration, setHeartbeatInterval,
+    requireStaticArgs, canonicalAddressArg, onlyAdmin, arg, cdl, checkNonAddress,
+    pushAddressMask, List.cons_append, List.nil_append, prepend,
+    Func.compileShape, push_size, push_accepted]
 
 private theorem runtimeMain_compileShape_eq (dp : DeployParams) :
     (runtimeMain dp).compileShape =

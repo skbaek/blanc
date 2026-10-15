@@ -622,7 +622,14 @@ set_option maxHeartbeats 800000 in
 theorem runtimePersistentEntryShapes_eq (dp : DeployParams) :
     persistentDispatchEntryShapes (funcs dp) =
       persistentDispatchEntryShapes (funcs ⟨0, 0, 0, 0, 0⟩) := by
-  rfl
+  have push_size (word : B256) : (pushDeployWord word).size = 33 := by rfl
+  have push_erased (word : B256) : nonPushInstruction? (pushDeployWord word) = none := by rfl
+  simp only [persistentDispatchEntryShapes, funcs, List.map_cons, List.map_nil,
+    admin, minPauseDuration, maxPauseDuration, minHeartbeatInterval, maxHeartbeatInterval,
+    returnDeployWord, registerPauser, setPauseDuration, setHeartbeatInterval,
+    requireStaticArgs, canonicalAddressArg, onlyAdmin, arg, cdl, checkNonAddress,
+    pushAddressMask, List.cons_append, List.nil_append, prepend,
+    persistentSourceShape, push_size, push_erased]
 
 theorem prepend_persistentSourceShape_eq (line : Line) {body body' : Func}
     (h : persistentSourceShape body = persistentSourceShape body') :
