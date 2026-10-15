@@ -112,6 +112,8 @@ import Blanc.Lift.UniswapV2Pair.PermitSource
 import Blanc.Lift.UniswapV2Pair.BurnFeeTransfers
 import Blanc.Lift.UniswapV2Pair.StaticViewClassify
 import Blanc.Lift.UniswapV2Pair.Creation.DeployInit
+-- `open private` below; no longer reached transitively under mathlib 4.35.
+import Batteries.Tactic.OpenPrivate
 
 /-!
 Lean-checked statement pins for the WETH10 flagship declarations and the Lido

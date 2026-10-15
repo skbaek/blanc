@@ -604,20 +604,20 @@ example (l : Line) (p q : Func) (tailShape : p.compileShape = q.compileShape) :
 
 -- EXPECT-NO-MATCH: docs/COMMON_API.md
 example (leftPrefix rightPrefix : Line) (p q : Func)
-    (given : (leftPrefix +++ p).compileShape =
+    (hshape : (leftPrefix +++ p).compileShape =
       (rightPrefix +++ q).compileShape) :
     (leftPrefix +++ p).compileShape =
       (rightPrefix +++ q).compileShape := by
   expect_no_recipe_trigger "goal-shape:compile-shape-prepend-congruence"
   blanc_suggest
-  exact given
+  exact hshape
 
 -- EXPECT-NO-MATCH: docs/COMMON_API.md
-example (p q : Func) (given : p.compileShape = q.compileShape) :
+example (p q : Func) (hshape : p.compileShape = q.compileShape) :
     p.compileShape = q.compileShape := by
   expect_no_recipe_trigger "goal-shape:compile-shape-prepend-congruence"
   blanc_suggest
-  exact given
+  exact hshape
 
 -- EXPECT-NO-MATCH: docs/COMMON_API.md
 example (l : Line) (p : Func) :
