@@ -1,4 +1,4 @@
-import Lean
+import Lean.Elab.Tactic.ElabTerm
 
 /-!
 # One kernel check for a conjunction of closed equalities
