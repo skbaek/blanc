@@ -29,7 +29,8 @@ theorem frameBalD {g : Fork} (hg : CoveredFork g) (hs : ReOK world7 eBal.sta)
   obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, -, -, hst, w1, w2, -⟩ := addFacts
   have hcode : ((eBal.sta.withFork g).withOrig world7).code =
       Blanc.Lift.VyperNonreentrantDeployed.Token20.code :=
-    (Prod.mk.inj (Prod.mk.inj hst).2).2
+    (Sevm.withOrig_code _ _).trans
+      ((Sevm.withFork_code _ _).trans (Prod.mk.inj (Prod.mk.inj hst).2).2)
   have w1' := (walk_re hs hg (.avoid 0) tokenTries okAny 29 cBal0).trans w1
   have w2' := (walk_re hs hg (.avoid 0) tokenTries okAny 1 cBal1).trans w2
   obtain ⟨hca, hall⟩ := leaf_frame_ok (.avoid 0) tokenTries hcode okAny hag w1' w2'
@@ -47,7 +48,8 @@ theorem frameTfD {g : Fork} (hg : CoveredFork g) (hs : ReOK world7 eTf.sta)
     w2, -⟩ := addFacts
   have hcode : ((eTf.sta.withFork g).withOrig world7).code =
       Blanc.Lift.VyperNonreentrantDeployed.Token20.code :=
-    (Prod.mk.inj (Prod.mk.inj (Prod.mk.inj hst).2).2).1
+    (Sevm.withOrig_code _ _).trans
+      ((Sevm.withFork_code _ _).trans (Prod.mk.inj (Prod.mk.inj (Prod.mk.inj hst).2).2).1)
   have w1' := (walk_re hs hg (.avoid 0) tokenTries okAny 85 cTf0).trans w1
   have w2' := (walk_re hs hg (.avoid 0) tokenTries okAny 1 cTf1).trans w2
   obtain ⟨hca, hall⟩ := leaf_frame_ok (.avoid 0) tokenTries hcode okAny hag w1' w2'
@@ -64,7 +66,8 @@ theorem frameDB {g : Fork} (hg : CoveredFork g) (hs : ReOK world7 eDB.sta) (hag 
     balErr, resB2, wB3, pB3, dB3, callTf, caTf, enterTf, -, -, -, tfErr, resB4, wB5, wB6,
     -⟩ := addFacts
   have hcode : ((eDB.sta.withFork g).withOrig world7).code = code :=
-    (Prod.mk.inj (Prod.mk.inj hstB).2).2
+    (Sevm.withOrig_code _ _).trans
+      ((Sevm.withFork_code _ _).trans (Prod.mk.inj (Prod.mk.inj hstB).2).2)
   have w1 := (walk_re hs hg (.avoid 0) codeTries okAny 121 cDB0).trans wB1
   have w3 := (walk_re hs hg (.avoid 0) codeTries okAny 1269 cDB2).trans wB3
   have w5 := (walk_re hs hg (.avoid 0) codeTries okAny 122 cDB4).trans wB5
@@ -85,8 +88,10 @@ theorem frameDB {g : Fork} (hg : CoveredFork g) (hs : ReOK world7 eDB.sta) (hag 
   obtain ⟨step1, ent1, -, hagBal⟩ := staticcall_node hag1 hat1 sBal nBal
   have hF1 := (scallPrep_node_facts hag1 sBal).2
   obtain ⟨t1, x2, -, -, e2, hx2, ex2, -, hag2⟩ :=
-    spawn_resume_ok hx1 hag1 hF1 step1 ent1 balErr resB2
+    spawn_resume_ok hx1 hag1 hF1 step1 ent1 balErr
+      ((resumeCallB_re cpBal g world7 (.ok dBal)).trans resB2)
       (fun t ht => let r := frameBalD hg hsBal (pagree_re hagBal) t (nodeAt_re ht); ⟨r.1, r.2.2⟩)
+  rw [CallPrep.re_adrs] at hag2 hx2
   -- the `CALL` of `transferFrom`
   obtain ⟨hag3, h3⟩ := pwalkH_cont (.avoid 0) codeTries hcode okAny 1269 cDB2 cDB3 hag2 w3
   obtain ⟨x3, hx3, -, ex3, -, -⟩ := h3 x2 hx2
@@ -94,8 +99,10 @@ theorem frameDB {g : Fork} (hg : CoveredFork g) (hs : ReOK world7 eDB.sta) (hag 
     rw [hcode, pB3]; exact decodeT_sound codeTries dB3
   obtain ⟨step3, ent3, -, hagTf, hF3⟩ := call_node hag3 hat3 sTf nTf
   obtain ⟨t2, x4, -, -, e4, hx4, ex4, -, hag4⟩ :=
-    spawn_resume_ok hx3 hag3 hF3 step3 ent3 tfErr resB4
+    spawn_resume_ok hx3 hag3 hF3 step3 ent3 tfErr
+      ((resumeCallB_re cpTf g world7 (.ok dTf)).trans resB4)
       (fun t ht => let r := frameTfD hg hsTf (pagree_re hagTf) t (nodeAt_re ht); ⟨r.1, r.2.2⟩)
+  rw [CallPrep.re_adrs] at hag4 hx4
   -- the mint, and `RETURN`
   obtain ⟨hag5, h5⟩ := pwalkH_cont (.avoid 0) codeTries hcode okAny 122 cDB4 cDB5 hag4 w5
   obtain ⟨x5, hx5, -, ex5, -, -⟩ := h5 x4 hx4
