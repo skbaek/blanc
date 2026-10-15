@@ -2531,7 +2531,7 @@ def check_part_bounds(n: int, parts: int) -> List[int]:
     return bounds
 
 
-def entry_decisions_mem(i: int) -> List[str]:
+def entry_decisions_mem(i: int, jump_proof: Optional[str] = None) -> List[str]:
     """`entry_i`/`jumps_i`, stated over `cert[i]` so the chain step `Cert.checkEntriesM_drop`
     matches them syntactically: the elaborator never unfolds the certificate list (whose depth
     would need a raised `maxRecDepth`); only the kernel reads the entry."""
@@ -2548,9 +2548,22 @@ def entry_decisions_mem(i: int) -> List[str]:
         f"    jumpsOkNodeM code (Cert.entries cert) true",
         f"      {e}.2 {e}.1.frame (mems.getD {i} []) = true := by",
         "  rw [← jumpsOkNodeMT_eq codeTries]",
-        "  decide +kernel",
+        f"  exact {jump_proof}" if jump_proof is not None else "  decide +kernel",
         "",
     ]
+
+
+def jump_decisions_mem_batch(indices: List[int]) -> List[str]:
+    """Share kernel normalization across a bounded group of jump checks."""
+    lines = [f"private theorem jumps_batch_{indices[0]} :"]
+    for pos, i in enumerate(indices):
+        e = f"(cert[{i}]'(by decide +kernel))"
+        tail = " ∧" if pos + 1 < len(indices) else " := by"
+        lines.extend([
+            "    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true",
+            f"      {e}.2 {e}.1.frame (mems.getD {i} []) = true{tail}",
+        ])
+    return lines + ["  kernel_rfl_and", ""]
 
 
 def check_source_mem(head: List[str]) -> Dict[str, str]:
@@ -2564,7 +2577,39 @@ def check_source_mem(head: List[str]) -> Dict[str, str]:
     for i, line in enumerate(cert_entries_lines):
         if re.match(r"^  \(⟨(0x[0-9a-f]+), (\[[^\]]*\]), (\d+)⟩, (t_\w+)\)$", line) is None:
             raise RuntimeError(f"cannot read certificate entry {i}: {line}")
-    blocks = [entry_decisions_mem(i) for i in range(n)]
+    blocks: List[List[str]] = [[] for _ in range(n)]
+    bounds = check_part_bounds(n, args.check_parts) if args.check_parts >= 2 else [0, n]
+    for lo, hi in zip(bounds, bounds[1:]):
+        groups: List[List[int]] = []
+        start = lo
+        while start < hi:
+            end = start + 1
+            nodes = entry_node_counts[start]
+            # Share the fixed runtime normalization only among small trees.
+            # Large entries retain their original individual decision, keeping
+            # multiple large normalized trees out of one kernel declaration.
+            while end < hi and end - start < 8 and nodes + entry_node_counts[end] <= 64:
+                nodes += entry_node_counts[end]
+                end += 1
+            indices = list(range(start, end))
+            groups.append(indices)
+            start = end
+        # Sparse small-tree groups did not pay for their additional proof
+        # declarations in the measured large-entry parts. Require at least a
+        # quarter of the separate jump decisions to disappear in this owner.
+        if sum(len(group) - 1 for group in groups) * 4 < hi - lo:
+            for i in range(lo, hi):
+                blocks[i] += entry_decisions_mem(i)
+            continue
+        for indices in groups:
+            start = indices[0]
+            if len(indices) == 1:
+                blocks[start] += entry_decisions_mem(start)
+                continue
+            blocks[start] += jump_decisions_mem_batch(indices)
+            for pos, i in enumerate(indices):
+                projection = ".2" * pos + (".1" if pos + 1 < len(indices) else "")
+                blocks[i] += entry_decisions_mem(i, f"jumps_batch_{start}{projection}")
     # Chain over the certificate's tails: each step is syntactic in its premises.
     assembly = [
         f"theorem rest_{n} : Cert.checkEntriesM code (Cert.entries cert) mems true {n} (cert.drop {n}) = true := by",
@@ -2591,7 +2636,11 @@ def check_source_mem(head: List[str]) -> Dict[str, str]:
         "",
         "theorem cert_jumpsOkM : Cert.jumpsOkM code cert mems true = true := jrest_0",
     ])
-    return split_check(lines, blocks, assembly)
+    files = split_check(lines, blocks, assembly)
+    for name in files:
+        if "  kernel_rfl_and" in files[name]:
+            files[name] = "import Blanc.Lift.KernelBatch\n" + files[name]
+    return files
 
 
 if args.check_out is not None:
