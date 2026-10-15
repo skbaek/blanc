@@ -960,7 +960,7 @@ Names that the tables above write unqualified.
 | `VyInv` | `Blanc.Lift.Curve3Crv.VyInv` (`Blanc/Lift/Curve3Crv/Layout.lean:95`) | Curve 3Crv's storage abstraction over the live keys |
 | `FreshKeys` | `Blanc.Lift.Curve3Crv.FreshKeys` (`Blanc/Lift/Curve3Crv/Layout.lean:115`) | the frame-local premise for the keys a Curve frame touches: each is fresh and their slots are pairwise distinct (HASH-T) |
 | `Curve3Crv.historyTouchedKeys` | `Blanc.Lift.Curve3Crv.historyTouchedKeys` (`Blanc/Lift/Curve3Crv/CarriedHistory.lean:27`) | the keys a Curve history touches |
-| `OwnerCallOk` | `Blanc.Lift.Curve3Crv.OwnerCallOk` (`Blanc/Lift/Curve3Crv/LiveBodies.lean:1692`) | the callee premise of Curve `set_name`: its static `owner()` call answers whenever it is given enough gas, and leaves at least `R` gas |
+| `OwnerCallOk` | `Blanc.Lift.Curve3Crv.OwnerCallOk` (`Blanc/Lift/Curve3Crv/LiveBodies.lean:1733`) | the callee premise of Curve `set_name`: its static `owner()` call answers whenever it is given enough gas, and leaves at least `R` gas |
 | `RegistryZeroRaw` | `Blanc.Lift.LidoCircuitBreakerDeployed.RegistryZeroRaw` (`Blanc/Lift/LidoCircuitBreakerDeployed/L2.lean:46`) | the raw-slot form of an empty registry: the array length word is zero and every canonical address has zero assignment, index and count words |
 | `StateInv` | `Blanc.ContractSpecSem.StateInv` (`Blanc/LadderSem.lean:86`) | the state invariant of a semantic contract spec (`lidoSpec.StateInv`) |
 | `ForeignApart` | `Blanc.Lift.LidoCircuitBreakerDeployed.ForeignApart` (`Blanc/Lift/LidoCircuitBreakerDeployed/Foreign.lean:21`) | a raw slot is disjoint from the storage slots of every logical key the registry observes up to a bound (HASH-U) |
