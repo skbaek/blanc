@@ -42,7 +42,7 @@ theorem frameRe {fk : Fork} (hg : CoveredFork fk) (hs : ReOK world8 eRe.sta) (ha
   intro G hG
   obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, eReF, wRe1, pRe1, wRe2, pRe2, wRe3, -⟩ := exitFacts
   have hcode : (reS eRe.sta fk).code = code :=
-    (Prod.mk.inj (Prod.mk.inj (Prod.mk.inj eReF).2).2).1
+    (Sevm.withOrig_code _ _).trans ((Sevm.withFork_code _ _).trans ((Prod.mk.inj (Prod.mk.inj (Prod.mk.inj eReF).2).2).1))
   have w1 := (walk_re hs hg (.avoid 0) codeTries okNoBody 26 cRe0).trans wRe1
   have w2 := (walk_re hs hg (.avoid 0) codeTries okNoBody 6 cRe1).trans wRe2
   have w3 := (walk_re hs hg (.avoid 0) codeTries okNoBody 4 cRe2).trans wRe3
@@ -68,7 +68,7 @@ theorem frameCb {fk : Fork} (hg : CoveredFork fk) (hs : ReOK world8 eCb.sta) (ha
   intro Q hQ
   obtain ⟨-, -, -, -, dCb1, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, eCbF, wCb1, pCb1, dcallRe, caRe, enterRe, -, -, -, -, -, -, setRe, resCb, wCb3, wCb4, -⟩ := exitFacts
   have hcode : (reS eCb.sta fk).code = fwd :=
-    (Prod.mk.inj (Prod.mk.inj (Prod.mk.inj eCbF).2).2).1
+    (Sevm.withOrig_code _ _).trans ((Sevm.withFork_code _ _).trans ((Prod.mk.inj (Prod.mk.inj (Prod.mk.inj eCbF).2).2).1))
   have hsRe : ReOK world8 eRe.sta :=
     ReOK.of_stat ((frameEnterS_stat enterRe).trans (dcallPrep_stat dcallRe).2) hs
   obtain ⟨sRe, nRe⟩ := dcallSpawn_re hs hg dcallRe
@@ -85,8 +85,10 @@ theorem frameCb {fk : Fork} (hg : CoveredFork fk) (hs : ReOK world8 eCb.sta) (ha
     rw [hcode, pCb1]; exact decodeT_sound fwdTries dCb1
   obtain ⟨hstep, hent, -, hagRe, hF⟩ := delegatecall_node hag1 hat sRe nRe
   obtain ⟨r, x', sp, hr, e, hx', hexn, hdesc, hagx⟩ :=
-    spawn_resume_err (e := .revert) hq1 hag1 hF hstep hent (.inl rfl) settleRe resCb
+    spawn_resume_err (e := .revert) hq1 hag1 hF hstep hent (.inl rfl) settleRe
+      ((resumeCallB_re cpRe fk world8 (.ok (settleOr cpRe.f (.error (.revert, dRe))))).trans resCb)
       (fun G hG => (frameRe hg hsRe (pagree_re hagRe) G (nodeAt_re hG)).1.1)
+  rw [CallPrep.re_adrs] at hagx hx'
   have dsg := (frameRe hg hsRe (pagree_re hagRe) r (nodeAt_re hr)).2
   obtain ⟨hag3, h3⟩ := pwalkH_cont .refuse fwdTries hcode okAny 9 cCb2 cCb3 hagx w3
   obtain ⟨q3, hq3, -, ex3, ds3, -⟩ := h3 x' hx'
@@ -107,7 +109,7 @@ theorem frameRcv {fk : Fork} (hg : CoveredFork fk) (hs : ReOK world8 eRcv.sta)
   intro Xn hX
   obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, eRcvF, wRcv1, pRcv1, dRcv1, callCb, caCb, enterCb, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, setCb, resRcv, wRcv3, wRcv4, -⟩ := exitFacts
   have hcode : (reS eRcv.sta fk).code = Blanc.Lift.VyperNonreentrantDeployed.Fixed.ReceiverR.code :=
-    (Prod.mk.inj (Prod.mk.inj (Prod.mk.inj eRcvF).2).2).1
+    (Sevm.withOrig_code _ _).trans ((Sevm.withFork_code _ _).trans ((Prod.mk.inj (Prod.mk.inj (Prod.mk.inj eRcvF).2).2).1))
   have hsCb : ReOK world8 eCb.sta :=
     ReOK.of_stat ((frameEnterS_stat enterCb).trans (callPrepP_stat callCb).2) hs
   obtain ⟨sCb, nCb⟩ := callSpawn_re hs hg callCb
@@ -124,8 +126,10 @@ theorem frameRcv {fk : Fork} (hg : CoveredFork fk) (hs : ReOK world8 eRcv.sta)
     rw [hcode, pRcv1]; exact decodeT_sound recvTries dRcv1
   obtain ⟨hstep, hent, -, hagCb, hF⟩ := call_node hag1 hat sCb nCb
   obtain ⟨q, x', sp, hq, e, hx', hexn, hdesc, hagx⟩ :=
-    spawn_resume_err (e := .revert) hx1 hag1 hF hstep hent (.inl rfl) settleCb resRcv
+    spawn_resume_err (e := .revert) hx1 hag1 hF hstep hent (.inl rfl) settleCb
+      ((resumeCallB_re cpCb fk world8 (.ok (settleOr cpCb.f (.error (.revert, dCb))))).trans resRcv)
       (fun Q hQ => (frameCb hg hsCb (pagree_re hagCb) Q (nodeAt_re hQ)).1)
+  rw [CallPrep.re_adrs] at hagx hx'
   obtain ⟨-, r, hr, dsq, hre⟩ := frameCb hg hsCb (pagree_re hagCb) q (nodeAt_re hq)
   obtain ⟨hag3, h3⟩ := pwalkH_cont .refuse recvTries hcode okAny 1 cRcv2 cRcv3 hagx w3
   obtain ⟨x3, hx3, -, ex3, ds3, -⟩ := h3 x' hx'
@@ -144,7 +148,7 @@ theorem frameBal {fk : Fork} (hg : CoveredFork fk) (hs : ReOK world8 eBal.sta)
   intro t ht
   obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, eBalF, wBal1, wBal2, -⟩ := exitFacts
   have hcode : (reS eBal.sta fk).code = Blanc.Lift.VyperNonreentrantDeployed.Token20.code :=
-    (Prod.mk.inj (Prod.mk.inj eBalF).2).2
+    (Sevm.withOrig_code _ _).trans ((Sevm.withFork_code _ _).trans ((Prod.mk.inj (Prod.mk.inj eBalF).2).2))
   have w1 := (walk_re hs hg (.avoid 0) tokenTries okAny 29 cBal0).trans wBal1
   have w2 := (walk_re hs hg (.avoid 0) tokenTries okAny 1 cBal1).trans wBal2
   obtain ⟨hca, hall⟩ := leaf_frame_ok (.avoid 0) tokenTries hcode okAny hag w1 w2
@@ -160,7 +164,7 @@ theorem frameXf {fk : Fork} (hg : CoveredFork fk) (hs : ReOK world8 eXf.sta)
   intro t ht
   obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, eXfF, wXf1, wXf2, -⟩ := exitFacts
   have hcode : (reS eXf.sta fk).code = Blanc.Lift.VyperNonreentrantDeployed.Token20.code :=
-    (Prod.mk.inj (Prod.mk.inj (Prod.mk.inj eXfF).2).2).1
+    (Sevm.withOrig_code _ _).trans ((Sevm.withFork_code _ _).trans ((Prod.mk.inj (Prod.mk.inj (Prod.mk.inj eXfF).2).2).1))
   have w1 := (walk_re hs hg (.avoid 0) tokenTries okAny 53 cXf0).trans wXf1
   have w2 := (walk_re hs hg (.avoid 0) tokenTries okAny 1 cXf1).trans wXf2
   obtain ⟨hca, hall⟩ := leaf_frame_ok (.avoid 0) tokenTries hcode okAny hag w1 w2
@@ -188,7 +192,8 @@ theorem frameB {fk : Fork} (hfk : CoveredFork fk) (hs : ReOK world8 eB.sta) (hag
         ReFacts G ∧ (∀ y, ParentPrefix F y → (HashPol.avoid 0).NodeOK code y) := by
   intro F hF
   obtain ⟨-, -, -, -, -, -, -, eBF, -, walkB1, pB1, walkB2, pB2, decB2, scallBal, caBal, enterBal, -, -, -, balErr, resB3, walkB4, pB4, decB4, callEth, caEth, enterRcv, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, rcvErr, resB5, walkB6, pB6, decB6, callXf, caXf, enterXf, -, -, -, xfErr, resB7, walkB8, walkB9, -⟩ := exitFacts
-  have hcode : (reS eB.sta fk).code = code := (Prod.mk.inj (Prod.mk.inj (Prod.mk.inj eBF).2).2).1
+  have hcode : (reS eB.sta fk).code = code :=
+    (Sevm.withOrig_code _ _).trans ((Sevm.withFork_code _ _).trans ((Prod.mk.inj (Prod.mk.inj (Prod.mk.inj eBF).2).2).1))
   have hsBal : ReOK world8 eBal.sta :=
     ReOK.of_stat ((frameEnterS_stat enterBal).trans (scallPrep_stat scallBal).2) hs
   have hsRcv : ReOK world8 eRcv.sta :=
@@ -225,8 +230,10 @@ theorem frameB {fk : Fork} (hfk : CoveredFork fk) (hs : ReOK world8 eB.sta) (hag
   obtain ⟨step2, ent2, -, hagBal⟩ := staticcall_node hag2 hat2 sBal nBal
   have hF2 := (scallPrep_node_facts hag2 sBal).2
   obtain ⟨t1, x3, sp1, ht1, e3, hx3, ex3, hdesc3, hag3⟩ :=
-    spawn_resume_ok hx2 hag2 hF2 step2 ent2 balErr resB3
+    spawn_resume_ok hx2 hag2 hF2 step2 ent2 balErr
+      ((resumeCallB_re cpBal fk world8 (.ok dBal)).trans resB3)
       (fun t ht => let r := frameBal hfk hsBal (pagree_re hagBal) t (nodeAt_re ht); ⟨r.1, r.2.2⟩)
+  rw [CallPrep.re_adrs] at hag3 hx3
   have dst1 := (frameBal hfk hsBal (pagree_re hagBal) t1 (nodeAt_re ht1)).2.1
   -- the ETH `CALL` of pc 7427
   obtain ⟨hag4, h4⟩ := pwalkH_cont (.avoid 0) codeTries hcode okNoRel 151 cB3 cB4 hag3 wB4
@@ -235,8 +242,10 @@ theorem frameB {fk : Fork} (hfk : CoveredFork fk) (hs : ReOK world8 eB.sta) (hag
     rw [hcode, pB4]; exact decodeT_sound codeTries decB4
   obtain ⟨step4, ent4, -, hagRcv, hF4⟩ := call_node hag4 hat4 sEth nRcv
   obtain ⟨xr, x5, sp2, hxr, e5, hx5, ex5, hdesc5, hag5⟩ :=
-    spawn_resume_ok hx4 hag4 hF4 step4 ent4 rcvErr resB5
+    spawn_resume_ok hx4 hag4 hF4 step4 ent4 rcvErr
+      ((resumeCallB_re cpEth fk world8 (.ok dRcv)).trans resB5)
       (fun X hX => let r := frameRcv hfk hsRcv (pagree_re hagRcv) X (nodeAt_re hX); ⟨r.1, r.2.1⟩)
+  rw [CallPrep.re_adrs] at hag5 hx5
   obtain ⟨-, -, q, G, hq, hG, dsr, dsq, hre⟩ := frameRcv hfk hsRcv (pagree_re hagRcv) xr (nodeAt_re hxr)
   -- the token's `transfer`
   obtain ⟨hag6, h6⟩ := pwalkH_cont (.avoid 0) codeTries hcode okAny 119 cB5 cB6 hag5 wB6
@@ -245,8 +254,10 @@ theorem frameB {fk : Fork} (hfk : CoveredFork fk) (hs : ReOK world8 eB.sta) (hag
     rw [hcode, pB6]; exact decodeT_sound codeTries decB6
   obtain ⟨step6, ent6, -, hagXf, hF6⟩ := call_node hag6 hat6 sXf nXf
   obtain ⟨t2, x7, sp3, ht2, e7, hx7, ex7, hdesc7, hag7⟩ :=
-    spawn_resume_ok hx6 hag6 hF6 step6 ent6 xfErr resB7
+    spawn_resume_ok hx6 hag6 hF6 step6 ent6 xfErr
+      ((resumeCallB_re cpXf fk world8 (.ok dXf)).trans resB7)
       (fun t ht => let r := frameXf hfk hsXf (pagree_re hagXf) t (nodeAt_re ht); ⟨r.1, r.2.2⟩)
+  rw [CallPrep.re_adrs] at hag7 hx7
   have dst2 := (frameXf hfk hsXf (pagree_re hagXf) t2 (nodeAt_re ht2)).2.1
   -- `RETURN`
   obtain ⟨hag8, h8⟩ := pwalkH_cont (.avoid 0) codeTries hcode okAny 125 cB7 cB8 hag7 wB8
