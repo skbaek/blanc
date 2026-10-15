@@ -668,6 +668,54 @@ private theorem finishSetPauserExecSatOf
       exact htail
   · exact hsuffix
 
+/-- Keep the post-SLOAD machine abstract while constructing the remaining walk. -/
+private theorem newCountUpdateWarmTailExecSatOf
+    {e : Sevm} {d : Devm} {M : Mem} {stack : Stack}
+    (hnew : (M.read (newPauserWord * 32).toNat 32).1.toB256 = 9)
+    (hsize : 768 ≤ M.size) (halign : M.size % 32 = 0)
+    (hroom : stack.length < 1019)
+    (hstore : Func.ExecSat
+      ((runtime officialParams).main :: (runtime officialParams).aux)
+      e (d.setMach ⟨countSlot 9 :: 1 :: stack, M,
+        10000 + gasStorageSet + 20 + 2132 + 45 + 1935 + 12 +
+          gasStorageSet, d.stateGas⟩)
+        (sstore ::: .call finishSetPauserSlot)
+      (fun ex => ∃ post, ex = .ok post)) :
+    Func.ExecSat
+      ((runtime officialParams).main :: (runtime officialParams).aux)
+      e (d.setMach ⟨0 :: stack, M,
+        10000 + gasStorageSet + 20 + 2132 + 45 + 1935 + 12 +
+          gasStorageSet + 18, d.stateGas⟩)
+        (pushB256 1 ::: add ::: newCountKey +++
+          sstore ::: .call finishSetPauserSlot)
+      (fun ex => ∃ post, ex = .ok post) := by
+  have hnewCovered : (newPauserWord * 32).toNat + 32 ≤ M.size := by
+    have hoff : (newPauserWord * 32).toNat + 32 ≤ 768 := by decide
+    omega
+  have hnewMemory : (M.read (newPauserWord * 32).toNat 32).2 = M := by
+    rw [Mem.read_snd_eq_self (memExtSize_of_le halign hnewCovered)]
+  have hnewCountValue :
+      (regionWord countRegion).or
+        (M.read (newPauserWord * 32).toNat 32).1.toB256 = countSlot 9 := by
+    simpa only [countSlot, slot] using
+      congrArg (fun x : B256 => (regionWord countRegion).or x) hnew
+  apply Func.execSat_segment
+    (devm' := d.setMach ⟨countSlot 9 :: 1 :: stack, M,
+      10000 + gasStorageSet + 20 + 2132 + 45 + 1935 + 12 +
+        gasStorageSet, d.stateGas⟩)
+    (f' := sstore ::: .call finishSetPauserSlot)
+  · intro ex htail
+    func_run (6) [1, 3, countSlot 9]
+    case h_room => omega
+    case h_cost =>
+      rw [Devm.extCost_zero_of_le halign hnewCovered]
+      norm_num only [gVerylow]
+    case h_f =>
+      rw [hnewMemory]
+      simp only [add_tsub_cancel_right]
+      exact htail
+  · exact hstore
+
 private theorem newCountUpdateTailExecSatOf
     {e : Sevm} {d : Devm} {M : Mem} {bs : Bytes} {stack : Stack}
     (hfork : CoveredFork e.benvStat.fork)
@@ -815,48 +863,22 @@ private theorem newCountUpdateTailExecSatOf
       · rfl
       · rfl
     · exact hcall
-  have hnewCovered : (newPauserWord * 32).toNat + 32 ≤ M.size := by
-    have hoff : (newPauserWord * 32).toNat + 32 ≤ 768 := by decide
-    omega
-  have hnewMemory :
-      (M.read (newPauserWord * 32).toNat 32).2 = M := by
-    rw [Mem.read_snd_eq_self (memExtSize_of_le halign hnewCovered)]
-  have haddMach (S : List B256) (G : Nat) :
-      addAccessedStorageKey (d.setMach ⟨S, M, G, d.stateGas⟩)
-          e.currentTarget (countSlot 9) =
-        d₁.setMach ⟨S, M, G, d₁.stateGas⟩ := rfl
-  apply Func.execSat_segment
-    (devm' := d₁.setMach ⟨countSlot 9 :: 1 :: stack, M,
+  have hstateGas : d₁.stateGas = d.stateGas := rfl
+  apply Func.execSat_next
+    (devm' := d₁.setMach ⟨0 :: stack, M,
       10000 + gasStorageSet + 20 + 2132 + 45 + 1935 + 12 +
-        gasStorageSet, d₁.stateGas⟩)
-    (f' := sstore ::: .call finishSetPauserSlot)
-  · intro ex htail
-    func_run (7) [1, 3, countSlot 9]
-    all_goals try exact hfork.rules_stateGas_none
-    all_goals try {
-      simp only [Devm.stack_setMach, List.length_cons]
-      omega }
-    all_goals try omega
-    all_goals try {
-      simp only [Devm.extCost, Devm.memory_setMach, memExtsSize,
-        memExtSize_of_le halign hnewCovered, Nat.sub_self]
-      norm_num only [gVerylow] }
-    all_goals try {
-      simpa only [countSlot, slot] using
-        congrArg (fun x : B256 => (regionWord countRegion).or x) hnew }
-    all_goals try {
-      change 1 + d.getStorVal e.currentTarget (countSlot 9) = 1
-      rw [hcount]
-      rfl }
-    case h_f =>
-      rw [hnewMemory, haddMach]
-      simp only [add_tsub_cancel_right]
-      change Func.ExecWitness _ _
-        (d₁.setMach ⟨countSlot 9 :: 1 :: stack, M,
+        gasStorageSet + 18, d₁.stateGas⟩)
+  · simpa only [Devm.addAccessedStorageKey_setMach_setMach,
+      Devm.memory_setMach, Devm.stateGas_setMach, hstateGas] using
+      (Ninst.runCompiled_sload_cold
+        (devm := d.setMach ⟨countSlot 9 :: stack, M,
           10000 + gasStorageSet + 20 + 2132 + 45 + 1935 + 12 +
-            gasStorageSet, d₁.stateGas⟩) _ ex
-      exact htail
-  · exact hstore
+            gasStorageSet + 2118, d.stateGas⟩)
+        (v := 0)
+        (G := 10000 + gasStorageSet + 20 + 2132 + 45 + 1935 + 12 +
+          gasStorageSet + 18)
+        hfork.rules_stateGas_none rfl hcountCold hcount rfl (by omega))
+  · exact newCountUpdateWarmTailExecSatOf hnew hsize halign hroom hstore
 
 private theorem afterOldPauserExecSatOf
     {e : Sevm} {d : Devm} {M : Mem} {bs : Bytes} {stack : Stack}
