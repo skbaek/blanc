@@ -62,6 +62,32 @@ def storOracle : StorShadow :=
    ((proxyAddr, 0x02), ethSentinel.toB256),
    ((implAddr, 1), 1)]
 
+private theorem oracleFacts :
+    (frameEnterS (fO world3) acs0 = .run (eO world3) ∧
+    ((eO world3).pc, (eO world3).sta.currentTarget, (eO world3).sta.code, (eO world3).sta.benvStat.fork,
+      (eO world3).sta.benvStat.excessBlobGas) =
+      (0, proxyAddr, Blanc.forwarderCode Blanc.curvePlainImpl847e, .prague, 0) ∧
+    pwalkH .refuse fwdTries (eO world3).sta okAny 11 (cO world3) = .cont (cO1 world3) ∧
+    (cO1 world3).pc = 31 ∧
+    decodeT 6 fwdTries.bytes 31 = some (.next (.exec .delegatecall)) ∧
+    dcallPrep (eO world3).sta (cO1 world3).devm (cO1 world3).adrs (cO1 world3).acs = some (cpO world3) ∧
+    frameEnterS (cpO world3).f (cO1 world3).acs = .run (eOB world3) ∧
+    ((eOB world3).pc, (eOB world3).sta.currentTarget, (eOB world3).sta.code) = (0, proxyAddr, code) ∧
+    (cpO world3).f.inner.codeAddress = some implAddr ∧
+    pwalkH (.avoid 0) codeTries (eOB world3).sta okAny 278 (cOB0 world3) = .cont (cOB1 world3) ∧
+    pwalkH (.avoid 0) codeTries (eOB world3).sta okAny 1 (cOB1 world3) = .halt (.ok (dOB world3)) ∧
+    (dOB world3).error = none ∧
+    resumeCallB (cpO world3).p (cpO world3).oi (cpO world3).os (.ok (dOB world3)) = some (dO2 world3) ∧
+    pwalkH .refuse fwdTries (eO world3).sta okAny 10 (cO2 world3) = .cont (cO3 world3) ∧
+    pwalkH .refuse fwdTries (eO world3).sta okAny 1 (cO3 world3) = .halt (.ok (dO world3)) ∧
+    (dO world3).error = none ∧ (dO world3).gasLeft = 89070 ∧ (dO world3).refundCounter = 4800) ∧
+    (canonS (cO3 world3).stor = storOracle ∧
+    (cO3 world3).acs.map Prod.fst = [creator, proxyAddr, implAddr] ∧
+    lookupA (cO3 world3).acs proxyAddr = lookupA acs0 proxyAddr ∧
+    lookupA (cO3 world3).acs creator = lookupA acs0 creator ∧
+    lookupA (cO3 world3).acs implAddr = lookupA acs0 implAddr) := by
+  kernel_rfl_and
+
 theorem oracleFactsA :
     frameEnterS (fO world3) acs0 = .run (eO world3) ∧
     ((eO world3).pc, (eO world3).sta.currentTarget, (eO world3).sta.code, (eO world3).sta.benvStat.fork,
@@ -81,7 +107,7 @@ theorem oracleFactsA :
     pwalkH .refuse fwdTries (eO world3).sta okAny 10 (cO2 world3) = .cont (cO3 world3) ∧
     pwalkH .refuse fwdTries (eO world3).sta okAny 1 (cO3 world3) = .halt (.ok (dO world3)) ∧
     (dO world3).error = none ∧ (dO world3).gasLeft = 89070 ∧ (dO world3).refundCounter = 4800 := by
-  kernel_rfl_and
+  exact oracleFacts.1
 
 theorem oracleFactsC :
     canonS (cO3 world3).stor = storOracle ∧
@@ -89,6 +115,6 @@ theorem oracleFactsC :
     lookupA (cO3 world3).acs proxyAddr = lookupA acs0 proxyAddr ∧
     lookupA (cO3 world3).acs creator = lookupA acs0 creator ∧
     lookupA (cO3 world3).acs implAddr = lookupA acs0 implAddr := by
-  kernel_rfl_and
+  exact oracleFacts.2
 
 end Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init
