@@ -1,6 +1,7 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.InitSetup
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Check
 import Blanc.Lift.WitnessSpawn
+import Blanc.Lift.KernelBatchForall
 
 /-!
 # V− setup, message 3: the kernel run of `initialize` through the proxy
@@ -112,34 +113,57 @@ def post3F (d : Devm) : Devm :=
   | .halt (.ok d') => d'
   | _ => default
 
-theorem prefix3 : stepN 11 e3 = some e3_31 := by kernel_rfl
+private theorem initEntryFacts :
+    (stepN 11 e3 = some e3_31) ∧
+    (dcallPrep e3_31.sta e3_31.dyna [] acs3 = some cpI) ∧
+    (frameEnterS cpI.f acs3 = .run eI) := by
+  kernel_rfl_and
 
-theorem cpI_eq : dcallPrep e3_31.sta e3_31.dyna [] acs3 = some cpI := by kernel_rfl
+theorem prefix3 : stepN 11 e3 = some e3_31 := by
+  exact initEntryFacts.1
 
-theorem eI_eq : frameEnterS cpI.f acs3 = .run eI := by kernel_rfl
+theorem cpI_eq : dcallPrep e3_31.sta e3_31.dyna [] acs3 = some cpI := by
+  exact initEntryFacts.2.1
+
+theorem eI_eq : frameEnterS cpI.f acs3 = .run eI := by
+  exact initEntryFacts.2.2
+
+private theorem initReturnFacts : ∀ d : Devm,
+    (resumeCallB cpI.p cpI.oi cpI.os (.ok (obsChildI d)) = some (dP2 (obsChildI d))) ∧
+    (stepN 10 ⟨32, e3.sta, dP2 (obsChildI d)⟩ = some (e3_44 (obsChildI d))) ∧
+    (Evm.step (e3_44 (obsChildI d)) = .halt (.ok (post3F (obsChildI d)))) ∧
+    (((post3F (obsChildI d)).gasLeft, (post3F (obsChildI d)).output.map UInt8.toNat,
+      (post3F (obsChildI d)).error.isNone) = (744993, [], true)) ∧
+    ((post3F (obsChildI d)).state = (dP2 (obsChildI d)).state) := by
+  kernel_forall_rfl_and
 
 theorem resumeI_eq : ∀ d : Devm,
     resumeCallB cpI.p cpI.oi cpI.os (.ok (obsChildI d)) = some (dP2 (obsChildI d)) := by
-  kernel_forall_rfl
+  intro d
+  exact (initReturnFacts d).1
 
 theorem tailI_eq : ∀ d : Devm,
     stepN 10 ⟨32, e3.sta, dP2 (obsChildI d)⟩ = some (e3_44 (obsChildI d)) := by
-  kernel_forall_rfl
+  intro d
+  exact (initReturnFacts d).2.1
 
 theorem returnI_eq : ∀ d : Devm,
     Evm.step (e3_44 (obsChildI d)) = .halt (.ok (post3F (obsChildI d))) := by
-  kernel_forall_rfl
+  intro d
+  exact (initReturnFacts d).2.2.1
 
 /-- The forwarder's gas at its `RETURN` (744,993 of 1,000,000), its (empty) return data and
 its success. -/
 theorem post3_obs : ∀ d : Devm,
     ((post3F (obsChildI d)).gasLeft, (post3F (obsChildI d)).output.map UInt8.toNat,
       (post3F (obsChildI d)).error.isNone) = (744993, [], true) := by
-  kernel_forall_rfl
+  intro d
+  exact (initReturnFacts d).2.2.2.1
 
 theorem post3_keep : ∀ d : Devm,
     (post3F (obsChildI d)).state = (dP2 (obsChildI d)).state := by
-  kernel_forall_rfl
+  intro d
+  exact (initReturnFacts d).2.2.2.2
 
 /-- Static facts of the machines and the spawn (closed evaluations). -/
 theorem static3 :
