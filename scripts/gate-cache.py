@@ -820,7 +820,7 @@ SOUNDNESS_AUTHORITY_NAMES = frozenset({
     "gate_uses_t8n_resolver", "gate_uses_tracked_population",
     "validate_tracked_population", "tracked_population", "semantic_authority_digest", "runner_identity",
     "resolve_path", "component_files", "glob_population", "traversable_population",
-    "component_populations", "trace_path_for", "module_dep_hash",
+    "component_populations", "trace_path_for", "dependency_trace_path_for", "module_dep_hash",
     "toolchain_artifact_identity", "toolchain_module_identity",
     "component_lean_modules", "imports_of", "component_lean_entries", "git_output",
     "component_git_refs", "component_external", "component_env", "component_tools",
@@ -1256,6 +1256,57 @@ def component_populations(
     return digest_of(detail), detail
 
 
+def dependency_trace_path_for(root: Path, module: str, relative: str) -> Path:
+    """Locate one trace in already-pinned Lake dependencies, never a glob.
+
+    The exact build certificate authenticates these same package checkouts.
+    Recheck the selected provider here as well, including for direct callers
+    without a certificate. Existing local/Jaune lookup retains precedence.
+    """
+    try:
+        manifest = json.loads((root / "lake-manifest.json").read_text(encoding="utf-8"))
+    except FileNotFoundError as error:
+        # Preserve authenticated trace-free stdlib resolution in small callers
+        # without a Lake manifest; non-toolchain imports still refuse below.
+        raise MissingLakeTrace(f"no Lake dependency manifest for module {module}") from error
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise Unresolvable(f"cannot read Lake dependency manifest: {error}") from error
+    if not isinstance(manifest, dict) or not isinstance(manifest.get("packages"), list):
+        raise Unresolvable("lake-manifest.json has no package population")
+    if manifest.get("packagesDir", ".lake/packages") != ".lake/packages":
+        raise Unresolvable("unsupported Lake dependency directory")
+    candidates: list[Path] = []
+    names: set[str] = set()
+    for package in manifest["packages"]:
+        if not isinstance(package, dict):
+            raise Unresolvable("lake-manifest.json has a malformed package row")
+        name, pin = package.get("name"), package.get("rev")
+        if (not isinstance(name, str) or re.fullmatch(r"[A-Za-z0-9_-]+", name) is None
+                or name in names):
+            raise Unresolvable("lake-manifest.json has an unsafe or duplicate package name")
+        names.add(name)
+        if (package.get("type", "git") != "git" or package.get("subDir") is not None
+                or not isinstance(pin, str) or re.fullmatch(r"[0-9a-f]{40}", pin) is None):
+            raise Unresolvable(f"Lake package {name} has no exact Git pin")
+        directory = root / ".lake/packages" / name
+        candidate = directory / ".lake/build/lib/lean" / relative
+        if candidate.is_symlink() or (candidate.exists() and not candidate.is_file()):
+            raise Unresolvable(f"non-regular Lake trace for module {module}: {candidate}")
+        if not candidate.is_file():
+            continue
+        if candidate.resolve() != root.resolve() / candidate.relative_to(root):
+            raise Unresolvable(f"aliased Lake dependency trace for module {module}: {candidate}")
+        component_external(root, [{"id": name, "path": str(directory), "pin": pin}])
+        candidates.append(candidate)
+    if len(candidates) > 1:
+        raise Unresolvable(f"ambiguous Lake dependency trace for module {module}")
+    if candidates:
+        return candidates[0]
+    raise MissingLakeTrace(
+        f"no Lake trace for module {module}; run `lake build` before selection"
+    )
+
+
 def trace_path_for(root: Path, module: str) -> Path:
     relative = module.replace(".", "/") + ".trace"
     for trace_root in LEAN_TRACE_ROOTS:
@@ -1264,9 +1315,7 @@ def trace_path_for(root: Path, module: str) -> Path:
             raise Unresolvable(f"non-regular Lake trace for module {module}: {candidate}")
         if candidate.is_file():
             return candidate
-    raise MissingLakeTrace(
-        f"no Lake trace for module {module}; run `lake build` before selection"
-    )
+    return dependency_trace_path_for(root, module, relative)
 
 
 def toolchain_artifact_identity(library: Path) -> str:
