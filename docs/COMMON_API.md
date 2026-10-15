@@ -974,6 +974,8 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   `scallSpawn_re`/`callSpawn_re`/`dcallSpawn_re`, `settle_re` and `frame_enter_re` move walks,
   spawns, settles and the root entry to `(s.withFork g).withOrig W` (any covered fork, the real
   original state) under `ReOK W s`; the `*_withOrig` lemmas are the original-state layer alone.
+  `Jaune.Sevm.withOrig_code` and `Blanc.ForkUniform.Sevm.withFork_code` transport the code projection
+  by named equalities, keeping a concrete source machine out of kernel conversion.
   `Blanc.Devm.getOrigStorVal_withOrig_of_eq` transports an actual original-storage
   read from snapshot agreement at one owner/key; created accounts read zero on
   both sides. Both the full `OrigAgree` and finite `OrigAgreeOn` transport proofs
@@ -989,7 +991,9 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   Hand a transported spawn's agreement and child nodes to lemmas stated over the kernel
   configuration through `pagree_re`/`nodeAt_re`: left to definitional
   unfolding, the kernel compares a concrete machine with its transported form by evaluating both
-  (measured: a frame module went from a 16.4 GiB retraction to a 5.1 GiB build).
+  (measured: a frame module went from a 16.4 GiB retraction to a 5.1 GiB build). Use
+  `resumeCallB_re` to preserve the parent and output window of a transformed call preparation,
+  and `CallPrep.re_adrs` for its accessed-address shadow at the resumed configuration.
   Worked use: `forwarder_root_re`/`leaf_root_re` and the frames of
   `Blanc/Lift/VyperNonreentrantDeployed/Fixed/Fund/{Root,Add}.lean` and `.../Fixed/Exit/`.
 - To run a walk (`pwalkH`) or a certificate run (`wrun`, `childRun`, `callResume`) whose

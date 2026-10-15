@@ -43,6 +43,9 @@ namespace Jaune
 def BenvStat.withOrig (s : BenvStat) (O : State) : BenvStat := { s with origState := O }
 def Benv.withOrig (b : Benv) (O : State) : Benv := { b with stat := b.stat.withOrig O }
 def Sevm.withOrig (s : Sevm) (O : State) : Sevm := { s with benvStat := s.benvStat.withOrig O }
+/-- Changing the original snapshot preserves code without reducing the source machine. -/
+theorem Sevm.withOrig_code (s : Sevm) (O : State) : (s.withOrig O).code = s.code := rfl
+
 def Evm.withOrig (e : Evm) (O : State) : Evm := { e with sta := e.sta.withOrig O }
 def Msg.withOrig (m : Msg) (O : State) : Msg := { m with benv := m.benv.withOrig O }
 def Frame.withOrig (f : Frame) (O : State) : Frame :=
@@ -406,6 +409,16 @@ theorem walk_re {g : Fork} (hs : ReOK O s) (hg : CoveredFork g) (pol : HashPol)
 /-- A call preparation with its fork and original state changed. -/
 def _root_.Blanc.Lift.Witness.CallPrep.re (cp : CallPrep) (g : Fork) (O : State) : CallPrep :=
   (cp.withFork g).withOrig O
+
+/-- Changing a call frame preserves the accessed-address shadow. -/
+theorem _root_.Blanc.Lift.Witness.CallPrep.re_adrs (cp : CallPrep) (g : Fork) (O : State) :
+    (cp.re g O).adrs = cp.adrs := rfl
+
+/-- Resuming a changed frame uses the same parent and output window. -/
+theorem resumeCallB_re (cp : CallPrep) (g : Fork) (O : State)
+    (r : Except (EvmError × State × AdrSet × Tra) Devm) :
+    resumeCallB (cp.re g O).p (cp.re g O).oi (cp.re g O).os r =
+      resumeCallB cp.p cp.oi cp.os r := rfl
 
 /-- A machine with its fork and original state changed. -/
 def _root_.Jaune.Evm.re (e : Evm) (g : Fork) (O : State) : Evm := (e.withFork g).withOrig O
