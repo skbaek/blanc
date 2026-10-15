@@ -1,3 +1,4 @@
+import Blanc.Lift.KernelBatchForall
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame4Child
 
 /-!
@@ -33,36 +34,57 @@ def post3F (d : Devm) : Devm :=
 /-- Frame 4's settled machine as the proxy's child, its observed parts as literals. -/
 abbrev obsChild4 (d : Devm) : Devm := childObs gas4 (word 106) d
 
+/-- The proxy frame's gas at its `RETURN`, and its return data (the child's). -/
+def gas3 : Nat := 28500077
+
+/- Share the concrete parent normalization across the seven kernel certificates. -/
+private theorem frame3_kernel : ∀ d : Devm,
+    (resumeCallB cp4.p cp4.oi cp4.os (.ok (obsChild4 d)) = some (d32 (obsChild4 d))) ∧
+    (stepN 10 ⟨32, e3.sta, d32 (obsChild4 d)⟩ = some (e44 (obsChild4 d))) ∧
+    (Evm.step (e44 (obsChild4 d)) = .halt (.ok (post3F (obsChild4 d)))) ∧
+    (((post3F (obsChild4 d)).gasLeft, (post3F (obsChild4 d)).output.map UInt8.toNat,
+      (post3F (obsChild4 d)).error.isNone) = (gas3, (word 106).map UInt8.toNat, true)) ∧
+    (((post3F (obsChild4 d)).accessedAddresses, (post3F (obsChild4 d)).accessedStorageKeys,
+      (post3F (obsChild4 d)).state) =
+    ((d32 (obsChild4 d)).accessedAddresses, (d32 (obsChild4 d)).accessedStorageKeys,
+      (d32 (obsChild4 d)).state)) ∧
+    ((post3F (obsChild4 d)).createdAccounts = d.createdAccounts) ∧
+    (e3.sta.code = proxyCode) := by
+  kernel_forall_rfl_and
+
 theorem resume3_eq : ∀ d : Devm,
     resumeCallB cp4.p cp4.oi cp4.os (.ok (obsChild4 d)) = some (d32 (obsChild4 d)) := by
-  kernel_forall_rfl
+  intro d
+  exact (frame3_kernel d).1
 
 theorem tail3_eq : ∀ d : Devm, stepN 10 ⟨32, e3.sta, d32 (obsChild4 d)⟩ = some (e44 (obsChild4 d)) := by
-  kernel_forall_rfl
+  intro d
+  exact (frame3_kernel d).2.1
 
 theorem return3_eq : ∀ d : Devm,
     Evm.step (e44 (obsChild4 d)) = .halt (.ok (post3F (obsChild4 d))) := by
-  kernel_forall_rfl
-
-/-- The proxy frame's gas at its `RETURN`, and its return data (the child's). -/
-def gas3 : Nat := 28500077
+  intro d
+  exact (frame3_kernel d).2.2.1
 
 theorem post3_obs : ∀ d : Devm,
     ((post3F (obsChild4 d)).gasLeft, (post3F (obsChild4 d)).output.map UInt8.toNat,
       (post3F (obsChild4 d)).error.isNone) = (gas3, (word 106).map UInt8.toNat, true) := by
-  kernel_forall_rfl
+  intro d
+  exact (frame3_kernel d).2.2.2.1
 
 theorem post3_keep : ∀ d : Devm,
     ((post3F (obsChild4 d)).accessedAddresses, (post3F (obsChild4 d)).accessedStorageKeys,
       (post3F (obsChild4 d)).state) =
     ((d32 (obsChild4 d)).accessedAddresses, (d32 (obsChild4 d)).accessedStorageKeys,
       (d32 (obsChild4 d)).state) := by
-  kernel_forall_rfl
+  intro d
+  exact (frame3_kernel d).2.2.2.2.1
 
 /-- The proxy frame passes its child's created-account set through (it creates nothing). -/
 theorem post3F_created : ∀ d : Devm,
     (post3F (obsChild4 d)).createdAccounts = d.createdAccounts := by
-  kernel_forall_rfl
+  intro d
+  exact (frame3_kernel d).2.2.2.2.2.1
 
 /-- The proxy frame's settled machine. -/
 def post3 : Devm := post3F post4
@@ -77,7 +99,8 @@ theorem post3_created : post3.createdAccounts = .emptyWithCapacity := by
   rw [obsChild4_post4] at h
   exact h.trans post4_created
 
-theorem e3_code : e3.sta.code = proxyCode := by kernel_rfl
+theorem e3_code : e3.sta.code = proxyCode :=
+  (frame3_kernel default).2.2.2.2.2.2
 
 theorem proxy_at_delegatecall : Xinst.At proxyCode 31 .delegatecall := by rfl
 
