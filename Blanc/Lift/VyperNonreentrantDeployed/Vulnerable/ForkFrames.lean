@@ -34,7 +34,8 @@ theorem e3_stat : e3.sta.benvStat = e2.sta.benvStat :=
   (frameEnterS_stat e3_eq).trans (callPrep_stat cp3_eq).2
 
 theorem e4_stat : e4.sta.benvStat = e3.sta.benvStat :=
-  (frameEnterS_stat e4_eq).trans (dcallPrep_stat cp4_eq).2
+  ((frameEnterS_stat e4_eq).trans (dcallPrep_stat cp4_eq).2).trans
+    (congrArg Sevm.benvStat (stepN_sta prefix3))
 
 theorem e2_block : e2.sta.benvStat.fork = .prague ∧ e2.sta.benvStat.excessBlobGas = 0 := by
   rw [e2_stat]; exact ⟨rfl, rfl⟩
@@ -46,11 +47,11 @@ theorem e4_block : e4.sta.benvStat.fork = .prague ∧ e4.sta.benvStat.excessBlob
   rw [e4_stat]; exact e3_block
 
 theorem cp3_neutral : cp3.f.PrecompNeutral :=
-  Frame.precompNeutral_of_codeAddress (congrArg (·.2.2.1) spawned_codeAddresses) (by decide)
+  Frame.precompNeutral_of_codeAddress (Prod.mk.inj (Prod.mk.inj (Prod.mk.inj spawned_codeAddresses).2).2).1 (by decide)
     (by decide)
 
 theorem cp4_neutral : cp4.f.PrecompNeutral :=
-  Frame.precompNeutral_of_codeAddress (congrArg (·.2.2.2) spawned_codeAddresses) (by decide)
+  Frame.precompNeutral_of_codeAddress (Prod.mk.inj (Prod.mk.inj (Prod.mk.inj spawned_codeAddresses).2).2).2 (by decide)
     (by decide)
 
 /-! ### The machines each frame enters with, under `g` -/
@@ -84,8 +85,7 @@ theorem prefix3_at (hg : CoveredFork g) : stepN 11 (e3.withFork g) = some (e31.w
 theorem cp4_at (hg : CoveredFork g) :
     dcallPrep (e31.withFork g).sta e31.dyna adrs3 acs3 = some (cp4.withFork g) := by
   have hf : CoveredFork e31.sta.benvStat.fork := by
-    show CoveredFork e3.sta.benvStat.fork
-    rw [e3_block.1]; exact CoveredFork.prague
+    rw [stepN_sta prefix3, e3_block.1]; exact CoveredFork.prague
   have h := dcallPrep_withFork hf hg e31.dyna adrs3 acs3
   show dcallPrep (e31.sta.withFork g) e31.dyna adrs3 acs3 = _
   rw [h, cp4_eq]; rfl
@@ -93,8 +93,10 @@ theorem cp4_at (hg : CoveredFork g) :
 theorem e4_at (hg : CoveredFork g) :
     frameEnterS (cp4.withFork g).f acs3 = .run (e4.withFork g) := by
   show frameEnterS (cp4.f.withFork g) _ = _
+  have hstat := dcallPrep_stat cp4_eq
+  rw [stepN_sta prefix3] at hstat
   rw [frameEnterS_withFork_of_stat (s := e3.sta) (by rw [e3_block.1]; exact CoveredFork.prague) hg
-    (dcallPrep_stat cp4_eq) cp4_neutral, e4_eq]
+    hstat cp4_neutral, e4_eq]
   rfl
 
 theorem r4_at (hg : CoveredFork g) : wrun fs1 (e4.withFork g).sta 4505 c4 = r4 :=
