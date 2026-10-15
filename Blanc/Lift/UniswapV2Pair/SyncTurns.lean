@@ -4878,26 +4878,40 @@ theorem sync_root_second_static_parent_exact_consumption {K : WriterKey → Prop
                         else [])) ∧
                     (∀ N, Exec.Deriv.ParentPrefix secondReturned N →
                       ∀ x, ¬Ninst.At N.sevm.code N.pc (.exec x)) := by
-  obtain ⟨occurrence, returned, node, cursor, parent, child, dp, na, childCode, avail, g, S, out,
-    original, decoded, decodedCursor, decodedFree, decodedPath, decodedPc, decodedSevm,
-    decodedOutcome, decodedTree, decodedK, decodedOk, long, decodedRep, decodedStor,
-    decodedMemory, decodedData, R, decodedStack, second, secondReturned, secondCursor, g1,
-    secondFree, returnedSecondFree, secondPath, secondPc, secondSevm, secondOutcome,
-    secondInstruction, secondRep, secondStor, secondMemory, secondData, secondStack,
-    secondCalldata, secondFilled, secondEdge, secondReturnedPc, secondReturnedSevm,
-    secondReturnedOutcome, secondResult, secondPrimitive, secondTree, secondK, secondOk, ordered,
-    secondNode, secondAt, parent1, child1, dp1, na1, childCode1, avail1, out1,
-    returnedNodeFree, secondNodePath, secondNodePc, secondNodeSevm, secondNodeOutcome,
-    secondNodeTree, sameSecondK, secondNodeOk, hpost1, outBound1, actualAnswered1,
-    secondReturnedData, childOutput1, clean1, depth1, childStack1, parentTail1,
-    parentState1, parentMemory1, parentLogs1, parentOutput1, authentication1, actualProcess1,
-    resumed1, returnedState1, returnedMemory1, returnedStack1, actualSpawn1, nodeStor1,
-    replyMemory1, nodeData1, nodeStack1, secondInstalled, joined, decoded1, decodedAt1,
-    decodedFree1, finalDecodedPath, finalDecodedPc,
-    finalDecodedSevm, finalDecodedOutcome,
-    decodedTree1, finalDecodedK, decodedOk1, long1,
-    finiteDecoded1, wholeDecodedStor1, wholeDecodedMemory1, decodedData1, wholeDecodedStack1, valueZero, entryUnlocked, exactContinuation, tailFact, decodedLogs, decodedOutput, secondLogs, secondOutput, secondGuarded, finalLogs, finalOutput, allK⟩ :=
+  obtain ⟨occurrence, returned, node, cursor, parent,
+    child, dp, na, childCode, avail,
+    g, S, out, original, decoded,
+    decodedCursor, parentFacts0⟩ :=
     sync_root_second_static_finite_request_reply_turns_decoded_parent pair rep sem image installed time codeEq fork selector run
+  rcases parentFacts0 with ⟨decodedFree, decodedPath, decodedPc, decodedSevm, decodedOutcome,
+    decodedTree, decodedK, decodedOk, long, decodedRep,
+    decodedStor, decodedMemory, decodedData, R, decodedStack,
+    second, parentFacts1⟩
+  rcases parentFacts1 with ⟨secondReturned, secondCursor, g1, secondFree, returnedSecondFree,
+    secondPath, secondPc, secondSevm, secondOutcome, secondInstruction,
+    secondRep, secondStor, secondMemory, secondData, secondStack,
+    secondCalldata, parentFacts2⟩
+  rcases parentFacts2 with ⟨secondFilled, secondEdge, secondReturnedPc, secondReturnedSevm, secondReturnedOutcome,
+    secondResult, secondPrimitive, secondTree, secondK, secondOk,
+    ordered, secondNode, secondAt, parent1, child1,
+    dp1, parentFacts3⟩
+  rcases parentFacts3 with ⟨na1, childCode1, avail1, out1, returnedNodeFree,
+    secondNodePath, secondNodePc, secondNodeSevm, secondNodeOutcome, secondNodeTree,
+    sameSecondK, secondNodeOk, hpost1, outBound1, actualAnswered1,
+    secondReturnedData, parentFacts4⟩
+  rcases parentFacts4 with ⟨childOutput1, clean1, depth1, childStack1, parentTail1,
+    parentState1, parentMemory1, parentLogs1, parentOutput1, authentication1,
+    actualProcess1, resumed1, returnedState1, returnedMemory1, returnedStack1,
+    actualSpawn1, parentFacts5⟩
+  rcases parentFacts5 with ⟨nodeStor1, replyMemory1, nodeData1, nodeStack1, secondInstalled,
+    joined, decoded1, decodedAt1, decodedFree1, finalDecodedPath,
+    finalDecodedPc, finalDecodedSevm, finalDecodedOutcome, decodedTree1, finalDecodedK,
+    decodedOk1, parentFacts6⟩
+  rcases parentFacts6 with ⟨long1, finiteDecoded1, wholeDecodedStor1, wholeDecodedMemory1, decodedData1,
+    wholeDecodedStack1, valueZero, entryUnlocked, exactContinuation, tailFact,
+    decodedLogs, decodedOutput, secondLogs, secondOutput, secondGuarded,
+    finalLogs, parentFacts7⟩
+  rcases parentFacts7 with ⟨finalOutput, allK⟩
   obtain ⟨tail, actualTail⟩ := tailFact
   have continuation : ∃ k : Cont,
       decodedAt1.K = [k] ∧ k.f = t_0257_c78 ∧ k.tag = 0x0257 := by
