@@ -41,7 +41,8 @@ theorem e4C_stat : e4C.sta.benvStat = e3C.sta.benvStat :=
   (frameEnterS_stat e4C_eq).trans (callPrep_stat cp4C_eq).2
 
 theorem e5C_stat : e5C.sta.benvStat = e4C.sta.benvStat :=
-  (frameEnterS_stat e5C_eq).trans (dcallPrep_stat cp5C_eq).2
+  ((frameEnterS_stat e5C_eq).trans (dcallPrep_stat cp5C_eq).2).trans
+    (congrArg Sevm.benvStat (stepN_sta prefix4C))
 
 theorem e0C_block : e0C.sta.benvStat.fork = .prague ∧ e0C.sta.benvStat.excessBlobGas = 0 := by
   rw [e0C_stat]; exact ⟨rfl, rfl⟩
@@ -70,15 +71,15 @@ theorem cp0C_neutral : cp0C.f.PrecompNeutral :=
     (by decide)
 
 theorem cp2C_neutral : cp2C.f.PrecompNeutral :=
-  Frame.precompNeutral_of_codeAddress (congrArg (·.2.2.1) spawned_codeAddressesC) (by decide)
+  Frame.precompNeutral_of_codeAddress ((Prod.mk.inj (Prod.mk.inj (Prod.mk.inj spawned_codeAddressesC).2).2).1) (by decide)
     (by decide)
 
 theorem cp4C_neutral : cp4C.f.PrecompNeutral :=
-  Frame.precompNeutral_of_codeAddress (congrArg (·.2.2.2.1) spawned_codeAddressesC) (by decide)
+  Frame.precompNeutral_of_codeAddress ((Prod.mk.inj (Prod.mk.inj (Prod.mk.inj (Prod.mk.inj spawned_codeAddressesC).2).2).2).1) (by decide)
     (by decide)
 
 theorem cp5C_neutral : cp5C.f.PrecompNeutral :=
-  Frame.precompNeutral_of_codeAddress (congrArg (·.2.2.2.2) spawned_codeAddressesC) (by decide)
+  Frame.precompNeutral_of_codeAddress ((Prod.mk.inj (Prod.mk.inj (Prod.mk.inj (Prod.mk.inj spawned_codeAddressesC).2).2).2).2) (by decide)
     (by decide)
 
 /-! ### The machines each frame enters with, under `g` -/
@@ -153,8 +154,7 @@ theorem prefix4C_at (hg : CoveredFork g) : stepN 11 (e4C.withFork g) = some (e4C
 theorem cp5C_at (hg : CoveredFork g) :
     dcallPrep (e4C31.withFork g).sta e4C31.dyna adrs4C acs4C = some (cp5C.withFork g) := by
   have hf : CoveredFork e4C31.sta.benvStat.fork := by
-    show CoveredFork e4C.sta.benvStat.fork
-    rw [e4C_block.1]; exact CoveredFork.prague
+    rw [stepN_sta prefix4C, e4C_block.1]; exact CoveredFork.prague
   have h := dcallPrep_withFork hf hg e4C31.dyna adrs4C acs4C
   show dcallPrep (e4C31.sta.withFork g) e4C31.dyna adrs4C acs4C = _
   rw [h, cp5C_eq]; rfl
@@ -162,8 +162,10 @@ theorem cp5C_at (hg : CoveredFork g) :
 theorem e5C_at (hg : CoveredFork g) :
     frameEnterS (cp5C.withFork g).f acs4C = .run (e5C.withFork g) := by
   show frameEnterS (cp5C.f.withFork g) _ = _
+  have hstat := dcallPrep_stat cp5C_eq
+  rw [stepN_sta prefix4C] at hstat
   rw [frameEnterS_withFork_of_stat (s := e4C.sta)
-    (by rw [e4C_block.1]; exact CoveredFork.prague) hg (dcallPrep_stat cp5C_eq) cp5C_neutral,
+    (by rw [e4C_block.1]; exact CoveredFork.prague) hg hstat cp5C_neutral,
     e5C_eq]
   rfl
 
