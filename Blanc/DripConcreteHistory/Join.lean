@@ -561,33 +561,110 @@ private theorem concreteJoin_chiMemoryFacts :
     Bytes.toB256 ((concreteJoinStagingMemory.write 160 scale.toBytes).read 160 32).1 = scale ∧
     ((concreteJoinStagingMemory.write 160 scale.toBytes).read 160 32).2 =
       concreteJoinStagingMemory.write 160 scale.toBytes := by
-  exact ⟨by decide +kernel, by decide +kernel, Mem.read_snd_eq_self (by decide +kernel)⟩
+  have hsize : (concreteJoinStagingMemory.write 160 scale.toBytes).size = 192 :=
+    Mem.size_write_of_size (i := 160) concreteJoin_stagingSize
+      (by decide) (B256.length_toBytes scale)
+  have hreads : Mem.Reads (concreteJoinStagingMemory.write 160 scale.toBytes)
+      (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt []
+        64 (100 : B256).toBytes) 96 (0 : B256).toBytes)
+        128 (0 : B256).toBytes) 32 (5 : B256).toBytes) 160 scale.toBytes) := by
+    unfold concreteJoinStagingMemory
+    repeat' first | apply Mem.Reads.write | apply Mem.Wf.write |
+      exact Mem.wf_empty | exact Mem.reads_empty
+  refine ⟨hsize, ?_, Mem.read_snd_eq_self ?_⟩
+  · rw [hreads.read]
+    exact Bytes.readWord_writeAt_self _ _ _
+  · rw [hsize]
+    decide
 
 private theorem concreteJoin_clockMemoryFacts : concreteJoinClockMemory.size = 224 ∧
     Bytes.toB256 (concreteJoinClockMemory.read 192 32).1 = 2 ∧
     (concreteJoinClockMemory.read 192 32).2 = concreteJoinClockMemory := by
-  exact ⟨by decide +kernel, by decide +kernel, Mem.read_snd_eq_self (by decide +kernel)⟩
+  have hsize : concreteJoinClockMemory.size = 224 :=
+    Mem.size_write_of_size (i := 192) concreteJoin_chiMemoryFacts.1
+      (by decide) (B256.length_toBytes (2 : B256))
+  have hreads : Mem.Reads concreteJoinClockMemory
+      (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt []
+        64 (100 : B256).toBytes) 96 (0 : B256).toBytes)
+        128 (0 : B256).toBytes) 32 (5 : B256).toBytes)
+        160 scale.toBytes) 192 (2 : B256).toBytes) := by
+    unfold concreteJoinClockMemory concreteJoinStagingMemory
+    repeat' first | apply Mem.Reads.write | apply Mem.Wf.write |
+      exact Mem.wf_empty | exact Mem.reads_empty
+  refine ⟨hsize, ?_, Mem.read_snd_eq_self ?_⟩
+  · rw [hreads.read]
+    exact Bytes.readWord_writeAt_self _ _ _
+  · rw [hsize]
+    decide
 
 private theorem concreteJoin_exponentMemoryFacts : concreteJoinExponentMemory.size = 224 ∧
     Bytes.toB256 (concreteJoinExponentMemory.read 0 32).1 = 1 ∧
     (concreteJoinExponentMemory.read 0 32).2 = concreteJoinExponentMemory := by
-  exact ⟨by decide +kernel, by decide +kernel, Mem.read_snd_eq_self (by decide +kernel)⟩
+  have hsize : concreteJoinExponentMemory.size = 224 :=
+    Mem.size_write_of_size (i := 0) concreteJoin_clockMemoryFacts.1
+      (by decide) (B256.length_toBytes (1 : B256))
+  refine ⟨hsize, ?_, Mem.read_snd_eq_self ?_⟩
+  · change Bytes.toB256 ((concreteJoinClockMemory.write 0 (1 : B256).toBytes).read 0 32).1 = 1
+    simpa only [B256.length_toBytes, B256.toB256_toBytes] using
+      congrArg Bytes.toB256 (Mem.read_write_zero concreteJoinClockMemory
+        (ys := (1 : B256).toBytes) (by decide))
+  · rw [hsize]
+    decide
 
 private theorem concreteJoin_baseMemoryFacts : concreteJoinBaseMemory.size = 256 ∧
     Bytes.toB256 (concreteJoinBaseMemory.read 0 32).1 = 1 ∧
     (concreteJoinBaseMemory.read 0 32).2 = concreteJoinBaseMemory := by
-  exact ⟨by decide +kernel, by decide +kernel, Mem.read_snd_eq_self (by decide +kernel)⟩
+  have hsize : concreteJoinBaseMemory.size = 256 :=
+    Mem.size_write_of_size (i := 224) concreteJoin_exponentMemoryFacts.1
+      (by decide) (B256.length_toBytes rate)
+  have hreads : Mem.Reads concreteJoinBaseMemory
+      (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt []
+        64 (100 : B256).toBytes) 96 (0 : B256).toBytes)
+        128 (0 : B256).toBytes) 32 (5 : B256).toBytes)
+        160 scale.toBytes) 192 (2 : B256).toBytes)
+        0 (1 : B256).toBytes) 224 rate.toBytes) := by
+    unfold concreteJoinBaseMemory concreteJoinExponentMemory
+      concreteJoinClockMemory concreteJoinStagingMemory
+    repeat' first | apply Mem.Reads.write | apply Mem.Wf.write |
+      exact Mem.wf_empty | exact Mem.reads_empty
+  refine ⟨hsize, ?_, Mem.read_snd_eq_self ?_⟩
+  · rw [hreads.read, Bytes.readWord_writeAt_of_disjoint _ 0 224 _ (by decide)]
+    exact Bytes.readWord_writeAt_self _ _ _
+  · rw [hsize]
+    decide
 
 private theorem concreteJoin_accumulatorMemoryFacts : concreteJoinAccumulatorMemory.size = 288 ∧
     Bytes.toB256 (concreteJoinAccumulatorMemory.read 0 32).1 = 1 ∧
     (concreteJoinAccumulatorMemory.read 0 32).2 = concreteJoinAccumulatorMemory := by
-  exact ⟨by decide +kernel, by decide +kernel, Mem.read_snd_eq_self (by decide +kernel)⟩
+  have hsize : concreteJoinAccumulatorMemory.size = 288 :=
+    Mem.size_write_of_size (i := 256) concreteJoin_baseMemoryFacts.1
+      (by decide) (B256.length_toBytes rate)
+  have hreads : Mem.Reads concreteJoinAccumulatorMemory
+      (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt []
+        64 (100 : B256).toBytes) 96 (0 : B256).toBytes)
+        128 (0 : B256).toBytes) 32 (5 : B256).toBytes)
+        160 scale.toBytes) 192 (2 : B256).toBytes)
+        0 (1 : B256).toBytes) 224 rate.toBytes) 256 rate.toBytes) := by
+    unfold concreteJoinAccumulatorMemory concreteJoinBaseMemory
+      concreteJoinExponentMemory concreteJoinClockMemory concreteJoinStagingMemory
+    repeat' first | apply Mem.Reads.write | apply Mem.Wf.write |
+      exact Mem.wf_empty | exact Mem.reads_empty
+  refine ⟨hsize, ?_, Mem.read_snd_eq_self ?_⟩
+  · rw [hreads.read, Bytes.readWord_writeAt_of_disjoint _ 0 256 _ (by decide),
+      Bytes.readWord_writeAt_of_disjoint _ 0 224 _ (by decide)]
+    exact Bytes.readWord_writeAt_self _ _ _
+  · rw [hsize]
+    decide
 
 private theorem concreteJoin_rpowMemorySize : concreteJoinRpowMemory.size = 288 := by
-  decide +kernel
+  exact Mem.size_write_of_size (i := 0) concreteJoin_accumulatorMemoryFacts.1
+    (by decide) (B256.length_toBytes (0 : B256))
 
 private theorem concreteJoin_rpowMemoryRead : Bytes.toB256 (concreteJoinRpowMemory.read 0 32).1 = 0 := by
-  decide +kernel
+  change Bytes.toB256 ((concreteJoinAccumulatorMemory.write 0 (0 : B256).toBytes).read 0 32).1 = 0
+  simpa only [B256.length_toBytes, B256.toB256_toBytes] using
+    congrArg Bytes.toB256 (Mem.read_write_zero concreteJoinAccumulatorMemory
+      (ys := (0 : B256).toBytes) (by decide))
 
 private theorem concreteJoin_rpowMemoryUnchanged :
     (concreteJoinRpowMemory.read 0 32).2 = concreteJoinRpowMemory := by
