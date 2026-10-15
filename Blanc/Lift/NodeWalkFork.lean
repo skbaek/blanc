@@ -146,6 +146,16 @@ theorem pwalk_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g)
 /-- A call preparation with its frame's fork changed. -/
 def _root_.Blanc.Lift.Witness.CallPrep.withFork (cp : CallPrep) (g : Fork) : CallPrep := { cp with f := cp.f.withFork g }
 
+/-- Changing a call preparation's fork preserves its accessed-address shadow. -/
+theorem _root_.Blanc.Lift.Witness.CallPrep.withFork_adrs (cp : CallPrep) (g : Fork) :
+    (cp.withFork g).adrs = cp.adrs := rfl
+
+/-- Changing a call preparation's fork preserves the parent and output window used to resume. -/
+theorem resumeCallB_withFork (cp : CallPrep) (g : Fork)
+    (ex : Except (EvmError × State × AdrSet × Tra) Devm) :
+    resumeCallB (cp.withFork g).p (cp.withFork g).oi (cp.withFork g).os ex =
+      resumeCallB cp.p cp.oi cp.os ex := rfl
+
 theorem scallPrep_withFork (hf : CoveredFork s.benvStat.fork) (hg : CoveredFork g)
     (d : Devm) (adrs : List Adr) (acs : AcctShadow) :
     scallPrep (s.withFork g) d adrs acs = (scallPrep s d adrs acs).map (·.withFork g) := by
@@ -249,6 +259,19 @@ theorem childCfg_withFork (cevm : Evm) (f : Frame) (keys : List (Adr × B256)) (
     (stor : StorShadow) (acs : AcctShadow) :
     childCfg (cevm.withFork g) (f.withFork g) keys adrs stor acs =
       childCfg cevm f keys adrs stor acs := rfl
+
+/-- Normalize a transported child's node view without unfolding its concrete entry machine. -/
+theorem nodeAt_withFork_entry (cevm : Evm) (cp : CallPrep) (g : Fork)
+    (keys : List (Adr × B256)) (stor : StorShadow) (acs : AcctShadow) (x : Exec.Deriv) :
+    NodeAt (cevm.withFork g).sta
+        (childCfg (cevm.withFork g) (cp.withFork g).f keys (cp.withFork g).adrs stor acs) x =
+      NodeAt (cevm.sta.withFork g) (childCfg cevm cp.f keys cp.adrs stor acs) x := rfl
+
+/-- Normalize a transported child's agreement view without unfolding its concrete preparation. -/
+theorem pagree_withFork_entry (cevm : Evm) (cp : CallPrep) (g : Fork)
+    (keys : List (Adr × B256)) (stor : StorShadow) (acs : AcctShadow) :
+    PAgree (childCfg (cevm.withFork g) (cp.withFork g).f keys (cp.withFork g).adrs stor acs) =
+      PAgree (childCfg cevm cp.f keys cp.adrs stor acs) := rfl
 
 /-! ## What a spawned or entered machine inherits -/
 

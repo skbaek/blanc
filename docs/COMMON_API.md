@@ -930,6 +930,13 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   `Frame.PrecompNeutral` frame (`Frame.precompNeutral_of_codeAddress` from a kernel fact on the
   frame's `codeAddress`), and `scallPrep_stat`/`callPrepP_stat`/`dcallPrep_stat`/
   `frameEnterS_stat` carry the block environment into children.
+  At the resumed parent, `resumeCallB_withFork` preserves the parent and output
+  window, and `CallPrep.withFork_adrs` preserves the accessed-address shadow.
+  Use these abstract equalities to avoid converting record updates on a concrete
+  call preparation. These field laws have no unique registered goal matcher.
+  `nodeAt_withFork_entry` and `pagree_withFork_entry` normalize the node and
+  agreement views of a child entered through a transported call preparation,
+  without unfolding the concrete child machine or preparation.
   For transaction-environment inheritance, use `callPrep_tenvStat` or
   `dcallPrep_tenvStat` on the successful preparation equation (both outer and
   inner frames), then `frameEnterS_tenvStat` on the entry equation for the
