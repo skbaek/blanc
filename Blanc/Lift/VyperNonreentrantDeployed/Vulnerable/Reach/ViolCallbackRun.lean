@@ -96,15 +96,23 @@ def e5Cb (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World) 
   | .run e => e
   | .done _ => default
 
+/-- Share this spawn history across related universally quantified observations. -/
+private theorem enteredCallbackFacts : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
+    (frameEnterS (cpCb5 O tS tA m w).f (acs4Cb O tS tA m w) = .run (e5Cb O tS tA m w)) ∧
+    (((e5Cb O tS tA m w).sta.currentTarget = proxyAddr ∧
+      (e5Cb O tS tA m w).sta.code = Vulnerable.code ∧
+      (e5Cb O tS tA m w).sta.data = reAddCall)) := by
+  kernel_forall_rfl_and
+
 theorem e5Cb_eq : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    frameEnterS (cpCb5 O tS tA m w).f (acs4Cb O tS tA m w) = .run (e5Cb O tS tA m w) := by
-  kernel_forall_rfl
+    frameEnterS (cpCb5 O tS tA m w).f (acs4Cb O tS tA m w) = .run (e5Cb O tS tA m w) :=
+  fun O tS tA m w => (enteredCallbackFacts O tS tA m w).1
 
 theorem e5Cb_facts : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
     ((e5Cb O tS tA m w).sta.currentTarget = proxyAddr ∧
       (e5Cb O tS tA m w).sta.code = Vulnerable.code ∧
-      (e5Cb O tS tA m w).sta.data = reAddCall) := by
-  kernel_forall_rfl_and
+      (e5Cb O tS tA m w).sta.data = reAddCall) :=
+  fun O tS tA m w => (enteredCallbackFacts O tS tA m w).2
 
 /-- F5's start configuration (the probe's convention). -/
 def c5Cb (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World) : Cfg :=
@@ -140,37 +148,54 @@ def post4Cb (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : Worl
   | .halt (.ok d') => d'
   | _ => default
 
+/-- Share this spawn history across related universally quantified observations. -/
+private theorem resumedCallbackFacts : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World)
+    (d : Devm),
+    (resumeCallB (cpCb5 O tS tA m w).p (cpCb5 O tS tA m w).oi (cpCb5 O tS tA m w).os
+      (.ok (obsChild5Cb d)) = some (d4Cb O tS tA m w d)) ∧
+    (stepN 10 ⟨32, (e4Cb O tS tA m w).sta, d4Cb O tS tA m w d⟩ =
+      some (e444Cb O tS tA m w d)) ∧
+    (Evm.step (e444Cb O tS tA m w d) = .halt (.ok (post4Cb O tS tA m w d))) ∧
+    (((post4Cb O tS tA m w d).gasLeft, (post4Cb O tS tA m w d).output.map UInt8.toNat,
+      (post4Cb O tS tA m w d).error.isNone) =
+    (gasCbFwd, outRe.map UInt8.toNat, true)) ∧
+    (((post4Cb O tS tA m w d).accessedAddresses, (post4Cb O tS tA m w d).accessedStorageKeys,
+      (post4Cb O tS tA m w d).state) =
+    ((d4Cb O tS tA m w d).accessedAddresses, (d4Cb O tS tA m w d).accessedStorageKeys,
+      (d4Cb O tS tA m w d).state)) := by
+  kernel_forall_rfl_and
+
 theorem resumeCb_eq : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World)
     (d : Devm),
     resumeCallB (cpCb5 O tS tA m w).p (cpCb5 O tS tA m w).oi (cpCb5 O tS tA m w).os
-      (.ok (obsChild5Cb d)) = some (d4Cb O tS tA m w d) := by
-  kernel_forall_rfl
+      (.ok (obsChild5Cb d)) = some (d4Cb O tS tA m w d) :=
+  fun O tS tA m w d => (resumedCallbackFacts O tS tA m w d).1
 
 theorem tailCb_eq : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World)
     (d : Devm),
     stepN 10 ⟨32, (e4Cb O tS tA m w).sta, d4Cb O tS tA m w d⟩ =
-      some (e444Cb O tS tA m w d) := by
-  kernel_forall_rfl
+      some (e444Cb O tS tA m w d) :=
+  fun O tS tA m w d => (resumedCallbackFacts O tS tA m w d).2.1
 
 theorem returnCb_eq : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World)
     (d : Devm),
-    Evm.step (e444Cb O tS tA m w d) = .halt (.ok (post4Cb O tS tA m w d)) := by
-  kernel_forall_rfl
+    Evm.step (e444Cb O tS tA m w d) = .halt (.ok (post4Cb O tS tA m w d)) :=
+  fun O tS tA m w d => (resumedCallbackFacts O tS tA m w d).2.2.1
 
 theorem post4Cb_obs : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World)
     (d : Devm),
     ((post4Cb O tS tA m w d).gasLeft, (post4Cb O tS tA m w d).output.map UInt8.toNat,
       (post4Cb O tS tA m w d).error.isNone) =
-    (gasCbFwd, outRe.map UInt8.toNat, true) := by
-  kernel_forall_rfl
+    (gasCbFwd, outRe.map UInt8.toNat, true) :=
+  fun O tS tA m w d => (resumedCallbackFacts O tS tA m w d).2.2.2.1
 
 theorem post4Cb_keep : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World)
     (d : Devm),
     ((post4Cb O tS tA m w d).accessedAddresses, (post4Cb O tS tA m w d).accessedStorageKeys,
       (post4Cb O tS tA m w d).state) =
     ((d4Cb O tS tA m w d).accessedAddresses, (d4Cb O tS tA m w d).accessedStorageKeys,
-      (d4Cb O tS tA m w d).state) := by
-  kernel_forall_rfl
+      (d4Cb O tS tA m w d).state) :=
+  fun O tS tA m w d => (resumedCallbackFacts O tS tA m w d).2.2.2.2
 
 /-! ## F3 resumed from F4, to its halt -/
 
@@ -209,12 +234,28 @@ theorem cpCb_codeAddr : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m :
     (cpCb O tS tA m w).f.inner.codeAddress = some proxyAddr := by
   kernel_forall_rfl
 
+/-- Share this spawn history across related universally quantified observations. -/
+private theorem callbackSupportFacts : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
+    (w : World),
+    (decide ((cpCb5 O tS tA m w).f.inner.codeAddress = some implAddr) = true) ∧
+    ((e5Cb O tS tA m w).pc = 0) ∧
+    ((e5Cb O tS tA m w).sta.caller = attackerAddr) ∧
+    ((e5Cb O tS tA m w).sta.target = some proxyAddr) ∧
+    ((e5Cb O tS tA m w).sta.value = 100) ∧
+    ((e5Cb O tS tA m w).sta.depth = 1019) ∧
+    (((e5Cb O tS tA m w).sta.shouldTransferValue = false ∧
+      (e5Cb O tS tA m w).sta.isStatic = false ∧
+      (e5Cb O tS tA m w).sta.disablePrecompiles = false)) ∧
+    ((e5Cb O tS tA m w).sta.tenvStat = (sRe.withOrig O).tenvStat) ∧
+    (Blanc.Lift.Witness.transferKeepsStor (cpCb5 O tS tA m w).f.inner (acs4Cb O tS tA m w) = true) := by
+  kernel_forall_rfl_and
+
 /-- F4's `DELEGATECALL` targets the implementation, as a kernel decision (the `Eq`
 form exceeds the kernel's depth budget; cf. `e4Cb31_stack'`). -/
 theorem cpCb5_codeAddr' : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
     (w : World),
-    decide ((cpCb5 O tS tA m w).f.inner.codeAddress = some implAddr) = true := by
-  kernel_forall_rfl
+    decide ((cpCb5 O tS tA m w).f.inner.codeAddress = some implAddr) = true :=
+  fun O tS tA m w => (callbackSupportFacts O tS tA m w).1
 
 theorem cpCb5_codeAddr : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
     (w : World), (cpCb5 O tS tA m w).f.inner.codeAddress = some implAddr :=
@@ -242,32 +283,32 @@ theorem e4Cb31_state : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : 
   kernel_forall_rfl
 
 theorem e5Cb_pc : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    (e5Cb O tS tA m w).pc = 0 := by
-  kernel_forall_rfl
+    (e5Cb O tS tA m w).pc = 0 :=
+  fun O tS tA m w => (callbackSupportFacts O tS tA m w).2.1
 
 /-- The entered F5 machine's small static fields, as literals. -/
 theorem e5Cb_caller : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
-    (w : World), (e5Cb O tS tA m w).sta.caller = attackerAddr := by
-  kernel_forall_rfl
+    (w : World), (e5Cb O tS tA m w).sta.caller = attackerAddr :=
+  fun O tS tA m w => (callbackSupportFacts O tS tA m w).2.2.1
 
 theorem e5Cb_target : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
-    (w : World), (e5Cb O tS tA m w).sta.target = some proxyAddr := by
-  kernel_forall_rfl
+    (w : World), (e5Cb O tS tA m w).sta.target = some proxyAddr :=
+  fun O tS tA m w => (callbackSupportFacts O tS tA m w).2.2.2.1
 
 theorem e5Cb_value : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
-    (w : World), (e5Cb O tS tA m w).sta.value = 100 := by
-  kernel_forall_rfl
+    (w : World), (e5Cb O tS tA m w).sta.value = 100 :=
+  fun O tS tA m w => (callbackSupportFacts O tS tA m w).2.2.2.2.1
 
 theorem e5Cb_depth : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
-    (w : World), (e5Cb O tS tA m w).sta.depth = 1019 := by
-  kernel_forall_rfl
+    (w : World), (e5Cb O tS tA m w).sta.depth = 1019 :=
+  fun O tS tA m w => (callbackSupportFacts O tS tA m w).2.2.2.2.2.1
 
 theorem e5Cb_flags : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
     (w : World),
     ((e5Cb O tS tA m w).sta.shouldTransferValue = false ∧
       (e5Cb O tS tA m w).sta.isStatic = false ∧
-      (e5Cb O tS tA m w).sta.disablePrecompiles = false) := by
-  kernel_forall_rfl_and
+      (e5Cb O tS tA m w).sta.disablePrecompiles = false) :=
+  fun O tS tA m w => (callbackSupportFacts O tS tA m w).2.2.2.2.2.2.1
 
 /-- The entered F5 machine inherits the block environment down the spawn chain (no
 kernel evaluation: each hop is a spec lemma). -/
@@ -284,8 +325,8 @@ theorem e5Cb_sta_benvStat : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) 
 
 theorem e5Cb_sta_tenv : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
     (w : World),
-    (e5Cb O tS tA m w).sta.tenvStat = (sRe.withOrig O).tenvStat := by
-  kernel_forall_rfl
+    (e5Cb O tS tA m w).sta.tenvStat = (sRe.withOrig O).tenvStat :=
+  fun O tS tA m w => (callbackSupportFacts O tS tA m w).2.2.2.2.2.2.2.1
 
 /-- F3's `CALL` moves its 100 wei between accounts with nonzero nonces: no storage is deleted. -/
 theorem keepsCb : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
@@ -294,7 +335,7 @@ theorem keepsCb : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
 
 /-- F4's `DELEGATECALL` moves no value. -/
 theorem keepsCb5 : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    Blanc.Lift.Witness.transferKeepsStor (cpCb5 O tS tA m w).f.inner (acs4Cb O tS tA m w) = true := by
-  kernel_forall_rfl
+    Blanc.Lift.Witness.transferKeepsStor (cpCb5 O tS tA m w).f.inner (acs4Cb O tS tA m w) = true :=
+  fun O tS tA m w => (callbackSupportFacts O tS tA m w).2.2.2.2.2.2.2.2
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol
