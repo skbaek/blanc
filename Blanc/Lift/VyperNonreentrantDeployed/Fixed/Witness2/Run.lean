@@ -184,6 +184,115 @@ def dTop : Devm := haltOf (pwalkH .refuse fwdTries eTop.sta okAny 1 cTop3)
 
 /-! ## The kernel decisions -/
 
+/-- Share the execution history across these two fact batches. -/
+private theorem runFactsAB :
+    (-- the forwarder frame: 11 steps to its `DELEGATECALL`, which spawns the pool body
+    pwalkH .refuse fwdTries eTop.sta okAny 11 cTop = .cont cTop1 ∧
+    cTop1.pc = 31 ∧
+    decodeT 6 fwdTries.bytes 31 = some (.next (.exec .delegatecall)) ∧
+    dcallPrep eTop.sta cTop1.devm cTop1.adrs cTop1.acs = some cpTop ∧
+    frameEnterS cpTop.f cTop1.acs = .run eB ∧
+    (eB.pc, eB.sta.currentTarget, eB.sta.code, eB.sta.data, eB.sta.benvStat.fork) =
+      (0, proxyAddress, code, removeCall, .prague) ∧
+    -- the pool body: the body start, the `STATICCALL` of `balanceOf`
+    pwalkH (.avoid 0) codeTries eB.sta okAny 174 cB0 = .cont cB1 ∧
+    cB1.pc = 0x1bae ∧
+    pwalkH (.avoid 0) codeTries eB.sta okNoRel 57 cB1 = .cont cB2 ∧
+    cB2.pc = 13178 ∧
+    decodeT 15 codeTries.bytes 13178 = some (.next (.exec .staticcall)) ∧
+    scallPrep eB.sta cB2.devm cB2.adrs cB2.acs = some cpBal ∧
+    frameEnterS cpBal.f cB2.acs = .run eBal ∧
+    (eBal.pc, eBal.sta.currentTarget, eBal.sta.code) = (0, receiverAddress, Receiver.code) ∧
+    -- the coin frame returns the word 1
+    pwalkH .refuse receiverTries eBal.sta okAny 8 cBal0 = .cont cBal1 ∧
+    pwalkH .refuse receiverTries eBal.sta okAny 1 cBal1 = .halt (.ok dBal) ∧
+    dBal.error = none ∧
+    -- the pool body after the coin: the ETH `CALL`
+    resumeCallB cpBal.p cpBal.oi cpBal.os (.ok dBal) = some dB3 ∧
+    pwalkH (.avoid 0) codeTries eB.sta okNoRel 151 cB3 = .cont cB4 ∧
+    cB4.pc = 7427 ∧
+    decodeT 15 codeTries.bytes 7427 = some (.next (.exec .call)) ∧
+    callPrepP eB.sta cB4 = some cpEth ∧
+    frameEnterS cpEth.f cB4.acs = .run eRcv ∧
+    (eRcv.pc, eRcv.sta.currentTarget, eRcv.sta.code, eRcv.sta.value.toNat, eRcv.sta.caller) =
+      (0, receiverAddress, Receiver.code, 100, proxyAddress)) ∧
+    (-- the receiver frame: 14 steps to its `CALL` of the pool forwarder
+    pwalkH .refuse receiverTries eRcv.sta okAny 14 cRcv0 = .cont cRcv1 ∧
+    cRcv1.pc = 83 ∧
+    decodeT 7 receiverTries.bytes 83 = some (.next (.exec .call)) ∧
+    callPrepP eRcv.sta cRcv1 = some cpCb ∧
+    frameEnterS cpCb.f cRcv1.acs = .run eCb ∧
+    (eCb.pc, eCb.sta.currentTarget, eCb.sta.code, eCb.sta.value.toNat) =
+      (0, proxyAddress, fwdCode, 0) ∧
+    -- the callback forwarder: 11 steps to its `DELEGATECALL`
+    pwalkH .refuse fwdTries eCb.sta okAny 11 cCb0 = .cont cCb1 ∧
+    cCb1.pc = 31 ∧
+    decodeT 6 fwdTries.bytes 31 = some (.next (.exec .delegatecall)) ∧
+    dcallPrep eCb.sta cCb1.devm cCb1.adrs cCb1.acs = some cpRe ∧
+    frameEnterS cpRe.f cCb1.acs = .run eRe ∧
+    (eRe.pc, eRe.sta.currentTarget, eRe.sta.code, eRe.sta.data) =
+      (0, proxyAddress, code, reentryCall) ∧
+    -- the reentrant frame: the lock check, the landing pad, `REVERT`
+    pwalkH (.avoid 0) codeTries eRe.sta okNoBody 26 cRe0 = .cont cRe1 ∧
+    cRe1.pc = 0x53 ∧
+    pwalkH (.avoid 0) codeTries eRe.sta okNoBody 6 cRe1 = .cont cRe2 ∧
+    cRe2.pc = 0x477e ∧
+    pwalkH (.avoid 0) codeTries eRe.sta okNoBody 4 cRe2 = .halt (.error (.revert, dRe)) ∧
+    -- the callback forwarder after its failed child
+    cpRe.f.settle (.error (.revert, dRe)) = .ok (settleOr cpRe.f (.error (.revert, dRe))) ∧
+    resumeCallB cpRe.p cpRe.oi cpRe.os (.ok (settleOr cpRe.f (.error (.revert, dRe)))) =
+      some dCb2 ∧
+    pwalkH .refuse fwdTries eCb.sta okAny 9 cCb2 = .cont cCb3 ∧
+    pwalkH .refuse fwdTries eCb.sta okAny 1 cCb3 = .halt (.error (.revert, dCb)) ∧
+    -- the receiver after its failed call
+    cpCb.f.settle (.error (.revert, dCb)) = .ok (settleOr cpCb.f (.error (.revert, dCb))) ∧
+    resumeCallB cpCb.p cpCb.oi cpCb.os (.ok (settleOr cpCb.f (.error (.revert, dCb)))) =
+      some dRcv2 ∧
+    pwalkH .refuse receiverTries eRcv.sta okAny 1 cRcv2 = .cont cRcv3 ∧
+    pwalkH .refuse receiverTries eRcv.sta okAny 1 cRcv3 = .halt (.ok dRcv) ∧
+    dRcv.error = none) := by
+  kernel_rfl_and
+
+/-- Share the execution history across these two fact batches. -/
+private theorem runFactsCD :
+    (resumeCallB cpEth.p cpEth.oi cpEth.os (.ok dRcv) = some dB5 ∧
+    pwalkH (.avoid 0) codeTries eB.sta okAny 119 cB5 = .cont cB6 ∧
+    cB6.pc = 7488 ∧
+    decodeT 15 codeTries.bytes 7488 = some (.next (.exec .call)) ∧
+    callPrepP eB.sta cB6 = some cpXf ∧
+    frameEnterS cpXf.f cB6.acs = .run eXf ∧
+    (eXf.pc, eXf.sta.currentTarget, eXf.sta.code, eXf.sta.value.toNat) =
+      (0, receiverAddress, Receiver.code, 0) ∧
+    pwalkH .refuse receiverTries eXf.sta okAny 8 cXf0 = .cont cXf1 ∧
+    pwalkH .refuse receiverTries eXf.sta okAny 1 cXf1 = .halt (.ok dXf) ∧
+    dXf.error = none ∧
+    resumeCallB cpXf.p cpXf.oi cpXf.os (.ok dXf) = some dB7 ∧
+    pwalkH (.avoid 0) codeTries eB.sta okAny 125 cB7 = .cont cB8 ∧
+    pwalkH (.avoid 0) codeTries eB.sta okAny 1 cB8 = .halt (.ok dB) ∧
+    dB.error = none ∧
+    resumeCallB cpTop.p cpTop.oi cpTop.os (.ok dB) = some dTop2 ∧
+    pwalkH .refuse fwdTries eTop.sta okAny 10 cTop2 = .cont cTop3 ∧
+    pwalkH .refuse fwdTries eTop.sta okAny 1 cTop3 = .halt (.ok dTop)) ∧
+    ((eTop.pc, eTop.sta.currentTarget, eTop.sta.code, eTop.sta.benvStat.fork) =
+      (0, proxyAddress, fwdCode, .prague) ∧
+    (lookupA cTop.acs proxyAddress).code = fwdCode ∧
+    (lookupA cTop.acs curvePlainImpl847e).code = code ∧
+    (lookupA cTop3.acs proxyAddress).bal.toNat = 900 ∧
+    (lookupA cTop3.acs receiverAddress).bal.toNat = 100 ∧
+    lookupS cTop3.stor proxyAddress 0 = (3 : Nat).toB256 ∧
+    (lookupA cTop.acs proxyAddress).bal.toNat = 1000 ∧
+    (lookupA cTop.acs receiverAddress).bal.toNat = 0 ∧
+    lookupS cTop.stor proxyAddress 0 = (3 : Nat).toB256 ∧
+    -- the code addresses of the six spawned frames (none is `MODEXP` or `P256VERIFY`, so
+    -- every spawn transports to any covered fork: `Frames.lean`)
+    cpTop.f.inner.codeAddress = some curvePlainImpl847e ∧
+    cpBal.f.inner.codeAddress = some receiverAddress ∧
+    cpEth.f.inner.codeAddress = some receiverAddress ∧
+    cpCb.f.inner.codeAddress = some proxyAddress ∧
+    cpRe.f.inner.codeAddress = some curvePlainImpl847e ∧
+    cpXf.f.inner.codeAddress = some receiverAddress) := by
+  kernel_rfl_and
+
 /-- The forwarder and the pool body up to the ETH `CALL`, and the receiver's entry. -/
 theorem runFactsA :
     -- the forwarder frame: 11 steps to its `DELEGATECALL`, which spawns the pool body
@@ -215,8 +324,7 @@ theorem runFactsA :
     callPrepP eB.sta cB4 = some cpEth ∧
     frameEnterS cpEth.f cB4.acs = .run eRcv ∧
     (eRcv.pc, eRcv.sta.currentTarget, eRcv.sta.code, eRcv.sta.value.toNat, eRcv.sta.caller) =
-      (0, receiverAddress, Receiver.code, 100, proxyAddress) := by
-  kernel_rfl_and
+      (0, receiverAddress, Receiver.code, 100, proxyAddress) := runFactsAB.1
 
 /-- The receiver, the callback forwarder and the reentrant pool frame. -/
 theorem runFactsB :
@@ -254,8 +362,7 @@ theorem runFactsB :
       some dRcv2 ∧
     pwalkH .refuse receiverTries eRcv.sta okAny 1 cRcv2 = .cont cRcv3 ∧
     pwalkH .refuse receiverTries eRcv.sta okAny 1 cRcv3 = .halt (.ok dRcv) ∧
-    dRcv.error = none := by
-  kernel_rfl_and
+    dRcv.error = none := runFactsAB.2
 
 /-- The pool body after the receiver: the transfer, `RETURN`; the forwarder's tail. -/
 theorem runFactsC :
@@ -276,8 +383,7 @@ theorem runFactsC :
     dB.error = none ∧
     resumeCallB cpTop.p cpTop.oi cpTop.os (.ok dB) = some dTop2 ∧
     pwalkH .refuse fwdTries eTop.sta okAny 10 cTop2 = .cont cTop3 ∧
-    pwalkH .refuse fwdTries eTop.sta okAny 1 cTop3 = .halt (.ok dTop) := by
-  kernel_rfl_and
+    pwalkH .refuse fwdTries eTop.sta okAny 1 cTop3 = .halt (.ok dTop) := runFactsCD.1
 
 /-- The forwarder's entry, the pre- and post-state the shadows show, and the code addresses of
 the spawned frames. -/
@@ -299,8 +405,7 @@ theorem runFactsD :
     cpEth.f.inner.codeAddress = some receiverAddress ∧
     cpCb.f.inner.codeAddress = some proxyAddress ∧
     cpRe.f.inner.codeAddress = some curvePlainImpl847e ∧
-    cpXf.f.inner.codeAddress = some receiverAddress := by
-  kernel_rfl_and
+    cpXf.f.inner.codeAddress = some receiverAddress := runFactsCD.2
 
 /-- **Control: the hash policy bites in this run.**  The last walk of the pool body executes one
 `KECCAK256` (pc 7612, the digest is `balanceSlot`); the same walk under the policy `.avoid
