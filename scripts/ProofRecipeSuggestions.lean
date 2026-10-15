@@ -1,6 +1,7 @@
 import Blanc.ProofRecipeTactic
 import Blanc.MachineDataFacts
 import Blanc.Lift.CodeSizeWalk
+import Blanc.Lift.NodeWalkOrig
 import Blanc.RootedExecution
 import Blanc.MessageExecution
 import Blanc.ExecutionNoninterference
@@ -102,6 +103,74 @@ elab "expect_no_recipe_offered" id:str : tactic =>
     let target ← Lean.instantiateMVars (← Lean.Elab.Tactic.getMainTarget)
     if ← proofRecipeMatches target (← proofRecipeById id.getString) then
       throwError "expected blanc_suggest not to offer proof recipe {id.getString} on this goal"
+
+-- EXPECT: changed-frame-projection
+example (s : Sevm) (O : State) : (s.withOrig O).code = s.code := by
+  expect_recipe_trigger "goal-shape:changed-frame-projection"
+  expect_recipe_offered "changed-frame-projection"
+  blanc_suggest
+  exact Jaune.Sevm.withOrig_code s O
+
+-- Fund/Add's code transport exposes withOrig above withFork and an arbitrary
+-- known code image, rather than requiring the RHS to be the original projection.
+example (s : Sevm) (g : Fork) (O : State) (code : ByteArray) (h : s.code = code) :
+    ((s.withFork g).withOrig O).code = code := by
+  expect_recipe_trigger "goal-shape:changed-frame-projection"
+  exact (Jaune.Sevm.withOrig_code _ _).trans
+    ((Blanc.ForkUniform.Sevm.withFork_code _ _).trans h)
+
+example (cp : Lift.Witness.CallPrep) (g : Fork) (O : State) :
+    (cp.re g O).adrs = cp.adrs := by
+  expect_recipe_trigger "goal-shape:changed-frame-projection"
+  exact Lift.Witness.CallPrep.re_adrs cp g O
+
+example (cp : Lift.Witness.CallPrep) (g : Fork) (O : State)
+    (r : Except (EvmError × State × AdrSet × Tra) Devm) :
+    Lift.Witness.resumeCallB (cp.re g O).p (cp.re g O).oi (cp.re g O).os r =
+      Lift.Witness.resumeCallB cp.p cp.oi cp.os r := by
+  expect_recipe_trigger "goal-shape:changed-frame-projection"
+  exact Lift.NodeWalk.resumeCallB_re cp g O r
+
+-- Close lookalikes exercise the registered production route, not theorem truth.
+example (s : Sevm) : s.code = s.code := by
+  expect_no_recipe_trigger "goal-shape:changed-frame-projection"
+  expect_no_recipe_offered "changed-frame-projection"
+  rfl
+
+example (cp : Lift.Witness.CallPrep) : cp.adrs = cp.adrs := by
+  expect_no_recipe_trigger "goal-shape:changed-frame-projection"
+  rfl
+
+example (cp : Lift.Witness.CallPrep)
+    (r : Except (EvmError × State × AdrSet × Tra) Devm) :
+    Lift.Witness.resumeCallB cp.p cp.oi cp.os r =
+      Lift.Witness.resumeCallB cp.p cp.oi cp.os r := by
+  expect_no_recipe_trigger "goal-shape:changed-frame-projection"
+  rfl
+
+example (s : Sevm) (g : Fork) : (s.withFork g).code = s.code := by
+  expect_no_recipe_trigger "goal-shape:changed-frame-projection"
+  exact Blanc.ForkUniform.Sevm.withFork_code s g
+
+example (s : Sevm) (O : State) : s.code = (s.withOrig O).code := by
+  expect_no_recipe_trigger "goal-shape:changed-frame-projection"
+  exact (Jaune.Sevm.withOrig_code s O).symm
+
+example (s : Sevm) (O : State) :
+    let changed := s.withOrig O
+    changed.code = s.code := by
+  intro changed
+  expect_no_recipe_trigger "goal-shape:changed-frame-projection"
+  exact Jaune.Sevm.withOrig_code s O
+
+-- All projections must belong to the same syntactic changed preparation;
+-- equal field values alone do not identify the supported recipe shape.
+example (cp : Lift.Witness.CallPrep) (g h : Fork) (O : State)
+    (r : Except (EvmError × State × AdrSet × Tra) Devm) :
+    Lift.Witness.resumeCallB (cp.re g O).p (cp.re h O).oi (cp.re g O).os r =
+      Lift.Witness.resumeCallB cp.p cp.oi cp.os r := by
+  expect_no_recipe_trigger "goal-shape:changed-frame-projection"
+  rfl
 
 -- EXPECT: machine-state-debit
 example {before after : Devm} {address : Adr} {value : B256}

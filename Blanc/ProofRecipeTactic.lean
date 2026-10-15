@@ -41,6 +41,45 @@ def proofRecipeLeafTriggerMatches (target : Lean.Expr) (trigger : String) : Tact
       return head == some `Blanc.CompiledStackSafety.ResumeSafe
   | "goal-shape:finite-coalition-ledger" =>
       return proofRecipeContainsName `Blanc.ledgerSumOn target
+  | "goal-shape:changed-frame-projection" =>
+      -- Inspect only the equality's left side. Never reduce a source machine
+      -- or unfold an alias to discover an update.
+      let projectionSource? (structureName projectionName : Lean.Name)
+          (index : Nat) (expr : Lean.Expr) : Option Lean.Expr :=
+        match expr.consumeMData with
+        | .proj name field source =>
+            if name == structureName && field == index then
+              some source.consumeMData else none
+        | .app (.const name _) source =>
+            if name == projectionName then some source.consumeMData else none
+        | _ => none
+      let isRe (expr : Lean.Expr) :=
+        expr.getAppFn.isConstOf `Blanc.Lift.Witness.CallPrep.re &&
+          expr.getAppArgs.size == 3
+      let reProjection? (projectionName : Lean.Name) (index : Nat)
+          (expr : Lean.Expr) : Option Lean.Expr := do
+        let source ← projectionSource? `Blanc.Lift.Witness.CallPrep projectionName index expr
+        if isRe source then some source else none
+      match proofRecipeEqLhs? target with
+      | none => return false
+      | some lhs =>
+          if let some source := projectionSource? `Jaune.Sevm `Jaune.Sevm.code 7 lhs then
+            return source.getAppFn.isConstOf `Jaune.Sevm.withOrig &&
+              source.getAppArgs.size == 2
+          if (reProjection? `Blanc.Lift.Witness.CallPrep.adrs 4 lhs).isSome then
+            return true
+          let lhs := lhs.consumeMData
+          unless lhs.getAppFn.isConstOf `Blanc.Lift.Witness.resumeCallB do
+            return false
+          let args := lhs.getAppArgs
+          match args with
+          | #[parent, offset, size, _] =>
+              match reProjection? `Blanc.Lift.Witness.CallPrep.p 1 parent,
+                  reProjection? `Blanc.Lift.Witness.CallPrep.oi 2 offset,
+                  reProjection? `Blanc.Lift.Witness.CallPrep.os 3 size with
+              | some p, some i, some s => return p == i && p == s
+              | _, _, _ => return false
+          | _ => return false
   | "goal-shape:machine-state-debit" =>
       return (proofRecipeEqLhs? target).bind proofRecipeHeadName? ==
         some `Jaune.State.subBal

@@ -114,6 +114,14 @@ def recipes : List Recipe := [
     boundary := "Do not duplicate the settlement/determinism tail, and do not infer deadness from qualified-name grep alone. CALL (7 operands, value, stipend) and STATICCALL (6 operands, forced static) have separate inversion statements: select by operand count, never by analogy. The inversion pair inverts an existing run and never manufactures liveness from a prefix; the spawn-source trichotomy's same-target disjunct is open for arbitrary instructions; the dedicated STATICCALL theorem requires nondelegation. Cursor family restrictions do not assert child commitment or effects."
   },
   {
+    id := "changed-frame-projection"
+    status := "active"
+    triggers := ["goal-shape:changed-frame-projection"]
+    preferredPath := "Import `Blanc.Lift.NodeWalkOrig` and rewrite the exposed projection with `Jaune.Sevm.withOrig_code`, `Blanc.Lift.Witness.CallPrep.re_adrs`, or `Blanc.Lift.NodeWalk.resumeCallB_re`. For nested fork/original-state code transport, compose `Jaune.Sevm.withOrig_code` with `Blanc.ForkUniform.Sevm.withFork_code`, then the known code equality, as in Fund/Add's `frameBalD` and `frameDB`. Keep the source machine symbolic while applying these named equalities; compose a resume equality with the known resumed configuration rather than asking kernel conversion to compare concrete machines."
+    symbols := ["module:Blanc/Lift/NodeWalkOrig.lean", "declaration:_root_.Jaune.Sevm.withOrig_code", "declaration:Blanc.ForkUniform.Sevm.withFork_code", "declaration:Blanc.Lift.Witness.CallPrep.re_adrs", "declaration:Blanc.Lift.NodeWalk.resumeCallB_re"]
+    boundary := "Advice matches only a direct equality whose left side is Sevm.code applied to an explicit Sevm.withOrig, CallPrep.adrs applied to an explicit CallPrep.re, or resumeCallB whose parent and both output-window projections come from the same explicit CallPrep.re. It does not match reversed equalities, plain projections, unrelated updates, or updates hidden by aliases. Unfold only the local binding hiding the relevant update or projection and run blanc_suggest again; do not normalize a concrete machine. These projection laws establish no fork coverage, original-storage agreement, frame entry, settlement, or execution."
+  },
+  {
     id := "devm-projection-bridge"
     status := "active"
     triggers := ["goal-shape:devm-update-projection"]

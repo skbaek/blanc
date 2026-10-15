@@ -423,6 +423,8 @@ def tactic_inventory(root: Path) -> Set[str]:
 
 
 def canonical_declaration(name: str) -> str:
+    if name.startswith("_root_."):
+        return name[len("_root_.") :]
     return name if name.startswith("Blanc.") else f"Blanc.{name}"
 
 
@@ -660,6 +662,8 @@ STRUCTURAL_DISPATCH_ARMS = frozenset({"goal-shape:shared-subject-kernel-decision
 JAUNE_DISPATCH_PIN = "55d296d768c5c9134cbf415d77b950b866939156"
 JAUNE_DISPATCH_SURFACE = frozenset({
     "Jaune.State.subBal",
+    "Jaune.Sevm",
+    "Jaune.Sevm.code",
     "Jaune.B256.bexp",
     "Jaune.Devm",
     "Jaune.Devm.accessedAddresses",
@@ -729,6 +733,7 @@ UNWITNESSED_RECIPES: Dict[str, str] = {
 # gaining an unrelated one cannot cancel out.
 REACHABILITY_WITNESSED_TRIGGERS = frozenset({
     "goal-shape:machine-state-debit",
+    "goal-shape:changed-frame-projection",
     "goal-shape:word-exponentiation",
     "context-shape:intermediate-devm",
     "goal-head:CompiledStackSafety.Certificate",
@@ -925,7 +930,10 @@ def validate_trigger_dispatch(
     vacuous: List[str] = []
     closures = {trigger: arm_dispatch_closure(arms[trigger], helpers) for trigger in arms}
     for trigger in sorted(arms):
-        own = sorted(name for name in closures[trigger] if name.startswith("Blanc."))
+        own = sorted(
+            name for name in closures[trigger]
+            if name.startswith("Blanc.") or name in names
+        )
         for name in own:
             checked += 1
             if name not in names:
@@ -958,7 +966,7 @@ def validate_trigger_dispatch(
             )
             continue
         closure = closures[trigger]
-        if any(name.startswith("Blanc.") for name in closure):
+        if any(name.startswith("Blanc.") or name in names for name in closure):
             vacuous.append(
                 f"{TACTICS_PATH}: trigger {trigger!r} is listed as unchecked "
                 f"({reason}) but now dispatches on a Blanc declaration — remove "
@@ -1201,7 +1209,7 @@ def materialized_jaune_rev(package: Path) -> str:
 
 
 def validate_jaune_dispatch(
-    closures: Dict[str, Set[str]], root: Path
+    closures: Dict[str, Set[str]], root: Path, local_names: Set[str]
 ) -> Tuple[int, int]:
     """Close the half of the trigger dispatch ``validate_trigger_dispatch`` cannot see.
 
@@ -1209,7 +1217,10 @@ def validate_jaune_dispatch(
     against was unchecked -- including the Jaune disjuncts of two arms that the
     per-arm guard reports as checked. This one binds the whole Jaune dispatch
     surface to the pin it was verified against, and resolves it against the
-    pinned source whenever Lake has materialized it.
+    pinned source whenever Lake has materialized it. Blanc-owned declarations
+    under the Jaune namespace (such as Sevm.withOrig) are checked against the
+    exact local inventory by validate_trigger_dispatch, not the dependency.
+    A lost local name becomes an unlisted dependency name and fails closed.
 
     Returns ``(surface size, names resolved against the pinned source)``; the
     second number is zero when the dependency is not materialized, and the
@@ -1226,7 +1237,8 @@ def validate_jaune_dispatch(
     for closure in closures.values():
         for name in closure:
             if name.startswith("Jaune."):
-                actual.add(name)
+                if name not in local_names:
+                    actual.add(name)
             elif not name.startswith("Blanc.") and name not in CORE_DISPATCH_NAMES:
                 stray.add(name)
     if stray:
@@ -1461,17 +1473,20 @@ def load_and_validate(root: Path) -> Registry:
     tactics = tactic_inventory(root)
     supported_triggers = proof_recipe_trigger_inventory(root)
     helpers = proof_recipe_helper_bodies(root)
-    validate_trigger_dispatch(
-        supported_triggers,
-        declarations | constructor_inventory(root),
-        helpers,
-    )
+    # Use the existing structure-aware reader for dispatch only: projections
+    # such as CallPrep.adrs are generated fields, not explicit declarations.
+    # Keep the recipe-symbol inventory's existing meaning unchanged.
+    dispatch_names = declarations | constructor_inventory(root)
+    for source in lean_sources(root):
+        dispatch_names.update(foreign_declarations_in(source))
+    validate_trigger_dispatch(supported_triggers, dispatch_names, helpers)
     jaune_surface, jaune_resolved = validate_jaune_dispatch(
         {
             trigger: arm_dispatch_closure(arm, helpers)
             for trigger, arm in supported_triggers.items()
         },
         root,
+        dispatch_names,
     )
     seen_ids: Set[str] = set()
     recipes: List[Recipe] = []
@@ -1947,6 +1962,16 @@ def self_test(root: Path) -> None:
             "missing ['boundary']",
         )
 
+        rejected(
+            "root-qualified-symbol-typo",
+            replace_once(
+                original, "declaration:_root_.Jaune.Sevm.withOrig_code",
+                "declaration:_root_.Jaune.Sevm.withOrig_codeTypo",
+                "root-qualified-symbol-typo",
+            ),
+            "was not found",
+        )
+
         tactics_path = test_root / TACTICS_PATH
         tactics_original = tactics_path.read_text(encoding="utf-8")
         leaf_dispatch_path = test_root / LEAF_TACTICS_PATH
@@ -1985,15 +2010,19 @@ def self_test(root: Path) -> None:
         )
         # ... and the check is not vacuous: dispatch reworded out of its sight
         # fails rather than passing green over an empty population. The
-        # population spans both dispatch files, so emptying the core alone
-        # would leave the leaf arm checked and trip the per-arm guard instead.
+        # population spans both dispatch files and includes locally owned
+        # Jaune-namespace declarations. Empty both namespaces in both files;
+        # leaving either would exercise the per-arm guard, not empty coverage.
         leaf_dispatch_path.write_text(
-            leaf_dispatch_original.replace("`Blanc.", "`Departed."), encoding="utf-8"
+            leaf_dispatch_original.replace("`Blanc.", "`Departed.")
+                .replace("`Jaune.", "`DepartedJaune."),
+            encoding="utf-8",
         )
         try:
             rejected_tactics(
                 "emptied-trigger-dispatch",
-                tactics_original.replace("`Blanc.", "`Departed."),
+                tactics_original.replace("`Blanc.", "`Departed.")
+                    .replace("`Jaune.", "`DepartedJaune."),
                 "reworded out of",
             )
         finally:
@@ -2047,6 +2076,8 @@ def self_test(root: Path) -> None:
             "manifest": test_root / MANIFEST_PATH,
             "lakefile": test_root / LAKEFILE_PATH,
             "tactics": tactics_path,
+            "leaf": leaf_dispatch_path,
+            "local-jaune-source": test_root / "Blanc/Lift/NodeWalkOrig.lean",
             "jaune-source": package_root / JAUNE_LIBRARY_DIR / "Surface.lean",
             "jaune-head": package_root / ".git" / "HEAD",
         }
@@ -2078,6 +2109,36 @@ def self_test(root: Path) -> None:
                 for name in mutations:
                     files[name].write_text(originals[name], encoding="utf-8")
             controls += 1
+
+        # The baseline above positively resolves the local Jaune-namespace
+        # owner. A typo, loss of that owner, or relocation into the dependency
+        # must not turn the local declaration into an unchecked foreign name.
+        rejected_files(
+            "local-jaune-name-misspelled",
+            {"leaf": replace_once(
+                originals["leaf"], "`Jaune.Sevm.withOrig",
+                "`Jaune.Sevm.withOrigTypo", "local-jaune-name-misspelled",
+            )},
+            "is dispatched on but unlisted",
+        )
+        renamed_local = replace_once(
+            originals["local-jaune-source"],
+            "def Sevm.withOrig (s : Sevm)", "def Sevm.withOrigRenamed (s : Sevm)",
+            "local-jaune-owner-departed",
+        )
+        rejected_files(
+            "local-jaune-owner-departed", {"local-jaune-source": renamed_local},
+            "is dispatched on but unlisted",
+        )
+        rejected_files(
+            "local-jaune-wrong-owner",
+            {
+                "local-jaune-source": renamed_local,
+                "jaune-source": originals["jaune-source"] +
+                    "\ndef Jaune.Sevm.withOrig : Nat := 0\n",
+            },
+            "is dispatched on but unlisted",
+        )
 
         moved_pin = "f" * 40
 
@@ -2294,16 +2355,16 @@ def self_test(root: Path) -> None:
         ), "is not implemented by")
         rejected_matcher("leaf-open-fallback", replace_once(
             leaf_original,
-            "| _ => return false",
-            "| _ => return true",
+            "\n  | _ => return false\n",
+            "\n  | _ => return true\n",
             "leaf-open-fallback",
         ), "wildcard must be exactly")
         rejected_matcher("duplicate-leaf-trigger", replace_once(
             leaf_original,
-            "| _ => return false",
-            '| "goal-shape:finite-coalition-ledger" =>\n'
+            "\n  | _ => return false\n",
+            '\n  | "goal-shape:finite-coalition-ledger" =>\n'
             '      return proofRecipeContainsName `Blanc.ledgerSumOn target\n'
-            "  | _ => return false",
+            "  | _ => return false\n",
             "duplicate-leaf-trigger",
         ), "duplicate proofRecipeLeafTriggerMatches arm")
         core_trigger = sorted(matcher_trigger_inventory(
@@ -2364,8 +2425,8 @@ def self_test(root: Path) -> None:
         else:
             raise RecipeError("self-test root-aggregate wrong-case alias passed")
         print("OK — proof recipe root aggregate: 1/1 wrong-case alias control live")
-    if controls != 31:
-        raise RecipeError(f"self-test accounting: expected 31 controls, ran {controls}")
+    if controls != 35:
+        raise RecipeError(f"self-test accounting: expected 35 controls, ran {controls}")
 
 
 def coverage_phrase(registry: Registry) -> str:
@@ -2407,7 +2468,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if args.self_test:
             self_test(root)
             print(
-                "OK — proof recipes self-test: 31/31 drift, schema, trigger, "
+                "OK — proof recipes self-test: 35/35 drift, schema, trigger, "
                 "matcher-ownership, trigger-dispatch, Jaune-dispatch, harness-enumeration, and symbol "
                 "controls live"
             )

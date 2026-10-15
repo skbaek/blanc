@@ -994,6 +994,13 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   (measured: a frame module went from a 16.4 GiB retraction to a 5.1 GiB build). Use
   `resumeCallB_re` to preserve the parent and output window of a transformed call preparation,
   and `CallPrep.re_adrs` for its accessed-address shadow at the resumed configuration.
+  The `changed-frame-projection` recipe recognizes direct equality goals exposing
+  `Sevm.code` over `Sevm.withOrig`, `CallPrep.adrs` over `CallPrep.re`, or
+  `resumeCallB` with all three parent/window projections from the same `CallPrep.re`.
+  Its fully qualified helpers are `Jaune.Sevm.withOrig_code`,
+  `Blanc.Lift.Witness.CallPrep.re_adrs`, and `Blanc.Lift.NodeWalk.resumeCallB_re`.
+  If an alias hides the update or projection, unfold only that local binding and
+  run `blanc_suggest` again; the advice never normalizes a concrete machine.
   Worked use: `forwarder_root_re`/`leaf_root_re` and the frames of
   `Blanc/Lift/VyperNonreentrantDeployed/Fixed/Fund/{Root,Add}.lean` and `.../Fixed/Exit/`.
 - To run a walk (`pwalkH`) or a certificate run (`wrun`, `childRun`, `callResume`) whose
