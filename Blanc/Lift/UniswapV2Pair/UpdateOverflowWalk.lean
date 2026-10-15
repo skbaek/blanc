@@ -371,19 +371,23 @@ def overflowControlFailed : Devm :=
 
 private theorem overflowControlMemoryEq :
     overflowControlFailed.memory = overflowMemory overflowControlMemory := by
-  kernel_rfl
+  simp only [overflowControlFailed, Devm.withOutput_memory, St.memory]
 
 private theorem overflowControlLogsEq :
     overflowControlFailed.logs = overflowControlBefore.logs := by
-  kernel_rfl
+  simp only [overflowControlFailed, overflowControlBefore, Devm.withOutput_logs,
+    St, Devm.setMach_logs]
 
 private theorem overflowControlAcctEq :
     overflowControlFailed.getAcct = overflowControlBefore.getAcct := by
-  kernel_rfl
+  have stateEq : overflowControlFailed.state = overflowControlBefore.state := by
+    simp only [overflowControlFailed, overflowControlBefore, Devm.withOutput_state,
+      St, Devm.setMach_state]
+  exact congrArg State.get stateEq
 
 private theorem overflowControlStorageEq :
     Devm.getStor overflowControlFailed = Devm.getStor overflowControlBefore := by
-  kernel_rfl
+  exact congrArg (fun (accounts : Adr → Acct) a => (accounts a).stor) overflowControlAcctEq
 
 /-- A bounded kernel-checked statement control, consumed from the symbolic
 operational theorem rather than from a finite interpreter comparison. -/
