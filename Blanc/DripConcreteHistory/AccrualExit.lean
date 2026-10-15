@@ -213,7 +213,11 @@ private theorem concreteDrip_loopReads : Mem.Reads concreteDripLoopMemory concre
   unfold concreteDripLoopMemory concreteDripAccumulatorMemory concreteDripBaseMemory concreteDripExponentMemory concreteDripClockMemory concreteDripStagingMemory concreteDripLoopImage
   repeat' first | apply Mem.Reads.write | apply Mem.Wf.write | exact Mem.wf_empty | exact Mem.reads_empty
 
-private theorem concreteDrip_loopSize : concreteDripLoopMemory.size = 288 := by decide +kernel
+private theorem concreteDrip_loopSize : concreteDripLoopMemory.size = 288 := by
+  unfold concreteDripLoopMemory concreteDripAccumulatorMemory concreteDripBaseMemory
+    concreteDripExponentMemory concreteDripClockMemory concreteDripStagingMemory
+  simp only [Mem.size_write_word_at]
+  decide
 
 private theorem concreteDrip_loopUnchanged (i : Nat) (h : i + 32 ≤ 288) :
     (concreteDripLoopMemory.read i 32).2 = concreteDripLoopMemory := by
@@ -1861,27 +1865,100 @@ private theorem concreteExit_chiMemoryFacts :
     Bytes.toB256 ((concreteExitStagingMemory.write 160 concreteDripChi.toBytes).read 160 32).1 = concreteDripChi ∧
     ((concreteExitStagingMemory.write 160 concreteDripChi.toBytes).read 160 32).2 =
       concreteExitStagingMemory.write 160 concreteDripChi.toBytes := by
-  exact ⟨by decide +kernel, by decide +kernel, Mem.read_snd_eq_self (by decide +kernel)⟩
+  have hsize : (concreteExitStagingMemory.write 160 concreteDripChi.toBytes).size = 192 :=
+    Mem.size_write_of_size (i := 160) concreteExit_stagingSize
+      (by decide) (B256.length_toBytes concreteDripChi)
+  have hreads : Mem.Reads (concreteExitStagingMemory.write 160 concreteDripChi.toBytes)
+      (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt []
+        64 (40 : B256).toBytes) 96 (99 : B256).toBytes)
+        128 (99 : B256).toBytes) 32 (2 : B256).toBytes) 160 concreteDripChi.toBytes) := by
+    unfold concreteExitStagingMemory concreteExitArgumentMemory
+    repeat' first | apply Mem.Reads.write | apply Mem.Wf.write |
+      exact Mem.wf_empty | exact Mem.reads_empty
+  refine ⟨hsize, ?_, Mem.read_snd_eq_self ?_⟩
+  · rw [hreads.read]
+    exact Bytes.readWord_writeAt_self _ _ _
+  · rw [hsize]
+    decide
 
 private theorem concreteExit_clockMemoryFacts : concreteExitClockMemory.size = 224 ∧
     Bytes.toB256 (concreteExitClockMemory.read 192 32).1 = 6 ∧
     (concreteExitClockMemory.read 192 32).2 = concreteExitClockMemory := by
-  exact ⟨by decide +kernel, by decide +kernel, Mem.read_snd_eq_self (by decide +kernel)⟩
+  have hsize : concreteExitClockMemory.size = 224 :=
+    Mem.size_write_of_size (i := 192) concreteExit_chiMemoryFacts.1
+      (by decide) (B256.length_toBytes (6 : B256))
+  have hreads : Mem.Reads concreteExitClockMemory
+      (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt []
+        64 (40 : B256).toBytes) 96 (99 : B256).toBytes)
+        128 (99 : B256).toBytes) 32 (2 : B256).toBytes)
+        160 concreteDripChi.toBytes) 192 (6 : B256).toBytes) := by
+    unfold concreteExitClockMemory concreteExitStagingMemory concreteExitArgumentMemory
+    repeat' first | apply Mem.Reads.write | apply Mem.Wf.write |
+      exact Mem.wf_empty | exact Mem.reads_empty
+  refine ⟨hsize, ?_, Mem.read_snd_eq_self ?_⟩
+  · rw [hreads.read]
+    exact Bytes.readWord_writeAt_self _ _ _
+  · rw [hsize]
+    decide
 
 private theorem concreteExit_exponentMemoryFacts : concreteExitExponentMemory.size = 224 ∧
     Bytes.toB256 (concreteExitExponentMemory.read 0 32).1 = 1 ∧
     (concreteExitExponentMemory.read 0 32).2 = concreteExitExponentMemory := by
-  exact ⟨by decide +kernel, by decide +kernel, Mem.read_snd_eq_self (by decide +kernel)⟩
+  have hsize : concreteExitExponentMemory.size = 224 :=
+    Mem.size_write_of_size (i := 0) concreteExit_clockMemoryFacts.1
+      (by decide) (B256.length_toBytes (1 : B256))
+  refine ⟨hsize, ?_, Mem.read_snd_eq_self ?_⟩
+  · change Bytes.toB256 ((concreteExitClockMemory.write 0 (1 : B256).toBytes).read 0 32).1 = 1
+    simpa only [B256.length_toBytes, B256.toB256_toBytes] using
+      congrArg Bytes.toB256 (Mem.read_write_zero concreteExitClockMemory
+        (ys := (1 : B256).toBytes) (by decide))
+  · rw [hsize]
+    decide
 
 private theorem concreteExit_baseMemoryFacts : concreteExitBaseMemory.size = 256 ∧
     Bytes.toB256 (concreteExitBaseMemory.read 0 32).1 = 1 ∧
     (concreteExitBaseMemory.read 0 32).2 = concreteExitBaseMemory := by
-  exact ⟨by decide +kernel, by decide +kernel, Mem.read_snd_eq_self (by decide +kernel)⟩
+  have hsize : concreteExitBaseMemory.size = 256 :=
+    Mem.size_write_of_size (i := 224) concreteExit_exponentMemoryFacts.1
+      (by decide) (B256.length_toBytes rate)
+  have hreads : Mem.Reads concreteExitBaseMemory
+      (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt []
+        64 (40 : B256).toBytes) 96 (99 : B256).toBytes)
+        128 (99 : B256).toBytes) 32 (2 : B256).toBytes)
+        160 concreteDripChi.toBytes) 192 (6 : B256).toBytes)
+        0 (1 : B256).toBytes) 224 rate.toBytes) := by
+    unfold concreteExitBaseMemory concreteExitExponentMemory
+      concreteExitClockMemory concreteExitStagingMemory concreteExitArgumentMemory
+    repeat' first | apply Mem.Reads.write | apply Mem.Wf.write |
+      exact Mem.wf_empty | exact Mem.reads_empty
+  refine ⟨hsize, ?_, Mem.read_snd_eq_self ?_⟩
+  · rw [hreads.read, Bytes.readWord_writeAt_of_disjoint _ 0 224 _ (by decide)]
+    exact Bytes.readWord_writeAt_self _ _ _
+  · rw [hsize]
+    decide
 
 private theorem concreteExit_accumulatorMemoryFacts : concreteExitAccumulatorMemory.size = 288 ∧
     Bytes.toB256 (concreteExitAccumulatorMemory.read 0 32).1 = 1 ∧
     (concreteExitAccumulatorMemory.read 0 32).2 = concreteExitAccumulatorMemory := by
-  exact ⟨by decide +kernel, by decide +kernel, Mem.read_snd_eq_self (by decide +kernel)⟩
+  have hsize : concreteExitAccumulatorMemory.size = 288 :=
+    Mem.size_write_of_size (i := 256) concreteExit_baseMemoryFacts.1
+      (by decide) (B256.length_toBytes rate)
+  have hreads : Mem.Reads concreteExitAccumulatorMemory
+      (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt []
+        64 (40 : B256).toBytes) 96 (99 : B256).toBytes)
+        128 (99 : B256).toBytes) 32 (2 : B256).toBytes)
+        160 concreteDripChi.toBytes) 192 (6 : B256).toBytes)
+        0 (1 : B256).toBytes) 224 rate.toBytes) 256 rate.toBytes) := by
+    unfold concreteExitAccumulatorMemory concreteExitBaseMemory
+      concreteExitExponentMemory concreteExitClockMemory concreteExitStagingMemory concreteExitArgumentMemory
+    repeat' first | apply Mem.Reads.write | apply Mem.Wf.write |
+      exact Mem.wf_empty | exact Mem.reads_empty
+  refine ⟨hsize, ?_, Mem.read_snd_eq_self ?_⟩
+  · rw [hreads.read, Bytes.readWord_writeAt_of_disjoint _ 0 256 _ (by decide),
+      Bytes.readWord_writeAt_of_disjoint _ 0 224 _ (by decide)]
+    exact Bytes.readWord_writeAt_self _ _ _
+  · rw [hsize]
+    decide
 
 theorem concreteExit_freshStart (sevm : Sevm) (base post : Devm) (G : Nat)
     (htime : sevm.benvStat.time = 6)
