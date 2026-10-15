@@ -56,9 +56,9 @@ theorem e1T_world : (∀ a k, storOf e1T.dyna.state a k = lookupS callCfg.stor a
   rw [benvAfterTransferB_stor hbB hC (fun a k => by rw [hst]; exact callCfg_agree.2.2.1 a k),
     show storTransfer cp0.f.inner callCfg.stor callCfg.acs = callCfg.stor by kernel_rfl]
 
-theorem e1T31_acc : e1T31.dyna.accessedAddresses = e1T.dyna.accessedAddresses := rfl
-theorem e1T31_keys : e1T31.dyna.accessedStorageKeys = e1T.dyna.accessedStorageKeys := rfl
-theorem e1T31_state : e1T31.dyna.state = e1T.dyna.state := rfl
+theorem e1T31_acc : e1T31.dyna.accessedAddresses = e1T.dyna.accessedAddresses := Devm.setMach_accessedAddresses _ _
+theorem e1T31_keys : e1T31.dyna.accessedStorageKeys = e1T.dyna.accessedStorageKeys := Devm.setMach_accessedStorageKeys _ _
+theorem e1T31_state : e1T31.dyna.state = e1T.dyna.state := Devm.setMach_state _ _
 
 theorem cp2T_spec :
     Xinst.step e1T31.sta e1T31.dyna .delegatecall = .spawn cp2T.f (.call cp2T.p cp2T.oi cp2T.os) ∧
@@ -137,9 +137,9 @@ theorem e4T_world : (∀ a k, storOf e4T.dyna.state a k = lookupS aCallT.stor a 
   rw [benvAfterTransferB_stor hbB hC (fun a k => by rw [hst]; exact agree_aCallT.2.2.1 a k),
     Blanc.Lift.Witness.storTransfer_of_keeps keeps4T]
 
-theorem e4T31_acc : e4T31.dyna.accessedAddresses = e4T.dyna.accessedAddresses := rfl
-theorem e4T31_keys : e4T31.dyna.accessedStorageKeys = e4T.dyna.accessedStorageKeys := rfl
-theorem e4T31_state : e4T31.dyna.state = e4T.dyna.state := rfl
+theorem e4T31_acc : e4T31.dyna.accessedAddresses = e4T.dyna.accessedAddresses := Devm.setMach_accessedAddresses _ _
+theorem e4T31_keys : e4T31.dyna.accessedStorageKeys = e4T.dyna.accessedStorageKeys := Devm.setMach_accessedStorageKeys _ _
+theorem e4T31_state : e4T31.dyna.state = e4T.dyna.state := Devm.setMach_state _ _
 
 theorem cp5T_spec :
     Xinst.step e4T31.sta e4T31.dyna .delegatecall = .spawn cp5T.f (.call cp5T.p cp5T.oi cp5T.os) ∧

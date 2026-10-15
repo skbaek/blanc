@@ -60,9 +60,9 @@ theorem e1C_world : (∀ a k, storOf e1C.dyna.state a k = lookupS callCfgC.stor 
   rw [benvAfterTransferB_stor hbB hC (fun a k => by rw [hst]; exact callCfgC_agree.2.2.1 a k),
     show storTransfer cp0C.f.inner callCfgC.stor callCfgC.acs = callCfgC.stor by kernel_rfl]
 
-theorem e1C31_acc : e1C31.dyna.accessedAddresses = e1C.dyna.accessedAddresses := rfl
-theorem e1C31_keys : e1C31.dyna.accessedStorageKeys = e1C.dyna.accessedStorageKeys := rfl
-theorem e1C31_state : e1C31.dyna.state = e1C.dyna.state := rfl
+theorem e1C31_acc : e1C31.dyna.accessedAddresses = e1C.dyna.accessedAddresses := Devm.setMach_accessedAddresses _ _
+theorem e1C31_keys : e1C31.dyna.accessedStorageKeys = e1C.dyna.accessedStorageKeys := Devm.setMach_accessedStorageKeys _ _
+theorem e1C31_state : e1C31.dyna.state = e1C.dyna.state := Devm.setMach_state _ _
 
 theorem cp2C_spec :
     Xinst.step e1C31.sta e1C31.dyna .delegatecall = .spawn cp2C.f (.call cp2C.p cp2C.oi cp2C.os) ∧
@@ -141,8 +141,8 @@ theorem e4C_world : (∀ a k, storOf e4C.dyna.state a k = lookupS aCallC.stor a 
   rw [benvAfterTransferB_stor hbB hC (fun a k => by rw [hst]; exact agree_aCallC.2.2.1 a k),
     Blanc.Lift.Witness.storTransfer_of_keeps keeps4C]
 
-theorem e4C31_acc : e4C31.dyna.accessedAddresses = e4C.dyna.accessedAddresses := rfl
-theorem e4C31_keys : e4C31.dyna.accessedStorageKeys = e4C.dyna.accessedStorageKeys := rfl
-theorem e4C31_state : e4C31.dyna.state = e4C.dyna.state := rfl
+theorem e4C31_acc : e4C31.dyna.accessedAddresses = e4C.dyna.accessedAddresses := Devm.setMach_accessedAddresses _ _
+theorem e4C31_keys : e4C31.dyna.accessedStorageKeys = e4C.dyna.accessedStorageKeys := Devm.setMach_accessedStorageKeys _ _
+theorem e4C31_state : e4C31.dyna.state = e4C.dyna.state := Devm.setMach_state _ _
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC
