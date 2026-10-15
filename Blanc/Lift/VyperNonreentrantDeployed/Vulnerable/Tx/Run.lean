@@ -1,3 +1,4 @@
+import Blanc.Lift.KernelBatch
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Outer
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Frame1Run
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Attacker2.Check
@@ -31,16 +32,12 @@ open Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxTop
 /-- The machine the proxy frame (`remove_liquidity`) enters with. -/
 def e1T : Evm := match frameEnterS cp0.f callCfg.acs with | .run e => e | .done _ => default
 
-theorem e1T_eq : frameEnterS cp0.f callCfg.acs = .run e1T := by kernel_rfl
-
 /-- The proxy at its `DELEGATECALL` (pc 31): the calldata copied to memory, the seven call
 words on the stack, 54 gas burned. -/
 def e1T31 : Evm :=
   ⟨31, e1T.sta, e1T.dyna.setMach
     ⟨[(29528521 : Nat).toB256, implementationAddress.toB256, 0, (132 : Nat).toB256, 0, 0, 0],
       Mem.empty.write 0 e1T.sta.data, 29528521, e1T.dyna.stateGas⟩⟩
-
-theorem prefix1T : stepN 11 e1T = some e1T31 := by kernel_rfl
 
 /-- The proxy's address shadow and account shadow at its `DELEGATECALL` (the zero-value
 transfer of `A'`'s `CALL` applied). -/
@@ -50,14 +47,10 @@ def acs1T : AcctShadow := acsTransfer cp0.f.inner callCfg.acs
 /-- The proxy's `DELEGATECALL` up to its spawn. -/
 def cp2T : CallPrep := (dcallPrep e1T31.sta e1T31.dyna adrs1T acs1T).getD noPrep
 
-theorem cp2T_eq : dcallPrep e1T31.sta e1T31.dyna adrs1T acs1T = some cp2T := by kernel_rfl
-
 /-! ### Frame 2: the implementation's `remove_liquidity` -/
 
 /-- The machine the implementation frame enters with. -/
 def e2T : Evm := match frameEnterS cp2T.f acs1T with | .run e => e | .done _ => default
-
-theorem e2T_eq : frameEnterS cp2T.f acs1T = .run e2T := by kernel_rfl
 
 /-- Frame 2's start configuration. -/
 def c2T : Cfg := ⟨e2T.dyna, t_0000_c0, [], callCfg.keys, cp2T.adrs, callCfg.stor,
@@ -68,8 +61,6 @@ def cfg339T : Cfg :=
   match wrun fs1 e2T.sta 339 c2T with
   | .cont c => c
   | _ => c2T
-
-theorem cfg339T_eq : wrun fs1 e2T.sta 339 c2T = .cont cfg339T := by kernel_rfl
 
 /-! ### Frame 3: `A'` re-entered -/
 
@@ -84,25 +75,16 @@ def e3T : Evm := match start3T with | some (e, _) => e | none => default
 /-- The callback frame's start configuration. -/
 def cc3T : Cfg := match start3T with | some (_, c) => c | none => c2T
 
-theorem start3T_eq : childStart e2T.sta cfg339T Attacker2.t_0000_c0 = some (e3T, cc3T) := by
-  kernel_rfl
-
 /-- `A'` (callback) at its `CALL` of `P`. -/
 def aCallT : Cfg := match wrun fs3 e3T.sta 32 cc3T with | .cont c => c | _ => c2T
 
-theorem aCallT_eq : wrun fs3 e3T.sta 32 cc3T = .cont aCallT := by kernel_rfl
-
 /-- `A'`'s `CALL` of `P` up to its spawn. -/
 def cp4T : CallPrep := (callPrep e3T.sta aCallT).getD noPrep
-
-theorem cp4T_eq : callPrep e3T.sta aCallT = some cp4T := by kernel_rfl
 
 /-! ### Frame 4: the proxy, `add_liquidity` -/
 
 /-- The machine the proxy frame (`add_liquidity`) enters with. -/
 def e4T : Evm := match frameEnterS cp4T.f aCallT.acs with | .run e => e | .done _ => default
-
-theorem e4T_eq : frameEnterS cp4T.f aCallT.acs = .run e4T := by kernel_rfl
 
 def adrs4T : List Adr := cp4T.adrs
 def acs4T : AcctShadow := acsTransfer cp4T.f.inner aCallT.acs
@@ -113,23 +95,69 @@ def e4T31 : Evm :=
     ⟨[(28120398 : Nat).toB256, implementationAddress.toB256, 0, (132 : Nat).toB256, 0, 0, 0],
       Mem.empty.write 0 e4T.sta.data, 28120398, e4T.dyna.stateGas⟩⟩
 
-theorem prefix4T : stepN 11 e4T = some e4T31 := by kernel_rfl
-
 /-- The proxy's `DELEGATECALL` up to its spawn. -/
 def cp5T : CallPrep := (dcallPrep e4T31.sta e4T31.dyna adrs4T acs4T).getD noPrep
-
-theorem cp5T_eq : dcallPrep e4T31.sta e4T31.dyna adrs4T acs4T = some cp5T := by kernel_rfl
 
 /-! ### Frame 5: the implementation's reentrant `add_liquidity` -/
 
 /-- The machine the implementation frame enters with. -/
 def e5T : Evm := match frameEnterS cp5T.f acs4T with | .run e => e | .done _ => default
 
-theorem e5T_eq : frameEnterS cp5T.f acs4T = .run e5T := by kernel_rfl
-
 /-- Frame 5's start configuration: the shadows of frame 3's `CALL` with the implementation
 added to the address shadow. -/
 def c5T : Cfg := ⟨e5T.dyna, t_0000_c0, [], aCallT.keys, cp5T.adrs, aCallT.stor,
   acsTransfer cp5T.f.inner acs4T⟩
+
+-- Check the related equations together so the kernel can reuse the spawn chain.
+private theorem spawnChainFacts :
+    (frameEnterS cp0.f callCfg.acs = .run e1T) ∧
+    (stepN 11 e1T = some e1T31) ∧
+    (dcallPrep e1T31.sta e1T31.dyna adrs1T acs1T = some cp2T) ∧
+    (frameEnterS cp2T.f acs1T = .run e2T) ∧
+    (wrun fs1 e2T.sta 339 c2T = .cont cfg339T) ∧
+    (childStart e2T.sta cfg339T Attacker2.t_0000_c0 = some (e3T, cc3T)) ∧
+    (wrun fs3 e3T.sta 32 cc3T = .cont aCallT) ∧
+    (callPrep e3T.sta aCallT = some cp4T) ∧
+    (frameEnterS cp4T.f aCallT.acs = .run e4T) ∧
+    (stepN 11 e4T = some e4T31) ∧
+    (dcallPrep e4T31.sta e4T31.dyna adrs4T acs4T = some cp5T) ∧
+    (frameEnterS cp5T.f acs4T = .run e5T) := by
+  kernel_rfl_and
+
+theorem e1T_eq : frameEnterS cp0.f callCfg.acs = .run e1T := by
+  exact spawnChainFacts.1
+
+theorem prefix1T : stepN 11 e1T = some e1T31 := by
+  exact spawnChainFacts.2.1
+
+theorem cp2T_eq : dcallPrep e1T31.sta e1T31.dyna adrs1T acs1T = some cp2T := by
+  exact spawnChainFacts.2.2.1
+
+theorem e2T_eq : frameEnterS cp2T.f acs1T = .run e2T := by
+  exact spawnChainFacts.2.2.2.1
+
+theorem cfg339T_eq : wrun fs1 e2T.sta 339 c2T = .cont cfg339T := by
+  exact spawnChainFacts.2.2.2.2.1
+
+theorem start3T_eq : childStart e2T.sta cfg339T Attacker2.t_0000_c0 = some (e3T, cc3T) := by
+  exact spawnChainFacts.2.2.2.2.2.1
+
+theorem aCallT_eq : wrun fs3 e3T.sta 32 cc3T = .cont aCallT := by
+  exact spawnChainFacts.2.2.2.2.2.2.1
+
+theorem cp4T_eq : callPrep e3T.sta aCallT = some cp4T := by
+  exact spawnChainFacts.2.2.2.2.2.2.2.1
+
+theorem e4T_eq : frameEnterS cp4T.f aCallT.acs = .run e4T := by
+  exact spawnChainFacts.2.2.2.2.2.2.2.2.1
+
+theorem prefix4T : stepN 11 e4T = some e4T31 := by
+  exact spawnChainFacts.2.2.2.2.2.2.2.2.2.1
+
+theorem cp5T_eq : dcallPrep e4T31.sta e4T31.dyna adrs4T acs4T = some cp5T := by
+  exact spawnChainFacts.2.2.2.2.2.2.2.2.2.2.1
+
+theorem e5T_eq : frameEnterS cp5T.f acs4T = .run e5T := by
+  exact spawnChainFacts.2.2.2.2.2.2.2.2.2.2.2
 
 end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx
