@@ -8,6 +8,8 @@ case needs it. It distinguishes: a live owner (refused, lock kept), an owner
 confirmed dead (reclaimed), an owner whose liveness is unknown because a probe
 was denied (refused, lock kept byte-for-byte), and a lock that cannot be
 created for a reason other than existence (refused with mkdir's own error).
+Every refusal is checked on stderr, with stdout empty. Successful acquisition
+and stale-lock notices retain their existing output behavior.
 No gate is run and no host lock is touched.
 """
 from __future__ import annotations
@@ -32,25 +34,18 @@ PS_LISTS = 'gate_lock_probe_ps() { echo "  $1"; return 0; }'
 OWNER = "424242\n2026-09-23 10:00:00\nscripts/check-elab.sh --no-build\n"
 
 
-def run(lockdir: Path, stubs: list[str]) -> tuple[int, str]:
+def run(lockdir: Path, stubs: list[str]) -> tuple[int, str, str]:
     script = "\n".join([
         "set -u",
         f'. "{GATE_LOCK}"',
         *stubs,
         'GATE_CMDLINE="test-gate-lock"',
         f'gate_lock_acquire "{lockdir}" "elab" "the report" "wait for it"',
-        'status=$?',
-        'echo "STATUS=$status"',
-        'exit 0',
+        'exit $?',
     ])
     proc = subprocess.run(["bash", "-c", script], capture_output=True, text=True,
                           check=False)
-    out = proc.stdout + proc.stderr
-    status = -1
-    for line in proc.stdout.splitlines():
-        if line.startswith("STATUS="):
-            status = int(line.split("=", 1)[1])
-    return status, out
+    return proc.returncode, proc.stdout, proc.stderr
 
 
 def held(root: Path, owner: str = OWNER) -> Path:
@@ -70,9 +65,10 @@ def main() -> int:
     def refused_kept(name: str, stubs: list[str], needle: str, owner: str = OWNER) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             lockdir = held(Path(tmp), owner)
-            status, out = run(lockdir, stubs)
+            status, out, err = run(lockdir, stubs)
             kept = (lockdir / "owner").is_file() and (lockdir / "owner").read_text() == owner
-            check(name, status == 1 and needle in out and "RECLAIMED" not in out and kept, out)
+            check(name, status == 1 and not out and needle in err and "RECLAIMED" not in err and kept,
+                  f"stdout={out!r} stderr={err!r}")
 
     # (a) live owner.
     refused_kept("live owner (kill -0 succeeds)", [KILL_OK, PS_DENIED], "is locked by PID 424242")
@@ -82,10 +78,10 @@ def main() -> int:
     # (b) owner confirmed dead: reclaimed, then held by this process.
     with tempfile.TemporaryDirectory() as tmp:
         lockdir = held(Path(tmp))
-        status, out = run(lockdir, [KILL_ESRCH, PS_DENIED])
+        status, out, err = run(lockdir, [KILL_ESRCH, PS_DENIED])
         owner = (lockdir / "owner").read_text() if (lockdir / "owner").is_file() else ""
         check("dead owner is reclaimed",
-              status == 0 and "RECLAIMED — elab: stale lock" in out
+              status == 0 and not err and "RECLAIMED — elab: stale lock" in out
               and owner.endswith("test-gate-lock\n") and not owner.startswith("424242"), out)
 
     # (c) liveness unknown: never treated as dead.
@@ -98,28 +94,31 @@ def main() -> int:
 
     # (d) cannot create for a reason other than existence.
     with tempfile.TemporaryDirectory() as tmp:
-        status, out = run(Path(tmp) / "missing" / "report.lock", [])
+        status, out, err = run(Path(tmp) / "missing" / "report.lock", [])
         check("missing parent",
-              status == 1 and "cannot create lock directory" in out
-              and "No such file or directory" in out and "locked by" not in out, out)
+              status == 1 and not out and "cannot create lock directory" in err
+              and "No such file or directory" in err and "locked by" not in err,
+              f"stdout={out!r} stderr={err!r}")
     with tempfile.TemporaryDirectory() as tmp:
         parent = Path(tmp) / "ro"
         parent.mkdir()
         parent.chmod(stat.S_IRUSR | stat.S_IXUSR)
         try:
-            status, out = run(parent / "report.lock", [])
+            status, out, err = run(parent / "report.lock", [])
         finally:
             parent.chmod(stat.S_IRWXU)
         if os.geteuid() != 0:
             check("unwritable parent",
-                  status == 1 and "cannot create lock directory" in out
-                  and "Permission denied" in out and "locked by" not in out, out)
+                  status == 1 and not out and "cannot create lock directory" in err
+                  and "Permission denied" in err and "locked by" not in err,
+                  f"stdout={out!r} stderr={err!r}")
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "report.lock"
         path.write_text("not a lock\n")
-        status, out = run(path, [])
+        status, out, err = run(path, [])
         check("path is a file",
-              status == 1 and "is not a directory" in out and "locked by" not in out, out)
+              status == 1 and not out and "is not a directory" in err and "locked by" not in err,
+              f"stdout={out!r} stderr={err!r}")
 
     # Unheld: acquire, then release removes the directory.
     with tempfile.TemporaryDirectory() as tmp:
@@ -129,14 +128,15 @@ def main() -> int:
                   f'[ ! -e "{lockdir}" ] || exit 7')
         proc = subprocess.run(["bash", "-c", script], capture_output=True, text=True,
                               check=False)
-        check("fresh acquire and release", proc.returncode == 0,
+        check("fresh acquire and release", proc.returncode == 0 and not proc.stdout and not proc.stderr,
               proc.stdout + proc.stderr + f"exit {proc.returncode}")
 
     # Real probes: this test's own PID is alive.
     with tempfile.TemporaryDirectory() as tmp:
         lockdir = held(Path(tmp), f"{os.getpid()}\nwhen\ncmd\n")
-        status, out = run(lockdir, [])
-        check("real probes see a live owner", status == 1 and "is locked by PID" in out, out)
+        status, out, err = run(lockdir, [])
+        check("real probes see a live owner", status == 1 and not out and "is locked by PID" in err,
+              f"stdout={out!r} stderr={err!r}")
 
     total = 11
     if failures:
