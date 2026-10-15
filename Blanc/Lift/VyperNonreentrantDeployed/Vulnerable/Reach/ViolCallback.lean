@@ -1,3 +1,4 @@
+import Blanc.Lift.KernelBatchForall
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolCallbackRun
 import Blanc.Lift.WitnessChild
 
@@ -156,29 +157,32 @@ theorem cpCb_f_isCreate_fork : ∀ (g : Fork) (O : State) (tS : StorShadow)
       ((((cpCb O tS tA m w).f)).isCreate) := by
   kernel_forall_rfl
 
-theorem cpCb5_p_keys_fork : ∀ (g : Fork) (O : State) (tS : StorShadow)
-    (tA : AcctShadow) (m : Meta) (w : World),
-    ((((cpCb5 O tS tA m w).withFork g).p).accessedStorageKeys) =
-      (((cpCb5 O tS tA m w).p).accessedStorageKeys) := by
-  kernel_forall_rfl
-
-theorem cpCb5_p_acc_fork : ∀ (g : Fork) (O : State) (tS : StorShadow)
-    (tA : AcctShadow) (m : Meta) (w : World),
-    ((((cpCb5 O tS tA m w).withFork g).p).accessedAddresses) =
-      (((cpCb5 O tS tA m w).p).accessedAddresses) := by
-  kernel_forall_rfl
-
-theorem cpCb5_adrs_fork : ∀ (g : Fork) (O : State) (tS : StorShadow)
-    (tA : AcctShadow) (m : Meta) (w : World),
-    ((((cpCb5 O tS tA m w).withFork g).adrs)) =
-      (((cpCb5 O tS tA m w).adrs)) := by
-  kernel_forall_rfl
-
 theorem cpCb5_p_fork : ∀ (g : Fork) (O : State) (tS : StorShadow)
     (tA : AcctShadow) (m : Meta) (w : World),
     ((((cpCb5 O tS tA m w).withFork g).p)) =
       (((cpCb5 O tS tA m w).p)) := by
   kernel_forall_rfl
+
+theorem cpCb5_p_keys_fork : ∀ (g : Fork) (O : State) (tS : StorShadow)
+    (tA : AcctShadow) (m : Meta) (w : World),
+    ((((cpCb5 O tS tA m w).withFork g).p).accessedStorageKeys) =
+      (((cpCb5 O tS tA m w).p).accessedStorageKeys) := by
+  intro g O tS tA m w
+  rw [cpCb5_p_fork]
+
+theorem cpCb5_p_acc_fork : ∀ (g : Fork) (O : State) (tS : StorShadow)
+    (tA : AcctShadow) (m : Meta) (w : World),
+    ((((cpCb5 O tS tA m w).withFork g).p).accessedAddresses) =
+      (((cpCb5 O tS tA m w).p).accessedAddresses) := by
+  intro g O tS tA m w
+  rw [cpCb5_p_fork]
+
+theorem cpCb5_adrs_fork : ∀ (g : Fork) (O : State) (tS : StorShadow)
+    (tA : AcctShadow) (m : Meta) (w : World),
+    ((((cpCb5 O tS tA m w).withFork g).adrs)) =
+      (((cpCb5 O tS tA m w).adrs)) := by
+  intro g O tS tA m w
+  exact CallPrep.withFork_adrs (cpCb5 O tS tA m w) g
 
 theorem cpCb5_oi_fork : ∀ (g : Fork) (O : State) (tS : StorShadow)
     (tA : AcctShadow) (m : Meta) (w : World),
@@ -222,15 +226,24 @@ theorem mkEvm_dyna_fork : ∀ (g : Fork) (pc : Nat) (s : Sevm) (d : Devm),
 theorem fwd_at_delegatecall : Xinst.At fwdCode 31 .delegatecall := by rfl
 
 /-- F5's entered static gas is the frozen machine's (whatever literal it is). -/
+private theorem e5EntryObservations : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
+    (decide ((e5Cb O tS tA m w).sta.gas = (sRe.withOrig O).gas) = true) ∧
+    (decide ((e5Cb O tS tA m w).sta.codeAddress = (sRe.withOrig O).codeAddress) = true) ∧
+    (decide ((cpCb5 O tS tA m w).adrs =
+      [implAddr, proxyAddr, attackerAddr, (4 : Adr), implAddr, proxyAddr]) = true) := by
+  kernel_forall_rfl_and
+
 theorem e5Cb_sta_gas' : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
     (w : World), decide ((e5Cb O tS tA m w).sta.gas = (sRe.withOrig O).gas) = true := by
-  kernel_forall_rfl
+  intro O tS tA m w
+  exact (e5EntryObservations O tS tA m w).1
 
 /-- F5's entered code address is the frozen machine's. -/
 theorem e5Cb_sta_codeAddress' : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow)
     (m : Meta) (w : World),
     decide ((e5Cb O tS tA m w).sta.codeAddress = (sRe.withOrig O).codeAddress) = true := by
-  kernel_forall_rfl
+  intro O tS tA m w
+  exact (e5EntryObservations O tS tA m w).2.1
 
 /-- F5's entered static machine is the frozen one, at the actual original state. -/
 theorem e5Cb_sta_eq : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
@@ -432,7 +445,8 @@ theorem cpCb5_adrs' : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : M
     (w : World),
     decide ((cpCb5 O tS tA m w).adrs =
       [implAddr, proxyAddr, attackerAddr, (4 : Adr), implAddr, proxyAddr]) = true := by
-  kernel_forall_rfl
+  intro O tS tA m w
+  exact (e5EntryObservations O tS tA m w).2.2
 
 theorem cpCb5_adrs : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
     (w : World),
@@ -510,7 +524,10 @@ theorem e5Cb_facts_at : ∀ (g : Fork) (O : State) (tS : StorShadow) (tA : AcctS
     ((((e5Cb O tS tA m w).withFork g).sta).currentTarget = proxyAddr) ∧
       ((((e5Cb O tS tA m w).withFork g).sta).code = Vulnerable.code) ∧
       ((((e5Cb O tS tA m w).withFork g).sta).data = reAddCall) := by
-  kernel_forall_rfl_and
+  intro g O tS tA m w
+  simp only [e5Cb_sta_fork, Blanc.ForkUniform.Sevm.withFork_currentTarget,
+    Blanc.ForkUniform.Sevm.withFork_code, Blanc.ForkUniform.Sevm.withFork_data]
+  exact e5Cb_facts O tS tA m w
 
 /-- F4's `DELEGATECALL` agreements, from F3's: address/key membership and the
 prepared frame's state, step, and key facts. -/
