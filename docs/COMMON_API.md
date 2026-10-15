@@ -1012,7 +1012,8 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   `frame_enter_withOrig`), in [`Blanc/Lift/NodeWalkOrig.lean`](../Blanc/Lift/NodeWalkOrig.lean)
   (worked use: `frameB_at` in `.../Vulnerable/Reach/AddTop.lean`). `kernel_forall_rfl_and`
   ([`Blanc/Lift/KernelBatchForall.lean`](../Blanc/Lift/KernelBatchForall.lean)) decides a
-  universally quantified conjunction of equalities in one kernel check; over a free world,
+  universally quantified conjunction of equalities in one kernel check. Its shared builder
+  imports `Lean.Elab.Tactic.ElabTerm` for the tactic elaboration support. Over a free world,
   compare computed values by `decide` (or against literal boundaries, `Boundary.obsD1`), never
   as terms.
 - To make a kernel-checked witness quantify over **every world that agrees on finitely many
