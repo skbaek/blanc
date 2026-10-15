@@ -794,7 +794,7 @@ theorem pauseCall_branchWord {sevm : Sevm} {target : Adr} {duration : B256}
   refine ⟨child, parent.stack, hstk, ?_, hrd, hmidrd.trans hrd⟩
   rw [hmidstk]
   cases child.error.isSome <;>
-    simp only [Bool.false_eq_true, if_false] <;> rfl
+    simp only [Bool.false_eq_true, ite_false] <;> rfl
 
 /-- **Both flag values occur in the relation, and only these two.**  A
 `PauseCallBoundary` never leaves the branch a third possibility, and it never
@@ -807,7 +807,7 @@ theorem pauseCall_flag_dichotomy {sevm : Sevm} {target : Adr} {duration : B256}
     -, -, -, -, -, -, -, -, -, -, -, -, -, -, hstk⟩ := boundary
   rw [hstk]
   cases child.error.isSome
-  · exact Or.inr (by simp only [Bool.false_eq_true, if_false]; rfl)
+  · exact Or.inr (by simp only [Bool.false_eq_true, ite_false]; rfl)
   · exact Or.inl rfl
 
 /-! ## Both arms
@@ -1001,9 +1001,9 @@ private lemma callEdge_zero_depth_flag {sevm : Sevm} {devm callPost : Devm}
       -- `.ok` polarity refutes the case.  The `show … from hroom` coercion
       -- rides the definitional stack projections through the record updates.
       rw [Xinst.step_call_zero_value hfork h_stk hext hdel hacc hsplit hga,
-        genericCall.step, if_pos h_depth, Devm.push_def] at hx
+        genericCall.step, ite_eq_left h_depth, Devm.push_def] at hx
       simp only [Except.assert] at hx
-      rw [if_neg (show ¬ ((((d1.setMach
+      rw [ite_eq_right (show ¬ ((((d1.setMach
               ⟨d1.stack, d1.memory, d1.gasLeft - (mcc + ext), d1.stateGas⟩).memExtends
             [(iiw.toNat, isw.toNat), (oiw.toNat, osw.toNat)]).withReturnData
           []).withGasLeft

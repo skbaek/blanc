@@ -182,7 +182,7 @@ private theorem heartbeat_countLoad_runCompiled
       base.accessedStorageKeys
   · unfold tagTop heartbeatAfterCountLoad heartbeatSloadBase
       heartbeatSloadCost
-    simp only [hwarm, if_pos]
+    simp only [hwarm, ite_eq_left]
     func_run [countSlot sevm.caller.toB256]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     case a =>
@@ -285,7 +285,7 @@ private theorem heartbeat_expiryLoad_runCompiled
       (heartbeatAfterCountLoad sevm base).accessedStorageKeys
   · unfold tagTop heartbeatAfterExpiryLoad heartbeatSloadBase
       heartbeatSloadCost
-    simp only [hwarm, if_pos]
+    simp only [hwarm, ite_eq_left]
     func_run [expirySlot sevm.caller.toB256]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     case a =>
@@ -391,7 +391,7 @@ private theorem heartbeat_intervalLoad_runCompiled
       heartbeatIntervalSlot⟩ : Adr × B256) ∈
       (heartbeatAfterExpiryLoad sevm base).accessedStorageKeys
   · unfold heartbeatAfterIntervalLoad heartbeatSloadBase heartbeatSloadCost
-    simp only [hwarm, if_pos]
+    simp only [hwarm, ite_eq_left]
     func_run
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     case a =>
@@ -486,7 +486,7 @@ private theorem heartbeat_checkedExpiry_runCompiled_then
       exact hsum }
     all_goals try {
       rw [htime]
-      simp only [B256.ltCheck, if_neg (not_lt_of_ge hle)] }
+      simp only [B256.ltCheck, ite_eq_right (not_lt_of_ge hle)] }
     case a =>
       func_run (1)
       repeat (case h_legacy => exact hfork.rules_stateGas_none)
@@ -906,7 +906,7 @@ theorem heartbeat_body_runCompiled_of_checkedExtension
       exact hsum }
     all_goals try {
       rw [htime]
-      simp only [B256.ltCheck, if_neg (not_lt_of_ge hle)] }
+      simp only [B256.ltCheck, ite_eq_right (not_lt_of_ge hle)] }
     case h_ext =>
       change (base.setMach
         ⟨[0, expiry, expiry], Mem.empty, G + 4693 - 388, base.stateGas⟩).extCost
@@ -915,7 +915,7 @@ theorem heartbeat_body_runCompiled_of_checkedExtension
         (Devm.extCost_empty_word (devm := base) (S := [0, expiry, expiry]) (G := G + 4693 - 388))
     all_goals try {
       rw [horigMach, Devm.getStorVal_setMach, holdExpiry]
-      rw [sstoreValueCost, if_pos ⟨rfl, hchanged⟩, if_neg holdNonzero]
+      rw [sstoreValueCost, ite_eq_left ⟨rfl, hchanged⟩, ite_eq_right holdNonzero]
       norm_num only [gasStorageUpdate, gasColdSload] }
     case h_cost =>
       rw [show ((0 : B256) * 32).toNat = 0 by decide,
@@ -1559,7 +1559,7 @@ private theorem setHeartbeatInterval_load_runCompiled
       heartbeatIntervalSlot⟩ : Adr × B256) ∈ base.accessedStorageKeys
   · unfold setHeartbeatIntervalAfterLoad setHeartbeatIntervalLoadCost
       heartbeatSloadBase heartbeatSloadCost
-    simp only [hwarm, if_pos]
+    simp only [hwarm, ite_eq_left]
     func_run
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     case a =>
@@ -1683,7 +1683,7 @@ private theorem setHeartbeatIntervalStoreTail_runCompiled
           Devm.getStorVal base sevm.currentTarget (expirySlot pauser) := by
   unfold Devm.getOrigStorVal at horig
   have hsstoreCost : sstoreValueCost old old newInterval = 2900 := by
-    rw [sstoreValueCost, if_pos ⟨rfl, hchanged⟩, if_neg holdNonzero]
+    rw [sstoreValueCost, ite_eq_left ⟨rfl, hchanged⟩, ite_eq_right holdNonzero]
     norm_num only [gasStorageUpdate, gasColdSload]
   unfold setHeartbeatIntervalStoreTail
     setHeartbeatIntervalStoreTailGasWarmUpdate
@@ -1737,7 +1737,7 @@ private theorem setHeartbeatIntervalStoreTail_runCompiled_zero
         Devm.getStorVal post sevm.currentTarget (expirySlot pauser) =
           Devm.getStorVal base sevm.currentTarget (expirySlot pauser) := by
   have hsstoreCost : sstoreValueCost 0 0 newInterval = 20000 := by
-    rw [sstoreValueCost, if_pos ⟨rfl, hnewNonzero.symm⟩, if_pos rfl]
+    rw [sstoreValueCost, ite_eq_left ⟨rfl, hnewNonzero.symm⟩, ite_eq_left rfl]
     norm_num only [gasStorageSet]
   unfold setHeartbeatIntervalStoreTail
     setHeartbeatIntervalStoreTailGasWarmSet
@@ -2109,7 +2109,7 @@ private theorem setHeartbeatIntervalUpdatePrefix_runCompiled_then
       post := by
   have hafter : setHeartbeatIntervalAfterLoad sevm base = base := by
     unfold setHeartbeatIntervalAfterLoad heartbeatSloadBase
-    simp only [hwarm, if_pos]
+    simp only [hwarm, ite_eq_left]
   have hstage := setHeartbeatIntervalMemoryStage_runCompiled_then (hfork := hfork)
     (base := setHeartbeatIntervalAfterLoad sevm base)
     (old := old) (newInterval := newInterval) (G := G)
@@ -2120,7 +2120,7 @@ private theorem setHeartbeatIntervalUpdatePrefix_runCompiled_then
     (mstoreAt 0 +++ arg 0 +++ mstoreAt 1 +++ tail) post hstage
   have hcost : setHeartbeatIntervalLoadCost sevm base = gasWarmAccess := by
     unfold setHeartbeatIntervalLoadCost heartbeatSloadCost
-    simp only [hwarm, if_pos]
+    simp only [hwarm, ite_eq_left]
   simpa only [hcost, gasWarmAccess] using hload
 
 set_option maxRecDepth 16384 in
@@ -3525,7 +3525,7 @@ theorem setHeartbeatInterval_success_settles_cleanly
     processMessage.settle, executeCode.handleErrorWith_ok, Except.bind_ok] at hsettle
   have hnotError : final.error.isSome ≠ true := by
     cases herror : final.error <;> simp_all only [ExceptT.stM_eq, Option.isSome_none, Bool.false_eq_true, ↓reduceIte, Option.isNone_none, Except.ok.injEq, ne_eq, not_false_eq_true, Option.isSome_some, Option.isNone_some]
-  rw [if_neg hnotError] at hsettle
+  rw [ite_eq_right hnotError] at hsettle
   exact Except.ok.inj hsettle
 
 /-- Exact clean direct-message setter effects, derived from generated runtime
@@ -4188,7 +4188,7 @@ theorem heartbeat_success_settles_cleanly
     processMessage.settle, executeCode.handleErrorWith_ok, Except.bind_ok] at hsettle
   have hnotError : final.error.isSome ≠ true := by
     cases herror : final.error <;> simp_all only [ExceptT.stM_eq, Option.isSome_none, Bool.false_eq_true, ↓reduceIte, Option.isNone_none, Except.ok.injEq, ne_eq, not_false_eq_true, Option.isSome_some, Option.isNone_some]
-  rw [if_neg hnotError] at hsettle
+  rw [ite_eq_right hnotError] at hsettle
   exact Except.ok.inj hsettle
 
 /-- Exact clean direct-message heartbeat effects, derived from generated

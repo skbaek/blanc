@@ -51,8 +51,8 @@ private theorem pauseWorld_settle_ok {stor : Stor} {gas : Nat} {post : Devm}
   have hnot : post.error.isSome ≠ true := by rw [herr]; simp only [Option.isSome_none, ne_eq,
     Bool.false_eq_true, not_false_eq_true]
   simp only [Frame.settle, Frame.settleMsg, Frame.ofCall,
-    executeCode.handleErrorWith_ok, executeCode.handleError, processMessage.settle, bind, Except.bind,
-    if_neg hnot]
+    executeCode.handleErrorWith_ok, processMessage.settle, bind, Except.bind,
+    ite_eq_right hnot]
   rfl
 
 /-- The message frame settles to the raw poststate: `ProcessMessage` at the

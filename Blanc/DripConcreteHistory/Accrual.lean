@@ -44,7 +44,7 @@ theorem concreteDripDebit_run :
   change (concreteJoined.state.incrNonce concreteCreateSender).subBal concreteCreateSender
     1000000 = _
   unfold State.subBal
-  rw [hb, if_neg (by decide +kernel)]
+  rw [hb, ite_eq_right (by decide +kernel)]
   unfold concreteDripDebit
   dsimp only
   rw [hb]
@@ -129,8 +129,8 @@ private theorem concreteDripDebit_storage (address : Adr) :
     rw [concreteJoinedSenderNonce]
     rfl
   unfold concreteDripDebit
-  rw [State.setBal_get_stor, if_neg]
-  · rw [State.incrNonce_get_stor, if_neg]
+  rw [State.setBal_get_stor, ite_eq_right]
+  · rw [State.incrNonce_get_stor, ite_eq_right]
     rintro ⟨_, empty⟩
     have nonzero : concreteJoined.state.getNonce concreteCreateSender + 1 ≠ 0 := by
       rw [concreteJoinedSenderNonce]

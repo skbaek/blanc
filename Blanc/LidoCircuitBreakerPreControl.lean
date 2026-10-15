@@ -45,7 +45,7 @@ theorem getTransVal_setTransVal_self (devm : Devm) (a : Adr) (k v : B256) :
     (devm.setTransVal a k v).getTransVal a k = v := by
   show ((devm.transientStorage.setStorVal a k v).getD a .empty).get k = v
   unfold Tra.setStorVal
-  rw [Std.TreeMap.getD_eq_getD_getElem?, Tra.getElem?_set, if_pos rfl]
+  rw [Std.TreeMap.getD_eq_getD_getElem?, Tra.getElem?_set, ite_eq_left rfl]
   split
   · -- The pruning branch: the map after the write is empty, so the write's
     -- own read-back law already says the stored word is what an empty map

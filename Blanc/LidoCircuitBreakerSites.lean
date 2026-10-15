@@ -805,8 +805,7 @@ theorem RuntimePersistentWrite.sourceSite?_injective
   have bound : left.index < (runtimePersistentSourceSites dp).length := by
     rw [runtimePersistentSourceSites_length]
     exact left.index_lt
-  have index_eq := (List.getElem?_inj bound
-    (runtimePersistentSourceSites_nodup dp)).mp
+  have index_eq := ((runtimePersistentSourceSites_nodup dp).getElem?_inj bound).mp
       (left_found.trans right_found.symm)
   exact RuntimePersistentWrite.index_injective index_eq
 

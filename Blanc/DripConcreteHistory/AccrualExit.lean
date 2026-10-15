@@ -31,7 +31,7 @@ private theorem concreteDrip_square (sevm : Sevm) (base post : Devm) (M : Mem) (
       (base.setMach ⟨[], M, G + 107, base.stateGas⟩)
       (guardedRoundedMul baseWord baseWord baseWord next) post := by
   unfold guardedRoundedMul roundedMulRecovery
-  rw [if_pos rfl]
+  rw [ite_eq_left rfl]
   func_run (2) [3]
   · simp only [Devm.extCost, Devm.memory_setMach, hsize]
     decide +kernel
@@ -64,7 +64,7 @@ private theorem concreteDrip_accumulate (sevm : Sevm) (base post : Devm) (M : Me
       (base.setMach ⟨[], M, G + 110, base.stateGas⟩)
       (guardedRoundedMul accumulatorWord baseWord accumulatorWord next) post := by
   unfold guardedRoundedMul roundedMulRecovery
-  rw [if_neg (by decide +kernel)]
+  rw [ite_eq_right (by decide +kernel)]
   func_run (2) [3]
   · simp only [Devm.extCost, Devm.memory_setMach, hsize]
     decide +kernel
@@ -543,7 +543,7 @@ private theorem concreteDrip_machineOriginalStorage (machine : Devm)
     (notCreated : concreteCreateTarget ∉ machine.createdAccounts) (key : B256) :
     machine.getOrigStorVal concreteDripSevm concreteCreateTarget key =
       (concreteJoined.state.getStor concreteCreateTarget).get key := by
-  rw [Devm.getOrigStorVal, if_neg notCreated]
+  rw [Devm.getOrigStorVal, ite_eq_right notCreated]
   exact concreteDrip_originalStorage key
 
 private theorem concreteDripStorageBase_notCreated :
@@ -574,9 +574,9 @@ private theorem concreteDrip_chiStore :
   have hf : sstoreNewRefundCounter concreteDripSevm.benvStat.rules.gas concreteDripChi rate rate 0 = 0 := by
     decide +kernel
   constructor
-  · simp only [sstoreCost, ht, hw, if_pos, Nat.zero_add, concreteDrip_machineOriginalStorage concreteDripStorageBase concreteDripStorageBase_notCreated,
+  · simp only [sstoreCost, ht, hw, ite_eq_left, Nat.zero_add, concreteDrip_machineOriginalStorage concreteDripStorageBase concreteDripStorageBase_notCreated,
       concreteJoined_values.1, hv, hc]
-  · simp only [afterSstore, ht, hw, if_pos, concreteDrip_machineOriginalStorage concreteDripStorageBase concreteDripStorageBase_notCreated,
+  · simp only [afterSstore, ht, hw, ite_eq_left, concreteDrip_machineOriginalStorage concreteDripStorageBase concreteDripStorageBase_notCreated,
       concreteJoined_values.1, hv, hr, hf]
     rfl
 
@@ -597,9 +597,9 @@ private theorem concreteDrip_rhoStore :
   have hf : sstoreNewRefundCounter concreteDripSevm.benvStat.rules.gas 5 2 2 0 = 0 := by
     decide +kernel
   constructor
-  · simp only [sstoreCost, ht, hw, if_pos, Nat.zero_add, concreteDrip_machineOriginalStorage concreteDripChiBase concreteDripChiBase_notCreated,
+  · simp only [sstoreCost, ht, hw, ite_eq_left, Nat.zero_add, concreteDrip_machineOriginalStorage concreteDripChiBase concreteDripChiBase_notCreated,
       concreteJoined_values.2.1, hv, hc]
-  · simp only [afterSstore, ht, hw, if_pos, concreteDrip_machineOriginalStorage concreteDripChiBase concreteDripChiBase_notCreated,
+  · simp only [afterSstore, ht, hw, ite_eq_left, concreteDrip_machineOriginalStorage concreteDripChiBase concreteDripChiBase_notCreated,
       concreteJoined_values.2.1, hv, hr, hf]
     rfl
 
@@ -742,12 +742,12 @@ theorem concreteDrip_messageCall :
   have hcode : some concreteDripMessage.code.toList = Prog.compile runtime := concreteDrip_compiled
   have hdelegation : getDelegatedCodeAddress concreteDripMessage.code = none := by
     unfold getDelegatedCodeAddress
-    rw [if_neg (not_delegation_of_compile hcode)]
+    rw [ite_eq_right (not_delegation_of_compile hcode)]
   have hrefund : (concreteDripRuntimePost 467925).refundCounter = 0 := rfl
   unfold processMessageCall
   rw [htarget]
   unfold processMessageCall.call
-  simp only [hauths, List.isEmpty, if_true, bind, Except.bind, hdelegation,
+  simp only [hauths, List.isEmpty, ite_true, bind, Except.bind, hdelegation,
     concreteDrip_processMessage, Except.bimap, id_eq, concreteDrip_postError,
     Option.isNone, hrefund]
   rfl
@@ -789,12 +789,12 @@ theorem concreteDrip_transaction :
   unfold processTransaction
   simp only [bind, Except.bind]
   rw [recoverValidationSender_of_stateGas_none concreteDripTx hvalidationStateGas]
-  simp only [bind, Except.bind]
+  simp only [bind]
   rw [hrules]
   simp only [Except.mapError]
   simp only [deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout] at hchecked
   rw [hchecked]
-  simp only [htypeThree, haccessList, hauths, Bool.false_eq_true, if_false,
+  simp only [htypeThree, haccessList, hauths, Bool.false_eq_true, ite_false,
     Nat.add_zero, Benv.beginTransaction]
   have htxGas : concreteDripTx.gas = 500000 := rfl
   rw [htxGas, show Nat.toB256 (500000 * 2) = 1000000 by decide +kernel, hdebit]
@@ -947,7 +947,7 @@ theorem concreteDrip_body :
   rw [hb]
   simp only [Except.mapError, bind, Except.bind]
   rw [hl']
-  simp only [Option.toExcept, hh', Except.mapError, bind, Except.bind]
+  simp only [Option.toExcept, hh']
   rw [show (concreteDripTxInput.withState concreteDripTxInput.state).state =
     concreteDripTxInput.state from rfl, hi']
   have htransaction := concreteDrip_transaction
@@ -962,7 +962,7 @@ theorem concreteDrip_body :
       BlockOutput.withWithdrawalsTrie
     rfl
   rw [hwithdrawals]
-  simp only [Prod.fst, Prod.snd]
+  simp only [Prod.fst]
   have hws (b : Benv) (st : State) : (b.withState st).withState st = b.withState st := rfl
   rw [hws]
   rw [concreteDrip_requestSuffix]
@@ -1141,12 +1141,12 @@ theorem concreteDrippedSenderNonce : concreteDripped.state.getNonce concreteCrea
     concreteCreateSender).nonce = _
   have hz : (0 : Adr) ≠ concreteCreateSender := by decide +kernel
   have ht : concreteCreateTarget ≠ concreteCreateSender := by decide +kernel
-  simp only [State.addBal, State.setBal_get_ne hz, State.setBal_get_self, Acct.clearIfEmpty_bal, Acct.clearIfEmpty_nonce, Acct.withBal]
+  simp only [State.addBal, State.setBal_get_ne hz, State.setBal_get_self, Acct.clearIfEmpty_nonce, Acct.withBal]
   rw [concreteDripMessageState_sender]
   change ((((concreteDripDebit.setBal concreteCreateSender
     (concreteDripDebit.bal concreteCreateSender - 0)).addBal concreteCreateTarget 0).get
     concreteCreateSender).nonce) = _
-  simp only [State.addBal, State.setBal_get_ne ht, State.setBal_get_self, Acct.clearIfEmpty_bal, Acct.clearIfEmpty_nonce]
+  simp only [State.addBal, State.setBal_get_ne ht, State.setBal_get_self, Acct.clearIfEmpty_nonce]
   unfold concreteDripDebit
   simp only [State.setBal_get_self, Acct.clearIfEmpty_nonce, State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_nonce, Acct.withBal]
   change (concreteJoined.state.getNonce concreteCreateSender) + 1 = 3
@@ -1160,13 +1160,13 @@ theorem concreteDrippedSenderBalance : concreteDripped.state.bal concreteCreateS
     concreteCreateSender).bal = _
   have hz : (0 : Adr) ≠ concreteCreateSender := by decide +kernel
   have ht : concreteCreateTarget ≠ concreteCreateSender := by decide +kernel
-  simp only [State.addBal, State.setBal_get_ne hz, State.setBal_get_self, Acct.clearIfEmpty_bal, Acct.clearIfEmpty_nonce, Acct.withBal]
+  simp only [State.addBal, State.setBal_get_ne hz, State.setBal_get_self, Acct.clearIfEmpty_bal, Acct.withBal]
   change (concreteDripMessageState.get concreteCreateSender).bal + 935850 = _
   rw [concreteDripMessageState_sender]
   change ((((concreteDripDebit.setBal concreteCreateSender
     (concreteDripDebit.bal concreteCreateSender - 0)).addBal concreteCreateTarget 0).get
     concreteCreateSender).bal) + 935850 = _
-  simp only [State.addBal, State.setBal_get_ne ht, State.setBal_get_self, Acct.clearIfEmpty_bal, Acct.clearIfEmpty_nonce]
+  simp only [State.addBal, State.setBal_get_ne ht, State.setBal_get_self, Acct.clearIfEmpty_bal]
   change (concreteDripDebit.bal concreteCreateSender - 0) + 935850 = _
   rw [concreteDripDebit_balance]
   decide +kernel
@@ -1364,7 +1364,7 @@ theorem concreteExitDebit_run :
   change (concreteDripped.state.incrNonce concreteCreateSender).subBal concreteCreateSender
     1000000 = _
   unfold State.subBal
-  rw [hb, if_neg (by decide +kernel)]
+  rw [hb, ite_eq_right (by decide +kernel)]
   unfold concreteExitDebit
   dsimp only
   rw [hb]
@@ -1449,8 +1449,8 @@ private theorem concreteExitDebit_storage (address : Adr) :
     rw [concreteDrippedSenderNonce]
     rfl
   unfold concreteExitDebit
-  rw [State.setBal_get_stor, if_neg]
-  · rw [State.incrNonce_get_stor, if_neg]
+  rw [State.setBal_get_stor, ite_eq_right]
+  · rw [State.incrNonce_get_stor, ite_eq_right]
     rintro ⟨_, empty⟩
     have nonzero : concreteDripped.state.getNonce concreteCreateSender + 1 ≠ 0 := by
       rw [concreteDrippedSenderNonce]
@@ -2218,7 +2218,7 @@ private theorem concreteExit_machineOriginalStorage (machine : Devm)
     (notCreated : concreteCreateTarget ∉ machine.createdAccounts) (key : B256) :
     machine.getOrigStorVal concreteExitSevm concreteCreateTarget key =
       (concreteDripped.state.getStor concreteCreateTarget).get key := by
-  rw [Devm.getOrigStorVal, if_neg notCreated]
+  rw [Devm.getOrigStorVal, ite_eq_right notCreated]
   exact concreteExit_originalStorage key
 
 private theorem concreteExitStorageBase_notCreated :
@@ -2266,9 +2266,9 @@ private theorem concreteExit_chiStore :
   have hf : sstoreNewRefundCounter concreteExitSevm.benvStat.rules.gas concreteExitChi concreteDripChi concreteDripChi 0 = 0 := by
     decide +kernel
   constructor
-  · simp only [sstoreCost, ht, hw, if_pos, Nat.zero_add, concreteExit_machineOriginalStorage concreteExitStorageBase concreteExitStorageBase_notCreated,
+  · simp only [sstoreCost, ht, hw, ite_eq_left, Nat.zero_add, concreteExit_machineOriginalStorage concreteExitStorageBase concreteExitStorageBase_notCreated,
       concreteDripped_values.1, hv, hc]
-  · simp only [afterSstore, ht, hw, if_pos, concreteExit_machineOriginalStorage concreteExitStorageBase concreteExitStorageBase_notCreated,
+  · simp only [afterSstore, ht, hw, ite_eq_left, concreteExit_machineOriginalStorage concreteExitStorageBase concreteExitStorageBase_notCreated,
       concreteDripped_values.1, hv, hr, hf]
     rfl
 
@@ -2289,9 +2289,9 @@ private theorem concreteExit_rhoStore :
   have hf : sstoreNewRefundCounter concreteExitSevm.benvStat.rules.gas 6 5 5 0 = 0 := by
     decide +kernel
   constructor
-  · simp only [sstoreCost, ht, hw, if_pos, Nat.zero_add, concreteExit_machineOriginalStorage concreteExitChiBase concreteExitChiBase_notCreated,
+  · simp only [sstoreCost, ht, hw, ite_eq_left, Nat.zero_add, concreteExit_machineOriginalStorage concreteExitChiBase concreteExitChiBase_notCreated,
       concreteDripped_values.2.1, hv, hc]
-  · simp only [afterSstore, ht, hw, if_pos, concreteExit_machineOriginalStorage concreteExitChiBase concreteExitChiBase_notCreated,
+  · simp only [afterSstore, ht, hw, ite_eq_left, concreteExit_machineOriginalStorage concreteExitChiBase concreteExitChiBase_notCreated,
       concreteDripped_values.2.1, hv, hr, hf]
     rfl
 
@@ -2315,9 +2315,9 @@ private theorem concreteExit_rowStore :
   have hf : sstoreNewRefundCounter concreteExitSevm.benvStat.rules.gas 59 99 99 0 = 0 := by
     decide +kernel
   constructor
-  · simp only [sstoreCost, ht, hw, if_pos, Nat.zero_add, concreteExit_machineOriginalStorage concreteExitRhoBase concreteExitRhoBase_notCreated,
+  · simp only [sstoreCost, ht, hw, ite_eq_left, Nat.zero_add, concreteExit_machineOriginalStorage concreteExitRhoBase concreteExitRhoBase_notCreated,
       concreteDripped_values.2.2.1, hv, hc]
-  · simp only [afterSstore, ht, hw, if_pos, concreteExit_machineOriginalStorage concreteExitRhoBase concreteExitRhoBase_notCreated,
+  · simp only [afterSstore, ht, hw, ite_eq_left, concreteExit_machineOriginalStorage concreteExitRhoBase concreteExitRhoBase_notCreated,
       concreteDripped_values.2.2.1, hv, hr, hf]
     rfl
 
@@ -2344,9 +2344,9 @@ private theorem concreteExit_totalStore :
   have hf : sstoreNewRefundCounter concreteExitSevm.benvStat.rules.gas 59 99 99 0 = 0 := by
     decide +kernel
   constructor
-  · simp only [sstoreCost, ht, hw, if_pos, Nat.zero_add, concreteExit_machineOriginalStorage concreteExitRowBase concreteExitRowBase_notCreated,
+  · simp only [sstoreCost, ht, hw, ite_eq_left, Nat.zero_add, concreteExit_machineOriginalStorage concreteExitRowBase concreteExitRowBase_notCreated,
       concreteDripped_values.2.2.2, hv, hc]
-  · simp only [afterSstore, ht, hw, if_pos, concreteExit_machineOriginalStorage concreteExitRowBase concreteExitRowBase_notCreated,
+  · simp only [afterSstore, ht, hw, ite_eq_left, concreteExit_machineOriginalStorage concreteExitRowBase concreteExitRowBase_notCreated,
       concreteDripped_values.2.2.2, hv, hr, hf]
     rfl
 
@@ -2572,7 +2572,7 @@ private theorem concreteExit_call_exists :
   have hext : (concreteExitCallInput.setMach
       ⟨[40], concreteExitCallInput.memory, concreteExitCallInput.gasLeft, concreteExitCallInput.stateGas⟩).extCost
       [(0, 0), (0, 0)] = 0 := by
-    simp only [Devm.extCost, memExtsSize, memExtSize, if_true, Nat.sub_self]
+    simp only [Devm.extCost, memExtsSize, memExtSize, ite_true, Nat.sub_self]
   have hdel : accessDelegation concreteExitCallResolved concreteCreateSender =
       ⟨false, concreteCreateSender, ByteArray.empty, 0, concreteExitCallResolved⟩ := by
     rw [accessDelegation_of_not_delegation]
@@ -2602,7 +2602,7 @@ private theorem concreteExit_call_exists :
         Devm.setMach_setMach]
       exact hdel)
     (by rw [hc]; change accessCost concreteCreateSender concreteExitTotalBase.accessedAddresses + 0 = 100; exact concreteExitCall_warm)
-    (by rw [hc, if_pos hempty])
+    (by rw [hc, ite_eq_left hempty])
     (by change calculateMsgCallGas 40 457907 457907 0 (100 + 0 + gasCallValue) = _; decide +kernel)
     (by change 450895 + 0 ≤ 457907; decide +kernel)
     rfl hsender (by decide +kernel) (by decide +kernel) rfl (by decide +kernel)
@@ -2776,13 +2776,13 @@ theorem concreteExit_messageCall :
   have hcode : some concreteExitMessage.code.toList = Prog.compile runtime := concreteExit_compiled
   have hdelegation : getDelegatedCodeAddress concreteExitMessage.code = none := by
     unfold getDelegatedCodeAddress
-    rw [if_neg (not_delegation_of_compile hcode)]
+    rw [ite_eq_right (not_delegation_of_compile hcode)]
   have hrefund : concreteExitRuntimePost.refundCounter = 0 := concreteExitCallPost_meta.2.2.1
   have hlogs : concreteExitRuntimePost.logs = [] := concreteExitCallPost_meta.2.1
   unfold processMessageCall
   rw [htarget]
   unfold processMessageCall.call
-  simp only [hauths, List.isEmpty, if_true, bind, Except.bind, hdelegation,
+  simp only [hauths, List.isEmpty, ite_true, bind, Except.bind, hdelegation,
     concreteExit_processMessage, Except.bimap, id_eq, concreteExit_postError,
     Option.isNone, hrefund]
   simp only [concreteExitRuntimePost, Devm.withOutput_logs, Devm.setMach_logs,
@@ -2826,12 +2826,12 @@ theorem concreteExit_transaction :
   unfold processTransaction
   simp only [bind, Except.bind]
   rw [recoverValidationSender_of_stateGas_none concreteExitTx hvalidationStateGas]
-  simp only [bind, Except.bind]
+  simp only [bind]
   rw [hrules]
   simp only [Except.mapError]
   simp only [deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout] at hchecked
   rw [hchecked]
-  simp only [htypeThree, haccessList, hauths, Bool.false_eq_true, if_false,
+  simp only [htypeThree, haccessList, hauths, Bool.false_eq_true, ite_false,
     Nat.add_zero, Benv.beginTransaction]
   have htxGas : concreteExitTx.gas = 500000 := rfl
   rw [htxGas, show Nat.toB256 (500000 * 2) = 1000000 by decide +kernel, hdebit]
@@ -2980,7 +2980,7 @@ theorem concreteExit_body :
   rw [hb]
   simp only [Except.mapError, bind, Except.bind]
   rw [hl']
-  simp only [Option.toExcept, hh', Except.mapError, bind, Except.bind]
+  simp only [Option.toExcept, hh']
   rw [show (concreteExitTxInput.withState concreteExitTxInput.state).state =
     concreteExitTxInput.state from rfl, hi']
   have htransaction := concreteExit_transaction
@@ -2995,7 +2995,7 @@ theorem concreteExit_body :
       BlockOutput.withWithdrawalsTrie
     rfl
   rw [hwithdrawals]
-  simp only [Prod.fst, Prod.snd]
+  simp only [Prod.fst]
   have hws (b : Benv) (st : State) : (b.withState st).withState st = b.withState st := rfl
   rw [hws]
   rw [concreteExit_requestSuffix]
@@ -3188,7 +3188,7 @@ theorem concreteExitedSenderBalance :
     concreteCreateSender).bal = _
   have hz : (0 : Adr) ≠ concreteCreateSender := by decide +kernel
   have ht : concreteCreateTarget ≠ concreteCreateSender := by decide +kernel
-  simp only [State.addBal, State.setBal_get_ne hz, State.setBal_get_self, Acct.clearIfEmpty_bal, Acct.clearIfEmpty_nonce, Acct.withBal]
+  simp only [State.addBal, State.setBal_get_ne hz, State.setBal_get_self, Acct.clearIfEmpty_bal, Acct.withBal]
   rw [concreteExitMessageState_paid]
   simp only [State.addBal, State.setBal_get_self, Acct.clearIfEmpty_bal, Acct.withBal,
     State.bal, State.setBal_get_ne ht]
@@ -3211,7 +3211,7 @@ theorem concreteExitedSenderNonce : concreteExited.state.getNonce concreteCreate
     concreteCreateSender).nonce = _
   have hz : (0 : Adr) ≠ concreteCreateSender := by decide +kernel
   have ht : concreteCreateTarget ≠ concreteCreateSender := by decide +kernel
-  simp only [State.addBal, State.setBal_get_ne hz, State.setBal_get_self, Acct.clearIfEmpty_bal, Acct.clearIfEmpty_nonce, Acct.withBal]
+  simp only [State.addBal, State.setBal_get_ne hz, State.setBal_get_self, Acct.clearIfEmpty_nonce, Acct.withBal]
   rw [concreteExitMessageState_paid]
   simp only [State.addBal, State.setBal_get_self, Acct.clearIfEmpty_nonce, State.setBal_get_ne ht, Acct.withBal]
   rw [concreteExitTotalBase_sender]

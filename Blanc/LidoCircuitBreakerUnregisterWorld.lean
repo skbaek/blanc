@@ -451,7 +451,7 @@ theorem unregWorldStor_witness :
       exact unregWorld_toB256_one.symm
     · rw [unregWorld_stor_index_other canonical ht]
       have hne : unregWorldTarget ≠ t := fun h => ht h.symm
-      simp only [oneBasedIndexAt, if_neg hne]
+      simp only [oneBasedIndexAt, ite_eq_right hne]
       exact unregWorld_toB256_zero.symm
   · intro p canonical
     show unregWorldStor.get (countSlot p) =
@@ -463,7 +463,7 @@ theorem unregWorldStor_witness :
       exact unregWorld_toB256_one.symm
     · rw [unregWorld_stor_count_other canonical hp]
       have hne : unregWorldPauser ≠ p := fun h => hp h.symm
-      simp only [assignmentCount, if_neg hne]
+      simp only [assignmentCount, ite_eq_right hne]
       exact unregWorld_toB256_zero.symm
   · show unregWorldStor.get (countSlot 0) = 0
     refine unregWorld_stor_count_other ?_ (by decide)
@@ -489,11 +489,11 @@ def unregWorldResetCost : Nat := gasStorageUpdate - gasColdSload
 private theorem unregWorld_resetCost {orig new : B256} (hnew : orig ≠ new)
     (hzero : ¬ orig = 0) :
     sstoreValueCost orig orig new = unregWorldResetCost := by
-  rw [sstoreValueCost, if_pos ⟨rfl, hnew⟩, if_neg hzero, unregWorldResetCost]
+  rw [sstoreValueCost, ite_eq_left ⟨rfl, hnew⟩, ite_eq_right hzero, unregWorldResetCost]
 
 private theorem unregWorld_noopCost {orig cur : B256} :
     sstoreValueCost orig cur cur = gasWarmAccess := by
-  rw [sstoreValueCost, if_neg (by simp only [ne_eq, not_true_eq_false, and_false, not_false_eq_true])]
+  rw [sstoreValueCost, ite_eq_right (by simp only [ne_eq, not_true_eq_false, and_false, not_false_eq_true])]
 
 /-- The exact body reserve of the retiring unregistration at this world: `221`
 decoder/admin prefix and `21931` of kernel walk, staged loads and value
@@ -770,7 +770,7 @@ theorem unregWorld_actualOrig {key value : B256}
     unregWorldPre.getOrigStorVal unregWorldSevm unregWorldOwner key = value := by
   have hnc : unregWorldOwner ∉ unregWorldPre.createdAccounts :=
     Std.HashSet.not_mem_emptyWithCapacity
-  rw [Devm.getOrigStorVal, ite_cond_eq_false _ _ (eq_false hnc)]
+  rw [Devm.getOrigStorVal, ite_eq_right_of_eq_false _ _ (eq_false hnc)]
   exact h
 
 theorem unregWorld_origAssignment :
@@ -1028,8 +1028,8 @@ theorem unregisterWorld_settles :
   have hsettle :
       (Frame.ofCall unregWorldMsg).settle (.ok post) = .ok post := by
     simp only [Frame.settle, Frame.settleMsg, Frame.ofCall,
-      executeCode.handleErrorWith_ok, executeCode.handleError, processMessage.settle, bind, Except.bind,
-      if_neg hnot]
+      executeCode.handleErrorWith_ok, processMessage.settle, bind, Except.bind,
+      ite_eq_right hnot]
     rfl
   rw [hsettle] at hprocess
   refine ⟨hprocess, ?_⟩

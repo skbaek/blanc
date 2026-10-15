@@ -218,7 +218,7 @@ data — it never mentions the message whose `gas` field it fills. -/
 
 private theorem freshWorld_setCost {new : B256} (h : new ≠ 0) :
     sstoreValueCost 0 0 new = gasStorageSet := by
-  rw [sstoreValueCost, if_pos ⟨rfl, fun hc => h hc.symm⟩, if_pos rfl]
+  rw [sstoreValueCost, ite_eq_left ⟨rfl, fun hc => h hc.symm⟩, ite_eq_left rfl]
 
 /-- The exact body reserve of the fresh registration at this world:
 `221` decoder/admin prefix, `25756` kernel walk, `6` memory extension, two warm
@@ -813,8 +813,8 @@ theorem freshRegistrationWorld_settles :
   have hsettle :
       (Frame.ofCall freshWorldMsg).settle (.ok post) = .ok post := by
     simp only [Frame.settle, Frame.settleMsg, Frame.ofCall,
-      executeCode.handleErrorWith_ok, executeCode.handleError, processMessage.settle, bind, Except.bind,
-      if_neg hnot]
+      executeCode.handleErrorWith_ok, processMessage.settle, bind, Except.bind,
+      ite_eq_right hnot]
     rfl
   rwa [hsettle] at hprocess
 

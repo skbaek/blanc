@@ -51,7 +51,7 @@ private theorem gatewayRunKeys_expiryBase :
     Std.HashSet.emptyWithCapacity.insert
       (configWorldOwner, assignmentSlot pauseWorldCallee.toB256) := by
   unfold pauseExpiryBase temporalSloadBase
-  rw [if_neg (show (sentinelGatewayPauseWorldSevm.currentTarget,
+  rw [ite_eq_right (show (sentinelGatewayPauseWorldSevm.currentTarget,
       assignmentSlot pauseWorldCallee.toB256) ∉
     (pauseLockPost sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre).accessedStorageKeys from
     Std.HashSet.not_mem_emptyWithCapacity)]
@@ -73,7 +73,7 @@ private theorem gatewayRunKeys_durationBase :
     intro _
     exact pauseWorld_assignCallee_ne_expiry
   unfold pauseDurationBase temporalSloadBase
-  rw [if_neg hnot]
+  rw [ite_eq_right hnot]
   show ((pauseExpiryBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
     pauseWorldCallee.toB256).accessedStorageKeys).insert
     (sentinelGatewayPauseWorldSevm.currentTarget, expirySlot pauseWorldPauser) = _
@@ -98,7 +98,7 @@ private theorem gatewayRunKeys_kernelBase :
     · exact pauseWorld_duration_ne_expiry.symm
     · exact pauseWorld_duration_ne_assignCallee.symm
   unfold pauseKernelBase temporalSloadBase
-  rw [if_neg hnot]
+  rw [ite_eq_right hnot]
   show ((pauseDurationBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
     pauseWorldCallee.toB256 pauseWorldPauser).accessedStorageKeys).insert
     (sentinelGatewayPauseWorldSevm.currentTarget, pauseDurationSlot) = _
@@ -124,7 +124,7 @@ private theorem gatewayRunKeys_assignPost :
       pauseWorldCallee.toB256 pauseWorldPauser)
     pauseWorldCallee.toB256).accessedStorageKeys = _
   unfold assignmentBase temporalSloadBase
-  rw [if_pos gatewayRunWarm_assign_kernelBase]
+  rw [ite_eq_left gatewayRunWarm_assign_kernelBase]
   exact gatewayRunKeys_kernelBase
 
 private theorem gatewayRunKeys_countBase :
@@ -149,7 +149,7 @@ private theorem gatewayRunKeys_countBase :
     · exact pauseWorld_count_ne_expiry.symm
     · exact pauseWorld_assignCallee_ne_count
   unfold temporalSloadBase
-  rw [if_neg hnot]
+  rw [ite_eq_right hnot]
   show ((assignmentPost sentinelGatewayPauseWorldSevm
       (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0).accessedStorageKeys).insert
@@ -299,7 +299,7 @@ private theorem gatewayRunCost_assignment :
     temporalSloadCost sentinelGatewayPauseWorldSevm (pauseLockPost sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre)
       (assignmentSlot pauseWorldCallee.toB256) = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (sentinelGatewayPauseWorldSevm.currentTarget, assignmentSlot pauseWorldCallee.toB256) ∉
+  rw [ite_eq_right (show (sentinelGatewayPauseWorldSevm.currentTarget, assignmentSlot pauseWorldCallee.toB256) ∉
     (pauseLockPost sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre).accessedStorageKeys from
     Std.HashSet.not_mem_emptyWithCapacity)]
   rfl
@@ -309,7 +309,7 @@ private theorem gatewayRunCost_expiry :
       (pauseExpiryBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre pauseWorldCallee.toB256)
       (expirySlot pauseWorldPauser) = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (sentinelGatewayPauseWorldSevm.currentTarget, expirySlot pauseWorldPauser) ∉
+  rw [ite_eq_right (show (sentinelGatewayPauseWorldSevm.currentTarget, expirySlot pauseWorldPauser) ∉
       (pauseExpiryBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre pauseWorldCallee.toB256).accessedStorageKeys from by
     rw [gatewayRunKeys_expiryBase]
     simp only [Std.HashSet.mem_insert,
@@ -324,7 +324,7 @@ private theorem gatewayRunCost_duration :
       (pauseDurationBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre pauseWorldCallee.toB256 pauseWorldPauser)
       pauseDurationSlot = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (sentinelGatewayPauseWorldSevm.currentTarget, pauseDurationSlot) ∉
+  rw [ite_eq_right (show (sentinelGatewayPauseWorldSevm.currentTarget, pauseDurationSlot) ∉
       (pauseDurationBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre pauseWorldCallee.toB256
         pauseWorldPauser).accessedStorageKeys from by
     rw [gatewayRunKeys_durationBase]
@@ -341,7 +341,7 @@ private theorem gatewayRunCost_assignWarm :
       pauseWorldCallee.toB256 pauseWorldPauser)
       (assignmentSlot pauseWorldCallee.toB256) = 100 := by
   unfold temporalSloadCost
-  rw [if_pos gatewayRunWarm_assign_kernelBase]
+  rw [ite_eq_left gatewayRunWarm_assign_kernelBase]
   rfl
 
 private theorem gatewayRunCost_countCold :
@@ -350,7 +350,7 @@ private theorem gatewayRunCost_countCold :
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser) = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (sentinelGatewayPauseWorldSevm.currentTarget, countSlot pauseWorldPauser) ∉
+  rw [ite_eq_right (show (sentinelGatewayPauseWorldSevm.currentTarget, countSlot pauseWorldPauser) ∉
       (assignmentPost sentinelGatewayPauseWorldSevm
       (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0).accessedStorageKeys from by
@@ -372,7 +372,7 @@ private theorem gatewayRunCost_idxCold :
       (countSlot pauseWorldPauser) 0)
       (indexSlot pauseWorldCallee.toB256) = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (sentinelGatewayPauseWorldSevm.currentTarget, indexSlot pauseWorldCallee.toB256) ∉
+  rw [ite_eq_right (show (sentinelGatewayPauseWorldSevm.currentTarget, indexSlot pauseWorldCallee.toB256) ∉
       (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
       (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
@@ -402,7 +402,7 @@ private theorem gatewayRunCost_lenCold :
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (sentinelGatewayPauseWorldSevm.currentTarget, arrayLengthSlot) ∉
+  rw [ite_eq_right (show (sentinelGatewayPauseWorldSevm.currentTarget, arrayLengthSlot) ∉
       (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
       (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
@@ -431,7 +431,7 @@ private theorem gatewayRunCost_arrCold :
       arrayLengthSlot)
       (arrayEntrySlot 1) = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (sentinelGatewayPauseWorldSevm.currentTarget, arrayEntrySlot 1) ∉
+  rw [ite_eq_right (show (sentinelGatewayPauseWorldSevm.currentTarget, arrayEntrySlot 1) ∉
       (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (temporalSstorePost sentinelGatewayPauseWorldSevm (temporalSloadBase sentinelGatewayPauseWorldSevm (assignmentPost sentinelGatewayPauseWorldSevm
       (pauseKernelBase sentinelGatewayPauseWorldSevm sentinelGatewayPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
@@ -1421,7 +1421,7 @@ private theorem gatewayRunAfterSetBase_ownerProtected :
       gatewayRunRemoveBase3, gatewayRunCountPost, gatewayRunKernelBase,
       indexClearPost, entryClearPost, lengthWritePost, indexWritePost,
       entryWritePost, assignmentPost, assignmentBase, pauseKernelBase,
-      pauseDurationBase, pauseExpiryBase, pauseLockPost, Devm.getCode_setMach,
+      pauseDurationBase, pauseExpiryBase, pauseLockPost,
       addLogCode, transCode, temporalSstorePost_getCode, temporalSloadBase_getCode]
   change (gatewayRunAfterSetBase.getCode
     sentinelGatewayPauseWorldSevm.currentTarget).toList ≠ []
@@ -1742,8 +1742,8 @@ private theorem gatewayRunAfterSetBase_createdAccounts :
     entryWritePost, assignmentPost, assignmentBase,
     pauseKernelBase, pauseDurationBase, pauseExpiryBase,
     pauseLockPost, sentinelGatewayPauseWorldRun_sload_created, sentinelGatewayPauseWorldRun_sstore_created,
-    sentinelGatewayPauseWorldRun_addKey_created, sentinelGatewayPauseWorldRun_addLog_created,
-    sentinelGatewayPauseWorldRun_transVal_created, Devm.setMach_createdAccounts]
+    sentinelGatewayPauseWorldRun_addLog_created,
+    sentinelGatewayPauseWorldRun_transVal_created]
 
 private theorem sentinelGatewayPauseWorld_successSuffix :
     ∃ successPre final : Devm,
@@ -1808,7 +1808,7 @@ private theorem sentinelGatewayPauseWorld_successSuffix :
     sentinelGatewayPauseWorld_callerWord hmidCount
     (by
       unfold temporalSloadCost
-      rw [if_pos hwarmCount]
+      rw [ite_eq_left hwarmCount]
       rfl)
     hmidExpiry
     ((sentinelGatewayPauseWorld_actualOrigStor

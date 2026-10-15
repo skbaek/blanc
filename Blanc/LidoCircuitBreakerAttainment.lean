@@ -2281,7 +2281,7 @@ theorem setPauseDuration_body_runCompiledTo
         (base.setMach ⟨[], Mem.empty, G + 21498, base.stateGas⟩)
         (setPauseDuration dp) (.ok post) := by
   have hsstoreCost : sstoreValueCost 0 0 duration = 20000 := by
-    rw [sstoreValueCost, if_pos ⟨rfl, hnonzero.symm⟩, if_pos rfl]
+    rw [sstoreValueCost, ite_eq_left ⟨rfl, hnonzero.symm⟩, ite_eq_left rfl]
     norm_num only [gasStorageSet]
   apply Exists.intro
   unfold setPauseDuration requireStaticArgs onlyAdmin arg cdl pushDeployWord

@@ -119,7 +119,7 @@ private lemma runCompiled_call_zero_value_stubPause
     change gasColdSload + sstoreValueCost 0 0
       (pauseForProjection sevm.benvStat.time duration) = 22100
     rw [sstoreValueCost,
-      if_pos ⟨rfl, fun h => h_new h.symm⟩, if_pos rfl]
+      ite_eq_left ⟨rfl, fun h => h_new h.symm⟩, ite_eq_left rfl]
     norm_num only [gasColdSload, gasStorageSet]
   obtain ⟨out, hexec, herr, hout, hgasOut, hmetaOut, hworldOut,
     heffectOut⟩ :=
@@ -154,7 +154,7 @@ private lemma runCompiled_call_zero_value_stubPause
       0 = 0
     rw [hchildOriginal, hchildCurrent]
     unfold sstoreNewRefundCounter
-    rw [if_pos (fun h => h_new h.symm)]
+    rw [ite_eq_left (fun h => h_new h.symm)]
     simp only [↓reduceIte, ne_eq, not_true_eq_false, and_true, false_and, and_self, zero_add,
       ite_eq_right_iff]
     intro hz
@@ -362,7 +362,7 @@ private lemma stubPause_call_crossing
     have hsize : stubCode.size = 53 := by
       decide +kernel
     unfold getDelegatedCodeAddress
-    rw [if_neg]
+    rw [ite_eq_right]
     intro hvalid
     have hs := hvalid.1
     rw [hsize] at hs
@@ -390,7 +390,7 @@ private lemma stubPause_call_crossing
       gasWarmAccess := by
     show accessCost target.toAdr devm.accessedAddresses + 0 = gasWarmAccess
     unfold accessCost
-    rw [if_pos hwarm]
+    rw [ite_eq_left hwarm]
     omega
   obtain ⟨mcc, mcs, hsplit⟩ : ∃ mcc mcs,
       calculateMsgCallGas 0 (Nat.toB256 G).toNat d0.gasLeft 0
@@ -402,7 +402,7 @@ private lemma stubPause_call_crossing
       B256.toNat_toB256_of_lt hbound
     rw [hd0gas] at hsplit
     unfold calculateMsgCallGas at hsplit
-    rw [hGnat, if_neg (by simp only [gasWarmAccess]; omega)] at hsplit
+    rw [hGnat, ite_eq_right (by simp only [gasWarmAccess]; omega)] at hsplit
     simp only [gasWarmAccess] at hsplit
     have hmin : min G (except64th (G - 0 - 100)) =
         except64th (G - 100) := by
@@ -732,7 +732,7 @@ private lemma stubQuery_staticcall_crossing
     have hsize : stubCode.size = 53 := by
       decide +kernel
     unfold getDelegatedCodeAddress
-    rw [if_neg]
+    rw [ite_eq_right]
     intro hvalid
     have hs := hvalid.1
     rw [hsize] at hs
@@ -760,7 +760,7 @@ private lemma stubQuery_staticcall_crossing
       gasWarmAccess := by
     show accessCost target.toAdr devm.accessedAddresses + 0 = gasWarmAccess
     unfold accessCost
-    rw [if_pos hwarm]
+    rw [ite_eq_left hwarm]
     omega
   obtain ⟨mcc, mcs, hsplit⟩ : ∃ mcc mcs,
       calculateMsgCallGas 0 (Nat.toB256 G).toNat d0.gasLeft 0
@@ -772,7 +772,7 @@ private lemma stubQuery_staticcall_crossing
       B256.toNat_toB256_of_lt hbound
     rw [hd0gas] at hsplit
     unfold calculateMsgCallGas at hsplit
-    rw [hGnat, if_neg (by simp only [gasWarmAccess]; omega)] at hsplit
+    rw [hGnat, ite_eq_right (by simp only [gasWarmAccess]; omega)] at hsplit
     simp only [gasWarmAccess] at hsplit
     have hmin : min G (except64th (G - 0 - 100)) =
         except64th (G - 100) := by

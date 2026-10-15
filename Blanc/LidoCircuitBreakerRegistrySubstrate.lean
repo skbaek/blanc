@@ -40,7 +40,7 @@ theorem Bytes.sliceD_writeAt_after
   apply List.map_congr_left
   intro i hi
   have hi' := List.mem_range.mp hi
-  rw [Bytes.getD_writeAt, if_neg]
+  rw [Bytes.getD_writeAt, ite_eq_right]
   omega
 
 /-- Writing one word at memory offset `0` — the event-payload scratch slot every
@@ -56,7 +56,7 @@ private theorem readNewPauser_after_writeZero
     Mem.Reads.read hreads, List.sliceD_eq_map, List.sliceD_eq_map]
   apply List.map_congr_left
   intro i hi
-  rw [Bytes.getD_writeAt, if_neg]
+  rw [Bytes.getD_writeAt, ite_eq_right]
   have hi' := List.mem_range.mp hi
   rw [B256.length_toBytes]
   have hoff : 32 ≤ (newPauserWord * 32).toNat := by decide
@@ -72,7 +72,7 @@ private theorem size_writeZero_word_of_le
     OfNat.zero_ne_ofNat, not_false_eq_true])
   · have hlen : (b :: bs).length = 32 := hb ▸ B256.length_toBytes w
     simp only [Mem.write, hlen, Nat.zero_add]
-    rw [if_pos h]
+    rw [ite_eq_left h]
     split <;> rfl
 
 private theorem accessedStorageKeys_setMach
@@ -122,11 +122,11 @@ theorem temporal_sload_runCompiled
       ((temporalSloadBase sevm base key).setMach
         ⟨value :: stack, M, G, (temporalSloadBase sevm base key).stateGas⟩) := by
   by_cases hwarm : (sevm.currentTarget, key) ∈ base.accessedStorageKeys
-  · simp only [temporalSloadBase, temporalSloadCost, if_pos hwarm]
+  · simp only [temporalSloadBase, temporalSloadCost, ite_eq_left hwarm]
     exact Ninst.runCompiled_sload_warm hfork.rules_stateGas_none rfl hwarm
       (by simpa only [Devm.getStorVal_setMach] using hvalue)
       (by simp only [Devm.gasLeft_setMach]) hroom
-  · simp only [temporalSloadBase, temporalSloadCost, if_neg hwarm]
+  · simp only [temporalSloadBase, temporalSloadCost, ite_eq_right hwarm]
     have hsg : (addAccessedStorageKey base sevm.currentTarget key).stateGas =
         base.stateGas := rfl
     rw [hsg]
@@ -163,7 +163,7 @@ theorem temporal_sstore_runCompiled
   · simp only [Devm.getStorVal_setMach, hcurrent, temporalSstore_getOrigStorVal_setMach,
       horiginal]
     exact hcost
-  · simp only [temporalSstorePost, Devm.getStorVal_setMach, refundCounter_setMach,
+  · simp only [Devm.getStorVal_setMach, refundCounter_setMach,
       temporalSstore_getOrigStorVal_setMach]
   · simp only [Devm.gasLeft_setMach]
 
@@ -574,7 +574,7 @@ theorem afterOldPauser_finishSetPauser_runCompiled
       (pushB256 1 ::: add ::: newCountKey +++
         Ninst.sstore ::: .call finishSetPauserSlot) post := by
     func_run (2)
-    all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
+    all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case a =>
       simp only
       rw [hcountNext]
@@ -645,7 +645,7 @@ theorem afterOldPauser_finishSetPauser_runCompiled
     norm_num only [gVerylow]
   case a =>
     rw [Mem.Reads.read hreads, hnew, hnewMemory]
-    simp only [B256.eqCheck, if_neg hnewNonzero]
+    simp only [B256.eqCheck, ite_eq_right hnewNonzero]
     have hg : G + 64 + temporalSloadCost sevm base countKey +
         countCost - 9 =
         G + 55 + temporalSloadCost sevm base countKey + countCost := by
@@ -984,7 +984,7 @@ theorem registerAfterSet_oldLast_newPauserTail_runCompiled
     exact hrun
   unfold registerAfterSet
   func_run (4) [3, 0]
-  all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
+  all_goals try ((try simp only [Devm.stack_setMach]); omega)
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hpreviousCovered]
     norm_num only [gVerylow]
@@ -1255,7 +1255,7 @@ theorem registerAfterSet_nonzeroNewPauserTail_runCompiled
       temporalSloadBase sevm base heartbeatIntervalSlot =
         addAccessedStorageKey base sevm.currentTarget
           heartbeatIntervalSlot := by
-    simp only [temporalSloadBase, if_neg hintervalCold]
+    simp only [temporalSloadBase, ite_eq_right hintervalCold]
   have htag := registerAfterSet_tagExpiryStoreLogTail_runCompiled (hfork := hfork) fs sevm
     (temporalSloadBase sevm base heartbeatIntervalSlot) M img _ newPauser expiry
     currentExpiry expiryOriginal stack storeCost G hnewValueM' hstack hwf hreads hnew hsize
@@ -1605,7 +1605,7 @@ theorem setPauserKernel_append_runCompiled
     func_run (1) [0]
     case h_val =>
       change (if target = 0 then (1 : B256) else 0) = 0
-      rw [if_neg htargetValid.1]
+      rw [ite_eq_right htargetValid.1]
     case a =>
       have hg : Ga + 84 + assignmentCost +
             temporalSloadCost sevm base assignmentKey - 3 =
@@ -1869,7 +1869,7 @@ theorem setPauserKernel_found_runCompiled
     func_run (1) [0]
     case h_val =>
       change (if oldPauser = 0 then (1 : B256) else 0) = 0
-      rw [if_neg holdValid.1]
+      rw [ite_eq_right holdValid.1]
     case a =>
       have hg : elseGas + 16 - 3 = elseGas + 13 := by omega
       rw [hg]
@@ -2050,7 +2050,7 @@ theorem setPauserKernel_found_runCompiled
     func_run (1) [0]
     case h_val =>
       change (if target = 0 then (1 : B256) else 0) = 0
-      rw [if_neg htargetValid.1]
+      rw [ite_eq_right htargetValid.1]
     case a =>
       have hg : elseGas + 71 + assignmentCost +
             temporalSloadCost sevm base (assignmentSlot target) - 3 =
@@ -2447,7 +2447,7 @@ theorem registerPauser_success_settles_cleanly
     processMessage.settle, executeCode.handleErrorWith_ok, Except.bind_ok] at hsettle
   have hnotError : final.error.isSome ≠ true := by
     cases herror : final.error <;> simp_all only [ExceptT.stM_eq, Option.isSome_none, Bool.false_eq_true, ↓reduceIte, Option.isNone_none, Except.ok.injEq, ne_eq, not_false_eq_true, Option.isSome_some, Option.isNone_some]
-  rw [if_neg hnotError] at hsettle
+  rw [ite_eq_right hnotError] at hsettle
   exact Except.ok.inj hsettle
 
 theorem pushZero_targetIndexKey_prepend_runCompiled
@@ -2676,7 +2676,7 @@ private theorem removeTarget_restoreTail_runCompiled
         hwarmLength (lt_of_lt_of_le hgasFinal (by omega)) hstatic
     exact Func.RunCompiled.next hsstore hindexTail
   func_run (6) [3]
-  all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
+  all_goals try ((try simp only [Devm.stack_setMach]); omega)
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hlengthCovered]
     norm_num only [gVerylow]

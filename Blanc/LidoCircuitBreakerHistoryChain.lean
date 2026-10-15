@@ -71,7 +71,7 @@ private lemma getDelegatedCodeAddress_of_compile {p : Prog} {code : ByteArray}
     (h : some code.toList = Prog.compile p) :
     getDelegatedCodeAddress code = none := by
   dsimp only [getDelegatedCodeAddress]
-  rw [if_neg (not_delegation_of_compile h)]
+  rw [ite_eq_right (not_delegation_of_compile h)]
 
 /-- **The child frame, and the induction hypothesis.**  The frame a `CALL` or a
 `STATICCALL` opens from the contract's own frame preserves Registry coherence.

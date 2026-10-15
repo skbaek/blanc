@@ -406,7 +406,7 @@ theorem replWorld_actualOrigStorVal {oldCount : B256} {gas : Nat} {key : B256} :
       replWorldOwner key = (replWorldStor oldCount).get key := by
   have hnc : replWorldOwner ∉ (replWorldPre oldCount gas).createdAccounts :=
     Std.HashSet.not_mem_emptyWithCapacity
-  rw [Devm.getOrigStorVal, ite_cond_eq_false _ _ (eq_false hnc)]
+  rw [Devm.getOrigStorVal, ite_eq_right_of_eq_false _ _ (eq_false hnc)]
   exact replWorld_getOrigStorVal
 
 theorem replWorld_getStor (oldCount : B256) (gas : Nat) :
@@ -649,11 +649,11 @@ def replWorldResetCost : Nat := gasStorageUpdate - gasColdSload
 private theorem replWorld_resetCost {orig new : B256} (hnew : orig ≠ new)
     (hzero : ¬ orig = 0) : sstoreValueCost orig orig new =
       replWorldResetCost := by
-  rw [sstoreValueCost, if_pos ⟨rfl, hnew⟩, if_neg hzero, replWorldResetCost]
+  rw [sstoreValueCost, ite_eq_left ⟨rfl, hnew⟩, ite_eq_right hzero, replWorldResetCost]
 
 private theorem replWorld_setCost {new : B256} (h : new ≠ 0) :
     sstoreValueCost 0 0 new = gasStorageSet := by
-  rw [sstoreValueCost, if_pos ⟨rfl, fun hc => h hc.symm⟩, if_pos rfl]
+  rw [sstoreValueCost, ite_eq_left ⟨rfl, fun hc => h hc.symm⟩, ite_eq_left rfl]
 
 private theorem replWorld_warmCost {oldCount : B256} {gas : Nat} {base : Devm}
     {key : B256} (h : base.accessedStorageKeys = replWorldKeys)

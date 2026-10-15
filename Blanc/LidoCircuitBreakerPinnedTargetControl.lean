@@ -159,7 +159,7 @@ private theorem not_stubMain_run_of_protected
         branchPre.stack := prefix_of_eq eqRun protectedPrefix
   have flagOne :
       (stubProtectedSelector =? Sevm.selector sevm) = 1 := by
-    rw [selectorEq, B256.eqCheck, if_pos rfl]
+    rw [selectorEq, B256.eqCheck, ite_eq_left rfl]
   rcases of_run_branch branchRun with
       ⟨entry, zeroPop, baseRun⟩ |
       ⟨flag, popPost, bodyEntry, flagNonzero, flagPop, bodyBurn, revertRun⟩
@@ -207,7 +207,7 @@ theorem stub_pauseFor_effect
       simp only [pauseForCalldata, List.length_append,
         abiSelectorBytes_length, B256.length_toBytes]
       change ((36 : B256) =? (36 : B256)) = 1
-      rw [B256.eqCheck, if_pos rfl]
+      rw [B256.eqCheck, ite_eq_left rfl]
     rw [flagOne] at flagZero
     exact (by cases flagZero)
   · change Func.Run [stubMain] sevm bodyEntry stubPause post at pauseRun
@@ -436,7 +436,7 @@ theorem stub_isPaused_truthful
     rw [frame.data]
     simp only [isPausedCalldata, abiSelectorBytes_length]
     change ((36 : B256) =? (4 : B256)) = 0
-    rw [B256.eqCheck, if_neg (by decide)]
+    rw [B256.eqCheck, ite_eq_right (by decide)]
   rcases of_run_branch branchRun with
       ⟨queryEntry, zeroPop, queryRun⟩ |
       ⟨flag, popPost, bodyEntry, flagNonzero, flagPop, bodyBurn, pauseRun⟩
@@ -521,11 +521,11 @@ theorem stub_isPaused_truthful
         have wordZero :
             (sevm.benvStat.time <?
               pausedUntil target (pre.state.getStor target)) = 0 := by
-          rw [B256.ltCheck, if_neg notPaused]
+          rw [B256.ltCheck, ite_eq_right notPaused]
         rw [wordZero] at wordOne
         exact (by cases wordOne)
       · intro paused
-        rw [B256.ltCheck, if_pos paused]
+        rw [B256.ltCheck, ite_eq_left paused]
     refine ⟨projectionEq, (acceptedIff 1).trans wordOneIff, ?_⟩
     intro notPaused
     left
@@ -592,7 +592,7 @@ theorem stub_lidoPinnedPauseTarget
     have acceptedEq (word : B256) :
         AcceptedBoolWord post word ↔ AcceptedBoolWord rawPost word := by
       simp only [AcceptedBoolWord, clean, rawClean, outputEq,
-        Option.isSome_none, Bool.false_eq_true, true_and]
+        Option.isSome_none, true_and]
     have acceptedExecutionEq (word : B256) :
         AcceptedBoolExecution (.ok post) word ↔
           AcceptedBoolWord rawPost word := by
@@ -1082,7 +1082,7 @@ private def benignCallResume : Resume :=
 
 private theorem benignCallAccessCost_eq : benignCallAccessCost = 2600 := by
   unfold benignCallAccessCost accessCost
-  rw [if_neg (show benignCallTarget ∉
+  rw [ite_eq_right (show benignCallTarget ∉
       benignCallBase.accessedAddresses by
     rw [show benignCallBase.accessedAddresses =
         Std.HashSet.emptyWithCapacity by rfl]

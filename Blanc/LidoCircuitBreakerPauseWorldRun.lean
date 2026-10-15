@@ -105,7 +105,7 @@ theorem pauseWorld_actualOrigStor (stor : Stor) (gas : Nat) {d : Devm} {key : B2
   have hnc : configWorldOwner ∉ d.createdAccounts := by
     rw [hd]
     exact Std.HashSet.not_mem_emptyWithCapacity
-  rw [Devm.getOrigStorVal, ite_cond_eq_false _ _ (eq_false hnc)]
+  rw [Devm.getOrigStorVal, ite_eq_right_of_eq_false _ _ (eq_false hnc)]
   exact pauseWorld_getOrigStor stor gas
 
 /-! ## Projection helpers
@@ -133,7 +133,7 @@ private theorem getTransVal_setTransVal_self (devm : Devm) (a : Adr)
     (k : B256) : (devm.setTransVal a k 0).getTransVal a k = 0 := by
   show ((devm.transientStorage.setStorVal a k 0).getD a .empty).get k = 0
   unfold Tra.setStorVal
-  rw [Std.TreeMap.getD_eq_getD_getElem?, Tra.getElem?_set, if_pos rfl]
+  rw [Std.TreeMap.getD_eq_getD_getElem?, Tra.getElem?_set, ite_eq_left rfl]
   split
   · show Stor.get .empty k = 0
     simp only [Stor.get, Stor.empty, Std.TreeMap.empty_eq_emptyc, Std.TreeMap.getD_emptyc]
@@ -196,7 +196,7 @@ private theorem temporalSloadBase_cold_keys (sevm : Sevm) (base : Devm)
     (temporalSloadBase sevm base key).accessedStorageKeys =
       base.accessedStorageKeys.insert (sevm.currentTarget, key) := by
   unfold temporalSloadBase
-  rw [if_neg h]
+  rw [ite_eq_right h]
   rfl
 
 private theorem lastKeys_expiryBase :
@@ -205,7 +205,7 @@ private theorem lastKeys_expiryBase :
     Std.HashSet.emptyWithCapacity.insert
       (configWorldOwner, assignmentSlot pauseWorldCallee.toB256) := by
   unfold pauseExpiryBase temporalSloadBase
-  rw [if_neg (show (pauseLastSevm.currentTarget,
+  rw [ite_eq_right (show (pauseLastSevm.currentTarget,
       assignmentSlot pauseWorldCallee.toB256) ∉
     (pauseLockPost pauseLastSevm pauseLastPre).accessedStorageKeys from
     Std.HashSet.not_mem_emptyWithCapacity)]
@@ -227,7 +227,7 @@ private theorem lastKeys_durationBase :
     intro _
     exact pauseWorld_assignCallee_ne_expiry
   unfold pauseDurationBase temporalSloadBase
-  rw [if_neg hnot]
+  rw [ite_eq_right hnot]
   show ((pauseExpiryBase pauseLastSevm pauseLastPre
     pauseWorldCallee.toB256).accessedStorageKeys).insert
     (pauseLastSevm.currentTarget, expirySlot pauseWorldPauser) = _
@@ -252,7 +252,7 @@ private theorem lastKeys_kernelBase :
     · exact pauseWorld_duration_ne_expiry.symm
     · exact pauseWorld_duration_ne_assignCallee.symm
   unfold pauseKernelBase temporalSloadBase
-  rw [if_neg hnot]
+  rw [ite_eq_right hnot]
   show ((pauseDurationBase pauseLastSevm pauseLastPre
     pauseWorldCallee.toB256 pauseWorldPauser).accessedStorageKeys).insert
     (pauseLastSevm.currentTarget, pauseDurationSlot) = _
@@ -278,7 +278,7 @@ private theorem lastKeys_assignPost :
       pauseWorldCallee.toB256 pauseWorldPauser)
     pauseWorldCallee.toB256).accessedStorageKeys = _
   unfold assignmentBase temporalSloadBase
-  rw [if_pos lastWarm_assign_kernelBase]
+  rw [ite_eq_left lastWarm_assign_kernelBase]
   exact lastKeys_kernelBase
 
 private theorem lastKeys_countBase :
@@ -303,7 +303,7 @@ private theorem lastKeys_countBase :
     · exact pauseWorld_count_ne_expiry.symm
     · exact pauseWorld_assignCallee_ne_count
   unfold temporalSloadBase
-  rw [if_neg hnot]
+  rw [ite_eq_right hnot]
   show ((assignmentPost pauseLastSevm
       (pauseKernelBase pauseLastSevm pauseLastPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0).accessedStorageKeys).insert
@@ -493,7 +493,7 @@ private theorem lastCost_assignment :
     temporalSloadCost pauseLastSevm (pauseLockPost pauseLastSevm pauseLastPre)
       (assignmentSlot pauseWorldCallee.toB256) = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (pauseLastSevm.currentTarget, assignmentSlot pauseWorldCallee.toB256) ∉
+  rw [ite_eq_right (show (pauseLastSevm.currentTarget, assignmentSlot pauseWorldCallee.toB256) ∉
     (pauseLockPost pauseLastSevm pauseLastPre).accessedStorageKeys from
     Std.HashSet.not_mem_emptyWithCapacity)]
   rfl
@@ -503,7 +503,7 @@ private theorem lastCost_expiry :
       (pauseExpiryBase pauseLastSevm pauseLastPre pauseWorldCallee.toB256)
       (expirySlot pauseWorldPauser) = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (pauseLastSevm.currentTarget, expirySlot pauseWorldPauser) ∉
+  rw [ite_eq_right (show (pauseLastSevm.currentTarget, expirySlot pauseWorldPauser) ∉
       (pauseExpiryBase pauseLastSevm pauseLastPre pauseWorldCallee.toB256).accessedStorageKeys from by
     rw [lastKeys_expiryBase]
     simp only [Std.HashSet.mem_insert,
@@ -518,7 +518,7 @@ private theorem lastCost_duration :
       (pauseDurationBase pauseLastSevm pauseLastPre pauseWorldCallee.toB256 pauseWorldPauser)
       pauseDurationSlot = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (pauseLastSevm.currentTarget, pauseDurationSlot) ∉
+  rw [ite_eq_right (show (pauseLastSevm.currentTarget, pauseDurationSlot) ∉
       (pauseDurationBase pauseLastSevm pauseLastPre pauseWorldCallee.toB256
         pauseWorldPauser).accessedStorageKeys from by
     rw [lastKeys_durationBase]
@@ -535,7 +535,7 @@ private theorem lastCost_assignWarm :
       pauseWorldCallee.toB256 pauseWorldPauser)
       (assignmentSlot pauseWorldCallee.toB256) = 100 := by
   unfold temporalSloadCost
-  rw [if_pos lastWarm_assign_kernelBase]
+  rw [ite_eq_left lastWarm_assign_kernelBase]
   rfl
 
 private theorem lastCost_countCold :
@@ -544,7 +544,7 @@ private theorem lastCost_countCold :
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser) = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (pauseLastSevm.currentTarget, countSlot pauseWorldPauser) ∉
+  rw [ite_eq_right (show (pauseLastSevm.currentTarget, countSlot pauseWorldPauser) ∉
       (assignmentPost pauseLastSevm
       (pauseKernelBase pauseLastSevm pauseLastPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0).accessedStorageKeys from by
@@ -566,7 +566,7 @@ private theorem lastCost_idxCold :
       (countSlot pauseWorldPauser) 0)
       (indexSlot pauseWorldCallee.toB256) = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (pauseLastSevm.currentTarget, indexSlot pauseWorldCallee.toB256) ∉
+  rw [ite_eq_right (show (pauseLastSevm.currentTarget, indexSlot pauseWorldCallee.toB256) ∉
       (temporalSstorePost pauseLastSevm (temporalSloadBase pauseLastSevm (assignmentPost pauseLastSevm
       (pauseKernelBase pauseLastSevm pauseLastPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
@@ -596,7 +596,7 @@ private theorem lastCost_lenCold :
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (pauseLastSevm.currentTarget, arrayLengthSlot) ∉
+  rw [ite_eq_right (show (pauseLastSevm.currentTarget, arrayLengthSlot) ∉
       (temporalSloadBase pauseLastSevm (temporalSstorePost pauseLastSevm (temporalSloadBase pauseLastSevm (assignmentPost pauseLastSevm
       (pauseKernelBase pauseLastSevm pauseLastPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
@@ -625,7 +625,7 @@ private theorem lastCost_arrCold :
       arrayLengthSlot)
       (arrayEntrySlot 1) = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (pauseLastSevm.currentTarget, arrayEntrySlot 1) ∉
+  rw [ite_eq_right (show (pauseLastSevm.currentTarget, arrayEntrySlot 1) ∉
       (temporalSloadBase pauseLastSevm (temporalSloadBase pauseLastSevm (temporalSstorePost pauseLastSevm (temporalSloadBase pauseLastSevm (assignmentPost pauseLastSevm
       (pauseKernelBase pauseLastSevm pauseLastPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
@@ -1394,12 +1394,12 @@ private theorem lastMem_durLast :
 
 private theorem lastSvc_reset {orig new : B256} (hnew : orig ≠ new)
     (hzero : ¬ orig = 0) : sstoreValueCost orig orig new = 2900 := by
-  rw [sstoreValueCost, if_pos ⟨rfl, hnew⟩, if_neg hzero]
+  rw [sstoreValueCost, ite_eq_left ⟨rfl, hnew⟩, ite_eq_right hzero]
   norm_num only [gasStorageUpdate, gasColdSload]
 
 private theorem lastSvc_noop {orig cur : B256} :
     sstoreValueCost orig cur cur = 100 := by
-  rw [sstoreValueCost, if_neg (by simp only [ne_eq, not_true_eq_false, and_false, not_false_eq_true])]
+  rw [sstoreValueCost, ite_eq_right (by simp only [ne_eq, not_true_eq_false, and_false, not_false_eq_true])]
   rfl
 
 /-! ## The kernel prefix reserve, closed -/
@@ -2245,17 +2245,17 @@ private theorem pauseLastWorld_master :
     hmidCount
     (by
       unfold temporalSloadCost
-      rw [if_pos hmidWarmCount]
+      rw [ite_eq_left hmidWarmCount]
       rfl)
     hmidExpiry
     ((pauseWorld_actualOrigStor pauseLastWorldStor pauseLastWorldGas
       (hd := hcreatedMid.trans (by
         (try simp only [indexClearPost, entryClearPost, lengthWritePost, indexWritePost,
-          entryWritePost, swapPopClearPost, assignmentPost, assignmentBase, foundKernelPost,
+          entryWritePost, assignmentPost, assignmentBase,
           pauseKernelBase, pauseDurationBase, pauseExpiryBase, pauseLockPost,
           pauseWorldRun_sload_created, pauseWorldRun_sstore_created,
-          pauseWorldRun_addKey_created, pauseWorldRun_addLog_created,
-          pauseWorldRun_transVal_created, Devm.setMach_createdAccounts]) <;> rfl))).trans
+          pauseWorldRun_addLog_created,
+          pauseWorldRun_transVal_created]) <;> rfl))).trans
       pauseLastStor_expiry)
     hmidWarmExpiry
     (lastSvc_reset (by decide) (by decide))
@@ -2616,7 +2616,7 @@ private theorem returnKeys_expiryBase :
     Std.HashSet.emptyWithCapacity.insert
       (configWorldOwner, assignmentSlot pauseWorldCallee.toB256) := by
   unfold pauseExpiryBase temporalSloadBase
-  rw [if_neg (show (pauseRetainedSevm.currentTarget,
+  rw [ite_eq_right (show (pauseRetainedSevm.currentTarget,
       assignmentSlot pauseWorldCallee.toB256) ∉
     (pauseLockPost pauseRetainedSevm pauseRetainedPre).accessedStorageKeys from
     Std.HashSet.not_mem_emptyWithCapacity)]
@@ -2638,7 +2638,7 @@ private theorem returnKeys_durationBase :
     intro _
     exact pauseWorld_assignCallee_ne_expiry
   unfold pauseDurationBase temporalSloadBase
-  rw [if_neg hnot]
+  rw [ite_eq_right hnot]
   show ((pauseExpiryBase pauseRetainedSevm pauseRetainedPre
     pauseWorldCallee.toB256).accessedStorageKeys).insert
     (pauseRetainedSevm.currentTarget, expirySlot pauseWorldPauser) = _
@@ -2663,7 +2663,7 @@ private theorem returnKeys_kernelBase :
     · exact pauseWorld_duration_ne_expiry.symm
     · exact pauseWorld_duration_ne_assignCallee.symm
   unfold pauseKernelBase temporalSloadBase
-  rw [if_neg hnot]
+  rw [ite_eq_right hnot]
   show ((pauseDurationBase pauseRetainedSevm pauseRetainedPre
     pauseWorldCallee.toB256 pauseWorldPauser).accessedStorageKeys).insert
     (pauseRetainedSevm.currentTarget, pauseDurationSlot) = _
@@ -2689,7 +2689,7 @@ private theorem returnKeys_assignPost :
       pauseWorldCallee.toB256 pauseWorldPauser)
     pauseWorldCallee.toB256).accessedStorageKeys = _
   unfold assignmentBase temporalSloadBase
-  rw [if_pos returnWarm_assign_kernelBase]
+  rw [ite_eq_left returnWarm_assign_kernelBase]
   exact returnKeys_kernelBase
 
 private theorem returnKeys_countBase :
@@ -2835,7 +2835,7 @@ private theorem returnCost_assignment :
     temporalSloadCost pauseRetainedSevm (pauseLockPost pauseRetainedSevm pauseRetainedPre)
       (assignmentSlot pauseWorldCallee.toB256) = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (pauseRetainedSevm.currentTarget, assignmentSlot pauseWorldCallee.toB256) ∉
+  rw [ite_eq_right (show (pauseRetainedSevm.currentTarget, assignmentSlot pauseWorldCallee.toB256) ∉
     (pauseLockPost pauseRetainedSevm pauseRetainedPre).accessedStorageKeys from
     Std.HashSet.not_mem_emptyWithCapacity)]
   rfl
@@ -2845,7 +2845,7 @@ private theorem returnCost_expiry :
       (pauseExpiryBase pauseRetainedSevm pauseRetainedPre pauseWorldCallee.toB256)
       (expirySlot pauseWorldPauser) = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (pauseRetainedSevm.currentTarget, expirySlot pauseWorldPauser) ∉
+  rw [ite_eq_right (show (pauseRetainedSevm.currentTarget, expirySlot pauseWorldPauser) ∉
       (pauseExpiryBase pauseRetainedSevm pauseRetainedPre pauseWorldCallee.toB256).accessedStorageKeys from by
     rw [returnKeys_expiryBase]
     simp only [Std.HashSet.mem_insert,
@@ -2860,7 +2860,7 @@ private theorem returnCost_duration :
       (pauseDurationBase pauseRetainedSevm pauseRetainedPre pauseWorldCallee.toB256 pauseWorldPauser)
       pauseDurationSlot = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (pauseRetainedSevm.currentTarget, pauseDurationSlot) ∉
+  rw [ite_eq_right (show (pauseRetainedSevm.currentTarget, pauseDurationSlot) ∉
       (pauseDurationBase pauseRetainedSevm pauseRetainedPre pauseWorldCallee.toB256
         pauseWorldPauser).accessedStorageKeys from by
     rw [returnKeys_durationBase]
@@ -2877,7 +2877,7 @@ private theorem returnCost_assignWarm :
       pauseWorldCallee.toB256 pauseWorldPauser)
       (assignmentSlot pauseWorldCallee.toB256) = 100 := by
   unfold temporalSloadCost
-  rw [if_pos returnWarm_assign_kernelBase]
+  rw [ite_eq_left returnWarm_assign_kernelBase]
   rfl
 
 private theorem returnCost_countCold :
@@ -2886,7 +2886,7 @@ private theorem returnCost_countCold :
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser) = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (pauseRetainedSevm.currentTarget, countSlot pauseWorldPauser) ∉
+  rw [ite_eq_right (show (pauseRetainedSevm.currentTarget, countSlot pauseWorldPauser) ∉
       (assignmentPost pauseRetainedSevm
       (pauseKernelBase pauseRetainedSevm pauseRetainedPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0).accessedStorageKeys from by
@@ -2908,7 +2908,7 @@ private theorem returnCost_idxCold :
       (countSlot pauseWorldPauser) 1)
       (indexSlot pauseWorldCallee.toB256) = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (pauseRetainedSevm.currentTarget, indexSlot pauseWorldCallee.toB256) ∉
+  rw [ite_eq_right (show (pauseRetainedSevm.currentTarget, indexSlot pauseWorldCallee.toB256) ∉
       (temporalSstorePost pauseRetainedSevm (temporalSloadBase pauseRetainedSevm (assignmentPost pauseRetainedSevm
       (pauseKernelBase pauseRetainedSevm pauseRetainedPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
@@ -2938,7 +2938,7 @@ private theorem returnCost_lenCold :
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (pauseRetainedSevm.currentTarget, arrayLengthSlot) ∉
+  rw [ite_eq_right (show (pauseRetainedSevm.currentTarget, arrayLengthSlot) ∉
       (temporalSloadBase pauseRetainedSevm (temporalSstorePost pauseRetainedSevm (temporalSloadBase pauseRetainedSevm (assignmentPost pauseRetainedSevm
       (pauseKernelBase pauseRetainedSevm pauseRetainedPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
@@ -2967,7 +2967,7 @@ private theorem returnCost_tailCold :
       arrayLengthSlot)
       (arrayEntrySlot 2) = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (pauseRetainedSevm.currentTarget, arrayEntrySlot 2) ∉
+  rw [ite_eq_right (show (pauseRetainedSevm.currentTarget, arrayEntrySlot 2) ∉
       (temporalSloadBase pauseRetainedSevm (temporalSloadBase pauseRetainedSevm (temporalSstorePost pauseRetainedSevm (temporalSloadBase pauseRetainedSevm (assignmentPost pauseRetainedSevm
       (pauseKernelBase pauseRetainedSevm pauseRetainedPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
@@ -4306,17 +4306,17 @@ private theorem pauseRetainedWorld_master :
     hmidCount (by decide)
     (by
       unfold temporalSloadCost
-      rw [if_pos hmidWarmCount]
+      rw [ite_eq_left hmidWarmCount]
       rfl)
     hmidInterval
     (by
       have hbase : temporalSloadBase pauseRetainedSevm mid
           (countSlot pauseWorldPauser) = mid := by
         unfold temporalSloadBase
-        rw [if_pos hmidWarmCount]
+        rw [ite_eq_left hmidWarmCount]
       rw [hbase]
       unfold temporalSloadCost
-      rw [if_neg (show (pauseRetainedSevm.currentTarget,
+      rw [ite_eq_right (show (pauseRetainedSevm.currentTarget,
           heartbeatIntervalSlot) ∉ mid.accessedStorageKeys from by
         simp only [haskF, addLog_accessedStorageKeys]
         rw [returnKeys_RB6_peel, returnKeys_removeBase3]
@@ -4331,12 +4331,12 @@ private theorem pauseRetainedWorld_master :
     hmidExpiry
     ((pauseWorld_actualOrigStor pauseRetainedWorldStor pauseRetainedWorldGas
       (hd := hcreatedMid.trans (by
-        (try simp only [indexClearPost, entryClearPost, lengthWritePost, indexWritePost,
-          entryWritePost, swapPopClearPost, assignmentPost, assignmentBase, foundKernelPost,
+        (try simp only [lengthWritePost,
+          assignmentPost, assignmentBase,
           pauseKernelBase, pauseDurationBase, pauseExpiryBase, pauseLockPost,
           pauseWorldRun_sload_created, pauseWorldRun_sstore_created,
           pauseWorldRun_addKey_created, pauseWorldRun_addLog_created,
-          pauseWorldRun_transVal_created, Devm.setMach_createdAccounts]) <;> rfl))).trans pauseRetainedStor_expiry)
+          pauseWorldRun_transVal_created]) <;> rfl))).trans pauseRetainedStor_expiry)
     hmidWarmExpiry
     (by
       show sstoreValueCost pauseWorldExpiry pauseWorldExpiry

@@ -209,7 +209,7 @@ private theorem removeTarget_restoreTail_runCompiled
     exact Func.RunCompiled.next hsstore hindexTail
   func_run (6) [3]
   all_goals first | (case a => skip) | (case h_cost => skip) |
-      try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
+      try ((try simp only [Devm.stack_setMach]); omega)
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hlengthCovered]
     norm_num only [gVerylow]
@@ -1601,6 +1601,77 @@ private theorem removeTarget_holeStorePrefix_runCompiled
     rw [hg]
     exact hholeRemoved
 
+/-- The tail-clear prefix of the swap-and-pop store suffix, stated over an
+abstract pre-store world `base`: push the zero, reload the array length,
+tag it into the tail key, and clear that cell warm.  Factored out so the
+kernel checks these steps against an opaque world rather than the main
+walk's let-bound `temporalSstorePost` chain. -/
+private theorem removeTarget_tailClearPrefix_runCompiled
+    {fs : List Func} {sevm : Sevm} {base : Devm} {M : Mem}
+    {len current original : B256} {stack : List B256} {G cost : Nat}
+    {tail : Func} {post : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (hcurrent : base.getStorVal sevm.currentTarget (arrayEntrySlot len) =
+      current)
+    (horiginal : base.getOrigStorVal sevm sevm.currentTarget
+      (arrayEntrySlot len) = original)
+    (hcost : sstoreValueCost original current 0 = cost)
+    (hwarm : (sevm.currentTarget, arrayEntrySlot len) ∈
+      base.accessedStorageKeys)
+    (hgas : gCallStipend < G + cost)
+    (hstatic : sevm.isStatic = false)
+    (hlengthValue :
+      (M.read (arrayLengthWord * 32).toNat 32).1.toB256 = len)
+    (hlengthMemory :
+      (M.read (arrayLengthWord * 32).toNat 32).2 = M)
+    (halign : M.size % 32 = 0)
+    (hlengthCovered : (arrayLengthWord * 32).toNat + 32 ≤ M.size)
+    (hstack : stack.length ≤ 1)
+    (hrest : Func.RunCompiled fs sevm
+      ((temporalSstorePost sevm base (arrayEntrySlot len) 0).setMach
+        ⟨stack, M, G,
+          (temporalSstorePost sevm base (arrayEntrySlot len) 0).stateGas⟩)
+      tail post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨stack, M, G + cost + 14, base.stateGas⟩)
+      (pushB256 0 ::: loadWord arrayLengthWord +++ tagTop arrayRegion +++
+        Ninst.sstore ::: tail)
+      post := by
+  have hstore : Func.RunCompiled fs sevm
+      (base.setMach
+        ⟨arrayEntrySlot len :: 0 :: stack, M, G + cost, base.stateGas⟩)
+      (Ninst.sstore ::: tail) post :=
+    Func.RunCompiled.next
+      (temporal_sstore_runCompiled hfork hcurrent horiginal hcost hwarm
+        hgas hstatic)
+      hrest
+  have htag : Func.RunCompiled fs sevm
+      (base.setMach ⟨len :: 0 :: stack, M, G + cost + 6, base.stateGas⟩)
+      (tagTop arrayRegion +++ Ninst.sstore ::: tail) post := by
+    func_run (2) [arrayEntrySlot len]
+    case a =>
+      have hg : G + cost + 6 - 6 = G + cost := by clear * -; omega
+      rw [hg]
+      exact hstore
+  have hlength : Func.RunCompiled fs sevm
+      (base.setMach ⟨0 :: stack, M, G + cost + 12, base.stateGas⟩)
+      (loadWord arrayLengthWord +++ tagTop arrayRegion +++
+        Ninst.sstore ::: tail) post := by
+    func_run (2) [3]
+    case h_cost =>
+      rw [Devm.extCost_zero_of_le halign hlengthCovered]
+      norm_num only [gVerylow]
+    case a =>
+      rw [hlengthValue, hlengthMemory]
+      have hg : G + cost + 12 - 6 = G + cost + 6 := by clear * -; omega
+      rw [hg]
+      exact htag
+  func_run (1)
+  case a =>
+    have hg : G + cost + 14 - 2 = G + cost + 12 := by clear * -; omega
+    rw [hg]
+    exact hlength
+
 set_option maxHeartbeats 1600000 in
 theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
@@ -2151,66 +2222,6 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         G + finishGas + 44 + indexClearCost + lengthRestoreCost := by clear * -; omega
     rw [hg]
     simpa only [fs, tailPost] using hrestore
-  have hstoreTail : Func.RunCompiled fs sevm
-      (movedPost.setMach
-        ⟨tailKey :: 0 :: stack, MLast,
-          G + finishGas + 44 + lengthRestoreCost + indexClearCost +
-            tailClearCost, movedPost.stateGas⟩)
-      (Ninst.sstore ::: loadWord arrayLengthWord +++ pushB256 1 :::
-        swap 0 ::: sub ::: pushB256 arrayLengthSlot ::: Ninst.sstore :::
-        pushB256 0 ::: targetIndexKey +++ Ninst.sstore :::
-        .call finishSetPauserSlot)
-      post := by
-    exact Func.RunCompiled.next
-      (temporal_sstore_runCompiled (hfork := hfork) htailMovedPost
-        ((hmovedOriginal tailKey).trans htailOrig)
-        htailClearCost
-        hwarmTailMoved (lt_of_lt_of_le hgasFinal (by omega)) hstatic)
-      hrestore'
-  have htailTag : Func.RunCompiled fs sevm
-      (movedPost.setMach
-        ⟨len :: 0 :: stack, MLast,
-          G + finishGas + 50 + lengthRestoreCost + indexClearCost +
-            tailClearCost, movedPost.stateGas⟩)
-      (tagTop arrayRegion +++ Ninst.sstore :::
-        loadWord arrayLengthWord +++ pushB256 1 ::: swap 0 ::: sub :::
-        pushB256 arrayLengthSlot ::: Ninst.sstore ::: pushB256 0 :::
-        targetIndexKey +++ Ninst.sstore ::: .call finishSetPauserSlot)
-      post := by
-    clear_value movedPost
-    func_run (2) [tailKey]
-    case a =>
-      have hg : G + finishGas + 50 + lengthRestoreCost + indexClearCost +
-          tailClearCost - 6 =
-          G + finishGas + 44 + lengthRestoreCost + indexClearCost +
-            tailClearCost := by clear * -; omega
-      rw [hg]
-      exact hstoreTail
-  have htailLength : Func.RunCompiled fs sevm
-      (movedPost.setMach
-        ⟨0 :: stack, MLast,
-          G + finishGas + 56 + lengthRestoreCost + indexClearCost +
-            tailClearCost, movedPost.stateGas⟩)
-      (loadWord arrayLengthWord +++ tagTop arrayRegion +++
-        Ninst.sstore ::: loadWord arrayLengthWord +++ pushB256 1 :::
-        swap 0 ::: sub ::: pushB256 arrayLengthSlot ::: Ninst.sstore :::
-        pushB256 0 ::: targetIndexKey +++ Ninst.sstore :::
-        .call finishSetPauserSlot)
-      post := by
-    clear_value movedPost
-    func_run (2) [3]
-    case h_cost =>
-      rw [Devm.extCost_zero_of_le halignLast
-        (hMLastCovered arrayLengthWord (by decide))]
-      norm_num only [gVerylow]
-    case a =>
-      rw [hlengthValue, hlengthMemory]
-      have hg : G + finishGas + 56 + lengthRestoreCost + indexClearCost +
-          tailClearCost - 6 =
-          G + finishGas + 50 + lengthRestoreCost + indexClearCost +
-            tailClearCost := by clear * -; omega
-      rw [hg]
-      exact htailTag
   have htailPrefix : Func.RunCompiled fs sevm
       (movedPost.setMach
         ⟨stack, MLast,
@@ -2222,15 +2233,16 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         pushB256 0 ::: targetIndexKey +++ Ninst.sstore :::
         .call finishSetPauserSlot)
       post := by
-    clear_value movedPost
-    func_run (1)
-    case a =>
-      have hg : G + finishGas + 58 + lengthRestoreCost + indexClearCost +
-          tailClearCost - 2 =
-          G + finishGas + 56 + lengthRestoreCost + indexClearCost +
-            tailClearCost := by clear * -; omega
-      rw [hg]
-      exact htailLength
+    have hg : G + finishGas + 58 + lengthRestoreCost + indexClearCost +
+        tailClearCost =
+        G + finishGas + 44 + lengthRestoreCost + indexClearCost +
+          tailClearCost + 14 := by clear * -; omega
+    rw [hg]
+    exact removeTarget_tailClearPrefix_runCompiled hfork htailMovedPost
+      ((hmovedOriginal tailKey).trans htailOrig) htailClearCost
+      hwarmTailMoved (lt_of_lt_of_le hgasFinal (by omega)) hstatic
+      hlengthValue hlengthMemory halignLast
+      (hMLastCovered arrayLengthWord (by decide)) hstack hrestore'
   have hstoreMoved : Func.RunCompiled fs sevm
       (holePost.setMach
         ⟨movedKey :: idx :: stack, MLast,

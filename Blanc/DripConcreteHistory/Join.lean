@@ -43,7 +43,7 @@ theorem concreteJoinDebit_run :
   change (concreteDeployed.state.incrNonce concreteCreateSender).subBal concreteCreateSender
     1000000 = _
   unfold State.subBal
-  rw [hb, if_neg (by decide +kernel)]
+  rw [hb, ite_eq_right (by decide +kernel)]
   unfold concreteJoinDebit
   dsimp only
   rw [hb]
@@ -122,8 +122,8 @@ private theorem concreteJoinDebit_storage (address : Adr) :
     change concreteDeployed.state.getNonce concreteCreateSender + 1 = 2
     rw [concreteDeployedSenderNonce]
     rfl
-  rw [State.setBal_get_stor, if_neg]
-  · rw [State.incrNonce_get_stor, if_neg]
+  rw [State.setBal_get_stor, ite_eq_right]
+  · rw [State.incrNonce_get_stor, ite_eq_right]
     rintro ⟨_, empty⟩
     have nonzero : concreteDeployed.state.getNonce concreteCreateSender + 1 ≠ 0 := by
       rw [concreteDeployedSenderNonce]
@@ -146,7 +146,7 @@ theorem concreteJoinEntry_run :
       some (concreteJoinDebit.setBal concreteCreateSender
         (concreteJoinDebit.bal concreteCreateSender - 100)) := by
     unfold State.subBal
-    rw [concreteJoinDebit_balance, if_neg (by decide +kernel)]
+    rw [concreteJoinDebit_balance, ite_eq_right (by decide +kernel)]
   change (do
     let b ← (concreteJoinMessage.benv.subBal concreteCreateSender 100).toExcept _
     pure (b.addBal concreteCreateTarget 100)) = _
@@ -189,8 +189,8 @@ theorem concreteJoinEntry_storage (address : Adr) :
     rw [concreteJoinDebit_sender_nonce]
     decide
   unfold State.addBal
-  rw [State.setBal_get_stor, if_neg]
-  · rw [State.setBal_get_stor, if_neg]
+  rw [State.setBal_get_stor, ite_eq_right]
+  · rw [State.setBal_get_stor, ite_eq_right]
     · exact concreteJoinDebit_storage address
     · rintro ⟨_, empty⟩
       rcases senderProtected with nonce | code
@@ -896,7 +896,7 @@ private theorem concreteJoin_machineOriginalStorage (machine : Devm)
     (notCreated : concreteCreateTarget ∉ machine.createdAccounts) (key : B256) :
     machine.getOrigStorVal concreteJoinSevm concreteCreateTarget key =
       (concreteDeployed.state.getStor concreteCreateTarget).get key := by
-  rw [Devm.getOrigStorVal, if_neg notCreated]
+  rw [Devm.getOrigStorVal, ite_eq_right notCreated]
   exact concreteJoin_originalStorage key
 
 private theorem concreteJoinStorageBase_notCreated :
@@ -927,9 +927,9 @@ private theorem concreteJoin_chiStore :
   have hf : sstoreNewRefundCounter concreteJoinSevm.benvStat.rules.gas rate scale scale 0 = 0 := by
     decide +kernel
   constructor
-  · simp only [sstoreCost, ht, hw, if_pos, Nat.zero_add, concreteJoin_machineOriginalStorage concreteJoinStorageBase concreteJoinStorageBase_notCreated,
+  · simp only [sstoreCost, ht, hw, ite_eq_left, Nat.zero_add, concreteJoin_machineOriginalStorage concreteJoinStorageBase concreteJoinStorageBase_notCreated,
       concreteDeploymentRoot.chi, concreteJoinStorageBase_storage, concreteJoinDevm_chi, hc]
-  · simp only [afterSstore, ht, hw, if_pos, concreteJoin_machineOriginalStorage concreteJoinStorageBase concreteJoinStorageBase_notCreated,
+  · simp only [afterSstore, ht, hw, ite_eq_left, concreteJoin_machineOriginalStorage concreteJoinStorageBase concreteJoinStorageBase_notCreated,
       concreteDeploymentRoot.chi, concreteJoinStorageBase_storage, concreteJoinDevm_chi, hr, hf]
     rfl
 
@@ -965,9 +965,9 @@ private theorem concreteJoin_rhoStore :
   have hf : sstoreNewRefundCounter concreteJoinSevm.benvStat.rules.gas 2 1 1 0 = 0 := by
     decide +kernel
   constructor
-  · simp only [sstoreCost, ht, hw, if_pos, Nat.zero_add, concreteJoin_machineOriginalStorage concreteJoinChiBase concreteJoinChiBase_notCreated,
+  · simp only [sstoreCost, ht, hw, ite_eq_left, Nat.zero_add, concreteJoin_machineOriginalStorage concreteJoinChiBase concreteJoinChiBase_notCreated,
       concreteDeployedRho, hv, hc]
-  · simp only [afterSstore, ht, hw, if_pos, concreteJoin_machineOriginalStorage concreteJoinChiBase concreteJoinChiBase_notCreated,
+  · simp only [afterSstore, ht, hw, ite_eq_left, concreteJoin_machineOriginalStorage concreteJoinChiBase concreteJoinChiBase_notCreated,
       concreteDeployedRho, hv, hr, hf]
     rfl
 
@@ -1010,8 +1010,8 @@ private theorem concreteJoin_rowStore :
   have hf : sstoreNewRefundCounter concreteJoinSevm.benvStat.rules.gas 99 0 0 0 = 0 := by
     decide +kernel
   constructor
-  · simp only [sstoreCost, ht, hw, if_pos, Nat.zero_add, concreteJoin_machineOriginalStorage concreteJoinRhoBase concreteJoinRhoBase_notCreated, ho, hv, hc]
-  · simp only [afterSstore, ht, hw, if_pos, concreteJoin_machineOriginalStorage concreteJoinRhoBase concreteJoinRhoBase_notCreated, ho, hv, hr, hf]
+  · simp only [sstoreCost, ht, hw, ite_eq_left, Nat.zero_add, concreteJoin_machineOriginalStorage concreteJoinRhoBase concreteJoinRhoBase_notCreated, ho, hv, hc]
+  · simp only [afterSstore, ht, hw, ite_eq_left, concreteJoin_machineOriginalStorage concreteJoinRhoBase concreteJoinRhoBase_notCreated, ho, hv, hr, hf]
     rfl
 
 noncomputable def concreteJoinTotalBase : Devm :=
@@ -1045,8 +1045,8 @@ private theorem concreteJoin_totalStore :
   have hf : sstoreNewRefundCounter concreteJoinSevm.benvStat.rules.gas 99 0 0 0 = 0 := by
     decide +kernel
   constructor
-  · simp only [sstoreCost, ht, hw, if_pos, Nat.zero_add, concreteJoin_machineOriginalStorage concreteJoinRowBase concreteJoinRowBase_notCreated, ho, hv, hc]
-  · simp only [afterSstore, ht, hw, if_pos, concreteJoin_machineOriginalStorage concreteJoinRowBase concreteJoinRowBase_notCreated, ho, hv, hr, hf]
+  · simp only [sstoreCost, ht, hw, ite_eq_left, Nat.zero_add, concreteJoin_machineOriginalStorage concreteJoinRowBase concreteJoinRowBase_notCreated, ho, hv, hc]
+  · simp only [afterSstore, ht, hw, ite_eq_left, concreteJoin_machineOriginalStorage concreteJoinRowBase concreteJoinRowBase_notCreated, ho, hv, hr, hf]
     rfl
 
 private theorem concreteJoin_commitUnits (base P T : Devm) (M : Mem) (G : Nat)
@@ -1263,12 +1263,12 @@ theorem concreteJoin_messageCall :
   have hcode : some concreteJoinMessage.code.toList = Prog.compile runtime := concreteJoin_compiled
   have hdelegation : getDelegatedCodeAddress concreteJoinMessage.code = none := by
     unfold getDelegatedCodeAddress
-    rw [if_neg (not_delegation_of_compile hcode)]
+    rw [ite_eq_right (not_delegation_of_compile hcode)]
   have hrefund : (concreteJoinRuntimePost 423856).refundCounter = 0 := rfl
   unfold processMessageCall
   rw [htarget]
   unfold processMessageCall.call
-  simp only [hauths, List.isEmpty, if_true, bind, Except.bind, hdelegation,
+  simp only [hauths, List.isEmpty, ite_true, bind, Except.bind, hdelegation,
     concreteJoin_processMessage, Except.bimap, id_eq, concreteJoin_postError,
     Option.isNone, hrefund]
   rfl
@@ -1310,12 +1310,12 @@ theorem concreteJoin_transaction :
   unfold processTransaction
   simp only [bind, Except.bind]
   rw [recoverValidationSender_of_stateGas_none concreteJoinTx hvalidationStateGas]
-  simp only [bind, Except.bind]
+  simp only [bind]
   rw [hrules]
   simp only [Except.mapError]
   simp only [deploymentTxPreludeBout, ExecutionTrace.transactionPreludeBout] at hchecked
   rw [hchecked]
-  simp only [htypeThree, haccessList, hauths, Bool.false_eq_true, if_false,
+  simp only [htypeThree, haccessList, hauths, Bool.false_eq_true, ite_false,
     Nat.add_zero, Benv.beginTransaction]
   have htxGas : concreteJoinTx.gas = 500000 := rfl
   rw [htxGas, show Nat.toB256 (500000 * 2) = 1000000 by decide +kernel, hdebit]
@@ -1466,7 +1466,7 @@ theorem concreteJoin_body :
   rw [hb]
   simp only [Except.mapError, bind, Except.bind]
   rw [hl']
-  simp only [Option.toExcept, hh', Except.mapError, bind, Except.bind]
+  simp only [Option.toExcept, hh']
   rw [show (concreteJoinTxInput.withState concreteJoinTxInput.state).state =
     concreteJoinTxInput.state from rfl, hi']
   have htransaction := concreteJoin_transaction
@@ -1481,7 +1481,7 @@ theorem concreteJoin_body :
       BlockOutput.withWithdrawalsTrie
     rfl
   rw [hwithdrawals]
-  simp only [Prod.fst, Prod.snd]
+  simp only [Prod.fst]
   rw [show (concreteJoinTxInput.withState concreteJoinTransactionState).withState
     concreteJoinTransactionState = concreteJoinTxInput.withState concreteJoinTransactionState from rfl]
   rw [concreteJoin_requestSuffix]
@@ -1674,12 +1674,12 @@ theorem concreteJoinedSenderNonce : concreteJoined.state.getNonce concreteCreate
     concreteCreateSender).nonce = _
   have hz : (0 : Adr) ≠ concreteCreateSender := by decide +kernel
   have ht : concreteCreateTarget ≠ concreteCreateSender := by decide +kernel
-  simp only [State.addBal, State.setBal_get_ne hz, State.setBal_get_self, Acct.clearIfEmpty_bal, Acct.clearIfEmpty_nonce, Acct.withBal]
+  simp only [State.addBal, State.setBal_get_ne hz, State.setBal_get_self, Acct.clearIfEmpty_nonce, Acct.withBal]
   rw [concreteJoinMessageState_sender]
   change ((((concreteJoinDebit.setBal concreteCreateSender
     (concreteJoinDebit.bal concreteCreateSender - 100)).addBal concreteCreateTarget 100).get
     concreteCreateSender).nonce) = _
-  simp only [State.addBal, State.setBal_get_ne ht, State.setBal_get_self, Acct.clearIfEmpty_bal, Acct.clearIfEmpty_nonce]
+  simp only [State.addBal, State.setBal_get_ne ht, State.setBal_get_self, Acct.clearIfEmpty_nonce]
   unfold concreteJoinDebit
   simp only [State.setBal_get_self, Acct.clearIfEmpty_nonce, State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_nonce, Acct.withBal]
   change (concreteDeployed.state.getNonce concreteCreateSender) + 1 = 2
@@ -1693,13 +1693,13 @@ theorem concreteJoinedSenderBalance : concreteJoined.state.bal concreteCreateSen
     concreteCreateSender).bal = _
   have hz : (0 : Adr) ≠ concreteCreateSender := by decide +kernel
   have ht : concreteCreateTarget ≠ concreteCreateSender := by decide +kernel
-  simp only [State.addBal, State.setBal_get_ne hz, State.setBal_get_self, Acct.clearIfEmpty_bal, Acct.clearIfEmpty_nonce, Acct.withBal]
+  simp only [State.addBal, State.setBal_get_ne hz, State.setBal_get_self, Acct.clearIfEmpty_bal, Acct.withBal]
   change (concreteJoinMessageState.get concreteCreateSender).bal + 847712 = _
   rw [concreteJoinMessageState_sender]
   change ((((concreteJoinDebit.setBal concreteCreateSender
     (concreteJoinDebit.bal concreteCreateSender - 100)).addBal concreteCreateTarget 100).get
     concreteCreateSender).bal) + 847712 = _
-  simp only [State.addBal, State.setBal_get_ne ht, State.setBal_get_self, Acct.clearIfEmpty_bal, Acct.clearIfEmpty_nonce]
+  simp only [State.addBal, State.setBal_get_ne ht, State.setBal_get_self, Acct.clearIfEmpty_bal]
   change (concreteJoinDebit.bal concreteCreateSender - 100) + 847712 = _
   rw [concreteJoinDebit_balance]
   decide +kernel

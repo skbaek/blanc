@@ -376,7 +376,7 @@ private lemma pauseSuccess_checkedArm
         (List.of_cons_pref_of_cons_pref hp6 (pref_of_split hpop.stack)).left
       have hnoWrap : ¬ (interval + sevm.benvStat.time < sevm.benvStat.time) := by
         intro hlt
-        rw [B256.ltCheck, if_pos hlt] at hflag
+        rw [B256.ltCheck, ite_eq_left hlt] at hflag
         exact absurd hflag (by decide)
       have hp7 : [interval + sevm.benvStat.time] <<+ _ :=
         prefix_of_pop ⟨_, Devm.PopBurn.of_popBurnBy hpop⟩ hp6
@@ -393,7 +393,7 @@ private lemma pauseSuccess_checkedArm
         (List.of_cons_pref_of_cons_pref hp6 (pref_of_split hpop.stack)).left
       have hwrap : interval + sevm.benvStat.time < sevm.benvStat.time := by
         by_contra hcontra
-        rw [B256.ltCheck, if_neg hcontra] at hflag
+        rw [B256.ltCheck, ite_eq_right hcontra] at hflag
         exact hne hflag.symm
       exact Or.inr ⟨not_nof_of_lt hwrap, _, htail⟩
 
@@ -486,7 +486,7 @@ theorem pauseSuccess_expiryWrite_dichotomy
         (List.of_cons_pref_of_cons_pref hp7 (pref_of_split hpop.stack)).left
       have hnonzero : count ≠ 0 := by
         intro hzero
-        rw [hzero, B256.eqCheck, if_pos rfl] at hflag
+        rw [hzero, B256.eqCheck, ite_eq_left rfl] at hflag
         exact absurd hflag (by decide)
       rcases pauseSuccess_checkedArm hinterval
           (hstor7.trans (PopBurn.Inv.inv (Devm.PopBurn.of_popBurnBy hpop)))
@@ -500,7 +500,7 @@ theorem pauseSuccess_expiryWrite_dichotomy
         (List.of_cons_pref_of_cons_pref hp7 (pref_of_split hpop.stack)).left
       have hzero : count = 0 := by
         by_contra hcontra
-        rw [B256.eqCheck, if_neg hcontra] at hflag
+        rw [B256.eqCheck, ite_eq_right hcontra] at hflag
         exact hne hflag.symm
       exact Or.inl ⟨0, pauseSuccess_zeroCountArm
         (hstor7.trans (PopBurn.Inv.inv (Devm.PopBurn.of_popBurnBy hpop))) htail,
@@ -528,8 +528,8 @@ private lemma pauseExpiryValue_ite {timestamp interval count : B256}
     (hreached : count ≠ 0 → B256.Nof timestamp interval) :
     PauseExpiryValue timestamp interval count
       (if count = 0 then 0 else timestamp + interval) := by
-  refine ⟨fun hzero => by rw [if_pos hzero], fun hnonzero => ?_⟩
-  rw [if_neg hnonzero]
+  refine ⟨fun hzero => by rw [ite_eq_left hzero], fun hnonzero => ?_⟩
+  rw [ite_eq_right hnonzero]
   exact checkedHeartbeatExtension_of_nof (hreached hnonzero)
 
 /-- **An actually reached pause-expiry write stores zero on a zero
@@ -559,9 +559,9 @@ theorem pauseSuccess_expiryWrite_of_reached
   rcases pauseSuccess_expiryWrite_dichotomy howner hcount hinterval hrun with
     ⟨value, hwrite, hvalue⟩ | ⟨hnonzero, hnof, _⟩
   · rcases eq_or_ne count 0 with hzero | hnonzero
-    · rw [if_pos hzero, ← hvalue.1 hzero]
+    · rw [ite_eq_left hzero, ← hvalue.1 hzero]
       exact hwrite
-    · rw [if_neg hnonzero,
+    · rw [ite_eq_right hnonzero,
         CheckedHeartbeatExtension.add_eq (hvalue.2 hnonzero)]
       exact hwrite
   · exact absurd (hreached hnonzero) hnof

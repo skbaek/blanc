@@ -373,9 +373,9 @@ private theorem sstore_getStor_all
   intro owner
   by_cases howner : owner = sevm.currentTarget
   · subst owner
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
     exact sstore_getStor_set run stack
-  · rw [if_neg howner]
+  · rw [ite_eq_right howner]
     rcases of_run_reg run with ⟨pc, hr⟩
     exact sstore_preserves_getStor_ne hr (fun h => howner h.symm)
 
@@ -791,7 +791,7 @@ private theorem pauseSuccess_trace_dichotomy
     have hcountNonzero : count ≠ 0 := by
       intro hzero
       have hbad : (0 : B256) = 1 := by
-        rw [hzero, B256.eqCheck, if_pos rfl] at hcountFlag
+        rw [hzero, B256.eqCheck, ite_eq_left rfl] at hcountFlag
         exact hcountFlag
       exact absurd hbad (by decide)
     have hstorChecked : Devm.getStor pre = Devm.getStor checkedPre :=
@@ -824,7 +824,7 @@ private theorem pauseSuccess_trace_dichotomy
       have hnoWrap :
           ¬ (interval + sevm.benvStat.time < sevm.benvStat.time) := by
         intro hlt
-        rw [B256.ltCheck, if_pos hlt] at hflag
+        rw [B256.ltCheck, ite_eq_left hlt] at hflag
         exact absurd hflag (by decide)
       have hvalue : [interval + sevm.benvStat.time] <<+ finishPre.stack :=
         prefix_of_pop ⟨_, Devm.PopBurn.of_popBurnBy hcheckedPop⟩
@@ -848,10 +848,10 @@ private theorem pauseSuccess_trace_dichotomy
               simpa only [List.cons_append, List.nil_append] using hcheckedStack))).left
       have hwrap : interval + sevm.benvStat.time < sevm.benvStat.time := by
         by_contra hcontra
-        rw [B256.ltCheck, if_neg hcontra] at hflag
+        rw [B256.ltCheck, ite_eq_right hcontra] at hflag
         exact hcheckedWordNonzero hflag.symm
       have hcheckedWordOne : checkedWord = 1 := by
-        rw [B256.ltCheck, if_pos hwrap] at hflag
+        rw [B256.ltCheck, ite_eq_left hwrap] at hflag
         exact hflag.symm
       rw [hcheckedWordOne] at hcheckedStack hcheckedPop
       exact Or.inr ⟨hcountNonzero, success_not_nof_of_lt hwrap,
@@ -862,10 +862,10 @@ private theorem pauseSuccess_trace_dichotomy
       pauseCount_word hcountEvent hcountRun countWord zeroPre.stack hcountStack
     have hcountZero : count = 0 := by
       by_contra hcontra
-      rw [B256.eqCheck, if_neg hcontra] at hcountFlag
+      rw [B256.eqCheck, ite_eq_right hcontra] at hcountFlag
       exact hcountWordNonzero hcountFlag
     have hcountWordOne : countWord = 1 := by
-      rw [B256.eqCheck, if_pos hcountZero] at hcountFlag
+      rw [B256.eqCheck, ite_eq_left hcountZero] at hcountFlag
       exact hcountFlag
     rw [hcountWordOne] at hcountStack hcountPop
     obtain ⟨finishPre, hpushZero, hfinish⟩ :=
@@ -942,13 +942,13 @@ theorem pauseSuccess_ok_getStorVal_eq_of_ne
         (Devm.getStor pre owner).get key
       rw [hstor]
       by_cases howner : owner = sevm.currentTarget
-      · rw [if_pos howner]
+      · rw [ite_eq_left howner]
         apply (Stor.get_set_ne _ ?_ _).trans
           (congrArg (fun stor => (stor owner).get key) hprefix).symm
         intro hkey
         apply different
         exact Prod.ext howner hkey.symm
-      · rw [if_neg howner]
+      · rw [ite_eq_right howner]
         exact (congrArg (fun stor => (stor owner).get key) hprefix).symm
   rcases runCompiledTo_branch_inv hbranch with
     ⟨checkedPre, -, hcountPop, hcheckedArm⟩ |
@@ -1035,7 +1035,7 @@ theorem pauseSuccess_ok_getStor_eq_of_owner_ne
       obtain ⟨_, hex, trace⟩ := pauseExpiryFinish_trace hvalue hfinish
       cases Except.ok.inj hex
       have hstor := (PauseSuccessFinishTrace.result trace).2.1 owner
-      rw [if_neg ownerNe] at hstor
+      rw [ite_eq_right ownerNe] at hstor
       exact hstor.trans (congrFun hprefix owner).symm
   rcases runCompiledTo_branch_inv hbranch with
     ⟨checkedPre, -, hcountPop, hcheckedArm⟩ |
@@ -1570,7 +1570,7 @@ private theorem pauseAfterSet_codeGuard_arms_words
     have pop := Devm.PopBurn.of_popBurnBy hpop
     have hcodeNonzero : (entry.getCode target).size.toB256 ≠ 0 := by
       intro hzero
-      rw [hzero, B256.eqCheck, if_pos rfl] at hflagZero
+      rw [hzero, B256.eqCheck, ite_eq_left rfl] at hflagZero
       exact absurd hflagZero (by decide)
     exact Or.inr ⟨hcodeNonzero, guardPost,
       MemWordAt.of_memory_eq pop.memory.symm targetGuard,
@@ -1582,7 +1582,7 @@ private theorem pauseAfterSet_codeGuard_arms_words
     obtain ⟨_, -, hbody⟩ := runCompiledTo_call_inv h_empty hrevert
     have hcodeZero : (entry.getCode target).size.toB256 = 0 := by
       by_contra hnonzero
-      rw [B256.eqCheck, if_neg hnonzero] at hflagWord
+      rw [B256.eqCheck, ite_eq_right hnonzero] at hflagWord
       exact hword hflagWord.symm
     exact Or.inl ⟨hcodeZero, runCompiledTo_revert_inv hbody⟩
 
@@ -1767,7 +1767,7 @@ private theorem pauseObservation_arms_words
     · cases hchild : child.error.isSome
       · exfalso
         apply hwordNonzero
-        rw [hchild, B256.eqCheck, if_neg (by decide)] at hflag
+        rw [hchild, B256.eqCheck, ite_eq_right (by decide)] at hflag
         exact hflag.symm
       · rfl
 
@@ -1878,14 +1878,14 @@ private theorem pauseDecode_success_words
           obtain ⟨tail, htail⟩ := hequalPrefix
           rw [htail] at hequalZero
           exact (List.cons.inj hequalZero).1
-        rw [hone, B256.eqCheck, if_pos rfl] at hequalFlag
+        rw [hone, B256.eqCheck, ite_eq_left rfl] at hequalFlag
         exact absurd hequalFlag (by decide)
       · have hequalFlag : ((1 : B256) =? pausedAnswer out) = equalWord := by
           obtain ⟨tail, htail⟩ := hequalPrefix
           rw [htail] at hequalStack
           exact (List.cons.inj hequalStack).1
         have hequalOne : equalWord = 1 := by
-          rw [hone, B256.eqCheck, if_pos rfl] at hequalFlag
+          rw [hone, B256.eqCheck, ite_eq_left rfl] at hequalFlag
           exact hequalFlag.symm
         have popEqual := Devm.PopBurn.of_popBurnBy hequalPop
         exact ⟨successPre,
@@ -1896,14 +1896,14 @@ private theorem pauseDecode_success_words
         obtain ⟨tail, htail⟩ := hzeroPrefix
         rw [htail] at hzeroWordStack
         exact (List.cons.inj hzeroWordStack).1
-      rw [hone, B256.eqCheck, if_neg (by decide)] at hanswerFlag
+      rw [hone, B256.eqCheck, ite_eq_right (by decide)] at hanswerFlag
       exact absurd hanswerFlag.symm hzeroWord
   · have hflagWord :
         (Nat.toB256 out.length <? (32 : B256)) = shortWord := by
       obtain ⟨tail, htail⟩ := hflag
       rw [htail] at hshortStack
       exact (List.cons.inj hshortStack).1
-    rw [B256.ltCheck, if_neg hnotShort] at hflagWord
+    rw [B256.ltCheck, ite_eq_right hnotShort] at hflagWord
     exact absurd hflagWord.symm hshortWord
 
 /-- The observation's five outcomes with the canonical `1` arm completed.

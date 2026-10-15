@@ -22,7 +22,7 @@ private theorem replayCell_eq_of_none
   | nil => rfl
   | cons head tail ih =>
       simp only [Exec.StorageWrite.replayCell, List.foldl_cons]
-      rw [if_neg (none head (by simp only [List.mem_cons, true_or]))]
+      rw [ite_eq_right (none head (by simp only [List.mem_cons, true_or]))]
       exact ih (by
         intro write member
         exact none write (by simp only [List.mem_cons, member, or_true]))
@@ -61,7 +61,7 @@ theorem storageOnlyOwner_zeroCredit_clears_storage :
     rw [hget]
     decide
   change (((st.setBal owner _).get owner).stor).get 0 ≠ ((st.get owner).stor).get 0
-  rw [State.setBal_get_stor, if_pos ⟨rfl, hempty⟩, hget]
+  rw [State.setBal_get_stor, ite_eq_left ⟨rfl, hempty⟩, hget]
   decide
 
 private theorem pinnedPause_cell_eq
@@ -570,7 +570,7 @@ private theorem resolvedCodeAddress_of_direct
     (getDelegatedCodeAddress (pre.getCode target)).getD target = target := by
   rw [installed]
   dsimp only [getDelegatedCodeAddress]
-  rw [if_neg notDelegation]
+  rw [ite_eq_right notDelegation]
   rfl
 
 /-- An actual non-precompile spawn from a state with `program`'s compiled bytes
@@ -908,7 +908,7 @@ private theorem spawnedChild_clean_of_zeroBranch
   cases errorEq : child.error.isSome
   · rfl
   · exfalso
-    simp only [errorEq, if_true] at headEq
+    simp only [errorEq, ite_true] at headEq
     exact absurd headEq (by decide)
 
 private theorem staticcallMessage_entry_getStor_eq

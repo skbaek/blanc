@@ -444,7 +444,7 @@ private theorem registerAfterSet_retained_newPauserTail_runCompiled
       post := by
     func_run (3) [0]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
+    all_goals try ((try simp only [Devm.stack_setMach]); omega)
     case h_val =>
       rw [Devm.getStorVal_setMach, hcount]
       simp only [B256.eqCheck, hremaining, ↓reduceIte]
@@ -455,7 +455,7 @@ private theorem registerAfterSet_retained_newPauserTail_runCompiled
       hpreviousMemory halign hpreviousCovered (by omega) hcountTail
   unfold registerAfterSet
   func_run (4) [3, 0]
-  all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
+  all_goals try ((try simp only [Devm.stack_setMach]); omega)
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hpreviousCovered]
     norm_num only [gVerylow]
@@ -1960,14 +1960,14 @@ theorem registerPauser_body_oldLastNonzero_runCompiled
       intro hp
       exact h (congrArg Prod.snd hp)
     by_cases hsame : oldPauser = newPauser
-    · rw [if_pos hsame, getStorVal_setMach, getStorVal_addLog, hsame,
+    · rw [ite_eq_left hsame, getStorVal_setMach, getStorVal_addLog, hsame,
         temporalSstorePost_self]
     · have hexpiryNe : expirySlot oldPauser ≠ expirySlot newPauser := by
         intro hslot
         exact hsame (addressSlot_injective (region := expiryRegion)
           (by norm_num only [expiryRegion]) holdValid.2 hnewValid.2
           (by simpa only [expirySlot] using hslot))
-      rw [if_neg hsame, getStorVal_setMach, getStorVal_addLog,
+      rw [ite_eq_right hsame, getStorVal_setMach, getStorVal_addLog,
         temporalSstorePost_other _ _ (expirySlot newPauser) expiry _
           (expirySlot oldPauser) (pairNe hexpiryNe),
         temporalSloadBase_getStorVal, getStorVal_addLog,

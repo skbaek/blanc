@@ -1111,9 +1111,9 @@ theorem processMessageCall_establishes_officialRegistryStable
     unfold processMessageCall
     rw [show msg.target.isNone = true by simp only [htargetNone, Option.isNone_none]]
     unfold processMessageCall.create
-    simp only [if_true]
+    simp only [ite_true]
     rw [htarget]
-    simp only [hfork.rules_stateGas_none, hnoCodeOrNonce, hnoStorage, Bool.or_self,
+    simp only [hfork.rules_stateGas_none, hnoCodeOrNonce,
       Bool.false_eq_true, ↓reduceIte, Except.bimap, hcreate'.run, id_eq, Option.isNone_iff_eq_none,
       Except.bind_ok, Nat.cast_zero, hcreate'.error, htoNat, officialMessageOutputOf,
       directCreateMessageOutputOf, out]

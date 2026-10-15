@@ -164,7 +164,7 @@ theorem canonicalDeploymentTransaction_succeeds
       ExecutionTrace.transactionPreludeBout] at hchecked
     rw [hchecked]
     simp only [Tx.isTypeThree, Tx.accessList, TxType.accessList, Tx.auths,
-      htype, Bool.false_eq_true, if_false, Nat.add_zero,
+      htype, Bool.false_eq_true, ite_false, Nat.add_zero,
       Benv.beginTransaction]
     rw [hdebit]
     simp only [Option.toExcept]

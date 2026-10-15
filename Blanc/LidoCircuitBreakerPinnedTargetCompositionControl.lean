@@ -223,7 +223,7 @@ theorem temporalSloadBase_cold_keys (sevm : Sevm) (base : Devm)
     (h : (sevm.currentTarget, key) ∉ base.accessedStorageKeys) :
     (temporalSloadBase sevm base key).accessedStorageKeys =
       base.accessedStorageKeys.insert (sevm.currentTarget, key) := by
-  rw [temporalSloadBase_keys, if_neg h]
+  rw [temporalSloadBase_keys, ite_eq_right h]
 
 private theorem stubRunKeys_expiryBase :
     (pauseExpiryBase stubPauseWorldSevm stubPauseWorldPre
@@ -231,7 +231,7 @@ private theorem stubRunKeys_expiryBase :
     Std.HashSet.emptyWithCapacity.insert
       (configWorldOwner, assignmentSlot pauseWorldCallee.toB256) := by
   unfold pauseExpiryBase temporalSloadBase
-  rw [if_neg (show (stubPauseWorldSevm.currentTarget,
+  rw [ite_eq_right (show (stubPauseWorldSevm.currentTarget,
       assignmentSlot pauseWorldCallee.toB256) ∉
     (pauseLockPost stubPauseWorldSevm stubPauseWorldPre).accessedStorageKeys from
     Std.HashSet.not_mem_emptyWithCapacity)]
@@ -253,7 +253,7 @@ private theorem stubRunKeys_durationBase :
     intro _
     exact pauseWorld_assignCallee_ne_expiry
   unfold pauseDurationBase temporalSloadBase
-  rw [if_neg hnot]
+  rw [ite_eq_right hnot]
   show ((pauseExpiryBase stubPauseWorldSevm stubPauseWorldPre
     pauseWorldCallee.toB256).accessedStorageKeys).insert
     (stubPauseWorldSevm.currentTarget, expirySlot pauseWorldPauser) = _
@@ -278,7 +278,7 @@ private theorem stubRunKeys_kernelBase :
     · exact pauseWorld_duration_ne_expiry.symm
     · exact pauseWorld_duration_ne_assignCallee.symm
   unfold pauseKernelBase temporalSloadBase
-  rw [if_neg hnot]
+  rw [ite_eq_right hnot]
   show ((pauseDurationBase stubPauseWorldSevm stubPauseWorldPre
     pauseWorldCallee.toB256 pauseWorldPauser).accessedStorageKeys).insert
     (stubPauseWorldSevm.currentTarget, pauseDurationSlot) = _
@@ -304,7 +304,7 @@ private theorem stubRunKeys_assignPost :
       pauseWorldCallee.toB256 pauseWorldPauser)
     pauseWorldCallee.toB256).accessedStorageKeys = _
   unfold assignmentBase temporalSloadBase
-  rw [if_pos stubRunWarm_assign_kernelBase]
+  rw [ite_eq_left stubRunWarm_assign_kernelBase]
   exact stubRunKeys_kernelBase
 
 private theorem stubRunKeys_countBase :
@@ -329,7 +329,7 @@ private theorem stubRunKeys_countBase :
     · exact pauseWorld_count_ne_expiry.symm
     · exact pauseWorld_assignCallee_ne_count
   unfold temporalSloadBase
-  rw [if_neg hnot]
+  rw [ite_eq_right hnot]
   show ((assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0).accessedStorageKeys).insert
@@ -479,7 +479,7 @@ private theorem stubRunCost_assignment :
     temporalSloadCost stubPauseWorldSevm (pauseLockPost stubPauseWorldSevm stubPauseWorldPre)
       (assignmentSlot pauseWorldCallee.toB256) = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (stubPauseWorldSevm.currentTarget, assignmentSlot pauseWorldCallee.toB256) ∉
+  rw [ite_eq_right (show (stubPauseWorldSevm.currentTarget, assignmentSlot pauseWorldCallee.toB256) ∉
     (pauseLockPost stubPauseWorldSevm stubPauseWorldPre).accessedStorageKeys from
     Std.HashSet.not_mem_emptyWithCapacity)]
   rfl
@@ -489,7 +489,7 @@ private theorem stubRunCost_expiry :
       (pauseExpiryBase stubPauseWorldSevm stubPauseWorldPre pauseWorldCallee.toB256)
       (expirySlot pauseWorldPauser) = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (stubPauseWorldSevm.currentTarget, expirySlot pauseWorldPauser) ∉
+  rw [ite_eq_right (show (stubPauseWorldSevm.currentTarget, expirySlot pauseWorldPauser) ∉
       (pauseExpiryBase stubPauseWorldSevm stubPauseWorldPre pauseWorldCallee.toB256).accessedStorageKeys from by
     rw [stubRunKeys_expiryBase]
     simp only [Std.HashSet.mem_insert,
@@ -504,7 +504,7 @@ private theorem stubRunCost_duration :
       (pauseDurationBase stubPauseWorldSevm stubPauseWorldPre pauseWorldCallee.toB256 pauseWorldPauser)
       pauseDurationSlot = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (stubPauseWorldSevm.currentTarget, pauseDurationSlot) ∉
+  rw [ite_eq_right (show (stubPauseWorldSevm.currentTarget, pauseDurationSlot) ∉
       (pauseDurationBase stubPauseWorldSevm stubPauseWorldPre pauseWorldCallee.toB256
         pauseWorldPauser).accessedStorageKeys from by
     rw [stubRunKeys_durationBase]
@@ -521,7 +521,7 @@ private theorem stubRunCost_assignWarm :
       pauseWorldCallee.toB256 pauseWorldPauser)
       (assignmentSlot pauseWorldCallee.toB256) = 100 := by
   unfold temporalSloadCost
-  rw [if_pos stubRunWarm_assign_kernelBase]
+  rw [ite_eq_left stubRunWarm_assign_kernelBase]
   rfl
 
 private theorem stubRunCost_countCold :
@@ -530,7 +530,7 @@ private theorem stubRunCost_countCold :
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser) = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (stubPauseWorldSevm.currentTarget, countSlot pauseWorldPauser) ∉
+  rw [ite_eq_right (show (stubPauseWorldSevm.currentTarget, countSlot pauseWorldPauser) ∉
       (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0).accessedStorageKeys from by
@@ -552,7 +552,7 @@ private theorem stubRunCost_idxCold :
       (countSlot pauseWorldPauser) 0)
       (indexSlot pauseWorldCallee.toB256) = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (stubPauseWorldSevm.currentTarget, indexSlot pauseWorldCallee.toB256) ∉
+  rw [ite_eq_right (show (stubPauseWorldSevm.currentTarget, indexSlot pauseWorldCallee.toB256) ∉
       (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
@@ -582,7 +582,7 @@ private theorem stubRunCost_lenCold :
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (stubPauseWorldSevm.currentTarget, arrayLengthSlot) ∉
+  rw [ite_eq_right (show (stubPauseWorldSevm.currentTarget, arrayLengthSlot) ∉
       (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
@@ -611,7 +611,7 @@ private theorem stubRunCost_arrCold :
       arrayLengthSlot)
       (arrayEntrySlot 1) = 2100 := by
   unfold temporalSloadCost
-  rw [if_neg (show (stubPauseWorldSevm.currentTarget, arrayEntrySlot 1) ∉
+  rw [ite_eq_right (show (stubPauseWorldSevm.currentTarget, arrayEntrySlot 1) ∉
       (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
@@ -1157,12 +1157,12 @@ theorem stubRunMem_durLast :
 
 theorem stubRunSvc_reset {orig new : B256} (hnew : orig ≠ new)
     (hzero : ¬ orig = 0) : sstoreValueCost orig orig new = 2900 := by
-  rw [sstoreValueCost, if_pos ⟨rfl, hnew⟩, if_neg hzero]
+  rw [sstoreValueCost, ite_eq_left ⟨rfl, hnew⟩, ite_eq_right hzero]
   norm_num only [gasStorageUpdate, gasColdSload]
 
 theorem stubRunSvc_noop {orig cur : B256} :
     sstoreValueCost orig cur cur = 100 := by
-  rw [sstoreValueCost, if_neg (by simp only [ne_eq, not_true_eq_false, and_false, not_false_eq_true])]
+  rw [sstoreValueCost, ite_eq_right (by simp only [ne_eq, not_true_eq_false, and_false, not_false_eq_true])]
   rfl
 
 /-! ## The kernel prefix reserve, closed -/
@@ -1871,7 +1871,7 @@ private theorem stubPauseWorld_actualOrigStor {d : Devm} {key : B256}
   have hnc : configWorldOwner ∉ d.createdAccounts := by
     rw [hd]
     exact Std.HashSet.not_mem_emptyWithCapacity
-  rw [Devm.getOrigStorVal, ite_cond_eq_false _ _ (eq_false hnc)]
+  rw [Devm.getOrigStorVal, ite_eq_right_of_eq_false _ _ (eq_false hnc)]
   exact stubPauseWorld_getOrigStorVal key
 
 private theorem stubPauseWorld_successSuffix :
@@ -1937,7 +1937,7 @@ private theorem stubPauseWorld_successSuffix :
     stubPauseWorld_callerWord hmidCount
     (by
       unfold temporalSloadCost
-      rw [if_pos hwarmCount]
+      rw [ite_eq_left hwarmCount]
       rfl)
     hmidExpiry
     (by
@@ -1948,8 +1948,7 @@ private theorem stubPauseWorld_successSuffix :
             lengthWritePost, indexWritePost, entryWritePost, assignmentPost,
             assignmentBase, pauseKernelBase, pauseDurationBase, pauseExpiryBase,
             pauseLockPost, stubWorld_sload_created, stubWorld_sstore_created,
-            stubWorld_addLog_created, stubWorld_transVal_created,
-            Devm.setMach_createdAccounts]) <;> rfl))).trans
+            stubWorld_addLog_created, stubWorld_transVal_created]) <;> rfl))).trans
         pauseLastStor_expiry)
     hwarmExpiry
     (stubRunSvc_reset (by decide) (by decide))

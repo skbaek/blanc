@@ -48,7 +48,7 @@ private lemma ltCheck_checkedSum_eq_zero {time interval : B256}
   have hnof' : B256.Nof interval time := by
     unfold B256.Nof at hnof ⊢
     omega
-  rw [B256.ltCheck, if_neg]
+  rw [B256.ltCheck, ite_eq_right]
   intro hlt
   rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_add_eq_of_nof _ _ hnof'] at hlt
   omega
@@ -227,7 +227,7 @@ private lemma responder_call_crossing
       gasWarmAccess := by
     show accessCost target.toAdr devm.accessedAddresses + 0 = gasWarmAccess
     unfold accessCost
-    rw [if_pos hwarm]
+    rw [ite_eq_left hwarm]
     omega
   obtain ⟨mcc, mcs, hsplit⟩ : ∃ mcc mcs,
       calculateMsgCallGas 0 (Nat.toB256 G).toNat d0.gasLeft 0 gasWarmAccess =
@@ -237,7 +237,7 @@ private lemma responder_call_crossing
     have hGnat : (Nat.toB256 G).toNat = G := B256.toNat_toB256_of_lt hbound
     rw [hd0gas] at hsplit
     unfold calculateMsgCallGas at hsplit
-    rw [hGnat, if_neg (by simp only [gasWarmAccess]; omega)] at hsplit
+    rw [hGnat, ite_eq_right (by simp only [gasWarmAccess]; omega)] at hsplit
     simp only [gasWarmAccess] at hsplit
     have hmin : min G (except64th (G - 0 - 100)) = except64th (G - 100) := by
       have h1 : except64th (G - 0 - 100) ≤ G := by
@@ -334,7 +334,7 @@ private lemma responder_staticcall_crossing
       gasWarmAccess := by
     show accessCost target.toAdr devm.accessedAddresses + 0 = gasWarmAccess
     unfold accessCost
-    rw [if_pos hwarm]
+    rw [ite_eq_left hwarm]
     omega
   obtain ⟨mcc, mcs, hsplit⟩ : ∃ mcc mcs,
       calculateMsgCallGas 0 (Nat.toB256 G).toNat d0.gasLeft 0 gasWarmAccess =
@@ -344,7 +344,7 @@ private lemma responder_staticcall_crossing
     have hGnat : (Nat.toB256 G).toNat = G := B256.toNat_toB256_of_lt hbound
     rw [hd0gas] at hsplit
     unfold calculateMsgCallGas at hsplit
-    rw [hGnat, if_neg (by simp only [gasWarmAccess]; omega)] at hsplit
+    rw [hGnat, ite_eq_right (by simp only [gasWarmAccess]; omega)] at hsplit
     simp only [gasWarmAccess] at hsplit
     have hmin : min G (except64th (G - 0 - 100)) = except64th (G - 100) := by
       have h1 : except64th (G - 0 - 100) ≤ G := by
@@ -527,11 +527,11 @@ private theorem temporalSloadBase_accessedStorageKeys_addLog
       (temporalSloadBase sevm base k).accessedStorageKeys := by
   unfold temporalSloadBase
   by_cases h : (sevm.currentTarget, k) ∈ base.accessedStorageKeys
-  · rw [if_pos (show (sevm.currentTarget, k) ∈
-      (base.addLog l).accessedStorageKeys from h), if_pos h]
+  · rw [ite_eq_left (show (sevm.currentTarget, k) ∈
+      (base.addLog l).accessedStorageKeys from h), ite_eq_left h]
     rfl
-  · rw [if_neg (show ¬ (sevm.currentTarget, k) ∈
-      (base.addLog l).accessedStorageKeys from h), if_neg h]
+  · rw [ite_eq_right (show ¬ (sevm.currentTarget, k) ∈
+      (base.addLog l).accessedStorageKeys from h), ite_eq_right h]
     rfl
 
 set_option maxRecDepth 604 in
@@ -921,7 +921,7 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
         sevm.currentTarget lockKey 0) := by
     func_run (4) [0]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
-    · rw [B256.eqCheck, if_neg hcountNz]
+    · rw [B256.eqCheck, ite_eq_right hcountNz]
     · have hg : G + 1560 + intervalCost + storeCost - 21 =
           G + 1539 + storeCost + intervalCost := by omega
       rw [hg]

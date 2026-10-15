@@ -235,7 +235,7 @@ private lemma runCompiled_call_zero_value_gatewayPause
         simpa only [gatewayPauseChildCost, hinfinite, ↓reduceIte] using h_mcs
       have htimeFinite : sevm.benvStat.time <
           duration + sevm.benvStat.time := by
-        rw [pauseForProjection, if_neg hinfinite] at h_time
+        rw [pauseForProjection, ite_eq_right hinfinite] at h_time
         exact lt_of_lt_of_eq h_time
           (B256.add_comm (xs := sevm.benvStat.time) (ys := duration))
       simpa only [exactOut, gatewayPauseChildPost, gatewayPauseChildCost, hinfinite, child, childSevm, childBase, ↓reduceIte] using
@@ -314,12 +314,12 @@ private lemma runCompiled_call_zero_value_gatewayPause
     · rename_i hinfinite
       rw [pauseSentinelPost_state, hchildTarget]
       change d1.state.setStorVal _ _ _ = _
-      rw [hd1state', pauseForProjection, if_pos hinfinite]
+      rw [hd1state', pauseForProjection, ite_eq_left hinfinite]
       rfl
     · rename_i hfinite
       rw [pauseFinitePost_state, hchildTarget, hchildTime]
       change d1.state.setStorVal _ _ _ = _
-      rw [hd1state', pauseForProjection, if_neg hfinite]
+      rw [hd1state', pauseForProjection, ite_eq_right hfinite]
       congr 1
       exact B256.add_comm (xs := duration) (ys := sevm.benvStat.time)
   have heffectOut : out.getStorVal cw.toAdr resumeSinceSlot =
@@ -331,13 +331,13 @@ private lemma runCompiled_call_zero_value_gatewayPause
       have h := pauseSentinelPost_stored childSevm childBase
         (mcs - gatewayPauseChildCost duration)
       rw [hchildTarget] at h
-      rw [h, pauseForProjection, if_pos hinfinite]
+      rw [h, pauseForProjection, ite_eq_left hinfinite]
       exact pauseInfinitely_eq_shared_sentinel
     · rename_i hfinite
       have h := pauseFinitePost_stored childSevm childBase duration
         (mcs - gatewayPauseChildCost duration)
       rw [hchildTarget, hchildTime] at h
-      rw [h, pauseForProjection, if_neg hfinite]
+      rw [h, pauseForProjection, ite_eq_right hfinite]
       exact B256.add_comm (xs := duration) (ys := sevm.benvStat.time)
   have hsettle : (Frame.ofCall msg).settle (exec child) = .ok out := by
     rw [hexec, Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
@@ -506,7 +506,7 @@ private lemma gatewayPause_call_crossing
     have hsize : (gatewayCode controlDeployParams).size = 8094 := by
       exact controlGatewayCode_size
     unfold getDelegatedCodeAddress
-    rw [if_neg]
+    rw [ite_eq_right]
     intro hvalid
     have hs := hvalid.1
     rw [hsize] at hs
@@ -534,7 +534,7 @@ private lemma gatewayPause_call_crossing
       gasWarmAccess := by
     show accessCost target.toAdr devm.accessedAddresses + 0 = gasWarmAccess
     unfold accessCost
-    rw [if_pos hwarm]
+    rw [ite_eq_left hwarm]
     omega
   obtain ⟨mcc, mcs, hsplit⟩ : ∃ mcc mcs,
       calculateMsgCallGas 0 (Nat.toB256 G).toNat d0.gasLeft 0
@@ -547,7 +547,7 @@ private lemma gatewayPause_call_crossing
       B256.toNat_toB256_of_lt hbound
     rw [hd0gas] at hsplit
     unfold calculateMsgCallGas at hsplit
-    rw [hGnat, if_neg (by simp only [gasWarmAccess]; omega)] at hsplit
+    rw [hGnat, ite_eq_right (by simp only [gasWarmAccess]; omega)] at hsplit
     simp only [gasWarmAccess] at hsplit
     have hmin : min G (except64th (G - 0 - 100)) =
         except64th (G - 100) := by
@@ -900,7 +900,7 @@ private lemma gatewayQuery_statcall_crossing
     have hsize : (gatewayCode controlDeployParams).size = 8094 := by
       exact controlGatewayCode_size
     unfold getDelegatedCodeAddress
-    rw [if_neg]
+    rw [ite_eq_right]
     intro hvalid
     have hs := hvalid.1
     rw [hsize] at hs
@@ -928,7 +928,7 @@ private lemma gatewayQuery_statcall_crossing
       gasWarmAccess := by
     show accessCost target.toAdr devm.accessedAddresses + 0 = gasWarmAccess
     unfold accessCost
-    rw [if_pos hwarm]
+    rw [ite_eq_left hwarm]
     omega
   obtain ⟨mcc, mcs, hsplit⟩ : ∃ mcc mcs,
       calculateMsgCallGas 0 (Nat.toB256 G).toNat d0.gasLeft 0
@@ -940,7 +940,7 @@ private lemma gatewayQuery_statcall_crossing
       B256.toNat_toB256_of_lt hbound
     rw [hd0gas] at hsplit
     unfold calculateMsgCallGas at hsplit
-    rw [hGnat, if_neg (by simp only [gasWarmAccess]; omega)] at hsplit
+    rw [hGnat, ite_eq_right (by simp only [gasWarmAccess]; omega)] at hsplit
     simp only [gasWarmAccess] at hsplit
     have hmin : min G (except64th (G - 0 - 100)) =
         except64th (G - 100) := by

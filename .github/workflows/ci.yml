@@ -34,7 +34,12 @@ jobs:
     # before it) mid-gate on exactly the bumps CI exists to check, skipping 20
     # gates. Keep this well clear of the cold path rather than tightened to the
     # warm one, for the same reason canary.yml keeps its own 60 min slack.
-    timeout-minutes: 90
+    # The library outgrew the ~33 min cold figure: on main run 38578618142
+    # (2026-10-14) lean-action alone ran 72+ min before the old 90 min limit
+    # cancelled the job, and a toolchain/mathlib/Jaune bump is fully cold.
+    # Raised to 180 by user decision lean-4-35-blanc-ci-timeout-180; no gate
+    # was removed, and warm runs are unaffected.
+    timeout-minutes: 180
 
     steps:
       - uses: actions/checkout@v6

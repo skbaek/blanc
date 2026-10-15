@@ -213,7 +213,7 @@ private theorem callee_exec_low_gas {m : Msg}
   · refine ⟨_, _, (exec_iff_exec_eq _ _ _ _).mp
       ⟨Exec.cont s0 (Exec.halt (step_push_fail
         (devm := (initDevm m).setMach ⟨[], Mem.empty, m.gas - 1, (initDevm m).stateGas⟩) at1 ?_))⟩⟩
-    rw [if_neg (by decide)]
+    rw [ite_eq_right (by decide)]
     show m.gas - 1 < 3
     omega
   have s1 : Evm.step ⟨1, initSevm m,
@@ -227,7 +227,7 @@ private theorem callee_exec_low_gas {m : Msg}
       ⟨Exec.cont s0 (Exec.cont s1 (Exec.halt (step_push_fail
         (devm := (initDevm m).setMach
           ⟨[Bytes.toB256 [1]], Mem.empty, m.gas - 1 - 3, (initDevm m).stateGas⟩) at3 ?_)))⟩⟩
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
     show m.gas - 1 - 3 < 2
     omega
   have s2 : Evm.step ⟨3, initSevm m, (initDevm m).setMach
@@ -256,7 +256,7 @@ private theorem callee_exec_low_gas {m : Msg}
   · refine ⟨_, _, (exec_iff_exec_eq _ _ _ _).mp
       ⟨Exec.cont s0 (Exec.cont s1 (Exec.cont s2 (Exec.cont
         (by exact s3) (Exec.halt (step_push_fail (devm := d4) at5 ?_)))))⟩⟩
-    rw [if_neg (by decide), hg4]
+    rw [ite_eq_right (by decide), hg4]
     show m.gas - 12 < 3
     omega
   have s4 : Evm.step ⟨5, initSevm m, d4⟩ = .cont 7
@@ -269,7 +269,7 @@ private theorem callee_exec_low_gas {m : Msg}
       (Exec.cont s4 (Exec.halt (step_push_fail
         (devm := d4.setMach ⟨Bytes.toB256 [32] :: d4.stack, d4.memory,
           d4.gasLeft - 3, d4.stateGas⟩) at7 ?_))))))⟩⟩
-  rw [if_pos rfl]
+  rw [ite_eq_left rfl]
   show d4.gasLeft - 3 < 2
   omega
 
@@ -301,10 +301,10 @@ private lemma settle_err_state {msg : Msg} {raw : Execution} {child : Devm}
     unfold processMessage.settle at hsettle
     simp only [bind, Except.bind] at hsettle
     by_cases he : evm.error.isSome
-    · rw [if_pos he] at hsettle
+    · rw [ite_eq_left he] at hsettle
       cases hsettle
       rfl
-    · rw [if_neg he] at hsettle
+    · rw [ite_eq_right he] at hsettle
       cases hsettle
       exact absurd hce he
 
@@ -326,12 +326,12 @@ private lemma settle_ok_clean {msg : Msg} {raw : Execution} {child : Devm}
     rcases e with reason | _ | reason | reason
     · unfold executeCode.handleError processMessage.settle at hsettle'
       simp only [bind, Except.bind] at hsettle'
-      rw [if_pos (by rfl)] at hsettle'
+      rw [ite_eq_left (by rfl)] at hsettle'
       cases hsettle'
       exact Bool.noConfusion (show (true : Bool) = false from hce)
     · unfold executeCode.handleError processMessage.settle at hsettle'
       simp only [bind, Except.bind] at hsettle'
-      rw [if_pos (by rfl)] at hsettle'
+      rw [ite_eq_left (by rfl)] at hsettle'
       cases hsettle'
       exact Bool.noConfusion (show (true : Bool) = false from hce)
     · unfold executeCode.handleError processMessage.settle at hsettle'
@@ -344,12 +344,12 @@ private lemma settle_ok_clean {msg : Msg} {raw : Execution} {child : Devm}
     simp only [bind, Except.bind] at hsettle'
     by_cases he : out.error.isSome
     · exfalso
-      rw [if_pos he] at hsettle'
+      rw [ite_eq_left he] at hsettle'
       cases hsettle'
       have hnone : out.error.isSome = false := hce
       rw [he] at hnone
       cases hnone
-    · rw [if_neg he] at hsettle'
+    · rw [ite_eq_right he] at hsettle'
       cases hsettle'
       rfl
 
@@ -376,21 +376,21 @@ private lemma resume_call_overflow {parent child : Devm} {oi os : Nat}
         fun e2 =>
         Except.ok (e2.memWrite oi (child.output.take os))) = .error e)
   by_cases hce : child.error.isSome
-  · rw [if_pos hce]
+  · rw [ite_eq_left hce]
     have hpush : Devm.push 0 (incorporateChildOnError parent child
         child.output) = .error ⟨.halt (.stackOverflow .none),
           incorporateChildOnError parent child child.output⟩ := by
       rw [Devm.push_def]
       simp only [Except.assert, bind, Except.bind]
-      rw [if_neg (by show ¬ parent.stack.length < 1024; exact h_room)]
+      rw [ite_eq_right (by show ¬ parent.stack.length < 1024; exact h_room)]
     exact ⟨_, by rw [hpush]; rfl⟩
-  · rw [if_neg hce]
+  · rw [ite_eq_right hce]
     have hpush : Devm.push 1 (incorporateChildOnSuccess parent child
         child.output) = .error ⟨.halt (.stackOverflow .none),
           incorporateChildOnSuccess parent child child.output⟩ := by
       rw [Devm.push_def]
       simp only [Except.assert, bind, Except.bind]
-      rw [if_neg (by show ¬ parent.stack.length < 1024; exact h_room)]
+      rw [ite_eq_right (by show ¬ parent.stack.length < 1024; exact h_room)]
     exact ⟨_, by rw [hpush]; rfl⟩
 
 /-! ## The crossing tail, shared by `CALL` and `STATICCALL`

@@ -1082,7 +1082,7 @@ theorem pauseLastStor_witness :
       decide
     · rw [pauseLastStor_index_other canonical ht]
       have hne : pauseWorldCallee.toB256 ≠ t := fun h => ht h.symm
-      simp only [oneBasedIndexAt, if_neg hne]
+      simp only [oneBasedIndexAt, ite_eq_right hne]
       decide
   · intro p canonical
     show pauseLastWorldStor.get (countSlot p) =
@@ -1093,7 +1093,7 @@ theorem pauseLastStor_witness :
       decide
     · rw [pauseLastStor_count_other canonical hp]
       have hne : pauseWorldPauser ≠ p := fun h => hp h.symm
-      simp only [assignmentCount, if_neg hne]
+      simp only [assignmentCount, ite_eq_right hne]
       decide
   · show pauseLastWorldStor.get (countSlot 0) = 0
     decide
@@ -1153,7 +1153,7 @@ theorem pauseRetainedStor_witness :
       · rw [pauseRetainedStor_index_other canonical ht ht2]
         have hne : pauseWorldCallee.toB256 ≠ t := fun h => ht h.symm
         have hne2 : pauseWorldT2 ≠ t := fun h => ht2 h.symm
-        simp only [oneBasedIndexAt, if_neg hne, if_neg hne2]
+        simp only [oneBasedIndexAt, ite_eq_right hne, ite_eq_right hne2]
         decide
   · intro p canonical
     show pauseRetainedWorldStor.get (countSlot p) =
@@ -1164,7 +1164,7 @@ theorem pauseRetainedStor_witness :
       decide
     · rw [pauseRetainedStor_count_other canonical hp]
       have hne : pauseWorldPauser ≠ p := fun h => hp h.symm
-      simp only [assignmentCount, if_neg hne]
+      simp only [assignmentCount, ite_eq_right hne]
       decide
   · show pauseRetainedWorldStor.get (countSlot 0) = 0
     decide

@@ -355,7 +355,7 @@ theorem pauseAssignedTest_word {sevm : Sevm} {entry start finish : Devm}
           (assignmentSlot (Sevm.argWord sevm 0))) hstorage]
     exact assigned
   rw [head_of_stack_prefix p5 hstack, hvalue']
-  rw [B256.eqCheck, if_pos rfl]
+  rw [B256.eqCheck, ite_eq_left rfl]
   exact fun h => B256.zero_ne_one h.symm
 
 /-- The liveness guard's taken-arm word, derived from the caller's expiry cell
@@ -396,7 +396,7 @@ theorem pauseLiveTest_word {sevm : Sevm} {entry start finish : Devm}
     exact congrArg (fun stor : Adr → Stor =>
       (stor sevm.currentTarget).get (expirySlot sevm.caller.toB256)) hstorage
   rw [head_of_stack_prefix p5 hstack, hexpiry']
-  rw [B256.ltCheck, if_pos live]
+  rw [B256.ltCheck, ite_eq_left live]
   exact fun h => B256.zero_ne_one h.symm
 
 /-! ## The pause body, on a successful outcome

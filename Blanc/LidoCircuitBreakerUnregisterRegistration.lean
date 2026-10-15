@@ -209,7 +209,7 @@ private theorem registerAfterSet_retainedOldZero_runCompiled
       hpreviousMemory halign hpreviousCovered (by omega) hcountTail
   unfold registerAfterSet
   func_run (4) [3, 0]
-  all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
+  all_goals try ((try simp only [Devm.stack_setMach]); omega)
   case h_cost =>
     rw [Devm.extCost_zero_of_le halign hpreviousCovered]
     norm_num only [gVerylow]
