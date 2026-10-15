@@ -1,3 +1,4 @@
+import Blanc.Lift.KernelBatchForall
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolBoundary
 import Blanc.Lift.NodeWalkFork
 import Blanc.Lift.WitnessChild
@@ -86,14 +87,24 @@ def cpF2 (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World) 
   (dcallPrep (e1'11 O tS tA m w).sta (e1'11 O tS tA m w).dyna (cpR O tS tA m w).adrs
     (acs1R O tS tA m w)).getD noPrepI
 
+private theorem cpF2Facts : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
+    (dcallPrep (e1'11 O tS tA m w).sta (e1'11 O tS tA m w).dyna (cpR O tS tA m w).adrs
+      (acs1R O tS tA m w) = some (cpF2 O tS tA m w)) ∧
+    (decide ((cpF2 O tS tA m w).adrs = [implAddr, proxyAddr]) = true) ∧
+    (decide ((cpF2 O tS tA m w).f.inner.codeAddress = some implAddr) = true) ∧
+    (Blanc.Lift.Witness.transferKeepsStor (cpF2 O tS tA m w).f.inner (acs1R O tS tA m w) = true) := by
+  kernel_forall_rfl_and
+
 theorem cpF2_eq : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
     dcallPrep (e1'11 O tS tA m w).sta (e1'11 O tS tA m w).dyna (cpR O tS tA m w).adrs
       (acs1R O tS tA m w) = some (cpF2 O tS tA m w) := by
-  kernel_forall_rfl
+  intro O tS tA m w
+  exact (cpF2Facts O tS tA m w).1
 
 theorem cpF2_adrs : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
     decide ((cpF2 O tS tA m w).adrs = [implAddr, proxyAddr]) = true := by
-  kernel_forall_rfl
+  intro O tS tA m w
+  exact (cpF2Facts O tS tA m w).2.1
 
 /-- Pushing a fork through F1's `DELEGATECALL` preparation preserves its shape. -/
 theorem cpF2_p_fork : ∀ (g : Fork) (O : State) (tS : StorShadow)
@@ -120,16 +131,26 @@ def e2 (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World) : 
   | .run e => e
   | .done _ => default
 
+private theorem e2EntryFacts : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
+    (frameEnterS (cpF2 O tS tA m w).f (acs1R O tS tA m w) = .run (e2 O tS tA m w)) ∧
+    (((e2 O tS tA m w).sta.currentTarget = proxyAddr ∧
+      (e2 O tS tA m w).sta.code = Vulnerable.code ∧
+      (e2 O tS tA m w).sta.data = removeCallR ∧
+      (e2 O tS tA m w).pc = 0)) := by
+  kernel_forall_rfl_and
+
 theorem e2_eq : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
     frameEnterS (cpF2 O tS tA m w).f (acs1R O tS tA m w) = .run (e2 O tS tA m w) := by
-  kernel_forall_rfl
+  intro O tS tA m w
+  exact (e2EntryFacts O tS tA m w).1
 
 theorem e2_facts : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
     ((e2 O tS tA m w).sta.currentTarget = proxyAddr ∧
       (e2 O tS tA m w).sta.code = Vulnerable.code ∧
       (e2 O tS tA m w).sta.data = removeCallR ∧
       (e2 O tS tA m w).pc = 0) := by
-  kernel_forall_rfl_and
+  intro O tS tA m w
+  exact (e2EntryFacts O tS tA m w).2
 
 /-- Pushing a fork through entered F2 lands in its state. -/
 theorem e2_sta_fork : ∀ (g : Fork) (O : State) (tS : StorShadow) (tA : AcctShadow)
@@ -139,35 +160,54 @@ theorem e2_sta_fork : ∀ (g : Fork) (O : State) (tS : StorShadow) (tA : AcctSha
   kernel_forall_rfl
 
 /-- F2's entered static machine is the frozen one, at the actual original state. -/
+private theorem e2StaticFacts : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
+    ((e2 O tS tA m w).sta.caller = (sRm.withOrig O).caller) ∧
+    ((e2 O tS tA m w).sta.target = (sRm.withOrig O).target) ∧
+    (decide ((e2 O tS tA m w).sta.gas = (sRm.withOrig O).gas) = true) ∧
+    ((e2 O tS tA m w).sta.value = (sRm.withOrig O).value) ∧
+    (decide ((e2 O tS tA m w).sta.codeAddress = (sRm.withOrig O).codeAddress) = true) ∧
+    ((e2 O tS tA m w).sta.depth = (sRm.withOrig O).depth) ∧
+    (((e2 O tS tA m w).sta.shouldTransferValue = (sRm.withOrig O).shouldTransferValue ∧
+      (e2 O tS tA m w).sta.isStatic = (sRm.withOrig O).isStatic ∧
+      (e2 O tS tA m w).sta.disablePrecompiles = (sRm.withOrig O).disablePrecompiles)) := by
+  kernel_forall_rfl_and
+
 theorem e2_sta_caller : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
     (w : World), (e2 O tS tA m w).sta.caller = (sRm.withOrig O).caller := by
-  kernel_forall_rfl
+  intro O tS tA m w
+  exact (e2StaticFacts O tS tA m w).1
 
 theorem e2_sta_target : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
     (w : World), (e2 O tS tA m w).sta.target = (sRm.withOrig O).target := by
-  kernel_forall_rfl
+  intro O tS tA m w
+  exact (e2StaticFacts O tS tA m w).2.1
 
 theorem e2_sta_gas : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
     (w : World), decide ((e2 O tS tA m w).sta.gas = (sRm.withOrig O).gas) = true := by
-  kernel_forall_rfl
+  intro O tS tA m w
+  exact (e2StaticFacts O tS tA m w).2.2.1
 
 theorem e2_sta_value : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
     (w : World), (e2 O tS tA m w).sta.value = (sRm.withOrig O).value := by
-  kernel_forall_rfl
+  intro O tS tA m w
+  exact (e2StaticFacts O tS tA m w).2.2.2.1
 
 theorem e2_sta_codeAddress : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
     (w : World), decide ((e2 O tS tA m w).sta.codeAddress = (sRm.withOrig O).codeAddress) = true := by
-  kernel_forall_rfl
+  intro O tS tA m w
+  exact (e2StaticFacts O tS tA m w).2.2.2.2.1
 
 theorem e2_sta_depth : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
     (w : World), (e2 O tS tA m w).sta.depth = (sRm.withOrig O).depth := by
-  kernel_forall_rfl
+  intro O tS tA m w
+  exact (e2StaticFacts O tS tA m w).2.2.2.2.2.1
 
 theorem e2_sta_flags : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
     (w : World), ((e2 O tS tA m w).sta.shouldTransferValue = (sRm.withOrig O).shouldTransferValue ∧
       (e2 O tS tA m w).sta.isStatic = (sRm.withOrig O).isStatic ∧
       (e2 O tS tA m w).sta.disablePrecompiles = (sRm.withOrig O).disablePrecompiles) := by
-  kernel_forall_rfl_and
+  intro O tS tA m w
+  exact (e2StaticFacts O tS tA m w).2.2.2.2.2.2
 
 theorem sR_benv : sR.benvStat = violStat := rfl
 
@@ -234,7 +274,8 @@ theorem keepsR : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) 
 /-- F1's `DELEGATECALL` moves no value. -/
 theorem keepsF2 : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
     Blanc.Lift.Witness.transferKeepsStor (cpF2 O tS tA m w).f.inner (acs1R O tS tA m w) = true := by
-  kernel_forall_rfl
+  intro O tS tA m w
+  exact (cpF2Facts O tS tA m w).2.2.2
 
 /-- F2's start configuration (the probe's convention). -/
 def c2 (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World) : Cfg :=
@@ -336,7 +377,8 @@ theorem cpR_neutral : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : M
 theorem cpF2_codeAddr' : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
     (w : World),
     decide ((cpF2 O tS tA m w).f.inner.codeAddress = some implAddr) = true := by
-  kernel_forall_rfl
+  intro O tS tA m w
+  exact (cpF2Facts O tS tA m w).2.2.1
 
 /-- F1's `DELEGATECALL` targets the implementation. -/
 theorem cpF2_codeAddr : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
@@ -420,19 +462,25 @@ theorem e1_code_fork : ∀ (g : Fork) (O : State) (tS : StorShadow) (tA : AcctSh
 theorem e2_target_fork : ∀ (g : Fork) (O : State) (tS : StorShadow) (tA : AcctShadow)
     (m : Meta) (w : World), (((e2 O tS tA m w).withFork g).sta.currentTarget) =
       proxyAddr := by
-  kernel_forall_rfl
+  intro g O tS tA m w
+  rw [e2_sta_fork, Blanc.ForkUniform.Sevm.withFork_currentTarget]
+  exact (e2_facts O tS tA m w).1
 
 /-- F2's entry code, under any covered fork. -/
 theorem e2_code_fork : ∀ (g : Fork) (O : State) (tS : StorShadow) (tA : AcctShadow)
     (m : Meta) (w : World), (((e2 O tS tA m w).withFork g).sta.code) =
       Vulnerable.code := by
-  kernel_forall_rfl
+  intro g O tS tA m w
+  rw [e2_sta_fork, Blanc.ForkUniform.Sevm.withFork_code]
+  exact (e2_facts O tS tA m w).2.1
 
 /-- F2's entry data, under any covered fork. -/
 theorem e2_data_fork : ∀ (g : Fork) (O : State) (tS : StorShadow) (tA : AcctShadow)
     (m : Meta) (w : World), (((e2 O tS tA m w).withFork g).sta.data) =
       removeCallR := by
-  kernel_forall_rfl
+  intro g O tS tA m w
+  rw [e2_sta_fork, Blanc.ForkUniform.Sevm.withFork_data]
+  exact (e2_facts O tS tA m w).2.2.1
 
 /-- F2's entry pc, under any covered fork. -/
 theorem e2_pc_fork : ∀ (g : Fork) (O : State) (tS : StorShadow) (tA : AcctShadow)
