@@ -91,7 +91,7 @@ GATE_LOCKS=""
 #   what     what is being protected, named as the operator sees it
 #   hint     optional escape-hatch sentence for the refusal message
 #
-# Returns 0 holding the lock, or 1 having printed a REFUSED verdict. Callers
+# Returns 0 holding the lock, or 1 having printed a REFUSED verdict to stderr. Callers
 # exit 2 on a refusal: the gate did not fail, it did not run.
 gate_lock_acquire() {
   gl_dir="$1"
@@ -119,14 +119,14 @@ gate_lock_acquire() {
         gl_vanished=1
         continue
       fi
-      echo "REFUSED — $gl_label: cannot create lock directory $gl_dir for $gl_what: ${gl_err:-mkdir failed without a message}"
-      echo "REFUSED — $gl_label: this is not a held lock; fix the path or its permissions"
-      echo "REFUSED — $gl_label: nothing was run and nothing was written"
+      echo "REFUSED — $gl_label: cannot create lock directory $gl_dir for $gl_what: ${gl_err:-mkdir failed without a message}" >&2
+      echo "REFUSED — $gl_label: this is not a held lock; fix the path or its permissions" >&2
+      echo "REFUSED — $gl_label: nothing was run and nothing was written" >&2
       return 1
     fi
     if [ ! -d "$gl_dir" ]; then
-      echo "REFUSED — $gl_label: cannot create lock directory $gl_dir for $gl_what: the path exists and is not a directory (${gl_err:-no mkdir message})"
-      echo "REFUSED — $gl_label: nothing was run and nothing was written"
+      echo "REFUSED — $gl_label: cannot create lock directory $gl_dir for $gl_what: the path exists and is not a directory (${gl_err:-no mkdir message})" >&2
+      echo "REFUSED — $gl_label: nothing was run and nothing was written" >&2
       return 1
     fi
 
@@ -137,15 +137,15 @@ gate_lock_acquire() {
       sleep 1
     fi
     if [ ! -s "$gl_dir/owner" ]; then
-      echo "REFUSED — $gl_label: $gl_what is locked by $gl_dir, which carries no owner metadata"
-      echo "REFUSED — $gl_label: a run may have died between creating and stamping it; if no gate is running, remove that directory by hand"
-      echo "REFUSED — $gl_label: nothing was run and nothing was written"
+      echo "REFUSED — $gl_label: $gl_what is locked by $gl_dir, which carries no owner metadata" >&2
+      echo "REFUSED — $gl_label: a run may have died between creating and stamping it; if no gate is running, remove that directory by hand" >&2
+      echo "REFUSED — $gl_label: nothing was run and nothing was written" >&2
       return 1
     fi
     if ! gl_owner="$(cat "$gl_dir/owner" 2>&1)"; then
-      echo "REFUSED — $gl_label: $gl_what is locked by $gl_dir, whose owner metadata cannot be read: $gl_owner"
-      echo "REFUSED — $gl_label: the holder's liveness is unknown, so the lock was left in place"
-      echo "REFUSED — $gl_label: nothing was run and nothing was written"
+      echo "REFUSED — $gl_label: $gl_what is locked by $gl_dir, whose owner metadata cannot be read: $gl_owner" >&2
+      echo "REFUSED — $gl_label: the holder's liveness is unknown, so the lock was left in place" >&2
+      echo "REFUSED — $gl_label: nothing was run and nothing was written" >&2
       return 1
     fi
 
@@ -156,18 +156,18 @@ gate_lock_acquire() {
     gl_state="$(gate_lock_liveness "$gl_pid")"
     case "$gl_state" in
       alive)
-        echo "REFUSED — $gl_label: $gl_what is locked by PID $gl_pid, started $gl_when"
-        echo "REFUSED — $gl_label: holder: $gl_cmd"
-        if [ -n "$gl_hint" ]; then echo "REFUSED — $gl_label: $gl_hint"; fi
-        echo "REFUSED — $gl_label: nothing was run and nothing was written"
+        echo "REFUSED — $gl_label: $gl_what is locked by PID $gl_pid, started $gl_when" >&2
+        echo "REFUSED — $gl_label: holder: $gl_cmd" >&2
+        if [ -n "$gl_hint" ]; then echo "REFUSED — $gl_label: $gl_hint" >&2; fi
+        echo "REFUSED — $gl_label: nothing was run and nothing was written" >&2
         return 1
         ;;
       dead) ;;
       *)
-        echo "REFUSED — $gl_label: $gl_what is locked by PID ${gl_pid:-<none>} ($gl_cmd, started $gl_when), whose liveness cannot be determined"
-        echo "REFUSED — $gl_label: probe: ${gl_state#unknown: }"
-        echo "REFUSED — $gl_label: an unknown holder is never treated as dead, so the lock was left in place; if that process is truly gone, remove $gl_dir by hand"
-        echo "REFUSED — $gl_label: nothing was run and nothing was written"
+        echo "REFUSED — $gl_label: $gl_what is locked by PID ${gl_pid:-<none>} ($gl_cmd, started $gl_when), whose liveness cannot be determined" >&2
+        echo "REFUSED — $gl_label: probe: ${gl_state#unknown: }" >&2
+        echo "REFUSED — $gl_label: an unknown holder is never treated as dead, so the lock was left in place; if that process is truly gone, remove $gl_dir by hand" >&2
+        echo "REFUSED — $gl_label: nothing was run and nothing was written" >&2
         return 1
         ;;
     esac
@@ -175,8 +175,8 @@ gate_lock_acquire() {
     # Confirmed dead. Reclaim once; a second failure means someone else won
     # the race for it, and that someone is now a holder.
     if [ "$gl_reclaimed" -ne 0 ]; then
-      echo "REFUSED — $gl_label: $gl_what is locked by $gl_dir and could not be reclaimed${gl_rm_err:+: $gl_rm_err}"
-      echo "REFUSED — $gl_label: nothing was run and nothing was written"
+      echo "REFUSED — $gl_label: $gl_what is locked by $gl_dir and could not be reclaimed${gl_rm_err:+: $gl_rm_err}" >&2
+      echo "REFUSED — $gl_label: nothing was run and nothing was written" >&2
       return 1
     fi
     gl_reclaimed=1
