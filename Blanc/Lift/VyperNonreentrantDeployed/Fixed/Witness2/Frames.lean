@@ -153,7 +153,7 @@ theorem frameRe {fk : Fork} (hg : CoveredFork fk) (hag : PAgree cRe0) :
   obtain ⟨hf, hx⟩ := eRe_ok
   obtain ⟨-, -, -, -, -, -, -, -, -, -, -, eReF, wRe1, pRe1, wRe2, pRe2, wRe3, -⟩ := runFactsB
   have hcode : (eRe.sta.withFork fk).code = code :=
-    (Prod.mk.inj (Prod.mk.inj (Prod.mk.inj eReF).2).2).1
+    (Sevm.withFork_code _ _).trans ((Prod.mk.inj (Prod.mk.inj (Prod.mk.inj eReF).2).2).1)
   have w1 := (pwalkH_withFork hf hg hx (.avoid 0) codeTries okNoBody 26 cRe0).trans wRe1
   have w2 := (pwalkH_withFork hf hg hx (.avoid 0) codeTries okNoBody 6 cRe1).trans wRe2
   have w3 := (pwalkH_withFork hf hg hx (.avoid 0) codeTries okNoBody 4 cRe2).trans wRe3
@@ -182,7 +182,7 @@ theorem frameCb {fk : Fork} (hg : CoveredFork fk) (hag : PAgree cCb0) :
     -⟩ := runFactsB
   have hcode : (eCb.sta.withFork fk).code = fwdCode := by
     obtain ⟨-, -, -, -, -, eCbF, -⟩ := runFactsB
-    exact (Prod.mk.inj (Prod.mk.inj (Prod.mk.inj eCbF).2).2).1
+    exact (Sevm.withFork_code _ _).trans ((Prod.mk.inj (Prod.mk.inj (Prod.mk.inj eCbF).2).2).1)
   obtain ⟨sRe, nRe⟩ := spawnRe_at hg
   have w1 := (pwalkH_withFork hf hg hx .refuse fwdTries okAny 11 cCb0).trans wCb1
   have w3 := (pwalkH_withFork hf hg hx .refuse fwdTries okAny 9 cCb2).trans wCb3
@@ -192,9 +192,15 @@ theorem frameCb {fk : Fork} (hg : CoveredFork fk) (hag : PAgree cCb0) :
   have hat : Ninst.At (eCb.sta.withFork fk).code cCb1.pc (.exec .delegatecall) := by
     rw [hcode, pCb1]; exact decodeT_sound fwdTries dCb1
   obtain ⟨hstep, hent, -, hagRe, hF⟩ := delegatecall_node hag1 hat sRe nRe
+  rw [pagree_withFork_entry] at hagRe
   obtain ⟨r, x', sp, hr, e, hx', hexn, hdesc, hagx⟩ :=
-    spawn_resume_err (e := .revert) hq1 hag1 hF hstep hent (.inl rfl) (settleRe_at hg) resCb
-      (fun G hG => (frameRe hg hagRe G hG).1.1)
+    spawn_resume_err (e := .revert) hq1 hag1 hF hstep hent (.inl rfl) (settleRe_at hg)
+      ((resumeCallB_withFork cpRe fk (.ok (settleOr cpRe.f (.error (.revert, dRe))))).trans resCb)
+      (fun G hG => by
+        rw [nodeAt_withFork_entry] at hG
+        exact (frameRe hg hagRe G hG).1.1)
+  rw [CallPrep.withFork_adrs] at hagx hx'
+  rw [nodeAt_withFork_entry] at hr
   have dsg := (frameRe hg hagRe r hr).2
   obtain ⟨hag3, h3⟩ := pwalkH_cont .refuse fwdTries hcode okAny 9 cCb2 cCb3 hagx w3
   obtain ⟨q3, hq3, -, ex3, ds3, -⟩ := h3 x' hx'
@@ -218,7 +224,7 @@ theorem frameRcv {fk : Fork} (hg : CoveredFork fk) (hag : PAgree cRcv0) :
   have hcode : (eRcv.sta.withFork fk).code = Receiver.code := by
     obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, eRcvF⟩ :=
       runFactsA
-    exact (Prod.mk.inj (Prod.mk.inj (Prod.mk.inj eRcvF).2).2).1
+    exact (Sevm.withFork_code _ _).trans ((Prod.mk.inj (Prod.mk.inj (Prod.mk.inj eRcvF).2).2).1)
   obtain ⟨sCb, nCb⟩ := spawnCb_at hg
   have w1 := (pwalkH_withFork hf hg hx .refuse receiverTries okAny 14 cRcv0).trans wRcv1
   have w3 := (pwalkH_withFork hf hg hx .refuse receiverTries okAny 1 cRcv2).trans wRcv3
@@ -228,9 +234,15 @@ theorem frameRcv {fk : Fork} (hg : CoveredFork fk) (hag : PAgree cRcv0) :
   have hat : Ninst.At (eRcv.sta.withFork fk).code cRcv1.pc (.exec .call) := by
     rw [hcode, pRcv1]; exact decodeT_sound receiverTries dRcv1
   obtain ⟨hstep, hent, -, hagCb, hF⟩ := call_node hag1 hat sCb nCb
+  rw [pagree_withFork_entry] at hagCb
   obtain ⟨q, x', sp, hq, e, hx', hexn, hdesc, hagx⟩ :=
-    spawn_resume_err (e := .revert) hx1 hag1 hF hstep hent (.inl rfl) (settleCb_at hg) resRcv
-      (fun Q hQ => (frameCb hg hagCb Q hQ).1)
+    spawn_resume_err (e := .revert) hx1 hag1 hF hstep hent (.inl rfl) (settleCb_at hg)
+      ((resumeCallB_withFork cpCb fk (.ok (settleOr cpCb.f (.error (.revert, dCb))))).trans resRcv)
+      (fun Q hQ => by
+        rw [nodeAt_withFork_entry] at hQ
+        exact (frameCb hg hagCb Q hQ).1)
+  rw [CallPrep.withFork_adrs] at hagx hx'
+  rw [nodeAt_withFork_entry] at hq
   obtain ⟨-, r, hr, dsq, hre⟩ := frameCb hg hagCb q hq
   obtain ⟨hag3, h3⟩ := pwalkH_cont .refuse receiverTries hcode okAny 1 cRcv2 cRcv3 hagx w3
   obtain ⟨x3, hx3, -, ex3, ds3, -⟩ := h3 x' hx'
@@ -250,7 +262,7 @@ theorem frameBal {fk : Fork} (hg : CoveredFork fk) (hag : PAgree cBal0) :
   obtain ⟨hf, hx⟩ := eBal_ok
   obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, eBalF, wBal1, wBal2, -⟩ := runFactsA
   have hcode : (eBal.sta.withFork fk).code = Receiver.code :=
-    (Prod.mk.inj (Prod.mk.inj eBalF).2).2
+    (Sevm.withFork_code _ _).trans ((Prod.mk.inj (Prod.mk.inj eBalF).2).2)
   have w1 := (pwalkH_withFork hf hg hx .refuse receiverTries okAny 8 cBal0).trans wBal1
   have w2 := (pwalkH_withFork hf hg hx .refuse receiverTries okAny 1 cBal1).trans wBal2
   obtain ⟨hca, hall⟩ := leaf_frame_ok .refuse receiverTries hcode okAny hag w1 w2
@@ -266,7 +278,7 @@ theorem frameXf {fk : Fork} (hg : CoveredFork fk) (hag : PAgree cXf0) :
   obtain ⟨hf, hx⟩ := eXf_ok
   obtain ⟨-, -, -, -, -, eXfF, wXf1, wXf2, -⟩ := runFactsC.2
   have hcode : (eXf.sta.withFork fk).code = Receiver.code :=
-    (Prod.mk.inj (Prod.mk.inj (Prod.mk.inj eXfF).2).2).1
+    (Sevm.withFork_code _ _).trans ((Prod.mk.inj (Prod.mk.inj (Prod.mk.inj eXfF).2).2).1)
   have w1 := (pwalkH_withFork hf hg hx .refuse receiverTries okAny 8 cXf0).trans wXf1
   have w2 := (pwalkH_withFork hf hg hx .refuse receiverTries okAny 1 cXf1).trans wXf2
   obtain ⟨hca, hall⟩ := leaf_frame_ok .refuse receiverTries hcode okAny hag w1 w2
@@ -303,7 +315,7 @@ theorem frameB {fk : Fork} (hfk : CoveredFork fk) (hag : PAgree cB0) :
   obtain ⟨sBal, nBal⟩ := spawnBal_at hfk
   obtain ⟨sEth, nRcv⟩ := spawnEth_at hfk
   obtain ⟨sXf, nXf⟩ := spawnXf_at hfk
-  have hcode : (eB.sta.withFork fk).code = code := (Prod.mk.inj (Prod.mk.inj (Prod.mk.inj eBF).2).2).1
+  have hcode : (eB.sta.withFork fk).code = code := (Sevm.withFork_code _ _).trans ((Prod.mk.inj (Prod.mk.inj (Prod.mk.inj eBF).2).2).1)
   have wB1 := (pwalkH_withFork hf hfk hx (.avoid 0) codeTries okAny 174 cB0).trans walkB1
   have wB2 := (pwalkH_withFork hf hfk hx (.avoid 0) codeTries okNoRel 57 cB1).trans walkB2
   have wB4 := (pwalkH_withFork hf hfk hx (.avoid 0) codeTries okNoRel 151 cB3).trans walkB4
@@ -326,10 +338,16 @@ theorem frameB {fk : Fork} (hfk : CoveredFork fk) (hag : PAgree cB0) :
   have hat2 : Ninst.At (eB.sta.withFork fk).code cB2.pc (.exec .staticcall) := by
     rw [hcode, pB2]; exact decodeT_sound codeTries decB2
   obtain ⟨step2, ent2, -, hagBal⟩ := staticcall_node hag2 hat2 sBal nBal
+  rw [pagree_withFork_entry] at hagBal
   have hF2 := (scallPrep_node_facts hag2 sBal).2
   obtain ⟨t1, x3, sp1, ht1, e3, hx3, ex3, hdesc3, hag3⟩ :=
-    spawn_resume_ok hx2 hag2 hF2 step2 ent2 balErr resB3
-      (fun t ht => let r := frameBal hfk hagBal t ht; ⟨r.1, r.2.2⟩)
+    spawn_resume_ok hx2 hag2 hF2 step2 ent2 balErr
+      ((resumeCallB_withFork cpBal fk (.ok dBal)).trans resB3)
+      (fun t ht => by
+        rw [nodeAt_withFork_entry] at ht
+        exact let r := frameBal hfk hagBal t ht; ⟨r.1, r.2.2⟩)
+  rw [CallPrep.withFork_adrs] at hag3 hx3
+  rw [nodeAt_withFork_entry] at ht1
   have dst1 := (frameBal hfk hagBal t1 ht1).2.1
   -- the ETH `CALL` of pc 7427
   obtain ⟨hag4, h4⟩ := pwalkH_cont (.avoid 0) codeTries hcode okNoRel 151 cB3 cB4 hag3 wB4
@@ -337,9 +355,15 @@ theorem frameB {fk : Fork} (hfk : CoveredFork fk) (hag : PAgree cB0) :
   have hat4 : Ninst.At (eB.sta.withFork fk).code cB4.pc (.exec .call) := by
     rw [hcode, pB4]; exact decodeT_sound codeTries decB4
   obtain ⟨step4, ent4, -, hagRcv, hF4⟩ := call_node hag4 hat4 sEth nRcv
+  rw [pagree_withFork_entry] at hagRcv
   obtain ⟨xr, x5, sp2, hxr, e5, hx5, ex5, hdesc5, hag5⟩ :=
-    spawn_resume_ok hx4 hag4 hF4 step4 ent4 rcvErr resB5
-      (fun X hX => let r := frameRcv hfk hagRcv X hX; ⟨r.1, r.2.1⟩)
+    spawn_resume_ok hx4 hag4 hF4 step4 ent4 rcvErr
+      ((resumeCallB_withFork cpEth fk (.ok dRcv)).trans resB5)
+      (fun X hX => by
+        rw [nodeAt_withFork_entry] at hX
+        exact let r := frameRcv hfk hagRcv X hX; ⟨r.1, r.2.1⟩)
+  rw [CallPrep.withFork_adrs] at hag5 hx5
+  rw [nodeAt_withFork_entry] at hxr
   obtain ⟨-, -, q, g, hq, hg, dsr, dsq, hre⟩ := frameRcv hfk hagRcv xr hxr
   -- the transfer `CALL`
   obtain ⟨hag6, h6⟩ := pwalkH_cont (.avoid 0) codeTries hcode okAny 119 cB5 cB6 hag5 wB6
@@ -347,9 +371,15 @@ theorem frameB {fk : Fork} (hfk : CoveredFork fk) (hag : PAgree cB0) :
   have hat6 : Ninst.At (eB.sta.withFork fk).code cB6.pc (.exec .call) := by
     rw [hcode, pB6]; exact decodeT_sound codeTries decB6
   obtain ⟨step6, ent6, -, hagXf, hF6⟩ := call_node hag6 hat6 sXf nXf
+  rw [pagree_withFork_entry] at hagXf
   obtain ⟨t2, x7, sp3, ht2, e7, hx7, ex7, hdesc7, hag7⟩ :=
-    spawn_resume_ok hx6 hag6 hF6 step6 ent6 xfErr resB7
-      (fun t ht => let r := frameXf hfk hagXf t ht; ⟨r.1, r.2.2⟩)
+    spawn_resume_ok hx6 hag6 hF6 step6 ent6 xfErr
+      ((resumeCallB_withFork cpXf fk (.ok dXf)).trans resB7)
+      (fun t ht => by
+        rw [nodeAt_withFork_entry] at ht
+        exact let r := frameXf hfk hagXf t ht; ⟨r.1, r.2.2⟩)
+  rw [CallPrep.withFork_adrs] at hag7 hx7
+  rw [nodeAt_withFork_entry] at ht2
   have dst2 := (frameXf hfk hagXf t2 ht2).2.1
   -- `RETURN`
   obtain ⟨hag8, h8⟩ := pwalkH_cont (.avoid 0) codeTries hcode okAny 125 cB7 cB8 hag7 wB8
