@@ -618,7 +618,6 @@ theorem hybridDispatchWith_persistentSourceShape_eq
     · exact linearDispatchWith_persistentSourceShape_eq (hslice 9 4) k
     · exact linearDispatchWith_persistentSourceShape_eq (hdrop 13) k
 
-set_option maxHeartbeats 800000 in
 theorem runtimePersistentEntryShapes_eq (dp : DeployParams) :
     persistentDispatchEntryShapes (funcs dp) =
       persistentDispatchEntryShapes (funcs ⟨0, 0, 0, 0, 0⟩) := by

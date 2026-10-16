@@ -1011,7 +1011,6 @@ private theorem hybridDispatchWith_compileShape_eq
     · exact linearDispatchWith_compileShape_eq (hslice 9 4) k
     · exact linearDispatchWith_compileShape_eq (hdrop 13) k
 
-set_option maxHeartbeats 800000 in
 private theorem runtimeEntryShapes_eq (dp : DeployParams) :
     dispatchEntryShapes (funcs dp) =
       dispatchEntryShapes (funcs ⟨0, 0, 0, 0, 0⟩) := by
