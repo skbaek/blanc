@@ -93,17 +93,43 @@ def m16 (c a : B256) : Mem := (m15 c a).write 0 runtimeWindow
 
 theorem runtimeWindow_length : runtimeWindow.length = 0x2c1d := ByteArray.length_sliceD _ _ _ _
 
-theorem m1_size : m1.size = 96 := by decide +kernel
-theorem m2_size : m2.size = 224 := by decide +kernel
-theorem m3_size : m3.size = 224 := by decide +kernel
-theorem m4_size : m4.size = 224 := by decide +kernel
-theorem m5_size : m5.size = 224 := by decide +kernel
-theorem m6_size : m6.size = 224 := by decide +kernel
-theorem m7_size : m7.size = 224 := by decide +kernel
-theorem m8_size : m8.size = 256 := by decide +kernel
-theorem m9_size : m9.size = 320 := by decide +kernel
-theorem m10_size : m10.size = 352 := by decide +kernel
-theorem m11_size : m11.size = 384 := by decide +kernel
+theorem m1_size : m1.size = 96 := by
+  rw [m1, Mem.size_write_of_size (show m0.size = 0 from rfl) (by decide)
+    (B256.length_toBytes _)]
+  decide
+theorem m2_size : m2.size = 224 := by
+  have hlen : typeString.length = 82 := by
+    rw [← typeWindow_eq]
+    exact ByteArray.length_sliceD _ _ _ _
+  rw [m2, Mem.size_write_of_size m1_size (by decide) hlen]
+  decide
+theorem m3_size : m3.size = 224 := by
+  rw [m3, Mem.size_write_of_size m2_size (by decide) (B256.length_toBytes _)]
+  decide
+theorem m4_size : m4.size = 224 := by
+  rw [m4, Mem.size_write_of_size m3_size (by decide) (B256.length_toBytes _)]
+  decide
+theorem m5_size : m5.size = 224 := by
+  rw [m5, Mem.size_write_of_size m4_size (by decide) (B256.length_toBytes _)]
+  decide
+theorem m6_size : m6.size = 224 := by
+  rw [m6, Mem.size_write_of_size m5_size (by decide) (B256.length_toBytes _)]
+  decide
+theorem m7_size : m7.size = 224 := by
+  rw [m7, Mem.size_write_of_size m6_size (by decide) (B256.length_toBytes _)]
+  decide
+theorem m8_size : m8.size = 256 := by
+  rw [m8, Mem.size_write_of_size m7_size (by decide) (B256.length_toBytes _)]
+  decide
+theorem m9_size : m9.size = 320 := by
+  rw [m9, Mem.size_write_of_size m8_size (by decide) (B256.length_toBytes _)]
+  decide
+theorem m10_size : m10.size = 352 := by
+  rw [m10, Mem.size_write_of_size m9_size (by decide) (B256.length_toBytes _)]
+  decide
+theorem m11_size : m11.size = 384 := by
+  rw [m11, Mem.size_write_of_size m10_size (by decide) (B256.length_toBytes _)]
+  decide
 
 theorem m12_size (c : B256) : (m12 c).size = 416 := by
   rw [m12, Mem.size_write_word_aligned (by rw [m11_size]) (by decide), m11_size]
