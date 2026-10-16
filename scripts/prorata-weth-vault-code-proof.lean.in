@@ -997,14 +997,6 @@ private def maxDepositFrozen : Bytes :=
 
 
 -- Phase 14: bounded compiler equations, over the actual auxiliary table.
-private theorem returnWord_slot_compile_at (n : Nat) :
-    Func.compile vaultTable n (Func.call ProrataWethVault.returnWordSlot) =
-      some [0x61, 0x3d, 0x33, 0x56] := by
-  simp only [Func.compile, vault_table_returnWord, Nat.reducePow, Nat.toUInt8_eq, List.cons_append,
-    List.nil_append, Option.pure_def, Option.bind_eq_bind, Option.bind_some, Nat.reduceLT, guard_true,
-    Nat.reduceShiftRight, UInt8.reduceOfNat, Option.some.injEq, List.cons.injEq, and_true, true_and]
-  rfl
-
 private theorem finishQuotient_capCeilPred_12067_compile :
     Func.compile vaultTable 12067
       (ProrataWethVault.finishQuotient
