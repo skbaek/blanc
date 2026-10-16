@@ -2719,6 +2719,107 @@ if args.jumps_out is not None:
     args.jumps_out.parent.mkdir(parents=True, exist_ok=True)
     args.jumps_out.write_text(jumps_source())
 
+def lock_dispatch_proofs(checker, entry_idx: int) -> Tuple[List[str], Optional[str]]:
+    """Cut a large entry's selector spine without changing its lock checker.
+
+    Each join is an equality over two *free* subtrees. Instantiating that
+    equality avoids elaborator conversion over the concrete suffix. Restrict
+    cuts to short selector prefixes with empty fact sets at both boundaries:
+    the Python checker stores facts as sets, whereas Lean preserves list order.
+    Every emitted prefix equality and terminal check is checked by Lean.
+    """
+    import lockann
+
+    if MEMRET or args.fold or count_tree_nodes(trees[entry_idx]) <= CHECK_SPLIT_NODE_BUDGET:
+        return [], None
+    allowed = {0x10, 0x11, 0x18, 0x1c, 0x34, 0x35, 0x36}
+    lines: List[str] = []
+    memo = {}
+    joins = 0
+
+    def claim(pc, frame, state, tree_name):
+        return (f"lockNode lockSpec (Cert.entries cert) lockAnn {pc} "
+                f"{stack_lean(frame)} {lockann.lean_state(state)} {tree_name}")
+
+    def cut(tree, frame, state):
+        if state.facts or len(frame) > 1:
+            return None
+        cursor, current_frame, current_state = tree, list(frame), state
+        ops = []
+        for _ in range(32):
+            kind, pc = cursor[0], cursor[-1]
+            current_state = checker.visit(pc, current_state)
+            if kind == 'dest':
+                cursor = cursor[1]
+            elif kind == 'next':
+                op, data = cursor[1]
+                if op not in allowed and not 0x5f <= op <= 0x8f:
+                    return None
+                ops.append(op)
+                next_frame = step_inst(op, data, current_frame, pc)
+                if next_frame is None:
+                    return None
+                current_frame = next_frame
+                current_state = checker.lstep(pc, op, data, current_state)
+                cursor = cursor[2]
+            elif kind == 'branch':
+                selector = (0x18 in ops or (0x36 in ops and 0x11 in ops) or
+                            (0x34 in ops and '.reg .xor' in render_sfunc(cursor[1], entry_idx)))
+                if not selector:
+                    return None
+                if len(current_frame) < 2 or len(current_state.kv) < 2:
+                    return None
+                child_frame = current_frame[2:]
+                fall_state = checker.refine(current_state, current_state.kv[1], current_state.kv[2:], True)
+                taken_state = checker.refine(current_state, current_state.kv[1], current_state.kv[2:], False)
+                if fall_state.facts or taken_state.facts or len(child_frame) > 1:
+                    return None
+                return cursor[1], cursor[2], child_frame, fall_state, taken_state
+            else:
+                return None
+        return None
+
+    def emit(tree, frame, state):
+        nonlocal joins
+        tree_name = emit_block(tree, entry_idx)
+        key = (tree_name, stack_lean(frame), lockann.lean_state(state))
+        if key in memo:
+            return memo[key]
+        name = f"lock_dispatch_{entry_idx}_{len(memo)}"
+        memo[key] = name
+        split = cut(tree, frame, state)
+        body = dict(lean_defs)[tree_name]
+        if split is not None:
+            fall, taken, child_frame, fall_state, taken_state = split
+            fall_name, taken_name = emit_block(fall, entry_idx), emit_block(taken, entry_idx)
+            # A named JUMPDEST inside the prefix is a separate producer block.
+            # Leave that case whole rather than unfolding an unbounded suffix.
+            if f"(.branch {fall_name} {taken_name})" not in body:
+                split = None
+        if split is None:
+            lines.extend([f"private theorem {name} : {claim(tree[-1], frame, state, tree_name)} = true := by",
+                          "  decide +kernel", ""])
+            return name
+        fall_proof = emit(fall, child_frame, fall_state)
+        taken_proof = emit(taken, child_frame, taken_state)
+        prefix_body = body.replace(f"(.branch {fall_name} {taken_name})", "(.branch f g)")
+        left = claim(fall[-1], child_frame, fall_state, 'f')
+        right = claim(taken[-1], child_frame, taken_state, 'g')
+        lines.extend([
+            f"private theorem {name}_prefix (f g : SFunc) :",
+            f"    {claim(tree[-1], frame, state, '(' + prefix_body + ')')} =",
+            f"    ({left} && {right}) := by rfl", "",
+            f"private theorem {name} : {claim(tree[-1], frame, state, tree_name)} = true :=",
+            f"  ({name}_prefix {fall_name} {taken_name}).trans",
+            f"    (Bool.and_eq_true_iff.mpr ⟨{fall_proof}, {taken_proof}⟩)", "",
+        ])
+        joins += 1
+        return name
+
+    proof = emit(trees[entry_idx], list(entries[entry_idx][1]), checker.ann[entry_idx])
+    return (lines, proof) if joins else ([], None)
+
+
 # 11. Reentrancy-lock annotations (`scripts/lift/lockann.py`) and their per-entry decisions.
 lock_opts = (args.lock_spec, args.lock_spec_module, args.lock_ann_out, args.lock_check_out)
 if any(o is not None for o in lock_opts):
@@ -2763,7 +2864,8 @@ if any(o is not None for o in lock_opts):
         f"import {args.lock_spec_module}",
         "",
         f"/-! {args.lock_header}",
-        "Each entry's lock walk is one kernel decision; `lock_cert` assembles them. -/",
+        "Each entry is kernel-checked, with selector-prefix certificates for large dispatchers;",
+        "`lock_cert` assembles the entry proofs. -/",
         "",
         f"namespace {ns}",
         "",
@@ -2775,10 +2877,12 @@ if any(o is not None for o in lock_opts):
         if m is None:
             raise RuntimeError(f"cannot read certificate entry {i}: {line}")
         pc, frame, _, tree = m.groups()
+        dispatch, dispatch_proof = lock_dispatch_proofs(checker, i) if i == 0 else ([], None)
+        chk += dispatch
         chk += [
             f"theorem lock_entry_{i} :",
             f"    lockNode lockSpec (Cert.entries cert) lockAnn {pc} {frame} lockAnn_{i} {tree} = true := by",
-            "  decide +kernel",
+            f"  exact {dispatch_proof}" if dispatch_proof else "  decide +kernel",
             "",
         ]
     n = len(cert_entries_lines)
