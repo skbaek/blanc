@@ -78,7 +78,10 @@ GENERATOR_LEDGER = "python3 scripts/leaf_audit.py generate --ledger"
 # Attribute heads the driver reads from the environment. Attributes never make a declaration used,
 # but known heads remain classified so that a new attribute head is refused until someone decides
 # what it does.
-USE_ATTRIBUTES = frozenset({"simp", "ext", "instance"})
+# `grind` (with any parameters, such as `hom` or `hom_pred`) registers rewrite/forward rules the way
+# `simp` does: an `attribute [grind ..] names` command credits those names in the source scan, and
+# membership by itself is still never a use.
+USE_ATTRIBUTES = frozenset({"simp", "ext", "instance", "grind"})
 # Attribute heads that cannot make a theorem used. Anything else found in the source is refused
 # until it is classified here and, if it uses a theorem, taught to the driver.
 NEUTRAL_ATTRIBUTES = frozenset({
@@ -1309,6 +1312,47 @@ def scan_controls() -> List[str]:
     return failures
 
 
+def attribute_controls() -> List[Tuple[Optional[str], str]]:
+    """Pure-text controls of the attribute vocabulary (no Lean): ``[(failure or None, ok line)]``.
+
+    Both directions bite: an unclassified head (``norm_cast``) is still refused while ``grind`` in
+    every form passes, and the names of an ``attribute [local grind ..]`` command count as used.
+    """
+
+    results: List[Tuple[Optional[str], str]] = []
+    unclassified = scan_attributes_text("A", "@[simp, norm_cast] theorem x : True := trivial\n"
+                                             "@[local irreducible] def y := 1\n")
+    scoped_use = scan_attributes_text("B", "@[local simp] theorem z : True := trivial\n")
+    fine = scan_attributes_text("C", "@[simp, ext] theorem x : True := trivial\n"
+                                     "attribute [local irreducible] y\n"
+                                     "/- @[local simp] in a comment -/\n")
+    ok = (len(unclassified) == 1 and "norm_cast" in unclassified[0] and len(scoped_use) == 1
+          and not fine)
+    results.append((None if ok else f"attribute guard: {unclassified} {scoped_use} {fine}",
+                    "OK — attribute guard: an unclassified attribute and an unexported use "
+                    "attribute are refused, classified ones and comments pass"))
+    grind_text = ("namespace G\n"
+                  "@[grind] theorem g0 : True := trivial\n"
+                  "theorem g1 : True := trivial\n"
+                  "theorem g2 : True := trivial\n"
+                  "theorem g3 : True := trivial\n"
+                  "section\n"
+                  "attribute [local grind hom] g1 g2\n"
+                  "attribute [local grind hom_pred] g3\n"
+                  "end\n"
+                  "end G\n")
+    grind_problems = scan_attributes_text("G", grind_text)
+    results.append((f"grind attribute guard: {grind_problems}" if grind_problems else None,
+                    "OK — grind attribute guard: `@[grind]` and `attribute [local grind hom|hom_pred]` "
+                    "are classified"))
+    used = scan_uses({"G": grind_text}, {"G.g0", "G.g1", "G.g2", "G.g3"})
+    ok_used = set(used) == {"G.g1", "G.g2", "G.g3"}
+    results.append((None if ok_used else f"grind use: expected G.g1 G.g2 G.g3, got {sorted(used)}",
+                    "OK — grind use: names of an `attribute [local grind ..]` command are used; "
+                    "membership alone (`@[grind]` g0) is not"))
+    return results
+
+
 def self_test(root: Path) -> int:
     fixture_dir = root / FIXTURE_DIR_RELATIVE
     base = (fixture_dir / "compliant.lean").read_text()
@@ -1698,19 +1742,12 @@ def self_test(root: Path) -> int:
             failures.append(f"{label}: an untrustworthy census was accepted")
 
     # The attribute-vocabulary guard refuses a new attribute head and an unexported use attribute.
-    checks += 1
-    unclassified = scan_attributes_text("A", "@[simp, norm_cast] theorem x : True := trivial\n"
-                                             "@[local irreducible] def y := 1\n")
-    scoped_use = scan_attributes_text("B", "@[local simp] theorem z : True := trivial\n")
-    fine = scan_attributes_text("C", "@[simp, ext] theorem x : True := trivial\n"
-                                     "attribute [local irreducible] y\n"
-                                     "/- @[local simp] in a comment -/\n")
-    if len(unclassified) != 1 or "norm_cast" not in unclassified[0] or len(scoped_use) != 1 \
-            or fine:
-        failures.append(f"attribute guard: {unclassified} {scoped_use} {fine}")
-    else:
-        print("OK — attribute guard: an unclassified attribute and an unexported use attribute are "
-              "refused, classified ones and comments pass")
+    for failure, line in attribute_controls():
+        checks += 1
+        if failure:
+            failures.append(failure)
+        else:
+            print(line)
 
     # Cascade planning: one edged census of a small fixture decides every round.
     cascade_source = fixture_source(root, CASCADE_FIXTURE)
