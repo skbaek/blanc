@@ -1,5 +1,6 @@
 import Blanc.OwnerDiscipline
 import Blanc.OwnerClosure
+import Blanc.Lift.InvWalkWorld
 
 /-!
 # The exact child of a spawning `DELEGATECALL` (contract-neutral)
@@ -118,5 +119,128 @@ theorem Xinst.step_delegatecall_spawn_exact {sevm : Sevm} {devm : Devm}
       x4.toNat x5.toNat).1 = _
     rw [← h_mem10, h_mem9, ← h_mem7]
     rfl
+
+/-- A spawning `DELEGATECALL` runs at a nonzero depth, enters a call frame one level deeper, and
+resumes as a call. -/
+theorem Xinst.step_delegatecall_spawn_meta {sevm : Sevm} {devm : Devm} {f : Frame} {rsm : Resume}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (spawn : Xinst.step sevm devm .delegatecall = .spawn f rsm) :
+    sevm.depth ≠ 0 ∧ f.inner.depth = sevm.depth - 1 ∧ f.isCreate = false ∧
+      ∃ (parent : Devm) (oi os : Nat), rsm = .call parent oi os := by
+  have hx := spawn
+  simp only [Xinst.step, Bind.bind, Except.bind, Except.assert] at hx
+  rw [hfork.rules_stateGas_none] at hx
+  dsimp only at hx
+  repeat' split at hx
+  all_goals simp only [XStep.ofExcept, reduceCtorEq, Pure.pure, Except.pure] at hx
+  all_goals first
+    | cases hx
+    | (have hd : sevm.depth ≠ 0 := by
+          intro h0
+          simp only [genericCall.step, h0, ↓reduceIte] at hx
+          revert hx
+          simp only [XStep.ofExcept, Bind.bind, Except.bind, Pure.pure, Except.pure]
+          split
+          · simp only [reduceCtorEq, imp_false, not_false_eq_true]
+          · rename_i hm
+            intro hs
+            subst hs
+            split at hm <;> simp only [reduceCtorEq, Except.ok.injEq] at hm
+       obtain ⟨rfl, rfl⟩ := genericCall_step_spawn_exact hx
+       exact ⟨hd, rfl, rfl, _, _, _, rfl⟩)
+
+/-- A `DELEGATECALL` that completes without a child frame pushes the failure flag `0`. -/
+theorem Xinst.step_delegatecall_done_flag {sevm : Sevm} {devm d : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (done : Xinst.step sevm devm .delegatecall = .done (.ok d)) :
+    ∃ s, d.stack = 0 :: s := by
+  have hx := done
+  simp only [Xinst.step, Bind.bind, Except.bind, Except.assert] at hx
+  rw [hfork.rules_stateGas_none] at hx
+  dsimp only at hx
+  repeat' split at hx
+  all_goals simp only [XStep.ofExcept, reduceCtorEq, Pure.pure, Except.pure] at hx
+  all_goals first
+    | cases hx
+    | (simp only [genericCall.step, Bind.bind, Except.bind, Pure.pure, Except.pure] at hx
+       repeat' split at hx
+       all_goals simp only [XStep.ofExcept, reduceCtorEq, XStep.done.injEq, Except.ok.injEq] at hx
+       all_goals subst hx
+       rename_i pushed pushEq
+       exact ⟨_, (Devm.push_of_push pushEq).stack⟩)
+
+/-- **Resuming a call frame.**  The parent resumes with the success flag `1`, the child's output as
+returndata and the child's world when the child's raw run succeeded cleanly; otherwise with the
+flag `0`. -/
+theorem Resume.call_run_inv {parent : Devm} {oi os : Nat} {f : Frame} {raw : Execution} {d : Devm}
+    (hf : f.isCreate = false) (hsg : f.inner.benv.stat.rules.stateGas = none)
+    (h : Resume.run (.call parent oi os) (f.settle raw) = .ok d) :
+    (∃ x, raw = .ok x ∧ x.error = none ∧ (∃ s, d.stack = 1 :: s) ∧ d.state = x.state ∧
+      d.returnData = x.output) ∨ ∃ s, d.stack = 0 :: s := by
+  unfold Frame.settle Frame.settleMsg at h
+  rw [hsg, hf] at h
+  simp only [executeCode.handleErrorWith, Bool.false_eq_true, ↓reduceIte] at h
+  -- the flag pushed by the resumption
+  have flag : ∀ {y : Devm}, Resume.run (.call parent oi os) (.ok y) = .ok d →
+      (y.error = none ∧ (∃ s, d.stack = 1 :: s) ∧ d.state = y.state ∧ d.returnData = y.output) ∨
+        ∃ s, d.stack = 0 :: s := by
+    intro y hy
+    unfold Resume.run liftToExecution at hy
+    simp only [bind, Except.bind] at hy
+    cases hey : y.error with
+    | some e =>
+        right
+        simp only [hey, Option.isSome_some, ↓reduceIte] at hy
+        rcases hp : (incorporateChildOnError parent y y.output).push 0 with _ | d' <;>
+          rw [hp] at hy
+        · cases hy
+        · injection hy with hy
+          subst hy
+          have := Blanc.Lift.Devm.eq_of_push_ok hp
+          subst this
+          exact ⟨_, rfl⟩
+    | none =>
+        left
+        simp only [hey, Option.isSome_none, Bool.false_eq_true, ↓reduceIte] at hy
+        rcases hp : (incorporateChildOnSuccess parent y y.output).push 1 with _ | d' <;>
+          rw [hp] at hy
+        · cases hy
+        · injection hy with hy
+          subst hy
+          have := Blanc.Lift.Devm.eq_of_push_ok hp
+          subst this
+          exact ⟨rfl, ⟨_, rfl⟩, rfl, rfl⟩
+  have settledErr : ∀ {y : Devm}, y.error.isSome = true →
+      ∀ (w : State) (t : Tra) (k : KeySet),
+        Resume.run (.call parent oi os) (.ok ((y.rollback w t).withStorageWrites k)) = .ok d →
+        ∃ s, d.stack = 0 :: s := by
+    intro y hy w t k hr
+    rcases flag hr with ⟨hn, -⟩ | h0
+    · have : ((y.rollback w t).withStorageWrites k).error = y.error := rfl
+      rw [this] at hn
+      rw [hn] at hy
+      cases hy
+    · exact h0
+  rcases raw with ⟨e, evm⟩ | x
+  · right
+    rcases e with r | _ | r | r <;>
+      simp only [executeCode.handleError, processMessage.settle, bind, Except.bind] at h
+    · split at h
+      · exact settledErr rfl _ _ _ h
+      · rename_i hn
+        exact absurd rfl hn
+    · split at h
+      · exact settledErr rfl _ _ _ h
+      · rename_i hn
+        exact absurd rfl hn
+    · simp only [Resume.run, liftToExecution, bind, Except.bind, reduceCtorEq] at h
+    · simp only [Resume.run, liftToExecution, bind, Except.bind, reduceCtorEq] at h
+  · simp only [executeCode.handleError, processMessage.settle, bind, Except.bind] at h
+    split at h
+    · rename_i hx
+      exact .inr (settledErr hx _ _ _ h)
+    · rcases flag h with ⟨hn, rest⟩ | h0
+      · exact .inl ⟨x, rfl, hn, rest⟩
+      · exact .inr h0
 
 end Blanc

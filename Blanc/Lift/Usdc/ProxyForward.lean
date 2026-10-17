@@ -70,22 +70,6 @@ theorem getCode_of_state {b b' : Devm} (h : b'.state = b.state) (a : Adr) :
     b'.getCode a = b.getCode a := by
   simp only [Devm.getCode, Devm.getAcct, h]
 
-/-- Reading back the window just written at offset `0`. -/
-theorem Mem.read_write_zero' (μ : Mem) (ys : Bytes) :
-    ((μ.write 0 ys).read 0 ys.length).1 = ys := by
-  rcases ys with _ | ⟨y, ys⟩
-  · rfl
-  · exact Mem.read_write_zero μ (List.cons_ne_nil _ _)
-
-theorem sliceD_zero_length (xs : Bytes) : xs.sliceD 0 xs.length 0 = xs := by
-  unfold List.sliceD
-  rw [List.drop_zero]
-  induction xs with
-  | nil => rfl
-  | cons x xs ih =>
-      show x :: List.takeD xs.length xs 0 = x :: xs
-      rw [ih]
-
 /-- **The `DELEGATECALL` child of a non-admin proxy frame.**  Every committed child runs at the
 proxy's storage with the implementation's code address and code, the frame's caller, value and static
 flag, and the first `calldatasize mod 2²⁵⁶` bytes of the calldata. -/

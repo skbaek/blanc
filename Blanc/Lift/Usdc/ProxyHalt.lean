@@ -74,16 +74,55 @@ namespace Blanc.Lift.Usdc.Proxy
 
 open Jaune Blanc Blanc.Lift
 
-/-- A run of the certificate passes `_delegate`'s `DELEGATECALL`, for a caller other than the
-admin word of `b`. -/
-def DelegateStep (P : Sevm → Devm → Ninst → Devm → Prop) (sevm : Sevm) (b : Devm) : Prop :=
-  sevm.caller ≠ (b.getStorVal sevm.currentTarget adminSlot).toAdr ∧
-    ∃ d d1, P sevm d (.exec .delegatecall) d1
+/-- The part of `_delegate` after its `DELEGATECALL`: copy the returndata to memory, then return it
+or revert with it. -/
+def dlTail : SFunc :=
+  (.next (.reg .returndatasize) (.next (.push [0x00] (by decide)) (.next (.reg (.dup 0))
+    (.next (.reg .returndatacopy) (.next (.reg (.dup 0)) (.next (.push [0x00] (by decide))
+      (.next (.reg (.dup 1)) (.next (.reg .eq) (.next (.push [0x06, 0xa3] (by decide))
+        (.branch t_069f_c23 t_06a3_c23))))))))))
 
-theorem DelegateStep.of_state {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm} {b b₁ : Devm}
-    (h : b₁.state = b.state) (step : DelegateStep P sevm b₁) : DelegateStep P sevm b := by
-  rw [DelegateStep, ← getStorVal_of_state h]
-  exact step
+/-- A run of the certificate passes `_delegate`'s `DELEGATECALL`, for a caller other than the
+admin word of `b`, with the implementation word and the calldata window as operands, and then halts
+through `dlTail` at `post`. -/
+def DelegateStep (P : Sevm → Devm → Ninst → Devm → Prop) (sevm : Sevm) (b post : Devm) : Prop :=
+  sevm.caller ≠ (b.getStorVal sevm.currentTarget adminSlot).toAdr ∧
+    ∃ (b' : Devm) (g : B256) (S : List B256) (M : Mem) (G : Nat) (d1 : Devm), b'.state = b.state ∧
+      P sevm (St b' (g :: b.getStorVal sevm.currentTarget implSlot :: 0 ::
+        sevm.data.length.toB256 :: 0 :: 0 :: S)
+          (M.write 0 (sevm.data.sliceD 0 sevm.data.length.toB256.toNat 0)) G)
+        (.exec .delegatecall) d1 ∧
+      SFunc.RunP P prog sevm d1 dlTail (.halted post)
+
+theorem DelegateStep.of_state {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm}
+    {b b₁ post : Devm} (h : b₁.state = b.state) (step : DelegateStep P sevm b₁ post) :
+    DelegateStep P sevm b post := by
+  obtain ⟨na, b', g, S, M, G, d1, hb', run, tail⟩ := step
+  rw [getStorVal_of_state h] at na run
+  exact ⟨na, b', g, S, M, G, d1, hb'.trans h, run, tail⟩
+
+/-- Reading back the window just written at offset `0`. -/
+theorem Mem.read_write_zero' (μ : Mem) (ys : Bytes) :
+    ((μ.write 0 ys).read 0 ys.length).1 = ys := by
+  rcases ys with _ | ⟨y, ys⟩
+  · rfl
+  · exact Mem.read_write_zero μ (List.cons_ne_nil _ _)
+
+theorem sliceD_zero_length (xs : Bytes) : xs.sliceD 0 xs.length 0 = xs := by
+  unfold List.sliceD
+  rw [List.drop_zero]
+  induction xs with
+  | nil => rfl
+  | cons x xs ih =>
+      show x :: List.takeD xs.length xs 0 = x :: xs
+      rw [ih]
+
+theorem linst_return_state {sevm : Sevm} {pre post : Devm}
+    (hl : Linst.Run sevm pre .return_ (.ok post)) : post.state = pre.state := by
+  have hframe := Linst.run_instructionFrame sevm pre .return_ (by decide)
+  unfold Linst.Run at hl
+  rw [hl] at hframe
+  exact hframe.state.symm
 
 theorem getters_noHalt : NoHaltSet prog getterEntries = true := by decide
 theorem ent3_admin_noHalt : NoHaltSet prog [14, 15] = true := by decide
@@ -127,7 +166,8 @@ theorem fb_not_returned (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {d :
 /-- A halting `_fallback()` copy runs `_delegate`'s `DELEGATECALL`. -/
 theorem fb_halted (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {d : Nat} {D : Devm}
     (hd : prog[d]? = some t_0682_c23)
-    (run : SFunc.RunP P prog sevm (St b S M G) (fbTree d) (.halted D)) : DelegateStep P sevm b := by
+    (run : SFunc.RunP P prog sevm (St b S M G) (fbTree d) (.halted D)) :
+    DelegateStep P sevm b D := by
   unfold fbTree at run
   obtain ⟨_, run⟩ := rpw_dest run
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -157,8 +197,10 @@ theorem fb_halted (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {d : Nat} 
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_dup rfl (hP s)
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, _, rfl⟩ := ri_gas (hP s)
-  obtain ⟨d1, s, -⟩ := rpw_next run
-  exact ⟨notAdmin, _, d1, s⟩
+  obtain ⟨d1, s, tail⟩ := rpw_next run
+  rw [getStorVal_afterSload] at s
+  exact ⟨notAdmin, _, _, _, _, _, d1, by rw [NodeWalk.afterSload_state, NodeWalk.afterSload_state],
+    s, tail⟩
 
 theorem ent1_run (hfork : CoveredFork sevm.benvStat.fork) {b : Devm}
     (run : SFunc.RunP P prog sevm (St b S M G) t_0213_c1 o) :
@@ -327,7 +369,7 @@ theorem ent5_run (hfork : CoveredFork sevm.benvStat.fork) {b : Devm}
 
 theorem sel33_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {x : B256} {post : Devm}
     (run : SFunc.RunP P prog sevm (St b (x :: S) M G) t_0077_c33 (.halted post)) :
-    DelegateStep P sevm b ∨ sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr := by
+    DelegateStep P sevm b post ∨ sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr := by
   unfold t_0077_c33 at run
   obtain ⟨_, run⟩ := rpw_dest run
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_callvalue (hP s)
@@ -371,14 +413,15 @@ theorem sel33_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {x : B256
   · rcases ent1_run hP hfork callee with h | ⟨_, _, _, _, -, fb⟩
     · exact .inr h
     · exact (fb_not_returned hP hfork rfl fb).elim
-  · rcases ent1_run hP hfork callee with h | ⟨_, _, _, _, hb, fb⟩
+  · cases hpost
+    rcases ent1_run hP hfork callee with h | ⟨_, _, _, _, hb, fb⟩
     · exact .inr h
     · exact .inl ((fb_halted hP hfork rfl fb).of_state hb)
 
 
 theorem sel34_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {x : B256} {post : Devm}
     (run : SFunc.RunP P prog sevm (St b (x :: S) M G) t_00ba_c34 (.halted post)) :
-    DelegateStep P sevm b ∨ sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr := by
+    DelegateStep P sevm b post ∨ sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr := by
   unfold t_00ba_c34 at run
   obtain ⟨_, run⟩ := rpw_dest run
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -431,14 +474,15 @@ theorem sel34_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {x : B256
   · rcases ent2_run hP hfork callee with h | ⟨_, _, _, _, -, fb⟩
     · exact .inr h
     · exact (fb_not_returned hP hfork rfl fb).elim
-  · rcases ent2_run hP hfork callee with h | ⟨_, _, _, _, hb, fb⟩
+  · cases hpost
+    rcases ent2_run hP hfork callee with h | ⟨_, _, _, _, hb, fb⟩
     · exact .inr h
     · exact .inl ((fb_halted hP hfork rfl fb).of_state hb)
 
 
 theorem sel35_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {x : B256} {post : Devm}
     (run : SFunc.RunP P prog sevm (St b (x :: S) M G) t_0108_c35 (.halted post)) :
-    DelegateStep P sevm b ∨ (sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr ∧
+    DelegateStep P sevm b post ∨ (sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr ∧
       Devm.getStor post = Devm.getStor b) := by
   unfold t_0108_c35 at run
   obtain ⟨_, run⟩ := rpw_dest run
@@ -462,15 +506,15 @@ theorem sel35_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {x : B256
     · refine .inr ⟨h, ?_⟩
       exact ((SFunc.Run.world_of_quiet empty_quiet hfork (by decide) (by decide) (cont.mono hP)).1).trans hs
     · exact (fb_not_returned hP hfork rfl fb).elim
-  · rcases ent3_run hP hfork callee with ⟨h, hs⟩ | ⟨_, _, _, _, hb, fb⟩
-    · cases hpost
-      exact .inr ⟨h, hs⟩
+  · cases hpost
+    rcases ent3_run hP hfork callee with ⟨h, hs⟩ | ⟨_, _, _, _, hb, fb⟩
+    · exact .inr ⟨h, hs⟩
     · exact .inl ((fb_halted hP hfork rfl fb).of_state hb)
 
 
 theorem sel36_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {x : B256} {post : Devm}
     (run : SFunc.RunP P prog sevm (St b (x :: S) M G) t_015f_c36 (.halted post)) :
-    DelegateStep P sevm b ∨ sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr := by
+    DelegateStep P sevm b post ∨ sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr := by
   unfold t_015f_c36 at run
   obtain ⟨_, run⟩ := rpw_dest run
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_callvalue (hP s)
@@ -514,14 +558,15 @@ theorem sel36_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {x : B256
   · rcases ent4_run hP hfork callee with h | ⟨_, _, _, _, -, fb⟩
     · exact .inr h
     · exact (fb_not_returned hP hfork rfl fb).elim
-  · rcases ent4_run hP hfork callee with h | ⟨_, _, _, _, hb, fb⟩
+  · cases hpost
+    rcases ent4_run hP hfork callee with h | ⟨_, _, _, _, hb, fb⟩
     · exact .inr h
     · exact .inl ((fb_halted hP hfork rfl fb).of_state hb)
 
 
 theorem sel37_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {x : B256} {post : Devm}
     (run : SFunc.RunP P prog sevm (St b (x :: S) M G) t_01a2_c37 (.halted post)) :
-    DelegateStep P sevm b ∨ (sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr ∧
+    DelegateStep P sevm b post ∨ (sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr ∧
       Devm.getStor post = Devm.getStor b) := by
   unfold t_01a2_c37 at run
   obtain ⟨_, run⟩ := rpw_dest run
@@ -545,16 +590,16 @@ theorem sel37_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {x : B256
     · refine .inr ⟨h, ?_⟩
       exact ((SFunc.Run.world_of_quiet empty_quiet hfork (by decide) (by decide) (cont.mono hP)).1).trans hs
     · exact (fb_not_returned hP hfork rfl fb).elim
-  · rcases ent5_run hP hfork callee with ⟨h, hs⟩ | ⟨_, _, _, _, hb, fb⟩
-    · cases hpost
-      exact .inr ⟨h, hs⟩
+  · cases hpost
+    rcases ent5_run hP hfork callee with ⟨h, hs⟩ | ⟨_, _, _, _, hb, fb⟩
+    · exact .inr ⟨h, hs⟩
     · exact .inl ((fb_halted hP hfork rfl fb).of_state hb)
 
 
 /-- **The successful runs of the proxy certificate.** -/
 theorem proxy_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {post : Devm}
     (run : SFunc.RunP P prog sevm (St b S M G) t_0000_c0 (.halted post)) :
-    DelegateStep P sevm b ∨
+    DelegateStep P sevm b post ∨
       (sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr ∧
         (dispatchWord sevm = Bytes.toB256 [0x36, 0x59, 0xcf, 0xe6] ∨
           dispatchWord sevm = Bytes.toB256 [0x4f, 0x1e, 0xf2, 0x86] ∨
@@ -637,6 +682,51 @@ theorem proxy_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {post : D
   obtain ⟨g, _, hg, run⟩ := rpw_jump run
   obtain rfl : g = fbTree 24 := Option.some.inj (hg.symm.trans rfl)
   exact .inl (fb_halted hP hfork rfl run)
+
+/-- After `_delegate`'s `DELEGATECALL`, a halting run had a nonzero success flag and returns the
+returndata, at the resumed world. -/
+theorem dl_tail_halted (hfork : CoveredFork sevm.benvStat.fork) {d1 post : Devm}
+    (run : SFunc.RunP P prog sevm d1 dlTail (.halted post)) :
+    (∃ w s, d1.stack = w :: s ∧ w ≠ 0) ∧
+      post.output = d1.returnData.sliceD 0 d1.returnData.length.toB256.toNat 0 ∧
+      post.state = d1.state := by
+  rw [St.self' d1] at run
+  unfold dlTail at run
+  obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_returndatasize (hP s)
+  obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
+  obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_dup rfl (hP s)
+  obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨-, _, rfl⟩ := ri_returndatacopy (hP s)
+  obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨w, hw, _, rfl⟩ := ri_dup_any (hP s)
+  obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
+  obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_dup rfl (hP s)
+  obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_eq (hP s)
+  obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
+  rcases rpw_branch run with ⟨hz, _, run⟩ | ⟨-, _, run⟩
+  · have hstack : ∃ s, d1.stack = w :: s := by
+      cases hs : d1.stack with
+      | nil => rw [hs] at hw; cases hw
+      | cons x s =>
+          rw [hs] at hw
+          exact ⟨s, by rw [Option.some.inj hw]⟩
+    obtain ⟨st, hst⟩ := hstack
+    refine ⟨⟨w, st, hst, eqCheck_eq_zero hz⟩, ?_⟩
+    unfold t_069f_c23 at run
+    obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_returndatasize (hP s)
+    obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
+    cases run with
+    | last hl =>
+        have hstate := linst_return_state hl
+        refine ⟨?_, hstate⟩
+        rw [(ri_return hl).1, show (Bytes.toB256 [0x00]).toNat = 0 from rfl]
+        have key := Mem.read_write_zero' d1.memory
+          (d1.returnData.sliceD 0 d1.returnData.length.toB256.toNat 0)
+        rw [List.length_sliceD] at key
+        exact key
+  · unfold t_06a3_c23 at run
+    obtain ⟨_, run⟩ := rpw_dest run
+    obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_returndatasize (hP s)
+    obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
+    exact (rpw_revert run).elim
 
 end Halt
 
