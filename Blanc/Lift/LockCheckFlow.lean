@@ -166,6 +166,7 @@ theorem effSetNow_other {pc : Nat} {i : Ninst} {σ : LSt} (h1 : i ≠ .reg .ssto
   · exact (h1 rfl).elim
   · exact (h1 rfl).elim
   · exact (h2 _ rfl).elim
+  · exact (h2 _ rfl).elim
   · rfl
 
 /-- The `SSTORE` rule and the `setNow` update are sound for one instruction. -/
@@ -212,9 +213,8 @@ theorem effSetNow_sound {i : Ninst} {σ : LSt} {S rest : List B256} {b : Bool}
       · cases he
   · by_cases hex : ∃ x, i = .exec x
     · obtain ⟨x, rfl⟩ := hex
-      simp only [effSetNow, Option.some.injEq] at he
-      subst he
-      intro h; cases h
+      cases x <;> simp only [effSetNow, Option.some.injEq, reduceCtorEq] at he <;>
+        (subst he; intro h; cases h)
     · have hex' : ∀ x, i ≠ .exec x := fun x h => hex ⟨x, h⟩
       rw [effSetNow_other hsst hex', Option.some.injEq] at he
       subst he
@@ -1248,6 +1248,22 @@ theorem LockOK.not_selfdestruct {n : Exec.Deriv} {κ : Cursor} {σ : LSt}
     · exact (hjump _ (by simp only [Bool.and_eq_true, beq_iff_eq] at hcheck; exact hcheck.1)).elim
     · cases hcheck
 
+/-- A reached node never executes `CREATE2`: the lock checker rejects it. -/
+theorem LockOK.not_create2 {n : Exec.Deriv} {κ : Cursor} {σ : LSt}
+    (ok : LockOK sp code c ann F n κ σ) : ¬ Ninst.At n.sevm.code n.pc (.exec .create2) := by
+  intro hat
+  obtain ⟨g, hf, -⟩ := ok.cursorOK.tree_of_exec hat
+  have hl := ok.lock
+  rw [hf] at hl
+  simp only [lockNode] at hl
+  split at hl
+  · cases hl
+  · split at hl
+    · rename_i hls
+      obtain ⟨-, -, b, -, -, -, hb, -⟩ := lstep_nonpush (fun _ _ h => by cases h) hls
+      simp only [effSetNow, reduceCtorEq] at hb
+    · cases hl
+
 end Frame
 
 /-! ## The dominance theorems -/
@@ -1306,7 +1322,11 @@ theorem no_forbidden (hc : Cert.check code c = true) (hl : lockCert sp c ann = t
     (∀ x, Ninst.At n.sevm.code n.pc (.exec x) → x = .call ∨ x = .staticcall) ∧
       ¬ Linst.At n.sevm.code n.pc .selfdestruct := by
   obtain ⟨κ, σ, ok⟩ := lock_of_parentPrefix hc hl hpc hcode hfork hhash hp
-  exact ⟨fun x hat => ok.cursorOK.exec_call_or_staticcall hat, ok.not_selfdestruct⟩
+  refine ⟨fun x hat => ?_, ok.not_selfdestruct⟩
+  rcases ok.cursorOK.exec_spawn hat with h | h | rfl
+  · exact Or.inl h
+  · exact Or.inr h
+  · exact (ok.not_create2 hat).elim
 
 end Dominance
 

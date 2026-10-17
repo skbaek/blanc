@@ -207,6 +207,7 @@ def effSetNow (sp : Spec) (pc : Nat) (n : Ninst) (σ : LSt) : Option Bool :=
       some (decide (constOf σ.facts v = some sp.locked.toNat))
     else none
   | .reg .sstore, _ => none
+  | .exec .create2, _ => none
   | .exec _, _ => some false
   | _, _ => some σ.setNow
 

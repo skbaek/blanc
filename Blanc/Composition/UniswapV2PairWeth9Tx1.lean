@@ -1,6 +1,7 @@
 import Blanc.Composition.UniswapV2PairWeth9Tx1Frame
 import Blanc.BlockForward
 import Blanc.TransactionForward
+import Blanc.CodeDelegation
 
 /-!
 # The closed instance's first transaction, on any agreeing world
@@ -54,14 +55,8 @@ def tx1SettledState (st : Jaune.State) (xT xP : B256) : Jaune.State :=
   ((tx1FrameState st xT xP).addBal trader 36486).addBal 0 31757
 
 /-- Token20's runtime is no EIP-7702 delegation designator. -/
-theorem getDelegatedCodeAddress_token20 : getDelegatedCodeAddress code = none := by
-  unfold getDelegatedCodeAddress
-  have h : ¬ isValidDelegation code := fun h => by
-    have h1 := h.1
-    change code.size = eoaDelegatedCodeLength at h1
-    revert h1
-    decide +kernel
-  simp only [h, ↓reduceIte]
+theorem getDelegatedCodeAddress_token20 : getDelegatedCodeAddress code = none :=
+  getDelegatedCodeAddress_eq_none_of_size_ne (by decide +kernel)
 
 theorem tx1_gas (v : Nat) (r s : Bytes) : (tx1 v r s).gas = 50000 := rfl
 
