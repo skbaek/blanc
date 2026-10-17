@@ -1060,6 +1060,7 @@ COMPOSITION = [
     "Composition.ProrataWethVaultWithdrawLocator",
     "Composition.ProrataWethVaultLedgerFaithful",
     "Composition.Weth9WethGas",
+    "Composition.Curve3Pool3CrvCheckpoint",
     # Every joint owner is explicit; no family or shared module may import back.
 ]
 
