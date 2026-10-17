@@ -1,4 +1,4 @@
-import Blanc.Composition.UniswapV2PairWeth9SwapLegsCall
+import Blanc.Composition.UniswapV2PairWeth9SwapLegsRead
 import Blanc.AddressSlotProofs
 
 /-!
@@ -184,5 +184,174 @@ theorem swapWethLeg1_spec {sevm : Sevm} {b : Devm} {st : UniswapV2Pair.State} {d
   rw [← hn]
   unfold leg1Charge
   omega
+
+/-! ## The read leg -/
+
+section Read
+
+variable (sevm : Sevm) (M : Mem) (n : Nat) (p : B256) (w : SwapCutWords) (ρ : B256) (R : List B256)
+  (G : Nat) (d0 : Devm)
+
+/-- The memory the WETH9 query is staged over (the first query's reply written in). -/
+def readMem : Mem := swapBalanceReply M p sevm.currentTarget d0.returnData
+
+/-- The words under the WETH9 query's operands. -/
+def readStack : List B256 :=
+  w.token1 :: w.token0 :: 0 :: swapBalanceWord d0.returnData :: swapCutTail w ρ R
+
+/-- The gas-free skeleton of the WETH9 `balanceOf` STATICCALL's result. -/
+def readSkel : Devm :=
+  wethBalanceSkel sevm d0 (readStack w ρ R d0) (readMem sevm M p d0) p w.token1
+
+/-- What the Pair needs left after the WETH9 query (the record's `tailGas + 64`), read on the
+skeleton. -/
+def readNeed : Nat :=
+  swapBackPostGas sevm (readSkel sevm M p w ρ R d0) (swapRequestSize (swapRequestSize n p) p) p w
+    (swapBalanceWord d0.returnData) (swapBalanceWord (readSkel sevm M p w ρ R d0).returnData) G + 64
+
+/-- WETH9's charge for the query's child frame. -/
+def readUsed : Nat := balUsed sevm d0 (readStack w ρ R d0) (readMem sevm M p d0) p w.token1
+
+/-- The query's own charges: the token's (warm) access, the windows' expansion, WETH9's view. -/
+def readCharge : Nat :=
+  balAcc d0 w.token1 + balExt sevm d0 (readStack w ρ R d0) (readMem sevm M p d0) p w.token1 +
+    readUsed sevm M p w ρ R d0
+
+end Read
+
+set_option linter.unusedVariables false in
+/-- The WETH9 post-callback `balanceOf(pair)` `STATICCALL` (token1 = WETH9): its result and the call
+gas WETH9's code determines.  (`d`, the join world, is part of the frozen signature; the query
+is staged over the first query's result `d0`.) -/
+noncomputable def swapWethRead1 (sevm : Sevm) (d : Devm) (M : Mem) (n : Nat) (p : B256)
+    (w : SwapCutWords) (ρ : B256) (R : List B256) (G : Nat) (d0 : Devm) : Devm × Nat :=
+  (wethBalanceCall sevm d0 (readStack w ρ R d0) (readMem sevm M p d0) p w.token1
+      (readNeed sevm M n p w ρ R G d0 + readCharge sevm M p w ρ R d0),
+    readNeed sevm M n p w ρ R G d0 + readCharge sevm M p w ρ R d0)
+
+section ReadFacts
+
+theorem sloadCost_setMach' (sevm : Sevm) (b : Devm) (m : Mach) (k : B256) :
+    sloadCost sevm (b.setMach m) k = sloadCost sevm b k := rfl
+
+theorem ite_setMach (c : Prop) [Decidable c] (a b : Devm) (m : Mach) :
+    (if c then a.setMach m else b.setMach m) = (if c then a else b).setMach m := by
+  split <;> rfl
+
+/-- The Pair's post-query charges read the query's result only off the gas column. -/
+theorem swapBackPostGas_withGasLeft (sevm : Sevm) (d : Devm) (x n2 : Nat) (p : B256)
+    (w : SwapCutWords) (bal0 bal1 : B256) (G : Nat) :
+    swapBackPostGas sevm (d.withGasLeft x) n2 p w bal0 bal1 G = swapBackPostGas sevm d n2 p w bal0 bal1 G := by
+  simp only [swapBackPostGas, swapUnlockCost, swapUpdateCharge, swapLoggedWorld, updateWorld,
+    updateSyncPost, updatePackedPost, updateFinalPackedWord, updateOracleWorld, updateOracleActive,
+    swapUpdLoad8, swapUpdStore8, swapUpdLoad9, swapUpdStore9, swapUpdLoad10, swapUpdStore10,
+    swapUpdAcc0, updateAccumulatorPost, Devm.withGasLeft, afterSload_setMach, afterSstore_setMach,
+    addLog_setMach', Devm.getStorVal_setMach, sstoreCost_setMach, sloadCost_setMach', ite_setMach]
+  rfl
+
+theorem weth9_code_size_word : Weth9.code.size.toB256 ≠ 0 := by
+  intro h
+  have hlt : Weth9.code.size < 2 ^ 256 := by decide +kernel
+  have := congrArg B256.toNat h
+  rw [B256.toNat_toB256_of_lt hlt] at this
+  exact Weth9.code_size_ne_zero this
+
+theorem swapBalanceReply_wf {M : Mem} {p : B256} {pair : Adr} {out : Bytes} (wf : Mem.Wf M) :
+    Mem.Wf (swapBalanceReply M p pair out) :=
+  (Mem.Wf.extends _ ((wf.write _ _).write _ _)).write _ _
+
+end ReadFacts
+
+/-- **The WETH9 `balanceOf` read leg's spec (frame level).**  At the result world `d0` of the first
+post-callback query, with WETH9's code at token1, token1 not a precompile, call depth left, the
+pointer's width bound and a well-formed memory, the leg's call gas a word, and room for WETH9's view
+under the 63/64 rule: `swapWethRead1` is the `SwapBalanceEnv` record the second query asks for.
+Code-only: nothing is assumed of the callback subtree. -/
+theorem swapWethRead1_spec {sevm : Sevm} {d : Devm} {M : Mem} {n : Nat} {p : B256}
+    {w : SwapCutWords} {ρ : B256} {R : List B256} {G : Nat} {d0 : Devm}
+    (fork : CoveredFork sevm.benvStat.fork) (depth : sevm.depth ≠ 0)
+    (wethCode : d0.state.getCode (swapTokenWord w.token1).toAdr = Weth9.code)
+    (notPrecompile : sevm.benvStat.rules.isPrecomp (swapTokenWord w.token1).toAdr = false)
+    (wf : Mem.Wf M) (width : p.toNat + 260 < 2 ^ 256)
+    (stackRoom : (swapCutTail w ρ R).length < 1014)
+    (fits : (swapWethRead1 sevm d M n p w ρ R G d0).2 < 2 ^ 256)
+    (room : readUsed sevm M p w ρ R d0 ≤
+      except64th (readNeed sevm M n p w ρ R G d0 + readUsed sevm M p w ρ R d0)) :
+    SwapBalanceEnv sevm d0 (swapBalanceReply M p sevm.currentTarget d0.returnData) p w.token1
+      (w.token1 :: w.token0 :: 0 :: swapBalanceWord d0.returnData :: swapCutTail w ρ R)
+      (swapWethRead1 sevm d M n p w ρ R G d0).1 (swapWethRead1 sevm d M n p w ρ R G d0).2
+      (swapBackPostGas sevm (swapWethRead1 sevm d M n p w ρ R G d0).1
+        (swapRequestSize (swapRequestSize n p) p) p w (swapBalanceWord d0.returnData)
+        (swapBalanceWord (swapWethRead1 sevm d M n p w ρ R G d0).1.returnData) G) := by
+  have spec := wethBalanceCall_spec (sevm := sevm) (B := d0) (S := readStack w ρ R d0)
+    (M := readMem sevm M p d0) (p := p) (t := w.token1)
+    (cg := readNeed sevm M n p w ρ R G d0 + readCharge sevm M p w ρ R d0) fork wethCode depth
+    notPrecompile (by simp only [readStack, List.length_cons]; omega) (swapBalanceReply_wf wf) width
+    fits (by unfold readCharge; omega)
+    (by
+      have e : readNeed sevm M n p w ρ R G d0 + readCharge sevm M p w ρ R d0 -
+          balExt sevm d0 (readStack w ρ R d0) (readMem sevm M p d0) p w.token1 - balAcc d0 w.token1 =
+          readNeed sevm M n p w ρ R G d0 + readUsed sevm M p w ρ R d0 := by
+        unfold readCharge readUsed; omega
+      rw [e]
+      exact room)
+  obtain ⟨hrun, hstk, hret, hgas⟩ := spec
+  have hskel : wethBalanceCall sevm d0 (readStack w ρ R d0) (readMem sevm M p d0) p w.token1
+      (readNeed sevm M n p w ρ R G d0 + readCharge sevm M p w ρ R d0) =
+      (readSkel sevm M p w ρ R d0).withGasLeft _ :=
+    wethBalanceCallAt_eq _ _ _ _ _ _ _ _ _ _
+  refine ⟨?_, hrun, hstk, ?_, ?_⟩
+  · change (d0.state.getCode (swapTokenWord w.token1).toAdr).size.toB256 ≠ 0
+    rw [wethCode]
+    exact weth9_code_size_word
+  · change 32 ≤ (wethBalanceCall sevm d0 (readStack w ρ R d0) (readMem sevm M p d0) p w.token1
+      (readNeed sevm M n p w ρ R G d0 + readCharge sevm M p w ρ R d0)).returnData.length
+    rw [hret, B256.length_toBytes]
+  · change (wethBalanceCall sevm d0 (readStack w ρ R d0) (readMem sevm M p d0) p w.token1
+      (readNeed sevm M n p w ρ R G d0 + readCharge sevm M p w ρ R d0)).gasLeft =
+      swapBackPostGas sevm (wethBalanceCall sevm d0 (readStack w ρ R d0) (readMem sevm M p d0) p
+        w.token1 (readNeed sevm M n p w ρ R G d0 + readCharge sevm M p w ρ R d0))
+        (swapRequestSize (swapRequestSize n p) p) p w (swapBalanceWord d0.returnData)
+        (swapBalanceWord (wethBalanceCall sevm d0 (readStack w ρ R d0) (readMem sevm M p d0) p
+          w.token1 (readNeed sevm M n p w ρ R G d0 + readCharge sevm M p w ρ R d0)).returnData) G + 64
+    rw [hgas]
+    conv => rhs; rw [hskel, swapBackPostGas_withGasLeft, withGasLeft_returnData]
+    have hn : readNeed sevm M n p w ρ R G d0 = swapBackPostGas sevm (readSkel sevm M p w ρ R d0)
+        (swapRequestSize (swapRequestSize n p) p) p w (swapBalanceWord d0.returnData)
+        (swapBalanceWord (readSkel sevm M p w ρ R d0).returnData) G + 64 := rfl
+    rw [← hn]
+    unfold readCharge readUsed
+    omega
+
+/-- The read leg's answer: the pair's WETH9 balance at `d0`. -/
+theorem swapWethRead1_answer {sevm : Sevm} {d : Devm} {M : Mem} {n : Nat} {p : B256}
+    {w : SwapCutWords} {ρ : B256} {R : List B256} {G : Nat} {d0 : Devm}
+    (fork : CoveredFork sevm.benvStat.fork) (depth : sevm.depth ≠ 0)
+    (wethCode : d0.state.getCode (swapTokenWord w.token1).toAdr = Weth9.code)
+    (notPrecompile : sevm.benvStat.rules.isPrecomp (swapTokenWord w.token1).toAdr = false)
+    (wf : Mem.Wf M) (width : p.toNat + 260 < 2 ^ 256)
+    (stackRoom : (swapCutTail w ρ R).length < 1014)
+    (fits : (swapWethRead1 sevm d M n p w ρ R G d0).2 < 2 ^ 256)
+    (room : readUsed sevm M p w ρ R d0 ≤
+      except64th (readNeed sevm M n p w ρ R G d0 + readUsed sevm M p w ρ R d0)) :
+    swapBalanceWord (swapWethRead1 sevm d M n p w ρ R G d0).1.returnData =
+      d0.getStorVal (swapTokenWord w.token1).toAdr (Weth9.balSlot sevm.currentTarget) := by
+  have spec := wethBalanceCall_spec (sevm := sevm) (B := d0) (S := readStack w ρ R d0)
+    (M := readMem sevm M p d0) (p := p) (t := w.token1)
+    (cg := readNeed sevm M n p w ρ R G d0 + readCharge sevm M p w ρ R d0) fork wethCode depth
+    notPrecompile (by simp only [readStack, List.length_cons]; omega) (swapBalanceReply_wf wf) width
+    fits (by unfold readCharge; omega)
+    (by
+      have e : readNeed sevm M n p w ρ R G d0 + readCharge sevm M p w ρ R d0 -
+          balExt sevm d0 (readStack w ρ R d0) (readMem sevm M p d0) p w.token1 - balAcc d0 w.token1 =
+          readNeed sevm M n p w ρ R G d0 + readUsed sevm M p w ρ R d0 := by
+        unfold readCharge readUsed; omega
+      rw [e]
+      exact room)
+  change swapBalanceWord (wethBalanceCall sevm d0 (readStack w ρ R d0) (readMem sevm M p d0) p w.token1
+      (readNeed sevm M n p w ρ R G d0 + readCharge sevm M p w ρ R d0)).returnData = _
+  rw [spec.2.2.1, swapBalanceWord, List.take_of_length_le (by rw [B256.length_toBytes]),
+    B256.toB256_toBytes]
+  rfl
 
 end Blanc.Composition.UniswapV2PairWeth9Joint
