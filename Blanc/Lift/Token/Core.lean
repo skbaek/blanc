@@ -76,6 +76,9 @@ structure BookLaws (B : Book) : Prop where
   /-- A holder's own holder-safe call does not raise the holder's allowances. -/
   allow_safe : ∀ {l l' : B.Ledger} {a : Sevm} {h g : Adr}, B.Good l → B.step l a = some l' →
     a.caller = h → (B.op a).HolderSafe → B.allow l' h g ≤ B.allow l h g
+  /-- A good ledger's balances are words (a `balanceOf` reply is the balance itself, not its
+  residue mod `2 ^ 256`). -/
+  bal_lt : ∀ {l : B.Ledger} {h : Adr}, B.Good l → B.bal l h < 2 ^ 256
 
 /-- The frame a caller enters at the token's address: storage owner and code address are both the
 token (a proxy's entry frame, never its delegatecalled implementation frame). -/
