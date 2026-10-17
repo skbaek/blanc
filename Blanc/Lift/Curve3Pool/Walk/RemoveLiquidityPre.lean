@@ -24,6 +24,7 @@ theorem xa_rl_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
     (hcd : sevm.data.length < 2 ^ 256)
     (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (htok : ¬ sevm.benvStat.rules.isPrecomp ((b.getStor sevm.currentTarget).get tokenSlot).toAdr)
+    (hSK : StaticKeeps sevm ((b.getStor sevm.currentTarget).get tokenSlot))
     (h : XAt sevm post 0x2c68 (St b [] M G) L) :
     (b.getStor sevm.currentTarget).get lockSlot = 0 ∧ sevm.value = 0 ∧
     ∃ (c : Exec.Frame) (L' : List Exec.Frame) (b1 : Devm) (M1 : Mem) (G1 : Nat) (img1 : Bytes),
@@ -35,7 +36,7 @@ theorem xa_rl_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
       (∀ x, (b1.getStor sevm.currentTarget).get x =
         ((b.getStor sevm.currentTarget).set lockSlot 1).get x) ∧
       (∀ a, a ≠ sevm.currentTarget → b1.getStor a = b.getStor a) ∧
-      b1.logs = b.logs ∧ b1.output = b.output ∧ Devm.AccGrow b b1 ∧
+      b1.logs = b.logs ∧ b1.output = b.output ∧ Devm.AccGrow b b1 ∧ b1.getCode 4 = b.getCode 4 ∧
       (∀ a, b.getCode a ≠ .empty → b1.getCode a = b.getCode a) ∧
       Mem.Reads M1 img1 ∧ Mem.Wf M1 ∧
       WordAt img1 0x140 (Bytes.toB256 (c.post.output.take 32)) ∧
@@ -78,7 +79,7 @@ theorem xa_rl_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   replace h := xa_staticcall_img (pc' := 0x2ca1) (i := 0x17c) (n := 4) (o := 0x1c0) (z := 0x20)
     hfork (atN hcode (by kernel_rfl)) rfl rfl rfl rfl rfl hR hW h
   clear hR hW
-  obtain ⟨d1, flag, out, M, L1, h, hR, hW, hrd, hob, hstor, hlogs, hk⟩ := h
+  obtain ⟨d1, flag, out, M, L1, h, ⟨d0, hrun0, hcd0⟩, hR, hW, hrd, hob, hstor, hlogs, hk⟩ := h
   xs 0x2ca4 (.push [0x2c, 0xa9] (by decide)) ri_push
   xji 0x2ca5 0x2ca9 hw
   · xdead
@@ -87,7 +88,11 @@ theorem xa_rl_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
       (Bytes.toB256 [5])) = (b.getStor sevm.currentTarget).get tokenSlot := by
     rw [lockSlot_lit, tokenSlot_lit, getStorVal_afterSstore_ne lock_ne_token, getStorVal_afterSload]
     rfl
-  rw [htok'] at hk
+  rw [htok'] at hk hrun0
+  have h4 : d1.getCode 4 = b.getCode 4 := by
+    rw [← congrFun hcd0 4, hSK _ _ _ _ _ _ _ _ rfl hrun0]
+    show (afterSload sevm _ _).getCode 4 = _
+    rw [afterSload_getCode, afterSstore_getCode, afterSload_getCode]
   rcases hk hw with ⟨hpre, -⟩ | ⟨c, hL, hdepth, hout, hacc, hcodeK, htgt, hdata, hstat, hcout, hclogs, hcpre,
     hcpost⟩
   · exact absurd hpre htok
@@ -126,12 +131,12 @@ theorem xa_rl_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   xs 0x2cd9 (.reg (.dup 3)) (ri_dup (by rfl))
   xmo 0x2cda (.reg .mstore) (ri_mstore_imgAt (o := 0x2a0) rfl)
   xs 0x2cdb (.reg .add) ri_add
-  clear * - h hR hW hL hdepth htgt hdata hstat hcout hlen hclogs hcpre hcpost hstor hlogs hout hacc hcodeK hob
+  clear * - h h4 hR hW hL hdepth htgt hdata hstat hcout hlen hclogs hcpre hcpost hstor hlogs hout hacc hcodeK hob
     hrd hcd
   rw [show [Bytes.toB256 [3] + Bytes.toB256 [0], Bytes.toB256 [2, 160]] = ([3, 0x2a0] : List B256)
     by decide] at h
   refine ⟨c, L1, d1, M, _, _, hL, hdepth, htgt, ?_, hstat, by rw [hcout]; exact hlen, hclogs, ?_, hcpost,
-    ?_, ?_, ?_, ?_, ?_, ?_, hR, hW, ?_, ?_, ?_, h⟩
+    ?_, ?_, ?_, ?_, ?_, h4, ?_, hR, hW, ?_, ?_, ?_, h⟩
   · rw [hdata, Bytes.sliceD_writeAt_inside _ _ _ _ _ (by decide)
       (by rw [B256.length_toBytes])]
     decide

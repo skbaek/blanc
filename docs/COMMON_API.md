@@ -697,6 +697,12 @@ tree's straight prefix with `SFunc.lineDrop n t` (`SFunc.lineSuffix_lineDrop`).
 `ChainMemoryBelow R bound` is the memory bound such content facts take. The
 first consumer is `Blanc/Lift/UniswapV2Pair/PairCallShape.lean`.
 
+For a contract address that must originate no settled message root, use
+[`Blanc/ExecutionTraceRootCallers.lean`](../Blanc/ExecutionTraceRootCallers.lean).
+`ConfiguredHistoryTrace.settledRoots_caller_ne` derives the caller exclusion from
+an admitted preserved contract invariant at the checkpoint and `ca ≠ systemAddress`.
+The transaction case uses EIP-3607; the system-root cases retain the system caller.
+
 ### E4. I need a common terminal walk
 
 Use [`Blanc/ExecutionTerminal.lean`](../Blanc/ExecutionTerminal.lean):
@@ -1249,6 +1255,12 @@ To take apart an arbitrary run whose first step is a spawn,
 resume, and returns the continuation `next` together with the equation
 `run = .runOk spawn entered child resumed next`. Rewriting by that equation lets
 raw-frame membership facts about `next` and the child transfer to `run`.
+
+For completeness of retained target-frame selection, use
+[`Blanc/Lift/RetainedTargetCompleteness.lean`](../Blanc/Lift/RetainedTargetCompleteness.lean).
+`Exec.childFrames_eq_nil_of_free` excludes direct children on an execution-free
+same-frame chain. `Exec.retainedTargetFramesFromAt_complete` places every retained
+frame at the target inside one of the selected outermost target frames.
 
 ### E8. I need an exact ordered replay of world-state changes
 
@@ -2250,6 +2262,24 @@ slots against those same explicit observations. These require neither a
 `Support` premise nor zero values for keys outside the observation list.
 WETH9's `Blanc/Lift/Weth9/Footprint.lean` is the first consumer (with `tracked`/`trackedSum` over
 `sum`); Curve's `Layout.lean` keeps its own copy of the same notions.
+
+For a finite complete-support checkpoint, use
+[`Blanc/Lift/FiniteCheckpoint.lean`](../Blanc/Lift/FiniteCheckpoint.lean).
+`checkRows_sound` turns the finite row checker into `RowsSound` (support, slot
+injectivity and separation from fixed slots); `checkSumNof_sound` establishes the
+world balance-sum bound from the actual account tree.
+
+For a token address's answers over a configured history without fixing its
+storage layout, use [`Blanc/Lift/Token/Core.lean`](../Blanc/Lift/Token/Core.lean):
+`Book`, `BookLaws` and `Core` carry the pure ledger, its laws, and its settled-frame
+replay and answers; `TransferLive` is a separate liveness facet.
+[`Blanc/Lift/Token/Holder.lean`](../Blanc/Lift/Token/Holder.lean) supplies
+`BookLaws.run_holder` and the positional `Core.segment` law.
+[`Blanc/Lift/Token/Along.lean`](../Blanc/Lift/Token/Along.lean) supplies
+`Core.good_along` and `Core.run_holder_segment` for settled prefixes.
+The independent facets `Erc20Abi` and `SelfCaller` live in
+[`Blanc/Lift/Token/Abi.lean`](../Blanc/Lift/Token/Abi.lean) and
+[`Blanc/Lift/Token/SelfCaller.lean`](../Blanc/Lift/Token/SelfCaller.lean).
 
 ### S8. I need Nat-level PRORATA pricing, accounting effects, or coalition-attack bounds
 
@@ -3475,6 +3505,16 @@ their transcripts, including the steps quantified by `NoShrink`.
 Its calling entries consume re-entered ERC-20 frames as nested
 transcript turns; its carrier's boundary is the storage view `(getStor ca).get` (raw `Stor`
 equality is not a function of the words), with representations transported by `WriterRep.congr`.
+
+To replay a ledger to an arbitrary committed frame's entry, use
+[`Blanc/ExecutionAccountingPositional.lean`](../Blanc/ExecutionAccountingPositional.lean).
+`PositionalLadder` extends the admitted accounting ladder with a positional root
+law. `modelPositionalLadder` is positional everywhere; `wholeFramePositionalLadder`
+is positional outside earlier enclosing non-static target frames.
+[`Blanc/ExecutionAccountingPositionalHistory.lean`](../Blanc/ExecutionAccountingPositionalHistory.lean)
+lifts that law to the wrapper hierarchy: `PositionalLadder.configuredHistory_at`
+replays exactly the settled frames before the selected frame, subject to the
+ladder's earlier-enclosing-opaque-frame exclusion and admitted checkpoint premises.
 
 ### T3. The wrapper is a transaction and the fact is about an installed contract
 
@@ -4771,6 +4811,34 @@ contract-neutral.
   saved one), and the word-slot carrier `Words M L` (`Words.write`, `.agree`, `.read`) over
   `memWord`/`Mem.AgreeOutside`; all in
   [`Blanc/Lift/VyperFrameLoop.lean`](../Blanc/Lift/VyperFrameLoop.lean).
+- Vyper 0.2.x checked `uint256` arithmetic and word-slot frames: the idiom trees
+  `vyMulT`/`vyAddT`/`vySubT`/`vyDivT` (guard, `PUSH2 ok JUMPI` over `vyRevertT`, clean-up),
+  inverted by `ric_vyMulT`/`ric_vyAddT`/`ric_vySubT`/`ric_vyDivT` (the guard as a `Nat` fact:
+  `B256.Nofm`, no-wrap sum, no underflow, nonzero divisor) and built by
+  `rxc_vyMulT`/`rxc_vyAddT`/`rxc_vySubT`/`rxc_vyDivT` (69/51/45/38 gas); the bridges to the
+  checked naturals of `StableSwapNewton/Defs.lean` (`chkMul_toNat_of_nofm`, `chkAdd_toNat_of_lt`,
+  `chkSub_toNat_of_le`, `chkDiv_toNat_of_ne` and their inverses `chkMul_inv` … `chkDiv_inv`);
+  the frame carrier `WordFrame M0 M lo ws` (`ws` at `lo + 32 j`, `M0`'s size, agreement off the
+  window, `Mem.Wf` kept) with `ric_mloadF`/`ric_mstoreF` (and `PUSH2` forms) and their forward
+  `rxc_*F` (3/6 gas); `ScratchOut` for a callee's result in scratch word `0`
+  (`WordFrame.scratch`, `ScratchOut.keepsOff` to `Mem.KeepsOff`, `ScratchOut.words`); the
+  `int128` range check `B256.toNat_lt_three_of_slt` (`ri_sltV`); comparison flags
+  (`toNat_lt_of_iszero_gt_eq_zero`, `eq_zero_of_iszero2_eq_zero`, `gtCheck_toNat`, …) and the
+  forward `JUMPI` into a goto entry `rxc_branchTo_zero`/`_cut`/`_taken`; the tracked-memory
+  frame kit over `MemTrack` (`MemTrack.saveMem'`/`MemTrack.restoreMem` across the frame
+  save/restore chains, `Words.restoreMem'`, `Words.of_frameSlots`, `Mem.KeepsOff.widen`,
+  `MemTrack.withWords`), the bridges `WordFrame.keepsOff`/`WordFrame.memTrack`/
+  `WordFrame.words1`, the untracked load `ric_mloadU` (`imloadU`), `isltV`, the forward
+  `rxc_slt`/`rxc_xor`, and `xname` (name the tracked memory of a forward walk); all in
+  [`Blanc/Lift/VyperCheckedArith.lean`](../Blanc/Lift/VyperCheckedArith.lean).
+  The fuel-loop kit's `RunExactCut_fuelLoop_peelAt` (one peeled pass at one counter, for a copy
+  whose last-pass fall-through is unreachable) is in `FuelLoopWalk.lean`.
+- Indexed loads from three consecutive carried words: `pickWord3` selects the word,
+  `word3_indexAddr` converts `32 * i + base` to its natural offset under the explicit
+  index/base bounds, and `ri_mloadWord3` inverts the actual `MLOAD` over `Words` plus
+  aligned allocation. It requires all three membership facts and the exact address
+  equation; it does not prove the index or any contract's array layout. Owner:
+  [`Blanc/Lift/ThreeWordFrame.lean`](../Blanc/Lift/ThreeWordFrame.lean).
 - Walking a successful frame along its own derivation (`XAt sevm post pc d L`: the actual state
   at `pc` and the direct children `L` still to come): `XAt.of_exec`, `xa_next`, `xa_jump`,
   `xa_jumpi`, `xa_jumpdest`, `xa_halt`, the `St`-state forms and the `CALL`/`STATICCALL` steps
@@ -4829,6 +4897,17 @@ contract-neutral.
   byte-number bridge `Bytes.toNat_toB256_of_length` / `B256.toNat_eq_toBytes` and the
   no-`Mem.Wf` byte readers `Mem.write_getD_inside`, `Mem.read_fst_of_getD`, in
   [`Blanc/Lift/VyperRawCall.lean`](../Blanc/Lift/VyperRawCall.lean).
+- Forward runs to *some* outcome, for walks through a call answered only by an `∃ d` premise
+  (the outcome is learned midway, so it cannot be fixed up front): `SFunc.RunEx` /
+  `SFunc.RunExCut` (`∃ r, RunExact … r ∧ Q r`), the lift `SFunc.RunEx.of` with the tactics
+  `xr (rx_push rfl h ·)` / `xrc …` for any fixed-outcome step, `SFunc.runEx_iff_runExCut_nil`,
+  and the fresh-state twins `rxce_call_identity`, `rxce_vyRawCallJoin`, `rxce_vyRawCallTail` in
+  [`Blanc/Lift/RunEx.lean`](../Blanc/Lift/RunEx.lean).
+- Frame walks keeping memory word-aligned (`M.size % 32 = 0`, which callee contracts such as
+  `getDMem_spec` need): `Mem.size_write_mod32`, `Mem.size_extends_mod32`, the image steps
+  `ri_mload_imgAtA`/`ri_mstore_imgAtA`/`ri_calldatacopy_imgAtA`/`ri_keccak_imgAtA` and the
+  spawning steps `xa_staticcall_imgA`/`xa_call_imgA`/`xa_identity_imgA` in
+  [`Blanc/Lift/FrameWalkAligned.lean`](../Blanc/Lift/FrameWalkAligned.lean).
 - solc idioms, gas-exact: the word-copy loop (`copy_loop`) in
   [`Blanc/Lift/CopyLoop.lean`](../Blanc/Lift/CopyLoop.lean); the
   `sha256(abi.encodePacked(a, b))` site through the SHA-256 precompile

@@ -138,6 +138,9 @@ macro "wchainT" : tactic => `(tactic| ((try simp only [transferSel]); wchain))
 
 theorem lockSlot_lit : Bytes.toB256 [255, 255, 255] = lockSlot := by decide
 theorem tokenSlot_lit : Bytes.toB256 [5] = tokenSlot := by decide
+theorem feeSlot_lit : Bytes.toB256 [0x02] = feeSlot := by decide
+theorem adminFeeSlot_lit : Bytes.toB256 [0x03] = adminFeeSlot := by decide
+theorem isKilledSlot_lit : Bytes.toB256 [0x0f] = isKilledSlot := by decide
 theorem lock_ne_token : lockSlot ≠ tokenSlot := by decide
 
 

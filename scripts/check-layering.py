@@ -197,11 +197,12 @@ SHARED += ["Lift.FuelLoopWalk"]
 # Vyper 0.2.x walk kit (array slots, identity copies, raw_call tails, balance differences):
 # contract-neutral.
 SHARED += ["Lift.VyperArraySlot", "Lift.IdentityCall", "Lift.BalanceDiffCall",
-           "Lift.VyperRawCall"]
+           "Lift.VyperRawCall", "Lift.RunEx", "Lift.FrameWalkAligned"]
 # Internal calls through the PC idiom and unrolled Vyper frame save/restore chains: contract-neutral.
 SHARED += ["Lift.InvWalkCallNext", "Lift.VyperFrameLoop"]
+SHARED += ["Lift.ThreeWordFrame"]
 # Vyper 0.2.x internal-callee walks: memory windows, load-only bases, checked arithmetic.
-SHARED += ["Lift.VyperCallee"]
+SHARED += ["Lift.VyperCallee", "Lift.VyperCheckedArith"]
 # Token-ledger sums read over a finite covering key footprint: contract-neutral.
 SHARED += ["Lift.LedgerFootprint"]
 # Walking a successful frame's own derivation with its direct children: contract-neutral.
@@ -250,6 +251,20 @@ SHARED += ["Lift.GasErasureRun", "Lift.InvWalkBranchToP", "Lift.LedgerFootprintO
 SHARED += ["Lift.CallChildren", "Lift.CallSite", "Lift.CallSiteChildren", "Lift.CallerProvenance"]
 # Outermost settled frames at an address (committed-replay histories): contract-neutral.
 SHARED += ["Lift.OutermostFrames"]
+
+# Recover contract-neutral registrations from the local Uniswap/WETH9 checkpoint.
+SHARED += [
+    "ExecutionAccountingPositional",
+    "ExecutionAccountingPositionalHistory",
+    "ExecutionTraceRootCallers",
+    "Lift.FiniteCheckpoint",
+    "Lift.RetainedTargetCompleteness",
+    "Lift.Token.Abi",
+    "Lift.Token.Along",
+    "Lift.Token.Core",
+    "Lift.Token.Holder",
+    "Lift.Token.SelfCaller",
+]
 
 CONTRACTS = {
     "uniswap-v2-pair": [
@@ -725,7 +740,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Cert",
                     "Lift.Curve3Pool.KitCheck",
                     "Lift.Curve3Pool.Callee.A",
-                    "Lift.Curve3Pool.Callee.Xp",
+                    "Lift.Curve3Pool.Callee.Xp", "Lift.Curve3Pool.Callee.GetD", "Lift.Curve3Pool.Callee.GetDExact", "Lift.Curve3Pool.Callee.GetDLoop", "Lift.Curve3Pool.Callee.GetDMem", "Lift.Curve3Pool.Callee.GetDMemExact", "Lift.Curve3Pool.Callee.GetY", "Lift.Curve3Pool.Callee.GetYCoins", "Lift.Curve3Pool.Callee.GetYExact", "Lift.Curve3Pool.Callee.GetYLoop", "Lift.Curve3Pool.Callee.GetYTrees", "Lift.Curve3Pool.Callee.GetDTrees", "Lift.Curve3Pool.Callee.GetYD", "Lift.Curve3Pool.Callee.GetYDCoins", "Lift.Curve3Pool.Callee.GetYDExact", "Lift.Curve3Pool.Callee.GetYDLoop", "Lift.Curve3Pool.Callee.GetYDTrees",
                     "Lift.Curve3Pool.CheckTries",
                     "Lift.Curve3Pool.Check",
                     "Lift.Curve3Pool.CheckPart0",
@@ -763,7 +778,54 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Walk.RemoveLiquiditySafe",
                     "Lift.Curve3Pool.Walk.AdminBalancesX",
                     "Lift.Curve3Pool.Walk.DonateX",
-                    "Lift.Curve3Pool.Walk.WithdrawAdminFeesX"],
+                    "Lift.Curve3Pool.Walk.WithdrawAdminFeesX",
+                    "Lift.Curve3Pool.Walk.RemoveImbalanceModel",
+                    "Lift.Curve3Pool.Walk.RemoveImbalanceChecks",
+                    "Lift.Curve3Pool.Walk.RemoveImbalanceDispatch",
+                    "Lift.Curve3Pool.Walk.RemoveImbalancePre",
+                    "Lift.Curve3Pool.Walk.RemoveImbalanceFee",
+                    "Lift.Curve3Pool.Walk.RemoveImbalanceCalls",
+                    "Lift.Curve3Pool.Walk.LiveKit",
+                    "Lift.Curve3Pool.LivePremises",
+                    "Lift.Curve3Pool.Walk.RemoveLiquidityLive",
+                    "Lift.Curve3Pool.RemoveLiquidityLiveness", "Lift.Curve3Pool.Walk.ArmChecks", "Lift.Curve3Pool.Walk.DispatchQuiet", "Lift.Curve3Pool.Walk.AdminRaw",
+                    "Lift.Curve3Pool.Walk.ExchangeDispatch",
+                    "Lift.Curve3Pool.Walk.ExchangeFrame",
+                    "Lift.Curve3Pool.Walk.ExchangePre",
+                    "Lift.Curve3Pool.Walk.ExchangeChecks",
+                    "Lift.Curve3Pool.Walk.ExchangeMid",
+                    "Lift.Curve3Pool.Walk.ExchangePull",
+                    "Lift.Curve3Pool.Walk.ExchangeTail",
+                    "Lift.Curve3Pool.Walk.ExchangeX",
+                    "Lift.Curve3Pool.Walk.ExchangeY",
+                    "Lift.Curve3Pool.Walk.ExchangeDy",
+                    "Lift.Curve3Pool.Walk.ExchangePush",
+                    "Lift.Curve3Pool.Walk.ExchangeFront",
+                    "Lift.Curve3Pool.Walk.Exchange",
+                    "Lift.Curve3Pool.Walk.ExchangeModel",
+                    "Lift.Curve3Pool.Walk.ExchangeObserve",
+                    "Lift.Curve3Pool.Walk.ExchangeSafe",
+                    "Lift.Curve3Pool.Walk.ViewsDispatch",
+                    "Lift.Curve3Pool.Walk.ViewsLoop",
+                    "Lift.Curve3Pool.Walk.ViewsKit",
+                    "Lift.Curve3Pool.Walk.ViewsGvp",
+                    "Lift.Curve3Pool.Walk.ViewsGvpRaw",
+                    "Lift.Curve3Pool.Walk.ViewsA",
+                    "Lift.Curve3Pool.Walk.BridgeChecks",
+                    "Lift.Curve3Pool.Walk.RampKit",
+                    "Lift.Curve3Pool.Walk.RampStop",
+                    "Lift.Curve3Pool.Walk.ViewsDy",
+                    "Lift.Curve3Pool.Walk.ViewsDyKit",
+                    "Lift.Curve3Pool.Walk.ViewsDyPost",
+                    "Lift.Curve3Pool.Walk.ViewsDyRaw",
+                    "Lift.Curve3Pool.Walk.AddLiquidityKit",
+                    "Lift.Curve3Pool.Walk.AddLiquidityFrames",
+                    "Lift.Curve3Pool.Walk.AddLiquidityPre",
+                    "Lift.Curve3Pool.Walk.AddLiquidityD0",
+                    "Lift.Curve3Pool.Walk.AddLiquidityPull",
+                    "Lift.Curve3Pool.Walk.AddLiquidityPull2",
+                    "Lift.Curve3Pool.Walk.AddLiquidityIter",
+                    "Lift.Curve3Pool.Walk.AddLiquidityD1"],
     "drip": ["DripCore", "Drip", "DripCode", "DripDeploy", "DripConcreteHistory", "DripConcreteHistory.Deployment", "DripConcreteHistory.Join", "DripConcreteHistory.Accrual", "DripConcreteHistory.AccrualExit", "DripConcreteReach", "DripCreationCode",
              "DripRpow", "DripIngress", "DripFunctional", "DripAccounting", "DripTranscript", "DripMachine", "DripEndpoints", "DripFresh", 
              "DripStackSafetyData", "DripStackSafety", "DripStackSafetyRegion214", "DripStackSafetyRegion576", "DripStackSafetyRegion1022", 
@@ -1021,6 +1083,25 @@ CONTRACTS["vyper-nonreentrant-deployed"].extend([
     "Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolFinal",
 ])
 
+# Recover only the existing checkpoint modules within their established families.
+CONTRACTS["uniswap-v2-pair"].extend([
+    "Lift.UniswapV2Pair.FiniteCheckpoint",
+    "Lift.UniswapV2Pair.ModelControlsSides",
+    "Lift.UniswapV2Pair.PairHistoryShape",
+    "Lift.UniswapV2Pair.PairModelFix",
+    "Lift.UniswapV2Pair.PairPositionalCalls",
+    "Lift.UniswapV2Pair.PairPositionalState",
+    "Lift.UniswapV2Pair.PairStepShape",
+    "Lift.UniswapV2Pair.PropertiesSides",
+])
+CONTRACTS["weth9"].extend([
+    "Lift.Weth9.FiniteFootprint",
+])
+CONTRACTS["vyper-nonreentrant-deployed"].extend([
+    "Lift.VyperNonreentrantDeployed.Token20.RunBalance",
+    "Lift.VyperNonreentrantDeployed.Token20.RunTransfer",
+])
+
 # The composition stratum: `Blanc/Composition/*.lean`, spelled here exactly as
 # `import Blanc.Composition.X` writes them. This is the only category permitted
 # to name more than one contract family, and adding a module here is the moment
@@ -1076,6 +1157,23 @@ COMPOSITION = [
     "Composition.Weth9WethGas",
     "Composition.Curve3Pool3CrvCheckpoint",
     # Every joint owner is explicit; no family or shared module may import back.
+]
+
+# Recover the downstream instance modules without relaxing import direction.
+COMPOSITION += [
+    "Composition.PairTokenCallers",
+    "Composition.UniswapV2PairWeth9CheckJoint",
+    "Composition.UniswapV2PairWeth9Checkpoint",
+    "Composition.UniswapV2PairWeth9Tx1",
+    "Composition.UniswapV2PairWeth9Tx1Effects",
+    "Composition.UniswapV2PairWeth9Tx1Frame",
+    "Composition.Weth9Token",
+    "Composition.Weth9TokenCore",
+    "Composition.Weth9TokenFrames",
+    "Composition.Weth9TokenFramesExec",
+    "Composition.Weth9TokenFramesNode",
+    "Composition.Weth9TokenOutputsTransfer",
+    "Composition.Weth9TokenOutputsWalk",
 ]
 
 ROOTS = ["Blanc", "Main"]
