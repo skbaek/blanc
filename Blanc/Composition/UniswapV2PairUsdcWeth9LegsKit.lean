@@ -139,6 +139,16 @@ theorem rx_calldatacopyK {di si sz : B256}
       (.next (.reg .calldatacopy) f) o :=
   rx_calldatacopy rfl rfl k
 
+/-- `RETURNDATACOPY` with its charge read off the image size. -/
+theorem rx_returndatacopyK {di ri sz : B256} (hb : ri.toNat + sz.toNat ≤ b.returnData.length)
+    (k : SFunc.RunExact fs sevm
+      (St b S (M.write di.toNat (b.returnData.sliceD ri.toNat sz.toNat 0)) G) f o) :
+    SFunc.RunExact fs sevm (St b (di :: ri :: sz :: S) M (G + (gVerylow + gReturnDataCopy *
+      ceilDiv sz.toNat 32 + (St b (di :: ri :: sz :: S) M 0).extCost [⟨di.toNat, sz.toNat⟩])))
+      (.next (.reg .returndatacopy) f) o :=
+  .next (Ninst.runCompiled_returndatacopy_of (devm := St b (di :: ri :: sz :: S) M _) (G := G) rfl rfl
+    hb rfl rfl) k
+
 /-- `MSTORE` of a word inside the image, off the pointer word. -/
 theorem rx_mstoreP {i v : B256} {i0 : Nat} (hM : FpM fp n M) (hi : i.toNat = i0)
     (hin : i0 + 32 ≤ n) (hd : i0 + 32 ≤ 64 ∨ 96 ≤ i0)
