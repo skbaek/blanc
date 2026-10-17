@@ -90,23 +90,63 @@ theorem xa_rli_feeA {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
   · exact WordAt.write_other (WordAt.write_self _ _ _) (Or.inl (by decide))
   · exact WordAt.write_self _ _ _
 
-/-- `PC`, inverted with an opaque pushed word (the step pc is not in the run). -/
-theorem rli_ri_pc {d : Devm}
-    (h : Ninst.Run sevm (St b S M G) (.reg .pc) d) :
-    ∃ G' w, d = St b (w :: S) M G' := by
-  rcases of_run_reg h with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  have hp := Devm.pushBurn_of_pushItem run
-  have hs : d.stack = Nat.toB256 pc :: S := by
-    have hst := hp.stack
-    simpa only [Stack.Push, Split, St.stack, List.cons_append, List.nil_append] using hst
-  have e := St.of_stackRel hp
-  rw [hs] at e
-  exact ⟨_, _, e⟩
+/-- `PC` at `0x3126`, pinned: it pushes the literal pc word (a run forgets the pc,
+so the inversion goes through `Evm.step`, where the machine pc is present). -/
+theorem xa_rli_pc3126 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {S : List B256}
+    {M : Mem} {G : Nat}
+    (hcode : sevm.code = code)
+    (h : XAt sevm post 0x3126 (St b S M G) L) :
+    ∃ G', XAt sevm post 0x3127 (St b (Nat.toB256 0x3126 :: S) M G') L := by
+  have hat : Ninst.At sevm.code 0x3126 (.reg .pc) := atN hcode (by kernel_rfl)
+  have hn : ∀ x : Xinst, (Ninst.reg .pc) ≠ Ninst.exec x := by nofun
+  have hstep : Evm.step ⟨0x3126, sevm, St b S M G⟩ =
+      Ninst.step ⟨0x3126, sevm, St b S M G⟩ (.reg .pc) := Evm.step_next hat
+  obtain ⟨exc, rfl, hg⟩ := h
+  cases exc with
+  | halt h => cases Ninst.step_ne_halt_ok (hstep.symm.trans h)
+  | cont h next =>
+    have hs : Ninst.step ⟨0x3126, sevm, St b S M G⟩ (.reg .pc) = .cont _ _ :=
+      hstep.symm.trans h
+    have e1 : Ninst.step ⟨0x3126, sevm, St b S M G⟩ (.reg .pc) =
+        Step.ofExecution (0x3126 + Ninst.size (.reg .pc))
+          (Rinst.run ⟨0x3126, sevm, St b S M G⟩ .pc) := rfl
+    rw [e1] at hs
+    have e2 : Rinst.run ⟨0x3126, sevm, St b S M G⟩ .pc =
+        pushItem (Nat.toB256 0x3126) gBase (St b S M G) := rfl
+    rw [e2] at hs
+    have esz : Ninst.size (.reg .pc) = 1 := rfl
+    rw [esz] at hs
+    have e3 : 0x3126 + 1 = 0x3127 := rfl
+    rw [e3] at hs
+    have hok : ∃ dd, pushItem (Nat.toB256 0x3126) gBase (St b S M G) = .ok dd := by
+      cases hpi : pushItem (Nat.toB256 0x3126) gBase (St b S M G)
+      · rw [hpi] at hs
+        cases hs
+      · exact ⟨_, rfl⟩
+    obtain ⟨dd, hpi⟩ := hok
+    rw [hpi] at hs
+    cases hs
+    rename_i V
+    have hp := Devm.pushBurn_of_pushItem hpi
+    have hst : V.stack = Nat.toB256 0x3126 :: S := by
+      have h2 := hp.stack
+      simpa only [Stack.Push, Split, St.stack, List.cons_append, List.nil_append] using h2
+    have e := St.of_stackRel hp
+    rw [hst] at e
+    obtain ⟨G', e'⟩ : ∃ G', V = St b (Nat.toB256 0x3126 :: S) M G' := ⟨_, e⟩
+    subst e'
+    have hx := XAt.of_exec next (lt_of_lt_of_le (gas_cont h) (le_of_lt hg))
+    exact ⟨_, hx⟩
+  | doneOk h _ _ _ =>
+    obtain ⟨x, hx, -⟩ := Ninst.step_spawn_inv (hstep.symm.trans h)
+    exact absurd hx (hn x)
+  | runOk h _ _ _ _ =>
+    obtain ⟨x, hx, -⟩ := Ninst.step_spawn_inv (hstep.symm.trans h)
+    exact absurd hx (hn x)
 
 /-- **`remove_liquidity_imbalance` `_A` call setup** (`0x3104` → `0xa9`): the eight words
-`0x140 … 0x220` pushed, the resume pc formed (`PC + 6`), and the jump into `_A`
-(entry 27). -/
+`0x140 … 0x220` pushed, the resume pc formed (`PC + 6`, concretely `0x312c`), and the
+jump into `_A` (entry 27). -/
 theorem xa_rli_feeB {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {w140 w160 w180 w1a0 w1c0 w1e0 w200 w220 : B256}
     (hcode : sevm.code = code)
@@ -116,10 +156,10 @@ theorem xa_rli_feeB {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
     (h1c0 : WordAt img 0x1c0 w1c0) (h1e0 : WordAt img 0x1e0 w1e0)
     (h200 : WordAt img 0x200 w200) (h220 : WordAt img 0x220 w220)
     (h : XAt sevm post 0x3104 (St b [] M G) L) :
-    ∃ (w : B256) (M1 : Mem) (G1 : Nat),
+    ∃ (M1 : Mem) (G1 : Nat),
       Mem.Reads M1 img ∧ Mem.Wf M1 ∧
       XAt sevm post 0xa9
-        (St b ((w + Bytes.toB256 [6]) :: w220 :: w200 :: w1e0 :: w1c0 :: w1a0 :: w180 ::
+        (St b (Nat.toB256 0x312c :: w220 :: w200 :: w1e0 :: w1c0 :: w1a0 :: w180 ::
           w160 :: w140 :: []) M1 G1) L := by
   xs 0x3107 (.push [0x01, 0x40] (by decide)) ri_push
   xmo 0x3108 (.reg .mload) (ri_mload_imgAt (o := 0x140) rfl)
@@ -140,10 +180,12 @@ theorem xa_rli_feeB {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
   unfold WordAt at h140 h160 h180 h1a0 h1c0 h1e0 h200 h220
   simp only [h140, h160, h180, h1a0, h1c0, h1e0, h200, h220, B256.toB256_toBytes] at h
   xs 0x3126 (.push [0x06] (by decide)) ri_push
-  xs2 0x3127 (.reg .pc) rli_ri_pc
+  obtain ⟨_, h⟩ := xa_rli_pc3126 hcode h
   xs 0x3128 (.reg .add) ri_add
   xs 0x312b (.push [0x00, 0xa9] (by decide)) ri_push
   xjmp 0xa9
-  exact ⟨_, _, _, hR, hW, h⟩
+  have hrw : Nat.toB256 0x3126 + Bytes.toB256 [0x06] = Nat.toB256 0x312c := by decide
+  rw [hrw] at h
+  exact ⟨_, _, hR, hW, h⟩
 
 end Blanc.Lift.Curve3Pool
