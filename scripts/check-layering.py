@@ -822,6 +822,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Walk.ExchangeLiveY",
                     "Lift.Curve3Pool.Walk.ExchangeLiveDy",
                     "Lift.Curve3Pool.Walk.ExchangeLiveStore",
+                    "Lift.Curve3Pool.Walk.ExchangeLivePush",
                     "Lift.Curve3Pool.Walk.ViewsDispatch",
                     "Lift.Curve3Pool.Walk.ViewsLoop",
                     "Lift.Curve3Pool.Walk.ViewsKit",

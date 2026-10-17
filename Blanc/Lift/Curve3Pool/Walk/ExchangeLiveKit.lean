@@ -180,6 +180,13 @@ theorem sha {rd : Bytes} (h : ExLive sevm W b σ) (hs : ShaCallPost b b' rd) :
     h.id.of_rel ⟨hs.stor, hs.code, hs.addrs, hs.logs, hs.output, hs.error⟩, h.wc,
     h.wc.sha _ _ _ hs h.w⟩
 
+theorem st (h : ExLive sevm W b σ) (S : List B256) (M : Mem) (G : Nat) :
+    ExLive sevm W (St b S M G) σ :=
+  ⟨fun x => h.stor x, ⟨h.id.nodeleg, h.id.warm, h.id.pre, h.id.fork⟩, h.wc, h.wc.st _ _ _ _ h.w⟩
+
+theorem addLogE (h : ExLive sevm W b σ) (l : Log) : ExLive sevm W (b.addLog l) σ :=
+  ⟨fun x => h.stor x, ⟨h.id.nodeleg, h.id.warm, h.id.pre, h.id.fork⟩, h.wc, h.wc.log _ _ h.w⟩
+
 end ExLive
 
 /-- A branch condition the walk's context or the kernel settles. -/

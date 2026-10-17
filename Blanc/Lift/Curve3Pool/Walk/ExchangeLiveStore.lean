@@ -43,7 +43,7 @@ theorem rx_ex_store {sevm : Sevm} {b : Devm} {σ : Stor} {G R : Nat} {Q : Outcom
           exAdm dyFee (σ.get adminFeeSlot) (exRate (exJ sevm).toNat))) →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0xbc0 →
       Region img' 0xb40 ((Bytes.toB256 [0] + Bytes.toB256 [4] + Bytes.toB256 [32] +
-        Bytes.toB256 [32]).toBytes ++ exPushData sevm dyOut) →
+        Bytes.toB256 [32]).toBytes ++ exPushData sevm dyOut) → WordAt img' 0x920 dyOut →
       R ≤ g → g ≤ G →
       SFunc.RunEx cert.prog sevm (St b' [Bytes.toB256 [32] + (Bytes.toB256 [0] + Bytes.toB256 [4] +
         Bytes.toB256 [32] + Bytes.toB256 [32]), Bytes.toB256 [10, 160]] M' g) t_2b49_c1174 Q) :
@@ -355,6 +355,7 @@ theorem rx_ex_store {sevm : Sevm} {b : Devm} {σ : Stor} {G R : Nat} {Q : Outcom
   have hdata : Region img3 0xb40 ((Bytes.toB256 [0] + Bytes.toB256 [4] + Bytes.toB256 [32] +
       Bytes.toB256 [32]).toBytes ++ exPushData sevm dyOut) := by
     rw [hI]; exact Region.write_self _ _ _
-  exact k bI M img3 g7 hL hR hW hsz hdata (by omega) (by omega)
+  have hout3 : WordAt img3 0x920 dyOut := by rw [hI]; wautoH hout
+  exact k bI M img3 g7 hL hR hW hsz hdata hout3 (by omega) (by omega)
 
 end Blanc.Lift.Curve3Pool
