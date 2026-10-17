@@ -335,4 +335,142 @@ theorem xa_al_pl5 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
     xjd 0x12d6
     exact .inl ⟨hi2, _, _, hR, hW, hA, h⟩
 
+theorem al_off {i : Nat} (hi : i < 3) (hb : Nat) (hbl : hb < 2 ^ 16) (hl : B256)
+    (hlv : hl.toNat = hb) :
+    (Bytes.toB256 [0x20] * Nat.toB256 i + hl).toNat = hb + 32 * i := by
+  rw [B256.toNat_add, B256.toNat_mul, B256.toNat_toB256_of_lt (by omega), hlv]
+  show (32 * i % 2 ^ 256 + hb) % 2 ^ 256 = hb + 32 * i
+  omega
+
+theorem AlMem0.old {img : Bytes} {F AF A T D0 : B256} {old : Nat → B256} {i : Nat}
+    (h : AlMem0 img F AF A T D0 old) (hi : i < 3) : WordAt img (0x300 + 32 * i) (old i) := by
+  rcases three_cases hi with rfl | rfl | rfl
+  · exact h.o0
+  · exact h.o1
+  · exact h.o2
+
+theorem AlPullImg.nb {img : Bytes} {i j : Nat} {F AF A T D0 : B256} {old nv : Nat → B256}
+    (h : AlPullImg img i F AF A T D0 old nv) (hj : j < 3) :
+    WordAt img (0x460 + 32 * j) (nv j) := by
+  rcases three_cases hj with rfl | rfl | rfl
+  · exact h.n0
+  · exact h.n1
+  · exact h.n2
+
+/-- **Pull, part 6** (`0x12d6` → the loop head or its exit): `new_balances[i] =
+old_balances[i] + in_amount` (checked) and `i += 1`. -/
+theorem xa_al_pl6 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
+    {img : Bytes} {i : Nat} {v F AF A T D0 : B256} {old nv : Nat → B256} (hcode : sevm.code = code)
+    (hi : i < 3) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
+    (hm : AlPullImg img i F AF A T D0 old nv) (hv : WordAt img 0x4e0 v)
+    (h : XAt sevm post 0x12d6 (St b [3, 0x4c0] M G) L) :
+    ¬ old i + v < old i ∧ ∃ M' img' G', Mem.Reads M' img' ∧ Mem.Wf M' ∧ M'.size % 32 = 0 ∧
+      AlPullImg img' (i + 1) F AF A T D0 old (Function.update nv i (old i + v)) ∧
+      XAt sevm post (if i + 1 = 3 then 0x1333 else 0x105d) (St b [3, 0x4c0] M' G') L := by
+  xjd 0x12d7
+  xs 0x12da (.push [0x03, 0x00] (by decide)) ri_push
+  xs 0x12dd (.push [0x04, 0xc0] (by decide)) ri_push
+  xml 0x12de 0x4c0 hm.ctr
+  xs 0x12e0 (.push [0x03] (by decide)) ri_push
+  xs 0x12e1 (.reg (.dup 1)) (ri_dup (by rfl))
+  xs 0x12e2 (.reg .lt) ri_lt
+  xs 0x12e5 (.push [0x12, 0xea] (by decide)) ri_push
+  xji 0x12e6 0x12ea hw
+  · exact absurd hw (ltCheck_ne_zero_of_lt (lt_three hi))
+  clear hw
+  xjd 0x12eb
+  xs 0x12ed (.push [0x20] (by decide)) ri_push
+  xs 0x12ee (.reg .mul) ri_mul
+  xs 0x12ef (.reg .add) ri_add
+  xma 0x12f0 (.reg .mload) (ri_mload_imgAtA (o := 0x300 + 32 * i)
+    (al_off hi 0x300 (by decide) _ (by decide)))
+  rw [(hm.m0.old hi).read] at h
+  xs 0x12f3 (.push [0x04, 0xe0] (by decide)) ri_push
+  xml 0x12f4 0x4e0 hv
+  xs 0x12f5 (.reg (.dup 1)) (ri_dup (by rfl))
+  xs 0x12f6 (.reg (.dup 1)) (ri_dup (by rfl))
+  xs 0x12f7 (.reg (.dup 3)) (ri_dup (by rfl))
+  xs 0x12f8 (.reg .add) ri_add
+  xs 0x12f9 (.reg .lt) ri_lt
+  xs 0x12fa (.reg .iszero) ri_iszero
+  xs 0x12fd (.push [0x13, 0x02] (by decide)) ri_push
+  xji 0x12fe 0x1302 hw
+  · xdead
+  have hadd := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+  clear hw
+  xjd 0x1303
+  xs 0x1304 (.reg (.dup 0)) (ri_dup (by rfl))
+  xs 0x1305 (.reg (.dup 2)) (ri_dup (by rfl))
+  xs 0x1306 (.reg .add) ri_add
+  xs 0x1307 (.reg (.swap 0)) (ri_swap (by rfl))
+  xs 0x1308 (.reg .pop) ri_pop
+  xs 0x1309 (.reg (.swap 0)) (ri_swap (by rfl))
+  xs 0x130a (.reg .pop) ri_pop
+  xs 0x130d (.push [0x04, 0x60] (by decide)) ri_push
+  xs 0x1310 (.push [0x04, 0xc0] (by decide)) ri_push
+  xml 0x1311 0x4c0 hm.ctr
+  xs 0x1313 (.push [0x03] (by decide)) ri_push
+  xs 0x1314 (.reg (.dup 1)) (ri_dup (by rfl))
+  xs 0x1315 (.reg .lt) ri_lt
+  xs 0x1318 (.push [0x13, 0x1d] (by decide)) ri_push
+  xji 0x1319 0x131d hw
+  · exact absurd hw (ltCheck_ne_zero_of_lt (lt_three hi))
+  clear hw
+  xjd 0x131e
+  xs 0x1320 (.push [0x20] (by decide)) ri_push
+  xs 0x1321 (.reg .mul) ri_mul
+  xs 0x1322 (.reg .add) ri_add
+  xma 0x1323 (.reg .mstore) (ri_mstore_imgAtA (o := 0x460 + 32 * i)
+    (al_off hi 0x460 (by decide) _ (by decide)))
+  have kc : WordAt (Bytes.writeAt img (0x460 + 32 * i) (old i + v).toBytes) 0x4c0 (Nat.toB256 i) :=
+    hm.ctr.write_other (by simp only [B256.length_toBytes]; omega)
+  xjd 0x1324
+  xs 0x1325 (.reg (.dup 1)) (ri_dup (by rfl))
+  xma 0x1326 (.reg .mload) (ri_mload_imgAtA (o := 0x4c0) rfl)
+  rw [kc.read] at h
+  xs 0x1328 (.push [0x01] (by decide)) ri_push
+  xs 0x1329 (.reg .add) ri_add
+  rw [succ_lit hi] at h
+  xs 0x132a (.reg (.dup 0)) (ri_dup (by rfl))
+  xs 0x132b (.reg (.dup 3)) (ri_dup (by rfl))
+  xma 0x132c (.reg .mstore) (ri_mstore_imgAtA (o := 0x4c0) rfl)
+  have hP : AlPullImg (Bytes.writeAt (Bytes.writeAt img (0x460 + 32 * i) (old i + v).toBytes) 0x4c0
+      (Nat.toB256 (i + 1)).toBytes) (i + 1) F AF A T D0 old (Function.update nv i (old i + v)) := by
+    refine ⟨(hm.m0.keep (by simp only [B256.length_toBytes]; omega)).keep
+      (by simp only [B256.length_toBytes]; omega), WordAt.write_self _ _ _, ?_, ?_, ?_⟩ <;>
+    refine WordAt.write_other ?_ (by simp only [B256.length_toBytes]; omega)
+    · by_cases e : i = 0
+      · subst e; rw [Function.update_self]; exact WordAt.write_self _ _ _
+      · rw [Function.update_of_ne (Ne.symm e)]
+        exact hm.n0.write_other (by simp only [B256.length_toBytes]; omega)
+    · by_cases e : i = 1
+      · subst e; rw [Function.update_self]; exact WordAt.write_self _ _ _
+      · rw [Function.update_of_ne (Ne.symm e)]
+        exact hm.n1.write_other (by simp only [B256.length_toBytes]; omega)
+    · by_cases e : i = 2
+      · subst e; rw [Function.update_self]; exact WordAt.write_self _ _ _
+      · rw [Function.update_of_ne (Ne.symm e)]
+        exact hm.n2.write_other (by simp only [B256.length_toBytes]; omega)
+  refine ⟨hadd, ?_⟩
+  xs 0x132d (.reg (.dup 1)) (ri_dup (by rfl))
+  xs 0x132e (.reg .eq) ri_eq
+  xs 0x132f (.reg .iszero) ri_iszero
+  xs 0x1332 (.push [0x10, 0x5d] (by decide)) ri_push
+  xji 0x1333 0x105d hw
+  · have e : i + 1 = 3 := by
+      have := eqCheck_ne_zero_eq (eqCheck_eq_zero hw)
+      rcases (show i = 0 ∨ i = 1 ∨ i = 2 by omega) with rfl | rfl | rfl
+      · exact absurd this (by decide)
+      · exact absurd this (by decide)
+      · rfl
+    split
+    next => exact ⟨_, _, _, hR, hW, hA, hP, h⟩
+    next he => exact absurd e he
+  · have e : i + 1 ≠ 3 := by
+      have := eqCheck_eq_zero (eqCheck_ne_zero_eq hw)
+      intro e; apply this; rw [show i = 2 by omega]; decide
+    split
+    next he => exact absurd he e
+    next => exact ⟨_, _, _, hR, hW, hA, hP, h⟩
+
 end Blanc.Lift.Curve3Pool
