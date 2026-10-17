@@ -203,6 +203,16 @@ end St
 
 /-! ## The call family -/
 
+/-- A static child at an exact target and calldata, with a complete first return word
+and no logs. This records reply observations; it does not assert parent-child provenance
+or constrain the remaining return bytes. -/
+structure StaticWordChild (t : Adr) (input : Bytes) (c : Exec.Frame) : Prop where
+  target : c.sevm.currentTarget = t
+  data : c.sevm.data = input
+  static : c.sevm.isStatic = true
+  len : 32 ≤ c.post.output.length
+  logs : c.post.logs = []
+
 /-- **What a committed call child is**, seen from its parent's step `d → d'`: it ran at `t`
 with calldata `input`, value `v` and staticness `static`; it returned `d'.returnData`; the
 parent's logs grew by exactly the child's; and at every account with code before the call,

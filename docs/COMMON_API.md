@@ -4823,7 +4823,8 @@ contract-neutral.
   `rxc_*F` (3/6 gas); `ScratchOut` for a callee's result in scratch word `0`
   (`WordFrame.scratch`, `ScratchOut.keepsOff` to `Mem.KeepsOff`, `ScratchOut.words`); the
   `int128` range check `B256.toNat_lt_three_of_slt` (`ri_sltV`); comparison flags
-  (`toNat_lt_of_iszero_gt_eq_zero`, `eq_zero_of_iszero2_eq_zero`, `gtCheck_toNat`, …) and the
+  (`toNat_lt_of_iszero_gt_eq_zero`, `eq_zero_of_iszero2_eq_zero`, `gtCheck_toNat`,
+  `iszero_eq3_ne` / `iszero_eq3_eq` for a three-iteration word counter, …) and the
   forward `JUMPI` into a goto entry `rxc_branchTo_zero`/`_cut`/`_taken`; the tracked-memory
   frame kit over `MemTrack` (`MemTrack.saveMem'`/`MemTrack.restoreMem` across the frame
   save/restore chains, `Words.restoreMem'`, `Words.of_frameSlots`, `Mem.KeepsOff.widen`,
@@ -4843,6 +4844,9 @@ contract-neutral.
   at `pc` and the direct children `L` still to come): `XAt.of_exec`, `xa_next`, `xa_jump`,
   `xa_jumpi`, `xa_jumpdest`, `xa_halt`, the `St`-state forms and the `CALL`/`STATICCALL` steps
   that peel one child, in [`Blanc/Lift/FrameWalk.lean`](../Blanc/Lift/FrameWalk.lean).
+  `StaticWordChild` records an exact target/calldata, staticness, at least one return
+  word and no child logs. It is an observation carrier; use the actual `XAt`/`ChildOf`
+  derivation separately to establish parent-child provenance.
 - Crossing a certified tree (callee) from a walked state: `xa_node` (any checked node; the walk
   resumes at the return address in the actual returned state) and `xa_node_span` (an exec-free
   tree, `ExecFreeSet`/`SFunc.execFreeIn`: the remaining children `L` are kept, a halt leaves

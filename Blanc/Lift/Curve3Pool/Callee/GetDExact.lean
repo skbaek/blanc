@@ -446,9 +446,9 @@ theorem gdInner_533 {x0 x1 x2 ρ s ann : B256} :
   refine ⟨_, _, rfl, hK, fun r kk => ?_⟩
   refine rxc_gdHeadPre hF rfl rfl (by omega) ?_
   refine rxc_gdInner (j := 0) hB rfl rfl (by decide) rfl rfl rfl hm1 hm2 hdv (by omega) ?_
-  refine rxc_branchTo_taken (iszero_eq3_neX (by decide)) (by decide) progGD_517 ?_
+  refine rxc_branchTo_taken (iszero_eq3_ne (by decide)) (by decide) progGD_517 ?_
   refine rxc_gdInner (j := 1) hE rfl rfl (by decide) rfl rfl rfl hm3 hm4 hdv2 (by omega) ?_
-  refine rxc_branchTo_taken (iszero_eq3_neX (by decide)) (by decide) progGD_517 ?_
+  refine rxc_branchTo_taken (iszero_eq3_ne (by decide)) (by decide) progGD_517 ?_
   refine rxc_gdInner (j := 2) hH rfl rfl (by decide) rfl rfl rfl hm5 hm6 hdv3 (by omega) ?_
   rw [show B256.eqCheck (B256.eqCheck (Nat.toB256 3) (Nat.toB256 (2 + 1))) 0 = 0 by decide]
   exact rxc_branchTo_zero kk
@@ -480,9 +480,9 @@ theorem gdInner_489 {x0 x1 x2 ρ s ann : B256} :
   refine ⟨_, _, rfl, hK, fun r kk => ?_⟩
   refine rxc_gdHeadPre hF rfl rfl (by omega) ?_
   refine rxc_gdInner (j := 0) hB rfl rfl (by decide) rfl rfl rfl hm1 hm2 hdv (by omega) ?_
-  refine rxc_branchTo_taken (iszero_eq3_neX (by decide)) (by decide) progGD_503 ?_
+  refine rxc_branchTo_taken (iszero_eq3_ne (by decide)) (by decide) progGD_503 ?_
   refine rxc_gdInner (j := 1) hE rfl rfl (by decide) rfl rfl rfl hm3 hm4 hdv2 (by omega) ?_
-  refine rxc_branchTo_taken (iszero_eq3_neX (by decide)) (by decide) progGD_517 ?_
+  refine rxc_branchTo_taken (iszero_eq3_ne (by decide)) (by decide) progGD_517 ?_
   refine rxc_gdInner (j := 2) hH rfl rfl (by decide) rfl rfl rfl hm5 hm6 hdv3 (by omega) ?_
   rw [show B256.eqCheck (B256.eqCheck (Nat.toB256 3) (Nat.toB256 (2 + 1))) 0 = 0 by decide]
   exact rxc_branchTo_zero kk
@@ -514,9 +514,9 @@ theorem gdInner_0 {x0 x1 x2 ρ s ann : B256} :
   refine ⟨_, _, rfl, hK, fun r kk => ?_⟩
   refine rxc_gdHeadPre hF rfl rfl (by omega) ?_
   refine rxc_gdInner (j := 0) hB rfl rfl (by decide) rfl rfl rfl hm1 hm2 hdv (by omega) ?_
-  refine rxc_branchTo_taken (iszero_eq3_neX (by decide)) (by decide) progGD_459 ?_
+  refine rxc_branchTo_taken (iszero_eq3_ne (by decide)) (by decide) progGD_459 ?_
   refine rxc_gdInner (j := 1) hE rfl rfl (by decide) rfl rfl rfl hm3 hm4 hdv2 (by omega) ?_
-  refine rxc_branchTo_taken (iszero_eq3_neX (by decide)) (by decide) progGD_473 ?_
+  refine rxc_branchTo_taken (iszero_eq3_ne (by decide)) (by decide) progGD_473 ?_
   refine rxc_gdInner (j := 2) hH rfl rfl (by decide) rfl rfl rfl hm5 hm6 hdv3 (by omega) ?_
   rw [show B256.eqCheck (B256.eqCheck (Nat.toB256 3) (Nat.toB256 (2 + 1))) 0 = 0 by decide]
   exact rxc_branch_zero kk
@@ -955,9 +955,9 @@ theorem getD_exact {sevm : Sevm} {b : Devm} {ρ x0 x1 x2 amp : B256} {S : List B
       omega]
     refine rxc_gdPro hsz hcov hroom ?_
     refine rxc_gdSIter (j := 0) hF0 rfl rfl (by decide) rfl rfl ha0 hroom ?_
-    refine rxc_branchTo_taken (iszero_eq3_neX (by decide)) (by decide) progGD_431 ?_
+    refine rxc_branchTo_taken (iszero_eq3_ne (by decide)) (by decide) progGD_431 ?_
     refine rxc_gdSIter (j := 1) hF1 rfl rfl (by decide) rfl rfl ha1 hroom ?_
-    refine rxc_branchTo_taken (iszero_eq3_neX (by decide)) (by decide) progGD_445 ?_
+    refine rxc_branchTo_taken (iszero_eq3_ne (by decide)) (by decide) progGD_445 ?_
     refine rxc_gdSIter (j := 2) hF2 rfl rfl (by decide) rfl rfl ha2 hroom ?_
     rw [show B256.eqCheck (B256.eqCheck (Nat.toB256 3) (Nat.toB256 (2 + 1))) 0 = 0 by decide]
     exact rxc_branch_zero hrun
@@ -979,9 +979,9 @@ theorem getD_exact {sevm : Sevm} {b : Devm} {ρ x0 x1 x2 amp : B256} {S : List B
       (G + 157 + P) + 10 + 138 + 10 + 138 + 10 + 138 + 61 from fun P => by omega]
     refine rxc_gdPro hsz hcov hroom ?_
     refine rxc_gdSIter (j := 0) hF0 rfl rfl (by decide) rfl rfl ha0 hroom ?_
-    refine rxc_branchTo_taken (iszero_eq3_neX (by decide)) (by decide) progGD_431 ?_
+    refine rxc_branchTo_taken (iszero_eq3_ne (by decide)) (by decide) progGD_431 ?_
     refine rxc_gdSIter (j := 1) hF1 rfl rfl (by decide) rfl rfl ha1 hroom ?_
-    refine rxc_branchTo_taken (iszero_eq3_neX (by decide)) (by decide) progGD_445 ?_
+    refine rxc_branchTo_taken (iszero_eq3_ne (by decide)) (by decide) progGD_445 ?_
     refine rxc_gdSIter (j := 2) hF2 rfl rfl (by decide) rfl rfl ha2 hroom ?_
     rw [show B256.eqCheck (B256.eqCheck (Nat.toB256 3) (Nat.toB256 (2 + 1))) 0 = 0 by decide]
     exact rxc_branch_zero hrun

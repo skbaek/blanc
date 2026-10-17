@@ -445,17 +445,6 @@ theorem ric_gdInnerAt {x0 x1 x2 ρ s ann p : B256} {n D j : Nat} {d : Devm} {jmp
     ric_gdInner hF rfl rfl hj3 (gdFrame_x hj3) rfl rfl run
   exact ⟨p', hp, M', G', ⟨amp, xs, sc, w8, dp, _, hF'⟩, run⟩
 
-theorem iszero_eq3_ne {m : Nat} (hm : m < 3) :
-    B256.eqCheck (B256.eqCheck (Nat.toB256 3) (Nat.toB256 m)) 0 ≠ 0 := by
-  rcases m with _ | _ | _ | m
-  · decide
-  · decide
-  · decide
-  · omega
-
-theorem iszero_eq3_eq : B256.eqCheck (B256.eqCheck (Nat.toB256 3) (Nat.toB256 3)) 0 = 0 := by
-  decide
-
 /-- An inner `JUMPI` that goes on to entry `k'` (the counter below `3`). -/
 theorem ric_gdJmpOn {w : B256} (hw : w ≠ 0) {f g : SFunc} {k' : Nat} (hkC : k' ∉ C)
     (hk : progYD[k']? = some g) {M : Mem} {G : Nat}

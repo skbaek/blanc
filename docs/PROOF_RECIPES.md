@@ -537,3 +537,14 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Canonical example: [Blanc/Lift/PackedSha.lean](../Blanc/Lift/PackedSha.lean) — `bexp_256_32`
 - Registered symbols: `module:Blanc/Lift/PackedSha.lean`, `declaration:Blanc.Lift.bexp_256_32`
 - Review: `proof-infrastructure` on `2026-10-15`
+
+## `static-word-child`
+
+- Status: `active`
+- Triggers: `goal-head:Lift.StaticWordChild`
+- Preferred path: Use Lift.StaticWordChild as the shared observation carrier for a static reply: supply its exact target, calldata, staticness, at-least-32-byte output and empty child logs. Extract those facts from an actual frame walk; preserve XAt or ChildOf separately when parent-child provenance matters.
+- Boundary: This carrier does not establish a parent-child relation, successful execution, a decoded answer value, storage preservation, or a fixed return length. It allows extra return bytes. The recipe matches only a direct StaticWordChild goal; a nested carrier is not a match.
+- Owner module: [Blanc/Lift/FrameWalk.lean](../Blanc/Lift/FrameWalk.lean)
+- Canonical example: [Blanc/Lift/FrameWalk.lean](../Blanc/Lift/FrameWalk.lean) — `StaticWordChild`
+- Registered symbols: `module:Blanc/Lift/FrameWalk.lean`, `declaration:Blanc.Lift.StaticWordChild`
+- Review: `proof-infrastructure` on `2026-10-17`

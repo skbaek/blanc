@@ -534,7 +534,7 @@ theorem rxc_gyCoinTail_next (hF : WordFrame M0 M 0x140 ws) (hlen : ws.length = 2
   refine rxc_eq rfl (by vy_room) ?_
   refine rxc_iszero rfl (by vy_room) ?_
   refine rxc_push rfl (by vy_room) ?_
-  exact rxc_branchTo_taken (iszero_eq3_neX hj3) hkC hk kk
+  exact rxc_branchTo_taken (iszero_eq3_ne hj3) hkC hk kk
 
 /-- **The last coin-loop counter tail, on to the set-up `g`**, forward (44 gas). -/
 theorem rxc_gyCoinTail_last (hF : WordFrame M0 M 0x140 ws) (hlen : ws.length = 28) {j : Nat}

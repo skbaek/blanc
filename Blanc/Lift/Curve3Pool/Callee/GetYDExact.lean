@@ -517,14 +517,6 @@ theorem rxc_ydTest_load (hF : WordFrame M0 M 0x140 ws) (hlen : ws.length = 16) {
   refine rxc_push rfl (by vy_room) ?_
   exact rxc_jump hk1 hk1C kk
 
-theorem iszero_eq3_neX {m : Nat} (hm : m < 3) :
-    B256.eqCheck (B256.eqCheck (Nat.toB256 3) (Nat.toB256 m)) 0 ≠ 0 := by
-  rcases m with _ | _ | _ | m
-  · decide
-  · decide
-  · decide
-  · omega
-
 -- SEGMENT: rxc_ydCoinTail
 /-- **The coin-loop counter tail, on to entry `k`**, forward (44 gas). -/
 theorem rxc_ydCoinTail_next (hF : WordFrame M0 M 0x140 ws) (hlen : ws.length = 16) {j k : Nat}
@@ -547,7 +539,7 @@ theorem rxc_ydCoinTail_next (hF : WordFrame M0 M 0x140 ws) (hlen : ws.length = 1
   refine rxc_eq rfl (by vy_room) ?_
   refine rxc_iszero rfl (by vy_room) ?_
   refine rxc_push rfl (by vy_room) ?_
-  exact rxc_branchTo_taken (iszero_eq3_neX hj3) hkC hk kk
+  exact rxc_branchTo_taken (iszero_eq3_ne hj3) hkC hk kk
 
 /-- **The last coin-loop counter tail, on to the set-up `g`**, forward (44 gas). -/
 theorem rxc_ydCoinTail_last (hF : WordFrame M0 M 0x140 ws) (hlen : ws.length = 16) {j : Nat}

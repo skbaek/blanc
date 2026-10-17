@@ -37,6 +37,8 @@ def proofRecipeLeafTriggerMatches (target : Lean.Expr) (trigger : String) : Tact
           | some value => return instruction == value.consumeMData
           | none => return false
       | _ => pure false
+  | "goal-head:Lift.StaticWordChild" =>
+      return head == some `Blanc.Lift.StaticWordChild
   | "goal-head:CompiledStackSafety.ResumeSafe" =>
       return head == some `Blanc.CompiledStackSafety.ResumeSafe
   | "goal-shape:finite-coalition-ledger" =>

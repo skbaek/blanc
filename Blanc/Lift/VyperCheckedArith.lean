@@ -77,6 +77,19 @@ def vyDivT (h l : UInt8) (fail k : SFunc) : SFunc :=
 
 /-! ## Guard facts -/
 
+/-- The `ISZERO (EQ 3 m)` continuation flag for a three-iteration word loop. -/
+theorem iszero_eq3_ne {m : Nat} (hm : m < 3) :
+    B256.eqCheck (B256.eqCheck (Nat.toB256 3) (Nat.toB256 m)) 0 ≠ 0 := by
+  rcases m with _ | _ | _ | m
+  · decide
+  · decide
+  · decide
+  · omega
+
+/-- The same three-iteration word loop exits at counter three. -/
+theorem iszero_eq3_eq : B256.eqCheck (B256.eqCheck (Nat.toB256 3) (Nat.toB256 3)) 0 = 0 := by
+  decide
+
 theorem B256.or_eqCheck_ne_zero {a b c d : B256} (h : (B256.eqCheck a b ||| B256.eqCheck c d) ≠ 0) :
     a = b ∨ c = d := by
   by_contra hn

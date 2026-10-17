@@ -401,6 +401,14 @@ def recipes : List Recipe := [
     symbols := ["module:Blanc/Lift/PackedSha.lean", "declaration:Blanc.Lift.bexp_256_32"]
     boundary := "EVM exponentiation wraps modulo 2^256; ordinary unbounded-power identities need that modulus. This does not justify evaluating a large symbolic exponent or concrete memory. Advice recognizes only a direct equality whose left side is B256.bexp; nested arithmetic and reversed equalities are left to the author."
   },
+  {
+    id := "static-word-child"
+    status := "active"
+    triggers := ["goal-head:Lift.StaticWordChild"]
+    preferredPath := "Use Lift.StaticWordChild as the shared observation carrier for a static reply: supply its exact target, calldata, staticness, at-least-32-byte output and empty child logs. Extract those facts from an actual frame walk; preserve XAt or ChildOf separately when parent-child provenance matters."
+    symbols := ["module:Blanc/Lift/FrameWalk.lean", "declaration:Blanc.Lift.StaticWordChild"]
+    boundary := "This carrier does not establish a parent-child relation, successful execution, a decoded answer value, storage preservation, or a fixed return length. It allows extra return bytes. The recipe matches only a direct StaticWordChild goal; a nested carrier is not a match."
+  },
 ]
 
 end Blanc.ProofRecipes
