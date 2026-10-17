@@ -1,4 +1,5 @@
 import Blanc.Lift.Curve3Pool.Check
+import Blanc.Lift.Curve3Pool.Callee.GetDMem
 import Blanc.Lift.FrameWalkNode
 
 /-!
@@ -73,5 +74,36 @@ theorem xa_A {sevm : Sevm} {post d : Devm} {ρ : B256} {base : List B256}
   · exact .inl h
   · match S', hlen with
     | [A], _ => exact .inr ⟨d', A, run, hx, hst⟩
+
+/-- `get_D_mem`'s entry. -/
+theorem gdm_entry : cert.entries[29]? = some ⟨0x7b7, [.ret, .unk, .unk, .unk, .unk], 1⟩ :=
+  rfl
+
+theorem gdm_prog : cert.prog[29]? = some t_07b7_c29 := rfl
+
+theorem gdm_mems : mems.getD 29 [] = [] := by decide
+
+/-- **`get_D_mem` crossed from a walked state.**  A walk at `get_D_mem`'s entry (`0x7b7`)
+with the return address `ρ`, the three balances and `amp` above the caller's stack `base`:
+`get_D_mem` halts the frame with no further child, or returns to `ρ` with one word (the
+invariant `D`) above `base`, in the actual returned state and with the same remaining
+children.  The entry closure (`gdmEntries`, `Callee/GetDMem.lean`) covers the inner
+`get_D` call. -/
+theorem xa_getDMem {sevm : Sevm} {post d : Devm} {ρ b0 b1 b2 amp : B256} {base : List B256}
+    {L : List Exec.Frame} (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hstack : d.stack = ρ :: b0 :: b1 :: b2 :: amp :: base)
+    (h : XAt sevm post 0x7b7 d L) :
+    (SFunc.Run cert.prog sevm d t_07b7_c29 (.halted post) ∧ L = []) ∨
+      ∃ (d' : Devm) (v : B256),
+        SFunc.Run cert.prog sevm d t_07b7_c29 (.returned d') ∧ XAt sevm post ρ.toNat d' L ∧
+        d'.stack = v :: base := by
+  rcases xa_callee gdm_entry gdm_prog gdm_mems gdm_execFreeSet gdm_free hcode hfork
+      (S := [ρ, b0, b1, b2, amp]) (by rw [hstack]; rfl)
+      (List.Forall₂.cons rfl (List.Forall₂.cons trivial (List.Forall₂.cons trivial
+        (List.Forall₂.cons trivial (List.Forall₂.cons trivial List.Forall₂.nil))))) h with
+    h | ⟨d', S', run, hx, hst, hlen⟩
+  · exact .inl h
+  · match S', hlen with
+    | [v], _ => exact .inr ⟨d', v, run, hx, hst⟩
 
 end Blanc.Lift.Curve3Pool
