@@ -685,7 +685,8 @@
         "entry_cap": 3,
         "widen": "agree",
         "frame_loops": true,
-        "mem_calls": true
+        "mem_calls": true,
+        "qualified_refs": true
       },
       "check": {
         "path": "Blanc/Lift/Curve3Pool/Check.lean",
@@ -709,7 +710,8 @@
       "options": {
         "code_import": "Blanc.Lift.Curve3Pool.Creation.Input",
         "code_ref": "Blanc.Lift.Curve3Pool.Creation.creationCode",
-        "pc": true
+        "pc": true,
+        "qualified_refs": true
       },
       "check": {
         "path": "Blanc/Lift/Curve3Pool/Creation/Check.lean",

@@ -345,6 +345,8 @@ def run_registry(args: argparse.Namespace) -> int:
                 argv.append("--pc")
             if opts.get("decide_jumpi") is True:
                 argv.append("--decide-jumpi")
+            if opts.get("qualified_refs") is True:
+                argv.append("--qualified-refs")
             if "memret" in opts:
                 # memory-tracking certificate (`Cert.checkM`): the vyper-memret-probe-v1 mode,
                 # ported with the Lean checker's exact memory transfer
@@ -483,6 +485,7 @@ parser.add_argument("--entry-cap", type=int, default=4, help="PROBE (--const-mem
 parser.add_argument("--widen", choices=("agree", "control"), default="agree", help="PROBE (--const-mem): at the per-pc cap keep values all entries at that pc agree on (agree) or only control values (control)")
 parser.add_argument("--frame-loops", action="store_true", help="(--const-mem) unroll a loop whose revisit changes the stack height (Vyper 0.2.x frame save/restore loops) instead of closing it as a loop entry; a back edge is a revisit of the same pc at the same stack height (registry option `\"frame_loops\": true`)")
 parser.add_argument("--mem-calls", action="store_true", help="(--memret) GAS keeps the memory map and STATICCALL with a constant output window forgets only that window, exactly as `absMem` (registry option `\"mem_calls\": true`)")
+parser.add_argument("--qualified-refs", action="store_true", help="write the certificate's own code/cert/mems/codeTries fully qualified in the generated Check, CheckPart, CheckTries and Jumps modules (registry option `\"qualified_refs\": true`)")
 parser.add_argument("--no-callee-join-exempt", action="store_true", help="PROBE (inline): do not exempt joins whose disagreeing positions hold jump destinations")
 
 args = parser.parse_args()
@@ -2411,6 +2414,28 @@ def split_entry_plan(entry_idx: int, threshold: int) -> SplitNode:
     return open_named(trees[entry_idx], epc, list(eframe))
 
 
+QUALIFIED_NAMES = ("codeTries", "code", "cert", "mems")
+
+
+def qualify_refs(text: str) -> str:
+    """--qualified-refs: every reference to the certificate's own `code`, `cert`, `mems` and
+    `codeTries` in a generated proof module is written fully qualified (`NS.code`, ...), so the
+    statements of two certificates' obligations differ in text as they do in meaning.  Declared
+    names (`def codeTries`) and comments are left as they are."""
+    ns = args.namespace
+    word = re.compile(r"(?<![\w.'])(" + "|".join(QUALIFIED_NAMES) + r")(?![\w'])")
+    out, in_comment = [], False
+    for line in text.split("\n"):
+        if in_comment or line.lstrip().startswith("/-"):
+            in_comment = "-/" not in line
+            out.append(line)
+            continue
+        m = re.match(r"^(\s*(?:private\s+)?(?:def|theorem|abbrev)\s+\S+)(.*)$", line)
+        head, body = (m.group(1), m.group(2)) if m else ("", line)
+        out.append(head + word.sub(lambda w: f"{ns}.{w.group(1)}", body))
+    return "\n".join(out)
+
+
 def check_source() -> Any:
     depth = max(1, (len(code) - 1).bit_length())
     ns = args.namespace
@@ -2742,6 +2767,9 @@ def check_source_mem(head: List[str]) -> Dict[str, str]:
 if args.check_out is not None:
     args.check_out.parent.mkdir(parents=True, exist_ok=True)
     _check = check_source()
+    if args.qualified_refs:
+        _check = ({k: qualify_refs(v) for k, v in _check.items()} if isinstance(_check, dict)
+                  else qualify_refs(_check))
     if isinstance(_check, dict):
         for _name, _text in _check.items():
             (args.check_out if _name == "Check" else args.check_out.with_name(_name + ".lean")).write_text(_text)
@@ -2794,7 +2822,7 @@ def jumps_source() -> str:
 
 if args.jumps_out is not None:
     args.jumps_out.parent.mkdir(parents=True, exist_ok=True)
-    args.jumps_out.write_text(jumps_source())
+    args.jumps_out.write_text(qualify_refs(jumps_source()) if args.qualified_refs else jumps_source())
 
 def lock_dispatch_proofs(checker, entry_idx: int) -> Tuple[List[str], Optional[str]]:
     """Cut a large entry's selector spine without changing its lock checker.

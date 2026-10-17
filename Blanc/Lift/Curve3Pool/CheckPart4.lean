@@ -10,912 +10,912 @@ namespace Blanc.Lift.Curve3Pool
 open Jaune
 
 private theorem jumps_batch_179 :
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[179]'(by decide +kernel)).2 (cert[179]'(by decide +kernel)).1.frame (mems.getD 179 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[180]'(by decide +kernel)).2 (cert[180]'(by decide +kernel)).1.frame (mems.getD 180 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[181]'(by decide +kernel)).2 (cert[181]'(by decide +kernel)).1.frame (mems.getD 181 []) = true := by
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[179]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[179]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 179 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[180]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[180]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 180 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[181]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[181]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 181 []) = true := by
   kernel_rfl_and
 
 theorem entry_179 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[179]'(by decide +kernel)).1.rets (cert[179]'(by decide +kernel)).1.pc
-      (cert[179]'(by decide +kernel)).1.frame (mems.getD 179 []) (cert[179]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[179]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[179]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[179]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 179 []) (Blanc.Lift.Curve3Pool.cert[179]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_179 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[179]'(by decide +kernel)).2 (cert[179]'(by decide +kernel)).1.frame (mems.getD 179 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[179]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[179]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 179 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_179.1
 
 theorem entry_180 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[180]'(by decide +kernel)).1.rets (cert[180]'(by decide +kernel)).1.pc
-      (cert[180]'(by decide +kernel)).1.frame (mems.getD 180 []) (cert[180]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[180]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[180]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[180]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 180 []) (Blanc.Lift.Curve3Pool.cert[180]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_180 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[180]'(by decide +kernel)).2 (cert[180]'(by decide +kernel)).1.frame (mems.getD 180 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[180]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[180]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 180 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_179.2.1
 
 theorem entry_181 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[181]'(by decide +kernel)).1.rets (cert[181]'(by decide +kernel)).1.pc
-      (cert[181]'(by decide +kernel)).1.frame (mems.getD 181 []) (cert[181]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[181]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[181]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[181]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 181 []) (Blanc.Lift.Curve3Pool.cert[181]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_181 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[181]'(by decide +kernel)).2 (cert[181]'(by decide +kernel)).1.frame (mems.getD 181 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[181]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[181]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 181 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_179.2.2
 
 theorem entry_182 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[182]'(by decide +kernel)).1.rets (cert[182]'(by decide +kernel)).1.pc
-      (cert[182]'(by decide +kernel)).1.frame (mems.getD 182 []) (cert[182]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[182]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[182]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[182]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 182 []) (Blanc.Lift.Curve3Pool.cert[182]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_182 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[182]'(by decide +kernel)).2 (cert[182]'(by decide +kernel)).1.frame (mems.getD 182 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[182]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[182]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 182 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 private theorem jumps_batch_183 :
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[183]'(by decide +kernel)).2 (cert[183]'(by decide +kernel)).1.frame (mems.getD 183 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[184]'(by decide +kernel)).2 (cert[184]'(by decide +kernel)).1.frame (mems.getD 184 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[185]'(by decide +kernel)).2 (cert[185]'(by decide +kernel)).1.frame (mems.getD 185 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[186]'(by decide +kernel)).2 (cert[186]'(by decide +kernel)).1.frame (mems.getD 186 []) = true := by
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[183]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[183]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 183 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[184]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[184]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 184 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[185]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[185]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 185 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[186]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[186]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 186 []) = true := by
   kernel_rfl_and
 
 theorem entry_183 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[183]'(by decide +kernel)).1.rets (cert[183]'(by decide +kernel)).1.pc
-      (cert[183]'(by decide +kernel)).1.frame (mems.getD 183 []) (cert[183]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[183]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[183]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[183]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 183 []) (Blanc.Lift.Curve3Pool.cert[183]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_183 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[183]'(by decide +kernel)).2 (cert[183]'(by decide +kernel)).1.frame (mems.getD 183 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[183]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[183]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 183 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_183.1
 
 theorem entry_184 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[184]'(by decide +kernel)).1.rets (cert[184]'(by decide +kernel)).1.pc
-      (cert[184]'(by decide +kernel)).1.frame (mems.getD 184 []) (cert[184]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[184]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[184]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[184]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 184 []) (Blanc.Lift.Curve3Pool.cert[184]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_184 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[184]'(by decide +kernel)).2 (cert[184]'(by decide +kernel)).1.frame (mems.getD 184 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[184]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[184]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 184 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_183.2.1
 
 theorem entry_185 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[185]'(by decide +kernel)).1.rets (cert[185]'(by decide +kernel)).1.pc
-      (cert[185]'(by decide +kernel)).1.frame (mems.getD 185 []) (cert[185]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[185]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[185]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[185]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 185 []) (Blanc.Lift.Curve3Pool.cert[185]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_185 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[185]'(by decide +kernel)).2 (cert[185]'(by decide +kernel)).1.frame (mems.getD 185 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[185]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[185]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 185 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_183.2.2.1
 
 theorem entry_186 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[186]'(by decide +kernel)).1.rets (cert[186]'(by decide +kernel)).1.pc
-      (cert[186]'(by decide +kernel)).1.frame (mems.getD 186 []) (cert[186]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[186]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[186]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[186]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 186 []) (Blanc.Lift.Curve3Pool.cert[186]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_186 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[186]'(by decide +kernel)).2 (cert[186]'(by decide +kernel)).1.frame (mems.getD 186 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[186]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[186]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 186 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_183.2.2.2
 
 theorem entry_187 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[187]'(by decide +kernel)).1.rets (cert[187]'(by decide +kernel)).1.pc
-      (cert[187]'(by decide +kernel)).1.frame (mems.getD 187 []) (cert[187]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[187]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[187]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[187]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 187 []) (Blanc.Lift.Curve3Pool.cert[187]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_187 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[187]'(by decide +kernel)).2 (cert[187]'(by decide +kernel)).1.frame (mems.getD 187 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[187]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[187]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 187 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 private theorem jumps_batch_188 :
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[188]'(by decide +kernel)).2 (cert[188]'(by decide +kernel)).1.frame (mems.getD 188 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[189]'(by decide +kernel)).2 (cert[189]'(by decide +kernel)).1.frame (mems.getD 189 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[190]'(by decide +kernel)).2 (cert[190]'(by decide +kernel)).1.frame (mems.getD 190 []) = true := by
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[188]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[188]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 188 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[189]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[189]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 189 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[190]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[190]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 190 []) = true := by
   kernel_rfl_and
 
 theorem entry_188 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[188]'(by decide +kernel)).1.rets (cert[188]'(by decide +kernel)).1.pc
-      (cert[188]'(by decide +kernel)).1.frame (mems.getD 188 []) (cert[188]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[188]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[188]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[188]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 188 []) (Blanc.Lift.Curve3Pool.cert[188]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_188 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[188]'(by decide +kernel)).2 (cert[188]'(by decide +kernel)).1.frame (mems.getD 188 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[188]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[188]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 188 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_188.1
 
 theorem entry_189 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[189]'(by decide +kernel)).1.rets (cert[189]'(by decide +kernel)).1.pc
-      (cert[189]'(by decide +kernel)).1.frame (mems.getD 189 []) (cert[189]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[189]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[189]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[189]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 189 []) (Blanc.Lift.Curve3Pool.cert[189]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_189 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[189]'(by decide +kernel)).2 (cert[189]'(by decide +kernel)).1.frame (mems.getD 189 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[189]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[189]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 189 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_188.2.1
 
 theorem entry_190 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[190]'(by decide +kernel)).1.rets (cert[190]'(by decide +kernel)).1.pc
-      (cert[190]'(by decide +kernel)).1.frame (mems.getD 190 []) (cert[190]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[190]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[190]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[190]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 190 []) (Blanc.Lift.Curve3Pool.cert[190]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_190 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[190]'(by decide +kernel)).2 (cert[190]'(by decide +kernel)).1.frame (mems.getD 190 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[190]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[190]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 190 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_188.2.2
 
 private theorem jumps_batch_191 :
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[191]'(by decide +kernel)).2 (cert[191]'(by decide +kernel)).1.frame (mems.getD 191 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[192]'(by decide +kernel)).2 (cert[192]'(by decide +kernel)).1.frame (mems.getD 192 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[193]'(by decide +kernel)).2 (cert[193]'(by decide +kernel)).1.frame (mems.getD 193 []) = true := by
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[191]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[191]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 191 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[192]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[192]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 192 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[193]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[193]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 193 []) = true := by
   kernel_rfl_and
 
 theorem entry_191 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[191]'(by decide +kernel)).1.rets (cert[191]'(by decide +kernel)).1.pc
-      (cert[191]'(by decide +kernel)).1.frame (mems.getD 191 []) (cert[191]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[191]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[191]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[191]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 191 []) (Blanc.Lift.Curve3Pool.cert[191]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_191 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[191]'(by decide +kernel)).2 (cert[191]'(by decide +kernel)).1.frame (mems.getD 191 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[191]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[191]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 191 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_191.1
 
 theorem entry_192 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[192]'(by decide +kernel)).1.rets (cert[192]'(by decide +kernel)).1.pc
-      (cert[192]'(by decide +kernel)).1.frame (mems.getD 192 []) (cert[192]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[192]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[192]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[192]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 192 []) (Blanc.Lift.Curve3Pool.cert[192]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_192 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[192]'(by decide +kernel)).2 (cert[192]'(by decide +kernel)).1.frame (mems.getD 192 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[192]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[192]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 192 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_191.2.1
 
 theorem entry_193 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[193]'(by decide +kernel)).1.rets (cert[193]'(by decide +kernel)).1.pc
-      (cert[193]'(by decide +kernel)).1.frame (mems.getD 193 []) (cert[193]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[193]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[193]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[193]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 193 []) (Blanc.Lift.Curve3Pool.cert[193]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_193 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[193]'(by decide +kernel)).2 (cert[193]'(by decide +kernel)).1.frame (mems.getD 193 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[193]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[193]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 193 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_191.2.2
 
 private theorem jumps_batch_194 :
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[194]'(by decide +kernel)).2 (cert[194]'(by decide +kernel)).1.frame (mems.getD 194 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[195]'(by decide +kernel)).2 (cert[195]'(by decide +kernel)).1.frame (mems.getD 195 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[196]'(by decide +kernel)).2 (cert[196]'(by decide +kernel)).1.frame (mems.getD 196 []) = true := by
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[194]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[194]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 194 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[195]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[195]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 195 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[196]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[196]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 196 []) = true := by
   kernel_rfl_and
 
 theorem entry_194 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[194]'(by decide +kernel)).1.rets (cert[194]'(by decide +kernel)).1.pc
-      (cert[194]'(by decide +kernel)).1.frame (mems.getD 194 []) (cert[194]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[194]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[194]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[194]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 194 []) (Blanc.Lift.Curve3Pool.cert[194]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_194 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[194]'(by decide +kernel)).2 (cert[194]'(by decide +kernel)).1.frame (mems.getD 194 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[194]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[194]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 194 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_194.1
 
 theorem entry_195 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[195]'(by decide +kernel)).1.rets (cert[195]'(by decide +kernel)).1.pc
-      (cert[195]'(by decide +kernel)).1.frame (mems.getD 195 []) (cert[195]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[195]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[195]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[195]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 195 []) (Blanc.Lift.Curve3Pool.cert[195]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_195 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[195]'(by decide +kernel)).2 (cert[195]'(by decide +kernel)).1.frame (mems.getD 195 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[195]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[195]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 195 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_194.2.1
 
 theorem entry_196 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[196]'(by decide +kernel)).1.rets (cert[196]'(by decide +kernel)).1.pc
-      (cert[196]'(by decide +kernel)).1.frame (mems.getD 196 []) (cert[196]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[196]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[196]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[196]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 196 []) (Blanc.Lift.Curve3Pool.cert[196]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_196 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[196]'(by decide +kernel)).2 (cert[196]'(by decide +kernel)).1.frame (mems.getD 196 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[196]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[196]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 196 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_194.2.2
 
 private theorem jumps_batch_197 :
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[197]'(by decide +kernel)).2 (cert[197]'(by decide +kernel)).1.frame (mems.getD 197 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[198]'(by decide +kernel)).2 (cert[198]'(by decide +kernel)).1.frame (mems.getD 198 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[199]'(by decide +kernel)).2 (cert[199]'(by decide +kernel)).1.frame (mems.getD 199 []) = true := by
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[197]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[197]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 197 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[198]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[198]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 198 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[199]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[199]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 199 []) = true := by
   kernel_rfl_and
 
 theorem entry_197 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[197]'(by decide +kernel)).1.rets (cert[197]'(by decide +kernel)).1.pc
-      (cert[197]'(by decide +kernel)).1.frame (mems.getD 197 []) (cert[197]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[197]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[197]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[197]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 197 []) (Blanc.Lift.Curve3Pool.cert[197]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_197 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[197]'(by decide +kernel)).2 (cert[197]'(by decide +kernel)).1.frame (mems.getD 197 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[197]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[197]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 197 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_197.1
 
 theorem entry_198 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[198]'(by decide +kernel)).1.rets (cert[198]'(by decide +kernel)).1.pc
-      (cert[198]'(by decide +kernel)).1.frame (mems.getD 198 []) (cert[198]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[198]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[198]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[198]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 198 []) (Blanc.Lift.Curve3Pool.cert[198]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_198 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[198]'(by decide +kernel)).2 (cert[198]'(by decide +kernel)).1.frame (mems.getD 198 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[198]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[198]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 198 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_197.2.1
 
 theorem entry_199 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[199]'(by decide +kernel)).1.rets (cert[199]'(by decide +kernel)).1.pc
-      (cert[199]'(by decide +kernel)).1.frame (mems.getD 199 []) (cert[199]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[199]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[199]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[199]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 199 []) (Blanc.Lift.Curve3Pool.cert[199]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_199 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[199]'(by decide +kernel)).2 (cert[199]'(by decide +kernel)).1.frame (mems.getD 199 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[199]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[199]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 199 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_197.2.2
 
 theorem entry_200 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[200]'(by decide +kernel)).1.rets (cert[200]'(by decide +kernel)).1.pc
-      (cert[200]'(by decide +kernel)).1.frame (mems.getD 200 []) (cert[200]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[200]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[200]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[200]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 200 []) (Blanc.Lift.Curve3Pool.cert[200]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_200 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[200]'(by decide +kernel)).2 (cert[200]'(by decide +kernel)).1.frame (mems.getD 200 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[200]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[200]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 200 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem entry_201 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[201]'(by decide +kernel)).1.rets (cert[201]'(by decide +kernel)).1.pc
-      (cert[201]'(by decide +kernel)).1.frame (mems.getD 201 []) (cert[201]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[201]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[201]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[201]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 201 []) (Blanc.Lift.Curve3Pool.cert[201]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_201 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[201]'(by decide +kernel)).2 (cert[201]'(by decide +kernel)).1.frame (mems.getD 201 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[201]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[201]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 201 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 private theorem jumps_batch_202 :
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[202]'(by decide +kernel)).2 (cert[202]'(by decide +kernel)).1.frame (mems.getD 202 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[203]'(by decide +kernel)).2 (cert[203]'(by decide +kernel)).1.frame (mems.getD 203 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[204]'(by decide +kernel)).2 (cert[204]'(by decide +kernel)).1.frame (mems.getD 204 []) = true := by
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[202]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[202]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 202 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[203]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[203]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 203 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[204]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[204]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 204 []) = true := by
   kernel_rfl_and
 
 theorem entry_202 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[202]'(by decide +kernel)).1.rets (cert[202]'(by decide +kernel)).1.pc
-      (cert[202]'(by decide +kernel)).1.frame (mems.getD 202 []) (cert[202]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[202]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[202]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[202]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 202 []) (Blanc.Lift.Curve3Pool.cert[202]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_202 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[202]'(by decide +kernel)).2 (cert[202]'(by decide +kernel)).1.frame (mems.getD 202 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[202]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[202]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 202 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_202.1
 
 theorem entry_203 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[203]'(by decide +kernel)).1.rets (cert[203]'(by decide +kernel)).1.pc
-      (cert[203]'(by decide +kernel)).1.frame (mems.getD 203 []) (cert[203]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[203]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[203]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[203]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 203 []) (Blanc.Lift.Curve3Pool.cert[203]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_203 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[203]'(by decide +kernel)).2 (cert[203]'(by decide +kernel)).1.frame (mems.getD 203 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[203]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[203]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 203 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_202.2.1
 
 theorem entry_204 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[204]'(by decide +kernel)).1.rets (cert[204]'(by decide +kernel)).1.pc
-      (cert[204]'(by decide +kernel)).1.frame (mems.getD 204 []) (cert[204]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[204]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[204]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[204]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 204 []) (Blanc.Lift.Curve3Pool.cert[204]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_204 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[204]'(by decide +kernel)).2 (cert[204]'(by decide +kernel)).1.frame (mems.getD 204 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[204]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[204]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 204 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_202.2.2
 
 theorem entry_205 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[205]'(by decide +kernel)).1.rets (cert[205]'(by decide +kernel)).1.pc
-      (cert[205]'(by decide +kernel)).1.frame (mems.getD 205 []) (cert[205]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[205]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[205]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[205]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 205 []) (Blanc.Lift.Curve3Pool.cert[205]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_205 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[205]'(by decide +kernel)).2 (cert[205]'(by decide +kernel)).1.frame (mems.getD 205 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[205]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[205]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 205 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 private theorem jumps_batch_206 :
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[206]'(by decide +kernel)).2 (cert[206]'(by decide +kernel)).1.frame (mems.getD 206 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[207]'(by decide +kernel)).2 (cert[207]'(by decide +kernel)).1.frame (mems.getD 207 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[208]'(by decide +kernel)).2 (cert[208]'(by decide +kernel)).1.frame (mems.getD 208 []) = true := by
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[206]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[206]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 206 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[207]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[207]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 207 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[208]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[208]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 208 []) = true := by
   kernel_rfl_and
 
 theorem entry_206 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[206]'(by decide +kernel)).1.rets (cert[206]'(by decide +kernel)).1.pc
-      (cert[206]'(by decide +kernel)).1.frame (mems.getD 206 []) (cert[206]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[206]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[206]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[206]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 206 []) (Blanc.Lift.Curve3Pool.cert[206]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_206 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[206]'(by decide +kernel)).2 (cert[206]'(by decide +kernel)).1.frame (mems.getD 206 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[206]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[206]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 206 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_206.1
 
 theorem entry_207 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[207]'(by decide +kernel)).1.rets (cert[207]'(by decide +kernel)).1.pc
-      (cert[207]'(by decide +kernel)).1.frame (mems.getD 207 []) (cert[207]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[207]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[207]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[207]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 207 []) (Blanc.Lift.Curve3Pool.cert[207]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_207 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[207]'(by decide +kernel)).2 (cert[207]'(by decide +kernel)).1.frame (mems.getD 207 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[207]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[207]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 207 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_206.2.1
 
 theorem entry_208 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[208]'(by decide +kernel)).1.rets (cert[208]'(by decide +kernel)).1.pc
-      (cert[208]'(by decide +kernel)).1.frame (mems.getD 208 []) (cert[208]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[208]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[208]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[208]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 208 []) (Blanc.Lift.Curve3Pool.cert[208]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_208 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[208]'(by decide +kernel)).2 (cert[208]'(by decide +kernel)).1.frame (mems.getD 208 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[208]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[208]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 208 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_206.2.2
 
 private theorem jumps_batch_209 :
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[209]'(by decide +kernel)).2 (cert[209]'(by decide +kernel)).1.frame (mems.getD 209 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[210]'(by decide +kernel)).2 (cert[210]'(by decide +kernel)).1.frame (mems.getD 210 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[211]'(by decide +kernel)).2 (cert[211]'(by decide +kernel)).1.frame (mems.getD 211 []) = true := by
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[209]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[209]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 209 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[210]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[210]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 210 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[211]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[211]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 211 []) = true := by
   kernel_rfl_and
 
 theorem entry_209 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[209]'(by decide +kernel)).1.rets (cert[209]'(by decide +kernel)).1.pc
-      (cert[209]'(by decide +kernel)).1.frame (mems.getD 209 []) (cert[209]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[209]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[209]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[209]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 209 []) (Blanc.Lift.Curve3Pool.cert[209]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_209 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[209]'(by decide +kernel)).2 (cert[209]'(by decide +kernel)).1.frame (mems.getD 209 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[209]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[209]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 209 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_209.1
 
 theorem entry_210 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[210]'(by decide +kernel)).1.rets (cert[210]'(by decide +kernel)).1.pc
-      (cert[210]'(by decide +kernel)).1.frame (mems.getD 210 []) (cert[210]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[210]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[210]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[210]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 210 []) (Blanc.Lift.Curve3Pool.cert[210]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_210 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[210]'(by decide +kernel)).2 (cert[210]'(by decide +kernel)).1.frame (mems.getD 210 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[210]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[210]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 210 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_209.2.1
 
 theorem entry_211 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[211]'(by decide +kernel)).1.rets (cert[211]'(by decide +kernel)).1.pc
-      (cert[211]'(by decide +kernel)).1.frame (mems.getD 211 []) (cert[211]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[211]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[211]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[211]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 211 []) (Blanc.Lift.Curve3Pool.cert[211]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_211 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[211]'(by decide +kernel)).2 (cert[211]'(by decide +kernel)).1.frame (mems.getD 211 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[211]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[211]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 211 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_209.2.2
 
 private theorem jumps_batch_212 :
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[212]'(by decide +kernel)).2 (cert[212]'(by decide +kernel)).1.frame (mems.getD 212 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[213]'(by decide +kernel)).2 (cert[213]'(by decide +kernel)).1.frame (mems.getD 213 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[214]'(by decide +kernel)).2 (cert[214]'(by decide +kernel)).1.frame (mems.getD 214 []) = true := by
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[212]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[212]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 212 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[213]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[213]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 213 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[214]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[214]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 214 []) = true := by
   kernel_rfl_and
 
 theorem entry_212 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[212]'(by decide +kernel)).1.rets (cert[212]'(by decide +kernel)).1.pc
-      (cert[212]'(by decide +kernel)).1.frame (mems.getD 212 []) (cert[212]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[212]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[212]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[212]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 212 []) (Blanc.Lift.Curve3Pool.cert[212]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_212 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[212]'(by decide +kernel)).2 (cert[212]'(by decide +kernel)).1.frame (mems.getD 212 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[212]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[212]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 212 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_212.1
 
 theorem entry_213 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[213]'(by decide +kernel)).1.rets (cert[213]'(by decide +kernel)).1.pc
-      (cert[213]'(by decide +kernel)).1.frame (mems.getD 213 []) (cert[213]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[213]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[213]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[213]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 213 []) (Blanc.Lift.Curve3Pool.cert[213]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_213 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[213]'(by decide +kernel)).2 (cert[213]'(by decide +kernel)).1.frame (mems.getD 213 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[213]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[213]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 213 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_212.2.1
 
 theorem entry_214 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[214]'(by decide +kernel)).1.rets (cert[214]'(by decide +kernel)).1.pc
-      (cert[214]'(by decide +kernel)).1.frame (mems.getD 214 []) (cert[214]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[214]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[214]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[214]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 214 []) (Blanc.Lift.Curve3Pool.cert[214]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_214 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[214]'(by decide +kernel)).2 (cert[214]'(by decide +kernel)).1.frame (mems.getD 214 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[214]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[214]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 214 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_212.2.2
 
 private theorem jumps_batch_215 :
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[215]'(by decide +kernel)).2 (cert[215]'(by decide +kernel)).1.frame (mems.getD 215 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[216]'(by decide +kernel)).2 (cert[216]'(by decide +kernel)).1.frame (mems.getD 216 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[217]'(by decide +kernel)).2 (cert[217]'(by decide +kernel)).1.frame (mems.getD 217 []) = true := by
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[215]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[215]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 215 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[216]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[216]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 216 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[217]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[217]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 217 []) = true := by
   kernel_rfl_and
 
 theorem entry_215 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[215]'(by decide +kernel)).1.rets (cert[215]'(by decide +kernel)).1.pc
-      (cert[215]'(by decide +kernel)).1.frame (mems.getD 215 []) (cert[215]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[215]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[215]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[215]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 215 []) (Blanc.Lift.Curve3Pool.cert[215]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_215 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[215]'(by decide +kernel)).2 (cert[215]'(by decide +kernel)).1.frame (mems.getD 215 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[215]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[215]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 215 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_215.1
 
 theorem entry_216 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[216]'(by decide +kernel)).1.rets (cert[216]'(by decide +kernel)).1.pc
-      (cert[216]'(by decide +kernel)).1.frame (mems.getD 216 []) (cert[216]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[216]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[216]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[216]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 216 []) (Blanc.Lift.Curve3Pool.cert[216]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_216 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[216]'(by decide +kernel)).2 (cert[216]'(by decide +kernel)).1.frame (mems.getD 216 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[216]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[216]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 216 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_215.2.1
 
 theorem entry_217 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[217]'(by decide +kernel)).1.rets (cert[217]'(by decide +kernel)).1.pc
-      (cert[217]'(by decide +kernel)).1.frame (mems.getD 217 []) (cert[217]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[217]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[217]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[217]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 217 []) (Blanc.Lift.Curve3Pool.cert[217]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_217 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[217]'(by decide +kernel)).2 (cert[217]'(by decide +kernel)).1.frame (mems.getD 217 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[217]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[217]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 217 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_215.2.2
 
 private theorem jumps_batch_218 :
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[218]'(by decide +kernel)).2 (cert[218]'(by decide +kernel)).1.frame (mems.getD 218 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[219]'(by decide +kernel)).2 (cert[219]'(by decide +kernel)).1.frame (mems.getD 219 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[220]'(by decide +kernel)).2 (cert[220]'(by decide +kernel)).1.frame (mems.getD 220 []) = true := by
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[218]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[218]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 218 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[219]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[219]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 219 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[220]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[220]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 220 []) = true := by
   kernel_rfl_and
 
 theorem entry_218 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[218]'(by decide +kernel)).1.rets (cert[218]'(by decide +kernel)).1.pc
-      (cert[218]'(by decide +kernel)).1.frame (mems.getD 218 []) (cert[218]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[218]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[218]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[218]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 218 []) (Blanc.Lift.Curve3Pool.cert[218]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_218 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[218]'(by decide +kernel)).2 (cert[218]'(by decide +kernel)).1.frame (mems.getD 218 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[218]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[218]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 218 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_218.1
 
 theorem entry_219 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[219]'(by decide +kernel)).1.rets (cert[219]'(by decide +kernel)).1.pc
-      (cert[219]'(by decide +kernel)).1.frame (mems.getD 219 []) (cert[219]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[219]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[219]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[219]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 219 []) (Blanc.Lift.Curve3Pool.cert[219]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_219 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[219]'(by decide +kernel)).2 (cert[219]'(by decide +kernel)).1.frame (mems.getD 219 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[219]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[219]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 219 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_218.2.1
 
 theorem entry_220 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[220]'(by decide +kernel)).1.rets (cert[220]'(by decide +kernel)).1.pc
-      (cert[220]'(by decide +kernel)).1.frame (mems.getD 220 []) (cert[220]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[220]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[220]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[220]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 220 []) (Blanc.Lift.Curve3Pool.cert[220]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_220 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[220]'(by decide +kernel)).2 (cert[220]'(by decide +kernel)).1.frame (mems.getD 220 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[220]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[220]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 220 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_218.2.2
 
 private theorem jumps_batch_221 :
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[221]'(by decide +kernel)).2 (cert[221]'(by decide +kernel)).1.frame (mems.getD 221 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[222]'(by decide +kernel)).2 (cert[222]'(by decide +kernel)).1.frame (mems.getD 222 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[223]'(by decide +kernel)).2 (cert[223]'(by decide +kernel)).1.frame (mems.getD 223 []) = true := by
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[221]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[221]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 221 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[222]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[222]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 222 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[223]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[223]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 223 []) = true := by
   kernel_rfl_and
 
 theorem entry_221 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[221]'(by decide +kernel)).1.rets (cert[221]'(by decide +kernel)).1.pc
-      (cert[221]'(by decide +kernel)).1.frame (mems.getD 221 []) (cert[221]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[221]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[221]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[221]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 221 []) (Blanc.Lift.Curve3Pool.cert[221]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_221 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[221]'(by decide +kernel)).2 (cert[221]'(by decide +kernel)).1.frame (mems.getD 221 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[221]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[221]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 221 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_221.1
 
 theorem entry_222 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[222]'(by decide +kernel)).1.rets (cert[222]'(by decide +kernel)).1.pc
-      (cert[222]'(by decide +kernel)).1.frame (mems.getD 222 []) (cert[222]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[222]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[222]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[222]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 222 []) (Blanc.Lift.Curve3Pool.cert[222]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_222 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[222]'(by decide +kernel)).2 (cert[222]'(by decide +kernel)).1.frame (mems.getD 222 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[222]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[222]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 222 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_221.2.1
 
 theorem entry_223 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[223]'(by decide +kernel)).1.rets (cert[223]'(by decide +kernel)).1.pc
-      (cert[223]'(by decide +kernel)).1.frame (mems.getD 223 []) (cert[223]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[223]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[223]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[223]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 223 []) (Blanc.Lift.Curve3Pool.cert[223]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_223 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[223]'(by decide +kernel)).2 (cert[223]'(by decide +kernel)).1.frame (mems.getD 223 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[223]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[223]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 223 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_221.2.2
 
 private theorem jumps_batch_224 :
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[224]'(by decide +kernel)).2 (cert[224]'(by decide +kernel)).1.frame (mems.getD 224 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[225]'(by decide +kernel)).2 (cert[225]'(by decide +kernel)).1.frame (mems.getD 225 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[226]'(by decide +kernel)).2 (cert[226]'(by decide +kernel)).1.frame (mems.getD 226 []) = true := by
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[224]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[224]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 224 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[225]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[225]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 225 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[226]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[226]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 226 []) = true := by
   kernel_rfl_and
 
 theorem entry_224 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[224]'(by decide +kernel)).1.rets (cert[224]'(by decide +kernel)).1.pc
-      (cert[224]'(by decide +kernel)).1.frame (mems.getD 224 []) (cert[224]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[224]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[224]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[224]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 224 []) (Blanc.Lift.Curve3Pool.cert[224]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_224 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[224]'(by decide +kernel)).2 (cert[224]'(by decide +kernel)).1.frame (mems.getD 224 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[224]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[224]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 224 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_224.1
 
 theorem entry_225 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[225]'(by decide +kernel)).1.rets (cert[225]'(by decide +kernel)).1.pc
-      (cert[225]'(by decide +kernel)).1.frame (mems.getD 225 []) (cert[225]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[225]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[225]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[225]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 225 []) (Blanc.Lift.Curve3Pool.cert[225]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_225 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[225]'(by decide +kernel)).2 (cert[225]'(by decide +kernel)).1.frame (mems.getD 225 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[225]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[225]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 225 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_224.2.1
 
 theorem entry_226 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[226]'(by decide +kernel)).1.rets (cert[226]'(by decide +kernel)).1.pc
-      (cert[226]'(by decide +kernel)).1.frame (mems.getD 226 []) (cert[226]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[226]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[226]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[226]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 226 []) (Blanc.Lift.Curve3Pool.cert[226]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_226 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[226]'(by decide +kernel)).2 (cert[226]'(by decide +kernel)).1.frame (mems.getD 226 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[226]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[226]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 226 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_224.2.2
 
 private theorem jumps_batch_227 :
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[227]'(by decide +kernel)).2 (cert[227]'(by decide +kernel)).1.frame (mems.getD 227 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[228]'(by decide +kernel)).2 (cert[228]'(by decide +kernel)).1.frame (mems.getD 228 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[229]'(by decide +kernel)).2 (cert[229]'(by decide +kernel)).1.frame (mems.getD 229 []) = true := by
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[227]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[227]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 227 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[228]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[228]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 228 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[229]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[229]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 229 []) = true := by
   kernel_rfl_and
 
 theorem entry_227 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[227]'(by decide +kernel)).1.rets (cert[227]'(by decide +kernel)).1.pc
-      (cert[227]'(by decide +kernel)).1.frame (mems.getD 227 []) (cert[227]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[227]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[227]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[227]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 227 []) (Blanc.Lift.Curve3Pool.cert[227]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_227 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[227]'(by decide +kernel)).2 (cert[227]'(by decide +kernel)).1.frame (mems.getD 227 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[227]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[227]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 227 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_227.1
 
 theorem entry_228 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[228]'(by decide +kernel)).1.rets (cert[228]'(by decide +kernel)).1.pc
-      (cert[228]'(by decide +kernel)).1.frame (mems.getD 228 []) (cert[228]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[228]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[228]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[228]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 228 []) (Blanc.Lift.Curve3Pool.cert[228]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_228 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[228]'(by decide +kernel)).2 (cert[228]'(by decide +kernel)).1.frame (mems.getD 228 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[228]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[228]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 228 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_227.2.1
 
 theorem entry_229 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[229]'(by decide +kernel)).1.rets (cert[229]'(by decide +kernel)).1.pc
-      (cert[229]'(by decide +kernel)).1.frame (mems.getD 229 []) (cert[229]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[229]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[229]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[229]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 229 []) (Blanc.Lift.Curve3Pool.cert[229]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_229 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[229]'(by decide +kernel)).2 (cert[229]'(by decide +kernel)).1.frame (mems.getD 229 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[229]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[229]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 229 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_227.2.2
 
 private theorem jumps_batch_230 :
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[230]'(by decide +kernel)).2 (cert[230]'(by decide +kernel)).1.frame (mems.getD 230 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[231]'(by decide +kernel)).2 (cert[231]'(by decide +kernel)).1.frame (mems.getD 231 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[232]'(by decide +kernel)).2 (cert[232]'(by decide +kernel)).1.frame (mems.getD 232 []) = true := by
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[230]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[230]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 230 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[231]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[231]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 231 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[232]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[232]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 232 []) = true := by
   kernel_rfl_and
 
 theorem entry_230 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[230]'(by decide +kernel)).1.rets (cert[230]'(by decide +kernel)).1.pc
-      (cert[230]'(by decide +kernel)).1.frame (mems.getD 230 []) (cert[230]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[230]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[230]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[230]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 230 []) (Blanc.Lift.Curve3Pool.cert[230]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_230 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[230]'(by decide +kernel)).2 (cert[230]'(by decide +kernel)).1.frame (mems.getD 230 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[230]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[230]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 230 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_230.1
 
 theorem entry_231 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[231]'(by decide +kernel)).1.rets (cert[231]'(by decide +kernel)).1.pc
-      (cert[231]'(by decide +kernel)).1.frame (mems.getD 231 []) (cert[231]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[231]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[231]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[231]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 231 []) (Blanc.Lift.Curve3Pool.cert[231]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_231 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[231]'(by decide +kernel)).2 (cert[231]'(by decide +kernel)).1.frame (mems.getD 231 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[231]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[231]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 231 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_230.2.1
 
 theorem entry_232 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[232]'(by decide +kernel)).1.rets (cert[232]'(by decide +kernel)).1.pc
-      (cert[232]'(by decide +kernel)).1.frame (mems.getD 232 []) (cert[232]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[232]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[232]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[232]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 232 []) (Blanc.Lift.Curve3Pool.cert[232]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_232 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[232]'(by decide +kernel)).2 (cert[232]'(by decide +kernel)).1.frame (mems.getD 232 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[232]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[232]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 232 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_230.2.2
 
 private theorem jumps_batch_233 :
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[233]'(by decide +kernel)).2 (cert[233]'(by decide +kernel)).1.frame (mems.getD 233 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[234]'(by decide +kernel)).2 (cert[234]'(by decide +kernel)).1.frame (mems.getD 234 []) = true ∧
-    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true
-      (cert[235]'(by decide +kernel)).2 (cert[235]'(by decide +kernel)).1.frame (mems.getD 235 []) = true := by
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[233]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[233]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 233 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[234]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[234]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 234 []) = true ∧
+    jumpsOkNodeMT Blanc.Lift.Curve3Pool.code _ Blanc.Lift.Curve3Pool.codeTries (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[235]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[235]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 235 []) = true := by
   kernel_rfl_and
 
 theorem entry_233 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[233]'(by decide +kernel)).1.rets (cert[233]'(by decide +kernel)).1.pc
-      (cert[233]'(by decide +kernel)).1.frame (mems.getD 233 []) (cert[233]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[233]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[233]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[233]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 233 []) (Blanc.Lift.Curve3Pool.cert[233]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_233 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[233]'(by decide +kernel)).2 (cert[233]'(by decide +kernel)).1.frame (mems.getD 233 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[233]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[233]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 233 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_233.1
 
 theorem entry_234 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[234]'(by decide +kernel)).1.rets (cert[234]'(by decide +kernel)).1.pc
-      (cert[234]'(by decide +kernel)).1.frame (mems.getD 234 []) (cert[234]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[234]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[234]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[234]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 234 []) (Blanc.Lift.Curve3Pool.cert[234]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_234 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[234]'(by decide +kernel)).2 (cert[234]'(by decide +kernel)).1.frame (mems.getD 234 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[234]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[234]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 234 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_233.2.1
 
 theorem entry_235 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[235]'(by decide +kernel)).1.rets (cert[235]'(by decide +kernel)).1.pc
-      (cert[235]'(by decide +kernel)).1.frame (mems.getD 235 []) (cert[235]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[235]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[235]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[235]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 235 []) (Blanc.Lift.Curve3Pool.cert[235]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_235 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[235]'(by decide +kernel)).2 (cert[235]'(by decide +kernel)).1.frame (mems.getD 235 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[235]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[235]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 235 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   exact jumps_batch_233.2.2
 
 theorem entry_236 :
-    checkNodeM code (Cert.entries cert) mems true
-      (cert[236]'(by decide +kernel)).1.rets (cert[236]'(by decide +kernel)).1.pc
-      (cert[236]'(by decide +kernel)).1.frame (mems.getD 236 []) (cert[236]'(by decide +kernel)).2 = true := by
-  rw [← checkNodeMT_eq codeTries]
+    checkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) Blanc.Lift.Curve3Pool.mems true
+      (Blanc.Lift.Curve3Pool.cert[236]'(by decide +kernel)).1.rets (Blanc.Lift.Curve3Pool.cert[236]'(by decide +kernel)).1.pc
+      (Blanc.Lift.Curve3Pool.cert[236]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 236 []) (Blanc.Lift.Curve3Pool.cert[236]'(by decide +kernel)).2 = true := by
+  rw [← checkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 theorem jumps_236 :
-    jumpsOkNodeM code (Cert.entries cert) true
-      (cert[236]'(by decide +kernel)).2 (cert[236]'(by decide +kernel)).1.frame (mems.getD 236 []) = true := by
-  rw [← jumpsOkNodeMT_eq codeTries]
+    jumpsOkNodeM Blanc.Lift.Curve3Pool.code (Cert.entries Blanc.Lift.Curve3Pool.cert) true
+      (Blanc.Lift.Curve3Pool.cert[236]'(by decide +kernel)).2 (Blanc.Lift.Curve3Pool.cert[236]'(by decide +kernel)).1.frame (Blanc.Lift.Curve3Pool.mems.getD 236 []) = true := by
+  rw [← jumpsOkNodeMT_eq Blanc.Lift.Curve3Pool.codeTries]
   decide +kernel
 
 end Blanc.Lift.Curve3Pool
