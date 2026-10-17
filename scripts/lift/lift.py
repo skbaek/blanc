@@ -190,6 +190,7 @@ LEAN_REG: Dict[int, str] = {
     0xa0: ".reg (.log 0)", 0xa1: ".reg (.log 1)", 0xa2: ".reg (.log 2)",
     0xa3: ".reg (.log 3)", 0xa4: ".reg (.log 4)",
     0xf1: ".exec .call", 0xfa: ".exec .staticcall", 0xf5: ".exec .create2",
+    0xf4: ".exec .delegatecall",
 }
 
 # Opcodes the certificate grammar expresses directly: halts (`.last`), jumps
@@ -230,7 +231,7 @@ def _arm_shape(rhs: str, source: str) -> Optional[Tuple[int, int]]:
     m = re.fullmatch(r"dropTransfer (\d+) words", rhs)
     if m:
         return (int(m.group(1)), 0)
-    m = re.fullmatch(r"(callTransfer|staticcallTransfer|create2Transfer) words", rhs)
+    m = re.fullmatch(r"(callTransfer|staticcallTransfer|create2Transfer|delegatecallTransfer) words", rhs)
     if m:
         dm = re.search(rf"def {m.group(1)} : Pattern → Option Pattern\n\s*\| ((?:_ :: )+)words => some \(none :: words\)", source)
         if dm:

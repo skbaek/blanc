@@ -71,7 +71,7 @@ theorem pair_spawnKinds (pair : Adr) : SpawnKinds pair pairSem := by
   intro sevm pre post run hrun _ fork _ node chain x hat
   obtain ⟨κ, reach, ok⟩ := Blanc.Lift.cursor_of_parentPrefix cert_check
     (F := ⟨0, sevm, pre, .ok post, run⟩) rfl hrun fork chain
-  exact ok.exec_call_or_staticcall (Cursor.noCreate2_of_reach (by decide +kernel) reach) hat
+  exact ok.exec_call_or_staticcall (Cursor.callOnly_of_reach (by decide +kernel) reach) hat
 
 /-! ## The frame contract and its entry condition -/
 

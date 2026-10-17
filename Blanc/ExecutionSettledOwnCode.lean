@@ -13,7 +13,7 @@ For an address `ca` whose code `C` at the checkpoint is nonempty and not an EIP-
 * `ConfiguredHistoryTrace.settled_ownCode`: every settled frame of a configured history finds `C`
   installed at `ca` when it starts, and every settled frame at `ca` runs `C` from pc `0`, provided
   frames running `C` at `ca` spawn only by `CALL`, `STATICCALL` or `CREATE2` (`OwnSpawns`; for a
-  certified runtime, `CursorOK.exec_spawn`).  No `DELEGATECALL`/`CALLCODE` from `C` means no frame
+  certified runtime, `CursorOK.exec_spawn_undelegated`).  No `DELEGATECALL`/`CALLCODE` from `C` means no frame
   at `ca` runs foreign code: a `CALL`/`STATICCALL` into `ca` runs the installed code, and a create
   never targets an address with code.
 * `ConfiguredHistoryTrace.settledRoots_caller_ne_of_code`: `ca ≠ systemAddress` originates no settled

@@ -438,7 +438,7 @@ theorem lido_spawnKinds (ca : Adr) : SpawnKinds ca lidoSpec.sem := by
   intro sevm pre post run hrun _ fork _ node chain x hat
   obtain ⟨κ, reach, ok⟩ := cursor_of_parentPrefix cert_check
     (F := ⟨0, sevm, pre, .ok post, run⟩) rfl hrun.1 fork chain
-  exact ok.exec_call_or_staticcall (Cursor.noCreate2_of_reach (by decide +kernel) reach) hat
+  exact ok.exec_call_or_staticcall (Cursor.callOnly_of_reach (by decide +kernel) reach) hat
 
 /-- **The Lido spawn obligation**: `RegInv` at every spawning node of a successful
 Lido frame, from `RegInv` at its entry. -/
