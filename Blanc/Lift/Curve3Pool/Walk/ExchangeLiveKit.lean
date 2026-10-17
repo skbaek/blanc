@@ -189,6 +189,50 @@ theorem addLogE (h : ExLive sevm W b σ) (l : Log) : ExLive sevm W (b.addLog l) 
 
 end ExLive
 
+/-- **A one-word `STATICCALL` answered by its premise, forward**: the call at `(ii, is, oi)`
+reading `A`, the `RETURNDATASIZE > 31` test, and the answer loaded back (`PUSH; MLOAD oi`), up
+to the tree `f2` after the load, over an image carrier. -/
+theorem rxe_staticWord {sevm : Sevm} {W W' : Devm → Prop} {σ : Stor} {b : Devm} {S : List B256}
+    {M : Mem} {img : Bytes} {G U : Nat} {t A ii is oi : B256} {data : Bytes} {o s : Nat}
+    {Q : Outcome → Prop} {f : SFunc} (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W')
+    (hp : StaticWordOkAt sevm W W' t data A U ii is oi) (hU : U ≤ G) (hG : G < 2 ^ 256)
+    (hin : (M.read ii.toNat is.toNat).1 = data) (hR : Mem.Reads M img) (hW : Mem.Wf M)
+    (hoi : oi.toNat = o)
+    (hext : (M.extends [(ii.toNat, is.toNat), (oi.toNat, 0x20)]).size = s) (hfit : o + 0x20 ≤ s)
+    (k : ∀ (d : Devm) (M' : Mem) (out : Bytes), ExLive sevm W' d σ →
+      Mem.Reads M' (Bytes.writeAt img o (out.take 0x20)) → Mem.Wf M' → M'.size = s →
+      32 ≤ out.length → out.length < 2 ^ 256 → Bytes.toB256 (out.take 32) = A →
+      d.returnData = out → G ≤ d.gasLeft + U → d.gasLeft ≤ G →
+      SFunc.RunEx cert.prog sevm (St d (1 :: S) M' d.gasLeft) f Q) :
+    SFunc.RunEx cert.prog sevm (St b (Nat.toB256 G :: t :: ii :: is :: oi :: 0x20 :: S) M G)
+      (.next (.exec .staticcall) f) Q := by
+  obtain ⟨d, out, hrun, hpost, hlen, hlt, hA, hg1, hg2, hWd, hidd⟩ := hp b S M G hL.w hU hG hin
+  have hd := hpost.eq_St
+  rw [show (0x20 : B256).toNat = 0x20 by decide] at hd
+  subst hoi
+  have hsz' : ((M.extends [(ii.toNat, is.toNat), (oi.toNat, 0x20)]).write oi.toNat
+      (out.take 0x20)).size = s := by
+    rw [Mem.size_write_of_le (by rw [hext, List.length_take]; omega), hext]
+  obtain ⟨r, hr, hq⟩ := k d _ out ⟨fun x => by rw [hpost.stor]; exact hL.stor x, hidd hL.id, hW'c, hWd⟩
+    ((hR.extends _).write (hW.extends _) _ _) ((hW.extends _).write _ _) hsz' hlen hlt hA
+    hpost.returnData hg1 hg2
+  exact ⟨r, .next hrun (Eq.mpr (congrArg (fun x => SFunc.RunExact cert.prog sevm x f r) hd) hr), hq⟩
+
+/-- A call's answer word read back where the call wrote it. -/
+theorem ex_ans_read (img out : Bytes) (o : Nat) (h : 32 ≤ out.length) :
+    Bytes.toB256 ((Bytes.writeAt img o (out.take 32)).sliceD o 32 0) = Bytes.toB256 (out.take 32) := by
+  have e := Bytes.sliceD_writeAt img (out.take 32) o
+  rw [List.length_take, Nat.min_eq_left h] at e
+  rw [e]
+
+/-- `RETURNDATASIZE > 31` for a reply of at least 32 bytes. -/
+theorem ex_rds_gt {out : Bytes} (h : 32 ≤ out.length) (hlt : out.length < 2 ^ 256) :
+    B256.gtCheck (Nat.toB256 out.length) (Bytes.toB256 [0x1f]) ≠ 0 := by
+  apply gtCheck_ne_zero_of_lt
+  rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hlt,
+    show (Bytes.toB256 [0x1f]).toNat = 31 by decide]
+  omega
+
 /-- A branch condition the walk's context or the kernel settles. -/
 macro "xbr" : tactic => `(tactic| first | assumption | decide)
 

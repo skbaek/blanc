@@ -816,6 +816,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Walk.ExchangeLivePre",
                     "Lift.Curve3Pool.Walk.ExchangeLiveMid",
                     "Lift.Curve3Pool.Walk.ExchangeLivePull",
+                    "Lift.Curve3Pool.Walk.ExchangeLiveBal",
                     "Lift.Curve3Pool.Walk.ExchangeLiveX",
                     "Lift.Curve3Pool.Walk.ExchangeLiveSave",
                     "Lift.Curve3Pool.Walk.ExchangeLiveRestore",
