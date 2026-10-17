@@ -277,7 +277,7 @@ theorem xpMem_spec {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
 /-! ## Forward twins -/
 
 /-- `xpChk`, coin by coin. -/
-theorem xpChk_some {b x : V3} (h : xpChk b = some x) :
+theorem xpChk_some_parts {b x : V3} (h : xpChk b = some x) :
     (∃ p, chkMul (rates.get 0) (b.get 0) = some p ∧ chkDiv p precision = some x.v0) ∧
     (∃ p, chkMul (rates.get 1) (b.get 1) = some p ∧ chkDiv p precision = some x.v1) ∧
     (∃ p, chkMul (rates.get 2) (b.get 2) = some p ∧ chkDiv p precision = some x.v2) := by
@@ -334,7 +334,7 @@ theorem xp_exact {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G n : Nat} 
       (Mem.KeepsOff M M' xpWin ∧ Mem.Wf M' ∧ M'.size = n)) ∧
       x = ⟨x0.toNat, x1.toNat, x2.toNat⟩ := by
   have hT := MemTrack.init hwf xpWin
-  obtain ⟨⟨p0, hm0, hd0⟩, ⟨p1, hm1, hd1⟩, ⟨p2, hm2, hd2⟩⟩ := xpChk_some hX
+  obtain ⟨⟨p0, hm0, hd0⟩, ⟨p1, hm1, hd1⟩, ⟨p2, hm2, hd2⟩⟩ := xpChk_some_parts hX
   rw [← ha.balances 0, show rates.get 0 = (Bytes.toB256 [13, 224, 182, 179, 167, 100, 0, 0]).toNat
     from by decide] at hm0
   rw [← ha.balances 1, show rates.get 1 =
@@ -422,7 +422,7 @@ theorem xpMem_exact {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G n : Na
       (Mem.KeepsOff M M' xpMemWin ∧ Mem.Wf M' ∧ M'.size = n)) ∧
       x = ⟨x0.toNat, x1.toNat, x2.toNat⟩ := by
   have hT := MemTrack.init hwf xpMemWin
-  obtain ⟨⟨p0, hm0, hd0⟩, ⟨p1, hm1, hd1⟩, ⟨p2, hm2, hd2⟩⟩ := xpChk_some hX
+  obtain ⟨⟨p0, hm0, hd0⟩, ⟨p1, hm1, hd1⟩, ⟨p2, hm2, hd2⟩⟩ := xpChk_some_parts hX
   rw [show rates.get 0 = (Bytes.toB256 [13, 224, 182, 179, 167, 100, 0, 0]).toNat
     from by decide] at hm0
   rw [show rates.get 1 =
