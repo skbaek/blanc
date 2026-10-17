@@ -17,7 +17,10 @@ namespace Blanc.Lift.Curve3Pool
 open Jaune Blanc.Lift
 
 /-- A stack-room side condition over a literal stack. -/
-macro "hr" : tactic => `(tactic| (simp only [List.length_cons, List.length_nil]; omega))
+macro "hr" : tactic => `(tactic| first
+  | omega
+  | (simp only [List.length_cons, List.length_nil, List.length_set]; omega)
+  | decide)
 
 section Fwd
 
@@ -48,13 +51,13 @@ theorem rxm_mload {i : B256} {o s : Nat} (hR : Mem.Reads M img) (hsz : M.size = 
   rfl
 
 /-- `KECCAK256` of a window the memory covers. -/
-theorem rxm_keccak {i sz : B256} {o z s : Nat} (hR : Mem.Reads M img) (hsz : M.size = s)
+theorem rxm_keccak {i sz : B256} {o z s c : Nat} (hR : Mem.Reads M img) (hsz : M.size = s)
     (ho : i.toNat = o) (hz : sz.toNat = z) (hin : o + z ≤ s ∧ s % 32 = 0)
-    (hroom : S.length < 1024)
+    (hroom : S.length < 1024) (hc : 30 + 6 * ceilDiv z 32 = c)
     (k : SFunc.RunExact fs sevm (St b (Bytes.keccak (img.sliceD o z 0) :: S) M G) f r) :
-    SFunc.RunExact fs sevm (St b (i :: sz :: S) M (G + (30 + 6 * ceilDiv z 32)))
+    SFunc.RunExact fs sevm (St b (i :: sz :: S) M (G + c))
       (.next (.reg .keccak256) f) r := by
-  subst ho hz
+  subst ho hz hc
   refine rx_keccak ?_ (by rw [hR.read]) (read_covered_len hsz hin.2 hin.1) hroom k
   rw [St.extCost_eq hsz, memExtSize_of_le hin.2 hin.1, Nat.sub_self, Nat.add_zero]
   rfl
@@ -73,6 +76,38 @@ theorem rxm_calldatacopy {di si sz : B256} {o z s c : Nat} (hR : Mem.Reads M img
     (k _ (hR.write hW _ _) (hW.write _ _)
       (Mem.size_write_of_size hsz hc.2 (List.length_sliceD _ _ _ _)))
   rw [St.extCost_eq hsz]; exact hc.1
+
+/-- An identity-precompile copy (`CALL(gas, 4, 0, ii, is, oi, os)`) over the image carrier,
+forward, at its exact cost `X = 100 + ext + idCost n`: the copy lays the input window (truncated
+to `os`) over the output window. -/
+theorem rxm_identity {g ii is oi os : B256} {i n o z s ext X : Nat}
+    (hid : IdReady sevm b) (hdepth : sevm.depth ≠ 0) (hR : Mem.Reads M img) (hW : Mem.Wf M)
+    (hsz : M.size = s) (hii : ii.toNat = i) (his : is.toNat = n) (hoi : oi.toNat = o)
+    (hos : os.toNat = z)
+    (hext : calculateMemoryGasCost (memExtsSize s [(i, n), (o, z)]) - calculateMemoryGasCost s = ext ∧
+      100 + ext + idCost n = X ∧ z ≤ n ∧ o + z ≤ memExtsSize s [(i, n), (o, z)])
+    (hg : g = Nat.toB256 (G + X)) (hfund : 100 + ext + 64 * idCost n ≤ G + X)
+    (hbound : G + X < 2 ^ 256) (hroom : S.length < 1024)
+    (k : ∀ b' M', ShaCallPost b b' (img.sliceD i n 0) →
+      Mem.Reads M' (Bytes.writeAt img o ((img.sliceD i n 0).take z)) → Mem.Wf M' →
+      M'.size = memExtsSize s [(i, n), (o, z)] → SFunc.RunExact fs sevm (St b' (1 :: S) M' G) f r) :
+    SFunc.RunExact fs sevm (St b (g :: 4 :: 0 :: ii :: is :: oi :: os :: S) M (G + X))
+      (.next (.exec .call) f) r := by
+  obtain ⟨hext, hX, hzn, hfit⟩ := hext
+  subst hii his hoi hos
+  have hext' : (St b S M (G + X)).extCost [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] = ext := by
+    rw [← hext, ← hsz]; rfl
+  refine SFunc.runExact_iff_runExactCut_nil.mpr (rxc_call_identity (C := []) hid hdepth hg hext'
+    hfund hbound hroom (fun b' hpost => SFunc.runExact_iff_runExactCut_nil.mp ?_))
+  rw [hX, Nat.add_sub_cancel]
+  have hlen : ((M.read ii.toNat is.toNat).1.take os.toNat).length ≤ os.toNat := by
+    rw [List.length_take]; omega
+  refine k b' _ (by rw [← Mem.Reads.read hR]; exact hpost) ?_ ((hW.extends _).write _ _) ?_
+  · rw [← Mem.Reads.read hR]
+    exact (hR.extends _).write (hW.extends _) _ _
+  · rw [Mem.size_write_of_le (by show _ + _ ≤ memExtsSize M.size _; rw [hsz]; omega)]
+    show memExtsSize M.size _ = _
+    rw [hsz]
 
 end Fwd
 
