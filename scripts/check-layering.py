@@ -677,7 +677,10 @@ CONTRACTS = {
                    "Lift.Curve3Crv.CommittedHistory", "Lift.Curve3Crv.Init", "Lift.Curve3Crv.Liveness"],
     # The Curve 3pool StableSwap (StableSwap3Pool.vy, Vyper 0.2.4): the deployed creation input,
     # lifted (curve-3pool-stableswap-v1).
-    "curve-3pool": ["Lift.Curve3Pool.Creation.Cert", "Lift.Curve3Pool.Creation.Check",
+    "curve-3pool": ["Lift.Curve3Pool.Cert", "Lift.Curve3Pool.CheckTries", "Lift.Curve3Pool.Check",
+                    "Lift.Curve3Pool.CheckPart0", "Lift.Curve3Pool.CheckPart1", "Lift.Curve3Pool.CheckPart2", "Lift.Curve3Pool.CheckPart3", "Lift.Curve3Pool.CheckPart4", "Lift.Curve3Pool.CheckPart5", "Lift.Curve3Pool.CheckPart6", "Lift.Curve3Pool.CheckPart7", "Lift.Curve3Pool.CheckPart8", "Lift.Curve3Pool.CheckPart9", "Lift.Curve3Pool.CheckPart10", "Lift.Curve3Pool.CheckPart11", "Lift.Curve3Pool.CheckPart12", "Lift.Curve3Pool.CheckPart13", "Lift.Curve3Pool.CheckPart14", "Lift.Curve3Pool.CheckPart15", "Lift.Curve3Pool.CheckPart16", "Lift.Curve3Pool.CheckPart17", "Lift.Curve3Pool.CheckPart18", "Lift.Curve3Pool.CheckPart19", "Lift.Curve3Pool.CheckPart20", "Lift.Curve3Pool.CheckPart21", "Lift.Curve3Pool.CheckPart22", "Lift.Curve3Pool.CheckPart23",
+                    "Lift.Curve3Pool.Creation.Input", "Lift.Curve3Pool.Creation.Window",
+                    "Lift.Curve3Pool.Creation.Cert", "Lift.Curve3Pool.Creation.Check",
                     "Lift.Curve3Pool.Creation.Jumps"],
     "drip": ["DripCore", "Drip", "DripCode", "DripDeploy", "DripConcreteHistory", "DripConcreteHistory.Deployment", "DripConcreteHistory.Join", "DripConcreteHistory.Accrual", "DripConcreteHistory.AccrualExit", "DripConcreteReach", "DripCreationCode",
              "DripRpow", "DripIngress", "DripFunctional", "DripAccounting", "DripTranscript", "DripMachine", "DripEndpoints", "DripFresh", 
