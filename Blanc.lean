@@ -1151,3 +1151,9 @@ import Blanc.Lift.UniswapV2Pair.MintPositionalSuffix
 import Blanc.Lift.UniswapV2Pair.MintPositionalRoot
 import Blanc.Lift.UniswapV2Pair.MintPositionalReturn
 import Blanc.Lift.UniswapV2Pair.MintPositionalFacts
+
+import Blanc.Lift.Curve3Pool.Walk.ExchangeFront
+import Blanc.Lift.Curve3Pool.Walk.Exchange
+import Blanc.Lift.Curve3Pool.Walk.ExchangeModel
+import Blanc.Lift.Curve3Pool.Walk.ExchangeObserve
+import Blanc.Lift.Curve3Pool.Walk.ExchangeSafe
