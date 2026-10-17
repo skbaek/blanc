@@ -79,11 +79,11 @@ theorem balanceOf_window {M : Mem} (hwf : Mem.Wf M) (self : Adr) (z : B256) :
   have lA : A.length = 32 := by rw [← hA, B256.length_toBytes]
   have lB : self.toB256.toBytes.length = 32 := B256.length_toBytes _
   have lZ : z.toBytes.length = 32 := B256.length_toBytes _
-  rw [Bytes.sliceD_writeAt_after _ z.toBytes 348 4 192 (by rw [lZ]; norm_num),
-    Bytes.sliceD_writeAt_after _ z.toBytes (348 + 4) 32 192 (by rw [lZ]; norm_num),
-    Bytes.sliceD_writeAt_before _ _ 348 4 352 (by norm_num), show 348 + 4 = 352 from rfl,
+  rw [Bytes.sliceD_writeAt_after _ z.toBytes 348 4 192 (by rw [lZ]; omega),
+    Bytes.sliceD_writeAt_after _ z.toBytes (348 + 4) 32 192 (by rw [lZ]; omega),
+    Bytes.sliceD_writeAt_before _ _ 348 4 352 (by omega), show 348 + 4 = 352 from rfl,
     ← lB, Bytes.sliceD_writeAt,
-    Bytes.sliceD_writeAt_inside _ _ 320 348 4 (by norm_num) (by rw [lA]), ← hA]
+    Bytes.sliceD_writeAt_inside _ _ 320 348 4 (by omega) (by rw [lA]), ← hA]
   rfl
 
 /-- The model's `admin_balances(i)` under the frame's one answer. -/

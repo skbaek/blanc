@@ -128,8 +128,8 @@ theorem safe_commitNewFee (hfork : CoveredFork sevm.benvStat.fork)
   have hwf2 : Mem.Wf ((M0.write 320 d.toBytes).read 320 32).2 := (hwf0.write _ _).extend _ _
   have hr2 : (((((M0.write 320 d.toBytes).read 320 32).2.write 352 (Sevm.argWord sevm 0).toBytes).write
       384 (Sevm.argWord sevm 1).toBytes).read 320 32).1 = d.toBytes := by
-    rw [Mem.read_write_disjoint (hwf2.write _ _) _ _ (.inr (by norm_num)),
-      Mem.read_write_disjoint hwf2 _ _ (.inr (by norm_num)), memRead_snd_fst,
+    rw [Mem.read_write_disjoint (hwf2.write _ _) _ _ (.inr (by omega)),
+      Mem.read_write_disjoint hwf2 _ _ (.inr (by omega)), memRead_snd_fst,
       Mem.read_write_word_of_wf hwf0]
   have hr3 : ((((((M0.write 320 d.toBytes).read 320 32).2.write 352 (Sevm.argWord sevm 0).toBytes).write
       384 (Sevm.argWord sevm 1).toBytes).read 320 32).2.read 352 64).1 =
