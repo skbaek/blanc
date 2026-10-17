@@ -201,4 +201,140 @@ theorem balUsed_le (sevm : Sevm) (B : Devm) (S : List B256) (M : Mem) (p t : B25
   unfold balUsed weth9BalanceGas
   split <;> omega
 
+/-! ## The back half reads its world only off non-gas fields
+
+A WETH9 leg's result differs across call gases only in its gas column, so the join world a callee
+environment is built over may be taken on the leg's gas-free skeleton.  The post-callback
+`balanceOf` record and the request staging charge read that world only off non-gas fields. -/
+
+theorem withGasLeft_self (d : Devm) : d.withGasLeft d.gasLeft = d := rfl
+
+/-- The request staging charge reads the world only off its warm set. -/
+theorem swapRequestCharge_withGasLeft (b : Devm) (x n : Nat) (p t : B256) (fixed : Nat) :
+    swapRequestCharge (b.withGasLeft x) n p t fixed = swapRequestCharge b n p t fixed := rfl
+
+/-- Account warming commutes with a gas shift. -/
+theorem temporalAccountAccessBase_withGasLeft (b : Devm) (x : Nat) (a : Adr) :
+    temporalAccountAccessBase (b.withGasLeft x) a = (temporalAccountAccessBase b a).withGasLeft x := by
+  unfold temporalAccountAccessBase
+  rw [withGasLeft_accessedAddresses]
+  by_cases h : a ∈ b.accessedAddresses
+  · rw [ite_eq_left h, ite_eq_left h]
+  · rw [ite_eq_right h, ite_eq_right h]
+    rfl
+
+theorem St_temporal_withGasLeft (b : Devm) (x : Nat) (a : Adr) (S : List B256) (M : Mem) (G : Nat) :
+    St (temporalAccountAccessBase (b.withGasLeft x) a) S M G = St (temporalAccountAccessBase b a) S M G := by
+  rw [temporalAccountAccessBase_withGasLeft]
+  rfl
+
+/-- A `balanceOf` record reads its world only off non-gas fields. -/
+theorem swapBalanceEnv_withGasLeft {sevm : Sevm} {b : Devm} {M : Mem} {p t : B256} {S : List B256}
+    {d : Devm} {callGas tailGas : Nat} (x : Nat) (env : SwapBalanceEnv sevm b M p t S d callGas tailGas) :
+    SwapBalanceEnv sevm (b.withGasLeft x) M p t S d callGas tailGas :=
+  ⟨env.code, by rw [St_temporal_withGasLeft]; exact env.call, env.success, env.long, env.returnedGas⟩
+
+/-- The join world over a gas-shifted transfer result is the gas-shifted join world. -/
+theorem swapFrontCutWorld_withGasLeft (sevm : Sevm) (b d0 d dC : Devm) (x : Nat) :
+    ∃ y, swapFrontCutWorld sevm b d0 (d.withGasLeft x) dC =
+      (swapFrontCutWorld sevm b d0 d dC).withGasLeft y := by
+  unfold swapFrontCutWorld swapFrontTransferWorld swapOptWorld
+  by_cases e : swapDataLength sevm = 0
+  · by_cases a1 : swapAmount1Out sevm = 0
+    · simp only [e, a1, ↓reduceIte]
+      exact ⟨_, (withGasLeft_self _).symm⟩
+    · simp only [e, a1, ↓reduceIte]
+      exact ⟨x, rfl⟩
+  · simp only [e, ↓reduceIte]
+    exact ⟨_, (withGasLeft_self _).symm⟩
+
+/-- The same with the first transfer's result gas-shifted (WETH9 = token0). -/
+theorem swapFrontCutWorld_withGasLeft0 (sevm : Sevm) (b d d1 dC : Devm) (x : Nat) :
+    ∃ y, swapFrontCutWorld sevm b (d.withGasLeft x) d1 dC =
+      (swapFrontCutWorld sevm b d d1 dC).withGasLeft y := by
+  unfold swapFrontCutWorld swapFrontTransferWorld swapOptWorld
+  by_cases e : swapDataLength sevm = 0
+  · by_cases a1 : swapAmount1Out sevm = 0
+    · by_cases a0 : swapAmount0Out sevm = 0
+      · simp only [e, a1, a0, ↓reduceIte]
+        exact ⟨_, (withGasLeft_self _).symm⟩
+      · simp only [e, a1, a0, ↓reduceIte]
+        exact ⟨x, rfl⟩
+    · simp only [e, a1, ↓reduceIte]
+      exact ⟨_, (withGasLeft_self _).symm⟩
+  · simp only [e, ↓reduceIte]
+    exact ⟨_, (withGasLeft_self _).symm⟩
+
+theorem swapFrontCutMem_withGasLeft (sevm : Sevm) (d0 d dC : Devm) (x : Nat) :
+    swapFrontCutMem sevm d0 (d.withGasLeft x) dC = swapFrontCutMem sevm d0 d dC := rfl
+
+theorem swapFrontCutMem_withGasLeft0 (sevm : Sevm) (d d1 dC : Devm) (x : Nat) :
+    swapFrontCutMem sevm (d.withGasLeft x) d1 dC = swapFrontCutMem sevm d d1 dC := rfl
+
+theorem swapFrontPtr_withGasLeft (sevm : Sevm) (d0 d : Devm) (x : Nat) :
+    swapFrontPtr sevm d0 (d.withGasLeft x) = swapFrontPtr sevm d0 d := rfl
+
+theorem swapFrontPtr_withGasLeft0 (sevm : Sevm) (d d1 : Devm) (x : Nat) :
+    swapFrontPtr sevm (d.withGasLeft x) d1 = swapFrontPtr sevm d d1 := rfl
+
+section ReadGasFree
+
+variable (sevm : Sevm) (B : Devm) (x : Nat) (S : List B256) (M : Mem) (p t : B256)
+
+theorem balPopped_withGasLeft (g : Nat) :
+    balPopped sevm (B.withGasLeft x) S M p t g = balPopped sevm B S M p t g := by
+  unfold balPopped
+  rw [temporalAccountAccessBase_withGasLeft]
+  rfl
+
+theorem balAcc_withGasLeft : balAcc (B.withGasLeft x) t = balAcc B t := by
+  unfold balAcc
+  rw [temporalAccountAccessBase_withGasLeft]
+  rfl
+
+theorem balExt_withGasLeft : balExt sevm (B.withGasLeft x) S M p t = balExt sevm B S M p t := by
+  unfold balExt
+  rw [balPopped_withGasLeft]
+
+theorem balParent_withGasLeft (g k : Nat) :
+    balParent sevm (B.withGasLeft x) S M p t g k = balParent sevm B S M p t g k := by
+  unfold balParent balWarm
+  rw [balPopped_withGasLeft]
+
+theorem balMsg_withGasLeft (g k f : Nat) :
+    balMsg sevm (B.withGasLeft x) S M p t g k f = balMsg sevm B S M p t g k f := by
+  unfold balMsg
+  rw [balParent_withGasLeft]
+  rfl
+
+theorem balUsed_withGasLeft : balUsed sevm (B.withGasLeft x) S M p t = balUsed sevm B S M p t := by
+  unfold balUsed
+  rw [balMsg_withGasLeft]
+
+theorem wethBalanceSkel_withGasLeft :
+    wethBalanceSkel sevm (B.withGasLeft x) S M p t = wethBalanceSkel sevm B S M p t := by
+  unfold wethBalanceSkel
+  rw [balParent_withGasLeft, balMsg_withGasLeft]
+
+theorem wethBalanceCall_withGasLeft (cg : Nat) :
+    wethBalanceCall sevm (B.withGasLeft x) S M p t cg = wethBalanceCall sevm B S M p t cg := by
+  unfold wethBalanceCall wethBalanceCallAt balSplit
+  rw [balParent_withGasLeft, balMsg_withGasLeft, balExt_withGasLeft, balAcc_withGasLeft,
+    balUsed_withGasLeft]
+
+theorem wethReadLeg_withGasLeft (need : Devm → Nat) :
+    wethReadLeg sevm (B.withGasLeft x) S M p t need = wethReadLeg sevm B S M p t need := by
+  unfold wethReadLeg readLegGas
+  rw [wethBalanceCall_withGasLeft, wethBalanceSkel_withGasLeft, balAcc_withGasLeft,
+    balExt_withGasLeft, balUsed_withGasLeft]
+
+end ReadGasFree
+
+/-- The WETH9 first query (WETH9 = token0) reads its join world only off non-gas fields. -/
+theorem swapWethRead0_withGasLeft (sevm : Sevm) (d : Devm) (x : Nat) (M : Mem) (n : Nat) (p : B256)
+    (w : SwapCutWords) (ρ : B256) (R : List B256) (callGas1 : Nat) :
+    swapWethRead0 sevm (d.withGasLeft x) M n p w ρ R callGas1 =
+      swapWethRead0 sevm d M n p w ρ R callGas1 :=
+  wethReadLeg_withGasLeft _ _ _ _ _ _ _ _
+
 end Blanc.Composition.UniswapV2PairWeth9Joint
