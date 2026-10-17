@@ -1,6 +1,15 @@
 import Blanc.Lift.Usdc.RefineSignedPermitCore
 import Blanc.Lift.Usdc.RefineTransferDispatch
 
+/-!
+# The frames of `permit` and `cancelAuthorization` (U6e4)
+
+From the implementation's pc-0 tree on a known selector: the dispatcher, the wrapper's ABI decoding
+(the `bytes` decodings by two new shuffle segments, `seg_w149_check` and `seg_w136_check`) and the
+body (`RefineSignedPermitCore.lean`): the guards a successful frame passed and the storage it leaves
+at its owner (`permitStor`, `cancelStor`).
+-/
+
 namespace Blanc.Lift.Usdc
 
 open Jaune Blanc Blanc.Lift Impl

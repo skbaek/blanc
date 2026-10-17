@@ -2,6 +2,21 @@ import Blanc.Lift.Usdc.SignedSkip
 import Blanc.Lift.Usdc.ShuffleSegments
 import Blanc.Lift.Usdc.RefineSignedCallees
 
+/-!
+# Certificate walks of the `permit` and `cancelAuthorization` callees (U6e4, route C)
+
+Inversion walks over the implementation certificate, skipping what writes no storage: the domain
+separator (entry 78) and the typed-data hash (79) by `ric_call_silent`, the digests and encodings by
+U6r3's shuffle segments, the library `DELEGATECALL` by `skip_libCall`, `_requireValidSignature` (111)
+by `skip_requireValidSignature`, and the signature-bytes copy loop (80) by the loop rule
+(`copy80`).  Walked: `_permit`'s nonce store (entry 8) and `_approve` (U6d's `e81_inv`), the
+cancellation's entries 110 and the `0x4b1d` store (U6e2), and the bodies' `whenNotPaused`.
+
+* `e8_inv`, `e94_inv`, `e88_inv`, `e24_inv`, `e41_inv`: `PermitPost`, the nonce bump and the
+  allowance write;
+* `e89_inv`, `e97_inv`, `e28_inv`, `e52_inv`: `CancelPost`, the authorization marked used.
+-/
+
 namespace Blanc.Lift.Usdc
 
 open Jaune Blanc Blanc.Lift Impl
